@@ -5,9 +5,8 @@ using Microsoft.AspNetCore.Http;
 namespace ACommerce.V1.App.Auth;
 
 /// <summary>
-/// حالَة المُستَخدِم في الـ Blazor circuit. مَملوكَة per-request.
-/// تُحَمَّل من cookie في كلّ طَلَب. الـ MainLayout يَستَهلِكها لِيُقَرِّر
-/// عَرض login button أو user info.
+/// حالَة المُستَخدِم في الـ Blazor circuit. تُحَمَّل من cookie في كلّ
+/// طَلَب SSR. كَتابَة الـ cookie تَجري في endpoints الـ SSR forms.
 /// </summary>
 public sealed class AuthSession
 {
@@ -31,33 +30,30 @@ public sealed class AuthSession
         Changed?.Invoke();
     }
 
-    public void SignIn(HttpContext http, AuthResult result)
-    {
-        UserId = result.UserId; UserName = result.FullName; Token = result.Token; TenantSlug ??= "";
-        var name = CookieName(TenantSlug ?? "");
-        var opts = new CookieOptions
-        {
-            HttpOnly = true, IsEssential = true,
-            Expires = DateTimeOffset.UtcNow.AddDays(30),
-            SameSite = SameSiteMode.Lax,
-            Path = $"/{TenantSlug}"
-        };
-        http.Response.Cookies.Append(name, result.Token, opts);
-        http.Response.Cookies.Append(name + ".name", result.FullName, opts);
-        Changed?.Invoke();
-    }
-
-    public void SignOut(HttpContext http)
-    {
-        var slug = TenantSlug ?? "";
-        Clear();
-        http.Response.Cookies.Delete(CookieName(slug), new CookieOptions { Path = $"/{slug}" });
-        http.Response.Cookies.Delete(CookieName(slug) + ".name", new CookieOptions { Path = $"/{slug}" });
-        Changed?.Invoke();
-    }
-
     public void SetTenant(string slug) => TenantSlug = slug;
     public void Clear() { UserId = null; UserName = null; Token = null; }
 
     public static string CookieName(string tenantSlug) => $".acommerce.auth.{tenantSlug}";
+
+    /// <summary>يُكتَب من SSR endpoint بَعد نَجاح المُصادَقَة.</summary>
+    public static void WriteCookie(HttpResponse res, string tenantSlug, AuthResult auth)
+    {
+        var opts = new CookieOptions
+        {
+            HttpOnly = true,
+            IsEssential = true,
+            Expires = DateTimeOffset.UtcNow.AddDays(30),
+            SameSite = SameSiteMode.Lax,
+            Path = "/"           // مَتاح لكلّ مَسارات الـ tenant
+        };
+        res.Cookies.Append(CookieName(tenantSlug), auth.Token, opts);
+        res.Cookies.Append(CookieName(tenantSlug) + ".name", auth.FullName, opts);
+    }
+
+    public static void ClearCookie(HttpResponse res, string tenantSlug)
+    {
+        var opts = new CookieOptions { Path = "/" };
+        res.Cookies.Delete(CookieName(tenantSlug), opts);
+        res.Cookies.Delete(CookieName(tenantSlug) + ".name", opts);
+    }
 }

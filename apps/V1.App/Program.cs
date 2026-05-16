@@ -1,18 +1,34 @@
+using ACommerce.Kit.Auth;
+using ACommerce.Kit.Auth.Providers.MockNafath;
+using ACommerce.Kit.Auth.Providers.MockSms;
+using ACommerce.Kit.Auth.Server;
 using ACommerce.Kit.Realtime.Server;
 using ACommerce.Platform.Hosting;
+using ACommerce.Platform.Shared;
 using ACommerce.V1.App.Auth;
 using ACommerce.V1.App.Components;
 using ACommerce.V1.App.Seed;
+using Marten;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddPlatformHost(host => host
     .AddKitAssembly(typeof(ACommerce.Kit.Tenants.Server.TenantHandlers).Assembly)
     .AddKitAssembly(typeof(ACommerce.Kit.Listings.Server.ListingHandlers).Assembly)
-    .AddKitAssembly(typeof(ACommerce.Kit.Auth.Server.AuthHandlers).Assembly)
+    .AddKitAssembly(typeof(AuthHandlers).Assembly)
     .AddKitAssembly(typeof(ACommerce.Kit.Notifications.Server.NotificationHandlers).Assembly)
     .AddKitAssembly(typeof(ACommerce.Kit.Chat.Server.ChatHandlers).Assembly)
-    .AddKitAssembly(typeof(ACommerce.Kit.Realtime.Server.RealtimeBroadcastHandler).Assembly));
+    .AddKitAssembly(typeof(RealtimeBroadcastHandler).Assembly));
+
+// مُزَوِّدو الـ Auth — مَفصولون. التَطبيق يَختار التَنفيذ:
+//   مَكتَبَة Auth.Server تَستَخدِم IOtpChannel/INafathChannel كَ contracts
+//   وهذا التَطبيق يَربُط Mock إليهما. الإنتاج يَستَبدِل المَكتَبَة فقط.
+builder.Services.AddMockSmsChannel();
+builder.Services.AddMockNafathChannel(opts =>
+{
+    opts.DisplayCode = "00";
+    opts.AutoApproveSeconds = 5;
+});
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<AuthSession>();
@@ -26,15 +42,87 @@ await using (var scope = app.Services.CreateAsyncScope())
 
 app.UsePlatformHost();
 
-// Logout endpoint (POST /{slug}/auth/logout) — يَمسَح الـ cookies ويُعيد توجيه
+// ─── SSR form endpoints — لا Blazor interactivity مَطلوب ─────────────
+//
+// Phone flow:
+//   POST /{slug}/auth/phone/login   → يَطلُب OTP، يُعيد توجيه إلى Stage=verify
+//   POST /{slug}/auth/phone/verify  → يَتَحَقَّق، يَضَع cookie، يُعيد للـ /{slug}
+
+app.MapPost("/{slug}/auth/phone/login",
+    async (string slug, HttpRequest req, HttpResponse res, IDocumentStore store,
+           ITenantContext tenant, IOtpChannel channel) =>
+{
+    if (!tenant.IsResolved) return Results.NotFound();
+    var phone = req.Form["phone"].ToString().Trim();
+    if (string.IsNullOrEmpty(phone))
+        return Results.Redirect($"/{slug}/login?err=phone_required");
+
+    await AuthHandlers.RequestPhoneOtpHandler(
+        new RequestPhoneOtp(phone), tenant, channel, default);
+    return Results.Redirect($"/{slug}/login?stage=verify&phone={Uri.EscapeDataString(phone)}");
+}).DisableAntiforgery();
+
+app.MapPost("/{slug}/auth/phone/verify",
+    async (string slug, HttpRequest req, HttpResponse res, IDocumentStore store,
+           ITenantContext tenant) =>
+{
+    if (!tenant.IsResolved) return Results.NotFound();
+    var phone = req.Form["phone"].ToString().Trim();
+    var code = req.Form["code"].ToString().Trim();
+    var result = await AuthHandlers.VerifyPhoneOtpHandler(
+        new VerifyPhoneOtp(phone, code), tenant, store);
+    if (result is null)
+        return Results.Redirect(
+            $"/{slug}/login?stage=verify&phone={Uri.EscapeDataString(phone)}&err=code_invalid");
+
+    AuthSession.WriteCookie(res, slug, result);
+    return Results.Redirect($"/{slug}");
+}).DisableAntiforgery();
+
+// Nafath flow:
+//   POST /{slug}/auth/nafath/login   → يَبدَأ، يُعيد توجيه إلى Stage=verify
+//   POST /{slug}/auth/nafath/verify  → يَفحَص الموافَقَة (Mock=5s)، cookie + redirect
+
+app.MapPost("/{slug}/auth/nafath/login",
+    async (string slug, HttpRequest req, HttpResponse res,
+           ITenantContext tenant, INafathChannel channel) =>
+{
+    if (!tenant.IsResolved) return Results.NotFound();
+    var nid = req.Form["nid"].ToString().Trim();
+    if (string.IsNullOrEmpty(nid) || nid.Length != 10)
+        return Results.Redirect($"/{slug}/login?err=nid_required");
+
+    var pending = await AuthHandlers.RequestNafathHandler(
+        new RequestNafath(nid), tenant, channel, default);
+    return Results.Redirect(
+        $"/{slug}/login?stage=verify&nid={Uri.EscapeDataString(nid)}" +
+        $"&attempt={pending.AttemptId}&code={pending.DisplayCode}");
+}).DisableAntiforgery();
+
+app.MapPost("/{slug}/auth/nafath/verify",
+    async (string slug, HttpRequest req, HttpResponse res,
+           ITenantContext tenant, INafathChannel channel, IDocumentStore store) =>
+{
+    if (!tenant.IsResolved) return Results.NotFound();
+    var nid = req.Form["nid"].ToString().Trim();
+    var attempt = req.Form["attempt"].ToString();
+    var result = await AuthHandlers.VerifyNafathHandler(
+        new VerifyNafath(attempt, nid), tenant, channel, store, default);
+    if (result is null)
+        return Results.Redirect(
+            $"/{slug}/login?stage=verify&nid={Uri.EscapeDataString(nid)}&attempt={attempt}&code=00&err=not_approved");
+
+    AuthSession.WriteCookie(res, slug, result);
+    return Results.Redirect($"/{slug}");
+}).DisableAntiforgery();
+
+// Logout
 app.MapPost("/{slug}/auth/logout", (string slug, HttpContext http) =>
 {
-    http.Response.Cookies.Delete(AuthSession.CookieName(slug), new CookieOptions { Path = $"/{slug}" });
-    http.Response.Cookies.Delete(AuthSession.CookieName(slug) + ".name", new CookieOptions { Path = $"/{slug}" });
+    AuthSession.ClearCookie(http.Response, slug);
     return Results.Redirect($"/{slug}");
-});
+}).DisableAntiforgery();
 
-// SignalR hub لِبَثّ realtime — مُسَجَّل بَعد UsePlatformHost لِأَنّ UseRouting يَجب أن يَكون قَد جَرى
 app.MapHub<RealtimeHub>("/realtime");
 
 app.MapRazorComponents<App>()

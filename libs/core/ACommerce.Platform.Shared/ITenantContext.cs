@@ -12,6 +12,7 @@ public interface ITenantContext
     string Slug { get; }
     string Name { get; }
     string BrandColor { get; }
+    string AuthChannel { get; }
     bool IsResolved { get; }
 }
 
@@ -22,9 +23,10 @@ public sealed class HttpItemTenantContext : ITenantContext
     public HttpItemTenantContext(IHttpContextAccessor http) => _http = http;
 
     public bool IsResolved => _http.HttpContext?.Items.ContainsKey(TenantKeys.Slug) == true;
-    public string Slug       => (string?)_http.HttpContext?.Items[TenantKeys.Slug]  ?? "";
-    public string Name       => (string?)_http.HttpContext?.Items[TenantKeys.Name]  ?? "";
-    public string BrandColor => (string?)_http.HttpContext?.Items[TenantKeys.Color] ?? "#000000";
+    public string Slug        => (string?)_http.HttpContext?.Items[TenantKeys.Slug]  ?? "";
+    public string Name        => (string?)_http.HttpContext?.Items[TenantKeys.Name]  ?? "";
+    public string BrandColor  => (string?)_http.HttpContext?.Items[TenantKeys.Color] ?? "#000000";
+    public string AuthChannel => (string?)_http.HttpContext?.Items[TenantKeys.AuthChannel] ?? "phone";
 }
 
 public static class TenantKeys
@@ -32,14 +34,16 @@ public static class TenantKeys
     public const string Slug  = "Tenant.Slug";
     public const string Name  = "Tenant.Name";
     public const string Color = "Tenant.Color";
+    public const string AuthChannel = "Tenant.AuthChannel";
 }
 
 public static class TenantContextExtensions
 {
-    public static void SetTenant(this HttpContext ctx, string slug, string name, string brandColor)
+    public static void SetTenant(this HttpContext ctx, string slug, string name, string brandColor, string authChannel)
     {
         ctx.Items[TenantKeys.Slug]  = slug;
         ctx.Items[TenantKeys.Name]  = name;
         ctx.Items[TenantKeys.Color] = brandColor;
+        ctx.Items[TenantKeys.AuthChannel] = authChannel;
     }
 }

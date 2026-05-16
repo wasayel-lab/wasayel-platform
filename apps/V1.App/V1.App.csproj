@@ -18,6 +18,8 @@
 
     <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Core\ACommerce.Kit.Auth.Core.csproj" />
     <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Server\ACommerce.Kit.Auth.Server.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.MockSms\ACommerce.Kit.Auth.Providers.MockSms.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.MockNafath\ACommerce.Kit.Auth.Providers.MockNafath.csproj" />
 
     <ProjectReference Include="..\..\libs\kits\Notifications\ACommerce.Kit.Notifications.Core\ACommerce.Kit.Notifications.Core.csproj" />
     <ProjectReference Include="..\..\libs\kits\Notifications\ACommerce.Kit.Notifications.Server\ACommerce.Kit.Notifications.Server.csproj" />

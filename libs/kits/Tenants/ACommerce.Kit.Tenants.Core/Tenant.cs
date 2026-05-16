@@ -18,6 +18,10 @@ public sealed class Tenant
     public string BrandColor { get; set; } = "#7C3AED";
     public string City { get; set; } = "";
     public string TagLine { get; set; } = "";
+    /// <summary>"phone" أو "nafath" — يَختار التَطبيق طَريقَة الدُخول
+    /// المُتاحَة لِهذا المُستَأجِر. صَفحَة Login تَقرَأ هذه القيمَة وتَعرِض
+    /// واجهَة واحِدَة (لا tabs).</summary>
+    public string AuthChannel { get; set; } = "phone";
     public List<Category> Categories { get; set; } = new();
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

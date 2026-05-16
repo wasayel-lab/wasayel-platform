@@ -22,6 +22,7 @@ public static class PlatformSeed
             color: "#7C3AED",
             city: "إب",
             tagLine: "السَكَن المُشتَرَك بأَريَحيّة",
+            authChannel: "nafath",
             categories: new[]
             {
                 ("room",      "غُرفَة لِشَريك سَكَن", "🛏️"),
@@ -43,6 +44,7 @@ public static class PlatformSeed
             color: "#F97316",
             city: "إب",
             tagLine: "كلّ ما يُؤَجَّر في مَدينَتك",
+            authChannel: "phone",
             categories: new[]
             {
                 ("apartment", "شَقّة",  "🏢"),
@@ -69,21 +71,32 @@ public static class PlatformSeed
     private static async Task SeedTenantIfMissingAsync(
         IDocumentSession globalSession,
         IDocumentStore store,
-        string slug, string name, string color, string city, string tagLine,
+        string slug, string name, string color, string city, string tagLine, string authChannel,
         (string slug, string label, string icon)[] categories,
         (string title, decimal price, string cat, string district)[] sampleListings)
     {
         var existing = await globalSession.LoadAsync<Tenant>(slug);
         if (existing is not null)
         {
-            Console.WriteLine($"[Seed] tenant '{slug}' already exists, skipping.");
+            // حَدِّث AuthChannel للمُحَدَّثات التي بَدَأَت قَبل إضافَة الحَقل
+            if (existing.AuthChannel != authChannel)
+            {
+                existing.AuthChannel = authChannel;
+                globalSession.Store(existing);
+                await globalSession.SaveChangesAsync();
+                Console.WriteLine($"[Seed] tenant '{slug}': AuthChannel updated to {authChannel}");
+            }
+            else
+            {
+                Console.WriteLine($"[Seed] tenant '{slug}' already exists, skipping.");
+            }
             return;
         }
 
         var tenant = new Tenant
         {
             Id = slug, Name = name, BrandColor = color,
-            City = city, TagLine = tagLine,
+            City = city, TagLine = tagLine, AuthChannel = authChannel,
             Categories = categories.Select(c => new Category
             {
                 Slug = c.slug, Label = c.label, Icon = c.icon

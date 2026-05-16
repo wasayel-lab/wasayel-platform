@@ -1,8 +1,14 @@
 @page "/{slug}/login"
 @inject ITenantContext Tenant
 @inject NavigationManager Nav
-@inject IHttpContextAccessor HttpCtx
-@inject AuthSession Auth
+
+@*
+    صَفحَة دُخول SSR. لا Blazor interactivity — كلّ شَيء forms POST عاديّة
+    تَصِل إلى endpoints مُسَجَّلَة في Program.cs، والـ endpoint يَضَع cookie
+    ويُعيد التَوجيه. هذا يَعمَل بدون JS ويَتَجاوَز مَشاكِل circuit/HttpContext.
+
+    الـ tenant يُحَدِّد القَناة: Ashare = Nafath، Ejar = Phone. لا اختِيار للمُستَخدِم.
+*@
 
 @if (!Tenant.IsResolved)
 {
@@ -10,203 +16,47 @@
 }
 else
 {
-    <div class="acs-nafath-head">
-        <span style="font-size:48px;">📱</span>
+    <div class="acs-nafath-head" style="text-align:center;padding-top:24px;">
+        <div style="font-size:48px;">@(Tenant.AuthChannel == "nafath" ? "🪪" : "📱")</div>
         <h1 class="acm-wizard-title">@Tenant.Name</h1>
+        <p class="acs-nafath-instruction">تَسجيل الدُخول بـ @(Tenant.AuthChannel == "nafath" ? "نَفاذ" : "الهاتف")</p>
     </div>
 
-    <div style="max-width:420px;margin:0 auto;background:var(--ac-surface);border:1px solid var(--ac-border);border-radius:var(--ac-radius-md);padding:20px;">
-
-        <div style="display:flex;gap:4px;margin-bottom:16px;background:var(--ac-bg-alt);padding:4px;border-radius:var(--ac-radius-sm);">
-            <button class="@(mode == "phone" ? "tab-active":"tab")" @onclick='() => SetMode("phone")'>هاتف</button>
-            <button class="@(mode == "nafath" ? "tab-active":"tab")" @onclick='() => SetMode("nafath")'>نَفاذ</button>
-        </div>
-
-        @if (mode == "phone")
+    <div style="max-width:420px;margin:0 auto;background:var(--ac-surface);
+                border:1px solid var(--ac-border);border-radius:var(--ac-radius-md);
+                padding:20px;">
+        @if (Tenant.AuthChannel == "nafath")
         {
-            @if (!_otpSent)
-            {
-                <label style="display:block;font-size:13px;margin-bottom:6px;">رَقم الهاتف <span style="color:var(--ac-danger)">*</span></label>
-                <input type="tel" class="ac-input" style="width:100%;padding:10px;border-radius:var(--ac-radius-sm);border:1px solid var(--ac-border);font-size:16px;"
-                       @bind="_phone" @bind:event="oninput" @onkeydown="OnPhoneKey" placeholder="7XXXXXXXX" />
-
-                @if (_error is not null) { <div style="background:color-mix(in srgb,var(--ac-danger) 12%,transparent);color:var(--ac-danger);padding:8px;border-radius:6px;margin-top:10px;font-size:13px;">@_error</div> }
-
-                <button class="btn-primary" @onclick="RequestOtp" disabled="@(_phone.Length < 9 || _busy)">
-                    @(_busy ? "جارٍ الإرسال…" : "إرسال الكود")
-                </button>
-            }
-            else
-            {
-                <p class="acs-nafath-instruction">أَدخِل الكود المُرسَل إلى رَقمك</p>
-                <label style="display:block;font-size:13px;margin-bottom:6px;">الكود <span style="color:var(--ac-danger)">*</span></label>
-                <input type="tel" class="ac-input" style="width:100%;padding:10px;border-radius:var(--ac-radius-sm);border:1px solid var(--ac-border);font-size:16px;letter-spacing:.4em;text-align:center;"
-                       @bind="_code" @bind:event="oninput" @onkeydown="OnCodeKey" placeholder="123456" maxlength="6" />
-
-                <div class="acs-nafath-state acs-nafath-state--ok mt-2">
-                    <span>✓</span><span>وَضع التَطوير — الكود: <strong>123456</strong></span>
-                </div>
-
-                @if (_error is not null) { <div style="background:color-mix(in srgb,var(--ac-danger) 12%,transparent);color:var(--ac-danger);padding:8px;border-radius:6px;margin-top:10px;font-size:13px;">@_error</div> }
-
-                <button class="btn-primary" @onclick="VerifyOtp" disabled="@(_code.Length < 6 || _busy)">
-                    @(_busy ? "جارٍ التَحَقُّق…" : "تَحَقُّق")
-                </button>
-                <button class="btn-ghost" @onclick="ResetOtp">تَغيير الرَقم</button>
-            }
+            <NafathLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
+                             NationalId="@NationalIdValue" AttemptId="@AttemptId" DisplayCode="@DisplayCode" />
         }
         else
         {
-            @* Nafath *@
-            @if (!_nafathSent)
-            {
-                <label style="display:block;font-size:13px;margin-bottom:6px;">رَقم الهُويَّة <span style="color:var(--ac-danger)">*</span></label>
-                <input type="tel" class="ac-input" style="width:100%;padding:10px;border-radius:var(--ac-radius-sm);border:1px solid var(--ac-border);font-size:16px;text-align:center;letter-spacing:.2em;"
-                       @bind="_nationalId" @bind:event="oninput" placeholder="١٠٢٢٣٣٤٤٥٥" maxlength="10" />
-
-                @if (_error is not null) { <div style="background:color-mix(in srgb,var(--ac-danger) 12%,transparent);color:var(--ac-danger);padding:8px;border-radius:6px;margin-top:10px;font-size:13px;">@_error</div> }
-
-                <button class="btn-primary" @onclick="RequestNafath" disabled="@(_nationalId.Length < 10 || _busy)">
-                    @(_busy ? "جارٍ الإرسال…" : "بَدء التَحَقُّق")
-                </button>
-            }
-            else
-            {
-                <p class="acs-nafath-instruction">اِفتَح تَطبيق نَفاذ في جَوّالك واختَر الرَقم المَوضَح:</p>
-
-                <div class="acs-nafath-code-wrap">
-                    <div class="acs-nafath-code-circle">
-                        <div class="acs-nafath-code-num">@_nafathCode</div>
-                    </div>
-                </div>
-
-                <div class="acs-nafath-state acs-nafath-state--waiting mt-2">
-                    <span>⏱</span><span>سيَتَحَقَّق تلقائيّاً خلال @_autoVerifySeconds ثانيَة (وَضع التَطوير)</span>
-                </div>
-
-                @if (_error is not null) { <div style="background:color-mix(in srgb,var(--ac-danger) 12%,transparent);color:var(--ac-danger);padding:8px;border-radius:6px;margin-top:10px;font-size:13px;">@_error</div> }
-
-                <button class="btn-primary" @onclick="VerifyNafath" disabled="@_busy">
-                    @(_busy ? "جارٍ التَحَقُّق…" : "تَحَقُّق الآن")
-                </button>
-                <button class="btn-ghost" @onclick="ResetNafath">تَغيير الرَقم</button>
-            }
+            <PhoneLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
+                            Phone="@PhoneValue" />
         }
     </div>
-}
 
-<style>
-    .tab, .tab-active {
-        flex:1; padding:8px; border:0; background:transparent; cursor:pointer;
-        font-size:13px; color:var(--ac-text-muted); border-radius:6px;
-    }
-    .tab-active { background:var(--ac-surface); color:var(--ac-primary); font-weight:700; box-shadow:0 1px 2px rgba(0,0,0,.06); }
-    .btn-primary {
-        width:100%; padding:12px; margin-top:12px;
-        background:var(--ac-primary); color:#fff; border:0;
-        border-radius:var(--ac-radius-sm); font-size:15px; font-weight:600;
-        cursor:pointer;
-    }
-    .btn-primary:disabled { opacity:.5; cursor:not-allowed; }
-    .btn-ghost {
-        width:100%; padding:10px; margin-top:6px;
-        background:transparent; color:var(--ac-text-muted); border:0;
-        cursor:pointer; font-size:13px;
-    }
-</style>
+    <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--ac-text-muted);">
+        ← <a href="@($"/{Slug}")" style="color:var(--ac-primary);text-decoration:none;">العَودَة لِـ @Tenant.Name</a>
+    </p>
+}
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
-    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery] public string? Stage { get; set; }
+    [SupplyParameterFromQuery] public string? Err { get; set; }
+    [SupplyParameterFromQuery(Name = "phone")]    public string? PhoneValue { get; set; }
+    [SupplyParameterFromQuery(Name = "nid")]      public string? NationalIdValue { get; set; }
+    [SupplyParameterFromQuery(Name = "attempt")]  public string? AttemptId { get; set; }
+    [SupplyParameterFromQuery(Name = "code")]     public string? DisplayCode { get; set; }
 
-    string mode = "phone";
-    string _phone = "", _code = "", _nationalId = "", _nafathCode = "00", _attemptId = "";
-    bool _otpSent, _nafathSent, _busy;
-    int _autoVerifySeconds = 5;
-    string? _error;
-
-    void SetMode(string m) { mode = m; _error = null; }
-    void ResetOtp()    { _otpSent = false; _code = ""; _error = null; }
-    void ResetNafath() { _nafathSent = false; _nationalId = ""; _error = null; }
-
-    async Task OnPhoneKey(KeyboardEventArgs e) { if (e.Key == "Enter" && _phone.Length >= 9) await RequestOtp(); }
-    async Task OnCodeKey(KeyboardEventArgs e)  { if (e.Key == "Enter" && _code.Length >= 6)  await VerifyOtp(); }
-
-    async Task RequestOtp()
+    string? ErrorMessage => Err switch
     {
-        _busy = true; _error = null;
-        try
-        {
-            var http = HttpCtx.HttpContext!;
-            var origin = $"{http.Request.Scheme}://{http.Request.Host}";
-            using var c = new HttpClient();
-            var r = await c.PostAsJsonAsync($"{origin}/{Slug}/auth/phone/request", new { phone = _phone });
-            if (r.IsSuccessStatusCode) _otpSent = true;
-            else _error = "تَعَذَّر إرسال الكود.";
-        }
-        catch (Exception ex) { _error = ex.Message; }
-        _busy = false;
-    }
-
-    async Task VerifyOtp()
-    {
-        _busy = true; _error = null;
-        try
-        {
-            var http = HttpCtx.HttpContext!;
-            var origin = $"{http.Request.Scheme}://{http.Request.Host}";
-            using var c = new HttpClient();
-            var r = await c.PostAsJsonAsync($"{origin}/{Slug}/auth/phone/verify", new { phone = _phone, code = _code });
-            if (!r.IsSuccessStatusCode) { _error = "كود خاطئ."; _busy = false; return; }
-            var auth = await r.Content.ReadFromJsonAsync<ACommerce.Kit.Auth.AuthResult>();
-            if (auth is null) { _error = "تَعَذَّر استلام التَوكَن."; _busy = false; return; }
-            Auth.SignIn(http, auth);
-            Nav.NavigateTo(ReturnUrl ?? $"/{Slug}", forceLoad: true);
-        }
-        catch (Exception ex) { _error = ex.Message; _busy = false; }
-    }
-
-    async Task RequestNafath()
-    {
-        _busy = true; _error = null;
-        try
-        {
-            var http = HttpCtx.HttpContext!;
-            var origin = $"{http.Request.Scheme}://{http.Request.Host}";
-            using var c = new HttpClient();
-            var r = await c.PostAsJsonAsync($"{origin}/{Slug}/auth/nafath/request", new { nationalId = _nationalId });
-            if (r.IsSuccessStatusCode)
-            {
-                var pending = await r.Content.ReadFromJsonAsync<ACommerce.Kit.Auth.NafathPending>();
-                if (pending is not null)
-                {
-                    _attemptId = pending.AttemptId;
-                    _nafathCode = pending.DisplayCode;
-                    _autoVerifySeconds = pending.AutoVerifyInSeconds;
-                    _nafathSent = true;
-                }
-            }
-            else _error = "تَعَذَّر بَدء التَحَقُّق.";
-        }
-        catch (Exception ex) { _error = ex.Message; }
-        _busy = false;
-    }
-
-    async Task VerifyNafath()
-    {
-        _busy = true; _error = null;
-        try
-        {
-            var http = HttpCtx.HttpContext!;
-            var origin = $"{http.Request.Scheme}://{http.Request.Host}";
-            using var c = new HttpClient();
-            var r = await c.PostAsJsonAsync($"{origin}/{Slug}/auth/nafath/verify", new { attemptId = _attemptId, nationalId = _nationalId });
-            if (!r.IsSuccessStatusCode) { _error = "لم يُؤكَّد بَعد، حاوِل ثانيَة."; _busy = false; return; }
-            var auth = await r.Content.ReadFromJsonAsync<ACommerce.Kit.Auth.AuthResult>();
-            if (auth is null) { _error = "تَعَذَّر استلام التَوكَن."; _busy = false; return; }
-            Auth.SignIn(http, auth);
-            Nav.NavigateTo(ReturnUrl ?? $"/{Slug}", forceLoad: true);
-        }
-        catch (Exception ex) { _error = ex.Message; _busy = false; }
-    }
+        "phone_required" => "اِكتُب رَقم الهاتف.",
+        "code_invalid"   => "الكود غير صَحيح أو انتَهَت صَلاحِيَّته.",
+        "nid_required"   => "اِكتُب رَقم الهُويَّة.",
+        "not_approved"   => "لم يُؤَكَّد بَعد. حاوِل مَرَّة أُخرى.",
+        _                => null
+    };
 }
