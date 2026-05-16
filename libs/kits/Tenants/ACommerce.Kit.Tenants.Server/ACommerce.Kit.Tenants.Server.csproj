@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Marten" />
+    <PackageReference Include="WolverineFx.Marten" />
+    <PackageReference Include="WolverineFx.Http" />
+    <ProjectReference Include="..\ACommerce.Kit.Tenants.Core\ACommerce.Kit.Tenants.Core.csproj" />
+  </ItemGroup>
+</Project>

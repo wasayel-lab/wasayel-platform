@@ -1,0 +1,82 @@
+@page "/{slug}"
+@inject ITenantContext Tenant
+@inject IDocumentStore Store
+@inject NavigationManager Nav
+
+@if (!Tenant.IsResolved || string.IsNullOrEmpty(Slug))
+{
+    <h1>المَتجَر غير مَوجود</h1>
+    <p><a href="/">العَودَة</a></p>
+}
+else if (loaded is null)
+{
+    <p>تَحميل...</p>
+}
+else
+{
+    <section class="hero">
+        <h1>@Tenant.Name</h1>
+        <p class="tagline">@loaded.TagLine</p>
+        <p class="muted">@loaded.City</p>
+    </section>
+
+    <h2>الفِئات</h2>
+    <ul class="category-grid">
+        @foreach (var c in loaded.Categories)
+        {
+            <li class="cat-card">
+                <a href="/@Slug/listings?category=@c.Slug" style="color:@Tenant.BrandColor">
+                    <span class="icon">@c.Icon</span>
+                    <strong>@c.Label</strong>
+                    <span class="muted">@CountFor(c.Slug) إعلان</span>
+                </a>
+            </li>
+        }
+    </ul>
+
+    <h2>أَحدَث الإعلانات</h2>
+    @if (latest is { Count: > 0 })
+    {
+        <ul class="listing-grid">
+            @foreach (var l in latest)
+            {
+                <li class="listing-card">
+                    <a href="/@Slug/listings/@l.Id">
+                        <strong>@l.Title</strong>
+                        <span class="price">@l.Price.ToString("N0") ريال</span>
+                        <span class="muted">@l.City — @l.District</span>
+                    </a>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    Tenant? loaded;
+    IReadOnlyList<Listing>? latest;
+    Dictionary<string, int> counts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var global = Store.QuerySession();
+        loaded = await global.LoadAsync<Tenant>(Slug);
+        if (loaded is null) return;
+
+        await using var tenantQ = Store.QuerySession(Slug);
+        latest = await tenantQ.Query<Listing>()
+            .Where(x => !x.IsDeleted)
+            .OrderByDescending(x => x.CreatedAt)
+            .Take(6)
+            .ToListAsync();
+
+        var all = await tenantQ.Query<Listing>()
+            .Where(x => !x.IsDeleted)
+            .Select(x => x.CategorySlug)
+            .ToListAsync();
+        counts = all.GroupBy(s => s).ToDictionary(g => g.Key, g => g.Count());
+    }
+
+    int CountFor(string catSlug) => counts.TryGetValue(catSlug, out var n) ? n : 0;
+}

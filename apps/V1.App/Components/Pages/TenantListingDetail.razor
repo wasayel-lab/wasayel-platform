@@ -1,0 +1,67 @@
+@page "/{slug}/listings/{id:guid}"
+@inject ITenantContext Tenant
+@inject IDocumentStore Store
+
+@if (!Tenant.IsResolved)
+{
+    <h1>غير مَوجود</h1>
+    <p><a href="/">العَودَة</a></p>
+}
+else if (listing is null)
+{
+    <p>تَحميل...</p>
+}
+else if (listing.IsDeleted)
+{
+    <h1>هذا الإعلان مَحذوف.</h1>
+}
+else
+{
+    <article class="listing-detail">
+        <h1>@listing.Title</h1>
+        <p class="price big">@listing.Price.ToString("N0") ريال</p>
+        <p class="muted">@listing.City — @listing.District</p>
+        <p class="cat">@CategoryLabel</p>
+
+        <p>@listing.Description</p>
+
+        @if (listing.Attributes.Count > 0)
+        {
+            <ul class="attrs">
+                @foreach (var a in listing.Attributes)
+                {
+                    <li><strong>@a.Key:</strong> @a.Value</li>
+                }
+            </ul>
+        }
+
+        <p class="muted">شوهد: @listing.ViewCount مَرَّة</p>
+        <p class="muted">تاريخ النَشر: @listing.CreatedAt.ToString("yyyy-MM-dd")</p>
+        <p><a href="/@Slug/listings">العَودَة لِكُلّ الإعلانات</a></p>
+    </article>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public Guid Id { get; set; }
+    Listing? listing;
+    Tenant? tenant;
+
+    string CategoryLabel =>
+        tenant?.Categories.FirstOrDefault(c => c.Slug == listing?.CategorySlug)?.Label ?? "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var g = Store.QuerySession();
+        tenant = await g.LoadAsync<Tenant>(Slug);
+        if (tenant is null) return;
+        await using var t = Store.LightweightSession(Slug);
+        listing = await t.Events.AggregateStreamAsync<Listing>(Id);
+        if (listing is not null && !listing.IsDeleted)
+        {
+            t.Events.Append(Id, new ListingViewed(Id, null, DateTime.UtcNow));
+            await t.SaveChangesAsync();
+            listing.ViewCount++;
+        }
+    }
+}

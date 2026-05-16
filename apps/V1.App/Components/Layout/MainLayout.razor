@@ -1,0 +1,33 @@
+@inherits LayoutComponentBase
+@inject ITenantContext Tenant
+
+<div class="page" style="@PageStyle">
+    @if (Tenant.IsResolved)
+    {
+        <header class="branded-header" style="background:@Tenant.BrandColor">
+            <div class="header-inner">
+                <a class="logo" href="/@Tenant.Slug">@Tenant.Name</a>
+                <nav>
+                    <a href="/@Tenant.Slug">الرَئيسيّة</a>
+                    <a href="/@Tenant.Slug/listings">كلّ الإعلانات</a>
+                </nav>
+            </div>
+        </header>
+    }
+    else
+    {
+        <header class="platform-header">
+            <div class="header-inner">
+                <a class="logo" href="/">ACommerce Platform V1</a>
+            </div>
+        </header>
+    }
+    <main>@Body</main>
+</div>
+
+@code {
+    string PageStyle =>
+        Tenant.IsResolved
+            ? $"--brand:{Tenant.BrandColor};"
+            : "--brand:#111827;";
+}

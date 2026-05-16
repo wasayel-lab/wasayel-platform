@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Marten" />
+    <ProjectReference Include="..\ACommerce.Platform.Shared\ACommerce.Platform.Shared.csproj" />
+    <ProjectReference Include="..\..\kits\Tenants\ACommerce.Kit.Tenants.Core\ACommerce.Kit.Tenants.Core.csproj" />
+  </ItemGroup>
+</Project>

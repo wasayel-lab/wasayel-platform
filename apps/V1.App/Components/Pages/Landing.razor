@@ -1,0 +1,39 @@
+@page "/"
+@inject IQuerySession Db
+
+<h1>منصّة ACommerce — V1</h1>
+<p class="lede">تَطبيق متَعَدِّد المُستَأجِرين، كلّ tenant يَملك مَتجَره الخاصّ، نَفس الـ binary يَخدِم الجَميع.</p>
+
+@if (tenants is null)
+{
+    <p>تَحميل...</p>
+}
+else if (tenants.Count == 0)
+{
+    <p>لا توجَد مَتاجِر بَعد.</p>
+}
+else
+{
+    <ul class="tenant-cards">
+        @foreach (var t in tenants)
+        {
+            <li class="tenant-card" style="border-color:@t.BrandColor">
+                <a href="/@t.Slug" style="color:@t.BrandColor">
+                    <strong>@t.Name</strong>
+                    <span>/@t.Slug</span>
+                </a>
+                <p class="muted">@t.TagLine</p>
+                <p class="muted">@t.City — @t.Categories.Count فِئَة</p>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    IReadOnlyList<Tenant>? tenants;
+
+    protected override async Task OnInitializedAsync()
+    {
+        tenants = await Db.Query<Tenant>().ToListAsync();
+    }
+}

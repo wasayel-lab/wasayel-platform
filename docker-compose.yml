@@ -1,0 +1,26 @@
+# خَيار بَديل لِمَن لا يُريد تَثبيت Postgres مَحَلِّيّاً.
+# يَتَطَلَّب Docker مُشَغَّلاً. اِستَخدِم:
+#   docker compose up -d
+# نَفس الـ credentials في appsettings.json.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: acommerce-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: acommerce
+      POSTGRES_PASSWORD: acommerce
+      POSTGRES_DB: acommerce_v1
+    ports:
+      - "5432:5432"
+    volumes:
+      - acommerce-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U acommerce -d acommerce_v1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  acommerce-pg-data:
