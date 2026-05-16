@@ -14,5 +14,6 @@
     <ProjectReference Include="..\..\kits\Auth\ACommerce.Kit.Auth.Core\ACommerce.Kit.Auth.Core.csproj" />
     <ProjectReference Include="..\..\kits\Notifications\ACommerce.Kit.Notifications.Core\ACommerce.Kit.Notifications.Core.csproj" />
     <ProjectReference Include="..\..\kits\Chat\ACommerce.Kit.Chat.Core\ACommerce.Kit.Chat.Core.csproj" />
+    <ProjectReference Include="..\..\kits\Favorites\ACommerce.Kit.Favorites.Core\ACommerce.Kit.Favorites.Core.csproj" />
   </ItemGroup>
 </Project>

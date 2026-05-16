@@ -2,7 +2,7 @@ using ACommerce.Kit.Auth;
 using ACommerce.Kit.Auth.Server;
 using Microsoft.AspNetCore.Http;
 
-namespace ACommerce.V1.App.Auth;
+namespace ACommerce.Templates.Customer.Marketplace;
 
 /// <summary>
 /// حالَة المُستَخدِم في الـ Blazor circuit. تُحَمَّل من cookie في كلّ

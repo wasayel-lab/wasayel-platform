@@ -19,6 +19,10 @@
     <Project Path="libs/kits/Chat/ACommerce.Kit.Chat.Core/ACommerce.Kit.Chat.Core.csproj" />
     <Project Path="libs/kits/Chat/ACommerce.Kit.Chat.Server/ACommerce.Kit.Chat.Server.csproj" />
   </Folder>
+  <Folder Name="/libs/kits/Favorites/">
+    <Project Path="libs/kits/Favorites/ACommerce.Kit.Favorites.Core/ACommerce.Kit.Favorites.Core.csproj" />
+    <Project Path="libs/kits/Favorites/ACommerce.Kit.Favorites.Server/ACommerce.Kit.Favorites.Server.csproj" />
+  </Folder>
   <Folder Name="/libs/kits/Listings/">
     <Project Path="libs/kits/Listings/ACommerce.Kit.Listings.Core/ACommerce.Kit.Listings.Core.csproj" />
     <Project Path="libs/kits/Listings/ACommerce.Kit.Listings.Server/ACommerce.Kit.Listings.Server.csproj" />
@@ -26,6 +30,9 @@
   <Folder Name="/libs/kits/Notifications/">
     <Project Path="libs/kits/Notifications/ACommerce.Kit.Notifications.Core/ACommerce.Kit.Notifications.Core.csproj" />
     <Project Path="libs/kits/Notifications/ACommerce.Kit.Notifications.Server/ACommerce.Kit.Notifications.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Profiles/">
+    <Project Path="libs/kits/Profiles/ACommerce.Kit.Profiles.Core/ACommerce.Kit.Profiles.Core.csproj" />
   </Folder>
   <Folder Name="/libs/kits/Realtime/">
     <Project Path="libs/kits/Realtime/ACommerce.Kit.Realtime.Core/ACommerce.Kit.Realtime.Core.csproj" />
@@ -36,6 +43,7 @@
     <Project Path="libs/kits/Tenants/ACommerce.Kit.Tenants.Server/ACommerce.Kit.Tenants.Server.csproj" />
   </Folder>
   <Folder Name="/libs/templates/">
+    <Project Path="libs/templates/ACommerce.Templates.Customer.Marketplace/ACommerce.Templates.Customer.Marketplace.csproj" />
     <Project Path="libs/templates/ACommerce.Templates.Shared/ACommerce.Templates.Shared.csproj" />
   </Folder>
   <Folder Name="/libs/widgets/">

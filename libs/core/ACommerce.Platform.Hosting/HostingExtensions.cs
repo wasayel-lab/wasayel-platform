@@ -84,6 +84,7 @@ public static class HostingExtensions
                 opts.Schema.For<ACommerce.Kit.Notifications.Notification>().Identity(x => x.Id);
                 opts.Schema.For<ACommerce.Kit.Chat.Conversation>().Identity(x => x.Id);
                 opts.Schema.For<ACommerce.Kit.Chat.Message>().Identity(x => x.Id);
+                opts.Schema.For<ACommerce.Kit.Favorites.Favorite>().Identity(x => x.Id);
 
                 // Auto-create schema في dev
                 if (builder.Environment.IsDevelopment())

@@ -1,138 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>Ejar.Customer.UI</RootNamespace>
-    <AssemblyName>ACommerce.Templates.Customer.Marketplace</AssemblyName>
-    <PackageId>ACommerce.Templates.Customer.Marketplace</PackageId>
-    <Version>1.0.0</Version>
-    <Description>
-      قالَب Customer Marketplace — التَّصميم الكامِل المُعَتَمَد لـ V1
-      (إيجار): pages + services + bindings + interceptors + interpreters
-      مَنقولة مِن V1 الأَصلي. تَطبيقات تَستَهلِك القالَب عَبر
-      AddTemplate_Customer_Marketplace فتَحصُل عَلى نَفس تَجربة V1
-      البَصَريّة دون أن تَحتاج كتابَة pages في طَبَقَة التَطبيق.
-      RootNamespace=Ejar.Customer.UI لِلتَّوافُق مَع الكود المُسَتَورَد
-      (يَحفَظ namespaces فلا تَكسِر cross-refs).
-    </Description>
-    <RazorLangVersion>latest</RazorLangVersion>
     <StaticWebAssetBasePath>_content/ACommerce.Templates.Customer.Marketplace</StaticWebAssetBasePath>
-    <!-- L10n Source Generator config (G3) -->
-    <L10nClassName>TemplateStrings</L10nClassName>
-    <L10nNamespace>Ejar.Customer.UI.Resources</L10nNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Expose msbuild props لِلـ Source Generator -->
-    <CompilerVisibleProperty Include="L10nClassName" />
-    <CompilerVisibleProperty Include="L10nNamespace" />
-    <CompilerVisibleProperty Include="RootNamespace" />
-  </ItemGroup>
-  <ItemGroup>
     <SupportedPlatform Include="browser" />
-  </ItemGroup>
-  <ItemGroup>
-    <!-- Domain (entities + seed contracts) — needed by V1 services -->
-    <ProjectReference Include="..\..\..\..\Apps\Ejar\Domain\Ejar.Domain.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+    <PackageReference Include="Marten" />
 
-    <!-- OperationEngine core + Wire -->
-    <ProjectReference Include="..\..\..\core\OperationEngine\ACommerce.OperationEngine\ACommerce.OperationEngine.csproj" />
-    <ProjectReference Include="..\..\..\core\OperationEngine\ACommerce.OperationEngine.Wire\ACommerce.OperationEngine.Wire.csproj" />
+    <ProjectReference Include="..\..\widgets\ACommerce.Widgets\ACommerce.Widgets.csproj" />
+    <ProjectReference Include="..\ACommerce.Templates.Shared\ACommerce.Templates.Shared.csproj" />
 
-    <!-- Client libs -->
-    <ProjectReference Include="..\..\..\..\clients\ACommerce.Client.Operations\ACommerce.Client.Operations.csproj" />
-    <ProjectReference Include="..\..\..\..\clients\ACommerce.Client.Http\ACommerce.Client.Http.csproj" />
-    <ProjectReference Include="..\..\..\..\clients\ACommerce.Client.StateBridge\ACommerce.Client.StateBridge.csproj" />
+    <ProjectReference Include="..\..\core\ACommerce.Platform.Shared\ACommerce.Platform.Shared.csproj" />
 
-    <!-- Culture -->
-    <ProjectReference Include="..\..\..\kits\Culture\ACommerce.Culture.Abstractions\ACommerce.Culture.Abstractions.csproj" />
-    <ProjectReference Include="..\..\..\kits\Culture\ACommerce.Culture.Defaults\ACommerce.Culture.Defaults.csproj" />
-    <ProjectReference Include="..\..\..\kits\Culture\ACommerce.Culture.Interceptors\ACommerce.Culture.Interceptors.csproj" />
-
-    <!-- L10n.Blazor — L + ITranslationProvider + ILanguageContext (مَكان V1's L.cs) -->
-    <ProjectReference Include="..\..\..\kits\L10n\ACommerce.L10n.Blazor\ACommerce.L10n.Blazor.csproj" />
-
-    <!-- Widgets + Marketplace + Shared templates -->
-    <ProjectReference Include="..\..\..\kits\Widgets\ACommerce.Widgets\ACommerce.Widgets.csproj" />
-    <ProjectReference Include="..\..\Shared\ACommerce.Templates.Shared\ACommerce.Templates.Shared.csproj" />
-    <ProjectReference Include="..\..\Marketplace\ACommerce.Templates.Marketplace\ACommerce.Templates.Marketplace.csproj" />
-
-    <!-- Chat client -->
-    <ProjectReference Include="..\..\..\kits\Chat\ACommerce.Chat.Client.Blazor\ACommerce.Chat.Client.Blazor.csproj" />
-
-    <!-- Subscriptions Templates -->
-    <ProjectReference Include="..\..\..\templates\Subscriptions\ACommerce.Subscriptions.Templates\ACommerce.Subscriptions.Templates.csproj" />
-
-    <!-- Versions Templates (replaces deleted Versions.Client meta) -->
-    <ProjectReference Include="..\..\..\kits\Versions\ACommerce.Kits.Versions.Operations\ACommerce.Kits.Versions.Operations.csproj" />
-    <ProjectReference Include="..\..\..\templates\Versions\ACommerce.Kits.Versions.Templates\ACommerce.Kits.Versions.Templates.csproj" />
-
-    <!-- ClientHost (fluent client-side host) -->
-    <ProjectReference Include="..\..\..\host-client\ACommerce.ClientHost\ACommerce.ClientHost.csproj" />
-
-    <!-- per-kit Frontend.Customer (Stores: IXxxStore + Default<Kit>Store + ApiClients) -->
-    <ProjectReference Include="..\..\..\kits\Listings\Frontend\Customer\ACommerce.Kits.Listings.Frontend.Customer.csproj" />
-    <ProjectReference Include="..\..\..\kits\Chat\Frontend\Customer\ACommerce.Kits.Chat.Frontend.Customer.csproj" />
-    <ProjectReference Include="..\..\..\kits\Notifications\Frontend\Customer\ACommerce.Kits.Notifications.Frontend.Customer.csproj" />
-    <ProjectReference Include="..\..\..\kits\Profiles\Frontend\Customer\ACommerce.Kits.Profiles.Frontend.Customer.csproj" />
-    <ProjectReference Include="..\..\..\kits\Auth\Frontend\Customer\ACommerce.Kits.Auth.Frontend.Customer.csproj" />
-    <ProjectReference Include="..\..\..\kits\Subscriptions\Frontend\Customer\ACommerce.Kits.Subscriptions.Frontend.Customer.csproj" />
-    <ProjectReference Include="..\..\..\kits\Support\Frontend\Customer\ACommerce.Kits.Support.Frontend.Customer.csproj" />
-    <ProjectReference Include="..\..\..\kits\Favorites\Frontend\Customer\ACommerce.Kits.Favorites.Frontend.Customer.csproj" />
-    <ProjectReference Include="..\..\..\kits\Taxonomy\Frontend\Customer\ACommerce.Kits.Taxonomy.Frontend.Customer\ACommerce.Kits.Taxonomy.Frontend.Customer.csproj" />
-    <ProjectReference Include="..\..\..\kits\Discovery\Frontend\Customer\ACommerce.Kits.Discovery.Frontend.Customer.csproj" />
-    <ProjectReference Include="..\..\..\kits\Reports\Frontend\Customer\ACommerce.Kits.Reports.Frontend.Customer.csproj" />
-
-    <!-- Listings Operations (for IListing interface) -->
-    <ProjectReference Include="..\..\..\kits\Listings\ACommerce.Kits.Listings.Operations\ACommerce.Kits.Listings.Operations.csproj" />
-
-    <!-- OperationEngine.Interceptors — IOperationInterceptor + AddOperationInterceptors -->
-    <ProjectReference Include="..\..\..\core\OperationEngine\ACommerce.OperationEngine.Interceptors\ACommerce.OperationEngine.Interceptors.csproj" />
-
-    <!-- Customer.Ledger — atomic badges (AcChat/NotificationsUnreadBadgeWidget) used by V1 OLD pages -->
-    <ProjectReference Include="..\..\Customer.Ledger\ACommerce.Templates.Customer.Ledger\ACommerce.Templates.Customer.Ledger.csproj" />
-
-    <!-- Customer.Unread composition — يَجمَع IChatStore + INotificationsStore unread counters -->
-    <ProjectReference Include="..\..\..\compositions\Customer.Unread\ACommerce.Compositions.Customer.Unread\ACommerce.Compositions.Customer.Unread.csproj" />
-
-    <!-- Customer.Chat/Notifications/Favorites Realtime compositions —
-         tunnels for hub-pushed events into kit Stores via OAM seam -->
-    <ProjectReference Include="..\..\..\compositions\Customer.Chat.Realtime\ACommerce.Compositions.Customer.Chat.Realtime\ACommerce.Compositions.Customer.Chat.Realtime.csproj" />
-    <ProjectReference Include="..\..\..\compositions\Customer.Notifications.Realtime\ACommerce.Compositions.Customer.Notifications.Realtime\ACommerce.Compositions.Customer.Notifications.Realtime.csproj" />
-    <ProjectReference Include="..\..\..\compositions\Customer.Favorites.Realtime\ACommerce.Compositions.Customer.Favorites.Realtime\ACommerce.Compositions.Customer.Favorites.Realtime.csproj" />
-
-    <!-- F64 Phase 2: services moved out of template into compositions/providers -->
-    <ProjectReference Include="..\..\..\compositions\Customer.Favorites.Sync\ACommerce.Compositions.Customer.Favorites.Sync\ACommerce.Compositions.Customer.Favorites.Sync.csproj" />
-    <ProjectReference Include="..\..\..\compositions\Customer.SignalR\ACommerce.Compositions.Customer.SignalR\ACommerce.Compositions.Customer.SignalR.csproj" />
-    <ProjectReference Include="..\..\..\..\libs\providers\Notifications\Firebase.Web\ACommerce.Notification.Providers.Firebase.Web\ACommerce.Notification.Providers.Firebase.Web.csproj" />
-
-    <!-- F66 Phase A: Customer.Marketplace.Home composition -->
-    <ProjectReference Include="..\..\..\compositions\Customer.Marketplace.Home\ACommerce.Compositions.Customer.Marketplace.Home\ACommerce.Compositions.Customer.Marketplace.Home.csproj" />
-
-    <!-- F71 Phase F: extracted compositions (Resx provider + JS Tz provider) -->
-    <ProjectReference Include="..\..\..\compositions\Customer.L10n.Resx\ACommerce.Compositions.Customer.L10n.Resx\ACommerce.Compositions.Customer.L10n.Resx.csproj" />
-    <ProjectReference Include="..\..\..\compositions\Customer.Timezone.Js\ACommerce.Compositions.Customer.Timezone.Js\ACommerce.Compositions.Customer.Timezone.Js.csproj" />
-
-    <!-- G3: L10n Source Generator (analyzer-only, no runtime dep) -->
-    <ProjectReference Include="..\..\..\kits\L10n\ACommerce.L10n.SourceGenerator\ACommerce.L10n.SourceGenerator.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
-  </ItemGroup>
-  <ItemGroup>
-    <!-- AdditionalFiles لِيَقرأها Source Generator. NEUTRAL فَقَط (Strings.resx)؛
-         Strings.ar.resx + أيّ culture أُخرى تُتَجاهَل (تُقرَأ runtime عَبر ResourceManager). -->
-    <AdditionalFiles Include="Resources\Strings.resx" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.7" />
-    <PackageReference Include="Microsoft.AspNetCore.Authorization" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.7" />
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Update="Resources\Strings.resx" Generator="ResXFileCodeGenerator" LastGenOutput="Strings.Designer.cs" />
-    <EmbeddedResource Update="Resources\Strings.ar.resx" />
+    <ProjectReference Include="..\..\kits\Tenants\ACommerce.Kit.Tenants.Core\ACommerce.Kit.Tenants.Core.csproj" />
+    <ProjectReference Include="..\..\kits\Listings\ACommerce.Kit.Listings.Core\ACommerce.Kit.Listings.Core.csproj" />
+    <ProjectReference Include="..\..\kits\Auth\ACommerce.Kit.Auth.Core\ACommerce.Kit.Auth.Core.csproj" />
+    <ProjectReference Include="..\..\kits\Auth\ACommerce.Kit.Auth.Server\ACommerce.Kit.Auth.Server.csproj" />
+    <ProjectReference Include="..\..\kits\Chat\ACommerce.Kit.Chat.Core\ACommerce.Kit.Chat.Core.csproj" />
+    <ProjectReference Include="..\..\kits\Notifications\ACommerce.Kit.Notifications.Core\ACommerce.Kit.Notifications.Core.csproj" />
+    <ProjectReference Include="..\..\kits\Favorites\ACommerce.Kit.Favorites.Core\ACommerce.Kit.Favorites.Core.csproj" />
+    <ProjectReference Include="..\..\kits\Profiles\ACommerce.Kit.Profiles.Core\ACommerce.Kit.Profiles.Core.csproj" />
   </ItemGroup>
 </Project>

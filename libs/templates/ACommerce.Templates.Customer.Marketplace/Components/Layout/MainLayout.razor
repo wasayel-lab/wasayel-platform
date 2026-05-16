@@ -1,250 +1,87 @@
-@namespace Ejar.Customer.UI.Components.Layout
-@using ACommerce.Kits.Versions.Templates
-@using Ejar.Customer.UI.Services
 @inherits LayoutComponentBase
-@inject IClientAuthState Auth
-@inject IUiPreferences Prefs
-@inject IClientAuthPersistence AuthPersistence
-@inject LocalStorageUiPersistence UiPersistence
-@inject IClientCultureController Culture
-@inject IFavoritesStore Favs
-@inject UnreadComposition Unread
-@inject EjarRealtimeService Realtime
-@inject FirebasePushService FirebasePush
-@inject VersionPoll VersionPoll
+@inject ITenantContext Tenant
 @inject NavigationManager Nav
-@inject IConfiguration Config
-@inject IHttpClientFactory HttpFactory
-@inject IJSRuntime JS
-@inject L L
-@implements IAsyncDisposable
+@inject IHttpContextAccessor HttpCtx
+@inject AuthSession Auth
 
-<div class="acs-page @(Prefs.HideChrome ? "acm-chrome-hidden" : "")">
-@if (VersionPoll.UpdateAvailable)
+@{
+    var slug = Tenant.Slug;
+    var brand = Tenant.BrandColor;
+    var path = new Uri(Nav.Uri).AbsolutePath;
+    var isLogin = path.Contains("/login", StringComparison.OrdinalIgnoreCase);
+    var topItems = new List<AcTopNav.TopNavItem>
+    {
+        new($"/{slug}",               "الرَئيسيّة", "home",    null, true),
+        new($"/{slug}/explore",       "استِكشاف",   "search"),
+        new($"/{slug}/chats",         "رَسائل",     "message"),
+        new($"/{slug}/notifications", "إشعارات",    "bell"),
+        new($"/{slug}/me",            Auth.IsAuthenticated ? Auth.UserName ?? "حِسابي" : "حِسابي", "user")
+    };
+    var bottomItems = new List<ACommerce.Templates.Shared.Models.BottomNavItemDto>
+    {
+        new() { Href = $"/{slug}",               Label = "الرَئيسيّة", IconName = "home",    Exact = true },
+        new() { Href = $"/{slug}/explore",       Label = "استِكشاف",   IconName = "search" },
+        new() { Href = $"/{slug}/chats",         Label = "رَسائل",     IconName = "message" },
+        new() { Href = $"/{slug}/notifications", Label = "إشعارات",    IconName = "bell" },
+        new() { Href = $"/{slug}/me",            Label = Auth.IsAuthenticated ? "حِسابي" : "دُخول", IconName = "user" },
+    };
+}
+
+@if (Tenant.IsResolved)
 {
-    @* بانر التحديث — يَظهَر فَوق كلّ شَيء عِندما يُكتَشَف إصدار جَديد. *@
-    <div role="alert" style="position:sticky; top:0; z-index:1000;
-                             background:#1d4ed8; color:#fff; padding:10px 14px;
-                             display:flex; gap:12px; align-items:center;
-                             justify-content:center; flex-wrap:wrap;
-                             font-family:Cairo,sans-serif;">
-        <span>@(string.Format(L[TemplateStrings.LayoutVersionAvailableFormat], VersionPoll.AvailableVersion))</span>
-        <button type="button"
-                style="background:#fff; color:#1d4ed8; border:0; padding:6px 14px;
-                       border-radius:6px; font-weight:700; cursor:pointer;"
-                @onclick="ApplyAppUpdate">
-            @(L[TemplateStrings.LayoutUpdateNow])
-        </button>
+    <div class="acs-page" style="--ac-primary:@brand; --ac-primary-dark:@brand; --ac-primary-light:@brand; --ac-primary-hover:@brand;">
+        @if (!isLogin)
+        {
+            <nav class="acm-mobile-nav">
+                <div class="acm-mobile-nav-inner">
+                    <div class="acm-mobile-nav-brand">
+                        <span class="acm-mobile-nav-brand-name">@Tenant.Name</span>
+                    </div>
+                    <div class="acm-mobile-nav-actions">
+                        <a class="acm-mobile-nav-btn" href="@($"/{slug}/notifications")" aria-label="الإشعارات">
+                            <AcIcon Name="bell" Size="24" />
+                        </a>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="acm-v2-topnav-wrap">
+                <AcTopNav Items="topItems">
+                    <BrandContent>
+                        <div class="acm-brand">
+                            <span class="acm-brand-text">@Tenant.Name</span>
+                        </div>
+                    </BrandContent>
+                </AcTopNav>
+            </div>
+        }
+
+        <main>
+            @Body
+
+            @if (!isLogin)
+            {
+                <div class="acm-v2-bottom-nav-wrap">
+                    <AcBottomNav Items="bottomItems" ExtraClass="acm-v2-bottomnav" />
+                </div>
+            }
+        </main>
     </div>
 }
-<AcAppVersionGate>
-    <ChildContent>
-        <nav class="acm-mobile-nav">
-            <div class="acm-mobile-nav-inner">
-                <div class="acm-mobile-nav-brand">
-                    <span class="acm-brand-text" style="font-size:1.3rem;font-weight:700;color:var(--ac-primary);">@(L[TemplateStrings.AppName])</span>
-                </div>
-                <div class="acm-mobile-nav-actions">
-                    <button class="acm-mobile-nav-btn" @onclick="@(() => Nav.NavigateTo("/search"))" aria-label="@(L[TemplateStrings.CommonSearchAria])">
-                        <AcIcon Name="search" Size="28" />
-                    </button>
-                    <button class="acm-mobile-nav-btn ejar-icon-with-badge"
-                            @onclick="@(() => Nav.NavigateTo("/notifications"))"
-                            aria-label="@(string.Format(L[TemplateStrings.LayoutNotificationsAriaFormat], Unread.NotifUnread > 0 ? string.Format(L[TemplateStrings.LayoutUnreadAriaSuffixFormat], Unread.NotifUnread) : ""))">
-                        <AcIcon Name="bell" Size="28" />
-                        @if (Unread.NotifUnread > 0)
-                        {
-                            <span class="ejar-icon-badge" aria-hidden="true">
-                                @(Unread.NotifUnread > 99 ? "99+" : Unread.NotifUnread.ToString())
-                            </span>
-                        }
-                    </button>
-                </div>
-            </div>
-        </nav>
-
-        <div class="acm-v2-topnav-wrap">
-            <AcTopNav Items="_topItems">
-                <BrandContent>
-                    <div class="acm-brand">
-                        <span style="font-size:1.4rem;font-weight:700;color:var(--ac-primary);">@(L[TemplateStrings.AppName])</span>
-                    </div>
-                </BrandContent>
-                <RightActions>
-                    <AcThemeToggle IsDark="@(Prefs.Theme == "dark")"
-                                   IsDarkChanged="@(async v => await Culture.SetThemeAsync(v ? "dark" : "light"))" />
-                    <AcLanguageToggle IsArabic="@(Prefs.Language == "ar")"
-                                      IsArabicChanged="@(async v => await Culture.SetLanguageAsync(v ? "ar" : "en"))" />
-                </RightActions>
-            </AcTopNav>
-        </div>
-
-        <main class="@(Prefs.Theme == "dark" ? "ac-dark-wrap" : "")">
-            @Body
-            <div class="acm-v2-bottom-nav-wrap">
-                <AcBottomNav Items="_bottomItems" ExtraClass="acm-v2-bottomnav" />
-            </div>
-        </main>
-
-        <CookieConsentBanner />
-    </ChildContent>
-</AcAppVersionGate>
-</div>
+else
+{
+    <div class="acs-page" style="--ac-primary:#1D4ED8;">
+        <main>@Body</main>
+    </div>
+}
 
 @code {
-    private bool _favoritesLoaded;
-
-    /// <summary>عَنصُر مُسَطَّح لِـ AcBottomNav.</summary>
-    private IReadOnlyList<BottomNavItemDto> _bottomItems => new[]
-    {
-        new BottomNavItemDto { Href = "/",          Label = L[TemplateStrings.NavHome], IconName = "home",    Exact = true },
-        new BottomNavItemDto { Href = "/explore",   Label = L[TemplateStrings.NavExplore],  IconName = "compass" },
-        new BottomNavItemDto { Href = "/favorites", Label = L[TemplateStrings.NavFavorites],  IconName = "heart" },
-        new BottomNavItemDto { Href = "/chats",     Label = L[TemplateStrings.NavMessages],  IconName = "message",
-                               Badge = Unread.ChatUnread > 0 ? Unread.ChatUnread : null },
-        new BottomNavItemDto { Href = "/me",        Label = L[TemplateStrings.NavAccount],    IconName = "user" }
-    };
-
-    private IReadOnlyList<AcTopNav.TopNavItem> _topItems => new[]
-    {
-        new AcTopNav.TopNavItem("/",              L[TemplateStrings.NavHome],  "home",    null, true),
-        new AcTopNav.TopNavItem("/explore",       L[TemplateStrings.NavExplore],   "compass"),
-        new AcTopNav.TopNavItem("/favorites",     L[TemplateStrings.NavFavorites],   "heart"),
-        new AcTopNav.TopNavItem("/chats",         L[TemplateStrings.NavMessages],   "message", Unread.ChatUnread > 0 ? Unread.ChatUnread : (int?)null),
-        new AcTopNav.TopNavItem("/notifications", L[TemplateStrings.NotificationsTitle], "bell",    Unread.NotifUnread > 0 ? Unread.NotifUnread : (int?)null),
-        new AcTopNav.TopNavItem("/me",            L[TemplateStrings.NavAccount],     "user")
-    };
-
-    private string? _appliedTheme;
-    private string? _appliedLang;
-
     protected override void OnInitialized()
     {
-        Prefs.OnChanged    += OnChange;
-        Auth.OnChanged     += OnChange;
-        Nav.LocationChanged += OnLocationChanged;
-        VersionPoll.Changed += OnVersionPollChanged;
-        Unread.Changed      += OnUnreadChanged;
-        _ = VersionPoll.StartAsync();
-        UpdateChrome(Nav.Uri);
-    }
-
-    private void OnUnreadChanged()    => InvokeAsync(StateHasChanged);
-    private void OnVersionPollChanged() => InvokeAsync(StateHasChanged);
-    private async Task ApplyAppUpdate() => await VersionPoll.ApplyUpdateAsync();
-
-    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
-    {
-        UpdateChrome(e.Location);
-        InvokeAsync(StateHasChanged);
-    }
-
-    private void UpdateChrome(string uri)
-    {
-        var path = new Uri(uri).AbsolutePath;
-        Prefs.HideChrome = path.StartsWith("/login", StringComparison.OrdinalIgnoreCase);
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
+        if (Tenant.IsResolved && HttpCtx.HttpContext is { } ctx)
         {
-            // استَعِد حالة الـ Auth + UI prefs مِن localStorage قَبل أيّ شَيء
-            // آخَر — يُعيد JWT + Theme + Language + City + RecentSearches
-            // بَعد إعادة تَحميل الصَفحة. كلّ مِن RestoreAsync آمِن لِلاستِدعاء
-            // أكثَر مِن مَرّة.
-            await AuthPersistence.RestoreAsync();
-            await UiPersistence.RestoreAsync();
-
-            // Connect to realtime hub if already authenticated (page reload case).
-            if (Auth.IsAuthenticated)
-                await ConnectRealtimeAsync();
+            Auth.SetTenant(Tenant.Slug);
+            Auth.Load(ctx, Tenant.Slug);
         }
-
-        // Connect after login (OnAfterRenderAsync fires after IClientAuthState.NotifyChanged)
-        if (Auth.IsAuthenticated && !Realtime.IsConnected)
-            await ConnectRealtimeAsync();
-
-        // حمِّل المُفَضَّلات + شارات unread + سَجِّل FCM token عِند المُصادَقَة.
-        // مَرّة واحِدَة لِكلّ جَلسة — Login.razor يَتَوَلّى المُهِمَّة عِند تَسجيل
-        // دُخول جَديد. هذا الـ block يَحتاطُ لِـ reload + return-from-tab.
-        if (Auth.IsAuthenticated && !_favoritesLoaded)
-        {
-            _favoritesLoaded = true;
-            _ = Favs.LoadAsync();
-            _ = Unread.RefreshAsync();
-            _ = FirebasePush.TryRegisterAsync();
-        }
-
-        if (_appliedTheme != Prefs.Theme || _appliedLang != Prefs.Language)
-        {
-            _appliedTheme = Prefs.Theme;
-            _appliedLang = Prefs.Language;
-            var dir = Prefs.Language == "ar" ? "rtl" : "ltr";
-            try { await JS.InvokeVoidAsync("ejarUi.apply", Prefs.Theme, Prefs.Language, dir); }
-            catch (InvalidOperationException) { }
-        }
-    }
-
-    private async Task ConnectRealtimeAsync()
-    {
-        // مَكان عامّ: نَستَخدِم BaseAddress لِنَفس الـ HttpClient الَّذي
-        // تَستَخدِمه كُلّ ApiClients (مُسَجَّل بِاسم "ejar" بِغَضّ النَّظَر
-        // عَن التَطبيق). كُلّ تَطبيق يَضبِطه مَرَّة واحِدَة في Program.cs مِن
-        // appsettings (EjarApi/AshareApi/…) ⇒ realtime يَتبَع تِلقائيّاً
-        // بِلا الحاجَة لِتَوحيد اسم مِفتاح الـ config.
-        var apiBase = HttpFactory.CreateClient("ejar").BaseAddress?.ToString().TrimEnd('/')
-                      ?? Config["EjarApi:BaseUrl"]?.TrimEnd('/')
-                      ?? "http://localhost:5300";
-        // الـ hub في الباك مُركَّب عَلى /realtime (راجِع Program.cs MapHub).
-        await Realtime.ConnectAsync($"{apiBase}/realtime");
-
-        // اشتَرِك مَرّة واحِدَة في إشعارات realtime لِإظهار toast OS-level.
-        if (!_notifWired)
-        {
-            _notifWired = true;
-            Realtime.NotificationReceived += OnRemoteNotification;
-            try { await JS.InvokeVoidAsync("ejarNotify.requestPermission"); } catch { }
-        }
-    }
-
-    private bool _notifWired;
-    private void OnRemoteNotification(string json)
-    {
-        try
-        {
-            using var doc = System.Text.Json.JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            string title = TryGet(root, "title") ?? L[TemplateStrings.AppName];
-            string body  = TryGet(root, "body")  ?? TryGet(root, "text") ?? "";
-            string? url  = TryGet(root, "url");
-            _ = JS.InvokeVoidAsync("ejarNotify.show", title, body, new { url });
-        }
-        catch { /* ignore — لا نُريد أن يَكسِر إشعار غير مُتَوَقَّع layout */ }
-
-        static string? TryGet(System.Text.Json.JsonElement el, string name)
-            => el.TryGetProperty(name, out var p) && p.ValueKind == System.Text.Json.JsonValueKind.String
-               ? p.GetString() : null;
-    }
-
-    private void OnChange()
-    {
-        InvokeAsync(async () =>
-        {
-            StateHasChanged();
-            if (Auth.IsAuthenticated && !Realtime.IsConnected)
-                await ConnectRealtimeAsync();
-        });
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        Prefs.OnChanged    -= OnChange;
-        Auth.OnChanged     -= OnChange;
-        Nav.LocationChanged -= OnLocationChanged;
-        VersionPoll.Changed -= OnVersionPollChanged;
-        Unread.Changed      -= OnUnreadChanged;
-        await VersionPoll.DisposeAsync();
-        await Realtime.DisposeAsync();
     }
 }
