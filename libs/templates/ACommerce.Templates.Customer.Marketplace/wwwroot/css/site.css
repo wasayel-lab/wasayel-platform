@@ -54,3 +54,6 @@
     text-decoration: none; color: var(--ac-text); font-size: 15px;
 }
 .me-item:hover { background: var(--ac-bg-alt); }
+
+/* Unread notification card */
+.ac-card-unread { background: color-mix(in srgb, var(--ac-primary) 6%, transparent); }

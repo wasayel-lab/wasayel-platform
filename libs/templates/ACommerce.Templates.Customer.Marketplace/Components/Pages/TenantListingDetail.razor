@@ -2,12 +2,6 @@
 @inject IDocumentStore Store
 @inject AuthSession Auth
 
-@*
-    لا @rendermode — صَفحَة SSR بَحتَة. زَرّ "تَواصُل" form POST.
-    نَستَخدِم Slug من الـ route مُباشَرَةً ولا نَعتَمِد على ITenantContext
-    (التي قَد تَفقُد قيمَتها في circuit interactive).
-*@
-
 @if (tenant is null)
 {
     <p class="ac-muted">المَتجَر غير مَوجود.</p>
@@ -23,79 +17,102 @@ else if (listing.IsDeleted)
 else
 {
     <div class="acs-gallery-wrap">
-        <div class="acs-gallery-ph" style="font-size:48px;">@CategoryIcon</div>
+        <AcGallery Images="_noImages"
+                   PlaceholderIcon="building" />
+
+        @if (Auth.IsAuthenticated)
+        {
+            <form method="post" action="@($"/{Slug}/listings/{Id}/favorite")" style="position:absolute;top:8px;inset-inline-end:8px;">
+                <input type="hidden" name="return" value="@($"/{Slug}/listings/{Id}")" />
+                <button type="submit" class="acs-fav-btn @(IsFav ? "active" : "")"
+                        aria-label="@(IsFav ? "أَزِل من المُفَضَّلَة" : "أَضِف للمُفَضَّلَة")">
+                    <AcIcon Name="heart" Filled="@IsFav" Size="20" />
+                </button>
+            </form>
+        }
     </div>
 
-    <h1>@listing.Title</h1>
-    <p style="font-size:24px;color:var(--ac-primary);font-weight:700;margin:4px 0;">
-        @listing.Price.ToString("N0") ريال
-    </p>
-    <p class="ac-muted">@listing.City — @listing.District</p>
-    <div style="display:inline-block;background:var(--ac-bg-alt);color:var(--ac-text-muted);
-                padding:4px 10px;border-radius:999px;font-size:12px;margin:6px 0;">
-        @CategoryLabel
+    <h1 class="acm-wizard-title">@listing.Title</h1>
+
+    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:12px;">
+        <span style="color:var(--ac-primary);font-weight:700;font-size:20px;">
+            @listing.Price.ToString("N0") ريال
+        </span>
+        <span class="ac-muted" style="display:inline-flex;gap:4px;align-items:center;">
+            <AcIcon Name="map-pin" Size="14" /> @listing.City — @listing.District
+        </span>
+        <AcBadge Variant="info" Text="@CategoryLabel" />
     </div>
 
     @if (!string.IsNullOrEmpty(listing.Description))
     {
-        <p style="margin:14px 0;line-height:1.7;">@listing.Description</p>
+        <AcCard>
+            <ChildContent>
+                <p style="margin:0;line-height:1.7;">@listing.Description</p>
+            </ChildContent>
+        </AcCard>
     }
 
     @if (listing.Attributes is { Count: > 0 })
     {
-        <h3 style="margin-top:20px;">التَفاصيل</h3>
-        <ul class="acs-amenity-chips">
-            @foreach (var a in listing.Attributes)
-            {
-                <li class="acs-amenity-chip"><strong>@a.Key:</strong> @a.Value</li>
-            }
-        </ul>
+        <AcCard>
+            <ChildContent>
+                <h3 style="margin-top:0;">التَفاصيل</h3>
+                <AcAttrChipRow Attributes="@AttrSnapshots" IsArabic="true" />
+            </ChildContent>
+        </AcCard>
     }
 
-    <div style="margin:20px 0;padding-top:12px;border-top:1px solid var(--ac-border);">
-        @if (Auth.IsAuthenticated)
-        {
-            <form method="post" action="@($"/{Slug}/listings/{Id}/chat")">
-                <button type="submit"
-                        style="width:100%;padding:12px;background:var(--ac-primary);
-                               color:#fff;border:0;border-radius:var(--ac-radius-sm);
-                               cursor:pointer;font-weight:600;font-size:15px;">
-                    💬 تَواصُل مَع المُعلِن
-                </button>
-            </form>
-        }
-        else
-        {
-            <a href="@($"/{Slug}/login?returnUrl=/{Slug}/listings/{Id}")"
-               style="display:block;text-align:center;padding:12px;
-                      background:var(--ac-primary);color:#fff;
-                      border-radius:var(--ac-radius-sm);text-decoration:none;font-weight:600;">
-                دُخول للتَواصُل
-            </a>
-        }
-    </div>
+    <AcCard>
+        <ChildContent>
+            <h3 style="margin-top:0;">تَواصُل</h3>
+            @if (Auth.IsAuthenticated)
+            {
+                <form method="post" action="@($"/{Slug}/listings/{Id}/chat")">
+                    <AcButton Type="submit" Variant="primary" Size="lg" Class="ac-btn-block"
+                              Text="💬 تَواصُل مَع المُعلِن" />
+                </form>
+            }
+            else
+            {
+                <a href="@($"/{Slug}/login?returnUrl=/{Slug}/listings/{Id}")"
+                   class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
+                   style="display:block;text-align:center;text-decoration:none;background:var(--ac-primary);
+                          color:#fff;padding:12px;border-radius:var(--ac-radius-sm);font-weight:600;">
+                    دُخول للتَواصُل
+                </a>
+            }
+        </ChildContent>
+    </AcCard>
 
-    <p class="ac-muted" style="font-size:12px;">
-        شوهد: @listing.ViewCount مَرَّة — نُشِر: @listing.CreatedAt.ToString("yyyy-MM-dd")
+    <p class="ac-muted" style="font-size:12px;margin-top:16px;">
+        <AcIcon Name="clock" Size="14" /> نُشِر: @listing.CreatedAt.ToString("yyyy-MM-dd")
+        — شوهد: @listing.ViewCount مَرَّة
     </p>
 }
 
 @code {
+    static readonly string[] _noImages = Array.Empty<string>();
     [Parameter] public string Slug { get; set; } = "";
     [Parameter] public Guid Id { get; set; }
     Listing? listing;
     Tenant? tenant;
+    bool IsFav;
 
     string CategoryLabel => tenant?.Categories.FirstOrDefault(c => c.Slug == listing?.CategorySlug)?.Label ?? "";
-    string CategoryIcon  => tenant?.Categories.FirstOrDefault(c => c.Slug == listing?.CategorySlug)?.Icon ?? "🏷️";
+
+    List<ACommerce.Widgets.DynamicAttribute> AttrSnapshots =>
+        (listing?.Attributes ?? new()).Select(kv => new ACommerce.Widgets.DynamicAttribute
+        {
+            Key = kv.Key, Label = kv.Key, LabelAr = kv.Key,
+            Type = "text", Value = kv.Value, ShowInCard = true
+        }).ToList();
 
     protected override async Task OnParametersSetAsync()
     {
-        // نَجلب الـ tenant مُباشَرَةً مِن slug — لا نَعتَمِد على ITenantContext
         await using var g = Store.QuerySession();
         tenant = await g.LoadAsync<Tenant>(Slug);
         if (tenant is null) return;
-
         await using var t = Store.LightweightSession(Slug);
         listing = await t.Events.AggregateStreamAsync<Listing>(Id);
         if (listing is not null && !listing.IsDeleted)
@@ -103,6 +120,12 @@ else
             t.Events.Append(Id, new ListingViewed(Id, Auth.UserId, DateTime.UtcNow));
             await t.SaveChangesAsync();
             listing.ViewCount++;
+
+            if (Auth.IsAuthenticated)
+            {
+                var favId = Favorite.MakeId(Auth.UserId!.Value, Id);
+                IsFav = (await t.LoadAsync<Favorite>(favId)) is not null;
+            }
         }
     }
 }

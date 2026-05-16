@@ -1,26 +1,29 @@
 @page "/{slug}"
-@inject ITenantContext Tenant
 @inject IDocumentStore Store
+@inject AuthSession Auth
 
-@if (!Tenant.IsResolved || loaded is null)
+@if (loaded is null)
 {
-    <p class="muted">جارٍ التَحميل…</p>
+    <p class="ac-muted">جارٍ التَحميل…</p>
 }
 else
 {
-    <section style="background:var(--ac-primary);color:#fff;padding:24px 16px;border-radius:var(--ac-radius-lg);margin-bottom:16px;">
-        <h1 style="color:#fff;margin:0 0 8px;font-size:24px;">@Tenant.Name</h1>
+    <section style="background:linear-gradient(135deg, var(--ac-primary), var(--ac-primary-hover));
+                    color:#fff;padding:24px 16px;border-radius:var(--ac-radius-lg);margin-bottom:16px;">
+        <h1 style="color:#fff;margin:0 0 8px;font-size:24px;">@loaded.Name</h1>
         <p style="margin:0;opacity:.92;">@loaded.TagLine</p>
-        <p style="margin:4px 0 0;opacity:.85;font-size:13px;">📍 @loaded.City</p>
+        <p style="margin:4px 0 0;opacity:.85;font-size:13px;">
+            <AcIcon Name="map-pin" Size="14" /> @loaded.City
+        </p>
     </section>
 
-    <h2>الفِئات</h2>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:24px;">
+    <h2 style="margin-top:24px;">الفِئات</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:24px;">
         @foreach (var c in loaded.Categories)
         {
-            <a href="@($"/{Tenant.Slug}/explore?category={c.Slug}")"
-               class="acs-cat-pick" style="text-decoration:none;">
-                <span style="font-size:1.75rem;">@c.Icon</span>
+            <a href="@($"/{Slug}/explore?category={c.Slug}")"
+               class="acs-cat-pick" style="text-decoration:none;color:var(--ac-text);">
+                <span style="font-size:32px;">@c.Icon</span>
                 <strong style="font-size:14px;">@c.Label</strong>
                 <span class="ac-muted" style="font-size:12px;">@CountFor(c.Slug) إعلان</span>
             </a>
@@ -30,57 +33,62 @@ else
     <h2>أَحدَث الإعلانات</h2>
     @if (latest is { Count: > 0 })
     {
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
             @foreach (var l in latest)
             {
-                <a href="@($"/{Tenant.Slug}/listings/{l.Id}")"
-                   style="background:var(--ac-surface);border:1px solid var(--ac-border);border-radius:var(--ac-radius-md);padding:14px;text-decoration:none;color:var(--ac-text);display:flex;flex-direction:column;gap:6px;transition:transform .12s,box-shadow .12s;"
-                   onmouseover="this.style.boxShadow='0 4px 14px rgba(0,0,0,.08)';this.style.transform='translateY(-2px)';"
-                   onmouseout="this.style.boxShadow='none';this.style.transform='none';">
-                    <div style="aspect-ratio:16/10;background:var(--ac-bg-alt);border-radius:var(--ac-radius-sm);display:flex;align-items:center;justify-content:center;color:var(--ac-text-muted);">@CategoryIcon(l.CategorySlug)</div>
-                    <strong style="font-size:15px;">@l.Title</strong>
-                    <span style="color:var(--ac-primary);font-weight:700;">@l.Price.ToString("N0") ريال</span>
-                    <span class="ac-muted" style="font-size:13px;">@l.City — @l.District</span>
-                    <span style="display:inline-block;background:var(--ac-bg-alt);color:var(--ac-text-muted);padding:4px 8px;border-radius:999px;font-size:12px;align-self:flex-start;">
-                        @CategoryLabel(l.CategorySlug)
-                    </span>
-                </a>
+                <a href="/@Slug/listings/@l.Id" style="text-decoration:none;color:inherit;display:block;"><AcSpaceCard Title="@l.Title"
+                             ImageUrl="@null"
+                             Location="@($"{l.City} — {l.District}")"
+                             PriceLabel="@($"{l.Price:N0} ريال")"
+                             Ribbon="@(latest.IndexOf(l) == 0 ? "جَديد" : null)"
+                             ShowFavorite="@Auth.IsAuthenticated"
+                             IsFavorite="@(favIds.Contains(l.Id))"
+                             AddFavoriteAriaLabel="أَضِف للمُفَضَّلَة"
+                             RemoveFavoriteAriaLabel="أَزِل من المُفَضَّلَة"
+                             OnOpen="@(() => Open(l.Id))" /></a>
             }
         </div>
     }
     else
     {
-        <p class="ac-muted">لا إعلانات بَعد.</p>
+        <p class="empty">لا إعلانات بَعد.</p>
     }
 }
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Inject] NavigationManager Nav { get; set; } = default!;
+
     Tenant? loaded;
-    IReadOnlyList<Listing>? latest;
+    List<Listing>? latest;
     Dictionary<string, int> counts = new();
+    HashSet<Guid> favIds = new();
+
+    void Open(Guid id) => Nav.NavigateTo($"/{Slug}/listings/{id}");
 
     protected override async Task OnParametersSetAsync()
     {
-        await using var global = Store.QuerySession();
-        loaded = await global.LoadAsync<Tenant>(Slug);
+        await using var g = Store.QuerySession();
+        loaded = await g.LoadAsync<Tenant>(Slug);
         if (loaded is null) return;
 
         await using var tq = Store.QuerySession(Slug);
-        latest = await tq.Query<Listing>()
+        latest = (await tq.Query<Listing>()
             .Where(x => !x.IsDeleted)
             .OrderByDescending(x => x.CreatedAt)
-            .Take(8)
-            .ToListAsync();
+            .Take(8).ToListAsync()).ToList();
 
-        var all = await tq.Query<Listing>()
-            .Where(x => !x.IsDeleted)
-            .Select(x => x.CategorySlug)
-            .ToListAsync();
+        var all = await tq.Query<Listing>().Where(x => !x.IsDeleted)
+            .Select(x => x.CategorySlug).ToListAsync();
         counts = all.GroupBy(s => s).ToDictionary(g => g.Key, g => g.Count());
+
+        if (Auth.IsAuthenticated)
+        {
+            var favs = await tq.Query<Favorite>()
+                .Where(f => f.UserId == Auth.UserId!.Value).ToListAsync();
+            favIds = favs.Select(f => f.ListingId).ToHashSet();
+        }
     }
 
     int CountFor(string s) => counts.TryGetValue(s, out var n) ? n : 0;
-    string CategoryLabel(string s) => loaded?.Categories.FirstOrDefault(c => c.Slug == s)?.Label ?? s;
-    string CategoryIcon(string s) => loaded?.Categories.FirstOrDefault(c => c.Slug == s)?.Icon ?? "🏷️";
 }

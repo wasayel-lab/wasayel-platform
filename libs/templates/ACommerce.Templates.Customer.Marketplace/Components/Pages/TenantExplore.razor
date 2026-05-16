@@ -1,63 +1,89 @@
 @page "/{slug}/explore"
-@inject ITenantContext Tenant
 @inject IDocumentStore Store
+@inject AuthSession Auth
+@inject NavigationManager Nav
 
-@if (!Tenant.IsResolved || tenant is null)
+@if (tenant is null)
 {
-    <p class="muted">…</p>
+    <p class="ac-muted">…</p>
 }
 else
 {
-    <h1>كلّ إعلانات @Tenant.Name</h1>
+    <h1>كلّ إعلانات @tenant.Name</h1>
 
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">
-        <a class="@(string.IsNullOrEmpty(Category)?"chip active":"chip")"
-           href="@($"/{Tenant.Slug}/explore")">الكلّ</a>
-        @foreach (var c in tenant.Categories)
-        {
-            <a class="@(Category == c.Slug ? "chip active" : "chip")"
-               href="@($"/{Tenant.Slug}/explore?category={c.Slug}")">
-                @c.Icon @c.Label
-            </a>
-        }
-    </div>
+    <AcFilterBar SearchValue="@Query"
+                 SearchPlaceholder="ابحَث في الإعلانات…"
+                 OnSearchChange="@(v => Reload(v, Category, Sort))">
+        <LeadingFilters>
+            <a class="@(string.IsNullOrEmpty(Category)?"chip active":"chip")"
+               href="@($"/{Slug}/explore")">الكلّ</a>
+            @foreach (var c in tenant.Categories)
+            {
+                <a class="@(Category == c.Slug ? "chip active" : "chip")"
+                   href="@($"/{Slug}/explore?category={c.Slug}")">
+                    @c.Icon @c.Label
+                </a>
+            }
+        </LeadingFilters>
+        <TrailingFilters>
+            <AcSortMenu Options="_sortOptions" Value="@Sort"
+                        ValueChanged="@(v => Reload(Query, Category, v))"
+                        Label="ترتيب" />
+        </TrailingFilters>
+    </AcFilterBar>
 
     @if (items is null)
     {
-        <p class="muted">جارٍ التَحميل…</p>
+        <p class="ac-muted">جارٍ التَحميل…</p>
     }
     else if (items.Count == 0)
     {
-        <p class="ac-muted" style="text-align:center;padding:32px 0;">لا إعلانات في هذه الفِئَة.</p>
+        <AcEmptyState Title="لا إعلانات في هذه الفِئَة"
+                      Description="جَرِّب فِئَة أُخرى أو غَيِّر البَحث"
+                      Icon="search" />
     }
     else
     {
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:12px;">
             @foreach (var l in items)
             {
-                <a href="@($"/{Tenant.Slug}/listings/{l.Id}")"
-                   style="background:var(--ac-surface);border:1px solid var(--ac-border);border-radius:var(--ac-radius-md);padding:14px;text-decoration:none;color:var(--ac-text);display:flex;flex-direction:column;gap:6px;">
-                    <div style="aspect-ratio:16/10;background:var(--ac-bg-alt);border-radius:var(--ac-radius-sm);display:flex;align-items:center;justify-content:center;font-size:2rem;">@CategoryIcon(l.CategorySlug)</div>
-                    <strong>@l.Title</strong>
-                    <span style="color:var(--ac-primary);font-weight:700;">@l.Price.ToString("N0") ريال</span>
-                    <span class="ac-muted">@l.City — @l.District</span>
-                </a>
+                <a href="/@Slug/listings/@l.Id" style="text-decoration:none;color:inherit;display:block;"><AcSpaceCard Title="@l.Title"
+                             Location="@($"{l.City} — {l.District}")"
+                             PriceLabel="@($"{l.Price:N0} ريال")"
+                             ShowFavorite="@Auth.IsAuthenticated"
+                             IsFavorite="@(favIds.Contains(l.Id))"
+                             OnOpen="@(() => Nav.NavigateTo($"/{Slug}/listings/{l.Id}"))" /></a>
             }
         </div>
     }
 }
 
-<style>
-    .chip {text-decoration:none;padding:8px 14px;border-radius:999px;background:var(--ac-surface);border:1px solid var(--ac-border);color:var(--ac-text);font-size:13px;display:inline-flex;align-items:center;gap:4px;}
-    .chip.active {background:var(--ac-primary);color:#fff;border-color:var(--ac-primary);}
-</style>
-
 @code {
     [Parameter] public string Slug { get; set; } = "";
-    [SupplyParameterFromQuery] public string? Category { get; set; }
+    [SupplyParameterFromQuery(Name = "category")] public string? Category { get; set; }
+    [SupplyParameterFromQuery(Name = "q")]        public string? Query    { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")]     public string? Sort     { get; set; }
 
     Tenant? tenant;
-    IReadOnlyList<Listing>? items;
+    List<Listing>? items;
+    HashSet<Guid> favIds = new();
+
+    static readonly IReadOnlyDictionary<string, string> _sortOptions = new Dictionary<string, string>
+    {
+        [""] = "افتراضيّ",
+        ["newest"]     = "الأَحدَث",
+        ["price_asc"]  = "السِعر تَصاعُديّ",
+        ["price_desc"] = "السِعر تَنازُليّ",
+    };
+
+    void Reload(string? q, string? cat, string? sort)
+    {
+        var url = $"/{Slug}/explore?";
+        if (!string.IsNullOrEmpty(cat))  url += $"category={cat}&";
+        if (!string.IsNullOrEmpty(q))    url += $"q={Uri.EscapeDataString(q)}&";
+        if (!string.IsNullOrEmpty(sort)) url += $"sort={sort}";
+        Nav.NavigateTo(url.TrimEnd('&', '?'));
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -68,8 +94,26 @@ else
         await using var t = Store.QuerySession(Slug);
         var q = t.Query<Listing>().Where(x => !x.IsDeleted);
         if (!string.IsNullOrEmpty(Category)) q = q.Where(x => x.CategorySlug == Category);
-        items = await q.OrderByDescending(x => x.CreatedAt).Take(60).ToListAsync();
-    }
+        if (!string.IsNullOrEmpty(Query))
+        {
+            var s = Query;
+            q = q.Where(x => x.Title.Contains(s) ||
+                             (x.Description != null && x.Description.Contains(s)));
+        }
+        q = Sort switch
+        {
+            "newest"     => q.OrderByDescending(x => x.CreatedAt),
+            "price_asc"  => q.OrderBy(x => x.Price),
+            "price_desc" => q.OrderByDescending(x => x.Price),
+            _            => q.OrderByDescending(x => x.CreatedAt),
+        };
+        items = (await q.Take(60).ToListAsync()).ToList();
 
-    string CategoryIcon(string s) => tenant?.Categories.FirstOrDefault(c => c.Slug == s)?.Icon ?? "🏷️";
+        if (Auth.IsAuthenticated)
+        {
+            var favs = await t.Query<Favorite>()
+                .Where(f => f.UserId == Auth.UserId!.Value).ToListAsync();
+            favIds = favs.Select(f => f.ListingId).ToHashSet();
+        }
+    }
 }
