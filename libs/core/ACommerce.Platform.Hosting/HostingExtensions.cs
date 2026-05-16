@@ -126,10 +126,15 @@ public static class HostingExtensions
     public static WebApplication UsePlatformHost(this WebApplication app)
     {
         app.UseSerilogRequestLogging();
+
+        // UseStaticFiles بدلاً من MapStaticAssets لأنّ الأَخير يُعلِن
+        // Content-Encoding: gzip ثُمّ يُرسِل صِفر بايتات حينَ لا يَكون
+        // هُناك نُسخَة gzipped مُسبَقَة، ما يَكسِر تَحميل CSS في المُتَصَفِّح.
         app.UseStaticFiles();
+
         app.UseRouting();
-        app.UsePlatformMultiTenancy();
         app.UseAntiforgery();
+        app.UsePlatformMultiTenancy();
 
         // Wolverine.Http يُسَجِّل كلّ [WolverinePost]/[WolverineGet]/etc.
         app.MapWolverineEndpoints();

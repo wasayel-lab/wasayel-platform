@@ -8,9 +8,10 @@
 }
 else
 {
-    <section style="background:linear-gradient(135deg, var(--ac-primary), var(--ac-primary-hover));
+    <section style="background-color: var(--ac-primary);
+                    background-image: linear-gradient(135deg, var(--ac-primary), var(--ac-primary-hover));
                     color:#fff;padding:24px 16px;border-radius:var(--ac-radius-lg);margin-bottom:16px;">
-        <h1 style="color:#fff;margin:0 0 8px;font-size:24px;">@loaded.Name</h1>
+        <h1 class="hero-title">@loaded.Name</h1>
         <p style="margin:0;opacity:.92;">@loaded.TagLine</p>
         <p style="margin:4px 0 0;opacity:.85;font-size:13px;">
             <AcIcon Name="map-pin" Size="14" /> @loaded.City

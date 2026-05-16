@@ -41,7 +41,7 @@ public static class PlatformSeed
         await SeedTenantIfMissingAsync(globalSession, store,
             slug: "ejar",
             name: "إيجار",
-            color: "#F97316",
+            color: "#C2410C",
             city: "إب",
             tagLine: "كلّ ما يُؤَجَّر في مَدينَتك",
             authChannel: "phone",
@@ -93,13 +93,19 @@ public static class PlatformSeed
         var existing = await globalSession.LoadAsync<Tenant>(slug);
         if (existing is not null)
         {
-            // حَدِّث AuthChannel للمُحَدَّثات التي بَدَأَت قَبل إضافَة الحَقل
-            if (existing.AuthChannel != authChannel)
+            // حَدِّث الحُقول المُتَغَيِّرَة في الإعدادات
+            var changed = false;
+            if (existing.AuthChannel != authChannel) { existing.AuthChannel = authChannel; changed = true; }
+            if (existing.BrandColor != color)        { existing.BrandColor = color;        changed = true; }
+            if (existing.TagLine != tagLine)         { existing.TagLine = tagLine;         changed = true; }
+            if (existing.City != city)               { existing.City = city;               changed = true; }
+            if (existing.Name != name)               { existing.Name = name;               changed = true; }
+
+            if (changed)
             {
-                existing.AuthChannel = authChannel;
                 globalSession.Store(existing);
                 await globalSession.SaveChangesAsync();
-                Console.WriteLine($"[Seed] tenant '{slug}': AuthChannel updated to {authChannel}");
+                Console.WriteLine($"[Seed] tenant '{slug}': metadata updated.");
             }
             else
             {

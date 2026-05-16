@@ -74,3 +74,18 @@
 
 /* Card form helper */
 .ac-card-form { padding: 4px; }
+
+/* Login CTA — alternative to .ac-btn on anchors */
+.ac-login-cta {
+    display: inline-block;
+    padding: 12px 24px;
+    background: var(--ac-primary);
+    color: #fff;
+    text-decoration: none;
+    border-radius: var(--ac-radius-sm);
+    font-weight: 600;
+}
+.ac-login-cta-block { display: block; text-align: center; padding: 12px; }
+
+/* Hero title (white on brand background) */
+.hero-title { color: #fff; margin: 0 0 8px; font-size: 24px; }

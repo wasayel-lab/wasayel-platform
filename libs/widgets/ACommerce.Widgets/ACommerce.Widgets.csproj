@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <StaticWebAssetBasePath>_content/ACommerce.Widgets</StaticWebAssetBasePath>
+  </PropertyGroup>
   <ItemGroup>
     <SupportedPlatform Include="browser" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
