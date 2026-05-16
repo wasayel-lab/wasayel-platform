@@ -1,11 +1,15 @@
 @page "/{slug}/notifications"
+@rendermode @(new InteractiveServerRenderMode(prerender: true))
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject IHttpContextAccessor HttpCtx
+@inject IConfiguration Config
+@inject ACommerce.Kit.Realtime.Client.RealtimeClient Realtime
+@implements IAsyncDisposable
 
-@if (!Auth.IsAuthenticated)
+@if (!_authed)
 {
-    <AcEmptyState Title="الإشعارات تَحتاج تَسجيل دُخول"
-                  Icon="bell" />
+    <AcEmptyState Title="الإشعارات تَحتاج تَسجيل دُخول" IconName="bell" />
     <div style="text-align:center;margin-top:12px;">
         <a href="@($"/{Slug}/login?returnUrl=/{Slug}/notifications")"
            style="display:inline-block;padding:10px 24px;background:var(--ac-primary);
@@ -16,14 +20,23 @@
 }
 else
 {
-    <h1>الإشعارات</h1>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h1 style="margin:0;">الإشعارات</h1>
+        @if (Realtime.IsConnected)
+        {
+            <span class="ac-badge ac-badge-success" style="display:inline-flex;gap:4px;align-items:center;font-size:11px;">
+                <span style="width:6px;height:6px;border-radius:50%;background:var(--ac-success);"></span>
+                مُتَّصِل
+            </span>
+        }
+    </div>
 
-    @if (items is null)        { <AcLoadingState Label="جارٍ التَحميل…" /> }
-    else if (items.Count == 0) { <AcEmptyState Title="لا توجَد إشعارات" Icon="bell" /> }
+    @if (_items is null)         { <AcLoadingState Message="جارٍ التَحميل…" /> }
+    else if (_items.Count == 0)  { <AcEmptyState Title="لا توجَد إشعارات" IconName="bell" /> }
     else
     {
         <div style="display:flex;flex-direction:column;gap:8px;">
-            @foreach (var n in items)
+            @foreach (var n in _items)
             {
                 <AcCard Class="@(n.IsRead ? "" : "ac-card-unread")">
                     <ChildContent>
@@ -48,14 +61,65 @@ else
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
-    List<Notification>? items;
+    bool _authed;
+    Guid _userId;
+    string? _token;
+    List<Notification>? _items;
 
-    protected override async Task OnParametersSetAsync()
+    protected override async Task OnInitializedAsync()
     {
-        if (!Auth.IsAuthenticated) return;
+        // أَوَّل render في SSR — HttpContext مَتاح. نَلتَقِط الـ token
+        // ونَحفَظه لِاستِخدام الـ circuit التَفاعُليّ لاحِقاً.
+        if (HttpCtx.HttpContext is { } ctx)
+        {
+            Auth.SetTenant(Slug);
+            Auth.Load(ctx, Slug);
+        }
+        _authed = Auth.IsAuthenticated;
+        if (!_authed) return;
+        _userId = Auth.UserId!.Value;
+        _token = Auth.Token;
+        await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _authed && !Realtime.IsConnected && _token is not null)
+        {
+            var baseUrl = $"http://localhost:{Config["Urls"]?.Split(':').Last() ?? "5050"}".Replace("//", "//").TrimEnd('/');
+            // أَبسَط: استَخدِم relative request URL
+            // الـ SignalR client يَحتاج URL مُطلَق — نَستَخدِم host الحاليّ
+            var request = HttpCtx.HttpContext?.Request;
+            if (request is not null)
+                baseUrl = $"{request.Scheme}://{request.Host}";
+
+            try
+            {
+                Realtime.NotificationReceived += OnNotif;
+                await Realtime.ConnectAsync(baseUrl, _token);
+            }
+            catch { /* تَجاهَل فَشَل الاتِّصال — الـ polling احتياط */ }
+            StateHasChanged();
+        }
+    }
+
+    void OnNotif(object payload) => InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    async Task LoadAsync()
+    {
         await using var s = Store.QuerySession(Slug);
-        items = (await s.Query<Notification>()
-            .Where(n => n.UserId == Auth.UserId!.Value)
+        _items = (await s.Query<Notification>()
+            .Where(n => n.UserId == _userId)
             .OrderByDescending(n => n.At).Take(50).ToListAsync()).ToList();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Realtime.NotificationReceived -= OnNotif;
+        await Realtime.DisposeAsync();
     }
 }

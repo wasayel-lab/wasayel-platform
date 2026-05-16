@@ -89,6 +89,19 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect($"/{slug}");
         }).DisableAntiforgery();
 
+        // ─── Language toggle ─────────────────────────────────────────────
+        app.MapPost("/lang/{lang}", (string lang, HttpRequest req, HttpResponse res) =>
+        {
+            var l = lang == "en" ? "en" : "ar";
+            res.Cookies.Append(L.CookieName, l, new CookieOptions
+            {
+                Expires = DateTimeOffset.UtcNow.AddYears(1),
+                IsEssential = true, Path = "/", SameSite = SameSiteMode.Lax
+            });
+            var ret = req.Form["return"].ToString();
+            return Results.Redirect(string.IsNullOrEmpty(ret) ? "/" : ret);
+        }).DisableAntiforgery();
+
         // ─── Logout ─────────────────────────────────────────────────────
         app.MapPost("/{slug}/auth/logout", (string slug, HttpContext http) =>
         {

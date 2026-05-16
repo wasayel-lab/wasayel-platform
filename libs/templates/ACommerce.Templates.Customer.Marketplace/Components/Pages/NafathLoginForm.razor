@@ -1,36 +1,14 @@
-@*
-    Nafath flow:
-    Stage = null أو "request" → اُكتُب الهُويَّة + بَدء
-    Stage = "verify"          → اُعرِض الرَقم الكَبير + زَرّ "تَأكَّد الآن"
-*@
-
 @if (Stage != "verify")
 {
     <form method="post" action="@($"/{Slug}/auth/nafath/login")">
-        <label style="display:block;font-size:13px;margin-bottom:6px;">
-            رَقم الهُويَّة الوَطَنِيَّة <span style="color:var(--ac-danger)">*</span>
-        </label>
-        <input type="tel" name="nid" value="@NationalId"
-               required pattern="[0-9]{10}" maxlength="10"
-               style="width:100%;padding:10px;border-radius:var(--ac-radius-sm);
-                      border:1px solid var(--ac-border);font-size:18px;
-                      text-align:center;letter-spacing:.2em;direction:ltr;"
-               placeholder="1XXXXXXXXX" />
-
-        @if (ErrorMessage is not null)
-        {
-            <div style="background:color-mix(in srgb,var(--ac-danger) 12%,transparent);
-                        color:var(--ac-danger);padding:8px;border-radius:6px;
-                        margin-top:10px;font-size:13px;">@ErrorMessage</div>
-        }
-
-        <button type="submit"
-                style="width:100%;padding:12px;margin-top:12px;
-                       background:var(--ac-primary);color:#fff;border:0;
-                       border-radius:var(--ac-radius-sm);font-size:15px;
-                       font-weight:600;cursor:pointer;">
-            بَدء التَحَقُّق عَبر نَفاذ
-        </button>
+        <AcField Label="رَقم الهُويَّة الوَطَنِيَّة" Required="true">
+            <input type="tel" name="nid" value="@NationalId" required pattern="[0-9]{10}" maxlength="10"
+                   class="ac-input" style="direction:ltr;font-size:18px;
+                          text-align:center;letter-spacing:.2em;"
+                   placeholder="1XXXXXXXXX" />
+        </AcField>
+        @if (ErrorMessage is not null) { <AcAlert Variant="danger">@ErrorMessage</AcAlert> }
+        <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="بَدء التَحَقُّق عَبر نَفاذ" />
     </form>
 }
 else
@@ -49,25 +27,15 @@ else
             </div>
         </div>
 
-        <div class="acs-nafath-state acs-nafath-state--waiting" style="margin-top:10px;text-align:center;">
-            <span>⏱</span>
+        <div class="acs-nafath-state acs-nafath-state--waiting" style="margin-top:10px;text-align:center;display:flex;gap:6px;align-items:center;justify-content:center;">
+            <AcIcon Name="clock" Size="16" />
             <span>وَضع التَطوير: يُعتَبَر مُؤَكَّداً تلقائيّاً بَعد 5 ثَوانٍ</span>
         </div>
 
-        @if (ErrorMessage is not null)
-        {
-            <div style="background:color-mix(in srgb,var(--ac-danger) 12%,transparent);
-                        color:var(--ac-danger);padding:8px;border-radius:6px;
-                        margin-top:10px;font-size:13px;">@ErrorMessage</div>
-        }
+        @if (ErrorMessage is not null) { <AcAlert Variant="danger">@ErrorMessage</AcAlert> }
 
-        <button type="submit"
-                style="width:100%;padding:12px;margin-top:12px;
-                       background:var(--ac-primary);color:#fff;border:0;
-                       border-radius:var(--ac-radius-sm);font-size:15px;
-                       font-weight:600;cursor:pointer;">
-            تَأكَّدت في تَطبيق نَفاذ — أَكمِل الدُخول
-        </button>
+        <AcButton Type="submit" Variant="primary" Size="lg" Block="true"
+                  Text="تَأكَّدت في تَطبيق نَفاذ — أَكمِل الدُخول" />
 
         <a href="@($"/{Slug}/login")"
            style="display:block;text-align:center;margin-top:10px;

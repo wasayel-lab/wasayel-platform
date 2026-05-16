@@ -6,7 +6,7 @@
 {
     <AcEmptyState Title="المُحادَثات تَحتاج تَسجيل دُخول"
                   Description="سَجِّل دُخولك للوصول إلى رَسائلك"
-                  Icon="message" />
+                  IconName="message" />
     <div style="text-align:center;margin-top:12px;">
         <a class="ac-btn ac-btn-primary" href="@($"/{Slug}/login?returnUrl=/{Slug}/chats")"
            style="display:inline-block;padding:10px 24px;background:var(--ac-primary);
@@ -21,13 +21,13 @@ else
 
     @if (convs is null)
     {
-        <AcLoadingState Label="جارٍ التَحميل…" />
+        <AcLoadingState Message="جارٍ التَحميل…" />
     }
     else if (convs.Count == 0)
     {
         <AcEmptyState Title="لا توجَد مُحادَثات بَعد"
                       Description="ابدأ مُحادَثَة من صَفحَة إعلان"
-                      Icon="message" />
+                      IconName="message" />
     }
     else
     {

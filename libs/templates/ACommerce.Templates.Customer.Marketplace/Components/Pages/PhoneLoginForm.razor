@@ -1,72 +1,40 @@
-@*
-    Phone OTP — مَرحَلَتان عَبر forms مُنفَصِلَة.
-    Stage = null أو "request" → اُكتُب الهاتف + إرسال
-    Stage = "verify"          → اُكتُب الكود + تَأكُّد
-*@
-
 @if (Stage != "verify")
 {
     <form method="post" action="@($"/{Slug}/auth/phone/login")">
-        <label style="display:block;font-size:13px;margin-bottom:6px;">
-            رَقم الهاتف <span style="color:var(--ac-danger)">*</span>
-        </label>
-        <input type="tel" name="phone" value="@Phone"
-               required pattern="[0-9]{9,15}"
-               style="width:100%;padding:10px;border-radius:var(--ac-radius-sm);border:1px solid var(--ac-border);font-size:16px;direction:ltr;"
-               placeholder="7XXXXXXXX" />
-
+        <AcField Label="رَقم الهاتف" Required="true">
+            <input type="tel" name="phone" value="@Phone" required pattern="[0-9]{9,15}"
+                   class="ac-input" style="direction:ltr;font-size:16px;"
+                   placeholder="7XXXXXXXX" />
+        </AcField>
         @if (ErrorMessage is not null)
         {
-            <div style="background:color-mix(in srgb,var(--ac-danger) 12%,transparent);
-                        color:var(--ac-danger);padding:8px;border-radius:6px;
-                        margin-top:10px;font-size:13px;">@ErrorMessage</div>
+            <AcAlert Variant="danger">@ErrorMessage</AcAlert>
         }
-
-        <button type="submit"
-                style="width:100%;padding:12px;margin-top:12px;
-                       background:var(--ac-primary);color:#fff;border:0;
-                       border-radius:var(--ac-radius-sm);font-size:15px;
-                       font-weight:600;cursor:pointer;">
-            إرسال الكود
-        </button>
+        <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="إرسال الكود" />
     </form>
 }
 else
 {
     <form method="post" action="@($"/{Slug}/auth/phone/verify")">
         <input type="hidden" name="phone" value="@Phone" />
-
         <p class="acs-nafath-instruction">أَدخِل الكود المُرسَل إلى <strong>@Phone</strong></p>
 
-        <label style="display:block;font-size:13px;margin-bottom:6px;">
-            الكود <span style="color:var(--ac-danger)">*</span>
-        </label>
-        <input type="text" name="code" required minlength="4" maxlength="6"
-               pattern="[0-9]{4,6}" autofocus
-               style="width:100%;padding:10px;border-radius:var(--ac-radius-sm);
-                      border:1px solid var(--ac-border);font-size:18px;
-                      letter-spacing:.4em;text-align:center;direction:ltr;"
-               placeholder="123456" />
+        <AcField Label="الكود" Required="true">
+            <input type="text" name="code" required minlength="4" maxlength="6"
+                   pattern="[0-9]{4,6}" autofocus
+                   class="ac-input" style="direction:ltr;font-size:18px;
+                          letter-spacing:.4em;text-align:center;"
+                   placeholder="123456" />
+        </AcField>
 
-        <div class="acs-nafath-state acs-nafath-state--ok" style="margin-top:10px;">
-            <span>ℹ️</span><span>وَضع التَطوير — الكود: <strong>123456</strong></span>
+        <div class="acs-nafath-state acs-nafath-state--ok mt-2" style="display:flex;gap:6px;align-items:center;">
+            <AcIcon Name="info" Size="16" />
+            <span>وَضع التَطوير — الكود: <strong>123456</strong></span>
         </div>
 
-        @if (ErrorMessage is not null)
-        {
-            <div style="background:color-mix(in srgb,var(--ac-danger) 12%,transparent);
-                        color:var(--ac-danger);padding:8px;border-radius:6px;
-                        margin-top:10px;font-size:13px;">@ErrorMessage</div>
-        }
+        @if (ErrorMessage is not null) { <AcAlert Variant="danger">@ErrorMessage</AcAlert> }
 
-        <button type="submit"
-                style="width:100%;padding:12px;margin-top:12px;
-                       background:var(--ac-primary);color:#fff;border:0;
-                       border-radius:var(--ac-radius-sm);font-size:15px;
-                       font-weight:600;cursor:pointer;">
-            تَحَقُّق ودُخول
-        </button>
-
+        <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="تَحَقُّق ودُخول" />
         <a href="@($"/{Slug}/login")"
            style="display:block;text-align:center;margin-top:10px;
                   color:var(--ac-text-muted);font-size:13px;text-decoration:none;">

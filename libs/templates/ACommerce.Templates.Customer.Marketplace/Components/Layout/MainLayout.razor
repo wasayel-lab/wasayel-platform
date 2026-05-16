@@ -3,6 +3,7 @@
 @inject NavigationManager Nav
 @inject IHttpContextAccessor HttpCtx
 @inject AuthSession Auth
+@inject L L
 
 @{
     var slug = Tenant.Slug;
@@ -52,6 +53,15 @@
                             <span class="acm-brand-text">@Tenant.Name</span>
                         </div>
                     </BrandContent>
+                    <RightActions>
+                        <form method="post" action="/lang/@(L.IsArabic ? "en" : "ar")" style="margin:0;">
+                            <input type="hidden" name="return" value="@Nav.Uri" />
+                            <button type="submit" class="ac-lang-toggle"
+                                    aria-label="Toggle language">
+                                @(L.IsArabic ? "EN" : "AR")
+                            </button>
+                        </form>
+                    </RightActions>
                 </AcTopNav>
             </div>
         }

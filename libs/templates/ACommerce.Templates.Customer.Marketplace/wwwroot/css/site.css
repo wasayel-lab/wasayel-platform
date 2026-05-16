@@ -57,3 +57,20 @@
 
 /* Unread notification card */
 .ac-card-unread { background: color-mix(in srgb, var(--ac-primary) 6%, transparent); }
+
+/* Language toggle in TopNav */
+.ac-lang-toggle {
+    background: transparent;
+    border: 1px solid var(--ac-border);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ac-text);
+    cursor: pointer;
+    letter-spacing: 0.05em;
+}
+.ac-lang-toggle:hover { background: var(--ac-bg-alt); }
+
+/* Card form helper */
+.ac-card-form { padding: 4px; }

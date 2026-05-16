@@ -1,15 +1,27 @@
+using Microsoft.AspNetCore.Http;
+
 namespace ACommerce.Templates.Customer.Marketplace;
 
 /// <summary>
-/// i18n خَفيف. قاموسان ثابِتان داخل القالَب (ar + en) — لا حاجَة
-/// لـ ResourceManager في هذه المَرحَلَة. الاستِخدام:
-///   @inject L L
-///   @(L["home.title"])
-///   L.Lang = "en"   (يُحَدِّث لكلّ الصَفحَة)
+/// i18n خَفيف. قاموسان ثابِتان داخل القالَب (ar + en).
+/// يَقرَأ اللُغَة المُختارَة من cookie ".acommerce.lang" عند بِنائه (scoped).
 /// </summary>
 public sealed class L
 {
+    public const string CookieName = ".acommerce.lang";
+
+    public L(IHttpContextAccessor http)
+    {
+        var ctx = http.HttpContext;
+        if (ctx is not null && ctx.Request.Cookies.TryGetValue(CookieName, out var lang))
+        {
+            if (lang == "en") Lang = "en";
+        }
+    }
+
     public string Lang { get; set; } = "ar";
+    public bool IsArabic => Lang == "ar";
+    public string Dir => IsArabic ? "rtl" : "ltr";
 
     public string this[string key] =>
         Lang == "en"
