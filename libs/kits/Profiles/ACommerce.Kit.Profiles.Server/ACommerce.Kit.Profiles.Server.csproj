@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Marten" />
+    <PackageReference Include="WolverineFx.Marten" />
+    <PackageReference Include="WolverineFx.Http" />
+    <ProjectReference Include="..\ACommerce.Kit.Profiles.Core\ACommerce.Kit.Profiles.Core.csproj" />
+    <ProjectReference Include="..\..\Auth\ACommerce.Kit.Auth.Core\ACommerce.Kit.Auth.Core.csproj" />
+    <ProjectReference Include="..\..\..\core\ACommerce.Platform.Shared\ACommerce.Platform.Shared.csproj" />
+  </ItemGroup>
+</Project>

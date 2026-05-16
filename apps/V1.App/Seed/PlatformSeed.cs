@@ -65,7 +65,22 @@ public static class PlatformSeed
                 ("مَكتَب صَغير اقتِصاديّ",     90000m, "office",    "المُدير"),
             });
 
+        await SeedPlansIfMissingAsync(store, "ashare");
+        await SeedPlansIfMissingAsync(store, "ejar");
+
         Console.WriteLine("[Seed] ✅ Platform seed complete.");
+    }
+
+    private static async Task SeedPlansIfMissingAsync(IDocumentStore store, string slug)
+    {
+        await using var s = store.LightweightSession(slug);
+        var existing = await s.Query<ACommerce.Kit.Subscriptions.Plan>().AnyAsync();
+        if (existing) return;
+        s.Store(new ACommerce.Kit.Subscriptions.Plan { Id = "free",  Name = "مَجّانيّ", Price = 0, ListingsQuota = 1, DaysPeriod = 30, Description = "إعلان واحِد شَهريّاً" });
+        s.Store(new ACommerce.Kit.Subscriptions.Plan { Id = "basic", Name = "أساسيّ",   Price = 49, ListingsQuota = 10, DaysPeriod = 30, Description = "١٠ إعلانات شَهريّاً + إبراز" });
+        s.Store(new ACommerce.Kit.Subscriptions.Plan { Id = "pro",   Name = "احتِرافيّ", Price = 199, ListingsQuota = 100, DaysPeriod = 30, Description = "حَتى ١٠٠ إعلان + دَعم أَوّليّ" });
+        await s.SaveChangesAsync();
+        Console.WriteLine($"[Seed] Plans added for '{slug}'.");
     }
 
     private static async Task SeedTenantIfMissingAsync(

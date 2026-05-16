@@ -19,6 +19,9 @@
     <Project Path="libs/kits/Chat/ACommerce.Kit.Chat.Core/ACommerce.Kit.Chat.Core.csproj" />
     <Project Path="libs/kits/Chat/ACommerce.Kit.Chat.Server/ACommerce.Kit.Chat.Server.csproj" />
   </Folder>
+  <Folder Name="/libs/kits/DynamicAttributes/">
+    <Project Path="libs/kits/DynamicAttributes/ACommerce.Kit.DynamicAttributes.Core/ACommerce.Kit.DynamicAttributes.Core.csproj" />
+  </Folder>
   <Folder Name="/libs/kits/Favorites/">
     <Project Path="libs/kits/Favorites/ACommerce.Kit.Favorites.Core/ACommerce.Kit.Favorites.Core.csproj" />
     <Project Path="libs/kits/Favorites/ACommerce.Kit.Favorites.Server/ACommerce.Kit.Favorites.Server.csproj" />
@@ -33,10 +36,20 @@
   </Folder>
   <Folder Name="/libs/kits/Profiles/">
     <Project Path="libs/kits/Profiles/ACommerce.Kit.Profiles.Core/ACommerce.Kit.Profiles.Core.csproj" />
+    <Project Path="libs/kits/Profiles/ACommerce.Kit.Profiles.Server/ACommerce.Kit.Profiles.Server.csproj" />
   </Folder>
   <Folder Name="/libs/kits/Realtime/">
+    <Project Path="libs/kits/Realtime/ACommerce.Kit.Realtime.Client/ACommerce.Kit.Realtime.Client.csproj" />
     <Project Path="libs/kits/Realtime/ACommerce.Kit.Realtime.Core/ACommerce.Kit.Realtime.Core.csproj" />
     <Project Path="libs/kits/Realtime/ACommerce.Kit.Realtime.Server/ACommerce.Kit.Realtime.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Subscriptions/">
+    <Project Path="libs/kits/Subscriptions/ACommerce.Kit.Subscriptions.Core/ACommerce.Kit.Subscriptions.Core.csproj" />
+    <Project Path="libs/kits/Subscriptions/ACommerce.Kit.Subscriptions.Server/ACommerce.Kit.Subscriptions.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Support/">
+    <Project Path="libs/kits/Support/ACommerce.Kit.Support.Core/ACommerce.Kit.Support.Core.csproj" />
+    <Project Path="libs/kits/Support/ACommerce.Kit.Support.Server/ACommerce.Kit.Support.Server.csproj" />
   </Folder>
   <Folder Name="/libs/kits/Tenants/">
     <Project Path="libs/kits/Tenants/ACommerce.Kit.Tenants.Core/ACommerce.Kit.Tenants.Core.csproj" />

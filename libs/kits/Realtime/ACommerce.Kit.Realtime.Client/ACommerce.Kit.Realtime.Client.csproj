@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
+    <ProjectReference Include="..\ACommerce.Kit.Realtime.Core\ACommerce.Kit.Realtime.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -85,6 +85,9 @@ public static class HostingExtensions
                 opts.Schema.For<ACommerce.Kit.Chat.Conversation>().Identity(x => x.Id);
                 opts.Schema.For<ACommerce.Kit.Chat.Message>().Identity(x => x.Id);
                 opts.Schema.For<ACommerce.Kit.Favorites.Favorite>().Identity(x => x.Id);
+                opts.Schema.For<ACommerce.Kit.Subscriptions.Plan>().Identity(x => x.Id);
+                opts.Projections.Snapshot<ACommerce.Kit.Subscriptions.Subscription>(SnapshotLifecycle.Inline);
+                opts.Projections.Snapshot<ACommerce.Kit.Support.Ticket>(SnapshotLifecycle.Inline);
 
                 // Auto-create schema في dev
                 if (builder.Environment.IsDevelopment())

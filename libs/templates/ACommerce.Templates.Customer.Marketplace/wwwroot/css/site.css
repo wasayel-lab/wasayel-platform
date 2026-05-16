@@ -31,3 +31,26 @@
 
 .muted { color: var(--ac-muted); font-size: 0.9rem; }
 .mt-2 { margin-top: 10px; }
+
+/* === Fixes for verify-css undefined classes === */
+.ac-muted { color: var(--ac-muted); font-size: 0.9rem; }
+.bi      { display: inline-block; width: 1em; height: 1em; }   /* placeholder for legacy icon refs */
+.chip {
+    text-decoration: none; padding: 8px 14px; border-radius: 999px;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    color: var(--ac-text); font-size: 13px;
+    display: inline-flex; align-items: center; gap: 4px;
+}
+.chip.active { background: var(--ac-primary); color: #fff; border-color: var(--ac-primary); }
+.empty {
+    color: var(--ac-text-muted); font-style: italic;
+    padding: 2rem 0; text-align: center;
+}
+.lede { font-size: 1.1rem; color: var(--ac-text-muted); }
+.me-item {
+    display: block; padding: 14px;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md); margin-bottom: 6px;
+    text-decoration: none; color: var(--ac-text); font-size: 15px;
+}
+.me-item:hover { background: var(--ac-bg-alt); }

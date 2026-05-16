@@ -1,0 +1,67 @@
+@page "/{slug}/support"
+@inject IDocumentStore Store
+@inject AuthSession Auth
+
+@if (!Auth.IsAuthenticated)
+{
+    <p class="ac-muted">تَحتاج تَسجيل دُخول.</p>
+    <a class="ac-btn ac-btn-primary" href="@($"/{Slug}/login?returnUrl=/{Slug}/support")"
+       style="display:inline-block;padding:10px 24px;background:var(--ac-primary);
+              color:#fff;border-radius:var(--ac-radius-sm);text-decoration:none;">دُخول</a>
+}
+else
+{
+    <h1>الدَعم والشَكاوى</h1>
+
+    <h2>طَلَب جَديد</h2>
+    <form method="post" action="@($"/{Slug}/support/open")" style="max-width:560px;background:var(--ac-surface);
+                                                                   border:1px solid var(--ac-border);
+                                                                   border-radius:var(--ac-radius-md);padding:16px;">
+        <label style="display:block;font-size:13px;margin-bottom:6px;">المَوضوع</label>
+        <input type="text" name="subject" required maxlength="100"
+               style="width:100%;padding:8px;border:1px solid var(--ac-border);
+                      border-radius:var(--ac-radius-sm);" />
+
+        <label style="display:block;font-size:13px;margin-top:12px;margin-bottom:6px;">التَفاصيل</label>
+        <textarea name="body" required rows="4" maxlength="2000"
+                  style="width:100%;padding:8px;border:1px solid var(--ac-border);
+                         border-radius:var(--ac-radius-sm);"></textarea>
+
+        <button type="submit" style="margin-top:12px;padding:10px 20px;background:var(--ac-primary);
+                                     color:#fff;border:0;border-radius:var(--ac-radius-sm);
+                                     font-weight:600;cursor:pointer;">إرسال</button>
+    </form>
+
+    <h2 style="margin-top:24px;">طَلَباتي السابِقَة</h2>
+    @if (tickets is null)   { <p class="ac-muted">جارٍ التَحميل…</p> }
+    else if (tickets.Count == 0) { <p class="empty">لا توجَد طَلَبات بَعد.</p> }
+    else
+    {
+        <ul style="list-style:none;padding:0;">
+            @foreach (var t in tickets)
+            {
+                <li style="border-bottom:1px solid var(--ac-border);padding:10px 0;">
+                    <strong>@t.Subject</strong>
+                    <span style="margin-inline-start:8px;font-size:12px;padding:2px 8px;
+                                 border-radius:999px;background:var(--ac-bg-alt);">@t.Status</span>
+                    <p class="ac-muted" style="margin:6px 0;font-size:13px;">@t.Body</p>
+                    <p class="ac-muted" style="font-size:11px;">@t.CreatedAt.ToString("yyyy-MM-dd HH:mm") — @(t.Replies.Count) ردّ</p>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    IReadOnlyList<ACommerce.Kit.Support.Ticket>? tickets;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await using var s = Store.QuerySession(Slug);
+        tickets = await s.Query<ACommerce.Kit.Support.Ticket>()
+            .Where(t => t.AuthorId == Auth.UserId!.Value)
+            .OrderByDescending(t => t.UpdatedAt).Take(50).ToListAsync();
+    }
+}

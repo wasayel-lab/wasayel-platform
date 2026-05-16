@@ -24,6 +24,8 @@ public static class MarketplaceTemplateExtensions
     {
         services.AddHttpContextAccessor();
         services.AddScoped<AuthSession>();
+        services.AddScoped<L>();
+        services.AddScoped<ACommerce.Kit.Realtime.Client.RealtimeClient>();
         return services;
     }
 
@@ -153,6 +155,69 @@ public static class MarketplaceTemplateExtensions
                 convId = conv.Id;
             }
             return Results.Redirect($"/{slug}/chats/{convId}");
+        }).DisableAntiforgery();
+
+        // ─── Profile save ───────────────────────────────────────────────
+        app.MapPost("/{slug}/me/save",
+            async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var parsed = AuthHandlers.ParseToken(token);
+            if (parsed is null) return Results.Redirect($"/{slug}/login");
+            var (userId, _, _) = parsed.Value;
+            var fullName = req.Form["fullName"].ToString().Trim();
+            if (fullName.Length == 0) return Results.Redirect($"/{slug}/me/edit");
+
+            await using var s = store.LightweightSession(slug);
+            var user = await s.LoadAsync<User>(userId);
+            if (user is null) return Results.Redirect($"/{slug}/me");
+            user.FullName = fullName;
+            user.UpdatedAt = DateTime.UtcNow;
+            s.Store(user);
+            await s.SaveChangesAsync();
+
+            AuthSession.UpdateNameCookie(req.HttpContext.Response, slug, fullName);
+            return Results.Redirect($"/{slug}/me");
+        }).DisableAntiforgery();
+
+        // ─── Plans subscribe ────────────────────────────────────────────
+        app.MapPost("/{slug}/plans/{planId}/subscribe",
+            async (string slug, string planId, HttpRequest req, IDocumentStore store) =>
+        {
+            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var parsed = AuthHandlers.ParseToken(token);
+            if (parsed is null) return Results.Redirect($"/{slug}/login?returnUrl=/{slug}/plans");
+            var (userId, _, _) = parsed.Value;
+
+            await using var s = store.LightweightSession(slug);
+            var plan = await s.LoadAsync<ACommerce.Kit.Subscriptions.Plan>(planId);
+            if (plan is null) return Results.Redirect($"/{slug}/plans");
+            var ev = new ACommerce.Kit.Subscriptions.SubscriptionCreated(
+                Guid.NewGuid(), userId, planId, plan.ListingsQuota, plan.DaysPeriod, DateTime.UtcNow);
+            s.Events.StartStream<ACommerce.Kit.Subscriptions.Subscription>(ev.Id, ev);
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/{slug}/me");
+        }).DisableAntiforgery();
+
+        // ─── Support open ticket ────────────────────────────────────────
+        app.MapPost("/{slug}/support/open",
+            async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var parsed = AuthHandlers.ParseToken(token);
+            if (parsed is null) return Results.Redirect($"/{slug}/login");
+            var (userId, _, _) = parsed.Value;
+            var userName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "—";
+            var subject = req.Form["subject"].ToString().Trim();
+            var body    = req.Form["body"].ToString().Trim();
+            if (subject.Length == 0 || body.Length == 0) return Results.Redirect($"/{slug}/support");
+
+            await using var s = store.LightweightSession(slug);
+            var ev = new ACommerce.Kit.Support.TicketCreated(
+                Guid.NewGuid(), userId, userName, subject, body, DateTime.UtcNow);
+            s.Events.StartStream<ACommerce.Kit.Support.Ticket>(ev.Id, ev);
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/{slug}/support");
         }).DisableAntiforgery();
 
         // ─── Send chat message ──────────────────────────────────────────

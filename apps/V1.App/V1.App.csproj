@@ -25,6 +25,11 @@
     <ProjectReference Include="..\..\libs\kits\Favorites\ACommerce.Kit.Favorites.Core\ACommerce.Kit.Favorites.Core.csproj" />
     <ProjectReference Include="..\..\libs\kits\Favorites\ACommerce.Kit.Favorites.Server\ACommerce.Kit.Favorites.Server.csproj" />
     <ProjectReference Include="..\..\libs\kits\Profiles\ACommerce.Kit.Profiles.Core\ACommerce.Kit.Profiles.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Profiles\ACommerce.Kit.Profiles.Server\ACommerce.Kit.Profiles.Server.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Subscriptions\ACommerce.Kit.Subscriptions.Core\ACommerce.Kit.Subscriptions.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Subscriptions\ACommerce.Kit.Subscriptions.Server\ACommerce.Kit.Subscriptions.Server.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Support\ACommerce.Kit.Support.Core\ACommerce.Kit.Support.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Support\ACommerce.Kit.Support.Server\ACommerce.Kit.Support.Server.csproj" />
 
     <ProjectReference Include="..\..\libs\templates\ACommerce.Templates.Customer.Marketplace\ACommerce.Templates.Customer.Marketplace.csproj" />
   </ItemGroup>

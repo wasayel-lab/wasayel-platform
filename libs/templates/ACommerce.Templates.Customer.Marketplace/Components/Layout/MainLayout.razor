@@ -13,17 +13,17 @@
     {
         new($"/{slug}",               "الرَئيسيّة", "home",    null, true),
         new($"/{slug}/explore",       "استِكشاف",   "search"),
+        new($"/{slug}/favorites",     "مُفَضَّلَة",     "heart"),
         new($"/{slug}/chats",         "رَسائل",     "message"),
-        new($"/{slug}/notifications", "إشعارات",    "bell"),
         new($"/{slug}/me",            Auth.IsAuthenticated ? Auth.UserName ?? "حِسابي" : "حِسابي", "user")
     };
     var bottomItems = new List<ACommerce.Templates.Shared.Models.BottomNavItemDto>
     {
-        new() { Href = $"/{slug}",               Label = "الرَئيسيّة", IconName = "home",    Exact = true },
-        new() { Href = $"/{slug}/explore",       Label = "استِكشاف",   IconName = "search" },
-        new() { Href = $"/{slug}/chats",         Label = "رَسائل",     IconName = "message" },
-        new() { Href = $"/{slug}/notifications", Label = "إشعارات",    IconName = "bell" },
-        new() { Href = $"/{slug}/me",            Label = Auth.IsAuthenticated ? "حِسابي" : "دُخول", IconName = "user" },
+        new() { Href = $"/{slug}",            Label = "الرَئيسيّة", IconName = "home",    Exact = true },
+        new() { Href = $"/{slug}/explore",    Label = "استِكشاف",   IconName = "search" },
+        new() { Href = $"/{slug}/favorites",  Label = "مُفَضَّلَة",     IconName = "heart" },
+        new() { Href = $"/{slug}/chats",      Label = "رَسائل",     IconName = "message" },
+        new() { Href = $"/{slug}/me",         Label = Auth.IsAuthenticated ? "حِسابي" : "دُخول", IconName = "user" },
     };
 }
 

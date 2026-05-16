@@ -16,6 +16,9 @@ builder.AddPlatformHost(host => host
     .AddKitAssembly(typeof(ACommerce.Kit.Notifications.Server.NotificationHandlers).Assembly)
     .AddKitAssembly(typeof(ACommerce.Kit.Chat.Server.ChatHandlers).Assembly)
     .AddKitAssembly(typeof(ACommerce.Kit.Favorites.Server.FavoriteHandlers).Assembly)
+    .AddKitAssembly(typeof(ACommerce.Kit.Subscriptions.Server.SubscriptionHandlers).Assembly)
+    .AddKitAssembly(typeof(ACommerce.Kit.Support.Server.TicketHandlers).Assembly)
+    .AddKitAssembly(typeof(ACommerce.Kit.Profiles.Server.ProfileHandlers).Assembly)
     .AddKitAssembly(typeof(RealtimeBroadcastHandler).Assembly));
 
 // مُزَوِّدو الـ Auth (mock — استَبدِلهم بـ Twilio/Nafath فعليّ في الإنتاج)

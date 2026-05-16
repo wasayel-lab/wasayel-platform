@@ -50,6 +50,17 @@ public sealed class AuthSession
         res.Cookies.Append(CookieName(tenantSlug) + ".name", auth.FullName, opts);
     }
 
+    public static void UpdateNameCookie(HttpResponse res, string tenantSlug, string newName)
+    {
+        var opts = new CookieOptions
+        {
+            HttpOnly = true, IsEssential = true,
+            Expires = DateTimeOffset.UtcNow.AddDays(30),
+            SameSite = SameSiteMode.Lax, Path = "/"
+        };
+        res.Cookies.Append(CookieName(tenantSlug) + ".name", newName, opts);
+    }
+
     public static void ClearCookie(HttpResponse res, string tenantSlug)
     {
         var opts = new CookieOptions { Path = "/" };

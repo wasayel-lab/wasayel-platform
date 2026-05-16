@@ -15,5 +15,7 @@
     <ProjectReference Include="..\..\kits\Notifications\ACommerce.Kit.Notifications.Core\ACommerce.Kit.Notifications.Core.csproj" />
     <ProjectReference Include="..\..\kits\Chat\ACommerce.Kit.Chat.Core\ACommerce.Kit.Chat.Core.csproj" />
     <ProjectReference Include="..\..\kits\Favorites\ACommerce.Kit.Favorites.Core\ACommerce.Kit.Favorites.Core.csproj" />
+    <ProjectReference Include="..\..\kits\Subscriptions\ACommerce.Kit.Subscriptions.Core\ACommerce.Kit.Subscriptions.Core.csproj" />
+    <ProjectReference Include="..\..\kits\Support\ACommerce.Kit.Support.Core\ACommerce.Kit.Support.Core.csproj" />
   </ItemGroup>
 </Project>

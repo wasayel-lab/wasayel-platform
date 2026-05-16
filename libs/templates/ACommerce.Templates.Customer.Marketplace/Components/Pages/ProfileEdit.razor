@@ -1,0 +1,53 @@
+@page "/{slug}/me/edit"
+@inject IDocumentStore Store
+@inject AuthSession Auth
+@inject NavigationManager Nav
+
+@if (!Auth.IsAuthenticated)
+{
+    <p class="ac-muted">تَحتاج تَسجيل دُخول.</p>
+    <a class="ac-btn ac-btn-primary" href="@($"/{Slug}/login?returnUrl=/{Slug}/me/edit")"
+       style="display:inline-block;padding:10px 24px;background:var(--ac-primary);color:#fff;
+              border-radius:var(--ac-radius-sm);text-decoration:none;">دُخول</a>
+}
+else if (user is null)
+{
+    <p class="ac-muted">جارٍ التَحميل…</p>
+}
+else
+{
+    <h1>تَعديل المَلَفّ الشَخصيّ</h1>
+
+    <form method="post" action="@($"/{Slug}/me/save")" style="max-width:420px;background:var(--ac-surface);
+                                                              border:1px solid var(--ac-border);
+                                                              border-radius:var(--ac-radius-md);padding:20px;">
+        <label style="display:block;font-size:13px;margin-bottom:6px;">الاسم الكامِل</label>
+        <input type="text" name="fullName" value="@user.FullName" required maxlength="60"
+               style="width:100%;padding:10px;border:1px solid var(--ac-border);
+                      border-radius:var(--ac-radius-sm);font-size:15px;" />
+
+        <p class="ac-muted" style="margin:12px 0 0;font-size:12px;">
+            الهاتف: @user.Phone
+            @if (!string.IsNullOrEmpty(user.NationalId)) { <br/><span>الهُويَّة: @user.NationalId</span> }
+        </p>
+
+        <button type="submit" style="margin-top:16px;width:100%;padding:12px;
+                                     background:var(--ac-primary);color:#fff;border:0;
+                                     border-radius:var(--ac-radius-sm);font-weight:600;cursor:pointer;">
+            حِفظ
+        </button>
+        <a href="@($"/{Slug}/me")" style="display:block;text-align:center;margin-top:8px;
+                                          color:var(--ac-text-muted);font-size:13px;text-decoration:none;">إلغاء</a>
+    </form>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    User? user;
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await using var s = Store.QuerySession(Slug);
+        user = await s.LoadAsync<User>(Auth.UserId!.Value);
+    }
+}
