@@ -15,5 +15,17 @@
 
     <ProjectReference Include="..\..\libs\kits\Listings\ACommerce.Kit.Listings.Core\ACommerce.Kit.Listings.Core.csproj" />
     <ProjectReference Include="..\..\libs\kits\Listings\ACommerce.Kit.Listings.Server\ACommerce.Kit.Listings.Server.csproj" />
+
+    <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Core\ACommerce.Kit.Auth.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Server\ACommerce.Kit.Auth.Server.csproj" />
+
+    <ProjectReference Include="..\..\libs\kits\Notifications\ACommerce.Kit.Notifications.Core\ACommerce.Kit.Notifications.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Notifications\ACommerce.Kit.Notifications.Server\ACommerce.Kit.Notifications.Server.csproj" />
+
+    <ProjectReference Include="..\..\libs\kits\Realtime\ACommerce.Kit.Realtime.Core\ACommerce.Kit.Realtime.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Realtime\ACommerce.Kit.Realtime.Server\ACommerce.Kit.Realtime.Server.csproj" />
+
+    <ProjectReference Include="..\..\libs\kits\Chat\ACommerce.Kit.Chat.Core\ACommerce.Kit.Chat.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Chat\ACommerce.Kit.Chat.Server\ACommerce.Kit.Chat.Server.csproj" />
   </ItemGroup>
 </Project>

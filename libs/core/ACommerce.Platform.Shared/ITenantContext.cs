@@ -1,10 +1,11 @@
+using Microsoft.AspNetCore.Http;
+
 namespace ACommerce.Platform.Shared;
 
 /// <summary>
-/// المُستَأجِر النَشِط في طَلَب الـ HTTP الحاليّ. يَملَؤه middleware
-/// عَن طَريق slug في الـ URL (مثل <c>/ashare/...</c>) ثُمّ يَستَهلِكه
-/// أيّ handler أو صَفحَة لاحقاً. scoped في DI حَتى يَكون مَحصوراً
-/// بالطَلَب.
+/// المُستَأجِر النَشِط في الطَلَب. مَدعوم بـ <see cref="HttpContext.Items"/>
+/// لِيَكون مَرئيّاً عَبر كلّ scopes الـ ASP.NET (Wolverine يَفتَح nested
+/// scopes أحياناً — الـ Items dictionary مَلكيّة HttpContext نَفسه فلا تَتأثَّر).
 /// </summary>
 public interface ITenantContext
 {
@@ -14,22 +15,31 @@ public interface ITenantContext
     bool IsResolved { get; }
 }
 
-/// <summary>
-/// قابِل للتَعديل من middleware فقط. الـ handlers تَستَهلِك
-/// <see cref="ITenantContext"/> فقط (مَنع التَعديل في طَبَقات لاحقَة).
-/// </summary>
-public sealed class TenantContext : ITenantContext
+public sealed class HttpItemTenantContext : ITenantContext
 {
-    public string Slug { get; private set; } = "";
-    public string Name { get; private set; } = "";
-    public string BrandColor { get; private set; } = "#000000";
-    public bool IsResolved { get; private set; }
+    private readonly IHttpContextAccessor _http;
 
-    public void Resolve(string slug, string name, string brandColor)
+    public HttpItemTenantContext(IHttpContextAccessor http) => _http = http;
+
+    public bool IsResolved => _http.HttpContext?.Items.ContainsKey(TenantKeys.Slug) == true;
+    public string Slug       => (string?)_http.HttpContext?.Items[TenantKeys.Slug]  ?? "";
+    public string Name       => (string?)_http.HttpContext?.Items[TenantKeys.Name]  ?? "";
+    public string BrandColor => (string?)_http.HttpContext?.Items[TenantKeys.Color] ?? "#000000";
+}
+
+public static class TenantKeys
+{
+    public const string Slug  = "Tenant.Slug";
+    public const string Name  = "Tenant.Name";
+    public const string Color = "Tenant.Color";
+}
+
+public static class TenantContextExtensions
+{
+    public static void SetTenant(this HttpContext ctx, string slug, string name, string brandColor)
     {
-        Slug = slug;
-        Name = name;
-        BrandColor = brandColor;
-        IsResolved = true;
+        ctx.Items[TenantKeys.Slug]  = slug;
+        ctx.Items[TenantKeys.Name]  = name;
+        ctx.Items[TenantKeys.Color] = brandColor;
     }
 }

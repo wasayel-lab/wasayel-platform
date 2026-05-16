@@ -10,14 +10,9 @@ namespace ACommerce.Platform.MultiTenancy;
 
 /// <summary>
 /// يَستَخرِج tenant slug من أَوّل segment في الـ URL ويُحَمِّل
-/// <see cref="Tenant"/> من Marten. لو وُجِد، يَملَأ
-/// <see cref="TenantContext"/> الـ scoped الذي تَستَهلِكه باقي
-/// الطَبَقات.
-///
-/// مثال:
-///   GET /ashare/listings  →  tenant.Slug = "ashare"
-///   GET /admin/...         →  bypassed (admin paths)
-///   GET /                  →  no tenant (landing page)
+/// <see cref="Tenant"/> من Marten. عند النَجاح يَضَع المُعَرِّفات
+/// في <see cref="HttpContext.Items"/> فتَكون مَرئيّة لِكُلّ scopes الطَلَب
+/// (بما فيها nested scopes التي يُنشِئها Wolverine).
 /// </summary>
 public sealed class TenantResolverMiddleware
 {
@@ -26,8 +21,8 @@ public sealed class TenantResolverMiddleware
     private readonly IMemoryCache _cache;
     private static readonly HashSet<string> ReservedPaths = new(StringComparer.OrdinalIgnoreCase)
     {
-        "admin", "api", "_blazor", "_framework", "_content",
-        "css", "js", "lib", "favicon.ico", "health"
+        "admin", "_blazor", "_framework", "_content",
+        "css", "js", "lib", "favicon.ico", "health", "realtime"
     };
 
     public TenantResolverMiddleware(RequestDelegate next, IDocumentStore store, IMemoryCache cache)
@@ -35,7 +30,7 @@ public sealed class TenantResolverMiddleware
         _next = next; _store = store; _cache = cache;
     }
 
-    public async Task InvokeAsync(HttpContext ctx, TenantContext tenant)
+    public async Task InvokeAsync(HttpContext ctx)
     {
         var path = ctx.Request.Path.Value ?? "/";
         if (path == "/" || path.Length < 2) { await _next(ctx); return; }
@@ -58,10 +53,7 @@ public sealed class TenantResolverMiddleware
         }
 
         if (entity is not null)
-        {
-            tenant.Resolve(entity.Slug, entity.Name, entity.BrandColor);
-            ctx.Items["TenantSlug"] = entity.Slug;
-        }
+            ctx.SetTenant(entity.Slug, entity.Name, entity.BrandColor);
 
         await _next(ctx);
     }
@@ -72,8 +64,8 @@ public static class MultiTenancyExtensions
     public static IServiceCollection AddPlatformMultiTenancy(this IServiceCollection services)
     {
         services.AddMemoryCache();
-        services.AddScoped<TenantContext>();
-        services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
+        services.AddHttpContextAccessor();
+        services.AddScoped<ITenantContext, HttpItemTenantContext>();
         return services;
     }
 

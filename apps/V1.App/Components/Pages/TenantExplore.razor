@@ -1,0 +1,75 @@
+@page "/{slug}/explore"
+@inject ITenantContext Tenant
+@inject IDocumentStore Store
+
+@if (!Tenant.IsResolved || tenant is null)
+{
+    <p class="muted">…</p>
+}
+else
+{
+    <h1>كلّ إعلانات @Tenant.Name</h1>
+
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">
+        <a class="@(string.IsNullOrEmpty(Category)?"chip active":"chip")"
+           href="@($"/{Tenant.Slug}/explore")">الكلّ</a>
+        @foreach (var c in tenant.Categories)
+        {
+            <a class="@(Category == c.Slug ? "chip active" : "chip")"
+               href="@($"/{Tenant.Slug}/explore?category={c.Slug}")">
+                @c.Icon @c.Label
+            </a>
+        }
+    </div>
+
+    @if (items is null)
+    {
+        <p class="muted">جارٍ التَحميل…</p>
+    }
+    else if (items.Count == 0)
+    {
+        <p class="ac-muted" style="text-align:center;padding:32px 0;">لا إعلانات في هذه الفِئَة.</p>
+    }
+    else
+    {
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;">
+            @foreach (var l in items)
+            {
+                <a href="@($"/{Tenant.Slug}/listings/{l.Id}")"
+                   style="background:var(--ac-surface);border:1px solid var(--ac-border);border-radius:var(--ac-radius-md);padding:14px;text-decoration:none;color:var(--ac-text);display:flex;flex-direction:column;gap:6px;">
+                    <div style="aspect-ratio:16/10;background:var(--ac-bg-alt);border-radius:var(--ac-radius-sm);display:flex;align-items:center;justify-content:center;font-size:2rem;">@CategoryIcon(l.CategorySlug)</div>
+                    <strong>@l.Title</strong>
+                    <span style="color:var(--ac-primary);font-weight:700;">@l.Price.ToString("N0") ريال</span>
+                    <span class="ac-muted">@l.City — @l.District</span>
+                </a>
+            }
+        </div>
+    }
+}
+
+<style>
+    .chip {text-decoration:none;padding:8px 14px;border-radius:999px;background:var(--ac-surface);border:1px solid var(--ac-border);color:var(--ac-text);font-size:13px;display:inline-flex;align-items:center;gap:4px;}
+    .chip.active {background:var(--ac-primary);color:#fff;border-color:var(--ac-primary);}
+</style>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery] public string? Category { get; set; }
+
+    Tenant? tenant;
+    IReadOnlyList<Listing>? items;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var g = Store.QuerySession();
+        tenant = await g.LoadAsync<Tenant>(Slug);
+        if (tenant is null) return;
+
+        await using var t = Store.QuerySession(Slug);
+        var q = t.Query<Listing>().Where(x => !x.IsDeleted);
+        if (!string.IsNullOrEmpty(Category)) q = q.Where(x => x.CategorySlug == Category);
+        items = await q.OrderByDescending(x => x.CreatedAt).Take(60).ToListAsync();
+    }
+
+    string CategoryIcon(string s) => tenant?.Categories.FirstOrDefault(c => c.Slug == s)?.Icon ?? "🏷️";
+}

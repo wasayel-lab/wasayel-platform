@@ -1,0 +1,118 @@
+@page "/{slug}/chats/{conversationId:guid}"
+@rendermode InteractiveServer
+@inject ITenantContext Tenant
+@inject IDocumentStore Store
+@inject AuthSession Auth
+@inject NavigationManager Nav
+@inject IHttpContextAccessor HttpCtx
+
+@if (!Auth.IsAuthenticated)
+{
+    <p>تَحتاج تَسجيل دُخول.</p>
+    <a href="@($"/{Slug}/login")">دُخول</a>
+}
+else if (conv is null)
+{
+    <p class="muted">…</p>
+}
+else
+{
+    var iAmOwner = conv.OwnerId == Auth.UserId;
+    var partnerName = iAmOwner ? conv.PartnerName : conv.OwnerName;
+
+    <div style="display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--ac-border);margin-bottom:12px;">
+        <a href="@($"/{Slug}/chats")" style="font-size:18px;text-decoration:none;color:var(--ac-text);">←</a>
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--ac-bg-alt);display:flex;align-items:center;justify-content:center;font-size:18px;">👤</div>
+        <strong>@partnerName</strong>
+    </div>
+
+    <div style="min-height:400px;display:flex;flex-direction:column;gap:8px;padding-bottom:16px;">
+        @foreach (var m in messages)
+        {
+            var mine = m.SenderId == Auth.UserId;
+            <div style="display:flex;justify-content:@(mine ? "flex-start" : "flex-end");">
+                <div style="max-width:75%;padding:10px 14px;border-radius:var(--ac-radius-md);background:@(mine ? "var(--ac-primary)" : "var(--ac-bg-alt)");color:@(mine ? "#fff" : "var(--ac-text)");">
+                    <div style="white-space:pre-wrap;word-break:break-word;">@m.Body</div>
+                    <div style="font-size:10px;opacity:.7;margin-top:4px;text-align:end;">@m.SentAt.ToString("HH:mm")</div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <form class="acs-chat-composer" @onsubmit="SendMessage" @onsubmit:preventDefault>
+        <input type="text" class="ac-input"
+               style="flex:1;padding:10px;border:1px solid var(--ac-border);border-radius:var(--ac-radius-sm);"
+               @bind="_text" @bind:event="oninput" placeholder="اِكتُب رسالَة…" />
+        <button type="submit" disabled="@(string.IsNullOrWhiteSpace(_text) || _busy)"
+                style="padding:10px 18px;background:var(--ac-primary);color:#fff;border:0;border-radius:var(--ac-radius-sm);cursor:pointer;font-weight:600;">
+            إرسال
+        </button>
+    </form>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public Guid ConversationId { get; set; }
+    Conversation? conv;
+    List<Message> messages = new();
+    string _text = "";
+    bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await LoadAsync();
+    }
+
+    async Task LoadAsync()
+    {
+        await using var s = Store.LightweightSession(Slug);
+        conv = await s.LoadAsync<Conversation>(ConversationId);
+        if (conv is null) return;
+
+        // مَن أُشارِك؟ تأكيد التَفويض
+        if (conv.OwnerId != Auth.UserId && conv.PartnerId != Auth.UserId) { conv = null; return; }
+
+        messages = (await s.Query<Message>()
+            .Where(m => m.ConversationId == ConversationId)
+            .OrderBy(m => m.SentAt)
+            .Take(200)
+            .ToListAsync()).ToList();
+
+        // mark read
+        var changed = false;
+        if (conv.OwnerId == Auth.UserId && conv.OwnerUnread > 0)   { conv.OwnerUnread = 0; changed = true; }
+        if (conv.PartnerId == Auth.UserId && conv.PartnerUnread > 0) { conv.PartnerUnread = 0; changed = true; }
+        if (changed) { s.Store(conv); await s.SaveChangesAsync(); }
+    }
+
+    async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(_text) || _busy) return;
+        _busy = true;
+        try
+        {
+            var body = _text.Trim(); _text = "";
+            await using var s = Store.LightweightSession(Slug);
+            var conv2 = await s.LoadAsync<Conversation>(ConversationId);
+            if (conv2 is null) return;
+            var msg = new Message {
+                Id = Guid.NewGuid(),
+                ConversationId = ConversationId,
+                SenderId = Auth.UserId!.Value,
+                Body = body,
+                SentAt = DateTime.UtcNow
+            };
+            s.Store(msg);
+            conv2.LastMessage = body.Length > 100 ? body[..100] : body;
+            conv2.LastAt = msg.SentAt;
+            if (msg.SenderId == conv2.OwnerId) conv2.PartnerUnread++;
+            else if (msg.SenderId == conv2.PartnerId) conv2.OwnerUnread++;
+            s.Store(conv2);
+            await s.SaveChangesAsync();
+            messages.Add(msg);
+            conv = conv2;
+        }
+        finally { _busy = false; }
+    }
+}

@@ -1,0 +1,77 @@
+@page "/{slug}/chats"
+@inject ITenantContext Tenant
+@inject IDocumentStore Store
+@inject AuthSession Auth
+@inject NavigationManager Nav
+
+@if (!Auth.IsAuthenticated)
+{
+    <div style="text-align:center;padding:48px 16px;">
+        <h2>المُحادَثات تَحتاج تَسجيل دُخول</h2>
+        <a class="ac-btn ac-btn-primary" href="@($"/{Slug}/login?returnUrl=/{Slug}/chats")" style="display:inline-block;padding:10px 24px;background:var(--ac-primary);color:#fff;border-radius:var(--ac-radius-sm);text-decoration:none;margin-top:12px;">تَسجيل دُخول</a>
+    </div>
+}
+else
+{
+    <h1>المُحادَثات</h1>
+    @if (convs is null)
+    {
+        <p class="muted">…</p>
+    }
+    else if (convs.Count == 0)
+    {
+        <div style="text-align:center;padding:32px 0;color:var(--ac-text-muted);">
+            <div style="font-size:48px;">💬</div>
+            <p>لا توجَد مُحادَثات بَعد.</p>
+            <p style="font-size:13px;">ابدأ مُحادَثَة من صَفحَة إعلان.</p>
+        </div>
+    }
+    else
+    {
+        <ul style="list-style:none;padding:0;margin:0;">
+            @foreach (var c in convs)
+            {
+                var iAmOwner = c.OwnerId == Auth.UserId;
+                var partnerName = iAmOwner ? c.PartnerName : c.OwnerName;
+                var unread = iAmOwner ? c.OwnerUnread : c.PartnerUnread;
+                <li style="border-bottom:1px solid var(--ac-border);">
+                    <a href="@($"/{Slug}/chats/{c.Id}")"
+                       style="display:flex;gap:12px;align-items:center;padding:14px 8px;text-decoration:none;color:var(--ac-text);">
+                        <div style="width:48px;height:48px;border-radius:50%;background:var(--ac-bg-alt);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">
+                            👤
+                        </div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;justify-content:space-between;align-items:baseline;">
+                                <strong style="font-size:15px;">@partnerName</strong>
+                                <span class="ac-muted" style="font-size:11px;">@c.LastAt.ToString("HH:mm")</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">
+                                <span class="ac-muted" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;">@(c.LastMessage ?? c.Subject ?? "—")</span>
+                                @if (unread > 0)
+                                {
+                                    <span style="background:var(--ac-primary);color:#fff;border-radius:999px;padding:2px 8px;font-size:11px;min-width:20px;text-align:center;">@unread</span>
+                                }
+                            </div>
+                        </div>
+                    </a>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    IReadOnlyList<Conversation>? convs;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await using var s = Store.QuerySession(Slug);
+        convs = await s.Query<Conversation>()
+            .Where(c => c.OwnerId == Auth.UserId!.Value || c.PartnerId == Auth.UserId!.Value)
+            .OrderByDescending(c => c.LastAt)
+            .Take(50)
+            .ToListAsync();
+    }
+}

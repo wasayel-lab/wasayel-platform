@@ -18,19 +18,19 @@ namespace ACommerce.Kit.Listings.Server;
 /// </summary>
 public static class ListingHandlers
 {
-    [WolverinePost("/api/listings")]
+    [WolverinePost("/{slug}/api/listings")]
     public static async Task<ListingCreated> Create(
         CreateListing cmd,
         IDocumentStore store,
-        ITenantContext tenant)
+        ITenantContext tenantCtx)
     {
-        if (!tenant.IsResolved)
+        if (!tenantCtx.IsResolved)
             throw new InvalidOperationException("tenant_not_resolved");
 
-        await using var session = store.LightweightSession(tenant.Slug);
+        await using var session = store.LightweightSession(tenantCtx.Slug);
         var id = Guid.NewGuid();
         var ev = new ListingCreated(
-            id, tenant.Slug, cmd.Title, cmd.Description, cmd.Price,
+            id, tenantCtx.Slug, cmd.Title, cmd.Description, cmd.Price,
             cmd.CategorySlug, cmd.City, cmd.District,
             cmd.Attributes ?? new(), DateTime.UtcNow);
         session.Events.StartStream<Listing>(id, ev);
@@ -38,15 +38,15 @@ public static class ListingHandlers
         return ev;
     }
 
-    [WolverinePost("/api/listings/{id}/edit")]
+    [WolverinePost("/{slug}/api/listings/{id}/edit")]
     public static async Task<ListingEdited?> Edit(
         Guid id,
         EditListing cmd,
         IDocumentStore store,
-        ITenantContext tenant)
+        ITenantContext tenantCtx)
     {
-        if (!tenant.IsResolved) return null;
-        await using var session = store.LightweightSession(tenant.Slug);
+        if (!tenantCtx.IsResolved) return null;
+        await using var session = store.LightweightSession(tenantCtx.Slug);
         var current = await session.Events.AggregateStreamAsync<Listing>(id);
         if (current is null || current.IsDeleted) return null;
 
@@ -59,12 +59,12 @@ public static class ListingHandlers
         return ev;
     }
 
-    [WolverinePost("/api/listings/{id}/delete")]
+    [WolverinePost("/{slug}/api/listings/{id}/delete")]
     public static async Task<ListingDeleted?> Delete(
-        Guid id, IDocumentStore store, ITenantContext tenant)
+        Guid id, IDocumentStore store, ITenantContext tenantCtx)
     {
-        if (!tenant.IsResolved) return null;
-        await using var session = store.LightweightSession(tenant.Slug);
+        if (!tenantCtx.IsResolved) return null;
+        await using var session = store.LightweightSession(tenantCtx.Slug);
         var current = await session.Events.AggregateStreamAsync<Listing>(id);
         if (current is null || current.IsDeleted) return null;
         var ev = new ListingDeleted(id, DateTime.UtcNow);
@@ -73,22 +73,22 @@ public static class ListingHandlers
         return ev;
     }
 
-    [WolverineGet("/api/listings/{id}")]
+    [WolverineGet("/{slug}/api/listings/{id}")]
     public static async Task<Listing?> Get(
-        Guid id, IDocumentStore store, ITenantContext tenant)
+        Guid id, IDocumentStore store, ITenantContext tenantCtx)
     {
-        if (!tenant.IsResolved) return null;
-        await using var session = store.QuerySession(tenant.Slug);
+        if (!tenantCtx.IsResolved) return null;
+        await using var session = store.QuerySession(tenantCtx.Slug);
         return await session.Events.AggregateStreamAsync<Listing>(id);
     }
 
-    [WolverineGet("/api/listings")]
+    [WolverineGet("/{slug}/api/listings")]
     public static async Task<IReadOnlyList<Listing>> List(
-        IDocumentStore store, ITenantContext tenant,
+        IDocumentStore store, ITenantContext tenantCtx,
         string? category = null, int take = 50)
     {
-        if (!tenant.IsResolved) return Array.Empty<Listing>();
-        await using var session = store.QuerySession(tenant.Slug);
+        if (!tenantCtx.IsResolved) return Array.Empty<Listing>();
+        await using var session = store.QuerySession(tenantCtx.Slug);
         var q = session.Query<Listing>().Where(x => !x.IsDeleted);
         if (!string.IsNullOrWhiteSpace(category))
             q = q.Where(x => x.CategorySlug == category);

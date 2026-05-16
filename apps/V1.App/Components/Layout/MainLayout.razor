@@ -1,33 +1,112 @@
 @inherits LayoutComponentBase
 @inject ITenantContext Tenant
+@inject NavigationManager Nav
+@inject IHttpContextAccessor HttpCtx
+@inject AuthSession Auth
 
-<div class="page" style="@PageStyle">
-    @if (Tenant.IsResolved)
-    {
-        <header class="branded-header" style="background:@Tenant.BrandColor">
-            <div class="header-inner">
-                <a class="logo" href="/@Tenant.Slug">@Tenant.Name</a>
-                <nav>
-                    <a href="/@Tenant.Slug">الرَئيسيّة</a>
-                    <a href="/@Tenant.Slug/listings">كلّ الإعلانات</a>
+@{
+    var slug = Tenant.Slug;
+    var brand = Tenant.BrandColor;
+    var path = new Uri(Nav.Uri).AbsolutePath;
+    var isLogin = path.Contains("/login", StringComparison.OrdinalIgnoreCase);
+}
+
+@if (Tenant.IsResolved)
+{
+    <div class="acs-page" style="--ac-primary:@brand; --ac-primary-dark:@brand; --ac-primary-light:@brand; --ac-primary-hover:@brand;">
+        @if (!isLogin)
+        {
+            <nav class="acm-mobile-nav">
+                <div class="acm-mobile-nav-inner">
+                    <div class="acm-mobile-nav-brand">
+                        <span class="acm-mobile-nav-brand-name">@Tenant.Name</span>
+                    </div>
+                    <div class="acm-mobile-nav-actions">
+                        <button class="acm-mobile-nav-btn" @onclick='() => Nav.NavigateTo($"/{slug}/notifications")' aria-label="الإشعارات">🔔</button>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="acm-v2-topnav-wrap">
+                <div class="ac-topnav" style="display:flex;justify-content:space-between;align-items:center;background:var(--ac-surface);border-radius:var(--ac-radius-md);padding:8px 16px;box-shadow:0 1px 3px rgba(0,0,0,.04);">
+                    <div class="acm-brand"><span class="acm-brand-text">@Tenant.Name</span></div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <NavLink class="ac-topnav-item" Match="NavLinkMatch.All" href="@($"/{slug}")">الرَئيسيّة</NavLink>
+                        <NavLink class="ac-topnav-item" href="@($"/{slug}/explore")">استِكشاف</NavLink>
+                        <NavLink class="ac-topnav-item" href="@($"/{slug}/chats")">رَسائل</NavLink>
+                        <NavLink class="ac-topnav-item" href="@($"/{slug}/notifications")">إشعارات</NavLink>
+                        @if (Auth.IsAuthenticated)
+                        {
+                            <NavLink class="ac-topnav-item" href="@($"/{slug}/me")">@Auth.UserName</NavLink>
+                        }
+                        else
+                        {
+                            <a class="ac-btn ac-btn-primary" href="@($"/{slug}/login")" style="padding:6px 14px;border-radius:8px;color:#fff;background:@brand;text-decoration:none;font-size:13px;">دُخول</a>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        <main>
+            @Body
+        </main>
+
+        @if (!isLogin)
+        {
+            <div class="acm-v2-bottom-nav-wrap">
+                <nav class="acm-v2-bottomnav" style="position:fixed;bottom:0;left:0;right:0;height:var(--acm-bottom-nav-h);background:var(--ac-surface);border-top:1px solid var(--ac-border);display:flex;justify-content:space-around;align-items:center;z-index:900;">
+                    <NavLink class="bn-item" Match="NavLinkMatch.All" href="@($"/{slug}")">
+                        <span class="bn-icon">🏠</span>
+                        <span class="bn-label">الرَئيسيّة</span>
+                    </NavLink>
+                    <NavLink class="bn-item" href="@($"/{slug}/explore")">
+                        <span class="bn-icon">🧭</span>
+                        <span class="bn-label">استِكشاف</span>
+                    </NavLink>
+                    <NavLink class="bn-item" href="@($"/{slug}/chats")">
+                        <span class="bn-icon">💬</span>
+                        <span class="bn-label">رَسائل</span>
+                    </NavLink>
+                    <NavLink class="bn-item" href="@($"/{slug}/notifications")">
+                        <span class="bn-icon">🔔</span>
+                        <span class="bn-label">إشعارات</span>
+                    </NavLink>
+                    <NavLink class="bn-item" href="@(Auth.IsAuthenticated ? $"/{slug}/me" : $"/{slug}/login")">
+                        <span class="bn-icon">👤</span>
+                        <span class="bn-label">@(Auth.IsAuthenticated ? "حِسابي" : "دُخول")</span>
+                    </NavLink>
                 </nav>
             </div>
-        </header>
-    }
-    else
-    {
-        <header class="platform-header">
-            <div class="header-inner">
-                <a class="logo" href="/">ACommerce Platform V1</a>
-            </div>
-        </header>
-    }
-    <main>@Body</main>
-</div>
+        }
+    </div>
+}
+else
+{
+    @* Landing page (no tenant) *@
+    <div class="acs-page" style="--ac-primary:#1D4ED8;">
+        <main>@Body</main>
+    </div>
+}
 
 @code {
-    string PageStyle =>
-        Tenant.IsResolved
-            ? $"--brand:{Tenant.BrandColor};"
-            : "--brand:#111827;";
+    protected override void OnInitialized()
+    {
+        if (Tenant.IsResolved && HttpCtx.HttpContext is { } ctx)
+        {
+            Auth.SetTenant(Tenant.Slug);
+            Auth.Load(ctx, Tenant.Slug);
+        }
+        Auth.Changed += OnAuthChanged;
+        Nav.LocationChanged += OnLoc;
+    }
+
+    void OnAuthChanged() => InvokeAsync(StateHasChanged);
+    void OnLoc(object? s, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Auth.Changed -= OnAuthChanged;
+        Nav.LocationChanged -= OnLoc;
+    }
 }

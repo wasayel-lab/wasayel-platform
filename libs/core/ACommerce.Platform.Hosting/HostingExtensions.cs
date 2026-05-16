@@ -78,6 +78,13 @@ public static class HostingExtensions
                 // Snapshot لِـ Listing aggregate (inline = نَفس الـ tx)
                 opts.Projections.Snapshot<ACommerce.Kit.Listings.Listing>(SnapshotLifecycle.Inline);
 
+                // Documents الإضافيّة — Marten يَكتَشِفها لكنّ ذِكرها صَريحاً
+                // يَجعَل الـ schema gen أَوضَح ويَتَأكَّد من الـ identity.
+                opts.Schema.For<ACommerce.Kit.Auth.User>().Identity(x => x.Id);
+                opts.Schema.For<ACommerce.Kit.Notifications.Notification>().Identity(x => x.Id);
+                opts.Schema.For<ACommerce.Kit.Chat.Conversation>().Identity(x => x.Id);
+                opts.Schema.For<ACommerce.Kit.Chat.Message>().Identity(x => x.Id);
+
                 // Auto-create schema في dev
                 if (builder.Environment.IsDevelopment())
                 {
@@ -86,6 +93,9 @@ public static class HostingExtensions
             })
             .UseLightweightSessions()
             .IntegrateWithWolverine();
+
+        // SignalR للبَثّ الفَوريّ
+        builder.Services.AddSignalR();
 
         // Wolverine: يَكتَشِف handlers + يُولِّد HTTP endpoints
         builder.Host.UseWolverine(opts =>

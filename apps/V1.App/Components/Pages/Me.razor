@@ -1,0 +1,43 @@
+@page "/{slug}/me"
+@inject ITenantContext Tenant
+@inject AuthSession Auth
+@inject IHttpContextAccessor HttpCtx
+@inject NavigationManager Nav
+
+@if (!Auth.IsAuthenticated)
+{
+    <div style="text-align:center;padding:48px 16px;">
+        <h2>سَجِّل دُخولك أَوَّلاً</h2>
+        <a class="ac-btn ac-btn-primary" href="@($"/{Slug}/login")"
+           style="display:inline-block;padding:10px 24px;background:var(--ac-primary);color:#fff;border-radius:var(--ac-radius-sm);text-decoration:none;margin-top:12px;">دُخول</a>
+    </div>
+}
+else
+{
+    <div style="text-align:center;padding:24px;">
+        <div style="width:96px;height:96px;border-radius:50%;background:var(--ac-bg-alt);margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:48px;">👤</div>
+        <h1 style="margin-top:12px;">@Auth.UserName</h1>
+        <p class="ac-muted" style="font-size:13px;">معرّف: @Auth.UserId.ToString()![..8]</p>
+    </div>
+
+    <ul style="list-style:none;padding:0;margin:0;">
+        <li><a class="me-item" href="@($"/{Slug}/chats")">💬 المُحادَثات</a></li>
+        <li><a class="me-item" href="@($"/{Slug}/notifications")">🔔 الإشعارات</a></li>
+        <li><form method="post" action="@($"/{Slug}/auth/logout")" style="margin:0;">
+            <button type="submit" class="me-item" style="width:100%;text-align:start;border:0;background:transparent;cursor:pointer;color:var(--ac-danger);">↩ تَسجيل خُروج</button>
+        </form></li>
+    </ul>
+}
+
+<style>
+    .me-item {
+        display:block;padding:14px;background:var(--ac-surface);border:1px solid var(--ac-border);
+        border-radius:var(--ac-radius-md);margin-bottom:6px;text-decoration:none;color:var(--ac-text);
+        font-size:15px;
+    }
+    .me-item:hover { background:var(--ac-bg-alt); }
+</style>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+}

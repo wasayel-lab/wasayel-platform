@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Marten" />
+    <PackageReference Include="WolverineFx.Marten" />
+    <PackageReference Include="WolverineFx.Http" />
+    <ProjectReference Include="..\ACommerce.Kit.Chat.Core\ACommerce.Kit.Chat.Core.csproj" />
+    <ProjectReference Include="..\..\Realtime\ACommerce.Kit.Realtime.Core\ACommerce.Kit.Realtime.Core.csproj" />
+    <ProjectReference Include="..\..\Notifications\ACommerce.Kit.Notifications.Core\ACommerce.Kit.Notifications.Core.csproj" />
+    <ProjectReference Include="..\..\..\core\ACommerce.Platform.Shared\ACommerce.Platform.Shared.csproj" />
+  </ItemGroup>
+</Project>

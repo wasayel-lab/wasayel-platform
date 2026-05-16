@@ -1,54 +1,56 @@
 @page "/{slug}"
 @inject ITenantContext Tenant
 @inject IDocumentStore Store
-@inject NavigationManager Nav
 
-@if (!Tenant.IsResolved || string.IsNullOrEmpty(Slug))
+@if (!Tenant.IsResolved || loaded is null)
 {
-    <h1>المَتجَر غير مَوجود</h1>
-    <p><a href="/">العَودَة</a></p>
-}
-else if (loaded is null)
-{
-    <p>تَحميل...</p>
+    <p class="muted">جارٍ التَحميل…</p>
 }
 else
 {
-    <section class="hero">
-        <h1>@Tenant.Name</h1>
-        <p class="tagline">@loaded.TagLine</p>
-        <p class="muted">@loaded.City</p>
+    <section style="background:var(--ac-primary);color:#fff;padding:24px 16px;border-radius:var(--ac-radius-lg);margin-bottom:16px;">
+        <h1 style="color:#fff;margin:0 0 8px;font-size:24px;">@Tenant.Name</h1>
+        <p style="margin:0;opacity:.92;">@loaded.TagLine</p>
+        <p style="margin:4px 0 0;opacity:.85;font-size:13px;">📍 @loaded.City</p>
     </section>
 
     <h2>الفِئات</h2>
-    <ul class="category-grid">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:24px;">
         @foreach (var c in loaded.Categories)
         {
-            <li class="cat-card">
-                <a href="/@Slug/listings?category=@c.Slug" style="color:@Tenant.BrandColor">
-                    <span class="icon">@c.Icon</span>
-                    <strong>@c.Label</strong>
-                    <span class="muted">@CountFor(c.Slug) إعلان</span>
-                </a>
-            </li>
+            <a href="@($"/{Tenant.Slug}/explore?category={c.Slug}")"
+               class="acs-cat-pick" style="text-decoration:none;">
+                <span style="font-size:1.75rem;">@c.Icon</span>
+                <strong style="font-size:14px;">@c.Label</strong>
+                <span class="ac-muted" style="font-size:12px;">@CountFor(c.Slug) إعلان</span>
+            </a>
         }
-    </ul>
+    </div>
 
     <h2>أَحدَث الإعلانات</h2>
     @if (latest is { Count: > 0 })
     {
-        <ul class="listing-grid">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;">
             @foreach (var l in latest)
             {
-                <li class="listing-card">
-                    <a href="/@Slug/listings/@l.Id">
-                        <strong>@l.Title</strong>
-                        <span class="price">@l.Price.ToString("N0") ريال</span>
-                        <span class="muted">@l.City — @l.District</span>
-                    </a>
-                </li>
+                <a href="@($"/{Tenant.Slug}/listings/{l.Id}")"
+                   style="background:var(--ac-surface);border:1px solid var(--ac-border);border-radius:var(--ac-radius-md);padding:14px;text-decoration:none;color:var(--ac-text);display:flex;flex-direction:column;gap:6px;transition:transform .12s,box-shadow .12s;"
+                   onmouseover="this.style.boxShadow='0 4px 14px rgba(0,0,0,.08)';this.style.transform='translateY(-2px)';"
+                   onmouseout="this.style.boxShadow='none';this.style.transform='none';">
+                    <div style="aspect-ratio:16/10;background:var(--ac-bg-alt);border-radius:var(--ac-radius-sm);display:flex;align-items:center;justify-content:center;color:var(--ac-text-muted);">@CategoryIcon(l.CategorySlug)</div>
+                    <strong style="font-size:15px;">@l.Title</strong>
+                    <span style="color:var(--ac-primary);font-weight:700;">@l.Price.ToString("N0") ريال</span>
+                    <span class="ac-muted" style="font-size:13px;">@l.City — @l.District</span>
+                    <span style="display:inline-block;background:var(--ac-bg-alt);color:var(--ac-text-muted);padding:2px 8px;border-radius:999px;font-size:11px;align-self:flex-start;">
+                        @CategoryLabel(l.CategorySlug)
+                    </span>
+                </a>
             }
-        </ul>
+        </div>
+    }
+    else
+    {
+        <p class="ac-muted">لا إعلانات بَعد.</p>
     }
 }
 
@@ -58,25 +60,27 @@ else
     IReadOnlyList<Listing>? latest;
     Dictionary<string, int> counts = new();
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
         await using var global = Store.QuerySession();
         loaded = await global.LoadAsync<Tenant>(Slug);
         if (loaded is null) return;
 
-        await using var tenantQ = Store.QuerySession(Slug);
-        latest = await tenantQ.Query<Listing>()
+        await using var tq = Store.QuerySession(Slug);
+        latest = await tq.Query<Listing>()
             .Where(x => !x.IsDeleted)
             .OrderByDescending(x => x.CreatedAt)
-            .Take(6)
+            .Take(8)
             .ToListAsync();
 
-        var all = await tenantQ.Query<Listing>()
+        var all = await tq.Query<Listing>()
             .Where(x => !x.IsDeleted)
             .Select(x => x.CategorySlug)
             .ToListAsync();
         counts = all.GroupBy(s => s).ToDictionary(g => g.Key, g => g.Count());
     }
 
-    int CountFor(string catSlug) => counts.TryGetValue(catSlug, out var n) ? n : 0;
+    int CountFor(string s) => counts.TryGetValue(s, out var n) ? n : 0;
+    string CategoryLabel(string s) => loaded?.Categories.FirstOrDefault(c => c.Slug == s)?.Label ?? s;
+    string CategoryIcon(string s) => loaded?.Categories.FirstOrDefault(c => c.Slug == s)?.Icon ?? "🏷️";
 }

@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="WolverineFx" />
+    <ProjectReference Include="..\ACommerce.Kit.Realtime.Core\ACommerce.Kit.Realtime.Core.csproj" />
+    <ProjectReference Include="..\..\Auth\ACommerce.Kit.Auth.Server\ACommerce.Kit.Auth.Server.csproj" />
+  </ItemGroup>
+</Project>

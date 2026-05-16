@@ -1,0 +1,45 @@
+namespace ACommerce.Kit.Auth;
+
+/// <summary>
+/// مُستَخدِم — وَثيقَة Marten مُتَعَدِّدَة المُستَأجِرين. كلّ tenant
+/// له مُستَخدِموه. الـ Id هو userId الفِعليّ (Guid).
+/// </summary>
+public sealed class User
+{
+    public Guid Id { get; set; }
+    public string TenantSlug { get; set; } = "";
+    public string Phone { get; set; } = "";
+    public string? NationalId { get; set; }
+    public string FullName { get; set; } = "مُستَخدِم جَديد";
+    public bool PhoneVerified { get; set; }
+    public string Role { get; set; } = "user";
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+// ─── Events (للـ stream المُستَقِلّ "AuthAttempts") ──────────────────
+public sealed record OtpRequested(
+    Guid Id, string Phone, string CodeHash, string Channel, DateTime At);
+
+public sealed record OtpVerified(
+    Guid Id, Guid UserId, DateTime At);
+
+public sealed record OtpFailed(
+    Guid Id, string Reason, DateTime At);
+
+public sealed record NafathRequested(
+    Guid Id, string NationalId, string DisplayCode, DateTime At);
+
+public sealed record NafathVerified(
+    Guid Id, Guid UserId, DateTime At);
+
+// ─── Commands ─────────────────────────────────────────────────────────
+public sealed record RequestPhoneOtp(string Phone);
+public sealed record VerifyPhoneOtp(string Phone, string Code);
+public sealed record RequestNafath(string NationalId);
+public sealed record VerifyNafath(string AttemptId, string NationalId);
+
+// ─── Response shapes ──────────────────────────────────────────────────
+public sealed record OtpRequestResult(string AttemptId, string DisplayCode, string Hint);
+public sealed record AuthResult(Guid UserId, string FullName, string Phone, string Token, string Role);
+public sealed record NafathPending(string AttemptId, string DisplayCode, int AutoVerifyInSeconds);
