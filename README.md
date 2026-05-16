@@ -14,17 +14,20 @@
 
 ## 🚀 تَشغيل سَريع
 
-```bash
-# مُتَطَلَّبات أَوَّليّة (مَرَّة واحِدَة):
-#   - .NET 10 SDK
-#   - PostgreSQL 16 مُشَغَّلاً على localhost:5432
-#   - مُستَخدِم "acommerce" بِكَلِمَة "acommerce" يَملِك قاعِدَة "acommerce_v1"
-# راجع INSTALL.md للتَفاصيل.
-
-./scripts/run.sh
-# أو
-dotnet run --project apps/V1.App --urls=http://localhost:5050
+### Windows (PowerShell كَ Administrator):
+```powershell
+cd platform-v1
+.\scripts\setup-windows.ps1   # مَرَّة واحِدَة (يُثَبِّت .NET + Postgres + يُنشِئ DB)
+.\scripts\run.ps1              # في كلّ تَشغيل
 ```
+
+### Linux / macOS:
+```bash
+cd platform-v1
+./scripts/run.sh              # يَفترِض Postgres مُشَغَّلاً (راجع INSTALL.md)
+```
+
+كِلاهُما يَفتَح: http://localhost:5050
 
 اِفتَح:
 - http://localhost:5050/ → صَفحَة المَنصّة

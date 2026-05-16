@@ -1,8 +1,77 @@
 # التَثبيت — منصّة ACommerce V1
 
-دَليل تَهيِئة بيئَة التَطوير المَحَلِّيَّة. نَفسه يَنطَبِق على
-Ubuntu 22.04/24.04 (سيرفر أو محليّاً). للأنظِمَة الأخرى: المَنطِق نَفسه،
-المَدير فقط يَختَلِف (brew/yum/إلخ).
+دَليل تَهيِئة بيئَة التَطوير المَحَلِّيَّة. مَدعومٌ على **Windows 10/11**
+وَ **Ubuntu 22.04+**. لِنَظام macOS اِستَخدِم Homebrew بدلاً من apt.
+
+---
+
+# 🪟 على Windows
+
+## الخَيار الأَسرَع — سكِريبت تلقائيّ
+
+اِفتَح **PowerShell كَ Administrator** ثُمّ:
+
+```powershell
+cd platform-v1
+.\scripts\setup-windows.ps1
+```
+
+السكِريبت يَفعَل (يَحتاج `winget` المُتَوَفِّر تلقائيّاً على Win10 1809+ وWin11):
+1. `winget install Microsoft.DotNet.SDK.10`
+2. `winget install PostgreSQL.PostgreSQL.16` (سيَطلُب كَلِمَة سِرّ لمُستَخدِم postgres — احفَظها)
+3. يُنشِئ مُستَخدِم `acommerce` بِكَلِمَة `acommerce` + قاعِدَة `acommerce_v1`
+
+ثُمّ شَغِّل:
+```powershell
+.\scripts\run.ps1
+```
+
+## الخَيار اليَدَويّ — أَوامِر منفصِلَة
+
+إذا فَضَّلت تَنفيذها واحِدَة-واحِدَة:
+
+```powershell
+# 1. .NET 10
+winget install --id Microsoft.DotNet.SDK.10 -e
+
+# 2. PostgreSQL 16 (يَطلُب كَلِمَة سِرّ لمُستَخدِم postgres)
+winget install --id PostgreSQL.PostgreSQL.16 -e
+
+# 3. أَضِف Postgres للـ PATH (إن لم يَفعَلها المُثَبِّت):
+$env:Path += ';C:\Program Files\PostgreSQL\16\bin'
+# (لِجَعلها دائمَة: System Properties → Environment Variables)
+
+# 4. أَنشِئ المُستَخدِم والقاعِدَة (يَطلُب كَلِمَة سِرّ postgres):
+psql -U postgres -c "CREATE USER acommerce WITH PASSWORD 'acommerce' SUPERUSER;"
+psql -U postgres -c "CREATE DATABASE acommerce_v1 OWNER acommerce;"
+
+# 5. اختِبار الاتِّصال:
+$env:PGPASSWORD = 'acommerce'
+psql -h localhost -U acommerce -d acommerce_v1 -c "SELECT 'OK';"
+
+# 6. شَغِّل المنصّة:
+dotnet run --project apps\V1.App --urls=http://localhost:5050
+```
+
+> **مُلاحَظَة عن `sudo`**: لا تَستَخدِم `sudo` على Windows — صيغَتُه تَختَلِف.
+> Postgres على Windows يَستَعمِل `psql -U <user>` مُباشَرَةً، يَطلُب
+> كَلِمَة السِرّ تفاعليّاً.
+
+## بَديل Docker على Windows
+
+إذا تُفَضِّل Docker Desktop:
+```powershell
+winget install Docker.DockerDesktop
+# أَعِد تَشغيل الجِهاز، ثُمّ:
+cd platform-v1
+docker compose up -d
+# يُشَغِّل Postgres مَع نَفس الـ credentials
+dotnet run --project apps\V1.App --urls=http://localhost:5050
+```
+
+---
+
+# 🐧 على Linux (Ubuntu 22.04+)
 
 ## ١) المُتَطَلَّبات
 
