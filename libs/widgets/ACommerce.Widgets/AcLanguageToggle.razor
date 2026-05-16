@@ -1,0 +1,24 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcLanguageToggle — زرّ تبديل ar / en.
+    UI-only: يرجع callback للتطبيق ليحفظ في AppStore ويعيد تحميل الترجمة.
+*@
+
+<button type="button" class="ac-btn ac-btn-ghost ac-lang-toggle @(Class ?? "")"
+        @onclick="Toggle" aria-label="@AriaLabel">
+    <span>@(IsArabic ? "EN" : "ع")</span>
+</button>
+
+@code {
+    [Parameter] public bool IsArabic { get; set; }
+    [Parameter] public EventCallback<bool> IsArabicChanged { get; set; }
+    [Parameter] public string AriaLabel { get; set; } = "Toggle language";
+    [Parameter] public string? Class { get; set; }
+
+    private Task Toggle()
+    {
+        IsArabic = !IsArabic;
+        return IsArabicChanged.InvokeAsync(IsArabic);
+    }
+}

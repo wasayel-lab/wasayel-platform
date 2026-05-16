@@ -1,0 +1,69 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcMapSim — محاكاة خريطة بـ CSS (شبكة + دبابيس) بدون Leaflet.
+    النقاط تُوضَع ضمن البؤرة بحساب نسبة lat/lng إلى الحدود المعطاة.
+
+    - Pins: قائمة بنقاط (lat, lng, Label, IsSelected).
+    - Bounds: (MinLat, MaxLat, MinLng, MaxLng) — إذا null يحسب تلقائياً.
+    - OnPinClick: يرجع الـ Id عند النقر.
+
+    مبدأ التصميم: خط واحد + لا ألوان — الدبابيس تستعمل var(--ac-primary)
+    والمختار var(--ac-secondary). الشبكة رمادية خفيفة تُحاكي طرقاً.
+
+    CSS_CLASSES: ac-map-sim, ac-map-sim-grid, ac-map-sim-pin,
+                 ac-map-sim-pin-selected
+*@
+
+<div class="ac-map-sim @(Class ?? "")" role="img" aria-label="@MapAriaLabel">
+    <div class="ac-map-sim-grid" aria-hidden="true"></div>
+    @foreach (var p in Pins)
+    {
+        var (x, y) = Project(p);
+        var sel = p.Id == SelectedId;
+        <button type="button"
+                class="ac-map-sim-pin @(sel ? "ac-map-sim-pin-selected" : "")"
+                style="inset-inline-start: @(x.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))%; top: @(y.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))%;"
+                @onclick="() => PinClicked(p.Id)"
+                aria-label="@p.Label">
+            <AcIcon Name="map-pin" Size="18" Filled="@sel" />
+            @if (!string.IsNullOrEmpty(p.ShortLabel))
+            {
+                <span class="ac-map-sim-pin-label">@p.ShortLabel</span>
+            }
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<MapPin> Pins { get; set; } = Array.Empty<MapPin>();
+    [Parameter] public string? SelectedId { get; set; }
+    [Parameter] public EventCallback<string> OnPinClick { get; set; }
+    [Parameter] public (double MinLat, double MaxLat, double MinLng, double MaxLng)? Bounds { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string MapAriaLabel { get; set; } = "Approximate map";
+
+    private Task PinClicked(string id) => OnPinClick.InvokeAsync(id);
+
+    private (double X, double Y) Project(MapPin p)
+    {
+        if (Pins.Count == 0) return (50, 50);
+        double minLat, maxLat, minLng, maxLng;
+        if (Bounds is { } b) { minLat = b.MinLat; maxLat = b.MaxLat; minLng = b.MinLng; maxLng = b.MaxLng; }
+        else
+        {
+            minLat = Pins.Min(x => x.Lat);
+            maxLat = Pins.Max(x => x.Lat);
+            minLng = Pins.Min(x => x.Lng);
+            maxLng = Pins.Max(x => x.Lng);
+        }
+        var latSpan = maxLat - minLat; if (latSpan < 1e-6) latSpan = 1;
+        var lngSpan = maxLng - minLng; if (lngSpan < 1e-6) lngSpan = 1;
+        // Padding 8% حول الحواف لمنع دبابيس الحدود من الاقتطاع.
+        var x = 8 + 84 * (p.Lng - minLng) / lngSpan;
+        var y = 8 + 84 * (1 - (p.Lat - minLat) / latSpan);
+        return (x, y);
+    }
+
+    public record MapPin(string Id, string Label, double Lat, double Lng, string? ShortLabel = null);
+}

@@ -1,0 +1,30 @@
+@*
+  Router shared across hosts (Server / WebAssembly / MAUI). Default
+  AppAssembly = هذه المكتبة (تحتوي كل صفحات @page)؛ يمكن للمضيف تمرير
+  تجميعه الخاص لو أضاف صفحات إضافية.
+*@
+<CascadingAuthenticationState>
+    <Router AppAssembly="@(AppAssembly ?? typeof(Routes).Assembly)"
+            AdditionalAssemblies="@AdditionalAssemblies">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+                <Authorizing>
+                    @* أثناء انتظار AuthenticationStateProvider يُكمل استعادة JWT
+                       من localStorage. بدون هذا الـ slot يُعرض NotAuthorized
+                       افتراضياً → يقفز RedirectToLogin قبل أن تنتهي الاستعادة،
+                       فيخرج المستخدم رغم أنّه لا يزال مصادَقاً عليه. *@
+                    <div class="acs-loading" role="status" aria-busy="true"></div>
+                </Authorizing>
+                <NotAuthorized>
+                    <RedirectToLogin />
+                </NotAuthorized>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        </Found>
+    </Router>
+</CascadingAuthenticationState>
+
+@code {
+    [Parameter] public System.Reflection.Assembly? AppAssembly { get; set; }
+    [Parameter] public IEnumerable<System.Reflection.Assembly>? AdditionalAssemblies { get; set; }
+}

@@ -1,0 +1,49 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcTopNav — شريط علوي للتصفّح (شاشات كبيرة فقط).
+    يظهر عند ≥768px ويُخفى دون ذلك؛ نظير لـ AcBottomNav في التخطيط.
+
+    CSS_CLASSES: ac-topnav, ac-topnav-brand, ac-topnav-links, ac-topnav-link,
+                 ac-topnav-link-active, ac-topnav-badge, ac-topnav-actions
+*@
+
+<nav class="ac-topnav @(Class ?? "")">
+    @if (BrandContent is not null)
+    {
+        <div class="ac-topnav-brand">@BrandContent</div>
+    }
+    <div class="ac-topnav-links">
+        @foreach (var item in Items)
+        {
+            var match = item.Exact ? NavLinkMatch.All : NavLinkMatch.Prefix;
+            <NavLink class="ac-topnav-link"
+                     ActiveClass="ac-topnav-link-active"
+                     href="@item.Href"
+                     Match="@match">
+                @if (!string.IsNullOrEmpty(item.IconName))
+                {
+                    <AcIcon Name="@item.IconName" Size="18" />
+                }
+                <span>@item.Label</span>
+                @if (item.Badge is > 0)
+                {
+                    <span class="ac-topnav-badge">@(item.Badge > 99 ? "99+" : item.Badge.ToString())</span>
+                }
+            </NavLink>
+        }
+    </div>
+    @if (RightActions is not null)
+    {
+        <div class="ac-topnav-actions">@RightActions</div>
+    }
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TopNavItem> Items { get; set; } = Array.Empty<TopNavItem>();
+    [Parameter] public RenderFragment? BrandContent { get; set; }
+    [Parameter] public RenderFragment? RightActions { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    public record TopNavItem(string Href, string Label, string? IconName = null, int? Badge = null, bool Exact = false);
+}

@@ -1,0 +1,52 @@
+@namespace ACommerce.Templates.Shared
+
+@*
+    Bottom tab bar with optional badge per item and an optional center slot
+    (for a floating action button). Uses NavLink for active-state highlighting.
+
+    Flex slots: CenterSlot (inserted at Math.Floor(Items.Count / 2))
+*@
+
+<nav class="acs-bottom-nav @(ExtraClass ?? "")">
+    @for (var i = 0; i < Items.Count; i++)
+    {
+        var item = Items[i];
+        var matchType = item.Exact ? NavLinkMatch.All : NavLinkMatch.Prefix;
+
+        @if (CenterSlot != null && i == Items.Count / 2)
+        {
+            <div class="acs-bottom-nav-center">@CenterSlot</div>
+        }
+
+        <NavLink class="acs-bottom-nav-item"
+                 ActiveClass="active"
+                 href="@item.Href"
+                 Match="@matchType">
+            <span class="acs-bottom-nav-icon">
+                @if (!string.IsNullOrEmpty(item.IconName))
+                {
+                    <AcIcon Name="@item.IconName" Size="20" StrokeWidth="1.75" />
+                }
+                else if (!string.IsNullOrEmpty(item.Emoji))
+                {
+                    @item.Emoji
+                }
+                else if (!string.IsNullOrEmpty(item.Icon))
+                {
+                    <i class="@item.Icon"></i>
+                }
+                @if (item.Badge is > 0)
+                {
+                    <span class="acs-bottom-nav-badge">@(item.Badge > 99 ? "99+" : item.Badge.ToString())</span>
+                }
+            </span>
+            <span class="acs-bottom-nav-label">@item.Label</span>
+        </NavLink>
+    }
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<BottomNavItemDto> Items { get; set; } = Array.Empty<BottomNavItemDto>();
+    [Parameter] public string? ExtraClass { get; set; }
+    [Parameter] public RenderFragment? CenterSlot { get; set; }
+}

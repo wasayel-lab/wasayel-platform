@@ -1,0 +1,48 @@
+@namespace ACommerce.Widgets
+
+<div class="acs-location-picker @(Class ?? "")" style="display:flex;gap: 8px;align-items:center">
+    <div style="flex:1">
+        <label style="font-size:0.75rem;color:var(--ac-text-muted)">@(CityLabel ?? "City")</label>
+        <select class="form-select form-select-sm" @onchange="HandleCityChange">
+            <option value="">@(AllCitiesLabel ?? "All cities")</option>
+            @foreach (var city in Cities)
+            {
+                <option value="@city" selected="@(SelectedCity == city)">@city</option>
+            }
+        </select>
+    </div>
+    @if (ShowDistrict && Districts.Count > 0)
+    {
+        <div style="flex:1">
+            <label style="font-size:0.75rem;color:var(--ac-text-muted)">@(DistrictLabel ?? "District")</label>
+            <select class="form-select form-select-sm" @onchange="HandleDistrictChange">
+                <option value="">@(AllDistrictsLabel ?? "All districts")</option>
+                @foreach (var district in Districts)
+                {
+                    <option value="@district" selected="@(SelectedDistrict == district)">@district</option>
+                }
+            </select>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<string> Cities { get; set; } = Array.Empty<string>();
+    [Parameter] public string? SelectedCity { get; set; }
+    [Parameter] public string? SelectedDistrict { get; set; }
+    [Parameter] public IReadOnlyList<string> Districts { get; set; } = Array.Empty<string>();
+    [Parameter] public EventCallback<string> OnCitySelect { get; set; }
+    [Parameter] public EventCallback<string?> OnDistrictSelect { get; set; }
+    [Parameter] public bool ShowDistrict { get; set; } = true;
+    [Parameter] public string? CityLabel { get; set; }
+    [Parameter] public string? DistrictLabel { get; set; }
+    [Parameter] public string? AllCitiesLabel { get; set; }
+    [Parameter] public string? AllDistrictsLabel { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private Task HandleCityChange(ChangeEventArgs e)
+        => OnCitySelect.InvokeAsync(e.Value?.ToString() ?? "");
+
+    private Task HandleDistrictChange(ChangeEventArgs e)
+        => OnDistrictSelect.InvokeAsync(e.Value?.ToString());
+}

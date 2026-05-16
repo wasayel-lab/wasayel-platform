@@ -1,0 +1,51 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcCityPicker — قائمة اختيار مدينة سريعة.
+    يُستخدَم عادة في hero الصفحة الرئيسية (عشير القديم يختار بين 8 مدن).
+
+    CSS_CLASSES: ac-citypicker, ac-citypicker-trigger, ac-citypicker-menu,
+                 ac-citypicker-option, ac-citypicker-option-active
+*@
+
+<div class="ac-citypicker @(Class ?? "")">
+    <button type="button" class="ac-citypicker-trigger" @onclick="Toggle" aria-expanded="@_open">
+        <AcIcon Name="map-pin" Size="16" />
+        <span>@Value</span>
+        <AcIcon Name="chevron-down" Size="14" />
+    </button>
+    @if (_open)
+    {
+        <div class="ac-citypicker-menu" role="listbox">
+            @foreach (var c in Cities)
+            {
+                var isActive = c == Value;
+                <button type="button"
+                        class="ac-citypicker-option @(isActive ? "ac-citypicker-option-active" : "")"
+                        @onclick="() => Pick(c)"
+                        role="option"
+                        aria-selected="@isActive">
+                    @c
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<string> Cities { get; set; } = Array.Empty<string>();
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private bool _open;
+
+    private void Toggle() => _open = !_open;
+
+    private async Task Pick(string city)
+    {
+        Value = city;
+        _open = false;
+        await ValueChanged.InvokeAsync(city);
+    }
+}

@@ -1,0 +1,10 @@
+@namespace ACommerce.Widgets
+
+<span class="ac-badge ac-badge-@Variant @(Class ?? "")">@(ChildContent ?? (RenderFragment)(b => b.AddContent(0, Text)))</span>
+
+@code {
+    [Parameter] public string? Text { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string Variant { get; set; } = "muted"; // primary|success|danger|warning|muted
+    [Parameter] public string? Class { get; set; }
+}

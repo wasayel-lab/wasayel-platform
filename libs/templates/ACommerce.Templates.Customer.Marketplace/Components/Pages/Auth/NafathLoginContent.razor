@@ -1,0 +1,200 @@
+@inject IAuthStore Auth
+@inject IClientAuthState AuthState
+@inject IUiPreferences Prefs
+@inject IFavoritesStore Favorites
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject L L
+@inject INumeralNormalizer Numerals
+@implements IDisposable
+
+@*
+    NafathLoginContent — تَدَفُّق نَفاذ بِخُطوَتَين:
+      1) إدخال رَقم الهُوِيَّة
+      2) عَرض displayCode (مَثَلاً "00") مَع countdown timer لِلتَّحَقُّق
+         التِلقائي. الـ component يَستَطلِع backend كُلّ 1.5 ثا (verify).
+         عِند النَّجاح ⇒ ينَتَقِل إلى ReturnUrl أَو الـ home.
+
+    لا "كود" يُكتَب — Nafath يَتَوَلّى ضَغط المُستَخدِم في تَطبيق نَفاذ.
+    في وَضع mock الـ verify يَنجَح بَعد AutoVerifySeconds (تُحَدِّده opts).
+*@
+
+@code {
+    [Parameter] public string? ReturnUrl { get; set; }
+}
+
+<div class="acs-nafath-head">
+    <AcIcon Name="shield-check" Size="48" />
+    <h1 class="acm-wizard-title">@(L[TemplateStrings.AppName])</h1>
+    <p class="acs-nafath-subtitle">@(L[TemplateStrings.NafathSubtitle])</p>
+</div>
+
+<AcCard>
+    <ChildContent>
+        @if (!_initiated)
+        {
+            <div @onkeydown="OnIdKey">
+                <AcField Label="@(L[TemplateStrings.NafathNationalId])" Required="true">
+                    <AcInput Type="tel" Value="@_nationalId" id="nafath-id"
+                             ValueChanged="@(v => _nationalId = (Numerals.ToLatin(v) ?? string.Empty).Trim())"
+                             Placeholder="10XXXXXXXX" />
+                </AcField>
+                @if (_error is not null) { <div class="ac-alert ac-alert-danger mt-2">@_error</div> }
+                <AcButton Variant="primary" Size="lg" Class="ac-btn-block mt-2"
+                          Text="@(L[TemplateStrings.NafathStart])"
+                          OnClick="@StartChallenge"
+                          Disabled="@(_nationalId.Length != 10 || Auth.IsBusy)" />
+            </div>
+        }
+        else
+        {
+            <div class="acs-nafath-verify">
+                <p class="acs-nafath-instruction">@(L[TemplateStrings.NafathTapInstruction])</p>
+
+                @* الرَّقَم في دائِرَة مَركَزِيَّة (تَصميم Google-style لِمصادَقَة
+                   بِالنَّقر عَلى رَقَم في جِهاز آخَر). *@
+                <div class="acs-nafath-code-wrap">
+                    <div class="acs-nafath-code-circle" aria-label="@(L[TemplateStrings.NafathCodeAria])">
+                        <span class="acs-nafath-code-num">@_displayCode</span>
+                    </div>
+                </div>
+
+                <div class="acs-nafath-state @(_verified ? "acs-nafath-state--ok" : "acs-nafath-state--waiting")">
+                    @if (_verified)
+                    {
+                        <AcIcon Name="check-circle" Size="16" />
+                        <span>@(L[TemplateStrings.NafathVerified])</span>
+                    }
+                    else if (_secondsLeft > 0)
+                    {
+                        <AcIcon Name="clock" Size="16" />
+                        <span>@(string.Format(L[TemplateStrings.NafathAutoVerifyFormat], _secondsLeft))</span>
+                    }
+                    else
+                    {
+                        <AcIcon Name="clock" Size="16" />
+                        <span>@(L[TemplateStrings.NafathVerifying])</span>
+                    }
+                </div>
+
+                @if (_error is not null) { <div class="ac-alert ac-alert-danger mt-2">@_error</div> }
+
+                <AcButton Variant="ghost" Class="ac-btn-block mt-2"
+                          Text="@(L[TemplateStrings.NafathCancel])"
+                          OnClick="@Reset" Disabled="@_verified" />
+            </div>
+        }
+    </ChildContent>
+</AcCard>
+
+@code {
+    private string  _nationalId = "";
+    private bool    _initiated;
+    private bool    _verified;
+    private string  _displayCode = "";
+    private int     _autoVerifySeconds;
+    private int     _secondsLeft;
+    private string? _error;
+    private System.Threading.Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        Auth.Changed += OnChange;
+        Prefs.HideChrome = true;
+        if (Auth.IsAuthenticated) Nav.NavigateTo("/");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Prefs.HideChrome = true;
+            try { await JS.InvokeVoidAsync("ejarChatUi.focus", "#nafath-id"); } catch { }
+        }
+    }
+
+    private async Task StartChallenge()
+    {
+        _error = null;
+        await Auth.RequestOtpAsync(_nationalId);
+        if (Auth.LastError is not null)
+        {
+            _error = Auth.LastError;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        _displayCode = Auth.LastProviderData?.TryGetValue("displayCode", out var dc) == true ? dc : "—";
+        _autoVerifySeconds =
+            Auth.LastProviderData?.TryGetValue("autoVerifyInSeconds", out var av) == true
+            && int.TryParse(av, out var avSec) ? avSec : 10;
+        _secondsLeft = _autoVerifySeconds;
+        _initiated = true;
+
+        // الـ Timer يَخدِم غايَتَين: تَنازُل العَدّاد المَرئي + استِطلاع verify
+        // كُلّ 1.5s. الـ Channel mock يَرفُض VerifyAsync قَبل انقِضاء
+        // AutoVerifySeconds ويَنجَح بَعدَها — الـ polling آمِن، لا يَخلِق
+        // أَيّ سِجلّ في DB.
+        _timer = new System.Threading.Timer(_ => _ = OnTick(), null, 1000, 1000);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnTick()
+    {
+        if (_verified) return;
+        if (_secondsLeft > 0) _secondsLeft--;
+        if (_secondsLeft % 2 == 0 || _secondsLeft <= 0) await PollVerify();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private bool _polling;
+    private async Task PollVerify()
+    {
+        if (_polling || _verified) return;
+        _polling = true;
+        try
+        {
+            // mock Nafath يَتَجاهَل الـ code، نُرسِل displayCode كَـ secret
+            // (الحَقل مَطلوب في AuthOps.VerifyOtp shape) ⇒ يَنجَح بَعد الزَّمَن.
+            await Auth.VerifyOtpAsync(_nationalId, _displayCode);
+            if (Auth.IsAuthenticated)
+            {
+                _verified = true;
+                _timer?.Dispose();
+                Prefs.HideChrome = false;
+                try { await Favorites.LoadAsync(); } catch { }
+                var dest = !string.IsNullOrWhiteSpace(ReturnUrl) ? ReturnUrl! : "/";
+                await InvokeAsync(() => Nav.NavigateTo(dest));
+            }
+            // غَير نَجاح ⇒ لا تَعرِض رِسالَة خَطَأ، فَالـ polling يَستَمِرّ
+            // حَتّى auto-verify time في الـ mock.
+        }
+        finally { _polling = false; }
+    }
+
+    private void Reset()
+    {
+        _timer?.Dispose();
+        _timer = null;
+        _initiated = false;
+        _verified = false;
+        _displayCode = "";
+        _secondsLeft = 0;
+        _error = null;
+    }
+
+    private async Task OnIdKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !Auth.IsBusy && _nationalId.Length == 10)
+            await StartChallenge();
+    }
+
+    private void OnChange() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        Auth.Changed -= OnChange;
+        Prefs.HideChrome = false;
+    }
+}

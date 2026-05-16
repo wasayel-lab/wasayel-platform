@@ -1,0 +1,53 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcModal — نافذة مشروطة (dialog) بـ header/body/footer + backdrop.
+
+    يُستخدَم في Explore لـ Filter Modal، ومستقبلاً لأيّ حوار قراري.
+    النقر على Backdrop يُغلق المودال؛ ChildContent هو البلاطة نفسها.
+
+    CSS_CLASSES: ac-modal-backdrop, ac-modal, ac-modal-header,
+                 ac-modal-title, ac-modal-close, ac-modal-body,
+                 ac-modal-footer
+*@
+
+@if (Open)
+{
+    <div class="ac-modal-backdrop" @onclick="Close"></div>
+    <div class="ac-modal @(Class ?? "")" role="dialog" aria-modal="true" @onclick:stopPropagation="true">
+        @if (!string.IsNullOrEmpty(Title) || HeaderActions is not null)
+        {
+            <div class="ac-modal-header">
+                <h3 class="ac-modal-title">@Title</h3>
+                <div class="ac-modal-header-actions">
+                    @HeaderActions
+                    <button type="button" class="ac-modal-close" aria-label="@CloseAriaLabel" @onclick="Close">
+                        <AcIcon Name="x" Size="20" />
+                    </button>
+                </div>
+            </div>
+        }
+        <div class="ac-modal-body">@ChildContent</div>
+        @if (Footer is not null)
+        {
+            <div class="ac-modal-footer">@Footer</div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public RenderFragment? HeaderActions { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string CloseAriaLabel { get; set; } = "Close";
+
+    private async Task Close()
+    {
+        Open = false;
+        await OpenChanged.InvokeAsync(false);
+    }
+}

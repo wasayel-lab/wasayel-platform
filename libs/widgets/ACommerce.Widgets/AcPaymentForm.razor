@@ -1,0 +1,97 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcPaymentForm — نموذج دفع محاكي.
+    لا يتّصل بأيّ خادم — يُصدِر OnSubmit مع البيانات ويترك المعالجة للأعلى.
+    في V2 المحاكاة تقرأ آخر رقم البطاقة: مزدوج يُنجح، فردي يُفشل.
+
+    CSS_CLASSES: ac-payform, ac-payform-row, ac-payform-cols
+*@
+
+<form class="ac-payform @(Class ?? "")" @onsubmit="SubmitInternal" @onsubmit:preventDefault="true">
+    <div class="ac-payform-row">
+        <AcField Label="@CardNumberLabel" Required="true">
+            <AcInput Type="text"
+                     Value="@_cardNumber"
+                     ValueChanged="@(v => _cardNumber = v ?? string.Empty)"
+                     Placeholder="XXXX XXXX XXXX XXXX"
+                     inputmode="numeric" />
+        </AcField>
+    </div>
+
+    <div class="ac-payform-cols">
+        <AcField Label="@ExpiryLabel" Required="true">
+            <AcInput Type="text"
+                     Value="@_expiry"
+                     ValueChanged="@(v => _expiry = v ?? string.Empty)"
+                     Placeholder="MM/YY" />
+        </AcField>
+        <AcField Label="@CvvLabel" Required="true">
+            <AcInput Type="text"
+                     Value="@_cvv"
+                     ValueChanged="@(v => _cvv = v ?? string.Empty)"
+                     Placeholder="123" />
+        </AcField>
+    </div>
+
+    <div class="ac-payform-row">
+        <AcField Label="@HolderLabel" Required="true">
+            <AcInput Type="text"
+                     Value="@_holder"
+                     ValueChanged="@(v => _holder = v ?? string.Empty)"
+                     Placeholder="@HolderLabel" />
+        </AcField>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <AcAlert Variant="danger" Text="@_error" />
+    }
+
+    <AcButton Type="submit"
+              Variant="primary"
+              Size="lg"
+              Text="@SubmitLabel"
+              Class="ac-btn-block"
+              Disabled="@Submitting" />
+</form>
+
+@code {
+    [Parameter] public string CardNumberLabel { get; set; } = "Card number";
+    [Parameter] public string ExpiryLabel { get; set; } = "Expiry date";
+    [Parameter] public string CvvLabel { get; set; } = "CVV";
+    [Parameter] public string HolderLabel { get; set; } = "Cardholder name";
+    [Parameter] public string SubmitLabel { get; set; } = "Pay";
+
+    [Parameter] public bool Submitting { get; set; }
+    [Parameter] public EventCallback<PaymentFormValues> OnSubmit { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string CardNumberInvalidMessage { get; set; } = "Invalid card number";
+    [Parameter] public string ExpiryInvalidMessage     { get; set; } = "Expiry must be MM/YY";
+    [Parameter] public string CvvInvalidMessage        { get; set; } = "Invalid CVV";
+    [Parameter] public string HolderRequiredMessage    { get; set; } = "Cardholder name is required";
+
+    private string _cardNumber = "";
+    private string _expiry = "";
+    private string _cvv = "";
+    private string _holder = "";
+    private string? _error;
+
+    private async Task SubmitInternal()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_cardNumber) || _cardNumber.Replace(" ", "").Length < 12)
+        { _error = CardNumberInvalidMessage; return; }
+        if (string.IsNullOrWhiteSpace(_expiry) || !_expiry.Contains('/'))
+        { _error = ExpiryInvalidMessage; return; }
+        if (string.IsNullOrWhiteSpace(_cvv) || _cvv.Length < 3)
+        { _error = CvvInvalidMessage; return; }
+        if (string.IsNullOrWhiteSpace(_holder))
+        { _error = HolderRequiredMessage; return; }
+
+        await OnSubmit.InvokeAsync(new PaymentFormValues(
+            _cardNumber.Replace(" ", ""), _expiry, _cvv, _holder));
+    }
+
+    public sealed record PaymentFormValues(string CardNumber, string Expiry, string Cvv, string Holder);
+}

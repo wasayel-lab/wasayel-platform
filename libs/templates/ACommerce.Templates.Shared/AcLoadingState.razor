@@ -1,0 +1,19 @@
+@namespace ACommerce.Templates.Shared
+
+@*
+    Loading-state template. Consistent spinner + optional message.
+*@
+
+<div class="acs-loading">
+    <div class="acs-spinner" role="status" aria-label="Loading"></div>
+    @if (!string.IsNullOrEmpty(Message))
+    {
+        <p class="acs-loading-message">@Message</p>
+    }
+    @ExtraContent
+</div>
+
+@code {
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public RenderFragment? ExtraContent { get; set; }
+}

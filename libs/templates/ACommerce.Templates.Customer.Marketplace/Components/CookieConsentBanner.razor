@@ -1,0 +1,45 @@
+@namespace Ejar.Customer.UI.Components.Shared
+@inject IJSRuntime JS
+@inject L L
+
+@if (_visible)
+{
+    <div class="acm-consent-bar" role="alertdialog" aria-label="@(L[TemplateStrings.CookieTitle])">
+        <p class="acm-consent-text">
+            @(L[TemplateStrings.CookieBannerText])
+            <a href="/legal/privacy" class="acm-consent-link">@(L[TemplateStrings.CookiePrivacyLink])</a>.
+        </p>
+        <div class="acm-consent-actions">
+            <button class="ac-btn ac-btn-sm ac-btn-outline-primary" @onclick="Decline">@(L[TemplateStrings.CommonReject])</button>
+            <button class="ac-btn ac-btn-sm ac-btn-primary" @onclick="Accept">@(L[TemplateStrings.CommonOk])</button>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _visible;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            var consent = await JS.InvokeAsync<string?>("localStorage.getItem", "ejar_consent");
+            _visible = string.IsNullOrEmpty(consent);
+            if (_visible) await InvokeAsync(StateHasChanged);
+        }
+        catch { }
+    }
+
+    private async Task Accept()
+    {
+        await JS.InvokeVoidAsync("localStorage.setItem", "ejar_consent", "granted");
+        _visible = false;
+    }
+
+    private async Task Decline()
+    {
+        await JS.InvokeVoidAsync("localStorage.setItem", "ejar_consent", "declined");
+        _visible = false;
+    }
+}

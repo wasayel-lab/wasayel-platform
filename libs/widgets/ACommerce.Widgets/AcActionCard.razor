@@ -1,0 +1,35 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcActionCard — بطاقة إجراء كبيرة في شبكة (grid).
+    بنية مطابقة لـ ashare-action-card في عشير القديم:
+      ┌──────────────────┐
+      │      [Icon]      │
+      │       Text       │
+      └──────────────────┘
+
+    تُستخدَم في `Quick Actions` أسفل الصفحة (زوج من البطاقات).
+    Variant: "primary" | "secondary" | "surface".
+
+    CSS_CLASSES: ac-action, ac-action-primary, ac-action-secondary,
+                 ac-action-surface, ac-action-icon, ac-action-label
+*@
+
+<button type="button"
+        class="ac-action ac-action-@Variant @(Class ?? "")"
+        @onclick="OnClickInternal">
+    <span class="ac-action-icon" aria-hidden="true">
+        <AcIcon Name="@IconName" Size="32" />
+    </span>
+    <span class="ac-action-label">@Label</span>
+</button>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string IconName { get; set; } = "";
+    [Parameter] public string Variant { get; set; } = "primary";
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private Task OnClickInternal() => OnClick.InvokeAsync();
+}

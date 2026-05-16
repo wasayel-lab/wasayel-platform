@@ -1,0 +1,20 @@
+@namespace ACommerce.Widgets
+
+<div class="acs-filter-bar @(Class ?? "")" style="display:flex;gap: 8px;align-items:center;padding: 8px 0">
+    @LeadingFilters
+    <input class="form-control form-control-sm"
+           style="flex:1"
+           placeholder="@(SearchPlaceholder ?? "Search...")"
+           value="@SearchValue"
+           @oninput="e => OnSearchChange.InvokeAsync(e.Value?.ToString())" />
+    @TrailingFilters
+</div>
+
+@code {
+    [Parameter] public string SearchValue { get; set; } = "";
+    [Parameter] public EventCallback<string> OnSearchChange { get; set; }
+    [Parameter] public string? SearchPlaceholder { get; set; }
+    [Parameter] public RenderFragment? LeadingFilters { get; set; }
+    [Parameter] public RenderFragment? TrailingFilters { get; set; }
+    [Parameter] public string? Class { get; set; }
+}

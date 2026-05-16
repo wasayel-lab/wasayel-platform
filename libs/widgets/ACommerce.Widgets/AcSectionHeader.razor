@@ -1,0 +1,35 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcSectionHeader — section title with an optional "view all" action.
+
+    CSS_CLASSES: ac-section-header, ac-section-title, ac-section-subtitle,
+                 ac-section-action
+*@
+
+<div class="ac-section-header @(Class ?? "")">
+    <div>
+        <h2 class="ac-section-title">@Title</h2>
+        @if (!string.IsNullOrEmpty(Subtitle))
+        {
+            <p class="ac-section-subtitle">@Subtitle</p>
+        }
+    </div>
+    @if (!string.IsNullOrEmpty(ActionLabel))
+    {
+        <button type="button" class="ac-section-action" @onclick="OnActionInternal">
+            <span>@ActionLabel</span>
+            <AcIcon Name="chevron-left" Size="16" />
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? ActionLabel { get; set; }
+    [Parameter] public EventCallback OnAction { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private Task OnActionInternal() => OnAction.InvokeAsync();
+}

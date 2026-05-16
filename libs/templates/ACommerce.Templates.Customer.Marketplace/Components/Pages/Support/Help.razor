@@ -1,0 +1,9 @@
+@page "/help"
+@inject NavigationManager Nav
+@inject L L
+
+<PageTitle>@($"{L[TemplateStrings.HelpTitle]} — {L[TemplateStrings.AppName]}")</PageTitle>
+
+<div class="acs-page acs-help-page">
+    @{ Nav.NavigateTo("/complaints", true); }
+</div>

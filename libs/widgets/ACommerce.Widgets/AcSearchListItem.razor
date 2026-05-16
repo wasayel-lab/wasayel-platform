@@ -1,0 +1,38 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcSearchListItem — صفّ قابل للنقر في قائمة اقتراحات البحث.
+    مُستخدَم للاستعلامات الأخيرة (+ زر حذف جانبي) وللاقتراحات الشائعة.
+
+    CSS_CLASSES: ac-searchitem, ac-searchitem-icon, ac-searchitem-label,
+                 ac-searchitem-remove
+*@
+
+<button type="button" class="ac-searchitem @(Class ?? "")" @onclick="ClickInternal">
+    <span class="ac-searchitem-icon" aria-hidden="true">
+        <AcIcon Name="@Icon" Size="16" />
+    </span>
+    <span class="ac-searchitem-label">@Label</span>
+    @if (Removable)
+    {
+        <button type="button" class="ac-searchitem-remove"
+                @onclick:stopPropagation="true"
+                @onclick="RemoveInternal"
+                aria-label="@RemoveAriaLabel">
+            <AcIcon Name="x" Size="14" />
+        </button>
+    }
+</button>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string Icon { get; set; } = "search";
+    [Parameter] public bool Removable { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public EventCallback OnRemove { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string RemoveAriaLabel { get; set; } = "Remove";
+
+    private Task ClickInternal() => OnClick.InvokeAsync();
+    private Task RemoveInternal() => OnRemove.InvokeAsync();
+}

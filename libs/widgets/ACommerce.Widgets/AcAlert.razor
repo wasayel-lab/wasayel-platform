@@ -1,0 +1,19 @@
+@namespace ACommerce.Widgets
+
+@if (Visible)
+{
+    <div class="ac-alert ac-alert-@Variant @(Class ?? "")">
+        @if (!string.IsNullOrEmpty(Title)) { <strong>@Title</strong><br /> }
+        @ChildContent
+        @if (!string.IsNullOrEmpty(Message)) { @Message }
+    </div>
+}
+
+@code {
+    [Parameter] public string Variant { get; set; } = "info"; // info|success|warning|danger
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public bool Visible { get; set; } = true;
+    [Parameter] public string? Class { get; set; }
+}

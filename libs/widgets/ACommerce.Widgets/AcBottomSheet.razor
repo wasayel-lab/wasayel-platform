@@ -1,0 +1,35 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcBottomSheet — ورقة منسحبة من الأسفل (نقرة على Backdrop تُغلقها).
+
+    يُستخدَم في Explore للمعاينة عند اختيار علامة على الخريطة، وفي أيّ
+    شاشة تحتاج إجراء سريعًا دون مغادرة الصفحة.
+
+    CSS_CLASSES: ac-sheet-backdrop, ac-sheet, ac-sheet-handle,
+                 ac-sheet-handle-bar, ac-sheet-body
+*@
+
+@if (Open)
+{
+    <div class="ac-sheet-backdrop" @onclick="Close"></div>
+    <div class="ac-sheet @(Class ?? "")" role="dialog" aria-modal="true" @onclick:stopPropagation="true">
+        <div class="ac-sheet-handle" @onclick="Close">
+            <div class="ac-sheet-handle-bar" aria-hidden="true"></div>
+        </div>
+        <div class="ac-sheet-body">@ChildContent</div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private async Task Close()
+    {
+        Open = false;
+        await OpenChanged.InvokeAsync(false);
+    }
+}

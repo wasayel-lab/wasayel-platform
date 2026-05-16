@@ -1,0 +1,33 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcCategoryTile — أيقونة دائريّة بخلفيّة مُظلَّلة + تسمية أسفلها.
+
+    بنية مطابقة لـ ashare-category-item في عشير القديم:
+      <button>
+        <span .ac-tile-icon />   ← دائرة بلون ‍currentColor بشفافيّة 12%
+        <span .ac-tile-label />
+      </button>
+
+    CSS_CLASSES: ac-tile, ac-tile-icon, ac-tile-label, ac-tile-selected
+*@
+
+<button type="button"
+        class="ac-tile @(Selected ? "ac-tile-selected" : "") @(Class ?? "")"
+        @onclick="OnClickInternal"
+        aria-pressed="@Selected">
+    <span class="ac-tile-icon" aria-hidden="true">
+        <AcIcon Name="@Icon" Size="22" />
+    </span>
+    <span class="ac-tile-label">@Label</span>
+</button>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string Icon { get; set; } = "tag";
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private Task OnClickInternal() => OnClick.InvokeAsync();
+}

@@ -1,0 +1,139 @@
+@page "/complaints/{Id}"
+@attribute [Authorize]
+@inject ITemplateEngine Engine
+@inject NavigationManager Nav
+@inject L L
+
+<PageTitle>@($"{L[TemplateStrings.ComplaintDetailTitle]} — {L[TemplateStrings.AppName]}")</PageTitle>
+
+<div class="acs-page acs-complaint-thread">
+    @if (_loading) { <AcLoadingState /> }
+    else if (_t is null) { <AcEmptyState IconName="alert-circle" Message="@(L[TemplateStrings.ComplaintNotFound])" /> }
+    else
+    {
+        <h1 class="acm-wizard-title">@_t.Subject</h1>
+        <AcCard>
+            <ChildContent>
+                <div class="acm-checkout-line"><span>@(L[TemplateStrings.CommonStatusLabel])</span><AcBadge Variant="@StatusVariant(_t.Status)" Text="@StatusLabel(_t.Status)" /></div>
+                <div class="acm-checkout-line"><span>@(L[TemplateStrings.ComplaintPriorityLabel])</span><strong>@_t.Priority</strong></div>
+                @if (!string.IsNullOrEmpty(_t.RelatedEntityId))
+                {
+                    <div class="acm-checkout-line"><span>@(L[TemplateStrings.ComplaintRelatedLabel])</span><strong>@_t.RelatedEntityId</strong></div>
+                }
+                <div class="acm-checkout-line"><span>@(L[TemplateStrings.ComplaintCreatedLabel])</span><strong>@_t.CreatedAt.ToString("yyyy-MM-dd HH:mm")</strong></div>
+            </ChildContent>
+        </AcCard>
+
+        <h3 style="margin-top:16px;">@(L[TemplateStrings.ChatConversationTitle])</h3>
+        <div class="acs-chat-messages">
+            @foreach (var m in _messages)
+            {
+                var sender = m.SenderPartyId ?? "";
+                var senderId = sender.StartsWith("User:") ? sender[5..] : sender;
+                var isSystem = senderId == "00000000-0000-0000-0000-000000000000";
+                var isMine   = !isSystem && _t.UserId == senderId;
+                var cls = isSystem ? "acs-bubble-system"
+                         : isMine ? "acs-bubble-mine"
+                                  : "acs-bubble-other acs-bubble-staff";
+                <div class="acs-bubble @cls">
+                    @if (!isMine && !isSystem)
+                    {
+                        <small style="display:block; font-weight:700; color:var(--ac-primary);">
+                            <AcIcon Name="shield" Size="14" /> @(L[TemplateStrings.SupportStaffLabel])
+                        </small>
+                    }
+                    <div>@m.Body</div>
+                    <small style="display:block; opacity:.6;">@m.SentAt.ToString("yyyy-MM-dd HH:mm")</small>
+                </div>
+            }
+        </div>
+
+        @if (_t.Status is "open" or "in_progress")
+        {
+            <div style="display:flex; gap:8px; margin-top:12px;">
+                <AcInput Value="@_draft" ValueChanged="@(v => _draft = v ?? string.Empty)" Placeholder="@(L[TemplateStrings.ComplaintReplyPlaceholder])" />
+                <AcButton Variant="primary" Text="@(L[TemplateStrings.CommonSend])" OnClick="@Send"
+                          Disabled="@(string.IsNullOrWhiteSpace(_draft) || _sending)" />
+            </div>
+        }
+        else
+        {
+            <AcAlert Variant="secondary" Message="@(L[TemplateStrings.ComplaintClosedBody])" />
+        }
+
+        <div style="margin-top:12px;">
+            <AcButton Variant="ghost" Text="@(L[TemplateStrings.CommonBack])" OnClick="@GoBack" />
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private TicketDto? _t;
+    private List<MessageDto> _messages = new();
+    private bool _loading = true;
+    private string _draft = "";
+    private bool _sending;
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (!first) return;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        // OAM-pure: support.ticket.get op (kit-defined). يَردّ
+        // { ticket, messages } — نَلتَقِطه بِـ DetailsDto مَحَلّيّ.
+        var env = await Engine.ExecuteAsync<DetailsDto>(SupportOps.GetTicket(Id));
+        _t = env.Data?.Ticket;
+        _messages = env.Data?.Messages ?? new();
+        _loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Send()
+    {
+        if (string.IsNullOrWhiteSpace(_draft) || _t is null) return;
+        _sending = true;
+        try
+        {
+            var env = await Engine.ExecuteAsync<object>(
+                SupportOps.Reply(Id),
+                payload: new { Text = _draft });
+            if (env.Operation.Status == "Success")
+            {
+                _draft = "";
+                await Reload();
+            }
+        }
+        finally { _sending = false; }
+    }
+
+    private void GoBack() => Nav.NavigateTo("/complaints");
+
+    private string StatusLabel(string s) => s switch
+    {
+        "open" => L[TemplateStrings.StatusOpen], "in_progress" => L[TemplateStrings.StatusInProgress],
+        "resolved" => L[TemplateStrings.StatusResolved], "closed" => L[TemplateStrings.StatusClosed],
+        _ => s
+    };
+
+    private static string StatusVariant(string s) => s switch
+    {
+        "open" => "warning", "in_progress" => "secondary",
+        "resolved" => "success", "closed" => "secondary",
+        _ => "secondary"
+    };
+
+    private sealed record TicketDto(string Id, string UserId, string ConversationId,
+        string Subject, string Status, string Priority,
+        string? RelatedEntityId, string? AssignedAgentId,
+        DateTime CreatedAt, DateTime? UpdatedAt);
+
+    private sealed record MessageDto(string Id, string ConversationId,
+        string SenderPartyId, string Body, DateTime SentAt, DateTime? ReadAt);
+
+    private sealed record DetailsDto(TicketDto Ticket, List<MessageDto> Messages);
+}

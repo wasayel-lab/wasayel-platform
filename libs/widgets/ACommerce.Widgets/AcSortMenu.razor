@@ -1,0 +1,36 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcSortMenu — قائمة ترتيب بسيطة (select مُنمَّق).
+
+    الخيارات Dictionary<string,string>: key=value، value=display label.
+
+    CSS_CLASSES: ac-sort, ac-sort-select
+*@
+
+<label class="ac-sort @(Class ?? "")">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <span class="ac-sort-label">@Label</span>
+    }
+    <select class="ac-sort-select" value="@Value" @onchange="HandleChange">
+        @foreach (var opt in Options)
+        {
+            <option value="@opt.Key">@opt.Value</option>
+        }
+    </select>
+</label>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyDictionary<string, string> Options { get; set; } = new Dictionary<string, string>();
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private async Task HandleChange(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString();
+        await ValueChanged.InvokeAsync(Value);
+    }
+}

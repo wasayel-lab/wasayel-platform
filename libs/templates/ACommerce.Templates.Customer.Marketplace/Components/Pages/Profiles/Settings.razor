@@ -1,0 +1,54 @@
+@page "/settings"
+@attribute [Authorize]
+@inject IUiPreferences Prefs
+@inject IClientCultureController Culture
+@inject NavigationManager Nav
+@inject L L
+
+<PageTitle>@(L[TemplateStrings.SettingsTitle]) — @(L[TemplateStrings.AppName])</PageTitle>
+
+<div class="acs-page acs-settings-page">
+    <h1 class="acm-wizard-title">@(L[TemplateStrings.SettingsTitle])</h1>
+
+    <AcCard>
+        <ChildContent>
+            <div class="acm-checkout-line">
+                <span>@(L[TemplateStrings.SettingsTheme])</span>
+                <div style="display:inline-flex; gap:8px;">
+                    <AcFilterChip Label="@(L[TemplateStrings.SettingsThemeLight])"
+                                  Active="@(Prefs.Theme == "light")"
+                                  OnClick="@SetLight" />
+                    <AcFilterChip Label="@(L[TemplateStrings.SettingsThemeDark])"
+                                  Active="@(Prefs.Theme == "dark")"
+                                  OnClick="@SetDark" />
+                </div>
+            </div>
+            <div class="acm-checkout-line">
+                <span>@(L[TemplateStrings.SettingsLanguage])</span>
+                <div style="display:inline-flex; gap:8px;">
+                    <AcFilterChip Label="@(L[TemplateStrings.LangArabicSelf])" Active="@(Prefs.Language == "ar")" OnClick="@SetAr" />
+                    <AcFilterChip Label="English"  Active="@(Prefs.Language == "en")" OnClick="@SetEn" />
+                </div>
+            </div>
+        </ChildContent>
+    </AcCard>
+
+    <AcCard>
+        <ChildContent>
+            <h3 style="margin-top:0;">@(L[TemplateStrings.LegalHeading])</h3>
+            <AcButton Variant="ghost" Class="ac-btn-block" Text="@(L[TemplateStrings.LegalPrivacy])" OnClick="@GoPrivacy" />
+            <AcButton Variant="ghost" Class="ac-btn-block" Text="@(L[TemplateStrings.LegalTerms])"   OnClick="@GoTerms" />
+            <AcButton Variant="ghost" Class="ac-btn-block" Text="@(L[TemplateStrings.LegalReturn])"  OnClick="@GoRefund" />
+        </ChildContent>
+    </AcCard>
+</div>
+
+@code {
+    private Task SetLight() => Culture.SetThemeAsync("light");
+    private Task SetDark()  => Culture.SetThemeAsync("dark");
+    private Task SetAr()    => Culture.SetLanguageAsync("ar");
+    private Task SetEn()    => Culture.SetLanguageAsync("en");
+    private void GoPrivacy() => Nav.NavigateTo("/legal/privacy");
+    private void GoTerms()   => Nav.NavigateTo("/legal/terms");
+    private void GoRefund()  => Nav.NavigateTo("/legal/refund");
+}

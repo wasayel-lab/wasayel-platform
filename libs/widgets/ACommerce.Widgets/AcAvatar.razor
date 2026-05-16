@@ -1,0 +1,67 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcAvatar — صورة بروفايل دائريّة بـ fallback ذكيّ:
+      1. ImageUrl موجود + IUrlAllowlist يُجيزه ⇒ <img>
+      2. وإلّا initials (حتى حرفَين) فوق gradient مُشتقّ من Name (hash-based).
+      3. لا Name ⇒ glyph عامّ "?".
+
+    Size = القطر بالـ px. Default 40.
+    CSS_CLASSES: ac-avatar, ac-avatar-img, ac-avatar-initials
+*@
+
+<div class="ac-avatar @(ExtraClass ?? "")"
+     style="width:@(Size)px; height:@(Size)px;@(IsImage ? "" : $" background:{_gradient};")"
+     role="img" aria-label="@(Name ?? FallbackAriaLabel)">
+    @if (IsImage)
+    {
+        <img class="ac-avatar-img" src="@ImageUrl" alt="@(Name ?? "")" loading="lazy" />
+    }
+    else
+    {
+        <span class="ac-avatar-initials" style="font-size:@(Size * 0.4)px;">@Initials</span>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Name { get; set; }
+    [Parameter] public string? ImageUrl { get; set; }
+    [Parameter] public int Size { get; set; } = 40;
+    [Parameter] public string? ExtraClass { get; set; }
+    [Parameter] public string FallbackAriaLabel { get; set; } = "Avatar";
+
+    private bool IsImage => !string.IsNullOrWhiteSpace(ImageUrl);
+
+    private string Initials
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Name)) return "?";
+            var parts = Name.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 1)
+                return parts[0].Length > 0
+                    ? parts[0].Substring(0, Math.Min(2, parts[0].Length)).ToUpperInvariant()
+                    : "?";
+            return ($"{parts[0][0]}{parts[1][0]}").ToUpperInvariant();
+        }
+    }
+
+    /// <summary>
+    /// gradient مُشتقّ من hash بسيط للاسم. نَفس الاسم ⇒ نَفس اللون دائماً
+    /// (المستخدم يَتعرّف على المراسل بلونه عبر التَطبيق). 8 أزواج محدَّدة
+    /// كلّها دافئة + متوسّطة الإشباع لِتَلائم أيّ ثيم.
+    /// </summary>
+    private string _gradient => _palette[Math.Abs((Name ?? "").GetHashCode()) % _palette.Length];
+
+    private static readonly string[] _palette =
+    {
+        "linear-gradient(135deg, #6366f1, #8b5cf6)", // إندِغو-بنفسجيّ
+        "linear-gradient(135deg, #14b8a6, #0ea5e9)", // teal-cyan
+        "linear-gradient(135deg, #f59e0b, #ef4444)", // عنبر-أحمر
+        "linear-gradient(135deg, #10b981, #84cc16)", // emerald-lime
+        "linear-gradient(135deg, #ec4899, #8b5cf6)", // pink-violet
+        "linear-gradient(135deg, #0891b2, #2563eb)", // cyan-blue
+        "linear-gradient(135deg, #eab308, #f97316)", // yellow-orange
+        "linear-gradient(135deg, #7c3aed, #db2777)", // violet-pink
+    };
+}

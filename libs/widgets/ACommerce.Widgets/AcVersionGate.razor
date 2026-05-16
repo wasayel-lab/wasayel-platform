@@ -1,0 +1,67 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcVersionGate — حارس تحديث الإصدار.
+    يلفّ ChildContent، وعند IsBlocked=true يعرض شاشة "تحديث مطلوب".
+    مطابق لـ Ashare.App/Components/AppStartup.razor (ثلاث حالات).
+
+    CSS_CLASSES: ac-vergate, ac-vergate-card, ac-vergate-icon,
+                 ac-vergate-title, ac-vergate-body, ac-vergate-versions,
+                 ac-vergate-version, ac-vergate-actions
+*@
+
+@if (IsLoading)
+{
+    <div class="acs-loading" role="status" aria-label="Loading">
+        <AcSpinner Large="true" />
+    </div>
+}
+else if (IsBlocked)
+{
+    <div class="ac-vergate">
+        <div class="ac-vergate-card">
+            <div class="ac-vergate-icon" aria-hidden="true">
+                <AcIcon Name="arrow-right" Size="40" />
+            </div>
+            <h1 class="ac-vergate-title">@RequiredTitle</h1>
+            <p class="ac-vergate-body">@RequiredBody</p>
+            <div class="ac-vergate-versions">
+                <div class="ac-vergate-version">
+                    <span>@CurrentLabel</span>
+                    <strong>@CurrentVersion</strong>
+                </div>
+                <div class="ac-vergate-version">
+                    <span>@LatestLabel</span>
+                    <strong>@LatestVersion</strong>
+                </div>
+            </div>
+            <div class="ac-vergate-actions">
+                <AcButton Variant="primary" Size="lg" Text="@DownloadLabel" OnClick="OnDownloadClick" />
+            </div>
+            @if (!string.IsNullOrEmpty(SupportEmail))
+            {
+                <p class="ac-vergate-body">@SupportLabel: @SupportEmail</p>
+            }
+        </div>
+    </div>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public bool IsBlocked { get; set; }
+    [Parameter] public string RequiredTitle { get; set; } = "Update required";
+    [Parameter] public string RequiredBody { get; set; } = "Please update the app to continue using it";
+    [Parameter] public string CurrentLabel { get; set; } = "Current version";
+    [Parameter] public string LatestLabel { get; set; } = "Latest version";
+    [Parameter] public string CurrentVersion { get; set; } = "1.0.0";
+    [Parameter] public string LatestVersion { get; set; } = "1.0.0";
+    [Parameter] public string DownloadLabel { get; set; } = "Download new version";
+    [Parameter] public string? SupportEmail { get; set; }
+    [Parameter] public string SupportLabel { get; set; } = "Support";
+    [Parameter] public EventCallback OnDownloadClick { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

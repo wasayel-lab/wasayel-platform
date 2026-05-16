@@ -1,0 +1,26 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcStickyActionBar — شريط إجراء ثابت أسفل الـ viewport.
+    مطابق لـ ashare-booking-bar في عشير القديم: سعر يسار + زرّ CTA يمين
+    (أو العكس في RTL — الفلكس يعيد الترتيب تلقائياً).
+
+    Leading: محتوى البداية (عادة السعر).
+    ChildContent: محتوى النهاية (عادة الزرّ).
+
+    CSS_CLASSES: ac-stickybar, ac-stickybar-leading
+*@
+
+<div class="ac-stickybar @(Class ?? "")">
+    @if (Leading is not null)
+    {
+        <div class="ac-stickybar-leading">@Leading</div>
+    }
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public RenderFragment? Leading { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+}

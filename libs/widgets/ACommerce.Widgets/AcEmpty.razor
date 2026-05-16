@@ -1,0 +1,26 @@
+@namespace ACommerce.Widgets
+
+<div class="ac-empty @(Class ?? "")">
+    @if (!string.IsNullOrEmpty(IconName))
+    {
+        <div class="ac-empty-icon"><AcIcon Name="@IconName" Size="48" StrokeWidth="1.5" /></div>
+    }
+    else if (!string.IsNullOrEmpty(Icon))
+    {
+        <div class="ac-empty-icon">@Icon</div>
+    }
+    @if (!string.IsNullOrEmpty(Title)) { <div class="ac-empty-title">@Title</div> }
+    @if (!string.IsNullOrEmpty(Message)) { <div>@Message</div> }
+    @if (Action != null) { <div class="ac-mt-md">@Action</div> }
+</div>
+
+@code {
+    /// <summary>AcIcon name (e.g. "inbox", "search"). Preferred over Icon.</summary>
+    [Parameter] public string? IconName { get; set; }
+    /// <summary>Legacy: raw markup / emoji. Ignored when <see cref="IconName"/> is set.</summary>
+    [Parameter] public string? Icon { get; set; } = "📭";
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public RenderFragment? Action { get; set; }
+    [Parameter] public string? Class { get; set; }
+}

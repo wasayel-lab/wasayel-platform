@@ -1,0 +1,86 @@
+@page "/favorites"
+@attribute [Authorize]
+@inject ITemplateEngine Engine
+@inject IFavoritesStore Favs
+@inject IClientAuthState AuthState
+@inject NavigationManager Nav
+@inject L L
+@implements IDisposable
+
+<PageTitle>@(L[TemplateStrings.NavFavorites]) - @(L[TemplateStrings.AppName])</PageTitle>
+
+<div class="acs-page">
+    <h1 class="acm-wizard-title">@(L[TemplateStrings.NavFavorites])</h1>
+    @if (_loading) { <AcLoadingState /> }
+    else if (_items.Count == 0) { <AcEmptyState IconName="heart" Message="@(L[TemplateStrings.FavoritesEmpty])" /> }
+    else
+    {
+        <div class="acm-home-grid">
+            @foreach (var l in _items)
+            {
+                var lid = l.Id;
+                <AcSpaceCard Title="@l.Title"
+                             ImageUrl="@l.FirstImage"
+                             Location="@($"{l.City} — {l.District}")"
+                             Capacity="@(l.BedroomCount == 0 ? null : l.BedroomCount)"
+                             PriceLabel="@($"{l.Price:0} {L[TemplateStrings.CommonCurrencyShort]}")"
+                             IsFavorite="true"
+                             OnOpen="@(() => Open(lid))"
+                             OnToggleFavorite="@(on => Toggle(lid, on))" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<FavListing> _items = new();
+    private bool _loading = true;
+
+    protected override void OnInitialized() => Favs.Changed += OnChange;
+
+    /// <summary>
+    /// تَحميل المُفَضَّلات مُباشَرَةً مِن <c>favorites.list</c> op (kit-defined).
+    /// الباك يَردّ rows غَنيّة (title + price + thumb) — نَلتَقِطها بِـ DTO
+    /// مَحَلّيّ مَطابِق لِلـ wire shape، ثُمّ نُحَدِّث IFavoritesStore.Ids
+    /// (لِشاراتِ القُلوب في الصَفحات الأُخرى).
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (!first) return;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        var env = await Engine.ExecuteAsync<List<FavListing>>(FavoritesOps.List());
+        _items = env.Data ?? new();
+        _loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void Open(string id) => Nav.NavigateTo($"/listings/{id}");
+
+    /// <summary>
+    /// إلغاء تفضيل من هذه الصفحة: نَدفَع <c>favorite.toggle</c> op عَبر
+    /// IFavoritesStore (يَتَوَلّى optimistic + rollback عَلى الفَشَل)، ثُمّ
+    /// نُزيل العنصر مِن القائِمَة المَحَلّيّة بَدَل reload كامِل.
+    /// </summary>
+    private async Task Toggle(string id, bool on)
+    {
+        await Favs.ToggleAsync(id);
+        if (!Favs.IsFavorited(id))
+            _items = _items.Where(x => x.Id != id).ToList();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnChange() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Favs.Changed -= OnChange;
+
+    // شَكل الـ row مِن /favorites — أَعمِدَة مُختَصَرَة فَقَط (كافِيَة لِـ AcSpaceCard).
+    // لا حاجة لِـ Lat/Lng/Amenities/Views… التي يُرجِعها /home/explore.
+    private sealed record FavListing(
+        string Id, string Title, decimal Price, string TimeUnit,
+        string PropertyType, string City, string District,
+        bool IsVerified, string? FirstImage,
+        int BedroomCount = 0);
+}

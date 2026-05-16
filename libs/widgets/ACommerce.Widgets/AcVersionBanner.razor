@@ -1,0 +1,44 @@
+@namespace ACommerce.Widgets
+
+@if (Visible)
+{
+    @if (ForceUpdate)
+    {
+        <div style="position:fixed;inset:0;background:var(--ac-bg-alt);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding: 32px;text-align:center">
+            <div style="font-size:3rem;margin-bottom: 16px">🔄</div>
+            <h2>@(Title ?? "Update required")</h2>
+            <p style="color:var(--ac-text-muted)">@Message</p>
+            @if (!string.IsNullOrEmpty(UpdateUrl))
+            {
+                <a href="@UpdateUrl" class="btn btn-primary btn-block" style="margin-top: 16px">@(UpdateLabel ?? "Update now")</a>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-warning" style="margin:0;border-radius:0;display:flex;justify-content:space-between;align-items:center">
+            <span>@(Title ?? "Update available") — @Message</span>
+            <div style="display:flex;gap: 8px">
+                @if (!string.IsNullOrEmpty(UpdateUrl))
+                {
+                    <a href="@UpdateUrl" class="btn btn-sm btn-warning">@(UpdateLabel ?? "Update")</a>
+                }
+                @if (OnDismiss.HasDelegate)
+                {
+                    <button class="btn btn-sm btn-ghost" @onclick="OnDismiss">@(DismissLabel ?? "Later")</button>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; } = false;
+    [Parameter] public bool ForceUpdate { get; set; } = false;
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? UpdateUrl { get; set; }
+    [Parameter] public string? UpdateLabel { get; set; }
+    [Parameter] public EventCallback OnDismiss { get; set; }
+    [Parameter] public string? DismissLabel { get; set; }
+}

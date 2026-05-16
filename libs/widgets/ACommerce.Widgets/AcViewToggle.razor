@@ -1,0 +1,38 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcViewToggle — مجموعة أزرار أيقونة بحالة نشطة واحدة.
+    يُستخدَم في Explore لتبديل list / grid / map.
+
+    CSS_CLASSES: ac-viewtoggle, ac-viewtoggle-btn, ac-viewtoggle-active
+*@
+
+<div class="ac-viewtoggle @(Class ?? "")" role="tablist">
+    @foreach (var opt in Options)
+    {
+        var isActive = opt.Key == Value;
+        <button type="button"
+                class="ac-viewtoggle-btn @(isActive ? "ac-viewtoggle-active" : "")"
+                @onclick="() => HandleClick(opt.Key)"
+                aria-pressed="@isActive"
+                aria-label="@opt.Label">
+            <AcIcon Name="@opt.Icon" Size="18" />
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ViewOption> Options { get; set; } = Array.Empty<ViewOption>();
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private async Task HandleClick(string? key)
+    {
+        if (key == Value) return;
+        Value = key;
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    public record ViewOption(string Key, string Icon, string Label);
+}

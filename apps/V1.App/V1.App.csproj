@@ -29,5 +29,8 @@
 
     <ProjectReference Include="..\..\libs\kits\Chat\ACommerce.Kit.Chat.Core\ACommerce.Kit.Chat.Core.csproj" />
     <ProjectReference Include="..\..\libs\kits\Chat\ACommerce.Kit.Chat.Server\ACommerce.Kit.Chat.Server.csproj" />
+
+    <ProjectReference Include="..\..\libs\widgets\ACommerce.Widgets\ACommerce.Widgets.csproj" />
+    <ProjectReference Include="..\..\libs\templates\ACommerce.Templates.Shared\ACommerce.Templates.Shared.csproj" />
   </ItemGroup>
 </Project>

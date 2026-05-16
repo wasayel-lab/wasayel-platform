@@ -1,0 +1,24 @@
+@namespace ACommerce.Widgets
+
+<div class="acs-seg @(Class ?? "")">
+    @foreach (var item in Items)
+    {
+        <button class="acs-seg-btn @(ActiveKey == item.Key ? "active" : "")"
+                @onclick="() => OnSelect.InvokeAsync(item.Key)">
+            @item.Label
+            @if (item.Badge.HasValue && item.Badge > 0)
+            {
+                <span class="badge bg-secondary ms-1">@item.Badge</span>
+            }
+        </button>
+    }
+</div>
+
+@code {
+    public sealed record SegmentItem(string Key, string Label, int? Badge = null);
+
+    [Parameter, EditorRequired] public IReadOnlyList<SegmentItem> Items { get; set; } = Array.Empty<SegmentItem>();
+    [Parameter] public string ActiveKey { get; set; } = "";
+    [Parameter] public EventCallback<string> OnSelect { get; set; }
+    [Parameter] public string? Class { get; set; }
+}

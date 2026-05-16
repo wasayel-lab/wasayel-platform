@@ -1,0 +1,273 @@
+@page "/profile/edit"
+@attribute [Authorize]
+@using System.Net.Http.Json
+@using ACommerce.Kits.Profiles.Operations
+@using ACommerce.OperationEngine.Wire
+@using ACommerce.SharedKernel.Domain.DynamicAttributes
+@inject IProfileStore Profiles
+@inject IDiscoveryStore Discovery
+@inject NavigationManager Nav
+@inject IHttpClientFactory HttpFactory
+@inject L L
+@inject INumeralNormalizer Numerals
+
+<PageTitle>@($"{L[TemplateStrings.ProfileEditTitle]} — {L[TemplateStrings.AppName]}")</PageTitle>
+
+<div class="acs-page acs-profile-edit-page">
+    <h1 class="acm-wizard-title">@(L[TemplateStrings.ProfileEditTitle])</h1>
+
+    @if (_loading) { <AcLoadingState /> }
+    else
+    {
+        <AcCard>
+            <ChildContent>
+                <div class="acm-details-owner">
+                    <span class="acm-details-owner-avatar" style="width:64px; height:64px;">
+                        @if (!string.IsNullOrEmpty(_avatarDataUrl))
+                        {
+                            <img src="@_avatarDataUrl" alt="avatar" style="width:100%; height:100%; border-radius:50%; object-fit:cover;" />
+                        }
+                        else
+                        {
+                            <AcIcon Name="user" Size="32" />
+                        }
+                    </span>
+                    <div class="acm-details-owner-info">
+                        <strong>@(_data!.FullName)</strong>
+                        <span>@(L[TemplateStrings.CommonMemberSince]) @_data.MemberSince.ToString("yyyy-MM-dd")</span>
+                    </div>
+                </div>
+
+                <div style="margin-top:12px;">
+                    <label class="ac-btn ac-btn-ghost ac-btn-block" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
+                        <AcIcon Name="camera" Size="16" />
+                        <span>@(L[TemplateStrings.ProfileEditChangeAvatar])</span>
+                        <InputFile OnChange="OnAvatarPicked" accept="image/*" style="display:none;" />
+                    </label>
+                </div>
+            </ChildContent>
+        </AcCard>
+
+        <AcCard>
+            <ChildContent>
+                <AcField Label="@(L[TemplateStrings.ProfileEditFullName])" Required="true">
+                    <AcInput Value="@_data!.FullName"
+                             ValueChanged="@(v => _data = _data with { FullName = v ?? string.Empty })" />
+                </AcField>
+
+                <AcField Label="@(L[TemplateStrings.AuthPhone])">
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <AcInput Type="tel" Value="@_data!.Phone"
+                                 ValueChanged="@(v => _data = _data with { Phone = Numerals.ToLatin(v) ?? string.Empty, PhoneVerified = false })" />
+                        @if (_data.PhoneVerified)
+                        {
+                            <AcBadge Variant="success" Text="@(L[TemplateStrings.CommonVerified])" />
+                        }
+                        else
+                        {
+                            <AcButton Variant="ghost" Text="@(L[TemplateStrings.CommonVerify])" OnClick="@VerifyPhone" />
+                        }
+                    </div>
+                </AcField>
+
+                <AcField Label="@(L[TemplateStrings.ProfileEditEmail])">
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <AcInput Type="email" Value="@(_data!.Email ?? string.Empty)"
+                                 ValueChanged="@(v => _data = _data with { Email = v ?? string.Empty, EmailVerified = false })" />
+                        @if (_data.EmailVerified)
+                        {
+                            <AcBadge Variant="success" Text="@(L[TemplateStrings.CommonVerified])" />
+                        }
+                        else
+                        {
+                            <AcButton Variant="ghost" Text="@(L[TemplateStrings.CommonVerify])" OnClick="@VerifyEmail" />
+                        }
+                    </div>
+                </AcField>
+
+                <AcField Label="@(L[TemplateStrings.ProfileEditCity])">
+                    <select class="ac-input" value="@_data!.City"
+                            @onchange="@(e => _data = _data with { City = e.Value?.ToString() ?? _data.City })">
+                        @foreach (var c in Discovery.Cities)
+                        {
+                            <option value="@c">@c</option>
+                        }
+                    </select>
+                </AcField>
+            </ChildContent>
+        </AcCard>
+
+        @* سِمات البروفايل الديناميكِيَّة (BusinessName/Type/Address/…)
+           تَأتي مَن قالَب نِطاق Profile + قِيَمها مَن AttributesJson.
+           لَو الـ backend فارِغ، <see cref="BuildFallbackTemplate"/>
+           يَضمَن ظُهور المُحَرِّر. *@
+        @if (_attrTemplate is { Fields.Count: > 0 })
+        {
+            <AcCard>
+                <ChildContent>
+                    <h4 style="margin-top:0;">@(L[TemplateStrings.ListingAttributes])</h4>
+                    <AcAttrEditor Template="_attrTemplate"
+                                  Values="_attrValues"
+                                  ValuesChanged="@(v => _attrValues = v)"
+                                  IsArabic="true" />
+                </ChildContent>
+            </AcCard>
+        }
+
+
+        @if (!string.IsNullOrEmpty(_alert))
+        {
+            <AcAlert Variant="@_alertVariant" Message="@_alert" />
+        }
+
+        <div style="display:flex; gap:8px; margin-top:12px;">
+            <AcButton Variant="primary" Class="ac-btn-block" Text="@(L[TemplateStrings.ProfileEditSave])" OnClick="@Save" Disabled="@_saving" />
+            <AcButton Variant="ghost" Text="@(L[TemplateStrings.CommonCancel])" OnClick="@GoBack" />
+        </div>
+    }
+</div>
+
+@code {
+    // sentinel scope id لِسِمات Profile (مُطابِق
+    // V3ProfileAttributes.CategoryId في الـ backend).
+    private static readonly Guid ProfileScopeId =
+        new("00000000-0000-0000-0000-000000000F01");
+
+    private InMemoryUserProfile? _data;
+    private bool _loading = true;
+    private bool _saving;
+    private string? _alert;
+    private string _alertVariant = "success";
+    private string? _avatarDataUrl;
+
+    private AttributeTemplate? _attrTemplate;
+    private Dictionary<string, object?> _attrValues = new(StringComparer.OrdinalIgnoreCase);
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (!first) return;
+        await System.Threading.Tasks.Task.WhenAll(
+            Profiles.LoadAsync(),
+            Discovery.LoadCitiesAsync());
+
+        var p = Profiles.Current;
+        _data = p is not null
+            ? new InMemoryUserProfile(p.Id, p.FullName, p.Phone, p.PhoneVerified,
+                p.Email, p.EmailVerified, p.City, p.AvatarUrl, p.MemberSince)
+            : new InMemoryUserProfile("U-1", "", "", false, "", false, L[TemplateStrings.CommonDefaultCity], null, DateTime.UtcNow);
+        _avatarDataUrl = _data.AvatarUrl;
+
+        await LoadAttrsAsync();
+        _loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// يَجلِب قالَب Profile الديناميكي + قِيَمه الحالِيَّة. لَو الـ backend
+    /// لَم يَزرَع التَعريفات بَعد (سَطر "لا سِمات إِضافِيَّة" الَّذي كانَ
+    /// يَظهَر)، نَستَخدِم <see cref="BuildFallbackTemplate"/> ثابِت لَيس
+    /// يَعتَمِد عَلى DB ⇒ المُحَرِّر يَظهَر دائِماً + الحَفظ يَكتُب
+    /// AttributesJson مُباشَرَةً.
+    /// </summary>
+    private async Task LoadAttrsAsync()
+    {
+        try
+        {
+            var http = HttpFactory.CreateClient("ejar");
+            var tplEnv = await http.GetFromJsonAsync<OperationEnvelope<AttributeTemplate>>(
+                $"dynamic-attributes/templates/{ProfileScopeId}");
+            _attrTemplate = tplEnv?.Data is { Fields.Count: > 0 } t ? t : BuildFallbackTemplate();
+
+            var snapEnv = await http.GetFromJsonAsync<OperationEnvelope<List<DynamicAttribute>>>(
+                "profile/me/attributes");
+            if (snapEnv?.Data is not null)
+            {
+                foreach (var a in snapEnv.Data)
+                    if (a.Value is not null) _attrValues[a.Key] = a.Value;
+            }
+        }
+        catch
+        {
+            _attrTemplate = BuildFallbackTemplate();
+        }
+    }
+
+    /// <summary>
+    /// قالَب احتِياطي مَحَلّي — يُستَخدَم لَو الـ backend لَم يَزرَع
+    /// AttributeDefinitions بَعد. مُطابِق لِـ V3ProfileAttributes.Defaults
+    /// (نُكَرِّر هُنا بِدَل اعتِماد frontend عَلى backend struct) لِيَبقى
+    /// المُحَرِّر مَرئيّاً دائِماً.
+    /// </summary>
+    private static AttributeTemplate BuildFallbackTemplate() => new()
+    {
+        Fields = new()
+        {
+            new() { Key = "BusinessName", Label = "اسم النشاط التجاري", LabelAr = "اسم النشاط التجاري", Type = "text",   SortOrder = 1 },
+            new() { Key = "Type",         Label = "نوع الحساب",         LabelAr = "نوع الحساب",         Type = "number", SortOrder = 2 },
+            new() { Key = "IsActive",     Label = "نَشِط",              LabelAr = "نَشِط",              Type = "bool",   SortOrder = 3 },
+            new() { Key = "IsVerified",   Label = "مُوَثَّق (نَفاذ)",   LabelAr = "مُوَثَّق (نَفاذ)",   Type = "bool",   SortOrder = 4 },
+            new() { Key = "VerifiedAt",   Label = "تاريخ التَوثيق",     LabelAr = "تاريخ التَوثيق",     Type = "date",   SortOrder = 5 },
+            new() { Key = "Address",      Label = "العنوان",            LabelAr = "العنوان",            Type = "text",   SortOrder = 6 },
+            new() { Key = "Country",      Label = "الدولة",             LabelAr = "الدولة",             Type = "text",   SortOrder = 7 },
+            new() { Key = "PostalCode",   Label = "الرمز البريدي",      LabelAr = "الرمز البريدي",      Type = "text",   SortOrder = 8 },
+            new() { Key = "Coordinates",  Label = "الإحداثيات",         LabelAr = "الإحداثيات",         Type = "text",   SortOrder = 9 },
+        }
+    };
+
+    private async Task OnAvatarPicked(InputFileChangeEventArgs e)
+    {
+        var f = e.File;
+        if (f is null) return;
+        if (f.Size > 2 * 1024 * 1024)
+        {
+            _alert = L[TemplateStrings.ProfileEditAvatarTooBig]; _alertVariant = "danger"; return;
+        }
+        using var s = f.OpenReadStream(maxAllowedSize: 2 * 1024 * 1024);
+        using var ms = new MemoryStream();
+        await s.CopyToAsync(ms);
+        var b64 = Convert.ToBase64String(ms.ToArray());
+        _avatarDataUrl = $"data:{f.ContentType};base64,{b64}";
+        _alert = null;
+    }
+
+    private void VerifyPhone()
+    {
+        _data = _data! with { PhoneVerified = true };
+        _alert = L[TemplateStrings.ProfileEditPhoneVerifiedDemo];
+        _alertVariant = "success";
+    }
+
+    private void VerifyEmail()
+    {
+        _data = _data! with { EmailVerified = true };
+        _alert = L[TemplateStrings.ProfileEditEmailVerifiedDemo];
+        _alertVariant = "success";
+    }
+
+    private async Task Save()
+    {
+        if (_data is null) return;
+        _saving = true;
+        try
+        {
+            // أَدرِج صورة البروفايل (إن اختيرت) كَ data URL في طَلَب الحَفظ.
+            // الـ Profile interface لا يَحوي حَقل avatar بِالاسم — نُمَرِّره
+            // عَبر <c>with</c> clone حَفاظاً عَلى wire shape مَطلوب الباك.
+            var next = _data with { AvatarUrl = _avatarDataUrl ?? _data.AvatarUrl };
+            var attrs = _attrValues.Count > 0 ? _attrValues : null;
+            await Profiles.UpdateAsync(next, attrs);
+
+            _alert = L[TemplateStrings.ProfileEditSaved]; _alertVariant = "success";
+            await Task.Delay(500);
+            Nav.NavigateTo("/me");
+        }
+        catch (Exception ex)
+        {
+            _alert = string.Format(L[TemplateStrings.ProfileSaveFailedFormat], ex.Message);
+            _alertVariant = "danger";
+        }
+        finally { _saving = false; }
+    }
+
+    private void GoBack() => Nav.NavigateTo("/me");
+}

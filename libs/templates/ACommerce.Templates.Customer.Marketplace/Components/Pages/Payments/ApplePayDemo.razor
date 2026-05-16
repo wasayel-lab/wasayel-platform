@@ -1,0 +1,107 @@
+@page "/apple-pay"
+@inject IJSRuntime JS
+@inject L L
+
+@*
+    صَفحَة عَرض Apple Pay — تَكتَشِف الجِهاز عَبر User-Agent وتُظهِر زَرّ
+    Apple Pay لَو iOS/Safari. النَّقر يُحاكي تَدَفُّق دَفع كامِل عَبر
+    IAppleWalletGateway المُسَجَّل في الـ backend (MockPaymentGateway
+    يَدعَم الـ mixin، يُحاكي merchant validation + charge).
+
+    التَطبيق الحَقيقي يَستَبدِل Mock بِـ Moyasar/Stripe الَّذي يُنَفِّذ
+    IAppleWalletGateway فِعليّاً.
+*@
+
+<PageTitle>Apple Pay — @(L[TemplateStrings.AppName])</PageTitle>
+
+<div class="acs-page acs-apple-pay-page">
+    <AcCard>
+        <ChildContent>
+            <h2 style="margin-top:0;">الدَّفع بِـ Apple Pay</h2>
+            @if (_loading)
+            {
+                <AcLoadingState />
+            }
+            else if (!_isApple)
+            {
+                <AcAlert Variant="info"
+                         Message="هذا الجِهاز لا يَدعَم Apple Pay. اِفتَح هذه الصَفحَة مَن iPhone أَو iPad أَو Mac بِـ Safari." />
+            }
+            else
+            {
+                <p style="color:var(--ac-text-muted, #666);">
+                    اِضغَط الزَرّ لِبَدء تَدَفُّق Apple Pay. (في وَضع التَّطوير،
+                    يُحاكي MockPaymentGateway التَّدَفُّق بِلا API حَقيقي.)
+                </p>
+
+                <button type="button" class="apple-pay-btn"
+                        @onclick="StartFlow" disabled="@_busy">
+                    @(_busy ? "جارٍ التَّحضير…" : " Pay")
+                </button>
+
+                @if (!string.IsNullOrEmpty(_resultMessage))
+                {
+                    <AcAlert Variant="@_resultVariant" Message="@_resultMessage" />
+                }
+            }
+        </ChildContent>
+    </AcCard>
+</div>
+
+<style>
+    .acs-apple-pay-page { padding: 12px; max-width: 480px; margin: 0 auto; }
+    .apple-pay-btn {
+        background: #000; color: #fff;
+        border: 0; border-radius: 8px;
+        padding: 14px 24px;
+        font: 600 17px/1 -apple-system, system-ui, sans-serif;
+        cursor: pointer;
+        width: 100%; max-width: 320px;
+        display: block; margin: 16px auto;
+        letter-spacing: -.5px;
+    }
+    .apple-pay-btn:hover:not(:disabled) { background: #1a1a1a; }
+    .apple-pay-btn:disabled { opacity: .5; cursor: not-allowed; }
+</style>
+
+@code {
+    private bool _loading = true;
+    private bool _isApple;
+    private bool _busy;
+    private string? _resultMessage;
+    private string _resultVariant = "success";
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (!first) return;
+        try
+        {
+            // كَشف Apple device عَبر User-Agent. الـ ApplePaySession.canMakePayments()
+            // أَدَقّ، لكِنّ هذا كافٍ لِلعَرض. الـ backend يُسَجِّل
+            // IAppleWalletGateway مُسبَقاً (MockPaymentGateway في dev).
+            var ua = await JS.InvokeAsync<string>("eval", "navigator.userAgent || ''");
+            _isApple = ua.Contains("iPhone", StringComparison.OrdinalIgnoreCase)
+                    || ua.Contains("iPad", StringComparison.OrdinalIgnoreCase)
+                    || ua.Contains("Macintosh", StringComparison.OrdinalIgnoreCase);
+        }
+        catch { _isApple = false; }
+        _loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task StartFlow()
+    {
+        _busy = true; _resultMessage = null;
+        await InvokeAsync(StateHasChanged);
+
+        // مُحاكاة تَدَفُّق Apple Pay:
+        //   ١. عَلى الإنتاج: نَستَدعي backend ⇒ IAppleWalletGateway.StartAppleSession
+        //   ٢. الـ ApplePaySession في JS تَفتَح sheet ⇒ المُستَخدِم يُؤَكِّد
+        //   ٣. نَستَدعي backend ⇒ CompleteApplePaymentAsync بِالـ token
+        // هُنا (dev mock) نَكتَفي بِتَأخير قَصير ثُمّ "نَجاح".
+        await Task.Delay(800);
+        _busy = false;
+        _resultMessage = "تَمَّ الدَّفع (مُحاكاة Mock). الإنتاج يَتَّصِل بِـ Moyasar أَو مُزَوِّد يَدعَم Apple Pay.";
+        _resultVariant = "success";
+    }
+}

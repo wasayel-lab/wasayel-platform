@@ -1,0 +1,26 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcThemeToggle — زرّ تبديل بين فاتح/داكن.
+    لا يستدعي خدمة خلفية — مجرّد OnChange callback؛ التطبيق يحفظ في AppStore.
+
+    CSS_CLASSES: ac-theme-toggle (reuse .ac-btn-ghost)
+*@
+
+<button type="button" class="ac-btn ac-btn-ghost ac-theme-toggle @(Class ?? "")"
+        @onclick="Toggle" aria-label="@AriaLabel">
+    <AcIcon Name="@(IsDark ? "sun" : "moon")" Size="18" />
+</button>
+
+@code {
+    [Parameter] public bool IsDark { get; set; }
+    [Parameter] public EventCallback<bool> IsDarkChanged { get; set; }
+    [Parameter] public string AriaLabel { get; set; } = "Toggle theme";
+    [Parameter] public string? Class { get; set; }
+
+    private Task Toggle()
+    {
+        IsDark = !IsDark;
+        return IsDarkChanged.InvokeAsync(IsDark);
+    }
+}

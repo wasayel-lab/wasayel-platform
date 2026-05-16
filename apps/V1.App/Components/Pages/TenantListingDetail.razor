@@ -1,17 +1,20 @@
 @page "/{slug}/listings/{id:guid}"
-@rendermode InteractiveServer
-@inject ITenantContext Tenant
 @inject IDocumentStore Store
 @inject AuthSession Auth
-@inject NavigationManager Nav
 
-@if (!Tenant.IsResolved)
+@*
+    لا @rendermode — صَفحَة SSR بَحتَة. زَرّ "تَواصُل" form POST.
+    نَستَخدِم Slug من الـ route مُباشَرَةً ولا نَعتَمِد على ITenantContext
+    (التي قَد تَفقُد قيمَتها في circuit interactive).
+*@
+
+@if (tenant is null)
 {
-    <p>غير مَوجود.</p>
+    <p class="ac-muted">المَتجَر غير مَوجود.</p>
 }
 else if (listing is null)
 {
-    <p class="muted">…</p>
+    <p class="ac-muted">جارٍ التَحميل…</p>
 }
 else if (listing.IsDeleted)
 {
@@ -24,9 +27,12 @@ else
     </div>
 
     <h1>@listing.Title</h1>
-    <p style="font-size:24px;color:var(--ac-primary);font-weight:700;margin:4px 0;">@listing.Price.ToString("N0") ريال</p>
+    <p style="font-size:24px;color:var(--ac-primary);font-weight:700;margin:4px 0;">
+        @listing.Price.ToString("N0") ريال
+    </p>
     <p class="ac-muted">@listing.City — @listing.District</p>
-    <div style="display:inline-block;background:var(--ac-bg-alt);color:var(--ac-text-muted);padding:4px 10px;border-radius:999px;font-size:12px;margin:6px 0;">
+    <div style="display:inline-block;background:var(--ac-bg-alt);color:var(--ac-text-muted);
+                padding:4px 10px;border-radius:999px;font-size:12px;margin:6px 0;">
         @CategoryLabel
     </div>
 
@@ -39,28 +45,39 @@ else
     {
         <h3 style="margin-top:20px;">التَفاصيل</h3>
         <ul class="acs-amenity-chips">
-            @foreach (var a in listing.Attributes) { <li class="acs-amenity-chip"><strong>@a.Key:</strong> @a.Value</li> }
+            @foreach (var a in listing.Attributes)
+            {
+                <li class="acs-amenity-chip"><strong>@a.Key:</strong> @a.Value</li>
+            }
         </ul>
     }
 
-    <div style="margin:20px 0;padding-top:12px;border-top:1px solid var(--ac-border);display:flex;gap:8px;flex-wrap:wrap;">
+    <div style="margin:20px 0;padding-top:12px;border-top:1px solid var(--ac-border);">
         @if (Auth.IsAuthenticated)
         {
-            <button @onclick="StartChat" disabled="@_busy"
-                    style="flex:1;min-width:140px;padding:12px;background:var(--ac-primary);color:#fff;border:0;border-radius:var(--ac-radius-sm);cursor:pointer;font-weight:600;">
-                💬 تَواصُل مَع المُعلِن
-            </button>
+            <form method="post" action="@($"/{Slug}/listings/{Id}/chat")">
+                <button type="submit"
+                        style="width:100%;padding:12px;background:var(--ac-primary);
+                               color:#fff;border:0;border-radius:var(--ac-radius-sm);
+                               cursor:pointer;font-weight:600;font-size:15px;">
+                    💬 تَواصُل مَع المُعلِن
+                </button>
+            </form>
         }
         else
         {
             <a href="@($"/{Slug}/login?returnUrl=/{Slug}/listings/{Id}")"
-               style="flex:1;min-width:140px;padding:12px;background:var(--ac-primary);color:#fff;border:0;border-radius:var(--ac-radius-sm);text-decoration:none;text-align:center;font-weight:600;">
+               style="display:block;text-align:center;padding:12px;
+                      background:var(--ac-primary);color:#fff;
+                      border-radius:var(--ac-radius-sm);text-decoration:none;font-weight:600;">
                 دُخول للتَواصُل
             </a>
         }
     </div>
 
-    <p class="ac-muted" style="font-size:12px;">شوهد: @listing.ViewCount مَرَّة — نُشِر: @listing.CreatedAt.ToString("yyyy-MM-dd")</p>
+    <p class="ac-muted" style="font-size:12px;">
+        شوهد: @listing.ViewCount مَرَّة — نُشِر: @listing.CreatedAt.ToString("yyyy-MM-dd")
+    </p>
 }
 
 @code {
@@ -68,16 +85,17 @@ else
     [Parameter] public Guid Id { get; set; }
     Listing? listing;
     Tenant? tenant;
-    bool _busy;
 
     string CategoryLabel => tenant?.Categories.FirstOrDefault(c => c.Slug == listing?.CategorySlug)?.Label ?? "";
     string CategoryIcon  => tenant?.Categories.FirstOrDefault(c => c.Slug == listing?.CategorySlug)?.Icon ?? "🏷️";
 
     protected override async Task OnParametersSetAsync()
     {
+        // نَجلب الـ tenant مُباشَرَةً مِن slug — لا نَعتَمِد على ITenantContext
         await using var g = Store.QuerySession();
         tenant = await g.LoadAsync<Tenant>(Slug);
         if (tenant is null) return;
+
         await using var t = Store.LightweightSession(Slug);
         listing = await t.Events.AggregateStreamAsync<Listing>(Id);
         if (listing is not null && !listing.IsDeleted)
@@ -86,41 +104,5 @@ else
             await t.SaveChangesAsync();
             listing.ViewCount++;
         }
-    }
-
-    async Task StartChat()
-    {
-        if (!Auth.IsAuthenticated || listing is null) return;
-        _busy = true;
-        try
-        {
-            await using var s = Store.LightweightSession(Slug);
-            // مُحادَثَة مُسبَقَة لِنَفس الإعلان والمُستَخدِم؟
-            var existing = await s.Query<Conversation>()
-                .Where(c => c.ListingId == listing.Id
-                         && (c.OwnerId == Auth.UserId || c.PartnerId == Auth.UserId))
-                .FirstOrDefaultAsync();
-
-            Guid convId;
-            if (existing is not null) convId = existing.Id;
-            else
-            {
-                // partner = صاحِب الإعلان (في الـ MVP نَستَخدِم مُستَخدِم وَهميّ)
-                // (لاحقاً نَجلِبه من Listing.OwnerId)
-                var partnerId = Guid.NewGuid();
-                var conv = new Conversation {
-                    Id = Guid.NewGuid(),
-                    OwnerId = Auth.UserId!.Value, OwnerName = Auth.UserName ?? "أنا",
-                    PartnerId = partnerId, PartnerName = "صاحِب الإعلان",
-                    Subject = listing.Title, ListingId = listing.Id,
-                    LastAt = DateTime.UtcNow
-                };
-                s.Store(conv);
-                await s.SaveChangesAsync();
-                convId = conv.Id;
-            }
-            Nav.NavigateTo($"/{Slug}/chats/{convId}");
-        }
-        finally { _busy = false; }
     }
 }

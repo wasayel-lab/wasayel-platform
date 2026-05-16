@@ -1,0 +1,133 @@
+@namespace ACommerce.Widgets
+@using System.Globalization
+
+@if (Template != null && Template.Fields.Count > 0)
+{
+    <div class="ac-attr-editor @(Class ?? "")">
+        @foreach (var f in Template.Fields.OrderBy(f => f.SortOrder))
+        {
+            var key = f.Key;
+            <div class="ac-attr-field">
+                <label class="ac-attr-field-label">
+                    @if (!string.IsNullOrEmpty(f.Icon)) { <i class="bi bi-@f.Icon"></i> }
+                    @(IsArabic ? (f.LabelAr ?? f.Label) : f.Label)
+                    @if (f.Required) { <span class="ac-attr-required">*</span> }
+                    @if (!string.IsNullOrEmpty(f.Unit)) { <small class="ac-attr-field-unit">(@f.Unit)</small> }
+                </label>
+
+                @switch (f.Type)
+                {
+                    case "select":
+                        <select class="ac-input" value="@GetString(key)" @onchange="@(e => Set(key, e.Value?.ToString()))">
+                            <option value="">@SelectPlaceholder</option>
+                            @foreach (var o in f.Options)
+                            {
+                                <option value="@o.Value">@(IsArabic ? (o.LabelAr ?? o.Label) : o.Label)</option>
+                            }
+                        </select>
+                        break;
+
+                    case "multi":
+                        <div class="ac-attr-multi">
+                            @foreach (var o in f.Options)
+                            {
+                                var checkedNow = GetMulti(key).Contains(o.Value);
+                                <label class="ac-attr-multi-opt @(checkedNow ? "is-on" : "")">
+                                    <input type="checkbox" checked="@checkedNow"
+                                           @onchange="@(e => ToggleMulti(key, o.Value, (bool)(e.Value ?? false)))" />
+                                    @if (!string.IsNullOrEmpty(o.Icon)) { <i class="bi bi-@o.Icon"></i> }
+                                    <span>@(IsArabic ? (o.LabelAr ?? o.Label) : o.Label)</span>
+                                </label>
+                            }
+                        </div>
+                        break;
+
+                    case "bool":
+                        <label class="ac-attr-bool">
+                            <input type="checkbox" checked="@GetBool(key)"
+                                   @onchange="@(e => Set(key, (bool)(e.Value ?? false)))" />
+                            <span>@(GetBool(key) ? YesLabel : NoLabel)</span>
+                        </label>
+                        break;
+
+                    case "number":
+                        <input type="number" class="ac-input"
+                               min="@(f.Min?.ToString(CultureInfo.InvariantCulture))"
+                               max="@(f.Max?.ToString(CultureInfo.InvariantCulture))"
+                               placeholder="@(IsArabic ? f.PlaceholderAr : f.Placeholder)"
+                               value="@GetString(key)"
+                               @oninput="@(e => SetNumber(key, e.Value?.ToString(), false))" />
+                        break;
+
+                    case "decimal":
+                        <input type="number" step="0.01" class="ac-input"
+                               min="@(f.Min?.ToString(CultureInfo.InvariantCulture))"
+                               max="@(f.Max?.ToString(CultureInfo.InvariantCulture))"
+                               placeholder="@(IsArabic ? f.PlaceholderAr : f.Placeholder)"
+                               value="@GetString(key)"
+                               @oninput="@(e => SetNumber(key, e.Value?.ToString(), true))" />
+                        break;
+
+                    case "date":
+                        <input type="date" class="ac-input" value="@GetString(key)"
+                               @oninput="@(e => Set(key, e.Value?.ToString()))" />
+                        break;
+
+                    default: // text
+                        <input type="text" class="ac-input"
+                               placeholder="@(IsArabic ? f.PlaceholderAr : f.Placeholder)"
+                               value="@GetString(key)"
+                               @oninput="@(e => Set(key, e.Value?.ToString()))" />
+                        break;
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public AttributeTemplate? Template { get; set; }
+    [Parameter] public Dictionary<string, object?> Values { get; set; } = new();
+    [Parameter] public EventCallback<Dictionary<string, object?>> ValuesChanged { get; set; }
+    [Parameter] public bool IsArabic { get; set; } = true;
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string SelectPlaceholder { get; set; } = "— اختَر —";
+    [Parameter] public string YesLabel          { get; set; } = "نَعَم";
+    [Parameter] public string NoLabel           { get; set; } = "لا";
+
+    private string GetString(string key) => Values.TryGetValue(key, out var v) ? v?.ToString() ?? "" : "";
+
+    private bool GetBool(string key) => Values.TryGetValue(key, out var v) && v is bool b && b;
+
+    private List<string> GetMulti(string key)
+    {
+        if (!Values.TryGetValue(key, out var v) || v == null) return new();
+        if (v is List<string> ls) return ls;
+        if (v is IEnumerable<object> arr) return arr.Select(x => x?.ToString() ?? "").ToList();
+        return new();
+    }
+
+    private async Task Set(string key, object? value)
+    {
+        Values[key] = value;
+        await ValuesChanged.InvokeAsync(Values);
+    }
+
+    private async Task SetNumber(string key, string? raw, bool dec)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) { Values[key] = null; }
+        else if (dec && decimal.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out var d)) Values[key] = d;
+        else if (!dec && int.TryParse(raw, out var i)) Values[key] = i;
+        else Values[key] = raw;
+        await ValuesChanged.InvokeAsync(Values);
+    }
+
+    private async Task ToggleMulti(string key, string value, bool on)
+    {
+        var list = GetMulti(key);
+        if (on && !list.Contains(value)) list.Add(value);
+        if (!on) list.Remove(value);
+        Values[key] = list;
+        await ValuesChanged.InvokeAsync(Values);
+    }
+}

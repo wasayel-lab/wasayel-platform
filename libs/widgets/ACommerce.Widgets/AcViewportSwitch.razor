@@ -1,0 +1,30 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcViewportSwitch — render TWO distinct template trees for the same page
+    and let CSS media-queries decide which one paints.
+
+    Usage:
+      <AcViewportSwitch>
+          <Desktop>  <MyDesktopPage … />  </Desktop>
+          <Mobile>   <MyMobilePage  … />  </Mobile>
+      </AcViewportSwitch>
+
+    Both trees are rendered.  The CSS in widgets.css (.ac-viewport-desktop,
+    .ac-viewport-mobile) hides the off-viewport tree via display:none at the
+    breakpoint defined by --ac-viewport-breakpoint (default 768px).  This:
+      • avoids a flash of wrong template between first render and JS probe;
+      • keeps Blazor prerender deterministic (no browser-size guesses on
+        the server);
+      • keeps the two trees fully independent — a mobile layout can drop
+        sidebars, change navigation, re-order sections, etc., without any
+        `@if` branches inside the individual components.
+*@
+
+<div class="ac-viewport-desktop">@Desktop</div>
+<div class="ac-viewport-mobile">@Mobile</div>
+
+@code {
+    [Parameter] public RenderFragment? Desktop { get; set; }
+    [Parameter] public RenderFragment? Mobile  { get; set; }
+}

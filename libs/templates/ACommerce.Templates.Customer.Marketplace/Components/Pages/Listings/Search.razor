@@ -1,0 +1,119 @@
+@page "/search"
+@inject IUiPreferences Prefs
+@inject IMarketplaceHomeStore Home
+@inject IDiscoveryStore Discovery
+@inject NavigationManager Nav
+@inject L L
+@implements IDisposable
+
+<PageTitle>@(L[TemplateStrings.CommonSearch]) — @(L[TemplateStrings.AppName])</PageTitle>
+
+<div class="acs-page acs-search-page">
+    <AcSearchBox Value="@_query" ValueChanged="@(v => _query = v ?? string.Empty)"
+                 Placeholder="@(L[TemplateStrings.SearchPlaceholder])" OnSubmit="Submit" />
+
+    @if (Prefs.RecentSearches.Count > 0)
+    {
+        <AcSectionHeader Title="@(L[TemplateStrings.SearchRecent])" ActionLabel="@(L[TemplateStrings.CommonClear])" OnAction="@ClearRecent" />
+        <div class="acs-filter-chips">
+            @foreach (var r in Prefs.RecentSearches.ToList())
+            {
+                var rq = r;
+                <span class="acs-recent-chip">
+                    <button type="button" @onclick="@(() => PickRecent(rq))">@rq</button>
+                    <button type="button" class="rm" @onclick="@(() => Remove(rq))" title="@(L[TemplateStrings.CommonDelete])">×</button>
+                </span>
+            }
+        </div>
+    }
+
+    @if (Home.Suggestions?.Popular is { Count: > 0 })
+    {
+        <AcSectionHeader Title="@(L[TemplateStrings.SearchPopular])" />
+        <div class="acs-filter-chips">
+            @foreach (var p in Home.Suggestions.Popular)
+            {
+                var pq = p;
+                <AcFilterChip Label="@pq" OnClick="@(() => PickRecent(pq))" />
+            }
+        </div>
+    }
+
+    @if (Discovery.Categories.Count > 0)
+    {
+        <AcSectionHeader Title="@(L[TemplateStrings.SearchBrowseByCategory])" />
+        @* شَجَرَة الأَنواع — اِنقُر kind لِيَنبَسِط، ثُمّ اختَر leaf
+           لِيَنتَقِل لِـ /explore فَلتَر بِها. الـ store يَجلِب الشَجَرَة
+           مَرَّة واحِدَة + يَحفَظها cache. *@
+        <AcTaxonomyTreeSelect RootCode="listing_categories"
+                              SelectedChanged="@OnTaxonomyPicked"
+                              IsArabic="true"
+                              Class="acs-search-taxonomy" />
+    }
+</div>
+
+@code {
+    private string _query = "";
+
+    protected override void OnInitialized()
+    {
+        Prefs.OnChanged += OnChange;
+        Home.Changed     += OnChange;
+        Discovery.Changed += OnChange;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (!first) return;
+        await System.Threading.Tasks.Task.WhenAll(
+            Home.LoadSuggestionsAsync(),
+            Discovery.LoadCategoriesAsync());
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void Submit()
+    {
+        if (string.IsNullOrWhiteSpace(_query)) return;
+        AddRecent(_query);
+        Nav.NavigateTo($"/explore?q={Uri.EscapeDataString(_query)}");
+    }
+
+    private void PickRecent(string q)
+    {
+        AddRecent(q);
+        Nav.NavigateTo($"/explore?q={Uri.EscapeDataString(q)}");
+    }
+
+    private void AddRecent(string q)
+    {
+        q = q.Trim();
+        if (string.IsNullOrEmpty(q)) return;
+        var list = Prefs.RecentSearches;
+        list.Remove(q);
+        list.Insert(0, q);
+        while (list.Count > 10) list.RemoveAt(list.Count - 1);
+        Prefs.NotifyChanged();
+    }
+
+    private void Remove(string q) { Prefs.RecentSearches.Remove(q); Prefs.NotifyChanged(); }
+    private void ClearRecent()    { Prefs.RecentSearches.Clear();   Prefs.NotifyChanged(); }
+
+    /// <summary>اختيار عُقدَة مَن AcTaxonomyTreeSelect ⇒ يُرسِل المُستَخدِم
+    /// إلى /explore فَلتَراً بِالـ slug. يَدعَم kinds وleaves بِنَفس النَّمَط
+    /// (الـ explore يَستَخدِم <c>GetSubtreeSlugsAsync</c> داخِليّاً لِفِلتَرَة
+    /// كُلّ الأَولاد).</summary>
+    private void OnTaxonomyPicked(string? slug)
+    {
+        if (string.IsNullOrEmpty(slug)) return;
+        Nav.NavigateTo($"/explore?category={Uri.EscapeDataString(slug)}");
+    }
+
+    private void OnChange() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Prefs.OnChanged    -= OnChange;
+        Home.Changed       -= OnChange;
+        Discovery.Changed  -= OnChange;
+    }
+}

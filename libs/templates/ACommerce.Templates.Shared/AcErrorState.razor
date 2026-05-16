@@ -1,0 +1,33 @@
+@namespace ACommerce.Templates.Shared
+
+@*
+    Error-state template. Used after a failed load or submit.
+    Flex slots: ExtraContent (extra details / technical info)
+*@
+
+<div class="acs-empty acs-error">
+    <div class="acs-empty-icon acs-empty-icon-line">
+        <AcIcon Name="alert-circle" Size="48" StrokeWidth="1.5" />
+    </div>
+    <h3 class="acs-empty-title">@(Title ?? "حدث خطأ")</h3>
+    @if (!string.IsNullOrEmpty(Message))
+    {
+        <p class="acs-empty-message">@Message</p>
+    }
+    @if (ExtraContent != null)
+    {
+        <div class="acs-empty-extra">@ExtraContent</div>
+    }
+    @if (OnRetry.HasDelegate)
+    {
+        <button class="btn btn-primary" @onclick="OnRetry">@(RetryLabel ?? "أعد المحاولة")</button>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? RetryLabel { get; set; }
+    [Parameter] public EventCallback OnRetry { get; set; }
+    [Parameter] public RenderFragment? ExtraContent { get; set; }
+}

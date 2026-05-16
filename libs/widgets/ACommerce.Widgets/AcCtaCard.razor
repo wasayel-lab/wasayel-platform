@@ -1,0 +1,57 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcCtaCard — بطاقة نداء إلى إجراء (Call-To-Action).
+
+    بنية مطابقة لـ ashare-cta-branded في عشير القديم:
+      ┌──[icon]───title──────────────[chevron]──┐
+      │           subtitle                        │
+      └──────────────────────────────────────────┘
+
+    Variant:
+      - "primary"   : var(--ac-primary)    (الأزرق الملكي)
+      - "secondary" : var(--ac-secondary)  (البرتقالي الدافئ — افتراضي)
+      - "surface"   : surface عادي بإطار
+
+    النص والأيقونات تستعمل currentColor دائماً؛ إعادة التلوين تحت العلامة.
+
+    CSS_CLASSES: ac-cta, ac-cta-primary, ac-cta-secondary, ac-cta-surface,
+                 ac-cta-icon, ac-cta-text, ac-cta-title, ac-cta-subtitle,
+                 ac-cta-arrow
+*@
+
+<button type="button"
+        class="ac-cta ac-cta-@Variant @(Class ?? "")"
+        @onclick="OnClickInternal">
+    @if (!string.IsNullOrEmpty(IconName))
+    {
+        <span class="ac-cta-icon" aria-hidden="true">
+            <AcIcon Name="@IconName" Size="28" />
+        </span>
+    }
+    <div class="ac-cta-text">
+        <h3 class="ac-cta-title">@Title</h3>
+        @if (!string.IsNullOrEmpty(Subtitle))
+        {
+            <p class="ac-cta-subtitle">@Subtitle</p>
+        }
+    </div>
+    @if (ShowArrow)
+    {
+        <span class="ac-cta-arrow" aria-hidden="true">
+            <AcIcon Name="chevron-left" Size="20" />
+        </span>
+    }
+</button>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? IconName { get; set; }
+    [Parameter] public string Variant { get; set; } = "secondary";
+    [Parameter] public bool ShowArrow { get; set; } = true;
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private Task OnClickInternal() => OnClick.InvokeAsync();
+}

@@ -1,0 +1,72 @@
+@namespace ACommerce.Templates.Shared
+
+@*
+    Empty-state template.
+
+    Icon source priority (highest first):
+      1. IconSlot       — fully custom RenderFragment for rare cases
+      2. IconName       — name of a built-in AcIcon (e.g. "inbox", "heart")
+
+    Legacy "Icon (raw markup string)" path was removed — it required
+    MarkupString rendering which violates the platform's no-XSS rule
+    (libs/host-client/.../IRichTextSanitizer). Pass an SVG via IconSlot
+    if you need a custom glyph.
+
+    Flex slots: IconSlot, ExtraContent (below message), BelowAction
+*@
+
+<div class="acs-empty @(ExtraClass ?? "")">
+    @if (IconSlot != null)
+    {
+        <div class="acs-empty-icon">@IconSlot</div>
+    }
+    else if (!string.IsNullOrEmpty(IconName))
+    {
+        <div class="acs-empty-icon acs-empty-icon-line">
+            <AcIcon Name="@IconName" Size="48" StrokeWidth="1.5" />
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(Title))
+    {
+        <h3 class="acs-empty-title">@Title</h3>
+    }
+    @if (!string.IsNullOrEmpty(Message))
+    {
+        <p class="acs-empty-message">@Message</p>
+    }
+    @if (ExtraContent != null)
+    {
+        <div class="acs-empty-extra">@ExtraContent</div>
+    }
+    @if (!string.IsNullOrEmpty(ActionLabel))
+    {
+        @if (!string.IsNullOrEmpty(ActionHref))
+        {
+            <a class="btn btn-primary" href="@ActionHref">@ActionLabel</a>
+        }
+        else if (OnAction.HasDelegate)
+        {
+            <button class="btn btn-primary" @onclick="OnAction">@ActionLabel</button>
+        }
+    }
+    @if (BelowAction != null)
+    {
+        <div class="acs-empty-below">@BelowAction</div>
+    }
+</div>
+
+@code {
+    /// <summary>Name of a built-in <see cref="AcIcon"/> (e.g. "inbox", "heart"). Preferred.</summary>
+    [Parameter] public string? IconName { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? ActionLabel { get; set; }
+    [Parameter] public string? ActionHref { get; set; }
+    [Parameter] public EventCallback OnAction { get; set; }
+    [Parameter] public string? ExtraClass { get; set; }
+
+    // Flex slots
+    [Parameter] public RenderFragment? IconSlot { get; set; }
+    [Parameter] public RenderFragment? ExtraContent { get; set; }
+    [Parameter] public RenderFragment? BelowAction { get; set; }
+}

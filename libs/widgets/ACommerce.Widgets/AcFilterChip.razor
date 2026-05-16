@@ -1,0 +1,36 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcFilterChip — شريحة تصفية قابلة للتبديل.
+
+    مطابقة لـ .ashare-filter-chip القديمة (active state + icon + label).
+    يُستخدَم في filter bar أفقي وفي مُوفّر capacity/rating filters.
+
+    CSS_CLASSES: ac-chip, ac-chip-active, ac-chip-icon
+*@
+
+<button type="button"
+        class="ac-chip @(Active ? "ac-chip-active" : "") @(Class ?? "")"
+        @onclick="OnClickInternal"
+        aria-pressed="@Active">
+    @if (!string.IsNullOrEmpty(Icon))
+    {
+        <span class="ac-chip-icon" aria-hidden="true"><AcIcon Name="@Icon" Size="14" /></span>
+    }
+    <span>@Label</span>
+    @if (IconTrailing is not null)
+    {
+        <span class="ac-chip-icon" aria-hidden="true">@IconTrailing</span>
+    }
+</button>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public RenderFragment? IconTrailing { get; set; }
+    [Parameter] public bool Active { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private Task OnClickInternal() => OnClick.InvokeAsync();
+}

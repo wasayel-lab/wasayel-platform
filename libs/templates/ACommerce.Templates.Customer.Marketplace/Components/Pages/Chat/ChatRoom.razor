@@ -1,0 +1,285 @@
+@page "/chat/{Id}"
+@attribute [Authorize]
+@using ACommerce.Chat.Client.Blazor
+@using ACommerce.Chat.Operations
+@inject ITemplateEngine Engine
+@inject IClientAuthState Auth
+@inject IChatClient Chat
+@inject UnreadComposition Unread
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject L L
+@implements IAsyncDisposable
+
+<PageTitle>@(L[TemplateStrings.ChatTitle]) — @(L[TemplateStrings.AppName])</PageTitle>
+
+<div class="acs-page acs-chat-page">
+    @if (_loading) { <AcLoadingState /> }
+    else if (_loadError is not null)
+    {
+        <AcEmptyState IconName="alert-circle" Message="@_loadError" />
+        <AcButton Variant="ghost" Class="ac-btn-block" Text="@(L[TemplateStrings.ChatsBackToList])"
+                  OnClick="@(() => Nav.NavigateTo("/chats"))" />
+    }
+    else if (_conv is null)
+    {
+        <AcEmptyState IconName="info" Message="@(L[TemplateStrings.ChatUnavailable])" />
+        <AcButton Variant="ghost" Class="ac-btn-block" Text="@(L[TemplateStrings.ChatsBackToList])"
+                  OnClick="@(() => Nav.NavigateTo("/chats"))" />
+    }
+    else
+    {
+        <div class="acs-chat-header" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+            <div style="display:flex; align-items:center; gap:12px; flex:1; min-width:0;">
+                <AcAvatar Name="@OtherName" ImageUrl="@OtherAvatar" Size="40" />
+                <div style="min-width:0;">
+                    <h1 class="acm-wizard-title" style="margin-bottom:4px;">@OtherName</h1>
+                    <small style="color:var(--ac-text-muted);">@(_conv.Subject ?? "")</small>
+                </div>
+            </div>
+            <AcButton Variant="ghost" Text="@(L[TemplateStrings.CommonBack])" OnClick="@GoBack" />
+        </div>
+
+        <div class="acs-chat-messages" id="acs-chat-msgs">
+            @{ DateTime? _lastDay = null; }
+            @foreach (var m in _messages)
+            {
+                var mine    = IsMine(m);
+                var localAt = m.SentAt.ToLocalTime();
+                var day     = localAt.Date;
+                if (_lastDay is null || _lastDay.Value != day)
+                {
+                    @* فاصِل تاريخ بَين الرَسائِل الَّتي تَنتَمي لِأَيّام مُختَلِفَة. *@
+                    <div class="acs-chat-day-sep"><span>@FormatDayHeader(day)</span></div>
+                    _lastDay = day;
+                }
+                <div class="acs-bubble @(mine ? "acs-bubble-mine" : "acs-bubble-other")">
+                    @if (!string.IsNullOrEmpty(m.Body))
+                    {
+                        <div>@m.Body</div>
+                    }
+                    <small style="display:block; opacity:.6;">@localAt.ToString("HH:mm")</small>
+                </div>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(_sendError))
+        {
+            <AcAlert Variant="danger" Message="@_sendError" />
+        }
+        <div class="acs-chat-composer" @onkeydown="OnComposerKey">
+            <AcInput Value="@_draft" id="chat-composer"
+                     ValueChanged="@(v => _draft = v ?? string.Empty)"
+                     Placeholder="@(L[TemplateStrings.ChatNewMessage])" />
+            <AcButton Variant="primary" Text="@(L[TemplateStrings.ChatSend])" OnClick="@Send"
+                      Disabled="@(_sending || string.IsNullOrWhiteSpace(_draft))" />
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+    private ConvDto? _conv;
+    private bool _loading = true;
+    private string? _loadError;
+    private readonly List<IChatMessage> _messages = new();
+    private string _draft = "";
+    private bool _sending;
+
+    private int _lastSeenCount;
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        // أَنزِل التَمرير إلى الأَسفَل عِند أَوّل render بَعد تَحميل الرَسائل،
+        // وعِند كلّ زِيادَة في عَدَد الرَسائل (إرسال أَو استِلام).
+        if (_conv is not null && _messages.Count != _lastSeenCount)
+        {
+            _lastSeenCount = _messages.Count;
+            try { await JS.InvokeVoidAsync("ejarChatUi.scrollToBottom", "#acs-chat-msgs"); }
+            catch { /* JSInterop غير جاهز قبل أوّل render */ }
+        }
+
+        if (!first) return;
+
+        // OAM-pure: chat.conversation.open op (kit-defined). الـ wire shape
+        // غَنيّ (OwnerName/PartnerName/Subject/ListingId/...) فنَستَخدِم DTO
+        // مَحَلّيّ يَلتَقِطه — IChatStore.CurrentMessages كافٍ لِلرَسائل لكنّ
+        // headers الـ conversation تَتَجاوز ConversationSummary.
+        var env = await Engine.ExecuteAsync<Payload>(ChatOps.OpenConversation(Id));
+        _conv = env.Data?.Conversation;
+        if (env.Data?.Messages is { } msgs)
+        {
+            _messages.AddRange(msgs.Select(m => (IChatMessage)m));
+        }
+        if (_conv is null)
+        {
+            var code = env.Error?.Code ?? env.Operation?.FailedAnalyzer;
+            var msg  = env.Error?.Message ?? env.Operation?.ErrorMessage;
+            _loadError = (code, msg) switch
+            {
+                ("conversation_not_found", _) => L[TemplateStrings.ChatNotFound],
+                ("not_a_participant",      _) => L[TemplateStrings.ChatNotParticipant],
+                ("network_error", var m) when m is not null => string.Format(L[TemplateStrings.ChatConnectionFailedFormat], m),
+                (_, var m) when !string.IsNullOrWhiteSpace(m) => m!,
+                (var c, _) when !string.IsNullOrWhiteSpace(c) => string.Format(L[TemplateStrings.ChatLoadFailedCodeFormat], c),
+                _ => L[TemplateStrings.ChatLoadFailedGeneric]
+            };
+        }
+        else
+        {
+            // افتح قَناة الدَردَشَة. التَسليم الحَيّ عَبر SignalR لِلـ foreground،
+            // والإشعارات في الخلفيّة عَبر FCM (راجِع FirebasePushService).
+            Chat.MessageReceived += OnRealtimeMessage;
+            try { await Chat.EnterAsync(Id); }
+            catch { /* ignore */ }
+
+            // EnterAsync الخادميّ يَستَدعي MarkReadAsync فيُصَفِّر العَدّاد في
+            // DB. ActiveConversationId يَجعَل realtime ingestor يَتَجاهَل
+            // الرَسائل الواردَة لِهذه المُحادَثة (لا تُحسَب unread لأنّ
+            // المُستَخدِم يَراها).
+            Unread.ActiveConversationId = Id;
+            await Unread.RefreshAsync();
+
+            // ركّز عَلى خانة الرَسالَة بَعد ما يُرسَم الـ DOM.
+            try { await JS.InvokeVoidAsync("ejarChatUi.focus", "#chat-composer"); } catch { }
+        }
+
+        _loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private string MyPartyId => Auth.UserId is { } g ? $"User:{g}" : "User:?";
+    private bool IsMine(IChatMessage m) =>
+        string.Equals(m.SenderPartyId, MyPartyId, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>اسم "الطَرَف الآخَر" حَسَب مَن يَعرض المُحادَثة.</summary>
+    private string OtherName
+    {
+        get
+        {
+            if (_conv is null) return "";
+            var myId = Auth.UserId?.ToString();
+            return string.Equals(_conv.OwnerId, myId, StringComparison.OrdinalIgnoreCase)
+                ? _conv.PartnerName ?? "—"
+                : _conv.OwnerName ?? "—";
+        }
+    }
+
+    /// <summary>صورة الطَرَف الآخَر — null تَترُك AcAvatar يَعرِض initials.</summary>
+    private string? OtherAvatar
+    {
+        get
+        {
+            if (_conv is null) return null;
+            var myId = Auth.UserId?.ToString();
+            return string.Equals(_conv.OwnerId, myId, StringComparison.OrdinalIgnoreCase)
+                ? _conv.PartnerAvatar
+                : _conv.OwnerAvatar;
+        }
+    }
+
+    private void OnRealtimeMessage(IChatMessage msg)
+    {
+        if (_messages.Any(m => m.Id == msg.Id)) return;
+
+        if (msg.SenderPartyId == MyPartyId)
+        {
+            for (int i = 0; i < _messages.Count; i++)
+            {
+                var existing = _messages[i];
+                if (!existing.Id.StartsWith("local-")) continue;
+                if (existing.Body != msg.Body) continue;
+                if ((msg.SentAt - existing.SentAt).Duration() > TimeSpan.FromSeconds(10)) continue;
+                _messages[i] = msg;
+                InvokeAsync(StateHasChanged);
+                return;
+            }
+        }
+
+        _messages.Add(msg);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string? _sendError;
+
+    private async Task Send()
+    {
+        if (string.IsNullOrWhiteSpace(_draft)) return;
+        _sending = true; _sendError = null;
+        var pending = _draft;
+        try
+        {
+            var localId = $"local-{DateTime.UtcNow.Ticks}";
+            _messages.Add(new ChatMessage(
+                Id: localId,
+                ConversationId: Id,
+                SenderPartyId: MyPartyId,
+                Body: pending,
+                SentAt: DateTime.UtcNow));
+            _draft = "";
+            await InvokeAsync(StateHasChanged);
+
+            await Chat.SendAsync(pending);
+        }
+        catch (Exception ex)
+        {
+            _messages.RemoveAll(m => m.Body == pending && m.Id.StartsWith("local-"));
+            _sendError = string.Format(L[TemplateStrings.ChatSendFailedFormat], ex.Message);
+            _draft = pending;
+        }
+        finally { _sending = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    private async Task OnComposerKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey && !_sending && !string.IsNullOrWhiteSpace(_draft))
+            await Send();
+    }
+
+    private void GoBack() => Nav.NavigateTo("/chats");
+
+    public async ValueTask DisposeAsync()
+    {
+        Chat.MessageReceived -= OnRealtimeMessage;
+        if (Unread.ActiveConversationId == Id) Unread.ActiveConversationId = null;
+        await Chat.LeaveAsync();
+    }
+
+    // Chat Kit shape: { conversation: ConvDto, messages: MessageDto[] }
+    private sealed record Payload(ConvDto? Conversation, List<MessageDto>? Messages);
+    private sealed record ConvDto(
+        string Id,
+        string? OwnerId, string? OwnerName, string? OwnerAvatar,
+        string? PartnerId, string? PartnerName, string? PartnerAvatar,
+        string? Subject, string? ListingId,
+        DateTime LastAt, int UnreadCount,
+        string? LastMessage);
+
+    private sealed record MessageDto(
+        string Id, string ConversationId, string SenderPartyId,
+        string Body, DateTime SentAt, DateTime? ReadAt) : IChatMessage;
+
+    /// <summary>
+    /// عُنوان فاصِل اليَوم بَين الرَسائِل. اليَوم/أَمس بِالعَرَبي + تاريخ كامِل
+    /// لِما تَجاوَزَ اليَومَين. <see cref="DateTime.Today"/> يَستَخدِم الـ
+    /// local time لِيَتَطابَق مَع <c>ToLocalTime()</c> أَعلاه.
+    /// </summary>
+    private string FormatDayHeader(DateTime day)
+    {
+        var today = DateTime.Now.Date;
+        if (day == today)                 return L[TemplateStrings.CommonToday];
+        if (day == today.AddDays(-1))     return L[TemplateStrings.CommonYesterday];
+        // التَّنسيق المُفَضَّل بِالعَرَبي: "الأَحَد ١٢ مايو ٢٠٢٦" — نَستَخدِم
+        // ar-SA culture لِيَتَكَفَّل بِالـ day-name + month-name. لَو لَم تَكُن
+        // مَدعومَة في runtime، نَعود لِـ yyyy-MM-dd.
+        try
+        {
+            var ar = new System.Globalization.CultureInfo("ar-SA");
+            return day.ToString("dddd، d MMMM yyyy", ar);
+        }
+        catch
+        {
+            return day.ToString("yyyy-MM-dd");
+        }
+    }
+}

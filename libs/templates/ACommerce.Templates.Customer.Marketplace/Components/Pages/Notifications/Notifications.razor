@@ -1,0 +1,101 @@
+@page "/notifications"
+@attribute [Authorize]
+@inject INotificationsStore Notifs
+@inject UnreadComposition Unread
+@inject ITimezoneProvider Tz
+@inject L L
+@implements IDisposable
+
+<PageTitle>@($"{L[TemplateStrings.NotificationsTitle]} — {L[TemplateStrings.AppName]}")</PageTitle>
+
+<div class="acs-page acs-notifications-page">
+    <AcSectionHeader Title="@(L[TemplateStrings.NotificationsTitle])" ActionLabel="@(L[TemplateStrings.NotificationsMarkAllRead])" OnAction="@MarkAllRead" />
+
+    <div class="acs-filter-chips">
+        <AcFilterChip Label="@(L[TemplateStrings.CommonAll])"   Active="@(_filter == "")"        OnClick="@(() => SetFilter(""))" />
+        <AcFilterChip Label="@(L[TemplateStrings.NotificationsKindMessage])"   Active="@(_filter == "message")" OnClick="@(() => SetFilter("message"))" />
+        <AcFilterChip Label="@(L[TemplateStrings.NotificationsKindListing])" Active="@(_filter == "listing")" OnClick="@(() => SetFilter("listing"))" />
+        <AcFilterChip Label="@(L[TemplateStrings.NotificationsKindSystem])"    Active="@(_filter == "system")"  OnClick="@(() => SetFilter("system"))" />
+    </div>
+
+    @if (Notifs.IsLoading) { <AcLoadingState /> }
+    else
+    {
+        var filtered = Notifs.Items.Where(n => string.IsNullOrEmpty(_filter) || n.Kind == _filter).ToList();
+
+        @if (filtered.Count == 0) { <AcEmptyState IconName="bell" Message="@(L[TemplateStrings.NotificationsEmpty])" /> }
+        else
+        {
+            @foreach (var group in filtered.GroupBy(n => GroupLabel(n.CreatedAt)))
+            {
+                <h3 style="margin-top:16px; font-size:14px; color:var(--ac-text-muted);">@group.Key</h3>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    @foreach (var n in group)
+                    {
+                        var nid = n.Id;
+                        <AcCard Hover="true">
+                            <ChildContent>
+                                <button type="button" class="acm-complaint-btn" @onclick="@(() => OnClick(nid))">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                                        <strong>@n.Title</strong>
+                                        @if (!n.IsRead) { <AcBadge Variant="primary" Text="@(L[TemplateStrings.CommonNewBadge])" /> }
+                                    </div>
+                                    <div class="acm-complaint-body">@n.Body</div>
+                                    <small>@Tz.FormatRelative(n.CreatedAt) — @TypeLabel(n.Kind)</small>
+                                </button>
+                            </ChildContent>
+                        </AcCard>
+                    }
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    private string _filter = "";
+
+    protected override void OnInitialized() => Notifs.Changed += OnChange;
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (!first) return;
+        await Tz.InitAsync();
+        await Notifs.LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void SetFilter(string f) { _filter = f; StateHasChanged(); }
+
+    /// <summary>
+    /// نَقرة عَلى إشعار: يُرسِل <c>notification.mark_read</c> op عَبر الـ kit
+    /// store. الـ store يَتَوَلّى تَحديث IsRead داخِليّاً + إطلاق Changed.
+    /// UnreadComposition تَلتَقِط التَغيير تلقائيّاً (يَستَهلِك
+    /// INotificationsStore.UnreadCount كَ derived state).
+    /// </summary>
+    private Task OnClick(string id) => Notifs.MarkReadAsync(id);
+
+    private Task MarkAllRead() => Notifs.MarkAllReadAsync();
+
+    private string GroupLabel(DateTime localDt)
+    {
+        var nowLocal = Tz.ToLocal(DateTime.UtcNow);
+        var days = (nowLocal - localDt).TotalDays;
+        if (days < 1) return L[TemplateStrings.TimeToday];
+        if (days < 2) return L[TemplateStrings.TimeYesterday];
+        if (days < 7) return L[TemplateStrings.TimeThisWeek];
+        return L[TemplateStrings.TimeOlder];
+    }
+
+    private string TypeLabel(string? t) => t switch
+    {
+        "message" => L[TemplateStrings.NotificationsLabelMessage],
+        "listing" => L[TemplateStrings.NotificationsLabelListing],
+        "promo"   => L[TemplateStrings.NotificationsKindPromo],
+        "system"  => L[TemplateStrings.NotificationsKindSystem],
+        _         => t ?? ""
+    };
+
+    private void OnChange() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Notifs.Changed -= OnChange;
+}

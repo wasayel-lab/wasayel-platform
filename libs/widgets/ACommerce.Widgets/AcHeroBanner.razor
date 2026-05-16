@@ -1,0 +1,46 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcHeroBanner — لافتة علويّة بخلفيّة اللون الأساسي.
+
+    بنية مطابقة لـ ashare-hero-branded في عشير القديم:
+      ┌──────────────────────────────────────┐
+      │  [LogoContent]                       │
+      │  Title                               │
+      │  Subtitle                            │
+      │  [ChildContent — عادةً AcSearchBox]  │
+      └──────────────────────────────────────┘
+
+    الخلفيّة تستخدم var(--ac-primary)؛ اللون النصّي الأبيض على hero.
+    زخرفة طبقة CSS اختياريّة عبر class acm-pattern-* على LogoContent أو
+    على الـ hero نفسه.
+
+    CSS_CLASSES: ac-hero, ac-hero-logo, ac-hero-title, ac-hero-subtitle,
+                 ac-hero-body
+*@
+
+<section class="ac-hero @(Class ?? "")">
+    @if (LogoContent is not null)
+    {
+        <div class="ac-hero-logo">@LogoContent</div>
+    }
+    <div class="ac-hero-body">
+        @if (!string.IsNullOrEmpty(Title))
+        {
+            <h1 class="ac-hero-title">@Title</h1>
+        }
+        @if (!string.IsNullOrEmpty(Subtitle))
+        {
+            <p class="ac-hero-subtitle">@Subtitle</p>
+        }
+        @ChildContent
+    </div>
+</section>
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public RenderFragment? LogoContent { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+}

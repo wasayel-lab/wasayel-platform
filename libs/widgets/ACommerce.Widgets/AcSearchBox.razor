@@ -1,0 +1,48 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcSearchBox — search input with a leading icon.
+
+    Emits ValueChanged on every keystroke; OnSubmit on Enter or button tap.
+    Pure UI — no data fetching, no debouncing. The template that hosts it
+    decides what entry to emit.
+
+    CSS_CLASSES: ac-search, ac-search-input, ac-search-icon, ac-search-submit
+*@
+
+<form class="ac-search @(Class ?? "")" role="search" @onsubmit="Submit" @onsubmit:preventDefault="true">
+    <span class="ac-search-icon" aria-hidden="true">
+        <AcIcon Name="search" Size="18" />
+    </span>
+    <input type="search"
+           class="ac-search-input"
+           placeholder="@Placeholder"
+           value="@Value"
+           autocomplete="off"
+           inputmode="search"
+           @oninput="OnInput" />
+    @if (ShowSubmit)
+    {
+        <button type="submit" class="ac-search-submit" aria-label="@SubmitLabel">
+            <AcIcon Name="arrow-left" Size="18" />
+        </button>
+    }
+</form>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public EventCallback<string?> OnSubmit { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "";
+    [Parameter] public string SubmitLabel { get; set; } = "Search";
+    [Parameter] public bool ShowSubmit { get; set; } = true;
+    [Parameter] public string? Class { get; set; }
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString();
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    private Task Submit() => OnSubmit.InvokeAsync(Value);
+}

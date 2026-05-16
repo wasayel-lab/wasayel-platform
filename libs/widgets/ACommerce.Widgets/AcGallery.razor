@@ -1,0 +1,84 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcGallery — معرض صور بإبهامات + أسهم + placeholder.
+
+    مطابق لـ ashare-gallery القديم:
+      ┌───────────────────────────┐
+      │ [Back]     [❤ share]      │  ← يتوضع أعلى الصورة
+      │                           │
+      │      main image           │
+      │                           │
+      └───────────────────────────┘
+      [ ][ ][ ][ ][ ]              ← إبهامات
+
+    Images يقبل قائمة URLs. إذا فارغة تُعرَض placeholder.
+    الشارات/الأزرار فوق الصورة تُحقن عبر OverlayContent.
+
+    CSS_CLASSES: ac-gallery, ac-gallery-main, ac-gallery-placeholder,
+                 ac-gallery-overlay, ac-gallery-thumbs, ac-gallery-thumb,
+                 ac-gallery-thumb-active, ac-gallery-arrow,
+                 ac-gallery-arrow-prev, ac-gallery-arrow-next
+*@
+
+<div class="ac-gallery @(Class ?? "")">
+    <div class="ac-gallery-main">
+        @if (Images.Count > 0)
+        {
+            <img src="@Images[_index]" alt="@Alt" loading="lazy" />
+        }
+        else
+        {
+            <div class="ac-gallery-placeholder" aria-hidden="true">
+                <AcIcon Name="@PlaceholderIcon" Size="48" />
+            </div>
+        }
+        @if (Images.Count > 1)
+        {
+            <button type="button" class="ac-gallery-arrow ac-gallery-arrow-prev"
+                    @onclick="Prev" aria-label="@PrevAriaLabel">
+                <AcIcon Name="chevron-right" Size="18" />
+            </button>
+            <button type="button" class="ac-gallery-arrow ac-gallery-arrow-next"
+                    @onclick="Next" aria-label="@NextAriaLabel">
+                <AcIcon Name="chevron-left" Size="18" />
+            </button>
+        }
+        @if (OverlayContent is not null)
+        {
+            <div class="ac-gallery-overlay">@OverlayContent</div>
+        }
+    </div>
+    @if (Images.Count > 1)
+    {
+        <div class="ac-gallery-thumbs">
+            @for (var i = 0; i < Images.Count; i++)
+            {
+                var ix = i;
+                <button type="button"
+                        class="ac-gallery-thumb @(ix == _index ? "ac-gallery-thumb-active" : "")"
+                        @onclick="() => _index = ix"
+                        aria-label="@(string.Format(ImageAriaFormat, ix + 1))">
+                    <img src="@Images[ix]" alt="" loading="lazy" />
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<string> Images { get; set; } = Array.Empty<string>();
+    [Parameter] public string Alt { get; set; } = "";
+    [Parameter] public string PlaceholderIcon { get; set; } = "building";
+    [Parameter] public RenderFragment? OverlayContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string PrevAriaLabel  { get; set; } = "Previous";
+    [Parameter] public string NextAriaLabel  { get; set; } = "Next";
+    /// <summary>Format: {0}=image index. Default: "Image {0}".</summary>
+    [Parameter] public string ImageAriaFormat { get; set; } = "Image {0}";
+
+    private int _index;
+
+    private void Prev() { _index = (_index - 1 + Images.Count) % Images.Count; }
+    private void Next() { _index = (_index + 1) % Images.Count; }
+}

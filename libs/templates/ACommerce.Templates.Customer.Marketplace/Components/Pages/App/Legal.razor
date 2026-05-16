@@ -1,0 +1,53 @@
+@page "/legal"
+@page "/legal/{Key}"
+@inject IMarketplaceHomeStore Home
+@inject NavigationManager Nav
+@inject L L
+
+<PageTitle>@(L[TemplateStrings.LegalTerms]) — @(L[TemplateStrings.AppName])</PageTitle>
+
+<div class="acs-page acs-legal-page">
+    <h1 class="acm-wizard-title">@(L[TemplateStrings.LegalHeading])</h1>
+
+    @if (_loading) { <AcLoadingState /> }
+    else if (_docs.Count == 0) { <AcEmptyState IconName="info" Message="@(L[TemplateStrings.LegalEmpty])" /> }
+    else
+    {
+        <div style="display:flex; flex-direction:column; gap:8px;">
+            @foreach (var d in _docs)
+            {
+                var key = d.Key;
+                var open = _openKey == key;
+                <AcCard>
+                    <ChildContent>
+                        <button type="button" class="acs-accordion-head"
+                                @onclick="@(() => Toggle(key))">
+                            <strong>@d.Label</strong>
+                            <AcIcon Name="@(open ? "chevron-up" : "chevron-down")" Size="16" />
+                        </button>
+                    </ChildContent>
+                </AcCard>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Key { get; set; }
+
+    private IReadOnlyList<LegalDoc> _docs = Array.Empty<LegalDoc>();
+    private bool _loading = true;
+    private string? _openKey;
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (!first) return;
+        await Home.LoadLegalAsync();
+        _docs    = Home.LegalDocs ?? Array.Empty<LegalDoc>();
+        _openKey = Key ?? _docs.FirstOrDefault()?.Key;
+        _loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void Toggle(string k) => _openKey = _openKey == k ? null : k;
+}

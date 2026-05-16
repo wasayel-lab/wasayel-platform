@@ -35,4 +35,10 @@
     <Project Path="libs/kits/Tenants/ACommerce.Kit.Tenants.Core/ACommerce.Kit.Tenants.Core.csproj" />
     <Project Path="libs/kits/Tenants/ACommerce.Kit.Tenants.Server/ACommerce.Kit.Tenants.Server.csproj" />
   </Folder>
+  <Folder Name="/libs/templates/">
+    <Project Path="libs/templates/ACommerce.Templates.Shared/ACommerce.Templates.Shared.csproj" />
+  </Folder>
+  <Folder Name="/libs/widgets/">
+    <Project Path="libs/widgets/ACommerce.Widgets/ACommerce.Widgets.csproj" />
+  </Folder>
 </Solution>

@@ -1,0 +1,151 @@
+@page "/complaints"
+@attribute [Authorize]
+@inject ITemplateEngine Engine
+@inject NavigationManager Nav
+@inject L L
+
+<PageTitle>@(L[TemplateStrings.ComplaintTitle]) — @(L[TemplateStrings.AppName])</PageTitle>
+
+<div class="acs-page acs-complaints-page">
+    <AcSectionHeader Title="@(L[TemplateStrings.ComplaintTitle])" ActionLabel="@(L[TemplateStrings.ComplaintNew])" OnAction="@ToggleNew" />
+
+    @if (_showNew)
+    {
+        <AcCard>
+            <ChildContent>
+                <AcField Label="@(L[TemplateStrings.ComplaintSubject])" Required="true">
+                    <AcInput Value="@_subject" ValueChanged="@(v => _subject = v ?? string.Empty)" />
+                </AcField>
+                <AcField Label="@(L[TemplateStrings.ComplaintBody])" Required="true">
+                    <textarea class="ac-input" rows="4" @bind="_body"
+                              @bind:event="oninput" placeholder="@(L[TemplateStrings.ComplaintBodyPlaceholder])"></textarea>
+                </AcField>
+                <AcField Label="@(L[TemplateStrings.ComplaintPriorityField])">
+                    <select class="ac-input" @bind="_priority">
+                        <option value="@(L[TemplateStrings.PriorityNormal])">@(L[TemplateStrings.PriorityNormal])</option>
+                        <option value="@(L[TemplateStrings.PriorityHigh])">@(L[TemplateStrings.PriorityHigh])</option>
+                        <option value="@(L[TemplateStrings.PriorityUrgent])">@(L[TemplateStrings.PriorityUrgent])</option>
+                    </select>
+                </AcField>
+                <AcField Label="@(L[TemplateStrings.ComplaintRelatedFieldOptional])">
+                    <AcInput Value="@_related" ValueChanged="@(v => _related = v ?? string.Empty)"
+                             Placeholder="@(L[TemplateStrings.ComplaintRelatedPlaceholder])" />
+                </AcField>
+                <div style="display:flex; gap:8px;">
+                    <AcButton Variant="primary" Text="@(L[TemplateStrings.ComplaintSend])" OnClick="@Submit"
+                              Disabled="@(string.IsNullOrWhiteSpace(_subject) || string.IsNullOrWhiteSpace(_body) || _saving)" />
+                    <AcButton Variant="ghost" Text="@(L[TemplateStrings.CommonCancel])" OnClick="@ToggleNew" />
+                </div>
+                @if (!string.IsNullOrEmpty(_alert))
+                {
+                    <AcAlert Variant="@_alertVariant" Message="@_alert" />
+                }
+            </ChildContent>
+        </AcCard>
+    }
+
+    @if (_loading) { <AcLoadingState /> }
+    else if (_items.Count == 0) { <AcEmptyState IconName="alert-circle" Message="@(L[TemplateStrings.ComplaintEmpty])" /> }
+    else
+    {
+        <div style="display:flex; flex-direction:column; gap:8px;">
+            @foreach (var c in _items)
+            {
+                var cid = c.Id;
+                <AcCard Hover="true">
+                    <ChildContent>
+                        <button type="button" class="acm-complaint-btn" @onclick="@(() => Open(cid))">
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                                <strong>@c.Subject</strong>
+                                <AcBadge Variant="@StatusVariant(c.Status)" Text="@StatusLabel(c.Status)" />
+                            </div>
+                            <small>@c.CreatedAt.ToString("yyyy-MM-dd HH:mm") — @(string.Format(L[TemplateStrings.ComplaintsPriorityFormat], c.Priority))</small>
+                        </button>
+                    </ChildContent>
+                </AcCard>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<ComplaintDto> _items = new();
+    private bool _loading = true;
+    private bool _showNew;
+    private bool _saving;
+    private string _subject = "";
+    private string _body = "";
+    private string _priority = "";
+    private string _related = "";
+    private string? _alert;
+    private string _alertVariant = "success";
+
+    protected override void OnInitialized()
+    {
+        // قِيمَة افتِراضيَّة لا تُستَطيع في field initializer لِأَنّ ‹L›
+        // مَحقون كَـ instance.
+        _priority = L[TemplateStrings.PriorityNormal];
+    }
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (!first) return;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        // OAM-pure: support.tickets.list op (kit-defined). Wire shape غَنيّ
+        // (Priority/RelatedEntityId/CreatedAt) فنَستَخدِم DTO مَحَلّيّ
+        // (SupportTicketSummary لا يَحوي هذه الحُقول).
+        var env = await Engine.ExecuteAsync<List<ComplaintDto>>(SupportOps.ListTickets());
+        _items = env.Data ?? new();
+        _loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void ToggleNew() { _showNew = !_showNew; _alert = null; }
+
+    private void Open(string id) => Nav.NavigateTo($"/complaints/{id}");
+
+    private async Task Submit()
+    {
+        _saving = true;
+        try
+        {
+            var env = await Engine.ExecuteAsync<object>(
+                SupportOps.CreateTicket(_subject),
+                payload: new { Subject = _subject, Body = _body, Priority = _priority, RelatedEntityId = _related });
+            if (env.Operation.Status == "Success")
+            {
+                _alert = L[TemplateStrings.ComplaintSent]; _alertVariant = "success";
+                _subject = ""; _body = ""; _related = ""; _showNew = false;
+                await Reload();
+            }
+            else
+            {
+                _alert = env.Error?.Message ?? L[TemplateStrings.ComplaintSendFailed];
+                _alertVariant = "danger";
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    // غَير static: تَحتاج ‹L› المَحقون.
+    private string StatusLabel(string s) => s switch
+    {
+        "open" => L[TemplateStrings.StatusOpen], "in_progress" => L[TemplateStrings.StatusInProgress],
+        "resolved" => L[TemplateStrings.StatusResolved], "closed" => L[TemplateStrings.StatusClosed],
+        _ => s
+    };
+
+    private static string StatusVariant(string s) => s switch
+    {
+        "open" => "warning", "in_progress" => "secondary",
+        "resolved" => "success", "closed" => "secondary",
+        _ => "secondary"
+    };
+
+    private sealed record ComplaintDto(string Id, string Subject, DateTime CreatedAt,
+        string Status, string Priority, string? RelatedEntityId);
+}

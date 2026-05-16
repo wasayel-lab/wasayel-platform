@@ -1,8 +1,6 @@
 @page "/{slug}/chats"
-@inject ITenantContext Tenant
 @inject IDocumentStore Store
 @inject AuthSession Auth
-@inject NavigationManager Nav
 
 @if (!Auth.IsAuthenticated)
 {

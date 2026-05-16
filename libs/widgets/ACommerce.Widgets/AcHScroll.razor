@@ -1,0 +1,19 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcHScroll — horizontal scroll rail for children (category tiles,
+    featured cards, etc.). Pure wrapper; snap + momentum live in CSS.
+
+    CSS_CLASSES: ac-hscroll, ac-hscroll-track
+*@
+
+<div class="ac-hscroll @(Class ?? "")">
+    <div class="ac-hscroll-track">
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+}
