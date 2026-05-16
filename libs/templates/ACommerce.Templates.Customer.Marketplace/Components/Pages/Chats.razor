@@ -5,7 +5,7 @@
 @if (!Auth.IsAuthenticated)
 {
     <AcEmptyState Title="المُحادَثات تَحتاج تَسجيل دُخول"
-                  Description="سَجِّل دُخولك للوصول إلى رَسائلك"
+                  Message="سَجِّل دُخولك للوصول إلى رَسائلك"
                   IconName="message" />
     <div style="text-align:center;margin-top:12px;">
         <a class="ac-login-cta" href="@($"/{Slug}/login?returnUrl=/{Slug}/chats")"
@@ -26,7 +26,7 @@ else
     else if (convs.Count == 0)
     {
         <AcEmptyState Title="لا توجَد مُحادَثات بَعد"
-                      Description="ابدأ مُحادَثَة من صَفحَة إعلان"
+                      Message="ابدأ مُحادَثَة من صَفحَة إعلان"
                       IconName="message" />
     }
     else
