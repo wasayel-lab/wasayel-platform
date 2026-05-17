@@ -116,26 +116,13 @@ public static class PlatformSeed
                 await globalSession.SaveChangesAsync();
                 Console.WriteLine($"[Seed] tenant '{slug}': metadata updated.");
             }
-
-            // أَعِد بَذر الإعلانات إن كانَت كُلّها مَحصورَة بِالمَدينَة
-            // الافتِراضِيَّة فَقَط — يَدُلّ عَلى أنَّها مِن seed قَديم قَبل
-            // تَوسيع المُدُن. حَذف نَظيف ثُمّ إعادَة بَذر بِالتَنَوُّع الجَديد.
-            await using var tQ = store.QuerySession(slug);
-            var actualCities = (await tQ.Query<Listing>()
-                .Where(x => !x.IsDeleted && x.City != null)
-                .Select(x => x.City!).ToListAsync())
-                .Distinct().ToList();
-            var sampleCities = sampleListings.Select(s => s.city).Distinct().ToList();
-            var staleListings = actualCities.Count <= 1 && sampleCities.Count > 1;
-            if (staleListings)
+            else
             {
-                await using var purge = store.LightweightSession(slug);
-                purge.DeleteWhere<Listing>(x => true);
-                purge.DeleteWhere<ACommerce.Kit.Favorites.Favorite>(x => true);
-                await purge.SaveChangesAsync();
-                Console.WriteLine($"[Seed] tenant '{slug}': purged stale single-city listings.");
-                await SeedListingsAsync(store, slug, sampleListings);
+                Console.WriteLine($"[Seed] tenant '{slug}' already exists, skipping.");
             }
+            // لا نُعيد بَذر الإعلانات: قَد تَكون مُستَورَدَة مِن أَداة
+            // Importer ومُلكاً حَقيقيّاً لِلمُستَخدِم. الـ seed يَلمَس
+            // Tenant metadata فَقَط بَعد أَوّل تَشغيل.
             return;
         }
 

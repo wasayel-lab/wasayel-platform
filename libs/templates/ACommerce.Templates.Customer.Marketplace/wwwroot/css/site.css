@@ -70,6 +70,15 @@
 /* صَفحَة /create-listing */
 .acm-create textarea.ac-input { font-family: inherit; }
 
+/* بِطاقَة الفِئَة كَ <label> حَولَ <input radio> — السلوك المُلوَّن
+   عَلى :checked يَجعَل النَّقر يُحَدِّد الفِئَة بَصَريّاً تَحت SSR. */
+.acs-cat-pick { user-select: none; transition: border-color 120ms, background 120ms; }
+.acs-cat-pick:hover { border-color: var(--ac-primary); }
+.acs-cat-pick:has(input[type="radio"]:checked) {
+    border-color: var(--ac-primary);
+    background: color-mix(in srgb, var(--ac-primary) 10%, transparent);
+}
+
 /* مُنتَقي المَدينَة على Hero — يَعرِض dropdown صَغير بِجانِب اسم المَتجَر */
 .acm-hero-city {
     display: inline-flex; align-items: center; gap: 4px;

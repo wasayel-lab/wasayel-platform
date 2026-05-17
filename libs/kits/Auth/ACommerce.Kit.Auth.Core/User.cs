@@ -15,6 +15,11 @@ public sealed class User
     public string Role { get; set; } = "user";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>سِمات بروفايل ديناميكِيَّة (Bio, Occupation, Address، …).
+    /// مَفاتيحها تَطابِق <c>AttributeDefinition.Code</c> في DB المُستَورَد.
+    /// تُحفَظ كَ JSON snapshot في عَمود مُنفَصِل.</summary>
+    public Dictionary<string, string> AttributesJson { get; set; } = new();
 }
 
 // ─── Events (للـ stream المُستَقِلّ "AuthAttempts") ──────────────────

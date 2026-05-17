@@ -3,6 +3,7 @@ using ACommerce.Kit.Chat;
 using ACommerce.Kit.Favorites;
 using ACommerce.Kit.Listings;
 using ACommerce.Kit.Notifications;
+using ACommerce.Platform.Shared;
 using ACommerce.Kit.Subscriptions;
 using ACommerce.Kit.Support;
 using ACommerce.Kit.Tenants;
@@ -245,15 +246,5 @@ public sealed class TargetWriter
 public sealed record SubscriptionImport(Guid Id, Guid UserId, string PlanId, int Quota, int DaysPeriod, DateTime StartsAt);
 public sealed record TicketImport(Guid Id, Guid AuthorId, string AuthorName, string Subject, string Body, DateTime CreatedAt);
 
-/// <summary>سِجِلّ خام — أَيّ صَفّ مِن DB المَصدَر لا يَملِك نَوع typed
-/// مُقابِل في platform-v1. الـ Id يُرَكَّب: "{table}/{sourceId}" لِيَكون
-/// فَريداً عَبر الجَداوِل وقابِلاً لِلاستِعلام بِالبِدايَة
-/// (مَثَلاً <c>WHERE Table = 'Reports'</c>).</summary>
-public sealed class ImportedRecord
-{
-    public string Id { get; set; } = "";
-    public string Table { get; set; } = "";
-    public string SourceId { get; set; } = "";
-    public DateTime ImportedAt { get; set; }
-    public Dictionary<string, object?> Data { get; set; } = new();
-}
+// ImportedRecord مَنقول إلى ACommerce.Platform.Shared لِيُشارَك مَع
+// مَشاريع التَطبيق (DynamicAttributesService، صَفَحات ديناميكِيَّة).
