@@ -55,30 +55,12 @@
         </div>
 
         <div class="acm-home-actions" style="margin-top:12px;">
-            <AcActionCard Label="الباقات"
-                          IconName="package"
-                          Variant="primary"
-                          OnClick="@(() => Nav.NavigateTo($"/{Slug}/plans"))" />
-            <AcActionCard Label="المُفَضَّلَة"
-                          IconName="heart"
-                          Variant="surface"
-                          OnClick="@(() => Nav.NavigateTo($"/{Slug}/favorites"))" />
-            <AcActionCard Label="المُحادَثات"
-                          IconName="message"
-                          Variant="surface"
-                          OnClick="@(() => Nav.NavigateTo($"/{Slug}/chats"))" />
-            <AcActionCard Label="الإشعارات"
-                          IconName="bell"
-                          Variant="surface"
-                          OnClick="@(() => Nav.NavigateTo($"/{Slug}/notifications"))" />
-            <AcActionCard Label="الشَكاوى والدَّعم"
-                          IconName="alert-circle"
-                          Variant="surface"
-                          OnClick="@(() => Nav.NavigateTo($"/{Slug}/support"))" />
-            <AcActionCard Label="إعدادات الحِساب"
-                          IconName="settings"
-                          Variant="surface"
-                          OnClick="@(() => Nav.NavigateTo($"/{Slug}/me/edit"))" />
+            <AcActionCard Label="الباقات"      IconName="package"       Variant="primary" Href="@($"/{Slug}/plans")" />
+            <AcActionCard Label="المُفَضَّلَة" IconName="heart"         Variant="surface" Href="@($"/{Slug}/favorites")" />
+            <AcActionCard Label="المُحادَثات"   IconName="message"       Variant="surface" Href="@($"/{Slug}/chats")" />
+            <AcActionCard Label="الإشعارات"     IconName="bell"          Variant="surface" Href="@($"/{Slug}/notifications")" />
+            <AcActionCard Label="الشَكاوى والدَّعم" IconName="alert-circle"  Variant="surface" Href="@($"/{Slug}/support")" />
+            <AcActionCard Label="إعدادات الحِساب"   IconName="settings"      Variant="surface" Href="@($"/{Slug}/me/edit")" />
         </div>
 
         <div style="margin-top:16px;">

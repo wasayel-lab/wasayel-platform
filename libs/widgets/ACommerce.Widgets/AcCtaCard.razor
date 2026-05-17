@@ -20,29 +20,40 @@
                  ac-cta-arrow
 *@
 
-<button type="button"
-        class="ac-cta ac-cta-@Variant @(Class ?? "")"
-        @onclick="OnClickInternal">
-    @if (!string.IsNullOrEmpty(IconName))
-    {
-        <span class="ac-cta-icon" aria-hidden="true">
-            <AcIcon Name="@IconName" Size="28" />
-        </span>
-    }
-    <div class="ac-cta-text">
-        <h3 class="ac-cta-title">@Title</h3>
-        @if (!string.IsNullOrEmpty(Subtitle))
+@{
+    RenderFragment innerContent = @<text>
+        @if (!string.IsNullOrEmpty(IconName))
         {
-            <p class="ac-cta-subtitle">@Subtitle</p>
+            <span class="ac-cta-icon" aria-hidden="true">
+                <AcIcon Name="@IconName" Size="28" />
+            </span>
         }
-    </div>
-    @if (ShowArrow)
-    {
-        <span class="ac-cta-arrow" aria-hidden="true">
-            <AcIcon Name="chevron-left" Size="20" />
-        </span>
-    }
-</button>
+        <div class="ac-cta-text">
+            <h3 class="ac-cta-title">@Title</h3>
+            @if (!string.IsNullOrEmpty(Subtitle))
+            {
+                <p class="ac-cta-subtitle">@Subtitle</p>
+            }
+        </div>
+        @if (ShowArrow)
+        {
+            <span class="ac-cta-arrow" aria-hidden="true">
+                <AcIcon Name="chevron-left" Size="20" />
+            </span>
+        }
+    </text>;
+}
+
+@if (!string.IsNullOrEmpty(Href))
+{
+    <a class="ac-cta ac-cta-@Variant @(Class ?? "")" href="@Href">@innerContent</a>
+}
+else
+{
+    <button type="button"
+            class="ac-cta ac-cta-@Variant @(Class ?? "")"
+            @onclick="OnClickInternal">@innerContent</button>
+}
 
 @code {
     [Parameter, EditorRequired] public string Title { get; set; } = "";
@@ -51,6 +62,7 @@
     [Parameter] public string Variant { get; set; } = "secondary";
     [Parameter] public bool ShowArrow { get; set; } = true;
     [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public string? Href { get; set; }
     [Parameter] public string? Class { get; set; }
 
     private Task OnClickInternal() => OnClick.InvokeAsync();

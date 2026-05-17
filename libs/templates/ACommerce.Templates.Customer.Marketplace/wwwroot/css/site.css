@@ -30,6 +30,42 @@
 }
 .acm-chip-row::-webkit-scrollbar { display: none; }
 
+/* كُتلَة الفَلاتِر في /explore */
+.acm-explore-filters {
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md); padding: 12px;
+    margin-bottom: 12px; display: flex; flex-direction: column; gap: 12px;
+}
+.acm-filter-row {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: end;
+}
+.acm-filter-field {
+    display: flex; flex-direction: column; gap: 4px; flex: 1 1 140px; min-width: 140px;
+}
+.acm-filter-label { font-size: 12px; color: var(--ac-text-muted); }
+.acm-filter-select { min-width: 160px; }
+.acm-filter-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+
+/* بِطاقَة Hero brand: شِعار + اسم مَتجَر على خَلفِيَّة اللَون الأَساسي */
+.acm-hero-brand { display: inline-flex; align-items: center; gap: 8px; color: #fff; }
+.acm-hero-brand-mark {
+    display: inline-flex; width: 36px; height: 36px;
+    align-items: center; justify-content: center;
+    background: rgba(255,255,255,.18); border-radius: 8px;
+}
+.acm-hero-brand-text { font-size: 1.1rem; font-weight: 700; color: #fff; }
+
+/* زِرّ تَبليغ على صَفحَة التَفاصيل */
+.acm-report-row {
+    display: flex; justify-content: center; padding: 16px 0 8px;
+}
+.acm-report-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: transparent; border: 0; cursor: pointer;
+    color: var(--ac-text-muted); font-size: 13px; text-decoration: underline;
+}
+.acm-report-btn:hover { color: var(--ac-danger); }
+
 
 /* Landing tenants list */
 .tenant-cards { list-style: none; padding: 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }

@@ -89,6 +89,25 @@ else
         <AcIcon Name="clock" Size="14" /> نُشِر: @listing.CreatedAt.ToString("yyyy-MM-dd")
         — شوهد: @listing.ViewCount مَرَّة
     </p>
+
+    @* قِسم التَبليغ — يَفتَح طَلَب دَعم مُسبَق التَعبِئَة بِمَعلومات الإعلان. *@
+    <div class="acm-report-row">
+        @if (Auth.IsAuthenticated)
+        {
+            <form method="post" action="@($"/{Slug}/listings/{Id}/report")" style="margin:0;">
+                <button type="submit" class="acm-report-btn"
+                        aria-label="تَبليغ عَن هذا الإعلان">
+                    <AcIcon Name="alert-circle" Size="14" /> تَبليغ عَن هذا الإعلان
+                </button>
+            </form>
+        }
+        else
+        {
+            <a class="acm-report-btn" href="@($"/{Slug}/login?returnUrl=/{Slug}/listings/{Id}")">
+                <AcIcon Name="alert-circle" Size="14" /> سَجِّل دُخولك لِلتَبليغ
+            </a>
+        }
+    </div>
 }
 
 @code {

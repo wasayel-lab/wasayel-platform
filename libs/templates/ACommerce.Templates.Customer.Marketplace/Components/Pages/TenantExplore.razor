@@ -3,33 +3,64 @@
 @inject AuthSession Auth
 @inject NavigationManager Nav
 
+<div class="acs-page">
 @if (tenant is null)
 {
-    <p class="ac-muted">…</p>
+    <AcLoadingState />
 }
 else
 {
     <AcPageHeader Title="@($"كلّ إعلانات {tenant.Name}")"
                   Subtitle="@($"{items?.Count ?? 0} نَتيجَة")" />
 
-    <form method="get" action="@($"/{Slug}/explore")" role="search" class="ac-search" style="margin-bottom:12px;">
-        <span class="ac-search-icon" aria-hidden="true">
-            <AcIcon Name="search" Size="18" />
-        </span>
-        <input type="search" name="q" class="ac-search-input"
-               placeholder="ابحَث في الإعلانات…"
-               value="@Query" autocomplete="off" inputmode="search" />
-        @if (!string.IsNullOrEmpty(Category))
-        {
-            <input type="hidden" name="category" value="@Category" />
-        }
-        @if (!string.IsNullOrEmpty(Sort))
-        {
-            <input type="hidden" name="sort" value="@Sort" />
-        }
-        <button type="submit" class="ac-search-submit" aria-label="بَحث">
-            <AcIcon Name="arrow-left" Size="18" />
-        </button>
+    <form method="get" action="@($"/{Slug}/explore")" class="acm-explore-filters">
+        @if (!string.IsNullOrEmpty(Category)) { <input type="hidden" name="category" value="@Category" /> }
+
+        <div class="acm-filter-row">
+            <div class="ac-search" role="search" style="flex:1;min-width:200px;">
+                <span class="ac-search-icon" aria-hidden="true"><AcIcon Name="search" Size="18" /></span>
+                <input type="search" name="q" class="ac-search-input"
+                       placeholder="ابحَث في الإعلانات…" value="@Query"
+                       autocomplete="off" inputmode="search" />
+                <button type="submit" class="ac-search-submit" aria-label="بَحث">
+                    <AcIcon Name="arrow-left" Size="18" />
+                </button>
+            </div>
+
+            <select name="sort" class="ac-input acm-filter-select" aria-label="تَرتيب">
+                <option value="newest"     selected="@(string.IsNullOrEmpty(Sort) || Sort == "newest")">الأَحدَث</option>
+                <option value="price_asc"  selected="@(Sort == "price_asc")">السِعر — تَصاعُديّ</option>
+                <option value="price_desc" selected="@(Sort == "price_desc")">السِعر — تَنازُليّ</option>
+            </select>
+        </div>
+
+        <div class="acm-filter-row">
+            <label class="acm-filter-field">
+                <span class="acm-filter-label">سِعر أَدنى</span>
+                <input type="number" name="min" class="ac-input" min="0" step="1000"
+                       value="@MinPrice" placeholder="0" />
+            </label>
+            <label class="acm-filter-field">
+                <span class="acm-filter-label">سِعر أَعلى</span>
+                <input type="number" name="max" class="ac-input" min="0" step="1000"
+                       value="@MaxPrice" placeholder="∞" />
+            </label>
+            <label class="acm-filter-field">
+                <span class="acm-filter-label">حَيّ</span>
+                <select name="district" class="ac-input">
+                    <option value="">الكلّ</option>
+                    @foreach (var d in districts)
+                    {
+                        <option value="@d" selected="@(District == d)">@d</option>
+                    }
+                </select>
+            </label>
+
+            <div class="acm-filter-actions">
+                <button type="submit" class="ac-btn ac-btn-primary">تَطبيق</button>
+                <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/explore")">إعادَة ضَبط</a>
+            </div>
+        </div>
     </form>
 
     <div class="acm-chip-row">
@@ -46,60 +77,43 @@ else
 
     @if (items is null)
     {
-        <p class="ac-muted">جارٍ التَحميل…</p>
+        <AcLoadingState Message="جارٍ التَحميل…" />
     }
     else if (items.Count == 0)
     {
-        <AcEmptyState Title="لا إعلانات في هذه الفِئَة"
-                      Message="جَرِّب فِئَة أُخرى أو غَيِّر البَحث"
-                      IconName="search" />
+        <AcEmptyState IconName="search"
+                      Title="لا إعلانات في هذه الفِئَة"
+                      Message="جَرِّب فِئَة أُخرى أو غَيِّر البَحث."
+                      ActionLabel="إعادَة ضَبط الفَلاتِر"
+                      ActionHref="@($"/{Slug}/explore")" />
     }
     else
     {
         <div class="acm-home-grid">
             @foreach (var l in items)
             {
-                <a href="@($"/{Slug}/listings/{l.Id}")" style="text-decoration:none;color:inherit;display:block;">
-                    <AcSpaceCard Title="@l.Title"
-                                 Location="@($"{l.City} — {l.District}")"
-                                 PriceLabel="@($"{l.Price:N0} ريال")"
-                                 ShowFavorite="@Auth.IsAuthenticated"
-                                 IsFavorite="@(favIds.Contains(l.Id))"
-                                 AddFavoriteAriaLabel="أَضِف لِلمُفَضَّلَة"
-                                 RemoveFavoriteAriaLabel="أَزِل مِن المُفَضَّلَة"
-                                 OnOpen="@(() => Nav.NavigateTo($"/{Slug}/listings/{l.Id}"))" />
-                </a>
+                <AcSpaceCard Title="@l.Title"
+                             Href="@($"/{Slug}/listings/{l.Id}")"
+                             Location="@($"{l.City} — {l.District}")"
+                             PriceLabel="@($"{l.Price:N0} ريال")" />
             }
         </div>
     }
 }
+</div>
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
     [SupplyParameterFromQuery(Name = "category")] public string? Category { get; set; }
     [SupplyParameterFromQuery(Name = "q")]        public string? Query    { get; set; }
     [SupplyParameterFromQuery(Name = "sort")]     public string? Sort     { get; set; }
+    [SupplyParameterFromQuery(Name = "min")]      public decimal? MinPrice { get; set; }
+    [SupplyParameterFromQuery(Name = "max")]      public decimal? MaxPrice { get; set; }
+    [SupplyParameterFromQuery(Name = "district")] public string? District { get; set; }
 
     Tenant? tenant;
     List<Listing>? items;
-    HashSet<Guid> favIds = new();
-
-    static readonly IReadOnlyDictionary<string, string> _sortOptions = new Dictionary<string, string>
-    {
-        [""] = "افتراضيّ",
-        ["newest"]     = "الأَحدَث",
-        ["price_asc"]  = "السِعر تَصاعُديّ",
-        ["price_desc"] = "السِعر تَنازُليّ",
-    };
-
-    void Reload(string? q, string? cat, string? sort)
-    {
-        var url = $"/{Slug}/explore?";
-        if (!string.IsNullOrEmpty(cat))  url += $"category={cat}&";
-        if (!string.IsNullOrEmpty(q))    url += $"q={Uri.EscapeDataString(q)}&";
-        if (!string.IsNullOrEmpty(sort)) url += $"sort={sort}";
-        Nav.NavigateTo(url.TrimEnd('&', '?'));
-    }
+    List<string> districts = new();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -109,7 +123,10 @@ else
 
         await using var t = Store.QuerySession(Slug);
         var q = t.Query<Listing>().Where(x => !x.IsDeleted);
-        if (!string.IsNullOrEmpty(Category)) q = q.Where(x => x.CategorySlug == Category);
+        if (!string.IsNullOrEmpty(Category))  q = q.Where(x => x.CategorySlug == Category);
+        if (!string.IsNullOrEmpty(District))  q = q.Where(x => x.District == District);
+        if (MinPrice.HasValue && MinPrice > 0) q = q.Where(x => x.Price >= MinPrice.Value);
+        if (MaxPrice.HasValue && MaxPrice > 0) q = q.Where(x => x.Price <= MaxPrice.Value);
         if (!string.IsNullOrEmpty(Query))
         {
             var s = Query;
@@ -118,18 +135,16 @@ else
         }
         q = Sort switch
         {
-            "newest"     => q.OrderByDescending(x => x.CreatedAt),
             "price_asc"  => q.OrderBy(x => x.Price),
             "price_desc" => q.OrderByDescending(x => x.Price),
             _            => q.OrderByDescending(x => x.CreatedAt),
         };
         items = (await q.Take(60).ToListAsync()).ToList();
 
-        if (Auth.IsAuthenticated)
-        {
-            var favs = await t.Query<Favorite>()
-                .Where(f => f.UserId == Auth.UserId!.Value).ToListAsync();
-            favIds = favs.Select(f => f.ListingId).ToHashSet();
-        }
+        districts = (await t.Query<Listing>()
+            .Where(x => !x.IsDeleted && x.District != null)
+            .Select(x => x.District!)
+            .ToListAsync())
+            .Distinct().OrderBy(s => s).ToList();
     }
 }

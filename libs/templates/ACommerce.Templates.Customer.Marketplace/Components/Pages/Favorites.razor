@@ -33,14 +33,10 @@
             <div class="acm-home-grid">
                 @foreach (var l in items)
                 {
-                    <a href="@($"/{Slug}/listings/{l.Id}")" style="text-decoration:none;color:inherit;display:block;">
-                        <AcSpaceCard Title="@l.Title"
-                                     Location="@($"{l.City} — {l.District}")"
-                                     PriceLabel="@($"{l.Price:N0} ريال")"
-                                     ShowFavorite="true"
-                                     IsFavorite="true"
-                                     OnOpen="@(() => Nav.NavigateTo($"/{Slug}/listings/{l.Id}"))" />
-                    </a>
+                    <AcSpaceCard Title="@l.Title"
+                                 Href="@($"/{Slug}/listings/{l.Id}")"
+                                 Location="@($"{l.City} — {l.District}")"
+                                 PriceLabel="@($"{l.Price:N0} ريال")" />
                 }
             </div>
         }

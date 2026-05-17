@@ -233,6 +233,28 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect($"/{slug}/support");
         }).DisableAntiforgery();
 
+        // ─── Report listing — يَفتَح طَلَب دَعم مُسبَق التَعبِئَة ─────────
+        app.MapPost("/{slug}/listings/{id:guid}/report",
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+        {
+            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var parsed = AuthHandlers.ParseToken(token);
+            if (parsed is null) return Results.Redirect($"/{slug}/login?returnUrl=/{slug}/listings/{id}");
+            var (userId, tenantSlug, _) = parsed.Value;
+            if (tenantSlug != slug) return Results.Redirect($"/{slug}/login");
+            var userName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "—";
+
+            await using var s = store.LightweightSession(slug);
+            var ev = new ACommerce.Kit.Support.TicketCreated(
+                Guid.NewGuid(), userId, userName,
+                Subject: $"تَبليغ عَن إعلان {id:N}",
+                Body:    $"الإعلان: /{slug}/listings/{id}\nالمُبَلِّغ: {userName}",
+                At:      DateTime.UtcNow);
+            s.Events.StartStream<ACommerce.Kit.Support.Ticket>(ev.Id, ev);
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/{slug}/support");
+        }).DisableAntiforgery();
+
         // ─── Send chat message ──────────────────────────────────────────
         app.MapPost("/{slug}/chats/{conversationId:guid}/send",
             async (string slug, Guid conversationId, HttpRequest req, IDocumentStore store) =>

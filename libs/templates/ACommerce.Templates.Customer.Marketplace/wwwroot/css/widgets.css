@@ -1136,7 +1136,9 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     text-align: start;
     font-family: inherit;
     min-height: 72px;
+    box-sizing: border-box;
     transition: transform 120ms, box-shadow 120ms;
+    text-decoration: none;
 }
 .ac-cta { background: var(--ac-surface, #ffffff); color: var(--ac-text, #111827); }
 .ac-cta:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.08); }

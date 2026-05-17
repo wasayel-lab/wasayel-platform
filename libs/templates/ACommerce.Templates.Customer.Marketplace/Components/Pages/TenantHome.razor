@@ -5,11 +5,8 @@
 @inject NavigationManager Nav
 
 @*
-    صَفحة الـ tenant الرَئيسيّة. تَتَّبع بُنية Home.razor مِن القالَب
-    القَديم (AcHeroBanner + AcSearchBox + AcCategoryTile + AcSpaceCard
-    + AcCtaCard + AcActionCard) ولكن مُرَكَّبَة يَدَويّاً (دون
-    AcMarketplaceHomePage) لأَنّه يَعتَمِد عَلى ITemplateEngine الَّذي لا
-    يَعمَل في platform-v1.
+    صَفحة الـ tenant الرَئيسيّة. كُلّ النَّقَرات تَستَخدِم Href بَدَلَ
+    OnClick لِتَعمَل تَحت SSR بِلا Blazor interactivity.
 *@
 
 <div class="acs-page acm-home">
@@ -22,13 +19,11 @@
         <AcHeroBanner Title="@($"ابحَث في {loaded.Name}")"
                       Subtitle="@loaded.TagLine">
             <LogoContent>
-                <div style="display:inline-flex;align-items:center;gap:8px;color:#fff;">
-                    <span aria-hidden="true"
-                          style="display:inline-flex;width:36px;height:36px;align-items:center;justify-content:center;
-                                 background:rgba(255,255,255,.18);border-radius:8px;">
+                <div class="acm-hero-brand">
+                    <span class="acm-hero-brand-mark" aria-hidden="true">
                         <AcIcon Name="home" Size="20" />
                     </span>
-                    <span style="font-size:1.1rem;font-weight:700;color:#fff;">@loaded.Name</span>
+                    <span class="acm-hero-brand-text">@loaded.Name</span>
                 </div>
             </LogoContent>
             <ChildContent>
@@ -54,7 +49,7 @@
                 {
                     <AcCategoryTile Label="@c.Label"
                                     Icon="@c.Icon"
-                                    OnClick="@(() => Nav.NavigateTo($"/{Slug}/explore?category={Uri.EscapeDataString(c.Slug)}"))" />
+                                    Href="@($"/{Slug}/explore?category={Uri.EscapeDataString(c.Slug)}")" />
                 }
             </AcHScroll>
         }
@@ -63,28 +58,23 @@
                    Subtitle="أَضِف إعلانك واصِل لِلمُهتَمّين بِسُرعَة"
                    IconName="house-add"
                    Variant="surface"
-                   OnClick="@(() => Nav.NavigateTo(Auth.IsAuthenticated ? $"/{Slug}/me/edit" : $"/{Slug}/login"))" />
+                   Href="@(Auth.IsAuthenticated ? $"/{Slug}/me/edit" : $"/{Slug}/login")" />
 
         @if (featured is { Count: > 0 })
         {
             <AcSectionHeader Title="مُمَيَّز"
                              ActionLabel="عَرض الكلّ"
-                             OnAction="@(() => Nav.NavigateTo($"/{Slug}/explore"))" />
+                             ActionHref="@($"/{Slug}/explore")" />
             <AcHScroll Class="acm-home-rail">
                 @foreach (var l in featured)
                 {
                     <div class="acm-home-rail-item">
                         <AcSpaceCard Title="@l.Title"
+                                     Href="@($"/{Slug}/listings/{l.Id}")"
                                      ImageUrl="@null"
                                      Location="@($"{l.City} — {l.District}")"
                                      PriceLabel="@($"{l.Price:N0} ريال")"
-                                     Ribbon="مُمَيَّز"
-                                     ShowFavorite="@Auth.IsAuthenticated"
-                                     IsFavorite="@favIds.Contains(l.Id)"
-                                     AddFavoriteAriaLabel="أَضِف لِلمُفَضَّلَة"
-                                     RemoveFavoriteAriaLabel="أَزِل مِن المُفَضَّلَة"
-                                     OnOpen="@(() => Open(l.Id))"
-                                     OnToggleFavorite="@(on => ToggleFav(l.Id, on))" />
+                                     Ribbon="مُمَيَّز" />
                     </div>
                 }
             </AcHScroll>
@@ -94,21 +84,16 @@
         {
             <AcSectionHeader Title="أُضيفَ حَديثاً"
                              ActionLabel="عَرض الكلّ"
-                             OnAction="@(() => Nav.NavigateTo($"/{Slug}/explore"))" />
+                             ActionHref="@($"/{Slug}/explore")" />
             <div class="acm-home-grid">
                 @foreach (var l in latest)
                 {
                     <AcSpaceCard Title="@l.Title"
+                                 Href="@($"/{Slug}/listings/{l.Id}")"
                                  ImageUrl="@null"
                                  Location="@($"{l.City} — {l.District}")"
                                  PriceLabel="@($"{l.Price:N0} ريال")"
-                                 Ribbon="جَديد"
-                                 ShowFavorite="@Auth.IsAuthenticated"
-                                 IsFavorite="@favIds.Contains(l.Id)"
-                                 AddFavoriteAriaLabel="أَضِف لِلمُفَضَّلَة"
-                                 RemoveFavoriteAriaLabel="أَزِل مِن المُفَضَّلَة"
-                                 OnOpen="@(() => Open(l.Id))"
-                                 OnToggleFavorite="@(on => ToggleFav(l.Id, on))" />
+                                 Ribbon="جَديد" />
                 }
             </div>
         }
@@ -117,11 +102,11 @@
             <AcActionCard Label="استِكشاف"
                           IconName="search-heart"
                           Variant="primary"
-                          OnClick="@(() => Nav.NavigateTo($"/{Slug}/explore"))" />
+                          Href="@($"/{Slug}/explore")" />
             <AcActionCard Label="@(Auth.IsAuthenticated ? "حِسابي" : "تَسجيل دُخول")"
                           IconName="user"
                           Variant="surface"
-                          OnClick="@(() => Nav.NavigateTo(Auth.IsAuthenticated ? $"/{Slug}/me" : $"/{Slug}/login"))" />
+                          Href="@(Auth.IsAuthenticated ? $"/{Slug}/me" : $"/{Slug}/login")" />
         </section>
 
         @if ((featured is null || featured.Count == 0) && (latest is null || latest.Count == 0))
@@ -137,18 +122,6 @@
     Tenant? loaded;
     List<Listing>? latest;
     List<Listing>? featured;
-    HashSet<Guid> favIds = new();
-
-    void Open(Guid id) => Nav.NavigateTo($"/{Slug}/listings/{id}");
-
-    async Task ToggleFav(Guid listingId, bool on)
-    {
-        // التَنفيذ الفِعليّ يَجري عَبر form POST في صَفحَة التَفاصيل؛ هُنا
-        // نُحَدِّث الـ UI تَفاؤُليّاً ليَنعَكِس التَغيير فَوراً قَبل refresh.
-        if (on) favIds.Add(listingId); else favIds.Remove(listingId);
-        await Task.CompletedTask;
-        StateHasChanged();
-    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -163,18 +136,9 @@
             .OrderByDescending(x => x.CreatedAt)
             .Take(6).ToListAsync()).ToList();
 
-        // "مُمَيَّز" حاليّاً = أَوّل 4 إعلانات حَسَب السِعر الأعلى. سَيُستَبدَل
-        // لاحِقاً بِحَقل IsFeatured في Listing.
         featured = (await tq.Query<Listing>()
             .Where(x => !x.IsDeleted)
             .OrderByDescending(x => x.Price)
             .Take(4).ToListAsync()).ToList();
-
-        if (Auth.IsAuthenticated)
-        {
-            var favs = await tq.Query<Favorite>()
-                .Where(f => f.UserId == Auth.UserId!.Value).ToListAsync();
-            favIds = favs.Select(f => f.ListingId).ToHashSet();
-        }
     }
 }

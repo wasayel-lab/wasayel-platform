@@ -17,10 +17,20 @@
     </div>
     @if (!string.IsNullOrEmpty(ActionLabel))
     {
-        <button type="button" class="ac-section-action" @onclick="OnActionInternal">
-            <span>@ActionLabel</span>
-            <AcIcon Name="chevron-left" Size="16" />
-        </button>
+        @if (!string.IsNullOrEmpty(ActionHref))
+        {
+            <a class="ac-section-action" href="@ActionHref">
+                <span>@ActionLabel</span>
+                <AcIcon Name="chevron-left" Size="16" />
+            </a>
+        }
+        else
+        {
+            <button type="button" class="ac-section-action" @onclick="OnActionInternal">
+                <span>@ActionLabel</span>
+                <AcIcon Name="chevron-left" Size="16" />
+            </button>
+        }
     }
 </div>
 
@@ -28,6 +38,7 @@
     [Parameter, EditorRequired] public string Title { get; set; } = "";
     [Parameter] public string? Subtitle { get; set; }
     [Parameter] public string? ActionLabel { get; set; }
+    [Parameter] public string? ActionHref { get; set; }
     [Parameter] public EventCallback OnAction { get; set; }
     [Parameter] public string? Class { get; set; }
 

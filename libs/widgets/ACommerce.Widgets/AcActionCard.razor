@@ -15,20 +15,33 @@
                  ac-action-surface, ac-action-icon, ac-action-label
 *@
 
-<button type="button"
-        class="ac-action ac-action-@Variant @(Class ?? "")"
-        @onclick="OnClickInternal">
-    <span class="ac-action-icon" aria-hidden="true">
-        <AcIcon Name="@IconName" Size="32" />
-    </span>
-    <span class="ac-action-label">@Label</span>
-</button>
+@if (!string.IsNullOrEmpty(Href))
+{
+    <a class="ac-action ac-action-@Variant @(Class ?? "")" href="@Href">
+        <span class="ac-action-icon" aria-hidden="true">
+            <AcIcon Name="@IconName" Size="32" />
+        </span>
+        <span class="ac-action-label">@Label</span>
+    </a>
+}
+else
+{
+    <button type="button"
+            class="ac-action ac-action-@Variant @(Class ?? "")"
+            @onclick="OnClickInternal">
+        <span class="ac-action-icon" aria-hidden="true">
+            <AcIcon Name="@IconName" Size="32" />
+        </span>
+        <span class="ac-action-label">@Label</span>
+    </button>
+}
 
 @code {
     [Parameter, EditorRequired] public string Label { get; set; } = "";
     [Parameter, EditorRequired] public string IconName { get; set; } = "";
     [Parameter] public string Variant { get; set; } = "primary";
     [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public string? Href { get; set; }
     [Parameter] public string? Class { get; set; }
 
     private Task OnClickInternal() => OnClick.InvokeAsync();
