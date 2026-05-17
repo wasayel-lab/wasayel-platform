@@ -39,19 +39,19 @@
             </ChildContent>
         </AcCard>
 
-        <div class="acm-home-grid" style="margin-top:12px;">
-            <AcCard><ChildContent>
-                <strong style="font-size:1.5rem;">@favoritesCount</strong>
-                <div style="color:var(--ac-text-muted);">المُفَضَّلَة</div>
-            </ChildContent></AcCard>
-            <AcCard><ChildContent>
-                <strong style="font-size:1.5rem;">@conversationsCount</strong>
-                <div style="color:var(--ac-text-muted);">المُحادَثات</div>
-            </ChildContent></AcCard>
-            <AcCard><ChildContent>
-                <strong style="font-size:1.5rem;">@notificationsCount</strong>
-                <div style="color:var(--ac-text-muted);">الإشعارات</div>
-            </ChildContent></AcCard>
+        <div class="acm-home-grid acm-stats-grid" style="margin-top:12px;">
+            <a class="acm-stat-tile" href="@($"/{Slug}/favorites")">
+                <strong>@favoritesCount</strong>
+                <span>المُفَضَّلَة</span>
+            </a>
+            <a class="acm-stat-tile" href="@($"/{Slug}/chats")">
+                <strong>@conversationsCount</strong>
+                <span>المُحادَثات</span>
+            </a>
+            <a class="acm-stat-tile" href="@($"/{Slug}/notifications")">
+                <strong>@notificationsCount</strong>
+                <span>الإشعارات</span>
+            </a>
         </div>
 
         <div class="acm-home-actions" style="margin-top:12px;">
@@ -60,7 +60,6 @@
             <AcActionCard Label="المُحادَثات"   IconName="message"       Variant="surface" Href="@($"/{Slug}/chats")" />
             <AcActionCard Label="الإشعارات"     IconName="bell"          Variant="surface" Href="@($"/{Slug}/notifications")" />
             <AcActionCard Label="الشَكاوى والدَّعم" IconName="alert-circle"  Variant="surface" Href="@($"/{Slug}/support")" />
-            <AcActionCard Label="إعدادات الحِساب"   IconName="settings"      Variant="surface" Href="@($"/{Slug}/me/edit")" />
         </div>
 
         <div style="margin-top:16px;">

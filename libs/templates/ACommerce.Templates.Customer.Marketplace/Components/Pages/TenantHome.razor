@@ -54,11 +54,17 @@
             </AcHScroll>
         }
 
-        <AcCtaCard Title="عِندَك ما تَعرِضه؟"
-                   Subtitle="أَضِف إعلانك واصِل لِلمُهتَمّين بِسُرعَة"
-                   IconName="house-add"
-                   Variant="surface"
-                   Href="@(Auth.IsAuthenticated ? $"/{Slug}/me/edit" : $"/{Slug}/login")" />
+        @* CTA يَظهَر فَقَط لِغَير المُسَجَّلين — يُحَفِّز التَّسجيل. لا
+           نَعرِضه لِلمُسَجَّلين لأَنّ صَفحَة "إنشاء إعلان" لم تُبنَ بَعد،
+           فلا وِجهَة مَنطِقيّة لِلزِرّ. *@
+        @if (!Auth.IsAuthenticated)
+        {
+            <AcCtaCard Title="سَجِّل دُخولك"
+                       Subtitle="لِحِفظ المُفَضَّلَة والتَواصُل مَع المُعلِنين"
+                       IconName="user"
+                       Variant="surface"
+                       Href="@($"/{Slug}/login?returnUrl=/{Slug}")" />
+        }
 
         @if (featured is { Count: > 0 })
         {

@@ -55,6 +55,18 @@
 }
 .acm-hero-brand-text { font-size: 1.1rem; font-weight: 700; color: #fff; }
 
+/* بِطاقَات الإحصائيّات على /me — قابِلَة لِلنَّقر */
+.acm-stat-tile {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 16px; text-decoration: none;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-lg); color: var(--ac-text);
+    transition: transform 120ms, box-shadow 120ms;
+}
+.acm-stat-tile:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+.acm-stat-tile strong { font-size: 1.5rem; color: var(--ac-text); }
+.acm-stat-tile span { font-size: 13px; color: var(--ac-text-muted); }
+
 /* زِرّ تَبليغ على صَفحَة التَفاصيل */
 .acm-report-row {
     display: flex; justify-content: center; padding: 16px 0 8px;
