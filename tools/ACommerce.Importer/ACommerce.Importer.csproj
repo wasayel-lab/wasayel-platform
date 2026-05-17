@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>ACommerce.Importer</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>acommerce-importer-secrets</UserSecretsId>
+    <Description>
+      أَداة CLI تَنقُل بَيانات قَواعِد بَيانات تَطبيقات سابِقَة (عَشير V3 SQL Server،
+      إيجار V1 SQL Server) إلى قاعِدَة PostgreSQL الخاصّ بِـ platform-v1 (Marten).
+      ضَع سَلاسِل الاتِّصال في appsettings.json أو appsettings.Local.json
+      ثُمّ شَغِّل: dotnet run --project platform-v1/tools/ACommerce.Importer
+      أو: dotnet run -- --tenant ashare --reset
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Marten" />
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Listing / Tenant / Conversation / Favorite / Notification / Plan / Ticket -->
+    <ProjectReference Include="..\..\libs\kits\Listings\ACommerce.Kit.Listings.Core\ACommerce.Kit.Listings.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Tenants\ACommerce.Kit.Tenants.Core\ACommerce.Kit.Tenants.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Core\ACommerce.Kit.Auth.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Chat\ACommerce.Kit.Chat.Core\ACommerce.Kit.Chat.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Favorites\ACommerce.Kit.Favorites.Core\ACommerce.Kit.Favorites.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Notifications\ACommerce.Kit.Notifications.Core\ACommerce.Kit.Notifications.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Subscriptions\ACommerce.Kit.Subscriptions.Core\ACommerce.Kit.Subscriptions.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Support\ACommerce.Kit.Support.Core\ACommerce.Kit.Support.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </None>
+    <None Update="appsettings.Local.json"> <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </None>
+  </ItemGroup>
+</Project>
