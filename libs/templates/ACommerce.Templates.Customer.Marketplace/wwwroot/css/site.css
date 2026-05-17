@@ -70,6 +70,50 @@
 /* صَفحَة /create-listing */
 .acm-create textarea.ac-input { font-family: inherit; }
 
+/* بِطاقَة الفِئَة كَ <label> حَولَ <input radio> — السلوك المُلوَّن
+   عَلى :checked يَجعَل النَّقر يُحَدِّد الفِئَة بَصَريّاً تَحت SSR. */
+.acs-cat-pick { user-select: none; transition: border-color 120ms, background 120ms; }
+.acs-cat-pick:hover { border-color: var(--ac-primary); }
+.acs-cat-pick:has(input[type="radio"]:checked) {
+    border-color: var(--ac-primary);
+    background: color-mix(in srgb, var(--ac-primary) 10%, transparent);
+}
+
+/* مُنتَقي المَدينَة على Hero — يَعرِض dropdown صَغير بِجانِب اسم المَتجَر */
+.acm-hero-city {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-inline-start: auto; margin: 0; padding: 0;
+    background: rgba(255,255,255,.16); border-radius: 999px;
+    padding: 4px 8px;
+}
+.acm-hero-city-icon { display: inline-flex; color: #fff; }
+.acm-hero-city-select {
+    background: transparent; border: 0; color: #fff;
+    font-size: 13px; font-family: inherit; cursor: pointer;
+    padding: 2px 4px; appearance: none; outline: none;
+}
+.acm-hero-city-select option { color: var(--ac-text); }
+
+/* AcSpaceCard SSR — <a> داخِل <article> مَع <form> أَخ لِزِرّ القَلب */
+.ac-space { position: relative; overflow: hidden; }
+.ac-space-link {
+    display: flex; flex-direction: column;
+    text-decoration: none; color: inherit;
+    flex: 1; min-width: 0;
+}
+.ac-space-fav-form {
+    position: absolute; top: 8px; inset-inline-end: 8px;
+    margin: 0; z-index: 2;
+}
+.ac-space-fav-form .ac-space-fav {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 999px;
+    background: rgba(255,255,255,.95); border: 0; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12); color: var(--ac-text-muted);
+}
+.ac-space-fav-form .ac-space-fav.is-fav { color: var(--ac-danger); }
+.ac-space-fav-form .ac-space-fav:hover  { color: var(--ac-danger); }
+
 /* صَفحَة /explore — Filter bar + sort bar + modal */
 .acm-explore-filterbar {
     display: flex; gap: 8px; align-items: center;

@@ -26,6 +26,7 @@ public static class MarketplaceTemplateExtensions
         services.AddScoped<AuthSession>();
         services.AddScoped<L>();
         services.AddScoped<ACommerce.Kit.Realtime.Client.RealtimeClient>();
+        services.AddScoped<ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService>();
         return services;
     }
 
@@ -181,11 +182,19 @@ public static class MarketplaceTemplateExtensions
             var fullName = req.Form["fullName"].ToString().Trim();
             if (fullName.Length == 0) return Results.Redirect($"/{slug}/me/edit");
 
+            // الخَصائِص الديناميكِيَّة: كُلّ حَقل بِالـ form بِالبادِئَة
+            // attr_<Code> يُحَدِّث user.AttributesJson. لا نَمسَح المَفاتيح
+            // غَير المَوجودَة (سَلوك upsert: نُحَدِّث المُمَرَّر، نَتُرك الباقي).
             await using var s = store.LightweightSession(slug);
             var user = await s.LoadAsync<User>(userId);
             if (user is null) return Results.Redirect($"/{slug}/me");
             user.FullName = fullName;
             user.UpdatedAt = DateTime.UtcNow;
+            foreach (var (key, vals) in req.Form)
+            {
+                if (!key.StartsWith("attr_", StringComparison.Ordinal)) continue;
+                user.AttributesJson[key["attr_".Length..]] = vals.ToString();
+            }
             s.Store(user);
             await s.SaveChangesAsync();
 
@@ -282,6 +291,14 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect($"/{slug}/create-listing?err=invalid");
             }
 
+            // الخَصائِص الديناميكِيَّة: كُلّ حَقل بِالـ form بِالبادِئَة
+            // attr_<Code> يَدخُل في Listing.Attributes.
+            var dynAttrs = req.Form
+                .Where(kv => kv.Key.StartsWith("attr_", StringComparison.Ordinal))
+                .ToDictionary(
+                    kv => kv.Key["attr_".Length..],
+                    kv => kv.Value.ToString());
+
             await using var s = store.LightweightSession(slug);
             var id = Guid.NewGuid();
             var ev = new ListingCreated(
@@ -290,7 +307,7 @@ public static class MarketplaceTemplateExtensions
                 price, category,
                 string.IsNullOrEmpty(city) ? null : city,
                 string.IsNullOrEmpty(district) ? null : district,
-                new Dictionary<string, string>(),
+                dynAttrs,
                 DateTime.UtcNow);
             s.Events.StartStream<Listing>(id, ev);
             await s.SaveChangesAsync();

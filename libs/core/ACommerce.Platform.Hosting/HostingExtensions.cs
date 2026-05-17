@@ -89,6 +89,12 @@ public static class HostingExtensions
                 opts.Projections.Snapshot<ACommerce.Kit.Subscriptions.Subscription>(SnapshotLifecycle.Inline);
                 opts.Projections.Snapshot<ACommerce.Kit.Support.Ticket>(SnapshotLifecycle.Inline);
 
+                // ImportedRecord: مُستَنَد عامّ يَكتُبه الـ Importer لِكُلّ
+                // صَفّ مِن جَدول مَصدَر لا يَملِك typed map. الـ Id سَلسَلَة
+                // "{Table}/{SourceId}" — Marten يَحتاج Identity صَريحَة.
+                opts.Schema.For<ACommerce.Platform.Shared.ImportedRecord>()
+                    .Identity(x => x.Id);
+
                 // Auto-create schema في dev
                 if (builder.Environment.IsDevelopment())
                 {

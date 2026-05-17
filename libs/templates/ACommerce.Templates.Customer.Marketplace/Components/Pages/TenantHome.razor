@@ -24,6 +24,26 @@
                         <AcIcon Name="home" Size="20" />
                     </span>
                     <span class="acm-hero-brand-text">@loaded.Name</span>
+
+                    @* مُنتَقي المَدينَة: form GET يُرسِل ?city=… على change.
+                       تَحت SSR لا يَتَوَفَّر <select dropdown مُخَصَّص>، نَستَخدِم
+                       <select> الأَصلي بِشكل style مُتوافِق مَع AcCityPicker. *@
+                    @if (cities is { Count: > 0 })
+                    {
+                        <form method="get" action="@($"/{Slug}")" class="acm-hero-city">
+                            <label for="city-select" class="acm-hero-city-icon" aria-hidden="true">
+                                <AcIcon Name="map-pin" Size="14" />
+                            </label>
+                            <select id="city-select" name="city" class="acm-hero-city-select"
+                                    aria-label="اختَر المَدينَة" onchange="this.form.submit()">
+                                <option value="">كلّ المُدُن</option>
+                                @foreach (var c in cities)
+                                {
+                                    <option value="@c" selected="@(City == c)">@c</option>
+                                }
+                            </select>
+                        </form>
+                    }
                 </div>
             </LogoContent>
             <ChildContent>
@@ -76,7 +96,13 @@
                                      ImageUrl="@null"
                                      Location="@($"{l.City} — {l.District}")"
                                      PriceLabel="@($"{l.Price:N0} ريال")"
-                                     Ribbon="مُمَيَّز" />
+                                     Ribbon="مُمَيَّز"
+                                     ShowFavorite="@Auth.IsAuthenticated"
+                                     IsFavorite="@favIds.Contains(l.Id)"
+                                     FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
+                                     FavoriteFormReturn="@($"/{Slug}")"
+                                     AddFavoriteAriaLabel="أَضِف لِلمُفَضَّلَة"
+                                     RemoveFavoriteAriaLabel="أَزِل مِن المُفَضَّلَة" />
                     </div>
                 }
             </AcHScroll>
@@ -95,7 +121,13 @@
                                  ImageUrl="@null"
                                  Location="@($"{l.City} — {l.District}")"
                                  PriceLabel="@($"{l.Price:N0} ريال")"
-                                 Ribbon="جَديد" />
+                                 Ribbon="جَديد"
+                                 ShowFavorite="@Auth.IsAuthenticated"
+                                 IsFavorite="@favIds.Contains(l.Id)"
+                                 FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
+                                 FavoriteFormReturn="@($"/{Slug}")"
+                                 AddFavoriteAriaLabel="أَضِف لِلمُفَضَّلَة"
+                                 RemoveFavoriteAriaLabel="أَزِل مِن المُفَضَّلَة" />
                 }
             </div>
         }
@@ -120,10 +152,13 @@
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "city")] public string? City { get; set; }
 
     Tenant? loaded;
     List<Listing>? latest;
     List<Listing>? featured;
+    List<string> cities = new();
+    HashSet<Guid> favIds = new();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -133,14 +168,29 @@
 
         await using var tq = Store.QuerySession(Slug);
 
-        latest = (await tq.Query<Listing>()
-            .Where(x => !x.IsDeleted)
+        var baseQ = tq.Query<Listing>().Where(x => !x.IsDeleted);
+        if (!string.IsNullOrEmpty(City))
+            baseQ = baseQ.Where(x => x.City == City);
+
+        latest = (await baseQ
             .OrderByDescending(x => x.CreatedAt)
             .Take(6).ToListAsync()).ToList();
 
-        featured = (await tq.Query<Listing>()
-            .Where(x => !x.IsDeleted)
+        featured = (await baseQ
             .OrderByDescending(x => x.Price)
             .Take(4).ToListAsync()).ToList();
+
+        cities = (await tq.Query<Listing>()
+            .Where(x => !x.IsDeleted && x.City != null)
+            .Select(x => x.City!)
+            .ToListAsync())
+            .Distinct().OrderBy(s => s).ToList();
+
+        if (Auth.IsAuthenticated && Auth.UserId.HasValue)
+        {
+            var favs = await tq.Query<Favorite>()
+                .Where(f => f.UserId == Auth.UserId.Value).ToListAsync();
+            favIds = favs.Select(f => f.ListingId).ToHashSet();
+        }
     }
 }

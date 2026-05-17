@@ -41,7 +41,7 @@ else
                         <div style="flex:1;min-width:0;">
                             <div style="display:flex;justify-content:space-between;align-items:baseline;">
                                 <strong style="font-size:15px;">@partnerName</strong>
-                                <span class="ac-muted" style="font-size:11px;">@c.LastAt.ToString("HH:mm")</span>
+                                <span class="ac-muted" style="font-size:11px;">@FormatWhen(c.LastAt)</span>
                             </div>
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
                                 <span class="ac-muted" style="font-size:13px;white-space:nowrap;
@@ -65,6 +65,23 @@ else
 @code {
     [Parameter] public string Slug { get; set; } = "";
     List<Conversation>? convs;
+
+    /// <summary>
+    /// تَنسيق وَقت آخِر رِسالَة بِأُسلوب تَطبيقات المُحادَثات: السَّاعَة
+    /// لِليَوم نَفسه، "أَمس" لِلأَمس، اسم اليَوم في الأُسبوع الحالي،
+    /// التَّاريخ القَصير ما عَدا ذلك.
+    /// </summary>
+    static string FormatWhen(DateTime at)
+    {
+        var localAt = at.Kind == DateTimeKind.Utc ? at.ToLocalTime() : at;
+        var nowDate = DateTime.Now.Date;
+        var atDate  = localAt.Date;
+        if (atDate == nowDate)                  return localAt.ToString("HH:mm");
+        if (atDate == nowDate.AddDays(-1))      return "أَمس";
+        if ((nowDate - atDate).TotalDays < 7)   return localAt.ToString("dddd", new System.Globalization.CultureInfo("ar"));
+        if (localAt.Year == nowDate.Year)       return localAt.ToString("dd/MM");
+        return localAt.ToString("yyyy/MM/dd");
+    }
 
     protected override async Task OnParametersSetAsync()
     {

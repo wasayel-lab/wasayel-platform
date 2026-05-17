@@ -1,0 +1,61 @@
+/*
+  branding.css — تَخصيص ألوان إيجار V1 لِكَلاسات قالَب Customer.Marketplace
+  (يَرِث Customer.Ledger). يُحَمَّل آخِر شَيء فيُغَلِّب القِيَم الافتراضيّة.
+
+  المَنهَج: V1 يَستَخدِم نَفس صَفحات V2 — الفَرق فقط في هذا المَلَفّ
+  (لَوحة ألوان "marketplace blue" بَدَل "ledger green") + اختِيار
+  Customer.Marketplace كَقالَب بَدَل Customer.Ledger.
+
+  مَرجِع: libs/templates/Customer.Marketplace/.../MarketplaceClasses.cs
+         libs/templates/Customer.Ledger/.../LedgerClasses.cs
+*/
+
+:root {
+    /* لَوحة إيجار V1: marketplace blue */
+    --ejar-primary:        #1d4ed8;
+    --ejar-primary-hover:  #1e40af;
+    --ejar-accent:         #f59e0b;
+    --ejar-bg-card:        #ffffff;
+    --ejar-text-primary:   #0f172a;
+    --ejar-border:         #e2e8f0;
+    --ejar-error:          #dc2626;
+}
+
+/* ─── أَزرار: Marketplace + Ledger يُشيران لِنَفس الـ widgets ────────── */
+.mp-btn,
+.ledger-login-btn,
+.oam-btn {
+    background: var(--ejar-primary);
+    color: #fff;
+    border: 0;
+}
+
+.mp-btn:hover:not([disabled]),
+.ledger-login-btn:hover:not([disabled]),
+.oam-btn:hover:not([disabled]) {
+    background: var(--ejar-primary-hover);
+}
+
+.mp-btn-ghost,
+.oam-btn-ghost {
+    background: transparent;
+    color: var(--ejar-primary);
+    border: 1px solid var(--ejar-primary);
+}
+
+/* ─── بِطاقات Listing: نَفس Ledger.ListingCard كَلاسات ─────────────── */
+.mp-listing-card,
+.ledger-listing-card {
+    border-bottom: 1px solid var(--ejar-border);
+    background: var(--ejar-bg-card);
+}
+
+.mp-listing-title,
+.ledger-listing-title { color: var(--ejar-text-primary); font-weight: 700; }
+
+.mp-listing-price,
+.ledger-listing-price { color: var(--ejar-accent); font-weight: 700; }
+
+/* ─── شارات + أَخطاء ─────────────────────────────────────────────── */
+.ac-badge { background: var(--ejar-accent); color: #fff; }
+.ac-err   { color: var(--ejar-error); }

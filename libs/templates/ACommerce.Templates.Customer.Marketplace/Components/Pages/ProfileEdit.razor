@@ -1,6 +1,7 @@
 @page "/{slug}/me/edit"
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
 
 <div class="acs-page">
 @if (!Auth.IsAuthenticated)
@@ -19,9 +20,12 @@ else
 {
     <h1 class="acm-wizard-title">تَعديل المَلَفّ الشَخصيّ</h1>
 
-    <AcCard Class="ac-card-form" style="max-width:420px;">
-        <ChildContent>
-            <form method="post" action="@($"/{Slug}/me/save")">
+    <form method="post" action="@($"/{Slug}/me/save")">
+
+        <AcCard>
+            <ChildContent>
+                <h3 style="margin-top:0;">المَعلومات الأَساسِيَّة</h3>
+
                 <AcField Label="الاسم الكامِل" Required="true">
                     <input type="text" name="fullName" value="@user.FullName"
                            required maxlength="60" class="ac-input" />
@@ -39,24 +43,90 @@ else
                                class="ac-input" style="background:var(--ac-bg-alt);direction:ltr;" />
                     </AcField>
                 }
+            </ChildContent>
+        </AcCard>
 
-                <AcButton Type="submit" Variant="primary" Block="true" Text="حِفظ التَعديلات" />
-                <a href="@($"/{Slug}/me")"
-                   style="display:block;text-align:center;margin-top:8px;
-                          color:var(--ac-text-muted);font-size:13px;text-decoration:none;">إلغاء</a>
-            </form>
-        </ChildContent>
-    </AcCard>
+        @* خَصائِص ديناميكِيَّة لِلبروفايل — مَأخوذَة مِن
+           AttributeDefinitions الَّتي رَبَطها CategoryAttributeMappings
+           بِـ scope الـ profile (sentinel 00000000-...-F01). تَختَلِف
+           حُقولها بَين Ashare V3 و Ejar V1 حَسَب ما زَرَعَه التَطبيق
+           الأَصلي في DB. *@
+        @if (dynFields is { Count: > 0 })
+        {
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">مَعلومات إضافِيَّة</h3>
+                    @foreach (var f in dynFields)
+                    {
+                        <AcField Label="@f.Label" Required="@f.IsRequired">
+                            @RenderDynInput(f, "attr_")
+                        </AcField>
+                    }
+                </ChildContent>
+            </AcCard>
+        }
+
+        <div style="display:flex;gap:8px;margin-top:16px;">
+            <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/me")">إلغاء</a>
+            <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
+                <AcIcon Name="check" Size="18" /> حِفظ التَعديلات
+            </button>
+        </div>
+    </form>
 }
 </div>
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
     User? user;
+    IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.DynField>? dynFields;
+
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
         await using var s = Store.QuerySession(Slug);
         user = await s.LoadAsync<User>(Auth.UserId!.Value);
+        dynFields = await DynAttrs.GetForProfileAsync(Slug);
     }
+
+    RenderFragment RenderDynInput(ACommerce.Templates.Customer.Marketplace.Services.DynField f, string prefix) => @<text>
+        @{
+            var name = prefix + f.Code;
+            var def = user?.AttributesJson is not null && user.AttributesJson.TryGetValue(f.Code, out var raw)
+                      ? raw : f.DefaultValue;
+        }
+        @switch (f.Type)
+        {
+            case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.Number:
+                <input type="number" name="@name" class="ac-input"
+                       required="@f.IsRequired" value="@def" inputmode="numeric" />
+                break;
+            case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.LongText:
+                <textarea name="@name" rows="3" class="ac-input"
+                          required="@f.IsRequired" style="resize:vertical;font-family:inherit;">@def</textarea>
+                break;
+            case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.Boolean:
+                <label style="display:inline-flex;align-items:center;gap:8px;">
+                    <input type="checkbox" name="@name" value="true" checked="@(def == "True" || def == "true")" />
+                    <span>نَعَم</span>
+                </label>
+                break;
+            case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.SingleSelect:
+                <select name="@name" class="ac-input" required="@f.IsRequired">
+                    <option value="">— اختَر —</option>
+                    @foreach (var o in f.Options)
+                    {
+                        <option value="@o.Value" selected="@(def == o.Value)">@o.Label</option>
+                    }
+                </select>
+                break;
+            case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.Date:
+                <input type="date" name="@name" class="ac-input" required="@f.IsRequired" value="@def" />
+                break;
+            default:
+                <input type="text" name="@name" class="ac-input" required="@f.IsRequired"
+                       value="@def" maxlength="200" />
+                break;
+        }
+    </text>;
 }
