@@ -169,6 +169,57 @@ public sealed class EjarImporter
             At         = n.At
         }).ToList();
         await _target.UpsertAsync(TenantSlug, notifs);
+
+        // 8) Plans — Plan.Id في إيجار V1 هُوَ Guid، نَتَّخِذه slug في
+        // platform-v1 (Plan.Id = string).
+        var plans = (await src.QueryAsync<EjarPlanRow>(
+            @"SELECT Id, Label, Price, MaxActiveListings, Description
+              FROM Plans WHERE IsDeleted = 0"
+        )).Select(p => new ACommerce.Kit.Subscriptions.Plan
+        {
+            Id            = p.Id.ToString(),
+            Name          = p.Label ?? "",
+            Price         = p.Price,
+            ListingsQuota = p.MaxActiveListings,
+            DaysPeriod    = 30,
+            Description   = p.Description,
+            IsActive      = true
+        }).ToList();
+        await _target.UpsertAsync(TenantSlug, plans);
+
+        // 9) Subscriptions — event-sourced في platform-v1.
+        var subs = (await src.QueryAsync<EjarSubRow>(
+            @"SELECT Id, UserId, PlanId, ListingsLimit, StartDate, EndDate
+              FROM Subscriptions WHERE IsDeleted = 0"
+        )).Select(s => new SubscriptionImport(
+            s.Id, s.UserId, s.PlanId.ToString(), s.ListingsLimit,
+            (s.EndDate - s.StartDate).Days, s.StartDate
+        )).ToList();
+        await _target.UpsertSubscriptionsAsync(TenantSlug, subs);
+
+        // 10) SupportTickets → Ticket (event-sourced).
+        var tickets = (await src.QueryAsync<EjarSupportTicketRow>(
+            @"SELECT st.Id, st.UserId, u.FullName AS AuthorName,
+                     st.Subject, st.RelatedEntityId AS Body, st.CreatedAt
+              FROM SupportTickets st
+              LEFT JOIN Users u ON u.Id = st.UserId
+              WHERE st.IsDeleted = 0"
+        )).Select(t => new TicketImport(
+            t.Id, t.UserId, t.AuthorName ?? "—",
+            t.Subject ?? "", t.Body ?? "", t.CreatedAt
+        )).ToList();
+        await _target.UpsertTicketsAsync(TenantSlug, tickets);
+
+        // 11) كُلّ الجَداوِل الباقِيَة كَ ImportedRecord.
+        string[] genericTables =
+        {
+            "UserPushTokens", "Reports", "Invoices", "AppVersions",
+            "DiscoveryRegions", "DiscoveryAmenities", "TaxonomyNodes",
+            "AttributeDefinitions", "AttributeValues", "CategoryAttributeMappings",
+            "SupportMessages"
+        };
+        foreach (var t in genericTables)
+            await _target.DumpGenericAsync(src, TenantSlug, t);
     }
 
     private sealed record EjarCategoryRow(Guid Id, string Slug, string Label, string? Icon);
@@ -182,4 +233,7 @@ public sealed class EjarImporter
                                        int OwnerUnread, int PartnerUnread, DateTime CreatedAt);
     private sealed record EjarMsgRow(Guid Id, Guid ConversationId, string? FromRaw, string? Body, DateTime SentAt);
     private sealed record EjarNotifRow(Guid Id, Guid UserId, string? Title, string? Body, string? RelatedId, bool IsRead, DateTime At);
+    private sealed record EjarPlanRow(Guid Id, string? Label, decimal Price, int MaxActiveListings, string? Description);
+    private sealed record EjarSubRow(Guid Id, Guid UserId, Guid PlanId, int ListingsLimit, DateTime StartDate, DateTime EndDate);
+    private sealed record EjarSupportTicketRow(Guid Id, Guid UserId, string? AuthorName, string? Subject, string? Body, DateTime CreatedAt);
 }

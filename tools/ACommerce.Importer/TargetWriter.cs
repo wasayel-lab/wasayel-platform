@@ -3,8 +3,12 @@ using ACommerce.Kit.Chat;
 using ACommerce.Kit.Favorites;
 using ACommerce.Kit.Listings;
 using ACommerce.Kit.Notifications;
+using ACommerce.Kit.Subscriptions;
+using ACommerce.Kit.Support;
 using ACommerce.Kit.Tenants;
+using Dapper;
 using Marten;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -47,14 +51,21 @@ public sealed class TargetWriter
             o.Schema.For<Conversation>().Identity(x => x.Id);
             o.Schema.For<Message>().Identity(x => x.Id);
             o.Schema.For<Favorite>().Identity(x => x.Id);
+            o.Schema.For<Plan>().Identity(x => x.Id);
+            o.Projections.Snapshot<Subscription>(global::Marten.Events.Projections.SnapshotLifecycle.Inline);
+            o.Projections.Snapshot<Ticket>(global::Marten.Events.Projections.SnapshotLifecycle.Inline);
+
+            // مُستَنَد عامّ لِكُلّ جَدول لا يَملِك تَعويض typed في
+            // platform-v1. يُحفَظ كَ JSON كامِل مَع المَفتاح "{table}/{srcId}".
+            o.Schema.For<ImportedRecord>().Identity(x => x.Id);
+
             o.AutoCreateSchemaObjects = JasperFx.AutoCreate.CreateOrUpdate;
         });
         await Task.CompletedTask;
         _log.LogInformation("✓ Marten target ready (schema=platform).");
     }
 
-    /// <summary>يَحذِف كُلّ مُستَنَدات tenant مُحَدَّد. لا يَحذِف الـ Tenant document
-    /// نَفسه (سَيُعاد إنشاؤه بِواسِطَة الـ importer).</summary>
+    /// <summary>يَحذِف كُلّ مُستَنَدات tenant مُحَدَّد.</summary>
     public async Task ResetTenantAsync(string slug)
     {
         if (_store is null) throw new InvalidOperationException();
@@ -65,11 +76,14 @@ public sealed class TargetWriter
         s.DeleteWhere<Message>(x => true);
         s.DeleteWhere<Notification>(x => true);
         s.DeleteWhere<User>(x => true);
+        s.DeleteWhere<Plan>(x => true);
+        s.DeleteWhere<Subscription>(x => true);
+        s.DeleteWhere<Ticket>(x => true);
+        s.DeleteWhere<ImportedRecord>(x => true);
         await s.SaveChangesAsync();
         _log.LogInformation("  ↻ reset tenant '{Slug}' (deleted documents).", slug);
     }
 
-    /// <summary>UPSERT لِـ Tenant document (global، يَحفَظ ميتاداتا المَتجَر).</summary>
     public async Task UpsertTenantAsync(Tenant t)
     {
         if (_store is null) throw new InvalidOperationException();
@@ -79,8 +93,6 @@ public sealed class TargetWriter
         _log.LogInformation("  ✓ tenant '{Slug}' ({Name}) — {Cats} categories.", t.Id, t.Name, t.Categories.Count);
     }
 
-    /// <summary>UPSERT دَفعَة مُستَنَدات داخِل tenant. النَوع T يُتَبَنّى
-    /// بِواسِطَة Marten، الـ Id الحاليّ يُحَدِّد upsert/insert.</summary>
     public async Task UpsertAsync<T>(string tenantSlug, IReadOnlyList<T> docs) where T : class
     {
         if (_store is null) throw new InvalidOperationException();
@@ -91,19 +103,16 @@ public sealed class TargetWriter
         _log.LogInformation("  ✓ {Count} {Type}", docs.Count, typeof(T).Name);
     }
 
-    /// <summary>إنشاء/تَحديث Listings كَ event streams. الـ Listing هو
-    /// aggregate event-sourced (Snapshot.Inline)، فالكِتابَة المُباشَرَة
-    /// كَ document تَترُك الـ event stream فارِغاً والـ
-    /// AggregateStreamAsync في التَفاصيل يُعيد null. الحَلّ: append
-    /// ListingCreated إن لم يَكُن الـ stream مَوجوداً، وإلّا ListingEdited.</summary>
+    /// <summary>إنشاء/تَحديث Listings كَ event streams (Snapshot.Inline).</summary>
     public async Task UpsertListingsAsync(string tenantSlug, IReadOnlyList<Listing> listings)
     {
         if (_store is null) throw new InvalidOperationException();
         if (listings.Count == 0) return;
 
         await using var s = _store.LightweightSession(tenantSlug);
+        var ids = listings.Select(l => l.Id).ToArray();
         var existingIds = (await s.Query<Listing>()
-            .Where(x => listings.Select(l => l.Id).Contains(x.Id))
+            .Where(x => ids.Contains(x.Id))
             .Select(x => x.Id).ToListAsync())
             .ToHashSet();
 
@@ -129,4 +138,122 @@ public sealed class TargetWriter
         await s.SaveChangesAsync();
         _log.LogInformation("  ✓ {Created} new + {Edited} updated Listing streams", created, edited);
     }
+
+    /// <summary>إنشاء/تَحديث Subscription/Ticket كَ event streams. الاثنان
+    /// Snapshot.Inline في V1.App. تُولِّد الـ event الإنشائيّ
+    /// إن لم يَكن stream مَوجوداً.</summary>
+    public async Task UpsertSubscriptionsAsync(string tenantSlug, IReadOnlyList<SubscriptionImport> subs)
+    {
+        if (_store is null) throw new InvalidOperationException();
+        if (subs.Count == 0) return;
+
+        await using var s = _store.LightweightSession(tenantSlug);
+        var ids = subs.Select(x => x.Id).ToArray();
+        var existing = (await s.Query<Subscription>()
+            .Where(x => ids.Contains(x.Id))
+            .Select(x => x.Id).ToListAsync())
+            .ToHashSet();
+
+        foreach (var x in subs)
+        {
+            if (existing.Contains(x.Id)) continue;
+            s.Events.StartStream<Subscription>(x.Id, new SubscriptionCreated(
+                x.Id, x.UserId, x.PlanId, x.Quota, x.DaysPeriod, x.StartsAt));
+        }
+        await s.SaveChangesAsync();
+        _log.LogInformation("  ✓ {Count} Subscription streams", subs.Count - existing.Count);
+    }
+
+    public async Task UpsertTicketsAsync(string tenantSlug, IReadOnlyList<TicketImport> tickets)
+    {
+        if (_store is null) throw new InvalidOperationException();
+        if (tickets.Count == 0) return;
+
+        await using var s = _store.LightweightSession(tenantSlug);
+        var ids = tickets.Select(x => x.Id).ToArray();
+        var existing = (await s.Query<Ticket>()
+            .Where(x => ids.Contains(x.Id))
+            .Select(x => x.Id).ToListAsync())
+            .ToHashSet();
+
+        foreach (var t in tickets)
+        {
+            if (existing.Contains(t.Id)) continue;
+            s.Events.StartStream<Ticket>(t.Id, new TicketCreated(
+                t.Id, t.AuthorId, t.AuthorName, t.Subject, t.Body, t.CreatedAt));
+        }
+        await s.SaveChangesAsync();
+        _log.LogInformation("  ✓ {Count} Ticket streams", tickets.Count - existing.Count);
+    }
+
+    /// <summary>دَفعَة نَسخ خام — كُلّ صَفّ يَصير ImportedRecord بِـ
+    /// Id = "{table}/{sourceId}" + Data = JSON كامِل لِلصَفّ. تُستَخدَم
+    /// لِلجَداوِل الَّتي لا تَملِك نَوع typed مُقابِل في platform-v1.</summary>
+    public async Task DumpGenericAsync(SqlConnection src, string tenantSlug,
+        string table, string idColumn = "Id", string? whereClause = null)
+    {
+        if (_store is null) throw new InvalidOperationException();
+        var sql = $"SELECT * FROM [{table}]";
+        if (!string.IsNullOrEmpty(whereClause)) sql += $" WHERE {whereClause}";
+
+        IEnumerable<dynamic>? rows;
+        try
+        {
+            rows = await src.QueryAsync(sql);
+        }
+        catch (SqlException ex)
+        {
+            _log.LogWarning("  ⚠ skip [{Table}]: {Msg}", table, ex.Message.Split('\n')[0]);
+            return;
+        }
+
+        var docs = new List<ImportedRecord>();
+        var now = DateTime.UtcNow;
+        foreach (var r in rows)
+        {
+            var dict = (IDictionary<string, object?>)r;
+            var rawId = dict.TryGetValue(idColumn, out var v) ? v?.ToString() : null;
+            if (string.IsNullOrEmpty(rawId)) rawId = Guid.NewGuid().ToString();
+            docs.Add(new ImportedRecord
+            {
+                Id         = $"{table}/{rawId}",
+                Table      = table,
+                SourceId   = rawId,
+                ImportedAt = now,
+                Data       = dict.ToDictionary(k => k.Key, k => k.Value)
+            });
+        }
+
+        if (docs.Count == 0)
+        {
+            _log.LogInformation("  · [{Table}] empty.", table);
+            return;
+        }
+
+        await using var s = _store.LightweightSession(tenantSlug);
+        foreach (var d in docs) s.Store(d);
+        await s.SaveChangesAsync();
+        _log.LogInformation("  ✓ [{Table}] {Count} rows → ImportedRecord", table, docs.Count);
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// DTOs لِلتَّمرير مِن importers إلى TargetWriter (تَتَجَنَّب اشتِراك الـ
+// importer في تَفاصيل event-sourcing).
+// ───────────────────────────────────────────────────────────────────────
+
+public sealed record SubscriptionImport(Guid Id, Guid UserId, string PlanId, int Quota, int DaysPeriod, DateTime StartsAt);
+public sealed record TicketImport(Guid Id, Guid AuthorId, string AuthorName, string Subject, string Body, DateTime CreatedAt);
+
+/// <summary>سِجِلّ خام — أَيّ صَفّ مِن DB المَصدَر لا يَملِك نَوع typed
+/// مُقابِل في platform-v1. الـ Id يُرَكَّب: "{table}/{sourceId}" لِيَكون
+/// فَريداً عَبر الجَداوِل وقابِلاً لِلاستِعلام بِالبِدايَة
+/// (مَثَلاً <c>WHERE Table = 'Reports'</c>).</summary>
+public sealed class ImportedRecord
+{
+    public string Id { get; set; } = "";
+    public string Table { get; set; } = "";
+    public string SourceId { get; set; } = "";
+    public DateTime ImportedAt { get; set; }
+    public Dictionary<string, object?> Data { get; set; } = new();
 }

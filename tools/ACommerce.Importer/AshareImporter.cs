@@ -235,6 +235,50 @@ public sealed class AshareImporter
                 At         = t.At
             }).ToList();
         await _target.UpsertAsync(TenantSlug, notifs);
+
+        // 8) Complaints → Tickets. عَشير يَستَخدِم Complaint + ComplaintReply
+        // كَنِظام دَعمه؛ shapes قَريبَة جِدّاً مِن Ticket.
+        var compRows = (await src.QueryAsync<AshareComplaintRow>(
+            @"SELECT c.Id, c.UserId, p.FullName AS AuthorName,
+                     c.Title AS Subject, c.Description AS Body, c.CreatedAt
+              FROM Complaint c
+              LEFT JOIN Profile p ON p.UserId = c.UserId
+              WHERE c.IsDeleted = 0"
+        )).ToList();
+        var tickets = compRows
+            .Select(c => (c.Id, Author: ResolveProfile(c.UserId), c.AuthorName, c.Subject, c.Body, c.CreatedAt))
+            .Where(t => t.Author.HasValue)
+            .Select(t => new TicketImport(
+                t.Id, t.Author!.Value, t.AuthorName ?? "—",
+                t.Subject ?? "", t.Body ?? "", t.CreatedAt))
+            .ToList();
+        await _target.UpsertTicketsAsync(TenantSlug, tickets);
+
+        // 9) كُلّ الجَداوِل الباقِيَة — نُلتَقِطها كَ ImportedRecord (JSON كامِل
+        // لِكُلّ صَفّ) لِكَي لا تَضيع. الـ Id يَصير "{table}/{sourceId}".
+        // قائِمَة كامِلَة مِن AshareV3DbContext.cs:
+        string[] genericTables =
+        {
+            "Products", "ProductCategory", "ProductCategoryMapping",
+            "ChatParticipant", "MessageRead",
+            "ComplaintReply", "Booking", "BookingStatusHistory",
+            "DeviceTokens", "AppVersions", "LegalPage",
+            "Reports", "DiscoveryCategories", "DiscoveryRegions", "DiscoveryAmenities",
+            "CategoryAttributeTemplates", "AttributeDefinitions", "AttributeValues",
+            "AttributeValueRelationships", "CategoryAttributeMappings", "CrossAttributeConstraint",
+            "Countries", "Regions", "Cities", "Neighborhoods",
+            "DocumentType", "DocumentTypeAttribute", "DocumentTypeRelation", "DocumentOperation",
+            "Vendor", "ProductBrand", "ProductBrandMapping", "ProductInventory",
+            "ProductPrices", "ProductRelation", "ProductReview", "ProductAttributes",
+            "Cart", "CartItem", "Order", "OrderItem", "Review",
+            "Currencies", "ExchangeRates", "Language", "Translation",
+            "MeasurementSystems", "Units", "UnitCategories", "UnitConversions",
+            "SubscriptionPlans", "Subscriptions", "SubscriptionInvoices", "SubscriptionEvents",
+            "OperationNotification", "RecipientGroup", "RecipientGroupUserRecipient", "UserRecipient",
+            "Addresses", "ContactPoint"
+        };
+        foreach (var t in genericTables)
+            await _target.DumpGenericAsync(src, TenantSlug, t);
     }
 
     // ──── Row types — مُطابِقَة لِأَعمِدَة SELECT أَعلاه ───────────────
@@ -248,4 +292,5 @@ public sealed class AshareImporter
                                          string? Subject, DateTime LastAt, DateTime CreatedAt);
     private sealed record AshareMsgRow(Guid Id, Guid ConversationId, string? SenderId, string? Body, DateTime SentAt);
     private sealed record AshareNotifRow(Guid Id, string? UserId, string? Title, string? Body, bool IsRead, DateTime At);
+    private sealed record AshareComplaintRow(Guid Id, string? UserId, string? AuthorName, string? Subject, string? Body, DateTime CreatedAt);
 }
