@@ -1,0 +1,65 @@
+<Solution>
+  <Folder Name="/apps/">
+    <Project Path="apps/V1.App/V1.App.csproj" />
+  </Folder>
+  <Folder Name="/libs/" />
+  <Folder Name="/libs/core/">
+    <Project Path="libs/core/ACommerce.Platform.Hosting/ACommerce.Platform.Hosting.csproj" />
+    <Project Path="libs/core/ACommerce.Platform.MultiTenancy/ACommerce.Platform.MultiTenancy.csproj" />
+    <Project Path="libs/core/ACommerce.Platform.Shared/ACommerce.Platform.Shared.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/" />
+  <Folder Name="/libs/kits/Auth/">
+    <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Core/ACommerce.Kit.Auth.Core.csproj" />
+    <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.MockNafath/ACommerce.Kit.Auth.Providers.MockNafath.csproj" />
+    <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.MockSms/ACommerce.Kit.Auth.Providers.MockSms.csproj" />
+    <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Server/ACommerce.Kit.Auth.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Chat/">
+    <Project Path="libs/kits/Chat/ACommerce.Kit.Chat.Core/ACommerce.Kit.Chat.Core.csproj" />
+    <Project Path="libs/kits/Chat/ACommerce.Kit.Chat.Server/ACommerce.Kit.Chat.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/DynamicAttributes/">
+    <Project Path="libs/kits/DynamicAttributes/ACommerce.Kit.DynamicAttributes.Core/ACommerce.Kit.DynamicAttributes.Core.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Favorites/">
+    <Project Path="libs/kits/Favorites/ACommerce.Kit.Favorites.Core/ACommerce.Kit.Favorites.Core.csproj" />
+    <Project Path="libs/kits/Favorites/ACommerce.Kit.Favorites.Server/ACommerce.Kit.Favorites.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Listings/">
+    <Project Path="libs/kits/Listings/ACommerce.Kit.Listings.Core/ACommerce.Kit.Listings.Core.csproj" />
+    <Project Path="libs/kits/Listings/ACommerce.Kit.Listings.Server/ACommerce.Kit.Listings.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Notifications/">
+    <Project Path="libs/kits/Notifications/ACommerce.Kit.Notifications.Core/ACommerce.Kit.Notifications.Core.csproj" />
+    <Project Path="libs/kits/Notifications/ACommerce.Kit.Notifications.Server/ACommerce.Kit.Notifications.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Profiles/">
+    <Project Path="libs/kits/Profiles/ACommerce.Kit.Profiles.Core/ACommerce.Kit.Profiles.Core.csproj" />
+    <Project Path="libs/kits/Profiles/ACommerce.Kit.Profiles.Server/ACommerce.Kit.Profiles.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Realtime/">
+    <Project Path="libs/kits/Realtime/ACommerce.Kit.Realtime.Client/ACommerce.Kit.Realtime.Client.csproj" />
+    <Project Path="libs/kits/Realtime/ACommerce.Kit.Realtime.Core/ACommerce.Kit.Realtime.Core.csproj" />
+    <Project Path="libs/kits/Realtime/ACommerce.Kit.Realtime.Server/ACommerce.Kit.Realtime.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Subscriptions/">
+    <Project Path="libs/kits/Subscriptions/ACommerce.Kit.Subscriptions.Core/ACommerce.Kit.Subscriptions.Core.csproj" />
+    <Project Path="libs/kits/Subscriptions/ACommerce.Kit.Subscriptions.Server/ACommerce.Kit.Subscriptions.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Support/">
+    <Project Path="libs/kits/Support/ACommerce.Kit.Support.Core/ACommerce.Kit.Support.Core.csproj" />
+    <Project Path="libs/kits/Support/ACommerce.Kit.Support.Server/ACommerce.Kit.Support.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Tenants/">
+    <Project Path="libs/kits/Tenants/ACommerce.Kit.Tenants.Core/ACommerce.Kit.Tenants.Core.csproj" />
+    <Project Path="libs/kits/Tenants/ACommerce.Kit.Tenants.Server/ACommerce.Kit.Tenants.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/templates/">
+    <Project Path="libs/templates/ACommerce.Templates.Customer.Marketplace/ACommerce.Templates.Customer.Marketplace.csproj" />
+    <Project Path="libs/templates/ACommerce.Templates.Shared/ACommerce.Templates.Shared.csproj" />
+  </Folder>
+  <Folder Name="/libs/widgets/">
+    <Project Path="libs/widgets/ACommerce.Widgets/ACommerce.Widgets.csproj" />
+  </Folder>
+</Solution>
