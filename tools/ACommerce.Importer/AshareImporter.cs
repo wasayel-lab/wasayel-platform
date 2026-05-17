@@ -50,12 +50,22 @@ public sealed class AshareImporter
 
         if (reset) await _target.ResetTenantAsync(TenantSlug);
 
-        // 1) Tenant.Categories مِن DiscoveryCategories (الفِئات الَّتي يَراها
-        // المُستَخدِم في الواجِهَة). ProductCategory هُوَ taxonomy داخِليّ.
+        // 1) Tenant.Categories: نَجَرِّب DiscoveryCategories أَوَّلاً (الفِئات
+        // الَّتي تَظهَر في الواجِهَة). إذا كانَت فارِغَة في DB الإنتاج،
+        // نَسقُط لِـ ProductCategory (الـ taxonomy الداخِليّ — حَيث يَسكُن
+        // الـ catalog الفِعليّ).
         var categories = (await src.QueryAsync<DiscoveryCatRow>(
             @"SELECT TOP 50 Id, Slug, Label, Icon FROM DiscoveryCategories
               WHERE IsDeleted = 0 ORDER BY Label"
         )).ToList();
+        if (categories.Count == 0)
+        {
+            _log.LogInformation("  ⓘ DiscoveryCategories فارِغ — أَسقُط لِـ ProductCategory.");
+            categories = (await src.QueryAsync<DiscoveryCatRow>(
+                @"SELECT TOP 50 Id, Slug, Name AS Label, Icon FROM ProductCategory
+                  WHERE IsDeleted = 0 AND IsActive = 1 ORDER BY SortOrder, Name"
+            )).ToList();
+        }
 
         await _target.UpsertTenantAsync(new Tenant
         {
@@ -155,7 +165,7 @@ public sealed class AshareImporter
                        MAX(CASE WHEN rn = 2 THEN UserId END) AS PartnerUserId
                 FROM (
                     SELECT ChatId, UserId,
-                           ROW_NUMBER() OVER (PARTITION BY ChatId ORDER BY JoinedAt, Id) AS rn
+                           ROW_NUMBER() OVER (PARTITION BY ChatId ORDER BY CreatedAt, Id) AS rn
                     FROM ChatParticipant WHERE IsDeleted = 0
                 ) t
                 GROUP BY ChatId
