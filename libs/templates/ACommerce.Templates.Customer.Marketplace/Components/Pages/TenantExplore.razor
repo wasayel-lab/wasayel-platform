@@ -24,20 +24,14 @@ else
 {
     <h1 class="acm-explore-title">@($"كلّ إعلانات {tenant.Name}")</h1>
 
-    @* Filter bar: chips + sliders button *@
+    @* Filter bar: شَجَرَة kinds + leaves + sliders button — مُطابِق
+       لِبِنية AcTaxonomyChips الأَصلِيَّة. *@
     <div class="acm-explore-filterbar">
         <div class="acm-explore-chips">
-            <div class="ac-hscroll">
-                <a class="@(string.IsNullOrEmpty(Category)?"ac-filter-chip is-active":"ac-filter-chip")"
-                   href="@($"/{Slug}/explore" + Preserve(except: "category"))">الكلّ</a>
-                @foreach (var c in tenant.Categories)
-                {
-                    <a class="@(Category == c.Slug ? "ac-filter-chip is-active" : "ac-filter-chip")"
-                       href="@($"/{Slug}/explore?category={c.Slug}" + Preserve(prefix: "&", except: "category"))">
-                        @c.Icon @c.Label
-                    </a>
-                }
-            </div>
+            <TaxonomyChips Slug="@Slug"
+                           Categories="tenant.Categories"
+                           ActiveKind="@Kind"
+                           BaseUrl="@($"/{Slug}/explore")" />
         </div>
         <a class="acm-explore-filterbtn" href="@FilterToggleHref" aria-label="الفَلاتِر">
             <AcIcon Name="sliders" Size="18" />
@@ -162,6 +156,7 @@ else
     [SupplyParameterFromQuery(Name = "max")]      public decimal? MaxPrice { get; set; }
     [SupplyParameterFromQuery(Name = "district")] public string? District { get; set; }
     [SupplyParameterFromQuery(Name = "filters")]  public string? Filters  { get; set; }
+    [SupplyParameterFromQuery(Name = "kind")]     public string? Kind     { get; set; }
 
     Tenant? tenant;
     List<Listing>? items;
@@ -226,6 +221,16 @@ else
         await using var t = Store.QuerySession(Slug);
         var q = t.Query<Listing>().Where(x => !x.IsDeleted);
         if (!string.IsNullOrEmpty(Category))   q = q.Where(x => x.CategorySlug == Category);
+        else if (!string.IsNullOrEmpty(Kind))
+        {
+            // فَلتَرَة بِالـ Kind: نَأخُذ كُلّ slugs الَّتي تَنتَمي لِلـ Kind
+            // المُختار مِن tenant.Categories. هذا يَسمَح بِفَلتَرَة "كُلّ
+            // العَقارات السَكَنيّة" دون اختِيار فِئَة بِعَينها.
+            var slugs = tenant.Categories
+                .Where(c => c.Kind == Kind)
+                .Select(c => c.Slug).ToList();
+            q = q.Where(x => slugs.Contains(x.CategorySlug));
+        }
         if (!string.IsNullOrEmpty(District))   q = q.Where(x => x.District == District);
         if (MinPrice.HasValue && MinPrice > 0) q = q.Where(x => x.Price >= MinPrice.Value);
         if (MaxPrice.HasValue && MaxPrice > 0) q = q.Where(x => x.Price <= MaxPrice.Value);

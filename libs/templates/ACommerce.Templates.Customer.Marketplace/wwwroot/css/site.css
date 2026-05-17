@@ -70,6 +70,34 @@
 /* صَفحَة /create-listing */
 .acm-create textarea.ac-input { font-family: inherit; }
 
+/* TaxonomyChips SSR — صَفَّان: kinds + leaves */
+.acm-taxo-chips { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.acm-taxo-chips-row {
+    display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+    padding: 4px 0;
+}
+.acm-taxo-chips-row::-webkit-scrollbar { display: none; }
+.acm-taxo-chips-sub { padding-inline-start: 4px; }
+.acm-taxo-chip {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+    padding: 8px 14px; border-radius: 999px; font-size: 13px;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    color: var(--ac-text); text-decoration: none; white-space: nowrap;
+    transition: background 120ms, border-color 120ms, color 120ms;
+}
+.acm-taxo-chip:hover { background: var(--ac-bg-alt); border-color: var(--ac-primary); }
+.acm-taxo-chip.is-active {
+    background: var(--ac-primary); color: var(--ac-on-primary, #fff);
+    border-color: var(--ac-primary); font-weight: 600;
+}
+.acm-taxo-chip-icon { font-size: 16px; line-height: 1; }
+.acm-taxo-chips-sub .acm-taxo-chip {
+    background: var(--ac-bg-alt); border-color: transparent;
+}
+.acm-taxo-chips-sub .acm-taxo-chip:hover {
+    background: var(--ac-surface); border-color: var(--ac-primary); color: var(--ac-primary);
+}
+
 /* شَجَرَة الفِئات في إنشاء عَرض — Kinds كَ <details> قابِلَة لِلطَيّ */
 .acm-cat-tree { display: flex; flex-direction: column; gap: 12px; }
 .acm-cat-tree-group {

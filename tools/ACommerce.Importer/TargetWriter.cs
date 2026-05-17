@@ -124,7 +124,11 @@ public sealed class TargetWriter
     public async Task UpsertListingsAsync(string tenantSlug, IReadOnlyList<Listing> listings)
     {
         if (_store is null) throw new InvalidOperationException();
-        if (listings.Count == 0) return;
+        if (listings.Count == 0)
+        {
+            _log.LogInformation("  · 0 Listings to import.");
+            return;
+        }
 
         await using var s = _store.LightweightSession(tenantSlug);
         var ids = listings.Select(l => l.Id).ToList();

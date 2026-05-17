@@ -1,0 +1,106 @@
+@namespace ACommerce.Templates.Customer.Marketplace.Components
+
+@*
+    TaxonomyChips SSR — استِنساخ بُنية AcTaxonomyChips الأَصلي تَحت
+    SSR (لا JS). الشَجَرَة عَلى صَفَّين:
+      1) Kinds   (residential, commercial, …)  ← روابِط <a href="?kind=X">
+      2) Leaves (apartment, villa, …)           ← روابِط <a href="?category=Y">
+
+    Kind المُختار يُحَدَّد بِواسِطَة ?kind=X في الـ URL. إذا لم يُحَدَّد،
+    نَأخُذ أَوَّل kind لَه أَولاد. Kind واحِد (= فِئات بِلا تَجميع) ⇒
+    صَفّ واحِد فَقَط.
+
+    CSS_CLASSES: acm-taxo-chips, acm-taxo-chips-row, acm-taxo-chips-sub,
+                 acm-taxo-chip, is-active, acm-taxo-chip-icon
+*@
+
+@{
+    var byKind = Categories
+        .Where(c => !string.IsNullOrEmpty(c.Kind))
+        .GroupBy(c => c.Kind)
+        .OrderBy(g => g.Min(c => c.SortOrder))
+        .ToList();
+    var flat = Categories.Where(c => string.IsNullOrEmpty(c.Kind)).ToList();
+    // الشَجَرَة فَقَط لَو في تَنَوُّع حَقيقي (Kinds مُتَعَدِّدَة). تَطبيق
+    // بِـ Kind واحِد أَو كُلّه بِلا Kind ⇒ شَبَكَة مُسَطَّحَة.
+    var hasTree = byKind.Count > 1;
+}
+
+@if (!hasTree)
+{
+    @* عَرض مُسَطَّح: AcCategoryTile مَع AcHScroll *@
+    <AcHScroll>
+        @foreach (var c in Categories.OrderBy(c => c.SortOrder).ThenBy(c => c.Label))
+        {
+            <AcCategoryTile Label="@c.Label"
+                            Icon="@c.Icon"
+                            Href="@($"/{Slug}/explore?category={Uri.EscapeDataString(c.Slug)}")" />
+        }
+    </AcHScroll>
+}
+else
+{
+    var currentKind = string.IsNullOrEmpty(ActiveKind)
+        ? byKind.FirstOrDefault()?.Key
+        : ActiveKind;
+    var leaves = byKind.FirstOrDefault(g => g.Key == currentKind)?.OrderBy(c => c.SortOrder).ThenBy(c => c.Label).ToList()
+                 ?? new List<ACommerce.Kit.Tenants.Category>();
+    <div class="acm-taxo-chips">
+        <div class="acm-taxo-chips-row">
+            @foreach (var g in byKind)
+            {
+                var isActive = g.Key == currentKind;
+                var toggleUrl = isActive
+                    ? $"{BaseUrl}"
+                    : $"{BaseUrl}?kind={Uri.EscapeDataString(g.Key)}";
+                <a class="acm-taxo-chip @(isActive ? "is-active" : "")"
+                   href="@toggleUrl">
+                    <span>@KindLabel(g.Key)</span>
+                </a>
+            }
+        </div>
+
+        @if (leaves.Count > 0)
+        {
+            <div class="acm-taxo-chips-row acm-taxo-chips-sub">
+                @foreach (var leaf in leaves)
+                {
+                    <a class="acm-taxo-chip"
+                       href="@($"/{Slug}/explore?category={Uri.EscapeDataString(leaf.Slug)}")">
+                        @if (!string.IsNullOrEmpty(leaf.Icon))
+                        {
+                            <span class="acm-taxo-chip-icon">@leaf.Icon</span>
+                        }
+                        <span>@leaf.Label</span>
+                    </a>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Slug { get; set; } = "";
+    [Parameter, EditorRequired] public List<ACommerce.Kit.Tenants.Category> Categories { get; set; } = new();
+    /// <summary>الـ Kind المُختار حاليّاً مِن ?kind= في الـ URL. null = أَوَّل kind.</summary>
+    [Parameter] public string? ActiveKind { get; set; }
+    /// <summary>الـ base URL لِلـ toggle (مَثَلاً "/{slug}" لِلصَفحَة الرَئيسيّة،
+    /// أَو "/{slug}/explore" لِصَفحَة الاستِكشاف).</summary>
+    [Parameter] public string BaseUrl { get; set; } = "";
+
+    protected override void OnParametersSet()
+    {
+        if (string.IsNullOrEmpty(BaseUrl)) BaseUrl = $"/{Slug}";
+    }
+
+    static string KindLabel(string kind) => kind switch
+    {
+        "roommate"     => "السَكَن المُشتَرَك",
+        "residential"  => "سَكَنيّ",
+        "commercial"   => "تِجاريّ",
+        "events"       => "مُناسَبات",
+        "vehicles"     => "مَركَبات",
+        "leisure"      => "تَرفيه",
+        _              => kind
+    };
+}

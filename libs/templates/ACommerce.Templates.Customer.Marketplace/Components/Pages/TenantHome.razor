@@ -64,14 +64,13 @@
         @if (loaded.Categories is { Count: > 0 })
         {
             <AcSectionHeader Title="الفِئات" />
-            <AcHScroll>
-                @foreach (var c in loaded.Categories)
-                {
-                    <AcCategoryTile Label="@c.Label"
-                                    Icon="@c.Icon"
-                                    Href="@($"/{Slug}/explore?category={Uri.EscapeDataString(c.Slug)}")" />
-                }
-            </AcHScroll>
+            @* شَجَرَة فِئات أَفقيّة كَ AcTaxonomyChips الأَصلي:
+               صَفّ kinds أَوّلاً، ثُمّ leaves الـ kind المُختار تَحته.
+               اختِيار الـ kind يَستَخدِم ?kind=X في الـ URL (SSR-friendly).
+               الـ tenants ذات الـ Kind الواحِد (عَشير) يَظهَرَن مُسَطَّحَة. *@
+            <TaxonomyChips Slug="@Slug"
+                           Categories="loaded.Categories"
+                           ActiveKind="@Kind" />
         }
 
         @* CTA "أَضِف إعلانك" — وِجهَة ثابِتَة /create-listing لأَيّ زائِر؛
@@ -153,6 +152,7 @@
 @code {
     [Parameter] public string Slug { get; set; } = "";
     [SupplyParameterFromQuery(Name = "city")] public string? City { get; set; }
+    [SupplyParameterFromQuery(Name = "kind")] public string? Kind { get; set; }
 
     Tenant? loaded;
     List<Listing>? latest;

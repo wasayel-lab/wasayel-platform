@@ -95,27 +95,40 @@ public sealed class AshareImporter
         Guid? ResolveProfile(string? userId)
             => userId is not null && userIdMap.TryGetValue(userId, out var g) ? g : null;
 
-        // 3) Listings — ProductListing + Product لِلوَصف. الـ Category في V3
-        // مُنفَصِل عَبر ProductCategoryMapping. حاليّاً نَترُك CategorySlug
-        // فارِغ لأَنّ بَيانات production قَد لا تَملُك mapping كامِل؛
-        // يُمكِن تَحسينه لاحِقاً بِالتَوصيل مَع DiscoveryCategories عَن طَريق
-        // attribute "category" أو slug في Product.Type.
-        var listings = (await src.QueryAsync<AshareListingRow>(
+        // 3) Listings — ProductListing + Product لِلوَصف.
+        //
+        // CategoryId يُحَدِّد أَيّ فِئَة. عَشير V3 يَستَخدِم Guids
+        // ثابِتَة (AshareV3RoommateAttributes): RoommateHasCategoryId و
+        // RoommateWantsCategoryId. إن كانَ الـ CategoryId يُطابِق أَحَدهما
+        // نَحفَظ الـ slug المُقابِل؛ غَير ذلك نَترُك CategorySlug فارِغاً
+        // (سَيَظهَر الإعلان تَحت "الكلّ" بِلا تَصنيف).
+        //
+        // قَيد IsActive=1 أُسقِط: بَيانات الإنتاج فيها إعلانات مُنشورَة
+        // بِـ IsActive=0 (مَثَلاً قَبل تَفعيل من Nafath). نَأخُذها كُلَّها
+        // ما دامَت غَير مَحذوفَة.
+        var roomHas    = Guid.Parse("0a01a01a-0a01-0a01-0a01-0a01000a01a2");
+        var roomWants  = Guid.Parse("0a01a01a-0a01-0a01-0a01-0a01000a01a3");
+
+        var listingRows = (await src.QueryAsync<AshareListingRow>(
             @"SELECT pl.Id, pl.Title,
                      COALESCE(NULLIF(pl.Description, ''), p.LongDescription, p.ShortDescription, '') AS Description,
-                     pl.Price, p.Type AS PType,
+                     pl.Price, pl.CategoryId,
                      pl.IsDeleted, pl.CreatedAt, pl.UpdatedAt
               FROM ProductListing pl
               JOIN Products p ON p.Id = pl.ProductId
-              WHERE pl.IsDeleted = 0 AND pl.IsActive = 1"
-        )).Select(l => new Listing
+              WHERE pl.IsDeleted = 0"
+        )).ToList();
+        _log.LogInformation("  ⓘ ProductListing: {Count} rows fetched.", listingRows.Count);
+        var listings = listingRows.Select(l => new Listing
         {
             Id           = l.Id,
             TenantSlug   = TenantSlug,
             Title        = l.Title ?? "",
             Description  = string.IsNullOrEmpty(l.Description) ? null : l.Description,
             Price        = l.Price,
-            CategorySlug = l.PType ?? "",   // Product.Type يَحوي slug الفِئَة في V3
+            CategorySlug = l.CategoryId == roomHas   ? "roommate_has"
+                         : l.CategoryId == roomWants ? "roommate_wants"
+                         : "",
             City         = null,
             District     = null,
             Attributes   = new(),
@@ -274,7 +287,7 @@ public sealed class AshareImporter
     private sealed record AshareProfileRow(Guid Id, string? FullName, string? Phone, string? NationalId, DateTime CreatedAt);
     private sealed record AshareUserIdMapRow(string? UserId, Guid Id);
     private sealed record AshareListingRow(Guid Id, string? Title, string? Description, decimal Price,
-                                            string? PType, bool IsDeleted, DateTime CreatedAt, DateTime? UpdatedAt);
+                                            Guid? CategoryId, bool IsDeleted, DateTime CreatedAt, DateTime? UpdatedAt);
     private sealed record AshareFavoriteRow(Guid Id, string? UserId, Guid ListingId, DateTime CreatedAt);
     private sealed record AshareChatRow(Guid Id, string? OwnerUserId, string? PartnerUserId,
                                          string? Subject, DateTime LastAt, DateTime CreatedAt);
