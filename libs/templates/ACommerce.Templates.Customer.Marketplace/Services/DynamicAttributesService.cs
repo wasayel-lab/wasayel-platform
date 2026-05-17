@@ -22,19 +22,57 @@ public sealed class DynamicAttributesService
     public static readonly Guid ProfileScopeId = Guid.Parse("00000000-0000-0000-0000-000000000F01");
 
     /// <summary>
-    /// scope id لِفِئَة إعلان. Ejar V1 يَشتَقّه عَبر MD5 مِن slug؛
-    /// Ashare V3 يَستَخدِم Guid ثابِت لِكُلّ ProductCategory.
+    /// scope id لِفِئَة إعلان.
+    /// <list type="bullet">
+    ///   <item>Ejar V1: MD5("ejar-listing:" + slug) (راجِع EjarListingScopes.DeriveScopeId).</item>
+    ///   <item>Ashare V3: literal Guid مِن ProductCategory.Id المُطابِق لِلـ slug.
+    ///         الـ Importer جَلَب ProductCategory كَ ImportedRecord — نَستَعلِم
+    ///         الجَدول لِلعُثور على الـ Guid، وَنُسَكِّن ذاكِرَة لِكُلّ tenant.</item>
+    /// </list>
+    /// يُرجِع Guid.Empty إذا لَم نَستَطِع تَحديد الـ scope (فِئَة غَير مَعروفَة).
     /// </summary>
-    public static Guid DeriveListingScope(string tenantSlug, string categorySlug)
-        => tenantSlug switch
-        {
-            "ejar"   => Md5Guid("ejar-listing:"   + categorySlug.ToLowerInvariant()),
-            "ashare" => Md5Guid("ashare-listing:" + categorySlug.ToLowerInvariant()),
-            _        => Md5Guid(tenantSlug + ":listing:" + categorySlug.ToLowerInvariant())
-        };
+    public async Task<Guid> DeriveListingScopeAsync(string tenantSlug, string categorySlug)
+    {
+        if (tenantSlug == "ejar") return Md5Guid("ejar-listing:" + categorySlug.ToLowerInvariant());
 
-    public Task<IReadOnlyList<DynField>> GetForListingCategoryAsync(string tenantSlug, string categorySlug)
-        => GetForScopeAsync(tenantSlug, DeriveListingScope(tenantSlug, categorySlug));
+        if (tenantSlug == "ashare")
+        {
+            // ProductCategory.Id الفِعلي مِن DB — نُسَكِّنه أوّل مَرَّة.
+            if (!_ashareCategoryMap.TryGetValue(categorySlug.ToLowerInvariant(), out var id))
+            {
+                if (!_ashareMapLoaded)
+                {
+                    await using var s = _store.QuerySession(tenantSlug);
+                    var pcs = await s.Query<ImportedRecord>()
+                        .Where(r => r.Table == "ProductCategory")
+                        .ToListAsync();
+                    foreach (var r in pcs)
+                    {
+                        var slug = GetString(r, "Slug");
+                        var pcid = GetGuid(r, "Id");
+                        if (!string.IsNullOrEmpty(slug) && pcid != Guid.Empty)
+                            _ashareCategoryMap[slug.ToLowerInvariant()] = pcid;
+                    }
+                    _ashareMapLoaded = true;
+                    _ashareCategoryMap.TryGetValue(categorySlug.ToLowerInvariant(), out id);
+                }
+            }
+            return id;
+        }
+
+        // tenant غَير مَعروف — احتِياط: نَفس مَنطِق Ejar.
+        return Md5Guid(tenantSlug + ":listing:" + categorySlug.ToLowerInvariant());
+    }
+
+    private static readonly Dictionary<string, Guid> _ashareCategoryMap = new(StringComparer.OrdinalIgnoreCase);
+    private static bool _ashareMapLoaded;
+
+    public async Task<IReadOnlyList<DynField>> GetForListingCategoryAsync(string tenantSlug, string categorySlug)
+    {
+        var scope = await DeriveListingScopeAsync(tenantSlug, categorySlug);
+        if (scope == Guid.Empty) return Array.Empty<DynField>();
+        return await GetForScopeAsync(tenantSlug, scope);
+    }
 
     public Task<IReadOnlyList<DynField>> GetForProfileAsync(string tenantSlug)
         => GetForScopeAsync(tenantSlug, ProfileScopeId);
