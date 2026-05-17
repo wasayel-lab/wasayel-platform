@@ -110,7 +110,7 @@ public sealed class TargetWriter
         if (listings.Count == 0) return;
 
         await using var s = _store.LightweightSession(tenantSlug);
-        var ids = listings.Select(l => l.Id).ToArray();
+        var ids = listings.Select(l => l.Id).ToList();
         var existingIds = (await s.Query<Listing>()
             .Where(x => ids.Contains(x.Id))
             .Select(x => x.Id).ToListAsync())
@@ -148,7 +148,7 @@ public sealed class TargetWriter
         if (subs.Count == 0) return;
 
         await using var s = _store.LightweightSession(tenantSlug);
-        var ids = subs.Select(x => x.Id).ToArray();
+        var ids = subs.Select(x => x.Id).ToList();
         var existing = (await s.Query<Subscription>()
             .Where(x => ids.Contains(x.Id))
             .Select(x => x.Id).ToListAsync())
@@ -170,7 +170,7 @@ public sealed class TargetWriter
         if (tickets.Count == 0) return;
 
         await using var s = _store.LightweightSession(tenantSlug);
-        var ids = tickets.Select(x => x.Id).ToArray();
+        var ids = tickets.Select(x => x.Id).ToList();
         var existing = (await s.Query<Ticket>()
             .Where(x => ids.Contains(x.Id))
             .Select(x => x.Id).ToListAsync())
