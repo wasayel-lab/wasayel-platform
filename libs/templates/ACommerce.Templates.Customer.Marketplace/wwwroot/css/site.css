@@ -70,6 +70,21 @@
 /* صَفحَة /create-listing */
 .acm-create textarea.ac-input { font-family: inherit; }
 
+/* مُنتَقي المَدينَة على Hero — يَعرِض dropdown صَغير بِجانِب اسم المَتجَر */
+.acm-hero-city {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-inline-start: auto; margin: 0; padding: 0;
+    background: rgba(255,255,255,.16); border-radius: 999px;
+    padding: 4px 8px;
+}
+.acm-hero-city-icon { display: inline-flex; color: #fff; }
+.acm-hero-city-select {
+    background: transparent; border: 0; color: #fff;
+    font-size: 13px; font-family: inherit; cursor: pointer;
+    padding: 2px 4px; appearance: none; outline: none;
+}
+.acm-hero-city-select option { color: var(--ac-text); }
+
 /* AcSpaceCard SSR — <a> داخِل <article> مَع <form> أَخ لِزِرّ القَلب */
 .ac-space { position: relative; overflow: hidden; }
 .ac-space-link {

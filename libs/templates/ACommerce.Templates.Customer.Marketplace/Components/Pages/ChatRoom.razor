@@ -38,8 +38,20 @@ else
         }
         else
         {
-            @foreach (var m in messages)
+            DateTime? lastDay = null;
+            foreach (var m in messages)
             {
+                var local = m.SentAt.Kind == DateTimeKind.Utc ? m.SentAt.ToLocalTime() : m.SentAt;
+                if (lastDay is null || lastDay.Value.Date != local.Date)
+                {
+                    lastDay = local;
+                    <div style="text-align:center;margin:12px 0 8px;">
+                        <span style="background:var(--ac-bg-alt);color:var(--ac-text-muted);
+                                     padding:3px 12px;border-radius:999px;font-size:11px;">
+                            @FormatDay(local)
+                        </span>
+                    </div>
+                }
                 var mine = m.SenderId == Auth.UserId;
                 <div style="display:flex;justify-content:@(mine ? "flex-end" : "flex-start");">
                     <div style="max-width:75%;padding:10px 14px;
@@ -48,7 +60,7 @@ else
                                 color:@(mine ? "#fff" : "var(--ac-text)");">
                         <div style="white-space:pre-wrap;word-break:break-word;">@m.Body</div>
                         <div style="font-size:10px;opacity:.7;margin-top:4px;text-align:end;">
-                            @m.SentAt.ToString("HH:mm")
+                            @local.ToString("HH:mm")
                         </div>
                     </div>
                 </div>
@@ -76,6 +88,16 @@ else
     [Parameter] public Guid ConversationId { get; set; }
     Conversation? conv;
     List<Message> messages = new();
+
+    static string FormatDay(DateTime localAt)
+    {
+        var today = DateTime.Now.Date;
+        if (localAt.Date == today)               return "اليَوم";
+        if (localAt.Date == today.AddDays(-1))   return "أَمس";
+        if ((today - localAt.Date).TotalDays < 7) return localAt.ToString("dddd", new System.Globalization.CultureInfo("ar"));
+        return localAt.ToString("yyyy/MM/dd");
+    }
+
 
     protected override async Task OnParametersSetAsync()
     {
