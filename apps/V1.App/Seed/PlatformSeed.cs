@@ -19,44 +19,49 @@ public static class PlatformSeed
         await SeedTenantIfMissingAsync(globalSession, store,
             slug: "ashare",
             name: "عَشير",
-            color: "#7C3AED",
+            color: "#345454",   // Deep Olive Green — هُويَّة عَشير V3 الرَسمِيَّة
             city: "إب",
             tagLine: "السَكَن المُشتَرَك بأَريَحيّة",
             authChannel: "nafath",
             categories: new[]
             {
-                ("room",      "غُرفَة لِشَريك سَكَن", "🛏️"),
-                ("apartment", "شَقّة كامِلَة",        "🏠"),
-                ("studio",    "ستوديو",              "🪟"),
+                ("roommate_has",   "عشير عنده سكن", "🏠", "roommate"),
+                ("roommate_wants", "عشير يدور سكن", "🔎", "roommate"),
             },
             sampleListings: new (string title, decimal price, string cat, string city, string district)[]
             {
-                ("غُرفَة شَريك في شَقّة هادِئَة",       45000m, "room",      "إب",     "حَوبان"),
-                ("غُرفَة قَريبَة مِن الجامِعَة",         55000m, "room",      "إب",     "المُدير"),
-                ("شَقّة طالِبات مَفروشَة",              180000m, "apartment", "إب",     "حَوبان"),
-                ("ستوديو مُستَقِلّ مَع مَطبَخ",           90000m, "studio",   "إب",     "السَلام"),
-                ("شَقّة عائِليّة قَريبَة مِن الجامِعَة", 220000m, "apartment", "إب",     "حَوبان"),
-                ("غُرفَة في فيلا شَريك سَكَن",           60000m, "room",      "تَعِز",  "ذِنوبَة"),
-                ("ستوديو حَديث وَسَط المَدينَة",         95000m, "studio",   "تَعِز",  "الجَحمَليَّة"),
-                ("شَقّة فَسيحَة لِلطُلّاب",             170000m, "apartment", "صَنعاء", "حَدّة"),
-                ("غُرفَة شَريك في شَقّة عائِلِيَّة",     50000m, "room",      "صَنعاء", "عَصر"),
-                ("ستوديو راقٍ — الجَريف",              110000m, "studio",   "صَنعاء", "الجَريف"),
+                ("عِندي شَقّة وأَدوَر شَريك سَكَن",       45000m, "roommate_has",   "إب",     "حَوبان"),
+                ("غُرفَة قَريبَة مِن الجامِعَة",          55000m, "roommate_has",   "إب",     "المُدير"),
+                ("شَقّة طالِبات مَفروشَة شَريك",         180000m, "roommate_has",   "إب",     "حَوبان"),
+                ("أَدوَر شَريك سَكَن طالِب",               0m,    "roommate_wants", "إب",     "حَوبان"),
+                ("أَدوَر غُرفَة في شَقّة هادِئَة",          0m,    "roommate_wants", "تَعِز",  "ذِنوبَة"),
+                ("ستوديو شَريك وَسَط المَدينَة",         95000m, "roommate_has",   "تَعِز",  "الجَحمَليَّة"),
+                ("أَدوَر سَكَن مَع طُلّاب طِبّ",            0m,    "roommate_wants", "صَنعاء", "حَدّة"),
+                ("غُرفَة شَريك في شَقّة عائِلِيَّة",      50000m, "roommate_has",   "صَنعاء", "عَصر"),
             });
 
         await SeedTenantIfMissingAsync(globalSession, store,
             slug: "ejar",
             name: "إيجار",
-            color: "#C2410C",
+            color: "#1d4ed8",  // Marketplace Blue — هُويَّة إيجار V1 الرَسمِيَّة
             city: "إب",
             tagLine: "كلّ ما يُؤَجَّر في مَدينَتك",
             authChannel: "phone",
             categories: new[]
             {
-                ("apartment", "شَقّة",  "🏢"),
-                ("villa",     "فيلا",  "🏡"),
-                ("office",    "مَكتَب", "💼"),
-                ("shop",      "مَحلّ",  "🏪"),
-                ("storage",   "مَخزَن", "📦"),
+                // عَقارات سَكَنيَّة
+                ("apartment", "شَقّة",   "🏢", "residential"),
+                ("villa",     "فيلا",    "🏡", "residential"),
+                ("studio",    "ستوديو",  "🛌", "residential"),
+                ("room",      "غُرفَة",   "🚪", "residential"),
+                // عَقارات تِجاريَّة
+                ("office",    "مَكتَب",  "💼", "commercial"),
+                ("shop",      "مَحلّ",    "🏪", "commercial"),
+                ("storage",   "مَخزَن",  "📦", "commercial"),
+                // مُناسَبات
+                ("hall",      "صالَة أَفراح", "🎉", "events"),
+                // مَركَبات
+                ("car",       "سَيّارَة", "🚗", "vehicles"),
             },
             sampleListings: new (string title, decimal price, string cat, string city, string district)[]
             {
@@ -96,7 +101,7 @@ public static class PlatformSeed
         IDocumentSession globalSession,
         IDocumentStore store,
         string slug, string name, string color, string city, string tagLine, string authChannel,
-        (string slug, string label, string icon)[] categories,
+        (string slug, string label, string icon, string kind)[] categories,
         (string title, decimal price, string cat, string city, string district)[] sampleListings)
     {
         var existing = await globalSession.LoadAsync<Tenant>(slug);
@@ -109,6 +114,29 @@ public static class PlatformSeed
             if (existing.TagLine != tagLine)         { existing.TagLine = tagLine;         changed = true; }
             if (existing.City != city)               { existing.City = city;               changed = true; }
             if (existing.Name != name)               { existing.Name = name;               changed = true; }
+
+            // الفِئات: نَستَبدِلها بِالكامِل لِتَتَطابَق دائِماً مَع
+            // التَصريح في الكود (مَصدَر الحَقيقَة) — مَنع تَراكُم فِئات
+            // قَديمَة. الإعلانات لا تُمَسّ — قَد تُشير لِسلوغات قَديمَة
+            // (تَظهَر بِلا فِئَة في الواجِهَة) حَتَّى يُعيد المُستَخدِم
+            // تَعيينها أو يُشَغِّل الـ Importer.
+            var newCats = categories
+                .Select((c, i) => new Category {
+                    Slug = c.slug, Label = c.label, Icon = c.icon,
+                    Kind = c.kind, SortOrder = i
+                })
+                .ToList();
+            var oldFingerprint = string.Join(",", existing.Categories
+                .OrderBy(c => c.Slug)
+                .Select(c => $"{c.Slug}|{c.Kind}|{c.Label}"));
+            var newFingerprint = string.Join(",", newCats
+                .OrderBy(c => c.Slug)
+                .Select(c => $"{c.Slug}|{c.Kind}|{c.Label}"));
+            if (oldFingerprint != newFingerprint)
+            {
+                existing.Categories = newCats;
+                changed = true;
+            }
 
             if (changed)
             {
@@ -130,9 +158,10 @@ public static class PlatformSeed
         {
             Id = slug, Name = name, BrandColor = color,
             City = city, TagLine = tagLine, AuthChannel = authChannel,
-            Categories = categories.Select(c => new Category
+            Categories = categories.Select((c, i) => new Category
             {
-                Slug = c.slug, Label = c.label, Icon = c.icon
+                Slug = c.slug, Label = c.label, Icon = c.icon,
+                Kind = c.kind, SortOrder = i
             }).ToList()
         };
         globalSession.Store(tenant);

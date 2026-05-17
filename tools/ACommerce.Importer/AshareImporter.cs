@@ -50,37 +50,26 @@ public sealed class AshareImporter
 
         if (reset) await _target.ResetTenantAsync(TenantSlug);
 
-        // 1) Tenant.Categories: نَجَرِّب DiscoveryCategories أَوَّلاً (الفِئات
-        // الَّتي تَظهَر في الواجِهَة). إذا كانَت فارِغَة في DB الإنتاج،
-        // نَسقُط لِـ ProductCategory (الـ taxonomy الداخِليّ — حَيث يَسكُن
-        // الـ catalog الفِعليّ).
-        var categories = (await src.QueryAsync<DiscoveryCatRow>(
-            @"SELECT TOP 50 Id, Slug, Label, Icon FROM DiscoveryCategories
-              WHERE IsDeleted = 0 ORDER BY Label"
-        )).ToList();
-        if (categories.Count == 0)
-        {
-            _log.LogInformation("  ⓘ DiscoveryCategories فارِغ — أَسقُط لِـ ProductCategory.");
-            categories = (await src.QueryAsync<DiscoveryCatRow>(
-                @"SELECT TOP 50 Id, Slug, Name AS Label, Icon FROM ProductCategory
-                  WHERE IsDeleted = 0 AND IsActive = 1 ORDER BY SortOrder, Name"
-            )).ToList();
-        }
-
+        // 1) Tenant.Categories: عَشير V3 يَحوي فِئَتَين فَقَط (roommate_has,
+        // roommate_wants) في الواجِهَة — كُلّ ما عَداهُما تَفاصيل
+        // تَصنيف داخِليَّة لا تَهُمّ المُستَخدِم. نَجلِبهما بِالاسم بِغَضّ
+        // النَّظَر عَمّا في DB. الـ Id هو نَفس الـ Guid الثابِت الَّذي
+        // تَستَخدِمه CategoryAttributeMappings.
         await _target.UpsertTenantAsync(new Tenant
         {
             Id          = TenantSlug,
             Name        = "عَشير",
-            BrandColor  = "#345454",
+            BrandColor  = "#345454",  // Deep Olive Green (Ashare V3 رَسمي)
             City        = "إب",
             TagLine     = "السَكَن المُشتَرَك بأَريَحيّة",
             AuthChannel = "nafath",
-            Categories  = categories.Select(c => new Category
+            Categories  = new List<Category>
             {
-                Slug  = c.Slug,
-                Label = c.Label,
-                Icon  = string.IsNullOrEmpty(c.Icon) ? "🛏️" : c.Icon
-            }).ToList()
+                new() { Slug = "roommate_has",   Label = "عشير عنده سكن",
+                        Icon = "🏠", Kind = "roommate", SortOrder = 1 },
+                new() { Slug = "roommate_wants", Label = "عشير يدور سكن",
+                        Icon = "🔎", Kind = "roommate", SortOrder = 2 }
+            }
         });
 
         // 2) Users — مِن Profile (FullName, Phone مَوجودان مُباشَرَةً).
@@ -282,7 +271,6 @@ public sealed class AshareImporter
     }
 
     // ──── Row types — مُطابِقَة لِأَعمِدَة SELECT أَعلاه ───────────────
-    private sealed record DiscoveryCatRow(Guid Id, string Slug, string Label, string? Icon);
     private sealed record AshareProfileRow(Guid Id, string? FullName, string? Phone, string? NationalId, DateTime CreatedAt);
     private sealed record AshareUserIdMapRow(string? UserId, Guid Id);
     private sealed record AshareListingRow(Guid Id, string? Title, string? Description, decimal Price,

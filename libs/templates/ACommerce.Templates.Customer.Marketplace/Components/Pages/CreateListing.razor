@@ -44,20 +44,41 @@
 
         @if (string.IsNullOrEmpty(Category))
         {
-            @* خَطوَة 1: اختِر فِئَة. كُلّ بِطاقَة <a> لِيَعمَل النَّقر تَحت SSR. *@
+            @* خَطوَة 1: اختِر فِئَة. تَجميع الفِئات بِالـ Kind إن وُجِد —
+               لِلتَنَوُّع الكَبير في إيجار. إذا كُلّ الفِئات بِنَفس الـ Kind
+               (مَثَل عَشير: roommate فَقَط) لا نَعرِض رُؤوس مَجموعات. *@
+            var groups = tenant.Categories
+                .GroupBy(c => string.IsNullOrEmpty(c.Kind) ? "" : c.Kind)
+                .Select(g => new {
+                    Kind = g.Key,
+                    Label = KindLabel(g.Key),
+                    Items = g.OrderBy(c => c.SortOrder).ThenBy(c => c.Label).ToList()
+                })
+                .ToList();
+            var manyGroups = groups.Count > 1;
             <AcCard>
                 <ChildContent>
                     <h3 style="margin-top:0;">اختَر فِئَة الإعلان</h3>
-                    <div class="acm-home-grid">
-                        @foreach (var c in tenant.Categories)
+                    @foreach (var g in groups)
+                    {
+                        @if (manyGroups)
                         {
-                            <a class="acs-cat-pick"
-                               href="@($"/{Slug}/create-listing?category={Uri.EscapeDataString(c.Slug)}")">
-                                <span style="font-size:28px;">@c.Icon</span>
-                                <span>@c.Label</span>
-                            </a>
+                            <h4 style="font-size:14px;color:var(--ac-text-muted);
+                                       margin:16px 0 8px;border-top:1px solid var(--ac-border);padding-top:12px;">
+                                @g.Label
+                            </h4>
                         }
-                    </div>
+                        <div class="acm-home-grid">
+                            @foreach (var c in g.Items)
+                            {
+                                <a class="acs-cat-pick"
+                                   href="@($"/{Slug}/create-listing?category={Uri.EscapeDataString(c.Slug)}")">
+                                    <span style="font-size:28px;">@c.Icon</span>
+                                    <span>@c.Label</span>
+                                </a>
+                            }
+                        </div>
+                    }
                 </ChildContent>
             </AcCard>
         }
@@ -173,6 +194,18 @@
         if (!string.IsNullOrEmpty(Category))
             dynFields = await DynAttrs.GetForListingCategoryAsync(Slug, Category);
     }
+
+    static string KindLabel(string kind) => kind switch
+    {
+        ""             => "الفِئات",
+        "roommate"     => "السَكَن المُشتَرَك",
+        "residential"  => "سَكَنيّ",
+        "commercial"   => "تِجاريّ",
+        "events"       => "مُناسَبات",
+        "vehicles"     => "مَركَبات",
+        "leisure"      => "تَرفيه",
+        _              => kind
+    };
 
     RenderFragment RenderDynInput(ACommerce.Templates.Customer.Marketplace.Services.DynField f, string prefix) => @<text>
         @{

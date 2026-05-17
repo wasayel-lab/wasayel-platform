@@ -45,25 +45,29 @@ public sealed class EjarImporter
 
         if (reset) await _target.ResetTenantAsync(TenantSlug);
 
-        // 1) Tenant.Categories مِن DiscoveryCategories.
+        // 1) Tenant.Categories مِن DiscoveryCategories — مَع تَجميع شَجَريّ
+        // عَلى Kind (residential / commercial / events / vehicles / leisure).
+        // Ejar V1 يَحوي ~20 فِئَة في 5 مَجموعات — لِذلك الـ tree مُهِمّ.
         var categories = (await src.QueryAsync<EjarCategoryRow>(
-            @"SELECT TOP 50 Id, Slug, Label, Icon FROM DiscoveryCategories
-              WHERE IsDeleted = 0 ORDER BY Label"
+            @"SELECT TOP 50 Id, Slug, Label, Icon, Kind FROM DiscoveryCategories
+              WHERE IsDeleted = 0 ORDER BY Kind, Label"
         )).ToList();
 
         await _target.UpsertTenantAsync(new Tenant
         {
             Id          = TenantSlug,
             Name        = "إيجار",
-            BrandColor  = "#C2410C",
+            BrandColor  = "#1d4ed8",  // Marketplace Blue (Ejar V1 رَسمي)
             City        = "إب",
             TagLine     = "كلّ ما يُؤَجَّر في مَدينَتك",
             AuthChannel = "phone",
-            Categories  = categories.Select(c => new Category
+            Categories  = categories.Select((c, idx) => new Category
             {
-                Slug  = c.Slug,
-                Label = c.Label,
-                Icon  = string.IsNullOrEmpty(c.Icon) ? "🏠" : c.Icon
+                Slug      = c.Slug,
+                Label     = c.Label,
+                Icon      = string.IsNullOrEmpty(c.Icon) ? "🏠" : c.Icon,
+                Kind      = c.Kind ?? "",
+                SortOrder = idx
             }).ToList()
         });
 
@@ -222,7 +226,7 @@ public sealed class EjarImporter
             await _target.DumpGenericAsync(src, TenantSlug, t);
     }
 
-    private sealed record EjarCategoryRow(Guid Id, string Slug, string Label, string? Icon);
+    private sealed record EjarCategoryRow(Guid Id, string Slug, string Label, string? Icon, string? Kind);
     private sealed record EjarUserRow(Guid Id, string? FullName, string? Phone, DateTime CreatedAt);
     private sealed record EjarListingRow(Guid Id, string? Title, string? Description, decimal Price,
                                           string? PropertyType, string? City, string? District,

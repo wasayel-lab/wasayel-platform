@@ -31,6 +31,19 @@ public sealed class Category
     public string Slug { get; set; } = "";
     public string Label { get; set; } = "";
     public string? Icon { get; set; }
+
+    /// <summary>تَجميع رَئيسي (residential / commercial / events / vehicles / leisure / …).
+    /// يُستَخدَم لِعَرض الفِئات على شَكل شَجَرَة مَجموعَة بِالـ Kind في
+    /// المُستَأجِرين الَّذين يَحتَوون فِئات كَثيرَة (مَثَل إيجار). فارِغ
+    /// يَعني فِئَة رَئيسيَّة بِلا تَجميع.</summary>
+    public string Kind { get; set; } = "";
+
+    /// <summary>slug الفِئَة الأَب — لِشَجَرَة حَقيقيَّة (parent → leaves).
+    /// null = جَذر.</summary>
+    public string? ParentSlug { get; set; }
+
+    public int SortOrder { get; set; }
+
     public List<AttributeField> Attributes { get; set; } = new();
 }
 
