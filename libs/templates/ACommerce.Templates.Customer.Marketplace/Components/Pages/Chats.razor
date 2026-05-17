@@ -2,22 +2,18 @@
 @inject IDocumentStore Store
 @inject AuthSession Auth
 
+<div class="acs-page">
 @if (!Auth.IsAuthenticated)
 {
-    <AcEmptyState Title="المُحادَثات تَحتاج تَسجيل دُخول"
+    <AcEmptyState IconName="message"
+                  Title="المُحادَثات تَحتاج تَسجيل دُخول"
                   Message="سَجِّل دُخولك للوصول إلى رَسائلك"
-                  IconName="message" />
-    <div style="text-align:center;margin-top:12px;">
-        <a class="ac-login-cta" href="@($"/{Slug}/login?returnUrl=/{Slug}/chats")"
-           style="display:inline-block;padding:12px 24px;background:var(--ac-primary);
-                  color:#fff;border-radius:var(--ac-radius-sm);text-decoration:none;">
-            تَسجيل دُخول
-        </a>
-    </div>
+                  ActionLabel="تَسجيل دُخول"
+                  ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/chats")" />
 }
 else
 {
-    <h1>المُحادَثات</h1>
+    <h1 class="acm-wizard-title">المُحادَثات</h1>
 
     @if (convs is null)
     {
@@ -64,6 +60,7 @@ else
         </ul>
     }
 }
+</div>
 
 @code {
     [Parameter] public string Slug { get; set; } = "";

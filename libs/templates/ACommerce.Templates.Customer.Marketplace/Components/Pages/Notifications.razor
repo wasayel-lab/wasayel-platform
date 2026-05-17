@@ -7,21 +7,19 @@
 @inject ACommerce.Kit.Realtime.Client.RealtimeClient Realtime
 @implements IAsyncDisposable
 
+<div class="acs-page">
 @if (!_authed)
 {
-    <AcEmptyState Title="الإشعارات تَحتاج تَسجيل دُخول" IconName="bell" />
-    <div style="text-align:center;margin-top:12px;">
-        <a href="@($"/{Slug}/login?returnUrl=/{Slug}/notifications")"
-           style="display:inline-block;padding:12px 24px;background:var(--ac-primary);
-                  color:#fff;border-radius:var(--ac-radius-sm);text-decoration:none;">
-            تَسجيل دُخول
-        </a>
-    </div>
+    <AcEmptyState IconName="bell"
+                  Title="الإشعارات تَحتاج تَسجيل دُخول"
+                  Message="سَجِّل دُخولك لِتَلَقّي تَنبيهات لَحظيّة."
+                  ActionLabel="تَسجيل دُخول"
+                  ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/notifications")" />
 }
 else
 {
     <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h1 style="margin:0;">الإشعارات</h1>
+        <h1 class="acm-wizard-title" style="margin:0;">الإشعارات</h1>
         @if (Realtime.IsConnected)
         {
             <span class="ac-badge ac-badge-success" style="display:inline-flex;gap:4px;align-items:center;font-size:11px;">
@@ -58,6 +56,7 @@ else
         </div>
     }
 }
+</div>
 
 @code {
     [Parameter] public string Slug { get; set; } = "";

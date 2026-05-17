@@ -2,9 +2,13 @@
 @inject IDocumentStore Store
 @inject AuthSession Auth
 
+<div class="acs-page">
 @if (!Auth.IsAuthenticated)
 {
-    <p class="ac-muted">تَحتاج تَسجيل دُخول.</p>
+    <AcEmptyState IconName="message"
+                  Title="تَحتاج تَسجيل دُخول"
+                  ActionLabel="تَسجيل دُخول"
+                  ActionHref="@($"/{Slug}/login")" />
 }
 else if (conv is null)
 {
@@ -65,6 +69,7 @@ else
         </button>
     </form>
 }
+</div>
 
 @code {
     [Parameter] public string Slug { get; set; } = "";

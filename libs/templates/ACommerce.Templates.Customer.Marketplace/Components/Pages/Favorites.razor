@@ -1,36 +1,51 @@
 @page "/{slug}/favorites"
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject NavigationManager Nav
 
-@if (!Auth.IsAuthenticated)
-{
-    <p class="ac-muted">تَحتاج تَسجيل دُخول.</p>
-    <a class="ac-login-cta" href="@($"/{Slug}/login?returnUrl=/{Slug}/favorites")"
-       style="display:inline-block;padding:12px 24px;background:var(--ac-primary);
-              color:#fff;border-radius:var(--ac-radius-sm);text-decoration:none;">دُخول</a>
-}
-else
-{
-    <h1>المُفَضَّلَة</h1>
-    @if (items is null) { <p class="ac-muted">جارٍ التَحميل…</p> }
-    else if (items.Count == 0) { <p class="empty">لا مُفَضَّلَة بَعد.</p> }
+<div class="acs-page">
+    @if (!Auth.IsAuthenticated)
+    {
+        <AcEmptyState IconName="heart"
+                      Title="المُفَضَّلَة تَحتاج تَسجيل دُخول"
+                      Message="سَجِّل دُخولك لِحِفظ الإعلانات الَّتي تَهُمّك."
+                      ActionLabel="تَسجيل دُخول"
+                      ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/favorites")" />
+    }
     else
     {
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;">
-            @foreach (var l in items)
-            {
-                <a href="@($"/{Slug}/listings/{l.Id}")"
-                   style="background:var(--ac-surface);border:1px solid var(--ac-border);
-                          border-radius:var(--ac-radius-md);padding:14px;text-decoration:none;
-                          color:var(--ac-text);display:flex;flex-direction:column;gap:6px;">
-                    <strong>@l.Title</strong>
-                    <span style="color:var(--ac-primary);font-weight:700;">@l.Price.ToString("N0") ريال</span>
-                    <span class="ac-muted">@l.City — @l.District</span>
-                </a>
-            }
-        </div>
+        <h1 class="acm-wizard-title">المُفَضَّلَة</h1>
+
+        @if (items is null)
+        {
+            <AcLoadingState Message="جارٍ التَحميل…" />
+        }
+        else if (items.Count == 0)
+        {
+            <AcEmptyState IconName="heart"
+                          Title="لا مُفَضَّلَة بَعد"
+                          Message="ابدَأ بِالتَصَفُّح وأَضِف الإعلانات الَّتي تُعجِبك."
+                          ActionLabel="استِكشاف"
+                          ActionHref="@($"/{Slug}/explore")" />
+        }
+        else
+        {
+            <div class="acm-home-grid">
+                @foreach (var l in items)
+                {
+                    <a href="@($"/{Slug}/listings/{l.Id}")" style="text-decoration:none;color:inherit;display:block;">
+                        <AcSpaceCard Title="@l.Title"
+                                     Location="@($"{l.City} — {l.District}")"
+                                     PriceLabel="@($"{l.Price:N0} ريال")"
+                                     ShowFavorite="true"
+                                     IsFavorite="true"
+                                     OnOpen="@(() => Nav.NavigateTo($"/{Slug}/listings/{l.Id}"))" />
+                    </a>
+                }
+            </div>
+        }
     }
-}
+</div>
 
 @code {
     [Parameter] public string Slug { get; set; } = "";

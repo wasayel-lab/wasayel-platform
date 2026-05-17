@@ -1,71 +1,154 @@
 @page "/{slug}"
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject ITenantContext Tenant
+@inject NavigationManager Nav
 
-@if (loaded is null)
-{
-    <p class="ac-muted">جارٍ التَحميل…</p>
-}
-else
-{
-    <section style="background-color: var(--ac-primary);
-                    background-image: linear-gradient(135deg, var(--ac-primary), var(--ac-primary-hover));
-                    color:#fff;padding:24px 16px;border-radius:var(--ac-radius-lg);margin-bottom:16px;">
-        <h1 class="hero-title">@loaded.Name</h1>
-        <p style="margin:0;opacity:.92;">@loaded.TagLine</p>
-        <p style="margin:4px 0 0;opacity:.85;font-size:13px;">
-            <AcIcon Name="map-pin" Size="14" /> @loaded.City
-        </p>
-    </section>
+@*
+    صَفحة الـ tenant الرَئيسيّة. تَتَّبع بُنية Home.razor مِن القالَب
+    القَديم (AcHeroBanner + AcSearchBox + AcCategoryTile + AcSpaceCard
+    + AcCtaCard + AcActionCard) ولكن مُرَكَّبَة يَدَويّاً (دون
+    AcMarketplaceHomePage) لأَنّه يَعتَمِد عَلى ITemplateEngine الَّذي لا
+    يَعمَل في platform-v1.
+*@
 
-    <h2 style="margin-top:24px;">الفِئات</h2>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:24px;">
-        @foreach (var c in loaded.Categories)
-        {
-            <a href="@($"/{Slug}/explore?category={c.Slug}")"
-               class="acs-cat-pick" style="text-decoration:none;color:var(--ac-text);">
-                <span style="font-size:32px;">@c.Icon</span>
-                <strong style="font-size:14px;">@c.Label</strong>
-                <span class="ac-muted" style="font-size:12px;">@CountFor(c.Slug) إعلان</span>
-            </a>
-        }
-    </div>
-
-    <h2>أَحدَث الإعلانات</h2>
-    @if (latest is { Count: > 0 })
+<div class="acs-page acm-home">
+    @if (loaded is null)
     {
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
-            @foreach (var l in latest)
-            {
-                <a href="/@Slug/listings/@l.Id" style="text-decoration:none;color:inherit;display:block;"><AcSpaceCard Title="@l.Title"
-                             ImageUrl="@null"
-                             Location="@($"{l.City} — {l.District}")"
-                             PriceLabel="@($"{l.Price:N0} ريال")"
-                             Ribbon="@(latest.IndexOf(l) == 0 ? "جَديد" : null)"
-                             ShowFavorite="@Auth.IsAuthenticated"
-                             IsFavorite="@(favIds.Contains(l.Id))"
-                             AddFavoriteAriaLabel="أَضِف للمُفَضَّلَة"
-                             RemoveFavoriteAriaLabel="أَزِل من المُفَضَّلَة"
-                             OnOpen="@(() => Open(l.Id))" /></a>
-            }
-        </div>
+        <AcLoadingState />
     }
     else
     {
-        <p class="empty">لا إعلانات بَعد.</p>
+        <AcHeroBanner Title="@($"ابحَث في {loaded.Name}")"
+                      Subtitle="@loaded.TagLine">
+            <LogoContent>
+                <div style="display:inline-flex;align-items:center;gap:8px;color:#fff;">
+                    <span aria-hidden="true"
+                          style="display:inline-flex;width:36px;height:36px;align-items:center;justify-content:center;
+                                 background:rgba(255,255,255,.18);border-radius:8px;">
+                        <AcIcon Name="home" Size="20" />
+                    </span>
+                    <span style="font-size:1.1rem;font-weight:700;color:#fff;">@loaded.Name</span>
+                </div>
+            </LogoContent>
+            <ChildContent>
+                <form method="get" action="@($"/{Slug}/explore")" role="search" class="ac-search">
+                    <span class="ac-search-icon" aria-hidden="true">
+                        <AcIcon Name="search" Size="18" />
+                    </span>
+                    <input type="search" name="q" class="ac-search-input"
+                           placeholder="@($"ابحَث في {loaded.Name}…")"
+                           autocomplete="off" inputmode="search" />
+                    <button type="submit" class="ac-search-submit" aria-label="بَحث">
+                        <AcIcon Name="arrow-left" Size="18" />
+                    </button>
+                </form>
+            </ChildContent>
+        </AcHeroBanner>
+
+        @if (loaded.Categories is { Count: > 0 })
+        {
+            <AcSectionHeader Title="الفِئات" />
+            <AcHScroll>
+                @foreach (var c in loaded.Categories)
+                {
+                    <AcCategoryTile Label="@c.Label"
+                                    Icon="@c.Icon"
+                                    OnClick="@(() => Nav.NavigateTo($"/{Slug}/explore?category={Uri.EscapeDataString(c.Slug)}"))" />
+                }
+            </AcHScroll>
+        }
+
+        <AcCtaCard Title="عِندَك ما تَعرِضه؟"
+                   Subtitle="أَضِف إعلانك واصِل لِلمُهتَمّين بِسُرعَة"
+                   IconName="house-add"
+                   Variant="surface"
+                   OnClick="@(() => Nav.NavigateTo(Auth.IsAuthenticated ? $"/{Slug}/me/edit" : $"/{Slug}/login"))" />
+
+        @if (featured is { Count: > 0 })
+        {
+            <AcSectionHeader Title="مُمَيَّز"
+                             ActionLabel="عَرض الكلّ"
+                             OnAction="@(() => Nav.NavigateTo($"/{Slug}/explore"))" />
+            <AcHScroll Class="acm-home-rail">
+                @foreach (var l in featured)
+                {
+                    <div class="acm-home-rail-item">
+                        <AcSpaceCard Title="@l.Title"
+                                     ImageUrl="@null"
+                                     Location="@($"{l.City} — {l.District}")"
+                                     PriceLabel="@($"{l.Price:N0} ريال")"
+                                     Ribbon="مُمَيَّز"
+                                     ShowFavorite="@Auth.IsAuthenticated"
+                                     IsFavorite="@favIds.Contains(l.Id)"
+                                     AddFavoriteAriaLabel="أَضِف لِلمُفَضَّلَة"
+                                     RemoveFavoriteAriaLabel="أَزِل مِن المُفَضَّلَة"
+                                     OnOpen="@(() => Open(l.Id))"
+                                     OnToggleFavorite="@(on => ToggleFav(l.Id, on))" />
+                    </div>
+                }
+            </AcHScroll>
+        }
+
+        @if (latest is { Count: > 0 })
+        {
+            <AcSectionHeader Title="أُضيفَ حَديثاً"
+                             ActionLabel="عَرض الكلّ"
+                             OnAction="@(() => Nav.NavigateTo($"/{Slug}/explore"))" />
+            <div class="acm-home-grid">
+                @foreach (var l in latest)
+                {
+                    <AcSpaceCard Title="@l.Title"
+                                 ImageUrl="@null"
+                                 Location="@($"{l.City} — {l.District}")"
+                                 PriceLabel="@($"{l.Price:N0} ريال")"
+                                 Ribbon="جَديد"
+                                 ShowFavorite="@Auth.IsAuthenticated"
+                                 IsFavorite="@favIds.Contains(l.Id)"
+                                 AddFavoriteAriaLabel="أَضِف لِلمُفَضَّلَة"
+                                 RemoveFavoriteAriaLabel="أَزِل مِن المُفَضَّلَة"
+                                 OnOpen="@(() => Open(l.Id))"
+                                 OnToggleFavorite="@(on => ToggleFav(l.Id, on))" />
+                }
+            </div>
+        }
+
+        <section class="acm-home-actions">
+            <AcActionCard Label="استِكشاف"
+                          IconName="search-heart"
+                          Variant="primary"
+                          OnClick="@(() => Nav.NavigateTo($"/{Slug}/explore"))" />
+            <AcActionCard Label="@(Auth.IsAuthenticated ? "حِسابي" : "تَسجيل دُخول")"
+                          IconName="user"
+                          Variant="surface"
+                          OnClick="@(() => Nav.NavigateTo(Auth.IsAuthenticated ? $"/{Slug}/me" : $"/{Slug}/login"))" />
+        </section>
+
+        @if ((featured is null || featured.Count == 0) && (latest is null || latest.Count == 0))
+        {
+            <AcEmptyState IconName="building" Message="لا إعلانات بَعد." />
+        }
     }
-}
+</div>
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
-    [Inject] NavigationManager Nav { get; set; } = default!;
 
     Tenant? loaded;
     List<Listing>? latest;
-    Dictionary<string, int> counts = new();
+    List<Listing>? featured;
     HashSet<Guid> favIds = new();
 
     void Open(Guid id) => Nav.NavigateTo($"/{Slug}/listings/{id}");
+
+    async Task ToggleFav(Guid listingId, bool on)
+    {
+        // التَنفيذ الفِعليّ يَجري عَبر form POST في صَفحَة التَفاصيل؛ هُنا
+        // نُحَدِّث الـ UI تَفاؤُليّاً ليَنعَكِس التَغيير فَوراً قَبل refresh.
+        if (on) favIds.Add(listingId); else favIds.Remove(listingId);
+        await Task.CompletedTask;
+        StateHasChanged();
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -74,14 +157,18 @@ else
         if (loaded is null) return;
 
         await using var tq = Store.QuerySession(Slug);
+
         latest = (await tq.Query<Listing>()
             .Where(x => !x.IsDeleted)
             .OrderByDescending(x => x.CreatedAt)
-            .Take(8).ToListAsync()).ToList();
+            .Take(6).ToListAsync()).ToList();
 
-        var all = await tq.Query<Listing>().Where(x => !x.IsDeleted)
-            .Select(x => x.CategorySlug).ToListAsync();
-        counts = all.GroupBy(s => s).ToDictionary(g => g.Key, g => g.Count());
+        // "مُمَيَّز" حاليّاً = أَوّل 4 إعلانات حَسَب السِعر الأعلى. سَيُستَبدَل
+        // لاحِقاً بِحَقل IsFeatured في Listing.
+        featured = (await tq.Query<Listing>()
+            .Where(x => !x.IsDeleted)
+            .OrderByDescending(x => x.Price)
+            .Take(4).ToListAsync()).ToList();
 
         if (Auth.IsAuthenticated)
         {
@@ -90,6 +177,4 @@ else
             favIds = favs.Select(f => f.ListingId).ToHashSet();
         }
     }
-
-    int CountFor(string s) => counts.TryGetValue(s, out var n) ? n : 0;
 }

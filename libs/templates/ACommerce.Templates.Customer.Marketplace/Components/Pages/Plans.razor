@@ -2,19 +2,22 @@
 @inject IDocumentStore Store
 @inject AuthSession Auth
 
-<h1>الباقات</h1>
+<div class="acs-page">
+<h1 class="acm-wizard-title">الباقات</h1>
 
 @if (plans is null)
 {
-    <p class="ac-muted">جارٍ التَحميل…</p>
+    <AcLoadingState Message="جارٍ التَحميل…" />
 }
 else if (plans.Count == 0)
 {
-    <p class="empty">لا توجَد باقات بَعد. يُسَجِّل المَتجَر باقاته من لوحَة التَحَكُّم.</p>
+    <AcEmptyState IconName="package"
+                  Title="لا توجَد باقات بَعد"
+                  Message="يُسَجِّل المَتجَر باقاته مِن لوحَة التَحَكُّم." />
 }
 else
 {
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;">
+    <div class="acm-home-grid">
         @foreach (var p in plans)
         {
             <AcCard>
@@ -44,6 +47,7 @@ else
         }
     </div>
 }
+</div>
 
 @code {
     [Parameter] public string Slug { get; set; } = "";

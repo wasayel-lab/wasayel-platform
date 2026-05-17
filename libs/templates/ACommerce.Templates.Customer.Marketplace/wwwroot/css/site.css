@@ -1,5 +1,36 @@
 /* تَعديلات خاصّة بـ V1.App فوق app.css */
 
+/* مَنع overflow أُفُقيّ مِن AcHScroll أو grids واسِعَة */
+.acs-page { overflow-x: hidden; }
+
+/* shell الـ layout الأَب — يَلُفّ navbar + topnav + main + bottom-nav */
+.acm-shell { min-height: 100vh; }
+
+
+
+/* Chip filter (used in /explore) */
+.ac-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 12px; border-radius: 999px;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    text-decoration: none; color: var(--ac-text); font-size: 13px;
+    white-space: nowrap; flex-shrink: 0;
+}
+.ac-chip:hover { background: var(--ac-bg-alt); }
+.ac-chip-active {
+    background: var(--ac-primary); color: var(--ac-on-primary);
+    border-color: var(--ac-primary);
+}
+.ac-chip-active:hover { background: var(--ac-primary-hover); }
+
+/* صَفّ chips قابِل لِلتَمرير أُفُقيّاً (يُستَخدَم في صَفحَة /explore) */
+.acm-chip-row {
+    display: flex; gap: 8px; overflow-x: auto;
+    padding: 4px 0 12px; scrollbar-width: none;
+}
+.acm-chip-row::-webkit-scrollbar { display: none; }
+
+
 /* Landing tenants list */
 .tenant-cards { list-style: none; padding: 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .tenant-card {

@@ -30,22 +30,26 @@
 
 @if (Tenant.IsResolved)
 {
+    @* nav fixed-positioned: خارِج .acs-page حَتّى لا تُفَسَّر كَ overflow في فُحوص الـ runtime. *@
+    @if (!isLogin)
+    {
+        <nav class="acm-mobile-nav" style="--ac-primary:@brand;">
+            <div class="acm-mobile-nav-inner">
+                <div class="acm-mobile-nav-brand">
+                    <span class="acm-mobile-nav-brand-name">@Tenant.Name</span>
+                </div>
+                <div class="acm-mobile-nav-actions">
+                    <a class="acm-mobile-nav-btn" href="@($"/{slug}/notifications")" aria-label="الإشعارات">
+                        <AcIcon Name="bell" Size="24" />
+                    </a>
+                </div>
+            </div>
+        </nav>
+    }
+
     <div class="acs-page" style="--ac-primary:@brand; --ac-primary-dark:@brand; --ac-primary-light:@brand; --ac-primary-hover:@brand;">
         @if (!isLogin)
         {
-            <nav class="acm-mobile-nav">
-                <div class="acm-mobile-nav-inner">
-                    <div class="acm-mobile-nav-brand">
-                        <span class="acm-mobile-nav-brand-name">@Tenant.Name</span>
-                    </div>
-                    <div class="acm-mobile-nav-actions">
-                        <a class="acm-mobile-nav-btn" href="@($"/{slug}/notifications")" aria-label="الإشعارات">
-                            <AcIcon Name="bell" Size="24" />
-                        </a>
-                    </div>
-                </div>
-            </nav>
-
             <div class="acm-v2-topnav-wrap">
                 <AcTopNav Items="topItems">
                     <BrandContent>

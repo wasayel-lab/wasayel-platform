@@ -1,0 +1,381 @@
+/* =========================================================================
+   ACommerce.Templates.Marketplace — CSS for marketplace-specific components
+   ========================================================================= */
+
+/* ── Booking card ─────────────────────────────────────────────────────── */
+.acm-booking-card {
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: var(--ac-shadow-sm);
+}
+.acm-booking-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom:8px;
+    border-bottom: 1px solid var(--ac-border);
+}
+.acm-booking-listing-title { font-weight: 700; font-size:1.125rem; }
+.acm-booking-status {
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size:0.875rem;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--ac-info) 14%, transparent);
+    color: var(--ac-info);
+}
+.acm-booking-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.acm-booking-customer { font-weight: 600; }
+.acm-booking-dates { color: var(--ac-text-muted); font-size:0.875rem; }
+.acm-booking-price,
+.acm-booking-total {
+    font-weight: 700;
+    color: var(--ac-primary);
+    font-size:1.125rem;
+}
+.acm-booking-notes {
+    background: var(--ac-bg-alt);
+    padding:8px 12px;
+    border-radius: var(--ac-radius-sm);
+    margin-top:8px;
+    font-size:0.875rem;
+    color: var(--ac-text-muted);
+}
+.acm-booking-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--ac-border);
+    flex-wrap: wrap;
+}
+
+/* Compact booking row (used in owner dashboard) */
+.acm-booking-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    margin-bottom: 8px;
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+    gap: 12px;
+}
+.acm-booking-row-info { flex: 1; min-width: 0; }
+.acm-booking-row-meta {
+    color: var(--ac-text-muted);
+    font-size:0.875rem;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* ── Listing card ─────────────────────────────────────────────────────── */
+.acm-listing-card {
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    box-shadow: var(--ac-shadow-sm);
+    transition: box-shadow var(--ac-transition), transform var(--ac-transition);
+}
+.acm-listing-card:hover {
+    box-shadow: var(--ac-shadow-md);
+    transform: translateY(-2px);
+}
+.acm-listing-badges {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    flex-wrap: wrap;
+}
+.acm-listing-featured {
+    background: var(--ac-secondary);
+    color: #ffffff;
+    padding: 8px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+.acm-listing-actions {
+    padding: 12px;
+    margin-top: auto;
+    border-top: 1px solid var(--ac-border);
+    display: flex;
+    gap: 8px;
+}
+
+/* ── Full listing card (expanded) ─────────────────────────────────────── */
+.acm-listing-header { display: flex; gap: 12px; padding: 12px; align-items: flex-start; }
+.acm-listing-thumb { width: 80px; height: 80px; border-radius: var(--ac-radius-sm); background: var(--ac-bg-alt); flex-shrink: 0; overflow: hidden; }
+.acm-listing-info { flex: 1; min-width: 0; }
+.acm-listing-title-row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.acm-listing-title { font-weight: 700; }
+.acm-listing-meta { color: var(--ac-text-muted); font-size:0.875rem; }
+.acm-listing-owner { color: var(--ac-text-muted); font-size:0.875rem; margin-top: 4px; }
+.acm-listing-price { color: var(--ac-primary); font-weight: 700; font-size:1.125rem; }
+
+/* ── Plan card ────────────────────────────────────────────────────────── */
+.acm-plan-card { padding: 20px; background: var(--ac-surface); border: 1px solid var(--ac-border); border-radius: var(--ac-radius-md); margin-bottom: 12px; }
+.acm-plan-header { display: flex; justify-content: space-between; align-items: center; margin-bottom:8px; }
+.acm-plan-price { font-size: 1.5rem; font-weight: 700; color: var(--ac-primary); }
+
+/* ── Subscription card ────────────────────────────────────────────────── */
+.acm-subscription-card, .acm-sub-details-card {
+    padding: 20px;
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+    margin-bottom: 16px;
+}
+.acm-sub-header, .acm-sub-details-header { display: flex; justify-content: space-between; margin-bottom: 12px; }
+.acm-sub-plan-name { font-weight: 700; font-size:1.125rem; }
+.acm-sub-desc { color: var(--ac-text-muted); font-size:0.875rem; margin-bottom: 8px; }
+.acm-sub-monthly-price, .acm-sub-details-price { font-size:1.5rem; font-weight: 700; color: var(--ac-primary); }
+.acm-sub-expiry { font-size:0.875rem; color: var(--ac-text-muted); }
+.acm-sub-footer { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--ac-border); }
+.acm-sub-cancel-section { margin-top: 16px; padding: 12px; background: color-mix(in srgb, var(--ac-danger) 8%, transparent); border-radius: var(--ac-radius-sm); }
+
+/* ── Quota widgets ────────────────────────────────────────────────────── */
+.acm-quota-card { padding: 16px; background: var(--ac-surface); border: 1px solid var(--ac-border); border-radius: var(--ac-radius-md); margin-bottom: 12px; }
+.acm-quota-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+.acm-quota-label { font-size:0.875rem; color: var(--ac-text-muted); }
+.acm-quota-bar { height: 8px; background: var(--ac-bg-alt); border-radius: 4px; overflow: hidden; }
+.acm-quota-fill { height: 100%; background: var(--ac-primary); border-radius: 4px; transition: width 300ms; }
+.acm-quota-fill-featured { background: var(--ac-secondary); }
+
+/* ── Quick actions dashboard row ──────────────────────────────────────── */
+.acm-quick-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+
+/* ── Marketplace Home (Ashare-inspired) ──────────────────────────────── */
+.acm-home { display: flex; flex-direction: column; gap: 16px; }
+.acm-home-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 20px 16px;
+    background: var(--ac-bg-alt);
+    border-radius: var(--ac-radius-lg);
+    border: 1px solid var(--ac-border);
+}
+.acm-home-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--ac-text);
+}
+.acm-home-subtitle {
+    font-size: 13px;
+    color: var(--ac-text-muted);
+    margin: 0 0 4px;
+}
+.acm-home-rail { padding: 4px 0; }
+.acm-home-rail-item { width: 220px; }
+.acm-home-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.acm-home-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+}
+
+/* ── Responsive: on narrow screens simulate mobile (≤600px)  ────────── */
+@media (max-width: 600px) {
+    .acm-home { gap: 12px; }
+    .acm-home-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .acm-home-rail-item { width: 180px; }
+}
+
+/* ── Marketplace Explore (Ashare-inspired) ───────────────────────────── */
+.acm-explore { display: flex; flex-direction: column; gap: 12px; }
+.acm-explore-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+    color: var(--ac-text);
+}
+
+.acm-explore-filterbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.acm-explore-chips { flex: 1; min-width: 0; }
+.acm-explore-filterbtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--ac-border);
+    background: var(--ac-surface);
+    color: var(--ac-primary);
+    border-radius: var(--ac-radius-md);
+    cursor: pointer;
+    flex-shrink: 0;
+    font-family: inherit;
+}
+.acm-explore-filterbtn:hover { background: var(--ac-bg-alt); }
+
+.acm-explore-sortbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 0;
+}
+.acm-explore-count {
+    font-size: 13px;
+    color: var(--ac-text-muted);
+    font-weight: 500;
+}
+.acm-explore-sortbar-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.acm-explore-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.acm-explore-map {
+    min-height: 300px;
+    padding: 24px;
+    background: var(--ac-bg-alt);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.acm-explore-preview { padding: 8px 0 16px; }
+
+.acm-explore-filtersec { margin-bottom: 16px; }
+.acm-explore-filtersec-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    color: var(--ac-text);
+}
+.acm-explore-pricerange {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.acm-explore-pricerange > .ac-input,
+.acm-explore-pricerange > input.ac-input { flex: 1; }
+.acm-explore-capacity,
+.acm-explore-rating {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* ── Responsive tweaks ───────────────────────────────────────────────── */
+@media (max-width: 600px) {
+    .acm-explore-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .acm-explore-sortbar { flex-wrap: wrap; }
+}
+
+/* ── Marketplace Details ─────────────────────────────────────────────── */
+.acm-details { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; }
+.acm-details-gallery-actions {
+    position: absolute; inset: 8px 8px auto 8px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px;
+}
+.acm-details-gallery-actions-end { display: inline-flex; gap: 8px; }
+.acm-details-circle-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border: 0; border-radius: 999px;
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--ac-text);
+    cursor: pointer; font-family: inherit;
+}
+.acm-details-title { font-size: 18px; font-weight: 700; margin: 4px 0 0; color: var(--ac-text); }
+.acm-details-location {
+    display: inline-flex; align-items: center; gap: 4px;
+    color: var(--ac-text-muted); font-size: 13px;
+}
+.acm-details-meta {
+    display: inline-flex; gap: 16px; color: var(--ac-text-muted); font-size: 13px;
+}
+.acm-details-meta > span { display: inline-flex; align-items: center; gap: 4px; }
+
+.acm-details-section { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--ac-border); }
+.acm-details-section-title { font-size: 14px; font-weight: 700; margin: 0; color: var(--ac-text); }
+.acm-details-description { font-size: 13px; color: var(--ac-text); line-height: 1.6; margin: 0; }
+
+.acm-details-owner { display: flex; gap: 12px; align-items: center; }
+.acm-details-owner-avatar {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 48px; height: 48px; border-radius: 999px;
+    background: color-mix(in srgb, var(--ac-primary) 12%, transparent);
+    color: var(--ac-primary); flex-shrink: 0;
+}
+.acm-details-owner-info h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--ac-text); }
+.acm-details-owner-info span { font-size: 12px; color: var(--ac-text-muted); }
+
+.acm-details-amenities { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.acm-details-amenity {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    background: var(--ac-bg-alt);
+    border-radius: var(--ac-radius-md);
+    font-size: 13px; color: var(--ac-text);
+}
+
+.acm-details-price { font-size: 16px; font-weight: 700; color: var(--ac-primary); }
+.acm-details-priceunit { font-size: 12px; color: var(--ac-text-muted); }
+
+/* ── Map page ────────────────────────────────────────────────────────── */
+.acm-mappage { position: relative; display: flex; flex-direction: column; gap: 8px; }
+.acm-mappage-preview { padding: 8px 0 16px; }
+
+/* ── Wizard / Create ─────────────────────────────────────────────────── */
+.acm-wizard { display: flex; flex-direction: column; gap: 12px; }
+.acm-wizard-title { font-size: 18px; font-weight: 700; margin: 0; color: var(--ac-text); }
+
+.acm-create { display: flex; flex-direction: column; gap: 12px; }
+.acm-create-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ── Complaints ──────────────────────────────────────────────────────── */
+.acm-complaints { display: flex; flex-direction: column; gap: 12px; }
+.acm-complaints-list { display: flex; flex-direction: column; gap: 8px; }
+.acm-complaint-card { padding: 0; }
+.acm-complaint-btn {
+    width: 100%; display: flex; flex-direction: column; gap: 4px;
+    padding: 12px; border: 0; background: transparent; text-align: start;
+    cursor: pointer; font-family: inherit; color: var(--ac-text);
+}
+.acm-complaint-body { color: var(--ac-text-muted); font-size: 13px; }
+
+/* ── Payment Checkout ────────────────────────────────────────────────── */
+.acm-checkout { display: flex; flex-direction: column; gap: 12px; }
+.acm-checkout-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 768px) {
+    .acm-checkout-grid { grid-template-columns: 1fr 1fr; align-items: start; }
+}
+.acm-checkout-line { display: flex; justify-content: space-between; padding: 6px 0; color: var(--ac-text); }

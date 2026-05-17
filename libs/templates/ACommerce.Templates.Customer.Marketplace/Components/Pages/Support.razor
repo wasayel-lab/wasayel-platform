@@ -2,19 +2,18 @@
 @inject IDocumentStore Store
 @inject AuthSession Auth
 
+<div class="acs-page">
 @if (!Auth.IsAuthenticated)
 {
-    <AcEmptyState Title="الدَعم يَحتاج تَسجيل دُخول" IconName="alert-circle" />
-    <div style="text-align:center;margin-top:12px;">
-        <a href="@($"/{Slug}/login?returnUrl=/{Slug}/support")"
-           class="ac-btn ac-btn-primary"
-           style="display:inline-block;padding:12px 24px;background:var(--ac-primary);
-                  color:#fff;text-decoration:none;border-radius:var(--ac-radius-sm);">دُخول</a>
-    </div>
+    <AcEmptyState IconName="alert-circle"
+                  Title="الدَعم يَحتاج تَسجيل دُخول"
+                  Message="سَجِّل دُخولك لِفَتح طَلَب أو مُتابَعَة طَلَباتك."
+                  ActionLabel="تَسجيل دُخول"
+                  ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/support")" />
 }
 else
 {
-    <h1>الدَعم والشَكاوى</h1>
+    <h1 class="acm-wizard-title">الدَعم والشَكاوى</h1>
 
     <AcCard>
         <ChildContent>
@@ -59,6 +58,7 @@ else
         </div>
     }
 }
+</div>
 
 @code {
     [Parameter] public string Slug { get; set; } = "";

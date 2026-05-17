@@ -9,28 +9,40 @@
 }
 else
 {
-    <h1>كلّ إعلانات @tenant.Name</h1>
+    <AcPageHeader Title="@($"كلّ إعلانات {tenant.Name}")"
+                  Subtitle="@($"{items?.Count ?? 0} نَتيجَة")" />
 
-    <AcFilterBar SearchValue="@Query"
-                 SearchPlaceholder="ابحَث في الإعلانات…"
-                 OnSearchChange="@(v => Reload(v, Category, Sort))">
-        <LeadingFilters>
-            <a class="@(string.IsNullOrEmpty(Category)?"chip active":"chip")"
-               href="@($"/{Slug}/explore")">الكلّ</a>
-            @foreach (var c in tenant.Categories)
-            {
-                <a class="@(Category == c.Slug ? "chip active" : "chip")"
-                   href="@($"/{Slug}/explore?category={c.Slug}")">
-                    @c.Icon @c.Label
-                </a>
-            }
-        </LeadingFilters>
-        <TrailingFilters>
-            <AcSortMenu Options="_sortOptions" Value="@Sort"
-                        ValueChanged="@(v => Reload(Query, Category, v))"
-                        Label="ترتيب" />
-        </TrailingFilters>
-    </AcFilterBar>
+    <form method="get" action="@($"/{Slug}/explore")" role="search" class="ac-search" style="margin-bottom:12px;">
+        <span class="ac-search-icon" aria-hidden="true">
+            <AcIcon Name="search" Size="18" />
+        </span>
+        <input type="search" name="q" class="ac-search-input"
+               placeholder="ابحَث في الإعلانات…"
+               value="@Query" autocomplete="off" inputmode="search" />
+        @if (!string.IsNullOrEmpty(Category))
+        {
+            <input type="hidden" name="category" value="@Category" />
+        }
+        @if (!string.IsNullOrEmpty(Sort))
+        {
+            <input type="hidden" name="sort" value="@Sort" />
+        }
+        <button type="submit" class="ac-search-submit" aria-label="بَحث">
+            <AcIcon Name="arrow-left" Size="18" />
+        </button>
+    </form>
+
+    <div class="acm-chip-row">
+        <a class="@(string.IsNullOrEmpty(Category)?"ac-chip ac-chip-active":"ac-chip")"
+           href="@($"/{Slug}/explore")">الكلّ</a>
+        @foreach (var c in tenant.Categories)
+        {
+            <a class="@(Category == c.Slug ? "ac-chip ac-chip-active" : "ac-chip")"
+               href="@($"/{Slug}/explore?category={c.Slug}")">
+                @c.Icon @c.Label
+            </a>
+        }
+    </div>
 
     @if (items is null)
     {
@@ -44,15 +56,19 @@ else
     }
     else
     {
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:12px;">
+        <div class="acm-home-grid">
             @foreach (var l in items)
             {
-                <a href="/@Slug/listings/@l.Id" style="text-decoration:none;color:inherit;display:block;"><AcSpaceCard Title="@l.Title"
-                             Location="@($"{l.City} — {l.District}")"
-                             PriceLabel="@($"{l.Price:N0} ريال")"
-                             ShowFavorite="@Auth.IsAuthenticated"
-                             IsFavorite="@(favIds.Contains(l.Id))"
-                             OnOpen="@(() => Nav.NavigateTo($"/{Slug}/listings/{l.Id}"))" /></a>
+                <a href="@($"/{Slug}/listings/{l.Id}")" style="text-decoration:none;color:inherit;display:block;">
+                    <AcSpaceCard Title="@l.Title"
+                                 Location="@($"{l.City} — {l.District}")"
+                                 PriceLabel="@($"{l.Price:N0} ريال")"
+                                 ShowFavorite="@Auth.IsAuthenticated"
+                                 IsFavorite="@(favIds.Contains(l.Id))"
+                                 AddFavoriteAriaLabel="أَضِف لِلمُفَضَّلَة"
+                                 RemoveFavoriteAriaLabel="أَزِل مِن المُفَضَّلَة"
+                                 OnOpen="@(() => Nav.NavigateTo($"/{Slug}/listings/{l.Id}"))" />
+                </a>
             }
         </div>
     }
