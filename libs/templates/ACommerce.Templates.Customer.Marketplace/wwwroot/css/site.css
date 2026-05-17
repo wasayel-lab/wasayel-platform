@@ -67,16 +67,122 @@
 .acm-stat-tile strong { font-size: 1.5rem; color: var(--ac-text); }
 .acm-stat-tile span { font-size: 13px; color: var(--ac-text-muted); }
 
-/* زِرّ تَبليغ على صَفحَة التَفاصيل */
-.acm-report-row {
-    display: flex; justify-content: center; padding: 16px 0 8px;
+/* صَفحَة /create-listing */
+.acm-create textarea.ac-input { font-family: inherit; }
+
+/* صَفحَة /explore — Filter bar + sort bar + modal */
+.acm-explore-filterbar {
+    display: flex; gap: 8px; align-items: center;
+    margin-bottom: 8px;
 }
-.acm-report-btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: transparent; border: 0; cursor: pointer;
-    color: var(--ac-text-muted); font-size: 13px; text-decoration: underline;
+.acm-explore-chips { flex: 1; min-width: 0; }
+.acm-explore-chips .ac-hscroll {
+    display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
 }
-.acm-report-btn:hover { color: var(--ac-danger); }
+.acm-explore-chips .ac-hscroll::-webkit-scrollbar { display: none; }
+
+.acm-explore-filterbtn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; border-radius: 999px;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    color: var(--ac-text); cursor: pointer; text-decoration: none;
+    flex-shrink: 0;
+}
+.acm-explore-filterbtn:hover { background: var(--ac-bg-alt); color: var(--ac-primary); }
+
+.acm-explore-sortbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; gap: 8px;
+}
+.acm-explore-count { color: var(--ac-text-muted); font-size: 13px; }
+.acm-explore-sortbar-right { display: flex; align-items: center; gap: 8px; }
+.acm-sort-form { margin: 0; }
+.acm-explore-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px;
+}
+
+/* Filter modal (rendered when ?filters=open) */
+.acm-explore-filter-modal {
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-lg); padding: 16px;
+    margin-bottom: 16px; box-shadow: 0 4px 16px rgba(0,0,0,.08);
+}
+.acm-explore-filter-modal-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+}
+.acm-explore-circle-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 999px;
+    background: var(--ac-bg-alt); border: 0; color: var(--ac-text);
+    cursor: pointer; text-decoration: none;
+}
+.acm-explore-filter-form { display: flex; flex-direction: column; gap: 12px; }
+.acm-explore-filtersec { margin: 0; }
+.acm-explore-filtersec-title { font-size: 14px; font-weight: 700; margin: 0 0 6px; }
+.acm-explore-pricerange { display: flex; align-items: center; gap: 8px; }
+.acm-explore-pricerange .ac-input { flex: 1; }
+.acm-explore-location .ac-input { width: 100%; }
+.acm-explore-filter-actions {
+    display: flex; justify-content: flex-end; gap: 8px; padding-top: 8px;
+    border-top: 1px solid var(--ac-border);
+}
+
+.ac-filter-chip {
+    display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+    padding: 8px 12px; border-radius: 999px;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    color: var(--ac-text); text-decoration: none; font-size: 13px;
+    white-space: nowrap;
+}
+.ac-filter-chip:hover { background: var(--ac-bg-alt); }
+.ac-filter-chip.is-active {
+    background: var(--ac-primary); color: var(--ac-on-primary);
+    border-color: var(--ac-primary);
+}
+
+/* صَفحَة /listings/{id} — Detail overlay actions + report details */
+.acm-details-gallery-actions {
+    position: absolute; top: 8px; left: 8px; right: 8px;
+    display: flex; justify-content: space-between; pointer-events: none;
+}
+.acm-details-gallery-actions-end { display: flex; gap: 8px; }
+.acm-details-circle-btn,
+.acm-details-circle-btn:hover {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 999px;
+    background: rgba(255,255,255,.95); border: 0; color: var(--ac-text);
+    cursor: pointer; text-decoration: none; pointer-events: auto;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+}
+.acm-details-circle-btn.is-fav { color: var(--ac-danger); }
+
+.acm-details-title { font-size: 20px; font-weight: 700; margin: 16px 0 4px; }
+.acm-details-location {
+    display: inline-flex; align-items: center; gap: 4px;
+    color: var(--ac-text-muted); font-size: 13px; margin-bottom: 8px;
+}
+.acm-details-meta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 16px; }
+.acm-details-price { color: var(--ac-primary); font-weight: 700; font-size: 20px; }
+.acm-details-section {
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-lg); padding: 16px; margin-bottom: 12px;
+}
+.acm-details-section-title { font-size: 16px; font-weight: 700; margin: 0 0 8px; }
+.acm-details-description { margin: 0; line-height: 1.7; color: var(--ac-text); }
+
+.acm-details-report {
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-lg); padding: 0; margin-bottom: 12px;
+}
+.acm-details-report summary {
+    list-style: none; cursor: pointer;
+    display: flex; align-items: center; gap: 6px; padding: 16px;
+    color: var(--ac-text-muted); font-size: 14px;
+}
+.acm-details-report summary::-webkit-details-marker { display: none; }
+.acm-details-report[open] summary { border-bottom: 1px solid var(--ac-border); }
+.acm-details-report-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 
 
 /* Landing tenants list */

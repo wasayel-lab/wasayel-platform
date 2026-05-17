@@ -2,118 +2,157 @@
 @inject IDocumentStore Store
 @inject AuthSession Auth
 
+@*
+    صَفحة تَفاصيل الإعلان. بُنية مَنقولَة مِن AcListingDetailsPage
+    في القالِب القَديم: AcGallery مَع overlay (Back + Share + Favorite)
+    + عُنوان + مَوقِع + meta + قِسم الوَصف + قِسم المُعلِن + قِسم تَواصُل.
+    أُضيف قِسم التَبليغ (لم يَكن في القالِب الأَصلي) كَـ <details>
+    يَنطَوي افتِراضيّاً ويَفتَح خِيارات السَّبَب.
+*@
+
+<div class="acs-page acm-details">
 @if (tenant is null)
 {
-    <p class="ac-muted">المَتجَر غير مَوجود.</p>
+    <AcEmptyState IconName="info" Message="المَتجَر غَير مَوجود." />
 }
 else if (listing is null)
 {
-    <p class="ac-muted">جارٍ التَحميل…</p>
+    <AcLoadingState />
 }
 else if (listing.IsDeleted)
 {
-    <p>هذا الإعلان مَحذوف.</p>
+    <AcEmptyState IconName="info" Message="هذا الإعلان مَحذوف." />
 }
 else
 {
-    <div class="acs-gallery-wrap">
-        <AcGallery Images="_noImages"
-                   PlaceholderIcon="building" />
+    @if (Reported == "1")
+    {
+        <AcAlert Variant="success" Message="شُكراً، تَمّ تَلَقّي بَلاغك وسَيُراجِعه فَريقنا." />
+    }
 
-        @if (Auth.IsAuthenticated)
-        {
-            <form method="post" action="@($"/{Slug}/listings/{Id}/favorite")" style="position:absolute;top:8px;inset-inline-end:8px;">
-                <input type="hidden" name="return" value="@($"/{Slug}/listings/{Id}")" />
-                <button type="submit" class="acs-fav-btn @(IsFav ? "active" : "")"
-                        aria-label="@(IsFav ? "أَزِل من المُفَضَّلَة" : "أَضِف للمُفَضَّلَة")">
-                    <AcIcon Name="heart" Filled="@IsFav" Size="20" />
-                </button>
-            </form>
-        }
+    <div class="acs-gallery-wrap" style="position:relative;">
+        <AcGallery Images="_noImages" PlaceholderIcon="building" />
+
+        <div class="acm-details-gallery-actions">
+            <a class="acm-details-circle-btn" href="@($"/{Slug}/explore")" aria-label="الرُجوع">
+                <AcIcon Name="arrow-right" Size="18" />
+            </a>
+            <div class="acm-details-gallery-actions-end">
+                @if (Auth.IsAuthenticated)
+                {
+                    <form method="post" action="@($"/{Slug}/listings/{Id}/favorite")" style="margin:0;">
+                        <input type="hidden" name="return" value="@($"/{Slug}/listings/{Id}")" />
+                        <button type="submit" class="acm-details-circle-btn @(IsFav ? "is-fav" : "")"
+                                aria-label="@(IsFav ? "أَزِل مِن المُفَضَّلَة" : "أَضِف لِلمُفَضَّلَة")">
+                            <AcIcon Name="heart" Filled="@IsFav" Size="18" />
+                        </button>
+                    </form>
+                }
+            </div>
+        </div>
     </div>
 
-    <h1 class="acm-wizard-title">@listing.Title</h1>
+    <h1 class="acm-details-title">@listing.Title</h1>
 
-    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:12px;">
-        <span style="color:var(--ac-primary);font-weight:700;font-size:20px;">
-            @listing.Price.ToString("N0") ريال
-        </span>
-        <span class="ac-muted" style="display:inline-flex;gap:4px;align-items:center;">
-            <AcIcon Name="map-pin" Size="14" /> @listing.City — @listing.District
-        </span>
+    <div class="acm-details-location">
+        <AcIcon Name="map-pin" Size="14" />
+        <span>@listing.City — @listing.District</span>
+    </div>
+
+    <div class="acm-details-meta">
+        <span class="acm-details-price">@listing.Price.ToString("N0") ريال</span>
         <AcBadge Variant="info" Text="@CategoryLabel" />
+        <span style="color:var(--ac-text-muted);font-size:12px;">
+            <AcIcon Name="search" Size="14" /> شوهد @listing.ViewCount مَرَّة
+        </span>
     </div>
 
     @if (!string.IsNullOrEmpty(listing.Description))
     {
-        <AcCard>
-            <ChildContent>
-                <p style="margin:0;line-height:1.7;">@listing.Description</p>
-            </ChildContent>
-        </AcCard>
+        <section class="acm-details-section">
+            <h2 class="acm-details-section-title">الوَصف</h2>
+            <p class="acm-details-description">@listing.Description</p>
+        </section>
     }
 
     @if (listing.Attributes is { Count: > 0 })
     {
-        <AcCard>
-            <ChildContent>
-                <h3 style="margin-top:0;">التَفاصيل</h3>
-                <AcAttrChipRow Attributes="@AttrSnapshots" IsArabic="true" />
-            </ChildContent>
-        </AcCard>
+        <section class="acm-details-section">
+            <h2 class="acm-details-section-title">التَفاصيل</h2>
+            <AcAttrChipRow Attributes="@AttrSnapshots" IsArabic="true" />
+        </section>
     }
 
-    <AcCard>
-        <ChildContent>
-            <h3 style="margin-top:0;">تَواصُل</h3>
-            @if (Auth.IsAuthenticated)
-            {
-                <form method="post" action="@($"/{Slug}/listings/{Id}/chat")">
-                    <AcButton Type="submit" Variant="primary" Size="lg" Class="ac-btn-block"
-                              Text="💬 تَواصُل مَع المُعلِن" />
-                </form>
-            }
-            else
-            {
-                <a href="@($"/{Slug}/login?returnUrl=/{Slug}/listings/{Id}")"
-                   class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
-                   style="display:block;text-align:center;text-decoration:none;background:var(--ac-primary);
-                          color:#fff;padding:12px;border-radius:var(--ac-radius-sm);font-weight:600;">
-                    دُخول للتَواصُل
-                </a>
-            }
-        </ChildContent>
-    </AcCard>
-
-    <p class="ac-muted" style="font-size:12px;margin-top:16px;">
-        <AcIcon Name="clock" Size="14" /> نُشِر: @listing.CreatedAt.ToString("yyyy-MM-dd")
-        — شوهد: @listing.ViewCount مَرَّة
-    </p>
-
-    @* قِسم التَبليغ — يَفتَح طَلَب دَعم مُسبَق التَعبِئَة بِمَعلومات الإعلان. *@
-    <div class="acm-report-row">
+    <section class="acm-details-section">
+        <h2 class="acm-details-section-title">تَواصُل</h2>
         @if (Auth.IsAuthenticated)
         {
-            <form method="post" action="@($"/{Slug}/listings/{Id}/report")" style="margin:0;">
-                <button type="submit" class="acm-report-btn"
-                        aria-label="تَبليغ عَن هذا الإعلان">
-                    <AcIcon Name="alert-circle" Size="14" /> تَبليغ عَن هذا الإعلان
+            <form method="post" action="@($"/{Slug}/listings/{Id}/chat")" style="margin:0;">
+                <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
+                    <AcIcon Name="message" Size="18" /> تَواصُل مَع المُعلِن
                 </button>
             </form>
         }
         else
         {
-            <a class="acm-report-btn" href="@($"/{Slug}/login?returnUrl=/{Slug}/listings/{Id}")">
-                <AcIcon Name="alert-circle" Size="14" /> سَجِّل دُخولك لِلتَبليغ
+            <a href="@($"/{Slug}/login?returnUrl=/{Slug}/listings/{Id}")"
+               class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
+               style="text-decoration:none;text-align:center;">
+                دُخول لِلتَواصُل
             </a>
         }
-    </div>
+    </section>
+
+    @* قِسم التَبليغ — يَنطَوي بِالـ <details>، يَفتَحه المُتَصَفِّح بِلا JS *@
+    <details class="acm-details-report">
+        <summary>
+            <AcIcon Name="alert-circle" Size="14" />
+            <span>تَبليغ عَن هذا الإعلان</span>
+        </summary>
+        <div class="acm-details-report-body">
+            @if (Auth.IsAuthenticated)
+            {
+                <form method="post" action="@($"/{Slug}/listings/{Id}/report")">
+                    <AcField Label="السَّبَب" Required="true">
+                        <select name="reason" required class="ac-input">
+                            <option value="">— اختَر —</option>
+                            <option value="مُكَرَّر">إعلان مُكَرَّر</option>
+                            <option value="مُضَلِّل">مَعلومات مُضَلِّلَة</option>
+                            <option value="غَير لائِق">مُحتَوى غَير لائِق</option>
+                            <option value="نَصَب">اشتِباه نَصَب</option>
+                            <option value="آخَر">سَبَب آخَر</option>
+                        </select>
+                    </AcField>
+                    <AcField Label="مَلاحَظَة (اختياريّ)">
+                        <textarea name="note" rows="3" maxlength="500" class="ac-input"
+                                  style="resize:vertical;" placeholder="تَفاصيل تُساعِد فَريق المُراجَعَة…"></textarea>
+                    </AcField>
+                    <button type="submit" class="ac-btn ac-btn-danger">
+                        <AcIcon Name="send" Size="14" /> إرسال البَلاغ
+                    </button>
+                </form>
+            }
+            else
+            {
+                <p>سَجِّل دُخولك أَوَّلاً لِيَتَمَكَّن فَريقنا مِن مُتابَعَة البَلاغ مَعَك.</p>
+                <a class="ac-btn ac-btn-primary" href="@($"/{Slug}/login?returnUrl=/{Slug}/listings/{Id}")">
+                    تَسجيل دُخول
+                </a>
+            }
+        </div>
+    </details>
+
+    <p class="ac-muted" style="font-size:12px;margin-top:16px;text-align:center;">
+        نُشِر: @listing.CreatedAt.ToString("yyyy-MM-dd")
+    </p>
 }
+</div>
 
 @code {
     static readonly string[] _noImages = Array.Empty<string>();
     [Parameter] public string Slug { get; set; } = "";
     [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery(Name = "reported")] public string? Reported { get; set; }
     Listing? listing;
     Tenant? tenant;
     bool IsFav;

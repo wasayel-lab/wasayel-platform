@@ -244,15 +244,57 @@ public static class MarketplaceTemplateExtensions
             if (tenantSlug != slug) return Results.Redirect($"/{slug}/login");
             var userName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "—";
 
+            var reason = req.Form["reason"].ToString().Trim();
+            var note   = req.Form["note"].ToString().Trim();
+            if (string.IsNullOrEmpty(reason)) reason = "غَير مُحَدَّد";
+
             await using var s = store.LightweightSession(slug);
             var ev = new ACommerce.Kit.Support.TicketCreated(
                 Guid.NewGuid(), userId, userName,
-                Subject: $"تَبليغ عَن إعلان {id:N}",
-                Body:    $"الإعلان: /{slug}/listings/{id}\nالمُبَلِّغ: {userName}",
+                Subject: $"تَبليغ: {reason}",
+                Body:    $"الإعلان: /{slug}/listings/{id}\nالسَّبَب: {reason}\n\n{note}",
                 At:      DateTime.UtcNow);
             s.Events.StartStream<ACommerce.Kit.Support.Ticket>(ev.Id, ev);
             await s.SaveChangesAsync();
-            return Results.Redirect($"/{slug}/support");
+            return Results.Redirect($"/{slug}/listings/{id}?reported=1");
+        }).DisableAntiforgery();
+
+        // ─── Create listing ─────────────────────────────────────────────
+        app.MapPost("/{slug}/listings/create",
+            async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var parsed = AuthHandlers.ParseToken(token);
+            if (parsed is null) return Results.Redirect($"/{slug}/login?returnUrl=/{slug}/create-listing");
+            var (_, tenantSlug, _) = parsed.Value;
+            if (tenantSlug != slug) return Results.Redirect($"/{slug}/login");
+
+            var title       = req.Form["title"].ToString().Trim();
+            var description = req.Form["description"].ToString().Trim();
+            var category    = req.Form["category"].ToString().Trim();
+            var city        = req.Form["city"].ToString().Trim();
+            var district    = req.Form["district"].ToString().Trim();
+            var priceStr    = req.Form["price"].ToString().Trim();
+
+            if (title.Length < 3 || string.IsNullOrEmpty(category) ||
+                !decimal.TryParse(priceStr, out var price) || price <= 0)
+            {
+                return Results.Redirect($"/{slug}/create-listing?err=invalid");
+            }
+
+            await using var s = store.LightweightSession(slug);
+            var id = Guid.NewGuid();
+            var ev = new ListingCreated(
+                id, slug, title,
+                string.IsNullOrEmpty(description) ? null : description,
+                price, category,
+                string.IsNullOrEmpty(city) ? null : city,
+                string.IsNullOrEmpty(district) ? null : district,
+                new Dictionary<string, string>(),
+                DateTime.UtcNow);
+            s.Events.StartStream<Listing>(id, ev);
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/{slug}/listings/{id}");
         }).DisableAntiforgery();
 
         // ─── Send chat message ──────────────────────────────────────────

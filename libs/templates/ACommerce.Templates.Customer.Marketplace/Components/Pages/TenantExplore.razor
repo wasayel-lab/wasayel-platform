@@ -1,79 +1,116 @@
 @page "/{slug}/explore"
 @inject IDocumentStore Store
 @inject AuthSession Auth
-@inject NavigationManager Nav
 
-<div class="acs-page">
+@*
+    صَفحة استِكشاف الإعلانات. بُنية مَنقولَة مِن
+    AcListingExplorePage.razor في القالِب القَديم:
+      ├─ Filter bar: AcHScroll مِن chips (الكلّ + الفِئات) + زِرّ sliders
+      ├─ Sort bar: عَدد النَتائِج + قائِمَة تَرتيب
+      ├─ Filter modal (sliders): مَدينَة/حَيّ + سِعر أَدنى/أَعلى
+      └─ شَبَكَة بِطاقات AcSpaceCard
+
+    لأنّ الصَفحَة SSR، الـ "modal" مُنَفَّذ كَـ <details> مَفتوح
+    بِـ ?filters=open في الـ URL — يَتَوَلّى المُتَصَفِّح فَتح/إغلاق
+    العُنصُر بِلا JavaScript.
+*@
+
+<div class="acs-page acm-explore">
 @if (tenant is null)
 {
     <AcLoadingState />
 }
 else
 {
-    <AcPageHeader Title="@($"كلّ إعلانات {tenant.Name}")"
-                  Subtitle="@($"{items?.Count ?? 0} نَتيجَة")" />
+    <h1 class="acm-explore-title">@($"كلّ إعلانات {tenant.Name}")</h1>
 
-    <form method="get" action="@($"/{Slug}/explore")" class="acm-explore-filters">
-        @if (!string.IsNullOrEmpty(Category)) { <input type="hidden" name="category" value="@Category" /> }
-
-        <div class="acm-filter-row">
-            <div class="ac-search" role="search" style="flex:1;min-width:200px;">
-                <span class="ac-search-icon" aria-hidden="true"><AcIcon Name="search" Size="18" /></span>
-                <input type="search" name="q" class="ac-search-input"
-                       placeholder="ابحَث في الإعلانات…" value="@Query"
-                       autocomplete="off" inputmode="search" />
-                <button type="submit" class="ac-search-submit" aria-label="بَحث">
-                    <AcIcon Name="arrow-left" Size="18" />
-                </button>
-            </div>
-
-            <select name="sort" class="ac-input acm-filter-select" aria-label="تَرتيب">
-                <option value="newest"     selected="@(string.IsNullOrEmpty(Sort) || Sort == "newest")">الأَحدَث</option>
-                <option value="price_asc"  selected="@(Sort == "price_asc")">السِعر — تَصاعُديّ</option>
-                <option value="price_desc" selected="@(Sort == "price_desc")">السِعر — تَنازُليّ</option>
-            </select>
-        </div>
-
-        <div class="acm-filter-row">
-            <label class="acm-filter-field">
-                <span class="acm-filter-label">سِعر أَدنى</span>
-                <input type="number" name="min" class="ac-input" min="0" step="1000"
-                       value="@MinPrice" placeholder="0" />
-            </label>
-            <label class="acm-filter-field">
-                <span class="acm-filter-label">سِعر أَعلى</span>
-                <input type="number" name="max" class="ac-input" min="0" step="1000"
-                       value="@MaxPrice" placeholder="∞" />
-            </label>
-            <label class="acm-filter-field">
-                <span class="acm-filter-label">حَيّ</span>
-                <select name="district" class="ac-input">
-                    <option value="">الكلّ</option>
-                    @foreach (var d in districts)
-                    {
-                        <option value="@d" selected="@(District == d)">@d</option>
-                    }
-                </select>
-            </label>
-
-            <div class="acm-filter-actions">
-                <button type="submit" class="ac-btn ac-btn-primary">تَطبيق</button>
-                <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/explore")">إعادَة ضَبط</a>
+    @* Filter bar: chips + sliders button *@
+    <div class="acm-explore-filterbar">
+        <div class="acm-explore-chips">
+            <div class="ac-hscroll">
+                <a class="@(string.IsNullOrEmpty(Category)?"ac-filter-chip is-active":"ac-filter-chip")"
+                   href="@($"/{Slug}/explore" + Preserve(except: "category"))">الكلّ</a>
+                @foreach (var c in tenant.Categories)
+                {
+                    <a class="@(Category == c.Slug ? "ac-filter-chip is-active" : "ac-filter-chip")"
+                       href="@($"/{Slug}/explore?category={c.Slug}" + Preserve(prefix: "&", except: "category"))">
+                        @c.Icon @c.Label
+                    </a>
+                }
             </div>
         </div>
-    </form>
-
-    <div class="acm-chip-row">
-        <a class="@(string.IsNullOrEmpty(Category)?"ac-chip ac-chip-active":"ac-chip")"
-           href="@($"/{Slug}/explore")">الكلّ</a>
-        @foreach (var c in tenant.Categories)
-        {
-            <a class="@(Category == c.Slug ? "ac-chip ac-chip-active" : "ac-chip")"
-               href="@($"/{Slug}/explore?category={c.Slug}")">
-                @c.Icon @c.Label
-            </a>
-        }
+        <a class="acm-explore-filterbtn" href="@FilterToggleHref" aria-label="الفَلاتِر">
+            <AcIcon Name="sliders" Size="18" />
+        </a>
     </div>
+
+    @* Sort bar: count + sort dropdown *@
+    <div class="acm-explore-sortbar">
+        <span class="acm-explore-count">@(items?.Count ?? 0) نَتيجَة</span>
+        <div class="acm-explore-sortbar-right">
+            <form method="get" action="@($"/{Slug}/explore")" class="acm-sort-form">
+                @PreserveHidden(except: "sort")
+                <select name="sort" class="ac-input acm-filter-select" aria-label="تَرتيب"
+                        onchange="this.form.submit()">
+                    <option value="newest"     selected="@(string.IsNullOrEmpty(Sort) || Sort == "newest")">الأَحدَث</option>
+                    <option value="price_asc"  selected="@(Sort == "price_asc")">السِعر — تَصاعُديّ</option>
+                    <option value="price_desc" selected="@(Sort == "price_desc")">السِعر — تَنازُليّ</option>
+                </select>
+            </form>
+        </div>
+    </div>
+
+    @* Filter modal — يُفتَح بِـ ?filters=open *@
+    @if (Filters == "open")
+    {
+        <div class="acm-explore-filter-modal">
+            <div class="acm-explore-filter-modal-head">
+                <strong>الفَلاتِر</strong>
+                <a class="acm-explore-circle-btn" href="@($"/{Slug}/explore" + Preserve(except: "filters"))" aria-label="إغلاق">
+                    <AcIcon Name="x" Size="16" />
+                </a>
+            </div>
+            <form method="get" action="@($"/{Slug}/explore")" class="acm-explore-filter-form">
+                @if (!string.IsNullOrEmpty(Category)) { <input type="hidden" name="category" value="@Category" /> }
+                @if (!string.IsNullOrEmpty(Query))    { <input type="hidden" name="q"        value="@Query" /> }
+                @if (!string.IsNullOrEmpty(Sort))     { <input type="hidden" name="sort"     value="@Sort" /> }
+
+                <section class="acm-explore-filtersec">
+                    <h4 class="acm-explore-filtersec-title">المَوقِع</h4>
+                    <div class="acm-explore-location">
+                        <select name="district" class="ac-input">
+                            <option value="">الكلّ</option>
+                            @foreach (var d in districts)
+                            {
+                                <option value="@d" selected="@(District == d)">@d</option>
+                            }
+                        </select>
+                    </div>
+                </section>
+
+                <section class="acm-explore-filtersec">
+                    <h4 class="acm-explore-filtersec-title">السِعر</h4>
+                    <div class="acm-explore-pricerange">
+                        <input type="number" name="min" class="ac-input" min="0" step="1000"
+                               value="@MinPrice" placeholder="من" />
+                        <span>—</span>
+                        <input type="number" name="max" class="ac-input" min="0" step="1000"
+                               value="@MaxPrice" placeholder="إلى" />
+                    </div>
+                </section>
+
+                <section class="acm-explore-filtersec">
+                    <h4 class="acm-explore-filtersec-title">البَحث</h4>
+                    <input type="search" name="q" class="ac-input" value="@Query" placeholder="كَلِمَة مِفتاحيّة…" />
+                </section>
+
+                <div class="acm-explore-filter-actions">
+                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/explore")">إعادَة ضَبط</a>
+                    <button type="submit" class="ac-btn ac-btn-primary">تَطبيق</button>
+                </div>
+            </form>
+        </div>
+    }
 
     @if (items is null)
     {
@@ -81,7 +118,7 @@ else
     }
     else if (items.Count == 0)
     {
-        <AcEmptyState IconName="search"
+        <AcEmptyState IconName="building"
                       Title="لا إعلانات في هذه الفِئَة"
                       Message="جَرِّب فِئَة أُخرى أو غَيِّر البَحث."
                       ActionLabel="إعادَة ضَبط الفَلاتِر"
@@ -89,7 +126,7 @@ else
     }
     else
     {
-        <div class="acm-home-grid">
+        <div class="acm-explore-grid">
             @foreach (var l in items)
             {
                 <AcSpaceCard Title="@l.Title"
@@ -110,10 +147,60 @@ else
     [SupplyParameterFromQuery(Name = "min")]      public decimal? MinPrice { get; set; }
     [SupplyParameterFromQuery(Name = "max")]      public decimal? MaxPrice { get; set; }
     [SupplyParameterFromQuery(Name = "district")] public string? District { get; set; }
+    [SupplyParameterFromQuery(Name = "filters")]  public string? Filters  { get; set; }
 
     Tenant? tenant;
     List<Listing>? items;
     List<string> districts = new();
+
+    string FilterToggleHref =>
+        $"/{Slug}/explore" + Preserve(set: Filters == "open" ? null : ("filters", "open"),
+                                       except: "filters");
+
+    /// <summary>يَبني query-string يَحفَظ القِيَم الحاليّة مَع إمكان حَذف
+    /// مِفتاح أو إضافَة جَديد. النَّتيجَة تَبدَأ بِـ ? لَو غَير فارِغَة.</summary>
+    string Preserve(string? except = null, (string Key, string Value)? set = null, string? prefix = null)
+    {
+        var pairs = new List<KeyValuePair<string, string?>>
+        {
+            new("category", Category),
+            new("q",        Query),
+            new("sort",     Sort),
+            new("min",      MinPrice?.ToString()),
+            new("max",      MaxPrice?.ToString()),
+            new("district", District),
+            new("filters",  Filters),
+        };
+        var parts = new List<string>();
+        foreach (var p in pairs)
+        {
+            if (p.Key == except) continue;
+            if (string.IsNullOrEmpty(p.Value)) continue;
+            parts.Add($"{p.Key}={Uri.EscapeDataString(p.Value)}");
+        }
+        if (set is { } s) parts.Add($"{s.Key}={Uri.EscapeDataString(s.Value)}");
+        if (parts.Count == 0) return "";
+        return (prefix ?? "?") + string.Join("&", parts);
+    }
+
+    /// <summary>نَفس Preserve لكن كـ hidden inputs داخِل form.</summary>
+    RenderFragment PreserveHidden(string? except = null) => @<text>
+        @foreach (var p in new[] {
+            ("category", Category),
+            ("q",        Query),
+            ("sort",     Sort),
+            ("min",      MinPrice?.ToString()),
+            ("max",      MaxPrice?.ToString()),
+            ("district", District),
+            ("filters",  Filters)
+        })
+        {
+            if (p.Item1 != except && !string.IsNullOrEmpty(p.Item2))
+            {
+                <input type="hidden" name="@p.Item1" value="@p.Item2" />
+            }
+        }
+    </text>;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -123,8 +210,8 @@ else
 
         await using var t = Store.QuerySession(Slug);
         var q = t.Query<Listing>().Where(x => !x.IsDeleted);
-        if (!string.IsNullOrEmpty(Category))  q = q.Where(x => x.CategorySlug == Category);
-        if (!string.IsNullOrEmpty(District))  q = q.Where(x => x.District == District);
+        if (!string.IsNullOrEmpty(Category))   q = q.Where(x => x.CategorySlug == Category);
+        if (!string.IsNullOrEmpty(District))   q = q.Where(x => x.District == District);
         if (MinPrice.HasValue && MinPrice > 0) q = q.Where(x => x.Price >= MinPrice.Value);
         if (MaxPrice.HasValue && MaxPrice > 0) q = q.Where(x => x.Price <= MaxPrice.Value);
         if (!string.IsNullOrEmpty(Query))

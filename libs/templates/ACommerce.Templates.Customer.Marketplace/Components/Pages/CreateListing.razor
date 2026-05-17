@@ -1,0 +1,102 @@
+@page "/{slug}/create-listing"
+@inject IDocumentStore Store
+@inject AuthSession Auth
+@inject NavigationManager Nav
+
+@*
+    إنشاء إعلان جَديد. بُنية مَنقولَة مِن AcCreateListingPage.razor
+    في القالِب القَديم: نَموذَج مُسَطَّح (لا wizard) بِحُقول
+    عُنوان/وَصف/سِعر/مَدينَة/حَيّ/فِئَة، والـ POST يَذهَب إلى
+    /{slug}/listings/create.
+*@
+
+<div class="acs-page acm-create">
+    <h1 class="acm-wizard-title">إعلان جَديد</h1>
+
+    @if (!Auth.IsAuthenticated)
+    {
+        <AcEmptyState IconName="user"
+                      Title="تَحتاج تَسجيل دُخول"
+                      Message="سَجِّل دُخولك قَبل نَشر إعلان."
+                      ActionLabel="تَسجيل دُخول"
+                      ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/create-listing")" />
+    }
+    else if (tenant is null)
+    {
+        <AcLoadingState />
+    }
+    else
+    {
+        @if (Err == "invalid")
+        {
+            <AcAlert Variant="danger" Message="الحُقول المَطلوبَة غَير صَحيحَة (العُنوان والسِعر والفِئَة)." />
+        }
+
+        <form method="post" action="@($"/{Slug}/listings/create")">
+            <AcCard>
+                <ChildContent>
+                    <AcField Label="عُنوان الإعلان" Required="true">
+                        <input type="text" name="title" required maxlength="120"
+                               class="ac-input" placeholder="مَثَلاً: شَقّة قَريبَة من الجامِعَة" />
+                    </AcField>
+
+                    <AcField Label="الوَصف">
+                        <textarea name="description" rows="4" maxlength="2000"
+                                  class="ac-input" style="resize:vertical;"
+                                  placeholder="تَفاصيل العَرض، المُمَيِّزات، شُروط التَواصُل…"></textarea>
+                    </AcField>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <AcField Label="السِعر (ريال)" Required="true">
+                            <input type="number" name="price" required min="1" step="1"
+                                   class="ac-input" inputmode="numeric" placeholder="0" />
+                        </AcField>
+
+                        <AcField Label="الفِئَة" Required="true">
+                            <select name="category" required class="ac-input">
+                                <option value="">— اختَر —</option>
+                                @foreach (var c in tenant.Categories)
+                                {
+                                    <option value="@c.Slug">@c.Icon @c.Label</option>
+                                }
+                            </select>
+                        </AcField>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <AcField Label="المَدينَة">
+                            <input type="text" name="city" maxlength="40"
+                                   class="ac-input" value="@(tenant.City ?? "")"
+                                   placeholder="إب" />
+                        </AcField>
+
+                        <AcField Label="الحَيّ">
+                            <input type="text" name="district" maxlength="60"
+                                   class="ac-input" placeholder="حَوبان" />
+                        </AcField>
+                    </div>
+
+                    <div style="display:flex;gap:8px;margin-top:12px;">
+                        <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
+                            <AcIcon Name="check" Size="18" /> نَشر الإعلان
+                        </button>
+                        <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}")">إلغاء</a>
+                    </div>
+                </ChildContent>
+            </AcCard>
+        </form>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+    Tenant? tenant;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await using var g = Store.QuerySession();
+        tenant = await g.LoadAsync<Tenant>(Slug);
+    }
+}

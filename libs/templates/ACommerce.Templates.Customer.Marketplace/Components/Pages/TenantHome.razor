@@ -54,17 +54,13 @@
             </AcHScroll>
         }
 
-        @* CTA يَظهَر فَقَط لِغَير المُسَجَّلين — يُحَفِّز التَّسجيل. لا
-           نَعرِضه لِلمُسَجَّلين لأَنّ صَفحَة "إنشاء إعلان" لم تُبنَ بَعد،
-           فلا وِجهَة مَنطِقيّة لِلزِرّ. *@
-        @if (!Auth.IsAuthenticated)
-        {
-            <AcCtaCard Title="سَجِّل دُخولك"
-                       Subtitle="لِحِفظ المُفَضَّلَة والتَواصُل مَع المُعلِنين"
-                       IconName="user"
-                       Variant="surface"
-                       Href="@($"/{Slug}/login?returnUrl=/{Slug}")" />
-        }
+        @* CTA "أَضِف إعلانك" — وِجهَة ثابِتَة /create-listing لأَيّ زائِر؛
+           الصَفحَة نَفسها تَتَوَلّى إعادَة التَوجيه لِلتَّسجيل عِندَ الحاجَة. *@
+        <AcCtaCard Title="عِندَك ما تَعرِضه؟"
+                   Subtitle="أَضِف إعلانك الآن واصِل لِلمُهتَمّين بِسُرعَة"
+                   IconName="house-add"
+                   Variant="surface"
+                   Href="@($"/{Slug}/create-listing")" />
 
         @if (featured is { Count: > 0 })
         {
