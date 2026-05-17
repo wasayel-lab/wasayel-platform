@@ -90,4 +90,43 @@ public sealed class TargetWriter
         await s.SaveChangesAsync();
         _log.LogInformation("  ✓ {Count} {Type}", docs.Count, typeof(T).Name);
     }
+
+    /// <summary>إنشاء/تَحديث Listings كَ event streams. الـ Listing هو
+    /// aggregate event-sourced (Snapshot.Inline)، فالكِتابَة المُباشَرَة
+    /// كَ document تَترُك الـ event stream فارِغاً والـ
+    /// AggregateStreamAsync في التَفاصيل يُعيد null. الحَلّ: append
+    /// ListingCreated إن لم يَكُن الـ stream مَوجوداً، وإلّا ListingEdited.</summary>
+    public async Task UpsertListingsAsync(string tenantSlug, IReadOnlyList<Listing> listings)
+    {
+        if (_store is null) throw new InvalidOperationException();
+        if (listings.Count == 0) return;
+
+        await using var s = _store.LightweightSession(tenantSlug);
+        var existingIds = (await s.Query<Listing>()
+            .Where(x => listings.Select(l => l.Id).Contains(x.Id))
+            .Select(x => x.Id).ToListAsync())
+            .ToHashSet();
+
+        var created = 0; var edited = 0;
+        foreach (var l in listings)
+        {
+            if (existingIds.Contains(l.Id))
+            {
+                s.Events.Append(l.Id, new ListingEdited(
+                    l.Id, l.Title, l.Description, l.Price, l.CategorySlug,
+                    l.City, l.District, l.Attributes, l.UpdatedAt));
+                edited++;
+            }
+            else
+            {
+                s.Events.StartStream<Listing>(l.Id, new ListingCreated(
+                    l.Id, l.TenantSlug, l.Title, l.Description, l.Price,
+                    l.CategorySlug, l.City, l.District,
+                    l.Attributes ?? new(), l.CreatedAt));
+                created++;
+            }
+        }
+        await s.SaveChangesAsync();
+        _log.LogInformation("  ✓ {Created} new + {Edited} updated Listing streams", created, edited);
+    }
 }

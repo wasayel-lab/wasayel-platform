@@ -13,18 +13,21 @@ namespace ACommerce.Importer;
 /// <summary>
 /// Ashare V3 → platform-v1.
 ///
-/// مَخطَّط المَصدَر يَختَلِف عَن إيجار:
-///   Profiles, Products, ProductCategories, ProductListings,
-///   Chats, Messages, Bookings, Favorites, Notifications، …
+/// مَخطَّط المَصدَر (راجِع Apps/Ashare.V3/Domain/AshareEntities.cs و
+/// Apps/Ashare.V3/Domain.Data/Data/AshareV3DbContext.cs):
+///   ProfileEntity         → table "Profile"
+///   ProductEntity         → table "Products"
+///   ProductCategoryEntity → table "ProductCategory"
+///   ProductListingEntity  → table "ProductListing"
+///   ChatEntity            → table "Chat"
+///   MessageEntity         → table "Message"  (Content, SenderId: string)
+///   FavoriteEntity        → table "Favorites" (UserId: string)
+///   NotificationEntity    → table "Notifications" (UserId: string)
+///   DiscoveryCategory     → table "DiscoveryCategories" (Slug, Label, Icon, Kind)
 ///
-/// Mapping:
-///   Profile        → User
-///   ProductListing → Listing (نَأخُذ السِعر والـ Title؛ ProductId يَربِط
-///                              بِـ Product لِلوَصف والـ Image)
-///   ProductCategory → Tenant.Categories
-///   Chat + Messages → Conversation + Message (نَطوي ChatParticipant)
-///   Favorite       → Favorite
-///   Notification   → Notification
+/// UserId في Ashare V3 هو ASP.NET Identity string (AspNetUsers.Id).
+/// نُحَوِّله إلى Profile.Id (Guid) عَبر join — هذا ما يَفهَمه
+/// platform-v1 (UserId مِن نَوع Guid).
 /// </summary>
 public sealed class AshareImporter
 {
@@ -47,11 +50,11 @@ public sealed class AshareImporter
 
         if (reset) await _target.ResetTenantAsync(TenantSlug);
 
-        // 1) Categories — جَدول مُتَّسِع، نَختار TOP 50 الأَكثَر ظُهوراً.
-        var categories = (await src.QueryAsync<AshareCategoryRow>(
-            @"SELECT TOP 50 Id, Slug, Name, Icon FROM ProductCategories
-              WHERE IsDeleted = 0 AND IsActive = 1
-              ORDER BY SortOrder, Name"
+        // 1) Tenant.Categories مِن DiscoveryCategories (الفِئات الَّتي يَراها
+        // المُستَخدِم في الواجِهَة). ProductCategory هُوَ taxonomy داخِليّ.
+        var categories = (await src.QueryAsync<DiscoveryCatRow>(
+            @"SELECT TOP 50 Id, Slug, Label, Icon FROM DiscoveryCategories
+              WHERE IsDeleted = 0 ORDER BY Label"
         )).ToList();
 
         await _target.UpsertTenantAsync(new Tenant
@@ -65,42 +68,45 @@ public sealed class AshareImporter
             Categories  = categories.Select(c => new Category
             {
                 Slug  = c.Slug,
-                Label = c.Name,
+                Label = c.Label,
                 Icon  = string.IsNullOrEmpty(c.Icon) ? "🛏️" : c.Icon
             }).ToList()
         });
 
-        // 2) Users — مِن Profile + AspNetUsers (نَكتَفي بِالأَسماء والهاتِف).
-        var users = (await src.QueryAsync<AshareUserRow>(
-            @"SELECT p.Id, p.FirstName, p.LastName, u.PhoneNumber AS Phone, u.Email,
-                     p.NationalId, p.CreatedAt
-              FROM Profiles p
-              LEFT JOIN AspNetUsers u ON u.Id = p.UserId
-              WHERE p.IsDeleted = 0"
-        )).Select(u => new User
+        // 2) Users — مِن Profile (FullName, Phone مَوجودان مُباشَرَةً).
+        var users = (await src.QueryAsync<AshareProfileRow>(
+            @"SELECT Id, FullName, Phone, NationalId, CreatedAt
+              FROM Profile WHERE IsDeleted = 0"
+        )).Select(p => new User
         {
-            Id         = u.Id,
+            Id         = p.Id,
             TenantSlug = TenantSlug,
-            FullName   = string.IsNullOrWhiteSpace($"{u.FirstName} {u.LastName}".Trim())
-                            ? "مُستَخدِم نَفاذ"
-                            : $"{u.FirstName} {u.LastName}".Trim(),
-            Phone      = u.Phone ?? "",
-            NationalId = u.NationalId,
-            CreatedAt  = u.CreatedAt
+            FullName   = string.IsNullOrWhiteSpace(p.FullName) ? "مُستَخدِم نَفاذ" : p.FullName!,
+            Phone      = p.Phone ?? "",
+            NationalId = p.NationalId,
+            CreatedAt  = p.CreatedAt
         }).ToList();
         await _target.UpsertAsync(TenantSlug, users);
 
-        // 3) Listings — ProductListing مُدمَج مَع Product لِلوَصف.
-        // الـ Category في Ashare V3 يَأتي مِن ProductCategoryMapping (M:N)؛
-        // نَأخُذ الفِئَة الأَولى لِكُلّ إعلان (الأَكثَر شُيوعاً).
+        // خَريطَة UserId (string) → Profile.Id (Guid). نَحتاجها لِكُلّ ما
+        // يُخَزِّن UserId كَ AspNetUsers.Id (Favorites, Notifications, …).
+        var userIdMap = (await src.QueryAsync<AshareUserIdMapRow>(
+            "SELECT UserId, Id FROM Profile WHERE IsDeleted = 0 AND UserId IS NOT NULL"
+        )).ToDictionary(r => r.UserId!, r => r.Id);
+        Guid? ResolveProfile(string? userId)
+            => userId is not null && userIdMap.TryGetValue(userId, out var g) ? g : null;
+
+        // 3) Listings — ProductListing + Product لِلوَصف. الـ Category في V3
+        // مُنفَصِل عَبر ProductCategoryMapping. حاليّاً نَترُك CategorySlug
+        // فارِغ لأَنّ بَيانات production قَد لا تَملُك mapping كامِل؛
+        // يُمكِن تَحسينه لاحِقاً بِالتَوصيل مَع DiscoveryCategories عَن طَريق
+        // attribute "category" أو slug في Product.Type.
         var listings = (await src.QueryAsync<AshareListingRow>(
-            @"SELECT pl.Id, pl.Title, COALESCE(NULLIF(pl.Description, ''), p.LongDescription, p.ShortDescription) AS Description,
-                     pl.Price,
-                     (SELECT TOP 1 pc.Slug FROM ProductCategoryMapping pcm
-                      JOIN ProductCategory pc ON pc.Id = pcm.CategoryId
-                      WHERE pcm.ProductId = pl.ProductId AND pc.IsDeleted = 0) AS CategorySlug,
+            @"SELECT pl.Id, pl.Title,
+                     COALESCE(NULLIF(pl.Description, ''), p.LongDescription, p.ShortDescription, '') AS Description,
+                     pl.Price, p.Type AS PType,
                      pl.IsDeleted, pl.CreatedAt, pl.UpdatedAt
-              FROM ProductListings pl
+              FROM ProductListing pl
               JOIN Products p ON p.Id = pl.ProductId
               WHERE pl.IsDeleted = 0 AND pl.IsActive = 1"
         )).Select(l => new Listing
@@ -108,105 +114,128 @@ public sealed class AshareImporter
             Id           = l.Id,
             TenantSlug   = TenantSlug,
             Title        = l.Title ?? "",
-            Description  = l.Description,
+            Description  = string.IsNullOrEmpty(l.Description) ? null : l.Description,
             Price        = l.Price,
-            CategorySlug = l.CategorySlug ?? "",
-            City         = null,  // عَشير V3 يَستَخدِم Address مُنفَصِل — يَحتاج JOIN ثاني
+            CategorySlug = l.PType ?? "",   // Product.Type يَحوي slug الفِئَة في V3
+            City         = null,
             District     = null,
             Attributes   = new(),
             IsDeleted    = false,
             CreatedAt    = l.CreatedAt,
             UpdatedAt    = l.UpdatedAt ?? l.CreatedAt
         }).ToList();
-        await _target.UpsertAsync(TenantSlug, listings);
+        await _target.UpsertListingsAsync(TenantSlug, listings);
 
-        // 4) Favorites.
-        var favs = (await src.QueryAsync<AshareFavoriteRow>(
-            "SELECT Id, UserId, ProductListingId AS ListingId, CreatedAt FROM Favorites WHERE IsDeleted = 0"
-        )).Select(f => new Favorite
-        {
-            Id        = Favorite.MakeId(f.UserId, f.ListingId),
-            UserId    = f.UserId,
-            ListingId = f.ListingId,
-            At        = f.CreatedAt
-        }).ToList();
+        // 4) Favorites — UserId سِترِنغ يَحتاج خَريطَة.
+        var favRows = (await src.QueryAsync<AshareFavoriteRow>(
+            "SELECT Id, UserId, ListingId, CreatedAt FROM Favorites WHERE IsDeleted = 0"
+        )).ToList();
+        var favs = favRows
+            .Select(f => (Resolved: ResolveProfile(f.UserId), f.ListingId, f.CreatedAt))
+            .Where(t => t.Resolved.HasValue)
+            .Select(t => new Favorite
+            {
+                Id        = Favorite.MakeId(t.Resolved!.Value, t.ListingId),
+                UserId    = t.Resolved.Value,
+                ListingId = t.ListingId,
+                At        = t.CreatedAt
+            }).ToList();
         await _target.UpsertAsync(TenantSlug, favs);
+        if (favRows.Count > favs.Count)
+            _log.LogWarning("  ⚠ Favorites: {Skipped}/{Total} skipped (UserId غَير مَوجود في Profile).",
+                favRows.Count - favs.Count, favRows.Count);
 
         // 5) Chats → Conversations. عَشير يَستَخدِم ChatParticipant M:N،
-        // نَخفِض إلى نَموذَج 1:1 (Owner + Partner) بِأَخذ أَوّل
-        // مُشارِكَين فَقَط — الأَدبيّ لِـ Ashare V3 chat هُوَ 1:1.
-        var convs = (await src.QueryAsync<AshareChatRow>(
+        // نَطوي إلى Owner+Partner (نَموذَج 1:1 المُتَوَقَّع في platform-v1).
+        // chats مَع >2 مُشارِكين تُحَوَّل إلى أَوّل اثنَين.
+        var convRows = (await src.QueryAsync<AshareChatRow>(
             @"WITH P AS (
                 SELECT ChatId,
-                       MIN(CASE WHEN rn = 1 THEN UserId END) AS OwnerId,
-                       MIN(CASE WHEN rn = 2 THEN UserId END) AS PartnerId,
-                       MIN(CASE WHEN rn = 1 THEN UserId END) AS A,
-                       MIN(CASE WHEN rn = 2 THEN UserId END) AS B
+                       MAX(CASE WHEN rn = 1 THEN UserId END) AS OwnerUserId,
+                       MAX(CASE WHEN rn = 2 THEN UserId END) AS PartnerUserId
                 FROM (
                     SELECT ChatId, UserId,
-                           ROW_NUMBER() OVER (PARTITION BY ChatId ORDER BY JoinedAt) AS rn
-                    FROM ChatParticipants WHERE IsDeleted = 0
+                           ROW_NUMBER() OVER (PARTITION BY ChatId ORDER BY JoinedAt, Id) AS rn
+                    FROM ChatParticipant WHERE IsDeleted = 0
                 ) t
                 GROUP BY ChatId
               )
-              SELECT c.Id, P.OwnerId, P.PartnerId, c.Subject,
+              SELECT c.Id, P.OwnerUserId, P.PartnerUserId, c.Title AS Subject,
                      COALESCE(c.UpdatedAt, c.CreatedAt) AS LastAt,
                      c.CreatedAt
-              FROM Chats c JOIN P ON P.ChatId = c.Id
-              WHERE c.IsDeleted = 0 AND P.OwnerId IS NOT NULL AND P.PartnerId IS NOT NULL"
-        )).Select(c => new Conversation
-        {
-            Id          = c.Id,
-            OwnerId     = c.OwnerId,
-            OwnerName   = "",
-            PartnerId   = c.PartnerId,
-            PartnerName = "",
-            ListingId   = null,
-            Subject     = c.Subject,
-            LastAt      = c.LastAt,
-            CreatedAt   = c.CreatedAt
-        }).ToList();
+              FROM Chat c JOIN P ON P.ChatId = c.Id
+              WHERE c.IsDeleted = 0 AND P.OwnerUserId IS NOT NULL AND P.PartnerUserId IS NOT NULL"
+        )).ToList();
+        var convs = convRows
+            .Select(c => (
+                c.Id,
+                Owner:   ResolveProfile(c.OwnerUserId),
+                Partner: ResolveProfile(c.PartnerUserId),
+                c.Subject, c.LastAt, c.CreatedAt))
+            .Where(t => t.Owner.HasValue && t.Partner.HasValue)
+            .Select(t => new Conversation
+            {
+                Id          = t.Id,
+                OwnerId     = t.Owner!.Value,
+                OwnerName   = "",
+                PartnerId   = t.Partner!.Value,
+                PartnerName = "",
+                ListingId   = null,
+                Subject     = t.Subject,
+                LastAt      = t.LastAt,
+                CreatedAt   = t.CreatedAt
+            }).ToList();
         await _target.UpsertAsync(TenantSlug, convs);
 
-        var msgs = (await src.QueryAsync<AshareMsgRow>(
-            @"SELECT Id, ChatId AS ConversationId, SenderId, Body, SentAt
-              FROM Messages WHERE IsDeleted = 0"
-        )).Select(m => new Message
-        {
-            Id             = m.Id,
-            ConversationId = m.ConversationId,
-            SenderId       = m.SenderId,
-            Body           = m.Body ?? "",
-            SentAt         = m.SentAt
-        }).ToList();
+        // 6) Messages — Content بَدَل Body؛ SenderId سِترِنغ يَحتاج
+        // خَريطَة؛ SentAt = CreatedAt في عَشير V3.
+        var msgRows = (await src.QueryAsync<AshareMsgRow>(
+            @"SELECT Id, ChatId AS ConversationId, SenderId, Content AS Body, CreatedAt AS SentAt
+              FROM Message WHERE IsDeleted = 0"
+        )).ToList();
+        var msgs = msgRows
+            .Select(m => (m.Id, m.ConversationId, Resolved: ResolveProfile(m.SenderId), m.Body, m.SentAt))
+            .Where(t => t.Resolved.HasValue)
+            .Select(t => new Message
+            {
+                Id             = t.Id,
+                ConversationId = t.ConversationId,
+                SenderId       = t.Resolved!.Value,
+                Body           = t.Body ?? "",
+                SentAt         = t.SentAt
+            }).ToList();
         await _target.UpsertAsync(TenantSlug, msgs);
 
-        // 6) Notifications.
-        var notifs = (await src.QueryAsync<AshareNotifRow>(
-            @"SELECT Id, UserId, Title, Body, RelatedUrl, IsRead, CreatedAt AS [At]
+        // 7) Notifications — UserId سِترِنغ، Kind بَدَل Type، لا RelatedUrl.
+        var notifRows = (await src.QueryAsync<AshareNotifRow>(
+            @"SELECT Id, UserId, Title, Body, IsRead, CreatedAt AS [At]
               FROM Notifications WHERE IsDeleted = 0"
-        )).Select(n => new Notification
-        {
-            Id         = n.Id,
-            UserId     = n.UserId,
-            Title      = n.Title ?? "",
-            Body       = n.Body ?? "",
-            RelatedUrl = n.RelatedUrl,
-            IsRead     = n.IsRead,
-            At         = n.At
-        }).ToList();
+        )).ToList();
+        var notifs = notifRows
+            .Select(n => (n.Id, Resolved: ResolveProfile(n.UserId), n.Title, n.Body, n.IsRead, n.At))
+            .Where(t => t.Resolved.HasValue)
+            .Select(t => new Notification
+            {
+                Id         = t.Id,
+                UserId     = t.Resolved!.Value,
+                Title      = t.Title ?? "",
+                Body       = t.Body ?? "",
+                RelatedUrl = null,
+                IsRead     = t.IsRead,
+                At         = t.At
+            }).ToList();
         await _target.UpsertAsync(TenantSlug, notifs);
     }
 
-    private sealed record AshareCategoryRow(Guid Id, string Slug, string Name, string? Icon);
-    private sealed record AshareUserRow(Guid Id, string? FirstName, string? LastName, string? Phone,
-                                         string? Email, string? NationalId, DateTime CreatedAt);
+    // ──── Row types — مُطابِقَة لِأَعمِدَة SELECT أَعلاه ───────────────
+    private sealed record DiscoveryCatRow(Guid Id, string Slug, string Label, string? Icon);
+    private sealed record AshareProfileRow(Guid Id, string? FullName, string? Phone, string? NationalId, DateTime CreatedAt);
+    private sealed record AshareUserIdMapRow(string? UserId, Guid Id);
     private sealed record AshareListingRow(Guid Id, string? Title, string? Description, decimal Price,
-                                            string? CategorySlug, bool IsDeleted,
-                                            DateTime CreatedAt, DateTime? UpdatedAt);
-    private sealed record AshareFavoriteRow(Guid Id, Guid UserId, Guid ListingId, DateTime CreatedAt);
-    private sealed record AshareChatRow(Guid Id, Guid OwnerId, Guid PartnerId, string? Subject,
-                                         DateTime LastAt, DateTime CreatedAt);
-    private sealed record AshareMsgRow(Guid Id, Guid ConversationId, Guid SenderId, string? Body, DateTime SentAt);
-    private sealed record AshareNotifRow(Guid Id, Guid UserId, string? Title, string? Body, string? RelatedUrl, bool IsRead, DateTime At);
+                                            string? PType, bool IsDeleted, DateTime CreatedAt, DateTime? UpdatedAt);
+    private sealed record AshareFavoriteRow(Guid Id, string? UserId, Guid ListingId, DateTime CreatedAt);
+    private sealed record AshareChatRow(Guid Id, string? OwnerUserId, string? PartnerUserId,
+                                         string? Subject, DateTime LastAt, DateTime CreatedAt);
+    private sealed record AshareMsgRow(Guid Id, Guid ConversationId, string? SenderId, string? Body, DateTime SentAt);
+    private sealed record AshareNotifRow(Guid Id, string? UserId, string? Title, string? Body, bool IsRead, DateTime At);
 }

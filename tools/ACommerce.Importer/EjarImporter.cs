@@ -13,16 +13,16 @@ namespace ACommerce.Importer;
 /// <summary>
 /// Ejar V1 → platform-v1.
 ///
-/// مَخطَّط المَصدَر (مُحَدَّد في Apps/Ejar/Domain.Data/Data/Entities.cs):
-///   Users, Listings, Conversations, Messages, Favorites,
-///   Notifications, Plans, Subscriptions, SupportTickets,
-///   DiscoveryCategories, DiscoveryRegions, AttributeDefinitions، …
+/// مَخطَّط المَصدَر (Apps/Ejar/Domain.Data/Data/Entities.cs):
+///   UserEntity         → Users         (Id Guid، FullName, Phone, Email, City…)
+///   ListingEntity      → Listings      (Title, Price, PropertyType, City, District…)
+///   ConversationEntity → Conversations (OwnerId, PartnerId, ListingId, Subject…)
+///   MessageEntity      → Messages      (ConversationId, From, Text, SentAt)
+///   NotificationEntity → Notifications (UserId, Title, Body, IsRead, RelatedId)
+///   Favorite           → Favorites     (UserId, EntityId, EntityType="Listing")
+///   DiscoveryCategory  → DiscoveryCategories (Slug, Label, Icon, Kind)
 ///
-/// مَخطَّط الهَدَف (platform-v1):
-///   Tenant(slug=ejar) + Listing + User + Conversation + Message +
-///   Favorite + Notification — كُلّها conjoined عَلى tenant_id.
-///
-/// idempotent: نَستَخدِم Id الأَصلي مِن المَصدَر كَ Marten Id.
+/// كُلّ الـ IDs في Ejar V1 هي Guid فلا حاجَة لِخَريطَة سِترِنغ.
 /// </summary>
 public sealed class EjarImporter
 {
@@ -45,10 +45,10 @@ public sealed class EjarImporter
 
         if (reset) await _target.ResetTenantAsync(TenantSlug);
 
-        // 1) Tenant document — ميتاداتا المَتجَر (الـ slug ثابِت لِأَنّ Ejar
-        // V1 تَطبيق وَحيد بِلا مُتَعَدّد مُستَأجِرين داخِليّ).
+        // 1) Tenant.Categories مِن DiscoveryCategories.
         var categories = (await src.QueryAsync<EjarCategoryRow>(
-            "SELECT TOP 50 Id, Slug, Label, Icon FROM DiscoveryCategories WHERE IsDeleted = 0 ORDER BY SortOrder, Label"
+            @"SELECT TOP 50 Id, Slug, Label, Icon FROM DiscoveryCategories
+              WHERE IsDeleted = 0 ORDER BY Label"
         )).ToList();
 
         await _target.UpsertTenantAsync(new Tenant
@@ -67,22 +67,21 @@ public sealed class EjarImporter
             }).ToList()
         });
 
-        // 2) Users — قائِمَة المُسَجَّلين.
+        // 2) Users.
         var users = (await src.QueryAsync<EjarUserRow>(
-            @"SELECT Id, FullName, Phone, Email, NationalId, IsDeleted, CreatedAt
+            @"SELECT Id, FullName, Phone, CreatedAt
               FROM Users WHERE IsDeleted = 0"
         )).Select(u => new User
         {
-            Id           = u.Id,
-            TenantSlug   = TenantSlug,
-            FullName     = u.FullName ?? "مُستَخدِم جَديد",
-            Phone        = u.Phone ?? "",
-            NationalId   = u.NationalId,
-            CreatedAt    = u.CreatedAt
+            Id         = u.Id,
+            TenantSlug = TenantSlug,
+            FullName   = string.IsNullOrWhiteSpace(u.FullName) ? "مُستَخدِم جَديد" : u.FullName!,
+            Phone      = u.Phone ?? "",
+            CreatedAt  = u.CreatedAt
         }).ToList();
         await _target.UpsertAsync(TenantSlug, users);
 
-        // 3) Listings — الإعلانات.
+        // 3) Listings — PropertyType يَلعَب دَور CategorySlug عِندَنا.
         var listings = (await src.QueryAsync<EjarListingRow>(
             @"SELECT Id, Title, Description, Price, PropertyType, City, District,
                      IsDeleted, CreatedAt, UpdatedAt
@@ -92,7 +91,7 @@ public sealed class EjarImporter
             Id           = l.Id,
             TenantSlug   = TenantSlug,
             Title        = l.Title ?? "",
-            Description  = l.Description,
+            Description  = string.IsNullOrEmpty(l.Description) ? null : l.Description,
             Price        = l.Price,
             CategorySlug = l.PropertyType ?? "",
             City         = string.IsNullOrEmpty(l.City) ? null : l.City,
@@ -102,57 +101,62 @@ public sealed class EjarImporter
             CreatedAt    = l.CreatedAt,
             UpdatedAt    = l.UpdatedAt ?? l.CreatedAt
         }).ToList();
-        await _target.UpsertAsync(TenantSlug, listings);
+        await _target.UpsertListingsAsync(TenantSlug, listings);
 
-        // 4) Favorites.
+        // 4) Favorites — generic shape (EntityType + EntityId)؛ نَأخُذ
+        // فَقَط ما EntityType = "Listing".
         var favs = (await src.QueryAsync<EjarFavoriteRow>(
-            "SELECT Id, UserId, ListingId, CreatedAt FROM Favorites WHERE IsDeleted = 0"
+            @"SELECT Id, UserId, EntityId AS ListingId, CreatedAt
+              FROM Favorites
+              WHERE IsDeleted = 0 AND EntityType = 'Listing'"
         )).Select(f => new Favorite
         {
-            Id         = Favorite.MakeId(f.UserId, f.ListingId),
-            UserId     = f.UserId,
-            ListingId  = f.ListingId,
-            At         = f.CreatedAt
+            Id        = Favorite.MakeId(f.UserId, f.ListingId),
+            UserId    = f.UserId,
+            ListingId = f.ListingId,
+            At        = f.CreatedAt
         }).ToList();
         await _target.UpsertAsync(TenantSlug, favs);
 
-        // 5) Conversations + Messages.
+        // 5) Conversations.
         var convs = (await src.QueryAsync<EjarConvRow>(
             @"SELECT Id, OwnerId, PartnerId, PartnerName, ListingId, Subject, LastAt,
                      OwnerUnread, PartnerUnread, CreatedAt
               FROM Conversations WHERE IsDeleted = 0"
         )).Select(c => new Conversation
         {
-            Id           = c.Id,
-            OwnerId      = c.OwnerId,
-            OwnerName    = "",
-            PartnerId    = c.PartnerId,
-            PartnerName  = c.PartnerName ?? "",
-            ListingId    = c.ListingId,
-            Subject      = c.Subject,
-            LastAt       = c.LastAt,
-            OwnerUnread  = c.OwnerUnread,
+            Id            = c.Id,
+            OwnerId       = c.OwnerId,
+            OwnerName     = "",
+            PartnerId     = c.PartnerId,
+            PartnerName   = c.PartnerName ?? "",
+            ListingId     = c.ListingId,
+            Subject       = c.Subject,
+            LastAt        = c.LastAt,
+            OwnerUnread   = c.OwnerUnread,
             PartnerUnread = c.PartnerUnread,
-            CreatedAt    = c.CreatedAt
+            CreatedAt     = c.CreatedAt
         }).ToList();
         await _target.UpsertAsync(TenantSlug, convs);
 
+        // 6) Messages — From + Text، لا SenderId/Body. From يَحوي Guid
+        // بِالنَّصّ (المُرسِل).
         var msgs = (await src.QueryAsync<EjarMsgRow>(
-            @"SELECT Id, ConversationId, [From] AS SenderIdRaw, Text AS Body, SentAt
+            @"SELECT Id, ConversationId, [From] AS FromRaw, Text AS Body, SentAt
               FROM Messages WHERE IsDeleted = 0"
         )).Select(m => new Message
         {
             Id             = m.Id,
             ConversationId = m.ConversationId,
-            SenderId       = Guid.TryParse(m.SenderIdRaw, out var g) ? g : Guid.Empty,
+            SenderId       = Guid.TryParse(m.FromRaw, out var g) ? g : Guid.Empty,
             Body           = m.Body ?? "",
             SentAt         = m.SentAt
-        }).ToList();
+        }).Where(m => m.SenderId != Guid.Empty).ToList();
         await _target.UpsertAsync(TenantSlug, msgs);
 
-        // 6) Notifications.
+        // 7) Notifications — RelatedId (لا RelatedUrl)، Type بَدَل Kind.
         var notifs = (await src.QueryAsync<EjarNotifRow>(
-            @"SELECT Id, UserId, Title, Body, RelatedUrl, IsRead, CreatedAt AS [At]
+            @"SELECT Id, UserId, Title, Body, RelatedId, IsRead, CreatedAt AS [At]
               FROM Notifications WHERE IsDeleted = 0"
         )).Select(n => new Notification
         {
@@ -160,16 +164,15 @@ public sealed class EjarImporter
             UserId     = n.UserId,
             Title      = n.Title ?? "",
             Body       = n.Body ?? "",
-            RelatedUrl = n.RelatedUrl,
+            RelatedUrl = n.RelatedId,
             IsRead     = n.IsRead,
             At         = n.At
         }).ToList();
         await _target.UpsertAsync(TenantSlug, notifs);
     }
 
-    // ──── Row types — مُطابِقَة لِأَعمِدَة SELECT أَعلاه ───────────────
     private sealed record EjarCategoryRow(Guid Id, string Slug, string Label, string? Icon);
-    private sealed record EjarUserRow(Guid Id, string? FullName, string? Phone, string? Email, string? NationalId, bool IsDeleted, DateTime CreatedAt);
+    private sealed record EjarUserRow(Guid Id, string? FullName, string? Phone, DateTime CreatedAt);
     private sealed record EjarListingRow(Guid Id, string? Title, string? Description, decimal Price,
                                           string? PropertyType, string? City, string? District,
                                           bool IsDeleted, DateTime CreatedAt, DateTime? UpdatedAt);
@@ -177,6 +180,6 @@ public sealed class EjarImporter
     private sealed record EjarConvRow(Guid Id, Guid OwnerId, Guid PartnerId, string? PartnerName,
                                        Guid ListingId, string? Subject, DateTime LastAt,
                                        int OwnerUnread, int PartnerUnread, DateTime CreatedAt);
-    private sealed record EjarMsgRow(Guid Id, Guid ConversationId, string? SenderIdRaw, string? Body, DateTime SentAt);
-    private sealed record EjarNotifRow(Guid Id, Guid UserId, string? Title, string? Body, string? RelatedUrl, bool IsRead, DateTime At);
+    private sealed record EjarMsgRow(Guid Id, Guid ConversationId, string? FromRaw, string? Body, DateTime SentAt);
+    private sealed record EjarNotifRow(Guid Id, Guid UserId, string? Title, string? Body, string? RelatedId, bool IsRead, DateTime At);
 }
