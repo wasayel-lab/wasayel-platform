@@ -70,6 +70,70 @@
 /* صَفحَة /create-listing */
 .acm-create textarea.ac-input { font-family: inherit; }
 
+/* شَجَرَة الفِئات في إنشاء عَرض — Kinds كَ <details> قابِلَة لِلطَيّ */
+.acm-cat-tree { display: flex; flex-direction: column; gap: 12px; }
+.acm-cat-tree-group {
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+    overflow: hidden;
+}
+.acm-cat-tree-summary {
+    list-style: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; font-weight: 700; font-size: 15px;
+    color: var(--ac-text);
+}
+.acm-cat-tree-summary::-webkit-details-marker { display: none; }
+.acm-cat-tree-summary::before {
+    content: "▸"; margin-inline-end: 8px; transition: transform 120ms;
+    color: var(--ac-text-muted); font-size: 12px;
+}
+.acm-cat-tree-group[open] > .acm-cat-tree-summary::before { transform: rotate(90deg); }
+.acm-cat-tree-count {
+    background: var(--ac-bg-alt); color: var(--ac-text-muted);
+    padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+}
+.acm-cat-tree-grid { padding: 0 16px 16px; }
+
+/* AcModal — مُطابِق لِبِنية AcModal.razor الأَصلِيَّة. يُستَخدَم تَحت SSR
+   لِفَلاتِر /explore. backdrop = <a> لِيَعمَل النَّقر بِلا JS. */
+.ac-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(15, 23, 42, .5);
+    z-index: 1000; cursor: pointer;
+}
+.ac-modal {
+    position: fixed; inset: auto 0 0 0;  /* mobile: sheet مِن الأَسفَل */
+    background: var(--ac-surface);
+    border-radius: var(--ac-radius-lg) var(--ac-radius-lg) 0 0;
+    z-index: 1001; max-height: 85vh; display: flex; flex-direction: column;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, .15);
+}
+@media (min-width: 640px) {
+    .ac-modal {
+        inset: 50% auto auto 50%; transform: translate(-50%, -50%);
+        max-width: 480px; width: 90vw;
+        border-radius: var(--ac-radius-lg);
+    }
+}
+.ac-modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--ac-border);
+}
+.ac-modal-title { font-size: 16px; font-weight: 700; margin: 0; }
+.ac-modal-close, .ac-modal-close:hover {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 999px; cursor: pointer;
+    background: var(--ac-bg-alt); color: var(--ac-text);
+    border: 0; text-decoration: none;
+}
+.ac-modal-body { padding: 20px; overflow-y: auto; flex: 1;
+                 display: flex; flex-direction: column; gap: 20px; }
+.ac-modal-footer {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding: 12px 20px; border-top: 1px solid var(--ac-border);
+}
+
 /* بِطاقَة الفِئَة كَ <label> حَولَ <input radio> — السلوك المُلوَّن
    عَلى :checked يَجعَل النَّقر يُحَدِّد الفِئَة بَصَريّاً تَحت SSR. */
 .acs-cat-pick { user-select: none; transition: border-color 120ms, background 120ms; }

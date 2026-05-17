@@ -60,51 +60,59 @@ else
         </div>
     </div>
 
-    @* Filter modal — يُفتَح بِـ ?filters=open *@
+    @* Filter modal — مُطابِق بِنيَة AcModal الأَصلِيَّة (backdrop +
+       ac-modal-header + ac-modal-body + ac-modal-footer). يُفتَح بِـ
+       ?filters=open. الـ backdrop رابِط يُغلِق الـ modal. *@
     @if (Filters == "open")
     {
-        <div class="acm-explore-filter-modal">
-            <div class="acm-explore-filter-modal-head">
-                <strong>الفَلاتِر</strong>
-                <a class="acm-explore-circle-btn" href="@($"/{Slug}/explore" + Preserve(except: "filters"))" aria-label="إغلاق">
-                    <AcIcon Name="x" Size="16" />
-                </a>
+        var closeHref = $"/{Slug}/explore" + Preserve(except: "filters");
+        <a class="ac-modal-backdrop" href="@closeHref" aria-label="إغلاق"></a>
+        <div class="ac-modal acm-explore-filter-modal" role="dialog" aria-modal="true">
+            <div class="ac-modal-header">
+                <h3 class="ac-modal-title">الفَلاتِر</h3>
+                <div class="ac-modal-header-actions">
+                    <a class="ac-modal-close" href="@closeHref" aria-label="إغلاق">
+                        <AcIcon Name="x" Size="20" />
+                    </a>
+                </div>
             </div>
-            <form method="get" action="@($"/{Slug}/explore")" class="acm-explore-filter-form">
+            <form method="get" action="@($"/{Slug}/explore")">
                 @if (!string.IsNullOrEmpty(Category)) { <input type="hidden" name="category" value="@Category" /> }
                 @if (!string.IsNullOrEmpty(Query))    { <input type="hidden" name="q"        value="@Query" /> }
                 @if (!string.IsNullOrEmpty(Sort))     { <input type="hidden" name="sort"     value="@Sort" /> }
 
-                <section class="acm-explore-filtersec">
-                    <h4 class="acm-explore-filtersec-title">المَوقِع</h4>
-                    <div class="acm-explore-location">
-                        <select name="district" class="ac-input">
-                            <option value="">الكلّ</option>
-                            @foreach (var d in districts)
-                            {
-                                <option value="@d" selected="@(District == d)">@d</option>
-                            }
-                        </select>
-                    </div>
-                </section>
+                <div class="ac-modal-body">
+                    <section class="acm-explore-filtersec">
+                        <h4 class="acm-explore-filtersec-title">المَوقِع</h4>
+                        <div class="acm-explore-location">
+                            <select name="district" class="ac-input">
+                                <option value="">الكلّ</option>
+                                @foreach (var d in districts)
+                                {
+                                    <option value="@d" selected="@(District == d)">@d</option>
+                                }
+                            </select>
+                        </div>
+                    </section>
 
-                <section class="acm-explore-filtersec">
-                    <h4 class="acm-explore-filtersec-title">السِعر</h4>
-                    <div class="acm-explore-pricerange">
-                        <input type="number" name="min" class="ac-input" min="0" step="1000"
-                               value="@MinPrice" placeholder="من" />
-                        <span>—</span>
-                        <input type="number" name="max" class="ac-input" min="0" step="1000"
-                               value="@MaxPrice" placeholder="إلى" />
-                    </div>
-                </section>
+                    <section class="acm-explore-filtersec">
+                        <h4 class="acm-explore-filtersec-title">السِعر</h4>
+                        <div class="acm-explore-pricerange">
+                            <input type="number" name="min" class="ac-input" min="0" step="1000"
+                                   value="@MinPrice" placeholder="مِن" />
+                            <span>—</span>
+                            <input type="number" name="max" class="ac-input" min="0" step="1000"
+                                   value="@MaxPrice" placeholder="إلى" />
+                        </div>
+                    </section>
 
-                <section class="acm-explore-filtersec">
-                    <h4 class="acm-explore-filtersec-title">البَحث</h4>
-                    <input type="search" name="q" class="ac-input" value="@Query" placeholder="كَلِمَة مِفتاحيّة…" />
-                </section>
+                    <section class="acm-explore-filtersec">
+                        <h4 class="acm-explore-filtersec-title">البَحث</h4>
+                        <input type="search" name="q" class="ac-input" value="@Query" placeholder="كَلِمَة مِفتاحيّة…" />
+                    </section>
+                </div>
 
-                <div class="acm-explore-filter-actions">
+                <div class="ac-modal-footer">
                     <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/explore")">إعادَة ضَبط</a>
                     <button type="submit" class="ac-btn ac-btn-primary">تَطبيق</button>
                 </div>

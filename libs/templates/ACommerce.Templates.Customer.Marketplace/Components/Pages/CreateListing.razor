@@ -44,9 +44,10 @@
 
         @if (string.IsNullOrEmpty(Category))
         {
-            @* خَطوَة 1: اختِر فِئَة. تَجميع الفِئات بِالـ Kind إن وُجِد —
-               لِلتَنَوُّع الكَبير في إيجار. إذا كُلّ الفِئات بِنَفس الـ Kind
-               (مَثَل عَشير: roommate فَقَط) لا نَعرِض رُؤوس مَجموعات. *@
+            @* خَطوَة 1: شَجَرَة فِئات. عِنْدَ تَعَدُّد الـ Kinds (مَثَل
+               إيجار) كُلّ Kind = <details> قابِل لِلطَيّ يَحوي شَبَكَة
+               الـ leaves. مُستَأجِر بِـ Kind واحِد (عَشير) ⇒ شَبَكَة
+               مُسَطَّحَة بِلا طَيّ. *@
             var groups = tenant.Categories
                 .GroupBy(c => string.IsNullOrEmpty(c.Kind) ? "" : c.Kind)
                 .Select(g => new {
@@ -55,21 +56,37 @@
                     Items = g.OrderBy(c => c.SortOrder).ThenBy(c => c.Label).ToList()
                 })
                 .ToList();
-            var manyGroups = groups.Count > 1;
             <AcCard>
                 <ChildContent>
                     <h3 style="margin-top:0;">اختَر فِئَة الإعلان</h3>
-                    @foreach (var g in groups)
+                    @if (groups.Count > 1)
                     {
-                        @if (manyGroups)
-                        {
-                            <h4 style="font-size:14px;color:var(--ac-text-muted);
-                                       margin:16px 0 8px;border-top:1px solid var(--ac-border);padding-top:12px;">
-                                @g.Label
-                            </h4>
-                        }
+                        <div class="acm-cat-tree">
+                            @foreach (var g in groups)
+                            {
+                                <details class="acm-cat-tree-group" open>
+                                    <summary class="acm-cat-tree-summary">
+                                        <span>@g.Label</span>
+                                        <span class="acm-cat-tree-count">@g.Items.Count</span>
+                                    </summary>
+                                    <div class="acm-home-grid acm-cat-tree-grid">
+                                        @foreach (var c in g.Items)
+                                        {
+                                            <a class="acs-cat-pick"
+                                               href="@($"/{Slug}/create-listing?category={Uri.EscapeDataString(c.Slug)}")">
+                                                <span style="font-size:28px;">@c.Icon</span>
+                                                <span>@c.Label</span>
+                                            </a>
+                                        }
+                                    </div>
+                                </details>
+                            }
+                        </div>
+                    }
+                    else
+                    {
                         <div class="acm-home-grid">
-                            @foreach (var c in g.Items)
+                            @foreach (var c in groups.SelectMany(g => g.Items))
                             {
                                 <a class="acs-cat-pick"
                                    href="@($"/{Slug}/create-listing?category={Uri.EscapeDataString(c.Slug)}")">

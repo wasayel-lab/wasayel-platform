@@ -66,7 +66,10 @@ public sealed class TargetWriter
         _log.LogInformation("✓ Marten target ready (schema=platform).");
     }
 
-    /// <summary>يَحذِف كُلّ مُستَنَدات tenant مُحَدَّد.</summary>
+    /// <summary>يَحذِف كُلّ مُستَنَدات tenant مُحَدَّد + event streams. الـ
+    /// snapshot docs لِوَحدها لا تَكفي لأَنّ Marten يَرفُض إعادَة إنشاء
+    /// stream بِنَفس الـ Id ما دامَت الأَحداث في mt_events لا تَزال
+    /// مَوجودَة (StreamIdCollisionException).</summary>
     public async Task ResetTenantAsync(string slug)
     {
         if (_store is null) throw new InvalidOperationException();
@@ -82,7 +85,20 @@ public sealed class TargetWriter
         s.DeleteWhere<Ticket>(x => true);
         s.DeleteWhere<ImportedRecord>(x => true);
         await s.SaveChangesAsync();
-        _log.LogInformation("  ↻ reset tenant '{Slug}' (deleted documents).", slug);
+
+        // مَسح event streams لِلـ tenant — Marten conjoined tenancy
+        // يَضَع tenant_id عَلى mt_events، نُنَظِّفه بِـ DELETE خام كَيلا
+        // يَتَصادَم StartStream عِنْدَ إعادَة الاستيراد.
+        await using var conn = new Npgsql.NpgsqlConnection(_opts.Target!.Postgres!);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            DELETE FROM platform.mt_events  WHERE tenant_id = @t;
+            DELETE FROM platform.mt_streams WHERE tenant_id = @t;
+            """;
+        cmd.Parameters.AddWithValue("t", slug);
+        await cmd.ExecuteNonQueryAsync();
+        _log.LogInformation("  ↻ reset tenant '{Slug}' (deleted documents + event streams).", slug);
     }
 
     public async Task UpsertTenantAsync(Tenant t)
