@@ -1,4 +1,5 @@
 @inject L L
+@inject ITenantContext Tenant
 <!DOCTYPE html>
 <html lang="@L.Lang" dir="@L.Dir">
 <head>
@@ -7,6 +8,8 @@
     <base href="/" />
     <title>ACommerce Platform V1</title>
 
+    @* خَطّ Cairo بِنَفس الأَوزان الَّتي يُحَمِّلها كُلّ مِن Ashare V3
+       و Ejar V1: 400 (نَصّ)، 600 (مُتَوَسِّط)، 700 (عَريض). *@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" />
@@ -16,6 +19,14 @@
     <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/templates-marketplace.css" />
     <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/app.css" />
     <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/site.css" />
+
+    @* branding.css لِكُلّ مُستَأجِر (مَنقولاً مِن Ashare.V3.Web/Ejar.Web).
+       يُحَدِّد --ac-primary وألوان أُخرى — يُحَمَّل آخِراً لِيَفوز عَلى
+       الافتراضي. لا يُرَكَّب إلّا بَعد أن يُحَلِّل الـ middleware الـ slug. *@
+    @if (Tenant.IsResolved && (Tenant.Slug == "ashare" || Tenant.Slug == "ejar"))
+    {
+        <link rel="stylesheet" href="@($"/branding/{Tenant.Slug}.css")" />
+    }
     <HeadOutlet />
 </head>
 <body>
