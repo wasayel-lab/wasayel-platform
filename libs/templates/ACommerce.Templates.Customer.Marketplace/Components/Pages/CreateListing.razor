@@ -1,16 +1,16 @@
 @page "/{slug}/create-listing"
 @inject IDocumentStore Store
 @inject AuthSession Auth
-@inject NavigationManager Nav
 
 @*
-    إنشاء إعلان جَديد. بُنية مَنقولَة مِن AcCreateListingPage.razor
-    في القالِب القَديم: نَموذَج مُسَطَّح (لا wizard) بِحُقول
-    عُنوان/وَصف/سِعر/مَدينَة/حَيّ/فِئَة، والـ POST يَذهَب إلى
-    /{slug}/listings/create.
+    صَفحة إنشاء إعلان. بُنية مَنقولَة مِن CreateListing.razor الأَصلي
+    (4 خَطَوات: فِئَة، تَفاصيل، صُوَر، مَوقِع). الفَرق: نَموذَج واحِد
+    SSR — كُلّ القُسوم مَرئيّة في وَقت واحِد، الـ step-indicator يَعرِض
+    تَقَدُّماً بَصَريّاً، الـ POST واحِد يَخلُق الإعلان.
+    رَفع الصُوَر مُؤَجَّل (الـ backend لا يَدعَمه بَعد).
 *@
 
-<div class="acs-page acm-create">
+<div class="acs-page acs-create-listing">
     <h1 class="acm-wizard-title">إعلان جَديد</h1>
 
     @if (!Auth.IsAuthenticated)
@@ -27,22 +27,50 @@
     }
     else
     {
+        <div class="acs-step-indicator">
+            <span class="active">الفِئَة</span>
+            <span class="active">التَفاصيل</span>
+            <span>الصُوَر</span>
+            <span class="active">المَوقِع</span>
+        </div>
+
         @if (Err == "invalid")
         {
-            <AcAlert Variant="danger" Message="الحُقول المَطلوبَة غَير صَحيحَة (العُنوان والسِعر والفِئَة)." />
+            <AcAlert Variant="danger" Message="الحُقول المَطلوبَة غَير صَحيحَة — اعتَنِ بِالعُنوان والسِعر والفِئَة." />
         }
 
         <form method="post" action="@($"/{Slug}/listings/create")">
+
             <AcCard>
                 <ChildContent>
+                    <h3 style="margin-top:0;">اختَر فِئَة الإعلان</h3>
+                    <div class="acm-home-grid">
+                        @foreach (var c in tenant.Categories)
+                        {
+                            <label class="acs-cat-pick">
+                                <input type="radio" name="category" value="@c.Slug" required
+                                       style="position:absolute;opacity:0;pointer-events:none;" />
+                                <span style="font-size:28px;">@c.Icon</span>
+                                <span>@c.Label</span>
+                            </label>
+                        }
+                    </div>
+                </ChildContent>
+            </AcCard>
+
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">تَفاصيل الإعلان</h3>
+
                     <AcField Label="عُنوان الإعلان" Required="true">
                         <input type="text" name="title" required maxlength="120"
-                               class="ac-input" placeholder="مَثَلاً: شَقّة قَريبَة من الجامِعَة" />
+                               class="ac-input"
+                               placeholder="مَثَلاً: شَقّة قَريبَة مِن الجامِعَة" />
                     </AcField>
 
-                    <AcField Label="الوَصف">
-                        <textarea name="description" rows="4" maxlength="2000"
-                                  class="ac-input" style="resize:vertical;"
+                    <AcField Label="الوَصف" Required="true">
+                        <textarea name="description" rows="4" maxlength="2000" required
+                                  class="ac-input" style="resize:vertical;font-family:inherit;"
                                   placeholder="تَفاصيل العَرض، المُمَيِّزات، شُروط التَواصُل…"></textarea>
                     </AcField>
 
@@ -51,39 +79,53 @@
                             <input type="number" name="price" required min="1" step="1"
                                    class="ac-input" inputmode="numeric" placeholder="0" />
                         </AcField>
-
-                        <AcField Label="الفِئَة" Required="true">
-                            <select name="category" required class="ac-input">
-                                <option value="">— اختَر —</option>
-                                @foreach (var c in tenant.Categories)
-                                {
-                                    <option value="@c.Slug">@c.Icon @c.Label</option>
-                                }
+                        <AcField Label="وَحدَة الإيجار">
+                            <select name="time_unit" class="ac-input">
+                                <option value="monthly">شَهريّاً</option>
+                                <option value="yearly">سَنَويّاً</option>
+                                <option value="daily">يَوميّاً</option>
+                                <option value="hourly">بِالساعَة</option>
                             </select>
                         </AcField>
                     </div>
+                </ChildContent>
+            </AcCard>
 
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">
+                        الصُوَر
+                        <small style="color:var(--ac-text-muted);font-weight:normal;">(اختِياريّ)</small>
+                    </h3>
+                    <p style="color:var(--ac-text-muted);font-size:13px;">
+                        رَفع الصُوَر سَيُتاح في تَحديث قَريب. الإعلان يُمكِن
+                        نَشره بِلا صُوَر حاليّاً.
+                    </p>
+                </ChildContent>
+            </AcCard>
+
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">المَوقِع</h3>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                         <AcField Label="المَدينَة">
-                            <input type="text" name="city" maxlength="40"
-                                   class="ac-input" value="@(tenant.City ?? "")"
-                                   placeholder="إب" />
+                            <input type="text" name="city" maxlength="40" class="ac-input"
+                                   value="@(tenant.City ?? "")" placeholder="إب" />
                         </AcField>
-
-                        <AcField Label="الحَيّ">
-                            <input type="text" name="district" maxlength="60"
+                        <AcField Label="الحَيّ" Required="true">
+                            <input type="text" name="district" required maxlength="60"
                                    class="ac-input" placeholder="حَوبان" />
                         </AcField>
                     </div>
-
-                    <div style="display:flex;gap:8px;margin-top:12px;">
-                        <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
-                            <AcIcon Name="check" Size="18" /> نَشر الإعلان
-                        </button>
-                        <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}")">إلغاء</a>
-                    </div>
                 </ChildContent>
             </AcCard>
+
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}")">إلغاء</a>
+                <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
+                    <AcIcon Name="check" Size="18" /> نَشر الإعلان
+                </button>
+            </div>
         </form>
     }
 </div>

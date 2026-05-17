@@ -1,29 +1,25 @@
 @namespace ACommerce.Widgets
 
 @*
-    AcSpaceCard — listing preview card for marketplace feeds.
+    AcSpaceCard — بِطاقَة عَرض لِلسوق.
+    تَحت SSR لا يَستَطيع <a> أَن يَحتَوي <form>/<button> (HTML5 invalid).
+    لِذلك نُرَكِّب البِطاقَة كَـ <article> يَحوي:
+      ├─ <a class="ac-space-link"> يُغَطّي مُعظَم البِطاقَة (يُفتَح الإعلان)
+      └─ <form class="ac-space-fav-form"> صَغير في الرُكن العُلويّ
+         يَحوي زِرّ القَلب (POST لِإضافَة/إزالَة المُفَضَّلَة)
 
-    Structure:
-      [image | placeholder]      (+ optional top-left Ribbon, + heart toggle)
-      Title (one line, ellipsised)
-      Location (icon + text)
-      Meta row: capacity + rating
-      Price (bottom row)
+    لِلتَوافُق الخَلفيّ مَع المُستَهلِكين الَّذين يُمَرِّرون OnOpen/OnToggleFavorite
+    (تَفاعُليّ)، نَدعَم الـ legacy path أَيضاً عِندَما لا يُمَرَّر Href.
 
-    عِندَما يَكون Href مَوجوداً نَستَخدِم <a> كَوِعاء كامِل لِيَعمَل النَّقر
-    تَحت SSR (دون JS). زِرّ المُفَضَّلَة يَختَفي في هذه الحالَة لأَنّ
-    nesting <button> أو <form> داخِل <a> غَير صَحيح في HTML5؛ يَتِمّ
-    التَبديل مِن صَفحَة التَفاصيل بَدَلاً مِن ذلك.
-
-    CSS_CLASSES: ac-space, ac-space-media, ac-space-ribbon, ac-space-fav,
-                 ac-space-body, ac-space-title, ac-space-meta, ac-space-price,
-                 ac-space-placeholder
+    CSS_CLASSES: ac-space, ac-space-link, ac-space-fav-form, ac-space-media,
+                 ac-space-ribbon, ac-space-fav, ac-space-body, ac-space-title,
+                 ac-space-meta, ac-space-price, ac-space-placeholder
 *@
 
 @{
     var hasHref = !string.IsNullOrEmpty(Href);
 
-    RenderFragment inner = @<text>
+    RenderFragment linkInner = @<text>
         <div class="ac-space-media">
             @if (!string.IsNullOrWhiteSpace(ImageUrl))
             {
@@ -38,17 +34,6 @@
             @if (!string.IsNullOrEmpty(Ribbon))
             {
                 <span class="ac-space-ribbon">@Ribbon</span>
-            }
-            @if (ShowFavorite && !hasHref)
-            {
-                <button type="button"
-                        class="ac-space-fav @(IsFavorite ? "is-fav" : "")"
-                        aria-label="@(IsFavorite ? RemoveFavoriteAriaLabel : AddFavoriteAriaLabel)"
-                        aria-pressed="@(IsFavorite ? "true" : "false")"
-                        @onclick="ToggleFavoriteInternal"
-                        @onclick:stopPropagation="true">
-                    <AcIcon Name="heart" Filled="@IsFavorite" Size="18" />
-                </button>
             }
         </div>
         <div class="ac-space-body">
@@ -84,11 +69,42 @@
 
 @if (hasHref)
 {
-    <a class="ac-space @(Class ?? "")" href="@Href">@inner</a>
+    <article class="ac-space @(Class ?? "")">
+        <a class="ac-space-link" href="@Href">@linkInner</a>
+        @if (ShowFavorite && !string.IsNullOrEmpty(FavoriteFormAction))
+        {
+            <form method="post" action="@FavoriteFormAction" class="ac-space-fav-form">
+                @if (!string.IsNullOrEmpty(FavoriteFormReturn))
+                {
+                    <input type="hidden" name="return" value="@FavoriteFormReturn" />
+                }
+                <button type="submit"
+                        class="ac-space-fav @(IsFavorite ? "is-fav" : "")"
+                        aria-label="@(IsFavorite ? RemoveFavoriteAriaLabel : AddFavoriteAriaLabel)"
+                        aria-pressed="@(IsFavorite ? "true" : "false")">
+                    <AcIcon Name="heart" Filled="@IsFavorite" Size="18" />
+                </button>
+            </form>
+        }
+    </article>
 }
 else
 {
-    <article class="ac-space @(Class ?? "")" @onclick="OnOpenInternal">@inner</article>
+    <article class="ac-space @(Class ?? "")" @onclick="OnOpenInternal">
+        @linkInner
+        @if (ShowFavorite)
+        {
+            <button type="button"
+                    class="ac-space-fav @(IsFavorite ? "is-fav" : "")"
+                    aria-label="@(IsFavorite ? RemoveFavoriteAriaLabel : AddFavoriteAriaLabel)"
+                    aria-pressed="@(IsFavorite ? "true" : "false")"
+                    @onclick="ToggleFavoriteInternal"
+                    @onclick:stopPropagation="true"
+                    style="position:absolute;top:8px;inset-inline-end:8px;">
+                <AcIcon Name="heart" Filled="@IsFavorite" Size="18" />
+            </button>
+        }
+    </article>
 }
 
 @code {
@@ -107,6 +123,12 @@ else
     [Parameter] public string? Class { get; set; }
     [Parameter] public string AddFavoriteAriaLabel    { get; set; } = "Add to favorites";
     [Parameter] public string RemoveFavoriteAriaLabel { get; set; } = "Remove from favorites";
+
+    /// <summary>عُنوان form لِزِرّ المُفَضَّلَة تَحت SSR (POST). لَو فارِغ
+    /// والـ Href مَوجود، يَختَفي زِرّ القَلب.</summary>
+    [Parameter] public string? FavoriteFormAction { get; set; }
+    /// <summary>قِيمَة hidden "return" لِإعادَة التَوجيه بَعد الـ POST.</summary>
+    [Parameter] public string? FavoriteFormReturn { get; set; }
 
     [Parameter] public List<DynamicAttribute>? Attributes { get; set; }
     [Parameter] public bool IsArabic { get; set; } = true;

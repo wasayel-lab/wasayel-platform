@@ -36,7 +36,13 @@
                     <AcSpaceCard Title="@l.Title"
                                  Href="@($"/{Slug}/listings/{l.Id}")"
                                  Location="@($"{l.City} — {l.District}")"
-                                 PriceLabel="@($"{l.Price:N0} ريال")" />
+                                 PriceLabel="@($"{l.Price:N0} ريال")"
+                                 ShowFavorite="true"
+                                 IsFavorite="true"
+                                 FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
+                                 FavoriteFormReturn="@($"/{Slug}/favorites")"
+                                 AddFavoriteAriaLabel="أَضِف لِلمُفَضَّلَة"
+                                 RemoveFavoriteAriaLabel="أَزِل مِن المُفَضَّلَة" />
                 }
             </div>
         }

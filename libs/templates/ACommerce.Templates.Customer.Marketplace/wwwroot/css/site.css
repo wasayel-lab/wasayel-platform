@@ -70,6 +70,26 @@
 /* صَفحَة /create-listing */
 .acm-create textarea.ac-input { font-family: inherit; }
 
+/* AcSpaceCard SSR — <a> داخِل <article> مَع <form> أَخ لِزِرّ القَلب */
+.ac-space { position: relative; overflow: hidden; }
+.ac-space-link {
+    display: flex; flex-direction: column;
+    text-decoration: none; color: inherit;
+    flex: 1; min-width: 0;
+}
+.ac-space-fav-form {
+    position: absolute; top: 8px; inset-inline-end: 8px;
+    margin: 0; z-index: 2;
+}
+.ac-space-fav-form .ac-space-fav {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 999px;
+    background: rgba(255,255,255,.95); border: 0; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12); color: var(--ac-text-muted);
+}
+.ac-space-fav-form .ac-space-fav.is-fav { color: var(--ac-danger); }
+.ac-space-fav-form .ac-space-fav:hover  { color: var(--ac-danger); }
+
 /* صَفحَة /explore — Filter bar + sort bar + modal */
 .acm-explore-filterbar {
     display: flex; gap: 8px; align-items: center;

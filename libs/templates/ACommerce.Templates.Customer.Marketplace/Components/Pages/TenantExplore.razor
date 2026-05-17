@@ -132,7 +132,13 @@ else
                 <AcSpaceCard Title="@l.Title"
                              Href="@($"/{Slug}/listings/{l.Id}")"
                              Location="@($"{l.City} — {l.District}")"
-                             PriceLabel="@($"{l.Price:N0} ريال")" />
+                             PriceLabel="@($"{l.Price:N0} ريال")"
+                             ShowFavorite="@Auth.IsAuthenticated"
+                             IsFavorite="@favIds.Contains(l.Id)"
+                             FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
+                             FavoriteFormReturn="@($"/{Slug}/explore")"
+                             AddFavoriteAriaLabel="أَضِف لِلمُفَضَّلَة"
+                             RemoveFavoriteAriaLabel="أَزِل مِن المُفَضَّلَة" />
             }
         </div>
     }
@@ -152,6 +158,7 @@ else
     Tenant? tenant;
     List<Listing>? items;
     List<string> districts = new();
+    HashSet<Guid> favIds = new();
 
     string FilterToggleHref =>
         $"/{Slug}/explore" + Preserve(set: Filters == "open" ? null : ("filters", "open"),
@@ -233,5 +240,12 @@ else
             .Select(x => x.District!)
             .ToListAsync())
             .Distinct().OrderBy(s => s).ToList();
+
+        if (Auth.IsAuthenticated && Auth.UserId.HasValue)
+        {
+            var favs = await t.Query<Favorite>()
+                .Where(f => f.UserId == Auth.UserId.Value).ToListAsync();
+            favIds = favs.Select(f => f.ListingId).ToHashSet();
+        }
     }
 }
