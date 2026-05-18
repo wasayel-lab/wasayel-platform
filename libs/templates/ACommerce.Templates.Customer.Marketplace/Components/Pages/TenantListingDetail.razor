@@ -1,6 +1,7 @@
 @page "/{slug}/listings/{id:guid}"
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
 
 @*
     صَفحة تَفاصيل الإعلان. بُنية مَنقولَة مِن AcListingDetailsPage
@@ -75,11 +76,19 @@ else
         </section>
     }
 
-    @if (listing.Attributes is { Count: > 0 })
+    @if (resolvedAttrs is { Count: > 0 })
     {
         <section class="acm-details-section">
             <h2 class="acm-details-section-title">التَفاصيل</h2>
-            <AcAttrChipRow Attributes="@AttrSnapshots" IsArabic="true" />
+            <dl class="acm-details-attrs">
+                @foreach (var a in resolvedAttrs)
+                {
+                    <div class="acm-details-attr">
+                        <dt>@a.Label</dt>
+                        <dd>@a.DisplayValue</dd>
+                    </div>
+                }
+            </dl>
         </section>
     }
 
@@ -156,15 +165,9 @@ else
     Listing? listing;
     Tenant? tenant;
     bool IsFav;
+    IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.ResolvedAttr>? resolvedAttrs;
 
     string CategoryLabel => tenant?.Categories.FirstOrDefault(c => c.Slug == listing?.CategorySlug)?.Label ?? "";
-
-    List<ACommerce.Widgets.DynamicAttribute> AttrSnapshots =>
-        (listing?.Attributes ?? new()).Select(kv => new ACommerce.Widgets.DynamicAttribute
-        {
-            Key = kv.Key, Label = kv.Key, LabelAr = kv.Key,
-            Type = "text", Value = kv.Value, ShowInCard = true
-        }).ToList();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -184,6 +187,11 @@ else
                 var favId = Favorite.MakeId(Auth.UserId!.Value, Id);
                 IsFav = (await t.LoadAsync<Favorite>(favId)) is not null;
             }
+
+            // حُلّ تَسمِيَات السِمات + تَرجَمَة قِيَم SingleSelect/MultiSelect
+            // مِن AttributeDefinitions + AttributeValues المُستَورَدَة.
+            if (listing.Attributes is { Count: > 0 })
+                resolvedAttrs = await DynAttrs.ResolveLabelsAsync(Slug, listing.Attributes);
         }
     }
 }

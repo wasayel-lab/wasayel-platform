@@ -77,6 +77,104 @@ public sealed class DynamicAttributesService
     public Task<IReadOnlyList<DynField>> GetForProfileAsync(string tenantSlug)
         => GetForScopeAsync(tenantSlug, ProfileScopeId);
 
+    /// <summary>
+    /// يُحَوِّل قاموس خام (Code → Value) إلى عَناصِر <see cref="ResolvedAttr"/>
+    /// مَع تَسمِيَات عَرَبيَّة:
+    /// <list type="bullet">
+    ///   <item>Label يَأتي مِن AttributeDefinitions.Name (تَسمِيَة الحَقل).</item>
+    ///   <item>DisplayValue يَأتي مِن AttributeValues.DisplayName حينَ
+    ///         يَكون النَّوع SingleSelect/MultiSelect (تَرجَمَة القِيمَة:
+    ///         "male" ⟶ "ذَكَر", "riyadh" ⟶ "الرِياض"). الأَنواع الحُرَّة
+    ///         (Number/Text/…) تُعرَض كَما هي.</item>
+    /// </list>
+    /// مَفاتيح لا تَملِك تَعريفاً مُقابِلاً في DB تُرَدّ بِالـ Code كَ Label
+    /// والـ Value كَما هو — لا نَفقِدها مِن الواجِهَة.
+    /// </summary>
+    public async Task<IReadOnlyList<ResolvedAttr>> ResolveLabelsAsync(
+        string tenantSlug, IReadOnlyDictionary<string, string> attrs)
+    {
+        if (attrs.Count == 0) return Array.Empty<ResolvedAttr>();
+
+        await using var s = _store.QuerySession(tenantSlug);
+        var all = (await s.Query<ImportedRecord>()
+            .Where(r => r.Table == "AttributeDefinitions" || r.Table == "AttributeValues")
+            .ToListAsync()).ToList();
+
+        var defs = all.Where(r => r.Table == "AttributeDefinitions").ToList();
+        var defByCode = defs
+            .Where(d => !string.IsNullOrEmpty(GetString(d, "Code")))
+            .GroupBy(d => GetString(d, "Code")!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        // AttributeValues: key = (DefId, Value) ⟶ DisplayName
+        var valLabel = new Dictionary<(Guid DefId, string Value), string>();
+        foreach (var v in all.Where(r => r.Table == "AttributeValues"))
+        {
+            var defId = GetGuid(v, "AttributeDefinitionId");
+            var raw   = GetString(v, "Value") ?? GetString(v, "Code") ?? "";
+            var disp  = GetString(v, "DisplayName") ?? GetString(v, "Name") ?? raw;
+            if (defId != Guid.Empty && !string.IsNullOrEmpty(raw))
+                valLabel[(defId, raw)] = disp;
+        }
+
+        var result = new List<ResolvedAttr>();
+        foreach (var (code, value) in attrs)
+        {
+            if (string.IsNullOrEmpty(value)) continue;
+
+            if (!defByCode.TryGetValue(code, out var d))
+            {
+                // مَفتاح بِلا تَعريف — نَعرِضه بِالـ Code كَتَسمِيَة
+                // والقِيمَة الخام؛ يَكشِف لِلمُطَوِّر مَفاتيح غَير مَوصولَة.
+                result.Add(new ResolvedAttr(code, code, value, DynFieldType.Text));
+                continue;
+            }
+
+            var defId = GetGuid(d, "Id");
+            var label = GetString(d, "Name") ?? code;
+            var type  = ParseType(GetString(d, "Type"));
+
+            string display = value;
+            if (type == DynFieldType.SingleSelect)
+            {
+                if (valLabel.TryGetValue((defId, value), out var v)) display = v;
+            }
+            else if (type == DynFieldType.MultiSelect)
+            {
+                // قَد يَكون JSON array أَو CSV — نُجَرِّب الاثنَين.
+                var items = TryParseList(value);
+                display = string.Join("، ",
+                    items.Select(it => valLabel.TryGetValue((defId, it), out var t) ? t : it));
+            }
+            else if (type == DynFieldType.Boolean)
+            {
+                display = value.Equals("true", StringComparison.OrdinalIgnoreCase) ? "نَعَم" : "لا";
+            }
+
+            result.Add(new ResolvedAttr(code, label, display, type));
+        }
+        return result;
+    }
+
+    private static List<string> TryParseList(string raw)
+    {
+        raw = raw.Trim();
+        if (raw.StartsWith("["))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(raw);
+                if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    return doc.RootElement.EnumerateArray()
+                        .Select(e => e.ValueKind == System.Text.Json.JsonValueKind.String
+                                     ? e.GetString() ?? "" : e.GetRawText())
+                        .Where(s => !string.IsNullOrEmpty(s)).ToList();
+            }
+            catch { }
+        }
+        return raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+    }
+
     private async Task<IReadOnlyList<DynField>> GetForScopeAsync(string tenantSlug, Guid scopeId)
     {
         await using var s = _store.QuerySession(tenantSlug);
@@ -189,3 +287,9 @@ public sealed record DynField(
     bool IsRequired,
     string? DefaultValue,
     IReadOnlyList<DynOption> Options);
+
+/// <summary>
+/// سِمَة مُحَلَّلَة جاهِزَة لِلعَرض: التَّسمِيَة عَرَبيّاً + قِيمَة العَرض
+/// (مُتَرجَمَة لِلـ SingleSelect/MultiSelect/Boolean).
+/// </summary>
+public sealed record ResolvedAttr(string Code, string Label, string DisplayValue, DynFieldType Type);
