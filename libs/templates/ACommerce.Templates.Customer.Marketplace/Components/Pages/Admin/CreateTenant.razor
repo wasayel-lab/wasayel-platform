@@ -1,0 +1,145 @@
+@page "/admin/tenants/new"
+@inject IDocumentStore Store
+
+@*
+    إنشاء مَتجَر جَديد — نَموذَج SSR بِالحُقول الأَدنى:
+      slug, name, brand color, tag line, city, auth channel,
+      + قائِمَة فِئات (slug | label | icon | kind)
+    POST يَذهَب إلى /admin/tenants/create.
+*@
+
+<div class="acs-page acm-admin">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin"
+           aria-label="الرُجوع">
+            <AcIcon Name="arrow-right" Size="16" />
+        </a>
+        <h1 class="acm-wizard-title" style="margin:0;">مَتجَر جَديد</h1>
+    </div>
+
+    @if (Err is not null)
+    {
+        <AcAlert Variant="danger" Message="@FormatError(Err)" />
+    }
+
+    <form method="post" action="/admin/tenants/create">
+
+        <AcCard>
+            <ChildContent>
+                <h3 style="margin-top:0;">الهُويَّة</h3>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                    <AcField Label="مُعَرِّف URL (slug)" Required="true">
+                        <input type="text" name="slug" required maxlength="32"
+                               pattern="[a-z0-9_-]+" class="ac-input"
+                               placeholder="ashare" dir="ltr"
+                               value="@Form?["slug"]" />
+                    </AcField>
+                    <AcField Label="الاسم العَرَبي" Required="true">
+                        <input type="text" name="name" required maxlength="60"
+                               class="ac-input" placeholder="عَشير"
+                               value="@Form?["name"]" />
+                    </AcField>
+                </div>
+
+                <AcField Label="الشِعار التَسويقي">
+                    <input type="text" name="tagline" maxlength="120"
+                           class="ac-input"
+                           placeholder="السَكَن المُشتَرَك بأَريَحيّة"
+                           value="@Form?["tagline"]" />
+                </AcField>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                    <AcField Label="لَون العَلامَة" Required="true">
+                        <input type="color" name="color" required
+                               class="ac-input" style="height:42px;padding:4px;"
+                               value="@(Form?["color"] ?? "#345454")" />
+                    </AcField>
+                    <AcField Label="المَدينَة الافتراضيّة">
+                        <input type="text" name="city" maxlength="40"
+                               class="ac-input" placeholder="إب"
+                               value="@Form?["city"]" />
+                    </AcField>
+                </div>
+            </ChildContent>
+        </AcCard>
+
+        <AcCard>
+            <ChildContent>
+                <h3 style="margin-top:0;">طَريقَة الدُخول</h3>
+                <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
+                    صاحِب المَتجَر يَختار قَناة واحِدَة. المَتاجِر السُعوديَّة عادَةً تَستَخدِم نَفاذ.
+                </p>
+                <div class="acm-radio-cards">
+                    <label class="acm-radio-card">
+                        <input type="radio" name="channel" value="phone"
+                               checked="@(Form?["channel"] != "nafath")" />
+                        <span class="acm-radio-card-body">
+                            <strong>📱 هاتِف + OTP</strong>
+                            <span>يُرسَل كود ٦ خانات بِالـ SMS — مُناسِب لِأَيّ مَتجَر</span>
+                        </span>
+                    </label>
+                    <label class="acm-radio-card">
+                        <input type="radio" name="channel" value="nafath"
+                               checked="@(Form?["channel"] == "nafath")" />
+                        <span class="acm-radio-card-body">
+                            <strong>🪪 نَفاذ</strong>
+                            <span>تَوثيق هُوِيَّة وَطنيَّة — مَتاجِر سُعوديَّة فَقَط</span>
+                        </span>
+                    </label>
+                </div>
+            </ChildContent>
+        </AcCard>
+
+        <AcCard>
+            <ChildContent>
+                <h3 style="margin-top:0;">الفِئات</h3>
+                <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
+                    صَفّ لِكُلّ فِئَة بِالصِّيغَة: <code>slug | الاسم | أَيقونَة | تَجميع</code>.
+                    التَجميع (Kind) اختيارِيّ — يَنفَع إذا كانَت الفِئات كَثيرَة (سَكَنيّ، تِجاريّ…).
+                </p>
+                <textarea name="categories" rows="6" required
+                          class="ac-input" style="font-family:monospace;font-size:13px;direction:ltr;"
+                          placeholder="apartment | شَقّة | 🏢 | residential&#10;villa | فيلا | 🏡 | residential&#10;office | مَكتَب | 💼 | commercial">@Form?["categories"]</textarea>
+            </ChildContent>
+        </AcCard>
+
+        <div style="display:flex;gap:8px;margin-top:16px;">
+            <a class="ac-btn ac-btn-ghost" href="/admin">إلغاء</a>
+            <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
+                <AcIcon Name="check" Size="18" /> إنشاء المَتجَر
+            </button>
+        </div>
+    </form>
+</div>
+
+@code {
+    /// <summary>إذا فَشَل POST، يُعيد المُستَخدِم هُنا مَع ?err=... +
+    /// القِيَم المُدخَلَة (لِنَحفَظها بِواسِطَة query-string في حال خَطَأ).</summary>
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+    [SupplyParameterFromQuery(Name = "slug")]     public string? Slug { get; set; }
+    [SupplyParameterFromQuery(Name = "name")]     public string? NameQ { get; set; }
+    [SupplyParameterFromQuery(Name = "tagline")]  public string? Tagline { get; set; }
+    [SupplyParameterFromQuery(Name = "color")]    public string? Color { get; set; }
+    [SupplyParameterFromQuery(Name = "city")]     public string? City { get; set; }
+    [SupplyParameterFromQuery(Name = "channel")]  public string? Channel { get; set; }
+    [SupplyParameterFromQuery(Name = "categories")] public string? Categories { get; set; }
+
+    IDictionary<string, string?>? Form => Err is null ? null : new Dictionary<string, string?>
+    {
+        ["slug"] = Slug, ["name"] = NameQ, ["tagline"] = Tagline,
+        ["color"] = Color, ["city"] = City, ["channel"] = Channel,
+        ["categories"] = Categories
+    };
+
+    static string FormatError(string err) => err switch
+    {
+        "slug_required" => "مُعَرِّف الـ URL مَطلوب وَيَجِب أَن يَكون a-z0-9-_.",
+        "slug_taken"    => "مُعَرِّف الـ URL مُستَخدَم — اختَر آخَر.",
+        "name_required" => "الاسم مَطلوب.",
+        "color_invalid" => "لَون العَلامَة غَير صَحيح.",
+        "no_categories" => "أَضِف فِئَة واحِدَة على الأَقَلّ.",
+        "bad_categories" => "تَنسيق الفِئات غَير صَحيح — كُلّ صَفّ: slug | الاسم | أَيقونَة | تَجميع.",
+        _               => err
+    };
+}

@@ -86,6 +86,54 @@
 }
 .acm-details-attr dd { margin: 0; font-weight: 600; color: var(--ac-text); }
 
+/* لَوحَة تَحَكُّم admin */
+.acm-admin-head {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; margin-bottom: 16px;
+}
+.acm-tenant-card {
+    display: flex; flex-direction: column; gap: 8px; padding: 16px;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-lg); text-decoration: none; color: var(--ac-text);
+    transition: transform 120ms, box-shadow 120ms;
+}
+.acm-tenant-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+.acm-tenant-card-head { display: flex; align-items: center; gap: 12px; }
+.acm-tenant-card-brand {
+    width: 40px; height: 40px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 18px; flex-shrink: 0;
+}
+.acm-tenant-card-info { display: flex; flex-direction: column; gap: 2px; }
+.acm-tenant-card-info strong { font-size: 16px; }
+.acm-tenant-card-info span { font-size: 12px; color: var(--ac-text-muted); }
+.acm-tenant-card-tagline { margin: 0; font-size: 13px; color: var(--ac-text-muted); }
+.acm-tenant-card-meta {
+    display: flex; gap: 12px; padding-top: 8px;
+    border-top: 1px solid var(--ac-border); font-size: 12px;
+    color: var(--ac-text-muted);
+}
+.acm-tenant-card-meta span { display: inline-flex; align-items: center; gap: 4px; }
+
+/* radio cards (طَريقَة الدُخول) */
+.acm-radio-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 480px) { .acm-radio-cards { grid-template-columns: 1fr; } }
+.acm-radio-card {
+    display: block; padding: 12px; cursor: pointer;
+    background: var(--ac-surface); border: 2px solid var(--ac-border);
+    border-radius: var(--ac-radius-md); user-select: none;
+    transition: border-color 120ms, background 120ms;
+}
+.acm-radio-card:hover { border-color: var(--ac-primary); }
+.acm-radio-card input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
+.acm-radio-card:has(input:checked) {
+    border-color: var(--ac-primary);
+    background: color-mix(in srgb, var(--ac-primary) 8%, transparent);
+}
+.acm-radio-card-body { display: flex; flex-direction: column; gap: 4px; }
+.acm-radio-card-body strong { font-size: 14px; }
+.acm-radio-card-body span { font-size: 12px; color: var(--ac-text-muted); }
+
 /* TaxonomyChips SSR — صَفَّان: kinds + leaves */
 .acm-taxo-chips { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
 .acm-taxo-chips-row {

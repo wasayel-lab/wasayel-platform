@@ -1,0 +1,76 @@
+@page "/admin"
+@inject IDocumentStore Store
+@inject NavigationManager Nav
+
+@*
+    لَوحَة تَحَكُّم المنصَّة (admin) — لِإدارَة المُستَأجِرين.
+    حاليّاً مَفتوحَة بِلا تَوثيق — ستُضاف auth في جَلسَة لاحِقَة.
+*@
+
+<div class="acs-page acm-admin">
+    <div class="acm-admin-head">
+        <div>
+            <h1 class="acm-wizard-title" style="margin:0;">المُستَأجِرون</h1>
+            <p style="color:var(--ac-text-muted);margin:4px 0 0;font-size:13px;">
+                @(tenants?.Count ?? 0) مَتجَر — مَنصَّة platform-v1
+            </p>
+        </div>
+        <div style="display:flex;gap:8px;">
+            <a class="ac-btn ac-btn-primary" href="/admin/tenants/new">
+                <AcIcon Name="plus-circle" Size="18" /> مَتجَر جَديد
+            </a>
+            <a class="ac-btn ac-btn-ghost" href="/admin/agent">
+                <AcIcon Name="message" Size="18" /> مُساعِد الإنشاء
+            </a>
+        </div>
+    </div>
+
+    @if (tenants is null)
+    {
+        <AcLoadingState />
+    }
+    else if (tenants.Count == 0)
+    {
+        <AcEmptyState IconName="building"
+                      Title="لا مَتاجِر بَعد"
+                      Message="أَنشِئ أَوَّل مَتجَر لِتَبدَأ."
+                      ActionLabel="مَتجَر جَديد"
+                      ActionHref="/admin/tenants/new" />
+    }
+    else
+    {
+        <div class="acm-home-grid" style="margin-top:16px;">
+            @foreach (var t in tenants)
+            {
+                <a class="acm-tenant-card" href="@($"/{t.Slug}")"
+                   style="border-inline-start:4px solid @t.BrandColor;">
+                    <div class="acm-tenant-card-head">
+                        <span class="acm-tenant-card-brand"
+                              style="background:@t.BrandColor;">@(t.Name.FirstOrDefault())</span>
+                        <div class="acm-tenant-card-info">
+                            <strong>@t.Name</strong>
+                            <span>/@t.Slug · @t.City</span>
+                        </div>
+                    </div>
+                    <p class="acm-tenant-card-tagline">@t.TagLine</p>
+                    <div class="acm-tenant-card-meta">
+                        <span><AcIcon Name="tag" Size="14" /> @t.Categories.Count فِئَة</span>
+                        <span><AcIcon Name="@(t.AuthChannel == "nafath" ? "shield" : "phone")" Size="14" />
+                              @(t.AuthChannel == "nafath" ? "نَفاذ" : "هاتِف")</span>
+                    </div>
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    List<Tenant>? tenants;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var s = Store.QuerySession();
+        tenants = (await s.Query<Tenant>()
+            .OrderBy(t => t.CreatedAt).ToListAsync()).ToList();
+    }
+}

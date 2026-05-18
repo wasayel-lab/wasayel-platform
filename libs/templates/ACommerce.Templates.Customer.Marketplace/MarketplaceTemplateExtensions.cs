@@ -347,6 +347,83 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect($"/{slug}/chats/{conversationId}");
         }).DisableAntiforgery();
 
+        // ─── Admin: create tenant ───────────────────────────────────────
+        // نَموذَج SSR على /admin/tenants/new يُرسِل لِهُنا. عَلى الفَشَل نُعيد
+        // إلى نَفس الصَفحَة مَع ?err=X و القِيَم المُدخَلَة لِيَحفَظها الـ form.
+        app.MapPost("/admin/tenants/create",
+            async (HttpRequest req, IDocumentStore store) =>
+        {
+            var f = req.Form;
+            var slug    = f["slug"].ToString().Trim().ToLowerInvariant();
+            var name    = f["name"].ToString().Trim();
+            var tagline = f["tagline"].ToString().Trim();
+            var color   = f["color"].ToString().Trim();
+            var city    = f["city"].ToString().Trim();
+            var channel = f["channel"].ToString().Trim();
+            if (channel != "phone" && channel != "nafath") channel = "phone";
+            var catsRaw = f["categories"].ToString();
+
+            // ── سَلاسِل الإعادَة في حالَة الخَطَأ ──
+            string Back(string err) => "/admin/tenants/new" + "?err=" + err
+                + "&slug="     + Uri.EscapeDataString(slug)
+                + "&name="     + Uri.EscapeDataString(name)
+                + "&tagline="  + Uri.EscapeDataString(tagline)
+                + "&color="    + Uri.EscapeDataString(color)
+                + "&city="     + Uri.EscapeDataString(city)
+                + "&channel="  + Uri.EscapeDataString(channel)
+                + "&categories=" + Uri.EscapeDataString(catsRaw);
+
+            // ── فَلتَرَة ──
+            if (string.IsNullOrEmpty(slug) ||
+                !System.Text.RegularExpressions.Regex.IsMatch(slug, "^[a-z0-9_-]+$"))
+                return Results.Redirect(Back("slug_required"));
+            if (string.IsNullOrEmpty(name))   return Results.Redirect(Back("name_required"));
+            if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))
+                return Results.Redirect(Back("color_invalid"));
+
+            // ── الفِئات: كُلّ صَفّ "slug | label | icon | kind" ──
+            var categories = new List<ACommerce.Kit.Tenants.Category>();
+            var idx = 0;
+            foreach (var line in catsRaw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = line.Split('|', StringSplitOptions.TrimEntries);
+                if (parts.Length < 2) return Results.Redirect(Back("bad_categories"));
+                var cslug = parts[0].Trim().ToLowerInvariant();
+                var clabel = parts[1].Trim();
+                if (string.IsNullOrEmpty(cslug) || string.IsNullOrEmpty(clabel))
+                    return Results.Redirect(Back("bad_categories"));
+                categories.Add(new ACommerce.Kit.Tenants.Category
+                {
+                    Slug = cslug,
+                    Label = clabel,
+                    Icon  = parts.Length > 2 ? parts[2].Trim() : "🏠",
+                    Kind  = parts.Length > 3 ? parts[3].Trim().ToLowerInvariant() : "",
+                    SortOrder = idx++
+                });
+            }
+            if (categories.Count == 0) return Results.Redirect(Back("no_categories"));
+
+            // ── تَحَقُّق مِن عَدَم تَكرار الـ slug ──
+            await using var s = store.LightweightSession();
+            var existing = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+            if (existing is not null) return Results.Redirect(Back("slug_taken"));
+
+            // ── إنشاء ──
+            s.Store(new ACommerce.Kit.Tenants.Tenant
+            {
+                Id          = slug,
+                Name        = name,
+                BrandColor  = color,
+                TagLine     = tagline,
+                City        = city,
+                AuthChannel = channel,
+                Categories  = categories,
+                CreatedAt   = DateTime.UtcNow
+            });
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/admin");
+        }).DisableAntiforgery();
+
         return app;
     }
 }
