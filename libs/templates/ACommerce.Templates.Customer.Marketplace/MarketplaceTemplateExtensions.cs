@@ -27,6 +27,9 @@ public static class MarketplaceTemplateExtensions
         services.AddScoped<L>();
         services.AddScoped<ACommerce.Kit.Realtime.Client.RealtimeClient>();
         services.AddScoped<ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService>();
+        services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.IAgentBackend>(
+            sp => ACommerce.Templates.Customer.Marketplace.Services.AgentBackendFactory
+                .Create(sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.AgentService>();
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor>();
         return services;

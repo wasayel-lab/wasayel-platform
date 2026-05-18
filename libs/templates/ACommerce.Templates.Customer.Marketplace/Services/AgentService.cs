@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using ACommerce.Kit.Tenants;
@@ -9,8 +8,8 @@ using Microsoft.Extensions.Configuration;
 namespace ACommerce.Templates.Customer.Marketplace.Services;
 
 // ─── حالَة المُحادَثَة ─────────────────────────────────────────────────
-// نَحفَظها كَ Marten doc واحِد في المُستَأجِر الافتراضي. لا multi-user
-// بَعد — الـ /admin بِلا مُصادَقَة (يُفتَرَض أَنَّه خَلف VPN/proxy).
+// نَحفَظها كَ Marten doc واحِد في tenant "_admin". لا multi-user
+// بَعد — الـ /admin بِلا مُصادَقَة (يُفتَرَض VPN/proxy).
 
 public sealed class AgentSession
 {
@@ -40,29 +39,21 @@ public sealed class AgentToolCall
 // ─── الخِدمَة ────────────────────────────────────────────────────────────
 public sealed class AgentService
 {
-    private readonly string _apiKey;
+    private readonly IAgentBackend _backend;
     private readonly string _model;
     private readonly IDocumentStore _store;
-    private static readonly HttpClient Http = new()
-    {
-        BaseAddress = new Uri("https://api.anthropic.com/"),
-        Timeout = TimeSpan.FromSeconds(60)
-    };
+    private const string AdminTenant = "_admin";
 
-    public AgentService(IConfiguration cfg, IDocumentStore store)
+    public AgentService(IConfiguration cfg, IDocumentStore store, IAgentBackend backend)
     {
-        _apiKey = cfg["Anthropic:ApiKey"]
-                  ?? Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY")
-                  ?? "";
-        _model  = cfg["Anthropic:Model"] ?? "claude-sonnet-4-6";
-        _store  = store;
+        _backend = backend;
+        _model   = cfg["Agent:Model"] ?? backend.DefaultModel;
+        _store   = store;
     }
 
-    public bool IsConfigured => !string.IsNullOrEmpty(_apiKey);
-
-    // الـ /admin مَفتوح بِلا tenant context — نَستَخدِم tenant ثابِت "_admin"
-    // لِجَميع وَثائِق الوَكيل، لِيَتَوافَق مَع سياسَة AllDocumentsAreMultiTenanted.
-    private const string AdminTenant = "_admin";
+    public string ProviderName => _backend.ProviderName;
+    public string ModelName    => _model;
+    public bool IsConfigured   => _backend.IsConfigured;
 
     public async Task<AgentSession> LoadSessionAsync(CancellationToken ct = default)
     {
@@ -84,7 +75,7 @@ public sealed class AgentService
         var session = await sess.LoadAsync<AgentSession>(AgentSession.SessionId, ct)
                       ?? new AgentSession();
         session.Turns.Add(new AgentTurn { Role = "user", Text = userMessage });
-        await CallClaudeAsync(session, ct);
+        await CallBackendAsync(session, ct);
         session.UpdatedAt = DateTime.UtcNow;
         sess.Store(session);
         await sess.SaveChangesAsync(ct);
@@ -96,7 +87,7 @@ public sealed class AgentService
         await using var sess = _store.LightweightSession(AdminTenant);
         var session = await sess.LoadAsync<AgentSession>(AgentSession.SessionId, ct);
         if (session is null) return new AgentSession();
-        await CallClaudeAsync(session, ct);
+        await CallBackendAsync(session, ct);
         session.UpdatedAt = DateTime.UtcNow;
         sess.Store(session);
         await sess.SaveChangesAsync(ct);
@@ -118,92 +109,50 @@ public sealed class AgentService
         await sess.SaveChangesAsync(ct);
     }
 
-    // ───────────────────────── نِداء Claude ─────────────────────────
-    private async Task CallClaudeAsync(AgentSession session, CancellationToken ct)
+    // ───────────────────────── نِداء الـ Backend ─────────────────────
+    private async Task CallBackendAsync(AgentSession session, CancellationToken ct)
     {
-        if (!IsConfigured)
+        if (!_backend.IsConfigured)
         {
             session.Turns.Add(new AgentTurn
             {
                 Role = "assistant",
-                Text = "لا يوجَد مِفتاح Anthropic مَضبوط. أَضِف `Anthropic:ApiKey` في "
-                     + "appsettings.Local.json أَو مُتَغَيِّر بيئَة `ANTHROPIC_API_KEY`."
+                Text = $"لا يوجَد مِفتاح لِـ {_backend.ProviderName} مَضبوط. "
+                     + "أَضِف `Agent:ApiKey` في appsettings.Local.json أَو مُتَغَيِّر بيئَة "
+                     + "(ANTHROPIC_API_KEY / GEMINI_API_KEY / OPENAI_API_KEY)."
             });
             return;
         }
 
         var snapshot = await BuildTenantSnapshotAsync(ct);
-        var system = BuildSystemPrompt(snapshot);
-        var messages = BuildMessages(session);
-        var tools = BuildTools();
+        var system   = BuildSystemPrompt(snapshot);
+        var messages = BuildAbstractMessages(session);
+        var tools    = BuildAbstractTools();
 
-        var body = new
-        {
-            model = _model,
-            max_tokens = 2048,
-            system,
-            tools,
-            messages
-        };
+        var resp = await _backend.CallAsync(
+            new AgentRequest(system, messages, tools, _model, MaxTokens: 2048), ct);
 
-        using var req = new HttpRequestMessage(HttpMethod.Post, "v1/messages")
-        {
-            Content = JsonContent.Create(body, options: new JsonSerializerOptions
-            {
-                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-            })
-        };
-        req.Headers.Add("x-api-key", _apiKey);
-        req.Headers.Add("anthropic-version", "2023-06-01");
-
-        string json;
-        try
-        {
-            using var resp = await Http.SendAsync(req, ct);
-            json = await resp.Content.ReadAsStringAsync(ct);
-            if (!resp.IsSuccessStatusCode)
-            {
-                session.Turns.Add(new AgentTurn
-                {
-                    Role = "assistant",
-                    Text = $"⚠️ خَطَأ مِن Anthropic ({(int)resp.StatusCode}): {Truncate(json, 600)}"
-                });
-                return;
-            }
-        }
-        catch (Exception ex)
+        if (resp.Error is not null)
         {
             session.Turns.Add(new AgentTurn
             {
                 Role = "assistant",
-                Text = "⚠️ تَعَذَّر الاتِّصال بِـ Anthropic API: " + ex.Message
+                Text = "⚠️ " + resp.Error
             });
             return;
         }
 
-        using var doc = JsonDocument.Parse(json);
-        var content = doc.RootElement.GetProperty("content");
-        string? text = null;
-        AgentToolCall? tool = null;
-        foreach (var block in content.EnumerateArray())
+        var tool = resp.ToolCall is null ? null : new AgentToolCall
         {
-            var type = block.GetProperty("type").GetString();
-            if (type == "text")
-                text = (text ?? "") + block.GetProperty("text").GetString();
-            else if (type == "tool_use")
-                tool = new AgentToolCall
-                {
-                    Id = block.GetProperty("id").GetString() ?? "",
-                    Name = block.GetProperty("name").GetString() ?? "",
-                    InputJson = block.GetProperty("input").GetRawText(),
-                    Status = "pending"
-                };
-        }
-
+            Id = resp.ToolCall.Id,
+            Name = resp.ToolCall.Name,
+            InputJson = resp.ToolCall.InputJson,
+            Status = "pending"
+        };
         session.Turns.Add(new AgentTurn
         {
             Role = "assistant",
-            Text = text,
+            Text = resp.Text,
             Tool = tool
         });
     }
@@ -250,9 +199,8 @@ public sealed class AgentService
 5. الـ scope_id في set_attributes:
    - Guid فِئَة مَوجودَة لِخَصائِص إعلاناتها، أَو
    - "00000000-0000-0000-0000-000000000F01" sentinel لِخَصائِص البروفايل.
-   لاحِظ: لِفِئَة جَديدَة، scope_id يُحسَب مِن MD5("{slug}-listing:{cat-slug}")
-   إلّا لِـ ashare الَّذي يَستَخدِم Guidات ثابِتَة. عِند الشَكّ اِسأَل المُستَخدِم
-   أَن يُرسِل الـ scope_id مِن صَفحَة /admin/tenants/{slug}/attributes.
+   عِند الشَكّ اِطلُب مِنَ المُشرِف فَتح صَفحَة /admin/tenants/{slug}/attributes
+   وإرسال الـ scope_id.
 6. الفِئات تُجَمَّع بِـ "kind": residential, commercial, events, vehicles,
    roommate، أَو فارِغ.
 7. لُغَتُكَ الافتراضيَّة العَرَبيَّة الفُصحى مَع تَشكيل خَفيف.
@@ -261,83 +209,51 @@ public sealed class AgentService
 {{snapshot}}
 """;
 
-    // ─── تَحويل turns إلى Anthropic messages ─────────────────────────
-    private static object[] BuildMessages(AgentSession session)
+    // ─── تَحويل turns إلى AgentMessage مُحَايِدَة ─────────────────────
+    private static List<AgentMessage> BuildAbstractMessages(AgentSession session)
     {
-        var list = new List<object>();
-        AgentTurn? pendingToolTurn = null;
+        var list = new List<AgentMessage>();
+        AgentTurn? pending = null;
 
         foreach (var t in session.Turns)
         {
             if (t.Role == "user")
             {
-                if (pendingToolTurn?.Tool is not null)
+                if (pending?.Tool is not null)
                 {
-                    list.Add(new
-                    {
-                        role = "user",
-                        content = new object[]
-                        {
-                            new
-                            {
-                                type = "tool_result",
-                                tool_use_id = pendingToolTurn.Tool.Id,
-                                content = ToolResultText(pendingToolTurn.Tool)
-                            },
-                            new { type = "text", text = t.Text ?? "" }
-                        }
-                    });
-                    pendingToolTurn = null;
+                    list.Add(new AgentMessage(
+                        "user", t.Text, null,
+                        new AgentToolResult(pending.Tool.Id, pending.Tool.Name,
+                                            ToolResultText(pending.Tool))));
+                    pending = null;
                 }
                 else
                 {
-                    list.Add(new { role = "user", content = t.Text ?? "" });
+                    list.Add(new AgentMessage("user", t.Text, null, null));
                 }
             }
-            else // assistant
+            else
             {
-                var blocks = new List<object>();
-                if (!string.IsNullOrEmpty(t.Text))
-                    blocks.Add(new { type = "text", text = t.Text });
-                if (t.Tool is not null)
-                {
-                    blocks.Add(new
-                    {
-                        type = "tool_use",
-                        id = t.Tool.Id,
-                        name = t.Tool.Name,
-                        input = JsonSerializer.Deserialize<JsonElement>(t.Tool.InputJson)
-                    });
-                    pendingToolTurn = t;
-                }
-                else
-                {
-                    pendingToolTurn = null;
-                }
-                list.Add(new { role = "assistant", content = blocks.ToArray() });
+                list.Add(new AgentMessage(
+                    "assistant", t.Text,
+                    t.Tool is null ? null
+                        : new AgentToolCallOut(t.Tool.Id, t.Tool.Name, t.Tool.InputJson),
+                    null));
+                pending = t.Tool is not null ? t : null;
             }
         }
 
-        // إن كانَ آخِر دَور assistant فيه tool resolved وَلا يوجَد user يَتبَعه،
-        // أَضِف user بِـ tool_result فَقَط لِيَستَجيب Claude.
-        if (pendingToolTurn?.Tool is { Status: not "pending" })
+        // إن انتَهَت المُحادَثَة بِأَداة resolved بِلا user بَعدَها، أَضِف user
+        // بِـ tool_result فَقَط لِيَستَجيب الـ backend.
+        if (pending?.Tool is { Status: not "pending" })
         {
-            list.Add(new
-            {
-                role = "user",
-                content = new object[]
-                {
-                    new
-                    {
-                        type = "tool_result",
-                        tool_use_id = pendingToolTurn.Tool!.Id,
-                        content = ToolResultText(pendingToolTurn.Tool!)
-                    }
-                }
-            });
+            list.Add(new AgentMessage(
+                "user", null, null,
+                new AgentToolResult(pending.Tool.Id, pending.Tool.Name,
+                                    ToolResultText(pending.Tool))));
         }
 
-        return list.ToArray();
+        return list;
     }
 
     private static string ToolResultText(AgentToolCall tool) => tool.Status switch
@@ -348,186 +264,143 @@ public sealed class AgentService
         _          => "لَم يُوافِق المُشرِف بَعد عَلى هذا الإجراء."
     };
 
-    private static object[] BuildTools() => new object[]
+    // ─── تَعريفات الأَدَوات (JSON Schema) ─────────────────────────────
+    // مَكتوبَة كَ JSON خام لِتُمَرَّر مُباشَرَةً إلى الـ backends.
+    private static List<AgentToolDef> BuildAbstractTools() => new()
     {
-        new
-        {
-            name = "create_tenant",
-            description = "إنشاء مَتجَر (مُستَأجِر) جَديد. الـ slug يَجِب أَن يَكون فَريداً.",
-            input_schema = new
-            {
-                type = "object",
-                required = new[] { "slug", "name", "color", "channel", "categories" },
-                properties = new Dictionary<string, object>
-                {
-                    ["slug"]    = new { type = "string", description = "[a-z0-9_-]+" },
-                    ["name"]    = new { type = "string" },
-                    ["tagline"] = new { type = "string" },
-                    ["city"]    = new { type = "string" },
-                    ["color"]   = new { type = "string", description = "لَون hex مَثَلاً #1d4ed8" },
-                    ["channel"] = new
-                    {
-                        type = "string",
-                        description = "phone أَو nafath",
-                        @enum = new[] { "phone", "nafath" }
-                    },
-                    ["categories"] = new
-                    {
-                        type = "array",
-                        items = new
-                        {
-                            type = "object",
-                            required = new[] { "slug", "label" },
-                            properties = new Dictionary<string, object>
-                            {
-                                ["slug"]  = new { type = "string" },
-                                ["label"] = new { type = "string" },
-                                ["icon"]  = new { type = "string", description = "إيموجي" },
-                                ["kind"]  = new { type = "string" }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        new
-        {
-            name = "set_categories",
-            description = "إعادَة كِتابَة قائِمَة فِئات مُستَأجِر مَوجود بِالكامِل.",
-            input_schema = new
-            {
-                type = "object",
-                required = new[] { "slug", "categories" },
-                properties = new Dictionary<string, object>
-                {
-                    ["slug"] = new { type = "string" },
-                    ["categories"] = new
-                    {
-                        type = "array",
-                        items = new
-                        {
-                            type = "object",
-                            required = new[] { "slug", "label" },
-                            properties = new Dictionary<string, object>
-                            {
-                                ["slug"]  = new { type = "string" },
-                                ["label"] = new { type = "string" },
-                                ["icon"]  = new { type = "string" },
-                                ["kind"]  = new { type = "string" }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        new
-        {
-            name = "set_branding",
-            description = "تَحديث الهُويَّة البَصَريَّة. كُلّ الحُقول اختِياريَّة عَدا slug.",
-            input_schema = new
-            {
-                type = "object",
-                required = new[] { "slug" },
-                properties = new Dictionary<string, object>
-                {
-                    ["slug"]    = new { type = "string" },
-                    ["name"]    = new { type = "string" },
-                    ["tagline"] = new { type = "string" },
-                    ["city"]    = new { type = "string" },
-                    ["color"]   = new { type = "string" },
-                    ["channel"] = new { type = "string", @enum = new[] { "phone", "nafath" } }
-                }
-            }
-        },
-        new
-        {
-            name = "set_regions",
-            description = "إعادَة كِتابَة المُدُن والأَحياء لِمُستَأجِر بِالكامِل.",
-            input_schema = new
-            {
-                type = "object",
-                required = new[] { "slug", "cities" },
-                properties = new Dictionary<string, object>
-                {
-                    ["slug"] = new { type = "string" },
-                    ["cities"] = new
-                    {
-                        type = "array",
-                        items = new
-                        {
-                            type = "object",
-                            required = new[] { "name" },
-                            properties = new Dictionary<string, object>
-                            {
-                                ["name"] = new { type = "string" },
-                                ["districts"] = new { type = "array", items = new { type = "string" } }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        new
-        {
-            name = "set_attributes",
-            description =
-                "إعادَة كِتابَة الخَصائِص الديناميكِيَّة لِنِطاق (scope) مَحَدَّد. "
-              + "النِّطاق إمّا Guid فِئَة أَو الـ sentinel 00000000-0000-0000-0000-000000000F01 لِلبروفايل.",
-            input_schema = new
-            {
-                type = "object",
-                required = new[] { "slug", "scope_id", "definitions" },
-                properties = new Dictionary<string, object>
-                {
-                    ["slug"]     = new { type = "string" },
-                    ["scope_id"] = new { type = "string" },
-                    ["definitions"] = new
-                    {
-                        type = "array",
-                        items = new
-                        {
-                            type = "object",
-                            required = new[] { "code", "name", "type" },
-                            properties = new Dictionary<string, object>
-                            {
-                                ["code"] = new { type = "string" },
-                                ["name"] = new { type = "string" },
-                                ["type"] = new
-                                {
-                                    type = "string",
-                                    @enum = new[] { "Text","LongText","Number","Boolean",
-                                                    "SingleSelect","MultiSelect","Date" }
-                                },
-                                ["required"] = new { type = "boolean" },
-                                ["options"] = new
-                                {
-                                    type = "array",
-                                    items = new
-                                    {
-                                        type = "object",
-                                        required = new[] { "value", "label" },
-                                        properties = new Dictionary<string, object>
-                                        {
-                                            ["value"] = new { type = "string" },
-                                            ["label"] = new { type = "string" }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        new("create_tenant",
+            "إنشاء مَتجَر (مُستَأجِر) جَديد. الـ slug يَجِب أَن يَكون فَريداً.",
+            CreateTenantSchema),
+        new("set_categories",
+            "إعادَة كِتابَة قائِمَة فِئات مُستَأجِر مَوجود بِالكامِل.",
+            SetCategoriesSchema),
+        new("set_branding",
+            "تَحديث الهُويَّة البَصَريَّة. كُلّ الحُقول اختِياريَّة عَدا slug.",
+            SetBrandingSchema),
+        new("set_regions",
+            "إعادَة كِتابَة المُدُن والأَحياء لِمُستَأجِر بِالكامِل.",
+            SetRegionsSchema),
+        new("set_attributes",
+            "إعادَة كِتابَة الخَصائِص الديناميكِيَّة لِنِطاق (scope) مَحَدَّد. "
+          + "النِّطاق إمّا Guid فِئَة أَو 00000000-0000-0000-0000-000000000F01 لِلبروفايل.",
+            SetAttributesSchema)
     };
 
-    private static string Truncate(string s, int max) =>
-        s.Length <= max ? s : s[..max] + "…";
+    private static readonly string CategoryItemSchema = """
+    {
+      "type": "object",
+      "required": ["slug", "label"],
+      "properties": {
+        "slug":  {"type": "string"},
+        "label": {"type": "string"},
+        "icon":  {"type": "string", "description": "إيموجي"},
+        "kind":  {"type": "string"}
+      }
+    }
+    """;
+
+    private static readonly string CreateTenantSchema = $$"""
+    {
+      "type": "object",
+      "required": ["slug", "name", "color", "channel", "categories"],
+      "properties": {
+        "slug":    {"type": "string", "description": "[a-z0-9_-]+"},
+        "name":    {"type": "string"},
+        "tagline": {"type": "string"},
+        "city":    {"type": "string"},
+        "color":   {"type": "string", "description": "لَون hex مَثَلاً #1d4ed8"},
+        "channel": {"type": "string", "enum": ["phone", "nafath"]},
+        "categories": {"type": "array", "items": {{CategoryItemSchema}}}
+      }
+    }
+    """;
+
+    private static readonly string SetCategoriesSchema = $$"""
+    {
+      "type": "object",
+      "required": ["slug", "categories"],
+      "properties": {
+        "slug": {"type": "string"},
+        "categories": {"type": "array", "items": {{CategoryItemSchema}}}
+      }
+    }
+    """;
+
+    private static readonly string SetBrandingSchema = """
+    {
+      "type": "object",
+      "required": ["slug"],
+      "properties": {
+        "slug":    {"type": "string"},
+        "name":    {"type": "string"},
+        "tagline": {"type": "string"},
+        "city":    {"type": "string"},
+        "color":   {"type": "string"},
+        "channel": {"type": "string", "enum": ["phone", "nafath"]}
+      }
+    }
+    """;
+
+    private static readonly string SetRegionsSchema = """
+    {
+      "type": "object",
+      "required": ["slug", "cities"],
+      "properties": {
+        "slug": {"type": "string"},
+        "cities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name":      {"type": "string"},
+              "districts": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        }
+      }
+    }
+    """;
+
+    private static readonly string SetAttributesSchema = """
+    {
+      "type": "object",
+      "required": ["slug", "scope_id", "definitions"],
+      "properties": {
+        "slug":     {"type": "string"},
+        "scope_id": {"type": "string"},
+        "definitions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["code", "name", "type"],
+            "properties": {
+              "code":     {"type": "string"},
+              "name":     {"type": "string"},
+              "type":     {"type": "string", "enum": ["Text","LongText","Number","Boolean","SingleSelect","MultiSelect","Date"]},
+              "required": {"type": "boolean"},
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["value", "label"],
+                  "properties": {
+                    "value": {"type": "string"},
+                    "label": {"type": "string"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    """;
 }
 
 // ─── مُنَفِّذ الأَدَوات ───────────────────────────────────────────────────
-// مَفصول عَن AgentService لِيَسهُل اختِبارُه ولِتَجَنُّب الاعتِماد الدائِري
-// مَع TenantOps. كُلّ tool يُحَوَّل إلى نِداء واحِد عَلى TenantOps.
+// مَفصول عَن AgentService لِيَسهُل اختِبارُه. كُلّ tool يُحَوَّل إلى نِداء
+// واحِد عَلى نَفس code-path الَّذي تَستَخدِمُه نَماذِج /admin/tenants/*/save.
 public sealed class AgentToolExecutor
 {
     private readonly IDocumentStore _store;

@@ -13,7 +13,12 @@
             <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin" aria-label="الرُجوع">
                 <AcIcon Name="arrow-right" Size="16" />
             </a>
-            <h1 class="acm-wizard-title" style="margin:0;">🤖 وَكيل إداري</h1>
+            <div>
+                <h1 class="acm-wizard-title" style="margin:0;">🤖 وَكيل إداري</h1>
+                <span style="font-size:11px;color:var(--ac-text-muted);direction:ltr;display:block;">
+                    @Agent.ProviderName / @Agent.ModelName
+                </span>
+            </div>
         </div>
         <form method="post" action="/admin/agent/reset" style="margin:0;">
             <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">
@@ -25,7 +30,7 @@
     @if (!Agent.IsConfigured)
     {
         <AcAlert Variant="warning"
-                 Message="لا يوجَد مِفتاح Anthropic مَضبوط. أَضِف Anthropic:ApiKey في appsettings.Local.json أَو مُتَغَيِّر بيئَة ANTHROPIC_API_KEY ثُمّ أَعِد التَّشغيل." />
+                 Message="@($"لا يوجَد مِفتاح {Agent.ProviderName} مَضبوط. أَضِف Agent:ApiKey في appsettings.Local.json أَو مُتَغَيِّر البيئَة المُناسِب ثُمّ أَعِد التَّشغيل.")" />
     }
 
     @if (Err is not null) { <AcAlert Variant="danger" Message="@FormatError(Err)" /> }
