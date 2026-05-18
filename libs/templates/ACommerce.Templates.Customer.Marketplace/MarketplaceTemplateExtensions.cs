@@ -27,6 +27,8 @@ public static class MarketplaceTemplateExtensions
         services.AddScoped<L>();
         services.AddScoped<ACommerce.Kit.Realtime.Client.RealtimeClient>();
         services.AddScoped<ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService>();
+        services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.AgentService>();
+        services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor>();
         return services;
     }
 
@@ -713,6 +715,54 @@ public static class MarketplaceTemplateExtensions
             }
             await s.SaveChangesAsync();
             return Results.Redirect($"/admin/tenants/{slug}/attributes?scope={scopeId}&saved=1");
+        }).DisableAntiforgery();
+
+        // ─── Admin: Agent — ask ─────────────────────────────────────────
+        app.MapPost("/admin/agent/ask",
+            async (HttpRequest req,
+                   ACommerce.Templates.Customer.Marketplace.Services.AgentService agent) =>
+        {
+            var msg = req.Form["message"].ToString().Trim();
+            if (string.IsNullOrEmpty(msg))
+                return Results.Redirect("/admin/agent?err=empty");
+            await agent.AskAsync(msg);
+            return Results.Redirect("/admin/agent");
+        }).DisableAntiforgery();
+
+        // ─── Admin: Agent — apply a pending tool call ───────────────────
+        app.MapPost("/admin/agent/tool/{toolId}/apply",
+            async (string toolId,
+                   ACommerce.Templates.Customer.Marketplace.Services.AgentService agent,
+                   ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor exec) =>
+        {
+            var session = await agent.LoadSessionAsync();
+            var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
+            if (turn?.Tool is null)
+                return Results.Redirect("/admin/agent?err=tool_missing");
+
+            var (ok, msg) = await exec.ExecuteAsync(turn.Tool.Name, turn.Tool.InputJson);
+            await agent.UpdateToolStatusAsync(toolId, ok ? "applied" : "error", msg);
+            // اطلُب مِن Claude اِستِكمال المُحادَثَة بَعد رُؤيَة tool_result
+            await agent.ContinueAfterToolAsync();
+            return Results.Redirect("/admin/agent");
+        }).DisableAntiforgery();
+
+        // ─── Admin: Agent — reject a pending tool call ──────────────────
+        app.MapPost("/admin/agent/tool/{toolId}/reject",
+            async (string toolId,
+                   ACommerce.Templates.Customer.Marketplace.Services.AgentService agent) =>
+        {
+            await agent.UpdateToolStatusAsync(toolId, "rejected", null);
+            await agent.ContinueAfterToolAsync();
+            return Results.Redirect("/admin/agent");
+        }).DisableAntiforgery();
+
+        // ─── Admin: Agent — reset conversation ──────────────────────────
+        app.MapPost("/admin/agent/reset",
+            async (ACommerce.Templates.Customer.Marketplace.Services.AgentService agent) =>
+        {
+            await agent.ResetAsync();
+            return Results.Redirect("/admin/agent");
         }).DisableAntiforgery();
 
         return app;

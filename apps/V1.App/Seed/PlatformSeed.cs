@@ -107,50 +107,13 @@ public static class PlatformSeed
         var existing = await globalSession.LoadAsync<Tenant>(slug);
         if (existing is not null)
         {
-            // حَدِّث الحُقول المُتَغَيِّرَة في الإعدادات
-            var changed = false;
-            if (existing.AuthChannel != authChannel) { existing.AuthChannel = authChannel; changed = true; }
-            if (existing.BrandColor != color)        { existing.BrandColor = color;        changed = true; }
-            if (existing.TagLine != tagLine)         { existing.TagLine = tagLine;         changed = true; }
-            if (existing.City != city)               { existing.City = city;               changed = true; }
-            if (existing.Name != name)               { existing.Name = name;               changed = true; }
-
-            // الفِئات: نَستَبدِلها بِالكامِل لِتَتَطابَق دائِماً مَع
-            // التَصريح في الكود (مَصدَر الحَقيقَة) — مَنع تَراكُم فِئات
-            // قَديمَة. الإعلانات لا تُمَسّ — قَد تُشير لِسلوغات قَديمَة
-            // (تَظهَر بِلا فِئَة في الواجِهَة) حَتَّى يُعيد المُستَخدِم
-            // تَعيينها أو يُشَغِّل الـ Importer.
-            var newCats = categories
-                .Select((c, i) => new Category {
-                    Slug = c.slug, Label = c.label, Icon = c.icon,
-                    Kind = c.kind, SortOrder = i
-                })
-                .ToList();
-            var oldFingerprint = string.Join(",", existing.Categories
-                .OrderBy(c => c.Slug)
-                .Select(c => $"{c.Slug}|{c.Kind}|{c.Label}"));
-            var newFingerprint = string.Join(",", newCats
-                .OrderBy(c => c.Slug)
-                .Select(c => $"{c.Slug}|{c.Kind}|{c.Label}"));
-            if (oldFingerprint != newFingerprint)
-            {
-                existing.Categories = newCats;
-                changed = true;
-            }
-
-            if (changed)
-            {
-                globalSession.Store(existing);
-                await globalSession.SaveChangesAsync();
-                Console.WriteLine($"[Seed] tenant '{slug}': metadata updated.");
-            }
-            else
-            {
-                Console.WriteLine($"[Seed] tenant '{slug}' already exists, skipping.");
-            }
-            // لا نُعيد بَذر الإعلانات: قَد تَكون مُستَورَدَة مِن أَداة
-            // Importer ومُلكاً حَقيقيّاً لِلمُستَخدِم. الـ seed يَلمَس
-            // Tenant metadata فَقَط بَعد أَوّل تَشغيل.
+            // المُستَأجِر مَوجود — لا نَلمَسه. أَيّ تَعديلات إداريَّة (مِن
+            // لَوحَة التَحَكُّم أَو الوَكيل) هي مَصدَر الحَقيقَة، والـ seed
+            // مُجَرَّد قائِمَة قِيَم افتِراضيَّة عِند أَوّل تَشغيل. كانَ هُنا
+            // فَرع يُعيد كِتابَة الفِئات/اللَون/الاسم لَو اختَلَفَت بَصمَتُها
+            // عَنِ الكود، لكِنَّه كانَ يَمسَح تَعديلات الـ admin في كُلّ
+            // إعادَة تَشغيل — لِذلك أُزيل.
+            Console.WriteLine($"[Seed] tenant '{slug}' exists — left untouched.");
             return;
         }
 
