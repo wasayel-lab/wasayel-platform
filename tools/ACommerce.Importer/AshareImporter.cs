@@ -97,29 +97,33 @@ public sealed class AshareImporter
 
         // 3) Listings — ProductListing + Product لِلوَصف.
         //
-        // CategoryId يُحَدِّد أَيّ فِئَة. عَشير V3 يَستَخدِم Guids
-        // ثابِتَة (AshareV3RoommateAttributes): RoommateHasCategoryId و
-        // RoommateWantsCategoryId. إن كانَ الـ CategoryId يُطابِق أَحَدهما
-        // نَحفَظ الـ slug المُقابِل؛ غَير ذلك نَترُك CategorySlug فارِغاً
-        // (سَيَظهَر الإعلان تَحت "الكلّ" بِلا تَصنيف).
+        // CategoryId يُحَدِّد أَيّ فِئَة (Guids ثابِتَة في
+        // AshareV3RoommateAttributes). إن لم يُطابِق أَحَدَهما نَحفَظ
+        // CategorySlug فارِغاً.
         //
-        // قَيد IsActive=1 أُسقِط: بَيانات الإنتاج فيها إعلانات مُنشورَة
-        // بِـ IsActive=0 (مَثَلاً قَبل تَفعيل من Nafath). نَأخُذها كُلَّها
-        // ما دامَت غَير مَحذوفَة.
+        // قَيد IsActive=1 أُسقِط. كَذلك الـ INNER JOIN مَع Products
+        // أَصبَح LEFT JOIN — لَو الإعلان يَتيم بِلا Product (بَيانات
+        // مُهَجَّرَة جُزئيّاً) لا نَفقِده. كَذلك دُمنا نُلَخِّص:
+        //   - عَدَد الصُفوف قَبل أَيّ فَلتَر
+        //   - عَدَد المَحذوفَة
+        //   - عَدَد ما يَتَبَقّى لِلكِتابَة
         var roomHas    = Guid.Parse("0a01a01a-0a01-0a01-0a01-0a01000a01a2");
         var roomWants  = Guid.Parse("0a01a01a-0a01-0a01-0a01-0a01000a01a3");
 
-        var listingRows = (await src.QueryAsync<AshareListingRow>(
+        var allRows = (await src.QueryAsync<AshareListingRow>(
             @"SELECT pl.Id, pl.Title,
                      COALESCE(NULLIF(pl.Description, ''), p.LongDescription, p.ShortDescription, '') AS Description,
                      pl.Price, pl.CategoryId,
                      pl.IsDeleted, pl.CreatedAt, pl.UpdatedAt
               FROM ProductListing pl
-              JOIN Products p ON p.Id = pl.ProductId
-              WHERE pl.IsDeleted = 0"
+              LEFT JOIN Products p ON p.Id = pl.ProductId"
         )).ToList();
-        _log.LogInformation("  ⓘ ProductListing: {Count} rows fetched.", listingRows.Count);
-        var listings = listingRows.Select(l => new Listing
+        var deletedCount = allRows.Count(l => l.IsDeleted);
+        var aliveRows = allRows.Where(l => !l.IsDeleted).ToList();
+        _log.LogInformation("  ⓘ ProductListing: total {Total} (deleted {Del}, alive {Alive}).",
+            allRows.Count, deletedCount, aliveRows.Count);
+
+        var listings = aliveRows.Select(l => new Listing
         {
             Id           = l.Id,
             TenantSlug   = TenantSlug,
