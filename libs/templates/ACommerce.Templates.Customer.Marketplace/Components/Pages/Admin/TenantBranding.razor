@@ -1,0 +1,125 @@
+@page "/admin/tenants/{slug}/branding"
+@inject IDocumentStore Store
+
+@*
+    مُحَرِّر الهُويَّة البَصَريّة — الاسم + الشِعار + اللَون + المَدينَة
+    الافتراضيّة + قَناة الدُخول. كَذلك مُعايَنَة بَصَريّة لِلَون.
+*@
+
+<div class="acs-page acm-admin">
+    @if (tenant is null)
+    {
+        <AcEmptyState IconName="info" Title="المَتجَر غَير مَوجود" />
+    }
+    else
+    {
+        <div class="acm-admin-head">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/admin/tenants/{Slug}")">
+                    <AcIcon Name="arrow-right" Size="16" />
+                </a>
+                <h1 class="acm-wizard-title" style="margin:0;">هُويَّة @tenant.Name</h1>
+            </div>
+        </div>
+
+        @if (Err is not null)
+        {
+            <AcAlert Variant="danger" Message="@FormatError(Err)" />
+        }
+
+        <form method="post" action="@($"/admin/tenants/{Slug}/branding/save")">
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">الاسم والشِعار</h3>
+
+                    <AcField Label="الاسم العَرَبي" Required="true">
+                        <input type="text" name="name" required maxlength="60"
+                               class="ac-input" value="@tenant.Name" />
+                    </AcField>
+
+                    <AcField Label="الشِعار التَسويقي">
+                        <input type="text" name="tagline" maxlength="120"
+                               class="ac-input" value="@tenant.TagLine" />
+                    </AcField>
+
+                    <AcField Label="المَدينَة الافتراضيّة">
+                        <input type="text" name="city" maxlength="40"
+                               class="ac-input" value="@tenant.City" />
+                    </AcField>
+                </ChildContent>
+            </AcCard>
+
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">لَون العَلامَة</h3>
+
+                    <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;">
+                        <span class="acm-tenant-card-brand"
+                              style="background:@tenant.BrandColor;width:64px;height:64px;">
+                            @(tenant.Name.FirstOrDefault())
+                        </span>
+                        <div style="flex:1;">
+                            <input type="color" name="color" required
+                                   class="ac-input" style="height:48px;padding:4px;"
+                                   value="@tenant.BrandColor" />
+                            <small style="color:var(--ac-text-muted);font-size:11px;direction:ltr;">
+                                @tenant.BrandColor
+                            </small>
+                        </div>
+                    </div>
+                </ChildContent>
+            </AcCard>
+
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">طَريقَة الدُخول</h3>
+                    <div class="acm-radio-cards">
+                        <label class="acm-radio-card">
+                            <input type="radio" name="channel" value="phone"
+                                   checked="@(tenant.AuthChannel != "nafath")" />
+                            <span class="acm-radio-card-body">
+                                <strong>📱 هاتِف + OTP</strong>
+                                <span>كود ٦ خانات بِالـ SMS</span>
+                            </span>
+                        </label>
+                        <label class="acm-radio-card">
+                            <input type="radio" name="channel" value="nafath"
+                                   checked="@(tenant.AuthChannel == "nafath")" />
+                            <span class="acm-radio-card-body">
+                                <strong>🪪 نَفاذ</strong>
+                                <span>تَوثيق هُوِيَّة وَطنيَّة سُعوديّ</span>
+                            </span>
+                        </label>
+                    </div>
+                </ChildContent>
+            </AcCard>
+
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">إلغاء</a>
+                <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
+                    <AcIcon Name="check" Size="18" /> حِفظ
+                </button>
+            </div>
+        </form>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+
+    Tenant? tenant;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var s = Store.QuerySession();
+        tenant = await s.LoadAsync<Tenant>(Slug);
+    }
+
+    static string FormatError(string err) => err switch
+    {
+        "name_required" => "الاسم مَطلوب.",
+        "color_invalid" => "لَون العَلامَة غَير صَحيح.",
+        _ => err
+    };
+}

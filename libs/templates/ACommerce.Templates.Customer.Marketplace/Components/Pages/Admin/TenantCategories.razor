@@ -1,0 +1,109 @@
+@page "/admin/tenants/{slug}/categories"
+@inject IDocumentStore Store
+
+@*
+    مُحَرِّر الفِئات — قائِمَة + شَكل سَطر-لِكُلّ-فِئَة كَ textarea (نَفس
+    شَكل صَفحَة إنشاء المَتجَر). يَسمَح بِإعادَة كِتابَة الشَجَرَة كامِلَة
+    دَفعَة واحِدَة بِدون UI مُعَقَّد لِلتَّرتيب/الإضافَة الفَرديَّة.
+*@
+
+<div class="acs-page acm-admin">
+    @if (tenant is null)
+    {
+        <AcEmptyState IconName="info" Title="المَتجَر غَير مَوجود" />
+    }
+    else
+    {
+        <div class="acm-admin-head">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/admin/tenants/{Slug}")">
+                    <AcIcon Name="arrow-right" Size="16" />
+                </a>
+                <h1 class="acm-wizard-title" style="margin:0;">فِئات @tenant.Name</h1>
+            </div>
+        </div>
+
+        @if (Err is not null)
+        {
+            <AcAlert Variant="danger" Message="@FormatError(Err)" />
+        }
+
+        <AcCard>
+            <ChildContent>
+                <h3 style="margin-top:0;">المَعروض حاليّاً (@tenant.Categories.Count فِئَة)</h3>
+                @if (tenant.Categories.Count > 0)
+                {
+                    <div class="acm-cat-list">
+                        @foreach (var c in tenant.Categories.OrderBy(c => c.SortOrder).ThenBy(c => c.Label))
+                        {
+                            <div class="acm-cat-row">
+                                <span style="font-size:24px;">@c.Icon</span>
+                                <div style="flex:1;">
+                                    <strong>@c.Label</strong>
+                                    <span style="color:var(--ac-text-muted);font-size:12px;
+                                                 display:block;direction:ltr;">@c.Slug</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(c.Kind))
+                                {
+                                    <span class="ac-chip ac-chip-sm">@c.Kind</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p style="color:var(--ac-text-muted);">لا فِئات بَعد.</p>
+                }
+            </ChildContent>
+        </AcCard>
+
+        <form method="post" action="@($"/admin/tenants/{Slug}/categories/save")">
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">تَحديث الفِئات</h3>
+                    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
+                        صَفّ لِكُلّ فِئَة بِالصِّيغَة:
+                        <code>slug | الاسم | أَيقونَة | تَجميع</code>.
+                        التَّرتيب في القائِمَة = تَرتيب العَرض.
+                        <strong>تَحذير</strong>: حَذف slug مَوجود يَترُك إعلاناتِه بِلا فِئَة في الواجِهَة.
+                    </p>
+                    <textarea name="categories" rows="10" required
+                              class="ac-input" style="font-family:monospace;font-size:13px;direction:ltr;">@catsText</textarea>
+                </ChildContent>
+            </AcCard>
+
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">إلغاء</a>
+                <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
+                    <AcIcon Name="check" Size="18" /> حِفظ
+                </button>
+            </div>
+        </form>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+
+    Tenant? tenant;
+    string catsText = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var s = Store.QuerySession();
+        tenant = await s.LoadAsync<Tenant>(Slug);
+        if (tenant is null) return;
+        catsText = string.Join('\n', tenant.Categories
+            .OrderBy(c => c.SortOrder).ThenBy(c => c.Label)
+            .Select(c => $"{c.Slug} | {c.Label} | {c.Icon ?? "🏠"} | {c.Kind}"));
+    }
+
+    static string FormatError(string err) => err switch
+    {
+        "no_categories" => "أَضِف فِئَة واحِدَة على الأَقَلّ.",
+        "bad_categories" => "تَنسيق غَير صَحيح — كُلّ صَفّ: slug | الاسم | أَيقونَة | تَجميع.",
+        _ => err
+    };
+}

@@ -1,0 +1,158 @@
+@page "/admin/tenants/{slug}/regions"
+@inject IDocumentStore Store
+
+@*
+    مُحَرِّر المُدُن والأَحياء.
+    Storage: ImportedRecord بِالجَدول "DiscoveryRegions" — نَفس الَّذي
+    تَكتُبه أَداة الـ Importer. هكَذا الفِئَتان (مُستَورَد + مُعَدَّل
+    يَدَويّاً) تَعيشان في نَفس المَكان.
+
+    Tree text: City > District1, District2, …
+              City2 > Dist1, Dist2
+*@
+
+<div class="acs-page acm-admin">
+    @if (tenant is null)
+    {
+        <AcEmptyState IconName="info" Title="المَتجَر غَير مَوجود" />
+    }
+    else
+    {
+        <div class="acm-admin-head">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/admin/tenants/{Slug}")">
+                    <AcIcon Name="arrow-right" Size="16" />
+                </a>
+                <h1 class="acm-wizard-title" style="margin:0;">مُدُن @tenant.Name</h1>
+            </div>
+        </div>
+
+        @if (Err is not null)
+        {
+            <AcAlert Variant="danger" Message="@FormatError(Err)" />
+        }
+        @if (Saved == "1")
+        {
+            <AcAlert Variant="success" Message="تَمّ الحِفظ." />
+        }
+
+        <AcCard>
+            <ChildContent>
+                <h3 style="margin-top:0;">المَعروض حاليّاً</h3>
+                @if (citiesWithKids.Count > 0)
+                {
+                    <ul class="acm-region-tree">
+                        @foreach (var (city, kids) in citiesWithKids)
+                        {
+                            <li>
+                                <strong>@city</strong>
+                                @if (kids.Count > 0)
+                                {
+                                    <ul>
+                                        @foreach (var d in kids) { <li>@d</li> }
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <span style="color:var(--ac-text-muted);font-size:12px;">
+                                        — لا أَحياء
+                                    </span>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p style="color:var(--ac-text-muted);">لا مُدُن بَعد.</p>
+                }
+            </ChildContent>
+        </AcCard>
+
+        <form method="post" action="@($"/admin/tenants/{Slug}/regions/save")">
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">تَحديث المُدُن والأَحياء</h3>
+                    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
+                        سَطر لِكُلّ مَدينَة بِالصِّيغَة:
+                        <code>المَدينَة &gt; الحَيّ1، الحَيّ2، …</code>
+                        مَدينَة بِلا أَحياء؟ اكتُب اسمها فَقَط بِلا <code>&gt;</code>.
+                    </p>
+                    <textarea name="regions" rows="10" required
+                              class="ac-input" style="font-family:monospace;font-size:13px;">@regionsText</textarea>
+                </ChildContent>
+            </AcCard>
+
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">إلغاء</a>
+                <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
+                    <AcIcon Name="check" Size="18" /> حِفظ
+                </button>
+            </div>
+        </form>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "err")]   public string? Err { get; set; }
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+
+    Tenant? tenant;
+    List<(string City, List<string> Districts)> citiesWithKids = new();
+    string regionsText = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var g = Store.QuerySession();
+        tenant = await g.LoadAsync<Tenant>(Slug);
+        if (tenant is null) return;
+
+        await using var t = Store.QuerySession(Slug);
+        var rows = await t.Query<ImportedRecord>()
+            .Where(r => r.Table == "DiscoveryRegions")
+            .ToListAsync();
+
+        // DiscoveryRegion: Name, ParentId, Level (1=City, 2=District)
+        var byId = new Dictionary<string, (string Name, string? ParentId, int Level)>();
+        foreach (var r in rows)
+        {
+            var id    = r.SourceId;
+            var name  = Get(r, "Name");
+            var pid   = Get(r, "ParentId");
+            var level = int.TryParse(Get(r, "Level"), out var l) ? l : 1;
+            if (!string.IsNullOrEmpty(name))
+                byId[id] = (name, string.IsNullOrEmpty(pid) ? null : pid, level);
+        }
+
+        var cities = byId.Where(kv => kv.Value.Level == 1).ToList();
+        foreach (var (cityId, city) in cities.OrderBy(kv => kv.Value.Name))
+        {
+            var kids = byId
+                .Where(kv => kv.Value.Level == 2 && kv.Value.ParentId == cityId)
+                .OrderBy(kv => kv.Value.Name)
+                .Select(kv => kv.Value.Name).ToList();
+            citiesWithKids.Add((city.Name, kids));
+        }
+
+        regionsText = string.Join('\n', citiesWithKids.Select(c =>
+            c.Districts.Count > 0
+                ? $"{c.City} > {string.Join("، ", c.Districts)}"
+                : c.City));
+    }
+
+    static string? Get(ImportedRecord r, string key)
+    {
+        if (!r.Data.TryGetValue(key, out var v) || v is null) return null;
+        if (v is System.Text.Json.JsonElement el)
+            return el.ValueKind == System.Text.Json.JsonValueKind.Null ? null : el.ToString();
+        return v.ToString();
+    }
+
+    static string FormatError(string err) => err switch
+    {
+        "empty"     => "أَضِف مَدينَة واحِدَة على الأَقَلّ.",
+        "bad_format" => "تَنسيق غَير صَحيح — كُلّ صَفّ: المَدينَة > أَحياء.",
+        _           => err
+    };
+}

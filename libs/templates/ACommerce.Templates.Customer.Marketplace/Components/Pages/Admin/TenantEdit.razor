@@ -1,0 +1,104 @@
+@page "/admin/tenants/{slug}"
+@inject IDocumentStore Store
+
+@*
+    صَفحَة المُستَأجِر الواحِد في لَوحَة التَحَكُّم — تَعرِض المَيتاداتا
+    وَتُقَدِّم روابِط لِكُلّ مُحَرِّر فَرعيّ (فِئات/خَصائِص/مُدُن/تَخصيص).
+*@
+
+<div class="acs-page acm-admin">
+    @if (tenant is null)
+    {
+        <AcEmptyState IconName="info"
+                      Title="المَتجَر غَير مَوجود"
+                      ActionLabel="الرُجوع لِلَوحَة التَحَكُّم"
+                      ActionHref="/admin" />
+    }
+    else
+    {
+        @if (Saved == "1")
+        {
+            <AcAlert Variant="success" Message="تَمّ الحِفظ." />
+        }
+
+        <div class="acm-admin-head">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin" aria-label="الرُجوع">
+                    <AcIcon Name="arrow-right" Size="16" />
+                </a>
+                <span class="acm-tenant-card-brand" style="background:@tenant.BrandColor;">
+                    @(tenant.Name.FirstOrDefault())
+                </span>
+                <div>
+                    <h1 class="acm-wizard-title" style="margin:0;">@tenant.Name</h1>
+                    <span style="color:var(--ac-text-muted);font-size:13px;">
+                        /@tenant.Slug · @tenant.City
+                    </span>
+                </div>
+            </div>
+            <a class="ac-btn ac-btn-ghost" href="@($"/{tenant.Slug}")"
+               target="_blank">
+                <AcIcon Name="external-link" Size="16" /> فَتح المَتجَر
+            </a>
+        </div>
+
+        <div class="acm-tenant-managers">
+            <a class="acm-manager-card" href="@($"/admin/tenants/{Slug}/categories")">
+                <span class="acm-manager-icon"><AcIcon Name="tag" Size="24" /></span>
+                <div>
+                    <strong>الفِئات</strong>
+                    <span>@tenant.Categories.Count فِئَة في @kindCount مَجموعَة</span>
+                </div>
+                <AcIcon Name="chevron-left" Size="16" />
+            </a>
+
+            <a class="acm-manager-card" href="@($"/admin/tenants/{Slug}/attributes")">
+                <span class="acm-manager-icon"><AcIcon Name="settings" Size="24" /></span>
+                <div>
+                    <strong>الخَصائِص الديناميكِيَّة</strong>
+                    <span>تَعريف حُقول الإعلانات والبروفايل</span>
+                </div>
+                <AcIcon Name="chevron-left" Size="16" />
+            </a>
+
+            <a class="acm-manager-card" href="@($"/admin/tenants/{Slug}/regions")">
+                <span class="acm-manager-icon"><AcIcon Name="map-pin" Size="24" /></span>
+                <div>
+                    <strong>المُدُن والأَحياء</strong>
+                    <span>قائِمَة المُدُن الَّتي يَختار مِنها المُستَخدِم</span>
+                </div>
+                <AcIcon Name="chevron-left" Size="16" />
+            </a>
+
+            <a class="acm-manager-card" href="@($"/admin/tenants/{Slug}/branding")">
+                <span class="acm-manager-icon"
+                      style="background:@tenant.BrandColor;color:#fff;">
+                    <AcIcon Name="brush" Size="24" />
+                </span>
+                <div>
+                    <strong>الهُويَّة البَصَريّة</strong>
+                    <span>اللَون، الاسم، الشِعار التَسويقي</span>
+                </div>
+                <AcIcon Name="chevron-left" Size="16" />
+            </a>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+
+    Tenant? tenant;
+    int kindCount;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var s = Store.QuerySession();
+        tenant = await s.LoadAsync<Tenant>(Slug);
+        if (tenant is null) return;
+        kindCount = tenant.Categories
+            .Where(c => !string.IsNullOrEmpty(c.Kind))
+            .Select(c => c.Kind).Distinct().Count();
+    }
+}

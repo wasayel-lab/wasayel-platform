@@ -424,6 +424,308 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect($"/admin");
         }).DisableAntiforgery();
 
+        // ─── Admin: save categories ─────────────────────────────────────
+        // إعادَة كِتابَة قائِمَة الفِئات بِالكامِل (overwrite). الإعلانات
+        // المَوجودَة بِفِئَة مَحذوفَة تَبقى في الـ events لكِن تَختَفي مِن
+        // الواجِهَة — هذا قَرار صَريح في النَّص التَوضيحي.
+        app.MapPost("/admin/tenants/{slug}/categories/save",
+            async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var catsRaw = req.Form["categories"].ToString();
+            string Back(string err) => $"/admin/tenants/{slug}/categories?err={err}";
+
+            var categories = new List<ACommerce.Kit.Tenants.Category>();
+            var idx = 0;
+            foreach (var line in catsRaw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var l = line.Trim();
+                if (l.Length == 0) continue;
+                var parts = l.Split('|', StringSplitOptions.TrimEntries);
+                if (parts.Length < 2) return Results.Redirect(Back("bad_categories"));
+                var cslug = parts[0].Trim().ToLowerInvariant();
+                var clabel = parts[1].Trim();
+                if (string.IsNullOrEmpty(cslug) || string.IsNullOrEmpty(clabel))
+                    return Results.Redirect(Back("bad_categories"));
+                categories.Add(new ACommerce.Kit.Tenants.Category
+                {
+                    Slug = cslug,
+                    Label = clabel,
+                    Icon  = parts.Length > 2 && !string.IsNullOrEmpty(parts[2]) ? parts[2].Trim() : "🏠",
+                    Kind  = parts.Length > 3 ? parts[3].Trim().ToLowerInvariant() : "",
+                    SortOrder = idx++
+                });
+            }
+            if (categories.Count == 0) return Results.Redirect(Back("no_categories"));
+
+            await using var s = store.LightweightSession();
+            var t = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+            if (t is null) return Results.Redirect("/admin");
+            t.Categories = categories;
+            s.Store(t);
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/admin/tenants/{slug}?saved=1");
+        }).DisableAntiforgery();
+
+        // ─── Admin: save branding ───────────────────────────────────────
+        app.MapPost("/admin/tenants/{slug}/branding/save",
+            async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var name    = req.Form["name"].ToString().Trim();
+            var tagline = req.Form["tagline"].ToString().Trim();
+            var city    = req.Form["city"].ToString().Trim();
+            var color   = req.Form["color"].ToString().Trim();
+            var channel = req.Form["channel"].ToString().Trim();
+            if (channel != "phone" && channel != "nafath") channel = "phone";
+
+            if (string.IsNullOrEmpty(name))
+                return Results.Redirect($"/admin/tenants/{slug}/branding?err=name_required");
+            if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))
+                return Results.Redirect($"/admin/tenants/{slug}/branding?err=color_invalid");
+
+            await using var s = store.LightweightSession();
+            var t = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+            if (t is null) return Results.Redirect("/admin");
+            t.Name = name;
+            t.TagLine = tagline;
+            t.City = city;
+            t.BrandColor = color;
+            t.AuthChannel = channel;
+            s.Store(t);
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/admin/tenants/{slug}?saved=1");
+        }).DisableAntiforgery();
+
+        // ─── Admin: save regions ────────────────────────────────────────
+        // اِحذِف كُلّ DiscoveryRegions الحالِيَّة لِلتَّينَنت ثُمّ أَعِد البِناء.
+        // المَدينَة Level=1 (ParentId=null)، الحَيّ Level=2 (ParentId=cityId).
+        app.MapPost("/admin/tenants/{slug}/regions/save",
+            async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var raw = req.Form["regions"].ToString();
+            if (string.IsNullOrWhiteSpace(raw))
+                return Results.Redirect($"/admin/tenants/{slug}/regions?err=empty");
+
+            var cities = new List<(string Name, List<string> Districts)>();
+            foreach (var line in raw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var l = line.Trim();
+                if (l.Length == 0) continue;
+                if (l.Contains('>'))
+                {
+                    var parts = l.Split('>', 2);
+                    var cityName = parts[0].Trim();
+                    if (string.IsNullOrEmpty(cityName))
+                        return Results.Redirect($"/admin/tenants/{slug}/regions?err=bad_format");
+                    var districts = parts[1]
+                        .Split(new[] { '،', ',' },
+                               StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Where(d => !string.IsNullOrEmpty(d))
+                        .ToList();
+                    cities.Add((cityName, districts));
+                }
+                else
+                {
+                    cities.Add((l, new List<string>()));
+                }
+            }
+            if (cities.Count == 0)
+                return Results.Redirect($"/admin/tenants/{slug}/regions?err=empty");
+
+            await using var s = store.LightweightSession(slug);
+            var existing = await s.Query<ImportedRecord>()
+                .Where(r => r.Table == "DiscoveryRegions").ToListAsync();
+            foreach (var r in existing) s.Delete(r);
+
+            var now = DateTime.UtcNow;
+            foreach (var (cityName, districts) in cities)
+            {
+                var cityId = Guid.NewGuid().ToString();
+                s.Store(new ImportedRecord
+                {
+                    Id = $"DiscoveryRegions/{cityId}",
+                    Table = "DiscoveryRegions",
+                    SourceId = cityId,
+                    ImportedAt = now,
+                    Data = new Dictionary<string, object?>
+                    {
+                        ["Name"]     = cityName,
+                        ["ParentId"] = null,
+                        ["Level"]    = "1"
+                    }
+                });
+                foreach (var d in districts)
+                {
+                    var distId = Guid.NewGuid().ToString();
+                    s.Store(new ImportedRecord
+                    {
+                        Id = $"DiscoveryRegions/{distId}",
+                        Table = "DiscoveryRegions",
+                        SourceId = distId,
+                        ImportedAt = now,
+                        Data = new Dictionary<string, object?>
+                        {
+                            ["Name"]     = d,
+                            ["ParentId"] = cityId,
+                            ["Level"]    = "2"
+                        }
+                    });
+                }
+            }
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/admin/tenants/{slug}/regions?saved=1");
+        }).DisableAntiforgery();
+
+        // ─── Admin: save attribute definitions for a scope ──────────────
+        // الـ scope إمّا CategoryId (لِإعلانات تِلك الفِئَة) أَو
+        // 00000000-0000-0000-0000-000000000F01 (sentinel البروفايل).
+        // نُعيد كِتابَة CategoryAttributeMappings لِهذا الـ scope كامِلَة،
+        // ونَنشُر AttributeDefinitions + AttributeValues جَديدَة. الـ defs
+        // اليَتيمَة (لا scope آخَر يَستَخدِمها) تُحذَف لِتَنظيف الجَدول.
+        app.MapPost("/admin/tenants/{slug}/attributes/save",
+            async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var scopeStr = req.Form["scope"].ToString().Trim();
+            var defsRaw  = req.Form["defs"].ToString();
+
+            if (!Guid.TryParse(scopeStr, out var scopeId))
+                return Results.Redirect($"/admin/tenants/{slug}/attributes?err=no_scope");
+
+            string Back(string err) =>
+                $"/admin/tenants/{slug}/attributes?scope={scopeId}&err={err}";
+
+            var rows = new List<(string Code, string Name, string Type, bool Req,
+                                 List<(string Val, string Label)> Opts)>();
+            foreach (var line in defsRaw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var l = line.Trim();
+                if (l.Length == 0) continue;
+                var parts = l.Split('|', StringSplitOptions.TrimEntries);
+                if (parts.Length < 4) return Results.Redirect(Back("bad_format"));
+                var code = parts[0];
+                var name = parts[1];
+                var type = parts[2];
+                var req2 = parts[3].Equals("req", StringComparison.OrdinalIgnoreCase);
+                if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(name) ||
+                    string.IsNullOrEmpty(type))
+                    return Results.Redirect(Back("bad_format"));
+                var opts = new List<(string Val, string Label)>();
+                if (parts.Length >= 5 && !string.IsNullOrEmpty(parts[4]))
+                {
+                    foreach (var pair in parts[4].Split(
+                                 new[] { '،', ',' },
+                                 StringSplitOptions.RemoveEmptyEntries |
+                                 StringSplitOptions.TrimEntries))
+                    {
+                        var kv = pair.Split('=', 2);
+                        if (kv.Length != 2) return Results.Redirect(Back("bad_format"));
+                        opts.Add((kv[0].Trim(), kv[1].Trim()));
+                    }
+                }
+                rows.Add((code, name, type, req2, opts));
+            }
+
+            await using var s = store.LightweightSession(slug);
+
+            // اِجلِب كُلّ الـ Mappings والـ defs الحالِيَّة في الذاكِرَة
+            // مَرَّة واحِدَة — أَسهَل لِفَلتَرَة الـ JsonElement يَدَويّاً.
+            var allMappings = await s.Query<ImportedRecord>()
+                .Where(r => r.Table == "CategoryAttributeMappings").ToListAsync();
+            var allDefs = await s.Query<ImportedRecord>()
+                .Where(r => r.Table == "AttributeDefinitions").ToListAsync();
+            var allValues = await s.Query<ImportedRecord>()
+                .Where(r => r.Table == "AttributeValues").ToListAsync();
+
+            var scopeMappings = allMappings
+                .Where(m => GuidFromData(m, "CategoryId") == scopeId).ToList();
+            var defIdsInScope = scopeMappings
+                .Select(m => GuidFromData(m, "AttributeDefinitionId"))
+                .Where(g => g != Guid.Empty).Distinct().ToList();
+            foreach (var m in scopeMappings) s.Delete(m);
+
+            var stillUsedDefs = allMappings
+                .Where(m => GuidFromData(m, "CategoryId") != scopeId)
+                .Select(m => GuidFromData(m, "AttributeDefinitionId"))
+                .ToHashSet();
+            var orphans = defIdsInScope.Where(id => !stillUsedDefs.Contains(id)).ToHashSet();
+            if (orphans.Count > 0)
+            {
+                foreach (var d in allDefs)
+                    if (orphans.Contains(GuidFromData(d, "Id"))) s.Delete(d);
+                foreach (var v in allValues)
+                    if (orphans.Contains(GuidFromData(v, "AttributeDefinitionId"))) s.Delete(v);
+            }
+
+            var now = DateTime.UtcNow;
+            var order = 0;
+            foreach (var (code, name, type, req2, opts) in rows)
+            {
+                var defId = Guid.NewGuid();
+                s.Store(new ImportedRecord
+                {
+                    Id = $"AttributeDefinitions/{defId}",
+                    Table = "AttributeDefinitions",
+                    SourceId = defId.ToString(),
+                    ImportedAt = now,
+                    Data = new Dictionary<string, object?>
+                    {
+                        ["Id"]         = defId.ToString(),
+                        ["Code"]       = code,
+                        ["Name"]       = name,
+                        ["Type"]       = type,
+                        ["IsRequired"] = req2 ? "true" : "false"
+                    }
+                });
+                s.Store(new ImportedRecord
+                {
+                    Id = $"CategoryAttributeMappings/{defId}-{scopeId}",
+                    Table = "CategoryAttributeMappings",
+                    SourceId = $"{defId}-{scopeId}",
+                    ImportedAt = now,
+                    Data = new Dictionary<string, object?>
+                    {
+                        ["CategoryId"]            = scopeId.ToString(),
+                        ["AttributeDefinitionId"] = defId.ToString(),
+                        ["SortOrder"]             = order.ToString()
+                    }
+                });
+                var voi = 0;
+                foreach (var (val, label) in opts)
+                {
+                    var vid = Guid.NewGuid();
+                    s.Store(new ImportedRecord
+                    {
+                        Id = $"AttributeValues/{vid}",
+                        Table = "AttributeValues",
+                        SourceId = vid.ToString(),
+                        ImportedAt = now,
+                        Data = new Dictionary<string, object?>
+                        {
+                            ["Id"]                    = vid.ToString(),
+                            ["AttributeDefinitionId"] = defId.ToString(),
+                            ["Value"]                 = val,
+                            ["DisplayName"]           = label,
+                            ["SortOrder"]             = voi.ToString()
+                        }
+                    });
+                    voi++;
+                }
+                order++;
+            }
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/admin/tenants/{slug}/attributes?scope={scopeId}&saved=1");
+        }).DisableAntiforgery();
+
         return app;
+    }
+
+    // قِراءَة قِيمَة Guid مِن Dictionary مَع التَّعامُل مَع JsonElement
+    // (Marten يَفُكّ التَسلسُل إلى JsonElement لِلقِيَم العامَّة).
+    private static Guid GuidFromData(ImportedRecord r, string key)
+    {
+        if (!r.Data.TryGetValue(key, out var v) || v is null) return Guid.Empty;
+        string? str = v is System.Text.Json.JsonElement el
+            ? (el.ValueKind == System.Text.Json.JsonValueKind.String ? el.GetString() : el.ToString())
+            : v.ToString();
+        return Guid.TryParse(str, out var g) ? g : Guid.Empty;
     }
 }

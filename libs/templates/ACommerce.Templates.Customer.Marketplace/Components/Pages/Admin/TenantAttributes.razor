@@ -1,0 +1,207 @@
+@page "/admin/tenants/{slug}/attributes"
+@inject IDocumentStore Store
+
+@*
+    مُحَرِّر الخَصائِص الديناميكِيَّة. خَطوَتان:
+      1) اختِيار scope: فِئَة مُعَيَّنَة، أو "بروفايل" (sentinel).
+      2) لِكُلّ scope، تَحرير قائِمَة الـ AttributeDefinitions
+         (Code | Name | Type | IsRequired | Options).
+
+    التَّخزين: ImportedRecord بِالجَدوَلَين "AttributeDefinitions"
+    و"CategoryAttributeMappings" — مُتَوافِق مَع الـ Importer.
+*@
+
+<div class="acs-page acm-admin">
+    @if (tenant is null)
+    {
+        <AcEmptyState IconName="info" Title="المَتجَر غَير مَوجود" />
+    }
+    else
+    {
+        <div class="acm-admin-head">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/admin/tenants/{Slug}")">
+                    <AcIcon Name="arrow-right" Size="16" />
+                </a>
+                <h1 class="acm-wizard-title" style="margin:0;">خَصائِص @tenant.Name</h1>
+            </div>
+        </div>
+
+        @if (Err is not null) { <AcAlert Variant="danger"  Message="@FormatError(Err)" /> }
+        @if (Saved == "1")     { <AcAlert Variant="success" Message="تَمّ الحِفظ." /> }
+
+        @* قائِمَة scopes — كُلّ فِئَة + sentinel البروفايل *@
+        <AcCard>
+            <ChildContent>
+                <h3 style="margin-top:0;">النِّطاق (Scope)</h3>
+                <p style="color:var(--ac-text-muted);font-size:13px;">
+                    اختَر فِئَة لِتَعريف حُقول إعلاناتها، أَو "البروفايل"
+                    لِحُقول صَفحَة المُستَخدِم.
+                </p>
+                <div class="acm-scope-list">
+                    @foreach (var s in scopes)
+                    {
+                        var isActive = s.Id == ScopeId;
+                        <a class="acm-scope-row @(isActive ? "is-active" : "")"
+                           href="@($"/admin/tenants/{Slug}/attributes?scope={s.Id}")">
+                            <span style="font-size:20px;">@s.Icon</span>
+                            <div style="flex:1;">
+                                <strong>@s.Label</strong>
+                                <span style="display:block;color:var(--ac-text-muted);font-size:11px;direction:ltr;">
+                                    @s.Id
+                                </span>
+                            </div>
+                            <span class="ac-chip ac-chip-sm">@s.DefCount حُقول</span>
+                        </a>
+                    }
+                </div>
+            </ChildContent>
+        </AcCard>
+
+        @if (!string.IsNullOrEmpty(ScopeId))
+        {
+            <form method="post" action="@($"/admin/tenants/{Slug}/attributes/save")">
+                <input type="hidden" name="scope" value="@ScopeId" />
+
+                <AcCard>
+                    <ChildContent>
+                        <h3 style="margin-top:0;">حُقول @selectedScopeLabel</h3>
+                        <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
+                            صَفّ لِكُلّ حَقل بِالصِّيغَة:<br/>
+                            <code>Code | الاسم العَرَبي | Type | IsRequired | Options</code><br/>
+                            <strong>Type</strong>: Text, LongText, Number, Boolean, SingleSelect, MultiSelect, Date.<br/>
+                            <strong>IsRequired</strong>: <code>req</code> أو <code>opt</code>.<br/>
+                            <strong>Options</strong> لِـ SingleSelect/MultiSelect فَقَط: <code>value=العَرَبي،value2=العَرَبي</code>
+                        </p>
+                        <textarea name="defs" rows="10"
+                                  class="ac-input" style="font-family:monospace;font-size:12px;direction:ltr;">@defsText</textarea>
+                    </ChildContent>
+                </AcCard>
+
+                <div style="display:flex;gap:8px;margin-top:16px;">
+                    <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}/attributes")">إلغاء</a>
+                    <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
+                        <AcIcon Name="check" Size="18" /> حِفظ
+                    </button>
+                </div>
+            </form>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "scope")] public string? ScopeId { get; set; }
+    [SupplyParameterFromQuery(Name = "err")]   public string? Err { get; set; }
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+
+    Tenant? tenant;
+    List<ScopeInfo> scopes = new();
+    string defsText = "";
+    string selectedScopeLabel = "";
+
+    static readonly Guid ProfileScopeId = Guid.Parse("00000000-0000-0000-0000-000000000F01");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var g = Store.QuerySession();
+        tenant = await g.LoadAsync<Tenant>(Slug);
+        if (tenant is null) return;
+
+        await using var t = Store.QuerySession(Slug);
+        var defs = await t.Query<ImportedRecord>()
+            .Where(r => r.Table == "AttributeDefinitions" || r.Table == "AttributeValues" || r.Table == "CategoryAttributeMappings")
+            .ToListAsync();
+
+        // عُدّ مَن الـ defs لِكُلّ scope.
+        var mappings = defs.Where(d => d.Table == "CategoryAttributeMappings").ToList();
+        var defCountByScope = mappings
+            .Select(m => GetGuid(m, "CategoryId"))
+            .Where(id => id != Guid.Empty)
+            .GroupBy(id => id)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        // scopes = فِئات tenant + Profile sentinel.
+        foreach (var c in tenant.Categories.OrderBy(c => c.SortOrder))
+        {
+            var sid = DeriveListingScope(Slug, c.Slug);
+            scopes.Add(new ScopeInfo(
+                Id: sid.ToString(), Label: c.Label, Icon: c.Icon ?? "🏠",
+                DefCount: defCountByScope.GetValueOrDefault(sid, 0)));
+        }
+        scopes.Add(new ScopeInfo(
+            Id: ProfileScopeId.ToString(), Label: "البروفايل", Icon: "👤",
+            DefCount: defCountByScope.GetValueOrDefault(ProfileScopeId, 0)));
+
+        if (!string.IsNullOrEmpty(ScopeId) && Guid.TryParse(ScopeId, out var scopeGuid))
+        {
+            selectedScopeLabel = scopes.FirstOrDefault(s => s.Id == ScopeId)?.Label ?? "النِّطاق";
+
+            // اِبني نَصّ الـ textarea: لِكُلّ mapping عَلى هذا الـ scope
+            // اِجلِب الـ AttributeDefinition + جَمِّع AttributeValues.
+            var allDefs = defs.Where(d => d.Table == "AttributeDefinitions")
+                              .ToDictionary(d => GetGuid(d, "Id"));
+            var valuesByDef = defs.Where(d => d.Table == "AttributeValues")
+                .GroupBy(d => GetGuid(d, "AttributeDefinitionId"))
+                .ToDictionary(g => g.Key,
+                              g => g.OrderBy(v => GetInt(v, "SortOrder"))
+                                    .Select(v => $"{GetString(v, "Value")}={GetString(v, "DisplayName")}")
+                                    .ToList());
+
+            var scopeMappings = mappings
+                .Where(m => GetGuid(m, "CategoryId") == scopeGuid)
+                .OrderBy(m => GetInt(m, "SortOrder"))
+                .ToList();
+            var lines = new List<string>();
+            foreach (var m in scopeMappings)
+            {
+                var defId = GetGuid(m, "AttributeDefinitionId");
+                if (!allDefs.TryGetValue(defId, out var d)) continue;
+                var code  = GetString(d, "Code") ?? "";
+                var name  = GetString(d, "Name") ?? code;
+                var type  = GetString(d, "Type") ?? "Text";
+                var req   = GetBool(d, "IsRequired") ? "req" : "opt";
+                var opts  = valuesByDef.GetValueOrDefault(defId, new()).ToList();
+                var optsStr = opts.Count > 0 ? string.Join(",", opts) : "";
+                lines.Add($"{code} | {name} | {type} | {req}" + (string.IsNullOrEmpty(optsStr) ? "" : $" | {optsStr}"));
+            }
+            defsText = string.Join('\n', lines);
+        }
+    }
+
+    static Guid DeriveListingScope(string tenantSlug, string categorySlug)
+    {
+        var raw = tenantSlug == "ashare"
+            ? "ashare-listing:" + categorySlug.ToLowerInvariant()
+            : (tenantSlug == "ejar" ? "ejar-listing:" : tenantSlug + ":listing:")
+              + categorySlug.ToLowerInvariant();
+        var hash = System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(raw));
+        return new Guid(hash);
+    }
+
+    static string? Raw(ImportedRecord r, string key)
+    {
+        if (!r.Data.TryGetValue(key, out var v) || v is null) return null;
+        if (v is System.Text.Json.JsonElement el)
+            return el.ValueKind switch
+            {
+                System.Text.Json.JsonValueKind.String => el.GetString(),
+                System.Text.Json.JsonValueKind.Null   => null,
+                _ => el.ToString()
+            };
+        return v.ToString();
+    }
+    static Guid GetGuid(ImportedRecord r, string k)    => Guid.TryParse(Raw(r, k), out var g) ? g : Guid.Empty;
+    static int GetInt(ImportedRecord r, string k)      => int.TryParse(Raw(r, k), out var i) ? i : 0;
+    static bool GetBool(ImportedRecord r, string k)    => bool.TryParse(Raw(r, k), out var b) && b;
+    static string? GetString(ImportedRecord r, string k) => Raw(r, k);
+
+    static string FormatError(string err) => err switch
+    {
+        "bad_format" => "تَنسيق صَفّ غَير صَحيح — راجِع الصِّيغَة.",
+        "no_scope"   => "اختَر نِطاقاً أَوّلاً.",
+        _ => err
+    };
+
+    sealed record ScopeInfo(string Id, string Label, string Icon, int DefCount);
+}
