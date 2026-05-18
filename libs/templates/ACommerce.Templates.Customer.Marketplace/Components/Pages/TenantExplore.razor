@@ -31,7 +31,7 @@ else
             <TaxonomyChips Slug="@Slug"
                            Categories="tenant.Categories"
                            ActiveKind="@Kind"
-                           BaseUrl="@($"/{Slug}/explore")" />
+                           ActiveCategory="@Category" />
         </div>
         <a class="acm-explore-filterbtn" href="@FilterToggleHref" aria-label="الفَلاتِر">
             <AcIcon Name="sliders" Size="18" />
@@ -70,39 +70,46 @@ else
                     </a>
                 </div>
             </div>
+            @* form يَحفَظ السِياق الحاليّ (category/kind/sort) كَ hidden inputs
+               حَتّى لا تُفقَد عِنْدَ تَطبيق الفَلتَر. الـ inputs المَرئيَّة
+               (district/min/max/q) تَملِك أَسماء فَريدَة فلا تَكرار. *@
             <form method="get" action="@($"/{Slug}/explore")">
                 @if (!string.IsNullOrEmpty(Category)) { <input type="hidden" name="category" value="@Category" /> }
-                @if (!string.IsNullOrEmpty(Query))    { <input type="hidden" name="q"        value="@Query" /> }
+                @if (!string.IsNullOrEmpty(Kind))     { <input type="hidden" name="kind"     value="@Kind" /> }
                 @if (!string.IsNullOrEmpty(Sort))     { <input type="hidden" name="sort"     value="@Sort" /> }
 
                 <div class="ac-modal-body">
                     <section class="acm-explore-filtersec">
                         <h4 class="acm-explore-filtersec-title">المَوقِع</h4>
-                        <div class="acm-explore-location">
-                            <select name="district" class="ac-input">
-                                <option value="">الكلّ</option>
-                                @foreach (var d in districts)
-                                {
-                                    <option value="@d" selected="@(District == d)">@d</option>
-                                }
-                            </select>
-                        </div>
+                        <select name="district" class="ac-input">
+                            <option value="">الكلّ</option>
+                            @foreach (var d in districts)
+                            {
+                                <option value="@d" selected="@(District == d)">@d</option>
+                            }
+                        </select>
                     </section>
 
                     <section class="acm-explore-filtersec">
                         <h4 class="acm-explore-filtersec-title">السِعر</h4>
                         <div class="acm-explore-pricerange">
-                            <input type="number" name="min" class="ac-input" min="0" step="1000"
-                                   value="@MinPrice" placeholder="مِن" />
+                            <input type="number" name="min" class="ac-input" min="0" step="1"
+                                   inputmode="numeric"
+                                   value="@(MinPrice?.ToString("0", System.Globalization.CultureInfo.InvariantCulture) ?? "")"
+                                   placeholder="مِن" />
                             <span>—</span>
-                            <input type="number" name="max" class="ac-input" min="0" step="1000"
-                                   value="@MaxPrice" placeholder="إلى" />
+                            <input type="number" name="max" class="ac-input" min="0" step="1"
+                                   inputmode="numeric"
+                                   value="@(MaxPrice?.ToString("0", System.Globalization.CultureInfo.InvariantCulture) ?? "")"
+                                   placeholder="إلى" />
                         </div>
                     </section>
 
                     <section class="acm-explore-filtersec">
                         <h4 class="acm-explore-filtersec-title">البَحث</h4>
-                        <input type="search" name="q" class="ac-input" value="@Query" placeholder="كَلِمَة مِفتاحيّة…" />
+                        <input type="search" name="q" class="ac-input"
+                               value="@(Query ?? "")"
+                               placeholder="كَلِمَة مِفتاحيّة…" />
                     </section>
                 </div>
 

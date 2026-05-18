@@ -16,6 +16,7 @@
         new($"/{slug}/explore",       "استِكشاف",   "search"),
         new($"/{slug}/favorites",     "مُفَضَّلَة",     "heart"),
         new($"/{slug}/chats",         "رَسائل",     "message"),
+        new($"/{slug}/notifications", "إشعارات",    "bell"),
         new($"/{slug}/me",            Auth.IsAuthenticated ? Auth.UserName ?? "حِسابي" : "حِسابي", "user")
     };
     var bottomItems = new List<ACommerce.Templates.Shared.Models.BottomNavItemDto>
