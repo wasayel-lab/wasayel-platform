@@ -86,24 +86,37 @@ public sealed class EjarImporter
         await _target.UpsertAsync(TenantSlug, users);
 
         // 3) Listings — PropertyType يَلعَب دَور CategorySlug عِندَنا.
+        // AttributesJson + الحُقول البِنيَويَّة (BedroomCount/AreaSqm/
+        // AmenitiesCsv/TimeUnit) تُدمَج كُلّها في Listing.Attributes
+        // لِيَقرَأها AcDynAttrEditor عَلى صَفحَة التَفاصيل.
         var listings = (await src.QueryAsync<EjarListingRow>(
             @"SELECT Id, Title, Description, Price, PropertyType, City, District,
+                     TimeUnit, BedroomCount, AreaSqm, AmenitiesCsv, AttributesJson,
                      IsDeleted, CreatedAt, UpdatedAt
               FROM Listings WHERE IsDeleted = 0"
-        )).Select(l => new Listing
+        )).Select(l =>
         {
-            Id           = l.Id,
-            TenantSlug   = TenantSlug,
-            Title        = l.Title ?? "",
-            Description  = string.IsNullOrEmpty(l.Description) ? null : l.Description,
-            Price        = l.Price,
-            CategorySlug = l.PropertyType ?? "",
-            City         = string.IsNullOrEmpty(l.City) ? null : l.City,
-            District     = string.IsNullOrEmpty(l.District) ? null : l.District,
-            Attributes   = new(),
-            IsDeleted    = false,
-            CreatedAt    = l.CreatedAt,
-            UpdatedAt    = l.UpdatedAt ?? l.CreatedAt
+            var attrs = AshareImporter.ParseAttributes(l.AttributesJson);
+            if (l.BedroomCount > 0) attrs["BedroomCount"] = l.BedroomCount.ToString();
+            if (l.AreaSqm      > 0) attrs["AreaSqm"]      = l.AreaSqm.ToString();
+            if (!string.IsNullOrEmpty(l.TimeUnit))    attrs["TimeUnit"]  = l.TimeUnit;
+            if (!string.IsNullOrEmpty(l.AmenitiesCsv)) attrs["Amenities"] = l.AmenitiesCsv;
+
+            return new Listing
+            {
+                Id           = l.Id,
+                TenantSlug   = TenantSlug,
+                Title        = l.Title ?? "",
+                Description  = string.IsNullOrEmpty(l.Description) ? null : l.Description,
+                Price        = l.Price,
+                CategorySlug = l.PropertyType ?? "",
+                City         = string.IsNullOrEmpty(l.City) ? null : l.City,
+                District     = string.IsNullOrEmpty(l.District) ? null : l.District,
+                Attributes   = attrs,
+                IsDeleted    = false,
+                CreatedAt    = l.CreatedAt,
+                UpdatedAt    = l.UpdatedAt ?? l.CreatedAt
+            };
         }).ToList();
         await _target.UpsertListingsAsync(TenantSlug, listings);
 
@@ -228,9 +241,12 @@ public sealed class EjarImporter
 
     private sealed record EjarCategoryRow(Guid Id, string Slug, string Label, string? Icon, string? Kind);
     private sealed record EjarUserRow(Guid Id, string? FullName, string? Phone, DateTime CreatedAt);
-    private sealed record EjarListingRow(Guid Id, string? Title, string? Description, decimal Price,
-                                          string? PropertyType, string? City, string? District,
-                                          bool IsDeleted, DateTime CreatedAt, DateTime? UpdatedAt);
+    private sealed record EjarListingRow(
+        Guid Id, string? Title, string? Description, decimal Price,
+        string? PropertyType, string? City, string? District,
+        string? TimeUnit, int BedroomCount, int AreaSqm,
+        string? AmenitiesCsv, string? AttributesJson,
+        bool IsDeleted, DateTime CreatedAt, DateTime? UpdatedAt);
     private sealed record EjarFavoriteRow(Guid Id, Guid UserId, Guid ListingId, DateTime CreatedAt);
     private sealed record EjarConvRow(Guid Id, Guid OwnerId, Guid PartnerId, string? PartnerName,
                                        Guid ListingId, string? Subject, DateTime LastAt,
