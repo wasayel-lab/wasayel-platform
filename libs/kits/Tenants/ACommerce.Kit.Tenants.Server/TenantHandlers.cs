@@ -47,11 +47,8 @@ public static class TenantHandlers
         return tenant;
     }
 
-    [WolverineGet("/admin/tenants")]
-    public static Task<IReadOnlyList<Tenant>> List(IQuerySession session)
-        => session.Query<Tenant>().ToListAsync().ContinueWith(t => (IReadOnlyList<Tenant>)t.Result);
-
-    [WolverineGet("/admin/tenants/{slug}")]
-    public static Task<Tenant?> Get(string slug, IQuerySession session)
-        => session.LoadAsync<Tenant>(slug);
+    // ملاحَظَة: كانَت هُنا GET endpoints لِـ /admin/tenants و
+    // /admin/tenants/{slug} كَـ JSON، لكِنَّها صارَت تَتَعارَض مَع
+    // صَفَحات Blazor SSR (@page) في القَالِب. الـ POSTs أَعلاه باقِيَة
+    // لِأَنَّها مُختَلِفَة في الـ verb.
 }
