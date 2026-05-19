@@ -1031,9 +1031,9 @@ public static class MarketplaceTemplateExtensions
         {
             var msg = req.Form["message"].ToString().Trim();
             if (string.IsNullOrEmpty(msg))
-                return Results.Redirect("/admin/agent?err=empty");
+                return Results.Redirect("/admin/agent?err=empty#composer");
             await agent.AskAsync(msg);
-            return Results.Redirect("/admin/agent");
+            return Results.Redirect("/admin/agent#latest");
         }).DisableAntiforgery();
 
         // ─── Admin: Agent — apply a pending tool call ───────────────────
@@ -1045,13 +1045,12 @@ public static class MarketplaceTemplateExtensions
             var session = await agent.LoadSessionAsync();
             var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
             if (turn?.Tool is null)
-                return Results.Redirect("/admin/agent?err=tool_missing");
+                return Results.Redirect("/admin/agent?err=tool_missing#latest");
 
             var (ok, msg) = await exec.ExecuteAsync(turn.Tool.Name, turn.Tool.InputJson);
             await agent.UpdateToolStatusAsync(toolId, ok ? "applied" : "error", msg);
-            // اطلُب مِن Claude اِستِكمال المُحادَثَة بَعد رُؤيَة tool_result
             await agent.ContinueAfterToolAsync();
-            return Results.Redirect("/admin/agent");
+            return Results.Redirect("/admin/agent#latest");
         }).DisableAntiforgery();
 
         // ─── Admin: Agent — reject a pending tool call ──────────────────
@@ -1061,7 +1060,7 @@ public static class MarketplaceTemplateExtensions
         {
             await agent.UpdateToolStatusAsync(toolId, "rejected", null);
             await agent.ContinueAfterToolAsync();
-            return Results.Redirect("/admin/agent");
+            return Results.Redirect("/admin/agent#latest");
         }).DisableAntiforgery();
 
         // ─── Admin: Agent — reset conversation ──────────────────────────

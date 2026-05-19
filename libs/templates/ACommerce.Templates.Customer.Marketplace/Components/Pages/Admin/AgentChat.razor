@@ -54,8 +54,13 @@
         }
         else
         {
+            var lastIdx = session.Turns.Count - 1;
+            var idx = 0;
             foreach (var turn in session.Turns)
             {
+                var isLast = idx == lastIdx;
+                idx++;
+                @if (isLast) { <span id="latest" style="display:block;scroll-margin-top:80px;"></span> }
                 <div class="acm-agent-turn @(turn.Role == "user" ? "is-user" : "is-assistant")">
                     <div class="acm-agent-avatar">
                         @(turn.Role == "user" ? "👤" : "🤖")
@@ -103,7 +108,7 @@
         }
     </div>
 
-    <form method="post" action="/admin/agent/ask" class="acm-agent-composer">
+    <form id="composer" method="post" action="/admin/agent/ask" class="acm-agent-composer">
         <textarea name="message" rows="3" required
                   class="ac-input"
                   placeholder="اُكتُب طَلَبَك… مَثَلاً: أَنشِئ مَتجَر «sukna» لِلسَكَن المُشتَرَك بِلَون أَخضَر زيتوني"></textarea>
@@ -112,6 +117,17 @@
         </button>
     </form>
 </div>
+
+@*  بَعد كُلّ POST يَرجِع الـ redirect إلى /admin/agent#latest، فَالمُتَصَفِّح
+    يُمَرِّر تِلقائيّاً لِآخِر دَور. هذا السكربت احتِياط (لَو فُتِحَت الصَفحَة
+    بِلا hash): يُمَرِّر إلى الـ composer لِأَنّ مَوقِع الكِتابَة أَسفَل المُحادَثَة.  *@
+<script>
+(function () {
+    if (location.hash) return;
+    var c = document.getElementById('composer');
+    if (c && c.scrollIntoView) c.scrollIntoView({ behavior: 'auto', block: 'end' });
+})();
+</script>
 
 <style>
 .acm-agent-help { padding:12px 16px; background:var(--ac-surface-2,#fafafa);
