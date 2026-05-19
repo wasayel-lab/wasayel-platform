@@ -15,6 +15,18 @@ public sealed class Conversation
     public int OwnerUnread { get; set; }
     public int PartnerUnread { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>وَقت انتِهاء الصَلاحِيَّة لِلمُحادَثات المُؤَقَّتَة (مَثَلاً
+    /// بَعد قَبول عَرض مُشوار في إنجيز — تَنتَهي بَعد 24 ساعَة). <c>null</c>
+    /// = دائِمَة (السلوك الحالي لِكُلّ المُحادَثات قَبل هذه الإضافَة).</summary>
+    public DateTime? ExpiresAt { get; set; }
+
+    /// <summary>إذا تَوَلَّدَت المُحادَثَة مِن قَبول Offer في كَيت Offers،
+    /// نُسَجِّل الـ OfferId لِلتَّتَبُّع وَلِيَستَطيع الـ UI رَبط
+    /// الإعلان+المُحادَثَة+المَوقِع.</summary>
+    public Guid? LinkedOfferId { get; set; }
+
+    public bool IsExpired => ExpiresAt.HasValue && DateTime.UtcNow > ExpiresAt.Value;
 }
 
 /// <summary>الرسالَة — وَثيقَة Marten. ثابِتَة بَعد الإرسال.</summary>

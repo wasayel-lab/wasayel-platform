@@ -48,6 +48,17 @@ else
                                        overflow:hidden;text-overflow:ellipsis;max-width:200px;">
                                     @(c.LastMessage ?? c.Subject ?? "—")
                                 </span>
+                                @if (c.ExpiresAt.HasValue && !c.IsExpired)
+                                {
+                                    <span class="ac-chip ac-chip-sm"
+                                          style="background:color-mix(in srgb, var(--ac-primary) 12%, transparent);">
+                                        ⏱ مُؤَقَّتَة
+                                    </span>
+                                }
+                                else if (c.IsExpired)
+                                {
+                                    <span class="ac-chip ac-chip-sm" style="opacity:.6;">انتَهَت</span>
+                                }
                                 @if (unread > 0)
                                 {
                                     <AcBadge Variant="primary" Text="@unread.ToString()" />

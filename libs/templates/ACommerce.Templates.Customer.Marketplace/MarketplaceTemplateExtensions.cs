@@ -406,8 +406,25 @@ public static class MarketplaceTemplateExtensions
             foreach (var sib in siblings)
                 s.Events.Append(sib.Id, new ACommerce.Kit.Offers.OfferRejected(sib.Id, now));
 
+            // افتَح مُحادَثَة مُؤَقَّتَة لِلتَنسيق — تَنتَهي بَعد 24 ساعَة.
+            // الـ Owner هُنا = المُتَّصِل (مالِك الإعلان)، Partner = مُقَدِّم العَرض.
+            var (acceptorId, _, _) = parsed.Value;
+            var acceptorName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "أنا";
+            var conv = new Conversation
+            {
+                Id = Guid.NewGuid(),
+                OwnerId = acceptorId, OwnerName = acceptorName,
+                PartnerId = offer.OffererId, PartnerName = offer.OffererName,
+                Subject = $"تَنسيق عَرض بِـ {offer.Price:N0} ريال",
+                ListingId = offer.ListingId,
+                LastAt = now,
+                ExpiresAt = now.AddHours(24),
+                LinkedOfferId = id
+            };
+            s.Store(conv);
+
             await s.SaveChangesAsync();
-            return Results.Redirect($"/{slug}/listings/{offer.ListingId}?matched=1");
+            return Results.Redirect($"/{slug}/chats/{conv.Id}");
         }).DisableAntiforgery();
 
         // ─── Reject / Withdraw offer ────────────────────────────────────
@@ -452,6 +469,7 @@ public static class MarketplaceTemplateExtensions
             var conv = await s.LoadAsync<Conversation>(conversationId);
             if (conv is null) return Results.Redirect($"/{slug}/chats");
             if (conv.OwnerId != userId && conv.PartnerId != userId) return Results.Forbid();
+            if (conv.IsExpired) return Results.Redirect($"/{slug}/chats/{conversationId}?err=expired");
 
             var msg = new Message
             {
