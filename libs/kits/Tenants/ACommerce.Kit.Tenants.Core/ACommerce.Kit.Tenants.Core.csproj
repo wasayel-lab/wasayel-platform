@@ -1,2 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\Roles\ACommerce.Kit.Roles.Core\ACommerce.Kit.Roles.Core.csproj" />
+  </ItemGroup>
 </Project>

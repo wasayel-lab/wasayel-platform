@@ -23,6 +23,12 @@ public sealed class Tenant
     /// واجهَة واحِدَة (لا tabs).</summary>
     public string AuthChannel { get; set; } = "phone";
     public List<Category> Categories { get; set; } = new();
+
+    /// <summary>الأَدوار المُتاحَة في هذا المَتجَر (سائِق/راكِب، مالِك/باحِث…).
+    /// فارِغ = نَمَط user-فَرد بِلا تَمييز أَدوار. تَفاصيلها في
+    /// <c>ACommerce.Kit.Roles.Role</c> وَالـ csproj يَعتَمِد عَلَيه.</summary>
+    public List<ACommerce.Kit.Roles.Role> Roles { get; set; } = new();
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 

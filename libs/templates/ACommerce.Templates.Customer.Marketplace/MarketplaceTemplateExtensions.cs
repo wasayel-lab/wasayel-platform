@@ -429,6 +429,49 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect($"/admin");
         }).DisableAntiforgery();
 
+        // ─── Admin: save roles ──────────────────────────────────────────
+        // إعادَة كِتابَة قائِمَة الأَدوار بِالكامِل. مُستَخدِمون لَدَيهم
+        // دَور مَحذوف يَظَلّ ActiveRole بِنَفس السَّلسَلَة لكِنّ المُستَخدِم
+        // سَيُطلَب مِنه اختِيار دَور جَديد عَلى أَوَّل تَفاعُل (TBD).
+        app.MapPost("/admin/tenants/{slug}/roles/save",
+            async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var raw = req.Form["roles"].ToString();
+            string Back(string err) => $"/admin/tenants/{slug}/roles?err={err}";
+
+            var roles = new List<ACommerce.Kit.Roles.Role>();
+            var idx = 0;
+            foreach (var line in raw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var l = line.Trim();
+                if (l.Length == 0) continue;
+                var parts = l.Split('|', StringSplitOptions.TrimEntries);
+                if (parts.Length < 2) return Results.Redirect(Back("bad_format"));
+                var rslug = parts[0].Trim().ToLowerInvariant();
+                var rlabel = parts[1].Trim();
+                if (string.IsNullOrEmpty(rslug) || string.IsNullOrEmpty(rlabel))
+                    return Results.Redirect(Back("bad_format"));
+                roles.Add(new ACommerce.Kit.Roles.Role
+                {
+                    Slug = rslug,
+                    Label = rlabel,
+                    Icon  = parts.Length > 2 && !string.IsNullOrEmpty(parts[2]) ? parts[2].Trim() : "👤",
+                    Description = parts.Length > 3 ? parts[3].Trim() : "",
+                    IsDefault = parts.Length > 4 &&
+                                parts[4].Trim().Equals("default", StringComparison.OrdinalIgnoreCase),
+                    SortOrder = idx++
+                });
+            }
+
+            await using var s = store.LightweightSession();
+            var t = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+            if (t is null) return Results.Redirect("/admin");
+            t.Roles = roles;
+            s.Store(t);
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/admin/tenants/{slug}?saved=1");
+        }).DisableAntiforgery();
+
         // ─── Admin: save categories ─────────────────────────────────────
         // إعادَة كِتابَة قائِمَة الفِئات بِالكامِل (overwrite). الإعلانات
         // المَوجودَة بِفِئَة مَحذوفَة تَبقى في الـ events لكِن تَختَفي مِن

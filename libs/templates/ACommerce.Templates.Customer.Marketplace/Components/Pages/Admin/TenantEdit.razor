@@ -70,6 +70,15 @@
                 <AcIcon Name="chevron-left" Size="16" />
             </a>
 
+            <a class="acm-manager-card" href="@($"/admin/tenants/{Slug}/roles")">
+                <span class="acm-manager-icon"><AcIcon Name="user" Size="24" /></span>
+                <div>
+                    <strong>الأَدوار</strong>
+                    <span>@(tenant.Roles.Count == 0 ? "بِلا تَمييز أَدوار (وَضع user)" : $"{tenant.Roles.Count} أَدوار")</span>
+                </div>
+                <AcIcon Name="chevron-left" Size="16" />
+            </a>
+
             <a class="acm-manager-card" href="@($"/admin/tenants/{Slug}/branding")">
                 <span class="acm-manager-icon"
                       style="background:@tenant.BrandColor;color:#fff;">

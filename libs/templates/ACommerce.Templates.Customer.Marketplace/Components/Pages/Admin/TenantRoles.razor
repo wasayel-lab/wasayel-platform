@@ -1,0 +1,112 @@
+@page "/admin/tenants/{slug}/roles"
+@inject IDocumentStore Store
+
+@*
+    مُحَرِّر الأَدوار — كُلّ صَفّ دَور بِالصِّيغَة:
+        slug | الاسم | أَيقونَة | وَصف | default?
+
+    خَصائِص الدَور (vehicle_type لِلسائِق…) تُحَرَّر مِن صَفحَة
+    /admin/tenants/{slug}/attributes — يَظهَر كُلّ دَور كَ scope هُناك.
+*@
+
+<div class="acs-page acm-admin">
+    @if (tenant is null)
+    {
+        <AcEmptyState IconName="info" Title="المَتجَر غَير مَوجود" />
+    }
+    else
+    {
+        <div class="acm-admin-head">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/admin/tenants/{Slug}")">
+                    <AcIcon Name="arrow-right" Size="16" />
+                </a>
+                <h1 class="acm-wizard-title" style="margin:0;">أَدوار @tenant.Name</h1>
+            </div>
+        </div>
+
+        @if (Err is not null) { <AcAlert Variant="danger"  Message="@FormatError(Err)" /> }
+        @if (Saved == "1")     { <AcAlert Variant="success" Message="تَمّ الحِفظ." /> }
+
+        <AcCard>
+            <ChildContent>
+                <h3 style="margin-top:0;">المَعروض حاليّاً (@tenant.Roles.Count دَور)</h3>
+                @if (tenant.Roles.Count > 0)
+                {
+                    <div class="acm-cat-list">
+                        @foreach (var r in tenant.Roles.OrderBy(r => r.SortOrder))
+                        {
+                            <div class="acm-cat-row">
+                                <span style="font-size:24px;">@(r.Icon ?? "👤")</span>
+                                <div style="flex:1;">
+                                    <strong>@r.Label</strong>
+                                    @if (!string.IsNullOrEmpty(r.Description))
+                                    {
+                                        <span style="color:var(--ac-text-muted);font-size:12px;display:block;">@r.Description</span>
+                                    }
+                                    <span style="color:var(--ac-text-muted);font-size:11px;direction:ltr;display:block;">@r.Slug</span>
+                                </div>
+                                @if (r.IsDefault) { <span class="ac-chip ac-chip-sm">افتراضي</span> }
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p style="color:var(--ac-text-muted);">
+                        لا أَدوار — المَتجَر في نَمَط user-فَرد. أَضِف أَدواراً
+                        لِتَمييز أَنواع المُستَخدِمين (مَثَلاً سائِق/راكِب).
+                    </p>
+                }
+            </ChildContent>
+        </AcCard>
+
+        <form method="post" action="@($"/admin/tenants/{Slug}/roles/save")">
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">تَحديث الأَدوار</h3>
+                    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
+                        صَفّ لِكُلّ دَور بِالصِّيغَة:
+                        <code>slug | الاسم | أَيقونَة | وَصف | default</code>.<br/>
+                        الكَلِمَة <code>default</code> في الحَقل الخامِس تَجعَلُه الدَور
+                        الافتراضي لِلمُستَخدِم الجَديد. اِترُكها فارِغَة لِغَير ذلك.
+                    </p>
+                    <textarea name="roles" rows="6"
+                              class="ac-input" style="font-family:monospace;font-size:13px;direction:ltr;">@rolesText</textarea>
+                </ChildContent>
+            </AcCard>
+
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">إلغاء</a>
+                <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
+                    <AcIcon Name="check" Size="18" /> حِفظ
+                </button>
+            </div>
+        </form>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "err")]   public string? Err { get; set; }
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+
+    Tenant? tenant;
+    string rolesText = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var s = Store.QuerySession();
+        tenant = await s.LoadAsync<Tenant>(Slug);
+        if (tenant is null) return;
+        rolesText = string.Join('\n', tenant.Roles
+            .OrderBy(r => r.SortOrder)
+            .Select(r => $"{r.Slug} | {r.Label} | {r.Icon ?? "👤"} | {r.Description ?? ""} | {(r.IsDefault ? "default" : "")}"));
+    }
+
+    static string FormatError(string err) => err switch
+    {
+        "bad_format" => "تَنسيق غَير صَحيح — كُلّ صَفّ: slug | الاسم | أَيقونَة | وَصف | default.",
+        _ => err
+    };
+}

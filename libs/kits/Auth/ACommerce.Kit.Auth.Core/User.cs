@@ -20,6 +20,18 @@ public sealed class User
     /// مَفاتيحها تَطابِق <c>AttributeDefinition.Code</c> في DB المُستَورَد.
     /// تُحفَظ كَ JSON snapshot في عَمود مُنفَصِل.</summary>
     public Dictionary<string, string> AttributesJson { get; set; } = new();
+
+    /// <summary>الدَور النَّشِط لِلمُستَخدِم داخِل المَتجَر (مَثَلاً
+    /// "rider" أَو "driver"). فارِغ = المَتجَر بِلا أَدوار. القائِمَة
+    /// المَسموحَة مِن <c>Tenant.Roles</c>.</summary>
+    public string ActiveRole { get; set; } = "";
+
+    /// <summary>خَصائِص بروفايل خاصَّة بِكُلّ دَور: مَفتاح خارِجيّ = roleSlug،
+    /// قاموس داخِليّ بِنَفس شَكل <c>AttributesJson</c>. مَثَلاً: السائِق
+    /// يَملأ vehicle_type/license/plate تَحت "driver"؛ الراكِب يَترُك
+    /// "driver" فارِغاً ويَملأ "rider" إن كانَت لَه خَصائِص خاصَّة. الـ
+    /// <c>AttributesJson</c> العامّ يَبقَى مُشتَرَكاً بَين كُلّ الأَدوار.</summary>
+    public Dictionary<string, Dictionary<string, string>> RoleAttributesJson { get; set; } = new();
 }
 
 // ─── Events (للـ stream المُستَقِلّ "AuthAttempts") ──────────────────
