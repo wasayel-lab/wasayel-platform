@@ -209,9 +209,20 @@ public sealed class DynamicAttributesService
             .GroupBy(v => GetGuid(v, "AttributeDefinitionId"))
             .ToDictionary(g => g.Key,
                           g => g.OrderBy(v => GetInt(v, "SortOrder"))
+                                // أَسماء الحُقول: الإصدار الحالي يَكتُب
+                                // Value + DisplayName (مُطابِق لِـ Ashare V3
+                                // و Ejar V1 الأَصلِيَّين). الـ fallback لِـ
+                                // Code/Name/Label يَدعَم بَيانات قَديمَة لَو
+                                // وُجِدَت. fallback أَخير "—" لَن يَظهَر بَعد
+                                // الآن لِبَيانات صَحيحَة.
                                 .Select(v => new DynOption(
-                                    Value: GetString(v, "Code") ?? GetGuid(v, "Id").ToString(),
-                                    Label: GetString(v, "Name") ?? GetString(v, "Label") ?? "—"))
+                                    Value: GetString(v, "Value")
+                                         ?? GetString(v, "Code")
+                                         ?? GetGuid(v, "Id").ToString(),
+                                    Label: GetString(v, "DisplayName")
+                                         ?? GetString(v, "Name")
+                                         ?? GetString(v, "Label")
+                                         ?? "—"))
                                 .ToList() as IReadOnlyList<DynOption>);
 
         var fields = new List<DynField>();

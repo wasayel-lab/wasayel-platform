@@ -133,20 +133,15 @@
                                       placeholder="تَفاصيل العَرض، المُمَيِّزات، شُروط التَواصُل…"></textarea>
                         </AcField>
 
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                            <AcField Label="السِعر (ريال)" Required="true">
-                                <input type="number" name="price" required min="1" step="1"
-                                       class="ac-input" inputmode="numeric" placeholder="0" />
-                            </AcField>
-                            <AcField Label="وَحدَة الإيجار">
-                                <select name="time_unit" class="ac-input">
-                                    <option value="monthly">شَهريّاً</option>
-                                    <option value="yearly">سَنَويّاً</option>
-                                    <option value="daily">يَوميّاً</option>
-                                    <option value="hourly">بِالساعَة</option>
-                                </select>
-                            </AcField>
-                        </div>
+                        @* السِعر — حَقل عامّ. كانَ هُنا حَقل "وَحدَة الإيجار"
+                           hard-coded (شَهري/سَنَوي/يَومي/ساعَة) لا يُحفَظ في
+                           POST handler ولا يَنطَبِق عَلى كُلّ المَتاجِر (مَثَلاً
+                           إنجيز لِلمَشاوير). أُزيلَ — لَو مَتجَر احتاج المَفهوم
+                           يُضاف كَخاصِّيَّة SingleSelect ديناميكِيَّة. *@
+                        <AcField Label="السِعر (ريال)" Required="true">
+                            <input type="number" name="price" required min="1" step="1"
+                                   class="ac-input" inputmode="numeric" placeholder="0" />
+                        </AcField>
                     </ChildContent>
                 </AcCard>
 
