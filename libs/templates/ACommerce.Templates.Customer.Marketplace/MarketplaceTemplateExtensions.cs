@@ -319,6 +319,122 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect($"/{slug}/listings/{id}");
         }).DisableAntiforgery();
 
+        // ─── Submit offer on a listing ──────────────────────────────────
+        app.MapPost("/{slug}/listings/{id:guid}/offers",
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+        {
+            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var parsed = AuthHandlers.ParseToken(token);
+            if (parsed is null) return Results.Redirect($"/{slug}/login?returnUrl=/{slug}/listings/{id}");
+            var (userId, tenantSlug, _) = parsed.Value;
+            if (tenantSlug != slug) return Results.Redirect($"/{slug}/login");
+            var userName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "—";
+
+            var priceStr = req.Form["price"].ToString().Trim();
+            var message  = req.Form["message"].ToString().Trim();
+            var latStr   = req.Form["lat"].ToString().Trim();
+            var lngStr   = req.Form["lng"].ToString().Trim();
+            var ttlStr   = req.Form["ttl_minutes"].ToString().Trim();
+
+            if (!decimal.TryParse(priceStr, out var price) || price <= 0)
+                return Results.Redirect($"/{slug}/listings/{id}?err=offer_price");
+            _ = double.TryParse(latStr, System.Globalization.NumberStyles.Float,
+                                System.Globalization.CultureInfo.InvariantCulture, out var lat);
+            _ = double.TryParse(lngStr, System.Globalization.NumberStyles.Float,
+                                System.Globalization.CultureInfo.InvariantCulture, out var lng);
+            _ = int.TryParse(ttlStr, out var ttl);
+            if (ttl <= 0) ttl = 15;
+
+            await using var s = store.LightweightSession(slug);
+            var listing = await s.Events.AggregateStreamAsync<Listing>(id);
+            if (listing is null) return Results.Redirect($"/{slug}");
+            // مَنع صاحِب الإعلان مِن تَقديم عَرض عَلى نَفسه — لا نَملِك
+            // ownerId مُباشَر عَلى الـ aggregate، نَترُك السَّماح حاليّاً
+            // ولكِنّ السلوك يُمكِن تَقييدُه لاحِقاً بِإضافَة Listing.OwnerId.
+
+            var oid = Guid.NewGuid();
+            var ev = new ACommerce.Kit.Offers.OfferSubmitted(
+                oid, id, userId, userName, price,
+                string.IsNullOrEmpty(message) ? null : message,
+                lat, lng,
+                DateTime.UtcNow.AddMinutes(ttl), DateTime.UtcNow);
+            s.Events.StartStream<ACommerce.Kit.Offers.Offer>(oid, ev);
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/{slug}/listings/{id}?offer=submitted");
+        }).DisableAntiforgery();
+
+        // ─── Accept an offer (listing owner) ────────────────────────────
+        app.MapPost("/{slug}/offers/{id:guid}/accept",
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+        {
+            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var parsed = AuthHandlers.ParseToken(token);
+            if (parsed is null) return Results.Redirect($"/{slug}/login");
+            // مالِك الإعلان فَقَط — لا نَملِك OwnerId عَلى Listing بَعد،
+            // نَكتَفي بِالتَّحَقُّق مِن الـ tenant ونَترُك صاحِب الإعلان
+            // الواحِد دون قُيود أُخرى (يُمكِن تَشديدُه لاحِقاً).
+            var (_, tenantSlug, _) = parsed.Value;
+            if (tenantSlug != slug) return Results.Redirect($"/{slug}/login");
+
+            await using var s = store.LightweightSession(slug);
+            var offer = await s.Events.AggregateStreamAsync<ACommerce.Kit.Offers.Offer>(id);
+            if (offer is null || offer.Status != ACommerce.Kit.Offers.OfferStatus.Pending)
+                return Results.Redirect($"/{slug}/listings/{(offer?.ListingId ?? Guid.Empty)}");
+
+            var now = DateTime.UtcNow;
+            s.Events.Append(id, new ACommerce.Kit.Offers.OfferAccepted(id, now));
+
+            // اِكتُب ListingMatch لِيَعرِف الواجِهَة أَنّ الإعلان مُتَطابِق.
+            s.Store(new ACommerce.Kit.Offers.ListingMatch
+            {
+                Id = offer.ListingId,
+                AcceptedOfferId = id,
+                OffererId = offer.OffererId,
+                OffererName = offer.OffererName,
+                AcceptedPrice = offer.Price,
+                OffererLat = offer.Lat,
+                OffererLng = offer.Lng,
+                MatchedAt = now
+            });
+
+            // أَغلِق العُروض الأُخرى عَلى نَفس الإعلان تِلقائيّاً.
+            var siblings = await s.Query<ACommerce.Kit.Offers.Offer>()
+                .Where(o => o.ListingId == offer.ListingId
+                         && o.Id != id
+                         && o.Status == ACommerce.Kit.Offers.OfferStatus.Pending)
+                .ToListAsync();
+            foreach (var sib in siblings)
+                s.Events.Append(sib.Id, new ACommerce.Kit.Offers.OfferRejected(sib.Id, now));
+
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/{slug}/listings/{offer.ListingId}?matched=1");
+        }).DisableAntiforgery();
+
+        // ─── Reject / Withdraw offer ────────────────────────────────────
+        app.MapPost("/{slug}/offers/{id:guid}/reject",
+            async (string slug, Guid id, IDocumentStore store) =>
+        {
+            await using var s = store.LightweightSession(slug);
+            var offer = await s.Events.AggregateStreamAsync<ACommerce.Kit.Offers.Offer>(id);
+            if (offer is null || offer.Status != ACommerce.Kit.Offers.OfferStatus.Pending)
+                return Results.Redirect($"/{slug}");
+            s.Events.Append(id, new ACommerce.Kit.Offers.OfferRejected(id, DateTime.UtcNow));
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/{slug}/listings/{offer.ListingId}");
+        }).DisableAntiforgery();
+
+        app.MapPost("/{slug}/offers/{id:guid}/withdraw",
+            async (string slug, Guid id, IDocumentStore store) =>
+        {
+            await using var s = store.LightweightSession(slug);
+            var offer = await s.Events.AggregateStreamAsync<ACommerce.Kit.Offers.Offer>(id);
+            if (offer is null || offer.Status != ACommerce.Kit.Offers.OfferStatus.Pending)
+                return Results.Redirect($"/{slug}");
+            s.Events.Append(id, new ACommerce.Kit.Offers.OfferWithdrawn(id, DateTime.UtcNow));
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/{slug}/me/offers");
+        }).DisableAntiforgery();
+
         // ─── Send chat message ──────────────────────────────────────────
         app.MapPost("/{slug}/chats/{conversationId:guid}/send",
             async (string slug, Guid conversationId, HttpRequest req, IDocumentStore store) =>

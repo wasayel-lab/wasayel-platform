@@ -92,6 +92,104 @@ else
         </section>
     }
 
+    @* العُروض المُقابِلَة (نَموذَج InDrive). تَظهَر إن كانَ الإعلان
+       مَفتوحاً لِلعُروض (خاصِّيَّة accepts_offers=true) أَو إن وُجِدَت
+       عُروض سابِقَة. التَّحَكُّم في إظهارها مَتروك لِلفِئَة عَبر الخَصائِص. *@
+    @if (showOffers)
+    {
+        <section class="acm-details-section">
+            <h2 class="acm-details-section-title">العُروض المُقابِلَة</h2>
+            @if (listingMatch is not null)
+            {
+                <div class="ac-offer ac-offer-accepted">
+                    <strong>تَمّ قَبول عَرض @listingMatch.OffererName بِـ @listingMatch.AcceptedPrice.ToString("N0") ريال.</strong>
+                    @if (listingMatch.OffererLat != 0 || listingMatch.OffererLng != 0)
+                    {
+                        <p style="margin:8px 0 0;font-size:12px;color:var(--ac-text-muted);">
+                            مَوقِع المُقَدِّم وَقت القَبول مَحفوظ — افتَح المُحادَثَة لِلتَنسيق.
+                        </p>
+                    }
+                </div>
+            }
+            else
+            {
+                @if (Auth.IsAuthenticated)
+                {
+                    <form method="post" action="@($"/{Slug}/listings/{Id}/offers")"
+                          style="display:flex;flex-direction:column;gap:8px;margin:0 0 16px;">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                            <AcField Label="عَرضُكَ (ريال)" Required="true">
+                                <input type="number" name="price" required min="1" step="1"
+                                       class="ac-input" inputmode="numeric" />
+                            </AcField>
+                            <AcField Label="مُدَّة الصَلاحِيَّة (دَقائِق)">
+                                <input type="number" name="ttl_minutes" value="15" min="1" max="120" class="ac-input" />
+                            </AcField>
+                        </div>
+                        <AcLocationInput Name="loc" Label="مَوقِعُكَ الحاليّ" Required="true" />
+                        <AcField Label="رِسالَة (اختياريّ)">
+                            <textarea name="message" rows="2" maxlength="200"
+                                      class="ac-input" style="resize:vertical;font-family:inherit;"></textarea>
+                        </AcField>
+                        @* maps.js يَملأ الـ hidden inputs بَعد الضَّغط — لكِنّ
+                           اسمَي الحَقلَين هُما loc_lat و loc_lng، نَنسَخهما
+                           لِـ lat/lng عَبر hidden duplicates عَبر JS الـ POST. *@
+                        <input type="hidden" name="lat" id="offer_lat" />
+                        <input type="hidden" name="lng" id="offer_lng" />
+                        <button type="submit" class="ac-btn ac-btn-primary"
+                                onclick="document.getElementById('offer_lat').value=document.getElementById('loc_lat').value;document.getElementById('offer_lng').value=document.getElementById('loc_lng').value;">
+                            <AcIcon Name="send" Size="16" /> تَقديم عَرضي
+                        </button>
+                    </form>
+                }
+                else
+                {
+                    <a href="@($"/{Slug}/login?returnUrl=/{Slug}/listings/{Id}")"
+                       class="ac-btn ac-btn-ghost ac-btn-block">
+                        دُخول لِتَقديم عَرض
+                    </a>
+                }
+
+                @if (offers.Count > 0)
+                {
+                    <div class="ac-offer-list">
+                        @foreach (var o in offers)
+                        {
+                            <div class="ac-offer">
+                                <div style="display:flex;justify-content:space-between;align-items:center;">
+                                    <strong>@o.OffererName</strong>
+                                    <span class="acm-details-price">@o.Price.ToString("N0") ريال</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(o.Message))
+                                {
+                                    <p style="margin:6px 0;font-size:13px;color:var(--ac-text-muted);">@o.Message</p>
+                                }
+                                <span style="font-size:11px;color:var(--ac-text-muted);">
+                                    صالِح حَتَّى @o.ExpiresAt.ToString("HH:mm")
+                                </span>
+                                @if (Auth.IsAuthenticated)
+                                {
+                                    <div style="display:flex;gap:6px;margin-top:8px;">
+                                        <form method="post" action="@($"/{Slug}/offers/{o.Id}/accept")" style="margin:0;">
+                                            <button type="submit" class="ac-btn ac-btn-primary ac-btn-sm">
+                                                <AcIcon Name="check" Size="14" /> قَبول
+                                            </button>
+                                        </form>
+                                        <form method="post" action="@($"/{Slug}/offers/{o.Id}/reject")" style="margin:0;">
+                                            <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">
+                                                <AcIcon Name="x" Size="14" /> رَفض
+                                            </button>
+                                        </form>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </section>
+    }
+
     <section class="acm-details-section">
         <h2 class="acm-details-section-title">تَواصُل</h2>
         @if (Auth.IsAuthenticated)
@@ -166,6 +264,9 @@ else
     Tenant? tenant;
     bool IsFav;
     IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.ResolvedAttr>? resolvedAttrs;
+    List<ACommerce.Kit.Offers.Offer> offers = new();
+    ACommerce.Kit.Offers.ListingMatch? listingMatch;
+    bool showOffers;
 
     string CategoryLabel => tenant?.Categories.FirstOrDefault(c => c.Slug == listing?.CategorySlug)?.Label ?? "";
 
@@ -192,6 +293,22 @@ else
             // مِن AttributeDefinitions + AttributeValues المُستَورَدَة.
             if (listing.Attributes is { Count: > 0 })
                 resolvedAttrs = await DynAttrs.ResolveLabelsAsync(Slug, listing.Attributes);
+
+            // العُروض المُقابِلَة — تَظهَر فَقَط لَو الفِئَة فَتَحَتها
+            // (خاصِّيَّة accepts_offers=true) أَو إن كانَ هُناك عُروض
+            // مَوجودَة. نَجلِب الـ ListingMatch أَيضاً لِمَعرِفَة الحالَة.
+            listing.Attributes.TryGetValue("accepts_offers", out var acceptsOffers);
+            var enabled = string.Equals(acceptsOffers, "true", StringComparison.OrdinalIgnoreCase);
+            listingMatch = await t.LoadAsync<ACommerce.Kit.Offers.ListingMatch>(Id);
+            if (enabled || listingMatch is not null)
+            {
+                showOffers = true;
+                offers = (await t.Query<ACommerce.Kit.Offers.Offer>()
+                    .Where(o => o.ListingId == Id
+                             && o.Status == ACommerce.Kit.Offers.OfferStatus.Pending)
+                    .ToListAsync())
+                    .OrderBy(o => o.Price).ToList();
+            }
         }
     }
 }

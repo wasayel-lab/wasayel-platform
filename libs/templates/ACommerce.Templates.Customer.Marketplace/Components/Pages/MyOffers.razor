@@ -1,0 +1,89 @@
+@page "/{slug}/me/offers"
+@inject IDocumentStore Store
+@inject AuthSession Auth
+
+@*
+    قائِمَة العُروض الَّتي قَدَّمها هذا المُستَخدِم — pending أَوَّلاً،
+    ثُمّ المُقَرَّرَة. مُلاءِم لِلسائِق (Injez) لِيَرى عُروضَه الفَعّالَة.
+*@
+
+<div class="acs-page">
+    <h1 class="acm-wizard-title">عُروضي</h1>
+
+    @if (!Auth.IsAuthenticated)
+    {
+        <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
+                      ActionLabel="تَسجيل دُخول"
+                      ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/me/offers")" />
+    }
+    else if (offers is null)
+    {
+        <AcLoadingState />
+    }
+    else if (offers.Count == 0)
+    {
+        <AcEmptyState IconName="package" Title="لا عُروض بَعد"
+                      Message="قَدِّم عَرضاً مِن أَيّ إعلان مَفتوح لِلتَفاوُض." />
+    }
+    else
+    {
+        <div class="ac-offer-list">
+            @foreach (var o in offers)
+            {
+                <a class="ac-offer" href="@($"/{Slug}/listings/{o.ListingId}")"
+                   style="text-decoration:none;color:inherit;display:block;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span class="ac-chip ac-chip-sm">@StatusLabel(o.Status)</span>
+                        <span class="acm-details-price">@o.Price.ToString("N0") ريال</span>
+                    </div>
+                    @if (!string.IsNullOrEmpty(o.Message))
+                    {
+                        <p style="margin:6px 0 0;font-size:13px;color:var(--ac-text-muted);">@o.Message</p>
+                    }
+                    <p style="margin:6px 0 0;font-size:11px;color:var(--ac-text-muted);">
+                        قُدِّم: @o.SubmittedAt.ToString("yyyy-MM-dd HH:mm")
+                        @if (o.Status == ACommerce.Kit.Offers.OfferStatus.Pending)
+                        {
+                            <span> · صالِح حَتَّى @o.ExpiresAt.ToString("HH:mm")</span>
+                        }
+                    </p>
+                </a>
+                @if (o.Status == ACommerce.Kit.Offers.OfferStatus.Pending)
+                {
+                    <form method="post" action="@($"/{Slug}/offers/{o.Id}/withdraw")" style="margin:0;">
+                        <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">
+                            <AcIcon Name="x" Size="14" /> سَحب
+                        </button>
+                    </form>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    List<ACommerce.Kit.Offers.Offer>? offers;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await using var s = Store.QuerySession(Slug);
+        offers = (await s.Query<ACommerce.Kit.Offers.Offer>()
+            .Where(o => o.OffererId == Auth.UserId!.Value)
+            .ToListAsync())
+            .OrderBy(o => o.Status == ACommerce.Kit.Offers.OfferStatus.Pending ? 0 : 1)
+            .ThenByDescending(o => o.SubmittedAt)
+            .ToList();
+    }
+
+    static string StatusLabel(ACommerce.Kit.Offers.OfferStatus s) => s switch
+    {
+        ACommerce.Kit.Offers.OfferStatus.Pending   => "قَيد المُراجَعَة",
+        ACommerce.Kit.Offers.OfferStatus.Accepted  => "مَقبول",
+        ACommerce.Kit.Offers.OfferStatus.Rejected  => "مَرفوض",
+        ACommerce.Kit.Offers.OfferStatus.Withdrawn => "مَسحوب",
+        ACommerce.Kit.Offers.OfferStatus.Expired   => "مُنتَهي",
+        _ => s.ToString()
+    };
+}

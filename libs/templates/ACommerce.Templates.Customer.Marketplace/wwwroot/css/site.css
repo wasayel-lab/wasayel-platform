@@ -656,3 +656,16 @@
     border: 2px dashed var(--ac-border);
     border-radius: var(--ac-radius-lg);
 }
+
+/* ═══ Offers (InDrive-style negotiation) ═══════════════════════════ */
+.ac-offer-list { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+.ac-offer {
+    padding: 12px 14px;
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+}
+.ac-offer-accepted {
+    background: color-mix(in srgb, var(--ac-primary) 8%, transparent);
+    border-color: var(--ac-primary);
+}
