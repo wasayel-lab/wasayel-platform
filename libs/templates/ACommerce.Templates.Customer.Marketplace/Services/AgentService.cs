@@ -235,7 +235,12 @@ public sealed class AgentService
    00000000-0000-0000-0000-000000000F01.
 6. الفِئات تُجَمَّع بِـ "kind": residential, commercial, events, vehicles,
    roommate، أَو فارِغ.
-7. لُغَتُكَ الافتراضيَّة العَرَبيَّة الفُصحى مَع تَشكيل خَفيف.
+7. الأَدوار تُختار مِن كاتالوج ثابِت — set_roles يَقبَل فَقَط slugs:
+   customer (عَميل/مُشتَري عامّ)، vendor (تاجِر يَنشُر إعلانات)،
+   driver (سائِق يُقَدِّم عُروض مَشاوير)، host (مالِك سَكَن يُؤَجِّر)،
+   shipper (شَركَة شَحن)، tenant_admin (إداريّ المَتجَر). كُلّ دَور
+   يَأتي بِصَلاحِيّات + حُقول بَيانات تِلقائيّاً. لا تَختَرِع slug آخَر.
+8. لُغَتُكَ الافتراضيَّة العَرَبيَّة الفُصحى مَع تَشكيل خَفيف.
 
 حالَة المُستَأجِرين الحالِيَّة:
 {{snapshot}}
@@ -379,6 +384,10 @@ public sealed class AgentService
     }
     """;
 
+    // الـ catalog يَضُمّ: customer, vendor, driver, host, shipper, tenant_admin.
+    // الوَكيل يَختار مِنها بِالـ slug فَقَط — كُلّ Permissions+Fields تَأتي
+    // مُعَدَّة مِن الكاتالوج تِلقائيّاً. لا يُمكِن لِلوَكيل اختِراع دَور
+    // خارِج الكاتالوج (يَضمَن سُلوكاً مُتَّسِقاً).
     private static readonly string SetRolesSchema = """
     {
       "type": "object",
@@ -387,17 +396,15 @@ public sealed class AgentService
         "slug": {"type": "string"},
         "roles": {
           "type": "array",
+          "description": "قائِمَة catalog slugs مَختارَة مِن: customer, vendor, driver, host, shipper, tenant_admin",
           "items": {
-            "type": "object",
-            "required": ["slug", "label"],
-            "properties": {
-              "slug":        {"type": "string"},
-              "label":       {"type": "string"},
-              "icon":        {"type": "string", "description": "إيموجي"},
-              "description": {"type": "string"},
-              "is_default":  {"type": "boolean"}
-            }
+            "type": "string",
+            "enum": ["customer", "vendor", "driver", "host", "shipper", "tenant_admin"]
           }
+        },
+        "default_role": {
+          "type": "string",
+          "description": "أَيّ دَور يُسَكَّن لِلمُستَخدِم الجَديد افتراضيّاً."
         }
       }
     }
@@ -569,25 +576,25 @@ public sealed class AgentToolExecutor
     {
         var slug = Str(root, "slug").ToLowerInvariant();
         if (!root.TryGetProperty("roles", out var arr) || arr.ValueKind != JsonValueKind.Array)
-            return (false, "roles مَطلوب.");
+            return (false, "roles مَطلوب (قائِمَة catalog slugs).");
 
+        var defaultRole = Str(root, "default_role").ToLowerInvariant();
         var roles = new List<ACommerce.Kit.Roles.Role>();
         var i = 0;
         foreach (var r in arr.EnumerateArray())
         {
-            var rslug = Str(r, "slug").ToLowerInvariant();
-            var rlabel = Str(r, "label");
-            if (string.IsNullOrEmpty(rslug) || string.IsNullOrEmpty(rlabel)) continue;
-            roles.Add(new ACommerce.Kit.Roles.Role
-            {
-                Slug = rslug, Label = rlabel,
-                Icon = TryStr(r, "icon", out var ic) && !string.IsNullOrEmpty(ic) ? ic : "👤",
-                Description = TryStr(r, "description", out var d) ? d : "",
-                IsDefault = r.TryGetProperty("is_default", out var def) &&
-                            def.ValueKind == JsonValueKind.True,
-                SortOrder = i++
-            });
+            var rslug = r.ValueKind == JsonValueKind.String
+                ? r.GetString()?.Trim().ToLowerInvariant() ?? ""
+                : "";
+            if (string.IsNullOrEmpty(rslug)) continue;
+            var tmpl = ACommerce.Kit.Roles.RoleCatalog.Find(rslug);
+            if (tmpl is null) continue;  // تَجاهُل slugs خارِج الكاتالوج
+            var role = ACommerce.Kit.Roles.RoleCatalog.InstantiateRole(tmpl, i++);
+            role.IsDefault = defaultRole == rslug;
+            roles.Add(role);
         }
+        if (roles.Count == 0)
+            return (false, "أَيّ مِن الـ slugs لَم تُطابِق الكاتالوج.");
 
         await using var s = _store.LightweightSession();
         var t = await s.LoadAsync<Tenant>(slug, ct);
@@ -595,7 +602,8 @@ public sealed class AgentToolExecutor
         t.Roles = roles;
         s.Store(t);
         await s.SaveChangesAsync(ct);
-        return (true, $"تَمّ تَحديث «{slug}» إلى {roles.Count} أَدوار.");
+        return (true, $"تَمّ تَحديث «{slug}» إلى {roles.Count} أَدوار مِن الكاتالوج: "
+                    + string.Join(", ", roles.Select(r => r.Slug)));
     }
 
     private async Task<(bool, string)> SetRegionsAsync(JsonElement root, CancellationToken ct)
