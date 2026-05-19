@@ -303,10 +303,12 @@ else
             if (enabled || listingMatch is not null)
             {
                 showOffers = true;
+                var now = DateTime.UtcNow;
                 offers = (await t.Query<ACommerce.Kit.Offers.Offer>()
                     .Where(o => o.ListingId == Id
                              && o.Status == ACommerce.Kit.Offers.OfferStatus.Pending)
                     .ToListAsync())
+                    .Where(o => o.ExpiresAt > now)   // اِستَبعِد المُنتَهيَة
                     .OrderBy(o => o.Price).ToList();
             }
         }

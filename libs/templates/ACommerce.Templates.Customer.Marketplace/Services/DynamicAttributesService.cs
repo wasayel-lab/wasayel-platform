@@ -77,6 +77,13 @@ public sealed class DynamicAttributesService
     public Task<IReadOnlyList<DynField>> GetForProfileAsync(string tenantSlug)
         => GetForScopeAsync(tenantSlug, ProfileScopeId);
 
+    /// <summary>حُقول بروفايل خاصَّة بِدَور (مَثَلاً السائِق: vehicle_type،
+    /// license_number…). الـ scope مَحسوب مِن
+    /// <see cref="ACommerce.Kit.Roles.RoleScopes.DeriveProfileScope"/>.</summary>
+    public Task<IReadOnlyList<DynField>> GetForRoleProfileAsync(string tenantSlug, string roleSlug)
+        => GetForScopeAsync(tenantSlug,
+            ACommerce.Kit.Roles.RoleScopes.DeriveProfileScope(tenantSlug, roleSlug));
+
     /// <summary>
     /// يُحَوِّل قاموس خام (Code → Value) إلى عَناصِر <see cref="ResolvedAttr"/>
     /// مَع تَسمِيَات عَرَبيَّة:

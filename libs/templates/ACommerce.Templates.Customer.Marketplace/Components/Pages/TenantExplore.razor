@@ -42,6 +42,19 @@ else
     <div class="acm-explore-sortbar">
         <span class="acm-explore-count">@(items?.Count ?? 0) نَتيجَة</span>
         <div class="acm-explore-sortbar-right">
+            @* حَفظ الفَلتَر الحالي كَ بَحث لِلإشعارات. POST عَلى نَفس
+               endpoint /searches/save مَع الحُقول المَأخوذَة مِن الـ
+               query string الحالي. *@
+            <form method="post" action="@($"/{Slug}/searches/save")" class="acm-sort-form">
+                <input type="hidden" name="label" value="@SearchLabel()" />
+                <input type="hidden" name="category" value="@(Category ?? "")" />
+                <input type="hidden" name="district" value="@(District ?? "")" />
+                <input type="hidden" name="min" value="@(MinPrice?.ToString() ?? "")" />
+                <input type="hidden" name="max" value="@(MaxPrice?.ToString() ?? "")" />
+                <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm" title="حَفظ كَبَحث لِيَصِلكَ إشعار">
+                    <AcIcon Name="bell" Size="14" /> حِفظ كَبَحث
+                </button>
+            </form>
             <form method="get" action="@($"/{Slug}/explore")" class="acm-sort-form">
                 @PreserveHidden(except: "sort")
                 <select name="sort" class="ac-input acm-filter-select" aria-label="تَرتيب"
@@ -173,6 +186,18 @@ else
     string FilterToggleHref =>
         $"/{Slug}/explore" + Preserve(set: Filters == "open" ? null : ("filters", "open"),
                                        except: "filters");
+
+    /// <summary>اِسم وَصفيّ لِلبَحث المَحفوظ يَعتَمِد عَلى الفَلاتِر الحالِيَّة.</summary>
+    string SearchLabel()
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrEmpty(Category)) parts.Add(Category);
+        if (!string.IsNullOrEmpty(District)) parts.Add(District);
+        if (MinPrice.HasValue || MaxPrice.HasValue)
+            parts.Add($"{MinPrice?.ToString("N0") ?? "0"}-{MaxPrice?.ToString("N0") ?? "∞"}");
+        if (!string.IsNullOrEmpty(Query)) parts.Add($"«{Query}»");
+        return parts.Count == 0 ? "بَحث عامّ" : string.Join(" · ", parts);
+    }
 
     /// <summary>يَبني query-string يَحفَظ القِيَم الحاليّة مَع إمكان حَذف
     /// مِفتاح أو إضافَة جَديد. النَّتيجَة تَبدَأ بِـ ? لَو غَير فارِغَة.</summary>

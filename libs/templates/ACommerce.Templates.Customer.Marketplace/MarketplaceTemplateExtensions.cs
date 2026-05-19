@@ -195,10 +195,35 @@ public static class MarketplaceTemplateExtensions
             if (user is null) return Results.Redirect($"/{slug}/me");
             user.FullName = fullName;
             user.UpdatedAt = DateTime.UtcNow;
+
+            // الدَور النَّشِط (يَظهَر فَقَط لَو المَتجَر يُعَرِّف أَدواراً).
+            var activeRole = req.Form["activeRole"].ToString().Trim();
+            if (!string.IsNullOrEmpty(activeRole)) user.ActiveRole = activeRole;
+
+            // خَصائِص ديناميكِيَّة: attr_<Code> = بروفايل عامّ،
+            // role_<roleSlug>_attr_<Code> = خاصّ بِدَور.
             foreach (var (key, vals) in req.Form)
             {
-                if (!key.StartsWith("attr_", StringComparison.Ordinal)) continue;
-                user.AttributesJson[key["attr_".Length..]] = vals.ToString();
+                if (key.StartsWith("attr_", StringComparison.Ordinal))
+                {
+                    user.AttributesJson[key["attr_".Length..]] = vals.ToString();
+                }
+                else if (key.StartsWith("role_", StringComparison.Ordinal))
+                {
+                    // role_{slug}_attr_{code}
+                    var rest = key["role_".Length..];
+                    var attrIdx = rest.IndexOf("_attr_", StringComparison.Ordinal);
+                    if (attrIdx <= 0) continue;
+                    var roleSlug = rest[..attrIdx];
+                    var attrCode = rest[(attrIdx + "_attr_".Length)..];
+                    if (string.IsNullOrEmpty(roleSlug) || string.IsNullOrEmpty(attrCode)) continue;
+                    if (!user.RoleAttributesJson.TryGetValue(roleSlug, out var dict))
+                    {
+                        dict = new Dictionary<string, string>();
+                        user.RoleAttributesJson[roleSlug] = dict;
+                    }
+                    dict[attrCode] = vals.ToString();
+                }
             }
             s.Store(user);
             await s.SaveChangesAsync();

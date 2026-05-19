@@ -170,6 +170,13 @@ public sealed class AgentService
               .Append(", channel=").Append(t.AuthChannel)
               .Append(", city=").Append(t.City)
               .AppendLine();
+            if (t.Roles.Count > 0)
+            {
+                sb.Append("    roles: ").Append(
+                    string.Join(", ", t.Roles.OrderBy(r => r.SortOrder)
+                        .Select(r => $"{r.Slug}«{r.Label}»{(r.IsDefault ? "*" : "")}")))
+                  .AppendLine();
+            }
             foreach (var c in t.Categories.OrderBy(c => c.SortOrder))
             {
                 var sid = DeriveListingScope(t.Slug, c.Slug);
@@ -181,6 +188,12 @@ public sealed class AgentService
             }
             sb.Append("    ↳ (بروفايل) scope_id=00000000-0000-0000-0000-000000000F01")
               .AppendLine();
+            foreach (var r in t.Roles.OrderBy(r => r.SortOrder))
+            {
+                var rsid = ACommerce.Kit.Roles.RoleScopes.DeriveProfileScope(t.Slug, r.Slug);
+                sb.Append("    ↳ (بروفايل/").Append(r.Slug).Append(") scope_id=")
+                  .Append(rsid.ToString()).AppendLine();
+            }
         }
         return sb.ToString();
     }
@@ -299,9 +312,15 @@ public sealed class AgentService
         new("set_regions",
             "إعادَة كِتابَة المُدُن والأَحياء لِمُستَأجِر بِالكامِل.",
             SetRegionsSchema),
+        new("set_roles",
+            "إعادَة كِتابَة قائِمَة أَدوار المَتجَر بِالكامِل. اِترُكها فارِغَة "
+          + "لِنَمَط user-فَرد. كُلّ دَور لَه scope_id بروفايل خاصّ (يَظهَر "
+          + "في snapshot أَدناه).",
+            SetRolesSchema),
         new("set_attributes",
             "إعادَة كِتابَة الخَصائِص الديناميكِيَّة لِنِطاق (scope) مَحَدَّد. "
-          + "النِّطاق إمّا Guid فِئَة أَو 00000000-0000-0000-0000-000000000F01 لِلبروفايل.",
+          + "النِّطاق إمّا Guid فِئَة أَو scope_id بروفايل دَور أَو "
+          + "00000000-0000-0000-0000-000000000F01 لِلبروفايل العامّ.",
             SetAttributesSchema)
     };
 
@@ -356,6 +375,30 @@ public sealed class AgentService
         "city":    {"type": "string"},
         "color":   {"type": "string"},
         "channel": {"type": "string", "enum": ["phone", "nafath"]}
+      }
+    }
+    """;
+
+    private static readonly string SetRolesSchema = """
+    {
+      "type": "object",
+      "required": ["slug", "roles"],
+      "properties": {
+        "slug": {"type": "string"},
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["slug", "label"],
+            "properties": {
+              "slug":        {"type": "string"},
+              "label":       {"type": "string"},
+              "icon":        {"type": "string", "description": "إيموجي"},
+              "description": {"type": "string"},
+              "is_default":  {"type": "boolean"}
+            }
+          }
+        }
       }
     }
     """;
@@ -438,6 +481,7 @@ public sealed class AgentToolExecutor
                 "set_categories" => await SetCategoriesAsync(root, ct),
                 "set_branding"   => await SetBrandingAsync(root, ct),
                 "set_regions"    => await SetRegionsAsync(root, ct),
+                "set_roles"      => await SetRolesAsync(root, ct),
                 "set_attributes" => await SetAttributesAsync(root, ct),
                 _ => (false, $"أَداة غَير مَعروفَة: {toolName}")
             };
@@ -519,6 +563,39 @@ public sealed class AgentToolExecutor
         s.Store(t);
         await s.SaveChangesAsync(ct);
         return (true, $"تَمّ تَحديث هُويَّة «{slug}».");
+    }
+
+    private async Task<(bool, string)> SetRolesAsync(JsonElement root, CancellationToken ct)
+    {
+        var slug = Str(root, "slug").ToLowerInvariant();
+        if (!root.TryGetProperty("roles", out var arr) || arr.ValueKind != JsonValueKind.Array)
+            return (false, "roles مَطلوب.");
+
+        var roles = new List<ACommerce.Kit.Roles.Role>();
+        var i = 0;
+        foreach (var r in arr.EnumerateArray())
+        {
+            var rslug = Str(r, "slug").ToLowerInvariant();
+            var rlabel = Str(r, "label");
+            if (string.IsNullOrEmpty(rslug) || string.IsNullOrEmpty(rlabel)) continue;
+            roles.Add(new ACommerce.Kit.Roles.Role
+            {
+                Slug = rslug, Label = rlabel,
+                Icon = TryStr(r, "icon", out var ic) && !string.IsNullOrEmpty(ic) ? ic : "👤",
+                Description = TryStr(r, "description", out var d) ? d : "",
+                IsDefault = r.TryGetProperty("is_default", out var def) &&
+                            def.ValueKind == JsonValueKind.True,
+                SortOrder = i++
+            });
+        }
+
+        await using var s = _store.LightweightSession();
+        var t = await s.LoadAsync<Tenant>(slug, ct);
+        if (t is null) return (false, "المَتجَر غَير مَوجود.");
+        t.Roles = roles;
+        s.Store(t);
+        await s.SaveChangesAsync(ct);
+        return (true, $"تَمّ تَحديث «{slug}» إلى {roles.Count} أَدوار.");
     }
 
     private async Task<(bool, string)> SetRegionsAsync(JsonElement root, CancellationToken ct)

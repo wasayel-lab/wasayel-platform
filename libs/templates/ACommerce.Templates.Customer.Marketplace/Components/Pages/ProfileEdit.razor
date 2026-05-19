@@ -12,7 +12,7 @@
                   ActionLabel="تَسجيل دُخول"
                   ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/me/edit")" />
 }
-else if (user is null)
+else if (user is null || tenant is null)
 {
     <AcLoadingState Message="جارٍ التَحميل…" />
 }
@@ -46,11 +46,36 @@ else
             </ChildContent>
         </AcCard>
 
-        @* خَصائِص ديناميكِيَّة لِلبروفايل — مَأخوذَة مِن
-           AttributeDefinitions الَّتي رَبَطها CategoryAttributeMappings
-           بِـ scope الـ profile (sentinel 00000000-...-F01). تَختَلِف
-           حُقولها بَين Ashare V3 و Ejar V1 حَسَب ما زَرَعَه التَطبيق
-           الأَصلي في DB. *@
+        @* الدَور النَّشِط — يَظهَر فَقَط لَو المَتجَر يُعَرِّف أَدواراً
+           (مَثَلاً إنجيز: rider/driver). مَتجَر بِلا أَدوار يَتَجاوَز كامِل
+           هذا القِسم وَيَستَخدِم البروفايل العامّ فَقَط. *@
+        @if (tenant.Roles.Count > 0)
+        {
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">الدَور</h3>
+                    <div class="acm-radio-cards">
+                        @foreach (var r in tenant.Roles.OrderBy(r => r.SortOrder))
+                        {
+                            <label class="acm-radio-card">
+                                <input type="radio" name="activeRole" value="@r.Slug"
+                                       checked="@(user.ActiveRole == r.Slug || (string.IsNullOrEmpty(user.ActiveRole) && r.IsDefault))" />
+                                <span class="acm-radio-card-body">
+                                    <strong>@(r.Icon ?? "👤") @r.Label</strong>
+                                    @if (!string.IsNullOrEmpty(r.Description))
+                                    {
+                                        <span>@r.Description</span>
+                                    }
+                                </span>
+                            </label>
+                        }
+                    </div>
+                </ChildContent>
+            </AcCard>
+        }
+
+        @* خَصائِص البروفايل العامّ — مَرتَبِطَة بِـ ProfileScopeId
+           sentinel. مُشتَرَكَة بَين كُلّ الأَدوار. *@
         @if (dynFields is { Count: > 0 })
         {
             <AcCard>
@@ -59,9 +84,42 @@ else
                     @foreach (var f in dynFields)
                     {
                         <AcField Label="@f.Label" Required="@f.IsRequired">
-                            @RenderDynInput(f, "attr_")
+                            @RenderDynInput(f, "attr_", user.AttributesJson)
                         </AcField>
                     }
+                </ChildContent>
+            </AcCard>
+        }
+
+        @* خَصائِص بروفايل خاصَّة بِكُلّ دَور — تُعرَض كَ <details> قابِلَة
+           لِلطَيّ. كُلّ قِسم لَه prefix فَريد role_{roleSlug}_attr_{code}
+           حَتَّى يَستَطيع POST handler فَصلُها وَتَخزينها في
+           user.RoleAttributesJson[roleSlug][code]. *@
+        @foreach (var (rslug, rlabel, ricon, fields) in roleFields)
+        {
+            if (fields.Count == 0) continue;
+            var roleValues = user.RoleAttributesJson.TryGetValue(rslug, out var rv)
+                ? rv : new Dictionary<string, string>();
+            var isActive = user.ActiveRole == rslug;
+            <AcCard>
+                <ChildContent>
+                    <details open="@isActive">
+                        <summary style="cursor:pointer;font-weight:700;list-style:none;">
+                            @ricon بَيانات دَور @rlabel
+                            @if (isActive)
+                            {
+                                <span class="ac-chip ac-chip-sm" style="margin-inline-start:6px;">نَشِط</span>
+                            }
+                        </summary>
+                        <div style="margin-top:12px;">
+                            @foreach (var f in fields)
+                            {
+                                <AcField Label="@f.Label" Required="@(f.IsRequired && isActive)">
+                                    @RenderDynInput(f, $"role_{rslug}_attr_", roleValues)
+                                </AcField>
+                            }
+                        </div>
+                    </details>
                 </ChildContent>
             </AcCard>
         }
@@ -79,21 +137,37 @@ else
 @code {
     [Parameter] public string Slug { get; set; } = "";
     User? user;
+    Tenant? tenant;
     IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.DynField>? dynFields;
+    List<(string Slug, string Label, string Icon,
+          IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.DynField> Fields)> roleFields = new();
 
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
+        await using var g = Store.QuerySession();
+        tenant = await g.LoadAsync<Tenant>(Slug);
         await using var s = Store.QuerySession(Slug);
         user = await s.LoadAsync<User>(Auth.UserId!.Value);
         dynFields = await DynAttrs.GetForProfileAsync(Slug);
+
+        if (tenant is not null)
+        {
+            foreach (var r in tenant.Roles.OrderBy(r => r.SortOrder))
+            {
+                var fields = await DynAttrs.GetForRoleProfileAsync(Slug, r.Slug);
+                roleFields.Add((r.Slug, r.Label, r.Icon ?? "👤", fields));
+            }
+        }
     }
 
-    RenderFragment RenderDynInput(ACommerce.Templates.Customer.Marketplace.Services.DynField f, string prefix) => @<text>
+    RenderFragment RenderDynInput(
+        ACommerce.Templates.Customer.Marketplace.Services.DynField f,
+        string prefix,
+        Dictionary<string, string> currentValues) => @<text>
         @{
             var name = prefix + f.Code;
-            var def = user?.AttributesJson is not null && user.AttributesJson.TryGetValue(f.Code, out var raw)
-                      ? raw : f.DefaultValue;
+            var def = currentValues.TryGetValue(f.Code, out var raw) ? raw : f.DefaultValue;
         }
         @switch (f.Type)
         {
