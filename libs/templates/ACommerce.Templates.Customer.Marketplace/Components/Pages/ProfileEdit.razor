@@ -155,11 +155,40 @@ else
         {
             foreach (var r in tenant.Roles.OrderBy(r => r.SortOrder))
             {
-                var fields = await DynAttrs.GetForRoleProfileAsync(Slug, r.Slug);
-                roleFields.Add((r.Slug, r.Label, r.Icon ?? "👤", fields));
+                // ادمِج حُقول الكاتالوج (Role.Fields، built-in) مَع أَيّ حُقول
+                // ديناميكِيَّة أَضافَها المُصَمِّم تَحت scope الدَور. الكاتالوج
+                // يَسبِق لِأَنَّه مَصدَر التَّعريف الأَوَّليّ.
+                var catalogFields = r.Fields.Select(f =>
+                    new ACommerce.Templates.Customer.Marketplace.Services.DynField(
+                        Code: f.Code,
+                        Label: f.Label,
+                        Type: ParseDynType(f.Type),
+                        IsRequired: f.IsRequired,
+                        DefaultValue: null,
+                        Options: f.Options.Select(o =>
+                            new ACommerce.Templates.Customer.Marketplace.Services.DynOption(
+                                Value: o.Value, Label: o.Label)).ToList()
+                    )).ToList();
+                var dynamicFields = await DynAttrs.GetForRoleProfileAsync(Slug, r.Slug);
+                var combined = catalogFields
+                    .Concat(dynamicFields.Where(d => !catalogFields.Any(c => c.Code == d.Code)))
+                    .ToList();
+                roleFields.Add((r.Slug, r.Label, r.Icon ?? "👤", combined));
             }
         }
     }
+
+    static ACommerce.Templates.Customer.Marketplace.Services.DynFieldType ParseDynType(string s)
+        => s switch
+        {
+            "Number"       => ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.Number,
+            "LongText"     => ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.LongText,
+            "Boolean"      => ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.Boolean,
+            "SingleSelect" => ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.SingleSelect,
+            "MultiSelect"  => ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.MultiSelect,
+            "Date"         => ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.Date,
+            _              => ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.Text
+        };
 
     RenderFragment RenderDynInput(
         ACommerce.Templates.Customer.Marketplace.Services.DynField f,
