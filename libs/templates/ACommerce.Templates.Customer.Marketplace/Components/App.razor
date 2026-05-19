@@ -34,5 +34,13 @@
     <Routes />
     <script src="_framework/blazor.web.js"></script>
     <script src="_content/ACommerce.Kit.Maps.Web/maps.js" defer></script>
+    <script>
+        // مُمَرِّر تِلقائيّ لِأَسفَل thread الوَكيل بَعد كُلّ تَحديث.
+        // يُستَدعَى مِن AgentChat عَبر IJSRuntime.InvokeVoidAsync.
+        window.scrollAgentToBottom = function () {
+            var el = document.getElementById('thread-bottom');
+            if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        };
+    </script>
 </body>
 </html>
