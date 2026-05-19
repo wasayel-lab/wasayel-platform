@@ -1,0 +1,70 @@
+@page "/{slug}/me/role"
+@inject IDocumentStore Store
+@inject AuthSession Auth
+
+@*
+    صَفحَة "اختَر دَورَكَ" — تَظهَر تِلقائيّاً لِلمُستَخدِم الَّذي ليس لَدَيه
+    ActiveRole في مَتجَر يُعَرِّف أَكثَر مِن دَور. اختِيار الدَور يَحفَظ
+    وَيُحَوِّل إلى onboarding لِجَمع بَيانات الدَور (إن وُجِدَت)، ثُمّ
+    إلى HomeRoute الخاصّ بِالدَور.
+*@
+
+<div class="acs-page">
+@if (!Auth.IsAuthenticated)
+{
+    <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
+                  ActionLabel="تَسجيل دُخول" ActionHref="@($"/{Slug}/login")" />
+}
+else if (tenant is null)
+{
+    <AcLoadingState />
+}
+else if (tenant.Roles.Count == 0)
+{
+    @* مَتجَر بِلا أَدوار — لا داعِيَ لِلصَفحَة *@
+    <AcEmptyState IconName="info" Title="هذا المَتجَر بِلا أَدوار مُتَعَدِّدَة"
+                  ActionLabel="المَتجَر" ActionHref="@($"/{Slug}")" />
+}
+else
+{
+    <h1 class="acm-wizard-title" style="text-align:center;margin-top:24px;">
+        كَيف تُحِبّ أَن تَستَخدِم @tenant.Name؟
+    </h1>
+    <p style="text-align:center;color:var(--ac-text-muted);font-size:14px;margin-bottom:24px;">
+        اختَر دَوركَ — يُمكِنُكَ تَبديلُه لاحِقاً مِن المَلَفّ الشَخصيّ.
+    </p>
+
+    <form method="post" action="@($"/{Slug}/me/role/save")">
+        <div class="acm-radio-cards" style="grid-template-columns:1fr;">
+            @foreach (var r in tenant.Roles.OrderBy(r => r.SortOrder))
+            {
+                <label class="acm-radio-card" style="padding:16px;">
+                    <input type="radio" name="role" value="@r.Slug"
+                           checked="@(r.IsDefault)" required />
+                    <span class="acm-radio-card-body">
+                        <strong style="font-size:18px;">@(r.Icon ?? "👤") @r.Label</strong>
+                        @if (!string.IsNullOrEmpty(r.Description))
+                        {
+                            <span style="font-size:13px;line-height:1.6;">@r.Description</span>
+                        }
+                    </span>
+                </label>
+            }
+        </div>
+        <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block" style="margin-top:16px;">
+            <AcIcon Name="check" Size="18" /> اختِيار
+        </button>
+    </form>
+}
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    Tenant? tenant;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var s = Store.QuerySession();
+        tenant = await s.LoadAsync<Tenant>(Slug);
+    }
+}

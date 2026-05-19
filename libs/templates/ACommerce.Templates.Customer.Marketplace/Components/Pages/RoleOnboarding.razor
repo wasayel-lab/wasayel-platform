@@ -1,0 +1,114 @@
+@page "/{slug}/me/role/onboarding"
+@inject IDocumentStore Store
+@inject AuthSession Auth
+
+@*
+    صَفحَة جَمع بَيانات الدَور — تُفتَح بَعد اختِيار الدَور. تَعرِض حُقول
+    Role.Fields الَّتي مَصدَرُها RoleCatalog. الحُقول المَطلوبَة مُلَوَّنَة،
+    البَقِيَّة اختِياريَّة. بَعد الحِفظ → HomeRoute الخاصّ بِالدَور.
+*@
+
+<div class="acs-page">
+@if (!Auth.IsAuthenticated)
+{
+    <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
+                  ActionLabel="تَسجيل دُخول" ActionHref="@($"/{Slug}/login")" />
+}
+else if (user is null || tenant is null || activeRole is null)
+{
+    <AcLoadingState />
+}
+else if (activeRole.Fields.Count == 0)
+{
+    @* لا بَيانات لِجَمعِها — تَخَطّ مُباشَرَة *@
+    <AcEmptyState IconName="check-circle" Title="جاهِز!"
+                  ActionLabel="ابدَأ" ActionHref="@HomeUrl" />
+}
+else
+{
+    var roleValues = user.RoleAttributesJson.TryGetValue(activeRole.Slug, out var rv)
+        ? rv : new Dictionary<string, string>();
+
+    <h1 class="acm-wizard-title">@activeRole.Icon بَيانات @activeRole.Label</h1>
+    <p style="color:var(--ac-text-muted);font-size:14px;margin-bottom:16px;">
+        اِملأ الحُقول المَطلوبَة لِتُصبِح جاهِزاً لِلاستِخدام. يُمكِنُكَ تَحديث
+        البَيانات لاحِقاً مِن المَلَفّ الشَخصيّ.
+    </p>
+
+    <form method="post" action="@($"/{Slug}/me/role/onboarding/save")">
+        <AcCard>
+            <ChildContent>
+                @foreach (var f in activeRole.Fields)
+                {
+                    var name = $"role_{activeRole.Slug}_attr_{f.Code}";
+                    var def = roleValues.TryGetValue(f.Code, out var raw) ? raw : "";
+                    <AcField Label="@f.Label" Required="@f.IsRequired">
+                        @switch (f.Type)
+                        {
+                            case "Number":
+                                <input type="number" name="@name" class="ac-input"
+                                       required="@f.IsRequired" value="@def" inputmode="numeric" />
+                                break;
+                            case "LongText":
+                                <textarea name="@name" rows="3" class="ac-input"
+                                          required="@f.IsRequired"
+                                          style="resize:vertical;font-family:inherit;">@def</textarea>
+                                break;
+                            case "SingleSelect":
+                                <select name="@name" class="ac-input" required="@f.IsRequired">
+                                    <option value="">— اختَر —</option>
+                                    @foreach (var o in f.Options)
+                                    {
+                                        <option value="@o.Value" selected="@(def == o.Value)">@o.Label</option>
+                                    }
+                                </select>
+                                break;
+                            case "Boolean":
+                                <label style="display:inline-flex;align-items:center;gap:8px;">
+                                    <input type="checkbox" name="@name" value="true"
+                                           checked="@(def == "True" || def == "true")" />
+                                    <span>نَعَم</span>
+                                </label>
+                                break;
+                            case "Date":
+                                <input type="date" name="@name" class="ac-input"
+                                       required="@f.IsRequired" value="@def" />
+                                break;
+                            default:
+                                <input type="text" name="@name" class="ac-input"
+                                       required="@f.IsRequired" value="@def" maxlength="200" />
+                                break;
+                        }
+                    </AcField>
+                }
+            </ChildContent>
+        </AcCard>
+
+        <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block" style="margin-top:16px;">
+            <AcIcon Name="check" Size="18" /> حِفظ والمُتابَعَة
+        </button>
+    </form>
+}
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    Tenant? tenant;
+    User? user;
+    ACommerce.Kit.Roles.Role? activeRole;
+
+    string HomeUrl => string.IsNullOrEmpty(activeRole?.HomeRoute)
+        ? $"/{Slug}"
+        : $"/{Slug}{activeRole.HomeRoute}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await using var g = Store.QuerySession();
+        tenant = await g.LoadAsync<Tenant>(Slug);
+        if (tenant is null) return;
+        await using var s = Store.QuerySession(Slug);
+        user = await s.LoadAsync<User>(Auth.UserId!.Value);
+        activeRole = tenant.Roles.FirstOrDefault(r => r.Slug == user?.ActiveRole);
+    }
+}

@@ -39,6 +39,29 @@
             </ChildContent>
         </AcCard>
 
+        @if (activeRole is not null)
+        {
+            <AcCard>
+                <ChildContent>
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <span style="font-size:28px;">@(activeRole.Icon ?? "👤")</span>
+                            <div>
+                                <strong style="font-size:14px;">@activeRole.Label</strong>
+                                <span style="display:block;color:var(--ac-text-muted);font-size:11px;">دَورُكَ النَّشِط</span>
+                            </div>
+                        </div>
+                        @if (tenantRoles.Count > 1)
+                        {
+                            <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/{Slug}/me/role")">
+                                <AcIcon Name="settings" Size="14" /> تَبديل
+                            </a>
+                        }
+                    </div>
+                </ChildContent>
+            </AcCard>
+        }
+
         <div class="acm-home-grid acm-stats-grid" style="margin-top:12px;">
             <a class="acm-stat-tile" href="@($"/{Slug}/favorites")">
                 <strong>@favoritesCount</strong>
@@ -84,11 +107,14 @@
     int favoritesCount;
     int conversationsCount;
     int notificationsCount;
+    ACommerce.Kit.Roles.Role? activeRole;
+    List<ACommerce.Kit.Roles.Role> tenantRoles = new();
 
     protected override async Task OnParametersSetAsync()
     {
         await using var g = Store.QuerySession();
         loadedTenant = await g.LoadAsync<Tenant>(Slug);
+        if (loadedTenant is not null) tenantRoles = loadedTenant.Roles;
 
         if (!Auth.IsAuthenticated || Auth.UserId is null) return;
 
@@ -96,5 +122,12 @@
         favoritesCount       = await s.Query<Favorite>().CountAsync(f => f.UserId == Auth.UserId.Value);
         conversationsCount   = await s.Query<Conversation>().CountAsync(c => c.OwnerId == Auth.UserId.Value || c.PartnerId == Auth.UserId.Value);
         notificationsCount   = await s.Query<Notification>().CountAsync(n => n.UserId == Auth.UserId.Value && !n.IsRead);
+
+        if (tenantRoles.Count > 0)
+        {
+            var me = await s.LoadAsync<User>(Auth.UserId.Value);
+            if (me is not null && !string.IsNullOrEmpty(me.ActiveRole))
+                activeRole = tenantRoles.FirstOrDefault(r => r.Slug == me.ActiveRole);
+        }
     }
 }

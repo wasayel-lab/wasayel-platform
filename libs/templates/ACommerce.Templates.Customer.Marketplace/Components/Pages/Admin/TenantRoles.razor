@@ -1,12 +1,12 @@
 @page "/admin/tenants/{slug}/roles"
 @inject IDocumentStore Store
+@using ACommerce.Kit.Roles
 
 @*
-    مُحَرِّر الأَدوار — كُلّ صَفّ دَور بِالصِّيغَة:
-        slug | الاسم | أَيقونَة | وَصف | default?
-
-    خَصائِص الدَور (vehicle_type لِلسائِق…) تُحَرَّر مِن صَفحَة
-    /admin/tenants/{slug}/attributes — يَظهَر كُلّ دَور كَ scope هُناك.
+    مُحَرِّر الأَدوار — قائِمَة checklist مِن RoleCatalog. مُصَمِّم المَتجَر
+    يَضَع علامَة عَلى الأَدوار المَطلوبَة، يُحَدِّد الافتراضي، ثُمّ يَحفَظ.
+    التَخصيص العَميق (إضافَة حُقول مُخَصَّصَة) يَتِم مِن صَفحَة الخَصائِص
+    الديناميكِيَّة عَلى scope الدَور.
 *@
 
 <div class="acs-page acm-admin">
@@ -26,13 +26,68 @@
         </div>
 
         @if (Err is not null) { <AcAlert Variant="danger"  Message="@FormatError(Err)" /> }
-        @if (Saved == "1")     { <AcAlert Variant="success" Message="تَمّ الحِفظ." /> }
+        @if (Saved == "1")    { <AcAlert Variant="success" Message="تَمّ الحِفظ." /> }
 
         <AcCard>
             <ChildContent>
-                <h3 style="margin-top:0;">المَعروض حاليّاً (@tenant.Roles.Count دَور)</h3>
-                @if (tenant.Roles.Count > 0)
-                {
+                <h3 style="margin-top:0;">القَوالِب القِياسيَّة</h3>
+                <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 16px;">
+                    اختَر الأَدوار الَّتي تَنطَبِق عَلى مَتجَرِكَ. كُلّ دَور
+                    يَأتي بِصَلاحِيّات + حُقول بَيانات افتراضِيَّة جاهِزَة.
+                    اِحفَظ لِتَطبيق الاختِيارات.
+                </p>
+
+                <form method="post" action="@($"/admin/tenants/{Slug}/roles/save")">
+                    <div class="acm-radio-cards" style="grid-template-columns:1fr;">
+                        @foreach (var tmpl in RoleCatalog.All)
+                        {
+                            var existing = tenant.Roles.FirstOrDefault(r => r.CatalogSlug == tmpl.Slug);
+                            var isPicked = existing is not null;
+                            <label class="acm-radio-card" style="display:flex;gap:12px;align-items:flex-start;">
+                                <input type="checkbox" name="role_@(tmpl.Slug)" value="1"
+                                       checked="@isPicked"
+                                       style="margin-top:4px;width:18px;height:18px;position:static;opacity:1;pointer-events:auto;" />
+                                <span class="acm-radio-card-body" style="flex:1;">
+                                    <strong style="font-size:15px;">@tmpl.Icon @tmpl.Label</strong>
+                                    <span>@tmpl.Description</span>
+                                    <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;">
+                                        @foreach (var p in tmpl.Permissions)
+                                        {
+                                            <span class="ac-chip ac-chip-sm" style="font-size:10px;">@p</span>
+                                        }
+                                    </div>
+                                    @if (tmpl.Fields.Count > 0)
+                                    {
+                                        <small style="display:block;margin-top:6px;color:var(--ac-text-muted);">
+                                            بَيانات إضافِيَّة لِلتَّسجيل: @string.Join("، ", tmpl.Fields.Select(f => f.Label))
+                                        </small>
+                                    }
+                                </span>
+                                <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;
+                                              color:var(--ac-text-muted);white-space:nowrap;">
+                                    <input type="radio" name="default_role" value="@tmpl.Slug"
+                                           checked="@(existing?.IsDefault == true)" />
+                                    افتراضي
+                                </label>
+                            </label>
+                        }
+                    </div>
+
+                    <div style="display:flex;gap:8px;margin-top:16px;">
+                        <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">إلغاء</a>
+                        <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
+                            <AcIcon Name="check" Size="18" /> حِفظ
+                        </button>
+                    </div>
+                </form>
+            </ChildContent>
+        </AcCard>
+
+        @if (tenant.Roles.Count > 0)
+        {
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">المَفعَّلَة حاليّاً (@tenant.Roles.Count)</h3>
                     <div class="acm-cat-list">
                         @foreach (var r in tenant.Roles.OrderBy(r => r.SortOrder))
                         {
@@ -40,49 +95,17 @@
                                 <span style="font-size:24px;">@(r.Icon ?? "👤")</span>
                                 <div style="flex:1;">
                                     <strong>@r.Label</strong>
-                                    @if (!string.IsNullOrEmpty(r.Description))
-                                    {
-                                        <span style="color:var(--ac-text-muted);font-size:12px;display:block;">@r.Description</span>
-                                    }
-                                    <span style="color:var(--ac-text-muted);font-size:11px;direction:ltr;display:block;">@r.Slug</span>
+                                    <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
+                                        @r.Permissions.Count صَلاحِيَّة · @r.Fields.Count حَقل بَيانات
+                                    </span>
                                 </div>
                                 @if (r.IsDefault) { <span class="ac-chip ac-chip-sm">افتراضي</span> }
                             </div>
                         }
                     </div>
-                }
-                else
-                {
-                    <p style="color:var(--ac-text-muted);">
-                        لا أَدوار — المَتجَر في نَمَط user-فَرد. أَضِف أَدواراً
-                        لِتَمييز أَنواع المُستَخدِمين (مَثَلاً سائِق/راكِب).
-                    </p>
-                }
-            </ChildContent>
-        </AcCard>
-
-        <form method="post" action="@($"/admin/tenants/{Slug}/roles/save")">
-            <AcCard>
-                <ChildContent>
-                    <h3 style="margin-top:0;">تَحديث الأَدوار</h3>
-                    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
-                        صَفّ لِكُلّ دَور بِالصِّيغَة:
-                        <code>slug | الاسم | أَيقونَة | وَصف | default</code>.<br/>
-                        الكَلِمَة <code>default</code> في الحَقل الخامِس تَجعَلُه الدَور
-                        الافتراضي لِلمُستَخدِم الجَديد. اِترُكها فارِغَة لِغَير ذلك.
-                    </p>
-                    <textarea name="roles" rows="6"
-                              class="ac-input" style="font-family:monospace;font-size:13px;direction:ltr;">@rolesText</textarea>
                 </ChildContent>
             </AcCard>
-
-            <div style="display:flex;gap:8px;margin-top:16px;">
-                <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">إلغاء</a>
-                <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
-                    <AcIcon Name="check" Size="18" /> حِفظ
-                </button>
-            </div>
-        </form>
+        }
     }
 </div>
 
@@ -92,21 +115,15 @@
     [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
 
     Tenant? tenant;
-    string rolesText = "";
 
     protected override async Task OnParametersSetAsync()
     {
         await using var s = Store.QuerySession();
         tenant = await s.LoadAsync<Tenant>(Slug);
-        if (tenant is null) return;
-        rolesText = string.Join('\n', tenant.Roles
-            .OrderBy(r => r.SortOrder)
-            .Select(r => $"{r.Slug} | {r.Label} | {r.Icon ?? "👤"} | {r.Description ?? ""} | {(r.IsDefault ? "default" : "")}"));
     }
 
     static string FormatError(string err) => err switch
     {
-        "bad_format" => "تَنسيق غَير صَحيح — كُلّ صَفّ: slug | الاسم | أَيقونَة | وَصف | default.",
         _ => err
     };
 }

@@ -61,7 +61,7 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(
                     $"/{slug}/login?stage=verify&phone={Uri.EscapeDataString(phone)}&err=code_invalid");
             AuthSession.WriteCookie(res, slug, result);
-            return Results.Redirect($"/{slug}");
+            return Results.Redirect(await PostLoginRouteAsync(slug, result.UserId, store));
         }).DisableAntiforgery();
 
         // ─── Nafath ─────────────────────────────────────────────────────
@@ -92,7 +92,7 @@ public static class MarketplaceTemplateExtensions
                     $"/{slug}/login?stage=verify&nid={Uri.EscapeDataString(nid)}" +
                     $"&attempt={attempt}&code=00&err=not_approved");
             AuthSession.WriteCookie(res, slug, result);
-            return Results.Redirect($"/{slug}");
+            return Results.Redirect(await PostLoginRouteAsync(slug, result.UserId, store));
         }).DisableAntiforgery();
 
         // ─── Language toggle ─────────────────────────────────────────────
@@ -174,6 +174,80 @@ public static class MarketplaceTemplateExtensions
                 convId = conv.Id;
             }
             return Results.Redirect($"/{slug}/chats/{convId}");
+        }).DisableAntiforgery();
+
+        // ─── Pick role (after first login or via switch) ────────────────
+        app.MapPost("/{slug}/me/role/save",
+            async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var parsed = AuthHandlers.ParseToken(token);
+            if (parsed is null) return Results.Redirect($"/{slug}/login");
+            var (userId, _, _) = parsed.Value;
+
+            var role = req.Form["role"].ToString().Trim().ToLowerInvariant();
+            if (string.IsNullOrEmpty(role))
+                return Results.Redirect($"/{slug}/me/role");
+
+            await using var sg = store.QuerySession();
+            var tenant = await sg.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+            if (tenant is null) return Results.Redirect("/admin");
+            var picked = tenant.Roles.FirstOrDefault(r => r.Slug == role);
+            if (picked is null) return Results.Redirect($"/{slug}/me/role?err=invalid_role");
+
+            await using var s = store.LightweightSession(slug);
+            var user = await s.LoadAsync<User>(userId);
+            if (user is null) return Results.Redirect($"/{slug}/me");
+            user.ActiveRole = role;
+            user.UpdatedAt = DateTime.UtcNow;
+            s.Store(user);
+            await s.SaveChangesAsync();
+
+            // إن كانَ لِلدَور حُقول بَيانات، حَوِّل إلى onboarding، وإلّا إلى HomeRoute.
+            if (picked.Fields.Any(f => f.IsRequired))
+                return Results.Redirect($"/{slug}/me/role/onboarding");
+            return Results.Redirect(string.IsNullOrEmpty(picked.HomeRoute)
+                ? $"/{slug}" : $"/{slug}{picked.HomeRoute}");
+        }).DisableAntiforgery();
+
+        app.MapPost("/{slug}/me/role/onboarding/save",
+            async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var parsed = AuthHandlers.ParseToken(token);
+            if (parsed is null) return Results.Redirect($"/{slug}/login");
+            var (userId, _, _) = parsed.Value;
+
+            await using var sg = store.QuerySession();
+            var tenant = await sg.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+            if (tenant is null) return Results.Redirect($"/{slug}");
+
+            await using var s = store.LightweightSession(slug);
+            var user = await s.LoadAsync<User>(userId);
+            if (user is null) return Results.Redirect($"/{slug}/me");
+
+            foreach (var (key, vals) in req.Form)
+            {
+                if (!key.StartsWith("role_", StringComparison.Ordinal)) continue;
+                var rest = key["role_".Length..];
+                var attrIdx = rest.IndexOf("_attr_", StringComparison.Ordinal);
+                if (attrIdx <= 0) continue;
+                var roleSlug = rest[..attrIdx];
+                var attrCode = rest[(attrIdx + "_attr_".Length)..];
+                if (!user.RoleAttributesJson.TryGetValue(roleSlug, out var dict))
+                {
+                    dict = new Dictionary<string, string>();
+                    user.RoleAttributesJson[roleSlug] = dict;
+                }
+                dict[attrCode] = vals.ToString();
+            }
+            user.UpdatedAt = DateTime.UtcNow;
+            s.Store(user);
+            await s.SaveChangesAsync();
+
+            var active = tenant.Roles.FirstOrDefault(r => r.Slug == user.ActiveRole);
+            return Results.Redirect(string.IsNullOrEmpty(active?.HomeRoute)
+                ? $"/{slug}" : $"/{slug}{active.HomeRoute}");
         }).DisableAntiforgery();
 
         // ─── Profile save ───────────────────────────────────────────────
@@ -305,8 +379,11 @@ public static class MarketplaceTemplateExtensions
             var token = req.Cookies[AuthSession.CookieName(slug)];
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect($"/{slug}/login?returnUrl=/{slug}/create-listing");
-            var (_, tenantSlug, _) = parsed.Value;
+            var (userId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect($"/{slug}/login");
+
+            if (!await HasPermissionAsync(slug, userId, "listing.create", store))
+                return Results.Redirect($"/{slug}?err=forbidden");
 
             var title       = req.Form["title"].ToString().Trim();
             var description = req.Form["description"].ToString().Trim();
@@ -455,6 +532,9 @@ public static class MarketplaceTemplateExtensions
             if (parsed is null) return Results.Redirect($"/{slug}/login?returnUrl=/{slug}/listings/{id}");
             var (userId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect($"/{slug}/login");
+
+            if (!await HasPermissionAsync(slug, userId, "offer.submit", store))
+                return Results.Redirect($"/{slug}/listings/{id}?err=forbidden");
             var userName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "—";
 
             var priceStr = req.Form["price"].ToString().Trim();
@@ -691,46 +771,58 @@ public static class MarketplaceTemplateExtensions
         }).DisableAntiforgery();
 
         // ─── Admin: save roles ──────────────────────────────────────────
-        // إعادَة كِتابَة قائِمَة الأَدوار بِالكامِل. مُستَخدِمون لَدَيهم
-        // دَور مَحذوف يَظَلّ ActiveRole بِنَفس السَّلسَلَة لكِنّ المُستَخدِم
-        // سَيُطلَب مِنه اختِيار دَور جَديد عَلى أَوَّل تَفاعُل (TBD).
+        // الـ form يُرسِل role_{catalogSlug}=1 لِكُلّ دَور مَختار + default_role
+        // لِتَحديد الافتراضي. الـ Role يُنشَأ بِنَسخ القالِب مِن RoleCatalog
+        // (Label/Icon/Permissions/Fields). إذا كانَ الدَور مَوجوداً مُسبَقاً
+        // نَحتَفِظ بِالتَخصيصات (Label/Icon) لكِنّ نُحَدِّث Permissions/Fields
+        // مِن الكاتالوج (لِيَستَفيد المَتجَر مِن تَحديثات الكاتالوج).
         app.MapPost("/admin/tenants/{slug}/roles/save",
             async (string slug, HttpRequest req, IDocumentStore store) =>
         {
-            var raw = req.Form["roles"].ToString();
-            string Back(string err) => $"/admin/tenants/{slug}/roles?err={err}";
-
-            var roles = new List<ACommerce.Kit.Roles.Role>();
-            var idx = 0;
-            foreach (var line in raw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var l = line.Trim();
-                if (l.Length == 0) continue;
-                var parts = l.Split('|', StringSplitOptions.TrimEntries);
-                if (parts.Length < 2) return Results.Redirect(Back("bad_format"));
-                var rslug = parts[0].Trim().ToLowerInvariant();
-                var rlabel = parts[1].Trim();
-                if (string.IsNullOrEmpty(rslug) || string.IsNullOrEmpty(rlabel))
-                    return Results.Redirect(Back("bad_format"));
-                roles.Add(new ACommerce.Kit.Roles.Role
-                {
-                    Slug = rslug,
-                    Label = rlabel,
-                    Icon  = parts.Length > 2 && !string.IsNullOrEmpty(parts[2]) ? parts[2].Trim() : "👤",
-                    Description = parts.Length > 3 ? parts[3].Trim() : "",
-                    IsDefault = parts.Length > 4 &&
-                                parts[4].Trim().Equals("default", StringComparison.OrdinalIgnoreCase),
-                    SortOrder = idx++
-                });
-            }
-
             await using var s = store.LightweightSession();
             var t = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
             if (t is null) return Results.Redirect("/admin");
-            t.Roles = roles;
+
+            var defaultRole = req.Form["default_role"].ToString().Trim().ToLowerInvariant();
+            var existingByCatalog = t.Roles
+                .Where(r => !string.IsNullOrEmpty(r.CatalogSlug))
+                .ToDictionary(r => r.CatalogSlug);
+
+            var newRoles = new List<ACommerce.Kit.Roles.Role>();
+            var idx = 0;
+            foreach (var tmpl in ACommerce.Kit.Roles.RoleCatalog.All)
+            {
+                if (req.Form[$"role_{tmpl.Slug}"].ToString() != "1") continue;
+                ACommerce.Kit.Roles.Role role;
+                if (existingByCatalog.TryGetValue(tmpl.Slug, out var prev))
+                {
+                    // اِحفَظ تَخصيصات المُصَمِّم (Label/Icon لَو غُيِّرَت)
+                    role = prev;
+                    role.Permissions = tmpl.Permissions.ToList();
+                    role.HomeRoute = tmpl.HomeRoute;
+                    role.Fields = tmpl.Fields.Select(f => new ACommerce.Kit.Roles.RoleField
+                    {
+                        Code = f.Code, Label = f.Label, Type = f.Type,
+                        IsRequired = f.IsRequired,
+                        Options = f.Options.Select(o => new ACommerce.Kit.Roles.RoleFieldOption
+                        {
+                            Value = o.Value, Label = o.Label
+                        }).ToList()
+                    }).ToList();
+                    role.SortOrder = idx++;
+                }
+                else
+                {
+                    role = ACommerce.Kit.Roles.RoleCatalog.InstantiateRole(tmpl, idx++);
+                }
+                role.IsDefault = defaultRole == tmpl.Slug;
+                newRoles.Add(role);
+            }
+
+            t.Roles = newRoles;
             s.Store(t);
             await s.SaveChangesAsync();
-            return Results.Redirect($"/admin/tenants/{slug}?saved=1");
+            return Results.Redirect($"/admin/tenants/{slug}/roles?saved=1");
         }).DisableAntiforgery();
 
         // ─── Admin: save categories ─────────────────────────────────────
@@ -1072,6 +1164,68 @@ public static class MarketplaceTemplateExtensions
         }).DisableAntiforgery();
 
         return app;
+    }
+
+    // فَحص صَلاحِيَّة لِلمُستَخدِم الحاليّ — يَجلِب tenant + user وَيُفَوِّض
+    // إلى <see cref="ACommerce.Kit.Roles.RolePermissions.Has"/>.
+    private static async Task<bool> HasPermissionAsync(
+        string slug, Guid userId, string permission, IDocumentStore store)
+    {
+        await using var g = store.QuerySession();
+        var tenant = await g.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+        if (tenant is null) return false;
+        if (tenant.Roles.Count == 0) return true;   // legacy mode
+
+        await using var t = store.QuerySession(slug);
+        var user = await t.LoadAsync<ACommerce.Kit.Auth.User>(userId);
+        if (user is null) return false;
+        return ACommerce.Kit.Roles.RolePermissions.Has(
+            tenant.Roles, user.ActiveRole, permission);
+    }
+
+    // قَرار التَّوجيه بَعد دُخول ناجِح:
+    //  1) مَتجَر بِلا أَدوار → الصَفحَة الرَّئيسِيَّة (سُلوك قَديم لِـ ashare/ejar).
+    //  2) المُستَخدِم بِلا ActiveRole، تَنفيذ:
+    //     - دَور واحِد في المَتجَر → اِضبِطه + تَخَطّ السُؤال.
+    //     - عِدَّة أَدوار → صَفحَة الاختِيار.
+    //  3) المُستَخدِم بِـ ActiveRole مَوجود → HomeRoute لِلدَور (أَو
+    //     الصَفحَة الافتراضِيَّة لَو فارِغ).
+    private static async Task<string> PostLoginRouteAsync(
+        string slug, Guid userId, IDocumentStore store)
+    {
+        await using var g = store.QuerySession();
+        var tenant = await g.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+        if (tenant is null || tenant.Roles.Count == 0)
+            return $"/{slug}";
+
+        await using var t = store.LightweightSession(slug);
+        var user = await t.LoadAsync<ACommerce.Kit.Auth.User>(userId);
+        if (user is null) return $"/{slug}";
+
+        // دَور واحِد فَقَط — اِضبِطه تِلقائيّاً (لا داعي لِلسُؤال).
+        if (tenant.Roles.Count == 1 && string.IsNullOrEmpty(user.ActiveRole))
+        {
+            user.ActiveRole = tenant.Roles[0].Slug;
+            t.Store(user);
+            await t.SaveChangesAsync();
+        }
+
+        if (string.IsNullOrEmpty(user.ActiveRole))
+            return $"/{slug}/me/role";
+
+        var role = tenant.Roles.FirstOrDefault(r => r.Slug == user.ActiveRole);
+        if (role is null) return $"/{slug}/me/role";
+
+        // الـ onboarding مَطلوب لَو دَور لَه حُقول مَطلوبَة لَم تُملَأ بَعد.
+        var roleValues = user.RoleAttributesJson.TryGetValue(role.Slug, out var rv)
+            ? rv : new Dictionary<string, string>();
+        var needsOnboarding = role.Fields
+            .Where(f => f.IsRequired)
+            .Any(f => !roleValues.ContainsKey(f.Code) || string.IsNullOrEmpty(roleValues[f.Code]));
+        if (needsOnboarding) return $"/{slug}/me/role/onboarding";
+
+        return string.IsNullOrEmpty(role.HomeRoute)
+            ? $"/{slug}" : $"/{slug}{role.HomeRoute}";
     }
 
     // قِراءَة قِيمَة Guid مِن Dictionary مَع التَّعامُل مَع JsonElement
