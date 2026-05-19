@@ -474,3 +474,185 @@
 
 /* Hero title (white on brand background) */
 .hero-title { color: #fff; margin: 0 0 8px; font-size: 24px; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   لَوحَة تَحَكُّم — صَفَحات /admin/*
+   ═══════════════════════════════════════════════════════════════════ */
+
+.acm-admin {
+    max-width: 960px; margin: 0 auto;
+    padding: 24px 16px 80px;
+}
+
+.acm-admin .acm-admin-head {
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--ac-border);
+}
+
+.acm-admin .acm-wizard-title {
+    font-size: 22px; font-weight: 700; color: var(--ac-text);
+}
+
+/* Grid لِبِطاقات المَتاجِر في /admin */
+.acm-home-grid {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+/* مُحَرِّرات المَتجَر — أَيقونَة + نَصّ + chevron (TenantEdit) */
+.acm-tenant-managers {
+    display: grid; gap: 10px; margin-top: 16px;
+    grid-template-columns: 1fr;
+}
+@media (min-width: 640px) {
+    .acm-tenant-managers { grid-template-columns: 1fr 1fr; }
+}
+.acm-manager-card {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 18px;
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-lg);
+    text-decoration: none; color: var(--ac-text);
+    transition: transform 120ms, box-shadow 120ms, border-color 120ms;
+}
+.acm-manager-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,.08);
+    border-color: var(--ac-primary);
+}
+.acm-manager-card > div:not([class]) { flex: 1; min-width: 0; }
+.acm-manager-card strong { display: block; font-size: 15px; margin-bottom: 3px; }
+.acm-manager-card span { display: block; color: var(--ac-text-muted); font-size: 12px; line-height: 1.5; }
+.acm-manager-icon {
+    width: 44px; height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--ac-bg-alt);
+    color: var(--ac-primary);
+    border-radius: 12px; flex-shrink: 0;
+}
+
+/* قائِمَة الفِئات (TenantEdit + TenantCategories) */
+.acm-cat-list { display: flex; flex-direction: column; gap: 6px; }
+.acm-cat-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px;
+    background: var(--ac-bg-alt);
+    border-radius: var(--ac-radius-md);
+    border: 1px solid transparent;
+    transition: border-color 120ms;
+}
+.acm-cat-row:hover { border-color: var(--ac-border); }
+
+/* مُنتَقي الـ scope (TenantAttributes) */
+.acm-scope-list { display: flex; flex-direction: column; gap: 6px; }
+.acm-scope-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 14px;
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+    text-decoration: none; color: var(--ac-text);
+    transition: border-color 120ms, background 120ms, transform 120ms;
+}
+.acm-scope-row:hover {
+    border-color: var(--ac-primary);
+    background: var(--ac-bg-alt);
+    transform: translateY(-1px);
+}
+.acm-scope-row.is-active {
+    border-color: var(--ac-primary);
+    background: color-mix(in srgb, var(--ac-primary) 8%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ac-primary) 15%, transparent);
+}
+
+/* شَجَرَة المُدُن (TenantRegions) */
+.acm-region-tree {
+    margin: 0; padding-inline-start: 0; list-style: none;
+}
+.acm-region-tree > li {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--ac-border);
+}
+.acm-region-tree > li:first-child { padding-top: 4px; }
+.acm-region-tree > li:last-child { border-bottom: 0; padding-bottom: 4px; }
+.acm-region-tree > li > strong {
+    font-size: 14px; color: var(--ac-text);
+}
+.acm-region-tree ul {
+    margin: 8px 0 0;
+    padding-inline-start: 24px;
+    list-style: none;
+    display: flex; flex-wrap: wrap; gap: 6px;
+}
+.acm-region-tree ul li {
+    background: var(--ac-bg-alt);
+    color: var(--ac-text-muted);
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+
+/* بِطاقَة عُنوان المَتجَر داخِل TenantEdit (الصَفّ العُلوي) */
+.acm-admin .acm-admin-head .acm-tenant-card-brand {
+    width: 52px; height: 52px; font-size: 22px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   صَفحَة الوَكيل /admin/agent — تَنسيقات في-الـ-razor، لكِنّ
+   التَّعديلات أَدناه تُحَسِّن الانسِجام مَع باقي الإدارَة.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.acm-agent-help {
+    padding: 14px 18px;
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--ac-primary) 6%, transparent),
+        color-mix(in srgb, var(--ac-primary) 3%, transparent));
+    border: 1px solid color-mix(in srgb, var(--ac-primary) 15%, transparent);
+    border-radius: var(--ac-radius-lg);
+    margin-bottom: 20px;
+}
+
+.acm-agent-thread .acm-agent-avatar {
+    background: var(--ac-bg-alt);
+    box-shadow: 0 2px 4px rgba(0,0,0,.06);
+}
+
+.acm-agent-turn.is-user .acm-agent-avatar {
+    background: color-mix(in srgb, var(--ac-primary) 12%, transparent);
+}
+
+.acm-agent-thread .acm-agent-text {
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    border-radius: 14px;
+}
+.acm-agent-turn.is-user .acm-agent-text {
+    background: color-mix(in srgb, var(--ac-primary) 8%, transparent);
+    border-color: color-mix(in srgb, var(--ac-primary) 20%, transparent);
+}
+
+.acm-agent-tool {
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+
+.acm-agent-composer {
+    border-radius: 14px;
+    box-shadow: 0 -4px 16px rgba(0,0,0,.04);
+    border-color: var(--ac-border);
+}
+.acm-agent-composer textarea {
+    border: 1px solid var(--ac-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.acm-agent-empty {
+    background: var(--ac-bg-alt);
+    border: 2px dashed var(--ac-border);
+    border-radius: var(--ac-radius-lg);
+}

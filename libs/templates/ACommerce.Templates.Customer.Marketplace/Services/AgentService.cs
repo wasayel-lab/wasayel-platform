@@ -165,17 +165,37 @@ public sealed class AgentService
         var sb = new StringBuilder();
         foreach (var t in tenants)
         {
-            sb.Append("- ").Append(t.Slug).Append(" «").Append(t.Name).Append("» ")
-              .Append("channel=").Append(t.AuthChannel)
-              .Append(", color=").Append(t.BrandColor)
+            sb.Append("• ").Append(t.Slug).Append(" «").Append(t.Name).Append("»")
+              .Append(" — color=").Append(t.BrandColor)
+              .Append(", channel=").Append(t.AuthChannel)
               .Append(", city=").Append(t.City)
-              .Append(", categories=[");
-            sb.Append(string.Join(", ",
-                t.Categories.OrderBy(c => c.SortOrder)
-                    .Select(c => $"{c.Slug}({c.Kind})")));
-            sb.AppendLine("]");
+              .AppendLine();
+            foreach (var c in t.Categories.OrderBy(c => c.SortOrder))
+            {
+                var sid = DeriveListingScope(t.Slug, c.Slug);
+                sb.Append("    ↳ ").Append(c.Slug)
+                  .Append(" «").Append(c.Label).Append("»")
+                  .Append(c.Kind.Length > 0 ? $" kind={c.Kind}" : "")
+                  .Append("  scope_id=").Append(sid.ToString())
+                  .AppendLine();
+            }
+            sb.Append("    ↳ (بروفايل) scope_id=00000000-0000-0000-0000-000000000F01")
+              .AppendLine();
         }
         return sb.ToString();
+    }
+
+    // نَفس مَنطِق التَوليد المُستَخدَم في صَفحَة /admin/tenants/{slug}/attributes
+    // (DeriveListingScope) — يَجعَل scope_id الَّذي يَحسُبه الوَكيل مُطابِقاً
+    // لِما يَراه المُشرِف في الـ UI.
+    private static Guid DeriveListingScope(string tenantSlug, string categorySlug)
+    {
+        var raw = tenantSlug == "ashare"
+            ? "ashare-listing:" + categorySlug.ToLowerInvariant()
+            : (tenantSlug == "ejar" ? "ejar-listing:" : tenantSlug + ":listing:")
+              + categorySlug.ToLowerInvariant();
+        var hash = System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(raw));
+        return new Guid(hash);
     }
 
     private static string BuildSystemPrompt(string snapshot) => $$"""
@@ -196,11 +216,10 @@ public sealed class AgentService
    - channel الدُخول: "phone" (هاتِف+OTP) أَو "nafath" (نَفاذ سُعودي).
    - اللَون hex (مَثَلاً #1d4ed8).
    - الـ slug (حُروف صَغيرَة وأَرقام و - و _).
-5. الـ scope_id في set_attributes:
-   - Guid فِئَة مَوجودَة لِخَصائِص إعلاناتها، أَو
-   - "00000000-0000-0000-0000-000000000F01" sentinel لِخَصائِص البروفايل.
-   عِند الشَكّ اِطلُب مِنَ المُشرِف فَتح صَفحَة /admin/tenants/{slug}/attributes
-   وإرسال الـ scope_id.
+5. الـ scope_id في set_attributes مَحسوب لَكَ مُسبَقاً في قائِمَة المُستَأجِرين
+   أَدناه (تَحت كُلّ فِئَة + sentinel البروفايل لِكُلّ مَتجَر). استَخدِمه
+   مُباشَرَة بِدون سُؤال المُشرِف. الـ sentinel الثابِت لِلبروفايل دائِماً:
+   00000000-0000-0000-0000-000000000F01.
 6. الفِئات تُجَمَّع بِـ "kind": residential, commercial, events, vehicles,
    roommate، أَو فارِغ.
 7. لُغَتُكَ الافتراضيَّة العَرَبيَّة الفُصحى مَع تَشكيل خَفيف.
