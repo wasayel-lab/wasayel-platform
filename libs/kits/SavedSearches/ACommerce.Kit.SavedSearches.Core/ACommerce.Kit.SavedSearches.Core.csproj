@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\Listings\ACommerce.Kit.Listings.Core\ACommerce.Kit.Listings.Core.csproj" />
+  </ItemGroup>
+</Project>

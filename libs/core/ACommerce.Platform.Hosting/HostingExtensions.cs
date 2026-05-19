@@ -90,6 +90,7 @@ public static class HostingExtensions
                 opts.Projections.Snapshot<ACommerce.Kit.Support.Ticket>(SnapshotLifecycle.Inline);
                 opts.Projections.Snapshot<ACommerce.Kit.Offers.Offer>(SnapshotLifecycle.Inline);
                 opts.Schema.For<ACommerce.Kit.Offers.ListingMatch>().Identity(x => x.Id);
+                opts.Schema.For<ACommerce.Kit.SavedSearches.SavedSearch>().Identity(x => x.Id);
 
                 // ImportedRecord: مُستَنَد عامّ يَكتُبه الـ Importer لِكُلّ
                 // صَفّ مِن جَدول مَصدَر لا يَملِك typed map. الـ Id سَلسَلَة

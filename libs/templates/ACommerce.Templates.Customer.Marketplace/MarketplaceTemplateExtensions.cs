@@ -315,8 +315,110 @@ public static class MarketplaceTemplateExtensions
                 dynAttrs,
                 DateTime.UtcNow);
             s.Events.StartStream<Listing>(id, ev);
+
+            // مُطابَقَة البَحوث المَحفوظَة — لِكُلّ SavedSearch مَفعَّل
+            // يَنطَبِق عَلى هذا الإعلان، أَنشِئ Notification لِصاحِبه.
+            // المُطابَقَة في الذاكِرَة (مِئات الـ searches لِلتَّينَنت كَحَدّ
+            // أَعلى مَعقول).
+            var newListing = new Listing
+            {
+                Id = id, TenantSlug = slug, Title = title, Description = description,
+                Price = price, CategorySlug = category, City = city, District = district,
+                Attributes = new(dynAttrs), CreatedAt = ev.At
+            };
+            var savedSearches = await s.Query<ACommerce.Kit.SavedSearches.SavedSearch>()
+                .Where(ss => ss.IsEnabled).ToListAsync();
+            foreach (var ss in savedSearches)
+            {
+                if (!ss.Matches(newListing)) continue;
+                s.Store(new ACommerce.Kit.Notifications.Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = ss.UserId,
+                    Type = "saved_search_match",
+                    Title = $"إعلان جَديد يُطابِق «{ss.Label}»",
+                    Body = title,
+                    RelatedUrl = $"/{slug}/listings/{id}",
+                    At = DateTime.UtcNow
+                });
+            }
+
             await s.SaveChangesAsync();
             return Results.Redirect($"/{slug}/listings/{id}");
+        }).DisableAntiforgery();
+
+        // ─── Saved Searches — create/delete/toggle ──────────────────────
+        app.MapPost("/{slug}/searches/save",
+            async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var parsed = AuthHandlers.ParseToken(token);
+            if (parsed is null) return Results.Redirect($"/{slug}/login");
+            var (userId, _, _) = parsed.Value;
+
+            var label = req.Form["label"].ToString().Trim();
+            if (string.IsNullOrEmpty(label)) label = "بَحث جَديد";
+
+            var ss = new ACommerce.Kit.SavedSearches.SavedSearch
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Label = label,
+                CategorySlug = NullIfEmpty(req.Form["category"].ToString()),
+                City         = NullIfEmpty(req.Form["city"].ToString()),
+                District     = NullIfEmpty(req.Form["district"].ToString())
+            };
+            if (decimal.TryParse(req.Form["min"].ToString(), out var min) && min > 0) ss.MinPrice = min;
+            if (decimal.TryParse(req.Form["max"].ToString(), out var max) && max > 0) ss.MaxPrice = max;
+
+            foreach (var (key, vals) in req.Form)
+            {
+                if (!key.StartsWith("attr_", StringComparison.Ordinal)) continue;
+                var v = vals.ToString();
+                if (!string.IsNullOrEmpty(v)) ss.Criteria[key["attr_".Length..]] = v;
+            }
+
+            await using var s = store.LightweightSession(slug);
+            s.Store(ss);
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/{slug}/me/searches?saved=1");
+
+            static string? NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+        }).DisableAntiforgery();
+
+        app.MapPost("/{slug}/searches/{id:guid}/delete",
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+        {
+            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var parsed = AuthHandlers.ParseToken(token);
+            if (parsed is null) return Results.Redirect($"/{slug}/login");
+            var (userId, _, _) = parsed.Value;
+
+            await using var s = store.LightweightSession(slug);
+            var ss = await s.LoadAsync<ACommerce.Kit.SavedSearches.SavedSearch>(id);
+            if (ss is null || ss.UserId != userId)
+                return Results.Redirect($"/{slug}/me/searches");
+            s.Delete(ss);
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/{slug}/me/searches");
+        }).DisableAntiforgery();
+
+        app.MapPost("/{slug}/searches/{id:guid}/toggle",
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+        {
+            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var parsed = AuthHandlers.ParseToken(token);
+            if (parsed is null) return Results.Redirect($"/{slug}/login");
+            var (userId, _, _) = parsed.Value;
+
+            await using var s = store.LightweightSession(slug);
+            var ss = await s.LoadAsync<ACommerce.Kit.SavedSearches.SavedSearch>(id);
+            if (ss is null || ss.UserId != userId)
+                return Results.Redirect($"/{slug}/me/searches");
+            ss.IsEnabled = !ss.IsEnabled;
+            s.Store(ss);
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/{slug}/me/searches");
         }).DisableAntiforgery();
 
         // ─── Submit offer on a listing ──────────────────────────────────

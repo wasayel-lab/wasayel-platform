@@ -1,0 +1,133 @@
+@page "/{slug}/me/searches"
+@inject IDocumentStore Store
+@inject AuthSession Auth
+
+@*
+    إدارَة البَحوث المَحفوظَة لِلمُستَخدِم — السائِق (إنجيز) يَستَخدِمها
+    لِيَصِله إشعار عَلى مَشاوير في مَدينَة/سِعر مُحَدَّدَين، الباحِث عَن
+    سَكَن (عَشير) لِيُنبَّه عَلى إعلانات سَكَن جَديدَة بِخَصائِص مُعَيَّنَة.
+*@
+
+<div class="acs-page">
+    <h1 class="acm-wizard-title">بَحوثي المَحفوظَة</h1>
+
+    @if (Saved == "1") { <AcAlert Variant="success" Message="تَمّ حِفظ البَحث." /> }
+
+    @if (!Auth.IsAuthenticated)
+    {
+        <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
+                      ActionLabel="تَسجيل دُخول"
+                      ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/me/searches")" />
+    }
+    else if (searches is null)
+    {
+        <AcLoadingState />
+    }
+    else
+    {
+        <AcCard>
+            <ChildContent>
+                <h3 style="margin-top:0;">حَفظ بَحث جَديد</h3>
+                <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
+                    اِملأ الحُقول الَّتي تَهمُّك (اِترُك الباقي فارِغاً)، وَسَتَصِل
+                    إشعارات عِندَ نَشر إعلانات تُطابِقها.
+                </p>
+                <form method="post" action="@($"/{Slug}/searches/save")">
+                    <AcField Label="عُنوان البَحث" Required="true">
+                        <input type="text" name="label" required maxlength="80"
+                               class="ac-input" placeholder="مَشاوير حَدّة" />
+                    </AcField>
+                    @if (tenant is not null && tenant.Categories.Count > 0)
+                    {
+                        <AcField Label="الفِئَة">
+                            <select name="category" class="ac-input">
+                                <option value="">— كُلّ الفِئات —</option>
+                                @foreach (var c in tenant.Categories.OrderBy(c => c.SortOrder))
+                                {
+                                    <option value="@c.Slug">@c.Icon @c.Label</option>
+                                }
+                            </select>
+                        </AcField>
+                    }
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        <AcField Label="المَدينَة">
+                            <input type="text" name="city" maxlength="40" class="ac-input" />
+                        </AcField>
+                        <AcField Label="الحَيّ">
+                            <input type="text" name="district" maxlength="60" class="ac-input" />
+                        </AcField>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        <AcField Label="الحَدّ الأَدنَى لِلسِعر">
+                            <input type="number" name="min" min="0" class="ac-input" />
+                        </AcField>
+                        <AcField Label="الحَدّ الأَقصَى لِلسِعر">
+                            <input type="number" name="max" min="0" class="ac-input" />
+                        </AcField>
+                    </div>
+                    <button type="submit" class="ac-btn ac-btn-primary ac-btn-block" style="margin-top:8px;">
+                        <AcIcon Name="check" Size="16" /> حِفظ
+                    </button>
+                </form>
+            </ChildContent>
+        </AcCard>
+
+        @if (searches.Count == 0)
+        {
+            <p style="color:var(--ac-text-muted);text-align:center;padding:24px;">
+                لا بَحوث مَحفوظَة بَعد.
+            </p>
+        }
+        else
+        {
+            <div class="ac-offer-list" style="margin-top:16px;">
+                @foreach (var ss in searches)
+                {
+                    <div class="ac-offer">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <div>
+                                <strong>@ss.Label</strong>
+                                @if (!ss.IsEnabled)
+                                {
+                                    <span class="ac-chip ac-chip-sm" style="opacity:.6;margin-inline-start:6px;">مُعَطَّل</span>
+                                }
+                            </div>
+                            <div style="display:flex;gap:6px;">
+                                <form method="post" action="@($"/{Slug}/searches/{ss.Id}/toggle")" style="margin:0;">
+                                    <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">
+                                        @(ss.IsEnabled ? "إيقاف" : "تَفعيل")
+                                    </button>
+                                </form>
+                                <form method="post" action="@($"/{Slug}/searches/{ss.Id}/delete")" style="margin:0;">
+                                    <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">
+                                        <AcIcon Name="x" Size="14" />
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        <p style="margin:6px 0 0;font-size:13px;color:var(--ac-text-muted);">@ss.Summary()</p>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+    Tenant? tenant;
+    List<ACommerce.Kit.SavedSearches.SavedSearch>? searches;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await using var g = Store.QuerySession();
+        tenant = await g.LoadAsync<Tenant>(Slug);
+        await using var s = Store.QuerySession(Slug);
+        searches = (await s.Query<ACommerce.Kit.SavedSearches.SavedSearch>()
+            .Where(ss => ss.UserId == Auth.UserId!.Value)
+            .ToListAsync())
+            .OrderByDescending(ss => ss.CreatedAt).ToList();
+    }
+}
