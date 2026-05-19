@@ -1,0 +1,86 @@
+@page "/{slug}/me/listings"
+@inject IDocumentStore Store
+@inject AuthSession Auth
+
+@*
+    "إعلاناتي" — تَجَمُّع الإعلانات الَّتي أَنشَأها المُستَخدِم الحاليّ.
+    الفَلتَرَة بِالخاصِّيَّة "owner_id" المَحفوظَة عِندَ إنشاء الإعلان.
+    HomeRoute لِأَدوار التاجِر/مالِك السَكَن.
+*@
+
+<div class="acs-page">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h1 class="acm-wizard-title" style="margin:0;">إعلاناتي</h1>
+        @if (Auth.IsAuthenticated)
+        {
+            <a class="ac-btn ac-btn-primary ac-btn-sm" href="@($"/{Slug}/create-listing")">
+                <AcIcon Name="plus" Size="14" /> إعلان جَديد
+            </a>
+        }
+    </div>
+
+    @if (!Auth.IsAuthenticated)
+    {
+        <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
+                      ActionLabel="تَسجيل دُخول"
+                      ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/me/listings")" />
+    }
+    else if (myListings is null)
+    {
+        <AcLoadingState />
+    }
+    else if (myListings.Count == 0)
+    {
+        <AcEmptyState IconName="package" Title="لا إعلانات بَعد"
+                      Message="أَنشِئ أَوَّل إعلان لِتَبدَأ."
+                      ActionLabel="إعلان جَديد"
+                      ActionHref="@($"/{Slug}/create-listing")" />
+    }
+    else
+    {
+        <div class="acm-explore-grid">
+            @foreach (var l in myListings)
+            {
+                <a class="ac-space ac-space-link" href="@($"/{Slug}/listings/{l.Id}")"
+                   style="text-decoration:none;color:inherit;display:block;
+                          background:var(--ac-surface);border:1px solid var(--ac-border);
+                          border-radius:var(--ac-radius-lg);padding:14px;">
+                    <strong style="font-size:15px;display:block;margin-bottom:4px;">@l.Title</strong>
+                    <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
+                        @l.CategorySlug · @l.City — @l.District
+                    </span>
+                    <div style="display:flex;justify-content:space-between;
+                                align-items:center;margin-top:8px;">
+                        <span class="acm-details-price">@l.Price.ToString("N0") ريال</span>
+                        <span style="color:var(--ac-text-muted);font-size:11px;">
+                            <AcIcon Name="search" Size="12" /> @l.ViewCount
+                        </span>
+                    </div>
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    List<Listing>? myListings;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await using var s = Store.QuerySession(Slug);
+        var meId = Auth.UserId!.Value.ToString();
+        // Marten لا يَدعَم فَلتَرَة Attributes في LINQ مُباشَرَةً — نَجلِب
+        // كُلّ إعلانات المُستَأجِر ثُمّ نُفَلتِر في الذاكِرَة. لِـ tenant
+        // صَغير/مُتَوَسِّط هذا مَقبول؛ لَو نَمَى يُمكِن إضافَة computed
+        // index على owner_id لاحِقاً.
+        var all = await s.Query<Listing>()
+            .Where(l => !l.IsDeleted)
+            .ToListAsync();
+        myListings = all
+            .Where(l => l.Attributes.TryGetValue("owner_id", out var oid) && oid == meId)
+            .OrderByDescending(l => l.CreatedAt)
+            .ToList();
+    }
+}

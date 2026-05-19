@@ -405,6 +405,9 @@ public static class MarketplaceTemplateExtensions
                 .ToDictionary(
                     kv => kv.Key["attr_".Length..],
                     kv => kv.Value.ToString());
+            // اِحفَظ مالِك الإعلان كَخاصِّيَّة لِأَنّ Listing event مازال
+            // بِلا OwnerId مُهَيكَل. صَفحَة /me/listings تَستَعمِلها لِلفَلتَرَة.
+            dynAttrs["owner_id"] = userId.ToString();
 
             await using var s = store.LightweightSession(slug);
             var id = Guid.NewGuid();
