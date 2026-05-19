@@ -1,0 +1,47 @@
+@*
+    حَقل اختِيار مَوقِع — يَنتُج hidden inputs بِأَسماء {Name}_lat و
+    {Name}_lng تُرسَل مَع الـ form. زِرّ "حَدِّد مَوقِعي" يَستَخدِم
+    navigator.geolocation (JS بَسيط بِلا أَيّ مَكتَبَة). إن أَدخَلَ
+    المُستَخدِم لاحِقاً، تَظهَر مُعايَنَة الخَريطَة تَحت الحُقول.
+
+    اِستِخدام تَحت form SSR:
+        <AcLocationInput Name="pickup" Label="مَكان الانطِلاق"
+                         InitialLat="@old.Lat" InitialLng="@old.Lng" />
+    الـ POST يَستَلِم pickup_lat و pickup_lng كَ سَلاسِل أَرقام.
+*@
+
+<div class="ac-loc">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <label class="ac-loc-label">@Label @(Required ? "*" : "")</label>
+    }
+    <div class="ac-loc-row">
+        <input type="number" step="any" required="@Required"
+               name="@($"{Name}_lat")" id="@($"{Name}_lat")"
+               class="ac-input ac-loc-input"
+               placeholder="lat" value="@(InitialLat?.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture) ?? "")" />
+        <input type="number" step="any" required="@Required"
+               name="@($"{Name}_lng")" id="@($"{Name}_lng")"
+               class="ac-input ac-loc-input"
+               placeholder="lng" value="@(InitialLng?.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture) ?? "")" />
+        <button type="button" class="ac-btn ac-btn-ghost ac-btn-sm"
+                onclick="@($"acLocFill('{Name}')")">
+            📍 مَوقِعي
+        </button>
+    </div>
+    @if (InitialLat.HasValue && InitialLng.HasValue &&
+         (InitialLat.Value != 0 || InitialLng.Value != 0))
+    {
+        <div style="margin-top:8px;">
+            <AcMapPin Lat="@InitialLat.Value" Lng="@InitialLng.Value" Height="160" />
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Name { get; set; } = "loc";
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public double? InitialLat { get; set; }
+    [Parameter] public double? InitialLng { get; set; }
+}

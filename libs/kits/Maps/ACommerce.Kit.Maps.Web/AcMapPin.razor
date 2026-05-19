@@ -1,0 +1,41 @@
+@*
+    عَرض مَوقِع واحِد كَ خَريطَة صَغيرَة عَبر iframe مِن openstreetmap.org.
+    SSR-safe: لا JS، لا interop. مَجّاني، بِلا API key.
+
+    اِستِخدام:
+        <AcMapPin Lat="15.3694" Lng="44.1910" Height="180" />
+        <AcMapPin Location="@listing.PickupLocation" />
+*@
+
+@if (HasLocation)
+{
+    <div class="ac-map-pin" style="@($"height:{Height}px;border-radius:{Radius}px;overflow:hidden;border:1px solid var(--ac-border);")">
+        <iframe loading="lazy"
+                style="width:100%;height:100%;border:0;"
+                src="@ACommerce.Kit.Maps.OsmLinks.EmbedUrl(EffectiveLat, EffectiveLng, Zoom)"></iframe>
+        @if (ShowOpenLink)
+        {
+            <a class="ac-map-pin-link" target="_blank" rel="noopener"
+               href="@ACommerce.Kit.Maps.OsmLinks.ViewUrl(EffectiveLat, EffectiveLng, Zoom + 2)">
+                فَتح في OpenStreetMap ↗
+            </a>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public double? Lat { get; set; }
+    [Parameter] public double? Lng { get; set; }
+    [Parameter] public ACommerce.Kit.Maps.Location? Location { get; set; }
+    [Parameter] public int Height { get; set; } = 200;
+    [Parameter] public int Zoom { get; set; } = 14;
+    [Parameter] public int Radius { get; set; } = 12;
+    [Parameter] public bool ShowOpenLink { get; set; } = true;
+
+    bool HasLocation =>
+        (Location is not null && !Location.IsEmpty) ||
+        (Lat.HasValue && Lng.HasValue && (Lat.Value != 0 || Lng.Value != 0));
+
+    double EffectiveLat => Location?.Lat ?? Lat ?? 0;
+    double EffectiveLng => Location?.Lng ?? Lng ?? 0;
+}

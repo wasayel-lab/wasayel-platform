@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <StaticWebAssetBasePath>_content/ACommerce.Kit.Maps.Web</StaticWebAssetBasePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+    <ProjectReference Include="..\ACommerce.Kit.Maps.Core\ACommerce.Kit.Maps.Core.csproj" />
+  </ItemGroup>
+</Project>
