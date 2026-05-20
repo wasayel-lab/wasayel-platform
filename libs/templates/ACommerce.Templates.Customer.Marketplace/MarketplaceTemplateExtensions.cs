@@ -589,16 +589,23 @@ public static class MarketplaceTemplateExtensions
             var token = req.Cookies[AuthSession.CookieName(slug)];
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect($"/{slug}/login");
-            // مالِك الإعلان فَقَط — لا نَملِك OwnerId عَلى Listing بَعد،
-            // نَكتَفي بِالتَّحَقُّق مِن الـ tenant ونَترُك صاحِب الإعلان
-            // الواحِد دون قُيود أُخرى (يُمكِن تَشديدُه لاحِقاً).
-            var (_, tenantSlug, _) = parsed.Value;
+            var (acceptorId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect($"/{slug}/login");
 
             await using var s = store.LightweightSession(slug);
             var offer = await s.Events.AggregateStreamAsync<ACommerce.Kit.Offers.Offer>(id);
             if (offer is null || offer.Status != ACommerce.Kit.Offers.OfferStatus.Pending)
                 return Results.Redirect($"/{slug}/listings/{(offer?.ListingId ?? Guid.Empty)}");
+
+            // مالِك الإعلان فَقَط يَقبَل العَرض — التَّحَقُّق عَبر خاصِّيَّة
+            // owner_id المَحفوظَة عِندَ الإنشاء. الـ UI أَيضاً يُخفي زِرّ
+            // القَبول عَن غَير المالِك لكِنّ التَّحَقُّق هُنا هو الحاجِز
+            // الفِعليّ.
+            var listing = await s.Events.AggregateStreamAsync<Listing>(offer.ListingId);
+            if (listing is null) return Results.Redirect($"/{slug}");
+            if (!listing.Attributes.TryGetValue("owner_id", out var ownerStr) ||
+                ownerStr != acceptorId.ToString())
+                return Results.Redirect($"/{slug}/listings/{offer.ListingId}?err=not_owner");
 
             var now = DateTime.UtcNow;
             s.Events.Append(id, new ACommerce.Kit.Offers.OfferAccepted(id, now));
@@ -627,7 +634,6 @@ public static class MarketplaceTemplateExtensions
 
             // افتَح مُحادَثَة مُؤَقَّتَة لِلتَنسيق — تَنتَهي بَعد 24 ساعَة.
             // الـ Owner هُنا = المُتَّصِل (مالِك الإعلان)، Partner = مُقَدِّم العَرض.
-            var (acceptorId, _, _) = parsed.Value;
             var acceptorName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "أنا";
             var conv = new Conversation
             {
@@ -648,24 +654,46 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Reject / Withdraw offer ────────────────────────────────────
         app.MapPost("/{slug}/offers/{id:guid}/reject",
-            async (string slug, Guid id, IDocumentStore store) =>
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
         {
+            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var parsed = AuthHandlers.ParseToken(token);
+            if (parsed is null) return Results.Redirect($"/{slug}/login");
+            var (rejectorId, _, _) = parsed.Value;
+
             await using var s = store.LightweightSession(slug);
             var offer = await s.Events.AggregateStreamAsync<ACommerce.Kit.Offers.Offer>(id);
             if (offer is null || offer.Status != ACommerce.Kit.Offers.OfferStatus.Pending)
                 return Results.Redirect($"/{slug}");
+
+            // فَقَط مالِك الإعلان يَستَطيع رَفض عَرض (مَن أَرادَ سَحب
+            // عَرضِه يَستَخدِم /withdraw).
+            var listing = await s.Events.AggregateStreamAsync<Listing>(offer.ListingId);
+            if (listing is null ||
+                !listing.Attributes.TryGetValue("owner_id", out var ownerStr) ||
+                ownerStr != rejectorId.ToString())
+                return Results.Redirect($"/{slug}/listings/{offer.ListingId}?err=not_owner");
+
             s.Events.Append(id, new ACommerce.Kit.Offers.OfferRejected(id, DateTime.UtcNow));
             await s.SaveChangesAsync();
             return Results.Redirect($"/{slug}/listings/{offer.ListingId}");
         }).DisableAntiforgery();
 
         app.MapPost("/{slug}/offers/{id:guid}/withdraw",
-            async (string slug, Guid id, IDocumentStore store) =>
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
         {
+            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var parsed = AuthHandlers.ParseToken(token);
+            if (parsed is null) return Results.Redirect($"/{slug}/login");
+            var (offererId, _, _) = parsed.Value;
+
             await using var s = store.LightweightSession(slug);
             var offer = await s.Events.AggregateStreamAsync<ACommerce.Kit.Offers.Offer>(id);
             if (offer is null || offer.Status != ACommerce.Kit.Offers.OfferStatus.Pending)
                 return Results.Redirect($"/{slug}");
+            // فَقَط مُقَدِّم العَرض يَسحَب عَرضَه.
+            if (offer.OffererId != offererId)
+                return Results.Redirect($"/{slug}/me/offers");
             s.Events.Append(id, new ACommerce.Kit.Offers.OfferWithdrawn(id, DateTime.UtcNow));
             await s.SaveChangesAsync();
             return Results.Redirect($"/{slug}/me/offers");
