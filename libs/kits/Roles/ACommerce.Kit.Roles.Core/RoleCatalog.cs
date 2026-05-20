@@ -24,13 +24,21 @@ public static class RoleCatalog
             Slug:        "customer",
             Label:       "عَميل",
             Icon:        "🛒",
-            Description: "يَتَصَفَّح، يَطلُب، وَيَنشُر طَلَبات (مَثَلاً مِشوار في إنجيز).",
+            Description: "مُشتَري عامّ — يَتَصَفَّح ويَتَواصَل ويَشتَري. لا يَنشُر إعلانات.",
             HomeRoute:   "",
-            // listing.create مَمنوحَة لِأَنّ نَموذَج "العَميل يَنشُر طَلَب،
-            // المُزَوِّدون يُقَدِّمون عُروض" شائِع (إنجيز، طَلَب خِدمَة، …).
-            // المَتاجِر الَّتي لا تَحتاج هذه القُدرَة لا تَعرِض زِرّ "إعلان
-            // جَديد" لِلعُمَلاء — الـ UI يَتَحَكَّم بِالظُّهور.
-            Permissions: new[] { "listing.browse", "listing.create", "offer.submit", "chat.start" },
+            // العَميل التَّقليديّ: يَتَصَفَّح فَقَط. الأَدوار الَّتي يَنشُر فيها
+            // المُستَخدِم طَلَبات/إعلانات هي rider / vendor / host (لِكُلٍّ
+            // قالِب مُختَلِف).
+            Permissions: new[] { "listing.browse", "offer.submit", "chat.start" },
+            Fields:      new RoleField[] { }),
+
+        new RoleTemplate(
+            Slug:        "rider",
+            Label:       "راكِب",
+            Icon:        "🧍",
+            Description: "يَنشُر طَلَب مِشوار + يَختار مِن عُروض السائِقين (نَموذَج إنجيز).",
+            HomeRoute:   "/me/listings",
+            Permissions: new[] { "listing.browse", "listing.create", "chat.start" },
             Fields:      new RoleField[] { }),
 
         new RoleTemplate(

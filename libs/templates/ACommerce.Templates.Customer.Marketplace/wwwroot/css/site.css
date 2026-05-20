@@ -527,13 +527,17 @@
 .acm-manager-card span { display: block; color: var(--ac-text-muted); font-size: 12px; line-height: 1.5; }
 .acm-manager-icon {
     width: 44px; height: 44px;
-    display: inline-flex; align-items: center; justify-content: center;
+    display: grid;
+    place-items: center;
     background: var(--ac-bg-alt);
     color: var(--ac-primary);
     border-radius: 12px; flex-shrink: 0;
-    line-height: 0;            /* مَنع الخَطّ الأَساسي مِن إزاحَة الـ SVG */
+    overflow: hidden;
 }
-.acm-manager-icon > svg { display: block; }
+.acm-manager-icon > svg {
+    display: block;
+    width: 24px; height: 24px;
+}
 
 /* قائِمَة الفِئات (TenantEdit + TenantCategories) */
 .acm-cat-list { display: flex; flex-direction: column; gap: 6px; }
@@ -657,6 +661,31 @@
     background: var(--ac-bg-alt);
     border: 2px dashed var(--ac-border);
     border-radius: var(--ac-radius-lg);
+}
+
+/* ═══ Role Home Hero — قالِب رَأس مُخَصَّص لِكُلّ دَور ════════════════ */
+.acm-role-hero {
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--ac-primary) 14%, transparent),
+        color-mix(in srgb, var(--ac-primary) 4%, transparent));
+    border: 1px solid color-mix(in srgb, var(--ac-primary) 25%, transparent);
+    border-radius: var(--ac-radius-lg);
+    padding: 20px;
+    margin-bottom: 16px;
+}
+.acm-role-hero-head {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 14px;
+}
+.acm-role-hero-icon {
+    font-size: 32px; line-height: 1;
+    width: 56px; height: 56px;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,.55);
+    border-radius: 14px;
+}
+.acm-role-hero-actions {
+    display: flex; flex-direction: column; gap: 8px;
 }
 
 /* ═══ Offers (InDrive-style negotiation) ═══════════════════════════ */

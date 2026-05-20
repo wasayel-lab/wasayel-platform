@@ -1,0 +1,120 @@
+@*
+    يَختار قالِب الصَفحَة الرَّئيسِيَّة بِناءً عَلى الدَور النَّشِط لِلمُستَخدِم.
+    كُلّ قالِب يَعرِض welcome مُخَتَلِف + إجراءات سَريعَة مُلائِمَة، ثُمّ
+    يَتبَعه المُحتَوى المُشتَرَك (الفِئات + المُمَيَّز + …) كَ ChildContent.
+
+    لِلتَّأكيد: المَتاجِر بِلا أَدوار (Roles فارِغَة) لا تَرى هذا القالِب
+    — تَنتَقِل مُباشَرَة إلى الـ ChildContent (سُلوك عَشير/إيجار القَديم).
+*@
+
+@if (Role is null)
+{
+    @ChildContent
+}
+else
+{
+    <section class="acm-role-hero acm-role-hero-@(Role.Slug)">
+        <div class="acm-role-hero-head">
+            <span class="acm-role-hero-icon">@(Role.Icon ?? "👤")</span>
+            <div>
+                <h2 style="margin:0;font-size:18px;">@Greeting</h2>
+                <span style="color:var(--ac-text-muted);font-size:13px;">@Subtitle</span>
+            </div>
+        </div>
+
+        <div class="acm-role-hero-actions">
+            @switch (Role.CatalogSlug)
+            {
+                case "rider":
+                    <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
+                       href="@($"/{Slug}/create-listing")">
+                        <AcIcon Name="plus" Size="18" /> نَشر طَلَب مِشوار
+                    </a>
+                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/me/listings")">
+                        <AcIcon Name="package" Size="16" /> طَلَباتي الحالِيَّة
+                    </a>
+                    break;
+
+                case "driver":
+                    <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
+                       href="@($"/{Slug}/explore")">
+                        <AcIcon Name="search" Size="18" /> مَشاوير مُتاحَة
+                    </a>
+                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/me/offers")">
+                        <AcIcon Name="package" Size="16" /> عُروضي
+                    </a>
+                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/me/searches")">
+                        <AcIcon Name="bell" Size="16" /> بَحوث الإشعار
+                    </a>
+                    break;
+
+                case "vendor":
+                case "host":
+                    <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
+                       href="@($"/{Slug}/create-listing")">
+                        <AcIcon Name="plus" Size="18" /> إعلان جَديد
+                    </a>
+                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/me/listings")">
+                        <AcIcon Name="package" Size="16" /> إعلاناتي
+                    </a>
+                    break;
+
+                case "shipper":
+                    <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
+                       href="@($"/{Slug}/explore")">
+                        <AcIcon Name="search" Size="18" /> شَحَنات مُتاحَة
+                    </a>
+                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/me/offers")">
+                        <AcIcon Name="package" Size="16" /> عُروضي
+                    </a>
+                    break;
+
+                case "tenant_admin":
+                    <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
+                       href="@($"/{Slug}/manage")">
+                        <AcIcon Name="settings" Size="18" /> لَوحَة الإدارَة
+                    </a>
+                    break;
+
+                case "customer":
+                default:
+                    <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
+                       href="@($"/{Slug}/explore")">
+                        <AcIcon Name="search" Size="18" /> اِستِكشاف
+                    </a>
+                    break;
+            }
+        </div>
+    </section>
+
+    @ChildContent
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public ACommerce.Kit.Roles.Role? Role { get; set; }
+    [Parameter] public string? UserName { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    string Greeting => Role?.CatalogSlug switch
+    {
+        "rider"        => string.IsNullOrEmpty(UserName) ? "أَهلاً" : $"أَهلاً {UserName}، إلى أَين؟",
+        "driver"       => string.IsNullOrEmpty(UserName) ? "أَهلاً سائِق" : $"أَهلاً {UserName}",
+        "vendor"       => "لَوحَة التاجِر",
+        "host"         => "لَوحَة المُؤَجِّر",
+        "shipper"      => "لَوحَة الشَحن",
+        "tenant_admin" => "لَوحَة الإداريّ",
+        _              => string.IsNullOrEmpty(UserName) ? "مَرحَباً" : $"مَرحَباً {UserName}"
+    };
+
+    string Subtitle => Role?.CatalogSlug switch
+    {
+        "rider"        => "اُكتُب وِجهَتك وَ سَيَصِلكَ سائِقون قَريبون.",
+        "driver"       => "تَصَفَّح طَلَبات الراكِبين القَريبَة وَ قَدِّم عَرضَك.",
+        "vendor"       => "أَدِر إعلاناتك وَ رُدّ عَلى الاستِفسارات.",
+        "host"         => "أَدِر إعلانات سَكَنك وَ رُدّ عَلى المُهتَمّين.",
+        "shipper"      => "خُذ شَحَنات تُناسِب أُسطولك.",
+        "tenant_admin" => "إدارَة المُحتَوى وَ مُستَخدِمي المَتجَر.",
+        _              => "اِستَكشِف العُروض المُتاحَة."
+    };
+}

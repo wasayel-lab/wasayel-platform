@@ -16,6 +16,14 @@
     }
     else
     {
+        @* قالِب رَأس مُلائِم لِلدَور النَّشِط — إجراءات + welcome مُخَصَّص.
+           يُتَجاوَز في حالَة المَتاجِر بِلا أَدوار (legacy mode) — يَسقُط
+           إلى الـ AcHeroBanner المَعروف. *@
+        @if (activeRole is not null && activeRole.CatalogSlug != "customer")
+        {
+            <RoleHomeHero Slug="@Slug" Role="activeRole" UserName="@Auth.UserName" />
+        }
+
         <AcHeroBanner Title="@($"ابحَث في {loaded.Name}")"
                       Subtitle="@loaded.TagLine">
             <LogoContent>
@@ -73,13 +81,18 @@
                            ActiveKind="@Kind" />
         }
 
-        @* CTA "أَضِف إعلانك" — وِجهَة ثابِتَة /create-listing لأَيّ زائِر؛
-           الصَفحَة نَفسها تَتَوَلّى إعادَة التَوجيه لِلتَّسجيل عِندَ الحاجَة. *@
-        <AcCtaCard Title="عِندَك ما تَعرِضه؟"
-                   Subtitle="أَضِف إعلانك الآن واصِل لِلمُهتَمّين بِسُرعَة"
-                   IconName="house-add"
-                   Variant="surface"
-                   Href="@($"/{Slug}/create-listing")" />
+        @* CTA "أَضِف إعلانك" — يُعرَض فَقَط لِمَن لَدَيه listing.create.
+           لِلمَتاجِر بِلا أَدوار يَظهَر لِلجَميع (سُلوك قَديم). لِلمَتاجِر
+           بِأَدوار، يُحجَب عَن العُمَلاء/السائِقين/الشَحّانين الَّذين لا
+           يَنشُرون إعلانات. *@
+        @if (canCreateListing)
+        {
+            <AcCtaCard Title="عِندَك ما تَعرِضه؟"
+                       Subtitle="أَضِف إعلانك الآن واصِل لِلمُهتَمّين بِسُرعَة"
+                       IconName="house-add"
+                       Variant="surface"
+                       Href="@($"/{Slug}/create-listing")" />
+        }
 
         @if (featured is { Count: > 0 })
         {
@@ -159,6 +172,8 @@
     List<Listing>? featured;
     List<string> cities = new();
     HashSet<Guid> favIds = new();
+    ACommerce.Kit.Roles.Role? activeRole;
+    bool canCreateListing = true;   // افتراضيّاً true لِمَتاجِر بِلا أَدوار
 
     protected override async Task OnParametersSetAsync()
     {
@@ -167,6 +182,22 @@
         if (loaded is null) return;
 
         await using var tq = Store.QuerySession(Slug);
+
+        if (loaded.Roles.Count > 0)
+        {
+            // مَتجَر بِأَدوار — افتَرِض المَنع حَتَّى نَتَحَقَّق مِن صَلاحِيَّة المُستَخدِم.
+            canCreateListing = false;
+            if (Auth.IsAuthenticated && Auth.UserId.HasValue)
+            {
+                var me = await tq.LoadAsync<User>(Auth.UserId.Value);
+                if (me is not null && !string.IsNullOrEmpty(me.ActiveRole))
+                {
+                    activeRole = loaded.Roles.FirstOrDefault(r => r.Slug == me.ActiveRole);
+                    canCreateListing = ACommerce.Kit.Roles.RolePermissions.Has(
+                        loaded.Roles, me.ActiveRole, "listing.create");
+                }
+            }
+        }
 
         var baseQ = tq.Query<Listing>().Where(x => !x.IsDeleted);
         if (!string.IsNullOrEmpty(City))

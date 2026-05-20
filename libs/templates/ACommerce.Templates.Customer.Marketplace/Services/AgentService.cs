@@ -236,10 +236,10 @@ public sealed class AgentService
 6. الفِئات تُجَمَّع بِـ "kind": residential, commercial, events, vehicles,
    roommate، أَو فارِغ.
 7. الأَدوار تُختار مِن كاتالوج ثابِت — set_roles يَقبَل فَقَط slugs:
-   customer (عَميل/مُشتَري عامّ)، vendor (تاجِر يَنشُر إعلانات)،
-   driver (سائِق يُقَدِّم عُروض مَشاوير)، host (مالِك سَكَن يُؤَجِّر)،
-   shipper (شَركَة شَحن)، tenant_admin (إداريّ المَتجَر). كُلّ دَور
-   يَأتي بِصَلاحِيّات + حُقول بَيانات تِلقائيّاً. لا تَختَرِع slug آخَر.
+   customer (مُشتَري عامّ، يَتَصَفَّح فَقَط)، rider (راكِب يَنشُر مَشاوير)،
+   vendor (تاجِر يَنشُر إعلانات)، driver (سائِق يُقَدِّم عُروض)،
+   host (مالِك سَكَن)، shipper (شَركَة شَحن)، tenant_admin (إداريّ المَتجَر).
+   لِتَطبيق نَموذَج إنجيز (راكِب⇄سائِق) اِختَر rider + driver.
 8. لُغَتُكَ الافتراضيَّة العَرَبيَّة الفُصحى مَع تَشكيل خَفيف.
 
 حالَة المُستَأجِرين الحالِيَّة:
@@ -396,10 +396,10 @@ public sealed class AgentService
         "slug": {"type": "string"},
         "roles": {
           "type": "array",
-          "description": "قائِمَة catalog slugs مَختارَة مِن: customer, vendor, driver, host, shipper, tenant_admin",
+          "description": "قائِمَة catalog slugs مَختارَة مِن: customer, rider, vendor, driver, host, shipper, tenant_admin",
           "items": {
             "type": "string",
-            "enum": ["customer", "vendor", "driver", "host", "shipper", "tenant_admin"]
+            "enum": ["customer", "rider", "vendor", "driver", "host", "shipper", "tenant_admin"]
           }
         },
         "default_role": {
