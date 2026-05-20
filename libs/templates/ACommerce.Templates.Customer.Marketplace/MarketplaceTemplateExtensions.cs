@@ -194,6 +194,10 @@ public static class MarketplaceTemplateExtensions
             if (tenant is null) return Results.Redirect("/admin");
             var picked = tenant.Roles.FirstOrDefault(r => r.Slug == role);
             if (picked is null) return Results.Redirect($"/{slug}/me/role?err=invalid_role");
+            // أَدوار إداريَّة لا يُمكِن مَنحُها ذاتيّاً — يُجَهَّز التَّعيين
+            // مِن قِبَل إداريّ آخَر أَو DB seed.
+            if (picked.CatalogSlug == "tenant_admin")
+                return Results.Redirect($"/{slug}/me/role?err=admin_self_grant");
 
             await using var s = store.LightweightSession(slug);
             var user = await s.LoadAsync<User>(userId);
@@ -383,7 +387,7 @@ public static class MarketplaceTemplateExtensions
             if (tenantSlug != slug) return Results.Redirect($"/{slug}/login");
 
             if (!await HasPermissionAsync(slug, userId, "listing.create", store))
-                return Results.Redirect($"/{slug}?err=forbidden");
+                return Results.Redirect($"/{slug}/create-listing?err=forbidden");
 
             var title       = req.Form["title"].ToString().Trim();
             var description = req.Form["description"].ToString().Trim();

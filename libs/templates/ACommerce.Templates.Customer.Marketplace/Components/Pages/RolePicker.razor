@@ -34,27 +34,43 @@ else
         اختَر دَوركَ — يُمكِنُكَ تَبديلُه لاحِقاً مِن المَلَفّ الشَخصيّ.
     </p>
 
-    <form method="post" action="@($"/{Slug}/me/role/save")">
-        <div class="acm-radio-cards" style="grid-template-columns:1fr;">
-            @foreach (var r in tenant.Roles.OrderBy(r => r.SortOrder))
-            {
-                <label class="acm-radio-card" style="padding:16px;">
-                    <input type="radio" name="role" value="@r.Slug"
-                           checked="@(r.IsDefault)" required />
-                    <span class="acm-radio-card-body">
-                        <strong style="font-size:18px;">@(r.Icon ?? "👤") @r.Label</strong>
-                        @if (!string.IsNullOrEmpty(r.Description))
-                        {
-                            <span style="font-size:13px;line-height:1.6;">@r.Description</span>
-                        }
-                    </span>
-                </label>
-            }
-        </div>
-        <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block" style="margin-top:16px;">
-            <AcIcon Name="check" Size="18" /> اختِيار
-        </button>
-    </form>
+    // tenant_admin لا يُمكِن أَن يُسَكِّن نَفسَه — يُمنَح بِفِعل إداريّ
+    // مُنفَصِل (سَنُضيف الواجِهَة لاحِقاً، أَو يَتِم عَبر DB seed). كُلّ
+    // أَدوار العُمَلاء/المُزَوِّدين قابِلَة لِلاختِيار الذاتيّ.
+    var selectable = tenant.Roles
+        .Where(r => !IsAdminRole(r.CatalogSlug))
+        .OrderBy(r => r.SortOrder)
+        .ToList();
+
+    @if (selectable.Count == 0)
+    {
+        <AcAlert Variant="warning"
+                 Message="لا أَدوار مُتاحَة لِلاختِيار الذاتيّ. اِتَّصِل بِإدارَة المَتجَر." />
+    }
+    else
+    {
+        <form method="post" action="@($"/{Slug}/me/role/save")">
+            <div class="acm-radio-cards" style="grid-template-columns:1fr;">
+                @foreach (var r in selectable)
+                {
+                    <label class="acm-radio-card" style="padding:16px;">
+                        <input type="radio" name="role" value="@r.Slug"
+                               checked="@(r.IsDefault)" required />
+                        <span class="acm-radio-card-body">
+                            <strong style="font-size:18px;">@(r.Icon ?? "👤") @r.Label</strong>
+                            @if (!string.IsNullOrEmpty(r.Description))
+                            {
+                                <span style="font-size:13px;line-height:1.6;">@r.Description</span>
+                            }
+                        </span>
+                    </label>
+                }
+            </div>
+            <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block" style="margin-top:16px;">
+                <AcIcon Name="check" Size="18" /> اختِيار
+            </button>
+        </form>
+    }
 }
 </div>
 
@@ -67,4 +83,7 @@ else
         await using var s = Store.QuerySession();
         tenant = await s.LoadAsync<Tenant>(Slug);
     }
+
+    // أَدوار مَحظورَة عَن الاختِيار الذاتيّ — تُمنَح فَقَط بِفِعل إداريّ.
+    static bool IsAdminRole(string catalogSlug) => catalogSlug == "tenant_admin";
 }

@@ -1,0 +1,116 @@
+@page "/{slug}/manage"
+@inject IDocumentStore Store
+@inject AuthSession Auth
+
+@*
+    لَوحَة tenant_admin — صَلاحِيَّة tenant.manage مَطلوبَة. تَعرِض إحصائِيّات
+    سَريعَة + رَوابِط لِلأَدوات الإداريّة عَلى مُستَوى المَتجَر (نَقطَة دُخول
+    مُختَلِفَة عَن /admin الَّذي هو لِإدارَة المنصّة كَكُلّ).
+*@
+
+<div class="acs-page">
+@if (!Auth.IsAuthenticated)
+{
+    <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
+                  ActionLabel="تَسجيل دُخول"
+                  ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/manage")" />
+}
+else if (!canManage)
+{
+    <AcEmptyState IconName="alert-circle"
+                  Title="لا صَلاحِيَّة"
+                  Message="هذه الصَفحَة مَفتوحَة لِإداريّي المَتجَر فَقَط."
+                  ActionLabel="الرُجوع"
+                  ActionHref="@($"/{Slug}")" />
+}
+else if (tenant is null)
+{
+    <AcLoadingState />
+}
+else
+{
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div>
+            <h1 class="acm-wizard-title" style="margin:0;">إدارَة @tenant.Name</h1>
+            <span style="color:var(--ac-text-muted);font-size:13px;">لَوحَة الإداريّ</span>
+        </div>
+        <span style="font-size:32px;">👔</span>
+    </div>
+
+    <div class="acm-home-grid acm-stats-grid" style="margin-top:8px;">
+        <a class="acm-stat-tile" href="@($"/{Slug}/explore")">
+            <strong>@listingsCount</strong>
+            <span>إعلان نَشِط</span>
+        </a>
+        <a class="acm-stat-tile" href="@($"/{Slug}/chats")">
+            <strong>@convsCount</strong>
+            <span>مُحادَثَة</span>
+        </a>
+        <div class="acm-stat-tile" style="cursor:default;">
+            <strong>@offersCount</strong>
+            <span>عَرض قَيد المُراجَعَة</span>
+        </div>
+        <div class="acm-stat-tile" style="cursor:default;">
+            <strong>@usersCount</strong>
+            <span>مُستَخدِم</span>
+        </div>
+    </div>
+
+    <AcCard>
+        <ChildContent>
+            <h3 style="margin-top:0;">إجراءات سَريعَة</h3>
+            <div class="acm-home-actions">
+                <AcActionCard Label="إنشاء إعلان"  IconName="plus"      Variant="primary" Href="@($"/{Slug}/create-listing")" />
+                <AcActionCard Label="تَصَفُّح الإعلانات" IconName="search"  Variant="surface" Href="@($"/{Slug}/explore")" />
+                <AcActionCard Label="مُحادَثات المَتجَر" IconName="message" Variant="surface" Href="@($"/{Slug}/chats")" />
+                <AcActionCard Label="الشَكاوى والدَّعم"  IconName="alert-circle" Variant="surface" Href="@($"/{Slug}/support")" />
+            </div>
+        </ChildContent>
+    </AcCard>
+
+    <AcCard>
+        <ChildContent>
+            <h3 style="margin-top:0;">إعدادات المَتجَر (المنصّة)</h3>
+            <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
+                هذه الرَوابِط تَفتَح أَدَوات إدارَة المُحتَوى عَلى مُستَوى المنصّة
+                (تَتَطَلَّب وُصولاً مُسبَقاً إلى /admin).
+            </p>
+            <div class="acm-home-actions">
+                <AcActionCard Label="الفِئات"       IconName="tag"      Variant="surface" Href="@($"/admin/tenants/{Slug}/categories")" />
+                <AcActionCard Label="الخَصائِص"      IconName="settings" Variant="surface" Href="@($"/admin/tenants/{Slug}/attributes")" />
+                <AcActionCard Label="المُدُن"        IconName="map-pin"  Variant="surface" Href="@($"/admin/tenants/{Slug}/regions")" />
+                <AcActionCard Label="الأَدوار"       IconName="user"     Variant="surface" Href="@($"/admin/tenants/{Slug}/roles")" />
+                <AcActionCard Label="الهُويَّة"      IconName="settings" Variant="surface" Href="@($"/admin/tenants/{Slug}/branding")" />
+            </div>
+        </ChildContent>
+    </AcCard>
+}
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    Tenant? tenant;
+    bool canManage;
+    int listingsCount, convsCount, offersCount, usersCount;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Auth.IsAuthenticated) return;
+        await using var g = Store.QuerySession();
+        tenant = await g.LoadAsync<Tenant>(Slug);
+        if (tenant is null) return;
+
+        await using var s = Store.QuerySession(Slug);
+        var me = await s.LoadAsync<User>(Auth.UserId!.Value);
+        canManage = ACommerce.Kit.Roles.RolePermissions.Has(
+            tenant.Roles, me?.ActiveRole, "tenant.manage");
+        if (!canManage) return;
+
+        listingsCount = await s.Query<Listing>().CountAsync(l => !l.IsDeleted);
+        convsCount    = await s.Query<Conversation>().CountAsync();
+        offersCount   = await s.Query<ACommerce.Kit.Offers.Offer>()
+                                .CountAsync(o => o.Status == ACommerce.Kit.Offers.OfferStatus.Pending);
+        usersCount    = await s.Query<User>().CountAsync();
+    }
+}

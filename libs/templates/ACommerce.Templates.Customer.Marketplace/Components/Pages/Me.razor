@@ -78,7 +78,11 @@
         </div>
 
         <div class="acm-home-actions" style="margin-top:12px;">
-            <AcActionCard Label="الباقات"      IconName="package"       Variant="primary" Href="@($"/{Slug}/plans")" />
+            @if (canManage)
+            {
+                <AcActionCard Label="إدارَة المَتجَر" IconName="settings" Variant="primary" Href="@($"/{Slug}/manage")" />
+            }
+            <AcActionCard Label="الباقات"      IconName="package"       Variant="@(canManage ? "surface" : "primary")" Href="@($"/{Slug}/plans")" />
             <AcActionCard Label="المُفَضَّلَة" IconName="heart"         Variant="surface" Href="@($"/{Slug}/favorites")" />
             <AcActionCard Label="المُحادَثات"   IconName="message"       Variant="surface" Href="@($"/{Slug}/chats")" />
             <AcActionCard Label="الإشعارات"     IconName="bell"          Variant="surface" Href="@($"/{Slug}/notifications")" />
@@ -109,6 +113,7 @@
     int notificationsCount;
     ACommerce.Kit.Roles.Role? activeRole;
     List<ACommerce.Kit.Roles.Role> tenantRoles = new();
+    bool canManage;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -128,6 +133,8 @@
             var me = await s.LoadAsync<User>(Auth.UserId.Value);
             if (me is not null && !string.IsNullOrEmpty(me.ActiveRole))
                 activeRole = tenantRoles.FirstOrDefault(r => r.Slug == me.ActiveRole);
+            canManage = ACommerce.Kit.Roles.RolePermissions.Has(
+                tenantRoles, me?.ActiveRole, "tenant.manage");
         }
     }
 }

@@ -41,6 +41,11 @@
         {
             <AcAlert Variant="danger" Message="الحُقول المَطلوبَة غَير صَحيحَة — اعتَنِ بِالعُنوان والسِعر والفِئَة." />
         }
+        else if (Err == "forbidden")
+        {
+            <AcAlert Variant="danger"
+                     Message="دَوركَ الحاليّ لا يَسمَح بِنَشر إعلان. إن كانَ هذا غَير مُتَوَقَّع، تَواصَل مَع إدارَة المَتجَر." />
+        }
 
         @if (string.IsNullOrEmpty(Category))
         {

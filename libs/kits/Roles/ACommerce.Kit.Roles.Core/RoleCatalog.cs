@@ -24,9 +24,13 @@ public static class RoleCatalog
             Slug:        "customer",
             Label:       "عَميل",
             Icon:        "🛒",
-            Description: "تَصَفُّح وَطَلَب العُروض. الدَور الأَكثَر شُيوعاً وَ يَكفيه هاتِف فَقَط.",
+            Description: "يَتَصَفَّح، يَطلُب، وَيَنشُر طَلَبات (مَثَلاً مِشوار في إنجيز).",
             HomeRoute:   "",
-            Permissions: new[] { "listing.browse", "offer.submit", "chat.start" },
+            // listing.create مَمنوحَة لِأَنّ نَموذَج "العَميل يَنشُر طَلَب،
+            // المُزَوِّدون يُقَدِّمون عُروض" شائِع (إنجيز، طَلَب خِدمَة، …).
+            // المَتاجِر الَّتي لا تَحتاج هذه القُدرَة لا تَعرِض زِرّ "إعلان
+            // جَديد" لِلعُمَلاء — الـ UI يَتَحَكَّم بِالظُّهور.
+            Permissions: new[] { "listing.browse", "listing.create", "offer.submit", "chat.start" },
             Fields:      new RoleField[] { }),
 
         new RoleTemplate(
@@ -97,7 +101,7 @@ public static class RoleCatalog
             Label:       "إداريّ المَتجَر",
             Icon:        "👔",
             Description: "إداريّ يُدير مُحتَوى وَ مُستَخدِمي المَتجَر بِالكامِل.",
-            HomeRoute:   "",
+            HomeRoute:   "/manage",
             Permissions: new[]
             {
                 "listing.create", "listing.edit", "listing.delete",

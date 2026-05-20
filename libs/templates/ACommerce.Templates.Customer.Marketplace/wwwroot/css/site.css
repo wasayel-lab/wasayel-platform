@@ -531,7 +531,9 @@
     background: var(--ac-bg-alt);
     color: var(--ac-primary);
     border-radius: 12px; flex-shrink: 0;
+    line-height: 0;            /* مَنع الخَطّ الأَساسي مِن إزاحَة الـ SVG */
 }
+.acm-manager-icon > svg { display: block; }
 
 /* قائِمَة الفِئات (TenantEdit + TenantCategories) */
 .acm-cat-list { display: flex; flex-direction: column; gap: 6px; }
