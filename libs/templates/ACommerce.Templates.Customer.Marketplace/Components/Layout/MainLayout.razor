@@ -4,29 +4,16 @@
 @inject IHttpContextAccessor HttpCtx
 @inject AuthSession Auth
 @inject L L
+@inject Marten.IDocumentStore Store
 
 @{
     var slug = Tenant.Slug;
     var brand = Tenant.BrandColor;
     var path = new Uri(Nav.Uri).AbsolutePath;
     var isLogin = path.Contains("/login", StringComparison.OrdinalIgnoreCase);
-    var topItems = new List<AcTopNav.TopNavItem>
-    {
-        new($"/{slug}",               "الرَئيسيّة", "home",    null, true),
-        new($"/{slug}/explore",       "استِكشاف",   "search"),
-        new($"/{slug}/favorites",     "مُفَضَّلَة",     "heart"),
-        new($"/{slug}/chats",         "رَسائل",     "message"),
-        new($"/{slug}/notifications", "إشعارات",    "bell"),
-        new($"/{slug}/me",            Auth.IsAuthenticated ? Auth.UserName ?? "حِسابي" : "حِسابي", "user")
-    };
-    var bottomItems = new List<ACommerce.Templates.Shared.Models.BottomNavItemDto>
-    {
-        new() { Href = $"/{slug}",            Label = "الرَئيسيّة", IconName = "home",    Exact = true },
-        new() { Href = $"/{slug}/explore",    Label = "استِكشاف",   IconName = "search" },
-        new() { Href = $"/{slug}/favorites",  Label = "مُفَضَّلَة",     IconName = "heart" },
-        new() { Href = $"/{slug}/chats",      Label = "رَسائل",     IconName = "message" },
-        new() { Href = $"/{slug}/me",         Label = Auth.IsAuthenticated ? "حِسابي" : "دُخول", IconName = "user" },
-    };
+
+    // قائِمَة nav مُلائِمَة لِلدَور النَّشِط — تَحتاج load بِسيط.
+    var (topItems, bottomItems) = BuildNav(slug, activeRoleSlug);
 }
 
 @if (Tenant.IsResolved)
@@ -91,12 +78,84 @@ else
 }
 
 @code {
-    protected override void OnInitialized()
+    string activeRoleSlug = "";
+
+    protected override async Task OnInitializedAsync()
     {
         if (Tenant.IsResolved && HttpCtx.HttpContext is { } ctx)
         {
             Auth.SetTenant(Tenant.Slug);
             Auth.Load(ctx, Tenant.Slug);
+
+            // قِراءَة الدَور النَّشِط لِبِناء nav المُلائِم. خَطَأ DB لا يَكسِر الـ layout.
+            if (Auth.IsAuthenticated && Auth.UserId.HasValue)
+            {
+                try
+                {
+                    await using var s = Store.QuerySession(Tenant.Slug);
+                    var me = await s.LoadAsync<ACommerce.Kit.Auth.User>(Auth.UserId.Value);
+                    if (me is not null) activeRoleSlug = me.ActiveRole ?? "";
+                }
+                catch { /* ignore — nav يَسقُط لِلافتراضيّ */ }
+            }
         }
+    }
+
+    // قائِمَة عَناصِر nav حَسَب الدَور النَّشِط — كُلّ دَور لَه قائِمَة
+    // مُختَلِفَة. القَوالِب الَّتي لا تَنطَبِق عَلى الدَور لا تُعرَض.
+    static (List<AcTopNav.TopNavItem> Top, List<ACommerce.Templates.Shared.Models.BottomNavItemDto> Bottom)
+        BuildNav(string slug, string roleSlug)
+    {
+        var ar = (
+            Top:    new List<AcTopNav.TopNavItem>(),
+            Bottom: new List<ACommerce.Templates.Shared.Models.BottomNavItemDto>()
+        );
+
+        void Add(string href, string label, string icon, bool exact = false)
+        {
+            ar.Top.Add(new(href, label, icon, null, exact));
+            ar.Bottom.Add(new() { Href = href, Label = label, IconName = icon, Exact = exact });
+        }
+
+        // الرَّئيسِيَّة دائِماً
+        Add($"/{slug}", "الرَئيسيّة", "home", exact: true);
+
+        switch (roleSlug)
+        {
+            case "rider":
+                Add($"/{slug}/me/listings", "طَلَباتي",  "package");
+                Add($"/{slug}/chats",       "رَسائل",    "message");
+                break;
+            case "driver":
+            case "shipper":
+                Add($"/{slug}/explore",      "مَشاوير",   "search");
+                Add($"/{slug}/me/offers",    "عُروضي",     "package");
+                Add($"/{slug}/me/searches",  "إشعارات",   "bell");
+                Add($"/{slug}/chats",        "رَسائل",     "message");
+                break;
+            case "vendor":
+            case "host":
+                Add($"/{slug}/me/listings",  "إعلاناتي",  "package");
+                Add($"/{slug}/chats",        "رَسائل",     "message");
+                Add($"/{slug}/notifications","إشعارات",   "bell");
+                break;
+            case "tenant_admin":
+                Add($"/{slug}/manage",       "إدارَة",     "settings");
+                Add($"/{slug}/chats",        "رَسائل",     "message");
+                Add($"/{slug}/notifications","إشعارات",   "bell");
+                break;
+            default:
+                // customer + لا دَور = القائِمَة الكَلاسيكِيَّة
+                Add($"/{slug}/explore",      "استِكشاف",   "search");
+                Add($"/{slug}/favorites",    "مُفَضَّلَة",     "heart");
+                Add($"/{slug}/chats",        "رَسائل",     "message");
+                Add($"/{slug}/notifications","إشعارات",   "bell");
+                break;
+        }
+
+        // حِسابي دائِماً آخِراً
+        ar.Top.Add(new($"/{slug}/me", "حِسابي", "user"));
+        ar.Bottom.Add(new() { Href = $"/{slug}/me", Label = "حِسابي", IconName = "user" });
+        return ar;
     }
 }

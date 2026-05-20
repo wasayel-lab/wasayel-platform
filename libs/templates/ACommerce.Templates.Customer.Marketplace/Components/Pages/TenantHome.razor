@@ -14,16 +14,23 @@
     {
         <AcLoadingState />
     }
+    else if (activeRole?.CatalogSlug == "rider")
+    {
+        <ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.RiderHome Slug="@Slug" />
+    }
+    else if (activeRole?.CatalogSlug == "driver" || activeRole?.CatalogSlug == "shipper")
+    {
+        <ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.DriverHome Slug="@Slug" />
+    }
+    else if (activeRole?.CatalogSlug == "vendor" || activeRole?.CatalogSlug == "host")
+    {
+        <ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.SellerHome
+            Slug="@Slug" RoleSlug="@activeRole.CatalogSlug" />
+    }
     else
     {
-        @* قالِب رَأس مُلائِم لِلدَور النَّشِط — إجراءات + welcome مُخَصَّص.
-           يُتَجاوَز في حالَة المَتاجِر بِلا أَدوار (legacy mode) — يَسقُط
-           إلى الـ AcHeroBanner المَعروف. *@
-        @if (activeRole is not null && activeRole.CatalogSlug != "customer")
-        {
-            <RoleHomeHero Slug="@Slug" Role="activeRole" UserName="@Auth.UserName" />
-        }
-
+        @* قالِب العَميل/الافتراضي — الصَفحَة الكَلاسيكِيَّة: hero + بَحث +
+           فِئات + مُمَيَّز + أَحدَث. هذا أَيضاً قالِب المَتاجِر بِلا أَدوار. *@
         <AcHeroBanner Title="@($"ابحَث في {loaded.Name}")"
                       Subtitle="@loaded.TagLine">
             <LogoContent>

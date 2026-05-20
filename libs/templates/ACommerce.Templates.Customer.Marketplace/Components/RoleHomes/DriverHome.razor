@@ -1,0 +1,121 @@
+@inject IDocumentStore Store
+@inject AuthSession Auth
+
+@*
+    صَفحَة السائِق الرَّئيسِيَّة — feed مَشاوير مَفتوحَة + بِطاقَة عُروضي
+    + رَوابِط لِبَحوث الإشعار. لا hero بَحث ولا rail "مُمَيَّز".
+*@
+
+<div class="acm-role-home acm-role-home-driver">
+    <header class="acm-role-home-head">
+        <h2>@(Greeting)</h2>
+        <p>مَشاوير قَريبَة مَفتوحَة لِلتَّفاوُض. اِختَر، قَدِّم عَرضَك، انتَظِر القَبول.</p>
+    </header>
+
+    <div class="acm-role-cta-row">
+        <a class="acm-role-cta-pill" href="@($"/{Slug}/me/offers")">
+            <strong>@pendingOffers</strong>
+            <span>عَرض قَيد المُراجَعَة</span>
+        </a>
+        <a class="acm-role-cta-pill" href="@($"/{Slug}/me/searches")">
+            <strong>@savedSearches</strong>
+            <span>بَحث مَحفوظ</span>
+        </a>
+    </div>
+
+    <AcSectionHeader Title="مَشاوير مَفتوحَة"
+                     ActionLabel="كُلّ المَشاوير"
+                     ActionHref="@($"/{Slug}/explore")" />
+
+    @if (openRequests is null)
+    {
+        <AcLoadingState />
+    }
+    else if (openRequests.Count == 0)
+    {
+        <div class="acm-role-empty">
+            <span style="font-size:36px;">🚗</span>
+            <p>لا مَشاوير مَفتوحَة حاليّاً. اِحفَظ بَحثاً وَ سَنُنَبِّهُكَ.</p>
+            <a class="ac-btn ac-btn-primary ac-btn-sm" href="@($"/{Slug}/me/searches")">
+                <AcIcon Name="bell" Size="14" /> حِفظ بَحث
+            </a>
+        </div>
+    }
+    else
+    {
+        <div class="acm-role-list">
+            @foreach (var l in openRequests)
+            {
+                <a class="acm-role-trip-card" href="@($"/{Slug}/listings/{l.Id}")">
+                    <div style="flex:1;min-width:0;">
+                        <strong>@l.Title</strong>
+                        <span class="ac-muted" style="font-size:12px;display:block;">
+                            @l.City — @l.District
+                        </span>
+                        @if (l.Price > 0)
+                        {
+                            <span style="font-size:11px;color:var(--ac-text-muted);">
+                                سِعر مَبدَئيّ: @l.Price.ToString("N0") ريال
+                            </span>
+                        }
+                    </div>
+                    <span class="acm-role-trip-time">@FormatAge(l.CreatedAt)</span>
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    List<Listing>? openRequests;
+    int pendingOffers;
+    int savedSearches;
+
+    string Greeting => string.IsNullOrEmpty(Auth.UserName)
+        ? "أَهلاً سائِق"
+        : $"أَهلاً {Auth.UserName}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var s = Store.QuerySession(Slug);
+
+        // كُلّ الإعلانات الَّتي تَقبَل عُروضاً وَ لَم تُطابَق بَعد.
+        var all = await s.Query<Listing>()
+            .Where(l => !l.IsDeleted)
+            .OrderByDescending(l => l.CreatedAt)
+            .Take(50)
+            .ToListAsync();
+        var open = new List<Listing>();
+        foreach (var l in all)
+        {
+            if (!l.Attributes.TryGetValue("accepts_offers", out var ao) ||
+                !string.Equals(ao, "true", System.StringComparison.OrdinalIgnoreCase))
+                continue;
+            var match = await s.LoadAsync<ACommerce.Kit.Offers.ListingMatch>(l.Id);
+            if (match is not null) continue;
+            open.Add(l);
+            if (open.Count >= 10) break;
+        }
+        openRequests = open;
+
+        if (Auth.IsAuthenticated && Auth.UserId.HasValue)
+        {
+            pendingOffers = await s.Query<ACommerce.Kit.Offers.Offer>()
+                .CountAsync(o => o.OffererId == Auth.UserId.Value
+                              && o.Status == ACommerce.Kit.Offers.OfferStatus.Pending);
+            savedSearches = await s.Query<ACommerce.Kit.SavedSearches.SavedSearch>()
+                .CountAsync(ss => ss.UserId == Auth.UserId.Value && ss.IsEnabled);
+        }
+    }
+
+    static string FormatAge(System.DateTime at)
+    {
+        var span = System.DateTime.UtcNow - at;
+        if (span.TotalMinutes < 1)  return "الآن";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}د";
+        if (span.TotalHours   < 24) return $"{(int)span.TotalHours}س";
+        return $"{(int)span.TotalDays}ي";
+    }
+}

@@ -663,7 +663,82 @@
     border-radius: var(--ac-radius-lg);
 }
 
-/* ═══ Role Home Hero — قالِب رَأس مُخَصَّص لِكُلّ دَور ════════════════ */
+/* ═══ Role Home — قَوالِب صَفَحات بَدء كامِلَة لِكُلّ دَور ════════════ */
+.acm-role-home { padding-bottom: 24px; }
+.acm-role-home-head { margin: 8px 0 16px; }
+.acm-role-home-head h2 { margin: 0 0 4px; font-size: 22px; }
+.acm-role-home-head p { margin: 0; color: var(--ac-text-muted); font-size: 14px; line-height: 1.6; }
+
+.acm-role-cta-primary {
+    display: flex; align-items: center; gap: 14px;
+    padding: 18px 20px; margin-bottom: 16px;
+    background: var(--ac-primary); color: #fff;
+    border-radius: var(--ac-radius-lg);
+    text-decoration: none;
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--ac-primary) 35%, transparent);
+    transition: transform 120ms, box-shadow 120ms;
+}
+.acm-role-cta-primary:hover { transform: translateY(-1px); }
+.acm-role-cta-icon {
+    width: 48px; height: 48px;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,.18); border-radius: 12px;
+    font-size: 24px; flex-shrink: 0;
+}
+.acm-role-cta-label { flex: 1; min-width: 0; }
+.acm-role-cta-label strong { display: block; font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+.acm-role-cta-label small { display: block; font-size: 12px; opacity: .85; }
+
+.acm-role-cta-row {
+    display: grid; gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    margin-bottom: 20px;
+}
+.acm-role-cta-pill {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 12px 8px;
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+    text-decoration: none; color: var(--ac-text);
+    transition: border-color 120ms;
+}
+.acm-role-cta-pill:hover { border-color: var(--ac-primary); }
+.acm-role-cta-pill strong { font-size: 20px; color: var(--ac-primary); font-weight: 700; }
+.acm-role-cta-pill span    { font-size: 11px; color: var(--ac-text-muted); margin-top: 2px; }
+
+.acm-role-list {
+    display: flex; flex-direction: column; gap: 8px; margin-top: 8px;
+}
+.acm-role-request-card,
+.acm-role-trip-card {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px;
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+    text-decoration: none; color: var(--ac-text);
+    transition: border-color 120ms, transform 120ms;
+}
+.acm-role-request-card:hover,
+.acm-role-trip-card:hover { border-color: var(--ac-primary); transform: translateY(-1px); }
+.acm-role-request-card strong,
+.acm-role-trip-card strong { display: block; font-size: 14px; }
+.acm-role-trip-time {
+    font-size: 11px; color: var(--ac-text-muted);
+    background: var(--ac-bg-alt); padding: 4px 8px; border-radius: 999px;
+    white-space: nowrap;
+}
+
+.acm-role-empty {
+    text-align: center; padding: 32px 16px;
+    background: var(--ac-bg-alt);
+    border: 2px dashed var(--ac-border);
+    border-radius: var(--ac-radius-lg);
+}
+.acm-role-empty p { margin: 12px 0; color: var(--ac-text-muted); }
+
+/* ═══ Role Home Hero — (قالِب صَغير، مُستَخدَم في حالات أُخرى) ═════════ */
 .acm-role-hero {
     background: linear-gradient(135deg,
         color-mix(in srgb, var(--ac-primary) 14%, transparent),

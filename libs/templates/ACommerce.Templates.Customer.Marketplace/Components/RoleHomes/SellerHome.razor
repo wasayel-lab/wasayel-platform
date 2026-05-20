@@ -1,0 +1,109 @@
+@inject IDocumentStore Store
+@inject AuthSession Auth
+
+@*
+    قالِب البائِع المُشتَرَك (vendor + host) — لَوحَة "إعلاناتي" مَع
+    إجراءات سَريعَة. يَختَلِف عَن RiderHome في أَنّ الإعلانات هُنا
+    مَخزون دائِم (سَكَن/سَلعَة) لا طَلَب مُؤَقَّت.
+*@
+
+<div class="acm-role-home acm-role-home-seller">
+    <header class="acm-role-home-head">
+        <h2>@(Greeting)</h2>
+        <p>@(Subtitle)</p>
+    </header>
+
+    <a class="acm-role-cta-primary" href="@($"/{Slug}/create-listing")">
+        <span class="acm-role-cta-icon">➕</span>
+        <span class="acm-role-cta-label">
+            <strong>إعلان جَديد</strong>
+            <small>أَضِف ما تَعرِضه — نَشر فَوريّ</small>
+        </span>
+        <AcIcon Name="chevron-left" Size="20" />
+    </a>
+
+    <div class="acm-role-cta-row">
+        <div class="acm-role-cta-pill" style="cursor:default;">
+            <strong>@activeCount</strong>
+            <span>إعلان نَشِط</span>
+        </div>
+        <div class="acm-role-cta-pill" style="cursor:default;">
+            <strong>@totalViews</strong>
+            <span>مُشاهَدَة</span>
+        </div>
+        <a class="acm-role-cta-pill" href="@($"/{Slug}/chats")">
+            <strong>@conversations</strong>
+            <span>مُحادَثَة</span>
+        </a>
+    </div>
+
+    @if (myListings is null)
+    {
+        <AcLoadingState />
+    }
+    else if (myListings.Count == 0)
+    {
+        <div class="acm-role-empty">
+            <span style="font-size:36px;">📦</span>
+            <p>لا إعلانات بَعد. اِنشُر أَوَّل إعلان فَوقُ.</p>
+        </div>
+    }
+    else
+    {
+        <AcSectionHeader Title="إعلاناتي"
+                         ActionLabel="@(myListings.Count > 6 ? "كُلّ الإعلانات" : null)"
+                         ActionHref="@($"/{Slug}/me/listings")" />
+        <div class="acm-role-list">
+            @foreach (var l in myListings.Take(6))
+            {
+                <a class="acm-role-request-card" href="@($"/{Slug}/listings/{l.Id}")">
+                    <div style="flex:1;min-width:0;">
+                        <strong>@l.Title</strong>
+                        <span class="ac-muted" style="font-size:12px;display:block;">
+                            @l.CategorySlug · @l.City — @l.District
+                        </span>
+                    </div>
+                    <span class="acm-details-price" style="font-size:14px;">
+                        @l.Price.ToString("N0") ريال
+                    </span>
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string RoleSlug { get; set; } = "vendor";
+
+    List<Listing>? myListings;
+    int activeCount;
+    int totalViews;
+    int conversations;
+
+    string Greeting => RoleSlug switch
+    {
+        "host" => string.IsNullOrEmpty(Auth.UserName) ? "لَوحَة المُؤَجِّر" : $"أَهلاً {Auth.UserName}",
+        _      => string.IsNullOrEmpty(Auth.UserName) ? "لَوحَة التاجِر"   : $"أَهلاً {Auth.UserName}"
+    };
+
+    string Subtitle => RoleSlug switch
+    {
+        "host" => "أَدِر إعلانات سَكَنك وَ رُدّ عَلى المُهتَمّين.",
+        _      => "أَدِر إعلاناتك وَ رُدّ عَلى الاستِفسارات.",
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Auth.IsAuthenticated || Auth.UserId is null) return;
+        await using var s = Store.QuerySession(Slug);
+        var meId = Auth.UserId.Value.ToString();
+        myListings = (await s.Query<Listing>().Where(l => !l.IsDeleted).ToListAsync())
+            .Where(l => l.Attributes.TryGetValue("owner_id", out var oid) && oid == meId)
+            .OrderByDescending(l => l.CreatedAt).ToList();
+        activeCount = myListings.Count;
+        totalViews  = myListings.Sum(l => l.ViewCount);
+        conversations = await s.Query<Conversation>()
+            .CountAsync(c => c.OwnerId == Auth.UserId.Value || c.PartnerId == Auth.UserId.Value);
+    }
+}
