@@ -5,13 +5,18 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
 
 @*
-    صَفحة إنشاء إعلان. خَطوَتان تَحت SSR:
-      1) اختِيار الفِئَة — بِطاقات قابِلَة لِلنَّقر، كُلٌّ يَنقُل لِـ
-         ?category=<slug> فيَنفَتِح step 2
-      2) تَفاصيل + خَصائِص ديناميكِيَّة مَأخوذَة مِن
-         AttributeDefinitions/CategoryAttributeMappings المُستَورَدَة
-         (مَثَلاً عَدَد الغُرَف، المَساحَة، المَرافِق…)
+    دِسباتشَر إنشاء إعلان حَسَب الدَور النَّشِط:
+      - rider  → RiderCreateRequest (نَموذَج مِشوار مُبَسَّط)
+      - غَيره  → النَموذَج الكامِل ذو الخَطوَتَين (فِئَة → تَفاصيل)
 *@
+
+@if (activeRole?.CatalogSlug == "rider")
+{
+    <ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.RiderCreateRequest
+        Slug="@Slug" Tenant="tenant" Err="@Err" />
+}
+else
+{
 
 <div class="acs-page acs-create-listing">
     <h1 class="acm-wizard-title">إعلان جَديد</h1>
@@ -194,6 +199,8 @@
     }
 </div>
 
+}
+
 @code {
     [Parameter] public string Slug { get; set; } = "";
     [SupplyParameterFromQuery(Name = "err")]      public string? Err      { get; set; }
@@ -201,12 +208,22 @@
 
     Tenant? tenant;
     IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.DynField>? dynFields;
+    ACommerce.Kit.Roles.Role? activeRole;
 
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
         await using var g = Store.QuerySession();
         tenant = await g.LoadAsync<Tenant>(Slug);
+        if (tenant is null) return;
+
+        if (tenant.Roles.Count > 0 && Auth.UserId.HasValue)
+        {
+            await using var t = Store.QuerySession(Slug);
+            var me = await t.LoadAsync<User>(Auth.UserId.Value);
+            if (me is not null && !string.IsNullOrEmpty(me.ActiveRole))
+                activeRole = tenant.Roles.FirstOrDefault(r => r.Slug == me.ActiveRole);
+        }
 
         if (!string.IsNullOrEmpty(Category))
             dynFields = await DynAttrs.GetForListingCategoryAsync(Slug, Category);

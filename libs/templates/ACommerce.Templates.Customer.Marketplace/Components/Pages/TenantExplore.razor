@@ -244,6 +244,8 @@ else
         }
     </text>;
 
+    bool driverMode;
+
     protected override async Task OnParametersSetAsync()
     {
         await using var g = Store.QuerySession();
@@ -251,6 +253,18 @@ else
         if (tenant is null) return;
 
         await using var t = Store.QuerySession(Slug);
+
+        // فَلتَرَة تِلقائيَّة لِلسائِق/الشَحّان: لا يَرى إلّا الإعلانات
+        // الَّتي تَقبَل عُروضاً (طَلَبات الراكِبين). UI بَقيَّة الـ explore
+        // كَما هو لِكُلّ الأَدوار.
+        if (tenant.Roles.Count > 0 && Auth.IsAuthenticated && Auth.UserId.HasValue)
+        {
+            var me = await t.LoadAsync<User>(Auth.UserId.Value);
+            var role = me is null ? null
+                : tenant.Roles.FirstOrDefault(r => r.Slug == me.ActiveRole);
+            driverMode = role?.CatalogSlug is "driver" or "shipper";
+        }
+
         var q = t.Query<Listing>().Where(x => !x.IsDeleted);
         if (!string.IsNullOrEmpty(Category))   q = q.Where(x => x.CategorySlug == Category);
         else if (!string.IsNullOrEmpty(Kind))
@@ -278,7 +292,16 @@ else
             "price_desc" => q.OrderByDescending(x => x.Price),
             _            => q.OrderByDescending(x => x.CreatedAt),
         };
-        items = (await q.Take(60).ToListAsync()).ToList();
+        items = (await q.Take(driverMode ? 200 : 60).ToListAsync()).ToList();
+        if (driverMode)
+        {
+            // أَبقِ فَقَط الَّتي تَقبَل عُروضاً — هذه هي طَلَبات الراكِبين.
+            // فَلتَرَة في الذاكِرَة لِأَنّ Attributes قاموس JSON.
+            items = items
+                .Where(l => l.Attributes.TryGetValue("accepts_offers", out var v) &&
+                            string.Equals(v, "true", System.StringComparison.OrdinalIgnoreCase))
+                .Take(60).ToList();
+        }
 
         districts = (await t.Query<Listing>()
             .Where(x => !x.IsDeleted && x.District != null)

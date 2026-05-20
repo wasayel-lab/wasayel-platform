@@ -1,0 +1,83 @@
+@*
+    نَموذَج إنشاء طَلَب مِشوار مُبَسَّط — لا قائِمَة فِئات، لا حُقول
+    اختِياريَّة مُعَقَّدَة. يَستَخدِم نَفس endpoint /listings/create
+    عَبر hidden inputs: category مُسَكَّن مُسبَقاً، accepts_offers=true،
+    وَ pickup/dropoff كَ خَصائِص ديناميكِيَّة.
+*@
+
+<div class="acs-page">
+    <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/{Slug}")">
+        <AcIcon Name="arrow-right" Size="16" /> الرُجوع
+    </a>
+
+    <h1 class="acm-wizard-title">اِنشُر طَلَب مِشوار</h1>
+    <p style="color:var(--ac-text-muted);font-size:14px;margin:0 0 16px;">
+        حَدِّد مَكان الانطِلاق وَ الوُصول، وَ سَيَصِلكَ سائِقون بِعُروض أَسعار.
+    </p>
+
+    @if (Err == "invalid")
+    {
+        <AcAlert Variant="danger" Message="حُقول ناقِصَة — مَوقِع الانطِلاق وَ الوُصول مَطلوبان." />
+    }
+    else if (Err == "forbidden")
+    {
+        <AcAlert Variant="danger" Message="دَوركَ الحاليّ لا يَسمَح بِنَشر طَلَبات." />
+    }
+
+    @if (DefaultCategory is null)
+    {
+        <AcAlert Variant="warning"
+                 Message="لَم يُعَدّ المَتجَر بِفِئَة مُناسِبَة. اِتَّصِل بِإدارَة المَتجَر." />
+    }
+    else
+    {
+        <form method="post" action="@($"/{Slug}/listings/create")">
+            <input type="hidden" name="category"             value="@DefaultCategory.Slug" />
+            <input type="hidden" name="title"                value="طَلَب مِشوار" />
+            <input type="hidden" name="attr_accepts_offers"  value="true" />
+
+            <AcCard>
+                <ChildContent>
+                    <AcLocationInput Name="attr_pickup"  Label="مَكان الانطِلاق"  Required="true" />
+                    <div style="height:12px;"></div>
+                    <AcLocationInput Name="attr_dropoff" Label="وِجهَة الوُصول"   Required="true" />
+                </ChildContent>
+            </AcCard>
+
+            <AcCard>
+                <ChildContent>
+                    <AcField Label="مُلاحَظات لِلسائِق (اختياريّ)">
+                        <textarea name="description" rows="3" maxlength="400"
+                                  class="ac-input" style="resize:vertical;font-family:inherit;"
+                                  placeholder="مَثَلاً: مَع طِفل، أَو وَزن أَمتِعَة، أَو وَقت الوُصول المُفَضَّل…"></textarea>
+                    </AcField>
+
+                    <AcField Label="سِعر مَبدَئيّ مُقتَرَح (اختياريّ — ريال)">
+                        <input type="number" name="price" min="0" step="1"
+                               class="ac-input" inputmode="numeric" placeholder="0" value="0" />
+                    </AcField>
+
+                    @* المَدينَة/الحَيّ مَأخوذَتان مِن مَكان الانطِلاق لاحِقاً
+                       (تَنبيه: التَخزين الحاليّ يَطلُبهما كَ hidden fallback). *@
+                    <input type="hidden" name="city"     value="@(DefaultCity ?? "")" />
+                    <input type="hidden" name="district" value="—" />
+                </ChildContent>
+            </AcCard>
+
+            <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block" style="margin-top:16px;">
+                <AcIcon Name="send" Size="18" /> نَشر الطَلَب
+            </button>
+        </form>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public Tenant? Tenant { get; set; }
+    [Parameter] public string? Err { get; set; }
+
+    Category? DefaultCategory =>
+        Tenant?.Categories.OrderBy(c => c.SortOrder).FirstOrDefault();
+
+    string? DefaultCity => Tenant?.City;
+}
