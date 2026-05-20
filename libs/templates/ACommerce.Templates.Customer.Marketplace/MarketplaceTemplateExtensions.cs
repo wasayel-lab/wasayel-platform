@@ -395,9 +395,14 @@ public static class MarketplaceTemplateExtensions
             var city        = req.Form["city"].ToString().Trim();
             var district    = req.Form["district"].ToString().Trim();
             var priceStr    = req.Form["price"].ToString().Trim();
+            var acceptsOffers = req.Form["attr_accepts_offers"].ToString()
+                .Equals("true", StringComparison.OrdinalIgnoreCase);
 
-            if (title.Length < 3 || string.IsNullOrEmpty(category) ||
-                !decimal.TryParse(priceStr, out var price) || price <= 0)
+            // الحَدّ الأَدنَى لِلسِعر = ١، إلّا لَو الإعلان طَلَب مَفتوح لِلعُروض
+            // (الراكِب يَترُك السِعر صِفراً، السائِق يُحَدِّدُه في عَرضِه).
+            decimal.TryParse(priceStr, out var price);
+            var priceOk = acceptsOffers ? price >= 0 : price > 0;
+            if (title.Length < 3 || string.IsNullOrEmpty(category) || !priceOk)
             {
                 return Results.Redirect($"/{slug}/create-listing?err=invalid");
             }

@@ -113,7 +113,9 @@ else
             }
             else
             {
-                @if (Auth.IsAuthenticated)
+                @* صاحِب الإعلان: يُرى عُروض الآخَرين مَع أَزرار قَبول/رَفض.
+                   غَير صاحِب الإعلان: يَرى نَموذَج تَقديم عَرض. *@
+                @if (Auth.IsAuthenticated && !isOwner)
                 {
                     <form method="post" action="@($"/{Slug}/listings/{Id}/offers")"
                           style="display:flex;flex-direction:column;gap:8px;margin:0 0 16px;">
@@ -131,9 +133,6 @@ else
                             <textarea name="message" rows="2" maxlength="200"
                                       class="ac-input" style="resize:vertical;font-family:inherit;"></textarea>
                         </AcField>
-                        @* maps.js يَملأ الـ hidden inputs بَعد الضَّغط — لكِنّ
-                           اسمَي الحَقلَين هُما loc_lat و loc_lng، نَنسَخهما
-                           لِـ lat/lng عَبر hidden duplicates عَبر JS الـ POST. *@
                         <input type="hidden" name="lat" id="offer_lat" />
                         <input type="hidden" name="lng" id="offer_lng" />
                         <button type="submit" class="ac-btn ac-btn-primary"
@@ -142,12 +141,18 @@ else
                         </button>
                     </form>
                 }
-                else
+                else if (!Auth.IsAuthenticated)
                 {
                     <a href="@($"/{Slug}/login?returnUrl=/{Slug}/listings/{Id}")"
                        class="ac-btn ac-btn-ghost ac-btn-block">
                         دُخول لِتَقديم عَرض
                     </a>
+                }
+                else if (isOwner && offers.Count == 0)
+                {
+                    <div class="acm-role-empty" style="margin:0;">
+                        <p>لَم تَصِل عُروض بَعد. سَيَظهَر هُنا كُلّ عَرض مِن السائِقين.</p>
+                    </div>
                 }
 
                 @if (offers.Count > 0)
@@ -167,7 +172,8 @@ else
                                 <span style="font-size:11px;color:var(--ac-text-muted);">
                                     صالِح حَتَّى @o.ExpiresAt.ToString("HH:mm")
                                 </span>
-                                @if (Auth.IsAuthenticated)
+                                @* أَزرار القَبول/الرَفض لِصاحِب الإعلان فَقَط. *@
+                                @if (isOwner)
                                 {
                                     <div style="display:flex;gap:6px;margin-top:8px;">
                                         <form method="post" action="@($"/{Slug}/offers/{o.Id}/accept")" style="margin:0;">
@@ -267,6 +273,7 @@ else
     List<ACommerce.Kit.Offers.Offer> offers = new();
     ACommerce.Kit.Offers.ListingMatch? listingMatch;
     bool showOffers;
+    bool isOwner;
 
     string CategoryLabel => tenant?.Categories.FirstOrDefault(c => c.Slug == listing?.CategorySlug)?.Label ?? "";
 
@@ -299,6 +306,13 @@ else
             // مَوجودَة. نَجلِب الـ ListingMatch أَيضاً لِمَعرِفَة الحالَة.
             listing.Attributes.TryGetValue("accepts_offers", out var acceptsOffers);
             var enabled = string.Equals(acceptsOffers, "true", StringComparison.OrdinalIgnoreCase);
+            // هَل المُستَخدِم الحاليّ هو صاحِب الإعلان؟ يُستَخدَم لإخفاء
+            // نَموذَج تَقديم العَرض عَنه + إظهار أَزرار القَبول/الرَفض لَه.
+            if (Auth.IsAuthenticated && Auth.UserId.HasValue &&
+                listing.Attributes.TryGetValue("owner_id", out var oid))
+            {
+                isOwner = oid == Auth.UserId.Value.ToString();
+            }
             listingMatch = await t.LoadAsync<ACommerce.Kit.Offers.ListingMatch>(Id);
             if (enabled || listingMatch is not null)
             {
