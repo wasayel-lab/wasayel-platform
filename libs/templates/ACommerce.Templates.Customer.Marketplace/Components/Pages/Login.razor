@@ -1,6 +1,9 @@
 @page "/{slug}/login"
+@page "/{slug}/r/{role}/login"
 @inject ITenantContext Tenant
 @inject NavigationManager Nav
+@inject AuthSession Auth
+@inject IHttpContextAccessor HttpCtx
 
 @*
     صَفحَة دُخول SSR. لا Blazor interactivity — كلّ شَيء forms POST عاديّة
@@ -10,46 +13,80 @@
     الـ tenant يُحَدِّد القَناة: Ashare = Nafath، Ejar = Phone. لا اختِيار للمُستَخدِم.
 *@
 
-@if (!Tenant.IsResolved)
+@{
+    // إن كانَ المُستَخدِم مُسَجَّل دُخول بِالفِعل (cookie صالِح)، أَعِده لِلصَفحَة
+    // الرَئيسِيَّة بِـ history.replaceState — يَكسِر الـ trap حَيث الـ back
+    // مِن الرَئيسِيَّة يَرجِع إلى /login → /verify. لِأَنّ POST /verify لا
+    // يَستَطيع حَذف صَفحات سابِقَة مِن history، نَستَخدِم replace هُنا
+    // لِبَعد الدُخول الناجِح.
+    if (HttpCtx.HttpContext is { } authCtx && Tenant.IsResolved)
+    {
+        Auth.SetTenant(Tenant.Slug);
+        Auth.Load(authCtx, Tenant.Slug);
+    }
+    var bouncePath = AuthSession.LinkFor(Slug, Role, "");
+}
+
+@if (Auth.IsAuthenticated)
+{
+    <script>
+        (function () {
+            try { history.replaceState(null, '', '@bouncePath'); } catch (_) {}
+            location.replace('@bouncePath');
+        })();
+    </script>
+    <p style="text-align:center;padding:20px;">جارٍ التَّحويل…</p>
+}
+else if (!Tenant.IsResolved)
 {
     <p>المَتجَر غير مَوجود.</p>
 }
 else
 {
-    <div class="acs-nafath-head" style="text-align:center;padding-top:24px;">
-        <div style="font-size:48px;">@(Tenant.AuthChannel == "nafath" ? "🪪" : "📱")</div>
-        <h1 class="acm-wizard-title">@Tenant.Name</h1>
-        <p class="acs-nafath-instruction">تَسجيل الدُخول بـ @(Tenant.AuthChannel == "nafath" ? "نَفاذ" : "الهاتف")</p>
-    </div>
+    <div class="ac-auth-wrap" style="--ac-primary:@Tenant.BrandColor;">
+        <div class="ac-auth-card">
+            <div class="ac-auth-logo" style="background:@Tenant.BrandColor;">
+                <AcIcon Name="@(Tenant.AuthChannel == "nafath" ? "key" : "phone")" Size="24" />
+            </div>
+            <h1 class="ac-auth-title">@Tenant.Name</h1>
+            <p class="ac-auth-sub">تَسجيل الدُخول بِـ @(Tenant.AuthChannel == "nafath" ? "نَفاذ" : "الهاتِف")</p>
 
-    <div style="max-width:420px;margin:0 auto;background:var(--ac-surface);
-                border:1px solid var(--ac-border);border-radius:var(--ac-radius-md);
-                padding:20px;">
-        @if (Tenant.AuthChannel == "nafath")
-        {
-            <NafathLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
-                             NationalId="@NationalIdValue" AttemptId="@AttemptId" DisplayCode="@DisplayCode" />
-        }
-        else
-        {
-            <PhoneLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
-                            Phone="@PhoneValue" />
-        }
-    </div>
+            @{
+                // الـ URL يَتَفَوَّق عَلى الـ query: لَو وُجِدَ /r/{role}/login نَتَجاهَل ?as=
+                var effectiveRole = !string.IsNullOrEmpty(Role) ? Role : AsRole;
+            }
+            @if (Tenant.AuthChannel == "nafath")
+            {
+                <NafathLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
+                                 NationalId="@NationalIdValue" AttemptId="@AttemptId" DisplayCode="@DisplayCode"
+                                 AsRole="@effectiveRole" />
+            }
+            else
+            {
+                <PhoneLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
+                                Phone="@PhoneValue" AsRole="@effectiveRole" />
+            }
 
-    <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--ac-text-muted);">
-        ← <a href="@($"/{Slug}")" style="color:var(--ac-primary);text-decoration:none;">العَودَة لِـ @Tenant.Name</a>
-    </p>
+            <p class="ac-auth-back">
+                <a href="@($"/{Slug}")">← العَودَة لِـ @Tenant.Name</a>
+            </p>
+        </div>
+    </div>
 }
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    /// <summary>الدَور المُختار مِن /r/{role}/login (يَتَفَوَّق عَلى ?as=).</summary>
+    [Parameter] public string? Role { get; set; }
     [SupplyParameterFromQuery] public string? Stage { get; set; }
     [SupplyParameterFromQuery] public string? Err { get; set; }
     [SupplyParameterFromQuery(Name = "phone")]    public string? PhoneValue { get; set; }
     [SupplyParameterFromQuery(Name = "nid")]      public string? NationalIdValue { get; set; }
     [SupplyParameterFromQuery(Name = "attempt")]  public string? AttemptId { get; set; }
     [SupplyParameterFromQuery(Name = "code")]     public string? DisplayCode { get; set; }
+    /// <summary>دَور مَختار مُسبَقاً (مِن صَفحَة /{slug}/r/landing).
+    /// يُمَرَّر كَ hidden إلى الـ POST لِيُسَكِّن ActiveRole بَعد التَّوثيق.</summary>
+    [SupplyParameterFromQuery(Name = "as")]       public string? AsRole { get; set; }
 
     string? ErrorMessage => Err switch
     {

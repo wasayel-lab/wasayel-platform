@@ -1,0 +1,77 @@
+@page "/studio/apps/{slug}/branding"
+@inject Services.Incubator.StudioAuth Auth
+@inject Marten.IDocumentStore Store
+@using ACommerce.Kit.Tenants
+
+@*
+    تَحرير الهُويَّة البَصَريَّة لِتَطبيق العَميل داخِل studio.
+    اِسم، شِعار، مَدينَة، لَون. الـ AuthChannel يُدار مِن مَكان آخَر.
+*@
+
+<StudioShell Title="@($"الهُوِيَّة · {tenant?.Name ?? Slug}")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← الإعدادات</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (tenant is null)
+        {
+            <div class="st-card">التَّطبيق غَير مَوجود أَو لا تَملِكه.</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>الهُوِيَّة البَصَريَّة</h1>
+                <p>الاسم واللَّون والشِّعار التَّسويقي — يَنعَكِس كُلّ ذلِك تِلقائيّاً عَلى التَّطبيق.</p>
+            </div>
+
+            @if (Saved == "1")  { <div class="st-chip st-chip-success" style="margin-bottom:14px;">تَمّ الحِفظ <AcIcon Name="check" Size="16" /></div> }
+            @if (Err == "name") { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">الاسم مَطلوب</div> }
+            @if (Err == "color"){ <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">اللَّون غَير صالِح</div> }
+
+            <form method="post" action="@($"/studio/apps/{Slug}/branding/save")" class="st-card">
+                <div class="st-field">
+                    <label class="st-label">اسم التَّطبيق</label>
+                    <input class="st-input" name="name" required maxlength="60" value="@tenant.Name" />
+                </div>
+                <div class="st-field">
+                    <label class="st-label">الشِّعار التَّسويقيّ</label>
+                    <input class="st-input" name="tagline" maxlength="120" value="@tenant.TagLine" />
+                </div>
+                <div class="st-field">
+                    <label class="st-label">المَدينَة الافتراضيَّة</label>
+                    <input class="st-input" name="city" maxlength="40" value="@tenant.City" />
+                </div>
+                <div class="st-field">
+                    <label class="st-label">لَون العَلامَة</label>
+                    <div style="display:flex;align-items:center;gap:14px;">
+                        <span style="width:60px;height:60px;border-radius:14px;display:grid;place-items:center;
+                                     background:@tenant.BrandColor;color:#fff;font-size:28px;font-weight:800;">
+                            @(tenant.Name.FirstOrDefault())
+                        </span>
+                        <input class="st-input" type="color" name="color" required
+                               value="@tenant.BrandColor"
+                               style="height:60px;padding:4px;width:120px;flex:0;" />
+                        <code style="color:var(--st-muted);font-size:13px;direction:ltr;">@tenant.BrandColor</code>
+                    </div>
+                </div>
+                <button type="submit" class="st-btn st-btn-primary">حِفظ التَّغييرات</button>
+            </form>
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery] public string? Saved { get; set; }
+    [SupplyParameterFromQuery] public string? Err   { get; set; }
+    Tenant? tenant;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        await using var qs = Store.QuerySession();
+        tenant = await qs.LoadAsync<Tenant>(Slug);
+        if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) tenant = null;
+    }
+}

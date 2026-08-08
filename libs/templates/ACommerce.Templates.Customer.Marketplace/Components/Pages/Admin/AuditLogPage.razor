@@ -1,0 +1,119 @@
+@page "/admin/audit"
+@page "/admin/audit/{scope}"
+@inject Marten.IDocumentStore Store
+@using ACommerce.Templates.Customer.Marketplace.Services.Audit
+
+@*
+    سِجِلّ التَّدقيق — يُعرَض حَسَب الـ scope (slug تَطبيق أَو "_platform").
+    قائِمَة بِكُلّ المُستَأجِرين لِلتَّبديل بَينَهُم.
+*@
+
+<RequirePlatformAdmin>
+<div class="studio-root">
+    <div class="studio-shell">
+        <aside class="studio-sidebar">
+            <div class="studio-sidebar-brand">
+                <img src="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-lockup-white.svg"
+                     alt="وَسايِل" height="30" />
+                <span style="font-size:13px;opacity:.65;font-weight:600;">Admin</span>
+            </div>
+            <nav class="studio-nav">
+                <a class="studio-nav-item" href="/admin">
+                    <AcIcon Name="building" Size="18" /> المُستَأجِرون
+                </a>
+                <a class="studio-nav-item" href="/admin/monitor">
+                    <AcIcon Name="grid" Size="18" /> المُراقَبَة
+                </a>
+                <a class="studio-nav-item" href="/admin/fixtures">
+                    <AcIcon Name="check-circle" Size="18" /> Fixtures
+                </a>
+                <a class="studio-nav-item active" href="/admin/audit">
+                    <AcIcon Name="list" Size="18" /> التَّدقيق
+                </a>
+                <a class="studio-nav-item" href="/admin/agent">
+                    <AcIcon Name="message" Size="18" /> الوَكيل
+                </a>
+            </nav>
+            <div class="studio-sidebar-footer">
+                <a href="/studio" class="studio-nav-item">← لوحَتي</a>
+            </div>
+        </aside>
+
+        <div class="studio-main">
+            <header class="studio-topbar">
+                <h2 class="studio-topbar-title">سِجِلّ التَّدقيق · @ScopeLabel</h2>
+            </header>
+            <div class="studio-content">
+                <div class="studio-page-head">
+                    <h1>أَحدَث الإجراءات</h1>
+                    <p>كُلّ تَغيير إداريّ يُسَجَّل هُنا. غَير قابِل لِلتَّعديل.</p>
+                </div>
+
+                @* اختِيار النِطاق *@
+                <div class="st-card" style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <span style="font-size:13px;color:var(--st-muted);align-self:center;">النِطاق:</span>
+                    <a class="st-btn @(EffectiveScope == "_platform" ? "st-btn-primary" : "st-btn-ghost")" href="/admin/audit/_platform">المَنصَّة</a>
+                    @foreach (var t in tenants)
+                    {
+                        <a class="st-btn @(EffectiveScope == t.Slug ? "st-btn-primary" : "st-btn-ghost")"
+                           href="@($"/admin/audit/{t.Slug}")">@t.Name</a>
+                    }
+                </div>
+
+                <div class="st-section-title">@entries.Count قَيد</div>
+                @if (entries.Count == 0)
+                {
+                    <div class="st-card" style="text-align:center;padding:36px;color:var(--st-muted);">
+                        لا قُيود في هذا النِطاق بَعد.
+                    </div>
+                }
+                else
+                {
+                    <div class="studio-list">
+                        @foreach (var e in entries)
+                        {
+                            <div class="studio-list-row" style="cursor:default;">
+                                <span class="studio-list-icon ac-chip-muted" style="font-family:ui-monospace;font-size:12px;">
+                                    @e.EntityType[..Math.Min(3, e.EntityType.Length)]
+                                </span>
+                                <div class="studio-list-body">
+                                    <strong>@e.Action</strong>
+                                    <span>
+                                        @(e.ActorName) · @e.At.ToString("yyyy-MM-dd HH:mm:ss")
+                                        @if (!string.IsNullOrEmpty(e.Note)) { <text> · @e.Note</text> }
+                                    </span>
+                                </div>
+                                <code style="font-size:11px;color:var(--st-faint);">@e.EntityId[..Math.Min(8, e.EntityId.Length)]</code>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+</RequirePlatformAdmin>
+
+@code {
+    [Parameter] public string? Scope { get; set; }
+    string EffectiveScope => string.IsNullOrEmpty(Scope) ? "_platform" : Scope;
+    string ScopeLabel => EffectiveScope == "_platform" ? "المَنصَّة" : EffectiveScope;
+
+    List<AuditEntry> entries = new();
+    List<ACommerce.Kit.Tenants.Tenant> tenants = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var ts = Store.QuerySession();
+        tenants = (await ts.Query<ACommerce.Kit.Tenants.Tenant>()
+            .OrderBy(t => t.CreatedAt).ToListAsync()).ToList();
+
+        try
+        {
+            await using var s = Store.QuerySession(EffectiveScope);
+            entries = (await s.Query<AuditEntry>()
+                .OrderByDescending(a => a.At).Take(300).ToListAsync()).ToList();
+        }
+        catch { entries = new(); }
+    }
+}

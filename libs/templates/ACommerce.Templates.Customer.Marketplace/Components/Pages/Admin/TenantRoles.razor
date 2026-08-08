@@ -16,9 +16,10 @@
     }
     else
     {
+        var backHref = From == "tenant" ? $"/{Slug}/r/admin/manage" : $"/admin/tenants/{Slug}";
         <div class="acm-admin-head">
             <div style="display:flex;align-items:center;gap:8px;">
-                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/admin/tenants/{Slug}")">
+                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@backHref">
                     <AcIcon Name="arrow-right" Size="16" />
                 </a>
                 <h1 class="acm-wizard-title" style="margin:0;">أَدوار @tenant.Name</h1>
@@ -38,17 +39,25 @@
                 </p>
 
                 <form method="post" action="@($"/admin/tenants/{Slug}/roles/save")">
-                    <div class="acm-radio-cards" style="grid-template-columns:1fr;">
+                    <div class="acm-role-picklist">
                         @foreach (var tmpl in RoleCatalog.All)
                         {
                             var existing = tenant.Roles.FirstOrDefault(r => r.CatalogSlug == tmpl.Slug);
                             var isPicked = existing is not null;
-                            <label class="acm-radio-card" style="display:flex;gap:12px;align-items:flex-start;">
-                                <input type="checkbox" name="role_@(tmpl.Slug)" value="1"
-                                       checked="@isPicked"
-                                       style="margin-top:4px;width:18px;height:18px;position:static;opacity:1;pointer-events:auto;" />
-                                <span class="acm-radio-card-body" style="flex:1;">
-                                    <strong style="font-size:15px;">@tmpl.Icon @tmpl.Label</strong>
+                            <label class="acm-role-pickcard @(isPicked ? "is-picked" : "")">
+                                @* Razor يَتَعامَل مَع checked كَ boolean attr عَبر
+                                   conditional rendering لِيَتَجَنَّب gotcha أَنّ
+                                   checked="False" يَجعَل الـ checkbox مَفعَّلَة. *@
+                                @if (isPicked)
+                                {
+                                    <input type="checkbox" name="role_@(tmpl.Slug)" value="1" checked />
+                                }
+                                else
+                                {
+                                    <input type="checkbox" name="role_@(tmpl.Slug)" value="1" />
+                                }
+                                <span class="acm-role-pickcard-body">
+                                    <strong style="font-size:15px;"><AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(tmpl.Icon, "tag")" Size="16" /> @tmpl.Label</strong>
                                     <span>@tmpl.Description</span>
                                     <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;">
                                         @foreach (var p in tmpl.Permissions)
@@ -59,12 +68,11 @@
                                     @if (tmpl.Fields.Count > 0)
                                     {
                                         <small style="display:block;margin-top:6px;color:var(--ac-text-muted);">
-                                            بَيانات إضافِيَّة لِلتَّسجيل: @string.Join("، ", tmpl.Fields.Select(f => f.Label))
+                                            بَيانات لِلتَّسجيل: @string.Join("، ", tmpl.Fields.Select(f => f.Label))
                                         </small>
                                     }
                                 </span>
-                                <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;
-                                              color:var(--ac-text-muted);white-space:nowrap;">
+                                <label class="acm-role-pickcard-default">
                                     <input type="radio" name="default_role" value="@tmpl.Slug"
                                            checked="@(existing?.IsDefault == true)" />
                                     افتراضي
@@ -92,7 +100,7 @@
                         @foreach (var r in tenant.Roles.OrderBy(r => r.SortOrder))
                         {
                             <div class="acm-cat-row">
-                                <span style="font-size:24px;">@(r.Icon ?? "👤")</span>
+                                <span><AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(r.Icon, "user")" Size="24" /></span>
                                 <div style="flex:1;">
                                     <strong>@r.Label</strong>
                                     <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
@@ -113,6 +121,7 @@
     [Parameter] public string Slug { get; set; } = "";
     [SupplyParameterFromQuery(Name = "err")]   public string? Err { get; set; }
     [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+    [SupplyParameterFromQuery(Name = "from")]  public string? From { get; set; }
 
     Tenant? tenant;
 

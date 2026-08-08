@@ -18,7 +18,7 @@
     /// <summary>AcIcon name (e.g. "inbox", "search"). Preferred over Icon.</summary>
     [Parameter] public string? IconName { get; set; }
     /// <summary>Legacy: raw markup / emoji. Ignored when <see cref="IconName"/> is set.</summary>
-    [Parameter] public string? Icon { get; set; } = "📭";
+    [Parameter] public string? Icon { get; set; } = "inbox";
     [Parameter] public string? Title { get; set; }
     [Parameter] public string? Message { get; set; }
     [Parameter] public RenderFragment? Action { get; set; }

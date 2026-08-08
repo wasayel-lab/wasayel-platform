@@ -1,0 +1,145 @@
+@page "/{slug}/vendor/{vendorId:guid}"
+@page "/{slug}/r/{role}/vendor/{vendorId:guid}"
+@inject IDocumentStore Store
+@inject AuthSession Auth
+@inject IHttpContextAccessor HttpCtx
+@using ACommerce.Kit.Reviews
+
+@*
+    صَفحَة بائِع — تَجرِبَة Order.V2 المَنقولَة. اِسم/صورَة + تَقييم
+    مُتَوَسِّط + إعلانات البائِع + CTA لِلتَّواصُل والمُتابَعَة.
+*@
+
+<div class="acs-page">
+    @if (vendor is null)
+    {
+        <AcEmptyState IconName="info" Title="البائِع غَير مَوجود" />
+    }
+    else
+    {
+        <AcCard>
+            <ChildContent>
+                <div style="display:flex;gap:12px;align-items:center;">
+                    <div style="width:64px;height:64px;border-radius:50%;background:var(--ac-primary);color:#fff;
+                                display:grid;place-items:center;font-size:24px;font-weight:700;">
+                        @(string.IsNullOrEmpty(vendor.FullName) ? "?" : vendor.FullName[0].ToString())
+                    </div>
+                    <div style="flex:1;">
+                        <h2 style="margin:0;">@vendor.FullName</h2>
+                        @if (avgRating > 0)
+                        {
+                            <div style="color:#f59e0b;font-size:14px;">
+                                @for (var i = 0; i < (int)Math.Round(avgRating); i++)
+                                {
+                                    <AcIcon Name="star" Size="14" Filled="true" />
+                                }<span style="color:var(--ac-text-muted);">
+                                    @avgRating.ToString("0.0") (@reviewCount تَقييم)
+                                </span>
+                            </div>
+                        }
+                        else
+                        {
+                            <span style="color:var(--ac-text-muted);font-size:13px;">لا تَقييمات بَعد</span>
+                        }
+                    </div>
+                </div>
+            </ChildContent>
+        </AcCard>
+
+        @if (Auth.IsAuthenticated && vendor.Id != Auth.UserId)
+        {
+            <form method="post" action="@($"/{Slug}/vendor/{VendorId}/chat")" style="margin:0 0 12px;">
+                <AcButton Type="submit" Variant="primary" Block="true" Text="تَواصَل مَع البائِع" />
+            </form>
+        }
+
+        <AcSectionHeader Title="@($"إعلانات {vendor.FullName} ({listings.Count})")" />
+        @if (listings.Count == 0)
+        {
+            <AcEmptyState IconName="package" Title="لا إعلانات نَشِطَة لِهذا البائِع" />
+        }
+        else
+        {
+            <div class="acm-cat-list">
+                @foreach (var l in listings)
+                {
+                    <a href="@AuthSession.LinkFor(Slug, Role, $"listings/{l.Id}")" class="acm-cat-row"
+                       style="text-decoration:none;color:inherit;">
+                        <div style="flex:1;">
+                            <strong>@l.Title</strong>
+                            <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
+                                @l.Price.ToString("N0") ر.س
+                            </span>
+                        </div>
+                        <AcIcon Name="chevron-left" Size="16" />
+                    </a>
+                }
+            </div>
+        }
+
+        @if (reviews.Count > 0)
+        {
+            <AcSectionHeader Title="آخِر التَّقييمات" />
+            <div class="acm-cat-list">
+                @foreach (var r in reviews.Take(10))
+                {
+                    <AcCard>
+                        <ChildContent>
+                            <div style="display:flex;justify-content:space-between;align-items:start;">
+                                <strong>@r.AuthorName</strong>
+                                <span style="color:#f59e0b;">
+                                    @for (var i = 0; i < r.Rating; i++)
+                                    {
+                                        <AcIcon Name="star" Size="14" Filled="true" />
+                                    }
+                                </span>
+                            </div>
+                            @if (!string.IsNullOrEmpty(r.Body))
+                            {
+                                <p style="margin:6px 0 0;font-size:14px;">@r.Body</p>
+                            }
+                            <span style="color:var(--ac-text-muted);font-size:11px;">@r.At.ToString("yyyy-MM-dd")</span>
+                        </ChildContent>
+                    </AcCard>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
+    [Parameter] public Guid VendorId { get; set; }
+
+    User? vendor;
+    List<Listing> listings = new();
+    List<Review> reviews = new();
+    double avgRating;
+    int reviewCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpCtx.HttpContext is { } ctx) { Auth.SetTenant(Slug); Auth.Load(ctx, Slug); }
+        await using var s = Store.QuerySession(Slug);
+        vendor = await s.LoadAsync<User>(VendorId);
+        if (vendor is null) return;
+
+        // إعلانات البائِع — مَن owner_id يُساوي vendor.Id (مُخَزَّن في
+        // Listing.Attributes حَسَب نَمَط tenant).
+        var all = await s.Query<Listing>()
+            .Where(l => !l.IsDeleted)
+            .OrderByDescending(l => l.CreatedAt)
+            .Take(50).ToListAsync();
+        listings = all.Where(l =>
+            l.Attributes.TryGetValue("owner_id", out var oid) && oid == VendorId.ToString()
+        ).ToList();
+
+        reviews = (await s.Query<Review>()
+            .Where(r => r.TargetUserId == VendorId)
+            .OrderByDescending(r => r.At)
+            .Take(20).ToListAsync()).ToList();
+        reviewCount = reviews.Count;
+        if (reviewCount > 0) avgRating = reviews.Average(r => r.Rating);
+    }
+}

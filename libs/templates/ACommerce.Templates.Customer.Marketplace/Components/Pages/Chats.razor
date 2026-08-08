@@ -1,4 +1,5 @@
 @page "/{slug}/chats"
+@page "/{slug}/r/{role}/chats"
 @inject IDocumentStore Store
 @inject AuthSession Auth
 
@@ -9,7 +10,7 @@
                   Title="المُحادَثات تَحتاج تَسجيل دُخول"
                   Message="سَجِّل دُخولك للوصول إلى رَسائلك"
                   ActionLabel="تَسجيل دُخول"
-                  ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/chats")" />
+                  ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/chats")" />
 }
 else
 {
@@ -32,12 +33,22 @@ else
             {
                 var iAmOwner = c.OwnerId == Auth.UserId;
                 var partnerName = iAmOwner ? c.PartnerName : c.OwnerName;
+                var partnerId = iAmOwner ? c.PartnerId : c.OwnerId;
+                var partnerAvatar = avatars.TryGetValue(partnerId, out var a) ? a : null;
                 var unread = iAmOwner ? c.OwnerUnread : c.PartnerUnread;
                 <li style="border-bottom:1px solid var(--ac-border);">
-                    <a href="@($"/{Slug}/chats/{c.Id}")"
+                    <a href="@AuthSession.LinkFor(Slug, Role, $"chats/{c.Id}")"
                        style="display:flex;gap:12px;align-items:center;padding:14px 8px;
                               text-decoration:none;color:var(--ac-text);">
-                        <AcAvatar Name="@partnerName" Size="48" />
+                        @if (!string.IsNullOrEmpty(partnerAvatar))
+                        {
+                            <img src="@partnerAvatar" alt="@partnerName"
+                                 style="width:48px;height:48px;border-radius:50%;object-fit:cover;flex:0 0 auto;" />
+                        }
+                        else
+                        {
+                            <AcAvatar Name="@partnerName" Size="48" />
+                        }
                         <div style="flex:1;min-width:0;">
                             <div style="display:flex;justify-content:space-between;align-items:baseline;">
                                 <strong style="font-size:15px;">@partnerName</strong>
@@ -75,6 +86,7 @@ else
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
     List<Conversation>? convs;
 
     /// <summary>
@@ -94,6 +106,8 @@ else
         return localAt.ToString("yyyy/MM/dd");
     }
 
+    Dictionary<Guid, string?> avatars = new();
+
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
@@ -102,5 +116,17 @@ else
             .Where(c => c.OwnerId == Auth.UserId!.Value || c.PartnerId == Auth.UserId!.Value)
             .OrderByDescending(c => c.LastAt)
             .Take(50).ToListAsync()).ToList();
+
+        // اِجلِب صُوَر الأَطراف الآخَرين دَفعَةً واحِدَةً لِعَرضِها في القائِمَة.
+        // ToList() مَقصودَة: Marten يَدعَم List<T>.Contains في WHERE ولا
+        // يَدعَم Array.Contains (يُحَلّ إلى MemoryExtensions.Contains).
+        var partnerIds = convs
+            .Select(c => c.OwnerId == Auth.UserId!.Value ? c.PartnerId : c.OwnerId)
+            .Distinct().ToList();
+        if (partnerIds.Count > 0)
+        {
+            var users = await s.Query<User>().Where(u => partnerIds.Contains(u.Id)).ToListAsync();
+            avatars = users.ToDictionary(u => u.Id, u => u.AvatarUrl);
+        }
     }
 }

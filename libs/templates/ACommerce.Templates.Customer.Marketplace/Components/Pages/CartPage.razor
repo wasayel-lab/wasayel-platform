@@ -1,0 +1,89 @@
+@page "/{slug}/cart"
+@page "/{slug}/r/{role}/cart"
+@inject IDocumentStore Store
+@inject AuthSession Auth
+@inject IHttpContextAccessor HttpCtx
+@using ACommerce.Kit.Cart
+
+@*
+    صَفحة السَّلَّة — تَجرِبَة Order.V2 المَنقولَة. تَعرِض القِطَع، تُتيح
+    تَعديل الكَمِّيَّة وإزالَة، مَع subtotal وزِرّ checkout. مُلائِم لِأَنماط
+    cafe/grocery حَيث يَحدُث الجَمع قَبل الدَّفع.
+*@
+
+<div class="acs-page">
+    @if (!Auth.IsAuthenticated)
+    {
+        <AcEmptyState IconName="package" Title="السَّلَّة تَحتاج دُخول"
+                      ActionLabel="دُخول" ActionHref="@AuthSession.LinkFor(Slug, Role, "login?returnUrl=/" + Slug + "/cart")" />
+    }
+    else if (cart is null || cart.Items.Count == 0)
+    {
+        <AcEmptyState IconName="package" Title="سَلَّتك فارِغَة"
+                      Message="أَضِف قِطَعاً لِلسَّلَّة مِن صَفحات الإعلانات."
+                      ActionLabel="استِكشاف" ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
+    }
+    else
+    {
+        <h1 class="acm-wizard-title">سَلَّتك (@cart.TotalQuantity قِطعَة)</h1>
+
+        @foreach (var item in cart.Items)
+        {
+            <AcCard>
+                <ChildContent>
+                    <div style="display:flex;gap:12px;align-items:center;">
+                        <div style="flex:1;min-width:0;">
+                            <strong>@item.Title</strong>
+                            <span style="display:block;color:var(--ac-text-muted);font-size:13px;">
+                                @item.UnitPriceSar.ToString("N0") ر.س / قِطعَة
+                            </span>
+                        </div>
+                        <form method="post" action="@($"/{Slug}/cart/{item.ListingId}/qty")" style="margin:0;display:flex;gap:4px;align-items:center;">
+                            <button type="submit" name="qty" value="@(item.Quantity - 1)"
+                                    class="ac-btn ac-btn-ghost ac-btn-sm" aria-label="ناقِص">−</button>
+                            <span style="min-width:24px;text-align:center;font-weight:700;">@item.Quantity</span>
+                            <button type="submit" name="qty" value="@(item.Quantity + 1)"
+                                    class="ac-btn ac-btn-ghost ac-btn-sm" aria-label="زائِد">+</button>
+                        </form>
+                        <strong style="min-width:80px;text-align:end;">
+                            @((item.UnitPriceSar * item.Quantity).ToString("N0")) ر.س
+                        </strong>
+                    </div>
+                </ChildContent>
+            </AcCard>
+        }
+
+        <AcCard>
+            <ChildContent>
+                <div style="display:flex;justify-content:space-between;font-size:16px;">
+                    <strong>المَجموع</strong>
+                    <strong style="color:var(--ac-primary);">@cart.SubtotalSar.ToString("N2") ر.س</strong>
+                </div>
+            </ChildContent>
+        </AcCard>
+
+        <div style="display:flex;gap:8px;">
+            <form method="post" action="@($"/{Slug}/cart/clear")" style="flex:0 0 auto;">
+                <AcButton Type="submit" Variant="ghost" Text="إفراغ" />
+            </form>
+            <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block" style="text-decoration:none;text-align:center;flex:1;"
+               href="@AuthSession.LinkFor(Slug, Role, "checkout")">
+                إتمام الشِراء →
+            </a>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
+    Cart? cart;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpCtx.HttpContext is { } ctx) { Auth.SetTenant(Slug); Auth.Load(ctx, Slug); }
+        if (!Auth.IsAuthenticated) return;
+        await using var s = Store.QuerySession(Slug);
+        cart = await s.LoadAsync<Cart>(Auth.UserId!.Value);
+    }
+}

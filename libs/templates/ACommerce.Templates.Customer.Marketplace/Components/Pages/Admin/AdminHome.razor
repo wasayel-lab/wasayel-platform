@@ -7,8 +7,28 @@
     حاليّاً مَفتوحَة بِلا تَوثيق — ستُضاف auth في جَلسَة لاحِقَة.
 *@
 
+<RequirePlatformAdmin>
 <div class="acs-page acm-admin">
-    <div class="acm-admin-head">
+    @* صَفحَة بِدايَة صاحِب المَتجَر الجَديد: ابدَأ بِتَحليل الفِكرَة قَبل الإنشاء. *@
+    <AcCard Class="acm-incubator-hero">
+        <ChildContent>
+            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                <span style="font-size:46px;"><AcIcon Name="search" Size="46" /></span>
+                <div style="flex:1;min-width:220px;">
+                    <h2 style="margin:0 0 4px;">عِندَكَ فِكرَة مَتجَر؟ ابدَأ بِتَحليلها</h2>
+                    <p style="margin:0;color:var(--ac-text-muted);font-size:13px;line-height:1.7;">
+                        قَبل أَن تَبني، تَحَقَّق مِن الجَدوى: حَجم السوق السعودي،
+                        المنافِسون، التَّكاليف، والمَخاطِر — دِراسَة مُولَّدَة في دَقائِق.
+                    </p>
+                </div>
+                <a class="ac-btn ac-btn-primary" href="/admin/incubator">
+                    <AcIcon Name="star" Size="18" /> حاضِنَة الأَفكار
+                </a>
+            </div>
+        </ChildContent>
+    </AcCard>
+
+    <div class="acm-admin-head" style="margin-top:20px;">
         <div>
             <h1 class="acm-wizard-title" style="margin:0;">المُستَأجِرون</h1>
             <p style="color:var(--ac-text-muted);margin:4px 0 0;font-size:13px;">
@@ -17,7 +37,7 @@
         </div>
         <div style="display:flex;gap:8px;">
             <a class="ac-btn ac-btn-primary" href="/admin/tenants/new">
-                <AcIcon Name="plus-circle" Size="18" /> مَتجَر جَديد
+                <AcIcon Name="plus" Size="18" /> مَتجَر جَديد
             </a>
             <a class="ac-btn ac-btn-ghost" href="/admin/agent">
                 <AcIcon Name="message" Size="18" /> مُساعِد الإنشاء
@@ -74,13 +94,19 @@
                               width:32px;height:32px;border-radius:999px;
                               background:var(--ac-bg-alt);color:var(--ac-text-muted);
                               text-decoration:none;font-size:14px;">
-                        ↗
+                        <AcIcon Name="external-link" Size="15" />
                     </a>
                 </article>
             }
         </div>
     }
 </div>
+
+    @* monitoring CTA لِمُشرِف المَنصَّة *@
+    <div style="margin-top:18px;">
+        <a class="ac-btn ac-btn-ghost" href="/admin/monitor"><AcIcon Name="bar-chart" Size="16" /> لوحَة مُراقَبَة جَودَة التَّحاليل</a>
+    </div>
+</RequirePlatformAdmin>
 
 @code {
     List<Tenant>? tenants;

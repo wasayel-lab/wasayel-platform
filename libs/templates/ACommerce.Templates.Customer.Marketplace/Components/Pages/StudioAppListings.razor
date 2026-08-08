@@ -1,0 +1,141 @@
+@page "/studio/apps/{slug}/listings"
+@inject Services.Incubator.StudioAuth Auth
+@inject Marten.IDocumentStore Store
+@using ACommerce.Kit.Tenants
+@using ACommerce.Kit.Listings
+
+@*
+    قائِمَة كُلّ إعلانات التَّطبيق (لِلمالِك الإداريّ، لا لِمُستَخدِم نِهائيّ).
+    إجراءات: إخفاء/إظهار/حَذف. فَلتَرَة بِالحالَة.
+*@
+
+<StudioShell Title="@($"الإعلانات · {tenant?.Name ?? Slug}")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/console")">← التَّشغيل</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (tenant is null)
+        {
+            <div class="st-card">التَّطبيق غَير مَوجود أَو لا تَملِكه.</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>إشراف الإعلانات</h1>
+                <p>أَخفِ الإعلانات المُسيئَة مِن البَحث العامّ، أَو احذِفها نِهائيّاً.</p>
+            </div>
+
+            <div class="studio-stats">
+                <div class="studio-stat"><div class="studio-stat-label">إجمالي</div>
+                    <div class="studio-stat-value">@listings.Count</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">نَشِطَة</div>
+                    <div class="studio-stat-value" style="color:var(--st-success);">
+                        @listings.Count(l => !l.IsDeleted && !l.IsHiddenByModerator)
+                    </div></div>
+                <div class="studio-stat"><div class="studio-stat-label">مُخفاة إشرافيّاً</div>
+                    <div class="studio-stat-value" style="color:var(--st-warning);">
+                        @listings.Count(l => l.IsHiddenByModerator && !l.IsDeleted)
+                    </div></div>
+                <div class="studio-stat"><div class="studio-stat-label">مَحذوفَة</div>
+                    <div class="studio-stat-value" style="color:var(--st-danger);">
+                        @listings.Count(l => l.IsDeleted)
+                    </div></div>
+            </div>
+
+            <div class="st-section-title">القائِمَة</div>
+            @if (listings.Count == 0)
+            {
+                <div class="st-card" style="text-align:center;padding:36px;color:var(--st-muted);">
+                    لا إعلانات بَعد.
+                </div>
+            }
+            else
+            {
+                <div class="studio-list">
+                    @foreach (var l in listings.OrderByDescending(l => l.UpdatedAt))
+                    {
+                        <div class="st-card">
+                            <div style="display:flex;gap:14px;align-items:start;">
+                                <span class="studio-list-icon" style="background:@StatusBg(l);color:@StatusColor(l);flex-shrink:0;">
+                                    <AcIcon Name="clipboard" Size="18" />
+                                </span>
+                                <div style="flex:1;min-width:0;">
+                                    <strong>@l.Title</strong>
+                                    @if (l.IsDeleted)
+                                    { <span class="st-chip st-chip-danger" style="margin-inline-start:6px;">مَحذوف</span> }
+                                    else if (l.IsHiddenByModerator)
+                                    { <span class="st-chip st-chip-warning" style="margin-inline-start:6px;">مُخفي</span> }
+                                    <div style="color:var(--st-muted);font-size:13px;margin-top:2px;">
+                                        @l.CategorySlug · @l.City @(string.IsNullOrEmpty(l.District) ? "" : "/ " + l.District)
+                                        · @l.Price.ToString("N0") ر.س · @l.ViewCount مُشاهَدَة
+                                    </div>
+                                    @if (l.IsHiddenByModerator && !string.IsNullOrEmpty(l.ModerationReason))
+                                    {
+                                        <div style="margin-top:6px;font-size:12.5px;color:var(--st-danger);">
+                                            <AcIcon Name="alert-circle" Size="14" /> سَبَب الإخفاء: @l.ModerationReason
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+                            @if (!l.IsDeleted)
+                            {
+                                <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+                                    @if (l.IsHiddenByModerator)
+                                    {
+                                        <form method="post" action="@($"/studio/apps/{Slug}/listings/{l.Id}/moderate")" style="margin:0;">
+                                            <input type="hidden" name="action" value="unhide" />
+                                            <button type="submit" class="st-btn st-btn-ghost"><AcIcon Name="refresh" Size="16" /> إظهار</button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <form method="post" action="@($"/studio/apps/{Slug}/listings/{l.Id}/moderate")"
+                                              style="display:flex;gap:6px;margin:0;flex:1;min-width:200px;">
+                                            <input type="hidden" name="action" value="hide" />
+                                            <input class="st-input" name="reason" placeholder="سَبَب الإخفاء" />
+                                            <button type="submit" class="st-btn st-btn-ghost" style="color:var(--st-warning);">إخفاء</button>
+                                        </form>
+                                    }
+                                    <form method="post" action="@($"/studio/apps/{Slug}/listings/{l.Id}/moderate")"
+                                          onsubmit="return confirm('تَأكيد الحَذف؟ غَير قابِل لِلتَّراجُع.');" style="margin:0;">
+                                        <input type="hidden" name="action" value="delete" />
+                                        <button type="submit" class="st-btn st-btn-ghost" style="color:var(--st-danger);"><AcIcon Name="trash" Size="16" /> حَذف</button>
+                                    </form>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    Tenant? tenant;
+    List<Listing> listings = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        await using var qs = Store.QuerySession();
+        tenant = await qs.LoadAsync<Tenant>(Slug);
+        if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) { tenant = null; return; }
+        if (tenant is null) return;
+        await using var ts = Store.QuerySession(Slug);
+        try
+        {
+            listings = (await ts.Query<Listing>()
+                .OrderByDescending(l => l.UpdatedAt).Take(200).ToListAsync()).ToList();
+        }
+        catch { listings = new(); }
+    }
+
+    static string StatusBg(Listing l) =>
+        l.IsDeleted ? "#fee2e2" : l.IsHiddenByModerator ? "#fef3c7" : "#dcfce7";
+    static string StatusColor(Listing l) =>
+        l.IsDeleted ? "#b91c1c" : l.IsHiddenByModerator ? "#854d0e" : "#15803d";
+}

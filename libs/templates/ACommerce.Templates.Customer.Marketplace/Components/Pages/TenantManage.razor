@@ -1,4 +1,5 @@
 @page "/{slug}/manage"
+@page "/{slug}/r/{role}/manage"
 @inject IDocumentStore Store
 @inject AuthSession Auth
 
@@ -13,7 +14,7 @@
 {
     <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
                   ActionLabel="تَسجيل دُخول"
-                  ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/manage")" />
+                  ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/manage")" />
 }
 else if (!canManage)
 {
@@ -34,15 +35,15 @@ else
             <h1 class="acm-wizard-title" style="margin:0;">إدارَة @tenant.Name</h1>
             <span style="color:var(--ac-text-muted);font-size:13px;">لَوحَة الإداريّ</span>
         </div>
-        <span style="font-size:32px;">👔</span>
+        <span style="font-size:32px;"><AcIcon Name="people" Size="24" /></span>
     </div>
 
     <div class="acm-home-grid acm-stats-grid" style="margin-top:8px;">
-        <a class="acm-stat-tile" href="@($"/{Slug}/explore")">
+        <a class="acm-stat-tile" href="@AuthSession.LinkFor(Slug, Role, $"explore")">
             <strong>@listingsCount</strong>
             <span>إعلان نَشِط</span>
         </a>
-        <a class="acm-stat-tile" href="@($"/{Slug}/chats")">
+        <a class="acm-stat-tile" href="@AuthSession.LinkFor(Slug, Role, $"chats")">
             <strong>@convsCount</strong>
             <span>مُحادَثَة</span>
         </a>
@@ -60,10 +61,10 @@ else
         <ChildContent>
             <h3 style="margin-top:0;">إجراءات سَريعَة</h3>
             <div class="acm-home-actions">
-                <AcActionCard Label="إنشاء إعلان"  IconName="plus"      Variant="primary" Href="@($"/{Slug}/create-listing")" />
-                <AcActionCard Label="تَصَفُّح الإعلانات" IconName="search"  Variant="surface" Href="@($"/{Slug}/explore")" />
-                <AcActionCard Label="مُحادَثات المَتجَر" IconName="message" Variant="surface" Href="@($"/{Slug}/chats")" />
-                <AcActionCard Label="الشَكاوى والدَّعم"  IconName="alert-circle" Variant="surface" Href="@($"/{Slug}/support")" />
+                <AcActionCard Label="إنشاء إعلان"  IconName="plus"      Variant="primary" Href="@AuthSession.LinkFor(Slug, Role, $"create-listing")" />
+                <AcActionCard Label="تَصَفُّح الإعلانات" IconName="search"  Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"explore")" />
+                <AcActionCard Label="مُحادَثات المَتجَر" IconName="message" Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"chats")" />
+                <AcActionCard Label="الشَكاوى والدَّعم"  IconName="alert-circle" Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"support")" />
             </div>
         </ChildContent>
     </AcCard>
@@ -76,11 +77,12 @@ else
                 (تَتَطَلَّب وُصولاً مُسبَقاً إلى /admin).
             </p>
             <div class="acm-home-actions">
-                <AcActionCard Label="الفِئات"       IconName="tag"      Variant="surface" Href="@($"/admin/tenants/{Slug}/categories")" />
-                <AcActionCard Label="الخَصائِص"      IconName="settings" Variant="surface" Href="@($"/admin/tenants/{Slug}/attributes")" />
-                <AcActionCard Label="المُدُن"        IconName="map-pin"  Variant="surface" Href="@($"/admin/tenants/{Slug}/regions")" />
-                <AcActionCard Label="الأَدوار"       IconName="user"     Variant="surface" Href="@($"/admin/tenants/{Slug}/roles")" />
-                <AcActionCard Label="الهُويَّة"      IconName="settings" Variant="surface" Href="@($"/admin/tenants/{Slug}/branding")" />
+                <AcActionCard Label="الفِئات"       IconName="tag"      Variant="surface" Href="@($"/admin/tenants/{Slug}/categories?from=tenant")" />
+                <AcActionCard Label="الخَصائِص"      IconName="settings" Variant="surface" Href="@($"/admin/tenants/{Slug}/attributes?from=tenant")" />
+                <AcActionCard Label="المُدُن"        IconName="map-pin"  Variant="surface" Href="@($"/admin/tenants/{Slug}/regions?from=tenant")" />
+                <AcActionCard Label="الأَدوار"       IconName="user"     Variant="surface" Href="@($"/admin/tenants/{Slug}/roles?from=tenant")" />
+                <AcActionCard Label="المُستَخدِمون"  IconName="user"     Variant="surface" Href="@($"/admin/tenants/{Slug}/users?from=tenant")" />
+                <AcActionCard Label="الهُويَّة"      IconName="settings" Variant="surface" Href="@($"/admin/tenants/{Slug}/branding?from=tenant")" />
             </div>
         </ChildContent>
     </AcCard>
@@ -89,6 +91,7 @@ else
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
 
     Tenant? tenant;
     bool canManage;
@@ -104,7 +107,7 @@ else
         await using var s = Store.QuerySession(Slug);
         var me = await s.LoadAsync<User>(Auth.UserId!.Value);
         canManage = ACommerce.Kit.Roles.RolePermissions.Has(
-            tenant.Roles, me?.ActiveRole, "tenant.manage");
+            tenant.Roles, Role ?? me?.ActiveRole, "tenant.manage");
         if (!canManage) return;
 
         listingsCount = await s.Query<Listing>().CountAsync(l => !l.IsDeleted);

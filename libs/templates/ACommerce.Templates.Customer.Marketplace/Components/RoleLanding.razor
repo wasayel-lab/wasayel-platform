@@ -1,0 +1,57 @@
+@*
+    صَفحَة دُخول المَتجَر مُتَعَدِّد التَّطبيقات الفَرعيَّة (مَتجَر بِأَدوار).
+    تَظهَر عَلى /{slug} عِندَ مَتجَر مِثل إنجيز قَبل أَن يَختار المُستَخدِم
+    تَطبيقَه الفَرعيّ. لا مُحتَوى ولا feed — فَقَط بِطاقات لِلتَّطبيقات
+    المُتاحَة. كُلّ بِطاقَة تَحمِل لِـ login مُسبَق-التَّحديد لِلدَور.
+*@
+
+<div class="acs-page acm-role-landing">
+    <header class="acm-role-landing-head">
+        <div class="acm-role-landing-brand"
+             style="background:@Tenant.BrandColor;">
+            @(Tenant.Name.FirstOrDefault())
+        </div>
+        <h1>@Tenant.Name</h1>
+        @if (!string.IsNullOrEmpty(Tenant.TagLine))
+        {
+            <p>@Tenant.TagLine</p>
+        }
+        <span class="acm-role-landing-hint">
+            <AcIcon Name="star" Size="14" /> اختَر تَطبيقَكَ لِلمُتابَعَة
+        </span>
+    </header>
+
+    <div class="acm-role-landing-cards">
+        @foreach (var r in Tenant.Roles
+                    .Where(r => r.CatalogSlug != "tenant_admin")
+                    .OrderBy(r => r.SortOrder))
+        {
+            <a class="acm-role-landing-card"
+               href="@AuthSession.LinkFor(Slug, Role, $"r/{r.Slug}/login")">
+                <span class="acm-role-landing-card-icon">
+                    <AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(r.Icon, "user")" Size="26" />
+                </span>
+                <div>
+                    <strong>@r.Label</strong>
+                    @if (!string.IsNullOrEmpty(r.Description))
+                    {
+                        <span>@r.Description</span>
+                    }
+                </div>
+                <span class="acm-role-landing-card-cta" aria-hidden="true">
+                    <AcIcon Name="chevron-left" Size="16" />
+                </span>
+            </a>
+        }
+    </div>
+
+    <div class="acm-role-landing-foot">
+        <a href="@AuthSession.LinkFor(Slug, Role, $"login")">لَدَيكَ حِساب بِدَور مُعَيَّن؟ سَجِّل الدُخول</a>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
+    [Parameter] public ACommerce.Kit.Tenants.Tenant Tenant { get; set; } = default!;
+}

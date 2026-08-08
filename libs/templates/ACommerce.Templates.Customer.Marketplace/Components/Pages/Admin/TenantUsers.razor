@@ -1,0 +1,124 @@
+@page "/admin/tenants/{slug}/users"
+@inject IDocumentStore Store
+
+@*
+    إدارَة مُستَخدِمي المَتجَر — قائِمَة مَع الدَور النَّشِط لِكُلّ مُستَخدِم
+    + زِرّ مَنح/سَحب صَلاحِيَّة tenant_admin. هذه القَناة المُعتَمَدَة لِتَعيين
+    الإداريّين (الـ /me/role لا يَسمَح بِالاختِيار الذاتيّ لِـ admin).
+*@
+
+<div class="acs-page acm-admin">
+    @if (tenant is null)
+    {
+        <AcEmptyState IconName="info" Title="المَتجَر غَير مَوجود" />
+    }
+    else
+    {
+        @* زِرّ الرُجوع يَحتَرِم سِياق الدُّخول: لَو جَئنا مِن إدارَة
+           المَتجَر (from=tenant) نَعود إلَيها، وإلَّا (افتِراضيّاً)
+           نَعود لِصَفحَة ادمن المَنصَّة. *@
+        string backHref = From == "tenant" ? $"/{Slug}/r/admin/manage" : $"/admin/tenants/{Slug}";
+        <div class="acm-admin-head">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@backHref">
+                    <AcIcon Name="arrow-right" Size="16" />
+                </a>
+                <h1 class="acm-wizard-title" style="margin:0;">مُستَخدِمو @tenant.Name</h1>
+            </div>
+            <span class="ac-chip ac-chip-sm">@users.Count مُستَخدِم</span>
+        </div>
+
+        @if (Saved == "1") { <AcAlert Variant="success" Message="تَمّ التَّحديث." /> }
+        @if (!hasAdminRole)
+        {
+            <AcAlert Variant="warning"
+                     Message="هذا المَتجَر لا يَحوي دَور tenant_admin بَعد. اِذهَب إلى صَفحَة الأَدوار وَ ضَع علامَة عَلَيه أَوَّلاً." />
+        }
+
+        @if (users.Count == 0)
+        {
+            <AcEmptyState IconName="user" Title="لا مُستَخدِمين بَعد" />
+        }
+        else
+        {
+            <AcCard>
+                <ChildContent>
+                    <div class="acm-cat-list">
+                        @foreach (var u in users)
+                        {
+                            var isAdmin = u.ActiveRole == "tenant_admin";
+                            <div class="acm-cat-row">
+                                <span style="font-size:24px;"><AcIcon Name="@(isAdmin ? "people" : "user")" Size="24" /></span>
+                                <div style="flex:1;min-width:0;">
+                                    <strong>@u.FullName</strong>
+                                    <span style="color:var(--ac-text-muted);font-size:12px;display:block;direction:ltr;">
+                                        @u.Phone
+                                    </span>
+                                    @if (!string.IsNullOrEmpty(u.ActiveRole))
+                                    {
+                                        <span style="color:var(--ac-text-muted);font-size:11px;display:block;">
+                                            الدَور: @RoleLabel(u.ActiveRole)
+                                        </span>
+                                    }
+                                </div>
+                                @if (hasAdminRole)
+                                {
+                                    @if (isAdmin)
+                                    {
+                                        <form method="post"
+                                              action="@($"/admin/tenants/{Slug}/users/{u.Id}/revoke-admin")"
+                                              style="margin:0;">
+                                            <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">
+                                                سَحب الإدارَة
+                                            </button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <form method="post"
+                                              action="@($"/admin/tenants/{Slug}/users/{u.Id}/grant-admin")"
+                                              style="margin:0;">
+                                            <button type="submit" class="ac-btn ac-btn-primary ac-btn-sm">
+                                                <AcIcon Name="check" Size="14" /> مَنح إدارَة
+                                            </button>
+                                        </form>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+                </ChildContent>
+            </AcCard>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+    [SupplyParameterFromQuery(Name = "from")] public string? From { get; set; }
+
+    Tenant? tenant;
+    List<User> users = new();
+    bool hasAdminRole;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var g = Store.QuerySession();
+        tenant = await g.LoadAsync<Tenant>(Slug);
+        if (tenant is null) return;
+        hasAdminRole = tenant.Roles.Any(r => r.CatalogSlug == "tenant_admin");
+
+        await using var s = Store.QuerySession(Slug);
+        users = (await s.Query<User>().ToListAsync())
+            .OrderBy(u => u.ActiveRole != "tenant_admin")
+            .ThenByDescending(u => u.CreatedAt)
+            .ToList();
+    }
+
+    string RoleLabel(string slug)
+    {
+        var role = tenant?.Roles.FirstOrDefault(r => r.Slug == slug);
+        return role?.Label ?? slug;
+    }
+}

@@ -1,0 +1,125 @@
+@page "/studio/apps/{slug}/pwa"
+@inject Services.Incubator.StudioAuth Auth
+@inject Marten.IDocumentStore Store
+@using ACommerce.Kit.Tenants
+@using ACommerce.Kit.Roles
+
+@*
+    مُحَرِّر تَطبيقات الـ PWA داخِل واجِهَة الـ Studio — لِكُلّ دَور: اِسم
+    مُخَصَّص (يَتَجاوَز التَّوليد التِلقائي) + أَيقونَة مُخَصَّصَة (تَتَجاوَز
+    التَّوليد بِلَون العَلامَة). الأَيقونَة تُحَوَّل لِـ data: URL وَتُخزَّن
+    مَعَ الدَور (سَقف ٢٥٦ كيلوبايت). تَركها فارِغَة = اِستِخدام التَّوليد
+    التِلقائي.
+*@
+
+<StudioShell Title="@($"تَطبيقات الجَوّال · {tenant?.Name ?? Slug}")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← الإعدادات</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (tenant is null)
+        {
+            <div class="st-card">التَّطبيق غَير مَوجود أَو لا تَملِكه.</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>تَطبيقات الجَوّال</h1>
+                <p>عِندَ "أَضِف إلى الشاشَة الرَئيسِيَّة" يَحصُل المُستَخدِم عَلى
+                    تَطبيق مُستَقِلّ لِدَورِه — اسم + أَيقونَة + لَون + اختِصارات.
+                    تَركك لِلحُقول فارِغَة يُولِّد القِيَم تِلقائيّاً مِن اسم
+                    الدَور وَلَون المَتجَر.</p>
+            </div>
+
+            @if (Saved == "1")             { <div class="st-chip st-chip-success" style="margin-bottom:14px;"><AcIcon Name="check" Size="14" /> تَمّ الحِفظ</div> }
+            @if (Err == "icon_too_large")  { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">الأَيقونَة أَكبَر مِن ٢٥٦ كيلوبايت.</div> }
+            @if (Err == "icon_bad_type")   { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">نَوع الصورَة غَير مَدعوم — اِستَخدِم PNG أَو SVG.</div> }
+
+            @if (tenant.Roles.Count == 0)
+            {
+                <div class="st-card">
+                    <p style="margin:0 0 12px;">
+                        هذا المَتجَر بِلا أَدوار — يَحصُل عَلى تَطبيق PWA واحِد عَلى /@(Slug).
+                        عَدِّل الأَدوار أَوَّلاً لِلحُصول عَلى تَطبيق لِكُلّ دَور.
+                    </p>
+                    <a class="st-btn st-btn-primary" href="@($"/studio/apps/{Slug}/roles")">
+                        <AcIcon Name="people" Size="16" /> إعداد الأَدوار
+                    </a>
+                </div>
+            }
+            else
+            {
+                <form method="post" action="@($"/studio/apps/{Slug}/pwa/save")"
+                      enctype="multipart/form-data">
+                    @foreach (var r in tenant.Roles.OrderBy(r => r.SortOrder))
+                    {
+                        var iconUrl = $"/api/{Slug}/r/{r.Slug}/icon.svg";
+                        <div class="st-card" style="margin-bottom:14px;">
+                            <div style="display:flex;gap:16px;align-items:flex-start;">
+                                <img src="@iconUrl" alt="@r.Label"
+                                     style="width:96px;height:96px;border-radius:18px;
+                                            background:#f4f4f5;flex-shrink:0;
+                                            border:1px solid var(--ac-border);" />
+                                <div style="flex:1;">
+                                    <h3 style="margin:0 0 4px;">
+                                        <AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(r.Icon, "user")" Size="18" /> @r.Label
+                                    </h3>
+                                    <small style="color:var(--ac-text-muted);direction:ltr;">
+                                        /@(Slug)/r/@(r.Slug)/
+                                    </small>
+
+                                    <AcField Label="اسم التَطبيق"
+                                             Hint="@($"الافتراضي: {tenant.Name} — {r.Label}")">
+                                        <input type="text" maxlength="60" class="ac-input"
+                                               name="@($"name_{r.Slug}")"
+                                               value="@(r.PwaName ?? "")"
+                                               placeholder="@($"{tenant.Name} — {r.Label}")" />
+                                    </AcField>
+
+                                    <AcField Label="أَيقونَة مُخَصَّصَة"
+                                             Hint="PNG أَو SVG، مُرَبَّع ٥١٢×٥١٢، حَتَّى ٢٥٦ كيلوبايت. اِترُك فارِغاً لِلتَوليد التِلقائي.">
+                                        <input type="file" class="ac-input"
+                                               name="@($"icon_{r.Slug}")"
+                                               accept="image/png,image/svg+xml,image/webp" />
+                                    </AcField>
+
+                                    @if (!string.IsNullOrEmpty(r.PwaIconDataUrl))
+                                    {
+                                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+                                            <input type="checkbox"
+                                                   name="@($"clear_{r.Slug}")" value="1" />
+                                            حَذف الأَيقونَة المُخَصَّصَة (العَودَة لِلتَوليد)
+                                        </label>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <div style="display:flex;gap:8px;margin-top:16px;">
+                        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">إلغاء</a>
+                        <button type="submit" class="st-btn st-btn-primary">
+                            <AcIcon Name="check" Size="18" /> حِفظ
+                        </button>
+                    </div>
+                </form>
+            }
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+    [SupplyParameterFromQuery(Name = "err")]   public string? Err { get; set; }
+    Tenant? tenant;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        await using var qs = Store.QuerySession();
+        tenant = await qs.LoadAsync<Tenant>(Slug);
+        if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) { tenant = null; return; }
+    }
+}

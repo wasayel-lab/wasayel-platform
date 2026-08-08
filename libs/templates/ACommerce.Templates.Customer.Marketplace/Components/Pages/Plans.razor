@@ -1,4 +1,5 @@
 @page "/{slug}/plans"
+@page "/{slug}/r/{role}/plans"
 @inject IDocumentStore Store
 @inject AuthSession Auth
 
@@ -17,7 +18,7 @@ else if (plans.Count == 0)
 }
 else
 {
-    <div class="acm-home-grid">
+    <div class="acm-plans-grid">
         @foreach (var p in plans)
         {
             <AcCard>
@@ -27,7 +28,7 @@ else
                         @p.Price.ToString("N0") <span style="font-size:0.8rem;">ريال / @(p.DaysPeriod) يوم</span>
                     </p>
                     <ul style="list-style:none;padding:0;margin:8px 0;font-size:13px;">
-                        <li>✓ @p.ListingsQuota إعلان</li>
+                        <li><AcIcon Name="check" Size="16" /> @p.ListingsQuota إعلان</li>
                         @if (!string.IsNullOrEmpty(p.Description)) { <li>@p.Description</li> }
                     </ul>
                     @if (Auth.IsAuthenticated)
@@ -38,7 +39,7 @@ else
                     }
                     else
                     {
-                        <a class="ac-login-cta ac-login-cta-block" href="@($"/{Slug}/login?returnUrl=/{Slug}/plans")"
+                        <a class="ac-login-cta ac-login-cta-block" href="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/plans")"
                            style="display:block;text-align:center;padding:8px;background:var(--ac-primary);color:#fff;
                                   border-radius:var(--ac-radius-sm);text-decoration:none;">دُخول للاشتِراك</a>
                     }
@@ -51,6 +52,7 @@ else
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
     IReadOnlyList<ACommerce.Kit.Subscriptions.Plan>? plans;
 
     protected override async Task OnParametersSetAsync()

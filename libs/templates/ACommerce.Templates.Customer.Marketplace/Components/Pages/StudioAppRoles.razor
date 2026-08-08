@@ -1,0 +1,90 @@
+@page "/studio/apps/{slug}/roles"
+@inject Services.Incubator.StudioAuth Auth
+@inject Marten.IDocumentStore Store
+@using ACommerce.Kit.Tenants
+@using ACommerce.Kit.Roles
+
+@*
+    تَحرير الأَدوار — checklist مِن RoleCatalog الثابِت. كُلّ دَور
+    = تَطبيق فَرعيّ. الـ default يُستَخدَم لِلمُستَخدِم الجَديد.
+*@
+
+<StudioShell Title="@($"الأَدوار · {tenant?.Name ?? Slug}")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← الإعدادات</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (tenant is null)
+        {
+            <div class="st-card">التَّطبيق غَير مَوجود أَو لا تَملِكه.</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>الأَدوار / التَّطبيقات الفَرعيَّة</h1>
+                <p>كُلّ دَور يَصبَح تَطبيقاً مُستَقِلّاً قابِلاً لِلتَّثبيت (PWA) مَع صَلاحيّات وحُقول مُخَصَّصَة.</p>
+            </div>
+
+            @if (Saved == "1") { <div class="st-chip st-chip-success" style="margin-bottom:14px;">تَمّ الحِفظ <AcIcon Name="check" Size="16" /></div> }
+
+            <form method="post" action="@($"/studio/apps/{Slug}/roles/save")">
+                <div class="studio-list">
+                    @foreach (var tmpl in RoleCatalog.All)
+                    {
+                        var existing = tenant.Roles.FirstOrDefault(r => r.CatalogSlug == tmpl.Slug);
+                        var isPicked = existing is not null;
+                        <label class="st-card" style="cursor:pointer;display:flex;align-items:flex-start;gap:14px;
+                                                       @(isPicked ? "border-color:var(--st-primary);background:var(--st-primary-50);" : "")">
+                            @if (isPicked)
+                            {
+                                <input type="checkbox" name="role_@(tmpl.Slug)" value="1" checked
+                                       style="margin-top:4px;width:18px;height:18px;flex-shrink:0;" />
+                            }
+                            else
+                            {
+                                <input type="checkbox" name="role_@(tmpl.Slug)" value="1"
+                                       style="margin-top:4px;width:18px;height:18px;flex-shrink:0;" />
+                            }
+                            <div style="flex:1;">
+                                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                                    <strong style="font-size:15px;"><AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(tmpl.Icon, "tag")" Size="16" /> @tmpl.Label</strong>
+                                    @if (isPicked)
+                                    {
+                                        <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--st-muted);">
+                                            <input type="radio" name="default_role" value="@tmpl.Slug"
+                                                   checked="@(existing!.IsDefault)" />
+                                            افتراضيّ
+                                        </label>
+                                    }
+                                </div>
+                                <p style="margin:0 0 8px;color:var(--st-muted);font-size:13px;">@tmpl.Description</p>
+                                <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                                    @foreach (var p in tmpl.Permissions)
+                                    {
+                                        <span class="st-chip" style="font-size:10.5px;background:var(--st-line-soft);color:var(--st-muted);">@p</span>
+                                    }
+                                </div>
+                            </div>
+                        </label>
+                    }
+                </div>
+                <button type="submit" class="st-btn st-btn-primary" style="margin-top:18px;">حِفظ الأَدوار</button>
+            </form>
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery] public string? Saved { get; set; }
+    Tenant? tenant;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        await using var qs = Store.QuerySession();
+        tenant = await qs.LoadAsync<Tenant>(Slug);
+        if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) tenant = null;
+    }
+}

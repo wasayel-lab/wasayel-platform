@@ -1,0 +1,208 @@
+@page "/{slug}/deals/{id:guid}"
+@page "/{slug}/r/{role}/deals/{id:guid}"
+@inject IDocumentStore Store
+@inject AuthSession Auth
+@inject Services.Deals.DealsService Deals
+@inject ACommerce.Kit.Reviews.ReviewsService Reviews
+@inject IHttpContextAccessor HttpCtx
+@using ACommerce.Templates.Customer.Marketplace.Services.Deals
+
+@*
+    تَفاصيل صَفقَة لِلعميل — stepper + إجراء بِوَعي الدَّور (يَظهَر زِرّ
+    المُتابَعَة فَقَط لِمَن يَملِك تَحريك المَرحَلَة الحاليَّة). تَقييم
+    في النِهايَة. مُواجِه لِلعميل.
+*@
+
+<div class="acs-page">
+    @if (!Auth.IsAuthenticated)
+    {
+        <AcEmptyState IconName="package" Title="تَحتاج تَسجيل دُخول"
+                      ActionLabel="دُخول" ActionHref="@AuthSession.LinkFor(Slug, Role, "login")" />
+    }
+    else if (deal is null)
+    {
+        <AcEmptyState IconName="info" Title="الصَّفقَة غَير مَوجودَة" />
+    }
+    else
+    {
+        <a href="@AuthSession.LinkFor(Slug, Role, "deals")"
+           style="color:var(--ac-text-muted);text-decoration:none;font-size:13px;">← صَفقاتي</a>
+        <h1 class="acm-wizard-title" style="margin-top:6px;">
+            @(string.IsNullOrEmpty(deal.ListingTitle) ? "صَفقَة" : deal.ListingTitle)
+        </h1>
+
+        @* stepper *@
+        <AcCard>
+            <ChildContent>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:space-between;">
+                    @foreach (var st in stages)
+                    {
+                        var done = stages.IndexOf(st) < stages.IndexOf(deal.Stage);
+                        var cur = st == deal.Stage;
+                        <div style="flex:1;min-width:64px;text-align:center;">
+                            <div style="width:30px;height:30px;border-radius:50%;display:grid;place-items:center;margin:0 auto 4px;
+                                        background:@(cur ? "var(--ac-primary)" : done ? "#16a34a" : "var(--ac-border)");
+                                        color:#fff;font-weight:700;font-size:13px;">
+                                @if (done) { <AcIcon Name="check" Size="16" /> } else { @(stages.IndexOf(st) + 1) }
+                            </div>
+                            <div style="font-size:10.5px;color:@(cur ? "var(--ac-primary)" : "var(--ac-text-muted)");">
+                                @DealsPolicy.LabelAr(st)
+                            </div>
+                        </div>
+                    }
+                </div>
+            </ChildContent>
+        </AcCard>
+
+        @* ملخّص *@
+        <AcCard>
+            <ChildContent>
+                <div style="display:flex;justify-content:space-between;font-size:14px;">
+                    <span style="color:var(--ac-text-muted);">المَبلَغ</span>
+                    <strong>@deal.AmountSar.ToString("N0") ر.س</strong>
+                </div>
+                @if (deal.CommissionSar is { } c)
+                {
+                    <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px;">
+                        <span style="color:var(--ac-text-muted);">عمولة المَنصَّة</span>
+                        <span>@c.ToString("N2") ر.س</span>
+                    </div>
+                }
+                <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px;">
+                    <span style="color:var(--ac-text-muted);">الطَّرَف الآخَر</span>
+                    <span>@(isInitiator ? (deal.CounterpartyName ?? "بانتِظار القَبول") : deal.InitiatorName)</span>
+                </div>
+            </ChildContent>
+        </AcCard>
+
+        @* إجراءات بِوَعي الدَّور *@
+        @if (deal.Status == DealStatus.Active)
+        {
+            @* مالِك الإعلان يَقبَل العَرض (الصَّفقَة في Offered وأَنا المالِك ولَستُ المُبادِر) *@
+            @if (deal.Stage == DealStage.Offered && isListingOwner && !isInitiator)
+            {
+                <form method="post" action="@($"/{Slug}/deals/{deal.Id}/accept")">
+                    <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="قَبول العَرض" />
+                </form>
+            }
+            else if (canAdvance && nextStage is { } ns)
+            {
+                <form method="post" action="@($"/{Slug}/deals/{deal.Id}/advance")">
+                    <AcButton Type="submit" Variant="primary" Size="lg" Block="true"
+                              Text="@($"تَأكيد: {DealsPolicy.LabelAr(ns)}")" />
+                </form>
+            }
+            else if (nextStage is { } waiting)
+            {
+                <AcAlert Variant="info"
+                         Message="@($"بانتِظار الطَّرَف الآخَر لِـ: {DealsPolicy.LabelAr(waiting)}")" />
+            }
+
+            <form method="post" action="@($"/{Slug}/deals/{deal.Id}/cancel")" style="margin-top:8px;">
+                <input name="reason" class="ac-input" placeholder="سَبَب الإلغاء (اختياريّ)" style="margin-bottom:6px;" />
+                <AcButton Type="submit" Variant="ghost" Block="true" Text="إلغاء الصَّفقَة" />
+            </form>
+        }
+        else if (deal.Status == DealStatus.Completed)
+        {
+            <AcAlert Variant="success" Message="اكتَمَلَت الصَّفقَة بِنَجاح" />
+            @if (!alreadyReviewed && deal.CounterpartyId is not null)
+            {
+                <AcCard>
+                    <ChildContent>
+                        <h3 style="margin:0 0 10px;">قَيِّم الطَّرَف الآخَر</h3>
+                        <form method="post" action="@($"/{Slug}/deals/{deal.Id}/review")">
+                            <AcField Label="التَّقييم">
+                                <select name="rating" class="ac-input">
+                                    <option value="5">٥ نُجوم — مُمتاز</option>
+                                    <option value="4">٤ نُجوم</option>
+                                    <option value="3">٣ نُجوم</option>
+                                    <option value="2">نَجمَتان</option>
+                                    <option value="1">نَجمَة</option>
+                                </select>
+                            </AcField>
+                            <AcField Label="تَعليق">
+                                <textarea name="body" class="ac-input" rows="2" placeholder="كَيف كانَت التَّجرِبَة؟"></textarea>
+                            </AcField>
+                            <AcButton Type="submit" Variant="primary" Block="true" Text="إرسال التَّقييم" />
+                        </form>
+                    </ChildContent>
+                </AcCard>
+            }
+            else if (alreadyReviewed)
+            {
+                <AcAlert Variant="info" Message="شُكراً، تَمّ تَسجيل تَقييمكَ." />
+            }
+        }
+        else
+        {
+            <AcAlert Variant="@(deal.Status == DealStatus.Disputed ? "warning" : "danger")"
+                     Message="@($"حالَة الصَّفقَة: {deal.Status}" + (string.IsNullOrEmpty(deal.CancelReason) ? "" : $" — {deal.CancelReason}"))" />
+        }
+
+        @* السِجِلّ *@
+        <AcSectionHeader Title="السِجِلّ" />
+        <div class="acm-cat-list">
+            @foreach (var e in deal.Timeline.OrderByDescending(x => x.At))
+            {
+                <div class="acm-cat-row">
+                    <div style="flex:1;">
+                        <strong style="font-size:13px;">@FormatEvent(e)</strong>
+                        <span style="color:var(--ac-text-muted);font-size:11px;display:block;">
+                            @(e.ActorName ?? "—") · @e.At.ToString("MM-dd HH:mm")
+                        </span>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
+    [Parameter] public Guid Id { get; set; }
+
+    Deal? deal;
+    List<DealStage> stages = new();
+    bool isInitiator, isListingOwner, canAdvance, alreadyReviewed;
+    DealStage? nextStage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpCtx.HttpContext is { } ctx) { Auth.SetTenant(Slug); Auth.Load(ctx, Slug); }
+        if (!Auth.IsAuthenticated) return;
+        var uid = Auth.UserId!.Value;
+        deal = await Deals.LoadAsync(Slug, Id);
+        if (deal is null) return;
+        // فَحص أَنّني طَرَف في الصَّفقَة.
+        var ownerRef = deal.Refs.TryGetValue("listing_owner", out var lo) ? lo : null;
+        isInitiator = deal.InitiatorId == uid;
+        isListingOwner = ownerRef == uid.ToString() || deal.CounterpartyId == uid;
+        if (!isInitiator && !isListingOwner) { deal = null; return; }
+
+        stages = DealsPolicy.StagesFor(deal.Pattern).ToList();
+        nextStage = DealsPolicy.Next(deal.Pattern, deal.Stage);
+        // مَن يُحَرِّك المَرحَلَة الحاليَّة؟
+        var required = DealsPolicy.Actor(deal.Stage);
+        canAdvance = required switch
+        {
+            "initiator" => isInitiator,
+            "counterparty" => deal.CounterpartyId == uid,
+            "either" => isInitiator || deal.CounterpartyId == uid,
+            _ => false
+        };
+        alreadyReviewed = await Reviews.HasReviewedAsync(Slug, uid, Id);
+    }
+
+    static string FormatEvent(DealEvent e) => e.Action switch
+    {
+        "created" => "بَدأَت الصَّفقَة",
+        "assigned" => "قُبِلَ العَرض",
+        "advanced" => $"{DealsPolicy.LabelAr(e.StageBefore)} ← {DealsPolicy.LabelAr(e.StageAfter)}",
+        "cancelled" => "أُلغِيَت",
+        "disputed" => "نِزاع",
+        "note" => e.Note ?? "مُلاحَظَة",
+        _ => e.Action
+    };
+}

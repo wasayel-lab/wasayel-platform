@@ -1,0 +1,69 @@
+@page "/{slug}/legal"
+@page "/{slug}/r/{role}/legal"
+@page "/{slug}/legal/{section}"
+@page "/{slug}/r/{role}/legal/{section}"
+
+@*
+    قِسم قانونيّ مُوَحَّد — Terms / Privacy / Returns. مَنقولَة مِن
+    Order.V2 /legal hub. كُلّ قِسم صَفحَة فَرعِيَّة بِنَفس الـ URL.
+*@
+
+<div class="acs-page">
+    <h1 class="acm-wizard-title">المَعلومات القانونيّة</h1>
+
+    <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+        <a class="ac-chip @(Section == "terms" || Section == "" ? "ac-chip-active" : "")"
+           href="@AuthSession.LinkFor(Slug, Role, "legal/terms")">الشُّروط والأَحكام</a>
+        <a class="ac-chip @(Section == "privacy" ? "ac-chip-active" : "")"
+           href="@AuthSession.LinkFor(Slug, Role, "legal/privacy")">الخُصوصِيَّة</a>
+        <a class="ac-chip @(Section == "returns" ? "ac-chip-active" : "")"
+           href="@AuthSession.LinkFor(Slug, Role, "legal/returns")">الاستِرجاع</a>
+    </div>
+
+    <AcCard>
+        <ChildContent>
+            @if (Section == "privacy")
+            {
+                <h2>سِياسَة الخُصوصِيَّة</h2>
+                <p>نَحتَرِم خُصوصِيَّتَك. البَيانات الَّتي نَجمَعها:</p>
+                <ul>
+                    <li>اِسم وَهاتِف عِندَ التَّسجيل (لِلتَّوثيق فَقَط).</li>
+                    <li>عَناوين التَّوصيل (لِخِدمَة الطَّلَب).</li>
+                    <li>تاريخ المُعامَلات (لِإصدار الفَواتير).</li>
+                </ul>
+                <p>لا نَبيع بَياناتك لِأَيّ طَرَف ثالِث. تَخزين الدَّفع آمِن
+                   عَبر مُزَوِّدين مُعتَمَدين (Moyasar / Noon — PCI-DSS).</p>
+                <p>لِحَذف حِسابك بِالكامِل: تَواصَل عَبر صَفحَة الدَّعم.</p>
+            }
+            else if (Section == "returns")
+            {
+                <h2>سِياسَة الاستِرجاع</h2>
+                <ul>
+                    <li>المُنتَجات المادِّيَّة: ٧ أَيّام مِن الاستِلام إن لَم تُستَخدَم.</li>
+                    <li>الخَدَمات: لا اِستِرجاع بَعد التَّأديَة، إلَّا لِخَلَل في الجَودَة.</li>
+                    <li>الإعلانات/الاشتِراكات: غَير قابِلَة لِلاستِرجاع بَعد النَّشر.</li>
+                </ul>
+                <p>الاستِرجاع عَبر صَفحَة «طَلَباتي» → اِختَر الطَّلَب → «اِستِرجاع».
+                   المَنصَّة تَستَرجِع بِكَامِل المَبلَغ في ٣-٥ أَيّام عَمَل.</p>
+            }
+            else
+            {
+                <h2>الشُّروط والأَحكام</h2>
+                <p>باستِخدامِك المَنصَّة، فَأَنتَ مُوافِق على:</p>
+                <ol>
+                    <li>عَدَم نَشر إعلانات مُخالِفَة لِلأَنظِمَة المَحَلِّيَّة.</li>
+                    <li>تَحَمُّل مَسؤولِيَّة دِقَّة بَياناتك ومُعامَلاتك.</li>
+                    <li>السَّماح لِلمَنصَّة بِجَمع عَمولَة على الصَّفقات النَّاجِحَة (٢٫٥٪).</li>
+                    <li>قَبول حَلّ النِزاعات عَبر آلِيّات المَنصَّة الداخِلِيَّة.</li>
+                </ol>
+                <p>الانتِهاكات تُؤَدّي لِتَعليق فَوريّ بِلا تَعويض.</p>
+            }
+        </ChildContent>
+    </AcCard>
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
+    [Parameter] public string Section { get; set; } = "";
+}

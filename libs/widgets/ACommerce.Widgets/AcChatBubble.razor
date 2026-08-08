@@ -1,0 +1,38 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcChatBubble — فُقّاعَة رِسالَة مُحادَثَة.
+
+    اتِّجاه (Mine = جِهَة المُرسِل، بِلَون البرَنْد · غَير ذَلِك = سَطح مُحايِد)
+    + نَصّ + وَقت + (اختياريّ) مُؤَشِّر مَقروء. ذَيل الفُقّاعَة عَبر زاوِيَة
+    سُفلِيَّة مُصَغَّرَة بِخَصائِص مَنطِقِيَّة (تَعمَل RTL/LTR).
+
+    CSS_CLASSES: ac-bubble-row, ac-bubble-row-mine, ac-bubble, ac-bubble-mine,
+                 ac-bubble-body, ac-bubble-meta, ac-bubble-time, ac-bubble-read
+*@
+
+<div class="ac-bubble-row @(Mine ? "ac-bubble-row-mine" : "")">
+    <div class="ac-bubble @(Mine ? "ac-bubble-mine" : "")">
+        <div class="ac-bubble-body">@Body</div>
+        <div class="ac-bubble-meta">
+            <span class="ac-bubble-time">@Time</span>
+            @if (Mine && Read.HasValue)
+            {
+                <AcIcon Name="@(Read.Value ? "check-circle" : "check")"
+                        Size="13" ExtraClass="ac-bubble-read" />
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>نَصّ الرِّسالَة (يُعرَض كَ نَصّ آمِن — Blazor يُهَرِّبه).</summary>
+    [Parameter, EditorRequired] public string Body { get; set; } = "";
+    /// <summary>الوَقت المُنَسَّق مُسبَقاً (مَثَلاً "14:30").</summary>
+    [Parameter] public string Time { get; set; } = "";
+    /// <summary>true = رِسالَتي (جِهَة المُرسِل، لَون البرَنْد).</summary>
+    [Parameter] public bool Mine { get; set; }
+    /// <summary>null = لا مُؤَشِّر؛ true = مَقروءَة؛ false = مُرسَلَة (غَير مَقروءَة).
+    /// يَظهَر فَقَط عَلى رَسائِلي.</summary>
+    [Parameter] public bool? Read { get; set; }
+}

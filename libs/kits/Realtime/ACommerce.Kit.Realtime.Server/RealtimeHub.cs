@@ -13,7 +13,19 @@ public sealed class RealtimeHub : Hub
     public override Task OnConnectedAsync()
     {
         var httpCtx = Context.GetHttpContext();
-        var token = httpCtx?.Request.Query["token"].ToString();
+        // SignalR مَع accessTokenFactory يُمَرِّر الـ token كَ
+        // <c>?access_token=...</c> لِلـ WebSocket handshake، وكَ Bearer header
+        // لِـ negotiate. نَدعَم الاثنَين + توافُق خَلفيّ لِـ ?token=.
+        var token = httpCtx?.Request.Query["access_token"].ToString();
+        if (string.IsNullOrEmpty(token))
+        {
+            var auth = httpCtx?.Request.Headers["Authorization"].ToString() ?? "";
+            if (auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                token = auth["Bearer ".Length..];
+        }
+        if (string.IsNullOrEmpty(token))
+            token = httpCtx?.Request.Query["token"].ToString();   // legacy
+
         var parsed = ACommerce.Kit.Auth.Server.AuthHandlers.ParseToken(token);
         if (parsed is null) { Context.Abort(); return Task.CompletedTask; }
         var (userId, tenantSlug, _) = parsed.Value;

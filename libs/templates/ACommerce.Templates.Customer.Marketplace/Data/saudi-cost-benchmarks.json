@@ -1,0 +1,39 @@
+{
+  "_meta": {
+    "description": "مقاييس تكلفة سعودية للتشغيل والتسويق والإطلاق — تُحقَن في توقعات التكلفة المالية.",
+    "currency": "SAR",
+    "lastUpdated": "2026-01",
+    "disclaimer": "تقديرات متوسطة. تختلف حسب الحجم والمورّد والتفاوض."
+  },
+  "infrastructure": {
+    "hostingMonthly": { "smallApp": 350, "growthApp": 1500, "scaleApp": 6000, "notes": "GCP/AWS Bahrain region لتقليل الـ latency والالتزام بإقامة البيانات." },
+    "smsPerMessage": { "unifonic": 0.12, "otpBundle10k": 950, "notes": "OTP عبر Unifonic أو Taqnyat. الأسعار تنخفض بالحجم." },
+    "paymentGatewayPct": { "tap": 2.75, "hyperpay": 2.5, "moyasar": 2.6, "tamaraBnplPct": 6.0, "notes": "نسبة + رسم ثابت ~1 ريال للمعاملة. Tamara/Tabby أعلى لكن ترفع التحويل." }
+  },
+  "marketingCac": {
+    "_note": "تكلفة اكتساب العميل بحسب القناة (I04-I07 في النموذج المالي)",
+    "googleAds": { "cacSar": 45, "channel": "بحث/شبكة" },
+    "metaAds": { "cacSar": 38, "channel": "Instagram/Snapchat" },
+    "tiktok": { "cacSar": 30, "channel": "محتوى قصير، جمهور شاب" },
+    "influencers": { "cacSar": 55, "channel": "مشاهير، فعّال لكن متغير" },
+    "organicSeo": { "cacSar": 12, "channel": "بطيء لكن مستدام" }
+  },
+  "salaries": {
+    "_note": "متوسط راتب شهري (I08)",
+    "softwareEngineer": 18000,
+    "productManager": 22000,
+    "marketingSpecialist": 12000,
+    "customerSupport": 7000,
+    "operationsManager": 16000,
+    "deliveryDriver": 5000
+  },
+  "launchCosts": {
+    "_note": "تكاليف الإطلاق لمرة واحدة (I09-I11)",
+    "commercialRegistrationCr": 1200,
+    "misaForeignInvestLicense": 12000,
+    "accountingSetupAnnual": 9000,
+    "legalSetup": 7000,
+    "trademarkRegistration": 2500,
+    "zatcaEinvoiceIntegration": 4000
+  }
+}

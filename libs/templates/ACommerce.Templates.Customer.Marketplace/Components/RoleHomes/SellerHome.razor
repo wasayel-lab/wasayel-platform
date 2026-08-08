@@ -13,8 +13,8 @@
         <p>@(Subtitle)</p>
     </header>
 
-    <a class="acm-role-cta-primary" href="@($"/{Slug}/create-listing")">
-        <span class="acm-role-cta-icon">➕</span>
+    <a class="acm-role-cta-primary" href="@AuthSession.LinkFor(Slug, Role, $"create-listing")">
+        <span class="acm-role-cta-icon"><AcIcon Name="plus" Size="22" /></span>
         <span class="acm-role-cta-label">
             <strong>إعلان جَديد</strong>
             <small>أَضِف ما تَعرِضه — نَشر فَوريّ</small>
@@ -31,7 +31,7 @@
             <strong>@totalViews</strong>
             <span>مُشاهَدَة</span>
         </div>
-        <a class="acm-role-cta-pill" href="@($"/{Slug}/chats")">
+        <a class="acm-role-cta-pill" href="@AuthSession.LinkFor(Slug, Role, $"chats")">
             <strong>@conversations</strong>
             <span>مُحادَثَة</span>
         </a>
@@ -44,7 +44,7 @@
     else if (myListings.Count == 0)
     {
         <div class="acm-role-empty">
-            <span style="font-size:36px;">📦</span>
+            <AcIcon Name="package" Size="36" />
             <p>لا إعلانات بَعد. اِنشُر أَوَّل إعلان فَوقُ.</p>
         </div>
     }
@@ -52,11 +52,11 @@
     {
         <AcSectionHeader Title="إعلاناتي"
                          ActionLabel="@(myListings.Count > 6 ? "كُلّ الإعلانات" : null)"
-                         ActionHref="@($"/{Slug}/me/listings")" />
+                         ActionHref="@AuthSession.LinkFor(Slug, Role, $"me/listings")" />
         <div class="acm-role-list">
             @foreach (var l in myListings.Take(6))
             {
-                <a class="acm-role-request-card" href="@($"/{Slug}/listings/{l.Id}")">
+                <a class="acm-role-request-card" href="@AuthSession.LinkFor(Slug, Role, $"listings/{l.Id}")">
                     <div style="flex:1;min-width:0;">
                         <strong>@l.Title</strong>
                         <span class="ac-muted" style="font-size:12px;display:block;">
@@ -74,6 +74,7 @@
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
     [Parameter] public string RoleSlug { get; set; } = "vendor";
 
     List<Listing>? myListings;

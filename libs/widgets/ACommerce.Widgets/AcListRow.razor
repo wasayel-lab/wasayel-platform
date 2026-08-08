@@ -1,0 +1,72 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcListRow — صَفّ قائِمَة غَنيّ لِصَفحات الـ inbox (دَردَشات، إشعارات،
+    صَفقات، عُروض). يَتَكَوَّن مِن:
+      • مُقَدِّمَة: صورَة / أَفاتار بِحَرف أَوَّل / أَيقونَة
+      • جِسم: عُنوان + وَقت + مُعايَنَة سَطر
+      • مُؤَخِّرَة: شارَة عَدّ (غَير مَقروء) أَو سَهم
+    CSS في premium.css (§17).
+*@
+
+@if (!string.IsNullOrEmpty(Href))
+{
+    <a class="ac-listrow @(Unread ? "is-unread" : "") @(Class ?? "")" href="@Href">@Inner</a>
+}
+else
+{
+    <div class="ac-listrow @(Unread ? "is-unread" : "") @(Class ?? "")"
+         @onclick="OnClickInternal" role="button">@Inner</div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Preview { get; set; }
+    [Parameter] public string? Time { get; set; }
+    [Parameter] public string? ImageUrl { get; set; }
+    /// <summary>اسم أَيقونَة AcIcon لِلمُقَدِّمَة (عِندَ غِياب ImageUrl). مَثَلاً "bell".</summary>
+    [Parameter] public string? IconName { get; set; }
+    [Parameter] public int Count { get; set; }
+    [Parameter] public bool Unread { get; set; }
+    [Parameter] public string? Href { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    private Task OnClickInternal() => OnClick.InvokeAsync();
+
+    private string Initial => string.IsNullOrWhiteSpace(Title) ? "؟" : Title.Trim()[..1];
+
+    private RenderFragment Inner => @<text>
+        <span class="ac-listrow-lead">
+            @if (!string.IsNullOrEmpty(ImageUrl))
+            {
+                <img src="@ImageUrl" alt="@Title" loading="lazy" />
+            }
+            else if (!string.IsNullOrEmpty(IconName))
+            {
+                <span class="ac-listrow-icon"><AcIcon Name="@IconName" Size="20" /></span>
+            }
+            else
+            {
+                <span class="ac-listrow-avatar">@Initial</span>
+            }
+        </span>
+        <span class="ac-listrow-body">
+            <span class="ac-listrow-top">
+                <strong class="ac-listrow-title">@Title</strong>
+                @if (!string.IsNullOrEmpty(Time))
+                {
+                    <span class="ac-listrow-time">@Time</span>
+                }
+            </span>
+            @if (!string.IsNullOrEmpty(Preview))
+            {
+                <span class="ac-listrow-preview">@Preview</span>
+            }
+        </span>
+        @if (Count > 0)
+        {
+            <span class="ac-listrow-badge">@(Count > 99 ? "99+" : Count.ToString())</span>
+        }
+    </text>;
+}

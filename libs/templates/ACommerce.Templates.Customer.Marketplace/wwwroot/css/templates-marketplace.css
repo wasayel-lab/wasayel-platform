@@ -379,3 +379,11 @@
     .acm-checkout-grid { grid-template-columns: 1fr 1fr; align-items: start; }
 }
 .acm-checkout-line { display: flex; justify-content: space-between; padding: 6px 0; color: var(--ac-text); }
+
+/* ─── Chips — حُروف/أَيقونات في دائِرَة لَوّنَتها ـ تَوحيد لَونَين شائِعَين ─ */
+/* استَخدَمَت ٦ مَواضِع نَفس inline (background:#dbeafe;color:#1d4ed8 و
+   background:#f1f5f9;color:#475569). الآن:
+     <span class="ac-chip ac-chip-info">…</span>
+     <span class="ac-chip ac-chip-muted">…</span>                          */
+.ac-chip-info  { background:#dbeafe; color:#1d4ed8; }
+.ac-chip-muted { background:#f1f5f9; color:#475569; }

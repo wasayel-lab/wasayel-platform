@@ -1,0 +1,214 @@
+@page "/admin/monitor"
+@inject Marten.IDocumentStore Store
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+
+@*
+    لوحَة مُراقَبَة جَودَة التَّحاليل + الاستِخدام (Phase 8).
+    تَجمَع: عَدَد جَلَسات بِالحالَة، مُتَوَسِّط جَودَة، تَوزيع الباقات،
+    أَكثَر الـ prompt versions، آخِر الفَشَلات.
+    مَحميَّة بِـ RequirePlatformAdmin.
+*@
+
+<RequirePlatformAdmin>
+<div class="studio-root">
+    <div class="studio-shell">
+        <aside class="studio-sidebar">
+            <div class="studio-sidebar-brand">
+                <img src="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-lockup-white.svg"
+                     alt="وَسايِل" height="30" />
+                <span style="font-size:13px;opacity:.65;font-weight:600;">Admin</span>
+            </div>
+            <nav class="studio-nav">
+                <a class="studio-nav-item" href="/admin">
+                    <AcIcon Name="building" Size="18" /> المُستَأجِرون
+                </a>
+                <a class="studio-nav-item active" href="/admin/monitor">
+                    <AcIcon Name="grid" Size="18" /> المُراقَبَة
+                </a>
+                <a class="studio-nav-item" href="/admin/fixtures">
+                    <AcIcon Name="check-circle" Size="18" /> Fixtures
+                </a>
+                <a class="studio-nav-item" href="/admin/agent">
+                    <AcIcon Name="message" Size="18" /> الوَكيل
+                </a>
+            </nav>
+            <div class="studio-sidebar-footer">
+                <a href="/studio" class="studio-nav-item">← لوحَتي</a>
+            </div>
+        </aside>
+
+        <div class="studio-main">
+            <header class="studio-topbar">
+                <h2 class="studio-topbar-title">جَودَة التَّحاليل + الاستِخدام</h2>
+            </header>
+            <div class="studio-content">
+                <div class="studio-page-head">
+                    <h1>لوحَة المُراقَبَة</h1>
+                    <p>أَرقام حَيَّة عَن استِخدام الحاضِنَة وجَودَة المُخرَجات.</p>
+                </div>
+
+                <div class="studio-stats">
+                    <div class="studio-stat">
+                        <div class="studio-stat-label">إجمالي الجَلَسات</div>
+                        <div class="studio-stat-value">@total</div>
+                    </div>
+                    <div class="studio-stat">
+                        <div class="studio-stat-label">مُكتَمِلَة</div>
+                        <div class="studio-stat-value" style="color:var(--st-success);">@completed</div>
+                    </div>
+                    <div class="studio-stat">
+                        <div class="studio-stat-label">قَيد التَّحليل</div>
+                        <div class="studio-stat-value" style="color:var(--st-warning);">@analyzing</div>
+                    </div>
+                    <div class="studio-stat">
+                        <div class="studio-stat-label">فاشِلَة</div>
+                        <div class="studio-stat-value" style="color:var(--st-danger);">@failed</div>
+                    </div>
+                </div>
+
+                <div class="studio-stats" style="margin-top:14px;">
+                    <div class="studio-stat">
+                        <div class="studio-stat-label">مُتَوَسِّط الجَودَة</div>
+                        <div class="studio-stat-value">@avgQuality%</div>
+                        <div class="studio-stat-sub">عَلى @completed جَلسَة مُكتَمِلَة</div>
+                    </div>
+                    <div class="studio-stat">
+                        <div class="studio-stat-label">مُستَخدِمو studio</div>
+                        <div class="studio-stat-value">@users</div>
+                    </div>
+                    <div class="studio-stat">
+                        <div class="studio-stat-label">مَتاجِر مُطلَقَة</div>
+                        <div class="studio-stat-value">@stores</div>
+                        <div class="studio-stat-sub">مِن دِراسات</div>
+                    </div>
+                    <div class="studio-stat">
+                        <div class="studio-stat-label">مُعَدَّل تَحويل</div>
+                        <div class="studio-stat-value">@(completed > 0 ? $"{stores * 100 / completed}%" : "—")</div>
+                        <div class="studio-stat-sub">دِراسَة → مَتجَر</div>
+                    </div>
+                </div>
+
+                <div class="st-section-title">تَوزيع الباقات</div>
+                <div class="studio-list">
+                    @foreach (var (tier, count) in tierCounts.OrderByDescending(x => x.Value))
+                    {
+                        var l = TierCatalog.For(tier);
+                        var pct = users > 0 ? count * 100 / users : 0;
+                        <div class="studio-list-row" style="cursor:default;">
+                            <span class="st-chip">@l.LabelAr</span>
+                            <div class="studio-list-body">
+                                <strong>@count مُستَخدِم</strong>
+                                <span>@l.MonthlyPriceSar ر.س/شَهر</span>
+                            </div>
+                            <span style="color:var(--st-muted);">@pct%</span>
+                        </div>
+                    }
+                </div>
+
+                <div class="st-section-title">إصدارات الـ prompt المُستَخدَمَة</div>
+                <div class="studio-list">
+                    @if (promptVersions.Count == 0)
+                    {
+                        <div class="st-card" style="color:var(--st-muted);text-align:center;">لا بَيانات بَعد.</div>
+                    }
+                    else
+                    {
+                        @foreach (var (v, count) in promptVersions.OrderByDescending(x => x.Value))
+                        {
+                            <div class="studio-list-row" style="cursor:default;">
+                                <code style="font-size:12px;background:var(--st-line-soft);padding:2px 8px;border-radius:6px;">@v</code>
+                                <div class="studio-list-body"><strong>@count جَلسَة</strong></div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                <div class="st-section-title">آخِر الفَشَلات</div>
+                @if (recentFailures.Count == 0)
+                {
+                    <div class="st-card" style="color:var(--st-muted);text-align:center;padding:24px;">
+                        لا فَشَلات بَعد <AcIcon Name="sparkle" Size="16" />
+                    </div>
+                }
+                else
+                {
+                    <div class="studio-list">
+                        @foreach (var s in recentFailures)
+                        {
+                            <div class="studio-list-row" style="cursor:default;">
+                                <span class="studio-list-icon" style="background:#fee2e2;color:#b91c1c;"><AcIcon Name="alert-circle" Size="16" /></span>
+                                <div class="studio-list-body">
+                                    <strong>@(string.IsNullOrEmpty(s.ProjectDescription) ? "بِلا وَصف" : Truncate(s.ProjectDescription, 70))</strong>
+                                    <span>@s.UpdatedAt.ToString("yyyy-MM-dd HH:mm") · @Truncate(s.AnalysisError ?? "", 80)</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="st-section-title">أَحدَث الجَلَسات المُكتَمِلَة</div>
+                <div class="studio-list">
+                    @foreach (var s in recentCompleted)
+                    {
+                        <div class="studio-list-row" style="cursor:default;">
+                            <span class="studio-list-icon" style="background:#dcfce7;color:#15803d;"><AcIcon Name="check" Size="16" /></span>
+                            <div class="studio-list-body">
+                                <strong>@(string.IsNullOrEmpty(s.ProjectDescription) ? "بِلا وَصف" : Truncate(s.ProjectDescription, 70))</strong>
+                                <span>@s.UpdatedAt.ToString("yyyy-MM-dd HH:mm") · @s.SuggestedPattern</span>
+                            </div>
+                            <span class="st-chip @QualityChip(s.AnalysisQualityScore)">@s.AnalysisQualityScore%</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</RequirePlatformAdmin>
+
+@code {
+    int total, completed, analyzing, failed, users, stores, avgQuality;
+    Dictionary<string, int> tierCounts = new();
+    Dictionary<string, int> promptVersions = new();
+    List<IncubatorSession> recentFailures = new();
+    List<IncubatorSession> recentCompleted = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var qs = Store.QuerySession(FeasibilityAnalysisService.IncubatorTenant);
+        var sessions = (await qs.Query<IncubatorSession>().ToListAsync()).ToList();
+        total = sessions.Count;
+        completed = sessions.Count(s => s.Status == IncubatorStatus.Completed);
+        analyzing = sessions.Count(s => s.Status == IncubatorStatus.Analyzing);
+        failed = sessions.Count(s => s.Status == IncubatorStatus.Failed);
+        avgQuality = completed > 0
+            ? (int)sessions.Where(s => s.Status == IncubatorStatus.Completed)
+                .Average(s => s.AnalysisQualityScore)
+            : 0;
+        promptVersions = sessions
+            .Where(s => !string.IsNullOrEmpty(s.PromptVersion))
+            .GroupBy(s => s.PromptVersion)
+            .ToDictionary(g => g.Key, g => g.Count());
+        recentFailures = sessions
+            .Where(s => s.Status == IncubatorStatus.Failed)
+            .OrderByDescending(s => s.UpdatedAt).Take(5).ToList();
+        recentCompleted = sessions
+            .Where(s => s.Status == IncubatorStatus.Completed)
+            .OrderByDescending(s => s.UpdatedAt).Take(8).ToList();
+
+        await using var us = Store.QuerySession(StudioAuth.Tenant);
+        var allUsers = (await us.Query<StudioUser>().ToListAsync()).ToList();
+        users = allUsers.Count;
+        tierCounts = allUsers.GroupBy(u => u.Tier).ToDictionary(g => g.Key, g => g.Count());
+
+        // عَدَد المَتاجِر المَبنيَّة مِن جَلَسات تَحليل
+        await using var ts = Store.QuerySession();
+        var tenants = (await ts.Query<ACommerce.Kit.Tenants.Tenant>().ToListAsync()).ToList();
+        stores = tenants.Count(t => t.SourceAnalysisId is not null);
+    }
+
+    static string Truncate(string s, int n) => s.Length <= n ? s : s[..n] + "…";
+
+    static string QualityChip(int q) => q >= 80 ? "st-chip-success"
+                                      : q >= 60 ? "st-chip" : "st-chip-warning";
+}

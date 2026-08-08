@@ -1,0 +1,255 @@
+@page "/studio"
+@page "/studio/ideas"
+@inject Services.Incubator.StudioAuth Auth
+@inject Services.Incubator.FeasibilityAnalysisService Incubator
+@inject Marten.IDocumentStore Store
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+@using ACommerce.Kit.Tenants
+
+@*
+    لوحَة رائِد الأَعمال — مَدخَل مَوَحَّد:
+    ١) تَطبيقاتي (المَتاجِر الَّتي يَملِكها) — كَ "اشتِراك مَتجَر تَطبيقات".
+    ٢) أَفكاري وتَحاليلي (الـ incubator sessions).
+    ٣) مَدخَلان واضِحان لِمَساعِدَي الذَّكاء:
+       • «حَلِّل فِكرَة» (/studio/new) — دِراسَة جَدوى لِفِكرَة قَبل البِناء.
+       • «وَكيل التَّطبيقات» (/studio/agent) — مُحادَثَة تُعَدِّل تَطبيقات
+         قائِمَة (فِئات/أَدوار/مُدُن/خَصائِص) مَع فَحص ملكيَّة كُلّ عَمَلِيَّة.
+
+    الـ Active يَتَبَدَّل بَين home/ideas حَسَب المَسار.
+*@
+
+<StudioShell Title="@Title" Active="@(IsIdeas ? "ideas" : "home")">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="/studio/agent">
+            <AcIcon Name="message" Size="14" /> وَكيل التَّطبيقات
+        </a>
+        <a class="st-btn st-btn-primary" href="/studio/new" style="margin-inline-start:8px;">
+            <AcIcon Name="lightbulb" Size="14" /> فِكرَة جَديدَة
+        </a>
+    </TopBarActions>
+    <ChildContent>
+        <UpgradePrompt Reason="@Upgrade" CurrentTier="@(currentTier ?? "spark")" />
+
+        <div class="studio-page-head">
+            <h1>@(IsIdeas ? "أَفكاري وتَحاليلي" : Greeting)</h1>
+            <p>@(IsIdeas ? "كُلّ الفِكَر الَّتي طَرَحتَها وحالَة تَحليلها."
+                          : "هُنا تُديرُ تَطبيقاتِكَ وتُتابِع تَحاليل أَفكارِكَ.")</p>
+        </div>
+
+        @if (!IsIdeas)
+        {
+            @* بِطاقَتان واضِحَتان لِمَساعِدَي الذَّكاء — كُلّ واحِدَة بِغَرَض مُختَلِف. *@
+            <div class="studio-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:18px;">
+                <a class="studio-list-row" href="/studio/new" style="align-items:flex-start;">
+                    <span class="studio-list-icon" style="background:#fef3c7;color:#854d0e;">
+                        <AcIcon Name="lightbulb" Size="18" />
+                    </span>
+                    <div class="studio-list-body" style="flex:1;">
+                        <strong>حَلِّل فِكرَة جَديدَة</strong>
+                        <span style="line-height:1.6;">قَبل أَن تَبني — تَحَقَّق مِن جَدوى السوق والمَنافِسين والتَكاليف
+                        والمَخاطِر. دِراسَة مُولَّدَة في دَقائِق.</span>
+                    </div>
+                    <span style="color:var(--st-faint);">←</span>
+                </a>
+                <a class="studio-list-row" href="/studio/agent" style="align-items:flex-start;">
+                    <span class="studio-list-icon ac-chip-info">
+                        <AcIcon Name="message" Size="18" />
+                    </span>
+                    <div class="studio-list-body" style="flex:1;">
+                        <strong>وَكيل التَّطبيقات</strong>
+                        <span style="line-height:1.6;">عَدِّل تَطبيقاً قائِماً بِالحِوار: «أَضِف فِئَة»، «غَيِّر اللَون»،
+                        «أَنشِئ دَوراً جَديداً». كُلّ تَنفيذ يُراجَع قَبل التَّطبيق.</span>
+                    </div>
+                    <span style="color:var(--st-faint);">←</span>
+                </a>
+            </div>
+
+            <div class="studio-stats">
+                <div class="studio-stat">
+                    <div class="studio-stat-label">تَطبيقاتي المُطلَقَة</div>
+                    <div class="studio-stat-value">@(myApps?.Count ?? 0)</div>
+                    <div class="studio-stat-sub">مَتاجِر/تَطبيقات تَملِكها</div>
+                </div>
+                <div class="studio-stat">
+                    <div class="studio-stat-label">دِراسات مُكتَمِلَة</div>
+                    <div class="studio-stat-value">@(sessions?.Count(s => s.Status == IncubatorStatus.Completed) ?? 0)</div>
+                </div>
+                <div class="studio-stat">
+                    <div class="studio-stat-label">إجمالي الأَفكار</div>
+                    <div class="studio-stat-value">@(sessions?.Count ?? 0)</div>
+                </div>
+            </div>
+
+            <div class="st-section-title" style="display:flex;justify-content:space-between;align-items:center;">
+                <span>تَطبيقاتي</span>
+                <a href="/studio/new" style="font-size:12px;color:var(--st-primary);text-decoration:none;font-weight:600;">+ فِكرَة جَديدَة</a>
+            </div>
+            @if (myApps is null)
+            {
+                <div class="st-card">جارٍ التَّحميل…</div>
+            }
+            else if (myApps.Count == 0)
+            {
+                <div class="st-card" style="text-align:center;padding:36px;">
+                    <div style="font-size:42px;margin-bottom:6px;"><AcIcon Name="package" Size="48" /></div>
+                    <h3 style="margin:0 0 6px;">لا تَطبيقات بَعد</h3>
+                    <p style="color:var(--st-muted);margin:0 0 16px;">حَلِّل فِكرَتَكَ أَوَّلاً، ثُمَّ أَطلِق التَّطبيق على المَنصَّة.</p>
+                    <a class="st-btn st-btn-primary" href="/studio/new">ابدَأ بِفِكرَة</a>
+                </div>
+            }
+            else
+            {
+                <div class="studio-list">
+                    @foreach (var t in myApps)
+                    {
+                        <a class="studio-list-row" href="@($"/studio/apps/{t.Slug}")">
+                            <span class="studio-list-icon"
+                                  style="background:@(t.BrandColor)1a;color:@t.BrandColor;">
+                                @(t.Name.FirstOrDefault())
+                            </span>
+                            <div class="studio-list-body">
+                                <strong>@t.Name</strong>
+                                <span>/@t.Slug · @t.Categories.Count فِئَة · @t.Roles.Count دَور</span>
+                            </div>
+                            <span class="st-chip">@(t.Roles.Count == 0 ? "مَتجَر" : "تَطبيق دَور-مُتَعَدِّد")</span>
+                            <span style="color:var(--st-faint);">←</span>
+                        </a>
+                    }
+                </div>
+            }
+        }
+
+        @if (!IsIdeas && recentDeals.Count > 0)
+        {
+            <div class="st-section-title">آخِر العَمَليّات عَبر تَطبيقاتك</div>
+            <div class="studio-list">
+                @foreach (var (slug, d) in recentDeals.Take(5))
+                {
+                    <a class="studio-list-row" href="@($"/studio/apps/{slug}/deals/{d.Id}")">
+                        <span class="studio-list-icon ac-chip-info"><AcIcon Name="@StageEmoji(d.Stage)" Size="16" /></span>
+                        <div class="studio-list-body">
+                            <strong>
+                                @(string.IsNullOrEmpty(d.ListingTitle) ? d.Pattern : d.ListingTitle)
+                            </strong>
+                            <span>/@slug · @d.Pattern · @d.UpdatedAt.ToString("HH:mm")</span>
+                        </div>
+                        <span class="st-chip">@Services.Deals.DealsPolicy.LabelAr(d.Stage)</span>
+                    </a>
+                }
+            </div>
+        }
+
+        <div class="st-section-title">@(IsIdeas ? "جَلَسات التَّحليل" : "آخِر الأَفكار")</div>
+        @if (sessions is null)
+        {
+            <div class="st-card">جارٍ التَّحميل…</div>
+        }
+        else if (sessions.Count == 0)
+        {
+            <div class="st-card" style="text-align:center;padding:36px;">
+                <div style="font-size:42px;margin-bottom:6px;"><AcIcon Name="lightbulb" Size="48" /></div>
+                <h3 style="margin:0 0 6px;">لا أَفكار بَعد</h3>
+                <p style="color:var(--st-muted);margin:0 0 16px;">ابدَأ بِوَصف فِكرَة مَشروعِكَ لِلحُصول على دِراسَة جَدوى.</p>
+                <a class="st-btn st-btn-primary" href="/studio/new">صِف فِكرَتي</a>
+            </div>
+        }
+        else
+        {
+            <div class="studio-list">
+                @foreach (var s in (IsIdeas ? sessions : sessions.Take(5)))
+                {
+                    <a class="studio-list-row" href="@($"/studio/s/{s.Id}")">
+                        <span class="studio-list-icon"><AcIcon Name="@StatusIcon(s.Status)" Size="16" /></span>
+                        <div class="studio-list-body">
+                            <strong>@(string.IsNullOrEmpty(s.ProjectDescription)
+                                ? "فِكرَة بِلا وَصف" : Truncate(s.ProjectDescription, 70))</strong>
+                            <span>@StatusLabel(s.Status) · @s.UpdatedAt.ToString("yyyy-MM-dd HH:mm")</span>
+                        </div>
+                        @if (s.Status == IncubatorStatus.Completed)
+                        { <span class="st-chip st-chip-success">جَودَة @s.AnalysisQualityScore%</span> }
+                        else if (s.Status == IncubatorStatus.Analyzing)
+                        { <span class="st-chip st-chip-warning">قَيد التَّحليل</span> }
+                        else if (s.Status == IncubatorStatus.Failed)
+                        { <span class="st-chip st-chip-danger">فَشِلَ</span> }
+                    </a>
+                }
+            </div>
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [SupplyParameterFromQuery] public string? Upgrade { get; set; }
+    List<IncubatorSession>? sessions;
+    List<Tenant>? myApps;
+    List<(string Slug, Services.Deals.Deal Deal)> recentDeals = new();
+    string? currentTier;
+
+    [Microsoft.AspNetCore.Components.Inject] NavigationManager Nav { get; set; } = default!;
+    [Microsoft.AspNetCore.Components.Inject] Services.Incubator.StudioTierService TierSvc { get; set; } = default!;
+    [Microsoft.AspNetCore.Components.Inject] Services.Deals.DealsService Deals { get; set; } = default!;
+    bool IsIdeas => new Uri(Nav.Uri).AbsolutePath.TrimEnd('/').EndsWith("/ideas");
+
+    string Title => IsIdeas ? "أَفكاري وتَحاليلي" : "لوحَتي";
+    string Greeting => $"أَهلاً، {Auth.UserName ?? "صاحِب المَشروع"}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        var uid = Auth.UserId!.Value;
+        sessions = await Incubator.ListForUserAsync(uid);
+        await using var qs = Store.QuerySession();
+        myApps = (await qs.Query<Tenant>()
+            .Where(t => t.OwnerUserId == uid)
+            .OrderBy(t => t.CreatedAt).ToListAsync()).ToList();
+        var u = await TierSvc.GetUserAsync(uid);
+        currentTier = u?.Tier ?? "spark";
+
+        // اِجمَع آخِر الـ deals مِن كُلّ تَطبيقات هذا المُستَخدِم.
+        foreach (var t in myApps)
+        {
+            try
+            {
+                var ds = await Deals.ListForTenantAsync(t.Slug, take: 5);
+                foreach (var d in ds) recentDeals.Add((t.Slug, d));
+            }
+            catch { /* لا جَدوَل في هذا المُستَأجِر */ }
+        }
+        recentDeals = recentDeals.OrderByDescending(x => x.Deal.UpdatedAt).ToList();
+    }
+
+    static string StageEmoji(Services.Deals.DealStage s) => s switch
+    {
+        Services.Deals.DealStage.Offered => "clipboard",
+        Services.Deals.DealStage.Booked => "calendar",
+        Services.Deals.DealStage.Confirmed => "check",
+        Services.Deals.DealStage.Paid => "credit-card",
+        Services.Deals.DealStage.Shipping => "truck",
+        Services.Deals.DealStage.Delivered => "package",
+        Services.Deals.DealStage.Received => "check",
+        Services.Deals.DealStage.Reviewed => "star",
+        _ => "tag"
+    };
+
+    static string StatusIcon(IncubatorStatus s) => s switch
+    {
+        IncubatorStatus.Completed => "check",
+        IncubatorStatus.Analyzing => "clock",
+        IncubatorStatus.Failed    => "alert-circle",
+        IncubatorStatus.PatternSuggested => "target",
+        _ => "edit"
+    };
+
+    static string StatusLabel(IncubatorStatus s) => s switch
+    {
+        IncubatorStatus.Discovery => "قَيد الاكتِشاف",
+        IncubatorStatus.PatternSuggested => "اقتُرِحَ نَمَط",
+        IncubatorStatus.Analyzing => "قَيد التَّحليل",
+        IncubatorStatus.Completed => "اكتَمَلَ",
+        IncubatorStatus.Failed => "فَشِلَ",
+        _ => "مَهجور"
+    };
+
+    static string Truncate(string s, int n) => s.Length <= n ? s : s[..n] + "…";
+}

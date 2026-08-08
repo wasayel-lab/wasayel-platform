@@ -1,0 +1,126 @@
+@page "/admin/fixtures"
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+
+@*
+    صَفحَة fixtures المَرحَلَة ٩: تَعرِض ٢٠ مَشروع اختِبار + اختِبار
+    PatternMatcher عَلَيها مُباشَرَةً (بِلا LLM). يَكشِف انحِراف القَواعِد.
+*@
+
+<RequirePlatformAdmin>
+<div class="studio-root">
+    <div class="studio-shell">
+        <aside class="studio-sidebar">
+            <div class="studio-sidebar-brand">
+                <img src="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-lockup-white.svg"
+                     alt="وَسايِل" height="30" />
+                <span style="font-size:13px;opacity:.65;font-weight:600;">Admin</span>
+            </div>
+            <nav class="studio-nav">
+                <a class="studio-nav-item" href="/admin">
+                    <AcIcon Name="building" Size="18" /> المُستَأجِرون
+                </a>
+                <a class="studio-nav-item" href="/admin/monitor">
+                    <AcIcon Name="grid" Size="18" /> المُراقَبَة
+                </a>
+                <a class="studio-nav-item active" href="/admin/fixtures">
+                    <AcIcon Name="check-circle" Size="18" /> Fixtures
+                </a>
+                <a class="studio-nav-item" href="/admin/agent">
+                    <AcIcon Name="message" Size="18" /> الوَكيل
+                </a>
+            </nav>
+            <div class="studio-sidebar-footer">
+                <a href="/studio" class="studio-nav-item">← لوحَتي</a>
+            </div>
+        </aside>
+
+        <div class="studio-main">
+            <header class="studio-topbar">
+                <h2 class="studio-topbar-title">Fixtures — اختِبارات الـ pipeline</h2>
+            </header>
+            <div class="studio-content">
+                <div class="studio-page-head">
+                    <h1>٢٠ مَشروع اختِبار</h1>
+                    <p>كُلّ صَفّ: الفِكرَة، النَّمَط المُتَوَقَّع، النَّمَط الَّذي اقتَرَحه PatternMatcher، وَ النَّتيجَة.</p>
+                </div>
+
+                <div class="studio-stats">
+                    <div class="studio-stat">
+                        <div class="studio-stat-label">إجمالي</div>
+                        <div class="studio-stat-value">@IncubatorFixtures.All.Count</div>
+                    </div>
+                    <div class="studio-stat">
+                        <div class="studio-stat-label">نَجَحَت <AcIcon Name="check" Size="14" /></div>
+                        <div class="studio-stat-value" style="color:var(--st-success);">@passed</div>
+                    </div>
+                    <div class="studio-stat">
+                        <div class="studio-stat-label">انحِراف <AcIcon Name="x" Size="14" /></div>
+                        <div class="studio-stat-value" style="color:var(--st-danger);">@failed</div>
+                    </div>
+                    <div class="studio-stat">
+                        <div class="studio-stat-label">مُعَدَّل النَّجاح</div>
+                        <div class="studio-stat-value">@(IncubatorFixtures.All.Count > 0 ? passed * 100 / IncubatorFixtures.All.Count : 0)%</div>
+                    </div>
+                </div>
+
+                <div class="st-section-title">النَّتائِج</div>
+                <div class="studio-list">
+                    @foreach (var (f, actual) in results)
+                    {
+                        var ok = actual.Pattern == f.ExpectedPattern;
+                        <div class="studio-list-row" style="cursor:default;">
+                            <span class="studio-list-icon" style="@(ok ? "background:#dcfce7;color:#15803d;" : "background:#fee2e2;color:#b91c1c;")">
+                                <AcIcon Name="@(ok ? "check" : "x")" Size="14" />
+                            </span>
+                            <div class="studio-list-body">
+                                <strong>@f.Description</strong>
+                                <span>
+                                    قِطاع: @f.ExpectedSector · مُتَوَقَّع: <code>@f.ExpectedPattern</code> ·
+                                    فِعليّ: <code>@actual.Pattern</code> (@actual.Confidence)
+                                </span>
+                            </div>
+                            <span class="st-chip">@actual.LabelAr</span>
+                        </div>
+                    }
+                </div>
+
+                <div class="st-card" style="margin-top:18px;background:var(--st-line-soft);border:0;font-size:12.5px;color:var(--st-muted);">
+                    <AcIcon Name="lightbulb" Size="16" /> لِفَحص LLM كامِل (يَستَهلِك الحِصَّة) شَغِّل التَّحاليل يَدَويّاً مِن صَفحَة كُلّ جَلسَة بَعد إنشائها مَع وَصف الـ fixture.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</RequirePlatformAdmin>
+
+@code {
+    int passed, failed;
+    List<(FeasibilityFixture, PatternSuggestion)> results = new();
+
+    protected override void OnInitialized()
+    {
+        foreach (var f in IncubatorFixtures.All)
+        {
+            // اِبنِ Answers تَخيُّليَّة مِن النَّمَط المُتَوَقَّع لِفَحص PatternMatcher.
+            var answers = AnswersFor(f);
+            var actual = PatternMatcher.Match(answers);
+            results.Add((f, actual));
+            if (actual.Pattern == f.ExpectedPattern) passed++; else failed++;
+        }
+    }
+
+    // إجابات الاكتِشاف الَّتي تُتَوَقَّع لِنَمَط مُعَيَّن.
+    static Dictionary<string, string> AnswersFor(FeasibilityFixture f) => f.ExpectedPattern switch
+    {
+        "ondemand" => new() { ["sector"] = f.ExpectedSector, ["customer"] = "b2c", ["offer"] = "service",
+                              ["payment"] = "oneoff", ["geo"] = "city", ["realtime"] = "yes" },
+        "rental"   => new() { ["sector"] = f.ExpectedSector, ["customer"] = "b2c", ["offer"] = "rental",
+                              ["payment"] = "oneoff", ["geo"] = "city", ["realtime"] = "no" },
+        "marketplace" => new() { ["sector"] = f.ExpectedSector, ["customer"] = "b2c", ["offer"] = "twosided",
+                                 ["payment"] = "commission", ["geo"] = "national", ["realtime"] = "no" },
+        "classifieds" => new() { ["sector"] = f.ExpectedSector, ["customer"] = "b2c", ["offer"] = "twosided",
+                                 ["payment"] = "subscription", ["geo"] = "city", ["realtime"] = "no" },
+        _ => new() { ["sector"] = f.ExpectedSector, ["customer"] = "b2c", ["offer"] = "digital",
+                     ["payment"] = "subscription", ["geo"] = "global", ["realtime"] = "no" }
+    };
+}

@@ -1,6 +1,10 @@
 @if (Stage != "verify")
 {
     <form method="post" action="@($"/{Slug}/auth/nafath/login")">
+        @if (!string.IsNullOrEmpty(AsRole))
+        {
+            <input type="hidden" name="as" value="@AsRole" />
+        }
         <AcField Label="رَقم الهُويَّة الوَطَنِيَّة" Required="true">
             <input type="tel" name="nid" value="@NationalId" required pattern="[0-9]{10}" maxlength="10"
                    class="ac-input" style="direction:ltr;font-size:18px;
@@ -16,6 +20,10 @@ else
     <form method="post" action="@($"/{Slug}/auth/nafath/verify")">
         <input type="hidden" name="nid"     value="@NationalId" />
         <input type="hidden" name="attempt" value="@AttemptId" />
+        @if (!string.IsNullOrEmpty(AsRole))
+        {
+            <input type="hidden" name="as" value="@AsRole" />
+        }
 
         <p class="acs-nafath-instruction" style="text-align:center;">
             اِفتَح تَطبيق <strong>نَفاذ</strong> في جَوّالك واختَر الرَقم المَوضَح:
@@ -37,7 +45,7 @@ else
         <AcButton Type="submit" Variant="primary" Size="lg" Block="true"
                   Text="تَأكَّدت في تَطبيق نَفاذ — أَكمِل الدُخول" />
 
-        <a href="@($"/{Slug}/login")"
+        <a href="@AuthSession.LinkFor(Slug, AsRole, $"login")"
            style="display:block;text-align:center;margin-top:10px;
                   color:var(--ac-text-muted);font-size:13px;text-decoration:none;">
             تَغيير الرَقم
@@ -52,4 +60,5 @@ else
     [Parameter] public string? AttemptId { get; set; }
     [Parameter] public string? DisplayCode { get; set; }
     [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public string? AsRole { get; set; }
 }

@@ -1,0 +1,30 @@
+{
+  "_meta": {
+    "description": "منافسون سعوديون بارزون لكل قطاع — يُحقَن في التحليل لتوليد مقارنة تنافسية واقعية.",
+    "sources": ["مواقع الشركات", "Crunchbase", "Wamda", "تقارير قطاعية عامة"],
+    "lastUpdated": "2026-01"
+  },
+  "ecommerce": [
+    { "name": "سلة (Salla)", "product": "منشئ متاجر SaaS", "pricingSar": "يبدأ ~99/شهر + باقات أعلى", "scale": "~68K متجر", "strengths": ["تكامل محلي (mada, الشحن)", "مجتمع تجار كبير"], "weaknesses": ["تخصيص محدود", "رسوم على الباقات العليا"] },
+    { "name": "زد (Zid)", "product": "منشئ متاجر + لوجستيات", "pricingSar": "باقات شهرية", "scale": "~12K متجر", "strengths": ["تكامل لوجستي قوي", "تطبيق تاجر جيد"], "weaknesses": ["حصة سوقية أصغر من سلة"] },
+    { "name": "Shopify (عربي)", "product": "منصة عالمية", "pricingSar": "بالدولار", "scale": "عالمي", "strengths": ["نظام إضافات ضخم"], "weaknesses": ["دعم محلي ضعيف", "تكاملات سعودية ناقصة"] }
+  ],
+  "fnb": [
+    { "name": "HungerStation", "product": "توصيل طعام", "pricingSar": "عمولة 15-30% على المطاعم", "scale": "رائد السوق", "strengths": ["تغطية واسعة", "ملكية Delivery Hero"], "weaknesses": ["عمولات مرتفعة تشكو منها المطاعم"] },
+    { "name": "جاهز (Jahez)", "product": "توصيل طعام", "pricingSar": "عمولة + اشتراك", "scale": "مدرج في تداول", "strengths": ["علامة سعودية", "توسع في الخدمات"], "weaknesses": ["منافسة سعرية شرسة"] },
+    { "name": "مرسول (Mrsool)", "product": "توصيل عام + طعام", "pricingSar": "رسوم توصيل متغيرة", "scale": "كبير", "strengths": ["مرونة الطلبات الحرة"], "weaknesses": ["تجربة غير متسقة"] }
+  ],
+  "realestate": [
+    { "name": "عقار (Aqar)", "product": "إعلانات عقارية", "pricingSar": "اشتراك معلنين", "scale": "الأكبر محلياً", "strengths": ["قاعدة إعلانات ضخمة"], "weaknesses": ["تجربة بحث قديمة", "إعلانات مكررة"] },
+    { "name": "بيوت (Bayut) SA", "product": "إعلانات عقارية", "pricingSar": "اشتراك", "scale": "متنامٍ", "strengths": ["UX حديث", "بيانات موثقة"], "weaknesses": ["حضور أحدث في السوق"] },
+    { "name": "إيجار (Ejar)", "product": "منصة حكومية للعقود", "pricingSar": "رسوم رمزية", "scale": "إلزامية", "strengths": ["إلزامية حكومية"], "weaknesses": ["ليست منصة وساطة تنافسية"] }
+  ],
+  "services": [
+    { "name": "مستعد", "product": "خدمات منزلية حسب الطلب", "pricingSar": "تسعير لكل خدمة", "scale": "متوسط", "strengths": ["تركيز على الجودة"], "weaknesses": ["تغطية جغرافية محدودة"] },
+    { "name": "خدمة (Khedma)", "product": "تجميع مزوّدي خدمات", "pricingSar": "عمولة", "scale": "ناشئ", "strengths": ["نموذج marketplace"], "weaknesses": ["سيولة عرض/طلب هشة"] }
+  ],
+  "transport": [
+    { "name": "Careem", "product": "نقل ركاب + خدمات", "pricingSar": "عمولة على الرحلة", "scale": "مهيمن", "strengths": ["super-app", "ملكية Uber"], "weaknesses": ["تركيز على المدن الكبرى"] },
+    { "name": "Uber", "product": "نقل ركاب", "pricingSar": "عمولة", "scale": "كبير", "strengths": ["علامة عالمية"], "weaknesses": ["حساسية تنظيمية محلية"] }
+  ]
+}

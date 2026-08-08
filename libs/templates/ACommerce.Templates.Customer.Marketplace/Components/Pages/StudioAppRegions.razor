@@ -1,0 +1,135 @@
+@page "/studio/apps/{slug}/regions"
+@inject Services.Incubator.StudioAuth Auth
+@inject Marten.IDocumentStore Store
+@using ACommerce.Kit.Tenants
+@using ACommerce.Platform.Shared
+
+@*
+    تَحرير المُدُن والأَحياء — صيغَة: كُلّ سَطر مَدينَة، اختياريّاً
+    تَتبَعها " > حَيّ١، حَيّ٢ ..". يُخزَّن في DiscoveryRegions كَ
+    شَجَرَة مُسطَّحَة (Level 1 = مَدينَة، Level 2 = حَيّ).
+*@
+
+<StudioShell Title="@($"المُدُن والأَحياء · {tenant?.Name ?? Slug}")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← الإعدادات</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (tenant is null)
+        {
+            <div class="st-card">التَّطبيق غَير مَوجود أَو لا تَملِكه.</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>التَّغطيَة الجُغرافيَّة</h1>
+                <p>المُدُن والأَحياء الَّتي يَختار مِنها العُملاء.</p>
+            </div>
+
+            @if (Saved == "1")     { <div class="st-chip st-chip-success" style="margin-bottom:14px;"><AcIcon Name="check" Size="14" /> تَمّ الحِفظ</div> }
+            @if (Err == "empty")   { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">أَضِف مَدينَة واحِدَة على الأَقَلّ</div> }
+            @if (Err == "format")  { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">صِيغَة سَطر غَير صَحيحَة</div> }
+
+            <form method="post" action="@($"/studio/apps/{Slug}/regions/save")" id="regions-form" class="st-card">
+                <p style="color:var(--st-muted);font-size:13px;margin:0 0 14px;">
+                    بِطاقَة لِكُلّ مَدينَة. اكتُب الحَيّ ثُمَّ اضغَط Enter لِإضافَتِه.
+                </p>
+
+                <div class="ac-editor" id="cities-editor">
+                    @foreach (var (city, kids) in citiesWithKids)
+                    {
+                        <div class="ac-editor-row" data-city-row>
+                            <div class="ac-editor-row-head">
+                                <input class="ac-input ac-city-name" placeholder="اسم المَدينَة" value="@city" />
+                                <button type="button" class="ac-icon-btn" data-remove-city aria-label="حَذف المَدينَة"><AcIcon Name="x" Size="16" /></button>
+                            </div>
+                            <div>
+                                <span class="ac-chip-input-label">الأَحياء</span>
+                                <div class="ac-chip-input" data-districts>
+                                    @foreach (var d in kids)
+                                    {
+                                        <span class="ac-chip-tag"><span class="t">@d</span><button type="button" aria-label="حَذف">×</button></span>
+                                    }
+                                    <input class="ac-chip-entry" placeholder="أَضِف حَيّاً ثُمَّ Enter" />
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <button type="button" class="ac-add-row-btn" id="add-city" style="margin-top:12px;">
+                    <AcIcon Name="plus" Size="16" /> إضافَة مَدينَة
+                </button>
+
+                <textarea name="regions" id="regions-hidden" hidden>@regionsText</textarea>
+
+                <button type="submit" class="st-btn st-btn-primary" style="margin-top:16px;">حِفظ التَّغطيَة</button>
+            </form>
+
+            <template id="city-row-tpl">
+                <div class="ac-editor-row" data-city-row>
+                    <div class="ac-editor-row-head">
+                        <input class="ac-input ac-city-name" placeholder="اسم المَدينَة" />
+                        <button type="button" class="ac-icon-btn" data-remove-city aria-label="حَذف المَدينَة"><AcIcon Name="x" Size="16" /></button>
+                    </div>
+                    <div>
+                        <span class="ac-chip-input-label">الأَحياء</span>
+                        <div class="ac-chip-input" data-districts>
+                            <input class="ac-chip-entry" placeholder="أَضِف حَيّاً ثُمَّ Enter" />
+                        </div>
+                    </div>
+                </div>
+            </template>
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery] public string? Saved { get; set; }
+    [SupplyParameterFromQuery] public string? Err   { get; set; }
+    Tenant? tenant;
+    string regionsText = "";
+    int lineCount;
+    List<(string City, List<string> Districts)> citiesWithKids = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        await using var qs = Store.QuerySession();
+        tenant = await qs.LoadAsync<Tenant>(Slug);
+        if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) { tenant = null; return; }
+        if (tenant is null) return;
+
+        // اِجلِب الـ DiscoveryRegions مِن tenant scope وحَوِّلها لِنَصّ.
+        await using var ts = Store.QuerySession(Slug);
+        var records = (await ts.Query<ImportedRecord>()
+            .Where(r => r.Table == "DiscoveryRegions").ToListAsync()).ToList();
+
+        var cities = records.Where(r => GetInt(r, "Level") == 1)
+            .OrderBy(r => GetInt(r, "SortOrder")).ToList();
+        var lines = new List<string>();
+        foreach (var c in cities)
+        {
+            var cityId = GetGuid(c, "Id");
+            var name = GetStr(c, "Name");
+            var districts = records
+                .Where(r => GetInt(r, "Level") == 2 && GetGuid(r, "ParentId") == cityId)
+                .OrderBy(r => GetInt(r, "SortOrder"))
+                .Select(r => GetStr(r, "Name"))
+                .Where(s => !string.IsNullOrEmpty(s)).ToList();
+            lines.Add(districts.Count > 0 ? $"{name} > {string.Join("، ", districts)}" : name);
+            citiesWithKids.Add((name, districts));
+        }
+        regionsText = string.Join("\n", lines);
+        lineCount = lines.Count;
+    }
+
+    static string GetStr(ImportedRecord r, string k)
+        => r.Data.TryGetValue(k, out var v) ? v?.ToString() ?? "" : "";
+    static int GetInt(ImportedRecord r, string k)
+        => r.Data.TryGetValue(k, out var v) && int.TryParse(v?.ToString(), out var i) ? i : 0;
+    static Guid GetGuid(ImportedRecord r, string k)
+        => r.Data.TryGetValue(k, out var v) && Guid.TryParse(v?.ToString(), out var g) ? g : Guid.Empty;
+}

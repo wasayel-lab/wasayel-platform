@@ -29,6 +29,21 @@ public sealed class Tenant
     /// <c>ACommerce.Kit.Roles.Role</c> وَالـ csproj يَعتَمِد عَلَيه.</summary>
     public List<ACommerce.Kit.Roles.Role> Roles { get; set; } = new();
 
+    /// <summary>رائِد الأَعمال المالِك لِهذا التَّطبيق على المَنصَّة
+    /// (<c>StudioUser.Id</c>). <c>Guid.Empty</c> = بِلا مالِك مُعَيَّن
+    /// (مَتاجِر قَبل ميزَة المِلكِيَّة، يُرَبَط لاحِقاً بِأَوَّل مُستَخدِم
+    /// عَبر <c>StudioOwnershipSeeder</c>).</summary>
+    public Guid OwnerUserId { get; set; }
+
+    /// <summary>جَلسَة التَّحليل الَّتي أَنشَأت هذا المَتجَر (إن وُجِدَت).
+    /// تُمَكِّن إظهار «هذا المَتجَر مَبني على فِكرَة س» في console.</summary>
+    public Guid? SourceAnalysisId { get; set; }
+
+    /// <summary>مَتجَر مُعَلَّق إداريّاً مِن مَنصَّة (مَخالَفَة، تَأخُّر
+    /// دَفع، …). يَختَفي مِن الواجِهَة العامَّة، لكِنّ بَياناتُه تَبقى.</summary>
+    public bool IsSuspended { get; set; }
+    public string? SuspensionReason { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 

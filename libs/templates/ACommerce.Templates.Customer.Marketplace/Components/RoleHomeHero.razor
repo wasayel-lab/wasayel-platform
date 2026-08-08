@@ -13,9 +13,11 @@
 }
 else
 {
-    <section class="acm-role-hero acm-role-hero-@(Role.Slug)">
+    <section class="acm-role-hero acm-role-hero-@(RoleObj.Slug)">
         <div class="acm-role-hero-head">
-            <span class="acm-role-hero-icon">@(Role.Icon ?? "👤")</span>
+            <span class="acm-role-hero-icon">
+                <AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(RoleObj.Icon, "user")" Size="24" />
+            </span>
             <div>
                 <h2 style="margin:0;font-size:18px;">@Greeting</h2>
                 <span style="color:var(--ac-text-muted);font-size:13px;">@Subtitle</span>
@@ -23,27 +25,27 @@ else
         </div>
 
         <div class="acm-role-hero-actions">
-            @switch (Role.CatalogSlug)
+            @switch (RoleObj?.CatalogSlug)
             {
                 case "rider":
                     <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
-                       href="@($"/{Slug}/create-listing")">
+                       href="@AuthSession.LinkFor(Slug, Role, $"create-listing")">
                         <AcIcon Name="plus" Size="18" /> نَشر طَلَب مِشوار
                     </a>
-                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/me/listings")">
+                    <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me/listings")">
                         <AcIcon Name="package" Size="16" /> طَلَباتي الحالِيَّة
                     </a>
                     break;
 
                 case "driver":
                     <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
-                       href="@($"/{Slug}/explore")">
+                       href="@AuthSession.LinkFor(Slug, Role, $"explore")">
                         <AcIcon Name="search" Size="18" /> مَشاوير مُتاحَة
                     </a>
-                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/me/offers")">
+                    <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me/offers")">
                         <AcIcon Name="package" Size="16" /> عُروضي
                     </a>
-                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/me/searches")">
+                    <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me/searches")">
                         <AcIcon Name="bell" Size="16" /> بَحوث الإشعار
                     </a>
                     break;
@@ -51,27 +53,27 @@ else
                 case "vendor":
                 case "host":
                     <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
-                       href="@($"/{Slug}/create-listing")">
+                       href="@AuthSession.LinkFor(Slug, Role, $"create-listing")">
                         <AcIcon Name="plus" Size="18" /> إعلان جَديد
                     </a>
-                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/me/listings")">
+                    <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me/listings")">
                         <AcIcon Name="package" Size="16" /> إعلاناتي
                     </a>
                     break;
 
                 case "shipper":
                     <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
-                       href="@($"/{Slug}/explore")">
+                       href="@AuthSession.LinkFor(Slug, Role, $"explore")">
                         <AcIcon Name="search" Size="18" /> شَحَنات مُتاحَة
                     </a>
-                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/me/offers")">
+                    <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me/offers")">
                         <AcIcon Name="package" Size="16" /> عُروضي
                     </a>
                     break;
 
                 case "tenant_admin":
                     <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
-                       href="@($"/{Slug}/manage")">
+                       href="@AuthSession.LinkFor(Slug, Role, $"manage")">
                         <AcIcon Name="settings" Size="18" /> لَوحَة الإدارَة
                     </a>
                     break;
@@ -79,7 +81,7 @@ else
                 case "customer":
                 default:
                     <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
-                       href="@($"/{Slug}/explore")">
+                       href="@AuthSession.LinkFor(Slug, Role, $"explore")">
                         <AcIcon Name="search" Size="18" /> اِستِكشاف
                     </a>
                     break;
@@ -92,11 +94,12 @@ else
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
-    [Parameter] public ACommerce.Kit.Roles.Role? Role { get; set; }
+    [Parameter] public string? Role { get; set; }
+    [Parameter] public ACommerce.Kit.Roles.Role? RoleObj { get; set; }
     [Parameter] public string? UserName { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    string Greeting => Role?.CatalogSlug switch
+    string Greeting => RoleObj?.CatalogSlug switch
     {
         "rider"        => string.IsNullOrEmpty(UserName) ? "أَهلاً" : $"أَهلاً {UserName}، إلى أَين؟",
         "driver"       => string.IsNullOrEmpty(UserName) ? "أَهلاً سائِق" : $"أَهلاً {UserName}",
@@ -107,7 +110,7 @@ else
         _              => string.IsNullOrEmpty(UserName) ? "مَرحَباً" : $"مَرحَباً {UserName}"
     };
 
-    string Subtitle => Role?.CatalogSlug switch
+    string Subtitle => RoleObj?.CatalogSlug switch
     {
         "rider"        => "اُكتُب وِجهَتك وَ سَيَصِلكَ سائِقون قَريبون.",
         "driver"       => "تَصَفَّح طَلَبات الراكِبين القَريبَة وَ قَدِّم عَرضَك.",

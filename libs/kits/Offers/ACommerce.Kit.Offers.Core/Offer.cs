@@ -23,7 +23,8 @@ public sealed record OfferSubmitted(
     double Lat,
     double Lng,
     System.DateTime ExpiresAt,
-    System.DateTime At);
+    System.DateTime At,
+    System.Collections.Generic.Dictionary<string, string>? Attributes = null);
 
 public sealed record OfferWithdrawn(System.Guid Id, System.DateTime At);
 public sealed record OfferAccepted(System.Guid Id, System.DateTime At);
@@ -48,6 +49,12 @@ public sealed class Offer
     public System.DateTime ExpiresAt { get; set; }
     public System.DateTime? ResolvedAt { get; set; }
 
+    /// <summary>خَصائِص العَرض الديناميكِيَّة — مَأخوذَة مِن form بِالبادِئَة
+    /// <c>attr_</c> عِندَ التَّقديم. تَختَلِف عَن خَصائِص الإعلان: السائِق
+    /// قَد يَذكُر "مَركَبَتي 7-رُكّاب" أَو "وَقت وُصولي 8 دَقائِق" كَ
+    /// إجابات مُهَيكَلَة لا نَصّ حُرّ في الرِسالَة.</summary>
+    public System.Collections.Generic.Dictionary<string, string> Attributes { get; set; } = new();
+
     public void Apply(OfferSubmitted e)
     {
         Id = e.Id; ListingId = e.ListingId;
@@ -56,6 +63,7 @@ public sealed class Offer
         Lat = e.Lat; Lng = e.Lng;
         ExpiresAt = e.ExpiresAt; SubmittedAt = e.At;
         Status = OfferStatus.Pending;
+        if (e.Attributes is not null) Attributes = new(e.Attributes);
     }
     public void Apply(OfferWithdrawn e) { Status = OfferStatus.Withdrawn; ResolvedAt = e.At; }
     public void Apply(OfferAccepted  e) { Status = OfferStatus.Accepted;  ResolvedAt = e.At; }
@@ -63,9 +71,18 @@ public sealed class Offer
     public void Apply(OfferExpired   e) { Status = OfferStatus.Expired;   ResolvedAt = e.At; }
 }
 
+/// <summary>حالات الرِحلَة بَعدَ القَبول:
+/// active = جارِيَة (السائِق مُلتَزَم) — لا يَستَطيع تَقديم عُروض جَديدَة.
+/// completed = انتَهَت بِنَجاح (وَصَل لِنُقطَة الوُصول).
+/// aborted = قُطِعَت (السائِق أَو الراكِب أَلغَى) — السائِق يَدخُل
+///           فَترَة تَهدِئَة قَبل أَن يَستَطيع تَقديم عَرض جَديد.
+/// </summary>
+public enum TripStatus { Active, Completed, Aborted }
+
 /// <summary>
 /// نَتيجَة المُطابَقَة عَلى مُستَوى الإعلان — doc بِـ Id = ListingId.
 /// يُنشَأ/يُحَدَّث عِندَ قَبول عَرض. وُجودُه يَعني "الإعلان مُتَطابِق".
+/// يَتَتَبَّع أَيضاً دَورَة حَياة الرِحلَة بَعد القَبول.
 /// </summary>
 public sealed class ListingMatch
 {
@@ -77,6 +94,25 @@ public sealed class ListingMatch
     public double OffererLat { get; set; }
     public double OffererLng { get; set; }
     public System.DateTime MatchedAt { get; set; }
+
+    /// <summary>الحالَة الحالِيَّة لِلرِحلَة. الافتراضي Active فَور القَبول.</summary>
+    public TripStatus Status { get; set; } = TripStatus.Active;
+
+    /// <summary>وَقت الانتِهاء (completed/aborted). null = لا تَزال Active.</summary>
+    public System.DateTime? ResolvedAt { get; set; }
+
+    /// <summary>مَن أَنهَى/قَطَع: "offerer" (السائِق) أَو "owner" (الراكِب).</summary>
+    public string? ResolvedBy { get; set; }
+
+    /// <summary>اختِياريّ: مُذَكِّرَة عَن سَبَب الإلغاء.</summary>
+    public string? AbortReason { get; set; }
+
+    /// <summary>وَقت تَأكيد السائِق وُصولَه لِنُقطَة الانطِلاق. null = لَم
+    /// يَصِل بَعد. لا يُغَيِّر الـ Status — تَبقَى Active، لكِنّ UI يَتَغَيَّر
+    /// (تَظهَر "تَأكيد انتِهاء" بَدَل "أَنا واصِل").</summary>
+    public System.DateTime? ArrivedAt { get; set; }
+    public double ArrivedLat { get; set; }
+    public double ArrivedLng { get; set; }
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────

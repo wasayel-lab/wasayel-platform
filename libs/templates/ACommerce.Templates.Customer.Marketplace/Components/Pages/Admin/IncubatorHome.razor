@@ -1,0 +1,112 @@
+@page "/admin/incubator"
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.FeasibilityAnalysisService Incubator
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+
+@*
+    مَدخَل الحاضِنَة — صَفحَة بِدايَة صاحِب المَشروع. يَبدَأ بِتَحليل فِكرَته
+    قَبل إنشاء المَتجَر. تَعرِض الجَلَسات السابِقَة + زِرّ بَدء جَديد.
+*@
+
+<div class="acs-page acm-admin">
+    <div class="acm-admin-head">
+        <div style="display:flex;align-items:center;gap:8px;">
+            <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin" aria-label="الرُجوع">
+                <AcIcon Name="arrow-right" Size="16" />
+            </a>
+            <div>
+                <h1 class="acm-wizard-title" style="margin:0;"><AcIcon Name="search" Size="16" /> حاضِنَة الأَفكار</h1>
+                <p style="color:var(--ac-text-muted);margin:2px 0 0;font-size:13px;">
+                    حَلِّل جَدوى فِكرَتِكَ في السوق السعودي قَبل الإطلاق
+                </p>
+            </div>
+        </div>
+    </div>
+
+    @if (!Incubator.IsConfigured)
+    {
+        <AcAlert Variant="warning"
+                 Message="لا يوجَد مِفتاح LLM مَضبوط. أَضِف Agent:ApiKey في appsettings.Local.json لِتَفعيل التَّحليل." />
+    }
+
+    <AcCard>
+        <ChildContent>
+            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                <span style="font-size:42px;"><AcIcon Name="lightbulb" Size="42" /></span>
+                <div style="flex:1;min-width:200px;">
+                    <h3 style="margin:0 0 4px;">عِندَكَ فِكرَة مَتجَر؟</h3>
+                    <p style="margin:0;color:var(--ac-text-muted);font-size:13px;line-height:1.7;">
+                        أَجِب على أَسئِلَة سَريعَة، نَقتَرِح لَكَ نَمَطاً مُناسِباً،
+                        ثُمَّ نُولِّد دِراسَة جَدوى بِأَرقام السوق السعودي ومَخاطِر
+                        مُستَنبَطَة مِن مَشاريع فَشِلَت.
+                    </p>
+                </div>
+                <form method="post" action="/admin/incubator/start">
+                    <button type="submit" class="ac-btn ac-btn-primary">
+                        <AcIcon Name="plus" Size="18" /> ابدَأ تَحليلاً
+                    </button>
+                </form>
+            </div>
+        </ChildContent>
+    </AcCard>
+
+    @if (sessions is null)
+    {
+        <AcLoadingState />
+    }
+    else if (sessions.Count > 0)
+    {
+        <h3 style="margin:20px 0 8px;font-size:15px;">جَلَساتُكَ السابِقَة</h3>
+        <div class="acm-cat-list">
+            @foreach (var s in sessions)
+            {
+                <a class="acm-cat-row" style="text-decoration:none;color:inherit;"
+                   href="@(s.Status == IncubatorStatus.Completed
+                        ? $"/admin/incubator/{s.Id}/study"
+                        : $"/admin/incubator/{s.Id}")">
+                    <span style="font-size:22px;"><AcIcon Name="@StatusIcon(s.Status)" Size="22" /></span>
+                    <div style="flex:1;">
+                        <strong>@(string.IsNullOrEmpty(s.ProjectDescription)
+                            ? "فِكرَة بِلا وَصف بَعد"
+                            : Truncate(s.ProjectDescription, 60))</strong>
+                        <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
+                            @StatusLabel(s.Status) · @s.UpdatedAt.ToString("yyyy-MM-dd HH:mm")
+                            @if (s.Status == IncubatorStatus.Completed)
+                            {
+                                <span> · جَودَة @s.AnalysisQualityScore%</span>
+                            }
+                        </span>
+                    </div>
+                    <AcIcon Name="chevron-left" Size="16" />
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    List<IncubatorSession>? sessions;
+
+    protected override async Task OnInitializedAsync()
+        => sessions = await Incubator.ListForUserAsync(Guid.Empty);
+
+    static string StatusIcon(IncubatorStatus s) => s switch
+    {
+        IncubatorStatus.Completed => "check",
+        IncubatorStatus.Analyzing => "clock",
+        IncubatorStatus.Failed    => "alert-circle",
+        IncubatorStatus.PatternSuggested => "target",
+        _ => "edit"
+    };
+
+    static string StatusLabel(IncubatorStatus s) => s switch
+    {
+        IncubatorStatus.Discovery => "قَيد الاكتِشاف",
+        IncubatorStatus.PatternSuggested => "اقتُرِحَ نَمَط",
+        IncubatorStatus.Analyzing => "قَيد التَّحليل",
+        IncubatorStatus.Completed => "اكتَمَلَ",
+        IncubatorStatus.Failed => "فَشِلَ",
+        _ => "مَهجور"
+    };
+
+    static string Truncate(string s, int n) => s.Length <= n ? s : s[..n] + "…";
+}

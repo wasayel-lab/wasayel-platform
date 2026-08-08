@@ -1,0 +1,49 @@
+@page "/studio/new"
+@inject Services.Incubator.StudioAuth Auth
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+
+@*
+    صَفحَة "فِكرَة جَديدَة" داخِل الـ studio (لِلمُستَخدِم المُسَجَّل) —
+    نَفس حَقل المُطالَبَة لكِنّ بِلا تَدَفُّق الزائر (لا "تَسجيل الدُخول"،
+    لا hero تَسويقيّ). تُرسِل إلى /studio/begin مِثل صَفحَة الهبوط، الـ
+    endpoint نَفسه يَنشُر التَّحليل وَيُحَوِّل لِ‍ /studio/s/{id}.
+*@
+
+<StudioShell Title="فِكرَة جَديدَة" Active="">
+    <ChildContent>
+        <div class="studio-page-head">
+            <h1>صِف فِكرَة مَشروعِكَ <AcIcon Name="sparkle" Size="24" /></h1>
+            <p>اِكتُب وَصفاً واضِحاً، ثُمَّ نَبني لَكَ دِراسَة جَدوى كامِلَة بِأَرقام السوق السعودي.</p>
+        </div>
+
+        <div class="st-card">
+            <form method="post" action="/studio/begin">
+                <label class="st-label">المُطالَبَة</label>
+                <textarea name="prompt" required rows="6" class="st-textarea"
+                    placeholder="مَثَلاً: مَنصَّة تَربِط أَصحاب المَطاعِم بِمَورّدي الخُضار في الرياض بِنِظام عُمولَة على كُلّ طَلَبيَّة…"></textarea>
+
+                <div class="st-section-title" style="margin-top:18px;">أَفكار لِلتَّجرِبَة</div>
+                <div class="landing-examples" style="justify-content:flex-start;margin:8px 0 18px;">
+                    <span class="landing-example" onclick="fillNew(this)">سوق إعلانات سيّارات مُستَعمَلَة</span>
+                    <span class="landing-example" onclick="fillNew(this)">تَطبيق توصيل طَعام في جدة</span>
+                    <span class="landing-example" onclick="fillNew(this)">تَأجير مَعَدّات تَصوير</span>
+                    <span class="landing-example" onclick="fillNew(this)">مَنصَّة خَدَمات منزليَّة حَسَب الطَّلَب</span>
+                </div>
+
+                <div style="display:flex;gap:8px;">
+                    <a class="st-btn st-btn-ghost" href="/studio">إلغاء</a>
+                    <button type="submit" class="st-btn st-btn-primary st-btn-block">
+                        حَلِّل فِكرَتي ←
+                    </button>
+                </div>
+            </form>
+        </div>
+    </ChildContent>
+</StudioShell>
+
+<script>
+    function fillNew(el) {
+        var ta = document.querySelector('.st-textarea');
+        if (ta) { ta.value = el.textContent.trim(); ta.focus(); }
+    }
+</script>

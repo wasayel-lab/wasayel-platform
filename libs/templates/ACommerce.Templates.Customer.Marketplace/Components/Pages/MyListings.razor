@@ -1,4 +1,5 @@
 @page "/{slug}/me/listings"
+@page "/{slug}/r/{role}/me/listings"
 @inject IDocumentStore Store
 @inject AuthSession Auth
 
@@ -13,7 +14,7 @@
         <h1 class="acm-wizard-title" style="margin:0;">إعلاناتي</h1>
         @if (Auth.IsAuthenticated)
         {
-            <a class="ac-btn ac-btn-primary ac-btn-sm" href="@($"/{Slug}/create-listing")">
+            <a class="ac-btn ac-btn-primary ac-btn-sm" href="@AuthSession.LinkFor(Slug, Role, $"create-listing")">
                 <AcIcon Name="plus" Size="14" /> إعلان جَديد
             </a>
         }
@@ -23,7 +24,7 @@
     {
         <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
                       ActionLabel="تَسجيل دُخول"
-                      ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/me/listings")" />
+                      ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/me/listings")" />
     }
     else if (myListings is null)
     {
@@ -34,14 +35,14 @@
         <AcEmptyState IconName="package" Title="لا إعلانات بَعد"
                       Message="أَنشِئ أَوَّل إعلان لِتَبدَأ."
                       ActionLabel="إعلان جَديد"
-                      ActionHref="@($"/{Slug}/create-listing")" />
+                      ActionHref="@AuthSession.LinkFor(Slug, Role, $"create-listing")" />
     }
     else
     {
         <div class="acm-explore-grid">
             @foreach (var l in myListings)
             {
-                <a class="ac-space ac-space-link" href="@($"/{Slug}/listings/{l.Id}")"
+                <a class="ac-space ac-space-link" href="@AuthSession.LinkFor(Slug, Role, $"listings/{l.Id}")"
                    style="text-decoration:none;color:inherit;display:block;
                           background:var(--ac-surface);border:1px solid var(--ac-border);
                           border-radius:var(--ac-radius-lg);padding:14px;">
@@ -64,6 +65,7 @@
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
     List<Listing>? myListings;
 
     protected override async Task OnParametersSetAsync()

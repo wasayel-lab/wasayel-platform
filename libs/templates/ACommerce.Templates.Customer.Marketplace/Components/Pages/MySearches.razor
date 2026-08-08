@@ -1,4 +1,5 @@
 @page "/{slug}/me/searches"
+@page "/{slug}/r/{role}/me/searches"
 @inject IDocumentStore Store
 @inject AuthSession Auth
 
@@ -17,7 +18,7 @@
     {
         <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
                       ActionLabel="تَسجيل دُخول"
-                      ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/me/searches")" />
+                      ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/me/searches")" />
     }
     else if (searches is null)
     {
@@ -44,7 +45,7 @@
                                 <option value="">— كُلّ الفِئات —</option>
                                 @foreach (var c in tenant.Categories.OrderBy(c => c.SortOrder))
                                 {
-                                    <option value="@c.Slug">@c.Icon @c.Label</option>
+                                    <option value="@c.Slug">@c.Label</option>
                                 }
                             </select>
                         </AcField>
@@ -115,6 +116,7 @@
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
     [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
     Tenant? tenant;
     List<ACommerce.Kit.SavedSearches.SavedSearch>? searches;

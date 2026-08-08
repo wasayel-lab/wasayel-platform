@@ -42,25 +42,30 @@
 }
 else
 {
-    // ① حَدِّد الـ kind النَّشِط: ?kind= صَريح، أَو kind الفِئَة المُختارَة،
-    //    أَو أَوَّل kind في القائِمَة. هذا يَجعَل النَّقر عَلى leaf يَبقى
-    //    عَلى نَفس المَجموعَة (لا يَقفِز لِأَوّل kind).
-    string? currentKind = ActiveKind;
-    if (string.IsNullOrEmpty(currentKind) && !string.IsNullOrEmpty(ActiveCategory))
-        currentKind = Categories.FirstOrDefault(c => c.Slug == ActiveCategory)?.Kind;
-    if (string.IsNullOrEmpty(currentKind))
-        currentKind = byKind.FirstOrDefault()?.Key;
+    // ① فَصل المَفهومَين:
+    //   • selectedKind = الـ kind المُفَلتَر فِعليّاً (يُحَدِّد is-active).
+    //     يَبقى null عِندَ «بِلا فَلتَر» — وهذِه حالَة «الكُلّ» النَّشِطَة.
+    //   • displayKind = الـ kind المَعروض leaves الصَفّ السُّفليّ تَحتَه.
+    //     يُشتَقّ مِن selectedKind أَو ActiveCategory، وَإلّا أَوَّل kind.
+    //   كانَ المُتَغَيِّر الواحِد currentKind يَخلِط الدَورَين، فَيُضَلِّل
+    //   «الكُلّ» وَ «أَوَّل kind» مَعاً عِندَ غِياب أَيّ فَلتَر.
+    string? selectedKind = !string.IsNullOrEmpty(ActiveKind)
+        ? ActiveKind
+        : Categories.FirstOrDefault(c => c.Slug == ActiveCategory)?.Kind;
+    string? displayKind = selectedKind ?? byKind.FirstOrDefault()?.Key;
+    bool noFilter = string.IsNullOrEmpty(selectedKind) && string.IsNullOrEmpty(ActiveCategory);
 
-    var leaves = byKind.FirstOrDefault(g => g.Key == currentKind)?.OrderBy(c => c.SortOrder).ThenBy(c => c.Label).ToList()
+    var leaves = byKind.FirstOrDefault(g => g.Key == displayKind)?.OrderBy(c => c.SortOrder).ThenBy(c => c.Label).ToList()
                  ?? new List<ACommerce.Kit.Tenants.Category>();
     <div class="acm-taxo-chips">
         <div class="acm-taxo-chips-row">
-            @* "الكلّ" — يَمسَح أَيّ kind/category *@
-            <a class="acm-taxo-chip @(string.IsNullOrEmpty(ActiveKind) && string.IsNullOrEmpty(ActiveCategory) ? "is-active" : "")"
+            @* "الكلّ" — نَشِطَة فَقَط حِينَ لا فَلتَر *@
+            <a class="acm-taxo-chip @(noFilter ? "is-active" : "")"
                href="@exploreUrl"><span>الكلّ</span></a>
             @foreach (var g in byKind)
             {
-                var isActive = g.Key == currentKind;
+                // is-active لِلـ kind فَقَط حِينَ هو المُفَلتَر فِعليّاً (لا «العَرض»).
+                var isActive = g.Key == selectedKind;
                 // النَّقر عَلى kind: يَنقُل إلى /explore?kind=X (يَفلتِر +
                 // يَفتَح الصَفّ السُفلي). النَّقر عَلى الـ kind النَّشِط نَفسه
                 // يُغلِقه ⟶ /explore (الكلّ).
@@ -82,12 +87,14 @@ else
                     var leafActive = leaf.Slug == ActiveCategory;
                     // Leaf يَحفَظ kind الأَب لِيَبقى الصَفّ مَفتوحاً عَلى
                     // نَفس المَجموعَة بَعد النَّقر.
-                    var leafHref = $"{exploreUrl}?category={Uri.EscapeDataString(leaf.Slug)}&kind={Uri.EscapeDataString(currentKind ?? "")}";
+                    var leafHref = $"{exploreUrl}?category={Uri.EscapeDataString(leaf.Slug)}&kind={Uri.EscapeDataString(displayKind ?? "")}";
                     <a class="acm-taxo-chip @(leafActive ? "is-active" : "")"
                        href="@leafHref">
                         @if (!string.IsNullOrEmpty(leaf.Icon))
                         {
-                            <span class="acm-taxo-chip-icon">@leaf.Icon</span>
+                            <span class="acm-taxo-chip-icon">
+                                <AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(leaf.Icon, "tag")" Size="15" />
+                            </span>
                         }
                         <span>@leaf.Label</span>
                     </a>

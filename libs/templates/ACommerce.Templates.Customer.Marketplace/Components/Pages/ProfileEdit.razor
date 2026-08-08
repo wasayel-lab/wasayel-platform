@@ -1,4 +1,5 @@
 @page "/{slug}/me/edit"
+@page "/{slug}/r/{role}/me/edit"
 @inject IDocumentStore Store
 @inject AuthSession Auth
 @inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
@@ -10,7 +11,7 @@
                   Title="تَحتاج تَسجيل دُخول"
                   Message="سَجِّل دُخولك لِتَعديل بَياناتك."
                   ActionLabel="تَسجيل دُخول"
-                  ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/me/edit")" />
+                  ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/me/edit")" />
 }
 else if (user is null || tenant is null)
 {
@@ -20,11 +21,32 @@ else
 {
     <h1 class="acm-wizard-title">تَعديل المَلَفّ الشَخصيّ</h1>
 
-    <form method="post" action="@($"/{Slug}/me/save")">
+    <form method="post" action="@($"/{Slug}/me/save")" enctype="multipart/form-data">
+        @* عُد إلى نَفس صَفحَة الدَّور الَّتي دَخَلنا مِنها. *@
+        <input type="hidden" name="returnUrl" value="@AuthSession.LinkFor(Slug, Role, "me")" />
 
         <AcCard>
             <ChildContent>
                 <h3 style="margin-top:0;">المَعلومات الأَساسِيَّة</h3>
+
+                @* صورَة المَلَفّ الشَخصيّ — تُرفَع عَبر IFileStorage. *@
+                <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+                    @if (!string.IsNullOrEmpty(user.AvatarUrl))
+                    {
+                        <img src="@user.AvatarUrl" alt="الصورَة"
+                             style="width:64px;height:64px;border-radius:50%;object-fit:cover;" />
+                    }
+                    else
+                    {
+                        <AcAvatar Name="@user.FullName" Size="64" />
+                    }
+                    <div style="flex:1;">
+                        <label style="font-size:13px;color:var(--ac-text-muted);display:block;margin-bottom:4px;">
+                            صورَة المَلَفّ الشَخصيّ
+                        </label>
+                        <input type="file" name="avatar" accept="image/png,image/jpeg,image/webp" class="ac-input" />
+                    </div>
+                </div>
 
                 <AcField Label="الاسم الكامِل" Required="true">
                     <input type="text" name="fullName" value="@user.FullName"
@@ -46,10 +68,11 @@ else
             </ChildContent>
         </AcCard>
 
-        @* الدَور النَّشِط — يَظهَر فَقَط لَو المَتجَر يُعَرِّف أَدواراً
-           (مَثَلاً إنجيز: rider/driver). مَتجَر بِلا أَدوار يَتَجاوَز كامِل
-           هذا القِسم وَيَستَخدِم البروفايل العامّ فَقَط. *@
-        @if (tenant.Roles.Count > 0)
+        @* الدَور النَّشِط — مُختار الأَدوار يَظهَر فَقَط عِندَ الدُّخول
+           بِلا دَور في الـ URL (مَثَلاً مِن /{slug}/me/edit مُباشَرَة).
+           إذا دَخَلَ المُستَخدِم مِن /r/{role}/me/edit فالدَور مَعروف
+           وَنُثَبِّتُه ضِمنياً — لا داعِيَ لِسؤالِه مَرَّةً أُخرى. *@
+        @if (tenant.Roles.Count > 0 && string.IsNullOrEmpty(Role))
         {
             <AcCard>
                 <ChildContent>
@@ -61,7 +84,7 @@ else
                                 <input type="radio" name="activeRole" value="@r.Slug"
                                        checked="@(user.ActiveRole == r.Slug || (string.IsNullOrEmpty(user.ActiveRole) && r.IsDefault))" />
                                 <span class="acm-radio-card-body">
-                                    <strong>@(r.Icon ?? "👤") @r.Label</strong>
+                                    <strong><AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(r.Icon, "user")" Size="16" /> @r.Label</strong>
                                     @if (!string.IsNullOrEmpty(r.Description))
                                     {
                                         <span>@r.Description</span>
@@ -72,6 +95,12 @@ else
                     </div>
                 </ChildContent>
             </AcCard>
+        }
+        else if (!string.IsNullOrEmpty(Role))
+        {
+            @* الدَور مَفروض مِن الـ URL — مَرِّرْه بِـ hidden field
+               حَتَّى يَستَقبِله /me/save كَ activeRole بِلا تَغيير. *@
+            <input type="hidden" name="activeRole" value="@Role" />
         }
 
         @* خَصائِص البروفايل العامّ — مَرتَبِطَة بِـ ProfileScopeId
@@ -95,37 +124,59 @@ else
            لِلطَيّ. كُلّ قِسم لَه prefix فَريد role_{roleSlug}_attr_{code}
            حَتَّى يَستَطيع POST handler فَصلُها وَتَخزينها في
            user.RoleAttributesJson[roleSlug][code]. *@
-        @foreach (var (rslug, rlabel, ricon, fields) in roleFields)
+        @* خَصائِص دَور: لَو دَخَلنا مِن /r/{role}/me/edit نَعرِض حُقول
+           هذا الدَّور فَقَط بِلا طَيّ (لا داعِيَ، فالسِّياق صَريح)؛
+           وإلَّا نَعرِض كُلّ الأَدوار كَأَقسام قابِلَة لِلطَيّ. *@
+        @{
+            var visibleRoles = string.IsNullOrEmpty(Role)
+                ? roleFields
+                : roleFields.Where(r => r.Slug == Role).ToList();
+        }
+        @foreach (var (rslug, rlabel, ricon, fields) in visibleRoles)
         {
             if (fields.Count == 0) continue;
             var roleValues = user.RoleAttributesJson.TryGetValue(rslug, out var rv)
                 ? rv : new Dictionary<string, string>();
-            var isActive = user.ActiveRole == rslug;
+            var isActive = user.ActiveRole == rslug || rslug == Role;
+            var forceOpen = !string.IsNullOrEmpty(Role);
             <AcCard>
                 <ChildContent>
-                    <details open="@isActive">
-                        <summary style="cursor:pointer;font-weight:700;list-style:none;">
-                            @ricon بَيانات دَور @rlabel
-                            @if (isActive)
-                            {
-                                <span class="ac-chip ac-chip-sm" style="margin-inline-start:6px;">نَشِط</span>
-                            }
-                        </summary>
-                        <div style="margin-top:12px;">
-                            @foreach (var f in fields)
-                            {
-                                <AcField Label="@f.Label" Required="@(f.IsRequired && isActive)">
-                                    @RenderDynInput(f, $"role_{rslug}_attr_", roleValues)
-                                </AcField>
-                            }
-                        </div>
-                    </details>
+                    @if (forceOpen)
+                    {
+                        <h3 style="margin-top:0;"><AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(ricon, "user")" Size="18" /> بَيانات دَور @rlabel</h3>
+                        @foreach (var f in fields)
+                        {
+                            <AcField Label="@f.Label" Required="@f.IsRequired">
+                                @RenderDynInput(f, $"role_{rslug}_attr_", roleValues)
+                            </AcField>
+                        }
+                    }
+                    else
+                    {
+                        <details open="@isActive">
+                            <summary style="cursor:pointer;font-weight:700;list-style:none;">
+                                <AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(ricon, "user")" Size="16" /> بَيانات دَور @rlabel
+                                @if (isActive)
+                                {
+                                    <span class="ac-chip ac-chip-sm" style="margin-inline-start:6px;">نَشِط</span>
+                                }
+                            </summary>
+                            <div style="margin-top:12px;">
+                                @foreach (var f in fields)
+                                {
+                                    <AcField Label="@f.Label" Required="@(f.IsRequired && isActive)">
+                                        @RenderDynInput(f, $"role_{rslug}_attr_", roleValues)
+                                    </AcField>
+                                }
+                            </div>
+                        </details>
+                    }
                 </ChildContent>
             </AcCard>
         }
 
         <div style="display:flex;gap:8px;margin-top:16px;">
-            <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/me")">إلغاء</a>
+            <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me")">إلغاء</a>
             <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
                 <AcIcon Name="check" Size="18" /> حِفظ التَعديلات
             </button>
@@ -136,6 +187,7 @@ else
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
     User? user;
     Tenant? tenant;
     IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.DynField>? dynFields;
@@ -173,7 +225,7 @@ else
                 var combined = catalogFields
                     .Concat(dynamicFields.Where(d => !catalogFields.Any(c => c.Code == d.Code)))
                     .ToList();
-                roleFields.Add((r.Slug, r.Label, r.Icon ?? "👤", combined));
+                roleFields.Add((r.Slug, r.Label, r.Icon ?? "", combined));
             }
         }
     }

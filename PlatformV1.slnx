@@ -13,7 +13,28 @@
     <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Core/ACommerce.Kit.Auth.Core.csproj" />
     <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.MockNafath/ACommerce.Kit.Auth.Providers.MockNafath.csproj" />
     <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.MockSms/ACommerce.Kit.Auth.Providers.MockSms.csproj" />
+    <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.Nafath/ACommerce.Kit.Auth.Providers.Nafath.csproj" />
+    <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.Twilio/ACommerce.Kit.Auth.Providers.Twilio.csproj" />
+    <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.Unifonic/ACommerce.Kit.Auth.Providers.Unifonic.csproj" />
     <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Server/ACommerce.Kit.Auth.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Cache/">
+    <Project Path="libs/kits/Cache/ACommerce.Kit.Cache.Core/ACommerce.Kit.Cache.Core.csproj" />
+    <Project Path="libs/kits/Cache/ACommerce.Kit.Cache.Providers.Redis/ACommerce.Kit.Cache.Providers.Redis.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Cart/">
+    <Project Path="libs/kits/Cart/ACommerce.Kit.Cart.Core/ACommerce.Kit.Cart.Core.csproj" />
+    <Project Path="libs/kits/Cart/ACommerce.Kit.Cart.Server/ACommerce.Kit.Cart.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Culture/">
+    <Project Path="libs/kits/Culture/ACommerce.Kit.Culture.Core/ACommerce.Kit.Culture.Core.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Reports/">
+    <Project Path="libs/kits/Reports/ACommerce.Kit.Reports.Core/ACommerce.Kit.Reports.Core.csproj" />
+    <Project Path="libs/kits/Reports/ACommerce.Kit.Reports.Server/ACommerce.Kit.Reports.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Versions/">
+    <Project Path="libs/kits/Versions/ACommerce.Kit.Versions.Core/ACommerce.Kit.Versions.Core.csproj" />
   </Folder>
   <Folder Name="/libs/kits/Chat/">
     <Project Path="libs/kits/Chat/ACommerce.Kit.Chat.Core/ACommerce.Kit.Chat.Core.csproj" />
@@ -26,13 +47,25 @@
     <Project Path="libs/kits/Favorites/ACommerce.Kit.Favorites.Core/ACommerce.Kit.Favorites.Core.csproj" />
     <Project Path="libs/kits/Favorites/ACommerce.Kit.Favorites.Server/ACommerce.Kit.Favorites.Server.csproj" />
   </Folder>
+  <Folder Name="/libs/kits/Files/">
+    <Project Path="libs/kits/Files/ACommerce.Kit.Files.Core/ACommerce.Kit.Files.Core.csproj" />
+    <Project Path="libs/kits/Files/ACommerce.Kit.Files.Providers.AliyunOss/ACommerce.Kit.Files.Providers.AliyunOss.csproj" />
+    <Project Path="libs/kits/Files/ACommerce.Kit.Files.Providers.GoogleCloud/ACommerce.Kit.Files.Providers.GoogleCloud.csproj" />
+  </Folder>
   <Folder Name="/libs/kits/Listings/">
     <Project Path="libs/kits/Listings/ACommerce.Kit.Listings.Core/ACommerce.Kit.Listings.Core.csproj" />
     <Project Path="libs/kits/Listings/ACommerce.Kit.Listings.Server/ACommerce.Kit.Listings.Server.csproj" />
   </Folder>
   <Folder Name="/libs/kits/Notifications/">
     <Project Path="libs/kits/Notifications/ACommerce.Kit.Notifications.Core/ACommerce.Kit.Notifications.Core.csproj" />
+    <Project Path="libs/kits/Notifications/ACommerce.Kit.Notifications.Providers.Firebase/ACommerce.Kit.Notifications.Providers.Firebase.csproj" />
+    <Project Path="libs/kits/Notifications/ACommerce.Kit.Notifications.Providers.Smtp/ACommerce.Kit.Notifications.Providers.Smtp.csproj" />
     <Project Path="libs/kits/Notifications/ACommerce.Kit.Notifications.Server/ACommerce.Kit.Notifications.Server.csproj" />
+  </Folder>
+  <Folder Name="/libs/kits/Payments/">
+    <Project Path="libs/kits/Payments/ACommerce.Kit.Payments.Core/ACommerce.Kit.Payments.Core.csproj" />
+    <Project Path="libs/kits/Payments/ACommerce.Kit.Payments.Providers.Moyasar/ACommerce.Kit.Payments.Providers.Moyasar.csproj" />
+    <Project Path="libs/kits/Payments/ACommerce.Kit.Payments.Providers.Noon/ACommerce.Kit.Payments.Providers.Noon.csproj" />
   </Folder>
   <Folder Name="/libs/kits/Profiles/">
     <Project Path="libs/kits/Profiles/ACommerce.Kit.Profiles.Core/ACommerce.Kit.Profiles.Core.csproj" />
@@ -41,6 +74,7 @@
   <Folder Name="/libs/kits/Realtime/">
     <Project Path="libs/kits/Realtime/ACommerce.Kit.Realtime.Client/ACommerce.Kit.Realtime.Client.csproj" />
     <Project Path="libs/kits/Realtime/ACommerce.Kit.Realtime.Core/ACommerce.Kit.Realtime.Core.csproj" />
+    <Project Path="libs/kits/Realtime/ACommerce.Kit.Realtime.Providers.SignalRRedis/ACommerce.Kit.Realtime.Providers.SignalRRedis.csproj" />
     <Project Path="libs/kits/Realtime/ACommerce.Kit.Realtime.Server/ACommerce.Kit.Realtime.Server.csproj" />
   </Folder>
   <Folder Name="/libs/kits/Subscriptions/">

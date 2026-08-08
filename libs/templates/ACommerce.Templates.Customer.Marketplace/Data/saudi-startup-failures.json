@@ -1,0 +1,20 @@
+{
+  "_meta": {
+    "description": "أنماط فشل مشاريع سعودية/خليجية — تُحقَن في التحليل كـ 'دروس من فشل مشابه' لإبراز المخاطر الحقيقية. هذا ما يجعل التحليل سعودياً لا generic.",
+    "sources": ["تقارير Wamda", "تحليل علني", "مقابلات مؤسسين منشورة"],
+    "lastUpdated": "2026-01",
+    "note": "بداية بـ 10 حالات؛ تُجمع البقية لاحقاً. بعض الأسماء عامة لحماية الخصوصية."
+  },
+  "failures": [
+    { "sector": "ecommerce", "cause": "احتراق نقدي — حرق رأس المال على اكتساب عملاء بـ CAC أعلى من LTV", "monthsToFail": 22, "fundingRaisedUsdM": 8, "lesson": "وحدة الاقتصاد (unit economics) يجب أن تكون موجبة قبل التوسع." },
+    { "sector": "fnb", "cause": "حرب أسعار توصيل — عمولات لا تغطي تكلفة آخر ميل", "monthsToFail": 18, "fundingRaisedUsdM": 5, "lesson": "في التوصيل، السيطرة على تكلفة الميل الأخير تحدد البقاء." },
+    { "sector": "marketplace", "cause": "مشكلة البيضة والدجاجة — لم تتحقق سيولة العرض والطلب في نفس الوقت", "monthsToFail": 14, "fundingRaisedUsdM": 2, "lesson": "ابدأ بجانب واحد مكثّف جغرافياً (مدينة واحدة) قبل التوسع." },
+    { "sector": "services", "cause": "جودة غير متسقة لمزوّدي الخدمات أضرّت بالعلامة", "monthsToFail": 20, "fundingRaisedUsdM": 3, "lesson": "التحقق من المزوّدين وضمان الجودة ليس اختيارياً في الخدمات." },
+    { "sector": "ecommerce", "cause": "تجاهل التكامل التنظيمي (ZATCA) أخّر الإطلاق وكبّد غرامات", "monthsToFail": 12, "fundingRaisedUsdM": 1, "lesson": "الامتثال (فاتورة، Maroof) جزء من المنتج لا إضافة لاحقة." },
+    { "sector": "realestate", "cause": "إعلانات مكررة ووهمية فقدت ثقة المستخدمين", "monthsToFail": 26, "fundingRaisedUsdM": 4, "lesson": "نزاهة البيانات في منصات الإعلانات هي الخندق التنافسي." },
+    { "sector": "transport", "cause": "اعتماد على سائقين غير سعوديين خالف اشتراط النقل العام", "monthsToFail": 9, "fundingRaisedUsdM": 1.5, "lesson": "افهم اشتراطات التوطين قبل بناء نموذج التشغيل." },
+    { "sector": "fintech", "cause": "حاول التوسع قبل ترخيص ساما (SAMA)", "monthsToFail": 16, "fundingRaisedUsdM": 6, "lesson": "في المالية، الترخيص يسبق المنتج لا العكس." },
+    { "sector": "ecommerce", "cause": "نسخ نموذج عالمي دون تكييف ثقافي/دفعي محلي", "monthsToFail": 15, "fundingRaisedUsdM": 3, "lesson": "التوطين (mada، الدفع عند الاستلام، RTL) ليس تجميلاً." },
+    { "sector": "services", "cause": "اعتماد مفرط على قناة تسويق واحدة (مشاهير) ارتفع سعرها", "monthsToFail": 19, "fundingRaisedUsdM": 2.5, "lesson": "نوّع قنوات الاكتساب مبكراً؛ القناة الواحدة مخاطرة وجودية." }
+  ]
+}

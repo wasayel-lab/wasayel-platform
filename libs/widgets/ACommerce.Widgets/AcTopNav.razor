@@ -26,9 +26,17 @@
                     <AcIcon Name="@item.IconName" Size="18" />
                 }
                 <span>@item.Label</span>
-                @if (item.Badge is > 0)
+                @* الـ badge يَظهَر دائِماً لِلعَناصِر الَّتي تَدعَمُه (badge != null)
+                   حَتَّى لَو الـ count = 0، فَيَستَطيع JS تَحديثَه عَبر
+                   data-badge-key بِلا حاجَة لِإعادَة تَحميل الصَفحَة. *@
+                @if (item.Badge.HasValue)
                 {
-                    <span class="ac-topnav-badge">@(item.Badge > 99 ? "99+" : item.Badge.ToString())</span>
+                    var key = BadgeKey(item.Href);
+                    <span class="ac-topnav-badge"
+                          data-badge-key="@key"
+                          style="@(item.Badge > 0 ? null : "display:none;")">
+                        @(item.Badge > 99 ? "99+" : item.Badge.Value.ToString())
+                    </span>
                 }
             </NavLink>
         }
@@ -46,4 +54,13 @@
     [Parameter] public string? Class { get; set; }
 
     public record TopNavItem(string Href, string Label, string? IconName = null, int? Badge = null, bool Exact = false);
+
+    // مِفتاح ثابِت يُمَيِّز نَوع الـ badge — JS يَستَخدِمه لِلتَحديث الحَيّ.
+    static string BadgeKey(string href)
+    {
+        if (href.EndsWith("/chats")) return "messages";
+        if (href.EndsWith("/notifications")) return "notifications";
+        if (href.EndsWith("/me/offers")) return "offers";
+        return "other";
+    }
 }

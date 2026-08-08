@@ -1,0 +1,162 @@
+@page "/{slug}/checkout"
+@page "/{slug}/r/{role}/checkout"
+@inject IDocumentStore Store
+@inject AuthSession Auth
+@inject IHttpContextAccessor HttpCtx
+@using ACommerce.Kit.Cart
+
+@*
+    Checkout مُتَعَدِّد الخُطوات — تَجرِبَة Order.V2:
+    Step 1: عُنوان التَّوصيل
+    Step 2: طَريقَة الدَّفع (بِطاقَة/نَقد عِندَ التَّسليم)
+    Step 3: مُلَخَّص + تَأكيد
+
+    خُطوَة واحِدَة في كُلّ صَفحَة — SSR بِلا JS. الخُطوَة في
+    <c>?step=1|2|3</c>. الـ form يَتَراكَم القِيَم عَبر hidden inputs.
+*@
+
+<div class="acs-page">
+    @if (!Auth.IsAuthenticated)
+    {
+        <AcEmptyState IconName="package" Title="تَحتاج دُخول"
+                      ActionLabel="دُخول" ActionHref="@AuthSession.LinkFor(Slug, Role, "login")" />
+    }
+    else if (cart is null || cart.Items.Count == 0)
+    {
+        <AcEmptyState IconName="package" Title="السَّلَّة فارِغَة"
+                      ActionLabel="استِكشاف" ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
+    }
+    else
+    {
+        <h1 class="acm-wizard-title">إتمام الشِراء</h1>
+
+        @* stepper *@
+        <div style="display:flex;gap:6px;margin-bottom:16px;">
+            @for (var i = 1; i <= 3; i++)
+            {
+                var current = i == Step;
+                var done = i < Step;
+                <div style="flex:1;text-align:center;">
+                    <div style="width:30px;height:30px;border-radius:50%;margin:0 auto 4px;display:grid;place-items:center;
+                                background:@(current ? "var(--ac-primary)" : done ? "#16a34a" : "var(--ac-border)");color:#fff;font-weight:700;">
+                        @if (done) { <AcIcon Name="check" Size="16" /> } else { @i }
+                    </div>
+                    <div style="font-size:11px;color:@(current ? "var(--ac-primary)" : "var(--ac-text-muted)");">
+                        @(i == 1 ? "العُنوان" : i == 2 ? "الدَّفع" : "تَأكيد")
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (Step == 1)
+        {
+            <form method="get" action="@($"/{Slug}/checkout")">
+                <input type="hidden" name="step" value="2" />
+                <AcCard>
+                    <ChildContent>
+                        <h3 style="margin-top:0;">عُنوان التَّوصيل</h3>
+                        <AcField Label="الاسم الكامِل" Required="true">
+                            <input name="name" required class="ac-input" value="@Name" />
+                        </AcField>
+                        <AcField Label="الهاتِف" Required="true">
+                            <input name="phone" required class="ac-input" dir="ltr" value="@Phone" />
+                        </AcField>
+                        <AcField Label="العُنوان" Required="true">
+                            <input name="addr" required class="ac-input" value="@Addr" />
+                        </AcField>
+                    </ChildContent>
+                </AcCard>
+                <AcButton Type="submit" Variant="primary" Block="true" Text="التالي →" />
+            </form>
+        }
+        else if (Step == 2)
+        {
+            <form method="get" action="@($"/{Slug}/checkout")">
+                <input type="hidden" name="step" value="3" />
+                <input type="hidden" name="name" value="@Name" />
+                <input type="hidden" name="phone" value="@Phone" />
+                <input type="hidden" name="addr" value="@Addr" />
+                <AcCard>
+                    <ChildContent>
+                        <h3 style="margin-top:0;">طَريقَة الدَّفع</h3>
+                        <div class="acm-radio-cards">
+                            <label class="acm-radio-card">
+                                <input type="radio" name="pay" value="card" required checked="@(Pay != "cash")" />
+                                <span class="acm-radio-card-body">
+                                    <strong><AcIcon Name="credit-card" Size="16" /> بِطاقَة (Moyasar/Noon)</strong>
+                                    <span>دَفع آمِن بِبِطاقَة مَدى أَو فيزا</span>
+                                </span>
+                            </label>
+                            <label class="acm-radio-card">
+                                <input type="radio" name="pay" value="cash" checked="@(Pay == "cash")" />
+                                <span class="acm-radio-card-body">
+                                    <strong><AcIcon Name="cash" Size="16" /> نَقد عِندَ التَّسليم</strong>
+                                    <span>اِدفَع عِندَما يَصِل طَلَبك</span>
+                                </span>
+                            </label>
+                        </div>
+                    </ChildContent>
+                </AcCard>
+                <div style="display:flex;gap:8px;">
+                    <a href="@AuthSession.LinkFor(Slug, Role, $"checkout?step=1&name={Uri.EscapeDataString(Name)}&phone={Uri.EscapeDataString(Phone)}&addr={Uri.EscapeDataString(Addr)}")"
+                       class="ac-btn ac-btn-ghost">← السابِق</a>
+                    <AcButton Type="submit" Variant="primary" Block="true" Text="التالي →" />
+                </div>
+            </form>
+        }
+        else
+        {
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">مُلَخَّص الطَلَب</h3>
+                    @foreach (var item in cart.Items)
+                    {
+                        <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px;">
+                            <span>@item.Title × @item.Quantity</span>
+                            <span>@((item.UnitPriceSar * item.Quantity).ToString("N0")) ر.س</span>
+                        </div>
+                    }
+                    <hr />
+                    <div style="display:flex;justify-content:space-between;font-weight:700;">
+                        <span>المَجموع</span>
+                        <span style="color:var(--ac-primary);">@cart.SubtotalSar.ToString("N2") ر.س</span>
+                    </div>
+                    <hr />
+                    <div style="font-size:13px;color:var(--ac-text-muted);">
+                        <strong>التَّوصيل لِـ:</strong> @Name · @Phone<br />
+                        @Addr<br />
+                        <strong>الدَّفع:</strong> @(Pay == "cash" ? "نَقد عِندَ التَّسليم" : "بِطاقَة")
+                    </div>
+                </ChildContent>
+            </AcCard>
+            <form method="post" action="@($"/{Slug}/checkout/submit")">
+                <input type="hidden" name="name"  value="@Name" />
+                <input type="hidden" name="phone" value="@Phone" />
+                <input type="hidden" name="addr"  value="@Addr" />
+                <input type="hidden" name="pay"   value="@Pay" />
+                <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="تَأكيد الطَلَب" />
+            </form>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
+    [SupplyParameterFromQuery] public int Step { get; set; } = 1;
+    [SupplyParameterFromQuery] public string Name { get; set; } = "";
+    [SupplyParameterFromQuery] public string Phone { get; set; } = "";
+    [SupplyParameterFromQuery] public string Addr { get; set; } = "";
+    [SupplyParameterFromQuery] public string Pay { get; set; } = "card";
+    Cart? cart;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpCtx.HttpContext is { } ctx) { Auth.SetTenant(Slug); Auth.Load(ctx, Slug); }
+        if (!Auth.IsAuthenticated) return;
+        if (Step < 1 || Step > 3) Step = 1;
+        await using var s = Store.QuerySession(Slug);
+        cart = await s.LoadAsync<Cart>(Auth.UserId!.Value);
+        if (Auth.UserName is { } un && string.IsNullOrEmpty(Name)) Name = un;
+    }
+}

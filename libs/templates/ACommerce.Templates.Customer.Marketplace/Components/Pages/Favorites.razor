@@ -1,4 +1,5 @@
 @page "/{slug}/favorites"
+@page "/{slug}/r/{role}/favorites"
 @inject IDocumentStore Store
 @inject AuthSession Auth
 @inject NavigationManager Nav
@@ -10,7 +11,7 @@
                       Title="المُفَضَّلَة تَحتاج تَسجيل دُخول"
                       Message="سَجِّل دُخولك لِحِفظ الإعلانات الَّتي تَهُمّك."
                       ActionLabel="تَسجيل دُخول"
-                      ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/favorites")" />
+                      ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/favorites")" />
     }
     else
     {
@@ -26,7 +27,7 @@
                           Title="لا مُفَضَّلَة بَعد"
                           Message="ابدَأ بِالتَصَفُّح وأَضِف الإعلانات الَّتي تُعجِبك."
                           ActionLabel="استِكشاف"
-                          ActionHref="@($"/{Slug}/explore")" />
+                          ActionHref="@AuthSession.LinkFor(Slug, Role, $"explore")" />
         }
         else
         {
@@ -34,7 +35,7 @@
                 @foreach (var l in items)
                 {
                     <AcSpaceCard Title="@l.Title"
-                                 Href="@($"/{Slug}/listings/{l.Id}")"
+                                 Href="@AuthSession.LinkFor(Slug, Role, $"listings/{l.Id}")"
                                  Location="@($"{l.City} — {l.District}")"
                                  PriceLabel="@($"{l.Price:N0} ريال")"
                                  ShowFavorite="true"
@@ -51,6 +52,7 @@
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
     List<Listing>? items;
 
     protected override async Task OnParametersSetAsync()

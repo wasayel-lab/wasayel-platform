@@ -1,0 +1,103 @@
+@inject Services.Incubator.StudioAuth Auth
+@inject Services.Incubator.StudioTierService Tier
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+
+@*
+    شِل لوحة العميل — شريط جانبي + شريط علوي + محتوى. يَفحَص المُصادَقَة:
+    إن لَم يَكُن مُسَجَّلاً يُحَوِّل للدُخول. يُستَخدَم في كُلّ صَفَحات /studio.
+    Active = مفتاح عنصر التنقل المُفعَّل.
+*@
+
+<div class="studio-root">
+    @{ Auth.Load(); }
+    @if (!Auth.IsAuthenticated)
+    {
+        <script>location.replace('/studio/auth');</script>
+    }
+    else
+    {
+        <div class="studio-shell">
+            <aside class="studio-sidebar">
+                <div class="studio-sidebar-brand">
+                    <img src="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-lockup-white.svg"
+                         alt="وَسايِل" height="34" />
+                </div>
+                <nav class="studio-nav">
+                    <a class="studio-nav-item @(Active == "home" ? "active" : "")" href="/studio">
+                        <AcIcon Name="home" Size="18" /> الرَئيسيَّة
+                    </a>
+                    <a class="studio-nav-item @(Active == "ideas" ? "active" : "")" href="/studio/ideas">
+                        <AcIcon Name="star" Size="18" /> أَفكاري وتَحاليلي
+                    </a>
+                    <a class="studio-nav-item @(Active == "stores" ? "active" : "")" href="/studio">
+                        <AcIcon Name="building" Size="18" /> تَطبيقاتي
+                    </a>
+
+                    <div class="studio-nav-section">إنشاء</div>
+                    <a class="studio-nav-item @(Active == "new" ? "active" : "")" href="/studio/new">
+                        <AcIcon Name="plus" Size="18" /> فِكرَة جَديدَة
+                    </a>
+                </nav>
+                <div class="studio-sidebar-footer">
+                    @if (limits is not null)
+                    {
+                        <a href="/studio/billing" class="studio-nav-item" style="background:var(--st-sidebar-soft);">
+                            <span style="background:var(--st-primary);color:#fff;border-radius:6px;
+                                         padding:2px 8px;font-size:10.5px;font-weight:800;">@limits.LabelAr</span>
+                            <span style="font-size:11.5px;color:#94a3b8;">@usageSummary</span>
+                        </a>
+                    }
+                    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;">
+                        <div style="width:34px;height:34px;border-radius:50%;background:var(--st-primary);
+                                    display:grid;place-items:center;color:#fff;font-weight:700;">
+                            @((Auth.UserName ?? "؟").FirstOrDefault())
+                        </div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:13px;color:#fff;font-weight:600;">@Auth.UserName</div>
+                        </div>
+                    </div>
+                    <form method="post" action="/studio/logout">
+                        <button type="submit" class="studio-nav-item" style="width:100%;border:0;background:none;cursor:pointer;">
+                            <AcIcon Name="log-out" Size="18" /> خُروج
+                        </button>
+                    </form>
+                </div>
+            </aside>
+
+            <div class="studio-main">
+                <header class="studio-topbar">
+                    <h2 class="studio-topbar-title">@Title</h2>
+                    @TopBarActions
+                </header>
+                <div class="studio-content">
+                    @ChildContent
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string Active { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? TopBarActions { get; set; }
+
+    TierLimits? limits;
+    string usageSummary = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        try
+        {
+            var (user, l) = await Tier.LoadWithLimitsAsync(Auth.UserId!.Value);
+            limits = l;
+            usageSummary = $"{user.AnalysesUsed}/{Cap(l.AnalysesPerMonth)} تَحليل · {user.StoresBuilt}/{Cap(l.StoresMax)} تَطبيق";
+        }
+        catch { /* مُستَخدِم لَم يُحَمَّل بَعد — تَجاهَل */ }
+    }
+
+    static string Cap(int v) => v == int.MaxValue ? "∞" : v.ToString();
+}

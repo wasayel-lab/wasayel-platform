@@ -33,6 +33,17 @@ public sealed record ListingEdited(
 public sealed record ListingDeleted(Guid Id, DateTime At);
 public sealed record ListingViewed(Guid Id, Guid? ViewerId, DateTime At);
 
+/// <summary>تَحديث صُوَر الإعلان — يَستَبدِل كامِل القائِمَة.</summary>
+public sealed record ListingMediaSet(Guid Id, List<string> MediaUrls, DateTime At);
+
+/// <summary>تَحديث شارات مُمَيَّز/مُوَثَّق — مِن لَوحَة الإدارَة أَو
+/// اشتِراك مَدفوع.</summary>
+public sealed record ListingFlagsSet(Guid Id, bool? IsFeatured, bool? IsVerified, DateTime At);
+
+/// <summary>إخفاء/إظهار إشرافيّ — مُنفَصِل عَن Delete العادي.
+/// المالِك المُديريّ يَقدِر يُخفي إعلاناً مِن البَحث بِدون حَذف فِعليّ.</summary>
+public sealed record ListingModerated(Guid Id, bool Hidden, string Reason, Guid ModeratorId, DateTime At);
+
 // ─── Aggregate (read model مُحَدَّث inline عَبر projection) ──────────
 public sealed class Listing
 {
@@ -45,8 +56,23 @@ public sealed class Listing
     public string? City { get; set; }
     public string? District { get; set; }
     public Dictionary<string, string> Attributes { get; set; } = new();
+    /// <summary>صُوَر الإعلان — قائِمَة روابِط مَخرَج <c>IFileStorage</c>
+    /// (مَثَلاً <c>/uploads/tenants/ashare/listings/{id}/0.jpg</c>). أَوَّل
+    /// عُنصُر هو الصورَة الرَئيسيَّة (cover) المُستَخدَمَة في البِطاقَة.</summary>
+    public List<string> MediaUrls { get; set; } = new();
+    /// <summary>إعلان مُمَيَّز (يَظهَر في كاروسيل «مُمَيَّز» في الرَئيسيَّة).
+    /// يُضبَط مِن لَوحَة الإدارَة أَو عَبر اشتِراك مَدفوع.</summary>
+    public bool IsFeatured { get; set; }
+    /// <summary>إعلان مُوَثَّق (المالِك حَقَّقَ هويَّتَه عَبر نَفاذ/يَقين).</summary>
+    public bool IsVerified { get; set; }
     public int ViewCount { get; set; }
     public bool IsDeleted { get; set; }
+
+    /// <summary>أُخفي مِن البَحث العامّ بِقَرار إشرافيّ. لا يَزال
+    /// المالِك يَراه في "إعلاناتي" لِفَهم السَبَب.</summary>
+    public bool IsHiddenByModerator { get; set; }
+    public string? ModerationReason { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
@@ -79,6 +105,26 @@ public sealed class Listing
     }
 
     public void Apply(ListingViewed e) => ViewCount++;
+
+    public void Apply(ListingMediaSet e)
+    {
+        MediaUrls = new(e.MediaUrls);
+        UpdatedAt = e.At;
+    }
+
+    public void Apply(ListingFlagsSet e)
+    {
+        if (e.IsFeatured.HasValue) IsFeatured = e.IsFeatured.Value;
+        if (e.IsVerified.HasValue) IsVerified = e.IsVerified.Value;
+        UpdatedAt = e.At;
+    }
+
+    public void Apply(ListingModerated e)
+    {
+        IsHiddenByModerator = e.Hidden;
+        ModerationReason = e.Hidden ? e.Reason : null;
+        UpdatedAt = e.At;
+    }
 }
 
 // ─── Commands ─────────────────────────────────────────────────────────

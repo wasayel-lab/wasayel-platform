@@ -1,0 +1,31 @@
+@namespace ACommerce.Widgets
+
+@*
+    AcSkeleton — حالَة تَحميل بِوَهَج (shimmer) بَدَلاً مِن الدَّوّار.
+    Variant: "card" (بِطاقَة شَبَكَة) أَو "line" (سَطر نَصّ).
+    CSS: ac-skeleton, ac-skeleton-card, ac-skeleton-line (في premium.css)
+*@
+
+@if (Variant == "grid")
+{
+    <div class="acm-explore-grid">
+        @for (var i = 0; i < Count; i++)
+        {
+            <div class="ac-skeleton ac-skeleton-card"></div>
+        }
+    </div>
+}
+else
+{
+    @for (var i = 0; i < Count; i++)
+    {
+        <div class="ac-skeleton @(Variant == "card" ? "ac-skeleton-card" : "ac-skeleton-line")"
+             style="@(Variant == "card" ? "margin-bottom:12px;" : null)"></div>
+    }
+}
+
+@code {
+    [Parameter] public int Count { get; set; } = 1;
+    /// <summary>"line" | "card" | "grid"</summary>
+    [Parameter] public string Variant { get; set; } = "line";
+}

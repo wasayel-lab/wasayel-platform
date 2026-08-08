@@ -25,7 +25,7 @@
                 <AcIcon Name="arrow-right" Size="16" />
             </a>
             <div>
-                <h1 class="acm-wizard-title" style="margin:0;">🤖 وَكيل إداري</h1>
+                <h1 class="acm-wizard-title" style="margin:0;"><AcIcon Name="message" Size="24" /> وَكيل إداري</h1>
                 <span style="font-size:11px;color:var(--ac-text-muted);direction:ltr;display:block;">
                     @Agent.ProviderName / @Agent.ModelName
                 </span>
@@ -56,7 +56,7 @@
         @if (session.Turns.Count == 0)
         {
             <div class="acm-agent-empty">
-                <span style="font-size:48px;">💬</span>
+                <span style="font-size:48px;"><AcIcon Name="message" Size="48" /></span>
                 <p>ابدَأ بِسُؤال أَو طَلَب</p>
             </div>
         }
@@ -66,7 +66,7 @@
             {
                 <div class="acm-agent-turn @(turn.Role == "user" ? "is-user" : "is-assistant")">
                     <div class="acm-agent-avatar">
-                        @(turn.Role == "user" ? "👤" : "🤖")
+                        <AcIcon Name="@(turn.Role == "user" ? "user" : "message")" Size="24" />
                     </div>
                     <div class="acm-agent-body">
                         @if (!string.IsNullOrEmpty(turn.Text))
@@ -114,7 +114,7 @@
         @if (isWorking)
         {
             <div class="acm-agent-turn is-assistant">
-                <div class="acm-agent-avatar">🤖</div>
+                <div class="acm-agent-avatar"><AcIcon Name="message" Size="24" /></div>
                 <div class="acm-agent-body">
                     <div class="acm-agent-text" style="font-style:italic;color:var(--ac-text-muted);">
                         جارٍ التَّفكير…
@@ -225,12 +225,12 @@
 
     static string ToolLabel(string name) => name switch
     {
-        "create_tenant"  => "🆕 إنشاء مَتجَر",
-        "set_categories" => "🏷️ تَحديث الفِئات",
-        "set_branding"   => "🎨 تَحديث الهُويَّة",
-        "set_regions"    => "📍 تَحديث المُدُن",
-        "set_roles"      => "👥 تَحديث الأَدوار",
-        "set_attributes" => "⚙️ تَحديث الخَصائِص",
+        "create_tenant"  => "إنشاء مَتجَر",
+        "set_categories" => "تَحديث الفِئات",
+        "set_branding"   => "تَحديث الهُويَّة",
+        "set_regions"    => "تَحديث المُدُن",
+        "set_roles"      => "تَحديث الأَدوار",
+        "set_attributes" => "تَحديث الخَصائِص",
         _ => name
     };
 

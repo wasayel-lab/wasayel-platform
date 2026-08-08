@@ -1,0 +1,496 @@
+@page "/studio/s/{id:guid}"
+@inject Services.Incubator.StudioAuth Auth
+@inject Services.Incubator.FeasibilityAnalysisService Incubator
+@inject Services.Incubator.TenantFromAnalysisFactory Factory
+@inject Marten.IDocumentStore Store
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+@using ACommerce.Kit.Tenants
+@using System.Text.Json
+
+@*
+    عرض دراسة الجدوى داخل لوحة العميل (تصميم studio احترافي). يُحدّث
+    تلقائياً كل 4 ثوانٍ أثناء التحليل عبر meta refresh.
+*@
+
+@if (session?.Status == IncubatorStatus.Analyzing)
+{
+    <HeadContent><meta http-equiv="refresh" content="4" /></HeadContent>
+}
+@if (!string.IsNullOrEmpty(Refining) && session?.Status == IncubatorStatus.Completed)
+{
+    @* Refine يَجري في الخَلفِيَّة — حَدِّث الصَفحَة كُلّ ٤ث حَتَّى تَتَحَدَّث Updated. *@
+    <HeadContent><meta http-equiv="refresh" content="4" /></HeadContent>
+}
+
+<StudioShell Title="دِراسَة الجَدوى" Active="ideas">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="/studio">← لوحَتي</a>
+        @if (session?.Status == IncubatorStatus.Completed)
+        {
+            <a class="st-btn st-btn-light" href="@($"/studio/s/{Id}/print")" target="_blank"
+               style="margin-inline-start:8px;"><AcIcon Name="file" Size="16" /> PDF</a>
+            <a class="st-btn st-btn-light" href="@($"/studio/s/{Id}/export.xlsx")"
+               style="margin-inline-start:8px;"><AcIcon Name="bar-chart" Size="16" /> Excel</a>
+        }
+    </TopBarActions>
+    <ChildContent>
+        <UpgradePrompt Reason="@Upgrade" CurrentTier="@(currentTier ?? "spark")" />
+
+        @if (session is null)
+        {
+            <div class="st-card">الجَلسَة غَير مَوجودَة.</div>
+        }
+        else if (session.Status == IncubatorStatus.Analyzing)
+        {
+            <div class="st-card" style="text-align:center;padding:48px;">
+                <div style="font-size:52px;margin-bottom:10px;"><AcIcon Name="clock" Size="48" /></div>
+                <h2 style="margin:0 0 6px;">جارٍ تَحليل فِكرَتِكَ…</h2>
+                <p style="color:var(--st-muted);margin:0;">
+                    نَجمَع أَرقام السوق، نُقارِن بِالمنافِسين، ونَستَنبِط المَخاطِر.
+                    تُحَدَّث الصَفحَة تِلقائيّاً.
+                </p>
+            </div>
+        }
+        else if (session.Status == IncubatorStatus.Failed)
+        {
+            <div class="st-card">
+                <div class="st-chip st-chip-danger" style="margin-bottom:12px;">فَشِلَ التَّحليل</div>
+                <p style="margin:0 0 16px;color:var(--st-ink-700);">@session.AnalysisError</p>
+                <form method="post" action="@($"/studio/s/{session.Id}/analyze")">
+                    <button type="submit" class="st-btn st-btn-primary">↺ إعادَة المُحاوَلَة</button>
+                </form>
+            </div>
+        }
+        else if (root is null)
+        {
+            <div class="st-card">لا تَحليل بَعد لِهذه الجَلسَة.</div>
+        }
+        else
+        {
+            var r = root.Value;
+
+            <div class="studio-page-head">
+                <h1>دِراسَة الجَدوى</h1>
+                <p>@(string.IsNullOrEmpty(session.ProjectDescription) ? "" : Truncate(session.ProjectDescription, 120))</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(Refining))
+            {
+                <div class="st-card" style="background:#fff7ed;border:1px solid var(--st-warning);
+                                            display:flex;align-items:center;gap:10px;">
+                    <span style="font-size:20px;"><AcIcon Name="clock" Size="20" /></span>
+                    <div style="flex:1;">
+                        جارٍ تَحسين قِسم «<strong>@SectionLabel(Refining)</strong>»…
+                        ستُحَدَّث الصَفحَة تِلقائيّاً عِندَ الجاهِزِيَّة.
+                    </div>
+                </div>
+            }
+
+            @if (r.TryGetProperty("summary", out var sum))
+            {
+                <div class="studio-stats">
+                    <div class="studio-stat">
+                        <div class="studio-stat-label">حَجم السوق</div>
+                        <div class="studio-stat-value" style="font-size:20px;">@Str(sum,"marketSizeSar")</div>
+                    </div>
+                    <div class="studio-stat">
+                        <div class="studio-stat-label">عُملاء السَّنَة ١</div>
+                        <div class="studio-stat-value" style="font-size:20px;">@Str(sum,"estimatedCustomersYear1")</div>
+                    </div>
+                    <div class="studio-stat">
+                        <div class="studio-stat-label">الاستِثمار المَطلوب</div>
+                        <div class="studio-stat-value" style="font-size:20px;">@Str(sum,"requiredInvestmentSar")</div>
+                    </div>
+                </div>
+                <div class="st-card" style="margin-top:16px;">
+                    <strong>الحُكم: </strong>@Str(sum, "verdict")
+                </div>
+            }
+
+            @Obj("حَجم السوق", "marketSizing", r, ("tam","TAM"),("sam","SAM"),("som","SOM"),("reasoning","التَّحليل"))
+            @Obj("نَموذَج الإيراد", "revenueModel", r, ("model","النَّموذَج"),("pricingSar","التَّسعير"),("unitEconomics","اقتِصاد الوَحدَة"))
+            @Obj("هَيكَل التَّكلِفَة", "costStructure", r, ("launchSar","الإطلاق"),("monthlyOpsSar","التَّشغيل/شَهر"),("cacSar","CAC"),("ltvSar","LTV"))
+            @Obj("التَّوَقُّع المالي", "financialProjection", r, ("year1RevenueSar","إيراد س١"),("breakEvenMonths","التَّعادُل (شهر)"),("scenario","السيناريو"))
+
+            @Arr("شَرائِح العُملاء", "customerSegments", r, "name", "description")
+            @Arr("المُنافِسون والفَجوَة", "competitors", r, "name", "gap")
+
+            @if (r.TryGetProperty("risks", out var risks) && risks.ValueKind == JsonValueKind.Array)
+            {
+                <div class="st-section-title"><AcIcon Name="alert-circle" Size="18" /> المَخاطِر — خَريطَة حَراريَّة</div>
+                var risksList = risks.EnumerateArray().ToList();
+                <div class="risk-heatmap">
+                    <div class="risk-heatmap-ylabel">الاحتِمال →</div>
+                    <div>
+                        <div class="risk-heatmap-grid">
+                            @* 3x3: rows = likelihood (high أَوَّلاً)، cols = impact (low أَوَّلاً) *@
+                            @for (var li = 2; li >= 0; li--)
+                            {
+                                @for (var im = 0; im < 3; im++)
+                                {
+                                    var lik = LevelName(li); var imp = LevelName(im);
+                                    var cls = $"risk-cell-l{Initial(imp)}-l{Initial(lik)}";
+                                    <div class="risk-heatmap-cell @cls">
+                                        @foreach (var risk in risksList
+                                            .Where(rk => Level(Str(rk,"likelihood")) == li
+                                                      && Level(Str(rk,"impact")) == im))
+                                        {
+                                            var cat = Str(risk, "category").ToLowerInvariant();
+                                            var dotCls = "risk-dot-" + (CategoryClass(cat));
+                                            <span class="risk-dot @dotCls"
+                                                  title="@($"{Str(risk,"title")} · {Str(risk,"mitigation")}")">
+                                                @(risksList.IndexOf(risk) + 1)
+                                            </span>
+                                        }
+                                    </div>
+                                }
+                            }
+                        </div>
+                        <div class="risk-heatmap-axis">
+                            <span>أَثَر مُنخَفِض</span><span>مُتَوَسِّط</span><span>عالٍ</span>
+                        </div>
+                        <div class="risk-heatmap-xlabel">← الأَثَر</div>
+                    </div>
+                </div>
+                <div class="risk-legend">
+                    <span class="risk-legend-item"><span class="risk-legend-swatch risk-dot-market"></span>سوق</span>
+                    <span class="risk-legend-item"><span class="risk-legend-swatch risk-dot-operational"></span>تَشغيليّ</span>
+                    <span class="risk-legend-item"><span class="risk-legend-swatch risk-dot-financial"></span>ماليّ</span>
+                    <span class="risk-legend-item"><span class="risk-legend-swatch risk-dot-regulatory"></span>تَنظيميّ</span>
+                </div>
+
+                <div class="st-section-title" style="margin-top:18px;">تَفاصيل المَخاطِر</div>
+                <div class="studio-list">
+                    @for (var i = 0; i < risksList.Count; i++)
+                    {
+                        var risk = risksList[i];
+                        <div class="st-card">
+                            <div style="display:flex;justify-content:space-between;gap:8px;align-items:start;">
+                                <strong>
+                                    <span class="risk-dot @($"risk-dot-{CategoryClass(Str(risk,"category").ToLowerInvariant())}")"
+                                          style="width:22px;height:22px;font-size:11px;display:inline-grid;vertical-align:middle;">
+                                        @(i + 1)
+                                    </span>
+                                    @Str(risk,"title")
+                                </strong>
+                                <span class="st-chip">@Str(risk,"category")</span>
+                            </div>
+                            <p style="margin:8px 0 0;font-size:13.5px;color:var(--st-muted);">
+                                أَثَر: @Str(risk,"impact") · احتِمال: @Str(risk,"likelihood")<br/>
+                                <strong>التَّخفيف:</strong> @Str(risk,"mitigation")
+                            </p>
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (r.TryGetProperty("lessonsFromFailures", out var lessons) && lessons.ValueKind == JsonValueKind.Array)
+            {
+                <div class="st-section-title"><AcIcon Name="bar-chart" Size="18" /> دُروس مِن مَشاريع فَشِلَت</div>
+                <div class="st-card">
+                    <ul style="margin:0;padding-inline-start:18px;line-height:2;font-size:13.5px;">
+                        @foreach (var l in lessons.EnumerateArray()) { <li>@l.GetString()</li> }
+                    </ul>
+                </div>
+            }
+
+            @if (r.TryGetProperty("roadmap", out var roadmap) && roadmap.ValueKind == JsonValueKind.Array)
+            {
+                <div class="st-section-title"><AcIcon Name="map" Size="18" /> خارِطَة الطَّريق</div>
+                <div class="studio-list">
+                    @foreach (var ph in roadmap.EnumerateArray())
+                    {
+                        <div class="studio-list-row" style="cursor:default;">
+                            <span class="st-chip">@Str(ph,"durationWeeks") أسبوع</span>
+                            <div class="studio-list-body">
+                                <strong>@Str(ph,"phase")</strong>
+                                <span>@Str(ph,"goal")</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (builtTenant is not null)
+            {
+                <div class="st-card" style="margin-top:20px;border:1px solid var(--st-success);background:#dcfce7;">
+                    <h3 style="margin:0 0 6px;"><AcIcon Name="check-circle" Size="24" /> أُنشِئ تَطبيقكَ مِن هذه الفِكرَة</h3>
+                    <p style="margin:0 0 14px;font-size:14px;">
+                        <strong>@builtTenant.Name</strong> · /@builtTenant.Slug
+                    </p>
+                    <a class="st-btn st-btn-primary" href="@($"/studio/apps/{builtTenant.Slug}")">
+                        فَتح لوحَة التَّطبيق ←
+                    </a>
+                </div>
+            }
+            else if (r.TryGetProperty("recommendedPattern", out var rp))
+            {
+                <div class="st-card" style="margin-top:20px;border:1px solid var(--st-primary);background:var(--st-primary-50);">
+                    <h3 style="margin:0 0 6px;"><AcIcon Name="sparkle" Size="24" /> أَطلِق تَطبيقَكَ على ACommerce</h3>
+                    <p style="margin:0 0 14px;font-size:14px;">
+                        <strong>النَّمَط المُقتَرَح:</strong> @Str(rp,"pattern") ·
+                        <strong>الوَقت:</strong> @Str(rp,"timeToLaunch")<br/>
+                        <span style="color:var(--st-ink-700);">@Str(rp,"reasoning")</span>
+                    </p>
+
+                    @if (suggestion is not null)
+                    {
+                        @if (BuildErr is not null)
+                        {
+                            <div class="st-chip st-chip-danger" style="margin-bottom:10px;">
+                                @FormatBuildErr(BuildErr)
+                            </div>
+                        }
+                        <form method="post" action="@($"/studio/s/{session!.Id}/build")"
+                              style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                            <div class="st-field" style="margin:0;grid-column:1/-1;">
+                                <label class="st-label">اسم التَّطبيق</label>
+                                <input class="st-input" name="name" required maxlength="60"
+                                       value="@suggestion.Name" />
+                            </div>
+                            <div class="st-field" style="margin:0;">
+                                <label class="st-label">المُعَرِّف (slug)</label>
+                                <input class="st-input" name="slug" required dir="ltr"
+                                       pattern="^[a-z0-9_-]+$"
+                                       placeholder="my-app" />
+                            </div>
+                            <div class="st-field" style="margin:0;">
+                                <label class="st-label">لَون العَلامَة</label>
+                                <input class="st-input" type="color" name="color" required
+                                       value="@suggestion.Color" style="padding:4px;height:46px;" />
+                            </div>
+                            <div class="st-field" style="margin:0;grid-column:1/-1;">
+                                <label class="st-label">الشِّعار التَّسويقيّ</label>
+                                <input class="st-input" name="tagline" maxlength="120"
+                                       value="@suggestion.TagLine" />
+                            </div>
+                            <div class="st-field" style="margin:0;grid-column:1/-1;">
+                                <label class="st-label">المَدينَة الافتراضيَّة</label>
+                                <input class="st-input" name="city" maxlength="40"
+                                       value="@suggestion.City" />
+                            </div>
+                            <button type="submit" class="st-btn st-btn-primary"
+                                    style="grid-column:1/-1;">
+                                <AcIcon Name="sparkle" Size="16" /> أَنشِئ التَّطبيق الآن
+                            </button>
+                        </form>
+                        <p style="margin:10px 0 0;font-size:12px;color:var(--st-muted);">
+                            سَيُهَيَّأ التَّطبيق تِلقائيّاً بِفِئات وأَدوار مَبدَئيَّة بِناءً على النَّمَط، ويُمكِنُكَ تَعديل كُلّ شَيء بَعد الإنشاء.
+                        </p>
+                    }
+                </div>
+            }
+
+            @* تَقييم سَريع لِلدِراسَة (👍/👎 لِكُلّ قِسم) *@
+            <div class="st-section-title"><AcIcon Name="check" Size="18" /> / <AcIcon Name="x" Size="18" /> تَقييم سَريع</div>
+            <div class="st-card">
+                <p style="margin:0 0 12px;color:var(--st-muted);font-size:13.5px;">
+                    قَيِّم الأَقسام لِنَتَعَلَّم كَيف نُحَسِّن التَّحليل.
+                </p>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;">
+                    @foreach (var sec in new[] { "marketSizing", "competitors", "revenueModel", "financialProjection", "risks", "roadmap" })
+                    {
+                        var prior = session.SectionFeedback.TryGetValue(sec, out var p) ? p : "";
+                        <div style="display:flex;align-items:center;justify-content:space-between;
+                                    padding:8px 12px;border:1px solid var(--st-line);border-radius:10px;font-size:13px;">
+                            <span>@SectionLabel(sec)</span>
+                            <span style="display:inline-flex;gap:4px;">
+                                <form method="post" action="@($"/studio/s/{session.Id}/feedback")" style="margin:0;">
+                                    <input type="hidden" name="section" value="@sec" />
+                                    <input type="hidden" name="rating" value="up" />
+                                    <button type="submit" class="st-btn st-btn-ghost" style="padding:4px 8px;font-size:14px;
+                                            @(prior == "up" ? "background:#dcfce7;border-color:var(--st-success);" : "")"><AcIcon Name="check" Size="16" /></button>
+                                </form>
+                                <form method="post" action="@($"/studio/s/{session.Id}/feedback")" style="margin:0;">
+                                    <input type="hidden" name="section" value="@sec" />
+                                    <input type="hidden" name="rating" value="down" />
+                                    <button type="submit" class="st-btn st-btn-ghost" style="padding:4px 8px;font-size:14px;
+                                            @(prior == "down" ? "background:#fee2e2;border-color:var(--st-danger);" : "")"><AcIcon Name="x" Size="16" /></button>
+                                </form>
+                            </span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @* تَحسين الدِراسَة — أَعِد توليد قِسم بِناءً عَلى مُلاحَظَة. *@
+            <div class="st-section-title"><AcIcon Name="message" Size="18" /> تَحسين الدِراسَة</div>
+            <details class="st-card" style="padding:0;">
+                <summary style="cursor:pointer;padding:16px 22px;font-weight:600;list-style:none;
+                                display:flex;align-items:center;gap:8px;">
+                    <span style="font-size:18px;"><AcIcon Name="sparkle" Size="18" /></span>
+                    لاحَظتَ خَلَلاً في قِسم؟ اطلُب إعادَة توليده
+                </summary>
+                <form method="post" action="@($"/studio/s/{session.Id}/refine")"
+                      style="padding:0 22px 22px;border-top:1px solid var(--st-line);">
+                    <div class="st-field" style="margin-top:14px;">
+                        <label class="st-label">القِسم المُراد تَحسينه</label>
+                        <select name="section" required class="st-input">
+                            <option value="marketSizing">حَجم السوق</option>
+                            <option value="customerSegments">شَرائِح العُملاء</option>
+                            <option value="competitors">المُنافِسون والفَجوَة</option>
+                            <option value="revenueModel">نَموذَج الإيراد</option>
+                            <option value="costStructure">هَيكَل التَّكلِفَة</option>
+                            <option value="financialProjection">التَّوَقُّع المالي</option>
+                            <option value="risks">المَخاطِر</option>
+                            <option value="lessonsFromFailures">دُروس الفَشَل</option>
+                            <option value="roadmap">خارِطَة الطَّريق</option>
+                            <option value="recommendedPattern">النَّمَط المُقتَرَح</option>
+                        </select>
+                    </div>
+                    <div class="st-field">
+                        <label class="st-label">مُلاحَظَتُكَ (مَ الَّذي يَنقُص أَو الَّذي تَوَدّ تَغييره؟)</label>
+                        <textarea name="feedback" required rows="3" class="st-textarea"
+                            placeholder="مَثَلاً: الأَرقام مُتَفائِلَة جِدّاً، رَكِّز على سيناريو مُتَحَفِّظ; أَو: أَضِف منافِساً «س» الَّذي لَم تَذكُره"></textarea>
+                    </div>
+                    <button type="submit" class="st-btn st-btn-primary">
+                        أَعِد توليد القِسم
+                    </button>
+                </form>
+            </details>
+
+            <div class="st-card" style="margin-top:16px;background:var(--st-line-soft);border:0;font-size:12.5px;color:var(--st-muted);">
+                @Disclaimer
+            </div>
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery(Name = "build_err")] public string? BuildErr { get; set; }
+    [SupplyParameterFromQuery(Name = "refining")]  public string? Refining { get; set; }
+    [SupplyParameterFromQuery]                     public string? Upgrade  { get; set; }
+    [Microsoft.AspNetCore.Components.Inject] Services.Incubator.StudioTierService TierSvc { get; set; } = default!;
+    string? currentTier;
+
+    // مُستَوى مِن نَصّ low/medium/high → فِهرِس 0/1/2.
+    static int Level(string s) => s.ToLowerInvariant() switch
+    {
+        "low" or "منخفض" or "مُنخَفِض" => 0,
+        "high" or "عالي" or "عالٍ"      => 2,
+        _ => 1
+    };
+    static string LevelName(int i) => i switch { 0 => "low", 2 => "high", _ => "medium" };
+    static string Initial(string s) => s[..1]; // l/m/h
+
+    static string CategoryClass(string cat) => cat switch
+    {
+        var c when c.Contains("market") || c.Contains("سوق")    => "market",
+        var c when c.Contains("oper")   || c.Contains("تشغيل")  => "operational",
+        var c when c.Contains("fin")    || c.Contains("مالي")   => "financial",
+        var c when c.Contains("reg")    || c.Contains("تنظيم")  => "regulatory",
+        _ => "other"
+    };
+
+    static string SectionLabel(string key) => key switch
+    {
+        "marketSizing"        => "حَجم السوق",
+        "customerSegments"    => "شَرائِح العُملاء",
+        "competitors"         => "المُنافِسون",
+        "revenueModel"        => "نَموذَج الإيراد",
+        "costStructure"       => "هَيكَل التَّكلِفَة",
+        "financialProjection" => "التَّوَقُّع المالي",
+        "risks"               => "المَخاطِر",
+        "lessonsFromFailures" => "دُروس الفَشَل",
+        "roadmap"             => "خارِطَة الطَّريق",
+        "recommendedPattern"  => "النَّمَط المُقتَرَح",
+        _ => key
+    };
+    IncubatorSession? session;
+    JsonElement? root;
+    TenantFromAnalysisFactory.BuildSuggestion? suggestion;
+    Tenant? builtTenant;
+
+    const string Disclaimer =
+        "هذا التَّحليل مُولَّد آلِيّاً بِناءً على بيانات السوق المُتاحَة. المَنصَّة غَير مَسؤولَة عَن نَتائِج القَرارات المَبنيَّة عَلَيه. يُوصَى بِالتَّحَقُّق المُستَقِلّ.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        session = await Incubator.LoadAsync(Id);
+        if (session is not null && session.OwnerUserId != Auth.UserId!.Value) { session = null; return; }
+        if (session?.AnalysisJson is not null)
+        {
+            try { root = JsonDocument.Parse(session.AnalysisJson).RootElement.Clone(); }
+            catch { root = null; }
+        }
+        if (session is { Status: IncubatorStatus.Completed })
+        {
+            suggestion = Factory.DeriveSuggestion(session);
+            // هَل أُنشِئ تَطبيق مِن هذه الجَلسَة سابِقاً؟
+            await using var qs = Store.QuerySession();
+            var all = (await qs.Query<Tenant>().ToListAsync()).ToList();
+            builtTenant = all.FirstOrDefault(t => t.SourceAnalysisId == Id);
+        }
+        var u = await TierSvc.GetUserAsync(Auth.UserId!.Value);
+        currentTier = u?.Tier ?? "spark";
+    }
+
+    static string FormatBuildErr(string err) => err switch
+    {
+        "name_required" => "الاسم مَطلوب.",
+        "color_invalid" => "اللَون غَير صالِح.",
+        _ => err
+    };
+
+    static string Str(JsonElement e, string p)
+        => e.TryGetProperty(p, out var v)
+            ? (v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : v.ToString())
+            : "—";
+
+    static string Truncate(string s, int n) => s.Length <= n ? s : s[..n] + "…";
+
+    RenderFragment Obj(string title, string key, JsonElement r,
+        params (string prop, string label)[] fields) => builder =>
+    {
+        if (!r.TryGetProperty(key, out var obj) || obj.ValueKind != JsonValueKind.Object) return;
+        var seq = 0;
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", "st-section-title");
+        builder.AddContent(seq++, title);
+        builder.CloseElement();
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", "st-card");
+        foreach (var (prop, label) in fields)
+        {
+            builder.OpenElement(seq++, "p");
+            builder.AddAttribute(seq++, "style", "margin:4px 0;font-size:14px;");
+            builder.OpenElement(seq++, "strong");
+            builder.AddContent(seq++, label + ": ");
+            builder.CloseElement();
+            builder.AddContent(seq++, Str(obj, prop));
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+
+    RenderFragment Arr(string title, string key, JsonElement r,
+        string titleProp, string bodyProp) => builder =>
+    {
+        if (!r.TryGetProperty(key, out var arr) || arr.ValueKind != JsonValueKind.Array) return;
+        var seq = 0;
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", "st-section-title");
+        builder.AddContent(seq++, title);
+        builder.CloseElement();
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", "studio-list");
+        foreach (var item in arr.EnumerateArray())
+        {
+            var captured = item;
+            builder.OpenElement(seq++, "div");
+            builder.AddAttribute(seq++, "class", "st-card");
+            builder.OpenElement(seq++, "strong");
+            builder.AddContent(seq++, Str(captured, titleProp));
+            builder.CloseElement();
+            builder.OpenElement(seq++, "p");
+            builder.AddAttribute(seq++, "style", "margin:6px 0 0;font-size:13.5px;color:var(--st-muted);");
+            builder.AddContent(seq++, Str(captured, bodyProp));
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+}

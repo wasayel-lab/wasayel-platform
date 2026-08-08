@@ -54,6 +54,16 @@ public sealed class Role
     /// الكاتالوج عِندَ إضافَة الدَور. تُجمَع في الـ onboarding وَتُخزَّن
     /// في <c>User.RoleAttributesJson[roleSlug][code]</c>.</summary>
     public List<RoleField> Fields { get; set; } = new();
+
+    /// <summary>أَيقونَة مُخَصَّصَة (data: URL أَو URL خارِجيّ، يَفضَّل
+    /// PNG 512x512) رَفَعَها مُصَمِّم المَتجَر لِـ PWA هذا الدَور. <c>null</c>
+    /// = نَستَخدِم أَيقونَة تِلقائيَّة مَبنيَّة مِن لَون المَتجَر + الحَرف
+    /// الأَوَّل لِـ Label.</summary>
+    public string? PwaIconDataUrl { get; set; }
+
+    /// <summary>اسم اختياريّ لِـ PWA هذا الدَور — يَتَجاوَز التَّوليد
+    /// التِلقائي "{tenant.Name} {role.Label}".</summary>
+    public string? PwaName { get; set; }
 }
 
 public sealed class RoleField

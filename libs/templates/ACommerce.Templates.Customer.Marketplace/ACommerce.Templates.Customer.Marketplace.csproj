@@ -7,6 +7,20 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
     <PackageReference Include="Marten" />
+    <PackageReference Include="WebPush" />
+    <PackageReference Include="ClosedXML" />
+  </ItemGroup>
+
+  <!-- بيانات السوق السعودي تُضمَّن كموارد لتُحقَن في prompt التحليل. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Data\saudi-market-context.json" />
+    <EmbeddedResource Include="Data\saudi-competitors.json" />
+    <EmbeddedResource Include="Data\saudi-cost-benchmarks.json" />
+    <EmbeddedResource Include="Data\saudi-startup-failures.json" />
+    <EmbeddedResource Include="Data\acommerce-capabilities.md" />
+  </ItemGroup>
+
+  <ItemGroup>
 
     <ProjectReference Include="..\..\widgets\ACommerce.Widgets\ACommerce.Widgets.csproj" />
     <ProjectReference Include="..\ACommerce.Templates.Shared\ACommerce.Templates.Shared.csproj" />
@@ -19,13 +33,18 @@
     <ProjectReference Include="..\..\kits\Auth\ACommerce.Kit.Auth.Server\ACommerce.Kit.Auth.Server.csproj" />
     <ProjectReference Include="..\..\kits\Chat\ACommerce.Kit.Chat.Core\ACommerce.Kit.Chat.Core.csproj" />
     <ProjectReference Include="..\..\kits\Notifications\ACommerce.Kit.Notifications.Core\ACommerce.Kit.Notifications.Core.csproj" />
+    <ProjectReference Include="..\..\kits\Cart\ACommerce.Kit.Cart.Core\ACommerce.Kit.Cart.Core.csproj" />
+    <ProjectReference Include="..\..\kits\Files\ACommerce.Kit.Files.Core\ACommerce.Kit.Files.Core.csproj" />
     <ProjectReference Include="..\..\kits\Favorites\ACommerce.Kit.Favorites.Core\ACommerce.Kit.Favorites.Core.csproj" />
     <ProjectReference Include="..\..\kits\Profiles\ACommerce.Kit.Profiles.Core\ACommerce.Kit.Profiles.Core.csproj" />
     <ProjectReference Include="..\..\kits\Subscriptions\ACommerce.Kit.Subscriptions.Core\ACommerce.Kit.Subscriptions.Core.csproj" />
     <ProjectReference Include="..\..\kits\Support\ACommerce.Kit.Support.Core\ACommerce.Kit.Support.Core.csproj" />
     <ProjectReference Include="..\..\kits\Realtime\ACommerce.Kit.Realtime.Client\ACommerce.Kit.Realtime.Client.csproj" />
+    <ProjectReference Include="..\..\kits\Realtime\ACommerce.Kit.Realtime.Server\ACommerce.Kit.Realtime.Server.csproj" />
     <ProjectReference Include="..\..\kits\Maps\ACommerce.Kit.Maps.Web\ACommerce.Kit.Maps.Web.csproj" />
     <ProjectReference Include="..\..\kits\Offers\ACommerce.Kit.Offers.Core\ACommerce.Kit.Offers.Core.csproj" />
     <ProjectReference Include="..\..\kits\SavedSearches\ACommerce.Kit.SavedSearches.Core\ACommerce.Kit.SavedSearches.Core.csproj" />
+    <ProjectReference Include="..\..\kits\Reviews\ACommerce.Kit.Reviews.Core\ACommerce.Kit.Reviews.Core.csproj" />
+    <ProjectReference Include="..\..\kits\Payments\ACommerce.Kit.Payments.Core\ACommerce.Kit.Payments.Core.csproj" />
   </ItemGroup>
 </Project>

@@ -42,11 +42,11 @@
     {
         @if (!string.IsNullOrEmpty(ActionHref))
         {
-            <a class="btn btn-primary" href="@ActionHref">@ActionLabel</a>
+            <a class="ac-btn ac-btn-primary" href="@ActionHref">@ActionLabel</a>
         }
         else if (OnAction.HasDelegate)
         {
-            <button class="btn btn-primary" @onclick="OnAction">@ActionLabel</button>
+            <button class="ac-btn ac-btn-primary" @onclick="OnAction">@ActionLabel</button>
         }
     }
     @if (BelowAction != null)

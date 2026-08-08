@@ -191,6 +191,16 @@ h1:focus, h2:focus, h3:focus { outline: none; }
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--ac-primary) 25%, transparent);
 }
 .ac-textarea { min-height: 6rem; resize: vertical; }
+/* color picker: appearance:auto لِـ input[type=color] في Chromium يُجبِر
+   ارتِفاع UA ~ 27px ويَتَجاهَل height:. نُلغي الـ appearance لِنُسَيطِر
+   عَلى الـ box. background-color يَعكِس قيمَة الـ value تِلقائيّاً. */
+input.ac-input[type="color"] {
+    -webkit-appearance: none;
+    appearance: none;
+    padding: 4px;
+    height: 44px;
+    box-sizing: border-box;
+}
 .ac-field-error { color: var(--ac-danger); font-size: var(--ac-font-size-sm); margin-top: var(--ac-space-xs); }
 
 /* =========================================================================

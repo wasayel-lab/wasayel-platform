@@ -1,0 +1,137 @@
+@page "/admin/tenants/{slug}/pwa"
+@inject IDocumentStore Store
+@using ACommerce.Kit.Roles
+
+@*
+    مُحَرِّر تَطبيقات الـ PWA — لِكُلّ دَور: اِسم مُخَصَّص (يَتَجاوَز
+    التَّوليد التِلقائي) + أَيقونَة مُخَصَّصَة (تَتَجاوَز التَّوليد بِلَون
+    العَلامَة). الأَيقونَة تُحَوَّل لِـ data: URL وَتُخزَّن مَعَ الدَور
+    (سَقف ٢٥٦ كيلوبايت). تَركها فارِغَة = اِستِخدام التَّوليد التِلقائي.
+
+    لِمَتجَر بِلا أَدوار نَعرِض إعدادات افتراضِيَّة عَلى مُستَوى المَتجَر
+    (تَحت "(بِلا دَور)").
+*@
+
+<div class="acs-page acm-admin">
+    @if (tenant is null)
+    {
+        <AcEmptyState IconName="info" Title="المَتجَر غَير مَوجود" />
+    }
+    else
+    {
+        <div class="acm-admin-head">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/admin/tenants/{Slug}")">
+                    <AcIcon Name="arrow-right" Size="16" />
+                </a>
+                <h1 class="acm-wizard-title" style="margin:0;">
+                    تَطبيقات @tenant.Name
+                </h1>
+            </div>
+        </div>
+
+        @if (Err is not null) { <AcAlert Variant="danger"  Message="@FormatError(Err)" /> }
+        @if (Saved == "1")    { <AcAlert Variant="success" Message="تَمّ الحِفظ." /> }
+
+        <p style="color:var(--ac-text-muted);font-size:13px;">
+            عِندَ "أَضِف إلى الشاشَة الرَئيسِيَّة" يَحصُل المُستَخدِم عَلى
+            تَطبيق مُستَقِلّ لِدَورِه — اسم + أَيقونَة + لَون + اختِصارات.
+            تَركك لِلحُقول فارِغَة يُولِّد القِيَم تِلقائيّاً مِن اسم الدَور
+            وَلَون المَتجَر.
+        </p>
+
+        @if (tenant.Roles.Count == 0)
+        {
+            <AcCard>
+                <ChildContent>
+                    <AcAlert Variant="info"
+                             Message="@($"هذا المَتجَر بِلا أَدوار — يَحصُل عَلى تَطبيق PWA واحِد عَلى /{Slug}. عَدِّل الأَدوار أَوَّلاً لِلحُصول عَلى تَطبيق لِكُلّ دَور.")" />
+                    <a class="ac-btn ac-btn-primary" style="margin-top:12px;"
+                       href="@($"/admin/tenants/{Slug}/roles")">
+                        <AcIcon Name="people" Size="16" /> إعداد الأَدوار
+                    </a>
+                </ChildContent>
+            </AcCard>
+        }
+        else
+        {
+            <form method="post" action="@($"/admin/tenants/{Slug}/pwa/save")"
+                  enctype="multipart/form-data">
+                @foreach (var r in tenant.Roles.OrderBy(r => r.SortOrder))
+                {
+                    var iconUrl = $"/api/{Slug}/r/{r.Slug}/icon.svg";
+                    <AcCard>
+                        <ChildContent>
+                            <div style="display:flex;gap:16px;align-items:flex-start;">
+                                <img src="@iconUrl" alt="@r.Label"
+                                     style="width:96px;height:96px;border-radius:18px;
+                                            background:#f4f4f5;flex-shrink:0;
+                                            border:1px solid var(--ac-border);" />
+                                <div style="flex:1;">
+                                    <h3 style="margin:0 0 4px;">
+                                        <AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(r.Icon, "user")" Size="18" /> @r.Label
+                                    </h3>
+                                    <small style="color:var(--ac-text-muted);direction:ltr;">
+                                        /@(Slug)/r/@(r.Slug)/
+                                    </small>
+
+                                    <AcField Label="اسم التَطبيق"
+                                             Hint="@($"الافتراضي: {tenant.Name} — {r.Label}")">
+                                        <input type="text" maxlength="60" class="ac-input"
+                                               name="@($"name_{r.Slug}")"
+                                               value="@(r.PwaName ?? "")"
+                                               placeholder="@($"{tenant.Name} — {r.Label}")" />
+                                    </AcField>
+
+                                    <AcField Label="أَيقونَة مُخَصَّصَة"
+                                             Hint="PNG أَو SVG، مُرَبَّع ٥١٢×٥١٢، حَتَّى ٢٥٦ كيلوبايت. اِترُك فارِغاً لِلتَوليد التِلقائي.">
+                                        <input type="file" class="ac-input"
+                                               name="@($"icon_{r.Slug}")"
+                                               accept="image/png,image/svg+xml,image/webp" />
+                                    </AcField>
+
+                                    @if (!string.IsNullOrEmpty(r.PwaIconDataUrl))
+                                    {
+                                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+                                            <input type="checkbox"
+                                                   name="@($"clear_{r.Slug}")" value="1" />
+                                            حَذف الأَيقونَة المُخَصَّصَة (العَودَة لِلتَوليد)
+                                        </label>
+                                    }
+                                </div>
+                            </div>
+                        </ChildContent>
+                    </AcCard>
+                }
+
+                <div style="display:flex;gap:8px;margin-top:16px;">
+                    <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">إلغاء</a>
+                    <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
+                        <AcIcon Name="check" Size="18" /> حِفظ
+                    </button>
+                </div>
+            </form>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "err")]   public string? Err { get; set; }
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+
+    Tenant? tenant;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var s = Store.QuerySession();
+        tenant = await s.LoadAsync<Tenant>(Slug);
+    }
+
+    static string FormatError(string err) => err switch
+    {
+        "icon_too_large" => "الأَيقونَة أَكبَر مِن ٢٥٦ كيلوبايت.",
+        "icon_bad_type"  => "نَوع الصورَة غَير مَدعوم — اِستَخدِم PNG أَو SVG.",
+        _ => err
+    };
+}

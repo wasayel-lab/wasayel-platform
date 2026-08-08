@@ -1,0 +1,101 @@
+@page "/{slug}/drivers"
+@page "/{slug}/r/{role}/drivers"
+@inject IDocumentStore Store
+@inject AuthSession Auth
+
+@*
+    صَفحَة العُمَلاء/الراكِبين لِتَصَفُّح السائِقين المُتاحين في المَتجَر.
+    يَستَعرِض المُستَخدِم بَيانات كُلّ سائِق (نَوع المَركَبَة، اللَوحَة…)
+    وَ يَبدَأ مُحادَثَة مُباشَرَة بِلا الحاجَة لِنَشر طَلَب مِشوار. مُفيد
+    عِندَما يَكون لِلراكِب سائِق مُفَضَّل أَو يُريد سُؤالاً قَبل النَّشر.
+*@
+
+<div class="acs-page">
+    <h1 class="acm-wizard-title">السائِقون المُتاحون</h1>
+    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 16px;">
+        تَواصَل مَع سائِق مُباشَرَةً أَو اُنشُر طَلَب مِشوار لِيَصِلكَ عُروض.
+    </p>
+
+    @if (drivers is null)
+    {
+        <AcLoadingState />
+    }
+    else if (drivers.Count == 0)
+    {
+        <AcEmptyState IconName="user" Title="لا سائِقون بَعد"
+                      Message="انتَظِر تَسجيل سائِقين أَو اُنشُر طَلَب مِشوار لِيَصِلكَ عُروض." />
+    }
+    else
+    {
+        <div class="acm-role-list">
+            @foreach (var d in drivers)
+            {
+                var attrs = d.RoleAttributesJson.TryGetValue("driver", out var rv)
+                    ? rv : new Dictionary<string, string>();
+                <div class="acm-role-trip-card" style="align-items:flex-start;">
+                    <div style="font-size:28px;flex-shrink:0;"><AcIcon Name="car" Size="24" /></div>
+                    <div style="flex:1;min-width:0;">
+                        <strong>@d.FullName</strong>
+                        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">
+                            @if (attrs.TryGetValue("vehicle_type", out var vt) && !string.IsNullOrEmpty(vt))
+                            {
+                                <span class="ac-chip ac-chip-sm">@VehicleLabel(vt)</span>
+                            }
+                            @if (attrs.TryGetValue("vehicle_plate", out var vp) && !string.IsNullOrEmpty(vp))
+                            {
+                                <span class="ac-chip ac-chip-sm" style="direction:ltr;">@vp</span>
+                            }
+                        </div>
+                        <span style="color:var(--ac-text-muted);font-size:11px;display:block;margin-top:6px;">
+                            مُنذُ @FormatAge(d.CreatedAt)
+                        </span>
+                    </div>
+                    @if (Auth.IsAuthenticated && Auth.UserId != d.Id)
+                    {
+                        <form method="post" action="@($"/{Slug}/users/{d.Id}/chat")" style="margin:0;">
+                            <button type="submit" class="ac-btn ac-btn-primary ac-btn-sm">
+                                <AcIcon Name="message" Size="14" /> تَواصُل
+                            </button>
+                        </form>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
+    List<User>? drivers;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var s = Store.QuerySession(Slug);
+        // كُلّ المُستَخدِمين الَّذين دَورُهم النَّشِط = driver. نَكتَفي بِهذا
+        // كَ "مُتاح" — إن أَرَدنا لاحِقاً حالَة "online/offline" نُضيفها
+        // كَ حَقل عَلى User.
+        drivers = (await s.Query<User>()
+            .Where(u => u.ActiveRole == "driver")
+            .ToListAsync())
+            .OrderByDescending(u => u.UpdatedAt)
+            .ToList();
+    }
+
+    static string VehicleLabel(string v) => v switch
+    {
+        "economy" => "اقتِصاديّ",
+        "comfort" => "مُريح",
+        "luxury"  => "فاخِر",
+        "family"  => "عائِليّ",
+        _ => v
+    };
+
+    static string FormatAge(System.DateTime at)
+    {
+        var span = System.DateTime.UtcNow - at;
+        if (span.TotalDays < 1)   return "اليَوم";
+        if (span.TotalDays < 30)  return $"{(int)span.TotalDays} يَوم";
+        return $"{(int)(span.TotalDays / 30)} شَهر";
+    }
+}

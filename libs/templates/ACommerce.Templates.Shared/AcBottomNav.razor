@@ -35,9 +35,16 @@
                 {
                     <i class="@item.Icon"></i>
                 }
-                @if (item.Badge is > 0)
+                @if (item.Badge.HasValue)
                 {
-                    <span class="acs-bottom-nav-badge">@(item.Badge > 99 ? "99+" : item.Badge.ToString())</span>
+                    var key = item.Href.EndsWith("/chats") ? "messages"
+                            : item.Href.EndsWith("/notifications") ? "notifications"
+                            : item.Href.EndsWith("/me/offers") ? "offers" : "other";
+                    <span class="acs-bottom-nav-badge"
+                          data-badge-key="@key"
+                          style="@(item.Badge > 0 ? null : "display:none;")">
+                        @(item.Badge > 99 ? "99+" : item.Badge.Value.ToString())
+                    </span>
                 }
             </span>
             <span class="acs-bottom-nav-label">@item.Label</span>

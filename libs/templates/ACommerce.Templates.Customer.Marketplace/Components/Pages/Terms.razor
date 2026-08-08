@@ -1,0 +1,92 @@
+@page "/{slug}/terms"
+@page "/{slug}/r/{role}/terms"
+@inject ITenantContext Tenant
+@inject AuthSession Auth
+@inject IHttpContextAccessor HttpCtx
+@using ACommerce.Templates.Customer.Marketplace.Gates
+
+@*
+    صَفحَة قَبول الشُروط والأَحكام. تُعرَض إجبارِيّاً بَعد التَّسجيل
+    قَبل أَيّ إجراء يَكتُب بَيانات (نَشر إعلان، تَقديم عَرض، رِسالَة، …).
+    POST يَحفَظ AcceptedTermsAt + AcceptedTermsVersion عَلى User،
+    ثُمَّ يَعود لِـ returnUrl.
+
+    لِكُلّ مَتجَر يُمكِن لاحِقاً تَخصيص نَصّ الشُروط (TenantTermsHtml) —
+    حاليّاً نَستَخدِم نَصّ عامّ.
+*@
+
+@{
+    if (HttpCtx.HttpContext is { } ctx && Tenant.IsResolved)
+    {
+        Auth.SetTenant(Tenant.Slug);
+        Auth.Load(ctx, Tenant.Slug);
+    }
+    var bouncePath = AuthSession.LinkFor(Slug, Role, "");
+}
+
+@if (!Auth.IsAuthenticated)
+{
+    <script>location.replace('@AuthSession.LinkFor(Slug, Role, "login")');</script>
+}
+else
+{
+    <div class="acs-page" style="max-width:680px;margin:0 auto;">
+        <div style="text-align:center;padding-top:16px;">
+            <div style="font-size:48px;"><AcIcon Name="file" Size="48" /></div>
+            <h1 class="acm-wizard-title">الشُروط والأَحكام</h1>
+            <p style="color:var(--ac-text-muted);font-size:13px;">
+                @Tenant.Name · إصدار @TermsPolicy.CurrentVersion
+            </p>
+        </div>
+
+        <AcCard>
+            <ChildContent>
+                <div style="font-size:14px;line-height:2;color:var(--ac-text);">
+                    <p><strong>١. الخُصوصِيَّة.</strong> نَحفَظ بَياناتكَ الشَخصِيَّة
+                    (اسم، هاتِف، مَوقِع) لِاستِخدامِها داخِل التَّطبيق فَقَط.
+                    لا نُشارِكها مَع أَطراف ثالِثَة بِدون إذنِكَ الصَّريح.</p>
+
+                    <p><strong>٢. المُعامَلات.</strong> أَنتَ مَسؤول عَن صِحَّة
+                    البَيانات الَّتي تَنشُرها — الإعلانات والعُروض والرِسائِل.
+                    التَّطبيق وَسيط؛ المَسؤولِيَّة الكامِلَة عَن أَيّ اتِّفاق
+                    بَينَكَ وَطَرَف آخَر تَقَع عَلى الطَّرَفَين.</p>
+
+                    <p><strong>٣. السُلوك المَقبول.</strong> يُمنَع نَشر مُحتَوى
+                    عُنصُريّ، احتِياليّ، أَو يَنتَهِك القانون. الإبلاغ مُتاح،
+                    وَالحِساب يُمكِن إيقافه بِدون إشعار مُسبَق.</p>
+
+                    <p><strong>٤. التَّعديل.</strong> قَد نُحَدِّث الشُروط؛
+                    سَنُخطِركَ وَنَطلُب القَبول مَرَّة أُخرى لِلإصدار الجَديد.</p>
+
+                    <p><strong>٥. الإشعارات.</strong> بِالـقَبول تُوافِق عَلى
+                    استِلام إشعارات تَطبيق وَ Web Push لِلرَسائِل وَالعُروض
+                    وَأَيّ إجراء يَتَطَلَّب انتِباهَكَ. يُمكِن إيقافها مِن
+                    إعدادات الجِهاز في أَيّ وَقت.</p>
+                </div>
+
+                <form method="post"
+                      action="@($"/{Slug}/terms/accept?returnUrl={Uri.EscapeDataString(ReturnUrl ?? bouncePath)}")"
+                      style="margin-top:20px;">
+                    <label style="display:flex;gap:8px;align-items:flex-start;font-size:14px;">
+                        <input type="checkbox" name="accept" required value="1"
+                               style="margin-top:3px;flex-shrink:0;" />
+                        <span>قَرَأت الشُروط أَعلاه وَأُوافِق عَلَيها.</span>
+                    </label>
+                    <div style="display:flex;gap:8px;margin-top:16px;">
+                        <a class="ac-btn ac-btn-ghost"
+                           href="@AuthSession.LinkFor(Slug, Role, "logout")">رَفض وَخُروج</a>
+                        <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
+                            <AcIcon Name="check" Size="18" /> قَبول وَمُتابَعَة
+                        </button>
+                    </div>
+                </form>
+            </ChildContent>
+        </AcCard>
+    </div>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
+    [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
+}

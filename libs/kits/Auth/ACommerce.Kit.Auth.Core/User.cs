@@ -11,6 +11,9 @@ public sealed class User
     public string Phone { get; set; } = "";
     public string? NationalId { get; set; }
     public string FullName { get; set; } = "مُستَخدِم جَديد";
+    /// <summary>رابِط صورَة المَلَفّ الشَخصيّ (مِن IFileStorage). فارِغ =
+    /// نَعرِض الحَرف الأَوَّل كَ avatar نائِب.</summary>
+    public string? AvatarUrl { get; set; }
     public bool PhoneVerified { get; set; }
     public string Role { get; set; } = "user";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -32,6 +35,42 @@ public sealed class User
     /// "driver" فارِغاً ويَملأ "rider" إن كانَت لَه خَصائِص خاصَّة. الـ
     /// <c>AttributesJson</c> العامّ يَبقَى مُشتَرَكاً بَين كُلّ الأَدوار.</summary>
     public Dictionary<string, Dictionary<string, string>> RoleAttributesJson { get; set; } = new();
+
+    /// <summary>مَركَز المَنطِقَة الجُغرافيّة الَّتي يَعمَل فيها (السائِق
+    /// يَضبُطها لِيَفلتِر فقط المَشاوير في نِطاقها). 0,0 = غَير مَضبوط.</summary>
+    public double AnchorLat { get; set; }
+    public double AnchorLng { get; set; }
+
+    /// <summary>نِصف قُطر العَمَل بِالكيلومِترات. 0 = بِلا حَدّ. مَثَلاً
+    /// السائِق في صَنعاء قَد يَضبُطها عَلى 15 كم.</summary>
+    public int RadiusKm { get; set; }
+
+    public bool HasAnchor => AnchorLat != 0 || AnchorLng != 0;
+
+    /// <summary>اشتِراكات Web Push لِلجِهاز الواحِد — كُلّ subscription
+    /// مَفتاح لِجِهاز/مُتَصَفِّح مُعَيَّن. السيرفر يَستَخدِمها لِإرسال
+    /// إشعار push عَلى مُستَوى نِظام التَّشغيل (يَعمَل حَتَّى لَو PWA
+    /// مُغلَق).</summary>
+    public List<PushSubscription> PushSubscriptions { get; set; } = new();
+
+    /// <summary>تاريخ قَبول الشُروط والأَحكام. <c>null</c> = لَم يَقبَل
+    /// بَعد. الـ TermsGate يُجبِر القَبول قَبل أَيّ إجراء يَكتُب بَيانات.</summary>
+    public DateTime? AcceptedTermsAt { get; set; }
+
+    /// <summary>إصدار الشُروط الَّتي قَبِلَها — لَو تَحَدَّثَت الشُروط نَرفَع
+    /// <see cref="TermsPolicy.CurrentVersion"/> وَنُجبِر القَبول مَرَّة أُخرى.</summary>
+    public int AcceptedTermsVersion { get; set; }
+}
+
+/// <summary>اشتِراك Web Push واحِد — جِهاز + مُتَصَفِّح. الـ Endpoint مِن
+/// تَزويد المُتَصَفِّح، P256dh + Auth مَفاتيح ECDH/HMAC تُستَخدَم لِتَشفير
+/// الـ payload.</summary>
+public sealed class PushSubscription
+{
+    public string Endpoint { get; set; } = "";
+    public string P256dh { get; set; } = "";
+    public string Auth { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
 }
 
 // ─── Events (للـ stream المُستَقِلّ "AuthAttempts") ──────────────────

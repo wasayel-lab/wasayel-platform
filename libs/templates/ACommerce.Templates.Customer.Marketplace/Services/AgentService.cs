@@ -55,25 +55,32 @@ public sealed class AgentService
     public string ModelName    => _model;
     public bool IsConfigured   => _backend.IsConfigured;
 
-    public async Task<AgentSession> LoadSessionAsync(CancellationToken ct = default)
+    /// <summary>مُعَرِّف جَلسَة المُحادَثَة لِنِطاق مُعَيَّن. لِلادمن: جَلسَة
+    /// مُشتَرَكَة (تَوافُق رَجعيّ). لِرائِد الأَعمال: جَلسَة لِكُلّ مُستَخدِم
+    /// مُنفَصِلَة — لا تَسريب مُحادَثات بَين رُوَّاد الأَعمال.</summary>
+    private static string SessionIdFor(string? scopeId)
+        => string.IsNullOrEmpty(scopeId) ? AgentSession.SessionId : "scope:" + scopeId;
+
+    public async Task<AgentSession> LoadSessionAsync(string? scopeId = null, CancellationToken ct = default)
     {
         await using var s = _store.QuerySession(AdminTenant);
-        return await s.LoadAsync<AgentSession>(AgentSession.SessionId, ct)
-               ?? new AgentSession();
+        return await s.LoadAsync<AgentSession>(SessionIdFor(scopeId), ct)
+               ?? new AgentSession { Id = SessionIdFor(scopeId) };
     }
 
-    public async Task ResetAsync(CancellationToken ct = default)
+    public async Task ResetAsync(string? scopeId = null, CancellationToken ct = default)
     {
         await using var s = _store.LightweightSession(AdminTenant);
-        s.Delete<AgentSession>(AgentSession.SessionId);
+        s.Delete<AgentSession>(SessionIdFor(scopeId));
         await s.SaveChangesAsync(ct);
     }
 
-    public async Task<AgentSession> AskAsync(string userMessage, CancellationToken ct = default)
+    public async Task<AgentSession> AskAsync(string userMessage, string? scopeId = null, CancellationToken ct = default)
     {
         await using var sess = _store.LightweightSession(AdminTenant);
-        var session = await sess.LoadAsync<AgentSession>(AgentSession.SessionId, ct)
-                      ?? new AgentSession();
+        var id = SessionIdFor(scopeId);
+        var session = await sess.LoadAsync<AgentSession>(id, ct)
+                      ?? new AgentSession { Id = id };
         session.Turns.Add(new AgentTurn { Role = "user", Text = userMessage });
         await CallBackendAsync(session, ct);
         session.UpdatedAt = DateTime.UtcNow;
@@ -82,11 +89,11 @@ public sealed class AgentService
         return session;
     }
 
-    public async Task<AgentSession> ContinueAfterToolAsync(CancellationToken ct = default)
+    public async Task<AgentSession> ContinueAfterToolAsync(string? scopeId = null, CancellationToken ct = default)
     {
         await using var sess = _store.LightweightSession(AdminTenant);
-        var session = await sess.LoadAsync<AgentSession>(AgentSession.SessionId, ct);
-        if (session is null) return new AgentSession();
+        var session = await sess.LoadAsync<AgentSession>(SessionIdFor(scopeId), ct);
+        if (session is null) return new AgentSession { Id = SessionIdFor(scopeId) };
         await CallBackendAsync(session, ct);
         session.UpdatedAt = DateTime.UtcNow;
         sess.Store(session);
@@ -95,10 +102,10 @@ public sealed class AgentService
     }
 
     public async Task UpdateToolStatusAsync(
-        string toolId, string status, string? result, CancellationToken ct = default)
+        string toolId, string status, string? result, string? scopeId = null, CancellationToken ct = default)
     {
         await using var sess = _store.LightweightSession(AdminTenant);
-        var session = await sess.LoadAsync<AgentSession>(AgentSession.SessionId, ct);
+        var session = await sess.LoadAsync<AgentSession>(SessionIdFor(scopeId), ct);
         if (session is null) return;
         var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
         if (turn?.Tool is null) return;
@@ -219,6 +226,7 @@ public sealed class AgentService
 - تَعديل المُدُن والأَحياء
 - تَعديل الخَصائِص الديناميكِيَّة (لِإعلانات فِئَة، أَو لِلبروفايل)
 - تَعديل الهُويَّة البَصَريَّة (اسم/لَون/شِعار/مَدينَة/قَناة الدُخول)
+- تَخصيص PWA لِكُلّ دَور (set_pwa): اسم وَأَيقونَة data: URL
 
 قَواعِد:
 1. اِستَخدِم الأَدَوات لِكُلّ كِتابَة. لا تَكتُب SQL. لا تَختَرِع APIs.
@@ -326,7 +334,12 @@ public sealed class AgentService
             "إعادَة كِتابَة الخَصائِص الديناميكِيَّة لِنِطاق (scope) مَحَدَّد. "
           + "النِّطاق إمّا Guid فِئَة أَو scope_id بروفايل دَور أَو "
           + "00000000-0000-0000-0000-000000000F01 لِلبروفايل العامّ.",
-            SetAttributesSchema)
+            SetAttributesSchema),
+        new("set_pwa",
+            "تَخصيص PWA لِدَور: اسم مُخَصَّص (يَتَجاوَز التَّوليد) أَو "
+          + "أَيقونَة مُخَصَّصَة (data: URL، يَتَجاوَز التَّوليد بِلَون "
+          + "العَلامَة). الحَذف بِتَمرير سِلسِلَة فارِغَة.",
+            SetPwaSchema)
     };
 
     private static readonly string CategoryItemSchema = """
@@ -380,6 +393,19 @@ public sealed class AgentService
         "city":    {"type": "string"},
         "color":   {"type": "string"},
         "channel": {"type": "string", "enum": ["phone", "nafath"]}
+      }
+    }
+    """;
+
+    private static readonly string SetPwaSchema = """
+    {
+      "type": "object",
+      "required": ["slug", "role"],
+      "properties": {
+        "slug":          {"type": "string", "description": "slug المَتجَر"},
+        "role":          {"type": "string", "description": "slug الدَور"},
+        "pwa_name":      {"type": "string", "description": "اسم التَطبيق، فارِغ = حَذف"},
+        "pwa_icon_url":  {"type": "string", "description": "data:image/png;base64,… (حَتَّى ٢٥٦ ك.ب.)، فارِغ = حَذف"}
       }
     }
     """;
@@ -475,21 +501,47 @@ public sealed class AgentToolExecutor
     private readonly IDocumentStore _store;
     public AgentToolExecutor(IDocumentStore store) { _store = store; }
 
-    public async Task<(bool Ok, string Message)> ExecuteAsync(
+    public Task<(bool Ok, string Message)> ExecuteAsync(
         string toolName, string inputJson, CancellationToken ct = default)
+        => ExecuteAsync(toolName, inputJson, ownerUserId: null, ct);
+
+    /// <summary>تَنفيذ أَداة مَع فَرض ملكيَّة المُستَخدِم. عِندَ
+    /// <paramref name="ownerUserId"/> = null: سُلوك ادمن المَنصَّة (بِلا قُيود).
+    /// عِندَ تَمرير قِيمَة: كُلّ أَداة تُعَدِّل tenant تَتَطَلَّب أَن يَكون
+    /// <c>tenant.OwnerUserId == ownerUserId</c>؛ وَ <c>create_tenant</c>
+    /// يَكتُب OwnerUserId مُباشَرَةً عَلى الـ tenant الجَديد. هذا يَمنَع
+    /// رائِد أَعمال مِن تَعديل تَطبيق رائِد أَعمال آخَر عَبر الوَكيل.</summary>
+    public async Task<(bool Ok, string Message)> ExecuteAsync(
+        string toolName, string inputJson, Guid? ownerUserId, CancellationToken ct = default)
     {
         try
         {
             using var doc = JsonDocument.Parse(inputJson);
             var root = doc.RootElement;
+
+            // فَحص الملكيَّة لِلأَدَوات الَّتي تُعَدِّل tenant قائم.
+            if (ownerUserId is Guid owner && toolName != "create_tenant")
+            {
+                var slug = Str(root, "slug").ToLowerInvariant();
+                if (string.IsNullOrEmpty(slug))
+                    return (false, "slug مَطلوب لِأَداة تَعديل المَتجَر.");
+                await using var qs = _store.QuerySession();
+                var existing = await qs.LoadAsync<Tenant>(slug, ct);
+                if (existing is null)
+                    return (false, $"المَتجَر «{slug}» غَير مَوجود.");
+                if (existing.OwnerUserId != owner)
+                    return (false, $"غَير مَسموح: لا تَملِك المَتجَر «{slug}». يُمكِن لِكُلّ رائِد أَعمال تَعديل تَطبيقاته فَقَط.");
+            }
+
             return toolName switch
             {
-                "create_tenant"  => await CreateTenantAsync(root, ct),
+                "create_tenant"  => await CreateTenantAsync(root, ownerUserId, ct),
                 "set_categories" => await SetCategoriesAsync(root, ct),
                 "set_branding"   => await SetBrandingAsync(root, ct),
                 "set_regions"    => await SetRegionsAsync(root, ct),
                 "set_roles"      => await SetRolesAsync(root, ct),
                 "set_attributes" => await SetAttributesAsync(root, ct),
+                "set_pwa"        => await SetPwaAsync(root, ct),
                 _ => (false, $"أَداة غَير مَعروفَة: {toolName}")
             };
         }
@@ -499,7 +551,7 @@ public sealed class AgentToolExecutor
         }
     }
 
-    private async Task<(bool, string)> CreateTenantAsync(JsonElement root, CancellationToken ct)
+    private async Task<(bool, string)> CreateTenantAsync(JsonElement root, Guid? ownerUserId, CancellationToken ct)
     {
         var slug    = Str(root, "slug").ToLowerInvariant();
         var name    = Str(root, "name");
@@ -525,6 +577,10 @@ public sealed class AgentToolExecutor
         {
             Id = slug, Name = name, BrandColor = color, TagLine = tagline,
             City = city, AuthChannel = channel, Categories = cats,
+            // عِندَ إنشاء عَبر وَكيل ستوديو، اِكتُب المالِك مُباشَرَةً —
+            // وإلّا أَيّ رائِد أَعمال يَستَطيع لاحِقاً «تَبَنّي» مَتجَر بِلا مالِك.
+            // Guid.Empty = بِلا مالِك (سُلوك ادمن المَنصَّة الافتراضيّ).
+            OwnerUserId = ownerUserId ?? Guid.Empty,
             CreatedAt = DateTime.UtcNow
         });
         await s.SaveChangesAsync(ct);
@@ -666,6 +722,50 @@ public sealed class AgentToolExecutor
         }
         await s.SaveChangesAsync(ct);
         return (true, $"تَمّ تَحديث «{slug}» إلى {cityCount} مُدُن، {distCount} أَحياء.");
+    }
+
+    private async Task<(bool, string)> SetPwaAsync(JsonElement root, CancellationToken ct)
+    {
+        var slug = Str(root, "slug").ToLowerInvariant();
+        var roleSlug = Str(root, "role").ToLowerInvariant();
+        if (string.IsNullOrEmpty(slug) || string.IsNullOrEmpty(roleSlug))
+            return (false, "slug وَ role مَطلوبان.");
+
+        await using var s = _store.LightweightSession();
+        var t = await s.LoadAsync<Tenant>(slug, ct);
+        if (t is null) return (false, "المَتجَر غَير مَوجود.");
+        var role = t.Roles.FirstOrDefault(r => r.Slug == roleSlug);
+        if (role is null) return (false, $"الدَور «{roleSlug}» غَير مَوجود.");
+
+        var changed = new List<string>();
+        if (TryStr(root, "pwa_name", out var pwaName))
+        {
+            role.PwaName = string.IsNullOrEmpty(pwaName) ? null : pwaName;
+            changed.Add("الاسم");
+        }
+        if (TryStr(root, "pwa_icon_url", out var iconUrl))
+        {
+            if (string.IsNullOrEmpty(iconUrl))
+            {
+                role.PwaIconDataUrl = null;
+                changed.Add("الأَيقونَة (حُذِفَت)");
+            }
+            else
+            {
+                if (!iconUrl.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
+                    return (false, "pwa_icon_url يَجِب أَن يَكون data:image/…");
+                // سَقف ٢٥٦ كيلوبايت بَعد فَكّ base64 (نَحسِبُه تَقريباً بِـ length * 3/4).
+                if (iconUrl.Length > 350_000)
+                    return (false, "الأَيقونَة أَكبَر مِن ٢٥٦ كيلوبايت.");
+                role.PwaIconDataUrl = iconUrl;
+                changed.Add("الأَيقونَة");
+            }
+        }
+        if (changed.Count == 0) return (true, "لا تَغيير.");
+
+        s.Store(t);
+        await s.SaveChangesAsync(ct);
+        return (true, $"تَمّ تَحديث PWA «{roleSlug}»: {string.Join("، ", changed)}.");
     }
 
     private async Task<(bool, string)> SetAttributesAsync(JsonElement root, CancellationToken ct)

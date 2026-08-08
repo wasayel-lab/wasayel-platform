@@ -1,0 +1,119 @@
+@page "/studio/apps/{slug}/categories"
+@inject Services.Incubator.StudioAuth Auth
+@inject Marten.IDocumentStore Store
+@using ACommerce.Kit.Tenants
+
+@*
+    تَحرير الفِئات — textarea نَصّيّ: كُلّ سَطر "slug | اسم | إيموجي | تَجميع".
+    أَبسَط مِن جَدوَل ديناميكيّ ويَكفي لِلتَّحرير السَريع. التَّجميع
+    اختياريّ (residential/commercial/fnb/transport/services/...).
+*@
+
+<StudioShell Title="@($"الفِئات · {tenant?.Name ?? Slug}")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← الإعدادات</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (tenant is null)
+        {
+            <div class="st-card">التَّطبيق غَير مَوجود أَو لا تَملِكه.</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>الفِئات</h1>
+                <p>الفِئات الَّتي يَتَصَفَّحها العُملاء (@tenant.Categories.Count فِئَة حاليّاً).</p>
+            </div>
+
+            @if (Saved == "1")    { <div class="st-chip st-chip-success" style="margin-bottom:14px;">تَمّ الحِفظ <AcIcon Name="check" Size="16" /></div> }
+            @if (Err == "format") { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">صِيغَة سَطر غَير صَحيحَة</div> }
+            @if (Err == "empty")  { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">أَضِف فِئَة واحِدَة على الأَقَلّ</div> }
+
+            <form method="post" action="@($"/studio/apps/{Slug}/categories/save")" id="cats-form" class="st-card">
+                <p style="color:var(--st-muted);font-size:13px;margin:0 0 14px;">
+                    بِطاقَة لِكُلّ فِئَة. التَّرتيب = تَرتيب العَرض.
+                </p>
+
+                <div class="ac-editor" id="cats-editor">
+                    @foreach (var c in tenant.Categories.OrderBy(c => c.SortOrder))
+                    {
+                        <div class="ac-editor-row" data-cat-row>
+                            <div class="ac-editor-row-head">
+                                <input class="ac-input ac-cat-icon" value="@(c.Icon ?? "tag")" aria-label="أَيقونَة" />
+                                <input class="ac-input ac-cat-label" placeholder="اسم الفِئَة" value="@c.Label" />
+                                <button type="button" class="ac-icon-btn" data-remove-cat aria-label="حَذف"><AcIcon Name="x" Size="14" /></button>
+                            </div>
+                            <div class="ac-editor-grid2">
+                                <div>
+                                    <span class="ac-chip-input-label">المُعَرِّف (slug)</span>
+                                    <input class="ac-input ac-cat-slug" placeholder="apartments" value="@c.Slug" style="direction:ltr;" />
+                                </div>
+                                <div>
+                                    <span class="ac-chip-input-label">التَّجميع (اختياريّ)</span>
+                                    <input class="ac-input ac-cat-kind" placeholder="residential" value="@c.Kind" list="kind-list" style="direction:ltr;" />
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <datalist id="kind-list">
+                    <option value="residential"></option>
+                    <option value="commercial"></option>
+                    <option value="roommate"></option>
+                    <option value="vehicles"></option>
+                    <option value="events"></option>
+                    <option value="leisure"></option>
+                </datalist>
+
+                <button type="button" class="ac-add-row-btn" id="add-cat" style="margin-top:12px;">
+                    <AcIcon Name="plus" Size="16" /> إضافَة فِئَة
+                </button>
+
+                <textarea name="categories" id="cats-hidden" hidden>@CategoriesAsText(tenant.Categories)</textarea>
+
+                <button type="submit" class="st-btn st-btn-primary" style="margin-top:16px;">حِفظ الفِئات</button>
+            </form>
+
+            <template id="cat-row-tpl">
+                <div class="ac-editor-row" data-cat-row>
+                    <div class="ac-editor-row-head">
+                        <input class="ac-input ac-cat-icon" value="tag" aria-label="أَيقونَة" />
+                        <input class="ac-input ac-cat-label" placeholder="اسم الفِئَة" />
+                        <button type="button" class="ac-icon-btn" data-remove-cat aria-label="حَذف"><AcIcon Name="x" Size="14" /></button>
+                    </div>
+                    <div class="ac-editor-grid2">
+                        <div>
+                            <span class="ac-chip-input-label">المُعَرِّف (slug)</span>
+                            <input class="ac-input ac-cat-slug" placeholder="apartments" style="direction:ltr;" />
+                        </div>
+                        <div>
+                            <span class="ac-chip-input-label">التَّجميع (اختياريّ)</span>
+                            <input class="ac-input ac-cat-kind" placeholder="residential" list="kind-list" style="direction:ltr;" />
+                        </div>
+                    </div>
+                </div>
+            </template>
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery] public string? Saved { get; set; }
+    [SupplyParameterFromQuery] public string? Err   { get; set; }
+    Tenant? tenant;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        await using var qs = Store.QuerySession();
+        tenant = await qs.LoadAsync<Tenant>(Slug);
+        if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) tenant = null;
+    }
+
+    static string CategoriesAsText(List<Category> cats)
+        => string.Join("\n", cats.OrderBy(c => c.SortOrder)
+            .Select(c => $"{c.Slug} | {c.Label} | {c.Icon ?? "tag"} | {c.Kind}"));
+}

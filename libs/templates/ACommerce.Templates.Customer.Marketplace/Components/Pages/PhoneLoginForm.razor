@@ -1,6 +1,10 @@
 @if (Stage != "verify")
 {
     <form method="post" action="@($"/{Slug}/auth/phone/login")">
+        @if (!string.IsNullOrEmpty(AsRole))
+        {
+            <input type="hidden" name="as" value="@AsRole" />
+        }
         <AcField Label="رَقم الهاتف" Required="true">
             <input type="tel" name="phone" value="@Phone" required pattern="[0-9]{9,15}"
                    class="ac-input" style="direction:ltr;font-size:16px;"
@@ -17,6 +21,10 @@ else
 {
     <form method="post" action="@($"/{Slug}/auth/phone/verify")">
         <input type="hidden" name="phone" value="@Phone" />
+        @if (!string.IsNullOrEmpty(AsRole))
+        {
+            <input type="hidden" name="as" value="@AsRole" />
+        }
         <p class="acs-nafath-instruction">أَدخِل الكود المُرسَل إلى <strong>@Phone</strong></p>
 
         <AcField Label="الكود" Required="true">
@@ -35,7 +43,7 @@ else
         @if (ErrorMessage is not null) { <AcAlert Variant="danger">@ErrorMessage</AcAlert> }
 
         <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="تَحَقُّق ودُخول" />
-        <a href="@($"/{Slug}/login")"
+        <a href="@AuthSession.LinkFor(Slug, AsRole, $"login")"
            style="display:block;text-align:center;margin-top:10px;
                   color:var(--ac-text-muted);font-size:13px;text-decoration:none;">
             تَغيير الرَقم
@@ -48,4 +56,5 @@ else
     [Parameter] public string? Stage { get; set; }
     [Parameter] public string? Phone { get; set; }
     [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public string? AsRole { get; set; }
 }

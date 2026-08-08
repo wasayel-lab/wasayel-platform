@@ -1,0 +1,125 @@
+@inject IHttpContextAccessor HttpCtx
+@inject AuthSession AuthSession
+@inject ITenantContext Tenant
+@inject IDocumentStore Store
+@using ACommerce.Kit.Auth
+@using ACommerce.Kit.Roles
+@using ACommerce.Kit.Tenants
+@using ACommerce.Templates.Customer.Marketplace.Gates
+
+@*
+    مُكَوِّن SSR يَلُفّ مُحتَوى الصَفحَة بِفَحص gates مُوَحَّد. يُسمَح بِـ
+    auth أَو terms أَو permission كَ معلَمات boolean / string. عَلى فَشَل
+    أَيّ gate يَعرِض UI مُلائِم (تَسجيل دُخول، قَبول شُروط، رَفض صَلاحِيَّة)
+    بَدَلاً مِن مُحتَوى الصَفحَة.
+
+    الاستِعمال:
+        <GatedPage RequireAuth RequireTerms Permission="listing.create">
+            <!-- مُحتَوى الصَفحَة -->
+        </GatedPage>
+
+    لا يَستَخدِم InteractiveServerRenderMode — كُلّ شَيء SSR. يَفترِض
+    أَنّ الصَفحَة الحاوِيَة لَدَيها [Parameter] Slug و Role لِأَنّ كُلّ
+    الصَفَحات تُسَجَّل عَلى /{slug} أَو /{slug}/r/{role}.
+*@
+
+@switch (_state)
+{
+    case GateState.Allowed:
+        @ChildContent
+        break;
+
+    case GateState.NeedAuth:
+        <AcEmptyState IconName="user"
+                      Title="@($"يَتَطَلَّب تَسجيل دُخول")"
+                      Message="سَجِّل دُخولك لِلوُصول لِهذه الصَفحَة."
+                      ActionLabel="تَسجيل دُخول"
+                      ActionHref="@_loginUrl" />
+        break;
+
+    case GateState.NeedTerms:
+        <AcEmptyState IconName="info"
+                      Title="@("قَبول الشُروط مَطلوب")"
+                      Message="اِقبَل الشُروط والأَحكام أَوَّلاً لِمُتابَعَة استِخدام التَّطبيق."
+                      ActionLabel="عَرض الشُروط"
+                      ActionHref="@_termsUrl" />
+        break;
+
+    case GateState.Forbidden:
+        <AcEmptyState IconName="alert-circle"
+                      Title="@("صَلاحِيَّة غَير كافِيَة")"
+                      Message="@_forbiddenMsg" />
+        break;
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
+
+    /// <summary>تَوثيق إجباريّ.</summary>
+    [Parameter] public bool RequireAuth { get; set; }
+
+    /// <summary>قَبول الشُروط إجباريّ (يَفتَرِض RequireAuth أَيضاً).</summary>
+    [Parameter] public bool RequireTerms { get; set; }
+
+    /// <summary>صَلاحِيَّة دَور مَطلوبَة (مَثَلاً "listing.create"). فارِغ = لا فَحص.</summary>
+    [Parameter] public string? Permission { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    enum GateState { Allowed, NeedAuth, NeedTerms, Forbidden }
+    GateState _state = GateState.Allowed;
+    string _loginUrl = "";
+    string _termsUrl = "";
+    string _forbiddenMsg = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpCtx.HttpContext is { } ctx && Tenant.IsResolved)
+        {
+            AuthSession.SetTenant(Tenant.Slug);
+            AuthSession.Load(ctx, Tenant.Slug);
+        }
+
+        var currentPath = HttpCtx.HttpContext?.Request.Path.Value ?? "/";
+        var returnUrl = Uri.EscapeDataString(currentPath);
+        _loginUrl = AuthSession.LinkFor(Slug, Role, $"login?returnUrl={returnUrl}");
+        _termsUrl = AuthSession.LinkFor(Slug, Role, $"terms?returnUrl={returnUrl}");
+
+        if (RequireAuth && !AuthSession.IsAuthenticated)
+        {
+            _state = GateState.NeedAuth;
+            return;
+        }
+
+        if (RequireTerms && AuthSession.UserId is { } uid)
+        {
+            await using var s = Store.QuerySession(Slug);
+            var user = await s.LoadAsync<User>(uid);
+            var ok = user is not null
+                  && user.AcceptedTermsAt is not null
+                  && user.AcceptedTermsVersion >= TermsPolicy.CurrentVersion;
+            if (!ok) { _state = GateState.NeedTerms; return; }
+        }
+
+        if (!string.IsNullOrEmpty(Permission) && AuthSession.UserId is { } uid2)
+        {
+            await using var g = Store.QuerySession();
+            var tenant = await g.LoadAsync<Tenant>(Slug);
+            if (tenant is { Roles.Count: > 0 })
+            {
+                await using var t = Store.QuerySession(Slug);
+                var user = await t.LoadAsync<User>(uid2);
+                var activeRole = Role ?? user?.ActiveRole ?? "";
+                if (!RolePermissions.Has(tenant.Roles, activeRole, Permission))
+                {
+                    _state = GateState.Forbidden;
+                    _forbiddenMsg = $"يَتَطَلَّب صَلاحِيَّة «{Permission}» — دَورك الحاليّ لا يَملِكها.";
+                    return;
+                }
+            }
+        }
+
+        _state = GateState.Allowed;
+    }
+}

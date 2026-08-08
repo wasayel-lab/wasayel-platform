@@ -1,0 +1,298 @@
+@page "/studio/agent"
+@rendermode RenderMode.InteractiveServer
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components.Web
+@inject Services.Incubator.StudioAuth StudioAuth
+@inject ACommerce.Templates.Customer.Marketplace.Services.AgentService Agent
+@inject ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor Executor
+@inject IHttpContextAccessor HttpCtx
+@inject IJSRuntime JS
+
+@*
+    وَكيل التَّطبيقات — مِرآة AgentChat داخِل إطار الستوديو.
+
+    الفَرق الجَوهَريّ عَن /admin/agent:
+      ١) الجَلسَة مَحصورَة بِالمُستَخدِم (scopeId = studio-{userId}) — كُلّ
+         رائِد أَعمال يَرى مُحادَثَتَه فَقَط.
+      ٢) كُلّ تَنفيذ أَداة يَمُرّ بِفَحص ملكيَّة tenant.OwnerUserId == userId.
+         رائِد أَعمال لا يَستَطيع تَعديل مَتجَر رائِد أَعمال آخَر — حَتَّى
+         لَو طَلَب الوَكيل ذَلِك بِالخَطَأ.
+      ٣) create_tenant يَكتُب OwnerUserId مُباشَرَةً عَلى المَتجَر الجَديد.
+
+    InteractiveServer: HttpContext مُتاح أَوَّل render فَقَط. نَلتَقِط
+    _userId مَرَّة واحِدَة هُناك ثُمَّ نَستَخدِمه في كُلّ نِداء.
+*@
+
+<StudioShell Title="وَكيل التَّطبيقات" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="/studio">← لوحَتي</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (!_authChecked)
+        {
+            <div class="st-card">جارٍ التَّحَقُّق…</div>
+        }
+        else if (_userId == Guid.Empty)
+        {
+            <div class="st-card">
+                <p>يَجِب تَسجيل الدُخول.</p>
+                <a class="st-btn st-btn-primary" href="/studio/auth">دُخول</a>
+            </div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1><AcIcon Name="message" Size="22" /> وَكيل التَّطبيقات</h1>
+                <p>اطلُب مِن الوَكيل تَعديل تَطبيقاتِكَ: فِئات، أَدوار، مُدُن، خَصائِص، PWA.
+                   كُلّ كِتابَة تُعرَض لِلمُراجَعَة قَبل التَّطبيق، وَكُلّ أَداة تَفحَص
+                   ملكيَّتَكَ لِلمَتجَر قَبل التَّنفيذ.</p>
+                <span style="font-size:11px;color:var(--st-muted);direction:ltr;">
+                    @Agent.ProviderName / @Agent.ModelName
+                </span>
+            </div>
+
+            @if (!Agent.IsConfigured)
+            {
+                <div class="st-chip st-chip-warning" style="margin-bottom:14px;">
+                    لا يوجَد مِفتاح @Agent.ProviderName مَضبوط. أَضِف Agent:ApiKey في الإعدادات.
+                </div>
+            }
+
+            <div class="acm-agent-thread">
+                @if (session.Turns.Count == 0)
+                {
+                    <div class="acm-agent-empty">
+                        <span><AcIcon Name="message" Size="48" /></span>
+                        <p>ابدَأ بِسُؤال أَو طَلَب — مَثَلاً: «أَضِف فِئَة «بُرغَر» إلى أوردر»</p>
+                    </div>
+                }
+                else
+                {
+                    foreach (var turn in session.Turns)
+                    {
+                        <div class="acm-agent-turn @(turn.Role == "user" ? "is-user" : "is-assistant")">
+                            <div class="acm-agent-avatar">
+                                <AcIcon Name="@(turn.Role == "user" ? "user" : "message")" Size="24" />
+                            </div>
+                            <div class="acm-agent-body">
+                                @if (!string.IsNullOrEmpty(turn.Text))
+                                {
+                                    <div class="acm-agent-text">@turn.Text</div>
+                                }
+                                @if (turn.Tool is not null)
+                                {
+                                    <div class="acm-agent-tool @StatusClass(turn.Tool.Status)">
+                                        <div class="acm-agent-tool-head">
+                                            <strong>@ToolLabel(turn.Tool.Name)</strong>
+                                            <span class="st-chip">@StatusLabel(turn.Tool.Status)</span>
+                                        </div>
+                                        <details class="acm-agent-tool-input">
+                                            <summary>عَرض المُعامِلات (JSON)</summary>
+                                            <pre>@FormatJson(turn.Tool.InputJson)</pre>
+                                        </details>
+                                        @if (!string.IsNullOrEmpty(turn.Tool.Result))
+                                        {
+                                            <div class="acm-agent-tool-result">@turn.Tool.Result</div>
+                                        }
+                                        @if (turn.Tool.Status == "pending")
+                                        {
+                                            var toolIdCapture = turn.Tool.Id;
+                                            <div class="acm-agent-tool-actions">
+                                                <button type="button" class="st-btn st-btn-primary"
+                                                        @onclick="() => ApplyAsync(toolIdCapture)"
+                                                        disabled="@isWorking">
+                                                    <AcIcon Name="check" Size="14" /> تَطبيق
+                                                </button>
+                                                <button type="button" class="st-btn st-btn-ghost"
+                                                        @onclick="() => RejectAsync(toolIdCapture)"
+                                                        disabled="@isWorking">
+                                                    <AcIcon Name="x" Size="14" /> رَفض
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+                <div id="thread-bottom"></div>
+                @if (isWorking)
+                {
+                    <div class="acm-agent-turn is-assistant">
+                        <div class="acm-agent-avatar"><AcIcon Name="message" Size="24" /></div>
+                        <div class="acm-agent-body">
+                            <div class="acm-agent-text" style="font-style:italic;color:var(--st-muted);">
+                                جارٍ التَّفكير…
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="acm-agent-composer">
+                <textarea @bind="newMessage" @bind:event="oninput" rows="3"
+                          class="st-input"
+                          disabled="@(isWorking || !Agent.IsConfigured)"
+                          placeholder="اُكتُب طَلَبَك… مَثَلاً: عَدِّل لَون مَتجَري إلى أَزرَق"></textarea>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                    <button type="button" class="st-btn st-btn-primary"
+                            @onclick="SendAsync"
+                            disabled="@(isWorking || !Agent.IsConfigured || string.IsNullOrWhiteSpace(newMessage))">
+                        <AcIcon Name="send" Size="16" /> إرسال
+                    </button>
+                    <button type="button" class="st-btn st-btn-ghost"
+                            @onclick="ResetAsync" disabled="@isWorking">
+                        <AcIcon Name="x" Size="14" /> مَسح
+                    </button>
+                </div>
+            </div>
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    Guid _userId = Guid.Empty;
+    bool _authChecked;
+    string _scopeId = "";
+    ACommerce.Templates.Customer.Marketplace.Services.AgentSession session = new();
+    string newMessage = "";
+    bool isWorking;
+    bool firstRenderDone;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // HttpContext مُتاح في render الأَوَّل فَقَط (SSR phase). نَلتَقِط
+        // userId مَرَّة وَنَحتَفِظ بِه — InteractiveServer لاحِقاً يَفقِد
+        // HttpContext.
+        if (_userId == Guid.Empty)
+        {
+            if (HttpCtx.HttpContext is not null)
+            {
+                StudioAuth.Load();
+                if (StudioAuth.IsAuthenticated)
+                {
+                    _userId = StudioAuth.UserId!.Value;
+                    _scopeId = "studio-" + _userId.ToString("N");
+                }
+            }
+            _authChecked = true;
+        }
+        if (_userId != Guid.Empty)
+            session = await Agent.LoadSessionAsync(_scopeId);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            firstRenderDone = true;
+            await ScrollToBottom();
+        }
+    }
+
+    async Task SendAsync()
+    {
+        var msg = newMessage?.Trim() ?? "";
+        if (string.IsNullOrEmpty(msg) || isWorking || _userId == Guid.Empty) return;
+        newMessage = "";
+        isWorking = true;
+        StateHasChanged();
+        session.Turns.Add(new ACommerce.Templates.Customer.Marketplace.Services.AgentTurn
+        {
+            Role = "user", Text = msg
+        });
+        StateHasChanged();
+        await ScrollToBottom();
+        session = await Agent.AskAsync(msg, _scopeId);
+        isWorking = false;
+        StateHasChanged();
+        await ScrollToBottom();
+    }
+
+    async Task ApplyAsync(string toolId)
+    {
+        if (isWorking || _userId == Guid.Empty) return;
+        isWorking = true;
+        StateHasChanged();
+        var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
+        if (turn?.Tool is not null)
+        {
+            // فَحص الملكيَّة يَتِمّ داخِل ExecuteAsync — لَو المَتجَر
+            // لَيس لِهذا المُستَخدِم، تَرجِع رِسالَة رَفض بِلا تَعديل.
+            var (ok, msg) = await Executor.ExecuteAsync(turn.Tool.Name, turn.Tool.InputJson, _userId);
+            await Agent.UpdateToolStatusAsync(toolId, ok ? "applied" : "error", msg, _scopeId);
+            session = await Agent.ContinueAfterToolAsync(_scopeId);
+        }
+        isWorking = false;
+        StateHasChanged();
+        await ScrollToBottom();
+    }
+
+    async Task RejectAsync(string toolId)
+    {
+        if (isWorking || _userId == Guid.Empty) return;
+        isWorking = true;
+        StateHasChanged();
+        await Agent.UpdateToolStatusAsync(toolId, "rejected", null, _scopeId);
+        session = await Agent.ContinueAfterToolAsync(_scopeId);
+        isWorking = false;
+        StateHasChanged();
+        await ScrollToBottom();
+    }
+
+    async Task ResetAsync()
+    {
+        if (isWorking || _userId == Guid.Empty) return;
+        await Agent.ResetAsync(_scopeId);
+        session = await Agent.LoadSessionAsync(_scopeId);
+        newMessage = "";
+        StateHasChanged();
+    }
+
+    async Task ScrollToBottom()
+    {
+        if (!firstRenderDone) return;
+        try { await JS.InvokeVoidAsync("scrollAgentToBottom"); } catch { /* ignore */ }
+    }
+
+    static string ToolLabel(string name) => name switch
+    {
+        "create_tenant"  => "إنشاء مَتجَر",
+        "set_categories" => "تَحديث الفِئات",
+        "set_branding"   => "تَحديث الهُويَّة",
+        "set_regions"    => "تَحديث المُدُن",
+        "set_roles"      => "تَحديث الأَدوار",
+        "set_attributes" => "تَحديث الخَصائِص",
+        "set_pwa"        => "تَحديث PWA",
+        _ => name
+    };
+
+    static string StatusLabel(string status) => status switch
+    {
+        "applied"  => "تَمّ",
+        "rejected" => "مَرفوض",
+        "error"    => "خَطَأ",
+        _          => "قَيد المُراجَعَة"
+    };
+
+    static string StatusClass(string status) => status switch
+    {
+        "applied"  => "is-applied",
+        "rejected" => "is-rejected",
+        "error"    => "is-error",
+        _ => ""
+    };
+
+    static string FormatJson(string raw)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(raw);
+            return System.Text.Json.JsonSerializer.Serialize(
+                doc.RootElement,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch { return raw; }
+    }
+}

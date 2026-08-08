@@ -1,0 +1,82 @@
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+
+@*
+    عُنصُر إشعار «تَجاوُز حَدّ الباقَة» — يَظهَر في أَعلى صَفحات studio
+    عِندَ ?upgrade=analyze|refine|build. يَعرِض الباقَة التالِيَة + الفائِدَة.
+*@
+
+@if (!string.IsNullOrEmpty(Reason))
+{
+    <div class="st-card" style="background:#fff7ed;border:1px solid var(--st-warning);margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+            <span style="font-size:32px;">⭐</span>
+            <div style="flex:1;min-width:200px;">
+                <strong style="font-size:15px;">@TitleFor(Reason)</strong>
+                <p style="margin:4px 0 0;font-size:13px;color:var(--st-muted);line-height:1.7;">
+                    @MessageFor(Reason)
+                </p>
+                @if (Next is not null)
+                {
+                    <ul style="margin:8px 0 0;padding-inline-start:18px;font-size:12.5px;color:var(--st-ink-700);line-height:1.8;">
+                        @foreach (var b in BenefitsFor(Next))
+                        {
+                            <li>@b</li>
+                        }
+                    </ul>
+                }
+            </div>
+            @if (Next is not null)
+            {
+                <a class="st-btn st-btn-primary" href="/studio/billing">
+                    تَرقِيَة إلى @Next.LabelAr (@Next.MonthlyPriceSar ر.س / شَهر)
+                </a>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>"analyze" | "refine" | "build" | null.</summary>
+    [Parameter] public string? Reason { get; set; }
+    /// <summary>الباقَة الحالِيَّة (لِحِساب التالِيَة).</summary>
+    [Parameter] public string CurrentTier { get; set; } = "spark";
+
+    TierLimits? Next => CurrentTier switch
+    {
+        "spark"  => TierCatalog.For("lite"),
+        "lite"   => TierCatalog.For("growth"),
+        "growth" => TierCatalog.For("scale"),
+        _ => null
+    };
+
+    static string TitleFor(string reason) => reason switch
+    {
+        "analyze" => "بَلَغتَ حَدّ تَحاليل هذا الشَّهر",
+        "refine"  => "بَلَغتَ حَدّ التَّحسينات لِهذا الشَّهر",
+        "build"   => "بَلَغتَ حَدّ التَّطبيقات لِباقَتِكَ",
+        _ => "تَتَطَلَّب هذه الميزَة تَرقيَة"
+    };
+
+    static string MessageFor(string reason) => reason switch
+    {
+        "analyze" => "احصُل على تَحاليل أَكثَر بِترقِيَة الباقَة.",
+        "refine"  => "احصُل على تَحسينات أَكثَر بِترقِيَة الباقَة.",
+        "build"   => "احصُل على إنشاء تَطبيقات إضافيَّة بِترقِيَة الباقَة.",
+        _ => ""
+    };
+
+    static IEnumerable<string> BenefitsFor(TierLimits t)
+    {
+        if (t.AnalysesPerMonth != int.MaxValue)
+            yield return $"{t.AnalysesPerMonth} تَحليل / شَهر";
+        else yield return "تَحاليل بِلا حَدّ";
+        if (t.RefinesPerMonth != int.MaxValue)
+            yield return $"{t.RefinesPerMonth} تَحسين / شَهر";
+        else yield return "تَحسينات بِلا حَدّ";
+        if (t.StoresMax != int.MaxValue)
+            yield return $"حَتَّى {t.StoresMax} تَطبيقات";
+        else yield return "تَطبيقات بِلا حَدّ";
+        if (t.AllowExport)         yield return "تَصدير PDF/Excel";
+        if (t.AllowCustomPattern)  yield return "أَنماط مُخَصَّصَة";
+    }
+}

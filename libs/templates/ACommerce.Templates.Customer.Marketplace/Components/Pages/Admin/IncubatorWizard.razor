@@ -1,0 +1,174 @@
+@page "/admin/incubator/{id:guid}"
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.FeasibilityAnalysisService Incubator
+@inject NavigationManager Nav
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+
+@*
+    معالج الاكتشاف — SSR. سؤال واحد لكل خطوة، POST لكل إجابة. عند آخر
+    سؤال يُحسَب النمط المقترح وتظهر بطاقته مع زر "حلّل الآن".
+*@
+
+<div class="acs-page acm-admin" style="max-width:640px;margin:0 auto;">
+    @if (session is null)
+    {
+        <AcEmptyState IconName="info" Title="الجَلسَة غَير مَوجودَة" />
+    }
+    else if (session.Status != IncubatorStatus.Discovery)
+    {
+        @* أَيّ حالَة بَعد الاكتِشاف (مُقتَرَح، يَجري التَّحليل، اكتَمَلَ،
+           أَو فَشِلَ) تَعرِض بِطاقَة النَّمَط + إجراء مُلائِم. *@
+        <div style="text-align:center;padding-top:12px;">
+            <span style="font-size:42px;"><AcIcon Name="@(session.Status == IncubatorStatus.Failed ? "alert-circle" : "target")" Size="42" /></span>
+            <h1 class="acm-wizard-title">
+                @(session.Status == IncubatorStatus.Failed ? "تَعَذَّرَ التَّحليل" : "النَّمَط المُقتَرَح")
+            </h1>
+        </div>
+        <AcCard>
+            <ChildContent>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+                    <strong style="font-size:18px;">@PatternLabel(session.SuggestedPattern)</strong>
+                    <span class="ac-chip ac-chip-sm">ثِقَة: @ConfidenceLabel(session.PatternConfidence)</span>
+                </div>
+                <p style="color:var(--ac-text-muted);font-size:14px;line-height:1.8;margin:0;">
+                    @session.PatternReasoning
+                </p>
+            </ChildContent>
+        </AcCard>
+
+        @if (session.Status == IncubatorStatus.Failed && !string.IsNullOrEmpty(session.AnalysisError))
+        {
+            <AcAlert Variant="danger" Message="@($"السَّبَب: {Truncate(session.AnalysisError, 240)}")" />
+        }
+
+        <div style="display:flex;gap:8px;margin-top:16px;">
+            <form method="post" action="/admin/incubator/restart" style="flex:0;">
+                <button type="submit" class="ac-btn ac-btn-ghost">↺ جَلسَة جَديدَة</button>
+            </form>
+            @if (session.Status == IncubatorStatus.Completed)
+            {
+                <a class="ac-btn ac-btn-primary ac-btn-block"
+                   href="@($"/admin/incubator/{session.Id}/study")">عَرض الدِراسَة ←</a>
+            }
+            else if (session.Status == IncubatorStatus.Analyzing)
+            {
+                <a class="ac-btn ac-btn-primary ac-btn-block"
+                   href="@($"/admin/incubator/{session.Id}/study")"><AcIcon Name="clock" Size="16" /> التَّحليل جارٍ — عَرض</a>
+            }
+            else
+            {
+                @* PatternSuggested أَو Failed → زِرّ تَحليل/إعادَة *@
+                <form method="post" action="@($"/admin/incubator/{session.Id}/analyze")"
+                      style="flex:1;">
+                    <button type="submit" class="ac-btn ac-btn-primary ac-btn-block"
+                            disabled="@(!Incubator.IsConfigured)">
+                        <AcIcon Name="star" Size="18" />
+                        @(session.Status == IncubatorStatus.Failed ? "إعادَة التَّحليل" : "حَلِّل الآن")
+                    </button>
+                </form>
+            }
+        </div>
+        @if (!Incubator.IsConfigured)
+        {
+            <p style="text-align:center;color:var(--ac-text-muted);font-size:12px;margin-top:8px;">
+                التَّحليل مُعَطَّل — لا مِفتاح LLM مَضبوط.
+            </p>
+        }
+    }
+    else
+    {
+        @* خطوة سؤال *@
+        var idx = AnsweredCount(session);
+        var q = DiscoveryQuestionBank.At(idx);
+        if (q is null)
+        {
+            <AcLoadingState Message="جارٍ التَّحضير…" />
+        }
+        else
+        {
+            <div style="margin-bottom:12px;">
+                <div style="height:6px;background:var(--ac-border);border-radius:99px;overflow:hidden;">
+                    <div style="height:100%;background:var(--ac-primary);
+                                width:@((idx * 100 / DiscoveryQuestionBank.Count))%;"></div>
+                </div>
+                <span style="font-size:12px;color:var(--ac-text-muted);">
+                    سؤال @(idx + 1) مِن @DiscoveryQuestionBank.Count
+                </span>
+            </div>
+
+            <AcCard>
+                <ChildContent>
+                    <h2 style="margin:0 0 16px;font-size:18px;">@q.QuestionAr</h2>
+                    <form method="post" action="@($"/admin/incubator/{session.Id}/answer")">
+                        <input type="hidden" name="questionId" value="@q.Id" />
+                        @if (q.Type == "text")
+                        {
+                            <textarea name="answer" rows="5" required class="ac-input"
+                                      placeholder="اكتُب وَصفاً واضِحاً…"
+                                      style="width:100%;resize:vertical;"></textarea>
+                            <button type="submit" class="ac-btn ac-btn-primary ac-btn-block"
+                                    style="margin-top:12px;">
+                                إنهاء وَاقتِراح النَّمَط ←
+                            </button>
+                        }
+                        else
+                        {
+                            <div class="acm-radio-cards">
+                                @foreach (var opt in q.Options)
+                                {
+                                    <label class="acm-radio-card">
+                                        <input type="radio" name="answer" value="@opt.Value" required />
+                                        <span class="acm-radio-card-body">
+                                            <strong>@opt.LabelAr</strong>
+                                        </span>
+                                    </label>
+                                }
+                            </div>
+                            <button type="submit" class="ac-btn ac-btn-primary ac-btn-block"
+                                    style="margin-top:16px;">
+                                التالي ←
+                            </button>
+                        }
+                    </form>
+                </ChildContent>
+            </AcCard>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    IncubatorSession? session;
+
+    protected override async Task OnInitializedAsync()
+        => session = await Incubator.LoadAsync(Id);
+
+    static int AnsweredCount(IncubatorSession s)
+    {
+        var count = 0;
+        foreach (var q in DiscoveryQuestionBank.Questions)
+        {
+            if (q.Type == "text")
+            {
+                if (!string.IsNullOrEmpty(s.ProjectDescription)) count++;
+            }
+            else if (s.Answers.ContainsKey(q.Id)) count++;
+        }
+        return count;
+    }
+
+    static string PatternLabel(string p) => p switch
+    {
+        "marketplace" => "المَتجَر مُتَعَدِّد البائِعين",
+        "classifieds" => "الإعلانات المُبَوَّبَة",
+        "rental"      => "التَّأجير",
+        "ondemand"    => "الطَّلَبات حَسَب المَوقِع",
+        _             => "تَكوين مُخَصَّص"
+    };
+
+    static string ConfidenceLabel(string c) => c switch
+    {
+        "high" => "عالِيَة", "medium" => "مُتَوَسِّطَة", _ => "مُنخَفِضَة"
+    };
+
+    static string Truncate(string s, int n) => s.Length <= n ? s : s[..n] + "…";
+}

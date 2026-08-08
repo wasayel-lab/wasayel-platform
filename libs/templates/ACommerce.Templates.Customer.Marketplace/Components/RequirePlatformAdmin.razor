@@ -1,0 +1,59 @@
+@inject Services.Incubator.StudioAuth Auth
+@inject Services.Incubator.StudioTierService TierSvc
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+
+@*
+    مُكَوِّن يَفحَص أَنّ المُستَخدِم مُسَجَّل وَيَملِك صَلاحيَّة platform_admin.
+    لَو فَشِلَ يَعرِض رِسالَة دُخول/مَنع، وَإلّا يَعرِض @@ChildContent.
+*@
+
+@switch (_state)
+{
+    case State.Loading:
+        <div style="padding:60px;text-align:center;color:var(--ac-text-muted);">
+            جارٍ التَّحَقُّق…
+        </div>
+        break;
+    case State.NeedAuth:
+        <div class="studio-root">
+            <div class="auth-wrap">
+                <div class="auth-card" style="text-align:center;">
+                    <div class="auth-logo-mark"><AcIcon Name="shield" Size="28" /></div>
+                    <h1 class="auth-title">دُخول مُشرِف المَنصَّة</h1>
+                    <p class="auth-sub">هذه الصَفحَة لِمُشرِفي المَنصَّة فَقَط.</p>
+                    <a class="st-btn st-btn-primary st-btn-block st-btn-lg"
+                       href="/studio/auth">تَسجيل دُخول</a>
+                </div>
+            </div>
+        </div>
+        break;
+    case State.Forbidden:
+        <div class="studio-root">
+            <div class="auth-wrap">
+                <div class="auth-card" style="text-align:center;">
+                    <div class="auth-logo-mark" style="background:linear-gradient(135deg,#dc2626,#ea580c);"><AcIcon Name="alert-circle" Size="28" /></div>
+                    <h1 class="auth-title">صَلاحيَّة غَير كافِيَة</h1>
+                    <p class="auth-sub">حِسابُكَ لَيس مُشرِف مَنصَّة. اِرجِع لِلوحَتِكَ.</p>
+                    <a class="st-btn st-btn-primary st-btn-block" href="/studio">لوحَتي</a>
+                </div>
+            </div>
+        </div>
+        break;
+    case State.Allowed:
+        @ChildContent
+        break;
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    enum State { Loading, NeedAuth, Forbidden, Allowed }
+    State _state = State.Loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) { _state = State.NeedAuth; return; }
+        var u = await TierSvc.GetUserAsync(Auth.UserId!.Value);
+        _state = u?.IsPlatformAdmin == true ? State.Allowed : State.Forbidden;
+    }
+}

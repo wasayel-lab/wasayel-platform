@@ -1,0 +1,101 @@
+@page "/studio/auth"
+@inject Services.Incubator.StudioAuth Auth
+@inject NavigationManager Nav
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+
+@*
+    دُخول studio وهميّ بِرَقم الهاتِف. مَرحَلَتان: إدخال الرَّقم ثُمَّ الرَّمز.
+    الرَّمز دائِماً "123456". إن كانَ المُستَخدِم مُسَجَّلاً، نُحَوِّله للوحَة.
+*@
+
+<div class="studio-root">
+    @{
+        Auth.Load();
+        var redirect = Auth.IsAuthenticated;
+    }
+    @if (redirect)
+    {
+        <script>location.replace('/studio');</script>
+    }
+    else
+    {
+        <div class="auth-wrap">
+            <div class="auth-card">
+                <div class="auth-logo">
+                    <div class="auth-logo-mark">A</div>
+                </div>
+
+                @if (Stage == "verify")
+                {
+                    <h1 class="auth-title">أَدخِل رَمز التَّحَقُّق</h1>
+                    <p class="auth-sub">أُرسِلَ رَمز إلى @Phone</p>
+
+                    <div class="auth-dev-hint">
+                        <AcIcon Name="key" Size="16" /> وَضع التَّجرِبَة — الرَّمز: <strong>123456</strong>
+                    </div>
+
+                    @if (Err == "code")
+                    {
+                        <div class="st-field">
+                            <div class="st-chip st-chip-danger" style="width:100%;justify-content:center;">
+                                الرَّمز غَير صَحيح
+                            </div>
+                        </div>
+                    }
+
+                    <form method="post" action="/studio/auth/verify">
+                        <input type="hidden" name="phone" value="@Phone" />
+                        <div class="st-field">
+                            <input name="code" inputmode="numeric" maxlength="6" required
+                                   class="st-input auth-otp-input" placeholder="······"
+                                   autocomplete="one-time-code" />
+                        </div>
+                        <button type="submit" class="st-btn st-btn-primary st-btn-block st-btn-lg">
+                            تَحَقُّق ودُخول
+                        </button>
+                    </form>
+                    <p style="text-align:center;margin-top:16px;">
+                        <a href="/studio/auth" style="color:var(--st-muted);font-size:13px;text-decoration:none;">
+                            ← تَغيير الرَّقم
+                        </a>
+                    </p>
+                }
+                else
+                {
+                    <h1 class="auth-title">تَسجيل الدُخول</h1>
+                    <p class="auth-sub">أَدخِل رَقم جَوّالِكَ لِلمُتابَعَة</p>
+
+                    @if (Err == "phone")
+                    {
+                        <div class="st-field">
+                            <div class="st-chip st-chip-danger" style="width:100%;justify-content:center;">
+                                اكتُب رَقم الجَوّال
+                            </div>
+                        </div>
+                    }
+
+                    <form method="post" action="/studio/auth/login">
+                        <div class="st-field">
+                            <label class="st-label">رَقم الجَوّال</label>
+                            <input name="phone" inputmode="tel" required
+                                   class="st-input" placeholder="05xxxxxxxx" dir="ltr"
+                                   style="text-align:start;" />
+                        </div>
+                        <button type="submit" class="st-btn st-btn-primary st-btn-block st-btn-lg">
+                            إرسال الرَّمز
+                        </button>
+                    </form>
+                    <p style="text-align:center;margin-top:18px;color:var(--st-faint);font-size:12px;">
+                        بِالمُتابَعَة تُوافِق على شُروط الاستِخدام وسياسَة الخُصوصِيَّة.
+                    </p>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Stage { get; set; }
+    [SupplyParameterFromQuery] public string? Phone { get; set; }
+    [SupplyParameterFromQuery] public string? Err { get; set; }
+}

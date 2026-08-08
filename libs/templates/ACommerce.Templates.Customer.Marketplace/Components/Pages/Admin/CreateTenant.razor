@@ -22,7 +22,7 @@
         <AcAlert Variant="danger" Message="@FormatError(Err)" />
     }
 
-    <form method="post" action="/admin/tenants/create">
+    <form method="post" action="/admin/tenants/create" id="cats-form">
 
         <AcCard>
             <ChildContent>
@@ -51,8 +51,7 @@
 
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                     <AcField Label="لَون العَلامَة" Required="true">
-                        <input type="color" name="color" required
-                               class="ac-input" style="height:42px;padding:4px;"
+                        <input type="color" name="color" required class="ac-input"
                                value="@(Form?["color"] ?? "#345454")" />
                     </AcField>
                     <AcField Label="المَدينَة الافتراضيّة">
@@ -75,7 +74,7 @@
                         <input type="radio" name="channel" value="phone"
                                checked="@(Form?["channel"] != "nafath")" />
                         <span class="acm-radio-card-body">
-                            <strong>📱 هاتِف + OTP</strong>
+                            <strong><AcIcon Name="phone" Size="16" /> هاتِف + OTP</strong>
                             <span>يُرسَل كود ٦ خانات بِالـ SMS — مُناسِب لِأَيّ مَتجَر</span>
                         </span>
                     </label>
@@ -83,7 +82,7 @@
                         <input type="radio" name="channel" value="nafath"
                                checked="@(Form?["channel"] == "nafath")" />
                         <span class="acm-radio-card-body">
-                            <strong>🪪 نَفاذ</strong>
+                            <strong><AcIcon Name="key" Size="16" /> نَفاذ</strong>
                             <span>تَوثيق هُوِيَّة وَطنيَّة — مَتاجِر سُعوديَّة فَقَط</span>
                         </span>
                     </label>
@@ -94,15 +93,66 @@
         <AcCard>
             <ChildContent>
                 <h3 style="margin-top:0;">الفِئات</h3>
-                <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
-                    صَفّ لِكُلّ فِئَة بِالصِّيغَة: <code>slug | الاسم | أَيقونَة | تَجميع</code>.
-                    التَجميع (Kind) اختيارِيّ — يَنفَع إذا كانَت الفِئات كَثيرَة (سَكَنيّ، تِجاريّ…).
+                <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 14px;">
+                    بِطاقَة لِكُلّ فِئَة. التَّجميع (Kind) اختياريّ — يَنفَع عِندَ كَثرَة الفِئات.
                 </p>
-                <textarea name="categories" rows="6" required
-                          class="ac-input" style="font-family:monospace;font-size:13px;direction:ltr;"
-                          placeholder="apartment | شَقّة | 🏢 | residential&#10;villa | فيلا | 🏡 | residential&#10;office | مَكتَب | 💼 | commercial">@Form?["categories"]</textarea>
+
+                <div class="ac-editor" id="cats-editor">
+                    <div class="ac-editor-row" data-cat-row>
+                        <div class="ac-editor-row-head">
+                            <input class="ac-input ac-cat-icon" value="building" aria-label="أَيقونَة" />
+                            <input class="ac-input ac-cat-label" placeholder="اسم الفِئَة (مَثَلاً: شَقَق)" />
+                            <button type="button" class="ac-icon-btn" data-remove-cat aria-label="حَذف"><AcIcon Name="x" Size="14" /></button>
+                        </div>
+                        <div class="ac-editor-grid2">
+                            <div>
+                                <span class="ac-chip-input-label">المُعَرِّف (slug)</span>
+                                <input class="ac-input ac-cat-slug" placeholder="apartments" style="direction:ltr;" />
+                            </div>
+                            <div>
+                                <span class="ac-chip-input-label">التَّجميع (اختياريّ)</span>
+                                <input class="ac-input ac-cat-kind" placeholder="residential" list="kind-list" style="direction:ltr;" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <datalist id="kind-list">
+                    <option value="residential"></option>
+                    <option value="commercial"></option>
+                    <option value="roommate"></option>
+                    <option value="vehicles"></option>
+                    <option value="events"></option>
+                    <option value="leisure"></option>
+                </datalist>
+
+                <button type="button" class="ac-add-row-btn" id="add-cat" style="margin-top:12px;">
+                    <AcIcon Name="plus" Size="16" /> إضافَة فِئَة
+                </button>
+
+                <textarea name="categories" id="cats-hidden" hidden>@Form?["categories"]</textarea>
             </ChildContent>
         </AcCard>
+
+        <template id="cat-row-tpl">
+            <div class="ac-editor-row" data-cat-row>
+                <div class="ac-editor-row-head">
+                    <input class="ac-input ac-cat-icon" value="tag" aria-label="أَيقونَة" />
+                    <input class="ac-input ac-cat-label" placeholder="اسم الفِئَة" />
+                    <button type="button" class="ac-icon-btn" data-remove-cat aria-label="حَذف"><AcIcon Name="x" Size="14" /></button>
+                </div>
+                <div class="ac-editor-grid2">
+                    <div>
+                        <span class="ac-chip-input-label">المُعَرِّف (slug)</span>
+                        <input class="ac-input ac-cat-slug" placeholder="apartments" style="direction:ltr;" />
+                    </div>
+                    <div>
+                        <span class="ac-chip-input-label">التَّجميع (اختياريّ)</span>
+                        <input class="ac-input ac-cat-kind" placeholder="residential" list="kind-list" style="direction:ltr;" />
+                    </div>
+                </div>
+            </div>
+        </template>
 
         <div style="display:flex;gap:8px;margin-top:16px;">
             <a class="ac-btn ac-btn-ghost" href="/admin">إلغاء</a>

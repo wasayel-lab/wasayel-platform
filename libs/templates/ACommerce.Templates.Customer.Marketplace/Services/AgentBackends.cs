@@ -315,15 +315,16 @@ public sealed class GeminiBackend : IAgentBackend
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
 }
 
-// ─── OpenAI ──────────────────────────────────────────────────────────
+// ─── OpenAI (وَمُتَوافِقاتُه: Groq, Cerebras, OpenRouter, Ollama، …) ───
+// أَيّ مُزَوِّد يَتَكَلَّم Chat Completions API يَعمَل بِتَبديل
+// Agent:BaseUrl فَقَط. أَمثِلَة في WolverineNotes/AlternativeProviders.md
+// (انظر التَّوثيق المُرفَق).
 public sealed class OpenAIBackend : IAgentBackend
 {
     private readonly string _apiKey;
-    private static readonly HttpClient Http = new()
-    {
-        BaseAddress = new Uri("https://api.openai.com/"),
-        Timeout = TimeSpan.FromSeconds(60)
-    };
+    private readonly string _providerName;
+    private readonly string _defaultModel;
+    private readonly HttpClient _http;
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
@@ -333,12 +334,32 @@ public sealed class OpenAIBackend : IAgentBackend
     {
         _apiKey = cfg["Agent:ApiKey"]
                   ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")
+                  ?? Environment.GetEnvironmentVariable("GROQ_API_KEY")
+                  ?? Environment.GetEnvironmentVariable("CEREBRAS_API_KEY")
+                  ?? Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")
                   ?? "";
+        var baseUrl = (cfg["Agent:BaseUrl"] ?? "https://api.openai.com/").TrimEnd('/') + "/";
+        _http = new HttpClient
+        {
+            BaseAddress = new Uri(baseUrl),
+            Timeout = TimeSpan.FromSeconds(60)
+        };
+        _providerName = (cfg["Agent:ProviderLabel"] ?? InferProvider(baseUrl)).ToLowerInvariant();
+        _defaultModel = cfg["Agent:Model"] ?? "gpt-4o";
     }
 
-    public string ProviderName => "openai";
-    public string DefaultModel => "gpt-4o";
-    public bool IsConfigured => !string.IsNullOrEmpty(_apiKey);
+    private static string InferProvider(string baseUrl)
+    {
+        if (baseUrl.Contains("groq"))       return "groq";
+        if (baseUrl.Contains("cerebras"))   return "cerebras";
+        if (baseUrl.Contains("openrouter")) return "openrouter";
+        if (baseUrl.Contains("11434") || baseUrl.Contains("localhost")) return "ollama";
+        return "openai";
+    }
+
+    public string ProviderName => _providerName;
+    public string DefaultModel => _defaultModel;
+    public bool IsConfigured => !string.IsNullOrEmpty(_apiKey) || _providerName == "ollama";
 
     public async Task<AgentBackendResponse> CallAsync(AgentRequest req, CancellationToken ct)
     {
@@ -374,7 +395,7 @@ public sealed class OpenAIBackend : IAgentBackend
 
         try
         {
-            using var resp = await Http.SendAsync(http, ct);
+            using var resp = await _http.SendAsync(http, ct);
             var json = await resp.Content.ReadAsStringAsync(ct);
             if (!resp.IsSuccessStatusCode)
                 return new AgentBackendResponse(null, null,

@@ -1,4 +1,5 @@
 @page "/{slug}"
+@page "/{slug}/r/{role}"
 @inject IDocumentStore Store
 @inject AuthSession Auth
 @inject ITenantContext Tenant
@@ -14,24 +15,31 @@
     {
         <AcLoadingState />
     }
+    else if (loaded.Roles.Count > 0 && (!Auth.IsAuthenticated || activeRole is null))
+    {
+        @* مَتجَر بِأَدوار + غَير مُسَجَّل دُخول (أَو بِلا ActiveRole):
+           لا يَرى أَيّ مُحتَوى. يَرَى صَفحَة اختِيار التَّطبيق الفَرعيّ.
+           هذا يُحَوِّل /{slug} مِن صَفحَة عامَّة إلى نُقطَة دُخول مُتَفَرِّعَة. *@
+        <RoleLanding Slug="@Slug" Tenant="loaded" Role="@Role"/>
+    }
     else if (activeRole?.CatalogSlug == "rider")
     {
-        <ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.RiderHome Slug="@Slug" />
+        <ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.RiderHome Slug="@Slug" Role="@Role"/>
     }
     else if (activeRole?.CatalogSlug == "driver" || activeRole?.CatalogSlug == "shipper")
     {
-        <ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.DriverHome Slug="@Slug" />
+        <ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.DriverHome Slug="@Slug" Role="@Role"/>
     }
     else if (activeRole?.CatalogSlug == "vendor" || activeRole?.CatalogSlug == "host")
     {
         <ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.SellerHome
-            Slug="@Slug" RoleSlug="@activeRole.CatalogSlug" />
+            Slug="@Slug" RoleSlug="@activeRole.CatalogSlug" Role="@Role"/>
     }
     else
     {
         @* قالِب العَميل/الافتراضي — الصَفحَة الكَلاسيكِيَّة: hero + بَحث +
            فِئات + مُمَيَّز + أَحدَث. هذا أَيضاً قالِب المَتاجِر بِلا أَدوار. *@
-        <AcHeroBanner Title="@($"ابحَث في {loaded.Name}")"
+        <AcHeroBanner Title="@(profile?.HomeHeroTitlePattern ?? $"ابحَث في {loaded.Name}")"
                       Subtitle="@loaded.TagLine">
             <LogoContent>
                 <div class="acm-hero-brand">
@@ -76,13 +84,11 @@
             </ChildContent>
         </AcHeroBanner>
 
-        @if (loaded.Categories is { Count: > 0 })
+        @* شَجَرَة الفِئات تَظهَر فَقَط لَو فيه أَكثَر مِن فِئَة. مَتجَر بِفِئَة
+           واحِدَة لا يَحتاج اختِيار — كُلّ شَيء في تِلكَ الفِئَة. *@
+        @if (loaded.Categories.Count > 1)
         {
             <AcSectionHeader Title="الفِئات" />
-            @* شَجَرَة فِئات أَفقيّة كَ AcTaxonomyChips الأَصلي:
-               صَفّ kinds أَوّلاً، ثُمّ leaves الـ kind المُختار تَحته.
-               اختِيار الـ kind يَستَخدِم ?kind=X في الـ URL (SSR-friendly).
-               الـ tenants ذات الـ Kind الواحِد (عَشير) يَظهَرَن مُسَطَّحَة. *@
             <TaxonomyChips Slug="@Slug"
                            Categories="loaded.Categories"
                            ActiveKind="@Kind" />
@@ -98,24 +104,24 @@
                        Subtitle="أَضِف إعلانك الآن واصِل لِلمُهتَمّين بِسُرعَة"
                        IconName="house-add"
                        Variant="surface"
-                       Href="@($"/{Slug}/create-listing")" />
+                       Href="@AuthSession.LinkFor(Slug, Role, $"create-listing")" />
         }
 
         @if (featured is { Count: > 0 })
         {
             <AcSectionHeader Title="مُمَيَّز"
                              ActionLabel="عَرض الكلّ"
-                             ActionHref="@($"/{Slug}/explore")" />
+                             ActionHref="@AuthSession.LinkFor(Slug, Role, $"explore")" />
             <AcHScroll Class="acm-home-rail">
                 @foreach (var l in featured)
                 {
                     <div class="acm-home-rail-item">
                         <AcSpaceCard Title="@l.Title"
-                                     Href="@($"/{Slug}/listings/{l.Id}")"
-                                     ImageUrl="@null"
+                                     Href="@AuthSession.LinkFor(Slug, Role, $"listings/{l.Id}")"
+                                     ImageUrl="@(l.MediaUrls.Count > 0 ? l.MediaUrls[0] : null)"
                                      Location="@($"{l.City} — {l.District}")"
-                                     PriceLabel="@($"{l.Price:N0} ريال")"
-                                     Ribbon="مُمَيَّز"
+                                     PriceLabel="@FormatPrice(l)"
+                                     Ribbon="@(l.IsVerified ? "مُوَثَّق" : "مُمَيَّز")"
                                      ShowFavorite="@Auth.IsAuthenticated"
                                      IsFavorite="@favIds.Contains(l.Id)"
                                      FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
@@ -131,16 +137,16 @@
         {
             <AcSectionHeader Title="أُضيفَ حَديثاً"
                              ActionLabel="عَرض الكلّ"
-                             ActionHref="@($"/{Slug}/explore")" />
+                             ActionHref="@AuthSession.LinkFor(Slug, Role, $"explore")" />
             <div class="acm-home-grid">
                 @foreach (var l in latest)
                 {
                     <AcSpaceCard Title="@l.Title"
-                                 Href="@($"/{Slug}/listings/{l.Id}")"
-                                 ImageUrl="@null"
+                                 Href="@AuthSession.LinkFor(Slug, Role, $"listings/{l.Id}")"
+                                 ImageUrl="@(l.MediaUrls.Count > 0 ? l.MediaUrls[0] : null)"
                                  Location="@($"{l.City} — {l.District}")"
-                                 PriceLabel="@($"{l.Price:N0} ريال")"
-                                 Ribbon="جَديد"
+                                 PriceLabel="@FormatPrice(l)"
+                                 Ribbon="@(l.IsVerified ? "مُوَثَّق" : null)"
                                  ShowFavorite="@Auth.IsAuthenticated"
                                  IsFavorite="@favIds.Contains(l.Id)"
                                  FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
@@ -155,7 +161,7 @@
             <AcActionCard Label="استِكشاف"
                           IconName="search-heart"
                           Variant="primary"
-                          Href="@($"/{Slug}/explore")" />
+                          Href="@AuthSession.LinkFor(Slug, Role, $"explore")" />
             <AcActionCard Label="@(Auth.IsAuthenticated ? "حِسابي" : "تَسجيل دُخول")"
                           IconName="user"
                           Variant="surface"
@@ -171,12 +177,30 @@
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }   // مِن /r/{role}/
     [SupplyParameterFromQuery(Name = "city")] public string? City { get; set; }
     [SupplyParameterFromQuery(Name = "kind")] public string? Kind { get; set; }
 
     Tenant? loaded;
+    ACommerce.Templates.Customer.Marketplace.Services.Patterns.PatternProfile? profile;
     List<Listing>? latest;
     List<Listing>? featured;
+
+    /// <summary>تَنسيق السِعر حَسَب نَمَط المُستَأجِر: إيجار → «… ر.س / شَهرِيّ»،
+    /// مَتجَر → «… ر.س»، مَشاوير → «اعرِض/ابدَأ مِن».</summary>
+    string FormatPrice(Listing l)
+    {
+        if (profile is null) return $"{l.Price:N0} ر.س";
+        return profile.Pattern switch
+        {
+            Services.Patterns.AppPattern.Rental
+                => $"{l.Price:N0} ر.س / {(l.Attributes.TryGetValue("lease_term", out var t) ? t : "شَهرِيّ")}",
+            Services.Patterns.AppPattern.Roommate
+                => l.Price > 0 ? $"{l.Price:N0} ر.س / شَهرِيّ" : "حَسَب الاتِّفاق",
+            Services.Patterns.AppPattern.Trip => $"يَبدَأ مِن {l.Price:N0} ر.س",
+            _ => $"{l.Price:N0} ر.س"
+        };
+    }
     List<string> cities = new();
     HashSet<Guid> favIds = new();
     ACommerce.Kit.Roles.Role? activeRole;
@@ -187,6 +211,7 @@
         await using var g = Store.QuerySession();
         loaded = await g.LoadAsync<Tenant>(Slug);
         if (loaded is null) return;
+        profile = Services.Patterns.PatternProfileResolver.Of(loaded);
 
         await using var tq = Store.QuerySession(Slug);
 
@@ -197,26 +222,40 @@
             if (Auth.IsAuthenticated && Auth.UserId.HasValue)
             {
                 var me = await tq.LoadAsync<User>(Auth.UserId.Value);
-                if (me is not null && !string.IsNullOrEmpty(me.ActiveRole))
+                // الـ URL role (Role param) يَتَفَوَّق عَلى user.ActiveRole
+                // (الـ DB يَحوي حَقل واحِد، لكِنّ المُستَخدِم قَد يَكون مُسَجَّلاً
+                // بِدَورَين في تَبويبَين — كُلّ تَبويب يَجِب أَن يَحتَرِم URLه).
+                var effectiveRoleSlug = !string.IsNullOrEmpty(Role) ? Role : me?.ActiveRole;
+                if (!string.IsNullOrEmpty(effectiveRoleSlug))
                 {
-                    activeRole = loaded.Roles.FirstOrDefault(r => r.Slug == me.ActiveRole);
+                    activeRole = loaded.Roles.FirstOrDefault(r => r.Slug == effectiveRoleSlug);
                     canCreateListing = ACommerce.Kit.Roles.RolePermissions.Has(
-                        loaded.Roles, me.ActiveRole, "listing.create");
+                        loaded.Roles, effectiveRoleSlug, "listing.create");
                 }
             }
         }
 
-        var baseQ = tq.Query<Listing>().Where(x => !x.IsDeleted);
+        var baseQ = tq.Query<Listing>().Where(x => !x.IsDeleted && !x.IsHiddenByModerator);
         if (!string.IsNullOrEmpty(City))
             baseQ = baseQ.Where(x => x.City == City);
 
         latest = (await baseQ
             .OrderByDescending(x => x.CreatedAt)
-            .Take(6).ToListAsync()).ToList();
+            .Take(20).ToListAsync()).ToList();   // نَجلِب أَكثَر ثُمّ نُصَفِّي
 
-        featured = (await baseQ
-            .OrderByDescending(x => x.Price)
-            .Take(4).ToListAsync()).ToList();
+        // المُمَيَّز = ما عُلِّمَ IsFeatured (مِن لَوحَة الإدارَة/اشتِراك مَدفوع).
+        // إن لَم يَكُن هُناك أَيّ مُمَيَّز بَعد، نَستَخدِم الأَعلى سِعراً كَ
+        // fallback لِنَملَأ الكاروسيل. اختِيار قابِل لِلتَّبديل لاحِقاً.
+        featured = (await baseQ.Where(x => x.IsFeatured)
+            .OrderByDescending(x => x.CreatedAt).Take(20).ToListAsync()).ToList();
+        if (featured.Count == 0)
+            featured = (await baseQ.OrderByDescending(x => x.Price).Take(20).ToListAsync()).ToList();
+
+        // فَلتَرَة الإعلانات الَّتي تَقبَل عُروضاً (طَلَبات السائِق المُؤَقَّتَة):
+        // لا تَظهَر في الصَفحَة الرَّئيسِيَّة العامَّة لِأَنَّها لَيسَت كاتالوج.
+        // السائِق يَراها في feed الخاصّ بِه. الـ owner يَراها في "طَلَباتي".
+        latest   = latest.Where(l => !IsTripRequest(l)).Take(6).ToList();
+        featured = featured.Where(l => !IsTripRequest(l)).Take(4).ToList();
 
         cities = (await tq.Query<Listing>()
             .Where(x => !x.IsDeleted && x.City != null)
@@ -231,4 +270,8 @@
             favIds = favs.Select(f => f.ListingId).ToHashSet();
         }
     }
+
+    static bool IsTripRequest(Listing l) =>
+        l.Attributes.TryGetValue("accepts_offers", out var v) &&
+        string.Equals(v, "true", System.StringComparison.OrdinalIgnoreCase);
 }

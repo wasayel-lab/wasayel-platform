@@ -1,4 +1,5 @@
 @page "/{slug}/support"
+@page "/{slug}/r/{role}/support"
 @inject IDocumentStore Store
 @inject AuthSession Auth
 
@@ -9,7 +10,7 @@
                   Title="الدَعم يَحتاج تَسجيل دُخول"
                   Message="سَجِّل دُخولك لِفَتح طَلَب أو مُتابَعَة طَلَباتك."
                   ActionLabel="تَسجيل دُخول"
-                  ActionHref="@($"/{Slug}/login?returnUrl=/{Slug}/support")" />
+                  ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/support")" />
 }
 else
 {
@@ -62,6 +63,7 @@ else
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
     IReadOnlyList<ACommerce.Kit.Support.Ticket>? tickets;
     protected override async Task OnParametersSetAsync()
     {

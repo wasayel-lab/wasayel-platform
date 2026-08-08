@@ -1,0 +1,126 @@
+@page "/studio/apps/{slug}/tickets/{id:guid}"
+@inject Services.Incubator.StudioAuth Auth
+@inject Marten.IDocumentStore Store
+@using ACommerce.Kit.Tenants
+@using ACommerce.Kit.Support
+
+@*
+    تَفاصيل تَذكَرَة + خَيط الرُدود + نَموذَج رَدّ. صَفّ زَمَنيّ مَع
+    تَمييز رُدود الفَريق.
+*@
+
+<StudioShell Title="@($"تَذكَرَة")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/tickets")">← التَّذاكِر</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (ticket is null)
+        {
+            <div class="st-card">التَّذكَرَة غَير مَوجودَة.</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>@ticket.Subject</h1>
+                <p>مِن @ticket.AuthorName · @ticket.CreatedAt.ToString("yyyy-MM-dd HH:mm") · حالَة:
+                    <span class="st-chip @StatusChip(ticket.Status)">@StatusLabel(ticket.Status)</span>
+                </p>
+            </div>
+
+            @if (Replied == "1") { <div class="st-chip st-chip-success" style="margin-bottom:14px;"><AcIcon Name="check" Size="14" /> تَمّ إرسال الرَّدّ</div> }
+            @if (Closed == "1")  { <div class="st-chip st-chip-success" style="margin-bottom:14px;"><AcIcon Name="check" Size="14" /> تَمّ إغلاق التَّذكَرَة</div> }
+
+            @* الرِسالَة الأَصلِيَّة *@
+            <div class="st-card">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                    <div style="width:36px;height:36px;border-radius:50%;background:#f1f5f9;display:grid;place-items:center;
+                                color:var(--st-ink-700);font-weight:700;">
+                        @(ticket.AuthorName.FirstOrDefault())
+                    </div>
+                    <div>
+                        <strong>@ticket.AuthorName</strong>
+                        <span style="display:block;font-size:12px;color:var(--st-muted);">
+                            @ticket.CreatedAt.ToString("yyyy-MM-dd HH:mm")
+                        </span>
+                    </div>
+                </div>
+                <p style="margin:0;white-space:pre-wrap;line-height:1.8;">@ticket.Body</p>
+            </div>
+
+            @* خَيط الرُدود *@
+            @foreach (var r in ticket.Replies.OrderBy(r => r.At))
+            {
+                var staff = r.FromStaff;
+                <div class="st-card" style="margin-top:10px;
+                            @(staff ? "background:var(--st-primary-50);border-color:var(--st-primary);" : "")">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                        <div style="width:36px;height:36px;border-radius:50%;
+                                    background:@(staff ? "var(--st-primary)" : "#f1f5f9");
+                                    color:@(staff ? "#fff" : "var(--st-ink-700)");
+                                    display:grid;place-items:center;font-weight:700;">
+                            @(r.AuthorName.FirstOrDefault())
+                        </div>
+                        <div>
+                            <strong>
+                                @r.AuthorName
+                                @if (staff) { <span class="st-chip" style="margin-inline-start:6px;">دَعم</span> }
+                            </strong>
+                            <span style="display:block;font-size:12px;color:var(--st-muted);">
+                                @r.At.ToString("yyyy-MM-dd HH:mm")
+                            </span>
+                        </div>
+                    </div>
+                    <p style="margin:0;white-space:pre-wrap;line-height:1.8;">@r.Body</p>
+                </div>
+            }
+
+            @* نَموذَج الرَّدّ + إغلاق *@
+            @if (ticket.Status != "closed")
+            {
+                <div class="st-section-title">رَدّ</div>
+                <form method="post" action="@($"/studio/apps/{Slug}/tickets/{ticket.Id}/reply")" class="st-card">
+                    <textarea class="st-textarea" name="body" rows="4" required
+                              placeholder="اكتُب رَدَّكَ هُنا…"></textarea>
+                    <div style="display:flex;gap:8px;margin-top:12px;">
+                        <button type="submit" class="st-btn st-btn-primary">إرسال الرَّدّ</button>
+                    </div>
+                </form>
+
+                <form method="post" action="@($"/studio/apps/{Slug}/tickets/{ticket.Id}/close")" style="margin-top:10px;">
+                    <button type="submit" class="st-btn st-btn-ghost">إغلاق التَّذكَرَة</button>
+                </form>
+            }
+            else
+            {
+                <div class="st-card" style="background:var(--st-line-soft);color:var(--st-muted);text-align:center;">
+                    التَّذكَرَة مُغلَقَة. لا يُمكِن الرَّدّ.
+                </div>
+            }
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] public string? Replied { get; set; }
+    [SupplyParameterFromQuery] public string? Closed { get; set; }
+    Ticket? ticket;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        await using var qs = Store.QuerySession();
+        var t = await qs.LoadAsync<Tenant>(Slug);
+        if (t is null || t.OwnerUserId != Auth.UserId!.Value) return;
+        await using var ts = Store.LightweightSession(Slug);
+        try { ticket = await ts.Events.AggregateStreamAsync<Ticket>(Id); }
+        catch { ticket = null; }
+    }
+
+    static string StatusChip(string s) => s switch
+    { "open" => "st-chip-danger", "answered" => "st-chip-warning", "closed" => "st-chip-success", _ => "" };
+    static string StatusLabel(string s) => s switch
+    { "open" => "مَفتوحَة", "answered" => "مَرُدودَة", "closed" => "مُغلَقَة", _ => s };
+}

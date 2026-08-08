@@ -1,0 +1,74 @@
+{
+  "_meta": {
+    "description": "سياق السوق السعودي — يُحقَن في prompt التحليل الاستثماري لإعطاء أرقام محلية بدلاً من تعميمات.",
+    "sources": ["GASTAT", "Mordor Intelligence", "Statista", "Saudi Vision 2030 reports", "CITC"],
+    "lastUpdated": "2026-01",
+    "disclaimer": "أرقام تقديرية مجمّعة من مصادر عامة. تُستخدم كمرجع للتحليل لا كحقائق نهائية."
+  },
+  "sectors": {
+    "ecommerce": {
+      "labelAr": "التجارة الإلكترونية",
+      "marketSizeUsdBn": 13.3,
+      "cagr3yPct": 12.5,
+      "notes": "نمو مدفوع بـ smartphone penetration العالي والدفع الرقمي (mada، Apple Pay).",
+      "keyRegulations": ["ZATCA e-invoicing (فاتورة)", "هيئة التجارة الإلكترونية", "Maroof توثيق المتاجر"]
+    },
+    "fnb": {
+      "labelAr": "الأغذية والمشروبات",
+      "marketSizeUsdBn": 28.0,
+      "cagr3yPct": 7.0,
+      "notes": "قطاع توصيل الطعام الأسرع نمواً (HungerStation، Jahez، ToYou، Mrsool).",
+      "keyRegulations": ["الهيئة العامة للغذاء والدواء (SFDA)", "اشتراطات البلدية", "ZATCA"]
+    },
+    "logistics": {
+      "labelAr": "اللوجستيات والتوصيل",
+      "marketSizeUsdBn": 21.0,
+      "cagr3yPct": 9.0,
+      "notes": "Vision 2030 تستهدف المملكة كمركز لوجستي إقليمي. آخر ميل هو نقطة الألم.",
+      "keyRegulations": ["الهيئة العامة للنقل (TGA)", "تصاريح المركبات التجارية"]
+    },
+    "realestate": {
+      "labelAr": "العقار",
+      "marketSizeUsdBn": 64.0,
+      "cagr3yPct": 8.5,
+      "notes": "الإيجار الرقمي (Ejar) إلزامي. منصات الوساطة تنمو مع التحول الرقمي.",
+      "keyRegulations": ["الهيئة العامة للعقار (REGA)", "منصة إيجار", "FAL ترخيص الوساطة"]
+    },
+    "services": {
+      "labelAr": "الخدمات (حرفية، منزلية، مهنية)",
+      "marketSizeUsdBn": 18.0,
+      "cagr3yPct": 11.0,
+      "notes": "سوق مجزّأ، فرصة كبيرة في تجميع مزوّدي الخدمات (سباكة، صيانة، تنظيف).",
+      "keyRegulations": ["تأشيرة العمل الحر", "وثيقة العمل الحر (فريلانس)"]
+    },
+    "transport": {
+      "labelAr": "النقل وتشارك الرحلات",
+      "marketSizeUsdBn": 6.5,
+      "cagr3yPct": 10.0,
+      "notes": "Careem وUber مهيمنان، لكن فرص في النقل بين المدن والشحن الخفيف.",
+      "keyRegulations": ["الهيئة العامة للنقل (TGA)", "اشتراط السائق سعودي للنقل العام"]
+    }
+  },
+  "cities": {
+    "riyadh":  { "labelAr": "الرياض", "populationMn": 7.7, "consumerSpendIndex": 100, "notes": "أعلى قوة شرائية، مركز الأعمال." },
+    "jeddah":  { "labelAr": "جدة",   "populationMn": 4.8, "consumerSpendIndex": 88,  "notes": "بوابة تجارية، سياحة دينية." },
+    "dammam":  { "labelAr": "الدمام/الخبر", "populationMn": 1.9, "consumerSpendIndex": 84, "notes": "المنطقة الشرقية، قطاع نفطي وصناعي." },
+    "makkah":  { "labelAr": "مكة",   "populationMn": 2.4, "consumerSpendIndex": 72, "notes": "موسمية الحج/العمرة تضاعف الطلب." },
+    "madinah": { "labelAr": "المدينة", "populationMn": 1.5, "consumerSpendIndex": 70, "notes": "موسمية دينية مشابهة لمكة." }
+  },
+  "demographics": {
+    "totalPopulationMn": 35.3,
+    "medianAge": 30,
+    "under35Pct": 63,
+    "literacyPct": 99,
+    "avgHouseholdIncomeSarMonthly": 14800,
+    "saudiNationalsPct": 58
+  },
+  "digital": {
+    "smartphonePenetrationPct": 97,
+    "internetPenetrationPct": 99,
+    "socialMediaUsersPct": 79,
+    "digitalPaymentAdoptionPct": 70,
+    "notes": "السعودية من أعلى دول العالم في استخدام الجوال؛ أي منتج يجب أن يكون mobile-first."
+  }
+}

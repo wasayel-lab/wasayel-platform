@@ -12,14 +12,23 @@
     var path = new Uri(Nav.Uri).AbsolutePath;
     var isLogin = path.Contains("/login", StringComparison.OrdinalIgnoreCase);
 
-    // قائِمَة nav مُلائِمَة لِلدَور النَّشِط — تَحتاج load بِسيط.
-    var (topItems, bottomItems) = BuildNav(slug, activeRoleSlug);
+    // إخفاء nav عَلى صَفحَة اختِيار التَّطبيق الفَرعيّ — لا nav قَبل
+    // أَن يَختار المُستَخدِم دَوراً، فَالـ tabs لا تَنطَبِق بَعد.
+    var trimmed = path.TrimEnd('/');
+    var isEntry = trimmed.Equals($"/{slug}", StringComparison.OrdinalIgnoreCase) &&
+                  tenantHasRoles && !Auth.IsAuthenticated;
+    var chromeHidden = isLogin || isEntry;
+
+    // الدَور المُستَخرَج مِن URL (لِبِناء روابِط /r/{role}/ في الـ nav).
+    var urlRole = AuthSession.ExtractRoleFromPath(new PathString(path));
+
+    var (topItems, bottomItems) = BuildNav(slug, activeRoleSlug, urlRole);
 }
 
 @if (Tenant.IsResolved)
 {
     @* nav fixed-positioned: خارِج .acs-page حَتّى لا تُفَسَّر كَ overflow في فُحوص الـ runtime. *@
-    @if (!isLogin)
+    @if (!chromeHidden)
     {
         <nav class="acm-mobile-nav" style="--ac-primary:@brand;">
             <div class="acm-mobile-nav-inner">
@@ -36,7 +45,7 @@
     }
 
     <div class="acs-page" style="--ac-primary:@brand; --ac-primary-dark:@brand; --ac-primary-light:@brand; --ac-primary-hover:@brand;">
-        @if (!isLogin)
+        @if (!chromeHidden)
         {
             <div class="acm-v2-topnav-wrap">
                 <AcTopNav Items="topItems">
@@ -61,7 +70,7 @@
         <main>
             @Body
 
-            @if (!isLogin)
+            @if (!chromeHidden)
             {
                 <div class="acm-v2-bottom-nav-wrap">
                     <AcBottomNav Items="bottomItems" ExtraClass="acm-v2-bottomnav" />
@@ -79,6 +88,10 @@ else
 
 @code {
     string activeRoleSlug = "";
+    bool tenantHasRoles;
+    string? listingPattern;
+    int unreadMessages;
+    int unreadNotifications;
 
     protected override async Task OnInitializedAsync()
     {
@@ -87,75 +100,141 @@ else
             Auth.SetTenant(Tenant.Slug);
             Auth.Load(ctx, Tenant.Slug);
 
-            // قِراءَة الدَور النَّشِط لِبِناء nav المُلائِم. خَطَأ DB لا يَكسِر الـ layout.
+            // اِكتَشِف هَل لِلمَتجَر أَدوار — تَحديد عَرض الـ landing.
+            try
+            {
+                await using var gs = Store.QuerySession();
+                var t = await gs.LoadAsync<ACommerce.Kit.Tenants.Tenant>(Tenant.Slug);
+                tenantHasRoles = t is not null && t.Roles.Count > 0;
+                // اِشتِقاق النَّمَط لِتَحديد ظُهور السَّلَّة: فَئات «menu»
+                // (مَقاهي/مَطاعِم) أَو غِياب الأَدوار العَقارِيَّة = marketplace.
+                if (t is not null)
+                {
+                    var kinds = t.Categories.Select(c => c.Kind).ToHashSet();
+                    var roleCats = t.Roles.Select(r => r.CatalogSlug).ToHashSet();
+                    listingPattern =
+                        roleCats.Contains("rider") || roleCats.Contains("driver") ? "trip" :
+                        roleCats.Contains("host") || kinds.Contains("residential") ||
+                        kinds.Contains("commercial") || kinds.Contains("roommate") ? "rental" :
+                        "marketplace";
+                }
+            }
+            catch { /* ignore */ }
+
             if (Auth.IsAuthenticated && Auth.UserId.HasValue)
             {
                 try
                 {
                     await using var s = Store.QuerySession(Tenant.Slug);
                     var me = await s.LoadAsync<ACommerce.Kit.Auth.User>(Auth.UserId.Value);
-                    if (me is not null) activeRoleSlug = me.ActiveRole ?? "";
+                    // الـ URL يَتَفَوَّق عَلى user.ActiveRole — السبَب: نَفس
+                    // المُستَخدِم قَد يَكون مُسَجَّلاً بِدَورَين في تَبويبَين،
+                    // فَالـ DB حَقل واحِد بَينَما الـ URL يُحَدِّد كُلّ تَبويب.
+                    var currentPath = new Uri(Nav.Uri).AbsolutePath;
+                    var urlRoleInit = AuthSession.ExtractRoleFromPath(new PathString(currentPath));
+                    activeRoleSlug = urlRoleInit ?? me?.ActiveRole ?? "";
+
+                    // عَدّاد المُحادَثات الَّتي فيها رَسائِل جَديدَة لي.
+                    // Conversation تَخزِنها كَ OwnerUnread / PartnerUnread —
+                    // الرَسائِل الَّتي أَرسَلتُها أَنا لا تَزيد عَدّادي
+                    // (الـ /chats/{id}/send يَزيد عَدّاد الطَّرَف الآخَر فَقَط).
+                    var convs = await s.Query<ACommerce.Kit.Chat.Conversation>()
+                        .Where(c => c.OwnerId == Auth.UserId.Value || c.PartnerId == Auth.UserId.Value)
+                        .ToListAsync();
+                    unreadMessages = convs.Count(c =>
+                        (c.OwnerId == Auth.UserId.Value   && c.OwnerUnread > 0) ||
+                        (c.PartnerId == Auth.UserId.Value && c.PartnerUnread > 0));
+
+                    unreadNotifications = await s.Query<ACommerce.Kit.Notifications.Notification>()
+                        .CountAsync(n => n.UserId == Auth.UserId.Value && !n.IsRead);
                 }
                 catch { /* ignore — nav يَسقُط لِلافتراضيّ */ }
             }
         }
     }
 
-    // قائِمَة عَناصِر nav حَسَب الدَور النَّشِط — كُلّ دَور لَه قائِمَة
-    // مُختَلِفَة. القَوالِب الَّتي لا تَنطَبِق عَلى الدَور لا تُعرَض.
-    static (List<AcTopNav.TopNavItem> Top, List<ACommerce.Templates.Shared.Models.BottomNavItemDto> Bottom)
-        BuildNav(string slug, string roleSlug)
+    // قائِمَة عَناصِر nav حَسَب الدَور النَّشِط — مَع badge عَلى الرَسائِل
+    // والإشعارات. <paramref name="urlRole"/> يُحَدِّد البادِئَة /r/{role}/
+    // لِكُلّ رابِط داخِل التَّطبيق الفَرعيّ، فَكُلّ التَنَقُّل يَبقَى داخِل
+    // الـ session role-scoped.
+    (List<AcTopNav.TopNavItem> Top, List<ACommerce.Templates.Shared.Models.BottomNavItemDto> Bottom)
+        BuildNav(string slug, string roleSlug, string? urlRole)
     {
         var ar = (
             Top:    new List<AcTopNav.TopNavItem>(),
             Bottom: new List<ACommerce.Templates.Shared.Models.BottomNavItemDto>()
         );
 
-        void Add(string href, string label, string icon, bool exact = false)
+        string Link(string path) => AuthSession.LinkFor(slug, urlRole, path);
+
+        // الشَّريط السُّفليّ في الهاتِف يَجِب أَلّا يَتَجاوَز ٥ تَبويبات
+        // (مِعيار تَطبيقات احتِرافِيَّة). الزائِد عَنها يَظهَر في nav الحاسوب
+        // العُلويّ + في صَفحَة «حِسابي» (hub). نُمَرِّر bottom:false لِلزائِد.
+        void Add(string path, string label, string icon, bool exact = false,
+                 int? badge = null, bool bottom = true)
         {
-            ar.Top.Add(new(href, label, icon, null, exact));
-            ar.Bottom.Add(new() { Href = href, Label = label, IconName = icon, Exact = exact });
+            var href = Link(path);
+            ar.Top.Add(new(href, label, icon, badge, exact));
+            if (bottom)
+                ar.Bottom.Add(new() { Href = href, Label = label, IconName = icon, Exact = exact, Badge = badge });
         }
 
-        // الرَّئيسِيَّة دائِماً
-        Add($"/{slug}", "الرَئيسيّة", "home", exact: true);
+        Add("", "الرَئيسيّة", "home", exact: true);
+
+        var msgBadge   = unreadMessages > 0      ? (int?)unreadMessages      : null;
+        var notifBadge = unreadNotifications > 0 ? (int?)unreadNotifications : null;
+
+        // أَيّ نَمَط يَستَخدِم السَّلَّة؟ (cafe/grocery/marketplace). أَنماط
+        // الإيجار/السَكَن المُشتَرَك/المَشاوير لا سَلَّة فيها — نُخفيها.
+        var usesCart = listingPattern is "marketplace" or "service" or null
+                       && roleSlug is not ("rider" or "driver" or "shipper" or "host");
 
         switch (roleSlug)
         {
             case "rider":
-                Add($"/{slug}/me/listings", "طَلَباتي",  "package");
-                Add($"/{slug}/chats",       "رَسائل",    "message");
+                // ٤ تَبويبات: رَئيسيّة + طَلَباتي + رَسائل + حِسابي.
+                Add("me/listings",  "طَلَباتي", "package");
+                Add("chats",        "رَسائل",   "message", badge: msgBadge);
+                Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
                 break;
             case "driver":
             case "shipper":
-                Add($"/{slug}/explore",      "مَشاوير",   "search");
-                Add($"/{slug}/me/offers",    "عُروضي",     "package");
-                Add($"/{slug}/me/searches",  "إشعارات",   "bell");
-                Add($"/{slug}/chats",        "رَسائل",     "message");
+                // ٥ تَبويبات: رَئيسيّة + مَشاوير + عُروضي + رَسائل + حِسابي.
+                Add("explore",      "مَشاوير",  "search");
+                Add("me/offers",    "عُروضي",   "package");
+                Add("chats",        "رَسائل",   "message", badge: msgBadge);
+                Add("me/searches",  "بَحثي",    "bell",    badge: notifBadge, bottom: false);
+                Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
                 break;
             case "vendor":
             case "host":
-                Add($"/{slug}/me/listings",  "إعلاناتي",  "package");
-                Add($"/{slug}/chats",        "رَسائل",     "message");
-                Add($"/{slug}/notifications","إشعارات",   "bell");
+                // ٥ تَبويبات: رَئيسيّة + إعلاناتي + صَفقات + رَسائل + حِسابي.
+                Add("me/listings",  "إعلاناتي", "package");
+                Add("deals",        "صَفقات",   "receipt");
+                Add("chats",        "رَسائل",   "message", badge: msgBadge);
+                Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
                 break;
             case "tenant_admin":
-                Add($"/{slug}/manage",       "إدارَة",     "settings");
-                Add($"/{slug}/chats",        "رَسائل",     "message");
-                Add($"/{slug}/notifications","إشعارات",   "bell");
+                // ٤ تَبويبات: رَئيسيّة + إدارَة + رَسائل + حِسابي.
+                Add("manage",       "إدارَة",   "settings");
+                Add("chats",        "رَسائل",   "message", badge: msgBadge);
+                Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
                 break;
             default:
-                // customer + لا دَور = القائِمَة الكَلاسيكِيَّة
-                Add($"/{slug}/explore",      "استِكشاف",   "search");
-                Add($"/{slug}/favorites",    "مُفَضَّلَة",     "heart");
-                Add($"/{slug}/chats",        "رَسائل",     "message");
-                Add($"/{slug}/notifications","إشعارات",   "bell");
+                // ٥ تَبويبات: رَئيسيّة + استِكشاف + مُفَضَّلَة + رَسائل + حِسابي.
+                // (الصَّفقات/السَّلَّة/الإشعارات في nav الحاسوب + صَفحَة حِسابي.)
+                Add("explore",      "استِكشاف", "search");
+                Add("favorites",    "مُفَضَّلَة",   "heart");
+                Add("chats",        "رَسائل",   "message", badge: msgBadge);
+                Add("deals",        "صَفقاتي",  "receipt", bottom: false);
+                if (usesCart) Add("cart", "السَّلَّة", "package", bottom: false);
+                Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
                 break;
         }
 
-        // حِسابي دائِماً آخِراً
-        ar.Top.Add(new($"/{slug}/me", "حِسابي", "user"));
-        ar.Bottom.Add(new() { Href = $"/{slug}/me", Label = "حِسابي", IconName = "user" });
+        var meHref = Link("me");
+        ar.Top.Add(new(meHref, "حِسابي", "user"));
+        ar.Bottom.Add(new() { Href = meHref, Label = "حِسابي", IconName = "user" });
         return ar;
     }
 }

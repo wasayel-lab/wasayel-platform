@@ -1,0 +1,321 @@
+@page "/studio/apps/{slug}/attributes"
+@inject Services.Incubator.StudioAuth Auth
+@inject Marten.IDocumentStore Store
+@using ACommerce.Kit.Tenants
+@using ACommerce.Platform.Shared
+
+@*
+    مُحَرِّر الخَصائِص الديناميكِيَّة داخِل واجِهَة الـ Studio. خَطوَتان:
+      1) اختِيار scope: فِئَة مُعَيَّنَة، أو "بروفايل" (sentinel).
+      2) لِكُلّ scope، تَحرير قائِمَة الـ AttributeDefinitions
+         (Code | Name | Type | IsRequired | Options).
+
+    التَّخزين: ImportedRecord بِالجَدوَلَين "AttributeDefinitions"
+    و"CategoryAttributeMappings" — مُتَوافِق مَع الـ Importer.
+*@
+
+<StudioShell Title="@($"الخَصائِص · {tenant?.Name ?? Slug}")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← الإعدادات</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (tenant is null)
+        {
+            <div class="st-card">التَّطبيق غَير مَوجود أَو لا تَملِكه.</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>الخَصائِص الديناميكِيَّة</h1>
+                <p>عَرِّف حُقول الإعلانات لِكُلّ فِئَة، أَو حُقول صَفحَة المُستَخدِم (البروفايل).</p>
+            </div>
+
+            @if (Saved == "1")          { <div class="st-chip st-chip-success" style="margin-bottom:14px;"><AcIcon Name="check" Size="14" /> تَمّ الحِفظ</div> }
+            @if (Err == "bad_format")   { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">تَنسيق صَفّ غَير صَحيح — راجِع الصِّيغَة.</div> }
+            @if (Err == "no_scope")     { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">اختَر نِطاقاً أَوّلاً.</div> }
+
+            @* قائِمَة scopes — كُلّ فِئَة + sentinel البروفايل *@
+            <div class="st-card">
+                <h3 style="margin-top:0;">النِّطاق (Scope)</h3>
+                <p style="color:var(--st-muted);font-size:13px;">
+                    اختَر فِئَة لِتَعريف حُقول إعلاناتها، أَو "البروفايل"
+                    لِحُقول صَفحَة المُستَخدِم.
+                </p>
+                <div class="acm-scope-list">
+                    @foreach (var sc in scopes)
+                    {
+                        var isActive = sc.Id == ScopeId;
+                        <a class="acm-scope-row @(isActive ? "is-active" : "")"
+                           href="@($"/studio/apps/{Slug}/attributes?scope={sc.Id}")">
+                            <span style="font-size:20px;"><AcIcon Name="@sc.Icon" Size="20" /></span>
+                            <div style="flex:1;">
+                                <strong>@sc.Label</strong>
+                                <span style="display:block;color:var(--ac-text-muted);font-size:11px;direction:ltr;">
+                                    @sc.Id
+                                </span>
+                            </div>
+                            <span class="ac-chip ac-chip-sm">@sc.DefCount حُقول</span>
+                        </a>
+                    }
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(ScopeId))
+            {
+                <form method="post" action="@($"/studio/apps/{Slug}/attributes/save")" id="attrs-form">
+                    <input type="hidden" name="scope" value="@ScopeId" />
+
+                    <div class="st-card">
+                        <h3 style="margin-top:0;">حُقول @selectedScopeLabel</h3>
+                        <p style="color:var(--st-muted);font-size:13px;margin:0 0 14px;">
+                            كُلّ بِطاقَة = حَقل في الإعلان. اختَر النَّوع، وإن كانَ
+                            «اختِيار» أَضِف الخِيارات كَرُقَع.
+                        </p>
+
+                        <div class="ac-editor" id="attrs-editor">
+                            @foreach (var f in fields)
+                            {
+                                var isSelect = f.Type is "SingleSelect" or "MultiSelect";
+                                <div class="ac-editor-row" data-attr-row>
+                                    <div class="ac-editor-row-head">
+                                        <input class="ac-input ac-attr-name" placeholder="اسم الحَقل (عَرَبي)" value="@f.Name" />
+                                        <button type="button" class="ac-icon-btn" data-remove-attr aria-label="حَذف الحَقل"><AcIcon Name="x" Size="14" /></button>
+                                    </div>
+                                    <div class="ac-editor-grid2">
+                                        <div>
+                                            <span class="ac-chip-input-label">الرَّمز (Code)</span>
+                                            <input class="ac-input ac-attr-code" placeholder="rooms" value="@f.Code"
+                                                   style="direction:ltr;" />
+                                        </div>
+                                        <div>
+                                            <span class="ac-chip-input-label">النَّوع</span>
+                                            <select class="ac-select ac-attr-type">
+                                                @foreach (var t in FieldTypes)
+                                                {
+                                                    if (t == f.Type)
+                                                    { <option value="@t" selected>@TypeLabel(t)</option> }
+                                                    else
+                                                    { <option value="@t">@TypeLabel(t)</option> }
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <label class="ac-attr-req-toggle">
+                                        <input type="checkbox" class="ac-attr-req" checked="@f.Required" />
+                                        <span>حَقل مَطلوب</span>
+                                    </label>
+                                    <div class="ac-attr-options" data-options style="@(isSelect ? "" : "display:none;")">
+                                        <span class="ac-chip-input-label">الخِيارات (اكتُب القيمَة ثُمَّ Enter)</span>
+                                        <div class="ac-chip-input" data-opts>
+                                            @foreach (var o in f.Options)
+                                            {
+                                                var label = o.Contains('=') ? o.Substring(o.IndexOf('=') + 1) : o;
+                                                <span class="ac-chip-tag" data-raw="@o"><span class="t">@label</span><button type="button" aria-label="حَذف">×</button></span>
+                                            }
+                                            <input class="ac-chip-entry" placeholder="مَثَلاً: شَقّة" />
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <button type="button" class="ac-add-row-btn" id="add-attr" style="margin-top:12px;">
+                            <AcIcon Name="plus" Size="16" /> إضافَة حَقل
+                        </button>
+
+                        <textarea name="defs" id="defs-hidden" hidden>@defsText</textarea>
+                    </div>
+
+                    <div style="display:flex;gap:8px;margin-top:16px;">
+                        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/attributes")">إلغاء</a>
+                        <button type="submit" class="st-btn st-btn-primary">
+                            <AcIcon Name="check" Size="18" /> حِفظ
+                        </button>
+                    </div>
+                </form>
+
+                <template id="attr-row-tpl">
+                    <div class="ac-editor-row" data-attr-row>
+                        <div class="ac-editor-row-head">
+                            <input class="ac-input ac-attr-name" placeholder="اسم الحَقل (عَرَبي)" />
+                            <button type="button" class="ac-icon-btn" data-remove-attr aria-label="حَذف الحَقل"><AcIcon Name="x" Size="14" /></button>
+                        </div>
+                        <div class="ac-editor-grid2">
+                            <div>
+                                <span class="ac-chip-input-label">الرَّمز (Code)</span>
+                                <input class="ac-input ac-attr-code" placeholder="rooms" style="direction:ltr;" />
+                            </div>
+                            <div>
+                                <span class="ac-chip-input-label">النَّوع</span>
+                                <select class="ac-select ac-attr-type">
+                                    @foreach (var t in FieldTypes)
+                                    {
+                                        <option value="@t">@TypeLabel(t)</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <label class="ac-attr-req-toggle">
+                            <input type="checkbox" class="ac-attr-req" />
+                            <span>حَقل مَطلوب</span>
+                        </label>
+                        <div class="ac-attr-options" data-options style="display:none;">
+                            <span class="ac-chip-input-label">الخِيارات (اكتُب القيمَة ثُمَّ Enter)</span>
+                            <div class="ac-chip-input" data-opts>
+                                <input class="ac-chip-entry" placeholder="مَثَلاً: شَقّة" />
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            }
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "scope")] public string? ScopeId { get; set; }
+    [SupplyParameterFromQuery(Name = "err")]   public string? Err { get; set; }
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+
+    Tenant? tenant;
+    List<ScopeInfo> scopes = new();
+    string defsText = "";
+    string selectedScopeLabel = "";
+    List<FieldRow> fields = new();
+
+    sealed record FieldRow(string Code, string Name, string Type, bool Required, List<string> Options);
+    static readonly string[] FieldTypes =
+        { "Text", "LongText", "Number", "Boolean", "SingleSelect", "MultiSelect", "Date" };
+    static string TypeLabel(string t) => t switch
+    {
+        "Text" => "نَصّ قَصير", "LongText" => "نَصّ طَويل", "Number" => "رَقم",
+        "Boolean" => "نَعَم/لا", "SingleSelect" => "اختِيار واحِد",
+        "MultiSelect" => "اختِيار مُتَعَدِّد", "Date" => "تاريخ", _ => t
+    };
+
+    static readonly Guid ProfileScopeId = Guid.Parse("00000000-0000-0000-0000-000000000F01");
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        await using var g = Store.QuerySession();
+        tenant = await g.LoadAsync<Tenant>(Slug);
+        if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) { tenant = null; return; }
+        if (tenant is null) return;
+
+        // النِّطاق الافتراضيّ = البروفايل عِندَ غِياب scope (نَفس رابِط الادمن).
+        if (string.IsNullOrEmpty(ScopeId)) ScopeId = ProfileScopeId.ToString();
+
+        await using var t = Store.QuerySession(Slug);
+        var defs = await t.Query<ImportedRecord>()
+            .Where(r => r.Table == "AttributeDefinitions" || r.Table == "AttributeValues" || r.Table == "CategoryAttributeMappings")
+            .ToListAsync();
+
+        // عُدّ مَن الـ defs لِكُلّ scope.
+        var mappings = defs.Where(d => d.Table == "CategoryAttributeMappings").ToList();
+        var defCountByScope = mappings
+            .Select(m => GetGuid(m, "CategoryId"))
+            .Where(id => id != Guid.Empty)
+            .GroupBy(id => id)
+            .ToDictionary(grp => grp.Key, grp => grp.Count());
+
+        // scopes = فِئات tenant + Profile sentinel.
+        foreach (var c in tenant.Categories.OrderBy(c => c.SortOrder))
+        {
+            var sid = DeriveListingScope(Slug, c.Slug);
+            scopes.Add(new ScopeInfo(
+                Id: sid.ToString(), Label: c.Label, Icon: IconName(c.Icon),
+                DefCount: defCountByScope.GetValueOrDefault(sid, 0)));
+        }
+        scopes.Add(new ScopeInfo(
+            Id: ProfileScopeId.ToString(), Label: "البروفايل", Icon: "user",
+            DefCount: defCountByScope.GetValueOrDefault(ProfileScopeId, 0)));
+
+        if (!string.IsNullOrEmpty(ScopeId) && Guid.TryParse(ScopeId, out var scopeGuid))
+        {
+            selectedScopeLabel = scopes.FirstOrDefault(s => s.Id == ScopeId)?.Label ?? "النِّطاق";
+
+            // اِبني نَصّ الـ textarea: لِكُلّ mapping عَلى هذا الـ scope
+            // اِجلِب الـ AttributeDefinition + جَمِّع AttributeValues.
+            var allDefs = defs.Where(d => d.Table == "AttributeDefinitions")
+                              .ToDictionary(d => GetGuid(d, "Id"));
+            var valuesByDef = defs.Where(d => d.Table == "AttributeValues")
+                .GroupBy(d => GetGuid(d, "AttributeDefinitionId"))
+                .ToDictionary(grp => grp.Key,
+                              grp => grp.OrderBy(v => GetInt(v, "SortOrder"))
+                                    .Select(v => $"{GetString(v, "Value")}={GetString(v, "DisplayName")}")
+                                    .ToList());
+
+            var scopeMappings = mappings
+                .Where(m => GetGuid(m, "CategoryId") == scopeGuid)
+                .OrderBy(m => GetInt(m, "SortOrder"))
+                .ToList();
+            var lines = new List<string>();
+            foreach (var m in scopeMappings)
+            {
+                var defId = GetGuid(m, "AttributeDefinitionId");
+                if (!allDefs.TryGetValue(defId, out var d)) continue;
+                var code  = GetString(d, "Code") ?? "";
+                var name  = GetString(d, "Name") ?? code;
+                var type  = GetString(d, "Type") ?? "Text";
+                var isReq = GetBool(d, "IsRequired");
+                var req   = isReq ? "req" : "opt";
+                var opts  = valuesByDef.GetValueOrDefault(defId, new()).ToList();
+                var optsStr = opts.Count > 0 ? string.Join(",", opts) : "";
+                lines.Add($"{code} | {name} | {type} | {req}" + (string.IsNullOrEmpty(optsStr) ? "" : $" | {optsStr}"));
+                fields.Add(new FieldRow(code, name, type, isReq, opts));
+            }
+            defsText = string.Join('\n', lines);
+        }
+    }
+
+    static Guid DeriveListingScope(string tenantSlug, string categorySlug)
+    {
+        var raw = tenantSlug == "ashare"
+            ? "ashare-listing:" + categorySlug.ToLowerInvariant()
+            : (tenantSlug == "ejar" ? "ejar-listing:" : tenantSlug + ":listing:")
+              + categorySlug.ToLowerInvariant();
+        var hash = System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(raw));
+        return new Guid(hash);
+    }
+
+    static string? Raw(ImportedRecord r, string key)
+    {
+        if (!r.Data.TryGetValue(key, out var v) || v is null) return null;
+        if (v is System.Text.Json.JsonElement el)
+            return el.ValueKind switch
+            {
+                System.Text.Json.JsonValueKind.String => el.GetString(),
+                System.Text.Json.JsonValueKind.Null   => null,
+                _ => el.ToString()
+            };
+        return v.ToString();
+    }
+    static Guid GetGuid(ImportedRecord r, string k)    => Guid.TryParse(Raw(r, k), out var g) ? g : Guid.Empty;
+    static int GetInt(ImportedRecord r, string k)      => int.TryParse(Raw(r, k), out var i) ? i : 0;
+    static bool GetBool(ImportedRecord r, string k)    => bool.TryParse(Raw(r, k), out var b) && b;
+    static string? GetString(ImportedRecord r, string k) => Raw(r, k);
+
+    // طَبِّع رَمز الفِئَة (قَد يَكون إيموجي مُستَورَد) إلى اسم أَيقونَة خَطّيَّة صالِح.
+    // مَفاتيح الإيموجي مَكتوبَة بِنِقاط Unicode (لا بايتات إيموجي حَرفِيَّة).
+    static readonly Dictionary<string, string> EmojiToIcon = new()
+    {
+        ["\U0001F3E0"] = "home", ["\U0001F3E1"] = "house-heart", ["\U0001F3E2"] = "building",
+        ["\U0001F3EA"] = "store", ["\U0001F6D2"] = "cart", ["\U0001F6CD️"] = "bag",
+        ["\U0001F4BC"] = "bag", ["\U0001F697"] = "car", ["\U0001F699"] = "car",
+        ["\U0001F69A"] = "truck", ["\U0001F4E6"] = "package", ["\u2615"] = "cup",
+        ["\U0001F464"] = "user", ["\U0001F465"] = "people", ["\U0001F4CB"] = "clipboard",
+        ["\U0001F9FE"] = "receipt", ["\U0001F4CD"] = "map-pin", ["\u2B50"] = "star",
+    };
+
+    static string IconName(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "home";
+        if (EmojiToIcon.TryGetValue(raw, out var mapped)) return mapped;
+        return System.Text.RegularExpressions.Regex.IsMatch(raw, "^[a-z][a-z-]*$") ? raw : "tag";
+    }
+
+    sealed record ScopeInfo(string Id, string Label, string Icon, int DefCount);
+}

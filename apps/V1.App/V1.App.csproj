@@ -31,6 +31,21 @@
     <ProjectReference Include="..\..\libs\kits\Support\ACommerce.Kit.Support.Core\ACommerce.Kit.Support.Core.csproj" />
     <ProjectReference Include="..\..\libs\kits\Support\ACommerce.Kit.Support.Server\ACommerce.Kit.Support.Server.csproj" />
 
+    <ProjectReference Include="..\..\libs\kits\Cart\ACommerce.Kit.Cart.Core\ACommerce.Kit.Cart.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Cart\ACommerce.Kit.Cart.Server\ACommerce.Kit.Cart.Server.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Culture\ACommerce.Kit.Culture.Core\ACommerce.Kit.Culture.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Reports\ACommerce.Kit.Reports.Core\ACommerce.Kit.Reports.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Reports\ACommerce.Kit.Reports.Server\ACommerce.Kit.Reports.Server.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Versions\ACommerce.Kit.Versions.Core\ACommerce.Kit.Versions.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Files\ACommerce.Kit.Files.Core\ACommerce.Kit.Files.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Files\ACommerce.Kit.Files.Providers.AliyunOss\ACommerce.Kit.Files.Providers.AliyunOss.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Files\ACommerce.Kit.Files.Providers.GoogleCloud\ACommerce.Kit.Files.Providers.GoogleCloud.csproj" />
+
+    <ProjectReference Include="..\..\libs\kits\Maps\ACommerce.Kit.Maps.Core\ACommerce.Kit.Maps.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Delivery\ACommerce.Kit.Delivery.Core\ACommerce.Kit.Delivery.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Payments\ACommerce.Kit.Payments.Core\ACommerce.Kit.Payments.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Reviews\ACommerce.Kit.Reviews.Core\ACommerce.Kit.Reviews.Core.csproj" />
+
     <ProjectReference Include="..\..\libs\templates\ACommerce.Templates.Customer.Marketplace\ACommerce.Templates.Customer.Marketplace.csproj" />
   </ItemGroup>
 </Project>

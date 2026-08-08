@@ -1,4 +1,5 @@
 @page "/{slug}/explore"
+@page "/{slug}/r/{role}/explore"
 @inject IDocumentStore Store
 @inject AuthSession Auth
 
@@ -27,12 +28,20 @@ else
     @* Filter bar: شَجَرَة kinds + leaves + sliders button — مُطابِق
        لِبِنية AcTaxonomyChips الأَصلِيَّة. *@
     <div class="acm-explore-filterbar">
-        <div class="acm-explore-chips">
-            <TaxonomyChips Slug="@Slug"
-                           Categories="tenant.Categories"
-                           ActiveKind="@Kind"
-                           ActiveCategory="@Category" />
-        </div>
+        @* TaxonomyChips تَظهَر فَقَط لَو فيه أَكثَر مِن فِئَة. *@
+        @if (tenant.Categories.Count > 1)
+        {
+            <div class="acm-explore-chips">
+                <TaxonomyChips Slug="@Slug"
+                               Categories="tenant.Categories"
+                               ActiveKind="@Kind"
+                               ActiveCategory="@Category" />
+            </div>
+        }
+        else
+        {
+            <div class="acm-explore-chips"></div>
+        }
         <a class="acm-explore-filterbtn" href="@FilterToggleHref" aria-label="الفَلاتِر">
             <AcIcon Name="sliders" Size="18" />
         </a>
@@ -127,7 +136,7 @@ else
                 </div>
 
                 <div class="ac-modal-footer">
-                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}/explore")">إعادَة ضَبط</a>
+                    <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"explore")">إعادَة ضَبط</a>
                     <button type="submit" class="ac-btn ac-btn-primary">تَطبيق</button>
                 </div>
             </form>
@@ -144,7 +153,7 @@ else
                       Title="لا إعلانات في هذه الفِئَة"
                       Message="جَرِّب فِئَة أُخرى أو غَيِّر البَحث."
                       ActionLabel="إعادَة ضَبط الفَلاتِر"
-                      ActionHref="@($"/{Slug}/explore")" />
+                      ActionHref="@AuthSession.LinkFor(Slug, Role, $"explore")" />
     }
     else
     {
@@ -152,9 +161,11 @@ else
             @foreach (var l in items)
             {
                 <AcSpaceCard Title="@l.Title"
-                             Href="@($"/{Slug}/listings/{l.Id}")"
+                             Href="@AuthSession.LinkFor(Slug, Role, $"listings/{l.Id}")"
+                             ImageUrl="@(l.MediaUrls.Count > 0 ? l.MediaUrls[0] : null)"
                              Location="@($"{l.City} — {l.District}")"
-                             PriceLabel="@($"{l.Price:N0} ريال")"
+                             PriceLabel="@FormatPrice(l)"
+                             Ribbon="@(l.IsVerified ? "مُوَثَّق" : l.IsFeatured ? "مُمَيَّز" : null)"
                              ShowFavorite="@Auth.IsAuthenticated"
                              IsFavorite="@favIds.Contains(l.Id)"
                              FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
@@ -169,6 +180,7 @@ else
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
     [SupplyParameterFromQuery(Name = "category")] public string? Category { get; set; }
     [SupplyParameterFromQuery(Name = "q")]        public string? Query    { get; set; }
     [SupplyParameterFromQuery(Name = "sort")]     public string? Sort     { get; set; }
@@ -179,6 +191,21 @@ else
     [SupplyParameterFromQuery(Name = "kind")]     public string? Kind     { get; set; }
 
     Tenant? tenant;
+    ACommerce.Templates.Customer.Marketplace.Services.Patterns.PatternProfile? profile;
+
+    string FormatPrice(Listing l)
+    {
+        if (profile is null) return $"{l.Price:N0} ر.س";
+        return profile.Pattern switch
+        {
+            Services.Patterns.AppPattern.Rental
+                => $"{l.Price:N0} ر.س / {(l.Attributes.TryGetValue("lease_term", out var t) ? t : "شَهرِيّ")}",
+            Services.Patterns.AppPattern.Roommate
+                => l.Price > 0 ? $"{l.Price:N0} ر.س / شَهرِيّ" : "حَسَب الاتِّفاق",
+            Services.Patterns.AppPattern.Trip => $"يَبدَأ مِن {l.Price:N0} ر.س",
+            _ => $"{l.Price:N0} ر.س"
+        };
+    }
     List<Listing>? items;
     List<string> districts = new();
     HashSet<Guid> favIds = new();
@@ -245,12 +272,16 @@ else
     </text>;
 
     bool driverMode;
+    bool driverHasAnchor;
+    double driverAnchorLat, driverAnchorLng;
+    int driverRadius;
 
     protected override async Task OnParametersSetAsync()
     {
         await using var g = Store.QuerySession();
         tenant = await g.LoadAsync<Tenant>(Slug);
         if (tenant is null) return;
+        profile = Services.Patterns.PatternProfileResolver.Of(tenant);
 
         await using var t = Store.QuerySession(Slug);
 
@@ -261,11 +292,18 @@ else
         {
             var me = await t.LoadAsync<User>(Auth.UserId.Value);
             var role = me is null ? null
-                : tenant.Roles.FirstOrDefault(r => r.Slug == me.ActiveRole);
+                : tenant.Roles.FirstOrDefault(r => r.Slug == (Role ?? me.ActiveRole));
             driverMode = role?.CatalogSlug is "driver" or "shipper";
+            if (driverMode && me is not null)
+            {
+                driverHasAnchor = me.HasAnchor;
+                driverAnchorLat = me.AnchorLat;
+                driverAnchorLng = me.AnchorLng;
+                driverRadius    = me.RadiusKm;
+            }
         }
 
-        var q = t.Query<Listing>().Where(x => !x.IsDeleted);
+        var q = t.Query<Listing>().Where(x => !x.IsDeleted && !x.IsHiddenByModerator);
         if (!string.IsNullOrEmpty(Category))   q = q.Where(x => x.CategorySlug == Category);
         else if (!string.IsNullOrEmpty(Kind))
         {
@@ -292,14 +330,45 @@ else
             "price_desc" => q.OrderByDescending(x => x.Price),
             _            => q.OrderByDescending(x => x.CreatedAt),
         };
-        items = (await q.Take(driverMode ? 200 : 60).ToListAsync()).ToList();
+        items = (await q.Take(driverMode ? 200 : 200).ToListAsync()).ToList();
         if (driverMode)
         {
-            // أَبقِ فَقَط الَّتي تَقبَل عُروضاً — هذه هي طَلَبات الراكِبين.
-            // فَلتَرَة في الذاكِرَة لِأَنّ Attributes قاموس JSON.
+            // أَبقِ فَقَط الَّتي تَقبَل عُروضاً وَ لَيسَت مُتَطابِقَة (سَواء
+            // Active/Completed/Aborted) — أَيّ ListingMatch يَعني أَنّ
+            // الإعلان "صَدَرَت لَه نَتيجَة" وَلا يَجِب إظهارُه كَفُرصَة جَديدَة.
+            var matchedIds = (await t.Query<ACommerce.Kit.Offers.ListingMatch>()
+                .ToListAsync()).Select(m => m.Id).ToHashSet();
             items = items
                 .Where(l => l.Attributes.TryGetValue("accepts_offers", out var v) &&
                             string.Equals(v, "true", System.StringComparison.OrdinalIgnoreCase))
+                .Where(l => !matchedIds.Contains(l.Id))
+                .ToList();
+
+            // فَلتَرَة المَنطِقَة لَو السائِق ضَبَط نِصف قُطر.
+            if (driverHasAnchor && driverRadius > 0)
+            {
+                items = items.Where(l =>
+                {
+                    if (!l.Attributes.TryGetValue("pickup_lat", out var latS) ||
+                        !l.Attributes.TryGetValue("pickup_lng", out var lngS)) return true;
+                    if (!double.TryParse(latS, System.Globalization.NumberStyles.Float,
+                                         System.Globalization.CultureInfo.InvariantCulture, out var plat)) return true;
+                    if (!double.TryParse(lngS, System.Globalization.NumberStyles.Float,
+                                         System.Globalization.CultureInfo.InvariantCulture, out var plng)) return true;
+                    var d = ACommerce.Kit.Offers.OfferHelpers.DistanceKm(
+                        driverAnchorLat, driverAnchorLng, plat, plng);
+                    return d <= driverRadius;
+                }).ToList();
+            }
+            items = items.Take(60).ToList();
+        }
+        else
+        {
+            // باقي الزَوّار (عَميل/زائِر/تاجِر…): لا يَرَون طَلَبات السائِق
+            // المُؤَقَّتَة. تَظهَر فَقَط الإعلانات الكاتالوجِيَّة.
+            items = items
+                .Where(l => !(l.Attributes.TryGetValue("accepts_offers", out var v) &&
+                              string.Equals(v, "true", System.StringComparison.OrdinalIgnoreCase)))
                 .Take(60).ToList();
         }
 

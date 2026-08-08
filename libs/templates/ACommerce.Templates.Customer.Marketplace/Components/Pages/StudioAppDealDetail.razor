@@ -1,0 +1,222 @@
+@page "/studio/apps/{slug}/deals/{id:guid}"
+@inject Services.Incubator.StudioAuth Auth
+@inject Marten.IDocumentStore Store
+@inject Services.Deals.DealsService Deals
+@using ACommerce.Kit.Tenants
+@using ACommerce.Templates.Customer.Marketplace.Services.Deals
+
+@*
+    تَفاصيل صَفقَة + شَريط مَراحِل بَصَريّ + سَجِلّ زَمَنيّ + إجراءات.
+*@
+
+<StudioShell Title="@($"عَمَلِيَّة {Id.ToString()[..8]}")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/deals")">← القائِمَة</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (deal is null)
+        {
+            <div class="st-card">العَمَلِيَّة غَير مَوجودَة.</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>@(string.IsNullOrEmpty(deal.ListingTitle) ? $"عَمَلِيَّة {Id.ToString()[..8]}" : deal.ListingTitle)</h1>
+                <p>نَمَط: @deal.Pattern · أُنشِئَت @deal.CreatedAt.ToString("yyyy-MM-dd HH:mm")</p>
+            </div>
+
+            @* شَريط مَراحِل (Stepper) *@
+            <div class="st-card">
+                <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;">
+                    @foreach (var st in stages)
+                    {
+                        var done = stages.IndexOf(st) < stages.IndexOf(deal.Stage);
+                        var current = st == deal.Stage;
+                        <div style="flex:1;min-width:80px;text-align:center;">
+                            <div style="width:34px;height:34px;border-radius:50%;display:grid;place-items:center;margin:0 auto 4px;
+                                        background:@(current ? "var(--st-primary)" : done ? "var(--st-success)" : "var(--st-line)");
+                                        color:#fff;font-weight:700;font-size:14px;">
+                                @if (done) { <AcIcon Name="check" Size="16" /> } else { @(stages.IndexOf(st) + 1) }
+                            </div>
+                            <div style="font-size:11.5px;color:@(current ? "var(--st-primary)" : "var(--st-muted)");font-weight:@(current ? "700" : "400");">
+                                @DealsPolicy.LabelAr(st)
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @* الأَطراف والمال *@
+            <div class="studio-stats" style="margin-top:14px;">
+                <div class="studio-stat">
+                    <div class="studio-stat-label">المُبادِر</div>
+                    <div class="studio-stat-value" style="font-size:15px;">@deal.InitiatorName</div>
+                </div>
+                <div class="studio-stat">
+                    <div class="studio-stat-label">الطَّرَف الآخَر</div>
+                    <div class="studio-stat-value" style="font-size:15px;">
+                        @(deal.CounterpartyName ?? "—")
+                    </div>
+                </div>
+                <div class="studio-stat">
+                    <div class="studio-stat-label">المَبلَغ</div>
+                    <div class="studio-stat-value">@deal.AmountSar.ToString("N0") ر.س</div>
+                </div>
+                <div class="studio-stat">
+                    <div class="studio-stat-label">الحالَة</div>
+                    <div class="studio-stat-value" style="font-size:15px;">@StatusLabel(deal.Status)</div>
+                </div>
+            </div>
+
+            @* الإجراءات *@
+            @if (deal.Status == DealStatus.Active)
+            {
+                <div class="st-section-title">إجراءات</div>
+                <div class="st-card" style="display:flex;gap:10px;flex-wrap:wrap;">
+                    @if (DealsPolicy.Next(deal.Pattern, deal.Stage) is { } next)
+                    {
+                        <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/advance")"
+                              style="display:flex;gap:8px;flex:1;min-width:200px;">
+                            <input class="st-input" name="note" placeholder="مُلاحَظَة (اختياريَّة)" />
+                            <button type="submit" class="st-btn st-btn-primary" style="white-space:nowrap;">
+                                → @DealsPolicy.LabelAr(next)
+                            </button>
+                        </form>
+                    }
+                    <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/dispute")"
+                          style="display:flex;gap:8px;flex:1;min-width:200px;">
+                        <input class="st-input" name="reason" placeholder="سَبَب النِزاع" />
+                        <button type="submit" class="st-btn st-btn-ghost" style="white-space:nowrap;color:var(--st-danger);">
+                            <AcIcon Name="alert-circle" Size="16" /> نِزاع
+                        </button>
+                    </form>
+                    <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/cancel")"
+                          style="display:flex;gap:8px;flex:1;min-width:200px;">
+                        <input class="st-input" name="reason" placeholder="سَبَب الإلغاء" />
+                        <button type="submit" class="st-btn st-btn-ghost" style="white-space:nowrap;">
+                            إلغاء
+                        </button>
+                    </form>
+                </div>
+            }
+
+            @* السِجِلّ الزَّمَنيّ *@
+            <div class="st-section-title">السِجِلّ الزَّمَنيّ</div>
+            <div class="studio-list">
+                @foreach (var e in deal.Timeline.OrderByDescending(x => x.At))
+                {
+                    <div class="studio-list-row" style="cursor:default;">
+                        <span class="studio-list-icon ac-chip-muted" style="font-size:14px;">
+                            <AcIcon Name="@ActionIcon(e.Action)" Size="16" />
+                        </span>
+                        <div class="studio-list-body">
+                            <strong>@FormatEvent(e)</strong>
+                            <span>
+                                @(e.ActorName ?? "—") · @e.At.ToString("yyyy-MM-dd HH:mm:ss")
+                                @if (!string.IsNullOrEmpty(e.Note)) { <text> · @e.Note</text> }
+                            </span>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @* التَّقييم المُتَبادَل (يَظهَر في Reviewed أَو Delivered) *@
+            @if (deal.Stage is DealStage.Reviewed or DealStage.Delivered or DealStage.Received
+                 && deal.CounterpartyId is not null)
+            {
+                <div class="st-section-title"><AcIcon Name="star" Size="16" /> تَقييم</div>
+                <div class="st-card">
+                    <p style="margin:0 0 12px;font-size:13.5px;color:var(--st-muted);">
+                        أَرسِل تَقييماً نِيابَةً عَن أَيّ مِن الطَّرَفَين.
+                    </p>
+                    <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/review")"
+                          style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                        <div class="st-field" style="margin:0;">
+                            <label class="st-label">المُقَيِّم</label>
+                            <select class="st-input" name="target">
+                                <option value="counterparty">@deal.InitiatorName يُقَيِّم @deal.CounterpartyName</option>
+                                <option value="initiator">@deal.CounterpartyName يُقَيِّم @deal.InitiatorName</option>
+                            </select>
+                        </div>
+                        <div class="st-field" style="margin:0;">
+                            <label class="st-label">عَدَد النُّجوم</label>
+                            <select class="st-input" name="rating">
+                                <option value="5">٥ نُجوم — مُمتاز</option>
+                                <option value="4">٤ نُجوم</option>
+                                <option value="3">٣ نُجوم</option>
+                                <option value="2">نَجمَتان</option>
+                                <option value="1">نَجمَة</option>
+                            </select>
+                        </div>
+                        <div class="st-field" style="margin:0;grid-column:1/-1;">
+                            <label class="st-label">التَّعليق</label>
+                            <textarea class="st-textarea" name="body" rows="3" required
+                                      placeholder="كَيف كانَت التَّجرِبَة؟"></textarea>
+                        </div>
+                        <button type="submit" class="st-btn st-btn-primary" style="grid-column:1/-1;">
+                            إرسال التَّقييم
+                        </button>
+                    </form>
+                </div>
+            }
+
+            @* المَراجِع (PaymentId، ShipmentId، …) *@
+            @if (deal.Refs.Count > 0)
+            {
+                <div class="st-section-title">مَراجِع مُرتَبِطَة</div>
+                <div class="st-card">
+                    @foreach (var (k, v) in deal.Refs)
+                    {
+                        <div style="display:flex;justify-content:space-between;padding:4px 0;">
+                            <span style="color:var(--st-muted);">@k</span>
+                            <code style="font-size:12px;">@v</code>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public Guid Id { get; set; }
+    Deal? deal;
+    List<DealStage> stages = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        await using var qs = Store.QuerySession();
+        var t = await qs.LoadAsync<Tenant>(Slug);
+        if (t is null || t.OwnerUserId != Auth.UserId!.Value) return;
+        deal = await Deals.LoadAsync(Slug, Id);
+        if (deal is not null) stages = DealsPolicy.StagesFor(deal.Pattern).ToList();
+    }
+
+    static string ActionIcon(string action) => action switch
+    {
+        "created" => "sparkle", "assigned" => "people", "advanced" => "arrow-right",
+        "cancelled" => "x", "disputed" => "alert-circle", "note" => "edit",
+        "refund" => "refresh", _ => "tag"
+    };
+
+    static string FormatEvent(DealEvent e) => e.Action switch
+    {
+        "created"   => "أُنشِئَت العَمَلِيَّة",
+        "assigned"  => "تَعيين الطَّرَف الآخَر",
+        "advanced"  => $"{DealsPolicy.LabelAr(e.StageBefore)} ← {DealsPolicy.LabelAr(e.StageAfter)}",
+        "cancelled" => "إلغاء العَمَلِيَّة",
+        "disputed"  => "فَتح نِزاع",
+        "note"      => "مُلاحَظَة/مَرجِع",
+        _ => e.Action
+    };
+
+    static string StatusLabel(DealStatus s) => s switch
+    {
+        DealStatus.Active => "نَشِطَة", DealStatus.Completed => "مُكتَمِلَة",
+        DealStatus.Cancelled => "مُلغاة", DealStatus.Disputed => "نِزاع",
+        _ => s.ToString()
+    };
+}

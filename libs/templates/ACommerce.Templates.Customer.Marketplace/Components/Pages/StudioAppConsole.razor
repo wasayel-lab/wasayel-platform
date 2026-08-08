@@ -1,0 +1,168 @@
+@page "/studio/apps/{slug}/console"
+@inject Services.Incubator.StudioAuth Auth
+@inject Marten.IDocumentStore Store
+@using ACommerce.Kit.Tenants
+@using ACommerce.Kit.Auth
+@using ACommerce.Kit.Support
+@using ACommerce.Kit.Listings
+@using ACommerce.Kit.Subscriptions
+@using ACommerce.Kit.Notifications
+
+@*
+    لوحَة تَشغيل التَّطبيق — قِراءَة لِأَرقام الإدارَة الأَساسيَّة:
+    عَدَد المُستَخدِمين، الإعلانات، التَّذاكِر، الإشعارات، الباقات.
+    تَحَقُّق مِلكِيَّة قَبل عَرض البَيانات.
+*@
+
+<StudioShell Title="@($"تَشغيل · {tenant?.Name ?? Slug}")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← الإعدادات</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (tenant is null)
+        {
+            <div class="st-card">التَّطبيق غَير مَوجود أَو لا تَملِكه.</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>لوحَة تَشغيل التَّطبيق</h1>
+                <p>نَظرَة سَريعَة على نَشاط <strong>@tenant.Name</strong>.</p>
+            </div>
+
+            <div class="studio-stats">
+                <div class="studio-stat"><div class="studio-stat-label">المُستَخدِمون</div><div class="studio-stat-value">@userCount</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">الإعلانات</div><div class="studio-stat-value">@listingCount</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">تَذاكِر مَفتوحَة</div><div class="studio-stat-value">@openTicketCount</div><div class="studio-stat-sub">@totalTicketCount إجمالاً</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">الباقات</div><div class="studio-stat-value">@planCount</div></div>
+            </div>
+
+            @* مَنح/سَحب صَلاحيَّة الإدارَة لِلمَتجَر هي عَمَلِيَّة عَلى
+               مُستَوى المَنصَّة — لا تَنتَمي لِإطار رائِد الأَعمال. عُملاء
+               المَتجَر يُحصَون أَدناه (@userCount). *@
+            <div class="st-section-title">إشراف</div>
+            <div class="studio-list">
+                <a class="studio-list-row" href="@($"/studio/apps/{Slug}/listings")">
+                    <span class="studio-list-icon" style="background:#fef3c7;color:#854d0e;"><AcIcon Name="clipboard" Size="16" /></span>
+                    <div class="studio-list-body"><strong>إشراف الإعلانات</strong>
+                        <span>@listingCount إعلان · إخفاء/حَذف لِلمُسيء</span></div>
+                    <span style="color:var(--st-faint);">←</span>
+                </a>
+                <a class="studio-list-row" href="@($"/studio/apps/{Slug}/tickets")">
+                    <span class="studio-list-icon" style="background:#fee2e2;color:#b91c1c;"><AcIcon Name="ticket" Size="16" /></span>
+                    <div class="studio-list-body"><strong>تَذاكِر الدَّعم</strong>
+                        <span>@openTicketCount مَفتوحَة · @totalTicketCount إجمالاً</span></div>
+                    <span style="color:var(--st-faint);">←</span>
+                </a>
+            </div>
+
+            <div class="st-section-title" style="display:flex;justify-content:space-between;align-items:center;">
+                <span>الدَّعم الفَنِّي</span>
+                <a href="@($"/studio/apps/{Slug}/tickets")"
+                   style="font-size:12px;color:var(--st-primary);text-decoration:none;font-weight:600;">
+                    كُلّ التَّذاكِر ←
+                </a>
+            </div>
+            @if (recentTickets is { Count: > 0 })
+            {
+                <div class="studio-list">
+                    @foreach (var t in recentTickets)
+                    {
+                        <a class="studio-list-row" href="@($"/studio/apps/{Slug}/tickets/{t.Id}")">
+                            <span class="studio-list-icon" style="background:#fef3c7;color:#854d0e;"><AcIcon Name="ticket" Size="16" /></span>
+                            <div class="studio-list-body">
+                                <strong>@(string.IsNullOrEmpty(t.Subject) ? "تَذكَرَة" : t.Subject)</strong>
+                                <span>@t.AuthorName · @t.CreatedAt.ToString("yyyy-MM-dd HH:mm")</span>
+                            </div>
+                            <span class="st-chip">@t.Status</span>
+                        </a>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="st-card" style="color:var(--st-muted);text-align:center;padding:24px;">
+                    لا تَذاكِر بَعد.
+                </div>
+            }
+
+            <div class="st-section-title">الباقات والاشتِراكات</div>
+            @if (plans is { Count: > 0 })
+            {
+                <div class="studio-list">
+                    @foreach (var p in plans)
+                    {
+                        <div class="studio-list-row" style="cursor:default;">
+                            <span class="studio-list-icon" style="background:#dcfce7;color:#15803d;"><AcIcon Name="wallet" Size="16" /></span>
+                            <div class="studio-list-body">
+                                <strong>@p.Name</strong>
+                                <span>@p.Price ريال/شَهر · @(p.IsActive ? "مُفَعَّلَة" : "مُعَطَّلَة")</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="st-card" style="color:var(--st-muted);text-align:center;padding:24px;">
+                    لا باقات مُعرَّفَة بَعد لِهذا التَّطبيق.
+                </div>
+            }
+
+            <div class="st-section-title">آخِر الإشعارات (سِجِلّ النَّشاط)</div>
+            @if (recentNotifs is { Count: > 0 })
+            {
+                <div class="studio-list">
+                    @foreach (var n in recentNotifs)
+                    {
+                        <div class="studio-list-row" style="cursor:default;">
+                            <span class="studio-list-icon" style="background:#fae8ff;color:#a21caf;"><AcIcon Name="bell" Size="16" /></span>
+                            <div class="studio-list-body">
+                                <strong>@n.Title</strong>
+                                <span>@n.Type · @n.At.ToString("yyyy-MM-dd HH:mm")</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="st-card" style="color:var(--st-muted);text-align:center;padding:24px;">
+                    لا نَشاط بَعد.
+                </div>
+            }
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    Tenant? tenant;
+    int userCount, listingCount, planCount, openTicketCount, totalTicketCount;
+    List<Ticket>? recentTickets;
+    List<Plan>? plans;
+    List<Notification>? recentNotifs;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        await using var gs = Store.QuerySession();
+        tenant = await gs.LoadAsync<Tenant>(Slug);
+        if (tenant is null || tenant.OwnerUserId != Auth.UserId!.Value) { tenant = null; return; }
+
+        await using var ts = Store.QuerySession(Slug);
+        userCount     = await Safe(() => ts.Query<User>().CountAsync());
+        listingCount  = await Safe(() => ts.Query<Listing>().Where(l => !l.IsDeleted).CountAsync());
+        plans         = await SafeList(() => ts.Query<Plan>().OrderBy(p => p.Price).Take(10).ToListAsync());
+        planCount     = plans?.Count ?? 0;
+        recentTickets = await SafeList(() => ts.Query<Ticket>().OrderByDescending(t => t.CreatedAt).Take(5).ToListAsync());
+        totalTicketCount = await Safe(() => ts.Query<Ticket>().CountAsync());
+        openTicketCount  = await Safe(() => ts.Query<Ticket>().Where(t => t.Status == "open").CountAsync());
+        recentNotifs  = await SafeList(() => ts.Query<Notification>().OrderByDescending(n => n.At).Take(8).ToListAsync());
+    }
+
+    static async Task<int> Safe(Func<Task<int>> fn) { try { return await fn(); } catch { return 0; } }
+    static async Task<List<T>?> SafeList<T>(Func<Task<IReadOnlyList<T>>> fn)
+    { try { return (await fn()).ToList(); } catch { return null; } }
+}

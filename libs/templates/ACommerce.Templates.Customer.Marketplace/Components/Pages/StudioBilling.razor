@@ -1,0 +1,89 @@
+@page "/studio/billing"
+@inject Services.Incubator.StudioAuth Auth
+@inject Services.Incubator.StudioTierService TierSvc
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+
+@*
+    صَفحَة باقَات وفَوتَرَة — حاليّاً عَرض فَقَط (لا تَكامُل دَفع).
+    الزِرّ "اِختَر" يُسَجِّل النِيَّة في الـ DB كَ pending — لِلتَّكامُل لاحِقاً.
+*@
+
+<StudioShell Title="الباقَات" Active="">
+    <ChildContent>
+        <div class="studio-page-head">
+            <h1>اختَر باقَتَكَ</h1>
+            <p>ابدَأ بِـ Spark — ارفَع الباقَة عِندَما تَصِل لِلحَدّ.</p>
+        </div>
+
+        @if (currentTier is not null)
+        {
+            <div class="st-card" style="background:var(--st-primary-50);border:1px solid var(--st-primary);margin-bottom:18px;">
+                باقَتُكَ الحاليَّة: <strong>@TierCatalog.For(currentTier).LabelAr</strong>
+                @if (user is not null)
+                {
+                    var l = TierCatalog.For(currentTier);
+                    <span style="color:var(--st-muted);font-size:13px;display:block;margin-top:6px;">
+                        استَهلَكتَ هذا الشَّهر:
+                        @user.AnalysesUsed / @Cap(l.AnalysesPerMonth) تَحاليل ·
+                        @user.RefinesUsed / @Cap(l.RefinesPerMonth) تَحسينات ·
+                        @user.StoresBuilt / @Cap(l.StoresMax) تَطبيقات
+                    </span>
+                }
+            </div>
+        }
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">
+            @foreach (var t in TierCatalog.All.Values)
+            {
+                var isCurrent = t.Tier == currentTier;
+                <div class="st-card"
+                     style="@(isCurrent ? "border:2px solid var(--st-primary);" : "")">
+                    <div style="font-size:13px;color:var(--st-muted);font-weight:700;letter-spacing:.04em;">
+                        @t.LabelAr
+                    </div>
+                    <div style="font-size:28px;font-weight:800;margin:4px 0 14px;">
+                        @t.MonthlyPriceSar <span style="font-size:13px;color:var(--st-muted);font-weight:400;">ر.س / شَهر</span>
+                    </div>
+                    <ul style="margin:0 0 16px;padding-inline-start:18px;font-size:13.5px;line-height:1.9;color:var(--st-ink-700);">
+                        <li>@Cap(t.AnalysesPerMonth) تَحاليل / شَهر</li>
+                        <li>@Cap(t.RefinesPerMonth) تَحسينات / شَهر</li>
+                        <li>@Cap(t.StoresMax) تَطبيقات</li>
+                        @if (t.AllowExport)        { <li>تَصدير PDF / Excel</li> }
+                        @if (t.AllowCustomPattern) { <li>أَنماط مُخَصَّصَة</li> }
+                    </ul>
+                    @if (isCurrent)
+                    {
+                        <button class="st-btn st-btn-ghost st-btn-block" disabled>الباقَة الحاليَّة</button>
+                    }
+                    else
+                    {
+                        <form method="post" action="@($"/studio/billing/select?tier={t.Tier}")">
+                            <button type="submit" class="st-btn st-btn-primary st-btn-block">
+                                اختِيار
+                            </button>
+                        </form>
+                    }
+                </div>
+            }
+        </div>
+
+        <p style="margin-top:18px;color:var(--st-muted);font-size:12px;text-align:center;">
+            مَلحوظَة: التَّكامُل مَع بَوّابَة الدَّفع غَير مُتاح حاليّاً — الاختِيار يُسَجَّل لِلتَّتَبُّع.
+        </p>
+    </ChildContent>
+</StudioShell>
+
+@code {
+    StudioUser? user;
+    string? currentTier;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        user = await TierSvc.GetUserAsync(Auth.UserId!.Value);
+        currentTier = user?.Tier ?? "spark";
+    }
+
+    static string Cap(int v) => v == int.MaxValue ? "بِلا حَدّ" : v.ToString();
+}

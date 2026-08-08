@@ -1,0 +1,213 @@
+@page "/studio/s/{id:guid}/print"
+@inject Services.Incubator.StudioAuth Auth
+@inject Services.Incubator.FeasibilityAnalysisService Incubator
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+@using System.Text.Json
+@layout EmptyLayout
+
+@*
+    صَفحَة قابِلَة لِلطِّباعَة لِدِراسَة الجَدوى. لا shell، فَقَط مُحتَوى
+    مُحَسَّن لِـ A4. الـ Ctrl+P يَحفَظها PDF.
+*@
+
+<HeadContent>
+    <title>دِراسَة جَدوى — للطِّباعَة</title>
+    <style>
+        @@page { size: A4; margin: 18mm 16mm; }
+        body { font-family: 'Cairo', system-ui, sans-serif; color: #0f172a;
+               background: #fff; direction: rtl; line-height: 1.7;
+               font-size: 13px; margin: 0; padding: 20px; max-width: 760px; margin-inline: auto; }
+        h1 { font-size: 22px; margin: 0 0 4px; }
+        h2 { font-size: 16px; margin: 18px 0 6px; border-bottom: 2px solid #2563eb; padding-bottom: 4px; color: #1d4ed8; }
+        h3 { font-size: 14px; margin: 10px 0 4px; }
+        .print-head { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; margin-bottom: 16px; }
+        .print-mark { width: 40px; height: 40px; border-radius: 10px;
+                      background: linear-gradient(135deg, #2563eb, #7c3aed); color:#fff;
+                      display: grid; place-items: center; font-size: 20px; font-weight: 800; }
+        .print-meta { color: #64748b; font-size: 11px; }
+        .print-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0; }
+        .print-stat { padding: 10px 12px; background: #f8fafc; border-radius: 8px; }
+        .print-stat-label { font-size: 11px; color: #64748b; }
+        .print-stat-value { font-size: 16px; font-weight: 700; }
+        .print-section { margin-bottom: 8px; }
+        .print-section p { margin: 4px 0; }
+        .print-list { margin: 0; padding-inline-start: 18px; }
+        .print-list li { margin-bottom: 4px; }
+        .risk-row { padding: 8px 12px; background: #f8fafc; border-radius: 8px; margin-bottom: 6px; page-break-inside: avoid; }
+        .risk-tag { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 10.5px; background: #e0e7ff; color: #4338ca; }
+        .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 10.5px; color: #94a3b8; }
+        .print-actions { background: #f1f5f9; padding: 10px; border-radius: 8px; margin-bottom: 16px; font-size: 12px; text-align: center; }
+        @@media print { .print-actions { display: none; } }
+        .print-actions button { background: #2563eb; color: #fff; border: 0; padding: 6px 14px;
+                                border-radius: 6px; cursor: pointer; font-family: inherit; }
+    </style>
+</HeadContent>
+
+<div class="print-actions">
+    اِضغَط <button type="button" onclick="window.print()">طِباعَة / حِفظ PDF</button>
+    ثُمَّ اختَر "حِفظ كَ PDF" مِن وُجهَة الطَّابِعَة.
+</div>
+
+@if (session is null || root is null)
+{
+    <p>الدِراسَة غَير مُتاحَة.</p>
+}
+else
+{
+    var r = root.Value;
+
+    <div class="print-head">
+        <div class="print-mark">A</div>
+        <div>
+            <h1>دِراسَة جَدوى</h1>
+            <div class="print-meta">
+                مُولَّدَة في @session.UpdatedAt.ToString("yyyy-MM-dd HH:mm") ·
+                جَودَة @session.AnalysisQualityScore% · ACommerce
+            </div>
+        </div>
+    </div>
+
+    <p style="margin:0 0 14px;color:#475569;">
+        <strong>الفِكرَة: </strong>
+        @(string.IsNullOrEmpty(session.ProjectDescription) ? "—" : session.ProjectDescription)
+    </p>
+
+    @if (r.TryGetProperty("summary", out var sum))
+    {
+        <div class="print-stats">
+            <div class="print-stat"><div class="print-stat-label">حَجم السوق</div>
+                <div class="print-stat-value">@Str(sum,"marketSizeSar")</div></div>
+            <div class="print-stat"><div class="print-stat-label">عُملاء س١</div>
+                <div class="print-stat-value">@Str(sum,"estimatedCustomersYear1")</div></div>
+            <div class="print-stat"><div class="print-stat-label">الاستِثمار</div>
+                <div class="print-stat-value">@Str(sum,"requiredInvestmentSar")</div></div>
+        </div>
+        <p><strong>الحُكم: </strong>@Str(sum,"verdict")</p>
+    }
+
+    @Section(r, "marketSizing", "حَجم السوق", ("tam","TAM"),("sam","SAM"),("som","SOM"),("reasoning","التَّحليل"))
+    @Section(r, "revenueModel", "نَموذَج الإيراد", ("model","النَّموذَج"),("pricingSar","التَّسعير"),("unitEconomics","اقتِصاد الوَحدَة"))
+    @Section(r, "costStructure", "هَيكَل التَّكلِفَة", ("launchSar","الإطلاق"),("monthlyOpsSar","التَّشغيل/شَهر"),("cacSar","CAC"),("ltvSar","LTV"))
+    @Section(r, "financialProjection", "التَّوَقُّع المالي", ("year1RevenueSar","إيراد س١"),("breakEvenMonths","التَّعادُل (شهر)"),("scenario","السيناريو"))
+
+    @Array(r, "customerSegments", "شَرائِح العُملاء", "name", "description")
+    @Array(r, "competitors", "المُنافِسون والفَجوَة", "name", "gap")
+
+    @if (r.TryGetProperty("risks", out var risks) && risks.ValueKind == JsonValueKind.Array)
+    {
+        <h2>المَخاطِر</h2>
+        @foreach (var risk in risks.EnumerateArray())
+        {
+            <div class="risk-row">
+                <strong>@Str(risk,"title")</strong> <span class="risk-tag">@Str(risk,"category")</span><br/>
+                <span style="color:#64748b;font-size:11.5px;">
+                    أَثَر: @Str(risk,"impact") · احتِمال: @Str(risk,"likelihood")
+                </span><br/>
+                <em>التَّخفيف: </em>@Str(risk,"mitigation")
+            </div>
+        }
+    }
+
+    @if (r.TryGetProperty("lessonsFromFailures", out var lessons) && lessons.ValueKind == JsonValueKind.Array)
+    {
+        <h2>دُروس مِن مَشاريع فَشِلَت</h2>
+        <ul class="print-list">
+            @foreach (var l in lessons.EnumerateArray()) { <li>@l.GetString()</li> }
+        </ul>
+    }
+
+    @if (r.TryGetProperty("roadmap", out var roadmap) && roadmap.ValueKind == JsonValueKind.Array)
+    {
+        <h2>خارِطَة الطَّريق</h2>
+        @foreach (var ph in roadmap.EnumerateArray())
+        {
+            <div class="risk-row">
+                <strong>@Str(ph,"phase")</strong>
+                <span class="risk-tag">@Str(ph,"durationWeeks") أسبوع</span><br/>
+                <span style="color:#64748b;">@Str(ph,"goal")</span>
+            </div>
+        }
+    }
+
+    @if (r.TryGetProperty("recommendedPattern", out var rp))
+    {
+        <h2>الإطلاق المُقتَرَح</h2>
+        <p><strong>النَّمَط:</strong> @Str(rp,"pattern") · <strong>الوَقت:</strong> @Str(rp,"timeToLaunch")</p>
+        <p>@Str(rp,"reasoning")</p>
+    }
+
+    <div class="footer">
+        هذا التَّحليل مُولَّد آلِيّاً مِن نَموذَج ذَكاء اصطِناعيّ بِناءً على بيانات السوق المُتاحَة.
+        المَنصَّة غَير مَسؤولَة عَن نَتائِج القَرارات المَبنيَّة عَلَيه.
+        يُوصَى بِالتَّحَقُّق المُستَقِلّ قَبل اتِّخاذ قَرارات استِثماريَّة.
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    IncubatorSession? session;
+    JsonElement? root;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        session = await Incubator.LoadAsync(Id);
+        if (session is not null && session.OwnerUserId != Auth.UserId!.Value) { session = null; return; }
+        if (session?.AnalysisJson is not null)
+        {
+            try { root = JsonDocument.Parse(session.AnalysisJson).RootElement.Clone(); }
+            catch { root = null; }
+        }
+    }
+
+    static string Str(JsonElement e, string p)
+        => e.TryGetProperty(p, out var v)
+            ? (v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : v.ToString())
+            : "—";
+
+    RenderFragment Section(JsonElement r, string key, string title,
+        params (string prop, string label)[] fields) => builder =>
+    {
+        if (!r.TryGetProperty(key, out var obj) || obj.ValueKind != JsonValueKind.Object) return;
+        var seq = 0;
+        builder.OpenElement(seq++, "h2");
+        builder.AddContent(seq++, title);
+        builder.CloseElement();
+        foreach (var (prop, label) in fields)
+        {
+            builder.OpenElement(seq++, "p");
+            builder.OpenElement(seq++, "strong");
+            builder.AddContent(seq++, label + ": ");
+            builder.CloseElement();
+            builder.AddContent(seq++, Str(obj, prop));
+            builder.CloseElement();
+        }
+    };
+
+    RenderFragment Array(JsonElement r, string key, string title,
+        string titleProp, string bodyProp) => builder =>
+    {
+        if (!r.TryGetProperty(key, out var arr) || arr.ValueKind != JsonValueKind.Array) return;
+        var seq = 0;
+        builder.OpenElement(seq++, "h2");
+        builder.AddContent(seq++, title);
+        builder.CloseElement();
+        foreach (var item in arr.EnumerateArray())
+        {
+            var c = item;
+            builder.OpenElement(seq++, "div");
+            builder.AddAttribute(seq++, "class", "risk-row");
+            builder.OpenElement(seq++, "strong");
+            builder.AddContent(seq++, Str(c, titleProp));
+            builder.CloseElement();
+            builder.OpenElement(seq++, "br");
+            builder.CloseElement();
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "style", "color:#64748b;font-size:11.5px;");
+            builder.AddContent(seq++, Str(c, bodyProp));
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+    };
+}

@@ -1,14 +1,15 @@
 @page "/{slug}/chats/{conversationId:guid}"
+@page "/{slug}/r/{role}/chats/{conversationId:guid}"
 @inject IDocumentStore Store
 @inject AuthSession Auth
 
-<div class="acs-page">
+<div class="acs-page acs-chat-page">
 @if (!Auth.IsAuthenticated)
 {
     <AcEmptyState IconName="message"
                   Title="تَحتاج تَسجيل دُخول"
                   ActionLabel="تَسجيل دُخول"
-                  ActionHref="@($"/{Slug}/login")" />
+                  ActionHref="@AuthSession.LinkFor(Slug, Role, $"login")" />
 }
 else if (conv is null)
 {
@@ -19,9 +20,9 @@ else
     var iAmOwner = conv.OwnerId == Auth.UserId;
     var partnerName = iAmOwner ? conv.PartnerName : conv.OwnerName;
 
-    <div style="display:flex;align-items:center;gap:12px;padding-bottom:12px;
+    <div class="acs-chat-header" style="display:flex;align-items:center;gap:12px;padding-bottom:12px;
                 border-bottom:1px solid var(--ac-border);margin-bottom:12px;">
-        <a href="@($"/{Slug}/chats")"
+        <a href="@AuthSession.LinkFor(Slug, Role, $"chats")"
            style="display:inline-flex;text-decoration:none;color:var(--ac-text);">
             <AcIcon Name="arrow-right" Size="24" />
         </a>
@@ -29,7 +30,7 @@ else
         <strong>@partnerName</strong>
     </div>
 
-    <div style="min-height:400px;display:flex;flex-direction:column;gap:8px;padding-bottom:16px;">
+    <div class="acs-chat-messages">
         @if (messages.Count == 0)
         {
             <p class="ac-muted" style="text-align:center;padding:32px 0;">
@@ -53,25 +54,16 @@ else
                     </div>
                 }
                 var mine = m.SenderId == Auth.UserId;
-                <div style="display:flex;justify-content:@(mine ? "flex-end" : "flex-start");">
-                    <div style="max-width:75%;padding:10px 14px;
-                                border-radius:var(--ac-radius-md);
-                                background:@(mine ? "var(--ac-primary)" : "var(--ac-bg-alt)");
-                                color:@(mine ? "#fff" : "var(--ac-text)");">
-                        <div style="white-space:pre-wrap;word-break:break-word;">@m.Body</div>
-                        <div style="font-size:10px;opacity:.7;margin-top:4px;text-align:end;">
-                            @local.ToString("HH:mm")
-                        </div>
-                    </div>
-                </div>
+                <AcChatBubble Body="@m.Body" Time="@local.ToString("HH:mm")" Mine="@mine" />
             }
         }
     </div>
 
     @if (conv.ExpiresAt.HasValue && !conv.IsExpired)
     {
-        <p style="text-align:center;font-size:12px;color:var(--ac-text-muted);margin:8px 0;">
-            ⏱ مُحادَثَة مُؤَقَّتَة — تَنتَهي @conv.ExpiresAt.Value.ToString("yyyy-MM-dd HH:mm")
+        <p style="display:flex;align-items:center;justify-content:center;gap:6px;
+                  font-size:12px;color:var(--ac-text-muted);margin:8px 0;">
+            <AcIcon Name="clock" Size="14" /> مُحادَثَة مُؤَقَّتَة — تَنتَهي @conv.ExpiresAt.Value.ToString("yyyy-MM-dd HH:mm")
         </p>
     }
 
@@ -102,6 +94,7 @@ else
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
     [Parameter] public Guid ConversationId { get; set; }
     Conversation? conv;
     List<Message> messages = new();

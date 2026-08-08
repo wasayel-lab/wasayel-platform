@@ -14,9 +14,10 @@
     }
     else
     {
+        var backHref = From == "tenant" ? $"/{Slug}/r/admin/manage" : $"/admin/tenants/{Slug}";
         <div class="acm-admin-head">
             <div style="display:flex;align-items:center;gap:8px;">
-                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/admin/tenants/{Slug}")">
+                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@backHref">
                     <AcIcon Name="arrow-right" Size="16" />
                 </a>
                 <h1 class="acm-wizard-title" style="margin:0;">فِئات @tenant.Name</h1>
@@ -37,7 +38,7 @@
                         @foreach (var c in tenant.Categories.OrderBy(c => c.SortOrder).ThenBy(c => c.Label))
                         {
                             <div class="acm-cat-row">
-                                <span style="font-size:24px;">@c.Icon</span>
+                                <span style="font-size:24px;"><AcIcon Name="@(string.IsNullOrEmpty(c.Icon) ? "tag" : ACommerce.Widgets.AcIconMap.Resolve(c.Icon, "tag"))" Size="24" /></span>
                                 <div style="flex:1;">
                                     <strong>@c.Label</strong>
                                     <span style="color:var(--ac-text-muted);font-size:12px;
@@ -58,18 +59,54 @@
             </ChildContent>
         </AcCard>
 
-        <form method="post" action="@($"/admin/tenants/{Slug}/categories/save")">
+        <form method="post" action="@($"/admin/tenants/{Slug}/categories/save")" id="cats-form">
             <AcCard>
                 <ChildContent>
                     <h3 style="margin-top:0;">تَحديث الفِئات</h3>
-                    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
-                        صَفّ لِكُلّ فِئَة بِالصِّيغَة:
-                        <code>slug | الاسم | أَيقونَة | تَجميع</code>.
-                        التَّرتيب في القائِمَة = تَرتيب العَرض.
-                        <strong>تَحذير</strong>: حَذف slug مَوجود يَترُك إعلاناتِه بِلا فِئَة في الواجِهَة.
+                    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 14px;">
+                        بِطاقَة لِكُلّ فِئَة. التَّرتيب = تَرتيب العَرض.
+                        <strong>تَحذير</strong>: حَذف فِئَة مَوجودَة يَترُك إعلاناتِها بِلا فِئَة.
                     </p>
-                    <textarea name="categories" rows="10" required
-                              class="ac-input" style="font-family:monospace;font-size:13px;direction:ltr;">@catsText</textarea>
+
+                    <div class="ac-editor" id="cats-editor">
+                        @foreach (var c in tenant.Categories.OrderBy(c => c.SortOrder).ThenBy(c => c.Label))
+                        {
+                            <div class="ac-editor-row" data-cat-row>
+                                <div class="ac-editor-row-head">
+                                    <input class="ac-input ac-cat-icon" value="@(c.Icon ?? "home")"
+                                           aria-label="أَيقونَة" />
+                                    <input class="ac-input ac-cat-label" placeholder="اسم الفِئَة" value="@c.Label" />
+                                    <button type="button" class="ac-icon-btn" data-remove-cat aria-label="حَذف"><AcIcon Name="x" Size="14" /></button>
+                                </div>
+                                <div class="ac-editor-grid2">
+                                    <div>
+                                        <span class="ac-chip-input-label">المُعَرِّف (slug)</span>
+                                        <input class="ac-input ac-cat-slug" placeholder="apartments" value="@c.Slug" style="direction:ltr;" />
+                                    </div>
+                                    <div>
+                                        <span class="ac-chip-input-label">التَّجميع (اختياريّ)</span>
+                                        <input class="ac-input ac-cat-kind" placeholder="residential" value="@c.Kind"
+                                               list="kind-list" style="direction:ltr;" />
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <datalist id="kind-list">
+                        <option value="residential"></option>
+                        <option value="commercial"></option>
+                        <option value="roommate"></option>
+                        <option value="vehicles"></option>
+                        <option value="events"></option>
+                        <option value="leisure"></option>
+                    </datalist>
+
+                    <button type="button" class="ac-add-row-btn" id="add-cat" style="margin-top:12px;">
+                        <AcIcon Name="plus" Size="16" /> إضافَة فِئَة
+                    </button>
+
+                    <textarea name="categories" id="cats-hidden" hidden>@catsText</textarea>
                 </ChildContent>
             </AcCard>
 
@@ -80,12 +117,33 @@
                 </button>
             </div>
         </form>
+
+        <template id="cat-row-tpl">
+            <div class="ac-editor-row" data-cat-row>
+                <div class="ac-editor-row-head">
+                    <input class="ac-input ac-cat-icon" value="tag" aria-label="أَيقونَة" />
+                    <input class="ac-input ac-cat-label" placeholder="اسم الفِئَة" />
+                    <button type="button" class="ac-icon-btn" data-remove-cat aria-label="حَذف"><AcIcon Name="x" Size="14" /></button>
+                </div>
+                <div class="ac-editor-grid2">
+                    <div>
+                        <span class="ac-chip-input-label">المُعَرِّف (slug)</span>
+                        <input class="ac-input ac-cat-slug" placeholder="apartments" style="direction:ltr;" />
+                    </div>
+                    <div>
+                        <span class="ac-chip-input-label">التَّجميع (اختياريّ)</span>
+                        <input class="ac-input ac-cat-kind" placeholder="residential" list="kind-list" style="direction:ltr;" />
+                    </div>
+                </div>
+            </div>
+        </template>
     }
 </div>
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
     [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+    [SupplyParameterFromQuery(Name = "from")] public string? From { get; set; }
 
     Tenant? tenant;
     string catsText = "";
@@ -97,7 +155,7 @@
         if (tenant is null) return;
         catsText = string.Join('\n', tenant.Categories
             .OrderBy(c => c.SortOrder).ThenBy(c => c.Label)
-            .Select(c => $"{c.Slug} | {c.Label} | {c.Icon ?? "🏠"} | {c.Kind}"));
+            .Select(c => $"{c.Slug} | {c.Label} | {c.Icon ?? "home"} | {c.Kind}"));
     }
 
     static string FormatError(string err) => err switch

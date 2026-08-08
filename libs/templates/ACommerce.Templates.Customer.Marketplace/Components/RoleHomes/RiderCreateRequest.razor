@@ -1,8 +1,11 @@
+@inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
+
 @*
-    نَموذَج إنشاء طَلَب مِشوار مُبَسَّط — لا قائِمَة فِئات، لا حُقول
-    اختِياريَّة مُعَقَّدَة. يَستَخدِم نَفس endpoint /listings/create
-    عَبر hidden inputs: category مُسَكَّن مُسبَقاً، accepts_offers=true،
-    وَ pickup/dropoff كَ خَصائِص ديناميكِيَّة.
+    نَموذَج إنشاء طَلَب مِشوار — مَيدان pickup/dropoff ثابِت (الحَدّ
+    الأَدنَى لِأَيّ مَتجَر مَشاوير)، ثُمّ الخَصائِص الديناميكِيَّة الَّتي
+    يُعَرِّفها مُصَمِّم المَتجَر عَلى الفِئَة (مَثَلاً نَوع المَركَبَة
+    المَطلوبَة، عَدَد الرُكّاب، وَقت الانطِلاق…) تَظهَر بَعدُ بِشَكل
+    تِلقائيّ. هكَذا يَكون لِلمُصَمِّم مَرونَة.
 *@
 
 <div class="acs-page">
@@ -44,6 +47,24 @@
                 </ChildContent>
             </AcCard>
 
+            @* خَصائِص ديناميكِيَّة لِفِئَة المَشاوير — مُعَرَّفَة مِن
+               /admin/tenants/{slug}/attributes عَلى نِطاق الفِئَة. لَو لَم
+               يُعَرِّف المُصَمِّم أَيّاً، لا يَظهَر هذا الـ Card. *@
+            @if (dynFields is { Count: > 0 })
+            {
+                <AcCard>
+                    <ChildContent>
+                        <h3 style="margin-top:0;font-size:14px;">تَفاصيل إضافِيَّة</h3>
+                        @foreach (var f in dynFields)
+                        {
+                            <AcField Label="@f.Label" Required="@f.IsRequired">
+                                @RenderDynInput(f)
+                            </AcField>
+                        }
+                    </ChildContent>
+                </AcCard>
+            }
+
             <AcCard>
                 <ChildContent>
                     <AcField Label="مُلاحَظات لِلسائِق (اختياريّ)">
@@ -57,8 +78,6 @@
                                class="ac-input" inputmode="numeric" placeholder="0" value="0" />
                     </AcField>
 
-                    @* المَدينَة/الحَيّ مَأخوذَتان مِن مَكان الانطِلاق لاحِقاً
-                       (تَنبيه: التَخزين الحاليّ يَطلُبهما كَ hidden fallback). *@
                     <input type="hidden" name="city"     value="@(DefaultCity ?? "")" />
                     <input type="hidden" name="district" value="—" />
                 </ChildContent>
@@ -73,6 +92,7 @@
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
     [Parameter] public Tenant? Tenant { get; set; }
     [Parameter] public string? Err { get; set; }
 
@@ -80,4 +100,46 @@
         Tenant?.Categories.OrderBy(c => c.SortOrder).FirstOrDefault();
 
     string? DefaultCity => Tenant?.City;
+
+    IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.DynField>? dynFields;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (DefaultCategory is not null)
+            dynFields = await DynAttrs.GetForListingCategoryAsync(Slug, DefaultCategory.Slug);
+    }
+
+    RenderFragment RenderDynInput(ACommerce.Templates.Customer.Marketplace.Services.DynField f) => @<text>
+        @{ var name = "attr_" + f.Code; }
+        @switch (f.Type)
+        {
+            case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.Number:
+                <input type="number" name="@name" class="ac-input"
+                       required="@f.IsRequired" inputmode="numeric" />
+                break;
+            case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.LongText:
+                <textarea name="@name" rows="2" class="ac-input"
+                          required="@f.IsRequired" style="resize:vertical;font-family:inherit;"></textarea>
+                break;
+            case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.Boolean:
+                <label style="display:inline-flex;align-items:center;gap:8px;">
+                    <input type="checkbox" name="@name" value="true" />
+                    <span>نَعَم</span>
+                </label>
+                break;
+            case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.SingleSelect:
+                <select name="@name" class="ac-input" required="@f.IsRequired">
+                    <option value="">— اختَر —</option>
+                    @foreach (var o in f.Options) { <option value="@o.Value">@o.Label</option> }
+                </select>
+                break;
+            case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.Date:
+                <input type="date" name="@name" class="ac-input" required="@f.IsRequired" />
+                break;
+            default:
+                <input type="text" name="@name" class="ac-input"
+                       required="@f.IsRequired" maxlength="200" />
+                break;
+        }
+    </text>;
 }

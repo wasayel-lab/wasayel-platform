@@ -1,0 +1,260 @@
+@page "/admin/incubator/{id:guid}/study"
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.FeasibilityAnalysisService Incubator
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+@using System.Text.Json
+
+@*
+    عرض دراسة الجدوى — SSR. أثناء التحليل (Analyzing) يُحدّث تلقائياً كل
+    4 ثوانٍ (meta refresh) حتى يكتمل. عند الاكتمال يعرض الأقسام من JSON.
+*@
+
+@if (session?.Status == IncubatorStatus.Analyzing)
+{
+    <HeadContent><meta http-equiv="refresh" content="4" /></HeadContent>
+}
+
+<div class="acs-page acm-admin" style="max-width:780px;margin:0 auto;">
+    <div class="acm-admin-head">
+        <div style="display:flex;align-items:center;gap:8px;">
+            <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin/incubator" aria-label="الرُجوع">
+                <AcIcon Name="arrow-right" Size="16" />
+            </a>
+            <h1 class="acm-wizard-title" style="margin:0;"><AcIcon Name="bar-chart" Size="16" /> دِراسَة الجَدوى</h1>
+        </div>
+        @if (session?.Status == IncubatorStatus.Completed)
+        {
+            <span class="ac-chip ac-chip-sm">جَودَة @session.AnalysisQualityScore%</span>
+        }
+    </div>
+
+    @if (session is null)
+    {
+        <AcEmptyState IconName="info" Title="الجَلسَة غَير مَوجودَة" />
+    }
+    else if (session.Status == IncubatorStatus.Analyzing)
+    {
+        <AcCard><ChildContent>
+            <div style="text-align:center;padding:32px;">
+                <span style="font-size:48px;"><AcIcon Name="clock" Size="48" /></span>
+                <h3>جارٍ تَحليل فِكرَتِكَ…</h3>
+                <p style="color:var(--ac-text-muted);font-size:13px;">
+                    نَجمَع أَرقام السوق ونُقارِن بِالمنافِسين ونَستَنبِط المَخاطِر.
+                    تُحَدَّث الصَفحَة تِلقائيّاً.
+                </p>
+            </div>
+        </ChildContent></AcCard>
+    }
+    else if (session.Status == IncubatorStatus.Failed)
+    {
+        <AcAlert Variant="danger"
+                 Message="@($"فَشِلَ التَّحليل: {session.AnalysisError}")" />
+        <form method="post" action="@($"/admin/incubator/{session.Id}/analyze")" style="margin-top:12px;">
+            <button type="submit" class="ac-btn ac-btn-primary">↺ إعادَة المُحاوَلَة</button>
+        </form>
+    }
+    else if (session.AnalysisJson is null)
+    {
+        <AcEmptyState IconName="info" Title="لا تَحليل بَعد"
+                      Message="عُد لِلمُعالِج وَاضغَط «حَلِّل الآن»."
+                      ActionLabel="المُعالِج" ActionHref="@($"/admin/incubator/{session.Id}")" />
+    }
+    else
+    {
+        @if (root is null)
+        {
+            <AcAlert Variant="warning" Message="تَعَذَّرَ قِراءَة نَتيجَة التَّحليل." />
+        }
+        else
+        {
+            var r = root.Value;
+
+            @* ── ملخص في 3 أرقام ── *@
+            @if (r.TryGetProperty("summary", out var sum))
+            {
+                <div class="acm-home-grid acm-stats-grid">
+                    <div class="acm-stat-tile">
+                        <strong>@Str(sum, "marketSizeSar")</strong>
+                        <span>حَجم السوق</span>
+                    </div>
+                    <div class="acm-stat-tile">
+                        <strong>@Str(sum, "estimatedCustomersYear1")</strong>
+                        <span>عُملاء السَّنَة ١</span>
+                    </div>
+                    <div class="acm-stat-tile">
+                        <strong>@Str(sum, "requiredInvestmentSar")</strong>
+                        <span>الاستِثمار المَطلوب</span>
+                    </div>
+                </div>
+                <AcCard><ChildContent>
+                    <strong>الحُكم: </strong>@Str(sum, "verdict")
+                </ChildContent></AcCard>
+            }
+
+            @Section("حَجم السوق", "marketSizing", r, ("tam","TAM"),("sam","SAM"),("som","SOM"),("reasoning","التَّحليل"))
+            @SectionObj("نَموذَج الإيراد", "revenueModel", r, ("model","النَّموذَج"),("pricingSar","التَّسعير"),("unitEconomics","اقتِصاد الوَحدَة"))
+            @SectionObj("هَيكَل التَّكلِفَة", "costStructure", r, ("launchSar","الإطلاق"),("monthlyOpsSar","التَّشغيل الشَّهري"),("cacSar","CAC"),("ltvSar","LTV"))
+            @SectionObj("التَّوَقُّع المالي", "financialProjection", r, ("year1RevenueSar","إيراد السَّنَة ١"),("breakEvenMonths","التَّعادُل (أشهُر)"),("scenario","السيناريو"))
+
+            @* ── شرائح العملاء ── *@
+            @ArraySection("شَرائِح العُملاء", "customerSegments", r, "name", "description")
+            @* ── المنافسون ── *@
+            @ArraySection("المُنافِسون والفَجوَة", "competitors", r, "name", "gap")
+
+            @* ── المخاطر ── *@
+            @if (r.TryGetProperty("risks", out var risks) && risks.ValueKind == JsonValueKind.Array)
+            {
+                <h3 style="margin:20px 0 8px;"><AcIcon Name="alert-circle" Size="16" /> المَخاطِر</h3>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    @foreach (var risk in risks.EnumerateArray())
+                    {
+                        <AcCard><ChildContent>
+                            <div style="display:flex;justify-content:space-between;gap:8px;align-items:start;">
+                                <strong>@Str(risk, "title")</strong>
+                                <span class="ac-chip ac-chip-sm">@Str(risk, "category")</span>
+                            </div>
+                            <p style="margin:6px 0 0;font-size:13px;color:var(--ac-text-muted);">
+                                أَثَر: @Str(risk,"impact") · احتِمال: @Str(risk,"likelihood")<br/>
+                                <strong>التَّخفيف:</strong> @Str(risk, "mitigation")
+                            </p>
+                        </ChildContent></AcCard>
+                    }
+                </div>
+            }
+
+            @* ── دروس الفشل ── *@
+            @if (r.TryGetProperty("lessonsFromFailures", out var lessons) && lessons.ValueKind == JsonValueKind.Array)
+            {
+                <h3 style="margin:20px 0 8px;"><AcIcon Name="bar-chart" Size="16" /> دُروس مِن مَشاريع فَشِلَت</h3>
+                <AcCard><ChildContent>
+                    <ul style="margin:0;padding-inline-start:18px;line-height:2;font-size:13px;">
+                        @foreach (var l in lessons.EnumerateArray())
+                        {
+                            <li>@l.GetString()</li>
+                        }
+                    </ul>
+                </ChildContent></AcCard>
+            }
+
+            @* ── خارطة الطريق ── *@
+            @if (r.TryGetProperty("roadmap", out var roadmap) && roadmap.ValueKind == JsonValueKind.Array)
+            {
+                <h3 style="margin:20px 0 8px;"><AcIcon Name="map" Size="16" /> خارِطَة الطَّريق</h3>
+                <div class="acm-cat-list">
+                    @foreach (var ph in roadmap.EnumerateArray())
+                    {
+                        <div class="acm-cat-row">
+                            <span class="ac-chip ac-chip-sm">@Str(ph,"durationWeeks") أسبوع</span>
+                            <div style="flex:1;">
+                                <strong>@Str(ph, "phase")</strong>
+                                <span style="display:block;color:var(--ac-text-muted);font-size:12px;">
+                                    @Str(ph, "goal")
+                                </span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            @* ── التوصيات + النمط المقترح ── *@
+            @if (r.TryGetProperty("recommendedPattern", out var rp))
+            {
+                <AcCard><ChildContent>
+                    <h3 style="margin:0 0 6px;"><AcIcon Name="sparkle" Size="16" /> الإطلاق على ACommerce</h3>
+                    <p style="margin:0;font-size:14px;">
+                        <strong>النَّمَط:</strong> @Str(rp,"pattern") ·
+                        <strong>الوَقت:</strong> @Str(rp,"timeToLaunch")<br/>
+                        <span style="color:var(--ac-text-muted);font-size:13px;">@Str(rp,"reasoning")</span>
+                    </p>
+                    <a class="ac-btn ac-btn-primary" style="margin-top:12px;"
+                       href="/admin/agent">
+                        <AcIcon Name="message" Size="16" /> أَنشِئ المَتجَر بِالمُساعِد
+                    </a>
+                </ChildContent></AcCard>
+            }
+
+            @* ── تنويه قانوني ── *@
+            <AcAlert Variant="info" Message="@Disclaimer" />
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    IncubatorSession? session;
+    JsonElement? root;
+
+    const string Disclaimer =
+        "هذا التَّحليل مُولَّد آلِيّاً مِن نَموذَج ذَكاء اصطِناعيّ بِناءً على بيانات السوق المُتاحَة. " +
+        "المَنصَّة غَير مَسؤولَة عَن نَجاح أَو فَشَل القَرارات المَبنيَّة عَلَيه. يُوصَى بِالتَّحَقُّق المُستَقِلّ قَبل اتِّخاذ قَرارات استِثماريَّة.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        session = await Incubator.LoadAsync(Id);
+        if (session?.AnalysisJson is not null)
+        {
+            try { root = JsonDocument.Parse(session.AnalysisJson).RootElement.Clone(); }
+            catch { root = null; }
+        }
+    }
+
+    static string Str(JsonElement e, string prop)
+        => e.TryGetProperty(prop, out var v)
+            ? (v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : v.ToString())
+            : "—";
+
+    RenderFragment Section(string title, string key, JsonElement r,
+        params (string prop, string label)[] fields) => SectionObj(title, key, r, fields);
+
+    RenderFragment SectionObj(string title, string key, JsonElement r,
+        params (string prop, string label)[] fields) => builder =>
+    {
+        if (!r.TryGetProperty(key, out var obj) || obj.ValueKind != JsonValueKind.Object) return;
+        builder.OpenElement(0, "h3");
+        builder.AddAttribute(1, "style", "margin:20px 0 8px;");
+        builder.AddContent(2, title);
+        builder.CloseElement();
+        builder.OpenComponent<ACommerce.Widgets.AcCard>(3);
+        builder.AddAttribute(4, "ChildContent", (RenderFragment)(b2 =>
+        {
+            var seq = 0;
+            foreach (var (prop, label) in fields)
+            {
+                b2.OpenElement(seq++, "p");
+                b2.AddAttribute(seq++, "style", "margin:4px 0;font-size:14px;");
+                b2.OpenElement(seq++, "strong");
+                b2.AddContent(seq++, label + ": ");
+                b2.CloseElement();
+                b2.AddContent(seq++, Str(obj, prop));
+                b2.CloseElement();
+            }
+        }));
+        builder.CloseComponent();
+    };
+
+    RenderFragment ArraySection(string title, string key, JsonElement r,
+        string titleProp, string bodyProp) => builder =>
+    {
+        if (!r.TryGetProperty(key, out var arr) || arr.ValueKind != JsonValueKind.Array) return;
+        builder.OpenElement(0, "h3");
+        builder.AddAttribute(1, "style", "margin:20px 0 8px;");
+        builder.AddContent(2, title);
+        builder.CloseElement();
+        var seq = 3;
+        foreach (var item in arr.EnumerateArray())
+        {
+            builder.OpenComponent<ACommerce.Widgets.AcCard>(seq++);
+            var captured = item;
+            builder.AddAttribute(seq++, "ChildContent", (RenderFragment)(b2 =>
+            {
+                b2.OpenElement(0, "strong");
+                b2.AddContent(1, Str(captured, titleProp));
+                b2.CloseElement();
+                b2.OpenElement(2, "p");
+                b2.AddAttribute(3, "style", "margin:6px 0 0;font-size:13px;color:var(--ac-text-muted);");
+                b2.AddContent(4, Str(captured, bodyProp));
+                b2.CloseElement();
+            }));
+            builder.CloseComponent();
+        }
+    };
+}

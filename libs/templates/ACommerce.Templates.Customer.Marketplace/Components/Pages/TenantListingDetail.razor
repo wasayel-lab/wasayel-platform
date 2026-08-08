@@ -1,4 +1,5 @@
 @page "/{slug}/listings/{id:guid}"
+@page "/{slug}/r/{role}/listings/{id:guid}"
 @inject IDocumentStore Store
 @inject AuthSession Auth
 @inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
@@ -32,14 +33,18 @@ else
     }
 
     <div class="acs-gallery-wrap" style="position:relative;">
-        <AcGallery Images="_noImages" PlaceholderIcon="building" />
+        <AcGallery Images="@listing.MediaUrls" PlaceholderIcon="building" />
 
         <div class="acm-details-gallery-actions">
-            <a class="acm-details-circle-btn" href="@($"/{Slug}/explore")" aria-label="الرُجوع">
+            <a class="acm-details-circle-btn" href="@AuthSession.LinkFor(Slug, Role, $"explore")" aria-label="الرُجوع">
                 <AcIcon Name="arrow-right" Size="18" />
             </a>
             <div class="acm-details-gallery-actions-end">
-                @if (Auth.IsAuthenticated)
+                @* المُفَضَّلَة: تُخفَى عَن مالِك الإعلان (لا مَعنَى لِأَن
+                   يُفَضِّل المَرء إعلانَه)، وَعَن السائِق/الشَحّان عَلى
+                   إعلان طَلَب-عَرض (نَموذَج المُحادَثَة هو العَرض، لا
+                   التَّفضيل).  *@
+                @if (Auth.IsAuthenticated && !isOwner && !isOfferBased)
                 {
                     <form method="post" action="@($"/{Slug}/listings/{Id}/favorite")" style="margin:0;">
                         <input type="hidden" name="return" value="@($"/{Slug}/listings/{Id}")" />
@@ -68,12 +73,43 @@ else
         </span>
     </div>
 
+    @* تَحذير احتِيال خاصّ بِنَمَط المُستَأجِر (سَكَن مُشتَرَك/إيجار). *@
+    @if (!string.IsNullOrEmpty(profile?.FraudWarning))
+    {
+        <AcAlert Variant="warning" Message="@profile.FraudWarning" />
+    }
+
     @if (!string.IsNullOrEmpty(listing.Description))
     {
         <section class="acm-details-section">
             <h2 class="acm-details-section-title">الوَصف</h2>
             <p class="acm-details-description">@listing.Description</p>
         </section>
+    }
+
+    @* شَبَكَة سِمات النَّمَط (DetailGridKeys) — تَعرِض مَا يَهُمّ في هذا النَمَط
+       فَقَط، بِالتَّرتيب الَّذي حَدَّدَه الـ profile. لِسَكَن: نَوع الشَريك،
+       التَّدخين، تَقاسُم الإيجار…؛ لِإيجار: غُرَف، حَمّامات، عَقد… *@
+    @if (profile is not null && profile.DetailGridKeys.Length > 0)
+    {
+        var rows = profile.DetailGridKeys
+            .Where(k => listing.Attributes.TryGetValue(k, out var v) && !string.IsNullOrEmpty(v))
+            .Select(k => (Key: k, Val: listing.Attributes[k])).ToList();
+        if (rows.Count > 0)
+        {
+            <section class="acm-details-section">
+                <h2 class="acm-details-section-title">التَّفاصيل</h2>
+                <div class="acm-details-grid">
+                    @foreach (var (k, v) in rows)
+                    {
+                        <div class="acm-details-grid-row">
+                            <span class="ac-muted" style="font-size:13px;">@AttrLabel(k)</span>
+                            <strong>@v</strong>
+                        </div>
+                    }
+                </div>
+            </section>
+        }
     }
 
     @if (resolvedAttrs is { Count: > 0 })
@@ -95,19 +131,152 @@ else
     @* العُروض المُقابِلَة (نَموذَج InDrive). تَظهَر إن كانَ الإعلان
        مَفتوحاً لِلعُروض (خاصِّيَّة accepts_offers=true) أَو إن وُجِدَت
        عُروض سابِقَة. التَّحَكُّم في إظهارها مَتروك لِلفِئَة عَبر الخَصائِص. *@
+    @* رَسائِل خَطَأ مِن POST handlers — تَظهَر فَوق قِسم العُروض *@
+    @if (Err == "offer_price")
+    {
+        <AcAlert Variant="danger" Message="السِعر يَجِب أَن يَكون أَكبَر مِن صِفر." />
+    }
+    else if (Err == "offer_geo")
+    {
+        <AcAlert Variant="danger" Message="يَجِب السَّماح بِالوُصول إلى مَوقِعكَ لِتَقديم العَرض. اِسمَح بِالإذن مِن مُتَصَفِّحكَ ثُمّ أَعِد المُحاوَلَة." />
+    }
+    else if (Err == "active_trip")
+    {
+        <AcAlert Variant="warning" Message="لَدَيكَ رِحلَة نَشِطَة — أَنهِها أَوّلاً قَبل تَقديم عَرض جَديد." />
+    }
+    else if (Err == "cooldown")
+    {
+        <AcAlert Variant="warning" Message="فَترَة تَهدِئَة: قَطَعتَ رِحلَة مُؤَخَّراً. حاوِل بَعد ٥ دَقائِق." />
+    }
+    else if (Err == "self_offer")
+    {
+        <AcAlert Variant="danger" Message="لا يُمكِنُكَ تَقديم عَرض عَلى إعلانِكَ." />
+    }
+
+    @if (Trip == "completed") { <AcAlert Variant="success" Message="تَمّ تَأكيد انتِهاء الرِحلَة. شُكراً." /> }
+    @if (Trip == "aborted")   { <AcAlert Variant="warning" Message="الرِحلَة أُلغِيَت." /> }
+    @if (Trip == "arrived")   { <AcAlert Variant="success" Message="تَمّ تَأكيد وُصولِكَ لِنُقطَة الانطِلاق." /> }
+    @if (Err == "too_far")
+    {
+        <AcAlert Variant="danger"
+                 Message="@($"أَنتَ بَعيد عَن نُقطَة الانطِلاق ({Dist} كم). اِقتَرِب ثُمّ حاوِل مَرَّة أُخرى.")" />
+    }
+    else if (Err == "arrived_geo")
+    {
+        <AcAlert Variant="danger" Message="يَجِب السَّماح بِالمَوقِع لِتَأكيد الوُصول." />
+    }
+    else if (Err == "not_driver")
+    {
+        <AcAlert Variant="danger" Message="هذا الإجراء لِلسائِق المَقبول فَقَط." />
+    }
+
+    @* خَريطَة لِنِقاط الانطِلاق/الوُصول — تَظهَر لِأَيّ إعلان لَه إحداثيّات
+       في الخَصائِص. زِرّ "افتَح في الخَريطَة" يَستَخدِم OSM (يَفتَحه
+       النِظام أَو المُتَصَفِّح أَو خَرائِط Google عَلى الجَوّال). *@
+    @if (pickupLat is not null || dropoffLat is not null)
+    {
+        <section class="acm-details-section">
+            <h2 class="acm-details-section-title">المَوقِع</h2>
+            @if (pickupLat is not null)
+            {
+                <div style="margin-bottom:12px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <strong style="font-size:14px;"><AcIcon Name="map-pin" Size="16" /> الانطِلاق</strong>
+                        <a class="ac-btn ac-btn-ghost ac-btn-sm" target="_blank" rel="noopener"
+                           href="@($"https://www.openstreetmap.org/?mlat={pickupLat}&mlon={pickupLng}#map=16/{pickupLat}/{pickupLng}")">
+                            <AcIcon Name="map-pin" Size="14" /> افتَح في الخَريطَة
+                        </a>
+                    </div>
+                    <AcMapPin Lat="@(pickupLat.Value)" Lng="@(pickupLng!.Value)" Height="160" />
+                </div>
+            }
+            @if (dropoffLat is not null)
+            {
+                <div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <strong style="font-size:14px;"><AcIcon Name="map-pin" Size="16" /> الوُصول</strong>
+                        <a class="ac-btn ac-btn-ghost ac-btn-sm" target="_blank" rel="noopener"
+                           href="@($"https://www.openstreetmap.org/?mlat={dropoffLat}&mlon={dropoffLng}#map=16/{dropoffLat}/{dropoffLng}")">
+                            <AcIcon Name="map-pin" Size="14" /> افتَح في الخَريطَة
+                        </a>
+                    </div>
+                    <AcMapPin Lat="@(dropoffLat.Value)" Lng="@(dropoffLng!.Value)" Height="160" />
+                </div>
+            }
+        </section>
+    }
+
     @if (showOffers)
     {
         <section class="acm-details-section">
             <h2 class="acm-details-section-title">العُروض المُقابِلَة</h2>
             @if (listingMatch is not null)
             {
-                <div class="ac-offer ac-offer-accepted">
-                    <strong>تَمّ قَبول عَرض @listingMatch.OffererName بِـ @listingMatch.AcceptedPrice.ToString("N0") ريال.</strong>
-                    @if (listingMatch.OffererLat != 0 || listingMatch.OffererLng != 0)
+                var status = listingMatch.Status;
+                var statusClass = status switch
+                {
+                    ACommerce.Kit.Offers.TripStatus.Completed => "ac-offer ac-offer-accepted",
+                    ACommerce.Kit.Offers.TripStatus.Aborted   => "ac-offer",
+                    _ => "ac-offer ac-offer-accepted"
+                };
+                <div class="@statusClass" style="@(status == ACommerce.Kit.Offers.TripStatus.Aborted ? "opacity:.7;" : "")">
+                    <strong>
+                        @switch (status)
+                        {
+                            case ACommerce.Kit.Offers.TripStatus.Active:
+                                <text>رِحلَة نَشِطَة مَع @listingMatch.OffererName — @listingMatch.AcceptedPrice.ToString("N0") ريال.</text>
+                                break;
+                            case ACommerce.Kit.Offers.TripStatus.Completed:
+                                <text><AcIcon Name="check" Size="16" /> انتَهَت الرِحلَة (@listingMatch.AcceptedPrice.ToString("N0") ريال).</text>
+                                break;
+                            case ACommerce.Kit.Offers.TripStatus.Aborted:
+                                <text>أُلغِيَت الرِحلَة (@listingMatch.AcceptedPrice.ToString("N0") ريال).</text>
+                                break;
+                        }
+                    </strong>
+
+                    @if (status == ACommerce.Kit.Offers.TripStatus.Active && Auth.IsAuthenticated)
                     {
-                        <p style="margin:8px 0 0;font-size:12px;color:var(--ac-text-muted);">
-                            مَوقِع المُقَدِّم وَقت القَبول مَحفوظ — افتَح المُحادَثَة لِلتَنسيق.
-                        </p>
+                        var isDriver = Auth.UserId == listingMatch.OffererId;
+                        var hasArrived = listingMatch.ArrivedAt.HasValue;
+
+                        @if (hasArrived)
+                        {
+                            <p style="margin:8px 0 0;font-size:12px;color:var(--ac-text-muted);">
+                                <AcIcon Name="check" Size="14" /> السائِق وَصَلَ نُقطَة الانطِلاق @listingMatch.ArrivedAt!.Value.ToString("HH:mm")
+                            </p>
+                        }
+
+                        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+                            @if (isDriver && !hasArrived)
+                            {
+                                @* السائِق فَقَط يُؤَكِّد الوُصول، الـ JS يَملَأ مَوقِعَه *@
+                                <form id="arrivedForm" method="post"
+                                      action="@($"/{Slug}/trips/{Id}/arrived")" style="margin:0;">
+                                    <input type="hidden" name="lat" id="arrived_lat" value="0" />
+                                    <input type="hidden" name="lng" id="arrived_lng" value="0" />
+                                    <button type="button" class="ac-btn ac-btn-primary ac-btn-sm"
+                                            onclick="acSubmitArrived(this)">
+                                        <AcIcon Name="map-pin" Size="14" /> أَنا واصِل
+                                    </button>
+                                </form>
+                            }
+
+                            @if (isOwner || isDriver)
+                            {
+                                <form method="post" action="@($"/{Slug}/trips/{Id}/complete")" style="margin:0;">
+                                    <button type="submit" class="ac-btn ac-btn-primary ac-btn-sm">
+                                        <AcIcon Name="check" Size="14" /> تَأكيد انتِهاء الرِحلَة
+                                    </button>
+                                </form>
+                                <form method="post" action="@($"/{Slug}/trips/{Id}/abort")" style="margin:0;">
+                                    <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm"
+                                            style="color:var(--ac-danger);">
+                                        <AcIcon Name="x" Size="14" /> إلغاء الرِحلَة
+                                    </button>
+                                </form>
+                            }
+                        </div>
                     }
                 </div>
             }
@@ -117,33 +286,42 @@ else
                    غَير صاحِب الإعلان: يَرى نَموذَج تَقديم عَرض. *@
                 @if (Auth.IsAuthenticated && !isOwner)
                 {
-                    <form method="post" action="@($"/{Slug}/listings/{Id}/offers")"
-                          style="display:flex;flex-direction:column;gap:8px;margin:0 0 16px;">
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                            <AcField Label="عَرضُكَ (ريال)" Required="true">
-                                <input type="number" name="price" required min="1" step="1"
-                                       class="ac-input" inputmode="numeric" />
-                            </AcField>
-                            <AcField Label="مُدَّة الصَلاحِيَّة (دَقائِق)">
-                                <input type="number" name="ttl_minutes" value="15" min="1" max="120" class="ac-input" />
-                            </AcField>
-                        </div>
-                        <AcLocationInput Name="loc" Label="مَوقِعُكَ الحاليّ" Required="true" />
-                        <AcField Label="رِسالَة (اختياريّ)">
-                            <textarea name="message" rows="2" maxlength="200"
-                                      class="ac-input" style="resize:vertical;font-family:inherit;"></textarea>
+                    @* نَموذَج مُبَسَّط: السِعر فَقَط ظاهِراً. الـ ttl ثابِت
+                       ١٥ دَقيقَة. المَوقِع يُلتَقَط تِلقائيّاً عَبر
+                       navigator.geolocation عِندَ الضَّغط. *@
+                    <form id="offerForm" method="post" action="@($"/{Slug}/listings/{Id}/offers")"
+                          style="display:flex;flex-direction:column;gap:10px;margin:0 0 16px;">
+                        <input type="hidden" name="lat" id="offer_lat" value="0" />
+                        <input type="hidden" name="lng" id="offer_lng" value="0" />
+                        <input type="hidden" name="ttl_minutes" value="15" />
+
+                        <AcField Label="عَرضُكَ (ريال)" Required="true">
+                            <input type="number" name="price" required min="1" step="1"
+                                   class="ac-input ac-input-lg" inputmode="numeric"
+                                   placeholder="مَثَلاً 50" autofocus />
                         </AcField>
-                        <input type="hidden" name="lat" id="offer_lat" />
-                        <input type="hidden" name="lng" id="offer_lng" />
-                        <button type="submit" class="ac-btn ac-btn-primary"
-                                onclick="document.getElementById('offer_lat').value=document.getElementById('loc_lat').value;document.getElementById('offer_lng').value=document.getElementById('loc_lng').value;">
-                            <AcIcon Name="send" Size="16" /> تَقديم عَرضي
+
+                        <details>
+                            <summary style="cursor:pointer;font-size:13px;color:var(--ac-text-muted);">
+                                إضافَة رِسالَة (اختياريّ)
+                            </summary>
+                            <textarea name="message" rows="2" maxlength="200"
+                                      class="ac-input" style="margin-top:6px;resize:vertical;font-family:inherit;"
+                                      placeholder="مَثَلاً: عَلَيَّ ٥ دَقائِق لِأَصِل، أَو سَيَّارَتي عائِليَّة"></textarea>
+                        </details>
+
+                        <button type="button" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
+                                onclick="acSubmitOffer(this)">
+                            <AcIcon Name="send" Size="18" /> تَقديم العَرض
                         </button>
+                        <p style="text-align:center;font-size:11px;color:var(--ac-text-muted);margin:0;">
+                            سَيُلتَقَط مَوقِعكَ الحاليّ تِلقائيّاً.
+                        </p>
                     </form>
                 }
                 else if (!Auth.IsAuthenticated)
                 {
-                    <a href="@($"/{Slug}/login?returnUrl=/{Slug}/listings/{Id}")"
+                    <a href="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/listings/{Id}")"
                        class="ac-btn ac-btn-ghost ac-btn-block">
                         دُخول لِتَقديم عَرض
                     </a>
@@ -168,6 +346,15 @@ else
                                 @if (!string.IsNullOrEmpty(o.Message))
                                 {
                                     <p style="margin:6px 0;font-size:13px;color:var(--ac-text-muted);">@o.Message</p>
+                                }
+                                @if (o.Attributes.Count > 0)
+                                {
+                                    <div style="display:flex;flex-wrap:wrap;gap:4px;margin:6px 0;">
+                                        @foreach (var (k, v) in o.Attributes)
+                                        {
+                                            <span class="ac-chip ac-chip-sm" style="font-size:11px;">@k: @v</span>
+                                        }
+                                    </div>
                                 }
                                 <span style="font-size:11px;color:var(--ac-text-muted);">
                                     صالِح حَتَّى @o.ExpiresAt.ToString("HH:mm")
@@ -196,25 +383,73 @@ else
         </section>
     }
 
-    <section class="acm-details-section">
-        <h2 class="acm-details-section-title">تَواصُل</h2>
-        @if (Auth.IsAuthenticated)
-        {
-            <form method="post" action="@($"/{Slug}/listings/{Id}/chat")" style="margin:0;">
-                <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
-                    <AcIcon Name="message" Size="18" /> تَواصُل مَع المُعلِن
-                </button>
-            </form>
-        }
-        else
-        {
-            <a href="@($"/{Slug}/login?returnUrl=/{Slug}/listings/{Id}")"
-               class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
-               style="text-decoration:none;text-align:center;">
-                دُخول لِلتَواصُل
-            </a>
-        }
-    </section>
+    @* قِسم التَّواصُل المُباشَر:
+        - يُخفَى عَن مالِك الإعلان (لا يُحادِث نَفسه).
+        - يُخفَى عَلى الإعلانات الَّتي تَقبَل عُروضاً (نَموذَج المُحادَثَة
+          يَفتَح تِلقائيّاً بَعد قَبول العَرض، فَلا داعِيَ لِزِرّ مُنفَصِل). *@
+    @if (!isOwner && !isOfferBased)
+    {
+        <section class="acm-details-section">
+            <h2 class="acm-details-section-title">@(profile?.PrimaryCtaLabel ?? "ابدَأ صَفقَة")</h2>
+            @if (Auth.IsAuthenticated)
+            {
+                @* السَّلَّة فَقَط لِلأَنماط الَّتي تَدعَمُها (مَتجَر/خَدَمات).
+                   إيجار/سَكَن مُشتَرَك/مَشاوير لا تَملِك سَلَّة — CTA يَتَحَوَّل
+                   لِلعَرض أَو التَّواصُل المُباشَر. *@
+                @if (profile?.UsesCart == true)
+                {
+                    <form method="post" action="@($"/{Slug}/listings/{Id}/cart/add")" style="margin:0 0 10px;">
+                        <input type="hidden" name="qty" value="1" />
+                        <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
+                            <AcIcon Name="@(profile?.PrimaryCtaIcon ?? "package")" Size="18" />
+                            @(profile?.PrimaryCtaLabel ?? "أَضِف لِلسَلَّة") · @listing.Price.ToString("N0") ر.س
+                        </button>
+                    </form>
+                    <form method="post" action="@($"/{Slug}/listings/{Id}/chat")" style="margin:0;">
+                        <button type="submit" class="ac-btn ac-btn-ghost ac-btn-block">
+                            <AcIcon Name="message" Size="18" /> اِسأَل البائِع
+                        </button>
+                    </form>
+                }
+                else
+                {
+                    @* أَنماط بِلا سَلَّة (إيجار/سَكَن/مَشاوير): تَواصُل + عَرض. *@
+                    <form method="post" action="@($"/{Slug}/listings/{Id}/chat")" style="margin:0 0 10px;">
+                        <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
+                            <AcIcon Name="@(profile?.PrimaryCtaIcon ?? "message")" Size="18" />
+                            @(profile?.PrimaryCtaLabel ?? "تَواصَل مَع المُعلِن")
+                        </button>
+                    </form>
+                    @* تَفاوُض اختياريّ — يَفتَح نَموذَج العَرض كَ <details>. *@
+                    <details>
+                        <summary class="ac-btn ac-btn-ghost ac-btn-block" style="text-align:start;cursor:pointer;">
+                            <AcIcon Name="send" Size="16" /> أَو قَدِّم عَرضاً مالِيّاً
+                        </summary>
+                        <form method="post" action="@($"/{Slug}/listings/{Id}/deal")" style="margin:10px 0 0;">
+                            <AcField Label="عَرضُكَ (ر.س)">
+                                <input type="number" name="amount" class="ac-input" min="1"
+                                       value="@((int)listing.Price)" />
+                            </AcField>
+                            <AcField Label="مُلاحَظَة">
+                                <input name="note" class="ac-input" placeholder="تَفاصيل عَرضِكَ" />
+                            </AcField>
+                            <button type="submit" class="ac-btn ac-btn-outline-primary ac-btn-block">
+                                إرسال العَرض
+                            </button>
+                        </form>
+                    </details>
+                }
+            }
+            else
+            {
+                <a href="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/listings/{Id}")"
+                   class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
+                   style="text-decoration:none;text-align:center;">
+                    دُخول لِبَدء صَفقَة
+                </a>
+            }
+        </section>
+    }
 
     @* قِسم التَبليغ — يَنطَوي بِالـ <details>، يَفتَحه المُتَصَفِّح بِلا JS *@
     <details class="acm-details-report">
@@ -248,7 +483,7 @@ else
             else
             {
                 <p>سَجِّل دُخولك أَوَّلاً لِيَتَمَكَّن فَريقنا مِن مُتابَعَة البَلاغ مَعَك.</p>
-                <a class="ac-btn ac-btn-primary" href="@($"/{Slug}/login?returnUrl=/{Slug}/listings/{Id}")">
+                <a class="ac-btn ac-btn-primary" href="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/listings/{Id}")">
                     تَسجيل دُخول
                 </a>
             }
@@ -263,17 +498,52 @@ else
 
 @code {
     static readonly string[] _noImages = Array.Empty<string>();
+
+    /// <summary>تَسمِيَة عَرَبِيَّة لِمِفتاح خاصِّيَّة. تَغطِّي مَفاتيح
+    /// PatternProfile الشائِعَة (إيجار/سَكَن مُشتَرَك/مَتجَر). أَيّ مِفتاح
+    /// غَير مَعروف يَظهَر كَما هو — الـ tenant admin يُغَطّيه بِـ
+    /// AttributeDefinition لاحِقاً.</summary>
+    static string AttrLabel(string key) => key switch
+    {
+        "bedrooms"          => "غُرَف النَّوم",
+        "bathrooms"         => "الحَمّامات",
+        "area_m2"           => "المِساحَة (م²)",
+        "furnished"         => "التَّأثيث",
+        "lease_term"        => "مُدَّة العَقد",
+        "deposit"           => "التَّأمين",
+        "payment_schedule"  => "جَدوَل الدَّفع",
+        "utilities"         => "الخَدَمات",
+        "gender_pref"       => "تَفضيل الجِنس",
+        "occupation_pref"   => "المِهنَة المُفَضَّلَة",
+        "smoking"           => "التَّدخين",
+        "rent_split"        => "تَقاسُم الإيجار",
+        "available_from"    => "مُتاح مِن",
+        "min_stay"          => "أَقَلّ إقامَة",
+        "from"              => "مِن",
+        "to"                => "إلى",
+        "when"              => "الوَقت",
+        "weight"            => "الوَزن",
+        "notes"             => "مُلاحَظات",
+        _ => key
+    };
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery(Name = "reported")] public string? Reported { get; set; }
+    [SupplyParameterFromQuery(Name = "err")]      public string? Err      { get; set; }
+    [SupplyParameterFromQuery(Name = "trip")]     public string? Trip     { get; set; }
+    [SupplyParameterFromQuery(Name = "dist")]     public string? Dist     { get; set; }
     Listing? listing;
     Tenant? tenant;
+    ACommerce.Templates.Customer.Marketplace.Services.Patterns.PatternProfile? profile;
     bool IsFav;
     IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.ResolvedAttr>? resolvedAttrs;
     List<ACommerce.Kit.Offers.Offer> offers = new();
     ACommerce.Kit.Offers.ListingMatch? listingMatch;
     bool showOffers;
     bool isOwner;
+    bool isOfferBased;   // accepts_offers=true → نَموذَج تَفاوُض، لا دَردَشَة مُباشَرَة
+    double? pickupLat, pickupLng, dropoffLat, dropoffLng;
 
     string CategoryLabel => tenant?.Categories.FirstOrDefault(c => c.Slug == listing?.CategorySlug)?.Label ?? "";
 
@@ -281,6 +551,7 @@ else
     {
         await using var g = Store.QuerySession();
         tenant = await g.LoadAsync<Tenant>(Slug);
+        profile = ACommerce.Templates.Customer.Marketplace.Services.Patterns.PatternProfileResolver.Of(tenant);
         if (tenant is null) return;
         await using var t = Store.LightweightSession(Slug);
         listing = await t.Events.AggregateStreamAsync<Listing>(Id);
@@ -306,6 +577,7 @@ else
             // مَوجودَة. نَجلِب الـ ListingMatch أَيضاً لِمَعرِفَة الحالَة.
             listing.Attributes.TryGetValue("accepts_offers", out var acceptsOffers);
             var enabled = string.Equals(acceptsOffers, "true", StringComparison.OrdinalIgnoreCase);
+            isOfferBased = enabled;
             // هَل المُستَخدِم الحاليّ هو صاحِب الإعلان؟ يُستَخدَم لإخفاء
             // نَموذَج تَقديم العَرض عَنه + إظهار أَزرار القَبول/الرَفض لَه.
             if (Auth.IsAuthenticated && Auth.UserId.HasValue &&
@@ -314,6 +586,12 @@ else
                 isOwner = oid == Auth.UserId.Value.ToString();
             }
             listingMatch = await t.LoadAsync<ACommerce.Kit.Offers.ListingMatch>(Id);
+
+            // اِستَخرِج إحداثيّات pickup/dropoff إن وُجِدَت في الخَصائِص.
+            pickupLat  = ParseDouble(listing.Attributes, "pickup_lat");
+            pickupLng  = ParseDouble(listing.Attributes, "pickup_lng");
+            dropoffLat = ParseDouble(listing.Attributes, "dropoff_lat");
+            dropoffLng = ParseDouble(listing.Attributes, "dropoff_lng");
             if (enabled || listingMatch is not null)
             {
                 showOffers = true;
@@ -326,5 +604,13 @@ else
                     .OrderBy(o => o.Price).ToList();
             }
         }
+    }
+
+    static double? ParseDouble(Dictionary<string,string> attrs, string key)
+    {
+        if (!attrs.TryGetValue(key, out var s) || string.IsNullOrEmpty(s)) return null;
+        return double.TryParse(s, System.Globalization.NumberStyles.Float,
+                               System.Globalization.CultureInfo.InvariantCulture, out var d)
+               ? d : null;
     }
 }

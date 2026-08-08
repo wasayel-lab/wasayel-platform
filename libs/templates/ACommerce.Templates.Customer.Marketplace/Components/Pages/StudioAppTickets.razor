@@ -1,0 +1,97 @@
+@page "/studio/apps/{slug}/tickets"
+@inject Services.Incubator.StudioAuth Auth
+@inject Marten.IDocumentStore Store
+@using ACommerce.Kit.Tenants
+@using ACommerce.Kit.Support
+
+@*
+    قائِمَة التَّذاكِر — فَلتَرَة بِالحالَة، عَدّاد لِكُلّ حالَة، نِقر يَفتَح
+    التَّفاصيل. مَحميَّة بِالمِلكِيَّة.
+*@
+
+<StudioShell Title="@($"التَّذاكِر · {tenant?.Name ?? Slug}")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/console")">← التَّشغيل</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (tenant is null)
+        {
+            <div class="st-card">التَّطبيق غَير مَوجود أَو لا تَملِكه.</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>تَذاكِر الدَّعم</h1>
+                <p>إدارَة طَلَبات الدَّعم الواصِلَة مِن مُستَخدِمي تَطبيقك.</p>
+            </div>
+
+            <div class="studio-stats">
+                <div class="studio-stat"><div class="studio-stat-label">إجمالي</div>
+                    <div class="studio-stat-value">@tickets.Count</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">مَفتوحَة</div>
+                    <div class="studio-stat-value" style="color:var(--st-danger);">@tickets.Count(t => t.Status == "open")</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">مَرُدودَة</div>
+                    <div class="studio-stat-value" style="color:var(--st-warning);">@tickets.Count(t => t.Status == "answered")</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">مُغلَقَة</div>
+                    <div class="studio-stat-value" style="color:var(--st-success);">@tickets.Count(t => t.Status == "closed")</div></div>
+            </div>
+
+            <div class="st-section-title">القائِمَة</div>
+            @if (tickets.Count == 0)
+            {
+                <div class="st-card" style="text-align:center;padding:36px;color:var(--st-muted);">
+                    لا تَذاكِر بَعد <AcIcon Name="sparkle" Size="16" />
+                </div>
+            }
+            else
+            {
+                <div class="studio-list">
+                    @foreach (var t in tickets.OrderByDescending(t => t.UpdatedAt))
+                    {
+                        <a class="studio-list-row" href="@($"/studio/apps/{Slug}/tickets/{t.Id}")">
+                            <span class="studio-list-icon" style="background:@StatusBg(t.Status);color:@StatusColor(t.Status);">
+                                <AcIcon Name="ticket" Size="18" />
+                            </span>
+                            <div class="studio-list-body">
+                                <strong>@t.Subject</strong>
+                                <span>
+                                    @t.AuthorName · @t.CreatedAt.ToString("yyyy-MM-dd HH:mm")
+                                    @if (t.Replies.Count > 0) { <text> · @t.Replies.Count رَدّ</text> }
+                                </span>
+                            </div>
+                            <span class="st-chip @StatusChip(t.Status)">@StatusLabel(t.Status)</span>
+                        </a>
+                    }
+                </div>
+            }
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    Tenant? tenant;
+    List<Ticket> tickets = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        await using var qs = Store.QuerySession();
+        tenant = await qs.LoadAsync<Tenant>(Slug);
+        if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) { tenant = null; return; }
+        if (tenant is null) return;
+        await using var ts = Store.QuerySession(Slug);
+        try { tickets = (await ts.Query<Ticket>().Take(200).ToListAsync()).ToList(); }
+        catch { /* جَدوَل غَير مُهَيَّأ */ }
+    }
+
+    static string StatusBg(string s) => s switch
+    { "open" => "#fee2e2", "answered" => "#fef3c7", "closed" => "#dcfce7", _ => "#f1f5f9" };
+    static string StatusColor(string s) => s switch
+    { "open" => "#b91c1c", "answered" => "#854d0e", "closed" => "#15803d", _ => "#475569" };
+    static string StatusChip(string s) => s switch
+    { "open" => "st-chip-danger", "answered" => "st-chip-warning", "closed" => "st-chip-success", _ => "" };
+    static string StatusLabel(string s) => s switch
+    { "open" => "مَفتوحَة", "answered" => "مَرُدودَة", "closed" => "مُغلَقَة", _ => s };
+}

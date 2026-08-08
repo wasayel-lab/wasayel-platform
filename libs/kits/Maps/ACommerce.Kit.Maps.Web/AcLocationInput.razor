@@ -26,7 +26,7 @@
                placeholder="lng" value="@(InitialLng?.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture) ?? "")" />
         <button type="button" class="ac-btn ac-btn-ghost ac-btn-sm"
                 onclick="@($"acLocFill('{Name}')")">
-            📍 مَوقِعي
+            <AcIcon Name="map-pin" Size="16" /> مَوقِعي
         </button>
     </div>
     @if (InitialLat.HasValue && InitialLng.HasValue &&
