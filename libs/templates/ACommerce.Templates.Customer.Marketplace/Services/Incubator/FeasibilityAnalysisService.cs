@@ -14,15 +14,24 @@ public sealed class FeasibilityAnalysisService
 
     private readonly IDocumentStore _store;
     private readonly IAgentBackend _backend;
+    private readonly string _model;
     private readonly FeasibilityPromptBuilder _prompt;
 
+    // مِلَفّ «Analysis» — وَكيل التَحليل يَستَحِقّ نَموذجاً أَذكى مِن وَكيل
+    // الاستوديو (دِراسَة جَدوى كامِلَة بِـ JSON مُهَيكَل)، فَلَه مِلَفُّه
+    // المُستَقِلّ: مُزَوِّد ومِفتاح وعُنوان ونَموذج. بِلا تَهيئَة مُسَمّاة
+    // يَسقُط إلى Agent:* القَديم.
     public FeasibilityAnalysisService(
-        IDocumentStore store, IAgentBackend backend, FeasibilityPromptBuilder prompt)
+        IDocumentStore store, IAgentBackendProvider agents, FeasibilityPromptBuilder prompt)
     {
         _store = store;
-        _backend = backend;
+        _backend = agents.For(AgentNames.Analysis);
+        _model = agents.ModelFor(AgentNames.Analysis);
         _prompt = prompt;
     }
+
+    /// <summary>النَموذج الفِعليّ لِوَكيل التَحليل (لِلعَرض والتَحَقُّق).</summary>
+    public string ModelName => _model;
 
     public bool IsConfigured => _backend.IsConfigured;
 
@@ -115,7 +124,7 @@ public sealed class FeasibilityAnalysisService
             new("user", userMsg, null, null)
         };
         var req = new AgentRequest(systemPrompt, messages,
-            Array.Empty<AgentToolDef>(), _backend.DefaultModel, MaxTokens: 3000);
+            Array.Empty<AgentToolDef>(), _model, MaxTokens: 3000);
         var resp = await _backend.CallAsync(req, ct);
         if (resp.Error is not null) return;
         var newJson = ExtractJson(resp.Text);
@@ -208,7 +217,7 @@ public sealed class FeasibilityAnalysisService
                     null, null)
             };
             var req = new AgentRequest(systemPrompt, messages,
-                Array.Empty<AgentToolDef>(), _backend.DefaultModel, MaxTokens: 8000);
+                Array.Empty<AgentToolDef>(), _model, MaxTokens: 8000);
             var resp = await _backend.CallAsync(req, ct);
             if (resp.Error is not null) { lastError = resp.Error; continue; }
             json = ExtractJson(resp.Text);

@@ -29,9 +29,12 @@ public static class MarketplaceTemplateExtensions
         services.AddScoped<L>();
         services.AddScoped<ACommerce.Kit.Realtime.Client.RealtimeClient>();
         services.AddScoped<ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService>();
-        services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.IAgentBackend>(
-            sp => ACommerce.Templates.Customer.Marketplace.Services.AgentBackendFactory
-                .Create(sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
+        // مُزَوِّد الخَلفيّات المُسَمّى: كُلّ وَكيل مَنطِقيّ (Studio / Analysis)
+        // يَطلُب مِلَفَّه بِاسمِه، والمُزَوِّد يَحُلّه ويُخَزِّن خَلفيَّة واحِدَة
+        // لِكُلّ مِلَفّ مُتَمايِز. تَسجيل واحِد بَدَل الخَلفيَّة المُشتَرَكَة.
+        services.AddSingleton<
+            ACommerce.Templates.Customer.Marketplace.Services.IAgentBackendProvider,
+            ACommerce.Templates.Customer.Marketplace.Services.AgentBackendProvider>();
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.AgentService>();
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor>();
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.WebPushService>();

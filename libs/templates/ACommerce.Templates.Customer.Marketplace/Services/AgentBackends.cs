@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using Microsoft.Extensions.Configuration;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services;
 
@@ -35,19 +34,18 @@ public interface IAgentBackend
     Task<AgentBackendResponse> CallAsync(AgentRequest req, CancellationToken ct);
 }
 
-// ─── Factory + DI helper ─────────────────────────────────────────────
+// ─── Factory ─────────────────────────────────────────────────────────
+// الخَلفيّات خيارات-صِرفَة: تَأخُذ <see cref="AgentProfile"/> مَحلولاً ولا
+// تَقرَأ إعدادات ولا بيئَة بِنَفسِها. كُلّ الحَلّ في AgentProfileResolver،
+// والاختِيار المُسَمّى في AgentBackendProvider.
 public static class AgentBackendFactory
 {
-    public static IAgentBackend Create(IConfiguration cfg)
+    public static IAgentBackend Create(AgentProfile profile) => profile.Provider switch
     {
-        var provider = (cfg["Agent:Provider"] ?? "anthropic").Trim().ToLowerInvariant();
-        return provider switch
-        {
-            "gemini" => new GeminiBackend(cfg),
-            "openai" => new OpenAIBackend(cfg),
-            _        => new AnthropicBackend(cfg)
-        };
-    }
+        "gemini" => new GeminiBackend(profile),
+        "openai" => new OpenAIBackend(profile),
+        _        => new AnthropicBackend(profile)
+    };
 }
 
 // ─── Anthropic (مَع prompt caching) ──────────────────────────────────
@@ -64,12 +62,7 @@ public sealed class AnthropicBackend : IAgentBackend
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AnthropicBackend(IConfiguration cfg)
-    {
-        _apiKey = cfg["Agent:ApiKey"]
-                  ?? Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY")
-                  ?? "";
-    }
+    public AnthropicBackend(AgentProfile profile) => _apiKey = profile.ApiKey;
 
     public string ProviderName => "anthropic";
     public string DefaultModel => "claude-sonnet-4-6";
@@ -207,13 +200,7 @@ public sealed class GeminiBackend : IAgentBackend
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    public GeminiBackend(IConfiguration cfg)
-    {
-        _apiKey = cfg["Agent:ApiKey"]
-                  ?? Environment.GetEnvironmentVariable("GEMINI_API_KEY")
-                  ?? Environment.GetEnvironmentVariable("GOOGLE_API_KEY")
-                  ?? "";
-    }
+    public GeminiBackend(AgentProfile profile) => _apiKey = profile.ApiKey;
 
     public string ProviderName => "gemini";
     public string DefaultModel => "gemini-2.0-flash";
@@ -315,38 +302,34 @@ public sealed class GeminiBackend : IAgentBackend
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
 }
 
-// ─── OpenAI (وَمُتَوافِقاتُه: Groq, Cerebras, OpenRouter, Ollama، …) ───
+// ─── OpenAI (وَمُتَوافِقاتُه: GitHub Models, Groq, Cerebras, OpenRouter, Ollama…) ───
 // أَيّ مُزَوِّد يَتَكَلَّم Chat Completions API يَعمَل بِتَبديل
-// Agent:BaseUrl فَقَط. أَمثِلَة في WolverineNotes/AlternativeProviders.md
-// (انظر التَّوثيق المُرفَق).
+// BaseUrl في مِلَفّ الوَكيل فَقَط (‏Agents:{Name}:BaseUrl أَو Agent:BaseUrl
+// القَديم). أَمثِلَة في docs/LLM-ALTERNATIVES.md و docs/AGENT-TOOLS.md §1.
 public sealed class OpenAIBackend : IAgentBackend
 {
     private readonly string _apiKey;
     private readonly string _providerName;
-    private readonly string _defaultModel;
     private readonly HttpClient _http;
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    public OpenAIBackend(IConfiguration cfg)
+    public OpenAIBackend(AgentProfile profile)
     {
-        _apiKey = cfg["Agent:ApiKey"]
-                  ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")
-                  ?? Environment.GetEnvironmentVariable("GROQ_API_KEY")
-                  ?? Environment.GetEnvironmentVariable("CEREBRAS_API_KEY")
-                  ?? Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")
-                  ?? "";
-        var baseUrl = (cfg["Agent:BaseUrl"] ?? "https://api.openai.com/").TrimEnd('/') + "/";
+        _apiKey = profile.ApiKey;
+        var baseUrl = (profile.BaseUrl ?? "https://api.openai.com/").TrimEnd('/') + "/";
         _http = new HttpClient
         {
             BaseAddress = new Uri(baseUrl),
             Timeout = TimeSpan.FromSeconds(60)
         };
-        _providerName = (cfg["Agent:ProviderLabel"] ?? InferProvider(baseUrl)).ToLowerInvariant();
-        _defaultModel = cfg["Agent:Model"] ?? "gpt-4o";
+        _providerName = (profile.ProviderLabel ?? InferProvider(baseUrl)).ToLowerInvariant();
     }
+
+    /// <summary>العُنوان الفِعليّ — لِلتَحَقُّق ولِتَمييز الخَلفيّات في السِجِلّ.</summary>
+    public string BaseUrl => _http.BaseAddress!.ToString();
 
     private static string InferProvider(string baseUrl)
     {
@@ -358,7 +341,7 @@ public sealed class OpenAIBackend : IAgentBackend
     }
 
     public string ProviderName => _providerName;
-    public string DefaultModel => _defaultModel;
+    public string DefaultModel => "gpt-4o";
     public bool IsConfigured => !string.IsNullOrEmpty(_apiKey) || _providerName == "ollama";
 
     public async Task<AgentBackendResponse> CallAsync(AgentRequest req, CancellationToken ct)

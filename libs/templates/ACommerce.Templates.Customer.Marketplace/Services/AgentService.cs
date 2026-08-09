@@ -3,7 +3,6 @@ using System.Text.Json;
 using ACommerce.Kit.Tenants;
 using ACommerce.Platform.Shared;
 using Marten;
-using Microsoft.Extensions.Configuration;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services;
 
@@ -44,10 +43,13 @@ public sealed class AgentService
     private readonly IDocumentStore _store;
     private const string AdminTenant = "_admin";
 
-    public AgentService(IConfiguration cfg, IDocumentStore store, IAgentBackend backend)
+    // مِلَفّ «Studio» — مُزَوِّدُه ومِفتاحُه ونَموذَجُه مُستَقِلَّة عَن وَكيل
+    // التَحليل. بِلا تَهيئَة مُسَمّاة يَسقُط إلى Agent:* القَديم فَيَبقى
+    // السُلوك كَما كان.
+    public AgentService(IDocumentStore store, IAgentBackendProvider agents)
     {
-        _backend = backend;
-        _model   = cfg["Agent:Model"] ?? backend.DefaultModel;
+        _backend = agents.For(AgentNames.Studio);
+        _model   = agents.ModelFor(AgentNames.Studio);
         _store   = store;
     }
 
