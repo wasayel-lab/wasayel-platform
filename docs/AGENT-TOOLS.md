@@ -64,8 +64,13 @@
 
 | الفجوة | الأثر | العلاج |
 |---|---|---|
-| **لا تحقق رسمي بمخطط JSON عند المنفذ** — القراءة يدوية بدوال `Str/TryStr`؛ المخطط يقيّد توليد النموذج لكنه لا يُفرض عند التنفيذ | ضمان «رفض ما يخالف المخطط» مفترض لا مُبرهن | بوابة مصادقة JSON-Schema إلزامية في `AgentToolExecutor` قبل التطبيق ([TESTING-PROTOCOL §T3](TESTING-PROTOCOL.md)) |
 | `/admin` بلا مصادقة (يُفترض VPN/proxy) | مقبول للتطوير فقط | نموذج صلاحيات المنصة في PRODUCTION-PLAN §1.1 |
+
+**مُغلقة (2026-08-09)**:
+
+| الفجوة | كيف أُغلقت |
+|---|---|
+| ~~لا تحقق رسمي بمخطط JSON عند المنفذ~~ — كانت القراءة يدوية بدوال `Str/TryStr` والمخطط يقيّد توليد النموذج دون أن يُفرض عند التنفيذ | بوابة `AgentToolValidator` (‏`Services/AgentToolValidation.cs`، مكتبة `JsonSchema.Net`): خريطة اسم الأداة ← مخطط مُجمّع مصدرها نفس تعريفات `BuildAbstractTools` — تُفرض **أولاً** في `AgentToolExecutor.ExecuteAsync` قبل فحص الملكية وقبل أي تنفيذ؛ الفشل يعيد رسالة عربية بالأخطاء. الفحوص اليدوية القائمة بقيت (دفاع متعدد الطبقات). حارسها: اختبارات [TESTING-PROTOCOL §T3](TESTING-PROTOCOL.md) في `tests/ACommerce.Platform.Tests` |
 
 ## 6. أصل بيانات مجاني — لا تفرّط فيه
 
@@ -75,6 +80,7 @@
 للموجهات — تُصان ولا تُحذف.
 
 ---
-*آخر تحقق ضد الكود: 2026-08-09 عند الكوميت `23067e3e`
-(`Services/AgentService.cs`, `Services/AgentBackends.cs`). أي تغيير في
+*آخر تحقق ضد الكود: 2026-08-09
+(`Services/AgentService.cs`, `Services/AgentBackends.cs`,
+`Services/AgentToolValidation.cs`). أي تغيير في
 الأدوات أو مخططاتها يستوجب تحديث هذه الوثيقة في نفس الـ PR.*

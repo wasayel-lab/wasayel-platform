@@ -66,10 +66,16 @@ Reviews، Roles، SavedSearches، Subscriptions، Support، Tenants، Versions.
 (MockNafath)، الدفع (MockPaymentProvider — فواتير بهيئة ZATCA وVAT ‏15%
 وidempotency keys)، التوصيل (دورة شحنة كاملة على مؤقت)، الخرائط.
 
-**غائب**: اختبارات وCI (لا يوجد أي مشروع اختبار)، تحقق رسمي بمخطط JSON عند
-منفذ أدوات الوكيل، `DealsPolicy` كبيانات (اليوم كود مُجمّع). التفصيل
-والعلاج في [TESTING-PROTOCOL](docs/TESTING-PROTOCOL.md)
+**بُني حديثاً (2026-08-09)**: مشروع اختبارات `tests/ACommerce.Platform.Tests`
+(xUnit — توصيف `DealsPolicy` كبذرة T5/T6 + اختبارات مصادقة المخطط كبذرة T3)
+مع بوابة CI على GitHub Actions، وبوابة تحقق رسمي بمخطط JSON
+(`AgentToolValidator`) تُفرض أولاً في منفذ أدوات الوكيل.
+
+**غائب**: جهاز T1/T2/T4 (ذخيرة الطلبات الحقيقية والاستنساخية والجلسات
+الذهبية) وT7 (القبول بالمحاكاة عبر `DealsService`)، `DealsPolicy` كبيانات
+(اليوم كود مُجمّع). التفصيل والعلاج في
+[TESTING-PROTOCOL](docs/TESTING-PROTOCOL.md)
 و[META-MODEL §8](docs/META-MODEL.md).
 
 ---
-*آخر تحقق من كل ادعاء أعلاه ضد الكود: 2026-08-09 عند الكوميت `23067e3e`.*
+*آخر تحقق من كل ادعاء أعلاه ضد الكود: 2026-08-09.*

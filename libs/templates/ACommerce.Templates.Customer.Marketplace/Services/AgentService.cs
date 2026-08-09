@@ -311,7 +311,9 @@ public sealed class AgentService
 
     // ─── تَعريفات الأَدَوات (JSON Schema) ─────────────────────────────
     // مَكتوبَة كَ JSON خام لِتُمَرَّر مُباشَرَةً إلى الـ backends.
-    private static List<AgentToolDef> BuildAbstractTools() => new()
+    // internal (لا private): نَفس التَّعريفات مَصدَر مُخَطَّطات
+    // AgentToolValidator — مَصدَر واحِد لِلمُخَطَّط تَوليداً وفَرضاً.
+    internal static List<AgentToolDef> BuildAbstractTools() => new()
     {
         new("create_tenant",
             "إنشاء مَتجَر (مُستَأجِر) جَديد. الـ slug يَجِب أَن يَكون فَريداً.",
@@ -514,6 +516,14 @@ public sealed class AgentToolExecutor
     public async Task<(bool Ok, string Message)> ExecuteAsync(
         string toolName, string inputJson, Guid? ownerUserId, CancellationToken ct = default)
     {
+        // بَوّابَة إلزاميَّة أُولى: مُصادَقَة الحُمولَة ضِدّ المُخَطَّط
+        // المُعلَن قَبل فَحص الملكيَّة وقَبل أَيّ تَنفيذ (TESTING-PROTOCOL
+        // §T3). الفُحوص اليَدَويَّة أَدناه تَبقى — دِفاع مُتَعَدِّد الطَّبَقات.
+        var validation = AgentToolValidator.Validate(toolName, inputJson);
+        if (!validation.IsValid)
+            return (false, $"رُفِضَت الحُمولَة — مُخالَفَة مُخَطَّط أَداة «{toolName}»: "
+                         + string.Join(" | ", validation.Errors));
+
         try
         {
             using var doc = JsonDocument.Parse(inputJson);
