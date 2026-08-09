@@ -1060,6 +1060,32 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     font-weight: 600;
     color: var(--ac-primary, #0d6efd);
 }
+/* شارات الثِقَة — صَفّ صَغير تَحتَ العُنوان. هادِئ بِقَصد: خَلفِيَّة
+   مَمزوجَة بِ 12% فَقَط مِن لَون الشارَة فَلا تُزاحِم السِعر ولا الصورَة.
+   الأَلوان مِن التوكِنات (--ac-success و --ac-primary المَملوك لِلمُستَأجِر). */
+.ac-space-trust {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.ac-space-trust-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    border-radius: var(--ac-radius-pill, 999px);
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 1.6;
+}
+.ac-space-trust-chip.is-verified {
+    color: var(--ac-success, #198754);
+    background: color-mix(in srgb, var(--ac-success, #198754) 12%, transparent);
+}
+.ac-space-trust-chip.is-featured {
+    color: var(--ac-primary, #0d6efd);
+    background: color-mix(in srgb, var(--ac-primary, #0d6efd) 12%, transparent);
+}
 
 /* ── AcSectionHeader ─────────────────────────────────────────────────── */
 .ac-section-header {

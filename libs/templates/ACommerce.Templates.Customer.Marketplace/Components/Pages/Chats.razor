@@ -23,8 +23,10 @@ else
     else if (convs.Count == 0)
     {
         <AcEmptyState Title="لا توجَد مُحادَثات بَعد"
-                      Message="ابدأ مُحادَثَة من صَفحَة إعلان"
-                      IconName="message" />
+                      Message="المُحادَثَة تَبدَأ مِن صَفحَة أَيّ إعلان — زِرّ التَواصُل يَفتَحها مُباشَرَةً."
+                      IconName="message"
+                      ActionLabel="استِكشاف الإعلانات"
+                      ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
     }
     else
     {

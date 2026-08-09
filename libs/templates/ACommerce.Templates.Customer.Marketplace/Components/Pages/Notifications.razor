@@ -43,7 +43,14 @@
     </script>
 
     @if (_items is null)         { <AcLoadingState Message="جارٍ التَحميل…" /> }
-    else if (_items.Count == 0)  { <AcEmptyState Title="لا توجَد إشعارات" IconName="bell" /> }
+    else if (_items.Count == 0)
+    {
+        <AcEmptyState Title="لا توجَد إشعارات"
+                      Message="الإشعارات تَصِل عِندَ حَرَكَة في صَفقاتِكَ أَو رَسائِلِكَ."
+                      IconName="bell"
+                      ActionLabel="استِكشاف الإعلانات"
+                      ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
+    }
     else
     {
         <div class="ac-inbox-list">

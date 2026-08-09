@@ -121,7 +121,9 @@
                                      ImageUrl="@(l.MediaUrls.Count > 0 ? l.MediaUrls[0] : null)"
                                      Location="@($"{l.City} — {l.District}")"
                                      PriceLabel="@FormatPrice(l)"
-                                     Ribbon="@(l.IsVerified ? "مُوَثَّق" : "مُمَيَّز")"
+                                     IsVerified="@l.IsVerified"
+                                     IsFeatured="@l.IsFeatured"
+                                     ReviewCount="@ReviewCountOf(l)"
                                      ShowFavorite="@Auth.IsAuthenticated"
                                      IsFavorite="@favIds.Contains(l.Id)"
                                      FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
@@ -146,7 +148,9 @@
                                  ImageUrl="@(l.MediaUrls.Count > 0 ? l.MediaUrls[0] : null)"
                                  Location="@($"{l.City} — {l.District}")"
                                  PriceLabel="@FormatPrice(l)"
-                                 Ribbon="@(l.IsVerified ? "مُوَثَّق" : null)"
+                                 IsVerified="@l.IsVerified"
+                                 IsFeatured="@l.IsFeatured"
+                                 ReviewCount="@ReviewCountOf(l)"
                                  ShowFavorite="@Auth.IsAuthenticated"
                                  IsFavorite="@favIds.Contains(l.Id)"
                                  FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
@@ -168,9 +172,35 @@
                           Href="@(Auth.IsAuthenticated ? $"/{Slug}/me" : $"/{Slug}/login")" />
         </section>
 
+        @* فَراغ مُوَجَّه: لا رِسالَة صامِتَة. ثَلاث حالات وَلِكُلٍّ خُطوَة
+           تالِيَة واحِدَة — فَلتَر مَدينَة يُرفَع، أَو إعلان أَوَّل يُنشَر
+           (لِمَن يَملِك الصَلاحِيَّة)، أَو تَصَفُّح. *@
         @if ((featured is null || featured.Count == 0) && (latest is null || latest.Count == 0))
         {
-            <AcEmptyState IconName="building" Message="لا إعلانات بَعد." />
+            @if (!string.IsNullOrEmpty(City))
+            {
+                <AcEmptyState IconName="building"
+                              Title="@($"لا إعلانات في {City} بَعد")"
+                              Message="جَرِّب كُلّ المُدُن — قَد يَكون ما تَبحَث عَنه قَريباً."
+                              ActionLabel="كُلّ المُدُن"
+                              ActionHref="@AuthSession.LinkFor(Slug, Role, "")" />
+            }
+            else if (canCreateListing)
+            {
+                <AcEmptyState IconName="building"
+                              Title="لا إعلانات بَعد"
+                              Message="كُن أَوَّل مَن يَنشُر هُنا — إعلانك سَيَظهَر في الرَئيسيَّة فَوراً."
+                              ActionLabel="أَضِف أَوَّل إعلان"
+                              ActionHref="@AuthSession.LinkFor(Slug, Role, "create-listing")" />
+            }
+            else
+            {
+                <AcEmptyState IconName="building"
+                              Title="لا إعلانات بَعد"
+                              Message="تَصَفَّح كُلّ الفِئات — الجَديد يَصِل أَوَّلاً إلى صَفحَة الاستِكشاف."
+                              ActionLabel="استِكشاف"
+                              ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
+            }
         }
     }
 </div>
@@ -203,6 +233,20 @@
     }
     List<string> cities = new();
     HashSet<Guid> favIds = new();
+    /// <summary>عَدَد تَقييمات كُلّ مُعلِن ظاهِر في هذه الصَفحَة —
+    /// استِعلام واحِد لِكُلّهم، لا استِعلام لِكُلّ بِطاقَة.</summary>
+    Dictionary<Guid, int> reviewCounts = new();
+
+    /// <summary>مالِك الإعلان مِن الخَصائِص (نَفس المِفتاح الَّذي تَكتُبُه
+    /// نُقطَة إنشاء الإعلان).</summary>
+    static Guid? OwnerOf(Listing l)
+        => l.Attributes.TryGetValue("owner_id", out var s) && Guid.TryParse(s, out var g)
+           ? g : null;
+
+    int? ReviewCountOf(Listing l)
+        => OwnerOf(l) is { } owner && reviewCounts.TryGetValue(owner, out var n) && n > 0
+           ? n : null;
+
     ACommerce.Kit.Roles.Role? activeRole;
     bool canCreateListing = true;   // افتراضيّاً true لِمَتاجِر بِلا أَدوار
 
@@ -262,6 +306,20 @@
             .Select(x => x.City!)
             .ToListAsync())
             .Distinct().OrderBy(s => s).ToList();
+
+        // مُؤَشِّر ثِقَة: عَدَد تَقييمات المُعلِن. استِعلام واحِد يُغَطّي كُلّ
+        // البِطاقات المَعروضَة (≤ ١٠ مُعلِنين) — لا N+1.
+        var ownerIds = latest.Concat(featured)
+            .Select(OwnerOf).Where(g => g.HasValue).Select(g => g!.Value)
+            .Distinct().ToList();
+        if (ownerIds.Count > 0)
+        {
+            var revs = await tq.Query<ACommerce.Kit.Reviews.Review>()
+                .Where(r => !r.Hidden && ownerIds.Contains(r.TargetUserId))
+                .ToListAsync();
+            reviewCounts = revs.GroupBy(r => r.TargetUserId)
+                               .ToDictionary(g => g.Key, g => g.Count());
+        }
 
         if (Auth.IsAuthenticated && Auth.UserId.HasValue)
         {

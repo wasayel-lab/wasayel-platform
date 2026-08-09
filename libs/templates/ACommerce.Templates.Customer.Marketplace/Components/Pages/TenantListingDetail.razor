@@ -3,6 +3,7 @@
 @inject IDocumentStore Store
 @inject AuthSession Auth
 @inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
+@inject ACommerce.Kit.Reviews.ReviewsService Reviews
 
 @*
     صَفحة تَفاصيل الإعلان. بُنية مَنقولَة مِن AcListingDetailsPage
@@ -68,10 +69,33 @@ else
     <div class="acm-details-meta">
         <span class="acm-details-price">@listing.Price.ToString("N0") ريال</span>
         <AcBadge Variant="info" Text="@CategoryLabel" />
+        @* شارات الثِقَة عِندَ نُقطَة القَرار نَفسِها. *@
+        @if (listing.IsVerified)
+        {
+            <AcBadge Variant="success" Text="مُوَثَّق" />
+        }
+        @if (listing.IsFeatured)
+        {
+            <AcBadge Variant="primary" Text="مُمَيَّز" />
+        }
         <span style="color:var(--ac-text-muted);font-size:12px;">
             <AcIcon Name="search" Size="14" /> شوهد @listing.ViewCount مَرَّة
         </span>
     </div>
+
+    @* سُمعَة المُعلِن — مَقروءَة مِن تَقييمات مَربوطَة بِصَفقات مُكتَمِلَة.
+       تُعرَض فَقَط حينَ يوجَد تَقييم فِعليّ؛ «صِفر تَقييم» لا يُعرَض
+       كَرَقم لِأَنَّه ضَجيج لا إشارَة. *@
+    @if (ownerId is { } oid2 && ownerReviews is { Count: > 0 })
+    {
+        <a class="acm-details-owner-trust"
+           href="@AuthSession.LinkFor(Slug, Role, $"vendor/{oid2}")">
+            <AcIcon Name="star" Filled="true" Size="14" />
+            <strong>@ownerReviews.AverageRating.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)</strong>
+            <span>(@ownerReviews.Count تَقييم لِلمُعلِن)</span>
+            <AcIcon Name="chevron-left" Size="14" />
+        </a>
+    }
 
     @* تَحذير احتِيال خاصّ بِنَمَط المُستَأجِر (سَكَن مُشتَرَك/إيجار). *@
     @if (!string.IsNullOrEmpty(profile?.FraudWarning))
@@ -451,6 +475,15 @@ else
         </section>
     }
 
+    @* شَرح التَدَفُّق — مَطويّ. مُشتَقّ مِن DealsPolicy لِنَفس النَّمَط
+       الَّذي سَيُنشِئُه المُستَأجِر عِندَ بَدء الصَّفقَة
+       (MarketplaceTemplateExtensions.PatternFromTenant). يَظهَر لِلجَميع
+       حَتَّى الزائِر غَير المُسَجَّل — مَعرِفَة الخُطُوات قَبل الالتِزام
+       هي ما يَرفَع الثِقَة. *@
+    <FlowExplainer Pattern="@dealPattern"
+                   Side="@(isOwner ? Services.Ux.DealSide.Counterparty : Services.Ux.DealSide.Initiator)"
+                   Collapsible="true" />
+
     @* قِسم التَبليغ — يَنطَوي بِالـ <details>، يَفتَحه المُتَصَفِّح بِلا JS *@
     <details class="acm-details-report">
         <summary>
@@ -544,6 +577,11 @@ else
     bool isOwner;
     bool isOfferBased;   // accepts_offers=true → نَموذَج تَفاوُض، لا دَردَشَة مُباشَرَة
     double? pickupLat, pickupLng, dropoffLat, dropoffLng;
+    /// <summary>نَمَط تَدَفُّق الصَّفقَة لِهذا المُستَأجِر — نَفس الدالَّة
+    /// الَّتي يَستَخدِمُها endpoint بَدء الصَّفقَة، لا اشتِقاق مُوازٍ.</summary>
+    string dealPattern = "marketplace";
+    Guid? ownerId;
+    ACommerce.Kit.Reviews.ReviewSummary? ownerReviews;
 
     string CategoryLabel => tenant?.Categories.FirstOrDefault(c => c.Slug == listing?.CategorySlug)?.Label ?? "";
 
@@ -552,6 +590,7 @@ else
         await using var g = Store.QuerySession();
         tenant = await g.LoadAsync<Tenant>(Slug);
         profile = ACommerce.Templates.Customer.Marketplace.Services.Patterns.PatternProfileResolver.Of(tenant);
+        dealPattern = MarketplaceTemplateExtensions.PatternFromTenant(tenant);
         if (tenant is null) return;
         await using var t = Store.LightweightSession(Slug);
         listing = await t.Events.AggregateStreamAsync<Listing>(Id);
@@ -578,13 +617,19 @@ else
             listing.Attributes.TryGetValue("accepts_offers", out var acceptsOffers);
             var enabled = string.Equals(acceptsOffers, "true", StringComparison.OrdinalIgnoreCase);
             isOfferBased = enabled;
-            // هَل المُستَخدِم الحاليّ هو صاحِب الإعلان؟ يُستَخدَم لإخفاء
-            // نَموذَج تَقديم العَرض عَنه + إظهار أَزرار القَبول/الرَفض لَه.
-            if (Auth.IsAuthenticated && Auth.UserId.HasValue &&
-                listing.Attributes.TryGetValue("owner_id", out var oid))
+            // مالِك الإعلان — يُقرَأ دائِماً (لا فَقَط لِلمُسَجَّلين) لِأَنّ
+            // سُمعَتَه مُؤَشِّر ثِقَة يَراه الزائِر أَيضاً.
+            if (listing.Attributes.TryGetValue("owner_id", out var oid))
             {
-                isOwner = oid == Auth.UserId.Value.ToString();
+                if (Guid.TryParse(oid, out var ownerGuid)) ownerId = ownerGuid;
+                // هَل المُستَخدِم الحاليّ هو صاحِب الإعلان؟ يُستَخدَم لإخفاء
+                // نَموذَج تَقديم العَرض عَنه + إظهار أَزرار القَبول/الرَفض لَه.
+                if (Auth.IsAuthenticated && Auth.UserId.HasValue)
+                    isOwner = oid == Auth.UserId.Value.ToString();
             }
+
+            if (ownerId is { } owner)
+                ownerReviews = await Reviews.SummaryAsync(Slug, owner);
             listingMatch = await t.LoadAsync<ACommerce.Kit.Offers.ListingMatch>(Id);
 
             // اِستَخرِج إحداثيّات pickup/dropoff إن وُجِدَت في الخَصائِص.

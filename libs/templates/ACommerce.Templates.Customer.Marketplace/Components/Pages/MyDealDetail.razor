@@ -31,6 +31,65 @@
             @(string.IsNullOrEmpty(deal.ListingTitle) ? "صَفقَة" : deal.ListingTitle)
         </h1>
 
+        @* ─── «دَورُكَ الآن» ────────────────────────────────────────────
+           أَعلى نُقطَة تَحفيز: تُخبِر هذا المُستَخدِم تَحديداً هَل
+           الإجراء التالي مِنه أَم لا. الفاعِل المُخَوَّل مَقروء مِن
+           DealsPolicy.Actor عَبر DealTurnView — نَفس القاعِدَة الَّتي
+           يَفرِضُها DealsService.AdvanceAsync، فَلا تَعِد البِطاقَة بِما
+           سَيَرفُضُه المُحَرِّك. *@
+        @if (deal.Status == DealStatus.Active)
+        {
+            var turn = Services.Ux.DealTurnView.For(deal.Pattern, deal.Stage, mySide);
+            @* حالَة خاصَّة قائِمَة: عِندَ Offered يَقبَل مالِك الإعلان
+               العَرض بِزِرّ مُنفَصِل (يُعَيِّنُه طَرَفاً ثانِياً) — إجراء
+               حَقيقيّ مَطلوب مِنه رَغم أَنّ فاعِل المَرحَلَة هو المُبادِر. *@
+            var acceptCase = deal.Stage == DealStage.Offered && isListingOwner && !isInitiator;
+            var mine = acceptCase || turn.IsMine;
+            <div class="acm-turn @(mine ? "is-mine" : "is-waiting")">
+                <span class="acm-turn-icon" aria-hidden="true">
+                    <AcIcon Name="@(mine ? "bell" : "clock")" Size="20" />
+                </span>
+                <span class="acm-turn-body">
+                    <strong class="acm-turn-title">
+                        @if (mine)
+                        {
+                            <text>دَورُكَ الآن</text>
+                        }
+                        else
+                        {
+                            <text>بانتِظار @Services.Ux.DealTurnView.ActorLabelAr(turn.ActorKey, mySide)</text>
+                        }
+                    </strong>
+                    <span class="acm-turn-text">
+                        @if (acceptCase)
+                        {
+                            <text>المَطلوب مِنكَ: قَبول العَرض لِتَبدَأ الصَّفقَة.</text>
+                        }
+                        else if (turn.NextStage is { } ns2)
+                        {
+                            <text>الخُطوَة التالِيَة: @DealsPolicy.LabelAr(ns2)</text>
+                        }
+                        else
+                        {
+                            <text>لا خُطوَة تالِيَة في هذا النَّمَط.</text>
+                        }
+                    </span>
+                </span>
+                @if (mine)
+                {
+                    <a class="ac-btn ac-btn-primary ac-btn-sm acm-turn-cta" href="#deal-action">
+                        إلى الإجراء
+                    </a>
+                }
+            </div>
+        }
+
+        @* شَرح التَدَفُّق كامِلاً — فَوق الـ stepper لا بَدَلاً مِنه:
+           الـ stepper يَقول «أَينَ نَحنُ»، وهذا يَقول «ما الطَريق ومَن
+           يُحَرِّك كُلّ خُطوَة». *@
+        <FlowExplainer Pattern="@deal.Pattern" Side="@mySide"
+                       CurrentStage="@deal.Stage" />
+
         @* stepper *@
         <AcCard>
             <ChildContent>
@@ -76,6 +135,7 @@
         </AcCard>
 
         @* إجراءات بِوَعي الدَّور *@
+        <div id="deal-action"></div>
         @if (deal.Status == DealStatus.Active)
         {
             @* مالِك الإعلان يَقبَل العَرض (الصَّفقَة في Offered وأَنا المالِك ولَستُ المُبادِر) *@
@@ -167,6 +227,9 @@
     List<DealStage> stages = new();
     bool isInitiator, isListingOwner, canAdvance, alreadyReviewed;
     DealStage? nextStage;
+    /// <summary>مَوقِعي مِن الصَّفقَة — يُغَذّي «دَورُكَ الآن» وَشَرح
+    /// التَدَفُّق («صاحِب الطَلَب» تُصبِح «أَنتَ»).</summary>
+    Services.Ux.DealSide mySide = Services.Ux.DealSide.Observer;
 
     protected override async Task OnInitializedAsync()
     {
@@ -181,6 +244,7 @@
         isListingOwner = ownerRef == uid.ToString() || deal.CounterpartyId == uid;
         if (!isInitiator && !isListingOwner) { deal = null; return; }
 
+        mySide = Services.Ux.DealTurnView.SideOf(uid, deal.InitiatorId, deal.CounterpartyId);
         stages = DealsPolicy.StagesFor(deal.Pattern).ToList();
         nextStage = DealsPolicy.Next(deal.Pattern, deal.Stage);
         // مَن يُحَرِّك المَرحَلَة الحاليَّة؟

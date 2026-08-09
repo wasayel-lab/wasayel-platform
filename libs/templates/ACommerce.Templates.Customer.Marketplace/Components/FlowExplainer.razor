@@ -1,0 +1,95 @@
+@namespace ACommerce.Templates.Customer.Marketplace.Components
+@using ACommerce.Templates.Customer.Marketplace.Services.Deals
+@using ACommerce.Templates.Customer.Marketplace.Services.Ux
+
+@*
+    FlowExplainer — شَرح تَدَفُّق الصَّفقَة، مُشتَقّ بِالكامِل مِن
+    DealsPolicy: المَراحِل مِن StagesFor، أَسماؤُها مِن LabelAr، وَمَن
+    يُحَرِّك كُلّ مَرحَلَة مِن Actor. لا نَصّ مَرحَلَة مَنسوخ هُنا —
+    تَغيير السِّياسَة يُغَيِّر الشَرح تِلقائيّاً.
+
+    يَعمَل في سِياقَين:
+      • صَفحَة الإعلان — مَطويّ (Collapsible=true)، بِلا مَرحَلَة حاليَّة.
+      • صَفحَة الصَّفقَة — مَفتوح فَوق الـ stepper، مَع CurrentStage.
+
+    SSR بِالكامِل: <details> يَفتَحُه المُتَصَفِّح بِلا JS.
+
+    CSS_CLASSES: acm-flow, acm-flow-title, acm-flow-steps, acm-flow-step,
+                 acm-flow-dot, acm-flow-body, acm-flow-label,
+                 acm-flow-actor, is-open, is-done, is-current
+*@
+
+@{
+    var stages = DealsPolicy.StagesFor(Pattern).ToList();
+    var currentIndex = CurrentStage is { } cs ? stages.IndexOf(cs) : -1;
+}
+
+@if (stages.Count > 0)
+{
+    if (Collapsible)
+    {
+        <details class="acm-flow">
+            <summary class="acm-flow-title">
+                <AcIcon Name="info" Size="16" />
+                <span>@Title</span>
+            </summary>
+            @StepList(stages, currentIndex)
+        </details>
+    }
+    else
+    {
+        <section class="acm-flow is-open">
+            <h2 class="acm-flow-title">
+                <AcIcon Name="info" Size="16" />
+                <span>@Title</span>
+            </h2>
+            @StepList(stages, currentIndex)
+        </section>
+    }
+}
+
+@code {
+    /// <summary>نَمَط تَدَفُّق الصَّفقَة كَما يَعرِفُه
+    /// <see cref="DealsPolicy"/>: marketplace | rental | trip | service |
+    /// classifieds. أَيّ قيمَة أُخرى تَسقُط عَلى التَسَلسُل الافتِراضيّ.</summary>
+    [Parameter, EditorRequired] public string Pattern { get; set; } = "marketplace";
+
+    /// <summary>مَوقِع المُشاهِد — يُحَوِّل «صاحِب الطَلَب» إلى «أَنتَ».</summary>
+    [Parameter] public DealSide Side { get; set; } = DealSide.Observer;
+
+    /// <summary>المَرحَلَة الَّتي بَلَغَتها صَفقَة قائِمَة (إن وُجِدَت).</summary>
+    [Parameter] public DealStage? CurrentStage { get; set; }
+
+    /// <summary>عَرضُه مَطوِيّاً داخِل <c>&lt;details&gt;</c>.</summary>
+    [Parameter] public bool Collapsible { get; set; }
+
+    [Parameter] public string Title { get; set; } = "كَيف تَتِمّ الصَّفقَة؟";
+
+    RenderFragment StepList(List<DealStage> stages, int currentIndex) =>
+        @<ol class="acm-flow-steps">
+            @for (var i = 0; i < stages.Count; i++)
+            {
+                var stage   = stages[i];
+                var done    = currentIndex >= 0 && i < currentIndex;
+                var current = currentIndex >= 0 && i == currentIndex;
+                <li class="acm-flow-step @(done ? "is-done" : "") @(current ? "is-current" : "")">
+                    <span class="acm-flow-dot" aria-hidden="true">
+                        @if (done)
+                        {
+                            <AcIcon Name="check" Size="14" />
+                        }
+                        else
+                        {
+                            @(i + 1)
+                        }
+                    </span>
+                    <span class="acm-flow-body">
+                        <span class="acm-flow-label">@DealsPolicy.LabelAr(stage)</span>
+                        <span class="acm-flow-actor">
+                            يُحَرِّكها: @DealTurnView.ActorLabelAr(DealsPolicy.Actor(stage), Side)
+                        </span>
+                    </span>
+                </li>
+            }
+        </ol>;
+}

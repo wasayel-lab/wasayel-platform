@@ -11,9 +11,15 @@
     لِلتَوافُق الخَلفيّ مَع المُستَهلِكين الَّذين يُمَرِّرون OnOpen/OnToggleFavorite
     (تَفاعُليّ)، نَدعَم الـ legacy path أَيضاً عِندَما لا يُمَرَّر Href.
 
+    مُؤَشِّرات الثِقَة (IsVerified / IsFeatured / ReviewCount) تَظهَر كَ
+    صَفّ شارات صَغير تَحتَ العُنوان. أَلوانُها مِن مُتَغَيِّرات العَلامَة
+    (--ac-success و --ac-primary المَملوك لِكُلّ مُستَأجِر) — لا لَون
+    مُخترَع في المُكَوِّن.
+
     CSS_CLASSES: ac-space, ac-space-link, ac-space-fav-form, ac-space-media,
                  ac-space-ribbon, ac-space-fav, ac-space-body, ac-space-title,
-                 ac-space-meta, ac-space-price, ac-space-placeholder
+                 ac-space-meta, ac-space-price, ac-space-placeholder,
+                 ac-space-trust, ac-space-trust-chip, is-verified, is-featured
 *@
 
 @{
@@ -38,6 +44,25 @@
         </div>
         <div class="ac-space-body">
             <h3 class="ac-space-title">@Title</h3>
+            @if (IsVerified || IsFeatured)
+            {
+                <div class="ac-space-trust">
+                    @if (IsVerified)
+                    {
+                        <span class="ac-space-trust-chip is-verified">
+                            <AcIcon Name="shield" Size="12" />
+                            <span>@VerifiedLabel</span>
+                        </span>
+                    }
+                    @if (IsFeatured)
+                    {
+                        <span class="ac-space-trust-chip is-featured">
+                            <AcIcon Name="star" Filled="true" Size="12" />
+                            <span>@FeaturedLabel</span>
+                        </span>
+                    }
+                </div>
+            }
             @if (!string.IsNullOrEmpty(Location))
             {
                 <div class="ac-space-meta">
@@ -52,7 +77,18 @@
                 }
                 @if (Rating.HasValue)
                 {
-                    <span><AcIcon Name="star" Filled="true" Size="14" /> @Rating.Value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)</span>
+                    <span>
+                        <AcIcon Name="star" Filled="true" Size="14" />
+                        @Rating.Value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)
+                        @if (ReviewCount is > 0)
+                        {
+                            <text>&nbsp;(@ReviewCount)</text>
+                        }
+                    </span>
+                }
+                else if (ReviewCount is > 0)
+                {
+                    <span><AcIcon Name="star" Size="14" /> @ReviewCount</span>
                 }
             </div>
             @if (Attributes is not null && Attributes.Count > 0)
@@ -129,6 +165,18 @@ else
     [Parameter] public string? FavoriteFormAction { get; set; }
     /// <summary>قِيمَة hidden "return" لِإعادَة التَوجيه بَعد الـ POST.</summary>
     [Parameter] public string? FavoriteFormReturn { get; set; }
+
+    /// <summary>هُوِيَّة المُعلِن مُوَثَّقَة — شارَة ثِقَة.</summary>
+    [Parameter] public bool IsVerified { get; set; }
+    /// <summary>إعلان مُمَيَّز (إدارَة أَو اشتِراك مَدفوع).</summary>
+    [Parameter] public bool IsFeatured { get; set; }
+    /// <summary>عَدَد تَقييمات المُعلِن — يَظهَر بِجانِب المُتَوَسِّط
+    /// (<see cref="Rating"/>) أَو وَحدَه إن لَم يُمَرَّر مُتَوَسِّط.</summary>
+    [Parameter] public int? ReviewCount { get; set; }
+    /// <summary>نُصوص الشارات — تُمَرَّر مِن القالِب لِتَبقَى الواجِهَة
+    /// قابِلَة لِلتَرجَمَة (المُكَوِّن مُشتَرَك بَين لُغَتَين).</summary>
+    [Parameter] public string VerifiedLabel { get; set; } = "مُوَثَّق";
+    [Parameter] public string FeaturedLabel { get; set; } = "مُمَيَّز";
 
     [Parameter] public List<DynamicAttribute>? Attributes { get; set; }
     [Parameter] public bool IsArabic { get; set; } = true;

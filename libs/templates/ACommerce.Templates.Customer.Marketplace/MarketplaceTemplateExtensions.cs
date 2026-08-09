@@ -3529,9 +3529,16 @@ public static class MarketplaceTemplateExtensions
                     url: relatedUrl, tag: $"admin-{type}-{Guid.NewGuid():N}");
     }
 
-    // اِشتِقاق نَمَط الـ Deal مِن أَدوار المُستَأجِر — لِتَحديد مَراحِل
-    // تَدَفُّق العَمَلِيّات. مَتجَر بِأَدوار rider/driver → trip، …إلخ.
-    private static string PatternFromTenant(ACommerce.Kit.Tenants.Tenant? t)
+    /// <summary>
+    /// اِشتِقاق نَمَط الـ Deal مِن أَدوار المُستَأجِر — لِتَحديد مَراحِل
+    /// تَدَفُّق العَمَلِيّات. مَتجَر بِأَدوار rider/driver → trip، …إلخ.
+    ///
+    /// <para><c>public</c> لِأَنّ الواجِهَة تَشرَح التَدَفُّق قَبل بَدئِه
+    /// (<c>FlowExplainer</c> في صَفحَة الإعلان)، وَيَجِب أَن تَشرَح
+    /// <b>نَفس</b> النَّمَط الَّذي سَيُنشِئُه هذا الكود عِندَ بَدء
+    /// الصَّفقَة. اِشتِقاق ثانٍ في الواجِهَة كانَ سَيَنفَصِل صامِتاً.</para>
+    /// </summary>
+    public static string PatternFromTenant(ACommerce.Kit.Tenants.Tenant? t)
     {
         if (t is null || t.Roles.Count == 0) return "marketplace";
         var cats = t.Roles.Select(r => r.CatalogSlug).ToHashSet();

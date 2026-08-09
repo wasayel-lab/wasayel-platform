@@ -165,7 +165,9 @@ else
                              ImageUrl="@(l.MediaUrls.Count > 0 ? l.MediaUrls[0] : null)"
                              Location="@($"{l.City} — {l.District}")"
                              PriceLabel="@FormatPrice(l)"
-                             Ribbon="@(l.IsVerified ? "مُوَثَّق" : l.IsFeatured ? "مُمَيَّز" : null)"
+                             IsVerified="@l.IsVerified"
+                             IsFeatured="@l.IsFeatured"
+                             ReviewCount="@ReviewCountOf(l)"
                              ShowFavorite="@Auth.IsAuthenticated"
                              IsFavorite="@favIds.Contains(l.Id)"
                              FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
@@ -209,6 +211,16 @@ else
     List<Listing>? items;
     List<string> districts = new();
     HashSet<Guid> favIds = new();
+    /// <summary>عَدَد تَقييمات كُلّ مُعلِن ظاهِر — استِعلام واحِد لِكُلّهم.</summary>
+    Dictionary<Guid, int> reviewCounts = new();
+
+    static Guid? OwnerOf(Listing l)
+        => l.Attributes.TryGetValue("owner_id", out var s) && Guid.TryParse(s, out var g)
+           ? g : null;
+
+    int? ReviewCountOf(Listing l)
+        => OwnerOf(l) is { } owner && reviewCounts.TryGetValue(owner, out var n) && n > 0
+           ? n : null;
 
     string FilterToggleHref =>
         $"/{Slug}/explore" + Preserve(set: Filters == "open" ? null : ("filters", "open"),
@@ -377,6 +389,19 @@ else
             .Select(x => x.District!)
             .ToListAsync())
             .Distinct().OrderBy(s => s).ToList();
+
+        // مُؤَشِّر ثِقَة: عَدَد تَقييمات المُعلِن — استِعلام واحِد لِكُلّ
+        // المُعلِنين الظاهِرين في هذه الصَفحَة (لا N+1).
+        var ownerIds = items.Select(OwnerOf).Where(g => g.HasValue)
+                            .Select(g => g!.Value).Distinct().ToList();
+        if (ownerIds.Count > 0)
+        {
+            var revs = await t.Query<ACommerce.Kit.Reviews.Review>()
+                .Where(r => !r.Hidden && ownerIds.Contains(r.TargetUserId))
+                .ToListAsync();
+            reviewCounts = revs.GroupBy(r => r.TargetUserId)
+                               .ToDictionary(g => g.Key, g => g.Count());
+        }
 
         if (Auth.IsAuthenticated && Auth.UserId.HasValue)
         {

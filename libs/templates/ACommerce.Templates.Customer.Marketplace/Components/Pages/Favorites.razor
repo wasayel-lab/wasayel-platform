@@ -38,6 +38,8 @@
                                  Href="@AuthSession.LinkFor(Slug, Role, $"listings/{l.Id}")"
                                  Location="@($"{l.City} — {l.District}")"
                                  PriceLabel="@($"{l.Price:N0} ريال")"
+                                 IsVerified="@l.IsVerified"
+                                 IsFeatured="@l.IsFeatured"
                                  ShowFavorite="true"
                                  IsFavorite="true"
                                  FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"

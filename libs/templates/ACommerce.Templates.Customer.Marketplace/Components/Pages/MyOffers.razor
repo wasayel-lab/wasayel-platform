@@ -24,7 +24,9 @@
     else if (offers.Count == 0)
     {
         <AcEmptyState IconName="package" Title="لا عُروض بَعد"
-                      Message="قَدِّم عَرضاً مِن أَيّ إعلان مَفتوح لِلتَفاوُض." />
+                      Message="قَدِّم عَرضاً مِن أَيّ إعلان مَفتوح لِلتَفاوُض."
+                      ActionLabel="تَصَفَّح الإعلانات المَفتوحَة"
+                      ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
     }
     else
     {

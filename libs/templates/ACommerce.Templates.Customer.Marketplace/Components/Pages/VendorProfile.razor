@@ -56,7 +56,10 @@
         <AcSectionHeader Title="@($"إعلانات {vendor.FullName} ({listings.Count})")" />
         @if (listings.Count == 0)
         {
-            <AcEmptyState IconName="package" Title="لا إعلانات نَشِطَة لِهذا البائِع" />
+            <AcEmptyState IconName="package" Title="لا إعلانات نَشِطَة لِهذا البائِع"
+                          Message="قَد يَكون أَخفاها مُؤَقَّتاً — تَصَفَّح بَقِيَّة المَتجَر."
+                          ActionLabel="استِكشاف"
+                          ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
         }
         else
         {
