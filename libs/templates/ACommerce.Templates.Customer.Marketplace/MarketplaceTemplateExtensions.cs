@@ -1434,7 +1434,7 @@ public static class MarketplaceTemplateExtensions
             await using var s = store.LightweightSession(slug);
             var conv = await s.LoadAsync<Conversation>(conversationId);
             if (conv is null) return Results.Redirect(Link(req, slug, $"chats"));
-            if (conv.OwnerId != userId && conv.PartnerId != userId) return Results.Forbid();
+            if (conv.OwnerId != userId && conv.PartnerId != userId) return Forbidden();
             if (conv.IsExpired) return Results.Redirect(Link(req, slug, $"chats/{conversationId}?err=expired"));
 
             var msg = new Message
@@ -2684,7 +2684,7 @@ public static class MarketplaceTemplateExtensions
             if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
             await using var us = store.QuerySession(Services.Incubator.StudioAuth.Tenant);
             var u = await us.LoadAsync<Services.Incubator.StudioUser>(auth.UserId!.Value);
-            if (u?.IsPlatformAdmin != true) return Results.Forbid();
+            if (u?.IsPlatformAdmin != true) return Forbidden();
 
             var reason = req.Form["reason"].ToString().Trim();
             var action = req.Form["action"].ToString().Trim();   // suspend | reactivate

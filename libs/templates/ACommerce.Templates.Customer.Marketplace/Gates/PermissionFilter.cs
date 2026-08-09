@@ -36,13 +36,16 @@ public sealed class PermissionFilter : IEndpointFilter
 
         await using var t = store.QuerySession(slug);
         var user = await t.LoadAsync<User>(userId.Value);
-        if (user is null) return Results.Forbid();
+        // 403 مُباشَر (StatusCode) لا Results.Forbid(): الأَخير يَطلُب
+        // IAuthenticationService غَير المُسَجَّل في المِنَصَّة فَيَرمي 500
+        // بَدَل 403 عِندَ كُلّ رَفض صَلاحِيَّة.
+        if (user is null) return Results.StatusCode(StatusCodes.Status403Forbidden);
 
         // الدَور الفَعّال: URL يَتَفَوَّق عَلى user.ActiveRole (لِجَلَسات
         // مُتَعَدِّدَة في نَفس المُتَصَفِّح).
         var activeRole = role ?? user.ActiveRole;
         if (!RolePermissions.Has(tenant.Roles, activeRole, _permission))
-            return Results.Forbid();
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
 
         return await next(ctx);
     }
