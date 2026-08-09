@@ -21,3 +21,9 @@ Thumbs.db
 
 # سجلات محلية
 *.log
+
+# أسرار محلية — لا تُتتبع أبداً
+appsettings.Local.json
+
+# مرفوعات التطوير المحلية (يكتبها LocalFileStorage)
+**/wwwroot/uploads/
