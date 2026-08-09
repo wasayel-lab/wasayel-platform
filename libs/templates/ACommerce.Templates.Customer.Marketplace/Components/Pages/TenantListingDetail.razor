@@ -318,6 +318,8 @@ else
                         <input type="hidden" name="lat" id="offer_lat" value="0" />
                         <input type="hidden" name="lng" id="offer_lng" value="0" />
                         <input type="hidden" name="ttl_minutes" value="15" />
+                        @* الدَور الفَعّال لِنُقطَة الكِتابَة بِلا دَور — يُحَرِّر تَعَدُّد الأَدوار المُتَزامِن. *@
+                        <input type="hidden" name="as" value="@Role" />
 
                         <AcField Label="عَرضُكَ (ريال)" Required="true">
                             <input type="number" name="price" required min="1" step="1"

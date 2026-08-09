@@ -25,7 +25,6 @@ public sealed class PermissionFilter : IEndpointFilter
         var http  = ctx.HttpContext;
         var store = http.RequestServices.GetRequiredService<IDocumentStore>();
         var slug  = http.Slug();
-        var role  = http.Role();
         var userId = http.UserIdOrNull();
         if (userId is null) return Results.Unauthorized();
 
@@ -41,10 +40,12 @@ public sealed class PermissionFilter : IEndpointFilter
         // بَدَل 403 عِندَ كُلّ رَفض صَلاحِيَّة.
         if (user is null) return Results.StatusCode(StatusCodes.Status403Forbidden);
 
-        // الدَور الفَعّال: URL يَتَفَوَّق عَلى user.ActiveRole (لِجَلَسات
-        // مُتَعَدِّدَة في نَفس المُتَصَفِّح).
-        var activeRole = role ?? user.ActiveRole;
-        if (!RolePermissions.Has(tenant.Roles, activeRole, _permission))
+        // الدَور الفَعّال لِلتَّفويض: الصَّريح (as على نُقطَة الكِتابَة، لِمَن
+        // يَملِكُه فِعلاً) ثُمَّ دَور الـ URL ثُمَّ ActiveRole المُخَزَّن —
+        // يُحَرِّر تَعَدُّد الأَدوار المُتَزامِن دون كِتابَة الحَقل المُشتَرَك.
+        var effectiveRole =
+            await EffectiveRole.ResolveAsync(http, slug, userId.Value, user.ActiveRole);
+        if (!RolePermissions.Has(tenant.Roles, effectiveRole, _permission))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
         return await next(ctx);

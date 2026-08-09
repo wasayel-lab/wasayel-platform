@@ -122,6 +122,8 @@ else
 
             <form method="post" action="@($"/{Slug}/listings/create")" enctype="multipart/form-data">
                 <input type="hidden" name="category" value="@effectiveCategory" />
+                @* الدَور الفَعّال لِنُقطَة الكِتابَة بِلا دَور — يُحَرِّر تَعَدُّد الأَدوار المُتَزامِن. *@
+                <input type="hidden" name="as" value="@Role" />
 
                 <AcCard>
                     <ChildContent>

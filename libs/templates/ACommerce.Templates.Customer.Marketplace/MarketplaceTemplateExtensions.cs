@@ -805,7 +805,7 @@ public static class MarketplaceTemplateExtensions
             var (userId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
 
-            if (!await HasPermissionAsync(slug, userId, "offer.submit", store))
+            if (!await HasPermissionAsync(req.HttpContext, slug, userId, "offer.submit", store))
                 return Results.Redirect(Link(req, slug, $"listings/{id}?err=forbidden"));
             var userName = AuthSession.ResolveUserName(req, slug) ?? "—";
 
@@ -3540,7 +3540,7 @@ public static class MarketplaceTemplateExtensions
     // فَحص صَلاحِيَّة لِلمُستَخدِم الحاليّ — يَجلِب tenant + user وَيُفَوِّض
     // إلى <see cref="ACommerce.Kit.Roles.RolePermissions.Has"/>.
     private static async Task<bool> HasPermissionAsync(
-        string slug, Guid userId, string permission, IDocumentStore store)
+        HttpContext http, string slug, Guid userId, string permission, IDocumentStore store)
     {
         await using var g = store.QuerySession();
         var tenant = await g.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
@@ -3550,8 +3550,13 @@ public static class MarketplaceTemplateExtensions
         await using var t = store.QuerySession(slug);
         var user = await t.LoadAsync<ACommerce.Kit.Auth.User>(userId);
         if (user is null) return false;
+        // الدَور الفَعّال (as الصَّريح لِمَن يَملِكُه ثُمَّ URL ثُمَّ المُخَزَّن)
+        // بَدَل ActiveRole وَحدَه — يَعمَل المُستَخدِم بِدَورَينِ مُتَزامِنَينِ
+        // عَلى نُقطَة كِتابَة بِلا دَور. راجِع Gates.EffectiveRole.
+        var effectiveRole = await Gates.EffectiveRole.ResolveAsync(
+            http, slug, userId, user.ActiveRole);
         return ACommerce.Kit.Roles.RolePermissions.Has(
-            tenant.Roles, user.ActiveRole, permission);
+            tenant.Roles, effectiveRole, permission);
     }
 
     // تَسكين دَور لِمُستَخدِم بَعد تَوثيقِه — يُستَدعَى مِن /verify عِندَ
