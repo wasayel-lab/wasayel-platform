@@ -96,6 +96,51 @@ public class AgentToolValidatorTests
         AssertFails(result);
     }
 
+    // ── قُيود رُمِّزَت رَسميّاً في المُخَطَّطات (2026-08-09):
+    //    نَمَط الـ slug، نَمَط اللَّون hex، وحَدّ حَجم الأَيقونَة ──
+
+    [Fact]
+    public void CreateTenant_SlugWithSpaces_Fails()
+    {
+        var result = AgentToolValidator.Validate("create_tenant",
+            """{"slug":"bad slug!","name":"مَتجَر","color":"#1d4ed8","channel":"phone","categories":[{"slug":"cars","label":"سَيّارات"}]}""");
+        AssertFails(result);
+    }
+
+    [Fact]
+    public void CreateTenant_ColorNotHex_Fails()
+    {
+        var result = AgentToolValidator.Validate("create_tenant",
+            """{"slug":"demo","name":"مَتجَر","color":"blue","channel":"phone","categories":[{"slug":"cars","label":"سَيّارات"}]}""");
+        AssertFails(result);
+    }
+
+    [Fact]
+    public void SetBranding_ColorMalformedHex_Fails()
+    {
+        var result = AgentToolValidator.Validate("set_branding",
+            """{"slug":"demo","color":"#GGGGGG"}""");
+        AssertFails(result);
+    }
+
+    [Fact]
+    public void SetPwa_IconExceedsEncodedSizeLimit_Fails()
+    {
+        var oversized = "data:image/png;base64," + new string('A', 360_000);
+        var result = AgentToolValidator.Validate("set_pwa",
+            $$"""{"slug":"demo","role":"customer","pwa_icon_url":"{{oversized}}"}""");
+        AssertFails(result);
+    }
+
+    [Fact]
+    public void SetPwa_EmptyIcon_DeleteSemantics_StillPasses()
+    {
+        var result = AgentToolValidator.Validate("set_pwa",
+            """{"slug":"demo","role":"customer","pwa_icon_url":""}""");
+        Assert.True(result.IsValid,
+            $"سِلسِلَة فارِغَة = حَذف — يَجِب أَن تَمُرّ: {string.Join(" | ", result.Errors)}");
+    }
+
     private static void AssertFails(AgentToolValidationResult result)
     {
         Assert.False(result.IsValid);

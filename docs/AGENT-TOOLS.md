@@ -40,16 +40,22 @@
 
 | الأداة | الغرض | الحقول الإلزامية | القيود المفروضة بالمخطط |
 |---|---|---|---|
-| `create_tenant` | إنشاء متجر/تطبيق جديد | slug, name, color, channel, categories | `slug` بنمط `[a-z0-9_-]+`؛ `channel ∈ {phone, nafath}` |
+| `create_tenant` | إنشاء متجر/تطبيق جديد | slug, name, color, channel, categories | `slug` بنمط مُرمّز `^[A-Za-z0-9_-]+$`؛ اللون بنمط hex مُرمّز؛ `channel ∈ {phone, nafath}` |
 | `set_categories` | إعادة كتابة فئات مستأجر بالكامل | slug, categories | كل فئة: slug + label (+icon إيموجي، kind) |
 | `set_branding` | تحديث الهوية البصرية | slug | البقية اختيارية (name, tagline, city, color, channel) |
 | `set_regions` | إعادة كتابة المدن والأحياء بالكامل | slug, cities | كل مدينة: name + districts[] |
 | `set_roles` | اختيار أدوار المتجر من الكاتالوج | slug, roles | **تعداد مغلق**: `customer, rider, vendor, driver, host, shipper, tenant_admin` + `default_role` |
 | `set_attributes` | خصائص ديناميكية لنطاق محدد | slug, scope_id, definitions | النطاق: Guid فئة أو scope دور أو `…0F01` للبروفايل العام؛ الأنواع: `Text, LongText, Number, Boolean, SingleSelect, MultiSelect, Date` |
-| `set_pwa` | اسم/أيقونة PWA مخصصة لدور | slug, role | الأيقونة `data:` URL حتى 256 ك.ب؛ سلسلة فارغة = حذف |
+| `set_pwa` | اسم/أيقونة PWA مخصصة لدور | slug, role | الأيقونة `data:` URL حتى 256 ك.ب (الحد مُرمّز `maxLength` في المخطط)؛ سلسلة فارغة = حذف |
 
 **دلالة الكتابة**: أدوات `set_*` القائمة على قوائم هي **إعادة كتابة كاملة**
 (replace-all) لا دمجاً — على المولِّد إرسال القائمة النهائية دائماً.
+
+**ترميز القيود (2026-08-09)**: نمط الـ slug (في الأدوات السبع)، ونمط اللون
+hex، وحد حجم الأيقونة أصبحت مُرمّزة رسمياً في المخططات نفسها وتفرضها بوابة
+`AgentToolValidator` قبل التنفيذ — الفحوص اليدوية في المنفذ دفاع ثانٍ لا أول.
+نمط الـ slug في البوابة متسامح مع حالة الأحرف (`^[A-Za-z0-9_-]+$`) لأن
+المنفذ يوحّدها صغيرة قبل الاستخدام.
 
 ## 4. الثوابت
 

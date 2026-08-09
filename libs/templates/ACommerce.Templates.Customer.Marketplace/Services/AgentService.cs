@@ -362,11 +362,11 @@ public sealed class AgentService
       "type": "object",
       "required": ["slug", "name", "color", "channel", "categories"],
       "properties": {
-        "slug":    {"type": "string", "description": "[a-z0-9_-]+"},
+        "slug":    {"type": "string", "pattern": "^[A-Za-z0-9_-]+$", "description": "[a-z0-9_-]+"},
         "name":    {"type": "string"},
         "tagline": {"type": "string"},
         "city":    {"type": "string"},
-        "color":   {"type": "string", "description": "لَون hex مَثَلاً #1d4ed8"},
+        "color":   {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$", "description": "لَون hex مَثَلاً #1d4ed8"},
         "channel": {"type": "string", "enum": ["phone", "nafath"]},
         "categories": {"type": "array", "items": {{CategoryItemSchema}}}
       }
@@ -378,7 +378,7 @@ public sealed class AgentService
       "type": "object",
       "required": ["slug", "categories"],
       "properties": {
-        "slug": {"type": "string"},
+        "slug": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
         "categories": {"type": "array", "items": {{CategoryItemSchema}}}
       }
     }
@@ -389,11 +389,11 @@ public sealed class AgentService
       "type": "object",
       "required": ["slug"],
       "properties": {
-        "slug":    {"type": "string"},
+        "slug":    {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
         "name":    {"type": "string"},
         "tagline": {"type": "string"},
         "city":    {"type": "string"},
-        "color":   {"type": "string"},
+        "color":   {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
         "channel": {"type": "string", "enum": ["phone", "nafath"]}
       }
     }
@@ -404,10 +404,10 @@ public sealed class AgentService
       "type": "object",
       "required": ["slug", "role"],
       "properties": {
-        "slug":          {"type": "string", "description": "slug المَتجَر"},
+        "slug":          {"type": "string", "pattern": "^[A-Za-z0-9_-]+$", "description": "slug المَتجَر"},
         "role":          {"type": "string", "description": "slug الدَور"},
         "pwa_name":      {"type": "string", "description": "اسم التَطبيق، فارِغ = حَذف"},
-        "pwa_icon_url":  {"type": "string", "description": "data:image/png;base64,… (حَتَّى ٢٥٦ ك.ب.)، فارِغ = حَذف"}
+        "pwa_icon_url":  {"type": "string", "maxLength": 350000, "description": "data:image/png;base64,… (حَتَّى ٢٥٦ ك.ب. — الحَدّ مُرَمَّز maxLength عَلى طول الـ data URL)، فارِغ = حَذف"}
       }
     }
     """;
@@ -421,7 +421,7 @@ public sealed class AgentService
       "type": "object",
       "required": ["slug", "roles"],
       "properties": {
-        "slug": {"type": "string"},
+        "slug": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
         "roles": {
           "type": "array",
           "description": "قائِمَة catalog slugs مَختارَة مِن: customer, rider, vendor, driver, host, shipper, tenant_admin",
@@ -443,7 +443,7 @@ public sealed class AgentService
       "type": "object",
       "required": ["slug", "cities"],
       "properties": {
-        "slug": {"type": "string"},
+        "slug": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
         "cities": {
           "type": "array",
           "items": {
@@ -464,7 +464,7 @@ public sealed class AgentService
       "type": "object",
       "required": ["slug", "scope_id", "definitions"],
       "properties": {
-        "slug":     {"type": "string"},
+        "slug":     {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
         "scope_id": {"type": "string"},
         "definitions": {
           "type": "array",
