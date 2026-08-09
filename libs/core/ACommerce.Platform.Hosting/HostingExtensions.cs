@@ -114,6 +114,12 @@ public static class HostingExtensions
         // Wolverine: يَكتَشِف handlers + يُولِّد HTTP endpoints
         builder.Host.UseWolverine(opts =>
         {
+            // Wolverine 6 نَزَع مُصَرِّف Roslyn مِن الـ core، فَـ TypeLoadMode
+            // الافتِراضيّ (Dynamic) يَرمي عِند StartAsync بِلا IAssemblyGenerator.
+            // حُزمَة WolverineFx.RuntimeCompilation تُسَجِّله تِلقائيّاً، والنِداء
+            // الصَريح هُنا idempotent ويَجعَل الاعتِماد ظاهِراً في الكود لا مُضمَراً.
+            opts.UseRuntimeCompilation();
+
             foreach (var asm in pb.KitAssemblies)
                 opts.Discovery.IncludeAssembly(asm);
             opts.Policies.AutoApplyTransactions();

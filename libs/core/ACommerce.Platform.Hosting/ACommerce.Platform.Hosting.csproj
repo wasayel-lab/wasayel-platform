@@ -5,6 +5,7 @@
     <PackageReference Include="WolverineFx" />
     <PackageReference Include="WolverineFx.Marten" />
     <PackageReference Include="WolverineFx.Http" />
+    <PackageReference Include="WolverineFx.RuntimeCompilation" />
     <PackageReference Include="Serilog.AspNetCore" />
     <PackageReference Include="Serilog.Sinks.Console" />
     <ProjectReference Include="..\ACommerce.Platform.Shared\ACommerce.Platform.Shared.csproj" />

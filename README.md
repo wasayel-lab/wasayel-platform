@@ -111,15 +111,30 @@ Azure Communication Services). التبديل بسطر تهيئة واحد:
   SSR ثابتاً بالكامل (لا `@rendermode` إلا في صفحتي وكيل)، فالزاحف يستلم
   HTML مكتملاً بلا انتظار SignalR.
 
-**عطل إقلاع قائم قبل هذه الموجة — يحتاج قراراً**: بعد ترقية Wolverine إلى 6
-(`b8efc91a`) لم يعد الـ core يشحن مُصرِّف وقت التشغيل، فيرمي
-`WolverineRuntime.StartAsync` استثناء `TypeLoadMode.Dynamic ... no
-IAssemblyGenerator (Roslyn) is registered` قبل خدمة أي طلب. تحقق مستقل بنسخة
-مصغرة بنفس الحزم (WolverineFx.Http 6.25.1 + Marten 9.22.5). العلاج أحدهما:
-إضافة `WolverineFx.RuntimeCompilation` (‏6.25.1 مستقرة) إلى
-`Directory.Packages.props`، أو توليد الكود مسبقاً
-(`dotnet run -- codegen write`) مع `TypeLoadMode.Static` في CI. البناء
-والاختبارات خضراء في الحالتين — العطل عند التشغيل فقط.
+**عطل مُصرِّف Wolverine — أُصلح**: بعد ترقية Wolverine إلى 6 (`b8efc91a`) لم
+يعد الـ core يشحن مُصرِّف وقت التشغيل، فكان `WolverineRuntime.StartAsync` يرمي
+`TypeLoadMode.Dynamic ... no IAssemblyGenerator (Roslyn) is registered` قبل
+خدمة أي طلب. العلاج المعتمد: حزمة `WolverineFx.RuntimeCompilation` ‏6.25.1
+(مطابقة لبقية حزم Wolverine) في `Directory.Packages.props`، ومرجعها في
+`ACommerce.Platform.Hosting` — حيث يُستدعى `UseWolverine` — مع نداء صريح
+`opts.UseRuntimeCompilation()`؛ الحزمة تُسجِّل نفسها تلقائياً والنداء
+idempotent، وذِكره يجعل الاعتماد ظاهراً في الكود لا مُضمَراً. التحقق: نسخة
+مصغرة معزولة بنفس الحزم ترمي الاستثناء نصّاً قبل الإصلاح، وبعده يمضي التوليد
+ويكون الفشل التالي `Npgsql: Failed to connect to 127.0.0.1:5432` فقط؛
+و`V1.App.deps.json` صار يحمل `WolverineFx.RuntimeCompilation/6.25.1` و
+`JasperFx.RuntimeCompiler/5.0.0` و`Microsoft.CodeAnalysis`. البديل للإنتاج
+(توليد مسبق `dotnet run -- codegen write` مع `TypeLoadMode.Static` وشحن بلا
+Roslyn) يبقى مفتوحاً متى لزم تصغير الحزمة وتسريع الإقلاع البارد.
+
+**عطل إقلاع آخر قائم — يحتاج قراراً**: مستقلّ عن سابقه وسابقٌ له في الترتيب،
+فهو يقع في `AddPlatformHost` عند `AddMarten` قبل أن يعمل Wolverine أصلاً (لذا
+كان يحجبه). بعد ترقية Marten إلى 9 صار توزيع دوال `Apply/Create` يتمّ بمولّد
+مصدر وقت التصريف بلا احتياطيّ وقت تشغيل، فيرمي
+`InvalidProjectionException: No source-generated dispatcher found for
+SingleStreamProjection<Listing>`. السبب: مشاريع الـ Core التي تُعرَّف فيها
+التجميعات (`Listings`, `Subscriptions`, `Support`, `Offers`) بلا
+`PackageReference` لـ Marten، فلا يعمل المولّد في تجميعاتها. البناء
+والاختبارات خضراء — العطل عند التشغيل فقط.
 
 **غائب**: جهاز T1/T2/T4 (ذخيرة الطلبات الحقيقية والاستنساخية والجلسات
 الذهبية) وT7 (القبول بالمحاكاة عبر `DealsService`)، `DealsPolicy` كبيانات
