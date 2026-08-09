@@ -126,15 +126,25 @@ idempotent، وذِكره يجعل الاعتماد ظاهراً في الكود
 (توليد مسبق `dotnet run -- codegen write` مع `TypeLoadMode.Static` وشحن بلا
 Roslyn) يبقى مفتوحاً متى لزم تصغير الحزمة وتسريع الإقلاع البارد.
 
-**عطل إقلاع آخر قائم — يحتاج قراراً**: مستقلّ عن سابقه وسابقٌ له في الترتيب،
-فهو يقع في `AddPlatformHost` عند `AddMarten` قبل أن يعمل Wolverine أصلاً (لذا
-كان يحجبه). بعد ترقية Marten إلى 9 صار توزيع دوال `Apply/Create` يتمّ بمولّد
-مصدر وقت التصريف بلا احتياطيّ وقت تشغيل، فيرمي
-`InvalidProjectionException: No source-generated dispatcher found for
-SingleStreamProjection<Listing>`. السبب: مشاريع الـ Core التي تُعرَّف فيها
-التجميعات (`Listings`, `Subscriptions`, `Support`, `Offers`) بلا
-`PackageReference` لـ Marten، فلا يعمل المولّد في تجميعاتها. البناء
-والاختبارات خضراء — العطل عند التشغيل فقط.
+**عطل مولّد Marten المصدريّ — أُصلح**: مستقلّ عن سابقه وسابقٌ له في الترتيب،
+فكان يقع في `AddPlatformHost` عند `AddMarten` قبل أن يعمل Wolverine أصلاً —
+ولذلك كان يحجبه، ولم ينكشف إلّا برفع الأول. بعد ترقية Marten إلى 9 صار توزيع
+دوال `Apply/Create` يتمّ بمولّد مصدر وقت التصريف بلا احتياطيّ وقت تشغيل،
+فكان يرمي `InvalidProjectionException: No source-generated dispatcher found
+for SingleStreamProjection<Listing>`. السبب: مشاريع الـ Core التي تُعرَّف فيها
+التجميعات الأربع (`Listings`, `Subscriptions`, `Support`, `Offers`) كانت
+ملفّات مشروع عارية بلا أيّ `PackageReference`، والمولّد يشحن داخل حزمة Marten
+فلا يعمل في تجميعة لا تُشير إليها. العلاج: `<PackageReference Include="Marten" />`
+في المشاريع الأربعة (بلا `Version` — الإدارة مركزيّة). المرجع وحده كفى: لم
+تُمَسّ تصريحات الأنواع ولا احتاج أيٌّ منها `partial`، مصداقاً لنصّ الاستثناء
+نفسه بأنّ النوع المسجَّل عبر `Snapshot<T>` لا يحتاجها.
+
+التحقق: المولّد صار يبثّ `{Aggregate}Evolver` لكلّ تجميعة من الأربع — يغطّي
+سبعة أحداث في حالة `Listing` — والتجميعات المبنيّة تحمل السمة
+`[assembly: GeneratedEvolver]`. و`V1.App` صار يعبر `AddMarten` فعلاً ويمضي
+حتى `PlatformSeed`، فيتوقّف عند اتصال Postgres وحده
+(`Failed to connect to 127.0.0.1:5432`) — وهو أقصى ما يبلغه جهاز بلا قاعدة
+بيانات. **بهذا لم يبقَ في طريق الإقلاع عائقٌ معروف غير Postgres نفسه.**
 
 **غائب**: جهاز T1/T2/T4 (ذخيرة الطلبات الحقيقية والاستنساخية والجلسات
 الذهبية) وT7 (القبول بالمحاكاة عبر `DealsService`)، `DealsPolicy` كبيانات

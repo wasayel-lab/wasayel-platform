@@ -1,2 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <!-- مولّد JasperFx المصدريّ يشحن داخل حزمة Marten، ولا بُدّ أن يعمل في
+         التجميعة التي تُعرَّف فيها Listing وإلّا فلا مُصرِّف وقت تشغيل لها. -->
+    <PackageReference Include="Marten" />
+  </ItemGroup>
 </Project>
