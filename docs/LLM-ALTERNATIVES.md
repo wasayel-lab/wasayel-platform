@@ -3,6 +3,12 @@
 نَفس `OpenAIBackend` يَعمَل مَع أَيّ مُزَوِّد يَتَكَلَّم Chat Completions API.
 بَدِّل `Agent:BaseUrl` و `Agent:ApiKey` و `Agent:Model` في `appsettings.Local.json`.
 
+> **مُنذ 2026-08-10**: هذِه المَفاتيح صارَت **مُشتَرَكَة بَين الوُكَلاء** —
+> يُمكِن تَخصيص كُلّ وَكيل عَلى حِدَة بِـ`Agents:{Studio|Analysis}:{Key}`،
+> وما لا يُذكَر هُناك يَسقُط إلى `Agent:*` أَدناه بِلا تَغيير. القاعِدَة
+> كامِلَةً ومِثال GitHub Models الثُنائيّ في
+> [AGENT-TOOLS §1](AGENT-TOOLS.md).
+
 ## ١) Groq — الأَسرَع، أَجوَد حِصَّة مَجّانيَّة
 
 **التَّسجيل**: console.groq.com → API Keys → "Create API Key" (مَجّاناً).

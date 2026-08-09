@@ -9,8 +9,91 @@
 - **محايد المزوّد**: `IAgentBackend` بثلاثة تطبيقات — Anthropic (الافتراضي،
   نموذج `claude-sonnet-4-6` مع prompt caching)، Gemini، OpenAI. التبديل
   بسطر إعدادات واحد دون لمس منطق الأدوات.
-- **الإعدادات**: `Agent:Provider` (‏`anthropic | gemini | openai`)،
-  `Agent:Model`، و`Agent:ApiKey` (أو متغير البيئة `ANTHROPIC_API_KEY`).
+- **وكيلان منطقيان، ملفّان مستقلّان (2026-08-10)**: المنصّة تشغّل أكثر من
+  وكيل، ولكلٍّ حاجة مختلفة — **`Analysis`** (محرّك دراسة الجدوى في الحاضنة،
+  `FeasibilityAnalysisService`) يحتاج نموذجاً أذكى ومخرجاً JSON طويلاً،
+  و**`Studio`** (`AgentService`، نداء الأدوات السبع) يحتاج نموذجاً أخفّ
+  وأسرع. لكلٍّ **مزوّده وعنوانه ومفتاحه ونموذجه** مستقلّة.
+- **حلّ الإعدادات — قاعدة واحدة في موضع واحد** (`AgentProfileResolver`):
+
+  ```
+  Agents:{Name}:{Key}   ←  وإن غاب  ←  Agent:{Key} (القديم)  ←  وإن غاب  ←  متغيّر البيئة
+  ```
+
+  أوّل قيمة **غير فارغة** تفوز؛ السلسلة الفارغة أو المسافات البيضاء تُعامَل
+  كغائبة (‏`appsettings.json` يشحن `"ApiKey": ""` و`"Model": ""` حشواً،
+  والمقصود بهما «غير مضبوط»). المفاتيح الخمسة: `Provider` (‏`anthropic |
+  gemini | openai`)، `BaseUrl`، `ApiKey`، `Model`، `ProviderLabel`.
+  الأسماء اليوم `Studio` و`Analysis`، والبنية مفتوحة لأسماء قادمة بلا
+  سطر كود جديد.
+- **سقوط البيئة يتبع المزوّد المحلول**: `anthropic` ← `ANTHROPIC_API_KEY`؛
+  `gemini` ← `GEMINI_API_KEY` ثم `GOOGLE_API_KEY`؛ `openai` ←
+  `OPENAI_API_KEY` ثم `GROQ_API_KEY` ثم `CEREBRAS_API_KEY` ثم
+  `OPENROUTER_API_KEY`.
+- **التوافق الرجعي**: تهيئة `Agent:*` وحدها تعطي وكيلين على **نفس الخلفية
+  المشتركة بعينها** (`Assert.Same`) بنفس المزوّد والمفتاح والنموذج — أي
+  سلوك ما قبل إعادة الهيكلة حرفياً. مثبت بتوصيف في
+  `tests/…/AgentProfileTests.cs`.
+- **المزوّد المسمّى**: `IAgentBackendProvider.For(name)` / `ModelFor(name)` —
+  تسجيل DI واحد. يخزّن خلفية واحدة لكل ملفّ **متمايز**؛ ومعيار التمايز هو
+  ما يغيّر الاتصال فقط (مزوّد + عنوان + مفتاح + تسمية)، **لا النموذج** —
+  فالنموذج يُمرَّر في كل `AgentRequest`. فوكيلان بنفس المفتاح والعنوان
+  ونموذجين مختلفين يتقاسمان `HttpClient` واحداً.
+- **الخلفيّات خيارات-صِرفة**: مُنشئاتها تأخذ `AgentProfile` محلولاً ولا
+  ترى `IConfiguration` ولا تقرأ بيئة بنفسها. كان تناثر قراءة `Agent:ApiKey`
+  مكرّراً في الخلفيات الثلاث بسقوط بيئة مختلف لكلٍّ — والآن في موضع واحد.
+
+### مثال التهيئة الثنائية المستهدفة — GitHub Models (مجّاني)
+
+نموذج ذكي للتحليل وأخفّ للاستوديو، عبر خلفية OpenAI المتوافقة، بمفتاح PAT
+واحد مشترك (‏`models:read`). يُلصَق في `appsettings.Local.json`:
+
+```json
+{
+  "Agents": {
+    "Analysis": {
+      "Provider": "openai",
+      "BaseUrl":  "https://models.github.ai/inference",
+      "ApiKey":   "github_pat_…",
+      "Model":    "openai/gpt-4o",
+      "ProviderLabel": "github-models"
+    },
+    "Studio": {
+      "Provider": "openai",
+      "BaseUrl":  "https://models.github.ai/inference",
+      "ApiKey":   "github_pat_…",
+      "Model":    "openai/gpt-4o-mini",
+      "ProviderLabel": "github-models"
+    }
+  }
+}
+```
+
+المفتاح هنا واحد فيتقاسم الوكيلان خلفية واحدة و`HttpClient` واحداً، مع
+نموذجين مختلفين. ولو اختلف المفتاح أو العنوان بين الوكيلين بُنيت خلفيتان
+منفصلتان تلقائياً — لا تغيير كود. وما لا يُذكر في `Agents:*` يسقط إلى
+`Agent:*` القديم، فيمكن وضع المشترك (`Provider`/`BaseUrl`/`ApiKey`) في
+`Agent:*` والاكتفاء بـ`Agents:{Name}:Model` لكل وكيل:
+
+```json
+{
+  "Agent":  { "Provider": "openai",
+              "BaseUrl":  "https://models.github.ai/inference",
+              "ApiKey":   "github_pat_…" },
+  "Agents": { "Analysis": { "Model": "openai/gpt-4o" },
+              "Studio":   { "Model": "openai/gpt-4o-mini" } }
+}
+```
+
+> **حدّ معلن — شكل المسار لم يُتحقّق حيّاً بعد.** `OpenAIBackend` يلحق
+> `v1/chat/completions` بالـ`BaseUrl` (وهو ما يصحّ لـGroq وCerebras
+> وOpenRouter وOllama)، فالعنوان أعلاه يُنادى فعلياً على
+> `https://models.github.ai/inference/v1/chat/completions`. لا مفتاح
+> GitHub Models متاح في هذه الموجة، فالمسار **يُتحقَّق منه بأول PAT حقيقي**؛
+> وإن رفضه المزوّد فالإصلاح سطر واحد في `OpenAIBackend.CallAsync` أو
+> `BaseUrl` يستوعب اللاحقة. طبقة الملفّات نفسها لا تتأثّر: المزوّد والمفتاح
+> والنموذج تُحلّ وتُختبر بمعزل عن شكل المسار.
+
 - **الجلسات**: وثيقة Marten (`AgentSession`) تحت مستأجر `_admin` —
   جلسة مشتركة للإدارة (توافق رجعي) وجلسة منعزلة لكل رائد أعمال
   (`scope:<id>`) — **لا تسريب محادثات بين المستأجرين**.
