@@ -1,0 +1,27 @@
+{
+  "slug": "customer",
+  "icon": "🛒",
+  "homeRoute": "",
+  "label": {
+    "ar": "عَميل",
+    "en": null
+  },
+  "description": {
+    "ar": "مُشتَري عامّ — يَتَصَفَّح ويَتَواصَل ويَشتَري. لا يَنشُر إعلانات.",
+    "en": null
+  },
+  "permissions": [
+    "listing.browse",
+    "offer.submit",
+    "chat.start"
+  ],
+  "fields": [],
+  "composition": {
+    "home": "defaultHome",
+    "createListing": "defaultCreateForm",
+    "nav": "defaultNav",
+    "explore": "defaultExplore",
+    "publicProfile": null,
+    "extras": []
+  }
+}

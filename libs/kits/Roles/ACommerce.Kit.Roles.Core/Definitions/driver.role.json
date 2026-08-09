@@ -1,0 +1,89 @@
+{
+  "slug": "driver",
+  "icon": "🚗",
+  "homeRoute": "/explore",
+  "label": {
+    "ar": "سائِق",
+    "en": null
+  },
+  "description": {
+    "ar": "سائِق مَركَبَة يُقَدِّم عُروضاً عَلى مَشاوير العُمَلاء.",
+    "en": null
+  },
+  "permissions": [
+    "listing.browse",
+    "offer.submit",
+    "chat.respond"
+  ],
+  "fields": [
+    {
+      "code": "vehicle_type",
+      "label": {
+        "ar": "نَوع المَركَبَة",
+        "en": null
+      },
+      "type": "SingleSelect",
+      "isRequired": true,
+      "options": [
+        {
+          "value": "economy",
+          "label": {
+            "ar": "اقتِصاديّ",
+            "en": null
+          }
+        },
+        {
+          "value": "comfort",
+          "label": {
+            "ar": "مُريح",
+            "en": null
+          }
+        },
+        {
+          "value": "luxury",
+          "label": {
+            "ar": "فاخِر",
+            "en": null
+          }
+        },
+        {
+          "value": "family",
+          "label": {
+            "ar": "عائِليّ",
+            "en": null
+          }
+        }
+      ]
+    },
+    {
+      "code": "vehicle_plate",
+      "label": {
+        "ar": "لَوحَة المَركَبَة",
+        "en": null
+      },
+      "type": "Text",
+      "isRequired": true,
+      "options": []
+    },
+    {
+      "code": "license_number",
+      "label": {
+        "ar": "رَقم رُخصَة القِيادَة",
+        "en": null
+      },
+      "type": "Text",
+      "isRequired": true,
+      "options": []
+    }
+  ],
+  "composition": {
+    "home": "driverHome",
+    "createListing": "defaultCreateForm",
+    "nav": "driverNav",
+    "explore": "driverExplore",
+    "publicProfile": null,
+    "extras": [
+      "driverArea"
+    ]
+  }
+}

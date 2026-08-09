@@ -1,0 +1,29 @@
+{
+  "slug": "rider",
+  "icon": "🧍",
+  "homeRoute": "/me/listings",
+  "label": {
+    "ar": "راكِب",
+    "en": null
+  },
+  "description": {
+    "ar": "يَنشُر طَلَب مِشوار + يَختار مِن عُروض السائِقين (نَموذَج إنجيز).",
+    "en": null
+  },
+  "permissions": [
+    "listing.browse",
+    "listing.create",
+    "chat.start"
+  ],
+  "fields": [],
+  "composition": {
+    "home": "riderHome",
+    "createListing": "riderCreateRequest",
+    "nav": "riderNav",
+    "explore": "defaultExplore",
+    "publicProfile": null,
+    "extras": [
+      "driversList"
+    ]
+  }
+}

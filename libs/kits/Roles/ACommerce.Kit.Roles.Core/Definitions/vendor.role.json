@@ -1,0 +1,49 @@
+{
+  "slug": "vendor",
+  "icon": "🏪",
+  "homeRoute": "/me/listings",
+  "label": {
+    "ar": "تاجِر",
+    "en": null
+  },
+  "description": {
+    "ar": "صاحِب نَشاط تِجاريّ — يَنشُر إعلانات وَ يَرُدّ عَلى الاستِفسارات.",
+    "en": null
+  },
+  "permissions": [
+    "listing.create",
+    "listing.edit",
+    "listing.delete",
+    "chat.respond"
+  ],
+  "fields": [
+    {
+      "code": "business_name",
+      "label": {
+        "ar": "اسم النَّشاط",
+        "en": null
+      },
+      "type": "Text",
+      "isRequired": true,
+      "options": []
+    },
+    {
+      "code": "business_type",
+      "label": {
+        "ar": "نَوع النَّشاط",
+        "en": null
+      },
+      "type": "Text",
+      "isRequired": false,
+      "options": []
+    }
+  ],
+  "composition": {
+    "home": "sellerHome",
+    "createListing": "defaultCreateForm",
+    "nav": "vendorNav",
+    "explore": "defaultExplore",
+    "publicProfile": "vendorProfile",
+    "extras": []
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "slug": "tenant_admin",
+  "icon": "👔",
+  "homeRoute": "/manage",
+  "label": {
+    "ar": "إداريّ المَتجَر",
+    "en": null
+  },
+  "description": {
+    "ar": "إداريّ يُدير مُحتَوى وَ مُستَخدِمي المَتجَر بِالكامِل.",
+    "en": null
+  },
+  "permissions": [
+    "listing.create",
+    "listing.edit",
+    "listing.delete",
+    "offer.submit",
+    "chat.respond",
+    "chat.start",
+    "tenant.manage",
+    "listing.browse"
+  ],
+  "fields": [],
+  "composition": {
+    "home": "defaultHome",
+    "createListing": "defaultCreateForm",
+    "nav": "adminNav",
+    "explore": "defaultExplore",
+    "publicProfile": null,
+    "extras": []
+  }
+}

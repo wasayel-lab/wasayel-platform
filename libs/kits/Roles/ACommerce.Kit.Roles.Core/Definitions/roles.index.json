@@ -1,0 +1,11 @@
+{
+  "roles": [
+    "customer",
+    "rider",
+    "vendor",
+    "driver",
+    "host",
+    "shipper",
+    "tenant_admin"
+  ]
+}

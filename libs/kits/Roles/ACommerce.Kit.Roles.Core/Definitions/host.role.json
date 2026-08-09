@@ -1,0 +1,39 @@
+{
+  "slug": "host",
+  "icon": "🏠",
+  "homeRoute": "/me/listings",
+  "label": {
+    "ar": "مالِك سَكَن",
+    "en": null
+  },
+  "description": {
+    "ar": "مالِك عَقار يَنشُر إعلان سَكَن لِلإيجار أَو المُشارَكَة.",
+    "en": null
+  },
+  "permissions": [
+    "listing.create",
+    "listing.edit",
+    "listing.delete",
+    "chat.respond"
+  ],
+  "fields": [
+    {
+      "code": "contact_phone",
+      "label": {
+        "ar": "هاتِف تَواصُل بَديل",
+        "en": null
+      },
+      "type": "Text",
+      "isRequired": false,
+      "options": []
+    }
+  ],
+  "composition": {
+    "home": "sellerHome",
+    "createListing": "defaultCreateForm",
+    "nav": "vendorNav",
+    "explore": "defaultExplore",
+    "publicProfile": "vendorProfile",
+    "extras": []
+  }
+}

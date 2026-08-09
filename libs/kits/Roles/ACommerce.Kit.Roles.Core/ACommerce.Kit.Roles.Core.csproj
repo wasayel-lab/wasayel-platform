@@ -1,2 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- تَعريفات الأَدوار السَبعَة: مِلَفّات ظاهِرَة في المُستودَع
+       (تُقرَأ وتُحَرَّر ويَظهَر فَرقُها في الـ diff) ومَضمونَة في
+       التَّجميع عِندَ النَّشر — فَلا مَسار أَساس يَختَلِف بَين المُضيفين.
+       المُبَرِّر كامِلاً في RoleDefinitionLoader. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Definitions\**\*.json" />
+  </ItemGroup>
+
 </Project>

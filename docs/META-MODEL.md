@@ -152,15 +152,159 @@ Booked/Shipping/Delivered = counterparty؛ Confirmed/Reviewed = either؛
 
 ---
 
-## 6. كاتالوج الأدوار (`RoleCatalog`)
+## 6. كاتالوج الأدوار (`RoleCatalog`) — ملفات، ومعجمان مغلقان، ومصادق
 
 سبعة قوالب أدوار مغلقة — الوكيل والواجهات يختارون منها ولا يخترعون خارجها:
 
-`customer 🛒 · rider 🧍 · vendor 🏪 · driver 🚗 · host · shipper · tenant_admin`
+`customer 🛒 · rider 🧍 · vendor 🏪 · driver 🚗 · host 🏠 · shipper 📦 · tenant_admin 👔`
 
-كل قالب: `Slug, Label, Icon, Description, HomeRoute, Permissions[],
-Fields[]` — والحقول منمّطة (`RoleField`: نص/اختيار مفرد بخيارات/…) وتظهر
-في بروفايل الدور تلقائياً.
+**ما تحقق (2026-08-10)**: القوالب السبعة خرجت من مصفوفة `RoleTemplate`
+مكتوبة في `RoleCatalog.cs` ومجمَّعة معه، إلى **ملف JSON لكل دور** —
+`libs/kits/Roles/ACommerce.Kit.Roles.Core/Definitions/{slug}.role.json`،
+بترتيب `roles.index.json`. الواجهة العامة **لم تتغير حرفاً**
+(`All`/`Find`/`InstantiateRole` بتواقيعها وأنواعها)، فلا مستهلك واحد من
+التسعة احتاج تعديلاً. والتطابق **مبرهن لا مُدّعى**: اختبار توصيف يلتقط
+سطح الكاتالوج كاملاً — بما فيه الصلاحيات بترتيبها والحقول بنصوصها
+المشكولة حرفياً ومصفوفة `RolePermissions.Has` كاملة — كُتب واخضرّ في
+كوميت مستقل **قبل** النقل، ولم يُمس سطر منه بعده.
+
+### 6.1 شكل `RoleDefinition`
+
+```json
+{
+  "slug": "driver",
+  "icon": "🚗",
+  "homeRoute": "/explore",
+  "label":       { "ar": "سائِق", "en": null },
+  "description": { "ar": "سائِق مَركَبَة يُقَدِّم عُروضاً…", "en": null },
+  "permissions": ["listing.browse", "offer.submit", "chat.respond"],
+  "fields": [
+    { "code": "vehicle_type",
+      "label": { "ar": "نَوع المَركَبَة", "en": null },
+      "type": "SingleSelect", "isRequired": true,
+      "options": [ { "value": "economy", "label": { "ar": "اقتِصاديّ", "en": null } } ] }
+  ],
+  "composition": {
+    "home": "driverHome", "createListing": "defaultCreateForm",
+    "nav": "driverNav", "explore": "driverExplore",
+    "publicProfile": null, "extras": ["driverArea"]
+  }
+}
+```
+
+**الترجمات**: كل سلسلة يراها المستخدم حاوية `{ar, en}`. العربية إلزامية
+(مملوءة من القيم القائمة بتشكيلها حرفياً) والإنجليزية بنية جاهزة فارغة.
+**والقراءة تبقى العربية كما اليوم** — `LocalizedText.Current` يرجع `ar`
+دائماً؛ خدمة التوطين `L` وزر اللغة قائمان في المستودع و**لم يُربطا**
+هنا، لأن الربط تغيير سلوكي وهذه الموجة شرطها ألا يتغير السلوك بتاً.
+
+### 6.2 معجم الصلاحيات المغلق (`PermissionCatalog`) — موثقاً كاملاً
+
+ثماني صلاحيات، لا تاسعة، مصدرها موضع واحد:
+
+| الصلاحية | يمنحها |
+|---|---|
+| `listing.browse` | customer · rider · driver · shipper · tenant_admin |
+| `listing.create` | rider · vendor · host · tenant_admin |
+| `listing.edit` | vendor · host · tenant_admin |
+| `listing.delete` | vendor · host · tenant_admin |
+| `offer.submit` | customer · driver · shipper · tenant_admin |
+| `chat.start` | customer · rider · tenant_admin |
+| `chat.respond` | vendor · driver · host · shipper · tenant_admin |
+| `tenant.manage` | tenant_admin |
+
+مواضع الفحص (لا تتغير في هذه الموجة): `RequirePermission` في
+`GateExtensions`، و`GatedPage.razor`، و`PermissionFilter`،
+و`GatePipeline`، و`HasPermissionAsync` في `MarketplaceTemplateExtensions`،
+وثلاث صفحات تفحص مباشرة (`Me`, `TenantHome`, `TenantManage`).
+
+**وما ليس منه، بقصد**:
+
+- `offer.accept` — يظهر **مثالاً في تعليق XML** على `RequirePermission`
+  فقط. لا يمنحه قالب ولا يفحصه مسار.
+- `tenant.roles_save`, `tenant.branding_save`, `tenant.suspend`,
+  `user.grant_admin`, `deal.advance`, `deal.cancel`, `deal.dispute`,
+  `listing.{action}` — **أسماء إجراءات في سجل التدقيق** لا صلاحيات
+  أدوار. تشبهها شكلاً وتختلف عنها موضعاً ومعنى، وخلطهما كان الخطر
+  الفعلي الذي أغلقه هذا المعجم.
+
+**حدّ معلن**: المعجم يغلق الحلقة من جهة **التعريف** (تعريف يمنح صلاحية
+خارجه يُرفض عند التحميل)، **لا من جهة الفحص** — `RequirePermission("…")`
+ما زال يقبل أي سلسلة كما كان، وإغلاق ذلك الطرف تغيير سلوكي مؤجل.
+
+### 6.3 معجم مكونات التركيب (`RoleComponents`) — وحدّ ما يقرأه التصيير
+
+قسم `composition` يلتقط **تركيب كل دور كما هو اليوم** كبيانات موصوفة،
+بمعجم مغلق حُصر بمسح كل مواضع `CatalogSlug` في الشجرة:
+
+| الفتحة | القيم | مصدرها في الكود |
+|---|---|---|
+| `home` | `defaultHome` · `riderHome` · `driverHome` · `sellerHome` | فروع `TenantHome.razor` |
+| `createListing` | `defaultCreateForm` · `riderCreateRequest` | فرعا `CreateListing.razor` |
+| `nav` | `defaultNav` · `riderNav` · `driverNav` · `vendorNav` · `adminNav` | `switch` في `MainLayout.BuildNav` |
+| `explore` | `defaultExplore` · `driverExplore` | `driverMode` في `TenantExplore.razor` |
+| `publicProfile` | `vendorProfile` أو `null` | `Components/Pages/VendorProfile.razor` |
+| `extras` | `driverArea` · `driversList` · `roleHomeHero` | صفحات `/me/area` و`/drivers` ومكون `RoleHomeHero` |
+
+**التركيب الحالي**: customer ‏(defaultHome/defaultCreateForm/defaultNav/defaultExplore)،
+rider ‏(riderHome/riderCreateRequest/riderNav + `driversList`)، vendor و host
+‏(sellerHome/defaultCreateForm/vendorNav + `vendorProfile`)، driver و shipper
+‏(driverHome/defaultCreateForm/driverNav/driverExplore + `driverArea`)،
+tenant_admin ‏(defaultHome/defaultCreateForm/adminNav).
+
+**حدّ هذه الموجة، معلناً وبلا تلميع**: **لا شيء يقرأ قسم `composition`
+بعد**. التصيير ما زال يتفرّع بـ `switch` على `CatalogSlug` في المواضع
+الستة أعلاه. قيمته الآن ثلاثة أشياء بلا رابع: توثيق التركيب في موضع
+واحد بدل ستة، ومصادقة المعجم (مكوّن خارج القائمة يُرفض)، وجاهزية الموجة
+الثانية التي تجعل التصيير يقرؤه.
+
+**مكوّن يتيم موثق**: `Components/RoleHomeHero.razor` **موجود في الشجرة
+ولا يصيّره أحد** — بحث نصي في كل `.razor` و`.cs` لا يجد له مرجعاً
+واحداً. أُبقي في المعجم توثيقاً للواقع ولا يُسند إلى أي دور، واختبار
+يثبّت الأمرين معاً.
+
+### 6.4 التقييمات وعلاقتها بالأدوار — ما وُجد لا ما يُشتهى
+
+مسح عدة `ACommerce.Kit.Reviews` كاملة أظهر أن `Review` **محايد الدور
+تماماً**: يستهدف `TargetUserId` (مستخدماً لا دوراً)، ولا حقل دور فيه،
+ولا فرع دور في `ReviewsService` ولا في `ReviewSummary`. ما فيه سياقاً هو
+`DealPattern` — نمط الصفقة لا الدور.
+
+لذلك **لا تهيئة تقييمات في `RoleDefinition`**: اختراع مفتاح لا يستهلكه
+شيء أسوأ من غيابه. وعلاقة الدور بالتقييم قائمة في موضع واحد فقط وهي
+**موصوفة فعلاً** عبر `composition.publicProfile`: صفحة `vendorProfile`
+هي الوحيدة في المستودع التي تعرض النجوم وعدّاد التقييمات، وهي صفحة
+الدورين `vendor` و`host` دون سواهما — واختبار يثبّت ذلك.
+
+**وعدم تماثل موثق كامتداد مستقبلي معلَّم**: السائق هدف تقييم صريح في
+تعليق `Review` نفسه («الراكب يقيّم السائق والسائق يقيّم الراكب»)، ومع
+ذلك `driversList` لا يعرض له نجمة واحدة. توثيق لا تهيئة.
+
+### 6.5 المصادق (`RoleDefinitionValidator`)
+
+دوال نقية بنمط `DealPatternValidator`، **مفروضة بوابةً عند التحميل**:
+تعريف فاسد يُفشل الإقلاع برسالة تسمي الدور والرمز، ولا يمر صامتاً.
+رموز الخرق الثابتة:
+
+`slug_empty` · `slug_pattern` · `icon_missing` · `home_route_malformed` ·
+`localized_arabic_missing` · `permission_out_of_vocabulary` ·
+`permission_duplicate` · `field_code_empty` · `field_code_duplicate` ·
+`field_type_out_of_vocabulary` · `select_without_options` ·
+`option_value_empty` · `option_value_duplicate` ·
+`composition_component_out_of_vocabulary`
+
+**وما لا يفحصه عمداً**: توافق التركيب مع الصلاحيات — `vendor` لا يملك
+`listing.browse` وتركيبه مع ذلك `defaultExplore`. هذا واقع الكاتالوج
+اليوم، وجعله خرقاً يرفض قالباً قياسياً قائماً — وهو بالضبط ما رفضه
+`DealPatternValidator` حين لم يشترط انتهاء النمط بـ `Reviewed`.
+
+**حدّ التخزين، معلناً**: التعريفات ملفات **مضمونة في العدة** لا وثائق
+Marten لكل مستأجر — نفس حدّ الخطوة 4. الملفات ظاهرة في المستودع (تُقرأ
+وتُحرَّر ويظهر فرقها في الـ diff) ومضمونة عند النشر، لأن القارئ يعمل
+تحت مضيفَين مختلفَي مسار (تطبيق ASP.NET بـ ContentRoot، ومشغّل اختبارات
+بمجلد عمل آخر). **ولا سقوط من قرص إلى مضمون**: مصدران للحقيقة يعنيان
+انحرافاً صامتاً بالتعريف، وهو ما جاءت الموجة لتزيله. حين يُنفَّذ
+التخزين يتغير `RoleDefinitionLoader` وحده.
 
 ---
 
@@ -181,6 +325,7 @@ Fields[]` — والحقول منمّطة (`RoleField`: نص/اختيار مفر
 | | اليوم | **[مخطط]** |
 |---|---|---|
 | `DealsPolicy` | **كاتالوج بيانات في موضع واحد** (`DealPatternCatalog` فوق `DealPatternDefinition`) خلف نفس واجهة `DealsPolicy` و`DealsService` | **[مخطط]** الكاتالوج نفسه وثيقة Marten لكل مستأجر — نفس الشكل، مصدر قراءة آخر |
+| `RoleCatalog` | **ملف JSON لكل دور** (`Definitions/*.role.json` فوق `RoleDefinition`) خلف نفس واجهة `RoleCatalog`، بمعجم صلاحيات مغلق ومصادق مفروض عند التحميل (§6) | **[مخطط]** وثيقة دور لكل مستأجر، والتصيير يقرأ `composition` بدل `switch` على `CatalogSlug` |
 | إنشاء عمود تجاري جديد | إضافة تعريف نمط إلى الكاتالوج (سطر بيانات) وإعادة نشر | **أثر بيانات** يولَّد ويُتحقق منه ويُعتمد بلا نشر |
 | ضمان الخصائص الشكلية | **فحص آلي** بدوال نقية (`DealPatternValidator` — T5/T6) | نفس الفحص مفروضاً **بوابةً** قبل حفظ أي نمط مولَّد |
 

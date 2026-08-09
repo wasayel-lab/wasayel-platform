@@ -15,112 +15,41 @@ using System.Linq;
 /// </list>
 /// لا تُغَيَّر هذه القَوالِب بِالـ runtime — التَّخصيص عَلى مُستَوى المَتجَر
 /// يَتِم بِنَسخ القالِب إلى <see cref="Role"/> ثُمّ تَعديل الحُقول هُناك.
+///
+/// <para><b>المَصدَر: مِلَفّات (2026-08-10)</b>. كانَت القَوالِب السَبعَة
+/// مَصفوفَة <c>RoleTemplate</c> مَكتوبَة في هذا المِلَفّ ومُجَمَّعَة مَعَه؛
+/// صارَت <see cref="RoleDefinition"/> تُقرَأ مِن
+/// <c>Definitions/*.role.json</c> عَبر <see cref="RoleDefinitionLoader"/>.
+/// <b>الواجِهَة العامَّة لَم تَتَغَيَّر حَرفاً</b> — <see cref="All"/>
+/// و<see cref="Find"/> و<see cref="InstantiateRole"/> بِتَواقيعِها
+/// وأَنواعِها، فَلا مُستَهلِك واحِد مِن التِّسعَة احتاجَ تَعديلاً.
+/// والتَّطابُق مُبرهَن بِـ <c>RoleCatalogCharacterizationTests</c> الَّذي
+/// كُتِبَ واخضَرَّ قَبل النَّقل ولَم يُمَسّ بَعدَه.</para>
+///
+/// <para><b>حَدّ المَوجَة، مُعلَناً</b>: التَّعريفات <b>مَضمونَة في
+/// العُدَّة</b> لا وَثائِق Marten لِكُلّ مُستَأجِر — نَفس حَدّ الخُطوَة ٤
+/// في <c>DealPatternCatalog</c>، وحينَ يُنَفَّذ التَّخزين يَتَغَيَّر
+/// <see cref="RoleDefinitionLoader"/> وَحدَه.</para>
 /// </summary>
 public static class RoleCatalog
 {
-    public static readonly IReadOnlyList<RoleTemplate> All = new[]
-    {
-        new RoleTemplate(
-            Slug:        "customer",
-            Label:       "عَميل",
-            Icon:        "🛒",
-            Description: "مُشتَري عامّ — يَتَصَفَّح ويَتَواصَل ويَشتَري. لا يَنشُر إعلانات.",
-            HomeRoute:   "",
-            // العَميل التَّقليديّ: يَتَصَفَّح فَقَط. الأَدوار الَّتي يَنشُر فيها
-            // المُستَخدِم طَلَبات/إعلانات هي rider / vendor / host (لِكُلٍّ
-            // قالِب مُختَلِف).
-            Permissions: new[] { "listing.browse", "offer.submit", "chat.start" },
-            Fields:      new RoleField[] { }),
+    /// <summary>التَّعريفات كَما قُرِئَت مِن المِلَفّات — بِحاوِيات
+    /// التَّوطين وقِسم التَّركيب كامِلَين. <see cref="All"/> إسقاط
+    /// مِنها إلى العَقد القَديم.</summary>
+    public static readonly IReadOnlyList<RoleDefinition> Definitions =
+        RoleDefinitionLoader.LoadEmbedded();
 
-        new RoleTemplate(
-            Slug:        "rider",
-            Label:       "راكِب",
-            Icon:        "🧍",
-            Description: "يَنشُر طَلَب مِشوار + يَختار مِن عُروض السائِقين (نَموذَج إنجيز).",
-            HomeRoute:   "/me/listings",
-            Permissions: new[] { "listing.browse", "listing.create", "chat.start" },
-            Fields:      new RoleField[] { }),
-
-        new RoleTemplate(
-            Slug:        "vendor",
-            Label:       "تاجِر",
-            Icon:        "🏪",
-            Description: "صاحِب نَشاط تِجاريّ — يَنشُر إعلانات وَ يَرُدّ عَلى الاستِفسارات.",
-            HomeRoute:   "/me/listings",
-            Permissions: new[] { "listing.create", "listing.edit", "listing.delete", "chat.respond" },
-            Fields:      new[]
-            {
-                new RoleField { Code = "business_name", Label = "اسم النَّشاط", Type = "Text", IsRequired = true },
-                new RoleField { Code = "business_type", Label = "نَوع النَّشاط", Type = "Text", IsRequired = false },
-            }),
-
-        new RoleTemplate(
-            Slug:        "driver",
-            Label:       "سائِق",
-            Icon:        "🚗",
-            Description: "سائِق مَركَبَة يُقَدِّم عُروضاً عَلى مَشاوير العُمَلاء.",
-            HomeRoute:   "/explore",
-            Permissions: new[] { "listing.browse", "offer.submit", "chat.respond" },
-            Fields:      new[]
-            {
-                new RoleField
-                {
-                    Code = "vehicle_type", Label = "نَوع المَركَبَة",
-                    Type = "SingleSelect", IsRequired = true,
-                    Options = new()
-                    {
-                        new() { Value = "economy", Label = "اقتِصاديّ" },
-                        new() { Value = "comfort", Label = "مُريح" },
-                        new() { Value = "luxury",  Label = "فاخِر" },
-                        new() { Value = "family",  Label = "عائِليّ" },
-                    }
-                },
-                new RoleField { Code = "vehicle_plate",  Label = "لَوحَة المَركَبَة",     Type = "Text", IsRequired = true },
-                new RoleField { Code = "license_number", Label = "رَقم رُخصَة القِيادَة", Type = "Text", IsRequired = true },
-            }),
-
-        new RoleTemplate(
-            Slug:        "host",
-            Label:       "مالِك سَكَن",
-            Icon:        "🏠",
-            Description: "مالِك عَقار يَنشُر إعلان سَكَن لِلإيجار أَو المُشارَكَة.",
-            HomeRoute:   "/me/listings",
-            Permissions: new[] { "listing.create", "listing.edit", "listing.delete", "chat.respond" },
-            Fields:      new[]
-            {
-                new RoleField { Code = "contact_phone", Label = "هاتِف تَواصُل بَديل", Type = "Text", IsRequired = false },
-            }),
-
-        new RoleTemplate(
-            Slug:        "shipper",
-            Label:       "شَركَة شَحن",
-            Icon:        "📦",
-            Description: "شَركَة تُقَدِّم خَدَمات نَقل بَضائِع.",
-            HomeRoute:   "/explore",
-            Permissions: new[] { "listing.browse", "offer.submit", "chat.respond" },
-            Fields:      new[]
-            {
-                new RoleField { Code = "company_name", Label = "اسم الشَركَة",     Type = "Text",   IsRequired = true },
-                new RoleField { Code = "fleet_size",   Label = "حَجم الأُسطول",     Type = "Number", IsRequired = false },
-            }),
-
-        new RoleTemplate(
-            Slug:        "tenant_admin",
-            Label:       "إداريّ المَتجَر",
-            Icon:        "👔",
-            Description: "إداريّ يُدير مُحتَوى وَ مُستَخدِمي المَتجَر بِالكامِل.",
-            HomeRoute:   "/manage",
-            Permissions: new[]
-            {
-                "listing.create", "listing.edit", "listing.delete",
-                "offer.submit", "chat.respond", "chat.start",
-                "tenant.manage", "listing.browse"
-            },
-            Fields:      new RoleField[] { }),
-    };
+    public static readonly IReadOnlyList<RoleTemplate> All =
+        Definitions.Select(ToTemplate).ToArray();
 
     public static RoleTemplate? Find(string slug) =>
         All.FirstOrDefault(r => r.Slug == slug);
+
+    /// <summary>التَّعريف الكامِل لِـ slug — لِمَن يَحتاج التَّركيب أَو
+    /// حاوِيات التَّوطين (المَوجَة الثانِيَة). <see cref="Find"/> يَبقى
+    /// المَدخَل لِمَن يَحتاج القالِب القَديم.</summary>
+    public static RoleDefinition? FindDefinition(string slug) =>
+        Definitions.FirstOrDefault(d => d.Slug == slug);
 
     /// <summary>يُحَوِّل قالِباً إلى <see cref="Role"/> جاهِز لِلتَّخزين
     /// في <c>Tenant.Roles</c>. المُصَمِّم يُمكِنه تَعديل Label/Icon لاحِقاً.</summary>
@@ -147,6 +76,28 @@ public static class RoleCatalog
             }).ToList()
         };
     }
+
+    /// <summary>إسقاط التَّعريف إلى القالِب القَديم. <b>القِراءَة
+    /// عَرَبيَّة كَما اليَوم</b> (<see cref="LocalizedText.Current"/>)،
+    /// وقِسم التَّركيب لا يَظهَر في القالِب لِأَنّ لا مُستَهلِك لَه بَعد.</summary>
+    private static RoleTemplate ToTemplate(RoleDefinition d) => new(
+        Slug:        d.Slug,
+        Label:       d.Label.Current,
+        Icon:        d.Icon,
+        Description: d.Description.Current,
+        HomeRoute:   d.HomeRoute,
+        Permissions: d.Permissions.ToArray(),
+        Fields:      d.Fields.Select(f => new RoleField
+        {
+            Code = f.Code,
+            Label = f.Label.Current,
+            Type = f.Type,
+            IsRequired = f.IsRequired,
+            Options = f.Options.Select(o => new RoleFieldOption
+            {
+                Value = o.Value, Label = o.Label.Current
+            }).ToList()
+        }).ToArray());
 }
 
 public sealed record RoleTemplate(
@@ -159,7 +110,13 @@ public sealed record RoleTemplate(
     IReadOnlyList<RoleField> Fields);
 
 /// <summary>أَدوات صَلاحِيّات — تَستَخدِمها الـ endpoints لِفَحص ما إذا
-/// كانَ الـ ActiveRole لِلمُستَخدِم يَملِك صَلاحِيَّة مُعَيَّنَة.</summary>
+/// كانَ الـ ActiveRole لِلمُستَخدِم يَملِك صَلاحِيَّة مُعَيَّنَة.
+///
+/// <para><b>لَم تُمَسّ في مَوجَة «الأَدوار مِلَفّات»</b>، وذلك مَقصود:
+/// هذه الدالَّة لا تَقرَأ الكاتالوج أَصلاً — تَقرَأ <c>tenant.Roles</c>،
+/// وهي بَيانات مُنذُ البِدايَة (تُنسَخ مِن الكاتالوج عِندَ
+/// <c>set_roles</c>). فَنَقل الكاتالوج إلى مِلَفّات لا يَمَسّ سَطراً
+/// مِنها، والتَّوصيف يَحرُس ذلك بِمَصفوفَة كامِلَة.</para></summary>
 public static class RolePermissions
 {
     /// <summary>هَل المُستَخدِم بِدَورِه النَّشِط يَملِك هذه الصَلاحِيَّة؟

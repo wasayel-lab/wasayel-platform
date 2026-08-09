@@ -1,0 +1,50 @@
+{
+  "slug": "shipper",
+  "icon": "📦",
+  "homeRoute": "/explore",
+  "label": {
+    "ar": "شَركَة شَحن",
+    "en": null
+  },
+  "description": {
+    "ar": "شَركَة تُقَدِّم خَدَمات نَقل بَضائِع.",
+    "en": null
+  },
+  "permissions": [
+    "listing.browse",
+    "offer.submit",
+    "chat.respond"
+  ],
+  "fields": [
+    {
+      "code": "company_name",
+      "label": {
+        "ar": "اسم الشَركَة",
+        "en": null
+      },
+      "type": "Text",
+      "isRequired": true,
+      "options": []
+    },
+    {
+      "code": "fleet_size",
+      "label": {
+        "ar": "حَجم الأُسطول",
+        "en": null
+      },
+      "type": "Number",
+      "isRequired": false,
+      "options": []
+    }
+  ],
+  "composition": {
+    "home": "driverHome",
+    "createListing": "defaultCreateForm",
+    "nav": "driverNav",
+    "explore": "driverExplore",
+    "publicProfile": null,
+    "extras": [
+      "driverArea"
+    ]
+  }
+}
