@@ -8,7 +8,103 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
-    <title>وَسايِل · Wasayel</title>
+
+    @* ─── SEO — تَرويسَة ديناميكيَّة لِكُلّ مُستَأجِر ────────────────────
+       العُنوان وَالوَصف وَالـ canonical وَبِطاقات المُشارَكَة كُلُّها مِن
+       وَثيقَة المُستَأجِر الَّتي حَمَّلَها الـ middleware أَصلاً (صِفر
+       استِعلام إضافيّ). صَفَحات المَنصَّة نَفسِها (الهُبوط/الاستوديو/
+       الإدارَة) تَسقُط عَلى الافتِراضيّ.
+
+       لِماذا هُنا وَلَيس بِـ <PageTitle>؟ تَحت SSR الثابِت يُصَيِّر
+       HeadOutlet وَسم <title> ثانِياً في نَفس المُستَند، وَالمُتَصَفِّح
+       (وَالزاحِف) يَعتَمِد الأَوَّل — فَعُنوان الصَفحَة يَجِب أَن يُكتَب
+       مَرَّة واحِدَة، هُنا. *@
+    @{
+        var seoReq       = HttpCtx.HttpContext?.Request;
+        var seoBase      = seoReq is null ? "" : $"{seoReq.Scheme}://{seoReq.Host}";
+        var seoPath      = seoReq?.Path.Value ?? "/";
+        var seoCanonical = seoBase.Length > 0 ? seoBase + seoPath : null;
+        var seoSegments  = seoPath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        // الرَئيسيَّة = /{slug} أَو /{slug}/r/{role} — وَحدَها تَحمِل JSON-LD.
+        var seoIsHome = Tenant.IsResolved &&
+                        (seoSegments.Length == 1 ||
+                         (seoSegments.Length == 3 && seoSegments[1] == "r"));
+
+        ACommerce.Kit.Tenants.Tenant? seoTenant = Tenant.IsResolved
+            ? new ACommerce.Kit.Tenants.Tenant
+              {
+                  Id         = Tenant.Slug,
+                  Name       = Tenant.Name,
+                  TagLine    = Tenant.TagLine,
+                  City       = Tenant.City,
+                  BrandColor = Tenant.BrandColor
+              }
+            : null;
+
+        var seoTitle = seoTenant is null
+            ? "وَسايِل · Wasayel"
+            : ACommerce.Kit.Tenants.SeoDocuments.HomeTitle(seoTenant);
+        var seoDescription = seoTenant is null
+            ? "مَنَصَّة تِجارَة وَخَدَمات مُتَعَدِّدَة المُستَأجِرين، عَرَبِيَّة أَوَّلاً."
+            : ACommerce.Kit.Tenants.SeoDocuments.HomeDescription(seoTenant);
+        var seoImage = seoBase.Length == 0 ? null
+            : seoTenant is not null
+                ? $"{seoBase}/api/{Uri.EscapeDataString(Tenant.Slug)}/icon.svg"
+                : $"{seoBase}/_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png";
+    }
+    <title>@seoTitle</title>
+    @if (!string.IsNullOrEmpty(seoDescription))
+    {
+        <meta name="description" content="@seoDescription" />
+    }
+    @if (seoCanonical is not null)
+    {
+        <link rel="canonical" href="@seoCanonical" />
+    }
+    @if (Tenant.IsResolved)
+    {
+        <meta name="theme-color" content="@Tenant.BrandColor" />
+    }
+
+    @* OpenGraph + Twitter — نَفس النُصوص، لا اختِراع. *@
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="@(L.IsArabic ? "ar_AR" : "en_US")" />
+    <meta property="og:site_name" content="@(Tenant.IsResolved ? Tenant.Name : "وَسايِل")" />
+    <meta property="og:title" content="@seoTitle" />
+    @if (!string.IsNullOrEmpty(seoDescription))
+    {
+        <meta property="og:description" content="@seoDescription" />
+    }
+    @if (seoCanonical is not null)
+    {
+        <meta property="og:url" content="@seoCanonical" />
+    }
+    @if (seoImage is not null)
+    {
+        <meta property="og:image" content="@seoImage" />
+    }
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="@seoTitle" />
+    @if (!string.IsNullOrEmpty(seoDescription))
+    {
+        <meta name="twitter:description" content="@seoDescription" />
+    }
+    @if (seoImage is not null)
+    {
+        <meta name="twitter:image" content="@seoImage" />
+    }
+
+    @* JSON-LD (Organization + WebSite) لِلرَئيسيَّة فَقَط.
+       MarkupString آمِنَة هُنا: النَصّ مُخرَج System.Text.Json بِالمُرَمِّز
+       الافتِراضيّ الَّذي يَهرُب < و > و & إلى \uXXXX — فَلا يَستَطيع اِسم
+       مَتجَر أَو شِعار أَن يُغلِق وَسم <script> أَو يَحقِن HTML. *@
+    @if (seoIsHome && seoTenant is not null && seoBase.Length > 0)
+    {
+        <script type="application/ld+json">
+            @((MarkupString)ACommerce.Kit.Tenants.SeoDocuments.BuildHomeJsonLd(seoTenant, seoBase))
+        </script>
+    }
 
     @* خَطّ Cairo بِنَفس الأَوزان الَّتي يُحَمِّلها كُلّ مِن Ashare V3
        و Ejar V1: 400 (نَصّ)، 600 (مُتَوَسِّط)، 700 (عَريض). *@
@@ -86,7 +182,7 @@
         <link rel="manifest" href="@($"{pwaPath}/manifest.json")" />
         <link rel="icon" type="image/svg+xml" href="@($"{pwaPath}/icon.svg")" />
         <link rel="apple-touch-icon" href="@($"{pwaPath}/icon.svg")" />
-        <meta name="theme-color" content="@Tenant.BrandColor" />
+        @* theme-color يُكتَب مَرَّة واحِدَة في كُتلَة الـ SEO أَعلاه. *@
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="@Tenant.Name" />

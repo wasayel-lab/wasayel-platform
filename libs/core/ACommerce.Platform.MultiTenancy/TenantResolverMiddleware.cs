@@ -22,7 +22,10 @@ public sealed class TenantResolverMiddleware
     private static readonly HashSet<string> ReservedPaths = new(StringComparer.OrdinalIgnoreCase)
     {
         "admin", "_blazor", "_framework", "_content",
-        "css", "js", "lib", "favicon.ico", "health", "realtime"
+        "css", "js", "lib", "favicon.ico", "health", "realtime",
+        // وَثائِق الزَحف عَلى الجَذر — لَيسَت slugs، فَلا داعِيَ
+        // لِاستِعلام Marten فاشِل عِندَ كُلّ زِيارَة زاحِف.
+        "robots.txt", "sitemap.xml"
     };
 
     public TenantResolverMiddleware(RequestDelegate next, IDocumentStore store, IMemoryCache cache)
@@ -53,7 +56,8 @@ public sealed class TenantResolverMiddleware
         }
 
         if (entity is not null)
-            ctx.SetTenant(entity.Slug, entity.Name, entity.BrandColor, entity.AuthChannel);
+            ctx.SetTenant(entity.Slug, entity.Name, entity.BrandColor, entity.AuthChannel,
+                          entity.TagLine, entity.City);
 
         await _next(ctx);
     }

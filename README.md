@@ -71,7 +71,8 @@ Reviews، Roles، SavedSearches، Subscriptions، Support، Tenants، Versions.
 **بُني حديثاً (2026-08-09)**: مشروع اختبارات `tests/ACommerce.Platform.Tests`
 (xUnit — توصيف `DealsPolicy` كبذرة T5/T6 + اختبارات مصادقة المخطط كبذرة T3)
 مع بوابة CI على GitHub Actions، وبوابة تحقق رسمي بمخطط JSON
-(`AgentToolValidator`) تُفرض أولاً في منفذ أدوات الوكيل.
+(`AgentToolValidator`) تُفرض أولاً في منفذ أدوات الوكيل. العدد اليوم
+**140 اختباراً** خضراء.
 
 **قناة مصادقة بالبريد (2026-08-09)**: قيمة ثالثة لقناة المستأجر إلى جانب
 `phone` و`nafath`. آلية الرمز **هي نفسها** (نفس التوليد والتجزئة ومهلة
@@ -85,6 +86,40 @@ Azure Communication Services). التبديل بسطر تهيئة واحد:
 بيانات، لكن **لم يُرسَل بريد فعلي عبر SMTP بعد** — راجع
 [PRODUCTION-PLAN](docs/PRODUCTION-PLAN.md) لما يلزم لتفعيله إنتاجياً
 (نطاق مُصادَق SPF/DKIM/DMARC واعتماد مزود وسمعة إرسال).
+
+**وضوح وتحفيز وSEO (2026-08-09)**: ثلاث إضافات عرضية لا تمس خط الصفقات
+ولا دلالته التشغيلية — `DealsPolicy` و`DealsService` والأحداث ومخططات أدوات
+الوكيل بلا تغيير حرف واحد.
+
+- **شرح التدفق** (`Components/FlowExplainer.razor`): خط زمني يبين مراحل
+  الصفقة ومن يحرك كل مرحلة، **مشتق بالكامل** من `DealsPolicy.StagesFor`
+  و`LabelAr` و`Actor` — لا نص مرحلة منسوخ، فتغيير السياسة يغير الشرح
+  تلقائياً. مطوي في صفحة الإعلان، ومفتوح فوق الـ stepper في صفحة الصفقة.
+- **«دورك الآن»** (`Services/Ux/DealTurnView.cs`): بطاقة تخبر المستخدم
+  الحالي تحديداً هل الإجراء التالي منه، مبنية على **نفس** قاعدة الفاعل التي
+  يفرضها `DealsService.AdvanceAsync` — واختبار يقارن الاثنتين عبر كل نمط
+  وكل مرحلة، فلا تعد الواجهة بما يرفضه المحرك. مع حالات فارغة موجهة (كل
+  قائمة فارغة صار لها خطوة تالية واحدة) ومؤشرات ثقة (مُوثَّق/مميَّز وعدد
+  تقييمات المعلن) بألوان العلامة من المستأجر.
+- **SEO** (`Kit.Tenants.Core/Seo.cs` + `Kit.Tenants.Server/SeoHandlers.cs`):
+  ترويسة ديناميكية لكل مستأجر (عنوان + وصف + canonical + theme-color +
+  OpenGraph/Twitter) تُبنى من وثيقة المستأجر التي حمّلها الـ middleware
+  أصلاً — صفر استعلام إضافي؛ و JSON-LD (`Organization` + `WebSite`)
+  للرئيسية؛ و`robots.txt` و`sitemap.xml` كنقطتي Wolverine HTTP تستثنيان
+  `_admin` والمستأجرين المعلقين ومسارات الإدارة والاستوديو. **دوال البناء
+  نقية** (بلا قاعدة بيانات) ومختبرة كذلك. الصفحات العامة كانت — وبقيت —
+  SSR ثابتاً بالكامل (لا `@rendermode` إلا في صفحتي وكيل)، فالزاحف يستلم
+  HTML مكتملاً بلا انتظار SignalR.
+
+**عطل إقلاع قائم قبل هذه الموجة — يحتاج قراراً**: بعد ترقية Wolverine إلى 6
+(`b8efc91a`) لم يعد الـ core يشحن مُصرِّف وقت التشغيل، فيرمي
+`WolverineRuntime.StartAsync` استثناء `TypeLoadMode.Dynamic ... no
+IAssemblyGenerator (Roslyn) is registered` قبل خدمة أي طلب. تحقق مستقل بنسخة
+مصغرة بنفس الحزم (WolverineFx.Http 6.25.1 + Marten 9.22.5). العلاج أحدهما:
+إضافة `WolverineFx.RuntimeCompilation` (‏6.25.1 مستقرة) إلى
+`Directory.Packages.props`، أو توليد الكود مسبقاً
+(`dotnet run -- codegen write`) مع `TypeLoadMode.Static` في CI. البناء
+والاختبارات خضراء في الحالتين — العطل عند التشغيل فقط.
 
 **غائب**: جهاز T1/T2/T4 (ذخيرة الطلبات الحقيقية والاستنساخية والجلسات
 الذهبية) وT7 (القبول بالمحاكاة عبر `DealsService`)، `DealsPolicy` كبيانات
