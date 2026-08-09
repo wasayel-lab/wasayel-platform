@@ -9,8 +9,9 @@ namespace ACommerce.Kit.Auth.Server;
 
 /// <summary>
 /// Handlers الـ Auth يَستَهلِكون مُزَوِّدين عَبر <see cref="IOtpChannel"/> و
-/// <see cref="INafathChannel"/>. التَطبيق يَختار التَنفيذ (Mock، Twilio،
-/// Unifonic، Nafath الحَقيقيّ، …) ويُسَجِّله في DI.
+/// <see cref="IEmailOtpChannel"/> و <see cref="INafathChannel"/>. التَطبيق
+/// يَختار التَنفيذ (Mock، Twilio، Unifonic، SMTP، Nafath الحَقيقيّ، …)
+/// ويُسَجِّله في DI.
 /// </summary>
 public static class AuthHandlers
 {
@@ -20,7 +21,7 @@ public static class AuthHandlers
         string Id, string TenantSlug, string Subject, string CodeHash,
         DateTime ExpiresAt, AuthKind Kind);
 
-    public enum AuthKind { PhoneOtp, Nafath }
+    public enum AuthKind { PhoneOtp, Nafath, EmailOtp }
 
     // ─── Rate-limit OTP ───────────────────────────────────────────────────
     // كانَ بِلا حُدود — مُهاجِم يَستَطيع تَجريب ١٠ٰ٠٠٠ OTP في الثانِيَة على
@@ -108,6 +109,60 @@ public static class AuthHandlers
         return await GetOrCreateUserAsync(store, tenantCtx.Slug, cmd.Phone, nationalId: null);
     }
 
+    // ── Email OTP ─────────────────────────────────────────────────────
+    // نَفس آليَّة الهاتِف حَرفيّاً: نَفس تَوليد الرَمز، نَفس التَجزئَة،
+    // نَفس قاموس <see cref="Attempts"/>، نَفس نَوافِذ حَدّ المُعَدَّل.
+    // المُختَلِف: العُنوان يُطَبَّع (قَصّ + تَصغير) قَبل كُلّ شَيء لِيَستَحيل
+    // أَن يَطلُب المُستَخدِم بِـ Ali@X.com ويَفشَل تَحَقُّقه بِـ ali@x.com.
+    // لا [WolverinePost] — راجِع التَّعليق على RequestPhoneOtpHandler.
+    public static async Task<OtpRequestResult> RequestEmailOtpHandler(
+        RequestEmailOtp cmd, ITenantContext tenantCtx,
+        IEmailOtpChannel channel, CancellationToken ct)
+    {
+        if (!tenantCtx.IsResolved) throw new InvalidOperationException("tenant_required");
+        var email = EmailAddress.Normalize(cmd.Email);
+        if (!EmailAddress.IsValid(email))
+            throw new InvalidOperationException("email_invalid");
+        // حِماية مِن سپام الإرسال (سُمعَة نِطاق الإرسال تَحتَرِق بِالسپام).
+        var rlKey = $"{tenantCtx.Slug}|{email}";
+        if (!TryConsume(_requestRl, rlKey, MaxRequestPerHour, TimeSpan.FromHours(1)))
+            throw new InvalidOperationException("rate_limited: try again in an hour");
+
+        var code = channel.DevHintCode ?? Random.Shared.Next(100000, 999999).ToString();
+        var attemptId = Guid.NewGuid().ToString("N");
+        Attempts[attemptId] = new AuthAttempt(
+            attemptId, tenantCtx.Slug, email, Hash(code),
+            DateTime.UtcNow.AddMinutes(10), AuthKind.EmailOtp);
+        await channel.SendOtpAsync(email, code, ct);
+        return new OtpRequestResult(
+            AttemptId: attemptId,
+            DisplayCode: channel.DevHintCode ?? "",
+            Hint: channel.DevHintCode is null
+                ? $"أَرسَلنا الكود إلى {email}"
+                : $"وَضع التَطوير ({channel.ChannelName}) — الكود: {code}");
+    }
+
+    // لا [WolverinePost] — راجِع التَّعليق على RequestPhoneOtpHandler.
+    public static async Task<AuthResult?> VerifyEmailOtpHandler(
+        VerifyEmailOtp cmd, ITenantContext tenantCtx, IDocumentStore store)
+    {
+        if (!tenantCtx.IsResolved) return null;
+        var email = EmailAddress.Normalize(cmd.Email);
+        // حِماية مِن brute-force OTP (٥/دَقيقَة لِكُلّ email+tenant).
+        var rlKey = $"{tenantCtx.Slug}|{email}";
+        if (!TryConsume(_verifyRl, rlKey, MaxVerifyPerMinute, TimeSpan.FromMinutes(1)))
+            return null;
+        var attempt = Attempts.Values
+            .FirstOrDefault(a => a.TenantSlug == tenantCtx.Slug
+                              && a.Subject == email
+                              && a.Kind == AuthKind.EmailOtp);
+        if (attempt is null || attempt.ExpiresAt < DateTime.UtcNow) return null;
+        if (Hash(cmd.Code) != attempt.CodeHash) return null;
+        Attempts.TryRemove(attempt.Id, out _);
+        return await GetOrCreateUserAsync(store, tenantCtx.Slug,
+            phone: "", nationalId: null, email: email);
+    }
+
     // ── Nafath ────────────────────────────────────────────────────────
     [WolverinePost("/{slug}/auth/nafath/request")]
     public static async Task<NafathPending> RequestNafathHandler(
@@ -141,12 +196,17 @@ public static class AuthHandlers
     }
 
     private static async Task<AuthResult> GetOrCreateUserAsync(
-        IDocumentStore store, string tenantSlug, string phone, string? nationalId)
+        IDocumentStore store, string tenantSlug, string phone, string? nationalId,
+        string? email = null)
     {
         await using var session = store.LightweightSession(tenantSlug);
-        var existing = await session.Query<User>().FirstOrDefaultAsync(u =>
-            (nationalId == null && u.Phone == phone) ||
-            (nationalId != null && u.NationalId == nationalId));
+        // البَريد مِفتاح هُويَّة مُستَقِلّ — لا يُخلَط بِبَحث الهاتِف/نَفاذ
+        // كَي لا يَلتَقِط مُستَخدِمي الهاتِف ذَوي الحَقل الفارِغ.
+        var existing = email is not null
+            ? await session.Query<User>().FirstOrDefaultAsync(u => u.Email == email)
+            : await session.Query<User>().FirstOrDefaultAsync(u =>
+                (nationalId == null && u.Phone == phone) ||
+                (nationalId != null && u.NationalId == nationalId));
         if (existing is null)
         {
             existing = new User
@@ -154,15 +214,29 @@ public static class AuthHandlers
                 Id = Guid.NewGuid(),
                 TenantSlug = tenantSlug,
                 Phone = phone,
+                Email = email ?? "",
                 NationalId = nationalId,
-                PhoneVerified = nationalId is null,
-                FullName = nationalId is null ? "عُضو جَديد" : "مُستَخدِم نَفاذ"
+                PhoneVerified = nationalId is null && email is null,
+                EmailVerified = email is not null,
+                FullName = email is not null ? "عُضو جَديد"
+                    : nationalId is null ? "عُضو جَديد" : "مُستَخدِم نَفاذ"
             };
             session.Store(existing);
             await session.SaveChangesAsync();
         }
+        else if (email is not null && !existing.EmailVerified)
+        {
+            // مُستَخدِم قَديم بِبَريد غَير مُوَثَّق أَثبَتَ مِلكِيَّته الآن.
+            existing.EmailVerified = true;
+            existing.UpdatedAt = DateTime.UtcNow;
+            session.Store(existing);
+            await session.SaveChangesAsync();
+        }
         var token = MakeToken(existing.Id, tenantSlug);
-        return new AuthResult(existing.Id, existing.FullName, existing.Phone, token, existing.Role);
+        // حَقل العَرض: الهاتِف حَيث وُجِد، وإلّا البَريد — كَي لا تَظهَر
+        // بِطاقَة مُستَخدِم بَريديّ بِمُعَرِّف فارِغ في الواجِهَة والإشعارات.
+        var display = string.IsNullOrEmpty(existing.Phone) ? existing.Email : existing.Phone;
+        return new AuthResult(existing.Id, existing.FullName, display, token, existing.Role);
     }
 
     /// <summary>

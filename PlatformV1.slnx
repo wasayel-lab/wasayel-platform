@@ -11,9 +11,11 @@
   <Folder Name="/libs/kits/" />
   <Folder Name="/libs/kits/Auth/">
     <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Core/ACommerce.Kit.Auth.Core.csproj" />
+    <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.MockEmail/ACommerce.Kit.Auth.Providers.MockEmail.csproj" />
     <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.MockNafath/ACommerce.Kit.Auth.Providers.MockNafath.csproj" />
     <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.MockSms/ACommerce.Kit.Auth.Providers.MockSms.csproj" />
     <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.Nafath/ACommerce.Kit.Auth.Providers.Nafath.csproj" />
+    <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.Smtp/ACommerce.Kit.Auth.Providers.Smtp.csproj" />
     <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.Twilio/ACommerce.Kit.Auth.Providers.Twilio.csproj" />
     <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.Unifonic/ACommerce.Kit.Auth.Providers.Unifonic.csproj" />
     <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Server/ACommerce.Kit.Auth.Server.csproj" />

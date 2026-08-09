@@ -127,6 +127,86 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect(await PostLoginRouteAsync(slug, result.UserId, asRole, store));
         }).DisableAntiforgery();
 
+        // ─── Email OTP ──────────────────────────────────────────────────
+        // نَفس بِنيَة مَساري الهاتِف حَرفيّاً (نَفس الـ redirects، نَفس
+        // أَسماء الـ query، نَفس كَتابَة الـ cookie) — المُختَلِف الحَقل
+        // والقَناة المَحقونَة فَقَط.
+        app.MapPost("/{slug}/auth/email/login",
+            async (string slug, HttpRequest req, IDocumentStore store,
+                   ITenantContext tenant, IEmailOtpChannel channel) =>
+        {
+            if (!tenant.IsResolved) return Results.NotFound();
+            var email = EmailAddress.Normalize(req.Form["email"].ToString());
+            var asRole = req.Form["as"].ToString().Trim();
+            var asParam = string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}";
+            if (string.IsNullOrEmpty(email))
+                return Results.Redirect(Link(req, slug, $"login?err=email_required{asParam}"));
+            if (!EmailAddress.IsValid(email))
+                return Results.Redirect(Link(req, slug,
+                    $"login?err=email_invalid&email={Uri.EscapeDataString(email)}{asParam}"));
+            try
+            {
+                await AuthHandlers.RequestEmailOtpHandler(new RequestEmailOtp(email), tenant, channel, default);
+            }
+            catch (InvalidOperationException)
+            {
+                // فَشَل الإرسال أَو تَجاوُز حَدّ المُعَدَّل — لا نَدفَع
+                // المُستَخدِم إلى شاشَة كود لَن يَصِلَه أَبَداً.
+                return Results.Redirect(Link(req, slug,
+                    $"login?err=send_failed&email={Uri.EscapeDataString(email)}{asParam}"));
+            }
+            return Results.Redirect(Link(req, slug,
+                $"login?stage=verify&email={Uri.EscapeDataString(email)}{asParam}"));
+        }).DisableAntiforgery();
+
+        app.MapPost("/{slug}/auth/email/verify",
+            async (string slug, HttpRequest req, HttpResponse res, IDocumentStore store, ITenantContext tenant) =>
+        {
+            if (!tenant.IsResolved) return Results.NotFound();
+            // اقبَل HTML form (واجِهَة المُستَخدِم) أَو JSON (الـ APIs والفُحوصات).
+            string email = "", code = "", asRoleEarly = "";
+            if (req.HasFormContentType)
+            {
+                email = req.Form["email"].ToString();
+                code  = req.Form["code"].ToString().Trim();
+                asRoleEarly = req.Form["as"].ToString().Trim();
+            }
+            else
+            {
+                try
+                {
+                    var body = await req.ReadFromJsonAsync<Dictionary<string, string>>();
+                    if (body is not null)
+                    {
+                        body.TryGetValue("Email", out email!); email = email ?? "";
+                        body.TryGetValue("Code",  out code!);  code  = (code  ?? "").Trim();
+                        body.TryGetValue("As",    out asRoleEarly!); asRoleEarly = (asRoleEarly ?? "").Trim();
+                    }
+                } catch { /* بِنيَة غَير مُتَوَقَّعَة → نَترُك الحُقول فارِغَة، يَفشَل verify بِشَكل صَريح */ }
+            }
+            email = EmailAddress.Normalize(email);
+            var result = await AuthHandlers.VerifyEmailOtpHandler(new VerifyEmailOtp(email, code), tenant, store);
+            if (result is null)
+                return Results.Redirect(Link(req, slug,
+                    $"login?stage=verify&email={Uri.EscapeDataString(email)}&err=code_invalid"));
+            var asRole = (asRoleEarly ?? "").ToLowerInvariant();
+            AuthSession.WriteCookie(res, slug, result,
+                role: string.IsNullOrEmpty(asRole) ? null : asRole);
+            if (!string.IsNullOrEmpty(asRole))
+                await AssignRoleAsync(slug, result.UserId, asRole, store);
+            // إن كانَ المُستَخدِم أُنشِئ تَوّاً، أَخطِر مُديري المَتجَر.
+            await using (var qs = store.QuerySession(slug))
+            {
+                var user = await qs.LoadAsync<User>(result.UserId);
+                if (user is not null && (DateTime.UtcNow - user.CreatedAt).TotalMinutes < 1)
+                    await NotifyAdminsAsync(store, slug, "new_user",
+                        "مُستَخدِم جَديد سَجَّل",
+                        $"{user.FullName} · {user.Email}",
+                        $"/admin/tenants/{slug}/users");
+            }
+            return Results.Redirect(await PostLoginRouteAsync(slug, result.UserId, asRole, store));
+        }).DisableAntiforgery();
+
         // ─── Nafath ─────────────────────────────────────────────────────
         app.MapPost("/{slug}/auth/nafath/login",
             async (string slug, HttpRequest req, ITenantContext tenant, INafathChannel channel) =>
@@ -1422,7 +1502,7 @@ public static class MarketplaceTemplateExtensions
             var color   = f["color"].ToString().Trim();
             var city    = f["city"].ToString().Trim();
             var channel = f["channel"].ToString().Trim();
-            if (channel != "phone" && channel != "nafath") channel = "phone";
+            channel = AuthChannels.NormalizeOrDefault(channel);
             var catsRaw = f["categories"].ToString();
 
             // ── سَلاسِل الإعادَة في حالَة الخَطَأ ──
@@ -1657,8 +1737,7 @@ public static class MarketplaceTemplateExtensions
             var tagline = req.Form["tagline"].ToString().Trim();
             var city    = req.Form["city"].ToString().Trim();
             var color   = req.Form["color"].ToString().Trim();
-            var channel = req.Form["channel"].ToString().Trim();
-            if (channel != "phone" && channel != "nafath") channel = "phone";
+            var channel = AuthChannels.NormalizeOrDefault(req.Form["channel"].ToString().Trim());
 
             if (string.IsNullOrEmpty(name))
                 return Results.Redirect($"/admin/tenants/{slug}/branding?err=name_required");

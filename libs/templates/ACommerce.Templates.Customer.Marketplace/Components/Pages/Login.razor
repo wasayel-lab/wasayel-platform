@@ -4,13 +4,15 @@
 @inject NavigationManager Nav
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
+@inject IServiceProvider Sp
 
 @*
     صَفحَة دُخول SSR. لا Blazor interactivity — كلّ شَيء forms POST عاديّة
     تَصِل إلى endpoints مُسَجَّلَة في Program.cs، والـ endpoint يَضَع cookie
     ويُعيد التَوجيه. هذا يَعمَل بدون JS ويَتَجاوَز مَشاكِل circuit/HttpContext.
 
-    الـ tenant يُحَدِّد القَناة: Ashare = Nafath، Ejar = Phone. لا اختِيار للمُستَخدِم.
+    الـ tenant يُحَدِّد القَناة: Ashare = Nafath، Ejar = Phone، وقَناة
+    البَريد (email) لِمَن لا هاتِف لَه. لا اختِيار للمُستَخدِم.
 *@
 
 @{
@@ -46,10 +48,10 @@ else
     <div class="ac-auth-wrap" style="--ac-primary:@Tenant.BrandColor;">
         <div class="ac-auth-card">
             <div class="ac-auth-logo" style="background:@Tenant.BrandColor;">
-                <AcIcon Name="@(Tenant.AuthChannel == "nafath" ? "key" : "phone")" Size="24" />
+                <AcIcon Name="@ChannelIcon" Size="24" />
             </div>
             <h1 class="ac-auth-title">@Tenant.Name</h1>
-            <p class="ac-auth-sub">تَسجيل الدُخول بِـ @(Tenant.AuthChannel == "nafath" ? "نَفاذ" : "الهاتِف")</p>
+            <p class="ac-auth-sub">تَسجيل الدُخول بِـ @ChannelLabel</p>
 
             @{
                 // الـ URL يَتَفَوَّق عَلى الـ query: لَو وُجِدَ /r/{role}/login نَتَجاهَل ?as=
@@ -60,6 +62,12 @@ else
                 <NafathLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
                                  NationalId="@NationalIdValue" AttemptId="@AttemptId" DisplayCode="@DisplayCode"
                                  AsRole="@effectiveRole" />
+            }
+            else if (Tenant.AuthChannel == "email")
+            {
+                <EmailLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
+                                Email="@EmailValue" AsRole="@effectiveRole"
+                                DevHint="@EmailDevHint" />
             }
             else
             {
@@ -81,6 +89,7 @@ else
     [SupplyParameterFromQuery] public string? Stage { get; set; }
     [SupplyParameterFromQuery] public string? Err { get; set; }
     [SupplyParameterFromQuery(Name = "phone")]    public string? PhoneValue { get; set; }
+    [SupplyParameterFromQuery(Name = "email")]    public string? EmailValue { get; set; }
     [SupplyParameterFromQuery(Name = "nid")]      public string? NationalIdValue { get; set; }
     [SupplyParameterFromQuery(Name = "attempt")]  public string? AttemptId { get; set; }
     [SupplyParameterFromQuery(Name = "code")]     public string? DisplayCode { get; set; }
@@ -88,9 +97,34 @@ else
     /// يُمَرَّر كَ hidden إلى الـ POST لِيُسَكِّن ActiveRole بَعد التَّوثيق.</summary>
     [SupplyParameterFromQuery(Name = "as")]       public string? AsRole { get; set; }
 
+    string ChannelIcon => Tenant.AuthChannel switch
+    {
+        "nafath" => "key",
+        "email"  => "mail",
+        _        => "phone"
+    };
+
+    string ChannelLabel => Tenant.AuthChannel switch
+    {
+        "nafath" => "نَفاذ",
+        "email"  => "البَريد الإلِكترونيّ",
+        _        => "الهاتِف"
+    };
+
+    /// <summary>كود المُزَوِّد الوَهميّ إن كانَ هو المُسَجَّل — نَقرَؤُه مِن
+    /// القَناة نَفسها لا نَكتُبه ثابِتاً، فَلا تَكذِب الواجِهَة إذا بُدِّل
+    /// المُزَوِّد بِـ SMTP. <c>GetService</c> (لا Required) كَي لا تَنكَسِر
+    /// صَفحَة الدُخول في مُضيف لَم يُسَجِّل قَناة بَريد أَصلاً.</summary>
+    string? EmailDevHint =>
+        (Sp.GetService(typeof(ACommerce.Kit.Auth.IEmailOtpChannel))
+            as ACommerce.Kit.Auth.IEmailOtpChannel)?.DevHintCode;
+
     string? ErrorMessage => Err switch
     {
         "phone_required" => "اِكتُب رَقم الهاتف.",
+        "email_required" => "اِكتُب البَريد الإلِكترونيّ.",
+        "email_invalid"  => "صيغَة البَريد غَير صَحيحَة.",
+        "send_failed"    => "تَعَذَّرَ إرسال الكود. حاوِل بَعد قَليل.",
         "code_invalid"   => "الكود غير صَحيح أو انتَهَت صَلاحِيَّته.",
         "nid_required"   => "اِكتُب رَقم الهُويَّة.",
         "not_approved"   => "لم يُؤَكَّد بَعد. حاوِل مَرَّة أُخرى.",

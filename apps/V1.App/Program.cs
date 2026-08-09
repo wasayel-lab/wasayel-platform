@@ -1,5 +1,7 @@
+using ACommerce.Kit.Auth.Providers.MockEmail;
 using ACommerce.Kit.Auth.Providers.MockNafath;
 using ACommerce.Kit.Auth.Providers.MockSms;
+using ACommerce.Kit.Auth.Providers.Smtp;
 using ACommerce.Kit.Auth.Server;
 using ACommerce.Kit.Culture;
 using ACommerce.Kit.Delivery;
@@ -55,6 +57,18 @@ builder.Services.AddVersionGate(opts =>
 // مُزَوِّدو الـ Auth (mock — استَبدِلهم بـ Twilio/Nafath فعليّ في الإنتاج)
 builder.Services.AddMockSmsChannel();
 builder.Services.AddMockNafathChannel(opts => { opts.DisplayCode = "00"; opts.AutoApproveSeconds = 5; });
+
+// قَناة البَريد — الاختِيار بِالتَهيئَة عَلى نَمَط Agent:Provider:
+// Auth:Email:Provider = smtp  ← إرسال فِعليّ (كُلّ الإعدادات مِن التَهيئَة،
+// لا سِرّ في الكود؛ يَعمَل مَع أَيّ SMTP بِما فيه Azure Communication Services).
+// أَيّ قيمَة أُخرى أَو غيابُها ← Mock (الافتِراضيّ التَطويريّ: الكود 123456
+// يُطبَع في اللوغ).
+if (string.Equals(builder.Configuration["Auth:Email:Provider"], "smtp",
+        StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddSmtpEmailChannel(opts =>
+        builder.Configuration.GetSection("Auth:Email").Bind(opts));
+else
+    builder.Services.AddMockEmailChannel();
 
 // مُزَوِّدو البِنيَة (mock — استَبدِلهم لاحِقاً بِـ Moyasar/Saee/Google Maps).
 builder.Services.AddMockMaps();

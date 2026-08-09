@@ -77,8 +77,8 @@
                         <p class="acm-tenant-card-tagline">@t.TagLine</p>
                         <div class="acm-tenant-card-meta">
                             <span><AcIcon Name="tag" Size="14" /> @t.Categories.Count فِئَة</span>
-                            <span><AcIcon Name="@(t.AuthChannel == "nafath" ? "shield" : "phone")" Size="14" />
-                                  @(t.AuthChannel == "nafath" ? "نَفاذ" : "هاتِف")</span>
+                            <span><AcIcon Name="@ChannelIcon(t.AuthChannel)" Size="14" />
+                                  @ChannelLabel(t.AuthChannel)</span>
                             @if (t.Roles.Count > 0)
                             {
                                 <span><AcIcon Name="user" Size="14" /> @t.Roles.Count أَدوار</span>
@@ -117,4 +117,18 @@
         tenants = (await s.Query<Tenant>()
             .OrderBy(t => t.CreatedAt).ToListAsync()).ToList();
     }
+
+    static string ChannelIcon(string channel) => channel switch
+    {
+        "nafath" => "shield",
+        "email"  => "mail",
+        _        => "phone"
+    };
+
+    static string ChannelLabel(string channel) => channel switch
+    {
+        "nafath" => "نَفاذ",
+        "email"  => "بَريد",
+        _        => "هاتِف"
+    };
 }

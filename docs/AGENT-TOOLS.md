@@ -40,9 +40,9 @@
 
 | الأداة | الغرض | الحقول الإلزامية | القيود المفروضة بالمخطط |
 |---|---|---|---|
-| `create_tenant` | إنشاء متجر/تطبيق جديد | slug, name, color, channel, categories | `slug` بنمط مُرمّز `^[A-Za-z0-9_-]+$`؛ اللون بنمط hex مُرمّز؛ `channel ∈ {phone, nafath}` |
+| `create_tenant` | إنشاء متجر/تطبيق جديد | slug, name, color, channel, categories | `slug` بنمط مُرمّز `^[A-Za-z0-9_-]+$`؛ اللون بنمط hex مُرمّز؛ `channel ∈ {phone, nafath, email}` |
 | `set_categories` | إعادة كتابة فئات مستأجر بالكامل | slug, categories | كل فئة: slug + label (+icon إيموجي، kind) |
-| `set_branding` | تحديث الهوية البصرية | slug | البقية اختيارية (name, tagline, city, color, channel) |
+| `set_branding` | تحديث الهوية البصرية | slug | البقية اختيارية (name, tagline, city, color, channel)؛ `channel ∈ {phone, nafath, email}` بنفس التعداد المغلق |
 | `set_regions` | إعادة كتابة المدن والأحياء بالكامل | slug, cities | كل مدينة: name + districts[] |
 | `set_roles` | اختيار أدوار المتجر من الكاتالوج | slug, roles | **تعداد مغلق**: `customer, rider, vendor, driver, host, shipper, tenant_admin` + `default_role` |
 | `set_attributes` | خصائص ديناميكية لنطاق محدد | slug, scope_id, definitions | النطاق: Guid فئة أو scope دور أو `…0F01` للبروفايل العام؛ الأنواع: `Text, LongText, Number, Boolean, SingleSelect, MultiSelect, Date` |
@@ -56,6 +56,18 @@ hex، وحد حجم الأيقونة أصبحت مُرمّزة رسمياً في
 `AgentToolValidator` قبل التنفيذ — الفحوص اليدوية في المنفذ دفاع ثانٍ لا أول.
 نمط الـ slug في البوابة متسامح مع حالة الأحرف (`^[A-Za-z0-9_-]+$`) لأن
 المنفذ يوحّدها صغيرة قبل الاستخدام.
+
+**توسيع تعداد القناة (2026-08-09)**: أُضيفت `email` إلى تعداد `channel` في
+`create_tenant` و`set_branding` مع قناة OTP بريدية كاملة في عدة Auth. تعداد
+القيم صار **مصدرَه موضعٌ واحد** — `AuthChannels.All` في
+`libs/kits/Auth/ACommerce.Kit.Auth.Core/Channels.cs` — بعد أن كان الشرط
+`!= "phone" && != "nafath"` منسوخاً في أربعة مواضع (نموذجَي الإدارة ومسارَي
+الوكيل). الخطر الذي يغلقه ذلك محدد: قيمة قناة صالحة **تُبتلع صامتة** وترتد
+إلى `phone` لأن موضعاً واحداً نسي التعداد — لا خطأ ولا لوغ، فقط متجر بقناة
+غير التي طُلبت. حارسه: `AuthChannelsTests` في
+`tests/ACommerce.Platform.Tests/AuthEmailChannelTests.cs`، ويقابله في طبقة
+المخطط اختبار موجب لكل أداة (`CreateTenant_ChannelEmail_Passes`،
+`SetBranding_ChannelEmail_Passes`) واختبار سالب بقيمة خارج التعداد.
 
 ## 4. الثوابت
 
@@ -88,5 +100,5 @@ hex، وحد حجم الأيقونة أصبحت مُرمّزة رسمياً في
 ---
 *آخر تحقق ضد الكود: 2026-08-09
 (`Services/AgentService.cs`, `Services/AgentBackends.cs`,
-`Services/AgentToolValidation.cs`). أي تغيير في
+`Services/AgentToolValidation.cs`, `Kit.Auth.Core/Channels.cs`). أي تغيير في
 الأدوات أو مخططاتها يستوجب تحديث هذه الوثيقة في نفس الـ PR.*

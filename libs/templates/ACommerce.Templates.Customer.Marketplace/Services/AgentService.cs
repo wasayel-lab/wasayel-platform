@@ -234,7 +234,8 @@ public sealed class AgentService
 3. كُلّ نِداء أَداة يَنتَظِر مُوافَقَة المُشرِف. لا تَفتَرِض النَّجاح
    قَبل أَن تَرى tool_result.
 4. عِند الغُموض اِسأَل قَبل أَن تَكتُب. خاصَّةً:
-   - channel الدُخول: "phone" (هاتِف+OTP) أَو "nafath" (نَفاذ سُعودي).
+   - channel الدُخول: "phone" (هاتِف+OTP) أَو "nafath" (نَفاذ سُعودي)
+     أَو "email" (بَريد إلِكترونيّ+OTP).
    - اللَون hex (مَثَلاً #1d4ed8).
    - الـ slug (حُروف صَغيرَة وأَرقام و - و _).
 5. الـ scope_id في set_attributes مَحسوب لَكَ مُسبَقاً في قائِمَة المُستَأجِرين
@@ -367,7 +368,7 @@ public sealed class AgentService
         "tagline": {"type": "string"},
         "city":    {"type": "string"},
         "color":   {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$", "description": "لَون hex مَثَلاً #1d4ed8"},
-        "channel": {"type": "string", "enum": ["phone", "nafath"]},
+        "channel": {"type": "string", "enum": ["phone", "nafath", "email"]},
         "categories": {"type": "array", "items": {{CategoryItemSchema}}}
       }
     }
@@ -394,7 +395,7 @@ public sealed class AgentService
         "tagline": {"type": "string"},
         "city":    {"type": "string"},
         "color":   {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
-        "channel": {"type": "string", "enum": ["phone", "nafath"]}
+        "channel": {"type": "string", "enum": ["phone", "nafath", "email"]}
       }
     }
     """;
@@ -568,8 +569,7 @@ public sealed class AgentToolExecutor
         var color   = Str(root, "color");
         var tagline = Str(root, "tagline");
         var city    = Str(root, "city");
-        var channel = Str(root, "channel");
-        if (channel != "phone" && channel != "nafath") channel = "phone";
+        var channel = ACommerce.Kit.Auth.AuthChannels.NormalizeOrDefault(Str(root, "channel"));
         if (!System.Text.RegularExpressions.Regex.IsMatch(slug, "^[a-z0-9_-]+$"))
             return (false, "slug غَير صالِح.");
         if (string.IsNullOrEmpty(name)) return (false, "الاسم مَطلوب.");
@@ -630,7 +630,8 @@ public sealed class AgentToolExecutor
         }
         if (TryStr(root, "channel", out var channel))
         {
-            if (channel != "phone" && channel != "nafath") return (false, "channel غَير صالِح.");
+            if (!ACommerce.Kit.Auth.AuthChannels.IsSupported(channel))
+                return (false, "channel غَير صالِح.");
             t.AuthChannel = channel;
         }
         s.Store(t);

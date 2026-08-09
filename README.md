@@ -37,7 +37,7 @@ libs/widgets/     ACommerce.Widgets
 apps/V1.App       المضيف الوحيد: Blazor + Wolverine HTTP في binary واحد
 ```
 
-العُدد الأربع والعشرون: Auth (نفاذ/Twilio/Unifonic + Mocks)، Cache (Redis)،
+العُدد الأربع والعشرون: Auth (نفاذ/Twilio/Unifonic/SMTP + Mocks)، Cache (Redis)،
 Cart، Chat، Culture، Delivery، DynamicAttributes، Favorites، Files
 (Aliyun OSS/Google Cloud)، Listings، Maps، Notifications، Offers (تفاوض
 InDrive-style)، Payments، Profiles، Realtime (SignalR+Redis)، Reports،
@@ -62,14 +62,29 @@ Reviews، Roles، SavedSearches، Subscriptions، Support، Tenants، Versions.
 + إجراءات)، تذاكر الدعم بالرد والإغلاق، إشراف الإعلانات، التقييمات المتبادلة
 المربوطة بالصفقات، وكيل الاستوديو (Anthropic/Gemini/OpenAI)، PWA لكل دور.
 
-**Mock بمنافذ جاهزة للتبديل**: OTP (رمز ثابت 123456)، SMS، نفاذ
-(MockNafath)، الدفع (MockPaymentProvider — فواتير بهيئة ZATCA وVAT ‏15%
-وidempotency keys)، التوصيل (دورة شحنة كاملة على مؤقت)، الخرائط.
+**Mock بمنافذ جاهزة للتبديل**: OTP بقناتيه — الهاتف (MockSms) والبريد
+(MockEmail) — كلاهما يطبع رمزاً ثابتاً `123456` في اللوغ ولا يرسل شيئاً،
+وهو الافتراضي التطويري؛ نفاذ (MockNafath)، الدفع (MockPaymentProvider —
+فواتير بهيئة ZATCA وVAT ‏15% وidempotency keys)، التوصيل (دورة شحنة كاملة
+على مؤقت)، الخرائط.
 
 **بُني حديثاً (2026-08-09)**: مشروع اختبارات `tests/ACommerce.Platform.Tests`
 (xUnit — توصيف `DealsPolicy` كبذرة T5/T6 + اختبارات مصادقة المخطط كبذرة T3)
 مع بوابة CI على GitHub Actions، وبوابة تحقق رسمي بمخطط JSON
 (`AgentToolValidator`) تُفرض أولاً في منفذ أدوات الوكيل.
+
+**قناة مصادقة بالبريد (2026-08-09)**: قيمة ثالثة لقناة المستأجر إلى جانب
+`phone` و`nafath`. آلية الرمز **هي نفسها** (نفس التوليد والتجزئة ومهلة
+العشر دقائق وحدود المعدل في `AuthHandlers`) — الجديد هو المُرسَل إليه
+والمزود. مزودان: `Auth.Providers.MockEmail` (الافتراضي، تطويري، لا إرسال
+فعلي) و`Auth.Providers.Smtp` (فعلي عبر MailKit، يعمل مع أي SMTP بما فيه
+Azure Communication Services). التبديل بسطر تهيئة واحد:
+`Auth:Email:Provider=smtp` مع `Auth:Email:Host/Port/Username/Password/From`
+— **لا سرّ في الكود**، وبلا هذه التهيئة يبقى Mock عاملاً. الحالة بدقة:
+المسار كامل من الواجهة إلى تخزين المستخدم ومختبَر منطقياً بلا قاعدة
+بيانات، لكن **لم يُرسَل بريد فعلي عبر SMTP بعد** — راجع
+[PRODUCTION-PLAN](docs/PRODUCTION-PLAN.md) لما يلزم لتفعيله إنتاجياً
+(نطاق مُصادَق SPF/DKIM/DMARC واعتماد مزود وسمعة إرسال).
 
 **غائب**: جهاز T1/T2/T4 (ذخيرة الطلبات الحقيقية والاستنساخية والجلسات
 الذهبية) وT7 (القبول بالمحاكاة عبر `DealsService`)، `DealsPolicy` كبيانات

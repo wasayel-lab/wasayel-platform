@@ -12,6 +12,9 @@ public interface ITenantContext
     string Slug { get; }
     string Name { get; }
     string BrandColor { get; }
+    /// <summary>"phone" | "nafath" | "email" — القَناة المُعلَنَة في وَثيقَة
+    /// المُستَأجِر، تُمَرَّر كَما هي بِلا تَعداد مُغلَق هُنا (الطَبَقَة
+    /// المُشتَرَكَة لا تَعرِف عُدَّة Auth). الافتِراضيّ "phone".</summary>
     string AuthChannel { get; }
     bool IsResolved { get; }
 }

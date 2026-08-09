@@ -76,7 +76,7 @@
                     <div class="acm-radio-cards">
                         <label class="acm-radio-card">
                             <input type="radio" name="channel" value="phone"
-                                   checked="@(tenant.AuthChannel != "nafath")" />
+                                   checked="@(tenant.AuthChannel is not "nafath" and not "email")" />
                             <span class="acm-radio-card-body">
                                 <strong><AcIcon Name="phone" Size="16" /> هاتِف + OTP</strong>
                                 <span>كود ٦ خانات بِالـ SMS</span>
@@ -88,6 +88,14 @@
                             <span class="acm-radio-card-body">
                                 <strong><AcIcon Name="key" Size="16" /> نَفاذ</strong>
                                 <span>تَوثيق هُوِيَّة وَطنيَّة سُعوديّ</span>
+                            </span>
+                        </label>
+                        <label class="acm-radio-card">
+                            <input type="radio" name="channel" value="email"
+                                   checked="@(tenant.AuthChannel == "email")" />
+                            <span class="acm-radio-card-body">
+                                <strong><AcIcon Name="mail" Size="16" /> بَريد + OTP</strong>
+                                <span>كود ٦ خانات بِالبَريد الإلِكترونيّ</span>
                             </span>
                         </label>
                     </div>

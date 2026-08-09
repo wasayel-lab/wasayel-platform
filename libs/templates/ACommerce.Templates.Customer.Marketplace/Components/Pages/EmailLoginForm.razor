@@ -1,0 +1,72 @@
+@*
+    نَفس بِنيَة PhoneLoginForm حَرفيّاً — مَرحَلَتان (طَلَب ثُمَّ تَحَقُّق)،
+    forms POST عاديّة بِلا Blazor interactivity. المُختَلِف: حَقل بَريد
+    بَدَل حَقل هاتِف.
+*@
+@if (Stage != "verify")
+{
+    <form method="post" action="@($"/{Slug}/auth/email/login")">
+        @if (!string.IsNullOrEmpty(AsRole))
+        {
+            <input type="hidden" name="as" value="@AsRole" />
+        }
+        <AcField Label="البَريد الإلِكترونيّ" Required="true">
+            <input type="email" name="email" value="@Email" required maxlength="254"
+                   inputmode="email" autocomplete="email"
+                   class="ac-input" style="direction:ltr;font-size:16px;"
+                   placeholder="name@example.com" />
+        </AcField>
+        @if (ErrorMessage is not null)
+        {
+            <AcAlert Variant="danger">@ErrorMessage</AcAlert>
+        }
+        <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="إرسال الكود" />
+    </form>
+}
+else
+{
+    <form method="post" action="@($"/{Slug}/auth/email/verify")">
+        <input type="hidden" name="email" value="@Email" />
+        @if (!string.IsNullOrEmpty(AsRole))
+        {
+            <input type="hidden" name="as" value="@AsRole" />
+        }
+        <p class="acs-nafath-instruction">أَدخِل الكود المُرسَل إلى <strong>@Email</strong></p>
+
+        <AcField Label="الكود" Required="true">
+            <input type="text" name="code" required minlength="4" maxlength="6"
+                   pattern="[0-9]{4,6}" autofocus
+                   class="ac-input" style="direction:ltr;font-size:18px;
+                          letter-spacing:.4em;text-align:center;"
+                   placeholder="123456" />
+        </AcField>
+
+        @if (DevHint is not null)
+        {
+            <div class="acs-nafath-state acs-nafath-state--ok mt-2" style="display:flex;gap:6px;align-items:center;">
+                <AcIcon Name="info" Size="16" />
+                <span>وَضع التَطوير — الكود: <strong>@DevHint</strong></span>
+            </div>
+        }
+
+        @if (ErrorMessage is not null) { <AcAlert Variant="danger">@ErrorMessage</AcAlert> }
+
+        <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="تَحَقُّق ودُخول" />
+        <a href="@AuthSession.LinkFor(Slug, AsRole, $"login")"
+           style="display:block;text-align:center;margin-top:10px;
+                  color:var(--ac-text-muted);font-size:13px;text-decoration:none;">
+            تَغيير البَريد
+        </a>
+    </form>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Stage { get; set; }
+    [Parameter] public string? Email { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public string? AsRole { get; set; }
+    /// <summary>كود المُزَوِّد الوَهميّ حينَ يَكون فَعّالاً؛ <c>null</c> مَع
+    /// مُزَوِّد فِعليّ (SMTP) فَلا نَعرِض شَيئاً.</summary>
+    [Parameter] public string? DevHint { get; set; }
+}

@@ -66,12 +66,47 @@ public class AgentToolValidatorTests
         AssertFails(result);
     }
 
+    // كانَ هذا الاختِبار يَحرُس رَفض "email" — ومُنذُ مَوجَة قَناة البَريد
+    // صارَت قيمَةً صالِحَة، فَانتَقَلَ الحَرَس إلى قيمَة أُخرى خارِج
+    // التَعداد. الغَرَض نَفسه: إثبات أَنّ التَعداد مُغلَق فِعلاً لا
+    // مُجَرَّد وَصف.
     [Fact]
-    public void CreateTenant_ChannelEmail_Fails()
+    public void CreateTenant_ChannelOutsideClosedEnum_Fails()
+    {
+        var result = AgentToolValidator.Validate("create_tenant",
+            """{"slug":"demo","name":"مَتجَر","color":"#1d4ed8","channel":"telegram","categories":[{"slug":"cars","label":"سَيّارات"}]}""");
+        AssertFails(result);
+    }
+
+    [Fact]
+    public void SetBranding_ChannelOutsideClosedEnum_Fails()
+    {
+        var result = AgentToolValidator.Validate("set_branding",
+            """{"slug":"demo","channel":"telegram"}""");
+        AssertFails(result);
+    }
+
+    // ── قَناة البَريد: قيمَة صالِحَة في الأَداتَين مَعاً ──
+    // الحارِس المُقابِل لِلاختِبار السالِب أَعلاه: لَو سَقَطَت "email" مِن
+    // أَحَد المُخَطَّطَين لَسَقَطَ هذا فَوراً.
+
+    [Fact]
+    public void CreateTenant_ChannelEmail_Passes()
     {
         var result = AgentToolValidator.Validate("create_tenant",
             """{"slug":"demo","name":"مَتجَر","color":"#1d4ed8","channel":"email","categories":[{"slug":"cars","label":"سَيّارات"}]}""");
-        AssertFails(result);
+        Assert.True(result.IsValid,
+            $"قَناة البَريد صالِحَة بَعد مَوجَة المُصادَقَة البَريديَّة: {string.Join(" | ", result.Errors)}");
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public void SetBranding_ChannelEmail_Passes()
+    {
+        var result = AgentToolValidator.Validate("set_branding",
+            """{"slug":"demo","channel":"email"}""");
+        Assert.True(result.IsValid,
+            $"تَحويل قَناة مَتجَر قائِم إلى البَريد يَجِب أَن يَمُرّ: {string.Join(" | ", result.Errors)}");
     }
 
     [Fact]

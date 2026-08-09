@@ -67,7 +67,12 @@
                 <div class="studio-stat">
                     <div class="studio-stat-label">قَناة الدُخول</div>
                     <div class="studio-stat-value" style="font-size:18px;">
-                        @(tenant.AuthChannel == "nafath" ? "نَفاذ" : "هاتِف")
+                        @(tenant.AuthChannel switch
+                          {
+                              "nafath" => "نَفاذ",
+                              "email"  => "بَريد",
+                              _        => "هاتِف"
+                          })
                     </div>
                 </div>
                 <div class="studio-stat">
