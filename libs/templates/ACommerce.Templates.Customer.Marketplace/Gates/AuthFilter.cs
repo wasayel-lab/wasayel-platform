@@ -28,9 +28,11 @@ public sealed class AuthFilter : IEndpointFilter
         if (string.IsNullOrEmpty(slug)) return Results.BadRequest();
 
         var role  = AuthSession.ExtractRoleFromPath(http.Request.Path);
-        var name  = AuthSession.CookieName(slug, role);
-        var token = http.Request.Cookies[name]
-                 ?? (role is not null ? null : http.Request.Cookies[AuthSession.CookieName(slug)]);
+        // قاعِدَة واحِدَة لِحَلّ الجَلسَة (AuthSession.ResolveToken): مَسار بِدَور
+        // → cookie دَورِه وَحدَه؛ مَسار بِلا دَور → العامّ ثُمَّ أَيّ دَور
+        // يَحمِلُه المُتَصَفِّح. هذا الأَخير هُوَ ما كانَ ناقِصاً، فَكانَ
+        // POST /{slug}/listings/create يُرَدّ إلى login رَغم دُخول ناجِح.
+        var token = AuthSession.ResolveToken(http.Request, slug);
         var parsed = AuthHandlers.ParseToken(token);
         if (parsed is null || parsed.Value.TenantSlug != slug)
         {

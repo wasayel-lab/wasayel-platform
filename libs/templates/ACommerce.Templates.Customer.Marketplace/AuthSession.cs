@@ -13,8 +13,10 @@ namespace ACommerce.Templates.Customer.Marketplace;
 /// لَه session مُستَقِلّ في نَفس المُتَصَفِّح. الـ Path يَبقَى <c>/</c>
 /// (المُتَصَفِّح يُرسِل كُلّ الـ cookies)، لكِنّ AuthSession يَختار أَيُّها
 /// يَقرَأ بِناءً عَلى الدَور المُستَخرَج مِن URL (نَمَط <c>/{slug}/r/{role}/…</c>).
-/// إن كانَ المَسار بِلا <c>/r/{role}/</c> نَسقُط لِلسُلوك القَديم: cookie
-/// واحِد بِالاسم <c>.acommerce.auth.{slug}</c> (مَتاجِر ashare/ejar).</para>
+/// إن كانَ المَسار بِلا <c>/r/{role}/</c> — وَهُوَ حالُ كُلّ نِقاط الـ POST
+/// تَقريباً — يُقبَل الـ cookie العامّ <c>.acommerce.auth.{slug}</c>
+/// (مَتاجِر ashare/ejar) ثُمَّ أَيّ cookie دَور لِنَفس المَتجَر.
+/// التَّفصيل وَالمُبَرِّر في <see cref="ResolveCookieBase"/>.</para>
 /// </summary>
 public sealed class AuthSession
 {
@@ -29,25 +31,15 @@ public sealed class AuthSession
 
     public void Load(HttpContext http, string requiredTenantSlug)
     {
-        var role = ExtractRoleFromPath(http.Request.Path);
-        RoleScope = role;
-        var name = CookieName(requiredTenantSlug, role);
+        RoleScope = ExtractRoleFromPath(http.Request.Path);
+        var name = ResolveCookieBase(http.Request, requiredTenantSlug);
+        if (name is null) { Clear(); return; }
         var token = http.Request.Cookies[name];
-        if (token is null && role is not null)
-        {
-            // إن كانَ الـ URL يَحمِل role لكِنّ لا cookie لَه، لا نَسقُط لِـ
-            // legacy — نَترُك المُستَخدِم غَير-مُسَجَّل في هذا التَّطبيق الفَرعيّ.
-            Clear(); return;
-        }
-        if (token is null) token = http.Request.Cookies[CookieName(requiredTenantSlug)];   // legacy fallback
         var parsed = AuthHandlers.ParseToken(token);
         if (parsed is null) { Clear(); return; }
         var (uid, slug, _) = parsed.Value;
-        if (slug != requiredTenantSlug) { Clear(); return; }
         UserId = uid; TenantSlug = slug; Token = token;
-        UserName = http.Request.Cookies[name + ".name"]
-                ?? http.Request.Cookies[CookieName(slug) + ".name"]
-                ?? "—";
+        UserName = http.Request.Cookies[name + ".name"] ?? "—";
         Changed?.Invoke();
     }
 
@@ -62,6 +54,78 @@ public sealed class AuthSession
         => string.IsNullOrEmpty(role)
             ? CookieName(tenantSlug)
             : $".acommerce.auth.{tenantSlug}.{role}";
+
+    // ─── حَلّ الجَلسَة: القاعِدَة الواحِدَة ───────────────────────────────
+    //
+    // كُلّ قارِئ لِلجَلسَة (AuthSession.Load، AuthFilter، وكُلّ form endpoint)
+    // يَمُرّ مِن هُنا — لا يَقرَأ أَحَدٌ اسم cookie بِيَدِه. كانَ العَكس هُوَ
+    // العَيب: عَشَرات النِّقاط تَقرَأ الاسم العامّ <c>.acommerce.auth.{slug}</c>
+    // حَرفيّاً، بَينَما الدُخول عَبر <c>/{slug}/r/{role}/login</c> يَكتُب
+    // <c>.acommerce.auth.{slug}.{role}</c> فَقَط — فَكُلّ POST عَلى مَسار بِلا
+    // <c>/r/{role}/</c> (‏listings/create، ‏listings/{id}/offers، ‏cart،
+    // ‏checkout، ‏deals…) يَراهُ المُستَخدِم مُسَجَّلاً وَيَراهُ الخادِم
+    // مَجهولاً، فَيُعيد توجيهاً لِـ login أَو يَفشَل صامِتاً.
+    //
+    // القاعِدَة:
+    //   • مَسار بِدَور  → cookie ذلكَ الدَور وَحدَه، بِلا سُقوط. (عَزل الأَدوار
+    //     يَبقَى كَما صُمِّم: جَلسَة راكِب في تَبويب وَسائِق في آخَر.)
+    //   • مَسار بِلا دَور → الـ cookie العامّ أَوَّلاً (تَوافُق مَع المَتاجِر
+    //     أُحادِيَّة الدَور ashare/ejar)، ثُمَّ أَيّ cookie دَور لِنَفس المَتجَر
+    //     يَحمِلُه المُتَصَفِّح أَصلاً.
+    //
+    // لِماذا التَّوسيع آمِن: الـ token لا يَحمِل دَوراً إطلاقاً — هُوَ
+    // <c>{userId}|{tenantSlug}|{exp}|{sig}</c> (‏AuthHandlers.MakeToken). فَكُلّ
+    // cookies الأَدوار لِنَفس المُستَخدِم مُتَكافِئَة هُوِيَّةً، وَقُبولُ أَيِّها
+    // عَلى مَسار بِلا دَور لا يَمنَح صَلاحِيَّةً جَديدَة: التَّفويض يَجري بَعدَها
+    // عَبر <c>RolePermissions.Has(tenant.Roles, user.ActiveRole, …)</c>. وَما
+    // يُفحَص هُنا هِيَ cookies المُتَصَفِّح نَفسِه — لا يَستَطيع طَرَف ثالِث
+    // زَرعَ جَلسَة غَيرِه فيها.
+
+    /// <summary>اسم الـ cookie الَّذي يَحمِل جَلسَةً صالِحَة لِهذا المَتجَر في
+    /// هذا الطَّلَب، أَو <c>null</c>. الاسم — لا القيمَة — لِيَقرَأ المُتَّصِل
+    /// الـ token وَ<c>.name</c> مِن نَفس العائِلَة فَلا يَختَلِط اسمُ دَور
+    /// بِتوكِن دَور آخَر.</summary>
+    public static string? ResolveCookieBase(HttpRequest req, string tenantSlug)
+    {
+        var role = ExtractRoleFromPath(req.Path);
+        if (role is not null)
+        {
+            var scoped = CookieName(tenantSlug, role);
+            return IsValidFor(req.Cookies[scoped], tenantSlug) ? scoped : null;
+        }
+
+        var generic = CookieName(tenantSlug);
+        if (IsValidFor(req.Cookies[generic], tenantSlug)) return generic;
+
+        var prefix = generic + ".";
+        foreach (var (cookieName, value) in req.Cookies)
+        {
+            if (!cookieName.StartsWith(prefix, StringComparison.Ordinal)) continue;
+            if (cookieName.EndsWith(".name", StringComparison.Ordinal)) continue;
+            if (IsValidFor(value, tenantSlug)) return cookieName;
+        }
+        return null;
+    }
+
+    /// <summary>الـ token الصالِح لِهذا الطَّلَب، أَو <c>null</c>.</summary>
+    public static string? ResolveToken(HttpRequest req, string tenantSlug)
+    {
+        var name = ResolveCookieBase(req, tenantSlug);
+        return name is null ? null : req.Cookies[name];
+    }
+
+    /// <summary>اسم صاحِب الجَلسَة المَحلولَة — مِن نَفس عائِلَة الـ token.</summary>
+    public static string? ResolveUserName(HttpRequest req, string tenantSlug)
+    {
+        var name = ResolveCookieBase(req, tenantSlug);
+        return name is null ? null : req.Cookies[name + ".name"];
+    }
+
+    private static bool IsValidFor(string? token, string tenantSlug)
+    {
+        var parsed = AuthHandlers.ParseToken(token);
+        return parsed is not null && parsed.Value.TenantSlug == tenantSlug;
+    }
 
     /// <summary>يَستَخرِج الدَور مِن <c>/{slug}/r/{role}/…</c>. <c>null</c>
     /// إن كانَ المَسار قَديماً (بِلا <c>/r/</c>).</summary>
@@ -117,12 +181,28 @@ public sealed class AuthSession
         var name = CookieName(tenantSlug, role);
         res.Cookies.Append(name, auth.Token, opts);
         res.Cookies.Append(name + ".name", auth.FullName, opts);
+
+        // ونُسخَة بِالاسم العامّ كَذلك. الدُخول بِدَور كانَ يَكتُب cookie الدَور
+        // وَحدَه، فَيَبقَى كُلّ مَسار بِلا /r/{role}/ بِلا جَلسَة. الكِتابَة هُنا
+        // تَجعَل الحَلّ حَتمِيّاً (بِلا مَسح cookies) لِكُلّ دُخول جَديد، وَلا
+        // تَمَسّ عَزل الأَدوار: المَسارات المُسَوَّرَة بِدَور لا تَقرَأ العامّ
+        // أَبَداً، وَالـ token بِلا دَور فَلا هُوِيَّةَ جَديدَة تُمنَح.
+        // وَ ClearAllCookiesForTenant يَمسَح العامّ وَكُلّ الأَدوار مَعاً.
+        if (!string.IsNullOrEmpty(role))
+        {
+            var generic = CookieName(tenantSlug);
+            res.Cookies.Append(generic, auth.Token, opts);
+            res.Cookies.Append(generic + ".name", auth.FullName, opts);
+        }
     }
 
     public static void UpdateNameCookie(HttpResponse res, string tenantSlug, string newName,
                                          string? role = null)
     {
-        res.Cookies.Append(CookieName(tenantSlug, role) + ".name", newName, BuildOpts());
+        var opts = BuildOpts();
+        res.Cookies.Append(CookieName(tenantSlug, role) + ".name", newName, opts);
+        if (!string.IsNullOrEmpty(role))
+            res.Cookies.Append(CookieName(tenantSlug) + ".name", newName, opts);
     }
 
     public static void ClearCookie(HttpResponse res, string tenantSlug, string? role = null)

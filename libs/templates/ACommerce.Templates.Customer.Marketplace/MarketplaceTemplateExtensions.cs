@@ -275,9 +275,7 @@ public static class MarketplaceTemplateExtensions
         app.MapGet("/{slug}/api/me/unread",
             async (string slug, HttpRequest req, IDocumentStore store) =>
         {
-            var parsed = AuthHandlers.ParseToken(req.Cookies[AuthSession.CookieName(slug)]
-                ?? req.Cookies[AuthSession.CookieName(slug,
-                    AuthSession.ExtractRoleFromPath(req.Path))]);
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null || parsed.Value.TenantSlug != slug)
                 return Results.Json(new { messages = 0, notifications = 0 });
             var uid = parsed.Value.UserId;
@@ -298,7 +296,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/listings/{id:guid}/favorite",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
@@ -323,12 +321,12 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/listings/{id:guid}/chat",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/listings/{id}"));
             var (userId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
-            var userName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "أنا";
+            var userName = AuthSession.ResolveUserName(req, slug) ?? "أنا";
 
             await using var s = store.LightweightSession(slug);
             var listing = await s.Events.AggregateStreamAsync<Listing>(id);
@@ -359,7 +357,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/me/role/save",
             async (string slug, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
@@ -404,7 +402,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/me/role/onboarding/save",
             async (string slug, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
@@ -446,7 +444,7 @@ public static class MarketplaceTemplateExtensions
             async (string slug, HttpRequest req, IDocumentStore store,
                    ACommerce.Kit.Files.IFileStorage files) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
@@ -523,7 +521,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/plans/{planId}/subscribe",
             async (string slug, string planId, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/plans"));
             var (userId, _, _) = parsed.Value;
@@ -542,11 +540,11 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/support/open",
             async (string slug, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
-            var userName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "—";
+            var userName = AuthSession.ResolveUserName(req, slug) ?? "—";
             var subject = req.Form["subject"].ToString().Trim();
             var body    = req.Form["body"].ToString().Trim();
             if (subject.Length == 0 || body.Length == 0) return Results.Redirect(Link(req, slug, $"support"));
@@ -563,12 +561,12 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/listings/{id:guid}/report",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/listings/{id}"));
             var (userId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
-            var userName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "—";
+            var userName = AuthSession.ResolveUserName(req, slug) ?? "—";
 
             var reason = req.Form["reason"].ToString().Trim();
             var note   = req.Form["note"].ToString().Trim();
@@ -727,7 +725,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/searches/save",
             async (string slug, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
@@ -765,7 +763,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/searches/{id:guid}/delete",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
@@ -782,7 +780,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/searches/{id:guid}/toggle",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
@@ -801,7 +799,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/listings/{id:guid}/offers",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/listings/{id}"));
             var (userId, tenantSlug, _) = parsed.Value;
@@ -809,7 +807,7 @@ public static class MarketplaceTemplateExtensions
 
             if (!await HasPermissionAsync(slug, userId, "offer.submit", store))
                 return Results.Redirect(Link(req, slug, $"listings/{id}?err=forbidden"));
-            var userName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "—";
+            var userName = AuthSession.ResolveUserName(req, slug) ?? "—";
 
             var priceStr = req.Form["price"].ToString().Trim();
             var message  = req.Form["message"].ToString().Trim();
@@ -879,7 +877,7 @@ public static class MarketplaceTemplateExtensions
                    Microsoft.AspNetCore.SignalR.IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> hub,
                    ACommerce.Templates.Customer.Marketplace.Services.WebPushService push) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (acceptorId, tenantSlug, _) = parsed.Value;
@@ -927,7 +925,7 @@ public static class MarketplaceTemplateExtensions
 
             // افتَح مُحادَثَة مُؤَقَّتَة لِلتَنسيق — تَنتَهي بَعد 24 ساعَة.
             // الـ Owner هُنا = المُتَّصِل (مالِك الإعلان)، Partner = مُقَدِّم العَرض.
-            var acceptorName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "أنا";
+            var acceptorName = AuthSession.ResolveUserName(req, slug) ?? "أنا";
             var conv = new Conversation
             {
                 Id = Guid.NewGuid(),
@@ -968,7 +966,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/offers/{id:guid}/reject",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (rejectorId, _, _) = parsed.Value;
@@ -999,7 +997,7 @@ public static class MarketplaceTemplateExtensions
                    Microsoft.AspNetCore.SignalR.IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> hub,
                    ACommerce.Templates.Customer.Marketplace.Services.WebPushService push) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
@@ -1075,7 +1073,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/trips/{listingId:guid}/complete",
             async (string slug, Guid listingId, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
@@ -1114,7 +1112,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/trips/{listingId:guid}/abort",
             async (string slug, Guid listingId, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
@@ -1154,7 +1152,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/offers/{id:guid}/withdraw",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (offererId, _, _) = parsed.Value;
@@ -1261,14 +1259,11 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/api/{slug}/push/subscribe",
             async (string slug, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
-            // جَرِّب رول-سكوبد cookies إذا الـ legacy ما وُجِدَ.
-            if (string.IsNullOrEmpty(token))
-            {
-                var role = AuthSession.ExtractRoleFromPath(req.Path);
-                if (role is not null)
-                    token = req.Cookies[AuthSession.CookieName(slug, role)];
-            }
+            // مَسار الـ push تَحتَ /api/{slug}/… — بادِئَتُه "api" فَـ
+            // ExtractRoleFromPath تُعيد null دائِماً هُنا، وَالسُقوط اليَدَويّ
+            // القَديم عَلى الدَور كانَ مَيتاً. ResolveToken يُغَطّيه: عامّ ثُمَّ
+            // أَيّ دَور.
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Unauthorized();
             var (userId, _, _) = parsed.Value;
@@ -1331,7 +1326,7 @@ public static class MarketplaceTemplateExtensions
         app.MapGet("/api/{slug}/unread-counts",
             async (string slug, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Json(new { messages = 0, notifications = 0 });
             var (userId, tenantSlug, _) = parsed.Value;
@@ -1352,7 +1347,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/me/area/save",
             async (string slug, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
@@ -1385,13 +1380,13 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/users/{userId:guid}/chat",
             async (string slug, Guid userId, HttpRequest req, IDocumentStore store) =>
         {
-            var token = req.Cookies[AuthSession.CookieName(slug)];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/drivers"));
             var (meId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
             if (meId == userId) return Results.Redirect(Link(req, slug, $"drivers"));
-            var meName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "أنا";
+            var meName = AuthSession.ResolveUserName(req, slug) ?? "أنا";
 
             await using var s = store.LightweightSession(slug);
             var partner = await s.LoadAsync<User>(userId);
@@ -2315,8 +2310,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/listings/{id:guid}/cart/add",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
         {
-            var parsed = AuthHandlers.ParseToken(req.Cookies[AuthSession.CookieName(slug)]
-                ?? req.Cookies[AuthSession.CookieName(slug, AuthSession.ExtractRoleFromPath(req.Path))]);
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/listings/{id}"));
             var (userId, _, _) = parsed.Value;
             await using var s = store.LightweightSession(slug);
@@ -2343,8 +2337,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/cart/{listingId:guid}/qty",
             async (string slug, Guid listingId, HttpRequest req, IDocumentStore store) =>
         {
-            var parsed = AuthHandlers.ParseToken(req.Cookies[AuthSession.CookieName(slug)]
-                ?? req.Cookies[AuthSession.CookieName(slug, AuthSession.ExtractRoleFromPath(req.Path))]);
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
             int.TryParse(req.Form["qty"].ToString(), out var qty);
@@ -2362,8 +2355,7 @@ public static class MarketplaceTemplateExtensions
 
         app.MapPost("/{slug}/cart/clear", async (string slug, HttpRequest req, IDocumentStore store) =>
         {
-            var parsed = AuthHandlers.ParseToken(req.Cookies[AuthSession.CookieName(slug)]
-                ?? req.Cookies[AuthSession.CookieName(slug, AuthSession.ExtractRoleFromPath(req.Path))]);
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
             await using var s = store.LightweightSession(slug);
@@ -2381,8 +2373,7 @@ public static class MarketplaceTemplateExtensions
                    Services.Deals.DealsService deals,
                    ACommerce.Kit.Payments.IPaymentProvider payments) =>
         {
-            var parsed = AuthHandlers.ParseToken(req.Cookies[AuthSession.CookieName(slug)]
-                ?? req.Cookies[AuthSession.CookieName(slug, AuthSession.ExtractRoleFromPath(req.Path))]);
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
             var name  = req.Form["name"].ToString().Trim();
@@ -2457,8 +2448,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/vendor/{vendorId:guid}/chat",
             async (string slug, Guid vendorId, HttpRequest req, IDocumentStore store) =>
         {
-            var parsed = AuthHandlers.ParseToken(req.Cookies[AuthSession.CookieName(slug)]
-                ?? req.Cookies[AuthSession.CookieName(slug, AuthSession.ExtractRoleFromPath(req.Path))]);
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
             await using var s = store.LightweightSession(slug);
@@ -2589,12 +2579,11 @@ public static class MarketplaceTemplateExtensions
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
                    Services.Deals.DealsService deals) =>
         {
-            var parsed = AuthHandlers.ParseToken(req.Cookies[AuthSession.CookieName(slug)]
-                ?? req.Cookies[AuthSession.CookieName(slug, AuthSession.ExtractRoleFromPath(req.Path))]);
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/listings/{id}"));
             var (userId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
-            var userName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "عميل";
+            var userName = AuthSession.ResolveUserName(req, slug) ?? "عميل";
 
             decimal.TryParse(req.Form["amount"].ToString(), out var amount);
             var note = req.Form["note"].ToString().Trim();
@@ -2624,11 +2613,10 @@ public static class MarketplaceTemplateExtensions
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
                    Services.Deals.DealsService deals) =>
         {
-            var parsed = AuthHandlers.ParseToken(req.Cookies[AuthSession.CookieName(slug)]
-                ?? req.Cookies[AuthSession.CookieName(slug, AuthSession.ExtractRoleFromPath(req.Path))]);
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
-            var userName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "المالِك";
+            var userName = AuthSession.ResolveUserName(req, slug) ?? "المالِك";
             var deal = await deals.LoadAsync(slug, id);
             if (deal is null) return Results.Redirect(Link(req, slug, "deals"));
             await deals.AssignCounterpartyAsync(slug, id, userId, userName);
@@ -2641,11 +2629,10 @@ public static class MarketplaceTemplateExtensions
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
                    Services.Deals.DealsService deals) =>
         {
-            var parsed = AuthHandlers.ParseToken(req.Cookies[AuthSession.CookieName(slug)]
-                ?? req.Cookies[AuthSession.CookieName(slug, AuthSession.ExtractRoleFromPath(req.Path))]);
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
-            var userName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "مُستَخدِم";
+            var userName = AuthSession.ResolveUserName(req, slug) ?? "مُستَخدِم";
             var note = req.Form["note"].ToString().Trim();
             await deals.AdvanceAsync(slug, id, userId, userName, note);
             return Results.Redirect(Link(req, slug, $"deals/{id}"));
@@ -2655,11 +2642,10 @@ public static class MarketplaceTemplateExtensions
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
                    Services.Deals.DealsService deals) =>
         {
-            var parsed = AuthHandlers.ParseToken(req.Cookies[AuthSession.CookieName(slug)]
-                ?? req.Cookies[AuthSession.CookieName(slug, AuthSession.ExtractRoleFromPath(req.Path))]);
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
-            var userName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "مُستَخدِم";
+            var userName = AuthSession.ResolveUserName(req, slug) ?? "مُستَخدِم";
             var reason = req.Form["reason"].ToString().Trim();
             await deals.CancelAsync(slug, id, userId, userName, string.IsNullOrEmpty(reason) ? "إلغاء" : reason);
             return Results.Redirect(Link(req, slug, $"deals/{id}"));
@@ -2671,11 +2657,10 @@ public static class MarketplaceTemplateExtensions
                    Services.Deals.DealsService deals,
                    ACommerce.Kit.Reviews.ReviewsService reviews) =>
         {
-            var parsed = AuthHandlers.ParseToken(req.Cookies[AuthSession.CookieName(slug)]
-                ?? req.Cookies[AuthSession.CookieName(slug, AuthSession.ExtractRoleFromPath(req.Path))]);
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
-            var userName = req.Cookies[AuthSession.CookieName(slug) + ".name"] ?? "مُستَخدِم";
+            var userName = AuthSession.ResolveUserName(req, slug) ?? "مُستَخدِم";
             if (!int.TryParse(req.Form["rating"].ToString(), out var rating)) rating = 5;
             var body = req.Form["body"].ToString().Trim();
 
@@ -2822,9 +2807,7 @@ public static class MarketplaceTemplateExtensions
                 return true;
 
             // (ب) مُستَخدِم مُسَجَّل دُخولاً في نَفس المَتجَر بِدَور إداريّ.
-            var token = req.Cookies[AuthSession.CookieName(slug)]
-                     ?? req.Cookies[AuthSession.CookieName(slug, AuthSession.ExtractRoleFromPath(req.Path))]
-                     ?? req.Cookies[AuthSession.CookieName(slug, "admin")];
+            var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return false;
             var (userId, tenantSlug, _) = parsed.Value;
@@ -2865,7 +2848,7 @@ public static class MarketplaceTemplateExtensions
             studioAuth.Load();
             if (studioAuth.IsAuthenticated)
                 return (studioAuth.UserId, studioAuth.UserName ?? "studio");
-            var parsed = AuthHandlers.ParseToken(req.Cookies[AuthSession.CookieName(slug)]);
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is not null) return (parsed.Value.UserId, "tenant_admin");
             return (null, "anonymous");
         }
