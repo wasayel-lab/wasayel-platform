@@ -39,14 +39,28 @@ public static class EffectiveRole
         return string.IsNullOrEmpty(activeRole) ? null : activeRole;
     }
 
+    /// <summary>الدَور الوَحيد غَير القابِل لِلاختِيار الذاتيّ. كُلّ الأَدوار
+    /// الأُخرى يَمنَحُها المُستَخدِم لِنَفسِه بِدُخول <c>as={role}</c>
+    /// (<c>AssignRoleAsync</c>)، أَمّا هذا فَيُمنَح يَدَويّاً مِن
+    /// <c>/admin/tenants/{slug}/users</c> فَقَط.</summary>
+    private const string AdminRole = "tenant_admin";
+
     /// <summary>بُرهان المِلكِيَّة: هَل يَحمِل المُتَصَفِّح cookie جَلسَة
     /// صالِحَة لِهذا <paramref name="role"/> تَخُصّ <paramref name="userId"/>
     /// في هذا المَتجَر؟ الـ token لا يَحمِل الدَور، فَاسم الـ cookie
-    /// (<c>.acommerce.auth.{slug}.{role}</c>) هُوَ ادِّعاء الدَور، ولا يُكتَب
-    /// إلّا بِدُخول <c>as={role}</c>.</summary>
+    /// (<c>.acommerce.auth.{slug}.{role}</c>) هُوَ ادِّعاء الدَور.
+    ///
+    /// <para><b>حَدّ أَمنيّ:</b> <c>tenant_admin</c> لا يُملَك أَبَداً عَبر
+    /// <c>as</c>. الـ token مُشتَرَك بَينَ أَدوار المُستَخدِم الواحِد
+    /// (لا يَحمِل دَوراً)، فَلَو اعتَمَدنا مُجَرَّد اسم الـ cookie لَأَمكَن
+    /// لِمُستَخدِم أَن يَنسَخ توكِنَه تَحت اسم <c>.tenant_admin</c> ويَنتَحِلَه.
+    /// لِبَقِيَّة الأَدوار هذا غَير ذي أَثَر (كُلُّها اختِياريَّة ذاتيّاً)، أَمّا
+    /// الإداريّ فَيُمنَح مِن الخادِم وَحدَه — فَنَستَثنيه هُنا مُطابَقَةً
+    /// لِـ<c>AssignRoleAsync</c>. مَسار الإدارَة يَقرَأ <c>ActiveRole</c>
+    /// مُباشَرَةً لا <c>as</c>.</para></summary>
     public static bool OwnsRole(HttpRequest req, string slug, Guid userId, string? role)
     {
-        if (string.IsNullOrEmpty(role)) return false;
+        if (string.IsNullOrEmpty(role) || role == AdminRole) return false;
         var cookie = req.Cookies[AuthSession.CookieName(slug, role)];
         var parsed = AuthHandlers.ParseToken(cookie);
         return parsed is not null

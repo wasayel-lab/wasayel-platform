@@ -127,6 +127,17 @@ public class EffectiveRoleTests
         Assert.False(EffectiveRole.OwnsRole(req, Slug, user, "host"));
     }
 
+    [Fact]
+    public void OwnsRole_False_ForTenantAdmin_EvenWithValidSelfToken()
+    {
+        // الـ token مُشتَرَك بَينَ أَدوار المُستَخدِم، فَقَد يَنسَخُه تَحت اسم
+        // .tenant_admin. الحَدّ الأَمنيّ: as لا يَملِك الإداريّ أَبَداً.
+        var user = Guid.NewGuid();
+        var req = Request($"/{Slug}/listings/create",
+            (AuthSession.CookieName(Slug, "tenant_admin"), TokenFor(user)));
+        Assert.False(EffectiveRole.OwnsRole(req, Slug, user, "tenant_admin"));
+    }
+
     // ─── التَّركيب مَع التَّفويض: العِلاج وَالحِراسَة السالِبَة ──────────────
 
     [Fact]
