@@ -96,4 +96,7 @@
   <Folder Name="/libs/widgets/">
     <Project Path="libs/widgets/ACommerce.Widgets/ACommerce.Widgets.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ACommerce.Platform.Tests/ACommerce.Platform.Tests.csproj" />
+  </Folder>
 </Solution>
