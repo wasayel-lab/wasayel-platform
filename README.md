@@ -5,9 +5,9 @@
 مشترك)، يُبنى **بالتهيئة لا بالكود**، ويُهيّأ جزئياً عبر وكيل استوديو ذكي
 مقيد الأدوات يعمل باعتماد بشري.
 
-**المكدس**: ‎.NET 10 + ASP.NET Core + Blazor Server، و**Marten 8**
+**المكدس**: ‎.NET 10 + ASP.NET Core + Blazor Server، و**Marten 9**
 (مخزن أحداث + وثائق فوق Postgres بعزل مستأجرين تلقائي — conjoined tenancy)،
-و**Wolverine 4** (وسيط + نقاط HTTP بدوال static بلا Controllers).
+و**Wolverine 6** (وسيط + نقاط HTTP بدوال static بلا Controllers).
 
 > **النسب**: هذا المستودع مستخرج بتاريخه الكامل من المستودع الأم
 > `acommerce-lab/acommerce-platform` (مجلد `platform-v1`)، ثم زومن مع حالة
