@@ -1,0 +1,23 @@
+# مخرجات البناء
+bin/
+obj/
+artifacts/
+*.binlog
+
+# بيئات التطوير
+.vs/
+.vscode/
+*.user
+*.suo
+
+# نتائج الاختبارات
+TestResults/
+*.trx
+coverage*.xml
+
+# نظام التشغيل
+Thumbs.db
+.DS_Store
+
+# سجلات محلية
+*.log
