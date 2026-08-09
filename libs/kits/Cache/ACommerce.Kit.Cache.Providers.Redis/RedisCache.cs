@@ -37,7 +37,9 @@ public sealed class RedisCache : ICache, IAsyncDisposable
     public async Task SetAsync<T>(string key, T value, TimeSpan? expiry = null, CancellationToken ct = default) where T : class
     {
         var db = await DbAsync();
-        await db.StringSetAsync(K(key), JsonSerializer.Serialize(value), expiry);
+        // When.Always صريحة: تحميلات TimeSpan?‎ في SE.Redis الحديثة تتطلبها،
+        // وإغفالها يحسم الاختيار لتحميل Expiration غير المتوافق مع null.
+        await db.StringSetAsync(K(key), JsonSerializer.Serialize(value), expiry, When.Always);
     }
 
     public async Task<bool> SetIfNotExistsAsync<T>(string key, T value, TimeSpan? expiry = null, CancellationToken ct = default) where T : class

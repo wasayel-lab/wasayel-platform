@@ -1,5 +1,6 @@
 using System.Reflection;
 using ACommerce.Platform.MultiTenancy;
+using JasperFx.Events.Projections;
 using Marten;
 using Marten.Events.Projections;
 using Microsoft.AspNetCore.Builder;
@@ -68,7 +69,7 @@ public static class HostingExtensions
                 // كلّ events + documents مَحصورَة بـ tenant_id إلّا
                 // ما نُسَجِّله صراحَة كَ global.
                 opts.Policies.AllDocumentsAreMultiTenanted();
-                opts.Events.TenancyStyle = global::Marten.Storage.TenancyStyle.Conjoined;
+                opts.Events.TenancyStyle = global::JasperFx.MultiTenancy.TenancyStyle.Conjoined;
 
                 // Tenant document = global (سِجِلّ المُستَأجِرين أَنفُسهم)
                 opts.Schema.For<ACommerce.Kit.Tenants.Tenant>()

@@ -1,24 +1,24 @@
 <Project>
   <ItemGroup>
     <!-- Marten + Wolverine -->
-    <PackageVersion Include="Marten" Version="8.10.0" />
-    <PackageVersion Include="WolverineFx" Version="4.11.0" />
-    <PackageVersion Include="WolverineFx.Http" Version="4.11.0" />
-    <PackageVersion Include="WolverineFx.Marten" Version="4.11.0" />
+    <PackageVersion Include="Marten" Version="9.22.5" />
+    <PackageVersion Include="WolverineFx" Version="6.25.1" />
+    <PackageVersion Include="WolverineFx.Http" Version="6.25.1" />
+    <PackageVersion Include="WolverineFx.Marten" Version="6.25.1" />
 
     <!-- ASP.NET runtime bits -->
-    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
 
     <!-- Web Push (PWA notifications) -->
-    <PackageVersion Include="WebPush" Version="1.0.12" />
+    <PackageVersion Include="WebPush" Version="1.0.13" />
 
     <!-- Cache + Realtime backplane -->
-    <PackageVersion Include="StackExchange.Redis"                          Version="2.8.16" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.0" />
+    <PackageVersion Include="StackExchange.Redis"                          Version="3.1.13" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.10" />
 
     <!-- Excel export (feasibility study) -->
-    <PackageVersion Include="ClosedXML" Version="0.104.2" />
+    <PackageVersion Include="ClosedXML" Version="0.105.1" />
 
     <!-- JSON Schema validation (بَوّابَة مُصادَقَة أَدَوات الوَكيل) -->
     <PackageVersion Include="JsonSchema.Net" Version="9.4.0" />
@@ -29,14 +29,14 @@
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
 
     <!-- Logging -->
-    <PackageVersion Include="Serilog.AspNetCore" Version="9.0.0" />
-    <PackageVersion Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
 
     <!-- Importer tool -->
-    <PackageVersion Include="Microsoft.Extensions.Hosting"            Version="10.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.Data.SqlClient"                Version="6.0.2" />
-    <PackageVersion Include="Dapper"                                  Version="2.1.66" />
-    <PackageVersion Include="System.CommandLine"                      Version="2.0.0-beta4.22272.1" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting"            Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Data.SqlClient"                Version="7.0.2" />
+    <PackageVersion Include="Dapper"                                  Version="2.1.79" />
+    <PackageVersion Include="System.CommandLine"                      Version="2.0.10" />
   </ItemGroup>
 </Project>
