@@ -246,10 +246,10 @@ public sealed class AgentService
    00000000-0000-0000-0000-000000000F01.
 6. الفِئات تُجَمَّع بِـ "kind": residential, commercial, events, vehicles,
    roommate، أَو فارِغ.
-7. الأَدوار تُختار مِن كاتالوج ثابِت — set_roles يَقبَل فَقَط slugs:
-   customer (مُشتَري عامّ، يَتَصَفَّح فَقَط)، rider (راكِب يَنشُر مَشاوير)،
-   vendor (تاجِر يَنشُر إعلانات)، driver (سائِق يُقَدِّم عُروض)،
-   host (مالِك سَكَن)، shipper (شَركَة شَحن)، tenant_admin (إداريّ المَتجَر).
+7. الأَدوار تُختار مِن كاتالوج الأَدوار — set_roles يَقبَل هذه الـ slugs
+   حَصراً (مَقروءَة مِن مِلَفّات تَعريف الأَدوار، فَما يُؤَلَّف مِنها
+   يَظهَر هُنا بِلا تَعديل نَصّ):
+{{CatalogRoleLines}}
    لِتَطبيق نَموذَج إنجيز (راكِب⇄سائِق) اِختَر rider + driver.
 8. لُغَتُكَ الافتراضيَّة العَرَبيَّة الفُصحى مَع تَشكيل خَفيف.
 
@@ -415,11 +415,44 @@ public sealed class AgentService
     }
     """;
 
-    // الـ catalog يَضُمّ: customer, vendor, driver, host, shipper, tenant_admin.
-    // الوَكيل يَختار مِنها بِالـ slug فَقَط — كُلّ Permissions+Fields تَأتي
-    // مُعَدَّة مِن الكاتالوج تِلقائيّاً. لا يُمكِن لِلوَكيل اختِراع دَور
-    // خارِج الكاتالوج (يَضمَن سُلوكاً مُتَّسِقاً).
-    private static readonly string SetRolesSchema = """
+    // ─── تَعداد أَدوار set_roles — مُشتَقّ لا مَكتوب ───────────────────
+    /// <summary>
+    /// <para>slugs الكاتالوج مَفصولَة بِفاصِلَة عَرَبيَّة — لِنُصوص
+    /// الوَصف الَّتي يَقرَؤُها النَّموذَج.</para>
+    /// </summary>
+    private static readonly string CatalogSlugsCsv =
+        string.Join("، ", ACommerce.Kit.Roles.RoleCatalog.All.Select(t => t.Slug));
+
+    /// <summary>تَعداد JSON لِنَفس الـ slugs — <c>["customer", …]</c>.</summary>
+    private static readonly string CatalogSlugsEnumJson =
+        "[" + string.Join(", ",
+            ACommerce.Kit.Roles.RoleCatalog.All.Select(t => "\"" + t.Slug + "\"")) + "]";
+
+    /// <summary>سُطور «slug — تَسمِيَة: وَصف» لِقاعِدَة الأَدوار في
+    /// رِسالَة النِّظام.</summary>
+    private static readonly string CatalogRoleLines =
+        string.Join("\n", ACommerce.Kit.Roles.RoleCatalog.All
+            .Select(t => $"   - {t.Slug} ({t.Label}): {t.Description}"));
+
+    /// <summary>
+    /// <para><b>التَّعداد مُشتَقّ مِن الكاتالوج لا مَكتوب يَدَوِيّاً</b>.
+    /// كانَ هُنا مَصفوفَة <c>enum</c> بِسَبعَة أَسماء مَنسوخَة، وتَحتَها
+    /// وَصف عَرَبيّ يَذكُر السَبعَة مَرَّةً أُخرى، وفَوقَها تَعليق يَذكُرُها
+    /// مَرَّةً ثالِثَة — <b>ونَقَصَ مِن التَّعليق <c>rider</c> أَصلاً</b>،
+    /// وهو بِعَينِه ما تَفعَلُه ثَلاثَة مَصادِر لِحَقيقَة واحِدَة.</para>
+    ///
+    /// <para>صارَت الثَّلاثَة تُشتَقّ مِن
+    /// <see cref="ACommerce.Kit.Roles.RoleCatalog.All"/>، فَدَور جَديد
+    /// يُؤَلَّف مِلَفّاً يَدخُل تَعداد الوَكيل <b>ووَصفَه ورِسالَةَ
+    /// نِظامِه</b> بِلا سَطر كود. و<c>AgentToolValidator</c> يَبني
+    /// مُخَطَّطاتِه مِن <see cref="BuildAbstractTools"/> نَفسِها، فَالبَوّابَة
+    /// تَتَّسِع مَعَه بِلا لَمس.</para>
+    ///
+    /// <para><b>وما لَم يَتَغَيَّر</b>: الوَكيل ما يَزال عاجِزاً عَن
+    /// اختِراع دَور خارِج الكاتالوج — الحارِس هو الكاتالوج نَفسُه بَدَل
+    /// نُسخَة مِنه.</para>
+    /// </summary>
+    private static readonly string SetRolesSchema = $$"""
     {
       "type": "object",
       "required": ["slug", "roles"],
@@ -427,10 +460,10 @@ public sealed class AgentService
         "slug": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
         "roles": {
           "type": "array",
-          "description": "قائِمَة catalog slugs مَختارَة مِن: customer, rider, vendor, driver, host, shipper, tenant_admin",
+          "description": "قائِمَة catalog slugs مَختارَة مِن: {{CatalogSlugsCsv}}",
           "items": {
             "type": "string",
-            "enum": ["customer", "rider", "vendor", "driver", "host", "shipper", "tenant_admin"]
+            "enum": {{CatalogSlugsEnumJson}}
           }
         },
         "default_role": {

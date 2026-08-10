@@ -58,6 +58,31 @@ public class AgentToolValidatorTests
         AssertFails(result);
     }
 
+    // ── تَعداد set_roles مُشتَقّ مِن الكاتالوج لا مَنسوخ ──────────────
+    // كانَ التَّعداد مَصفوفَة أَسماء مَكتوبَة في المُخَطَّط، ومَعَها وَصف
+    // عَرَبيّ يُكَرِّرُها وتَعليق يُكَرِّرُها ثالِثَةً — وكانَ التَّعليق
+    // ناقِصاً دَوراً (rider) فِعلاً، وهو أَثَر النَّسخ لا مُصادَفَة.
+    // صارَ يُشتَقّ مِن RoleCatalog.All، وهذانِ الاختِبارانِ يَحرُسانِ
+    // الطَرَفَين: أَنّ **كُلّ** ما في الكاتالوج يَمُرّ، وأَنّ ما ليسَ
+    // فيه لا يَمُرّ. فَدَور يُؤَلَّف مِلَفّاً يَصير مَقبولاً بِلا لَمس
+    // سَطر هُنا، ودَور مَحذوف يَصير مَرفوضاً بِلا لَمس سَطر هُنا.
+
+    [Fact]
+    public void SetRoles_AcceptsEveryCatalogSlug()
+    {
+        var all = ACommerce.Kit.Roles.RoleCatalog.All.Select(t => t.Slug).ToArray();
+        Assert.NotEmpty(all);
+
+        // كُلّ الكاتالوج دُفعَةً واحِدَة — وهو أَقوى مِن دَور دَور:
+        // يُثبِت أَنّ التَّعداد يَسَعُهُم جَميعاً لا أَنّ كُلّاً مِنهُم
+        // يُوافِق تَعداداً قَد يَكون أَوسَع.
+        var json = "{\"slug\":\"demo\",\"roles\":["
+                 + string.Join(",", all.Select(s => $"\"{s}\"")) + "]}";
+        var result = AgentToolValidator.Validate("set_roles", json);
+        Assert.True(result.IsValid,
+            $"سُلِّم الكاتالوج كامِلاً فَرُفِض: {string.Join(" | ", result.Errors)}");
+    }
+
     [Fact]
     public void CreateTenant_WithoutCategories_Fails()
     {
