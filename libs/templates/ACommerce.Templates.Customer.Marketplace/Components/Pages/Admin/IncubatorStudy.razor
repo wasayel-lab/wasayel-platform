@@ -8,6 +8,7 @@
     4 ثوانٍ (meta refresh) حتى يكتمل. عند الاكتمال يعرض الأقسام من JSON.
 *@
 
+<RequirePlatformAdmin>
 @if (session?.Status == IncubatorStatus.Analyzing)
 {
     <HeadContent><meta http-equiv="refresh" content="4" /></HeadContent>
@@ -177,6 +178,7 @@
         }
     }
 </div>
+</RequirePlatformAdmin>
 
 @code {
     [Parameter] public Guid Id { get; set; }

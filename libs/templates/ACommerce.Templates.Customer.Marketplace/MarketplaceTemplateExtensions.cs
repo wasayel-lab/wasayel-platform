@@ -44,6 +44,7 @@ public static class MarketplaceTemplateExtensions
         // بَوّابَة إدارَة المَتجَر — تَعريف واحِد يَقرَؤُه طَرَفا القِراءَة
         // (صَفَحات /admin/tenants/{slug}/*) وَالكِتابَة (نِقاط الـ POST).
         services.AddScoped<Services.TenantAdminGuard>();
+        services.AddScoped<Services.PlatformAdminGuard>();
 
         // ─── طبقة التحليل الاستثماري (الحاضنة) ──────────────────────────
         services.AddSingleton<Services.Incubator.SaudiDataProvider>();
@@ -1495,8 +1496,15 @@ public static class MarketplaceTemplateExtensions
         // نَموذَج SSR على /admin/tenants/new يُرسِل لِهُنا. عَلى الفَشَل نُعيد
         // إلى نَفس الصَفحَة مَع ?err=X و القِيَم المُدخَلَة لِيَحفَظها الـ form.
         app.MapPost("/admin/tenants/create",
-            async (HttpRequest req, IDocumentStore store) =>
+            async (HttpRequest req, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth) =>
         {
+            // التَّخويل قَبل قِراءَة الحُقول: كانَ الطَّلَب المَجهول يَصِل
+            // إلى الفَلتَرَة فَيَرتَدّ بِـ 302 عَن حَقل ناقِص — فَبَدا
+            // مَحروساً وَهُوَ مَكشوف. بِجِسم صَحيح كانَ يُنشِئ مُستَأجِراً.
+            if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
+                return Forbidden();
+
             var f = req.Form;
             var slug    = f["slug"].ToString().Trim().ToLowerInvariant();
             var name    = f["name"].ToString().Trim();
@@ -2044,9 +2052,12 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Admin: Agent — ask ─────────────────────────────────────────
         app.MapPost("/admin/agent/ask",
-            async (HttpRequest req,
+            async (HttpRequest req, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth,
                    ACommerce.Templates.Customer.Marketplace.Services.AgentService agent) =>
         {
+            if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
+                return Forbidden();
             var msg = req.Form["message"].ToString().Trim();
             if (string.IsNullOrEmpty(msg))
                 return Results.Redirect("/admin/agent?err=empty#composer");
@@ -2056,10 +2067,13 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Admin: Agent — apply a pending tool call ───────────────────
         app.MapPost("/admin/agent/tool/{toolId}/apply",
-            async (string toolId,
+            async (string toolId, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth,
                    ACommerce.Templates.Customer.Marketplace.Services.AgentService agent,
                    ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor exec) =>
         {
+            if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
+                return Forbidden();
             var session = await agent.LoadSessionAsync();
             var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
             if (turn?.Tool is null)
@@ -2073,9 +2087,12 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Admin: Agent — reject a pending tool call ──────────────────
         app.MapPost("/admin/agent/tool/{toolId}/reject",
-            async (string toolId,
+            async (string toolId, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth,
                    ACommerce.Templates.Customer.Marketplace.Services.AgentService agent) =>
         {
+            if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
+                return Forbidden();
             await agent.UpdateToolStatusAsync(toolId, "rejected", null);
             await agent.ContinueAfterToolAsync();
             return Results.Redirect("/admin/agent#latest");
@@ -2083,8 +2100,11 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Admin: Agent — reset conversation ──────────────────────────
         app.MapPost("/admin/agent/reset",
-            async (ACommerce.Templates.Customer.Marketplace.Services.AgentService agent) =>
+            async (IDocumentStore store, Services.Incubator.StudioAuth auth,
+                   ACommerce.Templates.Customer.Marketplace.Services.AgentService agent) =>
         {
+            if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
+                return Forbidden();
             await agent.ResetAsync();
             return Results.Redirect("/admin/agent");
         }).DisableAntiforgery();
@@ -2695,11 +2715,14 @@ public static class MarketplaceTemplateExtensions
             async (string slug, HttpRequest req, IDocumentStore store,
                    Services.Incubator.StudioAuth auth, Services.Audit.AuditWriter audit) =>
         {
-            auth.Load();
-            if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
-            await using var us = store.QuerySession(Services.Incubator.StudioAuth.Tenant);
-            var u = await us.LoadAsync<Services.Incubator.StudioUser>(auth.UserId!.Value);
-            if (u?.IsPlatformAdmin != true) return Forbidden();
+            // كانَ القَرار مَكتوباً هُنا حَرفاً بِحَرف — وَهُوَ النُّسخَة
+            // الثانِيَة الَّتي انجَرَفَت عَنها بَقِيَّة نِقاط المَنصَّة.
+            // صارَ في Services.PlatformAdminGuard، وَالمَجهول يُرَدّ الآن
+            // بِـ 403 كَبَقِيَّة نِقاط الكِتابَة لا بِتَحويل إلى صَفحَة دُخول
+            // تَضيع مَعَها حُقول الـ form أَصلاً.
+            var decision = await Services.PlatformAdminGuard.EvaluateAsync(store, auth);
+            if (!decision.Allowed) return Forbidden();
+            var u = decision.User!;
 
             var reason = req.Form["reason"].ToString().Trim();
             var action = req.Form["action"].ToString().Trim();   // suspend | reactivate
@@ -3240,19 +3263,28 @@ public static class MarketplaceTemplateExtensions
         }).DisableAntiforgery();
 
         // ─── Incubator — طبقة التحليل الاستثماري ─────────────────────────
-        // الـ admin مفتوح حاليّاً، فالمالك = Guid ثابت (مجهول). الاكتشاف
-        // SSR (POST لكل إجابة)، التحليل يُطلَق في الخلفية وصفحة الدراسة
-        // تَستطلِع حتى يكتمل.
+        // نُسخَة الـ admin مِن الحاضِنَة: أَداة مَنصَّة لا أَداة عُمَلاء
+        // (لِلعُمَلاء /studio/…)، فَهِيَ خَلف بَوّابَة مُشرِف المَنصَّة.
+        // المالِك يَبقى Guid.Empty — هذه جَلسات المَنصَّة نَفسِها، مُنفَصِلَة
+        // عَن جَلسات المُستَخدِمين. الاكتشاف SSR (POST لكل إجابة)، والتحليل
+        // يُطلَق في الخلفية وصفحة الدراسة تَستطلِع حتى يكتمل.
         app.MapPost("/admin/incubator/start",
-            async (Services.Incubator.FeasibilityAnalysisService svc) =>
+            async (IDocumentStore store, Services.Incubator.StudioAuth auth,
+                   Services.Incubator.FeasibilityAnalysisService svc) =>
         {
+            if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
+                return Forbidden();
             var s = await svc.StartAsync(Guid.Empty, "صاحِب المَشروع");
             return Results.Redirect($"/admin/incubator/{s.Id}");
         }).DisableAntiforgery();
 
         app.MapPost("/admin/incubator/{id:guid}/answer",
-            async (Guid id, HttpRequest req, Services.Incubator.FeasibilityAnalysisService svc) =>
+            async (Guid id, HttpRequest req, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth,
+                   Services.Incubator.FeasibilityAnalysisService svc) =>
         {
+            if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
+                return Forbidden();
             var qid = req.Form["questionId"].ToString().Trim();
             var answer = req.Form["answer"].ToString().Trim();
             if (!string.IsNullOrEmpty(qid))
@@ -3261,9 +3293,12 @@ public static class MarketplaceTemplateExtensions
         }).DisableAntiforgery();
 
         app.MapPost("/admin/incubator/{id:guid}/analyze",
-            async (Guid id, IServiceScopeFactory scopeFactory,
+            async (Guid id, IServiceScopeFactory scopeFactory, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth,
                    Services.Incubator.FeasibilityAnalysisService svc) =>
         {
+            if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
+                return Forbidden();
             // عيّن الحالة فوراً (متزامن) لتعرض صفحة الدراسة المؤشّر،
             // ثم شغّل التحليل الطويل في الخلفية بنطاق DI جديد.
             await svc.MarkAnalyzingAsync(id);
@@ -3280,8 +3315,11 @@ public static class MarketplaceTemplateExtensions
 
         // إعادة البدء = جلسة جديدة فارغة (الجلسة القديمة تبقى محفوظة).
         app.MapPost("/admin/incubator/restart",
-            async (Services.Incubator.FeasibilityAnalysisService svc) =>
+            async (IDocumentStore store, Services.Incubator.StudioAuth auth,
+                   Services.Incubator.FeasibilityAnalysisService svc) =>
         {
+            if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
+                return Forbidden();
             var s = await svc.StartAsync(Guid.Empty, "صاحِب المَشروع");
             return Results.Redirect($"/admin/incubator/{s.Id}");
         }).DisableAntiforgery();

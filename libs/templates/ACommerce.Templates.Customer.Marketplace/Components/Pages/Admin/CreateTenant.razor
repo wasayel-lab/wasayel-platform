@@ -5,9 +5,11 @@
     إنشاء مَتجَر جَديد — نَموذَج SSR بِالحُقول الأَدنى:
       slug, name, brand color, tag line, city, auth channel,
       + قائِمَة فِئات (slug | label | icon | kind)
-    POST يَذهَب إلى /admin/tenants/create.
+    POST يَذهَب إلى /admin/tenants/create — وَهُوَ مَحروس خادِمِيّاً
+    بِنَفس قَرار RequirePlatformAdmin، فَلا يَكفي إخفاء النَموذَج.
 *@
 
+<RequirePlatformAdmin>
 <div class="acs-page acm-admin">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
         <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin"
@@ -170,6 +172,7 @@
         </div>
     </form>
 </div>
+</RequirePlatformAdmin>
 
 @code {
     /// <summary>إذا فَشَل POST، يُعيد المُستَخدِم هُنا مَع ?err=... +

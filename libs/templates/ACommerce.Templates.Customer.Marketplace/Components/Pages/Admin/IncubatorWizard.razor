@@ -8,6 +8,7 @@
     سؤال يُحسَب النمط المقترح وتظهر بطاقته مع زر "حلّل الآن".
 *@
 
+<RequirePlatformAdmin>
 <div class="acs-page acm-admin" style="max-width:640px;margin:0 auto;">
     @if (session is null)
     {
@@ -134,6 +135,7 @@
         }
     }
 </div>
+</RequirePlatformAdmin>
 
 @code {
     [Parameter] public Guid Id { get; set; }

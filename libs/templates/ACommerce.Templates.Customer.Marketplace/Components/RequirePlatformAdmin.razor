@@ -1,10 +1,14 @@
-@inject Services.Incubator.StudioAuth Auth
-@inject Services.Incubator.StudioTierService TierSvc
-@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+@inject Services.PlatformAdminGuard Guard
+@using ACommerce.Templates.Customer.Marketplace.Services
 
 @*
     مُكَوِّن يَفحَص أَنّ المُستَخدِم مُسَجَّل وَيَملِك صَلاحيَّة platform_admin.
     لَو فَشِلَ يَعرِض رِسالَة دُخول/مَنع، وَإلّا يَعرِض @@ChildContent.
+
+    القَرار نَفسُه لا يَسكُن هُنا — هُوَ في Services.PlatformAdminGuard،
+    نَفس التَّعريف الَّذي تَقرَؤُه نِقاط الـ POST على مُستَوى المَنصَّة.
+    كانَ مَكتوباً هُنا وَمَرَّةً ثانِيَة في نُقطَة suspend، فَانفَرَدَت
+    الصَفَحات الأُخرى بِلا حارِس أَصلاً.
 *@
 
 @switch (_state)
@@ -51,9 +55,12 @@
 
     protected override async Task OnInitializedAsync()
     {
-        Auth.Load();
-        if (!Auth.IsAuthenticated) { _state = State.NeedAuth; return; }
-        var u = await TierSvc.GetUserAsync(Auth.UserId!.Value);
-        _state = u?.IsPlatformAdmin == true ? State.Allowed : State.Forbidden;
+        var decision = await Guard.EvaluateAsync();
+        _state = decision.Outcome switch
+        {
+            PlatformAdminOutcome.Allowed  => State.Allowed,
+            PlatformAdminOutcome.NotAdmin => State.Forbidden,
+            _                             => State.NeedAuth
+        };
     }
 }

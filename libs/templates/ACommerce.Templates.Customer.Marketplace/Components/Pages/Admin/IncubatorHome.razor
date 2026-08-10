@@ -5,8 +5,12 @@
 @*
     مَدخَل الحاضِنَة — صَفحَة بِدايَة صاحِب المَشروع. يَبدَأ بِتَحليل فِكرَته
     قَبل إنشاء المَتجَر. تَعرِض الجَلَسات السابِقَة + زِرّ بَدء جَديد.
+
+    نُسخَة المَنصَّة مِن الحاضِنَة (لِلعُمَلاء /studio) — خَلف بَوّابَة
+    مُشرِف المَنصَّة، وَنِقاط الـ POST تَحتَها مَحروسَة بِنَفس القَرار.
 *@
 
+<RequirePlatformAdmin>
 <div class="acs-page acm-admin">
     <div class="acm-admin-head">
         <div style="display:flex;align-items:center;gap:8px;">
@@ -82,6 +86,7 @@
         </div>
     }
 </div>
+</RequirePlatformAdmin>
 
 @code {
     List<IncubatorSession>? sessions;

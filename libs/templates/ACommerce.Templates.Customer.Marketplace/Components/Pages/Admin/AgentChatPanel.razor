@@ -1,0 +1,315 @@
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components.Web
+@inject ACommerce.Templates.Customer.Marketplace.Services.AgentService Agent
+@inject ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor Executor
+@inject IJSRuntime JS
+
+@*
+    جَزيرَة الوَكيل التَّفاعُلِيَّة — كانَت هِيَ الصَفحَة نَفسَها
+    (‏@@page "/admin/agent" + @@rendermode). فُصِلَت لِأَنّ الحِراسَة
+    لا تَصِحّ داخِل circuit:
+
+      • أَفعال هذه الجَزيرَة (‏SendAsync/‏ApplyAsync/‏ResetAsync) تُنادي
+        AgentService وَ AgentToolExecutor مُباشَرَةً عَبر SignalR — لا
+        عَبر نِقاط الـ POST — فَحِراسَة نِقاط الـ POST وَحدَها لا تَحرُسها.
+      • وَداخِل الـ circuit يَصير HttpContext فارِغاً، فَلا يَقدِر أَيّ
+        حارِس يَقرَأ الـ cookie أَن يَحكُم هُناك.
+
+    فَالحُكم يَقَع في المُضيف الثابِت (‏AgentChat.razor) حَيثُ HttpContext
+    صالِح، وَهذه الجَزيرَة لا تُبَثّ في الصَفحَة أَصلاً إلّا بَعدَ القَبول.
+    وَواصِفات مُكَوِّنات Blazor Server مَحمِيَّة بِـ Data Protection، فَلا
+    يَستَطيع عَميل أَن يَفتَح circuit لِمُكَوِّن لَم يُصَيِّرهُ الخادِم لَه.
+
+    الأَصل التَّفاعُليّ كَما هُوَ — عَبر SignalR (InteractiveServer)
+    بَدَل POST→Redirect→GET. النَتيجَة:
+    - لا تَلَوُّث history (لا navigate في كُلّ مَرَّة)
+    - الـ scroll يَبقَى عِندَ الكِتابَة وَيَتَتَبَّع آخِر دَور
+    - تَجرِبَة chat-like فِعليَّة بِزَمَن حَقيقيّ تَقريباً
+
+    الـ AgentService وَ AgentToolExecutor لا يَزالا كَما هُما — نَفس
+    التَخزين في Marten، نَفس الـ tool execution. التَّفاعُل فَقَط هو
+    الَّذي تَحَوَّل مِن forms إلى @onclick.
+*@
+
+<div class="acs-page acm-admin">
+    <div class="acm-admin-head">
+        <div style="display:flex;align-items:center;gap:12px;">
+            <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin" aria-label="الرُجوع">
+                <AcIcon Name="arrow-right" Size="16" />
+            </a>
+            <div>
+                <h1 class="acm-wizard-title" style="margin:0;"><AcIcon Name="message" Size="24" /> وَكيل إداري</h1>
+                <span style="font-size:11px;color:var(--ac-text-muted);direction:ltr;display:block;">
+                    @Agent.ProviderName / @Agent.ModelName
+                </span>
+            </div>
+        </div>
+        <button type="button" class="ac-btn ac-btn-ghost ac-btn-sm"
+                @onclick="ResetAsync" disabled="@isWorking">
+            <AcIcon Name="x" Size="14" /> مَسح المُحادَثَة
+        </button>
+    </div>
+
+    @if (!Agent.IsConfigured)
+    {
+        <AcAlert Variant="warning"
+                 Message="@($"لا يوجَد مِفتاح {Agent.ProviderName} مَضبوط. أَضِف Agent:ApiKey في appsettings.Local.json أَو مُتَغَيِّر البيئَة المُناسِب ثُمّ أَعِد التَّشغيل.")" />
+    }
+
+    <div class="acm-agent-help">
+        <p style="margin:0;color:var(--ac-text-muted);font-size:13px;line-height:1.7;">
+            اِسأَل الوَكيل بِلُغَتِكَ الطَّبيعيَّة:
+            "أَنشِئ مَتجَر «sukna» لِلسَكَن المُشتَرَك"،
+            "أَضِف دَورَي راكِب وسائِق لِإنجيز"،
+            "عَرِّف حُقول إعلانات roommate_has". كُلّ كِتابَة تُعرَض لِلمُراجَعَة قَبل التَّطبيق.
+        </p>
+    </div>
+
+    <div class="acm-agent-thread">
+        @if (session.Turns.Count == 0)
+        {
+            <div class="acm-agent-empty">
+                <span style="font-size:48px;"><AcIcon Name="message" Size="48" /></span>
+                <p>ابدَأ بِسُؤال أَو طَلَب</p>
+            </div>
+        }
+        else
+        {
+            foreach (var turn in session.Turns)
+            {
+                <div class="acm-agent-turn @(turn.Role == "user" ? "is-user" : "is-assistant")">
+                    <div class="acm-agent-avatar">
+                        <AcIcon Name="@(turn.Role == "user" ? "user" : "message")" Size="24" />
+                    </div>
+                    <div class="acm-agent-body">
+                        @if (!string.IsNullOrEmpty(turn.Text))
+                        {
+                            <div class="acm-agent-text">@turn.Text</div>
+                        }
+                        @if (turn.Tool is not null)
+                        {
+                            <div class="acm-agent-tool @StatusClass(turn.Tool.Status)">
+                                <div class="acm-agent-tool-head">
+                                    <strong>@ToolLabel(turn.Tool.Name)</strong>
+                                    <span class="ac-chip ac-chip-sm">@StatusLabel(turn.Tool.Status)</span>
+                                </div>
+                                <details class="acm-agent-tool-input">
+                                    <summary>عَرض المُعامِلات (JSON)</summary>
+                                    <pre>@FormatJson(turn.Tool.InputJson)</pre>
+                                </details>
+                                @if (!string.IsNullOrEmpty(turn.Tool.Result))
+                                {
+                                    <div class="acm-agent-tool-result">@turn.Tool.Result</div>
+                                }
+                                @if (turn.Tool.Status == "pending")
+                                {
+                                    var toolIdCapture = turn.Tool.Id;
+                                    <div class="acm-agent-tool-actions">
+                                        <button type="button" class="ac-btn ac-btn-primary ac-btn-sm"
+                                                @onclick="() => ApplyAsync(toolIdCapture)"
+                                                disabled="@isWorking">
+                                            <AcIcon Name="check" Size="14" /> تَطبيق
+                                        </button>
+                                        <button type="button" class="ac-btn ac-btn-ghost ac-btn-sm"
+                                                @onclick="() => RejectAsync(toolIdCapture)"
+                                                disabled="@isWorking">
+                                            <AcIcon Name="x" Size="14" /> رَفض
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+        <div id="thread-bottom"></div>
+        @if (isWorking)
+        {
+            <div class="acm-agent-turn is-assistant">
+                <div class="acm-agent-avatar"><AcIcon Name="message" Size="24" /></div>
+                <div class="acm-agent-body">
+                    <div class="acm-agent-text" style="font-style:italic;color:var(--ac-text-muted);">
+                        جارٍ التَّفكير…
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="acm-agent-composer">
+        <textarea @bind="newMessage" @bind:event="oninput" rows="3"
+                  class="ac-input"
+                  disabled="@(isWorking || !Agent.IsConfigured)"
+                  placeholder="اُكتُب طَلَبَك… مَثَلاً: أَنشِئ مَتجَر «sukna» لِلسَكَن المُشتَرَك بِلَون أَخضَر زيتوني"></textarea>
+        <button type="button" class="ac-btn ac-btn-primary"
+                @onclick="SendAsync"
+                disabled="@(isWorking || !Agent.IsConfigured || string.IsNullOrWhiteSpace(newMessage))">
+            <AcIcon Name="send" Size="16" /> إرسال
+        </button>
+    </div>
+</div>
+
+@code {
+    ACommerce.Templates.Customer.Marketplace.Services.AgentSession session = new();
+    string newMessage = "";
+    bool isWorking;
+    bool firstRenderDone;
+
+    protected override async Task OnInitializedAsync()
+    {
+        session = await Agent.LoadSessionAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            firstRenderDone = true;
+            await ScrollToBottom();
+        }
+    }
+
+    async Task SendAsync()
+    {
+        var msg = newMessage?.Trim() ?? "";
+        if (string.IsNullOrEmpty(msg) || isWorking) return;
+        newMessage = "";
+        isWorking = true;
+        StateHasChanged();
+        // اِظهار رِسالَة المُستَخدِم فَوراً (قَبل انتِظار الرَدّ).
+        session.Turns.Add(new ACommerce.Templates.Customer.Marketplace.Services.AgentTurn
+        {
+            Role = "user", Text = msg
+        });
+        StateHasChanged();
+        await ScrollToBottom();
+        // نِداء الـ backend — يَكتُب رِسالَة المُستَخدِم بِنَفسه (تَضاعُف غَير ضارّ
+        // لِأَنّ LoadSessionAsync يَجلِب الـ canonical state بَعد ذلك).
+        session = await Agent.AskAsync(msg);
+        isWorking = false;
+        StateHasChanged();
+        await ScrollToBottom();
+    }
+
+    async Task ApplyAsync(string toolId)
+    {
+        if (isWorking) return;
+        isWorking = true;
+        StateHasChanged();
+        var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
+        if (turn?.Tool is not null)
+        {
+            var (ok, msg) = await Executor.ExecuteAsync(turn.Tool.Name, turn.Tool.InputJson);
+            await Agent.UpdateToolStatusAsync(toolId, ok ? "applied" : "error", msg);
+            session = await Agent.ContinueAfterToolAsync();
+        }
+        isWorking = false;
+        StateHasChanged();
+        await ScrollToBottom();
+    }
+
+    async Task RejectAsync(string toolId)
+    {
+        if (isWorking) return;
+        isWorking = true;
+        StateHasChanged();
+        await Agent.UpdateToolStatusAsync(toolId, "rejected", null);
+        session = await Agent.ContinueAfterToolAsync();
+        isWorking = false;
+        StateHasChanged();
+        await ScrollToBottom();
+    }
+
+    async Task ResetAsync()
+    {
+        if (isWorking) return;
+        await Agent.ResetAsync();
+        session = await Agent.LoadSessionAsync();
+        newMessage = "";
+        StateHasChanged();
+    }
+
+    async Task ScrollToBottom()
+    {
+        if (!firstRenderDone) return;
+        try { await JS.InvokeVoidAsync("scrollAgentToBottom"); } catch { /* ignore JS errors */ }
+    }
+
+    static string ToolLabel(string name) => name switch
+    {
+        "create_tenant"  => "إنشاء مَتجَر",
+        "set_categories" => "تَحديث الفِئات",
+        "set_branding"   => "تَحديث الهُويَّة",
+        "set_regions"    => "تَحديث المُدُن",
+        "set_roles"      => "تَحديث الأَدوار",
+        "set_attributes" => "تَحديث الخَصائِص",
+        _ => name
+    };
+
+    static string StatusLabel(string status) => status switch
+    {
+        "applied"  => "تَمّ",
+        "rejected" => "مَرفوض",
+        "error"    => "خَطَأ",
+        _          => "قَيد المُراجَعَة"
+    };
+
+    static string StatusClass(string status) => status switch
+    {
+        "applied"  => "is-applied",
+        "rejected" => "is-rejected",
+        "error"    => "is-error",
+        _ => ""
+    };
+
+    static string FormatJson(string raw)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(raw);
+            return System.Text.Json.JsonSerializer.Serialize(
+                doc.RootElement,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch { return raw; }
+    }
+}
+
+<style>
+.acm-agent-help { padding:12px 16px; background:var(--ac-surface-2,#fafafa);
+    border-radius:8px; margin-bottom:16px; }
+.acm-agent-thread { display:flex; flex-direction:column; gap:16px;
+    margin-bottom:16px; min-height:200px; }
+.acm-agent-empty { text-align:center; padding:48px 16px; color:var(--ac-text-muted); }
+.acm-agent-turn { display:flex; gap:12px; align-items:flex-start; }
+.acm-agent-turn.is-user { flex-direction:row-reverse; }
+.acm-agent-avatar { font-size:24px; width:40px; height:40px;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--ac-surface-2,#f4f4f5); border-radius:50%; flex-shrink:0; }
+.acm-agent-body { flex:1; max-width:80%; }
+.acm-agent-turn.is-user .acm-agent-body { text-align:start; }
+.acm-agent-text { padding:12px 16px; background:#fff;
+    border:1px solid var(--ac-border,#e5e7eb); border-radius:12px;
+    white-space:pre-wrap; line-height:1.7; }
+.acm-agent-turn.is-user .acm-agent-text { background:var(--ac-primary-soft,#eef2ff); }
+.acm-agent-tool { margin-top:8px; padding:12px; border-radius:12px;
+    background:#fffbeb; border:1px solid #fef3c7; }
+.acm-agent-tool.is-applied { background:#f0fdf4; border-color:#bbf7d0; }
+.acm-agent-tool.is-rejected { background:#fef2f2; border-color:#fecaca; opacity:0.7; }
+.acm-agent-tool.is-error { background:#fef2f2; border-color:#fecaca; }
+.acm-agent-tool-head { display:flex; justify-content:space-between;
+    align-items:center; margin-bottom:8px; }
+.acm-agent-tool-input { font-size:12px; }
+.acm-agent-tool-input summary { cursor:pointer; color:var(--ac-text-muted); }
+.acm-agent-tool-input pre { background:#fff; padding:8px; border-radius:6px;
+    direction:ltr; font-family:monospace; font-size:11px;
+    overflow-x:auto; margin-top:4px; max-height:240px; }
+.acm-agent-tool-result { margin-top:8px; padding:8px 10px;
+    background:#fff; border-radius:6px; font-size:13px; }
+.acm-agent-tool-actions { display:flex; gap:8px; margin-top:10px; }
+.acm-agent-composer { display:flex; gap:8px; align-items:flex-end;
+    padding:12px; background:#fff; border:1px solid var(--ac-border,#e5e7eb);
+    border-radius:12px; position:sticky; bottom:8px; }
+.acm-agent-composer textarea { flex:1; resize:vertical; }
+</style>
