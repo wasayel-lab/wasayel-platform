@@ -283,6 +283,14 @@ else
         }
     </text>;
 
+    /// <summary>قاموس مُغلَق: قيمَة فَتحَة <c>explore</c> إلى وَضع
+    /// الصَفحَة. <c>driverExplore</c> وَحدَه يُفَعِّل فَلتَرَة السائِق.</summary>
+    static readonly Dictionary<string, bool> ExploreModes = new(StringComparer.Ordinal)
+    {
+        [ACommerce.Kit.Roles.RoleComponents.DefaultExplore] = false,
+        [ACommerce.Kit.Roles.RoleComponents.DriverExplore]  = true,
+    };
+
     bool driverMode;
     bool driverHasAnchor;
     double driverAnchorLat, driverAnchorLng;
@@ -305,7 +313,11 @@ else
             var me = await t.LoadAsync<User>(Auth.UserId.Value);
             var role = me is null ? null
                 : tenant.Roles.FirstOrDefault(r => r.Slug == (Role ?? me.ActiveRole));
-            driverMode = role?.CatalogSlug is "driver" or "shipper";
+            driverMode = ACommerce.Kit.Roles.RoleComponentMap.Map(
+                ExploreModes,
+                ACommerce.Kit.Roles.RoleCompositionResolver.Resolve(role?.CatalogSlug).Explore,
+                false,
+                "الاستِكشاف");
             if (driverMode && me is not null)
             {
                 driverHasAnchor = me.HasAnchor;

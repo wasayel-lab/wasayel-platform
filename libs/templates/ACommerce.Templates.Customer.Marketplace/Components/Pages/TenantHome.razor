@@ -22,18 +22,9 @@
            هذا يُحَوِّل /{slug} مِن صَفحَة عامَّة إلى نُقطَة دُخول مُتَفَرِّعَة. *@
         <RoleLanding Slug="@Slug" Tenant="loaded" Role="@Role"/>
     }
-    else if (activeRole?.CatalogSlug == "rider")
+    else if (RoleHome() is { } roleHome)
     {
-        <ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.RiderHome Slug="@Slug" Role="@Role"/>
-    }
-    else if (activeRole?.CatalogSlug == "driver" || activeRole?.CatalogSlug == "shipper")
-    {
-        <ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.DriverHome Slug="@Slug" Role="@Role"/>
-    }
-    else if (activeRole?.CatalogSlug == "vendor" || activeRole?.CatalogSlug == "host")
-    {
-        <ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.SellerHome
-            Slug="@Slug" RoleSlug="@activeRole.CatalogSlug" Role="@Role"/>
+        @roleHome
     }
     else
     {
@@ -249,6 +240,32 @@
 
     ACommerce.Kit.Roles.Role? activeRole;
     bool canCreateListing = true;   // افتراضيّاً true لِمَتاجِر بِلا أَدوار
+
+    /// <summary>الرَئيسِيَّة الَّتي يُصَيِّرُها هذا الدَور — قاموس مُغلَق
+    /// مِن قيمَة فَتحَة <c>home</c> إلى مَندوب تَصيير. <c>null</c> تَعني
+    /// «الفَرع الافتِراضيّ المُضَمَّن أَدناه» لا «لا شَيء»، ولِذلك هو
+    /// أَيضاً قيمَة <c>defaultHome</c> المُسَجَّلَة وقيمَة السُقوط مَعاً.</summary>
+    RenderFragment? RoleHome()
+    {
+        RenderFragment rider  = @<ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.RiderHome Slug="@Slug" Role="@Role"/>;
+        RenderFragment driver = @<ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.DriverHome Slug="@Slug" Role="@Role"/>;
+        RenderFragment seller = @<ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.SellerHome
+                                      Slug="@Slug" RoleSlug="@(activeRole?.CatalogSlug ?? "")" Role="@Role"/>;
+
+        var table = new Dictionary<string, RenderFragment?>(StringComparer.Ordinal)
+        {
+            [ACommerce.Kit.Roles.RoleComponents.DefaultHome] = null,
+            [ACommerce.Kit.Roles.RoleComponents.RiderHome]   = rider,
+            [ACommerce.Kit.Roles.RoleComponents.DriverHome]  = driver,
+            [ACommerce.Kit.Roles.RoleComponents.SellerHome]  = seller,
+        };
+
+        return ACommerce.Kit.Roles.RoleComponentMap.Map(
+            table,
+            ACommerce.Kit.Roles.RoleCompositionResolver.Resolve(activeRole?.CatalogSlug).Home,
+            null,
+            "الرَئيسِيَّة");
+    }
 
     protected override async Task OnParametersSetAsync()
     {

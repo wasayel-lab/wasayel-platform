@@ -11,10 +11,9 @@
       - غَيره  → النَموذَج الكامِل ذو الخَطوَتَين (فِئَة → تَفاصيل)
 *@
 
-@if (activeRole?.CatalogSlug == "rider")
+@if (RoleCreateForm() is { } roleCreateForm)
 {
-    <ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.RiderCreateRequest
-        Slug="@Slug" Tenant="tenant" Err="@Err" />
+    @roleCreateForm
 }
 else
 {
@@ -234,6 +233,28 @@ else
     Tenant? tenant;
     IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.DynField>? dynFields;
     ACommerce.Kit.Roles.Role? activeRole;
+
+    /// <summary>نَموذَج الإنشاء الَّذي يُصَيِّرُه هذا الدَور — قاموس مُغلَق
+    /// مِن قيمَة فَتحَة <c>createListing</c> إلى مَندوب تَصيير. <c>null</c>
+    /// تَعني النَموذَج الكامِل ذا الخَطوَتَين المُضَمَّن أَدناه.</summary>
+    RenderFragment? RoleCreateForm()
+    {
+        RenderFragment riderRequest =
+            @<ACommerce.Templates.Customer.Marketplace.Components.RoleHomes.RiderCreateRequest
+                 Slug="@Slug" Tenant="tenant" Err="@Err" />;
+
+        var table = new Dictionary<string, RenderFragment?>(StringComparer.Ordinal)
+        {
+            [ACommerce.Kit.Roles.RoleComponents.DefaultCreateForm]  = null,
+            [ACommerce.Kit.Roles.RoleComponents.RiderCreateRequest] = riderRequest,
+        };
+
+        return ACommerce.Kit.Roles.RoleComponentMap.Map(
+            table,
+            ACommerce.Kit.Roles.RoleCompositionResolver.Resolve(activeRole?.CatalogSlug).CreateListing,
+            null,
+            "إنشاء الإعلان");
+    }
 
     protected override async Task OnParametersSetAsync()
     {

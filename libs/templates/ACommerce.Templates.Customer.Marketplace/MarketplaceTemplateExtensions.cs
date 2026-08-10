@@ -3387,36 +3387,68 @@ public static class MarketplaceTemplateExtensions
         // الأَيقونَة (Android + Edge).
         var prefix = string.IsNullOrEmpty(role) ? $"/{slug}" : $"/{slug}/r/{role}";
         var icons  = new[] { new { src = iconUrl, sizes = "any", type = "image/svg+xml" } };
-        return r?.CatalogSlug switch
+
+        // المُختَصَرات مِرآة الـ nav لا مَعجَم ثالِث: كُلّ مُختَصَر أَساسيّ
+        // هُنا يُقابِل تَبويباً في نَفس عائِلَة التَّنَقُّل (نَفس المَسار
+        // ونَفس التَّسمِيَة)، والزائِد عَنه هو <c>extras</c> — السَطح الَّذي
+        // يَبلُغُه هذا الدَور تَحديداً. فَالفَتحَتانِ تَكفِيانِ، ولا يَلزَم
+        // فَتحَة سادِسَة لِلمُختَصَرات.
+        var composition = ACommerce.Kit.Roles.RoleCompositionResolver.Resolve(r?.CatalogSlug);
+
+        object[] DefaultShortcuts() => new object[]
         {
-            "rider" => new object[]
+            new { name = "اِستِكشاف",      short_name = "تَصَفُّح",url = $"{prefix}/explore",      icons },
+            new { name = "حِسابي",        short_name = "حِسابي",  url = $"{prefix}/me",           icons }
+        };
+
+        // قاموس مُغلَق: قيمَة فَتحَة nav ← المُختَصَرات الأَساسيَّة.
+        var navTable = new Dictionary<string, Func<object[]>>(StringComparer.Ordinal)
+        {
+            [ACommerce.Kit.Roles.RoleComponents.RiderNav] = () => new object[]
             {
                 new { name = "اِنشُر مِشواراً", short_name = "مِشوار", url = $"{prefix}/create-listing", icons },
-                new { name = "طَلَباتي",      short_name = "طَلَباتي", url = $"{prefix}/me/listings",   icons },
-                new { name = "السائِقون",     short_name = "سائِقون",  url = $"{prefix}/drivers",       icons }
+                new { name = "طَلَباتي",      short_name = "طَلَباتي", url = $"{prefix}/me/listings",   icons }
             },
-            "driver" or "shipper" => new object[]
+            [ACommerce.Kit.Roles.RoleComponents.DriverNav] = () => new object[]
             {
                 new { name = "مَشاوير مُتاحَة", short_name = "مَشاوير", url = $"{prefix}/explore",      icons },
-                new { name = "عُروضي",          short_name = "عُروضي",  url = $"{prefix}/me/offers",   icons },
-                new { name = "مَنطِقَتي",       short_name = "مَنطِقَتي",url = $"{prefix}/me/area",    icons }
+                new { name = "عُروضي",          short_name = "عُروضي",  url = $"{prefix}/me/offers",   icons }
             },
-            "vendor" or "host" => new object[]
+            [ACommerce.Kit.Roles.RoleComponents.VendorNav] = () => new object[]
             {
                 new { name = "إعلان جَديد",    short_name = "إعلان",   url = $"{prefix}/create-listing", icons },
                 new { name = "إعلاناتي",       short_name = "إعلاناتي",url = $"{prefix}/me/listings",   icons },
                 new { name = "المُحادَثات",     short_name = "رَسائِل", url = $"{prefix}/chats",          icons }
             },
-            "tenant_admin" => new object[]
+            [ACommerce.Kit.Roles.RoleComponents.AdminNav] = () => new object[]
             {
                 new { name = "لَوحَة الإدارَة", short_name = "إدارَة",  url = $"{prefix}/manage", icons }
             },
-            _ => new object[]
-            {
-                new { name = "اِستِكشاف",      short_name = "تَصَفُّح",url = $"{prefix}/explore",      icons },
-                new { name = "حِسابي",        short_name = "حِسابي",  url = $"{prefix}/me",           icons }
-            }
+            [ACommerce.Kit.Roles.RoleComponents.DefaultNav] = DefaultShortcuts,
         };
+
+        // قاموس مُغلَق: قيمَة في <c>extras</c> ← مُختَصَر إضافيّ (أَو لا شَيء).
+        // <c>roleHomeHero</c> مُسَجَّل بِلا مُختَصَر: مُكَوِّن يَتيم مُوَثَّق
+        // لا سَطح لَه يُبلَغ، ولا يُسنَد إلى دَور أَصلاً.
+        var extraTable = new Dictionary<string, Func<object?>>(StringComparer.Ordinal)
+        {
+            [ACommerce.Kit.Roles.RoleComponents.DriversList] = () =>
+                new { name = "السائِقون",     short_name = "سائِقون",  url = $"{prefix}/drivers",       icons },
+            [ACommerce.Kit.Roles.RoleComponents.DriverArea] = () =>
+                new { name = "مَنطِقَتي",       short_name = "مَنطِقَتي",url = $"{prefix}/me/area",    icons },
+            [ACommerce.Kit.Roles.RoleComponents.RoleHomeHero] = () => null,
+        };
+
+        var baseShortcuts = ACommerce.Kit.Roles.RoleComponentMap.Map(
+            navTable, composition.Nav, DefaultShortcuts, "مُختَصَرات التَّنَقُّل")();
+
+        var extraShortcuts = composition.Extras
+            .Select(e => ACommerce.Kit.Roles.RoleComponentMap.Map(
+                extraTable, e, () => (object?)null, "المُختَصَرات الإضافيَّة")())
+            .Where(x => x is not null)
+            .Select(x => x!);
+
+        return baseShortcuts.Concat(extraShortcuts).ToArray();
     }
 
     // ─── PWA — icon builder (SVG ديناميكيّ) ───────────────────────────

@@ -189,48 +189,60 @@ else
         var usesCart = listingPattern is "marketplace" or "service" or null
                        && roleSlug is not ("rider" or "driver" or "shipper" or "host");
 
-        switch (roleSlug)
+        // ٥ تَبويبات: رَئيسيّة + استِكشاف + مُفَضَّلَة + رَسائل + حِسابي.
+        // (الصَّفقات/السَّلَّة/الإشعارات في nav الحاسوب + صَفحَة حِسابي.)
+        void DefaultTabs()
         {
-            case "rider":
+            Add("explore",      "استِكشاف", "search");
+            Add("favorites",    "مُفَضَّلَة",   "heart");
+            Add("chats",        "رَسائل",   "message", badge: msgBadge);
+            Add("deals",        "صَفقاتي",  "receipt", bottom: false);
+            if (usesCart) Add("cart", "السَّلَّة", "package", bottom: false);
+            Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
+        }
+
+        // قاموس مُغلَق: قيمَة فَتحَة nav ← مَندوب بِناء التَّبويبات.
+        var navTable = new Dictionary<string, Action>(StringComparer.Ordinal)
+        {
+            [ACommerce.Kit.Roles.RoleComponents.RiderNav] = () =>
+            {
                 // ٤ تَبويبات: رَئيسيّة + طَلَباتي + رَسائل + حِسابي.
                 Add("me/listings",  "طَلَباتي", "package");
                 Add("chats",        "رَسائل",   "message", badge: msgBadge);
                 Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
-                break;
-            case "driver":
-            case "shipper":
+            },
+            [ACommerce.Kit.Roles.RoleComponents.DriverNav] = () =>
+            {
                 // ٥ تَبويبات: رَئيسيّة + مَشاوير + عُروضي + رَسائل + حِسابي.
                 Add("explore",      "مَشاوير",  "search");
                 Add("me/offers",    "عُروضي",   "package");
                 Add("chats",        "رَسائل",   "message", badge: msgBadge);
                 Add("me/searches",  "بَحثي",    "bell",    badge: notifBadge, bottom: false);
                 Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
-                break;
-            case "vendor":
-            case "host":
+            },
+            [ACommerce.Kit.Roles.RoleComponents.VendorNav] = () =>
+            {
                 // ٥ تَبويبات: رَئيسيّة + إعلاناتي + صَفقات + رَسائل + حِسابي.
                 Add("me/listings",  "إعلاناتي", "package");
                 Add("deals",        "صَفقات",   "receipt");
                 Add("chats",        "رَسائل",   "message", badge: msgBadge);
                 Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
-                break;
-            case "tenant_admin":
+            },
+            [ACommerce.Kit.Roles.RoleComponents.AdminNav] = () =>
+            {
                 // ٤ تَبويبات: رَئيسيّة + إدارَة + رَسائل + حِسابي.
                 Add("manage",       "إدارَة",   "settings");
                 Add("chats",        "رَسائل",   "message", badge: msgBadge);
                 Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
-                break;
-            default:
-                // ٥ تَبويبات: رَئيسيّة + استِكشاف + مُفَضَّلَة + رَسائل + حِسابي.
-                // (الصَّفقات/السَّلَّة/الإشعارات في nav الحاسوب + صَفحَة حِسابي.)
-                Add("explore",      "استِكشاف", "search");
-                Add("favorites",    "مُفَضَّلَة",   "heart");
-                Add("chats",        "رَسائل",   "message", badge: msgBadge);
-                Add("deals",        "صَفقاتي",  "receipt", bottom: false);
-                if (usesCart) Add("cart", "السَّلَّة", "package", bottom: false);
-                Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
-                break;
-        }
+            },
+            [ACommerce.Kit.Roles.RoleComponents.DefaultNav] = DefaultTabs,
+        };
+
+        ACommerce.Kit.Roles.RoleComponentMap.Map(
+            navTable,
+            ACommerce.Kit.Roles.RoleCompositionResolver.Resolve(roleSlug).Nav,
+            DefaultTabs,
+            "التَّنَقُّل")();
 
         var meHref = Link("me");
         ar.Top.Add(new(meHref, "حِسابي", "user"));
