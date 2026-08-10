@@ -1,0 +1,51 @@
+@inject Services.TenantAdminGuard Guard
+
+@*
+    بَوّابَة صَفَحات إدارَة المَتجَر (‏/admin/tenants/{slug}/*). تَسأَل
+    TenantAdminGuard — نَفس القَرار الَّذي تَسأَلُه نِقاط الـ POST — ثُمَّ
+    تَعرِض المُحتَوى أَو حالَة «غَير مُصَرَّح».
+
+    شَقيقَتُها RequirePlatformAdmin تَحرُس صَفَحات المَنصَّة (‏/admin،
+    ‏/admin/audit، ‏/admin/monitor، ‏/admin/fixtures)؛ هذه تَحرُس ما هُوَ
+    مَحصور بِمَتجَر واحِد.
+
+    حالَة الرَّفض لا تَذكُر شَيئاً مِن المَتجَر — لا اسمَه وَلا حَتّى هَل
+    هُوَ مَوجود أَصلاً — فَلا تَصلُح الصَفحَة عَدّاداً يُعَدِّد المَتاجِر.
+*@
+
+@if (_allowed)
+{
+    @ChildContent
+}
+else
+{
+    <div class="studio-root">
+        <div class="auth-wrap">
+            <div class="auth-card" style="text-align:center;">
+                <div class="auth-logo-mark" style="background:linear-gradient(135deg,#dc2626,#ea580c);">
+                    <AcIcon Name="shield" Size="28" />
+                </div>
+                <h1 class="auth-title">غَير مُصَرَّح</h1>
+                <p class="auth-sub">
+                    إدارَة المَتجَر لِمالِكِه أَو لِمَن يَحمِل صَلاحِيَّة
+                    إدارَتِه. سَجِّل دُخولَكَ ثُمَّ أَعِد المُحاوَلَة.
+                </p>
+                <a class="st-btn st-btn-primary st-btn-block st-btn-lg" href="/studio/auth">
+                    دُخول الاستوديو
+                </a>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    // الافتِراض رَفض: لَو فَشِلَ الفَحص أَو لَم يَجرِ بَعد، لا يُصَيَّر
+    // ChildContent إطلاقاً.
+    bool _allowed;
+
+    protected override async Task OnParametersSetAsync()
+        => _allowed = await Guard.CanAdministerAsync(Slug);
+}

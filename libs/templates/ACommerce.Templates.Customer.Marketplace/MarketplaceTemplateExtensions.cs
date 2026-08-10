@@ -41,6 +41,10 @@ public static class MarketplaceTemplateExtensions
         services.AddScoped<Gates.GatePipeline>();
         services.AddScoped<Commands.AcceptTermsHandler>();
 
+        // بَوّابَة إدارَة المَتجَر — تَعريف واحِد يَقرَؤُه طَرَفا القِراءَة
+        // (صَفَحات /admin/tenants/{slug}/*) وَالكِتابَة (نِقاط الـ POST).
+        services.AddScoped<Services.TenantAdminGuard>();
+
         // ─── طبقة التحليل الاستثماري (الحاضنة) ──────────────────────────
         services.AddSingleton<Services.Incubator.SaudiDataProvider>();
         services.AddSingleton<Services.Incubator.FeasibilityPromptBuilder>();
@@ -1570,7 +1574,8 @@ public static class MarketplaceTemplateExtensions
                    Services.Incubator.StudioAuth auth,
                    Services.Audit.AuditWriter audit) =>
         {
-            if (!await CanAdministerTenantAsync(store, auth, req, slug)) return Forbidden();
+            if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
+                return Forbidden();
             await using var g = store.QuerySession();
             var tenant = await g.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
             if (tenant is null ||
@@ -1597,7 +1602,8 @@ public static class MarketplaceTemplateExtensions
                    Services.Incubator.StudioAuth auth,
                    Services.Audit.AuditWriter audit) =>
         {
-            if (!await CanAdministerTenantAsync(store, auth, req, slug)) return Forbidden();
+            if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
+                return Forbidden();
             await using var g = store.QuerySession();
             var tenant = await g.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
             if (tenant is null) return Results.Redirect($"/admin/tenants/{slug}/users");
@@ -1629,7 +1635,8 @@ public static class MarketplaceTemplateExtensions
                    Services.Incubator.StudioAuth auth,
                    Services.Audit.AuditWriter audit) =>
         {
-            if (!await CanAdministerTenantAsync(store, auth, req, slug)) return Forbidden();
+            if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
+                return Forbidden();
             await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.roles_save");
             await using var s = store.LightweightSession();
             var t = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
@@ -1686,7 +1693,8 @@ public static class MarketplaceTemplateExtensions
                    Services.Incubator.StudioAuth auth,
                    Services.Audit.AuditWriter audit) =>
         {
-            if (!await CanAdministerTenantAsync(store, auth, req, slug)) return Forbidden();
+            if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
+                return Forbidden();
             await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.categories_save");
             var catsRaw = req.Form["categories"].ToString();
             string Back(string err) => $"/admin/tenants/{slug}/categories?err={err}";
@@ -1729,7 +1737,8 @@ public static class MarketplaceTemplateExtensions
                    Services.Incubator.StudioAuth auth,
                    Services.Audit.AuditWriter audit) =>
         {
-            if (!await CanAdministerTenantAsync(store, auth, req, slug)) return Forbidden();
+            if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
+                return Forbidden();
             await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.branding_save");
             var name    = req.Form["name"].ToString().Trim();
             var tagline = req.Form["tagline"].ToString().Trim();
@@ -1765,7 +1774,8 @@ public static class MarketplaceTemplateExtensions
                    Services.Incubator.StudioAuth auth,
                    Services.Audit.AuditWriter audit) =>
         {
-            if (!await CanAdministerTenantAsync(store, auth, req, slug)) return Forbidden();
+            if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
+                return Forbidden();
             await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.pwa_save");
             await using var s = store.LightweightSession();
             var t = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
@@ -1810,7 +1820,8 @@ public static class MarketplaceTemplateExtensions
                    Services.Incubator.StudioAuth auth,
                    Services.Audit.AuditWriter audit) =>
         {
-            if (!await CanAdministerTenantAsync(store, auth, req, slug)) return Forbidden();
+            if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
+                return Forbidden();
             await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.regions_save");
             var raw = req.Form["regions"].ToString();
             if (string.IsNullOrWhiteSpace(raw))
@@ -1897,7 +1908,8 @@ public static class MarketplaceTemplateExtensions
                    Services.Incubator.StudioAuth auth,
                    Services.Audit.AuditWriter audit) =>
         {
-            if (!await CanAdministerTenantAsync(store, auth, req, slug)) return Forbidden();
+            if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
+                return Forbidden();
             await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.attributes_save");
             var scopeStr = req.Form["scope"].ToString().Trim();
             var defsRaw  = req.Form["defs"].ToString();
@@ -2792,36 +2804,13 @@ public static class MarketplaceTemplateExtensions
         }
 
         // ─── حارِس ادمن المَتجَر — لِكُلّ /admin/tenants/{slug}/* ─────────
-        // يَقبَل: (أ) مالِك المَتجَر مِن Studio (auth cookie لِلـ studio)،
-        //         (ب) مُستَخدِم مُسَجَّل دُخولُه بِدَور لَه tenant.manage.
-        // يَرفُض كُلّ شَيء آخَر (يَرجِع 403 صَريحاً). كانَ مَفقوداً تَماماً
-        // فَصارَت كُلّ endpoints الـ admin مَفتوحَة عَلى الإنتَرنِت.
-        async Task<bool> CanAdministerTenantAsync(
-            IDocumentStore docStore, Services.Incubator.StudioAuth studioAuth,
-            HttpRequest req, string slug)
-        {
-            await using var globalQs = docStore.QuerySession();
-            var tenant = await globalQs.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
-            if (tenant is null) return false;
-
-            // (أ) مالِك المَتجَر مُسَجَّل دُخولاً عَبر Studio.
-            studioAuth.Load();
-            if (studioAuth.IsAuthenticated && tenant.OwnerUserId == studioAuth.UserId!.Value)
-                return true;
-
-            // (ب) مُستَخدِم مُسَجَّل دُخولاً في نَفس المَتجَر بِدَور إداريّ.
-            var token = AuthSession.ResolveToken(req, slug);
-            var parsed = AuthHandlers.ParseToken(token);
-            if (parsed is null) return false;
-            var (userId, tenantSlug, _) = parsed.Value;
-            if (tenantSlug != slug) return false;
-
-            await using var tenantQs = docStore.QuerySession(slug);
-            var me = await tenantQs.LoadAsync<User>(userId);
-            if (me is null) return false;
-            return ACommerce.Kit.Roles.RolePermissions.Has(
-                tenant.Roles, me.ActiveRole, "tenant.manage");
-        }
+        // القَرار سَكَنَ في Services.TenantAdminGuard لِيَقرَأَه طَرَفا
+        // القِراءَة وَالكِتابَة مَعاً. كانَ دالَّةً مَحَلِّيَّة هُنا لا تَراها
+        // صَفَحات Razor، فَحُرِسَت نِقاط الـ POST وَبَقِيَت الصَفَحات
+        // تُصَيَّر كامِلَةً لِأَيّ طَلَب مَجهول. نِقاط الـ POST أَعلاه
+        // تَقصِد التَّعريف الواحِد مُباشَرَةً — بِلا اسم وَسيط هُنا يُغري
+        // بِنُسخَة ثانِيَة تَنجَرِف. وَأَيّ endpoint جَديد تَحتَ هذا المَسار
+        // يَبدَأ بِـ Services.TenantAdminGuard.CanAdministerAsync.
 
         // مُخرَج 403 مُوَحَّد بَدَلاً مِن تَكرارِه في كُلّ endpoint.
         static IResult Forbidden() => Results.StatusCode(StatusCodes.Status403Forbidden);

@@ -1,5 +1,6 @@
 @page "/admin/tenants/{slug}/pwa"
 @inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard Guard
 @using ACommerce.Kit.Roles
 
 @*
@@ -12,6 +13,7 @@
     (تَحت "(بِلا دَور)").
 *@
 
+<RequireTenantAdmin Slug="@Slug">
 <div class="acs-page acm-admin">
     @if (tenant is null)
     {
@@ -114,6 +116,7 @@
         }
     }
 </div>
+</RequireTenantAdmin>
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
@@ -124,6 +127,11 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        // البَوّابَة قَبل أَيّ استِعلام: الرَّفض يَعني ألّا تُحَمَّل
+        // بَيانات المَتجَر أَصلاً، لا أَن تُحَمَّل ثُمَّ تُحجَب عَن
+        // التَّصيير. القَرار مَحفوظ لِلطَّلَب، فَنِداء RequireTenantAdmin
+        // بَعدَه لا يُكَلِّف استِعلاماً ثانِياً.
+        if (!await Guard.CanAdministerAsync(Slug)) return;
         await using var s = Store.QuerySession();
         tenant = await s.LoadAsync<Tenant>(Slug);
     }

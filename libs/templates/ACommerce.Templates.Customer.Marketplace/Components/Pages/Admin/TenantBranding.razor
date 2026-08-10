@@ -1,11 +1,13 @@
 @page "/admin/tenants/{slug}/branding"
 @inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard Guard
 
 @*
     مُحَرِّر الهُويَّة البَصَريّة — الاسم + الشِعار + اللَون + المَدينَة
     الافتراضيّة + قَناة الدُخول. كَذلك مُعايَنَة بَصَريّة لِلَون.
 *@
 
+<RequireTenantAdmin Slug="@Slug">
 <div class="acs-page acm-admin">
     @if (tenant is null)
     {
@@ -111,6 +113,7 @@
         </form>
     }
 </div>
+</RequireTenantAdmin>
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
@@ -121,6 +124,11 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        // البَوّابَة قَبل أَيّ استِعلام: الرَّفض يَعني ألّا تُحَمَّل
+        // بَيانات المَتجَر أَصلاً، لا أَن تُحَمَّل ثُمَّ تُحجَب عَن
+        // التَّصيير. القَرار مَحفوظ لِلطَّلَب، فَنِداء RequireTenantAdmin
+        // بَعدَه لا يُكَلِّف استِعلاماً ثانِياً.
+        if (!await Guard.CanAdministerAsync(Slug)) return;
         await using var s = Store.QuerySession();
         tenant = await s.LoadAsync<Tenant>(Slug);
     }
