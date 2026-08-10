@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using ACommerce.Kit.Roles;
 using ACommerce.Kit.Tenants;
 using ACommerce.Platform.Shared;
 using Marten;
@@ -316,7 +317,20 @@ public sealed class AgentService
     // مَكتوبَة كَ JSON خام لِتُمَرَّر مُباشَرَةً إلى الـ backends.
     // internal (لا private): نَفس التَّعريفات مَصدَر مُخَطَّطات
     // AgentToolValidator — مَصدَر واحِد لِلمُخَطَّط تَوليداً وفَرضاً.
-    internal static List<AgentToolDef> BuildAbstractTools() => new()
+    /// <summary>
+    /// <para>الأَدَوات في سِياق المَنصَّة — نَفس ما كانَ حَرفاً. تُبقي
+    /// <c>AgentToolValidator</c> عَلى خَريطَتِه السّاكِنَة كَما هي.</para>
+    /// </summary>
+    internal static List<AgentToolDef> BuildAbstractTools() =>
+        BuildAbstractTools(TenantRoleSet.Platform);
+
+    /// <summary>
+    /// <para><b>الأَدَوات في سِياق لَقطَة أَدوار</b>. الفَرق الوَحيد
+    /// عَن السِياق العامّ هو تَعداد <c>set_roles</c>: في سِياق مُستَأجِر
+    /// يَضُمّ أَدوارَه المُؤَلَّفَة المُعتَمَدَة. بَقِيَّة الأَدَوات نَصّها
+    /// ساكِن ولا يَتَغَيَّر بِالمُستَأجِر.</para>
+    /// </summary>
+    internal static List<AgentToolDef> BuildAbstractTools(TenantRoleSet roleSet) => new()
     {
         new("create_tenant",
             "إنشاء مَتجَر (مُستَأجِر) جَديد. الـ slug يَجِب أَن يَكون فَريداً.",
@@ -334,7 +348,16 @@ public sealed class AgentService
             "إعادَة كِتابَة قائِمَة أَدوار المَتجَر بِالكامِل. اِترُكها فارِغَة "
           + "لِنَمَط user-فَرد. كُلّ دَور لَه scope_id بروفايل خاصّ (يَظهَر "
           + "في snapshot أَدناه).",
-            SetRolesSchema),
+            ReferenceEquals(roleSet, TenantRoleSet.Platform)
+                ? SetRolesSchema                       // النَّصّ السّاكِن كَما كان
+                : SetRolesSchemaFor(roleSet)),
+        new("define_role",
+            "تَأليف دَور جَديد لِمَتجَر — دَور لا يُوجَد في كاتالوج المَنصَّة. "
+          + "يُخزَّن التَعريف <b>مُعَلَّقاً</b> ولا يَراه أَيّ مُستَخدِم حَتَّى "
+          + "يَعتَمِدَه مُشرِف المَنصَّة. الـ slug لا يُصادِم أَسماء الكاتالوج، "
+          + "والصَلاحِيّات وأَنواع الحُقول ومُكَوِّنات التَركيب مِن المَعاجِم "
+          + "المُغلَقَة حَصراً — الخُروج عَنها يُرجِع رَمز خَرق تُصَحِّح عَلَيه.",
+            DefineRoleSchema),
         new("set_attributes",
             "إعادَة كِتابَة الخَصائِص الديناميكِيَّة لِنِطاق (scope) مَحَدَّد. "
           + "النِّطاق إمّا Guid فِئَة أَو scope_id بروفايل دَور أَو "
@@ -423,10 +446,10 @@ public sealed class AgentService
     private static readonly string CatalogSlugsCsv =
         string.Join("، ", ACommerce.Kit.Roles.RoleCatalog.All.Select(t => t.Slug));
 
-    /// <summary>تَعداد JSON لِنَفس الـ slugs — <c>["customer", …]</c>.</summary>
-    private static readonly string CatalogSlugsEnumJson =
-        "[" + string.Join(", ",
-            ACommerce.Kit.Roles.RoleCatalog.All.Select(t => "\"" + t.Slug + "\"")) + "]";
+    // (كانَ هُنا CatalogSlugsEnumJson — تَعداد JSON لِنَفس الـ slugs.
+    //  نُقِلَ إلى SetRolesSchemaFor لِأَنّ التَعداد صارَ يُشتَقّ مِن
+    //  لَقطَة أَدوار قَد تَكون مُستَأجِراً لا مِن الكاتالوج وَحدَه —
+    //  والقيمَة السّاكِنَة لَم تَتَغَيَّر: لَقطَة المَنصَّة هي الكاتالوج.)
 
     /// <summary>سُطور «slug — تَسمِيَة: وَصف» لِقاعِدَة الأَدوار في
     /// رِسالَة النِّظام.</summary>
@@ -452,24 +475,174 @@ public sealed class AgentService
     /// اختِراع دَور خارِج الكاتالوج — الحارِس هو الكاتالوج نَفسُه بَدَل
     /// نُسخَة مِنه.</para>
     /// </summary>
-    private static readonly string SetRolesSchema = $$"""
+    private static readonly string SetRolesSchema = SetRolesSchemaFor(TenantRoleSet.Platform);
+
+    /// <summary>
+    /// <para><b>نَفس الاشتِقاق، بِمَصدَر يُمكِن أَن يَكون مُستَأجِراً</b>.
+    /// كانَ التَعداد يُقرَأ مِن <c>RoleCatalog.All</c> مُباشَرَةً؛ صارَ
+    /// يُقرَأ مِن لَقطَة أَدوار — و<see cref="TenantRoleSet.Platform"/>
+    /// هي الكاتالوج بِعَينِه، فَالحَقل السّاكِن أَعلاه <b>نَفس النَّصّ
+    /// حَرفاً</b> كَما كانَ.</para>
+    ///
+    /// <para>وحينَ يُبنى في سِياق مُستَأجِر يَضُمّ التَعداد أَدوارَه
+    /// المُؤَلَّفَة المُعتَمَدَة — فَيَستَطيع الوَكيل أَن يُسَكِّن دَوراً
+    /// أَلَّفَه هو نَفسُه في نَفس المَتجَر، ولا يَستَطيع تَسكينَه في
+    /// مَتجَر آخَر.</para>
+    /// </summary>
+    private static string SetRolesSchemaFor(TenantRoleSet roleSet)
+    {
+        var csv  = string.Join("، ", roleSet.All.Select(t => t.Slug));
+        var json = "[" + string.Join(", ", roleSet.All.Select(t => "\"" + t.Slug + "\"")) + "]";
+
+        return $$"""
+        {
+          "type": "object",
+          "required": ["slug", "roles"],
+          "properties": {
+            "slug": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+            "roles": {
+              "type": "array",
+              "description": "قائِمَة catalog slugs مَختارَة مِن: {{csv}}",
+              "items": {
+                "type": "string",
+                "enum": {{json}}
+              }
+            },
+            "default_role": {
+              "type": "string",
+              "description": "أَيّ دَور يُسَكَّن لِلمُستَخدِم الجَديد افتراضيّاً."
+            }
+          }
+        }
+        """;
+    }
+
+    // ─── define_role — مُخَطَّطُه شَكل RoleDefinition نَفسُه ────────────
+    /// <summary>حاوِيَة نَصّ مُوَطَّن — العَرَبيَّة إلزامِيَّة كَما في
+    /// <c>LocalizedText</c>، والإنجليزيَّة مَوضِع مَحجوز لا يَقرَؤُه
+    /// شَيء بَعد.</summary>
+    private const string LocalizedTextSchema = """
     {
       "type": "object",
-      "required": ["slug", "roles"],
+      "required": ["ar"],
+      "additionalProperties": false,
       "properties": {
-        "slug": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
-        "roles": {
+        "ar": {"type": "string", "description": "العَرَبيَّة بِتَشكيل خَفيف — إلزامِيَّة"},
+        "en": {"type": ["string", "null"], "description": "مَحجوزَة — اُترُكها null"}
+      }
+    }
+    """;
+
+    /// <summary>مُفرَدات المَعاجِم المُغلَقَة كَنُصوص وَصف — تُشتَقّ مِن
+    /// نَفس القَوائِم الَّتي يَفرِضُها <c>RoleDefinitionValidator</c>،
+    /// فَلا تَنحَرِف عَنها.</summary>
+    private static readonly string PermissionVocabCsv =
+        string.Join("، ", ACommerce.Kit.Roles.PermissionCatalog.All);
+
+    private static readonly string FieldTypeVocabCsv =
+        string.Join("، ", ACommerce.Kit.Roles.RoleFieldTypes.All);
+
+    private static readonly string ComponentVocabCsv =
+        string.Join("، ", ACommerce.Kit.Roles.RoleComponents.All);
+
+    private static readonly string AffinityVocabCsv =
+        string.Join("، ", ACommerce.Kit.Roles.RoleDealPatternAffinity.All);
+
+    /// <summary>
+    /// <para><b>شَكل <c>RoleDefinition</c> حَرفِيّاً</b> — نَفس المَفاتيح
+    /// بِنَفس أَسمائِها camelCase، و<c>additionalProperties: false</c>
+    /// لِيُطابِق <c>UnmappedMemberHandling.Disallow</c> في
+    /// <c>ParseDefinition</c>: ما يَرفُضُه المُخَطَّط يَرفُضُه القارِئ،
+    /// فَلا يَمُرّ مِفتاح مَجهول مِن أَحَدِهِما ويَسقُط في الآخَر.</para>
+    ///
+    /// <para><b>ومُفترَق مُعلَن: المَعاجِم المُغلَقَة وَصفٌ هُنا وفَرضٌ
+    /// في المُصادِق</b>. كانَ يُمكِن تَرميزُها <c>enum</c> في المُخَطَّط
+    /// (كَما في <c>set_roles</c>)، والاختِيار وَقَعَ عَلى الوَصف لِسَبَبَين:
+    /// أَنّ <c>RoleDefinitionValidator</c> هو المَقعَد المَوضوع لِهذا
+    /// بِالضَبط ويُعطي <b>رَمز خَرق ثابِتاً</b> يَقرَؤُه الوَكيل ويُصَحِّح
+    /// عَلَيه (<c>permission_out_of_vocabulary</c> أَوضَح مِن «لا يُطابِق
+    /// enum»)، وأَنّ مَصدَرَين لِلمَعجَم يَنحَرِفان بِصَمت. المُخَطَّط
+    /// يَحرُس <b>الشَكل</b>، والمُصادِق يَحرُس <b>المُفرَدات</b>.</para>
+    /// </summary>
+    private static readonly string RoleDefinitionSchema = $$"""
+    {
+      "type": "object",
+      "required": ["slug", "icon", "label", "description", "permissions"],
+      "additionalProperties": false,
+      "properties": {
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "مُعَرِّف ASCII فَريد. لا يُصادِم أَسماء الكاتالوج ({{CatalogSlugsCsv}}) — التَصادُم يُرفَض بِرَمز slug_shadows_platform_catalog."
+        },
+        "icon": {"type": "string", "description": "إيموجي واحِد"},
+        "homeRoute": {"type": "string", "description": "المَسار بَعد الدُخول، يَبدَأ بِـ / — أَو فارِغ لِلصَفحَة الافتِراضِيَّة"},
+        "label":       {{LocalizedTextSchema}},
+        "description": {{LocalizedTextSchema}},
+        "permissions": {
           "type": "array",
-          "description": "قائِمَة catalog slugs مَختارَة مِن: {{CatalogSlugsCsv}}",
+          "items": {"type": "string"},
+          "description": "مِن هذا المَعجَم حَصراً: {{PermissionVocabCsv}}"
+        },
+        "fields": {
+          "type": "array",
+          "description": "حُقول تُجمَع في الـ onboarding",
           "items": {
-            "type": "string",
-            "enum": {{CatalogSlugsEnumJson}}
+            "type": "object",
+            "required": ["code", "label", "type"],
+            "additionalProperties": false,
+            "properties": {
+              "code":  {"type": "string"},
+              "label": {{LocalizedTextSchema}},
+              "type": {
+                "type": "string",
+                "description": "مِن: {{FieldTypeVocabCsv}}"
+              },
+              "isRequired": {"type": "boolean"},
+              "options": {
+                "type": "array",
+                "description": "إلزامِيَّة لِـ SingleSelect و MultiSelect",
+                "items": {
+                  "type": "object",
+                  "required": ["value", "label"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "value": {"type": "string"},
+                    "label": {{LocalizedTextSchema}}
+                  }
+                }
+              }
+            }
           }
         },
-        "default_role": {
-          "type": "string",
-          "description": "أَيّ دَور يُسَكَّن لِلمُستَخدِم الجَديد افتراضيّاً."
+        "composition": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "تَركيب الواجِهَة — كُلّ قيمَة مِن مَعجَم المُكَوِّنات القائِم حَصراً، ولا مُكَوِّن جَديد: {{ComponentVocabCsv}}",
+          "properties": {
+            "home":          {"type": "string"},
+            "createListing": {"type": "string"},
+            "nav":           {"type": "string"},
+            "explore":       {"type": "string"},
+            "publicProfile": {"type": ["string", "null"]},
+            "extras":        {"type": "array", "items": {"type": "string"} }
+          }
+        },
+        "dealPatternAffinity": {
+          "type": ["string", "null"],
+          "description": "نَمَط الصَفقَة الَّذي يَجُرّ إلَيه — مِن: {{AffinityVocabCsv}} — أَو null"
         }
+      }
+    }
+    """;
+
+    private static readonly string DefineRoleSchema = $$"""
+    {
+      "type": "object",
+      "required": ["slug", "definition"],
+      "properties": {
+        "slug": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$", "description": "slug المَتجَر"},
+        "definition": {{RoleDefinitionSchema}}
       }
     }
     """;
@@ -537,7 +710,15 @@ public sealed class AgentService
 public sealed class AgentToolExecutor
 {
     private readonly IDocumentStore _store;
-    public AgentToolExecutor(IDocumentStore store) { _store = store; }
+
+    /// <summary>لَقطَة أَدوار المُستَأجِر — يَقرَؤُها المُنَفِّذ مَرَّتَين:
+    /// لِبِناء مُخَطَّط <c>set_roles</c> في سِياقِه، ولِيَجِد
+    /// <c>set_roles</c> دَوراً أَلَّفَه المُستَأجِر لا يَعرِفُه
+    /// الكاتالوج. وهي أَيضاً مَن يَكتُب تَعريف <c>define_role</c>.</summary>
+    private readonly TenantRoleService _roles;
+
+    public AgentToolExecutor(IDocumentStore store, TenantRoleService roles)
+    { _store = store; _roles = roles; }
 
     public Task<(bool Ok, string Message)> ExecuteAsync(
         string toolName, string inputJson, CancellationToken ct = default)
@@ -552,10 +733,18 @@ public sealed class AgentToolExecutor
     public async Task<(bool Ok, string Message)> ExecuteAsync(
         string toolName, string inputJson, Guid? ownerUserId, CancellationToken ct = default)
     {
+        // لَقطَة أَدوار المَتجَر المَقصود قَبل المُصادَقَة — لِأَنّ
+        // مُخَطَّط set_roles نَفسُه يَتَّسِع بِأَدوار المُستَأجِر
+        // المُعتَمَدَة. قِراءَة السلاج هُنا مُتَسامِحَة عَمداً: حُمولَة
+        // تالِفَة أَو بِلا slug تَسقُط إلى لَقطَة المَنصَّة، ثُمَّ
+        // يَرفُضُها المُصادِق بِرِسالَتِه المُعتادَة.
+        var tenantSlugForTools = TryReadTenantSlug(inputJson);
+        var roleSet = await _roles.ForAsync(tenantSlugForTools, ct);
+
         // بَوّابَة إلزاميَّة أُولى: مُصادَقَة الحُمولَة ضِدّ المُخَطَّط
         // المُعلَن قَبل فَحص الملكيَّة وقَبل أَيّ تَنفيذ (TESTING-PROTOCOL
         // §T3). الفُحوص اليَدَويَّة أَدناه تَبقى — دِفاع مُتَعَدِّد الطَّبَقات.
-        var validation = AgentToolValidator.Validate(toolName, inputJson);
+        var validation = AgentToolValidator.Validate(toolName, inputJson, roleSet);
         if (!validation.IsValid)
             return (false, $"رُفِضَت الحُمولَة — مُخالَفَة مُخَطَّط أَداة «{toolName}»: "
                          + string.Join(" | ", validation.Errors));
@@ -585,7 +774,8 @@ public sealed class AgentToolExecutor
                 "set_categories" => await SetCategoriesAsync(root, ct),
                 "set_branding"   => await SetBrandingAsync(root, ct),
                 "set_regions"    => await SetRegionsAsync(root, ct),
-                "set_roles"      => await SetRolesAsync(root, ct),
+                "set_roles"      => await SetRolesAsync(root, roleSet, ct),
+                "define_role"    => await DefineRoleAsync(root, ct),
                 "set_attributes" => await SetAttributesAsync(root, ct),
                 "set_pwa"        => await SetPwaAsync(root, ct),
                 _ => (false, $"أَداة غَير مَعروفَة: {toolName}")
@@ -674,7 +864,15 @@ public sealed class AgentToolExecutor
         return (true, $"تَمّ تَحديث هُويَّة «{slug}».");
     }
 
-    private async Task<(bool, string)> SetRolesAsync(JsonElement root, CancellationToken ct)
+    /// <summary>
+    /// <para><b>مَوضِع التِقاط</b>: البَحث صارَ في لَقطَة أَدوار
+    /// المُستَأجِر لا في الكاتالوج السّاكِن — فَدَور أَلَّفَه هذا المَتجَر
+    /// واعتُمِدَ يُمكِن تَسكينُه بِـ <c>set_roles</c>. وبِلا وَثيقَة
+    /// واحِدَة اللَقطَة <b>هي</b> الكاتالوج، فَالسُلوك لَم يَتَغَيَّر
+    /// بِحَرف.</para>
+    /// </summary>
+    private async Task<(bool, string)> SetRolesAsync(
+        JsonElement root, TenantRoleSet roleSet, CancellationToken ct)
     {
         var slug = Str(root, "slug").ToLowerInvariant();
         if (!root.TryGetProperty("roles", out var arr) || arr.ValueKind != JsonValueKind.Array)
@@ -689,8 +887,8 @@ public sealed class AgentToolExecutor
                 ? r.GetString()?.Trim().ToLowerInvariant() ?? ""
                 : "";
             if (string.IsNullOrEmpty(rslug)) continue;
-            var tmpl = ACommerce.Kit.Roles.RoleCatalog.Find(rslug);
-            if (tmpl is null) continue;  // تَجاهُل slugs خارِج الكاتالوج
+            var tmpl = roleSet.Find(rslug);
+            if (tmpl is null) continue;  // تَجاهُل slugs خارِج اللَقطَة
             var role = ACommerce.Kit.Roles.RoleCatalog.InstantiateRole(tmpl, i++);
             role.IsDefault = defaultRole == rslug;
             roles.Add(role);
@@ -924,6 +1122,82 @@ public sealed class AgentToolExecutor
         }
         await s.SaveChangesAsync(ct);
         return (true, $"تَمّ تَعريف {defCount} حُقول و {valCount} خِيارات لِنِطاق «{scopeId}».");
+    }
+
+    /// <summary>
+    /// <para><b>تَأليف دَور — المَسار الكامِل في ثَلاث خُطوات</b>:
+    /// <c>ParseDefinition</c> (نَفس القارِئ الَّذي يَقرَأ مِلَفّات
+    /// الكاتالوج المَضمونَة، بِنَفس خِياراتِه) ثُمَّ
+    /// <c>ValidateTenantDefinition</c> (نَفس المُصادِق، زائِدَ قاعِدَة
+    /// عَدَم الظِلّ) ثُمَّ <b>تَخزين مُعَلَّق</b>.</para>
+    ///
+    /// <para><b>ولا يَصير حَيّاً هُنا بِحال</b>: الوَثيقَة تُكتَب
+    /// <c>pending</c>، ولا سَطح لاعِب يَقرَأ إلّا <c>approved</c>. القَرار
+    /// البَشَريّ في <c>/admin/tenants/{slug}/roles</c> هو ما يُحييها،
+    /// وهو يُعيد المُصادَقَة عَلى النَّصّ المُخَزَّن قَبل أَن يَفعَل.</para>
+    ///
+    /// <para><b>والرَّفض يَعود بِرَمزِه</b> لا بِرِسالَة حُرَّة — لِأَنّ
+    /// الوَكيل يُصَحِّح عَلى الرَّمز: <c>permission_out_of_vocabulary</c>
+    /// يَقول «بَدِّل الصَلاحِيَّة»، و<c>slug_shadows_platform_catalog</c>
+    /// يَقول «بَدِّل الاسم». هذا هو نَفس عَقد بَقِيَّة الأَدَوات.</para>
+    /// </summary>
+    private async Task<(bool, string)> DefineRoleAsync(JsonElement root, CancellationToken ct)
+    {
+        var slug = Str(root, "slug").ToLowerInvariant();
+        if (!root.TryGetProperty("definition", out var defEl) ||
+            defEl.ValueKind != JsonValueKind.Object)
+            return (false, "definition مَطلوب (كائِن تَعريف دَور).");
+
+        // النَّصّ كَما كَتَبَه الوَكيل حَرفِيّاً — هو ما يُخزَّن، فَلا
+        // شَكل ثانٍ لِلتَعريف يَنحَرِف عَن الأَوَّل.
+        var definitionJson = defEl.GetRawText();
+
+        ACommerce.Kit.Roles.RoleDefinition parsed;
+        try
+        {
+            parsed = ACommerce.Kit.Roles.RoleDefinitionLoader.ParseDefinition(definitionJson);
+        }
+        catch (Exception ex)
+        {
+            return (false, "تَعَذَّرَت قِراءَة التَعريف: " + ex.Message);
+        }
+
+        var violations = ACommerce.Kit.Roles.RoleDefinitionValidator
+            .ValidateTenantDefinition(parsed);
+        if (violations.Count > 0)
+            return (false, $"رُفِضَ تَعريف الدَور «{parsed.Slug}»: " +
+                           string.Join(" | ", violations.Select(v => $"{v.Code}: {v.MessageAr}")));
+
+        await using (var qs = _store.QuerySession())
+        {
+            var t = await qs.LoadAsync<Tenant>(slug, ct);
+            if (t is null) return (false, $"المَتجَر «{slug}» غَير مَوجود.");
+        }
+
+        var (ok, msg) = await _roles.ProposeAsync(
+            slug, parsed.Slug, definitionJson, by: "agent:define_role", ct);
+        if (!ok) return (false, msg);
+
+        return (true,
+            $"سُجِّلَ تَعريف الدَور «{parsed.Slug}» ({parsed.Label.Current}) لِلمَتجَر «{slug}» " +
+            "مُعَلَّقاً. لا يَظهَر لِأَيّ مُستَخدِم حَتَّى يَعتَمِدَه مُشرِف المَنصَّة " +
+            $"مِن /admin/tenants/{slug}/roles.");
+    }
+
+    /// <summary>سلاج المَتجَر مِن حُمولَة أَداة، أَو <c>null</c> إن
+    /// تَعَذَّرَ. <b>مُتَسامِحَة عَمداً</b>: مُهِمَّتُها اختِيار لَقطَة
+    /// الأَدوار الَّتي يُصادَق بِها، لا الحُكم عَلى الحُمولَة — الحُكم
+    /// لِلمُصادِق بَعدَها.</summary>
+    private static string? TryReadTenantSlug(string inputJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(inputJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+            var s = Str(doc.RootElement, "slug").Trim().ToLowerInvariant();
+            return string.IsNullOrEmpty(s) ? null : s;
+        }
+        catch { return null; }
     }
 
     private static List<Category> ParseCategories(JsonElement root)

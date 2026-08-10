@@ -40,8 +40,39 @@ public static class AgentToolValidator
     /// <paramref name="toolName"/>. اسم أَداة غَير مَعروف = فَشَل،
     /// وَ JSON تالِف = فَشَل — لا استِثناءات تَتَسَرَّب.</summary>
     public static AgentToolValidationResult Validate(string toolName, string inputJson)
+        => Validate(toolName, inputJson, null);
+
+    /// <summary>
+    /// <para><b>نَفس المُصادَقَة في سِياق لَقطَة أَدوار مُستَأجِر</b>.
+    /// مُخَطَّط <c>set_roles</c> وَحدَه يَتَّسِع بِأَدوار المُستَأجِر
+    /// المُؤَلَّفَة المُعتَمَدَة، فَبِلا هذا التَحميل الزائِد كانَ الوَكيل
+    /// يُؤَلِّف دَوراً ثُمَّ يَعجِز عَن تَسكينِه — تَعداد المُخَطَّط لا
+    /// يَعرِفُه.</para>
+    ///
+    /// <para><b>والخَريطَة السّاكِنَة تَبقى هي المَسار الافتِراضيّ</b>:
+    /// <paramref name="roleSet"/> فارِغ التَأليف (وكُلّ مُستَأجِر بِلا
+    /// وَثيقَة كَذلِك) يَمُرّ عَلى نَفس المُخَطَّطات المُجَمَّعَة مَرَّةً
+    /// واحِدَة — بِلا بِناء مُخَطَّط لِكُلّ طَلَب، وبِلا كاش ثانٍ يُدار.
+    /// البِناء عِندَ الطَلَب مَقصور عَلى المَتاجِر الَّتي أَلَّفَت فِعلاً،
+    /// وهي أَقَلِّيَّة تَستَدعي أَداةً واحِدَة.</para>
+    /// </summary>
+    public static AgentToolValidationResult Validate(
+        string toolName, string inputJson, ACommerce.Kit.Roles.TenantRoleSet? roleSet)
     {
-        if (!Schemas.TryGetValue(toolName, out var schema))
+        JsonSchema? schema;
+
+        if (roleSet is not null && roleSet.TenantAuthored.Count > 0)
+        {
+            var tool = AgentService.BuildAbstractTools(roleSet)
+                .FirstOrDefault(t => t.Name == toolName);
+            schema = tool is null ? null : JsonSchema.FromText(tool.InputSchemaJson);
+        }
+        else
+        {
+            Schemas.TryGetValue(toolName, out schema);
+        }
+
+        if (schema is null)
             return AgentToolValidationResult.Failure($"أَداة غَير مَعروفَة: {toolName}");
 
         JsonDocument doc;

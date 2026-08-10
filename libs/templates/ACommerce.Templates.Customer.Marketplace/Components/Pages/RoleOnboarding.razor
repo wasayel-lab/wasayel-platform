@@ -2,6 +2,7 @@
 @page "/{slug}/r/{role}/me/role/onboarding"
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 
 @*
     صَفحَة جَمع بَيانات الدَور — تُفتَح بَعد اختِيار الدَور. تَعرِض حُقول
@@ -106,8 +107,10 @@ else
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
-        await using var g = Store.QuerySession();
-        tenant = await g.LoadAsync<Tenant>(Slug);
+        // مَوضِع الالتِقاط (onboarding): حُقول الدَور المُؤَلَّف تُقرَأ
+        // مِن تَعريفِه كَما تُقرَأ حُقول دَور الكاتالوج — نَفس المُحَرِّك،
+        // ولا فَرع جَديد في هذه الصَفحَة.
+        tenant = (await Roles.LoadAsync(Slug)).Tenant;
         if (tenant is null) return;
         await using var s = Store.QuerySession(Slug);
         user = await s.LoadAsync<User>(Auth.UserId!.Value);

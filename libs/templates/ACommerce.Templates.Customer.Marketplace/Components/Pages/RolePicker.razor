@@ -2,6 +2,7 @@
 @page "/{slug}/r/{role}/me/role"
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 
 @*
     صَفحَة "اختَر دَورَكَ" — تَظهَر تِلقائيّاً لِلمُستَخدِم الَّذي ليس لَدَيه
@@ -82,8 +83,10 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
-        await using var s = Store.QuerySession();
-        tenant = await s.LoadAsync<Tenant>(Slug);
+        // مَوضِع الالتِقاط (التَسجيل): بِطاقات الاختِيار تَشمَل الأَدوار
+        // الَّتي أَلَّفَها هذا المَتجَر واعتُمِدَت — بِنَفس الشَكل ونَفس
+        // القاعِدَة (tenant_admin يَبقى غَير قابِل لِلمَنح الذاتيّ).
+        tenant = (await Roles.LoadAsync(Slug)).Tenant;
     }
 
     // أَدوار مَحظورَة عَن الاختِيار الذاتيّ — تُمنَح فَقَط بِفِعل إداريّ.

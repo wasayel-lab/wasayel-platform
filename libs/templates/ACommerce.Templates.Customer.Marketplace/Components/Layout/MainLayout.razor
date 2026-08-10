@@ -5,6 +5,7 @@
 @inject AuthSession Auth
 @inject L L
 @inject Marten.IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 
 @{
     var slug = Tenant.Slug;
@@ -89,6 +90,11 @@ else
 @code {
     string activeRoleSlug = "";
     bool tenantHasRoles;
+
+    /// <summary>لَقطَة أَدوار المَتجَر — <b>مَوضِع الالتِقاط في
+    /// التَّنَقُّل</b>: فَتحَة <c>nav</c> لِدَور مُؤَلَّف تُقرَأ مِن
+    /// تَعريفِه. بِلا تَأليف هي قاعِدَة المَنصَّة، فَالشَّريط كَما كان.</summary>
+    ACommerce.Kit.Roles.TenantRoleSet roleSet = ACommerce.Kit.Roles.TenantRoleSet.Platform;
     string? listingPattern;
     int unreadMessages;
     int unreadNotifications;
@@ -103,8 +109,9 @@ else
             // اِكتَشِف هَل لِلمَتجَر أَدوار — تَحديد عَرض الـ landing.
             try
             {
-                await using var gs = Store.QuerySession();
-                var t = await gs.LoadAsync<ACommerce.Kit.Tenants.Tenant>(Tenant.Slug);
+                var withRoles = await Roles.LoadAsync(Tenant.Slug);
+                var t = withRoles.Tenant;
+                roleSet = withRoles.Roles;
                 tenantHasRoles = t is not null && t.Roles.Count > 0;
                 // اِشتِقاق النَّمَط لِتَحديد ظُهور السَّلَّة: فَئات «menu»
                 // (مَقاهي/مَطاعِم) أَو غِياب الأَدوار العَقارِيَّة = marketplace.
@@ -240,7 +247,7 @@ else
 
         ACommerce.Kit.Roles.RoleComponentMap.Map(
             navTable,
-            ACommerce.Kit.Roles.RoleCompositionResolver.Resolve(roleSlug).Nav,
+            roleSet.ResolveComposition(roleSlug).Nav,
             DefaultTabs,
             "التَّنَقُّل")();
 

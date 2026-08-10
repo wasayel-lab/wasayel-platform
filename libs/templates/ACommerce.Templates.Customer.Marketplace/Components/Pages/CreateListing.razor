@@ -4,6 +4,7 @@
 @inject AuthSession Auth
 @inject NavigationManager Nav
 @inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 
 @*
     دِسباتشَر إنشاء إعلان حَسَب الدَور النَّشِط:
@@ -234,6 +235,10 @@ else
     IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.DynField>? dynFields;
     ACommerce.Kit.Roles.Role? activeRole;
 
+    /// <summary>لَقطَة أَدوار المَتجَر — <b>مَوضِع الالتِقاط في نَموذَج
+    /// الإنشاء</b>. بِلا تَأليف هي قاعِدَة المَنصَّة.</summary>
+    ACommerce.Kit.Roles.TenantRoleSet roleSet = ACommerce.Kit.Roles.TenantRoleSet.Platform;
+
     /// <summary>نَموذَج الإنشاء الَّذي يُصَيِّرُه هذا الدَور — قاموس مُغلَق
     /// مِن قيمَة فَتحَة <c>createListing</c> إلى مَندوب تَصيير. <c>null</c>
     /// تَعني النَموذَج الكامِل ذا الخَطوَتَين المُضَمَّن أَدناه.</summary>
@@ -251,7 +256,7 @@ else
 
         return ACommerce.Kit.Roles.RoleComponentMap.Map(
             table,
-            ACommerce.Kit.Roles.RoleCompositionResolver.Resolve(activeRole?.CatalogSlug).CreateListing,
+            roleSet.ResolveComposition(activeRole?.CatalogSlug).CreateListing,
             null,
             "إنشاء الإعلان");
     }
@@ -259,8 +264,9 @@ else
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
-        await using var g = Store.QuerySession();
-        tenant = await g.LoadAsync<Tenant>(Slug);
+        var withRoles = await Roles.LoadAsync(Slug);
+        tenant  = withRoles.Tenant;
+        roleSet = withRoles.Roles;
         if (tenant is null) return;
 
         if (tenant.Roles.Count > 0 && Auth.UserId.HasValue)

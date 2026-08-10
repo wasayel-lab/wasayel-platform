@@ -4,6 +4,7 @@
 @inject AuthSession Auth
 @inject ITenantContext Tenant
 @inject NavigationManager Nav
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 
 @*
     صَفحة الـ tenant الرَئيسيّة. كُلّ النَّقَرات تَستَخدِم Href بَدَلَ
@@ -241,6 +242,13 @@
     ACommerce.Kit.Roles.Role? activeRole;
     bool canCreateListing = true;   // افتراضيّاً true لِمَتاجِر بِلا أَدوار
 
+    /// <summary>لَقطَة أَدوار هذا المَتجَر — الكاتالوج المَضمون وفَوقَه
+    /// تَعريفاتُه المُؤَلَّفَة المُعتَمَدَة. <b>مَوضِع الالتِقاط الأَوَّل</b>:
+    /// مِنها تُبنى بِطاقات البَوّابَة (عَبر <c>Tenant.Roles</c>
+    /// المُجَسَّدَة) ومِنها يُقرَأ التَركيب. مُهَيَّأَة إلى قاعِدَة
+    /// المَنصَّة فَلا فَرق قَبل الحِمل.</summary>
+    ACommerce.Kit.Roles.TenantRoleSet roleSet = ACommerce.Kit.Roles.TenantRoleSet.Platform;
+
     /// <summary>الرَئيسِيَّة الَّتي يُصَيِّرُها هذا الدَور — قاموس مُغلَق
     /// مِن قيمَة فَتحَة <c>home</c> إلى مَندوب تَصيير. <c>null</c> تَعني
     /// «الفَرع الافتِراضيّ المُضَمَّن أَدناه» لا «لا شَيء»، ولِذلك هو
@@ -262,15 +270,19 @@
 
         return ACommerce.Kit.Roles.RoleComponentMap.Map(
             table,
-            ACommerce.Kit.Roles.RoleCompositionResolver.Resolve(activeRole?.CatalogSlug).Home,
+            roleSet.ResolveComposition(activeRole?.CatalogSlug).Home,
             null,
             "الرَئيسِيَّة");
     }
 
     protected override async Task OnParametersSetAsync()
     {
-        await using var g = Store.QuerySession();
-        loaded = await g.LoadAsync<Tenant>(Slug);
+        // مَوضِع الالتِقاط: بَدَل LoadAsync<Tenant> عارِياً، تُحَمَّل
+        // الوَثيقَة وتُجَسَّد فَوقَها أَدوار المَتجَر المُؤَلَّفَة. مُستَأجِر
+        // بِلا تَأليف يَخرُج مِن هُنا بِنَفس الكائِن وبِنَفس قائِمَتِه.
+        var withRoles = await Roles.LoadAsync(Slug);
+        loaded  = withRoles.Tenant;
+        roleSet = withRoles.Roles;
         if (loaded is null) return;
         profile = Services.Patterns.PatternProfileResolver.Of(loaded);
 

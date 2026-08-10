@@ -37,6 +37,12 @@ public static class MarketplaceTemplateExtensions
             ACommerce.Templates.Customer.Marketplace.Services.AgentBackendProvider>();
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.AgentService>();
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor>();
+
+        // أَدوار المُستَأجِر وَقتَ التَّشغيل — Singleton لِأَنّ الكاش
+        // فيه (بِمِفتاح المُستَأجِر) يَجِب أَن يَعبُر الطَلَبات، وإلّا
+        // لَما كانَ كاشاً. والعَزل لا يَعتَمِد عَلى عُمر الخِدمَة بَل
+        // عَلى أَنّ كُلّ قِراءَة تُفتَح بِجَلسَة سلاج المُستَأجِر.
+        services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService>();
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.WebPushService>();
         services.AddScoped<Gates.GatePipeline>();
         services.AddScoped<Commands.AcceptTermsHandler>();
@@ -374,8 +380,9 @@ public static class MarketplaceTemplateExtensions
             if (string.IsNullOrEmpty(role))
                 return Results.Redirect(Link(req, slug, $"me/role"));
 
-            await using var sg = store.QuerySession();
-            var tenant = await sg.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+            // مَوضِع الالتِقاط (التَسجيل): الدَور المُؤَلَّف المُعتَمَد
+            // قابِل لِلاختِيار كَدَور الكاتالوج تَماماً.
+            var tenant = await LoadTenantWithRolesAsync(store, slug);
             if (tenant is null) return Results.Redirect("/admin");
             var picked = tenant.Roles.FirstOrDefault(r => r.Slug == role);
             if (picked is null) return Results.Redirect(Link(req, slug, $"me/role?err=invalid_role"));
@@ -415,8 +422,9 @@ public static class MarketplaceTemplateExtensions
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
 
-            await using var sg = store.QuerySession();
-            var tenant = await sg.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+            // مَوضِع الالتِقاط (onboarding): مَسار الدَور المُؤَلَّف بَعد
+            // الحِفظ يُقرَأ مِن تَعريفِه.
+            var tenant = await LoadTenantWithRolesAsync(store, slug);
             if (tenant is null) return Results.Redirect($"/{slug}");
 
             await using var s = store.LightweightSession(slug);
@@ -1690,6 +1698,38 @@ public static class MarketplaceTemplateExtensions
             s.Store(t);
             await s.SaveChangesAsync();
             return Results.Redirect($"/admin/tenants/{slug}/roles?saved=1");
+        }).DisableAntiforgery();
+
+        // ─── Admin: decide a tenant-authored role definition ────────────
+        // القَرار البَشَريّ الَّذي يُحيي تَعريفاً أَلَّفَه الوَكيل. مُعَلَّق
+        // ← مُعتَمَد أَو مَرفوض، ولا ثالِث.
+        //
+        // **البَوّابَة هي بَوّابَة مُشرِف المَنصَّة** لا مُشرِف المَتجَر،
+        // وذلك مَقصود ومُعلَن: التَعريف يُضيف دَوراً <b>خارِج كاتالوج
+        // المَنصَّة</b> بِصَلاحِيّاتِه وتَركيبِه، وهو قَرار مُستَوى مَنصَّة.
+        // مُشرِف المَتجَر يَرى التَعريفات المُعَلَّقَة في صَفحَة أَدوارِه
+        // (قِراءَةً) ولا يَعتَمِدُها.
+        app.MapPost("/admin/tenants/{slug}/roles/definitions/{roleSlug}/decide",
+            async (string slug, string roleSlug, HttpRequest req, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth,
+                   Services.TenantRoleService roles,
+                   Services.Audit.AuditWriter audit) =>
+        {
+            var decision = await Services.PlatformAdminGuard.EvaluateAsync(store, auth);
+            if (!decision.Allowed) return Forbidden();
+
+            var verdict = req.Form["decision"].ToString().Trim() == "approve"
+                ? ACommerce.Kit.Roles.TenantRoleStatuses.Approved
+                : ACommerce.Kit.Roles.TenantRoleStatuses.Rejected;
+
+            var by = decision.User is { } u ? $"{u.FullName} · {u.Phone}" : "platform-admin";
+            var (ok, msg) = await roles.DecideAsync(slug, roleSlug, verdict, by);
+
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.role_definition_decide");
+
+            return Results.Redirect(ok
+                ? $"/admin/tenants/{slug}/roles?saved=1"
+                : $"/admin/tenants/{slug}/roles?err={Uri.EscapeDataString(msg)}");
         }).DisableAntiforgery();
 
         // ─── Admin: save categories ─────────────────────────────────────
@@ -3610,8 +3650,7 @@ public static class MarketplaceTemplateExtensions
     private static async Task<bool> HasPermissionAsync(
         HttpContext http, string slug, Guid userId, string permission, IDocumentStore store)
     {
-        await using var g = store.QuerySession();
-        var tenant = await g.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+        var tenant = await LoadTenantWithRolesAsync(store, slug);
         if (tenant is null) return false;
         if (tenant.Roles.Count == 0) return true;   // legacy mode
 
@@ -3627,6 +3666,32 @@ public static class MarketplaceTemplateExtensions
             tenant.Roles, effectiveRole, permission);
     }
 
+    /// <summary>
+    /// <para><b>مَوضِع الالتِقاط في مَسارات القِراءَة السّاكِنَة</b> —
+    /// يُحَمِّل المُستَأجِر ويُجَسِّد فَوق <c>Roles</c> أَدوارَه المُؤَلَّفَة
+    /// المُعتَمَدَة. كُلّ مَن كانَ يَكتُب سَطرَي
+    /// <c>QuerySession() + LoadAsync&lt;Tenant&gt;</c> ثُمَّ يَقرَأ
+    /// <c>tenant.Roles</c> يَستَدعي هذه بَدَلَهُما.</para>
+    ///
+    /// <para><b>ولا تُستَخدَم في مَسار يَحفَظ المُستَأجِر</b> — التَجسيد
+    /// يَعيش في الذاكِرَة، وحِفظُ وَثيقَة مُجَسَّدَة كانَ سَيَنسَخ
+    /// التَعريفات داخِل <c>Tenant</c> فَيَصير لِلحَقيقَة مَصدَران. لِذلك
+    /// <c>/admin/tenants/{slug}/roles/save</c> يَبقى عَلى تَحميلِه
+    /// المُباشِر بِـ <c>LightweightSession</c>.</para>
+    /// </summary>
+    private static async Task<ACommerce.Kit.Tenants.Tenant?> LoadTenantWithRolesAsync(
+        IDocumentStore store, string slug)
+    {
+        await using var g = store.QuerySession();
+        var tenant = await g.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+        if (tenant is null) return null;
+
+        var set = await Services.TenantRoleService.ReadUncachedAsync(store, slug);
+        var merged = set.Materialize(tenant.Roles);
+        if (!ReferenceEquals(merged, tenant.Roles)) tenant.Roles = merged.ToList();
+        return tenant;
+    }
+
     // تَسكين دَور لِمُستَخدِم بَعد تَوثيقِه — يُستَدعَى مِن /verify عِندَ
     // وُجود ?as=role مِن صَفحَة الدُخول. tenant_admin مَمنوع: يَجِب أَن
     // يُمنَح يَدَويّاً مِن /admin/tenants/{slug}/users.
@@ -3634,8 +3699,7 @@ public static class MarketplaceTemplateExtensions
         string slug, Guid userId, string roleSlug, IDocumentStore store)
     {
         if (roleSlug == "tenant_admin") return;
-        await using var g = store.QuerySession();
-        var tenant = await g.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+        var tenant = await LoadTenantWithRolesAsync(store, slug);
         if (tenant is null) return;
         var picked = tenant.Roles.FirstOrDefault(r => r.Slug == roleSlug);
         if (picked is null) return;
@@ -3657,8 +3721,7 @@ public static class MarketplaceTemplateExtensions
     private static async Task<string> PostLoginRouteAsync(
         string slug, Guid userId, string? asRole, IDocumentStore store)
     {
-        await using var g = store.QuerySession();
-        var tenant = await g.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+        var tenant = await LoadTenantWithRolesAsync(store, slug);
         if (tenant is null || tenant.Roles.Count == 0)
             return $"/{slug}";
 

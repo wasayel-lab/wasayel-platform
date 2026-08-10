@@ -1,6 +1,7 @@
 @page "/admin/tenants/{slug}/roles"
 @inject IDocumentStore Store
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard Guard
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 @using ACommerce.Kit.Roles
 
 @*
@@ -93,6 +94,61 @@
             </ChildContent>
         </AcCard>
 
+        @*
+            الأَدوار المُؤَلَّفَة — وَثائِق هذا المَتجَر وَحدَه، فَوق
+            الكاتالوج لا مَحَلَّه. المُعَلَّق لا يَراه أَيّ مُستَخدِم؛
+            الاعتِماد هُنا يَجعَلُه حَيّاً في البَوّابَة والتَسجيل
+            والتَصيير بِالطَلَب التالي — بِلا بِناء وبِلا إعادَة تَشغيل.
+        *@
+        @if (definitions.Count > 0)
+        {
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">أَدوار مُؤَلَّفَة لِهذا المَتجَر (@definitions.Count)</h3>
+                    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 16px;">
+                        تُكتَب مِن الوَكيل (<code>define_role</code>) وتُخزَّن
+                        <b>مُعَلَّقَة</b>. الاعتِماد قَرار مُشرِف المَنصَّة —
+                        وبِه وَحدَه تَظهَر البِطاقَة لِلمُستَخدِمين.
+                    </p>
+                    <div class="acm-cat-list">
+                        @foreach (var d in definitions)
+                        {
+                            <div class="acm-cat-row">
+                                <div style="flex:1;">
+                                    <strong>@d.Slug</strong>
+                                    <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
+                                        @StatusLabel(d.Status) · كَتَبَها @d.CreatedBy ·
+                                        @d.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC
+                                        @if (d.DecidedBy is not null)
+                                        {
+                                            <text> · قَرَّرَ @d.DecidedBy</text>
+                                        }
+                                    </span>
+                                </div>
+                                @if (d.Status == TenantRoleStatuses.Pending)
+                                {
+                                    <form method="post" style="display:inline;"
+                                          action="@($"/admin/tenants/{Slug}/roles/definitions/{d.Slug}/decide")">
+                                        <input type="hidden" name="decision" value="approve" />
+                                        <button type="submit" class="ac-btn ac-btn-primary ac-btn-sm">اِعتِماد</button>
+                                    </form>
+                                    <form method="post" style="display:inline;margin-inline-start:6px;"
+                                          action="@($"/admin/tenants/{Slug}/roles/definitions/{d.Slug}/decide")">
+                                        <input type="hidden" name="decision" value="reject" />
+                                        <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">رَفض</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <span class="ac-chip ac-chip-sm">@StatusLabel(d.Status)</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </ChildContent>
+            </AcCard>
+        }
+
         @if (tenant.Roles.Count > 0)
         {
             <AcCard>
@@ -128,6 +184,18 @@
 
     Tenant? tenant;
 
+    /// <summary>تَعريفات هذا المَتجَر بِكُلّ حالاتِها — الصَفحَة الوَحيدَة
+    /// الَّتي تَرى المُعَلَّق والمَرفوض. بَقِيَّة السُطوح تَرى المُعتَمَد
+    /// فَقَط.</summary>
+    IReadOnlyList<TenantRoleDefinition> definitions = Array.Empty<TenantRoleDefinition>();
+
+    static string StatusLabel(string s) => s switch
+    {
+        TenantRoleStatuses.Approved => "مُعتَمَد",
+        TenantRoleStatuses.Rejected => "مَرفوض",
+        _                           => "مُعَلَّق"
+    };
+
     protected override async Task OnParametersSetAsync()
     {
         // البَوّابَة قَبل أَيّ استِعلام: الرَّفض يَعني ألّا تُحَمَّل
@@ -137,6 +205,8 @@
         if (!await Guard.CanAdministerAsync(Slug)) return;
         await using var s = Store.QuerySession();
         tenant = await s.LoadAsync<Tenant>(Slug);
+        if (tenant is null) return;
+        definitions = await Roles.ListAllAsync(Slug);
     }
 
     static string FormatError(string err) => err switch

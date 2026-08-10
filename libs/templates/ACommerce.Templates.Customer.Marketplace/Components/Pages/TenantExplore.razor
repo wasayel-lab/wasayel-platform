@@ -2,6 +2,7 @@
 @page "/{slug}/r/{role}/explore"
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 
 @*
     صَفحة استِكشاف الإعلانات. بُنية مَنقولَة مِن
@@ -298,8 +299,11 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
-        await using var g = Store.QuerySession();
-        tenant = await g.LoadAsync<Tenant>(Slug);
+        // مَوضِع الالتِقاط في الاستِكشاف — فَتحَة <c>explore</c> لِدَور
+        // مُؤَلَّف تُقرَأ مِن تَعريفِه.
+        var withRoles = await Roles.LoadAsync(Slug);
+        tenant = withRoles.Tenant;
+        var roleSet = withRoles.Roles;
         if (tenant is null) return;
         profile = Services.Patterns.PatternProfileResolver.Of(tenant);
 
@@ -315,7 +319,7 @@ else
                 : tenant.Roles.FirstOrDefault(r => r.Slug == (Role ?? me.ActiveRole));
             driverMode = ACommerce.Kit.Roles.RoleComponentMap.Map(
                 ExploreModes,
-                ACommerce.Kit.Roles.RoleCompositionResolver.Resolve(role?.CatalogSlug).Explore,
+                roleSet.ResolveComposition(role?.CatalogSlug).Explore,
                 false,
                 "الاستِكشاف");
             if (driverMode && me is not null)

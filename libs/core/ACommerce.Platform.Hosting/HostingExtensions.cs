@@ -93,6 +93,15 @@ public static class HostingExtensions
                 opts.Schema.For<ACommerce.Kit.Offers.ListingMatch>().Identity(x => x.Id);
                 opts.Schema.For<ACommerce.Kit.SavedSearches.SavedSearch>().Identity(x => x.Id);
 
+                // تَعريفات أَدوار المُستَأجِر — مُتَعَدِّدَة الإيجار
+                // بِالسِياسَة العامَّة أَعلاه (conjoined)، وهذا شَرط لا
+                // تَحسين: تَعريف دَور مَتجَر لا يُقرَأ مِن سِياق مَتجَر
+                // آخَر، والعَزل يَقَع في <c>tenant_id</c> لا في شَرط
+                // مَكتوب بِاليَد. الـ Id سلاج الدَور، فَنَفس السلاج في
+                // مَتجَرَين وَثيقَتان مُستَقِلَّتان.
+                opts.Schema.For<ACommerce.Kit.Roles.TenantRoleDefinition>()
+                    .Identity(x => x.Id);
+
                 // ImportedRecord: مُستَنَد عامّ يَكتُبه الـ Importer لِكُلّ
                 // صَفّ مِن جَدول مَصدَر لا يَملِك typed map. الـ Id سَلسَلَة
                 // "{Table}/{SourceId}" — Marten يَحتاج Identity صَريحَة.
