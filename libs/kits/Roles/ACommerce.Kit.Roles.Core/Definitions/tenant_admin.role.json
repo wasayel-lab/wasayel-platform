@@ -28,5 +28,6 @@
     "explore": "defaultExplore",
     "publicProfile": null,
     "extras": []
-  }
+  },
+  "dealPatternAffinity": null
 }

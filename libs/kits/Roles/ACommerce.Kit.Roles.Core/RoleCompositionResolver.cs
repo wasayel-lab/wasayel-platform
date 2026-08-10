@@ -7,81 +7,36 @@ namespace ACommerce.Kit.Roles;
 /// <b>بِلا تَغيير سُلوك</b>، فَصارَ لِلقَرار مَوضِع واحِد يُختَبَر
 /// ويُثَبَّت.</para>
 ///
-/// <para><b>ولِماذا الاستِخراج قَبل التَّبديل</b>: هذه الدالَّة هي
-/// <b>نُقطَة القَلب الوَحيدَة</b> — مَواضِع التَّصيير تَسأَلُها ولا
-/// تَعرِف مِن أَينَ تُجيب. حينَ يَصير مَصدَر الجَواب مِلَفّات التَّعريف
-/// بَدَل الـ <c>switch</c>، يَتَغَيَّر جِسم <see cref="Resolve"/> وَحدَه
-/// ولا يَتَحَرَّك سَطر في أَيّ مَوضِع تَصيير — واختِبار التَّوصيف الَّذي
-/// اخضَرَّ عَلى الـ <c>switch</c> يَبقى حاكِماً بِلا تَعديل.</para>
+/// <para><b>وهي نُقطَة القَلب الوَحيدَة</b> — مَواضِع التَّصيير
+/// تَسأَلُها ولا تَعرِف مِن أَينَ تُجيب. كانَ جِسمُها الفُروع نَفسَها
+/// مَنقولَةً حَرفِيّاً (كوميت التَّوصيف)، وصارَ الآن قِراءَةً مِن
+/// <c>Definitions/{slug}.role.json</c> — و<b>لَم يَتَحَرَّك سَطر واحِد
+/// في أَيّ مَوضِع تَصيير</b>، ولا سَطر في اختِبار التَّوصيف الَّذي
+/// اخضَرَّ عَلى الـ <c>switch</c> قَبل التَّبديل. مُرورُه عَلى الجِسمَين
+/// هو بُرهان التَّطابُق.</para>
 ///
-/// <para><b>الحالات الحَدِّيَّة مَحفوظَة حَرفِيّاً</b> كَما كانَت في
-/// الفُروع: <c>null</c> وسِلسِلَة فارِغَة و slug غَير مَعروف — كُلُّها
-/// تُعطي التَّركيب الافتِراضيّ، لِأَنّ كُلّ <c>switch</c> مِن السِتَّة
-/// كانَ يَنتَهي بِفَرع <c>default</c>. هذا لَيسَ اختِياراً جَديداً بَل
-/// التِقاط لِما يَقَع.</para>
+/// <para><b>الحالات الحَدِّيَّة مَحفوظَة حَرفِيّاً</b>: <c>null</c>
+/// وسِلسِلَة فارِغَة و slug غَير مَعروف — كُلُّها تُعطي التَّركيب
+/// الافتِراضيّ، تَماماً كَما كانَ فَرع <c>default</c> يَفعَل في كُلّ
+/// <c>switch</c> مِن السِتَّة. وهي اليَوم نَفس الجَواب لِسَبَب أَوضَح:
+/// <see cref="RoleCatalog.FindDefinition"/> لا يَجِد تَعريفاً، فَيَسقُط
+/// إلى <see cref="Fallback"/>.</para>
 /// </summary>
 public static class RoleCompositionResolver
 {
     /// <summary>التَّركيب الافتِراضيّ الآمِن — كُلّ فَتحَة عَلى قيمَتِها
     /// الافتِراضيّة، بِلا صَفحَة عامَّة وبِلا سُطوح إضافيَّة. وهو
-    /// <b>نَفس</b> ما يُعطيه فَرع <c>default</c> في المَواضِع السِتَّة.</summary>
+    /// <b>نَفس</b> ما كانَ يُعطيه فَرع <c>default</c> في المَواضِع
+    /// السِتَّة، ونَفس ما يَسقُط إلَيه الدَور بِلا تَعريف.</summary>
     public static readonly RoleComposition Fallback = new();
 
-    /// <summary>تَركيب الواجِهَة لِـ <paramref name="catalogSlug"/>.
-    /// المَجهول والفارِغ و<c>null</c> ← <see cref="Fallback"/>.</summary>
-    public static RoleComposition Resolve(string? catalogSlug) => new()
-    {
-        // مِن فُروع TenantHome.razor.
-        Home = catalogSlug switch
-        {
-            "rider"               => RoleComponents.RiderHome,
-            "driver" or "shipper" => RoleComponents.DriverHome,
-            "vendor" or "host"    => RoleComponents.SellerHome,
-            _                     => RoleComponents.DefaultHome,
-        },
-
-        // مِن فَرعَي CreateListing.razor.
-        CreateListing = catalogSlug switch
-        {
-            "rider" => RoleComponents.RiderCreateRequest,
-            _       => RoleComponents.DefaultCreateForm,
-        },
-
-        // مِن switch في MainLayout.BuildNav.
-        Nav = catalogSlug switch
-        {
-            "rider"               => RoleComponents.RiderNav,
-            "driver" or "shipper" => RoleComponents.DriverNav,
-            "vendor" or "host"    => RoleComponents.VendorNav,
-            "tenant_admin"        => RoleComponents.AdminNav,
-            _                     => RoleComponents.DefaultNav,
-        },
-
-        // مِن driverMode في TenantExplore.razor.
-        Explore = catalogSlug switch
-        {
-            "driver" or "shipper" => RoleComponents.DriverExplore,
-            _                     => RoleComponents.DefaultExplore,
-        },
-
-        // الصَفحَة العامَّة لِحامِل الدَور. <b>لا فَرع تَصيير يَقرَؤُها</b>
-        // اليَوم — <c>VendorProfile.razor</c> صَفحَة مَفتوحَة بِمُعَرِّف
-        // المُستَخدِم لا بِدَورِه، ولا بَوّابَة دَور فيها. القيمَة هُنا
-        // تَوثيق لِمَن لَه صَفحَة عامَّة، لا حِراسَة لِمَن يَبلُغُها.
-        PublicProfile = catalogSlug switch
-        {
-            "vendor" or "host" => RoleComponents.VendorProfile,
-            _                  => null,
-        },
-
-        // سُطوح إضافيَّة — تُقرَأ في مُختَصَرات الـ PWA (BuildShortcuts).
-        Extras = catalogSlug switch
-        {
-            "rider"               => new[] { RoleComponents.DriversList },
-            "driver" or "shipper" => new[] { RoleComponents.DriverArea },
-            _                     => [],
-        },
-    };
+    /// <summary>تَركيب الواجِهَة لِـ <paramref name="catalogSlug"/> كَما
+    /// يُعلِنُه مِلَفّ تَعريف الدَور. المَجهول والفارِغ و<c>null</c> ←
+    /// <see cref="Fallback"/>.</summary>
+    public static RoleComposition Resolve(string? catalogSlug) =>
+        string.IsNullOrEmpty(catalogSlug)
+            ? Fallback
+            : RoleCatalog.FindDefinition(catalogSlug)?.Composition ?? Fallback;
 }
 
 /// <summary>

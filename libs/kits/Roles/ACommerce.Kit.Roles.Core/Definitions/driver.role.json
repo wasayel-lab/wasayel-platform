@@ -85,5 +85,6 @@
     "extras": [
       "driverArea"
     ]
-  }
+  },
+  "dealPatternAffinity": "trip"
 }

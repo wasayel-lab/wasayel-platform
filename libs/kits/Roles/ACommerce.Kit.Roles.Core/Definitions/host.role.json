@@ -35,5 +35,6 @@
     "explore": "defaultExplore",
     "publicProfile": "vendorProfile",
     "extras": []
-  }
+  },
+  "dealPatternAffinity": "rental"
 }

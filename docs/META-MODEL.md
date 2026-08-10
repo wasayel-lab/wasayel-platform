@@ -188,7 +188,8 @@ Booked/Shipping/Delivered = counterparty؛ Confirmed/Reviewed = either؛
     "home": "driverHome", "createListing": "defaultCreateForm",
     "nav": "driverNav", "explore": "driverExplore",
     "publicProfile": null, "extras": ["driverArea"]
-  }
+  },
+  "dealPatternAffinity": "trip"
 }
 ```
 
@@ -252,16 +253,106 @@ rider ‏(riderHome/riderCreateRequest/riderNav + `driversList`)، vendor و hos
 ‏(driverHome/defaultCreateForm/driverNav/driverExplore + `driverArea`)،
 tenant_admin ‏(defaultHome/defaultCreateForm/adminNav).
 
-**حدّ هذه الموجة، معلناً وبلا تلميع**: **لا شيء يقرأ قسم `composition`
-بعد**. التصيير ما زال يتفرّع بـ `switch` على `CatalogSlug` في المواضع
-الستة أعلاه. قيمته الآن ثلاثة أشياء بلا رابع: توثيق التركيب في موضع
-واحد بدل ستة، ومصادقة المعجم (مكوّن خارج القائمة يُرفض)، وجاهزية الموجة
-الثانية التي تجعل التصيير يقرؤه.
+**الحدّ رُفع (2026-08-10 — الموجة الثانية)**: كان مكتوباً هنا أن **لا
+شيء يقرأ قسم `composition` بعد**، وأن التصيير ما زال يتفرّع بـ `switch`
+على `CatalogSlug` في المواضع الستة أعلاه. **صار التصيير يقرؤه.**
+
+### آلية القراءة — نقطة قلب واحدة وقاموس مغلق في كل موضع
+
+القرار خرج من المواضع الستة إلى دالة نقية واحدة:
+
+```csharp
+public static RoleComposition Resolve(string? catalogSlug) =>
+    string.IsNullOrEmpty(catalogSlug)
+        ? Fallback
+        : RoleCatalog.FindDefinition(catalogSlug)?.Composition ?? Fallback;
+```
+
+ثم **كل موضع يحوّل قيمة فتحته عبر قاموس مغلق** — قيمة معجمية ← مندوب
+تصيير، **لا انعكاس (reflection) على أسماء حرة** ولا تحويل اسم إلى نوع:
+
+```csharp
+var table = new Dictionary<string, RenderFragment?>(StringComparer.Ordinal)
+{
+    [RoleComponents.DefaultHome] = null,      // الفرع المضمَّن
+    [RoleComponents.RiderHome]   = rider,
+    [RoleComponents.DriverHome]  = driver,
+    [RoleComponents.SellerHome]  = seller,
+};
+return RoleComponentMap.Map(table, Resolve(activeRole?.CatalogSlug).Home,
+                            null, "الرَئيسِيَّة");
+```
+
+**والسقوط الآمن مقصود رغم أن المصادق يمنع المجهول**، لأن الحارسين
+يغطيان خطرين مختلفين: المصادق يحرس **المعجم** (قيمة خارج
+`RoleComponents.All` تُفشل الإقلاع)، و`RoleComponentMap.Map` يحرس
+**القاموس** — أن تُضاف قيمة إلى المعجم ويُنسى تسجيلها في موضع تصيير.
+القيمة غير المسجَّلة تسقط إلى الافتراضي وتطبع سطر تحذير، ولا تُسقط صفحة.
+
+**الفتحتان اللتان تبنيان مختصرات الـ PWA**: `BuildShortcuts` لا يحتاج
+فتحة سابعة — المختصرات **مرآة الـ nav** (كل مختصر أساسي يقابل تبويباً في
+نفس عائلة التنقل بنفس المسار والتسمية)، والزائد عنها هو `extras` بعينه.
+فـ `nav` + `extras` تكفيان، وهما ما يُقرأ.
+
+**ما لم ينقلب، وسببه**:
+
+- **`publicProfile` لا يقرؤه شيء — لأن لا فرع يقرؤه أصلاً.** فحص
+  `VendorProfile.razor` كاملاً أظهر أنها صفحة مفتوحة بـ `vendorId` لا
+  بوابة دور فيها، والرابط إليها في `TenantListingDetail` مشروط بوجود
+  تقييمات للمعلن لا بدور الزائر. فالفتحة **توثيق لمن له صفحة عامة، لا
+  حراسة لمن يبلغها** — وإضافة بوابة تغيير سلوك لا نقل.
+- **`usesCart` في `BuildNav`** ما زال يفحص أسماء أدوار مباشرة
+  (`rider`/`driver`/`shipper`/`host`). وهو على **محور النمط** لا محور
+  التركيب — قريب من `dealPatternAffinity` أدناه ومن `AppPattern`، ونقله
+  يحتاج قراراً في أي المعجمين يسكن، لا مجرد فتحة سابعة.
+- **`BuildNav` يفتاح على `Role.Slug` بينما `BuildShortcuts` على
+  `Role.CatalogSlug`** — عدم تماثل قائم قبل الموجة، نُقل كما هو. لا أثر
+  له اليوم لأن `InstantiateRole` يجعل الحقلين متساويين.
 
 **مكوّن يتيم موثق**: `Components/RoleHomeHero.razor` **موجود في الشجرة
 ولا يصيّره أحد** — بحث نصي في كل `.razor` و`.cs` لا يجد له مرجعاً
 واحداً. أُبقي في المعجم توثيقاً للواقع ولا يُسند إلى أي دور، واختبار
-يثبّت الأمرين معاً.
+يثبّت الأمرين معاً. **ولم يوصل في الموجة الثانية بقرار**: هو مسجَّل في
+قاموس `extras` بلا مختصر (`() => null`)، فالقاموس مكتمل التغطية
+والمكوّن يبقى يتيماً حتى يُحسم مصيره.
+
+### 6.3.1 انجذاب نمط الصفقة (`dealPatternAffinity`)
+
+`PatternFromTenant` كان يشتق نمط تدفّق الصفقة من أدوار المستأجر بشروط
+متناثرة تذكر أسماء أدوار بأعيانها. **المسح قبل تقرير الشكل** أظهر أن
+الاشتقاق قائم على **أدوار مفردة** (عضوية `rider`/`driver`/`host` في
+مجموعة الأدوار) لا على تركيبات مجموعات — فموضعه الطبيعي **حقل في ملف
+الدور** لا جدول قواعد:
+
+| الدور | `dealPatternAffinity` |
+|---|---|
+| `rider` · `driver` | `trip` |
+| `host` | `rental` |
+| `customer` · `vendor` · `shipper` · `tenant_admin` | `null` |
+
+و`RoleDealPatternAffinity.Resolve` تجمعها بـ **ترتيب غلبة معلن**
+(`trip` قبل `rental`، فسائق + مالك سكن في متجر واحد = `trip`)، وقيمة
+راحة `marketplace` حين لا يجرّ شيء. `marketplace` **خارج معجم الانجذاب
+المسند** بقصد: هي ما يُعطى حين لا انجذاب، فإسنادها إلى دور لا يعني شيئاً.
+
+**عدم تماثل موثق لا مصحَّح**: `shipper` بلا انجذاب رغم أنه دور سائق في
+كل فتحة تركيب (`driverHome`/`driverNav`/`driverExplore`) — لأن
+`PatternFromTenant` لم يكن يعدّه `trip`. تصحيحه تغيير سلوك، والموجة
+شرطها ألا يتغير السلوك بتاً؛ فنُقل كما هو ومعه اختبار يثبّته.
+
+**وهو نمط التدفّق لا شخصية الواجهة** (تنبيه §5): `AppPattern` في
+`PatternProfileResolver` معجم آخر بقواعد أخرى — يقرأ الفئات أيضاً،
+ويعدّ `shipper` من `Trip`، ويبدأ بـ `roommate`. **ولم يُمس**: توحيدهما
+تغيير سلوكي. ولهذا سُمّي الحقل `dealPatternAffinity` لا `patternAffinity`
+— الاسم العام كان سيوحي بأنه مصدر الاثنين وهو مصدر أحدهما.
+
+**برهان التطابق**: `RoleCompositionCharacterizationTests` يثبّت الفتحات
+الست لكل دور من السبعة، والحالات الحدّية التي كان يغطيها فرع `default`
+(null، فارغ، مجهول، اختلاف حالة الحرف)، و`PatternFromTenant` على إحدى
+وعشرين تركيبة أدوار. كُتب واخضرّ **على الـ `switch`** في كوميت مستقل قبل
+التبديل، **ولم يُمس سطر منه بعده**. ومعه **عشرون صفحة مرجعية** ملتقطة
+بـ curl من خادم حي قبل وبعد، **متطابقة بايتاً ببايت** بعد تطبيع تعليق
+حالة Blazor المعمّاة وحده (حمولة تتغير كل طلب بنفس الكود).
 
 ### 6.4 التقييمات وعلاقتها بالأدوار — ما وُجد لا ما يُشتهى
 
@@ -291,7 +382,8 @@ tenant_admin ‏(defaultHome/defaultCreateForm/adminNav).
 `permission_duplicate` · `field_code_empty` · `field_code_duplicate` ·
 `field_type_out_of_vocabulary` · `select_without_options` ·
 `option_value_empty` · `option_value_duplicate` ·
-`composition_component_out_of_vocabulary`
+`composition_component_out_of_vocabulary` ·
+`deal_pattern_affinity_out_of_vocabulary`
 
 **وما لا يفحصه عمداً**: توافق التركيب مع الصلاحيات — `vendor` لا يملك
 `listing.browse` وتركيبه مع ذلك `defaultExplore`. هذا واقع الكاتالوج
@@ -325,7 +417,7 @@ Marten لكل مستأجر — نفس حدّ الخطوة 4. الملفات ظا
 | | اليوم | **[مخطط]** |
 |---|---|---|
 | `DealsPolicy` | **كاتالوج بيانات في موضع واحد** (`DealPatternCatalog` فوق `DealPatternDefinition`) خلف نفس واجهة `DealsPolicy` و`DealsService` | **[مخطط]** الكاتالوج نفسه وثيقة Marten لكل مستأجر — نفس الشكل، مصدر قراءة آخر |
-| `RoleCatalog` | **ملف JSON لكل دور** (`Definitions/*.role.json` فوق `RoleDefinition`) خلف نفس واجهة `RoleCatalog`، بمعجم صلاحيات مغلق ومصادق مفروض عند التحميل (§6) | **[مخطط]** وثيقة دور لكل مستأجر، والتصيير يقرأ `composition` بدل `switch` على `CatalogSlug` |
+| `RoleCatalog` | **ملف JSON لكل دور** (`Definitions/*.role.json` فوق `RoleDefinition`) خلف نفس واجهة `RoleCatalog`، بمعجم صلاحيات مغلق ومصادق مفروض عند التحميل (§6)؛ **والتصيير يقرأ `composition` منها** عبر نقطة قلب واحدة وقاموس مغلق في كل موضع، و`PatternFromTenant` يقرأ `dealPatternAffinity` (§6.3) | **[مخطط]** وثيقة دور لكل مستأجر — يتغير `RoleDefinitionLoader` وحده؛ وتأليف أدوار جديدة كملفات بلا كود |
 | إنشاء عمود تجاري جديد | إضافة تعريف نمط إلى الكاتالوج (سطر بيانات) وإعادة نشر | **أثر بيانات** يولَّد ويُتحقق منه ويُعتمد بلا نشر |
 | ضمان الخصائص الشكلية | **فحص آلي** بدوال نقية (`DealPatternValidator` — T5/T6) | نفس الفحص مفروضاً **بوابةً** قبل حفظ أي نمط مولَّد |
 

@@ -113,6 +113,13 @@ public static class RoleDefinitionValidator
                 v.Add(new("composition_component_out_of_vocabulary",
                     $"المُكَوِّن «{c}» في تَركيب الدَور «{d.Slug}» خارِج مَعجَم RoleComponents."));
 
+        // ─── انجِذاب نَمَط الصَفقَة — null مَسموح، وغَيرُه مِن المَعجَم ──
+        if (d.DealPatternAffinity is not null &&
+            !RoleDealPatternAffinity.Contains(d.DealPatternAffinity))
+            v.Add(new("deal_pattern_affinity_out_of_vocabulary",
+                $"انجِذاب النَّمَط «{d.DealPatternAffinity}» في الدَور «{d.Slug}» " +
+                "خارِج مَعجَم RoleDealPatternAffinity."));
+
         return v;
     }
 

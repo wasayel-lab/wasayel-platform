@@ -109,6 +109,39 @@ public class RoleDefinitionValidatorTests
                 .Where(d => d.Composition.PublicProfile is not null)
                 .Select(d => d.Slug).ToArray());
 
+    // ─── انجِذاب نَمَط الصَفقَة ───────────────────────────────────────
+    /// <summary>الانجِذاب المُسنَد في المِلَفّات — ثَلاثَة أَدوار لا
+    /// رابِع، والبَقِيَّة <c>null</c>. وهو <b>تَثبيت لِعَدَم التَماثُل
+    /// المُوَثَّق</b>: <c>shipper</c> بِلا انجِذاب رَغم أَنَّه دَور سائِق
+    /// في كُلّ فَتحَة تَركيب — لِأَنّ <c>PatternFromTenant</c> لَم يَكُن
+    /// يَعُدُّه <c>trip</c>، وتَصحيحُه تَغيير سُلوك لا نَقل.</summary>
+    [Fact]
+    public void Deal_pattern_affinity_is_assigned_to_exactly_three_roles()
+        => Assert.Equal(
+            new[] { ("rider", "trip"), ("driver", "trip"), ("host", "rental") },
+            RoleCatalog.Definitions
+                .Where(d => d.DealPatternAffinity is not null)
+                .Select(d => (d.Slug, d.DealPatternAffinity!)).ToArray());
+
+    [Fact]
+    public void Every_assigned_affinity_is_in_the_vocabulary()
+        => Assert.All(
+            RoleCatalog.Definitions
+                .Select(d => d.DealPatternAffinity)
+                .Where(a => a is not null),
+            a => Assert.True(RoleDealPatternAffinity.Contains(a!), a));
+
+    /// <summary>تَرتيب الغَلَبَة مُعلَن وبِترتيبِه — <c>trip</c> قَبل
+    /// <c>rental</c>، وقيمَة الراحَة خارِج المَعجَم المُسنَد.</summary>
+    [Fact]
+    public void Affinity_priority_and_fallback_are_declared()
+    {
+        Assert.Equal(new[] { "trip", "rental" }, RoleDealPatternAffinity.Priority.ToArray());
+        Assert.Equal(new[] { "trip", "rental" }, RoleDealPatternAffinity.All.ToArray());
+        Assert.Equal("marketplace", RoleDealPatternAffinity.Fallback);
+        Assert.False(RoleDealPatternAffinity.Contains(RoleDealPatternAffinity.Fallback));
+    }
+
     // ─── سالِب — كُلّ رَمز خَرق بِمُدخَلِه المَقصود ───────────────────
     [Theory]
     [MemberData(nameof(CorruptCases))]
@@ -211,6 +244,16 @@ public class RoleDefinitionValidatorTests
         data.Add("composition_component_out_of_vocabulary", Sound() with
         {
             Composition = new RoleComposition { Extras = ["driverArea", "teleporter"] },
+        });
+
+        data.Add("deal_pattern_affinity_out_of_vocabulary", Sound() with
+        {
+            DealPatternAffinity = "teleportation",
+        });
+        // «marketplace» قيمَة الراحَة لا انجِذاباً يُسنَد — خارِج المَعجَم قَصداً.
+        data.Add("deal_pattern_affinity_out_of_vocabulary", Sound() with
+        {
+            DealPatternAffinity = "marketplace",
         });
 
         return data;

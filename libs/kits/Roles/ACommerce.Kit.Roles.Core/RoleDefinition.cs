@@ -150,6 +150,78 @@ public sealed record RoleDefinition
     public IReadOnlyList<RoleFieldDefinition> Fields { get; init; } = [];
 
     public RoleComposition Composition { get; init; } = new();
+
+    /// <summary>
+    /// <para><b>نَمَط الصَفقَة الَّذي يَجُرّ إلَيه هذا الدَور</b> — مِن
+    /// <see cref="RoleDealPatternAffinity.All"/> حَصراً، أَو <c>null</c>
+    /// لِمَن لا يَجُرّ. مَصدَرُه شُروط <c>PatternFromTenant</c>
+    /// المُتَناثِرَة، وقَد ثَبَتَ بِالقِراءَة أَنَّها قائِمَة عَلى
+    /// <b>أَدوار مُفرَدَة</b> لا عَلى تَركيبات مَجموعات، فَمَوضِعُها
+    /// الطَبيعيّ حَقل في مِلَفّ الدَور لا جَدوَل قَواعِد.</para>
+    ///
+    /// <para><b>وهو نَمَط التَدَفُّق لا شَخصِيَّة الواجِهَة</b> — نَفس
+    /// التَّنبيه في META-MODEL §5: <c>AppPattern</c>
+    /// (<c>PatternProfileResolver</c>) مَعجَم آخَر بِقَواعِد أُخرى
+    /// يَقرَأ الفِئات أَيضاً، ولا يُشتَقّ مِن هذا الحَقل.</para>
+    ///
+    /// <para><b>وعَدَم تَماثُل مُوَثَّق لا مُصَحَّح</b>: <c>shipper</c>
+    /// بِلا انجِذاب رَغم أَنَّه دَور سائِق في كُلّ فَتحَة تَركيب
+    /// (<c>driverHome</c>/<c>driverNav</c>/<c>driverExplore</c>)، لِأَنّ
+    /// <c>PatternFromTenant</c> لَم يَكُن يَعُدُّه <c>trip</c>. تَصحيحُه
+    /// تَغيير سُلوك، والمَوجَة شَرطُها ألّا يَتَغَيَّر السُلوك بَتّاً —
+    /// فَنُقِلَ كَما هو ومَعَه اختِبار يُثَبِّتُه.</para>
+    /// </summary>
+    public string? DealPatternAffinity { get; init; }
+}
+
+/// <summary>
+/// <para><b>اشتِقاق نَمَط الصَفقَة مِن أَدوار المُستَأجِر — مَوضِع
+/// واحِد</b>. كانَ شُروطاً مُتَناثِرَة في <c>PatternFromTenant</c>
+/// تَذكُر أَسماء أَدوار بِأَعيانِها؛ صارَ الانجِذاب حَقلاً في مِلَفّ كُلّ
+/// دَور (<see cref="RoleDefinition.DealPatternAffinity"/>) وهذه الدالَّة
+/// تَجمَعُه. إضافَة دَور جَديد يَجُرّ نَمَطاً لَم تَعُد تَمَسّ كوداً.</para>
+///
+/// <para>نَفس نَمَط <c>DealPatternCatalog</c>: بَيانات في مَوضِع واحِد،
+/// ودالَّة نَقِيَّة فَوقَها، ومَعجَم مُغلَق يَحرُسُها.</para>
+/// </summary>
+public static class RoleDealPatternAffinity
+{
+    /// <summary>النَّمَط حينَ لا يَجُرّ أَيّ دَور — قيمَة الراحَة.
+    /// مُستَأجِر بِلا أَدوار، أَو بِأَدوار كُلُّها بِلا انجِذاب، أَو
+    /// بِأَدوار خارِج الكاتالوج: كُلُّها هُنا.</summary>
+    public const string Fallback = "marketplace";
+
+    /// <summary>المَعجَم المُغلَق لِقيَم الانجِذاب المَسموحَة. و
+    /// <see cref="Fallback"/> <b>ليسَ مِنه</b> بِقَصد: هو ما يُعطى حينَ
+    /// لا انجِذاب، فَإسنادُه إلى دَور لا يَعني شَيئاً.</summary>
+    public static readonly IReadOnlyList<string> All = new[] { "trip", "rental" };
+
+    /// <summary>تَرتيب الغَلَبَة عِندَ اجتِماع انجِذابَين في مُستَأجِر
+    /// واحِد — <c>trip</c> قَبل <c>rental</c>، مَنقولاً حَرفِيّاً مِن
+    /// تَرتيب الشُروط في <c>PatternFromTenant</c> (سائِق + مالِك سَكَن
+    /// في مَتجَر واحِد = <c>trip</c>).</summary>
+    public static readonly IReadOnlyList<string> Priority = new[] { "trip", "rental" };
+
+    private static readonly HashSet<string> Set = new(All, StringComparer.Ordinal);
+    public static bool Contains(string affinity) => Set.Contains(affinity);
+
+    /// <summary>النَّمَط المُشتَقّ مِن مَجموعَة <c>CatalogSlug</c>.
+    /// المُقارَنَة حَسّاسَة لِلحالَة كَما كانَت.</summary>
+    public static string Resolve(IEnumerable<string?> catalogSlugs)
+    {
+        var pulled = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var slug in catalogSlugs)
+        {
+            if (string.IsNullOrEmpty(slug)) continue;
+            var affinity = RoleCatalog.FindDefinition(slug)?.DealPatternAffinity;
+            if (!string.IsNullOrEmpty(affinity)) pulled.Add(affinity);
+        }
+
+        foreach (var pattern in Priority)
+            if (pulled.Contains(pattern)) return pattern;
+
+        return Fallback;
+    }
 }
 
 /// <summary>أَنواع الحُقول المُغلَقَة — مُطابِقَة حَرفِيّاً لِمُفرَدات

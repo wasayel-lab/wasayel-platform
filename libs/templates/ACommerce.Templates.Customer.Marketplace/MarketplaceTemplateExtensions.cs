@@ -3555,15 +3555,21 @@ public static class MarketplaceTemplateExtensions
     /// (<c>FlowExplainer</c> في صَفحَة الإعلان)، وَيَجِب أَن تَشرَح
     /// <b>نَفس</b> النَّمَط الَّذي سَيُنشِئُه هذا الكود عِندَ بَدء
     /// الصَّفقَة. اِشتِقاق ثانٍ في الواجِهَة كانَ سَيَنفَصِل صامِتاً.</para>
+    ///
+    /// <para><b>والشُروط صارَت بَيانات</b>: كانَت هُنا أَسماء أَدوار
+    /// بِأَعيانِها (<c>rider</c>/<c>driver</c>/<c>host</c>) في شُروط
+    /// مُتَناثِرَة؛ وصارَ الانجِذاب حَقلاً في مِلَفّ كُلّ دَور
+    /// (<c>dealPatternAffinity</c>) تَجمَعُه
+    /// <see cref="ACommerce.Kit.Roles.RoleDealPatternAffinity.Resolve"/>
+    /// بِتَرتيب غَلَبَة مُعلَن. الاشتِقاق قائِم عَلى <b>أَدوار مُفرَدَة</b>
+    /// لا تَركيبات مَجموعات — ولِذلك حَقل في المِلَفّ لا جَدوَل قَواعِد.
+    /// السُلوك مُطابِق، مَحروساً بِتَوصيف عَلى إحدى وعِشرينَ تَركيبَة.</para>
     /// </summary>
     public static string PatternFromTenant(ACommerce.Kit.Tenants.Tenant? t)
-    {
-        if (t is null || t.Roles.Count == 0) return "marketplace";
-        var cats = t.Roles.Select(r => r.CatalogSlug).ToHashSet();
-        if (cats.Contains("rider") || cats.Contains("driver")) return "trip";
-        if (cats.Contains("host")) return "rental";
-        return "marketplace";
-    }
+        => t is null
+            ? ACommerce.Kit.Roles.RoleDealPatternAffinity.Fallback
+            : ACommerce.Kit.Roles.RoleDealPatternAffinity.Resolve(
+                  t.Roles.Select(r => r.CatalogSlug));
 
     // اِستِخراج owner_id مِن listing.Attributes كَ Guid.
     private static Guid? ParseListingOwnerId(Listing listing)
