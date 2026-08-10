@@ -43,6 +43,11 @@ public static class MarketplaceTemplateExtensions
         // لَما كانَ كاشاً. والعَزل لا يَعتَمِد عَلى عُمر الخِدمَة بَل
         // عَلى أَنّ كُلّ قِراءَة تُفتَح بِجَلسَة سلاج المُستَأجِر.
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService>();
+
+        // ثيم المُستَأجِر وَقتَ التَّشغيل — Singleton بِنَفس المُبَرِّر
+        // حَرفاً: الكاش بِمِفتاح المُستَأجِر يَجِب أَن يَعبُر الطَلَبات،
+        // والعَزل يَقَع في جَلسَة السلاج لا في عُمر الخِدمَة.
+        services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService>();
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.WebPushService>();
         services.AddScoped<Gates.GatePipeline>();
         services.AddScoped<Commands.AcceptTermsHandler>();
@@ -1730,6 +1735,55 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect(ok
                 ? $"/admin/tenants/{slug}/roles?saved=1"
                 : $"/admin/tenants/{slug}/roles?err={Uri.EscapeDataString(msg)}");
+        }).DisableAntiforgery();
+
+        // ─── Admin: propose / decide a tenant theme ─────────────────────
+        // نَفس عَقد تَعريفات الأَدوار حَرفاً: اقتِراح يَكتُب **مُعَلَّقاً**،
+        // ثُمَّ قَرار بَشَريّ يُحييه أَو يَرفُضُه — ولا ثالِث. والبَوّابَة
+        // بَوّابَة **مُشرِف المَنصَّة**، لِلسَبَب نَفسِه: الثيم يُبَثّ في
+        // <head> لِكُلّ زائِر، فَهو قَرار مُستَوى مَنصَّة لا تَفضيل
+        // مَتجَر.
+        //
+        // **ولِماذا نُقطَتان في مَوجَة بِلا واجِهَة**: بِدونِهِما تَبقى
+        // طَبَقَة البَيانات كامِلَةً و**لا سَبيل إلى تَفعيلِها في خادِم
+        // يَعمَل** — وثيمٌ لا يُبلَغ لا يُثبِت شَيئاً. لا سَطح لاعِب هُنا
+        // ولا مُبَدِّل: ذلك المَوجَة التالِيَة.
+        app.MapPost("/admin/tenants/{slug}/theme/propose",
+            async (string slug, HttpRequest req, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth,
+                   Services.TenantThemeService themes,
+                   Services.Audit.AuditWriter audit) =>
+        {
+            var decision = await Services.PlatformAdminGuard.EvaluateAsync(store, auth);
+            if (!decision.Allowed) return Forbidden();
+
+            var themeSlug = req.Form["theme_slug"].ToString().Trim();
+            var json      = req.Form["definition"].ToString();
+            var by = decision.User is { } u ? $"{u.FullName} · {u.Phone}" : "platform-admin";
+
+            var (ok, msg) = await themes.ProposeAsync(slug, themeSlug, json, by);
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.theme_propose");
+            return ok ? Results.Ok(msg) : Results.BadRequest(msg);
+        }).DisableAntiforgery();
+
+        app.MapPost("/admin/tenants/{slug}/theme/{themeSlug}/decide",
+            async (string slug, string themeSlug, HttpRequest req, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth,
+                   Services.TenantThemeService themes,
+                   Services.Audit.AuditWriter audit) =>
+        {
+            var decision = await Services.PlatformAdminGuard.EvaluateAsync(store, auth);
+            if (!decision.Allowed) return Forbidden();
+
+            var verdict = req.Form["decision"].ToString().Trim() == "approve"
+                ? ACommerce.Kit.Theme.TenantThemeStatuses.Approved
+                : ACommerce.Kit.Theme.TenantThemeStatuses.Rejected;
+
+            var by = decision.User is { } u ? $"{u.FullName} · {u.Phone}" : "platform-admin";
+            var (ok, msg) = await themes.DecideAsync(slug, themeSlug, verdict, by);
+
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.theme_decide");
+            return ok ? Results.Ok(msg) : Results.BadRequest(msg);
         }).DisableAntiforgery();
 
         // ─── Admin: save categories ─────────────────────────────────────

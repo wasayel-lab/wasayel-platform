@@ -3,13 +3,22 @@
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&family=Rubik:wght@300;400;500;600;700&display=swap');
 
 :root {
-    /* ── Brand: Ejar Royal Blue + Amber accent ──────────────────────── */
-    --ac-primary:        #1D4ED8;   /* Royal Blue */
-    --ac-primary-dark:   #1E3A8A;
-    --ac-primary-light:  #3B82F6;
-    --ac-primary-hover:  #1E40AF;
-    --ac-secondary:      #F59E0B;   /* Amber accent */
-    --ac-secondary-hover:#D97706;
+    /* ── Brand: Ejar Royal Blue + Amber accent ──────────────────────────
+       القِيَم صارَت رُموز تَصميم تُبَثّ في <head> مِن ثيم المُستَأجِر
+       (‏--wsl-*‎). القيمَة الافتِراضيّة في default.theme.json هي هذه
+       بِعَينِها حَرفاً — الأَزرَق المَلَكيّ والكَهرَمان — فَلا بِكسل
+       يَتَغَيَّر قَبل أَن يُؤَلِّف مُستَأجِر ثيماً.
+
+       وحَدٌّ مُعلَن: لَون العَلامَة (‏Tenant.BrandColor عَبر
+       set_branding) لا تَمَسّه هذه الطَبَقَة. MainLayout يَكتُبُه
+       أُسلوباً مُضَمَّناً عَلى .acs-page فَيَغلِب هُنا وفي branding.css
+       مَعاً — وهو السُلوك القائِم، مَتروكاً كَما هو عَمداً. */
+    --ac-primary:        var(--wsl-color-primary);
+    --ac-primary-dark:   var(--wsl-color-primary-dark);
+    --ac-primary-light:  var(--wsl-color-primary-light);
+    --ac-primary-hover:  var(--wsl-color-primary-hover);
+    --ac-secondary:      var(--wsl-color-secondary);
+    --ac-secondary-hover:var(--wsl-color-secondary-hover);
 
     /* ── Neutral palette ────────────────────────────────────────────── */
     --ac-bg:            #FFFFFF;
@@ -22,11 +31,14 @@
     --ac-text-muted:    #475569;
     --ac-muted:         #475569;
 
-    /* ── Status ─────────────────────────────────────────────────────── */
-    --ac-success: #10B981;
+    /* ── Status ───────────────────────────────────────────────────────
+       ‏--ac-error خارِج المَعجَم عَمداً: عَدَد استِعمالاتِه في أَوراق
+       الأَنماط **صِفر** (مَقيس). رَمزٌ يُغَيِّرُه المُستَأجِر فَلا
+       يَتَغَيَّر شَيء أَسوَأ مِن غِيابِه. يَبقى حَرفِيّاً كَما كان. */
+    --ac-success: var(--wsl-color-success);
     --ac-error:   #EF4444;
-    --ac-danger:  #EF4444;
-    --ac-warning: #F59E0B;
+    --ac-danger:  var(--wsl-color-danger);
+    --ac-warning: var(--wsl-color-warning);
 
     /* radii */
     --ac-radius-sm: 8px;

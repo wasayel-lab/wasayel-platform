@@ -1,0 +1,54 @@
+{
+  "slug": "default",
+  "label": {
+    "ar": "الثيم الافتِراضيّ",
+    "en": null
+  },
+  "tokens": {
+    "color.primary": "#1D4ED8",
+    "color.primaryDark": "#1E3A8A",
+    "color.primaryLight": "#3B82F6",
+    "color.primaryHover": "#1E40AF",
+    "color.secondary": "#F59E0B",
+    "color.secondaryHover": "#D97706",
+
+    "color.bg": "#fafafa",
+    "color.bgAlt": "#f4f4f5",
+    "color.surface": "#ffffff",
+    "color.surface2": "#fafafa",
+
+    "color.border": "rgba(17,24,39,.07)",
+    "color.borderStrong": "rgba(17,24,39,.12)",
+
+    "color.text": "#18181b",
+    "color.textMuted": "#71717a",
+    "color.textSoft": "#a1a1aa",
+
+    "color.success": "#10B981",
+    "color.danger": "#EF4444",
+    "color.warning": "#F59E0B",
+    "color.info": "#0dcaf0",
+
+    "radius.sm": "8px",
+    "radius.md": "10px",
+    "radius.lg": "14px",
+    "radius.xl": "20px",
+    "radius.pill": "999px",
+
+    "space.xs": "0.25rem",
+    "space.sm": "0.5rem",
+    "space.md": "1rem",
+    "space.lg": "1.5rem",
+    "space.xl": "2rem",
+
+    "fontSize.sm": "0.875rem",
+    "fontSize.base": "1rem",
+    "fontSize.lg": "1.25rem",
+    "fontSize.xl": "1.5rem",
+    "fontWeight.normal": "400",
+    "fontWeight.bold": "600",
+    "lineHeight.base": "1.5",
+
+    "density": "1"
+  }
+}

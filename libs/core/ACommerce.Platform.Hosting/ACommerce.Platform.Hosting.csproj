@@ -20,5 +20,6 @@
     <ProjectReference Include="..\..\kits\Support\ACommerce.Kit.Support.Core\ACommerce.Kit.Support.Core.csproj" />
     <ProjectReference Include="..\..\kits\Offers\ACommerce.Kit.Offers.Core\ACommerce.Kit.Offers.Core.csproj" />
     <ProjectReference Include="..\..\kits\SavedSearches\ACommerce.Kit.SavedSearches.Core\ACommerce.Kit.SavedSearches.Core.csproj" />
+    <ProjectReference Include="..\..\kits\Theme\ACommerce.Kit.Theme.Core\ACommerce.Kit.Theme.Core.csproj" />
   </ItemGroup>
 </Project>

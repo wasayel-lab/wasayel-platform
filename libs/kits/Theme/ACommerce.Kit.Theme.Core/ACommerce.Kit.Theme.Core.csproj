@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- الثيم الافتِراضيّ: مِلَفّ ظاهِر في المُستودَع (يُقرَأ ويُحَرَّر
+       ويَظهَر فَرقُه في الـ diff) ومَضمون في التَّجميع عِندَ النَّشر —
+       بِنَفس مُبَرِّر تَعريفات الأَدوار حَرفاً (ThemeDefinitionLoader). -->
+  <ItemGroup>
+    <EmbeddedResource Include="Definitions\**\*.json" />
+  </ItemGroup>
+
+</Project>

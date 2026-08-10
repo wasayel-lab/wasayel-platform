@@ -19,13 +19,13 @@
     /* أَسطُح هادِئَة مُحايِدَة (ذَوق Linear/Notion): قُربَ الأَبيَض، لَمسَة
        دِفء طَفيفَة جِدّاً، بِلا صَبغَة لَون المَتجَر في الخَلفِيَّة. اللَون
        يُستَخدَم بِتَقَشُّف — لِلإجراءات والحالات النَّشِطَة فَقَط. */
-    --ac-bg:        #fafafa;
-    --ac-bg-alt:    #f4f4f5;
-    --ac-surface:   #ffffff;
-    --ac-surface-2: #fafafa;
+    --ac-bg:        var(--wsl-color-bg);
+    --ac-bg-alt:    var(--wsl-color-bg-alt);
+    --ac-surface:   var(--wsl-color-surface);
+    --ac-surface-2: var(--wsl-color-surface-2);
     /* حُدود هَيرلاين دَقيقَة مُحايِدَة — سِرّ النَّظافَة */
-    --ac-border:    rgba(17,24,39,.07);
-    --ac-border-strong: rgba(17,24,39,.12);
+    --ac-border:    var(--wsl-color-border);
+    --ac-border-strong: var(--wsl-color-border-strong);
 
     /* تِنتات لَون المَتجَر — لِلأَكسِسوار فَقَط (حالَة نَشِطَة، رُقعَة، أَيقونَة) */
     --ac-tint-04: color-mix(in srgb, var(--ac-primary) 4%, transparent);
@@ -35,9 +35,9 @@
     --ac-on-tint: color-mix(in srgb, var(--ac-primary) 72%, #000 28%);
 
     /* نَصّ بِتَدَرُّج هَرَميّ واضِح */
-    --ac-text:        #18181b;
-    --ac-text-muted:  #71717a;
-    --ac-text-soft:   #a1a1aa;
+    --ac-text:        var(--wsl-color-text);
+    --ac-text-muted:  var(--wsl-color-text-muted);
+    --ac-text-soft:   var(--wsl-color-text-soft);
 
     /* نِظام عُمق مُتَقَشِّف — ظِلال خَفيفَة جِدّاً (الاعتِماد على الهَيرلاين).
        النَّظافَة تَأتي مِن الحَدّ الدَّقيق + ظِلّ بِالكاد مَرئيّ، لا مِن ثِقَل. */
@@ -50,12 +50,13 @@
     --ac-shadow-brand: 0 4px 14px -4px color-mix(in srgb, var(--ac-primary) 30%, transparent);
     --ac-shadow-brand-sm: 0 2px 8px -3px color-mix(in srgb, var(--ac-primary) 26%, transparent);
 
-    /* أَنصاف أَقطار مُعتَدِلَة (لا مُفرِطَة الاستِدارَة) */
-    --ac-radius-sm:  8px;
-    --ac-radius-md:  10px;
-    --ac-radius-lg:  14px;
-    --ac-radius-xl:  20px;
-    --ac-radius-pill: 999px;
+    /* أَنصاف أَقطار مُعتَدِلَة (لا مُفرِطَة الاستِدارَة) — رُموز الآن،
+       وقِيَمُها الافتِراضيّة هي هذه الأَربَعَة والحَبَّة حَرفاً. */
+    --ac-radius-sm:  var(--wsl-radius-sm);
+    --ac-radius-md:  var(--wsl-radius-md);
+    --ac-radius-lg:  var(--wsl-radius-lg);
+    --ac-radius-xl:  var(--wsl-radius-xl);
+    --ac-radius-pill: var(--wsl-radius-pill);
 
     /* حَرَكَة — easings راقِيَة، خَفيفَة */
     --ac-ease:        cubic-bezier(.4, 0, .2, 1);

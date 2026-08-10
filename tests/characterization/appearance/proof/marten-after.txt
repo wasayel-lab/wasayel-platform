@@ -1,0 +1,4 @@
+2026-08-10T04:49:31.169Z  [themes/adwar-demo] عَدَد الوَثائِق = 1
+2026-08-10T04:49:31.173Z  [themes/adwar-demo] slug=adwar_green status=approved by=صاحِب المَشروع · 0576199682 decided=2026-08-10T04:49:07.2548094Z
+2026-08-10T04:49:31.369Z  [effective/adwar-demo] theme=adwar_green primary=#14532D radius.md=4px
+2026-08-10T04:49:31.707Z  [platform-admin] phone=0576199682 name=صاحِب المَشروع

@@ -1,264 +1,41 @@
-@inject L L
-@inject ITenantContext Tenant
-@inject AuthSession Auth
-@inject IHttpContextAccessor HttpCtx
-@inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
 <!DOCTYPE html>
-<html lang="@L.Lang" dir="@L.Dir">
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <base href="/" />
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="/"><title>&#x639;&#x64E;&#x634;&#x64A;&#x631; &#xB7; &#x627;&#x644;&#x633;&#x64E;&#x643;&#x64E;&#x646; &#x627;&#x644;&#x645;&#x64F;&#x634;&#x62A;&#x64E;&#x631;&#x64E;&#x643; &#x628;&#x623;&#x64E;&#x631;&#x64A;&#x64E;&#x62D;&#x64A;&#x651;&#x629;</title><meta name="description" content="&#x627;&#x644;&#x633;&#x64E;&#x643;&#x64E;&#x646; &#x627;&#x644;&#x645;&#x64F;&#x634;&#x62A;&#x64E;&#x631;&#x64E;&#x643; &#x628;&#x623;&#x64E;&#x631;&#x64A;&#x64E;&#x62D;&#x64A;&#x651;&#x629; &#x2014; &#x625;&#x628;" /><link rel="canonical" href="http://localhost:5050/ashare" /><meta name="theme-color" content="#7a288a" /><meta property="og:type" content="website">
+    <meta property="og:locale" content="ar_AR" />
+    <meta property="og:site_name" content="&#x639;&#x64E;&#x634;&#x64A;&#x631;" />
+    <meta property="og:title" content="&#x639;&#x64E;&#x634;&#x64A;&#x631; &#xB7; &#x627;&#x644;&#x633;&#x64E;&#x643;&#x64E;&#x646; &#x627;&#x644;&#x645;&#x64F;&#x634;&#x62A;&#x64E;&#x631;&#x64E;&#x643; &#x628;&#x623;&#x64E;&#x631;&#x64A;&#x64E;&#x62D;&#x64A;&#x651;&#x629;" /><meta property="og:description" content="&#x627;&#x644;&#x633;&#x64E;&#x643;&#x64E;&#x646; &#x627;&#x644;&#x645;&#x64F;&#x634;&#x62A;&#x64E;&#x631;&#x64E;&#x643; &#x628;&#x623;&#x64E;&#x631;&#x64A;&#x64E;&#x62D;&#x64A;&#x651;&#x629; &#x2014; &#x625;&#x628;" /><meta property="og:url" content="http://localhost:5050/ashare" /><meta property="og:image" content="http://localhost:5050/api/ashare/icon.svg" /><meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="&#x639;&#x64E;&#x634;&#x64A;&#x631; &#xB7; &#x627;&#x644;&#x633;&#x64E;&#x643;&#x64E;&#x646; &#x627;&#x644;&#x645;&#x64F;&#x634;&#x62A;&#x64E;&#x631;&#x64E;&#x643; &#x628;&#x623;&#x64E;&#x631;&#x64A;&#x64E;&#x62D;&#x64A;&#x651;&#x629;" /><meta name="twitter:description" content="&#x627;&#x644;&#x633;&#x64E;&#x643;&#x64E;&#x646; &#x627;&#x644;&#x645;&#x64F;&#x634;&#x62A;&#x64E;&#x631;&#x64E;&#x643; &#x628;&#x623;&#x64E;&#x631;&#x64A;&#x64E;&#x62D;&#x64A;&#x651;&#x629; &#x2014; &#x625;&#x628;" /><meta name="twitter:image" content="http://localhost:5050/api/ashare/icon.svg" /><script type="application/ld&#x2B;json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"http://localhost:5050/ashare#organization","name":"\u0639\u064E\u0634\u064A\u0631","url":"http://localhost:5050/ashare","description":"\u0627\u0644\u0633\u064E\u0643\u064E\u0646 \u0627\u0644\u0645\u064F\u0634\u062A\u064E\u0631\u064E\u0643 \u0628\u0623\u064E\u0631\u064A\u064E\u062D\u064A\u0651\u0629 \u2014 \u0625\u0628","address":{"@type":"PostalAddress","addressLocality":"\u0625\u0628","addressCountry":"SA"},"logo":"http://localhost:5050/api/ashare/icon.svg","image":"http://localhost:5050/api/ashare/icon.svg"},{"@type":"WebSite","@id":"http://localhost:5050/ashare#website","name":"\u0639\u064E\u0634\u064A\u0631","url":"http://localhost:5050/ashare","inLanguage":"ar","publisher":{"@id":"http://localhost:5050/ashare#organization"},"potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"http://localhost:5050/ashare/explore?q={search_term_string}"},"query-input":"required name=search_term_string"}}]}</script><link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap">
 
-    @* ─── SEO — تَرويسَة ديناميكيَّة لِكُلّ مُستَأجِر ────────────────────
-       العُنوان وَالوَصف وَالـ canonical وَبِطاقات المُشارَكَة كُلُّها مِن
-       وَثيقَة المُستَأجِر الَّتي حَمَّلَها الـ middleware أَصلاً (صِفر
-       استِعلام إضافيّ). صَفَحات المَنصَّة نَفسِها (الهُبوط/الاستوديو/
-       الإدارَة) تَسقُط عَلى الافتِراضيّ.
+    <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/widgets.css">
+    <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/templates-shared.css">
+    <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/templates-marketplace.css">
+    <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/app.css">
+    <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/site.css">
+    <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/studio.css">
+    <link rel="stylesheet" href="_content/ACommerce.Kit.Maps.Web/maps.css"><link rel="stylesheet" href="/branding/ashare.css" /><link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/premium.css">
 
-       لِماذا هُنا وَلَيس بِـ <PageTitle>؟ تَحت SSR الثابِت يُصَيِّر
-       HeadOutlet وَسم <title> ثانِياً في نَفس المُستَند، وَالمُتَصَفِّح
-       (وَالزاحِف) يَعتَمِد الأَوَّل — فَعُنوان الصَفحَة يَجِب أَن يُكتَب
-       مَرَّة واحِدَة، هُنا. *@
-    @{
-        var seoReq       = HttpCtx.HttpContext?.Request;
-        var seoBase      = seoReq is null ? "" : $"{seoReq.Scheme}://{seoReq.Host}";
-        var seoPath      = seoReq?.Path.Value ?? "/";
-        var seoCanonical = seoBase.Length > 0 ? seoBase + seoPath : null;
-        var seoSegments  = seoPath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+    <script src="_content/ACommerce.Templates.Customer.Marketplace/admin-editors.js" defer></script><link rel="icon" type="image/svg+xml" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.svg">
+        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png">
+        <meta name="apple-mobile-web-app-title" content="وَسايِل"></head>
+<body><div class="acs-page" style="--ac-primary:#7a288a; --ac-primary-dark:#7a288a; --ac-primary-light:#7a288a; --ac-primary-hover:#7a288a;"><main><div class="acs-page acm-home"><div class="acs-page acm-role-landing"><header class="acm-role-landing-head"><div class="acm-role-landing-brand" style="background:#7a288a;">&#x639;</div>
+        <h1>&#x639;&#x64E;&#x634;&#x64A;&#x631;</h1><p>&#x627;&#x644;&#x633;&#x64E;&#x643;&#x64E;&#x646; &#x627;&#x644;&#x645;&#x64F;&#x634;&#x62A;&#x64E;&#x631;&#x64E;&#x643; &#x628;&#x623;&#x64E;&#x631;&#x64A;&#x64E;&#x62D;&#x64A;&#x651;&#x629;</p><span class="acm-role-landing-hint"><svg class="ac-icon " width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9Z"/></svg> اختَر تَطبيقَكَ لِلمُتابَعَة
+        </span></header>
 
-        // الرَئيسيَّة = /{slug} أَو /{slug}/r/{role} — وَحدَها تَحمِل JSON-LD.
-        var seoIsHome = Tenant.IsResolved &&
-                        (seoSegments.Length == 1 ||
-                         (seoSegments.Length == 3 && seoSegments[1] == "r"));
+    <div class="acm-role-landing-cards"><a class="acm-role-landing-card" href="/ashare/r/customer/login"><span class="acm-role-landing-card-icon"><svg class="ac-icon " width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/><path d="M3 4h2l2.5 11h11l2-8H7"/></svg></span>
+                <div><strong>&#x639;&#x64E;&#x645;&#x64A;&#x644;</strong><span>&#x645;&#x64F;&#x634;&#x62A;&#x64E;&#x631;&#x64A; &#x639;&#x627;&#x645;&#x651; &#x2014; &#x64A;&#x64E;&#x62A;&#x64E;&#x635;&#x64E;&#x641;&#x64E;&#x651;&#x62D; &#x648;&#x64A;&#x64E;&#x62A;&#x64E;&#x648;&#x627;&#x635;&#x64E;&#x644; &#x648;&#x64A;&#x64E;&#x634;&#x62A;&#x64E;&#x631;&#x64A;. &#x644;&#x627; &#x64A;&#x64E;&#x646;&#x634;&#x64F;&#x631; &#x625;&#x639;&#x644;&#x627;&#x646;&#x627;&#x62A;.</span></div>
+                <span class="acm-role-landing-card-cta" aria-hidden="true"><svg class="ac-icon " width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg></span></a><a class="acm-role-landing-card" href="/ashare/r/host/login"><span class="acm-role-landing-card-icon"><svg class="ac-icon " width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1Z"/></svg></span>
+                <div><strong>&#x645;&#x627;&#x644;&#x650;&#x643; &#x633;&#x64E;&#x643;&#x64E;&#x646;</strong><span>&#x645;&#x627;&#x644;&#x650;&#x643; &#x639;&#x64E;&#x642;&#x627;&#x631; &#x64A;&#x64E;&#x646;&#x634;&#x64F;&#x631; &#x625;&#x639;&#x644;&#x627;&#x646; &#x633;&#x64E;&#x643;&#x64E;&#x646; &#x644;&#x650;&#x644;&#x625;&#x64A;&#x62C;&#x627;&#x631; &#x623;&#x64E;&#x648; &#x627;&#x644;&#x645;&#x64F;&#x634;&#x627;&#x631;&#x64E;&#x643;&#x64E;&#x629;.</span></div>
+                <span class="acm-role-landing-card-cta" aria-hidden="true"><svg class="ac-icon " width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg></span></a><a class="acm-role-landing-card" href="/ashare/r/vendor/login"><span class="acm-role-landing-card-icon"><svg class="ac-icon " width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7 5 3h14l1 4"/><path d="M4 7v13h16V7"/><path d="M9 20v-6h6v6"/><path d="M4 7a2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0"/></svg></span>
+                <div><strong>&#x62A;&#x627;&#x62C;&#x650;&#x631;</strong><span>&#x635;&#x627;&#x62D;&#x650;&#x628; &#x646;&#x64E;&#x634;&#x627;&#x637; &#x62A;&#x650;&#x62C;&#x627;&#x631;&#x64A;&#x651; &#x2014; &#x64A;&#x64E;&#x646;&#x634;&#x64F;&#x631; &#x625;&#x639;&#x644;&#x627;&#x646;&#x627;&#x62A; &#x648;&#x64E; &#x64A;&#x64E;&#x631;&#x64F;&#x62F;&#x651; &#x639;&#x64E;&#x644;&#x649; &#x627;&#x644;&#x627;&#x633;&#x62A;&#x650;&#x641;&#x633;&#x627;&#x631;&#x627;&#x62A;.</span></div>
+                <span class="acm-role-landing-card-cta" aria-hidden="true"><svg class="ac-icon " width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg></span></a></div>
 
-        ACommerce.Kit.Tenants.Tenant? seoTenant = Tenant.IsResolved
-            ? new ACommerce.Kit.Tenants.Tenant
-              {
-                  Id         = Tenant.Slug,
-                  Name       = Tenant.Name,
-                  TagLine    = Tenant.TagLine,
-                  City       = Tenant.City,
-                  BrandColor = Tenant.BrandColor
-              }
-            : null;
-
-        var seoTitle = seoTenant is null
-            ? "وَسايِل · Wasayel"
-            : ACommerce.Kit.Tenants.SeoDocuments.HomeTitle(seoTenant);
-        var seoDescription = seoTenant is null
-            ? "مَنَصَّة تِجارَة وَخَدَمات مُتَعَدِّدَة المُستَأجِرين، عَرَبِيَّة أَوَّلاً."
-            : ACommerce.Kit.Tenants.SeoDocuments.HomeDescription(seoTenant);
-        var seoImage = seoBase.Length == 0 ? null
-            : seoTenant is not null
-                ? $"{seoBase}/api/{Uri.EscapeDataString(Tenant.Slug)}/icon.svg"
-                : $"{seoBase}/_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png";
-    }
-    <title>@seoTitle</title>
-    @if (!string.IsNullOrEmpty(seoDescription))
-    {
-        <meta name="description" content="@seoDescription" />
-    }
-    @if (seoCanonical is not null)
-    {
-        <link rel="canonical" href="@seoCanonical" />
-    }
-    @if (Tenant.IsResolved)
-    {
-        <meta name="theme-color" content="@Tenant.BrandColor" />
-    }
-
-    @* OpenGraph + Twitter — نَفس النُصوص، لا اختِراع. *@
-    <meta property="og:type" content="website" />
-    <meta property="og:locale" content="@(L.IsArabic ? "ar_AR" : "en_US")" />
-    <meta property="og:site_name" content="@(Tenant.IsResolved ? Tenant.Name : "وَسايِل")" />
-    <meta property="og:title" content="@seoTitle" />
-    @if (!string.IsNullOrEmpty(seoDescription))
-    {
-        <meta property="og:description" content="@seoDescription" />
-    }
-    @if (seoCanonical is not null)
-    {
-        <meta property="og:url" content="@seoCanonical" />
-    }
-    @if (seoImage is not null)
-    {
-        <meta property="og:image" content="@seoImage" />
-    }
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="@seoTitle" />
-    @if (!string.IsNullOrEmpty(seoDescription))
-    {
-        <meta name="twitter:description" content="@seoDescription" />
-    }
-    @if (seoImage is not null)
-    {
-        <meta name="twitter:image" content="@seoImage" />
-    }
-
-    @* JSON-LD (Organization + WebSite) لِلرَئيسيَّة فَقَط.
-       MarkupString آمِنَة هُنا: النَصّ مُخرَج System.Text.Json بِالمُرَمِّز
-       الافتِراضيّ الَّذي يَهرُب < و > و & إلى \uXXXX — فَلا يَستَطيع اِسم
-       مَتجَر أَو شِعار أَن يُغلِق وَسم <script> أَو يَحقِن HTML. *@
-    @if (seoIsHome && seoTenant is not null && seoBase.Length > 0)
-    {
-        <script type="application/ld+json">
-            @((MarkupString)ACommerce.Kit.Tenants.SeoDocuments.BuildHomeJsonLd(seoTenant, seoBase))
-        </script>
-    }
-
-    @* خَطّ Cairo بِنَفس الأَوزان الَّتي يُحَمِّلها كُلّ مِن Ashare V3
-       و Ejar V1: 400 (نَصّ)، 600 (مُتَوَسِّط)، 700 (عَريض). *@
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" />
-
-    @* ─── رُموز التَّصميم — المُدخَلات قَبل الأَوراق ────────────────────
-       كُتلَة <style> واحِدَة تَحمِل ‏:root بِكُلّ رُموز الثيم الفَعّال
-       (الافتِراضيّ، أَو الافتِراضيّ وقَد غُلِّبَت عَلَيه وَثيقَة
-       المُستَأجِر المُعتَمَدَة). أَوراق الأَنماط تَقرَؤُها بِـvar()‎.
-
-       **ولِماذا قَبل الأَوراق لا بَعدَها**: مُتَغَيِّرات CSS تُحَلّ
-       بِالكَسَل — فَتَرتيب تَصريحَة ‎--wsl-*‎ لا يُؤَثِّر عَلى
-       ‎var(--wsl-*)‎ في أَيّ وَرَقَة. لكِنّ البَثّ بَعدَ الأَوراق كانَ
-       سَيُغري بِكِتابَة ‎--ac-*‎ مِن هُنا، فَيَنتَزِع مِن branding.css
-       مِلكِيَّةَ لَون المَتجَر. المَوضِع يَقول القَصد: هذه مُدخَلات، لا
-       تَغليب.
-
-       ومُعَرِّف الكُتلَة ‎wsl-theme‎ لَيسَ زينَة: بَوّابَة القَبول
-       (scripts/compare-appearance.sh) تَنزِعُه بِاسمِه ثُمَّ تُقارِن
-       الباقي بايتاً بِبايت. *@
-    <style id="wsl-theme">@Theme.Css</style>
-
-    <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/widgets.css" />
-    <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/templates-shared.css" />
-    <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/templates-marketplace.css" />
-    <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/app.css" />
-    <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/site.css" />
-    <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/studio.css" />
-    <link rel="stylesheet" href="_content/ACommerce.Kit.Maps.Web/maps.css" />
-
-    @* branding.css لِكُلّ مُستَأجِر (مَنقولاً مِن Ashare.V3.Web/Ejar.Web).
-       يُحَدِّد --ac-primary وألوان أُخرى — يُحَمَّل آخِراً لِيَفوز عَلى
-       الافتراضي. لا يُرَكَّب إلّا بَعد أن يُحَلِّل الـ middleware الـ slug. *@
-    @if (Tenant.IsResolved && (Tenant.Slug == "ashare" || Tenant.Slug == "ejar"))
-    {
-        <link rel="stylesheet" href="@($"/branding/{Tenant.Slug}.css")" />
-    }
-
-    @* طَبَقَة الرُّقِيّ البَصَريّ — تُحَمَّل آخِراً (بَعد branding) لِتَفوز على
-       كُلّ شَيء في تَنسيق المُكَوِّنات، دونَ لَمس --ac-primary المَملوك لِكُلّ
-       مَتجَر. تَرفَع كُلّ صَفحَة في كُلّ دَور. *@
-    <link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/premium.css" />
-
-    @* مُحَرِّرات الادمن المُهَيكَلَة — يَعمَل تَحت enhanced nav. defer لِيُحَمَّل
-       بَعد blazor فَيَلتَقِط enhancedload. *@
-    <script src="_content/ACommerce.Templates.Customer.Marketplace/admin-editors.js" defer></script>
-
-    @* PWA: manifest + theme-color + iOS web-app meta.
-       قاعِدَة: التَّثبيت "يَبدَأ" مِن داخِل تَطبيق دَور فِعليّ — لا مِن
-       صَفحَة /login أَو /terms أَو /admin أَو الـ launcher الفارِغ
-       (مَثَلاً /injez). هذا يَمنَع المُستَخدِم مِن تَثبيت "صَفحَة
-       الدُخول" كَ PWA مُستَقِلّ. لِمَتاجِر بِلا أَدوار (ashare/ejar)
-       نَسمَح بِالتَّثبيت مِن أَيّ صَفحَة-تَطبيق (غَير عابِرَة). *@
-    @{
-        var rawPath = HttpCtx.HttpContext?.Request.Path.Value ?? "";
-        var roleForPwa = HttpCtx.HttpContext is { } pctx
-            ? ACommerce.Templates.Customer.Marketplace.AuthSession.ExtractRoleFromPath(pctx.Request.Path)
-            : null;
-
-        // مَسارات عابِرَة: لا تُمَثِّل التَّطبيق نَفسه.
-        var isTransient = rawPath.Contains("/login")
-                       || rawPath.Contains("/verify")
-                       || rawPath.Contains("/terms")
-                       || rawPath.Contains("/logout")
-                       || rawPath.Contains("/auth/")
-                       || rawPath.StartsWith("/admin");
-
-        // launcher: المَسار = "/{slug}" بِدون أَيّ شَيء بَعدَه. لِلمَتاجِر
-        // ذات الأَدوار (إنجيز)، هذه الصَفحَة لِاختِيار الدَور لا لِلاستِخدام —
-        // التَّثبيت يَجِب أَن يَكون مِن داخِل دَور.
-        var pathSegments = rawPath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var isLauncher = pathSegments.Length == 1;
-
-        // قاعِدَة الـ manifest:
-        //  - عابِرَة → لا manifest (لا تَظهَر القابِليَّة لِلتَّثبيت)
-        //  - URL فيه /r/{role}/ → manifest الدَور
-        //  - بِلا /r/ و لَيس launcher → manifest الـ slug (لِمَتاجِر بِلا أَدوار)
-        //  - launcher بِدون /r/ → لا manifest (نَنتَظِر دُخول الدَور)
-        string? pwaPath = null;
-        if (Tenant.IsResolved && !isTransient)
-        {
-            if (!string.IsNullOrEmpty(roleForPwa))
-                pwaPath = $"/api/{Tenant.Slug}/r/{roleForPwa}";
-            else if (!isLauncher)
-                pwaPath = $"/api/{Tenant.Slug}";
-        }
-    }
-    @if (pwaPath is not null)
-    {
-        <link rel="manifest" href="@($"{pwaPath}/manifest.json")" />
-        <link rel="icon" type="image/svg+xml" href="@($"{pwaPath}/icon.svg")" />
-        <link rel="apple-touch-icon" href="@($"{pwaPath}/icon.svg")" />
-        @* theme-color يُكتَب مَرَّة واحِدَة في كُتلَة الـ SEO أَعلاه. *@
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="@Tenant.Name" />
-        <meta name="mobile-web-app-capable" content="yes" />
-    }
-    else
-    {
-        @* صَفَحات المَنصَّة نَفسها (الهُبوط / studio / admin) لا تَملِك
-           tenant — تَستَخدِم أَيقونَة وَسايِل كَ favicon افتراضيّ. *@
-        <link rel="icon" type="image/svg+xml"
-              href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.svg" />
-        <link rel="apple-touch-icon"
-              href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png" />
-        <meta name="apple-mobile-web-app-title" content="وَسايِل" />
-    }
-
-    <HeadOutlet />
-</head>
-<body>
-    @* Install pill — زِرّ صَغير عائِم في زاوِيَة الشاشَة. مَخفيّ
-       افتراضيّاً، يَظهَره JS فَقَط لَو الـ PWA قابِلَة لِلتَثبيت
-       (https/localhost + SW + manifest). *@
-    @if (pwaPath is not null)
-    {
-        <div id="ac-install-banner" class="ac-pwa-pill" style="display:none;">
-            <button type="button" onclick="acInstall()" class="ac-pwa-pill-cta"
-                    aria-label="تَثبيت التَطبيق">
-                <span class="ac-pwa-pill-icon">⤓</span>
-                <span class="ac-pwa-pill-text">تَثبيت</span>
-            </button>
-            <button type="button" onclick="acDismissInstall()" class="ac-pwa-pill-x"
-                    aria-label="إغلاق">✕</button>
-        </div>
-    }
-    <Routes />
+    <div class="acm-role-landing-foot"><a href="/ashare/login">لَدَيكَ حِساب بِدَور مُعَيَّن؟ سَجِّل الدُخول</a></div></div></div></main></div>
+        <blazor-focus-on-navigate selector="h1"></blazor-focus-on-navigate>
     <script src="_framework/blazor.web.js"></script>
-    <script src="_content/ACommerce.Kit.Maps.Web/maps.js" defer></script>
-
-    @* SignalR JS client مِن CDN — يَكفي لِلاتِّصال بِـ /realtime hub.
-       تُحَمَّل عِندَ الحاجَة فَقَط (لَو مُستَخدِم مُتَّصِل) لِتَجَنُّب
-       تَحميل إضافيّ لِلصَفَحات العامَّة. *@
-    @{
-        if (HttpCtx.HttpContext is { } ctx2 && Tenant.IsResolved)
-        {
-            Auth.SetTenant(Tenant.Slug);
-            Auth.Load(ctx2, Tenant.Slug);
-        }
-    }
-    @if (Auth.IsAuthenticated && !string.IsNullOrEmpty(Auth.Token))
-    {
-        <script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@@8.0.7/dist/browser/signalr.min.js"></script>
-        <script>
-            window.acRealtimeToken = '@Auth.Token';
-            window.acRealtimeSlug  = '@Tenant.Slug';
-        </script>
-        <script src="_content/ACommerce.Templates.Customer.Marketplace/realtime-nav.js" defer></script>
-    }
-    <script>
+    <script src="_content/ACommerce.Kit.Maps.Web/maps.js" defer></script><script>
         // مُمَرِّر تِلقائيّ لِأَسفَل thread الوَكيل بَعد كُلّ تَحديث.
         // يُستَدعَى مِن AgentChat عَبر IJSRuntime.InvokeVoidAsync.
         window.scrollAgentToBottom = function () {
@@ -652,37 +429,4 @@
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
         };
-    </script>
-</body>
-</html>
-
-@code {
-    /// <summary>
-    /// <para><b>الثيم الفَعّال لِهذا الطَلَب</b> — الافتِراضيّ حَتَّى
-    /// تُقرَأ وَثيقَة المُستَأجِر. الابتِداء بِالافتِراضيّ (لا بِـnull)
-    /// يَعني أَنّ كُلّ مَسار فَشَل — سِياق بِلا مُستَأجِر، جَدوَل غَير
-    /// مُنشَأ، خَلَل عابِر — يَبُثّ مَظهَر اليَوم حَرفاً بَدَل أَن يَبُثّ
-    /// كُتلَة ناقِصَة أَو يَرمي في <c>&lt;head&gt;</c>.</para>
-    /// </summary>
-    ACommerce.Kit.Theme.EffectiveTheme Theme = ACommerce.Kit.Theme.ThemeCatalog.Default;
-
-    protected override async Task OnInitializedAsync()
-    {
-        // سِياق المَنصَّة (الهُبوط/الاستوديو/الإدارَة) لا مُستَأجِر لَه —
-        // ‏ForAsync يُجيب بِقاعِدَة المَنصَّة بِلا استِعلام أَصلاً.
-        if (!Tenant.IsResolved) return;
-
-        try
-        {
-            Theme = await Themes.EffectiveAsync(Tenant.Slug);
-        }
-        catch (Exception ex)
-        {
-            // الخِدمَة تَبتَلِع أَخطاءَها وتَسقُط لِلافتِراضيّ؛ هذا
-            // الحِزام الثاني لِما لا تُمسِكُه (‏DI، إلغاء). صَفحَة بِلا
-            // ثيم مُخَصَّص أَهوَن مِن صَفحَة بِـ500 في <head>.
-            Console.Error.WriteLine(
-                $"[theme] تَعَذَّرَ حَلّ ثيم «{Tenant.Slug}» — الافتِراضيّ: {ex.Message}");
-        }
-    }
-}
+    </script></body></html><!--Blazor-Server-Component-State:NORMALIZED>

@@ -40,7 +40,10 @@
     --ac-success: #198754;
     --ac-danger:  #dc3545;
     --ac-warning: #ffc107;
-    --ac-info:    #0dcaf0;
+    /* success/danger/warning يُغَلِّبها app.css (يُحَمَّل بَعد هذا
+       المِلَفّ) وهُناكَ صارَت رُموزاً. info لا يُعَرَّف إلّا هُنا، فَهُنا
+       يَصير رَمزاً. */
+    --ac-info:    var(--wsl-color-info);
 
     /* ===== Surfaces ===== */
     --ac-bg:         #ffffff;
@@ -56,20 +59,28 @@
 
     /* ===== Typography ===== */
     --ac-font-family: system-ui, -apple-system, 'Segoe UI', Tahoma, 'Noto Kufi Arabic', Arial, sans-serif;
-    --ac-font-size-base: 1rem;
-    --ac-font-size-sm:   0.875rem;
-    --ac-font-size-lg:   1.25rem;
-    --ac-font-size-xl:   1.5rem;
-    --ac-font-weight-normal: 400;
-    --ac-font-weight-bold:   600;
-    --ac-line-height-base:   1.5;
+    /* عائِلَة الخَطّ أَعلاه **لَيسَت رَمزاً** عَمداً: تَغطِيَة المَحارِف
+       العَرَبيَّة شَرط لا تَفضيل، وخَطٌّ بِلا تَغطِيَة يَرسُم مُرَبَّعات
+       فارِغَة عَلى الجِهاز. تُفتَح حينَ يُفحَص كُلّ خَطّ مُرَشَّح فِعلاً. */
+    --ac-font-size-base: var(--wsl-font-size-base);
+    --ac-font-size-sm:   var(--wsl-font-size-sm);
+    --ac-font-size-lg:   var(--wsl-font-size-lg);
+    --ac-font-size-xl:   var(--wsl-font-size-xl);
+    --ac-font-weight-normal: var(--wsl-font-weight-normal);
+    --ac-font-weight-bold:   var(--wsl-font-weight-bold);
+    --ac-line-height-base:   var(--wsl-line-height-base);
 
-    /* ===== Spacing ===== */
-    --ac-space-xs: 0.25rem;
-    --ac-space-sm: 0.5rem;
-    --ac-space-md: 1rem;
-    --ac-space-lg: 1.5rem;
-    --ac-space-xl: 2rem;
+    /* ===== Spacing =====
+       المِقياس × الكَثافَة. ‏--wsl-density افتِراضُه 1، و calc(x · 1)
+       يُحسَب إلى x بِالضَبط — فَالكَثافَة تَدخُل المَنصَّة بِتَكافُؤ
+       صِفريّ بَرهانيّ لا بِدَعوى. وهذا هو **المُستَهلِك الحَقيقيّ**
+       لِرَمز الكَثافَة: بِلا هذا السَطر لَكانَ رَمزاً لا يَقرَؤُه
+       أَحَد. */
+    --ac-space-xs: calc(var(--wsl-space-xs) * var(--wsl-density));
+    --ac-space-sm: calc(var(--wsl-space-sm) * var(--wsl-density));
+    --ac-space-md: calc(var(--wsl-space-md) * var(--wsl-density));
+    --ac-space-lg: calc(var(--wsl-space-lg) * var(--wsl-density));
+    --ac-space-xl: calc(var(--wsl-space-xl) * var(--wsl-density));
 
     /* ===== Radius ===== */
     --ac-radius-sm: 0.25rem;

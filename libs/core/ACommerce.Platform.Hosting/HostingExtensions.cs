@@ -102,6 +102,14 @@ public static class HostingExtensions
                 opts.Schema.For<ACommerce.Kit.Roles.TenantRoleDefinition>()
                     .Identity(x => x.Id);
 
+                // ثيم المُستَأجِر — نَفس العَقد حَرفاً: مُتَعَدِّد الإيجار
+                // بِالسِياسَة العامَّة (conjoined)، والـ Id سلاج الثيم.
+                // والعَزل هُنا أَشَدّ إلزاماً: تَسَرُّب تَعريف دَور يُظهِر
+                // خِياراً لا يَملِكُه مَتجَر؛ وتَسَرُّب ثيم يَصبُغ صَفحَة
+                // مَتجَر بِلَون مَتجَر آخَر — خَطَأً يَراه كُلّ زائِر.
+                opts.Schema.For<ACommerce.Kit.Theme.TenantThemeDefinition>()
+                    .Identity(x => x.Id);
+
                 // ImportedRecord: مُستَنَد عامّ يَكتُبه الـ Importer لِكُلّ
                 // صَفّ مِن جَدول مَصدَر لا يَملِك typed map. الـ Id سَلسَلَة
                 // "{Table}/{SourceId}" — Marten يَحتاج Identity صَريحَة.

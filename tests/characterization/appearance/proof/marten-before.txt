@@ -1,0 +1,3 @@
+2026-08-10T04:47:53.178Z  [themes/adwar-demo] عَدَد الوَثائِق = 0
+2026-08-10T04:47:53.374Z  [effective/adwar-demo] theme=default primary=#1D4ED8 radius.md=10px
+2026-08-10T04:47:53.725Z  [platform-admin] phone=0576199682 name=صاحِب المَشروع
