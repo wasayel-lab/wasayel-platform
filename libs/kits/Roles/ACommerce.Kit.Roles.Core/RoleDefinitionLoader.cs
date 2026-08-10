@@ -81,6 +81,30 @@ public static class RoleDefinitionLoader
         return list;
     }
 
+    /// <summary>
+    /// <para><b>قِراءَة تَعريف دَور مِن نَصّ JSON</b> — بِـ
+    /// <see cref="Options"/> نَفسِها الَّتي يَقرَأ بِها
+    /// <see cref="LoadEmbedded"/> (نَفس الحَقل السّاكِن، لا نُسخَة
+    /// مُشابِهَة)، فَما يَصِحّ هُنا يَصِحّ هُناك بِالبِناء لا
+    /// بِالمُصادَفَة.</para>
+    ///
+    /// <para><b>لِماذا مَدخَل عامّ وليسَ تَفصيلاً خاصّاً</b>: مَصدَر
+    /// النَّصّ اليَوم مَورِد مَضمون، وغَداً وَثيقَة Marten لِكُلّ
+    /// مُستَأجِر (<c>define_role</c>) — والقِراءَة واحِدَة في الحالَتَين.
+    /// وهو أَيضاً ما يَسمَح بِاختِبار <b>مِلَفّ دَور مُصطَنَع</b> عَبر
+    /// مَسارِه الكامِل (نَصّ ← تَعريف ← مُصادِق) لا عَبر كائِن يُبنى
+    /// في الاختِبار ويَتَخَطّى التَّسَلسُل.</para>
+    ///
+    /// <para><b>ولا يُصادِق</b> بِقَصد: يُرجِع التَّعريف كَما قُرِئ،
+    /// والمُصادَقَة تُطلَب صَريحَةً مِن
+    /// <see cref="RoleDefinitionValidator"/> — لِيَبقى الفَصل بَين
+    /// «تَعَذَّرَت القِراءَة» (مِفتاح مَجهول، JSON تالِف ← استِثناء)
+    /// و«قُرِئَ وخالَفَ» (قائِمَة خُروقات بِرُموزِها).</para>
+    /// </summary>
+    public static RoleDefinition ParseDefinition(string json) =>
+        JsonSerializer.Deserialize<RoleDefinition>(json, Options)
+        ?? throw new InvalidOperationException("نَصّ تَعريف الدَور أَعطى null.");
+
     private static T Read<T>(Assembly asm, string resourceSuffix)
     {
         var name = asm.GetManifestResourceNames()

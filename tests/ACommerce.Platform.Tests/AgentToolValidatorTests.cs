@@ -83,6 +83,26 @@ public class AgentToolValidatorTests
             $"سُلِّم الكاتالوج كامِلاً فَرُفِض: {string.Join(" | ", result.Errors)}");
     }
 
+    /// <summary><para><b>البُرهان المُباشَر لِمَوجَة «تَأليف الأَدوار»</b>:
+    /// ثَلاثَة أَدوار أُلِّفَت مِلَفّات JSON خالِصَة، والوَكيل يَقبَلُها
+    /// اليَوم — و<c>AgentService</c> <b>لَم يُلمَس</b> بَينَ تَأليفِها
+    /// وقَبولِها. لَو كانَ التَّعداد ما يَزال مَنسوخاً لَسَقَطَ هذا
+    /// الاختِبار وَحدَه، فَهو الفَرق بَين «الاشتِقاق يَعمَل» و«الاشتِقاق
+    /// مَكتوب».</para></summary>
+    [Theory]
+    [InlineData("broker")]
+    [InlineData("mover")]
+    [InlineData("organizer")]
+    public void SetRoles_AcceptsFileComposedRole(string slug)
+    {
+        Assert.Contains(slug, ACommerce.Kit.Roles.RoleCatalog.All.Select(t => t.Slug));
+
+        var result = AgentToolValidator.Validate("set_roles",
+            $$"""{"slug":"demo","roles":["{{slug}}"],"default_role":"{{slug}}"}""");
+        Assert.True(result.IsValid,
+            $"الدَور «{slug}» في الكاتالوج ورُفِض: {string.Join(" | ", result.Errors)}");
+    }
+
     [Fact]
     public void CreateTenant_WithoutCategories_Fails()
     {

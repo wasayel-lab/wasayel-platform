@@ -1,0 +1,82 @@
+{
+  "slug": "organizer",
+  "icon": "🎉",
+  "homeRoute": "/me/listings",
+  "label": {
+    "ar": "مُنَظِّم فَعالِيّات",
+    "en": null
+  },
+  "description": {
+    "ar": "يُنَظِّم الفَعالِيّات وَالمَعارِض — يَنشُر الفَعالِيَّة، وَيَبدَأ التَّواصُل مَع مُزَوِّدي الخِدمَة، وَيَرُدّ عَلى استِفسارات الحُضور.",
+    "en": null
+  },
+  "permissions": [
+    "listing.browse",
+    "listing.create",
+    "listing.edit",
+    "chat.start",
+    "chat.respond"
+  ],
+  "fields": [
+    {
+      "code": "event_type",
+      "label": {
+        "ar": "نَوع الفَعالِيَّة",
+        "en": null
+      },
+      "type": "SingleSelect",
+      "isRequired": true,
+      "options": [
+        {
+          "value": "conference",
+          "label": {
+            "ar": "مُؤتَمَر",
+            "en": null
+          }
+        },
+        {
+          "value": "exhibition",
+          "label": {
+            "ar": "مَعرِض",
+            "en": null
+          }
+        },
+        {
+          "value": "wedding",
+          "label": {
+            "ar": "حَفل زَواج",
+            "en": null
+          }
+        },
+        {
+          "value": "workshop",
+          "label": {
+            "ar": "وَرشَة عَمَل",
+            "en": null
+          }
+        }
+      ]
+    },
+    {
+      "code": "organizer_license",
+      "label": {
+        "ar": "رَقم تَصريح التَّنظيم",
+        "en": null
+      },
+      "type": "Text",
+      "isRequired": false,
+      "options": []
+    }
+  ],
+  "composition": {
+    "home": "sellerHome",
+    "createListing": "defaultCreateForm",
+    "nav": "vendorNav",
+    "explore": "defaultExplore",
+    "publicProfile": "vendorProfile",
+    "extras": [
+      "driversList"
+    ]
+  },
+  "dealPatternAffinity": null
+}

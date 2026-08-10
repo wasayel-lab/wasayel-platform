@@ -1,0 +1,51 @@
+{
+  "slug": "mover",
+  "icon": "🚚",
+  "homeRoute": "/explore",
+  "label": {
+    "ar": "ناقِل أَثاث",
+    "en": null
+  },
+  "description": {
+    "ar": "يَنقُل الأَثاث وَالعَفش — يَتَصَفَّح طَلَبات النَّقل وَيُقَدِّم عُروضَه عَلَيها.",
+    "en": null
+  },
+  "permissions": [
+    "listing.browse",
+    "offer.submit",
+    "chat.respond"
+  ],
+  "fields": [
+    {
+      "code": "truck_type",
+      "label": {
+        "ar": "نَوع الشاحِنَة",
+        "en": null
+      },
+      "type": "Text",
+      "isRequired": false,
+      "options": []
+    },
+    {
+      "code": "load_capacity",
+      "label": {
+        "ar": "سَعَة الحُمولَة",
+        "en": null
+      },
+      "type": "Text",
+      "isRequired": false,
+      "options": []
+    }
+  ],
+  "composition": {
+    "home": "driverHome",
+    "createListing": "defaultCreateForm",
+    "nav": "driverNav",
+    "explore": "driverExplore",
+    "publicProfile": null,
+    "extras": [
+      "driverArea"
+    ]
+  },
+  "dealPatternAffinity": "trip"
+}

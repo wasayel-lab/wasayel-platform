@@ -27,15 +27,34 @@ namespace ACommerce.Platform.Tests;
 //   • `PatternFromTenant` عَلى تَركيبات الأَدوار الواقِعِيَّة — بِما
 //     فيها التَّركيبات الَّتي تُظهِر الأَولَوِيَّة (trip قَبل rental)
 //     وعَدَم التَّماثُل المُوَثَّق (shipper وَحدَه ليسَ trip).
+//
+// ─── تَوسِعَة مَوجَة «تَأليف الأَدوار» (2026-08-10) ────────────────────
+// ثَلاثَة أَدوار جَديدَة أُلِّفَت **مِلَفّاتٍ خالِصَة** (`broker`,
+// `mover`, `organizer`)، ولِذلك كانَ توسيع هذا المِلَفّ **إضافَة
+// خالِصَة**: صِفر سَطر مَحذوف وصِفر سَطر مُعَدَّل و‏31 سَطراً مُضافاً،
+// مَقيسَة بِـ diff. وهو المَوضِع الَّذي يُبَرهِن الدَعوى المَركَزِيَّة:
+// فَتَحات الأَدوار الثَّلاثَة السِتّ تُقرَأ مِن مِلَفّاتِها، ولَم يُضَف
+// سَطر واحِد إلى أَيّ مِن مَواضِع التَّصيير السِتَّة لِتَعرِفَها.
+// وصَفّ `demo-four` (‏broker+mover+organizer+customer) هو **نَفس تَركيبَة
+// المُستَأجِر التَّجريبيّ الحَيّ** — يُشتَقّ `trip` مِن انجِذاب `mover`
+// وَحدَه، فَالبُرهان الحَيّ والبُرهان الوَحدَويّ يَقيسان الشَيء نَفسَه.
 
 public class RoleCompositionCharacterizationTests
 {
     /// <summary>الأَدوار المَفحوصَة — السَبعَة بِتَرتيب الفِهرِس، ثُمَّ
-    /// المَجهول والفارِغ وnull واختِلاف الحالَة.</summary>
+    /// المَجهول والفارِغ وnull واختِلاف الحالَة.
+    ///
+    /// <para><b>وأُلحِقَت بِها الثَّلاثَة المُؤَلَّفَة مِلَفّاتٍ</b> في
+    /// مَوجَة «تَأليف الأَدوار» — في الذَّيل لا في الوَسَط، لِتَبقى أَسطُر
+    /// السَبعَة والحالات الحَدِّيَّة في اللَّقطَة الذَّهَبيَّة عَلى
+    /// مَواضِعِها ونَصِّها حَرفاً بِحَرف. وهذا هو <b>تَثبيت التَّصيير</b>
+    /// لِلأَدوار الجَديدَة: أَنّ فَتَحاتِها السِتّ تُقرَأ مِن مِلَفّاتِها
+    /// بِلا سَطر كود واحِد أُضيفَ إلى أَيّ مَوضِع تَصيير.</para></summary>
     private static readonly string?[] ProbedSlugs =
     {
         "customer", "rider", "vendor", "driver", "host", "shipper", "tenant_admin",
-        "slug_from_the_future", "Customer", "", null
+        "slug_from_the_future", "Customer", "", null,
+        "broker", "mover", "organizer"
     };
 
     /// <summary>تَركيبات أَدوار المُستَأجِر المَفحوصَة في اشتِقاق
@@ -63,6 +82,18 @@ public class RoleCompositionCharacterizationTests
         ("unknown-only",          new[] { "slug_from_the_future" }),
         ("unknown+host",          new[] { "slug_from_the_future", "host" }),
         ("wrong-case-Rider",      new[] { "Rider" }),
+        // ─── مَوجَة «تَأليف الأَدوار» — مُلحَقَة في الذَّيل ───────────────
+        // الصُفوف الَّتي تُبَرهِن أَنّ الانجِذاب صارَ بَياناً: مُستَأجِر
+        // بِـ mover وَحدَه يُشتَقّ trip مِن مِلَفّ الدَور لا مِن شَرط في
+        // كود، وbroker/organizer بِلا انجِذاب فَيَبقَيان marketplace،
+        // والغَلَبَة المُعلَنَة تَعمَل عَلَيها كَما تَعمَل عَلى القَديمَة.
+        ("broker",                new[] { "broker" }),
+        ("mover",                 new[] { "mover" }),
+        ("organizer",             new[] { "organizer" }),
+        ("broker+organizer",      new[] { "broker", "organizer" }),
+        ("mover+host",            new[] { "mover", "host" }),
+        ("mover+broker+customer", new[] { "mover", "broker", "customer" }),
+        ("demo-four",             new[] { "broker", "mover", "organizer", "customer" }),
     };
 
     /// <summary>اللَّقطَة الذَّهَبيَّة — نَصّ حَرفيّ لا يُشتَقّ مِن الكود
@@ -149,6 +180,27 @@ nav           = defaultNav
 explore       = defaultExplore
 publicProfile = (null)
 extras        = (none)
+--- broker
+home          = sellerHome
+createListing = defaultCreateForm
+nav           = vendorNav
+explore       = defaultExplore
+publicProfile = vendorProfile
+extras        = (none)
+--- mover
+home          = driverHome
+createListing = defaultCreateForm
+nav           = driverNav
+explore       = driverExplore
+publicProfile = (null)
+extras        = driverArea
+--- organizer
+home          = sellerHome
+createListing = defaultCreateForm
+nav           = vendorNav
+explore       = defaultExplore
+publicProfile = vendorProfile
+extras        = driversList
 
 [composition-values-are-in-vocabulary]
 customer = True
@@ -162,6 +214,9 @@ slug_from_the_future = True
 Customer = True
 (empty) = True
 (null) = True
+broker = True
+mover = True
+organizer = True
 
 [fallback]
 home          = defaultHome
@@ -193,6 +248,13 @@ all-seven -> trip
 unknown-only -> marketplace
 unknown+host -> rental
 wrong-case-Rider -> marketplace
+broker -> marketplace
+mover -> trip
+organizer -> marketplace
+broker+organizer -> marketplace
+mover+host -> trip
+mover+broker+customer -> trip
+demo-four -> trip
 """;
 
     [Fact]

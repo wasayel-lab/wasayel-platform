@@ -154,9 +154,15 @@ Booked/Shipping/Delivered = counterparty؛ Confirmed/Reviewed = either؛
 
 ## 6. كاتالوج الأدوار (`RoleCatalog`) — ملفات، ومعجمان مغلقان، ومصادق
 
-سبعة قوالب أدوار مغلقة — الوكيل والواجهات يختارون منها ولا يخترعون خارجها:
+**عشرة** تعريفات أدوار مغلقة — الوكيل والواجهات يختارون منها ولا يخترعون
+خارجها:
 
-`customer 🛒 · rider 🧍 · vendor 🏪 · driver 🚗 · host 🏠 · shipper 📦 · tenant_admin 👔`
+`customer 🛒 · rider 🧍 · vendor 🏪 · driver 🚗 · host 🏠 · shipper 📦 ·
+tenant_admin 👔 · broker 💼 · mover 🚚 · organizer 🎉`
+
+السبعة الأولى **نُقلت** من كود مجمَّع إلى ملفات (الموجة الأولى أدناه)،
+والثلاثة الأخيرة **أُلِّفت ملفات ابتداءً** ولم يُكتب لها سطر C# واحد —
+لا في التصيير، ولا في التنقل، ولا في تعداد الوكيل. انظر §6.6.
 
 **ما تحقق (2026-08-10)**: القوالب السبعة خرجت من مصفوفة `RoleTemplate`
 مكتوبة في `RoleCatalog.cs` ومجمَّعة معه، إلى **ملف JSON لكل دور** —
@@ -251,7 +257,17 @@ Booked/Shipping/Delivered = counterparty؛ Confirmed/Reviewed = either؛
 rider ‏(riderHome/riderCreateRequest/riderNav + `driversList`)، vendor و host
 ‏(sellerHome/defaultCreateForm/vendorNav + `vendorProfile`)، driver و shipper
 ‏(driverHome/defaultCreateForm/driverNav/driverExplore + `driverArea`)،
-tenant_admin ‏(defaultHome/defaultCreateForm/adminNav).
+tenant_admin ‏(defaultHome/defaultCreateForm/adminNav)، broker
+‏(sellerHome/vendorNav + `vendorProfile`)، mover
+‏(driverHome/driverNav/driverExplore + `driverArea`)، organizer
+‏(sellerHome/vendorNav + `vendorProfile` + `driversList`).
+
+**والفتحات مستقلة لا عائلات**: `organizer` يجمع وجه البائع
+(`sellerHome`/`vendorNav`/`vendorProfile`) مع سطح كان الراكب وحده يبلغه
+(`driversList`) — وهو ليس خلطاً، بل يتبع صلاحياته: صفحة `/drivers` غرضها
+المعلَن «تواصَل مع سائق مباشرةً»، فهي تخدم من يملك `chat.start` حصراً.
+‏`rider` يملكها ويبلغها؛ و`vendor`/`host` لا يملكانها ولا يبلغانها؛
+و`organizer` يملكها فبلغها. **التركيب مشتقّ من الصلاحيات، لا مخترع.**
 
 **الحدّ رُفع (2026-08-10 — الموجة الثانية)**: كان مكتوباً هنا أن **لا
 شيء يقرأ قسم `composition` بعد**، وأن التصيير ما زال يتفرّع بـ `switch`
@@ -326,9 +342,12 @@ return RoleComponentMap.Map(table, Resolve(activeRole?.CatalogSlug).Home,
 
 | الدور | `dealPatternAffinity` |
 |---|---|
-| `rider` · `driver` | `trip` |
+| `rider` · `driver` · `mover` | `trip` |
 | `host` | `rental` |
-| `customer` · `vendor` · `shipper` · `tenant_admin` | `null` |
+| `customer` · `vendor` · `shipper` · `tenant_admin` · `broker` · `organizer` | `null` |
+
+(‏`mover` أُضيف **بسطر في ملفه** لا بشرط في كود — وهو البرهان العملي على
+أن هذا الحقل نقل القرار من الكود إلى البيانات فعلاً. §6.6.)
 
 و`RoleDealPatternAffinity.Resolve` تجمعها بـ **ترتيب غلبة معلن**
 (`trip` قبل `rental`، فسائق + مالك سكن في متجر واحد = `trip`)، وقيمة
@@ -371,6 +390,11 @@ return RoleComponentMap.Map(table, Resolve(activeRole?.CatalogSlug).Home,
 تعليق `Review` نفسه («الراكب يقيّم السائق والسائق يقيّم الراكب»)، ومع
 ذلك `driversList` لا يعرض له نجمة واحدة. توثيق لا تهيئة.
 
+**وتوسّعت الدعوى لا تبدّلت (§6.6)**: `broker` و`organizer` انضمّا إلى
+`vendorProfile`، والقاعدة نفسها هي التي أدخلتهما — **من يُختار بسمعته
+قبل التعاقد له صفحة عامة**. ومن لا يعرض عمله للعامة يبقى بـ `null`:
+`customer` · `rider` · `driver` · `shipper` · `mover` · `tenant_admin`.
+
 ### 6.5 المصادق (`RoleDefinitionValidator`)
 
 دوال نقية بنمط `DealPatternValidator`، **مفروضة بوابةً عند التحميل**:
@@ -398,6 +422,52 @@ Marten لكل مستأجر — نفس حدّ الخطوة 4. الملفات ظا
 انحرافاً صامتاً بالتعريف، وهو ما جاءت الموجة لتزيله. حين يُنفَّذ
 التخزين يتغير `RoleDefinitionLoader` وحده.
 
+### 6.6 كيف تؤلّف دوراً جديداً — خمس خطوات، بلا سطر C#
+
+الادعاء مُختبَر لا مُفترض: `broker` و`mover` و`organizer` أُلِّفت بهذه
+الخطوات بالضبط، ولم يُلمس ملف تصيير واحد ولا `MainLayout` ولا
+`AgentService`.
+
+1. **اكتب `Definitions/{slug}.role.json`.** الشكل في §6.1، وكل قيمة من
+   المعاجم المغلقة: الصلاحيات من الثماني (§6.2)، وفتحات `composition`
+   الست من `RoleComponents` (§6.3)، و`type` الحقل من `RoleFieldTypes`،
+   و`dealPatternAffinity` من `{trip, rental, null}` (§6.3.1).
+2. **أضف الـ slug إلى `Definitions/roles.index.json`.** الترتيب فيه هو
+   ترتيب العرض في كل مكان — صفحة الإدارة، وبوابة `/{slug}`، و`SortOrder`
+   عند التسكين. **ألحِقه في الذيل** ما لم يكن لك سبب في غيره: الإلحاق
+   يبقي كل ما بُني على ترتيب السابقين كما هو.
+3. **ابنِ.** الملفات موارد مضمونة — انظر «الحدّ الصادق» أدناه.
+4. **فعِّله على مستأجر** من `/admin/tenants/{slug}/roles` (القائمة تُبنى
+   من `RoleCatalog.All`، فالدور الجديد يظهر فيها بلا تعديل)، أو بأداة
+   الوكيل `set_roles` (تعدادها مشتق من الكاتالوج نفسه).
+5. **وسِّع التوصيف إضافةً لا تعديلاً**: أَلحِق الـ slug في ذيل
+   `ProbedRoles` و`ProbedSlugs` وقائمة `[find]`، وحدِّث اللقطة الذهبية.
+   القاعدة: **سطر العضوية وحده يتغير، وكل ما عداه إلحاق** — وتُقاس
+   بـ `diff` لا بالعين.
+
+**ما يأتي مجاناً بمجرد وجود الملف** — كل هذا مقيس على خادم حيّ:
+
+| السطح | من أين يقرأ |
+|---|---|
+| بطاقة الدور في صفحة الإدارة (اسم/وصف/صلاحيات/حقول) | `RoleCatalog.All` |
+| بطاقة الدور في بوابة `/{slug}` | `Tenant.Roles` المنسوخة من الكاتالوج |
+| الرئيسية والتنقل ووضع الاستكشاف ونموذج الإنشاء | `composition` عبر `RoleCompositionResolver` |
+| مختصرات PWA في `manifest.json` (بما فيها `extras`) | `composition.Nav` + `composition.Extras` |
+| المسار بعد الدخول | `homeRoute` |
+| شاشة الـ onboarding وحقولها وخياراتها | `fields` (والإلزامي منها يفرض الشاشة) |
+| نمط تدفّق الصفقة للمستأجر | `dealPatternAffinity` |
+| تعداد `set_roles` ووصفه وقاعدة الأدوار في رسالة نظام الوكيل | `RoleCatalog.All` |
+
+**الحدّ الصادق — «بلا كود» صحيحة، و«بلا إعادة بناء» ليست بعد.** ملفات
+التعريف **موارد مضمونة في التجميع** (`EmbeddedResource` — والسبب في
+`RoleDefinitionLoader`: قارئ واحد تحت مضيفَين مختلفَي مسار، ومصدر واحد
+للحقيقة بلا سقوط بين قرص ومضمون). فإضافة دور اليوم تعني: ملف + سطر
+فهرس + **إعادة بناء ونشر**. ما سقط هو **كتابة الكود ومراجعته
+واختباره**، لا دورة النشر. وإسقاط دورة النشر هو بالضبط ما تفتحه موجة
+Marten القادمة (`define_role` فوق وثيقة دور لكل مستأجر) — ويتغير عندها
+`RoleDefinitionLoader` وحده، لأن `RoleDefinitionLoader.ParseDefinition`
+موجود أصلاً ويقرأ نصّ JSON بنفس خيارات القراءة المضمونة.
+
 ---
 
 ## 7. عدة العروض (Offers) — نموذج التفاوض
@@ -417,7 +487,7 @@ Marten لكل مستأجر — نفس حدّ الخطوة 4. الملفات ظا
 | | اليوم | **[مخطط]** |
 |---|---|---|
 | `DealsPolicy` | **كاتالوج بيانات في موضع واحد** (`DealPatternCatalog` فوق `DealPatternDefinition`) خلف نفس واجهة `DealsPolicy` و`DealsService` | **[مخطط]** الكاتالوج نفسه وثيقة Marten لكل مستأجر — نفس الشكل، مصدر قراءة آخر |
-| `RoleCatalog` | **ملف JSON لكل دور** (`Definitions/*.role.json` فوق `RoleDefinition`) خلف نفس واجهة `RoleCatalog`، بمعجم صلاحيات مغلق ومصادق مفروض عند التحميل (§6)؛ **والتصيير يقرأ `composition` منها** عبر نقطة قلب واحدة وقاموس مغلق في كل موضع، و`PatternFromTenant` يقرأ `dealPatternAffinity` (§6.3) | **[مخطط]** وثيقة دور لكل مستأجر — يتغير `RoleDefinitionLoader` وحده؛ وتأليف أدوار جديدة كملفات بلا كود |
+| `RoleCatalog` | **ملف JSON لكل دور** (`Definitions/*.role.json` فوق `RoleDefinition`) خلف نفس واجهة `RoleCatalog`، بمعجم صلاحيات مغلق ومصادق مفروض عند التحميل (§6)؛ **والتصيير يقرأ `composition` منها** عبر نقطة قلب واحدة وقاموس مغلق في كل موضع، و`PatternFromTenant` يقرأ `dealPatternAffinity` (§6.3)؛ **وتأليف دور جديد صار ملفاً فقط** — ثلاثة أدوار أُلِّفت بلا سطر C# (§6.6) | **[مخطط]** وثيقة دور لكل مستأجر (`define_role`) — يتغير `RoleDefinitionLoader` وحده، فيسقط شرط إعادة البناء أيضاً |
 | إنشاء عمود تجاري جديد | إضافة تعريف نمط إلى الكاتالوج (سطر بيانات) وإعادة نشر | **أثر بيانات** يولَّد ويُتحقق منه ويُعتمد بلا نشر |
 | ضمان الخصائص الشكلية | **فحص آلي** بدوال نقية (`DealPatternValidator` — T5/T6) | نفس الفحص مفروضاً **بوابةً** قبل حفظ أي نمط مولَّد |
 

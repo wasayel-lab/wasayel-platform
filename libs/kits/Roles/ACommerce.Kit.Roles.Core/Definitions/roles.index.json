@@ -6,6 +6,9 @@
     "driver",
     "host",
     "shipper",
-    "tenant_admin"
+    "tenant_admin",
+    "broker",
+    "mover",
+    "organizer"
   ]
 }

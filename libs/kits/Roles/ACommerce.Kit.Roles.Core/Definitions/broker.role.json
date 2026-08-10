@@ -1,0 +1,50 @@
+{
+  "slug": "broker",
+  "icon": "💼",
+  "homeRoute": "/me/listings",
+  "label": {
+    "ar": "وَسيط",
+    "en": null
+  },
+  "description": {
+    "ar": "وَسيط مُرَخَّص يَعرِض عَقارات مُوَكِّليه وَيَرُدّ عَلى استِفسارات الرَّاغِبين. لا يَحذِف إعلاناً — المِلكِيَّة لِلمُوَكِّل.",
+    "en": null
+  },
+  "permissions": [
+    "listing.browse",
+    "listing.create",
+    "listing.edit",
+    "chat.respond"
+  ],
+  "fields": [
+    {
+      "code": "license_number",
+      "label": {
+        "ar": "رَقم الرُّخصَة",
+        "en": null
+      },
+      "type": "Text",
+      "isRequired": true,
+      "options": []
+    },
+    {
+      "code": "office_name",
+      "label": {
+        "ar": "اسم المَكتَب",
+        "en": null
+      },
+      "type": "Text",
+      "isRequired": false,
+      "options": []
+    }
+  ],
+  "composition": {
+    "home": "sellerHome",
+    "createListing": "defaultCreateForm",
+    "nav": "vendorNav",
+    "explore": "defaultExplore",
+    "publicProfile": "vendorProfile",
+    "extras": []
+  },
+  "dealPatternAffinity": null
+}

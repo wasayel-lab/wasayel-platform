@@ -11,10 +11,14 @@ namespace ACommerce.Platform.Tests;
 public class RoleDefinitionValidatorTests
 {
     // ─── التَّحميل والتَّرتيب ─────────────────────────────────────────
+    /// <summary>عَشَرَة تَعريفات بِتَرتيب الفِهرِس. كانَت سَبعَة، وأُلحِقَت
+    /// بِها ثَلاثَة أُلِّفَت مِلَفّاتٍ خالِصَة في مَوجَة «تَأليف الأَدوار»
+    /// — السَبعَة الأُولى بِأَسمائِها وتَرتيبِها كَما هي.</summary>
     [Fact]
-    public void Loads_seven_definitions_in_index_order()
+    public void Loads_ten_definitions_in_index_order()
         => Assert.Equal(
-            new[] { "customer", "rider", "vendor", "driver", "host", "shipper", "tenant_admin" },
+            new[] { "customer", "rider", "vendor", "driver", "host", "shipper", "tenant_admin",
+                    "broker", "mover", "organizer" },
             RoleCatalog.Definitions.Select(d => d.Slug).ToArray());
 
     [Fact]
@@ -40,6 +44,9 @@ public class RoleDefinitionValidatorTests
     [InlineData("host")]
     [InlineData("shipper")]
     [InlineData("tenant_admin")]
+    [InlineData("broker")]
+    [InlineData("mover")]
+    [InlineData("organizer")]
     public void Shipped_definition_passes(string slug)
     {
         var d = RoleCatalog.FindDefinition(slug)!;
@@ -99,26 +106,42 @@ public class RoleDefinitionValidatorTests
             RoleCatalog.Definitions.SelectMany(d => d.Composition.AllComponents()));
     }
 
-    /// <summary>التَّقييمات مُحايِدَة الدَور: نُقطَة اللَمس الوَحيدَة هي
-    /// الصَفحَة العامَّة، ولا يَملِكُها إلّا <c>vendor</c> و<c>host</c>.</summary>
+    /// <summary><para>التَّقييمات مُحايِدَة الدَور: نُقطَة اللَمس الوَحيدَة
+    /// هي الصَفحَة العامَّة (<c>vendorProfile</c>) — المَوضِع الوَحيد في
+    /// المُستودَع الَّذي يَعرِض النُّجوم وعَدّاد التَّقييمات.</para>
+    ///
+    /// <para><b>وُسِّعَت في مَوجَة «تَأليف الأَدوار»</b>: كانَت
+    /// <c>vendor</c> و<c>host</c> وَحدَهُما، وانضَمَّ إلَيهِما
+    /// <c>broker</c> و<c>organizer</c> — وكِلاهُما دَور <b>يُختار
+    /// بِسُمعَتِه</b> قَبل التَّعاقُد، وهذا بِعَينِه ما تَخدِمُه الصَفحَة
+    /// العامَّة. والدَعوى المُثَبَّتَة هُنا لَم تَتَبَدَّل: <b>مَن لا
+    /// يَعرِض عَمَلَه لِلعامَّة لا صَفحَة عامَّة لَه</b> — <c>customer</c>
+    /// و<c>rider</c> و<c>driver</c> و<c>shipper</c> و<c>mover</c>
+    /// و<c>tenant_admin</c> كُلُّهُم بِـ <c>null</c> كَما كانوا.</para></summary>
     [Fact]
-    public void Only_vendor_and_host_have_a_public_profile()
+    public void Only_reputation_facing_roles_have_a_public_profile()
         => Assert.Equal(
-            new[] { "vendor", "host" },
+            new[] { "vendor", "host", "broker", "organizer" },
             RoleCatalog.Definitions
                 .Where(d => d.Composition.PublicProfile is not null)
                 .Select(d => d.Slug).ToArray());
 
     // ─── انجِذاب نَمَط الصَفقَة ───────────────────────────────────────
-    /// <summary>الانجِذاب المُسنَد في المِلَفّات — ثَلاثَة أَدوار لا
-    /// رابِع، والبَقِيَّة <c>null</c>. وهو <b>تَثبيت لِعَدَم التَماثُل
-    /// المُوَثَّق</b>: <c>shipper</c> بِلا انجِذاب رَغم أَنَّه دَور سائِق
-    /// في كُلّ فَتحَة تَركيب — لِأَنّ <c>PatternFromTenant</c> لَم يَكُن
-    /// يَعُدُّه <c>trip</c>، وتَصحيحُه تَغيير سُلوك لا نَقل.</summary>
+    /// <summary><para>الانجِذاب المُسنَد في المِلَفّات، والبَقِيَّة
+    /// <c>null</c>. وهو <b>تَثبيت لِعَدَم التَماثُل المُوَثَّق</b>:
+    /// <c>shipper</c> بِلا انجِذاب رَغم أَنَّه دَور سائِق في كُلّ فَتحَة
+    /// تَركيب — لِأَنّ <c>PatternFromTenant</c> لَم يَكُن يَعُدُّه
+    /// <c>trip</c>، وتَصحيحُه تَغيير سُلوك لا نَقل.</para>
+    ///
+    /// <para><b>وانضَمَّ <c>mover</c> رابِعاً</b> في مَوجَة «تَأليف
+    /// الأَدوار» بِـ <c>trip</c> — وهو <b>البُرهان بِعَينِه</b> عَلى أَنّ
+    /// إضافَة دَور يَجُرّ نَمَطاً صارَت سَطراً في مِلَفّ لا شَرطاً في كود:
+    /// الثَّلاثَة الأُولى بِأَسمائِها وقِيَمِها وتَرتيبِها كَما هي.</para></summary>
     [Fact]
-    public void Deal_pattern_affinity_is_assigned_to_exactly_three_roles()
+    public void Deal_pattern_affinity_is_assigned_only_by_file()
         => Assert.Equal(
-            new[] { ("rider", "trip"), ("driver", "trip"), ("host", "rental") },
+            new[] { ("rider", "trip"), ("driver", "trip"), ("host", "rental"),
+                    ("mover", "trip") },
             RoleCatalog.Definitions
                 .Where(d => d.DealPatternAffinity is not null)
                 .Select(d => (d.Slug, d.DealPatternAffinity!)).ToArray());
@@ -293,4 +316,131 @@ public class RoleDefinitionValidatorTests
     [Fact]
     public void Sound_definition_passes_so_negatives_prove_their_own_cause()
         => Assert.True(RoleDefinitionValidator.IsValid(Sound()));
+
+    // ─── سالِب عَلى مَسار المِلَفّ كامِلاً — لا عَلى كائِن مَبنيّ ───────
+    // <para>الحالات أَعلاه تَبني <c>RoleDefinition</c> بِـ <c>with</c>
+    // وتُمَرِّرُه لِلمُصادِق: تُغَطّي <b>المُصادِق</b> تَغطِيَةً كامِلَة
+    // (‏permission_out_of_vocabulary بِحالَتَين، و
+    // composition_component_out_of_vocabulary بِثَلاث) — ولا تَمَسّ
+    // <b>التَّسَلسُل</b> بِسَطر واحِد. وهذه المَوجَة دَعواها أَنّ الدَور
+    // يُؤَلَّف <b>مِلَفّاً</b>، فَالسالِب الَّذي يَخدِمُها هو المِلَفّ
+    // المُصطَنَع يَمُرّ مِن حَيث تَمُرّ المِلَفّات السَليمَة: نَصّ JSON ←
+    // <c>RoleDefinitionLoader.ParseDefinition</c> بِنَفس خِيارات القِراءَة
+    // ← المُصادِق. فَلا تَكرار لِلتَغطِيَة، بَل إغلاق طَبَقَة لَم تُغَطَّ.</para>
+
+    /// <summary>مِلَفّ يَمنَح صَلاحِيَّة خارِج المَعجَم — يُقرَأ بِنَجاح
+    /// (فَالبُنيَة سَليمَة) ويُرفَض بِالرَّمز المَقصود.</summary>
+    [Fact]
+    public void Synthetic_role_file_with_unknown_permission_is_rejected()
+    {
+        var d = RoleDefinitionLoader.ParseDefinition("""
+        {
+          "slug": "auditor",
+          "icon": "🛡️",
+          "homeRoute": "/explore",
+          "label":       { "ar": "مُدَقِّق", "en": null },
+          "description": { "ar": "دَور مُصطَنَع لِلاختِبار.", "en": null },
+          "permissions": ["listing.browse", "listing.audit"],
+          "fields": [],
+          "composition": {
+            "home": "defaultHome", "createListing": "defaultCreateForm",
+            "nav": "defaultNav", "explore": "defaultExplore",
+            "publicProfile": null, "extras": []
+          },
+          "dealPatternAffinity": null
+        }
+        """);
+
+        // قُرِئَ فِعلاً — الرَّفض مِن المُصادِق لا مِن فَشَل تَسَلسُل.
+        Assert.Equal("auditor", d.Slug);
+        Assert.Equal(["listing.browse", "listing.audit"], d.Permissions);
+
+        var codes = RoleDefinitionValidator.Validate(d).Select(v => v.Code).ToArray();
+        Assert.Equal(["permission_out_of_vocabulary"], codes);
+    }
+
+    /// <summary>مِلَفّ بِقيمَة تَركيب مَجهولَة — الرَّمز الآخَر، ومِن
+    /// فَتحَة <c>extras</c> تَحديداً لِأَنَّها المَوضِع الَّذي يُغري
+    /// بِاختِراع سَطح جَديد.</summary>
+    [Fact]
+    public void Synthetic_role_file_with_unknown_component_is_rejected()
+    {
+        var d = RoleDefinitionLoader.ParseDefinition("""
+        {
+          "slug": "auditor",
+          "icon": "🛡️",
+          "homeRoute": "/explore",
+          "label":       { "ar": "مُدَقِّق", "en": null },
+          "description": { "ar": "دَور مُصطَنَع لِلاختِبار.", "en": null },
+          "permissions": ["listing.browse"],
+          "fields": [],
+          "composition": {
+            "home": "defaultHome", "createListing": "defaultCreateForm",
+            "nav": "defaultNav", "explore": "defaultExplore",
+            "publicProfile": null, "extras": ["auditPanel"]
+          },
+          "dealPatternAffinity": null
+        }
+        """);
+
+        Assert.Equal(["auditPanel"], d.Composition.Extras);
+
+        var codes = RoleDefinitionValidator.Validate(d).Select(v => v.Code).ToArray();
+        Assert.Equal(["composition_component_out_of_vocabulary"], codes);
+    }
+
+    /// <summary>مِفتاح مَجهول في المِلَفّ لا يُتَجاهَل صامِتاً — يَرمي
+    /// عِندَ القِراءَة (<c>UnmappedMemberHandling.Disallow</c>) قَبل أَن
+    /// يَصِل المُصادِق أَصلاً. طَبَقَة ثالِثَة لا يَحرُسُها المُصادِق
+    /// ولا يُمكِن أَن يَحرُسَها.</summary>
+    [Fact]
+    public void Synthetic_role_file_with_unknown_key_fails_to_read()
+    {
+        var ex = Record.Exception(() => RoleDefinitionLoader.ParseDefinition("""
+        {
+          "slug": "auditor",
+          "icon": "🛡️",
+          "homeRoute": "/explore",
+          "label":       { "ar": "مُدَقِّق", "en": null },
+          "description": { "ar": "دَور مُصطَنَع لِلاختِبار.", "en": null },
+          "permissions": ["listing.browse"],
+          "fields": [],
+          "composition": {
+            "home": "defaultHome", "createListing": "defaultCreateForm",
+            "nav": "defaultNav", "explore": "defaultExplore",
+            "publicProfile": null, "extras": []
+          },
+          "dealPatternAffinity": null,
+          "superPowers": ["flight"]
+        }
+        """));
+
+        Assert.IsType<System.Text.Json.JsonException>(ex);
+    }
+
+    /// <summary>والمُوجَب عَلى نَفس المَسار — لِئَلّا يَكون السالِبانِ
+    /// أَعلاه ناجِحَين لِسَبَب آخَر (مِثل أَنّ القِراءَة تَفشَل دائِماً).</summary>
+    [Fact]
+    public void Synthetic_role_file_that_is_sound_passes()
+    {
+        var d = RoleDefinitionLoader.ParseDefinition("""
+        {
+          "slug": "auditor",
+          "icon": "🛡️",
+          "homeRoute": "/explore",
+          "label":       { "ar": "مُدَقِّق", "en": null },
+          "description": { "ar": "دَور مُصطَنَع لِلاختِبار.", "en": null },
+          "permissions": ["listing.browse"],
+          "fields": [],
+          "composition": {
+            "home": "defaultHome", "createListing": "defaultCreateForm",
+            "nav": "defaultNav", "explore": "defaultExplore",
+            "publicProfile": null, "extras": []
+          },
+          "dealPatternAffinity": null
+        }
+        """);
+
+        Assert.True(RoleDefinitionValidator.IsValid(d));
+    }
 }

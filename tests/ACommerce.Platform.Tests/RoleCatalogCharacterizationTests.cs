@@ -27,6 +27,18 @@ namespace ACommerce.Platform.Tests;
 // كُتِبَ واخضَرَّ **قَبل** تَبديل الكاتالوج إلى مِلَفّات، ولَم يُمَسّ سَطر
 // واحِد مِنه بَعدَه — فَمُروره عَلى الكودَين هو بُرهان التَّطابُق، ويَبقى
 // حارِساً دائِماً ضِدّ أَيّ انحِراف صامِت لاحِق.
+//
+// ─── تَوسِعَة مَوجَة «تَأليف الأَدوار» (2026-08-10) ────────────────────
+// أُلِّفَت ثَلاثَة أَدوار جَديدَة مِلَفّاتٍ خالِصَة (`broker`, `mover`,
+// `organizer`) بِلا سَطر تَصيير واحِد. والتَّوصيف هُنا **تَطَوَّر ولَم
+// يَتآكَل**: كُلّ سَطر مِن أَسطُر السَبعَة القائِمَة بَقِيَ نَصّاً كَما
+// هو حَرفاً بِحَرف وفي مَوضِعِه، والتَّغيير الوَحيد غَير المُلحَق هو
+// **سَطر العُضوِيَّة** في `[order]` — وهو بِتَعريفِه سَطر العَدَد
+// والتَّرتيب، فَلا يُمكِن أَن يَتَّسِع الكاتالوج ويَبقى كَما هو.
+// وما عَداه إضافَة مَحضَة: ثَلاث كُتَل في `[templates]`، وثَلاث في
+// `[instantiate]`، وثَلاثَة أَسطُر في `[find]`، وسَبعَة وعِشرونَ سَطراً
+// في `[has]`، وثَلاثَة في `[has-legacy-empty-tenant]` — ‏107 أَسطُر
+// مُضافَة وسَطر واحِد مُعَدَّل وصِفر مَحذوف، مَقيسَة بِـ diff لا مُقَدَّرَة.
 
 public class RoleCatalogCharacterizationTests
 {
@@ -42,11 +54,19 @@ public class RoleCatalogCharacterizationTests
     };
 
     /// <summary>الأَدوار المَفحوصَة في مَصفوفَة Has — السَبعَة، ثُمَّ
-    /// دَور غَير مُسَجَّل، ثُمَّ فارِغ وnull.</summary>
+    /// دَور غَير مُسَجَّل، ثُمَّ فارِغ وnull.
+    ///
+    /// <para><b>وُسِّعَت في مَوجَة «تَأليف الأَدوار»</b> بِالثَّلاثَة
+    /// المُؤَلَّفَة مِلَفّاتٍ (<c>broker</c>, <c>mover</c>,
+    /// <c>organizer</c>) — <b>إضافَة مَحضَة</b>: لا اسم حُذِفَ ولا تَرتيب
+    /// تَبَدَّل، والثَلاثَة أُلحِقَت بَعدَ الحالات الحَدِّيَّة لِتَبقى
+    /// أَسطُر السَبعَة في اللَّقطَة الذَّهَبيَّة عَلى مَواضِعِها ونَصِّها
+    /// حَرفاً بِحَرف.</para></summary>
     private static readonly string?[] ProbedRoles =
     {
         "customer", "rider", "vendor", "driver", "host", "shipper", "tenant_admin",
-        "role_from_the_future", "", null
+        "role_from_the_future", "", null,
+        "broker", "mover", "organizer"
     };
 
     /// <summary>اللَّقطَة الذَّهَبيَّة — نَصّ حَرفيّ لا يُشتَقّ مِن الكود
@@ -56,7 +76,7 @@ public class RoleCatalogCharacterizationTests
 # RoleCatalog characterization snapshot
 
 [order]
-customer > rider > vendor > driver > host > shipper > tenant_admin
+customer > rider > vendor > driver > host > shipper > tenant_admin > broker > mover > organizer
 
 [templates]
 --- customer
@@ -120,6 +140,37 @@ description = إداريّ يُدير مُحتَوى وَ مُستَخدِمي �
 homeRoute   = [/manage]
 permissions = listing.create,listing.edit,listing.delete,offer.submit,chat.respond,chat.start,tenant.manage,listing.browse
 fields      = 0
+--- broker
+label       = وَسيط
+icon        = 💼
+description = وَسيط مُرَخَّص يَعرِض عَقارات مُوَكِّليه وَيَرُدّ عَلى استِفسارات الرَّاغِبين. لا يَحذِف إعلاناً — المِلكِيَّة لِلمُوَكِّل.
+homeRoute   = [/me/listings]
+permissions = listing.browse,listing.create,listing.edit,chat.respond
+fields      = 2
+  field license_number | رَقم الرُّخصَة | Text | required=True | options=0
+  field office_name | اسم المَكتَب | Text | required=False | options=0
+--- mover
+label       = ناقِل أَثاث
+icon        = 🚚
+description = يَنقُل الأَثاث وَالعَفش — يَتَصَفَّح طَلَبات النَّقل وَيُقَدِّم عُروضَه عَلَيها.
+homeRoute   = [/explore]
+permissions = listing.browse,offer.submit,chat.respond
+fields      = 2
+  field truck_type | نَوع الشاحِنَة | Text | required=False | options=0
+  field load_capacity | سَعَة الحُمولَة | Text | required=False | options=0
+--- organizer
+label       = مُنَظِّم فَعالِيّات
+icon        = 🎉
+description = يُنَظِّم الفَعالِيّات وَالمَعارِض — يَنشُر الفَعالِيَّة، وَيَبدَأ التَّواصُل مَع مُزَوِّدي الخِدمَة، وَيَرُدّ عَلى استِفسارات الحُضور.
+homeRoute   = [/me/listings]
+permissions = listing.browse,listing.create,listing.edit,chat.start,chat.respond
+fields      = 2
+  field event_type | نَوع الفَعالِيَّة | SingleSelect | required=True | options=4
+    option conference = مُؤتَمَر
+    option exhibition = مَعرِض
+    option wedding = حَفل زَواج
+    option workshop = وَرشَة عَمَل
+  field organizer_license | رَقم تَصريح التَّنظيم | Text | required=False | options=0
 
 [find]
 find(customer) -> customer
@@ -132,6 +183,9 @@ find(tenant_admin) -> tenant_admin
 find(Customer) -> (null)
 find() -> (null)
 find(slug_from_the_future) -> (null)
+find(broker) -> broker
+find(mover) -> mover
+find(organizer) -> organizer
 
 [instantiate]
 --- customer
@@ -223,6 +277,49 @@ homeRoute    = [/manage]
 permissions  = listing.create,listing.edit,listing.delete,offer.submit,chat.respond,chat.start,tenant.manage,listing.browse
 pwaIcon      = (null)
 pwaName      = (null)
+--- broker
+label        = وَسيط
+icon         = 💼
+description  = وَسيط مُرَخَّص يَعرِض عَقارات مُوَكِّليه وَيَرُدّ عَلى استِفسارات الرَّاغِبين. لا يَحذِف إعلاناً — المِلكِيَّة لِلمُوَكِّل.
+sortOrder    = 7
+isDefault    = False
+catalogSlug  = broker
+homeRoute    = [/me/listings]
+permissions  = listing.browse,listing.create,listing.edit,chat.respond
+pwaIcon      = (null)
+pwaName      = (null)
+  field license_number | رَقم الرُّخصَة | Text | required=True | options=0
+  field office_name | اسم المَكتَب | Text | required=False | options=0
+--- mover
+label        = ناقِل أَثاث
+icon         = 🚚
+description  = يَنقُل الأَثاث وَالعَفش — يَتَصَفَّح طَلَبات النَّقل وَيُقَدِّم عُروضَه عَلَيها.
+sortOrder    = 8
+isDefault    = False
+catalogSlug  = mover
+homeRoute    = [/explore]
+permissions  = listing.browse,offer.submit,chat.respond
+pwaIcon      = (null)
+pwaName      = (null)
+  field truck_type | نَوع الشاحِنَة | Text | required=False | options=0
+  field load_capacity | سَعَة الحُمولَة | Text | required=False | options=0
+--- organizer
+label        = مُنَظِّم فَعالِيّات
+icon         = 🎉
+description  = يُنَظِّم الفَعالِيّات وَالمَعارِض — يَنشُر الفَعالِيَّة، وَيَبدَأ التَّواصُل مَع مُزَوِّدي الخِدمَة، وَيَرُدّ عَلى استِفسارات الحُضور.
+sortOrder    = 9
+isDefault    = False
+catalogSlug  = organizer
+homeRoute    = [/me/listings]
+permissions  = listing.browse,listing.create,listing.edit,chat.start,chat.respond
+pwaIcon      = (null)
+pwaName      = (null)
+  field event_type | نَوع الفَعالِيَّة | SingleSelect | required=True | options=4
+    option conference = مُؤتَمَر
+    option exhibition = مَعرِض
+    option wedding = حَفل زَواج
+    option workshop = وَرشَة عَمَل
+  field organizer_license | رَقم تَصريح التَّنظيم | Text | required=False | options=0
 
 [instantiate-is-a-copy]
 template.permissions = listing.browse,offer.submit,chat.respond
@@ -320,6 +417,33 @@ role_from_the_future.permission.from.the.future = False
 (null).offer.submit = False
 (null).tenant.manage = False
 (null).permission.from.the.future = False
+broker.chat.respond = True
+broker.chat.start = False
+broker.listing.browse = True
+broker.listing.create = True
+broker.listing.delete = False
+broker.listing.edit = True
+broker.offer.submit = False
+broker.tenant.manage = False
+broker.permission.from.the.future = False
+mover.chat.respond = True
+mover.chat.start = False
+mover.listing.browse = True
+mover.listing.create = False
+mover.listing.delete = False
+mover.listing.edit = False
+mover.offer.submit = True
+mover.tenant.manage = False
+mover.permission.from.the.future = False
+organizer.chat.respond = True
+organizer.chat.start = True
+organizer.listing.browse = True
+organizer.listing.create = True
+organizer.listing.delete = False
+organizer.listing.edit = True
+organizer.offer.submit = False
+organizer.tenant.manage = False
+organizer.permission.from.the.future = False
 
 [has-legacy-empty-tenant]
 customer.listing.create = True
@@ -332,6 +456,9 @@ tenant_admin.listing.create = True
 role_from_the_future.listing.create = True
 .listing.create = True
 (null).listing.create = True
+broker.listing.create = True
+mover.listing.create = True
+organizer.listing.create = True
 """;
 
     [Fact]
@@ -370,7 +497,10 @@ role_from_the_future.listing.create = True
         sb.Append("\n[find]\n");
         foreach (var slug in new[]
                  { "customer", "rider", "vendor", "driver", "host", "shipper",
-                   "tenant_admin", "Customer", "", "slug_from_the_future" })
+                   "tenant_admin", "Customer", "", "slug_from_the_future",
+                   // مَوجَة «تَأليف الأَدوار» — مُلحَقَة في الذَّيل لِتَبقى
+                   // أَسطُر السَبعَة والحالات الحَدِّيَّة عَلى مَواضِعِها.
+                   "broker", "mover", "organizer" })
             sb.Append($"find({slug}) -> {RoleCatalog.Find(slug)?.Slug ?? "(null)"}\n");
 
         sb.Append("\n[instantiate]\n");
