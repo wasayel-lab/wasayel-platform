@@ -207,13 +207,24 @@ public static class RoleDealPatternAffinity
 
     /// <summary>النَّمَط المُشتَقّ مِن مَجموعَة <c>CatalogSlug</c>.
     /// المُقارَنَة حَسّاسَة لِلحالَة كَما كانَت.</summary>
-    public static string Resolve(IEnumerable<string?> catalogSlugs)
+    public static string Resolve(IEnumerable<string?> catalogSlugs) =>
+        Resolve(catalogSlugs, RoleCatalog.FindDefinition);
+
+    /// <summary>
+    /// <para>نَفس الاشتِقاق بِبَحث مَحقون — أُضيفَ في مَوجَة «الأَدوار
+    /// وَثائِق» لِيَرى <see cref="TenantRoleSet"/> أَدوار مُستَأجِرِه
+    /// المُؤَلَّفَة. <b>الجِسم واحِد لا نُسخَتان</b>: التَّحميل الزائِد
+    /// القَديم يُفَوِّض إلى هذا بِبَحث الكاتالوج، فَتَرتيب الغَلَبَة
+    /// وقاعِدَة السُقوط مَكتوبانِ مَرَّةً واحِدَة.</para>
+    /// </summary>
+    public static string Resolve(
+        IEnumerable<string?> catalogSlugs, Func<string, RoleDefinition?> lookup)
     {
         var pulled = new HashSet<string>(StringComparer.Ordinal);
         foreach (var slug in catalogSlugs)
         {
             if (string.IsNullOrEmpty(slug)) continue;
-            var affinity = RoleCatalog.FindDefinition(slug)?.DealPatternAffinity;
+            var affinity = lookup(slug)?.DealPatternAffinity;
             if (!string.IsNullOrEmpty(affinity)) pulled.Add(affinity);
         }
 

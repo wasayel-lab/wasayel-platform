@@ -79,8 +79,14 @@ public static class RoleCatalog
 
     /// <summary>إسقاط التَّعريف إلى القالِب القَديم. <b>القِراءَة
     /// عَرَبيَّة كَما اليَوم</b> (<see cref="LocalizedText.Current"/>)،
-    /// وقِسم التَّركيب لا يَظهَر في القالِب لِأَنّ لا مُستَهلِك لَه بَعد.</summary>
-    private static RoleTemplate ToTemplate(RoleDefinition d) => new(
+    /// وقِسم التَّركيب لا يَظهَر في القالِب لِأَنّ لا مُستَهلِك لَه بَعد.
+    ///
+    /// <para><c>internal</c> لا <c>private</c> مُنذُ مَوجَة «الأَدوار
+    /// وَثائِق»: <see cref="TenantRoleSet"/> يُسقِط تَعريفات المُستَأجِر
+    /// إلى قَوالِب <b>بِنَفس هذه الدالَّة</b> لا بِنُسخَة مِنها — وإلّا
+    /// لَانحَرَفَ إسقاط دَور مُؤَلَّف عَن إسقاط دَور كاتالوج، وهو
+    /// انحِراف لا يَراه أَحَد حَتّى يَظهَر في بِطاقَة بَوّابَة.</para></summary>
+    internal static RoleTemplate ToTemplate(RoleDefinition d) => new(
         Slug:        d.Slug,
         Label:       d.Label.Current,
         Icon:        d.Icon,

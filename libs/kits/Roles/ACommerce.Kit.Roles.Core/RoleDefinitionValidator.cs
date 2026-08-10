@@ -126,6 +126,40 @@ public static class RoleDefinitionValidator
     /// <summary>هَل يَجتاز البَوّابَة؟</summary>
     public static bool IsValid(RoleDefinition d) => Validate(d).Count == 0;
 
+    /// <summary>
+    /// <para><b>بَوّابَة تَعريف يُؤَلِّفُه مُستَأجِر</b> — كُلّ ما في
+    /// <see cref="Validate"/> حَرفِيّاً، <b>وزِيادَةٌ واحِدَة</b>: أَن
+    /// لا يُصادِم سلاجُه سلاجَ الكاتالوج المَضمون.</para>
+    ///
+    /// <para><b>لِماذا رَمز جَديد لا إعادَة استِعمال</b>: الخَرق هُنا
+    /// ليسَ «الاسم شاذّ» بَل «الاسم مَأخوذ عَلى مُستَوى المَنصَّة»،
+    /// وهو الفَرق بَين خَطَأ إملائيّ وبَين مُحاوَلَة تَغيير مَعنى
+    /// <c>vendor</c> لِكُلّ مَن يَقرَؤُه. رَمز مُتَمَيِّز يَعني رِسالَة
+    /// مُتَمَيِّزَة لِلوَكيل — فَيُعيد التَّسمِيَة بَدَل أَن يُعيد
+    /// المُحاوَلَة.</para>
+    ///
+    /// <para><b>ولِماذا دالَّة مُنفَصِلَة لا عَلَم في
+    /// <see cref="Validate"/></b>: تَعريفات الكاتالوج نَفسُها تَمُرّ مِن
+    /// <see cref="Validate"/> عِندَ الإقلاع — ولَو كانَ الفَحص فيها
+    /// لَرَفَضَ كُلّ دَور كاتالوج نَفسَه. فَصلُ الدالَّتَين يَجعَل
+    /// الاختِلاف مُعلَناً في التَّوقيع لا مَخفِيّاً في وَسيط.</para>
+    /// </summary>
+    public static IReadOnlyList<RoleDefinitionViolation> ValidateTenantDefinition(RoleDefinition d)
+    {
+        var v = new List<RoleDefinitionViolation>(Validate(d));
+
+        if (!string.IsNullOrWhiteSpace(d.Slug) && RoleCatalog.FindDefinition(d.Slug) is not null)
+            v.Add(new("slug_shadows_platform_catalog",
+                $"الـ slug «{d.Slug}» مَأخوذ في كاتالوج المَنصَّة — " +
+                "أَدوار المُستَأجِر تُضاف فَوقَه ولا تُظَلِّلُه. اِختَر اسماً آخَر."));
+
+        return v;
+    }
+
+    /// <summary>هَل يَجتاز بَوّابَة المُستَأجِر؟</summary>
+    public static bool IsValidTenantDefinition(RoleDefinition d) =>
+        ValidateTenantDefinition(d).Count == 0;
+
     private static void CheckArabic(
         List<RoleDefinitionViolation> v, LocalizedText t, string whereAr)
     {
