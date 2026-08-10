@@ -5,6 +5,7 @@
 @inject ITenantContext Tenant
 @inject NavigationManager Nav
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
 
 @*
     صَفحة الـ tenant الرَئيسيّة. كُلّ النَّقَرات تَستَخدِم Href بَدَلَ
@@ -109,6 +110,7 @@
                 {
                     <div class="acm-home-rail-item">
                         <AcSpaceCard Title="@l.Title"
+                                     VariantClassSuffix="@listingCardVariant"
                                      Href="@AuthSession.LinkFor(Slug, Role, $"listings/{l.Id}")"
                                      ImageUrl="@(l.MediaUrls.Count > 0 ? l.MediaUrls[0] : null)"
                                      Location="@($"{l.City} — {l.District}")"
@@ -136,6 +138,7 @@
                 @foreach (var l in latest)
                 {
                     <AcSpaceCard Title="@l.Title"
+                                 VariantClassSuffix="@listingCardVariant"
                                  Href="@AuthSession.LinkFor(Slug, Role, $"listings/{l.Id}")"
                                  ImageUrl="@(l.MediaUrls.Count > 0 ? l.MediaUrls[0] : null)"
                                  Location="@($"{l.City} — {l.District}")"
@@ -204,6 +207,12 @@
     [SupplyParameterFromQuery(Name = "kind")] public string? Kind { get; set; }
 
     Tenant? loaded;
+
+    /// <summary>لاحِقَة صَنف مُتَغايِر بِطاقَة الإعلان في هذا المَتجَر.
+    /// فارِغَة = الشَكل المُفَصَّل الافتِراضيّ، وهي قيمَة البَدء فَلا
+    /// يَتَغَيَّر وَسم مَتجَر بِلا ثيم بِحَرف.</summary>
+    string listingCardVariant = "";
+
     ACommerce.Templates.Customer.Marketplace.Services.Patterns.PatternProfile? profile;
     List<Listing>? latest;
     List<Listing>? featured;
@@ -283,6 +292,10 @@
         var withRoles = await Roles.LoadAsync(Slug);
         loaded  = withRoles.Tenant;
         roleSet = withRoles.Roles;
+
+        listingCardVariant = (await Themes.EffectiveAsync(Slug))
+            .VariantClassSuffix(ACommerce.Kit.Theme.ThemeVariantCatalog.ListingCard);
+
         if (loaded is null) return;
         profile = Services.Patterns.PatternProfileResolver.Of(loaded);
 

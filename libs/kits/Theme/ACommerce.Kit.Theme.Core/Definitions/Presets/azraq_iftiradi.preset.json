@@ -1,9 +1,10 @@
 {
-  "slug": "default",
+  "slug": "azraq_iftiradi",
   "label": {
-    "ar": "الثيم الافتِراضيّ",
+    "ar": "الأَزرَق الافتِراضيّ",
     "en": null
   },
+
   "tokens": {
     "color.primary": "#1D4ED8",
     "color.primaryDark": "#1E3A8A",

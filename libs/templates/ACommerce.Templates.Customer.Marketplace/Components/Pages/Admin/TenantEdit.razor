@@ -102,6 +102,23 @@
                 <AcIcon Name="chevron-left" Size="16" />
             </a>
 
+            @* الهُوِيَّة البَصَرِيَّة كامِلَةً — حُزَم جاهِزَة (رُموز
+               ومُتَغايِرات). البِطاقَة الَّتي فَوقَها تُغَيِّر لَون
+               العَلامَة وَحدَه؛ هذه تُبَدِّل اللَوحَة والشَكل مَعاً.
+               الصَفحَة خَلف بَوّابَة مُشرِف المَنصَّة — والفَرق مَذكور
+               هُنا صَراحَةً كَي لا يَبدو الرَفض عُطلاً. *@
+            <a class="acm-manager-card" href="@($"/admin/tenants/{Slug}/theme")">
+                <span class="acm-manager-icon"
+                      style="background:@tenant.BrandColor;color:#fff;">
+                    <AcIcon Name="brush" Size="24" />
+                </span>
+                <div>
+                    <strong>حُزَم الهُوِيَّة البَصَرِيَّة</strong>
+                    <span>ثَلاث حُزَم مُنَسَّقَة — لَوحَة وشَكل مَعاً · لِمُشرِف المَنصَّة</span>
+                </div>
+                <AcIcon Name="chevron-left" Size="16" />
+            </a>
+
             <a class="acm-manager-card" href="@($"/admin/tenants/{Slug}/pwa")">
                 <span class="acm-manager-icon"
                       style="background:@tenant.BrandColor;color:#fff;">

@@ -1,0 +1,61 @@
+{
+  "slug": "layl_ramliy",
+  "label": {
+    "ar": "لَيل رَملِيّ",
+    "en": null
+  },
+
+  "tokens": {
+    "color.primary": "#C98B45",
+    "color.primaryDark": "#8A5A22",
+    "color.primaryLight": "#E3B27A",
+    "color.primaryHover": "#B0763A",
+    "color.secondary": "#6FA396",
+    "color.secondaryHover": "#558275",
+
+    "color.bg": "#171310",
+    "color.bgAlt": "#1F1913",
+    "color.surface": "#241D16",
+    "color.surface2": "#2C241B",
+
+    "color.border": "rgba(232,214,190,.14)",
+    "color.borderStrong": "rgba(232,214,190,.26)",
+
+    "color.text": "#F3E7D6",
+    "color.textMuted": "#C0AA8E",
+    "color.textSoft": "#8E7B64",
+
+    "color.success": "#4BAA7E",
+    "color.danger": "#E06A5B",
+    "color.warning": "#D9A441",
+    "color.info": "#6BA8C4",
+
+    "radius.sm": "3px",
+    "radius.md": "4px",
+    "radius.lg": "6px",
+    "radius.xl": "8px",
+    "radius.pill": "999px",
+
+    "space.xs": "0.25rem",
+    "space.sm": "0.5rem",
+    "space.md": "0.875rem",
+    "space.lg": "1.25rem",
+    "space.xl": "1.75rem",
+
+    "fontSize.sm": "0.8125rem",
+    "fontSize.base": "0.9375rem",
+    "fontSize.lg": "1.1875rem",
+    "fontSize.xl": "1.4375rem",
+    "fontWeight.normal": "400",
+    "fontWeight.bold": "700",
+    "lineHeight.base": "1.45",
+
+    "density": "0.9"
+  },
+
+  "variants": {
+    "portal.roleCards": "compact",
+    "listing.card": "compact",
+    "header.bar": "compact"
+  }
+}

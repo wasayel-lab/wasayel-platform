@@ -88,9 +88,14 @@ public static class ThemeDefinitionValidator
                 $"تَسمِيَة الثيم «{d.Slug}»: العَرَبيَّة مَفقودَة في حاوِيَة التَّوطين."));
 
         // ─── الرُموز ─────────────────────────────────────────────────
-        if (d.Tokens.Count == 0)
+        // الفَراغ يُقاس عَلى **الوَثيقَة كامِلَةً** لا عَلى الرُموز
+        // وَحدَها: ثيم يُبَدِّل شَكل بِطاقَة ولا يَمَسّ لَوناً تَعريفٌ
+        // مَشروع تَمام المَشروعِيَّة. والرَمز بَقِيَ «tokens_empty» لا
+        // اسماً أَدَقّ لِأَنَّه مِفتاح تُصَحِّح عَلَيه أَدَوات قائِمَة —
+        // وتَغييرُ رَمز خَرق أَغلى مِن دِقَّة تَسمِيَتِه.
+        if (d.Tokens.Count == 0 && d.Variants.Count == 0)
             v.Add(new("tokens_empty",
-                $"الثيم «{d.Slug}» بِلا رَمز واحِد — لا شَيء يُبَثّ."));
+                $"الثيم «{d.Slug}» بِلا رَمز ولا مُتَغايِر — لا شَيء يُبَثّ ولا شَيء يَتَبَدَّل."));
 
         foreach (var (key, raw) in d.Tokens.OrderBy(p => p.Key, StringComparer.Ordinal))
         {
@@ -147,6 +152,33 @@ public static class ThemeDefinitionValidator
             }
         }
 
+        // ─── المُتَغايِرات ────────────────────────────────────────────
+        //
+        // <b>بَوّابَة بِلا نَحو</b> — وهذا فَرقُها عَن بَوّابَة الرُموز.
+        // قيمَة الرَمز نَصّ حُرّ يُصادَق بِتَعبير نَمَطيّ لِأَنّ مَجالَها
+        // لا نِهائيّ (‏كُلّ لَون، كُلّ طول)؛ وقيمَة المُتَغايِر
+        // <b>إحالَة</b> إلى قائِمَة مَكتوبَة في الشيفرَة، فَالفَحص
+        // احتِواءٌ في قامُوس. ولِذلك لا يَلزَمُها فَحص مَحارِف خَطِرَة:
+        // ما لَم تَكُن القيمَة **عَينَ** نَصٍّ مِن الكاتالوج فَهي
+        // مَرفوضَة، ولا يَصِل الوَسمَ إلّا الصَنف المَكتوب هُنا. الإغلاق
+        // نَفسُه هو الدِفاع.
+        foreach (var (key, raw) in d.Variants.OrderBy(p => p.Key, StringComparer.Ordinal))
+        {
+            var slot = ThemeVariantCatalog.Find(key);
+            if (slot is null)
+            {
+                v.Add(new("variant_slot_out_of_vocabulary",
+                    $"الفَتحَة «{key}» في الثيم «{d.Slug}» خارِج مَعجَم ThemeVariantCatalog."));
+                continue;
+            }
+
+            var value = (raw ?? string.Empty).Trim();
+            if (!slot.Contains(value))
+                v.Add(new("variant_value_out_of_vocabulary",
+                    $"القيمَة «{value}» لِلفَتحَة «{key}» في الثيم «{d.Slug}» " +
+                    $"خارِج قائِمَتِها: {string.Join("، ", slot.Values.Select(x => x.Value))}."));
+        }
+
         return v;
     }
 
@@ -175,6 +207,15 @@ public static class ThemeDefinitionValidator
             if (!d.Tokens.ContainsKey(token.Key))
                 v.Add(new("default_theme_incomplete",
                     $"الثيم الافتِراضيّ «{d.Slug}» لا يُعَرِّف الرَمز «{token.Key}»."));
+
+        // والاكتِمال نَفسُه لِلمُتَغايِرات، بِنَفس الحُجَّة: فَتحَة بِلا
+        // قيمَة في الثيم الأَساس تَعني مُكَوِّناً يَسأَل عَن شَكلِه فَلا
+        // يَجِد جَواباً — وهذا لا يُترَك لِسُقوطٍ ضِمنيّ في الكود، بَل
+        // يُفشِل الإقلاع بِرَمزِه.
+        foreach (var slot in ThemeVariantCatalog.All)
+            if (!d.Variants.ContainsKey(slot.Key))
+                v.Add(new("default_theme_variants_incomplete",
+                    $"الثيم الافتِراضيّ «{d.Slug}» لا يُعَرِّف الفَتحَة «{slot.Key}»."));
 
         return v;
     }

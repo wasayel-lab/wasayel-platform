@@ -27,6 +27,12 @@ public static class ThemeDefinitionLoader
 {
     private const string DefaultResourceSuffix = ".Definitions.default.theme.json";
 
+    /// <summary>سِمَة اسم مَورِد الحُزمَة الجاهِزَة. المُجَلَّد جُزء مِن
+    /// السِمَة عَمداً: مِلَفّ يُوضَع في <c>Definitions/</c> مُباشَرَةً لا
+    /// يَصير حُزمَةً بِالمُصادَفَة.</summary>
+    private const string PresetResourceInfix  = ".Definitions.Presets.";
+    private const string PresetResourceSuffix = ".preset.json";
+
     private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -62,6 +68,74 @@ public static class ThemeDefinitionLoader
     public static ThemeDefinition ParseDefinition(string json) =>
         JsonSerializer.Deserialize<ThemeDefinition>(json, Options)
         ?? throw new InvalidOperationException("نَصّ تَعريف الثيم أَعطى null.");
+
+    /// <summary>
+    /// <para><b>يُحَمِّل كُلّ الحُزَم الجاهِزَة المَضمونَة</b> ويُصادِقُها
+    /// بِبَوّابَة المُستَأجِر — لِأَنّ هذا بِالضَبط ما تَصيرُه الحُزمَة
+    /// حينَ تُطَبَّق: وَثيقَة ثيم لِمُستَأجِر. أَيّ خَرق يَرمي، فَحُزمَة
+    /// فاسِدَة تُفشِل الإقلاع بِرَمزِها ولا تَنتَظِر أَوَّل نَقرَة عَلى
+    /// «تَطبيق» في عَرضٍ أَمامَ مُستَثمِر.</para>
+    ///
+    /// <para><b>ويُحفَظ النَّصّ كَما هُوَ</b> بِجانِب الكائِن المُفَكَّك:
+    /// التَطبيق <b>نَسخ</b> لا إحالَة، فَما يُخَزَّن في وَثيقَة المُستَأجِر
+    /// هو هذه البايتات — لا إعادَة تَسَلسُل لِلكائِن. ولَو أُعيدَ
+    /// تَسَلسُلُه لَصارَ لِلحُزمَة الواحِدَة شَكلان: مِلَفٌّ في المُستودَع
+    /// ونَصٌّ في قاعِدَة البَيانات، يَنحَرِفان بِأَوَّل تَغيير في
+    /// خِيارات المُسَلسِل.</para>
+    ///
+    /// <para>والتَرتيب <b>بِالسلاج</b> لا بِتَرتيب المَوارِد: تَرتيب
+    /// <c>GetManifestResourceNames</c> غَير مَضمون، وسَطح الإدارَة
+    /// يَعرِض هذه القائِمَة — فَبِطاقاتُها لا تُبَدِّل أَماكِنَها بَين
+    /// إقلاعَين.</para>
+    /// </summary>
+    public static IReadOnlyList<ThemePreset> LoadEmbeddedPresets()
+    {
+        var asm = typeof(ThemeDefinitionLoader).Assembly;
+
+        var names = asm.GetManifestResourceNames()
+            .Where(n => n.Contains(PresetResourceInfix, StringComparison.Ordinal) &&
+                        n.EndsWith(PresetResourceSuffix, StringComparison.Ordinal))
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+
+        if (names.Length == 0)
+            throw new InvalidOperationException(
+                $"لا حُزمَة واحِدَة مَضمونَة في {asm.GetName().Name} — " +
+                "المَوارِد مَفقودَة أَو المُجَلَّد غَير مُضَمَّن.");
+
+        var presets = new List<ThemePreset>(names.Length);
+        foreach (var name in names)
+        {
+            using var stream = asm.GetManifestResourceStream(name)
+                ?? throw new InvalidOperationException($"تَعَذَّرَ فَتح المَورِد «{name}».");
+            using var reader = new StreamReader(stream);
+            var json = reader.ReadToEnd();
+
+            ThemeDefinition d;
+            try { d = ParseDefinition(json); }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"تَعَذَّرَت قِراءَة الحُزمَة «{name}»: {ex.Message}", ex);
+            }
+
+            var violations = ThemeDefinitionValidator.ValidateTenantDefinition(d);
+            if (violations.Count > 0)
+                throw new InvalidOperationException(
+                    $"الحُزمَة «{d.Slug}» لا تَجتاز المُصادَقَة: " +
+                    string.Join(" | ", violations.Select(v => $"{v.Code}: {v.MessageAr}")));
+
+            presets.Add(new ThemePreset(d.Slug, d.Label, json, d));
+        }
+
+        var duplicate = presets.GroupBy(p => p.Slug, StringComparer.Ordinal)
+            .FirstOrDefault(g => g.Count() > 1);
+        if (duplicate is not null)
+            throw new InvalidOperationException(
+                $"الحُزمَة «{duplicate.Key}» مُعَرَّفَة أَكثَر مِن مَرَّة.");
+
+        return presets.OrderBy(p => p.Slug, StringComparer.Ordinal).ToArray();
+    }
 
     private static ThemeDefinition Read(Assembly asm, string resourceSuffix)
     {

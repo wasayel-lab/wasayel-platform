@@ -190,6 +190,84 @@ public sealed class TenantThemeService
             : $"رُفِضَ ثيم «{themeSlug}».");
     }
 
+    /// <summary>
+    /// <para><b>تَطبيق حُزمَة جاهِزَة</b> — وهو ما يُنَفِّذُه زِرّ واحِد
+    /// في سَطح الإدارَة: اقتِراح ثُمَّ اعتِماد، بِنَفس
+    /// <see cref="ProposeAsync"/> و<see cref="DecideAsync"/> لا بِمَسار
+    /// كِتابَة ثالِث. المُصادَقَة تَجري مَرَّتَين كَما لِأَيّ ثيم آخَر،
+    /// والإبطال يَقَع في <c>DecideAsync</c> — فَـ«فَوراً» هُنا هي
+    /// «فَوراً» هُناك بِعَينِها.</para>
+    ///
+    /// <para><b>وما يَصِل مِن الطَلَب اسمُ حُزمَة لا نَصّ تَعريف</b>:
+    /// الجِسم يُقرَأ مِن <see cref="ThemePresetCatalog"/> — أَي مِن
+    /// المُستودَع. لا يَملِك صاحِبُ جَلسَةٍ مُخَوَّلَة أَن يَحقِن ثيماً
+    /// بِصِياغَة طَلَب، ولَيسَ لِأَنّ المُصادِق سَيَرُدُّه، بَل لِأَنَّه
+    /// لا يُقرَأ أَصلاً.</para>
+    ///
+    /// <para><b>وإعادَة التَطبيق مَقصودَة وسَهلَة</b>: وَثيقَة الحُزمَة
+    /// إن كانَت مُعتَمَدَة تُعاد <b>مُعَلَّقَة</b> قَبل الاقتِراح، فَتَمُرّ
+    /// بِحارِس «لا يُعاد تَعريف ثيم مُعتَمَد». وذلك الحارِس مَوضوع لِيَمنَع
+    /// الوَكيل مِن تَغيير مَعنى ثيم قائِم مِن تَحت المُشرِف — لا لِيَمنَع
+    /// مُشرِفاً يَضغَط «تَطبيق» مَرَّتَين. العَرض يُبَدَّل ذَهاباً
+    /// وإياباً أَمامَ العَين، فَـ«طُبِّقَت مِن قَبل» لا تَصلُح جَواباً.</para>
+    ///
+    /// <para><b>ولا تُلمَس وَثائِق الحُزَم الأُخرى</b>: تَبقى مُعتَمَدَةً
+    /// أَقدَمَ تاريخاً، والقاعِدَة المُعلَنَة في
+    /// <see cref="TenantThemeSet"/> — آخِر قَرار يَغلِب — تَحسِم أَيُّها
+    /// يُبَثّ. تَرتيب كامِل، فَالتَبديل ذَهاباً وإياباً حَتميّ.</para>
+    /// </summary>
+    public async Task<(bool Ok, string Message)> ApplyPresetAsync(
+        string tenantSlug, string presetSlug, string by, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(tenantSlug))
+            return (false, "لا مُستَأجِر.");
+
+        var preset = ThemePresetCatalog.Find(presetSlug);
+        if (preset is null)
+            return (false, $"لا حُزمَة بِاسم «{presetSlug}» في كاتالوج المَنصَّة.");
+
+        await ReopenIfApprovedAsync(tenantSlug, preset.Slug, by, ct);
+
+        var (proposed, proposeMsg) =
+            await ProposeAsync(tenantSlug, preset.Slug, preset.Json, by, ct);
+        if (!proposed) return (false, proposeMsg);
+
+        var (decided, decideMsg) = await DecideAsync(
+            tenantSlug, preset.Slug, TenantThemeStatuses.Approved, by, ct);
+        if (!decided) return (false, decideMsg);
+
+        return (true, $"طُبِّقَت حُزمَة «{preset.Label.Ar}» عَلى «{tenantSlug}». {decideMsg}");
+    }
+
+    /// <summary>يُعيد وَثيقَة حُزمَة مُعتَمَدَة إلى «مُعَلَّق» — الخُطوَة
+    /// الوَحيدَة الَّتي تُميِّز إعادَة التَطبيق عَن التَطبيق الأَوَّل.
+    /// لا تُنشِئ ولا تَحذِف: غِياب الوَثيقَة لا شَيء يُفعَل بِه.</summary>
+    private async Task ReopenIfApprovedAsync(
+        string tenantSlug, string themeSlug, string by, CancellationToken ct)
+    {
+        try
+        {
+            await using var s = _store.LightweightSession(tenantSlug);
+            var doc = await s.LoadAsync<TenantThemeDefinition>(themeSlug, ct);
+            if (doc is not { Status: TenantThemeStatuses.Approved }) return;
+
+            doc.Status    = TenantThemeStatuses.Pending;
+            doc.DecidedBy = by;
+            doc.DecidedAt = null;
+            s.Store(doc);
+            await s.SaveChangesAsync(ct);
+            Invalidate(tenantSlug);
+        }
+        catch (Exception ex)
+        {
+            // لا يُفشِل التَطبيق: لَو تَعَذَّرَت هذه الخُطوَة فَـ
+            // ProposeAsync سَيَرُدّ بِرِسالَتِه الواضِحَة، وهي أَنفَع مِن
+            // استِثناء مِن دالَّة تَمهيدِيَّة.
+            Console.Error.WriteLine(
+                $"[theme] تَعَذَّرَ إعادَة فَتح «{themeSlug}» في «{tenantSlug}»: {ex.Message}");
+        }
+    }
+
     /// <summary>إبطال لَقطَة مُستَأجِر واحِد. مِفتاح واحِد لا مَسح
     /// شامِل.</summary>
     public void Invalidate(string tenantSlug) => _cache.TryRemove(tenantSlug, out _);

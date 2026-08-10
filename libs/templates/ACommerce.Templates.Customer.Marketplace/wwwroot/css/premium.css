@@ -1282,3 +1282,117 @@ a.ac-stat:hover, a.acm-role-cta-pill:hover {
 .acm-taxo-chip { color: var(--ac-text) !important; }
 .acm-taxo-chip.is-active { color: var(--ac-on-primary, #fff) !important; }
 .acm-taxo-chip-icon { color: inherit; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   مُتَغايِرات المُكَوِّنات — الأَصناف المُعَدِّلَة وَحدَها
+   ───────────────────────────────────────────────────────────────────────
+   كُلّ مُحَدِّد هُنا يَبدَأ بِصَنف مُعَدِّل (‏…--grid ، …--compact ،
+   …--showcase ، …--transparent). ولِذلك **لا سَطر واحِد مِنها يَنطَبِق
+   عَلى صَفحَة بِالشَكل الافتِراضيّ**: الافتِراضيّ لا يَحمِل مُعَدِّلاً
+   أَصلاً (‏ThemeVariant بِمُعَدِّل فارِغ)، فَالإضافَة هُنا صِفر أَثَر
+   حَتَّى تُطَبَّق حُزمَة تَطلُبُها.
+
+   ومَوضِعُها في premium.css لا في وَرَقَة جَديدَة: الوَرَقَة الجَديدَة
+   وَسمُ <link> جَديد في <head> — أَي بايتات تَتَغَيَّر في كُلّ صَفحَة
+   في المَنصَّة، وهو بِعَينِه ما تَمنَعُه بَوّابَة القَبول. وpremium.css
+   تُحَمَّل آخِراً فَتَغلِب بِلا !important.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─── بِطاقات الأَدوار: شَبَكَة ─────────────────────────────────────── */
+.acm-role-landing-cards--grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 14px;
+}
+.acm-role-landing-cards--grid .acm-role-landing-card {
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: start;
+    gap: 12px;
+    padding: 18px 16px 16px;
+}
+.acm-role-landing-cards--grid .acm-role-landing-card-icon {
+    width: 48px; height: 48px;
+}
+.acm-role-landing-cards--grid .acm-role-landing-card-cta {
+    position: absolute;
+    inset-inline-end: 14px;
+    top: 18px;
+}
+
+/* ─── بِطاقات الأَدوار: مَضغوطَة ────────────────────────────────────── */
+/* الوَصف لا يُصَيَّر أَصلاً في هذا الشَكل (فَرق بِنيَويّ في RoleLanding)،
+   فَلا قاعِدَة إخفاء هُنا — لا شَيء لِيُخفى. */
+.acm-role-landing-cards--compact { gap: 6px; }
+.acm-role-landing-cards--compact .acm-role-landing-card {
+    padding: 10px 14px;
+    gap: 10px;
+    border-radius: var(--ac-radius-sm);
+    box-shadow: none;
+}
+.acm-role-landing-cards--compact .acm-role-landing-card:hover {
+    transform: none;
+    box-shadow: none;
+}
+.acm-role-landing-cards--compact .acm-role-landing-card-icon {
+    width: 34px; height: 34px;
+    font-size: 18px !important;
+    border-radius: var(--ac-radius-sm);
+}
+.acm-role-landing-cards--compact .acm-role-landing-card strong {
+    font-size: 15px;
+    margin-bottom: 0;
+}
+
+/* ─── بِطاقَة الإعلان: مَكثَّفَة (صَفّ أُفُقيّ) ───────────────────────── */
+.ac-space--compact .ac-space-link {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 10px;
+}
+.ac-space--compact .ac-space-media {
+    width: 104px;
+    flex: 0 0 104px;
+    aspect-ratio: 1 / 1;
+    border-radius: var(--ac-radius-sm);
+}
+.ac-space--compact .ac-space-body {
+    padding: 10px 12px 10px 0;
+    gap: 3px;
+    justify-content: center;
+}
+.ac-space--compact .ac-space-title { font-size: 14px; }
+.ac-space--compact .ac-space-trust { display: none; }
+.ac-space--compact .ac-space-fav-form { top: 6px; }
+
+/* ─── بِطاقَة الإعلان: واجِهَة عَرض ──────────────────────────────────── */
+.ac-space--showcase .ac-space-media { aspect-ratio: 3 / 4; }
+.ac-space--showcase .ac-space-body { padding: 18px 18px 20px; gap: 8px; }
+.ac-space--showcase .ac-space-title {
+    font-size: 18px;
+    font-weight: var(--ac-font-weight-bold, 700);
+    white-space: normal;
+}
+.ac-space--showcase .ac-space-price { font-size: 17px; }
+
+/* ─── شَريط الترويسَة: شَفّاف ───────────────────────────────────────── */
+/* لا تُمَسّ display: الشَريط مَخفيّ دونَ 768px بِقاعِدَة تَخطيط، وتَبديل
+   الهُوِيَّة لا يُعيد تَعريف نُقطَة الانكِسار. */
+.acm-v2-topnav-wrap--transparent .ac-topnav {
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-color: transparent;
+    border-bottom-color: transparent;
+    box-shadow: none;
+}
+
+/* ─── شَريط الترويسَة: مَضغوط ───────────────────────────────────────── */
+.acm-v2-topnav-wrap--compact { margin-top: 8px; }
+.acm-v2-topnav-wrap--compact .ac-topnav {
+    min-height: 44px;
+    padding: 6px 12px;
+    gap: 10px;
+    border-radius: var(--ac-radius-sm);
+}
+.acm-v2-topnav-wrap--compact .ac-topnav-link { font-size: 13px; }

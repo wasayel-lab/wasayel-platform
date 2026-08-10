@@ -38,6 +38,19 @@ public sealed class ThemeDefinition
     /// <summary>مِفتاح ← قيمَة. المَفاتيح مِن
     /// <see cref="ThemeTokenCatalog"/>، والقِيَم بِنَحو نَوعِها.</summary>
     public Dictionary<string, string> Tokens { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// <para>فَتحَة ← قيمَة. المَفاتيح مِن
+    /// <see cref="ThemeVariantCatalog"/> حَصراً، والقِيَم مِن قائِمَة كُلّ
+    /// فَتحَة حَصراً — <b>قامُوسانِ مُغلَقان لا نَحوٌ يُصادِق</b>.</para>
+    ///
+    /// <para><b>ولِماذا هُنا لا في مِلَفّ ثانٍ</b>: الهُوِيَّة البَصَرِيَّة
+    /// الواحِدَة لَون <b>وشَكل</b> مَعاً. مِلَفّ لِلرُموز وآخَر
+    /// لِلمُتَغايِرات كانَ سَيَسمَح بِتَطبيق نِصف هُوِيَّة — لَون الواحَة
+    /// عَلى شَكل اللَيل — وهي بِالضَبط الحالَة الَّتي لا يُريدُها العَرض.
+    /// الوَثيقَة واحِدَة، فَالتَطبيق ذَرِّيّ.</para>
+    /// </summary>
+    public Dictionary<string, string> Variants { get; set; } = new(StringComparer.Ordinal);
 }
 
 /// <summary>
@@ -53,12 +66,32 @@ public sealed class ThemeDefinition
 public sealed class EffectiveTheme
 {
     private readonly Dictionary<string, string> _values;
+    private readonly Dictionary<string, string> _variants;
 
-    private EffectiveTheme(string slug, IReadOnlyDictionary<string, string> values, string css)
+    /// <summary>فَتحَة ← لاحِقَة الصَنف الجاهِزَة. <b>تُحسَب مَرَّةً عِندَ
+    /// بِناء الثيم</b> لا عِندَ التَصيير: الصَفحَة تُصَيَّر آلاف
+    /// المَرّات، والثيم يَتَغَيَّر مَرَّة. ونَفس السِلسِلَة في كُلّ طَلَب
+    /// شَرطُ المُقارَنَة بايتاً بِبايت — بِنَفس مُبَرِّر
+    /// <see cref="Css"/>.</summary>
+    private readonly Dictionary<string, string> _variantSuffixes;
+
+    private EffectiveTheme(
+        string slug,
+        IReadOnlyDictionary<string, string> values,
+        IReadOnlyDictionary<string, string> variants,
+        string css)
     {
-        Slug   = slug;
-        _values = new Dictionary<string, string>(values, StringComparer.Ordinal);
-        Css    = css;
+        Slug      = slug;
+        _values   = new Dictionary<string, string>(values, StringComparer.Ordinal);
+        _variants = new Dictionary<string, string>(variants, StringComparer.Ordinal);
+        Css       = css;
+
+        _variantSuffixes = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var slot in ThemeVariantCatalog.All)
+        {
+            var chosen = _variants.TryGetValue(slot.Key, out var v) ? slot.Find(v) : null;
+            _variantSuffixes[slot.Key] = (chosen ?? slot.Default).ClassSuffix;
+        }
     }
 
     /// <summary>سلاج الثيم المُطَبَّق — <c>default</c> أَو سلاج تَعريف
@@ -72,6 +105,31 @@ public sealed class EffectiveTheme
     public string this[string key] => _values[key];
 
     public IReadOnlyDictionary<string, string> Values => _values;
+
+    /// <summary>فَتحَة ← القيمَة المُختارَة. مُكتَمِل: كُلّ فَتحَة في
+    /// المَعجَم لَها قيمَة.</summary>
+    public IReadOnlyDictionary<string, string> Variants => _variants;
+
+    /// <summary>قيمَة فَتحَة واحِدَة — لِلفُروق <b>البِنيَوِيَّة</b> الَّتي
+    /// لا يَقوى عَلَيها صَنف (‏حَذف وَصف البِطاقَة مَثَلاً)، ولِعَرضِها
+    /// في سَطح الإدارَة.</summary>
+    public string VariantValue(string slotKey) => _variants[slotKey];
+
+    /// <summary>
+    /// <para><b>ما يُلصَق في الوَسم</b> بَعد الصَنف الأَساس: فارِغ
+    /// لِلقيمَة الافتِراضيَّة، أَو مَسافَة ثُمَّ المُعَدِّل.</para>
+    ///
+    /// <para>ولِذلك يُكتَب في الوَسم <c>class="ac-space@(…) …"</c> لا
+    /// <c>class="ac-space @(…)"</c>: الأَوَّل يُعيد بِالافتِراضيّ نَفس
+    /// البايتات الَّتي كانَت، والثاني يُقحِم مَسافَةً زائِدَة في كُلّ
+    /// صَفحَة.</para>
+    /// </summary>
+    public string VariantClassSuffix(string slotKey) => _variantSuffixes[slotKey];
+
+    /// <summary>هَل الفَتحَة عَلى هذه القيمَة؟ اختِصار لِفَرع بِنيَويّ
+    /// في التَصيير.</summary>
+    public bool VariantIs(string slotKey, string value) =>
+        string.Equals(_variants[slotKey], value, StringComparison.Ordinal);
 
     /// <summary>
     /// <para>يَبني ثيماً فَعّالاً مِن <b>أَساس مُكتَمِل</b> و<b>طَبَقَة
@@ -87,23 +145,43 @@ public sealed class EffectiveTheme
     /// </summary>
     public static EffectiveTheme Compose(EffectiveTheme baseTheme, ThemeDefinition? overlay)
     {
-        if (overlay is null || overlay.Tokens.Count == 0) return baseTheme;
+        if (overlay is null || (overlay.Tokens.Count == 0 && overlay.Variants.Count == 0))
+            return baseTheme;
 
-        var merged = new Dictionary<string, string>(baseTheme._values, StringComparer.Ordinal);
-        var touched = false;
+        var merged   = new Dictionary<string, string>(baseTheme._values,   StringComparer.Ordinal);
+        var variants = new Dictionary<string, string>(baseTheme._variants, StringComparer.Ordinal);
+        var tokensTouched   = false;
+        var variantsTouched = false;
 
         foreach (var (key, value) in overlay.Tokens)
         {
             if (!ThemeTokenCatalog.Contains(key)) continue;
             if (string.Equals(merged[key], value, StringComparison.Ordinal)) continue;
             merged[key] = value;
-            touched = true;
+            tokensTouched = true;
+        }
+
+        // نَفس القاعِدَة لِلمُتَغايِرات: مِفتاح خارِج المَعجَم أَو قيمَة
+        // خارِج قائِمَة فَتحَتِها **تُتَجاهَل** هُنا. البَوّابَة عِندَ
+        // الكِتابَة وعِندَ القِراءَة، وهذه ثالِثَة — حَرفاً كَما لِلرُموز.
+        foreach (var (key, value) in overlay.Variants)
+        {
+            var slot = ThemeVariantCatalog.Find(key);
+            if (slot is null || !slot.Contains(value)) continue;
+            if (string.Equals(variants[key], value, StringComparison.Ordinal)) continue;
+            variants[key] = value;
+            variantsTouched = true;
         }
 
         // طَبَقَة لا تُغَيِّر قيمَةً واحِدَة = لا طَبَقَة.
-        return touched
-            ? new EffectiveTheme(overlay.Slug, merged, BuildCss(merged))
-            : baseTheme;
+        if (!tokensTouched && !variantsTouched) return baseTheme;
+
+        // ونَصّ الـCSS لا يُعاد بِناؤُه إلّا إن تَحَرَّكَ رَمز: مُتَغايِر
+        // يُبَدِّل صَنفاً في الوَسم ولا يَمَسّ كُتلَة ‏:root — فَإعادَة
+        // بِنائِها كانَت سَتُنتِج سِلسِلَةً جَديدَة مُساوِيَة، وتُضَيِّع
+        // «نَفس البايتات» بِلا سَبَب.
+        var css = tokensTouched ? BuildCss(merged) : baseTheme.Css;
+        return new EffectiveTheme(overlay.Slug, merged, variants, css);
     }
 
     /// <summary>يَبني ثيماً فَعّالاً مِن تَعريف <b>مُكتَمِل</b>. يَرمي
@@ -119,7 +197,21 @@ public sealed class EffectiveTheme
                     $"الثيم «{d.Slug}» غَير مُكتَمِل — الرَمز «{token.Key}» مَفقود.");
             values[token.Key] = v;
         }
-        return new EffectiveTheme(d.Slug, values, BuildCss(values));
+
+        var variants = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var slot in ThemeVariantCatalog.All)
+        {
+            if (!d.Variants.TryGetValue(slot.Key, out var v))
+                throw new InvalidOperationException(
+                    $"الثيم «{d.Slug}» غَير مُكتَمِل — الفَتحَة «{slot.Key}» مَفقودَة.");
+            if (!slot.Contains(v))
+                throw new InvalidOperationException(
+                    $"الثيم «{d.Slug}» يُعطي الفَتحَة «{slot.Key}» قيمَةً «{v}» " +
+                    "خارِج قائِمَتِها.");
+            variants[slot.Key] = v;
+        }
+
+        return new EffectiveTheme(d.Slug, values, variants, BuildCss(values));
     }
 
     /// <summary>البَثّ: <c>:root{--wsl-…:قيمَة;…}</c> بِتَرتيب المَعجَم

@@ -3,6 +3,7 @@
 @inject IDocumentStore Store
 @inject AuthSession Auth
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
 
 @*
     صَفحة استِكشاف الإعلانات. بُنية مَنقولَة مِن
@@ -162,6 +163,7 @@ else
             @foreach (var l in items)
             {
                 <AcSpaceCard Title="@l.Title"
+                             VariantClassSuffix="@listingCardVariant"
                              Href="@AuthSession.LinkFor(Slug, Role, $"listings/{l.Id}")"
                              ImageUrl="@(l.MediaUrls.Count > 0 ? l.MediaUrls[0] : null)"
                              Location="@($"{l.City} — {l.District}")"
@@ -292,6 +294,10 @@ else
         [ACommerce.Kit.Roles.RoleComponents.DriverExplore]  = true,
     };
 
+    /// <summary>لاحِقَة صَنف مُتَغايِر بِطاقَة الإعلان. فارِغَة =
+    /// الشَكل المُفَصَّل الافتِراضيّ.</summary>
+    string listingCardVariant = "";
+
     bool driverMode;
     bool driverHasAnchor;
     double driverAnchorLat, driverAnchorLng;
@@ -304,6 +310,10 @@ else
         var withRoles = await Roles.LoadAsync(Slug);
         tenant = withRoles.Tenant;
         var roleSet = withRoles.Roles;
+
+        listingCardVariant = (await Themes.EffectiveAsync(Slug))
+            .VariantClassSuffix(ACommerce.Kit.Theme.ThemeVariantCatalog.ListingCard);
+
         if (tenant is null) return;
         profile = Services.Patterns.PatternProfileResolver.Of(tenant);
 

@@ -85,6 +85,19 @@
                             }
                         </div>
                     </a>
+                    @* مُبَدِّل الهُوِيَّة البَصَرِيَّة — مَدخَلُه هُنا لا في
+                       صَفحَة المَتجَر وَحدَها: الصَفحَة خَلف بَوّابَة
+                       مُشرِف المَنصَّة، وهذه هي لَوحَتُه. مَدخَلٌ خَلف
+                       بَوّابَةٍ أَشَدّ مِن بَوّابَتِه لا يُبلَغ. *@
+                    <a href="@($"/admin/tenants/{t.Slug}/theme")"
+                       title="الهُوِيَّة البَصَرِيَّة — حُزَم جاهِزَة"
+                       style="position:absolute;top:10px;inset-inline-end:48px;
+                              display:inline-flex;align-items:center;justify-content:center;
+                              width:32px;height:32px;border-radius:999px;
+                              background:var(--ac-bg-alt);color:var(--ac-text-muted);
+                              text-decoration:none;font-size:14px;">
+                        <AcIcon Name="brush" Size="15" />
+                    </a>
                     @* رابِط مُنفَصِل لِفَتح المَتجَر نَفسه في تَبويب جَديد.
                        النَّقر عَلى البِطاقَة = تَحَكُّم، السَّهم = مُعايَنَة. *@
                     <a href="@($"/{t.Slug}")" target="_blank" rel="noopener"

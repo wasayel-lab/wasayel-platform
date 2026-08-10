@@ -3,6 +3,7 @@
 @inject IDocumentStore Store
 @inject AuthSession Auth
 @inject NavigationManager Nav
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
 
 <div class="acs-page">
     @if (!Auth.IsAuthenticated)
@@ -35,6 +36,7 @@
                 @foreach (var l in items)
                 {
                     <AcSpaceCard Title="@l.Title"
+                                 VariantClassSuffix="@listingCardVariant"
                                  Href="@AuthSession.LinkFor(Slug, Role, $"listings/{l.Id}")"
                                  Location="@($"{l.City} — {l.District}")"
                                  PriceLabel="@($"{l.Price:N0} ريال")"
@@ -57,8 +59,15 @@
     [Parameter] public string? Role { get; set; }
     List<Listing>? items;
 
+    /// <summary>لاحِقَة صَنف مُتَغايِر بِطاقَة الإعلان. فارِغَة =
+    /// الشَكل المُفَصَّل الافتِراضيّ.</summary>
+    string listingCardVariant = "";
+
     protected override async Task OnParametersSetAsync()
     {
+        listingCardVariant = (await Themes.EffectiveAsync(Slug))
+            .VariantClassSuffix(ACommerce.Kit.Theme.ThemeVariantCatalog.ListingCard);
+
         if (!Auth.IsAuthenticated) return;
         await using var s = Store.QuerySession(Slug);
         var favs = await s.Query<Favorite>()

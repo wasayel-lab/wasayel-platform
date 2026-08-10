@@ -6,6 +6,7 @@
 @inject L L
 @inject Marten.IDocumentStore Store
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
 
 @{
     var slug = Tenant.Slug;
@@ -48,7 +49,7 @@
     <div class="acs-page" style="--ac-primary:@brand; --ac-primary-dark:@brand; --ac-primary-light:@brand; --ac-primary-hover:@brand;">
         @if (!chromeHidden)
         {
-            <div class="acm-v2-topnav-wrap">
+            <div class="acm-v2-topnav-wrap@(theme.VariantClassSuffix(ACommerce.Kit.Theme.ThemeVariantCatalog.HeaderBar))">
                 <AcTopNav Items="topItems">
                     <BrandContent>
                         <div class="acm-brand">
@@ -95,6 +96,12 @@ else
     /// التَّنَقُّل</b>: فَتحَة <c>nav</c> لِدَور مُؤَلَّف تُقرَأ مِن
     /// تَعريفِه. بِلا تَأليف هي قاعِدَة المَنصَّة، فَالشَّريط كَما كان.</summary>
     ACommerce.Kit.Roles.TenantRoleSet roleSet = ACommerce.Kit.Roles.TenantRoleSet.Platform;
+
+    /// <summary>ثيم المَتجَر — <b>مَوضِع الالتِقاط في الترويسَة</b>.
+    /// مُهَيَّأ إلى قاعِدَة المَنصَّة: صَفَحات المَنصَّة نَفسِها (بِلا
+    /// مُستَأجِر) لا تَستَعلِم أَصلاً، والفَرع الآخَر لا شَريط فيه.</summary>
+    ACommerce.Kit.Theme.EffectiveTheme theme = ACommerce.Kit.Theme.ThemeCatalog.Default;
+
     string? listingPattern;
     int unreadMessages;
     int unreadNotifications;
@@ -105,6 +112,8 @@ else
         {
             Auth.SetTenant(Tenant.Slug);
             Auth.Load(ctx, Tenant.Slug);
+
+            theme = await Themes.EffectiveAsync(Tenant.Slug);
 
             // اِكتَشِف هَل لِلمَتجَر أَدوار — تَحديد عَرض الـ landing.
             try

@@ -1,3 +1,5 @@
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
+
 @*
     صَفحَة دُخول المَتجَر مُتَعَدِّد التَّطبيقات الفَرعيَّة (مَتجَر بِأَدوار).
     تَظهَر عَلى /{slug} عِندَ مَتجَر مِثل إنجيز قَبل أَن يَختار المُستَخدِم
@@ -21,7 +23,7 @@
         </span>
     </header>
 
-    <div class="acm-role-landing-cards">
+    <div class="acm-role-landing-cards@(theme.VariantClassSuffix(ACommerce.Kit.Theme.ThemeVariantCatalog.PortalRoleCards))">
         @foreach (var r in Tenant.Roles
                     .Where(r => r.CatalogSlug != "tenant_admin")
                     .OrderBy(r => r.SortOrder))
@@ -33,7 +35,11 @@
                 </span>
                 <div>
                     <strong>@r.Label</strong>
-                    @if (!string.IsNullOrEmpty(r.Description))
+                    @* الشَكل «المَضغوط» فَرقُه بِنيَويّ لا تَنسيقيّ: الوَصف
+                       لا يُصَيَّر أَصلاً. إخفاؤُه بِـdisplay:none كانَ
+                       سَيُبقي نَصّاً في المُستَند يَقرَؤُه قارِئ الشاشَة
+                       ويُثقِل البايتات بِلا أَن يُرى. *@
+                    @if (!string.IsNullOrEmpty(r.Description) && !cardsAreCompact)
                     {
                         <span>@r.Description</span>
                     }
@@ -54,4 +60,15 @@
     [Parameter] public string Slug { get; set; } = "";
     [Parameter] public string? Role { get; set; }
     [Parameter] public ACommerce.Kit.Tenants.Tenant Tenant { get; set; } = default!;
+
+    /// <summary>ثيم هذا المَتجَر. مُهَيَّأ إلى قاعِدَة المَنصَّة، فَلَو
+    /// لَم تَجرِ القِراءَة بَعد (أَو تَعَذَّرَت) صُيِّرَت الصَفحَة
+    /// بِالشَكل الافتِراضيّ — لا بِاستِثناء ولا بِفَراغ.</summary>
+    ACommerce.Kit.Theme.EffectiveTheme theme = ACommerce.Kit.Theme.ThemeCatalog.Default;
+
+    bool cardsAreCompact =>
+        theme.VariantIs(ACommerce.Kit.Theme.ThemeVariantCatalog.PortalRoleCards, "compact");
+
+    protected override async Task OnParametersSetAsync()
+        => theme = await Themes.EffectiveAsync(Slug);
 }

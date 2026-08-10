@@ -105,7 +105,7 @@
 
 @if (hasHref)
 {
-    <article class="ac-space @(Class ?? "")">
+    <article class="ac-space@(VariantClassSuffix) @(Class ?? "")">
         <a class="ac-space-link" href="@Href">@linkInner</a>
         @if (ShowFavorite && !string.IsNullOrEmpty(FavoriteFormAction))
         {
@@ -157,6 +157,27 @@ else
     [Parameter] public EventCallback OnOpen { get; set; }
     [Parameter] public EventCallback<bool> OnToggleFavorite { get; set; }
     [Parameter] public string? Class { get; set; }
+
+    /// <summary>
+    /// <para>لاحِقَة صَنف <b>مُتَغايِر</b> البِطاقَة: فارِغَة (الشَكل
+    /// المُفَصَّل — الافتِراضيّ)، أَو مَسافَة ثُمَّ صَنف مُعَدِّل.
+    /// يُمَرِّرُها القالِب مِن ثيم المُستَأجِر
+    /// (<c>EffectiveTheme.VariantClassSuffix</c>)، ولا يَبنيها هُنا
+    /// أَحَد.</para>
+    ///
+    /// <para><b>ولِماذا لاحِقَة جاهِزَة لا اسم قيمَة</b>: هذه المَكتَبَة
+    /// لا تَعرِف الثيم ولا تَعتَمِد عَلَيه — وهذا اتِّجاه اعتِماد
+    /// مَقصود. لَو أَخَذَت اسم القيمَة (‏<c>compact</c>) لَلَزِمَها
+    /// قامُوسُها الخاصّ يُتَرجِمُه، فَصارَ لِلمَعجَم مَصدَرانِ
+    /// يَنحَرِفان. القامُوس الوَحيد في
+    /// <c>ThemeVariantCatalog</c>.</para>
+    ///
+    /// <para>واللاحِقَة <b>تُلصَق بِلا مَسافَة قَبلَها</b>
+    /// (<c>class="ac-space@@(…) …"</c>) — فَبِالافتِراضيّ يَخرُج
+    /// <c>class="ac-space "</c> بِنَفس بايتاتِه قَبل هذه المَوجَة.</para>
+    /// </summary>
+    [Parameter] public string VariantClassSuffix { get; set; } = "";
+
     [Parameter] public string AddFavoriteAriaLabel    { get; set; } = "Add to favorites";
     [Parameter] public string RemoveFavoriteAriaLabel { get; set; } = "Remove from favorites";
 

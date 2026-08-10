@@ -1,0 +1,242 @@
+@page "/admin/tenants/{slug}/theme"
+@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
+@using ACommerce.Kit.Theme
+
+@*
+    مُبَدِّل الهُوِيَّة البَصَرِيَّة — ثَلاث حُزَم مُنَسَّقَة، ونَقرَة
+    واحِدَة تُطَبِّق إحداها عَلى المَتجَر **فَوراً**: كِتابَة + إبطال
+    كاش، والصَفحَة التالِيَة بِالهُوِيَّة الجَديدَة، بِنَفس العَمَلِيَّة
+    وبِلا إعادَة بِناء.
+
+    **البَوّابَة بَوّابَة مُشرِف المَنصَّة** لا مُشرِف المَتجَر — بِخِلاف
+    بَقِيَّة صَفَحات /admin/tenants/{slug}/*. والسَبَب أَنّ الزِرّ هُنا
+    يَنتَهي بِـ«اعتِماد»: هي العَمَلِيَّة الَّتي تَجعَل الثيم مَبثوثاً في
+    <head> لِكُلّ زائِر، وهي نَفسُها الَّتي تَحرُسُها نُقطَتا
+    theme/propose و theme/{slug}/decide بِـPlatformAdminGuard. صَفحَةٌ
+    بِحارِس أَخَفّ مِن نُقطَتِها بابٌ جانِبيّ، لا واجِهَة.
+
+    ولا يُعرَض هُنا مُحَرِّر رُموز حُرّ: ما يُرسَل **اسم حُزمَة**،
+    وجِسمُها يُقرَأ مِن ThemePresetCatalog — أَي مِن المُستودَع.
+*@
+
+<RequirePlatformAdmin>
+<div class="acs-page acm-admin">
+    @if (tenant is null)
+    {
+        <AcEmptyState IconName="info" Title="المَتجَر غَير مَوجود" />
+    }
+    else
+    {
+        <div class="acm-admin-head">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/admin/tenants/{Slug}")"
+                   aria-label="الرُجوع">
+                    <AcIcon Name="arrow-right" Size="16" />
+                </a>
+                <h1 class="acm-wizard-title" style="margin:0;">هُوِيَّة @tenant.Name البَصَرِيَّة</h1>
+            </div>
+            <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}")" target="_blank">
+                <AcIcon Name="external-link" Size="16" /> فَتح المَتجَر
+            </a>
+        </div>
+
+        @if (Err is not null)   { <AcAlert Variant="danger"  Message="@Err" /> }
+        @if (Saved is not null) { <AcAlert Variant="success" Message="@Saved" /> }
+
+        <AcCard>
+            <ChildContent>
+                <h3 style="margin-top:0;">الحُزَم الجاهِزَة (@ThemePresetCatalog.Count)</h3>
+                <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 16px;">
+                    كُلّ حُزمَة <b>رُموز ومُتَغايِرات مَعاً</b> — لَون وشَكل
+                    في مِلَفّ واحِد، فَلا تُطَبَّق نِصف هُوِيَّة. التَطبيق
+                    <b>نَسخ لا إحالَة</b>: يُخَزَّن نَصّ الحُزمَة كَما هُوَ
+                    اليَوم في وَثيقَة هذا المَتجَر، فَتَعديل مِلَفّ الحُزمَة
+                    غَداً لا يُغَيِّر مَتجَراً يَعمَل.
+                </p>
+
+                <div class="acm-role-picklist">
+                    @foreach (var p in ThemePresetCatalog.All)
+                    {
+                        var isLive = string.Equals(p.Slug, liveSlug, StringComparison.Ordinal);
+                        <div class="acm-role-pickcard @(isLive ? "is-picked" : "")">
+                            <span class="acm-role-pickcard-body">
+                                <strong style="font-size:15px;">
+                                    @p.Label.Ar
+                                    @if (isLive)
+                                    {
+                                        <span class="ac-chip ac-chip-sm"
+                                              style="font-size:10px;margin-inline-start:6px;">المُطَبَّقَة الآن</span>
+                                    }
+                                </strong>
+
+                                @* مُعايَنَة مُصَغَّرَة: مُرَبَّعات الأَلوان
+                                   مَقروءَة مِن الحُزمَة نَفسِها — لا لَون
+                                   مَكتوب في هذه الصَفحَة. *@
+                                <span style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+                                    @foreach (var key in SwatchKeys)
+                                    {
+                                        var v = p.Definition.Tokens.TryGetValue(key, out var raw) ? raw : null;
+                                        if (v is not null)
+                                        {
+                                            <span title="@key"
+                                                  style="@($"width:26px;height:26px;border-radius:6px;background:{v};border:1px solid var(--ac-border);display:inline-block;")"></span>
+                                        }
+                                    }
+                                </span>
+
+                                <span style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;">
+                                    @foreach (var slot in ThemeVariantCatalog.All)
+                                    {
+                                        var value = p.Definition.Variants.TryGetValue(slot.Key, out var vv)
+                                            ? vv : slot.DefaultValue;
+                                        <span class="ac-chip ac-chip-sm" style="font-size:10px;">
+                                            @SlotLabel(slot.Key): @value
+                                        </span>
+                                    }
+                                </span>
+                            </span>
+
+                            <form method="post" action="@($"/admin/tenants/{Slug}/theme/apply")"
+                                  style="margin:0;">
+                                <input type="hidden" name="preset" value="@p.Slug" />
+                                <button type="submit" class="ac-btn ac-btn-primary ac-btn-sm">
+                                    <AcIcon Name="check" Size="16" /> تَطبيق
+                                </button>
+                            </form>
+                        </div>
+                    }
+                </div>
+            </ChildContent>
+        </AcCard>
+
+        <AcCard>
+            <ChildContent>
+                <h3 style="margin-top:0;">المَبثوث الآن</h3>
+                <div class="acm-cat-list">
+                    <div class="acm-cat-row">
+                        <div style="flex:1;">
+                            <strong>@(liveSlug ?? ThemeCatalog.DefaultSlug)</strong>
+                            <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
+                                ثيم فَعّال: <code>@live.Slug</code> ·
+                                أَساس: <code>@live["color.primary"]</code> ·
+                                سَطح: <code>@live["color.surface"]</code> ·
+                                نَصّ: <code>@live["color.text"]</code>
+                            </span>
+                        </div>
+                    </div>
+                    @foreach (var slot in ThemeVariantCatalog.All)
+                    {
+                        <div class="acm-cat-row">
+                            <div style="flex:1;">
+                                <strong>@SlotLabel(slot.Key)</strong>
+                                <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
+                                    <code>@slot.Key</code> = <code>@live.VariantValue(slot.Key)</code>
+                                    @{
+                                        var suffix = live.VariantClassSuffix(slot.Key);
+                                    }
+                                    @if (suffix.Length == 0)
+                                    {
+                                        <text> · بِلا صَنف مُعَدِّل (الشَكل الافتِراضيّ حَرفاً)</text>
+                                    }
+                                    else
+                                    {
+                                        <text> · الصَنف:</text> <code>@suffix.Trim()</code>
+                                    }
+                                </span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </ChildContent>
+        </AcCard>
+
+        @if (definitions.Count > 0)
+        {
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">وَثائِق ثيم هذا المَتجَر (@definitions.Count)</h3>
+                    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 16px;">
+                        المُعتَمَد وَحدَه يُبَثّ، و<b>آخِر قَرار يَغلِب</b> —
+                        فَالتَبديل ذَهاباً وإياباً بَينَ حُزَم مُطَبَّقَة
+                        سابِقاً حَتميّ، لا يَعتَمِد عَلى تَرتيب صُفوف.
+                    </p>
+                    <div class="acm-cat-list">
+                        @foreach (var d in definitions)
+                        {
+                            <div class="acm-cat-row">
+                                <div style="flex:1;">
+                                    <strong>@d.Slug</strong>
+                                    <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
+                                        @StatusLabel(d.Status) · كَتَبَها @d.CreatedBy ·
+                                        @d.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC
+                                        @if (d.DecidedAt is { } at)
+                                        {
+                                            <text> · قُرِّرَ @at.ToString("yyyy-MM-dd HH:mm:ss") UTC</text>
+                                        }
+                                    </span>
+                                </div>
+                                <span class="ac-chip ac-chip-sm">@StatusLabel(d.Status)</span>
+                            </div>
+                        }
+                    </div>
+                </ChildContent>
+            </AcCard>
+        }
+    }
+</div>
+</RequirePlatformAdmin>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "err")]   public string? Err { get; set; }
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+
+    Tenant? tenant;
+
+    /// <summary>الثيم الفَعّال لِهذا المَتجَر — نَفس ما يُبَثّ في
+    /// <c>&lt;head&gt;</c>، مَقروءاً مِن نَفس الخِدمَة. الصَفحَة تَعرِض
+    /// الحالَة الحَقيقيَّة لا حِسابَها مِن جَديد.</summary>
+    EffectiveTheme live = ThemeCatalog.Default;
+
+    /// <summary>سلاج الوَثيقَة المَبثوثَة، أَو <c>null</c> إن لَم يَكُن
+    /// لِلمَتجَر ثيم مُؤَلَّف.</summary>
+    string? liveSlug;
+
+    IReadOnlyList<TenantThemeDefinition> definitions = Array.Empty<TenantThemeDefinition>();
+
+    /// <summary>الرُموز الَّتي تُعايَن كَمُرَبَّعات. خَمسَة تَكفي لِلحُكم
+    /// مِن ثَلاثَة أَمتار: أَساس، سَطح، خَلفِيَّة، نَصّ، ثانَويّ.</summary>
+    static readonly string[] SwatchKeys =
+    {
+        "color.primary", "color.surface", "color.bg", "color.text", "color.secondary"
+    };
+
+    static string SlotLabel(string key) => key switch
+    {
+        ThemeVariantCatalog.PortalRoleCards => "بِطاقَة الدَور",
+        ThemeVariantCatalog.ListingCard     => "بِطاقَة الإعلان",
+        ThemeVariantCatalog.HeaderBar       => "الترويسَة",
+        _                                   => key
+    };
+
+    static string StatusLabel(string s) => s switch
+    {
+        TenantThemeStatuses.Approved => "مُعتَمَد",
+        TenantThemeStatuses.Rejected => "مَرفوض",
+        _                            => "مُعَلَّق"
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var s = Store.QuerySession();
+        tenant = await s.LoadAsync<Tenant>(Slug);
+        if (tenant is null) return;
+
+        var set = await Themes.ForAsync(Slug);
+        live     = set.Theme;
+        liveSlug = set.TenantAuthored?.Slug;
+
+        definitions = await Themes.ListAllAsync(Slug);
+    }
+}

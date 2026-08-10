@@ -48,6 +48,16 @@ public static class MarketplaceTemplateExtensions
         // حَرفاً: الكاش بِمِفتاح المُستَأجِر يَجِب أَن يَعبُر الطَلَبات،
         // والعَزل يَقَع في جَلسَة السلاج لا في عُمر الخِدمَة.
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService>();
+
+        // ─── مُصادَقَة عُدَّة المَظهَر عِندَ الإقلاع ──────────────────────
+        // مَسّ صَريح لِلكاتالوجَين هُنا — لا انتِظاراً لِأَوَّل طَلَب.
+        // الثيم الافتِراضيّ يُصادَق مُكتَمِلاً، والحُزَم الثَلاث تُقرَأ
+        // وتُصادَق بِبَوّابَة المُستَأجِر (وهي بِالضَبط ما تَصيرُه عِندَ
+        // التَطبيق). خَرقٌ في أَيٍّ مِنها يَرمي **قَبل أَن يَستَمِع
+        // الخادِم**، فَلا يُكتَشَف بِنَقرَة «تَطبيق» في عَرضٍ أَمامَ
+        // مُستَثمِر.
+        _ = ACommerce.Kit.Theme.ThemeCatalog.Default;
+        _ = ACommerce.Kit.Theme.ThemePresetCatalog.Preload();
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.WebPushService>();
         services.AddScoped<Gates.GatePipeline>();
         services.AddScoped<Commands.AcceptTermsHandler>();
@@ -1784,6 +1794,36 @@ public static class MarketplaceTemplateExtensions
 
             await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.theme_decide");
             return ok ? Results.Ok(msg) : Results.BadRequest(msg);
+        }).DisableAntiforgery();
+
+        // ─── Admin: apply a curated preset (the live switcher) ──────────
+        // نُقطَة الزِرّ الواحِد في /admin/tenants/{slug}/theme. لا تُضيف
+        // عَقداً جَديداً: تُنادي ProposeAsync ثُمَّ DecideAsync — نَفس
+        // المُصادِق مَرَّتَين ونَفس الإبطال — والجَديد الوَحيد أَنّ
+        // **جِسم التَعريف يُقرَأ مِن كاتالوج المَنصَّة لا مِن الطَلَب**.
+        // فَما يَصِل قاعِدَة البَيانات مَكتوب في هذا المُستودَع.
+        //
+        // والبَوّابَة بَوّابَة مُشرِف المَنصَّة، لِأَنّ العَمَلِيَّة
+        // تَنتَهي بِـ«اعتِماد» — وهي القَرار الَّذي يَجعَل الثيم مَبثوثاً
+        // لِكُلّ زائِر. لا يُخَفَّف الحارِس لِأَنّ الواجِهَة صارَت زِرّاً.
+        app.MapPost("/admin/tenants/{slug}/theme/apply",
+            async (string slug, HttpRequest req, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth,
+                   Services.TenantThemeService themes,
+                   Services.Audit.AuditWriter audit) =>
+        {
+            var decision = await Services.PlatformAdminGuard.EvaluateAsync(store, auth);
+            if (!decision.Allowed) return Forbidden();
+
+            var presetSlug = req.Form["preset"].ToString().Trim();
+            var by = decision.User is { } u ? $"{u.FullName} · {u.Phone}" : "platform-admin";
+
+            var (ok, msg) = await themes.ApplyPresetAsync(slug, presetSlug, by);
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.theme_apply_preset");
+
+            return Results.Redirect(ok
+                ? $"/admin/tenants/{slug}/theme?saved={Uri.EscapeDataString(msg)}"
+                : $"/admin/tenants/{slug}/theme?err={Uri.EscapeDataString(msg)}");
         }).DisableAntiforgery();
 
         // ─── Admin: save categories ─────────────────────────────────────
