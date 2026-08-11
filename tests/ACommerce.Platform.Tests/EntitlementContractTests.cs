@@ -221,8 +221,16 @@ public class EntitlementContractTests
     private static string Rel(string path) =>
         Path.GetRelativePath(ThemeZeroEquivalenceTests.RepoRoot, path).Replace('\\', '/');
 
-    /// <summary>كُلّ مَصادِر <c>libs</c> و<c>apps</c> — بِلا
-    /// <c>obj</c>/<c>bin</c>.</summary>
+    /// <summary>
+    /// <para>كُلّ مَصادِر <c>libs</c> و<c>apps</c> — بِلا
+    /// <c>obj</c>/<c>bin</c>.</para>
+    ///
+    /// <para><b>و<c>.razor</c> مِنها، وهذا لَيسَ تَفصيلاً</b>: أَوَّل
+    /// نُسخَة مِن هذا المَسح قَرَأَت <c>.cs</c> وَحدَها، فَاتَّهَمَت
+    /// <c>ListingViewed</c> بِاليُتم — وهو يُصدَر في
+    /// <c>TenantListingDetail.razor:601</c>. الأَداةُ كانَت تَكذِب، لا
+    /// المَفحوص. والقاعِدَة ١٠: الأَداةُ تُقاس قَبل أَن يُوثَق بِها.</para>
+    /// </summary>
     internal static IEnumerable<(string File, string Text)> SourceFiles()
     {
         foreach (var root in new[] { "libs", "apps" })
@@ -230,8 +238,12 @@ public class EntitlementContractTests
             var dir = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, root);
             if (!Directory.Exists(dir)) continue;
 
-            foreach (var f in Directory.EnumerateFiles(dir, "*.cs", SearchOption.AllDirectories))
+            foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
             {
+                if (!f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) &&
+                    !f.EndsWith(".razor", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
                 var norm = f.Replace('\\', '/');
                 if (norm.Contains("/obj/", StringComparison.Ordinal) ||
                     norm.Contains("/bin/", StringComparison.Ordinal))
