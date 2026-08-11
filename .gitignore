@@ -27,3 +27,7 @@ appsettings.Local.json
 
 # مرفوعات التطوير المحلية (يكتبها LocalFileStorage)
 **/wwwroot/uploads/
+
+# حَزمَة المُستَثمِرين — بَيانات غُرفَة الصَفقَة، لا تُتتَبَّع
+docs/Wasayel_Package-*/
+docs/Wasayel_Package-*.zip
