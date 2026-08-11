@@ -1,0 +1,83 @@
+# scripts/verify-css-baseline.txt — PINNED DEBT for Layer 2 (verify-css.sh)
+#
+# Classes used in .razor that resolve to no rule in any .css, as measured on
+# 2026-08-11 at commit d08f0adc.  They are pinned BY NAME rather than waved
+# through by a slackened rule, so the debt stays countable.
+#
+# The pin is bidirectional, like the FlowInventoryTests dead-state ledger:
+#   • a name here that no longer fires in the code -> gate FAILS (stale pin)
+#   • a name in the code that is not here          -> gate FAILS (new debt)
+# The file can therefore only shrink, and it cannot silently rot.
+#
+# NOTHING HERE WAS FIXED when this baseline was created: measuring and
+# repairing are separate decisions, and the repair is the owner's call.
+# Each entry is an element that renders with NO styling at all.
+
+# ── Group A — admin/studio table cells that were never given rules (10) ──
+# Attribute and category management tables; text renders at browser defaults.
+ac-attr-code
+ac-attr-name
+ac-attr-req
+ac-attr-type
+ac-cat-kind
+ac-cat-label
+ac-cat-slug
+ac-city-name
+ac-chip-sm
+ac-input-lg
+
+# ── Group B — the agent chat panel (5) ──
+# AgentChatPanel.razor + StudioAgent.razor: tool-call blocks are unstyled,
+# so the tool input/result panes have no frame, padding, or mono font.
+acm-agent-body
+acm-agent-tool-actions
+acm-agent-tool-head
+acm-agent-tool-input
+acm-agent-tool-result
+
+# ── Group C — listing detail spec grid (2) ──
+# TenantListingDetail.razor renders the attribute table with no grid rules,
+# so rows collapse into a single run of text.
+acm-details-grid
+acm-details-grid-row
+
+# ── Group D — per-role home variants (3) ──
+# RoleHomes/*.razor emit a role modifier next to the defined .acm-role-home;
+# the modifier itself carries no rule, so all three roles look identical.
+acm-role-home-driver
+acm-role-home-rider
+acm-role-home-seller
+
+# ── Group E — print stylesheet never written (9) ──
+# A print layout was marked up in razor but the matching @media print rules
+# do not exist in any sheet.
+print-actions
+print-head
+print-list
+print-mark
+print-meta
+print-stat
+print-stat-label
+print-stat-value
+print-stats
+
+# ── Group F — risk widgets in IncubatorStudy (2) ──
+risk-row
+risk-tag
+
+# ── Group G — chat/turn state classes (2) ──
+# `is-assistant` is emitted literally; `is-waiting` is the else-branch of
+# `@(mine ? "is-mine" : "is-waiting")` — .is-mine exists, its sibling does not.
+is-assistant
+is-waiting
+
+# ── Group H — bare generic names (2) ──
+footer
+t
+
+# ── Group I — known extraction artifact, NOT a real defect (1) ──
+# `category` is a C# argument inside an interpolated expression:
+#   class="risk-dot @($"risk-dot-{CategoryClass(Str(risk,"category")...)}"
+# The extractor strips `==`/`!=` operands but cannot strip call arguments.
+# Pinned so the count stays honest rather than silently filtered.
+category
