@@ -218,8 +218,13 @@ public static class AuthHandlers
                 NationalId = nationalId,
                 PhoneVerified = nationalId is null && email is null,
                 EmailVerified = email is not null,
+                // مَن يَدخُل بِنَفاذ يَأخُذ اسماً مُشتَقّاً حَتمِيّاً مِن
+                // رَقم هُوِيَّتِه بَدَل «مُستَخدِم نَفاذ» لِلجَميع — وإلّا
+                // بَدَت كُلّ شاشَة فيها أَكثَر مِن طَرَف مُكَرَّرَةً.
+                // التَّغيير عَلى الإنشاء وَحدَه: مُستَخدِم قائِم لا يُمَسّ.
                 FullName = email is not null ? "عُضو جَديد"
-                    : nationalId is null ? "عُضو جَديد" : "مُستَخدِم نَفاذ"
+                    : nationalId is null ? "عُضو جَديد"
+                    : ACommerce.Kit.Auth.NafathNames.For(nationalId)
             };
             session.Store(existing);
             await session.SaveChangesAsync();
