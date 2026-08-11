@@ -49,7 +49,11 @@
                         <li>@Cap(t.RefinesPerMonth) تَحسينات / شَهر</li>
                         <li>@Cap(t.StoresMax) تَطبيقات</li>
                         @if (t.AllowExport)        { <li>تَصدير PDF / Excel</li> }
-                        @if (t.AllowCustomPattern) { <li>أَنماط مُخَصَّصَة</li> }
+                        @* «أَنماط مُخَصَّصَة» سُحِبَت مِن البَيع: لا مَسار
+                           يَختار فيه المُستَخدِم نَمَط تَطبيقِه أَصلاً — النَمَط
+                           تَستَنبِطُه قَواعِد PatternMatcher مِن إجابات الاكتِشاف
+                           ويَبنيه ‏/studio/s/{id}/build بِلا حَقل نَمَط. تَعود
+                           حينَ يوجَد المَسار، لا قَبلَه. *@
                     </ul>
                     @if (isCurrent)
                     {

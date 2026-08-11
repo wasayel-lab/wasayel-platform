@@ -77,6 +77,6 @@
             yield return $"حَتَّى {t.StoresMax} تَطبيقات";
         else yield return "تَطبيقات بِلا حَدّ";
         if (t.AllowExport)         yield return "تَصدير PDF/Excel";
-        if (t.AllowCustomPattern)  yield return "أَنماط مُخَصَّصَة";
+        // «أَنماط مُخَصَّصَة» سُحِبَت — لا مَسار لَها. التَفصيل في StudioTier.cs.
     }
 }

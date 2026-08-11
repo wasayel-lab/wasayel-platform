@@ -2,25 +2,47 @@ using Marten;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 
-/// <summary>حُدود الباقَة لِمُدَّة ٣٠ يَوم. <c>int.MaxValue</c> = بِلا حَدّ.</summary>
+/// <summary>
+/// <para>حُدود الباقَة لِمُدَّة ٣٠ يَوم. <c>int.MaxValue</c> = بِلا حَدّ.</para>
+///
+/// <para><b>سُحِبَ <c>AllowCustomPattern</c></b> (كانَ <c>false</c> في
+/// spark و lite، و<c>true</c> في growth و scale). كانَ يُعرَض ميزَةً
+/// مَدفوعَة في صَفحَة الباقات وفي نافِذَة التَرقِيَة، و<b>لَم يَفحَصه
+/// مَوضِع واحِد</b> — سَبع إصاباتٍ كُلُّها تَعريف أَو عَرض.</para>
+///
+/// <para>ولَم يُفرَض لِأَنّ المَسار الَّذي يَحرُسُه <b>غَير مَوجود</b>:
+/// نَمَط التَطبيق تَستَنبِطُه قَواعِد
+/// <see cref="PatternMatcher"/> مِن إجابات الاكتِشاف، ويُخَزَّن في
+/// <c>IncubatorSession.SuggestedPattern</c>، ويَقرَؤُه
+/// <c>/studio/s/{id}/build</c> مُباشَرَةً — واستِمارَة البِناء تُرسِل
+/// الاسم والسلاج واللَون والشِعار والمَدينَة **ولا تُرسِل نَمَطاً**.
+/// فَلا اختِيار لِلمُستَخدِم ولا تَعديل بَعد الإنشاء. حِراسَة مَعدومٍ
+/// شَرطٌ لا يَكذِب أَبَداً — وذلك أَسوَأ مِن غِيابِه، لِأَنَّه يُوهِم
+/// أَنّ المَنع قائِم.</para>
+///
+/// <para>القاعِدَة المُطَبَّقَة: تُباع الميزَة حينَ توجَد. فَحينَ يُبنى
+/// اختِيار النَمَط، يَعود الحَقل ويَعود سَطراه في
+/// <c>StudioBilling.razor</c> و<c>UpgradePrompt.razor</c> — ومَعَهُما
+/// فَحصٌ حَقيقيّ عِندَ البِناء.</para>
+/// </summary>
 public sealed record TierLimits(
     string Tier, string LabelAr, int MonthlyPriceSar,
     int AnalysesPerMonth, int RefinesPerMonth, int StoresMax,
-    bool AllowExport, bool AllowCustomPattern);
+    bool AllowExport);
 
 public static class TierCatalog
 {
     public static readonly IReadOnlyDictionary<string, TierLimits> All = new Dictionary<string, TierLimits>
     {
         ["spark"]  = new("spark",  "Spark",   99,  AnalysesPerMonth: 1, RefinesPerMonth: 3,
-                         StoresMax: 1, AllowExport: false, AllowCustomPattern: false),
+                         StoresMax: 1, AllowExport: false),
         ["lite"]   = new("lite",   "Lite",    199, AnalysesPerMonth: 3, RefinesPerMonth: 10,
-                         StoresMax: 3, AllowExport: true,  AllowCustomPattern: false),
+                         StoresMax: 3, AllowExport: true),
         ["growth"] = new("growth", "Growth",  399, AnalysesPerMonth: 10, RefinesPerMonth: 50,
-                         StoresMax: 10, AllowExport: true, AllowCustomPattern: true),
+                         StoresMax: 10, AllowExport: true),
         ["scale"]  = new("scale",  "Scale",   999, AnalysesPerMonth: int.MaxValue,
                          RefinesPerMonth: int.MaxValue, StoresMax: int.MaxValue,
-                         AllowExport: true, AllowCustomPattern: true),
+                         AllowExport: true),
     };
 
     public static TierLimits For(string tier)
