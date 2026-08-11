@@ -1,0 +1,34 @@
+# scripts/verify-design-quality-ceilings.txt — RATCHET for Layer 4
+#
+# Measured 2026-08-11 at commit d08f0adc over the stylesheets App.razor
+# actually links, plus apps/V1.App/wwwroot.  Regenerate the measurement with:
+#   WSL_DUMP=1 ./scripts/verify-design-quality.sh
+#
+# These are CEILINGS, not targets.  The gate fails only when a number GROWS,
+# so nothing has to be cleaned up for CI to pass — but nothing can quietly
+# get worse either.  When a number drops the run says so and asks for the
+# ceiling to be tightened; it does not fail, because failing an improvement
+# would punish the exact work this layer exists to encourage.
+#
+# ── How far past the reference limits these sit ─────────────────────────
+# The reference caps carried over from the origin repo are colours 60,
+# spacings 20, font-sizes 10, icon-sizes 6 — and every one of ours is over,
+# the typographic scale by more than 4x:
+#
+#   colours     129  vs  60   (the origin's worst app shipped 42)
+#   spacings     34  vs  20
+#   font-sizes   42  vs  10
+#   icon-sizes   16  vs   6
+#
+# Worth reading against META-MODEL §9: the theme catalog defines FOUR font
+# sizes and FIVE spacings as the closed vocabulary a tenant can drive.  The
+# stylesheets ship 42 and 34.  The gap is not a token problem — the tokens
+# are correct — it is that most declarations never reference them.  That is
+# the single largest piece of visual debt these five layers measure, and it
+# is recorded here rather than fixed, because collapsing 42 font sizes into
+# 4 is a design decision with visible consequences on every screen.
+
+colours|129
+spacings|34
+font-sizes|42
+icon-sizes|16
