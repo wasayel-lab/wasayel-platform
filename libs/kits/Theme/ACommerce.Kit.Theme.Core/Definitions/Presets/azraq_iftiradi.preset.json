@@ -22,8 +22,8 @@
     "color.borderStrong": "rgba(17,24,39,.12)",
 
     "color.text": "#18181b",
-    "color.textMuted": "#71717a",
-    "color.textSoft": "#71717a",
+    "color.textMuted": "#6f6f78",
+    "color.textSoft": "#6f6f78",
 
     "color.success": "#10B981",
     "color.danger": "#EF4444",
