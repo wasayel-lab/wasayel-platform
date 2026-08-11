@@ -1,0 +1,45 @@
+# scripts/verify-design-tokens-baseline.txt — PINNED DEBT for Layer 3
+#
+# Format: <kind>|<value>|<occurrences>   — measured 2026-08-11 at d08f0adc.
+# Keyed by the off-scale VALUE, not by file, because that is the unit a fix
+# removes: one decision ("13.5px is not a size we ship") retires one line
+# here, wherever its 8 occurrences live.
+#
+# Regenerate with:  WSL_DUMP=1 ./scripts/verify-design-tokens.sh
+# Bidirectional, as in Layers 1-2: new values fail the gate, and retired
+# values still pinned fail it too.
+#
+# ── font-size (29 occurrences, 8 distinct off-scale values) ──────────────
+# Two clusters, and they are different problems:
+#   • the half-pixel family (10.5 / 11.5 / 12.5 / 13.5) — 21 occurrences,
+#     almost all in the Studio/incubator screens.  Half-pixel type does not
+#     land on the device pixel grid and renders slightly blurred.
+#   • the display sizes (42 / 46 / 52) — 6 occurrences, hero numerals on
+#     Admin/Studio home screens, each picked ad hoc.
+#   • 22px (2) sits between the scale's 20 and 24.
+font-size|10.5px|5
+font-size|11.5px|4
+font-size|12.5px|4
+font-size|13.5px|8
+font-size|22px|2
+font-size|42px|4
+font-size|46px|1
+font-size|52px|1
+
+# ── spacing (8 occurrences) ─────────────────────────────────────────────
+# Sub-4px values are optical nudges (`margin-top:2px` to align a checkbox
+# against its label); 60px is a one-off empty-state pad.
+spacing-over|60px|1
+spacing-under|2px|5
+spacing-under|3px|2
+
+# ── icon-size (6 distinct off-scale values, 14 uses) ────────────────────
+# AcIcon Size="12|15|26|36|42|46".  12 and 15 sit just under the scale's
+# 14/16 pair, which is where the difference is least visible and the
+# inconsistency most likely accidental.
+icon-size|12|1
+icon-size|15|1
+icon-size|26|1
+icon-size|36|1
+icon-size|42|1
+icon-size|46|1
