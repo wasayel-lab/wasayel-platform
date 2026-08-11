@@ -1276,6 +1276,25 @@ public static class MarketplaceTemplateExtensions
             string slug, string role, IDocumentStore store) =>
             await BuildIconAsync(slug, role, store));
 
+        // ─── بِطاقَة المُشارَكَة — PNG نُقَطِيّ ──────────────────────────
+        // أَيقونَة الـ PWA أَعلاه SVG، وأَكثَر مِنَصّات المُشارَكَة
+        // (واتساب، فيسبوك، تويتر، لينكدإن) تَرفُض SVG في og:image فَتَعرِض
+        // الرابِط بِلا صورَة. هذه النُقطَة تُعطي نَفس الهُوِيَّة نُقَطِيَّةً
+        // بِالمَقاس العُرفيّ 1200×630، بِلا أَيّ حُزمَة رُسوم (المُرَمِّز
+        // في ACommerce.Kit.Tenants.Png فَوق ZLibStream المَكتَبيّ).
+        app.MapGet("/api/{slug}/og.png", async (
+            string slug, IDocumentStore store) =>
+        {
+            await using var s = store.QuerySession();
+            var tenant = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+            if (tenant is null) return Results.NotFound();
+
+            var png = ACommerce.Kit.Tenants.SocialCard.RenderPng(tenant.BrandColor);
+            // الرَسم حَتميّ مِن لَون واحِد، فَالكاش الطَويل آمِن: تَغيير
+            // لَون المَتجَر نادِر، وزَواحِف المُشارَكَة تُعيد الجَلب بِنَفسِها.
+            return Results.File(png, "image/png", lastModified: null, entityTag: null);
+        });
+
         // ─── PWA — VAPID public key (لِـ JS لِبَناء PushSubscription) ─────
         // الـ public key لَيس سِرّاً — يَكفي أَن يَكون مُتاحاً لِأَيّ client.
         // الـ private key يَبقى فَقَط في السيرفر.

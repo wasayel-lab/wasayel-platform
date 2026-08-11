@@ -49,10 +49,17 @@
         var seoDescription = seoTenant is null
             ? "مَنَصَّة تِجارَة وَخَدَمات مُتَعَدِّدَة المُستَأجِرين، عَرَبِيَّة أَوَّلاً."
             : ACommerce.Kit.Tenants.SeoDocuments.HomeDescription(seoTenant);
+        // صورَة المُشارَكَة نُقَطِيَّة دائِماً: أَكثَر المِنَصّات (واتساب،
+        // فيسبوك، تويتر، لينكدإن) تَرفُض SVG في og:image فَتَعرِض الرابِط
+        // بِلا صورَة أَصلاً. أَيقونَة الـ PWA تَبقى SVG حَيث تَنفَع.
         var seoImage = seoBase.Length == 0 ? null
             : seoTenant is not null
-                ? $"{seoBase}/api/{Uri.EscapeDataString(Tenant.Slug)}/icon.svg"
+                ? $"{seoBase}/api/{Uri.EscapeDataString(Tenant.Slug)}/og.png"
                 : $"{seoBase}/_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png";
+        // الأَبعاد تُصَرَّح لِلبِطاقَة المُوَلَّدَة وَحدَها — وهي وَحدَها
+        // المَعلومَة المَقاس. الشِعار الثابِت لِلمَنصَّة مُرَبَّع، فَلا
+        // نَنسِب إلَيه 1200×630 كَذِباً.
+        var seoImageSized = seoBase.Length > 0 && seoTenant is not null;
     }
     <title>@seoTitle</title>
     @if (!string.IsNullOrEmpty(seoDescription))
@@ -85,7 +92,15 @@
     {
         <meta property="og:image" content="@seoImage" />
     }
-    <meta name="twitter:card" content="summary" />
+    @if (seoImageSized)
+    {
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:width" content="@ACommerce.Kit.Tenants.SocialCard.Width" />
+        <meta property="og:image:height" content="@ACommerce.Kit.Tenants.SocialCard.Height" />
+    }
+    @* بِطاقَة عَريضَة حينَ تَكون الصورَة بِنِسبَة 1.91:1؛ وإلّا المُرَبَّعَة
+       الصَغيرَة — الشِعار الثابِت لِلمَنصَّة لا يَملَأ البِطاقَة العَريضَة. *@
+    <meta name="twitter:card" content="@(seoImageSized ? "summary_large_image" : "summary")" />
     <meta name="twitter:title" content="@seoTitle" />
     @if (!string.IsNullOrEmpty(seoDescription))
     {
