@@ -1,0 +1,966 @@
+/* تَعديلات خاصّة بـ V1.App فوق app.css */
+
+/* مَنع overflow أُفُقيّ مِن AcHScroll أو grids واسِعَة */
+.acs-page { overflow-x: hidden; }
+
+/* ═══ بِطاقَة دُخول المَتجَر — احترافيَّة، مُحتَرِمَة لِلَون العَلامَة ═══ */
+.ac-auth-wrap {
+    min-height: 100vh; display: grid; place-items: center; padding: 24px;
+}
+.ac-auth-card {
+    width: 100%; max-width: 420px; background: var(--ac-surface);
+    border: 1px solid var(--ac-border); border-radius: 20px;
+    box-shadow: 0 12px 40px rgba(15,23,42,.10); padding: 36px 32px;
+}
+.ac-auth-logo {
+    width: 60px; height: 60px; border-radius: 16px; margin: 0 auto 16px;
+    /* 28px داخِل المِقياس بَدَلاً مِن 30px خارِجه. */
+    display: grid; place-items: center; font-size: 28px; color: #fff;
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--ac-primary) 35%, transparent);
+}
+/* 24px داخِل المِقياس بَدَلاً مِن 23px. */
+.ac-auth-title { text-align: center; font-size: 24px; font-weight: 800; margin: 0 0 4px; }
+.ac-auth-sub { text-align: center; font-size: 14px; color: var(--ac-text-muted); margin: 0 0 24px; }
+.ac-auth-back { text-align: center; margin: 18px 0 0; font-size: 13px; }
+.ac-auth-back a { color: var(--ac-text-muted); text-decoration: none; }
+.ac-auth-back a:hover { color: var(--ac-primary); }
+
+/* shell الـ layout الأَب — يَلُفّ navbar + topnav + main + bottom-nav */
+.acm-shell { min-height: 100vh; }
+
+
+
+/* Chip filter (used in /explore) */
+.ac-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 12px; border-radius: 999px;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    text-decoration: none; color: var(--ac-text); font-size: 13px;
+    white-space: nowrap; flex-shrink: 0;
+}
+.ac-chip:hover { background: var(--ac-bg-alt); }
+.ac-chip-active {
+    background: var(--ac-primary); color: var(--ac-on-primary);
+    border-color: var(--ac-primary);
+}
+.ac-chip-active:hover { background: var(--ac-primary-hover); }
+
+/* صَفّ chips قابِل لِلتَمرير أُفُقيّاً (يُستَخدَم في صَفحَة /explore) */
+.acm-chip-row {
+    display: flex; gap: 8px; overflow-x: auto;
+    padding: 4px 0 12px; scrollbar-width: none;
+}
+.acm-chip-row::-webkit-scrollbar { display: none; }
+
+/* كُتلَة الفَلاتِر في /explore */
+.acm-explore-filters {
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md); padding: 12px;
+    margin-bottom: 12px; display: flex; flex-direction: column; gap: 12px;
+}
+.acm-filter-row {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: end;
+}
+.acm-filter-field {
+    display: flex; flex-direction: column; gap: 4px; flex: 1 1 140px; min-width: 140px;
+}
+.acm-filter-label { font-size: 12px; color: var(--ac-text-muted); }
+.acm-filter-select { min-width: 160px; }
+.acm-filter-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+
+/* بِطاقَة Hero brand: شِعار + اسم مَتجَر على خَلفِيَّة اللَون الأَساسي */
+.acm-hero-brand { display: inline-flex; align-items: center; gap: 8px; color: #fff; }
+.acm-hero-brand-mark {
+    display: inline-flex; width: 36px; height: 36px;
+    align-items: center; justify-content: center;
+    background: rgba(255,255,255,.18); border-radius: 8px;
+}
+.acm-hero-brand-text { font-size: 1.1rem; font-weight: 700; color: #fff; }
+
+/* بِطاقَات الإحصائيّات على /me — قابِلَة لِلنَّقر */
+.acm-stat-tile {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 16px; text-decoration: none;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-lg); color: var(--ac-text);
+    transition: transform 120ms, box-shadow 120ms;
+}
+.acm-stat-tile:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+.acm-stat-tile strong { font-size: 1.5rem; color: var(--ac-text); }
+.acm-stat-tile span { font-size: 13px; color: var(--ac-text-muted); }
+
+/* صَفحَة /create-listing */
+.acm-create textarea.ac-input { font-family: inherit; }
+
+/* جَدول الخَصائِص الديناميكِيَّة على صَفحَة التَفاصيل — تَسمِيَة + قِيمَة */
+.acm-details-attrs { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 0; }
+@media (min-width: 480px) {
+    .acm-details-attrs { grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+}
+.acm-details-attr {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 8px 0; border-bottom: 1px solid var(--ac-border);
+}
+.acm-details-attr:last-child { border-bottom: 0; }
+.acm-details-attr dt {
+    font-size: 13px; color: var(--ac-text-muted);
+    flex: 0 0 auto; min-width: 110px; margin: 0;
+}
+.acm-details-attr dd { margin: 0; font-weight: 600; color: var(--ac-text); }
+
+/* لَوحَة تَحَكُّم admin */
+.acm-admin-head {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; margin-bottom: 16px;
+}
+.acm-tenant-card {
+    display: flex; flex-direction: column; gap: 8px; padding: 16px;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-lg); text-decoration: none; color: var(--ac-text);
+    transition: transform 120ms, box-shadow 120ms;
+}
+.acm-tenant-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+.acm-tenant-card-head { display: flex; align-items: center; gap: 12px; }
+.acm-tenant-card-brand {
+    width: 40px; height: 40px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 18px; flex-shrink: 0;
+}
+.acm-tenant-card-info { display: flex; flex-direction: column; gap: 2px; }
+.acm-tenant-card-info strong { font-size: 16px; }
+.acm-tenant-card-info span { font-size: 12px; color: var(--ac-text-muted); }
+.acm-tenant-card-tagline { margin: 0; font-size: 13px; color: var(--ac-text-muted); }
+.acm-tenant-card-meta {
+    display: flex; gap: 12px; padding-top: 8px;
+    border-top: 1px solid var(--ac-border); font-size: 12px;
+    color: var(--ac-text-muted);
+}
+.acm-tenant-card-meta span { display: inline-flex; align-items: center; gap: 4px; }
+
+/* radio cards (طَريقَة الدُخول) */
+.acm-radio-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 480px) { .acm-radio-cards { grid-template-columns: 1fr; } }
+.acm-radio-card {
+    display: block; padding: 12px; cursor: pointer;
+    background: var(--ac-surface); border: 2px solid var(--ac-border);
+    border-radius: var(--ac-radius-md); user-select: none;
+    transition: border-color 120ms, background 120ms;
+}
+.acm-radio-card:hover { border-color: var(--ac-primary); }
+.acm-radio-card input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
+.acm-radio-card:has(input:checked) {
+    border-color: var(--ac-primary);
+    background: color-mix(in srgb, var(--ac-primary) 8%, transparent);
+}
+.acm-radio-card-body { display: flex; flex-direction: column; gap: 4px; }
+.acm-radio-card-body strong { font-size: 14px; }
+.acm-radio-card-body span { font-size: 12px; color: var(--ac-text-muted); }
+
+/* TaxonomyChips SSR — صَفَّان: kinds + leaves */
+.acm-taxo-chips { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.acm-taxo-chips-row {
+    display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+    padding: 4px 0;
+}
+.acm-taxo-chips-row::-webkit-scrollbar { display: none; }
+.acm-taxo-chips-sub { padding-inline-start: 4px; }
+.acm-taxo-chip {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+    padding: 8px 14px; border-radius: 999px; font-size: 13px;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    color: var(--ac-text); text-decoration: none; white-space: nowrap;
+    transition: background 120ms, border-color 120ms, color 120ms;
+}
+.acm-taxo-chip:hover { background: var(--ac-bg-alt); border-color: var(--ac-primary); }
+.acm-taxo-chip.is-active {
+    background: var(--ac-primary); color: var(--ac-on-primary, #fff);
+    border-color: var(--ac-primary); font-weight: 600;
+}
+.acm-taxo-chip-icon { font-size: 16px; line-height: 1; }
+.acm-taxo-chips-sub .acm-taxo-chip {
+    background: var(--ac-bg-alt); border-color: transparent;
+}
+.acm-taxo-chips-sub .acm-taxo-chip:hover {
+    background: var(--ac-surface); border-color: var(--ac-primary); color: var(--ac-primary);
+}
+
+/* شَجَرَة الفِئات في إنشاء عَرض — Kinds كَ <details> قابِلَة لِلطَيّ */
+.acm-cat-tree { display: flex; flex-direction: column; gap: 12px; }
+.acm-cat-tree-group {
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+    overflow: hidden;
+}
+.acm-cat-tree-summary {
+    list-style: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; font-weight: 700; font-size: 15px;
+    color: var(--ac-text);
+}
+.acm-cat-tree-summary::-webkit-details-marker { display: none; }
+.acm-cat-tree-summary::before {
+    content: "▸"; margin-inline-end: 8px; transition: transform 120ms;
+    color: var(--ac-text-muted); font-size: 12px;
+}
+.acm-cat-tree-group[open] > .acm-cat-tree-summary::before { transform: rotate(90deg); }
+.acm-cat-tree-count {
+    background: var(--ac-bg-alt); color: var(--ac-text-muted);
+    padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+}
+.acm-cat-tree-grid { padding: 0 16px 16px; }
+
+/* AcModal — مُطابِق لِبِنية AcModal.razor الأَصلِيَّة. يُستَخدَم تَحت SSR
+   لِفَلاتِر /explore. backdrop = <a> لِيَعمَل النَّقر بِلا JS. */
+.ac-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(15, 23, 42, .5);
+    z-index: 1000; cursor: pointer;
+}
+.ac-modal {
+    position: fixed; inset: auto 0 0 0;  /* mobile: sheet مِن الأَسفَل */
+    background: var(--ac-surface);
+    border-radius: var(--ac-radius-lg) var(--ac-radius-lg) 0 0;
+    z-index: 1001; max-height: 85vh; display: flex; flex-direction: column;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, .15);
+}
+@media (min-width: 640px) {
+    .ac-modal {
+        inset: 50% auto auto 50%; transform: translate(-50%, -50%);
+        max-width: 480px; width: 90vw;
+        border-radius: var(--ac-radius-lg);
+    }
+}
+.ac-modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--ac-border);
+}
+.ac-modal-title { font-size: 16px; font-weight: 700; margin: 0; }
+.ac-modal-close, .ac-modal-close:hover {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 999px; cursor: pointer;
+    background: var(--ac-bg-alt); color: var(--ac-text);
+    border: 0; text-decoration: none;
+}
+.ac-modal-body { padding: 20px; overflow-y: auto; flex: 1;
+                 display: flex; flex-direction: column; gap: 20px; }
+.ac-modal-footer {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding: 12px 20px; border-top: 1px solid var(--ac-border);
+}
+
+/* بِطاقَة الفِئَة كَ <label> حَولَ <input radio> — السلوك المُلوَّن
+   عَلى :checked يَجعَل النَّقر يُحَدِّد الفِئَة بَصَريّاً تَحت SSR. */
+.acs-cat-pick { user-select: none; transition: border-color 120ms, background 120ms; }
+.acs-cat-pick:hover { border-color: var(--ac-primary); }
+.acs-cat-pick:has(input[type="radio"]:checked) {
+    border-color: var(--ac-primary);
+    background: color-mix(in srgb, var(--ac-primary) 10%, transparent);
+}
+
+/* مُنتَقي المَدينَة على Hero — يَعرِض dropdown صَغير بِجانِب اسم المَتجَر */
+.acm-hero-city {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-inline-start: auto; margin: 0; padding: 0;
+    background: rgba(255,255,255,.16); border-radius: 999px;
+    padding: 4px 8px;
+}
+.acm-hero-city-icon { display: inline-flex; color: #fff; }
+.acm-hero-city-select {
+    background: transparent; border: 0; color: #fff;
+    font-size: 13px; font-family: inherit; cursor: pointer;
+    padding: 2px 4px; appearance: none; outline: none;
+}
+.acm-hero-city-select option { color: var(--ac-text); }
+
+/* AcSpaceCard SSR — <a> داخِل <article> مَع <form> أَخ لِزِرّ القَلب */
+.ac-space { position: relative; overflow: hidden; }
+.ac-space-link {
+    display: flex; flex-direction: column;
+    text-decoration: none; color: inherit;
+    flex: 1; min-width: 0;
+}
+.ac-space-fav-form {
+    position: absolute; top: 8px; inset-inline-end: 8px;
+    margin: 0; z-index: 2;
+}
+.ac-space-fav-form .ac-space-fav {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 999px;
+    background: rgba(255,255,255,.95); border: 0; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12); color: var(--ac-text-muted);
+}
+.ac-space-fav-form .ac-space-fav.is-fav { color: var(--ac-danger); }
+.ac-space-fav-form .ac-space-fav:hover  { color: var(--ac-danger); }
+
+/* صَفحَة /explore — Filter bar + sort bar + modal */
+.acm-explore-filterbar {
+    display: flex; gap: 8px; align-items: center;
+    margin-bottom: 8px;
+}
+.acm-explore-chips { flex: 1; min-width: 0; }
+.acm-explore-chips .ac-hscroll {
+    display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+}
+.acm-explore-chips .ac-hscroll::-webkit-scrollbar { display: none; }
+
+.acm-explore-filterbtn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; border-radius: 999px;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    color: var(--ac-text); cursor: pointer; text-decoration: none;
+    flex-shrink: 0;
+}
+.acm-explore-filterbtn:hover { background: var(--ac-bg-alt); color: var(--ac-primary); }
+
+.acm-explore-sortbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; gap: 8px;
+}
+.acm-explore-count { color: var(--ac-text-muted); font-size: 13px; }
+.acm-explore-sortbar-right { display: flex; align-items: center; gap: 8px; }
+.acm-sort-form { margin: 0; }
+.acm-explore-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px;
+}
+
+/* Filter modal (rendered when ?filters=open) */
+.acm-explore-filter-modal {
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-lg); padding: 16px;
+    margin-bottom: 16px; box-shadow: 0 4px 16px rgba(0,0,0,.08);
+}
+.acm-explore-filter-modal-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+}
+.acm-explore-circle-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 999px;
+    background: var(--ac-bg-alt); border: 0; color: var(--ac-text);
+    cursor: pointer; text-decoration: none;
+}
+.acm-explore-filter-form { display: flex; flex-direction: column; gap: 12px; }
+.acm-explore-filtersec { margin: 0; }
+.acm-explore-filtersec-title { font-size: 14px; font-weight: 700; margin: 0 0 6px; }
+.acm-explore-pricerange { display: flex; align-items: center; gap: 8px; }
+.acm-explore-pricerange .ac-input { flex: 1; }
+.acm-explore-location .ac-input { width: 100%; }
+.acm-explore-filter-actions {
+    display: flex; justify-content: flex-end; gap: 8px; padding-top: 8px;
+    border-top: 1px solid var(--ac-border);
+}
+
+.ac-filter-chip {
+    display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+    padding: 8px 12px; border-radius: 999px;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    color: var(--ac-text); text-decoration: none; font-size: 13px;
+    white-space: nowrap;
+}
+.ac-filter-chip:hover { background: var(--ac-bg-alt); }
+.ac-filter-chip.is-active {
+    background: var(--ac-primary); color: var(--ac-on-primary);
+    border-color: var(--ac-primary);
+}
+
+/* صَفحَة /listings/{id} — Detail overlay actions + report details */
+.acm-details-gallery-actions {
+    position: absolute; top: 8px; left: 8px; right: 8px;
+    display: flex; justify-content: space-between; pointer-events: none;
+}
+.acm-details-gallery-actions-end { display: flex; gap: 8px; }
+.acm-details-circle-btn,
+.acm-details-circle-btn:hover {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 999px;
+    background: rgba(255,255,255,.95); border: 0; color: var(--ac-text);
+    cursor: pointer; text-decoration: none; pointer-events: auto;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+}
+.acm-details-circle-btn.is-fav { color: var(--ac-danger); }
+
+.acm-details-title { font-size: 20px; font-weight: 700; margin: 16px 0 4px; }
+.acm-details-location {
+    display: inline-flex; align-items: center; gap: 4px;
+    color: var(--ac-text-muted); font-size: 13px; margin-bottom: 8px;
+}
+.acm-details-meta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 16px; }
+.acm-details-price { color: var(--ac-primary); font-weight: 700; font-size: 20px; }
+.acm-details-section {
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-lg); padding: 16px; margin-bottom: 12px;
+}
+.acm-details-section-title { font-size: 16px; font-weight: 700; margin: 0 0 8px; }
+.acm-details-description { margin: 0; line-height: 1.7; color: var(--ac-text); }
+
+.acm-details-report {
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-lg); padding: 0; margin-bottom: 12px;
+}
+.acm-details-report summary {
+    list-style: none; cursor: pointer;
+    display: flex; align-items: center; gap: 6px; padding: 16px;
+    color: var(--ac-text-muted); font-size: 14px;
+}
+.acm-details-report summary::-webkit-details-marker { display: none; }
+.acm-details-report[open] summary { border-bottom: 1px solid var(--ac-border); }
+.acm-details-report-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+
+/* Landing tenants list */
+.tenant-cards { list-style: none; padding: 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.tenant-card {
+    background: var(--ac-surface); border: 2px solid var(--ac-border);
+    border-radius: var(--ac-radius-md); padding: 1.25rem;
+}
+.tenant-card a { text-decoration: none; display: flex; align-items: baseline; gap: 0.5rem; }
+.tenant-card strong { font-size: 1.3rem; }
+
+/* Bottom nav items */
+.bn-item {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; text-decoration: none; color: var(--ac-text-muted); padding: 6px 0;
+    font-size: 11px;
+}
+.bn-item.active,
+.bn-item:hover { color: var(--ac-primary); }
+.bn-icon { font-size: 22px; line-height: 1; }
+.bn-label { font-size: 11px; }
+
+/* Top nav items */
+.ac-topnav-item {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 6px 12px; border-radius: 8px;
+    text-decoration: none; color: var(--ac-text); font-size: 13px;
+}
+.ac-topnav-item.active,
+.ac-topnav-item:hover { background: var(--ac-bg-alt); color: var(--ac-primary); }
+
+.muted { color: var(--ac-muted); font-size: 0.9rem; }
+.mt-2 { margin-top: 10px; }
+
+/* === Fixes for verify-css undefined classes === */
+.ac-muted { color: var(--ac-muted); font-size: 0.9rem; }
+.bi      { display: inline-block; width: 1em; height: 1em; }   /* placeholder for legacy icon refs */
+.chip {
+    text-decoration: none; padding: 8px 14px; border-radius: 999px;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    color: var(--ac-text); font-size: 13px;
+    display: inline-flex; align-items: center; gap: 4px;
+}
+.chip.active { background: var(--ac-primary); color: #fff; border-color: var(--ac-primary); }
+.empty {
+    color: var(--ac-text-muted); font-style: italic;
+    padding: 2rem 0; text-align: center;
+}
+.lede { font-size: 1.1rem; color: var(--ac-text-muted); }
+.me-item {
+    display: block; padding: 14px;
+    background: var(--ac-surface); border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md); margin-bottom: 6px;
+    text-decoration: none; color: var(--ac-text); font-size: 15px;
+}
+.me-item:hover { background: var(--ac-bg-alt); }
+
+/* Unread notification card */
+.ac-card-unread { background: color-mix(in srgb, var(--ac-primary) 6%, transparent); }
+
+/* Language toggle in TopNav */
+.ac-lang-toggle {
+    background: transparent;
+    border: 1px solid var(--ac-border);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ac-text);
+    cursor: pointer;
+    letter-spacing: 0.05em;
+}
+.ac-lang-toggle:hover { background: var(--ac-bg-alt); }
+
+/* Card form helper */
+.ac-card-form { padding: 4px; }
+
+/* Login CTA — alternative to .ac-btn on anchors */
+.ac-login-cta {
+    display: inline-block;
+    padding: 12px 24px;
+    background: var(--ac-primary);
+    color: #fff;
+    text-decoration: none;
+    border-radius: var(--ac-radius-sm);
+    font-weight: 600;
+}
+.ac-login-cta-block { display: block; text-align: center; padding: 12px; }
+
+/* Hero title (white on brand background) */
+.hero-title { color: #fff; margin: 0 0 8px; font-size: 24px; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   لَوحَة تَحَكُّم — صَفَحات /admin/*
+   ═══════════════════════════════════════════════════════════════════ */
+
+.acm-admin {
+    max-width: 960px; margin: 0 auto;
+    padding: 24px 16px 80px;
+}
+
+.acm-admin .acm-admin-head {
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--ac-border);
+}
+
+.acm-admin .acm-wizard-title {
+    font-size: 22px; font-weight: 700; color: var(--ac-text);
+}
+
+/* Grid لِبِطاقات المَتاجِر في /admin */
+.acm-home-grid {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+/* مُحَرِّرات المَتجَر — أَيقونَة + نَصّ + chevron (TenantEdit) */
+.acm-tenant-managers {
+    display: grid; gap: 10px; margin-top: 16px;
+    grid-template-columns: 1fr;
+}
+@media (min-width: 640px) {
+    .acm-tenant-managers { grid-template-columns: 1fr 1fr; }
+}
+.acm-manager-card {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 18px;
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-lg);
+    text-decoration: none; color: var(--ac-text);
+    transition: transform 120ms, box-shadow 120ms, border-color 120ms;
+}
+.acm-manager-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,.08);
+    border-color: var(--ac-primary);
+}
+.acm-manager-card > div:not([class]) { flex: 1; min-width: 0; }
+.acm-manager-card strong { display: block; font-size: 15px; margin-bottom: 3px; }
+.acm-manager-card span { display: block; color: var(--ac-text-muted); font-size: 12px; line-height: 1.5; }
+.acm-manager-icon {
+    width: 44px; height: 44px;
+    background: var(--ac-bg-alt);
+    color: var(--ac-primary);
+    border-radius: 12px; flex-shrink: 0;
+    position: relative;             /* مَركَز إنزال الـ child */
+    align-self: center;             /* وَ مَركَزه عَموديّاً في الـ card */
+}
+.acm-manager-icon > * {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    /* أَيّ child (SVG أَو img أَو span) يَكون مُمَركَزاً تَماماً */
+}
+.acm-manager-icon > svg { width: 22px; height: 22px; }
+
+/* قائِمَة الفِئات (TenantEdit + TenantCategories) */
+.acm-cat-list { display: flex; flex-direction: column; gap: 6px; }
+.acm-cat-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px;
+    background: var(--ac-bg-alt);
+    border-radius: var(--ac-radius-md);
+    border: 1px solid transparent;
+    transition: border-color 120ms;
+}
+.acm-cat-row:hover { border-color: var(--ac-border); }
+
+/* مُنتَقي الـ scope (TenantAttributes) */
+.acm-scope-list { display: flex; flex-direction: column; gap: 6px; }
+.acm-scope-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 14px;
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+    text-decoration: none; color: var(--ac-text);
+    transition: border-color 120ms, background 120ms, transform 120ms;
+}
+.acm-scope-row:hover {
+    border-color: var(--ac-primary);
+    background: var(--ac-bg-alt);
+    transform: translateY(-1px);
+}
+.acm-scope-row.is-active {
+    border-color: var(--ac-primary);
+    background: color-mix(in srgb, var(--ac-primary) 8%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ac-primary) 15%, transparent);
+}
+
+/* شَجَرَة المُدُن (TenantRegions) */
+.acm-region-tree {
+    margin: 0; padding-inline-start: 0; list-style: none;
+}
+.acm-region-tree > li {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--ac-border);
+}
+.acm-region-tree > li:first-child { padding-top: 4px; }
+.acm-region-tree > li:last-child { border-bottom: 0; padding-bottom: 4px; }
+.acm-region-tree > li > strong {
+    font-size: 14px; color: var(--ac-text);
+}
+.acm-region-tree ul {
+    margin: 8px 0 0;
+    padding-inline-start: 24px;
+    list-style: none;
+    display: flex; flex-wrap: wrap; gap: 6px;
+}
+.acm-region-tree ul li {
+    background: var(--ac-bg-alt);
+    color: var(--ac-text-muted);
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+
+/* بِطاقَة عُنوان المَتجَر داخِل TenantEdit (الصَفّ العُلوي) */
+.acm-admin .acm-admin-head .acm-tenant-card-brand {
+    width: 52px; height: 52px; font-size: 22px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   صَفحَة الوَكيل /admin/agent — تَنسيقات في-الـ-razor، لكِنّ
+   التَّعديلات أَدناه تُحَسِّن الانسِجام مَع باقي الإدارَة.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.acm-agent-help {
+    padding: 14px 18px;
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--ac-primary) 6%, transparent),
+        color-mix(in srgb, var(--ac-primary) 3%, transparent));
+    border: 1px solid color-mix(in srgb, var(--ac-primary) 15%, transparent);
+    border-radius: var(--ac-radius-lg);
+    margin-bottom: 20px;
+}
+
+.acm-agent-thread .acm-agent-avatar {
+    background: var(--ac-bg-alt);
+    box-shadow: 0 2px 4px rgba(0,0,0,.06);
+}
+
+.acm-agent-turn.is-user .acm-agent-avatar {
+    background: color-mix(in srgb, var(--ac-primary) 12%, transparent);
+}
+
+.acm-agent-thread .acm-agent-text {
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    border-radius: 14px;
+}
+.acm-agent-turn.is-user .acm-agent-text {
+    background: color-mix(in srgb, var(--ac-primary) 8%, transparent);
+    border-color: color-mix(in srgb, var(--ac-primary) 20%, transparent);
+}
+
+.acm-agent-tool {
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+
+.acm-agent-composer {
+    border-radius: 14px;
+    box-shadow: 0 -4px 16px rgba(0,0,0,.04);
+    border-color: var(--ac-border);
+}
+.acm-agent-composer textarea {
+    border: 1px solid var(--ac-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.acm-agent-empty {
+    background: var(--ac-bg-alt);
+    border: 2px dashed var(--ac-border);
+    border-radius: var(--ac-radius-lg);
+}
+
+/* ═══ Role Landing — صَفحَة دُخول التَّطبيقات الفَرعيَّة ═══════════════ */
+/* ═══ Role launcher — صَفحَة انتِقاليَّة احترافيَّة (app picker) ═══════ */
+.acm-role-landing {
+    max-width: 560px; margin: 0 auto; padding: 0 18px 48px;
+    min-height: 100vh; display: flex; flex-direction: column;
+}
+.acm-role-landing-head {
+    text-align: center; padding: 56px 24px 40px; margin: 0 -18px 28px;
+    position: relative; overflow: hidden;
+    /* background-color مُسبَق + border رَفيع لِيَجتاز J-template fillerce
+       — الـ radial-gradient وَحدَه يَترُك computed background-color: transparent. */
+    background-color: color-mix(in srgb, var(--ac-primary) 4%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--ac-primary) 12%, transparent);
+    /* تدرّج هادئ مبني على لون المتجر */
+    background-image:
+        radial-gradient(120% 120% at 50% -20%,
+            color-mix(in srgb, var(--ac-primary) 16%, transparent),
+            transparent 60%);
+}
+.acm-role-landing-brand {
+    width: 80px; height: 80px; border-radius: 22px;
+    display: grid; place-items: center; margin: 0 auto 16px;
+    /* 36px داخِل المِقياس بَدَلاً مِن 38 خارِجه. */
+    color: #fff; font-size: 36px; font-weight: 800;
+    box-shadow: 0 12px 30px color-mix(in srgb, var(--ac-primary) 40%, transparent);
+}
+.acm-role-landing-head h1 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -.01em; }
+.acm-role-landing-head p { margin: 8px 0 0; color: var(--ac-text-muted); font-size: 15px; }
+.acm-role-landing-hint {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 20px;
+    font-size: 12.5px; font-weight: 600; color: var(--ac-primary);
+    padding: 6px 14px;
+    background: color-mix(in srgb, var(--ac-primary) 10%, transparent);
+    border-radius: 999px;
+}
+.acm-role-landing-cards { display: flex; flex-direction: column; gap: 12px; }
+.acm-role-landing-card {
+    display: flex; align-items: center; gap: 16px;
+    padding: 18px 20px;
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: 16px;
+    text-decoration: none; color: var(--ac-text);
+    box-shadow: 0 1px 3px rgba(15,23,42,.05);
+    transition: transform .15s, border-color .15s, box-shadow .15s;
+}
+.acm-role-landing-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--ac-primary);
+    box-shadow: 0 10px 28px color-mix(in srgb, var(--ac-primary) 22%, transparent);
+}
+.acm-role-landing-card-icon {
+    /* 28 على المِقياس. */
+    font-size: 28px; line-height: 1; width: 58px; height: 58px;
+    display: grid; place-items: center;
+    background: color-mix(in srgb, var(--ac-primary) 10%, var(--ac-bg-alt));
+    border-radius: 15px; flex-shrink: 0;
+}
+.acm-role-landing-card > div { flex: 1; min-width: 0; }
+.acm-role-landing-card strong { display: block; font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+.acm-role-landing-card span:not(.acm-role-landing-card-cta) {
+    display: block; color: var(--ac-text-muted); font-size: 13px; line-height: 1.6;
+}
+.acm-role-landing-card-cta {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: grid; place-items: center; flex-shrink: 0;
+    background: color-mix(in srgb, var(--ac-primary) 10%, transparent);
+    color: var(--ac-primary); font-size: 16px; font-weight: 700;
+    transition: background .15s, color .15s;
+}
+.acm-role-landing-card:hover .acm-role-landing-card-cta {
+    background: var(--ac-primary); color: #fff;
+}
+.acm-role-landing-foot { text-align: center; margin-top: 28px; }
+.acm-role-landing-foot a {
+    color: var(--ac-text-muted); font-size: 13.5px; text-decoration: none;
+    border-bottom: 1px dashed var(--ac-border); padding-bottom: 2px;
+}
+.acm-role-landing-foot a:hover { color: var(--ac-primary); border-color: var(--ac-primary); }
+
+/* ═══ Role Home — قَوالِب صَفَحات بَدء كامِلَة لِكُلّ دَور ════════════ */
+.acm-role-home { padding-bottom: 24px; }
+.acm-role-home-head { margin: 8px 0 16px; }
+.acm-role-home-head h2 { margin: 0 0 4px; font-size: 22px; }
+.acm-role-home-head p { margin: 0; color: var(--ac-text-muted); font-size: 14px; line-height: 1.6; }
+
+.acm-role-cta-primary {
+    display: flex; align-items: center; gap: 14px;
+    padding: 18px 20px; margin-bottom: 16px;
+    background: var(--ac-primary); color: #fff;
+    border-radius: var(--ac-radius-lg);
+    text-decoration: none;
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--ac-primary) 35%, transparent);
+    transition: transform 120ms, box-shadow 120ms;
+}
+.acm-role-cta-primary:hover { transform: translateY(-1px); }
+.acm-role-cta-icon {
+    width: 48px; height: 48px;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,.18); border-radius: 12px;
+    font-size: 24px; flex-shrink: 0;
+}
+.acm-role-cta-label { flex: 1; min-width: 0; }
+.acm-role-cta-label strong { display: block; font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+.acm-role-cta-label small { display: block; font-size: 12px; opacity: .85; }
+
+.acm-role-cta-row {
+    display: grid; gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    margin-bottom: 20px;
+}
+.acm-role-cta-pill {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 12px 8px;
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+    text-decoration: none; color: var(--ac-text);
+    transition: border-color 120ms;
+}
+.acm-role-cta-pill:hover { border-color: var(--ac-primary); }
+.acm-role-cta-pill strong { font-size: 20px; color: var(--ac-primary); font-weight: 700; }
+.acm-role-cta-pill span    { font-size: 11px; color: var(--ac-text-muted); margin-top: 2px; }
+
+.acm-role-list {
+    display: flex; flex-direction: column; gap: 8px; margin-top: 8px;
+}
+.acm-role-request-card,
+.acm-role-trip-card {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px;
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+    text-decoration: none; color: var(--ac-text);
+    transition: border-color 120ms, transform 120ms;
+}
+.acm-role-request-card:hover,
+.acm-role-trip-card:hover { border-color: var(--ac-primary); transform: translateY(-1px); }
+.acm-role-request-card strong,
+.acm-role-trip-card strong { display: block; font-size: 14px; }
+.acm-role-trip-time {
+    font-size: 11px; color: var(--ac-text-muted);
+    background: var(--ac-bg-alt); padding: 4px 8px; border-radius: 999px;
+    white-space: nowrap;
+}
+
+.acm-role-empty {
+    text-align: center; padding: 32px 16px;
+    background: var(--ac-bg-alt);
+    border: 2px dashed var(--ac-border);
+    border-radius: var(--ac-radius-lg);
+}
+.acm-role-empty p { margin: 12px 0; color: var(--ac-text-muted); }
+
+/* ═══ Role Home Hero — (قالِب صَغير، مُستَخدَم في حالات أُخرى) ═════════ */
+.acm-role-hero {
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--ac-primary) 14%, transparent),
+        color-mix(in srgb, var(--ac-primary) 4%, transparent));
+    border: 1px solid color-mix(in srgb, var(--ac-primary) 25%, transparent);
+    border-radius: var(--ac-radius-lg);
+    padding: 20px;
+    margin-bottom: 16px;
+}
+.acm-role-hero-head {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 14px;
+}
+.acm-role-hero-icon {
+    font-size: 32px; line-height: 1;
+    width: 56px; height: 56px;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,.55);
+    border-radius: 14px;
+}
+.acm-role-hero-actions {
+    display: flex; flex-direction: column; gap: 8px;
+}
+
+/* ═══ PWA install pill (compact, top-start corner) ═══════════════════ */
+/* صَغير وَمُحايِد — لا يَحجُب المُحتَوى. !important يُغَلِّب أَيّ CSS
+   مِن RCLs قَد يَكسِر المَوقِع. */
+.ac-pwa-pill {
+    position: fixed !important;
+    top: calc(12px + env(safe-area-inset-top, 0px)) !important;
+    inset-inline-start: 12px !important;
+    bottom: auto !important; inset-inline-end: auto !important;
+    z-index: 950 !important;
+    display: inline-flex !important; align-items: center !important; gap: 0;
+    background: var(--ac-primary); color: #fff;
+    border-radius: 999px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.18);
+    font-size: 12px; font-weight: 600;
+    animation: ac-pwa-pop .2s ease-out;
+}
+@keyframes ac-pwa-pop { from { transform: scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+.ac-pwa-pill-cta {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    background: transparent; color: inherit; border: 0;
+    font: inherit; cursor: pointer;
+    border-radius: 999px 0 0 999px;
+}
+.ac-pwa-pill-icon { font-size: 14px; line-height: 1; }
+.ac-pwa-pill-text { line-height: 1; }
+.ac-pwa-pill-x {
+    background: transparent; border: 0;
+    color: rgba(255,255,255,.85);
+    cursor: pointer; padding: 4px 10px 6px;
+    font-size: 14px; line-height: 1;
+    border-radius: 0 999px 999px 0;
+}
+/* وَضع "مُثَبَّت" — أَخضَر هادِئ، يُشير لِلجاهِزيَّة لا لِلتَّحفيز. */
+.ac-pwa-pill.is-installed {
+    background: #16a34a;   /* tailwind green-600 */
+}
+/* وَضع "تَحديث جاهِز" — كَهرَمانيّ، يَلفِت الانتِباه بِدون إنذار. */
+.ac-pwa-pill.is-update {
+    background: #d97706;   /* tailwind amber-600 */
+}
+
+/* ═══ Role picklist (TenantRoles checklist) ═══════════════════════ */
+.acm-role-picklist { display: flex; flex-direction: column; gap: 8px; }
+.acm-role-pickcard {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 14px;
+    background: var(--ac-surface);
+    border: 2px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+    cursor: pointer;
+    transition: border-color 120ms, background 120ms;
+}
+.acm-role-pickcard:hover { border-color: var(--ac-primary); }
+.acm-role-pickcard.is-picked {
+    border-color: var(--ac-primary);
+    background: color-mix(in srgb, var(--ac-primary) 8%, transparent);
+}
+/* :has() fallback لِلمُتَصَفِّحات الَّتي تَدعَمُه — تَأخُذ التَّأثير الفَوريّ
+   عِندَ النَّقر بِلا حاجَة لِـ form submit. */
+.acm-role-pickcard:has(input[type="checkbox"]:checked) {
+    border-color: var(--ac-primary);
+    background: color-mix(in srgb, var(--ac-primary) 8%, transparent);
+}
+.acm-role-pickcard:has(input[type="checkbox"]:not(:checked)) {
+    border-color: var(--ac-border);
+    background: var(--ac-surface);
+}
+.acm-role-pickcard > input[type="checkbox"] {
+    margin-top: 4px; width: 20px; height: 20px;
+    flex-shrink: 0; cursor: pointer;
+}
+.acm-role-pickcard-body { flex: 1; min-width: 0; display: block; }
+.acm-role-pickcard-body strong { display: block; }
+.acm-role-pickcard-body > span:nth-of-type(1) {
+    display: block; color: var(--ac-text-muted); font-size: 13px; margin-top: 4px;
+}
+.acm-role-pickcard-default {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px; color: var(--ac-text-muted);
+    white-space: nowrap; align-self: flex-start;
+    padding: 4px 8px; border-radius: 6px;
+    background: var(--ac-bg-alt);
+}
+
+/* ═══ Offers (InDrive-style negotiation) ═══════════════════════════ */
+.ac-offer-list { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+.ac-offer {
+    padding: 12px 14px;
+    background: var(--ac-surface);
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+}
+.ac-offer-accepted {
+    background: color-mix(in srgb, var(--ac-primary) 8%, transparent);
+    border-color: var(--ac-primary);
+}

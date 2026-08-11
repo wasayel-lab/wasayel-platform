@@ -1,0 +1,74 @@
+/*
+  branding.css — تَخصيص أَلوان عَشير V3 لِكَلاسات قالَب Customer.Marketplace
+  (نَفس القالَب الذي يَستَهلِكه Ejar V1، لكِن بِهُوِيَّة عَشير البَصَرِيَّة).
+  يُحَمَّل آخِر شَيء فيُغَلِّب القِيَم الافتراضيّة.
+
+  لَوحَة Ashare الرَسميَّة (دَليل الهُوِيَّة 2025):
+    Deep Olive Green  #345454 — اللَون الرَئيسيّ
+    Soft Orange       #F4844C — التَمييز فَقَط
+    خَط Cairo (Brando Arabic web fallback)
+
+  مَرجِع: Apps/Ashare.V2/Customer/Frontend/Ashare.V2.Web/wwwroot/app.css
+*/
+
+:root {
+    /* لَوحَة Ashare V3: زَيتونيّ عَميق + بُرتُقاليّ ناعِم */
+    --ejar-primary:        #345454;   /* Deep Olive Green */
+    --ejar-primary-hover:  #243b3b;   /* Darker olive */
+    --ejar-accent:         #F4844C;   /* Soft Orange */
+    --ejar-bg-card:        #FFFFFF;
+    --ejar-text-primary:   #1C1917;
+    --ejar-border:         #E0DCD6;
+    --ejar-error:          #dc2626;
+
+    /* تَوحيد كَلاسات الإطار (Customer.Marketplace + Customer.Ledger يَقرَآنها) */
+    --ac-primary:        var(--ejar-primary);
+    --ac-primary-dark:   var(--ejar-primary-hover);
+    --ac-primary-hover:  var(--ejar-primary-hover);
+    --ac-secondary:      var(--ejar-accent);
+    --ac-bg:             #FFFFFF;
+    --ac-bg-alt:         #FDFCFB;
+    --ac-surface:        #FFFFFF;
+    --ac-border:         var(--ejar-border);
+    --ac-text:           var(--ejar-text-primary);
+    --ac-danger:         var(--ejar-error);
+}
+
+/* ─── أَزرار: Marketplace + Ledger يُشيران لِنَفس widgets ────────── */
+.mp-btn,
+.ledger-login-btn,
+.oam-btn {
+    background: var(--ejar-primary);
+    color: #fff;
+    border: 0;
+}
+
+.mp-btn:hover:not([disabled]),
+.ledger-login-btn:hover:not([disabled]),
+.oam-btn:hover:not([disabled]) {
+    background: var(--ejar-primary-hover);
+}
+
+.mp-btn-ghost,
+.oam-btn-ghost {
+    background: transparent;
+    color: var(--ejar-primary);
+    border: 1px solid var(--ejar-primary);
+}
+
+/* ─── بِطاقات Listing ───────────────────────────────────────────── */
+.mp-listing-card,
+.ledger-listing-card {
+    border-bottom: 1px solid var(--ejar-border);
+    background: var(--ejar-bg-card);
+}
+
+.mp-listing-title,
+.ledger-listing-title { color: var(--ejar-text-primary); font-weight: 700; }
+
+.mp-listing-price,
+.ledger-listing-price { color: var(--ejar-accent); font-weight: 700; }
+
+/* ─── شارات + أَخطاء ────────────────────────────────────────────── */
+.ac-badge { background: var(--ejar-accent); color: #fff; }
+.ac-err   { color: var(--ejar-error); }
