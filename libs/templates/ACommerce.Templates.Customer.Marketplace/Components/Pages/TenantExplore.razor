@@ -2,8 +2,27 @@
 @page "/{slug}/r/{role}/explore"
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject L L
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
+
+@*
+    نُصوص هذه الصَفحَة كُلُّها في `I18n/Locales/ar.json` تَحتَ
+    `listings.explore.*` (‏القاعِدَة ١١). ومَنفَذان لا واحِد، والفَرق
+    مَقيس لا ذَوقيّ:
+      · `L["…"]` — نَصّ خام لِلخَصائِص (‏aria-label، title، placeholder)
+        ولِلكود. الخاصِّيَّة تُرَمِّزُها Razor عِندَ الكِتابَة، تَماماً
+        كَما كانَت تُرَمِّز الحَرفِيَّة الَّتي حَلَّ مَحَلَّها.
+      · `L.Markup("…")` — عُقدَة نَصّ. Razor يَكتُب حَرفِيَّة المارك-أَب
+        **خاماً** ومُخرَج التَعبير **مُرَمَّزاً** (`&#x639;`…)، فَلَو
+        كُتِبَت العُقدَة تَعبيراً عادِيّاً لَتَبَدَّلَت بايتات الصَفحَة
+        بِلا أَن يَتَبَدَّل حَرفٌ واحِد مِمّا يُرى — وضاعَت البَوّابَة
+        الَّتي تَحرُس التَشكيل. وسَلامَتُه عِندَ المُصادِق:
+        `value_unsafe_markup` يَرُدّ `< > &`.
+    وما بَقيَ حَرفِيّاً عَمداً: «الاستِكشاف» المُمَرَّرَة إلى
+    `RoleComponentMap.Map` — وَسم فَتحَة يَذهَب إلى `Console.Error`
+    وَحدَه، أَي أَداة لا واجِهَة.
+*@
 
 @*
     صَفحة استِكشاف الإعلانات. بُنية مَنقولَة مِن
@@ -25,7 +44,7 @@
 }
 else
 {
-    <h1 class="acm-explore-title">@($"كلّ إعلانات {tenant.Name}")</h1>
+    <h1 class="acm-explore-title">@L.Format("listings.explore.title", tenant.Name)</h1>
 
     @* Filter bar: شَجَرَة kinds + leaves + sliders button — مُطابِق
        لِبِنية AcTaxonomyChips الأَصلِيَّة. *@
@@ -44,14 +63,14 @@ else
         {
             <div class="acm-explore-chips"></div>
         }
-        <a class="acm-explore-filterbtn" href="@FilterToggleHref" aria-label="الفَلاتِر">
+        <a class="acm-explore-filterbtn" href="@FilterToggleHref" aria-label="@(L["listings.explore.filters"])">
             <AcIcon Name="sliders" Size="18" />
         </a>
     </div>
 
     @* Sort bar: count + sort dropdown *@
     <div class="acm-explore-sortbar">
-        <span class="acm-explore-count">@(items?.Count ?? 0) نَتيجَة</span>
+        <span class="acm-explore-count">@L.Markup("listings.explore.result_count", items?.Count ?? 0)</span>
         <div class="acm-explore-sortbar-right">
             @* حَفظ الفَلتَر الحالي كَ بَحث لِلإشعارات. POST عَلى نَفس
                endpoint /searches/save مَع الحُقول المَأخوذَة مِن الـ
@@ -62,17 +81,25 @@ else
                 <input type="hidden" name="district" value="@(District ?? "")" />
                 <input type="hidden" name="min" value="@(MinPrice?.ToString() ?? "")" />
                 <input type="hidden" name="max" value="@(MaxPrice?.ToString() ?? "")" />
-                <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm" title="حَفظ كَبَحث لِيَصِلكَ إشعار">
-                    <AcIcon Name="bell" Size="14" /> حِفظ كَبَحث
+                <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm" title="@(L["listings.explore.save_search_hint"])">
+                    @* الذَيل صَريح، وهو اكتِشاف البَوّابَة لا زينَة: مُصَيِّر
+                       المُكَوِّنات يَحذِف عُقدَة النَصّ **الفارِغَة الأَخيرَة**
+                       داخِل العُنصُر. وقَبل التَرحيل لَم تَكُن فارِغَة — كانَ
+                       فَراغ الإزاحَة مُلتَصِقاً بِالحَرفِيَّة في عُقدَة واحِدَة
+                       فَنَجا؛ وبَعدَه انفَصَلَ فَحُذِف، فَسَقَطَ سَطرٌ و16 مَسافَة
+                       مِن الصَفحَة. قاسَتهُ المُقارَنَة بايتاً بِبايت (‏0A ثُمَّ
+                       0x20×16) ولا تَراهُ عَين. وهذا **يَقَع في كُلّ عُقدَة نَصّ
+                       أَخيرَة تُرَحَّل** — مُوَثَّق في `docs/I18N.md`. *@
+                    <AcIcon Name="bell" Size="14" /> @L.Markup("listings.explore.save_search")@((MarkupString)"\n                ")
                 </button>
             </form>
             <form method="get" action="@($"/{Slug}/explore")" class="acm-sort-form">
                 @PreserveHidden(except: "sort")
-                <select name="sort" class="ac-input acm-filter-select" aria-label="تَرتيب"
+                <select name="sort" class="ac-input acm-filter-select" aria-label="@(L["listings.explore.sort"])"
                         onchange="this.form.submit()">
-                    <option value="newest"     selected="@(string.IsNullOrEmpty(Sort) || Sort == "newest")">الأَحدَث</option>
-                    <option value="price_asc"  selected="@(Sort == "price_asc")">السِعر — تَصاعُديّ</option>
-                    <option value="price_desc" selected="@(Sort == "price_desc")">السِعر — تَنازُليّ</option>
+                    <option value="newest"     selected="@(string.IsNullOrEmpty(Sort) || Sort == "newest")">@L.Markup("listings.explore.sort_newest")</option>
+                    <option value="price_asc"  selected="@(Sort == "price_asc")">@L.Markup("listings.explore.sort_price_asc")</option>
+                    <option value="price_desc" selected="@(Sort == "price_desc")">@L.Markup("listings.explore.sort_price_desc")</option>
                 </select>
             </form>
         </div>
@@ -84,12 +111,12 @@ else
     @if (Filters == "open")
     {
         var closeHref = $"/{Slug}/explore" + Preserve(except: "filters");
-        <a class="ac-modal-backdrop" href="@closeHref" aria-label="إغلاق"></a>
+        <a class="ac-modal-backdrop" href="@closeHref" aria-label="@(L["common.action.close"])"></a>
         <div class="ac-modal acm-explore-filter-modal" role="dialog" aria-modal="true">
             <div class="ac-modal-header">
-                <h3 class="ac-modal-title">الفَلاتِر</h3>
+                <h3 class="ac-modal-title">@L.Markup("listings.explore.filters")</h3>
                 <div class="ac-modal-header-actions">
-                    <a class="ac-modal-close" href="@closeHref" aria-label="إغلاق">
+                    <a class="ac-modal-close" href="@closeHref" aria-label="@(L["common.action.close"])">
                         <AcIcon Name="x" Size="20" />
                     </a>
                 </div>
@@ -104,9 +131,9 @@ else
 
                 <div class="ac-modal-body">
                     <section class="acm-explore-filtersec">
-                        <h4 class="acm-explore-filtersec-title">المَوقِع</h4>
+                        <h4 class="acm-explore-filtersec-title">@L.Markup("listings.explore.section_location")</h4>
                         <select name="district" class="ac-input">
-                            <option value="">الكلّ</option>
+                            <option value="">@L.Markup("common.option.all")</option>
                             @foreach (var d in districts)
                             {
                                 <option value="@d" selected="@(District == d)">@d</option>
@@ -115,31 +142,31 @@ else
                     </section>
 
                     <section class="acm-explore-filtersec">
-                        <h4 class="acm-explore-filtersec-title">السِعر</h4>
+                        <h4 class="acm-explore-filtersec-title">@L.Markup("listings.explore.section_price")</h4>
                         <div class="acm-explore-pricerange">
                             <input type="number" name="min" class="ac-input" min="0" step="1"
                                    inputmode="numeric"
                                    value="@(MinPrice?.ToString("0", System.Globalization.CultureInfo.InvariantCulture) ?? "")"
-                                   placeholder="مِن" />
+                                   placeholder="@(L["listings.explore.price_min"])" />
                             <span>—</span>
                             <input type="number" name="max" class="ac-input" min="0" step="1"
                                    inputmode="numeric"
                                    value="@(MaxPrice?.ToString("0", System.Globalization.CultureInfo.InvariantCulture) ?? "")"
-                                   placeholder="إلى" />
+                                   placeholder="@(L["listings.explore.price_max"])" />
                         </div>
                     </section>
 
                     <section class="acm-explore-filtersec">
-                        <h4 class="acm-explore-filtersec-title">البَحث</h4>
+                        <h4 class="acm-explore-filtersec-title">@L.Markup("listings.explore.section_search")</h4>
                         <input type="search" name="q" class="ac-input"
                                value="@(Query ?? "")"
-                               placeholder="كَلِمَة مِفتاحيّة…" />
+                               placeholder="@(L["listings.explore.query_placeholder"])" />
                     </section>
                 </div>
 
                 <div class="ac-modal-footer">
-                    <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"explore")">إعادَة ضَبط</a>
-                    <button type="submit" class="ac-btn ac-btn-primary">تَطبيق</button>
+                    <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"explore")">@L.Markup("listings.explore.reset")</a>
+                    <button type="submit" class="ac-btn ac-btn-primary">@L.Markup("listings.explore.apply")</button>
                 </div>
             </form>
         </div>
@@ -147,14 +174,14 @@ else
 
     @if (items is null)
     {
-        <AcLoadingState Message="جارٍ التَحميل…" />
+        <AcLoadingState Message="@(L["common.state.loading"])" />
     }
     else if (items.Count == 0)
     {
         <AcEmptyState IconName="building"
-                      Title="لا إعلانات في هذه الفِئَة"
-                      Message="جَرِّب فِئَة أُخرى أو غَيِّر البَحث."
-                      ActionLabel="إعادَة ضَبط الفَلاتِر"
+                      Title="@(L["listings.explore.empty_title"])"
+                      Message="@(L["listings.explore.empty_message"])"
+                      ActionLabel="@(L["listings.explore.empty_action"])"
                       ActionHref="@AuthSession.LinkFor(Slug, Role, $"explore")" />
     }
     else
@@ -175,8 +202,8 @@ else
                              IsFavorite="@favIds.Contains(l.Id)"
                              FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
                              FavoriteFormReturn="@($"/{Slug}/explore")"
-                             AddFavoriteAriaLabel="أَضِف لِلمُفَضَّلَة"
-                             RemoveFavoriteAriaLabel="أَزِل مِن المُفَضَّلَة" />
+                             AddFavoriteAriaLabel="@(L["listings.card.favorite_add"])"
+                             RemoveFavoriteAriaLabel="@(L["listings.card.favorite_remove"])" />
             }
         </div>
     }
@@ -200,15 +227,17 @@ else
 
     string FormatPrice(Listing l)
     {
-        if (profile is null) return $"{l.Price:N0} ر.س";
+        if (profile is null) return L.Format("listings.price.amount", l.Price);
         return profile.Pattern switch
         {
             Services.Patterns.AppPattern.Rental
-                => $"{l.Price:N0} ر.س / {(l.Attributes.TryGetValue("lease_term", out var t) ? t : "شَهرِيّ")}",
+                => L.Format("listings.price.rental", l.Price,
+                     l.Attributes.TryGetValue("lease_term", out var t) ? t : L["listings.price.monthly"]),
             Services.Patterns.AppPattern.Roommate
-                => l.Price > 0 ? $"{l.Price:N0} ر.س / شَهرِيّ" : "حَسَب الاتِّفاق",
-            Services.Patterns.AppPattern.Trip => $"يَبدَأ مِن {l.Price:N0} ر.س",
-            _ => $"{l.Price:N0} ر.س"
+                => l.Price > 0 ? L.Format("listings.price.per_month", l.Price)
+                               : L["listings.price.negotiable"],
+            Services.Patterns.AppPattern.Trip => L.Format("listings.price.starts_from", l.Price),
+            _ => L.Format("listings.price.amount", l.Price)
         };
     }
     List<Listing>? items;
@@ -238,7 +267,9 @@ else
         if (MinPrice.HasValue || MaxPrice.HasValue)
             parts.Add($"{MinPrice?.ToString("N0") ?? "0"}-{MaxPrice?.ToString("N0") ?? "∞"}");
         if (!string.IsNullOrEmpty(Query)) parts.Add($"«{Query}»");
-        return parts.Count == 0 ? "بَحث عامّ" : string.Join(" · ", parts);
+        return parts.Count == 0
+            ? L["listings.explore.saved_search_default"]
+            : string.Join(" · ", parts);
     }
 
     /// <summary>يَبني query-string يَحفَظ القِيَم الحاليّة مَع إمكان حَذف

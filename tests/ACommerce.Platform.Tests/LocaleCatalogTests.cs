@@ -55,12 +55,19 @@ public class LocaleCatalogTests
         Assert.Equal(en, LocaleCatalog.Find("en", key));
     }
 
+    /// <summary>المُثَبَّتَة **جُزءٌ** مِن المَعجَم لا كُلُّه — والفَرق
+    /// مَقصود. كُتِبَت أَوَّلاً بِـ<c>Equal</c> فَاحمَرَّت في أَوَّل
+    /// مَوجَة تَرحيل بَعدَها (‏13 → 44)، وهي بِذلك كانَت تُعاقِب العَمَل
+    /// الَّذي وُجِدَت لِتَحرُسَه: نُقصانُ مِفتاح مُثَبَّت خَرق،
+    /// وزِيادَةُ مِفتاح جَديد **هي المَوجَة نَفسُها**. (نَفس مَنطِق
+    /// السَقّاطَة أُحادِيَّة الاتِّجاه في الطَبَقَة الرابِعَة:
+    /// الارتِخاء يُبَلَّغ ولا يُفشِل.)</summary>
     [Fact]
-    public void Lexicon_IsExactlyTheArabicKeys()
+    public void Lexicon_KeepsEveryPinnedKey()
     {
-        Assert.Equal(
-            Pinned.Select(p => p.Key).OrderBy(k => k, StringComparer.Ordinal).ToArray(),
-            LocaleCatalog.Lexicon.OrderBy(k => k, StringComparer.Ordinal).ToArray());
+        foreach (var (key, _, _) in Pinned)
+            Assert.Contains(key, LocaleCatalog.Lexicon);
+        Assert.True(LocaleCatalog.Lexicon.Count >= Pinned.Length);
     }
 
     // ─── الآلِيَّة ────────────────────────────────────────────────────
