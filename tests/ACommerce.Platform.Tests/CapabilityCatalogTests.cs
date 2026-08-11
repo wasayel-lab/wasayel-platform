@@ -1,0 +1,192 @@
+using ACommerce.Kit.Subscriptions;
+using Xunit;
+
+namespace ACommerce.Platform.Tests;
+
+/// <summary>
+/// <para><b>بَوّابَة مَعجَم القُدُرات</b> — لِكُلّ رَمز خَرق اختِبار
+/// مُوجِب واختِبار سالِب (القاعِدَة ٤)، ومَعَهُما البُرهان الَّذي
+/// يُمَيِّز هذا المَعجَم عَن سَلَفِه: <b>الطَرَف الآخَر مُغلَق</b> —
+/// لا يُقبَل رَمز خارِج المَعجَم في مَوضِع فَحص، لا وَقتَ تَركيب ولا
+/// في نَصّ المُستودَع.</para>
+/// </summary>
+public class CapabilityCatalogTests
+{
+    // ─── المَعجَم نَفسُه — مُثَبَّت بِعَدَدِه وبِأَسمائِه ─────────────
+
+    /// <summary>
+    /// <para><b>خَمس قُدُرات، ولا سادِسَة.</b> تَغَيُّر هذه القائِمَة
+    /// يَعني إضافَةَ حَدٍّ أَو سَحبَه — وكِلاهُما قَرار مُنتَج يَستَحِقّ
+    /// نَظَرَ إنسان، لا تَعديلَ سَطر يَمُرّ في مُراجَعَة.</para>
+    ///
+    /// <para><b>ولِماذا خَمس لا سِتّ</b>: وَصَفَ تَصميمُ هذه الطَبَقَة
+    /// <c>studio.custom_pattern</c> سادِسَةً «تُباع ولا تُفحَص».
+    /// القِياس اليَوم يَنفيها: <c>AllowCustomPattern</c> سُحِبَ مِن
+    /// <c>TierLimits</c> ومِن الشاشَتَين قَبل هذه المَوجَة، ولَم يَبقَ
+    /// مِنه إلّا تَعليق يَشرَح سَحبَه. المَعجَم يَصِف ما يُحَدّ
+    /// <b>اليَوم</b>.</para>
+    /// </summary>
+    [Fact]
+    public void Exactly_five_capabilities_and_they_are_these()
+        => Assert.Equal(
+            new[]
+            {
+                "listing.create",
+                "studio.analyze",
+                "studio.build",
+                "studio.export",
+                "studio.refine",
+            },
+            CapabilityCatalog.Codes);
+
+    /// <summary>الثَوابِت المُعلَنَة هي عَينُ ما في القائِمَة — فَلا
+    /// يَنحَرِف ثابِتٌ عَن مَدخَلَتِه.</summary>
+    [Fact]
+    public void The_constants_are_the_catalog_entries()
+    {
+        Assert.Equal(
+            new[]
+            {
+                CapabilityCatalog.ListingCreate,
+                CapabilityCatalog.StudioAnalyze,
+                CapabilityCatalog.StudioBuild,
+                CapabilityCatalog.StudioExport,
+                CapabilityCatalog.StudioRefine,
+            },
+            CapabilityCatalog.Codes);
+    }
+
+    /// <summary><c>studio.custom_pattern</c> لا يَعود إلّا بِقَرار —
+    /// وهذا الاختِبار هو ما يُحَمِّر عَودَتَه صامِتَةً.</summary>
+    [Fact]
+    public void The_withdrawn_custom_pattern_capability_is_not_in_the_vocabulary()
+    {
+        Assert.False(CapabilityCatalog.Contains("studio.custom_pattern"));
+        Assert.DoesNotContain("studio.custom_pattern", CapabilityCatalog.Codes);
+    }
+
+    /// <summary>كُلّ نَوع حَدّ مِن مَعجَمِه المُغلَق، وكُلّ قُدرَة
+    /// تُعلِن مَصدَرَها المَقيس — الشَرط الَّذي يَمنَع نُمُوَّ المَعجَم
+    /// بِالخَيال.</summary>
+    [Fact]
+    public void Every_capability_declares_a_known_kind_and_a_measured_source()
+    {
+        foreach (var c in CapabilityCatalog.All)
+        {
+            Assert.True(CapabilityKinds.Contains(c.Kind),
+                $"القُدرَة «{c.Code}» تُعلِن نَوعاً خارِج المَعجَم: «{c.Kind}».");
+            Assert.False(string.IsNullOrWhiteSpace(c.SourceRef),
+                $"القُدرَة «{c.Code}» بِلا مَصدَر مَقيس.");
+        }
+    }
+
+    /// <summary>أَربَع حِصَص ورايَة واحِدَة — والرايَة
+    /// <c>studio.export</c> وَحدَها لا تُستَهلَك.</summary>
+    [Fact]
+    public void Four_are_quotas_and_exactly_one_is_a_flag()
+    {
+        Assert.Equal(
+            new[] { "listing.create", "studio.analyze", "studio.build", "studio.refine" },
+            CapabilityCatalog.All.Where(c => c.Kind == CapabilityKinds.Quota)
+                .Select(c => c.Code).ToArray());
+
+        Assert.Equal(
+            new[] { "studio.export" },
+            CapabilityCatalog.All.Where(c => c.Kind == CapabilityKinds.Flag)
+                .Select(c => c.Code).ToArray());
+
+        Assert.True(CapabilityCatalog.IsQuota("listing.create"));
+        Assert.False(CapabilityCatalog.IsQuota("studio.export"));
+        Assert.False(CapabilityCatalog.IsQuota("nope"));
+    }
+
+    /// <summary>المَعجَم بِلا تَكرار، ومُرَتَّب أَبجَدِيّاً —
+    /// فَالمُقارَنَة بِه حَتمِيَّة.</summary>
+    [Fact]
+    public void The_vocabulary_is_distinct_and_ordinally_sorted()
+    {
+        Assert.Equal(CapabilityCatalog.Codes.Distinct(StringComparer.Ordinal), CapabilityCatalog.Codes);
+        Assert.Equal(
+            CapabilityCatalog.Codes.OrderBy(c => c, StringComparer.Ordinal).ToArray(),
+            CapabilityCatalog.Codes);
+    }
+
+    // ─── رُموز الخَرق: مُوجِب وسالِب لِكُلٍّ ──────────────────────────
+
+    [Fact]
+    public void Every_catalog_member_validates_clean()
+    {
+        foreach (var code in CapabilityCatalog.Codes)
+        {
+            Assert.Empty(CapabilityCatalog.Validate(code));
+            Assert.True(CapabilityCatalog.IsValid(code));
+            Assert.Equal(code, CapabilityCatalog.Require(code));
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Capability_empty_fires_on_blank(string? capability)
+        => Assert.Equal(
+            new[] { "capability_empty" },
+            CapabilityCatalog.Validate(capability).Select(v => v.Code).ToArray());
+
+    [Theory]
+    [InlineData("listing.publish_everywhere")]   // مُختَلَق
+    [InlineData("studio.custom_pattern")]        // سُحِبَ بِقَرار
+    [InlineData("Listing.Create")]               // حالَة الحَرف تَهُمّ
+    [InlineData("listing.create ")]              // مَسافَة لاحِقَة
+    [InlineData("chat.start")]                   // صَلاحِيَّة دَور لا قُدرَة باقَة
+    public void Capability_out_of_vocabulary_fires_on_everything_else(string capability)
+    {
+        Assert.Equal(
+            new[] { "capability_out_of_vocabulary" },
+            CapabilityCatalog.Validate(capability).Select(v => v.Code).ToArray());
+        Assert.False(CapabilityCatalog.IsValid(capability));
+    }
+
+    /// <summary><b>الخَلط الَّذي يَمنَعُه المَعجَم</b>: صَلاحِيّات
+    /// الأَدوار تُشبِه القُدُرات شَكلاً — و<c>listing.create</c> عُضوٌ في
+    /// المَعجَمَين مَعاً. تَشابُهُ الشَكل هو بِعَينِه سَبَبُ إغلاق
+    /// الطَرَفَين: <c>chat.start</c> صَلاحِيَّة ولَيسَت حِصَّةً تُشترى،
+    /// و<c>studio.analyze</c> حِصَّة ولَيسَت صَلاحِيَّةَ دَور.</summary>
+    [Fact]
+    public void Role_permissions_and_capabilities_overlap_in_exactly_one_code()
+    {
+        var shared = ACommerce.Kit.Roles.PermissionCatalog.All
+            .Intersect(CapabilityCatalog.Codes, StringComparer.Ordinal)
+            .OrderBy(c => c, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(new[] { "listing.create" }, shared);
+    }
+
+    // ─── الطَرَف الَّذي تَرَكَه PermissionCatalog مَفتوحاً ─────────────
+
+    /// <summary>
+    /// <para><b>يَرمي عِندَ التَركيب لا عِندَ الطَلَب</b> — فَرَمز
+    /// مَجهول يُفشِل الإقلاع بِرِسالَتِه، ولا يَمُرّ صامِتاً لِيُكتَشَف
+    /// مِن سِجِلّ خَطَأ لَيلاً.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("listing.publsh")]               // خَطَأ إملائيّ
+    [InlineData("studio.custom_pattern")]
+    public void Require_throws_on_anything_outside_the_vocabulary(string capability)
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CapabilityCatalog.Require(capability));
+        Assert.Contains("capability_", ex.Message);
+    }
+
+    /// <summary>والرِسالَة تَحمِل المَعجَم كامِلاً — فَمَن أَخطَأَ
+    /// يَقرَأ البَديل في نَفس السَطر بَدَل أَن يَبحَث عَنه.</summary>
+    [Fact]
+    public void The_out_of_vocabulary_message_names_the_whole_vocabulary()
+    {
+        var msg = CapabilityCatalog.Validate("listing.publsh").Single().MessageAr;
+        foreach (var code in CapabilityCatalog.Codes)
+            Assert.Contains(code, msg);
+    }
+}
