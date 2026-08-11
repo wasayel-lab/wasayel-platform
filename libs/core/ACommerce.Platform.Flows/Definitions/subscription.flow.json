@@ -1,0 +1,19 @@
+{
+  "flow": "subscription",
+  "label": { "ar": "اشتِراك مُستَخدِم", "en": "User subscription" },
+  "initial": "active",
+  "states": [
+    { "key": "active",    "label": { "ar": "فَعّال", "en": "Active" },       "isTerminal": false },
+    { "key": "expired",   "label": { "ar": "مُنتَهٍ", "en": "Expired" },     "isTerminal": true },
+    { "key": "cancelled", "label": { "ar": "مُلغى", "en": "Cancelled" },     "isTerminal": true }
+  ],
+  "transitions": [
+    {
+      "from": "(genesis)",
+      "to": "active",
+      "actor": "initiator",
+      "label": { "ar": "اِبدَأ اشتِراكاً", "en": "Start subscription" },
+      "effect": null
+    }
+  ]
+}

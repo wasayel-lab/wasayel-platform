@@ -1,0 +1,33 @@
+{
+  "flow": "trip",
+  "label": { "ar": "رِحلَة بَعدَ قَبول العَرض", "en": "Trip after offer acceptance" },
+  "initial": "Active",
+  "states": [
+    { "key": "Active",    "label": { "ar": "جارِيَة", "en": "Active" },       "isTerminal": false },
+    { "key": "Completed", "label": { "ar": "اكتَمَلَت", "en": "Completed" }, "isTerminal": true },
+    { "key": "Aborted",   "label": { "ar": "قُطِعَت", "en": "Aborted" },      "isTerminal": true }
+  ],
+  "transitions": [
+    {
+      "from": "(genesis)",
+      "to": "Active",
+      "actor": "system",
+      "label": { "ar": "بَدء بِقَبول العَرض", "en": "Start on acceptance" },
+      "effect": "open_coordination_chat"
+    },
+    {
+      "from": "Active",
+      "to": "Completed",
+      "actor": "either",
+      "label": { "ar": "أَنهِ الرِحلَة", "en": "Complete" },
+      "effect": "expire_coordination_chat"
+    },
+    {
+      "from": "Active",
+      "to": "Aborted",
+      "actor": "either",
+      "label": { "ar": "اقطَع الرِحلَة", "en": "Abort" },
+      "effect": "expire_coordination_chat"
+    }
+  ]
+}

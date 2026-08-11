@@ -1,0 +1,33 @@
+{
+  "flow": "tenant_role",
+  "label": { "ar": "تَعريف دَور مُستَأجِر", "en": "Tenant role definition" },
+  "initial": "pending",
+  "states": [
+    { "key": "pending",  "label": { "ar": "مُعَلَّق", "en": "Pending" },   "isTerminal": false },
+    { "key": "approved", "label": { "ar": "مُعتَمَد", "en": "Approved" },  "isTerminal": true },
+    { "key": "rejected", "label": { "ar": "مَرفوض", "en": "Rejected" },   "isTerminal": true }
+  ],
+  "transitions": [
+    {
+      "from": "(genesis)",
+      "to": "pending",
+      "actor": "system",
+      "label": { "ar": "اقتِراح تَعريف", "en": "Propose" },
+      "effect": "invalidate_tenant_cache"
+    },
+    {
+      "from": "pending",
+      "to": "approved",
+      "actor": "moderator",
+      "label": { "ar": "اِعتَمِد", "en": "Approve" },
+      "effect": "revalidate_definition"
+    },
+    {
+      "from": "pending",
+      "to": "rejected",
+      "actor": "moderator",
+      "label": { "ar": "اِرفُض", "en": "Reject" },
+      "effect": "invalidate_tenant_cache"
+    }
+  ]
+}

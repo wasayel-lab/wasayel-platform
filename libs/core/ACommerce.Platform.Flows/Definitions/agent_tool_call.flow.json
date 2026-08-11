@@ -1,0 +1,41 @@
+{
+  "flow": "agent_tool_call",
+  "label": { "ar": "نِداء أَداة الوَكيل", "en": "Agent tool call" },
+  "initial": "pending",
+  "states": [
+    { "key": "pending",  "label": { "ar": "بِانتِظار القَرار", "en": "Pending" }, "isTerminal": false },
+    { "key": "applied",  "label": { "ar": "تَمّ", "en": "Applied" },              "isTerminal": true },
+    { "key": "rejected", "label": { "ar": "مَرفوض", "en": "Rejected" },           "isTerminal": true },
+    { "key": "error",    "label": { "ar": "خَطَأ", "en": "Error" },               "isTerminal": true }
+  ],
+  "transitions": [
+    {
+      "from": "(genesis)",
+      "to": "pending",
+      "actor": "system",
+      "label": { "ar": "اقتِراح أَداة", "en": "Propose tool" },
+      "effect": null
+    },
+    {
+      "from": "pending",
+      "to": "applied",
+      "actor": "system",
+      "label": { "ar": "نُفِّذَ بِنَجاح", "en": "Applied" },
+      "effect": "write_audit"
+    },
+    {
+      "from": "pending",
+      "to": "error",
+      "actor": "system",
+      "label": { "ar": "فَشِلَ التَنفيذ", "en": "Failed" },
+      "effect": null
+    },
+    {
+      "from": "pending",
+      "to": "rejected",
+      "actor": "moderator",
+      "label": { "ar": "رَفَضَ المُشرِف", "en": "Rejected by admin" },
+      "effect": null
+    }
+  ]
+}

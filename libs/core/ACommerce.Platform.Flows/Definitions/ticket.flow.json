@@ -1,0 +1,47 @@
+{
+  "flow": "ticket",
+  "label": { "ar": "تَذكِرَة دَعم", "en": "Support ticket" },
+  "initial": "open",
+  "states": [
+    { "key": "open",     "label": { "ar": "مَفتوحَة", "en": "Open" },     "isTerminal": false },
+    { "key": "answered", "label": { "ar": "أُجيبَت", "en": "Answered" },  "isTerminal": false },
+    { "key": "closed",   "label": { "ar": "مُغلَقَة", "en": "Closed" },   "isTerminal": true }
+  ],
+  "transitions": [
+    {
+      "from": "(genesis)",
+      "to": "open",
+      "actor": "initiator",
+      "label": { "ar": "اِفتَح تَذكِرَة", "en": "Open ticket" },
+      "effect": null
+    },
+    {
+      "from": "open",
+      "to": "answered",
+      "actor": "moderator",
+      "label": { "ar": "رُدّ مِن الطاقِم", "en": "Staff reply" },
+      "effect": null
+    },
+    {
+      "from": "answered",
+      "to": "answered",
+      "actor": "moderator",
+      "label": { "ar": "رُدّ آخَر مِن الطاقِم", "en": "Further staff reply" },
+      "effect": "write_audit"
+    },
+    {
+      "from": "open",
+      "to": "closed",
+      "actor": "moderator",
+      "label": { "ar": "أَغلِق", "en": "Close" },
+      "effect": "write_audit"
+    },
+    {
+      "from": "answered",
+      "to": "closed",
+      "actor": "moderator",
+      "label": { "ar": "أَغلِق", "en": "Close" },
+      "effect": "write_audit"
+    }
+  ]
+}

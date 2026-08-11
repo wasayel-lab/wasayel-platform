@@ -1,0 +1,34 @@
+{
+  "flow": "report",
+  "label": { "ar": "تَبليغ عَن مُحتَوى", "en": "Content report" },
+  "initial": "Pending",
+  "states": [
+    { "key": "Pending",     "label": { "ar": "مُعَلَّق", "en": "Pending" },              "isTerminal": false },
+    { "key": "UnderReview", "label": { "ar": "قَيد المُراجَعَة", "en": "Under review" }, "isTerminal": false },
+    { "key": "Resolved",    "label": { "ar": "عولِجَ", "en": "Resolved" },               "isTerminal": true },
+    { "key": "Rejected",    "label": { "ar": "مَرفوض", "en": "Rejected" },              "isTerminal": true }
+  ],
+  "transitions": [
+    {
+      "from": "(genesis)",
+      "to": "Pending",
+      "actor": "initiator",
+      "label": { "ar": "أَرسِل تَبليغاً", "en": "Submit report" },
+      "effect": null
+    },
+    {
+      "from": "Pending",
+      "to": "Resolved",
+      "actor": "moderator",
+      "label": { "ar": "عالِج", "en": "Resolve" },
+      "effect": null
+    },
+    {
+      "from": "Pending",
+      "to": "Rejected",
+      "actor": "moderator",
+      "label": { "ar": "اِرفُض", "en": "Reject" },
+      "effect": null
+    }
+  ]
+}

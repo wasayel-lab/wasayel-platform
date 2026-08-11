@@ -1,0 +1,42 @@
+{
+  "flow": "offer",
+  "label": { "ar": "عَرض عَلى إعلان", "en": "Offer on a listing" },
+  "initial": "Pending",
+  "states": [
+    { "key": "Pending",   "label": { "ar": "قَيد المُراجَعَة", "en": "Pending" }, "isTerminal": false },
+    { "key": "Accepted",  "label": { "ar": "مَقبول", "en": "Accepted" },          "isTerminal": true },
+    { "key": "Rejected",  "label": { "ar": "مَرفوض", "en": "Rejected" },          "isTerminal": true },
+    { "key": "Withdrawn", "label": { "ar": "مَسحوب", "en": "Withdrawn" },         "isTerminal": true },
+    { "key": "Expired",   "label": { "ar": "مُنتَهي", "en": "Expired" },          "isTerminal": true }
+  ],
+  "transitions": [
+    {
+      "from": "(genesis)",
+      "to": "Pending",
+      "actor": "counterparty",
+      "label": { "ar": "قَدِّم عَرضاً", "en": "Submit offer" },
+      "effect": null
+    },
+    {
+      "from": "Pending",
+      "to": "Accepted",
+      "actor": "initiator",
+      "label": { "ar": "اِقبَل العَرض", "en": "Accept" },
+      "effect": "close_sibling_offers"
+    },
+    {
+      "from": "Pending",
+      "to": "Rejected",
+      "actor": "initiator",
+      "label": { "ar": "اِرفُض العَرض", "en": "Reject" },
+      "effect": null
+    },
+    {
+      "from": "Pending",
+      "to": "Withdrawn",
+      "actor": "counterparty",
+      "label": { "ar": "اِسحَب عَرضي", "en": "Withdraw" },
+      "effect": null
+    }
+  ]
+}

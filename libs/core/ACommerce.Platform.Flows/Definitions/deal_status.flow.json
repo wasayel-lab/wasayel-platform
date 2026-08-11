@@ -1,0 +1,41 @@
+{
+  "flow": "deal_status",
+  "label": { "ar": "حالَة الصَفقَة", "en": "Deal status" },
+  "initial": "Active",
+  "states": [
+    { "key": "Active",    "label": { "ar": "مَفتوحَة", "en": "Active" },      "isTerminal": false },
+    { "key": "Completed", "label": { "ar": "اكتَمَلَت", "en": "Completed" },  "isTerminal": true },
+    { "key": "Cancelled", "label": { "ar": "أُلغِيَت", "en": "Cancelled" },   "isTerminal": true },
+    { "key": "Disputed",  "label": { "ar": "نِزاع", "en": "Disputed" },       "isTerminal": true }
+  ],
+  "transitions": [
+    {
+      "from": "(genesis)",
+      "to": "Active",
+      "actor": "initiator",
+      "label": { "ar": "اِبدَأ صَفقَة", "en": "Start deal" },
+      "effect": "append_timeline"
+    },
+    {
+      "from": "Active",
+      "to": "Completed",
+      "actor": "system",
+      "label": { "ar": "اكتِمال بِبُلوغ آخِر مَرحَلَة", "en": "Complete on last stage" },
+      "effect": "append_timeline"
+    },
+    {
+      "from": "Active",
+      "to": "Cancelled",
+      "actor": "either",
+      "label": { "ar": "أَلغِ الصَفقَة", "en": "Cancel" },
+      "effect": "refund_payment"
+    },
+    {
+      "from": "Active",
+      "to": "Disputed",
+      "actor": "either",
+      "label": { "ar": "اِفتَح نِزاعاً", "en": "Dispute" },
+      "effect": "append_timeline"
+    }
+  ]
+}

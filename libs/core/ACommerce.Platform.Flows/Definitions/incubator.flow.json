@@ -1,0 +1,57 @@
+{
+  "flow": "incubator",
+  "label": { "ar": "جَلسَة حاضِنَة", "en": "Incubator session" },
+  "initial": "Discovery",
+  "states": [
+    { "key": "Discovery",        "label": { "ar": "قَيد الاكتِشاف", "en": "Discovery" },      "isTerminal": false },
+    { "key": "PatternSuggested", "label": { "ar": "اقتُرِحَ نَمَط", "en": "Pattern suggested" }, "isTerminal": false },
+    { "key": "Analyzing",        "label": { "ar": "قَيد التَحليل", "en": "Analyzing" },       "isTerminal": false },
+    { "key": "Completed",        "label": { "ar": "اكتَمَلَ", "en": "Completed" },            "isTerminal": true },
+    { "key": "Failed",           "label": { "ar": "فَشِلَ", "en": "Failed" },                 "isTerminal": false },
+    { "key": "Abandoned",        "label": { "ar": "مَهجورَة", "en": "Abandoned" },            "isTerminal": true }
+  ],
+  "transitions": [
+    {
+      "from": "(genesis)",
+      "to": "Discovery",
+      "actor": "initiator",
+      "label": { "ar": "اِبدَأ جَلسَة", "en": "Start session" },
+      "effect": null
+    },
+    {
+      "from": "Discovery",
+      "to": "PatternSuggested",
+      "actor": "system",
+      "label": { "ar": "اكتِمال الأَسئِلَة يَقتَرِح نَمَطاً", "en": "Suggest pattern" },
+      "effect": null
+    },
+    {
+      "from": "PatternSuggested",
+      "to": "Analyzing",
+      "actor": "initiator",
+      "label": { "ar": "حَلِّل الآن", "en": "Analyze" },
+      "effect": "run_analysis"
+    },
+    {
+      "from": "Analyzing",
+      "to": "Completed",
+      "actor": "system",
+      "label": { "ar": "عادَ التَحليل بِنَتيجَة", "en": "Analysis returned" },
+      "effect": null
+    },
+    {
+      "from": "Analyzing",
+      "to": "Failed",
+      "actor": "system",
+      "label": { "ar": "تَعَذَّرَ التَحليل", "en": "Analysis failed" },
+      "effect": null
+    },
+    {
+      "from": "Failed",
+      "to": "Analyzing",
+      "actor": "initiator",
+      "label": { "ar": "إعادَة التَحليل", "en": "Retry analysis" },
+      "effect": "run_analysis"
+    }
+  ]
+}
