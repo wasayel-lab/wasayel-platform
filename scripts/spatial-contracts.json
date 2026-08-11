@@ -98,6 +98,24 @@
     }
   ],
 
+  "container_fit_rules": [
+    {
+      "selector": ".acs-page > *, .acm-role-landing-card, .acm-role-landing-cards, .ac-space, .ac-space-body, .ac-space-media, .ac-tile, .acm-home > *, .acm-mobile-nav-inner",
+      "rule": "child-not-wider-than-container",
+      "tolerance_px": 1,
+      "description": "لا يَتَجاوَز عُنصُرٌ عَرضَ حاوِيَتِه. أُضيفَت بَعدَ أَن أَثبَتَ بُرهان الحَقن أَنّ القَصّ (overflow:hidden) يُخفي الفَيَضان عَن قَواعِد الاحتِواء وعَن تَمرير الصَفحَة مَعاً.",
+      "max_violations": 12
+    }
+  ],
+
+  "viewport_rules": [
+    {
+      "rule": "no-horizontal-scroll",
+      "tolerance_px": 1,
+      "description": "الصَفحَة لا تُمَرَّر أُفُقِيّاً. أُضيفَت بَعدَ أَن أَثبَتَ بُرهان الحَقن أَنّ قَواعِد الاحتِواء وَحدَها تَفوتُها حالَة الابن الفائِض عَن أَبٍ غَير مَذكور في العُقود."
+    }
+  ],
+
   "text_overflow_rules": [
     {
       "selector": ".ac-space-title, .ac-space-price, .acm-role-landing-card, .acs-bottom-nav-label, .acm-mobile-nav-brand-name",

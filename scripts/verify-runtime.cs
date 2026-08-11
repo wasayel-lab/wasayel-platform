@@ -39,6 +39,7 @@ var urls = new List<string>();
 int vpW = 1280, vpH = 900;
 bool reportOnly = false;
 string? jsonOut = null;
+string? injectCss = null;
 string contractsPath = Path.Combine(AppContext.BaseDirectory, "spatial-contracts.json");
 // المِلَفّ المُفرَد يُبنى في مُجَلَّد مُؤَقَّت، فَالعُقود تُطلَب بِجِوار المَصدَر.
 string srcDir = Path.GetDirectoryName(Path.GetFullPath(GetSourcePath())) ?? ".";
@@ -53,6 +54,8 @@ for (int i = 0; i < args.Length; i++)
             vpW = int.Parse(parts[0]); vpH = int.Parse(parts[1]);
             break;
         case "--report-only": reportOnly = true; break;
+        case "--inject-css": injectCss = args[++i]; break;
+        case "--inject-preset": injectCss = Presets(args[++i]); break;
         case "--json": jsonOut = args[++i]; break;
         case "--contracts": contractsPath = args[++i]; break;
         default: urls.Add(args[i]); break;
@@ -141,6 +144,12 @@ try
     Console.WriteLine();
     Console.WriteLine("══════════════════════════════════════════════════════════");
     Console.WriteLine($"  الطَبَقَة ٦ — تَحَقُّق حَيّ  ·  نافِذَة {vpW}×{vpH}  ·  {urls.Count} صَفحَة");
+    if (injectCss is not null)
+    {
+        // لا تَدَع جَولَةً مَحقونَة تَتَنَكَّر في صورَة قِياس نَظيف
+        Console.WriteLine("  ⚠ عَطَبٌ مَحقون في الذاكِرَة — هذِه جَولَة بُرهان، لا قِياس نَظيف");
+        Console.WriteLine($"     {injectCss[..Math.Min(96, injectCss.Length)]}…");
+    }
     Console.WriteLine("══════════════════════════════════════════════════════════");
 
     foreach (var url in urls)
@@ -148,6 +157,18 @@ try
         await cdp.Send("Page.navigate", $$"""{"url":{{Cdp.JStr(url)}}}""");
         await cdp.WaitForEvent("Page.loadEventFired", TimeSpan.FromSeconds(30));
         await Task.Delay(900); // اِستِقرار Blazor بَعدَ الحَدَث
+
+        if (injectCss is not null)
+        {
+            // يُحقَن بَعدَ الاستِقرار لِيَغلِب على أَنماط الصَفحَة
+            string inj = "(function(){var s=document.createElement('style');s.id='__fault__';" +
+                         "s.textContent=" + Cdp.JStr(injectCss) + ";document.head.appendChild(s);" +
+                         "return document.getElementById('__fault__') !== null;})()";
+            var ir = await cdp.Send("Runtime.evaluate", $$"""{"expression":{{Cdp.JStr(inj)}},"returnByValue":true}""");
+            bool applied = ir.RootElement.GetProperty("result").TryGetProperty("value", out var av) && av.ValueKind == JsonValueKind.True;
+            if (!applied) Console.WriteLine("      ⚠ تَعَذَّرَ حَقن العَطَب");
+            await Task.Delay(400); // إعادَة التَخطيط
+        }
 
         var res = await cdp.Send("Runtime.evaluate",
             $$"""{"expression":{{Cdp.JStr(js)}},"returnByValue":true,"awaitPromise":true}""");
@@ -243,6 +264,29 @@ return exitCode;
 
 // ═══════════════════════════════════════════════════════════════════
 static string GetSourcePath([System.Runtime.CompilerServices.CallerFilePath] string p = "") => p;
+
+// ─── حَقن العَطَب — بُرهان أَنّ الأَداة تَرى ───────────────────────
+//  «صِفر مُخالَفَة» لا يُثبِت أَنّ الأَداة تَرى؛ قَد تَسكُت لِأَنَّها
+//  لا تَفحَص شَيئاً. فَالبُرهان أَن يُحدَث عَطَبٌ مَعلوم، ويُثبَت أَنّ
+//  الأَداة تَصرُخ وتُحَدِّد المَوضِع، ثُمَّ يُرفَع فَتَسكُت.
+//
+//  والحَقن يَجري **في الذاكِرَة عَبر CDP**، لا بِتَعديل مِلَفّ CSS في
+//  المُستَودَع. وهذا أَسلَم وأَقوى مَعاً: أَسلَم لِأَنَّه لا يُخَلِّف
+//  أَثَراً يُنسى إرجاعُه ولا يُزاحِم وَكيلاً آخَرَ يَعمَل في libs/؛
+//  وأَقوى لِأَنّ البُرهان يَصير **قابِلاً لِلتَكرار** في كُلّ جَولَة
+//  بَدَلَ تَعديلٍ يَدَوِيّ يُثبِت مَرَّةً ولا يُخَلِّف شَيئاً.
+static string Presets(string name) => name switch
+{
+    // تَبايُن دونَ العَتَبَة: رَماديّ فاتِح على خَلفِيَّة فاتِحَة
+    "contrast" => ".ac-space-title, .acm-role-landing-card, h1, h2 { color: #b9bfc7 !important; }",
+    // فَيَضان: اِبن أَعرَض مِن حاوِيَتِه
+    "overflow" => ".ac-space-body, .acm-role-landing-card { width: 3000px !important; max-width: none !important; }",
+    // تَداخُل: بِطاقات تَركَب بَعضَها
+    "overlap" => ".ac-space, .acm-role-landing-card { position: absolute !important; top: 120px !important; left: 40px !important; width: 400px !important; height: 300px !important; }",
+    // هَدَف لَمس أَصغَر مِن الحَدّ
+    "touch" => ".acm-role-landing-card-cta, .acs-bottom-nav-item, .acm-mobile-nav-btn { height: 12px !important; min-height: 0 !important; padding: 0 !important; overflow: hidden !important; }",
+    _ => throw new ArgumentException($"عَطَب غَير مَعروف: {name} (المُتاح: contrast, overflow, overlap, touch)"),
+};
 
 static int FreePort()
 {
@@ -625,6 +669,71 @@ static class Scripts
                 count++;
             }
         }
+    });
+
+    // ─── K. الابن لا يَتَجاوَز حاوِيَتَه عَرضاً ────────────────────
+    //  أُضيفَت هي الأُخرى بِسَبَب بُرهان الحَقن: العَطَب المَحقون
+    //  (بِطاقَة عَرضُها 3000px) فاتَ C لِأَنّ الزَوج غَير مَذكور،
+    //  وفاتَ I لِأَنّ scrollWidth الابن = clientWidth‌ه، وفاتَ J
+    //  لِأَنّ سَلَفاً قاصّاً (overflow:hidden) يَمنَع تَمرير الصَفحَة
+    //  فَيُخفي الفَيَضان عَن مُستَوى المُستَند. والقِياس الوَحيد الَّذي
+    //  يَراه: مُقارَنَة الابن بِأَبيه مُباشَرَةً — والقَصّ لا يُخفيها.
+    (C.container_fit_rules || []).forEach(function (rule) {
+        var maxV = rule.max_violations == null ? 10 : rule.max_violations, count = 0;
+        var tol = rule.tolerance_px == null ? 1 : rule.tolerance_px;
+        var els = q(rule.selector);
+        for (var i = 0; i < els.length && count < maxV; i++) {
+            var n = els[i]; if (!shown(n)) continue;
+            var s = getComputedStyle(n);
+            // الخارِج عَن السِياق العادِيّ يُقاس بِقَواعِد أُخرى
+            if (s.position === 'absolute' || s.position === 'fixed') continue;
+            var p = n.parentElement; if (!p) continue;
+            var pw = p.clientWidth; if (pw <= 0) continue;
+            ck('K-fit');
+            var w = n.getBoundingClientRect().width;
+            if (w > pw + tol) {
+                var nm = function (e) {
+                    return (e.className && typeof e.className === 'string')
+                        ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.')
+                        : '<' + e.tagName.toLowerCase() + '>';
+                };
+                add('K-fit', nm(n) + ': عَرض ' + w.toFixed(0) + 'px > عَرض الحاوِيَة ' +
+                    nm(p) + ' (' + pw + 'px) — الابن أَعرَض مِن أَبيه', rule.selector);
+                count++;
+            }
+        }
+    });
+
+    // ─── J. فَيَضان النافِذَة أُفُقِيّاً ──────────────────────────
+    //  أَعَمّ مِن C: قاعِدَة الاحتِواء تَفحَص أَزواج أَب/ابن مَذكورَة
+    //  بِأَسمائِها، فَابنٌ يَفيض عَن أَبٍ لَم يُذكَر يَمُرّ دونَ أَن
+    //  يُرى — وهذا ما كَشَفَه بُرهان الحَقن. أَمّا هُنا فَالسُؤال
+    //  واحِد لا يَحتاج عَقداً: هَل تُمَرَّر الصَفحَة أُفُقِيّاً؟
+    //  وهو على الهاتِف عَطَبٌ دائِماً، ولا يَحتاج تَعداد مُحَدِّدات.
+    (C.viewport_rules || []).forEach(function (rule) {
+        if (rule.rule !== 'no-horizontal-scroll') return;
+        ck('J-viewport');
+        var de = document.documentElement;
+        var vw = de.clientWidth;
+        var sw = Math.max(de.scrollWidth, document.body ? document.body.scrollWidth : 0);
+        var tol = rule.tolerance_px == null ? 1 : rule.tolerance_px;
+        if (sw <= vw + tol) return;
+        // البَحث عَن المُتَسَبِّبين — العُنصُر الأَبعَد حافَّةً
+        var off = [];
+        var all = document.querySelectorAll('*');
+        for (var i = 0; i < all.length; i++) {
+            var n = all[i]; if (!shown(n)) continue;
+            var r = n.getBoundingClientRect();
+            if (r.width > 0 && (r.right > vw + tol || r.left < -tol)) off.push({ n: n, right: r.right, left: r.left });
+        }
+        off.sort(function (a, b) { return b.right - a.right; });
+        var names = off.slice(0, 5).map(function (o) {
+            var cls = (o.n.className && typeof o.n.className === 'string')
+                ? '.' + o.n.className.trim().split(/\s+/).slice(0, 3).join('.') : '';
+            return '<' + o.n.tagName.toLowerCase() + cls + '> يَمتَدّ إلى ' + o.right.toFixed(0);
+        });
+        add('J-viewport', 'الصَفحَة تُمَرَّر أُفُقِيّاً: scrollWidth=' + sw + ' > عَرض النافِذَة=' + vw +
+            (names.length ? ' — المُتَسَبِّبون: ' + names.join('  |  ') : ''), null);
     });
 
     var fam = [];
