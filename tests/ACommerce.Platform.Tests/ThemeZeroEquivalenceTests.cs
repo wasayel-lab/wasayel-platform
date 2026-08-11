@@ -77,6 +77,32 @@ public class ThemeZeroEquivalenceTests
         ("--ac-line-height-base",  "lineHeight.base"),
     };
 
+    /// <summary>
+    /// <para><b>الانحِرافات المَقصودَة عَن لَقطَة الأَساس</b> — ولِماذا
+    /// تُعلَن هُنا بَدَل أَن تُكتَب في اللَقطَة.</para>
+    ///
+    /// <para>حينَ يَتَغَيَّر رَمز عَن قيمَتِه التاريخِيَّة، الطَريق
+    /// السَهل أَن تُحَرَّر لَقطَة الأَساس فَيَسكُت الاختِبار. وذلك
+    /// <b>تَزوير لِلطَرَف المُقارَن</b>: اللَقطَة قيمَتُها كُلُّها في
+    /// أَنَّها «ما كان» لا «ما أُريدُه أَن يَكون» — ومَن يُحَرِّرُها
+    /// يَهدِم الحارِس لِكُلّ رَمز آخَر لِيَمُرَّ رَمزٌ واحِد.</para>
+    ///
+    /// <para>فَاللَقطَة تَبقى كَما هي حَرفاً، ويُعلَن الانحِراف هُنا
+    /// <b>مُثَبَّتاً مِن طَرَفَيه</b>: القيمَة القَديمَة والجَديدَة
+    /// مَعاً. فَإن تَحَرَّكَت اللَقطَة، أَو تَحَرَّكَت القيمَة
+    /// الجَديدَة، سَقَطَ التَثبيت وعادَ الاختِبار يَصرُخ — وهذا هو
+    /// الفَرق بَين استِثناءٍ مُعلَن وثُقبٍ مَفتوح.</para>
+    /// </summary>
+    private static readonly (string AcVariable, string Before, string After, string Why)[]
+        DeliberateDivergences =
+    {
+        ("--ac-text-soft", "#a1a1aa", "#71717a",
+         "تَصحيح تَباين WCAG AA: ‏#a1a1aa على خَلفِيَّة ‏#fafafa نِسبَتُه " +
+         "2.46 والمَطلوب 4.5 — وتَسميات شَريط التَنَقُّل السُفلِيّ تَقرَؤُه. " +
+         "‏#71717a يَبلُغ 4.63. ولا تَظهَر المُخالَفَة إلّا على الهاتِف " +
+         "لِأَنّ الشَريط لا يُرَكَّب على العَرض الواسِع."),
+    };
+
     // ─── ١. المُقارَنَة بِلَقطَة الأَساس ───────────────────────────────
 
     [Fact]
@@ -94,12 +120,50 @@ public class ThemeZeroEquivalenceTests
                 continue;
             }
             var after = theme[key];
-            if (!string.Equals(before, after, StringComparison.Ordinal))
-                mismatches.Add($"{acVar} ({key}): قَبل «{before}» ≠ بَعد «{after}»");
+            if (string.Equals(before, after, StringComparison.Ordinal)) continue;
+
+            // انحِراف مُعلَن ومُثَبَّت مِن طَرَفَيه؟ يَمُرّ. وما عَداه يَسقُط.
+            bool declared = DeliberateDivergences.Any(d =>
+                string.Equals(d.AcVariable, acVar,   StringComparison.Ordinal) &&
+                string.Equals(d.Before,     before,  StringComparison.Ordinal) &&
+                string.Equals(d.After,      after,   StringComparison.Ordinal));
+            if (declared) continue;
+
+            mismatches.Add($"{acVar} ({key}): قَبل «{before}» ≠ بَعد «{after}»");
         }
 
         Assert.True(mismatches.Count == 0,
             "التَكافُؤ الصِفريّ مَكسور:\n" + string.Join("\n", mismatches));
+    }
+
+    [Fact]
+    public void EveryDeclaredDivergence_IsStillRealAndStillNeeded()
+    {
+        // اِستِثناء بَقِيَ بَعدَ زَوال سَبَبِه أَسوَأ مِن لا استِثناء:
+        // يُعَلِّم القارِئ أَنّ الرَمز مُنحَرِف وهو لَيسَ كَذلك. فَكُلّ
+        // مَدخَل هُنا يَجِب أَن يَكون **مُطابِقاً لِلواقِع** طَرَفَيه.
+        var winning = WinningRootDeclarations();
+        var theme   = ThemeCatalog.Default;
+        var byVar   = Correspondence.ToDictionary(c => c.AcVariable, c => c.TokenKey,
+                                                  StringComparer.Ordinal);
+
+        foreach (var d in DeliberateDivergences)
+        {
+            Assert.True(byVar.ContainsKey(d.AcVariable),
+                $"{d.AcVariable}: انحِراف مُعلَن لِمُتَغَيِّر خارِج الخَريطَة.");
+            Assert.True(winning.TryGetValue(d.AcVariable, out var before),
+                $"{d.AcVariable}: لا تَصريحَة في لَقطَة الأَساس.");
+            Assert.Equal(d.Before, before);
+            Assert.Equal(d.After, theme[byVar[d.AcVariable]]);
+            Assert.NotEqual(d.Before, d.After);
+            Assert.False(string.IsNullOrWhiteSpace(d.Why),
+                $"{d.AcVariable}: انحِراف بِلا سَبَب مَكتوب.");
+        }
+
+        // والقائِمَة نَفسُها مُثَبَّتَة: إضافَة انحِراف ثانٍ تُسقِط هذا
+        // السَطر، فَلا يَنمو الاستِثناء صامِتاً إلى قائِمَة مَنسِيَّة.
+        Assert.Equal(new[] { "--ac-text-soft" },
+                     DeliberateDivergences.Select(d => d.AcVariable).ToArray());
     }
 
     [Fact]
