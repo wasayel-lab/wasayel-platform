@@ -1,0 +1,109 @@
+{
+  "_comment": "عُقود مَكانِيَّة — تَأكيدات تُقاس على صَفحَة حَيَّة بِمُحَرِّك Chromium (scripts/verify-runtime.cs).",
+
+  "_provenance": "بُنِيَت مِن الوِدجات القائِمَة فِعلاً في هذا المُستَودَع، لا مَنقولَة عَن المُستَودَع القَديم. كُلّ مُحَدِّد هُنا **قِيسَ حاضِراً** في DOM حَيّ على الأَقَلّ في صَفحَة واحِدَة مِن الخَمس، وكُلّ عَتَبَة مَسنودَة بِقاعِدَة CSS مَكتوبَة في المُستَودَع. عُقود المُستَودَع القَديم (.ac-card و .ord-bottom-nav و .act-navbar) **لَم تُنقَل**: قِياس الصَفَحات الخَمس أَظهَرَ أَنَّها صِفر مُطابَقَة هُنا، ونَقلُها كانَ سَيُنتِج قَواعِد لا تَفحَص شَيئاً.",
+
+  "style_contracts": {
+    ".ac-space": {
+      "_why": "بِطاقَة المَعروض — premium.css:430 تُصَرِّح border:1px و background:var(--ac-surface).",
+      "min-values": { "border-width": 1 },
+      "required": ["background"]
+    },
+    ".acm-role-landing-card": {
+      "_why": "بِطاقَة اختِيار الدَور في بَوّابَة المُستَأجِر — يَجِب أَن تَكون مَرئِيَّة وقابِلَة لِلَمس.",
+      "min-values": { "min-height": 44 },
+      "required": ["background"]
+    },
+    ".acm-mobile-nav": {
+      "_why": "app.css:92 — شَريط عُلوِيّ ثابِت بِخَلفِيَّة var(--ac-surface) وحَدّ سُفلِيّ.",
+      "min-values": { "border-width": 1 },
+      "required": ["background"]
+    }
+  },
+
+  "position_rules": [
+    {
+      "selector": ".acm-mobile-nav",
+      "rule": "sticky-top",
+      "description": "الشَريط العُلوِيّ position:fixed;top:0 (app.css:92) — فَيَجِب أَن يَبقى عِند y=0 بَعدَ التَمرير.",
+      "tolerance_px": 2
+    }
+  ],
+
+  "containment_rules": [
+    {
+      "parent": ".ac-space",
+      "children": ".ac-space-body, .ac-space-media",
+      "rule": "child-inside-parent-bounds",
+      "description": "جِسم البِطاقَة وصورَتُها لا يَخرُجان عَن حُدودِها."
+    },
+    {
+      "parent": ".acs-page",
+      "children": "> *",
+      "rule": "child-inside-parent-bounds",
+      "axis": "horizontal",
+      "description": "أَبناء الصَفحَة لا يَفيضون عَنها أُفُقِيّاً."
+    },
+    {
+      "parent": ".acm-mobile-nav-inner",
+      "children": "*",
+      "rule": "child-inside-parent-bounds",
+      "description": "عَناصِر الشَريط العُلوِيّ لا تَخرُج عَن الشَريط."
+    }
+  ],
+
+  "sibling_alignment_rules": [
+    {
+      "container": ".acm-mobile-nav-inner",
+      "rule": "siblings-same-y-in-flex-row",
+      "description": "app.css:100 — flex row + align-items:center، فَالعَلامَة والأَزرار على مَركَز أُفُقِيّ واحِد.",
+      "tolerance_px": 6
+    }
+  ],
+
+  "no_overlap_rules": [
+    {
+      "selectors": [".ac-space", ".acm-role-landing-card"],
+      "rule": "siblings-do-not-overlap",
+      "description": "بِطاقات القائِمَة لا تَركَب بَعضُها."
+    }
+  ],
+
+  "computed_value_rules": [
+    {
+      "selector": ".acm-role-landing-card-cta, .acs-bottom-nav-item, .acm-mobile-nav-btn",
+      "rule": "min-touch-target",
+      "min_height_px": 32,
+      "description": "أَهداف اللَمس لا تَقِلّ عَن ٣٢px.",
+      "max_violations": 10
+    }
+  ],
+
+  "contrast_rules": [
+    {
+      "selector": "h1, h2, h3, h4, p, a, span, label, button, li, td, th, div, small, strong",
+      "min_ratio": 4.5,
+      "min_ratio_large": 3.0,
+      "description": "WCAG AA — النَصّ مُقابِل خَلفِيَّتِه ≥ 4.5:1 (و 3:1 لِلنَصّ الكَبير). يُقاس نَصّ العُقدَة المُباشِر فَقَط، وتُدمَج الشَفافِيّات صُعوداً.",
+      "max_violations": 25
+    }
+  ],
+
+  "box_model_rules": [
+    {
+      "selector": ".ac-space, .ac-space-body, .acm-role-landing-card",
+      "rule": "box-sizing-border-box",
+      "description": "الوِدجات ذات العَرض والحَشو مَعاً يَجِب أَن تَحسِب border-box.",
+      "max_violations": 10
+    }
+  ],
+
+  "text_overflow_rules": [
+    {
+      "selector": ".ac-space-title, .ac-space-price, .acm-role-landing-card, .acs-bottom-nav-label, .acm-mobile-nav-brand-name",
+      "rule": "text-content-not-overflowing",
+      "description": "النَصّ لا يُقَصّ أُفُقِيّاً داخِل حاوِيَتِه.",
+      "max_violations": 15
+    }
+  ]
+}
