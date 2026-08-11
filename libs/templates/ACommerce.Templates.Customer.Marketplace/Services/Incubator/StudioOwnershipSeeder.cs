@@ -9,6 +9,13 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 /// مُستَخدِم (الأَقدَم). يَعمَل عِندَ بَدء التَطبيق + بَعد كُلّ
 /// تَسجيل دُخول جَديد (لِيَلتَقِط أَيّ تَسجيل أَوَّل بَعد إطلاق الميزَة).
 ///
+/// <para><b>لا يُرَقّي أَحَداً.</b> كانَ يَرفَع أَوَّل مُستَخدِم إلى
+/// <c>IsPlatformAdmin</c> ضِمناً — أَي أَنّ أَوَّل مَن يُسَجِّل عَلى قاعِدَة
+/// فارِغَة يَملِك المَنصَّة، بِلا فِعل واعٍ مِن أَحَد. حُذِفَت التَرقِيَة:
+/// صَلاحِيَّة المَنصَّة تُمنَح صَراحَةً بِـ
+/// <c>PlatformAdminSeeder</c> (مُتَغَيِّر بيئَة + بَوّابَة ثانِيَة)، لا
+/// كَأَثَر جانِبِيّ لِتَسجيل دُخول.</para>
+///
 /// <para>مُهِمّ: لا نَستَخدِم LINQ <c>Where(t => t.OwnerUserId == Guid.Empty)</c>
 /// لِأَنّ Marten يُتَرجِمها لـ <c>CAST(data ->> 'OwnerUserId' as uuid) = $1</c>،
 /// والمَتاجِر القَديمَة لا يَملِكون الحَقل في JSONB → القيمَة NULL → لا
@@ -25,24 +32,7 @@ public static class StudioOwnershipSeeder
             .OrderBy(u => u.CreatedAt).Take(1).ToListAsync(ct)).FirstOrDefault();
         if (firstUser is null) return;   // لا مُستَخدِمين بَعد — لا شَيء لِنَربِطه
 
-        // ── (أ) تَرقِيَة أَوَّل مُستَخدِم — شَأن مُستَقِلّ عَن التَبَنّي ──
-        // كانَت هذه الكُتلَة **تَحتَ** الرَدّ المُبَكِّر عَلى
-        // orphans.Count == 0، فَعَلى قاعِدَة كُلّ مَتاجِرِها مَملوكَة
-        // (نُسخَة إنتاج مَثَلاً) لا يُرَقّى أَحَد أَبَداً ولا سَبيل إلى
-        // سَطح الإدارَة. الشَأنان كانا مَقرونَين بِلا سَبَب، فَفُصِلا.
-        if (!firstUser.IsPlatformAdmin)
-        {
-            await using var us = store.LightweightSession(StudioAuth.Tenant);
-            var u = await us.LoadAsync<StudioUser>(firstUser.Id, ct);
-            if (u is not null)
-            {
-                u.IsPlatformAdmin = true;
-                us.Store(u);
-                await us.SaveChangesAsync(ct);
-            }
-        }
-
-        // ── (ب) تَبَنّي المَتاجِر اليَتيمَة ──
+        // ── تَبَنّي المَتاجِر اليَتيمَة ──
         // جَلب كُلّ المَتاجِر ثُمَّ التَّصفِيَة في الذاكِرَة (انظر التَّعليق).
         await using var qs = store.QuerySession();
         var all = (await qs.Query<Tenant>().ToListAsync(ct)).ToList();
