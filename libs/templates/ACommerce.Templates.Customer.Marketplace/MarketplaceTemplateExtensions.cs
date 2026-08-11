@@ -3507,8 +3507,11 @@ public static class MarketplaceTemplateExtensions
     private static async Task<IResult> BuildManifestAsync(
         string slug, string? role, IDocumentStore store)
     {
-        await using var s = store.QuerySession();
-        var tenant = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+        // مَوضِع الالتِقاط: الأَدوار مُجَسَّدَة واللَقطَة مَعَها. دَور
+        // مُعَرَّف وَقتَ التَّشغيل (وَثيقَة Marten) لا يوجَد في
+        // Tenant.Roles المُخَزَّنَة، فَقِراءَة خام كانَت تُعطي r = null
+        // فَيَسقُط الاسم والأَيقونَة والمُختَصَرات كُلُّها عَلى الافتِراضيّ.
+        var (tenant, roleSet) = await LoadTenantAndRolesAsync(store, slug);
         if (tenant is null) return Results.NotFound();
 
         ACommerce.Kit.Roles.Role? r = null;
@@ -3526,7 +3529,7 @@ public static class MarketplaceTemplateExtensions
                       : r is not null            ? $"{tenant.Name} — {r.Label}"
                                                  : tenant.Name;
         var shortName = r?.Label ?? tenant.Name;
-        var shortcuts = BuildShortcuts(slug, role, r, iconUrl);
+        var shortcuts = BuildShortcuts(slug, role, r, iconUrl, roleSet);
 
         return Results.Json(new
         {
@@ -3567,7 +3570,8 @@ public static class MarketplaceTemplateExtensions
     }
 
     private static object[] BuildShortcuts(string slug, string? role,
-        ACommerce.Kit.Roles.Role? r, string iconUrl)
+        ACommerce.Kit.Roles.Role? r, string iconUrl,
+        ACommerce.Kit.Roles.TenantRoleSet roleSet)
     {
         // shortcuts حَسَب الدَور — مُختَصَرَات تَظهَر في long-press عَلى
         // الأَيقونَة (Android + Edge).
@@ -3579,7 +3583,13 @@ public static class MarketplaceTemplateExtensions
         // ونَفس التَّسمِيَة)، والزائِد عَنه هو <c>extras</c> — السَطح الَّذي
         // يَبلُغُه هذا الدَور تَحديداً. فَالفَتحَتانِ تَكفِيانِ، ولا يَلزَم
         // فَتحَة سادِسَة لِلمُختَصَرات.
-        var composition = ACommerce.Kit.Roles.RoleCompositionResolver.Resolve(r?.CatalogSlug);
+        // اللَقطَة لا المُحَلِّل السّاكِن: RoleCompositionResolver يَرى
+        // كاتالوج المَنصَّة وَحدَه، فَدَور مُعَرَّف وَقتَ التَّشغيل كانَ
+        // يَسقُط عَلى Fallback فَيَأخُذ المُختَصَرات الافتِراضيَّة.
+        // ResolveComposition مِرآتُه بِنَفس الحالات الحَدِّيَّة، وبِبَحث
+        // يَرى أَدوار هذا المُستَأجِر — ومُستَأجِر بِلا تَأليف يُجيب
+        // بِنَفس جَواب اليَوم حَرفاً (TenantRoleSet.Platform).
+        var composition = roleSet.ResolveComposition(r?.CatalogSlug);
 
         object[] DefaultShortcuts() => new object[]
         {
@@ -3641,8 +3651,10 @@ public static class MarketplaceTemplateExtensions
     private static async Task<IResult> BuildIconAsync(
         string slug, string? role, IDocumentStore store)
     {
-        await using var s = store.QuerySession();
-        var tenant = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+        // نَفس مَوضِع الالتِقاط: الـ manifest يُشير إلى هذه النُقطَة في
+        // icons، فَقِراءَة خام هُنا كانَت تُرَكِّب أَيقونَة المَتجَر
+        // لِدَور مُعَرَّف وَقتَ التَّشغيل بَدَل أَيقونَتِه هو.
+        var tenant = await LoadTenantWithRolesAsync(store, slug);
         if (tenant is null) return Results.NotFound();
 
         ACommerce.Kit.Roles.Role? r = null;
@@ -3800,15 +3812,30 @@ public static class MarketplaceTemplateExtensions
     /// </summary>
     private static async Task<ACommerce.Kit.Tenants.Tenant?> LoadTenantWithRolesAsync(
         IDocumentStore store, string slug)
+        => (await LoadTenantAndRolesAsync(store, slug)).Tenant;
+
+    /// <summary>
+    /// <para><b>نَفس القِراءَة، ومَعَها اللَقطَة</b> — لِمَن لا يَكفيه
+    /// <c>Tenant.Roles</c> مُجَسَّداً بَل يَحتاج أَن <b>يُرَكِّب</b> فَوق
+    /// تَعريف دَور (‏<see cref="ACommerce.Kit.Roles.TenantRoleSet.ResolveComposition"/>).
+    /// التَجسيد يُعطي الدَور نَفسَه، واللَقطَة وَحدَها تُعطي فَتَحاتِه.</para>
+    ///
+    /// <para>و<see cref="LoadTenantWithRolesAsync"/> يُفَوِّض إلَيها —
+    /// فَمَسار القِراءَة واحِد لا يَنحَرِف أَحَدُ فَرعَيه عَن الآخَر.</para>
+    /// </summary>
+    private static async Task<(ACommerce.Kit.Tenants.Tenant? Tenant,
+                               ACommerce.Kit.Roles.TenantRoleSet Roles)>
+        LoadTenantAndRolesAsync(IDocumentStore store, string slug)
     {
         await using var g = store.QuerySession();
         var tenant = await g.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
-        if (tenant is null) return null;
+        if (tenant is null)
+            return (null, ACommerce.Kit.Roles.TenantRoleSet.Platform);
 
         var set = await Services.TenantRoleService.ReadUncachedAsync(store, slug);
         var merged = set.Materialize(tenant.Roles);
         if (!ReferenceEquals(merged, tenant.Roles)) tenant.Roles = merged.ToList();
-        return tenant;
+        return (tenant, set);
     }
 
     // تَسكين دَور لِمُستَخدِم بَعد تَوثيقِه — يُستَدعَى مِن /verify عِندَ
