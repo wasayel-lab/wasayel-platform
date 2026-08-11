@@ -291,4 +291,56 @@ public class SeoDocumentsTests
             .First(g => g.GetProperty("@type").GetString() == "Organization");
         Assert.Equal($"{Base}/my%20store", org.GetProperty("url").GetString());
     }
+
+    // ─── الوَسم كامِلاً ──────────────────────────────────────────────
+
+    /// <summary>
+    /// نَوع المُحتَوى <b>رَمز ثابِت</b>: أَيّ هُروب فيه — ولَو كانَ
+    /// <c>&amp;#x2B;</c> الَّذي يَفُكُّه مُحَلِّل مُطابِق لِلمُواصَفَة —
+    /// يُخفي الكُتلَة عَن كُلّ مُستَهلِك يُطابِق النَصّ حَرفِيّاً. هذا
+    /// بِالضَبط ما كانَ يَحدُث حينَ كُتِبَ الوَسم في Razor.
+    /// </summary>
+    [Fact]
+    public void BuildHomeJsonLdScript_CarriesTheMimeTypeLiterally()
+    {
+        var html = SeoDocuments.BuildHomeJsonLdScript(T("ashare", "أَشارِ"), Base);
+
+        Assert.StartsWith("<script type=\"application/ld+json\">", html, StringComparison.Ordinal);
+        Assert.EndsWith("</script>", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("&#x2B;", html, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>الغِلاف لا يَمَسّ الجِسم: ما بَينَ الوَسمَين هو
+    /// <see cref="SeoDocuments.BuildHomeJsonLd"/> حَرفاً بِحَرف، وJSON
+    /// صالِح بِـ <c>@context</c> و<c>@type</c>.</summary>
+    [Fact]
+    public void BuildHomeJsonLdScript_WrapsTheBodyUnchanged_AndStaysValidJson()
+    {
+        var t = T("ashare", "أَشارِ", "شَريك سَكَنِكَ", "الرِياض");
+        var html = SeoDocuments.BuildHomeJsonLdScript(t, Base);
+
+        const string open = "<script type=\"application/ld+json\">";
+        var body = html[open.Length..^"</script>".Length];
+
+        Assert.Equal(SeoDocuments.BuildHomeJsonLd(t, Base), body);
+
+        using var doc = JsonDocument.Parse(body);
+        Assert.Equal("https://schema.org", doc.RootElement.GetProperty("@context").GetString());
+        Assert.All(doc.RootElement.GetProperty("@graph").EnumerateArray(),
+            g => Assert.False(string.IsNullOrEmpty(g.GetProperty("@type").GetString())));
+    }
+
+    /// <summary>واِسم مَتجَر عَدائيّ لا يُغلِق الغِلاف — الجِسم مَهروب
+    /// أَصلاً، فَالوَسم الخام يَبقى وَسماً واحِداً.</summary>
+    [Fact]
+    public void BuildHomeJsonLdScript_HostileNameCannotCloseTheWrapper()
+    {
+        var html = SeoDocuments.BuildHomeJsonLdScript(
+            T("x", "</script><img src=x onerror=alert(1)>"), Base);
+
+        // إغلاق واحِد فَقَط — وهو الَّذي كَتَبَه الغِلاف.
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(
+            html, "</script>", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Count);
+        Assert.DoesNotContain("<img", html, StringComparison.OrdinalIgnoreCase);
+    }
 }
