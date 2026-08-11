@@ -119,8 +119,17 @@ grep -rn "list-group\|ejar-icon-badge" --include="*.razor" --include="*.cs" .   
 | `widgets.css` | `libs/widgets/ACommerce.Widgets/wwwroot/` و `libs/templates/…Marketplace/wwwroot/css/` |
 | `templates-shared.css` | `libs/templates/ACommerce.Templates.Shared/wwwroot/` و `libs/templates/…Marketplace/wwwroot/css/` |
 
-لَيسَتا نُسخَةً وأَصلاً بَل **نُسخَتَين انحَرَفَتا**. لَم يُصلَح هُنا — يُسَجَّل
-لِيُقَرِّرَ المالِك أَيُّهما المَصدَر.
+لَيسَتا نُسخَةً وأَصلاً بَل **نُسخَتَين انحَرَفَتا**.
+
+**وقَد حُسِمَ أَيُّهما المَصدَر** — بِقِياس مُستَقِلّ نَزَلَ في
+`8ec0b3b9` (`scripts/verify-page-structure.sh`): النُسخَتان في
+`libs/widgets/…` و`libs/templates/ACommerce.Templates.Shared/…`
+**مَيِّتَتان** — الحُزمَة مُشار إلَيها في الـcsproj لَكِنّ `App.razor` لا
+يَربُط `_content/{pkg}/*.css` قَطّ، وفي النُسخَة المَيِّتَة مِن
+`widgets.css` ‏**51 سَطراً لا وُجودَ لَها في الحَيَّة**.
+
+وهذا يُثَبِّت عَدَد §3: الخَمسَ عَشرَةَ تَصريحَة هي تَصريحات الأَوراق
+**المَخدومَة** فِعلاً، والأَربَع الزائِدَة كانَت في الأَوراق المَيِّتَة.
 
 ---
 
