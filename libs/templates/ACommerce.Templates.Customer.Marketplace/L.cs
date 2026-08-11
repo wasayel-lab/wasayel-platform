@@ -1,10 +1,38 @@
+using System.Text.Encodings.Web;
+using ACommerce.Templates.Customer.Marketplace.I18n;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Http;
 
 namespace ACommerce.Templates.Customer.Marketplace;
 
 /// <summary>
-/// i18n خَفيف. قاموسان ثابِتان داخل القالَب (ar + en).
-/// يَقرَأ اللُغَة المُختارَة من cookie ".acommerce.lang" عند بِنائه (scoped).
+/// <para><b>مَنفَذ نُصوص الواجِهَة</b> — مُوَسَّع لا مُستَبدَل: نَفس
+/// الصَنف، ونَفس الكوكي، ونَفس <c>Lang</c>/<c>Dir</c>. الجَديد أَنّ
+/// القامُوسَين المَكتوبَين في هذا المِلَفّ صارا <b>مِلَفَّي JSON</b>
+/// يَقرَؤُهما <see cref="LocaleCatalog"/> — فَاللُغَة الثالِثَة مِلَفّ
+/// يُضاف لا نَوع يُعَدَّل.</para>
+///
+/// <para><b>واللُغَة تُحفَظ في كوكي تُقرَأ في المُنشِئ</b> (‏scoped) لا
+/// في حالَة circuit: الطَلَب التالي — وإعادَة التَحميل — يَجِدُها.
+/// وهذا مَوضِع تَفَوُّقنا على السَلَف، فَلا يُبَدَّل.</para>
+///
+/// <para><b>ومَنفَذان لا واحِد، والفَرق مَقيس</b>: Razor يَكتُب
+/// الحَرفِيَّة في المارك-أَب <b>خاماً</b> ويَكتُب مُخرَج التَعبير
+/// <b>مُرَمَّزاً</b> (‏<c>&amp;#x639;</c>…). فَلَو رُحِّلَت عُقدَة نَصّ
+/// إلى تَعبير عاديّ لَتَغَيَّرَت بايتات الصَفحَة بِلا أَن يَتَغَيَّر
+/// حَرفٌ واحِد مِمّا يَراه المُستَخدِم — وضاعَت بَوّابَة التَطابُق
+/// البايتيّ الَّتي تَحرُس التَشكيل. لِذلك:</para>
+/// <list type="bullet">
+///   <item><see cref="this[string]"/> — <c>string</c> لِلخَصائِص
+///   (<c>aria-label</c>، <c>title</c>، <c>placeholder</c>) ولِلكود.</item>
+///   <item><see cref="Markup(string)"/> — <see cref="MarkupString"/>
+///   لِعُقَد النَصّ، فَتُكتَب كَما كانَت الحَرفِيَّة تُكتَب تَماماً.</item>
+/// </list>
+/// <para>وسَلامَةُ الثاني مَحروسَة عِندَ البَوّابَة لا عِندَ
+/// الاستِعمال: <c>value_unsafe_markup</c> في
+/// <see cref="LocaleValidator"/> يَرفُض أَيّ قيمَة فيها
+/// <c>&lt; &gt; &amp;</c>؛ ووُسَطاء <see cref="Markup(string, object?[])"/>
+/// تُرَمَّز واحِداً واحِداً قَبل الدَمج.</para>
 /// </summary>
 public sealed class L
 {
@@ -15,50 +43,39 @@ public sealed class L
         var ctx = http.HttpContext;
         if (ctx is not null && ctx.Request.Cookies.TryGetValue(CookieName, out var lang))
         {
-            if (lang == "en") Lang = "en";
+            // «لُغَة مَوجودَة» = لَها مِلَفّ. سابِقاً كانَ الشَرط
+            // `lang == "en"` حَرفاً؛ والمَجموعَة اليَوم {ar, en}
+            // فَالسُلوك واحِد — لكِنّ اللُغَة الثالِثَة تَعمَل بِلا
+            // لَمس هذا السَطر.
+            if (!string.IsNullOrEmpty(lang) && LocaleCatalog.Has(lang))
+                Lang = lang;
         }
     }
 
-    public string Lang { get; set; } = "ar";
-    public bool IsArabic => Lang == "ar";
+    public string Lang { get; set; } = LocaleCatalog.Arabic;
+    public bool IsArabic => Lang == LocaleCatalog.Arabic;
     public string Dir => IsArabic ? "rtl" : "ltr";
 
-    public string this[string key] =>
-        Lang == "en"
-            ? (En.TryGetValue(key, out var en) ? en : key)
-            : (Ar.TryGetValue(key, out var ar) ? ar : key);
+    /// <summary>النَصّ خاماً: لُغَتُه، ثُمَّ العَرَبِيَّة، ثُمَّ
+    /// المِفتاح.</summary>
+    public string this[string key] => LocaleCatalog.Text(Lang, key);
 
-    private static readonly Dictionary<string, string> Ar = new()
-    {
-        ["nav.home"]       = "الرَئيسيّة",
-        ["nav.explore"]    = "استِكشاف",
-        ["nav.chats"]      = "رَسائل",
-        ["nav.notifs"]     = "إشعارات",
-        ["nav.account"]    = "حِسابي",
-        ["nav.login"]      = "دُخول",
-        ["common.loading"] = "جارٍ التَحميل…",
-        ["common.empty"]   = "لا توجَد بَيانات بَعد.",
-        ["common.back"]    = "رُجوع",
-        ["auth.login"]     = "تَسجيل دُخول",
-        ["auth.logout"]    = "تَسجيل خُروج",
-        ["listings.contact"] = "تَواصُل مَع المُعلِن",
-        ["listings.views"] = "مَشاهَدات",
-    };
+    /// <summary>النَصّ كَعُقدَة مارك-أَب — لِيَبقى المُخرَج مُطابِقاً
+    /// لِلحَرفِيَّة الَّتي حَلَّ مَحَلَّها بايتاً بِبايت.</summary>
+    public MarkupString Markup(string key) => new(this[key]);
 
-    private static readonly Dictionary<string, string> En = new()
-    {
-        ["nav.home"]       = "Home",
-        ["nav.explore"]    = "Explore",
-        ["nav.chats"]      = "Messages",
-        ["nav.notifs"]     = "Alerts",
-        ["nav.account"]    = "Me",
-        ["nav.login"]      = "Login",
-        ["common.loading"] = "Loading…",
-        ["common.empty"]   = "Nothing here yet.",
-        ["common.back"]    = "Back",
-        ["auth.login"]     = "Sign in",
-        ["auth.logout"]    = "Sign out",
-        ["listings.contact"] = "Contact seller",
-        ["listings.views"] = "views",
-    };
+    /// <summary>النَصّ المُدمَج فيه وُسَطاء. كُلّ وَسيط <b>يُرَمَّز</b>
+    /// قَبل الدَمج، فَاسمُ مُستَأجِر لا يَكتُب وَسماً. والأَرقام
+    /// تَمُرّ بِلا تَغَيُّر (‏لا مَحرَفَ فيها يُرَمَّز)، فَيَبقى
+    /// المُخرَج كَما كان.</summary>
+    public MarkupString Markup(string key, params object?[] args)
+        => new(string.Format(
+            this[key],
+            args.Select(a => (object?)HtmlEncoder.Default.Encode(a?.ToString() ?? string.Empty))
+                .ToArray()));
+
+    /// <summary>النَصّ المُدمَج فيه وُسَطاء، خاماً — لِلخَصائِص ولِلكود.
+    /// (‏الخاصِّيَّة تُرَمَّزُها Razor عِندَ الكِتابَة.)</summary>
+    public string Format(string key, params object?[] args)
+        => string.Format(this[key], args);
 }

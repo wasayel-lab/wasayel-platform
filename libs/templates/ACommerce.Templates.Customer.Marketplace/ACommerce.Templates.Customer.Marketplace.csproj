@@ -21,6 +21,14 @@
     <EmbeddedResource Include="Data\acommerce-capabilities.md" />
   </ItemGroup>
 
+  <!-- قَوامِيس نُصوص الواجِهَة (‏docs/I18N.md). مَوارِد مُضَمَّنَة لا
+       مُحتَوىً ثابِتاً: تُقرَأ في الخادِم، ولا يَجوز أَن يَتَعَلَّق
+       وُجودُها بِنَسخِ مُخرَجات ولا بِمَسار قُرص. وإضافَة لُغَة =
+       إسقاط مِلَفّ هُنا؛ الـ wildcard يَلتَقِطُه بِلا تَعديل. -->
+  <ItemGroup>
+    <EmbeddedResource Include="I18n\Locales\*.json" />
+  </ItemGroup>
+
   <ItemGroup>
 
     <ProjectReference Include="..\..\widgets\ACommerce.Widgets\ACommerce.Widgets.csproj" />

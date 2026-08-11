@@ -1,0 +1,15 @@
+{
+  "shell.nav.home": "Home",
+  "shell.nav.explore": "Explore",
+  "shell.nav.chats": "Messages",
+  "shell.nav.notifs": "Alerts",
+  "shell.nav.account": "Me",
+  "shell.nav.login": "Login",
+  "common.state.loading": "Loading…",
+  "common.state.empty": "Nothing here yet.",
+  "common.action.back": "Back",
+  "auth.action.login": "Sign in",
+  "auth.action.logout": "Sign out",
+  "listings.detail.contact": "Contact seller",
+  "listings.detail.views": "views"
+}

@@ -1,0 +1,15 @@
+{
+  "shell.nav.home": "الرَئيسيّة",
+  "shell.nav.explore": "استِكشاف",
+  "shell.nav.chats": "رَسائل",
+  "shell.nav.notifs": "إشعارات",
+  "shell.nav.account": "حِسابي",
+  "shell.nav.login": "دُخول",
+  "common.state.loading": "جارٍ التَحميل…",
+  "common.state.empty": "لا توجَد بَيانات بَعد.",
+  "common.action.back": "رُجوع",
+  "auth.action.login": "تَسجيل دُخول",
+  "auth.action.logout": "تَسجيل خُروج",
+  "listings.detail.contact": "تَواصُل مَع المُعلِن",
+  "listings.detail.views": "مَشاهَدات"
+}
