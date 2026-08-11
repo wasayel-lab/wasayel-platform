@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\libs\templates\ACommerce.Templates.Customer.Marketplace\ACommerce.Templates.Customer.Marketplace.csproj" />
+    <ProjectReference Include="..\..\libs\core\ACommerce.Platform.Flows\ACommerce.Platform.Flows.csproj" />
   </ItemGroup>
 
 </Project>
