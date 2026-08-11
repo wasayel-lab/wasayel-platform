@@ -105,6 +105,11 @@ await using (var scope = app.Services.CreateAsyncScope())
     // بِـ ENV TEST_DATA_SEED=1، وإلّا تُتَجاوَز.
     if (Environment.GetEnvironmentVariable("TEST_DATA_SEED") == "1")
         await TestDataSeeder.RunAsync(scope.ServiceProvider);
+
+    // مُشرِف مَنصَّة لِلتَّطوير — بيئَة Development + ENV DEV_ADMIN_PHONE.
+    var devAdmin = await DevAdminSeeder.RunAsync(docStore, app.Environment);
+    if (devAdmin is not null)
+        app.Logger.LogWarning("[dev-admin] رُقِّيَ {Phone} إلى مُشرِف مَنصَّة", devAdmin);
 }
 
 // يَجِب أَن يُطَبَّق ForwardedHeaders قَبل أَيّ middleware يَقرَأ
