@@ -280,8 +280,10 @@ public static class MarketplaceTemplateExtensions
                 Expires = DateTimeOffset.UtcNow.AddYears(1),
                 IsEssential = true, Path = "/", SameSite = SameSiteMode.Lax
             });
-            var ret = req.Form["return"].ToString();
-            return Results.Redirect(string.IsNullOrEmpty(ret) ? "/" : ret);
+            // الوِجهَة تَأتي مِن الفورم — فَتَمُرّ بِـ Services.LocalRedirect
+            // لا بِشَرط مَحَلِّيّ. كانَت تُمَرَّر كَما هي: تَحويل مَفتوح.
+            return Results.Redirect(
+                Services.LocalRedirect.Resolve(req.Form["return"].ToString(), "/"));
         }).DisableAntiforgery();
 
         // ─── Logout ─────────────────────────────────────────────────────
@@ -342,8 +344,8 @@ public static class MarketplaceTemplateExtensions
                 s.Delete(existing);
             }
             await s.SaveChangesAsync();
-            var ret = req.Form["return"].ToString();
-            return Results.Redirect(string.IsNullOrEmpty(ret) ? $"/{slug}/listings/{id}" : ret);
+            return Results.Redirect(Services.LocalRedirect.Resolve(
+                req.Form["return"].ToString(), $"/{slug}/listings/{id}"));
         }).DisableAntiforgery();
 
         // ─── Start chat from listing ────────────────────────────────────
@@ -542,10 +544,9 @@ public static class MarketplaceTemplateExtensions
 
             AuthSession.UpdateNameCookie(req.HttpContext.Response, slug, fullName);
             // عُد إلى returnUrl إن أُرسِل (يَحفَظ سِياق الدَّور /r/{role}/me).
-            var ret = req.Form["returnUrl"].ToString();
-            if (!string.IsNullOrEmpty(ret) && ret.StartsWith("/"))
-                return Results.Redirect(ret);
-            return Results.Redirect(Link(req, slug, $"me"));
+            // كانَ الشَرط StartsWith("/") وَحدَه — يُمَرِّر //evil.com.
+            return Results.Redirect(Services.LocalRedirect.Resolve(
+                req.Form["returnUrl"].ToString(), Link(req, slug, $"me")));
         }).DisableAntiforgery();
 
         // ─── Plans subscribe ────────────────────────────────────────────
@@ -1351,9 +1352,9 @@ public static class MarketplaceTemplateExtensions
         {
             var userId = http.UserId();
             var role   = http.Role();
-            var returnUrl = req.Query["returnUrl"].ToString();
-            if (string.IsNullOrEmpty(returnUrl) || !returnUrl.StartsWith("/"))
-                returnUrl = AuthSession.LinkFor(slug, role, "");
+            // نَفس القَرار الواحِد — كانَ StartsWith("/") وَحدَه هُنا أَيضاً.
+            var returnUrl = Services.LocalRedirect.Resolve(
+                req.Query["returnUrl"].ToString(), AuthSession.LinkFor(slug, role, ""));
 
             var cmd = new Commands.AcceptTermsCommand(userId, slug, TermsPolicy.CurrentVersion);
             try
@@ -2360,9 +2361,8 @@ public static class MarketplaceTemplateExtensions
         {
             auth.Load();
             if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
-            var returnUrl = req.Form["returnUrl"].ToString();
-            if (string.IsNullOrEmpty(returnUrl) || !returnUrl.StartsWith("/"))
-                returnUrl = "/studio";
+            var returnUrl = Services.LocalRedirect.Resolve(
+                req.Form["returnUrl"].ToString(), "/studio");
 
             await using var s = store.LightweightSession(Services.Incubator.StudioAuth.Tenant);
             s.Store(new Services.Incubator.ConsentRecord
