@@ -2458,7 +2458,7 @@ public static class MarketplaceTemplateExtensions
             if (session.AnalysisJson is null)
                 return Results.Redirect($"/studio/s/{id}");
 
-            var (_, limits) = await tier.LoadWithLimitsAsync(auth.UserId!.Value);
+            var (_, limits) = await tier.ReadWithLimitsAsync(auth.UserId!.Value);
             if (!limits.AllowExport)
                 return Results.Redirect($"/studio/s/{id}?upgrade=refine");
 

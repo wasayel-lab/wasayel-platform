@@ -92,7 +92,7 @@
         if (!Auth.IsAuthenticated) return;
         try
         {
-            var (user, l) = await Tier.LoadWithLimitsAsync(Auth.UserId!.Value);
+            var (user, l) = await Tier.ReadWithLimitsAsync(Auth.UserId!.Value);
             limits = l;
             usageSummary = $"{user.AnalysesUsed}/{Cap(l.AnalysesPerMonth)} تَحليل · {user.StoresBuilt}/{Cap(l.StoresMax)} تَطبيق";
         }

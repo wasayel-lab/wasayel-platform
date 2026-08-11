@@ -64,21 +64,52 @@ public sealed class StudioTierService
         return await qs.LoadAsync<StudioUser>(userId, ct);
     }
 
-    /// <summary>يُحَمِّل المُستَخدِم ويُعيد فَترَته إن انتَهَت (>٣٠ يَوم).</summary>
-    public async Task<(StudioUser User, TierLimits Limits)> LoadWithLimitsAsync(
+    /// <summary>طول فَترَة الحِصَّة بِالأَيّام.</summary>
+    public const int PeriodDays = 30;
+
+    /// <summary><b>قاعِدَة انقِضاء الفَترَة، نَقِيَّة</b> — بِلا قاعِدَة
+    /// بَيانات ولا ساعَة ضِمنِيَّة، لِتُختَبَر وَحدَها. الشَرط
+    /// <c>&gt;=</c> لا <c>&gt;</c>: هو سُلوك اليَوم حَرفاً.</summary>
+    public static bool PeriodElapsed(DateTime periodStart, DateTime nowUtc)
+        => (nowUtc - periodStart).TotalDays >= PeriodDays;
+
+    /// <summary>
+    /// <para><b>يُطَبِّق دَوَران الفَترَة على نُسخَة في الذاكِرَة</b> —
+    /// نَفس الحِساب الَّذي كانَ يُكتَب، بِلا كِتابَة. يُعيد
+    /// <c>true</c> إن دارَت الفَترَة فِعلاً.</para>
+    /// </summary>
+    public static bool ApplyPeriodRollover(StudioUser user, DateTime nowUtc)
+    {
+        if (!PeriodElapsed(user.PeriodStart, nowUtc)) return false;
+        user.PeriodStart  = nowUtc;
+        user.AnalysesUsed = 0;
+        user.RefinesUsed  = 0;
+        return true;
+    }
+
+    /// <summary>
+    /// <para><b>قِراءَة نَقِيَّة</b> — لا تَمَسّ قاعِدَة البَيانات
+    /// بِكِتابَة. تُفتَح بِـ<c>QuerySession</c> فَلا تَملِك أَن تَكتُب
+    /// أَصلاً (المَنع بُنيَويّ لا اتِّفاقيّ)، ويُطَبَّق دَوَران الفَترَة
+    /// على النُسخَة المُعادَة وَحدَها — فَالمَعروض هو <b>الحالَة
+    /// الفِعلِيَّة</b> كَما كانَ تَماماً.</para>
+    ///
+    /// <para><b>ولِماذا انفَصَلَت</b>: كانَت تُسَمّى
+    /// <c>LoadWithLimitsAsync</c> وتَحوي <c>Store</c> و
+    /// <c>SaveChangesAsync</c>. فَنِداءُ عَرضٍ في
+    /// <c>StudioShell.razor</c> — وهو غِلاف كُلّ صَفَحات الاستوديو —
+    /// كانَ يَكتُب في قاعِدَة البَيانات <b>عِندَ كُلّ رَسم</b>. اِسمٌ
+    /// يَقول «حَمِّل» وفِعلٌ يَكتُب: أَسوَأ ما في العَطَب أَنّ
+    /// المُنادي لا يُمكِنُه أَن يَعلَم.</para>
+    /// </summary>
+    public async Task<(StudioUser User, TierLimits Limits)> ReadWithLimitsAsync(
         Guid userId, CancellationToken ct = default)
     {
-        await using var s = _store.LightweightSession(StudioAuth.Tenant);
-        var user = await s.LoadAsync<StudioUser>(userId, ct)
+        await using var qs = _store.QuerySession(StudioAuth.Tenant);
+        var user = await qs.LoadAsync<StudioUser>(userId, ct)
                    ?? throw new InvalidOperationException("user not found");
-        if ((DateTime.UtcNow - user.PeriodStart).TotalDays >= 30)
-        {
-            user.PeriodStart = DateTime.UtcNow;
-            user.AnalysesUsed = 0;
-            user.RefinesUsed = 0;
-            s.Store(user);
-            await s.SaveChangesAsync(ct);
-        }
+        // نُسخَة مُنفَصِلَة عَن أَيّ تَتَبُّع — التَعديل هُنا عَرضٌ لا حِفظ.
+        ApplyPeriodRollover(user, DateTime.UtcNow);
         return (user, TierCatalog.For(user.Tier));
     }
 
@@ -86,7 +117,7 @@ public sealed class StudioTierService
 
     public async Task<GateCheck> CheckAnalyzeAsync(Guid uid, CancellationToken ct = default)
     {
-        var (u, l) = await LoadWithLimitsAsync(uid, ct);
+        var (u, l) = await ReadWithLimitsAsync(uid, ct);
         if (u.AnalysesUsed >= l.AnalysesPerMonth)
             return new(false, u.AnalysesUsed, l.AnalysesPerMonth,
                 "بَلَغتَ حَدّ تَحاليل هذه الباقَة لِهذا الشَّهر.");
@@ -95,7 +126,7 @@ public sealed class StudioTierService
 
     public async Task<GateCheck> CheckRefineAsync(Guid uid, CancellationToken ct = default)
     {
-        var (u, l) = await LoadWithLimitsAsync(uid, ct);
+        var (u, l) = await ReadWithLimitsAsync(uid, ct);
         if (u.RefinesUsed >= l.RefinesPerMonth)
             return new(false, u.RefinesUsed, l.RefinesPerMonth,
                 "بَلَغتَ حَدّ التَّحسينات لِهذا الشَّهر.");
@@ -104,7 +135,7 @@ public sealed class StudioTierService
 
     public async Task<GateCheck> CheckBuildAsync(Guid uid, CancellationToken ct = default)
     {
-        var (u, l) = await LoadWithLimitsAsync(uid, ct);
+        var (u, l) = await ReadWithLimitsAsync(uid, ct);
         if (u.StoresBuilt >= l.StoresMax)
             return new(false, u.StoresBuilt, l.StoresMax,
                 "بَلَغتَ حَدّ التَّطبيقات لِهذه الباقَة.");
@@ -120,11 +151,21 @@ public sealed class StudioTierService
     public Task RecordStoreBuiltAsync(Guid uid, CancellationToken ct = default)
         => Bump(uid, u => u.StoresBuilt++, ct);
 
+    /// <summary>
+    /// <para><b>الكِتابَة الصَريحَة</b> — ونُقطَة المَعنى الَّتي تَقَع
+    /// عِندَها: استِهلاك الحِصَّة فِعلاً. هُنا وَحدَه يُثَبَّت دَوَران
+    /// الفَترَة في قاعِدَة البَيانات، لا عِندَ كُلّ رَسم.</para>
+    ///
+    /// <para>والتَرتيب مَقصود: يَدور أَوَّلاً ثُمَّ يَزيد — وإلّا
+    /// زادَ عَدّاداً مِن فَترَةٍ مُنقَضِيَة. والدَوَران والزِيادَة في
+    /// <b>حِفظٍ واحِد</b>، فَلا تَقَع إحداهُما دونَ الأُخرى.</para>
+    /// </summary>
     private async Task Bump(Guid uid, Action<StudioUser> mutate, CancellationToken ct)
     {
         await using var s = _store.LightweightSession(StudioAuth.Tenant);
         var u = await s.LoadAsync<StudioUser>(uid, ct);
         if (u is null) return;
+        ApplyPeriodRollover(u, DateTime.UtcNow);
         mutate(u);
         s.Store(u);
         await s.SaveChangesAsync(ct);
