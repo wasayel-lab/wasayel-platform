@@ -1,0 +1,211 @@
+{
+  "_comment": "Widget visual contracts, enforced by scripts/verify-widget-contracts.sh (Layer 5). A contract lists the properties a widget's CSS MUST declare for the widget to be visible and usable at all. Missing property = fail; wrong value is Layer 3's business.",
+
+  "_provenance": "Rebuilt for wasayel-platform on 2026-08-11 from the acommerce-lab/acommerce-platform original. Every selector below was checked to exist in the stylesheets App.razor actually links BEFORE being written here: 33 of the origin's 36 contracts had real subjects in this repo. Three were dropped as subjectless — .act-bubble, .act-navbar and .act-footer use the `act-` (commerce-templates) prefix, which does not exist here; our prefixes are ac- / acm- / acs-. Seven contracts were added for our own widgets that the origin had none for.",
+
+  "_min_values_are_not_enforced": "The `min-values` entries below are recorded INTENT, not gates. The origin script's header claimed it verified them; its code only ever checked `required`, so no min-value has ever been enforced in either repo. They are kept as documentation of the intended floor and as ready input if a future pass adds numeric checking — but nothing here should be read as 'this minimum is guaranteed'.",
+
+  "contracts": {
+    ".ac-input": {
+      "description": "Text input must be visible, clickable, readable",
+      "required": ["padding", "border", "background", "color", "font-size", "border-radius"],
+      "min-values": { "padding": 7, "min-height": 32, "border-width": 1 }
+    },
+    ".ac-textarea": {
+      "description": "Multi-line input — as ac-input plus min-height",
+      "required": ["padding", "border", "background", "color", "min-height"],
+      "min-values": { "padding": 7, "min-height": 70, "border-width": 1 }
+    },
+    ".ac-select": {
+      "description": "Dropdown must match input visuals",
+      "required": ["padding", "border", "background", "color", "border-radius"],
+      "min-values": { "padding": 7, "min-height": 32, "border-width": 1 }
+    },
+    ".ac-btn": {
+      "description": "Button must be fingertip-sized, bold, distinguishable",
+      "required": ["padding", "font-weight", "border-radius", "min-height", "cursor"],
+      "min-values": { "min-height": 32, "padding": 3, "font-weight": 500 }
+    },
+    ".ac-card": {
+      "description": "Card must visually contain its children with border + radius",
+      "required": ["background", "border", "border-radius"],
+      "min-values": { "border-width": 1, "border-radius": 4 }
+    },
+    ".ac-card-body": {
+      "description": "Card body must have internal padding",
+      "required": ["padding"],
+      "min-values": { "padding": 10 }
+    },
+    ".ac-card-header": {
+      "description": "Card header separates from body",
+      "required": ["padding", "border-bottom"],
+      "min-values": { "padding": 9, "border-width": 1 }
+    },
+    ".ac-field": {
+      "description": "Form field wrapper spaces fields vertically",
+      "required": ["margin-bottom"],
+      "min-values": { "margin-bottom": 7 }
+    },
+    ".ac-label": {
+      "description": "Label must be visible above its input with spacing",
+      "required": ["display", "margin-bottom", "font-weight", "color"],
+      "min-values": { "margin-bottom": 3, "font-weight": 500 }
+    },
+    ".form-input": {
+      "description": "Bootstrap-compat input (must mirror ac-input)",
+      "required": ["padding", "border", "background", "color", "border-radius"],
+      "min-values": { "padding": 7, "min-height": 32, "border-width": 1 }
+    },
+    ".form-control": {
+      "description": "Bootstrap-compat input (must mirror ac-input)",
+      "required": ["padding", "border", "background", "color"],
+      "min-values": { "padding": 7, "min-height": 32, "border-width": 1 }
+    },
+    ".ac-alert": {
+      "description": "Alert must stand out from the page with background + padding",
+      "required": ["padding", "background", "border-radius"],
+      "min-values": { "padding": 9, "border-radius": 4 }
+    },
+    ".acs-bubble": {
+      "description": "Chat bubble (AcChatBubble / chat pages): padding on all sides plus radius. Background comes from the -mine / -other variants, so it is not required here.",
+      "required": ["padding", "border-radius"],
+      "min-values": { "padding": 6, "border-radius": 4 }
+    },
+    ".s-card": {
+      "description": "Generic card (AcStatsGrid, settings panels, dashboard tiles). Needs background + border so the card shape is visible.",
+      "required": ["background", "border", "border-radius", "padding"],
+      "min-values": { "border-width": 1, "border-radius": 4, "padding": 8 }
+    },
+    ".ac-search": {
+      "description": "Search box: input inside a bordered, padded shell tappable anywhere.",
+      "required": ["background", "border", "border-radius", "padding", "min-height"],
+      "min-values": { "padding": 6, "min-height": 32, "border-width": 1 }
+    },
+    ".ac-tile": {
+      "description": "Category tile wrapper — icon circle + label. The wrapper is transparent; .ac-tile-icon carries the fill. Only the tap target matters here.",
+      "required": ["padding", "min-height"],
+      "min-values": { "padding": 4, "min-height": 72 }
+    },
+    ".ac-tile-icon": {
+      "description": "Category tile icon circle — pill filled with a tinted brand colour.",
+      "required": ["background", "border-radius", "min-height"],
+      "min-values": { "border-radius": 20, "min-height": 40 }
+    },
+    ".ac-space": {
+      "description": "Listing / space preview card. Must contain image + body with border and radius.",
+      "required": ["background", "border", "border-radius"],
+      "min-values": { "border-width": 1, "border-radius": 4 }
+    },
+    ".ac-space-body": {
+      "description": "Space card body — padding so text does not touch the image edge.",
+      "required": ["padding"],
+      "min-values": { "padding": 8 }
+    },
+    ".ac-hero": {
+      "description": "Hero banner — solid brand background, rounded corners, internal padding.",
+      "required": ["background", "padding", "border-radius"],
+      "min-values": { "padding": 16, "border-radius": 8 }
+    },
+    ".ac-cta": {
+      "description": "CTA card — icon + title + subtitle on a bold background.",
+      "required": ["background", "padding", "border-radius", "min-height"],
+      "min-values": { "padding": 12, "border-radius": 8, "min-height": 56 }
+    },
+    ".ac-action": {
+      "description": "Quick-action tile — large tappable card.",
+      "required": ["background", "padding", "border-radius", "min-height"],
+      "min-values": { "padding": 12, "border-radius": 8, "min-height": 72 }
+    },
+    ".ac-chip": {
+      "description": "Filter chip — pill button with a toggleable active state.",
+      "required": ["background", "border", "border-radius", "padding", "min-height"],
+      "min-values": { "padding": 6, "border-radius": 12, "min-height": 32, "border-width": 1 }
+    },
+    ".ac-sort-select": {
+      "description": "Sort dropdown — native select styled to match inputs.",
+      "required": ["background", "border", "padding", "min-height"],
+      "min-values": { "padding": 6, "min-height": 32, "border-width": 1 }
+    },
+    ".ac-viewtoggle-btn": {
+      "description": "View-toggle button — the parent .ac-viewtoggle carries the frame, so the button itself is transparent until active; only the tap target is contracted.",
+      "required": ["min-height"],
+      "min-values": { "min-height": 32 }
+    },
+    ".ac-sheet": {
+      "description": "Bottom sheet — slides from the viewport bottom; needs surface + rounded top corners.",
+      "required": ["background", "border-radius"],
+      "min-values": { "border-radius": 12 }
+    },
+    ".ac-modal": {
+      "description": "Modal dialog — centred surface with a visible frame.",
+      "required": ["background", "border", "border-radius"],
+      "min-values": { "border-radius": 12, "border-width": 1 }
+    },
+    ".ac-topnav": {
+      "description": "Desktop top navigation — bordered strip above the page.",
+      "required": ["background", "border", "border-radius", "padding", "min-height"],
+      "min-values": { "padding": 8, "min-height": 48, "border-radius": 8, "border-width": 1 }
+    },
+    ".ac-gallery-main": {
+      "description": "Gallery main image container.",
+      "required": ["background", "border", "border-radius"],
+      "min-values": { "border-width": 1, "border-radius": 8 }
+    },
+    ".ac-stickybar": {
+      "description": "Sticky action bar — visible surface so it does not float invisibly.",
+      "required": ["background", "padding", "min-height"],
+      "min-values": { "padding": 8, "min-height": 48 }
+    },
+    ".ac-map-sim": {
+      "description": "Simulated map — bordered surface the size of the content area.",
+      "required": ["background", "border", "border-radius", "min-height"],
+      "min-values": { "border-width": 1, "border-radius": 8, "min-height": 200 }
+    },
+    ".ac-map-sim-pin": {
+      "description": "Map pin — tappable marker.",
+      "required": ["background", "border", "border-radius", "padding", "min-height"],
+      "min-values": { "padding": 2, "min-height": 24, "border-radius": 4, "border-width": 1 }
+    },
+    ".ac-searchitem": {
+      "description": "Search suggestion row — padded tappable row.",
+      "required": ["background", "padding", "min-height"],
+      "min-values": { "padding": 6, "min-height": 36 }
+    },
+
+    ".ac-badge": {
+      "description": "ADDED for wasayel (AcBadge.razor). Status pill — must read as a pill: padding, radius, and a weight that separates it from body text.",
+      "required": ["padding", "border-radius", "font-size", "font-weight"],
+      "min-values": { "padding": 2, "border-radius": 4 }
+    },
+    ".ac-empty": {
+      "description": "ADDED for wasayel (AcEmpty.razor). Empty state — the screen a user sees when there is no data; needs a surface and generous padding or it reads as a broken page.",
+      "required": ["padding", "background", "border-radius", "color"],
+      "min-values": { "padding": 16, "border-radius": 8 }
+    },
+    ".ac-listrow": {
+      "description": "ADDED for wasayel (AcListRow.razor). Tappable list row — needs a surface and internal padding so rows are separable.",
+      "required": ["padding", "background", "border-radius"],
+      "min-values": { "padding": 8, "border-radius": 4 }
+    },
+    ".ac-spinner": {
+      "description": "ADDED for wasayel (AcSpinner.razor). Loading spinner — drawn entirely from a partially-coloured border, so the border and the round shape ARE the widget.",
+      "required": ["border", "border-radius", "animation"],
+      "min-values": { "border-width": 2 }
+    },
+    ".ac-viewtoggle": {
+      "description": "ADDED for wasayel (AcViewToggle.razor). The group frame that .ac-viewtoggle-btn sits inside — this is where the visible border lives.",
+      "required": ["background", "border", "border-radius"],
+      "min-values": { "border-width": 1, "border-radius": 8 }
+    },
+    ".acs-seg": {
+      "description": "ADDED for wasayel (AcSegmentControl.razor). Segmented control track — a bordered, padded rail holding the segments.",
+      "required": ["background", "border", "border-radius", "padding"],
+      "min-values": { "border-width": 1, "border-radius": 8, "padding": 2 }
+    },
+    ".ac-avatar": {
+      "description": "ADDED for wasayel (AcAvatar.razor). Avatar — round, centred, and clipped. `background` is deliberately NOT required: AcAvatar.razor sets a per-user gradient inline (line 14), so demanding it in CSS would be a false alarm.",
+      "required": ["display", "border-radius", "overflow"],
+      "min-values": { "border-radius": 50 }
+    }
+  }
+}
