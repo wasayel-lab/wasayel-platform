@@ -1,0 +1,54 @@
+# scripts/verify-page-structure-baseline.txt — PINNED DEBT for Layer 1
+#
+# Format: <rule>|<file>|<count>   — measured 2026-08-11 at commit d08f0adc.
+# The line number is deliberately NOT part of the fingerprint: edits above a
+# violation would churn the ledger without changing the debt.  Adding or
+# removing a violation in an already-listed file still moves the count and
+# still trips the gate.
+#
+# Bidirectional, like Layer 2 and the FlowInventoryTests dead-state ledger:
+# a new entry fails the gate, and a retired entry that is still pinned fails
+# it too.  Nothing here was repaired by the agent that measured it.
+#
+# ── no-inline-color (34) ─────────────────────────────────────────────────
+# Literal #hex in a style="" attribute.  These bypass the --wsl-* -> --ac-*
+# token layer entirely (META-MODEL §9), so a tenant theme can never restyle
+# them: status pills stay mint-green and amber whatever the tenant picks.
+# Concentrated in the Studio/incubator screens, which were built fastest.
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/QualityMonitor.razor|2
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantEdit.razor|3
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/ChatRoom.razor|1
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Plans.razor|1
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioApp.razor|7
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppConsole.razor|5
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppTicketDetail.razor|1
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioHome.razor|1
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudy.razor|2
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudyPrint.razor|3
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/VendorProfile.razor|3
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/RiderHome.razor|1
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/StudioShell.razor|3
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/UpgradePrompt.razor|1
+
+# ── no-raw-bootstrap-button (1) ──────────────────────────────────────────
+# `<button class="btn btn-primary">` in the SHARED error state — the one
+# widget every failure path renders.  Should be AcButton.
+no-raw-bootstrap-button|libs/templates/ACommerce.Templates.Shared/AcErrorState.razor|1
+
+# ── unlinked-rcl-css (2) ─────────────────────────────────────────────────
+# The heaviest finding of this layer.  Two referenced libraries ship a
+# stylesheet that App.razor never links, because the Marketplace template
+# keeps its OWN copy of each under wwwroot/css/ and links that instead:
+#
+#   libs/widgets/ACommerce.Widgets/wwwroot/widgets.css           (1933 lines, DEAD)
+#     vs .../Marketplace/wwwroot/css/widgets.css                 (1920 lines, SERVED)
+#     -> the copies have DIVERGED: 51 lines exist only in the dead one.
+#
+#   libs/templates/ACommerce.Templates.Shared/wwwroot/templates-shared.css (DEAD)
+#     vs .../Marketplace/wwwroot/css/templates-shared.css                  (SERVED)
+#     -> 1 line of divergence.
+#
+# Consequence: editing widget CSS at its natural address changes nothing in
+# the browser.  Pinned rather than fixed — deciding which copy is canonical
+# is the owner's call, not a verifier's.
+unlinked-rcl-css|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|2
