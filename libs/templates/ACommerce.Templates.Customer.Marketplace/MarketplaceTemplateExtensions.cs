@@ -1525,7 +1525,8 @@ public static class MarketplaceTemplateExtensions
             // التَّخويل قَبل قِراءَة الحُقول: كانَ الطَّلَب المَجهول يَصِل
             // إلى الفَلتَرَة فَيَرتَدّ بِـ 302 عَن حَقل ناقِص — فَبَدا
             // مَحروساً وَهُوَ مَكشوف. بِجِسم صَحيح كانَ يُنشِئ مُستَأجِراً.
-            if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
+            var creator = await Services.PlatformAdminGuard.EvaluateAsync(store, auth);
+            if (!creator.Allowed)
                 return Forbidden();
 
             var f = req.Form;
@@ -1593,7 +1594,12 @@ public static class MarketplaceTemplateExtensions
                 City        = city,
                 AuthChannel = channel,
                 Categories  = categories,
-                CreatedAt   = DateTime.UtcNow
+                CreatedAt   = DateTime.UtcNow,
+                // المُنشِئ هُوَ المالِك: كانَ المُستَأجِر يولَد يَتيماً
+                // (OwnerUserId = Guid.Empty)، فَيَرُدّ TenantAdminGuard
+                // مُنشِئَه نَفسَه بِـ 403 عَن إعداد ما أَنشَأ، ثُمَّ يَتَبَنّاه
+                // StudioOwnershipSeeder لِأَوَّل مُستَخدِم — أَيّاً كانَ.
+                OwnerUserId = creator.User!.Id
             });
             await s.SaveChangesAsync();
             return Results.Redirect($"/admin");

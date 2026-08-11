@@ -25,6 +25,24 @@ public static class StudioOwnershipSeeder
             .OrderBy(u => u.CreatedAt).Take(1).ToListAsync(ct)).FirstOrDefault();
         if (firstUser is null) return;   // لا مُستَخدِمين بَعد — لا شَيء لِنَربِطه
 
+        // ── (أ) تَرقِيَة أَوَّل مُستَخدِم — شَأن مُستَقِلّ عَن التَبَنّي ──
+        // كانَت هذه الكُتلَة **تَحتَ** الرَدّ المُبَكِّر عَلى
+        // orphans.Count == 0، فَعَلى قاعِدَة كُلّ مَتاجِرِها مَملوكَة
+        // (نُسخَة إنتاج مَثَلاً) لا يُرَقّى أَحَد أَبَداً ولا سَبيل إلى
+        // سَطح الإدارَة. الشَأنان كانا مَقرونَين بِلا سَبَب، فَفُصِلا.
+        if (!firstUser.IsPlatformAdmin)
+        {
+            await using var us = store.LightweightSession(StudioAuth.Tenant);
+            var u = await us.LoadAsync<StudioUser>(firstUser.Id, ct);
+            if (u is not null)
+            {
+                u.IsPlatformAdmin = true;
+                us.Store(u);
+                await us.SaveChangesAsync(ct);
+            }
+        }
+
+        // ── (ب) تَبَنّي المَتاجِر اليَتيمَة ──
         // جَلب كُلّ المَتاجِر ثُمَّ التَّصفِيَة في الذاكِرَة (انظر التَّعليق).
         await using var qs = store.QuerySession();
         var all = (await qs.Query<Tenant>().ToListAsync(ct)).ToList();
@@ -38,19 +56,6 @@ public static class StudioOwnershipSeeder
             ws.Store(t);
         }
         await ws.SaveChangesAsync(ct);
-
-        // أَوَّل مُستَخدِم يُصبِح platform admin تِلقائيّاً (لِلتَّجرِبَة).
-        if (!firstUser.IsPlatformAdmin)
-        {
-            await using var us = store.LightweightSession(StudioAuth.Tenant);
-            var u = await us.LoadAsync<StudioUser>(firstUser.Id, ct);
-            if (u is not null)
-            {
-                u.IsPlatformAdmin = true;
-                us.Store(u);
-                await us.SaveChangesAsync(ct);
-            }
-        }
     }
 }
 
