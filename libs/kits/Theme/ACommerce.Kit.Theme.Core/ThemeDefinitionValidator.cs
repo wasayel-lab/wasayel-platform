@@ -203,6 +203,14 @@ public static class ThemeDefinitionValidator
     {
         var v = new List<ThemeDefinitionViolation>(Validate(d));
 
+        // التَباين يُقَيَّم هُنا لا في Validate: الأَخيرَة تَرى تَعريفاً
+        // **جُزئيّاً** قَد يَنقُصُه طَرَف الزَوج، والحُكم عَلى زَوج
+        // نِصفُه غائِب لَيسَ حُكماً. الافتِراضيّ مُكتَمِل بِالفَحص
+        // أَعلاه، فَكُلّ زَوج فيه مَحسوم.
+        v.AddRange(ThemeContrastRule
+            .Evaluate(d.Slug, k => d.Tokens.TryGetValue(k, out var val) ? val : null)
+            .Violations);
+
         foreach (var token in ThemeTokenCatalog.All)
             if (!d.Tokens.ContainsKey(token.Key))
                 v.Add(new("default_theme_incomplete",
@@ -236,6 +244,23 @@ public static class ThemeDefinitionValidator
             v.Add(new("slug_shadows_platform_catalog",
                 $"الـ slug «{d.Slug}» مَأخوذ في كاتالوج المَنصَّة — " +
                 "ثيمات المُستَأجِر تُضاف فَوقَه ولا تُظَلِّلُه. اِختَر اسماً آخَر."));
+
+        // ─── التَباين يُقَيَّم عَلى **الفَعّال** لا عَلى المُعلَن ──────────
+        //
+        // ثيم المُستَأجِر جُزئيّ بِالتَعريف: قَد يُغَمِّق الخَلفِيَّة وَحدَها
+        // ويَرِث لَون النَصّ. والمَرسوم عَلى الشاشَة هُوَ الافتِراضيّ وقَد
+        // غُلِّبَت عَلَيه رُموزُه — فَذاكَ ما يُقاس، لا ما كُتِبَ في
+        // الوَثيقَة. ولَو قيسَ المُعلَن وَحدَه لَمَرَّ **أَخطَر مَدخَل**:
+        // خَلفِيَّة جَديدَة تَحتَ نَصّ مَوروث.
+        //
+        // (ولا دَورَة: قِراءَة ThemeCatalog.Default تَستَدعي ValidateDefault
+        // وهي لا تَمَسّ هذه الدالَّة. والعُدَّة نَفسُها تَقرَأ الكاتالوج
+        // هُنا مُنذُ حارِس التَظليل أَعلاه.)
+        v.AddRange(ThemeContrastRule
+            .Evaluate(d.Slug, k => d.Tokens.TryGetValue(k, out var val) && !string.IsNullOrWhiteSpace(val)
+                                   ? val
+                                   : ThemeCatalog.Default[k])
+            .Violations);
 
         return v;
     }
