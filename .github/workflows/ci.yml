@@ -22,3 +22,20 @@ jobs:
 
       - name: Run tests
         run: dotnet test tests/ACommerce.Platform.Tests/ACommerce.Platform.Tests.csproj -c Release --no-build
+
+  # الطَبَقات الساكِنَة ١–٥ (‏docs/VERIFICATION-LAYERS.md): تَقرَأ المَصدَر
+  # فَقَط — بِلا بِناء ولا خادِم ولا مُتَصَفِّح — فَتُشَغَّل مُوازِيَةً
+  # لِلبِناء ولا تُبطِئ البَوّابَة. الطَبَقَة السادِسَة (‏Playwright) تَحتاج
+  # تَطبيقاً حَيّاً وتَبقى خارِج البَوّابَة عَمداً.
+  #
+  # كُلّ طَبَقَة تَطبَع عَدَد ما فَحَصَتهُ وتَفشَل إن كانَ صِفراً؛ والدَين
+  # المَقيس اليَوم مُثَبَّت بِأَسمائِه في `scripts/*-baseline.txt` فَلا
+  # يُفشِل البَوّابَة — يُفشِلُها خَرقٌ **جَديد** أَو إدخالٌ مُثَبَّت لَم
+  # يَعُد يَقَع (فَالسِجِلّ لا يَنتَفِخ ولا يَعفَن).
+  static-verification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Static verification layers 1-5
+        run: ./scripts/verify-static.sh
