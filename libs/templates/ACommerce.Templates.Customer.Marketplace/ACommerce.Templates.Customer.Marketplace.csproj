@@ -48,5 +48,9 @@
     <ProjectReference Include="..\..\kits\Reviews\ACommerce.Kit.Reviews.Core\ACommerce.Kit.Reviews.Core.csproj" />
     <ProjectReference Include="..\..\kits\Payments\ACommerce.Kit.Payments.Core\ACommerce.Kit.Payments.Core.csproj" />
     <ProjectReference Include="..\..\kits\Theme\ACommerce.Kit.Theme.Core\ACommerce.Kit.Theme.Core.csproj" />
+    <!-- صَريح لا مُتَوارَث: جِسر نَمَط الصَفقَة إلى لُغَة التَدَفُّق
+         يَستَخدِمُها مُباشَرَةً، فَلا يُترَك وُصولُها رَهناً بِمَرجِع
+         عُدَّة أُخرى قَد يُنزَع. -->
+    <ProjectReference Include="..\..\core\ACommerce.Platform.Flows\ACommerce.Platform.Flows.csproj" />
   </ItemGroup>
 </Project>
