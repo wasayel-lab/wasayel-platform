@@ -3,5 +3,8 @@
     <!-- مولّد JasperFx المصدريّ يشحن داخل حزمة Marten، ولا بُدّ أن يعمل في
          التجميعة التي تُعرَّف فيها Subscription وإلّا فلا مُصرِّف وقت تشغيل لها. -->
     <PackageReference Include="Marten" />
+    <!-- دَورَة الاعتِماد ومَعجَم حالاتِها — نَفس التَعريف الواحِد الَّذي
+         تُحيل إلَيه عُدَّتا الأَدوار والمَظهَر. لا نُسخَة ثالِثَة. -->
+    <ProjectReference Include="..\..\..\core\ACommerce.Platform.Flows\ACommerce.Platform.Flows.csproj" />
   </ItemGroup>
 </Project>

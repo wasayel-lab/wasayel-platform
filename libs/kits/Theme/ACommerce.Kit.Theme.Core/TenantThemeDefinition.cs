@@ -46,7 +46,7 @@ public static class TenantThemeStatuses
 /// الخِيارات. ولَو خُزِّنَ الكائِن مُفَكَّكاً لَصارَ لِلتَعريف شَكلانِ
 /// يَنحَرِفان.</para>
 /// </summary>
-public sealed class TenantThemeDefinition
+public sealed class TenantThemeDefinition : ITenantDefinitionDocument
 {
     /// <summary>هُوِيَّة الوَثيقَة = <see cref="Slug"/>. الفَرادَة داخِل
     /// المُستَأجِر مَضمونَة بِالإيجار المُقتَرِن.</summary>

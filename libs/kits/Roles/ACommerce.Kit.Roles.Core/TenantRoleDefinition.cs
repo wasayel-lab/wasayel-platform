@@ -54,7 +54,7 @@ public static class TenantRoleStatuses
 /// المَوجَة السابِقَة لِهذه بِالضَبط. ولَو خُزِّنَ الكائِن مُفَكَّكاً
 /// لَصارَ لِلتَعريف شَكلانِ يَنحَرِفان.</para>
 /// </summary>
-public sealed class TenantRoleDefinition
+public sealed class TenantRoleDefinition : ITenantDefinitionDocument
 {
     /// <summary>هُوِيَّة الوَثيقَة = <see cref="Slug"/>. الفَرادَة
     /// داخِل المُستَأجِر مَضمونَة بِالإيجار المُقتَرِن (نَفس الـ Id في

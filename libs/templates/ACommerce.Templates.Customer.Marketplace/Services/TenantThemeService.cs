@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using ACommerce.Kit.Theme;
 using Marten;
 
@@ -10,6 +9,14 @@ namespace ACommerce.Templates.Customer.Marketplace.Services;
 /// <see cref="TenantThemeSet"/> فَوق الثيم الافتِراضيّ المَضمون. مَوضِع
 /// الالتِقاط واحِد (‏<c>App.razor</c>) يَسأَلُه ولا يَعرِف مِن أَينَ
 /// يُجيب.</para>
+///
+/// <para><b>ومَكانيكاهُ صارَت مُشتَرَكَة</b>
+/// (<see cref="TenantDefinitionService{TDoc,TSet}"/>) — نَفس مُشارَكَة
+/// خِدمَة الأَدوار حَرفاً. وما بَقِيَ هُنا <b>مُفرَدات المَظهَر</b>،
+/// ومِنها فَرقٌ سُلوكيّ واحِد مُعلَن: <b>المَظهَر يُصادِق قَبل
+/// التَخزين</b> (‏<see cref="ValidateBeforeStore"/>) والأَدوار لا
+/// تَفعَل. كانَ ذلك الفَرق مَخفِيّاً في تَشابُهِ جِسمَين؛ صارَ
+/// مُعلَناً في تَوقيع.</para>
 ///
 /// <para><b>العَزل بُنيَويّ لا اتِّفاقيّ</b>: كُلّ قِراءَة تُفتَح بِـ
 /// <c>QuerySession(tenantSlug)</c>، والوَثيقَة مُتَعَدِّدَة الإيجار
@@ -31,87 +38,31 @@ namespace ACommerce.Templates.Customer.Marketplace.Services;
 /// لا يَتَجَمَّد خَلَل عابِر حالَةً دائِمَة. الاختِيار مُعلَن: مَتجَر
 /// يَفقِد لَونَه لِثَوانٍ أَهوَن مِن مَتجَر يَسقُط بِـ500.</para>
 /// </summary>
-public sealed class TenantThemeService
+public sealed class TenantThemeService : TenantDefinitionService<TenantThemeDefinition, TenantThemeSet>
 {
-    private readonly IDocumentStore _store;
+    public TenantThemeService(IDocumentStore store) : base(store) { }
 
-    /// <summary>مِفتاحُه سلاج المُستَأجِر — شَرط لا تَحسين.</summary>
-    private readonly ConcurrentDictionary<string, TenantThemeSet> _cache =
-        new(StringComparer.Ordinal);
+    // ─── مُفرَدات المَظهَر ────────────────────────────────────────────
 
-    public TenantThemeService(IDocumentStore store) => _store = store;
+    protected override TenantThemeSet PlatformSet => TenantThemeSet.Platform;
 
-    /// <summary>لَقطَة ثيم المُستَأجِر. سلاج فارِغ أَو <c>null</c>
-    /// (سِياق بِلا مُستَأجِر) ← قاعِدَة المَنصَّة.</summary>
-    public async Task<TenantThemeSet> ForAsync(string? tenantSlug, CancellationToken ct = default)
-    {
-        if (string.IsNullOrEmpty(tenantSlug)) return TenantThemeSet.Platform;
-        if (_cache.TryGetValue(tenantSlug, out var hit)) return hit;
+    protected override string? SlugOf(TenantThemeSet set) => set.TenantSlug;
 
-        var set = await ReadUncachedAsync(_store, tenantSlug, ct);
+    protected override TenantThemeSet Build(string tenantSlug, IReadOnlyList<TenantThemeDefinition> docs)
+        => TenantThemeSet.FromDocuments(tenantSlug, docs);
 
-        // الفَشَل لا يُخَزَّن — يُعرَف بِأَنَّه سَقَطَ إلى لَقطَة المَنصَّة
-        // بِلا سلاج.
-        if (set.TenantSlug is not null) _cache[tenantSlug] = set;
-        return set;
-    }
+    protected override string LogTag => "theme";
 
-    /// <summary>ما يُبَثّ في <c>&lt;head&gt;</c> — اختِصار المَوضِع
-    /// الوَحيد الَّذي يَستَعمِلُه التَصيير.</summary>
-    public async Task<EffectiveTheme> EffectiveAsync(
-        string? tenantSlug, CancellationToken ct = default) =>
-        (await ForAsync(tenantSlug, ct)).Theme;
+    protected override Task<TenantThemeSet> ReadUncachedCoreAsync(string tenantSlug, CancellationToken ct)
+        => ReadUncachedAsync(Store, tenantSlug, ct);
 
-    /// <summary>نَفس القِراءَة، بِلا كاش وبِلا نُسخَة مِن الجِسم —
-    /// لِمَسارات تَملِك <c>IDocumentStore</c> ولا تَملِك هذه الخِدمَة.
-    /// نَفس مُفتَرَق <c>TenantRoleService.ReadUncachedAsync</c>
-    /// حَرفاً.</summary>
-    public static async Task<TenantThemeSet> ReadUncachedAsync(
-        IDocumentStore store, string tenantSlug, CancellationToken ct = default)
-    {
-        if (string.IsNullOrEmpty(tenantSlug)) return TenantThemeSet.Platform;
+    protected override string ListFailureAr(string tenantSlug, string error)
+        => $"[theme] تَعَذَّرَ سَرد ثيمات «{tenantSlug}»: {error}";
 
-        try
-        {
-            await using var s = store.QuerySession(tenantSlug);
-            var docs = await s.Query<TenantThemeDefinition>()
-                .Where(d => d.Status == TenantThemeStatuses.Approved)
-                .ToListAsync(ct);
-            return TenantThemeSet.FromDocuments(tenantSlug, docs);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine(
-                $"[theme] تَعَذَّرَت قِراءَة ثيم «{tenantSlug}» — " +
-                $"سُقوط إلى الثيم الافتِراضيّ: {ex.Message}");
-            return TenantThemeSet.Platform;
-        }
-    }
-
-    /// <summary>كُلّ ثيمات المُستَأجِر بِكُلّ حالاتِها — لِسَطح الإدارَة
-    /// وَحدَه. المَبثوث هو المُعتَمَد فَقَط.</summary>
-    public async Task<IReadOnlyList<TenantThemeDefinition>> ListAllAsync(
-        string tenantSlug, CancellationToken ct = default)
-    {
-        try
-        {
-            await using var s = _store.QuerySession(tenantSlug);
-            var all = await s.Query<TenantThemeDefinition>().ToListAsync(ct);
-            return all.OrderBy(d => d.CreatedAt).ThenBy(d => d.Slug, StringComparer.Ordinal).ToList();
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[theme] تَعَذَّرَ سَرد ثيمات «{tenantSlug}»: {ex.Message}");
-            return Array.Empty<TenantThemeDefinition>();
-        }
-    }
-
-    /// <summary><b>يَكتُب ثيماً مُعَلَّقاً</b> — لا حالَة أُخرى مِن هُنا.
-    /// المُصادَقَة تَتِمّ هُنا صَراحَةً قَبل الكِتابَة، فَلا يُخزَّن ثيم
-    /// فاسِد أَصلاً (وهذا هو السالِب الحَيّ في البُرهان).</summary>
-    public async Task<(bool Ok, string Message)> ProposeAsync(
-        string tenantSlug, string themeSlug, string definitionJson,
-        string by, CancellationToken ct = default)
+    /// <summary><b>المُصادَقَة تَتِمّ هُنا صَراحَةً قَبل الكِتابَة</b>،
+    /// فَلا يُخزَّن ثيم فاسِد أَصلاً (وهذا هو السالِب الحَيّ في
+    /// البُرهان).</summary>
+    protected override (bool Ok, string Message) ValidateBeforeStore(string definitionJson, string slug)
     {
         ThemeDefinition parsed;
         try { parsed = ThemeDefinitionLoader.ParseDefinition(definitionJson); }
@@ -122,84 +73,75 @@ public sealed class TenantThemeService
             return (false, "لا يَجتاز المُصادَقَة: " +
                            string.Join(" | ", violations.Select(v => v.Code)));
 
-        if (!string.Equals(parsed.Slug, themeSlug, StringComparison.Ordinal))
-            return (false, $"الوَثيقَة «{themeSlug}» تُعلِن slug مُختَلِفاً: «{parsed.Slug}».");
+        if (!string.Equals(parsed.Slug, slug, StringComparison.Ordinal))
+            return (false, $"الوَثيقَة «{slug}» تُعلِن slug مُختَلِفاً: «{parsed.Slug}».");
 
-        await using var s = _store.LightweightSession(tenantSlug);
-
-        var existing = await s.LoadAsync<TenantThemeDefinition>(themeSlug, ct);
-        if (existing is { Status: TenantThemeStatuses.Approved })
-            return (false,
-                $"الثيم «{themeSlug}» مُعتَمَد بِالفِعل في «{tenantSlug}» — " +
-                "لا يُعاد تَعريفُه مِن الوَكيل.");
-
-        s.Store(new TenantThemeDefinition
-        {
-            Id             = themeSlug,
-            Slug           = themeSlug,
-            DefinitionJson = definitionJson,
-            Status         = TenantThemeStatuses.Pending,
-            CreatedBy      = by,
-            CreatedAt      = DateTime.UtcNow
-        });
-        await s.SaveChangesAsync(ct);
-        Invalidate(tenantSlug);
-        return (true, $"سُجِّلَ ثيم «{themeSlug}» مُعَلَّقاً.");
+        return (true, "");
     }
 
-    /// <summary>قَرار بَشَريّ: اعتِماد أَو رَفض. <b>هُنا وَحدَه</b> يَصير
-    /// ثيم مَبثوثاً، وهُنا وَحدَه يُبطَل الكاش. والاعتِماد يُعيد
-    /// المُصادَقَة عَلى النَّصّ المُخَزَّن — لا يَثِق بِأَنَّها جَرَت
-    /// عِندَ الكِتابَة.</summary>
-    public async Task<(bool Ok, string Message)> DecideAsync(
-        string tenantSlug, string themeSlug, string status,
-        string by, CancellationToken ct = default)
+    /// <summary>والاعتِماد يُعيد المُصادَقَة عَلى النَّصّ المُخَزَّن — لا
+    /// يَثِق بِأَنَّها جَرَت عِندَ الكِتابَة.</summary>
+    protected override (bool Ok, string Message) ValidateBeforeApprove(TenantThemeDefinition doc)
     {
-        // نَفس الحارِس بِعَينِه — ومِن نَفس التَعريف. كانَ الشَرط
-        // مَنسوخاً بَينَ هذه الخِدمَة وخِدمَة الأَدوار؛ صارَ سُؤالاً
-        // واحِداً لِمَوضِع واحِد.
-        if (!ACommerce.Platform.Flows.ApprovalFlow.IsDecision(status))
-            return (false, $"قَرار غَير مَعروف: «{status}».");
+        ThemeDefinition parsed;
+        try { parsed = ThemeDefinitionLoader.ParseDefinition(doc.DefinitionJson); }
+        catch (Exception ex) { return (false, "تَعَذَّرَت قِراءَة التَعريف: " + ex.Message); }
 
-        await using var s = _store.LightweightSession(tenantSlug);
-        var doc = await s.LoadAsync<TenantThemeDefinition>(themeSlug, ct);
-        if (doc is null)
-            return (false, $"لا ثيم بِاسم «{themeSlug}» في «{tenantSlug}».");
+        var violations = ThemeDefinitionValidator.ValidateTenantDefinition(parsed);
+        if (violations.Count > 0)
+            return (false, "لا يَجتاز المُصادَقَة: " +
+                           string.Join(" | ", violations.Select(v => v.Code)));
 
-        if (status == TenantThemeStatuses.Approved)
-        {
-            ThemeDefinition parsed;
-            try { parsed = ThemeDefinitionLoader.ParseDefinition(doc.DefinitionJson); }
-            catch (Exception ex) { return (false, "تَعَذَّرَت قِراءَة التَعريف: " + ex.Message); }
+        if (!string.Equals(parsed.Slug, doc.Slug, StringComparison.Ordinal))
+            return (false, $"الوَثيقَة «{doc.Slug}» تُعلِن slug مُختَلِفاً: «{parsed.Slug}».");
 
-            var violations = ThemeDefinitionValidator.ValidateTenantDefinition(parsed);
-            if (violations.Count > 0)
-                return (false, "لا يَجتاز المُصادَقَة: " +
-                               string.Join(" | ", violations.Select(v => v.Code)));
-
-            if (!string.Equals(parsed.Slug, doc.Slug, StringComparison.Ordinal))
-                return (false, $"الوَثيقَة «{doc.Slug}» تُعلِن slug مُختَلِفاً: «{parsed.Slug}».");
-        }
-
-        doc.Status    = status;
-        doc.DecidedBy = by;
-        doc.DecidedAt = DateTime.UtcNow;
-        s.Store(doc);
-        await s.SaveChangesAsync(ct);
-        Invalidate(tenantSlug);
-
-        return (true, status == TenantThemeStatuses.Approved
-            ? $"اعتُمِدَ ثيم «{themeSlug}» — صارَ مَبثوثاً في «{tenantSlug}»."
-            : $"رُفِضَ ثيم «{themeSlug}».");
+        return (true, "");
     }
+
+    protected override string AlreadyApprovedAr(string slug, string tenantSlug)
+        => $"الثيم «{slug}» مُعتَمَد بِالفِعل في «{tenantSlug}» — " +
+           "لا يُعاد تَعريفُه مِن الوَكيل.";
+
+    protected override string ProposedAr(string slug)
+        => $"سُجِّلَ ثيم «{slug}» مُعَلَّقاً.";
+
+    protected override string NotFoundAr(string slug, string tenantSlug)
+        => $"لا ثيم بِاسم «{slug}» في «{tenantSlug}».";
+
+    protected override string DecidedAr(string slug, string tenantSlug, bool approved)
+        => approved
+            ? $"اعتُمِدَ ثيم «{slug}» — صارَ مَبثوثاً في «{tenantSlug}»."
+            : $"رُفِضَ ثيم «{slug}».";
+
+    // ─── ما يَخُصّ المَظهَر وَحدَه ────────────────────────────────────
+
+    /// <summary>نَفس القِراءَة، بِلا كاش وبِلا نُسخَة مِن الجِسم —
+    /// لِمَسارات تَملِك <c>IDocumentStore</c> ولا تَملِك هذه الخِدمَة.
+    /// نَفس مُفتَرَق <c>TenantRoleService.ReadUncachedAsync</c>
+    /// حَرفاً.</summary>
+    public static Task<TenantThemeSet> ReadUncachedAsync(
+        IDocumentStore store, string tenantSlug, CancellationToken ct = default)
+        => QueryApprovedAsync(
+            store, tenantSlug,
+            TenantThemeSet.FromDocuments,
+            TenantThemeSet.Platform,
+            ex => $"[theme] تَعَذَّرَت قِراءَة ثيم «{tenantSlug}» — " +
+                  $"سُقوط إلى الثيم الافتِراضيّ: {ex.Message}",
+            ct);
+
+    /// <summary>ما يُبَثّ في <c>&lt;head&gt;</c> — اختِصار المَوضِع
+    /// الوَحيد الَّذي يَستَعمِلُه التَصيير.</summary>
+    public async Task<EffectiveTheme> EffectiveAsync(
+        string? tenantSlug, CancellationToken ct = default) =>
+        (await ForAsync(tenantSlug, ct)).Theme;
 
     /// <summary>
     /// <para><b>تَطبيق حُزمَة جاهِزَة</b> — وهو ما يُنَفِّذُه زِرّ واحِد
     /// في سَطح الإدارَة: اقتِراح ثُمَّ اعتِماد، بِنَفس
-    /// <see cref="ProposeAsync"/> و<see cref="DecideAsync"/> لا بِمَسار
-    /// كِتابَة ثالِث. المُصادَقَة تَجري مَرَّتَين كَما لِأَيّ ثيم آخَر،
-    /// والإبطال يَقَع في <c>DecideAsync</c> — فَـ«فَوراً» هُنا هي
-    /// «فَوراً» هُناك بِعَينِها.</para>
+    /// <c>ProposeAsync</c> و<c>DecideAsync</c> لا بِمَسار كِتابَة ثالِث.
+    /// المُصادَقَة تَجري مَرَّتَين كَما لِأَيّ ثيم آخَر، والإبطال يَقَع
+    /// في <c>DecideAsync</c> — فَـ«فَوراً» هُنا هي «فَوراً» هُناك
+    /// بِعَينِها.</para>
     ///
     /// <para><b>وما يَصِل مِن الطَلَب اسمُ حُزمَة لا نَصّ تَعريف</b>:
     /// الجِسم يُقرَأ مِن <see cref="ThemePresetCatalog"/> — أَي مِن
@@ -250,7 +192,7 @@ public sealed class TenantThemeService
     {
         try
         {
-            await using var s = _store.LightweightSession(tenantSlug);
+            await using var s = Store.LightweightSession(tenantSlug);
             var doc = await s.LoadAsync<TenantThemeDefinition>(themeSlug, ct);
             if (doc is not { Status: TenantThemeStatuses.Approved }) return;
 
@@ -270,8 +212,4 @@ public sealed class TenantThemeService
                 $"[theme] تَعَذَّرَ إعادَة فَتح «{themeSlug}» في «{tenantSlug}»: {ex.Message}");
         }
     }
-
-    /// <summary>إبطال لَقطَة مُستَأجِر واحِد. مِفتاح واحِد لا مَسح
-    /// شامِل.</summary>
-    public void Invalidate(string tenantSlug) => _cache.TryRemove(tenantSlug, out _);
 }

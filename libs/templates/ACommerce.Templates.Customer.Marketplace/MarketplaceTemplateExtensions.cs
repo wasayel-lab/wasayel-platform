@@ -49,6 +49,10 @@ public static class MarketplaceTemplateExtensions
         // والعَزل يَقَع في جَلسَة السلاج لا في عُمر الخِدمَة.
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService>();
 
+        // باقات المُستَأجِر وَقتَ التَّشغيل — Singleton بِنَفس المُبَرِّر
+        // حَرفاً: الكاش بِمِفتاح المُستَأجِر يَجِب أَن يَعبُر الطَلَبات.
+        services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.TenantPlanService>();
+
         // ─── الاستِحقاق ──────────────────────────────────────────────────
         // Scoped لا Singleton: بِلا كاش — الرَصيد حالَة تَتَغَيَّر بِكُلّ
         // عَمَلِيَّة، وكاشُها هو بِعَينِه ما يَجعَل الفَحص يَكذِب. والقِراءَة

@@ -2,6 +2,7 @@
 @page "/{slug}/r/{role}/plans"
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantPlanService PlanSvc
 
 <div class="acs-page">
 <h1 class="acm-wizard-title">الباقات</h1>
@@ -55,10 +56,9 @@ else
     [Parameter] public string? Role { get; set; }
     IReadOnlyList<ACommerce.Kit.Subscriptions.Plan>? plans;
 
+    // المَوضِع الحَيّ لِتَعريفات الباقات. والتَكافُؤ صِفريّ: مُستَأجِر
+    // بِلا تَعريف واحِد يُعطي نَفس الاستِعلام ونَفس التَرتيب ونَفس
+    // المَرجِع — أَي هذه الصَفحَة بِعَينِها قَبل المَوجَة.
     protected override async Task OnParametersSetAsync()
-    {
-        await using var s = Store.QuerySession(Slug);
-        plans = await s.Query<ACommerce.Kit.Subscriptions.Plan>()
-            .Where(p => p.IsActive).OrderBy(p => p.Price).ToListAsync();
-    }
+        => plans = await PlanSvc.VisiblePlansAsync(Slug);
 }

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using ACommerce.Kit.Roles;
 using ACommerce.Kit.Tenants;
 using Marten;
@@ -17,18 +16,26 @@ public readonly record struct TenantWithRoles(Tenant? Tenant, TenantRoleSet Role
 /// الالتِقاط تَسأَلُه ولا تَعرِف مِن أَينَ يُجيب — تَماماً كَما
 /// تَسأَل <see cref="RoleCompositionResolver"/> اليَوم.</para>
 ///
+/// <para><b>ومَكانيكاهُ صارَت مُشتَرَكَة</b>
+/// (<see cref="TenantDefinitionService{TDoc,TSet}"/>): الكاش بِمِفتاح
+/// المُستَأجِر، وعَزلُ الجَلسَة، والسُقوط الآمِن، وحارِس القَرار،
+/// والإبطال — كُلُّها هُناك مَرَّةً واحِدَة. وما بَقِيَ هُنا
+/// <b>مُفرَدات الأَدوار</b>: كَيفَ تُبنى اللَقطَة، ومَتى تُصادَق،
+/// وبِأَيّ عِبارَة تُجيب. <b>ولَم يَتَغَيَّر حَرفٌ مِمّا يُجيب بِه</b> —
+/// وذلك شَرط التَبديل لا أَثَرُه.</para>
+///
 /// <para><b>العَزل بُنيَويّ لا اتِّفاقيّ</b>: كُلّ قِراءَة تُفتَح بِـ
 /// <c>QuerySession(tenantSlug)</c>، والوَثيقَة مُتَعَدِّدَة الإيجار
 /// بِسِياسَة <c>AllDocumentsAreMultiTenanted</c> — فَـ Marten يَضَع
 /// <c>tenant_id</c> في الاستِعلام. لا سَطر شَرط مَكتوب بِاليَد يُمكِن
 /// نِسيانُه، ولا استِعلام عابِر لِلمُستَأجِرين مُمكِن أَصلاً مِن هُنا.</para>
 ///
-/// <para><b>والكاش بِمِفتاح المُستَأجِر حَصراً</b>
-/// (<see cref="_cache"/>) — لا لَقطَة ساكِنَة واحِدَة تُشارِكُها
-/// المَتاجِر. يُبطَل عِندَ كُلّ كِتابَة تَمَسّ الأَدوار: الاقتِراح
-/// والاعتِماد والرَّفض. وهذا بِالضَبط ما يَجعَل بُرهان «فَوراً»
-/// مُمكِناً: الاعتِماد يُبطِل مِفتاح المُستَأجِر، فَالطَلَب التالي
-/// يَقرَأ الوَثائِق مِن جَديد — بِلا بِناء وبِلا إعادَة تَشغيل.</para>
+/// <para><b>والكاش بِمِفتاح المُستَأجِر حَصراً</b> — لا لَقطَة ساكِنَة
+/// واحِدَة تُشارِكُها المَتاجِر. يُبطَل عِندَ كُلّ كِتابَة تَمَسّ
+/// الأَدوار: الاقتِراح والاعتِماد والرَّفض. وهذا بِالضَبط ما يَجعَل
+/// بُرهان «فَوراً» مُمكِناً: الاعتِماد يُبطِل مِفتاح المُستَأجِر،
+/// فَالطَلَب التالي يَقرَأ الوَثائِق مِن جَديد — بِلا بِناء وبِلا
+/// إعادَة تَشغيل.</para>
 ///
 /// <para><b>وسُقوط آمِن عِندَ تَعَذُّر القِراءَة</b> (جَدوَل غَير
 /// مُنشَأ بَعد، أَو خَلَل عابِر): يُرجَع
@@ -37,37 +44,79 @@ public readonly record struct TenantWithRoles(Tenant? Tenant, TenantRoleSet Role
 /// حالَةً دائِمَة. الاختِيار مُعلَن: مَتجَر يَفقِد دَوراً مُؤَلَّفاً
 /// لِثَوانٍ أَهوَن مِن مَتجَر يَسقُط بِـ 500.</para>
 /// </summary>
-public sealed class TenantRoleService
+public sealed class TenantRoleService : TenantDefinitionService<TenantRoleDefinition, TenantRoleSet>
 {
-    private readonly IDocumentStore _store;
+    public TenantRoleService(IDocumentStore store) : base(store) { }
 
-    /// <summary>مِفتاحُه سلاج المُستَأجِر — وهذا شَرط لا تَحسين.</summary>
-    private readonly ConcurrentDictionary<string, TenantRoleSet> _cache =
-        new(StringComparer.Ordinal);
+    // ─── مُفرَدات الأَدوار ────────────────────────────────────────────
 
-    public TenantRoleService(IDocumentStore store) => _store = store;
+    protected override TenantRoleSet PlatformSet => TenantRoleSet.Platform;
 
-    /// <summary>لَقطَة أَدوار المُستَأجِر. سلاج فارِغ أَو <c>null</c>
-    /// (سِياق بِلا مُستَأجِر) ← قاعِدَة المَنصَّة.</summary>
-    public async Task<TenantRoleSet> ForAsync(string? tenantSlug, CancellationToken ct = default)
+    protected override string? SlugOf(TenantRoleSet set) => set.TenantSlug;
+
+    protected override TenantRoleSet Build(string tenantSlug, IReadOnlyList<TenantRoleDefinition> docs)
+        => TenantRoleSet.FromDocuments(tenantSlug, docs);
+
+    protected override string LogTag => "roles";
+
+    protected override Task<TenantRoleSet> ReadUncachedCoreAsync(string tenantSlug, CancellationToken ct)
+        => ReadUncachedAsync(Store, tenantSlug, ct);
+
+    protected override string ListFailureAr(string tenantSlug, string error)
+        => $"[roles] تَعَذَّرَ سَرد تَعريفات «{tenantSlug}»: {error}";
+
+    /// <summary><b>الأَدوار لا تُصادِق هُنا</b> — المُصادَقَة تَمَّت
+    /// قَبلَه في المُنَفِّذ (شَكلاً ثُمَّ مَعجَماً)، وهذه الدالَّة
+    /// تَكتُب فَقَط. وهذا هو الفَرق السُلوكيّ الوَحيد عَن المَظهَر،
+    /// <b>مُعلَناً في التَوقيع لا مَخفِيّاً في وَسيط</b>.</summary>
+    protected override (bool Ok, string Message) ValidateBeforeStore(string definitionJson, string slug)
+        => (true, "");
+
+    /// <summary>الاعتِماد يُعيد المُصادَقَة عَلى النَّصّ المُخَزَّن — لا
+    /// يَثِق بِأَنَّها جَرَت عِندَ الكِتابَة. الوَثيقَة قَد تَكون كُتِبَت
+    /// بِيَد أَو نَجَت مِن تَرحيل، والاعتِماد هو آخِر بَوّابَة قَبل أَن
+    /// يَراها لاعِب.</summary>
+    protected override (bool Ok, string Message) ValidateBeforeApprove(TenantRoleDefinition doc)
     {
-        if (string.IsNullOrEmpty(tenantSlug)) return TenantRoleSet.Platform;
-        if (_cache.TryGetValue(tenantSlug, out var hit)) return hit;
+        RoleDefinition parsed;
+        try { parsed = RoleDefinitionLoader.ParseDefinition(doc.DefinitionJson); }
+        catch (Exception ex) { return (false, "تَعَذَّرَت قِراءَة التَعريف: " + ex.Message); }
 
-        var set = await ReadUncachedAsync(_store, tenantSlug, ct);
+        var violations = RoleDefinitionValidator.ValidateTenantDefinition(parsed);
+        if (violations.Count > 0)
+            return (false, "لا يَجتاز المُصادَقَة: " +
+                           string.Join(" | ", violations.Select(v => v.Code)));
 
-        // الفَشَل لا يُخَزَّن — يُعرَف بِأَنَّه سَقَطَ إلى لَقطَة المَنصَّة
-        // بِلا سلاج، وتَخزينُه كانَ سَيُجَمِّد خَلَلاً عابِراً.
-        if (set.TenantSlug is not null) _cache[tenantSlug] = set;
-        return set;
+        if (!string.Equals(parsed.Slug, doc.Slug, StringComparison.Ordinal))
+            return (false, $"الوَثيقَة «{doc.Slug}» تُعلِن slug مُختَلِفاً: «{parsed.Slug}».");
+
+        return (true, "");
     }
+
+    protected override string AlreadyApprovedAr(string slug, string tenantSlug)
+        => $"الدَور «{slug}» مُعتَمَد بِالفِعل في «{tenantSlug}» — " +
+           "لا يُعاد تَعريفُه مِن الوَكيل.";
+
+    protected override string ProposedAr(string slug)
+        => $"سُجِّلَ تَعريف الدَور «{slug}» مُعَلَّقاً.";
+
+    protected override string NotFoundAr(string slug, string tenantSlug)
+        => $"لا تَعريف بِاسم «{slug}» في «{tenantSlug}».";
+
+    protected override string DecidedAr(string slug, string tenantSlug, bool approved)
+        => approved
+            ? $"اعتُمِدَ الدَور «{slug}» — صارَ حَيّاً في «{tenantSlug}»."
+            : $"رُفِضَ الدَور «{slug}».";
+
+    // ─── ما يَخُصّ الأَدوار وَحدَها ───────────────────────────────────
 
     /// <summary>
     /// <para><b>نَفس القِراءَة، بِلا كاش وبِلا نُسخَة مِن الجِسم</b> —
-    /// <see cref="ForAsync"/> يُفَوِّض إلَيها. مَوجودَة لِمَسارات تَملِك
-    /// <c>IDocumentStore</c> ولا تَملِك هذه الخِدمَة: مُعالِجات
-    /// <c>minimal-API</c> السّاكِنَة في <c>MarketplaceTemplateExtensions</c>
-    /// (تَوثيق الدُخول، تَسكين الدَور، فَحص الصَلاحِيَّة).</para>
+    /// <see cref="TenantDefinitionService{TDoc,TSet}.ForAsync"/> يُفَوِّض
+    /// إلَيها. مَوجودَة لِمَسارات تَملِك <c>IDocumentStore</c> ولا تَملِك
+    /// هذه الخِدمَة: مُعالِجات <c>minimal-API</c> السّاكِنَة في
+    /// <c>MarketplaceTemplateExtensions</c> (تَوثيق الدُخول، تَسكين
+    /// الدَور، فَحص الصَلاحِيَّة).</para>
     ///
     /// <para><b>مُفتَرَق مُعلَن</b>: كانَ البَديل تَمرير الخِدمَة عَبر
     /// ثَلاث دَوالّ خاصَّة وثَلاث lambdas. الاختِيار وَقَعَ عَلى مَدخَل
@@ -75,27 +124,15 @@ public sealed class TenantRoleService
     /// والثَمَن استِعلام إضافيّ عَلى مَسارات الدُخول وَحدَها، وهي نادِرَة
     /// بِطَبيعَتِها ومُقارَنَةً بِكُلّ عَرض صَفحَة.</para>
     /// </summary>
-    public static async Task<TenantRoleSet> ReadUncachedAsync(
+    public static Task<TenantRoleSet> ReadUncachedAsync(
         IDocumentStore store, string tenantSlug, CancellationToken ct = default)
-    {
-        if (string.IsNullOrEmpty(tenantSlug)) return TenantRoleSet.Platform;
-
-        try
-        {
-            await using var s = store.QuerySession(tenantSlug);
-            var docs = await s.Query<TenantRoleDefinition>()
-                .Where(d => d.Status == TenantRoleStatuses.Approved)
-                .ToListAsync(ct);
-            return TenantRoleSet.FromDocuments(tenantSlug, docs);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine(
-                $"[roles] تَعَذَّرَت قِراءَة تَعريفات أَدوار «{tenantSlug}» — " +
-                $"سُقوط إلى كاتالوج المَنصَّة: {ex.Message}");
-            return TenantRoleSet.Platform;
-        }
-    }
+        => QueryApprovedAsync(
+            store, tenantSlug,
+            TenantRoleSet.FromDocuments,
+            TenantRoleSet.Platform,
+            ex => $"[roles] تَعَذَّرَت قِراءَة تَعريفات أَدوار «{tenantSlug}» — " +
+                  $"سُقوط إلى كاتالوج المَنصَّة: {ex.Message}",
+            ct);
 
     /// <summary>المُستَأجِر بِأَدوارِه المُجَسَّدَة — يُحَمِّل الوَثيقَة
     /// العامَّة ثُمَّ يُلحِق بِـ <c>Roles</c> دَوراً لِكُلّ تَعريف
@@ -104,7 +141,7 @@ public sealed class TenantRoleService
     public async Task<TenantWithRoles> LoadAsync(string slug, CancellationToken ct = default)
     {
         Tenant? tenant;
-        await using (var g = _store.QuerySession())
+        await using (var g = Store.QuerySession())
             tenant = await g.LoadAsync<Tenant>(slug, ct);
 
         if (tenant is null) return new TenantWithRoles(null, TenantRoleSet.Platform);
@@ -119,108 +156,4 @@ public sealed class TenantRoleService
 
         return new TenantWithRoles(tenant, set);
     }
-
-    /// <summary>كُلّ تَعريفات المُستَأجِر بِكُلّ حالاتِها — لِصَفحَة
-    /// الإدارَة وَحدَها. المَقروء في السُطوح هو المُعتَمَد فَقَط.</summary>
-    public async Task<IReadOnlyList<TenantRoleDefinition>> ListAllAsync(
-        string tenantSlug, CancellationToken ct = default)
-    {
-        try
-        {
-            await using var s = _store.QuerySession(tenantSlug);
-            var all = await s.Query<TenantRoleDefinition>().ToListAsync(ct);
-            return all.OrderBy(d => d.CreatedAt).ThenBy(d => d.Slug, StringComparer.Ordinal).ToList();
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine(
-                $"[roles] تَعَذَّرَ سَرد تَعريفات «{tenantSlug}»: {ex.Message}");
-            return Array.Empty<TenantRoleDefinition>();
-        }
-    }
-
-    /// <summary>
-    /// <para><b>يَكتُب تَعريفاً مُعَلَّقاً</b> — لا حالَة أُخرى مِن هُنا.
-    /// المُصادَقَة تَمَّت قَبلَه في المُنَفِّذ (شَكلاً ثُمَّ مَعجَماً)،
-    /// وهذه الدالَّة تَكتُب فَقَط.</para>
-    /// </summary>
-    public async Task<(bool Ok, string Message)> ProposeAsync(
-        string tenantSlug, string roleSlug, string definitionJson,
-        string by, CancellationToken ct = default)
-    {
-        await using var s = _store.LightweightSession(tenantSlug);
-
-        var existing = await s.LoadAsync<TenantRoleDefinition>(roleSlug, ct);
-        if (existing is { Status: TenantRoleStatuses.Approved })
-            return (false,
-                $"الدَور «{roleSlug}» مُعتَمَد بِالفِعل في «{tenantSlug}» — " +
-                "لا يُعاد تَعريفُه مِن الوَكيل.");
-
-        s.Store(new TenantRoleDefinition
-        {
-            Id             = roleSlug,
-            Slug           = roleSlug,
-            DefinitionJson = definitionJson,
-            Status         = TenantRoleStatuses.Pending,
-            CreatedBy      = by,
-            CreatedAt      = DateTime.UtcNow
-        });
-        await s.SaveChangesAsync(ct);
-        Invalidate(tenantSlug);
-        return (true, $"سُجِّلَ تَعريف الدَور «{roleSlug}» مُعَلَّقاً.");
-    }
-
-    /// <summary>قَرار بَشَريّ: اعتِماد أَو رَفض. <b>هُنا وَحدَه</b>
-    /// يَصير تَعريف حَيّاً، وهُنا وَحدَه يُبطَل الكاش.</summary>
-    public async Task<(bool Ok, string Message)> DecideAsync(
-        string tenantSlug, string roleSlug, string status,
-        string by, CancellationToken ct = default)
-    {
-        // الحارِس يَسأَل تَعريف التَدَفُّق، لا شَرطاً مَكتوباً بِاليَد:
-        // هَل مِن pending انتِقال إلى هذه الحالَة يَملِكُه مُقَرِّر؟
-        // النَتيجَة مُطابِقَة لِلشَرط القَديم حَرفاً — والفَرق أَنّ
-        // مَوضِع الحَقيقَة صارَ واحِداً لِلأَدوار والمَظهَر مَعاً.
-        if (!ACommerce.Platform.Flows.ApprovalFlow.IsDecision(status))
-            return (false, $"قَرار غَير مَعروف: «{status}».");
-
-        await using var s = _store.LightweightSession(tenantSlug);
-        var doc = await s.LoadAsync<TenantRoleDefinition>(roleSlug, ct);
-        if (doc is null)
-            return (false, $"لا تَعريف بِاسم «{roleSlug}» في «{tenantSlug}».");
-
-        // الاعتِماد يُعيد المُصادَقَة عَلى النَّصّ المُخَزَّن — لا يَثِق
-        // بِأَنَّها جَرَت عِندَ الكِتابَة. الوَثيقَة قَد تَكون كُتِبَت
-        // بِيَد أَو نَجَت مِن تَرحيل، والاعتِماد هو آخِر بَوّابَة
-        // قَبل أَن يَراها لاعِب.
-        if (status == TenantRoleStatuses.Approved)
-        {
-            RoleDefinition parsed;
-            try { parsed = RoleDefinitionLoader.ParseDefinition(doc.DefinitionJson); }
-            catch (Exception ex) { return (false, "تَعَذَّرَت قِراءَة التَعريف: " + ex.Message); }
-
-            var violations = RoleDefinitionValidator.ValidateTenantDefinition(parsed);
-            if (violations.Count > 0)
-                return (false, "لا يَجتاز المُصادَقَة: " +
-                               string.Join(" | ", violations.Select(v => v.Code)));
-
-            if (!string.Equals(parsed.Slug, doc.Slug, StringComparison.Ordinal))
-                return (false, $"الوَثيقَة «{doc.Slug}» تُعلِن slug مُختَلِفاً: «{parsed.Slug}».");
-        }
-
-        doc.Status    = status;
-        doc.DecidedBy = by;
-        doc.DecidedAt = DateTime.UtcNow;
-        s.Store(doc);
-        await s.SaveChangesAsync(ct);
-        Invalidate(tenantSlug);
-
-        return (true, status == TenantRoleStatuses.Approved
-            ? $"اعتُمِدَ الدَور «{roleSlug}» — صارَ حَيّاً في «{tenantSlug}»."
-            : $"رُفِضَ الدَور «{roleSlug}».");
-    }
-
-    /// <summary>إبطال لَقطَة مُستَأجِر واحِد. مِفتاح واحِد لا مَسح
-    /// شامِل — مَتجَر يُعَدِّل أَدوارَه لا يُكَلِّف بَقِيَّة المَتاجِر
-    /// قِراءَةً.</summary>
-    public void Invalidate(string tenantSlug) => _cache.TryRemove(tenantSlug, out _);
 }
