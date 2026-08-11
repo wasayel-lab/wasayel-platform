@@ -7,4 +7,10 @@
     <EmbeddedResource Include="Definitions\**\*.json" />
   </ItemGroup>
 
+  <!-- نَفس تَعريف حالات الاعتِماد الَّذي تُحيل إلَيه عُدَّة الأَدوار
+       — مَوضِع واحِد لا نُسخَتان. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\core\ACommerce.Platform.Flows\ACommerce.Platform.Flows.csproj" />
+  </ItemGroup>
+
 </Project>

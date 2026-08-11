@@ -1,5 +1,7 @@
 namespace ACommerce.Kit.Theme;
 
+using ACommerce.Platform.Flows;
+
 /// <summary>
 /// <para><b>حالات وَثيقَة ثيم المُستَأجِر</b> — نَفس الدَورَة القَصيرَة
 /// المُغلَقَة الَّتي لِتَعريفات الأَدوار: <c>pending</c> عِندَ الكِتابَة،
@@ -11,16 +13,22 @@ namespace ACommerce.Kit.Theme;
 /// السالِب الحَيّ (ثيم بِلَون فاسِد) قابِلاً لِلبُرهان: يُرفَض عِندَ
 /// الكِتابَة، وحَتَّى لَو كُتِبَ فَلا قارِئ لَه.</para>
 /// </summary>
+/// <remarks>
+/// <para><b>مُحال إلى نَفس التَعريف الواحِد</b>
+/// (<see cref="ACommerce.Platform.Flows.ApprovalFlow"/>) الَّذي
+/// يُحيل إلَيه <c>TenantRoleStatuses</c>. تَطابُق المَعجَمَين لَم
+/// يَعُد مُصادَفَةً تُحرَس بِاليَقَظَة، بَل <b>مَوضِعاً واحِداً</b>
+/// لا يُمكِن أَن يَنحَرِف نِصفُه عَن نِصفِه.</para>
+/// </remarks>
 public static class TenantThemeStatuses
 {
-    public const string Pending  = "pending";
-    public const string Approved = "approved";
-    public const string Rejected = "rejected";
+    public const string Pending  = ApprovalFlow.Pending;
+    public const string Approved = ApprovalFlow.Approved;
+    public const string Rejected = ApprovalFlow.Rejected;
 
-    public static readonly IReadOnlyList<string> All = new[] { Pending, Approved, Rejected };
+    public static IReadOnlyList<string> All => ApprovalFlow.All;
 
-    private static readonly HashSet<string> Set = new(All, StringComparer.Ordinal);
-    public static bool Contains(string status) => Set.Contains(status);
+    public static bool Contains(string status) => ApprovalFlow.Contains(status);
 }
 
 /// <summary>

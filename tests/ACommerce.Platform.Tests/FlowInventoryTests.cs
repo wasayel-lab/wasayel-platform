@@ -204,6 +204,55 @@ public class FlowInventoryTests
         Assert.Equal(new[] { "active" }, FlowDefinitionLoader.Load("subscription").ReachableStates());
     }
 
+    // ─── بُرهان التَوحيد: تَعريف واحِد يُوَلِّد الاثنَين ────────────────
+
+    /// <summary>
+    /// <para><b>المِلَفّانِ ليسا نُسخَتَين مُتَشابِهَتَين — هُما مَخرَجا
+    /// دالَّة واحِدَة</b>. <c>ApprovalFlow.Definition</c> تُوَلِّد
+    /// الشَكل، والمِلَفّانِ يُطابِقانِه حالَةً حالَةً وانتِقالاً
+    /// انتِقالاً. فَتَعديل أَحَدِهِما بِاليَد يَحمَرّ هُنا.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("tenant_role",  "تَعريف دَور مُستَأجِر", "Tenant role definition")]
+    [InlineData("tenant_theme", "تَعريف مَظهَر مُستَأجِر", "Tenant theme definition")]
+    public void Approval_flow_files_are_generated_by_the_one_shared_definition(
+        string flow, string ar, string en)
+    {
+        var expected = ApprovalFlow.Definition(flow, new FlowLabel(ar, en));
+        var actual   = FlowDefinitionLoader.Load(flow);
+
+        Assert.Equal(expected.Flow,        actual.Flow);
+        Assert.Equal(expected.Label,       actual.Label);
+        Assert.Equal(expected.Initial,     actual.Initial);
+        Assert.Equal(expected.States,      actual.States);
+        Assert.Equal(expected.Transitions, actual.Transitions);
+    }
+
+    /// <summary>وما عَدا الاسم والتَسمِيَة، التَدَفُّقانِ <b>واحِد</b>:
+    /// نَفس الحالات ونَفس الانتِقالات ونَفس البِدايَة.</summary>
+    [Fact]
+    public void Role_and_theme_flows_differ_only_in_name_and_label()
+    {
+        var role  = FlowDefinitionLoader.Load("tenant_role");
+        var theme = FlowDefinitionLoader.Load("tenant_theme");
+
+        Assert.Equal(role.States,      theme.States);
+        Assert.Equal(role.Transitions, theme.Transitions);
+        Assert.Equal(role.Initial,     theme.Initial);
+        Assert.NotEqual(role.Flow,     theme.Flow);
+    }
+
+    /// <summary>والمَعجَم المُشتَرَك هو بِعَينِه ما يُعلِنُه
+    /// الصَنفانِ في العُدَّتَين — بَعدَ الإحالَة، مَوضِعٌ واحِد.</summary>
+    [Fact]
+    public void Both_kits_expose_the_shared_vocabulary()
+    {
+        Assert.Equal(ApprovalFlow.All, ACommerce.Kit.Roles.TenantRoleStatuses.All);
+        Assert.Equal(ApprovalFlow.All, ACommerce.Kit.Theme.TenantThemeStatuses.All);
+        Assert.Same(ApprovalFlow.All,  ACommerce.Kit.Roles.TenantRoleStatuses.All);
+        Assert.Same(ApprovalFlow.All,  ACommerce.Kit.Theme.TenantThemeStatuses.All);
+    }
+
     /// <summary>الحَصر: ثَلاثَة تَدَفُّقات تَحمِل خُروقاً، وخَمس
     /// حالات مَيِّتَة مَجموعاً. هذا الرَقَم هو ما يَنقُص حينَ يُصلَح
     /// الكود.</summary>

@@ -8,4 +8,11 @@
     <EmbeddedResource Include="Definitions\**\*.json" />
   </ItemGroup>
 
+  <!-- مَعجَم حالات الاعتِماد مُحال إلى تَعريف واحِد مُشتَرَك مَع
+       عُدَّة المَظهَر. والمَكتَبَة وَرَقَة بِلا مَرجِع، فَلا يَتَسَرَّب
+       شَيء إلى هذه العُدَّة عَبرَها. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\core\ACommerce.Platform.Flows\ACommerce.Platform.Flows.csproj" />
+  </ItemGroup>
+
 </Project>

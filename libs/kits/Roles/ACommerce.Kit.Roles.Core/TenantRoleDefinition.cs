@@ -2,6 +2,7 @@ namespace ACommerce.Kit.Roles;
 
 using System.Collections.Generic;
 using System.Linq;
+using ACommerce.Platform.Flows;
 
 /// <summary>
 /// <para><b>حالات وَثيقَة تَعريف دَور المُستَأجِر</b> — دَورَة قَصيرَة
@@ -16,16 +17,24 @@ using System.Linq;
 /// (تَعريف بِصَلاحِيَّة خارِج المَعجَم) قابِلاً لِلبُرهان: يُرفَض عِندَ
 /// الكِتابَة، وحَتَّى لَو كُتِبَ فَلا قارِئ لَه.</para>
 /// </summary>
+/// <remarks>
+/// <para><b>مُحال إلى تَعريف واحِد</b>
+/// (<see cref="ACommerce.Platform.Flows.ApprovalFlow"/>). كانَ هذا
+/// المَعجَم مَكتوباً هُنا وفي <c>TenantThemeStatuses</c> مُتَطابِقَين
+/// بايتاً ببايت؛ صارَ مَوضِعُه واحِداً وهذا السَطح <b>اسم</b> لَه.
+/// القيَم والتَرتيب وحَساسِيَّة الحالَة لَم تَتَغَيَّر بِحَرف —
+/// مُبرهَن في <c>ApprovalFlowCharacterizationTests</c> الَّذي كُتِبَ
+/// واخضَرَّ قَبل التَبديل ولَم يُمَسّ بَعدَه.</para>
+/// </remarks>
 public static class TenantRoleStatuses
 {
-    public const string Pending  = "pending";
-    public const string Approved = "approved";
-    public const string Rejected = "rejected";
+    public const string Pending  = ApprovalFlow.Pending;
+    public const string Approved = ApprovalFlow.Approved;
+    public const string Rejected = ApprovalFlow.Rejected;
 
-    public static readonly IReadOnlyList<string> All = new[] { Pending, Approved, Rejected };
+    public static IReadOnlyList<string> All => ApprovalFlow.All;
 
-    private static readonly HashSet<string> Set = new(All, StringComparer.Ordinal);
-    public static bool Contains(string status) => Set.Contains(status);
+    public static bool Contains(string status) => ApprovalFlow.Contains(status);
 }
 
 /// <summary>
