@@ -253,6 +253,45 @@ public class FlowInventoryTests
         Assert.Same(ApprovalFlow.All,  ACommerce.Kit.Theme.TenantThemeStatuses.All);
     }
 
+    /// <summary>
+    /// <para><b>الحارِس الحَيّ يَسأَل التَعريف</b> — و<c>IsDecision</c>
+    /// مُطابِق حَرفِيّاً لِلشَرط الَّذي حَلَّ مَحَلَّه
+    /// (<c>status == approved || status == rejected</c>) عَلى كُلّ
+    /// مُدخَل يُتَصَوَّر: الحالات الثَلاث، والحالَة الابتِدائيَّة
+    /// نَفسُها، ومُفرَدات مَعجَم الوَكيل، واختِلاف حالَة الحَرف،
+    /// والفارِغ.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("approved", true)]
+    [InlineData("rejected", true)]
+    [InlineData("pending",  false)]   // ليسَ قَراراً — لا انتِقال pending→pending
+    [InlineData("applied",  false)]   // مِن مَعجَم الوَكيل
+    [InlineData("error",    false)]
+    [InlineData("Approved", false)]   // حَسّاس لِلحالَة
+    [InlineData("",         false)]
+    [InlineData("draft",    false)]
+    public void IsDecision_matches_the_hand_written_condition_it_replaced(
+        string status, bool expected)
+    {
+        var handWritten = status == ApprovalFlow.Approved || status == ApprovalFlow.Rejected;
+
+        Assert.Equal(expected, handWritten);                  // الشَرط القَديم
+        Assert.Equal(expected, ApprovalFlow.IsDecision(status)); // والجَديد
+    }
+
+    /// <summary>وأَنّ الجَواب يَخرُج مِن التَعريف فِعلاً: لَو سُئِلَ
+    /// التَدَفُّق المُحَمَّل مِن المِلَفّ لَأَجابَ بِنَفس الجَواب.</summary>
+    [Fact]
+    public void The_guard_answer_comes_from_the_flow_definition()
+    {
+        var fromFile = FlowDefinitionLoader.Load("tenant_role");
+
+        foreach (var probe in new[] { "approved", "rejected", "pending", "applied", "" })
+            Assert.Equal(
+                fromFile.Allows(ApprovalFlow.Pending, probe, ApprovalFlow.DecisionActor),
+                ApprovalFlow.IsDecision(probe));
+    }
+
     /// <summary>الحَصر: ثَلاثَة تَدَفُّقات تَحمِل خُروقاً، وخَمس
     /// حالات مَيِّتَة مَجموعاً. هذا الرَقَم هو ما يَنقُص حينَ يُصلَح
     /// الكود.</summary>

@@ -41,6 +41,39 @@ public static class ApprovalFlow
     /// كانَت في الصَنفَين.</summary>
     public static bool Contains(string status) => Set.Contains(status);
 
+    /// <summary>الفاعِل المُخَوَّل بِالقَرار — بَشَر مُخَوَّل ليسَ
+    /// طَرَفاً في المُعامَلَة.</summary>
+    public const string DecisionActor = "moderator";
+
+    /// <summary><b>الشَكل المُشتَرَك مَبنيّاً مَرَّةً</b> — هذا هو
+    /// الكائِن الَّذي تَسأَلُه مَسارات الكِتابَة فِعلاً.</summary>
+    private static readonly FlowDefinition Shape =
+        Definition("approval", new FlowLabel("اعتِماد", "Approval"));
+
+    /// <summary>
+    /// <para><b>هَل هذه نَتيجَة قَرار مَشروعَة؟</b> — يُجيب
+    /// <b>بِسُؤال التَعريف</b> لا بِشَرط مَكتوب بِاليَد: هَل يوجَد
+    /// انتِقال مِن <c>pending</c> إلى هذه الحالَة يَملِكُه
+    /// <see cref="DecisionActor"/>؟</para>
+    ///
+    /// <para><b>وهذا هو المَوضِع الَّذي تَصير فيه اللُغَة مُستَهلَكَةً
+    /// حَيَّةً لا تَجريداً مُنتَظِراً</b>. كانَ الحارِس في
+    /// <c>TenantRoleService.DecideAsync</c> و
+    /// <c>TenantThemeService.DecideAsync</c> شَرطاً مَكتوباً
+    /// <b>مَرَّتَين</b> (<c>status != Approved &amp;&amp; status !=
+    /// Rejected</c>)؛ صارَ سُؤالاً واحِداً لِتَعريف واحِد. والنَتيجَة
+    /// <b>مُطابِقَة حَرفِيّاً</b>: الانتِقالانِ الوَحيدانِ الخارِجانِ
+    /// مِن <c>pending</c> هُما إلى <c>approved</c> و<c>rejected</c> —
+    /// فَما كانَ يُقبَل يُقبَل، وما كانَ يُرَدّ يُرَدّ.</para>
+    ///
+    /// <para><b>وفائِدَتُه أَنَّه يَنكَسِر مَعاً</b>: لَو أُضيفَت
+    /// حالَة رابِعَة إلى التَعريف، عَرَفَها المَساران مِن يَومِها بِلا
+    /// أَن يُفتَح مِلَفّ خِدمَة واحِد — وهو بِعَينِه ما لَم يَكُن
+    /// مُمكِناً حينَ كانَ الشَرط مَنسوخاً.</para>
+    /// </summary>
+    public static bool IsDecision(string status)
+        => Shape.Allows(Pending, status, DecisionActor);
+
     /// <summary>
     /// <para>يَبني تَعريف تَدَفُّق اعتِماد بِاسمِه وتَسمِيَتِه —
     /// <b>نَفس الشَكل</b> لِكُلّ مَن يَستَخدِمُه. هذا هو ما يَجعَل

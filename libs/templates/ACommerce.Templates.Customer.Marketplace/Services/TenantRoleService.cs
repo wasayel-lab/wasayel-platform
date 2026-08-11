@@ -176,7 +176,11 @@ public sealed class TenantRoleService
         string tenantSlug, string roleSlug, string status,
         string by, CancellationToken ct = default)
     {
-        if (status != TenantRoleStatuses.Approved && status != TenantRoleStatuses.Rejected)
+        // الحارِس يَسأَل تَعريف التَدَفُّق، لا شَرطاً مَكتوباً بِاليَد:
+        // هَل مِن pending انتِقال إلى هذه الحالَة يَملِكُه مُقَرِّر؟
+        // النَتيجَة مُطابِقَة لِلشَرط القَديم حَرفاً — والفَرق أَنّ
+        // مَوضِع الحَقيقَة صارَ واحِداً لِلأَدوار والمَظهَر مَعاً.
+        if (!ACommerce.Platform.Flows.ApprovalFlow.IsDecision(status))
             return (false, $"قَرار غَير مَعروف: «{status}».");
 
         await using var s = _store.LightweightSession(tenantSlug);

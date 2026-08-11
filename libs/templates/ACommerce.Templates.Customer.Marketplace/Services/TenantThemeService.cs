@@ -155,7 +155,10 @@ public sealed class TenantThemeService
         string tenantSlug, string themeSlug, string status,
         string by, CancellationToken ct = default)
     {
-        if (status != TenantThemeStatuses.Approved && status != TenantThemeStatuses.Rejected)
+        // نَفس الحارِس بِعَينِه — ومِن نَفس التَعريف. كانَ الشَرط
+        // مَنسوخاً بَينَ هذه الخِدمَة وخِدمَة الأَدوار؛ صارَ سُؤالاً
+        // واحِداً لِمَوضِع واحِد.
+        if (!ACommerce.Platform.Flows.ApprovalFlow.IsDecision(status))
             return (false, $"قَرار غَير مَعروف: «{status}».");
 
         await using var s = _store.LightweightSession(tenantSlug);
