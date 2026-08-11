@@ -13,21 +13,21 @@
       "to": "pending",
       "actor": "system",
       "label": { "ar": "اقتِراح تَعريف", "en": "Propose" },
-      "effect": "invalidate_tenant_cache"
+      "effects": ["invalidate_tenant_cache"]
     },
     {
       "from": "pending",
       "to": "approved",
       "actor": "moderator",
       "label": { "ar": "اِعتَمِد", "en": "Approve" },
-      "effect": "revalidate_definition"
+      "effects": ["revalidate_definition"]
     },
     {
       "from": "pending",
       "to": "rejected",
       "actor": "moderator",
       "label": { "ar": "اِرفُض", "en": "Reject" },
-      "effect": "invalidate_tenant_cache"
+      "effects": ["invalidate_tenant_cache"]
     }
   ]
 }

@@ -57,14 +57,52 @@ public sealed record FlowState(
 /// <see cref="FlowVocabulary.Actors"/> حَصراً.</param>
 /// <param name="Label">تَسمِيَة الإجراء («اِعتَمِد»، «اِرفُض») لا
 /// تَسمِيَة الحالَة.</param>
-/// <param name="Effect">مِفتاح الأَثَر، أَو <c>null</c> لِانتِقال
-/// يُغَيِّر الحالَة ولا يَفعَل شَيئاً آخَر.</param>
+/// <param name="Effects">مَفاتيح الآثار <b>بِتَرتيب وُقوعِها</b>،
+/// أَو فارِغَة لِانتِقال يُغَيِّر الحالَة ولا يَفعَل شَيئاً آخَر.</param>
 public sealed record FlowTransition(
     string From,
     string To,
     string Actor,
     FlowLabel Label,
-    string? Effect = null);
+    IReadOnlyList<string>? Effects = null)
+{
+    /// <summary>
+    /// <para>الآثار مُطَبَّعَة — فارِغَة لا <c>null</c>.</para>
+    ///
+    /// <para><b>ولِماذا قائِمَة لا مِفتاحاً واحِداً</b>: القِياس فَرَضَها.
+    /// كانَ الحَقل <c>string?</c> حَتَّى أُريدَ وَصف تَقَدُّم الصَفقَة
+    /// إلى <c>Paid</c>، فَظَهَرَ أَنَّه <b>يَكتُب سَطر الـ Timeline
+    /// ويَسحَب الدَّفع مَعاً</b> (<c>DealsService.cs:116</c> ثُمَّ
+    /// <c>:134</c>)، وأَنّ الإلغاء <b>يُرجِع المَبلَغ ويَكتُب السَطر</b>.
+    /// مِفتاح واحِد كانَ سَيَصِف نِصف ما يَقَع — وتَعريف يَصِف النِصف
+    /// أَسوَأ مِن تَعريف لا يوجَد، لِأَنَّه يُقرَأ ويُصَدَّق.</para>
+    /// </summary>
+    public IReadOnlyList<string> EffectKeys { get; } = Effects ?? Array.Empty<string>();
+
+    /// <summary><b>مُساواة بُنيَوِيَّة</b> — المُوَلَّدَة تُقارِن
+    /// <see cref="Effects"/> بِالمَرجِع (قائِمَة)، فَتَعريفانِ
+    /// مُتَطابِقان مَبنيّانِ مُنفَصِلَين كانا سَيَختَلِفان. والمُقارَنَة
+    /// هي بِالضَبط ما يُبَرهِن أَنّ الأَدوار والمَظهَر تَعريف
+    /// واحِد.</summary>
+    public bool Equals(FlowTransition? other)
+        => other is not null
+        && string.Equals(From,  other.From,  StringComparison.Ordinal)
+        && string.Equals(To,    other.To,    StringComparison.Ordinal)
+        && string.Equals(Actor, other.Actor, StringComparison.Ordinal)
+        && Label == other.Label
+        && EffectKeys.SequenceEqual(other.EffectKeys, StringComparer.Ordinal);
+
+    public override int GetHashCode()
+    {
+        var h = new HashCode();
+        h.Add(From, StringComparer.Ordinal);
+        h.Add(To, StringComparer.Ordinal);
+        h.Add(Actor, StringComparer.Ordinal);
+        h.Add(Label);
+        foreach (var e in EffectKeys) h.Add(e, StringComparer.Ordinal);
+        return h.ToHashCode();
+    }
+}
 
 /// <summary>
 /// <para><b>المَعاجِم المُغلَقَة</b> — ما تَفهَمُه اللُغَة وما عَداه

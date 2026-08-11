@@ -32,7 +32,7 @@ public class FlowDefinitionValidatorTests
         Transitions: new[]
         {
             new FlowTransition(FlowVocabulary.Genesis, "pending",  "system",    L("اقتِراح")),
-            new FlowTransition("pending", "approved", "moderator", L("اِعتَمِد"), "revalidate_definition"),
+            new FlowTransition("pending", "approved", "moderator", L("اِعتَمِد"), new[] { "revalidate_definition" }),
             new FlowTransition("pending", "rejected", "moderator", L("اِرفُض")),
         },
         Initial: "pending");
@@ -188,9 +188,36 @@ public class FlowDefinitionValidatorTests
         ShouldRaise(
             s with { Transitions = new[] {
                 s.Transitions[0],
-                new FlowTransition("pending", "approved", "moderator", L("اِعتَمِد"), "send_rocket"),
+                new FlowTransition("pending", "approved", "moderator", L("اِعتَمِد"), new[] { "send_rocket" }),
                 s.Transitions[2] } },
             "effect_out_of_vocabulary");
+    }
+
+    /// <summary>الأَثَر قائِمَة لِأَنّ الواقِع كَذلِك: التَقَدُّم إلى
+    /// <c>Paid</c> يَكتُب سَطر الـ Timeline <b>ويَسحَب الدَّفع</b>.
+    /// وتَكرار مِفتاح في القائِمَة لَغو يُرفَض.</summary>
+    [Fact]
+    public void duplicate_effect()
+    {
+        ShouldNotRaise(Sound(), "duplicate_effect");
+        var s = Sound();
+
+        // المُوجَب: أَثَرانِ مُختَلِفان عَلى انتِقال واحِد — مَشروع.
+        ShouldNotRaise(
+            s with { Transitions = new[] {
+                s.Transitions[0],
+                new FlowTransition("pending", "approved", "moderator", L("اِعتَمِد"),
+                    new[] { "revalidate_definition", "invalidate_tenant_cache" }),
+                s.Transitions[2] } },
+            "duplicate_effect");
+
+        ShouldRaise(
+            s with { Transitions = new[] {
+                s.Transitions[0],
+                new FlowTransition("pending", "approved", "moderator", L("اِعتَمِد"),
+                    new[] { "write_audit", "write_audit" }),
+                s.Transitions[2] } },
+            "duplicate_effect");
     }
 
     [Fact]
@@ -263,7 +290,7 @@ public class FlowDefinitionValidatorTests
         ShouldNotRaise(
             s with { Transitions = s.Transitions.Concat(new[] {
                 new FlowTransition("pending", "pending", "moderator", L("أَعِد الفَحص"),
-                    "revalidate_definition") }).ToArray() },
+                    new[] { "revalidate_definition" }) }).ToArray() },
             "self_transition_without_effect");
     }
 

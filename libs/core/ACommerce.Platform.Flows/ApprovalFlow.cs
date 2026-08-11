@@ -60,11 +60,11 @@ public static class ApprovalFlow
         Transitions: new[]
         {
             new FlowTransition(FlowVocabulary.Genesis, Pending, "system",
-                new FlowLabel("اقتِراح تَعريف", "Propose"), "invalidate_tenant_cache"),
+                new FlowLabel("اقتِراح تَعريف", "Propose"), new[] { "invalidate_tenant_cache" }),
             new FlowTransition(Pending, Approved, "moderator",
-                new FlowLabel("اِعتَمِد", "Approve"), "revalidate_definition"),
+                new FlowLabel("اِعتَمِد", "Approve"), new[] { "revalidate_definition" }),
             new FlowTransition(Pending, Rejected, "moderator",
-                new FlowLabel("اِرفُض", "Reject"), "invalidate_tenant_cache"),
+                new FlowLabel("اِرفُض", "Reject"), new[] { "invalidate_tenant_cache" }),
         },
         Initial: Pending);
 }

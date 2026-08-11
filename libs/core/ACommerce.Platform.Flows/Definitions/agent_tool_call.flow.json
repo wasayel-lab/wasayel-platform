@@ -14,28 +14,28 @@
       "to": "pending",
       "actor": "system",
       "label": { "ar": "اقتِراح أَداة", "en": "Propose tool" },
-      "effect": null
+      "effects": []
     },
     {
       "from": "pending",
       "to": "applied",
       "actor": "system",
       "label": { "ar": "نُفِّذَ بِنَجاح", "en": "Applied" },
-      "effect": "write_audit"
+      "effects": ["write_audit"]
     },
     {
       "from": "pending",
       "to": "error",
       "actor": "system",
       "label": { "ar": "فَشِلَ التَنفيذ", "en": "Failed" },
-      "effect": null
+      "effects": []
     },
     {
       "from": "pending",
       "to": "rejected",
       "actor": "moderator",
       "label": { "ar": "رَفَضَ المُشرِف", "en": "Rejected by admin" },
-      "effect": null
+      "effects": []
     }
   ]
 }
