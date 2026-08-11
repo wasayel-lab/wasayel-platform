@@ -5,6 +5,7 @@
 @inject NavigationManager Nav
 @inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
+@inject L L
 
 @*
     دِسباتشَر إنشاء إعلان حَسَب الدَور النَّشِط:
@@ -51,6 +52,20 @@ else
         {
             <AcAlert Variant="danger"
                      Message="دَوركَ الحاليّ لا يَسمَح بِنَشر إعلان. إن كانَ هذا غَير مُتَوَقَّع، تَواصَل مَع إدارَة المَتجَر." />
+        }
+        @* نَفاد الحِصَّة: رِسالَة تَقول ما وَقَعَ وما يُفعَل، ومَعَها
+           مَخرَج. نُصوصُها مِن قامُوس المَفاتيح لا حَرفِيَّةً في
+           المارك-أَب (القاعِدَة ١١). *@
+        else if (Err == "quota")
+        {
+            <AcAlert Variant="warning" Message="@L["listings.create.err_quota"]" />
+            <p style="margin:-4px 0 12px;">
+                <a href="@AuthSession.LinkFor(Slug, Role, "plans")">@L["listings.create.err_quota_action"]</a>
+            </p>
+        }
+        else if (Err == "busy")
+        {
+            <AcAlert Variant="warning" Message="@L["listings.create.err_busy"]" />
         }
 
         @* تَخَطّي خَطوَة اختِيار الفِئَة عِندَ وُجود فِئَة واحِدَة فَقَط

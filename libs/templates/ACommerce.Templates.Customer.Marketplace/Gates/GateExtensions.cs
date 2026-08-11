@@ -49,4 +49,24 @@ public static class GateExtensions
         b.AddEndpointFilter(new PermissionFilter(permission));
         return b;
     }
+
+    /// <summary>
+    /// <para><b>استِحقاق باقَة مَطلوب</b> — القُدرَة مِن
+    /// <c>CapabilityCatalog</c> حَصراً، ورَمزٌ خارِجَه يَرمي
+    /// <b>عِندَ التَركيب</b> فَيُفشِل الإقلاع. يَفتَرِض
+    /// <see cref="RequireAuth{TBuilder}"/> سَبَقَه.</para>
+    ///
+    /// <para><b>والفَرق عَن <see cref="RequirePermission{TBuilder}"/></b>:
+    /// الصَلاحِيَّة تَسأَل «هَل يَملِك دَورُكَ هذا؟» وجَوابُها ثابِت
+    /// لِلدَور؛ والاستِحقاق يَسأَل «هَل بَقِيَ في باقَتِكَ رَصيد؟»
+    /// وجَوابُه يَتَغَيَّر بِكُلّ عَمَلِيَّة. الأَوَّل يَرُدّ ‏403،
+    /// والثاني يَرُدّ رِسالَةً تَقول لِلمُستَخدِم ما يَفعَل.</para>
+    /// </summary>
+    public static TBuilder RequireEntitlement<TBuilder>(
+        this TBuilder b, string capability, string redirectPath, string errCode)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        b.AddEndpointFilter(new EntitlementFilter(capability, redirectPath, errCode));
+        return b;
+    }
 }

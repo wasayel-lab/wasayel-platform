@@ -49,6 +49,13 @@ public static class MarketplaceTemplateExtensions
         // والعَزل يَقَع في جَلسَة السلاج لا في عُمر الخِدمَة.
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService>();
 
+        // ─── الاستِحقاق ──────────────────────────────────────────────────
+        // Scoped لا Singleton: بِلا كاش — الرَصيد حالَة تَتَغَيَّر بِكُلّ
+        // عَمَلِيَّة، وكاشُها هو بِعَينِه ما يَجعَل الفَحص يَكذِب. والقِراءَة
+        // تُفتَح بِجَلسَة سلاج المُستَأجِر كَغَيرِها.
+        services.AddScoped<ACommerce.Kit.Subscriptions.IEntitlements,
+                           ACommerce.Kit.Subscriptions.SubscriptionEntitlements>();
+
         // ─── مُصادَقَة عُدَّة المَظهَر عِندَ الإقلاع ──────────────────────
         // مَسّ صَريح لِلكاتالوجَين هُنا — لا انتِظاراً لِأَوَّل طَلَب.
         // الثيم الافتِراضيّ يُصادَق مُكتَمِلاً، والحُزَم الثَلاث تُقرَأ
@@ -625,7 +632,8 @@ public static class MarketplaceTemplateExtensions
             async (string slug, HttpContext http, HttpRequest req, IDocumentStore store,
                    Microsoft.AspNetCore.SignalR.IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> hub,
                    ACommerce.Templates.Customer.Marketplace.Services.WebPushService push,
-                   ACommerce.Kit.Files.IFileStorage files) =>
+                   ACommerce.Kit.Files.IFileStorage files,
+                   ACommerce.Kit.Subscriptions.IEntitlements ents) =>
         {
             var userId = http.UserId();
 
@@ -686,57 +694,103 @@ public static class MarketplaceTemplateExtensions
                 }
                 catch { /* صَورَة فاشِلَة لا تَكسِر الإعلان */ }
             }
-            await using var s = store.LightweightSession(slug);
-            var ev = new ListingCreated(
-                id, slug, title,
-                string.IsNullOrEmpty(description) ? null : description,
-                price, category,
-                string.IsNullOrEmpty(city) ? null : city,
-                string.IsNullOrEmpty(district) ? null : district,
-                dynAttrs,
-                DateTime.UtcNow);
-            if (photoUrls.Count > 0)
-            {
-                // Stream يَبدَأ بِـ Created + Media مَعاً، فَيُسَجَّل
-                // الإعلان كامِلاً بِصُوَرِه في كِتابَة واحِدَة.
-                s.Events.StartStream<Listing>(id, ev,
-                    new ListingMediaSet(id, photoUrls, DateTime.UtcNow));
-            }
-            else
-            {
-                s.Events.StartStream<Listing>(id, ev);
-            }
-
-            // مُطابَقَة البَحوث المَحفوظَة — لِكُلّ SavedSearch مَفعَّل
-            // يَنطَبِق عَلى هذا الإعلان، أَنشِئ Notification لِصاحِبه.
-            // المُطابَقَة في الذاكِرَة (مِئات الـ searches لِلتَّينَنت كَحَدّ
-            // أَعلى مَعقول).
-            var newListing = new Listing
-            {
-                Id = id, TenantSlug = slug, Title = title, Description = description,
-                Price = price, CategorySlug = category, City = city, District = district,
-                Attributes = new(dynAttrs), MediaUrls = new(photoUrls), CreatedAt = ev.At
-            };
-            var savedSearches = await s.Query<ACommerce.Kit.SavedSearches.SavedSearch>()
-                .Where(ss => ss.IsEnabled).ToListAsync();
+            // ─── الكِتابَة: الإعلان والحِصَّة في جَلسَة واحِدَة ──────────
+            //
+            // الاستِهلاك يَقَع <b>داخِل</b> هذه الجَلسَة وبِـ
+            // SaveChangesAsync واحِدَة تَكتُب تَيار الإعلان وإشعارات
+            // البَحث المَحفوظ وحَدَث QuotaConsumed مَعاً. فَإمّا يُنشَر
+            // الإعلان وتُستَهلَك الحِصَّة، أَو لا يَقَع أَيُّهُما — بِلا
+            // نِداء ثانٍ يُمكِن أَن يَفشَل بَعدَ نَجاح الأَوَّل.
+            //
+            // ومُحاوَلَة واحِدَة لا حَلقَة: مُستَخدِمانِ يَستَهلِكانِ آخِر
+            // وَحدَة يَجعَل أَحَدَهُما يَفشَل عِندَ الحِفظ بِتَضارُب نُسخَة
+            // (الإلحاق بِنُسخَة مُتَوَقَّعَة). الخاسِر يُعيد القِراءَة
+            // مَرَّةً واحِدَة، فَإن نَفِدَ الرَصيد فَالجَواب <b>مَنع
+            // صَريح بِرِسالَتِه</b> لا فَشَل غامِض ولا خَمسُمِئَة.
             var nudged = new HashSet<Guid>();
-            foreach (var ss in savedSearches)
+            var quotaExhausted = false;
+
+            async Task<bool> AttemptAsync()
             {
-                if (!ss.Matches(newListing)) continue;
-                s.Store(new ACommerce.Kit.Notifications.Notification
+                await using var s = store.LightweightSession(slug);
+
+                var gate = await ents.ConsumeAsync(
+                    s, slug, userId,
+                    ACommerce.Kit.Subscriptions.CapabilityCatalog.ListingCreate,
+                    ct: http.RequestAborted);
+                if (!gate.Allowed) { quotaExhausted = true; return true; }
+
+                var ev = new ListingCreated(
+                    id, slug, title,
+                    string.IsNullOrEmpty(description) ? null : description,
+                    price, category,
+                    string.IsNullOrEmpty(city) ? null : city,
+                    string.IsNullOrEmpty(district) ? null : district,
+                    dynAttrs,
+                    DateTime.UtcNow);
+                if (photoUrls.Count > 0)
                 {
-                    Id = Guid.NewGuid(),
-                    UserId = ss.UserId,
-                    Type = "saved_search_match",
-                    Title = $"إعلان جَديد يُطابِق «{ss.Label}»",
-                    Body = title,
-                    RelatedUrl = $"/{slug}/listings/{id}",
-                    At = DateTime.UtcNow
-                });
-                nudged.Add(ss.UserId);
+                    // Stream يَبدَأ بِـ Created + Media مَعاً، فَيُسَجَّل
+                    // الإعلان كامِلاً بِصُوَرِه في كِتابَة واحِدَة.
+                    s.Events.StartStream<Listing>(id, ev,
+                        new ListingMediaSet(id, photoUrls, DateTime.UtcNow));
+                }
+                else
+                {
+                    s.Events.StartStream<Listing>(id, ev);
+                }
+
+                // مُطابَقَة البَحوث المَحفوظَة — لِكُلّ SavedSearch مَفعَّل
+                // يَنطَبِق عَلى هذا الإعلان، أَنشِئ Notification لِصاحِبه.
+                // المُطابَقَة في الذاكِرَة (مِئات الـ searches لِلتَّينَنت كَحَدّ
+                // أَعلى مَعقول).
+                var newListing = new Listing
+                {
+                    Id = id, TenantSlug = slug, Title = title, Description = description,
+                    Price = price, CategorySlug = category, City = city, District = district,
+                    Attributes = new(dynAttrs), MediaUrls = new(photoUrls), CreatedAt = ev.At
+                };
+                var savedSearches = await s.Query<ACommerce.Kit.SavedSearches.SavedSearch>()
+                    .Where(ss => ss.IsEnabled).ToListAsync();
+                nudged.Clear();
+                foreach (var ss in savedSearches)
+                {
+                    if (!ss.Matches(newListing)) continue;
+                    s.Store(new ACommerce.Kit.Notifications.Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = ss.UserId,
+                        Type = "saved_search_match",
+                        Title = $"إعلان جَديد يُطابِق «{ss.Label}»",
+                        Body = title,
+                        RelatedUrl = $"/{slug}/listings/{id}",
+                        At = DateTime.UtcNow
+                    });
+                    nudged.Add(ss.UserId);
+                }
+
+                try
+                {
+                    await s.SaveChangesAsync();
+                    return true;
+                }
+                catch (Exception ex) when (IsStreamVersionConflict(ex))
+                {
+                    // خَسِرَ السِباق — ولَم يُكتَب إعلانُه. المُعامَلَة
+                    // ارتَدَّت كامِلَةً، فَلا إعلان يَتيم بِلا حِصَّة.
+                    return false;
+                }
             }
 
-            await s.SaveChangesAsync();
+            if (!await AttemptAsync() && !await AttemptAsync())
+            {
+                // تَضارَبَ مَرَّتَين — يُرفَع بِرِسالَتِه ولا يُبتَلَع.
+                return Results.Redirect(Link(req, slug, $"create-listing?err=busy"));
+            }
+
+            if (quotaExhausted)
+                return Results.Redirect(Link(req, slug, $"create-listing?err=quota"));
+
             foreach (var uid in nudged)
             {
                 await NudgeAsync(hub, slug, uid);
@@ -751,7 +805,14 @@ public static class MarketplaceTemplateExtensions
                 title,
                 $"/{slug}/listings/{id}", hub);
             return Results.Redirect(Link(req, slug, $"listings/{id}"));
-        }).DisableAntiforgery().RequireAuth().RequireTerms().RequirePermission("listing.create");
+        }).DisableAntiforgery().RequireAuth().RequireTerms()
+          .RequirePermission("listing.create")
+          // الحارِس مُعلَن في التَوقيع لا في الجِسم (القاعِدَة ٦): يَرُدّ
+          // قَبل رَفع الصُوَر، والحَسم الذَرِّيّ في ConsumeAsync داخِل
+          // الجَلسَة. الفَحص الآليّ يَربِط الطَرَفَين فَلا يَفتَرِقان.
+          .RequireEntitlement(
+              ACommerce.Kit.Subscriptions.CapabilityCatalog.ListingCreate,
+              redirectPath: "create-listing", errCode: "quota");
 
         // ─── Saved Searches — create/delete/toggle ──────────────────────
         app.MapPost("/{slug}/searches/save",
@@ -3502,6 +3563,42 @@ public static class MarketplaceTemplateExtensions
 
     private static string Link(HttpRequest req, string slug, string path)
         => AuthSession.LinkFor(slug, RoleFromReferer(req), path);
+
+    /// <summary>
+    /// <para><b>هَل هذا الفَشَل تَضارُبُ نُسخَة تَيار؟</b> — أَي: خَسِرَ
+    /// هذا الطَلَبُ سِباقاً عَلى آخِر وَحدَة حِصَّة، فَارتَدَّت
+    /// مُعامَلَتُه كامِلَةً ولَم يُكتَب إعلانُه.</para>
+    ///
+    /// <para><b>ولِماذا يُفحَص بِالاسم لا بِنَوعٍ واحِد</b>: Marten
+    /// يُعبِّر عَن التَضارُب بِأَكثَر مِن شَكل حَسَبَ مَوضِع كَشفِه —
+    /// فَحصُ النُسخَة المُتَوَقَّعَة عِندَ الإلحاق
+    /// (<c>EventStreamUnexpectedMaxEventIdException</c>)، أَو
+    /// <c>ConcurrencyException</c>، أَو خَرقُ فَرادَة
+    /// <c>(stream_id, version)</c> في Postgres (‏<c>23505</c>) حينَ
+    /// يَتَسابَق طَلَبانِ داخِلَ نافِذَةٍ أَضيَق مِن الفَحص. وقَد يَصِل
+    /// أَيُّها مُغَلَّفاً — فَالبَحث يَنزِل في سِلسِلَة
+    /// <see cref="Exception.InnerException"/>.</para>
+    ///
+    /// <para><b>وما لا يَبتَلِعُه</b>: أَيّ فَشَل آخَر يُرفَع كَما هو.
+    /// مُرَشِّحٌ يَبتَلِع ما لا يَفهَم هو بِعَينِه العَطَب الَّذي جَعَلَ
+    /// الرَصيدَ صِفراً دائِماً في المُستودَع القَديم.</para>
+    /// </summary>
+    private static bool IsStreamVersionConflict(Exception? ex)
+    {
+        for (var e = ex; e is not null; e = e.InnerException)
+        {
+            var name = e.GetType().Name;
+            if (name is "EventStreamUnexpectedMaxEventIdException"
+                     or "ConcurrencyException"
+                     or "StreamLockedException")
+                return true;
+
+            // خَرق فَرادَة (stream_id, version) — 23505 في Postgres.
+            if (e is Npgsql.PostgresException { SqlState: "23505" })
+                return true;
+        }
+        return false;
+    }
 
     // ─── PWA — manifest builder ──────────────────────────────────────
     private static async Task<IResult> BuildManifestAsync(

@@ -45,5 +45,9 @@
   "listings.price.per_month": "{0:N0} ر.س / شَهرِيّ",
   "listings.price.monthly": "شَهرِيّ",
   "listings.price.negotiable": "حَسَب الاتِّفاق",
-  "listings.price.starts_from": "يَبدَأ مِن {0:N0} ر.س"
+  "listings.price.starts_from": "يَبدَأ مِن {0:N0} ر.س",
+
+  "listings.create.err_quota": "نَفِدَت حِصَّة الإعلانات في باقَتِكَ الحاليَّة. جَدِّد باقَتَكَ أَو اختَر باقَةً أَوسَع لِتُواصِل النَشر.",
+  "listings.create.err_quota_action": "عَرض الباقات",
+  "listings.create.err_busy": "لَم تَكتَمِل العَمَلِيَّة — جَرِّب مَرَّةً أُخرى بَعدَ لَحظَة."
 }
