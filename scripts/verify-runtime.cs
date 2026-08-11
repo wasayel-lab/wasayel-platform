@@ -424,6 +424,14 @@ static class Scripts
         var r = n.getBoundingClientRect();
         return { top: r.top, left: r.left, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
     }
+    // اِسم العُنصُر نَفسِه — لا صَدى المُحَدِّد. المُحَدِّد المُرَكَّب
+    // يَطبَع سَطراً لا يَدُلّ على مَوضِع، والتَقرير الَّذي لا يُوَضِّع لا يُصلَح بِه.
+    function nm(e) {
+        if (!e) return '?';
+        return (e.className && typeof e.className === 'string' && e.className.trim())
+            ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.')
+            : '<' + e.tagName.toLowerCase() + '>';
+    }
 
     // ─── A. عُقود الأَنماط ─────────────────────────────────────────
     var contracts = C.style_contracts || {};
@@ -435,22 +443,22 @@ static class Scripts
             var mins = contract['min-values'] || {};
             if (mins.padding !== undefined) {
                 var m = Math.min(px(s.paddingTop) || 0, px(s.paddingRight) || 0, px(s.paddingBottom) || 0, px(s.paddingLeft) || 0);
-                if (m < mins.padding) add('A-style', sel + '[' + i + ']: padding ' + m + 'px < ' + mins.padding + 'px', sel);
+                if (m < mins.padding) add('A-style', nm(n) + ': padding ' + m + 'px < ' + mins.padding + 'px', sel);
             }
             if (mins['min-height'] !== undefined) {
                 var h = Math.max(px(s.minHeight) || 0, n.offsetHeight || 0);
-                if (h < mins['min-height']) add('A-style', sel + '[' + i + ']: height ' + h + 'px < ' + mins['min-height'] + 'px', sel);
+                if (h < mins['min-height']) add('A-style', nm(n) + ': height ' + h + 'px < ' + mins['min-height'] + 'px', sel);
             }
             if (mins['border-width'] !== undefined) {
                 var b = Math.max(px(s.borderTopWidth) || 0, px(s.borderRightWidth) || 0, px(s.borderBottomWidth) || 0, px(s.borderLeftWidth) || 0);
-                if (b < mins['border-width']) add('A-style', sel + '[' + i + ']: border ' + b + 'px < ' + mins['border-width'] + 'px', sel);
+                if (b < mins['border-width']) add('A-style', nm(n) + ': border ' + b + 'px < ' + mins['border-width'] + 'px', sel);
             }
             if (mins['font-weight'] !== undefined) {
                 var f = parseInt(s.fontWeight) || 400;
-                if (f < mins['font-weight']) add('A-style', sel + '[' + i + ']: font-weight ' + f + ' < ' + mins['font-weight'], sel);
+                if (f < mins['font-weight']) add('A-style', nm(n) + ': font-weight ' + f + ' < ' + mins['font-weight'], sel);
             }
             if ((contract.required || []).indexOf('background') >= 0 && /rgba?\([^)]*,\s*0\s*\)/.test(s.backgroundColor))
-                add('A-style', sel + '[' + i + ']: خَلفِيَّة شَفّافَة — العُنصُر غَير مَرئِيّ', sel);
+                add('A-style', nm(n) + ': خَلفِيَّة شَفّافَة — العُنصُر غَير مَرئِيّ', sel);
         }
     }
 
@@ -553,7 +561,7 @@ static class Scripts
                 if (!shown(els[i])) continue;
                 ck('F-computed');
                 var bw = getComputedStyle(els[i]).borderTopWidth;
-                if ((px(bw) || 0) < 0.5) { add('F-computed', rule.selector + '[' + i + ']: border-width=' + bw + ' — الحَقل غَير مَرئِيّ', rule.selector); count++; }
+                if ((px(bw) || 0) < 0.5) { add('F-computed', nm(els[i]) + ': border-width=' + bw + ' — الحَقل غَير مَرئِيّ', rule.selector); count++; }
             }
         } else if (rule.rule === 'min-touch-target') {
             var minH = rule.min_height_px == null ? 32 : rule.min_height_px;
@@ -561,7 +569,7 @@ static class Scripts
                 if (!shown(els[i])) continue;
                 ck('F-computed');
                 var h = els[i].getBoundingClientRect().height;
-                if (h < minH) { add('F-computed', rule.selector + '[' + i + ']: ارتِفاع ' + h.toFixed(1) + 'px < ' + minH + 'px — أَصغَر مِن هَدَف اللَمس', rule.selector); count++; }
+                if (h < minH) { add('F-computed', nm(els[i]) + ': ارتِفاع ' + h.toFixed(1) + 'px < ' + minH + 'px — أَصغَر مِن هَدَف اللَمس', rule.selector); count++; }
             }
         }
     });
@@ -641,7 +649,7 @@ static class Scripts
                                       px(s.paddingBottom) || 0, px(s.paddingLeft) || 0) > 0;
                 var constrained = s.maxWidth !== 'none' || n.style.width || n.style.maxWidth;
                 if (padded && constrained) {
-                    add('H-box', rule.selector + '[' + i + ']: box-sizing=' + s.boxSizing +
+                    add('H-box', nm(n) + ': box-sizing=' + s.boxSizing +
                         ' مَع max-width=' + s.maxWidth + ' وحَشو — الحَشو يَتَجاوَز القَيد', rule.selector);
                     count++;
                 }
@@ -649,7 +657,7 @@ static class Scripts
                 var min = rule.min_padding_px == null ? 4 : rule.min_padding_px;
                 var p = [px(s.paddingTop) || 0, px(s.paddingRight) || 0, px(s.paddingBottom) || 0, px(s.paddingLeft) || 0];
                 if (Math.min.apply(null, p) < min) {
-                    add('H-box', rule.selector + '[' + i + ']: حَشو ' + p.join('/') + ' — جِهَة دونَ ' + min + 'px', rule.selector); count++;
+                    add('H-box', nm(n) + ': حَشو ' + p.join('/') + ' — جِهَة دونَ ' + min + 'px', rule.selector); count++;
                 }
             }
         }
@@ -665,7 +673,7 @@ static class Scripts
             if (s.overflowX === 'auto' || s.overflowX === 'scroll') continue; // تَمرير مَقصود
             ck('I-overflow');
             if (n.scrollWidth > n.clientWidth + 1) {
-                add('I-overflow', rule.selector + '[' + i + ']: scrollWidth=' + n.scrollWidth + ' > clientWidth=' + n.clientWidth + ' — النَصّ مَقصوص أُفُقِيّاً', rule.selector);
+                add('I-overflow', nm(n) + ': scrollWidth=' + n.scrollWidth + ' > clientWidth=' + n.clientWidth + ' — النَصّ مَقصوص أُفُقِيّاً', rule.selector);
                 count++;
             }
         }
