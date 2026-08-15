@@ -1,5 +1,6 @@
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject L L
 
 @*
     صَفحَة السائِق الرَّئيسِيَّة — feed مَشاوير مَفتوحَة بِفَلتَرَة المَنطِقَة
@@ -9,26 +10,26 @@
 <div class="acm-role-home acm-role-home-driver">
     <header class="acm-role-home-head">
         <h2>@(Greeting)</h2>
-        <p>مَشاوير قَريبَة مَفتوحَة لِلتَّفاوُض. اِختَر، قَدِّم عَرضَك، انتَظِر القَبول.</p>
+        <p>@L.Markup("roles.driver.subtitle")</p>
     </header>
 
     <div class="acm-role-cta-row">
         <a class="acm-role-cta-pill" href="@AuthSession.LinkFor(Slug, Role, $"me/offers")">
             <strong>@pendingOffers</strong>
-            <span>عَرض قَيد المُراجَعَة</span>
+            <span>@L.Markup("roles.driver.pending_offers")</span>
         </a>
         <a class="acm-role-cta-pill" href="@AuthSession.LinkFor(Slug, Role, $"me/searches")">
             <strong>@savedSearches</strong>
-            <span>بَحث مَحفوظ</span>
+            <span>@L.Markup("roles.driver.saved_searches")</span>
         </a>
         <a class="acm-role-cta-pill" href="@AuthSession.LinkFor(Slug, Role, $"me/area")">
-            <strong>@(driverRadius > 0 ? $"{driverRadius} كم" : "—")</strong>
-            <span>مَنطِقَة عَمَلي</span>
+            <strong>@(driverRadius > 0 ? L.Format("common.unit.km_value", driverRadius) : "—")</strong>
+            <span>@L.Markup("roles.driver.my_area")</span>
         </a>
     </div>
 
-    <AcSectionHeader Title="مَشاوير مَفتوحَة"
-                     ActionLabel="كُلّ المَشاوير"
+    <AcSectionHeader Title="@(L["roles.driver.open_trips_title"])"
+                     ActionLabel="@(L["roles.driver.all_trips"])"
                      ActionHref="@AuthSession.LinkFor(Slug, Role, $"explore")" />
 
     @if (openRequests is null)
@@ -39,9 +40,9 @@
     {
         <div class="acm-role-empty">
             <AcIcon Name="car" Size="36" />
-            <p>لا مَشاوير مَفتوحَة حاليّاً. اِحفَظ بَحثاً وَ سَنُنَبِّهُكَ.</p>
+            <p>@L.Markup("roles.driver.empty")</p>
             <a class="ac-btn ac-btn-primary ac-btn-sm" href="@AuthSession.LinkFor(Slug, Role, $"me/searches")">
-                <AcIcon Name="bell" Size="14" /> حِفظ بَحث
+                <AcIcon Name="bell" Size="14" /> @L.Markup("roles.driver.save_search")@((MarkupString)"\n            ")
             </a>
         </div>
     }
@@ -60,13 +61,13 @@
                             @if (l.Price > 0)
                             {
                                 <span style="font-size:11px;color:var(--ac-text-muted);">
-                                    مَبدَئيّ: @l.Price.ToString("N0") ريال
+                                    @((MarkupString)"\n                                    ")@L.Markup("roles.driver.initial_price") @((MarkupString)Money.Format(l.Price, style: MoneyUnitStyle.Name))
                                 </span>
                             }
                             @if (dist.HasValue)
                             {
                                 <span style="font-size:11px;color:var(--ac-primary);">
-                                    <AcIcon Name="map-pin" Size="14" /> @dist.Value.ToString("0.#") كم
+                                    <AcIcon Name="map-pin" Size="14" /> @dist.Value.ToString("0.#") @L.Markup("common.unit.km")@((MarkupString)"\n                                ")
                                 </span>
                             }
                         </div>
@@ -90,8 +91,8 @@
     double anchorLat, anchorLng;
 
     string Greeting => string.IsNullOrEmpty(Auth.UserName)
-        ? "أَهلاً سائِق"
-        : $"أَهلاً {Auth.UserName}";
+        ? L["roles.greeting.driver_plain"]
+        : L.Format("roles.greeting.named", Auth.UserName);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -164,12 +165,15 @@
                ? d : null;
     }
 
-    static string FormatAge(System.DateTime at)
+    // ‏`static` سَقَطَت لِأَنّ النَصّ صارَ مِن القامُوس، والقامُوس
+    // مَحقون scoped. لا أَثَرَ سُلوكِيّاً: الدالَّة لا تُستَدعى إلّا مِن
+    // نُسخَة المُكَوِّن نَفسِها.
+    string FormatAge(System.DateTime at)
     {
         var span = System.DateTime.UtcNow - at;
-        if (span.TotalMinutes < 1)  return "الآن";
-        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}د";
-        if (span.TotalHours   < 24) return $"{(int)span.TotalHours}س";
-        return $"{(int)span.TotalDays}ي";
+        if (span.TotalMinutes < 1)  return L["roles.driver.age_now"];
+        if (span.TotalMinutes < 60) return L.Format("common.unit.minutes_short", (int)span.TotalMinutes);
+        if (span.TotalHours   < 24) return L.Format("common.unit.hours_short", (int)span.TotalHours);
+        return L.Format("common.unit.days_short", (int)span.TotalDays);
     }
 }

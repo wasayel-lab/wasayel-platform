@@ -1,4 +1,5 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
+@inject L L
 
 @*
     نَموذَج إنشاء طَلَب مِشوار — مَيدان pickup/dropoff ثابِت (الحَدّ
@@ -10,40 +11,44 @@
 
 <div class="acs-page">
     <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/{Slug}")">
-        <AcIcon Name="arrow-right" Size="16" /> الرُجوع
+        <AcIcon Name="arrow-right" Size="16" /> @L.Markup("rider.request.back")@((MarkupString)"\n    ")
     </a>
 
-    <h1 class="acm-wizard-title">اِنشُر طَلَب مِشوار</h1>
+    <h1 class="acm-wizard-title">@L.Markup("roles.rider.new_request")</h1>
     <p style="color:var(--ac-text-muted);font-size:14px;margin:0 0 16px;">
-        حَدِّد مَكان الانطِلاق وَ الوُصول، وَ سَيَصِلكَ سائِقون بِعُروض أَسعار.
+        @((MarkupString)"\n        ")@L.Markup("rider.request.subtitle")@((MarkupString)"\n    ")
     </p>
 
     @if (Err == "invalid")
     {
-        <AcAlert Variant="danger" Message="حُقول ناقِصَة — مَوقِع الانطِلاق وَ الوُصول مَطلوبان." />
+        <AcAlert Variant="danger" Message="@(L["rider.request.err_invalid"])" />
     }
     else if (Err == "forbidden")
     {
-        <AcAlert Variant="danger" Message="دَوركَ الحاليّ لا يَسمَح بِنَشر طَلَبات." />
+        <AcAlert Variant="danger" Message="@(L["rider.request.err_forbidden"])" />
     }
 
     @if (DefaultCategory is null)
     {
         <AcAlert Variant="warning"
-                 Message="لَم يُعَدّ المَتجَر بِفِئَة مُناسِبَة. اِتَّصِل بِإدارَة المَتجَر." />
+                 Message="@(L["rider.request.err_no_category"])" />
     }
     else
     {
         <form method="post" action="@($"/{Slug}/listings/create")">
             <input type="hidden" name="category"             value="@DefaultCategory.Slug" />
+            @* `value` تَبقى حَرفِيَّة — عُنصُر ساكِن بِالكامِل، وتَرحيلُه
+               يَقلِبُه ديناميكِيّاً فَتَتَبَدَّل بايتاتُه (‏مَراجِع رَقَمِيَّة،
+               و`<input …>` يَصير `<input … />`). نَفس مُؤَجَّل `alt` في
+               `Landing`، ومَقيسٌ هُناكَ بِبَوّابَةٍ احمَرَّت. *@
             <input type="hidden" name="title"                value="طَلَب مِشوار" />
             <input type="hidden" name="attr_accepts_offers"  value="true" />
 
             <AcCard>
                 <ChildContent>
-                    <AcLocationInput Name="attr_pickup"  Label="مَكان الانطِلاق"  Required="true" />
+                    <AcLocationInput Name="attr_pickup"  Label="@(L["rider.request.pickup"])"  Required="true" />
                     <div style="height:12px;"></div>
-                    <AcLocationInput Name="attr_dropoff" Label="وِجهَة الوُصول"   Required="true" />
+                    <AcLocationInput Name="attr_dropoff" Label="@(L["rider.request.dropoff"])"   Required="true" />
                 </ChildContent>
             </AcCard>
 
@@ -54,7 +59,7 @@
             {
                 <AcCard>
                     <ChildContent>
-                        <h3 style="margin-top:0;font-size:14px;">تَفاصيل إضافِيَّة</h3>
+                        <h3 style="margin-top:0;font-size:14px;">@L.Markup("rider.request.extra_details")</h3>
                         @foreach (var f in dynFields)
                         {
                             <AcField Label="@f.Label" Required="@f.IsRequired">
@@ -67,13 +72,14 @@
 
             <AcCard>
                 <ChildContent>
-                    <AcField Label="مُلاحَظات لِلسائِق (اختياريّ)">
+                    <AcField Label="@(L["rider.request.notes"])">
+                        @* و`placeholder` كَذلك مُؤَجَّلَة — `<textarea>` ساكِن بِالكامِل. *@
                         <textarea name="description" rows="3" maxlength="400"
                                   class="ac-input" style="resize:vertical;font-family:inherit;"
                                   placeholder="مَثَلاً: مَع طِفل، أَو وَزن أَمتِعَة، أَو وَقت الوُصول المُفَضَّل…"></textarea>
                     </AcField>
 
-                    <AcField Label="سِعر مَبدَئيّ مُقتَرَح (اختياريّ — ريال)">
+                    <AcField Label="@(L.Format("rider.request.suggested_price", Money.Unit(style: MoneyUnitStyle.Name)))">
                         <input type="number" name="price" min="0" step="1"
                                class="ac-input" inputmode="numeric" placeholder="0" value="0" />
                     </AcField>
@@ -84,7 +90,7 @@
             </AcCard>
 
             <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block" style="margin-top:16px;">
-                <AcIcon Name="send" Size="18" /> نَشر الطَلَب
+                <AcIcon Name="send" Size="18" /> @L.Markup("rider.request.submit")@((MarkupString)"\n            ")
             </button>
         </form>
     }
@@ -124,12 +130,12 @@
             case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.Boolean:
                 <label style="display:inline-flex;align-items:center;gap:8px;">
                     <input type="checkbox" name="@name" value="true" />
-                    <span>نَعَم</span>
+                    <span>@L.Markup("common.option.yes")</span>
                 </label>
                 break;
             case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.SingleSelect:
                 <select name="@name" class="ac-input" required="@f.IsRequired">
-                    <option value="">— اختَر —</option>
+                    <option value="">@L.Markup("common.option.choose")</option>
                     @foreach (var o in f.Options) { <option value="@o.Value">@o.Label</option> }
                 </select>
                 break;

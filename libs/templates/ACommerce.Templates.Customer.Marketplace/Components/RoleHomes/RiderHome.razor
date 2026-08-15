@@ -1,5 +1,6 @@
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject L L
 
 @*
     صَفحَة الراكِب الرَّئيسِيَّة — لا hero بَحث، لا rail "مُمَيَّز".
@@ -9,14 +10,14 @@
 <div class="acm-role-home acm-role-home-rider">
     <header class="acm-role-home-head">
         <h2>@(Greeting)</h2>
-        <p>اُكتُب وِجهَتَكَ، وَ سَيَصِلكَ سائِقون قَريبون بِعُروض أَسعار.</p>
+        <p>@L.Markup("roles.rider.subtitle")</p>
     </header>
 
     <a class="acm-role-cta-primary" href="@AuthSession.LinkFor(Slug, Role, $"create-listing")">
         <span class="acm-role-cta-icon"><AcIcon Name="map-pin" Size="22" /></span>
         <span class="acm-role-cta-label">
-            <strong>اِنشُر طَلَب مِشوار</strong>
-            <small>حَدِّد مَكان الانطِلاق والوُصول</small>
+            <strong>@L.Markup("roles.rider.new_request")</strong>
+            <small>@L.Markup("roles.rider.new_request_hint")</small>
         </span>
         <AcIcon Name="chevron-left" Size="20" />
     </a>
@@ -24,10 +25,10 @@
     <a class="acm-role-cta-pill" href="@AuthSession.LinkFor(Slug, Role, $"drivers")"
        style="display:block;text-align:center;padding:14px;margin-bottom:16px;text-decoration:none;">
         <strong style="font-size:14px;color:var(--ac-text);">
-            <AcIcon Name="user" Size="14" /> تَصَفُّح السائِقين
+            <AcIcon Name="user" Size="14" /> @L.Markup("roles.rider.browse_drivers")@((MarkupString)"\n        ")
         </strong>
         <span style="font-size:11px;color:var(--ac-text-muted);display:block;margin-top:2px;">
-            تَواصَل مَع سائِق مُباشَرَةً
+            @((MarkupString)"\n            ")@L.Markup("roles.rider.contact_driver")@((MarkupString)"\n        ")
         </span>
     </a>
 
@@ -37,7 +38,7 @@
     }
     else if (myRequests.Count > 0)
     {
-        <AcSectionHeader Title="طَلَباتي الحالِيَّة" />
+        <AcSectionHeader Title="@(L["roles.rider.my_requests_title"])" />
         <div class="acm-role-list">
             @foreach (var (l, offers, matched) in myRequests)
             {
@@ -50,17 +51,17 @@
                     </div>
                     @if (matched)
                     {
-                        <span class="ac-chip ac-chip-sm" style="background:#dcfce7;color:#166534;"><AcIcon Name="check" Size="14" /> مُطابَق</span>
+                        <span class="ac-chip ac-chip-sm" style="background:#dcfce7;color:#166534;"><AcIcon Name="check" Size="14" /> @L.Markup("roles.rider.matched")</span>
                     }
                     else if (offers > 0)
                     {
                         <span class="ac-chip ac-chip-sm" style="background:color-mix(in srgb,var(--ac-primary) 15%,transparent);">
-                            @offers عَرض
+                            @offers @L.Markup("common.unit.offer")@((MarkupString)"\n                        ")
                         </span>
                     }
                     else
                     {
-                        <span class="ac-chip ac-chip-sm">بانتِظار سائِقين</span>
+                        <span class="ac-chip ac-chip-sm">@L.Markup("roles.rider.waiting_drivers")</span>
                     }
                 </a>
             }
@@ -70,7 +71,7 @@
     {
         <div class="acm-role-empty">
             <AcIcon Name="map" Size="36" />
-            <p>لا طَلَبات نَشِطَة. اِنشُر أَوَّل طَلَب فَوقُ.</p>
+            <p>@L.Markup("roles.rider.empty")</p>
         </div>
     }
 </div>
@@ -82,8 +83,8 @@
     List<(Listing Listing, int Offers, bool Matched)>? myRequests;
 
     string Greeting => string.IsNullOrEmpty(Auth.UserName)
-        ? "أَهلاً، إلى أَين؟"
-        : $"أَهلاً {Auth.UserName}، إلى أَين؟";
+        ? L["roles.greeting.rider_plain_dest"]
+        : L.Format("roles.greeting.rider_named", Auth.UserName);
 
     protected override async Task OnParametersSetAsync()
     {

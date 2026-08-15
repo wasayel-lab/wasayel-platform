@@ -30,23 +30,23 @@ else
                 case "rider":
                     <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
                        href="@AuthSession.LinkFor(Slug, Role, $"create-listing")">
-                        <AcIcon Name="plus" Size="18" /> نَشر طَلَب مِشوار
+                        <AcIcon Name="plus" Size="18" /> @L.Markup("roles.hero.rider_new_trip")@((MarkupString)"\n                    ")
                     </a>
                     <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me/listings")">
-                        <AcIcon Name="package" Size="16" /> طَلَباتي الحالِيَّة
+                        <AcIcon Name="package" Size="16" /> @L.Markup("roles.hero.rider_my_requests")@((MarkupString)"\n                    ")
                     </a>
                     break;
 
                 case "driver":
                     <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
                        href="@AuthSession.LinkFor(Slug, Role, $"explore")">
-                        <AcIcon Name="search" Size="18" /> مَشاوير مُتاحَة
+                        <AcIcon Name="search" Size="18" /> @L.Markup("roles.hero.driver_open_trips")@((MarkupString)"\n                    ")
                     </a>
                     <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me/offers")">
-                        <AcIcon Name="package" Size="16" /> عُروضي
+                        <AcIcon Name="package" Size="16" /> @L.Markup("roles.hero.my_offers")@((MarkupString)"\n                    ")
                     </a>
                     <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me/searches")">
-                        <AcIcon Name="bell" Size="16" /> بَحوث الإشعار
+                        <AcIcon Name="bell" Size="16" /> @L.Markup("roles.hero.alert_searches")@((MarkupString)"\n                    ")
                     </a>
                     break;
 
@@ -54,27 +54,27 @@ else
                 case "host":
                     <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
                        href="@AuthSession.LinkFor(Slug, Role, $"create-listing")">
-                        <AcIcon Name="plus" Size="18" /> إعلان جَديد
+                        <AcIcon Name="plus" Size="18" /> @L.Markup("roles.hero.new_listing")@((MarkupString)"\n                    ")
                     </a>
                     <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me/listings")">
-                        <AcIcon Name="package" Size="16" /> إعلاناتي
+                        <AcIcon Name="package" Size="16" /> @L.Markup("roles.hero.my_listings")@((MarkupString)"\n                    ")
                     </a>
                     break;
 
                 case "shipper":
                     <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
                        href="@AuthSession.LinkFor(Slug, Role, $"explore")">
-                        <AcIcon Name="search" Size="18" /> شَحَنات مُتاحَة
+                        <AcIcon Name="search" Size="18" /> @L.Markup("roles.hero.open_shipments")@((MarkupString)"\n                    ")
                     </a>
                     <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me/offers")">
-                        <AcIcon Name="package" Size="16" /> عُروضي
+                        <AcIcon Name="package" Size="16" /> @L.Markup("roles.hero.my_offers")@((MarkupString)"\n                    ")
                     </a>
                     break;
 
                 case "tenant_admin":
                     <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
                        href="@AuthSession.LinkFor(Slug, Role, $"manage")">
-                        <AcIcon Name="settings" Size="18" /> لَوحَة الإدارَة
+                        <AcIcon Name="settings" Size="18" /> @L.Markup("roles.hero.admin_panel")@((MarkupString)"\n                    ")
                     </a>
                     break;
 
@@ -82,7 +82,7 @@ else
                 default:
                     <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
                        href="@AuthSession.LinkFor(Slug, Role, $"explore")">
-                        <AcIcon Name="search" Size="18" /> اِستِكشاف
+                        <AcIcon Name="search" Size="18" /> @L.Markup("roles.hero.explore")@((MarkupString)"\n                    ")
                     </a>
                     break;
             }
@@ -91,6 +91,8 @@ else
 
     @ChildContent
 }
+
+@inject L L
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
@@ -101,23 +103,23 @@ else
 
     string Greeting => RoleObj?.CatalogSlug switch
     {
-        "rider"        => string.IsNullOrEmpty(UserName) ? "أَهلاً" : $"أَهلاً {UserName}، إلى أَين؟",
-        "driver"       => string.IsNullOrEmpty(UserName) ? "أَهلاً سائِق" : $"أَهلاً {UserName}",
-        "vendor"       => "لَوحَة التاجِر",
-        "host"         => "لَوحَة المُؤَجِّر",
-        "shipper"      => "لَوحَة الشَحن",
-        "tenant_admin" => "لَوحَة الإداريّ",
-        _              => string.IsNullOrEmpty(UserName) ? "مَرحَباً" : $"مَرحَباً {UserName}"
+        "rider"        => string.IsNullOrEmpty(UserName) ? L["roles.greeting.rider_plain"] : L.Format("roles.greeting.rider_named", UserName),
+        "driver"       => string.IsNullOrEmpty(UserName) ? L["roles.greeting.driver_plain"] : L.Format("roles.greeting.named", UserName),
+        "vendor"       => L["roles.greeting.vendor"],
+        "host"         => L["roles.greeting.host"],
+        "shipper"      => L["roles.greeting.shipper"],
+        "tenant_admin" => L["roles.greeting.admin"],
+        _              => string.IsNullOrEmpty(UserName) ? L["roles.greeting.default_plain"] : L.Format("roles.greeting.default_named", UserName)
     };
 
     string Subtitle => RoleObj?.CatalogSlug switch
     {
-        "rider"        => "اُكتُب وِجهَتك وَ سَيَصِلكَ سائِقون قَريبون.",
-        "driver"       => "تَصَفَّح طَلَبات الراكِبين القَريبَة وَ قَدِّم عَرضَك.",
-        "vendor"       => "أَدِر إعلاناتك وَ رُدّ عَلى الاستِفسارات.",
-        "host"         => "أَدِر إعلانات سَكَنك وَ رُدّ عَلى المُهتَمّين.",
-        "shipper"      => "خُذ شَحَنات تُناسِب أُسطولك.",
-        "tenant_admin" => "إدارَة المُحتَوى وَ مُستَخدِمي المَتجَر.",
-        _              => "اِستَكشِف العُروض المُتاحَة."
+        "rider"        => L["roles.subtitle.rider"],
+        "driver"       => L["roles.subtitle.driver"],
+        "vendor"       => L["roles.subtitle.vendor"],
+        "host"         => L["roles.subtitle.host"],
+        "shipper"      => L["roles.subtitle.shipper"],
+        "tenant_admin" => L["roles.subtitle.admin"],
+        _              => L["roles.subtitle.default"]
     };
 }

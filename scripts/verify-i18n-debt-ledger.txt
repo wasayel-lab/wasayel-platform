@@ -1,7 +1,7 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|1798
-DISTINCT|1178
+TOTAL|1709
+DISTINCT|1122
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|40
@@ -79,11 +79,7 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Terms.r
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/VendorProfile.razor|10
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RequirePlatformAdmin.razor|7
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RequireTenantAdmin.razor|3
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomeHero.razor|29
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/DriverHome.razor|18
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/RiderCreateRequest.razor|16
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/RiderHome.razor|13
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/SellerHome.razor|15
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/RiderCreateRequest.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Routes.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/StudioShell.razor|10
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/TaxonomyChips.razor|7

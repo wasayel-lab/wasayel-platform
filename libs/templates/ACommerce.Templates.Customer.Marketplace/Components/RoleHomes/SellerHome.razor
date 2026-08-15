@@ -1,5 +1,6 @@
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject L L
 
 @*
     قالِب البائِع المُشتَرَك (vendor + host) — لَوحَة "إعلاناتي" مَع
@@ -16,8 +17,8 @@
     <a class="acm-role-cta-primary" href="@AuthSession.LinkFor(Slug, Role, $"create-listing")">
         <span class="acm-role-cta-icon"><AcIcon Name="plus" Size="22" /></span>
         <span class="acm-role-cta-label">
-            <strong>إعلان جَديد</strong>
-            <small>أَضِف ما تَعرِضه — نَشر فَوريّ</small>
+            <strong>@L.Markup("roles.hero.new_listing")</strong>
+            <small>@L.Markup("roles.seller.new_listing_hint")</small>
         </span>
         <AcIcon Name="chevron-left" Size="20" />
     </a>
@@ -25,15 +26,15 @@
     <div class="acm-role-cta-row">
         <div class="acm-role-cta-pill" style="cursor:default;">
             <strong>@activeCount</strong>
-            <span>إعلان نَشِط</span>
+            <span>@L.Markup("roles.seller.active_listings")</span>
         </div>
         <div class="acm-role-cta-pill" style="cursor:default;">
             <strong>@totalViews</strong>
-            <span>مُشاهَدَة</span>
+            <span>@L.Markup("roles.seller.views")</span>
         </div>
         <a class="acm-role-cta-pill" href="@AuthSession.LinkFor(Slug, Role, $"chats")">
             <strong>@conversations</strong>
-            <span>مُحادَثَة</span>
+            <span>@L.Markup("roles.seller.conversations")</span>
         </a>
     </div>
 
@@ -45,13 +46,13 @@
     {
         <div class="acm-role-empty">
             <AcIcon Name="package" Size="36" />
-            <p>لا إعلانات بَعد. اِنشُر أَوَّل إعلان فَوقُ.</p>
+            <p>@L.Markup("roles.seller.empty")</p>
         </div>
     }
     else
     {
-        <AcSectionHeader Title="إعلاناتي"
-                         ActionLabel="@(myListings.Count > 6 ? "كُلّ الإعلانات" : null)"
+        <AcSectionHeader Title="@(L["roles.hero.my_listings"])"
+                         ActionLabel="@(myListings.Count > 6 ? L["roles.seller.all_listings"] : null)"
                          ActionHref="@AuthSession.LinkFor(Slug, Role, $"me/listings")" />
         <div class="acm-role-list">
             @foreach (var l in myListings.Take(6))
@@ -64,7 +65,7 @@
                         </span>
                     </div>
                     <span class="acm-details-price" style="font-size:14px;">
-                        @l.Price.ToString("N0") ريال
+                        @((MarkupString)Money.Format(l.Price, style: MoneyUnitStyle.Name))
                     </span>
                 </a>
             }
@@ -84,14 +85,14 @@
 
     string Greeting => RoleSlug switch
     {
-        "host" => string.IsNullOrEmpty(Auth.UserName) ? "لَوحَة المُؤَجِّر" : $"أَهلاً {Auth.UserName}",
-        _      => string.IsNullOrEmpty(Auth.UserName) ? "لَوحَة التاجِر"   : $"أَهلاً {Auth.UserName}"
+        "host" => string.IsNullOrEmpty(Auth.UserName) ? L["roles.greeting.host"] : L.Format("roles.greeting.named", Auth.UserName),
+        _      => string.IsNullOrEmpty(Auth.UserName) ? L["roles.greeting.vendor"]   : L.Format("roles.greeting.named", Auth.UserName)
     };
 
     string Subtitle => RoleSlug switch
     {
-        "host" => "أَدِر إعلانات سَكَنك وَ رُدّ عَلى المُهتَمّين.",
-        _      => "أَدِر إعلاناتك وَ رُدّ عَلى الاستِفسارات.",
+        "host" => L["roles.subtitle.host"],
+        _      => L["roles.subtitle.vendor"],
     };
 
     protected override async Task OnParametersSetAsync()
