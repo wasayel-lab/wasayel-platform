@@ -34,8 +34,8 @@
         .print-list { margin: 0; padding-inline-start: 18px; }
         .print-list li { margin-bottom: 4px; }
         .risk-row { padding: 8px 12px; background: #f8fafc; border-radius: 8px; margin-bottom: 6px; page-break-inside: avoid; }
-        .risk-tag { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 10.5px; background: #e0e7ff; color: #4338ca; }
-        .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 10.5px; color: #94a3b8; }
+        .risk-tag { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 11px; background: #e0e7ff; color: #4338ca; }
+        .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; }
         .print-actions { background: #f1f5f9; padding: 10px; border-radius: 8px; margin-bottom: 16px; font-size: 12px; text-align: center; }
         @@media print { .print-actions { display: none; } }
         .print-actions button { background: #2563eb; color: #fff; border: 0; padding: 6px 14px;
@@ -100,7 +100,7 @@ else
         {
             <div class="risk-row">
                 <strong>@Str(risk,"title")</strong> <span class="risk-tag">@Str(risk,"category")</span><br/>
-                <span style="color:#64748b;font-size:11.5px;">
+                <span style="color:#64748b;font-size:12px;">
                     أَثَر: @Str(risk,"impact") · احتِمال: @Str(risk,"likelihood")
                 </span><br/>
                 <em>التَّخفيف: </em>@Str(risk,"mitigation")
@@ -204,7 +204,7 @@ else
             builder.OpenElement(seq++, "br");
             builder.CloseElement();
             builder.OpenElement(seq++, "span");
-            builder.AddAttribute(seq++, "style", "color:#64748b;font-size:11.5px;");
+            builder.AddAttribute(seq++, "style", "color:#64748b;font-size:12px;");
             builder.AddContent(seq++, Str(c, bodyProp));
             builder.CloseElement();
             builder.CloseElement();

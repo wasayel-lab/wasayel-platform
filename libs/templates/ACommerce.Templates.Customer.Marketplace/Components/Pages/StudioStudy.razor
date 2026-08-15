@@ -175,7 +175,7 @@
                                 </strong>
                                 <span class="st-chip">@Str(risk,"category")</span>
                             </div>
-                            <p style="margin:8px 0 0;font-size:13.5px;color:var(--st-muted);">
+                            <p style="margin:8px 0 0;font-size:14px;color:var(--st-muted);">
                                 أَثَر: @Str(risk,"impact") · احتِمال: @Str(risk,"likelihood")<br/>
                                 <strong>التَّخفيف:</strong> @Str(risk,"mitigation")
                             </p>
@@ -188,7 +188,7 @@
             {
                 <div class="st-section-title"><AcIcon Name="bar-chart" Size="18" /> دُروس مِن مَشاريع فَشِلَت</div>
                 <div class="st-card">
-                    <ul style="margin:0;padding-inline-start:18px;line-height:2;font-size:13.5px;">
+                    <ul style="margin:0;padding-inline-start:18px;line-height:2;font-size:14px;">
                         @foreach (var l in lessons.EnumerateArray()) { <li>@l.GetString()</li> }
                     </ul>
                 </div>
@@ -284,7 +284,7 @@
             @* تَقييم سَريع لِلدِراسَة (👍/👎 لِكُلّ قِسم) *@
             <div class="st-section-title"><AcIcon Name="check" Size="18" /> / <AcIcon Name="x" Size="18" /> تَقييم سَريع</div>
             <div class="st-card">
-                <p style="margin:0 0 12px;color:var(--st-muted);font-size:13.5px;">
+                <p style="margin:0 0 12px;color:var(--st-muted);font-size:14px;">
                     قَيِّم الأَقسام لِنَتَعَلَّم كَيف نُحَسِّن التَّحليل.
                 </p>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;">
@@ -349,7 +349,7 @@
                 </form>
             </details>
 
-            <div class="st-card" style="margin-top:16px;background:var(--st-line-soft);border:0;font-size:12.5px;color:var(--st-muted);">
+            <div class="st-card" style="margin-top:16px;background:var(--st-line-soft);border:0;font-size:13px;color:var(--st-muted);">
                 @Disclaimer
             </div>
         }
@@ -486,7 +486,7 @@
             builder.AddContent(seq++, Str(captured, titleProp));
             builder.CloseElement();
             builder.OpenElement(seq++, "p");
-            builder.AddAttribute(seq++, "style", "margin:6px 0 0;font-size:13.5px;color:var(--st-muted);");
+            builder.AddAttribute(seq++, "style", "margin:6px 0 0;font-size:14px;color:var(--st-muted);");
             builder.AddContent(seq++, Str(captured, bodyProp));
             builder.CloseElement();
             builder.CloseElement();

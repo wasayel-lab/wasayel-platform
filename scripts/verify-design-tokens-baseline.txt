@@ -9,18 +9,24 @@
 # Bidirectional, as in Layers 1-2: new values fail the gate, and retired
 # values still pinned fail it too.
 #
-# ── font-size (29 occurrences, 8 distinct off-scale values) ──────────────
-# Two clusters, and they are different problems:
+# ── font-size (29 -> 8 occurrences, 8 -> 4 distinct off-scale values) ────
+# Two clusters, and they were different problems:
 #   • the half-pixel family (10.5 / 11.5 / 12.5 / 13.5) — 21 occurrences,
 #     almost all in the Studio/incubator screens.  Half-pixel type does not
 #     land on the device pixel grid and renders slightly blurred.
+#     RETIRED 2026-08-15: rounded to the nearest whole pixel, ties AWAY from
+#     zero (10.5->11, 11.5->12, 12.5->13, 13.5->14).  Every value is a tie,
+#     so the tie-break is the whole decision: rounding up never shrinks type
+#     that is already the smallest on the screen, and all four land ON the
+#     scale (10|11|12|13|14|15|16|18|20|24|28|32|40|48) rather than merely
+#     near it — so this retires the entries instead of moving them.
+#     12 files, 21 occurrences, -42 bytes of source.  None of the touched
+#     screens is among the 8 reference pages (all are behind a session), so
+#     the byte-for-byte gates cover them by construction, not by measurement
+#     — stated as a limit, not claimed as proof.
 #   • the display sizes (42 / 46 / 52) — 6 occurrences, hero numerals on
 #     Admin/Studio home screens, each picked ad hoc.
 #   • 22px (2) sits between the scale's 20 and 24.
-font-size|10.5px|5
-font-size|11.5px|4
-font-size|12.5px|4
-font-size|13.5px|8
 font-size|22px|2
 font-size|42px|4
 font-size|46px|1

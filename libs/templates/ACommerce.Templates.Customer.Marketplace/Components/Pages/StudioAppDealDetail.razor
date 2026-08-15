@@ -38,7 +38,7 @@
                                         color:#fff;font-weight:700;font-size:14px;">
                                 @if (done) { <AcIcon Name="check" Size="16" /> } else { @(stages.IndexOf(st) + 1) }
                             </div>
-                            <div style="font-size:11.5px;color:@(current ? "var(--st-primary)" : "var(--st-muted)");font-weight:@(current ? "700" : "400");">
+                            <div style="font-size:12px;color:@(current ? "var(--st-primary)" : "var(--st-muted)");font-weight:@(current ? "700" : "400");">
                                 @DealsPolicy.LabelAr(st)
                             </div>
                         </div>
@@ -126,7 +126,7 @@
             {
                 <div class="st-section-title"><AcIcon Name="star" Size="16" /> تَقييم</div>
                 <div class="st-card">
-                    <p style="margin:0 0 12px;font-size:13.5px;color:var(--st-muted);">
+                    <p style="margin:0 0 12px;font-size:14px;color:var(--st-muted);">
                         أَرسِل تَقييماً نِيابَةً عَن أَيّ مِن الطَّرَفَين.
                     </p>
                     <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/review")"
