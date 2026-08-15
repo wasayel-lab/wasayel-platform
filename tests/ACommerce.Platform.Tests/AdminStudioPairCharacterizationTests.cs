@@ -97,12 +97,17 @@ public class AdminStudioPairCharacterizationTests
             "رَفَعَها صاحِبُها قَبلَ دَقائِق. والغالِبُ هُوَ الَّذي لا يَفقِد. والصَلاحِيّاتُ " +
             "والحُقولُ تُحَدَّث مِن الكاتالوج في الحالَتَين — ذلك مَقصود ولَم يَتَغَيَّر."),
 
-        new("regions", PairState.Diverged,
-            new Side("/admin/tenants/{slug}/regions/save", true,  "403",
-                     new[] { "bad_format", "empty" }, Array.Empty<string>()),
-            new Side("/studio/apps/{slug}/regions/save",   false, "302",
-                     new[] { "empty", "format" }, Array.Empty<string>()),
-            ""),
+        new("regions", PairState.Unified,
+            new Side("/admin/tenants/{slug}/regions/save", true, "403",
+                     Array.Empty<string>(), new[] { "service" }),
+            new Side("/studio/apps/{slug}/regions/save",   true, "302",
+                     Array.Empty<string>(), new[] { "service" }),
+            "لَم يَغلِب طَرَف — لِأَنّ الشَكلَين كانا غَير مُتَوافِقَين وكُلّ قارِئٍ يَفهَم كاتِبَه " +
+            "وَحدَه: ما كُتِبَ مِن /admin يَظهَر في الاستوديو مُدُناً بِلا أَحياء (لا Data.Id " +
+            "فَيَصير Guid.Empty)، وما كُتِبَ مِن /studio يَنهار في الإدارَة إلى مِفتاحٍ واحِد " +
+            "(لا SourceId). فَالغالِبُ شَكلٌ جامِع — SourceId وData.Id وLevel نَصّاً وParentId " +
+            "وSortOrder مَعاً — يَفهَمُه القارِئانِ القائِمانِ بِلا تَعديل حَرفٍ في أَيٍّ مِنهُما. " +
+            "ورَمزُ الخَطَأ صارَ bad_format (كانَ format في الاستوديو)."),
 
         new("pwa", PairState.Diverged,
             new Side("/admin/tenants/{slug}/pwa/save", true,  "403",

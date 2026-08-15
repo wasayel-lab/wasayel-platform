@@ -57,6 +57,9 @@ public static class TenantConfigSurface
         return new RolesSaveRequest(selected, string.IsNullOrEmpty(def) ? null : def);
     }
 
+    public static RegionsSaveRequest ReadRegions(HttpRequest req) =>
+        new(req.Form["regions"].ToString());
+
     // ─── نَتيجَة ← ردّ ─────────────────────────────────────────────
 
     /// <summary>

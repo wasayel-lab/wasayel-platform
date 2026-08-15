@@ -28,7 +28,7 @@
 
             @if (Saved == "1")     { <div class="st-chip st-chip-success" style="margin-bottom:14px;"><AcIcon Name="check" Size="14" /> تَمّ الحِفظ</div> }
             @if (Err == "empty")   { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">أَضِف مَدينَة واحِدَة على الأَقَلّ</div> }
-            @if (Err == "format")  { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">صِيغَة سَطر غَير صَحيحَة</div> }
+            @if (Err == "bad_format")  { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">صِيغَة سَطر غَير صَحيحَة</div> }
 
             <form method="post" action="@($"/studio/apps/{Slug}/regions/save")" id="regions-form" class="st-card">
                 <p style="color:var(--st-muted);font-size:13px;margin:0 0 14px;">

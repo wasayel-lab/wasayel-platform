@@ -169,4 +169,89 @@ public class TenantConfigDecisionTests
         Assert.Empty(RolesSaveService.Compose(existing, Array.Empty<string>(), null));
         Assert.Single(RolesSaveService.Compose(existing, new[] { all[1].Slug }, null));
     }
+
+    // ─── المَناطِق ─────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   \n  ")]
+    public void Regions_reject_an_empty_input(string raw) =>
+        Assert.Equal(TenantConfigCodes.Empty, RegionsSaveService.Parse(raw).Code);
+
+    [Theory]
+    [InlineData("> حَيّ")]
+    [InlineData("  > حَيّ١، حَيّ٢")]
+    public void Regions_reject_a_district_line_with_no_city(string raw) =>
+        Assert.Equal(TenantConfigCodes.BadFormat, RegionsSaveService.Parse(raw).Code);
+
+    [Fact]
+    public void Regions_parse_cities_with_and_without_districts()
+    {
+        var (cities, code) = RegionsSaveService.Parse(
+            "الرِياض > العُلَيا، النَخيل\n\n  جُدَّة  \nالدَمّام > الشاطِئ,الفَيصَلِيَّة");
+
+        Assert.Null(code);
+        Assert.Equal(3, cities!.Count);
+        Assert.Equal(new[] { "العُلَيا", "النَخيل" }, cities[0].Districts);
+        Assert.Equal("جُدَّة", cities[1].Name);
+        Assert.Empty(cities[1].Districts);
+        // الفاصِلَةُ العَرَبِيَّة واللاتينِيَّة كِلتاهُما تَفصِلان.
+        Assert.Equal(new[] { "الشاطِئ", "الفَيصَلِيَّة" }, cities[2].Districts);
+    }
+
+    /// <summary>
+    /// <para><b>البُرهان الَّذي كَتَبَ الشَكل الجامِع.</b> صَفحَتا
+    /// القِراءَة تَقرَآنِ مَفاتيحَ مُختَلِفَة — الإدارَةُ تُفَهرِس
+    /// بِـ<c>SourceId</c>، والاستوديو بِـ<c>Data["Id"]</c> ويُرَتِّب
+    /// بِـ<c>Data["SortOrder"]</c>. وهذا الاختِبار يُثَبِّت أَنّ
+    /// السِجِلّ الواحِد يُرضي <b>كِلتَيهِما</b> — فَلا حاجَةَ إلى
+    /// تَعديل صَفحَةِ قِراءَةٍ واحِدَة، وهذا هُوَ ما جَعَلَ الحَسمَ
+    /// «شَكلٌ جامِع» لا «سَطحٌ يَغلِب».</para>
+    /// </summary>
+    [Fact]
+    public void Regions_records_satisfy_both_existing_readers()
+    {
+        var (cities, _) = RegionsSaveService.Parse("الرِياض > العُلَيا، النَخيل\nجُدَّة");
+        var recs = RegionsSaveService.ToRecords(cities!, new DateTime(2026, 8, 15, 0, 0, 0, DateTimeKind.Utc));
+
+        Assert.Equal(4, recs.Count);                       // مَدينَتان + حَيّان
+
+        foreach (var r in recs)
+        {
+            Assert.Equal("DiscoveryRegions", r.Table);
+            Assert.StartsWith("DiscoveryRegions/", r.Id);
+
+            // قارِئُ الإدارَة: يُفَهرِس بِـSourceId، ويَقرَأ
+            // Name/ParentId/Level مِن Data.
+            Assert.False(string.IsNullOrEmpty(r.SourceId));
+            Assert.True(Guid.TryParse(r.SourceId, out _));
+            Assert.True(r.Data.ContainsKey("Name"));
+            Assert.True(r.Data.ContainsKey("ParentId"));
+            Assert.True(int.TryParse(r.Data["Level"]?.ToString(), out var level));
+            Assert.InRange(level, 1, 2);
+
+            // قارِئُ الاستوديو: يُفَهرِس بِـData["Id"] ويُرَتِّب
+            // بِـData["SortOrder"].
+            Assert.True(Guid.TryParse(r.Data["Id"]?.ToString(), out _));
+            Assert.True(int.TryParse(r.Data["SortOrder"]?.ToString(), out _));
+
+            // والمِفتاحانِ يُشيرانِ إلى نَفس المُعَرِّف — وإلّا
+            // فَهرَسَ القارِئانِ سِجِلَّين مُختَلِفَين.
+            Assert.Equal(r.SourceId, r.Data["Id"]?.ToString());
+        }
+
+        var citiesOut = recs.Where(r => r.Data["Level"]!.ToString() == "1").ToList();
+        var districts = recs.Where(r => r.Data["Level"]!.ToString() == "2").ToList();
+        Assert.Equal(2, citiesOut.Count);
+        Assert.Equal(2, districts.Count);
+
+        // ‏ParentId فارِغٌ لِلمَدينَة (الإدارَة تَقرَؤُه فارِغاً،
+        // والاستوديو Guid.Empty)، ويُطابِق مُعَرِّفَ المَدينَة لِلحَيّ.
+        Assert.All(citiesOut, c => Assert.Null(c.Data["ParentId"]));
+        Assert.All(districts, d => Assert.Equal(citiesOut[0].SourceId, d.Data["ParentId"]?.ToString()));
+
+        // والتَرتيبُ داخِلَ المَدينَة يَبدَأ مِن صِفر لِكُلّ مَدينَة.
+        Assert.Equal(new[] { "0", "1" }, districts.Select(d => d.Data["SortOrder"]!.ToString()));
+        Assert.Equal(new[] { "0", "1" }, citiesOut.Select(c => c.Data["SortOrder"]!.ToString()));
+    }
 }

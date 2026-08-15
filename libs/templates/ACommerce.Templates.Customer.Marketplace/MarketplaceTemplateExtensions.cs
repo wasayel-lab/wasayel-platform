@@ -1981,79 +1981,16 @@ public static class MarketplaceTemplateExtensions
         {
             if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
                 return Forbidden();
-            await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.regions_save");
-            var raw = req.Form["regions"].ToString();
-            if (string.IsNullOrWhiteSpace(raw))
-                return Results.Redirect($"/admin/tenants/{slug}/regions?err=empty");
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, RegionsSaveService.AuditAction);
 
-            var cities = new List<(string Name, List<string> Districts)>();
-            foreach (var line in raw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var l = line.Trim();
-                if (l.Length == 0) continue;
-                if (l.Contains('>'))
-                {
-                    var parts = l.Split('>', 2);
-                    var cityName = parts[0].Trim();
-                    if (string.IsNullOrEmpty(cityName))
-                        return Results.Redirect($"/admin/tenants/{slug}/regions?err=bad_format");
-                    var districts = parts[1]
-                        .Split(new[] { '،', ',' },
-                               StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                        .Where(d => !string.IsNullOrEmpty(d))
-                        .ToList();
-                    cities.Add((cityName, districts));
-                }
-                else
-                {
-                    cities.Add((l, new List<string>()));
-                }
-            }
-            if (cities.Count == 0)
-                return Results.Redirect($"/admin/tenants/{slug}/regions?err=empty");
-
+            // جَلسَةٌ مَحصورَةٌ بِالمُستَأجِر: الوَثيقَةُ مُتَعَدِّدَةُ
+            // الإيجار، والحَصرُ هُنا لا في نِداء الخِدمَة.
             await using var s = store.LightweightSession(slug);
-            var existing = await s.Query<ImportedRecord>()
-                .Where(r => r.Table == "DiscoveryRegions").ToListAsync();
-            foreach (var r in existing) s.Delete(r);
+            var result = await RegionsSaveService.SaveAsync(s, TenantConfigSurface.ReadRegions(req));
+            if (result.Ok) await s.SaveChangesAsync();
 
-            var now = DateTime.UtcNow;
-            foreach (var (cityName, districts) in cities)
-            {
-                var cityId = Guid.NewGuid().ToString();
-                s.Store(new ImportedRecord
-                {
-                    Id = $"DiscoveryRegions/{cityId}",
-                    Table = "DiscoveryRegions",
-                    SourceId = cityId,
-                    ImportedAt = now,
-                    Data = new Dictionary<string, object?>
-                    {
-                        ["Name"]     = cityName,
-                        ["ParentId"] = null,
-                        ["Level"]    = "1"
-                    }
-                });
-                foreach (var d in districts)
-                {
-                    var distId = Guid.NewGuid().ToString();
-                    s.Store(new ImportedRecord
-                    {
-                        Id = $"DiscoveryRegions/{distId}",
-                        Table = "DiscoveryRegions",
-                        SourceId = distId,
-                        ImportedAt = now,
-                        Data = new Dictionary<string, object?>
-                        {
-                            ["Name"]     = d,
-                            ["ParentId"] = cityId,
-                            ["Level"]    = "2"
-                        }
-                    });
-                }
-            }
-            await s.SaveChangesAsync();
-            return Results.Redirect($"/admin/tenants/{slug}/regions?saved=1");
+            return TenantConfigSurface.Outcome(result,
+                $"/admin/tenants/{slug}/regions?saved=1", $"/admin/tenants/{slug}/regions", "/admin");
         }).DisableAntiforgery();
 
         // ─── Admin: save attribute definitions for a scope ──────────────
@@ -3075,70 +3012,18 @@ public static class MarketplaceTemplateExtensions
 
         app.MapPost("/studio/apps/{slug}/regions/save", async (
             string slug, HttpRequest req, IDocumentStore store,
-            Services.Incubator.StudioAuth auth) =>
+            Services.Incubator.StudioAuth auth,
+            Services.Audit.AuditWriter audit) =>
         {
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
-            var raw = req.Form["regions"].ToString();
-            if (string.IsNullOrWhiteSpace(raw))
-                return Results.Redirect($"/studio/apps/{slug}/regions?err=empty");
-
-            var cities = new List<(string Name, List<string> Districts)>();
-            foreach (var line in raw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var l = line.Trim();
-                if (l.Length == 0) continue;
-                if (l.Contains('>'))
-                {
-                    var parts = l.Split('>', 2);
-                    var cityName = parts[0].Trim();
-                    if (string.IsNullOrEmpty(cityName))
-                        return Results.Redirect($"/studio/apps/{slug}/regions?err=format");
-                    var districts = parts[1]
-                        .Split(new[] { '،', ',' },
-                            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                        .Where(d => !string.IsNullOrEmpty(d)).ToList();
-                    cities.Add((cityName, districts));
-                }
-                else cities.Add((l, new List<string>()));
-            }
-            if (cities.Count == 0) return Results.Redirect($"/studio/apps/{slug}/regions?err=empty");
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, RegionsSaveService.AuditAction);
 
             await using var s = store.LightweightSession(slug);
-            var existing = await s.Query<ImportedRecord>()
-                .Where(r => r.Table == "DiscoveryRegions").ToListAsync();
-            foreach (var r in existing) s.Delete(r);
+            var result = await RegionsSaveService.SaveAsync(s, TenantConfigSurface.ReadRegions(req));
+            if (result.Ok) await s.SaveChangesAsync();
 
-            var now = DateTime.UtcNow;
-            var cityOrder = 0;
-            foreach (var (cityName, districts) in cities)
-            {
-                var cityId = Guid.NewGuid();
-                s.Store(new ImportedRecord
-                {
-                    Id = cityId.ToString(), Table = "DiscoveryRegions",
-                    Data = new Dictionary<string, object?>
-                    {
-                        ["Id"] = cityId, ["Name"] = cityName, ["Level"] = 1,
-                        ["ParentId"] = null, ["SortOrder"] = cityOrder++,
-                    }, ImportedAt = now
-                });
-                var distOrder = 0;
-                foreach (var d in districts)
-                {
-                    var dId = Guid.NewGuid();
-                    s.Store(new ImportedRecord
-                    {
-                        Id = dId.ToString(), Table = "DiscoveryRegions",
-                        Data = new Dictionary<string, object?>
-                        {
-                            ["Id"] = dId, ["Name"] = d, ["Level"] = 2,
-                            ["ParentId"] = cityId, ["SortOrder"] = distOrder++,
-                        }, ImportedAt = now
-                    });
-                }
-            }
-            await s.SaveChangesAsync();
-            return Results.Redirect($"/studio/apps/{slug}/regions?saved=1");
+            return TenantConfigSurface.Outcome(result,
+                $"/studio/apps/{slug}/regions?saved=1", $"/studio/apps/{slug}/regions", "/studio");
         }).DisableAntiforgery();
 
         // ─── Studio: save PWA apps (per-role name + icon) ───────────────
