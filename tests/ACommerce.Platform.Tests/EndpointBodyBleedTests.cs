@@ -45,13 +45,20 @@ public class EndpointBodyBleedTests
 
     private static readonly Ceiling[] PinnedCeilings =
     {
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2778),
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2282),
     };
 
     /// <summary>مَجموع أَسطُر المَنطِق في أَجسام النِقاط كُلِّها —
     /// السَقف الأَعلى. هذا هُوَ <b>العَدَد الَّذي يَجِب أَن يَنزِل</b>
-    /// مَوجَةً بَعدَ مَوجَة.</summary>
-    private const int PinnedTotal = 2778;
+    /// مَوجَةً بَعدَ مَوجَة.
+    ///
+    /// <para><b>وقَد نَزَلَ أَوَّلَ مَرَّة</b>: ‏2778 ← ‏2282 يَوم
+    /// ‏2026-08-15، ‏<b>496 سَطراً</b> خَرَجَت مِن أَجسام اثنَتَي
+    /// عَشرَةَ نُقطَة إلى سِتّ خِدمات تَأخُذ الجَلسَة ولا
+    /// تَملِكُها. والسَقفُ يُشَدّ إلى المَقيس في نَفس الكوميت —
+    /// فَسَقفٌ أَوسَعُ مِن الواقِع بِـ‏496 سَطراً لا يَحرُس
+    /// شَيئاً.</para></summary>
+    private const int PinnedTotal = 2282;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ
