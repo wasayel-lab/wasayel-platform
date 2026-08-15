@@ -3471,10 +3471,26 @@ public static class MarketplaceTemplateExtensions
         }).DisableAntiforgery();
 
         // إعادَة تَحليل مِن داخِل لوحَة العميل (تُبقيه في مَساحَة /studio).
+        //
+        // كانَت هذه النُقطَة <b>بِلا حارِس واحِد</b> بَينَ أُختَيها
+        // المَحروسَتَين (‏/refine و/build) — مَجهول يَقلِب حالَة أَيّ دِراسَة
+        // إلى Analyzing ويُطلِق تَحليل LLM في الخَلفِيَّة بِتَكلِفَتِه.
+        // القياس الحَيّ فَضَحَها: أُختاها تَرُدّان 302 إلى /studio/auth
+        // وهي تَرُدّ 302 إلى صَفحَة النَجاح. والحارِس هُنا هُوَ
+        // <b>قَرارُهُما نَفسُه حَرفِيّاً</b> — جَلسَة studio صالِحَة، ثُمَّ
+        // مِلكِيَّة الدِراسَة — لا حارِسٌ ثانٍ مَكتوب بِيَدٍ ثانِيَة.
         app.MapPost("/studio/s/{id:guid}/analyze", async (
             Guid id, IServiceScopeFactory scopeFactory,
+            Services.Incubator.StudioAuth auth,
             Services.Incubator.FeasibilityAnalysisService svc) =>
         {
+            auth.Load();
+            if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
+
+            var session = await svc.LoadAsync(id);
+            if (session is null || session.OwnerUserId != auth.UserId!.Value)
+                return Results.Redirect("/studio");
+
             await svc.MarkAnalyzingAsync(id);
             _ = Task.Run(async () =>
             {
