@@ -3,6 +3,7 @@
 @inject IDocumentStore Store
 @inject AuthSession Auth
 @inject ITenantContext Tenant
+@inject L L
 @inject NavigationManager Nav
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
@@ -218,18 +219,23 @@
     List<Listing>? featured;
 
     /// <summary>تَنسيق السِعر حَسَب نَمَط المُستَأجِر: إيجار → «… ر.س / شَهرِيّ»،
-    /// مَتجَر → «… ر.س»، مَشاوير → «اعرِض/ابدَأ مِن».</summary>
+    /// مَتجَر → «… ر.س»، مَشاوير → «اعرِض/ابدَأ مِن». نُسخَة طِبق الأَصل
+    /// مِن <c>TenantExplore.FormatPrice</c> — والتَكرار قائِم قَبلَ هذه
+    /// المَوجَة وبَعدَها، ورَفعُه استِخراجٌ لَه مَوجَتُه.</summary>
     string FormatPrice(Listing l)
     {
-        if (profile is null) return $"{l.Price:N0} ر.س";
+        if (profile is null) return Money.Format(l.Price);
         return profile.Pattern switch
         {
             Services.Patterns.AppPattern.Rental
-                => $"{l.Price:N0} ر.س / {(l.Attributes.TryGetValue("lease_term", out var t) ? t : "شَهرِيّ")}",
+                => L.Format("listings.price.rental", Money.Format(l.Price),
+                     l.Attributes.TryGetValue("lease_term", out var t) ? t : L["listings.price.monthly"]),
             Services.Patterns.AppPattern.Roommate
-                => l.Price > 0 ? $"{l.Price:N0} ر.س / شَهرِيّ" : "حَسَب الاتِّفاق",
-            Services.Patterns.AppPattern.Trip => $"يَبدَأ مِن {l.Price:N0} ر.س",
-            _ => $"{l.Price:N0} ر.س"
+                => l.Price > 0 ? L.Format("listings.price.per_month", Money.Format(l.Price))
+                               : L["listings.price.negotiable"],
+            Services.Patterns.AppPattern.Trip
+                => L.Format("listings.price.starts_from", Money.Format(l.Price)),
+            _ => Money.Format(l.Price)
         };
     }
     List<string> cities = new();

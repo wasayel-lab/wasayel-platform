@@ -227,17 +227,18 @@ else
 
     string FormatPrice(Listing l)
     {
-        if (profile is null) return L.Format("listings.price.amount", l.Price);
+        if (profile is null) return Money.Format(l.Price);
         return profile.Pattern switch
         {
             Services.Patterns.AppPattern.Rental
-                => L.Format("listings.price.rental", l.Price,
+                => L.Format("listings.price.rental", Money.Format(l.Price),
                      l.Attributes.TryGetValue("lease_term", out var t) ? t : L["listings.price.monthly"]),
             Services.Patterns.AppPattern.Roommate
-                => l.Price > 0 ? L.Format("listings.price.per_month", l.Price)
+                => l.Price > 0 ? L.Format("listings.price.per_month", Money.Format(l.Price))
                                : L["listings.price.negotiable"],
-            Services.Patterns.AppPattern.Trip => L.Format("listings.price.starts_from", l.Price),
-            _ => L.Format("listings.price.amount", l.Price)
+            Services.Patterns.AppPattern.Trip
+                => L.Format("listings.price.starts_from", Money.Format(l.Price)),
+            _ => Money.Format(l.Price)
         };
     }
     List<Listing>? items;

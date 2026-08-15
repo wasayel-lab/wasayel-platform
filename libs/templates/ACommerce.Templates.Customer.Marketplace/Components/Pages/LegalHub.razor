@@ -2,61 +2,64 @@
 @page "/{slug}/r/{role}/legal"
 @page "/{slug}/legal/{section}"
 @page "/{slug}/r/{role}/legal/{section}"
+@inject L L
 
 @*
     قِسم قانونيّ مُوَحَّد — Terms / Privacy / Returns. مَنقولَة مِن
     Order.V2 /legal hub. كُلّ قِسم صَفحَة فَرعِيَّة بِنَفس الـ URL.
+
+    النُصوص مِن القامُوس. والفُروع الثَلاثَة **حَصرِيَّة**: الطَلَب
+    الواحِد لا يُصَيِّر إلّا واحِداً، فَبُرهانُها ثَلاث صَفَحات في
+    الأَساس لا واحِدَة (‏scripts/capture-appearance.sh).
 *@
 
 <div class="acs-page">
-    <h1 class="acm-wizard-title">المَعلومات القانونيّة</h1>
+    <h1 class="acm-wizard-title">@L.Markup("legal.hub.title")</h1>
 
     <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
         <a class="ac-chip @(Section == "terms" || Section == "" ? "ac-chip-active" : "")"
-           href="@AuthSession.LinkFor(Slug, Role, "legal/terms")">الشُّروط والأَحكام</a>
+           href="@AuthSession.LinkFor(Slug, Role, "legal/terms")">@L.Markup("legal.hub.tab_terms")</a>
         <a class="ac-chip @(Section == "privacy" ? "ac-chip-active" : "")"
-           href="@AuthSession.LinkFor(Slug, Role, "legal/privacy")">الخُصوصِيَّة</a>
+           href="@AuthSession.LinkFor(Slug, Role, "legal/privacy")">@L.Markup("legal.hub.tab_privacy")</a>
         <a class="ac-chip @(Section == "returns" ? "ac-chip-active" : "")"
-           href="@AuthSession.LinkFor(Slug, Role, "legal/returns")">الاستِرجاع</a>
+           href="@AuthSession.LinkFor(Slug, Role, "legal/returns")">@L.Markup("legal.hub.tab_returns")</a>
     </div>
 
     <AcCard>
         <ChildContent>
             @if (Section == "privacy")
             {
-                <h2>سِياسَة الخُصوصِيَّة</h2>
-                <p>نَحتَرِم خُصوصِيَّتَك. البَيانات الَّتي نَجمَعها:</p>
+                <h2>@L.Markup("legal.privacy.title")</h2>
+                <p>@L.Markup("legal.privacy.intro")</p>
                 <ul>
-                    <li>اِسم وَهاتِف عِندَ التَّسجيل (لِلتَّوثيق فَقَط).</li>
-                    <li>عَناوين التَّوصيل (لِخِدمَة الطَّلَب).</li>
-                    <li>تاريخ المُعامَلات (لِإصدار الفَواتير).</li>
+                    <li>@L.Markup("legal.privacy.item_identity")</li>
+                    <li>@L.Markup("legal.privacy.item_addresses")</li>
+                    <li>@L.Markup("legal.privacy.item_history")</li>
                 </ul>
-                <p>لا نَبيع بَياناتك لِأَيّ طَرَف ثالِث. تَخزين الدَّفع آمِن
-                   عَبر مُزَوِّدين مُعتَمَدين (Moyasar / Noon — PCI-DSS).</p>
-                <p>لِحَذف حِسابك بِالكامِل: تَواصَل عَبر صَفحَة الدَّعم.</p>
+                <p>@L.Markup("legal.privacy.no_selling")</p>
+                <p>@L.Markup("legal.privacy.deletion")</p>
             }
             else if (Section == "returns")
             {
-                <h2>سِياسَة الاستِرجاع</h2>
+                <h2>@L.Markup("legal.returns.title")</h2>
                 <ul>
-                    <li>المُنتَجات المادِّيَّة: ٧ أَيّام مِن الاستِلام إن لَم تُستَخدَم.</li>
-                    <li>الخَدَمات: لا اِستِرجاع بَعد التَّأديَة، إلَّا لِخَلَل في الجَودَة.</li>
-                    <li>الإعلانات/الاشتِراكات: غَير قابِلَة لِلاستِرجاع بَعد النَّشر.</li>
+                    <li>@L.Markup("legal.returns.item_goods")</li>
+                    <li>@L.Markup("legal.returns.item_services")</li>
+                    <li>@L.Markup("legal.returns.item_ads")</li>
                 </ul>
-                <p>الاستِرجاع عَبر صَفحَة «طَلَباتي» → اِختَر الطَّلَب → «اِستِرجاع».
-                   المَنصَّة تَستَرجِع بِكَامِل المَبلَغ في ٣-٥ أَيّام عَمَل.</p>
+                <p>@L.Markup("legal.returns.how")</p>
             }
             else
             {
-                <h2>الشُّروط والأَحكام</h2>
-                <p>باستِخدامِك المَنصَّة، فَأَنتَ مُوافِق على:</p>
+                <h2>@L.Markup("legal.terms.title")</h2>
+                <p>@L.Markup("legal.terms.intro")</p>
                 <ol>
-                    <li>عَدَم نَشر إعلانات مُخالِفَة لِلأَنظِمَة المَحَلِّيَّة.</li>
-                    <li>تَحَمُّل مَسؤولِيَّة دِقَّة بَياناتك ومُعامَلاتك.</li>
-                    <li>السَّماح لِلمَنصَّة بِجَمع عَمولَة على الصَّفقات النَّاجِحَة (٢٫٥٪).</li>
-                    <li>قَبول حَلّ النِزاعات عَبر آلِيّات المَنصَّة الداخِلِيَّة.</li>
+                    <li>@L.Markup("legal.terms.item_lawful")</li>
+                    <li>@L.Markup("legal.terms.item_accuracy")</li>
+                    <li>@L.Markup("legal.terms.item_commission")</li>
+                    <li>@L.Markup("legal.terms.item_disputes")</li>
                 </ol>
-                <p>الانتِهاكات تُؤَدّي لِتَعليق فَوريّ بِلا تَعويض.</p>
+                <p>@L.Markup("legal.terms.violations")</p>
             }
         </ChildContent>
     </AcCard>

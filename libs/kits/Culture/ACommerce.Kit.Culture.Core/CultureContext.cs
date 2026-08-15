@@ -27,8 +27,12 @@ public sealed class MutableCultureContext : ICultureContext
     public string Numerals { get; set; } = "arabic";
     public DateTime NowInZone => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow,
         TryGetTz(TimeZone));
+    /// <summary>تُفَوِّض إلى <see cref="Money.Format"/>. وكانَت قَبلَ
+    /// ذلك <c>N2</c> ورَمزاً لاحِقاً — أَي **تُخالِف كُلّ شاشَة** تَعرِض
+    /// <c>N0</c>، ولَم يُكتَشَف لِأَنَّها بِصِفر مُستَهلِك. مُنَسِّقٌ
+    /// واحِد لِلمال لا اثنان.</summary>
     public string FormatMoney(decimal amount)
-        => $"{amount:N2} {(Currency == "SAR" ? "ر.س" : Currency)}";
+        => Money.Format(amount, Currency, Language);
 
     private static TimeZoneInfo TryGetTz(string id)
     {

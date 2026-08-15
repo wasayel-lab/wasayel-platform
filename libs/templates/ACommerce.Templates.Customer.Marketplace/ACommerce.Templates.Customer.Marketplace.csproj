@@ -56,6 +56,11 @@
     <ProjectReference Include="..\..\kits\Reviews\ACommerce.Kit.Reviews.Core\ACommerce.Kit.Reviews.Core.csproj" />
     <ProjectReference Include="..\..\kits\Payments\ACommerce.Kit.Payments.Core\ACommerce.Kit.Payments.Core.csproj" />
     <ProjectReference Include="..\..\kits\Theme\ACommerce.Kit.Theme.Core\ACommerce.Kit.Theme.Core.csproj" />
+    <!-- المال يُنَسَّق مِن مَوضِع واحِد (‏`ACommerce.Kit.Culture.Money`)
+         بَدَل رَمز عُملَة مَحبوس في قيَم القامُوس. والعُدَّة قائِمَة
+         مُسَجَّلَة في `Program.cs` مُنذُ زَمَن؛ الجَديد أَنّ لَها
+         مُستَهلِكاً. -->
+    <ProjectReference Include="..\..\kits\Culture\ACommerce.Kit.Culture.Core\ACommerce.Kit.Culture.Core.csproj" />
     <!-- صَريح لا مُتَوارَث: جِسر نَمَط الصَفقَة إلى لُغَة التَدَفُّق
          يَستَخدِمُها مُباشَرَةً، فَلا يُترَك وُصولُها رَهناً بِمَرجِع
          عُدَّة أُخرى قَد يُنزَع. -->

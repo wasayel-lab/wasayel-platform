@@ -2,12 +2,18 @@
 @inject IQuerySession Db
 @inject Marten.IDocumentStore Store
 @inject Services.Incubator.StudioAuth StudioAuthSvc
+@inject L L
 
 @*
     صَفحَة الهبوط — تَدعو العَميل لِوَصف فِكرَة تَطبيقِه. الإرسال يَحفَظ
     المُطالَبَة ويُحَوِّل لِلدُخول الوهميّ، ثُمَّ يُولَّد التَّحليل تِلقائيّاً.
     إذا كانَ المُستَخدِم مُسَجَّلاً، نَعرِض زِرّ "لوحَتي" بَدَلَ "تَسجيل الدُخول".
     تَصميم احترافيّ (studio-root) مُنفَصِل عَن واجِهات المَتاجِر.
+
+    النُصوص مِن القامُوس (‏docs/I18N.md). و`@((MarkupString)"…")` بَعدَ آخِر
+    عُقدَة نَصّ في عُنصُر لَيسَ زينَة: المُصَيِّر يَحذِف عُقدَة النَصّ
+    الفارِغَة الأَخيرَة، وقَبلَ التَرحيل كانَ فَراغ الإزاحَة ناجِياً
+    بِالتِصاقِه بِالحَرفِيَّة.
 *@
 
 @{ StudioAuthSvc.Load(); }
@@ -15,64 +21,73 @@
 <div class="studio-root">
     <nav class="landing-nav">
         <div class="landing-brand">
+            @* `alt` تَبقى حَرفِيَّة — مُؤَجَّلَة بِقِياس لا بِسَهو. هذا
+               العُنصُر **ساكِن بِالكامِل**، فَتَرحيل خاصِّيَّة واحِدَة فيه
+               يَقلِبُه إلى عُنصُر ديناميكيّ فَتَتَبَدَّل بايتاتُه مَرَّتَين:
+               قيمَة الخاصِّيَّة تَصير مَراجِع رَقَمِيَّة
+               (`&#x648;`…)، والوَسم يَصير `<img … />` بَعدَ أَن كانَ
+               `<img …>`. ولا حَرفَ يَتَبَدَّل مِمّا يُرى — لكِنّ
+               البَوّابَة بايتِيَّة، وإرخاؤُها قَرار مالِك لا قَرار مَوجَة. *@
             <img src="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-lockup-color.svg"
                  alt="وَسايِل" class="landing-brand-logo" height="36" />
         </div>
         @if (StudioAuthSvc.IsAuthenticated)
         {
-            <a class="st-btn st-btn-primary" href="/studio">لوحَتي ←</a>
+            <a class="st-btn st-btn-primary" href="/studio">@L.Markup("landing.nav.dashboard")</a>
         }
         else
         {
-            <a class="st-btn st-btn-ghost" href="/studio/auth">تَسجيل الدُخول</a>
+            <a class="st-btn st-btn-ghost" href="/studio/auth">@L.Markup("landing.nav.login")</a>
         }
     </nav>
 
     <section class="landing-hero">
-        <span class="landing-eyebrow"><AcIcon Name="sparkle" Size="16" /> مَدعوم بِالذَّكاء الاصطِناعيّ + بيانات السوق السعودي</span>
-        <h1 class="landing-title">
-            حَوِّل فِكرَتَكَ إلى <span class="grad">تَطبيق جاهِز</span><br/>
-            في أَيّام، لا شُهور
+        <span class="landing-eyebrow"><AcIcon Name="sparkle" Size="16" /> @L.Markup("landing.hero.eyebrow")</span>
+        @* الفَراغ الحافّ صَريح — رَأساً وذَيلاً. المُصَيِّر يَحذِف عُقدَة
+           النَصّ الفارِغَة **في طَرَفَي** مُحتَوى العُنصُر (لا الذَيل
+           وَحدَه كَما كُتِبَ في المَوجَة الأولى)، والداخِلِيَّة تَنجو.
+           وقَبل التَرحيل كانَ الفَراغ ناجِياً بِالتِصاقِه بِالحَرفِيَّة. *@
+        <h1 class="landing-title">@((MarkupString)"\n            ")@L.Markup("landing.hero.title_before") <span class="grad">@L.Markup("landing.hero.title_accent")</span><br/>
+            @L.Markup("landing.hero.title_after")@((MarkupString)"\n        ")
         </h1>
-        <p class="landing-sub">
-            صِف فِكرَة مَشروعِكَ، واحصُل على دِراسَة جَدوى احترافيَّة بِأَرقام
-            السوق السعودي ومَخاطِر حَقيقيَّة — ثُمَّ أَطلِق متجَرَكَ على نَفس المَنصَّة.
+        <p class="landing-sub">@((MarkupString)"\n            ")@L.Markup("landing.hero.sub")@((MarkupString)"\n        ")
         </p>
 
         <form method="post" action="/studio/begin" class="landing-prompt">
+            @* و`placeholder` كَذلك — نَفس السَبَب: `<textarea>` هُنا ساكِن
+               بِالكامِل. (‏انظُر التَعليق على `alt` أَعلاه.) *@
             <textarea name="prompt" required
                       placeholder="مَثَلاً: مَنصَّة تَربِط أَصحاب المَطاعِم بِمَورّدي الخُضار في الرياض بِنِظام عُمولَة…"></textarea>
             <div class="landing-prompt-bar">
-                <span class="landing-prompt-hint">اكتُب بِالعَرَبيَّة أَو الإنجليزيَّة — كُلَّما زادَ الوَصف، دَقَّ التَّحليل</span>
-                <button type="submit" class="st-btn st-btn-primary">
-                    حَلِّل فِكرَتي ←
+                <span class="landing-prompt-hint">@L.Markup("landing.prompt.hint")</span>
+                <button type="submit" class="st-btn st-btn-primary">@((MarkupString)"\n                    ")@L.Markup("landing.prompt.submit")@((MarkupString)"\n                ")
                 </button>
             </div>
         </form>
 
         <div class="landing-examples">
-            <span class="landing-example" onclick="fillPrompt(this)">سوق إعلانات سيّارات مُستَعمَلَة</span>
-            <span class="landing-example" onclick="fillPrompt(this)">تَطبيق توصيل طَعام في جدة</span>
-            <span class="landing-example" onclick="fillPrompt(this)">تَأجير مَعَدّات تَصوير</span>
-            <span class="landing-example" onclick="fillPrompt(this)">مَنصَّة خَدَمات منزليَّة حَسَب الطَّلَب</span>
+            <span class="landing-example" onclick="fillPrompt(this)">@L.Markup("landing.example.cars")</span>
+            <span class="landing-example" onclick="fillPrompt(this)">@L.Markup("landing.example.food")</span>
+            <span class="landing-example" onclick="fillPrompt(this)">@L.Markup("landing.example.gear")</span>
+            <span class="landing-example" onclick="fillPrompt(this)">@L.Markup("landing.example.home_services")</span>
         </div>
     </section>
 
     <section class="landing-features">
         <div class="landing-feature">
             <div class="landing-feature-icon"><AcIcon Name="bar-chart" Size="28" /></div>
-            <h3>تَحليل سعوديّ حَقيقيّ</h3>
-            <p>أَرقام السوق، المنافِسون، التَّكاليف، ودُروس مِن مَشاريع فَشِلَت فِعلاً.</p>
+            <h3>@L.Markup("landing.feature.analysis_title")</h3>
+            <p>@L.Markup("landing.feature.analysis_body")</p>
         </div>
         <div class="landing-feature">
             <div class="landing-feature-icon"><AcIcon Name="sparkle" Size="28" /></div>
-            <h3>إطلاق سَريع</h3>
-            <p>أَربَعَة أَنماط جاهِزَة تُطلِق متجَرَكَ في ١-٣ أَيّام بَدَلاً مِن ستَّة أَشهُر.</p>
+            <h3>@L.Markup("landing.feature.launch_title")</h3>
+            <p>@L.Markup("landing.feature.launch_body")</p>
         </div>
         <div class="landing-feature">
             <div class="landing-feature-icon"><AcIcon Name="target" Size="28" /></div>
-            <h3>صَريح وموضوعيّ</h3>
-            <p>يُبرِز المَخاطِر بِقَدر الفُرَص — لا تَملُّق، قَرار استثماريّ واعٍ.</p>
+            <h3>@L.Markup("landing.feature.candid_title")</h3>
+            <p>@L.Markup("landing.feature.candid_body")</p>
         </div>
     </section>
 
@@ -81,10 +96,10 @@
     {
         <section style="max-width:1000px;margin:0 auto 32px;padding:0 24px;">
             <div class="studio-stats" style="grid-template-columns:repeat(4,1fr);">
-                <div class="studio-stat"><div class="studio-stat-label">مَتاجِر مُطلَقَة</div><div class="studio-stat-value">@(tenants?.Count ?? 0)</div></div>
-                <div class="studio-stat"><div class="studio-stat-label">إجمالي الإعلانات</div><div class="studio-stat-value">@totalListings</div></div>
-                <div class="studio-stat"><div class="studio-stat-label">أَدوار/تَطبيقات</div><div class="studio-stat-value">@totalRoles</div></div>
-                <div class="studio-stat"><div class="studio-stat-label">مُدُن مُغَطّاة</div><div class="studio-stat-value">@cityCount</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("landing.stat.tenants")</div><div class="studio-stat-value">@(tenants?.Count ?? 0)</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("landing.stat.listings")</div><div class="studio-stat-value">@totalListings</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("landing.stat.roles")</div><div class="studio-stat-value">@totalRoles</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("landing.stat.cities")</div><div class="studio-stat-value">@cityCount</div></div>
             </div>
         </section>
     }
@@ -92,7 +107,7 @@
     @if (tenants is { Count: > 0 })
     {
         <section style="max-width:1000px;margin:0 auto 56px;padding:0 24px;">
-            <div class="st-section-title">مَتاجِر مُطلَقَة على المَنصَّة</div>
+            <div class="st-section-title">@L.Markup("landing.tenants.title")</div>
             <div class="studio-list">
                 @foreach (var t in tenants)
                 {
@@ -108,10 +123,10 @@
                                 @if (!string.IsNullOrEmpty(t.City)) { <text> · @t.City</text> }
                             </span>
                         </div>
-                        <span class="st-chip">@lc إعلان</span>
+                        <span class="st-chip">@lc @L.Markup("common.unit.listing")</span>
                         @if (t.Roles.Count > 0)
                         {
-                            <span class="st-chip" style="background:var(--st-line-soft);color:var(--st-ink-700);">@t.Roles.Count دَور</span>
+                            <span class="st-chip" style="background:var(--st-line-soft);color:var(--st-ink-700);">@t.Roles.Count @L.Markup("common.unit.role")</span>
                         }
                         <span style="color:var(--st-faint);">←</span>
                     </a>

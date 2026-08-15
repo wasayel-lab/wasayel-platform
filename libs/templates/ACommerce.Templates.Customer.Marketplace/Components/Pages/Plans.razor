@@ -2,20 +2,21 @@
 @page "/{slug}/r/{role}/plans"
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject L L
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantPlanService PlanSvc
 
 <div class="acs-page">
-<h1 class="acm-wizard-title">الباقات</h1>
+<h1 class="acm-wizard-title">@L.Markup("plans.list.title")</h1>
 
 @if (plans is null)
 {
-    <AcLoadingState Message="جارٍ التَحميل…" />
+    <AcLoadingState Message="@(L["common.state.loading"])" />
 }
 else if (plans.Count == 0)
 {
     <AcEmptyState IconName="package"
-                  Title="لا توجَد باقات بَعد"
-                  Message="يُسَجِّل المَتجَر باقاته مِن لوحَة التَحَكُّم." />
+                  Title="@(L["plans.list.empty_title"])"
+                  Message="@(L["plans.list.empty_message"])" />
 }
 else
 {
@@ -26,23 +27,23 @@ else
                 <ChildContent>
                     <h3 style="margin:0 0 8px;">@p.Name</h3>
                     <p style="color:var(--ac-primary);font-weight:700;font-size:1.5rem;">
-                        @p.Price.ToString("N0") <span style="font-size:0.8rem;">ريال / @(p.DaysPeriod) يوم</span>
+                        @p.Price.ToString("N0") <span style="font-size:0.8rem;">@((MarkupString)Money.Unit(style: MoneyUnitStyle.Name)) / @(p.DaysPeriod) @L.Markup("common.unit.day")</span>
                     </p>
                     <ul style="list-style:none;padding:0;margin:8px 0;font-size:13px;">
-                        <li><AcIcon Name="check" Size="16" /> @p.ListingsQuota إعلان</li>
+                        <li><AcIcon Name="check" Size="16" /> @p.ListingsQuota @L.Markup("common.unit.listing")</li>
                         @if (!string.IsNullOrEmpty(p.Description)) { <li>@p.Description</li> }
                     </ul>
                     @if (Auth.IsAuthenticated)
                     {
                         <form method="post" action="@($"/{Slug}/plans/{p.Id}/subscribe")">
-                            <AcButton Type="submit" Variant="primary" Size="sm" Class="ac-btn-block" Text="اشتِراك" />
+                            <AcButton Type="submit" Variant="primary" Size="sm" Class="ac-btn-block" Text="@(L["plans.card.subscribe"])" />
                         </form>
                     }
                     else
                     {
                         <a class="ac-login-cta ac-login-cta-block" href="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/plans")"
                            style="display:block;text-align:center;padding:8px;background:var(--ac-primary);color:var(--ac-on-primary);
-                                  border-radius:var(--ac-radius-sm);text-decoration:none;">دُخول للاشتِراك</a>
+                                  border-radius:var(--ac-radius-sm);text-decoration:none;">@L.Markup("plans.card.login_cta")</a>
                     }
                 </ChildContent>
             </AcCard>
