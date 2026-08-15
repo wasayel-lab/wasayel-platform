@@ -254,4 +254,41 @@ public class TenantConfigDecisionTests
         Assert.Equal(new[] { "0", "1" }, districts.Select(d => d.Data["SortOrder"]!.ToString()));
         Assert.Equal(new[] { "0", "1" }, citiesOut.Select(c => c.Data["SortOrder"]!.ToString()));
     }
+
+    // ─── أَيقونات PWA ──────────────────────────────────────────────
+
+    private static UploadedIcon Icon(string type, long length) =>
+        new(type, length, _ => Task.FromResult(Array.Empty<byte>()));
+
+    [Fact]
+    public void Pwa_rejects_an_icon_above_the_ceiling() =>
+        Assert.Equal(TenantConfigCodes.IconTooLarge,
+            PwaSaveService.WhyIconRejected(Icon("image/png", PwaSaveService.MaxIconBytes + 1)));
+
+    [Fact]
+    public void Pwa_accepts_an_icon_exactly_at_the_ceiling() =>
+        Assert.Null(PwaSaveService.WhyIconRejected(Icon("image/png", PwaSaveService.MaxIconBytes)));
+
+    [Theory]
+    [InlineData("image/jpeg")]
+    [InlineData("image/gif")]
+    [InlineData("text/html")]
+    [InlineData("")]
+    public void Pwa_rejects_a_content_type_outside_the_allowed_set(string type) =>
+        Assert.Equal(TenantConfigCodes.IconBadType,
+            PwaSaveService.WhyIconRejected(Icon(type, 1024)));
+
+    [Theory]
+    [InlineData("image/png")]
+    [InlineData("image/svg+xml")]
+    [InlineData("IMAGE/WEBP")]   // الحالَةُ تُطَبَّع
+    public void Pwa_accepts_the_three_allowed_types(string type) =>
+        Assert.Null(PwaSaveService.WhyIconRejected(Icon(type, 1024)));
+
+    /// <summary>الحَجمُ يُفحَص قَبلَ النَوع — وذلك تَرتيبُ النُقطَتَين
+    /// قَبلَ التَوحيد، فَلا يَتَغَيَّر ما يَراه المُستَخدِم.</summary>
+    [Fact]
+    public void Pwa_reports_the_size_before_the_type() =>
+        Assert.Equal(TenantConfigCodes.IconTooLarge,
+            PwaSaveService.WhyIconRejected(Icon("image/gif", PwaSaveService.MaxIconBytes + 1)));
 }

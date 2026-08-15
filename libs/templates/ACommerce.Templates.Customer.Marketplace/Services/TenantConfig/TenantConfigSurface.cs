@@ -60,6 +60,51 @@ public static class TenantConfigSurface
     public static RegionsSaveRequest ReadRegions(HttpRequest req) =>
         new(req.Form["regions"].ToString());
 
+    /// <summary>
+    /// <para>صَفحَةُ PWA تُرسِل ثَلاثَةَ حُقولٍ لِكُلّ دَور:
+    /// <c>name_{slug}</c> و<c>clear_{slug}</c> و<c>icon_{slug}</c>.
+    /// والمُهايِئُ يَجمَع الأَدوارَ مِن البادِئات الثَلاث — ولا
+    /// يَقرَأ قاعِدَةَ بَيانات لِيَعرِفَ الأَدوار: تِلكَ مَعرِفَةُ
+    /// الخِدمَة.</para>
+    ///
+    /// <para>والمِلَفُّ لا يُقرَأ هُنا</b>: يُمَرَّر نَوعُه وطولُه
+    /// ودالَّةُ قِراءَتِه، فَتَرفُض الخِدمَةُ الحَجمَ قَبلَ أَن
+    /// يَدخُلَ بايتٌ الذاكِرَة.</para>
+    /// </summary>
+    public static PwaSaveRequest ReadPwa(HttpRequest req)
+    {
+        var slugs = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var key in req.Form.Keys)
+        {
+            if (key.StartsWith("name_", StringComparison.Ordinal)) slugs.Add(key["name_".Length..]);
+            else if (key.StartsWith("clear_", StringComparison.Ordinal)) slugs.Add(key["clear_".Length..]);
+        }
+        foreach (var f in req.Form.Files)
+            if (f.Name.StartsWith("icon_", StringComparison.Ordinal)) slugs.Add(f.Name["icon_".Length..]);
+
+        var roles = new List<PwaRoleInput>();
+        foreach (var slug in slugs)
+        {
+            var file = req.Form.Files[$"icon_{slug}"];
+            UploadedIcon? icon = file is { Length: > 0 }
+                ? new UploadedIcon(file.ContentType, file.Length, async ct =>
+                    {
+                        using var ms = new MemoryStream();
+                        await file.CopyToAsync(ms, ct);
+                        return ms.ToArray();
+                    })
+                : null;
+
+            roles.Add(new PwaRoleInput(
+                slug,
+                req.Form[$"name_{slug}"].ToString(),
+                req.Form[$"clear_{slug}"].ToString() == "1",
+                icon));
+        }
+
+        return new PwaSaveRequest(roles);
+    }
+
     // ─── نَتيجَة ← ردّ ─────────────────────────────────────────────
 
     /// <summary>

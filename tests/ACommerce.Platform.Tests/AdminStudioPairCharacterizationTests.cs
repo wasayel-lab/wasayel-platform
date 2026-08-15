@@ -109,12 +109,16 @@ public class AdminStudioPairCharacterizationTests
             "وSortOrder مَعاً — يَفهَمُه القارِئانِ القائِمانِ بِلا تَعديل حَرفٍ في أَيٍّ مِنهُما. " +
             "ورَمزُ الخَطَأ صارَ bad_format (كانَ format في الاستوديو)."),
 
-        new("pwa", PairState.Diverged,
-            new Side("/admin/tenants/{slug}/pwa/save", true,  "403",
-                     new[] { "icon_bad_type", "icon_too_large" }, Array.Empty<string>()),
-            new Side("/studio/apps/{slug}/pwa/save",   false, "302",
-                     new[] { "icon_bad_type", "icon_too_large" }, Array.Empty<string>()),
-            ""),
+        new("pwa", PairState.Unified,
+            new Side("/admin/tenants/{slug}/pwa/save", true, "403",
+                     Array.Empty<string>(), new[] { "service" }),
+            new Side("/studio/apps/{slug}/pwa/save",   true, "302",
+                     Array.Empty<string>(), new[] { "service" }),
+            "الجِسمانِ كانا مُتَطابِقَين حَرفاً عَدا الحارِس والتَدقيق والمَسار — فَالتَوحيدُ بِلا " +
+            "خاسِر، والمَحسومُ الوَحيد أَنّ التَدقيق يُكتَب في الطَرَفَين. وهذا بِعَينِه ما " +
+            "يُبَرِّر الإخراج: نُسخَتانِ مُتَطابِقَتانِ اليَومَ هُما مُتَبايِنَتانِ بَعدَ أَوَّل " +
+            "تَعديلٍ يُصيب إحداهُما — كَما وَقَعَ فِعلاً في الفِئات والأَدوار والمَناطِق. " +
+            "والتَطابُقُ حالٌ لا ضَمان."),
 
         new("attributes", PairState.Diverged,
             new Side("/admin/tenants/{slug}/attributes/save", true,  "403",

@@ -1935,40 +1935,14 @@ public static class MarketplaceTemplateExtensions
         {
             if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
                 return Forbidden();
-            await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.pwa_save");
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, PwaSaveService.AuditAction);
+
             await using var s = store.LightweightSession();
-            var t = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
-            if (t is null) return Results.Redirect("/admin");
+            var result = await PwaSaveService.SaveAsync(s, slug, TenantConfigSurface.ReadPwa(req));
+            if (result.Ok) await s.SaveChangesAsync();
 
-            const long maxBytes = 256 * 1024;
-            var allowed = new[] { "image/png", "image/svg+xml", "image/webp" };
-
-            foreach (var r in t.Roles)
-            {
-                var nameInput = req.Form[$"name_{r.Slug}"].ToString().Trim();
-                r.PwaName = string.IsNullOrEmpty(nameInput) ? null : nameInput;
-
-                if (req.Form[$"clear_{r.Slug}"].ToString() == "1")
-                    r.PwaIconDataUrl = null;
-
-                var file = req.Form.Files[$"icon_{r.Slug}"];
-                if (file is { Length: > 0 })
-                {
-                    if (file.Length > maxBytes)
-                        return Results.Redirect($"/admin/tenants/{slug}/pwa?err=icon_too_large");
-                    var ct = file.ContentType.ToLowerInvariant();
-                    if (!allowed.Contains(ct))
-                        return Results.Redirect($"/admin/tenants/{slug}/pwa?err=icon_bad_type");
-                    using var ms = new MemoryStream();
-                    await file.CopyToAsync(ms);
-                    var b64 = Convert.ToBase64String(ms.ToArray());
-                    r.PwaIconDataUrl = $"data:{ct};base64,{b64}";
-                }
-            }
-
-            s.Store(t);
-            await s.SaveChangesAsync();
-            return Results.Redirect($"/admin/tenants/{slug}/pwa?saved=1");
+            return TenantConfigSurface.Outcome(result,
+                $"/admin/tenants/{slug}/pwa?saved=1", $"/admin/tenants/{slug}/pwa", "/admin");
         }).DisableAntiforgery();
 
         // ─── Admin: save regions ────────────────────────────────────────
@@ -3031,42 +3005,18 @@ public static class MarketplaceTemplateExtensions
         // Studio بِحارِس المِلكِيَّة، والتَّوجيهات إلى مَسارات /studio/apps/.
         app.MapPost("/studio/apps/{slug}/pwa/save", async (
             string slug, HttpRequest req, IDocumentStore store,
-            Services.Incubator.StudioAuth auth) =>
+            Services.Incubator.StudioAuth auth,
+            Services.Audit.AuditWriter audit) =>
         {
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, PwaSaveService.AuditAction);
+
             await using var s = store.LightweightSession();
-            var t = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
-            if (t is null) return Results.Redirect("/studio");
+            var result = await PwaSaveService.SaveAsync(s, slug, TenantConfigSurface.ReadPwa(req));
+            if (result.Ok) await s.SaveChangesAsync();
 
-            const long maxBytes = 256 * 1024;
-            var allowed = new[] { "image/png", "image/svg+xml", "image/webp" };
-
-            foreach (var r in t.Roles)
-            {
-                var nameInput = req.Form[$"name_{r.Slug}"].ToString().Trim();
-                r.PwaName = string.IsNullOrEmpty(nameInput) ? null : nameInput;
-
-                if (req.Form[$"clear_{r.Slug}"].ToString() == "1")
-                    r.PwaIconDataUrl = null;
-
-                var file = req.Form.Files[$"icon_{r.Slug}"];
-                if (file is { Length: > 0 })
-                {
-                    if (file.Length > maxBytes)
-                        return Results.Redirect($"/studio/apps/{slug}/pwa?err=icon_too_large");
-                    var ct = file.ContentType.ToLowerInvariant();
-                    if (!allowed.Contains(ct))
-                        return Results.Redirect($"/studio/apps/{slug}/pwa?err=icon_bad_type");
-                    using var ms = new MemoryStream();
-                    await file.CopyToAsync(ms);
-                    var b64 = Convert.ToBase64String(ms.ToArray());
-                    r.PwaIconDataUrl = $"data:{ct};base64,{b64}";
-                }
-            }
-
-            s.Store(t);
-            await s.SaveChangesAsync();
-            return Results.Redirect($"/studio/apps/{slug}/pwa?saved=1");
+            return TenantConfigSurface.Outcome(result,
+                $"/studio/apps/{slug}/pwa?saved=1", $"/studio/apps/{slug}/pwa", "/studio");
         }).DisableAntiforgery();
 
         // ─── Studio: save attribute definitions for a scope ─────────────
