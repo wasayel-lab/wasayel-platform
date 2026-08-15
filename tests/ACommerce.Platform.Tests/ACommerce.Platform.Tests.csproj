@@ -16,6 +16,10 @@
     <!-- Reports.Core لا يَصِل إلى القالِب — ومُقابَلَة وَصف التَدَفُّق
          بِتَعداد ReportStatus تَحتاجُه. مَرجِع اختِبار فَقَط. -->
     <ProjectReference Include="..\..\libs\kits\Reports\ACommerce.Kit.Reports.Core\ACommerce.Kit.Reports.Core.csproj" />
+    <!-- بُرهان الرَبط (‏LiveOutboxTenantProofTests) يُقلِع مُضيفاً حَقيقيّاً
+         بِنَفس تَركيب HostingExtensions — Marten + Wolverine + Wolverine.Http.
+         مَرجِعٌ لِلبُرهان وَحدَه: بِدونِه تُقرَأ الدَعوى ولا تُقاس. -->
+    <ProjectReference Include="..\..\libs\core\ACommerce.Platform.Hosting\ACommerce.Platform.Hosting.csproj" />
   </ItemGroup>
 
 </Project>
