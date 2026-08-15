@@ -86,12 +86,16 @@ public class AdminStudioPairCharacterizationTests
             "bad_format/empty — لُغَةُ المَناطِق والخَصائِص على الطَرَفَين أَصلاً، فَتَوَحَّدَ " +
             "المُعجَمُ بَدَلَ أَن يَغلِبَ طَرَف."),
 
-        new("roles", PairState.Diverged,
-            new Side("/admin/tenants/{slug}/roles/save", true,  "403",
-                     Array.Empty<string>(), Array.Empty<string>()),
-            new Side("/studio/apps/{slug}/roles/save",   false, "302",
-                     Array.Empty<string>(), Array.Empty<string>()),
-            ""),
+        new("roles", PairState.Unified,
+            new Side("/admin/tenants/{slug}/roles/save", true, "403",
+                     Array.Empty<string>(), new[] { "service" }),
+            new Side("/studio/apps/{slug}/roles/save",   true, "302",
+                     Array.Empty<string>(), new[] { "service" }),
+            "غَلَبَ /admin، والفَرقُ هُنا كانَ فَقدَ بَياناتٍ لا اختِلافَ ذَوق: الاستوديو كانَ " +
+            "يُعيد إنشاءَ كُلّ دَورٍ مِن الكاتالوج، والدَورُ يَحمِل PwaName وPwaIconDataUrl " +
+            "وLabel وIcon مُخَصَّصَة — فَحِفظُ صَفحَةِ الأَدوار مِنه يَمحو أَيقونَةَ PWA الَّتي " +
+            "رَفَعَها صاحِبُها قَبلَ دَقائِق. والغالِبُ هُوَ الَّذي لا يَفقِد. والصَلاحِيّاتُ " +
+            "والحُقولُ تُحَدَّث مِن الكاتالوج في الحالَتَين — ذلك مَقصود ولَم يَتَغَيَّر."),
 
         new("regions", PairState.Diverged,
             new Side("/admin/tenants/{slug}/regions/save", true,  "403",

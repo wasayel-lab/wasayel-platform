@@ -41,6 +41,22 @@ public static class TenantConfigSurface
     public static CategoriesSaveRequest ReadCategories(HttpRequest req) =>
         new(req.Form["categories"].ToString());
 
+    /// <summary>النَموذَج يُرسِل <c>role_{catalogSlug}=1</c> لِكُلّ
+    /// دَورٍ مُختار. والمُهايِئ يَقرَأ <b>المَفاتيح</b> فَقَط ولا
+    /// يَعرِف الكاتالوج — مُطابَقَتُها بِالكاتالوج وتَرتيبُها شَأنُ
+    /// الخِدمَة.</summary>
+    public static RolesSaveRequest ReadRoles(HttpRequest req)
+    {
+        var selected = req.Form
+            .Where(kv => kv.Key.StartsWith("role_", StringComparison.Ordinal) &&
+                         kv.Value.ToString() == "1")
+            .Select(kv => kv.Key["role_".Length..])
+            .ToArray();
+
+        var def = req.Form["default_role"].ToString().Trim().ToLowerInvariant();
+        return new RolesSaveRequest(selected, string.IsNullOrEmpty(def) ? null : def);
+    }
+
     // ─── نَتيجَة ← ردّ ─────────────────────────────────────────────
 
     /// <summary>

@@ -102,4 +102,71 @@ public class TenantConfigDecisionTests
         Assert.Equal("cars", cats[1].Slug);
         Assert.Equal(1, cats[1].SortOrder);
     }
+
+    // ─── الأَدوار ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// <para><b>البُرهان الَّذي كَتَبَ حَسمَ الأَدوار.</b> دَورٌ
+    /// قائِمٌ رُفِعَت لَه أَيقونَةُ PWA واسمٌ مُخَصَّص، ثُمَّ حُفِظَت
+    /// صَفحَةُ الأَدوار بِنَفس الاختِيار: كانَ سُلوك
+    /// <c>/studio</c> يَمحو الاثنَين، وسُلوك <c>/admin</c>
+    /// يُبقيهِما. والآنَ تَعريفٌ واحِد، وهذا الاختِبار هُوَ الَّذي
+    /// يَمنَع عَودَةَ المَحو.</para>
+    /// </summary>
+    [Fact]
+    public void Roles_keep_the_owners_customisation_when_the_same_role_is_saved_again()
+    {
+        var tmpl = ACommerce.Kit.Roles.RoleCatalog.All[0];
+
+        var existing = ACommerce.Kit.Roles.RoleCatalog.InstantiateRole(tmpl, 7);
+        existing.Label = "تَسمِيَتي";
+        existing.Icon = "🐪";
+        existing.PwaName = "تَطبيقي";
+        existing.PwaIconDataUrl = "data:image/png;base64,AAA";
+
+        var composed = RolesSaveService.Compose(
+            new[] { existing }, new[] { tmpl.Slug }, tmpl.Slug);
+
+        var role = Assert.Single(composed);
+        Assert.Equal("تَسمِيَتي", role.Label);
+        Assert.Equal("🐪", role.Icon);
+        Assert.Equal("تَطبيقي", role.PwaName);
+        Assert.Equal("data:image/png;base64,AAA", role.PwaIconDataUrl);
+
+        // وما يَملِكُه الكاتالوج يُحَدَّث — وذلك مَقصود.
+        Assert.Equal(tmpl.Permissions.ToList(), role.Permissions);
+        Assert.Equal(tmpl.HomeRoute, role.HomeRoute);
+        Assert.Equal(0, role.SortOrder);
+        Assert.True(role.IsDefault);
+    }
+
+    /// <summary>التَرتيبُ تَرتيبُ الكاتالوج لا تَرتيبُ الاختِيار —
+    /// فَنَفسُ المُدخَل يُعطي نَفسَ <c>SortOrder</c> مِن أَيّ
+    /// سَطح.</summary>
+    [Fact]
+    public void Roles_are_ordered_by_the_catalogue_not_by_the_form()
+    {
+        var all = ACommerce.Kit.Roles.RoleCatalog.All;
+        Assert.True(all.Count >= 3, "أَداة عَمياء: الكاتالوج أَصغَر مِن أَن يُرَتَّب.");
+
+        var reversed = new[] { all[2].Slug, all[0].Slug };
+        var composed = RolesSaveService.Compose(Array.Empty<ACommerce.Kit.Roles.Role>(), reversed, null);
+
+        Assert.Equal(new[] { all[0].Slug, all[2].Slug }, composed.Select(r => r.Slug));
+        Assert.Equal(new[] { 0, 1 }, composed.Select(r => r.SortOrder));
+        Assert.All(composed, r => Assert.False(r.IsDefault));
+    }
+
+    /// <summary>ودَورٌ لَم يُختَر يَخرُج — نَفسُ سُلوك المَسارَين
+    /// قَبلَ التَوحيد، ولَم يُضَف رَفضٌ لِاختِيارٍ فارِغ لِأَنَّه
+    /// لَم يَكُن.</summary>
+    [Fact]
+    public void Roles_that_were_not_selected_are_dropped()
+    {
+        var all = ACommerce.Kit.Roles.RoleCatalog.All;
+        var existing = all.Take(2).Select((t, i) => ACommerce.Kit.Roles.RoleCatalog.InstantiateRole(t, i)).ToArray();
+
+        Assert.Empty(RolesSaveService.Compose(existing, Array.Empty<string>(), null));
+        Assert.Single(RolesSaveService.Compose(existing, new[] { all[1].Slug }, null));
+    }
 }

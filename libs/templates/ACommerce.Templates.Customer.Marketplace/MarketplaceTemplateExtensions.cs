@@ -1760,51 +1760,14 @@ public static class MarketplaceTemplateExtensions
         {
             if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
                 return Forbidden();
-            await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.roles_save");
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, RolesSaveService.AuditAction);
+
             await using var s = store.LightweightSession();
-            var t = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
-            if (t is null) return Results.Redirect("/admin");
+            var result = await RolesSaveService.SaveAsync(s, slug, TenantConfigSurface.ReadRoles(req));
+            if (result.Ok) await s.SaveChangesAsync();
 
-            var defaultRole = req.Form["default_role"].ToString().Trim().ToLowerInvariant();
-            var existingByCatalog = t.Roles
-                .Where(r => !string.IsNullOrEmpty(r.CatalogSlug))
-                .ToDictionary(r => r.CatalogSlug);
-
-            var newRoles = new List<ACommerce.Kit.Roles.Role>();
-            var idx = 0;
-            foreach (var tmpl in ACommerce.Kit.Roles.RoleCatalog.All)
-            {
-                if (req.Form[$"role_{tmpl.Slug}"].ToString() != "1") continue;
-                ACommerce.Kit.Roles.Role role;
-                if (existingByCatalog.TryGetValue(tmpl.Slug, out var prev))
-                {
-                    // اِحفَظ تَخصيصات المُصَمِّم (Label/Icon لَو غُيِّرَت)
-                    role = prev;
-                    role.Permissions = tmpl.Permissions.ToList();
-                    role.HomeRoute = tmpl.HomeRoute;
-                    role.Fields = tmpl.Fields.Select(f => new ACommerce.Kit.Roles.RoleField
-                    {
-                        Code = f.Code, Label = f.Label, Type = f.Type,
-                        IsRequired = f.IsRequired,
-                        Options = f.Options.Select(o => new ACommerce.Kit.Roles.RoleFieldOption
-                        {
-                            Value = o.Value, Label = o.Label
-                        }).ToList()
-                    }).ToList();
-                    role.SortOrder = idx++;
-                }
-                else
-                {
-                    role = ACommerce.Kit.Roles.RoleCatalog.InstantiateRole(tmpl, idx++);
-                }
-                role.IsDefault = defaultRole == tmpl.Slug;
-                newRoles.Add(role);
-            }
-
-            t.Roles = newRoles;
-            s.Store(t);
-            await s.SaveChangesAsync();
-            return Results.Redirect($"/admin/tenants/{slug}/roles?saved=1");
+            return TenantConfigSurface.Outcome(result,
+                $"/admin/tenants/{slug}/roles?saved=1", $"/admin/tenants/{slug}/roles", "/admin");
         }).DisableAntiforgery();
 
         // ─── Admin: decide a tenant-authored role definition ────────────
@@ -3096,27 +3059,18 @@ public static class MarketplaceTemplateExtensions
 
         app.MapPost("/studio/apps/{slug}/roles/save", async (
             string slug, HttpRequest req, IDocumentStore store,
-            Services.Incubator.StudioAuth auth) =>
+            Services.Incubator.StudioAuth auth,
+            Services.Audit.AuditWriter audit) =>
         {
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
-            var defaultRole = req.Form["default_role"].ToString().Trim().ToLowerInvariant();
-            var picks = new List<ACommerce.Kit.Roles.Role>();
-            var order = 0;
-            foreach (var tmpl in ACommerce.Kit.Roles.RoleCatalog.All)
-            {
-                if (req.Form[$"role_{tmpl.Slug}"].ToString() != "1") continue;
-                var role = ACommerce.Kit.Roles.RoleCatalog.InstantiateRole(tmpl, order++);
-                role.IsDefault = defaultRole == tmpl.Slug;
-                picks.Add(role);
-            }
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, RolesSaveService.AuditAction);
 
             await using var s = store.LightweightSession();
-            var t = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
-            if (t is null) return Results.Redirect("/studio");
-            t.Roles = picks;
-            s.Store(t);
-            await s.SaveChangesAsync();
-            return Results.Redirect($"/studio/apps/{slug}/roles?saved=1");
+            var result = await RolesSaveService.SaveAsync(s, slug, TenantConfigSurface.ReadRoles(req));
+            if (result.Ok) await s.SaveChangesAsync();
+
+            return TenantConfigSurface.Outcome(result,
+                $"/studio/apps/{slug}/roles?saved=1", $"/studio/apps/{slug}/roles", "/studio");
         }).DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/regions/save", async (
