@@ -67,6 +67,15 @@ public class AppliedEventEmitterTests
             "الانتِهاء يُعرَض بِمُقارَنَة ExpiresAt > now في الواجِهَة، ولا حَدَث يَكتُبُه. " +
             "مُثَبَّت سَلَفاً في FlowInventoryTests بِرَمز state_unreachable — " +
             "وهذا الفَحص يَراه مِن جِهَة الحَدَث لا مِن جِهَة الحالَة. لا مَوجَة لَه بَعد."),
+
+        // ─── وُلِدَ يَتيماً بِإغلاق الثَغرَة (‏2026-08-15) ─────────────────
+        new("ListingEdited", "الثَغرَة",
+            "باعِثُه الوَحيد كانَ ListingHandlers.Edit — نُقطَة " +
+            "POST /{slug}/api/listings/{id}/edit المَكشوفَة، وقَد حُذِفَت. " +
+            "وهذا وَحدَه يُثبِت أَنَّها لَم تَكُن مَساراً شَرعِيّاً: لا شاشَة " +
+            "تَحرير إعلان في المُنتَج إطلاقاً، فَما كانَ أَحَدٌ يَبلُغ التَحرير " +
+            "إلّا بِطَلَبٍ مَجهول. فَجوَةُ مُنتَج مُعلَنَة الآن بَعدَ أَن كانَت " +
+            "مَستورَةً بِثَغرَة — تُسَدّ بِشاشَة تَحرير مَحروسَة، لا بِإعادَة النُقطَة."),
     };
 
     // ─── الفَحص ───────────────────────────────────────────────────────
@@ -106,19 +115,25 @@ public class AppliedEventEmitterTests
     }
 
     /// <summary>
-    /// <para><b>العَدَد المُثَبَّت</b> — خَمسَة اليَوم، وهذا الرَقَم هو ما
+    /// <para><b>العَدَد المُثَبَّت</b> — سِتَّة اليَوم، وهذا الرَقَم هو ما
     /// يَنقُص مَوجَةً بَعدَ مَوجَة.</para>
     ///
     /// <para><b>وحِسابُه لَيسَ ما تَوَقَّعَه التَصميم</b>: عَدَّ خَمسَةً
     /// وقَصَدَ أَحداثَ الاشتِراك الخَمسَة. الواقِع المَقيس: أَربَعَة
-    /// مِنها بَقِيَت (‏<c>QuotaConsumed</c> نالَ مُصدِرَه في هذه
+    /// مِنها بَقِيَت (‏<c>QuotaConsumed</c> نالَ مُصدِرَه في تِلكَ
     /// المَوجَة)، <b>وانضَمَّ إلَيها <c>OfferExpired</c></b> مِن عُدَّة
-    /// أُخرى. خَمسَة إذَن — بِتَركيبَة مُختَلِفَة.</para>
+    /// أُخرى.</para>
+    ///
+    /// <para><b>والسادِس نَما بِقَرار مَرئيّ لا بِإهمال</b>:
+    /// <c>ListingEdited</c> فَقَدَ باعِثَه حينَ حُذِفَت نُقطَة التَحرير
+    /// المَكشوفَة. والقائِمَة تَنمو هُنا <b>لِأَنّ الحَذف كَشَفَ فَجوَةَ
+    /// مُنتَجٍ كانَت الثَغرَةُ تَستُرُها</b> — وهذا بِعَينِه ما وُجِدَت
+    /// القائِمَة لِتُظهِرَه بَدَل أَن يَمُرّ صامِتاً.</para>
     /// </summary>
     [Fact]
-    public void Exactly_five_orphans_remain_and_quota_consumed_is_not_among_them()
+    public void Exactly_six_orphans_remain_and_quota_consumed_is_not_among_them()
     {
-        Assert.Equal(5, PinnedOrphans.Length);
+        Assert.Equal(6, PinnedOrphans.Length);
         Assert.Equal(4, PinnedOrphans.Count(o => o.Event.StartsWith("Subscription", StringComparison.Ordinal)
                                               || o.Event.StartsWith("Quota", StringComparison.Ordinal)));
         Assert.DoesNotContain("QuotaConsumed", PinnedOrphans.Select(o => o.Event));
@@ -148,23 +163,27 @@ public class AppliedEventEmitterTests
     }
 
     /// <summary>
-    /// <para><b>دَين مُوَثَّق لا يُفاجِئ</b>: <c>SubscriptionCreated</c> لَه
-    /// <b>باعِثانِ مُتَوازِيان</b> — مُعالِج Wolverine
-    /// (<c>SubscriptionHandlers</c>) ونُقطَة Minimal-API المُضَمَّنَة في
-    /// القالِب، والمُستَهلِك الحَيّ هو الثاني. لَم يُصلَح في هذه المَوجَة
-    /// لِأَنّ تَوحيدَهُما تَغييرُ سُلوك، وهذه المَوجَة شَرطُها أَن تُضيفَ
-    /// باعِثاً غائِباً لا أَن تُبَدِّلَ مَساراً قائِماً.</para>
+    /// <para><b>دَينٌ كانَ مُوَثَّقاً وقَد سُدِّد</b>: كانَ لِـ
+    /// <c>SubscriptionCreated</c> <b>باعِثانِ مُتَوازِيان</b> — مُعالِج
+    /// Wolverine (<c>SubscriptionHandlers</c>) ونُقطَة Minimal-API في
+    /// القالِب، والمُستَهلِك الحَيّ هو الثاني. وقَد وُصِفَ يَومَها بِأَنّ
+    /// تَوحيدَهُما «تَغييرُ سُلوك» يُؤَجَّل لِمَوجَتِه.</para>
     ///
-    /// <para><b>وهذا الاختِبار يُثَبِّتُه بِرَقَمِه</b> كَي لا يُنسى: الفَحص
-    /// أَعلاه يَعُدُّ «واحِداً عَلى الأَقَلّ» فَلا يُنَبِّه إلى اثنَين.</para>
+    /// <para><b>وسَدَّدَته مَوجَةُ الثَغرَة بِلا أَن تَقصِدَه</b>: الباعِث
+    /// الأَوَّل كانَ <c>POST /{slug}/api/subscriptions/start</c> — نُقطَةً
+    /// <b>بِلا حارِس</b> تَمنَح حِصَّةَ إعلاناتٍ لِأَيّ مُعَرِّف يُكتَب في
+    /// جِسم الطَلَب. فَحَذفُها أَزالَ الازدِواج وأَغلَقَ التِفافاً على
+    /// الاستِحقاق مَعاً. <b>والباقي واحِد: مَسار القالِب المَحروس.</b></para>
+    ///
+    /// <para><b>والاختِبار يَبقى مُثَبِّتاً بِرَقَمِه</b> — لكِن بِالاتِّجاه
+    /// المَقلوب: باعِثٌ ثانٍ يَعود يَحمَرّ.</para>
     /// </summary>
     [Fact]
-    public void SubscriptionCreated_still_has_two_parallel_emitters()
+    public void SubscriptionCreated_now_has_exactly_one_emitter_in_the_template()
     {
         var sites = EmitterSites("SubscriptionCreated").ToArray();
-        Assert.Equal(2, sites.Length);
-        Assert.Contains(sites, f => f.EndsWith("SubscriptionHandlers.cs", StringComparison.Ordinal));
-        Assert.Contains(sites, f => f.EndsWith("MarketplaceTemplateExtensions.cs", StringComparison.Ordinal));
+        var only = Assert.Single(sites);
+        Assert.EndsWith("MarketplaceTemplateExtensions.cs", only, StringComparison.Ordinal);
     }
 
     // ─── الأَدَوات ────────────────────────────────────────────────────

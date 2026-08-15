@@ -1,43 +1,23 @@
-using ACommerce.Platform.Shared;
-using Marten;
-using Wolverine.Http;
-
 namespace ACommerce.Kit.Support.Server;
 
+/// <summary>
+/// <para><b>الصِنف باقٍ فارِغاً عَمداً</b> — <c>Program.cs</c> يُحيل إلَيه
+/// لِمَسح الـ assembly.</para>
+///
+/// <para><b>ما كانَ هُنا وَلِماذا زال:</b> ثَلاث نِقاط HTTP —
+/// <c>POST /{slug}/api/support/open</c> و<c>…/{id}/reply</c>
+/// و<c>GET …/mine</c> — <b>بِلا حارِس واحِد</b>. القياس الحَيّ
+/// (‏2026-08-15): مَجهول فَتَحَ تَذكِرَة، و<b>رَدَّ عَلى أَيّ تَذكِرَة
+/// بِـ <c>FromStaff: true</c></b> — أَي انتَحَلَ الدَعم الفَنّيّ نَفسَه —
+/// وقَرَأَ تَذاكِر أَيّ مُستَخدِم بِمُعَرِّفِه.</para>
+///
+/// <para><b>ولِماذا الحَذف لا الحِراسَة:</b> صِفر مُستَهلِك مَقيس؛
+/// والمَسار الحَيّ <c>POST /{slug}/support/open</c> مَحروس
+/// (‏<c>302</c> إلى الدُخول لِلمَجهول)، والرَدّ الإشرافيّ يَمُرّ بِـ
+/// <c>POST /studio/apps/{slug}/tickets/{id}/reply</c> خَلف
+/// <c>StudioOwnsAsync</c>. و<c>FromStaff</c> المَأخوذ مِن جِسم الطَلَب
+/// يَجعَل التَوثيق وَحدَه غَير كافٍ (القاعِدَة ٦).</para>
+/// </summary>
 public static class TicketHandlers
 {
-    [WolverinePost("/{slug}/api/support/open")]
-    public static async Task<Ticket?> Open(OpenTicket cmd, IDocumentStore store, ITenantContext tenantCtx)
-    {
-        if (!tenantCtx.IsResolved) return null;
-        await using var s = store.LightweightSession(tenantCtx.Slug);
-        var ev = new TicketCreated(Guid.NewGuid(), cmd.AuthorId, cmd.AuthorName,
-            cmd.Subject, cmd.Body, DateTime.UtcNow);
-        s.Events.StartStream<Ticket>(ev.Id, ev);
-        await s.SaveChangesAsync();
-        return await s.Events.AggregateStreamAsync<Ticket>(ev.Id);
-    }
-
-    [WolverinePost("/{slug}/api/support/{id:guid}/reply")]
-    public static async Task<TicketReplied?> Reply(Guid id, ReplyTicket cmd,
-        IDocumentStore store, ITenantContext tenantCtx)
-    {
-        if (!tenantCtx.IsResolved) return null;
-        await using var s = store.LightweightSession(tenantCtx.Slug);
-        var ev = new TicketReplied(id, Guid.NewGuid(), cmd.AuthorName, cmd.FromStaff,
-            cmd.Body, DateTime.UtcNow);
-        s.Events.Append(id, ev);
-        await s.SaveChangesAsync();
-        return ev;
-    }
-
-    [WolverineGet("/{slug}/api/support/mine")]
-    public static async Task<IReadOnlyList<Ticket>> Mine(IDocumentStore store, ITenantContext tenantCtx, Guid userId)
-    {
-        if (!tenantCtx.IsResolved) return Array.Empty<Ticket>();
-        await using var s = store.QuerySession(tenantCtx.Slug);
-        return await s.Query<Ticket>()
-            .Where(t => t.AuthorId == userId)
-            .OrderByDescending(t => t.UpdatedAt).Take(50).ToListAsync();
-    }
 }

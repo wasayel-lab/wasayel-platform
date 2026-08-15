@@ -1,98 +1,37 @@
 using ACommerce.Platform.Shared;
-using Marten;
-using Marten.Events.Projections;
-using Wolverine.Http;
-using Wolverine.Marten;
 
 namespace ACommerce.Kit.Listings.Server;
 
 /// <summary>
-/// Handlers الإعلانات. مُلاحَظَة في الـ multi-tenancy:
-/// <list type="bullet">
-///   <item>Marten conjoined-tenancy يُضيف <c>tenant_id</c> لِكُلّ event.</item>
-///   <item>الـ session مَحصور بـ tenant عَن طَريق
-///         <c>store.LightweightSession(tenantSlug)</c> داخِل الـ handler.</item>
-///   <item>الـ slug يَأتي من <see cref="ITenantContext"/> الذي يَملَؤه
-///         middleware من URL.</item>
-/// </list>
+/// <para><b>الصِنف باقٍ فارِغاً عَمداً</b> — <c>Program.cs</c> يُحيل إلَيه
+/// (<c>AddKitAssembly(typeof(ListingHandlers).Assembly)</c>) لِيَمسَح
+/// الـ assembly، فَحَذفُه يَكسِر التَركيب بِلا فائِدَة.</para>
+///
+/// <para><b>ما كانَ هُنا وَلِماذا زال:</b> خَمس نِقاط HTTP —
+/// <c>POST /{slug}/api/listings</c> و<c>…/{id}/edit</c> و<c>…/{id}/delete</c>
+/// و<c>GET …/{id}</c> و<c>GET …</c> — <b>بِلا حارِس واحِد</b>. القياس الحَيّ
+/// (‏2026-08-15): طَلَب <c>curl</c> مَجهول بِلا cookie ولا رَأس تَخويل رَدَّ
+/// <c>200</c> وأَنشَأَ إعلاناً فِعلِيّاً، وعَدَّلَ عُنوان إعلانٍ قائِم
+/// وسِعرَه، وحَذَفَه — في <b>أَيّ</b> مُستَأجِر يُسَمّى في المَسار. وقَد
+/// وَقَعَ ذلك فِعلاً في <c>ashare</c> (عَرض المُستَثمِرين): ثَلاثَة إعلانات
+/// دَخيلَة.</para>
+///
+/// <para><b>ولِماذا الحَذف لا الحِراسَة:</b> النِقاط الخَمس
+/// <b>بِصِفر مُستَهلِك مَقيس</b> — مَسحُ المُستَودَع كُلِّه
+/// (<c>.cs</c>, <c>.razor</c>, <c>.js</c>) لَم يَجِد لِمَسارِها ذِكراً
+/// خارِجَ سَطر إعلانِها نَفسِه؛ والواجِهَة كُلُّها SSR تَمُرّ بِـ
+/// <c>POST /{slug}/listings/create</c> المَحروس بِأَربَعَة حُرّاس
+/// (‏<c>RequireAuth</c> + <c>RequireTerms</c> +
+/// <c>RequirePermission("listing.create")</c> +
+/// <c>RequireEntitlement</c>). فَحِراسَتُها كانَت سَتُبقي سَطحاً
+/// مُوازِياً بِلا مُستَعمِل — والقاعِدَة ١: التَجريد لا يَسبِق
+/// مُستَهلِكَه. وهُوِيَّة الفاعِل فيها كانَت تَأتي <b>مِن جِسم الطَلَب</b>
+/// (‏<c>SenderId</c>/<c>UserId</c>)، فَحارِسُ تَوثيقٍ وَحدَه كانَ
+/// سَيُنتِج بَوّابَةً تَبدو مُغلَقَة وتَبقى مَفتوحَة (القاعِدَة ٦).</para>
+///
+/// <para>المَنطِق نَفسُه (‏<c>ListingCreated</c>/<c>Edited</c>/<c>Deleted</c>
+/// وتَجميعُها) في <c>ACommerce.Kit.Listings.Core</c> بِلا مَساس.</para>
 /// </summary>
 public static class ListingHandlers
 {
-    [WolverinePost("/{slug}/api/listings")]
-    public static async Task<ListingCreated> Create(
-        CreateListing cmd,
-        IDocumentStore store,
-        ITenantContext tenantCtx)
-    {
-        if (!tenantCtx.IsResolved)
-            throw new InvalidOperationException("tenant_not_resolved");
-
-        await using var session = store.LightweightSession(tenantCtx.Slug);
-        var id = Guid.NewGuid();
-        var ev = new ListingCreated(
-            id, tenantCtx.Slug, cmd.Title, cmd.Description, cmd.Price,
-            cmd.CategorySlug, cmd.City, cmd.District,
-            cmd.Attributes ?? new(), DateTime.UtcNow);
-        session.Events.StartStream<Listing>(id, ev);
-        await session.SaveChangesAsync();
-        return ev;
-    }
-
-    [WolverinePost("/{slug}/api/listings/{id}/edit")]
-    public static async Task<ListingEdited?> Edit(
-        Guid id,
-        EditListing cmd,
-        IDocumentStore store,
-        ITenantContext tenantCtx)
-    {
-        if (!tenantCtx.IsResolved) return null;
-        await using var session = store.LightweightSession(tenantCtx.Slug);
-        var current = await session.Events.AggregateStreamAsync<Listing>(id);
-        if (current is null || current.IsDeleted) return null;
-
-        var ev = new ListingEdited(
-            id, cmd.Title, cmd.Description, cmd.Price,
-            cmd.CategorySlug, cmd.City, cmd.District,
-            cmd.Attributes, DateTime.UtcNow);
-        session.Events.Append(id, ev);
-        await session.SaveChangesAsync();
-        return ev;
-    }
-
-    [WolverinePost("/{slug}/api/listings/{id}/delete")]
-    public static async Task<ListingDeleted?> Delete(
-        Guid id, IDocumentStore store, ITenantContext tenantCtx)
-    {
-        if (!tenantCtx.IsResolved) return null;
-        await using var session = store.LightweightSession(tenantCtx.Slug);
-        var current = await session.Events.AggregateStreamAsync<Listing>(id);
-        if (current is null || current.IsDeleted) return null;
-        var ev = new ListingDeleted(id, DateTime.UtcNow);
-        session.Events.Append(id, ev);
-        await session.SaveChangesAsync();
-        return ev;
-    }
-
-    [WolverineGet("/{slug}/api/listings/{id}")]
-    public static async Task<Listing?> Get(
-        Guid id, IDocumentStore store, ITenantContext tenantCtx)
-    {
-        if (!tenantCtx.IsResolved) return null;
-        await using var session = store.QuerySession(tenantCtx.Slug);
-        return await session.Events.AggregateStreamAsync<Listing>(id);
-    }
-
-    [WolverineGet("/{slug}/api/listings")]
-    public static async Task<IReadOnlyList<Listing>> List(
-        IDocumentStore store, ITenantContext tenantCtx,
-        string? category = null, int take = 50)
-    {
-        if (!tenantCtx.IsResolved) return Array.Empty<Listing>();
-        await using var session = store.QuerySession(tenantCtx.Slug);
-        var q = session.Query<Listing>().Where(x => !x.IsDeleted);
-        if (!string.IsNullOrWhiteSpace(category))
-            q = q.Where(x => x.CategorySlug == category);
-        var results = await q.OrderByDescending(x => x.CreatedAt).Take(take).ToListAsync();
-        return results;
-    }
 }

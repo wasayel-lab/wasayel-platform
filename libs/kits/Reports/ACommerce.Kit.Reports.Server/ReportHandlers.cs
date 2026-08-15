@@ -1,21 +1,19 @@
 using ACommerce.Platform.Shared;
 using Marten;
-using Wolverine.Http;
 
 namespace ACommerce.Kit.Reports.Server;
 
+/// <summary>
+/// <para>مُعالِجات رَسائِل البَلاغات — <b>لا نِقاط HTTP</b>.</para>
+///
+/// <para><b>ما زال مِن هُنا:</b> <c>GET /{slug}/api/reports/pending</c> —
+/// <b>بِلا حارِس</b>، وكانَت تُسَلِّم <b>طابور الإشراف كامِلاً</b>
+/// لِمَجهول: أَسماء المُبَلِّغين ونُصوص بَلاغاتِهم وأَهدافَها، حَتّى
+/// مِئَتَي بَلاغ في الطَلَب الواحِد. وبِصِفر مُستَهلِك مَقيس — لَوحَة
+/// الإشراف الحَيَّة صَفحَة Razor تَقرَأ داخِل جَلسَة مَحروسَة.</para>
+/// </summary>
 public static class ReportHandlers
 {
-    [WolverineGet("/{slug}/api/reports/pending")]
-    public static async Task<IReadOnlyList<Report>> Pending(IDocumentStore store, ITenantContext ctx)
-    {
-        if (!ctx.IsResolved) return Array.Empty<Report>();
-        await using var s = store.QuerySession(ctx.Slug);
-        return await s.Query<Report>()
-            .Where(r => r.Status == ReportStatus.Pending || r.Status == ReportStatus.UnderReview)
-            .OrderByDescending(r => r.At).Take(200).ToListAsync();
-    }
-
     public static async Task<Guid> Handle(SubmitReport cmd, IDocumentStore store, ITenantContext ctx)
     {
         if (!ctx.IsResolved) return Guid.Empty;

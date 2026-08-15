@@ -1,54 +1,30 @@
-using Marten;
-using Wolverine.Http;
-using Wolverine.Marten;
-
 namespace ACommerce.Kit.Tenants.Server;
 
 /// <summary>
-/// Handlers لِكيت المُستَأجِرين. تُسَجَّل تلقائيّاً عَبر Wolverine
-/// assembly scan. الـ <c>[WolverinePost]</c>/<c>[WolverineGet]</c>
-/// تَكشِف الـ method كَ HTTP endpoint بدون controller منفصل.
+/// <para><b>الصِنف باقٍ فارِغاً عَمداً</b> — <c>Program.cs</c> يُحيل إلَيه
+/// لِمَسح الـ assembly (وفيه <see cref="SeoHandlers"/> الحَيَّة).</para>
+///
+/// <para><b>ما كانَ هُنا وَلِماذا زال — وحَسمُ رِوايَتَين مُتَعارِضَتَين:</b>
+/// <c>POST /admin/tenants</c> و<c>POST /admin/tenants/{slug}/categories</c>،
+/// كِلتاهُما <b>بِلا حارِس</b>. تَقريرٌ سابِق قالَ إنّ الأُولى تُنشِئ
+/// مُستَأجِراً بِلا تَوثيق، وقياسٌ سابِق أَعطى <c>500</c> فَبَدَت
+/// مَحروسَة. <b>القياس الفاصِل (‏2026-08-15) يَحسِمُها: مَكشوفَة</b> —
+/// والـ <c>500</c> لَم يَكُن حِراسَةً بَل جِسماً فارِغاً
+/// (<c>{}</c>) رَفَضَه Marten لِأَنّ المِفتاح فارِغ. وبِجِسم صَحيح رَدَّت
+/// <c>200</c> وأَنشَأَت مُستَأجِراً حَقيقيّاً بَلَغَته
+/// <c>GET /zz-guard-probe</c> بِـ <c>200</c>. وهذا حَرفِيّاً شَكل
+/// العَطَب في القاعِدَة ٦: <b>خَطَأ التَحَقُّق قِناعاً لِلثَغرَة</b>.
+/// والثانِيَة كَذلك: أَضافَت فِئَةً فِعلاً إلى مُستَأجِر قائِم بِطَلَب
+/// مَجهول.</para>
+///
+/// <para><b>ولِماذا الحَذف لا الحِراسَة:</b> كِلتاهُما <b>تُكَرِّر مَساراً
+/// مَحروساً قائِماً</b> بِصِفر مُستَهلِك مَقيس —
+/// <c>POST /admin/tenants/create</c> خَلف <c>PlatformAdminGuard</c>
+/// و<c>POST /admin/tenants/{slug}/categories/save</c> خَلف
+/// <c>TenantAdminGuard</c>، وكِلاهُما رَدَّ <c>403</c> لِلمَجهول في
+/// القياس نَفسِه. فَالحَذف يُبقي <b>تَعريفاً واحِداً</b> لِقَرار
+/// «يَجوز لَه» بَدَل ثانٍ يَنجَرِف عَنه.</para>
 /// </summary>
 public static class TenantHandlers
 {
-    [WolverinePost("/admin/tenants")]
-    public static async Task<Tenant> Create(CreateTenant cmd, IDocumentSession session)
-    {
-        var tenant = new Tenant
-        {
-            Id = cmd.Slug,
-            Name = cmd.Name,
-            BrandColor = cmd.BrandColor,
-            City = cmd.City,
-            TagLine = cmd.TagLine
-        };
-        session.Store(tenant);
-        await session.SaveChangesAsync();
-        return tenant;
-    }
-
-    [WolverinePost("/admin/tenants/{slug}/categories")]
-    public static async Task<Tenant?> AddCategoryHandler(
-        string slug, AddCategory cmd, IDocumentSession session)
-    {
-        var tenant = await session.LoadAsync<Tenant>(slug);
-        if (tenant is null) return null;
-        if (tenant.Categories.Any(c => c.Slug == cmd.CategorySlug)) return tenant;
-
-        tenant.Categories.Add(new Category
-        {
-            Slug = cmd.CategorySlug,
-            Label = cmd.Label,
-            Icon = cmd.Icon,
-            Attributes = cmd.Attributes ?? new()
-        });
-        session.Store(tenant);
-        await session.SaveChangesAsync();
-        return tenant;
-    }
-
-    // ملاحَظَة: كانَت هُنا GET endpoints لِـ /admin/tenants و
-    // /admin/tenants/{slug} كَـ JSON، لكِنَّها صارَت تَتَعارَض مَع
-    // صَفَحات Blazor SSR (@page) في القَالِب. الـ POSTs أَعلاه باقِيَة
-    // لِأَنَّها مُختَلِفَة في الـ verb.
 }

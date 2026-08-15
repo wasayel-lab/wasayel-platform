@@ -1,10 +1,19 @@
 using ACommerce.Kit.Realtime;
 using ACommerce.Platform.Shared;
 using Marten;
-using Wolverine.Http;
 
 namespace ACommerce.Kit.Notifications.Server;
 
+/// <summary>
+/// <para>مُعالِج رِسالَة الإشعار — <b>لا نِقاط HTTP</b>.</para>
+///
+/// <para><b>ما زال مِن هُنا:</b> <c>GET /{slug}/api/notifications?userId=…</c>
+/// و<c>POST /{slug}/api/notifications/{id}/read</c> — كِلتاهُما
+/// <b>بِلا حارِس</b>: الأُولى تَقرَأ إشعارات أَيّ مُستَخدِم لِمَجهول،
+/// والثانِيَة تُعَلِّم أَيّ إشعار مَقروءاً. وبِصِفر مُستَهلِك مَقيس —
+/// الواجِهَة تَقرَأ عَدّاداتِها مِن <c>/{slug}/api/me/unread</c> في
+/// القالَب، وهي نُقطَة أُخرى قائِمَة بِذاتِها.</para>
+/// </summary>
 public static class NotificationHandlers
 {
     /// <summary>
@@ -27,30 +36,5 @@ public static class NotificationHandlers
         session.Store(notif);
         await session.SaveChangesAsync();
         return new BroadcastToUser(tenantCtx.Slug, cmd.UserId, "notification", notif);
-    }
-
-    [WolverineGet("/{slug}/api/notifications")]
-    public static async Task<IReadOnlyList<Notification>> List(
-        IDocumentStore store, ITenantContext tenantCtx, Guid userId)
-    {
-        if (!tenantCtx.IsResolved) return Array.Empty<Notification>();
-        await using var s = store.QuerySession(tenantCtx.Slug);
-        return await s.Query<Notification>()
-            .Where(n => n.UserId == userId)
-            .OrderByDescending(n => n.At)
-            .Take(50)
-            .ToListAsync();
-    }
-
-    [WolverinePost("/{slug}/api/notifications/{id}/read")]
-    public static async Task<bool> MarkRead(
-        Guid id, IDocumentStore store, ITenantContext tenantCtx)
-    {
-        if (!tenantCtx.IsResolved) return false;
-        await using var s = store.LightweightSession(tenantCtx.Slug);
-        var n = await s.LoadAsync<Notification>(id);
-        if (n is null) return false;
-        if (!n.IsRead) { n.IsRead = true; s.Store(n); await s.SaveChangesAsync(); }
-        return true;
     }
 }

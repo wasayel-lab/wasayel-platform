@@ -1,20 +1,19 @@
 using ACommerce.Platform.Shared;
 using Marten;
-using Wolverine.Http;
 
 namespace ACommerce.Kit.Cart.Server;
 
+/// <summary>
+/// <para>مُعالِجات رَسائِل السَلَّة — <b>لا نِقاط HTTP</b>. الواجِهَة
+/// تَستَدعيها عَبر مَسارات القالَب المَحروسَة
+/// (<c>/{slug}/listings/{id}/cart/add</c> وأَخَواتها).</para>
+///
+/// <para><b>ما زال مِن هُنا:</b> <c>GET /{slug}/api/cart/{userId}</c> —
+/// نُقطَة <b>بِلا حارِس</b> كانَت تُعيد سَلَّة أَيّ مُستَخدِم لِمَجهول
+/// يَعرِف مُعَرِّفَه، وبِصِفر مُستَهلِك مَقيس.</para>
+/// </summary>
 public static class CartHandlers
 {
-    /// <summary>اِجلِب سَلَّة المُستَخدِم الحاليّ في هذا المَتجَر.</summary>
-    [WolverineGet("/{slug}/api/cart/{userId}")]
-    public static async Task<Cart> Get(IDocumentStore store, ITenantContext ctx, Guid userId)
-    {
-        if (!ctx.IsResolved) return new Cart { Id = userId };
-        await using var s = store.QuerySession(ctx.Slug);
-        return await s.LoadAsync<Cart>(userId) ?? new Cart { Id = userId };
-    }
-
     public static async Task Handle(AddToCart cmd, IDocumentStore store, ITenantContext ctx)
     {
         if (!ctx.IsResolved) return;
