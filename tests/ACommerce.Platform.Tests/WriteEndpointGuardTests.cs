@@ -241,6 +241,47 @@ public class WriteEndpointGuardTests
         Assert.DoesNotContain("ذَيل",   StripComments(sample));
     }
 
+    /// <summary>
+    /// <para><b>ونُقطَةٌ تُعلَن <c>GET</c> وتَكتُب هي نُقطَةُ كِتابَة.</b>
+    /// هذا هُوَ الثَقب الَّذي تَرَكَته النُسخَة الأُولى: كانَت تَسأَل
+    /// <c>MapPost|Put|Delete|Patch</c> وَحدَها — أَي أَنَّها كانَت
+    /// تَقرَأ <b>الفِعل المُعلَن</b> لا <b>الفِعل الواقِع</b>.
+    /// و<c>MapGet</c> يُكتَب داخِلَه <c>SaveChangesAsync</c> بِلا أَن
+    /// يَحمَرّ شَيء.</para>
+    ///
+    /// <para><b>ولِماذا يُوَسَّع الفاحِص القائِم ولا يُنشَأ ثانٍ</b>
+    /// (القاعِدَة ٨): الحُرّاس ورُموزُهُم وقائِمَةُ التَثبيت هُنا،
+    /// وفاحِصٌ ثانٍ بِقائِمَةٍ ثانِيَة يَنجَرِف عَنها — وهذا بِعَينِه
+    /// عَطَبُ «تَعريفَين لِقَرارٍ واحِد» الَّذي حَذَفَت مَوجَةُ الثَغرَة
+    /// ‏25 نُقطَةً لِإزالَتِه.</para>
+    /// </summary>
+    [Fact]
+    public void Every_get_endpoint_that_writes_is_treated_as_a_write_endpoint()
+    {
+        var writeVerbRoutes = MinimalApiWriteEndpoints()
+            .Select(e => e.Route).ToHashSet(StringComparer.Ordinal);
+
+        var all = AllMinimalApiEndpoints().ToList();
+
+        // عَدّاد: أَداةٌ تَفحَص صِفراً أَداةٌ عَمياء (القاعِدَة ١٠).
+        Assert.True(all.Count >= 99,
+            $"أَداة عَمياء: وُجِدَت {all.Count} نُقطَة minimal API — والمَقيس ‏99 فَأَكثَر.");
+
+        var pinned = PinnedPublic.Select(p => p.Route).ToHashSet(StringComparer.Ordinal);
+
+        var writingGets = all
+            .Where(e => !writeVerbRoutes.Contains(e.Route))     // فِعلُها GET
+            .Where(e => ContainsAny(e.Body, WriteCalls))        // وتَكتُب فِعلاً
+            .Where(e => !HasGuard(e.Body) && !pinned.Contains(e.Route))
+            .Select(e => $"{e.Route}   ({e.File})")
+            .ToArray();
+
+        Assert.True(writingGets.Length == 0,
+            "‏GET يَكتُب وبِلا حارِس — الفِعل المُعلَن لَيسَ الفِعل الواقِع:\n  " +
+            string.Join("\n  ", writingGets) +
+            "\nإمّا أَن يُحرَس، أَو يُثَبَّت هُنا بِسَبَبِه في نَفس الكوميت.");
+    }
+
     /// <summary>كُلّ استِثناء يُعلِن سَبَبَه — فَالقائِمَة دَينٌ مَوصوف
     /// لا قائِمَةُ إسكات.</summary>
     [Fact]
@@ -259,7 +300,14 @@ public class WriteEndpointGuardTests
 
     // ─── الأَدَوات ────────────────────────────────────────────────────
 
-    private sealed record Endpoint(string Route, string Body, string File);
+    /// <summary><c>internal</c> لا <c>private</c>: فاحِصا البَند ٣ و‏٥
+    /// (‏<c>EndpointStoreInjectionTests</c> و
+    /// <c>EndpointBodyBleedTests</c>) يَقرَآنِ نَفس النِقاط.
+    /// و**ماسِحٌ واحِد مَقيس أَصَحّ مِن ثَلاثَة يُظَنّ بِها** — القاعِدَة ٨:
+    /// «لا أُنبوب رابِع: استَعمِل القائِم أَو أَصلِحه». وهذا الماسِح
+    /// بِعَينِه هُوَ الَّذي كَشَفَ حَقنُ عَيبٍ فيه أَنَّه كانَ يَبتَلِع
+    /// ‏13 نُقطَة — فَتَكرارُه يَعني تَكرارَ ذلكَ العَمى.</summary>
+    internal sealed record Endpoint(string Route, string Body, string File);
 
     private static bool HasGuard(string body) =>
         ContainsAny(body, ChainGuards) || ContainsAny(body, BodyGuards);
@@ -281,6 +329,14 @@ public class WriteEndpointGuardTests
     private static readonly Regex MapWrite =
         new(@"\.Map(?:Post|Put|Delete|Patch)\s*\(\s*""(?<route>[^""]+)""", RegexOptions.Compiled);
 
+    /// <summary>كُلّ نُقطَة minimal API بِأَيّ فِعل — بِما فيها
+    /// <c>MapGet</c>. يَلزَم فاحِصَي البَند ٣ و‏٥، ويَلزَم
+    /// <c>Every_get_endpoint_that_writes_is_treated_as_a_write_endpoint</c>:
+    /// نُقطَةٌ تُعلَن <c>GET</c> وتَكتُب هي نُقطَةُ كِتابَة مَهما قالَ
+    /// فِعلُها.</summary>
+    private static readonly Regex MapAny =
+        new(@"\.Map(?:Get|Post|Put|Delete|Patch)\s*\(\s*""(?<route>[^""]+)""", RegexOptions.Compiled);
+
     /// <summary>البادِئَة المُؤَهَّلَة اختِيارِيَّة عَمداً: حَقنُ عَيبٍ
     /// مُصطَنَع بِـ <c>[Wolverine.Http.WolverinePost(…)]</c> عَبَرَ
     /// النُسخَة الأُولى مِن هذا النَمَط بِلا أَن تَحمَرّ. (القاعِدَة ١٠.)</summary>
@@ -291,12 +347,18 @@ public class WriteEndpointGuardTests
     /// <summary>نِقاط الـ minimal API الكاتِبَة — مَع جِسمِها الكامِل
     /// مِن <c>Map…(</c> حَتّى فاصِلَة السَطر المُنهِيَة، فَتَدخُل
     /// السِلسِلَة المُعلَنَة بَعد الجِسم.</summary>
-    private static IEnumerable<Endpoint> MinimalApiWriteEndpoints()
+    private static IEnumerable<Endpoint> MinimalApiWriteEndpoints() => Scan(MapWrite);
+
+    /// <summary>كُلّ نُقطَة minimal API بِأَيّ فِعل — المَصدَر الوَحيد
+    /// لِفاحِصَي البَند ٣ و‏٥.</summary>
+    internal static IEnumerable<Endpoint> AllMinimalApiEndpoints() => Scan(MapAny);
+
+    private static IEnumerable<Endpoint> Scan(Regex pattern)
     {
         foreach (var (file, text) in EntitlementContractTests.SourceFiles())
         {
             var code = StripComments(text);
-            foreach (Match m in MapWrite.Matches(code))
+            foreach (Match m in pattern.Matches(code))
             {
                 var body = StatementFrom(code, m.Index);
                 yield return new Endpoint(m.Groups["route"].Value, body, Rel(file));
