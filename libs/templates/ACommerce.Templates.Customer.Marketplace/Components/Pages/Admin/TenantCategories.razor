@@ -166,10 +166,14 @@
             .Select(c => $"{c.Slug} | {c.Label} | {c.Icon ?? "home"} | {c.Kind}"));
     }
 
+    // الرَمزانِ مِن مُعجَم TenantConfigCodes المُغلَق — كانا
+    // no_categories/bad_categories هُنا و‏empty/format في الاستوديو
+    // لِنَفس المَعنى، وغَلَبَت empty/bad_format لِأَنَّها لُغَةُ
+    // المَناطِق والخَصائِص على الطَرَفَين أَصلاً.
     static string FormatError(string err) => err switch
     {
-        "no_categories" => "أَضِف فِئَة واحِدَة على الأَقَلّ.",
-        "bad_categories" => "تَنسيق غَير صَحيح — كُلّ صَفّ: slug | الاسم | أَيقونَة | تَجميع.",
+        "empty" => "أَضِف فِئَة واحِدَة على الأَقَلّ.",
+        "bad_format" => "تَنسيق غَير صَحيح — كُلّ صَفّ: slug | الاسم | أَيقونَة | تَجميع.",
         _ => err
     };
 }

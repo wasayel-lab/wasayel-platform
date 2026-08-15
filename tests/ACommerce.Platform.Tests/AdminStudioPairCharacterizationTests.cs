@@ -74,12 +74,17 @@ public class AdminStudioPairCharacterizationTests
             "القَناة أَصلاً. ورُموزُ الخَطَأ غَلَبَت فيها صيغَةُ /admin لِأَنَّها تَقول العِلَّة " +
             "(name_required) لا الحَقل (name)."),
 
-        new("categories", PairState.Diverged,
-            new Side("/admin/tenants/{slug}/categories/save", true,  "403",
-                     new[] { "bad_categories", "no_categories" }, new[] { "icon:U+1F3E0" }),
-            new Side("/studio/apps/{slug}/categories/save",   false, "302",
-                     new[] { "empty", "format" }, new[] { "icon:U+1F3F7,U+FE0F" }),
-            ""),
+        new("categories", PairState.Unified,
+            new Side("/admin/tenants/{slug}/categories/save", true, "403",
+                     Array.Empty<string>(), new[] { "service" }),
+            new Side("/studio/apps/{slug}/categories/save",   true, "302",
+                     Array.Empty<string>(), new[] { "service" }),
+            "غَلَبَت أَيقونَةُ الاستوديو 🏷️: و🏠 تَفتَرِض عَموداً واحِداً (العَقار) في مَنَصَّةٍ " +
+            "بِأَعمِدَةٍ عِدَّة، والأَثَرُ مَحصورٌ بِبُرهان لِأَنّ الصَفحَتَين تُعيدانِ عَمودَ " +
+            "الأَيقونَة في النَصّ فَلا يَنالُ الافتِراضُ إلّا صَفّاً بِعَمودَين. وغَلَبَ تَشذيبُ " +
+            "/admin لِلأَسطُر (كانَ الاستوديو يُنتِج slug يَبدَأ بِفَراغ). ورُموزُ الخَطَأ صارَت " +
+            "bad_format/empty — لُغَةُ المَناطِق والخَصائِص على الطَرَفَين أَصلاً، فَتَوَحَّدَ " +
+            "المُعجَمُ بَدَلَ أَن يَغلِبَ طَرَف."),
 
         new("roles", PairState.Diverged,
             new Side("/admin/tenants/{slug}/roles/save", true,  "403",

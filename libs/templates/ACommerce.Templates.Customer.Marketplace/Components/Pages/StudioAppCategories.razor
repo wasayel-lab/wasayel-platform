@@ -26,7 +26,7 @@
             </div>
 
             @if (Saved == "1")    { <div class="st-chip st-chip-success" style="margin-bottom:14px;">تَمّ الحِفظ <AcIcon Name="check" Size="16" /></div> }
-            @if (Err == "format") { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">صِيغَة سَطر غَير صَحيحَة</div> }
+            @if (Err == "bad_format") { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">صِيغَة سَطر غَير صَحيحَة</div> }
             @if (Err == "empty")  { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">أَضِف فِئَة واحِدَة على الأَقَلّ</div> }
 
             <form method="post" action="@($"/studio/apps/{Slug}/categories/save")" id="cats-form" class="st-card">

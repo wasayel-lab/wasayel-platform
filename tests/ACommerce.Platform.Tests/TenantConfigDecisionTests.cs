@@ -54,4 +54,52 @@ public class TenantConfigDecisionTests
     public void Branding_reports_the_missing_name_before_the_bad_colour() =>
         Assert.Equal(TenantConfigCodes.NameRequired,
             BrandingSaveService.WhyInvalid(Branding(name: "", color: "nope")));
+
+    // ─── الفِئات ───────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("sale")]                 // عَمودٌ واحِد
+    [InlineData("| اسم")]                // slug فارِغ
+    [InlineData("sale |")]               // تَسمِيَة فارِغَة
+    public void Categories_reject_a_row_that_is_not_two_columns(string raw) =>
+        Assert.Equal(TenantConfigCodes.BadFormat, CategoriesSaveService.Parse(raw).Code);
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("\n\n   \n")]
+    public void Categories_reject_an_input_with_no_row_at_all(string raw) =>
+        Assert.Equal(TenantConfigCodes.Empty, CategoriesSaveService.Parse(raw).Code);
+
+    /// <summary><b>الأَيقونَةُ الافتِراضِيَّة حُسِمَت</b>: 🏷️ لا 🏠.
+    /// وثَلاثَةُ مَداخِل تُعطيها: عَمودانِ فَقَط، وعَمودٌ ثالِثٌ
+    /// فارِغ، وعَمودٌ ثالِثٌ بِمَسافاتٍ وَحدَها.</summary>
+    [Theory]
+    [InlineData("sale | لِلبَيع")]
+    [InlineData("sale | لِلبَيع |")]
+    [InlineData("sale | لِلبَيع |   | rent")]
+    public void Categories_default_the_icon_to_the_tag_not_the_house(string raw)
+    {
+        var (cats, code) = CategoriesSaveService.Parse(raw);
+        Assert.Null(code);
+        Assert.Equal(CategoriesSaveService.DefaultIcon, cats![0].Icon);
+        Assert.Equal("🏷️", cats[0].Icon);
+    }
+
+    [Fact]
+    public void Categories_keep_an_explicit_icon_and_normalise_slug_and_kind()
+    {
+        var (cats, code) = CategoriesSaveService.Parse("  SALE | لِلبَيع | 🚚 | RENT  \n\n  cars | سَيّارات  ");
+        Assert.Null(code);
+        Assert.Equal(2, cats!.Count);
+
+        Assert.Equal("sale", cats[0].Slug);          // مُصَغَّر
+        Assert.Equal("لِلبَيع", cats[0].Label);
+        Assert.Equal("🚚", cats[0].Icon);            // الصَريحُ يَبقى
+        Assert.Equal("rent", cats[0].Kind);          // مُصَغَّر
+        Assert.Equal(0, cats[0].SortOrder);
+
+        // التَشذيب: سَطرٌ بِمَسافَةٍ بادِئَة لا يُنتِج slug بِفَراغ.
+        Assert.Equal("cars", cats[1].Slug);
+        Assert.Equal(1, cats[1].SortOrder);
+    }
 }

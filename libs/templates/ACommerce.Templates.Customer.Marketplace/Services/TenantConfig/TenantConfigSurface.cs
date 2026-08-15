@@ -38,6 +38,9 @@ public static class TenantConfigSurface
             req.Form["color"].ToString(),
             req.Form.ContainsKey("channel") ? req.Form["channel"].ToString() : null);
 
+    public static CategoriesSaveRequest ReadCategories(HttpRequest req) =>
+        new(req.Form["categories"].ToString());
+
     // ─── نَتيجَة ← ردّ ─────────────────────────────────────────────
 
     /// <summary>

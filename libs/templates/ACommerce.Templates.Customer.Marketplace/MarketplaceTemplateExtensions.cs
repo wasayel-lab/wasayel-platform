@@ -1929,40 +1929,14 @@ public static class MarketplaceTemplateExtensions
         {
             if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
                 return Forbidden();
-            await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.categories_save");
-            var catsRaw = req.Form["categories"].ToString();
-            string Back(string err) => $"/admin/tenants/{slug}/categories?err={err}";
-
-            var categories = new List<ACommerce.Kit.Tenants.Category>();
-            var idx = 0;
-            foreach (var line in catsRaw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var l = line.Trim();
-                if (l.Length == 0) continue;
-                var parts = l.Split('|', StringSplitOptions.TrimEntries);
-                if (parts.Length < 2) return Results.Redirect(Back("bad_categories"));
-                var cslug = parts[0].Trim().ToLowerInvariant();
-                var clabel = parts[1].Trim();
-                if (string.IsNullOrEmpty(cslug) || string.IsNullOrEmpty(clabel))
-                    return Results.Redirect(Back("bad_categories"));
-                categories.Add(new ACommerce.Kit.Tenants.Category
-                {
-                    Slug = cslug,
-                    Label = clabel,
-                    Icon  = parts.Length > 2 && !string.IsNullOrEmpty(parts[2]) ? parts[2].Trim() : "🏠",
-                    Kind  = parts.Length > 3 ? parts[3].Trim().ToLowerInvariant() : "",
-                    SortOrder = idx++
-                });
-            }
-            if (categories.Count == 0) return Results.Redirect(Back("no_categories"));
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, CategoriesSaveService.AuditAction);
 
             await using var s = store.LightweightSession();
-            var t = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
-            if (t is null) return Results.Redirect("/admin");
-            t.Categories = categories;
-            s.Store(t);
-            await s.SaveChangesAsync();
-            return Results.Redirect($"/admin/tenants/{slug}?saved=1");
+            var result = await CategoriesSaveService.SaveAsync(s, slug, TenantConfigSurface.ReadCategories(req));
+            if (result.Ok) await s.SaveChangesAsync();
+
+            return TenantConfigSurface.Outcome(result,
+                $"/admin/tenants/{slug}?saved=1", $"/admin/tenants/{slug}/categories", "/admin");
         }).DisableAntiforgery();
 
         // ─── Admin: save branding ───────────────────────────────────────
@@ -3106,38 +3080,18 @@ public static class MarketplaceTemplateExtensions
 
         app.MapPost("/studio/apps/{slug}/categories/save", async (
             string slug, HttpRequest req, IDocumentStore store,
-            Services.Incubator.StudioAuth auth) =>
+            Services.Incubator.StudioAuth auth,
+            Services.Audit.AuditWriter audit) =>
         {
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
-            var raw = req.Form["categories"].ToString();
-            var categories = new List<ACommerce.Kit.Tenants.Category>();
-            var idx = 0;
-            foreach (var line in raw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var parts = line.Split('|', StringSplitOptions.TrimEntries);
-                if (parts.Length < 2) return Results.Redirect($"/studio/apps/{slug}/categories?err=format");
-                var cslug = parts[0].ToLowerInvariant();
-                var clabel = parts[1];
-                if (string.IsNullOrEmpty(cslug) || string.IsNullOrEmpty(clabel))
-                    return Results.Redirect($"/studio/apps/{slug}/categories?err=format");
-                categories.Add(new ACommerce.Kit.Tenants.Category
-                {
-                    Slug = cslug, Label = clabel,
-                    Icon = parts.Length > 2 ? parts[2].Trim() : "🏷️",
-                    Kind = parts.Length > 3 ? parts[3].Trim().ToLowerInvariant() : "",
-                    SortOrder = idx++
-                });
-            }
-            if (categories.Count == 0)
-                return Results.Redirect($"/studio/apps/{slug}/categories?err=empty");
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, CategoriesSaveService.AuditAction);
 
             await using var s = store.LightweightSession();
-            var t = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
-            if (t is null) return Results.Redirect("/studio");
-            t.Categories = categories;
-            s.Store(t);
-            await s.SaveChangesAsync();
-            return Results.Redirect($"/studio/apps/{slug}/categories?saved=1");
+            var result = await CategoriesSaveService.SaveAsync(s, slug, TenantConfigSurface.ReadCategories(req));
+            if (result.Ok) await s.SaveChangesAsync();
+
+            return TenantConfigSurface.Outcome(result,
+                $"/studio/apps/{slug}/categories?saved=1", $"/studio/apps/{slug}/categories", "/studio");
         }).DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/roles/save", async (
