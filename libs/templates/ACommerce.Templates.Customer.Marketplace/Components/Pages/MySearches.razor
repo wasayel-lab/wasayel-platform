@@ -2,6 +2,7 @@
 @page "/{slug}/r/{role}/me/searches"
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject L L
 
 @*
     إدارَة البَحوث المَحفوظَة لِلمُستَخدِم — السائِق (إنجيز) يَستَخدِمها
@@ -10,14 +11,14 @@
 *@
 
 <div class="acs-page">
-    <h1 class="acm-wizard-title">بَحوثي المَحفوظَة</h1>
+    <h1 class="acm-wizard-title">@L.Markup("searches.page.title")</h1>
 
-    @if (Saved == "1") { <AcAlert Variant="success" Message="تَمّ حِفظ البَحث." /> }
+    @if (Saved == "1") { <AcAlert Variant="success" Message="@(L["searches.saved.ok"])" /> }
 
     @if (!Auth.IsAuthenticated)
     {
-        <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
-                      ActionLabel="تَسجيل دُخول"
+        <AcEmptyState IconName="user" Title="@(L["searches.login.title"])"
+                      ActionLabel="@(L["auth.action.login"])"
                       ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/me/searches")" />
     }
     else if (searches is null)
@@ -28,21 +29,20 @@
     {
         <AcCard>
             <ChildContent>
-                <h3 style="margin-top:0;">حَفظ بَحث جَديد</h3>
+                <h3 style="margin-top:0;">@L.Markup("searches.new.heading")</h3>
                 <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
-                    اِملأ الحُقول الَّتي تَهمُّك (اِترُك الباقي فارِغاً)، وَسَتَصِل
-                    إشعارات عِندَ نَشر إعلانات تُطابِقها.
+                    @((MarkupString)"\n                    ")@L.Markup("searches.new.note")@((MarkupString)"\n                ")
                 </p>
                 <form method="post" action="@($"/{Slug}/searches/save")">
-                    <AcField Label="عُنوان البَحث" Required="true">
+                    <AcField Label="@(L["searches.field.label"])" Required="true">
                         <input type="text" name="label" required maxlength="80"
                                class="ac-input" placeholder="مَشاوير حَدّة" />
                     </AcField>
                     @if (tenant is not null && tenant.Categories.Count > 0)
                     {
-                        <AcField Label="الفِئَة">
+                        <AcField Label="@(L["searches.field.category"])">
                             <select name="category" class="ac-input">
-                                <option value="">— كُلّ الفِئات —</option>
+                                <option value="">@L.Markup("searches.option.all_categories")</option>
                                 @foreach (var c in tenant.Categories.OrderBy(c => c.SortOrder))
                                 {
                                     <option value="@c.Slug">@c.Label</option>
@@ -51,23 +51,23 @@
                         </AcField>
                     }
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                        <AcField Label="المَدينَة">
+                        <AcField Label="@(L["searches.field.city"])">
                             <input type="text" name="city" maxlength="40" class="ac-input" />
                         </AcField>
-                        <AcField Label="الحَيّ">
+                        <AcField Label="@(L["searches.field.district"])">
                             <input type="text" name="district" maxlength="60" class="ac-input" />
                         </AcField>
                     </div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                        <AcField Label="الحَدّ الأَدنَى لِلسِعر">
+                        <AcField Label="@(L["searches.field.min_price"])">
                             <input type="number" name="min" min="0" class="ac-input" />
                         </AcField>
-                        <AcField Label="الحَدّ الأَقصَى لِلسِعر">
+                        <AcField Label="@(L["searches.field.max_price"])">
                             <input type="number" name="max" min="0" class="ac-input" />
                         </AcField>
                     </div>
                     <button type="submit" class="ac-btn ac-btn-primary ac-btn-block" style="margin-top:8px;">
-                        <AcIcon Name="check" Size="16" /> حِفظ
+                        <AcIcon Name="check" Size="16" /> @L.Markup("searches.action.save")@((MarkupString)"\n                    ")
                     </button>
                 </form>
             </ChildContent>
@@ -76,7 +76,7 @@
         @if (searches.Count == 0)
         {
             <p style="color:var(--ac-text-muted);text-align:center;padding:24px;">
-                لا بَحوث مَحفوظَة بَعد.
+                @((MarkupString)"\n                ")@L.Markup("searches.list.empty")@((MarkupString)"\n            ")
             </p>
         }
         else
@@ -90,13 +90,13 @@
                                 <strong>@ss.Label</strong>
                                 @if (!ss.IsEnabled)
                                 {
-                                    <span class="ac-chip ac-chip-sm" style="opacity:.6;margin-inline-start:6px;">مُعَطَّل</span>
+                                    <span class="ac-chip ac-chip-sm" style="opacity:.6;margin-inline-start:6px;">@L.Markup("searches.chip.disabled")</span>
                                 }
                             </div>
                             <div style="display:flex;gap:6px;">
                                 <form method="post" action="@($"/{Slug}/searches/{ss.Id}/toggle")" style="margin:0;">
                                     <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">
-                                        @(ss.IsEnabled ? "إيقاف" : "تَفعيل")
+                                        @(ss.IsEnabled ? L["searches.action.pause"] : L["searches.action.resume"])
                                     </button>
                                 </form>
                                 <form method="post" action="@($"/{Slug}/searches/{ss.Id}/delete")" style="margin:0;">

@@ -1,5 +1,6 @@
 @inject Services.PlatformAdminGuard Guard
 @using ACommerce.Templates.Customer.Marketplace.Services
+@inject L L
 
 @*
     مُكَوِّن يَفحَص أَنّ المُستَخدِم مُسَجَّل وَيَملِك صَلاحيَّة platform_admin.
@@ -15,7 +16,7 @@
 {
     case State.Loading:
         <div style="padding:60px;text-align:center;color:var(--ac-text-muted);">
-            جارٍ التَّحَقُّق…
+            @((MarkupString)"\n            ")@L.Markup("admin.guard.checking")@((MarkupString)"\n        ")
         </div>
         break;
     case State.NeedAuth:
@@ -23,10 +24,10 @@
             <div class="auth-wrap">
                 <div class="auth-card" style="text-align:center;">
                     <div class="auth-logo-mark"><AcIcon Name="shield" Size="28" /></div>
-                    <h1 class="auth-title">دُخول مُشرِف المَنصَّة</h1>
-                    <p class="auth-sub">هذه الصَفحَة لِمُشرِفي المَنصَّة فَقَط.</p>
+                    <h1 class="auth-title">@L.Markup("admin.guard.need_auth_title")</h1>
+                    <p class="auth-sub">@L.Markup("admin.guard.need_auth_sub")</p>
                     <a class="st-btn st-btn-primary st-btn-block st-btn-lg"
-                       href="/studio/auth">تَسجيل دُخول</a>
+                       href="/studio/auth">@L.Markup("auth.action.login")</a>
                 </div>
             </div>
         </div>
@@ -36,9 +37,9 @@
             <div class="auth-wrap">
                 <div class="auth-card" style="text-align:center;">
                     <div class="auth-logo-mark" style="background:linear-gradient(135deg,#dc2626,#ea580c);"><AcIcon Name="alert-circle" Size="28" /></div>
-                    <h1 class="auth-title">صَلاحيَّة غَير كافِيَة</h1>
-                    <p class="auth-sub">حِسابُكَ لَيس مُشرِف مَنصَّة. اِرجِع لِلوحَتِكَ.</p>
-                    <a class="st-btn st-btn-primary st-btn-block" href="/studio">لوحَتي</a>
+                    <h1 class="auth-title">@L.Markup("admin.guard.forbidden_title")</h1>
+                    <p class="auth-sub">@L.Markup("admin.guard.forbidden_sub")</p>
+                    <a class="st-btn st-btn-primary st-btn-block" href="/studio">@L.Markup("admin.nav.my_board")</a>
                 </div>
             </div>
         </div>

@@ -1,7 +1,7 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|1348
-DISTINCT|880
+TOTAL|1323
+DISTINCT|865
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|40
@@ -37,7 +37,7 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyDealD
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyDeals.razor|14
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyListings.razor|8
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyOffers.razor|16
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MySearches.razor|19
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MySearches.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/NafathLoginForm.razor|9
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Notifications.razor|8
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/PhoneLoginForm.razor|7
@@ -67,7 +67,6 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantH
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantListingDetail.razor|106
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantManage.razor|24
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/VendorProfile.razor|10
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RequirePlatformAdmin.razor|7
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RequireTenantAdmin.razor|3
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/RiderCreateRequest.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Routes.razor|1
