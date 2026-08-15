@@ -1,7 +1,7 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|1538
-DISTINCT|1014
+TOTAL|1463
+DISTINCT|974
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|40
@@ -10,7 +10,7 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/GatedPage.raz
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Layout/MainLayout.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AgentChatPanel.razor|33
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AuditLogPage.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/CreateTenant.razor|47
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/CreateTenant.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorFixturesPage.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorStudy.razor|44
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorWizard.razor|26
@@ -22,7 +22,6 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/T
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantPwa.razor|25
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantRegions.razor|25
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantRoles.razor|27
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantTheme.razor|32
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantUsers.razor|10
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/CartPage.razor|15
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/ChatRoom.razor|10

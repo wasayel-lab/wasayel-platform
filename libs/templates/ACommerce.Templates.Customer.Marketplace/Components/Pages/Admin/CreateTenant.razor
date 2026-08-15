@@ -1,5 +1,6 @@
 @page "/admin/tenants/new"
 @inject IDocumentStore Store
+@inject L L
 
 @*
     إنشاء مَتجَر جَديد — نَموذَج SSR بِالحُقول الأَدنى:
@@ -13,10 +14,10 @@
 <div class="acs-page acm-admin">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
         <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin"
-           aria-label="الرُجوع">
+           aria-label="@(L["admin.action.back"])">
             <AcIcon Name="arrow-right" Size="16" />
         </a>
-        <h1 class="acm-wizard-title" style="margin:0;">مَتجَر جَديد</h1>
+        <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("admin.home.new_tenant")</h1>
     </div>
 
     @if (Err is not null)
@@ -28,37 +29,37 @@
 
         <AcCard>
             <ChildContent>
-                <h3 style="margin-top:0;">الهُويَّة</h3>
+                <h3 style="margin-top:0;">@L.Markup("admin.new.identity")</h3>
 
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                    <AcField Label="مُعَرِّف URL (slug)" Required="true">
+                    <AcField Label="@(L["admin.new.slug"])" Required="true">
                         <input type="text" name="slug" required maxlength="32"
                                pattern="[a-z0-9_-]+" class="ac-input"
                                placeholder="ashare" dir="ltr"
                                value="@Form?["slug"]" />
                     </AcField>
-                    <AcField Label="الاسم العَرَبي" Required="true">
+                    <AcField Label="@(L["admin.new.name"])" Required="true">
                         <input type="text" name="name" required maxlength="60"
-                               class="ac-input" placeholder="عَشير"
+                               class="ac-input" placeholder="@(L["admin.new.name_ph"])"
                                value="@Form?["name"]" />
                     </AcField>
                 </div>
 
-                <AcField Label="الشِعار التَسويقي">
+                <AcField Label="@(L["admin.new.tagline"])">
                     <input type="text" name="tagline" maxlength="120"
                            class="ac-input"
-                           placeholder="السَكَن المُشتَرَك بأَريَحيّة"
+                           placeholder="@(L["admin.new.tagline_ph"])"
                            value="@Form?["tagline"]" />
                 </AcField>
 
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                    <AcField Label="لَون العَلامَة" Required="true">
+                    <AcField Label="@(L["admin.new.color"])" Required="true">
                         <input type="color" name="color" required class="ac-input"
                                value="@(Form?["color"] ?? "#345454")" />
                     </AcField>
-                    <AcField Label="المَدينَة الافتراضيّة">
+                    <AcField Label="@(L["admin.new.city"])">
                         <input type="text" name="city" maxlength="40"
-                               class="ac-input" placeholder="إب"
+                               class="ac-input" placeholder="@(L["admin.new.city_ph"])"
                                value="@Form?["city"]" />
                     </AcField>
                 </div>
@@ -67,33 +68,33 @@
 
         <AcCard>
             <ChildContent>
-                <h3 style="margin-top:0;">طَريقَة الدُخول</h3>
+                <h3 style="margin-top:0;">@L.Markup("admin.new.channel")</h3>
                 <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
-                    صاحِب المَتجَر يَختار قَناة واحِدَة. المَتاجِر السُعوديَّة عادَةً تَستَخدِم نَفاذ.
+                    @((MarkupString)"\n                    ")@L.Markup("admin.new.channel_note")@((MarkupString)"\n                ")
                 </p>
                 <div class="acm-radio-cards">
                     <label class="acm-radio-card">
                         <input type="radio" name="channel" value="phone"
                                checked="@(Form?["channel"] is not "nafath" and not "email")" />
                         <span class="acm-radio-card-body">
-                            <strong><AcIcon Name="phone" Size="16" /> هاتِف + OTP</strong>
-                            <span>يُرسَل كود ٦ خانات بِالـ SMS — مُناسِب لِأَيّ مَتجَر</span>
+                            <strong><AcIcon Name="phone" Size="16" /> @L.Markup("admin.new.channel_phone")</strong>
+                            <span>@L.Markup("admin.new.channel_phone_note")</span>
                         </span>
                     </label>
                     <label class="acm-radio-card">
                         <input type="radio" name="channel" value="nafath"
                                checked="@(Form?["channel"] == "nafath")" />
                         <span class="acm-radio-card-body">
-                            <strong><AcIcon Name="key" Size="16" /> نَفاذ</strong>
-                            <span>تَوثيق هُوِيَّة وَطنيَّة — مَتاجِر سُعوديَّة فَقَط</span>
+                            <strong><AcIcon Name="key" Size="16" /> @L.Markup("admin.new.channel_nafath")</strong>
+                            <span>@L.Markup("admin.new.channel_nafath_note")</span>
                         </span>
                     </label>
                     <label class="acm-radio-card">
                         <input type="radio" name="channel" value="email"
                                checked="@(Form?["channel"] == "email")" />
                         <span class="acm-radio-card-body">
-                            <strong><AcIcon Name="mail" Size="16" /> بَريد + OTP</strong>
-                            <span>كود ٦ خانات بِالبَريد — مُناسِب لِمَن لا هاتِف مَحَلِّيّ لَه</span>
+                            <strong><AcIcon Name="mail" Size="16" /> @L.Markup("admin.new.channel_email")</strong>
+                            <span>@L.Markup("admin.new.channel_email_note")</span>
                         </span>
                     </label>
                 </div>
@@ -102,9 +103,9 @@
 
         <AcCard>
             <ChildContent>
-                <h3 style="margin-top:0;">الفِئات</h3>
+                <h3 style="margin-top:0;">@L.Markup("admin.new.categories")</h3>
                 <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 14px;">
-                    بِطاقَة لِكُلّ فِئَة. التَّجميع (Kind) اختياريّ — يَنفَع عِندَ كَثرَة الفِئات.
+                    @((MarkupString)"\n                    ")@L.Markup("admin.new.categories_note")@((MarkupString)"\n                ")
                 </p>
 
                 <div class="ac-editor" id="cats-editor">
@@ -112,15 +113,15 @@
                         <div class="ac-editor-row-head">
                             <input class="ac-input ac-cat-icon" value="building" aria-label="أَيقونَة" />
                             <input class="ac-input ac-cat-label" placeholder="اسم الفِئَة (مَثَلاً: شَقَق)" />
-                            <button type="button" class="ac-icon-btn" data-remove-cat aria-label="حَذف"><AcIcon Name="x" Size="14" /></button>
+                            <button type="button" class="ac-icon-btn" data-remove-cat aria-label="@(L["admin.new.remove_cat"])"><AcIcon Name="x" Size="14" /></button>
                         </div>
                         <div class="ac-editor-grid2">
                             <div>
-                                <span class="ac-chip-input-label">المُعَرِّف (slug)</span>
+                                <span class="ac-chip-input-label">@L.Markup("admin.new.cat_slug")</span>
                                 <input class="ac-input ac-cat-slug" placeholder="apartments" style="direction:ltr;" />
                             </div>
                             <div>
-                                <span class="ac-chip-input-label">التَّجميع (اختياريّ)</span>
+                                <span class="ac-chip-input-label">@L.Markup("admin.new.cat_kind")</span>
                                 <input class="ac-input ac-cat-kind" placeholder="residential" list="kind-list" style="direction:ltr;" />
                             </div>
                         </div>
@@ -137,7 +138,7 @@
                 </datalist>
 
                 <button type="button" class="ac-add-row-btn" id="add-cat" style="margin-top:12px;">
-                    <AcIcon Name="plus" Size="16" /> إضافَة فِئَة
+                    <AcIcon Name="plus" Size="16" /> @L.Markup("admin.new.add_cat")@((MarkupString)"\n                ")
                 </button>
 
                 <textarea name="categories" id="cats-hidden" hidden>@Form?["categories"]</textarea>
@@ -149,15 +150,15 @@
                 <div class="ac-editor-row-head">
                     <input class="ac-input ac-cat-icon" value="tag" aria-label="أَيقونَة" />
                     <input class="ac-input ac-cat-label" placeholder="اسم الفِئَة" />
-                    <button type="button" class="ac-icon-btn" data-remove-cat aria-label="حَذف"><AcIcon Name="x" Size="14" /></button>
+                    <button type="button" class="ac-icon-btn" data-remove-cat aria-label="@(L["admin.new.remove_cat"])"><AcIcon Name="x" Size="14" /></button>
                 </div>
                 <div class="ac-editor-grid2">
                     <div>
-                        <span class="ac-chip-input-label">المُعَرِّف (slug)</span>
+                        <span class="ac-chip-input-label">@L.Markup("admin.new.cat_slug")</span>
                         <input class="ac-input ac-cat-slug" placeholder="apartments" style="direction:ltr;" />
                     </div>
                     <div>
-                        <span class="ac-chip-input-label">التَّجميع (اختياريّ)</span>
+                        <span class="ac-chip-input-label">@L.Markup("admin.new.cat_kind")</span>
                         <input class="ac-input ac-cat-kind" placeholder="residential" list="kind-list" style="direction:ltr;" />
                     </div>
                 </div>
@@ -165,9 +166,9 @@
         </template>
 
         <div style="display:flex;gap:8px;margin-top:16px;">
-            <a class="ac-btn ac-btn-ghost" href="/admin">إلغاء</a>
+            <a class="ac-btn ac-btn-ghost" href="/admin">@L.Markup("admin.new.cancel")</a>
             <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
-                <AcIcon Name="check" Size="18" /> إنشاء المَتجَر
+                <AcIcon Name="check" Size="18" /> @L.Markup("admin.new.submit")@((MarkupString)"\n            ")
             </button>
         </div>
     </form>
@@ -193,14 +194,14 @@
         ["categories"] = Categories
     };
 
-    static string FormatError(string err) => err switch
+    string FormatError(string err) => err switch
     {
-        "slug_required" => "مُعَرِّف الـ URL مَطلوب وَيَجِب أَن يَكون a-z0-9-_.",
-        "slug_taken"    => "مُعَرِّف الـ URL مُستَخدَم — اختَر آخَر.",
-        "name_required" => "الاسم مَطلوب.",
-        "color_invalid" => "لَون العَلامَة غَير صَحيح.",
-        "no_categories" => "أَضِف فِئَة واحِدَة على الأَقَلّ.",
-        "bad_categories" => "تَنسيق الفِئات غَير صَحيح — كُلّ صَفّ: slug | الاسم | أَيقونَة | تَجميع.",
+        "slug_required" => L["admin.new.err_slug_required"],
+        "slug_taken"    => L["admin.new.err_slug_taken"],
+        "name_required" => L["admin.new.err_name_required"],
+        "color_invalid" => L["admin.new.err_color"],
+        "no_categories" => L["admin.new.err_no_categories"],
+        "bad_categories" => L["admin.new.err_bad_categories"],
         _               => err
     };
 }
