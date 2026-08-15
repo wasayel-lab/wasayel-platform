@@ -10,24 +10,38 @@
 # a new entry fails the gate, and a retired entry that is still pinned fails
 # it too.  Nothing here was repaired by the agent that measured it.
 #
-# ── no-inline-color (34) ─────────────────────────────────────────────────
+# ── no-inline-color (34 -> 26) ───────────────────────────────────────────
 # Literal #hex in a style="" attribute.  These bypass the --wsl-* -> --ac-*
 # token layer entirely (META-MODEL §9), so a tenant theme can never restyle
 # them: status pills stay mint-green and amber whatever the tenant picks.
 # Concentrated in the Studio/incubator screens, which were built fastest.
+#
+# 2026-08-15: EIGHT retired, and only the eight whose literal equalled an
+# existing token EXACTLY and whose token is the semantically right one:
+#   color:#fff over background:var(--ac-primary)  -> var(--ac-on-primary)
+#     ChatRoom, Plans, VendorProfile — the house pattern, used 14 times in
+#     the stylesheets already.
+#   color:#fff over an arbitrary dark fill        -> var(--ac-text-on-dark)
+#     TenantEdit (the tenant's own BrandColor), StudioShell (--st-primary).
+# Both tokens are literal #ffffff, defined once in widgets.css, and are NOT
+# redefined by any tenant branding sheet nor by body.ac-dark — measured, so
+# the substitution is provably zero-change today AND stays zero.
+#
+# The rest were NOT touched, and the reason is written down rather than
+# implied: their literals equal no token (mint #dcfce7, amber #fef3c7, the
+# rating gold #f59e0b…).  Tinting a star rating with --ac-warning would be
+# zero-change today and a bug the first time a tenant paints warning red.
+# They are measured and costed in docs/THEME-DEBT-DECISIONS.md.
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/QualityMonitor.razor|2
-no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantEdit.razor|3
-no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/ChatRoom.razor|1
-no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Plans.razor|1
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioApp.razor|7
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppConsole.razor|5
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppTicketDetail.razor|1
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioHome.razor|1
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudy.razor|2
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudyPrint.razor|3
-no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/VendorProfile.razor|3
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/VendorProfile.razor|2
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/RiderHome.razor|1
-no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/StudioShell.razor|3
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/StudioShell.razor|1
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/UpgradePrompt.razor|1
 
 # ── no-raw-bootstrap-button (1) ──────────────────────────────────────────

@@ -42,7 +42,7 @@
                     @if (limits is not null)
                     {
                         <a href="/studio/billing" class="studio-nav-item" style="background:var(--st-sidebar-soft);">
-                            <span style="background:var(--st-primary);color:#fff;border-radius:6px;
+                            <span style="background:var(--st-primary);color:var(--ac-text-on-dark);border-radius:6px;
                                          padding:2px 8px;font-size:10.5px;font-weight:800;">@limits.LabelAr</span>
                             <span style="font-size:11.5px;color:#94a3b8;">@usageSummary</span>
                         </a>
@@ -53,7 +53,7 @@
                             @((Auth.UserName ?? "؟").FirstOrDefault())
                         </div>
                         <div style="flex:1;min-width:0;">
-                            <div style="font-size:13px;color:#fff;font-weight:600;">@Auth.UserName</div>
+                            <div style="font-size:13px;color:var(--ac-text-on-dark);font-weight:600;">@Auth.UserName</div>
                         </div>
                     </div>
                     <form method="post" action="/studio/logout">
