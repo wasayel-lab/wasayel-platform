@@ -20,6 +20,12 @@ namespace ACommerce.Kit.Tenants.Server;
 /// </summary>
 public static class SeoHandlers
 {
+    /// <summary><c>[NotTenanted]</c> استِثناءٌ مُعلَن: التَركيب يَفرِض
+    /// وُجود مُستَأجِر عَلى كُلّ نُقطَة Wolverine
+    /// (<c>opts.TenantId.AssertExists()</c>)، وهذِه وَثيقَةُ زَحفٍ عَلى
+    /// جَذر المَنصَّة لا تَحمِل <c>slug</c> بِطَبيعَتِها. مُثَبَّتَة
+    /// بِاسمِها في <c>WolverineTenancyContractTests</c>.</summary>
+    [NotTenanted]
     [WolverineGet("/robots.txt")]
     public static async Task Robots(HttpContext context)
     {
@@ -28,6 +34,11 @@ public static class SeoHandlers
         await context.Response.WriteAsync(body, context.RequestAborted);
     }
 
+    /// <summary><c>[NotTenanted]</c> — نَفس عِلَّة <see cref="Robots"/>،
+    /// وأَشَدّ: خَريطَةُ المَوقِع تَستَعرِض **كُلّ** المُستَأجِرين
+    /// فَجَلسَتُها بِلا سلاج هي الصَحيحَة (‏وَثيقَة <c>Tenant</c>
+    /// مُسَجَّلَة <c>SingleTenanted</c>).</summary>
+    [NotTenanted]
     [WolverineGet("/sitemap.xml")]
     public static async Task Sitemap(HttpContext context, IDocumentStore store)
     {

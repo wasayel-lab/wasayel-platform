@@ -170,7 +170,45 @@ public static class HostingExtensions
         app.UsePlatformMultiTenancy();
 
         // Wolverine.Http يُسَجِّل كلّ [WolverinePost]/[WolverineGet]/etc.
-        app.MapWolverineEndpoints();
+        app.MapWolverineEndpoints(opts =>
+        {
+            // ═══ حَصر المُستَأجِر خاصِّيَّةً بِنيَوِيَّة ═══════════════
+            //
+            // مَساراتُنا كُلُّها بِشَكل `/{slug}/…`، والحُزمَة تَشحَن
+            // كَشف المُستَأجِر مِن وَسيط المَسار. فَالسَطر التالي
+            // يَنقُل العَزل مِن **اتِّفاق مَكتوب بِاليَد في كُلّ جِسم**
+            // إلى **خاصِّيَّة يُوَلِّدُها التَركيب**.
+            //
+            // <b>والرَبط مَقيس لا مَظنون</b>: وَثيقَة القَرار وَسَمَته
+            // «[غَير مُثبَت]»، وأَثبَتَه `LiveOutboxTenantProofTests`
+            // بِمُضيفٍ حَيّ وطَرَفَين:
+            //     detect=on  → session.TenantId = وَسيط المَسار
+            //     detect=off → session.TenantId = *DEFAULT*
+            // والجَلسَة في الحالَتَين تَحمِل
+            // `Wolverine.Marten.FlushOutgoingMessagesOnCommit` — أَي
+            // أَنَّها مُنخَرِطَة في الصُندوق الصادِر.
+            opts.TenantId.IsRouteArgumentNamed("slug");
+
+            // ═══ والفَرض، لا الكَشف وَحدَه ═══════════════════════════
+            //
+            // الكَشف بِلا فَرض يُصلِح الحاضِر ولا يَمنَع الغَد: نُقطَة
+            // جَديدَة تُكتَب بِلا `slug` تَمُرّ صامِتَةً فَتَكتُب في
+            // `*DEFAULT*` — وهو بِعَينِه العَطَب الَّذي قاسَته وَثيقَة
+            // القَرار في سِتّ مُعالِجات. ومَع `AssertExists()` تَرتَدّ
+            // بِـ400 (‏`ProblemDetails`) بَدَل أَن تَكتُب في اللامَكان.
+            //
+            // <b>والاستِثناء مُعلَن ومَقيس لا صامِت</b>: نُقطَتا الزَحف
+            // عَلى الجَذر (‏`/robots.txt`, `/sitemap.xml`) لا تَحمِلانِ
+            // `slug` بِطَبيعَتِهِما، فَتَحمِلانِ `[NotTenanted]`
+            // صَراحَةً — و`WolverineTenancyContractTests` يُثَبِّتُهُما
+            // بِاسمِهِما ويَحمَرّ عَلى ثالِثَةٍ تُضاف بِلا قَرار.
+            //
+            // ولا يَمَسّ هذا مَسارات Minimal API ولا صَفَحات Blazor:
+            // `WolverineHttpOptions` تَحكُم سَلاسِل Wolverine وَحدَها —
+            // وهذا **مَقيس** بِتَوصيف ‏27 مَساراً قَبل/بَعد
+            // (‏`scripts/characterize-routes.sh`)، لا مُستَنتَجاً.
+            opts.TenantId.AssertExists();
+        });
 
         return app;
     }

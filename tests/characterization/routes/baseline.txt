@@ -1,0 +1,31 @@
+VERB   ROUTE                                         CODE  CONTENT-TYPE                       BYTES
+──────────────────────────────────────────────────────────────────────────────────────────────────────
+GET    /                                             200   text/html; charset=utf-8          39328
+GET    /robots.txt                                   200   text/plain; charset=utf-8         399
+GET    /sitemap.xml                                  200   application/xml; charset=utf-8    4409
+GET    /api/push/vapid-key                           200   text/plain                        87
+GET    /admin                                        200   text/html; charset=utf-8          30955
+GET    /admin/tenants/new                            200   text/html; charset=utf-8          30979
+GET    /admin/monitor                                200   text/html; charset=utf-8          30971
+GET    /studio                                       200   text/html; charset=utf-8          30268
+GET    /studio/new                                   200   text/html; charset=utf-8          30459
+GET    /studio/auth                                  200   text/html; charset=utf-8          31278
+GET    /favicon.ico                                  200   text/html; charset=utf-8          30331
+GET    /ashare                                       200   text/html; charset=utf-8          35958
+GET    /ashare/explore                               200   text/html; charset=utf-8          58446
+GET    /ashare/plans                                 200   text/html; charset=utf-8          40570
+GET    /ashare/legal                                 200   text/html; charset=utf-8          38356
+GET    /ashare/login                                 200   text/html; charset=utf-8          31682
+GET    /theme-demo                                   200   text/html; charset=utf-8          46942
+GET    /adwar-demo                                   200   text/html; charset=utf-8          30329
+GET    /zz-no-such-tenant                            200   text/html; charset=utf-8          30343
+GET    /ashare/api/me/unread                         200   application/json; charset=utf-8   32
+POST   /ashare/auth/nafath/request                   415                                     0
+POST   /ashare/auth/nafath/verify                    302                                     0
+POST   /zz-no-such-tenant/auth/nafath/request        415                                     0
+POST   /admin/tenants/create                         403                                     0
+POST   /ashare/auth/phone/login                      302                                     0
+POST   /lang/ar                                      302                                     0
+POST   /studio/begin                                 302                                     0
+──────────────────────────────────────────────────────────────────────────────────────────────────────
+المَسارات المَوصوفَة: 27
