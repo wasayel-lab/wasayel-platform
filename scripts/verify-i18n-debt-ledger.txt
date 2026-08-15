@@ -1,7 +1,7 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|1709
-DISTINCT|1122
+TOTAL|1639
+DISTINCT|1077
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|40
@@ -36,7 +36,6 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/EmailLo
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Favorites.razor|11
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Landing.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Login.razor|14
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Me.razor|22
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyDealDetail.razor|41
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyDeals.razor|14
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyListings.razor|8
@@ -45,7 +44,6 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MySearc
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/NafathLoginForm.razor|9
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Notifications.razor|8
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/PhoneLoginForm.razor|7
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/ProfileEdit.razor|20
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/RoleOnboarding.razor|9
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/RolePicker.razor|9
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAgent.razor|30
@@ -69,13 +67,11 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioH
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioNewIdea.razor|12
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudy.razor|99
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudyPrint.razor|41
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Support.razor|12
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantDrivers.razor|13
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantExplore.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantHome.razor|5
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantListingDetail.razor|106
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantManage.razor|24
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Terms.razor|16
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/VendorProfile.razor|10
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RequirePlatformAdmin.razor|7
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RequireTenantAdmin.razor|3

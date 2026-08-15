@@ -3,23 +3,24 @@
 @inject IDocumentStore Store
 @inject AuthSession Auth
 @inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
+@inject L L
 
 <div class="acs-page">
 @if (!Auth.IsAuthenticated)
 {
     <AcEmptyState IconName="user"
-                  Title="تَحتاج تَسجيل دُخول"
-                  Message="سَجِّل دُخولك لِتَعديل بَياناتك."
-                  ActionLabel="تَسجيل دُخول"
+                  Title="@(L["profile.login.title"])"
+                  Message="@(L["profile.login.message"])"
+                  ActionLabel="@(L["auth.action.login"])"
                   ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/me/edit")" />
 }
 else if (user is null || tenant is null)
 {
-    <AcLoadingState Message="جارٍ التَحميل…" />
+    <AcLoadingState Message="@(L["common.state.loading"])" />
 }
 else
 {
-    <h1 class="acm-wizard-title">تَعديل المَلَفّ الشَخصيّ</h1>
+    <h1 class="acm-wizard-title">@L.Markup("profile.page.title")</h1>
 
     <form method="post" action="@($"/{Slug}/me/save")" enctype="multipart/form-data">
         @* عُد إلى نَفس صَفحَة الدَّور الَّتي دَخَلنا مِنها. *@
@@ -27,13 +28,13 @@ else
 
         <AcCard>
             <ChildContent>
-                <h3 style="margin-top:0;">المَعلومات الأَساسِيَّة</h3>
+                <h3 style="margin-top:0;">@L.Markup("profile.section.basic")</h3>
 
                 @* صورَة المَلَفّ الشَخصيّ — تُرفَع عَبر IFileStorage. *@
                 <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
                     @if (!string.IsNullOrEmpty(user.AvatarUrl))
                     {
-                        <img src="@user.AvatarUrl" alt="الصورَة"
+                        <img src="@user.AvatarUrl" alt="@(L["profile.avatar.alt"])"
                              style="width:64px;height:64px;border-radius:50%;object-fit:cover;" />
                     }
                     else
@@ -42,25 +43,25 @@ else
                     }
                     <div style="flex:1;">
                         <label style="font-size:13px;color:var(--ac-text-muted);display:block;margin-bottom:4px;">
-                            صورَة المَلَفّ الشَخصيّ
+                            @((MarkupString)"\n                            ")@L.Markup("profile.avatar.label")@((MarkupString)"\n                        ")
                         </label>
                         <input type="file" name="avatar" accept="image/png,image/jpeg,image/webp" class="ac-input" />
                     </div>
                 </div>
 
-                <AcField Label="الاسم الكامِل" Required="true">
+                <AcField Label="@(L["profile.field.full_name"])" Required="true">
                     <input type="text" name="fullName" value="@user.FullName"
                            required maxlength="60" class="ac-input" />
                 </AcField>
 
-                <AcField Label="الهاتف">
+                <AcField Label="@(L["profile.field.phone"])">
                     <input type="text" value="@user.Phone" readonly
                            class="ac-input" style="background:var(--ac-bg-alt);direction:ltr;" />
                 </AcField>
 
                 @if (!string.IsNullOrEmpty(user.NationalId))
                 {
-                    <AcField Label="رَقم الهُويَّة">
+                    <AcField Label="@(L["profile.field.national_id"])">
                         <input type="text" value="@user.NationalId" readonly
                                class="ac-input" style="background:var(--ac-bg-alt);direction:ltr;" />
                     </AcField>
@@ -76,7 +77,7 @@ else
         {
             <AcCard>
                 <ChildContent>
-                    <h3 style="margin-top:0;">الدَور</h3>
+                    <h3 style="margin-top:0;">@L.Markup("profile.section.role")</h3>
                     <div class="acm-radio-cards">
                         @foreach (var r in tenant.Roles.OrderBy(r => r.SortOrder))
                         {
@@ -109,7 +110,7 @@ else
         {
             <AcCard>
                 <ChildContent>
-                    <h3 style="margin-top:0;">مَعلومات إضافِيَّة</h3>
+                    <h3 style="margin-top:0;">@L.Markup("profile.section.extra")</h3>
                     @foreach (var f in dynFields)
                     {
                         <AcField Label="@f.Label" Required="@f.IsRequired">
@@ -143,7 +144,7 @@ else
                 <ChildContent>
                     @if (forceOpen)
                     {
-                        <h3 style="margin-top:0;"><AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(ricon, "user")" Size="18" /> بَيانات دَور @rlabel</h3>
+                        <h3 style="margin-top:0;"><AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(ricon, "user")" Size="18" /> @L.Markup("profile.role.data_of") @rlabel</h3>
                         @foreach (var f in fields)
                         {
                             <AcField Label="@f.Label" Required="@f.IsRequired">
@@ -155,10 +156,10 @@ else
                     {
                         <details open="@isActive">
                             <summary style="cursor:pointer;font-weight:700;list-style:none;">
-                                <AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(ricon, "user")" Size="16" /> بَيانات دَور @rlabel
+                                <AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(ricon, "user")" Size="16" /> @L.Markup("profile.role.data_of") @rlabel
                                 @if (isActive)
                                 {
-                                    <span class="ac-chip ac-chip-sm" style="margin-inline-start:6px;">نَشِط</span>
+                                    <span class="ac-chip ac-chip-sm" style="margin-inline-start:6px;">@L.Markup("profile.role.active_chip")</span>
                                 }
                             </summary>
                             <div style="margin-top:12px;">
@@ -176,9 +177,9 @@ else
         }
 
         <div style="display:flex;gap:8px;margin-top:16px;">
-            <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me")">إلغاء</a>
+            <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me")">@L.Markup("profile.action.cancel")</a>
             <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
-                <AcIcon Name="check" Size="18" /> حِفظ التَعديلات
+                <AcIcon Name="check" Size="18" /> @L.Markup("profile.action.save")@((MarkupString)"\n            ")
             </button>
         </div>
     </form>
@@ -263,12 +264,12 @@ else
             case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.Boolean:
                 <label style="display:inline-flex;align-items:center;gap:8px;">
                     <input type="checkbox" name="@name" value="true" checked="@(def == "True" || def == "true")" />
-                    <span>نَعَم</span>
+                    <span>@L.Markup("common.option.yes")</span>
                 </label>
                 break;
             case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.SingleSelect:
                 <select name="@name" class="ac-input" required="@f.IsRequired">
-                    <option value="">— اختَر —</option>
+                    <option value="">@L.Markup("common.option.choose")</option>
                     @foreach (var o in f.Options)
                     {
                         <option value="@o.Value" selected="@(def == o.Value)">@o.Label</option>

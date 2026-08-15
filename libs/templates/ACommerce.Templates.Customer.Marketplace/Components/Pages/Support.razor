@@ -2,41 +2,42 @@
 @page "/{slug}/r/{role}/support"
 @inject IDocumentStore Store
 @inject AuthSession Auth
+@inject L L
 
 <div class="acs-page">
 @if (!Auth.IsAuthenticated)
 {
     <AcEmptyState IconName="alert-circle"
-                  Title="الدَعم يَحتاج تَسجيل دُخول"
-                  Message="سَجِّل دُخولك لِفَتح طَلَب أو مُتابَعَة طَلَباتك."
-                  ActionLabel="تَسجيل دُخول"
+                  Title="@(L["support.login.title"])"
+                  Message="@(L["support.login.message"])"
+                  ActionLabel="@(L["auth.action.login"])"
                   ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/support")" />
 }
 else
 {
-    <h1 class="acm-wizard-title">الدَعم والشَكاوى</h1>
+    <h1 class="acm-wizard-title">@L.Markup("support.page.title")</h1>
 
     <AcCard>
         <ChildContent>
-            <h3 style="margin-top:0;">طَلَب جَديد</h3>
+            <h3 style="margin-top:0;">@L.Markup("support.new.heading")</h3>
             <form method="post" action="@($"/{Slug}/support/open")">
-                <AcField Label="المَوضوع" Required="true">
+                <AcField Label="@(L["support.new.subject"])" Required="true">
                     <input type="text" name="subject" required maxlength="100" class="ac-input" />
                 </AcField>
 
-                <AcField Label="التَفاصيل" Required="true">
+                <AcField Label="@(L["support.new.details"])" Required="true">
                     <textarea name="body" required rows="4" maxlength="2000"
                               class="ac-input" style="resize:vertical;"></textarea>
                 </AcField>
 
-                <AcButton Type="submit" Variant="primary" Text="إرسال الطَلَب" />
+                <AcButton Type="submit" Variant="primary" Text="@(L["support.new.submit"])" />
             </form>
         </ChildContent>
     </AcCard>
 
-    <h2 style="margin-top:24px;">طَلَباتي السابِقَة</h2>
-    @if (tickets is null)        { <AcLoadingState Message="جارٍ التَحميل…" /> }
-    else if (tickets.Count == 0) { <AcEmptyState Title="لا توجَد طَلَبات بَعد" IconName="inbox" /> }
+    <h2 style="margin-top:24px;">@L.Markup("support.list.heading")</h2>
+    @if (tickets is null)        { <AcLoadingState Message="@(L["common.state.loading"])" /> }
+    else if (tickets.Count == 0) { <AcEmptyState Title="@(L["support.list.empty"])" IconName="inbox" /> }
     else
     {
         <div style="display:flex;flex-direction:column;gap:8px;">
@@ -51,7 +52,7 @@ else
                         </div>
                         <p class="ac-muted" style="margin:6px 0;font-size:13px;">@t.Body</p>
                         <p class="ac-muted" style="font-size:11px;">
-                            @t.CreatedAt.ToString("yyyy-MM-dd HH:mm") — @(t.Replies.Count) ردّ
+                            @t.CreatedAt.ToString("yyyy-MM-dd HH:mm") — @(t.Replies.Count) @L.Markup("common.unit.reply")@((MarkupString)"\n                        ")
                         </p>
                     </ChildContent>
                 </AcCard>

@@ -4,6 +4,7 @@
 @inject ITenantContext Tenant
 @inject AuthSession Auth
 @inject NavigationManager Nav
+@inject L L
 
 @*
     صَفحة "حِسابي". تَتَّبع بُنية Me.razor مِن القالَب القَديم
@@ -11,14 +12,14 @@
 *@
 
 <div class="acs-page acs-profile-page">
-    <h1 class="acm-wizard-title">حِسابي</h1>
+    <h1 class="acm-wizard-title">@L.Markup("shell.nav.account")</h1>
 
     @if (!Auth.IsAuthenticated)
     {
         <AcEmptyState IconName="user"
-                      Title="سَجِّل دُخولك أَوَّلاً"
-                      Message="بَعد الدُخول تَستَطيع تَصَفُّح إعلاناتك ومُحادَثاتك."
-                      ActionLabel="تَسجيل دُخول"
+                      Title="@(L["me.login.title"])"
+                      Message="@(L["me.login.message"])"
+                      ActionLabel="@(L["auth.action.login"])"
                       ActionHref="@AuthSession.LinkFor(Slug, Role, $"login")" />
     }
     else
@@ -33,15 +34,15 @@
                     }
                     else
                     {
-                        <AcAvatar Name="@(Auth.UserName ?? "؟")" Size="56" />
+                        <AcAvatar Name="@(Auth.UserName ?? L["me.profile.unknown_mark"])" Size="56" />
                     }
                     <div class="acm-details-owner-info" style="flex:1;">
-                        <h3 style="margin:0;">@(Auth.UserName ?? "عُضو جَديد")</h3>
+                        <h3 style="margin:0;">@(Auth.UserName ?? L["me.profile.new_member"])</h3>
                         <span style="color:var(--ac-text-muted);font-size:13px;">
-                            @(string.IsNullOrEmpty(me?.Phone) ? $"مُعَرِّف: {Auth.UserId?.ToString()![..8]}" : me!.Phone)
+                            @(string.IsNullOrEmpty(me?.Phone) ? L.Format("me.profile.user_id", Auth.UserId?.ToString()![..8]) : me!.Phone)
                         </span>
                     </div>
-                    <a class="ac-btn ac-btn-outline-primary" href="@AuthSession.LinkFor(Slug, Role, $"me/edit")">تَعديل</a>
+                    <a class="ac-btn ac-btn-outline-primary" href="@AuthSession.LinkFor(Slug, Role, $"me/edit")">@L.Markup("me.profile.edit")</a>
                 </div>
             </ChildContent>
         </AcCard>
@@ -58,13 +59,13 @@
                             <span><AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(activeRole.Icon, "user")" Size="28" /></span>
                             <div>
                                 <strong style="font-size:14px;">@activeRole.Label</strong>
-                                <span style="display:block;color:var(--ac-text-muted);font-size:11px;">دَورُكَ النَّشِط</span>
+                                <span style="display:block;color:var(--ac-text-muted);font-size:11px;">@L.Markup("me.role.active_label")</span>
                             </div>
                         </div>
                         @if (tenantRoles.Count > 1)
                         {
                             <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@AuthSession.LinkFor(Slug, Role, $"me/role")">
-                                <AcIcon Name="settings" Size="14" /> تَبديل
+                                <AcIcon Name="settings" Size="14" /> @L.Markup("me.role.switch")@((MarkupString)"\n                            ")
                             </a>
                         }
                     </div>
@@ -75,37 +76,37 @@
         <div class="acm-home-grid acm-stats-grid" style="margin-top:12px;">
             <a class="acm-stat-tile" href="@AuthSession.LinkFor(Slug, Role, $"favorites")">
                 <strong>@favoritesCount</strong>
-                <span>المُفَضَّلَة</span>
+                <span>@L.Markup("me.stat.favorites")</span>
             </a>
             <a class="acm-stat-tile" href="@AuthSession.LinkFor(Slug, Role, $"chats")">
                 <strong>@conversationsCount</strong>
-                <span>المُحادَثات</span>
+                <span>@L.Markup("me.stat.chats")</span>
             </a>
             <a class="acm-stat-tile" href="@AuthSession.LinkFor(Slug, Role, $"notifications")">
                 <strong>@notificationsCount</strong>
-                <span>الإشعارات</span>
+                <span>@L.Markup("me.stat.notifications")</span>
             </a>
         </div>
 
         <div class="acm-home-actions" style="margin-top:12px;">
             @if (canManage)
             {
-                <AcActionCard Label="إدارَة المَتجَر" IconName="settings" Variant="primary" Href="@AuthSession.LinkFor(Slug, Role, $"manage")" />
+                <AcActionCard Label="@(L["me.action.manage_store"])" IconName="settings" Variant="primary" Href="@AuthSession.LinkFor(Slug, Role, $"manage")" />
             }
-            <AcActionCard Label="الباقات"      IconName="package"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"plans")" />
-            <AcActionCard Label="المُفَضَّلَة" IconName="heart"         Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"favorites")" />
-            <AcActionCard Label="المُحادَثات"   IconName="message"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"chats")" />
-            <AcActionCard Label="الإشعارات"     IconName="bell"          Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"notifications")" />
-            <AcActionCard Label="صَفقاتي"        IconName="receipt"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"deals")" />
-            <AcActionCard Label="الشَكاوى والدَّعم" IconName="alert-circle"  Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"support")" />
-            <AcActionCard Label="المَعلومات القانونيّة" IconName="info"     Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"legal")" />
+            <AcActionCard Label="@(L["me.action.plans"])"      IconName="package"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"plans")" />
+            <AcActionCard Label="@(L["me.action.favorites"])" IconName="heart"         Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"favorites")" />
+            <AcActionCard Label="@(L["me.action.chats"])"   IconName="message"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"chats")" />
+            <AcActionCard Label="@(L["me.action.notifications"])"     IconName="bell"          Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"notifications")" />
+            <AcActionCard Label="@(L["me.action.deals"])"        IconName="receipt"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"deals")" />
+            <AcActionCard Label="@(L["me.action.support"])" IconName="alert-circle"  Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"support")" />
+            <AcActionCard Label="@(L["me.action.legal"])" IconName="info"     Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"legal")" />
         </div>
 
         <div style="margin-top:16px;">
             <form method="post" action="@($"/{Slug}/auth/logout")" style="margin:0;">
                 <button type="submit" class="ac-btn ac-btn-ghost"
                         style="color:var(--ac-danger);width:100%;">
-                    <AcIcon Name="log-out" Size="18" /> تَسجيل خُروج
+                    <AcIcon Name="log-out" Size="18" /> @L.Markup("auth.action.logout")@((MarkupString)"\n                ")
                 </button>
             </form>
         </div>
