@@ -1,13 +1,13 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|1854
-DISTINCT|1204
+TOTAL|1798
+DISTINCT|1178
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|40
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/FlowExplainer.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/GatedPage.razor|9
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Layout/MainLayout.razor|26
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Layout/MainLayout.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AdminHome.razor|18
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AgentChatPanel.razor|33
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AuditLogPage.razor|14
@@ -72,7 +72,7 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioS
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Support.razor|12
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantDrivers.razor|13
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantExplore.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantHome.razor|34
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantHome.razor|5
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantListingDetail.razor|106
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantManage.razor|24
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Terms.razor|16
@@ -84,7 +84,6 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/Dri
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/RiderCreateRequest.razor|16
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/RiderHome.razor|13
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/SellerHome.razor|15
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleLanding.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Routes.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/StudioShell.razor|10
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/TaxonomyChips.razor|7

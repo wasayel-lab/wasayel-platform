@@ -38,7 +38,7 @@
                     <span class="acm-mobile-nav-brand-name">@Tenant.Name</span>
                 </div>
                 <div class="acm-mobile-nav-actions">
-                    <a class="acm-mobile-nav-btn" href="@($"/{slug}/notifications")" aria-label="الإشعارات">
+                    <a class="acm-mobile-nav-btn" href="@($"/{slug}/notifications")" aria-label="@(L["shell.nav.notifs_aria"])">
                         <AcIcon Name="bell" Size="24" />
                     </a>
                 </div>
@@ -214,7 +214,7 @@ else
                 ar.Bottom.Add(new() { Href = href, Label = label, IconName = icon, Exact = exact, Badge = badge });
         }
 
-        Add("", "الرَئيسيّة", "home", exact: true);
+        Add("", L["shell.nav.home"], "home", exact: true);
 
         var msgBadge   = unreadMessages > 0      ? (int?)unreadMessages      : null;
         var notifBadge = unreadNotifications > 0 ? (int?)unreadNotifications : null;
@@ -228,12 +228,12 @@ else
         // (الصَّفقات/السَّلَّة/الإشعارات في nav الحاسوب + صَفحَة حِسابي.)
         void DefaultTabs()
         {
-            Add("explore",      "استِكشاف", "search");
-            Add("favorites",    "مُفَضَّلَة",   "heart");
-            Add("chats",        "رَسائل",   "message", badge: msgBadge);
-            Add("deals",        "صَفقاتي",  "receipt", bottom: false);
-            if (usesCart) Add("cart", "السَّلَّة", "package", bottom: false);
-            Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
+            Add("explore",      L["shell.nav.explore"],     "search");
+            Add("favorites",    L["shell.nav.favorites"],   "heart");
+            Add("chats",        L["shell.nav.chats"],       "message", badge: msgBadge);
+            Add("deals",        L["shell.nav.my_deals"],    "receipt", bottom: false);
+            if (usesCart) Add("cart", L["shell.nav.cart"], "package", bottom: false);
+            Add("notifications",L["shell.nav.notifs"],      "bell",    badge: notifBadge, bottom: false);
         }
 
         // قاموس مُغلَق: قيمَة فَتحَة nav ← مَندوب بِناء التَّبويبات.
@@ -242,33 +242,33 @@ else
             [ACommerce.Kit.Roles.RoleComponents.RiderNav] = () =>
             {
                 // ٤ تَبويبات: رَئيسيّة + طَلَباتي + رَسائل + حِسابي.
-                Add("me/listings",  "طَلَباتي", "package");
-                Add("chats",        "رَسائل",   "message", badge: msgBadge);
-                Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
+                Add("me/listings",  L["shell.nav.my_requests"], "package");
+                Add("chats",        L["shell.nav.chats"],       "message", badge: msgBadge);
+                Add("notifications",L["shell.nav.notifs"],      "bell",    badge: notifBadge, bottom: false);
             },
             [ACommerce.Kit.Roles.RoleComponents.DriverNav] = () =>
             {
                 // ٥ تَبويبات: رَئيسيّة + مَشاوير + عُروضي + رَسائل + حِسابي.
-                Add("explore",      "مَشاوير",  "search");
-                Add("me/offers",    "عُروضي",   "package");
-                Add("chats",        "رَسائل",   "message", badge: msgBadge);
-                Add("me/searches",  "بَحثي",    "bell",    badge: notifBadge, bottom: false);
-                Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
+                Add("explore",      L["shell.nav.trips"],       "search");
+                Add("me/offers",    L["shell.nav.my_offers"],   "package");
+                Add("chats",        L["shell.nav.chats"],       "message", badge: msgBadge);
+                Add("me/searches",  L["shell.nav.my_searches"], "bell",    badge: notifBadge, bottom: false);
+                Add("notifications",L["shell.nav.notifs"],      "bell",    badge: notifBadge, bottom: false);
             },
             [ACommerce.Kit.Roles.RoleComponents.VendorNav] = () =>
             {
                 // ٥ تَبويبات: رَئيسيّة + إعلاناتي + صَفقات + رَسائل + حِسابي.
-                Add("me/listings",  "إعلاناتي", "package");
-                Add("deals",        "صَفقات",   "receipt");
-                Add("chats",        "رَسائل",   "message", badge: msgBadge);
-                Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
+                Add("me/listings",  L["shell.nav.my_listings"], "package");
+                Add("deals",        L["shell.nav.deals"],       "receipt");
+                Add("chats",        L["shell.nav.chats"],       "message", badge: msgBadge);
+                Add("notifications",L["shell.nav.notifs"],      "bell",    badge: notifBadge, bottom: false);
             },
             [ACommerce.Kit.Roles.RoleComponents.AdminNav] = () =>
             {
                 // ٤ تَبويبات: رَئيسيّة + إدارَة + رَسائل + حِسابي.
-                Add("manage",       "إدارَة",   "settings");
-                Add("chats",        "رَسائل",   "message", badge: msgBadge);
-                Add("notifications","إشعارات",  "bell",    badge: notifBadge, bottom: false);
+                Add("manage",       L["shell.nav.manage"],      "settings");
+                Add("chats",        L["shell.nav.chats"],       "message", badge: msgBadge);
+                Add("notifications",L["shell.nav.notifs"],      "bell",    badge: notifBadge, bottom: false);
             },
             [ACommerce.Kit.Roles.RoleComponents.DefaultNav] = DefaultTabs,
         };
@@ -280,8 +280,8 @@ else
             "التَّنَقُّل")();
 
         var meHref = Link("me");
-        ar.Top.Add(new(meHref, "حِسابي", "user"));
-        ar.Bottom.Add(new() { Href = meHref, Label = "حِسابي", IconName = "user" });
+        ar.Top.Add(new(meHref, L["shell.nav.account"], "user"));
+        ar.Bottom.Add(new() { Href = meHref, Label = L["shell.nav.account"], IconName = "user" });
         return ar;
     }
 }

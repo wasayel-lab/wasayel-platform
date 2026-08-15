@@ -107,5 +107,40 @@
   "plans.list.empty_title": "لا توجَد باقات بَعد",
   "plans.card.subscribe": "اشتِراك",
   "plans.card.login_cta": "دُخول للاشتِراك",
-  "plans.list.empty_message": "يُسَجِّل المَتجَر باقاته مِن لوحَة التَحَكُّم."
+  "plans.list.empty_message": "يُسَجِّل المَتجَر باقاته مِن لوحَة التَحَكُّم.",
+
+  "shell.nav.favorites": "مُفَضَّلَة",
+  "shell.nav.my_deals": "صَفقاتي",
+  "shell.nav.cart": "السَّلَّة",
+  "shell.nav.my_requests": "طَلَباتي",
+  "shell.nav.trips": "مَشاوير",
+  "shell.nav.my_offers": "عُروضي",
+  "shell.nav.my_searches": "بَحثي",
+  "shell.nav.my_listings": "إعلاناتي",
+  "shell.nav.deals": "صَفقات",
+  "shell.nav.manage": "إدارَة",
+  "shell.nav.notifs_aria": "الإشعارات",
+
+  "home.hero.search_in": "ابحَث في {0}",
+  "home.hero.city_aria": "اختَر المَدينَة",
+  "home.hero.city_all": "كلّ المُدُن",
+  "home.search.placeholder": "ابحَث في {0}…",
+  "home.search.submit_aria": "بَحث",
+  "home.section.categories": "الفِئات",
+  "home.cta.title": "عِندَك ما تَعرِضه؟",
+  "home.cta.subtitle": "أَضِف إعلانك الآن واصِل لِلمُهتَمّين بِسُرعَة",
+  "home.section.featured": "مُمَيَّز",
+  "home.section.latest": "أُضيفَ حَديثاً",
+  "home.empty.city_title": "لا إعلانات في {0} بَعد",
+  "home.empty.city_message": "جَرِّب كُلّ المُدُن — قَد يَكون ما تَبحَث عَنه قَريباً.",
+  "home.empty.city_action": "كُلّ المُدُن",
+  "home.empty.none_title": "لا إعلانات بَعد",
+  "home.empty.create_message": "كُن أَوَّل مَن يَنشُر هُنا — إعلانك سَيَظهَر في الرَئيسيَّة فَوراً.",
+  "home.empty.create_action": "أَضِف أَوَّل إعلان",
+  "home.empty.browse_message": "تَصَفَّح كُلّ الفِئات — الجَديد يَصِل أَوَّلاً إلى صَفحَة الاستِكشاف.",
+
+  "common.action.view_all": "عَرض الكلّ",
+
+  "roles.landing.pick_hint": "اختَر تَطبيقَكَ لِلمُتابَعَة",
+  "roles.landing.have_account": "لَدَيكَ حِساب بِدَور مُعَيَّن؟ سَجِّل الدُخول"
 }

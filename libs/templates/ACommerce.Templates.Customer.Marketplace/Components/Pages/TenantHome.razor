@@ -33,7 +33,7 @@
     {
         @* قالِب العَميل/الافتراضي — الصَفحَة الكَلاسيكِيَّة: hero + بَحث +
            فِئات + مُمَيَّز + أَحدَث. هذا أَيضاً قالِب المَتاجِر بِلا أَدوار. *@
-        <AcHeroBanner Title="@(profile?.HomeHeroTitlePattern ?? $"ابحَث في {loaded.Name}")"
+        <AcHeroBanner Title="@(profile?.HomeHeroTitlePattern ?? L.Format("home.hero.search_in", loaded.Name))"
                       Subtitle="@loaded.TagLine">
             <LogoContent>
                 <div class="acm-hero-brand">
@@ -52,8 +52,8 @@
                                 <AcIcon Name="map-pin" Size="14" />
                             </label>
                             <select id="city-select" name="city" class="acm-hero-city-select"
-                                    aria-label="اختَر المَدينَة" onchange="this.form.submit()">
-                                <option value="">كلّ المُدُن</option>
+                                    aria-label="@(L["home.hero.city_aria"])" onchange="this.form.submit()">
+                                <option value="">@L.Markup("home.hero.city_all")</option>
                                 @foreach (var c in cities)
                                 {
                                     <option value="@c" selected="@(City == c)">@c</option>
@@ -69,9 +69,9 @@
                         <AcIcon Name="search" Size="18" />
                     </span>
                     <input type="search" name="q" class="ac-search-input"
-                           placeholder="@($"ابحَث في {loaded.Name}…")"
+                           placeholder="@(L.Format("home.search.placeholder", loaded.Name))"
                            autocomplete="off" inputmode="search" />
-                    <button type="submit" class="ac-search-submit" aria-label="بَحث">
+                    <button type="submit" class="ac-search-submit" aria-label="@(L["home.search.submit_aria"])">
                         <AcIcon Name="arrow-left" Size="18" />
                     </button>
                 </form>
@@ -82,7 +82,7 @@
            واحِدَة لا يَحتاج اختِيار — كُلّ شَيء في تِلكَ الفِئَة. *@
         @if (loaded.Categories.Count > 1)
         {
-            <AcSectionHeader Title="الفِئات" />
+            <AcSectionHeader Title="@(L["home.section.categories"])" />
             <TaxonomyChips Slug="@Slug"
                            Categories="loaded.Categories"
                            ActiveKind="@Kind" />
@@ -94,8 +94,8 @@
            يَنشُرون إعلانات. *@
         @if (canCreateListing)
         {
-            <AcCtaCard Title="عِندَك ما تَعرِضه؟"
-                       Subtitle="أَضِف إعلانك الآن واصِل لِلمُهتَمّين بِسُرعَة"
+            <AcCtaCard Title="@(L["home.cta.title"])"
+                       Subtitle="@(L["home.cta.subtitle"])"
                        IconName="house-add"
                        Variant="surface"
                        Href="@AuthSession.LinkFor(Slug, Role, $"create-listing")" />
@@ -103,8 +103,8 @@
 
         @if (featured is { Count: > 0 })
         {
-            <AcSectionHeader Title="مُمَيَّز"
-                             ActionLabel="عَرض الكلّ"
+            <AcSectionHeader Title="@(L["home.section.featured"])"
+                             ActionLabel="@(L["common.action.view_all"])"
                              ActionHref="@AuthSession.LinkFor(Slug, Role, $"explore")" />
             <AcHScroll Class="acm-home-rail">
                 @foreach (var l in featured)
@@ -123,8 +123,8 @@
                                      IsFavorite="@favIds.Contains(l.Id)"
                                      FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
                                      FavoriteFormReturn="@($"/{Slug}")"
-                                     AddFavoriteAriaLabel="أَضِف لِلمُفَضَّلَة"
-                                     RemoveFavoriteAriaLabel="أَزِل مِن المُفَضَّلَة" />
+                                     AddFavoriteAriaLabel="@(L["listings.card.favorite_add"])"
+                                     RemoveFavoriteAriaLabel="@(L["listings.card.favorite_remove"])" />
                     </div>
                 }
             </AcHScroll>
@@ -132,8 +132,8 @@
 
         @if (latest is { Count: > 0 })
         {
-            <AcSectionHeader Title="أُضيفَ حَديثاً"
-                             ActionLabel="عَرض الكلّ"
+            <AcSectionHeader Title="@(L["home.section.latest"])"
+                             ActionLabel="@(L["common.action.view_all"])"
                              ActionHref="@AuthSession.LinkFor(Slug, Role, $"explore")" />
             <div class="acm-home-grid">
                 @foreach (var l in latest)
@@ -151,18 +151,18 @@
                                  IsFavorite="@favIds.Contains(l.Id)"
                                  FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
                                  FavoriteFormReturn="@($"/{Slug}")"
-                                 AddFavoriteAriaLabel="أَضِف لِلمُفَضَّلَة"
-                                 RemoveFavoriteAriaLabel="أَزِل مِن المُفَضَّلَة" />
+                                 AddFavoriteAriaLabel="@(L["listings.card.favorite_add"])"
+                                 RemoveFavoriteAriaLabel="@(L["listings.card.favorite_remove"])" />
                 }
             </div>
         }
 
         <section class="acm-home-actions">
-            <AcActionCard Label="استِكشاف"
+            <AcActionCard Label="@(L["shell.nav.explore"])"
                           IconName="search-heart"
                           Variant="primary"
                           Href="@AuthSession.LinkFor(Slug, Role, $"explore")" />
-            <AcActionCard Label="@(Auth.IsAuthenticated ? "حِسابي" : "تَسجيل دُخول")"
+            <AcActionCard Label="@(Auth.IsAuthenticated ? L["shell.nav.account"] : L["auth.action.login"])"
                           IconName="user"
                           Variant="surface"
                           Href="@(Auth.IsAuthenticated ? $"/{Slug}/me" : $"/{Slug}/login")" />
@@ -176,25 +176,25 @@
             @if (!string.IsNullOrEmpty(City))
             {
                 <AcEmptyState IconName="building"
-                              Title="@($"لا إعلانات في {City} بَعد")"
-                              Message="جَرِّب كُلّ المُدُن — قَد يَكون ما تَبحَث عَنه قَريباً."
-                              ActionLabel="كُلّ المُدُن"
+                              Title="@(L.Format("home.empty.city_title", City))"
+                              Message="@(L["home.empty.city_message"])"
+                              ActionLabel="@(L["home.empty.city_action"])"
                               ActionHref="@AuthSession.LinkFor(Slug, Role, "")" />
             }
             else if (canCreateListing)
             {
                 <AcEmptyState IconName="building"
-                              Title="لا إعلانات بَعد"
-                              Message="كُن أَوَّل مَن يَنشُر هُنا — إعلانك سَيَظهَر في الرَئيسيَّة فَوراً."
-                              ActionLabel="أَضِف أَوَّل إعلان"
+                              Title="@(L["home.empty.none_title"])"
+                              Message="@(L["home.empty.create_message"])"
+                              ActionLabel="@(L["home.empty.create_action"])"
                               ActionHref="@AuthSession.LinkFor(Slug, Role, "create-listing")" />
             }
             else
             {
                 <AcEmptyState IconName="building"
-                              Title="لا إعلانات بَعد"
-                              Message="تَصَفَّح كُلّ الفِئات — الجَديد يَصِل أَوَّلاً إلى صَفحَة الاستِكشاف."
-                              ActionLabel="استِكشاف"
+                              Title="@(L["home.empty.none_title"])"
+                              Message="@(L["home.empty.browse_message"])"
+                              ActionLabel="@(L["shell.nav.explore"])"
                               ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
             }
         }
