@@ -1,6 +1,7 @@
 @page "/admin"
 @inject IDocumentStore Store
 @inject NavigationManager Nav
+@inject L L
 
 @*
     لَوحَة تَحَكُّم المنصَّة (admin) — لِإدارَة المُستَأجِرين.
@@ -15,14 +16,13 @@
             <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
                 <span style="font-size:46px;"><AcIcon Name="search" Size="46" /></span>
                 <div style="flex:1;min-width:220px;">
-                    <h2 style="margin:0 0 4px;">عِندَكَ فِكرَة مَتجَر؟ ابدَأ بِتَحليلها</h2>
+                    <h2 style="margin:0 0 4px;">@L.Markup("admin.home.idea_title")</h2>
                     <p style="margin:0;color:var(--ac-text-muted);font-size:13px;line-height:1.7;">
-                        قَبل أَن تَبني، تَحَقَّق مِن الجَدوى: حَجم السوق السعودي،
-                        المنافِسون، التَّكاليف، والمَخاطِر — دِراسَة مُولَّدَة في دَقائِق.
+                        @((MarkupString)"\n                        ")@L.Markup("admin.home.idea_body")@((MarkupString)"\n                    ")
                     </p>
                 </div>
                 <a class="ac-btn ac-btn-primary" href="/admin/incubator">
-                    <AcIcon Name="star" Size="18" /> حاضِنَة الأَفكار
+                    <AcIcon Name="star" Size="18" /> @L.Markup("admin.home.incubator_cta")@((MarkupString)"\n                ")
                 </a>
             </div>
         </ChildContent>
@@ -30,17 +30,17 @@
 
     <div class="acm-admin-head" style="margin-top:20px;">
         <div>
-            <h1 class="acm-wizard-title" style="margin:0;">المُستَأجِرون</h1>
+            <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("admin.home.tenants")</h1>
             <p style="color:var(--ac-text-muted);margin:4px 0 0;font-size:13px;">
-                @(tenants?.Count ?? 0) مَتجَر — مَنصَّة platform-v1
+                @(tenants?.Count ?? 0) @L.Markup("admin.home.count_note")@((MarkupString)"\n            ")
             </p>
         </div>
         <div style="display:flex;gap:8px;">
             <a class="ac-btn ac-btn-primary" href="/admin/tenants/new">
-                <AcIcon Name="plus" Size="18" /> مَتجَر جَديد
+                <AcIcon Name="plus" Size="18" /> @L.Markup("admin.home.new_tenant")@((MarkupString)"\n            ")
             </a>
             <a class="ac-btn ac-btn-ghost" href="/admin/agent">
-                <AcIcon Name="message" Size="18" /> مُساعِد الإنشاء
+                <AcIcon Name="message" Size="18" /> @L.Markup("admin.home.agent_cta")@((MarkupString)"\n            ")
             </a>
         </div>
     </div>
@@ -52,9 +52,9 @@
     else if (tenants.Count == 0)
     {
         <AcEmptyState IconName="building"
-                      Title="لا مَتاجِر بَعد"
-                      Message="أَنشِئ أَوَّل مَتجَر لِتَبدَأ."
-                      ActionLabel="مَتجَر جَديد"
+                      Title="@(L["admin.home.empty_title"])"
+                      Message="@(L["admin.home.empty_msg"])"
+                      ActionLabel="@(L["admin.home.new_tenant"])"
                       ActionHref="/admin/tenants/new" />
     }
     else
@@ -76,12 +76,12 @@
                         </div>
                         <p class="acm-tenant-card-tagline">@t.TagLine</p>
                         <div class="acm-tenant-card-meta">
-                            <span><AcIcon Name="tag" Size="14" /> @t.Categories.Count فِئَة</span>
+                            <span><AcIcon Name="tag" Size="14" /> @t.Categories.Count @L.Markup("admin.home.category_unit")</span>
                             <span><AcIcon Name="@ChannelIcon(t.AuthChannel)" Size="14" />
                                   @ChannelLabel(t.AuthChannel)</span>
                             @if (t.Roles.Count > 0)
                             {
-                                <span><AcIcon Name="user" Size="14" /> @t.Roles.Count أَدوار</span>
+                                <span><AcIcon Name="user" Size="14" /> @t.Roles.Count @L.Markup("admin.home.roles_unit")</span>
                             }
                         </div>
                     </a>
@@ -90,7 +90,7 @@
                        مُشرِف المَنصَّة، وهذه هي لَوحَتُه. مَدخَلٌ خَلف
                        بَوّابَةٍ أَشَدّ مِن بَوّابَتِه لا يُبلَغ. *@
                     <a href="@($"/admin/tenants/{t.Slug}/theme")"
-                       title="الهُوِيَّة البَصَرِيَّة — حُزَم جاهِزَة"
+                       title="@(L["admin.home.theme_title"])"
                        style="position:absolute;top:10px;inset-inline-end:48px;
                               display:inline-flex;align-items:center;justify-content:center;
                               width:32px;height:32px;border-radius:999px;
@@ -101,7 +101,7 @@
                     @* رابِط مُنفَصِل لِفَتح المَتجَر نَفسه في تَبويب جَديد.
                        النَّقر عَلى البِطاقَة = تَحَكُّم، السَّهم = مُعايَنَة. *@
                     <a href="@($"/{t.Slug}")" target="_blank" rel="noopener"
-                       title="فَتح المَتجَر في تَبويب جَديد"
+                       title="@(L["admin.home.open_title"])"
                        style="position:absolute;top:10px;inset-inline-end:10px;
                               display:inline-flex;align-items:center;justify-content:center;
                               width:32px;height:32px;border-radius:999px;
@@ -117,7 +117,7 @@
 
     @* monitoring CTA لِمُشرِف المَنصَّة *@
     <div style="margin-top:18px;">
-        <a class="ac-btn ac-btn-ghost" href="/admin/monitor"><AcIcon Name="bar-chart" Size="16" /> لوحَة مُراقَبَة جَودَة التَّحاليل</a>
+        <a class="ac-btn ac-btn-ghost" href="/admin/monitor"><AcIcon Name="bar-chart" Size="16" /> @L.Markup("admin.home.monitor_cta")</a>
     </div>
 </RequirePlatformAdmin>
 
@@ -138,10 +138,10 @@
         _        => "phone"
     };
 
-    static string ChannelLabel(string channel) => channel switch
+    string ChannelLabel(string channel) => channel switch
     {
-        "nafath" => "نَفاذ",
-        "email"  => "بَريد",
-        _        => "هاتِف"
+        "nafath" => L["auth.channel.nafath"],
+        "email"  => L["auth.channel.email"],
+        _        => L["auth.channel.phone"]
     };
 }

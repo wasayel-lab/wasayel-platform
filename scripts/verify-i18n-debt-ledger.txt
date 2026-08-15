@@ -1,22 +1,20 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|1639
-DISTINCT|1077
+TOTAL|1538
+DISTINCT|1014
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|40
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/FlowExplainer.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/GatedPage.razor|9
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Layout/MainLayout.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AdminHome.razor|18
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AgentChatPanel.razor|33
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AuditLogPage.razor|14
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AuditLogPage.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/CreateTenant.razor|47
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorFixturesPage.razor|19
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorHome.razor|19
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorFixturesPage.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorStudy.razor|44
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorWizard.razor|26
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/QualityMonitor.razor|34
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/QualityMonitor.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantAttributes.razor|40
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantBranding.razor|18
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantCategories.razor|28

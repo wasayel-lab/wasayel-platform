@@ -1,4 +1,5 @@
 @page "/admin/fixtures"
+@inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 
 @*
@@ -17,53 +18,53 @@
             </div>
             <nav class="studio-nav">
                 <a class="studio-nav-item" href="/admin">
-                    <AcIcon Name="building" Size="18" /> المُستَأجِرون
+                    <AcIcon Name="building" Size="18" /> @L.Markup("admin.nav.tenants")@((MarkupString)"\n                ")
                 </a>
                 <a class="studio-nav-item" href="/admin/monitor">
-                    <AcIcon Name="grid" Size="18" /> المُراقَبَة
+                    <AcIcon Name="grid" Size="18" /> @L.Markup("admin.nav.monitor")@((MarkupString)"\n                ")
                 </a>
                 <a class="studio-nav-item active" href="/admin/fixtures">
                     <AcIcon Name="check-circle" Size="18" /> Fixtures
                 </a>
                 <a class="studio-nav-item" href="/admin/agent">
-                    <AcIcon Name="message" Size="18" /> الوَكيل
+                    <AcIcon Name="message" Size="18" /> @L.Markup("admin.nav.agent")@((MarkupString)"\n                ")
                 </a>
             </nav>
             <div class="studio-sidebar-footer">
-                <a href="/studio" class="studio-nav-item">← لوحَتي</a>
+                <a href="/studio" class="studio-nav-item">← @L.Markup("admin.nav.my_board")</a>
             </div>
         </aside>
 
         <div class="studio-main">
             <header class="studio-topbar">
-                <h2 class="studio-topbar-title">Fixtures — اختِبارات الـ pipeline</h2>
+                <h2 class="studio-topbar-title">@L.Markup("admin.fixtures.topbar")</h2>
             </header>
             <div class="studio-content">
                 <div class="studio-page-head">
-                    <h1>٢٠ مَشروع اختِبار</h1>
-                    <p>كُلّ صَفّ: الفِكرَة، النَّمَط المُتَوَقَّع، النَّمَط الَّذي اقتَرَحه PatternMatcher، وَ النَّتيجَة.</p>
+                    <h1>@L.Markup("admin.fixtures.title")</h1>
+                    <p>@L.Markup("admin.fixtures.note")</p>
                 </div>
 
                 <div class="studio-stats">
                     <div class="studio-stat">
-                        <div class="studio-stat-label">إجمالي</div>
+                        <div class="studio-stat-label">@L.Markup("admin.fixtures.total")</div>
                         <div class="studio-stat-value">@IncubatorFixtures.All.Count</div>
                     </div>
                     <div class="studio-stat">
-                        <div class="studio-stat-label">نَجَحَت <AcIcon Name="check" Size="14" /></div>
+                        <div class="studio-stat-label">@L.Markup("admin.fixtures.passed") <AcIcon Name="check" Size="14" /></div>
                         <div class="studio-stat-value" style="color:var(--st-success);">@passed</div>
                     </div>
                     <div class="studio-stat">
-                        <div class="studio-stat-label">انحِراف <AcIcon Name="x" Size="14" /></div>
+                        <div class="studio-stat-label">@L.Markup("admin.fixtures.drift") <AcIcon Name="x" Size="14" /></div>
                         <div class="studio-stat-value" style="color:var(--st-danger);">@failed</div>
                     </div>
                     <div class="studio-stat">
-                        <div class="studio-stat-label">مُعَدَّل النَّجاح</div>
+                        <div class="studio-stat-label">@L.Markup("admin.fixtures.rate")</div>
                         <div class="studio-stat-value">@(IncubatorFixtures.All.Count > 0 ? passed * 100 / IncubatorFixtures.All.Count : 0)%</div>
                     </div>
                 </div>
 
-                <div class="st-section-title">النَّتائِج</div>
+                <div class="st-section-title">@L.Markup("admin.fixtures.results")</div>
                 <div class="studio-list">
                     @foreach (var (f, actual) in results)
                     {
@@ -75,8 +76,8 @@
                             <div class="studio-list-body">
                                 <strong>@f.Description</strong>
                                 <span>
-                                    قِطاع: @f.ExpectedSector · مُتَوَقَّع: <code>@f.ExpectedPattern</code> ·
-                                    فِعليّ: <code>@actual.Pattern</code> (@actual.Confidence)
+                                    @((MarkupString)"\n                                    ")@L.Markup("admin.fixtures.sector") @f.ExpectedSector · @L.Markup("admin.fixtures.expected") <code>@f.ExpectedPattern</code> ·
+                                    @L.Markup("admin.fixtures.actual") <code>@actual.Pattern</code> (@actual.Confidence)
                                 </span>
                             </div>
                             <span class="st-chip">@actual.LabelAr</span>
@@ -85,7 +86,7 @@
                 </div>
 
                 <div class="st-card" style="margin-top:18px;background:var(--st-line-soft);border:0;font-size:13px;color:var(--st-muted);">
-                    <AcIcon Name="lightbulb" Size="16" /> لِفَحص LLM كامِل (يَستَهلِك الحِصَّة) شَغِّل التَّحاليل يَدَويّاً مِن صَفحَة كُلّ جَلسَة بَعد إنشائها مَع وَصف الـ fixture.
+                    <AcIcon Name="lightbulb" Size="16" /> @L.Markup("admin.fixtures.llm_hint")@((MarkupString)"\n                ")
                 </div>
             </div>
         </div>

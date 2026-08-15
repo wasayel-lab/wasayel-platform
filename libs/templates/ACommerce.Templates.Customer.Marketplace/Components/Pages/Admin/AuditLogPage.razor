@@ -1,6 +1,7 @@
 @page "/admin/audit"
 @page "/admin/audit/{scope}"
 @inject Marten.IDocumentStore Store
+@inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Audit
 
 @*
@@ -19,40 +20,40 @@
             </div>
             <nav class="studio-nav">
                 <a class="studio-nav-item" href="/admin">
-                    <AcIcon Name="building" Size="18" /> المُستَأجِرون
+                    <AcIcon Name="building" Size="18" /> @L.Markup("admin.nav.tenants")@((MarkupString)"\n                ")
                 </a>
                 <a class="studio-nav-item" href="/admin/monitor">
-                    <AcIcon Name="grid" Size="18" /> المُراقَبَة
+                    <AcIcon Name="grid" Size="18" /> @L.Markup("admin.nav.monitor")@((MarkupString)"\n                ")
                 </a>
                 <a class="studio-nav-item" href="/admin/fixtures">
                     <AcIcon Name="check-circle" Size="18" /> Fixtures
                 </a>
                 <a class="studio-nav-item active" href="/admin/audit">
-                    <AcIcon Name="list" Size="18" /> التَّدقيق
+                    <AcIcon Name="list" Size="18" /> @L.Markup("admin.nav.audit")@((MarkupString)"\n                ")
                 </a>
                 <a class="studio-nav-item" href="/admin/agent">
-                    <AcIcon Name="message" Size="18" /> الوَكيل
+                    <AcIcon Name="message" Size="18" /> @L.Markup("admin.nav.agent")@((MarkupString)"\n                ")
                 </a>
             </nav>
             <div class="studio-sidebar-footer">
-                <a href="/studio" class="studio-nav-item">← لوحَتي</a>
+                <a href="/studio" class="studio-nav-item">← @L.Markup("admin.nav.my_board")</a>
             </div>
         </aside>
 
         <div class="studio-main">
             <header class="studio-topbar">
-                <h2 class="studio-topbar-title">سِجِلّ التَّدقيق · @ScopeLabel</h2>
+                <h2 class="studio-topbar-title">@L.Markup("admin.audit.title") · @ScopeLabel</h2>
             </header>
             <div class="studio-content">
                 <div class="studio-page-head">
-                    <h1>أَحدَث الإجراءات</h1>
-                    <p>كُلّ تَغيير إداريّ يُسَجَّل هُنا. غَير قابِل لِلتَّعديل.</p>
+                    <h1>@L.Markup("admin.audit.latest")</h1>
+                    <p>@L.Markup("admin.audit.note")</p>
                 </div>
 
                 @* اختِيار النِطاق *@
                 <div class="st-card" style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <span style="font-size:13px;color:var(--st-muted);align-self:center;">النِطاق:</span>
-                    <a class="st-btn @(EffectiveScope == "_platform" ? "st-btn-primary" : "st-btn-ghost")" href="/admin/audit/_platform">المَنصَّة</a>
+                    <span style="font-size:13px;color:var(--st-muted);align-self:center;">@L.Markup("admin.audit.scope")</span>
+                    <a class="st-btn @(EffectiveScope == "_platform" ? "st-btn-primary" : "st-btn-ghost")" href="/admin/audit/_platform">@L.Markup("admin.audit.platform")</a>
                     @foreach (var t in tenants)
                     {
                         <a class="st-btn @(EffectiveScope == t.Slug ? "st-btn-primary" : "st-btn-ghost")"
@@ -60,11 +61,11 @@
                     }
                 </div>
 
-                <div class="st-section-title">@entries.Count قَيد</div>
+                <div class="st-section-title">@entries.Count @L.Markup("admin.audit.entry_unit")</div>
                 @if (entries.Count == 0)
                 {
                     <div class="st-card" style="text-align:center;padding:36px;color:var(--st-muted);">
-                        لا قُيود في هذا النِطاق بَعد.
+                        @((MarkupString)"\n                        ")@L.Markup("admin.audit.empty")@((MarkupString)"\n                    ")
                     </div>
                 }
                 else
@@ -97,7 +98,7 @@
 @code {
     [Parameter] public string? Scope { get; set; }
     string EffectiveScope => string.IsNullOrEmpty(Scope) ? "_platform" : Scope;
-    string ScopeLabel => EffectiveScope == "_platform" ? "المَنصَّة" : EffectiveScope;
+    string ScopeLabel => EffectiveScope == "_platform" ? L["admin.audit.platform"] : EffectiveScope;
 
     List<AuditEntry> entries = new();
     List<ACommerce.Kit.Tenants.Tenant> tenants = new();

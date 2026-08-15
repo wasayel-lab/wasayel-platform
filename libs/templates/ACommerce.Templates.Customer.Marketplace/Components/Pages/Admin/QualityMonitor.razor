@@ -1,5 +1,6 @@
 @page "/admin/monitor"
 @inject Marten.IDocumentStore Store
+@inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 
 @*
@@ -20,75 +21,75 @@
             </div>
             <nav class="studio-nav">
                 <a class="studio-nav-item" href="/admin">
-                    <AcIcon Name="building" Size="18" /> المُستَأجِرون
+                    <AcIcon Name="building" Size="18" /> @L.Markup("admin.nav.tenants")@((MarkupString)"\n                ")
                 </a>
                 <a class="studio-nav-item active" href="/admin/monitor">
-                    <AcIcon Name="grid" Size="18" /> المُراقَبَة
+                    <AcIcon Name="grid" Size="18" /> @L.Markup("admin.nav.monitor")@((MarkupString)"\n                ")
                 </a>
                 <a class="studio-nav-item" href="/admin/fixtures">
                     <AcIcon Name="check-circle" Size="18" /> Fixtures
                 </a>
                 <a class="studio-nav-item" href="/admin/agent">
-                    <AcIcon Name="message" Size="18" /> الوَكيل
+                    <AcIcon Name="message" Size="18" /> @L.Markup("admin.nav.agent")@((MarkupString)"\n                ")
                 </a>
             </nav>
             <div class="studio-sidebar-footer">
-                <a href="/studio" class="studio-nav-item">← لوحَتي</a>
+                <a href="/studio" class="studio-nav-item">← @L.Markup("admin.nav.my_board")</a>
             </div>
         </aside>
 
         <div class="studio-main">
             <header class="studio-topbar">
-                <h2 class="studio-topbar-title">جَودَة التَّحاليل + الاستِخدام</h2>
+                <h2 class="studio-topbar-title">@L.Markup("admin.monitor.topbar")</h2>
             </header>
             <div class="studio-content">
                 <div class="studio-page-head">
-                    <h1>لوحَة المُراقَبَة</h1>
-                    <p>أَرقام حَيَّة عَن استِخدام الحاضِنَة وجَودَة المُخرَجات.</p>
+                    <h1>@L.Markup("admin.monitor.title")</h1>
+                    <p>@L.Markup("admin.monitor.subtitle")</p>
                 </div>
 
                 <div class="studio-stats">
                     <div class="studio-stat">
-                        <div class="studio-stat-label">إجمالي الجَلَسات</div>
+                        <div class="studio-stat-label">@L.Markup("admin.monitor.total_sessions")</div>
                         <div class="studio-stat-value">@total</div>
                     </div>
                     <div class="studio-stat">
-                        <div class="studio-stat-label">مُكتَمِلَة</div>
+                        <div class="studio-stat-label">@L.Markup("admin.monitor.completed")</div>
                         <div class="studio-stat-value" style="color:var(--st-success);">@completed</div>
                     </div>
                     <div class="studio-stat">
-                        <div class="studio-stat-label">قَيد التَّحليل</div>
+                        <div class="studio-stat-label">@L.Markup("admin.monitor.analyzing")</div>
                         <div class="studio-stat-value" style="color:var(--st-warning);">@analyzing</div>
                     </div>
                     <div class="studio-stat">
-                        <div class="studio-stat-label">فاشِلَة</div>
+                        <div class="studio-stat-label">@L.Markup("admin.monitor.failed")</div>
                         <div class="studio-stat-value" style="color:var(--st-danger);">@failed</div>
                     </div>
                 </div>
 
                 <div class="studio-stats" style="margin-top:14px;">
                     <div class="studio-stat">
-                        <div class="studio-stat-label">مُتَوَسِّط الجَودَة</div>
+                        <div class="studio-stat-label">@L.Markup("admin.monitor.avg_quality")</div>
                         <div class="studio-stat-value">@avgQuality%</div>
-                        <div class="studio-stat-sub">عَلى @completed جَلسَة مُكتَمِلَة</div>
+                        <div class="studio-stat-sub">@L.Markup("admin.monitor.over") @completed @L.Markup("admin.monitor.completed_unit")</div>
                     </div>
                     <div class="studio-stat">
-                        <div class="studio-stat-label">مُستَخدِمو studio</div>
+                        <div class="studio-stat-label">@L.Markup("admin.monitor.studio_users")</div>
                         <div class="studio-stat-value">@users</div>
                     </div>
                     <div class="studio-stat">
-                        <div class="studio-stat-label">مَتاجِر مُطلَقَة</div>
+                        <div class="studio-stat-label">@L.Markup("admin.monitor.stores")</div>
                         <div class="studio-stat-value">@stores</div>
-                        <div class="studio-stat-sub">مِن دِراسات</div>
+                        <div class="studio-stat-sub">@L.Markup("admin.monitor.from_studies")</div>
                     </div>
                     <div class="studio-stat">
-                        <div class="studio-stat-label">مُعَدَّل تَحويل</div>
+                        <div class="studio-stat-label">@L.Markup("admin.monitor.conversion")</div>
                         <div class="studio-stat-value">@(completed > 0 ? $"{stores * 100 / completed}%" : "—")</div>
-                        <div class="studio-stat-sub">دِراسَة → مَتجَر</div>
+                        <div class="studio-stat-sub">@L.Markup("admin.monitor.study_to_store")</div>
                     </div>
                 </div>
 
-                <div class="st-section-title">تَوزيع الباقات</div>
+                <div class="st-section-title">@L.Markup("admin.monitor.tier_split")</div>
                 <div class="studio-list">
                     @foreach (var (tier, count) in tierCounts.OrderByDescending(x => x.Value))
                     {
@@ -97,19 +98,25 @@
                         <div class="studio-list-row" style="cursor:default;">
                             <span class="st-chip">@l.LabelAr</span>
                             <div class="studio-list-body">
-                                <strong>@count مُستَخدِم</strong>
-                                <span>@l.MonthlyPriceSar ر.س/شَهر</span>
+                                <strong>@count @L.Markup("admin.monitor.user_unit")</strong>
+                                @* العُملَة مِن المُنَسِّق لا مِن المِفتاح (‏docs/I18N.md §٢-ب).
+                                   و`L.Format` لا `L.Markup(key, args)`: الثاني يُرَمِّز
+                                   الوَسيط فَتَصير «ر.س» مَراجِعَ رَقَمِيَّة، وهو بِعَينِه
+                                   ما أَجَّلَ `UpgradePrompt` في المَوجَة الثانِيَة.
+                                   والتَكافُؤ صِفريّ بِالقِياس: الباقات ‏99/199/399/999
+                                   فَـ`N0` يُعطي الرَقَم نَفسَه بِلا فاصِلَة آلاف. *@
+                                <span>@((MarkupString)L.Format("admin.monitor.tier_price", Money.Format(l.MonthlyPriceSar)))</span>
                             </div>
                             <span style="color:var(--st-muted);">@pct%</span>
                         </div>
                     }
                 </div>
 
-                <div class="st-section-title">إصدارات الـ prompt المُستَخدَمَة</div>
+                <div class="st-section-title">@L.Markup("admin.monitor.prompt_versions")</div>
                 <div class="studio-list">
                     @if (promptVersions.Count == 0)
                     {
-                        <div class="st-card" style="color:var(--st-muted);text-align:center;">لا بَيانات بَعد.</div>
+                        <div class="st-card" style="color:var(--st-muted);text-align:center;">@L.Markup("admin.monitor.no_data")</div>
                     }
                     else
                     {
@@ -117,17 +124,17 @@
                         {
                             <div class="studio-list-row" style="cursor:default;">
                                 <code style="font-size:12px;background:var(--st-line-soft);padding:2px 8px;border-radius:6px;">@v</code>
-                                <div class="studio-list-body"><strong>@count جَلسَة</strong></div>
+                                <div class="studio-list-body"><strong>@count @L.Markup("admin.monitor.session_unit")</strong></div>
                             </div>
                         }
                     }
                 </div>
 
-                <div class="st-section-title">آخِر الفَشَلات</div>
+                <div class="st-section-title">@L.Markup("admin.monitor.last_failures")</div>
                 @if (recentFailures.Count == 0)
                 {
                     <div class="st-card" style="color:var(--st-muted);text-align:center;padding:24px;">
-                        لا فَشَلات بَعد <AcIcon Name="sparkle" Size="16" />
+                        @((MarkupString)"\n                        ")@L.Markup("admin.monitor.no_failures") <AcIcon Name="sparkle" Size="16" />
                     </div>
                 }
                 else
@@ -138,7 +145,7 @@
                             <div class="studio-list-row" style="cursor:default;">
                                 <span class="studio-list-icon" style="background:#fee2e2;color:#b91c1c;"><AcIcon Name="alert-circle" Size="16" /></span>
                                 <div class="studio-list-body">
-                                    <strong>@(string.IsNullOrEmpty(s.ProjectDescription) ? "بِلا وَصف" : Truncate(s.ProjectDescription, 70))</strong>
+                                    <strong>@(string.IsNullOrEmpty(s.ProjectDescription) ? L["admin.monitor.no_desc"] : Truncate(s.ProjectDescription, 70))</strong>
                                     <span>@s.UpdatedAt.ToString("yyyy-MM-dd HH:mm") · @Truncate(s.AnalysisError ?? "", 80)</span>
                                 </div>
                             </div>
@@ -146,14 +153,14 @@
                     </div>
                 }
 
-                <div class="st-section-title">أَحدَث الجَلَسات المُكتَمِلَة</div>
+                <div class="st-section-title">@L.Markup("admin.monitor.last_completed")</div>
                 <div class="studio-list">
                     @foreach (var s in recentCompleted)
                     {
                         <div class="studio-list-row" style="cursor:default;">
                             <span class="studio-list-icon" style="background:#dcfce7;color:#15803d;"><AcIcon Name="check" Size="16" /></span>
                             <div class="studio-list-body">
-                                <strong>@(string.IsNullOrEmpty(s.ProjectDescription) ? "بِلا وَصف" : Truncate(s.ProjectDescription, 70))</strong>
+                                <strong>@(string.IsNullOrEmpty(s.ProjectDescription) ? L["admin.monitor.no_desc"] : Truncate(s.ProjectDescription, 70))</strong>
                                 <span>@s.UpdatedAt.ToString("yyyy-MM-dd HH:mm") · @s.SuggestedPattern</span>
                             </div>
                             <span class="st-chip @QualityChip(s.AnalysisQualityScore)">@s.AnalysisQualityScore%</span>

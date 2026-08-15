@@ -1,6 +1,7 @@
 @page "/admin/incubator"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.FeasibilityAnalysisService Incubator
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+@inject L L
 
 @*
     مَدخَل الحاضِنَة — صَفحَة بِدايَة صاحِب المَشروع. يَبدَأ بِتَحليل فِكرَته
@@ -14,13 +15,13 @@
 <div class="acs-page acm-admin">
     <div class="acm-admin-head">
         <div style="display:flex;align-items:center;gap:8px;">
-            <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin" aria-label="الرُجوع">
+            <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin" aria-label="@(L["admin.action.back"])">
                 <AcIcon Name="arrow-right" Size="16" />
             </a>
             <div>
-                <h1 class="acm-wizard-title" style="margin:0;"><AcIcon Name="search" Size="16" /> حاضِنَة الأَفكار</h1>
+                <h1 class="acm-wizard-title" style="margin:0;"><AcIcon Name="search" Size="16" /> @L.Markup("admin.incubator.title")</h1>
                 <p style="color:var(--ac-text-muted);margin:2px 0 0;font-size:13px;">
-                    حَلِّل جَدوى فِكرَتِكَ في السوق السعودي قَبل الإطلاق
+                    @((MarkupString)"\n                    ")@L.Markup("admin.incubator.subtitle")@((MarkupString)"\n                ")
                 </p>
             </div>
         </div>
@@ -29,7 +30,7 @@
     @if (!Incubator.IsConfigured)
     {
         <AcAlert Variant="warning"
-                 Message="لا يوجَد مِفتاح LLM مَضبوط. أَضِف Agent:ApiKey في appsettings.Local.json لِتَفعيل التَّحليل." />
+                 Message="@(L["admin.incubator.no_llm"])" />
     }
 
     <AcCard>
@@ -37,16 +38,14 @@
             <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
                 <span style="font-size:42px;"><AcIcon Name="lightbulb" Size="42" /></span>
                 <div style="flex:1;min-width:200px;">
-                    <h3 style="margin:0 0 4px;">عِندَكَ فِكرَة مَتجَر؟</h3>
+                    <h3 style="margin:0 0 4px;">@L.Markup("admin.incubator.have_idea")</h3>
                     <p style="margin:0;color:var(--ac-text-muted);font-size:13px;line-height:1.7;">
-                        أَجِب على أَسئِلَة سَريعَة، نَقتَرِح لَكَ نَمَطاً مُناسِباً،
-                        ثُمَّ نُولِّد دِراسَة جَدوى بِأَرقام السوق السعودي ومَخاطِر
-                        مُستَنبَطَة مِن مَشاريع فَشِلَت.
+                        @((MarkupString)"\n                        ")@L.Markup("admin.incubator.pitch")@((MarkupString)"\n                    ")
                     </p>
                 </div>
                 <form method="post" action="/admin/incubator/start">
                     <button type="submit" class="ac-btn ac-btn-primary">
-                        <AcIcon Name="plus" Size="18" /> ابدَأ تَحليلاً
+                        <AcIcon Name="plus" Size="18" /> @L.Markup("admin.incubator.start")@((MarkupString)"\n                    ")
                     </button>
                 </form>
             </div>
@@ -59,7 +58,7 @@
     }
     else if (sessions.Count > 0)
     {
-        <h3 style="margin:20px 0 8px;font-size:15px;">جَلَساتُكَ السابِقَة</h3>
+        <h3 style="margin:20px 0 8px;font-size:15px;">@L.Markup("admin.incubator.past")</h3>
         <div class="acm-cat-list">
             @foreach (var s in sessions)
             {
@@ -70,13 +69,13 @@
                     <span style="font-size:22px;"><AcIcon Name="@StatusIcon(s.Status)" Size="22" /></span>
                     <div style="flex:1;">
                         <strong>@(string.IsNullOrEmpty(s.ProjectDescription)
-                            ? "فِكرَة بِلا وَصف بَعد"
+                            ? L["admin.incubator.no_desc"]
                             : Truncate(s.ProjectDescription, 60))</strong>
                         <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
                             @StatusLabel(s.Status) · @s.UpdatedAt.ToString("yyyy-MM-dd HH:mm")
                             @if (s.Status == IncubatorStatus.Completed)
                             {
-                                <span> · جَودَة @s.AnalysisQualityScore%</span>
+                                <span> · @L.Markup("admin.incubator.quality") @s.AnalysisQualityScore%</span>
                             }
                         </span>
                     </div>
@@ -103,14 +102,14 @@
         _ => "edit"
     };
 
-    static string StatusLabel(IncubatorStatus s) => s switch
+    string StatusLabel(IncubatorStatus s) => s switch
     {
-        IncubatorStatus.Discovery => "قَيد الاكتِشاف",
-        IncubatorStatus.PatternSuggested => "اقتُرِحَ نَمَط",
-        IncubatorStatus.Analyzing => "قَيد التَّحليل",
-        IncubatorStatus.Completed => "اكتَمَلَ",
-        IncubatorStatus.Failed => "فَشِلَ",
-        _ => "مَهجور"
+        IncubatorStatus.Discovery => L["incubator.status.discovery"],
+        IncubatorStatus.PatternSuggested => L["incubator.status.pattern"],
+        IncubatorStatus.Analyzing => L["incubator.status.analyzing"],
+        IncubatorStatus.Completed => L["incubator.status.completed"],
+        IncubatorStatus.Failed => L["incubator.status.failed"],
+        _ => L["incubator.status.abandoned"]
     };
 
     static string Truncate(string s, int n) => s.Length <= n ? s : s[..n] + "…";
