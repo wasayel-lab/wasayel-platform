@@ -40,6 +40,19 @@ BASE_URL="${2:-http://localhost:5050}"
 # والزِيادَة لا تُبطِل اللَقطَة القائِمَة: `compare-appearance.sh`
 # يَدور على مِلَفّات **الأَساس**، فَما زادَ في الالتِقاط ولا أَساسَ لَه
 # يُهمَل.
+#
+# ‏2026-08-15 — أُضيفَت خَمس صَفَحات (‏#9–#13) لِمَوجَة النُصوص الثانِيَة،
+# وكُلٌّ مِنها **مَقيسَة قَبل أَن تُضاف** لا مَظنونَة:
+#   · `/` — الهُبوط: ‏28 مِن 29 سِلسِلَة في `Landing.razor` تَقَع فيها،
+#     وصِفرٌ مِنها كانَ يَقَع في الثَماني القائِمَة.
+#   · `/ashare/legal` وفَرعاها — `LegalHub.razor` ثَلاثَة فُروع
+#     حَصرِيَّة (شُروط/خُصوصِيَّة/استِرجاع) لا يُصَيَّر مِنها في الطَلَب
+#     الواحِد إلّا واحِد. والثَلاثَة مَعاً: ‏24 مِن 24 — تَغطِيَة تامَّة.
+#   · `/ashare/plans` — ‏6 مِن 9 في `Plans.razor`.
+# والقِياس نَفسُه صُحِّحَ مَرَّةً: أَوَّل عَدّ بَحَثَ عَن السِلسِلَة
+# **خاماً** في الصَفحَة فَأَعطى أَصفاراً كاذِبَة، لِأَنّ Razor يَكتُب
+# مُخرَج التَعبير مُرَمَّزاً (‏`&#x627;`…) — فَنَصٌّ يُصَيَّر عَبر خاصِّيَّة
+# مُكَوِّن لا يوجَد خاماً أَبَداً. العَدّ الصَحيح يَفُكّ التَرميز أَوَّلاً.
 PAGES=(
   "ashare-portal:/ashare"
   "ashare-role-customer:/ashare/r/customer"
@@ -49,6 +62,11 @@ PAGES=(
   "adwar-demo-portal:/adwar-demo"
   "ashare-explore-filters:/ashare/explore?filters=open"
   "ashare-explore-empty:/ashare/explore?category=__none__"
+  "landing:/"
+  "ashare-legal-terms:/ashare/legal"
+  "ashare-legal-privacy:/ashare/legal/privacy"
+  "ashare-legal-returns:/ashare/legal/returns"
+  "ashare-plans:/ashare/plans"
 )
 
 # أَوراق الأَنماط الَّتي تُحَمِّلها كُلّ صَفحَة — المَظهَر = HTML + CSS،
