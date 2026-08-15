@@ -61,6 +61,12 @@ BASE_URL="${2:-http://localhost:5050}"
 # **خاماً** في الصَفحَة فَأَعطى أَصفاراً كاذِبَة، لِأَنّ Razor يَكتُب
 # مُخرَج التَعبير مُرَمَّزاً (‏`&#x627;`…) — فَنَصٌّ يُصَيَّر عَبر خاصِّيَّة
 # مُكَوِّن لا يوجَد خاماً أَبَداً. العَدّ الصَحيح يَفُكّ التَرميز أَوَّلاً.
+#
+# ‏2026-08-15 (‏#16–#19) — صَفَحات **مَجهولَة عَمداً** تَحرُس فُروع
+# الرَفض. `/admin` بِلا جَلسَة يُصَيِّر فَرع `NeedAuth` مِن
+# `RequirePlatformAdmin`، و`/admin/tenants/…` بِلا جَلسَة يُصَيِّر فَرع
+# `RequireTenantAdmin`، و`/studio/auth` بِمَرحَلَتَيه لا يُصَيَّر
+# **إلّا** لِمَجهول (صاحِب الجَلسَة يُحَوَّل إلى `/studio`).
 PAGES=(
   "ashare-portal:/ashare"
   "ashare-role-customer:/ashare/r/customer"
@@ -77,6 +83,73 @@ PAGES=(
   "ashare-plans:/ashare/plans"
   "theme-demo-portal:/theme-demo"
   "theme-demo-city:/theme-demo?city=Riyadh"
+  "admin-anon:/admin"
+  "admin-tenant-anon:/admin/tenants/theme-demo/theme"
+  "studio-auth:/studio/auth"
+  # الرَقم هُنا **عَرضٌ لا مِفتاح**: الصَفحَة تَطبَعُه في «أُرسِلَ رَمز
+  # إلى …»، فَهو يَدخُل بايتات الأَساس ويَجِب أَن يَكون ثابِتاً. ولِذلك
+  # هو رَقم عَيِّنَة لا يُطابِق أَيّ مِلَفّ جَلسَة — وحَتّى لَو طابَقَ،
+  # فَالطَلَب هُنا `GET` لا يُنشِئ جَلسَةً ولا مُستَخدِماً.
+  "studio-auth-verify:/studio/auth?stage=verify&phone=0512345678&err=code"
+)
+
+# ═══════════════════════════════════════════════════════════════════════
+#  الصَفَحات المَحروسَة بِجَلسَة — ‏2026-08-15، المَوجَة الثالِثَة
+# ───────────────────────────────────────────────────────────────────────
+#  التَقدير في `docs/I18N.md` §٨ قالَ إنّ الباقي «أَغلَبُه Studio* و
+#  Admin/* وMy* — مَحروسٌ بِجَلسَة، لا تُصَيَّر لِزائِر، فَلا تَبلُغُها
+#  لَقطَة capture-appearance.sh كَما هي اليَوم». وهذا يَرفَع الأَمر إلى
+#  أَحَد طَريقَين: لَقطَة بِجَلسَة، أَو الاكتِفاء بِالمُقابَلَة
+#  الحَرفِيَّة مَع HEAD. **والأَوَّل أَغلى مَرَّةً وأَرخَص خَمس مَوجات**،
+#  فَنُفِّذَ هُنا.
+#
+#  ثَلاثَة مِلَفّات تَعريف، وكُلٌّ يُسَجَّل دُخولُه **مَرَّةً واحِدَة**:
+#
+#    admin  — مُشرِف مَنصَّة. جَلسَة studio لِهاتِف مَنَحَه
+#             `PlatformAdminSeeder` عَبر `PLATFORM_ADMIN_PHONE`.
+#             يَفتَح `RequirePlatformAdmin`.
+#    studio — صاحِب استوديو عاديّ (لَيسَ مُشرِف مَنصَّة). يَفتَح شِلّ
+#             `/studio`، ويُصَيِّر فَرع `Forbidden` في `/admin` —
+#             وهُما فَرعان لا يَبلُغُهُما لا الزائِر ولا المُشرِف.
+#    user   — مُستَخدِم مَتجَر. جَلسَة نَفاذ (‏MockNafath) في مُستَأجِر
+#             تَجرِبَة. يَفتَح `/{slug}/me/*`.
+#
+#  **ولا سِرّ في المُستَودَع**: الهَواتِف والهُوِيَّة والرَمز كُلُّها
+#  مُتَغَيِّرات بيئَة. وغِيابُها **لا يُنتِج لَقطَةً مَجهولَة صامِتَة** —
+#  الصَفَحات المَحروسَة تُتَخَطّى بِصَوت عالٍ، فَتَخرُج
+#  `compare-appearance.sh` حَمراءَ عَلى غيابِ طَرَفِها. الخَطَأ الَّذي
+#  لا يُغتَفَر هُنا هو أَن يُكتَب مِلَفّ أَساسٍ فيه صَفحَةُ «سَجِّل
+#  دُخولَك» بِاسم صَفحَةٍ مَحروسَة — فَتُصادِق البَوّابَة على شَيء لَم
+#  تَرَه قَطّ.
+#
+#  المُتَغَيِّرات:
+#    WSL_CAPTURE_ADMIN_PHONE   — هاتِف مُشرِف المَنصَّة (= PLATFORM_ADMIN_PHONE)
+#    WSL_CAPTURE_STUDIO_PHONE  — هاتِف صاحِب استوديو عاديّ
+#    WSL_CAPTURE_USER_NID      — هُوِيَّة نَفاذ (‏10 أَرقام)
+#    WSL_CAPTURE_USER_TENANT   — مُستَأجِر التَجرِبَة (افتِراضيّ theme-demo)
+#    WSL_CAPTURE_DEV_CODE      — رَمز OTP التَطويريّ (افتِراضيّ 123456،
+#                                وهو ثابِتٌ مَكتوب في `StudioAuth.DevCode`
+#                                فَلَيسَ سِرّاً — والمُتَغَيِّر لِيَتَبَدَّل
+#                                إن تَبَدَّلَ المَصدَر لا لِيُخفى)
+GUARDED_PAGES=(
+  "admin-home:admin:/admin"
+  "admin-tenant-new:admin:/admin/tenants/new"
+  "admin-monitor:admin:/admin/monitor"
+  "admin-incubator:admin:/admin/incubator"
+  "admin-fixtures:admin:/admin/fixtures"
+  "admin-audit:admin:/admin/audit"
+  "admin-tenant-theme:admin:/admin/tenants/theme-demo/theme"
+  "admin-forbidden:studio:/admin"
+  "studio-home:studio:/studio"
+  "studio-billing:studio:/studio/billing"
+  "studio-new:studio:/studio/new"
+  "studio-consent:studio:/studio/consent"
+  "studio-upgrade-analyze:studio:/studio?upgrade=analyze"
+  "studio-upgrade-refine:studio:/studio?upgrade=refine"
+  "studio-upgrade-stores:studio:/studio?upgrade=stores"
+  "studio-upgrade-feature:studio:/studio?upgrade=feature"
+  "user-searches:user:/{tenant}/me/searches"
+  "user-notifications:user:/{tenant}/notifications"
 )
 
 # أَوراق الأَنماط الَّتي تُحَمِّلها كُلّ صَفحَة — المَظهَر = HTML + CSS،
@@ -93,7 +166,109 @@ SHEETS=(
   "branding-ashare.css:/branding/ashare.css"
 )
 
+DEV_CODE="${WSL_CAPTURE_DEV_CODE:-123456}"
+USER_TENANT="${WSL_CAPTURE_USER_TENANT:-theme-demo}"
+
+JARS="$(mktemp -d)"
+trap 'rm -rf "$JARS"' EXIT
+
 mkdir -p "$OUT_DIR" "$OUT_DIR/css"
+
+# ── التَّطبيع: اثنان، وكِلاهُما مَقيس لا مُقَدَّر ────────────────────
+# ‏(١) تَعليق `Blazor-Server-Component-State` — الوَحيد الَّذي يَتَغَيَّر
+#     بَين طَلَبَين مُتَتالِيَين لِصَفحَة **بِلا جَلسَة**.
+#
+# ‏(٢) `window.acRealtimeToken` — ‏2026-08-15، أُضيفَ مَعَ الصَفَحات
+#     المَحروسَة، وهو **اكتِشافُ الأَداةِ عَطَبَ نَفسِها**: أَوَّل
+#     لَقطَتَين مُتَتالِيَتَين تَطابَقَتا في ‏35 مِلَفّاً واختَلَفَتا في
+#     صَفحَتَي المُستَخدِم — والسَطر المُختَلِف واحِد.
+#
+#     والسَبَب أَخطَرُ مِن الاختِلاف: `App.razor` يَطبَع `@@Auth.Token`
+#     في المُستَند لِـSignalR، أَي أَنّ **توكِن الجَلسَة نَفسَه** كانَ
+#     سَيُكتَب في لَقطَة أَساس تُودَع في Git. فَالتَطبيع هُنا يَقتُل
+#     عُصفورَين: يُثَبِّت الأَداةَ، ويُنَفِّذ شَرطَ «الناتِج لا يَحوي
+#     كوكِيّاً» بَدَل أَن يَعِد بِه.
+#
+#     والنَمَط يَشتَرِط **مَحرَفاً واحِداً على الأَقَلّ** بَينَ العَلامَتَين:
+#     الصَفحَة المَجهولَة تَطبَع `''` فَلا تُمَسّ — ولَولا هذا الشَرط
+#     لَاحمَرَّت لَقطات المَوجَتَين الأولى والثانِيَة كُلُّها بِلا سَبَب.
+normalize() {
+  sed -E -e 's/Blazor-Server-Component-State:[A-Za-z0-9+\/=_-]+/Blazor-Server-Component-State:NORMALIZED/g' \
+         -e "s/(window\.acRealtimeToken = ')[^']+'/\1NORMALIZED'/g" \
+      "$1" > "$2"
+}
+
+# ── تَسجيل دُخول studio (‏admin و studio) ────────────────────────────
+# نُقطَتان: `/studio/auth/login` تَنقُل إلى مَرحَلَة الرَمز بِلا أَثَر،
+# و`/studio/auth/verify` هي الَّتي تَكتُب الكوكي. نَستَدعي الثانِيَة
+# مُباشَرَةً — الأولى لا حالَةَ لَها تُحفَظ (مَقيس في المَصدَر:
+# تُعيد Redirect فَقَط).
+studio_login() {
+  local jar="$1" phone="$2"
+  curl -s -c "$jar" -o /dev/null \
+       -X POST -d "phone=$phone" -d "code=$DEV_CODE" \
+       "$BASE_URL/studio/auth/verify"
+  has_cookie "$jar" ".acommerce.studio"
+}
+
+# اسم الكوكي في الحَقل السادِس مِن صيغَة Netscape. الفَحص بِالحَقل لا
+# بِالسَطر: `.acommerce.studio.name` يَحمِل الاسم لا التوكِن، فَمُطابَقَة
+# جُزئيَّة كانَت سَتَقبَل جَرَّةً بِلا جَلسَة.
+has_cookie() {
+  awk -F'\t' -v want="$2" 'NF>=7 && $6==want {found=1} END{exit !found}' "$1" 2>/dev/null
+}
+
+# ── تَسجيل دُخول مُستَخدِم مَتجَر عَبر نَفاذ الوَهميّ ────────────────
+# ‏MockNafath يوافِق تِلقائيّاً بَعد `AutoApproveSeconds` (‏5 اليَوم)،
+# والمُحاوَلَة تَنتَهي بَعد دَقيقَتَين — فَالانتِظار داخِل النافِذَة.
+nafath_login() {
+  local jar="$1" tenant="$2" nid="$3"
+  local loc attempt
+  loc=$(curl -s -o /dev/null -w '%{redirect_url}' \
+             -X POST -d "nid=$nid" "$BASE_URL/$tenant/auth/nafath/login")
+  attempt=$(printf '%s' "$loc" | perl -ne 'print $1 if /attempt=([0-9a-f]+)/')
+  [ -n "$attempt" ] || return 1
+  sleep 6
+  curl -s -c "$jar" -o /dev/null \
+       -X POST -d "nid=$nid" -d "attempt=$attempt" \
+       "$BASE_URL/$tenant/auth/nafath/verify"
+  has_cookie "$jar" ".acommerce.auth.$tenant"
+}
+
+# ── تَهيِئَة المِلَفّات المُتاحَة ─────────────────────────────────────
+declare -A PROFILE_JAR=()
+PROFILES_READY=""
+PROFILES_MISSING=""
+
+if [ -n "${WSL_CAPTURE_ADMIN_PHONE:-}" ]; then
+  if studio_login "$JARS/admin" "$WSL_CAPTURE_ADMIN_PHONE"; then
+    PROFILE_JAR[admin]="$JARS/admin"; PROFILES_READY="$PROFILES_READY admin"
+  else
+    echo "✗ فَشِلَ دُخول مِلَفّ 'admin' — لا كوكي studio." >&2; exit 1
+  fi
+else
+  PROFILES_MISSING="$PROFILES_MISSING admin(WSL_CAPTURE_ADMIN_PHONE)"
+fi
+
+if [ -n "${WSL_CAPTURE_STUDIO_PHONE:-}" ]; then
+  if studio_login "$JARS/studio" "$WSL_CAPTURE_STUDIO_PHONE"; then
+    PROFILE_JAR[studio]="$JARS/studio"; PROFILES_READY="$PROFILES_READY studio"
+  else
+    echo "✗ فَشِلَ دُخول مِلَفّ 'studio' — لا كوكي studio." >&2; exit 1
+  fi
+else
+  PROFILES_MISSING="$PROFILES_MISSING studio(WSL_CAPTURE_STUDIO_PHONE)"
+fi
+
+if [ -n "${WSL_CAPTURE_USER_NID:-}" ]; then
+  if nafath_login "$JARS/user" "$USER_TENANT" "$WSL_CAPTURE_USER_NID"; then
+    PROFILE_JAR[user]="$JARS/user"; PROFILES_READY="$PROFILES_READY user"
+  else
+    echo "✗ فَشِلَ دُخول مِلَفّ 'user' — لا كوكي $USER_TENANT." >&2; exit 1
+  fi
+else
+  PROFILES_MISSING="$PROFILES_MISSING user(WSL_CAPTURE_USER_NID)"
+fi
 
 for entry in "${PAGES[@]}"; do
   name="${entry%%:*}"
@@ -103,11 +278,74 @@ for entry in "${PAGES[@]}"; do
     echo "✗ $path أَعطى $code — الالتِقاط مُتَوَقِّف." >&2
     exit 1
   fi
-  # التَّطبيع الوَحيد المَسموح.
-  sed -E 's/Blazor-Server-Component-State:[A-Za-z0-9+\/=_-]+/Blazor-Server-Component-State:NORMALIZED/g' \
-      "$OUT_DIR/$name.raw" > "$OUT_DIR/$name.html"
+  normalize "$OUT_DIR/$name.raw" "$OUT_DIR/$name.html"
   rm -f "$OUT_DIR/$name.raw"
   echo "✓ $path → $OUT_DIR/$name.html  ($(wc -c < "$OUT_DIR/$name.html") بايت)"
+done
+
+# ── الصَفَحات المَحروسَة ─────────────────────────────────────────────
+# **بُرهان أَنّ الجَلسَة عَمِلَت، لِكُلّ صَفحَة على حِدَة**: تُجلَب
+# مَرَّتَين — بِالجَلسَة وبِلا جَلسَة — ويُشتَرَط أَن تَختَلِفا. وهذا
+# المِعيار عامّ وقابِل لِلفَحص بِلا قائِمَة عَلامات نَصِّيَّة تَنجَرِف:
+# صَفحَةٌ مَحروسَة تُعطي المَجهولَ شَيئاً آخَر بِالضَرورَة، فَإن
+# تَساوَت النُسخَتان فَإمّا أَنّ الجَلسَة لَم تَصِل (‏كوكي ساقِط،
+# هاتِف خاطِئ) وإمّا أَنّ الصَفحَة **لَيسَت مَحروسَة أَصلاً** فَمَكانُها
+# `PAGES`. وكِلتا الحالَتَين خَطَأ يَجِب أَن يُصرَخ بِه لا أَن يُكتَب
+# مِلَفَّ أَساس.
+guarded_ok=0
+guarded_skipped=0
+for entry in "${GUARDED_PAGES[@]}"; do
+  name="${entry%%:*}"; rest="${entry#*:}"
+  profile="${rest%%:*}"; path="${rest#*:}"
+  path="${path//\{tenant\}/$USER_TENANT}"
+
+  jar="${PROFILE_JAR[$profile]:-}"
+  if [ -z "$jar" ]; then
+    # إلى `stderr` عَمداً: `compare-appearance.sh` يَبتَلِع `stdout`
+    # الالتِقاط، فَتَحذيرٌ مَكتوب هُناك لا يَراه أَحَد.
+    echo "⚠ $path — مِلَفّ '$profile' غَير مُهَيَّأ، تُخُطِّيَت (لا تُكتَب مَجهولَةً)." >&2
+    guarded_skipped=$((guarded_skipped + 1))
+    continue
+  fi
+
+  code=$(curl -s -b "$jar" -o "$OUT_DIR/$name.raw" -w '%{http_code}' "$BASE_URL$path")
+  if [ "$code" != "200" ]; then
+    echo "✗ $path ($profile) أَعطى $code — الالتِقاط مُتَوَقِّف." >&2
+    exit 1
+  fi
+  curl -s -o "$JARS/$name.anon" "$BASE_URL$path"
+  if cmp -s "$OUT_DIR/$name.raw" "$JARS/$name.anon"; then
+    echo "✗ $path ($profile) — الصَفحَة بِالجَلسَة تُساوي الصَفحَة بِلا جَلسَة." >&2
+    echo "   إمّا أَنّ الجَلسَة لَم تَصِل، وإمّا أَنّ الصَفحَة غَير مَحروسَة." >&2
+    exit 1
+  fi
+  normalize "$OUT_DIR/$name.raw" "$OUT_DIR/$name.html"
+  rm -f "$OUT_DIR/$name.raw"
+  guarded_ok=$((guarded_ok + 1))
+  echo "✓ $path ($profile) → $OUT_DIR/$name.html  ($(wc -c < "$OUT_DIR/$name.html") بايت)"
+done
+
+# ── لا كوكي في المُخرَج ──────────────────────────────────────────────
+# الشَرط مَكتوب في التَكليف، **ويُفحَص لا يُوعَد بِه**: قيمَة كُلّ توكِن
+# مُسَجَّل تُقرَأ مِن الجَرَّة وتُبحَث في كُلّ مِلَفّ مَكتوب.
+#
+# وبِشَكلَيها: الجَرَّة تَحفَظ القيمَة كَما جاءَت في التَرويسَة (‏`%3D`
+# لِـ`=`)، والصَفحَة تَطبَعُها مَفكوكَةَ التَرميز. فَفَحصُ الشَكل الخام
+# وَحدَه كانَ **عَمىً مَقيساً**: التوكِن كانَ في `user-*.html` والفَحصُ
+# أَخضَر، ولَم يُكشَف إلّا حينَ اختَلَفَت لَقطَتان مُتَتالِيَتان.
+url_decode() { perl -pe 's/%([0-9A-Fa-f]{2})/chr(hex($1))/ge' ; }
+
+for p in "${!PROFILE_JAR[@]}"; do
+  while read -r tok; do
+    [ ${#tok} -lt 12 ] && continue
+    plain=$(printf '%s' "$tok" | url_decode)
+    for form in "$tok" "$plain"; do
+      if grep -rqF "$form" "$OUT_DIR" 2>/dev/null; then
+        echo "✗ تَسَرَّبَ توكِن جَلسَة '$p' إلى لَقطَة الأَساس — الالتِقاط مُتَوَقِّف." >&2
+        exit 1
+      fi
+    done
+  done < <(awk -F'\t' 'NF>=7 && $1 !~ /^#/ {print $7}' "${PROFILE_JAR[$p]}")
 done
 
 for entry in "${SHEETS[@]}"; do
@@ -121,4 +359,9 @@ for entry in "${SHEETS[@]}"; do
   echo "✓ $path → $OUT_DIR/css/$name  ($(wc -c < "$OUT_DIR/css/$name") بايت)"
 done
 
-echo "اِلتُقِطَت ${#PAGES[@]} صَفَحات و${#SHEETS[@]} أَوراق أَنماط في $OUT_DIR"
+echo "اِلتُقِطَت ${#PAGES[@]} صَفَحات عامَّة و$guarded_ok مَحروسَة و${#SHEETS[@]} أَوراق أَنماط في $OUT_DIR"
+[ -n "$PROFILES_READY" ] && echo "المِلَفّات المُهَيَّأَة:$PROFILES_READY"
+if [ "$guarded_skipped" -gt 0 ]; then
+  echo "⚠ تُخُطِّيَت $guarded_skipped صَفحَة مَحروسَة — الناقِص:$PROFILES_MISSING" >&2
+fi
+exit 0
