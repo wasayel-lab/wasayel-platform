@@ -63,7 +63,7 @@
 .st-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     padding: 11px 20px; border-radius: var(--st-radius-sm);
-    font-family: inherit; font-size: 15px; font-weight: 600;
+    font-family: inherit; font-size: 15px; font-weight: var(--ac-font-weight-bold);
     border: 1px solid transparent; cursor: pointer;
     text-decoration: none; transition: all .15s ease; line-height: 1;
 }
@@ -91,7 +91,7 @@
 }
 .st-chip {
     display: inline-flex; align-items: center; gap: 4px;
-    padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    padding: 3px 10px; border-radius: var(--ac-radius-pill); font-size: 12px; font-weight: var(--ac-font-weight-bold);
     background: var(--st-primary-50); color: var(--st-primary-700);
 }
 .st-chip-success { background: #dcfce7; color: var(--st-success); }
@@ -109,7 +109,7 @@
     box-shadow: 0 0 0 3px var(--st-primary-100);
 }
 .st-textarea { resize: vertical; min-height: 120px; line-height: 1.7; }
-.st-label { display: block; font-size: 13px; font-weight: 600; color: var(--st-ink-700); margin-bottom: 6px; }
+.st-label { display: block; font-size: 13px; font-weight: var(--ac-font-weight-bold); color: var(--st-ink-700); margin-bottom: 6px; }
 .st-field { margin-bottom: 16px; }
 
 /* ═══ صفحة الهبوط ═══════════════════════════════════════════════ */
@@ -138,7 +138,7 @@
 .landing-eyebrow {
     display: inline-flex; align-items: center; gap: 6px;
     background: var(--st-primary-50); color: var(--st-primary-700);
-    padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 600;
+    padding: 6px 14px; border-radius: var(--ac-radius-pill); font-size: 13px; font-weight: var(--ac-font-weight-bold);
     margin-bottom: 20px;
 }
 .landing-title {
@@ -175,7 +175,7 @@
 }
 .landing-example {
     background: var(--st-surface); border: 1px solid var(--st-line);
-    border-radius: 999px; padding: 7px 14px; font-size: 13px; color: var(--st-ink-700);
+    border-radius: var(--ac-radius-pill); padding: 7px 14px; font-size: 13px; color: var(--st-ink-700);
     cursor: pointer; transition: all .15s;
 }
 .landing-example:hover { border-color: var(--st-primary); color: var(--st-primary-700); }
@@ -187,7 +187,7 @@
 /* 32 على المِقياس بَدَلاً مِن 34. */
 .landing-feature-icon { font-size: 32px; margin-bottom: 10px; }
 .landing-feature h3 { font-size: 16px; margin: 0 0 6px; }
-.landing-feature p { font-size: 14px; color: var(--st-muted); margin: 0; line-height: 1.7; }
+.landing-feature p { font-size: var(--ac-font-size-base); color: var(--st-muted); margin: 0; line-height: 1.7; }
 @media (max-width: 720px) { .landing-features { grid-template-columns: 1fr; } }
 
 /* ═══ صفحة الدخول ═══════════════════════════════════════════════ */
@@ -206,10 +206,10 @@
     display: grid; place-items: center; color: #fff; font-size: 28px;
 }
 .auth-title { text-align: center; font-size: 22px; font-weight: 700; margin: 0 0 4px; }
-.auth-sub { text-align: center; font-size: 14px; color: var(--st-muted); margin: 0 0 24px; }
+.auth-sub { text-align: center; font-size: var(--ac-font-size-base); color: var(--st-muted); margin: 0 0 24px; }
 .auth-dev-hint {
     background: #fffbeb; border: 1px dashed #fcd34d; color: #92400e;
-    border-radius: 10px; padding: 10px 14px; font-size: 13px; text-align: center; margin-bottom: 16px;
+    border-radius: var(--ac-radius-md); padding: 10px 14px; font-size: 13px; text-align: center; margin-bottom: 16px;
 }
 .auth-otp-input {
     letter-spacing: .4em; text-align: center; font-size: 22px; font-weight: 700;
@@ -237,7 +237,7 @@
 }
 .studio-nav-item {
     display: flex; align-items: center; gap: 11px; padding: 10px 12px;
-    border-radius: 10px; color: #cbd5e1; text-decoration: none; font-size: 14.5px;
+    border-radius: var(--ac-radius-md); color: #cbd5e1; text-decoration: none; font-size: 14.5px;
     font-weight: 500; transition: all .12s;
 }
 .studio-nav-item:hover { background: var(--st-sidebar-soft); color: #fff; }
@@ -296,7 +296,7 @@
 .risk-heatmap-ylabel {
     writing-mode: vertical-rl; transform: rotate(180deg);
     align-self: center; justify-self: center;
-    font-size: 12px; color: var(--st-muted); font-weight: 600;
+    font-size: 12px; color: var(--st-muted); font-weight: var(--ac-font-weight-bold);
 }
 .risk-heatmap-grid {
     display: grid; grid-template-columns: repeat(3, 1fr);
@@ -304,7 +304,7 @@
     gap: 4px; min-height: 240px;
 }
 .risk-heatmap-cell {
-    border-radius: 8px; padding: 8px;
+    border-radius: var(--ac-radius-sm); padding: 8px;
     display: flex; flex-wrap: wrap; gap: 4px;
     align-content: flex-start;
     min-height: 70px;
@@ -332,7 +332,7 @@
 .risk-dot-other       { background: #64748b; }
 .risk-heatmap-xlabel {
     grid-column: 2; text-align: center;
-    font-size: 12px; color: var(--st-muted); font-weight: 600; margin-top: 6px;
+    font-size: 12px; color: var(--st-muted); font-weight: var(--ac-font-weight-bold); margin-top: 6px;
 }
 .risk-heatmap-axis {
     display: flex; justify-content: space-between;
