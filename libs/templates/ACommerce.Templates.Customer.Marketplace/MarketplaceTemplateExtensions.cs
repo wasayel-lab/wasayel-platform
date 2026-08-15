@@ -30,6 +30,10 @@ public static class MarketplaceTemplateExtensions
         services.AddScoped<L>();
         services.AddScoped<ACommerce.Kit.Realtime.Client.RealtimeClient>();
         services.AddScoped<ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService>();
+        // قِراءَةُ إعلانٍ واحِد — يَسأَلُها **مُستَهلِكان**: شاشَةُ
+        // التَحرير (فَلا تَفتَح جَلسَةً بِيَدِها، والطَبَقَة الثامِنَة
+        // تَبقى عِندَ ‏55) والمُرَشِّح `ListingOwnerFilter`.
+        services.AddScoped<ACommerce.Templates.Customer.Marketplace.Services.ListingLookupService>();
         // مُزَوِّد الخَلفيّات المُسَمّى: كُلّ وَكيل مَنطِقيّ (Studio / Analysis)
         // يَطلُب مِلَفَّه بِاسمِه، والمُزَوِّد يَحُلّه ويُخَزِّن خَلفيَّة واحِدَة
         // لِكُلّ مِلَفّ مُتَمايِز. تَسجيل واحِد بَدَل الخَلفيَّة المُشتَرَكَة.
@@ -818,6 +822,61 @@ public static class MarketplaceTemplateExtensions
           .RequireEntitlement(
               ACommerce.Kit.Subscriptions.CapabilityCatalog.ListingCreate,
               redirectPath: "create-listing", errCode: "quota");
+
+        // ─── Edit listing — الفَجوَة الَّتي كَشَفَها إغلاقُ الثَغرَة ─────
+        //
+        // ‏`POST /{slug}/api/listings/{id}/edit` حُذِفَت في `a7e0352d`
+        // لِأَنَّها كانَت تَقبَل أَيّ طَلَبٍ مَجهول، فَصارَ
+        // `ListingEdited` يَتيماً — أَي أَنّ المُنتَج **بِلا شاشَةِ
+        // تَحرير إعلانٍ إطلاقاً**، وكانَت الثَغرَةُ تَستُر الفَجوَة.
+        // وهذِه هي النُقطَة الشَرعِيَّة: نَفسُ المَسار، وهُوِيَّةُ
+        // الفاعِل مِن **الجَلسَة** لا مِن جِسم الطَلَب، وحارِسانِ
+        // مُعلَنانِ في التَوقيع — تَوثيقٌ ثُمَّ مِلكِيَّة.
+        //
+        // والجِسمُ يَقرَأ النَموذَجَ ويَعرِض، والمَنطِقُ في
+        // `ListingEditService` (تَأخُذ الجَلسَة ولا تَفتَحُها)،
+        // والحَدَثُ يُلحَق في **نَفس** الجَلسَة الَّتي تُودِع.
+        app.MapPost("/{slug}/listings/{id:guid}/edit",
+            async (string slug, Guid id, HttpContext http, HttpRequest req, IDocumentStore store) =>
+        {
+            await using var s = store.LightweightSession(slug);
+            var result = await Services.Listings.ListingEditService.EditAsync(s,
+                new Services.Listings.ListingEditRequest(
+                    id, http.UserId(),
+                    req.Form["title"].ToString(),
+                    req.Form["description"].ToString(),
+                    req.Form["price"].ToString(),
+                    req.Form["city"].ToString(),
+                    req.Form["district"].ToString()),
+                http.RequestAborted);
+
+            if (result.Status == Services.Listings.ListingEditStatus.Missing)
+                return Results.Redirect(Link(req, slug, "me/listings"));
+            if (!result.Ok)
+                return Results.Redirect(Link(req, slug, $"edit-listing/{id}?err={result.Code}"));
+
+            await s.SaveChangesAsync();
+            return Results.Redirect(Link(req, slug, $"listings/{id}?saved=1"));
+        }).DisableAntiforgery().RequireAuth().RequireListingOwner();
+
+        // ─── Delete listing — نَفسُ الحارِسَين ونَفسُ الخِدمَة ──────────
+        // الحَذفُ لَيِّن (`IsDeleted`)، فَهو قابِلٌ لِلعَكس بِحَدَثٍ
+        // مُقابِل. و`ListingDeleted` لَه باعِثٌ مَحروسٌ سَلَفاً في
+        // إشراف الاستوديو — فَهذا **سَطحُ المالِك** لا باعِثٌ أَوَّل.
+        app.MapPost("/{slug}/listings/{id:guid}/delete",
+            async (string slug, Guid id, HttpContext http, HttpRequest req, IDocumentStore store) =>
+        {
+            await using var s = store.LightweightSession(slug);
+            var result = await Services.Listings.ListingEditService.DeleteAsync(s,
+                new Services.Listings.ListingDeleteRequest(id, http.UserId()),
+                http.RequestAborted);
+
+            if (result.Status == Services.Listings.ListingEditStatus.Rejected)
+                return Results.Redirect(Link(req, slug, $"edit-listing/{id}?err={result.Code}"));
+
+            if (result.Ok) await s.SaveChangesAsync();
+            return Results.Redirect(Link(req, slug, "me/listings"));
+        }).DisableAntiforgery().RequireAuth().RequireListingOwner();
 
         // ─── Saved Searches — create/delete/toggle ──────────────────────
         app.MapPost("/{slug}/searches/save",

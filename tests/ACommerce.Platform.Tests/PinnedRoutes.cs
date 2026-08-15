@@ -34,6 +34,24 @@ internal static class PinnedRoutes
         "/{slug}/support/open",
         "/{slug}/listings/{id:guid}/report",
         "/{slug}/listings/create",
+
+        // ─── المَوجَة ٤: سَطرانِ يُضافانِ بِقَرارٍ مَرئيّ، وهذا سَبَبُهُما ──
+        // نُقطَتا تَحريرِ الإعلان وحَذفِه. وأَخذُهُما المَخزَنَ **لَيسَ
+        // إهمالاً بَل الشَكل الوَحيد المُمكِن اليَوم**: حَقنُ
+        // `IDocumentSession` في نُقطَة Minimal API يُعطي جَلسَةً بِلا
+        // مُستَأجِر — الرَبطُ المَقيس في `LiveOutboxTenantProofTests`
+        // يَقَع على نِقاط **Wolverine.Http** عَبر
+        // `opts.TenantId.IsRouteArgumentNamed("slug")`، ولا يَمُرّ بِـ
+        // Minimal API. ووَثائِقُنا كُلُّها `AllDocumentsAreMultiTenanted`،
+        // فَجَلسَةٌ بِلا سلاج تَكتُب في `*DEFAULT*` صامِتَةً.
+        //
+        // والمَنطِقُ خَرَجَ رَغمَ ذلك: `ListingEditService` تَأخُذ
+        // الجَلسَةَ ولا تَفتَحُها ولا تُودِع، فَما بَقِيَ في الجِسم
+        // فَتحُ الجَلسَة وقِراءَةُ النَموذَج والعَرض. ويَومَ تُرَحَّل
+        // النِقاطُ إلى Wolverine.Http يُرفَع السَطرانِ بِلا لَمس
+        // الخِدمَة.
+        "/{slug}/listings/{id:guid}/edit",
+        "/{slug}/listings/{id:guid}/delete",
         "/{slug}/searches/save",
         "/{slug}/searches/{id:guid}/delete",
         "/{slug}/searches/{id:guid}/toggle",

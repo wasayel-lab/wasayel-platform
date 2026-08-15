@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using ACommerce.Templates.Customer.Marketplace.Services.Listings;
 using ACommerce.Templates.Customer.Marketplace.Services.TenantConfig;
 using Xunit;
 
@@ -19,46 +20,83 @@ namespace ACommerce.Platform.Tests;
 ///   <item><b>لا تَعرِف HTTP</b> — لا <c>HttpRequest</c> ولا
 ///   <c>IFormCollection</c> ولا <c>IResult</c> في أَيّ مِلَفّ خِدمَة.
 ///   وهذا بِعَينِه ما يَجعَلُها صالِحَةً لِـAPI ولِتَطبيقٍ أَصيل
-///   غَداً؛ والمُهايِئ <c>TenantConfigSurface</c> هُوَ
-///   <b>الاستِثناء الوَحيد المُعلَن</b>.</item>
+///   غَداً؛ ومُهايِئُ كُلّ مُجَلَّد — إن وُجِدَ — هُوَ
+///   <b>الاستِثناء الوَحيد المُعلَن</b> فيه.</item>
 ///
 ///   <item><b>مُعجَمُ الرَفض مُغلَق</b> — كُلّ رَمزٍ تَرُدُّه خِدمَةٌ
-///   عُضوٌ في <see cref="TenantConfigCodes"/>. والانغِلاق مَفروضٌ
-///   مَرَّتَين: نَصِّيّاً هُنا، وفي وَقت التَشغيل بِرَميٍ داخِلَ
-///   <see cref="TenantConfigResult.Reject"/> — فَسِلسِلَةٌ عابِرَة لا
-///   تَصير رَمزاً.</item>
+///   عُضوٌ في مُعجَم مُجَلَّدِها. والانغِلاق مَفروضٌ مَرَّتَين:
+///   نَصِّيّاً هُنا، وفي وَقت التَشغيل بِرَميٍ داخِلَ
+///   <c>Reject</c> — فَسِلسِلَةٌ عابِرَة لا تَصير رَمزاً.</item>
 /// </list>
+///
+/// <para><b>ووُسِّعَ في المَوجَة ٤ لِيَشمَلَ مُجَلَّداً ثانِياً</b>
+/// (<c>Services/Listings</c>). والتَوسيعُ هُوَ الجَواب الصَحيح لا
+/// فاحِصٌ ثانٍ (القاعِدَة ٨: «لا أُنبوب رابِع»): شَكلٌ واحِد
+/// مَفروضٌ مِن مَوضِعٍ واحِد، وقائِمَةُ المُجَلَّدات بَياناتٌ في
+/// أَعلى المِلَفّ. وفاحِصٌ ثانٍ بِقائِمَةٍ ثانِيَة يَنجَرِف عَنها
+/// — وهذا بِعَينِه عَطَبُ «تَعريفَين لِقَرارٍ واحِد».</para>
 /// </summary>
 public class TenantConfigServiceShapeTests
 {
-    private const string Dir =
-        "libs/templates/ACommerce.Templates.Customer.Marketplace/Services/TenantConfig";
+    /// <summary>مُجَلَّدُ خِدماتٍ يَخضَع لِلشَكل. <c>SurfaceFile</c>
+    /// اسمُ المُهايِئ الَّذي يُسمَح لَه وَحدَه بِمَعرِفَة HTTP —
+    /// و<c>null</c> تَعني «لا مُهايِئ هُنا، ولا مِلَفَّ يَعرِف
+    /// HTTP».</summary>
+    private sealed record ShapedDir(string Path, string? SurfaceFile, string WhyAr);
 
-    /// <summary>المُهايِئ وَحدَه يَعرِف HTTP — بِاسمِه وسَبَبِه.</summary>
-    private const string SurfaceFile = "TenantConfigSurface.cs";
-
-    private static IReadOnlyList<(string Name, string Code)> ServiceFiles()
+    private static readonly ShapedDir[] Dirs =
     {
-        var dir = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, Dir.Replace('/', Path.DirectorySeparatorChar));
-        Assert.True(Directory.Exists(dir), $"أَداة عَمياء: لا مُجَلَّد {Dir}.");
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Services/TenantConfig",
+            "TenantConfigSurface.cs",
+            "سِتّ عَمَلِيّات إعدادِ مُستَأجِر، كُلٌّ يُنادِيها السَطحان " +
+            "(‏/admin و/studio). والمُهايِئُ يُحَوِّل النَموذَجَ إلى طَلَبٍ " +
+            "مَكتوبٍ بِأَنواعِه، والنَتيجَةَ إلى ردٍّ يَراه الجُمهور."),
 
-        return Directory.EnumerateFiles(dir, "*.cs")
-            .Select(f => (Path.GetFileName(f), WriteEndpointGuardTests.StripComments(File.ReadAllText(f))))
-            .OrderBy(x => x.Item1, StringComparer.Ordinal)
-            .ToArray();
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Listings",
+            null,
+            "تَحريرُ الإعلان وحَذفُه — سَطحٌ واحِد اليَوم (نُقطَتا القالِب). " +
+            "ولا مُهايِئَ هُنا عَمداً: النُقطَةُ تَقرَأ النَموذَجَ وتَعرِض " +
+            "بِنَفسِها، فَالمُجَلَّدُ **صِفرُ مَعرِفَةٍ بِـHTTP** لا " +
+            "مِلَفٌّ واحِدٌ مُستَثنى. مُهايِئٌ بِمُستَهلِكٍ واحِد تَجريدٌ " +
+            "يَسبِق مُستَهلِكَه (القاعِدَة ١)."),
+    };
+
+    /// <summary>كُلّ مِلَفّات الخِدمَة في كُلّ مُجَلَّد خاضِع، مَع
+    /// مُجَلَّدِها — فَرِسالَةُ الخَرق تَقول أَينَ وَقَع.</summary>
+    private static IReadOnlyList<(ShapedDir Dir, string Name, string Code)> ServiceFiles()
+    {
+        var rows = new List<(ShapedDir, string, string)>();
+
+        foreach (var d in Dirs)
+        {
+            var dir = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+                d.Path.Replace('/', Path.DirectorySeparatorChar));
+            Assert.True(Directory.Exists(dir), $"أَداة عَمياء: لا مُجَلَّد {d.Path}.");
+
+            foreach (var f in Directory.EnumerateFiles(dir, "*.cs").OrderBy(x => x, StringComparer.Ordinal))
+                rows.Add((d, Path.GetFileName(f),
+                          WriteEndpointGuardTests.StripComments(File.ReadAllText(f))));
+        }
+
+        return rows;
     }
 
     [Fact]
     public void No_service_opens_or_commits_a_session()
     {
         var files = ServiceFiles();
-        Assert.True(files.Count >= 3, $"أَداة عَمياء: {files.Count} مِلَفّ فَقَط.");
+        Assert.True(files.Count >= 5, $"أَداة عَمياء: {files.Count} مِلَفّ فَقَط.");
+
+        // ولا مُجَلَّدَ فارِغ يَمُرّ صامِتاً: مُجَلَّدٌ مُثَبَّت بِلا
+        // مِلَفّ يَجعَل الفاحِصَ يُصادِق على لا شَيء.
+        foreach (var d in Dirs)
+            Assert.True(files.Any(f => f.Dir == d), $"أَداة عَمياء: {d.Path} بِلا مِلَفّ.");
 
         var breaches = new List<string>();
-        foreach (var (name, code) in files)
+        foreach (var (d, name, code) in files)
             foreach (var forbidden in new[] { "LightweightSession(", "QuerySession(", "SaveChangesAsync" })
                 if (code.Contains(forbidden, StringComparison.Ordinal))
-                    breaches.Add($"{name}: «{forbidden}» — الخِدمَة تَأخُذ الجَلسَة ولا تَملِكُها.");
+                    breaches.Add($"{d.Path}/{name}: «{forbidden}» — الخِدمَة تَأخُذ الجَلسَة ولا تَملِكُها.");
 
         Assert.True(breaches.Count == 0, string.Join("\n  ", breaches));
     }
@@ -66,28 +104,40 @@ public class TenantConfigServiceShapeTests
     [Fact]
     public void No_service_except_the_declared_surface_adapter_knows_http()
     {
-        var files = ServiceFiles();
         var breaches = new List<string>();
 
-        foreach (var (name, code) in files)
+        foreach (var (d, name, code) in ServiceFiles())
         {
-            if (name == SurfaceFile) continue;
+            if (name == d.SurfaceFile) continue;
             foreach (var forbidden in new[] { "HttpRequest", "IFormCollection", "IFormFile", "IResult", "Results." })
                 if (code.Contains(forbidden, StringComparison.Ordinal))
-                    breaches.Add($"{name}: «{forbidden}» — الخِدمَة لا تَعرِف HTTP؛ المُهايِئ {SurfaceFile} وَحدَه يَعرِفُه.");
+                    breaches.Add($"{d.Path}/{name}: «{forbidden}» — الخِدمَة لا تَعرِف HTTP" +
+                                 (d.SurfaceFile is null
+                                     ? "، ولا مُهايِئَ مُعلَناً في هذا المُجَلَّد."
+                                     : $"؛ المُهايِئ {d.SurfaceFile} وَحدَه يَعرِفُه."));
         }
 
         Assert.True(breaches.Count == 0, string.Join("\n  ", breaches));
     }
 
     /// <summary>والاستِثناءُ يَموت مَع سَبَبِه: مُهايِئٌ لا يَعرِف HTTP
-    /// لَم يَعُد مُهايِئاً — يُرفَع مِن الاستِثناء.</summary>
+    /// لَم يَعُد مُهايِئاً — يُرفَع مِن الاستِثناء. ومُجَلَّدٌ أُعلِنَ
+    /// بِلا مُهايِئ ثُمَّ صارَ لَه واحِد يُمسِكُه الفَحصُ أَعلاه.</summary>
     [Fact]
     public void The_declared_surface_adapter_really_is_the_one_that_knows_http()
     {
-        var surface = ServiceFiles().FirstOrDefault(f => f.Name == SurfaceFile);
-        Assert.False(surface.Code is null, $"استِثناءٌ مُثَبَّت لِمِلَفٍّ لا وُجودَ لَه: {SurfaceFile}.");
-        Assert.Contains("HttpRequest", surface.Code, StringComparison.Ordinal);
+        var files = ServiceFiles();
+        var declared = Dirs.Count(d => d.SurfaceFile is not null);
+        Assert.True(declared > 0, "أَداة عَمياء: لا مُهايِئَ مُعلَناً واحِداً.");
+
+        foreach (var d in Dirs)
+        {
+            if (d.SurfaceFile is null) continue;
+            var surface = files.FirstOrDefault(f => f.Dir == d && f.Name == d.SurfaceFile);
+            Assert.False(surface.Code is null,
+                $"استِثناءٌ مُثَبَّت لِمِلَفٍّ لا وُجودَ لَه: {d.Path}/{d.SurfaceFile}.");
+            Assert.Contains("HttpRequest", surface.Code, StringComparison.Ordinal);
+        }
     }
 
     /// <summary>
@@ -96,6 +146,14 @@ public class TenantConfigServiceShapeTests
     /// <b>المَسارانِ مَعاً</b> لَيسَت تَوحيداً — هي نُسخَةٌ ثالِثَة.
     /// فَالمَقياس لَيسَ «هَل لَها مُستَهلِك» بَل «هَل لَها
     /// السَطحان».</para>
+    ///
+    /// <para><b>ونِطاقُه <c>*SaveService</c> وَحدَها، وهذا مَقصود</b>:
+    /// شَرطُ السَطحَين وُجِدَ لِأَنّ تِلكَ السِتّ كانَت
+    /// <b>مَكتوبَةً مَرَّتَين</b> فَوُحِّدَت. و<c>ListingEditService</c>
+    /// لَم تُكتَب مَرَّتَين قَطّ — بَل لَم يَكُن لَها سَطحٌ واحِد،
+    /// وذاكَ هُوَ العَطَبُ الَّذي سَدَّته المَوجَة ٤. فَشَرطُ
+    /// السَطحَين عَلَيها يَقلِب القاعِدَةَ إلى طَقس: يُوجِب سَطحاً
+    /// إدارِيّاً لا يَطلُبُه أَحَد.</para>
     /// </summary>
     [Fact]
     public void Every_service_is_called_from_both_surfaces()
@@ -131,8 +189,22 @@ public class TenantConfigServiceShapeTests
             string.Join("\n  ", breaches));
     }
 
+    /// <summary>كُلّ نَوعِ نَتيجَةٍ في مُجَلَّدٍ خاضِع — الاسمُ في
+    /// النِداء يَجِب أَن يَكون أَحَدَها، فَنَوعٌ ثالِثٌ يُضاف بِلا
+    /// تَسجيلٍ هُنا لا يُفحَص انغِلاقُه.</summary>
     private static readonly Regex RejectCall =
-        new(@"TenantConfigResult\.Reject\(\s*(?<a>[^)]+?)\s*\)", RegexOptions.Compiled);
+        new(@"(?<t>TenantConfigResult|ListingEditResult)\.Reject\(\s*(?<a>[^)]+?)\s*\)",
+            RegexOptions.Compiled);
+
+    /// <summary>ورَمزُ المُعجَم يُكتَب بِثابِتٍ مِن صِنفِ مُعجَمِ
+    /// نَوعِه — لا مُعجَمَ مُشتَرَك، لِأَنّ الاشتِراكَ يَفتَحُهُما
+    /// مَعاً.</summary>
+    private static readonly IReadOnlyDictionary<string, string> CodeClassOf =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["TenantConfigResult"] = "TenantConfigCodes.",
+            ["ListingEditResult"]  = "ListingEditCodes.",
+        };
 
     [Fact]
     public void Every_rejection_code_is_a_member_of_the_closed_vocabulary()
@@ -140,31 +212,50 @@ public class TenantConfigServiceShapeTests
         var sites = 0;
         var breaches = new List<string>();
 
-        foreach (var (name, code) in ServiceFiles())
+        foreach (var (d, name, code) in ServiceFiles())
         foreach (Match m in RejectCall.Matches(code))
         {
             sites++;
-            var arg = m.Groups["a"].Value.Trim();
+            var type = m.Groups["t"].Value;
+            var arg  = m.Groups["a"].Value.Trim();
 
-            // شَكلانِ مَقبولانِ: ثابِتٌ مِن المُعجَم، أَو مُتَغَيِّرٌ
-            // أُسنِدَ مِن دالَّةِ قَرارٍ تُعيد ثَوابِتَ المُعجَم.
-            if (arg.StartsWith("TenantConfigCodes.", StringComparison.Ordinal)) continue;
+            // شَكلانِ مَقبولانِ: ثابِتٌ مِن مُعجَم نَوعِه، أَو
+            // مُتَغَيِّرٌ أُسنِدَ مِن دالَّةِ قَرارٍ تُعيد ثَوابِتَه.
+            if (arg.StartsWith(CodeClassOf[type], StringComparison.Ordinal)) continue;
             if (Regex.IsMatch(arg, @"^[a-z][A-Za-z0-9]*$")) continue;
 
-            breaches.Add($"{name}: Reject({arg}) — رَمزٌ لا يَعود إلى TenantConfigCodes.");
+            breaches.Add($"{d.Path}/{name}: {type}.Reject({arg}) — رَمزٌ لا يَعود إلى {CodeClassOf[type]}");
         }
 
         Assert.True(sites > 0, "أَداة عَمياء: لا مَوضِعَ رَفضٍ واحِد.");
+
+        // وعَدّادٌ لِكُلّ نَوع: نَوعٌ بِصِفر مَوضِع رَفض يَعني أَنّ
+        // النَمَطَ لَم يَرَه — وذاكَ صِفرٌ كاذِب لا انغِلاقٌ مُثبَت.
+        foreach (var type in CodeClassOf.Keys)
+            Assert.True(
+                ServiceFiles().Any(f => f.Code.Contains(type + ".Reject(", StringComparison.Ordinal)),
+                $"أَداة عَمياء: {type}.Reject بِصِفر مَوضِع — إمّا زالَ النَوع، وإمّا كَذَبَ النَمَط.");
+
         Assert.True(breaches.Count == 0, string.Join("\n  ", breaches));
     }
 
     /// <summary>والانغِلاق مَفروضٌ في وَقت التَشغيل أَيضاً: رَمزٌ
-    /// خارِجَ المُعجَم يَرمي، فَلا يَتَسَلَّل عَبرَ مُتَغَيِّر.</summary>
+    /// خارِجَ المُعجَم يَرمي، فَلا يَتَسَلَّل عَبرَ مُتَغَيِّر.
+    /// <b>وبِالطَرَفَين لِكُلّ نَوع</b> — رَميٌ لِلغَريب، وقَبولٌ
+    /// لِكُلّ عُضو.</summary>
     [Fact]
     public void A_code_outside_the_vocabulary_throws_at_runtime()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => TenantConfigResult.Reject("made_up"));
         foreach (var c in TenantConfigCodes.All)
             Assert.Equal(c, TenantConfigResult.Reject(c).Code);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => ListingEditResult.Reject("made_up"));
+        // ورَمزٌ مِن المُعجَم الآخَر غَريبٌ هُنا — والمُعجَمانِ
+        // مُنفَصِلانِ فِعلاً لا بِالاسم فَقَط.
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => ListingEditResult.Reject(TenantConfigCodes.NoScope));
+        foreach (var c in ListingEditCodes.All)
+            Assert.Equal(c, ListingEditResult.Reject(c).Code);
     }
 }

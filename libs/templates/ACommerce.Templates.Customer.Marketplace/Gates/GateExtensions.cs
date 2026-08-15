@@ -51,6 +51,25 @@ public static class GateExtensions
     }
 
     /// <summary>
+    /// <para><b>مِلكِيَّة الإعلان مَطلوبَة</b> — الحارِسُ الوَحيد هُنا
+    /// الَّذي يَسأَل عَن <b>المَفعولِ بِه</b> لا عَن الفاعِل. يَقرَأ
+    /// <c>{id}</c> مِن المَسار، ويُقارِن مالِكَ الإعلان بِصاحِبِ
+    /// الجَلسَة. يَفتَرِض <see cref="RequireAuth{TBuilder}"/> سَبَقَه.</para>
+    ///
+    /// <para><b>ولِماذا لَم يَكفِ <c>RequirePermission("listing.create")</c></b>:
+    /// الصَلاحِيَّة جَوابُها ثابِتٌ لِلدَور — «هذا الدَور يَنشُر
+    /// إعلانات» — فَتَفتَح تَحريرَ <b>كُلّ</b> إعلانات المَتجَر لِكُلّ
+    /// ناشِر. والمِلكِيَّة سُؤالٌ عَن صَفٍّ بِعَينِه، ولا يُجيبُه إلّا
+    /// مَن يَقرَأ ذاكَ الصَفّ.</para>
+    /// </summary>
+    public static TBuilder RequireListingOwner<TBuilder>(this TBuilder b)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        b.AddEndpointFilter(new ListingOwnerFilter());
+        return b;
+    }
+
+    /// <summary>
     /// <para><b>استِحقاق باقَة مَطلوب</b> — القُدرَة مِن
     /// <c>CapabilityCatalog</c> حَصراً، ورَمزٌ خارِجَه يَرمي
     /// <b>عِندَ التَركيب</b> فَيُفشِل الإقلاع. يَفتَرِض

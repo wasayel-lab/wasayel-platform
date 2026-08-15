@@ -1,0 +1,167 @@
+@page "/{slug}/edit-listing/{id:guid}"
+@page "/{slug}/r/{role}/edit-listing/{id:guid}"
+@inject AuthSession Auth
+@inject ACommerce.Templates.Customer.Marketplace.Services.ListingLookupService Listings
+@inject L L
+
+@*
+    تَحرير إعلانٍ قائِم — الشاشَة الَّتي كَشَفَ غِيابَها إغلاقُ الثَغرَة
+    (‏`a7e0352d`): كانَ `ListingEdited` يُبعَث مِن نُقطَةٍ مَكشوفَة
+    وَحدَها، فَلَمّا حُذِفَت صارَ يَتيماً — أَي أَنّ المُنتَج بِلا
+    مَسارٍ شَرعيّ لِلتَحرير أَصلاً.
+
+    ثَلاثَة قَرارات في هذا المِلَفّ، كُلٌّ لَه عِلَّتُه:
+
+    ١. **لا جَلسَة Marten هُنا.** القِراءَة عَبر
+       `ListingLookupService`، فَلا تَدخُل الصَفحَةُ سِجِلَّ الطَبَقَة
+       الثامِنَة (‏55 صَفحَة) ولا تَرفَع سَقفَه.
+
+    ٢. **ولا سَطرَ عَرَبيٍّ حَرفيٍّ واحِد** — كُلّ ما يُرى مِن
+       القامُوس مِن يَومِه (القاعِدَة ١١). والاصطِلاح مَجّانيّ على
+       شاشَةٍ تُكتَب اليَوم، وكِلفَتُه على شاشَةٍ مَكتوبَة فَتحُها
+       وتَعديلُها وإعادَةُ اختِبارِها.
+
+    ٣. **والمِلكِيَّة تُفحَص هُنا وفي المُرَشِّح وفي الخِدمَة بِنَفس
+       الدالَّة** (‏`ListingEditService.IsOwnedBy`). فَما تَفتَحُه
+       الشاشَةُ هُوَ بِالضَبط ما تَقبَلُه النُقطَة — ولا شاشَةَ
+       تُعرَض لِمَن سَتَرُدُّه الكِتابَة.
+*@
+
+<div class="acs-page acs-create-listing">
+    <h1 class="acm-wizard-title">@L.Markup("listings.edit.title")</h1>
+
+    @if (!Auth.IsAuthenticated)
+    {
+        <AcEmptyState IconName="user"
+                      Title="@L["listings.edit.login_title"]"
+                      Message="@L["listings.edit.login_message"]"
+                      ActionLabel="@L["auth.action.login"]"
+                      ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/edit-listing/{Id}")" />
+    }
+    else if (loading)
+    {
+        <AcLoadingState />
+    }
+    else if (listing is null)
+    {
+        @* «لَيسَ لَك» و«غَير مَوجود» جَوابٌ واحِد — وإلّا صارَ تَجريبُ
+           المُعَرِّفات أَداةَ استِطلاع تَكشِف أَيُّها إعلانٌ قائِم. *@
+        <AcEmptyState IconName="package"
+                      Title="@L["listings.edit.missing_title"]"
+                      Message="@L["listings.edit.missing_message"]"
+                      ActionLabel="@L["listings.edit.missing_action"]"
+                      ActionHref="@AuthSession.LinkFor(Slug, Role, "me/listings")" />
+    }
+    else
+    {
+        @* الرَقَم يُصاغ هُنا لا في الخاصِّيَّة: `decimal` يَحفَظ
+           مِقياسَه، فَـ`1000.00` القادِمَة مِن JSON تَكتُب في الحَقل
+           سِعراً بِكَسرٍ لا يُريدُه أَحَد. والنَموذَج `step="1"`. *@
+        var priceValue = listing.Price.ToString("0");
+
+        @if (ErrKey() is { } errKey)
+        {
+            <AcAlert Variant="danger" Message="@L[errKey]" />
+        }
+
+        <form method="post" action="@($"/{Slug}/listings/{Id}/edit")">
+            <input type="hidden" name="as" value="@Role" />
+
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">@L.Markup("listings.edit.section_details")</h3>
+
+                    <AcField Label="@L["listings.edit.field_title"]" Required="true">
+                        <input type="text" name="title" required maxlength="120"
+                               class="ac-input" value="@listing.Title" />
+                    </AcField>
+
+                    <AcField Label="@L["listings.edit.field_description"]">
+                        <textarea name="description" rows="4" maxlength="2000"
+                                  class="ac-input" style="resize:vertical;font-family:inherit;">@listing.Description</textarea>
+                    </AcField>
+
+                    @* وَحدَةُ العُملَة مِن المُنَسِّق لا مِن قيمَة المِفتاح
+                       (‏`docs/I18N.md` §٢-ب): المِفتاح يَحمِل الجُملَة،
+                       و`Money.Unit()` يَحمِل المال. *@
+                    <AcField Label="@L.Format("listings.edit.field_price", ACommerce.Kit.Culture.Money.Unit())" Required="true">
+                        <input type="number" name="price" required min="0" step="1"
+                               class="ac-input" inputmode="numeric" value="@priceValue" />
+                    </AcField>
+                </ChildContent>
+            </AcCard>
+
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">@L.Markup("listings.edit.section_location")</h3>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <AcField Label="@L["listings.edit.field_city"]">
+                            <input type="text" name="city" maxlength="40" class="ac-input"
+                                   value="@(listing.City ?? "")" />
+                        </AcField>
+                        <AcField Label="@L["listings.edit.field_district"]">
+                            <input type="text" name="district" maxlength="60" class="ac-input"
+                                   value="@(listing.District ?? "")" />
+                        </AcField>
+                    </div>
+                    <p style="color:var(--ac-text-muted);font-size:13px;margin:12px 0 0;">
+                        @L.Markup("listings.edit.frozen_note")
+                    </p>
+                </ChildContent>
+            </AcCard>
+
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"listings/{Id}")">@L.Markup("listings.edit.cancel")</a>
+                <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
+                    <AcIcon Name="check" Size="18" /> @L.Markup("listings.edit.save")
+                </button>
+            </div>
+        </form>
+
+        @* الحَذف نَموذَجٌ مُنفَصِل — زِرُّ حَذفٍ داخِلَ نَموذَج الحِفظ
+           يُرسِل حُقولَه كُلَّها إلى مَسارٍ لا يَقرَؤُها. والحَذف
+           لَيِّن (`IsDeleted`) فَهو قابِلٌ لِلعَكس بِحَدَثٍ مُقابِل. *@
+        <form method="post" action="@($"/{Slug}/listings/{Id}/delete")"
+              onsubmit="@($"return confirm('{L["listings.edit.delete_confirm"]}')")"
+              style="margin-top:24px;">
+            <input type="hidden" name="as" value="@Role" />
+            <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">
+                <AcIcon Name="trash" Size="14" /> @L.Markup("listings.edit.delete")
+            </button>
+        </form>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+
+    Listing? listing;
+    bool loading = true;
+
+    /// <summary>رَمزُ الرَفض ← مِفتاحُ رِسالَتِه. <b>قامُوسٌ مُغلَق</b>:
+    /// رَمزٌ لا تَعرِفُه الصَفحَة لا يَرسِم شَيئاً بَدَل أَن يَطبَعَ
+    /// نَفسَه — فَقيمَةُ استِعلامٍ يَكتُبُها زائِر لا تَصير نَصّاً
+    /// مَعروضاً.</summary>
+    string? ErrKey() => Err switch
+    {
+        ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingEditCodes.NotOwner
+            => "listings.edit.err_not_owner",
+        ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingEditCodes.TitleShort
+            => "listings.edit.err_title_short",
+        ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingEditCodes.PriceInvalid
+            => "listings.edit.err_price_invalid",
+        ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingEditCodes.NoChange
+            => "listings.edit.err_no_change",
+        _ => null,
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Auth.IsAuthenticated) { loading = false; return; }
+        listing = await Listings.LoadOwnedAsync(Slug, Id, Auth.UserId!.Value);
+        loading = false;
+    }
+}

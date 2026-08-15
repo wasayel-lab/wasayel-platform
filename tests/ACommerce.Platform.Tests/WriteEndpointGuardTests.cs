@@ -82,6 +82,11 @@ public class WriteEndpointGuardTests
     {
         ".RequireAuth(", ".RequireAuthApi(", ".RequireTerms(",
         ".RequirePermission(", ".RequireEntitlement(",
+        // المَوجَة ٤: الحارِسُ الوَحيد الَّذي يَسأَل عَن **المَفعولِ
+        // بِه** لا عَن الفاعِل — مِلكِيَّةُ الإعلان. ويُسَجَّل هُنا
+        // لِأَنّ رَمزَ حارِسٍ لا يَعرِفُه الفاحِصُ حارِسٌ لا يُرى:
+        // نُقطَةٌ مَحروسَةٌ بِه وَحدَه كانَت سَتُعَدّ مَكشوفَة.
+        ".RequireListingOwner(",
     };
 
     /// <summary>حارِسٌ في الجِسم — مَقبول لِأَنَّه الواقِع الغالِب في
