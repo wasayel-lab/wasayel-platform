@@ -123,6 +123,17 @@ DEFINED_CNT=$(wc -l < "$TMP/defined.txt" | tr -d ' ')
 UNDEF_CNT=$(wc -l < "$TMP/undefined.txt" | tr -d ' ')
 UNUSED_CNT=$(wc -l < "$TMP/unused.txt" | tr -d ' ')
 
+# `WSL_DUMP=unused|undefined ./scripts/verify-css.sh` prints that list alone,
+# one name per line, and exits.  Layers 3, 4 and 5 already dump their
+# fingerprints; this layer reported its LARGEST number (614 defined-but-
+# unused) with nothing behind it, so "614 dead classes" could be neither
+# reviewed nor acted on.  It dumps BEFORE the report so the output is
+# pipeable; a gating run never sets the variable.
+case "${WSL_DUMP:-}" in
+    unused)    cat "$TMP/unused.txt";    exit 0 ;;
+    undefined) cat "$TMP/undefined.txt"; exit 0 ;;
+esac
+
 wsl_require_subjects "classes used in razor"  "$USED_CNT"
 wsl_require_subjects "classes defined in css" "$DEFINED_CNT"
 
