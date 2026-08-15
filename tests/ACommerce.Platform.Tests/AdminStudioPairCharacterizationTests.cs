@@ -62,12 +62,17 @@ public class AdminStudioPairCharacterizationTests
     /// </summary>
     private static readonly Pair[] Pinned =
     {
-        new("branding", PairState.Diverged,
+        new("branding", PairState.Unified,
             new Side("/admin/tenants/{slug}/branding/save", true,  "403",
-                     new[] { "color_invalid", "name_required" }, new[] { "AuthChannel" }),
-            new Side("/studio/apps/{slug}/branding/save",   false, "302",
-                     new[] { "color", "name" }, Array.Empty<string>()),
-            ""),
+                     Array.Empty<string>(), new[] { "service" }),
+            new Side("/studio/apps/{slug}/branding/save",   true,  "302",
+                     Array.Empty<string>(), new[] { "service" }),
+            "غَلَبَ /admin في مِحوَرَين بِتَوصِيَةِ المالِك: التَدقيق يُكتَب دائِماً (أَمنٌ وامتِثال، " +
+            "وغِيابُه في مَسارٍ كانَ عَطَباً لا خِياراً)، و‏AuthChannel يُدرَج (الأَكمَل يَغلِب) — " +
+            "لَكِنّ غِيابَه مِن الطَلَب يَعني «لا تُغَيِّر» لا «أَعِدهُ إلى هاتِف»، وإلّا مَحا " +
+            "حِفظُ الاسمِ مِن الاستوديو قَناةَ مُستَأجِرٍ على نَفاذ — وصَفحَةُ الاستوديو لا تُدير " +
+            "القَناة أَصلاً. ورُموزُ الخَطَأ غَلَبَت فيها صيغَةُ /admin لِأَنَّها تَقول العِلَّة " +
+            "(name_required) لا الحَقل (name)."),
 
         new("categories", PairState.Diverged,
             new Side("/admin/tenants/{slug}/categories/save", true,  "403",

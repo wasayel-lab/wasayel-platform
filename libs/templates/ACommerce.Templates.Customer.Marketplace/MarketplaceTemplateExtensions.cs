@@ -5,6 +5,7 @@ using ACommerce.Kit.Favorites;
 using ACommerce.Kit.Listings;
 using ACommerce.Platform.Shared;
 using ACommerce.Templates.Customer.Marketplace.Gates;
+using ACommerce.Templates.Customer.Marketplace.Services.TenantConfig;
 using Marten;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -1965,6 +1966,9 @@ public static class MarketplaceTemplateExtensions
         }).DisableAntiforgery();
 
         // ─── Admin: save branding ───────────────────────────────────────
+        // المَنطِق في BrandingSaveService — تَعريفٌ واحِد يُنادِيه هذا
+        // المَسار ونَظيرُه في /studio. وما بَقِيَ هُنا أَربَعَة أَشياء
+        // لا خامِسَ لَها: الحارِس، والتَدقيق، والمُعامَلَة، والعَرض.
         app.MapPost("/admin/tenants/{slug}/branding/save",
             async (string slug, HttpRequest req, IDocumentStore store,
                    Services.Incubator.StudioAuth auth,
@@ -1972,29 +1976,14 @@ public static class MarketplaceTemplateExtensions
         {
             if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
                 return Forbidden();
-            await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.branding_save");
-            var name    = req.Form["name"].ToString().Trim();
-            var tagline = req.Form["tagline"].ToString().Trim();
-            var city    = req.Form["city"].ToString().Trim();
-            var color   = req.Form["color"].ToString().Trim();
-            var channel = AuthChannels.NormalizeOrDefault(req.Form["channel"].ToString().Trim());
-
-            if (string.IsNullOrEmpty(name))
-                return Results.Redirect($"/admin/tenants/{slug}/branding?err=name_required");
-            if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))
-                return Results.Redirect($"/admin/tenants/{slug}/branding?err=color_invalid");
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, BrandingSaveService.AuditAction);
 
             await using var s = store.LightweightSession();
-            var t = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
-            if (t is null) return Results.Redirect("/admin");
-            t.Name = name;
-            t.TagLine = tagline;
-            t.City = city;
-            t.BrandColor = color;
-            t.AuthChannel = channel;
-            s.Store(t);
-            await s.SaveChangesAsync();
-            return Results.Redirect($"/admin/tenants/{slug}?saved=1");
+            var result = await BrandingSaveService.SaveAsync(s, slug, TenantConfigSurface.ReadBranding(req));
+            if (result.Ok) await s.SaveChangesAsync();
+
+            return TenantConfigSurface.Outcome(result,
+                $"/admin/tenants/{slug}?saved=1", $"/admin/tenants/{slug}/branding", "/admin");
         }).DisableAntiforgery();
 
         // ─── Admin: save PWA per-role (name + custom icon) ──────────────
@@ -3095,27 +3084,24 @@ public static class MarketplaceTemplateExtensions
         static string Truncate(string s, int max)
             => s.Length <= max ? s : s[..max] + "…";
 
+        // نَفس خِدمَة /admin — والفَرقُ الباقي ثَلاثَة: أَيّ حارِسٍ
+        // يُسأَل (مالِك التَطبيق لا مُشرِف المَتجَر)، وإلى أَين يَعود
+        // المُتَصَفِّح، وأَنّ الرَفض هُنا ‏302 لا ‏403. والتَدقيق لَم
+        // يَعُد فَرقاً: يُكتَب في المَسارَين.
         app.MapPost("/studio/apps/{slug}/branding/save", async (
             string slug, HttpRequest req, IDocumentStore store,
-            Services.Incubator.StudioAuth auth) =>
+            Services.Incubator.StudioAuth auth,
+            Services.Audit.AuditWriter audit) =>
         {
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
-            var name    = req.Form["name"].ToString().Trim();
-            var tagline = req.Form["tagline"].ToString().Trim();
-            var city    = req.Form["city"].ToString().Trim();
-            var color   = req.Form["color"].ToString().Trim();
-            if (string.IsNullOrEmpty(name))
-                return Results.Redirect($"/studio/apps/{slug}/branding?err=name");
-            if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))
-                return Results.Redirect($"/studio/apps/{slug}/branding?err=color");
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, BrandingSaveService.AuditAction);
 
             await using var s = store.LightweightSession();
-            var t = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
-            if (t is null) return Results.Redirect("/studio");
-            t.Name = name; t.TagLine = tagline; t.City = city; t.BrandColor = color;
-            s.Store(t);
-            await s.SaveChangesAsync();
-            return Results.Redirect($"/studio/apps/{slug}/branding?saved=1");
+            var result = await BrandingSaveService.SaveAsync(s, slug, TenantConfigSurface.ReadBranding(req));
+            if (result.Ok) await s.SaveChangesAsync();
+
+            return TenantConfigSurface.Outcome(result,
+                $"/studio/apps/{slug}/branding?saved=1", $"/studio/apps/{slug}/branding", "/studio");
         }).DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/categories/save", async (

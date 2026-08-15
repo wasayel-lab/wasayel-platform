@@ -25,8 +25,11 @@
             </div>
 
             @if (Saved == "1")  { <div class="st-chip st-chip-success" style="margin-bottom:14px;">تَمّ الحِفظ <AcIcon Name="check" Size="16" /></div> }
-            @if (Err == "name") { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">الاسم مَطلوب</div> }
-            @if (Err == "color"){ <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">اللَّون غَير صالِح</div> }
+            @* رَمزا الخَطَأ صارا مِن مُعجَم TenantConfigCodes المُغلَق —
+               كانا name/color هُنا و‏name_required/color_invalid في
+               الإدارَة لِنَفس المَعنى. *@
+            @if (Err == "name_required") { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">الاسم مَطلوب</div> }
+            @if (Err == "color_invalid") { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">اللَّون غَير صالِح</div> }
 
             <form method="post" action="@($"/studio/apps/{Slug}/branding/save")" class="st-card">
                 <div class="st-field">
