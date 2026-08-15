@@ -1,6 +1,7 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Incubator.StudioTierService Tier
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+@inject L L
 
 @*
     شِل لوحة العميل — شريط جانبي + شريط علوي + محتوى. يَفحَص المُصادَقَة:
@@ -24,18 +25,18 @@
                 </div>
                 <nav class="studio-nav">
                     <a class="studio-nav-item @(Active == "home" ? "active" : "")" href="/studio">
-                        <AcIcon Name="home" Size="18" /> الرَئيسيَّة
+                        <AcIcon Name="home" Size="18" /> @L.Markup("studio.nav.home")@((MarkupString)"\n                    ")
                     </a>
                     <a class="studio-nav-item @(Active == "ideas" ? "active" : "")" href="/studio/ideas">
-                        <AcIcon Name="star" Size="18" /> أَفكاري وتَحاليلي
+                        <AcIcon Name="star" Size="18" /> @L.Markup("studio.nav.ideas")@((MarkupString)"\n                    ")
                     </a>
                     <a class="studio-nav-item @(Active == "stores" ? "active" : "")" href="/studio">
-                        <AcIcon Name="building" Size="18" /> تَطبيقاتي
+                        <AcIcon Name="building" Size="18" /> @L.Markup("studio.nav.apps")@((MarkupString)"\n                    ")
                     </a>
 
-                    <div class="studio-nav-section">إنشاء</div>
+                    <div class="studio-nav-section">@L.Markup("studio.nav.create")</div>
                     <a class="studio-nav-item @(Active == "new" ? "active" : "")" href="/studio/new">
-                        <AcIcon Name="plus" Size="18" /> فِكرَة جَديدَة
+                        <AcIcon Name="plus" Size="18" /> @L.Markup("studio.nav.new_idea")@((MarkupString)"\n                    ")
                     </a>
                 </nav>
                 <div class="studio-sidebar-footer">
@@ -58,7 +59,7 @@
                     </div>
                     <form method="post" action="/studio/logout">
                         <button type="submit" class="studio-nav-item" style="width:100%;border:0;background:none;cursor:pointer;">
-                            <AcIcon Name="log-out" Size="18" /> خُروج
+                            <AcIcon Name="log-out" Size="18" /> @L.Markup("studio.nav.logout")@((MarkupString)"\n                        ")
                         </button>
                     </form>
                 </div>
@@ -94,7 +95,7 @@
         {
             var (user, l) = await Tier.ReadWithLimitsAsync(Auth.UserId!.Value);
             limits = l;
-            usageSummary = $"{user.AnalysesUsed}/{Cap(l.AnalysesPerMonth)} تَحليل · {user.StoresBuilt}/{Cap(l.StoresMax)} تَطبيق";
+            usageSummary = L.Format("studio.usage.summary", user.AnalysesUsed, Cap(l.AnalysesPerMonth), user.StoresBuilt, Cap(l.StoresMax));
         }
         catch { /* مُستَخدِم لَم يُحَمَّل بَعد — تَجاهَل */ }
     }

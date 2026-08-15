@@ -4,6 +4,7 @@
 @inject Services.Incubator.FeasibilityAnalysisService Incubator
 @inject Marten.IDocumentStore Store
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+@inject L L
 @using ACommerce.Kit.Tenants
 
 @*
@@ -21,19 +22,19 @@
 <StudioShell Title="@Title" Active="@(IsIdeas ? "ideas" : "home")">
     <TopBarActions>
         <a class="st-btn st-btn-ghost" href="/studio/agent">
-            <AcIcon Name="message" Size="14" /> وَكيل التَّطبيقات
+            <AcIcon Name="message" Size="14" /> @L.Markup("studio.home.agent_cta")@((MarkupString)"\n        ")
         </a>
         <a class="st-btn st-btn-primary" href="/studio/new" style="margin-inline-start:8px;">
-            <AcIcon Name="lightbulb" Size="14" /> فِكرَة جَديدَة
+            <AcIcon Name="lightbulb" Size="14" /> @L.Markup("studio.home.new_idea")@((MarkupString)"\n        ")
         </a>
     </TopBarActions>
     <ChildContent>
         <UpgradePrompt Reason="@Upgrade" CurrentTier="@(currentTier ?? "spark")" />
 
         <div class="studio-page-head">
-            <h1>@(IsIdeas ? "أَفكاري وتَحاليلي" : Greeting)</h1>
-            <p>@(IsIdeas ? "كُلّ الفِكَر الَّتي طَرَحتَها وحالَة تَحليلها."
-                          : "هُنا تُديرُ تَطبيقاتِكَ وتُتابِع تَحاليل أَفكارِكَ.")</p>
+            <h1>@(IsIdeas ? L["studio.home.ideas_title"] : Greeting)</h1>
+            <p>@(IsIdeas ? L["studio.home.ideas_sub"]
+                          : L["studio.home.home_sub"])</p>
         </div>
 
         @if (!IsIdeas)
@@ -45,9 +46,8 @@
                         <AcIcon Name="lightbulb" Size="18" />
                     </span>
                     <div class="studio-list-body" style="flex:1;">
-                        <strong>حَلِّل فِكرَة جَديدَة</strong>
-                        <span style="line-height:1.6;">قَبل أَن تَبني — تَحَقَّق مِن جَدوى السوق والمَنافِسين والتَكاليف
-                        والمَخاطِر. دِراسَة مُولَّدَة في دَقائِق.</span>
+                        <strong>@L.Markup("studio.home.analyze_title")</strong>
+                        <span style="line-height:1.6;">@L.Markup("studio.home.analyze_body")</span>
                     </div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
@@ -56,9 +56,8 @@
                         <AcIcon Name="message" Size="18" />
                     </span>
                     <div class="studio-list-body" style="flex:1;">
-                        <strong>وَكيل التَّطبيقات</strong>
-                        <span style="line-height:1.6;">عَدِّل تَطبيقاً قائِماً بِالحِوار: «أَضِف فِئَة»، «غَيِّر اللَون»،
-                        «أَنشِئ دَوراً جَديداً». كُلّ تَنفيذ يُراجَع قَبل التَّطبيق.</span>
+                        <strong>@L.Markup("studio.home.agent_title")</strong>
+                        <span style="line-height:1.6;">@L.Markup("studio.home.agent_body")</span>
                     </div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
@@ -66,35 +65,35 @@
 
             <div class="studio-stats">
                 <div class="studio-stat">
-                    <div class="studio-stat-label">تَطبيقاتي المُطلَقَة</div>
+                    <div class="studio-stat-label">@L.Markup("studio.home.stat_apps")</div>
                     <div class="studio-stat-value">@(myApps?.Count ?? 0)</div>
-                    <div class="studio-stat-sub">مَتاجِر/تَطبيقات تَملِكها</div>
+                    <div class="studio-stat-sub">@L.Markup("studio.home.stat_apps_sub")</div>
                 </div>
                 <div class="studio-stat">
-                    <div class="studio-stat-label">دِراسات مُكتَمِلَة</div>
+                    <div class="studio-stat-label">@L.Markup("studio.home.stat_studies")</div>
                     <div class="studio-stat-value">@(sessions?.Count(s => s.Status == IncubatorStatus.Completed) ?? 0)</div>
                 </div>
                 <div class="studio-stat">
-                    <div class="studio-stat-label">إجمالي الأَفكار</div>
+                    <div class="studio-stat-label">@L.Markup("studio.home.stat_ideas")</div>
                     <div class="studio-stat-value">@(sessions?.Count ?? 0)</div>
                 </div>
             </div>
 
             <div class="st-section-title" style="display:flex;justify-content:space-between;align-items:center;">
-                <span>تَطبيقاتي</span>
-                <a href="/studio/new" style="font-size:12px;color:var(--st-primary);text-decoration:none;font-weight:600;">+ فِكرَة جَديدَة</a>
+                <span>@L.Markup("studio.home.my_apps")</span>
+                <a href="/studio/new" style="font-size:12px;color:var(--st-primary);text-decoration:none;font-weight:600;">@L.Markup("studio.home.plus_idea")</a>
             </div>
             @if (myApps is null)
             {
-                <div class="st-card">جارٍ التَّحميل…</div>
+                <div class="st-card">@L.Markup("studio.state.loading")</div>
             }
             else if (myApps.Count == 0)
             {
                 <div class="st-card" style="text-align:center;padding:36px;">
                     <div style="font-size:42px;margin-bottom:6px;"><AcIcon Name="package" Size="48" /></div>
-                    <h3 style="margin:0 0 6px;">لا تَطبيقات بَعد</h3>
-                    <p style="color:var(--st-muted);margin:0 0 16px;">حَلِّل فِكرَتَكَ أَوَّلاً، ثُمَّ أَطلِق التَّطبيق على المَنصَّة.</p>
-                    <a class="st-btn st-btn-primary" href="/studio/new">ابدَأ بِفِكرَة</a>
+                    <h3 style="margin:0 0 6px;">@L.Markup("studio.home.no_apps")</h3>
+                    <p style="color:var(--st-muted);margin:0 0 16px;">@L.Markup("studio.home.no_apps_body")</p>
+                    <a class="st-btn st-btn-primary" href="/studio/new">@L.Markup("studio.home.start_idea")</a>
                 </div>
             }
             else
@@ -109,9 +108,9 @@
                             </span>
                             <div class="studio-list-body">
                                 <strong>@t.Name</strong>
-                                <span>/@t.Slug · @t.Categories.Count فِئَة · @t.Roles.Count دَور</span>
+                                <span>/@t.Slug · @t.Categories.Count @L.Markup("studio.home.category_unit") · @t.Roles.Count @L.Markup("studio.home.role_unit")</span>
                             </div>
-                            <span class="st-chip">@(t.Roles.Count == 0 ? "مَتجَر" : "تَطبيق دَور-مُتَعَدِّد")</span>
+                            <span class="st-chip">@(t.Roles.Count == 0 ? L["studio.home.kind_store"] : L["studio.home.kind_multirole"])</span>
                             <span style="color:var(--st-faint);">←</span>
                         </a>
                     }
@@ -121,7 +120,7 @@
 
         @if (!IsIdeas && recentDeals.Count > 0)
         {
-            <div class="st-section-title">آخِر العَمَليّات عَبر تَطبيقاتك</div>
+            <div class="st-section-title">@L.Markup("studio.home.recent_deals")</div>
             <div class="studio-list">
                 @foreach (var (slug, d) in recentDeals.Take(5))
                 {
@@ -139,18 +138,18 @@
             </div>
         }
 
-        <div class="st-section-title">@(IsIdeas ? "جَلَسات التَّحليل" : "آخِر الأَفكار")</div>
+        <div class="st-section-title">@(IsIdeas ? L["studio.home.analysis_sessions"] : L["studio.home.recent_ideas"])</div>
         @if (sessions is null)
         {
-            <div class="st-card">جارٍ التَّحميل…</div>
+            <div class="st-card">@L.Markup("studio.state.loading")</div>
         }
         else if (sessions.Count == 0)
         {
             <div class="st-card" style="text-align:center;padding:36px;">
                 <div style="font-size:42px;margin-bottom:6px;"><AcIcon Name="lightbulb" Size="48" /></div>
-                <h3 style="margin:0 0 6px;">لا أَفكار بَعد</h3>
-                <p style="color:var(--st-muted);margin:0 0 16px;">ابدَأ بِوَصف فِكرَة مَشروعِكَ لِلحُصول على دِراسَة جَدوى.</p>
-                <a class="st-btn st-btn-primary" href="/studio/new">صِف فِكرَتي</a>
+                <h3 style="margin:0 0 6px;">@L.Markup("studio.home.no_ideas")</h3>
+                <p style="color:var(--st-muted);margin:0 0 16px;">@L.Markup("studio.home.no_ideas_body")</p>
+                <a class="st-btn st-btn-primary" href="/studio/new">@L.Markup("studio.home.describe_idea")</a>
             </div>
         }
         else
@@ -162,15 +161,15 @@
                         <span class="studio-list-icon"><AcIcon Name="@StatusIcon(s.Status)" Size="16" /></span>
                         <div class="studio-list-body">
                             <strong>@(string.IsNullOrEmpty(s.ProjectDescription)
-                                ? "فِكرَة بِلا وَصف" : Truncate(s.ProjectDescription, 70))</strong>
+                                ? L["studio.home.no_desc"] : Truncate(s.ProjectDescription, 70))</strong>
                             <span>@StatusLabel(s.Status) · @s.UpdatedAt.ToString("yyyy-MM-dd HH:mm")</span>
                         </div>
                         @if (s.Status == IncubatorStatus.Completed)
-                        { <span class="st-chip st-chip-success">جَودَة @s.AnalysisQualityScore%</span> }
+                        { <span class="st-chip st-chip-success">@L.Markup("admin.incubator.quality") @s.AnalysisQualityScore%</span> }
                         else if (s.Status == IncubatorStatus.Analyzing)
-                        { <span class="st-chip st-chip-warning">قَيد التَّحليل</span> }
+                        { <span class="st-chip st-chip-warning">@L.Markup("incubator.status.analyzing")</span> }
                         else if (s.Status == IncubatorStatus.Failed)
-                        { <span class="st-chip st-chip-danger">فَشِلَ</span> }
+                        { <span class="st-chip st-chip-danger">@L.Markup("incubator.status.failed")</span> }
                     </a>
                 }
             </div>
@@ -190,8 +189,8 @@
     [Microsoft.AspNetCore.Components.Inject] Services.Deals.DealsService Deals { get; set; } = default!;
     bool IsIdeas => new Uri(Nav.Uri).AbsolutePath.TrimEnd('/').EndsWith("/ideas");
 
-    string Title => IsIdeas ? "أَفكاري وتَحاليلي" : "لوحَتي";
-    string Greeting => $"أَهلاً، {Auth.UserName ?? "صاحِب المَشروع"}";
+    string Title => IsIdeas ? L["studio.home.ideas_title"] : L["admin.nav.my_board"];
+    string Greeting => L.Format("studio.home.greeting", Auth.UserName ?? L["studio.home.owner_fallback"]);
 
     protected override async Task OnInitializedAsync()
     {
@@ -241,14 +240,14 @@
         _ => "edit"
     };
 
-    static string StatusLabel(IncubatorStatus s) => s switch
+    string StatusLabel(IncubatorStatus s) => s switch
     {
-        IncubatorStatus.Discovery => "قَيد الاكتِشاف",
-        IncubatorStatus.PatternSuggested => "اقتُرِحَ نَمَط",
-        IncubatorStatus.Analyzing => "قَيد التَّحليل",
-        IncubatorStatus.Completed => "اكتَمَلَ",
-        IncubatorStatus.Failed => "فَشِلَ",
-        _ => "مَهجور"
+        IncubatorStatus.Discovery => L["incubator.status.discovery"],
+        IncubatorStatus.PatternSuggested => L["incubator.status.pattern"],
+        IncubatorStatus.Analyzing => L["incubator.status.analyzing"],
+        IncubatorStatus.Completed => L["incubator.status.completed"],
+        IncubatorStatus.Failed => L["incubator.status.failed"],
+        _ => L["incubator.status.abandoned"]
     };
 
     static string Truncate(string s, int n) => s.Length <= n ? s : s[..n] + "…";

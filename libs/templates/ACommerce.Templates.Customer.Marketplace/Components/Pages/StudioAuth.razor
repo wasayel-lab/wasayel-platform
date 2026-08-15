@@ -2,6 +2,7 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject NavigationManager Nav
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+@inject L L
 
 @*
     دُخول studio وهميّ بِرَقم الهاتِف. مَرحَلَتان: إدخال الرَّقم ثُمَّ الرَّمز.
@@ -27,18 +28,18 @@
 
                 @if (Stage == "verify")
                 {
-                    <h1 class="auth-title">أَدخِل رَمز التَّحَقُّق</h1>
-                    <p class="auth-sub">أُرسِلَ رَمز إلى @Phone</p>
+                    <h1 class="auth-title">@L.Markup("studio.auth.code_title")</h1>
+                    <p class="auth-sub">@L.Markup("studio.auth.code_sent") @Phone</p>
 
                     <div class="auth-dev-hint">
-                        <AcIcon Name="key" Size="16" /> وَضع التَّجرِبَة — الرَّمز: <strong>123456</strong>
+                        <AcIcon Name="key" Size="16" /> @L.Markup("studio.auth.dev_hint") <strong>123456</strong>
                     </div>
 
                     @if (Err == "code")
                     {
                         <div class="st-field">
                             <div class="st-chip st-chip-danger" style="width:100%;justify-content:center;">
-                                الرَّمز غَير صَحيح
+                                @((MarkupString)"\n                                ")@L.Markup("studio.auth.code_invalid")@((MarkupString)"\n                            ")
                             </div>
                         </div>
                     }
@@ -51,42 +52,42 @@
                                    autocomplete="one-time-code" />
                         </div>
                         <button type="submit" class="st-btn st-btn-primary st-btn-block st-btn-lg">
-                            تَحَقُّق ودُخول
+                            @((MarkupString)"\n                            ")@L.Markup("studio.auth.verify")@((MarkupString)"\n                        ")
                         </button>
                     </form>
                     <p style="text-align:center;margin-top:16px;">
                         <a href="/studio/auth" style="color:var(--st-muted);font-size:13px;text-decoration:none;">
-                            ← تَغيير الرَّقم
+                            ← @L.Markup("studio.auth.change_number")@((MarkupString)"\n                        ")
                         </a>
                     </p>
                 }
                 else
                 {
-                    <h1 class="auth-title">تَسجيل الدُخول</h1>
-                    <p class="auth-sub">أَدخِل رَقم جَوّالِكَ لِلمُتابَعَة</p>
+                    <h1 class="auth-title">@L.Markup("studio.auth.login_title")</h1>
+                    <p class="auth-sub">@L.Markup("studio.auth.login_sub")</p>
 
                     @if (Err == "phone")
                     {
                         <div class="st-field">
                             <div class="st-chip st-chip-danger" style="width:100%;justify-content:center;">
-                                اكتُب رَقم الجَوّال
+                                @((MarkupString)"\n                                ")@L.Markup("studio.auth.phone_missing")@((MarkupString)"\n                            ")
                             </div>
                         </div>
                     }
 
                     <form method="post" action="/studio/auth/login">
                         <div class="st-field">
-                            <label class="st-label">رَقم الجَوّال</label>
+                            <label class="st-label">@L.Markup("studio.auth.phone_label")</label>
                             <input name="phone" inputmode="tel" required
                                    class="st-input" placeholder="05xxxxxxxx" dir="ltr"
                                    style="text-align:start;" />
                         </div>
                         <button type="submit" class="st-btn st-btn-primary st-btn-block st-btn-lg">
-                            إرسال الرَّمز
+                            @((MarkupString)"\n                            ")@L.Markup("studio.auth.send_code")@((MarkupString)"\n                        ")
                         </button>
                     </form>
                     <p style="text-align:center;margin-top:18px;color:var(--st-faint);font-size:12px;">
-                        بِالمُتابَعَة تُوافِق على شُروط الاستِخدام وسياسَة الخُصوصِيَّة.
+                        @((MarkupString)"\n                        ")@L.Markup("studio.auth.terms_note")@((MarkupString)"\n                    ")
                     </p>
                 }
             </div>

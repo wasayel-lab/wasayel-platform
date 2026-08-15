@@ -1,4 +1,5 @@
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+@inject L L
 
 @*
     عُنصُر إشعار «تَجاوُز حَدّ الباقَة» — يَظهَر في أَعلى صَفحات studio
@@ -28,7 +29,7 @@
             @if (Next is not null)
             {
                 <a class="st-btn st-btn-primary" href="/studio/billing">
-                    تَرقِيَة إلى @Next.LabelAr (@Next.MonthlyPriceSar ر.س / شَهر)
+                    @((MarkupString)"\n                    ")@L.Markup("upgrade.cta.to") @Next.LabelAr (@((MarkupString)L.Format("upgrade.cta.per_month", Money.Format(Next.MonthlyPriceSar))))
                 </a>
             }
         </div>
@@ -49,34 +50,34 @@
         _ => null
     };
 
-    static string TitleFor(string reason) => reason switch
+    string TitleFor(string reason) => reason switch
     {
-        "analyze" => "بَلَغتَ حَدّ تَحاليل هذا الشَّهر",
-        "refine"  => "بَلَغتَ حَدّ التَّحسينات لِهذا الشَّهر",
-        "build"   => "بَلَغتَ حَدّ التَّطبيقات لِباقَتِكَ",
-        _ => "تَتَطَلَّب هذه الميزَة تَرقيَة"
+        "analyze" => L["upgrade.title.analyze"],
+        "refine"  => L["upgrade.title.refine"],
+        "build"   => L["upgrade.title.build"],
+        _ => L["upgrade.title.feature"]
     };
 
-    static string MessageFor(string reason) => reason switch
+    string MessageFor(string reason) => reason switch
     {
-        "analyze" => "احصُل على تَحاليل أَكثَر بِترقِيَة الباقَة.",
-        "refine"  => "احصُل على تَحسينات أَكثَر بِترقِيَة الباقَة.",
-        "build"   => "احصُل على إنشاء تَطبيقات إضافيَّة بِترقِيَة الباقَة.",
+        "analyze" => L["upgrade.msg.analyze"],
+        "refine"  => L["upgrade.msg.refine"],
+        "build"   => L["upgrade.msg.build"],
         _ => ""
     };
 
-    static IEnumerable<string> BenefitsFor(TierLimits t)
+    IEnumerable<string> BenefitsFor(TierLimits t)
     {
         if (t.AnalysesPerMonth != int.MaxValue)
-            yield return $"{t.AnalysesPerMonth} تَحليل / شَهر";
-        else yield return "تَحاليل بِلا حَدّ";
+            yield return L.Format("upgrade.benefit.analyses", t.AnalysesPerMonth);
+        else yield return L["upgrade.benefit.analyses_max"];
         if (t.RefinesPerMonth != int.MaxValue)
-            yield return $"{t.RefinesPerMonth} تَحسين / شَهر";
-        else yield return "تَحسينات بِلا حَدّ";
+            yield return L.Format("upgrade.benefit.refines", t.RefinesPerMonth);
+        else yield return L["upgrade.benefit.refines_max"];
         if (t.StoresMax != int.MaxValue)
-            yield return $"حَتَّى {t.StoresMax} تَطبيقات";
-        else yield return "تَطبيقات بِلا حَدّ";
-        if (t.AllowExport)         yield return "تَصدير PDF/Excel";
+            yield return L.Format("upgrade.benefit.stores", t.StoresMax);
+        else yield return L["upgrade.benefit.stores_max"];
+        if (t.AllowExport)         yield return L["upgrade.benefit.export"];
         // «أَنماط مُخَصَّصَة» سُحِبَت — لا مَسار لَها. التَفصيل في StudioTier.cs.
     }
 }

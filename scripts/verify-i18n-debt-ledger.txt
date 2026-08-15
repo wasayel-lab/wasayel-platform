@@ -1,7 +1,7 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|1463
-DISTINCT|974
+TOTAL|1348
+DISTINCT|880
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|40
@@ -57,11 +57,8 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioA
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppRoles.razor|9
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppTicketDetail.razor|16
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppTickets.razor|15
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAuth.razor|12
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioBilling.razor|18
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioConsent.razor|15
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioHome.razor|44
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioNewIdea.razor|12
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioConsent.razor|10
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioNewIdea.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudy.razor|99
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudyPrint.razor|41
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantDrivers.razor|13
@@ -74,9 +71,8 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RequirePlatfo
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RequireTenantAdmin.razor|3
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/RiderCreateRequest.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Routes.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/StudioShell.razor|10
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/StudioShell.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/TaxonomyChips.razor|7
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/UpgradePrompt.razor|17
 libs/templates/ACommerce.Templates.Shared/AcErrorState.razor|2
 libs/widgets/ACommerce.Widgets/AcAttrEditor.razor|3
 libs/widgets/ACommerce.Widgets/AcAttrGrid.razor|2
