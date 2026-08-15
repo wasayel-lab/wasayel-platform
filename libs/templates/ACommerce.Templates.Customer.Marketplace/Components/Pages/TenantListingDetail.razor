@@ -4,6 +4,7 @@
 @inject AuthSession Auth
 @inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
 @inject ACommerce.Kit.Reviews.ReviewsService Reviews
+@inject L L
 
 @*
     صَفحة تَفاصيل الإعلان. بُنية مَنقولَة مِن AcListingDetailsPage
@@ -41,6 +42,23 @@ else
                 <AcIcon Name="arrow-right" Size="18" />
             </a>
             <div class="acm-details-gallery-actions-end">
+                @* المَدخَل إلى شاشَة التَحرير — والقاعِدَة ١٢: ميزَةٌ لا
+                   تُبلَغ بِالنَقر غَير مَوجودَة. ومَوضِعُه هُنا لا في
+                   بِطاقَة «إعلاناتي»، والسَبَبُ قِياس: الغِلافُ حَولَ
+                   البِطاقَة (لِيَسَعَ رابِطَين) يَجعَلُها تَفيض عَن
+                   حاوِيَتِها — قاسَته الطَبَقَةُ السادِسَة ‏306px في
+                   ‏276px. وهُنا الشَرطُ مَحسوبٌ سَلَفاً (`isOwner`)،
+                   والشَكلُ نَفسُ شَكل زِرّ المُفَضَّلَة المُجاوِر.
+                   <b>ونَفسُ دالَّة القَرار</b> تَحرُس النُقطَة، فَلا
+                   يَظهَر الزِرُّ لِمَن سَتَرُدُّه الكِتابَة. *@
+                @if (isOwner)
+                {
+                    <a class="acm-details-circle-btn"
+                       href="@AuthSession.LinkFor(Slug, Role, $"edit-listing/{Id}")"
+                       aria-label="@L["listings.detail.edit"]">
+                        <AcIcon Name="edit" Size="18" />
+                    </a>
+                }
                 @* المُفَضَّلَة: تُخفَى عَن مالِك الإعلان (لا مَعنَى لِأَن
                    يُفَضِّل المَرء إعلانَه)، وَعَن السائِق/الشَحّان عَلى
                    إعلان طَلَب-عَرض (نَموذَج المُحادَثَة هو العَرض، لا

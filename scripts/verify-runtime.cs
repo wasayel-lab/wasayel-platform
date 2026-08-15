@@ -40,6 +40,7 @@ int vpW = 1280, vpH = 900;
 bool reportOnly = false;
 string? jsonOut = null;
 string? injectCss = null;
+var cookies = new List<(string Name, string Value)>();
 string contractsPath = Path.Combine(AppContext.BaseDirectory, "spatial-contracts.json");
 // المِلَفّ المُفرَد يُبنى في مُجَلَّد مُؤَقَّت، فَالعُقود تُطلَب بِجِوار المَصدَر.
 string srcDir = Path.GetDirectoryName(Path.GetFullPath(GetSourcePath())) ?? ".";
@@ -56,6 +57,21 @@ for (int i = 0; i < args.Length; i++)
         case "--report-only": reportOnly = true; break;
         case "--inject-css": injectCss = args[++i]; break;
         case "--inject-preset": injectCss = Presets(args[++i]); break;
+        // ─── جَلسَة: صَفحَةٌ مَحروسَة لا يَراها زائِر ─────────────────
+        // الأَداةُ بِلا هذا **عَمياءُ بِالبِنيَة** عَن كُلّ `/me/*` و
+        // `/studio/*` و`/admin/*`: تُصَيَّر لَها صَفحَةُ «سَجِّل
+        // دُخولَك» فَتُعطي «صِفر مُخالَفَة» عَن تَخطيطٍ لَم تَرَه قَطّ.
+        // ونَفسُ الحاجَة حُلَّت مَرَّةً في `capture-appearance.sh`
+        // (‏`GUARDED_PAGES`)؛ والقاعِدَة ٨ تَقول: أَصلِح الأُنبوبَ
+        // القائِم ولا تَبنِ رابِعاً.
+        case "--cookie":
+        {
+            var kv = args[++i];
+            var eq = kv.IndexOf('=');
+            if (eq <= 0) { Console.Error.WriteLine($"✗ --cookie يَحتاج name=value، ووَصَلَ: {kv}"); return 2; }
+            cookies.Add((kv[..eq], kv[(eq + 1)..]));
+            break;
+        }
         case "--json": jsonOut = args[++i]; break;
         case "--contracts": contractsPath = args[++i]; break;
         default: urls.Add(args[i]); break;
@@ -136,6 +152,16 @@ try
     await cdp.Send("Emulation.setDeviceMetricsOverride",
         $$"""{"width":{{vpW}},"height":{{vpH}},"deviceScaleFactor":1,"mobile":{{(vpW < 768).ToString().ToLowerInvariant()}}}""");
 
+    // الكوكيّات تُزرَع قَبلَ أَوَّل تَنَقُّل، وإلّا وَصَلَ الطَلَبُ
+    // الأَوَّل مَجهولاً فَقيسَ فَرعَ الرَفض.
+    if (cookies.Count > 0)
+    {
+        await cdp.Send("Network.enable");
+        foreach (var (name, value) in cookies)
+            await cdp.Send("Network.setCookie",
+                $$"""{"name":{{Cdp.JStr(name)}},"value":{{Cdp.JStr(value)}},"domain":"localhost","path":"/"}""");
+    }
+
     string js = BuildScript(contractsJson);
 
     var allReports = new List<PageReport>();
@@ -144,6 +170,10 @@ try
     Console.WriteLine();
     Console.WriteLine("══════════════════════════════════════════════════════════");
     Console.WriteLine($"  الطَبَقَة ٦ — تَحَقُّق حَيّ  ·  نافِذَة {vpW}×{vpH}  ·  {urls.Count} صَفحَة");
+    // عَدّادٌ يُقال: جَولَةٌ بِجَلسَة وجَولَةٌ بِلا جَلسَة تُعطِيانِ
+    // «صِفر مُخالَفَة» مُتَشابِهاً على صَفحَتَين مُختَلِفَتَين تَماماً.
+    if (cookies.Count > 0)
+        Console.WriteLine($"  · جَلسَة: {cookies.Count} كوكي مَزروع ({string.Join(", ", cookies.Select(c => c.Name))})");
     if (injectCss is not null)
     {
         // لا تَدَع جَولَةً مَحقونَة تَتَنَكَّر في صورَة قِياس نَظيف

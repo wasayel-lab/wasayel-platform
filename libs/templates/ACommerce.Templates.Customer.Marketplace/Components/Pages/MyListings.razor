@@ -51,11 +51,6 @@
         <div class="acm-explore-grid">
             @foreach (var l in myListings)
             {
-            @* المَدخَل إلى شاشَة التَحرير — والقاعِدَة ١٢: ميزَةٌ لا
-               تُبلَغ بِالنَقر غَير مَوجودَة. وهُوَ **خارِج** بِطاقَة
-               الإعلان لا داخِلَها: `<a>` داخِلَ `<a>` مارك-أَب غَير
-               صالِح، والمُتَصَفِّح يَفُكُّه فَيَنكَسِر التَخطيط. *@
-            <div>
                 <a class="ac-space ac-space-link" href="@AuthSession.LinkFor(Slug, Role, $"listings/{l.Id}")"
                    style="text-decoration:none;color:inherit;display:block;
                           background:var(--ac-surface);border:1px solid var(--ac-border);
@@ -72,13 +67,6 @@
                         </span>
                     </div>
                 </a>
-                <div style="display:flex;justify-content:flex-end;margin-top:8px;">
-                    <a class="ac-btn ac-btn-ghost ac-btn-sm"
-                       href="@AuthSession.LinkFor(Slug, Role, $"edit-listing/{l.Id}")">
-                        <AcIcon Name="edit" Size="14" /> @L.Markup("listings.mine.edit")
-                    </a>
-                </div>
-            </div>
             }
         </div>
     }

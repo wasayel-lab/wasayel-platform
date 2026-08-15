@@ -50,9 +50,8 @@
   "listings.create.err_quota_action": "عَرض الباقات",
   "listings.create.err_busy": "لَم تَكتَمِل العَمَلِيَّة — جَرِّب مَرَّةً أُخرى بَعدَ لَحظَة.",
 
-  "listings.mine.title": "إعلاناتي",
-  "listings.mine.edit": "تَعديل",
   "listings.mine.err_not_owner": "هذا الإعلان لَيسَ مِن إعلاناتِك، أَو لَم يَعُد مَوجوداً.",
+  "listings.detail.edit": "تَعديل الإعلان",
 
   "listings.edit.title": "تَعديل الإعلان",
   "listings.edit.login_title": "تَحتاج تَسجيل دُخول",
