@@ -93,6 +93,16 @@
             {
                 <AcActionCard Label="@(L["me.action.manage_store"])" IconName="settings" Variant="primary" Href="@AuthSession.LinkFor(Slug, Role, $"manage")" />
             }
+            @* «إعلاناتي» — والمَدخَلُ هُنا لَيسَ تَزييناً بَل شَرطَ
+               وُجود (القاعِدَة ١٢). التَبويبُ في الشِلّ يَظهَر لِأَدوارٍ
+               بِعَينِها (‏`RiderNav`، `VendorNav`)، ومُستَأجِرٌ **بِلا
+               أَدوار** يَقَع على `DefaultTabs` ولا `me/listings` فيها —
+               مَقيس: صِفر رابِط في `/theme-demo`. فَكانَت «إعلاناتي»
+               وشاشَةُ تَحريرِها كودًا حَيّاً لا يَبلُغُه أَحَد في
+               نِصف المُستَأجِرين. وصَفحَةُ «حِسابي» هي **المَوضِع
+               المُعلَن** لِلزائِد عَن خَمسَة تَبويبات
+               (‏`MainLayout` §الشَريط السُفليّ). *@
+            <AcActionCard Label="@(L["me.action.my_listings"])" IconName="package"      Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"me/listings")" />
             <AcActionCard Label="@(L["me.action.plans"])"      IconName="package"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"plans")" />
             <AcActionCard Label="@(L["me.action.favorites"])" IconName="heart"         Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"favorites")" />
             <AcActionCard Label="@(L["me.action.chats"])"   IconName="message"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"chats")" />
