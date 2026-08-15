@@ -876,7 +876,7 @@ main {
   font-size: 10px; font-weight: 700;
   line-height: 18px;
   text-align: center;
-  border: 2px solid var(--ac-card-bg, #fff);
+  border: 2px solid var(--ac-surface);
   box-shadow: 0 0 0 1px rgba(0,0,0,.04);
   pointer-events: none;
 }
@@ -895,7 +895,7 @@ main {
 .ejar-chat-row {
   display: flex; gap: 12px; align-items: center;
   padding: 12px 14px;
-  background: var(--ac-card-bg, #fff);
+  background: var(--ac-surface);
   border: 1px solid var(--ac-border, #e5e7eb);
   border-radius: 12px;
   margin-bottom: 8px;

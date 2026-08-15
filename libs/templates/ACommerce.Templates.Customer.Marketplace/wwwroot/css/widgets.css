@@ -841,7 +841,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     margin: 16px 0;
 }
 .ac-attr-tile {
-    background: var(--ac-card-bg, #fff);
+    background: var(--ac-surface);
     border: 1px solid var(--ac-border, #e5e7eb);
     border-radius: var(--ac-radius-md);
     padding: 12px;
@@ -1139,7 +1139,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     color: rgba(255, 255, 255, 0.85);
 }
 .ac-hero .ac-search {
-    background: #ffffff;
+    background: var(--ac-surface);
     color: var(--ac-text, #111827);
     border-color: transparent;
 }
