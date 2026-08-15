@@ -1767,7 +1767,7 @@ public static class MarketplaceTemplateExtensions
             if (result.Ok) await s.SaveChangesAsync();
 
             return TenantConfigSurface.Outcome(result,
-                $"/admin/tenants/{slug}/roles?saved=1", $"/admin/tenants/{slug}/roles", "/admin");
+                $"/admin/tenants/{slug}/roles", $"/admin/tenants/{slug}/roles", "/admin");
         }).DisableAntiforgery();
 
         // ─── Admin: decide a tenant-authored role definition ────────────
@@ -1899,7 +1899,7 @@ public static class MarketplaceTemplateExtensions
             if (result.Ok) await s.SaveChangesAsync();
 
             return TenantConfigSurface.Outcome(result,
-                $"/admin/tenants/{slug}?saved=1", $"/admin/tenants/{slug}/categories", "/admin");
+                $"/admin/tenants/{slug}", $"/admin/tenants/{slug}/categories", "/admin");
         }).DisableAntiforgery();
 
         // ─── Admin: save branding ───────────────────────────────────────
@@ -1920,7 +1920,7 @@ public static class MarketplaceTemplateExtensions
             if (result.Ok) await s.SaveChangesAsync();
 
             return TenantConfigSurface.Outcome(result,
-                $"/admin/tenants/{slug}?saved=1", $"/admin/tenants/{slug}/branding", "/admin");
+                $"/admin/tenants/{slug}", $"/admin/tenants/{slug}/branding", "/admin");
         }).DisableAntiforgery();
 
         // ─── Admin: save PWA per-role (name + custom icon) ──────────────
@@ -1942,7 +1942,7 @@ public static class MarketplaceTemplateExtensions
             if (result.Ok) await s.SaveChangesAsync();
 
             return TenantConfigSurface.Outcome(result,
-                $"/admin/tenants/{slug}/pwa?saved=1", $"/admin/tenants/{slug}/pwa", "/admin");
+                $"/admin/tenants/{slug}/pwa", $"/admin/tenants/{slug}/pwa", "/admin");
         }).DisableAntiforgery();
 
         // ─── Admin: save regions ────────────────────────────────────────
@@ -1964,7 +1964,7 @@ public static class MarketplaceTemplateExtensions
             if (result.Ok) await s.SaveChangesAsync();
 
             return TenantConfigSurface.Outcome(result,
-                $"/admin/tenants/{slug}/regions?saved=1", $"/admin/tenants/{slug}/regions", "/admin");
+                $"/admin/tenants/{slug}/regions", $"/admin/tenants/{slug}/regions", "/admin");
         }).DisableAntiforgery();
 
         // ─── Admin: save attribute definitions for a scope ──────────────
@@ -1980,136 +1980,19 @@ public static class MarketplaceTemplateExtensions
         {
             if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
                 return Forbidden();
-            await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.attributes_save");
-            var scopeStr = req.Form["scope"].ToString().Trim();
-            var defsRaw  = req.Form["defs"].ToString();
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, AttributesSaveService.AuditAction);
 
-            if (!Guid.TryParse(scopeStr, out var scopeId))
-                return Results.Redirect($"/admin/tenants/{slug}/attributes?err=no_scope");
-
-            string Back(string err) =>
-                $"/admin/tenants/{slug}/attributes?scope={scopeId}&err={err}";
-
-            var rows = new List<(string Code, string Name, string Type, bool Req,
-                                 List<(string Val, string Label)> Opts)>();
-            foreach (var line in defsRaw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var l = line.Trim();
-                if (l.Length == 0) continue;
-                var parts = l.Split('|', StringSplitOptions.TrimEntries);
-                if (parts.Length < 4) return Results.Redirect(Back("bad_format"));
-                var code = parts[0];
-                var name = parts[1];
-                var type = parts[2];
-                var req2 = parts[3].Equals("req", StringComparison.OrdinalIgnoreCase);
-                if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(name) ||
-                    string.IsNullOrEmpty(type))
-                    return Results.Redirect(Back("bad_format"));
-                var opts = new List<(string Val, string Label)>();
-                if (parts.Length >= 5 && !string.IsNullOrEmpty(parts[4]))
-                {
-                    foreach (var pair in parts[4].Split(
-                                 new[] { '،', ',' },
-                                 StringSplitOptions.RemoveEmptyEntries |
-                                 StringSplitOptions.TrimEntries))
-                    {
-                        var kv = pair.Split('=', 2);
-                        if (kv.Length != 2) return Results.Redirect(Back("bad_format"));
-                        opts.Add((kv[0].Trim(), kv[1].Trim()));
-                    }
-                }
-                rows.Add((code, name, type, req2, opts));
-            }
-
+            var request = TenantConfigSurface.ReadAttributes(req);
             await using var s = store.LightweightSession(slug);
+            var result = await AttributesSaveService.SaveAsync(s, request);
+            if (result.Ok) await s.SaveChangesAsync();
 
-            // اِجلِب كُلّ الـ Mappings والـ defs الحالِيَّة في الذاكِرَة
-            // مَرَّة واحِدَة — أَسهَل لِفَلتَرَة الـ JsonElement يَدَويّاً.
-            var allMappings = await s.Query<ImportedRecord>()
-                .Where(r => r.Table == "CategoryAttributeMappings").ToListAsync();
-            var allDefs = await s.Query<ImportedRecord>()
-                .Where(r => r.Table == "AttributeDefinitions").ToListAsync();
-            var allValues = await s.Query<ImportedRecord>()
-                .Where(r => r.Table == "AttributeValues").ToListAsync();
-
-            var scopeMappings = allMappings
-                .Where(m => GuidFromData(m, "CategoryId") == scopeId).ToList();
-            var defIdsInScope = scopeMappings
-                .Select(m => GuidFromData(m, "AttributeDefinitionId"))
-                .Where(g => g != Guid.Empty).Distinct().ToList();
-            foreach (var m in scopeMappings) s.Delete(m);
-
-            var stillUsedDefs = allMappings
-                .Where(m => GuidFromData(m, "CategoryId") != scopeId)
-                .Select(m => GuidFromData(m, "AttributeDefinitionId"))
-                .ToHashSet();
-            var orphans = defIdsInScope.Where(id => !stillUsedDefs.Contains(id)).ToHashSet();
-            if (orphans.Count > 0)
-            {
-                foreach (var d in allDefs)
-                    if (orphans.Contains(GuidFromData(d, "Id"))) s.Delete(d);
-                foreach (var v in allValues)
-                    if (orphans.Contains(GuidFromData(v, "AttributeDefinitionId"))) s.Delete(v);
-            }
-
-            var now = DateTime.UtcNow;
-            var order = 0;
-            foreach (var (code, name, type, req2, opts) in rows)
-            {
-                var defId = Guid.NewGuid();
-                s.Store(new ImportedRecord
-                {
-                    Id = $"AttributeDefinitions/{defId}",
-                    Table = "AttributeDefinitions",
-                    SourceId = defId.ToString(),
-                    ImportedAt = now,
-                    Data = new Dictionary<string, object?>
-                    {
-                        ["Id"]         = defId.ToString(),
-                        ["Code"]       = code,
-                        ["Name"]       = name,
-                        ["Type"]       = type,
-                        ["IsRequired"] = req2 ? "true" : "false"
-                    }
-                });
-                s.Store(new ImportedRecord
-                {
-                    Id = $"CategoryAttributeMappings/{defId}-{scopeId}",
-                    Table = "CategoryAttributeMappings",
-                    SourceId = $"{defId}-{scopeId}",
-                    ImportedAt = now,
-                    Data = new Dictionary<string, object?>
-                    {
-                        ["CategoryId"]            = scopeId.ToString(),
-                        ["AttributeDefinitionId"] = defId.ToString(),
-                        ["SortOrder"]             = order.ToString()
-                    }
-                });
-                var voi = 0;
-                foreach (var (val, label) in opts)
-                {
-                    var vid = Guid.NewGuid();
-                    s.Store(new ImportedRecord
-                    {
-                        Id = $"AttributeValues/{vid}",
-                        Table = "AttributeValues",
-                        SourceId = vid.ToString(),
-                        ImportedAt = now,
-                        Data = new Dictionary<string, object?>
-                        {
-                            ["Id"]                    = vid.ToString(),
-                            ["AttributeDefinitionId"] = defId.ToString(),
-                            ["Value"]                 = val,
-                            ["DisplayName"]           = label,
-                            ["SortOrder"]             = voi.ToString()
-                        }
-                    });
-                    voi++;
-                }
-                order++;
-            }
-            await s.SaveChangesAsync();
-            return Results.Redirect($"/admin/tenants/{slug}/attributes?scope={scopeId}&saved=1");
+            // النِطاقُ يَدخُل رابِطَ العَودَة حينَ يُحَلَّل، ويَسقُط
+            // مِنه حينَ لا يُحَلَّل — وهذا هُوَ فَرقُ no_scope عَن
+            // بَقِيَّة الرُموز.
+            var page = $"/admin/tenants/{slug}/attributes" +
+                       (request.Scope is { } id ? $"?scope={id}" : "");
+            return TenantConfigSurface.Outcome(result, page, page, "/admin");
         }).DisableAntiforgery();
 
         // ─── Admin: Agent — ask ─────────────────────────────────────────
@@ -2949,7 +2832,7 @@ public static class MarketplaceTemplateExtensions
             if (result.Ok) await s.SaveChangesAsync();
 
             return TenantConfigSurface.Outcome(result,
-                $"/studio/apps/{slug}/branding?saved=1", $"/studio/apps/{slug}/branding", "/studio");
+                $"/studio/apps/{slug}/branding", $"/studio/apps/{slug}/branding", "/studio");
         }).DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/categories/save", async (
@@ -2965,7 +2848,7 @@ public static class MarketplaceTemplateExtensions
             if (result.Ok) await s.SaveChangesAsync();
 
             return TenantConfigSurface.Outcome(result,
-                $"/studio/apps/{slug}/categories?saved=1", $"/studio/apps/{slug}/categories", "/studio");
+                $"/studio/apps/{slug}/categories", $"/studio/apps/{slug}/categories", "/studio");
         }).DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/roles/save", async (
@@ -2981,7 +2864,7 @@ public static class MarketplaceTemplateExtensions
             if (result.Ok) await s.SaveChangesAsync();
 
             return TenantConfigSurface.Outcome(result,
-                $"/studio/apps/{slug}/roles?saved=1", $"/studio/apps/{slug}/roles", "/studio");
+                $"/studio/apps/{slug}/roles", $"/studio/apps/{slug}/roles", "/studio");
         }).DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/regions/save", async (
@@ -2997,7 +2880,7 @@ public static class MarketplaceTemplateExtensions
             if (result.Ok) await s.SaveChangesAsync();
 
             return TenantConfigSurface.Outcome(result,
-                $"/studio/apps/{slug}/regions?saved=1", $"/studio/apps/{slug}/regions", "/studio");
+                $"/studio/apps/{slug}/regions", $"/studio/apps/{slug}/regions", "/studio");
         }).DisableAntiforgery();
 
         // ─── Studio: save PWA apps (per-role name + icon) ───────────────
@@ -3016,7 +2899,7 @@ public static class MarketplaceTemplateExtensions
             if (result.Ok) await s.SaveChangesAsync();
 
             return TenantConfigSurface.Outcome(result,
-                $"/studio/apps/{slug}/pwa?saved=1", $"/studio/apps/{slug}/pwa", "/studio");
+                $"/studio/apps/{slug}/pwa", $"/studio/apps/{slug}/pwa", "/studio");
         }).DisableAntiforgery();
 
         // ─── Studio: save attribute definitions for a scope ─────────────
@@ -3024,136 +2907,20 @@ public static class MarketplaceTemplateExtensions
         // الـ Studio بِحارِس المِلكِيَّة، والتَّوجيهات إلى مَسارات /studio/apps/.
         app.MapPost("/studio/apps/{slug}/attributes/save", async (
             string slug, HttpRequest req, IDocumentStore store,
-            Services.Incubator.StudioAuth auth) =>
+            Services.Incubator.StudioAuth auth,
+            Services.Audit.AuditWriter audit) =>
         {
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
-            var scopeStr = req.Form["scope"].ToString().Trim();
-            var defsRaw  = req.Form["defs"].ToString();
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, AttributesSaveService.AuditAction);
 
-            if (!Guid.TryParse(scopeStr, out var scopeId))
-                return Results.Redirect($"/studio/apps/{slug}/attributes?err=no_scope");
-
-            string Back(string err) =>
-                $"/studio/apps/{slug}/attributes?scope={scopeId}&err={err}";
-
-            var rows = new List<(string Code, string Name, string Type, bool Req,
-                                 List<(string Val, string Label)> Opts)>();
-            foreach (var line in defsRaw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var l = line.Trim();
-                if (l.Length == 0) continue;
-                var parts = l.Split('|', StringSplitOptions.TrimEntries);
-                if (parts.Length < 4) return Results.Redirect(Back("bad_format"));
-                var code = parts[0];
-                var name = parts[1];
-                var type = parts[2];
-                var req2 = parts[3].Equals("req", StringComparison.OrdinalIgnoreCase);
-                if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(name) ||
-                    string.IsNullOrEmpty(type))
-                    return Results.Redirect(Back("bad_format"));
-                var opts = new List<(string Val, string Label)>();
-                if (parts.Length >= 5 && !string.IsNullOrEmpty(parts[4]))
-                {
-                    foreach (var pair in parts[4].Split(
-                                 new[] { '،', ',' },
-                                 StringSplitOptions.RemoveEmptyEntries |
-                                 StringSplitOptions.TrimEntries))
-                    {
-                        var kv = pair.Split('=', 2);
-                        if (kv.Length != 2) return Results.Redirect(Back("bad_format"));
-                        opts.Add((kv[0].Trim(), kv[1].Trim()));
-                    }
-                }
-                rows.Add((code, name, type, req2, opts));
-            }
-
+            var request = TenantConfigSurface.ReadAttributes(req);
             await using var s = store.LightweightSession(slug);
+            var result = await AttributesSaveService.SaveAsync(s, request);
+            if (result.Ok) await s.SaveChangesAsync();
 
-            var allMappings = await s.Query<ImportedRecord>()
-                .Where(r => r.Table == "CategoryAttributeMappings").ToListAsync();
-            var allDefs = await s.Query<ImportedRecord>()
-                .Where(r => r.Table == "AttributeDefinitions").ToListAsync();
-            var allValues = await s.Query<ImportedRecord>()
-                .Where(r => r.Table == "AttributeValues").ToListAsync();
-
-            var scopeMappings = allMappings
-                .Where(m => GuidFromData(m, "CategoryId") == scopeId).ToList();
-            var defIdsInScope = scopeMappings
-                .Select(m => GuidFromData(m, "AttributeDefinitionId"))
-                .Where(g => g != Guid.Empty).Distinct().ToList();
-            foreach (var m in scopeMappings) s.Delete(m);
-
-            var stillUsedDefs = allMappings
-                .Where(m => GuidFromData(m, "CategoryId") != scopeId)
-                .Select(m => GuidFromData(m, "AttributeDefinitionId"))
-                .ToHashSet();
-            var orphans = defIdsInScope.Where(id => !stillUsedDefs.Contains(id)).ToHashSet();
-            if (orphans.Count > 0)
-            {
-                foreach (var d in allDefs)
-                    if (orphans.Contains(GuidFromData(d, "Id"))) s.Delete(d);
-                foreach (var v in allValues)
-                    if (orphans.Contains(GuidFromData(v, "AttributeDefinitionId"))) s.Delete(v);
-            }
-
-            var now = DateTime.UtcNow;
-            var order = 0;
-            foreach (var (code, name, type, req2, opts) in rows)
-            {
-                var defId = Guid.NewGuid();
-                s.Store(new ImportedRecord
-                {
-                    Id = $"AttributeDefinitions/{defId}",
-                    Table = "AttributeDefinitions",
-                    SourceId = defId.ToString(),
-                    ImportedAt = now,
-                    Data = new Dictionary<string, object?>
-                    {
-                        ["Id"]         = defId.ToString(),
-                        ["Code"]       = code,
-                        ["Name"]       = name,
-                        ["Type"]       = type,
-                        ["IsRequired"] = req2 ? "true" : "false"
-                    }
-                });
-                s.Store(new ImportedRecord
-                {
-                    Id = $"CategoryAttributeMappings/{defId}-{scopeId}",
-                    Table = "CategoryAttributeMappings",
-                    SourceId = $"{defId}-{scopeId}",
-                    ImportedAt = now,
-                    Data = new Dictionary<string, object?>
-                    {
-                        ["CategoryId"]            = scopeId.ToString(),
-                        ["AttributeDefinitionId"] = defId.ToString(),
-                        ["SortOrder"]             = order.ToString()
-                    }
-                });
-                var voi = 0;
-                foreach (var (val, label) in opts)
-                {
-                    var vid = Guid.NewGuid();
-                    s.Store(new ImportedRecord
-                    {
-                        Id = $"AttributeValues/{vid}",
-                        Table = "AttributeValues",
-                        SourceId = vid.ToString(),
-                        ImportedAt = now,
-                        Data = new Dictionary<string, object?>
-                        {
-                            ["Id"]                    = vid.ToString(),
-                            ["AttributeDefinitionId"] = defId.ToString(),
-                            ["Value"]                 = val,
-                            ["DisplayName"]           = label,
-                            ["SortOrder"]             = voi.ToString()
-                        }
-                    });
-                    voi++;
-                }
-                order++;
-            }
-            await s.SaveChangesAsync();
-            return Results.Redirect($"/studio/apps/{slug}/attributes?scope={scopeId}&saved=1");
+            var page = $"/studio/apps/{slug}/attributes" +
+                       (request.Scope is { } id ? $"?scope={id}" : "");
+            return TenantConfigSurface.Outcome(result, page, page, "/studio");
         }).DisableAntiforgery();
 
         // بِناء Tenant فِعليّ مِن جَلسَة تَحليل (الجِسر بَين الفِكرَة والتَّطبيق).

@@ -291,4 +291,44 @@ public class TenantConfigDecisionTests
     public void Pwa_reports_the_size_before_the_type() =>
         Assert.Equal(TenantConfigCodes.IconTooLarge,
             PwaSaveService.WhyIconRejected(Icon("image/gif", PwaSaveService.MaxIconBytes + 1)));
+
+    // ─── الخَصائِص ─────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("code | الاسم | text")]               // ثَلاثَةُ أَعمِدَة
+    [InlineData(" | الاسم | text | req")]             // رَمزٌ فارِغ
+    [InlineData("code |  | text | req")]              // اسمٌ فارِغ
+    [InlineData("code | الاسم |  | req")]             // نَوعٌ فارِغ
+    [InlineData("code | الاسم | select | req | بِلا_مُساواة")]
+    public void Attributes_reject_a_malformed_row(string raw) =>
+        Assert.Equal(TenantConfigCodes.BadFormat, AttributesSaveService.Parse(raw).Code);
+
+    [Fact]
+    public void Attributes_parse_options_and_the_required_flag()
+    {
+        var (rows, code) = AttributesSaveService.Parse(
+            "  rooms | الغُرَف | number | req  \n" +
+            "kind | النَوع | select | opt | villa=فِلّا، apt=شَقَّة\n\n");
+
+        Assert.Null(code);
+        Assert.Equal(2, rows!.Count);
+
+        Assert.Equal("rooms", rows[0].Code);
+        Assert.True(rows[0].IsRequired);
+        Assert.Empty(rows[0].Options);
+
+        Assert.False(rows[1].IsRequired);
+        Assert.Equal(new[] { ("villa", "فِلّا"), ("apt", "شَقَّة") }, rows[1].Options);
+    }
+
+    /// <summary>ونَصٌّ فارِغٌ لَيسَ خَطَأً هُنا — هُوَ «امحُ خَصائِص
+    /// هذا النِطاق»، وذلك سُلوكُ المَسارَين قَبلَ التَوحيد. الرَفضُ
+    /// الوَحيد غِيابُ النِطاق.</summary>
+    [Fact]
+    public void Attributes_treat_an_empty_text_as_clearing_the_scope()
+    {
+        var (rows, code) = AttributesSaveService.Parse("");
+        Assert.Null(code);
+        Assert.Empty(rows!);
+    }
 }

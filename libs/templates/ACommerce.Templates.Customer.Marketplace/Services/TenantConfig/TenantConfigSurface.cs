@@ -105,19 +105,30 @@ public static class TenantConfigSurface
         return new PwaSaveRequest(roles);
     }
 
+    /// <summary>النِطاقُ يُحَوَّل هُنا إلى <c>Guid?</c> — فَالسَطحُ
+    /// يَحتاجُه مَكتوباً لِبِناء رابِط العَودَة، والخِدمَةُ تَرفُض
+    /// غِيابَه بِـ<c>no_scope</c>. تَحليلٌ واحِد لا اثنان.</summary>
+    public static AttributesSaveRequest ReadAttributes(HttpRequest req) =>
+        new(Guid.TryParse(req.Form["scope"].ToString().Trim(), out var scope) ? scope : null,
+            req.Form["defs"].ToString());
+
     // ─── نَتيجَة ← ردّ ─────────────────────────────────────────────
 
     /// <summary>
-    /// <para>ثَلاثُ حالاتٍ وثَلاثَةُ مَسارات. و<c>errBase</c> يَقبَل
-    /// استِعلاماً سابِقاً (‏<c>?scope=…</c>) فَيُضاف إلَيه
-    /// <c>&amp;err=</c> لا <c>?err=</c>.</para>
+    /// <para>ثَلاثُ حالاتٍ وثَلاثَةُ مَسارات. والقاعِدَتانِ تَقبَلانِ
+    /// استِعلاماً سابِقاً (‏<c>?scope=…</c>) فَيُضاف إلَيهِما
+    /// <c>&amp;</c> لا <c>?</c> — ولا يُترَك ذلك لِكُلّ نُقطَةٍ
+    /// تَبنيه بِيَدِها.</para>
     /// </summary>
     public static IResult Outcome(
-        TenantConfigResult result, string savedUrl, string errBase, string rootUrl) =>
+        TenantConfigResult result, string savedBase, string errBase, string rootUrl) =>
         result.Status switch
         {
-            TenantConfigStatus.Saved         => Results.Redirect(savedUrl),
+            TenantConfigStatus.Saved         => Results.Redirect(WithQuery(savedBase, "saved=1")),
             TenantConfigStatus.TenantMissing => Results.Redirect(rootUrl),
-            _ => Results.Redirect(errBase + (errBase.Contains('?') ? "&" : "?") + "err=" + result.Code),
+            _ => Results.Redirect(WithQuery(errBase, "err=" + result.Code)),
         };
+
+    private static string WithQuery(string url, string q) =>
+        url + (url.Contains('?') ? "&" : "?") + q;
 }

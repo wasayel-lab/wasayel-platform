@@ -120,12 +120,15 @@ public class AdminStudioPairCharacterizationTests
             "تَعديلٍ يُصيب إحداهُما — كَما وَقَعَ فِعلاً في الفِئات والأَدوار والمَناطِق. " +
             "والتَطابُقُ حالٌ لا ضَمان."),
 
-        new("attributes", PairState.Diverged,
-            new Side("/admin/tenants/{slug}/attributes/save", true,  "403",
-                     new[] { "bad_format", "no_scope" }, Array.Empty<string>()),
-            new Side("/studio/apps/{slug}/attributes/save",   false, "302",
-                     new[] { "bad_format", "no_scope" }, Array.Empty<string>()),
-            ""),
+        new("attributes", PairState.Unified,
+            new Side("/admin/tenants/{slug}/attributes/save", true, "403",
+                     Array.Empty<string>(), new[] { "service" }),
+            new Side("/studio/apps/{slug}/attributes/save",   true, "302",
+                     Array.Empty<string>(), new[] { "service" }),
+            "أَثقَلُ الأَزواج (‏140 و‏135 سَطراً) وأَقَلُّها انحِرافاً: رُموزُ الخَطَأ واحِدَة " +
+            "والمَنطِقُ واحِد، والفَرقُ الحارِسُ والتَدقيقُ والمَسار. فَالمَحسومُ هُوَ التَدقيق " +
+            "وَحدَه. والنِطاقُ صارَ Guid? في الطَلَب لا نَصّاً: تَحليلُه شَأنُ المُهايِئ (يَحتاجُه " +
+            "لِرابِط العَودَة)، ورَفضُ غِيابِه شَأنُ الخِدمَة — تَحليلٌ واحِد لا اثنان."),
     };
 
     // ─── الفَحص ───────────────────────────────────────────────────────
@@ -192,11 +195,16 @@ public class AdminStudioPairCharacterizationTests
     {
         var bodies = Bodies();
         var stale = new List<string>();
-        var checkedPairs = 0;
+
+        // عَدّادُ العَمى هُنا على <b>الجَدوَل</b> لا على المُنحَرِف
+        // مِنه: الصِفرُ هُوَ الهَدَف، ولَو اشتُرِطَ زَوجٌ مُنحَرِفٌ
+        // واحِد لَحَمِرَت البَوّابَةُ يَومَ يَتِمّ التَوحيد — أَي
+        // لَعاقَبَت ما وُجِدَت لِتُشَجِّعَه.
+        Assert.True(Pinned.Length == 6, $"أَداة عَمياء: {Pinned.Length} زَوجاً في الجَدوَل — والمَقيس سِتَّة.");
+        Assert.Equal(12, bodies.Count);
 
         foreach (var p in Pinned.Where(x => x.State == PairState.Diverged))
         {
-            checkedPairs++;
             var a = MeasureSide(p.Admin.Route, bodies[p.Admin.Route]);
             var s = MeasureSide(p.Studio.Route, bodies[p.Studio.Route]);
 
@@ -210,7 +218,6 @@ public class AdminStudioPairCharacterizationTests
                 stale.Add($"{p.Operation}: مُعلَنٌ مُنحَرِفاً والطَرَفانِ مُتَّفِقان — اقلِب الحالَة.");
         }
 
-        Assert.True(checkedPairs > 0, "أَداة عَمياء: لا زَوجَ مُنحَرِفاً لِيُفحَص.");
         Assert.True(stale.Count == 0, string.Join("\n  ", stale));
     }
 
@@ -234,6 +241,7 @@ public class AdminStudioPairCharacterizationTests
         var bodies = Bodies();
         var breaches = new List<string>();
         var unified = Pinned.Where(x => x.State == PairState.Unified).ToArray();
+        Assert.True(unified.Length > 0, "أَداة عَمياء: لا زَوجَ مُوَحَّداً لِيُفحَص.");
 
         foreach (var p in unified)
         {
