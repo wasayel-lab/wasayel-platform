@@ -10,7 +10,7 @@
 # a new entry fails the gate, and a retired entry that is still pinned fails
 # it too.  Nothing here was repaired by the agent that measured it.
 #
-# ── no-inline-color (34 -> 26) ───────────────────────────────────────────
+# ── no-inline-color (34 -> 26 -> 24) ───────────────────────────────────────────
 # Literal #hex in a style="" attribute.  These bypass the --wsl-* -> --ac-*
 # token layer entirely (META-MODEL §9), so a tenant theme can never restyle
 # them: status pills stay mint-green and amber whatever the tenant picks.
@@ -28,10 +28,23 @@
 # the substitution is provably zero-change today AND stays zero.
 #
 # The rest were NOT touched, and the reason is written down rather than
-# implied: their literals equal no token (mint #dcfce7, amber #fef3c7, the
-# rating gold #f59e0b…).  Tinting a star rating with --ac-warning would be
-# zero-change today and a bug the first time a tenant paints warning red.
+# implied: their literals equal no token (mint #dcfce7, amber #fef3c7…).
 # They are measured and costed in docs/THEME-DEBT-DECISIONS.md.
+#
+# ── 2026-08-15, second pass (26 -> 24): the rating gold got its own token ──
+# The note above said tinting a star with --ac-warning "would be zero-change
+# today and a bug the first time a tenant paints warning red".  That reading
+# still holds; the answer was not to reuse a token but to MINT one.
+# `color.rating` is now the 40th entry of the closed theme vocabulary, its
+# default value is byte-identical to the literal it replaced (#f59e0b, pinned
+# against the frozen snapshot in ThemeZeroEquivalenceTests), and the two
+# VendorProfile sites now read var(--ac-rating).  Measured, not assumed:
+# the gold paints <AcIcon> only (svg fill/stroke = currentColor), never a
+# text glyph — so WCAG 1.4.3 does not govern it and it is deliberately NOT a
+# ThemeContrastRule pair.  Adding it as one would reject the DEFAULT theme
+# (#f59e0b on #ffffff = 2.148 < 4.5) and fail boot on an imaginary breach.
+# Computed-style proof: 8/8 pages, +2 TOKEN lines each, zero CSS/BOX lines
+# changed out of 74,834.
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/QualityMonitor.razor|2
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioApp.razor|7
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppConsole.razor|5
@@ -39,7 +52,6 @@ no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Componen
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioHome.razor|1
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudy.razor|2
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudyPrint.razor|3
-no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/VendorProfile.razor|2
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/RiderHome.razor|1
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/StudioShell.razor|1
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/UpgradePrompt.razor|1

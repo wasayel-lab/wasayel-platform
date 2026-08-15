@@ -183,21 +183,116 @@ public class ThemeZeroEquivalenceTests
     }
 
     [Fact]
-    public void TheDensityTokenIsTheOnlyOneWithoutAPredecessor()
+    public void OnlyTwoTokensHaveNoRootVariablePredecessor_AndBothArePinned()
     {
-        // ‏density رَمز **أُدخِلَ** لا وُجِدَ — فَلا حَرفِيَّة سابِقَة لَه.
-        // وقيمَتُه 1 تَجعَل calc(x · 1) ≡ x، فَدُخولُه بِتَكافُؤ صِفريّ.
-        // وهو الوَحيد كَذلك: كُلّ رَمز آخَر في المَعجَم لَه سَلَف في
-        // الخَريطَة أَعلاه، وهذا الاختِبار يَقفِل الباب عَلى إضافَة
-        // رَمز بِلا مُستَهلِك.
+        // الخَريطَة أَعلاه تَربِط رَمزاً بِـ**مُتَغَيِّر `:root`** كانَ
+        // مَوجوداً في لَقطَة الأَساس. ورَمزان لا سَلَفَ لَهُما مِن هذا
+        // النَوع، وكِلاهُما مُثَبَّت هُنا بِسَبَبِه — فَلا يَنمو الباب
+        // صامِتاً إلى قائِمَة مَنسِيَّة:
+        //
+        //   • ‏density   — رَمز **أُدخِلَ** لا وُجِدَ، فَلا حَرفِيَّة
+        //     سابِقَة لَه إطلاقاً. وقيمَتُه 1 تَجعَل calc(x · 1) ≡ x،
+        //     فَدُخولُه بِتَكافُؤ صِفريّ. مُستَهلِكُه مَفحوص في
+        //     TheSpacingScaleActuallyConsumesDensity.
+        //
+        //   • ‏color.rating — لَه سَلَف، لكِنَّه **حَرفِيَّة داخِل
+        //     قاعِدَة** (`.ac-rating{color:#f59e0b}`) لا تَصريحَةُ
+        //     `:root`، فَلا تَبلُغُها WinningRootDeclarations أَصلاً.
+        //     ولِذلك بُرهانُه في اختِبارِه الخاصّ أَدناه — يُقرَأ مِن
+        //     نَفس لَقطَة الأَساس، بِنَفس مَبدَأ «الطَرَف المُقارَن
+        //     لَيسَ مِن تَأليفي».
         var mapped = Correspondence.Select(c => c.TokenKey).ToHashSet(StringComparer.Ordinal);
         var unmapped = ThemeTokenCatalog.All
             .Select(t => t.Key)
             .Where(k => !mapped.Contains(k))
             .ToArray();
 
-        Assert.Equal(new[] { "density" }, unmapped);
+        Assert.Equal(new[] { "color.rating", "density" }, unmapped.OrderBy(k => k, StringComparer.Ordinal).ToArray());
         Assert.Equal("1", ThemeCatalog.Default["density"]);
+    }
+
+    // ─── ‏color.rating — التَكافُؤ الصِفريّ مِن اللَقطَة لا مِن جَدوَل ──
+
+    /// <summary>الحَرفِيَّة الَّتي حَلَّ الرَمز مَحَلَّها، مَقروءَةً مِن
+    /// <b>لَقطَة الأَساس</b> — لا مَكتوبَةً هُنا. نَفس مَبدَأ
+    /// <see cref="WinningRootDeclarations"/> بِالضَبط، والفَرق أَنّ
+    /// المَوضِع قاعِدَة (`.ac-rating`) لا كُتلَة `:root`.</summary>
+    private static string RatingLiteralFromBaseline()
+    {
+        var path = Path.Combine(RepoRoot,
+            "tests", "characterization", "appearance", "baseline", "css", "premium.css");
+        Assert.True(File.Exists(path),
+            $"لَقطَة الأَساس مَفقودَة: {path} — البُرهان بِلا طَرَف مُقارَن.");
+
+        var m = Regex.Match(File.ReadAllText(path),
+            @"\.ac-rating\s*\{[^}]*?color:\s*(?<value>#[0-9a-fA-F]{3,8})\s*;");
+        Assert.True(m.Success,
+            "قاعِدَة .ac-rating بِلَون حَرفيّ غَير مَوجودَة في لَقطَة الأَساس — الدَعوى كاذِبَة.");
+        return m.Groups["value"].Value;
+    }
+
+    [Fact]
+    public void TheRatingTokenEqualsTheLiteralItReplaced_ByteForByte()
+    {
+        // ‏«مُطابِق» بِـOrdinal لا بِتَحليل لَون: القيمَة في
+        // default.theme.json كُتِبَت **بِحالَة أَحرُف الحَرفِيَّة نَفسِها**
+        // (‏#f59e0b صُغرى) عَمداً — اتِّساق تَجميليّ مَع بَقِيَّة المِلَفّ
+        // كانَ سَيُضَيِّع بُرهاناً بايتِيّاً مُقابِلَ لا شَيء.
+        Assert.Equal(RatingLiteralFromBaseline(), ThemeCatalog.Default["color.rating"]);
+    }
+
+    [Fact]
+    public void TheRatingTokenHasRealConsumers_NotJustACatalogEntry()
+    {
+        // القاعِدَة ١: لا تَجريد قَبلَ مُستَهلِكِه. ثَلاثَة مَواضِع
+        // مَقيسَة، **في المِلَفّات الحَيَّة** لا في اللَقطَة.
+        var css = Path.Combine(RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "wwwroot", "css");
+
+        // الجِسر: مُدخَل الثيم يَصير مُخرَجاً تَقرَؤُه المُكَوِّنات.
+        Assert.Contains("--ac-rating:  var(--wsl-color-rating);",
+            File.ReadAllText(Path.Combine(css, "app.css")), StringComparison.Ordinal);
+
+        // المُستَهلِك الأَوَّل — قاعِدَة .ac-rating.
+        Assert.Contains("color: var(--ac-rating);",
+            File.ReadAllText(Path.Combine(css, "premium.css")), StringComparison.Ordinal);
+
+        // والمُستَهلِكان الثاني والثالِث — أُسلوبان مُضَمَّنان في razor.
+        var razor = File.ReadAllText(Path.Combine(RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "Components", "Pages",
+            "VendorProfile.razor"));
+        Assert.Equal(2, Regex.Matches(razor, @"color:var\(--ac-rating\)").Count);
+
+        // ولا حَرفِيَّة باقِيَة في أَيٍّ مِن المَواضِع الثَلاثَة.
+        Assert.DoesNotContain("#f59e0b", razor, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("#f59e0b",
+            File.ReadAllText(Path.Combine(css, "premium.css")), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TheRatingTokenIsNotATextPair_AndTheNumberSaysWhy()
+    {
+        // ‏**قيسَ ولَم يُفتَرَض**: ذَهَب التَقييم يُلَوِّن <AcIcon>
+        // وَحدَها — و‏AcIcon هي `<svg fill/stroke = currentColor>` بِلا
+        // مَحرَف نَصّ، والنَصّ المُجاوِر في VendorProfile يَضبِط لَونَه
+        // بِنَفسِه (‏--ac-text-muted). فَلا يَقَع تَحتَ WCAG 1.4.3،
+        // وقائِمَة الأَزواج تَبقى مُغلَقَةً على ما لَه مُنتَقٍ نَصّيّ.
+        Assert.DoesNotContain(ThemeContrastRule.Pairs,
+            p => p.TextKey == "color.rating" || p.SurfaceKey == "color.rating");
+
+        // ولِأَنّ «لَيسَ نَصّاً» دَعوى، هذا رَقَمُها: لَو أُدرِجَ زَوجاً
+        // نَصِّيّاً فَوقَ السَطح لَرَدَّ المُصادِقُ **الثيمَ الافتِراضيَّ
+        // نَفسَه** فَأَفشَلَ الإقلاع بِخَرقٍ خَياليّ.
+        Assert.True(ThemeContrastRule.TryParse(ThemeCatalog.Default["color.rating"], out var gold));
+        Assert.True(ThemeContrastRule.TryParse(ThemeCatalog.Default["color.surface"], out var surface));
+        var ratio = ThemeContrastRule.Ratio(
+            ThemeContrastRule.Luminance(gold), ThemeContrastRule.Luminance(surface));
+
+        // ‏2.148 — رَقَم أَعطَتهُ الأَداة لا التَقدير. (كُتِبَ أَوَّلاً
+        // ‏2.161 حِساباً ذِهنِيّاً، فَرَدَّهُ الاختِبار. القاعِدَة ١٠:
+        // إذا اختَلَفَت العَين والأَداة فَالأَداة هي الحَكَم.)
+        Assert.Equal(2.148, Math.Round(ratio, 3));
+        Assert.True(ratio < ThemeContrastRule.MinimumRatio);
     }
 
     [Fact]

@@ -826,7 +826,7 @@ a.ac-stat:hover, a.acm-role-cta-pill:hover {
 }
 
 /* ── تَقييم نُجوم (AcRating) ─────────────────────────────────────────── */
-.ac-rating { display: inline-flex; align-items: center; gap: 2px; color: #f59e0b; }
+.ac-rating { display: inline-flex; align-items: center; gap: 2px; color: var(--ac-rating); }
 .ac-rating-empty { color: var(--ac-border-strong); }
 .ac-rating-value { font-size: 13px; font-weight: 700; color: var(--ac-text); margin-inline-start: 4px; }
 

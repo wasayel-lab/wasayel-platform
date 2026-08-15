@@ -28,7 +28,7 @@
                         <h2 style="margin:0;">@vendor.FullName</h2>
                         @if (avgRating > 0)
                         {
-                            <div style="color:#f59e0b;font-size:14px;">
+                            <div style="color:var(--ac-rating);font-size:14px;">
                                 @for (var i = 0; i < (int)Math.Round(avgRating); i++)
                                 {
                                     <AcIcon Name="star" Size="14" Filled="true" />
@@ -90,7 +90,7 @@
                         <ChildContent>
                             <div style="display:flex;justify-content:space-between;align-items:start;">
                                 <strong>@r.AuthorName</strong>
-                                <span style="color:#f59e0b;">
+                                <span style="color:var(--ac-rating);">
                                     @for (var i = 0; i < r.Rating; i++)
                                     {
                                         <AcIcon Name="star" Size="14" Filled="true" />
