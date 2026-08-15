@@ -75,6 +75,25 @@ is-waiting
 footer
 t
 
+# ── Group J — REVEALED 2026-08-15 by deleting the dead widgets.css (3) ──
+# These three are NOT new debt.  They rendered unstyled in the browser from
+# the moment the two widgets.css copies diverged; this layer simply could not
+# see it, because it scans every .css under libs/ — INCLUDING sheets that no
+# document links.  Their only rules lived in
+#   libs/widgets/ACommerce.Widgets/wwwroot/widgets.css   (never linked, DEAD)
+# so a rule that reached no browser was still counted as "defined".  That is
+# the false green that Layer 1 rule 11 (unlinked-rcl-css) exists to prevent,
+# and it is why the dead sheet had to go before anything was built on top.
+#
+# Deleting the sheet turned the false green into an accurate red.  Restoring
+# the four .ac-space-trust* rules is a VISIBLE change on /ashare/explore —
+# the zero-equivalence yardstick page — so it is the owner's call and is
+# written up as item D-1 in docs/THEME-DEBT-DECISIONS.md, together with the
+# `git show` command that brings the 26 lines back verbatim.
+ac-space-trust-chip
+is-featured
+is-verified
+
 # ── Group I — known extraction artifact, NOT a real defect (1) ──
 # `category` is a C# argument inside an interpolated expression:
 #   class="risk-dot @($"risk-dot-{CategoryClass(Str(risk,"category")...)}"

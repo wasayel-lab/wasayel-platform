@@ -35,20 +35,28 @@ no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Componen
 # widget every failure path renders.  Should be AcButton.
 no-raw-bootstrap-button|libs/templates/ACommerce.Templates.Shared/AcErrorState.razor|1
 
-# ── unlinked-rcl-css (2) ─────────────────────────────────────────────────
-# The heaviest finding of this layer.  Two referenced libraries ship a
-# stylesheet that App.razor never links, because the Marketplace template
-# keeps its OWN copy of each under wwwroot/css/ and links that instead:
+# ── unlinked-rcl-css (0) — RETIRED 2026-08-15 ────────────────────────────
+# Was the heaviest finding of this layer: two referenced libraries shipped a
+# stylesheet App.razor never linked, because the Marketplace template kept
+# its OWN copy of each under wwwroot/css/ and linked that instead.
 #
-#   libs/widgets/ACommerce.Widgets/wwwroot/widgets.css           (1933 lines, DEAD)
-#     vs .../Marketplace/wwwroot/css/widgets.css                 (1920 lines, SERVED)
-#     -> the copies have DIVERGED: 51 lines exist only in the dead one.
-#
+#   libs/widgets/ACommerce.Widgets/wwwroot/widgets.css            (1933 lines, DEAD)
+#     vs .../Marketplace/wwwroot/css/widgets.css                  (1920 lines, SERVED)
+#     -> measured divergence at deletion: 52 lines dead-only, 39 live-only.
 #   libs/templates/ACommerce.Templates.Shared/wwwroot/templates-shared.css (DEAD)
 #     vs .../Marketplace/wwwroot/css/templates-shared.css                  (SERVED)
-#     -> 1 line of divergence.
+#     -> 1 line of divergence (max(6px,…) vs the served max(8px,…)).
 #
-# Consequence: editing widget CSS at its natural address changes nothing in
-# the browser.  Pinned rather than fixed — deciding which copy is canonical
-# is the owner's call, not a verifier's.
-unlinked-rcl-css|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|2
+# RESOLVED by DELETING both dead copies (commit "الحَدّ المَكسور"), not by
+# re-pointing the link: re-pointing would have changed one <link href> in
+# every rendered page and broken the byte-for-byte appearance gate, and it
+# would have forced an edit to ThemeZeroEquivalenceTests' frozen path — the
+# characterization test that must stay green without a character changed.
+# The served copy was measurably the NEWER one (it carries the --wsl-* token
+# wiring and the density calc); the dead ones were pre-token snapshots.
+#
+# One thing was lost with the dead widgets.css and is NOT re-added here,
+# because re-adding it is a VISIBLE change on /ashare/explore (the
+# zero-equivalence yardstick): the four .ac-space-trust* rules (26 lines).
+# See docs/THEME-DEBT-DECISIONS.md item D-1 for the measurement and the
+# `git show` incantation that restores them.
