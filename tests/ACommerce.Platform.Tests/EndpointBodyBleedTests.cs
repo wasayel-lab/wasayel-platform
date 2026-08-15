@@ -1,0 +1,163 @@
+using Xunit;
+
+namespace ACommerce.Platform.Tests;
+
+/// <summary>
+/// <para><b>عَدّاد النَزيف</b> — كَم سَطرَ مَنطِقٍ يَعيش <b>داخِلَ جِسم
+/// نُقطَة HTTP</b> بَدَل أَن يَعيش في مُعالِج أَو خِدمَة؟ ويَحمَرّ إن
+/// نَما.</para>
+///
+/// <para><b>لِماذا هذا المِقياس بِالذات، ولِماذا لَيسَ «حَجم
+/// المِلَفّ»</b>: قياسُ أَسطُر المِلَفّ يُعاقِب التَعليق ويُكافِئ
+/// الضَغط — فَيَدفَع إلى إخفاء الدَين لا إلى نَقلِه. والمِقياس هُنا
+/// يَعُدّ <b>ما بَينَ <c>Map…(</c> وفاصِلَةِ العِبارَة المُنهِيَة</b>،
+/// بَعدَ تَبييض التَعليقات وحَذف الفَراغ. فَإضافَةُ شَرحٍ مَجّانِيَّة،
+/// ونَقلُ مَنطِقٍ إلى مُعالِج يُنقِص الرَقَم، وكِتابَةُ مَنطِقٍ جَديد
+/// في لامدا تَرفَعُه — وهذا بِالضَبط ما يُراد رَصدُه.</para>
+///
+/// <para><b>والرَقَم الَّذي كَتَبَه</b>: قاسَت وَثيقَة القَرار
+/// المِعماريّ النَزيف بِـ<b>‏172 سَطراً في يَوم عَمَل</b> (‏687 سَطراً
+/// في أَربَعَة أَيّام)، و<b>‏83٪</b> مِن دَين مِلَفّ النِقاط
+/// <b>مَوروث</b> مِن كوميت استيراد واحِد. فَالتَشخيص لَيسَ «الفَريق
+/// يَكتُب مِعماريَّةً سَيِّئَة» بَل «يَكتُب مِعماريَّةً جَيِّدَة في
+/// مَوضِعٍ سَيِّئ» — و‏145 سَطر <c>feat(entitlement)</c> أَجوَدُ كودٍ في
+/// المُستَودَع، مَكتوبَةً في جِسم لامدا.</para>
+///
+/// <para><b>وما لا يَدَّعيه</b>: لا يَعرِف «المَنطِق» مِن «التَوجيه».
+/// سَطرُ <c>Results.Redirect</c> يُعَدّ كَما يُعَدّ سَطرُ حِساب. ولا
+/// حَدَّ مَوضوعِيّاً بَينَهُما نَصِّيّاً — والاحتِيالُ عَلى ذلك
+/// بِتَقديرٍ يَجعَل العَدّاد رَأياً. فَالمِقياس <b>مَوضِعٌ لا نِيَّة</b>:
+/// «كَم سَطراً يَقَع هُنا»، وهُوَ قابِلٌ لِلعَدّ ولا يُختَلَف فيه.</para>
+///
+/// <para><b>وثُنائيّ الاتِّجاه بِالشَكل الَّذي لا يُعاقِب التَحسين</b>:
+/// المَجاميع <b>سُقوف</b> — النُزول يُقال بِصَوتٍ ويَمُرّ؛ ومِلَفّ
+/// جَديد يَحمِل نِقاطاً وهُوَ غَير مُثَبَّت <b>يَحمَرّ</b>؛ ومِلَفّ
+/// مُثَبَّت لَم تَعُد فيه نُقطَة <b>يَحمَرّ</b> حَتّى يُرفَع.</para>
+/// </summary>
+public class EndpointBodyBleedTests
+{
+    /// <summary>سَقفُ أَسطُر المَنطِق داخِلَ أَجسام النِقاط، لِكُلّ
+    /// مِلَفّ. مَقيسٌ يَوم ‏2026-08-15 وشُدَّ إلى الواقِع حَرفاً، ولا
+    /// يُرفَع إلّا بِقَرار مَرئيّ في مُراجَعَة. وسَقفٌ أَوسَعُ مِن
+    /// الواقِع لا يَحرُس شَيئاً — أُوَّلُ صيغَةٍ هُنا وُضِعَت ‏3190
+    /// تَقديراً، وقاسَ الفاحِصُ ‏2778، فَشُدَّ. (القاعِدَة ١٠.)</summary>
+    private sealed record Ceiling(string File, int Lines);
+
+    private static readonly Ceiling[] PinnedCeilings =
+    {
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2778),
+    };
+
+    /// <summary>مَجموع أَسطُر المَنطِق في أَجسام النِقاط كُلِّها —
+    /// السَقف الأَعلى. هذا هُوَ <b>العَدَد الَّذي يَجِب أَن يَنزِل</b>
+    /// مَوجَةً بَعدَ مَوجَة.</summary>
+    private const int PinnedTotal = 2778;
+
+    /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
+    /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ
+    /// جَديدَة في القالِب تَرفَع هذا وَحدَه.</summary>
+    private const int PinnedEndpointCount = 99;
+
+    // ─── الفَحص ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void Logic_inside_endpoint_bodies_does_not_grow()
+    {
+        var byFile = Measure();
+
+        // عَدّاد: أَداةٌ تَفحَص صِفراً أَداةٌ عَمياء (القاعِدَة ١٠).
+        Assert.True(byFile.Count > 0, "أَداة عَمياء: لَم يُعَدّ جِسمُ نُقطَةٍ واحِدَة.");
+
+        var total = byFile.Values.Sum(v => v.Lines);
+        var count = byFile.Values.Sum(v => v.Endpoints);
+
+        Assert.True(total > 1000,
+            $"أَداة عَمياء: عُدَّ {total} سَطراً فَقَط — والمَقيس آلاف. " +
+            "اُنظُر StatementFrom قَبل أَن تُصَدِّق الرَقَم.");
+
+        var breaches = new List<string>();
+
+        foreach (var (file, m) in byFile.OrderBy(k => k.Key, StringComparer.Ordinal))
+        {
+            var pin = PinnedCeilings.FirstOrDefault(c => c.File == file);
+            if (pin is null)
+            {
+                breaches.Add($"مِلَفّ جَديد يَحمِل نِقاطاً وهُوَ غَير مُثَبَّت: {file}  ({m.Lines} سَطراً في {m.Endpoints} نُقطَة)");
+            }
+            else if (m.Lines > pin.Lines)
+            {
+                breaches.Add($"نَزيف: {file}  {pin.Lines} → {m.Lines} سَطراً");
+            }
+        }
+
+        foreach (var pin in PinnedCeilings)
+            if (!byFile.ContainsKey(pin.File))
+                breaches.Add($"سَقفٌ مُثَبَّت لِمِلَفّ لَم تَعُد فيه نُقطَة: {pin.File} — اِرفَعه.");
+
+        if (total > PinnedTotal)
+            breaches.Add($"المَجموع ارتَفَعَ: {PinnedTotal} → {total} سَطراً.");
+
+        if (count > PinnedEndpointCount)
+            breaches.Add($"عَدَد النِقاط ارتَفَعَ: {PinnedEndpointCount} → {count}.");
+
+        Assert.True(breaches.Count == 0,
+            "عَدّاد النَزيف أَحمَر — مَنطِقٌ جَديد كُتِبَ في جِسم نُقطَة:\n  " +
+            string.Join("\n  ", breaches) +
+            "\nالمَسار الصَحيح: مُعالِج Wolverine يَحقُن IDocumentSession، أَو خِدمَة " +
+            "تَأخُذ الجَلسَة وَسيطاً. وإن كانَ الدَين مَقصوداً فَارفَع السَقف هُنا " +
+            "في نَفس الكوميت وقُل لِماذا.");
+    }
+
+    /// <summary><b>والنِصف الَّذي يَمنَع السِجِلّ مِن أَن يَرِثّ</b>:
+    /// سَقفٌ أَوسَعُ مِن الواقِع بِفَرقٍ كَبير لا يَحرُس شَيئاً. يُقال
+    /// بِصَوتٍ ويَمُرّ — فَالشَدّ مَجّانيّ ولا يُعاقَب التَحسين
+    /// بِأَحمَر (دَرسُ الطَبَقَة الرابِعَة: النُزول مِن ‏129 إلى ‏120
+    /// أَحمَرَ بَوّابَةً وُجِدَت لِتُشَجِّعَه).</summary>
+    [Fact]
+    public void The_ledger_is_not_looser_than_reality_without_saying_so()
+    {
+        var byFile = Measure();
+        var total = byFile.Values.Sum(v => v.Lines);
+
+        if (total < PinnedTotal)
+            Console.WriteLine(
+                $"· السِجِلّ أَوسَع مِن الواقِع: {PinnedTotal} → {total} " +
+                $"({PinnedTotal - total} سَطراً). شَدُّه مَجّانيّ.");
+
+        foreach (var pin in PinnedCeilings)
+            if (byFile.TryGetValue(pin.File, out var m) && m.Lines < pin.Lines)
+                Console.WriteLine($"· {pin.File}: {pin.Lines} → {m.Lines}. شَدَّ السَقف.");
+
+        // لا تَكرار في السُقوف — سَقفانِ لِمِلَفٍّ واحِد يُخفيانِ أَحَدَهُما.
+        Assert.Equal(
+            PinnedCeilings.Select(c => c.File).Distinct(StringComparer.Ordinal).Count(),
+            PinnedCeilings.Length);
+    }
+
+    // ─── الأَدَوات ────────────────────────────────────────────────────
+
+    private sealed record FileMeasure(int Lines, int Endpoints);
+
+    /// <summary>لِكُلّ مِلَفّ: مَجموع الأَسطُر غَير الفارِغَة داخِلَ
+    /// أَجسام نِقاطِه، وعَدَد نِقاطِه. التَعليقات مُبَيَّضَة سَلَفاً
+    /// بِـ<c>StripComments</c> — فَسَطرُ تَعليقٍ يَصير فَراغاً ولا
+    /// يُعَدّ.</summary>
+    private static IReadOnlyDictionary<string, FileMeasure> Measure()
+    {
+        var byFile = new Dictionary<string, FileMeasure>(StringComparer.Ordinal);
+
+        foreach (var e in WriteEndpointGuardTests.AllMinimalApiEndpoints())
+        {
+            var lines = e.Body
+                .Split('\n')
+                .Count(l => !string.IsNullOrWhiteSpace(l));
+
+            byFile.TryGetValue(e.File, out var cur);
+            byFile[e.File] = new FileMeasure(
+                (cur?.Lines ?? 0) + lines,
+                (cur?.Endpoints ?? 0) + 1);
+        }
+
+        return byFile;
+    }
+}
