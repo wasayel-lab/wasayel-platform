@@ -351,6 +351,15 @@ static class Scripts
     'min-height','min-width','max-width','box-sizing','overflow-x','overflow-y',
     'inset-inline-start','inset-inline-end','top','bottom','z-index'];
 
+  // التَطبيع الثاني والأَخير: يُنزَع لافِت تَحديث عامِل الخِدمَة.
+  // وُجودُه لَيسَ مَظهَراً بَل دَورَة حَياة: يُنشِئُه JS عِندَ رَصد نُسخَة
+  // مُنتَظِرَة، فَيَظهَر أَحياناً ويَغيب أَحياناً في نَفس البِناء — قيسَ:
+  // تَفريغان مُتَتالِيان بِلا أَيّ تَغيير في المَصدَر اختَلَفا بِـ228
+  // سَطراً في ثَلاث صَفَحات، كُلُّها هذا العُنصُر وحدَه. وحُكمٌ يَتَقَلَّب
+  // بِلا سَبَبٍ في المَقيس لَيسَ حُكماً.
+  var upd = document.getElementById('ac-update-banner');
+  if (upd && upd.parentNode) upd.parentNode.removeChild(upd);
+
   var lines = [];
   var cs = getComputedStyle(document.documentElement);
   var names = [];
