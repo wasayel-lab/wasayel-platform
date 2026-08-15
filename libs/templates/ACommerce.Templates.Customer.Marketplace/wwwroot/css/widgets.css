@@ -442,7 +442,7 @@ input.ac-input[type="color"] {
     display: flex;
     width: 100%;
     padding:16px 20px;
-    font-size:1rem;
+    font-size:var(--ac-font-size-base);
     min-height: 50px;
     border-radius: var(--ac-radius-md, 12px);
 }
@@ -495,7 +495,7 @@ input.ac-input[type="color"] {
     display: block;
     margin-bottom: 8px;
     font-weight: var(--ac-font-weight-bold);
-    font-size:0.875rem;
+    font-size:var(--ac-font-size-sm);
     color: var(--ac-text);
 }
 .form-label + .form-input,
@@ -506,7 +506,7 @@ input.ac-input[type="color"] {
     width: 100%;
     padding:8px 16px;
     font-family: inherit;
-    font-size: 1rem;
+    font-size: var(--ac-font-size-base);
     line-height: 1.4;
     color: var(--ac-text);
     background: var(--ac-surface);
@@ -825,13 +825,13 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     color: var(--ac-text, #111827);
     border: 1px solid var(--ac-border, #e5e7eb);
     padding: 3px 8px;
-    border-radius: 999px;
+    border-radius: var(--ac-radius-pill);
     font-size: 0.75rem;
     line-height: 1.4;
     white-space: nowrap;
 }
 .ac-attr-chip i { font-size: 0.85rem; opacity: 0.75; }
-.ac-attr-chip-val { font-weight: 600; }
+.ac-attr-chip-val { font-weight: var(--ac-font-weight-bold); }
 .ac-attr-chip-unit { opacity: 0.6; margin-inline-start: 2px; }
 
 .ac-attr-grid {
@@ -843,7 +843,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
 .ac-attr-tile {
     background: var(--ac-card-bg, #fff);
     border: 1px solid var(--ac-border, #e5e7eb);
-    border-radius: 10px;
+    border-radius: var(--ac-radius-md);
     padding: 12px;
     text-align: center;
     transition: transform 120ms, box-shadow 120ms;
@@ -852,16 +852,16 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
 .ac-attr-tile-icon { font-size: 1.4rem; color: var(--ac-primary, #0d6efd); margin-bottom: 6px; }
 .ac-attr-tile-label { font-size: 0.75rem; color: var(--ac-text-muted, #6b7280); margin-bottom: 4px; }
 .ac-attr-tile-value { font-weight: 700; color: var(--ac-text, #111827); }
-.ac-attr-tile-unit { font-size: 0.75rem; opacity: 0.6; margin-inline-start: 3px; font-weight: 400; }
+.ac-attr-tile-unit { font-size: 0.75rem; opacity: 0.6; margin-inline-start: 3px; font-weight: var(--ac-font-weight-normal); }
 
 .ac-attr-editor { display: flex; flex-direction: column; gap: 14px; }
 .ac-attr-field { display: flex; flex-direction: column; gap: 6px; }
 .ac-attr-field-label {
     display: flex; align-items: center; gap: 6px;
-    font-weight: 600; font-size: 0.875rem; color: var(--ac-text, #111827);
+    font-weight: var(--ac-font-weight-bold); font-size: var(--ac-font-size-sm); color: var(--ac-text, #111827);
 }
 .ac-attr-field-label i { color: var(--ac-primary, #0d6efd); }
-.ac-attr-field-unit { color: var(--ac-text-muted, #6b7280); font-weight: 400; margin-inline-start: 4px; }
+.ac-attr-field-unit { color: var(--ac-text-muted, #6b7280); font-weight: var(--ac-font-weight-normal); margin-inline-start: 4px; }
 .ac-attr-required { color: var(--ac-danger, #dc2626); font-weight: 700; }
 
 .ac-attr-multi { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -870,7 +870,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     padding: 6px 10px;
     border: 1px solid var(--ac-border, #e5e7eb);
     background: var(--ac-surface, #fafafa);
-    border-radius: 999px; cursor: pointer;
+    border-radius: var(--ac-radius-pill); cursor: pointer;
     font-size: 0.8125rem; user-select: none;
     transition: background 120ms, border-color 120ms;
 }
@@ -910,7 +910,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     outline: none;
     background: transparent;
     color: var(--ac-text, #111827);
-    font-size: 14px;
+    font-size: var(--ac-font-size-base);
     font-family: inherit;
     min-height: 24px;
     padding: 0;
@@ -956,7 +956,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     width: 56px;
     height: 56px;
     min-height: 56px;
-    border-radius: 999px;
+    border-radius: var(--ac-radius-pill);
     background: color-mix(in srgb, var(--ac-primary, #0d6efd) 12%, transparent);
     color: var(--ac-primary, #0d6efd);
 }
@@ -1015,7 +1015,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     border: 1px solid var(--ac-border, #e5e7eb);
     border-radius: var(--ac-radius-sm, 4px);
     font-size: 11px;
-    font-weight: 600;
+    font-weight: var(--ac-font-weight-bold);
     color: var(--ac-text, #111827);
 }
 .ac-space-fav {
@@ -1029,7 +1029,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     height: 32px;
     background: var(--ac-surface, #ffffff);
     border: 1px solid var(--ac-border, #e5e7eb);
-    border-radius: 999px;
+    border-radius: var(--ac-radius-pill);
     color: var(--ac-text, #111827);
     cursor: pointer;
 }
@@ -1045,8 +1045,8 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     padding: 12px;
 }
 .ac-space-title {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--ac-font-size-base);
+    font-weight: var(--ac-font-weight-bold);
     margin: 0;
     color: var(--ac-text, #111827);
     overflow: hidden;
@@ -1067,8 +1067,8 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
 }
 .ac-space-price {
     margin-top: 4px;
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--ac-font-size-base);
+    font-weight: var(--ac-font-weight-bold);
     color: var(--ac-primary, #0d6efd);
 }
 
@@ -1082,7 +1082,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
 }
 .ac-section-title {
     font-size: 16px;
-    font-weight: 600;
+    font-weight: var(--ac-font-weight-bold);
     margin: 0;
     color: var(--ac-text, #111827);
 }
@@ -1134,7 +1134,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
 }
 .ac-hero-subtitle {
     font-size: 13px;
-    font-weight: 400;
+    font-weight: var(--ac-font-weight-normal);
     margin: 0 0 16px;
     color: rgba(255, 255, 255, 0.85);
 }
@@ -1176,7 +1176,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     justify-content: center;
     width: 48px;
     height: 48px;
-    border-radius: 999px;
+    border-radius: var(--ac-radius-pill);
     background: rgba(255, 255, 255, 0.2);
     color: inherit;
     flex-shrink: 0;
@@ -1187,7 +1187,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
 }
 .ac-cta-text { flex: 1; min-width: 0; }
 .ac-cta-title {
-    font-size: 14px;
+    font-size: var(--ac-font-size-base);
     font-weight: 700;
     margin: 0 0 2px;
     color: inherit;
@@ -1234,7 +1234,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     justify-content: center;
     width: 56px;
     height: 56px;
-    border-radius: 999px;
+    border-radius: var(--ac-radius-pill);
     background: rgba(255, 255, 255, 0.18);
     color: inherit;
 }
@@ -1244,7 +1244,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
 }
 .ac-action-label {
     font-size: 13px;
-    font-weight: 600;
+    font-weight: var(--ac-font-weight-bold);
     color: inherit;
     text-align: center;
 }
@@ -1273,7 +1273,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     gap: 6px;
     padding: 8px 12px;
     min-height: 36px;
-    border-radius: 999px;
+    border-radius: var(--ac-radius-pill);
     border: 1px solid var(--ac-border, #e5e7eb);
     background: var(--ac-surface, #ffffff);
     color: var(--ac-text, #111827);
@@ -1376,7 +1376,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
 .ac-sheet-handle-bar {
     width: 40px;
     height: 4px;
-    border-radius: 999px;
+    border-radius: var(--ac-radius-pill);
     background: var(--ac-border-dark, #94a3b8);
 }
 .ac-sheet-body {
@@ -1502,7 +1502,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
 .ac-topnav-link-active {
     background: color-mix(in srgb, var(--ac-primary, #0d6efd) 12%, transparent);
     color: var(--ac-primary, #0d6efd);
-    font-weight: 600;
+    font-weight: var(--ac-font-weight-bold);
 }
 .ac-topnav-badge {
     position: absolute;
@@ -1511,7 +1511,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     min-width: 16px;
     height: 16px;
     padding: 0 4px;
-    border-radius: 999px;
+    border-radius: var(--ac-radius-pill);
     background: var(--ac-danger, #dc3545);
     color: #ffffff;
     font-size: 10px;
@@ -1558,7 +1558,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     width: 36px;
     height: 36px;
     border: 0;
-    border-radius: 999px;
+    border-radius: var(--ac-radius-pill);
     background: rgba(255, 255, 255, 0.9);
     color: var(--ac-text, #111827);
     cursor: pointer;
@@ -1643,7 +1643,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     border-radius: var(--ac-radius-md, 8px);
     color: var(--ac-primary, #0d6efd);
     font-size: 11px;
-    font-weight: 600;
+    font-weight: var(--ac-font-weight-bold);
     cursor: pointer;
     font-family: inherit;
     min-height: 32px;
@@ -1690,7 +1690,7 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
     width: 28px;
     height: 28px;
     border: 0;
-    border-radius: 999px;
+    border-radius: var(--ac-radius-pill);
     background: transparent;
     color: var(--ac-text-muted, #6b7280);
     cursor: pointer;
@@ -1768,7 +1768,7 @@ body.ac-dark .acm-details-circle-btn { background: rgba(30, 41, 59, 0.92); color
     font-family: inherit;
 }
 .ac-citypicker-option:hover { background: var(--ac-bg-alt, #f3f4f6); }
-.ac-citypicker-option-active { background: color-mix(in srgb, var(--ac-primary, #0d6efd) 15%, transparent); color: var(--ac-primary, #0d6efd); font-weight: 600; }
+.ac-citypicker-option-active { background: color-mix(in srgb, var(--ac-primary, #0d6efd) 15%, transparent); color: var(--ac-primary, #0d6efd); font-weight: var(--ac-font-weight-bold); }
 
 /* ── AcVersionGate ──────────────────────────────────────────────────── */
 .ac-vergate {
@@ -1798,12 +1798,12 @@ body.ac-dark .acm-details-circle-btn { background: rgba(30, 41, 59, 0.92); color
     justify-content: center;
     width: 80px;
     height: 80px;
-    border-radius: 999px;
+    border-radius: var(--ac-radius-pill);
     background: color-mix(in srgb, var(--ac-primary, #0d6efd) 12%, transparent);
     color: var(--ac-primary, #0d6efd);
 }
 .ac-vergate-title { font-size: 20px; font-weight: 700; margin: 0; color: var(--ac-text, #111827); }
-.ac-vergate-body { font-size: 14px; color: var(--ac-text-muted, #6b7280); margin: 0; }
+.ac-vergate-body { font-size: var(--ac-font-size-base); color: var(--ac-text-muted, #6b7280); margin: 0; }
 .ac-vergate-versions {
     display: flex;
     gap: 16px;
@@ -1820,7 +1820,7 @@ body.ac-dark .acm-details-circle-btn { background: rgba(30, 41, 59, 0.92); color
     font-size: 12px;
     color: var(--ac-text-muted, #6b7280);
 }
-.ac-vergate-version strong { color: var(--ac-text, #111827); font-size: 14px; }
+.ac-vergate-version strong { color: var(--ac-text, #111827); font-size: var(--ac-font-size-base); }
 .ac-vergate-actions { width: 100%; }
 
 /* ── AcPaymentForm ──────────────────────────────────────────────────── */
@@ -1851,7 +1851,7 @@ body.ac-dark .acm-details-circle-btn { background: rgba(30, 41, 59, 0.92); color
 .acm-taxo-btn {
   display:flex; align-items:center; gap:8px;
   width:100%; padding:8px 12px;
-  background:transparent; border:1px solid transparent; border-radius:8px;
+  background:transparent; border:1px solid transparent; border-radius:var(--ac-radius-sm);
   cursor:pointer; text-align:start;
   color: inherit; font: inherit;
   transition: background .12s, border-color .12s;
@@ -1860,7 +1860,7 @@ body.ac-dark .acm-details-circle-btn { background: rgba(30, 41, 59, 0.92); color
 .acm-taxo-btn.is-selected {
   background: var(--ac-primary-50, rgba(20,80,60,.08));
   border-color: var(--ac-primary, #2e7d6b);
-  font-weight: 600;
+  font-weight: var(--ac-font-weight-bold);
 }
 .acm-taxo-caret { width: 12px; color: var(--ac-text-muted, #888); }
 .acm-taxo-icon  { color: var(--ac-text-muted, #888); }
@@ -1897,7 +1897,7 @@ body.ac-dark .acm-details-circle-btn { background: rgba(30, 41, 59, 0.92); color
   padding: 6px 12px;
   background: var(--ac-surface, #f5f5f5);
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--ac-radius-pill);
   cursor: pointer;
   font: inherit; color: inherit;
   white-space: nowrap;
@@ -1909,7 +1909,7 @@ body.ac-dark .acm-details-circle-btn { background: rgba(30, 41, 59, 0.92); color
   border-color: var(--ac-primary, #2e7d6b);
   color: #fff;
 }
-.acm-taxo-chip-icon { font-size: 14px; line-height: 1; }
+.acm-taxo-chip-icon { font-size: var(--ac-font-size-base); line-height: 1; }
 .acm-taxo-chips-sub .acm-taxo-chip {
   background: transparent;
   border: 1px solid rgba(0,0,0,.12);

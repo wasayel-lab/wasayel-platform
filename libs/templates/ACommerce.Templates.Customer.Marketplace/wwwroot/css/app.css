@@ -73,8 +73,13 @@ body.ac-dark {
 
 html, body {
     font-family: var(--ac-font-family);
+    /* ‏14px يَبقى حَرفِيّاً هُنا وَحدَه، وهو الاستِثناء الوَحيد في المَوجَة:
+       ‏--ac-font-size-base قيمَتُه 1rem، و rem يُقاس مِن **هذا** العُنصُر
+       نَفسِه — فَـ`html{font-size:1rem}` تَرجِع إلى 16px الابتِدائيَّة
+       فَيَنزاح السُلَّم كُلُّه. القيمَة هُنا هي مَرجِع الـrem لا
+       مُستَهلِكُه. (كُشِفَ بِبَوّابَة النَمَط المَحسوب، لا بِالعَين.) */
     font-size: 14px;
-    line-height: 1.5;
+    line-height: var(--ac-line-height-base);
     margin: 0;
     background: var(--ac-bg);
     color: var(--ac-text);
@@ -202,7 +207,7 @@ main {
     justify-content: center;
     width: 40px;
     height: 40px;
-    border-radius: 999px;
+    border-radius: var(--ac-radius-pill);
     background: rgba(255, 255, 255, 0.18);
 }
 .acm-brand-text {
@@ -243,7 +248,7 @@ main {
 .acs-nafath-wait { text-align: center; }
 .acs-nafath-instruction {
     color: var(--ac-muted);
-    font-size: 14px;
+    font-size: var(--ac-font-size-base);
     margin-bottom: 16px;
     text-align: center;
 }
@@ -439,7 +444,7 @@ main {
 .acs-plans-compare {
     width: 100%;
     border-collapse: collapse;
-    font-size: 14px;
+    font-size: var(--ac-font-size-base);
 }
 .acs-plans-compare th,
 .acs-plans-compare td {
@@ -487,7 +492,7 @@ main {
     font-size: 12px;
 }
 .acs-chat-attach-preview button {
-    background: transparent; border: none; cursor: pointer; font-size: 14px;
+    background: transparent; border: none; cursor: pointer; font-size: var(--ac-font-size-base);
 }
 .acs-chat-attach {
     display: inline-flex;
@@ -596,14 +601,14 @@ main {
     color: var(--ac-text);
     padding: 4px;
 }
-.acs-recent-chip button.rm { color: var(--ac-text-muted); font-size: 14px; }
+.acs-recent-chip button.rm { color: var(--ac-text-muted); font-size: var(--ac-font-size-base); }
 
 /* ── Vertical category list (Search page) — صفّ لكل فئة، أوضح على الجوّال
       من شبكة 3-أعمدة لأنّ أسماء الفئات قد تطول. */
 .acs-category-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .acs-category-row {
   display: flex; align-items: center; gap: 12px;
-  padding: 12px 14px; border-radius: 10px;
+  padding: 12px 14px; border-radius: var(--ac-radius-md);
   background: var(--ac-surface, #fff); border: 1px solid var(--ac-border, #e5e7eb);
   cursor: pointer; text-align: start; width: 100%;
   transition: background-color .15s ease;
@@ -613,11 +618,11 @@ main {
 }
 .acs-category-row__icon {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; border-radius: 8px;
+  width: 36px; height: 36px; border-radius: var(--ac-radius-sm);
   background: var(--ac-primary-soft, #eef2ff); color: var(--ac-primary, #1d4ed8);
   flex-shrink: 0;
 }
-.acs-category-row__label { flex: 1; font-weight: 600; color: var(--ac-text, #111827); }
+.acs-category-row__label { flex: 1; font-weight: var(--ac-font-weight-bold); color: var(--ac-text, #111827); }
 .acs-category-row__chev  { color: var(--ac-text-muted, #6b7280); }
 
 /* ── Report-listing wrapper — يحاذي زرّ AcButton(ghost) في المنتصف
@@ -738,7 +743,7 @@ main {
 .acs-chat-day-sep span {
     padding: 2px 10px;
     background: rgba(0,0,0,.03);
-    border-radius: 10px;
+    border-radius: var(--ac-radius-md);
     white-space: nowrap;
 }
 
@@ -755,8 +760,8 @@ main {
     max-width: 78%;
     padding: 10px 14px;
     border-radius: 18px;
-    line-height: 1.5;
-    font-size: 14px;
+    line-height: var(--ac-line-height-base);
+    font-size: var(--ac-font-size-base);
     word-break: break-word;
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
@@ -873,7 +878,7 @@ main {
   display: flex; align-items: baseline; justify-content: space-between;
   margin-bottom: 12px;
 }
-.ejar-chats-head h1 { margin: 0; font-size: 1.25rem; font-weight: 700; }
+.ejar-chats-head h1 { margin: 0; font-size: var(--ac-font-size-lg); font-weight: 700; }
 
 .ejar-chat-list {
   list-style: none; padding: 0; margin: 12px 0 0;
@@ -911,7 +916,7 @@ main {
   gap: 8px; min-width: 0;
 }
 .ejar-chat-name {
-  font-weight: 600; font-size: 0.95rem; color: var(--ac-text, #1f2937);
+  font-weight: var(--ac-font-weight-bold); font-size: 0.95rem; color: var(--ac-text, #1f2937);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .ejar-chat-time {

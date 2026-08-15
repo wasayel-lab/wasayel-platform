@@ -27,8 +27,28 @@
 # the single largest piece of visual debt these five layers measure, and it
 # is recorded here rather than fixed, because collapsing 42 font sizes into
 # 4 is a design decision with visible consequences on every screen.
+#
+# ── 2026-08-15: font-sizes 42 -> 39, and why the other three did not move ─
+# 182 declarations whose literal equalled an existing token EXACTLY were
+# rewritten to var(--ac-…) — proven zero-change against the computed style
+# of 1,298 elements on 8 pages.  Only the typographic count moved, because
+# only there did the app's de-facto scale intersect the token scale:
+#
+#   font-size   14px / 1rem / .875rem / 1.25rem / 1.5rem  ← ON the scale
+#   radius      8 / 10 / 14 / 999 px                      ← ON the scale
+#   spacing     4 / 8 / 12 / 16 / 20 px                   ← the token scale
+#                                                            is 3.5/7/14/21/28
+#                                                            (rem × 14px root):
+#                                                            ONE value in common
+#   colour      the invariant tokens matched 2 literal sites in the sheets
+#
+# So `spacings|34` is NOT laziness: substituting 12px or 16px for a token
+# worth 14px is a visible change, and substituting only the accidental 14px
+# would make a third of one row scale under density while its neighbours
+# stay pinned — worse than uniform literals.  The measured decision table is
+# docs/THEME-DEBT-DECISIONS.md.
 
 colours|129
 spacings|34
-font-sizes|42
+font-sizes|39
 icon-sizes|16
