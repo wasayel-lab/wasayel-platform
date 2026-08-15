@@ -44,10 +44,31 @@ no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Componen
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/StudioShell.razor|1
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/UpgradePrompt.razor|1
 
-# ── no-raw-bootstrap-button (1) ──────────────────────────────────────────
-# `<button class="btn btn-primary">` in the SHARED error state — the one
-# widget every failure path renders.  Should be AcButton.
-no-raw-bootstrap-button|libs/templates/ACommerce.Templates.Shared/AcErrorState.razor|1
+# ── no-raw-bootstrap-button (0) — RETIRED 2026-08-15 ─────────────────────
+# `<button class="btn btn-primary">` in AcErrorState is now <AcButton>.
+#
+# TWO CORRECTIONS to what this entry used to claim, both measured:
+#
+# 1. "the one widget every failure path renders" is FALSE.  `AcErrorState`
+#    has ZERO consumers — `grep -r "<AcErrorState"` over every .razor is
+#    empty, while its siblings run AcEmptyState 38 files, AcLoadingState 24,
+#    AcBottomNav 1.  The failure paths actually render AcEmptyState with
+#    IconName="alert-circle" (GatedPage.razor:49, IncubatorStudy.razor:33).
+#    So this was never "every failure path"; it was dead markup.  The claim
+#    is corrected rather than quietly dropped, because a ledger that
+#    overstates a cost is as misleading as one that understates it.
+#
+# 2. The button was NOT unstyled.  widgets.css:397-421 ships a `.btn` /
+#    `.btn-primary` compatibility shim, so it rendered close to `.ac-btn`
+#    already.  The measured delta of the swap, when it ever renders:
+#      padding      8px 20px -> 12px 24px
+#      line-height  1.2      -> 1.4
+#      type         (absent, i.e. "submit" inside a form) -> "button"
+#    The third is the only one that is a defect rather than a difference.
+#
+# Deleting AcErrorState outright is the rule-1 answer (no consumer, no
+# abstraction) and is item D-2 in docs/THEME-DEBT-DECISIONS.md — deleting a
+# component is the owner's call; making it correct is not.
 
 # ── unlinked-rcl-css (0) — RETIRED 2026-08-15 ────────────────────────────
 # Was the heaviest finding of this layer: two referenced libraries shipped a

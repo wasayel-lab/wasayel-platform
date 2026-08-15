@@ -20,7 +20,7 @@
     }
     @if (OnRetry.HasDelegate)
     {
-        <button class="btn btn-primary" @onclick="OnRetry">@(RetryLabel ?? "أعد المحاولة")</button>
+        <AcButton Variant="primary" OnClick="@(_ => OnRetry.InvokeAsync())">@(RetryLabel ?? "أعد المحاولة")</AcButton>
     }
 </div>
 
