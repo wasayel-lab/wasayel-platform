@@ -1,7 +1,7 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|396
-DISTINCT|319
+TOTAL|371
+DISTINCT|295
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|40
@@ -12,7 +12,7 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/A
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AuditLogPage.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/CreateTenant.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorFixturesPage.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorWizard.razor|26
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorWizard.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/QualityMonitor.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantAttributes.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantCategories.razor|2

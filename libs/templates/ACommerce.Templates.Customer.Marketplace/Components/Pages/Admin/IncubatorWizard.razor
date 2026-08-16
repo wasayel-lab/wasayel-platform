@@ -1,6 +1,7 @@
 @page "/admin/incubator/{id:guid}"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.FeasibilityAnalysisService Incubator
 @inject NavigationManager Nav
+@inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 
 @*
@@ -12,7 +13,7 @@
 <div class="acs-page acm-admin" style="max-width:640px;margin:0 auto;">
     @if (session is null)
     {
-        <AcEmptyState IconName="info" Title="الجَلسَة غَير مَوجودَة" />
+        <AcEmptyState IconName="info" Title="@L["admin.study.not_found"]" />
     }
     else if (session.Status != IncubatorStatus.Discovery)
     {
@@ -21,14 +22,14 @@
         <div style="text-align:center;padding-top:12px;">
             <span style="font-size:42px;"><AcIcon Name="@(session.Status == IncubatorStatus.Failed ? "alert-circle" : "target")" Size="42" /></span>
             <h1 class="acm-wizard-title">
-                @(session.Status == IncubatorStatus.Failed ? "تَعَذَّرَ التَّحليل" : "النَّمَط المُقتَرَح")
+                @(session.Status == IncubatorStatus.Failed ? L["admin.wizard.analysis_failed"] : L["studio.study.section_pattern"])
             </h1>
         </div>
         <AcCard>
             <ChildContent>
                 <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
                     <strong style="font-size:18px;">@PatternLabel(session.SuggestedPattern)</strong>
-                    <span class="ac-chip ac-chip-sm">ثِقَة: @ConfidenceLabel(session.PatternConfidence)</span>
+                    <span class="ac-chip ac-chip-sm">@L.Markup("admin.wizard.confidence_label") @ConfidenceLabel(session.PatternConfidence)</span>
                 </div>
                 <p style="color:var(--ac-text-muted);font-size:14px;line-height:1.8;margin:0;">
                     @session.PatternReasoning
@@ -38,22 +39,22 @@
 
         @if (session.Status == IncubatorStatus.Failed && !string.IsNullOrEmpty(session.AnalysisError))
         {
-            <AcAlert Variant="danger" Message="@($"السَّبَب: {Truncate(session.AnalysisError, 240)}")" />
+            <AcAlert Variant="danger" Message="@($"{L["admin.wizard.reason_prefix"]} {Truncate(session.AnalysisError, 240)}")" />
         }
 
         <div style="display:flex;gap:8px;margin-top:16px;">
             <form method="post" action="/admin/incubator/restart" style="flex:0;">
-                <button type="submit" class="ac-btn ac-btn-ghost">↺ جَلسَة جَديدَة</button>
+                <button type="submit" class="ac-btn ac-btn-ghost">@L.Markup("admin.wizard.new_session")</button>
             </form>
             @if (session.Status == IncubatorStatus.Completed)
             {
                 <a class="ac-btn ac-btn-primary ac-btn-block"
-                   href="@($"/admin/incubator/{session.Id}/study")">عَرض الدِراسَة ←</a>
+                   href="@($"/admin/incubator/{session.Id}/study")">@L.Markup("admin.wizard.view_study")</a>
             }
             else if (session.Status == IncubatorStatus.Analyzing)
             {
                 <a class="ac-btn ac-btn-primary ac-btn-block"
-                   href="@($"/admin/incubator/{session.Id}/study")"><AcIcon Name="clock" Size="16" /> التَّحليل جارٍ — عَرض</a>
+                   href="@($"/admin/incubator/{session.Id}/study")"><AcIcon Name="clock" Size="16" /> @L.Markup("admin.wizard.analyzing_link")</a>
             }
             else
             {
@@ -63,15 +64,14 @@
                     <button type="submit" class="ac-btn ac-btn-primary ac-btn-block"
                             disabled="@(!Incubator.IsConfigured)">
                         <AcIcon Name="star" Size="18" />
-                        @(session.Status == IncubatorStatus.Failed ? "إعادَة التَّحليل" : "حَلِّل الآن")
+                        @(session.Status == IncubatorStatus.Failed ? L["admin.wizard.reanalyze"] : L["admin.wizard.analyze_now"])
                     </button>
                 </form>
             }
         </div>
         @if (!Incubator.IsConfigured)
         {
-            <p style="text-align:center;color:var(--ac-text-muted);font-size:12px;margin-top:8px;">
-                التَّحليل مُعَطَّل — لا مِفتاح LLM مَضبوط.
+            <p style="text-align:center;color:var(--ac-text-muted);font-size:12px;margin-top:8px;">@((MarkupString)"\n                ")@L.Markup("admin.wizard.llm_disabled")@((MarkupString)"\n            ")
             </p>
         }
     }
@@ -82,7 +82,7 @@
         var q = DiscoveryQuestionBank.At(idx);
         if (q is null)
         {
-            <AcLoadingState Message="جارٍ التَّحضير…" />
+            <AcLoadingState Message="@L["admin.wizard.preparing"]" />
         }
         else
         {
@@ -91,8 +91,7 @@
                     <div style="height:100%;background:var(--ac-primary);
                                 width:@((idx * 100 / DiscoveryQuestionBank.Count))%;"></div>
                 </div>
-                <span style="font-size:12px;color:var(--ac-text-muted);">
-                    سؤال @(idx + 1) مِن @DiscoveryQuestionBank.Count
+                <span style="font-size:12px;color:var(--ac-text-muted);">@((MarkupString)"\n                    ")@L.Markup("admin.wizard.question_word") @(idx + 1) @L.Markup("admin.wizard.question_of") @DiscoveryQuestionBank.Count
                 </span>
             </div>
 
@@ -107,8 +106,7 @@
                                       placeholder="اكتُب وَصفاً واضِحاً…"
                                       style="width:100%;resize:vertical;"></textarea>
                             <button type="submit" class="ac-btn ac-btn-primary ac-btn-block"
-                                    style="margin-top:12px;">
-                                إنهاء وَاقتِراح النَّمَط ←
+                                    style="margin-top:12px;">@((MarkupString)"\n                                ")@L.Markup("admin.wizard.finish")@((MarkupString)"\n                            ")
                             </button>
                         }
                         else
@@ -125,8 +123,7 @@
                                 }
                             </div>
                             <button type="submit" class="ac-btn ac-btn-primary ac-btn-block"
-                                    style="margin-top:16px;">
-                                التالي ←
+                                    style="margin-top:16px;">@((MarkupString)"\n                                ")@L.Markup("admin.wizard.next")@((MarkupString)"\n                            ")
                             </button>
                         }
                     </form>
@@ -158,18 +155,18 @@
         return count;
     }
 
-    static string PatternLabel(string p) => p switch
+    string PatternLabel(string p) => p switch
     {
-        "marketplace" => "المَتجَر مُتَعَدِّد البائِعين",
-        "classifieds" => "الإعلانات المُبَوَّبَة",
-        "rental"      => "التَّأجير",
-        "ondemand"    => "الطَّلَبات حَسَب المَوقِع",
-        _             => "تَكوين مُخَصَّص"
+        "marketplace" => L["admin.wizard.pattern_marketplace"],
+        "classifieds" => L["admin.wizard.pattern_classifieds"],
+        "rental"      => L["admin.wizard.pattern_rental"],
+        "ondemand"    => L["admin.wizard.pattern_ondemand"],
+        _             => L["admin.wizard.pattern_custom"]
     };
 
-    static string ConfidenceLabel(string c) => c switch
+    string ConfidenceLabel(string c) => c switch
     {
-        "high" => "عالِيَة", "medium" => "مُتَوَسِّطَة", _ => "مُنخَفِضَة"
+        "high" => L["admin.wizard.confidence_high"], "medium" => L["admin.wizard.confidence_medium"], _ => L["admin.wizard.confidence_low"]
     };
 
     static string Truncate(string s, int n) => s.Length <= n ? s : s[..n] + "…";
