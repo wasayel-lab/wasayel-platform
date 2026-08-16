@@ -8,39 +8,15 @@
 #   وصِنفُها نَفسُ صِنفِ `<option value="عَرَبيّ">` في نَموذَج
 #   التَبليغ: قيمَةٌ تُخَزَّن، لا تَسمِيَةٌ تُقرَأ.
 # ــــــــــــــــــــــــــــــــــــــــــــــــــ
-TOTAL|111
-DISTINCT|86
+TOTAL|36
+DISTINCT|34
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|9
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|5
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/FlowExplainer.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AuditLogPage.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/CreateTenant.razor|4
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorFixturesPage.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorWizard.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/QualityMonitor.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantAttributes.razor|4
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantCategories.razor|2
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantRegions.razor|4
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/ChatRoom.razor|2
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/CreateListing.razor|3
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Landing.razor|2
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyDealDetail.razor|2
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MySearches.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Notifications.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppAttributes.razor|4
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppCategories.razor|2
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppDealDetail.razor|4
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppListings.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppRegions.razor|4
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppTicketDetail.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioConsent.razor|10
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioNewIdea.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudy.razor|10
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudy.razor|8
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantHome.razor|3
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantListingDetail.razor|15
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/RiderCreateRequest.razor|2
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/StudioShell.razor|2
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantListingDetail.razor|6
 libs/templates/ACommerce.Templates.Shared/AcErrorState.razor|2
 libs/widgets/ACommerce.Widgets/AcAttrEditor.razor|3
 libs/widgets/ACommerce.Widgets/AcAttrGrid.razor|2

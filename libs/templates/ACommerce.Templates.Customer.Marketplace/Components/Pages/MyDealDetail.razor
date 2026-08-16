@@ -159,7 +159,7 @@
             }
 
             <form method="post" action="@($"/{Slug}/deals/{deal.Id}/cancel")" style="margin-top:8px;">
-                <input name="reason" class="ac-input" placeholder="سَبَب الإلغاء (اختياريّ)" style="margin-bottom:6px;" />
+                <input name="reason" class="ac-input" placeholder="@L["deals.detail.cancel_reason_placeholder"]" style="margin-bottom:6px;" />
                 <AcButton Type="submit" Variant="ghost" Block="true" Text="@L["deals.detail.cancel_action"]" />
             </form>
         }
@@ -182,7 +182,7 @@
                                 </select>
                             </AcField>
                             <AcField Label="@L["deals.detail.review_comment"]">
-                                <textarea name="body" class="ac-input" rows="2" placeholder="كَيف كانَت التَّجرِبَة؟"></textarea>
+                                <textarea name="body" class="ac-input" rows="2" placeholder="@L["deals.detail.review_placeholder"]"></textarea>
                             </AcField>
                             <AcButton Type="submit" Variant="primary" Block="true" Text="@L["deals.detail.review_submit"]" />
                         </form>

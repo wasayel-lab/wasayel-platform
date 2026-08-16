@@ -94,9 +94,9 @@
                                     <div class="ac-chip-input" data-districts>
                                         @foreach (var d in kids)
                                         {
-                                            <span class="ac-chip-tag"><span class="t">@d</span><button type="button" aria-label="حَذف">×</button></span>
+                                            <span class="ac-chip-tag"><span class="t">@d</span><button type="button" aria-label="@L["admin.tenant_regions.remove_district"]">×</button></span>
                                         }
-                                        <input class="ac-chip-entry" placeholder="أَضِف حَيّاً ثُمَّ Enter" />
+                                        <input class="ac-chip-entry" placeholder="@L["admin.tenant_regions.district_placeholder"]" />
                                     </div>
                                 </div>
                             </div>
@@ -122,13 +122,13 @@
         <template id="city-row-tpl">
             <div class="ac-editor-row" data-city-row>
                 <div class="ac-editor-row-head">
-                    <input class="ac-input ac-city-name" placeholder="اسم المَدينَة" />
+                    <input class="ac-input ac-city-name" placeholder="@L["admin.tenant_regions.city_name_placeholder"]" />
                     <button type="button" class="ac-icon-btn" data-remove-city aria-label="@L["admin.tenant_regions.remove_city"]"><AcIcon Name="x" Size="14" /></button>
                 </div>
                 <div>
                     <span class="ac-chip-input-label">@L.Markup("admin.tenant_regions.districts_label")</span>
                     <div class="ac-chip-input" data-districts>
-                        <input class="ac-chip-entry" placeholder="أَضِف حَيّاً ثُمَّ Enter" />
+                        <input class="ac-chip-entry" placeholder="@L["admin.tenant_regions.district_placeholder"]" />
                     </div>
                 </div>
             </div>

@@ -157,13 +157,13 @@ else
                         <AcField Label="@L["listings.create.field_title"]" Required="true">
                             <input type="text" name="title" required maxlength="120"
                                    class="ac-input"
-                                   placeholder="مَثَلاً: شَقّة قَريبَة مِن الجامِعَة" />
+                                   placeholder="@L["listings.create.title_placeholder"]" />
                         </AcField>
 
                         <AcField Label="@L["listings.create.field_description"]" Required="true">
                             <textarea name="description" rows="4" maxlength="2000" required
                                       class="ac-input" style="resize:vertical;font-family:inherit;"
-                                      placeholder="تَفاصيل العَرض، المُمَيِّزات، شُروط التَواصُل…"></textarea>
+                                      placeholder="@L["listings.create.desc_placeholder"]"></textarea>
                         </AcField>
 
                         @* السِعر — حَقل عامّ. كانَ هُنا حَقل "وَحدَة الإيجار"
@@ -219,7 +219,7 @@ else
                             </AcField>
                             <AcField Label="@L["listings.create.field_district"]" Required="true">
                                 <input type="text" name="district" required maxlength="60"
-                                       class="ac-input" placeholder="حَوبان" />
+                                       class="ac-input" placeholder="@L["listings.create.district_placeholder"]" />
                             </AcField>
                         </div>
                     </ChildContent>

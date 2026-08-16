@@ -27,8 +27,7 @@
             <button type="button" class="ac-btn ac-btn-primary ac-btn-sm"
                     onclick="acEnableNotifications().then(ok => {
                         if (ok) document.getElementById('ac-push-banner').style.display='none';
-                    });">
-                تَفعيل
+                    });">@((MarkupString)"\n                ")@L.Markup("notifications.push.enable")@((MarkupString)"\n            ")
             </button>
         </div>
     </div>

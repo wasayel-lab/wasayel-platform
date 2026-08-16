@@ -21,7 +21,7 @@
             <aside class="studio-sidebar">
                 <div class="studio-sidebar-brand">
                     <img src="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-lockup-white.svg"
-                         alt="وَسايِل" height="34" />
+                         alt="@L["shell.seo.site_name"]" height="34" />
                 </div>
                 <nav class="studio-nav">
                     <a class="studio-nav-item @(Active == "home" ? "active" : "")" href="/studio">
@@ -51,7 +51,7 @@
                     <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;">
                         <div style="width:34px;height:34px;border-radius:50%;background:var(--st-primary);
                                     display:grid;place-items:center;color:#fff;font-weight:700;">
-                            @((Auth.UserName ?? "؟").FirstOrDefault())
+                            @((Auth.UserName ?? L["studio.nav.avatar_fallback"]).FirstOrDefault())
                         </div>
                         <div style="flex:1;min-width:0;">
                             <div style="font-size:13px;color:var(--ac-text-on-dark);font-weight:600;">@Auth.UserName</div>

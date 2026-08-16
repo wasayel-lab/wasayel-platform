@@ -41,7 +41,7 @@
                يَقلِبُه ديناميكِيّاً فَتَتَبَدَّل بايتاتُه (‏مَراجِع رَقَمِيَّة،
                و`<input …>` يَصير `<input … />`). نَفس مُؤَجَّل `alt` في
                `Landing`، ومَقيسٌ هُناكَ بِبَوّابَةٍ احمَرَّت. *@
-            <input type="hidden" name="title"                value="طَلَب مِشوار" />
+            <input type="hidden" name="title"                value="@L["rider.request.submit_label"]" />
             <input type="hidden" name="attr_accepts_offers"  value="true" />
 
             <AcCard>
@@ -76,7 +76,7 @@
                         @* و`placeholder` كَذلك مُؤَجَّلَة — `<textarea>` ساكِن بِالكامِل. *@
                         <textarea name="description" rows="3" maxlength="400"
                                   class="ac-input" style="resize:vertical;font-family:inherit;"
-                                  placeholder="مَثَلاً: مَع طِفل، أَو وَزن أَمتِعَة، أَو وَقت الوُصول المُفَضَّل…"></textarea>
+                                  placeholder="@L["rider.request.notes_placeholder"]"></textarea>
                     </AcField>
 
                     <AcField Label="@(L.Format("rider.request.suggested_price", Money.Unit(style: MoneyUnitStyle.Name)))">

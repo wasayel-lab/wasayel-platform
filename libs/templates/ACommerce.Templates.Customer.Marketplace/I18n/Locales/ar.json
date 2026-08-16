@@ -1572,5 +1572,84 @@
   "pwa.unsupported.body": "مُتَصَفِّحك لا يَدعَم تَثبيت PWA. جَرِّب Chrome أَو Edge أَو Safari (iOS).",
   "pwa.update.ready": "تَحديث جَديد جاهِز",
   "trips.arrived.checking": "جارٍ التَّحَقُّق…",
-  "trips.arrived.need_location": "يَجِب السَّماح بِالوُصول لِلمَوقِع"
+  "trips.arrived.need_location": "يَجِب السَّماح بِالوُصول لِلمَوقِع",
+
+  "listings.create.desc_placeholder": "تَفاصيل العَرض، المُمَيِّزات، شُروط التَواصُل…",
+  "listings.create.district_placeholder": "حَوبان",
+  "listings.create.title_placeholder": "مَثَلاً: شَقّة قَريبَة مِن الجامِعَة",
+
+  "deals.detail.cancel_reason_placeholder": "سَبَب الإلغاء (اختياريّ)",
+  "deals.detail.review_placeholder": "كَيف كانَت التَّجرِبَة؟",
+
+  "admin.wizard.desc_placeholder": "اكتُب وَصفاً واضِحاً…",
+
+  "admin.tenant_regions.city_name_placeholder": "اسم المَدينَة",
+  "admin.tenant_regions.district_placeholder": "أَضِف حَيّاً ثُمَّ Enter",
+  "admin.tenant_regions.remove_district": "حَذف",
+
+  "studio.app_ticket.reply_placeholder": "اكتُب رَدَّكَ هُنا…",
+
+  "studio.consent.item1_body": "الدِراسات يُولِّدها نَموذَج ذَكاء اصطِناعيّ بِناءً على بيانات السوق المُتاحَة. قَد تَحتَوي عَلى تَخمينات.",
+  "studio.consent.item1_title": "١. مُحتَوى مُولَّد آلِيّاً.",
+  "studio.consent.item2_body": "أَنتَ المَسؤول الوَحيد عَن أَيّ قَرار استِثماريّ أَو تَشغيليّ تَبنيه عَلى التَّحليل. المَنصَّة لَيسَت بَديلاً عَن مَشورَة قانونيَّة/مُحاسَبيَّة.",
+  "studio.consent.item2_title": "٢. مَسؤوليَّة القَرار.",
+  "studio.consent.item3_body": "نَحفَظ بَياناتِكَ (هاتِف، أَفكار، تَحاليل) لِاستِخدامِها في تَحسين الخِدمَة. لا نُشارِكها مَع أَطراف ثالِثَة.",
+  "studio.consent.item3_title": "٣. الخُصوصِيَّة.",
+  "studio.consent.item4_body": "الباقات لَها حُدود شَهريَّة. تُعاد كُلّ ٣٠ يَوم. الدَّفع مُسَجَّل كَ نِيَّة فَقَط في هذه المَرحَلَة (لا يَتِم تَحصيل).",
+  "studio.consent.item4_title": "٤. الباقات.",
+  "studio.consent.item5_body": "قَد نُحَدِّث الشُروط. التَّحديث يَتَطَلَّب قَبولاً جَديداً. التَّحاليل القَديمَة تَبقى صالِحَة ٦ أَشهُر.",
+  "studio.consent.item5_title": "٥. التَّحديثات.",
+
+  "studio.app_attrs.name_placeholder": "اسم الحَقل (عَرَبي)",
+  "studio.app_attrs.option_placeholder": "مَثَلاً: شَقّة",
+  "studio.app_attrs.remove_option": "حَذف",
+
+  "notifications.push.enable": "تَفعيل",
+
+  "landing.idea.placeholder": "مَثَلاً: مَنصَّة تَربِط أَصحاب المَطاعِم بِمَورّدي الخُضار في الرياض بِنِظام عُمولَة…",
+
+  "studio.app_regions.city_name_placeholder": "اسم المَدينَة",
+  "studio.app_regions.district_placeholder": "أَضِف حَيّاً ثُمَّ Enter",
+  "studio.app_regions.remove_district": "حَذف",
+
+  "admin.new.cat_icon_label": "أَيقونَة",
+  "admin.new.cat_name_example": "اسم الفِئَة (مَثَلاً: شَقَق)",
+  "admin.new.cat_name_placeholder": "اسم الفِئَة",
+
+  "studio.new.idea_placeholder": "مَثَلاً: مَنصَّة تَربِط أَصحاب المَطاعِم بِمَورّدي الخُضار في الرياض بِنِظام عُمولَة على كُلّ طَلَبيَّة…",
+
+  "chats.room.expired": "انتَهَت صَلاحِيَّة هذه المُحادَثَة. لا يُمكِن إرسال رَسائِل جَديدَة.",
+  "chats.room.input_placeholder": "اِكتُب رسالَة…",
+
+  "admin.tenant_attrs.name_placeholder": "اسم الحَقل (عَرَبي)",
+  "admin.tenant_attrs.option_placeholder": "مَثَلاً: شَقّة",
+  "admin.tenant_attrs.remove_option": "حَذف",
+
+  "rider.request.notes_placeholder": "مَثَلاً: مَع طِفل، أَو وَزن أَمتِعَة، أَو وَقت الوُصول المُفَضَّل…",
+  "rider.request.submit_label": "طَلَب مِشوار",
+
+  "studio.study.refine_placeholder": "مَثَلاً: الأَرقام مُتَفائِلَة جِدّاً، رَكِّز على سيناريو مُتَحَفِّظ; أَو: أَضِف منافِساً «س» الَّذي لَم تَذكُره",
+
+  "studio.deal.cancel_placeholder": "سَبَب الإلغاء",
+  "studio.deal.dispute_placeholder": "سَبَب النِزاع",
+  "studio.deal.note_placeholder": "مُلاحَظَة (اختياريَّة)",
+  "studio.deal.review_placeholder": "كَيف كانَت التَّجرِبَة؟",
+
+  "listings.detail.offer_details_placeholder": "تَفاصيل عَرضِكَ",
+  "listings.detail.offer_note_placeholder": "مَثَلاً: عَلَيَّ ٥ دَقائِق لِأَصِل، أَو سَيَّارَتي عائِليَّة",
+  "listings.detail.offer_price_placeholder": "مَثَلاً 50",
+  "listings.detail.report_duplicate": "إعلان مُكَرَّر",
+  "listings.detail.report_improper": "مُحتَوى غَير لائِق",
+  "listings.detail.report_misleading": "مَعلومات مُضَلِّلَة",
+  "listings.detail.report_note_placeholder": "تَفاصيل تُساعِد فَريق المُراجَعَة…",
+  "listings.detail.report_other": "سَبَب آخَر",
+  "listings.detail.report_scam": "اشتِباه نَصَب",
+
+  "searches.new.name_placeholder": "مَشاوير حَدّة",
+
+  "studio.app_listings.hide_reason_placeholder": "سَبَب الإخفاء",
+
+  "pwa.pill.install_label": "تَثبيت التَطبيق",
+
+  "studio.nav.avatar_fallback": "؟"
 }

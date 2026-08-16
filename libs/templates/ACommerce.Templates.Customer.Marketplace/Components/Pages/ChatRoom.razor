@@ -70,8 +70,7 @@ else
     @if (conv.IsExpired)
     {
         <div style="text-align:center;padding:16px;background:var(--ac-bg-alt);
-                    border-radius:var(--ac-radius-md);color:var(--ac-text-muted);">
-            انتَهَت صَلاحِيَّة هذه المُحادَثَة. لا يُمكِن إرسال رَسائِل جَديدَة.
+                    border-radius:var(--ac-radius-md);color:var(--ac-text-muted);">@((MarkupString)"\n            ")@L.Markup("chats.room.expired")@((MarkupString)"\n        ")
         </div>
     }
     else
@@ -79,7 +78,7 @@ else
         <form method="post" action="@($"/{Slug}/chats/{ConversationId}/send")" class="acs-chat-composer">
             <input type="text" name="body" class="ac-input"
                    style="flex:1;padding:10px;border:1px solid var(--ac-border);border-radius:var(--ac-radius-sm);"
-                   placeholder="اِكتُب رسالَة…" required autofocus />
+                   placeholder="@L["chats.room.input_placeholder"]" required autofocus />
             <button type="submit"
                     style="padding:10px 18px;background:var(--ac-primary);color:var(--ac-on-primary);border:0;
                            border-radius:var(--ac-radius-sm);cursor:pointer;font-weight:600;

@@ -29,7 +29,7 @@
                `<img …>`. ولا حَرفَ يَتَبَدَّل مِمّا يُرى — لكِنّ
                البَوّابَة بايتِيَّة، وإرخاؤُها قَرار مالِك لا قَرار مَوجَة. *@
             <img src="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-lockup-color.svg"
-                 alt="وَسايِل" class="landing-brand-logo" height="36" />
+                 alt="@L["shell.seo.site_name"]" class="landing-brand-logo" height="36" />
         </div>
         @if (StudioAuthSvc.IsAuthenticated)
         {
@@ -57,7 +57,7 @@
             @* و`placeholder` كَذلك — نَفس السَبَب: `<textarea>` هُنا ساكِن
                بِالكامِل. (‏انظُر التَعليق على `alt` أَعلاه.) *@
             <textarea name="prompt" required
-                      placeholder="مَثَلاً: مَنصَّة تَربِط أَصحاب المَطاعِم بِمَورّدي الخُضار في الرياض بِنِظام عُمولَة…"></textarea>
+                      placeholder="@L["landing.idea.placeholder"]"></textarea>
             <div class="landing-prompt-bar">
                 <span class="landing-prompt-hint">@L.Markup("landing.prompt.hint")</span>
                 <button type="submit" class="st-btn st-btn-primary">@((MarkupString)"\n                    ")@L.Markup("landing.prompt.submit")@((MarkupString)"\n                ")

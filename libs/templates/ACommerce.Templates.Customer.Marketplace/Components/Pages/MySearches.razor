@@ -37,7 +37,7 @@
                 <form method="post" action="@($"/{Slug}/searches/save")">
                     <AcField Label="@(L["searches.field.label"])" Required="true">
                         <input type="text" name="label" required maxlength="80"
-                               class="ac-input" placeholder="مَشاوير حَدّة" />
+                               class="ac-input" placeholder="@L["searches.new.name_placeholder"]" />
                     </AcField>
                     @if (tenant is not null && tenant.Categories.Count > 0)
                     {

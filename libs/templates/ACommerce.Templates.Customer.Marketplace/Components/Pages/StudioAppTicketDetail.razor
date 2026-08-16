@@ -82,7 +82,7 @@
                 <div class="st-section-title">@L.Markup("studio.app_tickets.reply_unit")</div>
                 <form method="post" action="@($"/studio/apps/{Slug}/tickets/{ticket.Id}/reply")" class="st-card">
                     <textarea class="st-textarea" name="body" rows="4" required
-                              placeholder="اكتُب رَدَّكَ هُنا…"></textarea>
+                              placeholder="@L["studio.app_ticket.reply_placeholder"]"></textarea>
                     <div style="display:flex;gap:8px;margin-top:12px;">
                         <button type="submit" class="st-btn st-btn-primary">@L.Markup("studio.app_ticket.reply_send")</button>
                     </div>

@@ -103,7 +103,7 @@
                         @if (q.Type == "text")
                         {
                             <textarea name="answer" rows="5" required class="ac-input"
-                                      placeholder="اكتُب وَصفاً واضِحاً…"
+                                      placeholder="@L["admin.wizard.desc_placeholder"]"
                                       style="width:100%;resize:vertical;"></textarea>
                             <button type="submit" class="ac-btn ac-btn-primary ac-btn-block"
                                     style="margin-top:12px;">@((MarkupString)"\n                                ")@L.Markup("admin.wizard.finish")@((MarkupString)"\n                            ")

@@ -108,9 +108,9 @@
                                             @foreach (var o in f.Options)
                                             {
                                                 var label = o.Contains('=') ? o.Substring(o.IndexOf('=') + 1) : o;
-                                                <span class="ac-chip-tag" data-raw="@o"><span class="t">@label</span><button type="button" aria-label="حَذف">×</button></span>
+                                                <span class="ac-chip-tag" data-raw="@o"><span class="t">@label</span><button type="button" aria-label="@L["studio.app_attrs.remove_option"]">×</button></span>
                                             }
-                                            <input class="ac-chip-entry" placeholder="مَثَلاً: شَقّة" />
+                                            <input class="ac-chip-entry" placeholder="@L["studio.app_attrs.option_placeholder"]" />
                                         </div>
                                     </div>
                                 </div>
@@ -135,7 +135,7 @@
                 <template id="attr-row-tpl">
                     <div class="ac-editor-row" data-attr-row>
                         <div class="ac-editor-row-head">
-                            <input class="ac-input ac-attr-name" placeholder="اسم الحَقل (عَرَبي)" />
+                            <input class="ac-input ac-attr-name" placeholder="@L["studio.app_attrs.name_placeholder"]" />
                             <button type="button" class="ac-icon-btn" data-remove-attr aria-label="@L["studio.app_attrs.remove_field"]"><AcIcon Name="x" Size="14" /></button>
                         </div>
                         <div class="ac-editor-grid2">
@@ -160,7 +160,7 @@
                         <div class="ac-attr-options" data-options style="display:none;">
                             <span class="ac-chip-input-label">@L.Markup("studio.app_attrs.options_label")</span>
                             <div class="ac-chip-input" data-opts>
-                                <input class="ac-chip-entry" placeholder="مَثَلاً: شَقّة" />
+                                <input class="ac-chip-entry" placeholder="@L["studio.app_attrs.option_placeholder"]" />
                             </div>
                         </div>
                     </div>

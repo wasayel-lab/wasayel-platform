@@ -233,7 +233,7 @@
               href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.svg" />
         <link rel="apple-touch-icon"
               href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png" />
-        <meta name="apple-mobile-web-app-title" content="وَسايِل" />
+        <meta name="apple-mobile-web-app-title" content="@L["shell.seo.site_name"]" />
     }
 
     <HeadOutlet />
@@ -246,12 +246,12 @@
     {
         <div id="ac-install-banner" class="ac-pwa-pill" style="display:none;">
             <button type="button" onclick="acInstall()" class="ac-pwa-pill-cta"
-                    aria-label="تَثبيت التَطبيق">
+                    aria-label="@L["pwa.pill.install_label"]">
                 <span class="ac-pwa-pill-icon">⤓</span>
-                <span class="ac-pwa-pill-text">تَثبيت</span>
+                <span class="ac-pwa-pill-text">@L.Markup("pwa.pill.install")</span>
             </button>
             <button type="button" onclick="acDismissInstall()" class="ac-pwa-pill-x"
-                    aria-label="إغلاق">✕</button>
+                    aria-label="@L["common.action.close"]">✕</button>
         </div>
     }
     <Routes />

@@ -343,7 +343,7 @@ else
                         <AcField Label="@L.Format("listings.detail.offer_price_label", Money.Unit(style: MoneyUnitStyle.Name))" Required="true">
                             <input type="number" name="price" required min="1" step="1"
                                    class="ac-input ac-input-lg" inputmode="numeric"
-                                   placeholder="مَثَلاً 50" autofocus />
+                                   placeholder="@L["listings.detail.offer_price_placeholder"]" autofocus />
                         </AcField>
 
                         <details>
@@ -351,7 +351,7 @@ else
                             </summary>
                             <textarea name="message" rows="2" maxlength="200"
                                       class="ac-input" style="margin-top:6px;resize:vertical;font-family:inherit;"
-                                      placeholder="مَثَلاً: عَلَيَّ ٥ دَقائِق لِأَصِل، أَو سَيَّارَتي عائِليَّة"></textarea>
+                                      placeholder="@L["listings.detail.offer_note_placeholder"]"></textarea>
                         </details>
 
                         <button type="button" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
@@ -472,7 +472,7 @@ else
                                        value="@((int)listing.Price)" />
                             </AcField>
                             <AcField Label="@L["listings.detail.note_label"]">
-                                <input name="note" class="ac-input" placeholder="تَفاصيل عَرضِكَ" />
+                                <input name="note" class="ac-input" placeholder="@L["listings.detail.offer_details_placeholder"]" />
                             </AcField>
                             <button type="submit" class="ac-btn ac-btn-outline-primary ac-btn-block">@((MarkupString)"\n                                ")@L.Markup("listings.detail.send_offer")@((MarkupString)"\n                            ")
                             </button>
@@ -512,16 +512,16 @@ else
                     <AcField Label="@L["listings.detail.reason_label"]" Required="true">
                         <select name="reason" required class="ac-input">
                             <option value="">@L.Markup("listings.detail.reason_choose")</option>
-                            <option value="مُكَرَّر">إعلان مُكَرَّر</option>
-                            <option value="مُضَلِّل">مَعلومات مُضَلِّلَة</option>
-                            <option value="غَير لائِق">مُحتَوى غَير لائِق</option>
-                            <option value="نَصَب">اشتِباه نَصَب</option>
-                            <option value="آخَر">سَبَب آخَر</option>
+                            <option value="مُكَرَّر">@L.Markup("listings.detail.report_duplicate")</option>
+                            <option value="مُضَلِّل">@L.Markup("listings.detail.report_misleading")</option>
+                            <option value="غَير لائِق">@L.Markup("listings.detail.report_improper")</option>
+                            <option value="نَصَب">@L.Markup("listings.detail.report_scam")</option>
+                            <option value="آخَر">@L.Markup("listings.detail.report_other")</option>
                         </select>
                     </AcField>
                     <AcField Label="@L["listings.detail.note_optional"]">
                         <textarea name="note" rows="3" maxlength="500" class="ac-input"
-                                  style="resize:vertical;" placeholder="تَفاصيل تُساعِد فَريق المُراجَعَة…"></textarea>
+                                  style="resize:vertical;" placeholder="@L["listings.detail.report_note_placeholder"]"></textarea>
                     </AcField>
                     <button type="submit" class="ac-btn ac-btn-danger">
                         <AcIcon Name="send" Size="14" /> @L.Markup("listings.detail.send_report")@((MarkupString)"\n                    ")

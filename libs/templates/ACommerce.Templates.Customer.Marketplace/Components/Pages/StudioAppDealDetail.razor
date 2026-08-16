@@ -78,7 +78,7 @@
                     {
                         <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/advance")"
                               style="display:flex;gap:8px;flex:1;min-width:200px;">
-                            <input class="st-input" name="note" placeholder="مُلاحَظَة (اختياريَّة)" />
+                            <input class="st-input" name="note" placeholder="@L["studio.deal.note_placeholder"]" />
                             <button type="submit" class="st-btn st-btn-primary" style="white-space:nowrap;">
                                 → @DealsPolicy.LabelAr(next)
                             </button>
@@ -86,14 +86,14 @@
                     }
                     <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/dispute")"
                           style="display:flex;gap:8px;flex:1;min-width:200px;">
-                        <input class="st-input" name="reason" placeholder="سَبَب النِزاع" />
+                        <input class="st-input" name="reason" placeholder="@L["studio.deal.dispute_placeholder"]" />
                         <button type="submit" class="st-btn st-btn-ghost" style="white-space:nowrap;color:var(--st-danger);">
                             <AcIcon Name="alert-circle" Size="16" /> @L.Markup("studio.deal.dispute")@((MarkupString)"\n                        ")
                         </button>
                     </form>
                     <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/cancel")"
                           style="display:flex;gap:8px;flex:1;min-width:200px;">
-                        <input class="st-input" name="reason" placeholder="سَبَب الإلغاء" />
+                        <input class="st-input" name="reason" placeholder="@L["studio.deal.cancel_placeholder"]" />
                         <button type="submit" class="st-btn st-btn-ghost" style="white-space:nowrap;">@((MarkupString)"\n                            ")@L.Markup("studio.deal.cancel")@((MarkupString)"\n                        ")
                         </button>
                     </form>
@@ -150,7 +150,7 @@
                         <div class="st-field" style="margin:0;grid-column:1/-1;">
                             <label class="st-label">@L.Markup("studio.deal.comment")</label>
                             <textarea class="st-textarea" name="body" rows="3" required
-                                      placeholder="كَيف كانَت التَّجرِبَة؟"></textarea>
+                                      placeholder="@L["studio.deal.review_placeholder"]"></textarea>
                         </div>
                         <button type="submit" class="st-btn st-btn-primary" style="grid-column:1/-1;">@((MarkupString)"\n                            ")@L.Markup("studio.deal.review_submit")@((MarkupString)"\n                        ")
                         </button>
