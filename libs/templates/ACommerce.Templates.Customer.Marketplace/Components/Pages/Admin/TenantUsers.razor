@@ -2,6 +2,7 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantAdminQueries TenantAdmin
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard Guard
+@inject L L
 
 @*
     إدارَة مُستَخدِمي المَتجَر — قائِمَة مَع الدَور النَّشِط لِكُلّ مُستَخدِم
@@ -13,7 +14,7 @@
 <div class="acs-page acm-admin">
     @if (tenant is null)
     {
-        <AcEmptyState IconName="info" Title="المَتجَر غَير مَوجود" />
+        <AcEmptyState IconName="info" Title="@L["admin.tenant.not_found"]" />
     }
     else
     {
@@ -26,21 +27,21 @@
                 <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@backHref">
                     <AcIcon Name="arrow-right" Size="16" />
                 </a>
-                <h1 class="acm-wizard-title" style="margin:0;">مُستَخدِمو @tenant.Name</h1>
+                <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("admin.tenant_users.title_prefix") @tenant.Name</h1>
             </div>
-            <span class="ac-chip ac-chip-sm">@users.Count مُستَخدِم</span>
+            <span class="ac-chip ac-chip-sm">@users.Count @L.Markup("admin.tenant_users.count_unit")</span>
         </div>
 
-        @if (Saved == "1") { <AcAlert Variant="success" Message="تَمّ التَّحديث." /> }
+        @if (Saved == "1") { <AcAlert Variant="success" Message="@L["admin.tenant_users.updated"]" /> }
         @if (!hasAdminRole)
         {
             <AcAlert Variant="warning"
-                     Message="هذا المَتجَر لا يَحوي دَور tenant_admin بَعد. اِذهَب إلى صَفحَة الأَدوار وَ ضَع علامَة عَلَيه أَوَّلاً." />
+                     Message="@L["admin.tenant_users.no_admin_role"]" />
         }
 
         @if (users.Count == 0)
         {
-            <AcEmptyState IconName="user" Title="لا مُستَخدِمين بَعد" />
+            <AcEmptyState IconName="user" Title="@L["admin.tenant_users.empty"]" />
         }
         else
         {
@@ -59,8 +60,7 @@
                                     </span>
                                     @if (!string.IsNullOrEmpty(u.ActiveRole))
                                     {
-                                        <span style="color:var(--ac-text-muted);font-size:11px;display:block;">
-                                            الدَور: @RoleLabel(u.ActiveRole)
+                                        <span style="color:var(--ac-text-muted);font-size:11px;display:block;">@((MarkupString)"\n                                            ")@L.Markup("admin.tenant_users.role_label") @RoleLabel(u.ActiveRole)
                                         </span>
                                     }
                                 </div>
@@ -71,8 +71,7 @@
                                         <form method="post"
                                               action="@($"/admin/tenants/{Slug}/users/{u.Id}/revoke-admin")"
                                               style="margin:0;">
-                                            <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">
-                                                سَحب الإدارَة
+                                            <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">@((MarkupString)"\n                                                ")@L.Markup("admin.tenant_users.revoke")@((MarkupString)"\n                                            ")
                                             </button>
                                         </form>
                                     }
@@ -82,7 +81,7 @@
                                               action="@($"/admin/tenants/{Slug}/users/{u.Id}/grant-admin")"
                                               style="margin:0;">
                                             <button type="submit" class="ac-btn ac-btn-primary ac-btn-sm">
-                                                <AcIcon Name="check" Size="14" /> مَنح إدارَة
+                                                <AcIcon Name="check" Size="14" /> @L.Markup("admin.tenant_users.grant")@((MarkupString)"\n                                            ")
                                             </button>
                                         </form>
                                     }

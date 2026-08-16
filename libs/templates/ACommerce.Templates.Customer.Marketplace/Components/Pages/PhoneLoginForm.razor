@@ -1,3 +1,4 @@
+@inject L L
 @if (Stage != "verify")
 {
     <form method="post" action="@($"/{Slug}/auth/phone/login")">
@@ -5,7 +6,7 @@
         {
             <input type="hidden" name="as" value="@AsRole" />
         }
-        <AcField Label="رَقم الهاتف" Required="true">
+        <AcField Label="@L["auth.phone.label_phone"]" Required="true">
             <input type="tel" name="phone" value="@Phone" required pattern="[0-9]{9,15}"
                    class="ac-input" style="direction:ltr;font-size:16px;"
                    placeholder="7XXXXXXXX" />
@@ -14,7 +15,7 @@
         {
             <AcAlert Variant="danger">@ErrorMessage</AcAlert>
         }
-        <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="إرسال الكود" />
+        <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="@L["auth.otp.send_code"]" />
     </form>
 }
 else
@@ -25,9 +26,9 @@ else
         {
             <input type="hidden" name="as" value="@AsRole" />
         }
-        <p class="acs-nafath-instruction">أَدخِل الكود المُرسَل إلى <strong>@Phone</strong></p>
+        <p class="acs-nafath-instruction">@L.Markup("auth.otp.code_sent_to") <strong>@Phone</strong></p>
 
-        <AcField Label="الكود" Required="true">
+        <AcField Label="@L["auth.otp.label_code"]" Required="true">
             <input type="text" name="code" required minlength="4" maxlength="6"
                    pattern="[0-9]{4,6}" autofocus
                    class="ac-input" style="direction:ltr;font-size:18px;
@@ -37,16 +38,15 @@ else
 
         <div class="acs-nafath-state acs-nafath-state--ok mt-2" style="display:flex;gap:6px;align-items:center;">
             <AcIcon Name="info" Size="16" />
-            <span>وَضع التَطوير — الكود: <strong>123456</strong></span>
+            <span>@L.Markup("auth.otp.dev_code") <strong>123456</strong></span>
         </div>
 
         @if (ErrorMessage is not null) { <AcAlert Variant="danger">@ErrorMessage</AcAlert> }
 
-        <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="تَحَقُّق ودُخول" />
+        <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="@L["auth.otp.verify"]" />
         <a href="@AuthSession.LinkFor(Slug, AsRole, $"login")"
            style="display:block;text-align:center;margin-top:10px;
-                  color:var(--ac-text-muted);font-size:13px;text-decoration:none;">
-            تَغيير الرَقم
+                  color:var(--ac-text-muted);font-size:13px;text-decoration:none;">@((MarkupString)"\n            ")@L.Markup("auth.phone.change_number")@((MarkupString)"\n        ")
         </a>
     </form>
 }

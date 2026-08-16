@@ -5,6 +5,7 @@
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
 @inject IServiceProvider Sp
+@inject L L
 
 @*
     صَفحَة دُخول SSR. لا Blazor interactivity — كلّ شَيء forms POST عاديّة
@@ -37,11 +38,11 @@
             location.replace('@bouncePath');
         })();
     </script>
-    <p style="text-align:center;padding:20px;">جارٍ التَّحويل…</p>
+    <p style="text-align:center;padding:20px;">@L.Markup("auth.login.redirecting")</p>
 }
 else if (!Tenant.IsResolved)
 {
-    <p>المَتجَر غير مَوجود.</p>
+    <p>@L.Markup("auth.login.tenant_missing")</p>
 }
 else
 {
@@ -51,7 +52,7 @@ else
                 <AcIcon Name="@ChannelIcon" Size="24" />
             </div>
             <h1 class="ac-auth-title">@Tenant.Name</h1>
-            <p class="ac-auth-sub">تَسجيل الدُخول بِـ @ChannelLabel</p>
+            <p class="ac-auth-sub">@L.Markup("auth.login.sub_prefix") @ChannelLabel</p>
 
             @{
                 // الـ URL يَتَفَوَّق عَلى الـ query: لَو وُجِدَ /r/{role}/login نَتَجاهَل ?as=
@@ -76,7 +77,7 @@ else
             }
 
             <p class="ac-auth-back">
-                <a href="@($"/{Slug}")">← العَودَة لِـ @Tenant.Name</a>
+                <a href="@($"/{Slug}")">@L.Markup("auth.login.back_to") @Tenant.Name</a>
             </p>
         </div>
     </div>
@@ -106,9 +107,9 @@ else
 
     string ChannelLabel => Tenant.AuthChannel switch
     {
-        "nafath" => "نَفاذ",
-        "email"  => "البَريد الإلِكترونيّ",
-        _        => "الهاتِف"
+        "nafath" => L["auth.channel.nafath"],
+        "email"  => L["auth.channel.email_full"],
+        _        => L["auth.channel.phone_full"]
     };
 
     /// <summary>كود المُزَوِّد الوَهميّ إن كانَ هو المُسَجَّل — نَقرَؤُه مِن
@@ -121,13 +122,13 @@ else
 
     string? ErrorMessage => Err switch
     {
-        "phone_required" => "اِكتُب رَقم الهاتف.",
-        "email_required" => "اِكتُب البَريد الإلِكترونيّ.",
-        "email_invalid"  => "صيغَة البَريد غَير صَحيحَة.",
-        "send_failed"    => "تَعَذَّرَ إرسال الكود. حاوِل بَعد قَليل.",
-        "code_invalid"   => "الكود غير صَحيح أو انتَهَت صَلاحِيَّته.",
-        "nid_required"   => "اِكتُب رَقم الهُويَّة.",
-        "not_approved"   => "لم يُؤَكَّد بَعد. حاوِل مَرَّة أُخرى.",
+        "phone_required" => L["auth.login.err_phone_required"],
+        "email_required" => L["auth.login.err_email_required"],
+        "email_invalid"  => L["auth.login.err_email_invalid"],
+        "send_failed"    => L["auth.login.err_send_failed"],
+        "code_invalid"   => L["auth.login.err_code_invalid"],
+        "nid_required"   => L["auth.login.err_nid_required"],
+        "not_approved"   => L["auth.login.err_not_approved"],
         _                => null
     };
 }

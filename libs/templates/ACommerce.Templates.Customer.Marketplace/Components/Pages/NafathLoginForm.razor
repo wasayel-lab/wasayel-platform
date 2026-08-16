@@ -1,3 +1,4 @@
+@inject L L
 @if (Stage != "verify")
 {
     <form method="post" action="@($"/{Slug}/auth/nafath/login")">
@@ -5,14 +6,14 @@
         {
             <input type="hidden" name="as" value="@AsRole" />
         }
-        <AcField Label="رَقم الهُويَّة الوَطَنِيَّة" Required="true">
+        <AcField Label="@L["auth.nafath.label_nid"]" Required="true">
             <input type="tel" name="nid" value="@NationalId" required pattern="[0-9]{10}" maxlength="10"
                    class="ac-input" style="direction:ltr;font-size:18px;
                           text-align:center;letter-spacing:.2em;"
                    placeholder="1XXXXXXXXX" />
         </AcField>
         @if (ErrorMessage is not null) { <AcAlert Variant="danger">@ErrorMessage</AcAlert> }
-        <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="بَدء التَحَقُّق عَبر نَفاذ" />
+        <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="@L["auth.nafath.start"]" />
     </form>
 }
 else
@@ -25,8 +26,7 @@ else
             <input type="hidden" name="as" value="@AsRole" />
         }
 
-        <p class="acs-nafath-instruction" style="text-align:center;">
-            اِفتَح تَطبيق <strong>نَفاذ</strong> في جَوّالك واختَر الرَقم المَوضَح:
+        <p class="acs-nafath-instruction" style="text-align:center;">@((MarkupString)"\n            ")@L.Markup("auth.nafath.open_app") <strong>@L.Markup("auth.channel.nafath")</strong> @L.Markup("auth.nafath.pick_code")@((MarkupString)"\n        ")
         </p>
 
         <div class="acs-nafath-code-wrap">
@@ -37,18 +37,17 @@ else
 
         <div class="acs-nafath-state acs-nafath-state--waiting" style="margin-top:10px;text-align:center;display:flex;gap:6px;align-items:center;justify-content:center;">
             <AcIcon Name="clock" Size="16" />
-            <span>وَضع التَطوير: يُعتَبَر مُؤَكَّداً تلقائيّاً بَعد 5 ثَوانٍ</span>
+            <span>@L.Markup("auth.nafath.dev_auto") 5 @L.Markup("auth.nafath.seconds")</span>
         </div>
 
         @if (ErrorMessage is not null) { <AcAlert Variant="danger">@ErrorMessage</AcAlert> }
 
         <AcButton Type="submit" Variant="primary" Size="lg" Block="true"
-                  Text="تَأكَّدت في تَطبيق نَفاذ — أَكمِل الدُخول" />
+                  Text="@L["auth.nafath.confirm"]" />
 
         <a href="@AuthSession.LinkFor(Slug, AsRole, $"login")"
            style="display:block;text-align:center;margin-top:10px;
-                  color:var(--ac-text-muted);font-size:13px;text-decoration:none;">
-            تَغيير الرَقم
+                  color:var(--ac-text-muted);font-size:13px;text-decoration:none;">@((MarkupString)"\n            ")@L.Markup("auth.nafath.change_nid")@((MarkupString)"\n        ")
         </a>
     </form>
 }

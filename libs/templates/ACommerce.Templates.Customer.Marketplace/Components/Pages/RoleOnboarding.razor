@@ -3,6 +3,7 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
+@inject L L
 
 @*
     صَفحَة جَمع بَيانات الدَور — تُفتَح بَعد اختِيار الدَور. تَعرِض حُقول
@@ -13,8 +14,8 @@
 <div class="acs-page">
 @if (!Auth.IsAuthenticated)
 {
-    <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
-                  ActionLabel="تَسجيل دُخول" ActionHref="@AuthSession.LinkFor(Slug, Role, $"login")" />
+    <AcEmptyState IconName="user" Title="@L["me.onboarding.need_login"]"
+                  ActionLabel="@L["auth.action.login"]" ActionHref="@AuthSession.LinkFor(Slug, Role, $"login")" />
 }
 else if (user is null || tenant is null || activeRole is null)
 {
@@ -23,18 +24,16 @@ else if (user is null || tenant is null || activeRole is null)
 else if (activeRole.Fields.Count == 0)
 {
     @* لا بَيانات لِجَمعِها — تَخَطّ مُباشَرَة *@
-    <AcEmptyState IconName="check-circle" Title="جاهِز!"
-                  ActionLabel="ابدَأ" ActionHref="@HomeUrl" />
+    <AcEmptyState IconName="check-circle" Title="@L["me.onboarding.ready"]"
+                  ActionLabel="@L["me.onboarding.start"]" ActionHref="@HomeUrl" />
 }
 else
 {
     var roleValues = user.RoleAttributesJson.TryGetValue(activeRole.Slug, out var rv)
         ? rv : new Dictionary<string, string>();
 
-    <h1 class="acm-wizard-title"><AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(activeRole.Icon, "user")" Size="22" /> بَيانات @activeRole.Label</h1>
-    <p style="color:var(--ac-text-muted);font-size:14px;margin-bottom:16px;">
-        اِملأ الحُقول المَطلوبَة لِتُصبِح جاهِزاً لِلاستِخدام. يُمكِنُكَ تَحديث
-        البَيانات لاحِقاً مِن المَلَفّ الشَخصيّ.
+    <h1 class="acm-wizard-title"><AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(activeRole.Icon, "user")" Size="22" /> @L.Markup("me.onboarding.data_prefix") @activeRole.Label</h1>
+    <p style="color:var(--ac-text-muted);font-size:14px;margin-bottom:16px;">@((MarkupString)"\n        ")@L.Markup("me.onboarding.intro")@((MarkupString)"\n    ")
     </p>
 
     <form method="post" action="@($"/{Slug}/me/role/onboarding/save")">
@@ -58,7 +57,7 @@ else
                                 break;
                             case "SingleSelect":
                                 <select name="@name" class="ac-input" required="@f.IsRequired">
-                                    <option value="">— اختَر —</option>
+                                    <option value="">@L.Markup("me.onboarding.select_placeholder")</option>
                                     @foreach (var o in f.Options)
                                     {
                                         <option value="@o.Value" selected="@(def == o.Value)">@o.Label</option>
@@ -69,7 +68,7 @@ else
                                 <label style="display:inline-flex;align-items:center;gap:8px;">
                                     <input type="checkbox" name="@name" value="true"
                                            checked="@(def == "True" || def == "true")" />
-                                    <span>نَعَم</span>
+                                    <span>@L.Markup("common.option.yes")</span>
                                 </label>
                                 break;
                             case "Date":
@@ -87,7 +86,7 @@ else
         </AcCard>
 
         <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block" style="margin-top:16px;">
-            <AcIcon Name="check" Size="18" /> حِفظ والمُتابَعَة
+            <AcIcon Name="check" Size="18" /> @L.Markup("me.onboarding.save")@((MarkupString)"\n        ")
         </button>
     </form>
 }

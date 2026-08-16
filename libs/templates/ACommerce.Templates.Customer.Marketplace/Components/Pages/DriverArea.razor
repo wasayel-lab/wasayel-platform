@@ -2,6 +2,7 @@
 @page "/{slug}/r/{role}/me/area"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
+@inject L L
 
 @*
     ضَبط مَنطِقَة عَمَل السائِق — نُقطَة المَركَز + نِصف قُطر بِالكيلومِترات.
@@ -12,21 +13,19 @@
 
 <div class="acs-page">
     <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/{Slug}")">
-        <AcIcon Name="arrow-right" Size="16" /> الرُجوع
+        <AcIcon Name="arrow-right" Size="16" /> @L.Markup("me.area.back")@((MarkupString)"\n    ")
     </a>
 
-    <h1 class="acm-wizard-title">مَنطِقَة عَمَلي</h1>
-    <p style="color:var(--ac-text-muted);font-size:14px;margin:0 0 16px;">
-        حَدِّد مَركَزَ المَنطِقَة + نِصف القُطر، وَ سَتَرَى فَقَط المَشاوير
-        ضِمن هذا النِطاق. اِترُك نِصف القُطر صِفراً لِرُؤيَة كُلّ المَشاوير.
+    <h1 class="acm-wizard-title">@L.Markup("me.area.title")</h1>
+    <p style="color:var(--ac-text-muted);font-size:14px;margin:0 0 16px;">@((MarkupString)"\n        ")@L.Markup("me.area.intro")@((MarkupString)"\n    ")
     </p>
 
-    @if (Saved == "1") { <AcAlert Variant="success" Message="تَمّ الحِفظ." /> }
+    @if (Saved == "1") { <AcAlert Variant="success" Message="@L["me.area.saved"]" /> }
 
     @if (user is null)
     {
-        <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
-                      ActionLabel="تَسجيل دُخول" ActionHref="@AuthSession.LinkFor(Slug, Role, $"login")" />
+        <AcEmptyState IconName="user" Title="@L["me.area.need_login"]"
+                      ActionLabel="@L["auth.action.login"]" ActionHref="@AuthSession.LinkFor(Slug, Role, $"login")" />
     }
     else
     {
@@ -34,20 +33,20 @@
             <AcCard>
                 <ChildContent>
                     <AcLocationInput Name="anchor"
-                                     Label="مَركَز مَنطِقَة العَمَل"
+                                     Label="@L["me.area.anchor_label"]"
                                      InitialLat="@(user.HasAnchor ? user.AnchorLat : (double?)null)"
                                      InitialLng="@(user.HasAnchor ? user.AnchorLng : (double?)null)" />
 
-                    <AcField Label="نِصف القُطر (كم)">
+                    <AcField Label="@L["me.area.radius_label"]">
                         <input type="number" name="radius" min="0" max="500" step="1"
                                class="ac-input" inputmode="numeric"
-                               value="@user.RadiusKm" placeholder="مَثَلاً 15" />
+                               value="@user.RadiusKm" placeholder="@L["me.area.radius_placeholder"]" />
                     </AcField>
                 </ChildContent>
             </AcCard>
 
             <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block" style="margin-top:16px;">
-                <AcIcon Name="check" Size="18" /> حِفظ المَنطِقَة
+                <AcIcon Name="check" Size="18" /> @L.Markup("me.area.save")@((MarkupString)"\n            ")
             </button>
         </form>
     }

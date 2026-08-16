@@ -2,18 +2,19 @@
 @page "/{slug}/r/{role}/chats/{conversationId:guid}"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Account
 @inject AuthSession Auth
+@inject L L
 
 <div class="acs-page acs-chat-page">
 @if (!Auth.IsAuthenticated)
 {
     <AcEmptyState IconName="message"
-                  Title="تَحتاج تَسجيل دُخول"
-                  ActionLabel="تَسجيل دُخول"
+                  Title="@L["chats.room.need_login"]"
+                  ActionLabel="@L["auth.action.login"]"
                   ActionHref="@AuthSession.LinkFor(Slug, Role, $"login")" />
 }
 else if (conv is null)
 {
-    <AcLoadingState Message="جارٍ التَحميل…" />
+    <AcLoadingState Message="@L["common.state.loading"]" />
 }
 else
 {
@@ -33,8 +34,7 @@ else
     <div class="acs-chat-messages">
         @if (messages.Count == 0)
         {
-            <p class="ac-muted" style="text-align:center;padding:32px 0;">
-                ابدأ المُحادَثَة — لا توجَد رَسائل بَعد.
+            <p class="ac-muted" style="text-align:center;padding:32px 0;">@((MarkupString)"\n                ")@L.Markup("chats.room.empty")@((MarkupString)"\n            ")
             </p>
         }
         else
@@ -63,7 +63,7 @@ else
     {
         <p style="display:flex;align-items:center;justify-content:center;gap:6px;
                   font-size:12px;color:var(--ac-text-muted);margin:8px 0;">
-            <AcIcon Name="clock" Size="14" /> مُحادَثَة مُؤَقَّتَة — تَنتَهي @conv.ExpiresAt.Value.ToString("yyyy-MM-dd HH:mm")
+            <AcIcon Name="clock" Size="14" /> @L.Markup("chats.room.temp_until") @conv.ExpiresAt.Value.ToString("yyyy-MM-dd HH:mm")
         </p>
     }
 
@@ -85,7 +85,7 @@ else
                            border-radius:var(--ac-radius-sm);cursor:pointer;font-weight:600;
                            display:inline-flex;align-items:center;gap:6px;">
                 <AcIcon Name="send" Size="16" />
-                <span>إرسال</span>
+                <span>@L.Markup("chats.room.send")</span>
             </button>
         </form>
     }
@@ -99,11 +99,12 @@ else
     Conversation? conv;
     List<Message> messages = new();
 
-    static string FormatDay(DateTime localAt)
+    // غَير ساكِنَة: القيَم صارَت في المَعجَم، والساكِنَة لا تَبلُغ `L`.
+    string FormatDay(DateTime localAt)
     {
         var today = DateTime.Now.Date;
-        if (localAt.Date == today)               return "اليَوم";
-        if (localAt.Date == today.AddDays(-1))   return "أَمس";
+        if (localAt.Date == today)               return L["chats.room.day_today"];
+        if (localAt.Date == today.AddDays(-1))   return L["chats.room.day_yesterday"];
         if ((today - localAt.Date).TotalDays < 7) return localAt.ToString("dddd", new System.Globalization.CultureInfo("ar"));
         return localAt.ToString("yyyy/MM/dd");
     }

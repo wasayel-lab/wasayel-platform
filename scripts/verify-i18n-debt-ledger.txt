@@ -1,7 +1,7 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|329
-DISTINCT|257
+TOTAL|254
+DISTINCT|201
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|37
@@ -17,19 +17,12 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/Q
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantAttributes.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantCategories.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantRegions.razor|7
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantUsers.razor|10
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/ChatRoom.razor|10
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/ChatRoom.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/CreateListing.razor|3
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/DriverArea.razor|11
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/EmailLoginForm.razor|7
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Landing.razor|2
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Login.razor|14
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyDealDetail.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MySearches.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/NafathLoginForm.razor|9
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Notifications.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/PhoneLoginForm.razor|7
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/RoleOnboarding.razor|9
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/RolePicker.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAgent.razor|30
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppAttributes.razor|4
