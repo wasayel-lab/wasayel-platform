@@ -220,6 +220,18 @@ GUARDED_PAGES=(
   #     مالِكِه**، فَيُصَيَّر نَموذَجُ تَقديم العَرض كامِلاً.
   "user-listing-own:user:/{tenant}/listings/ff8e1748-b98a-4ad0-9da0-10ac616eaf9e"
   "user-listing-offers:user:/{tenant}/listings/94877b94-abb5-4a8b-8494-be8ef678cc59"
+
+  # ── مِلَفُّ `owner`: نَفسُ الشاشات على مُستَأجِرٍ **مَملوء** ────────
+  # ‏`ejar` فيه ‏15 إعلاناً وصَفقَتانِ ومُستَخدِمون، فَتُصَيَّر أَجسامُ
+  # الحَلَقات الَّتي لا يَبلُغُها `owner-test` الفارِغ. والزَوجُ
+  # (فارِغ/مَملوء) يَحرُس الفَرعَين مَعاً بَدَل واحِد.
+  "owner-app-listings:owner:/studio/apps/ejar/listings"
+  "owner-app-deals:owner:/studio/apps/ejar/deals"
+  "owner-app-deal-detail:owner:/studio/apps/ejar/deals/17497544-0a6a-485d-bc72-f5d738995169"
+  "owner-app-console:owner:/studio/apps/ejar/console"
+  "owner-app-attributes:owner:/studio/apps/ejar/attributes"
+  "owner-app-pwa:owner:/studio/apps/ejar/pwa"
+  "owner-app-home:owner:/studio/apps/ejar"
 )
 
 # أَوراق الأَنماط الَّتي تُحَمِّلها كُلّ صَفحَة — المَظهَر = HTML + CSS،
@@ -328,6 +340,22 @@ if [ -n "${WSL_CAPTURE_STUDIO_PHONE:-}" ]; then
   fi
 else
   PROFILES_MISSING="$PROFILES_MISSING studio(WSL_CAPTURE_STUDIO_PHONE)"
+fi
+
+# ‏2026-08-16 — مِلَفٌّ رابِع: صاحِبُ استوديو **يَملِك مُستَأجِراً
+# مَملوءاً**. والحاجَةُ إلَيه مَقيسَة لا مَظنونَة: مِلَفُّ `admin` يَملِك
+# `owner-test` وَحدَه، وهو بِصِفر إعلان وصِفر صَفقَة — فَجِسمُ
+# `@foreach` في `StudioAppListings` و`StudioAppDeals` **لا يُصَيَّر**،
+# وحالَةُ الفَراغ وَحدَها تُحرَس. أَي أَنّ ثُلُثَي المِلَفَّين كانا
+# سَيُرَحَّلان بِبَوّابَةٍ عَمياءَ عَنهُما (‏القاعِدَة ١٠).
+if [ -n "${WSL_CAPTURE_OWNER_PHONE:-}" ]; then
+  if studio_login "$JARS/owner" "$WSL_CAPTURE_OWNER_PHONE"; then
+    PROFILE_JAR[owner]="$JARS/owner"; PROFILES_READY="$PROFILES_READY owner"
+  else
+    echo "✗ فَشِلَ دُخول مِلَفّ 'owner' — لا كوكي studio." >&2; exit 1
+  fi
+else
+  PROFILES_MISSING="$PROFILES_MISSING owner(WSL_CAPTURE_OWNER_PHONE)"
 fi
 
 if [ -n "${WSL_CAPTURE_USER_NID:-}" ]; then
