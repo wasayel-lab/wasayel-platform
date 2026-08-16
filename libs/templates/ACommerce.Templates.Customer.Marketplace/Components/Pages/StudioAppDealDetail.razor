@@ -2,6 +2,7 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.Deals.DealsService Deals
+@inject L L
 @using ACommerce.Kit.Tenants
 @using ACommerce.Templates.Customer.Marketplace.Services.Deals
 
@@ -9,20 +10,20 @@
     تَفاصيل صَفقَة + شَريط مَراحِل بَصَريّ + سَجِلّ زَمَنيّ + إجراءات.
 *@
 
-<StudioShell Title="@($"عَمَلِيَّة {Id.ToString()[..8]}")" Active="home">
+<StudioShell Title="@($"{L["studio.deal.title_prefix"]} {Id.ToString()[..8]}")" Active="home">
     <TopBarActions>
-        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/deals")">← القائِمَة</a>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/deals")">@L.Markup("studio.deal.back_list")</a>
     </TopBarActions>
     <ChildContent>
         @if (deal is null)
         {
-            <div class="st-card">العَمَلِيَّة غَير مَوجودَة.</div>
+            <div class="st-card">@L.Markup("studio.deal.not_found")</div>
         }
         else
         {
             <div class="studio-page-head">
-                <h1>@(string.IsNullOrEmpty(deal.ListingTitle) ? $"عَمَلِيَّة {Id.ToString()[..8]}" : deal.ListingTitle)</h1>
-                <p>نَمَط: @deal.Pattern · أُنشِئَت @deal.CreatedAt.ToString("yyyy-MM-dd HH:mm")</p>
+                <h1>@(string.IsNullOrEmpty(deal.ListingTitle) ? $"{L["studio.deal.title_prefix"]} {Id.ToString()[..8]}" : deal.ListingTitle)</h1>
+                <p>@L.Markup("studio.deal.pattern_label") @deal.Pattern · @L.Markup("studio.deal.created_label") @deal.CreatedAt.ToString("yyyy-MM-dd HH:mm")</p>
             </div>
 
             @* شَريط مَراحِل (Stepper) *@
@@ -49,21 +50,21 @@
             @* الأَطراف والمال *@
             <div class="studio-stats" style="margin-top:14px;">
                 <div class="studio-stat">
-                    <div class="studio-stat-label">المُبادِر</div>
+                    <div class="studio-stat-label">@L.Markup("studio.deal.initiator")</div>
                     <div class="studio-stat-value" style="font-size:15px;">@deal.InitiatorName</div>
                 </div>
                 <div class="studio-stat">
-                    <div class="studio-stat-label">الطَّرَف الآخَر</div>
+                    <div class="studio-stat-label">@L.Markup("studio.deal.counterparty")</div>
                     <div class="studio-stat-value" style="font-size:15px;">
                         @(deal.CounterpartyName ?? "—")
                     </div>
                 </div>
                 <div class="studio-stat">
-                    <div class="studio-stat-label">المَبلَغ</div>
-                    <div class="studio-stat-value">@deal.AmountSar.ToString("N0") ر.س</div>
+                    <div class="studio-stat-label">@L.Markup("studio.deal.amount")</div>
+                    <div class="studio-stat-value">@((MarkupString)ACommerce.Kit.Culture.Money.Format(deal.AmountSar))</div>
                 </div>
                 <div class="studio-stat">
-                    <div class="studio-stat-label">الحالَة</div>
+                    <div class="studio-stat-label">@L.Markup("studio.deal.status")</div>
                     <div class="studio-stat-value" style="font-size:15px;">@StatusLabel(deal.Status)</div>
                 </div>
             </div>
@@ -71,7 +72,7 @@
             @* الإجراءات *@
             @if (deal.Status == DealStatus.Active)
             {
-                <div class="st-section-title">إجراءات</div>
+                <div class="st-section-title">@L.Markup("studio.deal.actions")</div>
                 <div class="st-card" style="display:flex;gap:10px;flex-wrap:wrap;">
                     @if (DealsPolicy.Next(deal.Pattern, deal.Stage) is { } next)
                     {
@@ -87,21 +88,20 @@
                           style="display:flex;gap:8px;flex:1;min-width:200px;">
                         <input class="st-input" name="reason" placeholder="سَبَب النِزاع" />
                         <button type="submit" class="st-btn st-btn-ghost" style="white-space:nowrap;color:var(--st-danger);">
-                            <AcIcon Name="alert-circle" Size="16" /> نِزاع
+                            <AcIcon Name="alert-circle" Size="16" /> @L.Markup("studio.deal.dispute")@((MarkupString)"\n                        ")
                         </button>
                     </form>
                     <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/cancel")"
                           style="display:flex;gap:8px;flex:1;min-width:200px;">
                         <input class="st-input" name="reason" placeholder="سَبَب الإلغاء" />
-                        <button type="submit" class="st-btn st-btn-ghost" style="white-space:nowrap;">
-                            إلغاء
+                        <button type="submit" class="st-btn st-btn-ghost" style="white-space:nowrap;">@((MarkupString)"\n                            ")@L.Markup("studio.deal.cancel")@((MarkupString)"\n                        ")
                         </button>
                     </form>
                 </div>
             }
 
             @* السِجِلّ الزَّمَنيّ *@
-            <div class="st-section-title">السِجِلّ الزَّمَنيّ</div>
+            <div class="st-section-title">@L.Markup("studio.deal.timeline")</div>
             <div class="studio-list">
                 @foreach (var e in deal.Timeline.OrderByDescending(x => x.At))
                 {
@@ -124,37 +124,35 @@
             @if (deal.Stage is DealStage.Reviewed or DealStage.Delivered or DealStage.Received
                  && deal.CounterpartyId is not null)
             {
-                <div class="st-section-title"><AcIcon Name="star" Size="16" /> تَقييم</div>
+                <div class="st-section-title"><AcIcon Name="star" Size="16" /> @L.Markup("studio.deal.review")</div>
                 <div class="st-card">
-                    <p style="margin:0 0 12px;font-size:14px;color:var(--st-muted);">
-                        أَرسِل تَقييماً نِيابَةً عَن أَيّ مِن الطَّرَفَين.
+                    <p style="margin:0 0 12px;font-size:14px;color:var(--st-muted);">@((MarkupString)"\n                        ")@L.Markup("studio.deal.review_hint")@((MarkupString)"\n                    ")
                     </p>
                     <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/review")"
                           style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                         <div class="st-field" style="margin:0;">
-                            <label class="st-label">المُقَيِّم</label>
+                            <label class="st-label">@L.Markup("studio.deal.reviewer")</label>
                             <select class="st-input" name="target">
-                                <option value="counterparty">@deal.InitiatorName يُقَيِّم @deal.CounterpartyName</option>
-                                <option value="initiator">@deal.CounterpartyName يُقَيِّم @deal.InitiatorName</option>
+                                <option value="counterparty">@deal.InitiatorName @L.Markup("studio.deal.reviews_verb") @deal.CounterpartyName</option>
+                                <option value="initiator">@deal.CounterpartyName @L.Markup("studio.deal.reviews_verb") @deal.InitiatorName</option>
                             </select>
                         </div>
                         <div class="st-field" style="margin:0;">
-                            <label class="st-label">عَدَد النُّجوم</label>
+                            <label class="st-label">@L.Markup("studio.deal.stars")</label>
                             <select class="st-input" name="rating">
-                                <option value="5">٥ نُجوم — مُمتاز</option>
-                                <option value="4">٤ نُجوم</option>
-                                <option value="3">٣ نُجوم</option>
-                                <option value="2">نَجمَتان</option>
-                                <option value="1">نَجمَة</option>
+                                <option value="5">@L.Markup("deals.detail.rating_5")</option>
+                                <option value="4">@L.Markup("deals.detail.rating_4")</option>
+                                <option value="3">@L.Markup("deals.detail.rating_3")</option>
+                                <option value="2">@L.Markup("deals.detail.rating_2")</option>
+                                <option value="1">@L.Markup("deals.detail.rating_1")</option>
                             </select>
                         </div>
                         <div class="st-field" style="margin:0;grid-column:1/-1;">
-                            <label class="st-label">التَّعليق</label>
+                            <label class="st-label">@L.Markup("studio.deal.comment")</label>
                             <textarea class="st-textarea" name="body" rows="3" required
                                       placeholder="كَيف كانَت التَّجرِبَة؟"></textarea>
                         </div>
-                        <button type="submit" class="st-btn st-btn-primary" style="grid-column:1/-1;">
-                            إرسال التَّقييم
+                        <button type="submit" class="st-btn st-btn-primary" style="grid-column:1/-1;">@((MarkupString)"\n                            ")@L.Markup("studio.deal.review_submit")@((MarkupString)"\n                        ")
                         </button>
                     </form>
                 </div>
@@ -163,7 +161,7 @@
             @* المَراجِع (PaymentId، ShipmentId، …) *@
             @if (deal.Refs.Count > 0)
             {
-                <div class="st-section-title">مَراجِع مُرتَبِطَة</div>
+                <div class="st-section-title">@L.Markup("studio.deal.refs")</div>
                 <div class="st-card">
                     @foreach (var (k, v) in deal.Refs)
                     {
@@ -201,21 +199,21 @@
         "refund" => "refresh", _ => "tag"
     };
 
-    static string FormatEvent(DealEvent e) => e.Action switch
+    string FormatEvent(DealEvent e) => e.Action switch
     {
-        "created"   => "أُنشِئَت العَمَلِيَّة",
-        "assigned"  => "تَعيين الطَّرَف الآخَر",
+        "created"   => L["studio.deal.event_created"],
+        "assigned"  => L["studio.deal.event_assigned"],
         "advanced"  => $"{DealsPolicy.LabelAr(e.StageBefore)} ← {DealsPolicy.LabelAr(e.StageAfter)}",
-        "cancelled" => "إلغاء العَمَلِيَّة",
-        "disputed"  => "فَتح نِزاع",
-        "note"      => "مُلاحَظَة/مَرجِع",
+        "cancelled" => L["studio.deal.event_cancelled"],
+        "disputed"  => L["studio.deal.event_disputed"],
+        "note"      => L["studio.deal.event_note"],
         _ => e.Action
     };
 
-    static string StatusLabel(DealStatus s) => s switch
+    string StatusLabel(DealStatus s) => s switch
     {
-        DealStatus.Active => "نَشِطَة", DealStatus.Completed => "مُكتَمِلَة",
-        DealStatus.Cancelled => "مُلغاة", DealStatus.Disputed => "نِزاع",
+        DealStatus.Active => L["studio.deal.status_active"], DealStatus.Completed => L["studio.deal.status_completed"],
+        DealStatus.Cancelled => L["studio.deal.status_cancelled"], DealStatus.Disputed => L["studio.deal.status_disputed"],
         _ => s.ToString()
     };
 }

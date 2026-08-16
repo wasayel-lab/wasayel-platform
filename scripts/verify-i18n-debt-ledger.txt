@@ -1,7 +1,7 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|698
-DISTINCT|509
+TOTAL|660
+DISTINCT|479
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|40
@@ -42,7 +42,7 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/RolePic
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAgent.razor|30
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppAttributes.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppCategories.razor|2
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppDealDetail.razor|42
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppDealDetail.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppListings.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppRegions.razor|5
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppTicketDetail.razor|16
