@@ -1,6 +1,6 @@
 @page "/{slug}"
 @page "/{slug}/r/{role}"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.StorefrontQueries Storefront
 @inject AuthSession Auth
 @inject ITenantContext Tenant
 @inject L L
@@ -238,17 +238,17 @@
             _ => Money.Format(l.Price)
         };
     }
-    List<string> cities = new();
-    HashSet<Guid> favIds = new();
+    IReadOnlyList<string> cities = Array.Empty<string>();
+    IReadOnlySet<Guid> favIds = new HashSet<Guid>();
     /// <summary>عَدَد تَقييمات كُلّ مُعلِن ظاهِر في هذه الصَفحَة —
     /// استِعلام واحِد لِكُلّهم، لا استِعلام لِكُلّ بِطاقَة.</summary>
-    Dictionary<Guid, int> reviewCounts = new();
+    IReadOnlyDictionary<Guid, int> reviewCounts = new Dictionary<Guid, int>();
 
-    /// <summary>مالِك الإعلان مِن الخَصائِص (نَفس المِفتاح الَّذي تَكتُبُه
-    /// نُقطَة إنشاء الإعلان).</summary>
+    /// <summary>مالِك الإعلان مِن الخَصائِص — <b>تَعريف واحِد</b> في
+    /// <c>StorefrontQueries</c> تَقرَؤُه هذه الصَفحَة وشاشَةُ
+    /// الاستِكشاف وخِدمَةُ تَحرير الإعلان.</summary>
     static Guid? OwnerOf(Listing l)
-        => l.Attributes.TryGetValue("owner_id", out var s) && Guid.TryParse(s, out var g)
-           ? g : null;
+        => Services.Queries.StorefrontQueries.OwnerOf(l);
 
     int? ReviewCountOf(Listing l)
         => OwnerOf(l) is { } owner && reviewCounts.TryGetValue(owner, out var n) && n > 0
@@ -305,7 +305,18 @@
         if (loaded is null) return;
         profile = Services.Patterns.PatternProfileResolver.Of(loaded);
 
-        await using var tq = Store.QuerySession(Slug);
+        // نِداءٌ واحِد بَدَل جَلسَةٍ مَفتوحَةٍ هُنا. والفَلتَرَةُ
+        // انتَقَلَت مَعَه لا بَعدَه: عَدَدُ التَقييمات يُستَعلَم عَن
+        // مُلّاك **ما بَقِيَ** بَعد إسقاط طَلَبات السائِق، فَتَركُ
+        // الإسقاط هُنا كانَ يَعني جَلسَتَين بَدَل واحِدَة.
+        var home = await Storefront.HomeAsync(
+            Slug, City, Auth.IsAuthenticated ? Auth.UserId : null);
+
+        latest       = home.Latest.ToList();
+        featured     = home.Featured.ToList();
+        cities       = home.Cities;
+        reviewCounts = home.ReviewCounts;
+        favIds       = home.FavouriteListingIds;
 
         if (loaded.Roles.Count > 0)
         {
@@ -313,11 +324,11 @@
             canCreateListing = false;
             if (Auth.IsAuthenticated && Auth.UserId.HasValue)
             {
-                var me = await tq.LoadAsync<User>(Auth.UserId.Value);
                 // الـ URL role (Role param) يَتَفَوَّق عَلى user.ActiveRole
                 // (الـ DB يَحوي حَقل واحِد، لكِنّ المُستَخدِم قَد يَكون مُسَجَّلاً
                 // بِدَورَين في تَبويبَين — كُلّ تَبويب يَجِب أَن يَحتَرِم URLه).
-                var effectiveRoleSlug = !string.IsNullOrEmpty(Role) ? Role : me?.ActiveRole;
+                // وهذا قَرارُ تَوجيهٍ لا استِعلام، فَمَوضِعُه الصَفحَة.
+                var effectiveRoleSlug = !string.IsNullOrEmpty(Role) ? Role : home.StoredActiveRole;
                 if (!string.IsNullOrEmpty(effectiveRoleSlug))
                 {
                     activeRole = loaded.Roles.FirstOrDefault(r => r.Slug == effectiveRoleSlug);
@@ -326,58 +337,5 @@
                 }
             }
         }
-
-        var baseQ = tq.Query<Listing>().Where(x => !x.IsDeleted && !x.IsHiddenByModerator);
-        if (!string.IsNullOrEmpty(City))
-            baseQ = baseQ.Where(x => x.City == City);
-
-        latest = (await baseQ
-            .OrderByDescending(x => x.CreatedAt)
-            .Take(20).ToListAsync()).ToList();   // نَجلِب أَكثَر ثُمّ نُصَفِّي
-
-        // المُمَيَّز = ما عُلِّمَ IsFeatured (مِن لَوحَة الإدارَة/اشتِراك مَدفوع).
-        // إن لَم يَكُن هُناك أَيّ مُمَيَّز بَعد، نَستَخدِم الأَعلى سِعراً كَ
-        // fallback لِنَملَأ الكاروسيل. اختِيار قابِل لِلتَّبديل لاحِقاً.
-        featured = (await baseQ.Where(x => x.IsFeatured)
-            .OrderByDescending(x => x.CreatedAt).Take(20).ToListAsync()).ToList();
-        if (featured.Count == 0)
-            featured = (await baseQ.OrderByDescending(x => x.Price).Take(20).ToListAsync()).ToList();
-
-        // فَلتَرَة الإعلانات الَّتي تَقبَل عُروضاً (طَلَبات السائِق المُؤَقَّتَة):
-        // لا تَظهَر في الصَفحَة الرَّئيسِيَّة العامَّة لِأَنَّها لَيسَت كاتالوج.
-        // السائِق يَراها في feed الخاصّ بِه. الـ owner يَراها في "طَلَباتي".
-        latest   = latest.Where(l => !IsTripRequest(l)).Take(6).ToList();
-        featured = featured.Where(l => !IsTripRequest(l)).Take(4).ToList();
-
-        cities = (await tq.Query<Listing>()
-            .Where(x => !x.IsDeleted && x.City != null)
-            .Select(x => x.City!)
-            .ToListAsync())
-            .Distinct().OrderBy(s => s).ToList();
-
-        // مُؤَشِّر ثِقَة: عَدَد تَقييمات المُعلِن. استِعلام واحِد يُغَطّي كُلّ
-        // البِطاقات المَعروضَة (≤ ١٠ مُعلِنين) — لا N+1.
-        var ownerIds = latest.Concat(featured)
-            .Select(OwnerOf).Where(g => g.HasValue).Select(g => g!.Value)
-            .Distinct().ToList();
-        if (ownerIds.Count > 0)
-        {
-            var revs = await tq.Query<ACommerce.Kit.Reviews.Review>()
-                .Where(r => !r.Hidden && ownerIds.Contains(r.TargetUserId))
-                .ToListAsync();
-            reviewCounts = revs.GroupBy(r => r.TargetUserId)
-                               .ToDictionary(g => g.Key, g => g.Count());
-        }
-
-        if (Auth.IsAuthenticated && Auth.UserId.HasValue)
-        {
-            var favs = await tq.Query<Favorite>()
-                .Where(f => f.UserId == Auth.UserId.Value).ToListAsync();
-            favIds = favs.Select(f => f.ListingId).ToHashSet();
-        }
     }
-
-    static bool IsTripRequest(Listing l) =>
-        l.Attributes.TryGetValue("accepts_offers", out var v) &&
-        string.Equals(v, "true", System.StringComparison.OrdinalIgnoreCase);
 }

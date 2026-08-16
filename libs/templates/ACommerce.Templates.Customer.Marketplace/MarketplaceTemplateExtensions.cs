@@ -43,6 +43,7 @@ public static class MarketplaceTemplateExtensions
         services.AddScoped<Services.Queries.AuditLogQueries>();
         services.AddScoped<Services.Queries.ShellQueries>();
         services.AddScoped<Services.Queries.AccountQueries>();
+        services.AddScoped<Services.Queries.StorefrontQueries>();
         // مُزَوِّد الخَلفيّات المُسَمّى: كُلّ وَكيل مَنطِقيّ (Studio / Analysis)
         // يَطلُب مِلَفَّه بِاسمِه، والمُزَوِّد يَحُلّه ويُخَزِّن خَلفيَّة واحِدَة
         // لِكُلّ مِلَفّ مُتَمايِز. تَسجيل واحِد بَدَل الخَلفيَّة المُشتَرَكَة.
