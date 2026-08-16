@@ -44,10 +44,10 @@
             : null;
 
         var seoTitle = seoTenant is null
-            ? "وَسايِل · Wasayel"
+            ? L["shell.seo.title"]
             : ACommerce.Kit.Tenants.SeoDocuments.HomeTitle(seoTenant);
         var seoDescription = seoTenant is null
-            ? "مَنَصَّة تِجارَة وَخَدَمات مُتَعَدِّدَة المُستَأجِرين، عَرَبِيَّة أَوَّلاً."
+            ? L["shell.seo.description"]
             : ACommerce.Kit.Tenants.SeoDocuments.HomeDescription(seoTenant);
         // صورَة المُشارَكَة نُقَطِيَّة دائِماً: أَكثَر المِنَصّات (واتساب،
         // فيسبوك، تويتر، لينكدإن) تَرفُض SVG في og:image فَتَعرِض الرابِط
@@ -78,7 +78,7 @@
     @* OpenGraph + Twitter — نَفس النُصوص، لا اختِراع. *@
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="@(L.IsArabic ? "ar_AR" : "en_US")" />
-    <meta property="og:site_name" content="@(Tenant.IsResolved ? Tenant.Name : "وَسايِل")" />
+    <meta property="og:site_name" content="@(Tenant.IsResolved ? Tenant.Name : L["shell.seo.site_name"])" />
     <meta property="og:title" content="@seoTitle" />
     @if (!string.IsNullOrEmpty(seoDescription))
     {

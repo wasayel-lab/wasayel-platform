@@ -1,6 +1,7 @@
 @page "/admin/tenants/{slug}"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard Guard
+@inject L L
 
 @*
     صَفحَة المُستَأجِر الواحِد في لَوحَة التَحَكُّم — تَعرِض المَيتاداتا
@@ -12,20 +13,20 @@
     @if (tenant is null)
     {
         <AcEmptyState IconName="info"
-                      Title="المَتجَر غَير مَوجود"
-                      ActionLabel="الرُجوع لِلَوحَة التَحَكُّم"
+                      Title="@L["admin.tenant.not_found"]"
+                      ActionLabel="@L["admin.tenant_edit.back_dashboard"]"
                       ActionHref="/admin" />
     }
     else
     {
         @if (Saved == "1")
         {
-            <AcAlert Variant="success" Message="تَمّ الحِفظ." />
+            <AcAlert Variant="success" Message="@L["admin.tenant_edit.saved"]" />
         }
 
         <div class="acm-admin-head">
             <div style="display:flex;align-items:center;gap:12px;">
-                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin" aria-label="الرُجوع">
+                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin" aria-label="@L["admin.action.back"]">
                     <AcIcon Name="arrow-right" Size="16" />
                 </a>
                 <span class="acm-tenant-card-brand" style="background:@tenant.BrandColor;">
@@ -40,7 +41,7 @@
             </div>
             <a class="ac-btn ac-btn-ghost" href="@($"/{tenant.Slug}")"
                target="_blank">
-                <AcIcon Name="external-link" Size="16" /> فَتح المَتجَر
+                <AcIcon Name="external-link" Size="16" /> @L.Markup("admin.theme.open_tenant")@((MarkupString)"\n            ")
             </a>
         </div>
 
@@ -48,8 +49,8 @@
             <a class="acm-manager-card" href="@($"/admin/tenants/{Slug}/categories")">
                 <span class="acm-manager-icon"><AcIcon Name="tag" Size="24" /></span>
                 <div>
-                    <strong>الفِئات</strong>
-                    <span>@tenant.Categories.Count فِئَة في @kindCount مَجموعَة</span>
+                    <strong>@L.Markup("admin.tenant_edit.cat_title")</strong>
+                    <span>@tenant.Categories.Count @L.Markup("admin.tenant_edit.cat_unit") @kindCount @L.Markup("admin.tenant_edit.cat_group")</span>
                 </div>
                 <AcIcon Name="chevron-left" Size="16" />
             </a>
@@ -57,8 +58,8 @@
             <a class="acm-manager-card" href="@($"/admin/tenants/{Slug}/attributes")">
                 <span class="acm-manager-icon"><AcIcon Name="settings" Size="24" /></span>
                 <div>
-                    <strong>الخَصائِص الديناميكِيَّة</strong>
-                    <span>تَعريف حُقول الإعلانات والبروفايل</span>
+                    <strong>@L.Markup("admin.tenant_edit.attrs_title")</strong>
+                    <span>@L.Markup("admin.tenant_edit.attrs_sub")</span>
                 </div>
                 <AcIcon Name="chevron-left" Size="16" />
             </a>
@@ -66,8 +67,8 @@
             <a class="acm-manager-card" href="@($"/admin/tenants/{Slug}/regions")">
                 <span class="acm-manager-icon"><AcIcon Name="map-pin" Size="24" /></span>
                 <div>
-                    <strong>المُدُن والأَحياء</strong>
-                    <span>قائِمَة المُدُن الَّتي يَختار مِنها المُستَخدِم</span>
+                    <strong>@L.Markup("admin.tenant_edit.regions_title")</strong>
+                    <span>@L.Markup("admin.tenant_edit.regions_sub")</span>
                 </div>
                 <AcIcon Name="chevron-left" Size="16" />
             </a>
@@ -75,8 +76,8 @@
             <a class="acm-manager-card" href="@($"/admin/tenants/{Slug}/roles")">
                 <span class="acm-manager-icon"><AcIcon Name="user" Size="24" /></span>
                 <div>
-                    <strong>الأَدوار</strong>
-                    <span>@(tenant.Roles.Count == 0 ? "بِلا تَمييز أَدوار (وَضع user)" : $"{tenant.Roles.Count} أَدوار")</span>
+                    <strong>@L.Markup("admin.tenant_edit.roles_title")</strong>
+                    <span>@(tenant.Roles.Count == 0 ? L["admin.tenant_edit.roles_none"] : $"{tenant.Roles.Count} {L["admin.home.roles_unit"]}")</span>
                 </div>
                 <AcIcon Name="chevron-left" Size="16" />
             </a>
@@ -84,8 +85,8 @@
             <a class="acm-manager-card" href="@($"/admin/tenants/{Slug}/users")">
                 <span class="acm-manager-icon"><AcIcon Name="user" Size="24" /></span>
                 <div>
-                    <strong>المُستَخدِمون</strong>
-                    <span>قائِمَة المُستَخدِمين + مَنح/سَحب صَلاحِيَّة الإدارَة</span>
+                    <strong>@L.Markup("admin.tenant_edit.users_title")</strong>
+                    <span>@L.Markup("admin.tenant_edit.users_sub")</span>
                 </div>
                 <AcIcon Name="chevron-left" Size="16" />
             </a>
@@ -96,8 +97,8 @@
                     <AcIcon Name="brush" Size="24" />
                 </span>
                 <div>
-                    <strong>الهُويَّة البَصَريّة</strong>
-                    <span>اللَون، الاسم، الشِعار التَسويقي</span>
+                    <strong>@L.Markup("admin.tenant_edit.branding_title")</strong>
+                    <span>@L.Markup("admin.tenant_edit.branding_sub")</span>
                 </div>
                 <AcIcon Name="chevron-left" Size="16" />
             </a>
@@ -113,8 +114,8 @@
                     <AcIcon Name="brush" Size="24" />
                 </span>
                 <div>
-                    <strong>حُزَم الهُوِيَّة البَصَرِيَّة</strong>
-                    <span>ثَلاث حُزَم مُنَسَّقَة — لَوحَة وشَكل مَعاً · لِمُشرِف المَنصَّة</span>
+                    <strong>@L.Markup("admin.tenant_edit.theme_title")</strong>
+                    <span>@L.Markup("admin.tenant_edit.theme_sub")</span>
                 </div>
                 <AcIcon Name="chevron-left" Size="16" />
             </a>
@@ -125,8 +126,8 @@
                     <AcIcon Name="device-mobile" Size="24" />
                 </span>
                 <div>
-                    <strong>تَطبيقات الجَوّال (PWA)</strong>
-                    <span>اِسم وَأَيقونَة كُلّ دَور عَلى الشاشَة الرَئيسِيَّة</span>
+                    <strong>@L.Markup("admin.tenant_edit.pwa_title")</strong>
+                    <span>@L.Markup("admin.tenant_edit.pwa_sub")</span>
                 </div>
                 <AcIcon Name="chevron-left" Size="16" />
             </a>

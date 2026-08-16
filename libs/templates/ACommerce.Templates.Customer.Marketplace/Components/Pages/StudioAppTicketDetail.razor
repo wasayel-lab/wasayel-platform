@@ -2,6 +2,7 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.Queries.TenantAdminQueries TenantAdmin
+@inject L L
 @using ACommerce.Kit.Tenants
 @using ACommerce.Kit.Support
 
@@ -10,26 +11,26 @@
     تَمييز رُدود الفَريق.
 *@
 
-<StudioShell Title="@($"تَذكَرَة")" Active="home">
+<StudioShell Title="@(L["studio.app_ticket.title"])" Active="home">
     <TopBarActions>
-        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/tickets")">← التَّذاكِر</a>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/tickets")">@L.Markup("studio.app_ticket.back")</a>
     </TopBarActions>
     <ChildContent>
         @if (ticket is null)
         {
-            <div class="st-card">التَّذكَرَة غَير مَوجودَة.</div>
+            <div class="st-card">@L.Markup("studio.app_ticket.not_found")</div>
         }
         else
         {
             <div class="studio-page-head">
                 <h1>@ticket.Subject</h1>
-                <p>مِن @ticket.AuthorName · @ticket.CreatedAt.ToString("yyyy-MM-dd HH:mm") · حالَة:
+                <p>@L.Markup("studio.app_ticket.from") @ticket.AuthorName · @ticket.CreatedAt.ToString("yyyy-MM-dd HH:mm") @L.Markup("studio.app_ticket.status_label")
                     <span class="st-chip @StatusChip(ticket.Status)">@StatusLabel(ticket.Status)</span>
                 </p>
             </div>
 
-            @if (Replied == "1") { <div class="st-chip st-chip-success" style="margin-bottom:14px;"><AcIcon Name="check" Size="14" /> تَمّ إرسال الرَّدّ</div> }
-            @if (Closed == "1")  { <div class="st-chip st-chip-success" style="margin-bottom:14px;"><AcIcon Name="check" Size="14" /> تَمّ إغلاق التَّذكَرَة</div> }
+            @if (Replied == "1") { <div class="st-chip st-chip-success" style="margin-bottom:14px;"><AcIcon Name="check" Size="14" /> @L.Markup("studio.app_ticket.replied")</div> }
+            @if (Closed == "1")  { <div class="st-chip st-chip-success" style="margin-bottom:14px;"><AcIcon Name="check" Size="14" /> @L.Markup("studio.app_ticket.closed_ok")</div> }
 
             @* الرِسالَة الأَصلِيَّة *@
             <div class="st-card">
@@ -64,7 +65,7 @@
                         <div>
                             <strong>
                                 @r.AuthorName
-                                @if (staff) { <span class="st-chip" style="margin-inline-start:6px;">دَعم</span> }
+                                @if (staff) { <span class="st-chip" style="margin-inline-start:6px;">@L.Markup("studio.app_ticket.staff_badge")</span> }
                             </strong>
                             <span style="display:block;font-size:12px;color:var(--st-muted);">
                                 @r.At.ToString("yyyy-MM-dd HH:mm")
@@ -78,23 +79,22 @@
             @* نَموذَج الرَّدّ + إغلاق *@
             @if (ticket.Status != "closed")
             {
-                <div class="st-section-title">رَدّ</div>
+                <div class="st-section-title">@L.Markup("studio.app_tickets.reply_unit")</div>
                 <form method="post" action="@($"/studio/apps/{Slug}/tickets/{ticket.Id}/reply")" class="st-card">
                     <textarea class="st-textarea" name="body" rows="4" required
                               placeholder="اكتُب رَدَّكَ هُنا…"></textarea>
                     <div style="display:flex;gap:8px;margin-top:12px;">
-                        <button type="submit" class="st-btn st-btn-primary">إرسال الرَّدّ</button>
+                        <button type="submit" class="st-btn st-btn-primary">@L.Markup("studio.app_ticket.reply_send")</button>
                     </div>
                 </form>
 
                 <form method="post" action="@($"/studio/apps/{Slug}/tickets/{ticket.Id}/close")" style="margin-top:10px;">
-                    <button type="submit" class="st-btn st-btn-ghost">إغلاق التَّذكَرَة</button>
+                    <button type="submit" class="st-btn st-btn-ghost">@L.Markup("studio.app_ticket.close_action")</button>
                 </form>
             }
             else
             {
-                <div class="st-card" style="background:var(--st-line-soft);color:var(--st-muted);text-align:center;">
-                    التَّذكَرَة مُغلَقَة. لا يُمكِن الرَّدّ.
+                <div class="st-card" style="background:var(--st-line-soft);color:var(--st-muted);text-align:center;">@((MarkupString)"\n                    ")@L.Markup("studio.app_ticket.closed_note")@((MarkupString)"\n                ")
                 </div>
             }
         }
@@ -121,6 +121,8 @@
 
     static string StatusChip(string s) => s switch
     { "open" => "st-chip-danger", "answered" => "st-chip-warning", "closed" => "st-chip-success", _ => "" };
-    static string StatusLabel(string s) => s switch
-    { "open" => "مَفتوحَة", "answered" => "مَرُدودَة", "closed" => "مُغلَقَة", _ => s };
+    // غَير ساكِنَة عَمداً: القيَم صارَت في المَعجَم، والمَنفَذ `L` مَحقون
+    // في الصَفحَة — والساكِنَة لا تَبلُغُه.
+    string StatusLabel(string s) => s switch
+    { "open" => L["studio.app_tickets.status_open"], "answered" => L["studio.app_tickets.status_answered"], "closed" => L["studio.app_tickets.status_closed"], _ => s };
 }
