@@ -1,6 +1,7 @@
 @page "/admin/tenants/{slug}/categories"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard Guard
+@inject L L
 
 @*
     مُحَرِّر الفِئات — قائِمَة + شَكل سَطر-لِكُلّ-فِئَة كَ textarea (نَفس
@@ -12,7 +13,7 @@
 <div class="acs-page acm-admin">
     @if (tenant is null)
     {
-        <AcEmptyState IconName="info" Title="المَتجَر غَير مَوجود" />
+        <AcEmptyState IconName="info" Title="@L["admin.tenant.not_found"]" />
     }
     else
     {
@@ -22,7 +23,7 @@
                 <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@backHref">
                     <AcIcon Name="arrow-right" Size="16" />
                 </a>
-                <h1 class="acm-wizard-title" style="margin:0;">فِئات @tenant.Name</h1>
+                <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("admin.tenant_categories.heading") @tenant.Name</h1>
             </div>
         </div>
 
@@ -33,7 +34,7 @@
 
         <AcCard>
             <ChildContent>
-                <h3 style="margin-top:0;">المَعروض حاليّاً (@tenant.Categories.Count فِئَة)</h3>
+                <h3 style="margin-top:0;">@L.Markup("admin.tenant_categories.current_before")@tenant.Categories.Count @L.Markup("admin.tenant_categories.current_after")</h3>
                 @if (tenant.Categories.Count > 0)
                 {
                     <div class="acm-cat-list">
@@ -56,7 +57,7 @@
                 }
                 else
                 {
-                    <p style="color:var(--ac-text-muted);">لا فِئات بَعد.</p>
+                    <p style="color:var(--ac-text-muted);">@L.Markup("admin.tenant_categories.empty")</p>
                 }
             </ChildContent>
         </AcCard>
@@ -64,10 +65,9 @@
         <form method="post" action="@($"/admin/tenants/{Slug}/categories/save")" id="cats-form">
             <AcCard>
                 <ChildContent>
-                    <h3 style="margin-top:0;">تَحديث الفِئات</h3>
-                    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 14px;">
-                        بِطاقَة لِكُلّ فِئَة. التَّرتيب = تَرتيب العَرض.
-                        <strong>تَحذير</strong>: حَذف فِئَة مَوجودَة يَترُك إعلاناتِها بِلا فِئَة.
+                    <h3 style="margin-top:0;">@L.Markup("admin.tenant_categories.update_heading")</h3>
+                    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 14px;">@((MarkupString)"\n                        ")@L.Markup("admin.tenant_categories.hint_before") = @L.Markup("admin.tenant_categories.hint_after")
+                        <strong>@L.Markup("admin.tenant_categories.warn_label")</strong>: @L.Markup("admin.tenant_categories.warn_body")@((MarkupString)"\n                    ")
                     </p>
 
                     <div class="ac-editor" id="cats-editor">
@@ -76,17 +76,17 @@
                             <div class="ac-editor-row" data-cat-row>
                                 <div class="ac-editor-row-head">
                                     <input class="ac-input ac-cat-icon" value="@(c.Icon ?? "home")"
-                                           aria-label="أَيقونَة" />
-                                    <input class="ac-input ac-cat-label" placeholder="اسم الفِئَة" value="@c.Label" />
-                                    <button type="button" class="ac-icon-btn" data-remove-cat aria-label="حَذف"><AcIcon Name="x" Size="14" /></button>
+                                           aria-label="@L["admin.tenant_categories.icon_label"]" />
+                                    <input class="ac-input ac-cat-label" placeholder="@L["admin.tenant_categories.name_placeholder"]" value="@c.Label" />
+                                    <button type="button" class="ac-icon-btn" data-remove-cat aria-label="@L["admin.tenant_categories.remove"]"><AcIcon Name="x" Size="14" /></button>
                                 </div>
                                 <div class="ac-editor-grid2">
                                     <div>
-                                        <span class="ac-chip-input-label">المُعَرِّف (slug)</span>
+                                        <span class="ac-chip-input-label">@L.Markup("admin.tenant_categories.slug_label")</span>
                                         <input class="ac-input ac-cat-slug" placeholder="apartments" value="@c.Slug" style="direction:ltr;" />
                                     </div>
                                     <div>
-                                        <span class="ac-chip-input-label">التَّجميع (اختياريّ)</span>
+                                        <span class="ac-chip-input-label">@L.Markup("admin.tenant_categories.kind_label")</span>
                                         <input class="ac-input ac-cat-kind" placeholder="residential" value="@c.Kind"
                                                list="kind-list" style="direction:ltr;" />
                                     </div>
@@ -105,7 +105,7 @@
                     </datalist>
 
                     <button type="button" class="ac-add-row-btn" id="add-cat" style="margin-top:12px;">
-                        <AcIcon Name="plus" Size="16" /> إضافَة فِئَة
+                        <AcIcon Name="plus" Size="16" /> @L.Markup("admin.tenant_categories.add_row")@((MarkupString)"\n                    ")
                     </button>
 
                     <textarea name="categories" id="cats-hidden" hidden>@catsText</textarea>
@@ -113,9 +113,9 @@
             </AcCard>
 
             <div style="display:flex;gap:8px;margin-top:16px;">
-                <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">إلغاء</a>
+                <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">@L.Markup("admin.tenant_categories.cancel")</a>
                 <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
-                    <AcIcon Name="check" Size="18" /> حِفظ
+                    <AcIcon Name="check" Size="18" /> @L.Markup("admin.tenant_categories.save")@((MarkupString)"\n                ")
                 </button>
             </div>
         </form>
@@ -125,15 +125,15 @@
                 <div class="ac-editor-row-head">
                     <input class="ac-input ac-cat-icon" value="tag" aria-label="أَيقونَة" />
                     <input class="ac-input ac-cat-label" placeholder="اسم الفِئَة" />
-                    <button type="button" class="ac-icon-btn" data-remove-cat aria-label="حَذف"><AcIcon Name="x" Size="14" /></button>
+                    <button type="button" class="ac-icon-btn" data-remove-cat aria-label="@L["admin.tenant_categories.remove"]"><AcIcon Name="x" Size="14" /></button>
                 </div>
                 <div class="ac-editor-grid2">
                     <div>
-                        <span class="ac-chip-input-label">المُعَرِّف (slug)</span>
+                        <span class="ac-chip-input-label">@L.Markup("admin.tenant_categories.slug_label")</span>
                         <input class="ac-input ac-cat-slug" placeholder="apartments" style="direction:ltr;" />
                     </div>
                     <div>
-                        <span class="ac-chip-input-label">التَّجميع (اختياريّ)</span>
+                        <span class="ac-chip-input-label">@L.Markup("admin.tenant_categories.kind_label")</span>
                         <input class="ac-input ac-cat-kind" placeholder="residential" list="kind-list" style="direction:ltr;" />
                     </div>
                 </div>
@@ -169,10 +169,10 @@
     // no_categories/bad_categories هُنا و‏empty/format في الاستوديو
     // لِنَفس المَعنى، وغَلَبَت empty/bad_format لِأَنَّها لُغَةُ
     // المَناطِق والخَصائِص على الطَرَفَين أَصلاً.
-    static string FormatError(string err) => err switch
+    string FormatError(string err) => err switch
     {
-        "empty" => "أَضِف فِئَة واحِدَة على الأَقَلّ.",
-        "bad_format" => "تَنسيق غَير صَحيح — كُلّ صَفّ: slug | الاسم | أَيقونَة | تَجميع.",
+        "empty" => L["admin.tenant_categories.err_empty"],
+        "bad_format" => L["admin.tenant_categories.err_format"],
         _ => err
     };
 }

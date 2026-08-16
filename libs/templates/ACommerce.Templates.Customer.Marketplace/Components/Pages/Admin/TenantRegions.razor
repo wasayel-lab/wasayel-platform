@@ -2,6 +2,7 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantAdminQueries TenantAdmin
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard Guard
+@inject L L
 
 @*
     مُحَرِّر المُدُن والأَحياء.
@@ -17,7 +18,7 @@
 <div class="acs-page acm-admin">
     @if (tenant is null)
     {
-        <AcEmptyState IconName="info" Title="المَتجَر غَير مَوجود" />
+        <AcEmptyState IconName="info" Title="@L["admin.tenant.not_found"]" />
     }
     else
     {
@@ -27,7 +28,7 @@
                 <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@backHref">
                     <AcIcon Name="arrow-right" Size="16" />
                 </a>
-                <h1 class="acm-wizard-title" style="margin:0;">مُدُن @tenant.Name</h1>
+                <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("admin.tenant_regions.heading") @tenant.Name</h1>
             </div>
         </div>
 
@@ -37,12 +38,12 @@
         }
         @if (Saved == "1")
         {
-            <AcAlert Variant="success" Message="تَمّ الحِفظ." />
+            <AcAlert Variant="success" Message="@L["admin.tenant_regions.saved"]" />
         }
 
         <AcCard>
             <ChildContent>
-                <h3 style="margin-top:0;">المَعروض حاليّاً</h3>
+                <h3 style="margin-top:0;">@L.Markup("admin.tenant_regions.current")</h3>
                 @if (citiesWithKids.Count > 0)
                 {
                     <ul class="acm-region-tree">
@@ -59,7 +60,7 @@
                                 else
                                 {
                                     <span style="color:var(--ac-text-muted);font-size:12px;">
-                                        — لا أَحياء
+                                        — @L.Markup("admin.tenant_regions.no_districts")@((MarkupString)"\n                                    ")
                                     </span>
                                 }
                             </li>
@@ -68,7 +69,7 @@
                 }
                 else
                 {
-                    <p style="color:var(--ac-text-muted);">لا مُدُن بَعد.</p>
+                    <p style="color:var(--ac-text-muted);">@L.Markup("admin.tenant_regions.empty")</p>
                 }
             </ChildContent>
         </AcCard>
@@ -76,9 +77,8 @@
         <form method="post" action="@($"/admin/tenants/{Slug}/regions/save")" id="regions-form">
             <AcCard>
                 <ChildContent>
-                    <h3 style="margin-top:0;">تَحديث المُدُن والأَحياء</h3>
-                    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 14px;">
-                        بِطاقَة لِكُلّ مَدينَة. اكتُب الحَيّ ثُمَّ اضغَط Enter لِإضافَتِه.
+                    <h3 style="margin-top:0;">@L.Markup("admin.tenant_regions.update_heading")</h3>
+                    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 14px;">@((MarkupString)"\n                        ")@L.Markup("admin.tenant_regions.hint_before") Enter @L.Markup("admin.tenant_regions.hint_after")@((MarkupString)"\n                    ")
                     </p>
 
                     <div class="ac-editor" id="cities-editor">
@@ -86,11 +86,11 @@
                         {
                             <div class="ac-editor-row" data-city-row>
                                 <div class="ac-editor-row-head">
-                                    <input class="ac-input ac-city-name" placeholder="اسم المَدينَة" value="@city" />
-                                    <button type="button" class="ac-icon-btn" data-remove-city aria-label="حَذف المَدينَة"><AcIcon Name="x" Size="14" /></button>
+                                    <input class="ac-input ac-city-name" placeholder="@L["admin.tenant_regions.city_placeholder"]" value="@city" />
+                                    <button type="button" class="ac-icon-btn" data-remove-city aria-label="@L["admin.tenant_regions.remove_city"]"><AcIcon Name="x" Size="14" /></button>
                                 </div>
                                 <div>
-                                    <span class="ac-chip-input-label">الأَحياء</span>
+                                    <span class="ac-chip-input-label">@L.Markup("admin.tenant_regions.districts_label")</span>
                                     <div class="ac-chip-input" data-districts>
                                         @foreach (var d in kids)
                                         {
@@ -104,7 +104,7 @@
                     </div>
 
                     <button type="button" class="ac-add-row-btn" id="add-city" style="margin-top:12px;">
-                        <AcIcon Name="plus" Size="16" /> إضافَة مَدينَة
+                        <AcIcon Name="plus" Size="16" /> @L.Markup("admin.tenant_regions.add_city")@((MarkupString)"\n                    ")
                     </button>
 
                     <textarea name="regions" id="regions-hidden" hidden>@regionsText</textarea>
@@ -112,9 +112,9 @@
             </AcCard>
 
             <div style="display:flex;gap:8px;margin-top:16px;">
-                <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">إلغاء</a>
+                <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">@L.Markup("admin.tenant_regions.cancel")</a>
                 <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
-                    <AcIcon Name="check" Size="18" /> حِفظ
+                    <AcIcon Name="check" Size="18" /> @L.Markup("admin.tenant_regions.save")@((MarkupString)"\n                ")
                 </button>
             </div>
         </form>
@@ -123,10 +123,10 @@
             <div class="ac-editor-row" data-city-row>
                 <div class="ac-editor-row-head">
                     <input class="ac-input ac-city-name" placeholder="اسم المَدينَة" />
-                    <button type="button" class="ac-icon-btn" data-remove-city aria-label="حَذف المَدينَة"><AcIcon Name="x" Size="14" /></button>
+                    <button type="button" class="ac-icon-btn" data-remove-city aria-label="@L["admin.tenant_regions.remove_city"]"><AcIcon Name="x" Size="14" /></button>
                 </div>
                 <div>
-                    <span class="ac-chip-input-label">الأَحياء</span>
+                    <span class="ac-chip-input-label">@L.Markup("admin.tenant_regions.districts_label")</span>
                     <div class="ac-chip-input" data-districts>
                         <input class="ac-chip-entry" placeholder="أَضِف حَيّاً ثُمَّ Enter" />
                     </div>
@@ -196,9 +196,9 @@
         return v.ToString();
     }
 
-    static string FormatError(string err) => err switch
+    string FormatError(string err) => err switch
     {
-        "empty"     => "أَضِف مَدينَة واحِدَة على الأَقَلّ.",
+        "empty"     => L["admin.tenant_regions.err_empty"],
         "bad_format" => "تَنسيق غَير صَحيح — كُلّ صَفّ: المَدينَة > أَحياء.",
         _           => err
     };

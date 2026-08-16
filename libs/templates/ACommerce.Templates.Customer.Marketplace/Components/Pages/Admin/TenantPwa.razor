@@ -1,6 +1,7 @@
 @page "/admin/tenants/{slug}/pwa"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard Guard
+@inject L L
 @using ACommerce.Kit.Roles
 
 @*
@@ -17,7 +18,7 @@
 <div class="acs-page acm-admin">
     @if (tenant is null)
     {
-        <AcEmptyState IconName="info" Title="المَتجَر غَير مَوجود" />
+        <AcEmptyState IconName="info" Title="@L["admin.tenant.not_found"]" />
     }
     else
     {
@@ -26,20 +27,15 @@
                 <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/admin/tenants/{Slug}")">
                     <AcIcon Name="arrow-right" Size="16" />
                 </a>
-                <h1 class="acm-wizard-title" style="margin:0;">
-                    تَطبيقات @tenant.Name
+                <h1 class="acm-wizard-title" style="margin:0;">@((MarkupString)"\n                    ")@L.Markup("admin.tenant_pwa.heading") @tenant.Name
                 </h1>
             </div>
         </div>
 
         @if (Err is not null) { <AcAlert Variant="danger"  Message="@FormatError(Err)" /> }
-        @if (Saved == "1")    { <AcAlert Variant="success" Message="تَمّ الحِفظ." /> }
+        @if (Saved == "1")    { <AcAlert Variant="success" Message="@L["admin.tenant_pwa.saved"]" /> }
 
-        <p style="color:var(--ac-text-muted);font-size:13px;">
-            عِندَ "أَضِف إلى الشاشَة الرَئيسِيَّة" يَحصُل المُستَخدِم عَلى
-            تَطبيق مُستَقِلّ لِدَورِه — اسم + أَيقونَة + لَون + اختِصارات.
-            تَركك لِلحُقول فارِغَة يُولِّد القِيَم تِلقائيّاً مِن اسم الدَور
-            وَلَون المَتجَر.
+        <p style="color:var(--ac-text-muted);font-size:13px;">@((MarkupString)"\n            ")@L.Markup("admin.tenant_pwa.intro")@((MarkupString)"\n        ")
         </p>
 
         @if (tenant.Roles.Count == 0)
@@ -47,10 +43,10 @@
             <AcCard>
                 <ChildContent>
                     <AcAlert Variant="info"
-                             Message="@($"هذا المَتجَر بِلا أَدوار — يَحصُل عَلى تَطبيق PWA واحِد عَلى /{Slug}. عَدِّل الأَدوار أَوَّلاً لِلحُصول عَلى تَطبيق لِكُلّ دَور.")" />
+                             Message="@($"{L["admin.tenant_pwa.no_roles"]} PWA {L["admin.tenant_pwa.no_roles_mid"]}{Slug}. {L["admin.tenant_pwa.no_roles_hint"]}")" />
                     <a class="ac-btn ac-btn-primary" style="margin-top:12px;"
                        href="@($"/admin/tenants/{Slug}/roles")">
-                        <AcIcon Name="people" Size="16" /> إعداد الأَدوار
+                        <AcIcon Name="people" Size="16" /> @L.Markup("admin.tenant_pwa.setup_roles")@((MarkupString)"\n                    ")
                     </a>
                 </ChildContent>
             </AcCard>
@@ -77,16 +73,16 @@
                                         /@(Slug)/r/@(r.Slug)/
                                     </small>
 
-                                    <AcField Label="اسم التَطبيق"
-                                             Hint="@($"الافتراضي: {tenant.Name} — {r.Label}")">
+                                    <AcField Label="@L["admin.tenant_pwa.field_name"]"
+                                             Hint="@($"{L["admin.tenant_pwa.name_hint"]} {tenant.Name} — {r.Label}")">
                                         <input type="text" maxlength="60" class="ac-input"
                                                name="@($"name_{r.Slug}")"
                                                value="@(r.PwaName ?? "")"
                                                placeholder="@($"{tenant.Name} — {r.Label}")" />
                                     </AcField>
 
-                                    <AcField Label="أَيقونَة مُخَصَّصَة"
-                                             Hint="PNG أَو SVG، مُرَبَّع ٥١٢×٥١٢، حَتَّى ٢٥٦ كيلوبايت. اِترُك فارِغاً لِلتَوليد التِلقائي.">
+                                    <AcField Label="@L["admin.tenant_pwa.field_icon"]"
+                                             Hint="@L["admin.tenant_pwa.icon_hint"]">
                                         <input type="file" class="ac-input"
                                                name="@($"icon_{r.Slug}")"
                                                accept="image/png,image/svg+xml,image/webp" />
@@ -97,7 +93,7 @@
                                         <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
                                             <input type="checkbox"
                                                    name="@($"clear_{r.Slug}")" value="1" />
-                                            حَذف الأَيقونَة المُخَصَّصَة (العَودَة لِلتَوليد)
+                                            @L.Markup("admin.tenant_pwa.clear_icon")@((MarkupString)"\n                                        ")
                                         </label>
                                     }
                                 </div>
@@ -107,9 +103,9 @@
                 }
 
                 <div style="display:flex;gap:8px;margin-top:16px;">
-                    <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">إلغاء</a>
+                    <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">@L.Markup("admin.tenant_pwa.cancel")</a>
                     <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
-                        <AcIcon Name="check" Size="18" /> حِفظ
+                        <AcIcon Name="check" Size="18" /> @L.Markup("admin.tenant_pwa.save")@((MarkupString)"\n                    ")
                     </button>
                 </div>
             </form>
@@ -135,10 +131,10 @@
         tenant = await Tenants.FindAsync(Slug);
     }
 
-    static string FormatError(string err) => err switch
+    string FormatError(string err) => err switch
     {
-        "icon_too_large" => "الأَيقونَة أَكبَر مِن ٢٥٦ كيلوبايت.",
-        "icon_bad_type"  => "نَوع الصورَة غَير مَدعوم — اِستَخدِم PNG أَو SVG.",
+        "icon_too_large" => L["admin.tenant_pwa.err_icon_large"],
+        "icon_bad_type"  => L["admin.tenant_pwa.err_icon_type"],
         _ => err
     };
 }
