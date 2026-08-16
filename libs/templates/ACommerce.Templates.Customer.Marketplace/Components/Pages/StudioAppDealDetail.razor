@@ -1,6 +1,6 @@
 @page "/studio/apps/{slug}/deals/{id:guid}"
 @inject Services.Incubator.StudioAuth Auth
-@inject Marten.IDocumentStore Store
+@inject Services.Queries.TenantDirectory Tenants
 @inject Services.Deals.DealsService Deals
 @using ACommerce.Kit.Tenants
 @using ACommerce.Templates.Customer.Marketplace.Services.Deals
@@ -188,8 +188,7 @@
     {
         Auth.Load();
         if (!Auth.IsAuthenticated) return;
-        await using var qs = Store.QuerySession();
-        var t = await qs.LoadAsync<Tenant>(Slug);
+        var t = await Tenants.FindAsync(Slug);
         if (t is null || t.OwnerUserId != Auth.UserId!.Value) return;
         deal = await Deals.LoadAsync(Slug, Id);
         if (deal is not null) stages = DealsPolicy.StagesFor(deal.Pattern).ToList();

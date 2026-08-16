@@ -1,5 +1,5 @@
 @page "/admin/tenants/{slug}/categories"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard Guard
 
 @*
@@ -158,8 +158,7 @@
         // التَّصيير. القَرار مَحفوظ لِلطَّلَب، فَنِداء RequireTenantAdmin
         // بَعدَه لا يُكَلِّف استِعلاماً ثانِياً.
         if (!await Guard.CanAdministerAsync(Slug)) return;
-        await using var s = Store.QuerySession();
-        tenant = await s.LoadAsync<Tenant>(Slug);
+        tenant = await Tenants.FindAsync(Slug);
         if (tenant is null) return;
         catsText = string.Join('\n', tenant.Categories
             .OrderBy(c => c.SortOrder).ThenBy(c => c.Label)

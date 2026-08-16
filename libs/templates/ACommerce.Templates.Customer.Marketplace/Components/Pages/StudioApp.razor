@@ -1,6 +1,6 @@
 @page "/studio/apps/{slug}"
 @inject Services.Incubator.StudioAuth Auth
-@inject Marten.IDocumentStore Store
+@inject Services.Queries.TenantDirectory Tenants
 @using ACommerce.Kit.Tenants
 
 @*
@@ -152,8 +152,7 @@
     {
         Auth.Load();
         if (!Auth.IsAuthenticated) return;
-        await using var qs = Store.QuerySession();
-        tenant = await qs.LoadAsync<Tenant>(Slug);
+        tenant = await Tenants.FindAsync(Slug);
         // تَحَقَّق مِن المِلكِيَّة
         if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) tenant = null;
     }
