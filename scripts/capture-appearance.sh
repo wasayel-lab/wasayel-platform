@@ -150,6 +150,52 @@ PAGES=(
   "ejar-listings-anon:/ejar/me/listings"
   "ejar-role-anon:/ejar/me/role"
   "theme-demo-manage-anon:/theme-demo/manage"
+
+  # ‏2026-08-16 (‏#33–#48) — المَوجَة العاشِرَة: **بابُ الدُخول**.
+  #
+  # ‏`Login` (‏14) و`PhoneLoginForm` (‏7) و`NafathLoginForm` (‏9) —
+  # ‏30 سِلسِلَة، وكُلُّها كانَت خارِجَ اللَقطَة رَغمَ أَنّ الصَفَحات
+  # **عامَّة بِالكامِل**. والسَبَب أَنّ الفُروعَ تُفتَح بِـ`query` لا
+  # بِجَلسَة: مَرحَلَة الرَمز (`stage=verify`)، وسَبعَةُ نُصوصِ خَطَأ
+  # (`err=…`) في تَعبير `switch` واحِد لا يُصَيَّر مِنه إلّا واحِد.
+  #
+  # والقَناةُ مِن المُستَأجِر لا مِن الطَلَب (مَقيس في القاعِدَة):
+  # ‏`ejar`=`phone` و`theme-demo`=`nafath`، **ولا مُستَأجِرَ واحِدَ
+  # بِقَناة `email`** — فَـ`EmailLoginForm` (‏7) خارِجَ البُرهان
+  # البايتيّ بِالبِنيَة، ويُقال ولا يُنسى.
+  #
+  # أَمّا `err` فَيُحسَب في `Login.razor` **قَبلَ** اختِيار النَموذَج،
+  # فَالسَبعَةُ كُلُّها تُصَيَّر على قَناةٍ واحِدَة — ولِذلك سَبعَةُ
+  # عَناوينَ على `ejar` وَحدَها، لا سَبعَةٌ في كُلّ قَناة.
+  "ejar-login:/ejar/login"
+  "ejar-login-verify:/ejar/login?stage=verify&phone=0512345678"
+  "ejar-login-err-phone:/ejar/login?err=phone_required"
+  "ejar-login-err-email-req:/ejar/login?err=email_required"
+  "ejar-login-err-email-bad:/ejar/login?err=email_invalid"
+  "ejar-login-err-send:/ejar/login?err=send_failed"
+  "ejar-login-err-code:/ejar/login?err=code_invalid"
+  "ejar-login-err-nid:/ejar/login?err=nid_required"
+  "ejar-login-err-approve:/ejar/login?err=not_approved"
+  "theme-demo-login:/theme-demo/login"
+  "theme-demo-login-verify:/theme-demo/login?stage=verify&nid=1122334455&attempt=ab12cd34&code=42"
+  # فَرعُ «المَتجَر غير مَوجود.» — مَسارٌ يُطابِق `/{slug}/login` بِمُعَرِّفٍ
+  # لا مُستَأجِرَ لَه. لا يُنشِئ شَيئاً ولا يَكتُب حَرفاً.
+  "login-unknown:/__no_such_tenant__/login"
+
+  # ‏`TenantDrivers` (‏13): `order` وَحدَه فيه دَور `driver` (مَقيس في
+  # `TestDataSeeder.Plan`)، فَجِسمُ الحَلَقَة لا يُصَيَّر في `ejar`.
+  # والزَوجُ (مَملوء/فارِغ) يَحرُس الفَرعَين مَعاً.
+  "order-drivers:/order/drivers"
+  "ejar-drivers:/ejar/drivers"
+
+  # ‏`VendorProfile` (‏10) — صَفحَةٌ عامَّة بِمُعَرِّف بائِع، والبائِعُ
+  # هُنا مُستَخدِمُ `ejar/vendor` الَّذي بَذَرَه `TestDataSeeder`.
+  "ejar-vendor:/ejar/vendor/e7862bae-5f0a-42b7-b071-c973d5a3305b"
+  "ejar-vendor-missing:/ejar/vendor/00000000-0000-0000-0000-000000000001"
+
+  # فَرعا «المَجهول» في صَفحَتَي الدَور والمَنطِقَة.
+  "ejar-onboarding-anon:/ejar/me/role/onboarding"
+  "ejar-area-anon:/ejar/me/area"
 )
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -368,6 +414,25 @@ GUARDED_PAGES=(
   #
   # ومالِكُ الجَلسَة هو صاحِبُ `PLATFORM_ADMIN_PHONE`، أَي مِلَفُّ
   # `admin` — و`StudioStudy` يَشتَرِط `OwnerUserId == Auth.UserId`.
+  # ══ المَوجَة العاشِرَة — ما لا تَبلُغُه إلّا جَلسَة ═══════════════
+  #
+  # ‏`TenantUsers` (‏10): تَوأَمُ شاشات الاستوديو، ويَفتَحُها مِلَفُّ
+  # `admin` بِمِلكِيَّة `owner-test` — بِلا بَيانٍ جَديد.
+  "admin-tenant-users:admin:/admin/tenants/owner-test/users"
+
+  # ‏`ChatRoom` (‏10): مُحادَثَةُ `ejar` الوَحيدَة، بَذَرَها
+  # `TestDataSeeder` بَين أَوَّلِ مُستَخدِمَين — و`member` أَحَدُهُما.
+  "member-chat:member:/{member}/chats/90e91b8c-330d-483a-8908-869196182fd5"
+
+  # ‏`RoleOnboarding` (‏9) و`DriverArea` (‏11) بِجَلسَة — الطَرَفُ
+  # المُقابِل لِفَرعَي «المَجهول» في `PAGES`.
+  "member-onboarding:member:/{member}/me/role/onboarding"
+  "member-area:member:/{member}/me/area"
+
+  # فَرعُ «تَسجيل الدُخول» في `Login` نَفسِه: صاحِبُ الجَلسَة يُصَيِّر
+  # سَطرَ التَحويل («جارٍ التَّحويل…») الَّذي لا يَبلُغُه زائِر أَبَداً.
+  "member-login:member:/{member}/login"
+
   "studio-study:admin:/studio/s/5a3e1d00-0000-4000-8000-00000000ec01"
   "studio-study-print:admin:/studio/s/5a3e1d00-0000-4000-8000-00000000ec01/print"
   "admin-incubator-study:admin:/admin/incubator/5a3e1d00-0000-4000-8000-00000000ec01/study"
