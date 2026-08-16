@@ -18,7 +18,7 @@
 <div class="acs-page acm-details">
 @if (tenant is null)
 {
-    <AcEmptyState IconName="info" Message="المَتجَر غَير مَوجود." />
+    <AcEmptyState IconName="info" Message="@L["listings.detail.tenant_missing"]" />
 }
 else if (listing is null)
 {
@@ -26,20 +26,20 @@ else if (listing is null)
 }
 else if (listing.IsDeleted)
 {
-    <AcEmptyState IconName="info" Message="هذا الإعلان مَحذوف." />
+    <AcEmptyState IconName="info" Message="@L["listings.detail.deleted"]" />
 }
 else
 {
     @if (Reported == "1")
     {
-        <AcAlert Variant="success" Message="شُكراً، تَمّ تَلَقّي بَلاغك وسَيُراجِعه فَريقنا." />
+        <AcAlert Variant="success" Message="@L["listings.detail.report_thanks"]" />
     }
 
     <div class="acs-gallery-wrap" style="position:relative;">
         <AcGallery Images="@listing.MediaUrls" PlaceholderIcon="building" />
 
         <div class="acm-details-gallery-actions">
-            <a class="acm-details-circle-btn" href="@AuthSession.LinkFor(Slug, Role, $"explore")" aria-label="الرُجوع">
+            <a class="acm-details-circle-btn" href="@AuthSession.LinkFor(Slug, Role, $"explore")" aria-label="@L["listings.detail.back"]">
                 <AcIcon Name="arrow-right" Size="18" />
             </a>
             <div class="acm-details-gallery-actions-end">
@@ -69,7 +69,7 @@ else
                     <form method="post" action="@($"/{Slug}/listings/{Id}/favorite")" style="margin:0;">
                         <input type="hidden" name="return" value="@($"/{Slug}/listings/{Id}")" />
                         <button type="submit" class="acm-details-circle-btn @(IsFav ? "is-fav" : "")"
-                                aria-label="@(IsFav ? "أَزِل مِن المُفَضَّلَة" : "أَضِف لِلمُفَضَّلَة")">
+                                aria-label="@(IsFav ? L["listings.detail.fav_remove"] : L["listings.detail.fav_add"])">
                             <AcIcon Name="heart" Filled="@IsFav" Size="18" />
                         </button>
                     </form>
@@ -86,19 +86,19 @@ else
     </div>
 
     <div class="acm-details-meta">
-        <span class="acm-details-price">@listing.Price.ToString("N0") ريال</span>
+        <span class="acm-details-price">@((MarkupString)Money.Format(listing.Price, style: MoneyUnitStyle.Name))</span>
         <AcBadge Variant="info" Text="@CategoryLabel" />
         @* شارات الثِقَة عِندَ نُقطَة القَرار نَفسِها. *@
         @if (listing.IsVerified)
         {
-            <AcBadge Variant="success" Text="مُوَثَّق" />
+            <AcBadge Variant="success" Text="@L["listings.detail.verified"]" />
         }
         @if (listing.IsFeatured)
         {
-            <AcBadge Variant="primary" Text="مُمَيَّز" />
+            <AcBadge Variant="primary" Text="@L["listings.detail.featured"]" />
         }
         <span style="color:var(--ac-text-muted);font-size:12px;">
-            <AcIcon Name="search" Size="14" /> شوهد @listing.ViewCount مَرَّة
+            <AcIcon Name="search" Size="14" /> @L.Markup("listings.detail.seen_before") @listing.ViewCount @L.Markup("listings.detail.seen_after")@((MarkupString)"\n        ")
         </span>
     </div>
 
@@ -111,7 +111,7 @@ else
            href="@AuthSession.LinkFor(Slug, Role, $"vendor/{oid2}")">
             <AcIcon Name="star" Filled="true" Size="14" />
             <strong>@ownerReviews.AverageRating.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)</strong>
-            <span>(@ownerReviews.Count تَقييم لِلمُعلِن)</span>
+            <span>(@ownerReviews.Count @L.Markup("listings.detail.reviews_suffix")</span>
             <AcIcon Name="chevron-left" Size="14" />
         </a>
     }
@@ -125,7 +125,7 @@ else
     @if (!string.IsNullOrEmpty(listing.Description))
     {
         <section class="acm-details-section">
-            <h2 class="acm-details-section-title">الوَصف</h2>
+            <h2 class="acm-details-section-title">@L.Markup("listings.detail.section_description")</h2>
             <p class="acm-details-description">@listing.Description</p>
         </section>
     }
@@ -141,7 +141,7 @@ else
         if (rows.Count > 0)
         {
             <section class="acm-details-section">
-                <h2 class="acm-details-section-title">التَّفاصيل</h2>
+                <h2 class="acm-details-section-title">@L.Markup("listings.detail.section_details")</h2>
                 <div class="acm-details-grid">
                     @foreach (var (k, v) in rows)
                     {
@@ -158,7 +158,7 @@ else
     @if (resolvedAttrs is { Count: > 0 })
     {
         <section class="acm-details-section">
-            <h2 class="acm-details-section-title">التَفاصيل</h2>
+            <h2 class="acm-details-section-title">@L.Markup("listings.detail.section_attrs")</h2>
             <dl class="acm-details-attrs">
                 @foreach (var a in resolvedAttrs)
                 {
@@ -177,40 +177,40 @@ else
     @* رَسائِل خَطَأ مِن POST handlers — تَظهَر فَوق قِسم العُروض *@
     @if (Err == "offer_price")
     {
-        <AcAlert Variant="danger" Message="السِعر يَجِب أَن يَكون أَكبَر مِن صِفر." />
+        <AcAlert Variant="danger" Message="@L["listings.detail.err_offer_price"]" />
     }
     else if (Err == "offer_geo")
     {
-        <AcAlert Variant="danger" Message="يَجِب السَّماح بِالوُصول إلى مَوقِعكَ لِتَقديم العَرض. اِسمَح بِالإذن مِن مُتَصَفِّحكَ ثُمّ أَعِد المُحاوَلَة." />
+        <AcAlert Variant="danger" Message="@L["listings.detail.err_offer_geo"]" />
     }
     else if (Err == "active_trip")
     {
-        <AcAlert Variant="warning" Message="لَدَيكَ رِحلَة نَشِطَة — أَنهِها أَوّلاً قَبل تَقديم عَرض جَديد." />
+        <AcAlert Variant="warning" Message="@L["listings.detail.err_active_trip"]" />
     }
     else if (Err == "cooldown")
     {
-        <AcAlert Variant="warning" Message="فَترَة تَهدِئَة: قَطَعتَ رِحلَة مُؤَخَّراً. حاوِل بَعد ٥ دَقائِق." />
+        <AcAlert Variant="warning" Message="@L["listings.detail.err_cooldown"]" />
     }
     else if (Err == "self_offer")
     {
-        <AcAlert Variant="danger" Message="لا يُمكِنُكَ تَقديم عَرض عَلى إعلانِكَ." />
+        <AcAlert Variant="danger" Message="@L["listings.detail.err_self_offer"]" />
     }
 
-    @if (Trip == "completed") { <AcAlert Variant="success" Message="تَمّ تَأكيد انتِهاء الرِحلَة. شُكراً." /> }
-    @if (Trip == "aborted")   { <AcAlert Variant="warning" Message="الرِحلَة أُلغِيَت." /> }
-    @if (Trip == "arrived")   { <AcAlert Variant="success" Message="تَمّ تَأكيد وُصولِكَ لِنُقطَة الانطِلاق." /> }
+    @if (Trip == "completed") { <AcAlert Variant="success" Message="@L["listings.detail.trip_completed"]" /> }
+    @if (Trip == "aborted")   { <AcAlert Variant="warning" Message="@L["listings.detail.trip_aborted"]" /> }
+    @if (Trip == "arrived")   { <AcAlert Variant="success" Message="@L["listings.detail.trip_arrived"]" /> }
     @if (Err == "too_far")
     {
         <AcAlert Variant="danger"
-                 Message="@($"أَنتَ بَعيد عَن نُقطَة الانطِلاق ({Dist} كم). اِقتَرِب ثُمّ حاوِل مَرَّة أُخرى.")" />
+                 Message="@($"{L["listings.detail.too_far_before"]}{Dist} {L["listings.detail.too_far_after"]}")" />
     }
     else if (Err == "arrived_geo")
     {
-        <AcAlert Variant="danger" Message="يَجِب السَّماح بِالمَوقِع لِتَأكيد الوُصول." />
+        <AcAlert Variant="danger" Message="@L["listings.detail.err_arrived_geo"]" />
     }
     else if (Err == "not_driver")
     {
-        <AcAlert Variant="danger" Message="هذا الإجراء لِلسائِق المَقبول فَقَط." />
+        <AcAlert Variant="danger" Message="@L["listings.detail.err_not_driver"]" />
     }
 
     @* خَريطَة لِنِقاط الانطِلاق/الوُصول — تَظهَر لِأَيّ إعلان لَه إحداثيّات
@@ -219,15 +219,15 @@ else
     @if (pickupLat is not null || dropoffLat is not null)
     {
         <section class="acm-details-section">
-            <h2 class="acm-details-section-title">المَوقِع</h2>
+            <h2 class="acm-details-section-title">@L.Markup("listings.detail.section_location")</h2>
             @if (pickupLat is not null)
             {
                 <div style="margin-bottom:12px;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                        <strong style="font-size:14px;"><AcIcon Name="map-pin" Size="16" /> الانطِلاق</strong>
+                        <strong style="font-size:14px;"><AcIcon Name="map-pin" Size="16" /> @L.Markup("listings.detail.pickup")</strong>
                         <a class="ac-btn ac-btn-ghost ac-btn-sm" target="_blank" rel="noopener"
                            href="@($"https://www.openstreetmap.org/?mlat={pickupLat}&mlon={pickupLng}#map=16/{pickupLat}/{pickupLng}")">
-                            <AcIcon Name="map-pin" Size="14" /> افتَح في الخَريطَة
+                            <AcIcon Name="map-pin" Size="14" /> @L.Markup("listings.detail.open_map")@((MarkupString)"\n                        ")
                         </a>
                     </div>
                     <AcMapPin Lat="@(pickupLat.Value)" Lng="@(pickupLng!.Value)" Height="160" />
@@ -237,10 +237,10 @@ else
             {
                 <div>
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                        <strong style="font-size:14px;"><AcIcon Name="map-pin" Size="16" /> الوُصول</strong>
+                        <strong style="font-size:14px;"><AcIcon Name="map-pin" Size="16" /> @L.Markup("listings.detail.dropoff")</strong>
                         <a class="ac-btn ac-btn-ghost ac-btn-sm" target="_blank" rel="noopener"
                            href="@($"https://www.openstreetmap.org/?mlat={dropoffLat}&mlon={dropoffLng}#map=16/{dropoffLat}/{dropoffLng}")">
-                            <AcIcon Name="map-pin" Size="14" /> افتَح في الخَريطَة
+                            <AcIcon Name="map-pin" Size="14" /> @L.Markup("listings.detail.open_map")@((MarkupString)"\n                        ")
                         </a>
                     </div>
                     <AcMapPin Lat="@(dropoffLat.Value)" Lng="@(dropoffLng!.Value)" Height="160" />
@@ -252,7 +252,7 @@ else
     @if (showOffers)
     {
         <section class="acm-details-section">
-            <h2 class="acm-details-section-title">العُروض المُقابِلَة</h2>
+            <h2 class="acm-details-section-title">@L.Markup("listings.detail.section_offers")</h2>
             @if (listingMatch is not null)
             {
                 var status = listingMatch.Status;
@@ -267,13 +267,13 @@ else
                         @switch (status)
                         {
                             case ACommerce.Kit.Offers.TripStatus.Active:
-                                <text>رِحلَة نَشِطَة مَع @listingMatch.OffererName — @listingMatch.AcceptedPrice.ToString("N0") ريال.</text>
+                                <text>@L.Markup("listings.detail.trip_active_with") @listingMatch.OffererName — @((MarkupString)Money.Format(listingMatch.AcceptedPrice, style: MoneyUnitStyle.Name)).</text>
                                 break;
                             case ACommerce.Kit.Offers.TripStatus.Completed:
-                                <text><AcIcon Name="check" Size="16" /> انتَهَت الرِحلَة (@listingMatch.AcceptedPrice.ToString("N0") ريال).</text>
+                                <text><AcIcon Name="check" Size="16" /> @L.Markup("listings.detail.trip_ended")@((MarkupString)Money.Format(listingMatch.AcceptedPrice, style: MoneyUnitStyle.Name))).</text>
                                 break;
                             case ACommerce.Kit.Offers.TripStatus.Aborted:
-                                <text>أُلغِيَت الرِحلَة (@listingMatch.AcceptedPrice.ToString("N0") ريال).</text>
+                                <text>@L.Markup("listings.detail.trip_cancelled")@((MarkupString)Money.Format(listingMatch.AcceptedPrice, style: MoneyUnitStyle.Name))).</text>
                                 break;
                         }
                     </strong>
@@ -286,7 +286,7 @@ else
                         @if (hasArrived)
                         {
                             <p style="margin:8px 0 0;font-size:12px;color:var(--ac-text-muted);">
-                                <AcIcon Name="check" Size="14" /> السائِق وَصَلَ نُقطَة الانطِلاق @listingMatch.ArrivedAt!.Value.ToString("HH:mm")
+                                <AcIcon Name="check" Size="14" /> @L.Markup("listings.detail.driver_arrived") @listingMatch.ArrivedAt!.Value.ToString("HH:mm")
                             </p>
                         }
 
@@ -300,7 +300,7 @@ else
                                     <input type="hidden" name="lng" id="arrived_lng" value="0" />
                                     <button type="button" class="ac-btn ac-btn-primary ac-btn-sm"
                                             onclick="acSubmitArrived(this)">
-                                        <AcIcon Name="map-pin" Size="14" /> أَنا واصِل
+                                        <AcIcon Name="map-pin" Size="14" /> @L.Markup("listings.detail.i_arrived")@((MarkupString)"\n                                    ")
                                     </button>
                                 </form>
                             }
@@ -309,13 +309,13 @@ else
                             {
                                 <form method="post" action="@($"/{Slug}/trips/{Id}/complete")" style="margin:0;">
                                     <button type="submit" class="ac-btn ac-btn-primary ac-btn-sm">
-                                        <AcIcon Name="check" Size="14" /> تَأكيد انتِهاء الرِحلَة
+                                        <AcIcon Name="check" Size="14" /> @L.Markup("listings.detail.confirm_trip_end")@((MarkupString)"\n                                    ")
                                     </button>
                                 </form>
                                 <form method="post" action="@($"/{Slug}/trips/{Id}/abort")" style="margin:0;">
                                     <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm"
                                             style="color:var(--ac-danger);">
-                                        <AcIcon Name="x" Size="14" /> إلغاء الرِحلَة
+                                        <AcIcon Name="x" Size="14" /> @L.Markup("listings.detail.cancel_trip")@((MarkupString)"\n                                    ")
                                     </button>
                                 </form>
                             }
@@ -340,15 +340,14 @@ else
                         @* الدَور الفَعّال لِنُقطَة الكِتابَة بِلا دَور — يُحَرِّر تَعَدُّد الأَدوار المُتَزامِن. *@
                         <input type="hidden" name="as" value="@Role" />
 
-                        <AcField Label="عَرضُكَ (ريال)" Required="true">
+                        <AcField Label="@L.Format("listings.detail.offer_price_label", Money.Unit(style: MoneyUnitStyle.Name))" Required="true">
                             <input type="number" name="price" required min="1" step="1"
                                    class="ac-input ac-input-lg" inputmode="numeric"
                                    placeholder="مَثَلاً 50" autofocus />
                         </AcField>
 
                         <details>
-                            <summary style="cursor:pointer;font-size:13px;color:var(--ac-text-muted);">
-                                إضافَة رِسالَة (اختياريّ)
+                            <summary style="cursor:pointer;font-size:13px;color:var(--ac-text-muted);">@((MarkupString)"\n                                ")@L.Markup("listings.detail.add_message")@((MarkupString)"\n                            ")
                             </summary>
                             <textarea name="message" rows="2" maxlength="200"
                                       class="ac-input" style="margin-top:6px;resize:vertical;font-family:inherit;"
@@ -357,24 +356,22 @@ else
 
                         <button type="button" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
                                 onclick="acSubmitOffer(this)">
-                            <AcIcon Name="send" Size="18" /> تَقديم العَرض
+                            <AcIcon Name="send" Size="18" /> @L.Markup("listings.detail.submit_offer")@((MarkupString)"\n                        ")
                         </button>
-                        <p style="text-align:center;font-size:11px;color:var(--ac-text-muted);margin:0;">
-                            سَيُلتَقَط مَوقِعكَ الحاليّ تِلقائيّاً.
+                        <p style="text-align:center;font-size:11px;color:var(--ac-text-muted);margin:0;">@((MarkupString)"\n                            ")@L.Markup("listings.detail.geo_note")@((MarkupString)"\n                        ")
                         </p>
                     </form>
                 }
                 else if (!Auth.IsAuthenticated)
                 {
                     <a href="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/listings/{Id}")"
-                       class="ac-btn ac-btn-ghost ac-btn-block">
-                        دُخول لِتَقديم عَرض
+                       class="ac-btn ac-btn-ghost ac-btn-block">@((MarkupString)"\n                        ")@L.Markup("listings.detail.login_to_offer")@((MarkupString)"\n                    ")
                     </a>
                 }
                 else if (isOwner && offers.Count == 0)
                 {
                     <div class="acm-role-empty" style="margin:0;">
-                        <p>لَم تَصِل عُروض بَعد. سَيَظهَر هُنا كُلّ عَرض مِن السائِقين.</p>
+                        <p>@L.Markup("listings.detail.no_offers_yet")</p>
                     </div>
                 }
 
@@ -386,7 +383,7 @@ else
                             <div class="ac-offer">
                                 <div style="display:flex;justify-content:space-between;align-items:center;">
                                     <strong>@o.OffererName</strong>
-                                    <span class="acm-details-price">@o.Price.ToString("N0") ريال</span>
+                                    <span class="acm-details-price">@((MarkupString)Money.Format(o.Price, style: MoneyUnitStyle.Name))</span>
                                 </div>
                                 @if (!string.IsNullOrEmpty(o.Message))
                                 {
@@ -401,8 +398,7 @@ else
                                         }
                                     </div>
                                 }
-                                <span style="font-size:11px;color:var(--ac-text-muted);">
-                                    صالِح حَتَّى @o.ExpiresAt.ToString("HH:mm")
+                                <span style="font-size:11px;color:var(--ac-text-muted);">@((MarkupString)"\n                                    ")@L.Markup("listings.detail.valid_until") @o.ExpiresAt.ToString("HH:mm")
                                 </span>
                                 @* أَزرار القَبول/الرَفض لِصاحِب الإعلان فَقَط. *@
                                 @if (isOwner)
@@ -410,12 +406,12 @@ else
                                     <div style="display:flex;gap:6px;margin-top:8px;">
                                         <form method="post" action="@($"/{Slug}/offers/{o.Id}/accept")" style="margin:0;">
                                             <button type="submit" class="ac-btn ac-btn-primary ac-btn-sm">
-                                                <AcIcon Name="check" Size="14" /> قَبول
+                                                <AcIcon Name="check" Size="14" /> @L.Markup("listings.detail.accept")@((MarkupString)"\n                                            ")
                                             </button>
                                         </form>
                                         <form method="post" action="@($"/{Slug}/offers/{o.Id}/reject")" style="margin:0;">
                                             <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">
-                                                <AcIcon Name="x" Size="14" /> رَفض
+                                                <AcIcon Name="x" Size="14" /> @L.Markup("listings.detail.reject")@((MarkupString)"\n                                            ")
                                             </button>
                                         </form>
                                     </div>
@@ -435,7 +431,7 @@ else
     @if (!isOwner && !isOfferBased)
     {
         <section class="acm-details-section">
-            <h2 class="acm-details-section-title">@(profile?.PrimaryCtaLabel ?? "ابدَأ صَفقَة")</h2>
+            <h2 class="acm-details-section-title">@(profile?.PrimaryCtaLabel ?? L["listings.detail.cta_deal"])</h2>
             @if (Auth.IsAuthenticated)
             {
                 @* السَّلَّة فَقَط لِلأَنماط الَّتي تَدعَمُها (مَتجَر/خَدَمات).
@@ -447,12 +443,12 @@ else
                         <input type="hidden" name="qty" value="1" />
                         <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
                             <AcIcon Name="@(profile?.PrimaryCtaIcon ?? "package")" Size="18" />
-                            @(profile?.PrimaryCtaLabel ?? "أَضِف لِلسَلَّة") · @listing.Price.ToString("N0") ر.س
+                            @(profile?.PrimaryCtaLabel ?? L["listings.detail.cta_cart"]) · @((MarkupString)Money.Format(listing.Price))
                         </button>
                     </form>
                     <form method="post" action="@($"/{Slug}/listings/{Id}/chat")" style="margin:0;">
                         <button type="submit" class="ac-btn ac-btn-ghost ac-btn-block">
-                            <AcIcon Name="message" Size="18" /> اِسأَل البائِع
+                            <AcIcon Name="message" Size="18" /> @L.Markup("listings.detail.ask_seller")@((MarkupString)"\n                        ")
                         </button>
                     </form>
                 }
@@ -462,24 +458,23 @@ else
                     <form method="post" action="@($"/{Slug}/listings/{Id}/chat")" style="margin:0 0 10px;">
                         <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
                             <AcIcon Name="@(profile?.PrimaryCtaIcon ?? "message")" Size="18" />
-                            @(profile?.PrimaryCtaLabel ?? "تَواصَل مَع المُعلِن")
+                            @(profile?.PrimaryCtaLabel ?? L["listings.detail.cta_contact"])
                         </button>
                     </form>
                     @* تَفاوُض اختياريّ — يَفتَح نَموذَج العَرض كَ <details>. *@
                     <details>
                         <summary class="ac-btn ac-btn-ghost ac-btn-block" style="text-align:start;cursor:pointer;">
-                            <AcIcon Name="send" Size="16" /> أَو قَدِّم عَرضاً مالِيّاً
+                            <AcIcon Name="send" Size="16" /> @L.Markup("listings.detail.or_offer")@((MarkupString)"\n                        ")
                         </summary>
                         <form method="post" action="@($"/{Slug}/listings/{Id}/deal")" style="margin:10px 0 0;">
-                            <AcField Label="عَرضُكَ (ر.س)">
+                            <AcField Label="@L.Format("listings.detail.offer_price_label", Money.Unit())">
                                 <input type="number" name="amount" class="ac-input" min="1"
                                        value="@((int)listing.Price)" />
                             </AcField>
-                            <AcField Label="مُلاحَظَة">
+                            <AcField Label="@L["listings.detail.note_label"]">
                                 <input name="note" class="ac-input" placeholder="تَفاصيل عَرضِكَ" />
                             </AcField>
-                            <button type="submit" class="ac-btn ac-btn-outline-primary ac-btn-block">
-                                إرسال العَرض
+                            <button type="submit" class="ac-btn ac-btn-outline-primary ac-btn-block">@((MarkupString)"\n                                ")@L.Markup("listings.detail.send_offer")@((MarkupString)"\n                            ")
                             </button>
                         </form>
                     </details>
@@ -489,8 +484,7 @@ else
             {
                 <a href="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/listings/{Id}")"
                    class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
-                   style="text-decoration:none;text-align:center;">
-                    دُخول لِبَدء صَفقَة
+                   style="text-decoration:none;text-align:center;">@((MarkupString)"\n                    ")@L.Markup("listings.detail.login_to_deal")@((MarkupString)"\n                ")
                 </a>
             }
         </section>
@@ -509,15 +503,15 @@ else
     <details class="acm-details-report">
         <summary>
             <AcIcon Name="alert-circle" Size="14" />
-            <span>تَبليغ عَن هذا الإعلان</span>
+            <span>@L.Markup("listings.detail.report_summary")</span>
         </summary>
         <div class="acm-details-report-body">
             @if (Auth.IsAuthenticated)
             {
                 <form method="post" action="@($"/{Slug}/listings/{Id}/report")">
-                    <AcField Label="السَّبَب" Required="true">
+                    <AcField Label="@L["listings.detail.reason_label"]" Required="true">
                         <select name="reason" required class="ac-input">
-                            <option value="">— اختَر —</option>
+                            <option value="">@L.Markup("listings.detail.reason_choose")</option>
                             <option value="مُكَرَّر">إعلان مُكَرَّر</option>
                             <option value="مُضَلِّل">مَعلومات مُضَلِّلَة</option>
                             <option value="غَير لائِق">مُحتَوى غَير لائِق</option>
@@ -525,27 +519,25 @@ else
                             <option value="آخَر">سَبَب آخَر</option>
                         </select>
                     </AcField>
-                    <AcField Label="مَلاحَظَة (اختياريّ)">
+                    <AcField Label="@L["listings.detail.note_optional"]">
                         <textarea name="note" rows="3" maxlength="500" class="ac-input"
                                   style="resize:vertical;" placeholder="تَفاصيل تُساعِد فَريق المُراجَعَة…"></textarea>
                     </AcField>
                     <button type="submit" class="ac-btn ac-btn-danger">
-                        <AcIcon Name="send" Size="14" /> إرسال البَلاغ
+                        <AcIcon Name="send" Size="14" /> @L.Markup("listings.detail.send_report")@((MarkupString)"\n                    ")
                     </button>
                 </form>
             }
             else
             {
-                <p>سَجِّل دُخولك أَوَّلاً لِيَتَمَكَّن فَريقنا مِن مُتابَعَة البَلاغ مَعَك.</p>
-                <a class="ac-btn ac-btn-primary" href="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/listings/{Id}")">
-                    تَسجيل دُخول
+                <p>@L.Markup("listings.detail.report_login_hint")</p>
+                <a class="ac-btn ac-btn-primary" href="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/listings/{Id}")">@((MarkupString)"\n                    ")@L.Markup("listings.detail.report_login")@((MarkupString)"\n                ")
                 </a>
             }
         </div>
     </details>
 
-    <p class="ac-muted" style="font-size:12px;margin-top:16px;text-align:center;">
-        نُشِر: @listing.CreatedAt.ToString("yyyy-MM-dd")
+    <p class="ac-muted" style="font-size:12px;margin-top:16px;text-align:center;">@((MarkupString)"\n        ")@L.Markup("listings.detail.published") @listing.CreatedAt.ToString("yyyy-MM-dd")
     </p>
 
     @* ── عَدّادُ المُشاهَدَة — أَثَرٌ جانِبيّ بَعدَ التَصيير ─────────────
@@ -591,27 +583,27 @@ else
     /// PatternProfile الشائِعَة (إيجار/سَكَن مُشتَرَك/مَتجَر). أَيّ مِفتاح
     /// غَير مَعروف يَظهَر كَما هو — الـ tenant admin يُغَطّيه بِـ
     /// AttributeDefinition لاحِقاً.</summary>
-    static string AttrLabel(string key) => key switch
+    string AttrLabel(string key) => key switch
     {
-        "bedrooms"          => "غُرَف النَّوم",
-        "bathrooms"         => "الحَمّامات",
-        "area_m2"           => "المِساحَة (م²)",
-        "furnished"         => "التَّأثيث",
-        "lease_term"        => "مُدَّة العَقد",
-        "deposit"           => "التَّأمين",
-        "payment_schedule"  => "جَدوَل الدَّفع",
-        "utilities"         => "الخَدَمات",
-        "gender_pref"       => "تَفضيل الجِنس",
-        "occupation_pref"   => "المِهنَة المُفَضَّلَة",
-        "smoking"           => "التَّدخين",
-        "rent_split"        => "تَقاسُم الإيجار",
-        "available_from"    => "مُتاح مِن",
-        "min_stay"          => "أَقَلّ إقامَة",
-        "from"              => "مِن",
-        "to"                => "إلى",
-        "when"              => "الوَقت",
-        "weight"            => "الوَزن",
-        "notes"             => "مُلاحَظات",
+        "bedrooms"          => L["listings.attr.bedrooms"],
+        "bathrooms"         => L["listings.attr.bathrooms"],
+        "area_m2"           => L["listings.attr.area_m2"],
+        "furnished"         => L["listings.attr.furnished"],
+        "lease_term"        => L["listings.attr.lease_term"],
+        "deposit"           => L["listings.attr.deposit"],
+        "payment_schedule"  => L["listings.attr.payment_schedule"],
+        "utilities"         => L["listings.attr.utilities"],
+        "gender_pref"       => L["listings.attr.gender_pref"],
+        "occupation_pref"   => L["listings.attr.occupation_pref"],
+        "smoking"           => L["listings.attr.smoking"],
+        "rent_split"        => L["listings.attr.rent_split"],
+        "available_from"    => L["listings.attr.available_from"],
+        "min_stay"          => L["listings.attr.min_stay"],
+        "from"              => L["listings.attr.from"],
+        "to"                => L["listings.attr.to"],
+        "when"              => L["listings.attr.when"],
+        "weight"            => L["listings.attr.weight"],
+        "notes"             => L["listings.attr.notes"],
         _ => key
     };
     [Parameter] public string Slug { get; set; } = "";
