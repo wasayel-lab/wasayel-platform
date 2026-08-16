@@ -315,7 +315,13 @@ static string Presets(string name) => name switch
     "overlap" => ".ac-space, .acm-role-landing-card { position: absolute !important; top: 120px !important; left: 40px !important; width: 400px !important; height: 300px !important; }",
     // هَدَف لَمس أَصغَر مِن الحَدّ
     "touch" => ".acm-role-landing-card-cta, .acs-bottom-nav-item, .acm-mobile-nav-btn { height: 12px !important; min-height: 0 !important; padding: 0 !important; overflow: hidden !important; }",
-    _ => throw new ArgumentException($"عَطَب غَير مَعروف: {name} (المُتاح: contrast, overflow, overlap, touch)"),
+    // تَدَرُّج داكِن تَحتَ نَصٍّ داكِن — وهذا العَطَب **بِعَينِه** هو
+    // ما كانَت الأَداة تَعمى عَنه: التَدَرُّج يُرسَم بِـbackground-image
+    // فَيَبقى backgroundColor شَفّافاً، والصيغَة القَديمَة تَعبُر مِن
+    // فَوقِه إلى الأَبيَض خَلفَه فَتَقرَأ «داكِن على أَبيَض» = سَليم.
+    // فَهو المِجَسّ الَّذي يُفَرِّق الصيغَتَين: صامِتٌ قَبل، صارِخٌ بَعد.
+    "gradient" => "h1, h2, .ac-space-title, .acm-role-landing-card { background-image: linear-gradient(135deg,#1E293B,#334155) !important; }",
+    _ => throw new ArgumentException($"عَطَب غَير مَعروف: {name} (المُتاح: contrast, overflow, overlap, touch, gradient)"),
 };
 
 static int FreePort()
@@ -435,11 +441,16 @@ record PageReport(string Url, int Elements, int Checks, List<Violation> Violatio
 static class Scripts
 {
     public const string Body = """
-    var V = [], checks = 0, CK = {};
+    var V = [], checks = 0, CK = {}, SKIP = {};
     function add(cat, msg, sel) { V.push({ category: cat, message: msg, selector: sel || null }); }
     // عَدّاد لِكُلّ عائِلَة — لِأَنّ «صِفر مُخالَفَة» لا مَعنى لَها
     // ما لَم يُعرَف كَم تَأكيداً جَرى فِعلاً. صِفرٌ مِن صِفر لَيسَ نَجاحاً.
     function ck(f) { checks++; CK[f] = (CK[f] || 0) + 1; }
+    // ومُتَخَطّىً لَيسَ تَأكيداً: يُعَدّ وحدَه ويُطبَع وحدَه. عُنصُرٌ
+    // تَعَذَّرَ الحُكم عَلَيه فَمَرَّ صامِتاً يُعيد الأَداةَ إلى العَمى
+    // بِلا أَن يَنقُص عَدّادٌ واحِد — وهي الصورَة الَّتي تُحَذِّر مِنها
+    // القاعِدَة ١٠.
+    function skip(f) { SKIP[f] = (SKIP[f] || 0) + 1; }
     function px(s) { var m = /^(-?\d+(?:\.\d+)?)px/.exec(s || ''); return m ? parseFloat(m[1]) : null; }
     function q(sel) { try { return Array.prototype.slice.call(document.querySelectorAll(sel)); } catch (e) { return []; } }
     function shown(n) {
@@ -624,6 +635,41 @@ static class Scripts
         if (fg.a >= 0.999) return fg;
         return { r: fg.r * fg.a + bg.r * (1 - fg.a), g: fg.g * fg.a + bg.g * (1 - fg.a), b: fg.b * fg.a + bg.b * (1 - fg.a), a: 1 };
     }
+    // خَلفِيَّةُ عُقدَةٍ واحِدَة: إمّا لَون صَلب، أَو مَحَطّات تَدَرُّج،
+    // أَو **مَجهولَة**. والتَمييز لَيسَ تَرَفاً:
+    //
+    //   التَدَرُّج يُرسَم بِـ background-image، و backgroundColor مَعَه
+    //   `transparent`. فَقارِئٌ يَقرَأ اللَون وَحدَه يَعبُر **مِن فَوق**
+    //   التَدَرُّج إلى ما خَلفَه، فَيَحكُم على خَلفِيَّةٍ لا تُرى.
+    //
+    // مَقيس (‏2026-08-16): نَصّ أَبيَض فَوقَ تَدَرُّج أَخضَر في
+    // ‏.ac-avatar أُبلِغَ عَنه «أَبيَض على أَبيَض، نِسبَة 1.00»
+    // والنِسبَة الحَقيقِيَّة ‏1.98…2.54. والرَقَم المُختَلَق يَعمَل في
+    // الاتِّجاهَين مَعاً: التَدَرُّج البَنَفسَجيّ في نَفس اللَوحَة
+    // نِسبَتُه ‏4.60 وكانَ سَيُبلَّغ بِنَفس الـ1.00 — أَي **إنذارٌ
+    // كاذِب** لا يُميَّز عَن الصادِق. ولِذلك الحُكم بِأَسوَأ مَحَطَّة:
+    // التَدَرُّج مَرسوم فِعلاً، فَلَيسَ فيه ما يُتَخَطّى.
+    //
+    // أَمّا `url(...)` فَما تَحتَ النَصّ لا يُعرَف بِلا قِراءَة بِكسل،
+    // فَيُتَخَطّى **ويُعَدّ** — وهو نَفس انضِباط ThemeContrastRule مَع
+    // السَطح شِبه الشَفّاف: «يُتَخَطّى بَدَل أَن يُحكَم عَلَيه بِرَقم
+    // مُختَلَق». والعَدّاد جُزء مِن العَقد: مُتَخَطّىً صامِت يَعود
+    // بِالأَداة إلى العَمى الَّذي أُصلِح هُنا.
+    function bgLayer(el) {
+        var s = getComputedStyle(el), img = s.backgroundImage;
+        if (img && img !== 'none') {
+            if (/gradient\(/.test(img)) {
+                var stops = [], m, re = /rgba?\([^)]*\)/g;
+                while ((m = re.exec(img)) !== null) { var c = parseRgb(m[0]); if (c) stops.push(c); }
+                // مَحَطَّةٌ بِنَحوٍ لا نَقرَؤُه (‏color(srgb …)‎، ‏#hex)
+                // تَجعَل «أَسوَأ مَحَطَّة» دَعوى بِلا سَنَد
+                if (stops.length && !/color\(|#/.test(img)) return { kind: 'stops', stops: stops };
+            }
+            return { kind: 'unknown' };
+        }
+        var b = parseRgb(s.backgroundColor);
+        return (b && b.a > 0.001) ? { kind: 'stops', stops: [b] } : { kind: 'none' };
+    }
     (C.contrast_rules || []).forEach(function (rule) {
         var maxV = rule.max_violations == null ? 10 : rule.max_violations, count = 0;
         var els = q(rule.selector);
@@ -637,21 +683,39 @@ static class Scripts
             if (own.length === 0) continue;
             var s = getComputedStyle(n);
             if (parseFloat(s.opacity) < 0.15) continue;
-            // صُعود الشَجَرَة حَتّى خَلفِيَّة غَير شَفّافَة
-            var bgc = parseRgb(s.backgroundColor), p = n.parentElement, hops = 0;
-            var stack = [];
-            if (bgc && bgc.a > 0.001) stack.push(bgc);
-            while ((!bgc || bgc.a < 0.999) && p && hops < 12) {
-                var pb = parseRgb(getComputedStyle(p).backgroundColor);
-                if (pb && pb.a > 0.001) { stack.push(pb); if (pb.a >= 0.999) { bgc = pb; break; } }
-                p = p.parentElement; hops++;
+            var fg0 = parseRgb(s.color); if (!fg0) continue;
+            // صُعود الشَجَرَة حَتّى طَبَقَة صَلبَة — أَو حَتّى مَجهول
+            var stack = [], cur = n, hops = 0, unknown = false;
+            while (cur && hops < 13) {
+                var L = bgLayer(cur);
+                if (L.kind === 'unknown') { unknown = true; break; }
+                if (L.kind === 'stops') {
+                    stack.push(L.stops);
+                    var minA = 1;
+                    for (var t = 0; t < L.stops.length; t++) minA = Math.min(minA, L.stops[t].a);
+                    if (minA >= 0.999) break;   // صَلبَة: تَحجُب ما وَراءَها
+                }
+                cur = cur.parentElement; hops++;
             }
-            var bg = { r: 255, g: 255, b: 255, a: 1 };
-            for (var k = stack.length - 1; k >= 0; k--) bg = over(stack[k], bg);
-            var fg = parseRgb(s.color); if (!fg) continue;
-            fg = over(fg, bg);
+            if (unknown) { skip('G-unmeasurable'); continue; }
+            // طَيٌّ مِن الأَبعَد إلى الأَقرَب. كُلّ طَبَقَة قَد تَحمِل
+            // مَحَطّات، فَالنَتيجَة قائِمَة مُرَشَّحات لا لَوناً واحِداً.
+            var cands = [{ r: 255, g: 255, b: 255, a: 1 }];
+            for (var k = stack.length - 1; k >= 0; k--) {
+                var next = [];
+                for (var a = 0; a < stack[k].length; a++)
+                    for (var b2 = 0; b2 < cands.length && next.length < 16; b2++)
+                        next.push(over(stack[k][a], cands[b2]));
+                cands = next;
+            }
             ck('G-contrast');
-            var rr = ratio(fg, bg);
+            // أَسوَأ مُرَشَّح — لا الأَفتَح ولا الأَغمَق، بَل أَقَلُّها
+            // نِسبَةً؛ فَأَدنى تَبايُنٍ يَقَع حَيثُ تَقتَرِب الإضاءَتان.
+            var bg = cands[0], fg = over(fg0, bg), rr = ratio(fg, bg);
+            for (var z = 1; z < cands.length; z++) {
+                var f2 = over(fg0, cands[z]), r2 = ratio(f2, cands[z]);
+                if (r2 < rr) { rr = r2; bg = cands[z]; fg = f2; }
+            }
             // WCAG: النَصّ الكَبير (≥24px أَو ≥18.66px عَريض) عَتَبَتُه 3:1
             var fsz = px(s.fontSize) || 16, fw = parseInt(s.fontWeight) || 400;
             var large = fsz >= 24 || (fsz >= 18.66 && fw >= 700);
@@ -659,6 +723,7 @@ static class Scripts
             if (rr < need)
                 add('G-contrast', '<' + n.tagName.toLowerCase() + '> «' + own.slice(0, 26) + '» نِسبَة ' + rr.toFixed(2) + ' < ' + need +
                     ' (نَصّ rgb(' + [fg.r, fg.g, fg.b].map(Math.round).join(',') + ') على rgb(' + [bg.r, bg.g, bg.b].map(Math.round).join(',') + ')' +
+                    (cands.length > 1 ? '، أَسوَأ مَحَطَّة مِن ' + cands.length : '') +
                     (large ? '، نَصّ كَبير' : '') + ')', rule.selector), count++;
         }
     });
@@ -777,6 +842,10 @@ static class Scripts
     var fam = [];
     for (var k in CK) fam.push(k + '=' + CK[k]);
     fam.sort();
+    var sk = [];
+    for (var k2 in SKIP) sk.push(k2 + '=' + SKIP[k2]);
+    sk.sort();
+    if (sk.length) fam.push('·  مُتَخَطّىً: ' + sk.join('  '));
     return { violations: V, stats: { elements: document.querySelectorAll('*').length, checks: checks, byFamily: fam.join('  ') } };
     """;
 }
