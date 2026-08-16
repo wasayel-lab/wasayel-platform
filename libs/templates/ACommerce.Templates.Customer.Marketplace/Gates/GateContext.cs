@@ -41,4 +41,23 @@ public static class GateAccessors
 public static class TermsPolicy
 {
     public const int CurrentVersion = 1;
+
+    /// <summary>
+    /// <para><b>هَل قَبِلَ هذا المُستَخدِمُ الإصدارَ الحاليّ؟</b> —
+    /// دالَّةٌ نَقِيَّة، وتَعريفٌ واحِد يَقرَؤُه <b>ثَلاثَة</b>:
+    /// ‏<c>TermsFilter</c> (يَحرُس النُقطَة)، و<c>GatePipeline</c>
+    /// (يَحرُس الأَمر)، و<c>AccountQueries</c> (تَقرَؤُها الشاشَة).</para>
+    ///
+    /// <para><b>وهي استُخرِجَت بِبُلوغِ العَدَد لا قَبلَه</b> (القاعِدَة
+    /// ١: ثَلاثَةُ مُستَهلِكين قَبلَ الاستِخراج): العِبارَةُ كانَت
+    /// مَكتوبَةً حَرفاً في المَوضِعَين الأَوَّلَين قَبلَ هذِه المَوجَة،
+    /// والمَوجَةُ كانَت ستَكتُبُها **رابِعَةً**. فَتَعريفٌ واحِدٌ هُنا
+    /// أَرخَصُ مِن رابِعَةٍ تَنجَرِف — وشَرطُ «قَبِلَ» و«الإصدار
+    /// كافٍ» لا يَجوز أَن يَختَلِفا بَينَ حارِسٍ وشاشَة، وإلّا فُتِحَت
+    /// شاشَةٌ لِمَن تَرُدُّه النُقطَة.</para>
+    /// </summary>
+    public static bool IsAccepted(ACommerce.Kit.Auth.User? user)
+        => user is not null
+        && user.AcceptedTermsAt is not null
+        && user.AcceptedTermsVersion >= CurrentVersion;
 }

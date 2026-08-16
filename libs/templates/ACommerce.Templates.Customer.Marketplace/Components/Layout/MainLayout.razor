@@ -4,7 +4,7 @@
 @inject IHttpContextAccessor HttpCtx
 @inject AuthSession Auth
 @inject L L
-@inject Marten.IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.ShellQueries Shell
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
 
@@ -160,28 +160,22 @@ else
             {
                 try
                 {
-                    await using var s = Store.QuerySession(Tenant.Slug);
-                    var me = await s.LoadAsync<ACommerce.Kit.Auth.User>(Auth.UserId.Value);
+                    // نِداءٌ واحِد بَدَل جَلسَةٍ مَفتوحَةٍ هُنا: الشِلُّ
+                    // يُصَيَّر مَع كُلّ صَفحَة، فَجَلسَتُه كانَت أَكثَر
+                    // الجَلسات تَكراراً — ولا تَطبيقَ MAUI يُصَيِّر
+                    // شاشَةً واحِدَة وشِلُّه يَطلُب قاعِدَةَ بَيانات.
+                    var shell = await Shell.LoadAsync(Tenant.Slug, Auth.UserId.Value);
+
                     // الـ URL يَتَفَوَّق عَلى user.ActiveRole — السبَب: نَفس
                     // المُستَخدِم قَد يَكون مُسَجَّلاً بِدَورَين في تَبويبَين،
                     // فَالـ DB حَقل واحِد بَينَما الـ URL يُحَدِّد كُلّ تَبويب.
+                    // وهذا قَرارُ تَوجيهٍ لا استِعلام، فَمَوضِعُه الصَفحَة.
                     var currentPath = new Uri(Nav.Uri).AbsolutePath;
                     var urlRoleInit = AuthSession.ExtractRoleFromPath(new PathString(currentPath));
-                    activeRoleSlug = urlRoleInit ?? me?.ActiveRole ?? "";
+                    activeRoleSlug = urlRoleInit ?? shell.StoredActiveRole;
 
-                    // عَدّاد المُحادَثات الَّتي فيها رَسائِل جَديدَة لي.
-                    // Conversation تَخزِنها كَ OwnerUnread / PartnerUnread —
-                    // الرَسائِل الَّتي أَرسَلتُها أَنا لا تَزيد عَدّادي
-                    // (الـ /chats/{id}/send يَزيد عَدّاد الطَّرَف الآخَر فَقَط).
-                    var convs = await s.Query<ACommerce.Kit.Chat.Conversation>()
-                        .Where(c => c.OwnerId == Auth.UserId.Value || c.PartnerId == Auth.UserId.Value)
-                        .ToListAsync();
-                    unreadMessages = convs.Count(c =>
-                        (c.OwnerId == Auth.UserId.Value   && c.OwnerUnread > 0) ||
-                        (c.PartnerId == Auth.UserId.Value && c.PartnerUnread > 0));
-
-                    unreadNotifications = await s.Query<ACommerce.Kit.Notifications.Notification>()
-                        .CountAsync(n => n.UserId == Auth.UserId.Value && !n.IsRead);
+                    unreadMessages      = shell.UnreadMessages;
+                    unreadNotifications = shell.UnreadNotifications;
                 }
                 catch { /* ignore — nav يَسقُط لِلافتراضيّ */ }
             }

@@ -1,6 +1,7 @@
 @page "/{slug}/me/searches"
 @page "/{slug}/r/{role}/me/searches"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
 @inject L L
 
@@ -119,17 +120,12 @@
     [Parameter] public string? Role { get; set; }
     [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
     Tenant? tenant;
-    List<ACommerce.Kit.SavedSearches.SavedSearch>? searches;
+    IReadOnlyList<ACommerce.Kit.SavedSearches.SavedSearch>? searches;
 
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
-        await using var g = Store.QuerySession();
-        tenant = await g.LoadAsync<Tenant>(Slug);
-        await using var s = Store.QuerySession(Slug);
-        searches = (await s.Query<ACommerce.Kit.SavedSearches.SavedSearch>()
-            .Where(ss => ss.UserId == Auth.UserId!.Value)
-            .ToListAsync())
-            .OrderByDescending(ss => ss.CreatedAt).ToList();
+        tenant   = await Tenants.FindAsync(Slug);
+        searches = await Accounts.SavedSearchesAsync(Slug, Auth.UserId!.Value);
     }
 }

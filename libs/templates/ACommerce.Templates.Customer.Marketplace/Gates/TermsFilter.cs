@@ -29,9 +29,7 @@ public sealed class TermsFilter : IEndpointFilter
         if (user is null)
             return Results.Redirect(AuthSession.LinkFor(slug, role, "login"));
 
-        var accepted = user.AcceptedTermsAt is not null
-                    && user.AcceptedTermsVersion >= TermsPolicy.CurrentVersion;
-        if (accepted) return await next(ctx);
+        if (TermsPolicy.IsAccepted(user)) return await next(ctx);
 
         var returnUrl = Uri.EscapeDataString(http.Request.Path + http.Request.QueryString);
         return Results.Redirect(AuthSession.LinkFor(slug, role,

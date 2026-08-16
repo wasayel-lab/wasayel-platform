@@ -41,6 +41,8 @@ public static class MarketplaceTemplateExtensions
         // Blazor Hybrid حَيثُ لا قاعِدَةَ بَيانات على الهاتِف.
         services.AddScoped<Services.Queries.TenantDirectory>();
         services.AddScoped<Services.Queries.AuditLogQueries>();
+        services.AddScoped<Services.Queries.ShellQueries>();
+        services.AddScoped<Services.Queries.AccountQueries>();
         // مُزَوِّد الخَلفيّات المُسَمّى: كُلّ وَكيل مَنطِقيّ (Studio / Analysis)
         // يَطلُب مِلَفَّه بِاسمِه، والمُزَوِّد يَحُلّه ويُخَزِّن خَلفيَّة واحِدَة
         // لِكُلّ مِلَفّ مُتَمايِز. تَسجيل واحِد بَدَل الخَلفيَّة المُشتَرَكَة.

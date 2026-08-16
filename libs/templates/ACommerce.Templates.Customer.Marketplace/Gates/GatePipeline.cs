@@ -60,9 +60,7 @@ public sealed class GatePipeline
             var user = await s.LoadAsync<User>(terms.UserId!.Value, ct);
             if (user is null)
                 throw new GateDeniedException("auth", "المُستَخدِم غَير مَوجود.");
-            var ok = user.AcceptedTermsAt is not null
-                  && user.AcceptedTermsVersion >= TermsPolicy.CurrentVersion;
-            if (!ok)
+            if (!TermsPolicy.IsAccepted(user))
                 throw new GateDeniedException("terms", "قَبول الشُروط مَطلوب.");
         }
 

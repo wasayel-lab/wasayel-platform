@@ -1,7 +1,8 @@
 @inject IHttpContextAccessor HttpCtx
 @inject AuthSession AuthSession
 @inject ITenantContext Tenant
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @using ACommerce.Kit.Auth
 @using ACommerce.Kit.Roles
 @using ACommerce.Kit.Tenants
@@ -94,23 +95,23 @@
 
         if (RequireTerms && AuthSession.UserId is { } uid)
         {
-            await using var s = Store.QuerySession(Slug);
-            var user = await s.LoadAsync<User>(uid);
-            var ok = user is not null
-                  && user.AcceptedTermsAt is not null
-                  && user.AcceptedTermsVersion >= TermsPolicy.CurrentVersion;
-            if (!ok) { _state = GateState.NeedTerms; return; }
+            if (!await Accounts.HasAcceptedCurrentTermsAsync(Slug, uid))
+            {
+                _state = GateState.NeedTerms; return;
+            }
         }
 
         if (!string.IsNullOrEmpty(Permission) && AuthSession.UserId is { } uid2)
         {
-            await using var g = Store.QuerySession();
-            var tenant = await g.LoadAsync<Tenant>(Slug);
+            var tenant = await Tenants.FindAsync(Slug);
             if (tenant is { Roles.Count: > 0 })
             {
-                await using var t = Store.QuerySession(Slug);
-                var user = await t.LoadAsync<User>(uid2);
-                var activeRole = Role ?? user?.ActiveRole ?? "";
+                // القِراءَةُ غَير مَشروطَة عَمداً — كَما كانَت حَرفاً.
+                // ‏`Role ?? await …` كانَ سَيَتَخَطّى الاستِعلامَ مَتى
+                // كانَ الدَورُ في المَسار، وذاكَ تَحسينُ عَدَدِ استِعلامات
+                // لا نَقلُ مَوضِع. التَحسينُ لَه مَوجَتُه.
+                var storedRole = await Accounts.ActiveRoleAsync(Slug, uid2);
+                var activeRole = Role ?? storedRole ?? "";
                 if (!RolePermissions.Has(tenant.Roles, activeRole, Permission))
                 {
                     _state = GateState.Forbidden;

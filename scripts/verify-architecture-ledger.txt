@@ -5,10 +5,8 @@
 #   R = تَفتَح QuerySession فَقَط — تَسَرُّب استِعلام.
 #   W = تَفتَح LightweightSession أَو تَستَدعي SaveChangesAsync —
 #       خارِج المُعامَلَة وخارِج الصُندوق الصادِر.
-SESSION_FILES|52
+SESSION_FILES|49
 WRITE_FILES|4
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/GatedPage.razor|R
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Layout/MainLayout.razor|R
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/QualityMonitor.razor|R
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantAttributes.razor|R
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantBranding.razor|R
@@ -29,7 +27,6 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Landing
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Me.razor|R
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyListings.razor|R
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyOffers.razor|R
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MySearches.razor|R
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Notifications.razor|W
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/ProfileEdit.razor|R
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/RoleOnboarding.razor|R
