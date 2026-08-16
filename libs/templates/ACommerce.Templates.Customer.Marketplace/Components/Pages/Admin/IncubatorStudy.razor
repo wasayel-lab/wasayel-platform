@@ -1,5 +1,6 @@
 @page "/admin/incubator/{id:guid}/study"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.FeasibilityAnalysisService Incubator
+@inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 @using System.Text.Json
 
@@ -17,30 +18,28 @@
 <div class="acs-page acm-admin" style="max-width:780px;margin:0 auto;">
     <div class="acm-admin-head">
         <div style="display:flex;align-items:center;gap:8px;">
-            <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin/incubator" aria-label="الرُجوع">
+            <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin/incubator" aria-label="@L["admin.action.back"]">
                 <AcIcon Name="arrow-right" Size="16" />
             </a>
-            <h1 class="acm-wizard-title" style="margin:0;"><AcIcon Name="bar-chart" Size="16" /> دِراسَة الجَدوى</h1>
+            <h1 class="acm-wizard-title" style="margin:0;"><AcIcon Name="bar-chart" Size="16" /> @L.Markup("admin.study.heading")</h1>
         </div>
         @if (session?.Status == IncubatorStatus.Completed)
         {
-            <span class="ac-chip ac-chip-sm">جَودَة @session.AnalysisQualityScore%</span>
+            <span class="ac-chip ac-chip-sm">@L.Markup("study.label.quality") @session.AnalysisQualityScore%</span>
         }
     </div>
 
     @if (session is null)
     {
-        <AcEmptyState IconName="info" Title="الجَلسَة غَير مَوجودَة" />
+        <AcEmptyState IconName="info" Title="@L["admin.study.not_found"]" />
     }
     else if (session.Status == IncubatorStatus.Analyzing)
     {
         <AcCard><ChildContent>
             <div style="text-align:center;padding:32px;">
                 <span style="font-size:48px;"><AcIcon Name="clock" Size="48" /></span>
-                <h3>جارٍ تَحليل فِكرَتِكَ…</h3>
-                <p style="color:var(--ac-text-muted);font-size:13px;">
-                    نَجمَع أَرقام السوق ونُقارِن بِالمنافِسين ونَستَنبِط المَخاطِر.
-                    تُحَدَّث الصَفحَة تِلقائيّاً.
+                <h3>@L.Markup("admin.study.analyzing_title")</h3>
+                <p style="color:var(--ac-text-muted);font-size:13px;">@((MarkupString)"\n                    ")@L.Markup("admin.study.analyzing_hint")@((MarkupString)"\n                ")
                 </p>
             </div>
         </ChildContent></AcCard>
@@ -48,22 +47,22 @@
     else if (session.Status == IncubatorStatus.Failed)
     {
         <AcAlert Variant="danger"
-                 Message="@($"فَشِلَ التَّحليل: {session.AnalysisError}")" />
+                 Message="@($"{L["admin.study.failed_prefix"]} {session.AnalysisError}")" />
         <form method="post" action="@($"/admin/incubator/{session.Id}/analyze")" style="margin-top:12px;">
-            <button type="submit" class="ac-btn ac-btn-primary">↺ إعادَة المُحاوَلَة</button>
+            <button type="submit" class="ac-btn ac-btn-primary">@L.Markup("admin.study.retry")</button>
         </form>
     }
     else if (session.AnalysisJson is null)
     {
-        <AcEmptyState IconName="info" Title="لا تَحليل بَعد"
-                      Message="عُد لِلمُعالِج وَاضغَط «حَلِّل الآن»."
-                      ActionLabel="المُعالِج" ActionHref="@($"/admin/incubator/{session.Id}")" />
+        <AcEmptyState IconName="info" Title="@L["admin.study.no_analysis_title"]"
+                      Message="@L["admin.study.no_analysis_hint"]"
+                      ActionLabel="@L["admin.study.wizard_link"]" ActionHref="@($"/admin/incubator/{session.Id}")" />
     }
     else
     {
         @if (root is null)
         {
-            <AcAlert Variant="warning" Message="تَعَذَّرَ قِراءَة نَتيجَة التَّحليل." />
+            <AcAlert Variant="warning" Message="@L["admin.study.parse_error"]" />
         }
         else
         {
@@ -75,36 +74,36 @@
                 <div class="acm-home-grid acm-stats-grid">
                     <div class="acm-stat-tile">
                         <strong>@Str(sum, "marketSizeSar")</strong>
-                        <span>حَجم السوق</span>
+                        <span>@L.Markup("study.section.market_size")</span>
                     </div>
                     <div class="acm-stat-tile">
                         <strong>@Str(sum, "estimatedCustomersYear1")</strong>
-                        <span>عُملاء السَّنَة ١</span>
+                        <span>@L.Markup("admin.study.stat_customers")</span>
                     </div>
                     <div class="acm-stat-tile">
                         <strong>@Str(sum, "requiredInvestmentSar")</strong>
-                        <span>الاستِثمار المَطلوب</span>
+                        <span>@L.Markup("admin.study.stat_investment")</span>
                     </div>
                 </div>
                 <AcCard><ChildContent>
-                    <strong>الحُكم: </strong>@Str(sum, "verdict")
+                    <strong>@L.Markup("study.field.verdict")@((MarkupString)" ") </strong>@Str(sum, "verdict")
                 </ChildContent></AcCard>
             }
 
-            @Section("حَجم السوق", "marketSizing", r, ("tam","TAM"),("sam","SAM"),("som","SOM"),("reasoning","التَّحليل"))
-            @SectionObj("نَموذَج الإيراد", "revenueModel", r, ("model","النَّموذَج"),("pricingSar","التَّسعير"),("unitEconomics","اقتِصاد الوَحدَة"))
-            @SectionObj("هَيكَل التَّكلِفَة", "costStructure", r, ("launchSar","الإطلاق"),("monthlyOpsSar","التَّشغيل الشَّهري"),("cacSar","CAC"),("ltvSar","LTV"))
-            @SectionObj("التَّوَقُّع المالي", "financialProjection", r, ("year1RevenueSar","إيراد السَّنَة ١"),("breakEvenMonths","التَّعادُل (أشهُر)"),("scenario","السيناريو"))
+            @Section(L["study.section.market_size"], "marketSizing", r, ("tam","TAM"),("sam","SAM"),("som","SOM"),("reasoning",L["study.field.reasoning"]))
+            @SectionObj(L["study.section.revenue_model"], "revenueModel", r, ("model",L["study.field.model"]),("pricingSar",L["study.field.pricing"]),("unitEconomics",L["study.field.unit_economics"]))
+            @SectionObj(L["study.section.cost_structure"], "costStructure", r, ("launchSar",L["study.field.launch"]),("monthlyOpsSar",L["admin.study.field_monthly_ops"]),("cacSar","CAC"),("ltvSar","LTV"))
+            @SectionObj(L["study.section.financial"], "financialProjection", r, ("year1RevenueSar",L["admin.study.field_year1_revenue"]),("breakEvenMonths",L["admin.study.field_breakeven"]),("scenario",L["study.field.scenario"]))
 
             @* ── شرائح العملاء ── *@
-            @ArraySection("شَرائِح العُملاء", "customerSegments", r, "name", "description")
+            @ArraySection(L["study.section.segments"], "customerSegments", r, "name", "description")
             @* ── المنافسون ── *@
-            @ArraySection("المُنافِسون والفَجوَة", "competitors", r, "name", "gap")
+            @ArraySection(L["study.section.competitors"], "competitors", r, "name", "gap")
 
             @* ── المخاطر ── *@
             @if (r.TryGetProperty("risks", out var risks) && risks.ValueKind == JsonValueKind.Array)
             {
-                <h3 style="margin:20px 0 8px;"><AcIcon Name="alert-circle" Size="16" /> المَخاطِر</h3>
+                <h3 style="margin:20px 0 8px;"><AcIcon Name="alert-circle" Size="16" /> @L.Markup("study.section.risks")</h3>
                 <div style="display:flex;flex-direction:column;gap:8px;">
                     @foreach (var risk in risks.EnumerateArray())
                     {
@@ -113,9 +112,8 @@
                                 <strong>@Str(risk, "title")</strong>
                                 <span class="ac-chip ac-chip-sm">@Str(risk, "category")</span>
                             </div>
-                            <p style="margin:6px 0 0;font-size:13px;color:var(--ac-text-muted);">
-                                أَثَر: @Str(risk,"impact") · احتِمال: @Str(risk,"likelihood")<br/>
-                                <strong>التَّخفيف:</strong> @Str(risk, "mitigation")
+                            <p style="margin:6px 0 0;font-size:13px;color:var(--ac-text-muted);">@((MarkupString)"\n                                ")@L.Markup("study.field.impact") @Str(risk,"impact") · @L.Markup("study.field.likelihood") @Str(risk,"likelihood")<br/>
+                                <strong>@L.Markup("study.field.mitigation")</strong> @Str(risk, "mitigation")
                             </p>
                         </ChildContent></AcCard>
                     }
@@ -125,7 +123,7 @@
             @* ── دروس الفشل ── *@
             @if (r.TryGetProperty("lessonsFromFailures", out var lessons) && lessons.ValueKind == JsonValueKind.Array)
             {
-                <h3 style="margin:20px 0 8px;"><AcIcon Name="bar-chart" Size="16" /> دُروس مِن مَشاريع فَشِلَت</h3>
+                <h3 style="margin:20px 0 8px;"><AcIcon Name="bar-chart" Size="16" /> @L.Markup("study.section.lessons")</h3>
                 <AcCard><ChildContent>
                     <ul style="margin:0;padding-inline-start:18px;line-height:2;font-size:13px;">
                         @foreach (var l in lessons.EnumerateArray())
@@ -139,12 +137,12 @@
             @* ── خارطة الطريق ── *@
             @if (r.TryGetProperty("roadmap", out var roadmap) && roadmap.ValueKind == JsonValueKind.Array)
             {
-                <h3 style="margin:20px 0 8px;"><AcIcon Name="map" Size="16" /> خارِطَة الطَّريق</h3>
+                <h3 style="margin:20px 0 8px;"><AcIcon Name="map" Size="16" /> @L.Markup("study.section.roadmap")</h3>
                 <div class="acm-cat-list">
                     @foreach (var ph in roadmap.EnumerateArray())
                     {
                         <div class="acm-cat-row">
-                            <span class="ac-chip ac-chip-sm">@Str(ph,"durationWeeks") أسبوع</span>
+                            <span class="ac-chip ac-chip-sm">@Str(ph,"durationWeeks") @L.Markup("study.unit.weeks")</span>
                             <div style="flex:1;">
                                 <strong>@Str(ph, "phase")</strong>
                                 <span style="display:block;color:var(--ac-text-muted);font-size:12px;">
@@ -160,15 +158,15 @@
             @if (r.TryGetProperty("recommendedPattern", out var rp))
             {
                 <AcCard><ChildContent>
-                    <h3 style="margin:0 0 6px;"><AcIcon Name="sparkle" Size="16" /> الإطلاق على ACommerce</h3>
+                    <h3 style="margin:0 0 6px;"><AcIcon Name="sparkle" Size="16" /> @L.Markup("admin.study.launch_heading") ACommerce</h3>
                     <p style="margin:0;font-size:14px;">
-                        <strong>النَّمَط:</strong> @Str(rp,"pattern") ·
-                        <strong>الوَقت:</strong> @Str(rp,"timeToLaunch")<br/>
+                        <strong>@L.Markup("study.field.pattern")</strong> @Str(rp,"pattern") ·
+                        <strong>@L.Markup("study.field.time")</strong> @Str(rp,"timeToLaunch")<br/>
                         <span style="color:var(--ac-text-muted);font-size:13px;">@Str(rp,"reasoning")</span>
                     </p>
                     <a class="ac-btn ac-btn-primary" style="margin-top:12px;"
                        href="/admin/agent">
-                        <AcIcon Name="message" Size="16" /> أَنشِئ المَتجَر بِالمُساعِد
+                        <AcIcon Name="message" Size="16" /> @L.Markup("admin.study.build_with_agent")@((MarkupString)"\n                    ")
                     </a>
                 </ChildContent></AcCard>
             }
@@ -185,9 +183,12 @@
     IncubatorSession? session;
     JsonElement? root;
 
-    const string Disclaimer =
-        "هذا التَّحليل مُولَّد آلِيّاً مِن نَموذَج ذَكاء اصطِناعيّ بِناءً على بيانات السوق المُتاحَة. " +
-        "المَنصَّة غَير مَسؤولَة عَن نَجاح أَو فَشَل القَرارات المَبنيَّة عَلَيه. يُوصَى بِالتَّحَقُّق المُستَقِلّ قَبل اتِّخاذ قَرارات استِثماريَّة.";
+    // ‏لَيسَت `const` بَعدَ اليَوم: قيمَتُها مِن `L` وهو مَحقونٌ scoped،
+    // ‏والثابِتُ يُحسَب وَقتَ التَرجَمَة. خاصِّيَّةٌ مُعَبَّرٌ عَنها
+    // ‏(`=>`) تُبقي مَوضِعَ الاستِعمال كَما هو حَرفاً.
+    string Disclaimer =>
+        L["admin.study.disclaimer_a"] +
+        L["admin.study.disclaimer_b"];
 
     protected override async Task OnInitializedAsync()
     {

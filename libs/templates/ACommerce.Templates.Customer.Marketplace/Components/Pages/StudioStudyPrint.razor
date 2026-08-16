@@ -1,6 +1,7 @@
 @page "/studio/s/{id:guid}/print"
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Incubator.FeasibilityAnalysisService Incubator
+@inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 @using System.Text.Json
 @layout EmptyLayout
@@ -11,7 +12,7 @@
 *@
 
 <HeadContent>
-    <title>دِراسَة جَدوى — للطِّباعَة</title>
+    <title>@L.Markup("studio.print.title")</title>
     <style>
         @@page { size: A4; margin: 18mm 16mm; }
         body { font-family: 'Cairo', system-ui, sans-serif; color: #0f172a;
@@ -43,14 +44,13 @@
     </style>
 </HeadContent>
 
-<div class="print-actions">
-    اِضغَط <button type="button" onclick="window.print()">طِباعَة / حِفظ PDF</button>
-    ثُمَّ اختَر "حِفظ كَ PDF" مِن وُجهَة الطَّابِعَة.
+<div class="print-actions">@((MarkupString)"\n    ")@L.Markup("studio.print.hint_press") <button type="button" onclick="window.print()">@L.Markup("studio.print.button")</button>
+    @L.Markup("studio.print.hint_then") @L.Markup("studio.print.hint_saveas") @L.Markup("studio.print.hint_dialog")@((MarkupString)"\n")
 </div>
 
 @if (session is null || root is null)
 {
-    <p>الدِراسَة غَير مُتاحَة.</p>
+    <p>@L.Markup("studio.print.unavailable")</p>
 }
 else
 {
@@ -59,58 +59,56 @@ else
     <div class="print-head">
         <div class="print-mark">A</div>
         <div>
-            <h1>دِراسَة جَدوى</h1>
-            <div class="print-meta">
-                مُولَّدَة في @session.UpdatedAt.ToString("yyyy-MM-dd HH:mm") ·
-                جَودَة @session.AnalysisQualityScore% · ACommerce
+            <h1>@L.Markup("studio.print.heading")</h1>
+            <div class="print-meta">@((MarkupString)"\n                ")@L.Markup("studio.print.generated_at") @session.UpdatedAt.ToString("yyyy-MM-dd HH:mm") ·
+                @L.Markup("study.label.quality") @session.AnalysisQualityScore% · ACommerce
             </div>
         </div>
     </div>
 
     <p style="margin:0 0 14px;color:#475569;">
-        <strong>الفِكرَة: </strong>
+        <strong>@L.Markup("studio.print.idea_label")@((MarkupString)" ") </strong>
         @(string.IsNullOrEmpty(session.ProjectDescription) ? "—" : session.ProjectDescription)
     </p>
 
     @if (r.TryGetProperty("summary", out var sum))
     {
         <div class="print-stats">
-            <div class="print-stat"><div class="print-stat-label">حَجم السوق</div>
+            <div class="print-stat"><div class="print-stat-label">@L.Markup("study.section.market_size")</div>
                 <div class="print-stat-value">@Str(sum,"marketSizeSar")</div></div>
-            <div class="print-stat"><div class="print-stat-label">عُملاء س١</div>
+            <div class="print-stat"><div class="print-stat-label">@L.Markup("studio.print.stat_customers")</div>
                 <div class="print-stat-value">@Str(sum,"estimatedCustomersYear1")</div></div>
-            <div class="print-stat"><div class="print-stat-label">الاستِثمار</div>
+            <div class="print-stat"><div class="print-stat-label">@L.Markup("studio.print.stat_investment")</div>
                 <div class="print-stat-value">@Str(sum,"requiredInvestmentSar")</div></div>
         </div>
-        <p><strong>الحُكم: </strong>@Str(sum,"verdict")</p>
+        <p><strong>@L.Markup("study.field.verdict")@((MarkupString)" ") </strong>@Str(sum,"verdict")</p>
     }
 
-    @Section(r, "marketSizing", "حَجم السوق", ("tam","TAM"),("sam","SAM"),("som","SOM"),("reasoning","التَّحليل"))
-    @Section(r, "revenueModel", "نَموذَج الإيراد", ("model","النَّموذَج"),("pricingSar","التَّسعير"),("unitEconomics","اقتِصاد الوَحدَة"))
-    @Section(r, "costStructure", "هَيكَل التَّكلِفَة", ("launchSar","الإطلاق"),("monthlyOpsSar","التَّشغيل/شَهر"),("cacSar","CAC"),("ltvSar","LTV"))
-    @Section(r, "financialProjection", "التَّوَقُّع المالي", ("year1RevenueSar","إيراد س١"),("breakEvenMonths","التَّعادُل (شهر)"),("scenario","السيناريو"))
+    @Section(r, "marketSizing", L["study.section.market_size"], ("tam","TAM"),("sam","SAM"),("som","SOM"),("reasoning",L["study.field.reasoning"]))
+    @Section(r, "revenueModel", L["study.section.revenue_model"], ("model",L["study.field.model"]),("pricingSar",L["study.field.pricing"]),("unitEconomics",L["study.field.unit_economics"]))
+    @Section(r, "costStructure", L["study.section.cost_structure"], ("launchSar",L["study.field.launch"]),("monthlyOpsSar",L["studio.print.field_monthly_ops"]),("cacSar","CAC"),("ltvSar","LTV"))
+    @Section(r, "financialProjection", L["study.section.financial"], ("year1RevenueSar",L["studio.print.field_year1_revenue"]),("breakEvenMonths",L["studio.print.field_breakeven"]),("scenario",L["study.field.scenario"]))
 
-    @Array(r, "customerSegments", "شَرائِح العُملاء", "name", "description")
-    @Array(r, "competitors", "المُنافِسون والفَجوَة", "name", "gap")
+    @Array(r, "customerSegments", L["study.section.segments"], "name", "description")
+    @Array(r, "competitors", L["study.section.competitors"], "name", "gap")
 
     @if (r.TryGetProperty("risks", out var risks) && risks.ValueKind == JsonValueKind.Array)
     {
-        <h2>المَخاطِر</h2>
+        <h2>@L.Markup("study.section.risks")</h2>
         @foreach (var risk in risks.EnumerateArray())
         {
             <div class="risk-row">
                 <strong>@Str(risk,"title")</strong> <span class="risk-tag">@Str(risk,"category")</span><br/>
-                <span style="color:#64748b;font-size:12px;">
-                    أَثَر: @Str(risk,"impact") · احتِمال: @Str(risk,"likelihood")
+                <span style="color:#64748b;font-size:12px;">@((MarkupString)"\n                    ")@L.Markup("study.field.impact") @Str(risk,"impact") · @L.Markup("study.field.likelihood") @Str(risk,"likelihood")
                 </span><br/>
-                <em>التَّخفيف: </em>@Str(risk,"mitigation")
+                <em>@L.Markup("study.field.mitigation")@((MarkupString)" ") </em>@Str(risk,"mitigation")
             </div>
         }
     }
 
     @if (r.TryGetProperty("lessonsFromFailures", out var lessons) && lessons.ValueKind == JsonValueKind.Array)
     {
-        <h2>دُروس مِن مَشاريع فَشِلَت</h2>
+        <h2>@L.Markup("study.section.lessons")</h2>
         <ul class="print-list">
             @foreach (var l in lessons.EnumerateArray()) { <li>@l.GetString()</li> }
         </ul>
@@ -118,12 +116,12 @@ else
 
     @if (r.TryGetProperty("roadmap", out var roadmap) && roadmap.ValueKind == JsonValueKind.Array)
     {
-        <h2>خارِطَة الطَّريق</h2>
+        <h2>@L.Markup("study.section.roadmap")</h2>
         @foreach (var ph in roadmap.EnumerateArray())
         {
             <div class="risk-row">
                 <strong>@Str(ph,"phase")</strong>
-                <span class="risk-tag">@Str(ph,"durationWeeks") أسبوع</span><br/>
+                <span class="risk-tag">@Str(ph,"durationWeeks") @L.Markup("study.unit.weeks")</span><br/>
                 <span style="color:#64748b;">@Str(ph,"goal")</span>
             </div>
         }
@@ -131,15 +129,12 @@ else
 
     @if (r.TryGetProperty("recommendedPattern", out var rp))
     {
-        <h2>الإطلاق المُقتَرَح</h2>
-        <p><strong>النَّمَط:</strong> @Str(rp,"pattern") · <strong>الوَقت:</strong> @Str(rp,"timeToLaunch")</p>
+        <h2>@L.Markup("studio.print.launch_heading")</h2>
+        <p><strong>@L.Markup("study.field.pattern")</strong> @Str(rp,"pattern") · <strong>@L.Markup("study.field.time")</strong> @Str(rp,"timeToLaunch")</p>
         <p>@Str(rp,"reasoning")</p>
     }
 
-    <div class="footer">
-        هذا التَّحليل مُولَّد آلِيّاً مِن نَموذَج ذَكاء اصطِناعيّ بِناءً على بيانات السوق المُتاحَة.
-        المَنصَّة غَير مَسؤولَة عَن نَتائِج القَرارات المَبنيَّة عَلَيه.
-        يُوصَى بِالتَّحَقُّق المُستَقِلّ قَبل اتِّخاذ قَرارات استِثماريَّة.
+    <div class="footer">@((MarkupString)"\n        ")@L.Markup("studio.print.disclaimer")@((MarkupString)"\n    ")
     </div>
 }
 

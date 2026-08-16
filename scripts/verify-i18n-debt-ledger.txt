@@ -1,7 +1,7 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|570
-DISTINCT|414
+TOTAL|485
+DISTINCT|386
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|40
@@ -12,7 +12,6 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/A
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AuditLogPage.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/CreateTenant.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorFixturesPage.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorStudy.razor|44
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorWizard.razor|26
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/QualityMonitor.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantAttributes.razor|4
@@ -43,7 +42,6 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioA
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioConsent.razor|10
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioNewIdea.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudy.razor|99
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudyPrint.razor|41
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantDrivers.razor|13
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantExplore.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantHome.razor|4
