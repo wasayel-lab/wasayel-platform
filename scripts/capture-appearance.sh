@@ -91,6 +91,30 @@ PAGES=(
   # هو رَقم عَيِّنَة لا يُطابِق أَيّ مِلَفّ جَلسَة — وحَتّى لَو طابَقَ،
   # فَالطَلَب هُنا `GET` لا يُنشِئ جَلسَةً ولا مُستَخدِماً.
   "studio-auth-verify:/studio/auth?stage=verify&phone=0512345678&err=code"
+  # ‏2026-08-16 (‏#20–#21) — المَوجَة الثامِنَة: **البابُ الأَوَّل**.
+  #
+  # ‏`TenantListingDetail` (‏105 سِلسِلَة) كانَ أَثقَلَ مِلَفّ في السِجِلّ
+  # وخارِجَ كُلّ لَقطَة، لِسَبَبَين قيسا في المَوجَة الثالِثَة: صَفَحات
+  # تَفصيل إعلانات `ashare` مَمنوعَة، ومُستَأجِرو التَجرِبَة **ظُنّوا**
+  # بِصِفر إعلان. والقِياسُ اليَومَ يَرُدّ النِصفَ الثاني: `ejar` فيه
+  # ‏15 إعلاناً، **وأَوَّلُها مُوَثَّق ومُمَيَّز بِسِمات كامِلَة** —
+  # يَبثُّها `PlatformSeed` عَبر `ListingFlagsSet`. فَما كانَ ناقِصاً
+  # بَياناتٍ لَم يَكُن ناقِصاً أَصلاً؛ كانَ ناقِصاً **سُؤالاً**.
+  #
+  # والصَفحَةُ صارَت قِراءَةً خالِصَة بِالمَوجَة السابِعَة (خَرَجَ
+  # `ListingViewed` مِن `GET` إلى `POST …/view` بَعدَ التَصيير، ولا
+  # يُطلِقُه `curl`)، فَطَلَبانِ مُتَتالِيانِ يُعطِيانِ نَفسَ البايتات —
+  # قيسَ قَبلَ الإضافَة، لا مَظنوناً.
+  #
+  # ‏`45b17b1e…` هو **الإعلان المُوَثَّق المُمَيَّز** في `ejar` (شَقَّة،
+  # ‏350,000، سِمات إيجار كامِلَة): يُصَيِّر شارَتَي الثِقَة، وتَحذيرَ
+  # الاحتِيال، وشَبَكَةَ `DetailGridKeys`، والسِمات المَحلولَة، وفَرعَ
+  # «بِلا سَلَّة» لِزائِر — أَي أَغلَبَ المِلَفّ في صَفحَة واحِدَة.
+  # و`94877b94…` في `theme-demo` **مَفتوحٌ لِلعُروض**
+  # (`accepts_offers=true`) فَيُصَيِّر قِسمَ العُروض وفَرعَ «دُخول
+  # لِتَقديم عَرض» الَّذي لا يَقَع في الأَوَّل أَبَداً.
+  "ejar-listing:/ejar/listings/45b17b1e-1997-4fcc-b3ce-051ef484fb16"
+  "theme-demo-listing-offers:/theme-demo/listings/94877b94-abb5-4a8b-8494-be8ef678cc59"
 )
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -150,6 +174,52 @@ GUARDED_PAGES=(
   "studio-upgrade-feature:studio:/studio?upgrade=feature"
   "user-searches:user:/{tenant}/me/searches"
   "user-notifications:user:/{tenant}/notifications"
+
+  # ═══ المَوجَة الثامِنَة — ‏2026-08-16 ═══════════════════════════════
+  #
+  # ‏**البابُ الثاني: صَفَحات `/studio/apps/{slug}/*`** (‏≈230 سِلسِلَة).
+  # قالَت المَوجَة الثالِثَة إنَّها «تَشتَرِط مِلكِيَّةَ مُستَأجِر لا
+  # مُجَرَّدَ جَلسَة»، وإنّ الطَريقَينِ كِلَيهِما قَرارُ مالِك: مُستَأجِرٌ
+  # جَديد يُنشِئُه مِلَفُّ الالتِقاط (‏فَيَظهَر في صَفحَة الهُبوط
+  # ويُبَدِّل لَقطَةَ أَساسٍ قائِمَة)، أَو نَقلُ مِلكِيَّة.
+  #
+  # **والقِياسُ أَسقَطَ السُؤالَ كُلَّه**: مِلَفُّ `admin` (‏هاتِفُ
+  # `PLATFORM_ADMIN_PHONE`) **يَملِك `owner-test` بِالفِعل** —
+  # ‏`StudioOwnershipSeeder` أَسنَدَ المُستَأجِرَ اليَتيمَ إلَيه عِندَ
+  # إقلاعٍ سابِق. فَلا مُستَأجِرَ يُنشَأ، ولا مِلكِيَّةَ تُنقَل، ولا
+  # بايتَ يَتَغَيَّر في `landing.html`. القاعِدَة ١٤ حَرفاً: قَبلَ
+  # تَوجيه العَمَل نَحوَ آلِيَّةٍ جَديدَة، **اِبحَث هَل يَفعَلُها
+  # المُستَودَع أَصلاً**.
+  #
+  # ولِماذا مِلَفُّ `admin` لا `studio`: الحارِسُ هُنا
+  # (`StudioOwnsAsync`) يَسأَل عَن **المِلكِيَّة** لا عَن صَلاحِيَّة
+  # المَنصَّة، فَأَيُّ المِلَفَّينِ مَلَكَ فَتَحَ. و`studio` صِفرُ
+  # تَطبيق — ولِذلك بِالضَبط تَبقى `studio-home` كَما هي، فَلا يُمَسّ
+  # أَساسٌ قائِم.
+  "studio-app:admin:/studio/apps/owner-test"
+  "studio-app-branding:admin:/studio/apps/owner-test/branding"
+  "studio-app-categories:admin:/studio/apps/owner-test/categories"
+  "studio-app-roles:admin:/studio/apps/owner-test/roles"
+  "studio-app-regions:admin:/studio/apps/owner-test/regions"
+  "studio-app-attributes:admin:/studio/apps/owner-test/attributes"
+  "studio-app-pwa:admin:/studio/apps/owner-test/pwa"
+  "studio-app-listings:admin:/studio/apps/owner-test/listings"
+  "studio-app-deals:admin:/studio/apps/owner-test/deals"
+  "studio-app-tickets:admin:/studio/apps/owner-test/tickets"
+  "studio-app-console:admin:/studio/apps/owner-test/console"
+  # فَرعُ «التَذكِرَة غَير مَوجودَة» — ‏`owner-test` بِلا تَذكِرَة
+  # قابِلَة لِلقِراءَة، فَالمُعَرَّفُ ثابِتٌ لا يُطابِق شَيئاً. وهو
+  # فَرعٌ **يُصَيَّر فِعلاً** ولا يَبلُغُه غَيرُ المالِك، فَمَكانُه هُنا.
+  "studio-app-ticket-missing:admin:/studio/apps/owner-test/tickets/00000000-0000-0000-0000-000000000001"
+
+  # ‏`TenantListingDetail` بِجَلسَة — فَرعانِ لا يَقَعانِ لِزائِر:
+  #   · `user-listing-own`    — الإعلانُ مِلكُ صاحِبِ الجَلسَة
+  #     (`owner_id` = هُوِيَّةُ مِلَفّ `user`)، فَيَظهَر مَدخَلُ
+  #     التَحرير وتُخفى المُفَضَّلَةُ وقِسمُ التَواصُل.
+  #   · `user-listing-offers` — إعلانٌ مَفتوحٌ لِلعُروض **لِغَيرِ
+  #     مالِكِه**، فَيُصَيَّر نَموذَجُ تَقديم العَرض كامِلاً.
+  "user-listing-own:user:/{tenant}/listings/ff8e1748-b98a-4ad0-9da0-10ac616eaf9e"
+  "user-listing-offers:user:/{tenant}/listings/94877b94-abb5-4a8b-8494-be8ef678cc59"
 )
 
 # أَوراق الأَنماط الَّتي تُحَمِّلها كُلّ صَفحَة — المَظهَر = HTML + CSS،
