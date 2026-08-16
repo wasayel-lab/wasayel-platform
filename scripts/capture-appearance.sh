@@ -126,6 +126,30 @@ PAGES=(
   # يُخفي انحِداراً حَقيقِيّاً في عَدّادٍ لَه أَربَعَةُ مُستَهلِكين.
   "ejar-listing:/ejar/listings/45b17b1e-1997-4fcc-b3ce-051ef484fb16"
   "theme-demo-listing-offers:/theme-demo/listings/94877b94-abb5-4a8b-8494-be8ef678cc59"
+
+  # ‏2026-08-16 (‏#22–#32) — المَوجَة التاسِعَة: **فُروعُ «المَجهول» في
+  # صَفَحات العُضو**.
+  #
+  # صَفَحاتُ المُستَخدِم (`MyDealDetail`، `CreateListing`، `CheckoutPage`،
+  # `CartPage`…) تَبدَأ كُلُّها بِفَرع `!Auth.IsAuthenticated` يُصَيِّر
+  # `AcEmptyState` بِعُنوانٍ وزِرٍّ عَرَبِيَّين. وهذا الفَرع **لا تَبلُغُه
+  # جَلسَة** بِالبِنيَة — فَمَكانُه هُنا لا في `GUARDED_PAGES`، وهو
+  # الطَرَفُ المُقابِل لِلصَفحَة المَحروسَة نَفسِها.
+  #
+  # والقِياسُ قَبلَ الإضافَة: هذِه الفُروعُ وَحدَها تَحرُس ‏‎2–3 سَلاسِل
+  # لِكُلّ مِلَفّ، وهي السَلاسِلُ الَّتي لا يُصَيِّرُها أَيُّ مِلَفّ
+  # جَلسَة مَهما بَلَغ.
+  "ejar-deal-anon:/ejar/deals/17497544-0a6a-485d-bc72-f5d738995169"
+  "ejar-deals-anon:/ejar/deals"
+  "ejar-create-listing-anon:/ejar/create-listing"
+  "ejar-checkout-anon:/ejar/checkout"
+  "ejar-cart-anon:/ejar/cart"
+  "ejar-favorites-anon:/ejar/favorites"
+  "ejar-chats-anon:/ejar/chats"
+  "ejar-offers-anon:/ejar/me/offers"
+  "ejar-listings-anon:/ejar/me/listings"
+  "ejar-role-anon:/ejar/me/role"
+  "theme-demo-manage-anon:/theme-demo/manage"
 )
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -166,6 +190,28 @@ PAGES=(
 #                                وهو ثابِتٌ مَكتوب في `StudioAuth.DevCode`
 #                                فَلَيسَ سِرّاً — والمُتَغَيِّر لِيَتَبَدَّل
 #                                إن تَبَدَّلَ المَصدَر لا لِيُخفى)
+#
+#  ‏2026-08-16 — مِلَفّان خامِس وسادِس، **بِقَناة دُخولٍ ثالِثَة**:
+#    member  — عُضوُ مَتجَر في مُستَأجِرٍ **مَملوء**، وهو **طَرَفٌ في
+#              صَفقَتَين** (مُبادِر). يَفتَح `MyDealDetail` و`MyDeals` و
+#              `CreateListing` و`CartPage` و`MyOffers`…
+#    member2 — الطَرَفُ المُقابِل في نَفس الصَفقَة. يَفتَح فَرعَ
+#              «بانتِظار …» الَّذي **لا يَقَع لِلمُبادِر أَبَداً** — أَي
+#              أَنّ الزَوجَ يَحرُس وَجهَي «دَورُكَ الآن» لا وَجهاً واحِداً.
+#
+#  ولِماذا قَناةٌ ثالِثَة: مُستَخدِمو `ejar` بَذَرَهُم `TestDataSeeder`
+#  بِهاتِفٍ **وبِلا `NationalId`** (مَقيس)، فَنَفاذُ الوَهميّ لا يَبلُغُهُم.
+#  والقَناةُ المَوجودَة أَصلاً هي OTP الهاتِف (`/{slug}/auth/phone/*`)
+#  بِرَمزٍ ثابِت `MockSmsChannel.FixedCode` = `123456` — فَلا آلِيَّةَ
+#  جَديدَة تُبنى، والقائِمُ يُستَعمَل (القاعِدَة ٨).
+#
+#  **وصِفرُ بَيانٍ يُنشَأ**: المُستَخدِمانِ قائِمانِ مُنذُ بَذرٍ سابِق،
+#  والصَفقَتانِ قائِمَتان. و`NotifyAdminsAsync` لا تَقَع إلّا لِمُستَخدِمٍ
+#  عُمرُه دونَ الدَقيقَة، فَالدُخولُ هُنا قِراءَةٌ خالِصَة.
+#
+#    WSL_CAPTURE_MEMBER_PHONE  — هاتِف عُضو المَتجَر (طَرَفٌ في صَفقَة)
+#    WSL_CAPTURE_MEMBER2_PHONE — هاتِف الطَرَف المُقابِل
+#    WSL_CAPTURE_MEMBER_TENANT — مُستَأجِرُهُما (افتِراضيّ ejar)
 GUARDED_PAGES=(
   "admin-home:admin:/admin"
   "admin-tenant-new:admin:/admin/tenants/new"
@@ -257,6 +303,54 @@ GUARDED_PAGES=(
   "owner-app-attributes:owner:/studio/apps/ejar/attributes"
   "owner-app-pwa:owner:/studio/apps/ejar/pwa"
   "owner-app-home:owner:/studio/apps/ejar"
+
+  # ══ المَوجَة التاسِعَة — صَفَحاتُ العُضو ═══════════════════════════
+  #
+  # ‏`{member}` تُستَبدَل بِـ`WSL_CAPTURE_MEMBER_TENANT` كَما تُستَبدَل
+  # `{tenant}` لِمِلَفّ `user`.
+  #
+  # ‏**`MyDealDetail` (‏41 سِلسِلَة)** — خَمسَةُ فُروعٍ لا يَجتَمِعُ
+  # مِنها في طَلَبٍ واحِد إلّا واحِد، وهذا مَقيس:
+  #   · نَشِطَة/مُبادِر  → «دَورُكَ الآن» + الإجراء + الإلغاء
+  #   · نَشِطَة/مُقابِل  → «بانتِظار …» + «بانتِظار الطَرَف الآخَر لِـ»
+  #   · مُكتَمِلَة       → «اكتَمَلَت» + نَموذَج التَقييم بِنُجومِه الخَمس
+  #   · مُعَرَّفٌ لا يُطابِق → «الصَّفقَة غَير مَوجودَة»
+  #   · بِلا جَلسَة      → في `PAGES` أَعلاه
+  "member-deal-active:member:/{member}/deals/17497544-0a6a-485d-bc72-f5d738995169"
+  "member-deal-waiting:member2:/{member}/deals/17497544-0a6a-485d-bc72-f5d738995169"
+  "member-deal-done:member:/{member}/deals/8c34e5ee-1760-4eba-b276-caf3e721f996"
+  "member-deal-missing:member:/{member}/deals/00000000-0000-0000-0000-000000000001"
+
+  # ‏**`CreateListing` (‏40)** — أَربَعَةُ فُروع. و`ejar` بِتِسع فِئات
+  # على **خَمسَة `Kind`** فَيُصَيَّر فَرعُ الشَجَرَة (`groups.Count > 1`)
+  # بِتَسمِياتِه («سَكَنيّ»، «تِجاريّ»…) — وهي فَرعٌ لا يَقَع في
+  # `theme-demo` ذي الـ`Kind` الواحِد (مَقيس).
+  "member-create-listing:member:/{member}/create-listing"
+  "member-create-listing-cat:member:/{member}/create-listing?category=apartment"
+  "member-create-listing-invalid:member:/{member}/create-listing?err=invalid"
+  "member-create-listing-forbidden:member:/{member}/create-listing?err=forbidden"
+
+  # ‏**`TenantManage` (‏24)** — ثَلاثَةُ فُروع: الإداريّ (‏`user` في
+  # `theme-demo` يَملِك `tenant.manage`)، وغَيرُ الإداريّ (‏`member`)،
+  # والمَجهول (في `PAGES`).
+  "user-manage:user:/{tenant}/manage"
+  "member-manage:member:/{member}/manage"
+
+  # ‏**`CheckoutPage` (‏29)** — الفَرعُ الوَحيدُ الَّذي تَبلُغُه جَلسَة
+  # اليَوم هو «السَّلَّة فارِغَة»: **صِفر سَلَّة في القاعِدَة كُلِّها**
+  # (مَقيس). وجِسمُ المُعالِج الثُلاثيّ الخُطوات يَحتاج **بَياناتٍ**
+  # لا جَلسَة — يُعلَن ولا يُرَحَّل بِلا بُرهان.
+  "member-checkout:member:/{member}/checkout"
+  "member-cart:member:/{member}/cart"
+
+  # ── جيرانٌ يَبلُغُهُم نَفسُ المِلَفّ في نَفسِ الجَولَة ──────────────
+  "member-deals:member:/{member}/deals"
+  "member-offers:member:/{member}/me/offers"
+  "member-listings:member:/{member}/me/listings"
+  "member-favorites:member:/{member}/favorites"
+  "member-chats:member:/{member}/chats"
+  "member-notifications:member:/{member}/notifications"
+  "member-role:member:/{member}/me/role"
 )
 
 # أَوراق الأَنماط الَّتي تُحَمِّلها كُلّ صَفحَة — المَظهَر = HTML + CSS،
@@ -275,6 +369,7 @@ SHEETS=(
 
 DEV_CODE="${WSL_CAPTURE_DEV_CODE:-123456}"
 USER_TENANT="${WSL_CAPTURE_USER_TENANT:-theme-demo}"
+MEMBER_TENANT="${WSL_CAPTURE_MEMBER_TENANT:-ejar}"
 
 JARS="$(mktemp -d)"
 trap 'rm -rf "$JARS"' EXIT
@@ -328,6 +423,23 @@ has_cookie() {
 # ── تَسجيل دُخول مُستَخدِم مَتجَر عَبر نَفاذ الوَهميّ ────────────────
 # ‏MockNafath يوافِق تِلقائيّاً بَعد `AutoApproveSeconds` (‏5 اليَوم)،
 # والمُحاوَلَة تَنتَهي بَعد دَقيقَتَين — فَالانتِظار داخِل النافِذَة.
+# ── تَسجيل دُخول عُضو مَتجَر بِـOTP الهاتِف ─────────────────────────
+# نُقطَتان كَما في الاستوديو: `…/phone/login` تَطلُب الرَمز بِلا حالَةٍ
+# تُحفَظ في جَرَّتِنا، و`…/phone/verify` هي الَّتي تَكتُب الكوكي.
+# ونَستَدعي الأولى لِأَنّ الثانِيَة تَقرَأ رَمزاً **مُصدَراً فِعلاً**
+# (`AuthHandlers.VerifyPhoneOtpHandler`) — بِخِلاف مَسار الاستوديو.
+#
+# واسمُ الكوكي مُتَضَمِّنٌ لِلمُستَأجِر (`.acommerce.auth.{slug}`)، وهو
+# ما يُفحَص — لا مُجَرَّد وُجود جَرَّة.
+phone_login() {
+  local jar="$1" tenant="$2" phone="$3"
+  curl -s -o /dev/null -X POST -d "phone=$phone" "$BASE_URL/$tenant/auth/phone/login"
+  curl -s -c "$jar" -o /dev/null \
+       -X POST -d "phone=$phone" -d "code=$DEV_CODE" \
+       "$BASE_URL/$tenant/auth/phone/verify"
+  has_cookie "$jar" ".acommerce.auth.$tenant"
+}
+
 nafath_login() {
   local jar="$1" tenant="$2" nid="$3"
   local loc attempt
@@ -393,6 +505,26 @@ else
   PROFILES_MISSING="$PROFILES_MISSING user(WSL_CAPTURE_USER_NID)"
 fi
 
+if [ -n "${WSL_CAPTURE_MEMBER_PHONE:-}" ]; then
+  if phone_login "$JARS/member" "$MEMBER_TENANT" "$WSL_CAPTURE_MEMBER_PHONE"; then
+    PROFILE_JAR[member]="$JARS/member"; PROFILES_READY="$PROFILES_READY member"
+  else
+    echo "✗ فَشِلَ دُخول مِلَفّ 'member' — لا كوكي $MEMBER_TENANT." >&2; exit 1
+  fi
+else
+  PROFILES_MISSING="$PROFILES_MISSING member(WSL_CAPTURE_MEMBER_PHONE)"
+fi
+
+if [ -n "${WSL_CAPTURE_MEMBER2_PHONE:-}" ]; then
+  if phone_login "$JARS/member2" "$MEMBER_TENANT" "$WSL_CAPTURE_MEMBER2_PHONE"; then
+    PROFILE_JAR[member2]="$JARS/member2"; PROFILES_READY="$PROFILES_READY member2"
+  else
+    echo "✗ فَشِلَ دُخول مِلَفّ 'member2' — لا كوكي $MEMBER_TENANT." >&2; exit 1
+  fi
+else
+  PROFILES_MISSING="$PROFILES_MISSING member2(WSL_CAPTURE_MEMBER2_PHONE)"
+fi
+
 for entry in "${PAGES[@]}"; do
   name="${entry%%:*}"
   path="${entry#*:}"
@@ -421,6 +553,7 @@ for entry in "${GUARDED_PAGES[@]}"; do
   name="${entry%%:*}"; rest="${entry#*:}"
   profile="${rest%%:*}"; path="${rest#*:}"
   path="${path//\{tenant\}/$USER_TENANT}"
+  path="${path//\{member\}/$MEMBER_TENANT}"
 
   jar="${PROFILE_JAR[$profile]:-}"
   if [ -z "$jar" ]; then
