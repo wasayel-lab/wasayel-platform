@@ -681,7 +681,7 @@ public static class MarketplaceTemplateExtensions
         // ─── Create listing — gates: auth + terms + permission ──────────
         // الـ filters تَتَكَفَّل بِالتَّوثيق وَالشُروط وَ "listing.create".
         app.MapPost("/{slug}/listings/create",
-            async (string slug, HttpContext http, HttpRequest req, IDocumentStore store,
+            async (string slug, HttpContext http, HttpRequest req, IDocumentStore store, L l,
                    Microsoft.AspNetCore.SignalR.IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> hub,
                    ACommerce.Templates.Customer.Marketplace.Services.WebPushService push,
                    ACommerce.Kit.Files.IFileStorage files,
@@ -813,7 +813,7 @@ public static class MarketplaceTemplateExtensions
                         Id = Guid.NewGuid(),
                         UserId = ss.UserId,
                         Type = "saved_search_match",
-                        Title = $"إعلان جَديد يُطابِق «{ss.Label}»",
+                        Title = l.Format("notifications.saved_search.title", ss.Label),
                         Body = title,
                         RelatedUrl = $"/{slug}/listings/{id}",
                         At = DateTime.UtcNow
@@ -847,7 +847,7 @@ public static class MarketplaceTemplateExtensions
             {
                 await NudgeAsync(hub, slug, uid);
                 await push.SendAsync(store, slug, uid,
-                    "إعلان جَديد يُطابِق بَحثكَ",
+                    l["notifications.saved_search.push_title"],
                     title,
                     url: $"/{slug}/listings/{id}",
                     tag: $"ss-{id}");
@@ -1073,7 +1073,7 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Accept an offer (listing owner) ────────────────────────────
         app.MapPost("/{slug}/offers/{id:guid}/accept",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store,
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, L l,
                    Microsoft.AspNetCore.SignalR.IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> hub,
                    ACommerce.Templates.Customer.Marketplace.Services.WebPushService push) =>
         {
@@ -1131,7 +1131,7 @@ public static class MarketplaceTemplateExtensions
                 Id = Guid.NewGuid(),
                 OwnerId = acceptorId, OwnerName = acceptorName,
                 PartnerId = offer.OffererId, PartnerName = offer.OffererName,
-                Subject = $"تَنسيق عَرض بِـ {offer.Price:N0} ريال",
+                Subject = l.Format("chats.offer.subject", offer.Price),
                 ListingId = offer.ListingId,
                 LastAt = now,
                 ExpiresAt = now.AddHours(24),
@@ -1145,8 +1145,8 @@ public static class MarketplaceTemplateExtensions
                 Id = Guid.NewGuid(),
                 UserId = offer.OffererId,
                 Type = "offer_accepted",
-                Title = "تَمّ قَبول عَرضكَ ✓",
-                Body  = $"{acceptorName} قَبِلَ عَرضكَ بِـ {offer.Price:N0} ريال. افتَح المُحادَثَة لِلتَنسيق.",
+                Title = l["notifications.offer_accepted.title"],
+                Body  = l.Format("notifications.offer_accepted.body", acceptorName, offer.Price),
                 RelatedUrl = $"/{slug}/chats/{conv.Id}",
                 At = now
             });
@@ -1155,8 +1155,8 @@ public static class MarketplaceTemplateExtensions
             // أَخطِر السائِق فَوراً — الإشعار + المُحادَثَة ظَهَرا.
             await NudgeAsync(hub, slug, offer.OffererId);
             await push.SendAsync(store, slug, offer.OffererId,
-                "تَمّ قَبول عَرضكَ ✓",
-                $"{acceptorName} قَبِلَ عَرضكَ بِـ {offer.Price:N0} ريال.",
+                l["notifications.offer_accepted.title"],
+                l.Format("notifications.offer_accepted.push_body", acceptorName, offer.Price),
                 url: $"/{slug}/chats/{conv.Id}",
                 tag: $"offer-{id}");
             return Results.Redirect(Link(req, slug, $"chats/{conv.Id}"));
@@ -1193,7 +1193,7 @@ public static class MarketplaceTemplateExtensions
         // فَحص قُرب: السائِق يُرسِل مَوقِعَه الحاليّ، نُقارِنه مَع
         // pickup_lat/pickup_lng. لَو > 1 كم يُرفَض الادِّعاء.
         app.MapPost("/{slug}/trips/{listingId:guid}/arrived",
-            async (string slug, Guid listingId, HttpRequest req, IDocumentStore store,
+            async (string slug, Guid listingId, HttpRequest req, IDocumentStore store, L l,
                    Microsoft.AspNetCore.SignalR.IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> hub,
                    ACommerce.Templates.Customer.Marketplace.Services.WebPushService push) =>
         {
@@ -1246,8 +1246,8 @@ public static class MarketplaceTemplateExtensions
                 Id = Guid.NewGuid(),
                 UserId = ParseListingOwnerId(listing) ?? Guid.Empty,
                 Type = "driver_arrived",
-                Title = "السائِق وَصَل ✓",
-                Body  = $"{match.OffererName} في نُقطَة الانطِلاق.",
+                Title = l["notifications.driver_arrived.title"],
+                Body  = l.Format("notifications.driver_arrived.body", match.OffererName),
                 RelatedUrl = $"/{slug}/listings/{listingId}",
                 At = DateTime.UtcNow
             });
@@ -1258,8 +1258,8 @@ public static class MarketplaceTemplateExtensions
             {
                 await NudgeAsync(hub, slug, ownerGuid.Value);
                 await push.SendAsync(store, slug, ownerGuid.Value,
-                    "السائِق وَصَل ✓",
-                    $"{match.OffererName} في نُقطَة الانطِلاق.",
+                    l["notifications.driver_arrived.title"],
+                    l.Format("notifications.driver_arrived.body", match.OffererName),
                     url: $"/{slug}/listings/{listingId}",
                     tag: $"arrived-{listingId}");
             }
@@ -1597,7 +1597,7 @@ public static class MarketplaceTemplateExtensions
         // مُستَخدَم في صَفحَة /{slug}/drivers — العَميل يَفتَح مُحادَثَة
         // مُباشَرَة مَع سائِق بِلا حاجَة لِنَشر طَلَب مِشوار.
         app.MapPost("/{slug}/users/{userId:guid}/chat",
-            async (string slug, Guid userId, HttpRequest req, IDocumentStore store) =>
+            async (string slug, Guid userId, HttpRequest req, IDocumentStore store, L l) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
@@ -1625,7 +1625,7 @@ public static class MarketplaceTemplateExtensions
                 Id = Guid.NewGuid(),
                 OwnerId = meId, OwnerName = meName,
                 PartnerId = partner.Id, PartnerName = partner.FullName,
-                Subject = $"تَواصُل مَع {partner.FullName}",
+                Subject = l.Format("chats.direct.subject", partner.FullName),
                 ListingId = null,
                 LastAt = DateTime.UtcNow,
                 // مُحادَثَة عامَّة بِلا TTL — لَيسَت مُؤَقَّتَة كَالمَشوار.
@@ -1693,7 +1693,7 @@ public static class MarketplaceTemplateExtensions
         // — الـ filter يَكتُب userId إلى HttpContext.Items وَنَقرَأها هُنا.
         app.MapPost("/{slug}/chats/{conversationId:guid}/send",
             async (string slug, Guid conversationId, HttpContext http, HttpRequest req,
-                   IDocumentStore store,
+                   IDocumentStore store, L l,
                    Microsoft.AspNetCore.SignalR.IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> hub,
                    ACommerce.Templates.Customer.Marketplace.Services.WebPushService push) =>
         {
@@ -1735,7 +1735,7 @@ public static class MarketplaceTemplateExtensions
                     Id = Guid.NewGuid(),
                     UserId = recipientId,
                     Type = "chat_message",
-                    Title = $"رِسالَة مِن {senderName}",
+                    Title = l.Format("notifications.chat_message.title", senderName),
                     Body = conv.LastMessage ?? "—",
                     RelatedUrl = $"/{slug}/chats/{conversationId}",
                     At = msg.SentAt
@@ -1748,7 +1748,7 @@ public static class MarketplaceTemplateExtensions
             await NudgeAsync(hub, slug, recipientId);
             if (!hasRecent)
                 await push.SendAsync(store, slug, recipientId,
-                    $"رِسالَة مِن {senderName}",
+                    l.Format("notifications.chat_message.title", senderName),
                     conv.LastMessage ?? "—",
                     url: $"/{slug}/chats/{conversationId}",
                     tag: $"chat-{conversationId}");

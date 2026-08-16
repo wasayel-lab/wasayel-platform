@@ -136,12 +136,94 @@ print "DEBT_FILES " . scalar(keys %files) . "\n";
 print "FILE $files{$_} $_\n" for sort keys %files;
 PERL
 
+# ── The SINK counter — user-facing text OUTSIDE .razor ──────────────────
+# Layer 7 counts .razor and nothing else, and §8-د says so plainly: "100 %
+# coverage does not mean zero literal text in the product."  This closes the
+# named part of that gap.
+#
+# ── Why a DECLARED SINK LIST and not "Arabic in .cs" ────────────────────
+# Measured, not assumed: ~500 Arabic string literals live in .cs under
+# libs+apps, and the great majority are structurally NOT user-facing —
+# `MessageAr` reviewer text in validators, LLM prompt bodies, patterns that
+# match model output character-for-character, seed content, the Nafath name
+# table, log lines.  No lexical property separates them from a UI label:
+# "في الانتظار" (a label) and "منخفض" (a model-output match pattern) look
+# identical to a scanner.  A blanket counter would be a false-positive
+# machine, and a counter nobody trusts is a counter nobody acts on.
+#
+# So the sinks are DECLARED.  Two of them, and both are places whose value
+# is delivered to an end user with no .razor in between:
+#   1. `Title = / Body = / Subject =` — Notification and Conversation
+#      documents, rendered on /notifications and /chats.
+#   2. the argument list of `SendAsync(` — the web-push payload.
+#
+# ── And the limit is printed, not buried ────────────────────────────────
+# This counter is a FLOOR, not a ceiling: it sees the sinks it is told
+# about.  A new sink added tomorrow is invisible until it is declared here.
+# That is stated in the output so no reader mistakes "0" for "none left".
+#
+# ── Declared exclusions, each with its reason ───────────────────────────
+#   · `*/Seed/*`         — seeders write CONTENT (what a user would type),
+#                          not INTERFACE.  A sample listing title is data.
+#   · `Properties.Title` — document metadata on an exported workbook, not a
+#                          screen.
+cat > "$TMP/sinks.pl" <<'PERL'
+use strict; use warnings;
+use open ':std', ':encoding(UTF-8)';
+my $SINK_ASSIGN = qr/\b(?:Title|Body|Subject)\s*=\s*[\$\@]{0,2}"/;
+my (%files, $total, $scanned);
+for my $f (@ARGV) {
+    next if $f =~ m{/Seed/};
+    open(my $fh, '<:encoding(UTF-8)', $f) or next;
+    local $/; my $s = <$fh>; close $fh;
+    $scanned++;
+    my $blank = sub { my $t = shift; $t =~ s/[^\n]/ /g; $t };
+    $s =~ s{(/\*.*?\*/)}{$blank->($1)}ges;
+    $s =~ s{(//[^\n]*)}{$blank->($1)}ge;
+
+    my $n = 0;
+    my @lines = split /\n/, $s, -1;
+    for my $i (0 .. $#lines) {
+        my $line = $lines[$i];
+        next unless $line =~ /[\x{0600}-\x{06FF}]/;
+        next if $line =~ /Properties\s*\.\s*Title/;
+        $n++ if $line =~ /$SINK_ASSIGN/;
+    }
+    # حُمولَةُ الدَفع: مِن `SendAsync(` إلى إغلاقِ قَوسِها.
+    while ($s =~ /\bSendAsync\s*\(/g) {
+        my $start = pos($s);
+        my ($depth, $j) = (1, $start);
+        while ($j < length($s) && $depth > 0) {
+            my $c = substr($s, $j, 1);
+            $depth++ if $c eq '(';
+            $depth-- if $c eq ')';
+            $j++;
+        }
+        my $args = substr($s, $start, $j - $start);
+        $n += () = ($args =~ /"[^"\n]*[\x{0600}-\x{06FF}][^"\n]*"/g);
+    }
+    $files{$f} = $n if $n > 0;
+    $total = ($total // 0) + $n;
+}
+print "SINK_SCANNED " . ($scanned // 0) . "\n";
+print "SINK_TOTAL "   . ($total   // 0) . "\n";
+print "SINK $files{$_} $_\n" for sort keys %files;
+PERL
+
+wsl_find cs "$WSL_ALL_ROOTS" > "$TMP/csfiles.txt"
+CS_CNT=$(wc -l < "$TMP/csfiles.txt" | tr -d ' ')
+xargs -a "$TMP/csfiles.txt" -d '\n' perl "$TMP/sinks.pl" > "$TMP/sinkraw.txt"
+SINK_TOTAL=$(awk '$1=="SINK_TOTAL"{print $2}' "$TMP/sinkraw.txt")
+awk '$1=="SINK"{ p=$3; for(i=4;i<=NF;i++) p=p" "$i; sub(ROOT"/","",p); print "sink:"p"|"$2 }' \
+    ROOT="$ROOT" "$TMP/sinkraw.txt" | sort > "$TMP/sinkcur.txt"
+
 wsl_find razor "$WSL_ALL_ROOTS" > "$TMP/files.txt"
 FILE_CNT=$(wc -l < "$TMP/files.txt" | tr -d ' ')
 
 if [ "$EMIT" -eq 0 ]; then
     echo "--- Subjects ---"
     wsl_require_subjects ".razor files" "$FILE_CNT" 50
+    wsl_require_subjects ".cs files (declared UI sinks)" "$CS_CNT" 50
     echo ""
 fi
 
@@ -180,7 +262,9 @@ if [ "$EMIT" -eq 1 ]; then
     echo "# ــــــــــــــــــــــــــــــــــــــــــــــــــ"
     echo "TOTAL|$TOTAL_RUNS"
     echo "DISTINCT|$DISTINCT"
+    echo "SINK_TOTAL|$SINK_TOTAL"
     cat "$TMP/current.txt"
+    cat "$TMP/sinkcur.txt"
     exit 0
 fi
 
@@ -196,6 +280,13 @@ echo "  distinct literal strings:      $DISTINCT"
 echo "  dictionary keys (ar.json):     $KEYS"
 echo "  coverage:                      $COVERAGE %"
 echo ""
+echo "--- UI text OUTSIDE .razor (declared sinks) ---"
+echo "  .cs files scanned:             $CS_CNT"
+echo "  literals reaching a sink:      $SINK_TOTAL"
+echo "  · sinks declared: Title=/Body=/Subject= assignments, and SendAsync(…) args."
+echo "  · exclusions:     */Seed/* (content, not chrome), Properties.Title (doc metadata)."
+echo "  · THIS IS A FLOOR: it sees the sinks it is told about, not every sink."
+echo ""
 
 if [ ! -f "$LEDGER" ]; then
     echo "  ✗ no ledger at $(wsl_rel "$LEDGER")."
@@ -205,7 +296,10 @@ fi
 
 grep -vE '^[[:space:]]*(#|$)' "$LEDGER" > "$TMP/ledger.txt"
 PINNED_TOTAL=$(awk -F'|' '$1=="TOTAL"{print $2}' "$TMP/ledger.txt")
-grep -vE '^(TOTAL|DISTINCT)\|' "$TMP/ledger.txt" | sort > "$TMP/pinned.txt"
+PINNED_SINK=$(awk -F'|' '$1=="SINK_TOTAL"{print $2}' "$TMP/ledger.txt")
+grep -E '^sink:' "$TMP/ledger.txt" | sort > "$TMP/sinkpinned.txt" || true
+grep -vE '^(TOTAL|DISTINCT|SINK_TOTAL)\|' "$TMP/ledger.txt" \
+    | grep -vE '^sink:' | sort > "$TMP/pinned.txt"
 PINNED_FILES=$(wc -l < "$TMP/pinned.txt" | tr -d ' ')
 
 echo "--- Ledger ---"
@@ -246,6 +340,30 @@ if [ "$TOTAL_RUNS" -gt "$PINNED_TOTAL" ]; then
     echo "  ✗ total literal runs rose: $PINNED_TOTAL → $TOTAL_RUNS"
     FAIL=1
 fi
+
+# 4. The sink ceiling and the sink file set — same two-way rule, because a
+#    sink that regains hardcoded text is the exact regression this counter
+#    was added for.  `PINNED_SINK` empty means an old ledger predating the
+#    sink counter: that is a stale ledger, and it says so.
+if [ -z "$PINNED_SINK" ]; then
+    echo "  ✗ ledger has no SINK_TOTAL line — it predates the sink counter."
+    echo "    Re-emit it: ./scripts/verify-i18n-debt.sh --emit-ledger > $(wsl_rel "$LEDGER")"
+    FAIL=1
+elif [ "$SINK_TOTAL" -gt "$PINNED_SINK" ]; then
+    echo "  ✗ literals reaching a declared UI sink rose: $PINNED_SINK → $SINK_TOTAL"
+    FAIL=1
+elif [ "$SINK_TOTAL" -lt "$PINNED_SINK" ]; then
+    echo "  · sink debt shrank: $PINNED_SINK → $SINK_TOTAL   (ledger loose — tighten it)"
+    LOOSE=$((LOOSE + 1))
+fi
+
+while IFS='|' read -r file count; do
+    [ -z "$file" ] && continue
+    if ! grep -qxF "$file|$count" "$TMP/sinkpinned.txt"; then
+        echo "  ✗ sink debt not as pinned: $file ($count)"
+        FAIL=1
+    fi
+done < "$TMP/sinkcur.txt"
 
 echo ""
 if [ "$FAIL" -eq 1 ]; then

@@ -1651,5 +1651,16 @@
 
   "pwa.pill.install_label": "تَثبيت التَطبيق",
 
-  "studio.nav.avatar_fallback": "؟"
+  "studio.nav.avatar_fallback": "؟",
+
+  "chats.direct.subject": "تَواصُل مَع {0}",
+  "chats.offer.subject": "تَنسيق عَرض بِـ {0:N0} ريال",
+  "notifications.chat_message.title": "رِسالَة مِن {0}",
+  "notifications.driver_arrived.body": "{0} في نُقطَة الانطِلاق.",
+  "notifications.driver_arrived.title": "السائِق وَصَل ✓",
+  "notifications.offer_accepted.body": "{0} قَبِلَ عَرضكَ بِـ {1:N0} ريال. افتَح المُحادَثَة لِلتَنسيق.",
+  "notifications.offer_accepted.push_body": "{0} قَبِلَ عَرضكَ بِـ {1:N0} ريال.",
+  "notifications.offer_accepted.title": "تَمّ قَبول عَرضكَ ✓",
+  "notifications.saved_search.push_title": "إعلان جَديد يُطابِق بَحثكَ",
+  "notifications.saved_search.title": "إعلان جَديد يُطابِق «{0}»"
 }

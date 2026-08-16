@@ -10,6 +10,7 @@
 # ــــــــــــــــــــــــــــــــــــــــــــــــــ
 TOTAL|31
 DISTINCT|29
+SINK_TOTAL|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|4
@@ -22,3 +23,4 @@ libs/widgets/ACommerce.Widgets/AcAttrGrid.razor|2
 libs/widgets/ACommerce.Widgets/AcLanguageToggle.razor|1
 libs/widgets/ACommerce.Widgets/AcListRow.razor|1
 libs/widgets/ACommerce.Widgets/AcSpaceCard.razor|2
+sink:libs/kits/Auth/ACommerce.Kit.Auth.Providers.Smtp/SmtpEmailChannel.cs|1
