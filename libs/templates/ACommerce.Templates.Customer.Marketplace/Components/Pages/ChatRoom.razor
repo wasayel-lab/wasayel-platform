@@ -1,6 +1,6 @@
 @page "/{slug}/chats/{conversationId:guid}"
 @page "/{slug}/r/{role}/chats/{conversationId:guid}"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Account
 @inject AuthSession Auth
 
 <div class="acs-page acs-chat-page">
@@ -109,21 +109,24 @@ else
     }
 
 
+    /// <summary>
+    /// <para><b>قِراءَةٌ خالِصَة.</b> كانَت هذِه الدالَّةُ تُصَفِّر عَدّاد
+    /// غَير المَقروء وتُودِع — أَي أَنّ <b>طَلَبَ عَرضٍ كانَ يُبَدِّل
+    /// حالَة</b>، فَيَرفَعُها الزاحِفُ والجالِبُ المُسبَق وأَداةُ التَحَقُّق
+    /// نَفسُها. ونُقِلَ ذلك إلى أَمرٍ صَريح:
+    /// <c>POST /{slug}/chats/{id}/read</c> يُطلِقُه العَميلُ <b>بَعدَ</b>
+    /// التَصيير (‏<c>realtime-nav.js</c>)، فَيَقَع داخِلَ مُعامَلَةِ نُقطَةٍ
+    /// مَحروسَةٍ بِـ<c>RequireAuthApi</c> لا خارِجَها.</para>
+    ///
+    /// <para><b>والعُضوِيَّةُ بَقِيَت هُنا</b> — تُمَرَّر دالَّةً نَقِيَّة
+    /// إلى الخِدمَة، فَالقَرارُ حَيثُ تَعيش هُوِيَّةُ صاحِب الجَلسَة.</para>
+    /// </summary>
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
-        await using var s = Store.LightweightSession(Slug);
-        conv = await s.LoadAsync<Conversation>(ConversationId);
-        if (conv is null) return;
-        if (conv.OwnerId != Auth.UserId && conv.PartnerId != Auth.UserId) { conv = null; return; }
-
-        messages = (await s.Query<Message>()
-            .Where(m => m.ConversationId == ConversationId)
-            .OrderBy(m => m.SentAt).Take(200).ToListAsync()).ToList();
-
-        var changed = false;
-        if (conv.OwnerId == Auth.UserId && conv.OwnerUnread > 0)     { conv.OwnerUnread = 0; changed = true; }
-        if (conv.PartnerId == Auth.UserId && conv.PartnerUnread > 0) { conv.PartnerUnread = 0; changed = true; }
-        if (changed) { s.Store(conv); await s.SaveChangesAsync(); }
+        var room = await Account.ChatRoomAsync(Slug, ConversationId,
+            c => c.OwnerId == Auth.UserId || c.PartnerId == Auth.UserId);
+        conv     = room.Conversation;
+        messages = room.Messages.ToList();
     }
 }

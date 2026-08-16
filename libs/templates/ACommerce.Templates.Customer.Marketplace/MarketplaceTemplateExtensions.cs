@@ -1606,6 +1606,58 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect(Link(req, slug, $"chats/{conv.Id}"));
         }).DisableAntiforgery();
 
+        // ─── تَعليمُ مُحادَثَةٍ مَقروءَة — أَمرٌ صَريح لا أَثَرٌ في عَرض ──
+        // كانَ هذا التَصفيرُ يَقَع داخِلَ `ChatRoom.razor` في طَلَب `GET`:
+        // كِتابَةٌ خارِجَ المُعامَلَة وخارِجَ الصُندوق الصادِر، **ويَرفَعُها
+        // كُلُّ مَن يَفتَح الصَفحَة بِلا قِراءَة** — زاحِفٌ أَو جالِبٌ
+        // مُسبَق أَو أَداةُ تَحَقُّقٍ بَصَريّ. وصارَ نُقطَةً يُنادِيها
+        // العَميلُ **بَعدَ** التَصيير (`realtime-nav.js`).
+        //
+        // و`RequireAuthApi` لا `RequireAuth`: المُنادي `fetch` لا نَموذَج،
+        // فَالرَدُّ ‏401 أَصدَقُ مِن تَحويلٍ إلى صَفحَة دُخول لا يَراها أَحَد.
+        app.MapPost("/{slug}/chats/{conversationId:guid}/read",
+            async (string slug, Guid conversationId, HttpContext http,
+                   IDocumentStore store) =>
+        {
+            var userId = http.UserId();
+
+            await using var s = store.LightweightSession(slug);
+            var conv = await s.LoadAsync<Conversation>(conversationId);
+            if (conv is null) return Results.NotFound();
+            if (conv.OwnerId != userId && conv.PartnerId != userId) return Forbidden();
+
+            // نَفسُ الشَرطَين حَرفاً كَما كانا في الصَفحَة — والإيداعُ
+            // مَشروطٌ بِتَبَدُّلٍ فِعليّ، فَنِداءٌ مُكَرَّرٌ لا يَكتُب.
+            var changed = false;
+            if (conv.OwnerId   == userId && conv.OwnerUnread   > 0) { conv.OwnerUnread   = 0; changed = true; }
+            if (conv.PartnerId == userId && conv.PartnerUnread > 0) { conv.PartnerUnread = 0; changed = true; }
+            if (changed) { s.Store(conv); await s.SaveChangesAsync(); }
+            return Results.NoContent();
+        }).DisableAntiforgery().RequireAuthApi();
+
+        // ─── تَعليمُ الإشعارات مَقروءَة — أَمرٌ صَريح لا أَثَرٌ في عَرض ──
+        // نَفسُ عِلَّةِ نُقطَةِ المُحادَثَة أَعلاه. و**نَفسُ الخَمسين
+        // حَرفاً**: تُقرَأ بِنَفس التَرتيب والسَقف الَّذي تَعرِضُه
+        // الصَفحَة، فَما يُعَلَّم مَقروءاً هُوَ بِالضَبط ما رَآه
+        // صاحِبُه — لا كُلُّ ما في المَخزَن.
+        app.MapPost("/{slug}/notifications/read",
+            async (string slug, HttpContext http, IDocumentStore store) =>
+        {
+            var userId = http.UserId();
+
+            await using var s = store.LightweightSession(slug);
+            var shown = await s.Query<ACommerce.Kit.Notifications.Notification>()
+                .Where(n => n.UserId == userId)
+                .OrderByDescending(n => n.At).Take(50).ToListAsync();
+
+            var unread = shown.Where(n => !n.IsRead).ToList();
+            if (unread.Count == 0) return Results.NoContent();
+
+            foreach (var n in unread) { n.IsRead = true; s.Store(n); }
+            await s.SaveChangesAsync();
+            return Results.NoContent();
+        }).DisableAntiforgery().RequireAuthApi();
+
         // ─── Send chat message — gates: auth + terms ─────────────────────
         // boilerplate التَّوثيق المُتَكَرِّر استُبدِل بِـ .RequireAuth().RequireTerms()
         // — الـ filter يَكتُب userId إلى HttpContext.Items وَنَقرَأها هُنا.

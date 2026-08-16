@@ -44,6 +44,26 @@ public sealed record ChatList(
 }
 
 /// <summary>
+/// <para><b>غُرفَةُ مُحادَثَةٍ واحِدَة</b> — الوَثيقَةُ ورَسائِلُها،
+/// استِعلامانِ في جَلسَةٍ واحِدَة كَما كانا في <c>ChatRoom.razor</c>.</para>
+///
+/// <para><b>وما لَم يَنتَقِل مَعَهُما: تَصفيرُ عَدّاد غَير المَقروء.</b>
+/// كانَ يَقَع في نَفس الدالَّة وفي نَفس طَلَب الـ<c>GET</c>، وصارَ
+/// أَمراً صَريحاً (<c>POST /{slug}/chats/{id}/read</c>). فَهذِه
+/// الخِدمَةُ <b>تَقرَأ ولا تَكتُب</b>، وذاكَ شَرطُ مُجَلَّدِها.</para>
+/// </summary>
+public sealed record ChatRoomView(
+    Conversation? Conversation, IReadOnlyList<Message> Messages)
+{
+    /// <summary>«لا مُحادَثَة» — إمّا أَنَّها غَير مَوجودَة وإمّا أَنّ
+    /// السائِلَ لَيسَ طَرَفاً فيها. ولا يُفَرَّقُ بَينَهُما عَمداً:
+    /// الصَفحَةُ كانَت تُصَفِّر <c>conv</c> في الحالَتَين حَرفاً،
+    /// و<b>التَفريقُ نَفسُه تَسريب</b> — يَقول لِلغَريب إنّ المُحادَثَة
+    /// مَوجودَة.</summary>
+    public static readonly ChatRoomView Empty = new(null, Array.Empty<Message>());
+}
+
+/// <summary>
 /// <para><b>عُروضي ومَواقِعُ التِقاطِها</b>. و<c>Pickups</c> مَبنِيَّةٌ
 /// مِن <b>مَجرى أَحداث</b> كُلّ إعلان (<c>AggregateStreamAsync</c>) لا
 /// مِن وَثيقَة — نُقِلَ كَما هُوَ، فَتَبديلُه إلى قِراءَةِ لَقطَة
@@ -238,6 +258,55 @@ public sealed class AccountQueries
         }
 
         return new ChatList(convs, avatars);
+    }
+
+    /// <summary>
+    /// <para><b>غُرفَةُ مُحادَثَةٍ واحِدَة</b> — الوَثيقَةُ ثُمَّ ‏200
+    /// رِسالَةٍ بِتَرتيب الإرسال، كَما كانا في الصَفحَة حَرفاً.</para>
+    ///
+    /// <para><b>والعُضوِيَّةُ قَرارٌ لا يَنتَقِل</b>:
+    /// <paramref name="isParty"/> دالَّةٌ <b>نَقِيَّة</b> تَبقى مُعَرَّفَةً
+    /// في الصَفحَة — هُناكَ تَعيش هُوِيَّةُ صاحِب الجَلسَة
+    /// (<c>AuthSession</c>) — وتُنادِيها الخِدمَةُ بِالوَثيقَة الَّتي
+    /// جَلَبَتها. نَفسُ شَكل <c>ExploreAsync</c> (‏§٨.٣): الخِدمَةُ
+    /// <b>تُنادي مَن يُقَرِّر</b> ولا تُقَرِّر.</para>
+    ///
+    /// <para><b>ولا تُجلَب الرَسائِلُ لِغَير الطَرَف</b> — نَفسُ تَرتيب
+    /// الصَفحَة: فَحصُ العُضوِيَّة كانَ يَسبِق استِعلامَ الرَسائِل،
+    /// فَبَقِيَ سابِقاً.</para>
+    /// </summary>
+    public async Task<ChatRoomView> ChatRoomAsync(
+        string tenantSlug, Guid conversationId, Func<Conversation, bool> isParty,
+        CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(tenantSlug);
+
+        var conv = await s.LoadAsync<Conversation>(conversationId, ct);
+        if (conv is null || !isParty(conv)) return ChatRoomView.Empty;
+
+        var messages = (await s.Query<Message>()
+            .Where(m => m.ConversationId == conversationId)
+            .OrderBy(m => m.SentAt).Take(200).ToListAsync(ct)).ToList();
+
+        return new ChatRoomView(conv, messages);
+    }
+
+    /// <summary>
+    /// <para><b>إشعاراتي</b> — أَحدَث ‏50، كَما كانَت في
+    /// <c>Notifications.razor</c> حَرفاً.</para>
+    ///
+    /// <para><b>وما لَم يَنتَقِل: تَعليمُها مَقروءَة.</b> كانَ يَقَع في
+    /// نَفس الدالَّة، وصارَ أَمراً صَريحاً
+    /// (<c>POST /{slug}/notifications/read</c>) يَقرَأ <b>نَفس</b>
+    /// الخَمسين — فَما يُعَلَّم مَقروءاً هُوَ بِالضَبط ما عُرِض.</para>
+    /// </summary>
+    public async Task<IReadOnlyList<Notification>> NotificationsAsync(
+        string tenantSlug, Guid userId, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(tenantSlug);
+        return (await s.Query<Notification>()
+            .Where(n => n.UserId == userId)
+            .OrderByDescending(n => n.At).Take(50).ToListAsync(ct)).ToList();
     }
 
     /// <summary>تَذاكِرُ الدَعم الَّتي كَتَبتُها — أَحدَث ‏50.</summary>

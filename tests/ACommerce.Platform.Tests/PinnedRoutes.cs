@@ -72,6 +72,17 @@ internal static class PinnedRoutes
         "/{slug}/me/area/save",
         "/{slug}/users/{userId:guid}/chat",
         "/{slug}/chats/{conversationId:guid}/send",
+
+        // ─── المَوجَة ٧: نُقطَةٌ تُضاف بِقَرارٍ مَرئيّ، وهذا سَبَبُها ────
+        // تَصفيرُ عَدّاد غَير المَقروء كانَ يَقَع في `ChatRoom.razor`
+        // داخِلَ طَلَب `GET` — كِتابَةٌ في مَسار عَرض، يَرفَعُها الزاحِفُ
+        // والجالِبُ المُسبَق وأَداةُ التَحَقُّق. فَخَرَجَ إلى أَمرٍ صَريح.
+        // **والصافي نَقص لا زيادَة**: خَرَجَت كِتابَةٌ مِن خارِج
+        // المُعامَلَة (سِجِلُّ الطَبَقَة ٨) ودَخَلَت نُقطَةً مَحروسَة،
+        // وثَمَنُها سَطرٌ هُنا. والشَكلُ المِثاليّ — نُقطَةُ
+        // Wolverine.Http بِجَلسَةٍ مَحقونَة — قَرارٌ لَه ADR ومَوجَة.
+        "/{slug}/chats/{conversationId:guid}/read",
+        "/{slug}/notifications/read",
         "/admin/tenants/create",
         "/admin/tenants/{slug}/users/{userId:guid}/grant-admin",
         "/admin/tenants/{slug}/users/{userId:guid}/revoke-admin",

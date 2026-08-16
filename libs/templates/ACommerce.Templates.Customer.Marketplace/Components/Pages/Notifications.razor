@@ -5,7 +5,7 @@
     في الصَفحَة. لَو لَم يَكُن مُسَجَّلاً يَظهَر AcEmptyState مَع زِرّ
     تَسجيل، خِلاف ذلِك المُحتَوى.
 *@
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Account
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
 @using ACommerce.Kit.Notifications
@@ -98,23 +98,21 @@
         await LoadAsync(Auth.UserId!.Value);
     }
 
+    /// <summary>
+    /// <para><b>قِراءَةٌ خالِصَة.</b> كانَت هذِه الدالَّةُ تَفتَح جَلسَةً
+    /// ثانِيَةً قابِلَةً لِلكِتابَة وتُعَلِّم كُلَّ ما عُرِض مَقروءاً —
+    /// أَي أَنّ <b>طَلَبَ عَرضٍ كانَ يُبَدِّل حالَة</b>. ونُقِلَ ذلك إلى
+    /// <c>POST /{slug}/notifications/read</c> يُطلِقُه العَميلُ بَعدَ
+    /// التَصيير (<c>realtime-nav.js</c>).</para>
+    ///
+    /// <para><b>وأَثَرٌ مَرئيّ تَبِعَه، وهُوَ إصلاح</b>: الكِتابَةُ
+    /// كانَت تُعَدِّل <b>نَفسَ الكائِنات</b> الَّتي يُصَيَّر مِنها
+    /// <c>Unread</c>، فَكانَت الصَفحَةُ تَعرِض كُلَّ إشعارٍ
+    /// <b>مَقروءاً دائِماً</b> — والخاصِّيَّةُ الَّتي كُتِبَت لِتُمَيِّز
+    /// غَيرَ المَقروء لَم تَكُن تَقَع أَبَداً. والآنَ تُصَيَّر الحالَةُ
+    /// المُخَزَّنَة كَما هي: غَيرُ المَقروء يَظهَر غَيرَ مَقروء في
+    /// الزِيارَة الأُولى، ومَقروءاً في الثانِيَة.</para>
+    /// </summary>
     async Task LoadAsync(Guid userId)
-    {
-        await using var s = Store.QuerySession(Slug);
-        _items = (await s.Query<Notification>()
-            .Where(n => n.UserId == userId)
-            .OrderByDescending(n => n.At).Take(50).ToListAsync()).ToList();
-
-        var unread = _items.Where(n => !n.IsRead).ToList();
-        if (unread.Count > 0)
-        {
-            await using var ws = Store.LightweightSession(Slug);
-            foreach (var n in unread)
-            {
-                n.IsRead = true;
-                ws.Store(n);
-            }
-            await ws.SaveChangesAsync();
-        }
-    }
+        => _items = (await Account.NotificationsAsync(Slug, userId)).ToList();
 }
