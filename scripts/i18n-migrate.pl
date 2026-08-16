@@ -205,6 +205,8 @@ sub extend_left {
     if ($n eq '*') {
         $s-- while $s > 0 && substr($src, $s - 1, 1) !~ /[><}{]/;
         $s++ while $s < length($src) && substr($src, $s, 1) =~ /\s/;
+    } elsif ($n eq 'q') {          # إلى الاقتِباس المُحيط — لِقيمَة خاصِّيَّة
+        $s-- while $s > 0 && substr($src, $s - 1, 1) ne '"';
     } else { $s -= $n }
     return $s;
 }
@@ -213,6 +215,8 @@ sub extend_right {
     if ($n eq '*') {
         $e++ while $e < length($src) && substr($src, $e, 1) !~ /[<>\@{}]/;
         $e-- while $e > 0 && substr($src, $e - 1, 1) =~ /\s/;
+    } elsif ($n eq 'q') {
+        $e++ while $e < length($src) && substr($src, $e, 1) ne '"';
     } else { $e += $n }
     return $e;
 }
@@ -230,8 +234,12 @@ for my $p (@plan) {
 my %pairs;
 for my $p (@plan) {
     my $v = $p->{val};
+    # الطَرَفانِ يُطَبَّعانِ مِن `\r` قَبلَ المُقابَلَة (‏الفَخُّ الرابِع):
+    # ‏`git show HEAD:` يُعطي LF والشَجَرَةُ CRLF، فَقيمَةٌ مَلفوفَة عَلى
+    # سَطرَين تُعطي «غَير مَوجود» وهي مَوجودَةٌ حَرفاً بِحَرف.
+    my $vn = $v; $vn =~ s/\r//g;
     die "القيمَةُ «$v» غَير مَوجودَة في HEAD — تَوَقَّف.\n"
-        unless index($head, $v) >= 0;
+        unless index($head, $vn) >= 0;
     die "قيمَةٌ فيها مَحرَفٌ غَير آمِن (<، >، &): «$v»\n" if $v =~ /[<>&]/;
     if (exists $pairs{$p->{key}} && $pairs{$p->{key}} ne $v) {
         die "تَعارُض: المِفتاح $p->{key} يُطلَب لِقيمَتَين مُختَلِفَتَين.\n";
@@ -249,7 +257,13 @@ while ($dict =~ /^\s*"([a-z][a-z0-9_.]*)"\s*:\s*"((?:[^"\\]|\\.)*)"/gm) {
 my @add;
 for my $k (sort keys %pairs) {
     my $v = $pairs{$k};
-    my $esc = $v; $esc =~ s/\\/\\\\/g; $esc =~ s/"/\\"/g;
+    # التَرميز إلى JSON: والسَطرُ الجَديد **يُطَبَّع إلى `\n`** لا
+    # `\r\n` (‏الفَخُّ الثالِث: مُخرَجُ المُصَيِّر صِفرُ `CR`، ومَصادِرُنا
+    # مَخلوطَة). وقيمَةٌ فيها سَطرٌ حَرفيّ تَكسِر JSON أَصلاً.
+    my $esc = $v;
+    $esc =~ s/\\/\\\\/g; $esc =~ s/"/\\"/g;
+    $esc =~ s/\r\n/\n/g; $esc =~ s/\r/\n/g;
+    $esc =~ s/\n/\\n/g;  $esc =~ s/\t/\\t/g;
     if (exists $existing{$k}) {
         die "المِفتاح $k قائِمٌ بِقيمَةٍ مُختَلِفَة — الدُفعَةُ مُتَوَقِّفَة.\n"
             . "  القائِم: «$existing{$k}»\n  المَطلوب: «$esc»\n"

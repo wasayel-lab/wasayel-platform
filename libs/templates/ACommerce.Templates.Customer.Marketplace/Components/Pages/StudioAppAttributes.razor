@@ -2,6 +2,7 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.Queries.TenantAdminQueries TenantAdmin
+@inject L L
 @using ACommerce.Kit.Tenants
 @using ACommerce.Platform.Shared
 
@@ -15,32 +16,30 @@
     و"CategoryAttributeMappings" — مُتَوافِق مَع الـ Importer.
 *@
 
-<StudioShell Title="@($"الخَصائِص · {tenant?.Name ?? Slug}")" Active="home">
+<StudioShell Title="@($"{L["studio.app_attrs.title"]} {tenant?.Name ?? Slug}")" Active="home">
     <TopBarActions>
-        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← الإعدادات</a>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← @L.Markup("studio.app_nav.settings")</a>
     </TopBarActions>
     <ChildContent>
         @if (tenant is null)
         {
-            <div class="st-card">التَّطبيق غَير مَوجود أَو لا تَملِكه.</div>
+            <div class="st-card">@L.Markup("studio.app.not_found")</div>
         }
         else
         {
             <div class="studio-page-head">
-                <h1>الخَصائِص الديناميكِيَّة</h1>
-                <p>عَرِّف حُقول الإعلانات لِكُلّ فِئَة، أَو حُقول صَفحَة المُستَخدِم (البروفايل).</p>
+                <h1>@L.Markup("studio.app_attrs.heading")</h1>
+                <p>@L.Markup("studio.app_attrs.intro")</p>
             </div>
 
-            @if (Saved == "1")          { <div class="st-chip st-chip-success" style="margin-bottom:14px;"><AcIcon Name="check" Size="14" /> تَمّ الحِفظ</div> }
-            @if (Err == "bad_format")   { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">تَنسيق صَفّ غَير صَحيح — راجِع الصِّيغَة.</div> }
-            @if (Err == "no_scope")     { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">اختَر نِطاقاً أَوّلاً.</div> }
+            @if (Saved == "1")          { <div class="st-chip st-chip-success" style="margin-bottom:14px;"><AcIcon Name="check" Size="14" /> @L.Markup("studio.app.saved")</div> }
+            @if (Err == "bad_format")   { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">@L.Markup("studio.app_attrs.err_format")</div> }
+            @if (Err == "no_scope")     { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">@L.Markup("studio.app_attrs.err_scope")</div> }
 
             @* قائِمَة scopes — كُلّ فِئَة + sentinel البروفايل *@
             <div class="st-card">
-                <h3 style="margin-top:0;">النِّطاق (Scope)</h3>
-                <p style="color:var(--st-muted);font-size:13px;">
-                    اختَر فِئَة لِتَعريف حُقول إعلاناتها، أَو "البروفايل"
-                    لِحُقول صَفحَة المُستَخدِم.
+                <h3 style="margin-top:0;">@L.Markup("studio.app_attrs.scope_title")</h3>
+                <p style="color:var(--st-muted);font-size:13px;">@((MarkupString)"\n                    ")@L.Markup("studio.app_attrs.scope_hint")@((MarkupString)"\n                ")
                 </p>
                 <div class="acm-scope-list">
                     @foreach (var sc in scopes)
@@ -55,7 +54,7 @@
                                     @sc.Id
                                 </span>
                             </div>
-                            <span class="ac-chip ac-chip-sm">@sc.DefCount حُقول</span>
+                            <span class="ac-chip ac-chip-sm">@sc.DefCount @L.Markup("studio.app_attrs.field_unit")</span>
                         </a>
                     }
                 </div>
@@ -67,10 +66,8 @@
                     <input type="hidden" name="scope" value="@ScopeId" />
 
                     <div class="st-card">
-                        <h3 style="margin-top:0;">حُقول @selectedScopeLabel</h3>
-                        <p style="color:var(--st-muted);font-size:13px;margin:0 0 14px;">
-                            كُلّ بِطاقَة = حَقل في الإعلان. اختَر النَّوع، وإن كانَ
-                            «اختِيار» أَضِف الخِيارات كَرُقَع.
+                        <h3 style="margin-top:0;">@L.Markup("studio.app_attrs.fields_of") @selectedScopeLabel</h3>
+                        <p style="color:var(--st-muted);font-size:13px;margin:0 0 14px;">@((MarkupString)"\n                            ")@L.Markup("studio.app_attrs.card_hint")@((MarkupString)"\n                        ")
                         </p>
 
                         <div class="ac-editor" id="attrs-editor">
@@ -79,17 +76,17 @@
                                 var isSelect = f.Type is "SingleSelect" or "MultiSelect";
                                 <div class="ac-editor-row" data-attr-row>
                                     <div class="ac-editor-row-head">
-                                        <input class="ac-input ac-attr-name" placeholder="اسم الحَقل (عَرَبي)" value="@f.Name" />
-                                        <button type="button" class="ac-icon-btn" data-remove-attr aria-label="حَذف الحَقل"><AcIcon Name="x" Size="14" /></button>
+                                        <input class="ac-input ac-attr-name" placeholder="@L["studio.app_attrs.field_name"]" value="@f.Name" />
+                                        <button type="button" class="ac-icon-btn" data-remove-attr aria-label="@L["studio.app_attrs.remove_field"]"><AcIcon Name="x" Size="14" /></button>
                                     </div>
                                     <div class="ac-editor-grid2">
                                         <div>
-                                            <span class="ac-chip-input-label">الرَّمز (Code)</span>
+                                            <span class="ac-chip-input-label">@L.Markup("studio.app_attrs.code_label")</span>
                                             <input class="ac-input ac-attr-code" placeholder="rooms" value="@f.Code"
                                                    style="direction:ltr;" />
                                         </div>
                                         <div>
-                                            <span class="ac-chip-input-label">النَّوع</span>
+                                            <span class="ac-chip-input-label">@L.Markup("studio.app_attrs.type_label")</span>
                                             <select class="ac-select ac-attr-type">
                                                 @foreach (var t in FieldTypes)
                                                 {
@@ -103,10 +100,10 @@
                                     </div>
                                     <label class="ac-attr-req-toggle">
                                         <input type="checkbox" class="ac-attr-req" checked="@f.Required" />
-                                        <span>حَقل مَطلوب</span>
+                                        <span>@L.Markup("studio.app_attrs.required")</span>
                                     </label>
                                     <div class="ac-attr-options" data-options style="@(isSelect ? "" : "display:none;")">
-                                        <span class="ac-chip-input-label">الخِيارات (اكتُب القيمَة ثُمَّ Enter)</span>
+                                        <span class="ac-chip-input-label">@L.Markup("studio.app_attrs.options_label")</span>
                                         <div class="ac-chip-input" data-opts>
                                             @foreach (var o in f.Options)
                                             {
@@ -121,16 +118,16 @@
                         </div>
 
                         <button type="button" class="ac-add-row-btn" id="add-attr" style="margin-top:12px;">
-                            <AcIcon Name="plus" Size="16" /> إضافَة حَقل
+                            <AcIcon Name="plus" Size="16" /> @L.Markup("studio.app_attrs.add_field")@((MarkupString)"\n                        ")
                         </button>
 
                         <textarea name="defs" id="defs-hidden" hidden>@defsText</textarea>
                     </div>
 
                     <div style="display:flex;gap:8px;margin-top:16px;">
-                        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/attributes")">إلغاء</a>
+                        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/attributes")">@L.Markup("studio.app_attrs.cancel")</a>
                         <button type="submit" class="st-btn st-btn-primary">
-                            <AcIcon Name="check" Size="18" /> حِفظ
+                            <AcIcon Name="check" Size="18" /> @L.Markup("studio.app_attrs.save")@((MarkupString)"\n                        ")
                         </button>
                     </div>
                 </form>
@@ -139,15 +136,15 @@
                     <div class="ac-editor-row" data-attr-row>
                         <div class="ac-editor-row-head">
                             <input class="ac-input ac-attr-name" placeholder="اسم الحَقل (عَرَبي)" />
-                            <button type="button" class="ac-icon-btn" data-remove-attr aria-label="حَذف الحَقل"><AcIcon Name="x" Size="14" /></button>
+                            <button type="button" class="ac-icon-btn" data-remove-attr aria-label="@L["studio.app_attrs.remove_field"]"><AcIcon Name="x" Size="14" /></button>
                         </div>
                         <div class="ac-editor-grid2">
                             <div>
-                                <span class="ac-chip-input-label">الرَّمز (Code)</span>
+                                <span class="ac-chip-input-label">@L.Markup("studio.app_attrs.code_label")</span>
                                 <input class="ac-input ac-attr-code" placeholder="rooms" style="direction:ltr;" />
                             </div>
                             <div>
-                                <span class="ac-chip-input-label">النَّوع</span>
+                                <span class="ac-chip-input-label">@L.Markup("studio.app_attrs.type_label")</span>
                                 <select class="ac-select ac-attr-type">
                                     @foreach (var t in FieldTypes)
                                     {
@@ -158,10 +155,10 @@
                         </div>
                         <label class="ac-attr-req-toggle">
                             <input type="checkbox" class="ac-attr-req" />
-                            <span>حَقل مَطلوب</span>
+                            <span>@L.Markup("studio.app_attrs.required")</span>
                         </label>
                         <div class="ac-attr-options" data-options style="display:none;">
-                            <span class="ac-chip-input-label">الخِيارات (اكتُب القيمَة ثُمَّ Enter)</span>
+                            <span class="ac-chip-input-label">@L.Markup("studio.app_attrs.options_label")</span>
                             <div class="ac-chip-input" data-opts>
                                 <input class="ac-chip-entry" placeholder="مَثَلاً: شَقّة" />
                             </div>
@@ -188,11 +185,11 @@
     sealed record FieldRow(string Code, string Name, string Type, bool Required, List<string> Options);
     static readonly string[] FieldTypes =
         { "Text", "LongText", "Number", "Boolean", "SingleSelect", "MultiSelect", "Date" };
-    static string TypeLabel(string t) => t switch
+    string TypeLabel(string t) => t switch
     {
-        "Text" => "نَصّ قَصير", "LongText" => "نَصّ طَويل", "Number" => "رَقم",
-        "Boolean" => "نَعَم/لا", "SingleSelect" => "اختِيار واحِد",
-        "MultiSelect" => "اختِيار مُتَعَدِّد", "Date" => "تاريخ", _ => t
+        "Text" => L["studio.app_attrs.type_text"], "LongText" => L["studio.app_attrs.type_longtext"], "Number" => L["studio.app_attrs.type_number"],
+        "Boolean" => L["studio.app_attrs.type_boolean"], "SingleSelect" => L["studio.app_attrs.type_single"],
+        "MultiSelect" => L["studio.app_attrs.type_multi"], "Date" => L["studio.app_attrs.type_date"], _ => t
     };
 
     static readonly Guid ProfileScopeId = Guid.Parse("00000000-0000-0000-0000-000000000F01");
@@ -228,12 +225,12 @@
                 DefCount: defCountByScope.GetValueOrDefault(sid, 0)));
         }
         scopes.Add(new ScopeInfo(
-            Id: ProfileScopeId.ToString(), Label: "البروفايل", Icon: "user",
+            Id: ProfileScopeId.ToString(), Label: L["studio.app_attrs.scope_profile"], Icon: "user",
             DefCount: defCountByScope.GetValueOrDefault(ProfileScopeId, 0)));
 
         if (!string.IsNullOrEmpty(ScopeId) && Guid.TryParse(ScopeId, out var scopeGuid))
         {
-            selectedScopeLabel = scopes.FirstOrDefault(s => s.Id == ScopeId)?.Label ?? "النِّطاق";
+            selectedScopeLabel = scopes.FirstOrDefault(s => s.Id == ScopeId)?.Label ?? L["studio.app_attrs.scope_fallback"];
 
             // اِبني نَصّ الـ textarea: لِكُلّ mapping عَلى هذا الـ scope
             // اِجلِب الـ AttributeDefinition + جَمِّع AttributeValues.

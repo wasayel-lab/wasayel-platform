@@ -2,6 +2,7 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.Queries.TenantAdminQueries TenantAdmin
+@inject L L
 @using ACommerce.Kit.Tenants
 @using ACommerce.Kit.Auth
 @using ACommerce.Kit.Support
@@ -15,50 +16,50 @@
     تَحَقُّق مِلكِيَّة قَبل عَرض البَيانات.
 *@
 
-<StudioShell Title="@($"تَشغيل · {tenant?.Name ?? Slug}")" Active="home">
+<StudioShell Title="@($"{L["studio.app_console.title"]} {tenant?.Name ?? Slug}")" Active="home">
     <TopBarActions>
-        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← الإعدادات</a>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← @L.Markup("studio.app_nav.settings")</a>
     </TopBarActions>
     <ChildContent>
         @if (tenant is null)
         {
-            <div class="st-card">التَّطبيق غَير مَوجود أَو لا تَملِكه.</div>
+            <div class="st-card">@L.Markup("studio.app.not_found")</div>
         }
         else
         {
             <div class="studio-page-head">
-                <h1>لوحَة تَشغيل التَّطبيق</h1>
-                <p>نَظرَة سَريعَة على نَشاط <strong>@tenant.Name</strong>.</p>
+                <h1>@L.Markup("studio.app_console.heading")</h1>
+                <p>@L.Markup("studio.app_console.intro") <strong>@tenant.Name</strong>.</p>
             </div>
 
             <div class="studio-stats">
-                <div class="studio-stat"><div class="studio-stat-label">المُستَخدِمون</div><div class="studio-stat-value">@userCount</div></div>
-                <div class="studio-stat"><div class="studio-stat-label">الإعلانات</div><div class="studio-stat-value">@listingCount</div></div>
-                <div class="studio-stat"><div class="studio-stat-label">تَذاكِر مَفتوحَة</div><div class="studio-stat-value">@openTicketCount</div><div class="studio-stat-sub">@totalTicketCount إجمالاً</div></div>
-                <div class="studio-stat"><div class="studio-stat-label">الباقات</div><div class="studio-stat-value">@planCount</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("studio.app_console.stat_users")</div><div class="studio-stat-value">@userCount</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("studio.app_console.stat_listings")</div><div class="studio-stat-value">@listingCount</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("studio.app_console.stat_open_tickets")</div><div class="studio-stat-value">@openTicketCount</div><div class="studio-stat-sub">@totalTicketCount @L.Markup("studio.app_console.total_suffix")</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("studio.app_console.stat_plans")</div><div class="studio-stat-value">@planCount</div></div>
             </div>
 
             @* مَنح/سَحب صَلاحيَّة الإدارَة لِلمَتجَر هي عَمَلِيَّة عَلى
                مُستَوى المَنصَّة — لا تَنتَمي لِإطار رائِد الأَعمال. عُملاء
                المَتجَر يُحصَون أَدناه (@userCount). *@
-            <div class="st-section-title">إشراف</div>
+            <div class="st-section-title">@L.Markup("studio.app_console.section_moderation")</div>
             <div class="studio-list">
                 <a class="studio-list-row" href="@($"/studio/apps/{Slug}/listings")">
                     <span class="studio-list-icon" style="background:#fef3c7;color:#854d0e;"><AcIcon Name="clipboard" Size="16" /></span>
-                    <div class="studio-list-body"><strong>إشراف الإعلانات</strong>
-                        <span>@listingCount إعلان · إخفاء/حَذف لِلمُسيء</span></div>
+                    <div class="studio-list-body"><strong>@L.Markup("studio.app_console.listings_title")</strong>
+                        <span>@listingCount @L.Markup("studio.app_console.listings_sub")</span></div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
                 <a class="studio-list-row" href="@($"/studio/apps/{Slug}/tickets")">
                     <span class="studio-list-icon" style="background:#fee2e2;color:#b91c1c;"><AcIcon Name="ticket" Size="16" /></span>
-                    <div class="studio-list-body"><strong>تَذاكِر الدَّعم</strong>
-                        <span>@openTicketCount مَفتوحَة · @totalTicketCount إجمالاً</span></div>
+                    <div class="studio-list-body"><strong>@L.Markup("studio.app_console.tickets_title")</strong>
+                        <span>@openTicketCount @L.Markup("studio.app_console.tickets_open") @totalTicketCount @L.Markup("studio.app_console.total_suffix")</span></div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
             </div>
 
             <div class="st-section-title" style="display:flex;justify-content:space-between;align-items:center;">
-                <span>الدَّعم الفَنِّي</span>
+                <span>@L.Markup("studio.app_console.support")</span>
                 @* نَفسُ خَرق التَبايُن الَّذي أُصلِحَ في `/studio`
                    (‏4.33 دونَ 4.5): الأَخضَرُ الفاتِح نَصّاً على
                    خَلفِيَّة الاستوديو. والأَخضَرُ الغامِق في اللَوحَة
@@ -66,8 +67,7 @@
                    إصلاح الأَوَّل — فَالمَسحُ الواحِد لا يَكفي لِنَمَطٍ
                    مُكَرَّر. *@
                 <a href="@($"/studio/apps/{Slug}/tickets")"
-                   style="font-size:12px;color:var(--st-primary-700);text-decoration:none;font-weight:600;">
-                    كُلّ التَّذاكِر ←
+                   style="font-size:12px;color:var(--st-primary-700);text-decoration:none;font-weight:600;">@((MarkupString)"\n                    ")@L.Markup("studio.app_console.all_tickets") ←
                 </a>
             </div>
             @if (recentTickets is { Count: > 0 })
@@ -78,7 +78,7 @@
                         <a class="studio-list-row" href="@($"/studio/apps/{Slug}/tickets/{t.Id}")">
                             <span class="studio-list-icon" style="background:#fef3c7;color:#854d0e;"><AcIcon Name="ticket" Size="16" /></span>
                             <div class="studio-list-body">
-                                <strong>@(string.IsNullOrEmpty(t.Subject) ? "تَذكَرَة" : t.Subject)</strong>
+                                <strong>@(string.IsNullOrEmpty(t.Subject) ? L["studio.app_console.ticket_untitled"] : t.Subject)</strong>
                                 <span>@t.AuthorName · @t.CreatedAt.ToString("yyyy-MM-dd HH:mm")</span>
                             </div>
                             <span class="st-chip">@t.Status</span>
@@ -88,12 +88,11 @@
             }
             else
             {
-                <div class="st-card" style="color:var(--st-muted);text-align:center;padding:24px;">
-                    لا تَذاكِر بَعد.
+                <div class="st-card" style="color:var(--st-muted);text-align:center;padding:24px;">@((MarkupString)"\n                    ")@L.Markup("studio.app_console.no_tickets")@((MarkupString)"\n                ")
                 </div>
             }
 
-            <div class="st-section-title">الباقات والاشتِراكات</div>
+            <div class="st-section-title">@L.Markup("studio.app_console.section_plans")</div>
             @if (plans is { Count: > 0 })
             {
                 <div class="studio-list">
@@ -103,7 +102,7 @@
                             <span class="studio-list-icon" style="background:#dcfce7;color:#15803d;"><AcIcon Name="wallet" Size="16" /></span>
                             <div class="studio-list-body">
                                 <strong>@p.Name</strong>
-                                <span>@p.Price ريال/شَهر · @(p.IsActive ? "مُفَعَّلَة" : "مُعَطَّلَة")</span>
+                                <span>@((MarkupString)ACommerce.Kit.Culture.Money.Format(p.Price, style: ACommerce.Kit.Culture.MoneyUnitStyle.Name))@L.Markup("studio.app_console.plan_period") @(p.IsActive ? L["studio.app_console.plan_on"] : L["studio.app_console.plan_off"])</span>
                             </div>
                         </div>
                     }
@@ -111,12 +110,11 @@
             }
             else
             {
-                <div class="st-card" style="color:var(--st-muted);text-align:center;padding:24px;">
-                    لا باقات مُعرَّفَة بَعد لِهذا التَّطبيق.
+                <div class="st-card" style="color:var(--st-muted);text-align:center;padding:24px;">@((MarkupString)"\n                    ")@L.Markup("studio.app_console.no_plans")@((MarkupString)"\n                ")
                 </div>
             }
 
-            <div class="st-section-title">آخِر الإشعارات (سِجِلّ النَّشاط)</div>
+            <div class="st-section-title">@L.Markup("studio.app_console.section_activity")</div>
             @if (recentNotifs is { Count: > 0 })
             {
                 <div class="studio-list">
@@ -134,8 +132,7 @@
             }
             else
             {
-                <div class="st-card" style="color:var(--st-muted);text-align:center;padding:24px;">
-                    لا نَشاط بَعد.
+                <div class="st-card" style="color:var(--st-muted);text-align:center;padding:24px;">@((MarkupString)"\n                    ")@L.Markup("studio.app_console.no_activity")@((MarkupString)"\n                ")
                 </div>
             }
         }
