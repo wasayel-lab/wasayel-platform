@@ -287,6 +287,147 @@ public class WriteEndpointGuardTests
             "\nإمّا أَن يُحرَس، أَو يُثَبَّت هُنا بِسَبَبِه في نَفس الكوميت.");
     }
 
+    // ─── المَوجَة ٧: مَسارُ العَرض لا يُبَدِّل حالَة ────────────────────
+
+    /// <summary>مَوضِعُ عَرضٍ يَكتُب، مُثَبَّتٌ بِاسمِه وسَبَبِه.</summary>
+    private sealed record DisplayWriter(string Where, string WhyAr);
+
+    /// <summary>
+    /// <para><b>فارِغَةٌ عَمداً، وهذا هُوَ الخَبَر.</b> كانَت ثَلاثَةً
+    /// قَبلَ المَوجَة ٧: <c>ChatRoom.razor</c> تُصَفِّر عَدّادَ غَير
+    /// المَقروء، و<c>Notifications.razor</c> تُعَلِّم المَعروضَ مَقروءاً،
+    /// و<c>TenantListingDetail.razor</c> تُلحِق <c>ListingViewed</c> —
+    /// كُلُّها في تَصيير صَفحَةٍ يُطلَب بِـ<c>GET</c>.</para>
+    ///
+    /// <para><b>وكُلُّ إضافَةٍ هُنا قَرارٌ يُتَّخَذ بِاليَد</b> في نَفس
+    /// الكوميت الَّذي يَخرِقُ القاعِدَة — لا نَتيجَةُ نِسيان.</para>
+    /// </summary>
+    private static readonly DisplayWriter[] PinnedDisplayWriters =
+        Array.Empty<DisplayWriter>();
+
+    /// <summary>
+    /// <para><b>لا صَفحَةَ <c>.razor</c> تُبَدِّل حالَةً مُخَزَّنَة.</b>
+    /// وهذا لَيسَ تَكراراً لِلطَبَقَة الثامِنَة بَل سَدُّ ثَغرَتِها:
+    /// تِلكَ تَعُدّ مَن <b>يَفتَح</b> جَلسَةً، وصَفحَةٌ تَحقِن
+    /// <c>IDocumentSession</c> مِن الحاوي ثُمَّ تُودِع <b>لا تَفتَح
+    /// شَيئاً</b> فَلا يَراها المُصَنِّف إطلاقاً. فَالمِقياسُ هُنا
+    /// <b>فِعلُ الكِتابَة نَفسُه</b> لا مِلكِيَّةُ الجَلسَة.</para>
+    ///
+    /// <para><b>ولِماذا الرُموزُ هي <see cref="WriteCalls"/> نَفسُها
+    /// ولا تُوسَّع</b>: ‏Marten لا يُثَبِّت شَيئاً بِلا
+    /// <c>SaveChangesAsync</c> أَو إلحاقِ حَدَث — فَالقائِمَةُ كافِيَةٌ
+    /// لِلسُؤال «هَل يَنتُج عَن هذا العَرض أَثَرٌ باقٍ؟». وقائِمَةٌ
+    /// ثانِيَة أَوسَع تَنجَرِف عَن الأولى، وذاكَ عَطَبُ «تَعريفَين
+    /// لِقَرارٍ واحِد» (القاعِدَة ٨).</para>
+    ///
+    /// <para><b>ويَفحَص المَوضِعَ لا النِيَّة</b>: مِلَفٌّ لاحِقَتُه
+    /// <c>.razor</c> — أَي مَسارُ تَصيير بِالتَعريف — يَحوي رَمزَ
+    /// كِتابَة. ولا يَسأَل لِماذا، ولا مَتى تُنَفَّذ.</para>
+    /// </summary>
+    [Fact]
+    public void No_razor_page_writes_state()
+    {
+        var pages = EntitlementContractTests.SourceFiles()
+            .Where(f => f.File.EndsWith(".razor", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        // عَدّاد: أَداةٌ تَفحَص صِفراً أَداةٌ عَمياء (القاعِدَة ١٠).
+        Assert.True(pages.Count >= 140,
+            $"أَداة عَمياء: وُجِدَ {pages.Count} مِلَفّ .razor — والمَقيس ‏147.");
+
+        var pinned = PinnedDisplayWriters.Select(p => p.Where).ToHashSet(StringComparer.Ordinal);
+
+        var breaches = new List<string>();
+        foreach (var (file, text) in pages)
+        {
+            var code = StripComments(StripMarkupComments(text));
+            var hits = WriteCalls.Where(w => code.Contains(w, StringComparison.Ordinal)).ToArray();
+            if (hits.Length == 0) continue;
+
+            var rel = Rel(file);
+            if (pinned.Contains(rel)) continue;
+            breaches.Add($"{rel}   ← {string.Join(", ", hits)}");
+        }
+
+        Assert.True(breaches.Count == 0,
+            "صَفحَةُ عَرضٍ تُبَدِّل حالَةً مُخَزَّنَة — والطَلَبُ الَّذي يَرسُمُها `GET`:\n  " +
+            string.Join("\n  ", breaches) +
+            "\nالزاحِفُ والجالِبُ المُسبَق وأَداةُ التَحَقُّق كُلُّها تُطلِق هذا. " +
+            "المَسار الصَحيح: أَمرٌ صَريح (`POST`) يُنادى بَعدَ التَصيير، " +
+            "أَو حَذفُ الكِتابَة إن لَم يَكُن لَها مُستَهلِكٌ مَقيس.");
+    }
+
+    /// <summary>
+    /// <para><b>ولا نُقطَةَ <c>MapGet</c> تُبَدِّل حالَةً مُخَزَّنَة —
+    /// ولَو كانَت مَحروسَة.</b> وهذا هُوَ الفَرقُ عَن
+    /// <see cref="Every_get_endpoint_that_writes_is_treated_as_a_write_endpoint"/>
+    /// أَعلاه: ذاكَ يَسأَل «هَل لِهذِه الكِتابَة حارِس؟»، وهذا يَسأَل
+    /// <b>«ولِمَ تَكتُب أَصلاً وفِعلُها عَرض؟»</b>. فَنُقطَةُ
+    /// <c>GET</c> مَحروسَةٌ تَكتُب تَعبُر ذاكَ وتَحمَرّ هُنا — وهي
+    /// الحالَةُ الَّتي كانَت مَفتوحَة.</para>
+    ///
+    /// <para>والمِقياس <b>مَوضِعٌ</b> لا نِيَّة: رَمزُ كِتابَةٍ يَقَع
+    /// داخِلَ عِبارَة <c>.MapGet(</c>.</para>
+    /// </summary>
+    [Fact]
+    public void No_get_endpoint_writes_state()
+    {
+        var gets = MinimalApiGetEndpoints().ToList();
+
+        // عَدّاد: أَداةٌ تَفحَص صِفراً أَداةٌ عَمياء (القاعِدَة ١٠).
+        Assert.True(gets.Count >= 10,
+            $"أَداة عَمياء: وُجِدَت {gets.Count} نُقطَة MapGet — والمَقيس ‏11.");
+
+        var pinned = PinnedDisplayWriters.Select(p => p.Where).ToHashSet(StringComparer.Ordinal);
+
+        var breaches = gets
+            .Where(e => ContainsAny(e.Body, WriteCalls))
+            .Where(e => !pinned.Contains(e.Route))
+            .Select(e => $"{e.Route}   ({e.File})")
+            .ToArray();
+
+        Assert.True(breaches.Length == 0,
+            "نُقطَةُ `GET` تُبَدِّل حالَةً مُخَزَّنَة — الفِعلُ المُعلَن عَرضٌ والواقِعُ كِتابَة:\n  " +
+            string.Join("\n  ", breaches) +
+            "\nإمّا أَن تَصيرَ `POST` صَريحاً، أَو تُثَبَّت هُنا بِسَبَبِها في نَفس الكوميت.");
+    }
+
+    /// <summary><b>والنِصفُ الآخَر</b>: إدخالَةٌ مُثَبَّتَة لَم تَعُد
+    /// تَكتُب — أَو لَم يَعُد مَوضِعُها مَوجوداً — تَحمَرّ حَتّى تُرفَع.
+    /// وكُلُّ إدخالَةٍ تُعلِن سَبَبَها، فَالقائِمَةُ دَينٌ مَوصوف لا
+    /// قائِمَةُ إسكات.</summary>
+    [Fact]
+    public void No_pinned_display_writer_outlives_its_reason()
+    {
+        foreach (var p in PinnedDisplayWriters)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(p.WhyAr), $"«{p.Where}» بِلا سَبَب.");
+            Assert.True(p.WhyAr.Length > 30, $"سَبَب «{p.Where}» أَقصَرُ مِن أَن يَكونَ سَبَباً.");
+        }
+
+        Assert.Equal(
+            PinnedDisplayWriters.Select(p => p.Where).Distinct(StringComparer.Ordinal).Count(),
+            PinnedDisplayWriters.Length);
+
+        var writing = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var (file, text) in EntitlementContractTests.SourceFiles()
+                     .Where(f => f.File.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)))
+            if (ContainsAny(StripComments(StripMarkupComments(text)), WriteCalls))
+                writing.Add(Rel(file));
+
+        foreach (var e in MinimalApiGetEndpoints())
+            if (ContainsAny(e.Body, WriteCalls))
+                writing.Add(e.Route);
+
+        var settled = PinnedDisplayWriters
+            .Where(p => !writing.Contains(p.Where)).Select(p => p.Where).ToArray();
+
+        Assert.True(settled.Length == 0,
+            "إدخالَةٌ مُثَبَّتَة لَم تَعُد تَكتُب في مَسار عَرض — اِرفَعها:\n  " +
+            string.Join("\n  ", settled));
+    }
+
     /// <summary>كُلّ استِثناء يُعلِن سَبَبَه — فَالقائِمَة دَينٌ مَوصوف
     /// لا قائِمَةُ إسكات.</summary>
     [Fact]
@@ -353,6 +494,15 @@ public class WriteEndpointGuardTests
     /// مِن <c>Map…(</c> حَتّى فاصِلَة السَطر المُنهِيَة، فَتَدخُل
     /// السِلسِلَة المُعلَنَة بَعد الجِسم.</summary>
     private static IEnumerable<Endpoint> MinimalApiWriteEndpoints() => Scan(MapWrite);
+
+    /// <summary>نِقاطُ <c>MapGet</c> وَحدَها — مَصدَرُ فاحِصِ «مَسارُ
+    /// العَرض لا يَكتُب». وتُقرَأ بِنَمَطٍ خاصٍّ بِها لا بِطَرحِ
+    /// الكاتِبَة مِن الكُلّ: الطَرحُ بِالمَسار يُخطِئ لَو حَمَلَ مَسارٌ
+    /// واحِد فِعلَين.</summary>
+    private static readonly Regex MapRead =
+        new(@"\.MapGet\s*\(\s*""(?<route>[^""]+)""", RegexOptions.Compiled);
+
+    private static IEnumerable<Endpoint> MinimalApiGetEndpoints() => Scan(MapRead);
 
     /// <summary>كُلّ نُقطَة minimal API بِأَيّ فِعل — المَصدَر الوَحيد
     /// لِفاحِصَي البَند ٣ و‏٥.</summary>
@@ -461,6 +611,41 @@ public class WriteEndpointGuardTests
             }
         }
         return new string(b);
+    }
+
+    /// <summary>
+    /// <para><b>يُبَيِّض تَعليقات Razor و‏HTML</b> — <c>@*…*@</c> و
+    /// <c>&lt;!--…--&gt;</c> — ويُبقي الطول. ويَسبِق
+    /// <see cref="StripComments"/> لِأَنّ صَفحَةَ <c>.razor</c> فيها
+    /// الصِنفانِ مَعاً.</para>
+    ///
+    /// <para><b>ولَيسَ تَرَفاً</b>: نَفسُ عِلَّةِ المُصَنِّف في الطَبَقَة
+    /// الثامِنَة — شَرحٌ يَذكُر <c>SaveChangesAsync</c> لِيَقولَ «هذا ما
+    /// كانَ يَقَع هُنا» يَجعَل الفاحِصَ يَتَّهِمُ الوَثيقَةَ بِأَنَّها
+    /// كود. وثَلاثُ صَفَحاتٍ في هذِه المَوجَة تَحمِل بِالضَبط ذلك
+    /// الشَرح.</para>
+    /// </summary>
+    internal static string StripMarkupComments(string s)
+    {
+        var b = s.ToCharArray();
+        Blank("@*", "*@");
+        Blank("<!--", "-->");
+        return new string(b);
+
+        void Blank(string open, string close)
+        {
+            var i = 0;
+            while (true)
+            {
+                var start = new string(b).IndexOf(open, i, StringComparison.Ordinal);
+                if (start < 0) return;
+                var end = new string(b).IndexOf(close, start + open.Length, StringComparison.Ordinal);
+                end = end < 0 ? b.Length : end + close.Length;
+                for (var j = start; j < end; j++)
+                    if (b[j] is not ('\n' or '\r')) b[j] = ' ';
+                i = end;
+            }
+        }
     }
 
     private static string Rel(string path) =>
