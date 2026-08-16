@@ -3,6 +3,7 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
+@inject L L
 @using ACommerce.Kit.Cart
 
 @*
@@ -18,17 +19,17 @@
 <div class="acs-page">
     @if (!Auth.IsAuthenticated)
     {
-        <AcEmptyState IconName="package" Title="تَحتاج دُخول"
-                      ActionLabel="دُخول" ActionHref="@AuthSession.LinkFor(Slug, Role, "login")" />
+        <AcEmptyState IconName="package" Title="@L["checkout.gate.need_login"]"
+                      ActionLabel="@L["shell.nav.login"]" ActionHref="@AuthSession.LinkFor(Slug, Role, "login")" />
     }
     else if (cart is null || cart.Items.Count == 0)
     {
-        <AcEmptyState IconName="package" Title="السَّلَّة فارِغَة"
-                      ActionLabel="استِكشاف" ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
+        <AcEmptyState IconName="package" Title="@L["checkout.gate.cart_empty"]"
+                      ActionLabel="@L["shell.nav.explore"]" ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
     }
     else
     {
-        <h1 class="acm-wizard-title">إتمام الشِراء</h1>
+        <h1 class="acm-wizard-title">@L.Markup("checkout.wizard.title")</h1>
 
         @* stepper *@
         <div style="display:flex;gap:6px;margin-bottom:16px;">
@@ -42,7 +43,7 @@
                         @if (done) { <AcIcon Name="check" Size="16" /> } else { @i }
                     </div>
                     <div style="font-size:11px;color:@(current ? "var(--ac-primary)" : "var(--ac-text-muted)");">
-                        @(i == 1 ? "العُنوان" : i == 2 ? "الدَّفع" : "تَأكيد")
+                        @(i == 1 ? L["checkout.step.address"] : i == 2 ? L["checkout.step.payment"] : L["checkout.step.confirm"])
                     </div>
                 </div>
             }
@@ -54,19 +55,19 @@
                 <input type="hidden" name="step" value="2" />
                 <AcCard>
                     <ChildContent>
-                        <h3 style="margin-top:0;">عُنوان التَّوصيل</h3>
-                        <AcField Label="الاسم الكامِل" Required="true">
+                        <h3 style="margin-top:0;">@L.Markup("checkout.address.title")</h3>
+                        <AcField Label="@L["checkout.address.name"]" Required="true">
                             <input name="name" required class="ac-input" value="@Name" />
                         </AcField>
-                        <AcField Label="الهاتِف" Required="true">
+                        <AcField Label="@L["checkout.address.phone"]" Required="true">
                             <input name="phone" required class="ac-input" dir="ltr" value="@Phone" />
                         </AcField>
-                        <AcField Label="العُنوان" Required="true">
+                        <AcField Label="@L["checkout.address.line"]" Required="true">
                             <input name="addr" required class="ac-input" value="@Addr" />
                         </AcField>
                     </ChildContent>
                 </AcCard>
-                <AcButton Type="submit" Variant="primary" Block="true" Text="التالي →" />
+                <AcButton Type="submit" Variant="primary" Block="true" Text="@L["checkout.action.next"]" />
             </form>
         }
         else if (Step == 2)
@@ -78,20 +79,20 @@
                 <input type="hidden" name="addr" value="@Addr" />
                 <AcCard>
                     <ChildContent>
-                        <h3 style="margin-top:0;">طَريقَة الدَّفع</h3>
+                        <h3 style="margin-top:0;">@L.Markup("checkout.payment.title")</h3>
                         <div class="acm-radio-cards">
                             <label class="acm-radio-card">
                                 <input type="radio" name="pay" value="card" required checked="@(Pay != "cash")" />
                                 <span class="acm-radio-card-body">
-                                    <strong><AcIcon Name="credit-card" Size="16" /> بِطاقَة (Moyasar/Noon)</strong>
-                                    <span>دَفع آمِن بِبِطاقَة مَدى أَو فيزا</span>
+                                    <strong><AcIcon Name="credit-card" Size="16" /> @L.Markup("checkout.payment.card")</strong>
+                                    <span>@L.Markup("checkout.payment.card_hint")</span>
                                 </span>
                             </label>
                             <label class="acm-radio-card">
                                 <input type="radio" name="pay" value="cash" checked="@(Pay == "cash")" />
                                 <span class="acm-radio-card-body">
-                                    <strong><AcIcon Name="cash" Size="16" /> نَقد عِندَ التَّسليم</strong>
-                                    <span>اِدفَع عِندَما يَصِل طَلَبك</span>
+                                    <strong><AcIcon Name="cash" Size="16" /> @L.Markup("checkout.payment.cash")</strong>
+                                    <span>@L.Markup("checkout.payment.cash_hint")</span>
                                 </span>
                             </label>
                         </div>
@@ -99,8 +100,8 @@
                 </AcCard>
                 <div style="display:flex;gap:8px;">
                     <a href="@AuthSession.LinkFor(Slug, Role, $"checkout?step=1&name={Uri.EscapeDataString(Name)}&phone={Uri.EscapeDataString(Phone)}&addr={Uri.EscapeDataString(Addr)}")"
-                       class="ac-btn ac-btn-ghost">← السابِق</a>
-                    <AcButton Type="submit" Variant="primary" Block="true" Text="التالي →" />
+                       class="ac-btn ac-btn-ghost">@L.Markup("checkout.action.previous")</a>
+                    <AcButton Type="submit" Variant="primary" Block="true" Text="@L["checkout.action.next"]" />
                 </div>
             </form>
         }
@@ -108,24 +109,24 @@
         {
             <AcCard>
                 <ChildContent>
-                    <h3 style="margin-top:0;">مُلَخَّص الطَلَب</h3>
+                    <h3 style="margin-top:0;">@L.Markup("checkout.summary.title")</h3>
                     @foreach (var item in cart.Items)
                     {
                         <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px;">
                             <span>@item.Title × @item.Quantity</span>
-                            <span>@((item.UnitPriceSar * item.Quantity).ToString("N0")) ر.س</span>
+                            <span>@((MarkupString)ACommerce.Kit.Culture.Money.Format(item.UnitPriceSar * item.Quantity))</span>
                         </div>
                     }
                     <hr />
                     <div style="display:flex;justify-content:space-between;font-weight:700;">
-                        <span>المَجموع</span>
-                        <span style="color:var(--ac-primary);">@cart.SubtotalSar.ToString("N2") ر.س</span>
+                        <span>@L.Markup("checkout.summary.total")</span>
+                        <span style="color:var(--ac-primary);">@cart.SubtotalSar.ToString("N2") @((MarkupString)ACommerce.Kit.Culture.Money.Unit())</span>
                     </div>
                     <hr />
                     <div style="font-size:13px;color:var(--ac-text-muted);">
-                        <strong>التَّوصيل لِـ:</strong> @Name · @Phone<br />
+                        <strong>@L.Markup("checkout.summary.ship_to")</strong> @Name · @Phone<br />
                         @Addr<br />
-                        <strong>الدَّفع:</strong> @(Pay == "cash" ? "نَقد عِندَ التَّسليم" : "بِطاقَة")
+                        <strong>@L.Markup("checkout.summary.pay_with")</strong> @(Pay == "cash" ? L["checkout.payment.cash"] : L["checkout.payment.card_short"])
                     </div>
                 </ChildContent>
             </AcCard>
@@ -134,7 +135,7 @@
                 <input type="hidden" name="phone" value="@Phone" />
                 <input type="hidden" name="addr"  value="@Addr" />
                 <input type="hidden" name="pay"   value="@Pay" />
-                <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="تَأكيد الطَلَب" />
+                <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="@L["checkout.action.submit"]" />
             </form>
         }
     }

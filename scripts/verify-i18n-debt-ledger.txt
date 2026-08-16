@@ -1,7 +1,7 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|727
-DISTINCT|527
+TOTAL|698
+DISTINCT|509
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|40
@@ -23,7 +23,6 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/T
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/CartPage.razor|15
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/ChatRoom.razor|10
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Chats.razor|11
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/CheckoutPage.razor|29
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/CreateListing.razor|3
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/DriverArea.razor|11
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/EmailLoginForm.razor|7
