@@ -72,13 +72,16 @@
         var uid = Auth.UserId!.Value;
         var all = await Deals.ListForUserAsync(Slug, uid);
         mine = all.Where(d => d.InitiatorId == uid).ToList();
+        // العُروضُ الوارِدَةُ قَبلَ القَبول داخِلَةٌ في هذا النِداء —
+        // انظُر <c>DealsService.ListForListingOwnerAsync</c>.
+        //
+        // وكانَ هُنا مُرَشِّحٌ ثانٍ يَبحَثُ عَنها في `all`، **ولا يُمكِنُ
+        // أَن يُطابِقَ شَيئاً أَبَداً**: مَصدَرُ `all` هو
+        // `ListForUserAsync` وشَرطُه `InitiatorId == uid ||
+        // CounterpartyId == uid`، والمُرَشِّحُ يَطلُب `CounterpartyId is
+        // null && InitiatorId != uid` — نَقيضُه حَرفاً. حُذِفَ، ونُقِلَ
+        // السُؤالُ إلى الاستِعلام الَّذي يَملِكُ الجَواب.
         asOwner = await Deals.ListForListingOwnerAsync(Slug, uid);
-        // عُروض جَديدَة لَم تُقبَل بَعد على إعلاناتي (CounterpartyId فارِغ +
-        // listing_owner = أَنا) — تُجلَب بِفَحص refs.
-        var pending = all.Where(d => d.CounterpartyId is null
-            && d.Refs.TryGetValue("listing_owner", out var lo) && lo == uid.ToString()
-            && d.InitiatorId != uid).ToList();
-        foreach (var p in pending) if (!asOwner.Any(x => x.Id == p.Id)) asOwner.Add(p);
     }
 
     RenderFragment DealRow(Deal d) => @<a class="acm-cat-row" style="text-decoration:none;color:inherit;"

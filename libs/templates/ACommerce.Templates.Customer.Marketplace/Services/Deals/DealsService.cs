@@ -22,18 +22,60 @@ public sealed class DealsService
     /// قابِلَة لِلتَّكوين لاحِقاً لِكُلّ مُستَأجِر/باقَة. حاليّاً ٢.٥٪.</summary>
     public const decimal PlatformCommissionRate = 0.025m;
 
-    /// <summary>قائِمَة الصَّفقات على إعلانات يَملِكها مُستَخدِم مُعَيَّن
-    /// (لِعَرض «عُروض على إعلاناتي»). يَعتَمِد على Listing.owner_id.</summary>
+    /// <summary>مِفتاحُ مَرجِعِ مالِكِ الإعلان في <see cref="Deal.Refs"/> —
+    /// يُلحِقُه مَسارُ إنشاءِ العَرض. مُعَرَّفٌ هُنا لِأَنّ الكاتِبَ
+    /// والقارِئَ يَجِبُ أَن يَقرَآ نَفسَ الحَرف.</summary>
+    public const string ListingOwnerRef = "listing_owner";
+
+    /// <summary><para><b>عَرضٌ وارِدٌ لَم يُقبَل بَعد، ومالِكُ إعلانِه هو
+    /// <paramref name="ownerId"/></b> — دالَّةٌ <b>نَقِيَّة</b> فَتُختَبَر
+    /// بِلا قاعِدَة بَيانات، بِمُوجَبٍ وسالِب.</para>
+    ///
+    /// <para><b>ولِماذا دالَّةٌ لا سَطرٌ في الاستِعلام</b>: الشَرطُ نَفسُه
+    /// كانَ مَكتوباً مَرَّةً في صَفحَة «صَفقاتي» فَوقَ قائِمَةٍ **تَستَثني
+    /// بِبِنيَتِها** ما يَبحَثُ عَنه، فَما طابَقَ قَطّ ولا أَحمَرَّ
+    /// شَيء. تَعريفٌ واحِدٌ مَقيسٌ يَمنَعُ تَكرارَ ذلك.</para></summary>
+    public static bool IsIncomingOfferFor(Deal deal, Guid ownerId) =>
+        deal.CounterpartyId is null
+        && deal.InitiatorId != ownerId
+        && deal.Refs.TryGetValue(ListingOwnerRef, out var lo)
+        && lo == ownerId.ToString();
+
+    /// <summary><para>قائِمَة الصَّفقات على إعلانات يَملِكها مُستَخدِم
+    /// مُعَيَّن (لِعَرض «عُروض على إعلاناتي»).</para>
+    ///
+    /// <para><b>وشَطرانِ لا شَطر، وهذا هُوَ العَطَبُ الَّذي أُصلِح</b>:
+    /// الصَّفقَةُ المَقبولَة يَحمِلُها <c>CounterpartyId</c>، أَمّا
+    /// <b>العَرضُ الوارِدُ قَبلَ القَبول</b> فَـ<c>CounterpartyId</c>‏ه
+    /// <c>null</c> ومالِكُه في <c>Refs[listing_owner]</c> وَحدَه. وكانَ
+    /// الشَطرُ الثاني مَوصوفاً في تَعليقِ هذِه الدالَّة و<b>غَيرَ
+    /// مَكتوبٍ في جِسمِها</b>، فَلَم يَرَ مالِكُ إعلانٍ عَرضاً وارِداً
+    /// في أَيّ شاشَة — لا «صَفقاتي» ولا «عُروضي» ولا الإشعارات.</para>
+    ///
+    /// <para><b>والفَلتَرَةُ في الذاكِرَة نُقلَةٌ لا اختِيار</b>: ‏Marten
+    /// لا يُفَلتِر <c>Dictionary</c> في LINQ — نَفسُ سَبَبِ
+    /// <c>AccountQueries.MyListingsAsync</c> ونَفسُ شَكلِه.</para></summary>
     public async Task<List<Deal>> ListForListingOwnerAsync(
         string tenantSlug, Guid ownerId, CancellationToken ct = default)
     {
         await using var s = _store.QuerySession(tenantSlug);
-        // الصَّفقات الَّتي صاحِبُها الطَّرَف الآخَر = المالِك، أَو الَّتي
-        // لَم يُعَيَّن لَها طَرَف ثانٍ بَعد لكِنّ الإعلان لَه.
-        var all = await s.Query<Deal>()
+        // الشَطرُ الأَوَّل: صَفقاتٌ صارَ المالِكُ طَرَفَها المُقابِل.
+        var settled = await s.Query<Deal>()
             .Where(d => d.CounterpartyId == ownerId)
             .OrderByDescending(d => d.UpdatedAt).Take(100).ToListAsync(ct);
-        return all.ToList();
+
+        // الشَطرُ الثاني: عُروضٌ وارِدَةٌ لَم تُقبَل بَعد — بِلا طَرَفٍ
+        // ثانٍ، ومالِكُ إعلانِها أَنا، ولَستُ أَنا مَن بادَرَ بِها.
+        var pending = (await s.Query<Deal>()
+            .Where(d => d.CounterpartyId == null && d.InitiatorId != ownerId)
+            .OrderByDescending(d => d.UpdatedAt).Take(200).ToListAsync(ct))
+            .Where(d => IsIncomingOfferFor(d, ownerId));
+
+        return settled
+            .Concat(pending.Where(p => settled.All(x => x.Id != p.Id)))
+            .OrderByDescending(d => d.UpdatedAt)
+            .Take(100)
+            .ToList();
     }
 
     public async Task<Deal> StartAsync(

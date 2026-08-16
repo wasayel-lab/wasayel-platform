@@ -29,8 +29,15 @@
                     .Where(r => r.CatalogSlug != "tenant_admin")
                     .OrderBy(r => r.SortOrder))
         {
+            @* المَقطَعُ `r/{role}` يُبنى مِن **جَذر المُستَأجِر** لا مِن
+               الدَور الحاليّ. وتَمريرُ `Role` هُنا كانَ يُنتِج
+               `/{slug}/r/{cur}/r/{new}/login` — مَسارٌ غَيرُ مُعَرَّف
+               يَرُدّ ‏404، ويَقَع كُلَّما صُيِّرَت هذِه البِطاقاتُ على
+               `/{slug}/r/{role}` (زائِرٌ يَفتَح تَطبيقَ دَورٍ مُباشَرَةً،
+               أَو يَخرُج مِن جَلسَتِه فيه). فَبَوّابَةُ الأَدوارِ نَفسُها
+               كانَت تَرُدُّ النَقرَةَ بِصَفحَةِ خَطَأ. *@
             <a class="acm-role-landing-card"
-               href="@AuthSession.LinkFor(Slug, Role, $"r/{r.Slug}/login")">
+               href="@AuthSession.LinkFor(Slug, null, $"r/{r.Slug}/login")">
                 <span class="acm-role-landing-card-icon">
                     <AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(r.Icon, "user")" Size="26" />
                 </span>
