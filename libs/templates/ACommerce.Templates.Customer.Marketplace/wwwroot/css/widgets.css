@@ -226,7 +226,7 @@ input.ac-input[type="color"] {
     line-height: 1;
 }
 .ac-badge-primary { background: var(--ac-primary); color: var(--ac-on-primary); }
-.ac-badge-success { background: var(--ac-success); color: #ffffff; }
+.ac-badge-success { background: var(--ac-success); color: #000000; }
 .ac-badge-danger  { background: var(--ac-danger);  color: #ffffff; }
 .ac-badge-warning { background: var(--ac-warning); color: #000000; }
 .ac-badge-muted   { background: var(--ac-bg-alt);  color: var(--ac-text-muted); }
