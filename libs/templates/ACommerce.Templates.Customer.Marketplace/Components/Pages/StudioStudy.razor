@@ -3,6 +3,7 @@
 @inject Services.Incubator.FeasibilityAnalysisService Incubator
 @inject Services.Incubator.TenantFromAnalysisFactory Factory
 @inject Services.Queries.TenantDirectory Tenants
+@inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 @using ACommerce.Kit.Tenants
 @using System.Text.Json
@@ -22,9 +23,9 @@
     <HeadContent><meta http-equiv="refresh" content="4" /></HeadContent>
 }
 
-<StudioShell Title="دِراسَة الجَدوى" Active="ideas">
+<StudioShell Title="@L["admin.study.heading"]" Active="ideas">
     <TopBarActions>
-        <a class="st-btn st-btn-ghost" href="/studio">← لوحَتي</a>
+        <a class="st-btn st-btn-ghost" href="/studio">← @L.Markup("studio.study.back_dashboard")</a>
         @if (session?.Status == IncubatorStatus.Completed)
         {
             <a class="st-btn st-btn-light" href="@($"/studio/s/{Id}/print")" target="_blank"
@@ -38,39 +39,37 @@
 
         @if (session is null)
         {
-            <div class="st-card">الجَلسَة غَير مَوجودَة.</div>
+            <div class="st-card">@L.Markup("studio.study.not_found")</div>
         }
         else if (session.Status == IncubatorStatus.Analyzing)
         {
             <div class="st-card" style="text-align:center;padding:48px;">
                 <div style="font-size:52px;margin-bottom:10px;"><AcIcon Name="clock" Size="48" /></div>
-                <h2 style="margin:0 0 6px;">جارٍ تَحليل فِكرَتِكَ…</h2>
-                <p style="color:var(--st-muted);margin:0;">
-                    نَجمَع أَرقام السوق، نُقارِن بِالمنافِسين، ونَستَنبِط المَخاطِر.
-                    تُحَدَّث الصَفحَة تِلقائيّاً.
+                <h2 style="margin:0 0 6px;">@L.Markup("admin.study.analyzing_title")</h2>
+                <p style="color:var(--st-muted);margin:0;">@((MarkupString)"\n                    ")@L.Markup("studio.study.analyzing_hint")@((MarkupString)"\n                ")
                 </p>
             </div>
         }
         else if (session.Status == IncubatorStatus.Failed)
         {
             <div class="st-card">
-                <div class="st-chip st-chip-danger" style="margin-bottom:12px;">فَشِلَ التَّحليل</div>
+                <div class="st-chip st-chip-danger" style="margin-bottom:12px;">@L.Markup("studio.study.failed_title")</div>
                 <p style="margin:0 0 16px;color:var(--st-ink-700);">@session.AnalysisError</p>
                 <form method="post" action="@($"/studio/s/{session.Id}/analyze")">
-                    <button type="submit" class="st-btn st-btn-primary">↺ إعادَة المُحاوَلَة</button>
+                    <button type="submit" class="st-btn st-btn-primary">@L.Markup("admin.study.retry")</button>
                 </form>
             </div>
         }
         else if (root is null)
         {
-            <div class="st-card">لا تَحليل بَعد لِهذه الجَلسَة.</div>
+            <div class="st-card">@L.Markup("studio.study.no_analysis")</div>
         }
         else
         {
             var r = root.Value;
 
             <div class="studio-page-head">
-                <h1>دِراسَة الجَدوى</h1>
+                <h1>@L.Markup("admin.study.heading")</h1>
                 <p>@(string.IsNullOrEmpty(session.ProjectDescription) ? "" : Truncate(session.ProjectDescription, 120))</p>
             </div>
 
@@ -79,9 +78,8 @@
                 <div class="st-card" style="background:#fff7ed;border:1px solid var(--st-warning);
                                             display:flex;align-items:center;gap:10px;">
                     <span style="font-size:20px;"><AcIcon Name="clock" Size="20" /></span>
-                    <div style="flex:1;">
-                        جارٍ تَحسين قِسم «<strong>@SectionLabel(Refining)</strong>»…
-                        ستُحَدَّث الصَفحَة تِلقائيّاً عِندَ الجاهِزِيَّة.
+                    <div style="flex:1;">@((MarkupString)"\n                        ")@L.Markup("studio.study.refining_prefix")<strong>@SectionLabel(Refining)</strong>»…
+                        @L.Markup("studio.study.refining_hint")@((MarkupString)"\n                    ")
                     </div>
                 </div>
             }
@@ -90,37 +88,37 @@
             {
                 <div class="studio-stats">
                     <div class="studio-stat">
-                        <div class="studio-stat-label">حَجم السوق</div>
+                        <div class="studio-stat-label">@L.Markup("study.section.market_size")</div>
                         <div class="studio-stat-value" style="font-size:20px;">@Str(sum,"marketSizeSar")</div>
                     </div>
                     <div class="studio-stat">
-                        <div class="studio-stat-label">عُملاء السَّنَة ١</div>
+                        <div class="studio-stat-label">@L.Markup("admin.study.stat_customers")</div>
                         <div class="studio-stat-value" style="font-size:20px;">@Str(sum,"estimatedCustomersYear1")</div>
                     </div>
                     <div class="studio-stat">
-                        <div class="studio-stat-label">الاستِثمار المَطلوب</div>
+                        <div class="studio-stat-label">@L.Markup("admin.study.stat_investment")</div>
                         <div class="studio-stat-value" style="font-size:20px;">@Str(sum,"requiredInvestmentSar")</div>
                     </div>
                 </div>
                 <div class="st-card" style="margin-top:16px;">
-                    <strong>الحُكم: </strong>@Str(sum, "verdict")
+                    <strong>@L.Markup("study.field.verdict")@((MarkupString)" ") </strong>@Str(sum, "verdict")
                 </div>
             }
 
-            @Obj("حَجم السوق", "marketSizing", r, ("tam","TAM"),("sam","SAM"),("som","SOM"),("reasoning","التَّحليل"))
-            @Obj("نَموذَج الإيراد", "revenueModel", r, ("model","النَّموذَج"),("pricingSar","التَّسعير"),("unitEconomics","اقتِصاد الوَحدَة"))
-            @Obj("هَيكَل التَّكلِفَة", "costStructure", r, ("launchSar","الإطلاق"),("monthlyOpsSar","التَّشغيل/شَهر"),("cacSar","CAC"),("ltvSar","LTV"))
-            @Obj("التَّوَقُّع المالي", "financialProjection", r, ("year1RevenueSar","إيراد س١"),("breakEvenMonths","التَّعادُل (شهر)"),("scenario","السيناريو"))
+            @Obj(L["study.section.market_size"], "marketSizing", r, ("tam","TAM"),("sam","SAM"),("som","SOM"),("reasoning",L["study.field.reasoning"]))
+            @Obj(L["study.section.revenue_model"], "revenueModel", r, ("model",L["study.field.model"]),("pricingSar",L["study.field.pricing"]),("unitEconomics",L["study.field.unit_economics"]))
+            @Obj(L["study.section.cost_structure"], "costStructure", r, ("launchSar",L["study.field.launch"]),("monthlyOpsSar",L["studio.print.field_monthly_ops"]),("cacSar","CAC"),("ltvSar","LTV"))
+            @Obj(L["study.section.financial"], "financialProjection", r, ("year1RevenueSar",L["studio.print.field_year1_revenue"]),("breakEvenMonths",L["studio.print.field_breakeven"]),("scenario",L["study.field.scenario"]))
 
-            @Arr("شَرائِح العُملاء", "customerSegments", r, "name", "description")
-            @Arr("المُنافِسون والفَجوَة", "competitors", r, "name", "gap")
+            @Arr(L["study.section.segments"], "customerSegments", r, "name", "description")
+            @Arr(L["study.section.competitors"], "competitors", r, "name", "gap")
 
             @if (r.TryGetProperty("risks", out var risks) && risks.ValueKind == JsonValueKind.Array)
             {
-                <div class="st-section-title"><AcIcon Name="alert-circle" Size="18" /> المَخاطِر — خَريطَة حَراريَّة</div>
+                <div class="st-section-title"><AcIcon Name="alert-circle" Size="18" /> @L.Markup("studio.study.heatmap_title")</div>
                 var risksList = risks.EnumerateArray().ToList();
                 <div class="risk-heatmap">
-                    <div class="risk-heatmap-ylabel">الاحتِمال →</div>
+                    <div class="risk-heatmap-ylabel">@L.Markup("studio.study.heatmap_y")</div>
                     <div>
                         <div class="risk-heatmap-grid">
                             @* 3x3: rows = likelihood (high أَوَّلاً)، cols = impact (low أَوَّلاً) *@
@@ -147,19 +145,19 @@
                             }
                         </div>
                         <div class="risk-heatmap-axis">
-                            <span>أَثَر مُنخَفِض</span><span>مُتَوَسِّط</span><span>عالٍ</span>
+                            <span>@L.Markup("studio.study.impact_low")</span><span>@L.Markup("studio.study.impact_medium")</span><span>@L.Markup("studio.study.impact_high")</span>
                         </div>
-                        <div class="risk-heatmap-xlabel">← الأَثَر</div>
+                        <div class="risk-heatmap-xlabel">@L.Markup("studio.study.heatmap_x")</div>
                     </div>
                 </div>
                 <div class="risk-legend">
-                    <span class="risk-legend-item"><span class="risk-legend-swatch risk-dot-market"></span>سوق</span>
-                    <span class="risk-legend-item"><span class="risk-legend-swatch risk-dot-operational"></span>تَشغيليّ</span>
-                    <span class="risk-legend-item"><span class="risk-legend-swatch risk-dot-financial"></span>ماليّ</span>
-                    <span class="risk-legend-item"><span class="risk-legend-swatch risk-dot-regulatory"></span>تَنظيميّ</span>
+                    <span class="risk-legend-item"><span class="risk-legend-swatch risk-dot-market"></span>@L.Markup("studio.study.cat_market")</span>
+                    <span class="risk-legend-item"><span class="risk-legend-swatch risk-dot-operational"></span>@L.Markup("studio.study.cat_operational")</span>
+                    <span class="risk-legend-item"><span class="risk-legend-swatch risk-dot-financial"></span>@L.Markup("studio.study.cat_financial")</span>
+                    <span class="risk-legend-item"><span class="risk-legend-swatch risk-dot-regulatory"></span>@L.Markup("studio.study.cat_regulatory")</span>
                 </div>
 
-                <div class="st-section-title" style="margin-top:18px;">تَفاصيل المَخاطِر</div>
+                <div class="st-section-title" style="margin-top:18px;">@L.Markup("studio.study.risk_details")</div>
                 <div class="studio-list">
                     @for (var i = 0; i < risksList.Count; i++)
                     {
@@ -175,9 +173,8 @@
                                 </strong>
                                 <span class="st-chip">@Str(risk,"category")</span>
                             </div>
-                            <p style="margin:8px 0 0;font-size:14px;color:var(--st-muted);">
-                                أَثَر: @Str(risk,"impact") · احتِمال: @Str(risk,"likelihood")<br/>
-                                <strong>التَّخفيف:</strong> @Str(risk,"mitigation")
+                            <p style="margin:8px 0 0;font-size:14px;color:var(--st-muted);">@((MarkupString)"\n                                ")@L.Markup("study.field.impact") @Str(risk,"impact") · @L.Markup("study.field.likelihood") @Str(risk,"likelihood")<br/>
+                                <strong>@L.Markup("study.field.mitigation")</strong> @Str(risk,"mitigation")
                             </p>
                         </div>
                     }
@@ -186,7 +183,7 @@
 
             @if (r.TryGetProperty("lessonsFromFailures", out var lessons) && lessons.ValueKind == JsonValueKind.Array)
             {
-                <div class="st-section-title"><AcIcon Name="bar-chart" Size="18" /> دُروس مِن مَشاريع فَشِلَت</div>
+                <div class="st-section-title"><AcIcon Name="bar-chart" Size="18" /> @L.Markup("study.section.lessons")</div>
                 <div class="st-card">
                     <ul style="margin:0;padding-inline-start:18px;line-height:2;font-size:14px;">
                         @foreach (var l in lessons.EnumerateArray()) { <li>@l.GetString()</li> }
@@ -196,12 +193,12 @@
 
             @if (r.TryGetProperty("roadmap", out var roadmap) && roadmap.ValueKind == JsonValueKind.Array)
             {
-                <div class="st-section-title"><AcIcon Name="map" Size="18" /> خارِطَة الطَّريق</div>
+                <div class="st-section-title"><AcIcon Name="map" Size="18" /> @L.Markup("study.section.roadmap")</div>
                 <div class="studio-list">
                     @foreach (var ph in roadmap.EnumerateArray())
                     {
                         <div class="studio-list-row" style="cursor:default;">
-                            <span class="st-chip">@Str(ph,"durationWeeks") أسبوع</span>
+                            <span class="st-chip">@Str(ph,"durationWeeks") @L.Markup("study.unit.weeks")</span>
                             <div class="studio-list-body">
                                 <strong>@Str(ph,"phase")</strong>
                                 <span>@Str(ph,"goal")</span>
@@ -214,22 +211,21 @@
             @if (builtTenant is not null)
             {
                 <div class="st-card" style="margin-top:20px;border:1px solid var(--st-success);background:#dcfce7;">
-                    <h3 style="margin:0 0 6px;"><AcIcon Name="check-circle" Size="24" /> أُنشِئ تَطبيقكَ مِن هذه الفِكرَة</h3>
+                    <h3 style="margin:0 0 6px;"><AcIcon Name="check-circle" Size="24" /> @L.Markup("studio.study.build_title")</h3>
                     <p style="margin:0 0 14px;font-size:14px;">
                         <strong>@builtTenant.Name</strong> · /@builtTenant.Slug
                     </p>
-                    <a class="st-btn st-btn-primary" href="@($"/studio/apps/{builtTenant.Slug}")">
-                        فَتح لوحَة التَّطبيق ←
+                    <a class="st-btn st-btn-primary" href="@($"/studio/apps/{builtTenant.Slug}")">@((MarkupString)"\n                        ")@L.Markup("studio.study.open_app")@((MarkupString)"\n                    ")
                     </a>
                 </div>
             }
             else if (r.TryGetProperty("recommendedPattern", out var rp))
             {
                 <div class="st-card" style="margin-top:20px;border:1px solid var(--st-primary);background:var(--st-primary-50);">
-                    <h3 style="margin:0 0 6px;"><AcIcon Name="sparkle" Size="24" /> أَطلِق تَطبيقَكَ على ACommerce</h3>
+                    <h3 style="margin:0 0 6px;"><AcIcon Name="sparkle" Size="24" /> @L.Markup("studio.study.launch_heading") ACommerce</h3>
                     <p style="margin:0 0 14px;font-size:14px;">
-                        <strong>النَّمَط المُقتَرَح:</strong> @Str(rp,"pattern") ·
-                        <strong>الوَقت:</strong> @Str(rp,"timeToLaunch")<br/>
+                        <strong>@L.Markup("studio.study.pattern_label")</strong> @Str(rp,"pattern") ·
+                        <strong>@L.Markup("study.field.time")</strong> @Str(rp,"timeToLaunch")<br/>
                         <span style="color:var(--st-ink-700);">@Str(rp,"reasoning")</span>
                     </p>
 
@@ -244,48 +240,46 @@
                         <form method="post" action="@($"/studio/s/{session!.Id}/build")"
                               style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                             <div class="st-field" style="margin:0;grid-column:1/-1;">
-                                <label class="st-label">اسم التَّطبيق</label>
+                                <label class="st-label">@L.Markup("studio.study.field_app_name")</label>
                                 <input class="st-input" name="name" required maxlength="60"
                                        value="@suggestion.Name" />
                             </div>
                             <div class="st-field" style="margin:0;">
-                                <label class="st-label">المُعَرِّف (slug)</label>
+                                <label class="st-label">@L.Markup("studio.study.field_slug")</label>
                                 <input class="st-input" name="slug" required dir="ltr"
                                        pattern="^[a-z0-9_-]+$"
                                        placeholder="my-app" />
                             </div>
                             <div class="st-field" style="margin:0;">
-                                <label class="st-label">لَون العَلامَة</label>
+                                <label class="st-label">@L.Markup("studio.study.field_color")</label>
                                 <input class="st-input" type="color" name="color" required
                                        value="@suggestion.Color" style="padding:4px;height:46px;" />
                             </div>
                             <div class="st-field" style="margin:0;grid-column:1/-1;">
-                                <label class="st-label">الشِّعار التَّسويقيّ</label>
+                                <label class="st-label">@L.Markup("studio.study.field_tagline")</label>
                                 <input class="st-input" name="tagline" maxlength="120"
                                        value="@suggestion.TagLine" />
                             </div>
                             <div class="st-field" style="margin:0;grid-column:1/-1;">
-                                <label class="st-label">المَدينَة الافتراضيَّة</label>
+                                <label class="st-label">@L.Markup("studio.study.field_city")</label>
                                 <input class="st-input" name="city" maxlength="40"
                                        value="@suggestion.City" />
                             </div>
                             <button type="submit" class="st-btn st-btn-primary"
                                     style="grid-column:1/-1;">
-                                <AcIcon Name="sparkle" Size="16" /> أَنشِئ التَّطبيق الآن
+                                <AcIcon Name="sparkle" Size="16" /> @L.Markup("studio.study.build_now")@((MarkupString)"\n                            ")
                             </button>
                         </form>
-                        <p style="margin:10px 0 0;font-size:12px;color:var(--st-muted);">
-                            سَيُهَيَّأ التَّطبيق تِلقائيّاً بِفِئات وأَدوار مَبدَئيَّة بِناءً على النَّمَط، ويُمكِنُكَ تَعديل كُلّ شَيء بَعد الإنشاء.
+                        <p style="margin:10px 0 0;font-size:12px;color:var(--st-muted);">@((MarkupString)"\n                            ")@L.Markup("studio.study.build_hint")@((MarkupString)"\n                        ")
                         </p>
                     }
                 </div>
             }
 
             @* تَقييم سَريع لِلدِراسَة (👍/👎 لِكُلّ قِسم) *@
-            <div class="st-section-title"><AcIcon Name="check" Size="18" /> / <AcIcon Name="x" Size="18" /> تَقييم سَريع</div>
+            <div class="st-section-title"><AcIcon Name="check" Size="18" /> / <AcIcon Name="x" Size="18" /> @L.Markup("studio.study.feedback_title")</div>
             <div class="st-card">
-                <p style="margin:0 0 12px;color:var(--st-muted);font-size:14px;">
-                    قَيِّم الأَقسام لِنَتَعَلَّم كَيف نُحَسِّن التَّحليل.
+                <p style="margin:0 0 12px;color:var(--st-muted);font-size:14px;">@((MarkupString)"\n                    ")@L.Markup("studio.study.feedback_hint")@((MarkupString)"\n                ")
                 </p>
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;">
                     @foreach (var sec in new[] { "marketSizing", "competitors", "revenueModel", "financialProjection", "risks", "roadmap" })
@@ -314,37 +308,36 @@
             </div>
 
             @* تَحسين الدِراسَة — أَعِد توليد قِسم بِناءً عَلى مُلاحَظَة. *@
-            <div class="st-section-title"><AcIcon Name="message" Size="18" /> تَحسين الدِراسَة</div>
+            <div class="st-section-title"><AcIcon Name="message" Size="18" /> @L.Markup("studio.study.refine_title")</div>
             <details class="st-card" style="padding:0;">
                 <summary style="cursor:pointer;padding:16px 22px;font-weight:600;list-style:none;
                                 display:flex;align-items:center;gap:8px;">
                     <span style="font-size:18px;"><AcIcon Name="sparkle" Size="18" /></span>
-                    لاحَظتَ خَلَلاً في قِسم؟ اطلُب إعادَة توليده
+                    @L.Markup("studio.study.refine_hint")@((MarkupString)"\n                ")
                 </summary>
                 <form method="post" action="@($"/studio/s/{session.Id}/refine")"
                       style="padding:0 22px 22px;border-top:1px solid var(--st-line);">
                     <div class="st-field" style="margin-top:14px;">
-                        <label class="st-label">القِسم المُراد تَحسينه</label>
+                        <label class="st-label">@L.Markup("studio.study.refine_section_label")</label>
                         <select name="section" required class="st-input">
-                            <option value="marketSizing">حَجم السوق</option>
-                            <option value="customerSegments">شَرائِح العُملاء</option>
-                            <option value="competitors">المُنافِسون والفَجوَة</option>
-                            <option value="revenueModel">نَموذَج الإيراد</option>
-                            <option value="costStructure">هَيكَل التَّكلِفَة</option>
-                            <option value="financialProjection">التَّوَقُّع المالي</option>
-                            <option value="risks">المَخاطِر</option>
-                            <option value="lessonsFromFailures">دُروس الفَشَل</option>
-                            <option value="roadmap">خارِطَة الطَّريق</option>
-                            <option value="recommendedPattern">النَّمَط المُقتَرَح</option>
+                            <option value="marketSizing">@L.Markup("study.section.market_size")</option>
+                            <option value="customerSegments">@L.Markup("study.section.segments")</option>
+                            <option value="competitors">@L.Markup("study.section.competitors")</option>
+                            <option value="revenueModel">@L.Markup("study.section.revenue_model")</option>
+                            <option value="costStructure">@L.Markup("study.section.cost_structure")</option>
+                            <option value="financialProjection">@L.Markup("study.section.financial")</option>
+                            <option value="risks">@L.Markup("study.section.risks")</option>
+                            <option value="lessonsFromFailures">@L.Markup("studio.study.section_lessons")</option>
+                            <option value="roadmap">@L.Markup("study.section.roadmap")</option>
+                            <option value="recommendedPattern">@L.Markup("studio.study.section_pattern")</option>
                         </select>
                     </div>
                     <div class="st-field">
-                        <label class="st-label">مُلاحَظَتُكَ (مَ الَّذي يَنقُص أَو الَّذي تَوَدّ تَغييره؟)</label>
+                        <label class="st-label">@L.Markup("studio.study.refine_note_label")</label>
                         <textarea name="feedback" required rows="3" class="st-textarea"
                             placeholder="مَثَلاً: الأَرقام مُتَفائِلَة جِدّاً، رَكِّز على سيناريو مُتَحَفِّظ; أَو: أَضِف منافِساً «س» الَّذي لَم تَذكُره"></textarea>
                     </div>
-                    <button type="submit" class="st-btn st-btn-primary">
-                        أَعِد توليد القِسم
+                    <button type="submit" class="st-btn st-btn-primary">@((MarkupString)"\n                        ")@L.Markup("studio.study.refine_submit")@((MarkupString)"\n                    ")
                     </button>
                 </form>
             </details>
@@ -383,18 +376,18 @@
         _ => "other"
     };
 
-    static string SectionLabel(string key) => key switch
+    string SectionLabel(string key) => key switch
     {
-        "marketSizing"        => "حَجم السوق",
-        "customerSegments"    => "شَرائِح العُملاء",
-        "competitors"         => "المُنافِسون",
-        "revenueModel"        => "نَموذَج الإيراد",
-        "costStructure"       => "هَيكَل التَّكلِفَة",
-        "financialProjection" => "التَّوَقُّع المالي",
-        "risks"               => "المَخاطِر",
-        "lessonsFromFailures" => "دُروس الفَشَل",
-        "roadmap"             => "خارِطَة الطَّريق",
-        "recommendedPattern"  => "النَّمَط المُقتَرَح",
+        "marketSizing"        => L["study.section.market_size"],
+        "customerSegments"    => L["study.section.segments"],
+        "competitors"         => L["studio.study.section_competitors"],
+        "revenueModel"        => L["study.section.revenue_model"],
+        "costStructure"       => L["study.section.cost_structure"],
+        "financialProjection" => L["study.section.financial"],
+        "risks"               => L["study.section.risks"],
+        "lessonsFromFailures" => L["studio.study.section_lessons"],
+        "roadmap"             => L["study.section.roadmap"],
+        "recommendedPattern"  => L["studio.study.section_pattern"],
         _ => key
     };
     IncubatorSession? session;
@@ -402,8 +395,10 @@
     TenantFromAnalysisFactory.BuildSuggestion? suggestion;
     Tenant? builtTenant;
 
-    const string Disclaimer =
-        "هذا التَّحليل مُولَّد آلِيّاً بِناءً على بيانات السوق المُتاحَة. المَنصَّة غَير مَسؤولَة عَن نَتائِج القَرارات المَبنيَّة عَلَيه. يُوصَى بِالتَّحَقُّق المُستَقِلّ.";
+    // ‏لَيسَت `const`: القيمَة مِن `L` المَحقون scoped، والثابِتُ يُحسَب
+    // ‏وَقتَ التَرجَمَة. المُستَهلِكُ لا يَتَغَيَّر.
+    string Disclaimer =>
+        L["studio.study.disclaimer"];
 
     protected override async Task OnInitializedAsync()
     {
@@ -427,10 +422,10 @@
         currentTier = u?.Tier ?? "spark";
     }
 
-    static string FormatBuildErr(string err) => err switch
+    string FormatBuildErr(string err) => err switch
     {
-        "name_required" => "الاسم مَطلوب.",
-        "color_invalid" => "اللَون غَير صالِح.",
+        "name_required" => L["studio.study.err_name_required"],
+        "color_invalid" => L["studio.study.err_color_invalid"],
         _ => err
     };
 
