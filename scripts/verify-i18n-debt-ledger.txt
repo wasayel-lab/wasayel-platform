@@ -1,7 +1,7 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|890
-DISTINCT|634
+TOTAL|827
+DISTINCT|591
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|40
@@ -15,11 +15,10 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/I
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorStudy.razor|44
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorWizard.razor|26
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/QualityMonitor.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantAttributes.razor|40
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantAttributes.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantCategories.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantEdit.razor|24
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantRegions.razor|7
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantRoles.razor|27
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantUsers.razor|10
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/CartPage.razor|15
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/ChatRoom.razor|10

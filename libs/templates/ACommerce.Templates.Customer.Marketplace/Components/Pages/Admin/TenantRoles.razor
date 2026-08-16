@@ -2,6 +2,7 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard Guard
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
+@inject L L
 @using ACommerce.Kit.Roles
 
 @*
@@ -15,7 +16,7 @@
 <div class="acs-page acm-admin">
     @if (tenant is null)
     {
-        <AcEmptyState IconName="info" Title="المَتجَر غَير مَوجود" />
+        <AcEmptyState IconName="info" Title="@L["admin.tenant.not_found"]" />
     }
     else
     {
@@ -25,20 +26,17 @@
                 <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@backHref">
                     <AcIcon Name="arrow-right" Size="16" />
                 </a>
-                <h1 class="acm-wizard-title" style="margin:0;">أَدوار @tenant.Name</h1>
+                <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("admin.tenant_roles.heading") @tenant.Name</h1>
             </div>
         </div>
 
         @if (Err is not null) { <AcAlert Variant="danger"  Message="@FormatError(Err)" /> }
-        @if (Saved == "1")    { <AcAlert Variant="success" Message="تَمّ الحِفظ." /> }
+        @if (Saved == "1")    { <AcAlert Variant="success" Message="@L["admin.tenant_roles.saved"]" /> }
 
         <AcCard>
             <ChildContent>
-                <h3 style="margin-top:0;">القَوالِب القِياسيَّة</h3>
-                <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 16px;">
-                    اختَر الأَدوار الَّتي تَنطَبِق عَلى مَتجَرِكَ. كُلّ دَور
-                    يَأتي بِصَلاحِيّات + حُقول بَيانات افتراضِيَّة جاهِزَة.
-                    اِحفَظ لِتَطبيق الاختِيارات.
+                <h3 style="margin-top:0;">@L.Markup("admin.tenant_roles.catalog")</h3>
+                <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 16px;">@((MarkupString)"\n                    ")@L.Markup("admin.tenant_roles.catalog_hint")@((MarkupString)"\n                ")
                 </p>
 
                 <form method="post" action="@($"/admin/tenants/{Slug}/roles/save")">
@@ -70,24 +68,23 @@
                                     </div>
                                     @if (tmpl.Fields.Count > 0)
                                     {
-                                        <small style="display:block;margin-top:6px;color:var(--ac-text-muted);">
-                                            بَيانات لِلتَّسجيل: @string.Join("، ", tmpl.Fields.Select(f => f.Label))
+                                        <small style="display:block;margin-top:6px;color:var(--ac-text-muted);">@((MarkupString)"\n                                            ")@L.Markup("admin.tenant_roles.signup_fields") @string.Join(L["admin.tenant_roles.field_sep"], tmpl.Fields.Select(f => f.Label))
                                         </small>
                                     }
                                 </span>
                                 <label class="acm-role-pickcard-default">
                                     <input type="radio" name="default_role" value="@tmpl.Slug"
                                            checked="@(existing?.IsDefault == true)" />
-                                    افتراضي
+                                    @L.Markup("admin.tenant_roles.default")@((MarkupString)"\n                                ")
                                 </label>
                             </label>
                         }
                     </div>
 
                     <div style="display:flex;gap:8px;margin-top:16px;">
-                        <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">إلغاء</a>
+                        <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">@L.Markup("admin.tenant_roles.cancel")</a>
                         <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
-                            <AcIcon Name="check" Size="18" /> حِفظ
+                            <AcIcon Name="check" Size="18" /> @L.Markup("admin.tenant_roles.save")@((MarkupString)"\n                        ")
                         </button>
                     </div>
                 </form>
@@ -104,11 +101,9 @@
         {
             <AcCard>
                 <ChildContent>
-                    <h3 style="margin-top:0;">أَدوار مُؤَلَّفَة لِهذا المَتجَر (@definitions.Count)</h3>
-                    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 16px;">
-                        تُكتَب مِن الوَكيل (<code>define_role</code>) وتُخزَّن
-                        <b>مُعَلَّقَة</b>. الاعتِماد قَرار مُشرِف المَنصَّة —
-                        وبِه وَحدَه تَظهَر البِطاقَة لِلمُستَخدِمين.
+                    <h3 style="margin-top:0;">@L.Markup("admin.tenant_roles.authored")@definitions.Count)</h3>
+                    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 16px;">@((MarkupString)"\n                        ")@L.Markup("admin.tenant_roles.authored_hint_a")<code>define_role</code>) @L.Markup("admin.tenant_roles.authored_hint_b")
+                        <b>@L.Markup("admin.tenant_roles.pending")</b>. @L.Markup("admin.tenant_roles.pending_hint")@((MarkupString)"\n                    ")
                     </p>
                     <div class="acm-cat-list">
                         @foreach (var d in definitions)
@@ -117,11 +112,11 @@
                                 <div style="flex:1;">
                                     <strong>@d.Slug</strong>
                                     <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
-                                        @StatusLabel(d.Status) · كَتَبَها @d.CreatedBy ·
+                                        @StatusLabel(d.Status) · @L.Markup("admin.tenant_roles.written_by") @d.CreatedBy ·
                                         @d.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC
                                         @if (d.DecidedBy is not null)
                                         {
-                                            <text> · قَرَّرَ @d.DecidedBy</text>
+                                            <text> · @L.Markup("admin.tenant_roles.decided_by") @d.DecidedBy</text>
                                         }
                                     </span>
                                 </div>
@@ -130,12 +125,12 @@
                                     <form method="post" style="display:inline;"
                                           action="@($"/admin/tenants/{Slug}/roles/definitions/{d.Slug}/decide")">
                                         <input type="hidden" name="decision" value="approve" />
-                                        <button type="submit" class="ac-btn ac-btn-primary ac-btn-sm">اِعتِماد</button>
+                                        <button type="submit" class="ac-btn ac-btn-primary ac-btn-sm">@L.Markup("admin.tenant_roles.approve")</button>
                                     </form>
                                     <form method="post" style="display:inline;margin-inline-start:6px;"
                                           action="@($"/admin/tenants/{Slug}/roles/definitions/{d.Slug}/decide")">
                                         <input type="hidden" name="decision" value="reject" />
-                                        <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">رَفض</button>
+                                        <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">@L.Markup("admin.tenant_roles.reject")</button>
                                     </form>
                                 }
                                 else
@@ -153,7 +148,7 @@
         {
             <AcCard>
                 <ChildContent>
-                    <h3 style="margin-top:0;">المَفعَّلَة حاليّاً (@tenant.Roles.Count)</h3>
+                    <h3 style="margin-top:0;">@L.Markup("admin.tenant_roles.active_now")@tenant.Roles.Count)</h3>
                     <div class="acm-cat-list">
                         @foreach (var r in tenant.Roles.OrderBy(r => r.SortOrder))
                         {
@@ -162,10 +157,10 @@
                                 <div style="flex:1;">
                                     <strong>@r.Label</strong>
                                     <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
-                                        @r.Permissions.Count صَلاحِيَّة · @r.Fields.Count حَقل بَيانات
+                                        @r.Permissions.Count @L.Markup("admin.tenant_roles.permission_unit") @r.Fields.Count @L.Markup("admin.tenant_roles.field_unit")@((MarkupString)"\n                                    ")
                                     </span>
                                 </div>
-                                @if (r.IsDefault) { <span class="ac-chip ac-chip-sm">افتراضي</span> }
+                                @if (r.IsDefault) { <span class="ac-chip ac-chip-sm">@L.Markup("admin.tenant_roles.default")</span> }
                             </div>
                         }
                     </div>
@@ -189,11 +184,11 @@
     /// فَقَط.</summary>
     IReadOnlyList<TenantRoleDefinition> definitions = Array.Empty<TenantRoleDefinition>();
 
-    static string StatusLabel(string s) => s switch
+    string StatusLabel(string s) => s switch
     {
-        TenantRoleStatuses.Approved => "مُعتَمَد",
-        TenantRoleStatuses.Rejected => "مَرفوض",
-        _                           => "مُعَلَّق"
+        TenantRoleStatuses.Approved => L["admin.tenant_roles.status_approved"],
+        TenantRoleStatuses.Rejected => L["admin.tenant_roles.status_rejected"],
+        _                           => L["admin.tenant_roles.status_pending"]
     };
 
     protected override async Task OnParametersSetAsync()

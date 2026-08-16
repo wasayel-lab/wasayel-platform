@@ -2,6 +2,7 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantAdminQueries TenantAdmin
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard Guard
+@inject L L
 
 @*
     مُحَرِّر الخَصائِص الديناميكِيَّة. خَطوَتان:
@@ -17,7 +18,7 @@
 <div class="acs-page acm-admin">
     @if (tenant is null)
     {
-        <AcEmptyState IconName="info" Title="المَتجَر غَير مَوجود" />
+        <AcEmptyState IconName="info" Title="@L["admin.tenant.not_found"]" />
     }
     else
     {
@@ -27,20 +28,18 @@
                 <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@backHref">
                     <AcIcon Name="arrow-right" Size="16" />
                 </a>
-                <h1 class="acm-wizard-title" style="margin:0;">خَصائِص @tenant.Name</h1>
+                <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("admin.tenant_attrs.heading") @tenant.Name</h1>
             </div>
         </div>
 
         @if (Err is not null) { <AcAlert Variant="danger"  Message="@FormatError(Err)" /> }
-        @if (Saved == "1")     { <AcAlert Variant="success" Message="تَمّ الحِفظ." /> }
+        @if (Saved == "1")     { <AcAlert Variant="success" Message="@L["admin.tenant_attrs.saved"]" /> }
 
         @* قائِمَة scopes — كُلّ فِئَة + sentinel البروفايل *@
         <AcCard>
             <ChildContent>
-                <h3 style="margin-top:0;">النِّطاق (Scope)</h3>
-                <p style="color:var(--ac-text-muted);font-size:13px;">
-                    اختَر فِئَة لِتَعريف حُقول إعلاناتها، أَو "البروفايل"
-                    لِحُقول صَفحَة المُستَخدِم.
+                <h3 style="margin-top:0;">@L.Markup("admin.tenant_attrs.scope_title")</h3>
+                <p style="color:var(--ac-text-muted);font-size:13px;">@((MarkupString)"\n                    ")@L.Markup("admin.tenant_attrs.scope_hint")@((MarkupString)"\n                ")
                 </p>
                 <div class="acm-scope-list">
                     @foreach (var s in scopes)
@@ -55,7 +54,7 @@
                                     @s.Id
                                 </span>
                             </div>
-                            <span class="ac-chip ac-chip-sm">@s.DefCount حُقول</span>
+                            <span class="ac-chip ac-chip-sm">@s.DefCount @L.Markup("admin.tenant_attrs.field_unit")</span>
                         </a>
                     }
                 </div>
@@ -69,10 +68,8 @@
 
                 <AcCard>
                     <ChildContent>
-                        <h3 style="margin-top:0;">حُقول @selectedScopeLabel</h3>
-                        <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 14px;">
-                            كُلّ بِطاقَة = حَقل في الإعلان. اختَر النَّوع، وإن كانَ
-                            «اختِيار» أَضِف الخِيارات كَرُقَع.
+                        <h3 style="margin-top:0;">@L.Markup("admin.tenant_attrs.fields_of") @selectedScopeLabel</h3>
+                        <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 14px;">@((MarkupString)"\n                            ")@L.Markup("admin.tenant_attrs.card_hint")@((MarkupString)"\n                        ")
                         </p>
 
                         <div class="ac-editor" id="attrs-editor">
@@ -81,17 +78,17 @@
                                 var isSelect = f.Type is "SingleSelect" or "MultiSelect";
                                 <div class="ac-editor-row" data-attr-row>
                                     <div class="ac-editor-row-head">
-                                        <input class="ac-input ac-attr-name" placeholder="اسم الحَقل (عَرَبي)" value="@f.Name" />
-                                        <button type="button" class="ac-icon-btn" data-remove-attr aria-label="حَذف الحَقل"><AcIcon Name="x" Size="14" /></button>
+                                        <input class="ac-input ac-attr-name" placeholder="@L["admin.tenant_attrs.field_name"]" value="@f.Name" />
+                                        <button type="button" class="ac-icon-btn" data-remove-attr aria-label="@L["admin.tenant_attrs.remove_field"]"><AcIcon Name="x" Size="14" /></button>
                                     </div>
                                     <div class="ac-editor-grid2">
                                         <div>
-                                            <span class="ac-chip-input-label">الرَّمز (Code)</span>
+                                            <span class="ac-chip-input-label">@L.Markup("admin.tenant_attrs.code_label")</span>
                                             <input class="ac-input ac-attr-code" placeholder="rooms" value="@f.Code"
                                                    style="direction:ltr;" />
                                         </div>
                                         <div>
-                                            <span class="ac-chip-input-label">النَّوع</span>
+                                            <span class="ac-chip-input-label">@L.Markup("admin.tenant_attrs.type_label")</span>
                                             <select class="ac-select ac-attr-type">
                                                 @foreach (var t in FieldTypes)
                                                 {
@@ -105,10 +102,10 @@
                                     </div>
                                     <label class="ac-attr-req-toggle">
                                         <input type="checkbox" class="ac-attr-req" checked="@f.Required" />
-                                        <span>حَقل مَطلوب</span>
+                                        <span>@L.Markup("admin.tenant_attrs.required")</span>
                                     </label>
                                     <div class="ac-attr-options" data-options style="@(isSelect ? "" : "display:none;")">
-                                        <span class="ac-chip-input-label">الخِيارات (اكتُب القيمَة ثُمَّ Enter)</span>
+                                        <span class="ac-chip-input-label">@L.Markup("admin.tenant_attrs.options_label")</span>
                                         <div class="ac-chip-input" data-opts>
                                             @foreach (var o in f.Options)
                                             {
@@ -123,7 +120,7 @@
                         </div>
 
                         <button type="button" class="ac-add-row-btn" id="add-attr" style="margin-top:12px;">
-                            <AcIcon Name="plus" Size="16" /> إضافَة حَقل
+                            <AcIcon Name="plus" Size="16" /> @L.Markup("admin.tenant_attrs.add_field")@((MarkupString)"\n                        ")
                         </button>
 
                         <textarea name="defs" id="defs-hidden" hidden>@defsText</textarea>
@@ -131,9 +128,9 @@
                 </AcCard>
 
                 <div style="display:flex;gap:8px;margin-top:16px;">
-                    <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}/attributes")">إلغاء</a>
+                    <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}/attributes")">@L.Markup("admin.tenant_attrs.cancel")</a>
                     <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
-                        <AcIcon Name="check" Size="18" /> حِفظ
+                        <AcIcon Name="check" Size="18" /> @L.Markup("admin.tenant_attrs.save")@((MarkupString)"\n                    ")
                     </button>
                 </div>
             </form>
@@ -142,15 +139,15 @@
                 <div class="ac-editor-row" data-attr-row>
                     <div class="ac-editor-row-head">
                         <input class="ac-input ac-attr-name" placeholder="اسم الحَقل (عَرَبي)" />
-                        <button type="button" class="ac-icon-btn" data-remove-attr aria-label="حَذف الحَقل"><AcIcon Name="x" Size="14" /></button>
+                        <button type="button" class="ac-icon-btn" data-remove-attr aria-label="@L["admin.tenant_attrs.remove_field"]"><AcIcon Name="x" Size="14" /></button>
                     </div>
                     <div class="ac-editor-grid2">
                         <div>
-                            <span class="ac-chip-input-label">الرَّمز (Code)</span>
+                            <span class="ac-chip-input-label">@L.Markup("admin.tenant_attrs.code_label")</span>
                             <input class="ac-input ac-attr-code" placeholder="rooms" style="direction:ltr;" />
                         </div>
                         <div>
-                            <span class="ac-chip-input-label">النَّوع</span>
+                            <span class="ac-chip-input-label">@L.Markup("admin.tenant_attrs.type_label")</span>
                             <select class="ac-select ac-attr-type">
                                 @foreach (var t in FieldTypes)
                                 {
@@ -161,10 +158,10 @@
                     </div>
                     <label class="ac-attr-req-toggle">
                         <input type="checkbox" class="ac-attr-req" />
-                        <span>حَقل مَطلوب</span>
+                        <span>@L.Markup("admin.tenant_attrs.required")</span>
                     </label>
                     <div class="ac-attr-options" data-options style="display:none;">
-                        <span class="ac-chip-input-label">الخِيارات (اكتُب القيمَة ثُمَّ Enter)</span>
+                        <span class="ac-chip-input-label">@L.Markup("admin.tenant_attrs.options_label")</span>
                         <div class="ac-chip-input" data-opts>
                             <input class="ac-chip-entry" placeholder="مَثَلاً: شَقّة" />
                         </div>
@@ -193,11 +190,11 @@
     sealed record FieldRow(string Code, string Name, string Type, bool Required, List<string> Options);
     static readonly string[] FieldTypes =
         { "Text", "LongText", "Number", "Boolean", "SingleSelect", "MultiSelect", "Date" };
-    static string TypeLabel(string t) => t switch
+    string TypeLabel(string t) => t switch
     {
-        "Text" => "نَصّ قَصير", "LongText" => "نَصّ طَويل", "Number" => "رَقم",
-        "Boolean" => "نَعَم/لا", "SingleSelect" => "اختِيار واحِد",
-        "MultiSelect" => "اختِيار مُتَعَدِّد", "Date" => "تاريخ", _ => t
+        "Text" => L["admin.tenant_attrs.type_text"], "LongText" => L["admin.tenant_attrs.type_longtext"], "Number" => L["admin.tenant_attrs.type_number"],
+        "Boolean" => L["admin.tenant_attrs.type_boolean"], "SingleSelect" => L["admin.tenant_attrs.type_single"],
+        "MultiSelect" => L["admin.tenant_attrs.type_multi"], "Date" => L["admin.tenant_attrs.type_date"], _ => t
     };
 
     static readonly Guid ProfileScopeId = Guid.Parse("00000000-0000-0000-0000-000000000F01");
@@ -232,12 +229,12 @@
                 DefCount: defCountByScope.GetValueOrDefault(sid, 0)));
         }
         scopes.Add(new ScopeInfo(
-            Id: ProfileScopeId.ToString(), Label: "البروفايل", Icon: "user",
+            Id: ProfileScopeId.ToString(), Label: L["admin.tenant_attrs.scope_profile"], Icon: "user",
             DefCount: defCountByScope.GetValueOrDefault(ProfileScopeId, 0)));
 
         if (!string.IsNullOrEmpty(ScopeId) && Guid.TryParse(ScopeId, out var scopeGuid))
         {
-            selectedScopeLabel = scopes.FirstOrDefault(s => s.Id == ScopeId)?.Label ?? "النِّطاق";
+            selectedScopeLabel = scopes.FirstOrDefault(s => s.Id == ScopeId)?.Label ?? L["admin.tenant_attrs.scope_fallback"];
 
             // اِبني نَصّ الـ textarea: لِكُلّ mapping عَلى هذا الـ scope
             // اِجلِب الـ AttributeDefinition + جَمِّع AttributeValues.
@@ -300,10 +297,10 @@
     static bool GetBool(ImportedRecord r, string k)    => bool.TryParse(Raw(r, k), out var b) && b;
     static string? GetString(ImportedRecord r, string k) => Raw(r, k);
 
-    static string FormatError(string err) => err switch
+    string FormatError(string err) => err switch
     {
-        "bad_format" => "تَنسيق صَفّ غَير صَحيح — راجِع الصِّيغَة.",
-        "no_scope"   => "اختَر نِطاقاً أَوّلاً.",
+        "bad_format" => L["admin.tenant_attrs.err_format"],
+        "no_scope"   => L["admin.tenant_attrs.err_scope"],
         _ => err
     };
 
