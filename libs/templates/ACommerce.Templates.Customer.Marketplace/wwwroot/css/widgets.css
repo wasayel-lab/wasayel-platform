@@ -719,10 +719,16 @@ textarea.form-control, textarea.form-input { min-height: 6rem; resize: vertical;
 }
 
 /* ── AcSpaceCard ─────────────────────────────────────────────────────── */
+/* ‏box-sizing هُنا صَراحَةً: التَصفيرُ العامّ أَعلاه مَحصورٌ بِـ
+   `.ac-root *`، وبِطاقَةُ الإعلان تُصَيَّر خارِجَه في واجِهَة المَتجَر.
+   فَكانَ `width:100%` يَعني عَرضَ المُحتَوى، والحاشِيَتانِ (‏1px لِكُلّ
+   جانِب) تُضافانِ فَوقَه — ‏182px داخِلَ رَفٍّ عَرضُه ‏180px. مَقيسٌ
+   بِالطَبَقَة السادِسَة على `/theme-demo` بِنافِذَة ‏390×844. */
 .ac-space {
     display: flex;
     flex-direction: column;
     width: 100%;
+    box-sizing: border-box;
     background: var(--ac-surface, #ffffff);
     border: 1px solid var(--ac-border, #e5e7eb);
     border-radius: var(--ac-radius-md, 8px);

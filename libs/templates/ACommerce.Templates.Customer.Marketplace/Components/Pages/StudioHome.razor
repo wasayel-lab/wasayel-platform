@@ -81,7 +81,12 @@
 
             <div class="st-section-title" style="display:flex;justify-content:space-between;align-items:center;">
                 <span>@L.Markup("studio.home.my_apps")</span>
-                <a href="/studio/new" style="font-size:12px;color:var(--st-primary);text-decoration:none;font-weight:600;">@L.Markup("studio.home.plus_idea")</a>
+                @* الأَخضَرُ الفاتِح (‏--st-primary ‏#198754) على خَلفِيَّة
+                   الاستوديو (‏--st-bg ‏#f8fafc) نِسبَتُه ‏4.33 دونَ ‏4.5 —
+                   مَقيسٌ بِالطَبَقَة السادِسَة. والأَخضَرُ الغامِق
+                   مَوجودٌ في اللَوحَة سَلَفاً لِهذا بِعَينِه، فَلا لَونَ
+                   جَديد يُخترَع. *@
+                <a href="/studio/new" style="font-size:12px;color:var(--st-primary-700);text-decoration:none;font-weight:600;">@L.Markup("studio.home.plus_idea")</a>
             </div>
             @if (myApps is null)
             {

@@ -186,7 +186,62 @@ try
     {
         await cdp.Send("Page.navigate", $$"""{"url":{{Cdp.JStr(url)}}}""");
         await cdp.WaitForEvent("Page.loadEventFired", TimeSpan.FromSeconds(30));
-        await Task.Delay(900); // اِستِقرار Blazor بَعدَ الحَدَث
+
+        // ── الاستِقرار يُقاس، ولا يُقَدَّر بِمُهلَة ثابِتَة ──────────────
+        // كانَ هُنا `Task.Delay(900)`، والقِياس أَسقَطَه: خَمسُ جَولات
+        // مُتَتالِيَة على نَفس العُنوان أَعطَت أَربَعاً بِـ217 عُنصُراً
+        // وصِفر مُخالَفَة، وواحِدَةً بِـ212 عُنصُراً و11 مُخالَفَة —
+        // كُلُّها كاذِبَة («خَلفِيَّة شَفّافَة»، «نَصّ أَسوَد»)، لِأَنّ
+        // أَوراقَ الأَنماط لَم تَكُن قَد طُبِّقَت بَعد. أَي أَنّ الأَداةَ
+        // كانَت **تَكذِب مَرَّةً في كُلّ خَمس** — والأَسوَأ أَنّها قَد
+        // تَكذِب في الاتِّجاه الآخَر فَتُمَرِّر صَفحَةً مَكسورَة.
+        //
+        // الشَرطُ الآن مُرَكَّب ومَقروء: المُستَند مُكتَمِل، وكُلُّ ورَقَة
+        // أَنماط مَربوطَة **لَها قَواعِدُ فِعلاً**، والخُطوطُ حُمِّلَت،
+        // وعَدَدُ العُقَد ثابِتٌ بَينَ قِياسَين مُتَتالِيَين. وإن لَم
+        // يَتَحَقَّق، **تَسقُط الصَفحَة بِصَوت** ولا تُقاس صامِتَة.
+        const string readyJs = """
+            (function(){
+              if (document.readyState !== 'complete') return { ok:false, why:'readyState' };
+              var links = Array.prototype.slice.call(
+                  document.querySelectorAll('link[rel~="stylesheet"]'));
+              for (var i = 0; i < links.length; i++) {
+                var sh = null; try { sh = links[i].sheet; } catch (e) { sh = null; }
+                if (!sh) return { ok:false, why:'sheet:' + links[i].href };
+                var nr = 1; try { nr = sh.cssRules.length; } catch (e) { nr = 1; }
+                if (nr === 0) return { ok:false, why:'rules:' + links[i].href };
+              }
+              if (document.fonts && document.fonts.status !== 'loaded')
+                return { ok:false, why:'fonts' };
+              return { ok:true, n: document.querySelectorAll('*').length };
+            })()
+            """;
+
+        int lastN = -1, stableTimes = 0; string lastWhy = "—"; bool settled = false;
+        for (var attempt = 0; attempt < 60 && !settled; attempt++)
+        {
+            await Task.Delay(200);
+            var rr = await cdp.Send("Runtime.evaluate",
+                $$"""{"expression":{{Cdp.JStr(readyJs)}},"returnByValue":true}""");
+            if (!rr.RootElement.GetProperty("result").TryGetProperty("value", out var rv) ||
+                rv.ValueKind != JsonValueKind.Object) { lastWhy = "evaluate"; continue; }
+            if (!rv.GetProperty("ok").GetBoolean())
+            {
+                lastWhy = rv.TryGetProperty("why", out var w) ? (w.GetString() ?? "?") : "?";
+                stableTimes = 0; lastN = -1; continue;
+            }
+            var n = rv.GetProperty("n").GetInt32();
+            if (n == lastN) { stableTimes++; if (stableTimes >= 2) settled = true; }
+            else { lastN = n; stableTimes = 0; }
+        }
+
+        if (!settled)
+        {
+            Console.WriteLine($"\n  ✗ {url} — لَم تَستَقِرّ الصَفحَة خِلال 12 ثانِيَة ({lastWhy}).");
+            Console.WriteLine("      صَفحَةٌ تُقاس قَبلَ أَن تَستَقِرّ تُعطي مُخالَفاتٍ كاذِبَة أَو تَستُر حَقيقِيَّة.");
+            total++;
+            continue;
+        }
 
         if (injectCss is not null)
         {
@@ -605,9 +660,22 @@ static class Scripts
     });
 
     // ─── G. تَبايُن WCAG AA ────────────────────────────────────────
+    // لَونٌ لا يُقرَأ = عُقدَةٌ تُتَخَطّى **قَبل** ck، أَي تَأكيدٌ يَختَفي
+    // بِلا صَوت. وهذا وَقَعَ فِعلاً: لَونٌ مَكتوبٌ بِـ`color-mix()` يُعيدُه
+    // المُتَصَفِّح بِصيغَة `color(srgb r g b)` — لا `rgb(...)` — فَكانَ
+    // النَمَطُ يَفشَل، فَتَسقُط العُقدَةُ مِن الفَحص وتَبدو الصَفحَةُ
+    // أَنظَف. قيسَ: نَفسُ الصَفحَة أَعطَت ‏30 تَأكيدَ تَبايُن بِلَونٍ
+    // كلاسيكيّ و‏29 بِلَونٍ مَمزوج — والفَرقُ هُوَ العُقدَةُ المَقصودَة
+    // بِالإصلاح نَفسِه. (القاعِدَة ١٠: الأَداةُ تُقاس قَبلَ أَن يُوثَق بِها.)
     function parseRgb(s) {
-        var m = /rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+))?/.exec(s || '');
-        return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] == null ? 1 : +m[4] } : null;
+        s = s || '';
+        var m = /rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+))?/.exec(s);
+        if (m) return { r: +m[1], g: +m[2], b: +m[3], a: m[4] == null ? 1 : +m[4] };
+        // ‏color(srgb r g b / a) — مُرَكِّباتُه ‏0..1 لا ‏0..255.
+        var c = /color\(\s*srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?/.exec(s);
+        if (c) return { r: +c[1] * 255, g: +c[2] * 255, b: +c[3] * 255,
+                        a: c[4] == null ? 1 : +c[4] };
+        return null;
     }
     function lum(c) {
         var a = [c.r, c.g, c.b].map(function (v) {

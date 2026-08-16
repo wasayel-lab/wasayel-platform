@@ -11,7 +11,7 @@
 *@
 
 <div class="ac-avatar @(ExtraClass ?? "")"
-     style="width:@(Size)px; height:@(Size)px;@(IsImage ? "" : $" background:{_gradient};")"
+     style="width:@(Size)px; height:@(Size)px;@(IsImage ? "" : $" {_background}")"
      role="img" aria-label="@(Name ?? FallbackAriaLabel)">
     @if (IsImage)
     {
@@ -60,7 +60,32 @@
     /// الدالَّة</b> المَكتوبَة لِنَفس السَبَب في
     /// <c>ACommerce.Kit.Auth.NafathNames</c>.</para>
     /// </summary>
-    private string _gradient => _palette[(int)(Fnv1a(Name ?? "") % (uint)_palette.Length)];
+    /// <summary>
+    /// <para><b>لَونٌ حَقيقيّ تَحتَ التَدَرُّج، ولَيسَ تَدَرُّجاً وَحدَه.</b>
+    /// كانَ السَطرُ يَكتُب <c>background: linear-gradient(…)</c> — والاختِصار
+    /// يُصَفِّر <c>background-color</c> إلى شَفّاف. فَكُلُّ قارِئٍ يَسأَل
+    /// «ما لَونُ خَلفِيَّةِ هذا النَصّ؟» — قارِئُ الشاشَة، وأَداةُ
+    /// التَبايُن، والمُتَصَفِّح حينَ يَعجِز عَن رَسم التَدَرُّج — يَرِث
+    /// أَبيَضَ الصَفحَة، فَيَقَع أَبيَضُ الحُروف على أَبيَض. مَقيس:
+    /// الطَبَقَة السادِسَة على <c>/{slug}/me</c> أَعطَت «‏«—» نِسبَة ‏1.00».
+    /// </para>
+    ///
+    /// <para><b>والقياسُ حينَ صَدَقَ كَشَفَ ما تَحتَه</b>: ثَلاثَةٌ مِن
+    /// الأَلوان الثَمانِيَة (‏teal، وemerald، وyellow) كانَت تَحمِل حُروفاً
+    /// بَيضاءَ بِنِسبَةٍ دونَ ‏3 — عَطَبٌ حَقيقيّ كانَ التَدَرُّجُ
+    /// يَستُرُه عَن الأَداةِ لا عَن العَين. فَعُتِّمَت الثَمانِيَة كُلُّها
+    /// إلى ‏58% مِن قيمَتِها (‏نَفسُ الأَلوان، أَعمَق)، وأَدنى نِسبَةٍ
+    /// بَعدَ ذلك ‏5.2 — أَي فَوقَ عَتَبَة النَصّ الكَبير (‏3) وفَوقَ
+    /// عَتَبَة النَصّ العاديّ (‏4.5) مَعاً.</para>
+    /// </summary>
+    private string _background
+    {
+        get
+        {
+            var (from, to) = _palette[(int)(Fnv1a(Name ?? "") % (uint)_palette.Length)];
+            return $"background-color:{from}; background-image:linear-gradient(135deg, {from}, {to});";
+        }
+    }
 
     /// <summary>‏FNV-1a ‏32-بِت فَوق بايتات UTF-8 — ثابِتَة عَبر
     /// العَمَلِيّات والمِنَصّات، بِخِلاف تَجزِئَة الإطار.</summary>
@@ -75,15 +100,24 @@
         return h;
     }
 
-    private static readonly string[] _palette =
+    /// <summary>
+    /// <para>ثَمانِيَةُ أَزواج — نَفسُ العائِلات اللَونِيَّة الَّتي
+    /// كانَت، مُعَتَّمَةً إلى ‏58% لِيَقرَأ الأَبيَضُ فَوقَها. واللَونُ
+    /// الأَوَّل هُوَ <c>background-color</c> المَقيس.</para>
+    ///
+    /// <para>الأَصلُ قَبلَ التَعتيم، بِالتَرتيب نَفسِه:
+    /// ‏6366f1→8b5cf6، ‏14b8a6→0ea5e9، ‏f59e0b→ef4444، ‏10b981→84cc16،
+    /// ‏ec4899→8b5cf6، ‏0891b2→2563eb، ‏eab308→f97316، ‏7c3aed→db2777.</para>
+    /// </summary>
+    private static readonly (string From, string To)[] _palette =
     {
-        "linear-gradient(135deg, #6366f1, #8b5cf6)", // إندِغو-بنفسجيّ
-        "linear-gradient(135deg, #14b8a6, #0ea5e9)", // teal-cyan
-        "linear-gradient(135deg, #f59e0b, #ef4444)", // عنبر-أحمر
-        "linear-gradient(135deg, #10b981, #84cc16)", // emerald-lime
-        "linear-gradient(135deg, #ec4899, #8b5cf6)", // pink-violet
-        "linear-gradient(135deg, #0891b2, #2563eb)", // cyan-blue
-        "linear-gradient(135deg, #eab308, #f97316)", // yellow-orange
-        "linear-gradient(135deg, #7c3aed, #db2777)", // violet-pink
+        ("#393b8c", "#51358f"), // indigo-violet
+        ("#0c6b60", "#086087"), // teal-cyan
+        ("#8e5c06", "#8b2727"), // amber-red
+        ("#096b4b", "#4d760d"), // emerald-lime
+        ("#892a59", "#51358f"), // pink-violet
+        ("#055467", "#153988"), // cyan-blue
+        ("#886805", "#90430d"), // yellow-orange
+        ("#48228a", "#7f1745"), // violet-pink
     };
 }
