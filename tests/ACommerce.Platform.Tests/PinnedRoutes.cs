@@ -83,6 +83,7 @@ internal static class PinnedRoutes
         // Wolverine.Http بِجَلسَةٍ مَحقونَة — قَرارٌ لَه ADR ومَوجَة.
         "/{slug}/chats/{conversationId:guid}/read",
         "/{slug}/notifications/read",
+        "/{slug}/listings/{id:guid}/view",
         "/admin/tenants/create",
         "/admin/tenants/{slug}/users/{userId:guid}/grant-admin",
         "/admin/tenants/{slug}/users/{userId:guid}/revoke-admin",

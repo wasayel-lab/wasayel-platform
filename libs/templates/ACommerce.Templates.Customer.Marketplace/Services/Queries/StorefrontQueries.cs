@@ -69,6 +69,27 @@ public sealed record ExploreResult(
 }
 
 /// <summary>
+/// <para><b>صَفحَةُ تَفصيل إعلانٍ واحِد</b> — الإعلانُ مِن مَجرى
+/// أَحداثِه، وهَل هُوَ في مُفَضَّلَة السائِل، ومُطابَقَتُه إن وُجِدَت،
+/// والعُروضُ المُعَلَّقَة. جَلسَةٌ واحِدَة كَما كانَت في
+/// <c>TenantListingDetail.razor</c>.</para>
+///
+/// <para><b>وما لَم يَنتَقِل مَعَها: تَزييدُ عَدّاد المُشاهَدَة.</b>
+/// كانَت الصَفحَةُ تُلحِق <c>ListingViewed</c> بِمَجرى الأَحداث
+/// وتُودِع <b>في طَلَب <c>GET</c></b>، فَيَرفَعُ العَدّادَ كُلُّ زاحِفٍ
+/// وجالِبٍ مُسبَق وكُلُّ جَولَةِ تَحَقُّقٍ بَصَريّ. وصارَ أَثَراً
+/// جانِبِيّاً خارِجَ مَسار العَرض (<c>POST /{slug}/listings/{id}/view</c>).
+/// فَهذِه الخِدمَةُ <b>تَقرَأ ولا تَكتُب</b>، وذاكَ شَرطُ
+/// مُجَلَّدِها.</para>
+/// </summary>
+public sealed record ListingDetail(
+    Listing? Listing, bool IsFavourite, ListingMatch? Match, IReadOnlyList<Offer> Offers)
+{
+    public static readonly ListingDetail Empty =
+        new(null, false, null, Array.Empty<Offer>());
+}
+
+/// <summary>
 /// <para><b>ما تَعرِضُه واجِهَةُ المَتجَر الرَئيسِيَّة</b> — الدَورُ
 /// المَحفوظ، وشَريطا «أَحدَث» و«مُمَيَّز»، ومُدُنُ الفَلتَرَة، وعَدّاداتُ
 /// تَقييم المُعلِنين، ومُفَضَّلاتُ الزائِر. <b>لَقطَةٌ واحِدَة لِلطَلَب</b>
@@ -219,6 +240,47 @@ public sealed class StorefrontQueries
             .Take(20).ToListAsync(ct)).ToList();
 
         return new VendorPage(vendor, listings, reviews);
+    }
+
+    /// <summary>
+    /// <para><b>صَفحَةُ تَفصيل الإعلان.</b> والإعلانُ يُبنى مِن
+    /// <b>مَجرى أَحداثِه</b> لا مِن لَقطَةٍ — نُقِلَ كَما هُوَ.</para>
+    ///
+    /// <para><b>وشَرطُ جَلب العُروض نُقِلَ مَعَها لِأَنَّه لَيسَ
+    /// قَراراً</b>: «يَقبَل العُروض» هُوَ <see cref="IsTripRequest"/>
+    /// نَفسُها — ثابِتُ <see cref="ListingEditService"/> الَّذي تَقرَؤُه
+    /// الواجِهَةُ والاستِكشافُ ورَئيسِيَّةُ السائِق. وتَركُه في الصَفحَة
+    /// كانَ يَعني جَلسَةً ثانِيَة لِاستِعلامٍ مَشروط.</para>
+    ///
+    /// <para><paramref name="now"/> يُمَرَّر لِتَبقى الدالَّةُ حَتمِيَّةً
+    /// بِمُدخَلِها — نَفسُ ما فَعَلَته <see cref="AccountQueries.MyOffersAsync"/>.</para>
+    /// </summary>
+    public async Task<ListingDetail> ListingDetailAsync(
+        string tenantSlug, Guid listingId, Guid? userId, DateTime now,
+        CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(tenantSlug);
+
+        var listing = await s.Events.AggregateStreamAsync<Listing>(listingId, token: ct);
+        // المَحذوفُ يُعاد كَما هُوَ: الصَفحَةُ تُصَيِّر لَه فَرعاً
+        // خاصّاً («هذا الإعلان مَحذوف») ولا تَقرَأ لَه شَيئاً بَعدَه.
+        if (listing is null || listing.IsDeleted)
+            return new ListingDetail(listing, false, null, Array.Empty<Offer>());
+
+        var isFav = userId is { } uid &&
+            await s.LoadAsync<Favorite>(Favorite.MakeId(uid, listingId), ct) is not null;
+
+        var match = await s.LoadAsync<ListingMatch>(listingId, ct);
+
+        IReadOnlyList<Offer> offers = Array.Empty<Offer>();
+        if (IsTripRequest(listing) || match is not null)
+            offers = (await s.Query<Offer>()
+                    .Where(o => o.ListingId == listingId && o.Status == OfferStatus.Pending)
+                    .ToListAsync(ct))
+                .Where(o => o.ExpiresAt > now)      // اِستَبعِد المُنتَهيَة
+                .OrderBy(o => o.Price).ToList();
+
+        return new ListingDetail(listing, isFav, match, offers);
     }
 
     /// <summary>سائِقو المَتجَر — مَن دَورُه النَشِط <c>driver</c>،

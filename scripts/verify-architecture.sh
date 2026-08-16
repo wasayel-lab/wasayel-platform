@@ -144,7 +144,12 @@ fi
 grep -vE '^[[:space:]]*(#|$)' "$LEDGER" > "$TMP/ledger.txt"
 PINNED_SESSION=$(perl -F'\|' -ane 'print $F[1] if $F[0] eq "SESSION_FILES"' "$TMP/ledger.txt" | tr -d '\n')
 PINNED_WRITE=$(perl -F'\|'   -ane 'print $F[1] if $F[0] eq "WRITE_FILES"'   "$TMP/ledger.txt" | tr -d '\n')
-grep -vE '^(SESSION_FILES|WRITE_FILES)\|' "$TMP/ledger.txt" | sort > "$TMP/pinned.txt"
+# ‏`|| true` لَيسَ تَساهُلاً بَل إصلاحُ عَطَبٍ ظَهَرَ يَومَ بَلَغَ الدَين
+# صِفراً (المَوجَة ٧): سِجِلٌّ بِلا إدخالَةٍ واحِدَة يَجعَل `grep` يَرُدّ
+# ‏1، فَيَموت السكربت تَحتَ `set -e` **صامِتاً بَعدَ طَبع القِياس** —
+# فَيَبدو أَنَّه فَحَصَ ومَرّ، وهو لَم يَصِل إلى فَحصٍ واحِد. أَي أَنّ
+# الأَداةَ كانَت **تَنكَسِر عِندَ النَجاح التامّ**. (القاعِدَة ١٠.)
+grep -vE '^(SESSION_FILES|WRITE_FILES)\|' "$TMP/ledger.txt" | sort > "$TMP/pinned.txt" || true
 PINNED_FILES=$(wc -l < "$TMP/pinned.txt" | tr -d ' ')
 
 echo "--- Ledger ---"

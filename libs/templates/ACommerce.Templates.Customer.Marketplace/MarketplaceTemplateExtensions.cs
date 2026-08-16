@@ -377,6 +377,36 @@ public static class MarketplaceTemplateExtensions
                 req.Form["return"].ToString(), $"/{slug}/listings/{id}"));
         }).DisableAntiforgery();
 
+        // ─── عَدّادُ المُشاهَدَة — أَثَرٌ جانِبيّ خارِجَ مَسار العَرض ────
+        // كانَ `TenantListingDetail.razor` يُلحِق `ListingViewed` ويُودِع
+        // في طَلَب `GET`، فَكانَت **فَتحَتانِ مُتَتالِيَتانِ تُعطِيانِ
+        // صَفحَتَينِ مُختَلِفَتَين**. ومِن هُنا جاءَت قاعِدَةُ «لا تُفتَح
+        // صَفَحاتُ تَفصيل إعلانات ashare».
+        //
+        // **ولا حارِسَ هُنا عَمداً، والصَراحَةُ أَولى مِن الإيهام**:
+        // مُشاهَدَةُ الزائِر المَجهول هي أَغلَبُ المُشاهَدات، فَحَصرُ
+        // العَدّاد في المُوَثَّقين يُبَدِّل مَعناه. و`ResolveToken` أَدناه
+        // تُقرَأ **لِنِسبَة المُشاهَدَة لا لِمَنعِها** — وهي رَمزٌ
+        // يَعُدُّه `WriteEndpointGuardTests` حارِساً، وذاكَ حَدٌّ مُعلَنٌ
+        // في تَوثيقِه («لا يُثبِت أَنّ الحارِس يَرُدّ»). والحارِسُ
+        // الحَقيقيّ هُنا على **المَفعول بِه**: إعلانٌ غَير مَوجود أَو
+        // مَحذوف يُرَدّ ‏404 قَبلَ أَيّ كِتابَة.
+        app.MapPost("/{slug}/listings/{id:guid}/view",
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            var viewerId = parsed is { } p && p.TenantSlug == slug
+                ? p.UserId : (Guid?)null;
+
+            await using var s = store.LightweightSession(slug);
+            var listing = await s.Events.AggregateStreamAsync<Listing>(id);
+            if (listing is null || listing.IsDeleted) return Results.NotFound();
+
+            s.Events.Append(id, new ListingViewed(id, viewerId, DateTime.UtcNow));
+            await s.SaveChangesAsync();
+            return Results.NoContent();
+        }).DisableAntiforgery();
+
         // ─── Start chat from listing ────────────────────────────────────
         app.MapPost("/{slug}/listings/{id:guid}/chat",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>

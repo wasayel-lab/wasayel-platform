@@ -1,6 +1,7 @@
 @page "/{slug}/listings/{id:guid}"
 @page "/{slug}/r/{role}/listings/{id:guid}"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.StorefrontQueries Storefront
 @inject AuthSession Auth
 @inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
 @inject ACommerce.Kit.Reviews.ReviewsService Reviews
@@ -546,6 +547,40 @@ else
     <p class="ac-muted" style="font-size:12px;margin-top:16px;text-align:center;">
         نُشِر: @listing.CreatedAt.ToString("yyyy-MM-dd")
     </p>
+
+    @* ── عَدّادُ المُشاهَدَة — أَثَرٌ جانِبيّ بَعدَ التَصيير ─────────────
+       كانَ الحَدَثُ يُلحَق داخِلَ `OnParametersSetAsync`، أَي في طَلَب
+       `GET`. وهُنا يُطلَق مِن المُتَصَفِّح بَعدَ التَصيير، فَيَسقُط
+       عَن العَدّاد الزاحِفُ والجالِبُ المُسبَق — وكِلاهُما لا يُنَفِّذ
+       JS.
+
+       ولِماذا وَسمٌ في الصَفحَة هُنا، بَينَما إشعارا القِراءَة في
+       `realtime-nav.js`؟ لِأَنّ ذاكَ المِلَفَّ **لا يُحَمَّل لِزائِرٍ
+       مَجهول**، ومُشاهَدَةُ المَجهول هي أَغلَبُ المُشاهَدات. وهذِه
+       الصَفحَةُ — بِخِلاف صَفحَة الإشعارات — لَيسَ لَها لَقطَةُ مَظهَرٍ
+       مُثَبَّتَة تَكسِرُها بايتاتُ الوَسم.
+
+       و`document.hidden` تُسقِط الصَفحَةَ المُهَيَّأَة سَلَفاً
+       (prerender) الَّتي لَم يَرَها أَحَد؛ فَإن ظَهَرَت لاحِقاً حُسِبَت
+       **مَرَّةً واحِدَة**. *@
+    <script>
+        (function () {
+            var sent = false;
+            var url  = '@($"/{Slug}/listings/{Id}/view")';
+            function send() {
+                if (sent || document.hidden) return;
+                sent = true;
+                try {
+                    if (navigator.sendBeacon && navigator.sendBeacon(url)) return;
+                } catch (e) { /* المُتَصَفِّح رَفَض الـ beacon — نَنزِل لِـ fetch */ }
+                try {
+                    fetch(url, { method: 'POST', credentials: 'same-origin', keepalive: true });
+                } catch (e) { /* صامِت — عَدّادٌ فاشِل لا يَكسِر صَفحَة */ }
+            }
+            if (document.hidden) document.addEventListener('visibilitychange', send, { once: true });
+            else send();
+        })();
+    </script>
 }
 </div>
 
@@ -605,70 +640,67 @@ else
 
     string CategoryLabel => tenant?.Categories.FirstOrDefault(c => c.Slug == listing?.CategorySlug)?.Label ?? "";
 
+    /// <summary>
+    /// <para><b>قِراءَةٌ خالِصَة.</b> كانَت هذِه الدالَّةُ تُلحِق
+    /// <c>ListingViewed</c> بِمَجرى الأَحداث وتُودِع — في طَلَب
+    /// <c>GET</c>. ولِذلك كانَت <b>فَتحَتانِ مُتَتالِيَتانِ تُعطِيانِ
+    /// صَفحَتَينِ مُختَلِفَتَين</b>، ولِذلك كُتِبَت قاعِدَةُ «لا تُفتَح
+    /// صَفَحاتُ تَفصيل إعلانات <c>ashare</c>»: مُجَرَّدُ القِراءَة كانَ
+    /// كِتابَة.</para>
+    ///
+    /// <para><b>والعَدّادُ لَم يُحذَف — لَه أَربَعَةُ مُستَهلِكين</b>
+    /// (‏«إعلاناتي»، ورَئيسِيَّةُ التاجِر، وقائِمَةُ إعلانات الاستوديو،
+    /// وهذِه الصَفحَة). فَخَرَجَ مِن مَسار الطَلَب إلى أَثَرٍ جانِبيّ:
+    /// نِداءُ <c>POST …/view</c> بَعدَ التَصيير — لا يُبطِئ الصَفحَة،
+    /// ولا يُطلِقُه زاحِفٌ لا يُنَفِّذ JS.</para>
+    /// </summary>
     protected override async Task OnParametersSetAsync()
     {
-        await using var g = Store.QuerySession();
-        tenant = await g.LoadAsync<Tenant>(Slug);
+        tenant = await Tenants.FindAsync(Slug);
         profile = ACommerce.Templates.Customer.Marketplace.Services.Patterns.PatternProfileResolver.Of(tenant);
         dealPattern = MarketplaceTemplateExtensions.PatternFromTenant(tenant);
         if (tenant is null) return;
-        await using var t = Store.LightweightSession(Slug);
-        listing = await t.Events.AggregateStreamAsync<Listing>(Id);
-        if (listing is not null && !listing.IsDeleted)
+
+        var detail = await Storefront.ListingDetailAsync(
+            Slug, Id, Auth.IsAuthenticated ? Auth.UserId : null, DateTime.UtcNow);
+        listing = detail.Listing;
+        if (listing is null || listing.IsDeleted) return;
+
+        IsFav        = detail.IsFavourite;
+        listingMatch = detail.Match;
+        offers       = detail.Offers.ToList();
+
+        // حُلّ تَسمِيَات السِمات + تَرجَمَة قِيَم SingleSelect/MultiSelect
+        // مِن AttributeDefinitions + AttributeValues المُستَورَدَة.
+        if (listing.Attributes is { Count: > 0 })
+            resolvedAttrs = await DynAttrs.ResolveLabelsAsync(Slug, listing.Attributes);
+
+        // العُروض المُقابِلَة — تَظهَر فَقَط لَو الفِئَة فَتَحَتها
+        // (خاصِّيَّة accepts_offers=true) أَو إن كانَ هُناك عُروض
+        // مَوجودَة. والـ ListingMatch يُعرَف مِنه أَنّ لَه نَتيجَة.
+        listing.Attributes.TryGetValue("accepts_offers", out var acceptsOffers);
+        isOfferBased = string.Equals(acceptsOffers, "true", StringComparison.OrdinalIgnoreCase);
+        showOffers   = isOfferBased || listingMatch is not null;
+
+        // مالِك الإعلان — يُقرَأ دائِماً (لا فَقَط لِلمُسَجَّلين) لِأَنّ
+        // سُمعَتَه مُؤَشِّر ثِقَة يَراه الزائِر أَيضاً.
+        if (listing.Attributes.TryGetValue("owner_id", out var oid))
         {
-            t.Events.Append(Id, new ListingViewed(Id, Auth.UserId, DateTime.UtcNow));
-            await t.SaveChangesAsync();
-            listing.ViewCount++;
-
-            if (Auth.IsAuthenticated)
-            {
-                var favId = Favorite.MakeId(Auth.UserId!.Value, Id);
-                IsFav = (await t.LoadAsync<Favorite>(favId)) is not null;
-            }
-
-            // حُلّ تَسمِيَات السِمات + تَرجَمَة قِيَم SingleSelect/MultiSelect
-            // مِن AttributeDefinitions + AttributeValues المُستَورَدَة.
-            if (listing.Attributes is { Count: > 0 })
-                resolvedAttrs = await DynAttrs.ResolveLabelsAsync(Slug, listing.Attributes);
-
-            // العُروض المُقابِلَة — تَظهَر فَقَط لَو الفِئَة فَتَحَتها
-            // (خاصِّيَّة accepts_offers=true) أَو إن كانَ هُناك عُروض
-            // مَوجودَة. نَجلِب الـ ListingMatch أَيضاً لِمَعرِفَة الحالَة.
-            listing.Attributes.TryGetValue("accepts_offers", out var acceptsOffers);
-            var enabled = string.Equals(acceptsOffers, "true", StringComparison.OrdinalIgnoreCase);
-            isOfferBased = enabled;
-            // مالِك الإعلان — يُقرَأ دائِماً (لا فَقَط لِلمُسَجَّلين) لِأَنّ
-            // سُمعَتَه مُؤَشِّر ثِقَة يَراه الزائِر أَيضاً.
-            if (listing.Attributes.TryGetValue("owner_id", out var oid))
-            {
-                if (Guid.TryParse(oid, out var ownerGuid)) ownerId = ownerGuid;
-                // هَل المُستَخدِم الحاليّ هو صاحِب الإعلان؟ يُستَخدَم لإخفاء
-                // نَموذَج تَقديم العَرض عَنه + إظهار أَزرار القَبول/الرَفض لَه.
-                if (Auth.IsAuthenticated && Auth.UserId.HasValue)
-                    isOwner = oid == Auth.UserId.Value.ToString();
-            }
-
-            if (ownerId is { } owner)
-                ownerReviews = await Reviews.SummaryAsync(Slug, owner);
-            listingMatch = await t.LoadAsync<ACommerce.Kit.Offers.ListingMatch>(Id);
-
-            // اِستَخرِج إحداثيّات pickup/dropoff إن وُجِدَت في الخَصائِص.
-            pickupLat  = ParseDouble(listing.Attributes, "pickup_lat");
-            pickupLng  = ParseDouble(listing.Attributes, "pickup_lng");
-            dropoffLat = ParseDouble(listing.Attributes, "dropoff_lat");
-            dropoffLng = ParseDouble(listing.Attributes, "dropoff_lng");
-            if (enabled || listingMatch is not null)
-            {
-                showOffers = true;
-                var now = DateTime.UtcNow;
-                offers = (await t.Query<ACommerce.Kit.Offers.Offer>()
-                    .Where(o => o.ListingId == Id
-                             && o.Status == ACommerce.Kit.Offers.OfferStatus.Pending)
-                    .ToListAsync())
-                    .Where(o => o.ExpiresAt > now)   // اِستَبعِد المُنتَهيَة
-                    .OrderBy(o => o.Price).ToList();
-            }
+            if (Guid.TryParse(oid, out var ownerGuid)) ownerId = ownerGuid;
+            // هَل المُستَخدِم الحاليّ هو صاحِب الإعلان؟ يُستَخدَم لإخفاء
+            // نَموذَج تَقديم العَرض عَنه + إظهار أَزرار القَبول/الرَفض لَه.
+            if (Auth.IsAuthenticated && Auth.UserId.HasValue)
+                isOwner = oid == Auth.UserId.Value.ToString();
         }
+
+        if (ownerId is { } owner)
+            ownerReviews = await Reviews.SummaryAsync(Slug, owner);
+
+        // اِستَخرِج إحداثيّات pickup/dropoff إن وُجِدَت في الخَصائِص.
+        pickupLat  = ParseDouble(listing.Attributes, "pickup_lat");
+        pickupLng  = ParseDouble(listing.Attributes, "pickup_lng");
+        dropoffLat = ParseDouble(listing.Attributes, "dropoff_lat");
+        dropoffLng = ParseDouble(listing.Attributes, "dropoff_lng");
     }
 
     static double? ParseDouble(Dictionary<string,string> attrs, string key)
