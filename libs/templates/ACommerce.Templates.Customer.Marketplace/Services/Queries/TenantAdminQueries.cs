@@ -134,6 +134,27 @@ public sealed class TenantAdminQueries
         catch { return null; }
     }
 
+    /// <summary>
+    /// <para>تَذكِرَةٌ واحِدَة، مَبنِيَّةٌ مِن <b>مَجرى أَحداثِها</b>.</para>
+    ///
+    /// <para><b>ولِماذا خَرَجَت مِن قائِمَة «الكِتابات الأَربَع»</b>: كانَت
+    /// الصَفحَةُ تَفتَح <c>LightweightSession</c> — جَلسَةً قابِلَةً
+    /// لِلكِتابَة — ثُمَّ <b>لا تَكتُب شَيئاً</b>. فَتَصنيفُها كاتِبَةً
+    /// كانَ صَحيحاً بِالشَكل خاطِئاً بِالمَعنى: لا مُعامَلَةَ فيها
+    /// تُقَرَّر، ولا صُندوقَ صادِراً يُتَجاوَز. فَهي **نُقلَةُ مَوضِعٍ
+    /// خالِصَة**، وتُرَحَّل مَعَ القِراءات لا مَعَ الكِتابات.</para>
+    /// </summary>
+    public async Task<Ticket?> TicketAsync(
+        string tenantSlug, Guid id, CancellationToken ct = default)
+    {
+        try
+        {
+            await using var s = _store.QuerySession(tenantSlug);
+            return await s.Events.AggregateStreamAsync<Ticket>(id, token: ct);
+        }
+        catch { return null; }
+    }
+
     /// <summary>لَوحَةُ تَحَكُّم التَطبيق — سَبعُ قِراءات في جَلسَةٍ
     /// واحِدَة، وكُلٌّ بِسُقوطِها كَما كانَت في الصَفحَة.</summary>
     public async Task<AppConsole> ConsoleAsync(

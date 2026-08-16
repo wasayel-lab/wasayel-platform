@@ -5,9 +5,8 @@
 #   R = تَفتَح QuerySession فَقَط — تَسَرُّب استِعلام.
 #   W = تَفتَح LightweightSession أَو تَستَدعي SaveChangesAsync —
 #       خارِج المُعامَلَة وخارِج الصُندوق الصادِر.
-SESSION_FILES|4
-WRITE_FILES|4
+SESSION_FILES|3
+WRITE_FILES|3
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/ChatRoom.razor|W
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Notifications.razor|W
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppTicketDetail.razor|W
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantListingDetail.razor|W
