@@ -5,6 +5,7 @@
 @inject Services.Deals.DealsService Deals
 @inject ACommerce.Kit.Reviews.ReviewsService Reviews
 @inject IHttpContextAccessor HttpCtx
+@inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Deals
 
 @*
@@ -16,19 +17,19 @@
 <div class="acs-page">
     @if (!Auth.IsAuthenticated)
     {
-        <AcEmptyState IconName="package" Title="تَحتاج تَسجيل دُخول"
-                      ActionLabel="دُخول" ActionHref="@AuthSession.LinkFor(Slug, Role, "login")" />
+        <AcEmptyState IconName="package" Title="@L["deals.detail.need_login"]"
+                      ActionLabel="@L["shell.nav.login"]" ActionHref="@AuthSession.LinkFor(Slug, Role, "login")" />
     }
     else if (deal is null)
     {
-        <AcEmptyState IconName="info" Title="الصَّفقَة غَير مَوجودَة" />
+        <AcEmptyState IconName="info" Title="@L["deals.detail.not_found"]" />
     }
     else
     {
         <a href="@AuthSession.LinkFor(Slug, Role, "deals")"
-           style="color:var(--ac-text-muted);text-decoration:none;font-size:13px;">← صَفقاتي</a>
+           style="color:var(--ac-text-muted);text-decoration:none;font-size:13px;">@L.Markup("deals.detail.back")</a>
         <h1 class="acm-wizard-title" style="margin-top:6px;">
-            @(string.IsNullOrEmpty(deal.ListingTitle) ? "صَفقَة" : deal.ListingTitle)
+            @(string.IsNullOrEmpty(deal.ListingTitle) ? L["deals.detail.title_fallback"] : deal.ListingTitle)
         </h1>
 
         @* ─── «دَورُكَ الآن» ────────────────────────────────────────────
@@ -53,32 +54,31 @@
                     <strong class="acm-turn-title">
                         @if (mine)
                         {
-                            <text>دَورُكَ الآن</text>
+                            <text>@L.Markup("deals.detail.turn_mine")</text>
                         }
                         else
                         {
-                            <text>بانتِظار @Services.Ux.DealTurnView.ActorLabelAr(turn.ActorKey, mySide)</text>
+                            <text>@L.Markup("deals.detail.turn_waiting") @Services.Ux.DealTurnView.ActorLabelAr(turn.ActorKey, mySide)</text>
                         }
                     </strong>
                     <span class="acm-turn-text">
                         @if (acceptCase)
                         {
-                            <text>المَطلوب مِنكَ: قَبول العَرض لِتَبدَأ الصَّفقَة.</text>
+                            <text>@L.Markup("deals.detail.turn_accept_hint")</text>
                         }
                         else if (turn.NextStage is { } ns2)
                         {
-                            <text>الخُطوَة التالِيَة: @DealsPolicy.LabelAr(ns2)</text>
+                            <text>@L.Markup("deals.detail.next_step") @DealsPolicy.LabelAr(ns2)</text>
                         }
                         else
                         {
-                            <text>لا خُطوَة تالِيَة في هذا النَّمَط.</text>
+                            <text>@L.Markup("deals.detail.no_next_step")</text>
                         }
                     </span>
                 </span>
                 @if (mine)
                 {
-                    <a class="ac-btn ac-btn-primary ac-btn-sm acm-turn-cta" href="#deal-action">
-                        إلى الإجراء
+                    <a class="ac-btn ac-btn-primary ac-btn-sm acm-turn-cta" href="#deal-action">@((MarkupString)"\n                        ")@L.Markup("deals.detail.to_action")@((MarkupString)"\n                    ")
                     </a>
                 }
             </div>
@@ -117,19 +117,19 @@
         <AcCard>
             <ChildContent>
                 <div style="display:flex;justify-content:space-between;font-size:14px;">
-                    <span style="color:var(--ac-text-muted);">المَبلَغ</span>
-                    <strong>@deal.AmountSar.ToString("N0") ر.س</strong>
+                    <span style="color:var(--ac-text-muted);">@L.Markup("deals.detail.amount_label")</span>
+                    <strong>@((MarkupString)ACommerce.Kit.Culture.Money.Format(deal.AmountSar))</strong>
                 </div>
                 @if (deal.CommissionSar is { } c)
                 {
                     <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px;">
-                        <span style="color:var(--ac-text-muted);">عمولة المَنصَّة</span>
-                        <span>@c.ToString("N2") ر.س</span>
+                        <span style="color:var(--ac-text-muted);">@L.Markup("deals.detail.commission_label")</span>
+                        <span>@c.ToString("N2") @((MarkupString)ACommerce.Kit.Culture.Money.Unit())</span>
                     </div>
                 }
                 <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px;">
-                    <span style="color:var(--ac-text-muted);">الطَّرَف الآخَر</span>
-                    <span>@(isInitiator ? (deal.CounterpartyName ?? "بانتِظار القَبول") : deal.InitiatorName)</span>
+                    <span style="color:var(--ac-text-muted);">@L.Markup("deals.detail.other_party")</span>
+                    <span>@(isInitiator ? (deal.CounterpartyName ?? L["deals.detail.awaiting_accept"]) : deal.InitiatorName)</span>
                 </div>
             </ChildContent>
         </AcCard>
@@ -142,66 +142,66 @@
             @if (deal.Stage == DealStage.Offered && isListingOwner && !isInitiator)
             {
                 <form method="post" action="@($"/{Slug}/deals/{deal.Id}/accept")">
-                    <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="قَبول العَرض" />
+                    <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="@L["deals.detail.accept_offer"]" />
                 </form>
             }
             else if (canAdvance && nextStage is { } ns)
             {
                 <form method="post" action="@($"/{Slug}/deals/{deal.Id}/advance")">
                     <AcButton Type="submit" Variant="primary" Size="lg" Block="true"
-                              Text="@($"تَأكيد: {DealsPolicy.LabelAr(ns)}")" />
+                              Text="@($"{L["deals.detail.confirm_prefix"]} {DealsPolicy.LabelAr(ns)}")" />
                 </form>
             }
             else if (nextStage is { } waiting)
             {
                 <AcAlert Variant="info"
-                         Message="@($"بانتِظار الطَّرَف الآخَر لِـ: {DealsPolicy.LabelAr(waiting)}")" />
+                         Message="@($"{L["deals.detail.awaiting_other"]} {DealsPolicy.LabelAr(waiting)}")" />
             }
 
             <form method="post" action="@($"/{Slug}/deals/{deal.Id}/cancel")" style="margin-top:8px;">
                 <input name="reason" class="ac-input" placeholder="سَبَب الإلغاء (اختياريّ)" style="margin-bottom:6px;" />
-                <AcButton Type="submit" Variant="ghost" Block="true" Text="إلغاء الصَّفقَة" />
+                <AcButton Type="submit" Variant="ghost" Block="true" Text="@L["deals.detail.cancel_action"]" />
             </form>
         }
         else if (deal.Status == DealStatus.Completed)
         {
-            <AcAlert Variant="success" Message="اكتَمَلَت الصَّفقَة بِنَجاح" />
+            <AcAlert Variant="success" Message="@L["deals.detail.completed"]" />
             @if (!alreadyReviewed && deal.CounterpartyId is not null)
             {
                 <AcCard>
                     <ChildContent>
-                        <h3 style="margin:0 0 10px;">قَيِّم الطَّرَف الآخَر</h3>
+                        <h3 style="margin:0 0 10px;">@L.Markup("deals.detail.review_title")</h3>
                         <form method="post" action="@($"/{Slug}/deals/{deal.Id}/review")">
-                            <AcField Label="التَّقييم">
+                            <AcField Label="@L["deals.detail.review_rating"]">
                                 <select name="rating" class="ac-input">
-                                    <option value="5">٥ نُجوم — مُمتاز</option>
-                                    <option value="4">٤ نُجوم</option>
-                                    <option value="3">٣ نُجوم</option>
-                                    <option value="2">نَجمَتان</option>
-                                    <option value="1">نَجمَة</option>
+                                    <option value="5">@L.Markup("deals.detail.rating_5")</option>
+                                    <option value="4">@L.Markup("deals.detail.rating_4")</option>
+                                    <option value="3">@L.Markup("deals.detail.rating_3")</option>
+                                    <option value="2">@L.Markup("deals.detail.rating_2")</option>
+                                    <option value="1">@L.Markup("deals.detail.rating_1")</option>
                                 </select>
                             </AcField>
-                            <AcField Label="تَعليق">
+                            <AcField Label="@L["deals.detail.review_comment"]">
                                 <textarea name="body" class="ac-input" rows="2" placeholder="كَيف كانَت التَّجرِبَة؟"></textarea>
                             </AcField>
-                            <AcButton Type="submit" Variant="primary" Block="true" Text="إرسال التَّقييم" />
+                            <AcButton Type="submit" Variant="primary" Block="true" Text="@L["deals.detail.review_submit"]" />
                         </form>
                     </ChildContent>
                 </AcCard>
             }
             else if (alreadyReviewed)
             {
-                <AcAlert Variant="info" Message="شُكراً، تَمّ تَسجيل تَقييمكَ." />
+                <AcAlert Variant="info" Message="@L["deals.detail.review_thanks"]" />
             }
         }
         else
         {
             <AcAlert Variant="@(deal.Status == DealStatus.Disputed ? "warning" : "danger")"
-                     Message="@($"حالَة الصَّفقَة: {deal.Status}" + (string.IsNullOrEmpty(deal.CancelReason) ? "" : $" — {deal.CancelReason}"))" />
+                     Message="@($"{L["deals.detail.status_prefix"]} {deal.Status}" + (string.IsNullOrEmpty(deal.CancelReason) ? "" : $" — {deal.CancelReason}"))" />
         }
 
         @* السِجِلّ *@
-        <AcSectionHeader Title="السِجِلّ" />
+        <AcSectionHeader Title="@L["deals.detail.timeline_title"]" />
         <div class="acm-cat-list">
             @foreach (var e in deal.Timeline.OrderByDescending(x => x.At))
             {
@@ -259,14 +259,17 @@
         alreadyReviewed = await Reviews.HasReviewedAsync(Slug, uid, Id);
     }
 
-    static string FormatEvent(DealEvent e) => e.Action switch
+    // ‏لَيسَت `static` بَعدَ اليَوم: قيَمُها صارَت مِن `L` وهو مَحقونٌ
+    // ‏scoped — ودالَّةٌ ساكِنَة لا تَبلُغُه. المُستَهلِكُ واحِد
+    // (`@FormatEvent(e)` في الحَلَقَة)، فَالتَبديلُ بِلا أَثَرٍ سِواه.
+    string FormatEvent(DealEvent e) => e.Action switch
     {
-        "created" => "بَدأَت الصَّفقَة",
-        "assigned" => "قُبِلَ العَرض",
+        "created" => L["deals.detail.event_created"],
+        "assigned" => L["deals.detail.event_assigned"],
         "advanced" => $"{DealsPolicy.LabelAr(e.StageBefore)} ← {DealsPolicy.LabelAr(e.StageAfter)}",
-        "cancelled" => "أُلغِيَت",
-        "disputed" => "نِزاع",
-        "note" => e.Note ?? "مُلاحَظَة",
+        "cancelled" => L["deals.detail.event_cancelled"],
+        "disputed" => L["deals.detail.event_disputed"],
+        "note" => e.Note ?? L["deals.detail.event_note"],
         _ => e.Action
     };
 }

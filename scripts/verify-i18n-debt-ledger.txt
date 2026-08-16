@@ -1,7 +1,7 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|827
-DISTINCT|591
+TOTAL|788
+DISTINCT|566
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|40
@@ -30,7 +30,7 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/EmailLo
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Favorites.razor|11
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Landing.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Login.razor|14
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyDealDetail.razor|41
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyDealDetail.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyDeals.razor|14
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyListings.razor|8
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyOffers.razor|16
