@@ -113,6 +113,13 @@ await using (var scope = app.Services.CreateAsyncScope())
     if (Environment.GetEnvironmentVariable("INCUBATOR_SAMPLE_SEED") == "1")
         await IncubatorSampleSeeder.RunAsync(scope.ServiceProvider);
 
+    // سَلَّةُ **عَيِّنَةِ بِنيَة** — تَفتَح جِسمَ مُعالِج الشِراء الثُلاثيّ
+    // الَّذي لا يُصَيَّر بِلا سَلَّة، وكانَ في القاعِدَة صِفرُ سَلَّة.
+    // نَفسُ الاصطِلاح: ‏ENV CART_SAMPLE_SEED=1، وإلّا صِفرُ قِراءَةٍ
+    // وصِفرُ كِتابَة. التَفصيلُ في `CartSampleSeeder`.
+    if (Environment.GetEnvironmentVariable("CART_SAMPLE_SEED") == "1")
+        await CartSampleSeeder.RunAsync(scope.ServiceProvider);
+
     // مَنح صَلاحِيَّة مُشرِف المَنصَّة صَراحَةً — ENV PLATFORM_ADMIN_PHONE،
     // وخارِج التَطوير يَلزَم PLATFORM_ADMIN_BOOTSTRAP=1 مَعَه.
     var granted = await PlatformAdminSeeder.RunAsync(docStore, app.Environment);

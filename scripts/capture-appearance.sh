@@ -386,7 +386,22 @@ GUARDED_PAGES=(
   # اليَوم هو «السَّلَّة فارِغَة»: **صِفر سَلَّة في القاعِدَة كُلِّها**
   # (مَقيس). وجِسمُ المُعالِج الثُلاثيّ الخُطوات يَحتاج **بَياناتٍ**
   # لا جَلسَة — يُعلَن ولا يُرَحَّل بِلا بُرهان.
+  # ‏2026-08-16، المَوجَة العاشِرَة — **البَذرَةُ تَفتَح الجِسم**.
+  # ‏`CartSampleSeeder` (خَلفَ `CART_SAMPLE_SEED=1`) يَبذُر سَلَّةَ
+  # عَيِّنَةٍ بِنيَوِيَّة لِصاحِبِ مِلَفّ `member`، فَتَنقَلِب هاتانِ
+  # الصَفحَتان مِن «السَّلَّة فارِغَة» إلى الجِسم — وهو أَثَرُ بَياناتٍ
+  # صَحيح **أُعيدَ تَثبيتُه مُعلَناً**، لا انحِدار.
+  #
+  # وخُطُواتُ المُعالِج الثَلاث لا يَجتَمِعُ مِنها في طَلَبٍ واحِدٍ إلّا
+  # واحِدَة (`?step=`)، والثالِثَةُ فَرعان بِـ`pay`. وقيَمُ النَموذَج
+  # في العُنوان **لاتينِيَّةٌ مُعَلَّمَةٌ عَيِّنَةً** لِأَنَّها تُطبَع في
+  # الصَفحَة فَتَدخُل بايتات الأَساس.
   "member-checkout:member:/{member}/checkout"
+  "member-checkout-pay:member:/{member}/checkout?step=2&name=SAMPLE&phone=0512345678&addr=SAMPLE-ADDRESS"
+  "member-checkout-confirm-cash:member:/{member}/checkout?step=3&name=SAMPLE&phone=0512345678&addr=SAMPLE-ADDRESS&pay=cash"
+  "member-checkout-confirm-card:member:/{member}/checkout?step=3&name=SAMPLE&phone=0512345678&addr=SAMPLE-ADDRESS&pay=card"
+  # وفَرعُ «السَّلَّة فارِغَة» لا يَضيع: `member2` بِلا سَلَّة.
+  "member2-checkout-empty:member2:/{member}/checkout"
   "member-cart:member:/{member}/cart"
 
   # ── جيرانٌ يَبلُغُهُم نَفسُ المِلَفّ في نَفسِ الجَولَة ──────────────
