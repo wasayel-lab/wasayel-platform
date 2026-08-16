@@ -1,5 +1,6 @@
 @page "/admin/tenants/{slug}/users"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantAdminQueries TenantAdmin
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard Guard
 
 @*
@@ -112,16 +113,10 @@
         // التَّصيير. القَرار مَحفوظ لِلطَّلَب، فَنِداء RequireTenantAdmin
         // بَعدَه لا يُكَلِّف استِعلاماً ثانِياً.
         if (!await Guard.CanAdministerAsync(Slug)) return;
-        await using var g = Store.QuerySession();
-        tenant = await g.LoadAsync<Tenant>(Slug);
+        tenant = await Tenants.FindAsync(Slug);
         if (tenant is null) return;
         hasAdminRole = tenant.Roles.Any(r => r.CatalogSlug == "tenant_admin");
-
-        await using var s = Store.QuerySession(Slug);
-        users = (await s.Query<User>().ToListAsync())
-            .OrderBy(u => u.ActiveRole != "tenant_admin")
-            .ThenByDescending(u => u.CreatedAt)
-            .ToList();
+        users = (await TenantAdmin.UsersAsync(Slug)).ToList();
     }
 
     string RoleLabel(string slug)

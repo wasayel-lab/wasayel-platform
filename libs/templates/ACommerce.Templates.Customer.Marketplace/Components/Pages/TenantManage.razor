@@ -1,6 +1,8 @@
 @page "/{slug}/manage"
 @page "/{slug}/r/{role}/manage"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantAdminQueries TenantAdmin
 @inject AuthSession Auth
 
 @*
@@ -100,20 +102,21 @@ else
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
-        await using var g = Store.QuerySession();
-        tenant = await g.LoadAsync<Tenant>(Slug);
+        tenant = await Tenants.FindAsync(Slug);
         if (tenant is null) return;
 
-        await using var s = Store.QuerySession(Slug);
-        var me = await s.LoadAsync<User>(Auth.UserId!.Value);
+        // القَرارُ يَبقى هُنا: يَقرَأ أَدوارَ المُستَأجِر ودَورَ الـURL
+        // ودَورَ المُستَخدِم مَعاً — تَأليفٌ لا استِعلام. والدَورُ
+        // المَحفوظُ وَحدَه هُوَ ما يُسأَل عَنه.
+        var storedRole = await Accounts.ActiveRoleAsync(Slug, Auth.UserId!.Value);
         canManage = ACommerce.Kit.Roles.RolePermissions.Has(
-            tenant.Roles, Role ?? me?.ActiveRole, "tenant.manage");
+            tenant.Roles, Role ?? storedRole, "tenant.manage");
         if (!canManage) return;
 
-        listingsCount = await s.Query<Listing>().CountAsync(l => !l.IsDeleted);
-        convsCount    = await s.Query<Conversation>().CountAsync();
-        offersCount   = await s.Query<ACommerce.Kit.Offers.Offer>()
-                                .CountAsync(o => o.Status == ACommerce.Kit.Offers.OfferStatus.Pending);
-        usersCount    = await s.Query<User>().CountAsync();
+        var overview  = await TenantAdmin.OverviewAsync(Slug);
+        listingsCount = overview.Listings;
+        convsCount    = overview.Conversations;
+        offersCount   = overview.PendingOffers;
+        usersCount    = overview.Users;
     }
 }

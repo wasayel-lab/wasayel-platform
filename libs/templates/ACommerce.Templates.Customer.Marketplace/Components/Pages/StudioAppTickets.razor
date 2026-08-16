@@ -1,6 +1,7 @@
 @page "/studio/apps/{slug}/tickets"
 @inject Services.Incubator.StudioAuth Auth
-@inject Marten.IDocumentStore Store
+@inject Services.Queries.TenantDirectory Tenants
+@inject Services.Queries.TenantAdminQueries TenantAdmin
 @using ACommerce.Kit.Tenants
 @using ACommerce.Kit.Support
 
@@ -77,13 +78,10 @@
     {
         Auth.Load();
         if (!Auth.IsAuthenticated) return;
-        await using var qs = Store.QuerySession();
-        tenant = await qs.LoadAsync<Tenant>(Slug);
+        tenant = await Tenants.FindAsync(Slug);
         if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) { tenant = null; return; }
         if (tenant is null) return;
-        await using var ts = Store.QuerySession(Slug);
-        try { tickets = (await ts.Query<Ticket>().Take(200).ToListAsync()).ToList(); }
-        catch { /* جَدوَل غَير مُهَيَّأ */ }
+        tickets = await TenantAdmin.AllTicketsAsync(Slug) ?? tickets;
     }
 
     static string StatusBg(string s) => s switch

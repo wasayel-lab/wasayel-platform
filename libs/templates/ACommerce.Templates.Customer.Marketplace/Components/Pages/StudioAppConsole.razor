@@ -1,6 +1,7 @@
 @page "/studio/apps/{slug}/console"
 @inject Services.Incubator.StudioAuth Auth
-@inject Marten.IDocumentStore Store
+@inject Services.Queries.TenantDirectory Tenants
+@inject Services.Queries.TenantAdminQueries TenantAdmin
 @using ACommerce.Kit.Tenants
 @using ACommerce.Kit.Auth
 @using ACommerce.Kit.Support
@@ -147,22 +148,21 @@
     {
         Auth.Load();
         if (!Auth.IsAuthenticated) return;
-        await using var gs = Store.QuerySession();
-        tenant = await gs.LoadAsync<Tenant>(Slug);
+        tenant = await Tenants.FindAsync(Slug);
         if (tenant is null || tenant.OwnerUserId != Auth.UserId!.Value) { tenant = null; return; }
 
-        await using var ts = Store.QuerySession(Slug);
-        userCount     = await Safe(() => ts.Query<User>().CountAsync());
-        listingCount  = await Safe(() => ts.Query<Listing>().Where(l => !l.IsDeleted).CountAsync());
-        plans         = await SafeList(() => ts.Query<Plan>().OrderBy(p => p.Price).Take(10).ToListAsync());
-        planCount     = plans?.Count ?? 0;
-        recentTickets = await SafeList(() => ts.Query<Ticket>().OrderByDescending(t => t.CreatedAt).Take(5).ToListAsync());
-        totalTicketCount = await Safe(() => ts.Query<Ticket>().CountAsync());
-        openTicketCount  = await Safe(() => ts.Query<Ticket>().Where(t => t.Status == "open").CountAsync());
-        recentNotifs  = await SafeList(() => ts.Query<Notification>().OrderByDescending(n => n.At).Take(8).ToListAsync());
+        // سَبعُ قِراءات بِسُقوطِها انتَقَلَت إلى
+        // TenantAdminQueries.ConsoleAsync — و`null` ما زالَت تَعني
+        // «جَدوَل غَير مُهَيَّأ» لا «فارِغ».
+        var console      = await TenantAdmin.ConsoleAsync(Slug);
+        userCount        = console.Users;
+        listingCount     = console.Listings;
+        plans            = console.Plans;
+        planCount        = plans?.Count ?? 0;
+        recentTickets    = console.RecentTickets;
+        totalTicketCount = console.TotalTickets;
+        openTicketCount  = console.OpenTickets;
+        recentNotifs     = console.RecentNotifications;
     }
 
-    static async Task<int> Safe(Func<Task<int>> fn) { try { return await fn(); } catch { return 0; } }
-    static async Task<List<T>?> SafeList<T>(Func<Task<IReadOnlyList<T>>> fn)
-    { try { return (await fn()).ToList(); } catch { return null; } }
 }
