@@ -1,14 +1,13 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|254
-DISTINCT|201
+TOTAL|191
+DISTINCT|160
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|37
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/FlowExplainer.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/GatedPage.razor|9
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Layout/MainLayout.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AgentChatPanel.razor|33
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AuditLogPage.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/CreateTenant.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorFixturesPage.razor|1
@@ -24,7 +23,6 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyDealD
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MySearches.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Notifications.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/RolePicker.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAgent.razor|30
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppAttributes.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppCategories.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppDealDetail.razor|4

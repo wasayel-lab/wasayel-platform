@@ -7,6 +7,7 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor Executor
 @inject IHttpContextAccessor HttpCtx
 @inject IJSRuntime JS
+@inject L L
 
 @*
     وَكيل التَّطبيقات — مِرآة AgentChat داخِل إطار الستوديو.
@@ -23,29 +24,27 @@
     _userId مَرَّة واحِدَة هُناك ثُمَّ نَستَخدِمه في كُلّ نِداء.
 *@
 
-<StudioShell Title="وَكيل التَّطبيقات" Active="home">
+<StudioShell Title="@L["studio.agent.title"]" Active="home">
     <TopBarActions>
-        <a class="st-btn st-btn-ghost" href="/studio">← لوحَتي</a>
+        <a class="st-btn st-btn-ghost" href="/studio">@L.Markup("studio.agent.back")</a>
     </TopBarActions>
     <ChildContent>
         @if (!_authChecked)
         {
-            <div class="st-card">جارٍ التَّحَقُّق…</div>
+            <div class="st-card">@L.Markup("studio.agent.checking")</div>
         }
         else if (_userId == Guid.Empty)
         {
             <div class="st-card">
-                <p>يَجِب تَسجيل الدُخول.</p>
-                <a class="st-btn st-btn-primary" href="/studio/auth">دُخول</a>
+                <p>@L.Markup("studio.agent.need_login")</p>
+                <a class="st-btn st-btn-primary" href="/studio/auth">@L.Markup("studio.agent.login")</a>
             </div>
         }
         else
         {
             <div class="studio-page-head">
-                <h1><AcIcon Name="message" Size="22" /> وَكيل التَّطبيقات</h1>
-                <p>اطلُب مِن الوَكيل تَعديل تَطبيقاتِكَ: فِئات، أَدوار، مُدُن، خَصائِص، PWA.
-                   كُلّ كِتابَة تُعرَض لِلمُراجَعَة قَبل التَّطبيق، وَكُلّ أَداة تَفحَص
-                   ملكيَّتَكَ لِلمَتجَر قَبل التَّنفيذ.</p>
+                <h1><AcIcon Name="message" Size="22" /> @L.Markup("studio.agent.title")</h1>
+                <p>@L.Markup("studio.agent.help")</p>
                 <span style="font-size:11px;color:var(--st-muted);direction:ltr;">
                     @Agent.ProviderName / @Agent.ModelName
                 </span>
@@ -53,8 +52,7 @@
 
             @if (!Agent.IsConfigured)
             {
-                <div class="st-chip st-chip-warning" style="margin-bottom:14px;">
-                    لا يوجَد مِفتاح @Agent.ProviderName مَضبوط. أَضِف Agent:ApiKey في الإعدادات.
+                <div class="st-chip st-chip-warning" style="margin-bottom:14px;">@((MarkupString)"\n                    ")@L.Markup("agent.key.missing_prefix") @Agent.ProviderName @L.Markup("agent.key.missing_mid") Agent:ApiKey @L.Markup("studio.agent.key_suffix")@((MarkupString)"\n                ")
                 </div>
             }
 
@@ -63,7 +61,7 @@
                 {
                     <div class="acm-agent-empty">
                         <span><AcIcon Name="message" Size="48" /></span>
-                        <p>ابدَأ بِسُؤال أَو طَلَب — مَثَلاً: «أَضِف فِئَة «بُرغَر» إلى أوردر»</p>
+                        <p>@L.Markup("studio.agent.empty")</p>
                     </div>
                 }
                 else
@@ -87,7 +85,7 @@
                                             <span class="st-chip">@StatusLabel(turn.Tool.Status)</span>
                                         </div>
                                         <details class="acm-agent-tool-input">
-                                            <summary>عَرض المُعامِلات (JSON)</summary>
+                                            <summary>@L.Markup("agent.chat.params_toggle")</summary>
                                             <pre>@FormatJson(turn.Tool.InputJson)</pre>
                                         </details>
                                         @if (!string.IsNullOrEmpty(turn.Tool.Result))
@@ -101,12 +99,12 @@
                                                 <button type="button" class="st-btn st-btn-primary"
                                                         @onclick="() => ApplyAsync(toolIdCapture)"
                                                         disabled="@isWorking">
-                                                    <AcIcon Name="check" Size="14" /> تَطبيق
+                                                    <AcIcon Name="check" Size="14" /> @L.Markup("agent.chat.apply")@((MarkupString)"\n                                                ")
                                                 </button>
                                                 <button type="button" class="st-btn st-btn-ghost"
                                                         @onclick="() => RejectAsync(toolIdCapture)"
                                                         disabled="@isWorking">
-                                                    <AcIcon Name="x" Size="14" /> رَفض
+                                                    <AcIcon Name="x" Size="14" /> @L.Markup("agent.chat.reject")@((MarkupString)"\n                                                ")
                                                 </button>
                                             </div>
                                         }
@@ -122,8 +120,7 @@
                     <div class="acm-agent-turn is-assistant">
                         <div class="acm-agent-avatar"><AcIcon Name="message" Size="24" /></div>
                         <div class="acm-agent-body">
-                            <div class="acm-agent-text" style="font-style:italic;color:var(--st-muted);">
-                                جارٍ التَّفكير…
+                            <div class="acm-agent-text" style="font-style:italic;color:var(--st-muted);">@((MarkupString)"\n                                ")@L.Markup("agent.chat.thinking")@((MarkupString)"\n                            ")
                             </div>
                         </div>
                     </div>
@@ -134,16 +131,16 @@
                 <textarea @bind="newMessage" @bind:event="oninput" rows="3"
                           class="st-input"
                           disabled="@(isWorking || !Agent.IsConfigured)"
-                          placeholder="اُكتُب طَلَبَك… مَثَلاً: عَدِّل لَون مَتجَري إلى أَزرَق"></textarea>
+                          placeholder="@L["studio.agent.placeholder"]"></textarea>
                 <div style="display:flex;flex-direction:column;gap:6px;">
                     <button type="button" class="st-btn st-btn-primary"
                             @onclick="SendAsync"
                             disabled="@(isWorking || !Agent.IsConfigured || string.IsNullOrWhiteSpace(newMessage))">
-                        <AcIcon Name="send" Size="16" /> إرسال
+                        <AcIcon Name="send" Size="16" /> @L.Markup("agent.chat.send")@((MarkupString)"\n                    ")
                     </button>
                     <button type="button" class="st-btn st-btn-ghost"
                             @onclick="ResetAsync" disabled="@isWorking">
-                        <AcIcon Name="x" Size="14" /> مَسح
+                        <AcIcon Name="x" Size="14" /> @L.Markup("studio.agent.clear")@((MarkupString)"\n                    ")
                     </button>
                 </div>
             </div>
@@ -256,24 +253,25 @@
         try { await JS.InvokeVoidAsync("scrollAgentToBottom"); } catch { /* ignore */ }
     }
 
-    static string ToolLabel(string name) => name switch
+    // غَير ساكِنَة: القيَم في المَعجَم، والساكِنَة لا تَبلُغ `L`.
+    string ToolLabel(string name) => name switch
     {
-        "create_tenant"  => "إنشاء مَتجَر",
-        "set_categories" => "تَحديث الفِئات",
-        "set_branding"   => "تَحديث الهُويَّة",
-        "set_regions"    => "تَحديث المُدُن",
-        "set_roles"      => "تَحديث الأَدوار",
-        "set_attributes" => "تَحديث الخَصائِص",
-        "set_pwa"        => "تَحديث PWA",
+        "create_tenant"  => L["agent.tool.create_tenant"],
+        "set_categories" => L["agent.tool.set_categories"],
+        "set_branding"   => L["agent.tool.set_branding"],
+        "set_regions"    => L["agent.tool.set_regions"],
+        "set_roles"      => L["agent.tool.set_roles"],
+        "set_attributes" => L["agent.tool.set_attributes"],
+        "set_pwa"        => L["agent.tool.set_pwa"],
         _ => name
     };
 
-    static string StatusLabel(string status) => status switch
+    string StatusLabel(string status) => status switch
     {
-        "applied"  => "تَمّ",
-        "rejected" => "مَرفوض",
-        "error"    => "خَطَأ",
-        _          => "قَيد المُراجَعَة"
+        "applied"  => L["agent.status.applied"],
+        "rejected" => L["agent.status.rejected"],
+        "error"    => L["agent.status.error"],
+        _          => L["agent.status.pending"]
     };
 
     static string StatusClass(string status) => status switch
