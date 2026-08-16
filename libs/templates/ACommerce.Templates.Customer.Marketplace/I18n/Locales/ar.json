@@ -1548,5 +1548,29 @@
 
   "shell.nav.explore_full": "الاستِكشاف",
 
-  "shell.nav.nav_label": "التَّنَقُّل"
+  "shell.nav.nav_label": "التَّنَقُّل",
+
+  "offers.submit.locating": "جارٍ التِقاط مَوقِعكَ…",
+  "pwa.android.retry_hint": "إن لَم يَظهَر، اِنتَظِر ثَوانٍ بَعد تَصَفُّحك ثُمَّ أَعِد المحاوَلَة.",
+  "pwa.android.step_install": "اِختَر «تَثبيت التَّطبيق» أَو «إضافَة إلى الشاشَة الرَئيسِيَّة»",
+  "pwa.android.step_menu": "اِضغَط ⋮ في أَعلى Chrome",
+  "pwa.android.title": "عَلى Android:",
+  "pwa.chromium.retry_hint": "إن لَم تَظهَر، تَصَفَّح لِثَوانٍ ثُمَّ أَعِد المحاوَلَة.",
+  "pwa.chromium.step_find": "اِبحَث عَن أَيقونَة التَّثبيت",
+  "pwa.chromium.step_find_in": "في شَريط العُنوان",
+  "pwa.chromium.step_menu": "أَو افتَح القائِمَة (⋮) واختَر «تَثبيت…»",
+  "pwa.chromium.title": "عَلى Chrome / Edge:",
+  "pwa.dialog.close": "حَسَناً",
+  "pwa.dialog.title": "تَثبيت التَّطبيق",
+  "pwa.ios.step_add_home": "اِختَر «إضافَة إلى الشاشَة الرَئيسِيَّة»",
+  "pwa.ios.step_confirm": "اِضغَط «إضافَة» لِيَظهَر التَّطبيق مُستَقِلّاً",
+  "pwa.ios.step_share": "اِضغَط زِرّ المُشارَكَة",
+  "pwa.ios.step_share_in": "في Safari",
+  "pwa.ios.title": "عَلى iPhone / iPad:",
+  "pwa.pill.install": "تَثبيت",
+  "pwa.pill.open_app": "افتَح في التَّطبيق",
+  "pwa.unsupported.body": "مُتَصَفِّحك لا يَدعَم تَثبيت PWA. جَرِّب Chrome أَو Edge أَو Safari (iOS).",
+  "pwa.update.ready": "تَحديث جَديد جاهِز",
+  "trips.arrived.checking": "جارٍ التَّحَقُّق…",
+  "trips.arrived.need_location": "يَجِب السَّماح بِالوُصول لِلمَوقِع"
 }

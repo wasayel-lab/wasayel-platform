@@ -8,11 +8,11 @@
 #   وصِنفُها نَفسُ صِنفِ `<option value="عَرَبيّ">` في نَموذَج
 #   التَبليغ: قيمَةٌ تُخَزَّن، لا تَسمِيَةٌ تُقرَأ.
 # ــــــــــــــــــــــــــــــــــــــــــــــــــ
-TOTAL|139
-DISTINCT|110
+TOTAL|111
+DISTINCT|86
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|37
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|9
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/FlowExplainer.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AuditLogPage.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/CreateTenant.razor|4

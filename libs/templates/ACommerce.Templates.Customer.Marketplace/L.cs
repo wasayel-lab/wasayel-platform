@@ -78,4 +78,22 @@ public sealed class L
     /// (‏الخاصِّيَّة تُرَمَّزُها Razor عِندَ الكِتابَة.)</summary>
     public string Format(string key, params object?[] args)
         => string.Format(this[key], args);
+
+    /// <summary><b>المَنفَذ الثالِث — داخِلَ حَرفِيَّةِ سِلسِلَةِ
+    /// JavaScript</b> في عُنصُر <c>&lt;script&gt;</c>:
+    /// <c>'@L.Js("k")'</c>.
+    ///
+    /// <para>ولِماذا ثالِثٌ لا مُشتَقّ مِن الاثنَين: مُحتَوى
+    /// <c>&lt;script&gt;</c> نَصٌّ خام لا يَفُكّ مَراجِعَ HTML، فَـ
+    /// <see cref="this[string]"/> (المُرَمَّز) يَكسِر المَعروض، و
+    /// <see cref="Markup(string)"/> (الخام) يَفتَح الخُروجَ مِن
+    /// الحَرفِيَّة ومِن العُنصُر. والصَحيحُ هُروبُ JavaScript —
+    /// وتَفصيلُ أَبوابِه الثَلاثَة في <see cref="JsText"/>.</para>
+    ///
+    /// <para>و<see cref="MarkupString"/> هُنا لِلسَبَب نَفسِه الَّذي
+    /// جَعَلَها في <see cref="Markup(string)"/>: التَعبيرُ المُرَمَّز
+    /// يُبَدِّل بايتات الصَفحَة بِلا أَن يُبَدِّل حَرفاً مِمّا يُرى.
+    /// وسَلامَتُها هُنا مِن <see cref="JsText.Escape"/> لا مِن
+    /// المُصَيِّر.</para></summary>
+    public MarkupString Js(string key) => new(JsText.Escape(this[key]));
 }

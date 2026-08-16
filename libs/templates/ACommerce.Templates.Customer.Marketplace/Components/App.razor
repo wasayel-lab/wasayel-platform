@@ -291,7 +291,7 @@
             var form = btn.closest('form');
             if (!form) return;
             btn.disabled = true;
-            btn.textContent = 'جارٍ التِقاط مَوقِعكَ…';
+            btn.textContent = '@L.Js("offers.submit.locating")';
             var send = function () { try { form.submit(); } catch (e) { /* ignore */ } };
             if (!navigator.geolocation) { send(); return; }
             navigator.geolocation.getCurrentPosition(
@@ -408,7 +408,7 @@
                 b.innerHTML =
                     '<button type="button" class="ac-pwa-pill-cta">' +
                     '  <span class="ac-pwa-pill-icon">↻</span>' +
-                    '  <span class="ac-pwa-pill-text">تَحديث جَديد جاهِز</span>' +
+                    '  <span class="ac-pwa-pill-text">@L.Js("pwa.update.ready")</span>' +
                     '</button>';
                 b.style.top = 'calc(60px + env(safe-area-inset-top, 0px))';
                 b.querySelector('.ac-pwa-pill-cta').addEventListener('click', function () {
@@ -540,25 +540,25 @@
             function showInstructions() {
                 var body;
                 if (isIOS) {
-                    body = '<p><strong>عَلى iPhone / iPad:</strong></p>' +
+                    body = '<p><strong>@L.Js("pwa.ios.title")</strong></p>' +
                            '<ol style="padding-inline-start:18px;line-height:2;">' +
-                           '<li>اِضغَط زِرّ المُشارَكَة <span style="font-size:18px;">⬆︎</span> في Safari</li>' +
-                           '<li>اِختَر «إضافَة إلى الشاشَة الرَئيسِيَّة»</li>' +
-                           '<li>اِضغَط «إضافَة» لِيَظهَر التَّطبيق مُستَقِلّاً</li></ol>';
+                           '<li>@L.Js("pwa.ios.step_share") <span style="font-size:18px;">⬆︎</span> @L.Js("pwa.ios.step_share_in")</li>' +
+                           '<li>@L.Js("pwa.ios.step_add_home")</li>' +
+                           '<li>@L.Js("pwa.ios.step_confirm")</li></ol>';
                 } else if (isAndroid) {
-                    body = '<p><strong>عَلى Android:</strong></p>' +
+                    body = '<p><strong>@L.Js("pwa.android.title")</strong></p>' +
                            '<ol style="padding-inline-start:18px;line-height:2;">' +
-                           '<li>اِضغَط ⋮ في أَعلى Chrome</li>' +
-                           '<li>اِختَر «تَثبيت التَّطبيق» أَو «إضافَة إلى الشاشَة الرَئيسِيَّة»</li></ol>' +
-                           '<small style="color:#64748b;">إن لَم يَظهَر، اِنتَظِر ثَوانٍ بَعد تَصَفُّحك ثُمَّ أَعِد المحاوَلَة.</small>';
+                           '<li>@L.Js("pwa.android.step_menu")</li>' +
+                           '<li>@L.Js("pwa.android.step_install")</li></ol>' +
+                           '<small style="color:#64748b;">@L.Js("pwa.android.retry_hint")</small>';
                 } else if (isChromiumBased) {
-                    body = '<p><strong>عَلى Chrome / Edge:</strong></p>' +
+                    body = '<p><strong>@L.Js("pwa.chromium.title")</strong></p>' +
                            '<ol style="padding-inline-start:18px;line-height:2;">' +
-                           '<li>اِبحَث عَن أَيقونَة التَّثبيت <span style="font-size:18px;">⊕</span> في شَريط العُنوان</li>' +
-                           '<li>أَو افتَح القائِمَة (⋮) واختَر «تَثبيت…»</li></ol>' +
-                           '<small style="color:#64748b;">إن لَم تَظهَر، تَصَفَّح لِثَوانٍ ثُمَّ أَعِد المحاوَلَة.</small>';
+                           '<li>@L.Js("pwa.chromium.step_find") <span style="font-size:18px;">⊕</span> @L.Js("pwa.chromium.step_find_in")</li>' +
+                           '<li>@L.Js("pwa.chromium.step_menu")</li></ol>' +
+                           '<small style="color:#64748b;">@L.Js("pwa.chromium.retry_hint")</small>';
                 } else {
-                    body = '<p>مُتَصَفِّحك لا يَدعَم تَثبيت PWA. جَرِّب Chrome أَو Edge أَو Safari (iOS).</p>';
+                    body = '<p>@L.Js("pwa.unsupported.body")</p>';
                 }
                 var dlg = document.createElement('div');
                 dlg.id = 'ac-install-dialog';
@@ -567,10 +567,10 @@
                 dlg.innerHTML = '<div style="background:#fff;border-radius:16px;padding:24px;' +
                     'max-width:440px;font-family:Cairo,sans-serif;color:#0f172a;direction:rtl;' +
                     'box-shadow:0 20px 50px rgba(0,0,0,0.3);">' +
-                    '<h3 style="margin:0 0 12px;font-size:18px;">تَثبيت التَّطبيق</h3>' + body +
+                    '<h3 style="margin:0 0 12px;font-size:18px;">@L.Js("pwa.dialog.title")</h3>' + body +
                     '<button id="ac-install-dlg-close" style="margin-top:16px;padding:8px 16px;' +
                     'border:none;border-radius:8px;background:#1d4ed8;color:#fff;font-family:inherit;' +
-                    'font-size:14px;cursor:pointer;">حَسَناً</button></div>';
+                    'font-size:14px;cursor:pointer;">@L.Js("pwa.dialog.close")</button></div>';
                 document.body.appendChild(dlg);
                 dlg.addEventListener('click', function (e) {
                     if (e.target === dlg || e.target.id === 'ac-install-dlg-close') dlg.remove();
@@ -614,12 +614,12 @@
                 var textSpan = w.querySelector('.ac-pwa-pill-text');
                 if (installed) {
                     if (iconSpan) iconSpan.textContent = '↗';
-                    if (textSpan) textSpan.textContent = 'افتَح في التَّطبيق';
+                    if (textSpan) textSpan.textContent = '@L.Js("pwa.pill.open_app")';
                     if (cta) cta.setAttribute('onclick', 'acOpenInApp()');
                     w.classList.add('is-installed');
                 } else {
                     if (iconSpan) iconSpan.textContent = '⤓';
-                    if (textSpan) textSpan.textContent = 'تَثبيت';
+                    if (textSpan) textSpan.textContent = '@L.Js("pwa.pill.install")';
                     if (cta) cta.setAttribute('onclick', 'acInstall()');
                     w.classList.remove('is-installed');
                 }
@@ -657,7 +657,7 @@
             var form = btn.closest('form');
             if (!form || !navigator.geolocation) return;
             btn.disabled = true;
-            btn.textContent = 'جارٍ التَّحَقُّق…';
+            btn.textContent = '@L.Js("trips.arrived.checking")';
             navigator.geolocation.getCurrentPosition(
                 function (p) {
                     form.querySelector('#arrived_lat').value = p.coords.latitude.toFixed(6);
@@ -666,7 +666,7 @@
                 },
                 function () {
                     btn.disabled = false;
-                    btn.textContent = 'يَجِب السَّماح بِالوُصول لِلمَوقِع';
+                    btn.textContent = '@L.Js("trips.arrived.need_location")';
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );

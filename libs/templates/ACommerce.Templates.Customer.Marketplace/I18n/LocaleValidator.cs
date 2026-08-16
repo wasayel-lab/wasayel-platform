@@ -15,7 +15,9 @@ public sealed record LocaleViolation(string Code, string MessageAr);
 /// (بِتَكرارِها) لِأَنّ أَحَد الخُروق الثَلاثَة لا يَظهَر بَعدَ
 /// الطَيّ.</para>
 ///
-/// <para><b>والخُروق السَبعَة، ولِكُلٍّ سَبَبُه</b>:</para>
+/// <para><b>والخُروق الثَمانِيَة، ولِكُلٍّ سَبَبُه</b> — سَبعَةٌ
+/// تُفحَص لِكُلّ مِفتاح، والثامِن <b>مَشروطٌ بِسِياق
+/// القِراءَة</b>:</para>
 /// <list type="bullet">
 ///   <item><c>catalog_arabic_missing</c> — لا مِلَفّ عَرَبيّ أَصلاً؛
 ///   فَلا مَعجَم ولا سُقوط، وكُلّ مِفتاح يُعرَض خاماً.</item>
@@ -34,6 +36,10 @@ public sealed record LocaleViolation(string Code, string MessageAr);
 ///   العَرَبِيَّة: تَحجُب السُقوط وتَرسُم فَراغاً.</item>
 ///   <item><c>value_unsafe_markup</c> — قيمَة تَحمِل
 ///   <c>&lt;</c> أَو <c>&gt;</c> أَو <c>&amp;</c>.</item>
+///   <item><c>value_unsafe_js</c> — قيمَةُ مِفتاحٍ يُقرَأ في سِياق
+///   JavaScript وتَحتاج هُروباً. <b>مَشروطَةٌ بِالسِياق</b>، فَلَها
+///   <see cref="ValidateJs"/> لا سَطرٌ في <see cref="Validate"/> —
+///   والسَبَب في تَوثيقِها.</item>
 /// </list>
 ///
 /// <para><b>ولِماذا الأَخير بِالذات</b>: عُقَد النَصّ تُكتَب عَبر
@@ -117,6 +123,47 @@ public static class LocaleValidator
                         "وعُقَد النَصّ تُكتَب بِلا تَرميز."));
             }
         }
+
+        return v;
+    }
+
+    /// <summary>
+    /// <para><b>الخَرقُ الثامِن — <c>value_unsafe_js</c></b>، وهو
+    /// <b>مَشروطٌ بِالسِياق</b> فَلِذلكَ دالَّةٌ ثانِيَة لا سَطرٌ في
+    /// <see cref="Validate"/>: المِفتاحُ الَّذي يُقرَأ بِـ
+    /// <c>L.Js</c> يُكتَبُ داخِلَ حَرفِيَّةِ سِلسِلَةِ JavaScript،
+    /// فَيَلزَمُه ما لا يَلزَمُ غَيرَه.</para>
+    ///
+    /// <para><b>ولِماذا لا يُعَمَّم على كُلّ المَعجَم</b> — قِياسٌ لا
+    /// ذَوق: ‏33 مِفتاحاً في <c>ar.json</c> تَحمِل سَطراً جَديداً
+    /// وسِتَّةٌ تَحمِل <c>"</c>، وكُلُّها <b>سَليمَةٌ في مَوضِعِها</b>
+    /// (عُقَدُ نَصّ وخَصائِص). فَتَعميمُ الشَرط يَرُدُّ قيَماً صَحيحَة،
+    /// وذاكَ بَوّابَةٌ تُعاقِب الصَواب.</para>
+    ///
+    /// <para><b>والمِعيارُ بايتيّ لا ذَوقيّ</b>: القيمَةُ تُرَدُّ إن
+    /// لَم تَكُن <see cref="JsText.IsVerbatim"/> — أَي إن كانَ
+    /// الهُروبُ سَيُبَدِّلُ فيها بايتاً. وذاكَ يَحرُس شَيئَين بِشَرطٍ
+    /// واحِد: أَنّ المَعروضَ لا يَنكَسِر (الهُروبُ يَعمَل)، وأَنّ
+    /// بايتات الصَفحَة لا تَتَبَدَّل (الهُروبُ لا يَحتاج أَن
+    /// يَعمَل).</para>
+    /// </summary>
+    public static IReadOnlyList<LocaleViolation> ValidateJs(
+        IReadOnlyCollection<string> jsKeys,
+        IReadOnlyDictionary<string, IReadOnlyList<LocaleEntry>> byLang)
+    {
+        var keys = jsKeys.ToHashSet(StringComparer.Ordinal);
+        var v = new List<LocaleViolation>();
+
+        foreach (var lang in byLang.Keys.OrderBy(k => k, StringComparer.Ordinal))
+            foreach (var e in byLang[lang])
+            {
+                if (!keys.Contains(e.Key) || JsText.IsVerbatim(e.Value)) continue;
+
+                v.Add(new("value_unsafe_js",
+                    $"قيمَة «{e.Key}» في «{lang}» تُقرَأ في سِياق JavaScript " +
+                    "وتَحمِل مَحرَفاً يَحتاج هُروباً (‏' \" ` \\ $ < > & أَو سَطراً " +
+                    "جَديداً أَو U+2028/9) — يُبَدِّل بايتات الصَفحَة."));
+            }
 
         return v;
     }
