@@ -2,7 +2,7 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Incubator.FeasibilityAnalysisService Incubator
 @inject Services.Incubator.TenantFromAnalysisFactory Factory
-@inject Marten.IDocumentStore Store
+@inject Services.Queries.TenantDirectory Tenants
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 @using ACommerce.Kit.Tenants
 @using System.Text.Json
@@ -419,10 +419,9 @@
         if (session is { Status: IncubatorStatus.Completed })
         {
             suggestion = Factory.DeriveSuggestion(session);
-            // هَل أُنشِئ تَطبيق مِن هذه الجَلسَة سابِقاً؟
-            await using var qs = Store.QuerySession();
-            var all = (await qs.Query<Tenant>().ToListAsync()).ToList();
-            builtTenant = all.FirstOrDefault(t => t.SourceAnalysisId == Id);
+            // هَل أُنشِئ تَطبيق مِن هذه الجَلسَة سابِقاً؟ — سُؤالٌ عَن
+            // سِجِلّ المُستَأجِرين، فَجَوابُه عِندَ TenantDirectory.
+            builtTenant = await Tenants.FindBySourceAnalysisAsync(Id);
         }
         var u = await TierSvc.GetUserAsync(Auth.UserId!.Value);
         currentTier = u?.Tier ?? "spark";

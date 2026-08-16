@@ -1,4 +1,4 @@
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.StorefrontQueries Storefront
 @inject AuthSession Auth
 @inject L L
 
@@ -89,23 +89,8 @@
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated || Auth.UserId is null) return;
-        await using var s = Store.QuerySession(Slug);
-        var meId = Auth.UserId.Value.ToString();
-        var all = (await s.Query<Listing>().Where(l => !l.IsDeleted).ToListAsync())
-            .Where(l => l.Attributes.TryGetValue("owner_id", out var oid) && oid == meId)
-            .OrderByDescending(l => l.CreatedAt)
-            .Take(8)
+        myRequests = (await Storefront.RiderHomeAsync(Slug, Auth.UserId.Value))
+            .Select(r => (r.Listing, r.PendingOffers, r.Matched))
             .ToList();
-
-        var result = new List<(Listing, int, bool)>(all.Count);
-        foreach (var l in all)
-        {
-            var matched = await s.LoadAsync<ACommerce.Kit.Offers.ListingMatch>(l.Id);
-            var count = await s.Query<ACommerce.Kit.Offers.Offer>()
-                .CountAsync(o => o.ListingId == l.Id
-                              && o.Status == ACommerce.Kit.Offers.OfferStatus.Pending);
-            result.Add((l, count, matched is not null));
-        }
-        myRequests = result;
     }
 }

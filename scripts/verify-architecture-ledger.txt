@@ -5,7 +5,7 @@
 #   R = تَفتَح QuerySession فَقَط — تَسَرُّب استِعلام.
 #   W = تَفتَح LightweightSession أَو تَستَدعي SaveChangesAsync —
 #       خارِج المُعامَلَة وخارِج الصُندوق الصادِر.
-SESSION_FILES|20
+SESSION_FILES|14
 WRITE_FILES|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantAttributes.razor|R
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantRegions.razor|R
@@ -18,12 +18,6 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioA
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppRegions.razor|R
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppTicketDetail.razor|W
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppTickets.razor|R
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudy.razor|R
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantDrivers.razor|R
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantExplore.razor|R
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantListingDetail.razor|W
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantManage.razor|R
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/VendorProfile.razor|R
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/DriverHome.razor|R
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/RiderHome.razor|R
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/SellerHome.razor|R

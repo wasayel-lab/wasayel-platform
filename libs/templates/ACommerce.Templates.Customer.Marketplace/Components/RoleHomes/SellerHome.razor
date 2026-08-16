@@ -1,4 +1,4 @@
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.StorefrontQueries Storefront
 @inject AuthSession Auth
 @inject L L
 
@@ -98,14 +98,11 @@
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated || Auth.UserId is null) return;
-        await using var s = Store.QuerySession(Slug);
-        var meId = Auth.UserId.Value.ToString();
-        myListings = (await s.Query<Listing>().Where(l => !l.IsDeleted).ToListAsync())
-            .Where(l => l.Attributes.TryGetValue("owner_id", out var oid) && oid == meId)
-            .OrderByDescending(l => l.CreatedAt).ToList();
+        var feed = await Storefront.SellerHomeAsync(Slug, Auth.UserId.Value);
+        myListings    = feed.MyListings.ToList();
+        conversations = feed.Conversations;
+        // اشتِقاقٌ لا استِعلام — يَبقى حَيثُ كانَ.
         activeCount = myListings.Count;
         totalViews  = myListings.Sum(l => l.ViewCount);
-        conversations = await s.Query<Conversation>()
-            .CountAsync(c => c.OwnerId == Auth.UserId.Value || c.PartnerId == Auth.UserId.Value);
     }
 }

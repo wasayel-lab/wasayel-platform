@@ -65,4 +65,18 @@ public sealed class TenantDirectory
             .Where(t => t.OwnerUserId == ownerUserId)
             .OrderBy(t => t.CreatedAt).ToListAsync(ct)).ToList();
     }
+
+    /// <summary><b>هَل بُنِيَ مَتجَرٌ مِن هذِه الدِراسَة؟</b> — سُؤالُ
+    /// صَفحَة الدِراسَة في الاستوديو. وهو سُؤالٌ عَن <b>سِجِلّ
+    /// المُستَأجِرين</b> لا عَن الحاضِنَة، فَمَوضِعُه هُنا.
+    /// <b>والفَلتَرَةُ في الذاكِرَة نُقلَةٌ لا اختِيار</b>: الصَفحَةُ
+    /// كانَت تَجلِب الكُلَّ ثُمَّ تَبحَث بِـ<c>FirstOrDefault</c>، ونَقلُها
+    /// إلى شَرطٍ في القاعِدَة تَحسينٌ لَه مَوجَتُه.</summary>
+    public async Task<Tenant?> FindBySourceAnalysisAsync(
+        Guid analysisId, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession();
+        return (await s.Query<Tenant>().ToListAsync(ct))
+            .FirstOrDefault(t => t.SourceAnalysisId == analysisId);
+    }
 }

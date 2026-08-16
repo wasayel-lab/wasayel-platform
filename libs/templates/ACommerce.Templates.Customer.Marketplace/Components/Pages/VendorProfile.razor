@@ -1,6 +1,6 @@
 @page "/{slug}/vendor/{vendorId:guid}"
 @page "/{slug}/r/{role}/vendor/{vendorId:guid}"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.StorefrontQueries Storefront
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
 @using ACommerce.Kit.Reviews
@@ -124,24 +124,11 @@
     protected override async Task OnInitializedAsync()
     {
         if (HttpCtx.HttpContext is { } ctx) { Auth.SetTenant(Slug); Auth.Load(ctx, Slug); }
-        await using var s = Store.QuerySession(Slug);
-        vendor = await s.LoadAsync<User>(VendorId);
+        var page = await Storefront.VendorAsync(Slug, VendorId);
+        vendor = page.Vendor;
         if (vendor is null) return;
-
-        // إعلانات البائِع — مَن owner_id يُساوي vendor.Id (مُخَزَّن في
-        // Listing.Attributes حَسَب نَمَط tenant).
-        var all = await s.Query<Listing>()
-            .Where(l => !l.IsDeleted)
-            .OrderByDescending(l => l.CreatedAt)
-            .Take(50).ToListAsync();
-        listings = all.Where(l =>
-            l.Attributes.TryGetValue("owner_id", out var oid) && oid == VendorId.ToString()
-        ).ToList();
-
-        reviews = (await s.Query<Review>()
-            .Where(r => r.TargetUserId == VendorId)
-            .OrderByDescending(r => r.At)
-            .Take(20).ToListAsync()).ToList();
+        listings = page.Listings.ToList();
+        reviews  = page.Reviews.ToList();
         reviewCount = reviews.Count;
         if (reviewCount > 0) avgRating = reviews.Average(r => r.Rating);
     }

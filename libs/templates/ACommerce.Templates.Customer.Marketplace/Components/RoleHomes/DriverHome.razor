@@ -1,4 +1,4 @@
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.StorefrontQueries Storefront
 @inject AuthSession Auth
 @inject L L
 
@@ -96,74 +96,20 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        await using var s = Store.QuerySession(Slug);
-
-        // اِجلِب مَنطِقَة السائِق (لو ضَبَطها) لِنَفلتِر الـ feed.
-        if (Auth.IsAuthenticated && Auth.UserId.HasValue)
-        {
-            var me = await s.LoadAsync<User>(Auth.UserId.Value);
-            if (me is not null)
-            {
-                driverRadius = me.RadiusKm;
-                hasAnchor    = me.HasAnchor;
-                anchorLat    = me.AnchorLat;
-                anchorLng    = me.AnchorLng;
-            }
-        }
-
-        // كُلّ الإعلانات الَّتي تَقبَل عُروضاً وَ لَم تُطابَق بَعد.
-        var all = await s.Query<Listing>()
-            .Where(l => !l.IsDeleted)
-            .OrderByDescending(l => l.CreatedAt)
-            .Take(80)
-            .ToListAsync();
-        var open = new List<(Listing, double?)>();
-        foreach (var l in all)
-        {
-            if (!l.Attributes.TryGetValue("accepts_offers", out var ao) ||
-                !string.Equals(ao, "true", System.StringComparison.OrdinalIgnoreCase))
-                continue;
-            var match = await s.LoadAsync<ACommerce.Kit.Offers.ListingMatch>(l.Id);
-            // أَيّ مُطابَقَة (Active/Completed/Aborted) → الإعلان لَه نَتيجَة. يُحجَب.
-            if (match is not null) continue;
-
-            // فَلتَرَة المَسافَة لَو السائِق ضَبَط مَنطِقَة.
-            double? dist = null;
-            if (hasAnchor &&
-                ParseD(l.Attributes, "pickup_lat") is double plat &&
-                ParseD(l.Attributes, "pickup_lng") is double plng)
-            {
-                dist = ACommerce.Kit.Offers.OfferHelpers.DistanceKm(
-                    anchorLat, anchorLng, plat, plng);
-                if (driverRadius > 0 && dist > driverRadius) continue;
-            }
-
-            open.Add((l, dist));
-            if (open.Count >= 12) break;
-        }
-        // رَتِّب بِالأَقرَب لَو المَسافَة مَعروفَة، ثُمّ بِالأَحدَث.
-        openRequests = open
-            .OrderBy(x => x.Item2 ?? double.MaxValue)
-            .ThenByDescending(x => x.Item1.CreatedAt)
-            .ToList();
-
-        if (Auth.IsAuthenticated && Auth.UserId.HasValue)
-        {
-            pendingOffers = await s.Query<ACommerce.Kit.Offers.Offer>()
-                .CountAsync(o => o.OffererId == Auth.UserId.Value
-                              && o.Status == ACommerce.Kit.Offers.OfferStatus.Pending);
-            savedSearches = await s.Query<ACommerce.Kit.SavedSearches.SavedSearch>()
-                .CountAsync(ss => ss.UserId == Auth.UserId.Value && ss.IsEnabled);
-        }
+        // كُلُّ ما كانَ هُنا — مَنطِقَةُ السائِق، وحَلقَةُ الطَلَبات
+        // المَفتوحَة بِفَلتَرَة المَسافَة، والعَدّادان — انتَقَلَ إلى
+        // StorefrontQueries.DriverHomeAsync بِنَفس السُقوف ونَفس التَرتيب.
+        var feed = await Storefront.DriverHomeAsync(
+            Slug, Auth.IsAuthenticated ? Auth.UserId : null);
+        driverRadius = feed.RadiusKm;
+        hasAnchor    = feed.HasAnchor;
+        anchorLat    = feed.AnchorLat;
+        anchorLng    = feed.AnchorLng;
+        openRequests = feed.Open.Select(x => (x.Listing, x.DistanceKm)).ToList();
+        pendingOffers = feed.PendingOffers;
+        savedSearches = feed.SavedSearches;
     }
 
-    static double? ParseD(Dictionary<string,string> attrs, string key)
-    {
-        if (!attrs.TryGetValue(key, out var s) || string.IsNullOrEmpty(s)) return null;
-        return double.TryParse(s, System.Globalization.NumberStyles.Float,
-                               System.Globalization.CultureInfo.InvariantCulture, out var d)
-               ? d : null;
-    }
 
     // ‏`static` سَقَطَت لِأَنّ النَصّ صارَ مِن القامُوس، والقامُوس
     // مَحقون scoped. لا أَثَرَ سُلوكِيّاً: الدالَّة لا تُستَدعى إلّا مِن

@@ -1,10 +1,50 @@
+using ACommerce.Kit.Auth;
+using ACommerce.Kit.Chat;
 using ACommerce.Kit.Favorites;
 using ACommerce.Kit.Listings;
+using ACommerce.Kit.Offers;
 using ACommerce.Kit.Reviews;
+using ACommerce.Kit.SavedSearches;
 using ACommerce.Templates.Customer.Marketplace.Services.Listings;
 using Marten;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services.Queries;
+
+/// <summary>صَفحَةُ مُعلِنٍ واحِد — وَثيقَتُه، وإعلاناتُه، وتَقييماتُه.
+/// جَلسَةٌ واحِدَة كَما كانَت في <c>VendorProfile.razor</c>.</summary>
+public sealed record VendorPage(
+    User? Vendor, IReadOnlyList<Listing> Listings, IReadOnlyList<Review> Reviews)
+{
+    public static readonly VendorPage Empty =
+        new(null, Array.Empty<Listing>(), Array.Empty<Review>());
+}
+
+/// <summary>رَئيسِيَّةُ التاجِر: إعلاناتُه وعَدَدُ مُحادَثاتِه.
+/// <c>المُشاهَداتُ والعَدَدُ النَشِط</c> مُشتَقّانِ في الصَفحَة مِن
+/// القائِمَة نَفسِها، فَلا يُنقَلانِ هُنا — اشتِقاقٌ لا استِعلام.</summary>
+public sealed record SellerFeed(IReadOnlyList<Listing> MyListings, int Conversations)
+{
+    public static readonly SellerFeed Empty = new(Array.Empty<Listing>(), 0);
+}
+
+/// <summary>
+/// <para>رَئيسِيَّةُ السائِق — إعداداتُ مَنطِقَتِه، والطَلَباتُ
+/// المَفتوحَة الَّتي لَم تُطابَق، وعَدّادانِ.</para>
+///
+/// <para><b>والفَلتَرَةُ انتَقَلَت مَعَ الاستِعلام</b>: الحَلقَةُ تَقرَأ
+/// <c>ListingMatch</c> لِكُلّ إعلانٍ يَقبَل العُروض حَتّى تَجمَع ‏12 —
+/// فَتَركُها في الصَفحَة كانَ يَعني جَلسَةً ثانِيَة أَو جَلبَ ‏80
+/// إعلاناً إلى التَخطيط. نُقِلَت كَما هي: نَفسُ السَقف، ونَفسُ شَرط
+/// الحَجب، ونَفسُ التَرتيب (الأَقرَب ثُمَّ الأَحدَث).</para>
+/// </summary>
+public sealed record DriverFeed(
+    int RadiusKm, bool HasAnchor, double AnchorLat, double AnchorLng,
+    IReadOnlyList<(Listing Listing, double? DistanceKm)> Open,
+    int PendingOffers, int SavedSearches)
+{
+    public static readonly DriverFeed Empty = new(
+        0, false, 0, 0, Array.Empty<(Listing, double?)>(), 0, 0);
+}
 
 /// <summary>
 /// <para><b>ما تَعرِضُه واجِهَةُ المَتجَر الرَئيسِيَّة</b> — الدَورُ
@@ -132,4 +172,147 @@ public sealed class StorefrontQueries
         return new StorefrontHome(storedRole, latestShown, featuredShown,
                                   cities, reviewCounts, favIds);
     }
+
+    /// <summary>صَفحَةُ مُعلِن. <b>ونَفسُ مِفتاح المِلكِيَّة</b> الَّذي
+    /// تَقرَؤُه <see cref="ListingEditService.IsOwnedBy"/> و
+    /// <see cref="AccountQueries.MyListingsAsync"/> — ثَلاثَةُ قُرّاءٍ
+    /// وتَعريفٌ واحِد.</summary>
+    public async Task<VendorPage> VendorAsync(
+        string tenantSlug, Guid vendorId, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(tenantSlug);
+
+        var vendor = await s.LoadAsync<User>(vendorId, ct);
+        if (vendor is null) return VendorPage.Empty;
+
+        var all = await s.Query<Listing>()
+            .Where(l => !l.IsDeleted)
+            .OrderByDescending(l => l.CreatedAt)
+            .Take(50).ToListAsync(ct);
+        var listings = all.Where(l => OwnerOf(l) == vendorId).ToList();
+
+        var reviews = (await s.Query<Review>()
+            .Where(r => r.TargetUserId == vendorId)
+            .OrderByDescending(r => r.At)
+            .Take(20).ToListAsync(ct)).ToList();
+
+        return new VendorPage(vendor, listings, reviews);
+    }
+
+    /// <summary>سائِقو المَتجَر — مَن دَورُه النَشِط <c>driver</c>،
+    /// الأَحدَثُ تَحديثاً أَوَّلاً. «مُتاح» تَعني هذا وَحدَه اليَوم،
+    /// كَما كانَ في <c>TenantDrivers.razor</c> حَرفاً.</summary>
+    public async Task<IReadOnlyList<User>> DriversAsync(
+        string tenantSlug, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(tenantSlug);
+        return (await s.Query<User>()
+                .Where(u => u.ActiveRole == "driver")
+                .ToListAsync(ct))
+            .OrderByDescending(u => u.UpdatedAt).ToList();
+    }
+
+    /// <summary>رَئيسِيَّةُ التاجِر.</summary>
+    public async Task<SellerFeed> SellerHomeAsync(
+        string tenantSlug, Guid userId, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(tenantSlug);
+
+        var mine = (await s.Query<Listing>().Where(l => !l.IsDeleted).ToListAsync(ct))
+            .Where(l => OwnerOf(l) == userId)
+            .OrderByDescending(l => l.CreatedAt).ToList();
+
+        var conversations = await s.Query<Conversation>()
+            .CountAsync(c => c.OwnerId == userId || c.PartnerId == userId, ct);
+
+        return new SellerFeed(mine, conversations);
+    }
+
+    /// <summary>رَئيسِيَّةُ الراكِب — طَلَباتُه الثَمانِيَة الأَحدَث، مَع
+    /// عَدَد العُروض المُعَلَّقَة على كُلٍّ وهَل طوبِقَ.</summary>
+    public async Task<IReadOnlyList<(Listing Listing, int PendingOffers, bool Matched)>>
+        RiderHomeAsync(string tenantSlug, Guid userId, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(tenantSlug);
+
+        var mine = (await s.Query<Listing>().Where(l => !l.IsDeleted).ToListAsync(ct))
+            .Where(l => OwnerOf(l) == userId)
+            .OrderByDescending(l => l.CreatedAt)
+            .Take(8).ToList();
+
+        var result = new List<(Listing, int, bool)>(mine.Count);
+        foreach (var l in mine)
+        {
+            var matched = await s.LoadAsync<ListingMatch>(l.Id, ct);
+            var count = await s.Query<Offer>()
+                .CountAsync(o => o.ListingId == l.Id && o.Status == OfferStatus.Pending, ct);
+            result.Add((l, count, matched is not null));
+        }
+        return result;
+    }
+
+    /// <summary>رَئيسِيَّةُ السائِق. <paramref name="userId"/> فارِغٌ
+    /// لِزائِرٍ — عِندَها تُقرَأ الطَلَباتُ بِلا مَنطِقَة وبِلا عَدّادات،
+    /// نَفسَ ما كانَت تَفعَلُه الصَفحَة.</summary>
+    public async Task<DriverFeed> DriverHomeAsync(
+        string tenantSlug, Guid? userId, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(tenantSlug);
+
+        var radius = 0; double aLat = 0, aLng = 0; var hasAnchor = false;
+        if (userId is { } uid && await s.LoadAsync<User>(uid, ct) is { } me)
+        {
+            radius = me.RadiusKm; hasAnchor = me.HasAnchor;
+            aLat = me.AnchorLat;  aLng = me.AnchorLng;
+        }
+
+        var all = await s.Query<Listing>()
+            .Where(l => !l.IsDeleted)
+            .OrderByDescending(l => l.CreatedAt)
+            .Take(80).ToListAsync(ct);
+
+        var open = new List<(Listing, double?)>();
+        foreach (var l in all)
+        {
+            if (!IsTripRequest(l)) continue;
+            // أَيّ مُطابَقَة (Active/Completed/Aborted) ← لِلإعلان نَتيجَة، فَيُحجَب.
+            if (await s.LoadAsync<ListingMatch>(l.Id, ct) is not null) continue;
+
+            double? dist = null;
+            if (hasAnchor &&
+                ParseCoord(l.Attributes, "pickup_lat") is double plat &&
+                ParseCoord(l.Attributes, "pickup_lng") is double plng)
+            {
+                dist = OfferHelpers.DistanceKm(aLat, aLng, plat, plng);
+                if (radius > 0 && dist > radius) continue;
+            }
+
+            open.Add((l, dist));
+            if (open.Count >= 12) break;
+        }
+
+        var ordered = open
+            .OrderBy(x => x.Item2 ?? double.MaxValue)
+            .ThenByDescending(x => x.Item1.CreatedAt)
+            .ToList();
+
+        var pending = 0; var saved = 0;
+        if (userId is { } u2)
+        {
+            pending = await s.Query<Offer>()
+                .CountAsync(o => o.OffererId == u2 && o.Status == OfferStatus.Pending, ct);
+            saved = await s.Query<SavedSearch>()
+                .CountAsync(ss => ss.UserId == u2 && ss.IsEnabled, ct);
+        }
+
+        return new DriverFeed(radius, hasAnchor, aLat, aLng, ordered, pending, saved);
+    }
+
+    /// <summary>إحداثِيَّةٌ مِن خَصائِص الإعلان — نَقِيَّةٌ فَتُختَبَر بِلا
+    /// قاعِدَة بَيانات.</summary>
+    public static double? ParseCoord(IReadOnlyDictionary<string, string> attrs, string key)
+        => attrs.TryGetValue(key, out var s) && !string.IsNullOrEmpty(s) &&
+           double.TryParse(s, System.Globalization.NumberStyles.Float,
+                           System.Globalization.CultureInfo.InvariantCulture, out var d)
+            ? d : null;
 }

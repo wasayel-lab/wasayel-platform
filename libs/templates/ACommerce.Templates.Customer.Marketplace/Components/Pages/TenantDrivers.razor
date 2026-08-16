@@ -1,6 +1,6 @@
 @page "/{slug}/drivers"
 @page "/{slug}/r/{role}/drivers"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.StorefrontQueries Storefront
 @inject AuthSession Auth
 
 @*
@@ -71,15 +71,9 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        await using var s = Store.QuerySession(Slug);
-        // كُلّ المُستَخدِمين الَّذين دَورُهم النَّشِط = driver. نَكتَفي بِهذا
-        // كَ "مُتاح" — إن أَرَدنا لاحِقاً حالَة "online/offline" نُضيفها
-        // كَ حَقل عَلى User.
-        drivers = (await s.Query<User>()
-            .Where(u => u.ActiveRole == "driver")
-            .ToListAsync())
-            .OrderByDescending(u => u.UpdatedAt)
-            .ToList();
+        // «مُتاح» = دَورُه النَشِط سائِق، ولا شَيءَ سِواه بَعد.
+        // الاستِعلامُ ‏(والتَرتيب) في StorefrontQueries.DriversAsync.
+        drivers = (await Storefront.DriversAsync(Slug)).ToList();
     }
 
     static string VehicleLabel(string v) => v switch
