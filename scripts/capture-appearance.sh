@@ -351,6 +351,27 @@ GUARDED_PAGES=(
   "member-chats:member:/{member}/chats"
   "member-notifications:member:/{member}/notifications"
   "member-role:member:/{member}/me/role"
+
+  # ══ شاشاتُ الحاضِنَة — بَذرَةٌ لا مِفتاح ═══════════════════════════
+  #
+  # ‏`StudioStudy` (‏99) و`IncubatorStudy` (‏44) و`StudioStudyPrint`
+  # (‏41) = ‏184 سِلسِلَة، وكُلُّها تَقرَأ `AnalysisJson` مِن
+  # `IncubatorSession`. وكانَ في القاعِدَة **صِفرُ جَلسَة**، وتَوليدُ
+  # الدِراسَة يَمُرّ بِمُزَوِّد LLM حَقيقيّ.
+  #
+  # فَبُذِرَت جَلسَةٌ **كامِلَةُ البِنيَة بِقيَمٍ مُعَلَّمَةٍ عَيِّنَةً**
+  # خَلفَ `INCUBATOR_SAMPLE_SEED=1` (‏`apps/V1.App/Seed/`)، بِمُعَرِّفٍ
+  # ثابِت — فَالعُنوانُ هُنا حَرفيّ لا مُكتَشَف. بِلا المُتَغَيِّر
+  # لا تُوجَد الجَلسَة وتَخرُج هذِه الأَربَعُ بِـ«الجَلسَة غَير مَوجودَة»،
+  # وتَحمَرّ المُقارَنَة — وذاكَ صَحيح: بيئَةٌ ناقِصَة لا شيفرَةٌ
+  # مُنحَرِفَة.
+  #
+  # ومالِكُ الجَلسَة هو صاحِبُ `PLATFORM_ADMIN_PHONE`، أَي مِلَفُّ
+  # `admin` — و`StudioStudy` يَشتَرِط `OwnerUserId == Auth.UserId`.
+  "studio-study:admin:/studio/s/5a3e1d00-0000-4000-8000-00000000ec01"
+  "studio-study-print:admin:/studio/s/5a3e1d00-0000-4000-8000-00000000ec01/print"
+  "admin-incubator-study:admin:/admin/incubator/5a3e1d00-0000-4000-8000-00000000ec01/study"
+  "admin-incubator-wizard:admin:/admin/incubator/5a3e1d00-0000-4000-8000-00000000ec01"
 )
 
 # أَوراق الأَنماط الَّتي تُحَمِّلها كُلّ صَفحَة — المَظهَر = HTML + CSS،

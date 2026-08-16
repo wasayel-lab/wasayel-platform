@@ -106,6 +106,13 @@ await using (var scope = app.Services.CreateAsyncScope())
     if (Environment.GetEnvironmentVariable("TEST_DATA_SEED") == "1")
         await TestDataSeeder.RunAsync(scope.ServiceProvider);
 
+    // جَلسَةُ حاضِنَة **عَيِّنَةَ بِنيَة** — تَفتَح شاشات الدِراسَة الثَلاث
+    // بِلا مُزَوِّد LLM ولا مِفتاح API. نَفسُ اصطِلاح البَذرَة أَعلاه:
+    // ‏ENV INCUBATOR_SAMPLE_SEED=1، وإلّا لا تَعمَل. التَفصيلُ وسَبَبُ
+    // كَونِ القيَم مُعَلَّمَةً في `IncubatorSampleSeeder`.
+    if (Environment.GetEnvironmentVariable("INCUBATOR_SAMPLE_SEED") == "1")
+        await IncubatorSampleSeeder.RunAsync(scope.ServiceProvider);
+
     // مَنح صَلاحِيَّة مُشرِف المَنصَّة صَراحَةً — ENV PLATFORM_ADMIN_PHONE،
     // وخارِج التَطوير يَلزَم PLATFORM_ADMIN_BOOTSTRAP=1 مَعَه.
     var granted = await PlatformAdminSeeder.RunAsync(docStore, app.Environment);
