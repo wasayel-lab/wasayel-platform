@@ -2,6 +2,7 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.Queries.TenantAdminQueries TenantAdmin
+@inject L L
 @using ACommerce.Kit.Tenants
 @using ACommerce.Kit.Support
 
@@ -10,38 +11,37 @@
     التَّفاصيل. مَحميَّة بِالمِلكِيَّة.
 *@
 
-<StudioShell Title="@($"التَّذاكِر · {tenant?.Name ?? Slug}")" Active="home">
+<StudioShell Title="@($"{L["studio.app_tickets.title"]} {tenant?.Name ?? Slug}")" Active="home">
     <TopBarActions>
-        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/console")">← التَّشغيل</a>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/console")">← @L.Markup("studio.app_nav.console")</a>
     </TopBarActions>
     <ChildContent>
         @if (tenant is null)
         {
-            <div class="st-card">التَّطبيق غَير مَوجود أَو لا تَملِكه.</div>
+            <div class="st-card">@L.Markup("studio.app.not_found")</div>
         }
         else
         {
             <div class="studio-page-head">
-                <h1>تَذاكِر الدَّعم</h1>
-                <p>إدارَة طَلَبات الدَّعم الواصِلَة مِن مُستَخدِمي تَطبيقك.</p>
+                <h1>@L.Markup("studio.app_tickets.heading")</h1>
+                <p>@L.Markup("studio.app_tickets.intro")</p>
             </div>
 
             <div class="studio-stats">
-                <div class="studio-stat"><div class="studio-stat-label">إجمالي</div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("studio.app_tickets.stat_total")</div>
                     <div class="studio-stat-value">@tickets.Count</div></div>
-                <div class="studio-stat"><div class="studio-stat-label">مَفتوحَة</div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("studio.app_tickets.stat_open")</div>
                     <div class="studio-stat-value" style="color:var(--st-danger);">@tickets.Count(t => t.Status == "open")</div></div>
-                <div class="studio-stat"><div class="studio-stat-label">مَرُدودَة</div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("studio.app_tickets.stat_answered")</div>
                     <div class="studio-stat-value" style="color:var(--st-warning);">@tickets.Count(t => t.Status == "answered")</div></div>
-                <div class="studio-stat"><div class="studio-stat-label">مُغلَقَة</div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("studio.app_tickets.stat_closed")</div>
                     <div class="studio-stat-value" style="color:var(--st-success);">@tickets.Count(t => t.Status == "closed")</div></div>
             </div>
 
-            <div class="st-section-title">القائِمَة</div>
+            <div class="st-section-title">@L.Markup("studio.app_tickets.list")</div>
             @if (tickets.Count == 0)
             {
-                <div class="st-card" style="text-align:center;padding:36px;color:var(--st-muted);">
-                    لا تَذاكِر بَعد <AcIcon Name="sparkle" Size="16" />
+                <div class="st-card" style="text-align:center;padding:36px;color:var(--st-muted);">@((MarkupString)"\n                    ")@L.Markup("studio.app_tickets.empty") <AcIcon Name="sparkle" Size="16" />
                 </div>
             }
             else
@@ -57,7 +57,7 @@
                                 <strong>@t.Subject</strong>
                                 <span>
                                     @t.AuthorName · @t.CreatedAt.ToString("yyyy-MM-dd HH:mm")
-                                    @if (t.Replies.Count > 0) { <text> · @t.Replies.Count رَدّ</text> }
+                                    @if (t.Replies.Count > 0) { <text> · @t.Replies.Count @L.Markup("studio.app_tickets.reply_unit")</text> }
                                 </span>
                             </div>
                             <span class="st-chip @StatusChip(t.Status)">@StatusLabel(t.Status)</span>
@@ -90,6 +90,6 @@
     { "open" => "#b91c1c", "answered" => "#854d0e", "closed" => "#15803d", _ => "#475569" };
     static string StatusChip(string s) => s switch
     { "open" => "st-chip-danger", "answered" => "st-chip-warning", "closed" => "st-chip-success", _ => "" };
-    static string StatusLabel(string s) => s switch
-    { "open" => "مَفتوحَة", "answered" => "مَرُدودَة", "closed" => "مُغلَقَة", _ => s };
+    string StatusLabel(string s) => s switch
+    { "open" => L["studio.app_tickets.status_open"], "answered" => L["studio.app_tickets.status_answered"], "closed" => L["studio.app_tickets.status_closed"], _ => s };
 }

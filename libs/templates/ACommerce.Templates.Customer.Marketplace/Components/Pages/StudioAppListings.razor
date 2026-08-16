@@ -2,6 +2,7 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.Queries.TenantAdminQueries TenantAdmin
+@inject L L
 @using ACommerce.Kit.Tenants
 @using ACommerce.Kit.Listings
 
@@ -10,44 +11,43 @@
     إجراءات: إخفاء/إظهار/حَذف. فَلتَرَة بِالحالَة.
 *@
 
-<StudioShell Title="@($"الإعلانات · {tenant?.Name ?? Slug}")" Active="home">
+<StudioShell Title="@($"{L["studio.app_listings.title"]} {tenant?.Name ?? Slug}")" Active="home">
     <TopBarActions>
-        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/console")">← التَّشغيل</a>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/console")">← @L.Markup("studio.app_nav.console")</a>
     </TopBarActions>
     <ChildContent>
         @if (tenant is null)
         {
-            <div class="st-card">التَّطبيق غَير مَوجود أَو لا تَملِكه.</div>
+            <div class="st-card">@L.Markup("studio.app.not_found")</div>
         }
         else
         {
             <div class="studio-page-head">
-                <h1>إشراف الإعلانات</h1>
-                <p>أَخفِ الإعلانات المُسيئَة مِن البَحث العامّ، أَو احذِفها نِهائيّاً.</p>
+                <h1>@L.Markup("studio.app_listings.heading")</h1>
+                <p>@L.Markup("studio.app_listings.intro")</p>
             </div>
 
             <div class="studio-stats">
-                <div class="studio-stat"><div class="studio-stat-label">إجمالي</div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("studio.app_listings.stat_total")</div>
                     <div class="studio-stat-value">@listings.Count</div></div>
-                <div class="studio-stat"><div class="studio-stat-label">نَشِطَة</div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("studio.app_listings.stat_active")</div>
                     <div class="studio-stat-value" style="color:var(--st-success);">
                         @listings.Count(l => !l.IsDeleted && !l.IsHiddenByModerator)
                     </div></div>
-                <div class="studio-stat"><div class="studio-stat-label">مُخفاة إشرافيّاً</div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("studio.app_listings.stat_hidden")</div>
                     <div class="studio-stat-value" style="color:var(--st-warning);">
                         @listings.Count(l => l.IsHiddenByModerator && !l.IsDeleted)
                     </div></div>
-                <div class="studio-stat"><div class="studio-stat-label">مَحذوفَة</div>
+                <div class="studio-stat"><div class="studio-stat-label">@L.Markup("studio.app_listings.stat_deleted")</div>
                     <div class="studio-stat-value" style="color:var(--st-danger);">
                         @listings.Count(l => l.IsDeleted)
                     </div></div>
             </div>
 
-            <div class="st-section-title">القائِمَة</div>
+            <div class="st-section-title">@L.Markup("studio.app_listings.list")</div>
             @if (listings.Count == 0)
             {
-                <div class="st-card" style="text-align:center;padding:36px;color:var(--st-muted);">
-                    لا إعلانات بَعد.
+                <div class="st-card" style="text-align:center;padding:36px;color:var(--st-muted);">@((MarkupString)"\n                    ")@L.Markup("studio.app_listings.empty")@((MarkupString)"\n                ")
                 </div>
             }
             else
@@ -63,17 +63,17 @@
                                 <div style="flex:1;min-width:0;">
                                     <strong>@l.Title</strong>
                                     @if (l.IsDeleted)
-                                    { <span class="st-chip st-chip-danger" style="margin-inline-start:6px;">مَحذوف</span> }
+                                    { <span class="st-chip st-chip-danger" style="margin-inline-start:6px;">@L.Markup("studio.app_listings.chip_deleted")</span> }
                                     else if (l.IsHiddenByModerator)
-                                    { <span class="st-chip st-chip-warning" style="margin-inline-start:6px;">مُخفي</span> }
+                                    { <span class="st-chip st-chip-warning" style="margin-inline-start:6px;">@L.Markup("studio.app_listings.chip_hidden")</span> }
                                     <div style="color:var(--st-muted);font-size:13px;margin-top:2px;">
                                         @l.CategorySlug · @l.City @(string.IsNullOrEmpty(l.District) ? "" : "/ " + l.District)
-                                        · @l.Price.ToString("N0") ر.س · @l.ViewCount مُشاهَدَة
+                                        · @((MarkupString)ACommerce.Kit.Culture.Money.Format(l.Price)) · @l.ViewCount @L.Markup("studio.app_listings.view_unit")@((MarkupString)"\n                                    ")
                                     </div>
                                     @if (l.IsHiddenByModerator && !string.IsNullOrEmpty(l.ModerationReason))
                                     {
                                         <div style="margin-top:6px;font-size:13px;color:var(--st-danger);">
-                                            <AcIcon Name="alert-circle" Size="14" /> سَبَب الإخفاء: @l.ModerationReason
+                                            <AcIcon Name="alert-circle" Size="14" /> @L.Markup("studio.app_listings.hide_reason_shown") @l.ModerationReason
                                         </div>
                                     }
                                 </div>
@@ -86,7 +86,7 @@
                                     {
                                         <form method="post" action="@($"/studio/apps/{Slug}/listings/{l.Id}/moderate")" style="margin:0;">
                                             <input type="hidden" name="action" value="unhide" />
-                                            <button type="submit" class="st-btn st-btn-ghost"><AcIcon Name="refresh" Size="16" /> إظهار</button>
+                                            <button type="submit" class="st-btn st-btn-ghost"><AcIcon Name="refresh" Size="16" /> @L.Markup("studio.app_listings.unhide")</button>
                                         </form>
                                     }
                                     else
@@ -95,13 +95,13 @@
                                               style="display:flex;gap:6px;margin:0;flex:1;min-width:200px;">
                                             <input type="hidden" name="action" value="hide" />
                                             <input class="st-input" name="reason" placeholder="سَبَب الإخفاء" />
-                                            <button type="submit" class="st-btn st-btn-ghost" style="color:var(--st-warning);">إخفاء</button>
+                                            <button type="submit" class="st-btn st-btn-ghost" style="color:var(--st-warning);">@L.Markup("studio.app_listings.hide")</button>
                                         </form>
                                     }
                                     <form method="post" action="@($"/studio/apps/{Slug}/listings/{l.Id}/moderate")"
-                                          onsubmit="return confirm('تَأكيد الحَذف؟ غَير قابِل لِلتَّراجُع.');" style="margin:0;">
+                                          onsubmit="return confirm('@L["studio.app_listings.confirm_delete"]');" style="margin:0;">
                                         <input type="hidden" name="action" value="delete" />
-                                        <button type="submit" class="st-btn st-btn-ghost" style="color:var(--st-danger);"><AcIcon Name="trash" Size="16" /> حَذف</button>
+                                        <button type="submit" class="st-btn st-btn-ghost" style="color:var(--st-danger);"><AcIcon Name="trash" Size="16" /> @L.Markup("studio.app_listings.delete")</button>
                                     </form>
                                 </div>
                             }
