@@ -46,6 +46,28 @@ public sealed record DriverFeed(
         0, false, 0, 0, Array.Empty<(Listing, double?)>(), 0, 0);
 }
 
+/// <summary>فَلاتِرُ شاشَة الاستِكشاف — كُلُّها مِن مُتَغَيِّرات الـURL
+/// حَرفاً، ولا واحِدَةَ مِنها قَرار.</summary>
+public sealed record ExploreFilters(
+    string? Category = null, string? Kind = null, string? District = null,
+    decimal? MinPrice = null, decimal? MaxPrice = null,
+    string? Query = null, string? Sort = null);
+
+/// <summary>ما تَعرِضُه شاشَةُ الاستِكشاف. و<c>DriverMode</c> مُعادٌ
+/// هُنا لا لِأَنّ الخِدمَةَ قَرَّرَته — بَل لِأَنَّها هي مَن نادَت
+/// دالَّةَ القَرار، فَتَرُدُّ ما جاءَت بِه.</summary>
+public sealed record ExploreResult(
+    IReadOnlyList<Listing> Items,
+    IReadOnlyList<string> Districts,
+    IReadOnlyDictionary<Guid, int> ReviewCounts,
+    IReadOnlySet<Guid> FavouriteListingIds,
+    bool DriverMode)
+{
+    public static readonly ExploreResult Empty = new(
+        Array.Empty<Listing>(), Array.Empty<string>(),
+        new Dictionary<Guid, int>(), new HashSet<Guid>(), false);
+}
+
 /// <summary>
 /// <para><b>ما تَعرِضُه واجِهَةُ المَتجَر الرَئيسِيَّة</b> — الدَورُ
 /// المَحفوظ، وشَريطا «أَحدَث» و«مُمَيَّز»، ومُدُنُ الفَلتَرَة، وعَدّاداتُ
@@ -306,6 +328,125 @@ public sealed class StorefrontQueries
         }
 
         return new DriverFeed(radius, hasAnchor, aLat, aLng, ordered, pending, saved);
+    }
+
+    /// <summary>
+    /// <para><b>شاشَةُ الاستِكشاف.</b> أُجِّلَت في المَوجَة ٥ لِأَنّ
+    /// قِراءَتَها مُتَشابِكَةٌ مَع <b>قَرار تَأليف</b> في مُنتَصَفِها:
+    /// تُقرَأ <c>User</c>، ثُمَّ يُحسَب «وَضعُ السائِق» مِن أَدوار
+    /// المُستَأجِر ودَورِ الـURL والدَورِ المَحفوظ، ثُمَّ يُبنى
+    /// الاستِعلامُ في <b>نَفس</b> الجَلسَة.</para>
+    ///
+    /// <para><b>والحَلُّ لا يَنقُل القَرار ولا يَشُقّ الجَلسَة</b>:
+    /// <paramref name="isDriverMode"/> دالَّةٌ <b>نَقِيَّة</b> تَبقى
+    /// مُعَرَّفَةً في الصَفحَة (هُناكَ يَعيش المُعجَمُ المُغلَق
+    /// <c>ExploreModes</c> و<c>ResolveComposition</c>)، والخِدمَةُ
+    /// تُنادِيها بِالوَثيقَة الَّتي جَلَبَتها. فَالقَرارُ في مَوضِعِه،
+    /// والجَلسَةُ واحِدَة كَما كانَت، ولا بايتَ يَتَبَدَّل.</para>
+    ///
+    /// <para><paramref name="tenant"/> يَلزَم لِفَلتَرَة <c>kind</c>
+    /// وَحدَها — تُشتَقّ مِنه سلاجاتُ الفِئات، وهو مَقروءٌ سَلَفاً في
+    /// الصَفحَة فَلا يُقرَأ مَرَّتَين.</para>
+    /// </summary>
+    public async Task<ExploreResult> ExploreAsync(
+        string tenantSlug, ACommerce.Kit.Tenants.Tenant tenant, ExploreFilters f,
+        Guid? userId, Func<ACommerce.Kit.Auth.User?, bool> isDriverMode,
+        CancellationToken ct = default)
+    {
+        await using var t = _store.QuerySession(tenantSlug);
+
+        var driverMode = false;
+        User? me = null;
+        if (tenant.Roles.Count > 0 && userId is { } uid)
+        {
+            me = await t.LoadAsync<User>(uid, ct);
+            driverMode = isDriverMode(me);
+        }
+
+        var q = t.Query<Listing>().Where(x => !x.IsDeleted && !x.IsHiddenByModerator);
+        if (!string.IsNullOrEmpty(f.Category)) q = q.Where(x => x.CategorySlug == f.Category);
+        else if (!string.IsNullOrEmpty(f.Kind))
+        {
+            // فَلتَرَة بِالـ Kind: كُلُّ سلاجات الفِئات المُنتَمِيَة إلَيه.
+            var slugs = tenant.Categories
+                .Where(c => c.Kind == f.Kind)
+                .Select(c => c.Slug).ToList();
+            q = q.Where(x => slugs.Contains(x.CategorySlug));
+        }
+        if (!string.IsNullOrEmpty(f.District)) q = q.Where(x => x.District == f.District);
+        if (f.MinPrice is > 0) q = q.Where(x => x.Price >= f.MinPrice!.Value);
+        if (f.MaxPrice is > 0) q = q.Where(x => x.Price <= f.MaxPrice!.Value);
+        if (!string.IsNullOrEmpty(f.Query))
+        {
+            var s = f.Query;
+            q = q.Where(x => x.Title.Contains(s) ||
+                             (x.Description != null && x.Description.Contains(s)));
+        }
+        q = f.Sort switch
+        {
+            "price_asc"  => q.OrderBy(x => x.Price),
+            "price_desc" => q.OrderByDescending(x => x.Price),
+            _            => q.OrderByDescending(x => x.CreatedAt),
+        };
+
+        var items = (await q.Take(200).ToListAsync(ct)).ToList();
+
+        if (driverMode)
+        {
+            // أَيّ ListingMatch (‏Active/Completed/Aborted) يَعني أَنّ
+            // الإعلان صَدَرَت لَه نَتيجَة، فَلا يُعرَض فُرصَةً جَديدَة.
+            var matchedIds = (await t.Query<ListingMatch>().ToListAsync(ct))
+                .Select(m => m.Id).ToHashSet();
+            items = items
+                .Where(IsTripRequest)
+                .Where(l => !matchedIds.Contains(l.Id))
+                .ToList();
+
+            if (me is { HasAnchor: true, RadiusKm: > 0 })
+            {
+                items = items.Where(l =>
+                {
+                    var plat = ParseCoord(l.Attributes, "pickup_lat");
+                    var plng = ParseCoord(l.Attributes, "pickup_lng");
+                    if (plat is null || plng is null) return true;
+                    return OfferHelpers.DistanceKm(
+                        me.AnchorLat, me.AnchorLng, plat.Value, plng.Value) <= me.RadiusKm;
+                }).ToList();
+            }
+            items = items.Take(60).ToList();
+        }
+        else
+        {
+            // بَقِيَّةُ الزَوّار لا يَرَونَ طَلَبات السائِق المُؤَقَّتَة.
+            items = items.Where(l => !IsTripRequest(l)).Take(60).ToList();
+        }
+
+        var districts = (await t.Query<Listing>()
+                .Where(x => !x.IsDeleted && x.District != null)
+                .Select(x => x.District!)
+                .ToListAsync(ct))
+            .Distinct().OrderBy(s => s).ToList();
+
+        var reviewCounts = new Dictionary<Guid, int>();
+        var ownerIds = items.Select(OwnerOf).Where(g => g.HasValue)
+                            .Select(g => g!.Value).Distinct().ToList();
+        if (ownerIds.Count > 0)
+        {
+            var revs = await t.Query<Review>()
+                .Where(r => !r.Hidden && ownerIds.Contains(r.TargetUserId))
+                .ToListAsync(ct);
+            reviewCounts = revs.GroupBy(r => r.TargetUserId)
+                               .ToDictionary(g => g.Key, g => g.Count());
+        }
+
+        var favIds = new HashSet<Guid>();
+        if (userId is { } fav)
+        {
+            var favs = await t.Query<Favorite>().Where(x => x.UserId == fav).ToListAsync(ct);
+            favIds = favs.Select(x => x.ListingId).ToHashSet();
+        }
+
+        return new ExploreResult(items, districts, reviewCounts, favIds, driverMode);
     }
 
     /// <summary>إحداثِيَّةٌ مِن خَصائِص الإعلان — نَقِيَّةٌ فَتُختَبَر بِلا
