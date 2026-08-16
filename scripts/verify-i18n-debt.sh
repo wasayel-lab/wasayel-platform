@@ -71,6 +71,45 @@ fi
 cat > "$TMP/count.pl" <<'PERL'
 use strict; use warnings;
 use open ':std', ':encoding(UTF-8)';
+
+# ── Trailing `//` comments — the counter's own false positive ────────────
+# The stripper used to be `^\s*//.*$`: only comments that START a line.  A
+# comment that TRAILS code was counted as user-facing text.  Measured cost:
+# five phantom entries in the ledger — three in TenantHome, one in App.razor,
+# one in TenantListingDetail — none of which a user can ever read.  A counter
+# that over-reports is as untrustworthy as one that under-reports: it makes
+# "the debt is N" a claim nobody can act on.
+#
+# Why not simply strip `//` to end of line: `//` also appears INSIDE string
+# literals (`href="https://…"`, `'/api/' + slug`).  Cutting there would delete
+# real text after it — a FALSE NEGATIVE, which is the worse failure.
+#
+# So the rule is: strip from the first `//` whose prefix on that line closes
+# every quote it opened.  And the rule was MEASURED before it was adopted —
+# across every .razor in the repo, the number of lines carrying `//` inside an
+# open quote AND Arabic after it is ZERO.  The scan that says so:
+#
+#   perl -CSD -ne 'if (m{//} && /[\x{0600}-\x{06FF}]/) { ... }'  (see git log)
+#
+# `i18n-migrate.pl` carries the same routine, deliberately duplicated: the two
+# tools MUST agree on run indices or a spec file addresses the wrong string.
+sub strip_line_comments {
+    my ($text) = @_;
+    my @out;
+    for my $line (split /\n/, $text, -1) {
+        my $off = 0;
+        while ((my $j = index($line, '//', $off)) >= 0) {
+            my $pre = substr($line, 0, $j);
+            my $dq = ($pre =~ tr/"//);
+            my $sq = ($pre =~ tr/'//);
+            if ($dq % 2 == 0 && $sq % 2 == 0) { $line = $pre; last; }
+            $off = $j + 2;
+        }
+        push @out, $line;
+    }
+    return join("\n", @out);
+}
+
 my (%runs, %files, $total);
 for my $f (@ARGV) {
     open(my $fh, '<:encoding(UTF-8)', $f) or next;
@@ -79,7 +118,7 @@ for my $f (@ARGV) {
     $s =~ s/<!--.*?-->//gs;       # HTML comments
     $s =~ s{/\*.*?\*/}{}gs;       # C# block comments
     $s =~ s{///.*$}{}gm;          # C# doc comments
-    $s =~ s{^\s*//.*$}{}gm;       # C# / JS line comments
+    $s = strip_line_comments($s); # C# / JS line comments — ANYWHERE on the line
     my $n = 0;
     while ($s =~ /([\x{0600}-\x{06FF}\x{0750}-\x{077F}]
                    [\x{0600}-\x{06FF}\x{0750}-\x{077F}\s\x{060C}\x{061B}\x{061F}

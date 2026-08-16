@@ -110,7 +110,27 @@ $mask =~ s/(\@\*.*?\*\@)/$blank->($1)/ges;
 $mask =~ s/(<!--.*?-->)/$blank->($1)/ges;
 $mask =~ s{(/\*.*?\*/)}{$blank->($1)}ges;
 $mask =~ s{(///[^\n]*)}{$blank->($1)}ge;
-$mask =~ s{^([ \t]*//[^\n]*)}{$blank->($1)}gme;
+# التَعليقُ الذَيليّ — نَفسُ الرُوتين في `verify-i18n-debt.sh`، ومُكَرَّرٌ
+# عَمداً: الأَداتانِ **يَجِب** أَن تَتَّفِقا على أَرقام السَلاسِل وإلّا
+# خاطَبَ مِلَفُّ الأَمر سِلسِلَةً غَيرَ الَّتي قُصِدَت.
+{
+    my @out;
+    for my $line (split /\n/, $mask, -1) {
+        my $off = 0;
+        while ((my $j = index($line, '//', $off)) >= 0) {
+            my $pre = substr($line, 0, $j);
+            my $dq = ($pre =~ tr/"//);
+            my $sq = ($pre =~ tr/'//);
+            if ($dq % 2 == 0 && $sq % 2 == 0) {
+                $line = $pre . (' ' x (length($line) - $j));   # نَفسُ الطول
+                last;
+            }
+            $off = $j + 2;
+        }
+        push @out, $line;
+    }
+    $mask = join("\n", @out);
+}
 
 # ─── التِقاطُ السَلاسِل — بِنَفس تَعبير `verify-i18n-debt.sh` ─────────
 my $RUN = qr/(?x)

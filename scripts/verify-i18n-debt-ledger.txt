@@ -8,15 +8,14 @@
 #   وصِنفُها نَفسُ صِنفِ `<option value="عَرَبيّ">` في نَموذَج
 #   التَبليغ: قيمَةٌ تُخَزَّن، لا تَسمِيَةٌ تُقرَأ.
 # ــــــــــــــــــــــــــــــــــــــــــــــــــ
-TOTAL|36
-DISTINCT|34
+TOTAL|31
+DISTINCT|29
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|5
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/FlowExplainer.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudy.razor|8
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantHome.razor|3
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantListingDetail.razor|6
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantListingDetail.razor|5
 libs/templates/ACommerce.Templates.Shared/AcErrorState.razor|2
 libs/widgets/ACommerce.Widgets/AcAttrEditor.razor|3
 libs/widgets/ACommerce.Widgets/AcAttrGrid.razor|2
