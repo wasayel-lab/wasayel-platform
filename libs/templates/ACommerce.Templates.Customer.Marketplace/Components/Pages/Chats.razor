@@ -1,6 +1,6 @@
 @page "/{slug}/chats"
 @page "/{slug}/r/{role}/chats"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
 
 <div class="acs-page">
@@ -113,22 +113,10 @@ else
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
-        await using var s = Store.QuerySession(Slug);
-        convs = (await s.Query<Conversation>()
-            .Where(c => c.OwnerId == Auth.UserId!.Value || c.PartnerId == Auth.UserId!.Value)
-            .OrderByDescending(c => c.LastAt)
-            .Take(50).ToListAsync()).ToList();
-
-        // اِجلِب صُوَر الأَطراف الآخَرين دَفعَةً واحِدَةً لِعَرضِها في القائِمَة.
-        // ToList() مَقصودَة: Marten يَدعَم List<T>.Contains في WHERE ولا
-        // يَدعَم Array.Contains (يُحَلّ إلى MemoryExtensions.Contains).
-        var partnerIds = convs
-            .Select(c => c.OwnerId == Auth.UserId!.Value ? c.PartnerId : c.OwnerId)
-            .Distinct().ToList();
-        if (partnerIds.Count > 0)
-        {
-            var users = await s.Query<User>().Where(u => partnerIds.Contains(u.Id)).ToListAsync();
-            avatars = users.ToDictionary(u => u.Id, u => u.AvatarUrl);
-        }
+        // المُحادَثات وصُوَرُ أَطرافِها — استِعلامان في جَلسَةٍ واحِدَة،
+        // انتَقَلا مَعاً إلى AccountQueries.ConversationsAsync.
+        var chats = await Accounts.ConversationsAsync(Slug, Auth.UserId!.Value);
+        convs   = chats.Conversations.ToList();
+        avatars = chats.PartnerAvatars.ToDictionary(kv => kv.Key, kv => kv.Value);
     }
 }

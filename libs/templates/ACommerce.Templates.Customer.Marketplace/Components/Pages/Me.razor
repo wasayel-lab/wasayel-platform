@@ -1,6 +1,7 @@
 @page "/{slug}/me"
 @page "/{slug}/r/{role}/me"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject ITenantContext Tenant
 @inject AuthSession Auth
 @inject NavigationManager Nav
@@ -142,17 +143,18 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        await using var g = Store.QuerySession();
-        loadedTenant = await g.LoadAsync<Tenant>(Slug);
+        loadedTenant = await Tenants.FindAsync(Slug);
         if (loadedTenant is not null) tenantRoles = loadedTenant.Roles;
 
         if (!Auth.IsAuthenticated || Auth.UserId is null) return;
 
-        await using var s = Store.QuerySession(Slug);
-        me                   = await s.LoadAsync<User>(Auth.UserId.Value);
-        favoritesCount       = await s.Query<Favorite>().CountAsync(f => f.UserId == Auth.UserId.Value);
-        conversationsCount   = await s.Query<Conversation>().CountAsync(c => c.OwnerId == Auth.UserId.Value || c.PartnerId == Auth.UserId.Value);
-        notificationsCount   = await s.Query<Notification>().CountAsync(n => n.UserId == Auth.UserId.Value && !n.IsRead);
+        // الوَثيقَةُ وثَلاثَةُ العَدّادات — جَلسَةٌ واحِدَة كَما كانَت،
+        // انتَقَلَت إلى AccountQueries.SummaryAsync.
+        var summary          = await Accounts.SummaryAsync(Slug, Auth.UserId.Value);
+        me                   = summary.Me;
+        favoritesCount       = summary.Favorites;
+        conversationsCount   = summary.Conversations;
+        notificationsCount   = summary.UnreadNotifications;
 
         if (tenantRoles.Count > 0)
         {

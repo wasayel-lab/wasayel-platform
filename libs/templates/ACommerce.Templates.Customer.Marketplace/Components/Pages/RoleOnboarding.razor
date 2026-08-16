@@ -1,6 +1,6 @@
 @page "/{slug}/me/role/onboarding"
 @page "/{slug}/r/{role}/me/role/onboarding"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 
@@ -112,8 +112,7 @@ else
         // ولا فَرع جَديد في هذه الصَفحَة.
         tenant = (await Roles.LoadAsync(Slug)).Tenant;
         if (tenant is null) return;
-        await using var s = Store.QuerySession(Slug);
-        user = await s.LoadAsync<User>(Auth.UserId!.Value);
+        user = await Accounts.ProfileAsync(Slug, Auth.UserId!.Value);
         activeRole = tenant.Roles.FirstOrDefault(r => r.Slug == user?.ActiveRole);
     }
 }

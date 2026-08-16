@@ -1,6 +1,6 @@
 @page "/{slug}/me/area"
 @page "/{slug}/r/{role}/me/area"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
 
 @*
@@ -62,7 +62,6 @@
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
-        await using var s = Store.QuerySession(Slug);
-        user = await s.LoadAsync<User>(Auth.UserId!.Value);
+        user = await Accounts.ProfileAsync(Slug, Auth.UserId!.Value);
     }
 }

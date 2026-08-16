@@ -1,6 +1,6 @@
 @page "/{slug}/me/listings"
 @page "/{slug}/r/{role}/me/listings"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
 @inject L L
 
@@ -81,18 +81,9 @@
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
-        await using var s = Store.QuerySession(Slug);
-        var meId = Auth.UserId!.Value.ToString();
-        // Marten لا يَدعَم فَلتَرَة Attributes في LINQ مُباشَرَةً — نَجلِب
-        // كُلّ إعلانات المُستَأجِر ثُمّ نُفَلتِر في الذاكِرَة. لِـ tenant
-        // صَغير/مُتَوَسِّط هذا مَقبول؛ لَو نَمَى يُمكِن إضافَة computed
-        // index على owner_id لاحِقاً.
-        var all = await s.Query<Listing>()
-            .Where(l => !l.IsDeleted)
-            .ToListAsync();
-        myListings = all
-            .Where(l => l.Attributes.TryGetValue("owner_id", out var oid) && oid == meId)
-            .OrderByDescending(l => l.CreatedAt)
-            .ToList();
+        // الفَلتَرَة في الذاكِرَة (‏Marten لا يُفَلتِر Attributes في LINQ)
+        // انتَقَلَت مَع الاستِعلام إلى AccountQueries.MyListingsAsync —
+        // نَفس الخُطوَتَين ونَفس التَرتيب.
+        myListings = (await Accounts.MyListingsAsync(Slug, Auth.UserId!.Value)).ToList();
     }
 }

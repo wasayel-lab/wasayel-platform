@@ -1,6 +1,7 @@
 @page "/{slug}/me/edit"
 @page "/{slug}/r/{role}/me/edit"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
 @inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
 @inject L L
@@ -198,10 +199,8 @@ else
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
-        await using var g = Store.QuerySession();
-        tenant = await g.LoadAsync<Tenant>(Slug);
-        await using var s = Store.QuerySession(Slug);
-        user = await s.LoadAsync<User>(Auth.UserId!.Value);
+        tenant = await Tenants.FindAsync(Slug);
+        user = await Accounts.ProfileAsync(Slug, Auth.UserId!.Value);
         dynFields = await DynAttrs.GetForProfileAsync(Slug);
 
         if (tenant is not null)

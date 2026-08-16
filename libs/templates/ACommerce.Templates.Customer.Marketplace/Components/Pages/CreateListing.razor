@@ -1,6 +1,6 @@
 @page "/{slug}/create-listing"
 @page "/{slug}/r/{role}/create-listing"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
 @inject NavigationManager Nav
 @inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
@@ -286,8 +286,7 @@ else
 
         if (tenant.Roles.Count > 0 && Auth.UserId.HasValue)
         {
-            await using var t = Store.QuerySession(Slug);
-            var me = await t.LoadAsync<User>(Auth.UserId.Value);
+            var me = await Accounts.ProfileAsync(Slug, Auth.UserId.Value);
             if (me is not null && !string.IsNullOrEmpty(me.ActiveRole))
                 activeRole = tenant.Roles.FirstOrDefault(r => r.Slug == (Role ?? me.ActiveRole));
         }

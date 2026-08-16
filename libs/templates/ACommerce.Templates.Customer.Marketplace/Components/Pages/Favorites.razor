@@ -1,6 +1,6 @@
 @page "/{slug}/favorites"
 @page "/{slug}/r/{role}/favorites"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
 @inject NavigationManager Nav
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
@@ -69,13 +69,6 @@
             .VariantClassSuffix(ACommerce.Kit.Theme.ThemeVariantCatalog.ListingCard);
 
         if (!Auth.IsAuthenticated) return;
-        await using var s = Store.QuerySession(Slug);
-        var favs = await s.Query<Favorite>()
-            .Where(f => f.UserId == Auth.UserId!.Value)
-            .OrderByDescending(f => f.At).ToListAsync();
-        var listingIds = favs.Select(f => f.ListingId).ToList();
-        items = (await s.Query<Listing>()
-            .Where(l => listingIds.Contains(l.Id) && !l.IsDeleted)
-            .ToListAsync()).ToList();
+        items = (await Accounts.FavoriteListingsAsync(Slug, Auth.UserId!.Value)).ToList();
     }
 }

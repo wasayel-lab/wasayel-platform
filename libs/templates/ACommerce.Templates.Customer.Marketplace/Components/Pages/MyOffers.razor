@@ -1,6 +1,6 @@
 @page "/{slug}/me/offers"
 @page "/{slug}/r/{role}/me/offers"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
 
 @*
@@ -80,34 +80,12 @@
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
-        await using var s = Store.QuerySession(Slug);
-        var now = DateTime.UtcNow;
-        // فَلتَرَة العُروض المُنتَهيَة client-side: pending وَ ExpiresAt مَضَى
-        // = اعتَبِرها مُنتَهيَة في العَرض رَغمَ أَنَّها لا تَزال "Pending"
-        // في الـ store (لا مُهَمَّة دَوريَّة بَعد).
-        offers = (await s.Query<ACommerce.Kit.Offers.Offer>()
-            .Where(o => o.OffererId == Auth.UserId!.Value)
-            .ToListAsync())
-            .OrderBy(o => o.Status == ACommerce.Kit.Offers.OfferStatus.Pending && o.ExpiresAt > now ? 0 : 1)
-            .ThenByDescending(o => o.SubmittedAt)
-            .ToList();
-
-        // اِجلِب pickup_lat/pickup_lng مِن كُلّ إعلان لِحِساب المَسافَة.
-        var listingIds = offers.Select(o => o.ListingId).Distinct().ToList();
-        foreach (var lid in listingIds)
-        {
-            var listing = await s.Events.AggregateStreamAsync<Listing>(lid);
-            if (listing is null) { ListingPickup[lid] = null; continue; }
-            if (listing.Attributes.TryGetValue("pickup_lat", out var latStr) &&
-                listing.Attributes.TryGetValue("pickup_lng", out var lngStr) &&
-                double.TryParse(latStr, System.Globalization.NumberStyles.Float,
-                                System.Globalization.CultureInfo.InvariantCulture, out var lat) &&
-                double.TryParse(lngStr, System.Globalization.NumberStyles.Float,
-                                System.Globalization.CultureInfo.InvariantCulture, out var lng))
-                ListingPickup[lid] = (lat, lng);
-            else
-                ListingPickup[lid] = null;
-        }
+        // العُروضُ ومَواقِعُ الالتِقاط — نَفسُ التَرتيب (المُنتَهي يُؤَخَّر
+        // وإن بَقِيَ Pending في المَخزَن) ونَفسُ قِراءَةِ مَجرى الأَحداث،
+        // انتَقَلا إلى AccountQueries.MyOffersAsync.
+        var view = await Accounts.MyOffersAsync(Slug, Auth.UserId!.Value, DateTime.UtcNow);
+        offers = view.Offers.ToList();
+        ListingPickup = view.Pickups.ToDictionary(kv => kv.Key, kv => kv.Value);
     }
 
     static string StatusLabel(ACommerce.Kit.Offers.OfferStatus s) => s switch

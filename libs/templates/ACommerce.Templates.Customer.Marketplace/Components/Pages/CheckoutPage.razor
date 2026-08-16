@@ -1,6 +1,6 @@
 @page "/{slug}/checkout"
 @page "/{slug}/r/{role}/checkout"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
 @using ACommerce.Kit.Cart
@@ -155,8 +155,7 @@
         if (HttpCtx.HttpContext is { } ctx) { Auth.SetTenant(Slug); Auth.Load(ctx, Slug); }
         if (!Auth.IsAuthenticated) return;
         if (Step < 1 || Step > 3) Step = 1;
-        await using var s = Store.QuerySession(Slug);
-        cart = await s.LoadAsync<Cart>(Auth.UserId!.Value);
+        cart = await Accounts.CartAsync(Slug, Auth.UserId!.Value);
         if (Auth.UserName is { } un && string.IsNullOrEmpty(Name)) Name = un;
     }
 }
