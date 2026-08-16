@@ -184,7 +184,7 @@
 
         regionsText = string.Join('\n', citiesWithKids.Select(c =>
             c.Districts.Count > 0
-                ? $"{c.City} > {string.Join("، ", c.Districts)}"
+                ? $"{c.City} > {string.Join(L["admin.tenant_roles.field_sep"], c.Districts)}"
                 : c.City));
     }
 
@@ -199,7 +199,7 @@
     string FormatError(string err) => err switch
     {
         "empty"     => L["admin.tenant_regions.err_empty"],
-        "bad_format" => "تَنسيق غَير صَحيح — كُلّ صَفّ: المَدينَة > أَحياء.",
+        "bad_format" => $"{L["admin.tenant_regions.err_format_a"]} > {L["admin.tenant_regions.err_format_b"]}",
         _           => err
     };
 }

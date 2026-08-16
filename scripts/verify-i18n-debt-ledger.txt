@@ -1,13 +1,19 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|191
-DISTINCT|160
+# ــــــ استِثناءٌ مُعلَن (لا يُتَرجَم أَبَداً) ــــــ
+# StudioStudy.razor — ‏8 حَرفِيّات في تَعبيرَي `switch`:
+#   Level:         «منخفض» «مُنخَفِض» «عالي» «عالٍ»
+#   CategoryClass: «سوق» «تشغيل» «مالي» «تنظيم»
+#   السَبَب: مُطابَقَةُ مُخرَجِ النَموذَج، لا نَصُّ شاشَة.
+#   وصِنفُها نَفسُ صِنفِ `<option value="عَرَبيّ">` في نَموذَج
+#   التَبليغ: قيمَةٌ تُخَزَّن، لا تَسمِيَةٌ تُقرَأ.
+# ــــــــــــــــــــــــــــــــــــــــــــــــــ
+TOTAL|139
+DISTINCT|110
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|37
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/FlowExplainer.razor|2
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/GatedPage.razor|9
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Layout/MainLayout.razor|1
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/FlowExplainer.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AuditLogPage.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/CreateTenant.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/IncubatorFixturesPage.razor|1
@@ -15,33 +21,26 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/I
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/QualityMonitor.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantAttributes.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantCategories.razor|2
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantRegions.razor|7
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantRegions.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/ChatRoom.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/CreateListing.razor|3
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Landing.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyDealDetail.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MySearches.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Notifications.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/RolePicker.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppAttributes.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppCategories.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppDealDetail.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppListings.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppRegions.razor|5
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppRegions.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppTicketDetail.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioConsent.razor|10
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioNewIdea.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudy.razor|10
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantDrivers.razor|13
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantExplore.razor|1
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantHome.razor|4
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantHome.razor|3
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantListingDetail.razor|15
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/VendorProfile.razor|10
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RequireTenantAdmin.razor|3
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/RiderCreateRequest.razor|2
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Routes.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/StudioShell.razor|2
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/TaxonomyChips.razor|7
 libs/templates/ACommerce.Templates.Shared/AcErrorState.razor|2
 libs/widgets/ACommerce.Widgets/AcAttrEditor.razor|3
 libs/widgets/ACommerce.Widgets/AcAttrGrid.razor|2

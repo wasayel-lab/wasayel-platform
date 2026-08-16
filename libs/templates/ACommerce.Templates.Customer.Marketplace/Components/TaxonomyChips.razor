@@ -1,3 +1,4 @@
+@inject L L
 @namespace ACommerce.Templates.Customer.Marketplace.Components
 
 @*
@@ -61,7 +62,7 @@ else
         <div class="acm-taxo-chips-row">
             @* "الكلّ" — نَشِطَة فَقَط حِينَ لا فَلتَر *@
             <a class="acm-taxo-chip @(noFilter ? "is-active" : "")"
-               href="@exploreUrl"><span>الكلّ</span></a>
+               href="@exploreUrl"><span>@L.Markup("listings.taxo.all")</span></a>
             @foreach (var g in byKind)
             {
                 // is-active لِلـ kind فَقَط حِينَ هو المُفَلتَر فِعليّاً (لا «العَرض»).
@@ -116,14 +117,15 @@ else
     /// الآن TaxonomyChips تَنقُل دائِماً إلى /explore.</summary>
     [Parameter] public string BaseUrl { get; set; } = "";
 
-    static string KindLabel(string kind) => kind switch
+    // غَير ساكِنَة: القيَم في المَعجَم، والساكِنَة لا تَبلُغ `L`.
+    string KindLabel(string kind) => kind switch
     {
-        "roommate"     => "السَكَن المُشتَرَك",
-        "residential"  => "سَكَنيّ",
-        "commercial"   => "تِجاريّ",
-        "events"       => "مُناسَبات",
-        "vehicles"     => "مَركَبات",
-        "leisure"      => "تَرفيه",
+        "roommate"     => L["listings.kind.roommate"],
+        "residential"  => L["listings.kind.residential"],
+        "commercial"   => L["listings.kind.commercial"],
+        "events"       => L["listings.kind.events"],
+        "vehicles"     => L["listings.kind.vehicles"],
+        "leisure"      => L["listings.kind.leisure"],
         _              => kind
     };
 }

@@ -117,7 +117,7 @@
                 .OrderBy(r => GetInt(r, "SortOrder"))
                 .Select(r => GetStr(r, "Name"))
                 .Where(s => !string.IsNullOrEmpty(s)).ToList();
-            lines.Add(districts.Count > 0 ? $"{name} > {string.Join("، ", districts)}" : name);
+            lines.Add(districts.Count > 0 ? $"{name} > {string.Join(L["admin.tenant_roles.field_sep"], districts)}" : name);
             citiesWithKids.Add((name, districts));
         }
         regionsText = string.Join("\n", lines);

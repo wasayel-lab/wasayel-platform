@@ -2,6 +2,7 @@
 @page "/{slug}/r/{role}/drivers"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.StorefrontQueries Storefront
 @inject AuthSession Auth
+@inject L L
 
 @*
     صَفحَة العُمَلاء/الراكِبين لِتَصَفُّح السائِقين المُتاحين في المَتجَر.
@@ -11,9 +12,8 @@
 *@
 
 <div class="acs-page">
-    <h1 class="acm-wizard-title">السائِقون المُتاحون</h1>
-    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 16px;">
-        تَواصَل مَع سائِق مُباشَرَةً أَو اُنشُر طَلَب مِشوار لِيَصِلكَ عُروض.
+    <h1 class="acm-wizard-title">@L.Markup("drivers.list.title")</h1>
+    <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 16px;">@((MarkupString)"\n        ")@L.Markup("drivers.list.intro")@((MarkupString)"\n    ")
     </p>
 
     @if (drivers is null)
@@ -22,8 +22,8 @@
     }
     else if (drivers.Count == 0)
     {
-        <AcEmptyState IconName="user" Title="لا سائِقون بَعد"
-                      Message="انتَظِر تَسجيل سائِقين أَو اُنشُر طَلَب مِشوار لِيَصِلكَ عُروض." />
+        <AcEmptyState IconName="user" Title="@L["drivers.list.empty_title"]"
+                      Message="@L["drivers.list.empty_msg"]" />
     }
     else
     {
@@ -46,15 +46,14 @@
                                 <span class="ac-chip ac-chip-sm" style="direction:ltr;">@vp</span>
                             }
                         </div>
-                        <span style="color:var(--ac-text-muted);font-size:11px;display:block;margin-top:6px;">
-                            مُنذُ @FormatAge(d.CreatedAt)
+                        <span style="color:var(--ac-text-muted);font-size:11px;display:block;margin-top:6px;">@((MarkupString)"\n                            ")@L.Markup("drivers.card.since") @FormatAge(d.CreatedAt)
                         </span>
                     </div>
                     @if (Auth.IsAuthenticated && Auth.UserId != d.Id)
                     {
                         <form method="post" action="@($"/{Slug}/users/{d.Id}/chat")" style="margin:0;">
                             <button type="submit" class="ac-btn ac-btn-primary ac-btn-sm">
-                                <AcIcon Name="message" Size="14" /> تَواصُل
+                                <AcIcon Name="message" Size="14" /> @L.Markup("drivers.card.contact")@((MarkupString)"\n                            ")
                             </button>
                         </form>
                     }
@@ -76,20 +75,21 @@
         drivers = (await Storefront.DriversAsync(Slug)).ToList();
     }
 
-    static string VehicleLabel(string v) => v switch
+    // غَير ساكِنَة: القيَم في المَعجَم، والساكِنَة لا تَبلُغ `L`.
+    string VehicleLabel(string v) => v switch
     {
-        "economy" => "اقتِصاديّ",
-        "comfort" => "مُريح",
-        "luxury"  => "فاخِر",
-        "family"  => "عائِليّ",
+        "economy" => L["drivers.vehicle.economy"],
+        "comfort" => L["drivers.vehicle.comfort"],
+        "luxury"  => L["drivers.vehicle.luxury"],
+        "family"  => L["drivers.vehicle.family"],
         _ => v
     };
 
-    static string FormatAge(System.DateTime at)
+    string FormatAge(System.DateTime at)
     {
         var span = System.DateTime.UtcNow - at;
-        if (span.TotalDays < 1)   return "اليَوم";
-        if (span.TotalDays < 30)  return $"{(int)span.TotalDays} يَوم";
-        return $"{(int)(span.TotalDays / 30)} شَهر";
+        if (span.TotalDays < 1)   return L["drivers.age.today"];
+        if (span.TotalDays < 30)  return $"{(int)span.TotalDays} {L["drivers.age.day_unit"]}";
+        return $"{(int)(span.TotalDays / 30)} {L["drivers.age.month_unit"]}";
     }
 }

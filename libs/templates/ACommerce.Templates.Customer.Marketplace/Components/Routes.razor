@@ -1,3 +1,4 @@
+@inject L L
 <Router AppAssembly="@typeof(App).Assembly">
     <Found Context="routeData">
         <RouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)" />
@@ -5,7 +6,7 @@
     </Found>
     <NotFound>
         <LayoutView Layout="@typeof(Layout.MainLayout)">
-            <p class="empty">صَفحَة غير مَوجودَة.</p>
+            <p class="empty">@L.Markup("shell.error.not_found")</p>
         </LayoutView>
     </NotFound>
 </Router>

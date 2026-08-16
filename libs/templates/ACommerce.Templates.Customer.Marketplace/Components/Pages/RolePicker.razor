@@ -30,7 +30,7 @@ else if (tenant.Roles.Count == 0)
 }
 else
 {
-    <h1 class="acm-wizard-title" style="text-align:center;margin-top:24px;">@((MarkupString)"\n        ")@L.Markup("roles.picker.question") @tenant.Name؟
+    <h1 class="acm-wizard-title" style="text-align:center;margin-top:24px;">@((MarkupString)"\n        ")@L.Markup("roles.picker.question") @tenant.Name@L.Markup("roles.picker.suffix")@((MarkupString)"\n    ")
     </h1>
     <p style="text-align:center;color:var(--ac-text-muted);font-size:14px;margin-bottom:24px;">@((MarkupString)"\n        ")@L.Markup("roles.picker.hint")@((MarkupString)"\n    ")
     </p>

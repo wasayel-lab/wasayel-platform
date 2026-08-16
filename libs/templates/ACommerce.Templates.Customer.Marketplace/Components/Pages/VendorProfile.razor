@@ -3,6 +3,7 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.StorefrontQueries Storefront
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
+@inject L L
 @using ACommerce.Kit.Reviews
 
 @*
@@ -13,7 +14,7 @@
 <div class="acs-page">
     @if (vendor is null)
     {
-        <AcEmptyState IconName="info" Title="البائِع غَير مَوجود" />
+        <AcEmptyState IconName="info" Title="@L["vendors.profile.not_found"]" />
     }
     else
     {
@@ -33,13 +34,13 @@
                                 {
                                     <AcIcon Name="star" Size="14" Filled="true" />
                                 }<span style="color:var(--ac-text-muted);">
-                                    @avgRating.ToString("0.0") (@reviewCount تَقييم)
+                                    @avgRating.ToString("0.0") (@reviewCount @L.Markup("vendors.profile.rating_unit")@((MarkupString)"\n                                ")
                                 </span>
                             </div>
                         }
                         else
                         {
-                            <span style="color:var(--ac-text-muted);font-size:13px;">لا تَقييمات بَعد</span>
+                            <span style="color:var(--ac-text-muted);font-size:13px;">@L.Markup("vendors.profile.no_ratings")</span>
                         }
                     </div>
                 </div>
@@ -49,16 +50,16 @@
         @if (Auth.IsAuthenticated && vendor.Id != Auth.UserId)
         {
             <form method="post" action="@($"/{Slug}/vendor/{VendorId}/chat")" style="margin:0 0 12px;">
-                <AcButton Type="submit" Variant="primary" Block="true" Text="تَواصَل مَع البائِع" />
+                <AcButton Type="submit" Variant="primary" Block="true" Text="@L["vendors.profile.contact"]" />
             </form>
         }
 
-        <AcSectionHeader Title="@($"إعلانات {vendor.FullName} ({listings.Count})")" />
+        <AcSectionHeader Title="@($"{L["vendors.profile.listings_prefix"]} {vendor.FullName} ({listings.Count})")" />
         @if (listings.Count == 0)
         {
-            <AcEmptyState IconName="package" Title="لا إعلانات نَشِطَة لِهذا البائِع"
-                          Message="قَد يَكون أَخفاها مُؤَقَّتاً — تَصَفَّح بَقِيَّة المَتجَر."
-                          ActionLabel="استِكشاف"
+            <AcEmptyState IconName="package" Title="@L["vendors.profile.empty_title"]"
+                          Message="@L["vendors.profile.empty_msg"]"
+                          ActionLabel="@L["shell.nav.explore"]"
                           ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
         }
         else
@@ -71,7 +72,10 @@
                         <div style="flex:1;">
                             <strong>@l.Title</strong>
                             <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
-                                @l.Price.ToString("N0") ر.س
+                                @* الفَراغُ الذَيليّ صَريح: كانَ مُلتَصِقاً بِـ«ر.س» في عُقدَةٍ
+                                   واحِدَة فَنَجا، ولَمّا خَرَجَت العُملَةُ إلى المُنَسِّق صارَ
+                                   الفَراغُ وَحدَه حافَّةً فَحُذِف. (الفَخُّ الأَوَّل.) *@
+                                @((MarkupString)ACommerce.Kit.Culture.Money.Format(l.Price))@((MarkupString)"\n                            ")
                             </span>
                         </div>
                         <AcIcon Name="chevron-left" Size="16" />
@@ -82,7 +86,7 @@
 
         @if (reviews.Count > 0)
         {
-            <AcSectionHeader Title="آخِر التَّقييمات" />
+            <AcSectionHeader Title="@L["vendors.profile.reviews_title"]" />
             <div class="acm-cat-list">
                 @foreach (var r in reviews.Take(10))
                 {

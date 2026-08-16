@@ -1,4 +1,5 @@
 @inject Services.TenantAdminGuard Guard
+@inject L L
 
 @*
     بَوّابَة صَفَحات إدارَة المَتجَر (‏/admin/tenants/{slug}/*). تَسأَل
@@ -25,13 +26,10 @@ else
                 <div class="auth-logo-mark" style="background:linear-gradient(135deg,#dc2626,#ea580c);">
                     <AcIcon Name="shield" Size="28" />
                 </div>
-                <h1 class="auth-title">غَير مُصَرَّح</h1>
-                <p class="auth-sub">
-                    إدارَة المَتجَر لِمالِكِه أَو لِمَن يَحمِل صَلاحِيَّة
-                    إدارَتِه. سَجِّل دُخولَكَ ثُمَّ أَعِد المُحاوَلَة.
+                <h1 class="auth-title">@L.Markup("admin.guard.title")</h1>
+                <p class="auth-sub">@((MarkupString)"\n                    ")@L.Markup("admin.guard.message")@((MarkupString)"\n                ")
                 </p>
-                <a class="st-btn st-btn-primary st-btn-block st-btn-lg" href="/studio/auth">
-                    دُخول الاستوديو
+                <a class="st-btn st-btn-primary st-btn-block st-btn-lg" href="/studio/auth">@((MarkupString)"\n                    ")@L.Markup("admin.guard.action")@((MarkupString)"\n                ")
                 </a>
             </div>
         </div>

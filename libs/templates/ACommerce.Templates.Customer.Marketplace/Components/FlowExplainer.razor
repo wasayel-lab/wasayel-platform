@@ -1,3 +1,4 @@
+@inject L L
 @namespace ACommerce.Templates.Customer.Marketplace.Components
 @using ACommerce.Templates.Customer.Marketplace.Services.Deals
 @using ACommerce.Templates.Customer.Marketplace.Services.Ux
@@ -85,8 +86,7 @@
                     </span>
                     <span class="acm-flow-body">
                         <span class="acm-flow-label">@DealsPolicy.LabelAr(stage)</span>
-                        <span class="acm-flow-actor">
-                            يُحَرِّكها: @DealTurnView.ActorLabelAr(DealsPolicy.Actor(stage), Side)
+                        <span class="acm-flow-actor">@((MarkupString)"\n                            ")@L.Markup("deals.flow.driven_by") @DealTurnView.ActorLabelAr(DealsPolicy.Actor(stage), Side)
                         </span>
                     </span>
                 </li>

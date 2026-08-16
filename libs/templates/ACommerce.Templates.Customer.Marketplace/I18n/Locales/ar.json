@@ -1489,5 +1489,64 @@
   "studio.agent.login": "دُخول",
   "studio.agent.need_login": "يَجِب تَسجيل الدُخول.",
   "studio.agent.placeholder": "اُكتُب طَلَبَك… مَثَلاً: عَدِّل لَون مَتجَري إلى أَزرَق",
-  "studio.agent.title": "وَكيل التَّطبيقات"
+  "studio.agent.title": "وَكيل التَّطبيقات",
+
+  "drivers.age.day_unit": "يَوم",
+  "drivers.age.month_unit": "شَهر",
+  "drivers.age.today": "اليَوم",
+  "drivers.card.contact": "تَواصُل",
+  "drivers.card.since": "مُنذُ",
+  "drivers.list.empty_msg": "انتَظِر تَسجيل سائِقين أَو اُنشُر طَلَب مِشوار لِيَصِلكَ عُروض.",
+  "drivers.list.empty_title": "لا سائِقون بَعد",
+  "drivers.list.intro": "تَواصَل مَع سائِق مُباشَرَةً أَو اُنشُر طَلَب مِشوار لِيَصِلكَ عُروض.",
+  "drivers.list.title": "السائِقون المُتاحون",
+  "drivers.vehicle.comfort": "مُريح",
+  "drivers.vehicle.economy": "اقتِصاديّ",
+  "drivers.vehicle.family": "عائِليّ",
+  "drivers.vehicle.luxury": "فاخِر",
+
+  "gate.auth.message": "سَجِّل دُخولك لِلوُصول لِهذه الصَفحَة.",
+  "gate.auth.title": "يَتَطَلَّب تَسجيل دُخول",
+  "gate.forbidden.prefix": "يَتَطَلَّب صَلاحِيَّة «",
+  "gate.forbidden.suffix": "دَورك الحاليّ لا يَملِكها.",
+  "gate.forbidden.title": "صَلاحِيَّة غَير كافِيَة",
+  "gate.terms.action": "عَرض الشُروط",
+  "gate.terms.message": "اِقبَل الشُروط والأَحكام أَوَّلاً لِمُتابَعَة استِخدام التَّطبيق.",
+  "gate.terms.title": "قَبول الشُروط مَطلوب",
+
+  "listings.kind.commercial": "تِجاريّ",
+  "listings.kind.events": "مُناسَبات",
+  "listings.kind.leisure": "تَرفيه",
+  "listings.kind.residential": "سَكَنيّ",
+  "listings.kind.roommate": "السَكَن المُشتَرَك",
+  "listings.kind.vehicles": "مَركَبات",
+  "listings.taxo.all": "الكلّ",
+
+  "admin.guard.action": "دُخول الاستوديو",
+  "admin.guard.message": "إدارَة المَتجَر لِمالِكِه أَو لِمَن يَحمِل صَلاحِيَّة\n                    إدارَتِه. سَجِّل دُخولَكَ ثُمَّ أَعِد المُحاوَلَة.",
+  "admin.guard.title": "غَير مُصَرَّح",
+
+  "vendors.profile.contact": "تَواصَل مَع البائِع",
+  "vendors.profile.empty_msg": "قَد يَكون أَخفاها مُؤَقَّتاً — تَصَفَّح بَقِيَّة المَتجَر.",
+  "vendors.profile.empty_title": "لا إعلانات نَشِطَة لِهذا البائِع",
+  "vendors.profile.listings_prefix": "إعلانات",
+  "vendors.profile.no_ratings": "لا تَقييمات بَعد",
+  "vendors.profile.not_found": "البائِع غَير مَوجود",
+  "vendors.profile.rating_unit": "تَقييم)",
+  "vendors.profile.reviews_title": "آخِر التَّقييمات",
+
+  "shell.error.not_found": "صَفحَة غير مَوجودَة.",
+
+  "roles.picker.suffix": "؟",
+
+  "deals.flow.driven_by": "يُحَرِّكها:",
+
+  "admin.tenant_regions.err_format_a": "تَنسيق غَير صَحيح — كُلّ صَفّ: المَدينَة",
+  "admin.tenant_regions.err_format_b": "أَحياء.",
+
+  "shell.nav.home_full": "الرَئيسِيَّة",
+
+  "shell.nav.explore_full": "الاستِكشاف",
+
+  "shell.nav.nav_label": "التَّنَقُّل"
 }

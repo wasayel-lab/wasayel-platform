@@ -3,6 +3,7 @@
 @inject ITenantContext Tenant
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
+@inject L L
 @using ACommerce.Kit.Auth
 @using ACommerce.Kit.Roles
 @using ACommerce.Kit.Tenants
@@ -32,23 +33,23 @@
 
     case GateState.NeedAuth:
         <AcEmptyState IconName="user"
-                      Title="@($"يَتَطَلَّب تَسجيل دُخول")"
-                      Message="سَجِّل دُخولك لِلوُصول لِهذه الصَفحَة."
-                      ActionLabel="تَسجيل دُخول"
+                      Title="@(L["gate.auth.title"])"
+                      Message="@L["gate.auth.message"]"
+                      ActionLabel="@L["auth.action.login"]"
                       ActionHref="@_loginUrl" />
         break;
 
     case GateState.NeedTerms:
         <AcEmptyState IconName="info"
-                      Title="@("قَبول الشُروط مَطلوب")"
-                      Message="اِقبَل الشُروط والأَحكام أَوَّلاً لِمُتابَعَة استِخدام التَّطبيق."
-                      ActionLabel="عَرض الشُروط"
+                      Title="@(L["gate.terms.title"])"
+                      Message="@L["gate.terms.message"]"
+                      ActionLabel="@L["gate.terms.action"]"
                       ActionHref="@_termsUrl" />
         break;
 
     case GateState.Forbidden:
         <AcEmptyState IconName="alert-circle"
-                      Title="@("صَلاحِيَّة غَير كافِيَة")"
+                      Title="@(L["gate.forbidden.title"])"
                       Message="@_forbiddenMsg" />
         break;
 }
@@ -115,7 +116,7 @@
                 if (!RolePermissions.Has(tenant.Roles, activeRole, Permission))
                 {
                     _state = GateState.Forbidden;
-                    _forbiddenMsg = $"يَتَطَلَّب صَلاحِيَّة «{Permission}» — دَورك الحاليّ لا يَملِكها.";
+                    _forbiddenMsg = $"{L["gate.forbidden.prefix"]}{Permission}» — {L["gate.forbidden.suffix"]}";
                     return;
                 }
             }
