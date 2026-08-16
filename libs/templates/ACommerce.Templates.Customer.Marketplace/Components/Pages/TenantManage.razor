@@ -4,6 +4,7 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantAdminQueries TenantAdmin
 @inject AuthSession Auth
+@inject L L
 
 @*
     لَوحَة tenant_admin — صَلاحِيَّة tenant.manage مَطلوبَة. تَعرِض إحصائِيّات
@@ -14,16 +15,16 @@
 <div class="acs-page">
 @if (!Auth.IsAuthenticated)
 {
-    <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
-                  ActionLabel="تَسجيل دُخول"
+    <AcEmptyState IconName="user" Title="@L["tenant.manage.need_login"]"
+                  ActionLabel="@L["auth.action.login"]"
                   ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/manage")" />
 }
 else if (!canManage)
 {
     <AcEmptyState IconName="alert-circle"
-                  Title="لا صَلاحِيَّة"
-                  Message="هذه الصَفحَة مَفتوحَة لِإداريّي المَتجَر فَقَط."
-                  ActionLabel="الرُجوع"
+                  Title="@L["tenant.manage.no_permission"]"
+                  Message="@L["tenant.manage.no_permission_hint"]"
+                  ActionLabel="@L["admin.action.back"]"
                   ActionHref="@($"/{Slug}")" />
 }
 else if (tenant is null)
@@ -34,8 +35,8 @@ else
 {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <div>
-            <h1 class="acm-wizard-title" style="margin:0;">إدارَة @tenant.Name</h1>
-            <span style="color:var(--ac-text-muted);font-size:13px;">لَوحَة الإداريّ</span>
+            <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("tenant.manage.title_prefix") @tenant.Name</h1>
+            <span style="color:var(--ac-text-muted);font-size:13px;">@L.Markup("tenant.manage.subtitle")</span>
         </div>
         <span style="font-size:32px;"><AcIcon Name="people" Size="24" /></span>
     </div>
@@ -43,48 +44,46 @@ else
     <div class="acm-home-grid acm-stats-grid" style="margin-top:8px;">
         <a class="acm-stat-tile" href="@AuthSession.LinkFor(Slug, Role, $"explore")">
             <strong>@listingsCount</strong>
-            <span>إعلان نَشِط</span>
+            <span>@L.Markup("tenant.manage.stat_listings")</span>
         </a>
         <a class="acm-stat-tile" href="@AuthSession.LinkFor(Slug, Role, $"chats")">
             <strong>@convsCount</strong>
-            <span>مُحادَثَة</span>
+            <span>@L.Markup("tenant.manage.stat_conversations")</span>
         </a>
         <div class="acm-stat-tile" style="cursor:default;">
             <strong>@offersCount</strong>
-            <span>عَرض قَيد المُراجَعَة</span>
+            <span>@L.Markup("tenant.manage.stat_offers")</span>
         </div>
         <div class="acm-stat-tile" style="cursor:default;">
             <strong>@usersCount</strong>
-            <span>مُستَخدِم</span>
+            <span>@L.Markup("tenant.manage.stat_users")</span>
         </div>
     </div>
 
     <AcCard>
         <ChildContent>
-            <h3 style="margin-top:0;">إجراءات سَريعَة</h3>
+            <h3 style="margin-top:0;">@L.Markup("tenant.manage.quick_actions")</h3>
             <div class="acm-home-actions">
-                <AcActionCard Label="إنشاء إعلان"  IconName="plus"      Variant="primary" Href="@AuthSession.LinkFor(Slug, Role, $"create-listing")" />
-                <AcActionCard Label="تَصَفُّح الإعلانات" IconName="search"  Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"explore")" />
-                <AcActionCard Label="مُحادَثات المَتجَر" IconName="message" Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"chats")" />
-                <AcActionCard Label="الشَكاوى والدَّعم"  IconName="alert-circle" Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"support")" />
+                <AcActionCard Label="@L["tenant.manage.action_create"]"  IconName="plus"      Variant="primary" Href="@AuthSession.LinkFor(Slug, Role, $"create-listing")" />
+                <AcActionCard Label="@L["tenant.manage.action_explore"]" IconName="search"  Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"explore")" />
+                <AcActionCard Label="@L["tenant.manage.action_chats"]" IconName="message" Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"chats")" />
+                <AcActionCard Label="@L["tenant.manage.action_support"]"  IconName="alert-circle" Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"support")" />
             </div>
         </ChildContent>
     </AcCard>
 
     <AcCard>
         <ChildContent>
-            <h3 style="margin-top:0;">إعدادات المَتجَر (المنصّة)</h3>
-            <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
-                هذه الرَوابِط تَفتَح أَدَوات إدارَة المُحتَوى عَلى مُستَوى المنصّة
-                (تَتَطَلَّب وُصولاً مُسبَقاً إلى /admin).
+            <h3 style="margin-top:0;">@L.Markup("tenant.manage.settings_title")</h3>
+            <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">@((MarkupString)"\n                ")@L.Markup("tenant.manage.settings_hint")@((MarkupString)"\n            ")
             </p>
             <div class="acm-home-actions">
-                <AcActionCard Label="الفِئات"       IconName="tag"      Variant="surface" Href="@($"/admin/tenants/{Slug}/categories?from=tenant")" />
-                <AcActionCard Label="الخَصائِص"      IconName="settings" Variant="surface" Href="@($"/admin/tenants/{Slug}/attributes?from=tenant")" />
-                <AcActionCard Label="المُدُن"        IconName="map-pin"  Variant="surface" Href="@($"/admin/tenants/{Slug}/regions?from=tenant")" />
-                <AcActionCard Label="الأَدوار"       IconName="user"     Variant="surface" Href="@($"/admin/tenants/{Slug}/roles?from=tenant")" />
-                <AcActionCard Label="المُستَخدِمون"  IconName="user"     Variant="surface" Href="@($"/admin/tenants/{Slug}/users?from=tenant")" />
-                <AcActionCard Label="الهُويَّة"      IconName="settings" Variant="surface" Href="@($"/admin/tenants/{Slug}/branding?from=tenant")" />
+                <AcActionCard Label="@L["tenant.manage.link_categories"]"       IconName="tag"      Variant="surface" Href="@($"/admin/tenants/{Slug}/categories?from=tenant")" />
+                <AcActionCard Label="@L["tenant.manage.link_attributes"]"      IconName="settings" Variant="surface" Href="@($"/admin/tenants/{Slug}/attributes?from=tenant")" />
+                <AcActionCard Label="@L["tenant.manage.link_regions"]"        IconName="map-pin"  Variant="surface" Href="@($"/admin/tenants/{Slug}/regions?from=tenant")" />
+                <AcActionCard Label="@L["tenant.manage.link_roles"]"       IconName="user"     Variant="surface" Href="@($"/admin/tenants/{Slug}/roles?from=tenant")" />
+                <AcActionCard Label="@L["tenant.manage.link_users"]"  IconName="user"     Variant="surface" Href="@($"/admin/tenants/{Slug}/users?from=tenant")" />
+                <AcActionCard Label="@L["tenant.manage.link_branding"]"      IconName="settings" Variant="surface" Href="@($"/admin/tenants/{Slug}/branding?from=tenant")" />
             </div>
         </ChildContent>
     </AcCard>
