@@ -91,6 +91,45 @@ public class ThemeContrastRuleTests
     }
 
     [Fact]
+    public void TheDangerPairs_RejectExactlyTheColoursTheyReplaced_AndAcceptTheNewOnes()
+    {
+        // حارِسٌ يُضاف **بَعدَ** إصلاحِ ما كانَ يَحرُسُه لا يُثبِت
+        // شَيئاً بِخُضرَتِه: قَد يَكون أَخضَرَ لِأَنَّه لا يَرى. فَيُغَذّى
+        // هُنا بِالقيَم الساقِطَة بِعَينِها — تِلكَ الَّتي كانَت في
+        // المِلَفّات صَباحَ ‏2026-08-16 — ويُشتَرَط أَن يَرُدَّها.
+
+        // و«يَحمِل الرَمز» شَرطٌ لا زينَة: لَو اكتُفِيَ بِوُجود الرَمزِ
+        // في القائِمَة لَجازَ أَن يُرضِيَه زَوجٌ آخَرُ ساقِط، فَيَخضَرّ
+        // الاختِبارُ وزَوجا danger مَحذوفان.
+        static void RejectsNamingDanger(ThemeDefinition d)
+        {
+            var v = ThemeDefinitionValidator.ValidateTenantDefinition(d);
+            Assert.Contains(v, x => x.Code == ThemeContrastRule.ViolationCode &&
+                                    x.MessageAr.Contains("color.danger", StringComparison.Ordinal));
+        }
+
+        // ‏default/azraq: ‏#EF4444 فَوقَ #fafafa = 3.61، وفَوقَ #ffffff = 3.76
+        RejectsNamingDanger(Theme(("color.danger", "#EF4444"), ("color.bg", "#fafafa"),
+                                  ("color.surface", "#ffffff")));
+
+        // ‏akhdar_alwaha: ‏#DC2626 فَوقَ #F2F7F2 = 4.452 — ساقِطٌ بِخَمسَةٍ
+        // مِن مِئَة، وهو الرَقَمُ الَّذي أَعطَتهُ الطَبَقَةُ السادِسَة
+        // حَرفاً على زِرّ الخُروج في ‏/theme-demo/me.
+        RejectsNamingDanger(Theme(("color.danger", "#DC2626"), ("color.bg", "#F2F7F2")));
+
+        // والمُوجَب: القيَمُ الَّتي حَلَّت مَحَلَّها تَمُرّ — وإلّا كانَ
+        // الإصلاحُ نَفسُه ناقِصاً.
+        var now1 = Theme(("color.danger", "#DC2626"), ("color.bg", "#fafafa"),
+                         ("color.surface", "#ffffff"));
+        Assert.DoesNotContain(ThemeContrastRule.ViolationCode,
+                              Codes(ThemeDefinitionValidator.ValidateTenantDefinition(now1)));
+
+        var now2 = Theme(("color.danger", "#C81E1E"), ("color.bg", "#F2F7F2"));
+        Assert.DoesNotContain(ThemeContrastRule.ViolationCode,
+                              Codes(ThemeDefinitionValidator.ValidateTenantDefinition(now2)));
+    }
+
+    [Fact]
     public void ATenantThatDarkensOnlyTheBackground_IsCaughtAgainstInheritedText()
     {
         // **أَخطَر مَدخَل**: الوَثيقَة لا تَذكُر لَونَ نَصّ إطلاقاً —
@@ -171,7 +210,13 @@ public class ThemeContrastRuleTests
         // القائِمَة مُشتَقَّة بِالعَدّ مِن أَوراق الأَنماط لا مِن الخَيال —
         // فَكُلّ زَوج يَحمِل مُنتَقِيَه، ولا زَوجَ مُكَرَّراً، ولا مِفتاحَ
         // خارِج مَعجَم الرُموز.
-        Assert.Equal(10, ThemeContrastRule.Pairs.Count);
+        //
+        // كانَت عَشَرَة، وصارَت اثنَي عَشَرَ بِزَوجَي ‏color.danger
+        // (‏2026-08-16). والزِيادَةُ تُقال ولا تُجَمَّل: العَشَرَةُ
+        // اُشتُقَّت مِن اقتِران `color: var(--ac-text*)` وَحدَه، فَغابَ
+        // عَنها رَمزُ حالَةٍ يُرسَم نَصّاً — وسَقَطَ فيه ثَلاثَةٌ مِن
+        // أَربَعَةِ ثيماتٍ بِلا أَن يَرُدَّ المُصادِقُ واحِداً.
+        Assert.Equal(12, ThemeContrastRule.Pairs.Count);
 
         foreach (var p in ThemeContrastRule.Pairs)
         {

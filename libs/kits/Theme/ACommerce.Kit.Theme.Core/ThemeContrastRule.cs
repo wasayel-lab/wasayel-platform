@@ -90,6 +90,23 @@ public static class ThemeContrastRule
             ".ac-space-placeholder فَوقَ .ac-space-media، و .ac-gallery-placeholder"),
         new("color.textSoft", "color.surface",
             ".acs-bottom-nav-item و .ac-listrow-time و .ac-search-icon و ::placeholder"),
+
+        // ‏color.danger — وهو **لَيسَ رَمزَ نَصّ**، ولِذلك غابَ.
+        //
+        // القائِمَةُ أَعلاه اُشتُقَّت بِالعَدّ مِن اقتِران
+        // ‏`color: var(--ac-text*)` بِخَلفِيَّتِه، فَلَم يَدخُلها رَمزُ
+        // حالَةٍ يُرسَم نَصّاً. والنَتيجَة مَقيسَة (‏2026-08-16): ثَلاثَةٌ
+        // مِن أَربَعَةِ ثيماتٍ تَسقُط في زَوجٍ واحِدٍ على الأَقَلّ،
+        // **وصِفرُ ثيمٍ رَدَّهُ المُصادِق** — لِأَنّ الرَمز لَم يَكُن
+        // في مَعجَمِه. كَشَفَتهُ الطَبَقَةُ السادِسَة على صَفحَةٍ حَيَّة.
+        //
+        // فَالدَرسُ لَيسَ «زِيدَ زَوجان» بَل: **مَعجَمٌ مُغلَقٌ يَحرُس
+        // ما فيه وَحدَه**، وحُدودُه تُقاس بِما يُرسَم في الأَنماط لا
+        // بِاسم الرَمز. وكُلُّ رَمزٍ يُرسَم نَصّاً مَحَلُّه هُنا.
+        new("color.danger", "color.bg",
+            ".acs-fav-btn.active و .ac-space-fav.is-fav — نَصّ/أَيقونَة بِلا خَلفِيَّة مَحَلِّيَّة في جِسم الصَفحَة"),
+        new("color.danger", "color.surface",
+            ".ac-field-error و .acs-error .acs-empty-title و .ac-alert-danger — رَسائِل الخَطَأ داخِل البِطاقات والنَماذِج"),
     };
 
     /// <summary>
