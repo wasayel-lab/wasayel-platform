@@ -1,5 +1,6 @@
 @page "/admin/monitor"
-@inject Marten.IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.StudioQueries Studio
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 
@@ -175,43 +176,29 @@
 
 @code {
     int total, completed, analyzing, failed, users, stores, avgQuality;
-    Dictionary<string, int> tierCounts = new();
-    Dictionary<string, int> promptVersions = new();
-    List<IncubatorSession> recentFailures = new();
-    List<IncubatorSession> recentCompleted = new();
+    IReadOnlyDictionary<string, int> tierCounts = new Dictionary<string, int>();
+    IReadOnlyDictionary<string, int> promptVersions = new Dictionary<string, int>();
+    IReadOnlyList<IncubatorSession> recentFailures = Array.Empty<IncubatorSession>();
+    IReadOnlyList<IncubatorSession> recentCompleted = Array.Empty<IncubatorSession>();
 
     protected override async Task OnInitializedAsync()
     {
-        await using var qs = Store.QuerySession(FeasibilityAnalysisService.IncubatorTenant);
-        var sessions = (await qs.Query<IncubatorSession>().ToListAsync()).ToList();
-        total = sessions.Count;
-        completed = sessions.Count(s => s.Status == IncubatorStatus.Completed);
-        analyzing = sessions.Count(s => s.Status == IncubatorStatus.Analyzing);
-        failed = sessions.Count(s => s.Status == IncubatorStatus.Failed);
-        avgQuality = completed > 0
-            ? (int)sessions.Where(s => s.Status == IncubatorStatus.Completed)
-                .Average(s => s.AnalysisQualityScore)
-            : 0;
-        promptVersions = sessions
-            .Where(s => !string.IsNullOrEmpty(s.PromptVersion))
-            .GroupBy(s => s.PromptVersion)
-            .ToDictionary(g => g.Key, g => g.Count());
-        recentFailures = sessions
-            .Where(s => s.Status == IncubatorStatus.Failed)
-            .OrderByDescending(s => s.UpdatedAt).Take(5).ToList();
-        recentCompleted = sessions
-            .Where(s => s.Status == IncubatorStatus.Completed)
-            .OrderByDescending(s => s.UpdatedAt).Take(8).ToList();
+        var m = await Studio.MonitorAsync();
+        total           = m.Total;
+        completed       = m.Completed;
+        analyzing       = m.Analyzing;
+        failed          = m.Failed;
+        avgQuality      = m.AvgQuality;
+        promptVersions  = m.PromptVersions;
+        recentFailures  = m.RecentFailures;
+        recentCompleted = m.RecentCompleted;
+        users           = m.Users;
+        tierCounts      = m.TierCounts;
 
-        await using var us = Store.QuerySession(StudioAuth.Tenant);
-        var allUsers = (await us.Query<StudioUser>().ToListAsync()).ToList();
-        users = allUsers.Count;
-        tierCounts = allUsers.GroupBy(u => u.Tier).ToDictionary(g => g.Key, g => g.Count());
-
-        // عَدَد المَتاجِر المَبنيَّة مِن جَلَسات تَحليل
-        await using var ts = Store.QuerySession();
-        var tenants = (await ts.Query<ACommerce.Kit.Tenants.Tenant>().ToListAsync()).ToList();
-        stores = tenants.Count(t => t.SourceAnalysisId is not null);
+        // عَدَد المَتاجِر المَبنيَّة مِن جَلَسات تَحليل — مَصدَرُه سِجِلُّ
+        // المُستَأجِرين العامّ، فَيُسأَل مِن مالِكِه لا مِن لَوحَةِ
+        // المُراقَبَة.
+        stores = (await Tenants.ListAsync()).Count(t => t.SourceAnalysisId is not null);
     }
 
     static string Truncate(string s, int n) => s.Length <= n ? s : s[..n] + "…";

@@ -1,6 +1,6 @@
 @page "/"
-@inject IQuerySession Db
-@inject Marten.IDocumentStore Store
+@inject Services.Queries.TenantDirectory Tenants
+@inject Services.Queries.PlatformStatsQueries PlatformStats
 @inject Services.Incubator.StudioAuth StudioAuthSvc
 @inject L L
 
@@ -144,32 +144,24 @@
 </script>
 
 @code {
-    List<Tenant>? tenants;
-    Dictionary<string, int> listingsByTenant = new();
+    IReadOnlyList<Tenant>? tenants;
+    IReadOnlyDictionary<string, int> listingsByTenant = new Dictionary<string, int>();
     int totalListings;
     int totalRoles;
     int cityCount;
 
     protected override async Task OnInitializedAsync()
     {
-        tenants = (await Db.Query<Tenant>().OrderBy(t => t.CreatedAt).ToListAsync()).ToList();
+        tenants = await Tenants.ListAsync();
         totalRoles = tenants.Sum(t => t.Roles.Count);
         var allCities = new HashSet<string>(
             tenants.Where(t => !string.IsNullOrEmpty(t.City)).Select(t => t.City!));
 
-        // اِعدد الإعلانات لِكُلّ مُستَأجِر (sessions per-tenant لِأَنّ Listing conjoined).
-        foreach (var t in tenants)
-        {
-            try
-            {
-                await using var s = Store.QuerySession(t.Slug);
-                var count = await s.Query<ACommerce.Kit.Listings.Listing>()
-                    .Where(l => !l.IsDeleted).CountAsync();
-                listingsByTenant[t.Slug] = count;
-                totalListings += count;
-            }
-            catch { /* tenant بِدون جَدوَل listings — تَجاهَل */ }
-        }
+        // العَدُّ جَلسَةً لِكُلّ سلاج — `Listing` مُقتَرِنَة الإيجار،
+        // فَلا استِعلامَ واحِداً يَعُدُّ كُلّ المَتاجِر. نَفسُ ما كانَت
+        // الصَفحَةُ تَفعَلُه بِيَدِها، في مَوضِعِه الصَحيح.
+        listingsByTenant = await PlatformStats.ListingCountsAsync(tenants.Select(t => t.Slug));
+        totalListings = listingsByTenant.Values.Sum();
         cityCount = allCities.Count;
     }
 }

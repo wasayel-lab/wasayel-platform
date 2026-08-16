@@ -1,6 +1,6 @@
 @page "/studio/consent"
 @inject Services.Incubator.StudioAuth Auth
-@inject Marten.IDocumentStore Store
+@inject Services.Queries.StudioQueries Studio
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 @inject L L
 
@@ -66,11 +66,7 @@
     {
         Auth.Load();
         if (!Auth.IsAuthenticated) return;
-        await using var qs = Store.QuerySession(
-            ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth.Tenant);
-        var existing = await qs.Query<ConsentRecord>()
-            .Where(c => c.UserId == Auth.UserId!.Value && c.Version == ConsentPolicy.CurrentVersion)
-            .ToListAsync();
-        alreadyConsented = existing.Count > 0;
+        alreadyConsented = await Studio.HasConsentedAsync(
+            Auth.UserId!.Value, ConsentPolicy.CurrentVersion);
     }
 }

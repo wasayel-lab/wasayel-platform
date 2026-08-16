@@ -2,7 +2,7 @@
 @page "/studio/ideas"
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Incubator.FeasibilityAnalysisService Incubator
-@inject Marten.IDocumentStore Store
+@inject Services.Queries.TenantDirectory Tenants
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 @inject L L
 @using ACommerce.Kit.Tenants
@@ -198,10 +198,7 @@
         if (!Auth.IsAuthenticated) return;
         var uid = Auth.UserId!.Value;
         sessions = await Incubator.ListForUserAsync(uid);
-        await using var qs = Store.QuerySession();
-        myApps = (await qs.Query<Tenant>()
-            .Where(t => t.OwnerUserId == uid)
-            .OrderBy(t => t.CreatedAt).ToListAsync()).ToList();
+        myApps = (await Tenants.ListOwnedByAsync(uid)).ToList();
         var u = await TierSvc.GetUserAsync(uid);
         currentTier = u?.Tier ?? "spark";
 
