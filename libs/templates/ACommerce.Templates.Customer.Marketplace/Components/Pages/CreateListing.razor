@@ -21,14 +21,14 @@ else
 {
 
 <div class="acs-page acs-create-listing">
-    <h1 class="acm-wizard-title">إعلان جَديد</h1>
+    <h1 class="acm-wizard-title">@L.Markup("listings.create.title")</h1>
 
     @if (!Auth.IsAuthenticated)
     {
         <AcEmptyState IconName="user"
-                      Title="تَحتاج تَسجيل دُخول"
-                      Message="سَجِّل دُخولك قَبل نَشر إعلان."
-                      ActionLabel="تَسجيل دُخول"
+                      Title="@L["listings.create.need_login"]"
+                      Message="@L["listings.create.need_login_hint"]"
+                      ActionLabel="@L["auth.action.login"]"
                       ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/create-listing")" />
     }
     else if (tenant is null)
@@ -38,20 +38,20 @@ else
     else
     {
         <div class="acs-step-indicator">
-            <span class="@(string.IsNullOrEmpty(Category)? "active" : "")">الفِئَة</span>
-            <span class="@(!string.IsNullOrEmpty(Category)? "active" : "")">التَفاصيل</span>
-            <span>الصُوَر</span>
-            <span class="@(!string.IsNullOrEmpty(Category)? "active" : "")">المَوقِع</span>
+            <span class="@(string.IsNullOrEmpty(Category)? "active" : "")">@L.Markup("listings.create.step_category")</span>
+            <span class="@(!string.IsNullOrEmpty(Category)? "active" : "")">@L.Markup("listings.create.step_details")</span>
+            <span>@L.Markup("listings.create.step_photos")</span>
+            <span class="@(!string.IsNullOrEmpty(Category)? "active" : "")">@L.Markup("listings.create.step_location")</span>
         </div>
 
         @if (Err == "invalid")
         {
-            <AcAlert Variant="danger" Message="الحُقول المَطلوبَة غَير صَحيحَة — اعتَنِ بِالعُنوان والسِعر والفِئَة." />
+            <AcAlert Variant="danger" Message="@L["listings.create.err_invalid"]" />
         }
         else if (Err == "forbidden")
         {
             <AcAlert Variant="danger"
-                     Message="دَوركَ الحاليّ لا يَسمَح بِنَشر إعلان. إن كانَ هذا غَير مُتَوَقَّع، تَواصَل مَع إدارَة المَتجَر." />
+                     Message="@L["listings.create.err_forbidden"]" />
         }
         @* نَفاد الحِصَّة: رِسالَة تَقول ما وَقَعَ وما يُفعَل، ومَعَها
            مَخرَج. نُصوصُها مِن قامُوس المَفاتيح لا حَرفِيَّةً في
@@ -90,7 +90,7 @@ else
                 .ToList();
             <AcCard>
                 <ChildContent>
-                    <h3 style="margin-top:0;">اختَر فِئَة الإعلان</h3>
+                    <h3 style="margin-top:0;">@L.Markup("listings.create.pick_category")</h3>
                     @if (groups.Count > 1)
                     {
                         <div class="acm-cat-tree">
@@ -143,25 +143,24 @@ else
                 <AcCard>
                     <ChildContent>
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                            <h3 style="margin:0;">تَفاصيل الإعلان</h3>
+                            <h3 style="margin:0;">@L.Markup("listings.create.details_title")</h3>
                             <a href="@AuthSession.LinkFor(Slug, Role, $"create-listing")" class="ac-btn ac-btn-ghost ac-btn-sm">
-                                <AcIcon Name="arrow-right" Size="14" /> تَغيير الفِئَة
+                                <AcIcon Name="arrow-right" Size="14" /> @L.Markup("listings.create.change_category")@((MarkupString)"\n                            ")
                             </a>
                         </div>
                         @if (selectedCategory is not null)
                         {
-                            <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
-                                الفِئَة: <strong><AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(selectedCategory.Icon, "tag")" Size="16" /> @selectedCategory.Label</strong>
+                            <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">@((MarkupString)"\n                                ")@L.Markup("listings.create.category_label") <strong><AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(selectedCategory.Icon, "tag")" Size="16" /> @selectedCategory.Label</strong>
                             </p>
                         }
 
-                        <AcField Label="عُنوان الإعلان" Required="true">
+                        <AcField Label="@L["listings.create.field_title"]" Required="true">
                             <input type="text" name="title" required maxlength="120"
                                    class="ac-input"
                                    placeholder="مَثَلاً: شَقّة قَريبَة مِن الجامِعَة" />
                         </AcField>
 
-                        <AcField Label="الوَصف" Required="true">
+                        <AcField Label="@L["listings.create.field_description"]" Required="true">
                             <textarea name="description" rows="4" maxlength="2000" required
                                       class="ac-input" style="resize:vertical;font-family:inherit;"
                                       placeholder="تَفاصيل العَرض، المُمَيِّزات، شُروط التَواصُل…"></textarea>
@@ -172,7 +171,7 @@ else
                            POST handler ولا يَنطَبِق عَلى كُلّ المَتاجِر (مَثَلاً
                            إنجيز لِلمَشاوير). أُزيلَ — لَو مَتجَر احتاج المَفهوم
                            يُضاف كَخاصِّيَّة SingleSelect ديناميكِيَّة. *@
-                        <AcField Label="السِعر (ريال)" Required="true">
+                        <AcField Label="@L["listings.create.field_price"]" Required="true">
                             <input type="number" name="price" required min="1" step="1"
                                    class="ac-input" inputmode="numeric" placeholder="0" />
                         </AcField>
@@ -185,7 +184,7 @@ else
                 {
                     <AcCard>
                         <ChildContent>
-                            <h3 style="margin-top:0;">تَفاصيل @selectedCategory?.Label</h3>
+                            <h3 style="margin-top:0;">@L.Markup("listings.create.dyn_details_prefix") @selectedCategory?.Label</h3>
                             @foreach (var f in dynFields)
                             {
                                 <AcField Label="@f.Label" Required="@f.IsRequired">
@@ -201,9 +200,8 @@ else
                    في Attributes["photos"] كَ JSON array. *@
                 <AcCard>
                     <ChildContent>
-                        <h3 style="margin-top:0;">الصُوَر</h3>
-                        <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">
-                            حَتَّى ٦ صُوَر (JPG / PNG / WebP). الأُولَى تَظهَر كَغِلاف.
+                        <h3 style="margin-top:0;">@L.Markup("listings.create.photos_title")</h3>
+                        <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 12px;">@((MarkupString)"\n                            ")@L.Markup("listings.create.photos_hint")@((MarkupString)"\n                        ")
                         </p>
                         <input type="file" name="photos" multiple
                                accept="image/jpeg,image/png,image/webp"
@@ -213,13 +211,13 @@ else
 
                 <AcCard>
                     <ChildContent>
-                        <h3 style="margin-top:0;">المَوقِع</h3>
+                        <h3 style="margin-top:0;">@L.Markup("listings.create.location_title")</h3>
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                            <AcField Label="المَدينَة">
+                            <AcField Label="@L["listings.create.field_city"]">
                                 <input type="text" name="city" maxlength="40" class="ac-input"
-                                       value="@(tenant.City ?? "")" placeholder="إب" />
+                                       value="@(tenant.City ?? "")" placeholder="@L["listings.create.city_hint"]" />
                             </AcField>
-                            <AcField Label="الحَيّ" Required="true">
+                            <AcField Label="@L["listings.create.field_district"]" Required="true">
                                 <input type="text" name="district" required maxlength="60"
                                        class="ac-input" placeholder="حَوبان" />
                             </AcField>
@@ -228,9 +226,9 @@ else
                 </AcCard>
 
                 <div style="display:flex;gap:8px;margin-top:16px;">
-                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}")">إلغاء</a>
+                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}")">@L.Markup("listings.create.cancel")</a>
                     <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
-                        <AcIcon Name="check" Size="18" /> نَشر الإعلان
+                        <AcIcon Name="check" Size="18" /> @L.Markup("listings.create.submit")@((MarkupString)"\n                    ")
                     </button>
                 </div>
             </form>
@@ -273,7 +271,7 @@ else
             table,
             roleSet.ResolveComposition(activeRole?.CatalogSlug).CreateListing,
             null,
-            "إنشاء الإعلان");
+            L["listings.create.role_form_label"]);
     }
 
     protected override async Task OnParametersSetAsync()
@@ -298,15 +296,16 @@ else
             dynFields = await DynAttrs.GetForListingCategoryAsync(Slug, tenant.Categories[0].Slug);
     }
 
-    static string KindLabel(string kind) => kind switch
+    // ‏لَيسَت `static`: قيَمُها مِن `L` المَحقون scoped.
+    string KindLabel(string kind) => kind switch
     {
-        ""             => "الفِئات",
-        "roommate"     => "السَكَن المُشتَرَك",
-        "residential"  => "سَكَنيّ",
-        "commercial"   => "تِجاريّ",
-        "events"       => "مُناسَبات",
-        "vehicles"     => "مَركَبات",
-        "leisure"      => "تَرفيه",
+        ""             => L["listings.create.kind_default"],
+        "roommate"     => L["listings.create.kind_roommate"],
+        "residential"  => L["listings.create.kind_residential"],
+        "commercial"   => L["listings.create.kind_commercial"],
+        "events"       => L["listings.create.kind_events"],
+        "vehicles"     => L["listings.create.kind_vehicles"],
+        "leisure"      => L["listings.create.kind_leisure"],
         _              => kind
     };
 
@@ -327,12 +326,12 @@ else
             case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.Boolean:
                 <label style="display:inline-flex;align-items:center;gap:8px;">
                     <input type="checkbox" name="@name" value="true" />
-                    <span>نَعَم</span>
+                    <span>@L.Markup("listings.create.dyn_yes")</span>
                 </label>
                 break;
             case ACommerce.Templates.Customer.Marketplace.Services.DynFieldType.SingleSelect:
                 <select name="@name" class="ac-input" required="@f.IsRequired">
-                    <option value="">— اختَر —</option>
+                    <option value="">@L.Markup("listings.create.dyn_choose")</option>
                     @foreach (var o in f.Options)
                     {
                         <option value="@o.Value" selected="@(f.DefaultValue == o.Value)">@o.Label</option>
