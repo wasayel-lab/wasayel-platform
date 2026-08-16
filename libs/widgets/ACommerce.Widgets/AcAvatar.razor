@@ -50,8 +50,30 @@
     /// gradient مُشتقّ من hash بسيط للاسم. نَفس الاسم ⇒ نَفس اللون دائماً
     /// (المستخدم يَتعرّف على المراسل بلونه عبر التَطبيق). 8 أزواج محدَّدة
     /// كلّها دافئة + متوسّطة الإشباع لِتَلائم أيّ ثيم.
+    ///
+    /// <para><b>و«دائماً» تَشمَل ما بَعدَ إعادَة التَشغيل</b>: كانَت هُنا
+    /// <c>string.GetHashCode()</c> وبَذرَتُها تَتَبَدَّل مَع كُلّ عَمَلِيَّة
+    /// في dotnet — فَلَونُ الشَخص نَفسِه يَتَغَيَّر بَعدَ كُلّ إقلاع، وهو
+    /// نَقضُ الوَعد المَكتوب في هذا التَعليق. كُشِفَ بِالقِياس: لَقطَتان
+    /// لِنَفس الصَفحَة قَبلَ الإقلاع وبَعدَه اختَلَفَتا في هذا السَطر
+    /// وَحدَه. والبَديل <c>FNV-1a</c> صَريحَة، وهي <b>نَفسُ العِلاج ونَفسُ
+    /// الدالَّة</b> المَكتوبَة لِنَفس السَبَب في
+    /// <c>ACommerce.Kit.Auth.NafathNames</c>.</para>
     /// </summary>
-    private string _gradient => _palette[Math.Abs((Name ?? "").GetHashCode()) % _palette.Length];
+    private string _gradient => _palette[(int)(Fnv1a(Name ?? "") % (uint)_palette.Length)];
+
+    /// <summary>‏FNV-1a ‏32-بِت فَوق بايتات UTF-8 — ثابِتَة عَبر
+    /// العَمَلِيّات والمِنَصّات، بِخِلاف تَجزِئَة الإطار.</summary>
+    private static uint Fnv1a(string s)
+    {
+        var h = 2166136261u;
+        foreach (var b in System.Text.Encoding.UTF8.GetBytes(s))
+        {
+            h ^= b;
+            h *= 16777619u;
+        }
+        return h;
+    }
 
     private static readonly string[] _palette =
     {

@@ -28,7 +28,14 @@ public sealed class MockMapsProvider : IMapsProvider
             if (address.Contains(key, StringComparison.OrdinalIgnoreCase))
                 return Task.FromResult<GeocodingResult?>(new(loc, $"{address}، السعودية"));
         // افتراضيّ: وَسَط الرياض مَع إزاحَة بِناء عَلى hash.
-        var h = address.GetHashCode();
+        //
+        // والتَجزِئَةُ **صَريحَة** لا `string.GetHashCode`: بَذرَةُ تِلكَ
+        // تَتَبَدَّل مَع كُلّ عَمَلِيَّة في dotnet، فَكانَ نَفسُ العُنوان
+        // يُعطي إحداثِيَّتَين مُختَلِفَتَين بَعدَ كُلّ إقلاع — ومُزَوِّدٌ
+        // وَهميّ غَيرُ حَتميّ يَجعَل كُلَّ اختِبارٍ يَعتَمِد عَلَيه
+        // مُتَقَلِّباً بِلا سَبَبٍ ظاهِر. نَفسُ العِلَّة ونَفسُ العِلاج في
+        // `ACommerce.Kit.Auth.NafathNames`.
+        var h = (int)Fnv1a(address);
         var lat = 24.7 + ((h & 0xFF) / 5000.0);
         var lng = 46.7 + (((h >> 8) & 0xFF) / 5000.0);
         return Task.FromResult<GeocodingResult?>(new(new(lat, lng), $"{address}"));
@@ -73,6 +80,19 @@ public sealed class MockMapsProvider : IMapsProvider
                + Math.Cos(Rad(a.Lat)) * Math.Cos(Rad(b.Lat))
                * Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
         return 2 * R * Math.Asin(Math.Sqrt(sa));
+    }
+
+    /// <summary>‏FNV-1a ‏32-بِت فَوق بايتات UTF-8 — ثابِتَة عَبر
+    /// العَمَلِيّات والمِنَصّات، بِخِلاف تَجزِئَة الإطار.</summary>
+    internal static uint Fnv1a(string s)
+    {
+        var h = 2166136261u;
+        foreach (var b in System.Text.Encoding.UTF8.GetBytes(s))
+        {
+            h ^= b;
+            h *= 16777619u;
+        }
+        return h;
     }
 }
 
