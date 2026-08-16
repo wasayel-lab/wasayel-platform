@@ -38,8 +38,15 @@
                 var current = i == Step;
                 var done = i < Step;
                 <div style="flex:1;text-align:center;">
+                    @* الخُطوَةُ الآتِيَة رَقمُها كانَ **أَبيَضَ على
+                       `--ac-border`** — والرَمزُ حَدٌّ لا سَطح، قيمَتُه
+                       ‏`rgba(17,24,39,.07)` أَي رَماديٌّ شاحِب. النِسبَةُ
+                       المَقيسَة ‏**1.20**: الرَقَمانِ ‏٢ و٣ غَيرُ
+                       مَنظورَينِ إطلاقاً في النافِذَتَين. والخَطَأُ
+                       لَيسَ في الرَمز بَل في تَعبِئَةِ حَدٍّ بِنَصّ —
+                       فَيُصَحَّح النَصُّ حَيثُ يَقَع، ولا يُمَسّ الرَمز. *@
                     <div style="width:30px;height:30px;border-radius:50%;margin:0 auto 4px;display:grid;place-items:center;
-                                background:@(current ? "var(--ac-primary)" : done ? "#16a34a" : "var(--ac-border)");color:#fff;font-weight:700;">
+                                background:@(current ? "var(--ac-primary)" : done ? "#16a34a" : "var(--ac-border)");color:@(current || done ? "#fff" : "var(--ac-text)");font-weight:700;">
                         @if (done) { <AcIcon Name="check" Size="16" /> } else { @i }
                     </div>
                     <div style="font-size:11px;color:@(current ? "var(--ac-primary)" : "var(--ac-text-muted)");">

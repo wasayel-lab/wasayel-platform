@@ -578,6 +578,13 @@ static class Scripts
                 : Array.prototype.slice.call(p.querySelectorAll(rule.children));
             kids.forEach(function (k) {
                 if (!shown(k)) return;
+                // ‏`position:fixed` مُثَبَّتٌ **بِالنافِذَة** لا بِالوالِد —
+                // فَقِياسُ احتِوائِه داخِلَ الوالِد خَطَأُ تَصنيفٍ لا
+                // اكتِشافُ عَطَب. ظِلُّ النافِذَة (‏`.ac-modal-backdrop`:
+                // ‏`position:fixed; inset:0`) كانَ يُحمِرُ صَفحَةَ
+                // الاستِكشاف بِفَلاتِرَ مَفتوحَة **وهُوَ يَفعَلُ ما
+                // صُمِّمَ لَه بِالضَبط**. ولا يُبتَلَع صامِتاً: يُعَدّ.
+                if (getComputedStyle(k).position === 'fixed') { ck('C-skipped-fixed'); return; }
                 var kr = R(k); ck('C-containment');
                 if ((axis === 'horizontal' || axis === 'both') && (kr.left < pr.left - 1 || kr.right > pr.right + 1))
                     add('C-containment', rule.children + ' يَفيض خارِج ' + rule.parent + ' أُفُقِيّاً (' +
@@ -705,15 +712,38 @@ static class Scripts
             if (own.length === 0) continue;
             var s = getComputedStyle(n);
             if (parseFloat(s.opacity) < 0.15) continue;
-            // صُعود الشَجَرَة حَتّى خَلفِيَّة غَير شَفّافَة
+            // صُعود الشَجَرَة حَتّى خَلفِيَّة غَير شَفّافَة.
+            //
+            // **وصورَةُ الخَلفِيَّة تُوقِفُ الصُعود، ولا تُتَخَطّى**:
+            // العُنصُرُ المَطليُّ بِتَدَرُّجٍ خَلفِيُّهُ المَحسوبُ
+            // ‏`rgba(0,0,0,0)`، فَكانَ الصُعودُ يَمُرُّ فَوقَه إلى أَبيَضِ
+            // الجَدّ ويَحكُمُ بِنِسبَةٍ **لِخَلفِيَّةٍ لا وُجودَ لَها
+            // تَحتَ النَصّ**. وكَذِبُهُ ذو وَجهَين، وكِلاهُما مَقيس:
+            //   · أَحمَرُ كاذِب — أَبيَضُ على تَدَرُّجٍ أَخضَر يُقرَأ
+            //     «‏1.00 أَبيَضُ على أَبيَض» (‏`.auth-logo-mark`).
+            //   · **وأَخضَرُ كاذِب** — حُقِنَ نَصٌّ بِلَونِ التَدَرُّجِ
+            //     نَفسِه، أَي غَيرُ مَرئيٍّ إطلاقاً، فَأَعطَت الأَداةُ
+            //     **صِفرَ مُخالَفَة**.
+            // ولا يُبتَلَع الجَهلُ صامِتاً: يُعَدّ في عائِلَتِه، فَيَظهَر
+            // في سَطر «قِياسات» كَما يَظهَرُ كُلُّ ما فُحِص. (‏نَفسُ دَرسِ
+            // عَمى `color-mix`: العُقدَةُ الَّتي تُتَخَطّى **قَبلَ**
+            // العَدّاد تُخفي نَفسَها.)
             var bgc = parseRgb(s.backgroundColor), p = n.parentElement, hops = 0;
             var stack = [];
+            var painted = function (el) {
+                var bi = getComputedStyle(el).backgroundImage;
+                return bi && bi !== 'none';
+            };
+            if (painted(n)) { ck('G-skipped-bgimage'); continue; }
             if (bgc && bgc.a > 0.001) stack.push(bgc);
+            var unknownBg = false;
             while ((!bgc || bgc.a < 0.999) && p && hops < 12) {
+                if (painted(p)) { unknownBg = true; break; }
                 var pb = parseRgb(getComputedStyle(p).backgroundColor);
                 if (pb && pb.a > 0.001) { stack.push(pb); if (pb.a >= 0.999) { bgc = pb; break; } }
                 p = p.parentElement; hops++;
             }
+            if (unknownBg) { ck('G-skipped-bgimage'); continue; }
             var bg = { r: 255, g: 255, b: 255, a: 1 };
             for (var k = stack.length - 1; k >= 0; k--) bg = over(stack[k], bg);
             var fg = parseRgb(s.color); if (!fg) continue;

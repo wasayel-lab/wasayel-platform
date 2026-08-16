@@ -95,7 +95,7 @@
                                               style="display:flex;gap:6px;margin:0;flex:1;min-width:200px;">
                                             <input type="hidden" name="action" value="hide" />
                                             <input class="st-input" name="reason" placeholder="@L["studio.app_listings.hide_reason_placeholder"]" />
-                                            <button type="submit" class="st-btn st-btn-ghost" style="color:var(--st-warning);">@L.Markup("studio.app_listings.hide")</button>
+                                            <button type="submit" class="st-btn st-btn-ghost" style="color:var(--st-warning-text);">@L.Markup("studio.app_listings.hide")</button>
                                         </form>
                                     }
                                     <form method="post" action="@($"/studio/apps/{Slug}/listings/{l.Id}/moderate")"
