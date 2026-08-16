@@ -165,7 +165,7 @@ try
     string js = BuildScript(contractsJson);
 
     var allReports = new List<PageReport>();
-    int total = 0;
+    int total = 0, notMeasured = 0;
 
     Console.WriteLine();
     Console.WriteLine("══════════════════════════════════════════════════════════");
@@ -186,7 +186,29 @@ try
     {
         await cdp.Send("Page.navigate", $$"""{"url":{{Cdp.JStr(url)}}}""");
         await cdp.WaitForEvent("Page.loadEventFired", TimeSpan.FromSeconds(30));
-        await Task.Delay(900); // اِستِقرار Blazor بَعدَ الحَدَث
+
+        // ‏`Page.loadEventFired` **لا يَعني أَنّ الأَنماط طُبِّقَت**،
+        // و«نَنتَظِر 900ms ثُمَّ نَقيس» رِهانٌ لا قِياس. الكُلفَة
+        // مَقيسَة (‏2026-08-16): جَولَةٌ بارِدَة مِن ثَلاث أَعطَت
+        // ‏`--ac-danger = #dc3545` و`--ac-primary = #0d6efd` — وهُما
+        // حَرفِيَّتا `widgets.css` الاحتِياطِيَّتان، أَي أَنّ `app.css`
+        // (وفيها جِسرُ `--ac-*` ← `--wsl-*`) لَم تَكُن قَد طُبِّقَت.
+        // فَطُبِعَت نِسبَةُ تَبايُنٍ **بِأَلوانٍ لا تَقَع على الشاشَة**،
+        // بِثِقَةٍ كامِلَة وبِلا أَيّ عَلامَة تُميِّزُها عَن قِياسٍ سَليم.
+        //
+        // وهذا أَخطَرُ مِن مُخالَفَةٍ فائِتَة: رَقَمٌ خاطِئٌ يُوثَق ويُبنى
+        // عَلَيه قَرار. فَالبَوّابَةُ هُنا تَرفُض القِياس بَدَلَ أَن
+        // تُخَمِّن، وتَقول لِماذا.
+        var gate = await WaitUntilStyled(cdp, TimeSpan.FromSeconds(15));
+        if (!gate.Ok)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"  ⚠ {url} — لَم تُقَس: {gate.Why}");
+            Console.WriteLine($"      {gate.Census}");
+            notMeasured++;
+            continue;
+        }
+        await Task.Delay(400); // اِستِقرار Blazor بَعدَ تَطبيق الأَنماط
 
         if (injectCss is not null)
         {
@@ -230,7 +252,7 @@ try
         string mark = violations.Count == 0 ? "✓" : "✗";
         Console.WriteLine();
         Console.WriteLine($"  {mark} {url}");
-        Console.WriteLine($"      عَناصِر: {elements}   ·   تَأكيدات: {checks}   ·   مُخالَفات: {violations.Count}");
+        Console.WriteLine($"      عَناصِر: {elements}   ·   تَأكيدات: {checks}   ·   مُخالَفات: {violations.Count}   ·   {gate.Census}");
         Console.WriteLine($"      قِياسات: {byFamily}");
 
         foreach (var g in violations.GroupBy(v => v.Category).OrderBy(g => g.Key))
@@ -246,6 +268,11 @@ try
     Console.WriteLine(total == 0
         ? $"  ✓ لا مُخالَفَة — {allReports.Sum(r => r.Checks)} تَأكيداً على {allReports.Count} صَفحَة"
         : $"  ✗ {total} مُخالَفَة على {allReports.Count} صَفحَة");
+    // صَفحَةٌ لَم تُقَس لَيسَت صَفحَةً نَظيفَة. ولَو مَرَّت بِصَمت
+    // لَكانَ «‏8/8 خَضراء» يَعني أَحياناً «‏7 قيسَت وواحِدَة غابَت» —
+    // وهو الأَخضَرُ الأَعمى بِعَينِه.
+    if (notMeasured > 0)
+        Console.WriteLine($"  ⚠ {notMeasured} صَفحَة لَم تُقَس إطلاقاً — النَتيجَةُ أَعلاهُ ناقِصَة، لا نَظيفَة");
     Console.WriteLine("══════════════════════════════════════════════════════════");
     Console.WriteLine();
 
@@ -278,7 +305,9 @@ try
         Console.WriteLine($"  التَقرير: {jsonOut}");
     }
 
-    exitCode = (total > 0 && !reportOnly) ? 1 : 0;
+    // صَفحَةٌ لَم تُقَس عَطَبٌ تَشغيليّ (‏2) لا مُخالَفَة (‏1)، ولا
+    // يَرفَعُها `--report-only`: ذاكَ يُسكِت المُخالَفات، لا العَمى.
+    exitCode = notMeasured > 0 ? 2 : (total > 0 && !reportOnly) ? 1 : 0;
 }
 catch (Exception e)
 {
@@ -323,6 +352,79 @@ static string Presets(string name) => name switch
     "gradient" => "h1, h2, .ac-space-title, .acm-role-landing-card { background-image: linear-gradient(135deg,#1E293B,#334155) !important; }",
     _ => throw new ArgumentException($"عَطَب غَير مَعروف: {name} (المُتاح: contrast, overflow, overlap, touch, gradient)"),
 };
+
+// ─── بَوّابَةُ الجاهِزِيَّة — «هَل ما أَمامي هو الصَفحَة فِعلاً؟» ──
+//  ثَلاثَةُ أَسئِلَة، وكُلُّها تُقاس مِن داخِل الصَفحَة:
+//    ١. هَل رَدَّ الخادِمُ ‏2xx؟ صَفحَةُ خَطَأٍ تُقاس فَتُعطي «صِفر
+//       مُخالَفَة» عَن شاشَةٍ لا وُجودَ لَها.
+//    ٢. هَل اكتَمَلَ التَحميل (‏readyState)؟
+//    ٣. **وهَل طُبِّقَت الأَوراق؟** ورَقَةٌ مَربوطَة و`link.sheet`
+//       فيها `null` تَعني أَنّ رُموزَها لَم تَدخُل الحُسبان بَعد —
+//       وهذا بِالضَبط ما أَعطى `#dc3545` بَدَلَ `#dc2626`.
+//  والأَوراقُ عَبرَ أَصلٍ آخَر (خُطوط Google) تَرمي عِندَ `cssRules`
+//  ولا تَعني نَقصاً، فَتُعَدّ على حِدَة ولا تَحبِس البَوّابَة.
+const string ReadyProbe = """
+(function () {
+  var nav = performance.getEntriesByType('navigation')[0];
+  var links = document.querySelectorAll('link[rel="stylesheet"]');
+  var pending = 0, blocked = 0, applied = 0;
+  for (var i = 0; i < links.length; i++) {
+    var s = links[i].sheet;
+    if (!s) { pending++; continue; }
+    // «رَمَت `cssRules`» لا تَعني «عَبرَ أَصلٍ آخَر». والفَرقُ يُقاس
+    // بِالأَصل لا بِالاستِثناء: ورَقَةٌ **مِن أَصلِنا** تَرمي هي
+    // ورَقَةٌ لَم تَصِل، وعَدُّها «عَبرَ أَصلٍ آخَر» يَفتَح في
+    // البَوّابَةِ ثُقباً بِحَجم العَطَبِ الَّذي بُنِيَت لَه.
+    var same = true;
+    try { same = new URL(links[i].href, location.href).origin === location.origin; } catch (e) { }
+    try { var n = s.cssRules.length; applied++; }
+    catch (e) { if (same) pending++; else blocked++; }
+  }
+  return JSON.stringify({
+    state: document.readyState,
+    status: (nav && nav.responseStatus != null) ? nav.responseStatus : 0,
+    links: links.length, pending: pending, blocked: blocked, applied: applied
+  });
+})()
+""";
+
+static async Task<(bool Ok, string Census, string Why)> WaitUntilStyled(Cdp cdp, TimeSpan timeout)
+{
+    var deadline = DateTime.UtcNow + timeout;
+    string census = "أَوراق: لَم تُقرَأ", why = "لَم تُقرَأ الحالَة";
+    while (DateTime.UtcNow < deadline)
+    {
+        var r = await cdp.Send("Runtime.evaluate",
+            $$"""{"expression":{{Cdp.JStr(ReadyProbe)}},"returnByValue":true}""");
+        if (!r.RootElement.GetProperty("result").TryGetProperty("value", out var val) ||
+            val.ValueKind != JsonValueKind.String)
+        {
+            await Task.Delay(150);
+            continue;
+        }
+
+        using var doc = JsonDocument.Parse(val.GetString()!);
+        var e = doc.RootElement;
+        int status  = e.GetProperty("status").GetInt32();
+        int pending = e.GetProperty("pending").GetInt32();
+        int blocked = e.GetProperty("blocked").GetInt32();
+        int applied = e.GetProperty("applied").GetInt32();
+        string state = e.GetProperty("state").GetString() ?? "?";
+
+        census = $"أَوراق: {applied} مُطَبَّقَة" + (blocked > 0 ? $" + {blocked} عَبرَ أَصلٍ آخَر" : "");
+
+        // ‏0 = غَير مَعروف (‏file://‎ أَو about:blank) فَلا يُحكَم بِه
+        if (status != 0 && (status < 200 || status >= 300))
+            return (false, census, $"الخادِمُ رَدَّ {status} — وصَفحَةُ الخَطَأ لا تُقاس");
+        if (state == "complete" && pending == 0) return (true, census, "");
+
+        why = state != "complete"
+            ? $"‏readyState = {state}"
+            : $"{pending} ورَقَة مَربوطَة لَم تُطَبَّق بَعد";
+        await Task.Delay(150);
+    }
+    return (false, census, why + " — بَعدَ المُهلَة");
+}
 
 static int FreePort()
 {
