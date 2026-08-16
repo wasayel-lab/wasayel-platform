@@ -3,6 +3,7 @@
 @inject IDocumentStore Store
 @inject AuthSession Auth
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
+@inject L L
 
 @*
     صَفحَة "اختَر دَورَكَ" — تَظهَر تِلقائيّاً لِلمُستَخدِم الَّذي ليس لَدَيه
@@ -14,8 +15,8 @@
 <div class="acs-page">
 @if (!Auth.IsAuthenticated)
 {
-    <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
-                  ActionLabel="تَسجيل دُخول" ActionHref="@AuthSession.LinkFor(Slug, Role, $"login")" />
+    <AcEmptyState IconName="user" Title="@L["roles.picker.need_login"]"
+                  ActionLabel="@L["auth.action.login"]" ActionHref="@AuthSession.LinkFor(Slug, Role, $"login")" />
 }
 else if (tenant is null)
 {
@@ -24,16 +25,14 @@ else if (tenant is null)
 else if (tenant.Roles.Count == 0)
 {
     @* مَتجَر بِلا أَدوار — لا داعِيَ لِلصَفحَة *@
-    <AcEmptyState IconName="info" Title="هذا المَتجَر بِلا أَدوار مُتَعَدِّدَة"
-                  ActionLabel="المَتجَر" ActionHref="@($"/{Slug}")" />
+    <AcEmptyState IconName="info" Title="@L["roles.picker.no_roles_title"]"
+                  ActionLabel="@L["roles.picker.no_roles_action"]" ActionHref="@($"/{Slug}")" />
 }
 else
 {
-    <h1 class="acm-wizard-title" style="text-align:center;margin-top:24px;">
-        كَيف تُحِبّ أَن تَستَخدِم @tenant.Name؟
+    <h1 class="acm-wizard-title" style="text-align:center;margin-top:24px;">@((MarkupString)"\n        ")@L.Markup("roles.picker.question") @tenant.Name؟
     </h1>
-    <p style="text-align:center;color:var(--ac-text-muted);font-size:14px;margin-bottom:24px;">
-        اختَر دَوركَ — يُمكِنُكَ تَبديلُه لاحِقاً مِن المَلَفّ الشَخصيّ.
+    <p style="text-align:center;color:var(--ac-text-muted);font-size:14px;margin-bottom:24px;">@((MarkupString)"\n        ")@L.Markup("roles.picker.hint")@((MarkupString)"\n    ")
     </p>
 
     // tenant_admin لا يُمكِن أَن يُسَكِّن نَفسَه — يُمنَح بِفِعل إداريّ
@@ -47,7 +46,7 @@ else
     @if (selectable.Count == 0)
     {
         <AcAlert Variant="warning"
-                 Message="لا أَدوار مُتاحَة لِلاختِيار الذاتيّ. اِتَّصِل بِإدارَة المَتجَر." />
+                 Message="@L["roles.picker.empty_message"]" />
     }
     else
     {
@@ -69,7 +68,7 @@ else
                 }
             </div>
             <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block" style="margin-top:16px;">
-                <AcIcon Name="check" Size="18" /> اختِيار
+                <AcIcon Name="check" Size="18" /> @L.Markup("roles.picker.choose")@((MarkupString)"\n            ")
             </button>
         </form>
     }

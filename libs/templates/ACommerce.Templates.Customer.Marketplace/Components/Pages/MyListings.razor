@@ -12,11 +12,11 @@
 
 <div class="acs-page">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h1 class="acm-wizard-title" style="margin:0;">إعلاناتي</h1>
+        <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("listings.mine.title")</h1>
         @if (Auth.IsAuthenticated)
         {
             <a class="ac-btn ac-btn-primary ac-btn-sm" href="@AuthSession.LinkFor(Slug, Role, $"create-listing")">
-                <AcIcon Name="plus" Size="14" /> إعلان جَديد
+                <AcIcon Name="plus" Size="14" /> @L.Markup("listings.mine.new")@((MarkupString)"\n            ")
             </a>
         }
     </div>
@@ -31,8 +31,8 @@
 
     @if (!Auth.IsAuthenticated)
     {
-        <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
-                      ActionLabel="تَسجيل دُخول"
+        <AcEmptyState IconName="user" Title="@L["listings.mine.need_login"]"
+                      ActionLabel="@L["auth.action.login"]"
                       ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/me/listings")" />
     }
     else if (myListings is null)
@@ -41,9 +41,9 @@
     }
     else if (myListings.Count == 0)
     {
-        <AcEmptyState IconName="package" Title="لا إعلانات بَعد"
-                      Message="أَنشِئ أَوَّل إعلان لِتَبدَأ."
-                      ActionLabel="إعلان جَديد"
+        <AcEmptyState IconName="package" Title="@L["listings.mine.empty_title"]"
+                      Message="@L["listings.mine.empty_hint"]"
+                      ActionLabel="@L["listings.mine.new"]"
                       ActionHref="@AuthSession.LinkFor(Slug, Role, $"create-listing")" />
     }
     else
@@ -61,7 +61,7 @@
                     </span>
                     <div style="display:flex;justify-content:space-between;
                                 align-items:center;margin-top:8px;">
-                        <span class="acm-details-price">@l.Price.ToString("N0") ريال</span>
+                        <span class="acm-details-price">@((MarkupString)ACommerce.Kit.Culture.Money.Format(l.Price, style: ACommerce.Kit.Culture.MoneyUnitStyle.Name))</span>
                         <span style="color:var(--ac-text-muted);font-size:11px;">
                             <AcIcon Name="search" Size="12" /> @l.ViewCount
                         </span>

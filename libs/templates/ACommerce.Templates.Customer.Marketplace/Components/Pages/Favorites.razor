@@ -4,30 +4,31 @@
 @inject AuthSession Auth
 @inject NavigationManager Nav
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
+@inject L L
 
 <div class="acs-page">
     @if (!Auth.IsAuthenticated)
     {
         <AcEmptyState IconName="heart"
-                      Title="المُفَضَّلَة تَحتاج تَسجيل دُخول"
-                      Message="سَجِّل دُخولك لِحِفظ الإعلانات الَّتي تَهُمّك."
-                      ActionLabel="تَسجيل دُخول"
+                      Title="@L["favorites.gate.need_login"]"
+                      Message="@L["favorites.gate.need_login_hint"]"
+                      ActionLabel="@L["auth.action.login"]"
                       ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/favorites")" />
     }
     else
     {
-        <h1 class="acm-wizard-title">المُفَضَّلَة</h1>
+        <h1 class="acm-wizard-title">@L.Markup("favorites.list.title")</h1>
 
         @if (items is null)
         {
-            <AcLoadingState Message="جارٍ التَحميل…" />
+            <AcLoadingState Message="@L["common.state.loading"]" />
         }
         else if (items.Count == 0)
         {
             <AcEmptyState IconName="heart"
-                          Title="لا مُفَضَّلَة بَعد"
-                          Message="ابدَأ بِالتَصَفُّح وأَضِف الإعلانات الَّتي تُعجِبك."
-                          ActionLabel="استِكشاف"
+                          Title="@L["favorites.list.empty_title"]"
+                          Message="@L["favorites.list.empty_hint"]"
+                          ActionLabel="@L["shell.nav.explore"]"
                           ActionHref="@AuthSession.LinkFor(Slug, Role, $"explore")" />
         }
         else
@@ -39,15 +40,15 @@
                                  VariantClassSuffix="@listingCardVariant"
                                  Href="@AuthSession.LinkFor(Slug, Role, $"listings/{l.Id}")"
                                  Location="@($"{l.City} — {l.District}")"
-                                 PriceLabel="@($"{l.Price:N0} ريال")"
+                                 PriceLabel="@(ACommerce.Kit.Culture.Money.Format(l.Price, style: ACommerce.Kit.Culture.MoneyUnitStyle.Name))"
                                  IsVerified="@l.IsVerified"
                                  IsFeatured="@l.IsFeatured"
                                  ShowFavorite="true"
                                  IsFavorite="true"
                                  FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
                                  FavoriteFormReturn="@($"/{Slug}/favorites")"
-                                 AddFavoriteAriaLabel="أَضِف لِلمُفَضَّلَة"
-                                 RemoveFavoriteAriaLabel="أَزِل مِن المُفَضَّلَة" />
+                                 AddFavoriteAriaLabel="@L["favorites.action.add"]"
+                                 RemoveFavoriteAriaLabel="@L["favorites.action.remove"]" />
                 }
             </div>
         }

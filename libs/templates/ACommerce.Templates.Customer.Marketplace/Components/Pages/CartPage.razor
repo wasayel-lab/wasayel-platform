@@ -3,6 +3,7 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
+@inject L L
 @using ACommerce.Kit.Cart
 
 @*
@@ -14,18 +15,18 @@
 <div class="acs-page">
     @if (!Auth.IsAuthenticated)
     {
-        <AcEmptyState IconName="package" Title="السَّلَّة تَحتاج دُخول"
-                      ActionLabel="دُخول" ActionHref="@AuthSession.LinkFor(Slug, Role, "login?returnUrl=/" + Slug + "/cart")" />
+        <AcEmptyState IconName="package" Title="@L["cart.gate.need_login"]"
+                      ActionLabel="@L["shell.nav.login"]" ActionHref="@AuthSession.LinkFor(Slug, Role, "login?returnUrl=/" + Slug + "/cart")" />
     }
     else if (cart is null || cart.Items.Count == 0)
     {
-        <AcEmptyState IconName="package" Title="سَلَّتك فارِغَة"
-                      Message="أَضِف قِطَعاً لِلسَّلَّة مِن صَفحات الإعلانات."
-                      ActionLabel="استِكشاف" ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
+        <AcEmptyState IconName="package" Title="@L["cart.empty.title"]"
+                      Message="@L["cart.empty.hint"]"
+                      ActionLabel="@L["shell.nav.explore"]" ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
     }
     else
     {
-        <h1 class="acm-wizard-title">سَلَّتك (@cart.TotalQuantity قِطعَة)</h1>
+        <h1 class="acm-wizard-title">@L.Markup("cart.list.title_prefix")@cart.TotalQuantity @L.Markup("cart.list.title_suffix")</h1>
 
         @foreach (var item in cart.Items)
         {
@@ -35,18 +36,18 @@
                         <div style="flex:1;min-width:0;">
                             <strong>@item.Title</strong>
                             <span style="display:block;color:var(--ac-text-muted);font-size:13px;">
-                                @item.UnitPriceSar.ToString("N0") ر.س / قِطعَة
+                                @((MarkupString)ACommerce.Kit.Culture.Money.Format(item.UnitPriceSar))@L.Markup("cart.list.per_piece")@((MarkupString)"\n                            ")
                             </span>
                         </div>
                         <form method="post" action="@($"/{Slug}/cart/{item.ListingId}/qty")" style="margin:0;display:flex;gap:4px;align-items:center;">
                             <button type="submit" name="qty" value="@(item.Quantity - 1)"
-                                    class="ac-btn ac-btn-ghost ac-btn-sm" aria-label="ناقِص">−</button>
+                                    class="ac-btn ac-btn-ghost ac-btn-sm" aria-label="@L["cart.qty.decrease"]">−</button>
                             <span style="min-width:24px;text-align:center;font-weight:700;">@item.Quantity</span>
                             <button type="submit" name="qty" value="@(item.Quantity + 1)"
-                                    class="ac-btn ac-btn-ghost ac-btn-sm" aria-label="زائِد">+</button>
+                                    class="ac-btn ac-btn-ghost ac-btn-sm" aria-label="@L["cart.qty.increase"]">+</button>
                         </form>
                         <strong style="min-width:80px;text-align:end;">
-                            @((item.UnitPriceSar * item.Quantity).ToString("N0")) ر.س
+                            @((MarkupString)ACommerce.Kit.Culture.Money.Format(item.UnitPriceSar * item.Quantity))
                         </strong>
                     </div>
                 </ChildContent>
@@ -56,19 +57,18 @@
         <AcCard>
             <ChildContent>
                 <div style="display:flex;justify-content:space-between;font-size:16px;">
-                    <strong>المَجموع</strong>
-                    <strong style="color:var(--ac-primary);">@cart.SubtotalSar.ToString("N2") ر.س</strong>
+                    <strong>@L.Markup("cart.list.total")</strong>
+                    <strong style="color:var(--ac-primary);">@cart.SubtotalSar.ToString("N2") @((MarkupString)ACommerce.Kit.Culture.Money.Unit())</strong>
                 </div>
             </ChildContent>
         </AcCard>
 
         <div style="display:flex;gap:8px;">
             <form method="post" action="@($"/{Slug}/cart/clear")" style="flex:0 0 auto;">
-                <AcButton Type="submit" Variant="ghost" Text="إفراغ" />
+                <AcButton Type="submit" Variant="ghost" Text="@L["cart.action.clear"]" />
             </form>
             <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block" style="text-decoration:none;text-align:center;flex:1;"
-               href="@AuthSession.LinkFor(Slug, Role, "checkout")">
-                إتمام الشِراء →
+               href="@AuthSession.LinkFor(Slug, Role, "checkout")">@((MarkupString)"\n                ")@L.Markup("cart.action.checkout")@((MarkupString)"\n            ")
             </a>
         </div>
     }

@@ -4,6 +4,7 @@
 @inject AuthSession Auth
 @inject Services.Deals.DealsService Deals
 @inject IHttpContextAccessor HttpCtx
+@inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Deals
 
 @*
@@ -16,27 +17,27 @@
     @if (!Auth.IsAuthenticated)
     {
         <AcEmptyState IconName="package"
-                      Title="صَفقاتي تَحتاج تَسجيل دُخول"
-                      Message="سَجِّل دُخولك لِمُتابَعَة عُروضِكَ وصَفقاتِكَ."
-                      ActionLabel="تَسجيل دُخول"
+                      Title="@L["deals.mine.need_login"]"
+                      Message="@L["deals.mine.need_login_hint"]"
+                      ActionLabel="@L["auth.action.login"]"
                       ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/deals")" />
     }
     else
     {
-        <h1 class="acm-wizard-title">صَفقاتي</h1>
+        <h1 class="acm-wizard-title">@L.Markup("deals.mine.title")</h1>
 
         @if (mine.Count == 0 && asOwner.Count == 0)
         {
-            <AcEmptyState IconName="package" Title="لا صَفقات بَعد"
-                          Message="قَدِّم عَرضاً على إعلان لِتَبدَأ صَفقَة."
-                          ActionLabel="استِكشاف الإعلانات"
+            <AcEmptyState IconName="package" Title="@L["deals.mine.empty_title"]"
+                          Message="@L["deals.mine.empty_hint"]"
+                          ActionLabel="@L["deals.mine.empty_action"]"
                           ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
         }
         else
         {
             @if (mine.Count > 0)
             {
-                <AcSectionHeader Title="عُروضي وصَفقاتي" />
+                <AcSectionHeader Title="@L["deals.mine.section_mine"]" />
                 <div class="acm-cat-list">
                     @foreach (var d in mine)
                     {
@@ -46,7 +47,7 @@
             }
             @if (asOwner.Count > 0)
             {
-                <AcSectionHeader Title="عُروض على إعلاناتي" />
+                <AcSectionHeader Title="@L["deals.mine.section_incoming"]" />
                 <div class="acm-cat-list">
                     @foreach (var d in asOwner)
                     {
@@ -87,7 +88,7 @@
             <strong>@(string.IsNullOrEmpty(d.ListingTitle) ? d.Pattern : d.ListingTitle)</strong>
             <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
                 @DealsPolicy.LabelAr(d.Stage) · @StatusLabel(d.Status) ·
-                @d.AmountSar.ToString("N0") ر.س · @d.UpdatedAt.ToString("MM-dd HH:mm")
+                @((MarkupString)ACommerce.Kit.Culture.Money.Format(d.AmountSar)) · @d.UpdatedAt.ToString("MM-dd HH:mm")
             </span>
         </div>
         <AcIcon Name="chevron-left" Size="16" />
@@ -99,9 +100,9 @@
         DealStage.Paid => "credit-card", DealStage.Shipping => "truck", DealStage.Delivered => "package",
         DealStage.Received => "check-circle", DealStage.Reviewed => "star", _ => "tag"
     };
-    static string StatusLabel(DealStatus s) => s switch
+    string StatusLabel(DealStatus s) => s switch
     {
-        DealStatus.Active => "نَشِطَة", DealStatus.Completed => "مُكتَمِلَة",
-        DealStatus.Cancelled => "مُلغاة", DealStatus.Disputed => "نِزاع", _ => s.ToString()
+        DealStatus.Active => L["deals.status.active"], DealStatus.Completed => L["deals.status.completed"],
+        DealStatus.Cancelled => L["deals.status.cancelled"], DealStatus.Disputed => L["deals.status.disputed"], _ => s.ToString()
     };
 }

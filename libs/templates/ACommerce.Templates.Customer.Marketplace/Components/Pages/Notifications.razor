@@ -8,20 +8,20 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Account
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
+@inject L L
 @using ACommerce.Kit.Notifications
 
 <div class="acs-page">
 <GatedPage Slug="@Slug" Role="@Role" RequireAuth>
-    <h1 class="acm-wizard-title" style="margin:0;">الإشعارات</h1>
+    <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("notifications.list.title")</h1>
 
     @* بَنر تَفعيل إشعارات Push — يَظهَر فَقَط إذا الإذن لَم يُمنَح بَعد. *@
     <div id="ac-push-banner" style="display:none;" class="ac-card">
         <div style="display:flex;align-items:center;gap:12px;padding:8px;">
             <span style="font-size:24px;"><AcIcon Name="bell" Size="24" /></span>
             <div style="flex:1;">
-                <strong>فَعِّل إشعارات الجَوّال</strong>
-                <small style="display:block;color:var(--ac-text-muted);">
-                    اِستَلِم تَنبيهات لِلرَسائِل وَالعُروض حَتَّى وَالتَّطبيق مُغلَق.
+                <strong>@L.Markup("notifications.push.title")</strong>
+                <small style="display:block;color:var(--ac-text-muted);">@((MarkupString)"\n                    ")@L.Markup("notifications.push.hint")@((MarkupString)"\n                ")
                 </small>
             </div>
             <button type="button" class="ac-btn ac-btn-primary ac-btn-sm"
@@ -42,13 +42,13 @@
         })();
     </script>
 
-    @if (_items is null)         { <AcLoadingState Message="جارٍ التَحميل…" /> }
+    @if (_items is null)         { <AcLoadingState Message="@L["common.state.loading"]" /> }
     else if (_items.Count == 0)
     {
-        <AcEmptyState Title="لا توجَد إشعارات"
-                      Message="الإشعارات تَصِل عِندَ حَرَكَة في صَفقاتِكَ أَو رَسائِلِكَ."
+        <AcEmptyState Title="@L["notifications.list.empty_title"]"
+                      Message="@L["notifications.list.empty_hint"]"
                       IconName="bell"
-                      ActionLabel="استِكشاف الإعلانات"
+                      ActionLabel="@L["notifications.list.empty_action"]"
                       ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
     }
     else

@@ -2,6 +2,7 @@
 @page "/{slug}/r/{role}/me/offers"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
+@inject L L
 
 @*
     قائِمَة العُروض الَّتي قَدَّمها هذا المُستَخدِم — pending أَوَّلاً،
@@ -9,12 +10,12 @@
 *@
 
 <div class="acs-page">
-    <h1 class="acm-wizard-title">عُروضي</h1>
+    <h1 class="acm-wizard-title">@L.Markup("offers.mine.title")</h1>
 
     @if (!Auth.IsAuthenticated)
     {
-        <AcEmptyState IconName="user" Title="تَحتاج تَسجيل دُخول"
-                      ActionLabel="تَسجيل دُخول"
+        <AcEmptyState IconName="user" Title="@L["offers.mine.need_login"]"
+                      ActionLabel="@L["auth.action.login"]"
                       ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/me/offers")" />
     }
     else if (offers is null)
@@ -23,9 +24,9 @@
     }
     else if (offers.Count == 0)
     {
-        <AcEmptyState IconName="package" Title="لا عُروض بَعد"
-                      Message="قَدِّم عَرضاً مِن أَيّ إعلان مَفتوح لِلتَفاوُض."
-                      ActionLabel="تَصَفَّح الإعلانات المَفتوحَة"
+        <AcEmptyState IconName="package" Title="@L["offers.mine.empty_title"]"
+                      Message="@L["offers.mine.empty_hint"]"
+                      ActionLabel="@L["offers.mine.empty_action"]"
                       ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
     }
     else
@@ -40,21 +41,20 @@
                    style="text-decoration:none;color:inherit;display:block;">
                     <div style="display:flex;justify-content:space-between;align-items:center;">
                         <span class="ac-chip ac-chip-sm">@StatusLabel(o.Status)</span>
-                        <span class="acm-details-price">@o.Price.ToString("N0") ريال</span>
+                        <span class="acm-details-price">@((MarkupString)ACommerce.Kit.Culture.Money.Format(o.Price, style: ACommerce.Kit.Culture.MoneyUnitStyle.Name))</span>
                     </div>
                     @if (!string.IsNullOrEmpty(o.Message))
                     {
                         <p style="margin:6px 0 0;font-size:13px;color:var(--ac-text-muted);">@o.Message</p>
                     }
-                    <p style="margin:6px 0 0;font-size:11px;color:var(--ac-text-muted);">
-                        قُدِّم: @o.SubmittedAt.ToString("yyyy-MM-dd HH:mm")
+                    <p style="margin:6px 0 0;font-size:11px;color:var(--ac-text-muted);">@((MarkupString)"\n                        ")@L.Markup("offers.mine.submitted_at") @o.SubmittedAt.ToString("yyyy-MM-dd HH:mm")
                         @if (o.Status == ACommerce.Kit.Offers.OfferStatus.Pending)
                         {
-                            <span> · صالِح حَتَّى @o.ExpiresAt.ToString("HH:mm")</span>
+                            <span> · @L.Markup("offers.mine.valid_until") @o.ExpiresAt.ToString("HH:mm")</span>
                         }
                         @if (dist.HasValue)
                         {
-                            <span> · <AcIcon Name="map-pin" Size="14" /> @dist.Value.ToString("0.#") كم مِن الراكِب</span>
+                            <span> · <AcIcon Name="map-pin" Size="14" /> @dist.Value.ToString("0.#") @L.Markup("offers.mine.distance_rider")</span>
                         }
                     </p>
                 </a>
@@ -62,7 +62,7 @@
                 {
                     <form method="post" action="@($"/{Slug}/offers/{o.Id}/withdraw")" style="margin:0;">
                         <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">
-                            <AcIcon Name="x" Size="14" /> سَحب
+                            <AcIcon Name="x" Size="14" /> @L.Markup("offers.mine.withdraw")@((MarkupString)"\n                        ")
                         </button>
                     </form>
                 }
@@ -88,13 +88,13 @@
         ListingPickup = view.Pickups.ToDictionary(kv => kv.Key, kv => kv.Value);
     }
 
-    static string StatusLabel(ACommerce.Kit.Offers.OfferStatus s) => s switch
+    string StatusLabel(ACommerce.Kit.Offers.OfferStatus s) => s switch
     {
-        ACommerce.Kit.Offers.OfferStatus.Pending   => "قَيد المُراجَعَة",
-        ACommerce.Kit.Offers.OfferStatus.Accepted  => "مَقبول",
-        ACommerce.Kit.Offers.OfferStatus.Rejected  => "مَرفوض",
-        ACommerce.Kit.Offers.OfferStatus.Withdrawn => "مَسحوب",
-        ACommerce.Kit.Offers.OfferStatus.Expired   => "مُنتَهي",
+        ACommerce.Kit.Offers.OfferStatus.Pending   => L["offers.status.pending"],
+        ACommerce.Kit.Offers.OfferStatus.Accepted  => L["offers.status.accepted"],
+        ACommerce.Kit.Offers.OfferStatus.Rejected  => L["offers.status.rejected"],
+        ACommerce.Kit.Offers.OfferStatus.Withdrawn => L["offers.status.withdrawn"],
+        ACommerce.Kit.Offers.OfferStatus.Expired   => L["offers.status.expired"],
         _ => s.ToString()
     };
 }

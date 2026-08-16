@@ -2,30 +2,31 @@
 @page "/{slug}/r/{role}/chats"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject AuthSession Auth
+@inject L L
 
 <div class="acs-page">
 @if (!Auth.IsAuthenticated)
 {
     <AcEmptyState IconName="message"
-                  Title="المُحادَثات تَحتاج تَسجيل دُخول"
-                  Message="سَجِّل دُخولك للوصول إلى رَسائلك"
-                  ActionLabel="تَسجيل دُخول"
+                  Title="@L["chats.gate.need_login"]"
+                  Message="@L["chats.gate.need_login_hint"]"
+                  ActionLabel="@L["auth.action.login"]"
                   ActionHref="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/chats")" />
 }
 else
 {
-    <h1 class="acm-wizard-title">المُحادَثات</h1>
+    <h1 class="acm-wizard-title">@L.Markup("chats.list.title")</h1>
 
     @if (convs is null)
     {
-        <AcLoadingState Message="جارٍ التَحميل…" />
+        <AcLoadingState Message="@L["common.state.loading"]" />
     }
     else if (convs.Count == 0)
     {
-        <AcEmptyState Title="لا توجَد مُحادَثات بَعد"
-                      Message="المُحادَثَة تَبدَأ مِن صَفحَة أَيّ إعلان — زِرّ التَواصُل يَفتَحها مُباشَرَةً."
+        <AcEmptyState Title="@L["chats.list.empty_title"]"
+                      Message="@L["chats.list.empty_hint"]"
                       IconName="message"
-                      ActionLabel="استِكشاف الإعلانات"
+                      ActionLabel="@L["chats.list.empty_action"]"
                       ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
     }
     else
@@ -64,13 +65,12 @@ else
                                 @if (c.ExpiresAt.HasValue && !c.IsExpired)
                                 {
                                     <span class="ac-chip ac-chip-sm"
-                                          style="background:color-mix(in srgb, var(--ac-primary) 12%, transparent);">
-                                        ⏱ مُؤَقَّتَة
+                                          style="background:color-mix(in srgb, var(--ac-primary) 12%, transparent);">@((MarkupString)"\n                                        ")@L.Markup("chats.list.temporary")@((MarkupString)"\n                                    ")
                                     </span>
                                 }
                                 else if (c.IsExpired)
                                 {
-                                    <span class="ac-chip ac-chip-sm" style="opacity:.6;">انتَهَت</span>
+                                    <span class="ac-chip ac-chip-sm" style="opacity:.6;">@L.Markup("chats.list.expired")</span>
                                 }
                                 @if (unread > 0)
                                 {
@@ -96,13 +96,13 @@ else
     /// لِليَوم نَفسه، "أَمس" لِلأَمس، اسم اليَوم في الأُسبوع الحالي،
     /// التَّاريخ القَصير ما عَدا ذلك.
     /// </summary>
-    static string FormatWhen(DateTime at)
+    string FormatWhen(DateTime at)
     {
         var localAt = at.Kind == DateTimeKind.Utc ? at.ToLocalTime() : at;
         var nowDate = DateTime.Now.Date;
         var atDate  = localAt.Date;
         if (atDate == nowDate)                  return localAt.ToString("HH:mm");
-        if (atDate == nowDate.AddDays(-1))      return "أَمس";
+        if (atDate == nowDate.AddDays(-1))      return L["chats.time.yesterday"];
         if ((nowDate - atDate).TotalDays < 7)   return localAt.ToString("dddd", new System.Globalization.CultureInfo("ar"));
         if (localAt.Year == nowDate.Year)       return localAt.ToString("dd/MM");
         return localAt.ToString("yyyy/MM/dd");
