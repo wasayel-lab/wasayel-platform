@@ -232,6 +232,20 @@ GUARDED_PAGES=(
   "user-listing-own:user:/{tenant}/listings/ff8e1748-b98a-4ad0-9da0-10ac616eaf9e"
   "user-listing-offers:user:/{tenant}/listings/94877b94-abb5-4a8b-8494-be8ef678cc59"
 
+  # ── تَوأَمُ الاستوديو الإداريّ: `/admin/tenants/{slug}/*` ──────────
+  # ‏`AdminStudioPairCharacterizationTests` يُثَبِّت أَنّ هذِه الشاشات
+  # **نَفسُ شاشات `/studio/apps/{slug}/*` لِجُمهورَين**. وحارِسُها
+  # `TenantAdminGuard` يَشتَرِط مِلكِيَّةَ المُستَأجِر لا صَلاحِيَّةَ
+  # المَنصَّة — ومِلَفُّ `admin` يَملِك `owner-test`، فَبَلَغَتها
+  # بِلا بَيانٍ جَديد.
+  "admin-tenant-edit:admin:/admin/tenants/owner-test"
+  "admin-tenant-categories:admin:/admin/tenants/owner-test/categories"
+  "admin-tenant-roles:admin:/admin/tenants/owner-test/roles"
+  "admin-tenant-regions:admin:/admin/tenants/owner-test/regions"
+  "admin-tenant-pwa:admin:/admin/tenants/owner-test/pwa"
+  "admin-tenant-branding:admin:/admin/tenants/owner-test/branding"
+  "admin-tenant-attributes:admin:/admin/tenants/owner-test/attributes"
+
   # ── مِلَفُّ `owner`: نَفسُ الشاشات على مُستَأجِرٍ **مَملوء** ────────
   # ‏`ejar` فيه ‏15 إعلاناً وصَفقَتانِ ومُستَخدِمون، فَتُصَيَّر أَجسامُ
   # الحَلَقات الَّتي لا يَبلُغُها `owner-test` الفارِغ. والزَوجُ
