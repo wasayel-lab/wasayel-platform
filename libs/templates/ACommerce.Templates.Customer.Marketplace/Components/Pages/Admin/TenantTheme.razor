@@ -1,5 +1,5 @@
 @page "/admin/tenants/{slug}/theme"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
 @inject L L
 @using ACommerce.Kit.Theme
@@ -225,8 +225,7 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        await using var s = Store.QuerySession();
-        tenant = await s.LoadAsync<Tenant>(Slug);
+        tenant = await Tenants.FindAsync(Slug);
         if (tenant is null) return;
 
         var set = await Themes.ForAsync(Slug);

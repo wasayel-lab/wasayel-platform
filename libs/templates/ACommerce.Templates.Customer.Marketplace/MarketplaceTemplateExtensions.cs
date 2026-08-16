@@ -34,6 +34,13 @@ public static class MarketplaceTemplateExtensions
         // التَحرير (فَلا تَفتَح جَلسَةً بِيَدِها، والطَبَقَة الثامِنَة
         // تَبقى عِندَ ‏55) والمُرَشِّح `ListingOwnerFilter`.
         services.AddScoped<ACommerce.Templates.Customer.Marketplace.Services.ListingLookupService>();
+        // ═══ خِدماتُ الاستِعلام — المَوجَة ٥ ══════════════════════════
+        // كُلُّ واحِدَةٍ مِنها تَنزِع صَفحَةً (أَو أَكثَر) مِن سِجِلّ
+        // الطَبَقَة الثامِنَة: الصَفحَةُ تَحقِن الخِدمَةَ ولا تَعرِف
+        // `IDocumentStore`. وهذا بِعَينِه شَرطُ تَشغيلِها في MAUI
+        // Blazor Hybrid حَيثُ لا قاعِدَةَ بَيانات على الهاتِف.
+        services.AddScoped<Services.Queries.TenantDirectory>();
+        services.AddScoped<Services.Queries.AuditLogQueries>();
         // مُزَوِّد الخَلفيّات المُسَمّى: كُلّ وَكيل مَنطِقيّ (Studio / Analysis)
         // يَطلُب مِلَفَّه بِاسمِه، والمُزَوِّد يَحُلّه ويُخَزِّن خَلفيَّة واحِدَة
         // لِكُلّ مِلَفّ مُتَمايِز. تَسجيل واحِد بَدَل الخَلفيَّة المُشتَرَكَة.

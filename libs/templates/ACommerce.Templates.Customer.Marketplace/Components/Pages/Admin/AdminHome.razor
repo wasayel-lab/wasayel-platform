@@ -1,5 +1,5 @@
 @page "/admin"
-@inject IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject NavigationManager Nav
 @inject L L
 
@@ -122,13 +122,11 @@
 </RequirePlatformAdmin>
 
 @code {
-    List<Tenant>? tenants;
+    IReadOnlyList<Tenant>? tenants;
 
     protected override async Task OnInitializedAsync()
     {
-        await using var s = Store.QuerySession();
-        tenants = (await s.Query<Tenant>()
-            .OrderBy(t => t.CreatedAt).ToListAsync()).ToList();
+        tenants = await Tenants.ListAsync();
     }
 
     static string ChannelIcon(string channel) => channel switch

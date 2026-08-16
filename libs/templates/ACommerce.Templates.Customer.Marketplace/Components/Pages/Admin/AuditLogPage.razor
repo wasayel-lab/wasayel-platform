@@ -1,6 +1,7 @@
 @page "/admin/audit"
 @page "/admin/audit/{scope}"
-@inject Marten.IDocumentStore Store
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AuditLogQueries AuditLog
 @inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Audit
 
@@ -100,21 +101,12 @@
     string EffectiveScope => string.IsNullOrEmpty(Scope) ? "_platform" : Scope;
     string ScopeLabel => EffectiveScope == "_platform" ? L["admin.audit.platform"] : EffectiveScope;
 
-    List<AuditEntry> entries = new();
-    List<ACommerce.Kit.Tenants.Tenant> tenants = new();
+    IReadOnlyList<AuditEntry> entries = Array.Empty<AuditEntry>();
+    IReadOnlyList<ACommerce.Kit.Tenants.Tenant> tenants = Array.Empty<ACommerce.Kit.Tenants.Tenant>();
 
     protected override async Task OnParametersSetAsync()
     {
-        await using var ts = Store.QuerySession();
-        tenants = (await ts.Query<ACommerce.Kit.Tenants.Tenant>()
-            .OrderBy(t => t.CreatedAt).ToListAsync()).ToList();
-
-        try
-        {
-            await using var s = Store.QuerySession(EffectiveScope);
-            entries = (await s.Query<AuditEntry>()
-                .OrderByDescending(a => a.At).Take(300).ToListAsync()).ToList();
-        }
-        catch { entries = new(); }
+        tenants = await Tenants.ListAsync();
+        entries = await AuditLog.RecentAsync(EffectiveScope);
     }
 }

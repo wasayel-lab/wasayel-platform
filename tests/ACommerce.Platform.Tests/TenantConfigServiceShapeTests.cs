@@ -38,11 +38,30 @@ namespace ACommerce.Platform.Tests;
 /// </summary>
 public class TenantConfigServiceShapeTests
 {
+    /// <summary>
+    /// <para><b>صِنفُ المُجَلَّد — ومَن يَملِك الجَلسَة فيه.</b> والمِحوَرُ
+    /// لَيسَ «يَقرَأ أَم يَكتُب» بَل <b>«هَل لِمُنادِيه مُعامَلَة؟»</b>:</para>
+    /// <list type="bullet">
+    ///   <item><see cref="Transactional"/> — يُنادى مِن جِسم نُقطَة، فَالمُعامَلَةُ
+    ///   قائِمَةٌ والخِدمَةُ تَنضَمّ إلَيها ولا تَفتَح جَلسَةً ولا تُودِع.</item>
+    ///   <item><see cref="Read"/> — يُنادى مِن صَفحَة <c>.razor</c>، ولا
+    ///   مُعامَلَةَ لِلصَفحَة تَنضَمُّ إلَيها. فَالخِدمَةُ تَفتَح
+    ///   <c>QuerySession</c> بِنَفسِها — ومَنعُها مِن ذلك يُعيد الجَلسَةَ
+    ///   إلى الصَفحَة، وهو عَينُ الدَين الَّذي يُسَدَّد.</item>
+    /// </list>
+    /// </summary>
+    private enum ServiceKind { Transactional, Read }
+
     /// <summary>مُجَلَّدُ خِدماتٍ يَخضَع لِلشَكل. <c>SurfaceFile</c>
     /// اسمُ المُهايِئ الَّذي يُسمَح لَه وَحدَه بِمَعرِفَة HTTP —
     /// و<c>null</c> تَعني «لا مُهايِئ هُنا، ولا مِلَفَّ يَعرِف
-    /// HTTP».</summary>
-    private sealed record ShapedDir(string Path, string? SurfaceFile, string WhyAr);
+    /// HTTP». و<c>GlobalFile</c> (لِمُجَلَّدات <see cref="ServiceKind.Read"/>
+    /// وَحدَها) اسمُ المِلَفّ الوَحيد المَأذون لَه بِجَلسَةٍ <b>بِلا
+    /// سلاج مُستَأجِر</b>، لِأَنّ وَثيقَتَه مُسَجَّلَة
+    /// <c>SingleTenanted</c>.</summary>
+    private sealed record ShapedDir(
+        string Path, string? SurfaceFile, string WhyAr,
+        ServiceKind Kind = ServiceKind.Transactional, string? GlobalFile = null);
 
     private static readonly ShapedDir[] Dirs =
     {
@@ -59,6 +78,17 @@ public class TenantConfigServiceShapeTests
             "بِنَفسِها، فَالمُجَلَّدُ **صِفرُ مَعرِفَةٍ بِـHTTP** لا " +
             "مِلَفٌّ واحِدٌ مُستَثنى. مُهايِئٌ بِمُستَهلِكٍ واحِد تَجريدٌ " +
             "يَسبِق مُستَهلِكَه (القاعِدَة ١)."),
+
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Queries",
+            null,
+            "خِدماتُ الاستِعلام لِلصَفَحات — المَوجَة ٥. تُنادى مِن " +
+            "`.razor` لا مِن نُقطَة، ولا مُعامَلَةَ لِلصَفحَة تَنضَمُّ " +
+            "إلَيها، فَتَفتَح جَلسَةَ قِراءَةٍ بِنَفسِها كَما تَفعَل " +
+            "`ListingLookupService` مُنذُ المَوجَة ٤. وشَرطُها الَّذي " +
+            "يَقوم مَقامَ «لا تَفتَح جَلسَة»: **كُلّ جَلسَةٍ بِسلاج " +
+            "مُستَأجِر** إلّا في سِجِلّ المُستَأجِرين نَفسِه.",
+            ServiceKind.Read,
+            GlobalFile: "TenantDirectory.cs"),
     };
 
     /// <summary>كُلّ مِلَفّات الخِدمَة في كُلّ مُجَلَّد خاضِع، مَع
@@ -94,10 +124,85 @@ public class TenantConfigServiceShapeTests
 
         var breaches = new List<string>();
         foreach (var (d, name, code) in files)
-            foreach (var forbidden in new[] { "LightweightSession(", "QuerySession(", "SaveChangesAsync" })
-                if (code.Contains(forbidden, StringComparison.Ordinal))
-                    breaches.Add($"{d.Path}/{name}: «{forbidden}» — الخِدمَة تَأخُذ الجَلسَة ولا تَملِكُها.");
+        {
+            // ومُجَلَّدُ القِراءَة يُعفى مِن `QuerySession(` وَحدَها —
+            // لا مِن الكِتابَة. الجَلسَةُ القابِلَةُ لِلكِتابَة والإيداع
+            // يَبقَيانِ مَمنوعَين في كُلّ مُجَلَّد خاضِع: صَفحَةٌ تَكتُب
+            // تَقَع خارِج المُعامَلَة وخارِج الصُندوق الصادِر، وذاكَ هُوَ
+            // الخَطَر الَّذي يُمَيِّزُه سِجِلُّ الطَبَقَة ٨ نَفسُه.
+            var forbidden = d.Kind == ServiceKind.Read
+                ? new[] { "LightweightSession(", "SaveChangesAsync" }
+                : new[] { "LightweightSession(", "QuerySession(", "SaveChangesAsync" };
 
+            foreach (var f in forbidden)
+                if (code.Contains(f, StringComparison.Ordinal))
+                    breaches.Add(d.Kind == ServiceKind.Read
+                        ? $"{d.Path}/{name}: «{f}» — خِدمَةُ استِعلامٍ تَقرَأ ولا تَكتُب."
+                        : $"{d.Path}/{name}: «{f}» — الخِدمَة تَأخُذ الجَلسَة ولا تَملِكُها.");
+        }
+
+        Assert.True(breaches.Count == 0, string.Join("\n  ", breaches));
+    }
+
+    /// <summary>
+    /// <para><b>العَزلُ بُنيَويّ لا اتِّفاقيّ — والفاحِصُ هُوَ ما
+    /// يَجعَلُه كَذلك.</b> كُلّ <c>QuerySession(</c> في مُجَلَّد قِراءَةٍ
+    /// يَجِب أَن يَحمِل <b>وَسيطاً</b> (سلاج المُستَأجِر). والنَداءُ
+    /// العاري <c>QuerySession()</c> يُعطي جَلسَةَ <c>*DEFAULT*</c> —
+    /// وهو بِعَينِه العَطَبُ الَّذي قاسَته المَوجَة ١ في سِتّ مُعالِجات،
+    /// وأَثبَتَه <c>LiveOutboxTenantProofTests</c> بِطَرَفَيه
+    /// (‏<c>detect=off → *DEFAULT*</c>).</para>
+    ///
+    /// <para><b>والاستِثناءُ واحِدٌ ومُعلَنٌ وثُنائيّ الاتِّجاه</b>:
+    /// وَثيقَةُ <c>Tenant</c> مُسَجَّلَة <c>SingleTenanted()</c> — سِجِلُّ
+    /// المُستَأجِرين لا يَقَع في مُستَأجِر. فَمِلَفٌّ واحِدٌ يُعلَن
+    /// بِاسمِه، <b>ويَحمَرّ إن لَم يَعُد يَفتَح جَلسَةً عارِيَة</b> —
+    /// فَلا يَبقى إذنٌ حَيّاً بَعدَ زَوال سَبَبِه.</para>
+    /// </summary>
+    [Fact]
+    public void Every_read_service_scopes_its_session_to_a_tenant()
+    {
+        var readDirs = Dirs.Where(d => d.Kind == ServiceKind.Read).ToArray();
+        Assert.True(readDirs.Length > 0, "أَداة عَمياء: لا مُجَلَّدَ قِراءَةٍ واحِداً.");
+
+        var scoped = 0;
+        var global = 0;
+        var breaches = new List<string>();
+
+        foreach (var (d, name, code) in ServiceFiles())
+        {
+            if (d.Kind != ServiceKind.Read) continue;
+
+            foreach (Match m in Regex.Matches(code, @"QuerySession\(\s*(?<a>[^)]*)\)"))
+            {
+                var arg = m.Groups["a"].Value.Trim();
+                if (arg.Length > 0) { scoped++; continue; }
+
+                global++;
+                if (name != d.GlobalFile)
+                    breaches.Add($"{d.Path}/{name}: «QuerySession()» بِلا سلاج — " +
+                                 $"جَلسَةُ *DEFAULT*. المَأذون وَحدَه: {d.GlobalFile ?? "لا أَحَد"}.");
+            }
+        }
+
+        // عَدّادانِ لِطَرَفَي المِعيار (القاعِدَة ١٠): صِفرُ جَلسَةٍ
+        // مُسَلَّجَة يَعني أَنّ النَمَطَ لَم يَرَ شَيئاً؛ وصِفرُ جَلسَةٍ
+        // عارِيَة يَعني أَنّ الاستِثناءَ المُعلَن ماتَ ولَم يُرفَع.
+        Assert.True(scoped > 0, "أَداة عَمياء: صِفر «QuerySession(slug)» في مُجَلَّدات القِراءَة.");
+
+        foreach (var d in readDirs)
+        {
+            if (d.GlobalFile is null) continue;
+            var file = ServiceFiles().FirstOrDefault(f => f.Dir == d && f.Name == d.GlobalFile);
+            Assert.False(file.Code is null,
+                $"استِثناءٌ مُثَبَّت لِمِلَفٍّ لا وُجودَ لَه: {d.Path}/{d.GlobalFile}.");
+            Assert.True(Regex.IsMatch(file.Code, @"QuerySession\(\s*\)"),
+                $"{d.Path}/{d.GlobalFile} لَم يَعُد يَفتَح جَلسَةً عارِيَة — " +
+                "ارفَع الاستِثناء مِن القائِمَة، فَالإذنُ يَموت مَع سَبَبِه.");
+        }
+
+        Assert.True(global > 0, "أَداة عَمياء: صِفر «QuerySession()» — إمّا زالَ سِجِلُّ " +
+                                "المُستَأجِرين وإمّا كَذَبَ النَمَط.");
         Assert.True(breaches.Count == 0, string.Join("\n  ", breaches));
     }
 
