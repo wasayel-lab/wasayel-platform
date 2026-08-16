@@ -1,6 +1,7 @@
 @page "/studio/apps/{slug}/categories"
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Queries.TenantDirectory Tenants
+@inject L L
 @using ACommerce.Kit.Tenants
 
 @*
@@ -9,29 +10,28 @@
     اختياريّ (residential/commercial/fnb/transport/services/...).
 *@
 
-<StudioShell Title="@($"الفِئات · {tenant?.Name ?? Slug}")" Active="home">
+<StudioShell Title="@($"{L["studio.app_categories.title"]} {tenant?.Name ?? Slug}")" Active="home">
     <TopBarActions>
-        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← الإعدادات</a>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← @L.Markup("studio.app_nav.settings")</a>
     </TopBarActions>
     <ChildContent>
         @if (tenant is null)
         {
-            <div class="st-card">التَّطبيق غَير مَوجود أَو لا تَملِكه.</div>
+            <div class="st-card">@L.Markup("studio.app.not_found")</div>
         }
         else
         {
             <div class="studio-page-head">
-                <h1>الفِئات</h1>
-                <p>الفِئات الَّتي يَتَصَفَّحها العُملاء (@tenant.Categories.Count فِئَة حاليّاً).</p>
+                <h1>@L.Markup("studio.app_categories.heading")</h1>
+                <p>@L.Markup("studio.app_categories.intro_before")@tenant.Categories.Count @L.Markup("studio.app_categories.intro_after")</p>
             </div>
 
-            @if (Saved == "1")    { <div class="st-chip st-chip-success" style="margin-bottom:14px;">تَمّ الحِفظ <AcIcon Name="check" Size="16" /></div> }
-            @if (Err == "bad_format") { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">صِيغَة سَطر غَير صَحيحَة</div> }
-            @if (Err == "empty")  { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">أَضِف فِئَة واحِدَة على الأَقَلّ</div> }
+            @if (Saved == "1")    { <div class="st-chip st-chip-success" style="margin-bottom:14px;">@L.Markup("studio.app.saved") <AcIcon Name="check" Size="16" /></div> }
+            @if (Err == "bad_format") { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">@L.Markup("studio.app_categories.err_format")</div> }
+            @if (Err == "empty")  { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">@L.Markup("studio.app_categories.err_empty")</div> }
 
             <form method="post" action="@($"/studio/apps/{Slug}/categories/save")" id="cats-form" class="st-card">
-                <p style="color:var(--st-muted);font-size:13px;margin:0 0 14px;">
-                    بِطاقَة لِكُلّ فِئَة. التَّرتيب = تَرتيب العَرض.
+                <p style="color:var(--st-muted);font-size:13px;margin:0 0 14px;">@((MarkupString)"\n                    ")@L.Markup("studio.app_categories.hint_before") = @L.Markup("studio.app_categories.hint_after")@((MarkupString)"\n                ")
                 </p>
 
                 <div class="ac-editor" id="cats-editor">
@@ -39,17 +39,17 @@
                     {
                         <div class="ac-editor-row" data-cat-row>
                             <div class="ac-editor-row-head">
-                                <input class="ac-input ac-cat-icon" value="@(c.Icon ?? "tag")" aria-label="أَيقونَة" />
-                                <input class="ac-input ac-cat-label" placeholder="اسم الفِئَة" value="@c.Label" />
-                                <button type="button" class="ac-icon-btn" data-remove-cat aria-label="حَذف"><AcIcon Name="x" Size="14" /></button>
+                                <input class="ac-input ac-cat-icon" value="@(c.Icon ?? "tag")" aria-label="@L["studio.app_categories.icon_label"]" />
+                                <input class="ac-input ac-cat-label" placeholder="@L["studio.app_categories.name_placeholder"]" value="@c.Label" />
+                                <button type="button" class="ac-icon-btn" data-remove-cat aria-label="@L["studio.app_categories.remove"]"><AcIcon Name="x" Size="14" /></button>
                             </div>
                             <div class="ac-editor-grid2">
                                 <div>
-                                    <span class="ac-chip-input-label">المُعَرِّف (slug)</span>
+                                    <span class="ac-chip-input-label">@L.Markup("studio.app_categories.slug_label")slug)</span>
                                     <input class="ac-input ac-cat-slug" placeholder="apartments" value="@c.Slug" style="direction:ltr;" />
                                 </div>
                                 <div>
-                                    <span class="ac-chip-input-label">التَّجميع (اختياريّ)</span>
+                                    <span class="ac-chip-input-label">@L.Markup("studio.app_categories.kind_label")</span>
                                     <input class="ac-input ac-cat-kind" placeholder="residential" value="@c.Kind" list="kind-list" style="direction:ltr;" />
                                 </div>
                             </div>
@@ -67,12 +67,12 @@
                 </datalist>
 
                 <button type="button" class="ac-add-row-btn" id="add-cat" style="margin-top:12px;">
-                    <AcIcon Name="plus" Size="16" /> إضافَة فِئَة
+                    <AcIcon Name="plus" Size="16" /> @L.Markup("studio.app_categories.add_row")@((MarkupString)"\n                ")
                 </button>
 
                 <textarea name="categories" id="cats-hidden" hidden>@CategoriesAsText(tenant.Categories)</textarea>
 
-                <button type="submit" class="st-btn st-btn-primary" style="margin-top:16px;">حِفظ الفِئات</button>
+                <button type="submit" class="st-btn st-btn-primary" style="margin-top:16px;">@L.Markup("studio.app_categories.save")</button>
             </form>
 
             <template id="cat-row-tpl">
@@ -80,15 +80,15 @@
                     <div class="ac-editor-row-head">
                         <input class="ac-input ac-cat-icon" value="tag" aria-label="أَيقونَة" />
                         <input class="ac-input ac-cat-label" placeholder="اسم الفِئَة" />
-                        <button type="button" class="ac-icon-btn" data-remove-cat aria-label="حَذف"><AcIcon Name="x" Size="14" /></button>
+                        <button type="button" class="ac-icon-btn" data-remove-cat aria-label="@L["studio.app_categories.remove"]"><AcIcon Name="x" Size="14" /></button>
                     </div>
                     <div class="ac-editor-grid2">
                         <div>
-                            <span class="ac-chip-input-label">المُعَرِّف (slug)</span>
+                            <span class="ac-chip-input-label">@L.Markup("studio.app_categories.slug_label")slug)</span>
                             <input class="ac-input ac-cat-slug" placeholder="apartments" style="direction:ltr;" />
                         </div>
                         <div>
-                            <span class="ac-chip-input-label">التَّجميع (اختياريّ)</span>
+                            <span class="ac-chip-input-label">@L.Markup("studio.app_categories.kind_label")</span>
                             <input class="ac-input ac-cat-kind" placeholder="residential" list="kind-list" style="direction:ltr;" />
                         </div>
                     </div>

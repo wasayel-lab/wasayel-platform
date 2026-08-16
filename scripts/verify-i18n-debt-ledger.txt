@@ -1,7 +1,7 @@
 # scripts/verify-i18n-debt-ledger.txt — الدَين المَقيس، مُثَبَّتاً بِأَسمائِه.
 # وُلِّد بِـ: ./scripts/verify-i18n-debt.sh --emit-ledger
-TOTAL|1320
-DISTINCT|862
+TOTAL|1219
+DISTINCT|818
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
 libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|40
@@ -44,17 +44,14 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/PhoneLo
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/RoleOnboarding.razor|9
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/RolePicker.razor|9
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAgent.razor|30
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioApp.razor|40
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppAttributes.razor|43
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppBranding.razor|13
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppCategories.razor|23
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppCategories.razor|2
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppConsole.razor|27
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppDealDetail.razor|42
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppDeals.razor|24
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppListings.razor|21
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppPwa.razor|27
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppRegions.razor|22
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppRoles.razor|9
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppRegions.razor|5
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppTicketDetail.razor|16
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppTickets.razor|15
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioConsent.razor|10
@@ -64,7 +61,7 @@ libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioS
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantDrivers.razor|13
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantExplore.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantHome.razor|4
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantListingDetail.razor|106
+libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantListingDetail.razor|105
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantManage.razor|24
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/VendorProfile.razor|10
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RequireTenantAdmin.razor|3

@@ -1,6 +1,7 @@
 @page "/studio/apps/{slug}"
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Queries.TenantDirectory Tenants
+@inject L L
 @using ACommerce.Kit.Tenants
 
 @*
@@ -10,17 +11,16 @@
     التَّشغيل: زِرّ يَنقُل لِـ /studio/apps/{slug}/console (مُستَخدِمون، تذاكِر، …).
 *@
 
-<StudioShell Title="@(tenant?.Name ?? "تَطبيق")" Active="home">
+<StudioShell Title="@(tenant?.Name ?? L["studio.app.title_fallback"])" Active="home">
     <TopBarActions>
-        <a class="st-btn st-btn-ghost" href="/studio">← لوحَتي</a>
-        <a class="st-btn st-btn-light" href="@($"/{Slug}")" target="_blank" rel="noopener" style="margin-inline-start:8px;">
-            مُعايَنَة التَّطبيق ↗
+        <a class="st-btn st-btn-ghost" href="/studio">@L.Markup("studio.app_nav.my_board")</a>
+        <a class="st-btn st-btn-light" href="@($"/{Slug}")" target="_blank" rel="noopener" style="margin-inline-start:8px;">@((MarkupString)"\n            ")@L.Markup("studio.app_nav.preview")@((MarkupString)"\n        ")
         </a>
     </TopBarActions>
     <ChildContent>
         @if (tenant is null)
         {
-            <div class="st-card">التَّطبيق غَير مَوجود أَو لا تَملِكه.</div>
+            <div class="st-card">@L.Markup("studio.app.not_found")</div>
         }
         else
         {
@@ -32,7 +32,7 @@
                 <div style="flex:1;">
                     <h1 style="margin:0;">@tenant.Name</h1>
                     <p style="margin:2px 0 0;color:var(--st-muted);font-size:14px;">
-                        /@tenant.Slug · @(string.IsNullOrEmpty(tenant.TagLine) ? "بِلا شِعار" : tenant.TagLine)
+                        /@tenant.Slug · @(string.IsNullOrEmpty(tenant.TagLine) ? L["studio.app.no_tagline"] : tenant.TagLine)
                     </p>
                 </div>
             </div>
@@ -40,101 +40,100 @@
             @if (JustBuilt)
             {
                 <div class="st-card" style="background:#dcfce7;border:1px solid var(--st-success);">
-                    <AcIcon Name="sparkle" Size="16" /> تَمّ إنشاء التَّطبيق بِنَجاح. عَدِّل الفِئات والأَدوار والهُويَّة مِن الأَقسام أَدناه.
+                    <AcIcon Name="sparkle" Size="16" /> @L.Markup("studio.app.just_built")@((MarkupString)"\n                ")
                 </div>
             }
 
             @if (tenant.SourceAnalysisId.HasValue)
             {
                 <div class="st-card" style="background:var(--st-primary-50);border:1px solid var(--st-primary);">
-                    <AcIcon Name="lightbulb" Size="16" /> هذا التَّطبيق مَبنيّ على فِكرَة حُلِّلَت في الحاضِنَة.
+                    <AcIcon Name="lightbulb" Size="16" /> @L.Markup("studio.app.from_incubator")
                     <a href="@($"/studio/s/{tenant.SourceAnalysisId}")"
-                       style="color:var(--st-primary-700);font-weight:600;text-decoration:none;">
-                        عَرض الدِراسَة ←
+                       style="color:var(--st-primary-700);font-weight:600;text-decoration:none;">@((MarkupString)"\n                        ")@L.Markup("studio.app.view_study")@((MarkupString)"\n                    ")
                     </a>
                 </div>
             }
 
             <div class="studio-stats">
                 <div class="studio-stat">
-                    <div class="studio-stat-label">الفِئات</div>
+                    <div class="studio-stat-label">@L.Markup("studio.app.stat_categories")</div>
                     <div class="studio-stat-value">@tenant.Categories.Count</div>
                 </div>
                 <div class="studio-stat">
-                    <div class="studio-stat-label">الأَدوار</div>
+                    <div class="studio-stat-label">@L.Markup("studio.app.stat_roles")</div>
                     <div class="studio-stat-value">@tenant.Roles.Count</div>
                 </div>
                 <div class="studio-stat">
-                    <div class="studio-stat-label">قَناة الدُخول</div>
+                    <div class="studio-stat-label">@L.Markup("studio.app.stat_auth")</div>
                     <div class="studio-stat-value" style="font-size:18px;">
                         @(tenant.AuthChannel switch
                           {
-                              "nafath" => "نَفاذ",
-                              "email"  => "بَريد",
-                              _        => "هاتِف"
+                              "nafath" => L["studio.app.auth_nafath"],
+                              "email"  => L["studio.app.auth_email"],
+                              _        => L["studio.app.auth_phone"]
                           })
                     </div>
                 </div>
                 <div class="studio-stat">
-                    <div class="studio-stat-label">المَدينَة</div>
+                    <div class="studio-stat-label">@L.Markup("studio.app.stat_city")</div>
                     <div class="studio-stat-value" style="font-size:18px;">
                         @(string.IsNullOrEmpty(tenant.City) ? "—" : tenant.City)
                     </div>
                 </div>
             </div>
 
-            <div class="st-section-title">التَّصميم والتَّهيئَة</div>
+            <div class="st-section-title">@L.Markup("studio.app.section_design")</div>
             <div class="studio-list">
                 <a class="studio-list-row" href="@($"/studio/apps/{Slug}/branding")">
                     <span class="studio-list-icon ac-chip-info"><AcIcon Name="image" Size="16" /></span>
-                    <div class="studio-list-body"><strong>الهُوِيَّة البَصَريَّة</strong>
-                        <span>اللَّون، الاسم، الشِّعار، المَدينَة</span></div>
+                    <div class="studio-list-body"><strong>@L.Markup("studio.app.branding_title")</strong>
+                        <span>@L.Markup("studio.app.branding_sub")</span></div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
                 <a class="studio-list-row" href="@($"/studio/apps/{Slug}/categories")">
                     <span class="studio-list-icon" style="background:#dcfce7;color:#15803d;"><AcIcon Name="list" Size="16" /></span>
-                    <div class="studio-list-body"><strong>الفِئات</strong>
-                        <span>@tenant.Categories.Count فِئَة</span></div>
+                    <div class="studio-list-body"><strong>@L.Markup("studio.app.categories_title")</strong>
+                        <span>@tenant.Categories.Count @L.Markup("studio.app.category_unit")</span></div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
                 <a class="studio-list-row" href="@($"/studio/apps/{Slug}/roles")">
                     <span class="studio-list-icon" style="background:#fef3c7;color:#854d0e;"><AcIcon Name="people" Size="16" /></span>
-                    <div class="studio-list-body"><strong>الأَدوار (التَّطبيقات الفَرعيَّة)</strong>
-                        <span>@tenant.Roles.Count دَور — كُلّ دَور = تَطبيق مُستَقِلّ</span></div>
+                    <div class="studio-list-body"><strong>@L.Markup("studio.app.roles_title")</strong>
+                        <span>@tenant.Roles.Count @L.Markup("studio.app.roles_sub_before") = @L.Markup("studio.app.roles_sub_after")</span></div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
                 <a class="studio-list-row" href="@($"/studio/apps/{Slug}/regions")">
                     <span class="studio-list-icon" style="background:#e0e7ff;color:#4338ca;"><AcIcon Name="map" Size="16" /></span>
-                    <div class="studio-list-body"><strong>المُدُن والأَحياء</strong>
-                        <span>التَّغطيَة الجُغرافيَّة</span></div>
+                    <div class="studio-list-body"><strong>@L.Markup("studio.app.regions_title")</strong>
+                        <span>@L.Markup("studio.app.regions_sub")</span></div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
                 <a class="studio-list-row" href="@($"/studio/apps/{Slug}/attributes")">
                     <span class="studio-list-icon" style="background:#fae8ff;color:#a21caf;"><AcIcon Name="sliders" Size="16" /></span>
-                    <div class="studio-list-body"><strong>الخَصائِص الديناميكيَّة</strong>
-                        <span>حُقول مُخَصَّصَة لِلإعلانات والبروفايلات</span></div>
+                    <div class="studio-list-body"><strong>@L.Markup("studio.app.attributes_title")</strong>
+                        <span>@L.Markup("studio.app.attributes_sub")</span></div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
                 <a class="studio-list-row" href="@($"/studio/apps/{Slug}/pwa")">
                     <span class="studio-list-icon" style="background:#cffafe;color:#0e7490;"><AcIcon Name="phone" Size="16" /></span>
-                    <div class="studio-list-body"><strong>تَطبيقات الجَوّال (PWA)</strong>
-                        <span>اِسم وأَيقونَة كُلّ دَور</span></div>
+                    <div class="studio-list-body"><strong>@L.Markup("studio.app.pwa_title")</strong>
+                        <span>@L.Markup("studio.app.pwa_sub")</span></div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
             </div>
 
-            <div class="st-section-title">التَّشغيل والمُتابَعَة</div>
+            <div class="st-section-title">@L.Markup("studio.app.section_ops")</div>
             <div class="studio-list">
                 <a class="studio-list-row" href="@($"/studio/apps/{Slug}/deals")">
                     <span class="studio-list-icon ac-chip-info"><AcIcon Name="refresh" Size="16" /></span>
-                    <div class="studio-list-body"><strong>تَدَفُّق العَمَليَّات</strong>
-                        <span>صَفقات تَمُرّ بِـ عَرض → حَجز → تَأكيد → دَفع → شَحن → استِلام → تَقييم</span></div>
+                    <div class="studio-list-body"><strong>@L.Markup("studio.app.deals_title")</strong>
+                        <span>@L.Markup("studio.app.deals_sub")</span></div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
                 <a class="studio-list-row" href="@($"/studio/apps/{Slug}/console")">
                     <span class="studio-list-icon" style="background:#fee2e2;color:#b91c1c;"><AcIcon Name="bar-chart" Size="16" /></span>
-                    <div class="studio-list-body"><strong>لوحَة التَّشغيل</strong>
-                        <span>المُستَخدِمون، التَّذاكِر، سِجِلّ العَمَلِيّات</span></div>
+                    <div class="studio-list-body"><strong>@L.Markup("studio.app.console_title")</strong>
+                        <span>@L.Markup("studio.app.console_sub")</span></div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
             </div>
