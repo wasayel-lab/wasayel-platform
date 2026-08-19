@@ -66,6 +66,14 @@ public class EndpointStoreInjectionTests
             $"أَداة عَمياء: مُستَخرِج الوُسَطاء وَجَدَ {takers.Length} نُقطَة تَأخُذ المَخزَن — " +
             "والمَقيس عَشَرات. اُنظُر StripComments/StatementFrom قَبل أَن تُصَدِّق الصِفر.");
 
+        // سَطر القِياس — يُطبَع دائِماً لا عِندَ الفَشَل، فَالرَقَم الَّذي
+        // لا أَمرَ يُنتِجُه يَتَعَفَّن في الوَثائِق (وقَد تَعَفَّنَ: §٣ في
+        // `docs/ARCHITECTURE-ENFORCEMENT.md` بَقِيَ يَقول «‏86 مِن ‏99»
+        // بَعدَ أَن صارَت النِقاط ‏104).
+        Console.WriteLine(
+            $"· قِياس حَقن المَخزَن: {takers.Length} نُقطَة تَأخُذ IDocumentStore " +
+            $"مِن {endpoints.Count} نُقطَة.");
+
         var unpinned = takers.Except(PinnedStoreTakers, StringComparer.Ordinal).ToArray();
         Assert.True(unpinned.Length == 0,
             "نُقطَة تَأخُذ IDocumentStore وغَير مُثَبَّتَة — تَفتَح جَلسَتَها بِيَدِها " +

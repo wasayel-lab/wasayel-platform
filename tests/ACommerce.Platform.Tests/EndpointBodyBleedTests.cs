@@ -131,6 +131,25 @@ public class EndpointBodyBleedTests
             $"أَداة عَمياء: عُدَّ {total} سَطراً فَقَط — والمَقيس آلاف. " +
             "اُنظُر StatementFrom قَبل أَن تُصَدِّق الرَقَم.");
 
+        // ─── سَطر القِياس — ولِماذا يُطبَع دائِماً لا عِندَ الفَشَل ──────
+        // الرَقَم الَّذي لا أَمرَ يُنتِجُه يَتَعَفَّن في الوَثائِق. وقَد
+        // وَقَعَ: `docs/ARCHITECTURE-ENFORCEMENT.md` §٣ ظَلَّ يَقول
+        // ‏«2,282 سَطراً في 99 نُقطَة» بَعدَ مَوجَتَين رَفَعَتاهُ إلى
+        // ‏2,356 في 104 — لِأَنّ السُقوف كانَت تُقرَأ مِن ثابِتٍ في
+        // المَصدَر ولا تُطبَع. الآنَ تُطبَع، والوَثيقَة تَحمِل الأَمر
+        // بِجِوار الرَقَم:
+        //
+        //   dotnet test PlatformV1.slnx \
+        //     --filter FullyQualifiedName~EndpointBodyBleed \
+        //     -l "console;verbosity=detailed" | grep 'قِياس النَزيف'
+        //
+        // وهذا نَصّ القاعِدَة ١٠: أَداة تَقول «أَخضَر» بِلا عَدّاد لا
+        // تُمَيَّز عَن أَداة عَمياء.
+        Console.WriteLine(
+            $"· قِياس النَزيف: {total} سَطراً في {count} نُقطَة، " +
+            $"{byFile.Count} مِلَفّ.  (السُقوف المُثَبَّتَة: " +
+            $"{PinnedTotal} سَطراً في {PinnedEndpointCount} نُقطَة.)");
+
         var breaches = new List<string>();
 
         foreach (var (file, m) in byFile.OrderBy(k => k.Key, StringComparer.Ordinal))
