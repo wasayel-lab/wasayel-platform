@@ -1,0 +1,185 @@
+# ══════════════════════════════════════════════════════════════════════
+#  مِرآة `main` إلى مُستودَع الـSpace على Hugging Face
+# ══════════════════════════════════════════════════════════════════════
+#
+#  **العِلَّة**: الإنتاج الحَيّ يُنشَر مِن المُستودَع القَديم
+#  (`acommerce-lab/acommerce-platform` فَرع `deploy-hf`). فَكُلّ إصلاح
+#  يُودَع هُنا — بِما فيه إصلاحٌ أَمنيّ — **لا يَبلُغ المُستَخدِم**. هذِه
+#  الوَظيفَة تَقطَع ذلك: ما يَدخُل `main` ويَمُرّ البَوّابَةَ يَصير هو
+#  ما يَعمَل.
+#
+#  **ولِماذا بَعدَ CI لا مَعَه**: ‏`workflow_run` لا يُشَغَّل إلّا حينَ
+#  تَنتَهي «CI»، والشَرطُ أَدناه يَشتَرِط `conclusion == 'success'`.
+#  فَبِناءٌ أَحمَر لا يُنشَر أَبَداً. ولَو رُبِطَت الوَظيفَتان بِـ`on: push`
+#  مُتَوازِيَتَين لَسَبَقَ النَشرُ نَتيجَةَ الاختِبارات وصارَت البَوّابَةُ
+#  زينَةً.
+#
+#  **ولا رَمزَ في هذا المِلَفّ**: أَسماءُ أَسرارٍ ومُتَغَيِّرات فَقَط.
+#  المَطلوب إنشاؤُه في إعدادات المُستودَع (‏Settings → Secrets and
+#  variables → Actions):
+#
+#    | الاسم       | النَوع    | المِثال            | إلزاميّ |
+#    |-------------|-----------|--------------------|---------|
+#    | `HF_TOKEN`  | Secret    | ‏(رَمز بِصَلاحِيَّة write) | نَعَم |
+#    | `HF_SPACE`  | Variable  | `wasayel/wasayel`  | نَعَم |
+#    | `HF_USER`   | Variable  | `wasayel`          | لا — يُشتَقّ مِن `HF_SPACE` |
+#
+#  التَفصيل وخَطَوات المالِك في `docs/DEPLOY.md`.
+#
+# ══════════════════════════════════════════════════════════════════════
+
+name: Deploy to Hugging Face Space
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+  # لِلتَراجُع وَحدَه: ادفَع رَقمَ إيداعٍ سابِقاً كانَ أَخضَرَ يَوماً.
+  # وهذا المَسار **يَتَجاوَز البَوّابَة عَمداً** — لِأَنّ التَراجُع
+  # يَستَهدِف حالَةً سَبَقَ أَن مَرَّت، والانتِظارُ لِبِناءٍ جَديدٍ
+  # وَقتَ العَطَب هو الكَلفَة بِعَينِها.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "رَقم الإيداع أو الفَرع المُراد نَشرُه (افتِراضيّاً main)"
+        required: false
+        default: main
+
+concurrency:
+  # دَفعَتان بِـ--force مُتَداخِلَتان تَجعَلانِ الفائِزَ مَسأَلَةَ تَوقيت.
+  # ولا يُلغى الجاري: الإلغاءُ بَعدَ الدَفع وقَبلَ التَحَقُّق يُخَلِّف
+  # نَشراً لا أَحَدَ قَرَأَ نَتيجَتَه.
+  group: deploy-hf
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    # النَشر عَن دَفعٍ ناجِح إلى main، أَو عَن تَشغيلٍ يَدَويّ لِلتَراجُع.
+    # و`workflow_run.event == 'push'` يَستَبعِد تَشغيلات CI الآتِيَة مِن
+    # طَلَبات الدَمج (‏pull_request) — تِلكَ تَفحَص ولا تُنشَر.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # ‏`workflow_run` لا يَحمِل الشَجَرَة، بَل رَقمَ الإيداع الَّذي
+      # مَرَّ البَوّابَة. نَستَنسِخُه بِعَينِه — لا `main` — وإلّا نَشَرنا
+      # إيداعاً لاحِقاً لَم يُختَبَر بَعد.
+      - name: Checkout the exact commit CI approved
+        uses: actions/checkout@v4
+        with:
+          ref: >-
+            ${{ github.event_name == 'workflow_dispatch'
+                && inputs.ref
+                || github.event.workflow_run.head_sha }}
+          # عُمقٌ كامِل: الاستِنساخ الضَحل لا يُدفَع
+          # (‏"shallow update not allowed").
+          fetch-depth: 0
+
+      - name: Assert the Space target is configured
+        env:
+          HF_SPACE: ${{ vars.HF_SPACE }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "${HF_SPACE:-}" ] || missing="${missing} vars.HF_SPACE"
+          [ -n "${HF_TOKEN:-}" ] || missing="${missing} secrets.HF_TOKEN"
+          if [ -n "${missing}" ]; then
+            echo "::error::إعداد ناقِص:${missing}"
+            echo "المَطلوب — Settings → Secrets and variables → Actions:"
+            echo "  · Secret   HF_TOKEN  = رَمز Hugging Face بِصَلاحِيَّة write"
+            echo "  · Variable HF_SPACE  = <owner>/<space>   مِثال: wasayel/wasayel"
+            echo "الخَطَوات كامِلَةً في docs/DEPLOY.md"
+            exit 1
+          fi
+          case "${HF_SPACE}" in
+            */*) : ;;
+            *) echo "::error::HF_SPACE يَجِب أَن يَكون <owner>/<space> لا '${HF_SPACE}'"; exit 1 ;;
+          esac
+          echo "الهَدَف: huggingface.co/spaces/${HF_SPACE}"
+
+      - name: Push the tree to the Space
+        env:
+          HF_SPACE: ${{ vars.HF_SPACE }}
+          HF_USER: ${{ vars.HF_USER }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          # اسمُ المُستَخدِم في الـURL يُشتَقّ مِن مالِك الـSpace ما لَم
+          # يُصَرَّح بِغَيرِه — فَيَنقُص ما يُطلَب مِن المالِك بِمُتَغَيِّر.
+          user="${HF_USER:-${HF_SPACE%%/*}}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          sha="$(git rev-parse HEAD)"
+          echo "sha=${sha}" >> "$GITHUB_ENV"
+          echo "الإيداع المَدفوع: ${sha}"
+
+          # ‏--force مَقصود: مُستودَعُ الـSpace **تاريخٌ مُستَقِلّ** —
+          # أَنشَأَته HF بِإيداعٍ أَوَّلِيّ خاصٍّ بِه، ولَيسَ سَلَفاً
+          # لِتاريخِنا. فَالدَفعُ السَريع مَرفوضٌ دائِماً (non-fast-forward)
+          # لا مَرَّةً واحِدَة. والمِرآةُ تَعني أَنّ الحُجَّةَ عِندَنا:
+          # ما في `main` هو الحَقيقَة، وما في الـSpace نُسخَةٌ تُستَبدَل.
+          # والتَراجُعُ لا يُكَلِّف هذا شَيئاً: يُدفَع الإيداعُ السابِق
+          # بِنَفس الطَريقَة (workflow_dispatch أَعلاه).
+          #
+          # والرَمزُ لا يُطبَع: يُبنى الـURL في المُتَغَيِّر ولا يُصدَّر،
+          # وGitHub يُقَنِّع قيمَةَ السِرّ في السِجِلّ عَلى كُلّ حال.
+          git push --force \
+            "https://${user}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}.git" \
+            "HEAD:refs/heads/main"
+
+      # ═══ الكاتِبُ الَّذي لا يُعيد القِراءَة يُبَلِّغ بِنِيَّتِه لا بِفِعلِه ═══
+      - name: Read the Space back and assert it carries this commit
+        env:
+          HF_SPACE: ${{ vars.HF_SPACE }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          api="https://huggingface.co/api/spaces/${HF_SPACE}"
+          for attempt in 1 2 3; do
+            body="$(curl -sS -H "Authorization: Bearer ${HF_TOKEN}" "${api}")" || body=""
+            remote_sha="$(printf '%s' "${body}" | jq -r '.sha // empty')"
+            stage="$(printf '%s' "${body}" | jq -r '.runtime.stage // "unknown"')"
+            [ -n "${remote_sha}" ] && break
+            echo "المُحاوَلَة ${attempt}: الـAPI لَم يُجِب بِرَقم إيداع — إعادَة بَعدَ 10ث"
+            sleep 10
+          done
+
+          if [ "${remote_sha}" != "${sha}" ]; then
+            echo "::error::الـSpace يَحمِل ${remote_sha:-<لا شَيء>} والمَدفوع ${sha}"
+            exit 1
+          fi
+          echo "✅ مُستودَع الـSpace يَحمِل ${sha}"
+          echo "الحالَة الآن: ${stage}"
+
+          # ═══ وما لا تَراه الأَداة لا تَدَّعيه ═══════════════════════
+          # ‏`runtime.stage` يَصِف الحاوِيَةَ العامِلَة، ولا يَقول **مِن
+          # أَيّ إيداعٍ بُنِيَت**. فَبَعدَ الدَفع مُباشَرَةً تُجيب
+          # `RUNNING` وهي ما زالَت تَخدِم البِناءَ السابِق. لِذلك لا
+          # تُعامَل هذِه القيمَةُ بُرهاناً ولا تُفشِل الوَظيفَة — تُطبَع
+          # خَبَراً. والسُؤال «أَيّ إصدارٍ يَعمَل الآن؟» لا يُجيبُه إلّا
+          # التَطبيقُ نَفسُه: اقتِراحُ نُقطَة `/health` في docs/DEPLOY.md.
+          {
+            echo "### النَشر إلى Hugging Face"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| الـSpace | \`${HF_SPACE}\` |"
+            echo "| الإيداع المَدفوع | \`${sha}\` |"
+            echo "| إيداع الـSpace (‏مَقروءاً مِن الـAPI) | \`${remote_sha}\` |"
+            echo "| حالَة التَشغيل وَقتَ القِراءَة | \`${stage}\` |"
+            echo ""
+            echo "سِجِلّ البِناء: https://huggingface.co/spaces/${HF_SPACE}?logs=build"
+          } >> "$GITHUB_STEP_SUMMARY"
