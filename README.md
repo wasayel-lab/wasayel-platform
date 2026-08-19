@@ -1,3 +1,27 @@
+---
+title: Wasayel
+emoji: 🛍️
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+short_description: Wasayel — multi-tenant commerce platform (Arabic-first).
+---
+
+<!--
+الكُتلَة YAML أَعلاه يَقرَؤها Hugging Face Spaces لِنَشر التَّطبيق
+(Docker SDK): بِلا `sdk: docker` يَظُنّ المَكانَ Gradio، وبِلا
+`app_port: 7860` يَقيسُ الصِحَّةَ عَلى مَنفَذٍ لا أَحَدَ فيه. GitHub
+يُخفيها عِندَ العَرض، فَلا تُكَلِّف قارِئَ المُستودَع سَطراً.
+
+مَنقولَة حَرفاً مِن `acommerce-lab/acommerce-platform` فَرع `deploy-hf`
+— وهي التَرويسَة الَّتي يَعمَل بِها الإنتاج الحَيّ اليَوم.
+
+لِخَطَوات النَّشر الكامِلَة والأَسرار المَطلوبَة: docs/DEPLOY.md
+-->
+
 # منصة وسايل — Wasayel Platform
 
 منصة تجارة وخدمات **متعددة المستأجرين، عربية أولاً**: المستأجر الواحد = تطبيق
