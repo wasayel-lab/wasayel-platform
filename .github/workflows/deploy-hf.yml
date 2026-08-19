@@ -148,10 +148,14 @@ jobs:
         run: |
           set -euo pipefail
           api="https://huggingface.co/api/spaces/${HF_SPACE}"
+          # ‏`|| true` على `jq` مَقصود: صَفحَةُ خَطَإٍ بِـHTML بَدَل JSON
+          # تَجعَل `jq` يَخرُج بِـ5، و`set -e` يَقتُل السكريبت في
+          # المُحاوَلَة الأولى — فَتَصير حَلقَةُ الإعادَة زينَةً.
+          remote_sha=""; stage="unknown"
           for attempt in 1 2 3; do
             body="$(curl -sS -H "Authorization: Bearer ${HF_TOKEN}" "${api}")" || body=""
-            remote_sha="$(printf '%s' "${body}" | jq -r '.sha // empty')"
-            stage="$(printf '%s' "${body}" | jq -r '.runtime.stage // "unknown"')"
+            remote_sha="$(printf '%s' "${body}" | jq -r '.sha // empty' 2>/dev/null || true)"
+            stage="$(printf '%s' "${body}" | jq -r '.runtime.stage // "unknown"' 2>/dev/null || echo unknown)"
             [ -n "${remote_sha}" ] && break
             echo "المُحاوَلَة ${attempt}: الـAPI لَم يُجِب بِرَقم إيداع — إعادَة بَعدَ 10ث"
             sleep 10
