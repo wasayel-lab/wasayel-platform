@@ -11,3 +11,11 @@ tests/characterization/computed/** -text
 
 # سُكريبتات bash تُشَغَّل بِـLF دائِماً.
 *.sh text eol=lf
+
+# الـDockerfile و`.dockerignore` بِـLF دائِماً. الجِهاز هُنا يُشَغِّل
+# `core.autocrlf=true`، فَنُسخَةُ العَمَل عَلى Windows تَأخُذ CRLF عِندَ
+# أَيّ استِنساخ جَديد — وسَطرُ `RUN … \` المُتبوع بِـCRLF مَزلَقٌ
+# مَعروف في `docker build`. البُنيَة المُودَعَة LF (‏مَقيسَة: صِفر بايت
+# CR)، وهذا السَطر يُبقيها LF في نُسخَة العَمَل أَيضاً.
+Dockerfile text eol=lf
+.dockerignore text eol=lf
