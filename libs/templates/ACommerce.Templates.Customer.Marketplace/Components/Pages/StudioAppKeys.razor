@@ -1,0 +1,188 @@
+@page "/studio/apps/{slug}/keys"
+@inject Services.Incubator.StudioAuth Auth
+@inject Services.Queries.TenantDirectory Tenants
+@inject Services.Queries.TenantAdminQueries TenantAdmin
+@inject Services.Api.ApiKeyService Keys
+@inject Services.Api.ApiKeyRevealStore Reveal
+@inject L L
+@using ACommerce.Kit.Tenants
+@using ACommerce.Kit.Auth
+@using ACommerce.Templates.Customer.Marketplace.Services.Api
+
+@*
+    مَفاتيحُ الـAPI لِمَتجَرٍ واحِد — إصدارٌ وسَردٌ وإبطال.
+
+    والسِرُّ يُعرَض **مَرَّةً واحِدَة**: نُقطَةُ الإصدار تَضَعُه في
+    وِعاءِ العَرض، وهذِه الصَفحَة تَأخُذُه فَيُحذَف. تَحديثُ الصَفحَة
+    لا يُعيدُه — وذاكَ عَقدٌ مُعلَنٌ لِلمُستَخدِم لا وَعدٌ في نَصّ.
+
+    ولا جَلسَةَ Marten هُنا: الصَفحَةُ تَحقِن خِدمَةً (الطَبَقَة ٨
+    عِندَ صِفر، ولا تَرتَفِع).
+*@
+
+<StudioShell Title="@($"{L["studio.keys.title"]} {tenant?.Name ?? Slug}")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← @L.Markup("studio.app_nav.settings")</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (tenant is null)
+        {
+            <div class="st-card">@L.Markup("studio.app.not_found")</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>@L.Markup("studio.keys.heading")</h1>
+                <p>@L.Markup("studio.keys.intro")</p>
+            </div>
+
+            @if (errorKey is not null)
+            {
+                <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@L.Markup(errorKey)</div>
+            }
+
+            @if (revealed is not null)
+            {
+                <div class="st-card" style="border:1px solid var(--st-success);margin-bottom:16px;">
+                    <div class="st-section-title">@L.Markup("studio.keys.issued_title")</div>
+                    <p style="color:var(--st-muted);font-size:13px;margin:0 0 10px;">@L.Markup("studio.keys.issued_warning")</p>
+                    <code style="display:block;direction:ltr;text-align:start;word-break:break-all;
+                                 background:var(--st-bg);padding:12px;border-radius:8px;">@revealed</code>
+                    <p style="color:var(--st-muted);font-size:13px;margin:10px 0 0;">@L.Markup("studio.keys.usage_hint")</p>
+                </div>
+            }
+
+            <div class="st-section-title">@L.Markup("studio.keys.new_title")</div>
+            <form method="post" action="@($"/studio/apps/{Slug}/keys/create")" class="st-card">
+                <label class="ac-chip-input-label" for="key-name">@L.Markup("studio.keys.name_label")</label>
+                <input class="ac-input" id="key-name" name="name" required
+                       placeholder="@L["studio.keys.name_placeholder"]" />
+
+                <label class="ac-chip-input-label" for="key-actor" style="margin-top:12px;display:block;">@L.Markup("studio.keys.actor_label")</label>
+                <select class="ac-input" id="key-actor" name="actor_user_id" required>
+                    <option value="">@L["studio.keys.actor_choose"]</option>
+                    @foreach (var u in users)
+                    {
+                        <option value="@u.Id">@(string.IsNullOrWhiteSpace(u.FullName) ? u.Phone : u.FullName)</option>
+                    }
+                </select>
+                <p style="color:var(--st-muted);font-size:12px;margin:6px 0 0;">@L.Markup("studio.keys.actor_hint")</p>
+
+                <label class="ac-chip-input-label" for="key-actor-name" style="margin-top:12px;display:block;">@L.Markup("studio.keys.actor_name_label")</label>
+                <input class="ac-input" id="key-actor-name" name="actor_name"
+                       placeholder="@L["studio.keys.actor_name_placeholder"]" />
+
+                <div class="ac-chip-input-label" style="margin-top:12px;">@L.Markup("studio.keys.scopes_label")</div>
+                @foreach (var scope in ApiScopeCatalog.All)
+                {
+                    <label style="display:block;margin-top:6px;">
+                        <input type="checkbox" name="scopes" value="@scope" />
+                        @L.Markup(ScopeLabelKey(scope))
+                    </label>
+                }
+
+                <label class="ac-chip-input-label" for="key-expiry" style="margin-top:12px;display:block;">@L.Markup("studio.keys.expiry_label")</label>
+                <input class="ac-input" id="key-expiry" name="expires_in_days" type="number" min="1" />
+                <p style="color:var(--st-muted);font-size:12px;margin:6px 0 0;">@L.Markup("studio.keys.expiry_hint")</p>
+
+                <button type="submit" class="st-btn st-btn-primary" style="margin-top:16px;">@L.Markup("studio.keys.issue_action")</button>
+            </form>
+
+            <div class="st-section-title">@L.Markup("studio.keys.list_title")</div>
+            @if (keys.Count == 0)
+            {
+                <div class="st-card" style="color:var(--st-muted);text-align:center;padding:24px;">@L.Markup("studio.keys.empty")</div>
+            }
+            else
+            {
+                <div class="studio-list">
+                    @foreach (var k in keys)
+                    {
+                        <div class="studio-list-row" style="cursor:default;">
+                            <span class="studio-list-icon ac-chip-info"><AcIcon Name="key" Size="16" /></span>
+                            <div class="studio-list-body">
+                                <strong>@k.Name</strong>
+                                <span style="direction:ltr;text-align:start;">@k.Id · @string.Join(" · ", k.Scopes)</span>
+                                <span>@L.Markup("studio.keys.col_created") @k.CreatedAt.ToString("yyyy-MM-dd") ·
+                                      @L.Markup("studio.keys.col_expires")
+                                      @(k.ExpiresAt is null ? L["studio.keys.never_expires"] : k.ExpiresAt.Value.ToString("yyyy-MM-dd"))</span>
+                            </div>
+                            <span class="@StateChipClass(k)">@L.Markup(StateLabelKey(k))</span>
+                            @if (IsActive(k))
+                            {
+                                <form method="post" action="@($"/studio/apps/{Slug}/keys/{k.Id}/revoke")"
+                                      style="margin-inline-start:8px;">
+                                    <button type="submit" class="st-btn st-btn-ghost">@L.Markup("studio.keys.revoke_action")</button>
+                                </form>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "issued")] public string? Issued { get; set; }
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+
+    Tenant? tenant;
+    IReadOnlyList<ApiKeyDocument> keys = Array.Empty<ApiKeyDocument>();
+    IReadOnlyList<User> users = Array.Empty<User>();
+    string? revealed;
+    string? errorKey;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        tenant = await Tenants.FindAsync(Slug);
+        if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) tenant = null;
+        if (tenant is null) return;
+
+        keys  = await Keys.ListAsync(Slug);
+        users = await TenantAdmin.UsersAsync(Slug);
+
+        // مَرَّةً واحِدَة: القِراءَةُ تَحذِف.
+        if (!string.IsNullOrEmpty(Issued)) revealed = Reveal.TakeOnce(Slug, Issued);
+        errorKey = ErrorKeyFor(Err);
+    }
+
+    // ─── تَسمِياتٌ مِن القامُوس، ومَعجَمٌ مُغلَقٌ لِلرُموز ──────────────
+    //
+    // ورَمزٌ غَير مَعروفٍ يُرَدُّ إلى `null` لا إلى مِفتاحٍ يُطبَع خاماً:
+    // القامُوسُ يَسقُط إلى المِفتاح نَفسِه، فَرَمزٌ مَجهولٌ كانَ
+    // سَيَرسُم `studio.keys.err_whatever` على الشاشَة.
+    static string? ErrorKeyFor(string? code) => code switch
+    {
+        "name_empty"                => "studio.keys.err_name_empty",
+        "name_too_long"             => "studio.keys.err_name_too_long",
+        "actor_required"            => "studio.keys.err_actor_required",
+        "scopes_empty"              => "studio.keys.err_scopes_empty",
+        "scope_out_of_vocabulary"   => "studio.keys.err_scope_bad",
+        "expiry_not_positive"       => "studio.keys.err_expiry_bad",
+        "key_not_found"             => "studio.keys.err_key_not_found",
+        _                           => null,
+    };
+
+    static string ScopeLabelKey(string scope) => scope switch
+    {
+        ApiScopeCatalog.DealsRead  => "studio.keys.scope_read",
+        ApiScopeCatalog.DealsWrite => "studio.keys.scope_write",
+        _                          => "studio.keys.scope_unknown",
+    };
+
+    bool IsActive(ApiKeyDocument k)
+        => k.Status == ApiKeyDocument.StatusActive
+        && (k.ExpiresAt is null || k.ExpiresAt > DateTime.UtcNow);
+
+    string StateLabelKey(ApiKeyDocument k)
+        => k.Status == ApiKeyDocument.StatusRevoked ? "studio.keys.state_revoked"
+         : IsActive(k)                              ? "studio.keys.state_active"
+         :                                            "studio.keys.state_expired";
+
+    string StateChipClass(ApiKeyDocument k)
+        => IsActive(k) ? "st-chip st-chip-success" : "st-chip st-chip-danger";
+}

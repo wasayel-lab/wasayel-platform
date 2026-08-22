@@ -136,6 +136,15 @@
                         <span>@L.Markup("studio.app.console_sub")</span></div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
+                @* المَدخَلُ نِصفُ الميزَة لا مُهِمَّةٌ تالِيَة (القاعِدَة ١٢):
+                   شاشَةُ المَفاتيحِ مَبنِيَّةٌ ومُختَبَرَة، وبِلا هذا
+                   السَطرِ **غَيرُ مَوجودَة**. *@
+                <a class="studio-list-row" href="@($"/studio/apps/{Slug}/keys")">
+                    <span class="studio-list-icon ac-chip-info"><AcIcon Name="key" Size="16" /></span>
+                    <div class="studio-list-body"><strong>@L.Markup("studio.app.keys_title")</strong>
+                        <span>@L.Markup("studio.app.keys_sub")</span></div>
+                    <span style="color:var(--st-faint);">←</span>
+                </a>
             </div>
         }
     </ChildContent>
