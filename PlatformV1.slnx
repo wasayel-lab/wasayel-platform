@@ -6,6 +6,7 @@
   <Folder Name="/libs/core/">
     <Project Path="libs/core/ACommerce.Platform.Flows/ACommerce.Platform.Flows.csproj" />
     <Project Path="libs/core/ACommerce.Platform.Hosting/ACommerce.Platform.Hosting.csproj" />
+    <Project Path="libs/core/ACommerce.Platform.I18n/ACommerce.Platform.I18n.csproj" />
     <Project Path="libs/core/ACommerce.Platform.MultiTenancy/ACommerce.Platform.MultiTenancy.csproj" />
     <Project Path="libs/core/ACommerce.Platform.Shared/ACommerce.Platform.Shared.csproj" />
   </Folder>

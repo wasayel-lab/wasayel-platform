@@ -1,3 +1,5 @@
+using System.Text;
+using ACommerce.Platform.I18n;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
 using ACommerce.Templates.Customer.Marketplace.Services.Ux;
 using Xunit;
@@ -130,37 +132,82 @@ public class DealTurnViewTests
         Assert.False(turn.IsMine);
     }
 
-    // ─── تَسمِيات الفاعِلين ─────────────────────────────────────────
+    // ─── تَسمِيات الفاعِلين — مَفاتيح لا جُمَل ────────────────────────
+    //
+    // ‏ADR-001، الخِيار (د). كانَت هذِه الاختِبارات تُؤَكِّد **الجُملَة
+    // العَرَبِيَّة** الَّتي تُرجِعُها الدالَّة؛ وصارَت تُؤَكِّد
+    // **المِفتاح**. والجُملَةُ لَم تَسقُط مِن الميزان: يَحرُسُها
+    // <c>MigratedActorLabels_AreByteIdentical_…</c> أَدناه، وهو يُقابِل
+    // قيمَةَ القامُوس بِالحَرفِيَّةِ الَّتي كانَت في الكود **بايتاً
+    // بايتاً** — فَتَشكيلٌ يَسقُط في النَقل يُحمِرُّ فَوراً بَدَل أَن
+    // يَمُرّ صامِتاً على الشاشَة (القاعِدَة ١١: «كُلّ دَفعَة تَرحيل
+    // تُبرهَن بِمُقارَنَة بايتيَّة»).
 
     [Theory]
     [InlineData("initiator")]
     [InlineData("counterparty")]
     [InlineData("either")]
     [InlineData("platform")]
-    public void ActorLabelAr_IsNonEmpty_ForTheClosedVocabulary(string actor)
+    public void ActorLabelKey_IsAlwaysInTheClosedLexicon_ForTheKnownVocabulary(string actor)
     {
-        Assert.False(string.IsNullOrWhiteSpace(DealTurnView.ActorLabelAr(actor)));
+        Assert.Contains(DealTurnView.ActorLabelKey(actor), LocaleCatalog.Lexicon);
         foreach (var side in Enum.GetValues<DealSide>())
-            Assert.False(string.IsNullOrWhiteSpace(DealTurnView.ActorLabelAr(actor, side)));
+            Assert.Contains(DealTurnView.ActorLabelKey(actor, side), LocaleCatalog.Lexicon);
     }
 
     [Fact]
-    public void ActorLabelAr_SaysYou_OnlyToTheSideThatActs()
+    public void ActorLabelKey_SaysYou_OnlyToTheSideThatActs()
     {
-        Assert.Equal("أَنتَ",              DealTurnView.ActorLabelAr("initiator", DealSide.Initiator));
-        Assert.Equal("الطَّرَف الآخَر",     DealTurnView.ActorLabelAr("initiator", DealSide.Counterparty));
-        Assert.Equal("أَنتَ",              DealTurnView.ActorLabelAr("counterparty", DealSide.Counterparty));
-        Assert.Equal("الطَّرَف الآخَر",     DealTurnView.ActorLabelAr("counterparty", DealSide.Initiator));
+        Assert.Equal("deals.actor.you",          DealTurnView.ActorLabelKey("initiator", DealSide.Initiator));
+        Assert.Equal("deals.actor.counterparty", DealTurnView.ActorLabelKey("initiator", DealSide.Counterparty));
+        Assert.Equal("deals.actor.you",          DealTurnView.ActorLabelKey("counterparty", DealSide.Counterparty));
+        Assert.Equal("deals.actor.counterparty", DealTurnView.ActorLabelKey("counterparty", DealSide.Initiator));
         // المَنصَّة لا تُصبِح «أَنتَ» أَبَداً.
-        Assert.Equal("المَنصَّة",           DealTurnView.ActorLabelAr("platform", DealSide.Initiator));
+        Assert.Equal("deals.actor.platform",     DealTurnView.ActorLabelKey("platform", DealSide.Initiator));
+        Assert.Equal("deals.actor.you_or_other", DealTurnView.ActorLabelKey("either", DealSide.Initiator));
     }
 
     [Fact]
-    public void ActorLabelAr_ForObserver_UsesNeutralVocabulary()
+    public void ActorLabelKey_ForObserver_UsesNeutralVocabulary()
     {
-        Assert.Equal("صاحِب الطَلَب",   DealTurnView.ActorLabelAr("initiator", DealSide.Observer));
-        Assert.Equal("الطَّرَف الآخَر",  DealTurnView.ActorLabelAr("counterparty", DealSide.Observer));
-        Assert.Equal("أَيّ مِن الطَّرَفَين", DealTurnView.ActorLabelAr("either", DealSide.Observer));
+        Assert.Equal("deals.actor.initiator",    DealTurnView.ActorLabelKey("initiator", DealSide.Observer));
+        Assert.Equal("deals.actor.counterparty", DealTurnView.ActorLabelKey("counterparty", DealSide.Observer));
+        Assert.Equal("deals.actor.either",       DealTurnView.ActorLabelKey("either", DealSide.Observer));
+    }
+
+    /// <summary>الفاعِلُ المَجهولُ يَسقُط إلى نَفسِه — تَماماً كَما كانَ
+    /// قَبلَ التَرحيل: <c>L[x]</c> لِمِفتاحٍ خارِجَ القامُوس يُرجِع
+    /// <c>x</c> حَرفاً، فَالسُلوكُ المَرئيّ لَم يَتَبَدَّل.</summary>
+    [Fact]
+    public void ActorLabelKey_ForAnUnknownActor_FallsBackToTheActorItself()
+    {
+        Assert.Equal("wormhole", DealTurnView.ActorLabelKey("wormhole"));
+        Assert.Equal("wormhole", DealTurnView.ActorLabelKey("wormhole", DealSide.Initiator));
+        Assert.Equal("wormhole", DealTurnView.ActorLabelKey("wormhole", DealSide.Observer));
+        Assert.Equal("wormhole", LocaleCatalog.Text(LocaleCatalog.Arabic, "wormhole"));
+    }
+
+    // ─── حارِسُ التَطابُقِ البايتيّ ──────────────────────────────────
+    //
+    // الحَرفِيّاتُ أَدناه **مَنسوخَةٌ آليّاً** مِن نُسخَةِ الكود قَبلَ
+    // التَرحيل (‏git show HEAD:…/DealTurnView.cs) لا مُعادَ كِتابَتُها —
+    // وإعادَةُ الكِتابَة هي بِعَينِها ما يُسقِط التَشكيل.
+
+    [Theory]
+    [InlineData("deals.actor.initiator",    "صاحِب الطَلَب")]
+    [InlineData("deals.actor.counterparty", "الطَّرَف الآخَر")]
+    [InlineData("deals.actor.either",       "أَيّ مِن الطَّرَفَين")]
+    [InlineData("deals.actor.platform",     "المَنصَّة")]
+    [InlineData("deals.actor.you",          "أَنتَ")]
+    [InlineData("deals.actor.you_or_other", "أَنتَ أَو الطَّرَف الآخَر")]
+    public void MigratedActorLabels_AreByteIdentical_ToThePreMigrationLiterals(
+        string key, string preMigrationLiteral)
+    {
+        var fromCatalog = LocaleCatalog.Find(LocaleCatalog.Arabic, key);
+        Assert.NotNull(fromCatalog);
+        Assert.Equal(
+            Encoding.UTF8.GetBytes(preMigrationLiteral),
+            Encoding.UTF8.GetBytes(fromCatalog!));
     }
 
     // ─── شَرح التَدَفُّق يُغَطّي كُلّ مَرحَلَة بِلا نَصّ مَفقود ────────
@@ -172,8 +219,13 @@ public class DealTurnViewTests
         foreach (var stage in DealsPolicy.StagesFor(pattern))
         {
             Assert.False(string.IsNullOrWhiteSpace(DealsPolicy.LabelAr(stage)));
+            // المِفتاحُ لا يَكفي: يُحَلّ مِن القامُوس كَما يَفعَل razor،
+            // فَمِفتاحٌ بِلا مَدخَلَة يَظهَر خاماً على الشاشَة — وذاك
+            // ما يُمسِكُه <c>Assert.Contains</c> في المُعجَم.
+            var key = DealTurnView.ActorLabelKey(DealsPolicy.Actor(stage), DealSide.Observer);
+            Assert.Contains(key, LocaleCatalog.Lexicon);
             Assert.False(string.IsNullOrWhiteSpace(
-                DealTurnView.ActorLabelAr(DealsPolicy.Actor(stage), DealSide.Observer)));
+                LocaleCatalog.Text(LocaleCatalog.Arabic, key)));
         }
     }
 }

@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace ACommerce.Templates.Customer.Marketplace.I18n;
+namespace ACommerce.Platform.I18n;
 
 /// <summary>خَرق واحِد في قامُوس نُصوص. <c>Code</c> مِفتاح ثابِت
 /// لِلاختِبارات واللوغ وتَصحيح الوَكيل، و<c>MessageAr</c> لِلمُراجِع

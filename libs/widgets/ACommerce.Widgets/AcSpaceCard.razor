@@ -1,4 +1,5 @@
 @namespace ACommerce.Widgets
+@inject L L
 
 @*
     AcSpaceCard — بِطاقَة عَرض لِلسوق.
@@ -51,14 +52,14 @@
                     {
                         <span class="ac-space-trust-chip is-verified">
                             <AcIcon Name="shield" Size="12" />
-                            <span>@VerifiedLabel</span>
+                            <span>@(VerifiedLabel ?? L["widgets.card.verified"])</span>
                         </span>
                     }
                     @if (IsFeatured)
                     {
                         <span class="ac-space-trust-chip is-featured">
                             <AcIcon Name="star" Filled="true" Size="12" />
-                            <span>@FeaturedLabel</span>
+                            <span>@(FeaturedLabel ?? L["widgets.card.featured"])</span>
                         </span>
                     }
                 </div>
@@ -194,10 +195,13 @@ else
     /// <summary>عَدَد تَقييمات المُعلِن — يَظهَر بِجانِب المُتَوَسِّط
     /// (<see cref="Rating"/>) أَو وَحدَه إن لَم يُمَرَّر مُتَوَسِّط.</summary>
     [Parameter] public int? ReviewCount { get; set; }
-    /// <summary>نُصوص الشارات — تُمَرَّر مِن القالِب لِتَبقَى الواجِهَة
-    /// قابِلَة لِلتَرجَمَة (المُكَوِّن مُشتَرَك بَين لُغَتَين).</summary>
-    [Parameter] public string VerifiedLabel { get; set; } = "مُوَثَّق";
-    [Parameter] public string FeaturedLabel { get; set; } = "مُمَيَّز";
+    /// <summary>نُصوص الشارات — تُمَرَّر مِن القالِب إن أُريدَ تَجاوُز
+    /// المَعجَم، وإلّا سَقَطَت إلى القامُوس (‏ADR-001 (ج)). وكانَت
+    /// الحَرفِيَّةُ هُنا افتِراضاً <b>مَخبوزاً</b> يُنَفَّذ عِندَ
+    /// الإنشاء قَبلَ الحَقن — والتَعليقُ فَوقَها كانَ يَعِد
+    /// «قابِلَة لِلتَرجَمَة» وهي غَيرُ قابِلَة.</summary>
+    [Parameter] public string? VerifiedLabel { get; set; }
+    [Parameter] public string? FeaturedLabel { get; set; }
 
     [Parameter] public List<DynamicAttribute>? Attributes { get; set; }
     [Parameter] public bool IsArabic { get; set; } = true;

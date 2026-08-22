@@ -1,4 +1,5 @@
 @namespace ACommerce.Widgets
+@inject L L
 
 @*
     AcListRow — صَفّ قائِمَة غَنيّ لِصَفحات الـ inbox (دَردَشات، إشعارات،
@@ -34,7 +35,9 @@ else
 
     private Task OnClickInternal() => OnClick.InvokeAsync();
 
-    private string Initial => string.IsNullOrWhiteSpace(Title) ? "؟" : Title.Trim()[..1];
+    private string Initial => string.IsNullOrWhiteSpace(Title)
+        ? L["widgets.listrow.initial_fallback"]
+        : Title.Trim()[..1];
 
     private RenderFragment Inner => @<text>
         <span class="ac-listrow-lead">

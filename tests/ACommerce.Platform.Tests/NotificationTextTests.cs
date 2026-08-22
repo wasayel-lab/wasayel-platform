@@ -1,5 +1,5 @@
 using ACommerce.Templates.Customer.Marketplace;
-using ACommerce.Templates.Customer.Marketplace.I18n;
+using ACommerce.Platform.I18n;
 using Microsoft.AspNetCore.Http;
 using Xunit;
 

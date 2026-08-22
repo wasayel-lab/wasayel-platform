@@ -1,9 +1,8 @@
 using System.Text.Encodings.Web;
-using ACommerce.Templates.Customer.Marketplace.I18n;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Http;
 
-namespace ACommerce.Templates.Customer.Marketplace;
+namespace ACommerce.Platform.I18n;
 
 /// <summary>
 /// <para><b>مَنفَذ نُصوص الواجِهَة</b> — مُوَسَّع لا مُستَبدَل: نَفس

@@ -6,4 +6,7 @@
     <SupportedPlatform Include="browser" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\ACommerce.Platform.I18n\ACommerce.Platform.I18n.csproj" />
+  </ItemGroup>
 </Project>

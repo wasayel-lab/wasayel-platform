@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 
-namespace ACommerce.Templates.Customer.Marketplace.I18n;
+namespace ACommerce.Platform.I18n;
 
 /// <summary>مَدخَلَة واحِدَة كَما وَرَدَت في المِلَفّ — <b>بِتَرتيبِها
 /// وبِتَكرارِها</b>. المُصادِق يَحتاج التَكرار (لِيَراه)، والقامُوس
@@ -33,7 +33,7 @@ public static class LocaleCatalog
     public const string Arabic = "ar";
 
     private const string ResourcePrefix =
-        "ACommerce.Templates.Customer.Marketplace.I18n.Locales.";
+        "ACommerce.Platform.I18n.Locales.";
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<LocaleEntry>> RawByLang
         = LoadRaw();

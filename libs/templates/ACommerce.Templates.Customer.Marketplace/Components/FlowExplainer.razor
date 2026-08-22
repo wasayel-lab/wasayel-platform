@@ -32,7 +32,7 @@
         <details class="acm-flow">
             <summary class="acm-flow-title">
                 <AcIcon Name="info" Size="16" />
-                <span>@Title</span>
+                <span>@(Title ?? L["deals.flow.title"])</span>
             </summary>
             @StepList(stages, currentIndex)
         </details>
@@ -42,7 +42,7 @@
         <section class="acm-flow is-open">
             <h2 class="acm-flow-title">
                 <AcIcon Name="info" Size="16" />
-                <span>@Title</span>
+                <span>@(Title ?? L["deals.flow.title"])</span>
             </h2>
             @StepList(stages, currentIndex)
         </section>
@@ -64,7 +64,17 @@
     /// <summary>عَرضُه مَطوِيّاً داخِل <c>&lt;details&gt;</c>.</summary>
     [Parameter] public bool Collapsible { get; set; }
 
-    [Parameter] public string Title { get; set; } = "كَيف تَتِمّ الصَّفقَة؟";
+    /// <summary><b>‏ADR-001 الخِيار (ج)</b> — الافتِراضيّ <c>null</c>
+    /// يُحَلّ عِندَ التَصيير لا عِندَ الإنشاء.
+    ///
+    /// <para>كانَ هُنا <c>= "كَيف تَتِمّ الصَّفقَة؟"</c>. و<c>L</c>
+    /// مَحقونٌ في هذا المِلَفّ ومُستَعمَلٌ في سَطرٍ آخَر — أَي أَنّ
+    /// <b>اتِّجاهَ الاعتِماد لَم يَكُن الحاجِز هُنا إطلاقاً</b>. الحاجِزُ
+    /// أَنّ مُهَيِّئَ الحَقل يَعمَل عِندَ الإنشاء، <b>قَبلَ</b> الحَقن،
+    /// فَالجُملَةُ تُكتَب قَبلَ أَن يوجَدَ <c>L</c>. وهذا المَوضِعُ
+    /// وَحدَه هُوَ ما أَثبَتَ أَنّ الحاجِزَينِ اثنانِ لا
+    /// واحِد.</para></summary>
+    [Parameter] public string? Title { get; set; }
 
     RenderFragment StepList(List<DealStage> stages, int currentIndex) =>
         @<ol class="acm-flow-steps">
@@ -86,7 +96,7 @@
                     </span>
                     <span class="acm-flow-body">
                         <span class="acm-flow-label">@DealsPolicy.LabelAr(stage)</span>
-                        <span class="acm-flow-actor">@((MarkupString)"\n                            ")@L.Markup("deals.flow.driven_by") @DealTurnView.ActorLabelAr(DealsPolicy.Actor(stage), Side)
+                        <span class="acm-flow-actor">@((MarkupString)"\n                            ")@L.Markup("deals.flow.driven_by") @L[DealTurnView.ActorLabelKey(DealsPolicy.Actor(stage), Side)]
                         </span>
                     </span>
                 </li>

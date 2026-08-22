@@ -3,6 +3,7 @@ using ACommerce.Kit.Auth.Server;
 using ACommerce.Kit.Chat;
 using ACommerce.Kit.Favorites;
 using ACommerce.Kit.Listings;
+using ACommerce.Platform.I18n;
 using ACommerce.Platform.Shared;
 using ACommerce.Templates.Customer.Marketplace.Gates;
 using ACommerce.Templates.Customer.Marketplace.Services.TenantConfig;

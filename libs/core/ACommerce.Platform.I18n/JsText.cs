@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace ACommerce.Templates.Customer.Marketplace.I18n;
+namespace ACommerce.Platform.I18n;
 
 /// <summary>
 /// <para><b>طَبَقَةُ الهُروب إلى JS</b> — المَنفَذُ الثالِث بَعدَ

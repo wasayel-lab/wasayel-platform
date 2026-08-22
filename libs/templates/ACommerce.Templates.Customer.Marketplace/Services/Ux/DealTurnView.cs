@@ -67,27 +67,46 @@ public static class DealTurnView
         return new DealTurn(mine, actor, next, next is null);
     }
 
-    /// <summary>تَسمِيَة الفاعِل بِلا مَنظور — لِشَرح التَدَفُّق العامّ.</summary>
-    public static string ActorLabelAr(string actorKey) => actorKey switch
+    // ─── تَسمِيات الفاعِلين — مَفاتيح لا جُمَل ───────────────────────
+    //
+    // ‏ADR-001، الخِيار (د). كانَت هاتانِ الدالَّتانِ تُرجِعانِ **جُمَلاً
+    // عَرَبِيَّة** (‏10 حَرفِيّات، ‏6 قيَم مُتَمايِزَة) — نَصٌّ يَراهُ
+    // المُستَخدِم ولا يَبلُغُه **أَيُّ** عَدّاد: الطَبَقَة ٧ تَقرَأ
+    // `.razor` وحدَها، ومَصرِفُ الـ`.cs` يَلتَقِط `Title=/Body=/Subject=`
+    // فَقَط. أَي أَنّ الدَينَ كانَ خارِجَ كُلّ ميزان.
+    //
+    // **ولِماذا مِفتاحٌ لا حَقنُ `L`**: الدالَّةُ **ساكِنَة ونَقِيَّة**،
+    // وحَقنُ مَنفَذٍ فيها يَجعَلُها تَعرِف الطَلَب والكوكي واللُغَة —
+    // ثَلاثَةُ أَشياءَ لا شَأنَ لَها بِقَرار «مَن دَورُه». فَتَبقى
+    // نَقِيَّةً وتُرجِع مِفتاحاً، ويَحُلُّه razor الَّذي يَملِك `L`
+    // أَصلاً. القَرارُ هُنا، والكَلامُ في المَعجَم.
+    //
+    // **والمَجهولُ يَسقُطُ إلى نَفسِه**: `_ => actorKey` كَما كانَ —
+    // ‏`L[x]` لِمِفتاحٍ خارِجَ القامُوس يُرجِع `x` حَرفاً، فَالسُلوكُ
+    // عِندَ فاعِلٍ غَير مَعروف لَم يَتَبَدَّل بايتاً.
+
+    /// <summary>مِفتاحُ تَسمِيَةِ الفاعِل بِلا مَنظور — لِشَرح التَدَفُّق
+    /// العامّ.</summary>
+    public static string ActorLabelKey(string actorKey) => actorKey switch
     {
-        "initiator"    => "صاحِب الطَلَب",
-        "counterparty" => "الطَّرَف الآخَر",
-        "either"       => "أَيّ مِن الطَّرَفَين",
-        "platform"     => "المَنصَّة",
+        "initiator"    => "deals.actor.initiator",
+        "counterparty" => "deals.actor.counterparty",
+        "either"       => "deals.actor.either",
+        "platform"     => "deals.actor.platform",
         _              => actorKey
     };
 
-    /// <summary>تَسمِيَة الفاعِل مِن مَنظور المُشاهِد — «أَنتَ» حينَ
-    /// يَنطَبِق، وَإلّا «الطَّرَف الآخَر».</summary>
-    public static string ActorLabelAr(string actorKey, DealSide side) => (actorKey, side) switch
+    /// <summary>مِفتاحُ تَسمِيَةِ الفاعِل مِن مَنظور المُشاهِد — «أَنتَ»
+    /// حينَ يَنطَبِق، وَإلّا «الطَّرَف الآخَر».</summary>
+    public static string ActorLabelKey(string actorKey, DealSide side) => (actorKey, side) switch
     {
-        ("platform", _)                          => "المَنصَّة",
-        (_, DealSide.Observer)                   => ActorLabelAr(actorKey),
-        ("either", _)                            => "أَنتَ أَو الطَّرَف الآخَر",
-        ("initiator", DealSide.Initiator)        => "أَنتَ",
-        ("counterparty", DealSide.Counterparty)  => "أَنتَ",
-        ("initiator", DealSide.Counterparty)     => "الطَّرَف الآخَر",
-        ("counterparty", DealSide.Initiator)     => "الطَّرَف الآخَر",
-        _                                        => ActorLabelAr(actorKey)
+        ("platform", _)                          => "deals.actor.platform",
+        (_, DealSide.Observer)                   => ActorLabelKey(actorKey),
+        ("either", _)                            => "deals.actor.you_or_other",
+        ("initiator", DealSide.Initiator)        => "deals.actor.you",
+        ("counterparty", DealSide.Counterparty)  => "deals.actor.you",
+        ("initiator", DealSide.Counterparty)     => "deals.actor.counterparty",
+        ("counterparty", DealSide.Initiator)     => "deals.actor.counterparty",
+        _                                        => ActorLabelKey(actorKey)
     };
 }

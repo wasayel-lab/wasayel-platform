@@ -58,7 +58,7 @@
                         }
                         else
                         {
-                            <text>@L.Markup("deals.detail.turn_waiting") @Services.Ux.DealTurnView.ActorLabelAr(turn.ActorKey, mySide)</text>
+                            <text>@L.Markup("deals.detail.turn_waiting") @L[Services.Ux.DealTurnView.ActorLabelKey(turn.ActorKey, mySide)]</text>
                         }
                     </strong>
                     <span class="acm-turn-text">

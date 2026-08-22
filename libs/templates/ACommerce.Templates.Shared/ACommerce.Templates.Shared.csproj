@@ -4,4 +4,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
     <ProjectReference Include="..\..\widgets\ACommerce.Widgets\ACommerce.Widgets.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\ACommerce.Platform.I18n\ACommerce.Platform.I18n.csproj" />
+  </ItemGroup>
 </Project>

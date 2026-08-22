@@ -29,52 +29,58 @@
 #   مُستَخدِمٌ على شاشَة. وإدخالُهُما القامُوسَ يُلَوِّثُه بِما لا
 #   يُتَرجَم — والقامُوسُ عَقدٌ مَع مُتَرجِم.
 #
-# ── ٣. خارِجَ مُتَناوَل `L` — بِانتِظار ADR-001 (‏14) ───────────
+# ── ٣. خارِجَ مُتَناوَل `L` — سُدِّد بِـADR-001 (‏0) ─────────────
 #
-# ‏13 في 8 مِلَفّات تَحتَ `ACommerce.Widgets` و
-# `ACommerce.Templates.Shared` و`ACommerce.Kit.Maps.Web`:
-#   الحاجِز الأَوَّل — `L` يَعيش في مَشروعِ القالِب الَّذي
-#   **يُرجِعُ إلَيها**، فَحَقنُه فيها يَقلِب اتِّجاهَ الاعتِماد.
+# كانَ هُنا ‏14، وصارَ صِفراً في ‏2026-08-22.
+#   ‏13 في 8 مِلَفّات تَحتَ `ACommerce.Widgets` و
+#   `ACommerce.Templates.Shared` و`ACommerce.Kit.Maps.Web` —
+#   الحاجِزُ الأَوَّل: اتِّجاهُ الاعتِماد. سَقَطَ بِـ(أ): نَزَلَ
+#   `L` و`LocaleCatalog` و`LocaleValidator` و`JsText` إلى
+#   مَشروعٍ **وَرَقيّ** `libs/core/ACommerce.Platform.I18n`،
+#   فَلَم يَنقَلِب سَهمٌ بَل نَزَلَ الهَدَف.
 #
-# و‏1 في FlowExplainer.razor — **داخِلَ مَشروعِ القالِب نَفسِه**:
-#   الحاجِز الثاني — قيمَةُ مُعامِلٍ افتِراضِيَّة
-#   (`[Parameter] … = "…"`) تُنَفَّذ عِندَ الإنشاء **قَبلَ
-#   الحَقن**. وهذا المَوضِعُ وَحدَه يُثبِت أَنّ الحاجِزَين
-#   مُستَقِلّان: نُزولُ `L` طَبَقَةً لا يُصلِحُه.
+#   و‏1 في `FlowExplainer.razor` — الحاجِزُ الثاني: مُهَيِّئُ
+#   مُعامِلٍ يَعمَل عِندَ الإنشاء قَبلَ الحَقن. سَقَطَ بِـ(ج):
+#   الافتِراضيُّ `null` يُحَلّ عِندَ التَصيير.
 #
-#   التَفصيل والخِيارات: docs/ADR-001-TEXT-PORT-BELOW-THE-TEMPLATE.md
-#   الحالَة: **مُقتَرَح، لَم يُنَفَّذ** — لا يُنَفَّذ بِلا إقرار.
+#   وهذا هو البُرهانُ العَمَليّ أَنّ الحاجِزَينِ مُستَقِلّان:
+#   (أ) وَحدَها تَرَكَت `FlowExplainer` كَما هو.
 #
-# ── ٤. المَصرِف الباقي خارِجَ `.razor` (‏1) ────────────────────
+# ── ٤. المَصرِف خارِجَ `.razor` (‏0) ──────────────────────────
 #
-# SmtpEmailChannel.cs — مَوضوعُ رِسالَة التَحَقُّق.
-#   نَفسُ الحاجِز الأَوَّل: عُدَّةٌ لا تُرجِعُ إلى مَشروعِ القالِب.
+# SmtpEmailChannel.cs — مَوضوعُ رِسالَة التَحَقُّق، رُحِّل إلى
+#   `auth.email.otp_subject`. ويُقرَأ بِـ`LocaleCatalog.Text`
+#   بِالعَرَبِيَّة صَراحَةً لا بِـ`L`: الرِسالَةُ تُقرَأ في
+#   صُندوقِ بَريدٍ لا في مُتَصَفِّح، فَلُغَةُ الكوكي لَيسَت
+#   لُغَةَ القارِئ — وقَد لا يَكون ثَمَّ طَلَبٌ أَصلاً.
 #
-# ── ٥. نَصٌّ يُصَيَّر ولا يَبلُغُه **أَيُّ** عَدّاد — يُقال ولا يُخفى
+#   وجِسمُ الرِسالَة يَبقى حَرفِيّاً بِسَبَبٍ مَقيس: يَحمِل
+#   `<html>` و`<p>` و`&`، و`value_unsafe_markup` في
+#   `LocaleValidator` يَرفُض أَيّ قيمَةٍ فيها `< > &`.
+#   قالَبُ رِسالَةٍ كامِلٌ مُستَنَدٌ لا نَصُّ مِفتاح، وبابُه
+#   قَوالِبُ بَريدٍ لا قامُوسُ واجِهَة — قَرارٌ لَه مَوجَتُه.
 #
-# DealTurnView.ActorLabelAr — ‏10 حَرفِيّات (‏6 قيَم مُتَمايِزَة)
-#   يُصَيِّرُها razor في FlowExplainer وMyDealDetail. دالَّةٌ
-#   **ساكِنَة** في `.cs`: لا العَدّادُ الأَوَّل يَراها (لَيسَت
-#   razor)، ولا مَصرِفٌ مُعلَنٌ يَلتَقِطُها. بابُها في ADR-001 (د).
+# ── ٥. نَصٌّ يُصَيَّر ولا يَبلُغُه **أَيُّ** عَدّاد ─────────────
+#
+# DealTurnView — رُحِّل بِـADR-001 (د). `ActorLabelAr` صارَت
+#   `ActorLabelKey`: الدالَّةُ تَبقى ساكِنَةً نَقِيَّةً وتُرجِع
+#   **مِفتاحاً**، ويَحُلُّه razor الَّذي يَملِك `L` أَصلاً —
+#   بِلا حَقنٍ يَجعَل «مَن دَورُه؟» تَعرِف الطَلَبَ والكوكي.
+#
+#   و‏6 قيَم دَخَلَت المَعجَم تَحتَ `deals.actor.*`، يَحرُسُها
+#   `MigratedActorLabels_AreByteIdentical_…` — يُقابِل قيمَةَ
+#   القامُوس بِالحَرفِيَّةِ قَبلَ التَرحيل **بايتاً بايتاً**.
+#   والحارِسُ نَفسُه مَقيسٌ بِحَقنِ عَيب: إسقاطُ شَدَّةٍ واحِدَة
+#   (‏U+0651) مِن `deals.actor.platform` يُحمِرُّه فَوراً.
 #
 # StatusHelpers.cs — ‏11 تَسمِيَة، و**صِفرُ مُستَهلِك** (مَقيس).
 #   لَيسَت دَيناً بَل كودٌ مَيِّت — القاعِدَة ١: يُحذَف لا يُرَحَّل.
 #
-# ═══ المَجموع: ‏31 في razor (‏13+4+14) و1 مَصرِف، و21 لا يُعَدّ ═══
+# ═══ المَجموع: ‏17 في razor (‏13+4)، وصِفرُ مَصرِف ═══════════
 # ــــــــــــــــــــــــــــــــــــــــــــــــــ
-TOTAL|31
-DISTINCT|29
-SINK_TOTAL|1
-libs/kits/Maps/ACommerce.Kit.Maps.Web/AcLocationInput.razor|1
-libs/kits/Maps/ACommerce.Kit.Maps.Web/AcMapPin.razor|1
+TOTAL|17
+DISTINCT|17
+SINK_TOTAL|0
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|4
-libs/templates/ACommerce.Templates.Customer.Marketplace/Components/FlowExplainer.razor|1
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudy.razor|8
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantListingDetail.razor|5
-libs/templates/ACommerce.Templates.Shared/AcErrorState.razor|2
-libs/widgets/ACommerce.Widgets/AcAttrEditor.razor|3
-libs/widgets/ACommerce.Widgets/AcAttrGrid.razor|2
-libs/widgets/ACommerce.Widgets/AcLanguageToggle.razor|1
-libs/widgets/ACommerce.Widgets/AcListRow.razor|1
-libs/widgets/ACommerce.Widgets/AcSpaceCard.razor|2
-sink:libs/kits/Auth/ACommerce.Kit.Auth.Providers.Smtp/SmtpEmailChannel.cs|1

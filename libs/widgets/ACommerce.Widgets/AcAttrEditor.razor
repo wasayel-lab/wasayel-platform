@@ -1,4 +1,5 @@
 @namespace ACommerce.Widgets
+@inject L L
 @using System.Globalization
 
 @if (Template != null && Template.Fields.Count > 0)
@@ -19,7 +20,7 @@
                 {
                     case "select":
                         <select class="ac-input" value="@GetString(key)" @onchange="@(e => Set(key, e.Value?.ToString()))">
-                            <option value="">@SelectPlaceholder</option>
+                            <option value="">@(SelectPlaceholder ?? L["widgets.attr.select_placeholder"])</option>
                             @foreach (var o in f.Options)
                             {
                                 <option value="@o.Value">@(IsArabic ? (o.LabelAr ?? o.Label) : o.Label)</option>
@@ -46,7 +47,7 @@
                         <label class="ac-attr-bool">
                             <input type="checkbox" checked="@GetBool(key)"
                                    @onchange="@(e => Set(key, (bool)(e.Value ?? false)))" />
-                            <span>@(GetBool(key) ? YesLabel : NoLabel)</span>
+                            <span>@(GetBool(key) ? (YesLabel ?? L["widgets.attr.yes"]) : (NoLabel ?? L["widgets.attr.no"]))</span>
                         </label>
                         break;
 
@@ -91,9 +92,14 @@
     [Parameter] public EventCallback<Dictionary<string, object?>> ValuesChanged { get; set; }
     [Parameter] public bool IsArabic { get; set; } = true;
     [Parameter] public string? Class { get; set; }
-    [Parameter] public string SelectPlaceholder { get; set; } = "— اختَر —";
-    [Parameter] public string YesLabel          { get; set; } = "نَعَم";
-    [Parameter] public string NoLabel           { get; set; } = "لا";
+    // ‏ADR-001 (ج): الافتِراضيّ `null` يُحَلّ عِندَ التَصيير. ومُهَيِّئُ
+    // الحَقل يَعمَل عِندَ الإنشاء قَبلَ الحَقن، فَلا يَنفَع فيه `L`
+    // مَهما نَزَلَ طَبَقات. ومَوضِعُ الاستِدعاء لا يَتَغَيَّر: مَن كانَ
+    // يُمَرِّر تَسمِيَةً ما زالَ يُمَرِّرُها، ومَن لَم يُمَرِّر يَحصُل
+    // على العَرَبِيَّة مِن المَعجَم بَدَل الحَرفِيَّة المَخبوزَة.
+    [Parameter] public string? SelectPlaceholder { get; set; }
+    [Parameter] public string? YesLabel          { get; set; }
+    [Parameter] public string? NoLabel           { get; set; }
 
     private string GetString(string key) => Values.TryGetValue(key, out var v) ? v?.ToString() ?? "" : "";
 

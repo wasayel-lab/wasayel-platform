@@ -231,9 +231,12 @@ public class ListingEditDecisionTests
     [Fact]
     public void Every_rejection_code_has_a_message_key_and_no_key_outlives_its_code()
     {
+        // نَزَلَ القامُوسُ إلى المَشروع الوَرَقيّ `ACommerce.Platform.I18n`
+        // في ‏ADR-001 — والحارِسُ «أَداة عَمياء» أَدناه هُوَ ما أَمسَكَ
+        // المَسارَ العَتيقَ يَومَ النَقل، لا مُراجَعَةُ عَين.
         var dict = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
-            "libs", "templates", "ACommerce.Templates.Customer.Marketplace",
-            "I18n", "Locales", "ar.json");
+            "libs", "core", "ACommerce.Platform.I18n",
+            "Locales", "ar.json");
         Assert.True(File.Exists(dict), $"أَداة عَمياء: لا قامُوس في {dict}.");
 
         const string prefix = "listings.edit.err_";

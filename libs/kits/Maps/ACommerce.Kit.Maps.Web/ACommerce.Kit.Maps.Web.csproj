@@ -8,4 +8,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
     <ProjectReference Include="..\ACommerce.Kit.Maps.Core\ACommerce.Kit.Maps.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\core\ACommerce.Platform.I18n\ACommerce.Platform.I18n.csproj" />
+  </ItemGroup>
 </Project>

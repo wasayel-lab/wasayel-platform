@@ -1,4 +1,5 @@
 @namespace ACommerce.Widgets
+@inject L L
 
 @if (Visible.Count > 0)
 {
@@ -27,8 +28,9 @@
     [Parameter] public List<DynamicAttribute>? Attributes { get; set; }
     [Parameter] public bool IsArabic { get; set; } = true;
     [Parameter] public string? Class { get; set; }
-    [Parameter] public string YesLabel { get; set; } = "نَعَم";
-    [Parameter] public string NoLabel  { get; set; } = "لا";
+    // ‏ADR-001 (ج) — انظُر AcAttrEditor لِلسَبَب كامِلاً.
+    [Parameter] public string? YesLabel { get; set; }
+    [Parameter] public string? NoLabel  { get; set; }
 
     private List<DynamicAttribute> Visible =>
         (Attributes ?? new())
@@ -51,7 +53,7 @@
                 int i       => i != 0,
                 _           => false,
             };
-            return truthy ? YesLabel : NoLabel;
+            return truthy ? (YesLabel ?? L["widgets.attr.yes"]) : (NoLabel ?? L["widgets.attr.no"]);
         }
         return a.Value?.ToString() ?? "";
     }

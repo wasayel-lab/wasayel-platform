@@ -1,3 +1,4 @@
+using ACommerce.Platform.I18n;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,7 +61,24 @@ public sealed class SmtpEmailChannel : IEmailOtpChannel
         var msg = new MimeMessage();
         msg.From.Add(ParseFrom());
         msg.To.Add(MailboxAddress.Parse(email));
-        msg.Subject = "رَمز التَّحَقُّق";
+        // ‏ADR-001 (أ): المَصرِفُ الوَحيدُ الَّذي يَعُدُّه فاحِصُ الطَبَقَة ٧
+        // خارِجَ `.razor`. وكانَ حاجِزُه اتِّجاهَ الاعتِماد — عُدَّةٌ لا
+        // تُرجِع إلى مَشروعِ القالِب حَيثُ كانَ `L` — فَسَقَطَ بِنُزول
+        // المَنفَذ إلى مَشروعٍ وَرَقيّ.
+        //
+        // **ولِماذا `LocaleCatalog` لا `L`**: ‏`L` نِطاقُه الطَلَب،
+        // ويَقرَأ لُغَتَه مِن كوكي المُتَصَفِّح. وهذِه الرِسالَةُ تُرسَل
+        // في مَسارٍ قَد لا يَملِك طَلَباً، **وتُقرَأ في صُندوقِ بَريدٍ
+        // لا في مُتَصَفِّح** — فَلُغَةُ الكوكي لَيسَت لُغَةَ القارِئ.
+        // فَالعَرَبِيَّةُ صَراحَةً، وهي المَعجَمُ الإلزاميّ.
+        //
+        // **وجِسمُ الرِسالَة يَبقى حَرفِيّاً — بِسَبَبٍ مَقيسٍ لا
+        // بِإهمال**: يَحمِل `<html>` و`<p>` و`&`، و`value_unsafe_markup`
+        // في `LocaleValidator` يَرفُض أَيّ قيمَةٍ فيها `< > &` (وهو
+        // يَحرُس `L.Markup` الَّذي يَكتُب بِلا تَرميز). فَقالَبُ رِسالَةٍ
+        // كامِلٌ لَيسَ «نَصّ مِفتاح» بَل مُستَند، وبابُه قَوالِبُ بَريدٍ
+        // لا قامُوسُ واجِهَة — وذاكَ قَرارٌ آخَر لَه مَوجَتُه.
+        msg.Subject = LocaleCatalog.Text(LocaleCatalog.Arabic, "auth.email.otp_subject");
         msg.Body = new BodyBuilder
         {
             TextBody = $"رَمز التَّحَقُّق: {code}\nصالِح لِعَشر دَقائِق. إن لَم تَطلُبه فَتَجاهَل هذِه الرِّسالَة.",

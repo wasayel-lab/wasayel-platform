@@ -1662,5 +1662,25 @@
   "notifications.offer_accepted.push_body": "{0} قَبِلَ عَرضكَ بِـ {1:N0} ريال.",
   "notifications.offer_accepted.title": "تَمّ قَبول عَرضكَ ✓",
   "notifications.saved_search.push_title": "إعلان جَديد يُطابِق بَحثكَ",
-  "notifications.saved_search.title": "إعلان جَديد يُطابِق «{0}»"
+  "notifications.saved_search.title": "إعلان جَديد يُطابِق «{0}»",
+
+  "deals.actor.initiator": "صاحِب الطَلَب",
+  "deals.actor.counterparty": "الطَّرَف الآخَر",
+  "deals.actor.either": "أَيّ مِن الطَّرَفَين",
+  "deals.actor.platform": "المَنصَّة",
+  "deals.actor.you_or_other": "أَنتَ أَو الطَّرَف الآخَر",
+  "deals.actor.you": "أَنتَ",
+  "deals.flow.title": "كَيف تَتِمّ الصَّفقَة؟",
+  "widgets.attr.select_placeholder": "— اختَر —",
+  "widgets.attr.yes": "نَعَم",
+  "widgets.attr.no": "لا",
+  "widgets.card.verified": "مُوَثَّق",
+  "widgets.card.featured": "مُمَيَّز",
+  "widgets.lang.arabic_short": "ع",
+  "widgets.listrow.initial_fallback": "؟",
+  "widgets.error.title": "حدث خطأ",
+  "widgets.error.retry": "أعد المحاولة",
+  "maps.location.my_location": "مَوقِعي",
+  "maps.pin.open_osm": "فَتح في OpenStreetMap ↗",
+  "auth.email.otp_subject": "رَمز التَّحَقُّق"
 }

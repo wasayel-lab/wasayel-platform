@@ -65,5 +65,6 @@
          يَستَخدِمُها مُباشَرَةً، فَلا يُترَك وُصولُها رَهناً بِمَرجِع
          عُدَّة أُخرى قَد يُنزَع. -->
     <ProjectReference Include="..\..\core\ACommerce.Platform.Flows\ACommerce.Platform.Flows.csproj" />
+    <ProjectReference Include="..\..\core\ACommerce.Platform.I18n\ACommerce.Platform.I18n.csproj" />
   </ItemGroup>
 </Project>

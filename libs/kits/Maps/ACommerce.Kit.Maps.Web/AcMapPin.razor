@@ -7,6 +7,8 @@
         <AcMapPin Location="@listing.PickupLocation" />
 *@
 
+@inject L L
+
 @if (HasLocation)
 {
     <div class="ac-map-pin" style="@($"height:{Height}px;border-radius:{Radius}px;overflow:hidden;border:1px solid var(--ac-border);")">
@@ -17,7 +19,7 @@
         {
             <a class="ac-map-pin-link" target="_blank" rel="noopener"
                href="@ACommerce.Kit.Maps.OsmLinks.ViewUrl(EffectiveLat, EffectiveLng, Zoom + 2)">
-                فَتح في OpenStreetMap ↗
+                @L.Markup("maps.pin.open_osm")
             </a>
         }
     </div>

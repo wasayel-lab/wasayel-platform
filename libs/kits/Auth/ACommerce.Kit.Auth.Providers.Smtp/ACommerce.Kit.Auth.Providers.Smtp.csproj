@@ -5,4 +5,7 @@
     <PackageReference Include="MimeKit" />
     <ProjectReference Include="..\ACommerce.Kit.Auth.Core\ACommerce.Kit.Auth.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\core\ACommerce.Platform.I18n\ACommerce.Platform.I18n.csproj" />
+  </ItemGroup>
 </Project>

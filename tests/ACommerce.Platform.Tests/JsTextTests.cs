@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-using ACommerce.Templates.Customer.Marketplace.I18n;
+using ACommerce.Platform.I18n;
 using Xunit;
 
 namespace ACommerce.Platform.Tests;
