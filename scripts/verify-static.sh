@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 # Usage: ./scripts/verify-static.sh
 #
-# Runs the STATIC verification layers (1-5, 7 and 8) and summarises them.
+# Runs the STATIC verification layers (1-5, 7-10) and summarises them.
 #
 # These layers read source files only — no build, no server, no browser — so
 # they are the ones that can gate CI.  Layer 6 (verify-runtime, Playwright)
 # needs a live app on :5050 and stays out of the gate; see
 # docs/VERIFICATION-LAYERS.md.  Layers 7 and 8 are static and therefore in the
 # gate, and keep their own numbers rather than taking 6's.
+#
+# Layers 9 and 10 arrived with the API surface (docs/API-SURFACE-DESIGN.md, section 5).
+# They are narrower than 1-8 by design: they guard ONE file set — the
+# /api/v1 surface — and they carry NO ledger and NO exception list, because
+# the files are new and carry no debt.  The only condition is that they be
+# written clean from day one, and that is exactly what they enforce.
 #
 # Every layer prints how much it inspected and fails if it inspected nothing.
 # Each runs to completion even if an earlier one failed, so one broken layer
@@ -24,6 +30,8 @@ LAYERS=(
     "5|Widget contracts    |verify-widget-contracts.sh"
     "7|Literal-text debt   |verify-i18n-debt.sh"
     "8|Session in .razor   |verify-architecture.sh"
+    "9|API bodies vs storage|verify-api-endpoints.sh"
+    "10|API contract shape  |verify-api-contract.sh"
 )
 
 FAILED=0
@@ -45,7 +53,7 @@ done
 
 echo ""
 echo "═══════════════════════════════════════════════"
-echo "   Static verification summary (layers 1-5, 7, 8)"
+echo "   Static verification summary (layers 1-5, 7-10)"
 echo "═══════════════════════════════════════════════"
 printf '%s\n' "${RESULTS[@]}"
 echo ""
@@ -59,5 +67,5 @@ if [ "$FAILED" -ne 0 ]; then
     echo "scripts/verify-architecture-ledger.txt — and does not fail the gate."
     exit 1
 fi
-echo "All seven static layers green."
+echo "All nine static layers green."
 exit 0
