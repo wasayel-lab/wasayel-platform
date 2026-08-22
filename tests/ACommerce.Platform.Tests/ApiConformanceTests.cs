@@ -195,39 +195,52 @@ public class ApiConformanceTests
 
     // ═══ الدَينُ المُعلَن — ما يَحتاج نِداءً حَيّاً ════════════════════
 
-    private sealed record LiveObligation(string What, string WhyAr, string Curl);
+    private sealed record LiveObligation(string What, string WhyAr, string Curl, string MeasuredAr);
 
     /// <summary>
-    /// <para><b>البُرهانُ الحَيُّ دَينٌ مُعلَنٌ بِاسمِه.</b> أَربَعَةُ
-    /// نِداءاتٍ لا تُنَفَّذ في هذِه الجَولَة لِأَنّ قاعِدَةَ
-    /// البَيانات تَرُدّ <c>28P01</c> — <b>ولا يُدَّعى تَنفيذُها</b>.
-    /// وكُلُّ واحِدٍ مَكتوبٌ بِنَصِّه هُنا كَما سَيُنَفَّذ، فَلا
-    /// يُعادُ اختِراعُه يَومَ تَعودُ القاعِدَة.</para>
+    /// <para><b>البُرهانُ الحَيُّ — نُفِّذَ ‏2026-08-22.</b> كانَت
+    /// هذِه أَربَعَةَ نِداءاتٍ <b>مُؤَجَّلَة</b> لِأَنّ قاعِدَةَ
+    /// البَيانات كانَت تَرُدّ <c>28P01</c>. عادَت القاعِدَة، ونُفِّذَ
+    /// النَصُّ حَرفاً، فَصارَ لِكُلّ سَطرٍ حَقلٌ رابِع:
+    /// <see cref="LiveObligation.MeasuredAr"/> — <b>ما قيسَ فِعلاً</b>.
+    /// المُخرَجاتُ كامِلَةً في
+    /// <c>docs/API-SURFACE-DESIGN.md</c> §١١٫١٠.</para>
+    ///
+    /// <para><b>ولِماذا يَبقى السَطرُ بَعدَ سَدادِه</b>: القائِمَةُ
+    /// عَقدُ المَوجَة — تَحذِفُها يَعني أَنّ المَوجَةَ التالِيَة
+    /// تَبدَأُ بِلا شَرطِ إغلاق. تُسَدَّد ولا تُمحى.</para>
     /// </summary>
     private static readonly LiveObligation[] LiveObligations =
     {
         new("مِفتاحٌ صالِحٌ يَقرَأُ صَفقاتِه",
-            "يَحتاج مِفتاحاً مُصدَراً مِن الاستوديو وصَفقَةً في القاعِدَة — والقاعِدَةُ تَرُدّ 28P01.",
-            "curl -H \"Authorization: Bearer wsl_…\" https://…/api/v1/deals"),
+            "التَركيبُ الكامِل (مُرَشِّح + خِدمَة + جَلسَةُ مُستَأجِر) لا يُثبِتُه اختِبارُ وَحدَة.",
+            "curl -H \"Authorization: Bearer wsl_…\" https://…/api/v1/deals",
+            "‏200 · JSON بِصَفقَتَين (count=2) · مِفتاحٌ مُصدَرٌ بِالنَقر مِن /studio/apps/ejar/keys"),
 
         new("تَحريكُ صَفقَةٍ مَرَّتَين بِنَفس مِفتاحِ مَرَّة-واحِدَة",
-            "الأَثَرُ الواحِدُ لا يُقاس إلّا بِتَيارِ أَحداثٍ حَقيقيّ.",
+            "الأَثَرُ الواحِدُ لا يُقاس إلّا بِقاعِدَةٍ حَيَّة تُعَدُّ صُفوفُها قَبلَ وبَعد.",
             "curl -H \"Authorization: Bearer wsl_…\" -H \"Idempotency-Key: k1\" " +
-            "-X POST -d '{}' -H 'Content-Type: application/json' https://…/api/v1/deals/{id}/advance"),
+            "-X POST -d '{}' -H 'Content-Type: application/json' https://…/api/v1/deals/{id}/advance",
+            "‏200 مَرَّتَين · الجَوابانِ مُتَطابِقانِ بايتاً بِبايت (‏491 بايت) · " +
+            "Timeline ‏3←4 وStage ‏3←4 بَعدَ **نِداءَين** · mt_events ‏17←17"),
 
         new("طَلَبٌ بِلا مِفتاحٍ يُرَدّ 401",
             "مَقيسٌ في ApiKeyFilterTests بِسِياقٍ مُصطَنَع — والحَيُّ يُثبِت التَركيبَ لا القَرار.",
-            "curl -i https://…/api/v1/deals"),
+            "curl -i https://…/api/v1/deals",
+            "‏401 Unauthorized · {\"error\":{\"code\":\"auth_missing\",…}}"),
 
         new("مِفتاحُ مُستَأجِرٍ آخَر يُرَدّ 404 لا 403",
             "يَحتاج مُستَأجِرَين ومِفتاحَين وصَفقَةً — كُلُّها في القاعِدَة.",
-            "curl -H \"Authorization: Bearer <مِفتاح مُستَأجِر آخَر>\" https://…/api/v1/deals/{id}"),
+            "curl -H \"Authorization: Bearer <مِفتاح مُستَأجِر آخَر>\" https://…/api/v1/deals/{id}",
+            "‏404 not_found بِمِفتاح order على صَفقَةِ ejar · وضابِطٌ: نَفسُ الصَفقَة بِمِفتاح ejar = 200"),
     };
 
-    /// <summary>كُلُّ دَينٍ يُعلِن سَبَبَه وأَمرَه — فَالقائِمَةُ
-    /// دَينٌ مَوصوفٌ لا قائِمَةُ إسكات.</summary>
+    /// <summary>كُلُّ دَينٍ يُعلِن سَبَبَه وأَمرَه <b>وما قيسَ</b> —
+    /// فَالقائِمَةُ بُرهانٌ مَوصوفٌ لا قائِمَةُ إسكات. وحَقلُ القِياس
+    /// هُوَ الَّذي يَمنَعُ أَن يَعودَ السَطرُ وَعداً: نَصٌّ فارِغٌ
+    /// فيه يُحمِر.</summary>
     [Fact]
-    public void Every_live_obligation_names_its_reason_and_its_command()
+    public void Every_live_obligation_names_its_reason_its_command_and_what_was_measured()
     {
         Assert.Equal(4, LiveObligations.Length);
 
@@ -236,7 +249,11 @@ public class ApiConformanceTests
             Assert.True(o.WhyAr.Length > 30, $"«{o.What}» بِسَبَبٍ أَقصَرَ مِن أَن يَكونَ سَبَباً.");
             Assert.StartsWith("curl", o.Curl);
             Assert.Contains("/api/v1/", o.Curl);
+            Assert.True(o.MeasuredAr.Length > 20,
+                $"«{o.What}» بِلا قِياسٍ مَكتوب — الدَينُ يُسَدَّد بِرَقمٍ لا بِدَعوى.");
         }
+
+        Console.WriteLine($"· البُرهانُ الحَيّ: {LiveObligations.Length} نِداءً مُنَفَّذاً، لِكُلٍّ قِياسُه.");
     }
 
     // ═══ القُدرَةُ مَوصولَة ════════════════════════════════════════════

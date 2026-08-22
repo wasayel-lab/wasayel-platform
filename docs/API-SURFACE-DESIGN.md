@@ -736,40 +736,146 @@ curl -H "Authorization: Bearer <مِفتاح مُستَأجِر آخَر>" …/d
 | `Idempotency-Key` **إلزامِيٌّ** على كُلّ كِتابَة | §٤٫٥ تَقول «على كُلّ كِتابَة»؛ جُعِلَ إلزاماً لا اختِياراً كَي لا يوجَد مَسارٌ يَتَجاوَز الآلِيَّة |
 | الفاحِصُ ١٠ يَشمَل **أَربَعَةَ** مِلَفّات لا مِلَفَّ النِقاط وَحدَه | الجَوابُ يُبنى في `ApiOutcome`/`ApiErrors`/`ApiKeyFilter` — وحَصرُ الفَحصِ في الأَوَّل يَترُك البابَ الَّذي يُكتَب مِنه التَحويلُ فِعلاً |
 
-### ١١٫١٠ البُرهانُ الحَيّ — **دَينٌ مُعلَنٌ لَم يُنَفَّذ**
+### ١١٫١٠ البُرهانُ الحَيّ — **نُفِّذَ، ‏2026-08-22**
 
-قاعِدَةُ البَيانات تَرُدّ `28P01` في هذِه الجَولَة، فَلَم يُنَفَّذ
-نِداءُ `curl` واحِد **ولا يُدَّعى**. والنُصوصُ مَكتوبَةٌ هُنا كَما
-سَتُنَفَّذ، ومُثَبَّتَةٌ أَيضاً في
-`ApiConformanceTests.LiveObligations` بِاختِبارٍ يُلزِم كُلَّ
-واحِدَةٍ بِسَبَبٍ وأَمر:
+الدَينُ المُعلَنُ في الجَولَةِ السابِقَة (‏قاعِدَةُ البَيانات كانَت
+تَرُدّ `28P01`) **سُدِّد**. النِداءاتُ أَدناه مُنَفَّذَةٌ حَرفاً على
+فَرعِ Neon الحَيّ و`localhost:5050`، والمُخرَجاتُ مَنسوخَةٌ كَما
+طُبِعَت. **والمِفتاحُ مَقطوعٌ بَعدَ `wsl_`** — لا يُكتَب سِرٌّ في
+وَثيقَة.
 
-```bash
-# ٠. مِفتاحٌ مُصدَرٌ بِالنَقر: /studio ← التَطبيق ← «مَفاتيح الـAPI» ← إصدار
-KEY=wsl_<keyId>_<secret>          # يُنسَخ مِن الشاشَة مَرَّةً واحِدَة
-DEAL=<guid صَفقَةٍ الفاعِلُ طَرَفٌ فيها>
+**‏٠. المِفتاحُ مُصدَرٌ بِالنَقر، لا بِأَمرِ تَطوير** (القاعِدَة ١٢).
+لَوحُ المُتَصَفِّح في هذِه البيئَة لا يُرَكِّب إطاراً، فَقيدَ
+Chrome بِـCDP — **نَفسُ مُحَرِّكِ الطَبَقَة السادِسَة** — بِأَحداثِ
+فَأرَةٍ حَقيقِيَّة (`Input.dispatchMouseEvent`) لا بِـ`element.click()`
+ولا بِـ`curl` على نُقطَةِ الإصدار. المَسارُ المَقطوع، وكُلُّ خُطوَةٍ
+مَطبوعَةٌ بِمَسارِها:
 
-# ١. سَرد — 200 JSON
-curl -s -o /dev/null -w '%{http_code}\n' \
-     -H "Authorization: Bearer $KEY" https://<host>/api/v1/deals
-
-# ٢. تَحريك — 200، ثُمَّ إعادَتُه بِنَفس المِفتاح ⇒ نَفسُ الجَواب وأَثَرٌ واحِد
-curl -s -H "Authorization: Bearer $KEY" -H "Idempotency-Key: k1" \
-     -H "Content-Type: application/json" -d '{}' \
-     -X POST https://<host>/api/v1/deals/$DEAL/advance
-curl -s -H "Authorization: Bearer $KEY" -H "Idempotency-Key: k1" \
-     -H "Content-Type: application/json" -d '{}' \
-     -X POST https://<host>/api/v1/deals/$DEAL/advance   # بايتاً بِبايت كَالأَوَّل
-
-# ٣. بِلا مِفتاح — 401 auth_missing
-curl -i -s https://<host>/api/v1/deals | head -1
-
-# ٤. مِفتاحُ مُستَأجِرٍ آخَر — 404 لا 403
-curl -s -o /dev/null -w '%{http_code}\n' \
-     -H "Authorization: Bearer $OTHER_KEY" https://<host>/api/v1/deals/$DEAL
+```
+[1] /studio            → تَحويل إلى /studio/auth   (حَقلُ هاتِف واحِد)
+[2] بَعدَ الهاتِف       → حَقلُ الرَمز حاضِر
+[3] بَعدَ الرَمز        → /studio ، كوكي acommerce.studio = true
+[4] نَقرُ بِطاقَةِ التَطبيق → /studio/apps/ejar  (رابِطُ المَفاتيح حاضِر)
+[5] نَقرُ «مَفاتيح الـAPI» → /studio/apps/ejar/keys
+    الاستِمارَة حاضِرَة · ‏4 خِيارات فاعِل
+    name=live-proof-wave-1  actor=3e476c16-…  scopes=["deals:read","deals:write"]
+[6] بَعدَ الإصدار       → /studio/apps/ejar/keys?issued=4b63936ce8c97851
+[7] المِفتاحُ مَعروضٌ مَرَّةً واحِدَة — ‏85 مِحرَفاً
 ```
 
-**وشَرطُ الإغلاق قائِمٌ كَما هُوَ** (الخَطَر ١): المَوجَةُ لا تُعَدُّ
-مُغلَقَةً حَتّى يُنَفَّذَ هذا النَصُّ ويُدرَج ناتِجُه. ما تَمَّ اليَوم
-**بِناءٌ مُبرهَنٌ ساكِناً**: بِناءٌ بِصِفر أَخطاء، و‏1100 اختِبار،
-وتِسعُ طَبَقاتٍ ساكِنَةٍ خَضراء، وتِسعُ حَقناتِ عَيبٍ أَحمَرَّت.
+**‏١. سَرد — ‏200 JSON**
+
+```bash
+$ curl -s -o /dev/null -w '%{http_code}\n' \
+       -H "Authorization: Bearer wsl_…" http://localhost:5050/api/v1/deals
+200
+```
+
+```json
+{"deals":[{"id":"17497544-0a6a-485d-bc72-f5d738995169","pattern":"marketplace",
+"stage":"Paid","stage_label_ar":"دَفع","status":"Active",
+"initiator_id":"3e476c16-c453-4f1c-a2ea-be0ed69f80b4",
+"counterparty_id":"357cf2eb-e8ee-45f2-bd88-371365a963bd",
+"listing_title":"إعلان اختِبار — صَفقَة نَشِطَة","amount_sar":100,
+"next_stage":"Shipping","actor_for_current_stage":"initiator",
+"created_at":"2026-06-20T22:40:36.404883Z","updated_at":"2026-06-21T21:40:36.404883Z"},
+{"id":"8c34e5ee-1760-4eba-b276-caf3e721f996","pattern":"marketplace",
+"stage":"Received","stage_label_ar":"استِلام","status":"Completed", … }],"count":2}
+```
+
+**‏٢. تَحريك — ‏200، ثُمَّ إعادَةٌ بِنَفسِ `Idempotency-Key`**
+
+```bash
+$ curl -s -H "Authorization: Bearer wsl_…" -H "Idempotency-Key: k1" \
+       -H "Content-Type: application/json" -d '{}' \
+       -X POST http://localhost:5050/api/v1/deals/17497544-…/advance
+HTTP 200
+{"id":"17497544-0a6a-485d-bc72-f5d738995169","pattern":"marketplace","stage":"Shipping",
+"stage_label_ar":"شَحن","status":"Active", … "next_stage":"Delivered",
+"actor_for_current_stage":"counterparty","updated_at":"2026-08-22T19:26:14.4950637Z"}
+
+$ # الإعادَةُ حَرفاً — نَفسُ المِفتاح ونَفسُ الرَأس
+HTTP 200
+{ … "updated_at":"2026-08-22T19:26:14.4950637Z"}      ← نَفسُ الطابَعِ الزَمَنيّ
+
+$ cmp الجَوابَين
+IDENTICAL (491 بايت)
+```
+
+**والأَثَرُ واحِدٌ — مَقيسٌ في قاعِدَةِ البَيانات لا مُستَنتَجٌ مِن
+تَطابُقِ الجَواب**:
+
+| المَقيس | قَبل | بَعدَ نِداءَين |
+|---|---|---|
+| `Timeline` الصَفقَة | ‏3 | **‏4** |
+| `Stage` | ‏3 (`Paid`) | **‏4 (`Shipping`)** |
+| `UpdatedAt` | ‏2026-06-21T21:40:36 | ‏2026-08-22T19:26:14 (‏**والثانِيَةُ لَم تُحَرِّكه**) |
+| `mt_events` (‏`ejar`) | ‏17 | ‏17 |
+| `mt_streams` (‏`ejar`) | ‏15 | ‏15 |
+
+> **ولِماذا `Timeline` لا `mt_events`**: الصَفقَةُ **وَثيقَةٌ** لا
+> مَجرى — `AdvanceAsync` تُلحِق سَطراً في `Deal.Timeline` وتُودِع
+> بِـ`Store`. فَعَدُّ `mt_events` وَحدَه كانَ سَيُعطي «صِفر أَثَر»
+> لِنِداءٍ **غَيَّرَ مَرحَلَةً فِعلاً** — أَي أَخضَرَ كاذِباً مِن
+> عَدّادٍ يَنظُر إلى الجَدوَلِ الخَطَأ. العَدّادانِ مَطبوعانِ مَعاً
+> عَمداً.
+
+**‏٣. بِلا مِفتاح — ‏401 `auth_missing`**
+
+```bash
+$ curl -i -s http://localhost:5050/api/v1/deals | head -1
+HTTP/1.1 401 Unauthorized
+
+$ curl -s http://localhost:5050/api/v1/deals
+{"error":{"code":"auth_missing","message_ar":"لا مِفتاح — أَرسِل رَأس Authorization: Bearer wsl_…"}}
+```
+
+**‏٤. مِفتاحُ مُستَأجِرٍ آخَر — ‏404 لا ‏403**
+
+أُصدِرَ مِفتاحٌ ثانٍ بِنَفسِ مَسارِ النَقر لِمُستَأجِرِ `order`
+(‏`?issued=34d2f0f07dd8733e`)، وسُئِلَ بِه عَن صَفقَةِ `ejar`:
+
+```bash
+$ curl -s -o /dev/null -w '%{http_code}\n' \
+       -H "Authorization: Bearer wsl_…" \
+       http://localhost:5050/api/v1/deals/17497544-…
+404
+{"error":{"code":"not_found","message_ar":"لا مَورِدَ بِهذا المُعَرِّف."}}
+```
+
+وضابِطانِ يَمنَعانِ أَن يَكونَ الـ404 كَسَلاً في الحارِس:
+
+| الضابِط | النَتيجَة |
+|---|---|
+| نَفسُ الصَفقَة بِمِفتاحِ `ejar` | **‏200** |
+| `GET /api/v1/deals` بِمِفتاحِ `order` | ‏200 — وصَفقاتُ `order` وَحدَها (`c2f40a9f-…`) |
+
+**‏٥. `/api/{slug}/manifest.json` بَعدَ حَجزِ `api`** — الثَلاثَةُ
+القائِمَةُ ما زالَت ‏200، والجِسمُ مَنيفِست حَقيقيّ لا صَفحَةَ خَطَأ:
+
+```
+/api/ashare/manifest.json → 200
+/api/ejar/manifest.json   → 200   {"name":"إيجار","short_name":"إيجار", … "scope":"/ejar/", … }
+/api/order/manifest.json  → 200
+```
+
+**‏٦. الإبطالُ بِالنَقر — والنِداءُ يَعودُ ‏401**
+
+```
+[5] /studio/apps/ejar/keys — استِماراتُ إبطالٍ قَبل: 1
+[6] بَعدَ النَقر            — استِماراتُ إبطالٍ بَعد: 0
+
+$ curl -s -H "Authorization: Bearer wsl_…" http://localhost:5050/api/v1/deals
+HTTP 401
+{"error":{"code":"auth_invalid","message_ar":"المِفتاح غَير صالِح."}}
+```
+
+ورَمزُ الرَفضِ هُنا `auth_invalid` لا `auth_missing`: الرَأسُ حاضِرٌ
+والمِفتاحُ مَعروف، والساقِطُ هو **حالَتُه** — وهذا بِعَينِه الحَقلُ
+الَّذي يُشَخِّصُه §٢٫٣ غائِباً عَن التوكن الحاليّ.
+
+**والمِفتاحانِ كِلاهُما أُبطِلا في نِهايَةِ الجَولَة** — الجَولَةُ لا
+تُخَلِّف اعتِماداً حَيّاً.
+
+**فَشَرطُ الإغلاقِ في §٩ مُستَوفىً**: النَصُّ نُفِّذَ، والناتِجُ
+مُدرَجٌ حَرفاً.
