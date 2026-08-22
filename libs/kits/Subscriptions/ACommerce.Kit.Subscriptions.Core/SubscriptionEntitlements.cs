@@ -34,8 +34,17 @@ public sealed class SubscriptionEntitlements : IEntitlements
     /// بِصَمت، ويَخضَرّ كُلّ اختِبار مُوجِب. الرَمي يَجعَل سوءَ التَركيب
     /// عَطَباً <b>مَسموعاً</b>.</para>
     /// </summary>
+    /// <remarks>
+    /// <para><b>وصارَت قُدرَتَين لا واحِدَة</b> —
+    /// <c>api.call</c> انضَمَّت. وهي <b>رايَة</b> لا حِصَّة، فَلا
+    /// تَمُرّ بِعَدّاد التَيار: <see cref="Decide"/> يَفصِل
+    /// الصِنفَين بِـ<c>CapabilityCatalog.IsQuota</c>، و
+    /// <see cref="ConsumeAsync"/> لا يُلحِق <c>QuotaConsumed</c>
+    /// لِرايَة — فَحَدَثُ استِهلاكٍ بِلا رَصيدٍ يَنقُص عَبَثٌ
+    /// يَكذِب على السِجِلّ.</para>
+    /// </remarks>
     public IReadOnlyCollection<string> Handles { get; } =
-        new[] { CapabilityCatalog.ListingCreate };
+        new[] { CapabilityCatalog.ApiCall, CapabilityCatalog.ListingCreate };
 
     /// <summary>رِسالَة النَفاد — لِلوغ ولِلمُنادي. النَصّ الَّذي
     /// <b>يَراه المُستَخدِم</b> يُختار عِندَ التَصيير مِن قامُوس
@@ -73,6 +82,11 @@ public sealed class SubscriptionEntitlements : IEntitlements
         // الإلحاق يَقَع عِندَ السَماح <b>ومَع اشتِراك قائِم</b> فَقَط.
         if (!decision.Allowed || sub is null) return decision;
 
+        // ورايَةٌ لا تُستَهلَك: لا رَصيدَ يَنقُص، فَلا حَدَثَ يُلحَق.
+        // <c>QuotaConsumed</c> على رايَةٍ يَكتُب في السِجِلّ استِهلاكاً
+        // لَم يَقَع، ويَجعَل «كَم استُهلِكَ» سُؤالاً بِجَوابَين.
+        if (!CapabilityCatalog.IsQuota(capability)) return decision;
+
         // نُسخَة التَيار قَبل الإلحاق — ومِنها النُسخَة المُتَوَقَّعَة
         // بَعدَه. هذا هو ما يَجعَل الخاسِر في السِباق يَفشَل عِندَ
         // الحِفظ بَدَل أَن يُنقِص الرَصيد مَرَّتَين.
@@ -108,9 +122,25 @@ public sealed class SubscriptionEntitlements : IEntitlements
     /// اليَوم حَرفاً</b>، إذ لا سَطر في مَسار إنشاء الإعلان يَذكُر
     /// اشتِراكاً ولا خُطَّة. فَهذه المَوجَة تُضيف باعِثاً غائِباً ولا
     /// تُغلِق باباً كانَ مَفتوحاً.</para>
+    ///
+    /// <para><b>والرايَةُ تُفصَل عَن الحِصَّة هُنا، بِسَطرٍ واحِد</b>:
+    /// حِسابُ <c>QuotaRemaining</c> جَوابٌ عَن سُؤالٍ عَدَدِيّ، وطَرحُه
+    /// على رايَةٍ يُعطي مَعنىً مَقلوباً — مُشتَرِكٌ نَفِدَت حِصَّةُ
+    /// إعلاناتِه كانَ سَيُمنَع مِن الـAPI، وهُما حَدّانِ لا عَلاقَةَ
+    /// بَينَهُما. فَالرايَةُ تُجيب بِنَعَم و<c>Unlimited</c> —
+    /// <b>وهذا هُوَ التَكافُؤ الصِفريّ حَرفاً</b>: لا رَقمَ لِحِصَّةِ
+    /// API في المُستَودَع ولا في <c>docs/</c>، واختِراعُه اختِراعُ
+    /// بَياناتِ مُنتَج (القاعِدَة ١٦). ويَومَ يَقولُ المالِكُ «الباقَةُ
+    /// الفُلانِيَّة لا تَشمَل الـAPI» يُقرَأُ ذلك هُنا، في هذا
+    /// السَطر — والمُرَشِّحُ يَسأَلُ سَلَفاً ويَرُدُّ ‏403 (‏مُثبَتٌ في
+    /// <c>ApiKeyFilter</c> بِاختِبارٍ سالِب)، فَالطَرَفُ الَّذي
+    /// يَفرِضُ قائِمٌ مِن يَومِه.</para>
     /// </summary>
     private static EntitlementResult Decide(Subscription? sub, string capability, int amount)
     {
+        if (!CapabilityCatalog.IsQuota(capability))
+            return new EntitlementResult(true, capability, Entitlements.Unlimited, null);
+
         if (sub is null)
             return new EntitlementResult(true, capability, Entitlements.Unlimited, null);
 

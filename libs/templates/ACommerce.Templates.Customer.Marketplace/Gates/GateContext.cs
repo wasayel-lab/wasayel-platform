@@ -18,6 +18,16 @@ public static class GateKeys
     public const string UserId   = "ac.userId";
     public const string SlugItem = "ac.slug";
     public const string Role     = "ac.role";   // مُستَخرَج مِن URL
+
+    /// <summary><b>هُوِيَّةُ مِفتاح API</b> — يَملَؤُها
+    /// <c>ApiKeyFilter</c> بَعدَ اعتِمادٍ ناجِح، إلى جانِب
+    /// <see cref="UserId"/> و<see cref="SlugItem"/> نَفسِهِما. وهذا
+    /// هُوَ سَبَبُ صَلاحِيَّةِ الأُنبوب القائِم بِلا تَعديل: كُلُّ
+    /// حارِسٍ يَقرَأُ الهُوِيَّةَ مِن <c>HttpContext.Items</c> —
+    /// و<c>EntitlementFilter</c> مِنها — يَرِثُ المِفتاحَ بِلا سَطرٍ
+    /// جَديد (‏§٣٫٤). والمَفتاحُ الإضافيّ لِما لا يَحمِلُه المُستَخدِم:
+    /// مُعَرِّفُ المِفتاحِ ونِطاقاتُه.</summary>
+    public const string ApiPrincipal = "ac.apiPrincipal";
 }
 
 public static class GateAccessors
@@ -34,6 +44,11 @@ public static class GateAccessors
     public static string? Role(this HttpContext http)
         => http.Items[GateKeys.Role] as string
         ?? AuthSession.ExtractRoleFromPath(http.Request.Path);
+
+    /// <summary>هُوِيَّةُ مِفتاح API لِهذا الطَلَب، أَو <c>null</c>
+    /// لِطَلَبٍ لَم يَمُرَّ بِـ<c>ApiKeyFilter</c>.</summary>
+    public static Services.Api.ApiKeyPrincipal? ApiPrincipal(this HttpContext http)
+        => http.Items[GateKeys.ApiPrincipal] as Services.Api.ApiKeyPrincipal;
 }
 
 /// <summary>إصدار الشُروط الحاليّ. بَدّله لِتُجبِر كُلّ المُستَخدِمين عَلى

@@ -88,4 +88,24 @@ public static class GateExtensions
         b.AddEndpointFilter(new EntitlementFilter(capability, redirectPath, errCode));
         return b;
     }
+
+    /// <summary>
+    /// <para><b>مِفتاحُ API مَطلوب بِنِطاقٍ بِعَينِه</b> — الحارِسُ
+    /// الوَحيد تَحتَ <c>/api/v1</c>. يَجمَع الاعتِمادَ والنِطاقَ
+    /// واستِحقاقَ <c>api.call</c> في سَطرٍ واحِد، فَلا يُنسى نِصفُه.
+    /// وجَوابُ المَنع <b>JSON بِرَمزٍ مِن مَعجَمٍ مُغلَق</b> — لا
+    /// تَحويلَ ولا <c>Results.Forbid()</c>.</para>
+    ///
+    /// <para><b>ولا يُركَّب مَعَ <see cref="RequireAuth{TBuilder}"/></b>:
+    /// الاعتِمادانِ بَديلانِ لا مُتَتالِيان — كوكي لِلمُتَصَفِّح،
+    /// ومِفتاحٌ لِلآلَة.</para>
+    /// </summary>
+    /// <param name="scope">مِن <c>ApiScopeCatalog</c> حَصراً — رَمزٌ
+    /// خارِجَه يَرمي <b>عِندَ التَركيب</b> فَيُفشِل الإقلاع.</param>
+    public static TBuilder RequireApiKey<TBuilder>(this TBuilder b, string scope)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        b.AddEndpointFilter(new ApiKeyFilter(scope));
+        return b;
+    }
 }

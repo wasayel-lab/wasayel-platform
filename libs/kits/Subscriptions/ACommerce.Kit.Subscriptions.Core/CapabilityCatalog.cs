@@ -96,11 +96,36 @@ public static class CapabilityCatalog
     /// <summary>تَصدير دِراسَة — رايَة لا حِصَّة.</summary>
     public const string StudioExport = "studio.export";
 
-    /// <summary><b>القُدُرات الخَمس</b> — كُلّ ما يُحَدّ أَو يُباع اليَوم،
+    /// <summary>
+    /// <para><b>الوُصول عَبر الـAPI</b> — <b>رايَة لا حِصَّة</b>،
+    /// وهذا قَرارٌ مُعلَنٌ لا تَقصير: الحِصَّةُ تَحتاج <b>رَقماً</b>،
+    /// ولا رَقمَ لِحِصَّةِ API في المُستَودَع ولا في <c>docs/</c>
+    /// (‏مَسحُ <c>Quota|Limit|Max[A-Z]|PerMonth</c> لا يُعطي واحِداً)
+    /// — فَاختِراعُه اختِراعُ بَياناتِ مُنتَج (القاعِدَة ١٦).
+    /// والحِصَّةُ العَدَدِيَّةُ قَرارُ مُنتَجٍ مُنفَصِل، مُؤَجَّلٌ
+    /// بِاسمِه في ‏§٨ مِن وَثيقَة التَصميم.</para>
+    ///
+    /// <para><b>ومَصدَرُ حَدِّها اليَوم وَثيقَةُ المِفتاح نَفسُها</b>:
+    /// <c>Status</c> و<c>ExpiresAt</c> و<c>Scopes</c> — وهي المَواضِعُ
+    /// الثَلاثَةُ الَّتي تَمنَع طَلَباً فِعلاً. فَـ<c>SourceRef</c>
+    /// يُشير إلى ما يَحُدُّ حَقّاً، لا إلى حَقلٍ يُخترَع في
+    /// <c>Plan</c> لِيَملَأَ خانَة.</para>
+    ///
+    /// <para><b>والرايَةُ مَفروضَةٌ لا مَعروضَة</b>: لا تُذكَر في
+    /// شاشَةِ باقاتٍ واحِدَة — الخَطَرُ ٧ في وَثيقَة التَصميم
+    /// (<c>AllowCustomPattern</c> تُباع في ثَلاثِ شاشات وصِفرُ
+    /// مَوضِعٍ يَفحَصُها) مَقلوبٌ هُنا عَمداً: تُفحَص في
+    /// <c>ApiKeyFilter</c> على كُلّ نُقطَة، ولا تُباع في شاشَة.</para>
+    /// </summary>
+    public const string ApiCall = "api.call";
+
+    /// <summary><b>القُدُرات السِتّ</b> — كُلّ ما يُحَدّ أَو يُباع اليَوم،
     /// مُرَتَّبَة أَبجَدِيّاً بِرَمزِها. الزِيادَة عَلَيها قَرار مُعلَن:
     /// سَطر هُنا + مَوضِع فَحص حَيّ + اختِبار سالِب يُثبِت المَنع.</summary>
     public static readonly IReadOnlyList<Capability> All = new[]
     {
+        new Capability(ApiCall, CapabilityKinds.Flag,
+            "ApiKeyDocument.Status/ExpiresAt/Scopes (ApiKey.cs) → ApiKeyFilter"),
         new Capability(ListingCreate, CapabilityKinds.Quota,
             "Plan.ListingsQuota (Subscription.cs:9) → Subscription.QuotaRemaining"),
         new Capability(StudioAnalyze, CapabilityKinds.Quota,

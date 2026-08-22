@@ -15,22 +15,28 @@ public class CapabilityCatalogTests
     // ─── المَعجَم نَفسُه — مُثَبَّت بِعَدَدِه وبِأَسمائِه ─────────────
 
     /// <summary>
-    /// <para><b>خَمس قُدُرات، ولا سادِسَة.</b> تَغَيُّر هذه القائِمَة
+    /// <para><b>سِتّ قُدُرات، ولا سابِعَة.</b> تَغَيُّر هذه القائِمَة
     /// يَعني إضافَةَ حَدٍّ أَو سَحبَه — وكِلاهُما قَرار مُنتَج يَستَحِقّ
     /// نَظَرَ إنسان، لا تَعديلَ سَطر يَمُرّ في مُراجَعَة.</para>
     ///
-    /// <para><b>ولِماذا خَمس لا سِتّ</b>: وَصَفَ تَصميمُ هذه الطَبَقَة
-    /// <c>studio.custom_pattern</c> سادِسَةً «تُباع ولا تُفحَص».
-    /// القِياس اليَوم يَنفيها: <c>AllowCustomPattern</c> سُحِبَ مِن
-    /// <c>TierLimits</c> ومِن الشاشَتَين قَبل هذه المَوجَة، ولَم يَبقَ
-    /// مِنه إلّا تَعليق يَشرَح سَحبَه. المَعجَم يَصِف ما يُحَدّ
+    /// <para><b>ولِماذا لَم تَدخُل <c>studio.custom_pattern</c></b>:
+    /// وَصَفَ تَصميمُ هذه الطَبَقَة رايَةً «تُباع ولا تُفحَص».
+    /// القِياس يَنفيها: <c>AllowCustomPattern</c> سُحِبَ مِن
+    /// <c>TierLimits</c> ومِن الشاشَتَين، ولَم يَبقَ مِنه إلّا
+    /// تَعليق يَشرَح سَحبَه. المَعجَم يَصِف ما يُحَدّ
     /// <b>اليَوم</b>.</para>
+    ///
+    /// <para><b>والسادِسَةُ الَّتي دَخَلَت — <c>api.call</c></b> —
+    /// دَخَلَت بِالشَرط نَفسِه مَقلوباً: <b>تُفحَص ولا تُباع</b>.
+    /// <c>ApiKeyFilter</c> يَسأَلُها على كُلّ نُقطَةٍ تَحتَ
+    /// <c>/api/v1</c>، ولا تُذكَر في شاشَةِ باقاتٍ واحِدَة.</para>
     /// </summary>
     [Fact]
-    public void Exactly_five_capabilities_and_they_are_these()
+    public void Exactly_six_capabilities_and_they_are_these()
         => Assert.Equal(
             new[]
             {
+                "api.call",
                 "listing.create",
                 "studio.analyze",
                 "studio.build",
@@ -47,6 +53,7 @@ public class CapabilityCatalogTests
         Assert.Equal(
             new[]
             {
+                CapabilityCatalog.ApiCall,
                 CapabilityCatalog.ListingCreate,
                 CapabilityCatalog.StudioAnalyze,
                 CapabilityCatalog.StudioBuild,
@@ -80,10 +87,13 @@ public class CapabilityCatalogTests
         }
     }
 
-    /// <summary>أَربَع حِصَص ورايَة واحِدَة — والرايَة
-    /// <c>studio.export</c> وَحدَها لا تُستَهلَك.</summary>
+    /// <summary>أَربَع حِصَص ورايَتان، ولا تُستَهلَك رايَة:
+    /// <c>api.call</c> رايَةٌ لِأَنّ حِصَّتَها العَدَدِيَّة تَحتاج
+    /// رَقماً لا وُجودَ لَه (القاعِدَة ١٦)، و<c>studio.export</c>
+    /// رايَةٌ لِأَنّ مَصدَرَها <c>AllowExport</c> ثُنائيٌّ
+    /// أَصلاً.</summary>
     [Fact]
-    public void Four_are_quotas_and_exactly_one_is_a_flag()
+    public void Four_are_quotas_and_exactly_two_are_flags()
     {
         Assert.Equal(
             new[] { "listing.create", "studio.analyze", "studio.build", "studio.refine" },
@@ -91,12 +101,13 @@ public class CapabilityCatalogTests
                 .Select(c => c.Code).ToArray());
 
         Assert.Equal(
-            new[] { "studio.export" },
+            new[] { "api.call", "studio.export" },
             CapabilityCatalog.All.Where(c => c.Kind == CapabilityKinds.Flag)
                 .Select(c => c.Code).ToArray());
 
         Assert.True(CapabilityCatalog.IsQuota("listing.create"));
         Assert.False(CapabilityCatalog.IsQuota("studio.export"));
+        Assert.False(CapabilityCatalog.IsQuota("api.call"));
         Assert.False(CapabilityCatalog.IsQuota("nope"));
     }
 

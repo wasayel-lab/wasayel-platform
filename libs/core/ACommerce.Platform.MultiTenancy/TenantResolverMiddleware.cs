@@ -19,14 +19,61 @@ public sealed class TenantResolverMiddleware
     private readonly RequestDelegate _next;
     private readonly IDocumentStore _store;
     private readonly IMemoryCache _cache;
-    private static readonly HashSet<string> ReservedPaths = new(StringComparer.OrdinalIgnoreCase)
+    /// <summary>
+    /// <para><b>مَقاطِعُ أَوَّلُ المَسار الَّتي لَيسَت سلاجاً</b>.
+    /// <c>internal</c> لا <c>private</c>: <c>SlugFromPath</c> يَقرَؤُها
+    /// والاختِبارُ يَقرَأُ <c>SlugFromPath</c> — فَالقائِمَةُ
+    /// مَقيسَةٌ لا مَظنونَة.</para>
+    /// </summary>
+    internal static readonly HashSet<string> ReservedPaths = new(StringComparer.OrdinalIgnoreCase)
     {
         "admin", "_blazor", "_framework", "_content",
         "css", "js", "lib", "favicon.ico", "health", "realtime",
         // وَثائِق الزَحف عَلى الجَذر — لَيسَت slugs، فَلا داعِيَ
         // لِاستِعلام Marten فاشِل عِندَ كُلّ زِيارَة زاحِف.
-        "robots.txt", "sitemap.xml"
+        "robots.txt", "sitemap.xml",
+
+        // ═══ «api» — سَبَبٌ بِنيَوِيّ لا تَفصيل ═════════════════════
+        //
+        // سَطحُ الـAPI مَساراتُه `/api/v1/…` — <b>بِلا مَقطَعِ سلاج
+        // إطلاقاً، وذاكَ مَقصود</b>: المُستَأجِرُ يُشتَقّ مِن
+        // الاعتِماد (وَثيقَةِ المِفتاح) ولا يُقبَل مِن الطَلَب
+        // أَبَداً. وبِلا هذا السَطر يُحاوِلُ الوَسيطُ حَلَّ
+        // مُستَأجِرٍ اسمُه `api` عِندَ <b>كُلّ</b> طَلَبِ API
+        // فَيَفشَل — استِعلامُ Marten ضائِعٌ في كُلّ نِداء.
+        //
+        // <b>والتَغييرُ صِفريُّ الأَثَر على ما كانَ يَعمَل</b>، وهذا
+        // مَقيسٌ لا مَظنون: مَسارات `/api/{slug}/manifest.json`
+        // وإخوانُها كانَ الوَسيطُ يَقرَأُ مِنها المَقطَعَ الأَوَّل
+        // `api` — لا سلاجَ المُستَأجِر — فَيَستَعلِم عَن مُستَأجِرٍ
+        // بِهذا الاسم ولا يَجِدُه، فَلا يَضَع مُستَأجِراً. أَي أَنّ
+        // تِلكَ النِقاطَ تَعمَلُ اليَومَ <b>بِلا مُستَأجِرٍ
+        // مَحلول</b> وتَقرَأُ السلاجَ مِن وَسيطِ المَسار بِنَفسِها.
+        // فَالحَجزُ يُبَدِّل «استِعلامٌ يَفشَل» بِـ«لا استِعلام»،
+        // والنَتيجَةُ واحِدَة — مُثَبَّتَةً في
+        // `TenantSlugResolutionTests`.
+        "api",
     };
+
+    /// <summary>
+    /// <para><b>قَرارُ «أَيُّ سلاجٍ في هذا المَسار؟» — دالَّةٌ
+    /// نَقِيَّة.</b> تُعيد <c>null</c> لِمَسارٍ لا سلاجَ فيه: الجَذر،
+    /// والقَصير، والمَحجوز. وهذا هُوَ كُلُّ ما كانَ مَكتوباً في
+    /// أَوَّل أَربَعَةِ أَسطُرٍ مِن <see cref="InvokeAsync"/>،
+    /// مَنقولاً بِلا تَغييرِ حَرف — <b>لِيُختَبَر بِلا مُضيفٍ ولا
+    /// قاعِدَةِ بَيانات</b> (القاعِدَة ٢: الحَدُّ الَّذي لا يُقاس
+    /// آلِيّاً يَنهار).</para>
+    /// </summary>
+    public static string? SlugFromPath(string? path)
+    {
+        path ??= "/";
+        if (path == "/" || path.Length < 2) return null;
+
+        var firstSlash = path.IndexOf('/', 1);
+        var slug = firstSlash > 0 ? path[1..firstSlash] : path[1..];
+
+        return string.IsNullOrEmpty(slug) || ReservedPaths.Contains(slug) ? null : slug;
+    }
 
     public TenantResolverMiddleware(RequestDelegate next, IDocumentStore store, IMemoryCache cache)
     {
@@ -35,16 +82,8 @@ public sealed class TenantResolverMiddleware
 
     public async Task InvokeAsync(HttpContext ctx)
     {
-        var path = ctx.Request.Path.Value ?? "/";
-        if (path == "/" || path.Length < 2) { await _next(ctx); return; }
-
-        var firstSlash = path.IndexOf('/', 1);
-        var slug = firstSlash > 0 ? path[1..firstSlash] : path[1..];
-
-        if (string.IsNullOrEmpty(slug) || ReservedPaths.Contains(slug))
-        {
-            await _next(ctx); return;
-        }
+        var slug = SlugFromPath(ctx.Request.Path.Value);
+        if (slug is null) { await _next(ctx); return; }
 
         var cacheKey = $"tenant:{slug.ToLowerInvariant()}";
         if (!_cache.TryGetValue(cacheKey, out Tenant? entity))

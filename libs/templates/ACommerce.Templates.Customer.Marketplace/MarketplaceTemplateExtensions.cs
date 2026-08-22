@@ -5,6 +5,7 @@ using ACommerce.Kit.Favorites;
 using ACommerce.Kit.Listings;
 using ACommerce.Platform.I18n;
 using ACommerce.Platform.Shared;
+using ACommerce.Templates.Customer.Marketplace.Api;
 using ACommerce.Templates.Customer.Marketplace.Gates;
 using ACommerce.Templates.Customer.Marketplace.Services.TenantConfig;
 using Marten;
@@ -114,6 +115,36 @@ public static class MarketplaceTemplateExtensions
 
         // سِجِلّ التَّدقيق (مَن فَعَل ماذا، مَتى).
         services.AddScoped<Services.Audit.AuditWriter>();
+
+        // ─── سَطحُ الـAPI — المَوجَةُ الأولى ─────────────────────────────
+        // ثَلاثُ خِدماتٍ لِثَلاثَةِ مُستَهلِكينَ قائِمين: المُرَشِّح،
+        // ونُقطَتا الاستوديو، وشاشَةُ المَفاتيح. ولا رابِعَة تُبنى
+        // «لِأَنَّها قَد تَلزَم».
+        services.AddScoped<Services.Api.ApiKeyService>();
+        services.AddScoped<Api.ApiIdempotencyService>();
+        // وِعاءُ العَرضِ مَرَّةً واحِدَة — Singleton لِأَنَّه يَعبُر
+        // طَلَبَين (‏POST ثُمَّ تَحويلٌ ثُمَّ تَصيير)، والكاش تَحتَه
+        // هُوَ نَفسُ `IMemoryCache` المُسَجَّل في المِنَصَّة.
+        services.AddSingleton<Services.Api.ApiKeyRevealStore>();
+
+        // ─── شَكلُ وَثيقَتَي الـAPI في Marten ────────────────────────────
+        // <b>هُنا لا في `HostingExtensions`</b>: الاعتِمادُ يَمشي مِن
+        // القالَب إلى النَواة لا العَكس، فَتَسجيلُ وَثيقَةٍ يَملِكُها
+        // القالَبُ في مِلَفّ النَواة يَقلِبُ الاتِّجاه.
+        services.ConfigureMarten(opts =>
+        {
+            // مِفتاحُ الـAPI <b>عامّ</b> — يُحمَّل قَبلَ أَن يُعرَف
+            // المُستَأجِر، فَلا سَبيلَ إلى حَصرِه بِـ`tenant_id`.
+            // نَفسُ استِثناء وَثيقَة `Tenant` ولِنَفس السَبَب.
+            opts.Schema.For<Services.Api.ApiKeyDocument>()
+                .SingleTenanted()
+                .Identity(x => x.Id);
+
+            // وسِجِلُّ مَرَّة-واحِدَة <b>مَحصورٌ بِالمُستَأجِر</b>
+            // بِالسِياسَة العامَّة — والعَزلُ مَجّانيّ: مِفتاحُ
+            // مُستَأجِرٍ لا يُصادِف مِفتاحَ آخَر.
+            opts.Schema.For<Api.ApiIdempotencyRecord>().Identity(x => x.Id);
+        });
 
         return services;
     }
@@ -3279,6 +3310,62 @@ public static class MarketplaceTemplateExtensions
             var s = await svc.StartAsync(Guid.Empty, "صاحِب المَشروع");
             return Results.Redirect($"/admin/incubator/{s.Id}");
         }).DisableAntiforgery();
+
+        // ─── مَفاتيحُ الـAPI — الإصدارُ والإبطالُ مِن الاستوديو ──────────
+        //
+        // <b>ولِماذا هُنا لا تَحتَ `/api/v1/keys`</b> كَما وَصَفَت
+        // ‏§٩: مِفتاحٌ يُصدِرُ مِفتاحاً يَفتَرِض مِفتاحاً قائِماً،
+        // والأَوَّلُ لا يُوجَد. فَالإصدارُ يَلزَمُه اعتِمادٌ مِن
+        // صِنفٍ آخَر — جَلسَةُ الاستوديو ومِلكِيَّةُ المَتجَر — ونُقطَةٌ
+        // بِحارِسٍ مُختَلِف تَحتَ `/api/v1` تَكسِر العَقدَ الَّذي
+        // يَحرُسُه الفاحِصان (‏حارِسٌ واحِد، JSON، بِلا تَحويل).
+        // والانحِرافُ مَكتوبٌ في `docs/API-SURFACE-DESIGN.md`.
+        //
+        // <b>ويُبلَغ بِالنَقر</b> (القاعِدَة ١٢):
+        //   /studio ← لَوحَةُ التَطبيق ← «مَفاتيح الـAPI» ← إصدار.
+        app.MapPost("/studio/apps/{slug}/keys/create", async (
+            string slug, HttpRequest req, IDocumentStore store,
+            Services.Incubator.StudioAuth auth,
+            Services.Api.ApiKeyService keys,
+            Services.Api.ApiKeyRevealStore reveal,
+            Services.Audit.AuditWriter audit) =>
+        {
+            if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
+
+            var request = Services.Api.ApiKeySurface.Read(req);
+            var violations = Services.Api.ApiKeyValidator.Validate(request);
+            if (violations.Count > 0)
+                return Results.Redirect($"/studio/apps/{slug}/keys?err={violations[0].Code}");
+
+            var issued = await keys.IssueAsync(slug, request, auth.UserId!.Value);
+            // السِرُّ يُعرَض مَرَّةً — في وِعاءٍ لا في المَسار: الطَلَبُ
+            // يُكتَب في اللوغ كامِلاً، وسِرٌّ في المَسار سِرٌّ في مِلَفّ.
+            reveal.Stash(slug, issued.Key.Id, issued.Presented);
+            await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
+                "apikey.issue", "apikey", issued.Key.Id, note: issued.Key.Name,
+                ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
+            return Results.Redirect($"/studio/apps/{slug}/keys?issued={issued.Key.Id}");
+        }).DisableAntiforgery();
+
+        app.MapPost("/studio/apps/{slug}/keys/{keyId}/revoke", async (
+            string slug, string keyId, HttpRequest req, IDocumentStore store,
+            Services.Incubator.StudioAuth auth,
+            Services.Api.ApiKeyService keys,
+            Services.Audit.AuditWriter audit) =>
+        {
+            if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
+
+            var ok = await keys.RevokeAsync(slug, keyId);
+            await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
+                "apikey.revoke", "apikey", keyId,
+                ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
+            return Results.Redirect(
+                $"/studio/apps/{slug}/keys" + (ok ? "" : "?err=key_not_found"));
+        }).DisableAntiforgery();
+
+        // ─── سَطحُ الـAPI ────────────────────────────────────────────────
+        // مِلَفٌّ مُنفَصِل — نِطاقُ الفاحِصَين ٩ و‏١٠ نَصِّيّ بِلا لَبس.
+        app.MapApiV1();
 
         return app;
     }

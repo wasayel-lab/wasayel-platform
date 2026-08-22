@@ -50,12 +50,19 @@ public class EntitlementContractTests
 
     // ─── التَنفيذ لا يَسمَح بِما لا يَعرِف ───────────────────────────
 
-    /// <summary>قُدرَة واحِدَة يَخدِمُها هذا التَنفيذ — ونُموُّها قَرار
-    /// مَرئيّ.</summary>
+    /// <summary>
+    /// <para>قُدرَتانِ يَخدِمُهُما هذا التَنفيذ — ونُموُّهُما قَرار
+    /// مَرئيّ، وهذا هُوَ السَطر الَّذي يُحَمِّر نُمُوّاً صامِتاً.</para>
+    ///
+    /// <para><b>والثانِيَة دَخَلَت بِمَوجَة سَطح الـAPI</b>:
+    /// <c>api.call</c> رايَةٌ لا حِصَّة، فَلا تَمُرّ بِعَدّاد التَيار
+    /// — <c>Decide</c> يَفصِل الصِنفَين، و<c>ConsumeAsync</c> لا
+    /// يُلحِق <c>QuotaConsumed</c> لِرايَة.</para>
+    /// </summary>
     [Fact]
-    public void Subscription_entitlements_serve_exactly_listing_create()
+    public void Subscription_entitlements_serve_exactly_api_call_and_listing_create()
         => Assert.Equal(
-            new[] { "listing.create" },
+            new[] { "api.call", "listing.create" },
             new SubscriptionEntitlements(null!).Handles.ToArray());
 
     /// <summary>
