@@ -610,22 +610,41 @@ public static class MarketplaceTemplateExtensions
         }).DisableAntiforgery();
 
         // ─── Plans subscribe ────────────────────────────────────────────
+        // **ما كانَ هُنا ولِماذا زال**: كانَ الجِسمُ يُحَمِّل الباقَةَ،
+        // **يَتَجاهَل `Price`**، ويَفتَح `SubscriptionCreated` لِأَيّ
+        // مُستَخدِمٍ مُسَجَّلٍ بِنَقرَة — فَحِصَّةُ الإعلانات، وهي عَينُ
+        // ما يَحرُسُه الاستِحقاقُ على `listings/create`، تُمنَح مَجّاناً
+        // مِن زِرٍّ مَعروض. والمالِكُ يَقبِض حَوالاتٍ بَنكِيَّةً
+        // يَدَوِيَّةً ويَمنَح الباقاتِ بِيَدِه، فَهذا تَسريبُ إيرادٍ
+        // مُباشِر لا ثَغرَةٌ نَظَرِيَّة.
+        //
+        // **والمَجّانِيَّة لَم تُمَسّ**: `Price == 0` تُمنَح ذاتِيّاً
+        // بِنَفس الحَدَث ونَفس المَجرى — القَرارُ في
+        // `SubscriptionRequestPolicy.Route`، دالَّةٌ نَقِيَّة مُختَبَرَة
+        // بِلا قاعِدَةِ بَيانات.
         app.MapPost("/{slug}/plans/{planId}/subscribe",
-            async (string slug, string planId, HttpRequest req, IDocumentStore store) =>
+            async (string slug, string planId, HttpRequest req, IDocumentStore store, L l) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/plans"));
             var (userId, _, _) = parsed.Value;
+            var userName = AuthSession.ResolveUserName(req, slug) ?? "—";
 
             await using var s = store.LightweightSession(slug);
-            var plan = await s.LoadAsync<ACommerce.Kit.Subscriptions.Plan>(planId);
-            if (plan is null) return Results.Redirect(Link(req, slug, $"plans"));
-            var ev = new ACommerce.Kit.Subscriptions.SubscriptionCreated(
-                Guid.NewGuid(), userId, planId, plan.ListingsQuota, plan.DaysPeriod, DateTime.UtcNow);
-            s.Events.StartStream<ACommerce.Kit.Subscriptions.Subscription>(ev.Id, ev);
+            var outcome = await Services.Subscriptions.SubscriptionRequestService.SubscribeAsync(
+                s, planId, userId, userName, DateTime.UtcNow, Guid.NewGuid(), Guid.NewGuid());
+            if (outcome.Outcome == Services.Subscriptions.SubscribeOutcome.PlanMissing)
+                return Results.Redirect(Link(req, slug, $"plans"));
             await s.SaveChangesAsync();
-            return Results.Redirect(Link(req, slug, $"me"));
+
+            if (outcome.Request is null) return Results.Redirect(Link(req, slug, $"me"));
+            if (outcome.Outcome == Services.Subscriptions.SubscribeOutcome.RequestOpened)
+                await NotifyAdminsAsync(store, slug, "subscription_request",
+                    l["notifications.subscription_request.title"],
+                    l.Format("notifications.subscription_request.body", userName, outcome.Request.PlanName),
+                    $"/admin/tenants/{slug}/subscriptions");
+            return Results.Redirect(Link(req, slug, $"plans?request={outcome.Request.Id}"));
         }).DisableAntiforgery();
 
         // ─── Support open ticket ────────────────────────────────────────
@@ -1955,6 +1974,52 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect(ok
                 ? $"/admin/tenants/{slug}/roles?saved=1"
                 : $"/admin/tenants/{slug}/roles?err={Uri.EscapeDataString(msg)}");
+        }).DisableAntiforgery();
+
+        // ─── Admin: decide a subscription request ───────────────────────
+        // القَرارُ البَشَريّ الَّذي يَمنَح باقَةً بِسِعر. مُعَلَّق ←
+        // مُعتَمَد أَو مَرفوض، ولا ثالِث — نَفسُ دَورَة تَعريفات
+        // الأَدوار والمَظهَر بِالإحالَة إلى `ApprovalFlow` لا بِنَسخِه.
+        //
+        // **والبَوّابَة هُنا بَوّابَةُ مُشرِف المَتجَر لا مُشرِف
+        // المَنصَّة**، بِخِلافِ جارَتَيها أَدناه — وهذا فَرقٌ مَقصودٌ
+        // ومُعلَن: تَعريفُ الدَور يُضيف دَوراً خارِجَ كاتالوج
+        // المَنصَّة، والثيمُ يُبَثّ في `<head>` لِكُلّ زائِر —
+        // فَكِلاهُما قَرارُ مَنصَّة. أَمّا هذا فَإقرارُ **حَوالَةٍ
+        // بَنكِيَّةٍ وَصَلَت حِسابَ المَتجَر**: تَعليماتُ التَحويل
+        // نَفسُها حَقلٌ في وَثيقَة المُستَأجِر يُحَرِّرُها مُشرِفُه،
+        // فَمَن يَقبِض هُوَ مَن يُقِرّ. وحَصرُه في مُشرِف المَنصَّة
+        // كانَ سَيَجعَل كُلّ مَتجَرٍ يَنتَظِرُنا لِيَقبِض ثَمَنَه.
+        //
+        // ونَفسُ الحارِس الَّذي يَحرُس بَقِيَّةَ
+        // `/admin/tenants/{slug}/…` — فَمُستَخدِمٌ عادِيٌّ لا يَعتَمِد
+        // طَلَبَ نَفسِه: `TenantAdminGuard` يَقبَل مالِكَ المَتجَر مِن
+        // الاستوديو أَو دَوراً يَحمِل `tenant.manage`، ولا ثالِث.
+        app.MapPost("/admin/tenants/{slug}/subscriptions/{reference}/decide",
+            async (string slug, string reference, HttpRequest req, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth,
+                   Services.Audit.AuditWriter audit) =>
+        {
+            if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
+                return Forbidden();
+            await LogTenantConfigChangeAsync(audit, req, slug, auth,
+                Services.Subscriptions.SubscriptionRequestService.DecideAuditAction);
+
+            var verdict = req.Form["decision"].ToString().Trim() == "approve"
+                ? ACommerce.Kit.Subscriptions.SubscriptionRequestStatuses.Approved
+                : ACommerce.Kit.Subscriptions.SubscriptionRequestStatuses.Rejected;
+            var by = auth.IsAuthenticated
+                ? $"studio · {auth.UserId}"
+                : AuthSession.ResolveUserName(req, slug) ?? "tenant-admin";
+
+            await using var s = store.LightweightSession(slug);
+            var (decision, _) = await Services.Subscriptions.SubscriptionRequestService.DecideAsync(
+                s, reference, verdict, by, DateTime.UtcNow);
+            if (decision.Ok) await s.SaveChangesAsync();
+
+            return Results.Redirect(decision.Ok
+                ? $"/admin/tenants/{slug}/subscriptions?saved=1"
+                : $"/admin/tenants/{slug}/subscriptions?err={Uri.EscapeDataString(decision.Code)}");
         }).DisableAntiforgery();
 
         // ─── Admin: propose / decide a tenant theme ─────────────────────

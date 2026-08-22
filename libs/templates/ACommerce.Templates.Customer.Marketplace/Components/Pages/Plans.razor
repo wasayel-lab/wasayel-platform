@@ -1,12 +1,58 @@
 @page "/{slug}/plans"
 @page "/{slug}/r/{role}/plans"
-@inject IDocumentStore Store
+@* لا `IDocumentStore` هُنا: الصَفحَةُ تَسأَل خِدماتِ الاستِعلام
+   وَحدَها. كانَ مَحقوناً وغَيرَ مُستَعمَل، وحَقنٌ بِلا مُستَهلِك
+   يُغري بِفَتح جَلسَةٍ في تَصيير صَفحَة — وذاكَ سِجِلُّ الطَبَقَة
+   الثامِنَة، وهُوَ صِفرٌ اليَوم. *@
 @inject AuthSession Auth
 @inject L L
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantPlanService PlanSvc
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
+@using ACommerce.Kit.Subscriptions
 
 <div class="acs-page">
 <h1 class="acm-wizard-title">@L.Markup("plans.list.title")</h1>
+
+@*
+    بِطاقَةُ الطَلَب المُعَلَّق — تُعرَض قَبلَ الباقات لِأَنَّها
+    الجَوابُ عَن «ماذا يَحدُث الآن؟». وفيها **رَقمُ الطَلَب** الَّذي
+    يُطابِقُ بِه المُشرِفُ الحَوالَةَ، و**تَعليماتُ التَحويل** كَما
+    كَتَبَها المَتجَر.
+
+    ولِماذا لا يُترَك المُستَخدِمُ بِلا شَيء: الباقَةُ بِسِعر لَم
+    تَعُد تُمنَح بِنَقرَة، فَنَقرَةٌ بِلا أَثَرٍ مَرئيّ تَبدو عُطلاً —
+    وهي أَسوَأُ مِن زِرٍّ لا يوجَد.
+*@
+@if (pending.Count > 0)
+{
+    <AcCard>
+        <ChildContent>
+            <h3 style="margin-top:0;">@L.Markup("plans.request.pending_title")</h3>
+            @foreach (var r in pending)
+            {
+                <p style="margin:0 0 4px;">
+                    <strong>@r.PlanName</strong> ·
+                    @r.Price.ToString("N0") @((MarkupString)Money.Unit(style: MoneyUnitStyle.Name)) ·
+                    <span class="ac-chip ac-chip-sm">@StatusLabel(r.Status)</span>
+                </p>
+                <p style="margin:0 0 12px;font-size:13px;color:var(--ac-text-muted);">
+                    @L.Markup("plans.request.reference", r.Id)
+                </p>
+            }
+            <h4 style="margin:12px 0 4px;">@L.Markup("plans.request.transfer_title")</h4>
+            @if (string.IsNullOrWhiteSpace(bankInstructions))
+            {
+                <p style="margin:0;font-size:13px;color:var(--ac-text-muted);">@L.Markup("plans.request.transfer_missing")</p>
+            }
+            else
+            {
+                <p style="margin:0;font-size:13px;white-space:pre-wrap;">@bankInstructions</p>
+            }
+            <p style="margin:12px 0 0;font-size:12px;color:var(--ac-text-muted);">@L.Markup("plans.request.note")</p>
+        </ChildContent>
+    </AcCard>
+}
 
 @if (plans is null)
 {
@@ -35,9 +81,19 @@ else
                     </ul>
                     @if (Auth.IsAuthenticated)
                     {
+                        @* والزِرُّ يَقول ما يَفعَل: الباقَةُ بِسِعر
+                           **تُطلَب** ولا تُمنَح. الوَعدُ الَّذي لا
+                           يُوفى أَسوَأُ مِن وَعدٍ لا يُقال. *@
                         <form method="post" action="@($"/{Slug}/plans/{p.Id}/subscribe")">
-                            <AcButton Type="submit" Variant="primary" Size="sm" Class="ac-btn-block" Text="@(L["plans.card.subscribe"])" />
+                            <AcButton Type="submit" Variant="primary" Size="sm" Class="ac-btn-block"
+                                      Text="@(SubscriptionRequestPolicy.RequiresApproval(p) ? L["plans.card.request"] : L["plans.card.subscribe"])" />
                         </form>
+                        @if (SubscriptionRequestPolicy.RequiresApproval(p))
+                        {
+                            <small style="display:block;margin-top:6px;color:var(--ac-text-muted);font-size:11px;">
+                                @L.Markup("plans.card.price_note")
+                            </small>
+                        }
                     }
                     else
                     {
@@ -57,9 +113,30 @@ else
     [Parameter] public string? Role { get; set; }
     IReadOnlyList<ACommerce.Kit.Subscriptions.Plan>? plans;
 
+    /// <summary>طَلَباتي المُعَلَّقَة في هذا المَتجَر — قِراءَةٌ بَحتَة.
+    /// وفارِغَةٌ لِكُلّ مَن لَم يَطلُب شَيئاً، أَي لِكُلّ زائِرٍ
+    /// اليَوم.</summary>
+    IReadOnlyList<SubscriptionRequest> pending = Array.Empty<SubscriptionRequest>();
+    string bankInstructions = "";
+
+    string StatusLabel(string s) => s switch
+    {
+        SubscriptionRequestStatuses.Approved => L["plans.request.status_approved"],
+        SubscriptionRequestStatuses.Rejected => L["plans.request.status_rejected"],
+        _                                    => L["plans.request.status_pending"]
+    };
+
     // المَوضِع الحَيّ لِتَعريفات الباقات. والتَكافُؤ صِفريّ: مُستَأجِر
     // بِلا تَعريف واحِد يُعطي نَفس الاستِعلام ونَفس التَرتيب ونَفس
     // المَرجِع — أَي هذه الصَفحَة بِعَينِها قَبل المَوجَة.
     protected override async Task OnParametersSetAsync()
-        => plans = await PlanSvc.VisiblePlansAsync(Slug);
+    {
+        plans = await PlanSvc.VisiblePlansAsync(Slug);
+
+        if (!Auth.IsAuthenticated || Auth.UserId is null) return;
+        pending = (await Accounts.SubscriptionRequestsAsync(Slug, Auth.UserId.Value))
+            .Where(r => r.Status == SubscriptionRequestStatuses.Pending).ToList();
+        if (pending.Count > 0)
+            bankInstructions = (await Tenants.FindAsync(Slug))?.BankTransferInstructions ?? "";
+    }
 }

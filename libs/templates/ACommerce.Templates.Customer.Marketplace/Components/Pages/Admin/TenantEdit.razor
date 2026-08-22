@@ -131,6 +131,21 @@
                 </div>
                 <AcIcon Name="chevron-left" Size="16" />
             </a>
+
+            @* طَلَبات الاشتِراك — **والمَدخَلُ هُنا نِصفُ المَيزَة لا
+               زينَتُها** (القاعِدَة ١٢). شاشَةُ الاعتِماد بِلا رابِطٍ
+               إلَيها كودٌ مَيِّت: الباقَةُ المَدفوعَة تَفتَح طَلَباً
+               مُعَلَّقاً، ولا يَمنَحُها شَيءٌ حَتّى يُقَرَّرَ الطَلَب —
+               فَلَو لَم يَبلُغِ المُشرِفُ هذِه الصَفحَةَ لَبَقِيَ كُلّ
+               مَن حَوَّلَ مالَه مُنتَظِراً إلى الأَبَد. *@
+            <a class="acm-manager-card" href="@($"/admin/tenants/{Slug}/subscriptions")">
+                <span class="acm-manager-icon"><AcIcon Name="receipt" Size="24" /></span>
+                <div>
+                    <strong>@L.Markup("admin.tenant_edit.subs_title")</strong>
+                    <span>@L.Markup("admin.tenant_edit.subs_sub")</span>
+                </div>
+                <AcIcon Name="chevron-left" Size="16" />
+            </a>
         </div>
     }
 </div>

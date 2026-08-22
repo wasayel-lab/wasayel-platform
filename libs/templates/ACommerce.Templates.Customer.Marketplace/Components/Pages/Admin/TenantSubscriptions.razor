@@ -1,0 +1,150 @@
+@page "/admin/tenants/{slug}/subscriptions"
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard Guard
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantAdminQueries TenantAdmin
+@inject L L
+@using ACommerce.Kit.Subscriptions
+
+@*
+    شاشَةُ اعتِماد طَلَبات الاشتِراك.
+
+    **ولِماذا وُجِدَت**: كانَ `POST /{slug}/plans/{planId}/subscribe`
+    يَفتَح اشتِراكاً لِأَيّ مُستَخدِمٍ مُسَجَّلٍ بِنَقرَة، **مُتَجاهِلاً
+    سِعرَ الباقَة** — فَحِصَّةُ الإعلانات تُمنَح مَجّاناً. والمالِكُ
+    يَقبِض حَوالاتٍ بَنكِيَّةً يَدَوِيَّة، فَالباقَةُ بِسِعر صارَت
+    تَفتَح **طَلَباً مُعَلَّقاً** لا اشتِراكاً، والمَنحُ يَقَع هُنا.
+
+    **ولا دَورَةَ اعتِمادٍ جَديدَة**: نَفسُ `pending/approved/rejected`
+    ونَفسُ `CreatedBy`/`DecidedBy`/`DecidedAt` الَّتي تَمُرّ بِها
+    تَعريفاتُ الأَدوار والمَظهَر — بِالإحالَة إلى `ApprovalFlow`.
+
+    والحارِسُ حارِسُ **مُشرِف المَتجَر** لا مُشرِف المَنصَّة، بِخِلاف
+    شاشَتَي الأَدوار والثيم: تَعليماتُ التَحويل حَقلٌ في وَثيقَة
+    المُستَأجِر، والحَوالَةُ تَصِل حِسابَ المَتجَر — فَمَن يَقبِض هُوَ
+    مَن يُقِرّ.
+*@
+
+<RequireTenantAdmin Slug="@Slug">
+<div class="acs-page acm-admin">
+    @if (tenant is null)
+    {
+        <AcEmptyState IconName="info" Title="@L["admin.tenant.not_found"]" />
+    }
+    else
+    {
+        var backHref = From == "tenant" ? $"/{Slug}/r/admin/manage" : $"/admin/tenants/{Slug}";
+        <div class="acm-admin-head">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@backHref">
+                    <AcIcon Name="arrow-right" Size="16" />
+                </a>
+                <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("admin.subscriptions.heading") @tenant.Name</h1>
+            </div>
+        </div>
+
+        @if (Err is not null)   { <AcAlert Variant="danger"  Message="@FormatError(Err)" /> }
+        @if (Saved == "1")      { <AcAlert Variant="success" Message="@L["admin.subscriptions.saved"]" /> }
+
+        <AcCard>
+            <ChildContent>
+                <p style="color:var(--ac-text-muted);font-size:13px;margin:0;">@L.Markup("admin.subscriptions.hint")</p>
+            </ChildContent>
+        </AcCard>
+
+        @if (requests.Count == 0)
+        {
+            <AcEmptyState IconName="receipt"
+                          Title="@(L["admin.subscriptions.empty_title"])"
+                          Message="@(L["admin.subscriptions.empty_message"])" />
+        }
+        else
+        {
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">@pendingCount @L.Markup("admin.subscriptions.pending_unit")</h3>
+                    <div class="acm-cat-list">
+                        @foreach (var r in requests)
+                        {
+                            <div class="acm-cat-row">
+                                <div style="flex:1;">
+                                    <strong>@r.PlanName · @r.Price.ToString("N0") @((MarkupString)Money.Unit(style: MoneyUnitStyle.Name))</strong>
+                                    <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
+                                        @L.Markup("admin.subscriptions.reference") @r.Id ·
+                                        @L.Markup("admin.subscriptions.requested_by") @r.UserName ·
+                                        @r.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC
+                                    </span>
+                                    <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
+                                        @r.ListingsQuota @L.Markup("admin.subscriptions.quota_unit") @r.DaysPeriod @L.Markup("admin.subscriptions.day_unit")
+                                        @if (r.DecidedBy is not null)
+                                        {
+                                            <text> · @L.Markup("admin.subscriptions.decided_by") @r.DecidedBy</text>
+                                        }
+                                    </span>
+                                </div>
+                                @if (r.Status == SubscriptionRequestStatuses.Pending)
+                                {
+                                    <form method="post" style="display:inline;"
+                                          action="@($"/admin/tenants/{Slug}/subscriptions/{r.Id}/decide")">
+                                        <input type="hidden" name="decision" value="approve" />
+                                        <button type="submit" class="ac-btn ac-btn-primary ac-btn-sm">@L.Markup("admin.subscriptions.approve")</button>
+                                    </form>
+                                    <form method="post" style="display:inline;margin-inline-start:6px;"
+                                          action="@($"/admin/tenants/{Slug}/subscriptions/{r.Id}/decide")">
+                                        <input type="hidden" name="decision" value="reject" />
+                                        <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">@L.Markup("admin.subscriptions.reject")</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <span class="ac-chip ac-chip-sm">@StatusLabel(r.Status)</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </ChildContent>
+            </AcCard>
+        }
+    }
+</div>
+</RequireTenantAdmin>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "err")]   public string? Err { get; set; }
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+    [SupplyParameterFromQuery(Name = "from")]  public string? From { get; set; }
+
+    Tenant? tenant;
+
+    /// <summary>طَلَبات هذا المَتجَر بِكُلّ حالاتِها — المُعَلَّقُ
+    /// أَوَّلاً. والمَرفوضُ يَبقى مَعروضاً: سِجِلُّ قَرارٍ لا
+    /// سَلَّةُ مُهمَلات.</summary>
+    IReadOnlyList<SubscriptionRequest> requests = Array.Empty<SubscriptionRequest>();
+    int pendingCount;
+
+    string StatusLabel(string s) => s switch
+    {
+        SubscriptionRequestStatuses.Approved => L["admin.subscriptions.status_approved"],
+        SubscriptionRequestStatuses.Rejected => L["admin.subscriptions.status_rejected"],
+        _                                    => L["admin.subscriptions.status_pending"]
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // البَوّابَة قَبل أَيّ استِعلام: الرَفضُ يَعني ألّا تُحَمَّل
+        // بَياناتُ المَتجَر أَصلاً. القَرارُ مَحفوظٌ لِلطَلَب، فَنِداءُ
+        // RequireTenantAdmin بَعدَه لا يُكَلِّف استِعلاماً ثانِياً.
+        if (!await Guard.CanAdministerAsync(Slug)) return;
+        tenant   = await Tenants.FindAsync(Slug);
+        requests = await TenantAdmin.SubscriptionRequestsAsync(Slug);
+        pendingCount = requests.Count(r => r.Status == SubscriptionRequestStatuses.Pending);
+    }
+
+    string FormatError(string err) => err switch
+    {
+        SubscriptionRequestPolicy.NotFound       => L["admin.subscriptions.err_not_found"],
+        SubscriptionRequestPolicy.AlreadyDecided => L["admin.subscriptions.err_decided"],
+        SubscriptionRequestPolicy.BadVerdict     => L["admin.subscriptions.err_verdict"],
+        _ => err
+    };
+}

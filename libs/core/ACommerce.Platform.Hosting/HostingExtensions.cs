@@ -88,6 +88,15 @@ public static class HostingExtensions
                 opts.Schema.For<ACommerce.Kit.Favorites.Favorite>().Identity(x => x.Id);
                 opts.Schema.For<ACommerce.Kit.Subscriptions.Plan>().Identity(x => x.Id);
                 opts.Projections.Snapshot<ACommerce.Kit.Subscriptions.Subscription>(SnapshotLifecycle.Inline);
+
+                // طَلَبُ اشتِراكٍ في باقَةٍ بِسِعر — مُتَعَدِّد الإيجار
+                // بِالسِياسَة العامَّة (conjoined)، والـ Id هُوَ رَقمُ
+                // الطَلَب المَرجِعيّ الَّذي يُطابِقُ بِه المُشرِفُ
+                // الحَوالَةَ البَنكِيَّة. والعَزلُ شَرطٌ لا تَحسين:
+                // طَلَبُ مُستَخدِمٍ في مَتجَرٍ لا يُقرَأ ولا يُعتَمَد
+                // مِن سِياق مَتجَرٍ آخَر.
+                opts.Schema.For<ACommerce.Kit.Subscriptions.SubscriptionRequest>()
+                    .Identity(x => x.Id);
                 opts.Projections.Snapshot<ACommerce.Kit.Support.Ticket>(SnapshotLifecycle.Inline);
                 opts.Projections.Snapshot<ACommerce.Kit.Offers.Offer>(SnapshotLifecycle.Inline);
                 opts.Schema.For<ACommerce.Kit.Offers.ListingMatch>().Identity(x => x.Id);

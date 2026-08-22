@@ -6,6 +6,7 @@ using ACommerce.Kit.Listings;
 using ACommerce.Kit.Notifications;
 using ACommerce.Kit.Offers;
 using ACommerce.Kit.SavedSearches;
+using ACommerce.Kit.Subscriptions;
 using ACommerce.Kit.Support;
 using ACommerce.Templates.Customer.Marketplace.Gates;
 using Marten;
@@ -332,5 +333,28 @@ public sealed class AccountQueries
                 .CountAsync(c => c.OwnerId == userId || c.PartnerId == userId, ct),
             UnreadNotifications: await s.Query<Notification>()
                 .CountAsync(n => n.UserId == userId && !n.IsRead, ct));
+    }
+
+    /// <summary>
+    /// <para><b>طَلَباتُ اشتِراكي</b> — الأَحدَثُ أَوَّلاً. تَقرَؤُها
+    /// صَفحَتا الباقات و«حِسابي»، فَيَرى صاحِبُ الطَلَب حالَتَه
+    /// ومَرجِعَه بِلا أَن يَسأَل أَحَداً.</para>
+    ///
+    /// <para><b>والسُقوطُ قائِمَةٌ فارِغَة</b>: مُستَأجِرٌ لَم يُطلَب
+    /// فيه شَيءٌ بَعد لا جَدوَلَ طَلَباتٍ لَه، وصَفحَةُ الباقات
+    /// <b>لا تَنكَسِر لِذلك</b> — وهذا هُوَ التَكافُؤ الصِفريّ الَّذي
+    /// يَجعَل المَوجَةَ إضافَةً لا تَبديلاً.</para>
+    /// </summary>
+    public async Task<IReadOnlyList<SubscriptionRequest>> SubscriptionRequestsAsync(
+        string tenantSlug, Guid userId, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(tenantSlug);
+        try
+        {
+            return (await s.Query<SubscriptionRequest>()
+                    .Where(r => r.UserId == userId).ToListAsync(ct))
+                .OrderByDescending(r => r.CreatedAt).ToList();
+        }
+        catch { return Array.Empty<SubscriptionRequest>(); }
     }
 }

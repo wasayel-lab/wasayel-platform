@@ -79,6 +79,17 @@ public class TenantConfigServiceShapeTests
             "مِلَفٌّ واحِدٌ مُستَثنى. مُهايِئٌ بِمُستَهلِكٍ واحِد تَجريدٌ " +
             "يَسبِق مُستَهلِكَه (القاعِدَة ١)."),
 
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Subscriptions",
+            null,
+            "طَلَبُ الاشتِراك وقَرارُه — سَطحانِ اثنان: نُقطَةُ " +
+            "`plans/{planId}/subscribe` ونُقطَةُ " +
+            "`admin/tenants/{slug}/subscriptions/{reference}/decide`. ولا " +
+            "مُهايِئَ هُنا عَمداً: النُقطَتانِ تَقرَآنِ النَموذَجَ " +
+            "وتَعرِضانِ بِأَنفُسِهِما، فَالمُجَلَّدُ **صِفرُ مَعرِفَةٍ " +
+            "بِـHTTP**. **والمُجَلَّدُ يُعلَن هُنا يَومَ يُنشَأ لا " +
+            "بَعدَه**: مُجَلَّدُ خِدمَةٍ غَيرُ خاضِعٍ لِلفاحِص هُوَ " +
+            "بِالضَبط الطَريقُ الَّذي يَنجَرِف بِه حَدٌّ (القاعِدَة ٢)."),
+
         new("libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Queries",
             null,
             "خِدماتُ الاستِعلام لِلصَفَحات — المَوجَة ٥. تُنادى مِن " +

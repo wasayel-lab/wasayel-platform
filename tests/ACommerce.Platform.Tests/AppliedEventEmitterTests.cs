@@ -198,13 +198,22 @@ public class AppliedEventEmitterTests
     ///
     /// <para><b>والاختِبار يَبقى مُثَبِّتاً بِرَقَمِه</b> — لكِن بِالاتِّجاه
     /// المَقلوب: باعِثٌ ثانٍ يَعود يَحمَرّ.</para>
+    ///
+    /// <para><b>والباعِثُ الواحِد انتَقَل — والاختِبارُ يَتبَعُه بِقَرارٍ
+    /// مَرئيّ</b>: كانَ في جِسم <c>MarketplaceTemplateExtensions.cs</c>،
+    /// وصارَ في <c>Services/Subscriptions/SubscriptionRequestService.cs</c>
+    /// يَومَ أُغلِقَ تَسريبُ الباقَة المَجّانِيَّة. والسَبَبُ أَنّ
+    /// المَسارَينِ — المَجّانيّ بِنَقرَة، والمَدفوعَ بَعدَ اعتِماد
+    /// المُشرِف — يَجِب أَن يَلتَقِيا عِندَ <b>حَدَثٍ واحِد</b>؛
+    /// وباعِثانِ في مَوضِعَين كانا سَيَنجَرِفانِ في الحِصَّة أَو
+    /// المُدَّة. <b>والعَدَدُ لَم يَتَغَيَّر: واحِدٌ كَما كان.</b></para>
     /// </summary>
     [Fact]
     public void SubscriptionCreated_now_has_exactly_one_emitter_in_the_template()
     {
         var sites = EmitterSites("SubscriptionCreated").ToArray();
         var only = Assert.Single(sites);
-        Assert.EndsWith("MarketplaceTemplateExtensions.cs", only, StringComparison.Ordinal);
+        Assert.EndsWith("Subscriptions/SubscriptionRequestService.cs", only, StringComparison.Ordinal);
     }
 
     // ─── الأَدَوات ────────────────────────────────────────────────────

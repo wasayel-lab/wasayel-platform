@@ -89,6 +89,22 @@ internal static class PinnedRoutes
         "/admin/tenants/{slug}/users/{userId:guid}/revoke-admin",
         "/admin/tenants/{slug}/roles/save",
         "/admin/tenants/{slug}/roles/definitions/{roleSlug}/decide",
+
+        // ─── إغلاقُ تَسريب الباقَة: سَطرٌ يُضاف بِقَرارٍ مَرئيّ ────────
+        // نُقطَةُ قَرار طَلَب الاشتِراك. وأَخذُها المَخزَنَ **نَفسُ
+        // الشَكل الوَحيد المُمكِن اليَوم** الَّذي أَخَذَته كُلّ نُقاط
+        // `/admin/tenants/{slug}/…` قَبلَها: حَقنُ `IDocumentSession`
+        // في Minimal API يُعطي جَلسَةً بِلا مُستَأجِر، ووَثائِقُنا
+        // كُلُّها `AllDocumentsAreMultiTenanted` — فَتَكتُب في
+        // `*DEFAULT*` صامِتَةً. والرَبطُ بِسلاج المَسار يَقَع على
+        // نِقاط Wolverine.Http وَحدَها.
+        //
+        // **والمَنطِقُ خَرَجَ رَغمَ ذلك**: القَرارُ كُلُّه في
+        // `SubscriptionRequestPolicy` (دالّاتٌ نَقِيَّة)، والأَثَرُ في
+        // `SubscriptionRequestService` (تَأخُذُ الجَلسَةَ ولا
+        // تَملِكُها). فَما بَقِيَ في الجِسم: حارِسٌ، وسَطرُ تَدقيق،
+        // وقِراءَةُ حُكمٍ مِن النَموذَج، وفَتحُ جَلسَة، ورَدّان.
+        "/admin/tenants/{slug}/subscriptions/{reference}/decide",
         "/admin/tenants/{slug}/theme/propose",
         "/admin/tenants/{slug}/theme/{themeSlug}/decide",
         "/admin/tenants/{slug}/theme/apply",

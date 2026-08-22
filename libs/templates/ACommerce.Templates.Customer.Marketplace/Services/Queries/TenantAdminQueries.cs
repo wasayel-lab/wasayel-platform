@@ -180,4 +180,29 @@ public sealed class TenantAdminQueries
             RecentNotifications: await SafeList(() =>
                 s.Query<Notification>().OrderByDescending(n => n.At).Take(8).ToListAsync(ct)));
     }
+
+    /// <summary>
+    /// <para><b>طَلَباتُ الاشتِراك في هذا المَتجَر</b> — المُعَلَّقُ
+    /// أَوَّلاً ثُمَّ الأَحدَثُ طَلَباً، فَما يَنتَظِر قَراراً يَقَع
+    /// في أَعلى الشاشَة.</para>
+    ///
+    /// <para><b>وسُقوطُها قائِمَةٌ فارِغَة لا انفِجار</b>: جَدوَلُ
+    /// الطَلَبات لا يوجَد في مُستَأجِرٍ لَم يُطلَب فيه شَيءٌ بَعد —
+    /// وهذِه حالُ كُلّ مُستَأجِرٍ قائِمٍ يَومَ كِتابَة هذا السَطر.
+    /// نَفسُ حِزام <c>SafeList</c> أَعلاه.</para>
+    /// </summary>
+    public async Task<IReadOnlyList<SubscriptionRequest>> SubscriptionRequestsAsync(
+        string tenantSlug, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(tenantSlug);
+        try
+        {
+            var all = await s.Query<SubscriptionRequest>().ToListAsync(ct);
+            return all
+                .OrderBy(r => r.Status == SubscriptionRequestStatuses.Pending ? 0 : 1)
+                .ThenByDescending(r => r.CreatedAt)
+                .ToList();
+        }
+        catch { return Array.Empty<SubscriptionRequest>(); }
+    }
 }
