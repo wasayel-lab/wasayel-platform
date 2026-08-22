@@ -255,16 +255,31 @@ public class ApiContractTests
 
     [Fact]
     public void A_cancel_that_did_not_cancel_answers_409()
-        => Assert.Equal(409, DealApi.FromCancel(DealAt(DealStage.Booked)).Status);
+        => Assert.Equal(409, DealApi.FromCancel(DealCancelResult.Refused(
+            new DealCancelViolation(DealCancelAuthorization.DealNotActive, "…"),
+            DealAt(DealStage.Booked, DealStatus.Cancelled))).Status);
 
     [Fact]
     public void A_cancel_that_cancelled_answers_200()
         => Assert.Equal(200,
-            DealApi.FromCancel(DealAt(DealStage.Booked, DealStatus.Cancelled)).Status);
+            DealApi.FromCancel(DealCancelResult.Cancelled(
+                DealAt(DealStage.Booked, DealStatus.Cancelled))).Status);
 
     [Fact]
     public void A_cancel_on_a_missing_deal_answers_404()
-        => Assert.Equal(404, DealApi.FromCancel(null).Status);
+        => Assert.Equal(404, DealApi.FromCancel(DealCancelResult.Refused(
+            new DealCancelViolation(DealCancelAuthorization.DealNotFound, "…"))).Status);
+
+    /// <summary><b>وغَيرُ الطَرَف يُطوى إلى ‏404 لا ‏403</b> — لا
+    /// نُفشي وُجودَ مَورِدٍ لا يَملِكُه السائِل. وهذا الفَرعُ لا
+    /// يُبلَغ مِن النُقطَةِ لِأَنَّها تَفحَص <c>IsParty</c> قَبلَه —
+    /// وبَقاؤُه هُوَ ما يَجعَلُ إسقاطَ أَحَدِ الحارِسَينِ غَيرَ
+    /// فاتِحٍ لِلباب.</summary>
+    [Fact]
+    public void A_cancel_by_someone_who_is_not_a_party_answers_404_not_403()
+        => Assert.Equal(404, DealApi.FromCancel(DealCancelResult.Refused(
+            new DealCancelViolation(DealCancelAuthorization.ActorNotParty, "…"),
+            DealAt(DealStage.Booked))).Status);
 
     // ─── العُضوِيَّة ───────────────────────────────────────────────────
 

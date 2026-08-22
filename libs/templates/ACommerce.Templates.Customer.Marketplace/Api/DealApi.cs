@@ -52,16 +52,19 @@ public static class DealApi
     /// <para><b>هَل هذا الفاعِلُ طَرَفٌ في الصَفقَة؟</b> — دالَّةٌ
     /// نَقِيَّة، وهي <b>سَطحُ الـAPI أَشَدُّ مِن سَطحِ الشاشَة
     /// عَمداً</b>: نُقطَةُ الإلغاء في الواجِهَة
-    /// (<c>/{slug}/deals/{id}/cancel</c>) تَكتَفي بِجَلسَةٍ صالِحَة
-    /// ولا تَسأَلُ عَن العُضوِيَّة — و<c>DealsService.CancelAsync</c>
-    /// لا تَفحَصُ الفاعِلَ أَصلاً (بِخِلاف <c>AdvanceAsync</c>).
-    /// فَمِفتاحٌ آلِيٌّ بِلا هذا الشَرط كانَ سَيُلغي صَفقَةَ
-    /// غَيرِه.</para>
+    /// (<c>/{slug}/deals/{id}/cancel</c>) كانَت تَكتَفي بِجَلسَةٍ
+    /// صالِحَة ولا تَسأَلُ عَن العُضوِيَّة. فَمِفتاحٌ آلِيٌّ بِلا هذا
+    /// الشَرط كانَ سَيُلغي صَفقَةَ غَيرِه.</para>
     ///
-    /// <para><b>وهذا لَيسَ مَنطِقاً مُكَرَّراً بَل مَنطِقٌ غائِب</b>:
-    /// لا مَوضِعَ في المُستَودَع يَقول «طَرَفُ الصَفقَة» — وقَولُه
-    /// هُنا مَرَّةً واحِدَةً هُوَ الشَكلُ الصَحيح حَتّى يَنزِلَ إلى
-    /// الخِدمَة في مَوجَةٍ تَملِك تَعديلَها.</para>
+    /// <para><b>‏2026-08-22 — والشَرطُ نَزَلَ إلى الخِدمَة</b>: صارَت
+    /// <c>DealsService.CancelAsync</c> تَطلُب
+    /// <c>DealCanceller</c> في تَوقيعِها، و
+    /// <c>DealCancelAuthorization.Validate</c> تَرُدُّ
+    /// <c>actor_not_party</c>. فَهذِه الدالَّةُ <b>لَم تُحذَف</b> ولا
+    /// صارَت تَكراراً: هي تَحكُم <b>ما يَراهُ</b> السائِل
+    /// (‏<c>GET …/deals/{id}</c> يَرُدّ ‏404 لِغَيرِ الطَرَف — لا
+    /// نُفشي وُجودَ مَورِد)، والخِدمَةُ تَحكُم <b>ما يَفعَلُه</b>.
+    /// حارِسانِ لِسُؤالَين، لا سَطرانِ لِسُؤالٍ واحِد.</para>
     /// </summary>
     public static bool IsParty(Deal d, Guid actorId) =>
         d.InitiatorId == actorId || d.CounterpartyId == actorId;
@@ -94,16 +97,32 @@ public static class DealApi
         });
     }
 
-    /// <summary>‏<c>cancel</c> كامِلاً. <c>CancelAsync</c> تُعيد
-    /// الصَفقَةَ كَما هي إن لَم تَكُن فَعّالَة، فَالتَفريقُ
-    /// بِالحالَةِ بَعدَ النِداء لا بِرِسالَة.</summary>
-    public static ApiOutcome FromCancel(Deal? deal)
+    /// <summary>
+    /// <para>‏<c>cancel</c> كامِلاً. <b>ورَفضُ الخِدمَةِ صارَ
+    /// مَقروءاً</b>: كانَت <c>CancelAsync</c> تُعيد <c>Deal?</c>
+    /// فَيُستَنتَجُ الرَفضُ مِن الحالَةِ بَعدَ النِداء؛ صارَت تُعيد
+    /// <c>DealCancelResult</c> بِرَمزٍ مِن مَعجَمٍ مُغلَق.</para>
+    ///
+    /// <para><b>و<c>actor_not_party</c> يُطوى إلى ‏404 لا ‏403</b> —
+    /// نَفسُ قاعِدَةِ الكُتلَة (أ): لا نُفشي وُجودَ مَورِدٍ لا
+    /// يَملِكُه السائِل. وعَمَلِيّاً لا يُبلَغ هذا الفَرعُ مِن
+    /// الـAPI أَصلاً لِأَنّ النُقطَةَ تَفحَص <c>IsParty</c> قَبلَه —
+    /// وبَقاؤُه هُنا هُوَ ما يَجعَلُ الطَبَقَتَينِ مُستَقِلَّتَين:
+    /// إسقاطُ إحداهُما لا يَفتَح البابَ.</para>
+    /// </summary>
+    public static ApiOutcome FromCancel(DealCancelResult result)
     {
-        if (deal is null) return ApiOutcome.Error(ApiErrorCatalog.NotFound);
-        if (deal.Status != DealStatus.Cancelled)
-            return ApiOutcome.Error(ApiErrorCatalog.DealNotActive,
-                new { status = deal.Status.ToString() });
-        return ApiOutcome.Ok(ToDto(deal));
+        if (result.Ok && result.Deal is not null) return ApiOutcome.Ok(ToDto(result.Deal));
+
+        return result.Violation!.Code switch
+        {
+            DealCancelAuthorization.DealNotFound  => ApiOutcome.Error(ApiErrorCatalog.NotFound),
+            DealCancelAuthorization.ActorNotParty => ApiOutcome.Error(ApiErrorCatalog.NotFound),
+            DealCancelAuthorization.DealNotActive => ApiOutcome.Error(
+                ApiErrorCatalog.DealNotActive,
+                new { status = result.Deal?.Status.ToString() }),
+            _ => ApiOutcome.Error(ApiErrorCatalog.ValidationFailed),
+        };
     }
 
     /// <summary>سَبَبُ الإلغاء مِن جِسمِ الطَلَب — <c>null</c> يَعني

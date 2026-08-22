@@ -45,7 +45,12 @@ public class EndpointBodyBleedTests
 
     private static readonly Ceiling[] PinnedCeilings =
     {
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2418),
+        // ‏2418 ← 2420 يَوم ‏2026-08-22: نُقطَتا الإلغاء صارَتا
+        // **تُصَرِّحانِ بِسُلطَتِهِما** (‏`DealCanceller(..., IsStoreAdmin: …)`)
+        // وإحداهُما تَقرَأُ الرَفض. سَطرانِ لا أَكثَر، والمُقابِلُ إغلاقُ
+        // ثَغرَةٍ كانَ أَيُّ مُستَخدِمٍ يُلغي بِها صَفقَةَ غَيرِه ويَستَرِدُّ
+        // مالَها (‏§١١٫٦). راجِع `DealCancelAuthorizationTests`.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2420),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -147,8 +152,17 @@ public class EndpointBodyBleedTests
     /// الرَقَمِ لاحِقاً أَصعَب</b>: كُلُّ نُقطَةٍ تُضاف تَحتَ
     /// <c>/api/v1</c> تَقَع في مِلَفٍّ <b>يَستَحيل</b> فيه فَتحُ
     /// جَلسَة — فَسَقفُ نَزيفِها بِنيَوِيٌّ لا أَخلاقيّ.</para>
+    ///
+    /// <para><b>وارتَفَعَ خامِسَةً — سَطرانِ، وهُما حارِسٌ لا
+    /// مَنطِق</b>: ‏2458 ← <b>2460</b> يَوم ‏2026-08-22. أُغلِقَت
+    /// ثَغرَةُ ‏§١١٫٦ (‏`CancelAsync` لا تَفحَصُ الفاعِل، ومَعَ
+    /// الإلغاءِ يَقَع `RefundAsync`) — والقَرارُ كُلُّه نَزَلَ إلى
+    /// دالَّةٍ نَقِيَّة (`DealCancelAuthorization.Validate`)، فَما
+    /// بَقِيَ في الجِسمَين هُوَ <b>التَصريحُ بِالسُلطَة</b> وقِراءَةُ
+    /// الرَفض. وهذا هُوَ الشَكلُ الَّذي يَقصِدُه هذا العَدّاد: يَرتَفِع
+    /// حينَ يُعلَنُ حارِسٌ، لا حينَ يُكتَبُ مَنطِق.</para>
     /// </summary>
-    private const int PinnedTotal = 2458;
+    private const int PinnedTotal = 2460;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

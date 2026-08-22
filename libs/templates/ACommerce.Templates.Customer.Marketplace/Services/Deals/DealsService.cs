@@ -199,13 +199,30 @@ public sealed class DealsService
         return new(true, deal, null);
     }
 
-    public async Task<Deal?> CancelAsync(
-        string tenantSlug, Guid dealId, Guid actorId, string actorName,
+    /// <summary>
+    /// <para><b>الحارِسُ في التَوقيع</b> (القاعِدَة ٦): الوَسيطُ
+    /// <see cref="DealCanceller"/> إلزامِيٌّ ويَحمِل السُلطَة، ولا
+    /// يوجَد حِملٌ زائِدٌ بِـ<c>Guid actorId</c> — فَلا يُمكِن نِداءُ
+    /// الإلغاءِ بِلا تَصريح.</para>
+    ///
+    /// <para><b>وكانَت هذِه الدالَّةُ لا تَفحَصُ الفاعِلَ إطلاقاً</b>
+    /// (‏§١١٫٦): أَيُّ مُستَخدِمٍ في المَتجَر كانَ يُلغي صَفقَةَ أَيّ
+    /// أَحَد — <b>ومَعَ الإلغاءِ يَقَع <c>RefundAsync</c></b>. القَرارُ
+    /// كُلُّه في <see cref="DealCancelAuthorization.Validate"/> النَقِيَّة،
+    /// والجِسمُ يُطَبِّقُه ولا يَحمِلُه.</para>
+    /// </summary>
+    public async Task<DealCancelResult> CancelAsync(
+        string tenantSlug, Guid dealId, DealCanceller by,
         string reason, CancellationToken ct = default)
     {
+        var (actorId, actorName) = (by.ActorId, by.ActorName);
         await using var s = _store.LightweightSession(tenantSlug);
-        var deal = await s.LoadAsync<Deal>(dealId, ct);
-        if (deal is null || deal.Status != DealStatus.Active) return deal;
+        var loaded = await s.LoadAsync<Deal>(dealId, ct);
+
+        var violation = DealCancelAuthorization.Validate(loaded, by);
+        if (violation is not null) return DealCancelResult.Refused(violation, loaded);
+        // ‏`Validate` تَرُدّ `deal_not_found` عِندَ العَدَم، فَما بَعدَها غَيرُ عَدَم.
+        var deal = loaded!;
 
         // إن كانَ في الصَّفقَة مَعامَلَة دَفع (Refs["payment_id"] مَوضوع
         // عِندَ /checkout/submit)، أَرجِع المَبلَغ كامِلاً قَبل تَعليم
@@ -237,7 +254,7 @@ public sealed class DealsService
             actorId, actorName, reason, DateTime.UtcNow));
         s.Store(deal);
         await s.SaveChangesAsync(ct);
-        return deal;
+        return DealCancelResult.Cancelled(deal);
     }
 
     public async Task<Deal?> DisputeAsync(

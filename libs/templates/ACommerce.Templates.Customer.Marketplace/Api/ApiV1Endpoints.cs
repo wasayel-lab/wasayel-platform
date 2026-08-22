@@ -103,8 +103,8 @@ public static class ApiV1Endpoints
                 if (found is null || !DealApi.IsParty(found, p.ActorUserId))
                     return ApiOutcome.Error(ApiErrorCatalog.NotFound);
 
-                return DealApi.FromCancel(
-                    await deals.CancelAsync(p.TenantSlug, id, p.ActorUserId, p.ActorName, reason, http.RequestAborted));
+                return DealApi.FromCancel(await deals.CancelAsync(p.TenantSlug, id,
+                    new DealCanceller(p.ActorUserId, p.ActorName, IsStoreAdmin: false), reason, http.RequestAborted));
             })
         ).RequireApiKey(ApiScopeCatalog.DealsWrite);
 

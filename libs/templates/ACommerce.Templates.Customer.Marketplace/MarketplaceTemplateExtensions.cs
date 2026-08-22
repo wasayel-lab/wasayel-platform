@@ -2877,8 +2877,13 @@ public static class MarketplaceTemplateExtensions
             var (userId, _, _) = parsed.Value;
             var userName = AuthSession.ResolveUserName(req, slug) ?? "مُستَخدِم";
             var reason = req.Form["reason"].ToString().Trim();
-            await deals.CancelAsync(slug, id, userId, userName, string.IsNullOrEmpty(reason) ? "إلغاء" : reason);
-            return Results.Redirect(Link(req, slug, $"deals/{id}"));
+            // ‏§١١٫٦ أُغلِقَت: الجَلسَةُ الصالِحَةُ لَم تَعُد كافِيَةً —
+            // الحارِسُ في تَوقيعِ الخِدمَة، وهذا المَسارُ يُصَرِّح
+            // بِأَنَّه **لَيسَ** مُشرِفَ مَتجَر. مُستَخدِمُ المَتجَر
+            // يُلغي صَفقَتَه هُوَ لا صَفقَةَ غَيرِه.
+            var res = await deals.CancelAsync(slug, id, new Services.Deals.DealCanceller(userId, userName, IsStoreAdmin: false),
+                string.IsNullOrEmpty(reason) ? "إلغاء" : reason);
+            return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}")));
         }).DisableAntiforgery();
 
         // تَقييم الطَّرَف الآخَر بَعد اكتِمال الصَّفقَة.
@@ -2988,8 +2993,11 @@ public static class MarketplaceTemplateExtensions
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
             var reason = req.Form["reason"].ToString().Trim();
             if (string.IsNullOrEmpty(reason)) reason = "إلغاء إداريّ";
-            await deals.CancelAsync(slug, id, auth.UserId!.Value, "مالِك التَّطبيق", reason);
-            await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
+            // ‏`StudioOwnsAsync` أَعلاه أَثبَتَ مِلكِيَّةَ المَتجَر —
+            // فَالسُلطَةُ تُقال هُنا صَراحَةً بَدَلَ أَن تُستَنتَج.
+            var res = await deals.CancelAsync(slug, id,
+                new Services.Deals.DealCanceller(auth.UserId!.Value, "مالِك التَّطبيق", IsStoreAdmin: true), reason);
+            if (res.Ok) await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
                 "deal.cancel", "deal", id.ToString(), note: reason,
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
             return Results.Redirect($"/studio/apps/{slug}/deals/{id}");
