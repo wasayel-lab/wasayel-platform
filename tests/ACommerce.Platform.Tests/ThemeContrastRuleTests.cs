@@ -33,6 +33,14 @@ public class ThemeContrastRuleTests
     [InlineData("#18181b", "#fafafa", 16.974)]
     [InlineData("#6f6f78", "#f4f4f5", 4.526)]
     [InlineData("#71717a", "#f4f4f5", 4.397)]
+    // الزَوجُ الَّذي أَمسَكَتهُ الطَبَقَةُ السادِسَةُ حَيّاً على
+    // ‏/admin/tenants/new — والخَلفِيَّةُ لَيسَت رَمزاً بَل
+    // ‏color-mix(in srgb, var(--ac-primary) 8%, transparent) فَوقَ
+    // ‏color.surface الأَبيَض. ولِذلكَ لَم يَجِدهُ أَيُّ حِسابٍ ساكِنٍ
+    // يَمسَح مَعجَمَ الرُموز أَو الخَلفِيّاتِ الصَلبَة.
+    [InlineData("#6f6f78", "#edf1fc", 4.404)]   // ← ما كانَ: دونَ العَتَبَة
+    [InlineData("#6e6e77", "#edf1fc", 4.469)]   // ← خُطوَةٌ واحِدَة: ما زالَت تَقصُر
+    [InlineData("#6d6d76", "#edf1fc", 4.535)]   // ← خُطوَتان: تَجتاز
     [InlineData("#a1a1aa", "#fafafa", 2.455)]
     [InlineData("#96826a", "#241D16", 4.514)]
     public void TheRatioIsWcagRelativeLuminance(string fg, string bg, double expected)
@@ -198,33 +206,79 @@ public class ThemeContrastRuleTests
         // <b>هذا الاختِبار يُثَبِّت قَراراً مَقيساً، لا يَحرُس سُلوكاً.</b>
         //
         // في الثيم الافتِراضيّ ‏color.textMuted ≡ color.textSoft. وهذا
-        // لَيسَ سَهواً: سَقف AA فَوقَ ‏color.bgAlt ‏#f4f4f5 هُوَ إضاءَة
-        // ‏0.16228، و‏#6f6f78 إضاءَتُه 0.16104 — أَي أَنَّه <b>آخِر</b>
-        // رَماديّ يَجتاز. فَلا مَوضِعَ فَوقَه لِطَبَقَة ثالِثَة أَفتَح.
+        // لَيسَ سَهواً بَل قَرارٌ مَقيس، والقيمَةُ الواحِدَةُ تَتَحَرَّك
+        // مَعاً لا نِصفَين.
         //
-        // وتَغميق الخَلفِيَّة — وهو ما اقتُرِحَ — <b>يُضَيِّق</b> المَدى لا
-        // يُوَسِّعُه: ‏(L_bg+.05)/(L_fg+.05) تَنقُص بِنُقصان L_bg. القِياس:
-        // ‏#71717a على #fafafa = 4.630، وعلى #f7f7f8 = 4.514، وعلى
-        // ‏#f5f5f5 = 4.433 — أَي أَنّ ثَلاث دَرَجات تَكسِر الطَبَقَة.
+        // <b>‏2026-08-22 — والسَقفُ الحاكِمُ تَبَدَّل، فَتَبَدَّلَت
+        // القيمَة.</b> كانَ السَقفُ يُحسَب مِن <c>color.bgAlt</c>
+        // ‏#f4f4f5، وكانَ ‏#6f6f78 «آخِرَ رَماديٍّ يَجتاز» فَوقَه
+        // (‏4.526). ثُمَّ أَمسَكَت الطَبَقَةُ السادِسَةُ <b>حَيّاً</b>
+        // خَلفِيَّةً أَغمَقَ مِن bgAlt لا يَعرِفُها مَعجَمُ الرُموز
+        // أَصلاً: ‏<c>.acm-radio-card:has(input:checked)</c> في
+        // ‏site.css:151 مَطلِيَّةٌ بِـ
+        // <c>color-mix(in srgb, var(--ac-primary) 8%, transparent)</c>،
+        // فَتُرَكَّب فَوقَ الأَبيَضِ إلى ‏#edf1fc — و‏#6f6f78 عَلَيها
+        // ‏<b>4.404</b>. ولا حِسابٌ ساكِنٌ يَبلُغُها: هي ناتِجُ مَزجٍ
+        // لا رَمزٌ في مِلَفّ.
         //
-        // والخِيار الوَحيد لِثَلاث طَبَقات مُتَمايِزَة هُوَ تَغميق
-        // <b>الوُسطى</b> إلى ‏#52525b (‏7.032 على bgAlt) — وذلك تَغيير
-        // مَحسوس في ‏105 مَواضِع تَقرَأ ‏--ac-text-muted، فَهُوَ قَرار
-        // المالِك لا قَرارُنا. إن اتُّخِذَ، هذا السَطر هُوَ ما يَسقُط
-        // فَيُذَكِّر بِتَحديث الانحِراف المُعلَن.
+        // فَالسَقفُ يُحسَب هُنا مِن <b>الخَلفِيَّةِ المُرَكَّبَة</b>،
+        // و‏#6d6d76 هُوَ آخِرُ رَماديٍّ يَجتازُها (‏4.535)، وخُطوَةٌ
+        // واحِدَةٌ قَبلَه — ‏#6e6e77 — تَقصُر عِندَ ‏4.469.
+        //
+        // وتَغميق الخَلفِيَّة <b>يُضَيِّق</b> المَدى لا يُوَسِّعُه:
+        // ‏(L_bg+.05)/(L_fg+.05) تَنقُص بِنُقصان L_bg — وهذا بِعَينِه ما
+        // فَعَلَه المَزج.
+        //
+        // والخِيار الوَحيد لِثَلاث طَبَقات مُتَمايِزَة يَبقى تَغميق
+        // <b>الوُسطى</b> إلى ‏#52525b — تَغييرٌ مَحسوسٌ في ‏105 مَواضِع،
+        // فَهُوَ قَرار المالِك لا قَرارُنا.
         var t = ThemeCatalog.Default;
         Assert.Equal(t["color.textMuted"], t["color.textSoft"]);
-        Assert.Equal("#6f6f78", t["color.textMuted"]);
+        Assert.Equal("#6d6d76", t["color.textMuted"]);
 
         Assert.True(ThemeContrastRule.TryParse(t["color.textMuted"], out var muted));
-        Assert.True(ThemeContrastRule.TryParse(t["color.bgAlt"], out var bgAlt));
-        var ceiling = (ThemeContrastRule.Luminance(bgAlt) + 0.05) / 4.5 - 0.05;
+        Assert.True(ThemeContrastRule.TryParse(CheckedRadioCardBackground, out var painted));
+        var ceiling = (ThemeContrastRule.Luminance(painted) + 0.05) / 4.5 - 0.05;
         var actual  = ThemeContrastRule.Luminance(muted);
 
         Assert.True(actual <= ceiling, $"{actual:F5} > {ceiling:F5}");
         // وعَلى بُعد أَقَلّ مِن دَرَجَتَي رَماديّ مِن السَقف — أَي أَنّ
         // «آخِر رَماديّ يَجتاز» دَعوى مَقيسَة لا مَجاز.
         Assert.True(ceiling - actual < 0.005, $"المَسافَة إلى السَقف {ceiling - actual:F5}");
+
+        // وما زالَ يَجتاز السَقفَ القَديمَ أَيضاً — التَغميقُ لا يَكسِر
+        // ما كانَ يَمُرّ.
+        Assert.True(ThemeContrastRule.TryParse(t["color.bgAlt"], out var bgAlt));
+        Assert.True(ThemeContrastRule.Ratio(
+            ThemeContrastRule.Luminance(muted), ThemeContrastRule.Luminance(bgAlt)) >= 4.5);
+    }
+
+    /// <summary>
+    /// <para><b>الخَلفِيَّةُ الَّتي لا يَعرِفُها مَعجَمُ الرُموز</b> —
+    /// ‏<c>color-mix(in srgb, var(--ac-primary) 8%, transparent)</c>
+    /// (‏`site.css:151`) مُرَكَّبَةً فَوقَ <c>color.surface</c>
+    /// الأَبيَض بِـ<c>color.primary</c> الافتِراضيّ ‏#1D4ED8.</para>
+    ///
+    /// <para><b>ولِماذا تُكتَب هُنا حَرفِيَّةً ومَعَها بُرهانُها</b>:
+    /// المَزجُ يَقَع في المُتَصَفِّح لا في مِلَفّ، فَلا قيمَةَ لَه في
+    /// الشَجَرَة. والاختِبارُ التالي يُعيدُ حِسابَها مِن الرَمزَين —
+    /// فَإن تَحَرَّكَ <c>color.primary</c> أَو <c>color.surface</c>
+    /// سَقَطَ التَثبيتُ ولَم يُبتَلَع.</para>
+    /// </summary>
+    private const string CheckedRadioCardBackground = "#edf1fc";
+
+    [Fact]
+    public void ThePaintedRadioCardBackgroundIsDerivedFromTwoTokens_NotInvented()
+    {
+        var t = ThemeCatalog.Default;
+        Assert.True(ThemeContrastRule.TryParse(t["color.primary"], out var p));
+        Assert.True(ThemeContrastRule.TryParse(t["color.surface"], out var s));
+
+        // ‏8 % مِن الأَوَّل فَوقَ الثاني — نَفسُ ما يَفعَلُه color-mix.
+        static int Mix8(double fg, double bg) => (int)Math.Round(fg * 0.08 + bg * 0.92);
+        var derived = $"#{Mix8(p.R, s.R):x2}{Mix8(p.G, s.G):x2}{Mix8(p.B, s.B):x2}";
+
+        Assert.Equal(CheckedRadioCardBackground, derived);
     }
 
     [Fact]
