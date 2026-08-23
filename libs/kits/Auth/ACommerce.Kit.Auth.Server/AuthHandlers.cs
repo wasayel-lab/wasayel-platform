@@ -33,6 +33,16 @@ public static class AuthHandlers
     private const int MaxVerifyPerMinute = 5;
     private const int MaxRequestPerHour = 10;
 
+    /// <summary>حِصَّةُ الإرسال — عَشرُ رَسائِلَ في الساعَة لِكُلّ
+    /// <c>tenant|subject</c>. تُنادى مِن أَبوابٍ خارِجَ هذا المِلَفّ
+    /// (بابُ الاستوديو) كَي تَبقى النافِذَةُ والعَدّادُ **واحِداً**.</summary>
+    public static bool TryConsumeSendQuota(string key)
+        => TryConsume(_requestRl, key, MaxRequestPerHour, TimeSpan.FromHours(1));
+
+    /// <summary>حِصَّةُ التَحَقُّق — خَمسُ مُحاوَلاتٍ في الدَقيقَة.</summary>
+    public static bool TryConsumeVerifyQuota(string key)
+        => TryConsume(_verifyRl, key, MaxVerifyPerMinute, TimeSpan.FromMinutes(1));
+
     /// <summary>هَل تُسمَح المُحاوَلَة؟ يُحَدِّث العَدّاد ذَرّيّاً.</summary>
     private static bool TryConsume(ConcurrentDictionary<string, RateBucket> rl,
         string key, int max, TimeSpan window)
@@ -54,6 +64,57 @@ public static class AuthHandlers
         }
     }
 
+    // ─── آليَّةُ الرَمز — مَوضِعٌ واحِدٌ لِكُلّ بابٍ في المُستَودَع ──────
+    //
+    // **لِماذا استُخرِجَت (‏2026-08-23)**: بابُ جَلسَةِ الاستوديو كانَ
+    // يُقارِن الرَمزَ بِثابِتٍ `"123456"` بِلا شَرطِ بيئَة — أَي أَنَّه
+    // **لَم يَكُن يَمُرّ بِهذا المِلَفّ إطلاقاً**. ولَو نُسِخَت الآليَّةُ
+    // إلَيه لَصارَ لِلتَوليدِ والتَجزئَةِ والمُهلَةِ **تَعريفانِ
+    // يَنجَرِفان** — وهو عَينُ ما تَمنَعُه القاعِدَة ٨. فَالدالّاتُ
+    // الثَلاثُ أَدناه هي ما كانَ مَنثوراً في أَجسامِ المُعالِجات، ونُقِلَ
+    // بِلا تَغييرِ حَرف: نَفسُ المَدى (`100000..999999`)، ونَفسُ التَجزئَة
+    // (`SHA-256` سُداسيّ)، ونَفسُ العَشرِ دَقائِق. والمُعالِجاتُ أَدناه
+    // تُناديها الآنَ، فَالمَوضِعُ واحِدٌ **بِالقياس** لا بِالنِيَّة.
+
+    /// <summary>عُمرُ الرَمز الافتِراضيّ — عَشرُ دَقائِق، كَما كانَ.</summary>
+    public static readonly TimeSpan OtpLifetime = TimeSpan.FromMinutes(10);
+
+    /// <summary>الرَمز: تَلميحُ المُحاكي إن وُجِد، وإلّا **عَشوائيٌّ**
+    /// سُداسيّ. و`DevHintCode` لا يَكونُ غَيرَ `null` إلّا لِقَناةٍ
+    /// مُحاكيَة، وتِلكَ لا تُسَجَّل خارِجَ التَطوير (‏<c>AuthChannelSelection</c>
+    /// وحارِسُ الإقلاع). فَالثابِتُ لا سَبيلَ لَه إلى الإنتاج.</summary>
+    public static string NewCode(string? devHintCode)
+        => devHintCode ?? Random.Shared.Next(100000, 999999).ToString();
+
+    /// <summary>يُسَجِّل مُحاوَلَةً بِرَمزٍ **مُجَزَّأ** ومُهلَة. يُعيد
+    /// مُعَرِّفَ المُحاوَلَة.</summary>
+    public static string IssueAttempt(
+        string tenantSlug, string subject, string code, AuthKind kind,
+        TimeSpan? lifetime = null)
+    {
+        var attemptId = Guid.NewGuid().ToString("N");
+        Attempts[attemptId] = new AuthAttempt(
+            attemptId, tenantSlug, subject, Hash(code),
+            DateTime.UtcNow.Add(lifetime ?? OtpLifetime), kind);
+        return attemptId;
+    }
+
+    /// <summary>يَستَهلِك المُحاوَلَة: مُطابَقَةُ التَجزئَة داخِلَ المُهلَة
+    /// **مَرَّةً واحِدَة**. رَمزٌ خاطِئ أَو مُنتَهٍ أَو غائِبٌ ⇒
+    /// <c>false</c> بِلا تَمييزٍ بَينَها في الرَدّ.</summary>
+    public static bool ConsumeAttempt(
+        string tenantSlug, string subject, string code, AuthKind kind)
+    {
+        var attempt = Attempts.Values
+            .FirstOrDefault(a => a.TenantSlug == tenantSlug
+                              && a.Subject == subject
+                              && a.Kind == kind);
+        if (attempt is null || attempt.ExpiresAt < DateTime.UtcNow) return false;
+        if (Hash(code) != attempt.CodeHash) return false;
+        Attempts.TryRemove(attempt.Id, out _);
+        return true;
+    }
+
     /// <summary>سِرّ تَوقيع الـ token — يُحَمَّل مِن ENV عِندَ بَدء التَّطبيق.
     /// لَو فارِغ نَستَخدِم سِرّ افتِراضيّ (تَطوير فَقَط)؛ في الإنتاج
     /// ضَع <c>ACOMMERCE_AUTH_SECRET</c> بِـ ٣٢+ حَرفاً عَشوائِيّاً.</summary>
@@ -73,14 +134,11 @@ public static class AuthHandlers
         if (!tenantCtx.IsResolved) throw new InvalidOperationException("tenant_required");
         // حِماية مِن سپام الإرسال (تَكلِفَة SMS فِعلِيَّة).
         var rlKey = $"{tenantCtx.Slug}|{cmd.Phone}";
-        if (!TryConsume(_requestRl, rlKey, MaxRequestPerHour, TimeSpan.FromHours(1)))
+        if (!TryConsumeSendQuota(rlKey))
             throw new InvalidOperationException("rate_limited: try again in an hour");
 
-        var code = channel.DevHintCode ?? Random.Shared.Next(100000, 999999).ToString();
-        var attemptId = Guid.NewGuid().ToString("N");
-        Attempts[attemptId] = new AuthAttempt(
-            attemptId, tenantCtx.Slug, cmd.Phone, Hash(code),
-            DateTime.UtcNow.AddMinutes(10), AuthKind.PhoneOtp);
+        var code = NewCode(channel.DevHintCode);
+        var attemptId = IssueAttempt(tenantCtx.Slug, cmd.Phone, code, AuthKind.PhoneOtp);
         await channel.SendOtpAsync(cmd.Phone, code, ct);
         return new OtpRequestResult(
             AttemptId: attemptId,
@@ -97,15 +155,8 @@ public static class AuthHandlers
         if (!tenantCtx.IsResolved) return null;
         // حِماية مِن brute-force OTP (٥/دَقيقَة لِكُلّ phone+tenant).
         var rlKey = $"{tenantCtx.Slug}|{cmd.Phone}";
-        if (!TryConsume(_verifyRl, rlKey, MaxVerifyPerMinute, TimeSpan.FromMinutes(1)))
-            return null;
-        var attempt = Attempts.Values
-            .FirstOrDefault(a => a.TenantSlug == tenantCtx.Slug
-                              && a.Subject == cmd.Phone
-                              && a.Kind == AuthKind.PhoneOtp);
-        if (attempt is null || attempt.ExpiresAt < DateTime.UtcNow) return null;
-        if (Hash(cmd.Code) != attempt.CodeHash) return null;
-        Attempts.TryRemove(attempt.Id, out _);
+        if (!TryConsumeVerifyQuota(rlKey)) return null;
+        if (!ConsumeAttempt(tenantCtx.Slug, cmd.Phone, cmd.Code, AuthKind.PhoneOtp)) return null;
         return await GetOrCreateUserAsync(store, tenantCtx.Slug, cmd.Phone, nationalId: null);
     }
 
@@ -125,14 +176,11 @@ public static class AuthHandlers
             throw new InvalidOperationException("email_invalid");
         // حِماية مِن سپام الإرسال (سُمعَة نِطاق الإرسال تَحتَرِق بِالسپام).
         var rlKey = $"{tenantCtx.Slug}|{email}";
-        if (!TryConsume(_requestRl, rlKey, MaxRequestPerHour, TimeSpan.FromHours(1)))
+        if (!TryConsumeSendQuota(rlKey))
             throw new InvalidOperationException("rate_limited: try again in an hour");
 
-        var code = channel.DevHintCode ?? Random.Shared.Next(100000, 999999).ToString();
-        var attemptId = Guid.NewGuid().ToString("N");
-        Attempts[attemptId] = new AuthAttempt(
-            attemptId, tenantCtx.Slug, email, Hash(code),
-            DateTime.UtcNow.AddMinutes(10), AuthKind.EmailOtp);
+        var code = NewCode(channel.DevHintCode);
+        var attemptId = IssueAttempt(tenantCtx.Slug, email, code, AuthKind.EmailOtp);
         await channel.SendOtpAsync(email, code, ct);
         return new OtpRequestResult(
             AttemptId: attemptId,
@@ -150,15 +198,8 @@ public static class AuthHandlers
         var email = EmailAddress.Normalize(cmd.Email);
         // حِماية مِن brute-force OTP (٥/دَقيقَة لِكُلّ email+tenant).
         var rlKey = $"{tenantCtx.Slug}|{email}";
-        if (!TryConsume(_verifyRl, rlKey, MaxVerifyPerMinute, TimeSpan.FromMinutes(1)))
-            return null;
-        var attempt = Attempts.Values
-            .FirstOrDefault(a => a.TenantSlug == tenantCtx.Slug
-                              && a.Subject == email
-                              && a.Kind == AuthKind.EmailOtp);
-        if (attempt is null || attempt.ExpiresAt < DateTime.UtcNow) return null;
-        if (Hash(cmd.Code) != attempt.CodeHash) return null;
-        Attempts.TryRemove(attempt.Id, out _);
+        if (!TryConsumeVerifyQuota(rlKey)) return null;
+        if (!ConsumeAttempt(tenantCtx.Slug, email, cmd.Code, AuthKind.EmailOtp)) return null;
         return await GetOrCreateUserAsync(store, tenantCtx.Slug,
             phone: "", nationalId: null, email: email);
     }
