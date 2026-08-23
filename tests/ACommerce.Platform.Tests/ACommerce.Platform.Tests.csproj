@@ -20,6 +20,12 @@
          بِنَفس تَركيب HostingExtensions — Marten + Wolverine + Wolverine.Http.
          مَرجِعٌ لِلبُرهان وَحدَه: بِدونِه تُقرَأ الدَعوى ولا تُقاس. -->
     <ProjectReference Include="..\..\libs\core\ACommerce.Platform.Hosting\ACommerce.Platform.Hosting.csproj" />
+    <!-- حارِسُ قَنَوات الدُخول يَقرَأ **عَلامَةً** على القَناة نَفسِها،
+         فَالبُرهانُ يَحتاج نَوعَ المُحاكي ونَوعَ المُزَوِّدِ الفِعليّ:
+         سُقوطُ العَلامَةِ عَن مُحاكٍ يُسكِت الحارِس، وحَملُها على مُزَوِّدٍ
+         فِعليّ يُغلِق الإنتاجَ على المَضبوط. مَرجِعُ اختِبارٍ فَقَط. -->
+    <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.MockEmail\ACommerce.Kit.Auth.Providers.MockEmail.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.Smtp\ACommerce.Kit.Auth.Providers.Smtp.csproj" />
   </ItemGroup>
 
 </Project>

@@ -18,6 +18,12 @@
     <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.MockNafath\ACommerce.Kit.Auth.Providers.MockNafath.csproj" />
     <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.MockEmail\ACommerce.Kit.Auth.Providers.MockEmail.csproj" />
     <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.Smtp\ACommerce.Kit.Auth.Providers.Smtp.csproj" />
+    <!-- مُزَوِّدا الإنتاج — يُسَجَّلان بِالتَهيئَة وَحدَها
+         (Auth__Sms__Provider=twilio، Auth__Nafath__Provider=nafath).
+         والإحالَةُ هُنا لِأَنّ deploy-manifest.sh يَمشي ProjectReference
+         تَعَدِّيّاً: مَشروعٌ غَيرُ مُحالٍ لا يَبلُغ الـSpace أَصلاً. -->
+    <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.Twilio\ACommerce.Kit.Auth.Providers.Twilio.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.Nafath\ACommerce.Kit.Auth.Providers.Nafath.csproj" />
     <ProjectReference Include="..\..\libs\kits\Notifications\ACommerce.Kit.Notifications.Core\ACommerce.Kit.Notifications.Core.csproj" />
     <ProjectReference Include="..\..\libs\kits\Notifications\ACommerce.Kit.Notifications.Server\ACommerce.Kit.Notifications.Server.csproj" />
     <ProjectReference Include="..\..\libs\kits\Realtime\ACommerce.Kit.Realtime.Core\ACommerce.Kit.Realtime.Core.csproj" />

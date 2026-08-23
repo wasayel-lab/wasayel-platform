@@ -1,7 +1,10 @@
+using ACommerce.Kit.Auth;
 using ACommerce.Kit.Auth.Providers.MockEmail;
 using ACommerce.Kit.Auth.Providers.MockNafath;
 using ACommerce.Kit.Auth.Providers.MockSms;
+using ACommerce.Kit.Auth.Providers.Nafath;
 using ACommerce.Kit.Auth.Providers.Smtp;
+using ACommerce.Kit.Auth.Providers.Twilio;
 using ACommerce.Kit.Auth.Server;
 using ACommerce.Kit.Culture;
 using ACommerce.Kit.Delivery;
@@ -54,21 +57,54 @@ builder.Services.AddVersionGate(opts =>
     opts.LatestSuggested = "1.0.0";
 });
 
-// مُزَوِّدو الـ Auth (mock — استَبدِلهم بـ Twilio/Nafath فعليّ في الإنتاج)
-builder.Services.AddMockSmsChannel();
-builder.Services.AddMockNafathChannel(opts => { opts.DisplayCode = "00"; opts.AutoApproveSeconds = 5; });
+// ─── قَنَواتُ الدُخول — بِالتَهيئَة، وفَشَلٌ مُغلَقٌ في الإنتاج ────────
+// كانَ المُحاكيان (‏SMS ونَفاذ) يُسَجَّلان **بِلا شَرطِ بيئَة**، فَرَمزُ
+// الدُخول في الإنتاج ثابِتٌ `123456` لِأَيّ رَقم، ومُحاكي نَفاذ يُوافِق
+// تِلقائِيّاً عَلى أَيّ هُوِيَّة. القَرارُ الآنَ دالَّةٌ مَقيسَةٌ بِجَدوَل
+// (‏`AuthChannelSelection.Decide`)، والسُطورُ أَدناه أَثَرُها لا مَنطِقُها.
+// والغِيابُ خارِجَ التَطوير = لا قَناة = رَفضُ طَلَبِ الرَمز بِرِسالَةٍ
+// مِن القامُوس. أَسماءُ المُتَغَيِّرات في `docs/DEPLOY.md` § قَنَواتُ الدُخول.
+var isDev = builder.Environment.IsDevelopment();
 
-// قَناة البَريد — الاختِيار بِالتَهيئَة عَلى نَمَط Agent:Provider:
-// Auth:Email:Provider = smtp  ← إرسال فِعليّ (كُلّ الإعدادات مِن التَهيئَة،
-// لا سِرّ في الكود؛ يَعمَل مَع أَيّ SMTP بِما فيه Azure Communication Services).
-// أَيّ قيمَة أُخرى أَو غيابُها ← Mock (الافتِراضيّ التَطويريّ: الكود 123456
-// يُطبَع في اللوغ).
-if (string.Equals(builder.Configuration["Auth:Email:Provider"], "smtp",
-        StringComparison.OrdinalIgnoreCase))
-    builder.Services.AddSmtpEmailChannel(opts =>
-        builder.Configuration.GetSection("Auth:Email").Bind(opts));
-else
-    builder.Services.AddMockEmailChannel();
+switch (AuthChannelSelection.Decide(AuthChannelKind.Sms,
+            builder.Configuration[AuthChannelSelection.SmsProviderKey], isDev))
+{
+    case AuthChannelProvider.Twilio:
+        builder.Services.AddTwilioSmsChannel(opts =>
+            builder.Configuration.GetSection("Auth:Twilio").Bind(opts));
+        break;
+    case AuthChannelProvider.Mock:
+        builder.Services.AddMockSmsChannel();
+        break;
+}
+
+switch (AuthChannelSelection.Decide(AuthChannelKind.Nafath,
+            builder.Configuration[AuthChannelSelection.NafathProviderKey], isDev))
+{
+    case AuthChannelProvider.Nafath:
+        builder.Services.AddNafathChannel(opts =>
+            builder.Configuration.GetSection("Auth:Nafath").Bind(opts));
+        break;
+    case AuthChannelProvider.Mock:
+        builder.Services.AddMockNafathChannel(opts =>
+        { opts.DisplayCode = "00"; opts.AutoApproveSeconds = 5; });
+        break;
+}
+
+// قَناة البَريد — نَفسُ مِفتاح `Auth:Email:Provider` القائِم مُنذُ مَوجَةِ
+// البَريد، صارَ يَمُرّ بِالجَدوَل نَفسِه. كُلّ إعدادات SMTP مِن التَهيئَة،
+// لا سِرَّ في الكود؛ يَعمَل مَع أَيّ SMTP بِما فيه Azure Communication Services.
+switch (AuthChannelSelection.Decide(AuthChannelKind.Email,
+            builder.Configuration[AuthChannelSelection.EmailProviderKey], isDev))
+{
+    case AuthChannelProvider.Smtp:
+        builder.Services.AddSmtpEmailChannel(opts =>
+            builder.Configuration.GetSection("Auth:Email").Bind(opts));
+        break;
+    case AuthChannelProvider.Mock:
+        builder.Services.AddMockEmailChannel();
+        break;
+}
 
 // مُزَوِّدو البِنيَة (mock — استَبدِلهم لاحِقاً بِـ Moyasar/Saee/Google Maps).
 builder.Services.AddMockMaps();
@@ -87,6 +123,29 @@ builder.Services.AddLocalFileStorage(opts =>
 builder.Services.AddCustomerMarketplaceTemplate();
 
 var app = builder.Build();
+
+// ─── حارِسُ الإقلاع: لا مُحاكِيَ خارِجَ التَطوير ─────────────────────
+// **الحِراسَةُ في التَركيب لا في الجِسم**: القَرارُ أَعلاه لا يُسَجِّل
+// مُحاكِياً خارِجَ التَطوير — وهذا يُثبِتُ أَنَّه لَم يَحدُث. سَطرُ
+// `AddMockSmsChannel()` مُباشِرٌ يَعود يَوماً سَهواً (وهو ما وَقَعَ فِعلاً)
+// فَيَرمي هُنا قَبلَ أَوَّلِ طَلَب، بَدَلَ أَن يَصمُتَ ويَقبَل `123456`.
+AuthChannelSelection.AssertNoStubsOutsideDevelopment(
+    app.Environment.IsDevelopment(),
+    new[]
+    {
+        Describe(AuthChannelKind.Sms,    app.Services.GetService<IOtpChannel>()),
+        Describe(AuthChannelKind.Email,  app.Services.GetService<IEmailOtpChannel>()),
+        Describe(AuthChannelKind.Nafath, app.Services.GetService<INafathChannel>())
+    }.OfType<RegisteredAuthChannel>());
+
+static RegisteredAuthChannel? Describe(AuthChannelKind kind, object? channel) => channel switch
+{
+    null => null,
+    IOtpChannel c      => new(kind, c.ChannelName, c is IDevelopmentStubChannel || c.DevHintCode is not null),
+    IEmailOtpChannel c => new(kind, c.ChannelName, c is IDevelopmentStubChannel || c.DevHintCode is not null),
+    INafathChannel c   => new(kind, c.ChannelName, c is IDevelopmentStubChannel),
+    _ => null
+};
 
 // AuthSession يَحتاج IHttpContextAccessor لِيَكشِف HTTPS فَيَضَع Secure cookie
 // تِلقائيّاً (آمِن في الإنتاج، يَعمَل على HTTP المَحَلّيّ).

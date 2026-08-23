@@ -36,10 +36,16 @@ else
                    placeholder="123456" />
         </AcField>
 
-        <div class="acs-nafath-state acs-nafath-state--ok mt-2" style="display:flex;gap:6px;align-items:center;">
-            <AcIcon Name="info" Size="16" />
-            <span>@L.Markup("auth.otp.dev_code") <strong>123456</strong></span>
-        </div>
+        @* الرَمزُ كانَ مَكتوباً ثابِتاً هُنا — يُعرَض لِكُلّ زائِر في كُلّ
+           بيئَة. صارَ يُقرَأ مِن القَناة نَفسِها كَما في نَموذَج البَريد:
+           مُزَوِّدٌ فِعليّ ← <c>null</c> ← لا لَوحَة. *@
+        @if (DevHint is not null)
+        {
+            <div class="acs-nafath-state acs-nafath-state--ok mt-2" style="display:flex;gap:6px;align-items:center;">
+                <AcIcon Name="info" Size="16" />
+                <span>@L.Markup("auth.otp.dev_code") <strong>@DevHint</strong></span>
+            </div>
+        }
 
         @if (ErrorMessage is not null) { <AcAlert Variant="danger">@ErrorMessage</AcAlert> }
 
@@ -57,4 +63,7 @@ else
     [Parameter] public string? Phone { get; set; }
     [Parameter] public string? ErrorMessage { get; set; }
     [Parameter] public string? AsRole { get; set; }
+    /// <summary>كود المُزَوِّد الوَهميّ حينَ يَكون فَعّالاً؛ <c>null</c> مَع
+    /// مُزَوِّد فِعليّ (Twilio) فَلا نَعرِض شَيئاً.</summary>
+    [Parameter] public string? DevHint { get; set; }
 }

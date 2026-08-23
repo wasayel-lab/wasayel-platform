@@ -14,7 +14,7 @@ namespace ACommerce.Kit.Auth.Providers.MockEmail;
 /// services.AddSmtpEmailChannel(o =&gt; config.GetSection("Auth:Email").Bind(o));
 /// </code>
 /// </summary>
-public sealed class MockEmailChannel : IEmailOtpChannel
+public sealed class MockEmailChannel : IEmailOtpChannel, IDevelopmentStubChannel
 {
     public const string FixedCode = "123456";
 

@@ -35,10 +35,15 @@ else
             </div>
         </div>
 
-        <div class="acs-nafath-state acs-nafath-state--waiting" style="margin-top:10px;text-align:center;display:flex;gap:6px;align-items:center;justify-content:center;">
-            <AcIcon Name="clock" Size="16" />
-            <span>@L.Markup("auth.nafath.dev_auto") 5 @L.Markup("auth.nafath.seconds")</span>
-        </div>
+        @* «تَأكيدٌ تِلقائيّ بَعدَ ٥ ثَوانٍ» وَصفُ المُحاكي وَحدَه —
+           كانَ يُعرَض في الإنتاج أَيضاً، ويَصِفُ فيه سُلوكاً لا يَقَع. *@
+        @if (DevAuto)
+        {
+            <div class="acs-nafath-state acs-nafath-state--waiting" style="margin-top:10px;text-align:center;display:flex;gap:6px;align-items:center;justify-content:center;">
+                <AcIcon Name="clock" Size="16" />
+                <span>@L.Markup("auth.nafath.dev_auto") 5 @L.Markup("auth.nafath.seconds")</span>
+            </div>
+        }
 
         @if (ErrorMessage is not null) { <AcAlert Variant="danger">@ErrorMessage</AcAlert> }
 
@@ -60,4 +65,7 @@ else
     [Parameter] public string? DisplayCode { get; set; }
     [Parameter] public string? ErrorMessage { get; set; }
     [Parameter] public string? AsRole { get; set; }
+    /// <summary>أَمُحاكي نَفاذ هو المُسَجَّل؟ عِندَها وَحدَها تُعرَض
+    /// لَوحَةُ «تَأكيدٌ تِلقائيّ».</summary>
+    [Parameter] public bool DevAuto { get; set; }
 }

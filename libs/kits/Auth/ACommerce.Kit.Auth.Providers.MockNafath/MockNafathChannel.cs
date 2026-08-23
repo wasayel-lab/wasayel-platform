@@ -17,7 +17,7 @@ public sealed class MockNafathOptions
 /// مُزَوِّد نَفاذ وَهميّ — يُحاكي خِدمَة نَفاذ بتَأكيد تلقائيّ بَعد ثَوانٍ.
 /// الإنتاج: مَكتَبَة أُخرى تَنفِّذ <see cref="INafathChannel"/> فوق API نَفاذ.
 /// </summary>
-public sealed class MockNafathChannel : INafathChannel
+public sealed class MockNafathChannel : INafathChannel, IDevelopmentStubChannel
 {
     private readonly MockNafathOptions _opts;
     private readonly ILogger<MockNafathChannel> _logger;

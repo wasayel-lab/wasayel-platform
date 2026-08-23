@@ -13,7 +13,7 @@ namespace ACommerce.Kit.Auth.Providers.MockSms;
 /// services.AddSingleton&lt;IOtpChannel, UnifonicSmsChannel&gt;();
 /// </code>
 /// </summary>
-public sealed class MockSmsChannel : IOtpChannel
+public sealed class MockSmsChannel : IOtpChannel, IDevelopmentStubChannel
 {
     public const string FixedCode = "123456";
 

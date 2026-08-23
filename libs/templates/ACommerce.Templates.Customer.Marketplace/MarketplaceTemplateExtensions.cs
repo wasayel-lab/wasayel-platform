@@ -11,6 +11,7 @@ using ACommerce.Templates.Customer.Marketplace.Services.TenantConfig;
 using Marten;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
@@ -152,13 +153,23 @@ public static class MarketplaceTemplateExtensions
     public static IEndpointRouteBuilder MapCustomerMarketplaceTemplate(this IEndpointRouteBuilder app)
     {
         // ─── Phone OTP ──────────────────────────────────────────────────
+        // ‏`IOtpChannel?` **اختِياريَّةٌ في التَوقيع** لا مَفحوصَةٌ في الجِسم:
+        // خارِجَ التَطوير بِلا `Auth__Sms__Provider` لا تُسَجَّلُ قَناةٌ
+        // أَصلاً (‏`AuthChannelSelection`)، فَلَو بَقِيَت إلزامِيَّةً
+        // لَارتَدَّ الطَلَبُ **‏500** — عُطلاً يَبدو خَلَلاً لا سِياسَة.
+        // والفَشَلُ المُغلَقُ يُقال بِرِسالَةٍ مِن القامُوس.
         app.MapPost("/{slug}/auth/phone/login",
             async (string slug, HttpRequest req, IDocumentStore store,
-                   ITenantContext tenant, IOtpChannel channel) =>
+                   ITenantContext tenant,
+                   [FromServices] IOtpChannel? channel) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
             var phone = req.Form["phone"].ToString().Trim();
             var asRole = req.Form["as"].ToString().Trim();
+            if (channel is null)
+                return Results.Redirect(Link(req, slug,
+                    $"login?err=phone_unavailable" +
+                    (string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}")));
             if (string.IsNullOrEmpty(phone))
                 return Results.Redirect(Link(req, slug,
                     $"login?err=phone_required" +
@@ -223,12 +234,16 @@ public static class MarketplaceTemplateExtensions
         // والقَناة المَحقونَة فَقَط.
         app.MapPost("/{slug}/auth/email/login",
             async (string slug, HttpRequest req, IDocumentStore store,
-                   ITenantContext tenant, IEmailOtpChannel channel) =>
+                   ITenantContext tenant,
+                   [FromServices] IEmailOtpChannel? channel) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
             var email = EmailAddress.Normalize(req.Form["email"].ToString());
             var asRole = req.Form["as"].ToString().Trim();
             var asParam = string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}";
+            // نَفسُ الفَشَلِ المُغلَقِ — راجِع مَسارَ الهاتِف أَعلاه.
+            if (channel is null)
+                return Results.Redirect(Link(req, slug, $"login?err=email_unavailable{asParam}"));
             if (string.IsNullOrEmpty(email))
                 return Results.Redirect(Link(req, slug, $"login?err=email_required{asParam}"));
             if (!EmailAddress.IsValid(email))
@@ -299,10 +314,14 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Nafath ─────────────────────────────────────────────────────
         app.MapPost("/{slug}/auth/nafath/login",
-            async (string slug, HttpRequest req, ITenantContext tenant, INafathChannel channel) =>
+            async (string slug, HttpRequest req, ITenantContext tenant,
+                   [FromServices] INafathChannel? channel) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
             var nid = req.Form["nid"].ToString().Trim();
+            // نَفسُ الفَشَلِ المُغلَقِ — راجِع مَسارَ الهاتِف أَعلاه.
+            if (channel is null)
+                return Results.Redirect(Link(req, slug, $"login?err=nafath_unavailable"));
             if (string.IsNullOrEmpty(nid) || nid.Length != 10)
                 return Results.Redirect(Link(req, slug, $"login?err=nid_required"));
             var pending = await AuthHandlers.RequestNafathHandler(new RequestNafath(nid), tenant, channel, default);
@@ -313,11 +332,14 @@ public static class MarketplaceTemplateExtensions
 
         app.MapPost("/{slug}/auth/nafath/verify",
             async (string slug, HttpRequest req, HttpResponse res,
-                   ITenantContext tenant, INafathChannel channel, IDocumentStore store) =>
+                   ITenantContext tenant, [FromServices] INafathChannel? channel,
+                   IDocumentStore store) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
             var nid = req.Form["nid"].ToString().Trim();
             var attempt = req.Form["attempt"].ToString();
+            if (channel is null)
+                return Results.Redirect(Link(req, slug, $"login?err=nafath_unavailable"));
             var result = await AuthHandlers.VerifyNafathHandler(
                 new VerifyNafath(attempt, nid), tenant, channel, store, default);
             if (result is null)

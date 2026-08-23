@@ -58,11 +58,17 @@ else
                 // الـ URL يَتَفَوَّق عَلى الـ query: لَو وُجِدَ /r/{role}/login نَتَجاهَل ?as=
                 var effectiveRole = !string.IsNullOrEmpty(Role) ? Role : AsRole;
             }
-            @if (Tenant.AuthChannel == "nafath")
+            @if (!ChannelRegistered)
+            {
+                @* لا قَناةَ مُسَجَّلَة (إنتاجٌ بِلا مُزَوِّدٍ مَضبوط) — لا
+                   يُعرَض نَموذَجٌ يَقود إلى رَفض. نَفسُ رِسالَةِ المَسار. *@
+                <AcAlert Variant="danger">@ChannelUnavailableMessage</AcAlert>
+            }
+            else if (Tenant.AuthChannel == "nafath")
             {
                 <NafathLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
                                  NationalId="@NationalIdValue" AttemptId="@AttemptId" DisplayCode="@DisplayCode"
-                                 AsRole="@effectiveRole" />
+                                 AsRole="@effectiveRole" DevAuto="@NafathDevAuto" />
             }
             else if (Tenant.AuthChannel == "email")
             {
@@ -73,7 +79,8 @@ else
             else
             {
                 <PhoneLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
-                                Phone="@PhoneValue" AsRole="@effectiveRole" />
+                                Phone="@PhoneValue" AsRole="@effectiveRole"
+                                DevHint="@PhoneDevHint" />
             }
 
             <p class="ac-auth-back">
@@ -120,6 +127,36 @@ else
         (Sp.GetService(typeof(ACommerce.Kit.Auth.IEmailOtpChannel))
             as ACommerce.Kit.Auth.IEmailOtpChannel)?.DevHintCode;
 
+    /// <summary>نَفسُ قِراءَة البَريد لِلهاتِف. كانَ الرَمز <b>مَكتوباً
+    /// ثابِتاً</b> في <c>PhoneLoginForm</c> (‏<c>123456</c>) فَيُعرَض
+    /// لِكُلّ زائِرٍ حَتّى مَع مُزَوِّدٍ فِعليّ — وهو نِصفُ الثَغرَة:
+    /// النِصفُ الآخَر أَنَّه كانَ صَحيحاً.</summary>
+    string? PhoneDevHint =>
+        (Sp.GetService(typeof(ACommerce.Kit.Auth.IOtpChannel))
+            as ACommerce.Kit.Auth.IOtpChannel)?.DevHintCode;
+
+    /// <summary>مُحاكي نَفاذ لا يَملِك رَمزاً مَعروضاً — يَملِك
+    /// مُوافَقَةً تِلقائِيَّة. فَالعَلامَةُ هي ما يُقرَأ.</summary>
+    bool NafathDevAuto =>
+        Sp.GetService(typeof(ACommerce.Kit.Auth.INafathChannel))
+            is ACommerce.Kit.Auth.IDevelopmentStubChannel;
+
+    /// <summary>أَمُسَجَّلَةٌ قَناةُ هذا المُستَأجِر؟ خارِجَ التَطوير بِلا
+    /// مُزَوِّدٍ مَضبوط لا تُسَجَّل، فَلا نَموذَجَ يُعرَض.</summary>
+    bool ChannelRegistered => Tenant.AuthChannel switch
+    {
+        "nafath" => Sp.GetService(typeof(ACommerce.Kit.Auth.INafathChannel)) is not null,
+        "email"  => Sp.GetService(typeof(ACommerce.Kit.Auth.IEmailOtpChannel)) is not null,
+        _        => Sp.GetService(typeof(ACommerce.Kit.Auth.IOtpChannel)) is not null
+    };
+
+    string ChannelUnavailableMessage => Tenant.AuthChannel switch
+    {
+        "nafath" => L["auth.login.err_nafath_unavailable"],
+        "email"  => L["auth.login.err_email_unavailable"],
+        _        => L["auth.login.err_phone_unavailable"]
+    };
+
     string? ErrorMessage => Err switch
     {
         "phone_required" => L["auth.login.err_phone_required"],
@@ -129,6 +166,9 @@ else
         "code_invalid"   => L["auth.login.err_code_invalid"],
         "nid_required"   => L["auth.login.err_nid_required"],
         "not_approved"   => L["auth.login.err_not_approved"],
+        "phone_unavailable"  => L["auth.login.err_phone_unavailable"],
+        "email_unavailable"  => L["auth.login.err_email_unavailable"],
+        "nafath_unavailable" => L["auth.login.err_nafath_unavailable"],
         _                => null
     };
 }
