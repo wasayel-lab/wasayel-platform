@@ -55,13 +55,13 @@ public class TenantConfigServiceShapeTests
     /// <summary>مُجَلَّدُ خِدماتٍ يَخضَع لِلشَكل. <c>SurfaceFile</c>
     /// اسمُ المُهايِئ الَّذي يُسمَح لَه وَحدَه بِمَعرِفَة HTTP —
     /// و<c>null</c> تَعني «لا مُهايِئ هُنا، ولا مِلَفَّ يَعرِف
-    /// HTTP». و<c>GlobalFile</c> (لِمُجَلَّدات <see cref="ServiceKind.Read"/>
-    /// وَحدَها) اسمُ المِلَفّ الوَحيد المَأذون لَه بِجَلسَةٍ <b>بِلا
+    /// HTTP». و<c>GlobalFiles</c> (لِمُجَلَّدات <see cref="ServiceKind.Read"/>
+    /// وَحدَها) أَسماءُ المِلَفّات المَأذونِ لَها بِجَلسَةٍ <b>بِلا
     /// سلاج مُستَأجِر</b>، لِأَنّ وَثيقَتَه مُسَجَّلَة
     /// <c>SingleTenanted</c>.</summary>
     private sealed record ShapedDir(
         string Path, string? SurfaceFile, string WhyAr,
-        ServiceKind Kind = ServiceKind.Transactional, string? GlobalFile = null);
+        ServiceKind Kind = ServiceKind.Transactional, string[]? GlobalFiles = null);
 
     private static readonly ShapedDir[] Dirs =
     {
@@ -81,9 +81,11 @@ public class TenantConfigServiceShapeTests
 
         new("libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Subscriptions",
             null,
-            "طَلَبُ الاشتِراك وقَرارُه — سَطحانِ اثنان: نُقطَةُ " +
-            "`plans/{planId}/subscribe` ونُقطَةُ " +
-            "`admin/tenants/{slug}/subscriptions/{reference}/decide`. ولا " +
+            "الاشتِراكُ وباقَةُ المُستَأجِر — سُطوحٌ ثَلاثَة: نُقطَةُ " +
+            "`plans/{planId}/subscribe`، ونُقطَتا " +
+            "`admin/tenants/{slug}/plan/*`. (‏كانَت نُقطَةَ قَرارِ طَلَبِ " +
+            "الاشتِراك حَتّى ‏2026-08-23، وحُذِفَت مَعَ دَورَتِها — " +
+            "‏ADR-003.) ولا " +
             "مُهايِئَ هُنا عَمداً: النُقطَتانِ تَقرَآنِ النَموذَجَ " +
             "وتَعرِضانِ بِأَنفُسِهِما، فَالمُجَلَّدُ **صِفرُ مَعرِفَةٍ " +
             "بِـHTTP**. **والمُجَلَّدُ يُعلَن هُنا يَومَ يُنشَأ لا " +
@@ -99,7 +101,16 @@ public class TenantConfigServiceShapeTests
             "يَقوم مَقامَ «لا تَفتَح جَلسَة»: **كُلّ جَلسَةٍ بِسلاج " +
             "مُستَأجِر** إلّا في سِجِلّ المُستَأجِرين نَفسِه.",
             ServiceKind.Read,
-            GlobalFile: "TenantDirectory.cs"),
+            GlobalFiles: new[]
+            {
+                // سِجِلُّ المُستَأجِرين نَفسُه — لا مُستَأجِرَ يَقَع فيه.
+                "TenantDirectory.cs",
+                // وباقَةُ المُستَأجِرِ في وَسايِل وإعداداتُ المَنَصَّة
+                // (‏2026-08-23، ‏ADR-003): كِلتاهُما `SingleTenanted`،
+                // وجَلسَةٌ بِسلاجٍ عَلَيهِما تُعطي `null` دائِماً —
+                // **وحارِسٌ يَقرَأ `null` يَسمَح دائِماً**.
+                "PlatformBillingQueries.cs",
+            }),
     };
 
     /// <summary>كُلّ مِلَفّات الخِدمَة في كُلّ مُجَلَّد خاضِع، مَع
@@ -190,9 +201,10 @@ public class TenantConfigServiceShapeTests
                 if (arg.Length > 0) { scoped++; continue; }
 
                 global++;
-                if (name != d.GlobalFile)
+                if (d.GlobalFiles is null || !d.GlobalFiles.Contains(name, StringComparer.Ordinal))
                     breaches.Add($"{d.Path}/{name}: «QuerySession()» بِلا سلاج — " +
-                                 $"جَلسَةُ *DEFAULT*. المَأذون وَحدَه: {d.GlobalFile ?? "لا أَحَد"}.");
+                                 $"جَلسَةُ *DEFAULT*. المَأذونون: " +
+                                 $"{(d.GlobalFiles is null ? "لا أَحَد" : string.Join("، ", d.GlobalFiles))}.");
             }
         }
 
@@ -203,13 +215,16 @@ public class TenantConfigServiceShapeTests
 
         foreach (var d in readDirs)
         {
-            if (d.GlobalFile is null) continue;
-            var file = ServiceFiles().FirstOrDefault(f => f.Dir == d && f.Name == d.GlobalFile);
-            Assert.False(file.Code is null,
-                $"استِثناءٌ مُثَبَّت لِمِلَفٍّ لا وُجودَ لَه: {d.Path}/{d.GlobalFile}.");
-            Assert.True(Regex.IsMatch(file.Code, @"QuerySession\(\s*\)"),
-                $"{d.Path}/{d.GlobalFile} لَم يَعُد يَفتَح جَلسَةً عارِيَة — " +
-                "ارفَع الاستِثناء مِن القائِمَة، فَالإذنُ يَموت مَع سَبَبِه.");
+            if (d.GlobalFiles is null) continue;
+            foreach (var globalFile in d.GlobalFiles)
+            {
+                var file = ServiceFiles().FirstOrDefault(f => f.Dir == d && f.Name == globalFile);
+                Assert.False(file.Code is null,
+                    $"استِثناءٌ مُثَبَّت لِمِلَفٍّ لا وُجودَ لَه: {d.Path}/{globalFile}.");
+                Assert.True(Regex.IsMatch(file.Code, @"QuerySession\(\s*\)"),
+                    $"{d.Path}/{globalFile} لَم يَعُد يَفتَح جَلسَةً عارِيَة — " +
+                    "ارفَع الاستِثناء مِن القائِمَة، فَالإذنُ يَموت مَع سَبَبِه.");
+            }
         }
 
         Assert.True(global > 0, "أَداة عَمياء: صِفر «QuerySession()» — إمّا زالَ سِجِلُّ " +

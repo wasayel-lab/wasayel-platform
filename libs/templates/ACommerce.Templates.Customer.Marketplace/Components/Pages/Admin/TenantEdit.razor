@@ -1,6 +1,7 @@
 @page "/admin/tenants/{slug}"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard Guard
+@inject ACommerce.Templates.Customer.Marketplace.Services.PlatformAdminGuard PlatformGuard
 @inject L L
 
 @*
@@ -131,6 +132,26 @@
                 </div>
                 <AcIcon Name="chevron-left" Size="16" />
             </a>
+
+            @* باقَةُ المَتجَرِ في وَسايِل — **والمَدخَلُ هُنا نِصفُ
+               المَيزَة لا زينَتُها** (القاعِدَة ١٢): شاشَةُ الضَبط بِلا
+               رابِطٍ إلَيها كودٌ مَيِّت، والمَتاجِرُ كُلُّها تَبقى بِلا
+               باقَةٍ إلى الأَبَد. والبِطاقَةُ تَظهَر لِمُشرِف المَنَصَّة
+               وَحدَه — الصَفحَةُ خَلفَ بَوّابَتِه. *@
+            @if (IsPlatformAdmin)
+            {
+                <a class="acm-manager-card" href="@($"/admin/tenants/{Slug}/plan")">
+                    <span class="acm-manager-icon"
+                          style="background:@tenant.BrandColor;color:var(--ac-text-on-dark);">
+                        <AcIcon Name="receipt" Size="24" />
+                    </span>
+                    <div>
+                        <strong>@L.Markup("admin.tenant_edit.plan_title")</strong>
+                        <span>@L.Markup("admin.tenant_edit.plan_sub")</span>
+                    </div>
+                    <AcIcon Name="chevron-left" Size="16" />
+                </a>
+            }
         </div>
     }
 </div>
@@ -143,6 +164,11 @@
     Tenant? tenant;
     int kindCount;
 
+    /// <summary>بِطاقَةُ الباقَة لِمُشرِف المَنَصَّة وَحدَه — وصَفحَتُها
+    /// خَلفَ `RequirePlatformAdmin`. فَمُشرِفُ المَتجَر لا يَرى رابِطاً
+    /// يَرُدُّه الحارِس: مَدخَلٌ يَقود إلى رَفضٍ أَسوَأُ مِن غِيابِه.</summary>
+    bool IsPlatformAdmin;
+
     protected override async Task OnParametersSetAsync()
     {
         // البَوّابَة قَبل أَيّ استِعلام: الرَّفض يَعني ألّا تُحَمَّل
@@ -150,6 +176,7 @@
         // التَّصيير. القَرار مَحفوظ لِلطَّلَب، فَنِداء RequireTenantAdmin
         // بَعدَه لا يُكَلِّف استِعلاماً ثانِياً.
         if (!await Guard.CanAdministerAsync(Slug)) return;
+        IsPlatformAdmin = (await PlatformGuard.EvaluateAsync()).Allowed;
         tenant = await Tenants.FindAsync(Slug);
         if (tenant is null) return;
         kindCount = tenant.Categories

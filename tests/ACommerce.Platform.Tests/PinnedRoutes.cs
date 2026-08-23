@@ -98,6 +98,16 @@ internal static class PinnedRoutes
         // تُباع أَصلاً، ولا طَلَبَ يُقَرَّر. والمَسارُ يُرفَع مِن هُنا
         // لِأَنّ هذا المِلَفَّ يُثَبِّت **ما هُوَ قائِم**؛ ومَسارٌ
         // مُثَبَّتٌ لا وُجودَ لَه يُحمِرّ بِحَقّ.
+        // ─── ثَلاثَةٌ تُضاف بِقَرارٍ مَرئيّ (‏2026-08-23، ‏ADR-003) ─────
+        // باقَةُ المُستَأجِر وإعداداتُ المَنَصَّة **وَثيقَتانِ
+        // `SingleTenanted`**، ونُقاطُهُما تَسأَل `PlatformAdminGuard`
+        // أَوَّلاً — وهُوَ يَأخُذ `IDocumentStore` بِتَوقيعِه. فَحَقنُ
+        // `IDocumentSession` كانَ سَيُعطي جَلسَةً ثانِيَةً إلى جِوارِ
+        // جَلسَةِ الحارِس لا بَدَلاً مِنها. نَفسُ شَكلِ كُلّ نُقاط
+        // `/admin/…` قَبلَها بِلا استِثناء.
+        "/admin/tenants/{slug}/plan/save",
+        "/admin/tenants/{slug}/plan/status",
+        "/admin/transfer/save",
         "/admin/tenants/{slug}/theme/propose",
         "/admin/tenants/{slug}/theme/{themeSlug}/decide",
         "/admin/tenants/{slug}/theme/apply",

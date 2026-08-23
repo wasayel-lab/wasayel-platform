@@ -94,6 +94,18 @@ public static class HostingExtensions
                 //   مَتجَر** بِحَوالَةٍ إلى حِساب التاجِر. حُذِفَت الوَثيقَةُ
                 //   والدَورَةُ كامِلَةً: التاجِرُ لا يَستَلِم حَوالات.
                 //   راجِع `docs/ADR-003`.)
+                //
+                // وحَلَّ مَحَلَّها **مُستَوىً أَعلى**: باقَةُ المُستَأجِر
+                // نَفسِه في وَسايِل، وإعداداتُ المَنَصَّة. وكِلتاهُما
+                // <b>غَيرُ مَحصورَةٍ بِإيجار</b> كَوَثيقَة `Tenant`
+                // ولِنَفس السَبَب: تُقرَآنِ **قَبلَ** أَن يُعرَف
+                // مُستَأجِرُ الطَلَب، ومُعَرِّفُ الأولى سلاجُه.
+                opts.Schema.For<ACommerce.Kit.Subscriptions.TenantPlan>()
+                    .SingleTenanted()
+                    .Identity(x => x.Id);
+                opts.Schema.For<ACommerce.Kit.Subscriptions.PlatformSettings>()
+                    .SingleTenanted()
+                    .Identity(x => x.Id);
                 opts.Projections.Snapshot<ACommerce.Kit.Support.Ticket>(SnapshotLifecycle.Inline);
                 opts.Projections.Snapshot<ACommerce.Kit.Offers.Offer>(SnapshotLifecycle.Inline);
                 opts.Schema.For<ACommerce.Kit.Offers.ListingMatch>().Identity(x => x.Id);

@@ -50,6 +50,7 @@ public static class MarketplaceTemplateExtensions
         services.AddScoped<Services.Queries.StudioQueries>();
         services.AddScoped<Services.Queries.PlatformStatsQueries>();
         services.AddScoped<Services.Queries.TenantAdminQueries>();
+        services.AddScoped<Services.Queries.PlatformBillingQueries>();
         // مُزَوِّد الخَلفيّات المُسَمّى: كُلّ وَكيل مَنطِقيّ (Studio / Analysis)
         // يَطلُب مِلَفَّه بِاسمِه، والمُزَوِّد يَحُلّه ويُخَزِّن خَلفيَّة واحِدَة
         // لِكُلّ مِلَفّ مُتَمايِز. تَسجيل واحِد بَدَل الخَلفيَّة المُشتَرَكَة.
@@ -2020,6 +2021,89 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect(ok
                 ? $"/admin/tenants/{slug}/roles?saved=1"
                 : $"/admin/tenants/{slug}/roles?err={Uri.EscapeDataString(msg)}");
+        }).DisableAntiforgery();
+
+        // ─── Admin: باقَةُ المُستَأجِر في وَسايِل ───────────────────────
+        // **الحارِسُ حارِسُ مُشرِفِ المَنَصَّة** — بِخِلاف نُقطَةِ
+        // الاشتِراك المَحذوفَة أَمس (‏ADR-002 §٤ عَلَّلَت `TenantAdminGuard`
+        // بِأَنّ «مَن يَقبِض هُوَ مَن يُقِرّ»). والقابِضُ الآنَ **وَسايِل**،
+        // فَالحارِسُ عادَ إلى جارَتَيه: تَعريفُ الدَور والثيم. ولا
+        // انحِرافَ يُعلَن لِأَنَّه لَم يَعُد.
+        //
+        // ولا دَورَةَ اعتِمادٍ هُنا: المُشرِفُ لا يَطلُب مِن نَفسِه
+        // ويَعتَمِد لِنَفسِه. تَعيينٌ واحِدٌ يَخدِم التَمديدَ أَيضاً —
+        // فِعلانِ لِشَيءٍ واحِدٍ يَنجَرِفانِ في التَحَقُّق.
+        app.MapPost("/admin/tenants/{slug}/plan/save",
+            async (string slug, HttpRequest req, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth,
+                   Services.Audit.AuditWriter audit) =>
+        {
+            var decision = await Services.PlatformAdminGuard.EvaluateAsync(store, auth);
+            if (!decision.Allowed) return Forbidden();
+            await LogTenantConfigChangeAsync(audit, req, slug, auth,
+                Services.Subscriptions.TenantPlanAdminService.SetAuditAction);
+
+            var by = decision.User is { } pu ? $"studio · {pu.Id}" : "platform-admin";
+            var f = ACommerce.Kit.Subscriptions.TenantPlanPolicy.ReadSetting(
+                req.Form["plan"], req.Form["starts"], req.Form["expires"],
+                req.Form["grace"], req.Form["price"], DateTime.UtcNow);
+
+            await using var s = store.LightweightSession();
+            var violations = Services.Subscriptions.TenantPlanAdminService.Set(
+                s, slug, f.PlanId, f.StartsAt, f.ExpiresAt,
+                f.GraceDays, f.Price, by, DateTime.UtcNow);
+            if (violations.Count > 0)
+                return Results.Redirect($"/admin/tenants/{slug}/plan" +
+                    $"?err={Uri.EscapeDataString(violations[0].Code)}");
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
+        }).DisableAntiforgery();
+
+        app.MapPost("/admin/tenants/{slug}/plan/status",
+            async (string slug, HttpRequest req, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth,
+                   Services.Audit.AuditWriter audit) =>
+        {
+            var decision = await Services.PlatformAdminGuard.EvaluateAsync(store, auth);
+            if (!decision.Allowed) return Forbidden();
+            await LogTenantConfigChangeAsync(audit, req, slug, auth,
+                Services.Subscriptions.TenantPlanAdminService.StopAuditAction);
+
+            var by = decision.User is { } pu ? $"studio · {pu.Id}" : "platform-admin";
+            var resume = req.Form["action"].ToString().Trim() == "resume";
+
+            await using var s = store.LightweightSession();
+            var plan = await s.LoadAsync<ACommerce.Kit.Subscriptions.TenantPlan>(slug);
+            var ok = resume
+                ? Services.Subscriptions.TenantPlanAdminService.Resume(s, plan, by, DateTime.UtcNow)
+                : Services.Subscriptions.TenantPlanAdminService.Stop(s, plan, by, DateTime.UtcNow);
+            if (!ok) return Results.Redirect($"/admin/tenants/{slug}/plan?err=tenant_plan_missing");
+            await s.SaveChangesAsync();
+            return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
+        }).DisableAntiforgery();
+
+        // وتَعليماتُ التَحويلِ إلى وَسايِل — نَصٌّ واحِدٌ لِلمَنَصَّة
+        // كُلِّها، يَراه رائِدُ الأَعمال في الاستوديو. حَرفِيَّةٌ في
+        // الكود كانَت سَتَجعَل تَغييرَ آيبانٍ إصداراً.
+        app.MapPost("/admin/transfer/save",
+            async (HttpRequest req, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth,
+                   Services.Audit.AuditWriter audit) =>
+        {
+            var decision = await Services.PlatformAdminGuard.EvaluateAsync(store, auth);
+            if (!decision.Allowed) return Forbidden();
+            await LogTenantConfigChangeAsync(audit, req, "-", auth,
+                Services.Subscriptions.TenantPlanAdminService.SettingsAuditAction);
+
+            var by = decision.User is { } pu ? $"studio · {pu.Id}" : "platform-admin";
+            await using var s = store.LightweightSession();
+            var settings = await s.LoadAsync<ACommerce.Kit.Subscriptions.PlatformSettings>(
+                                ACommerce.Kit.Subscriptions.PlatformSettings.SingletonId)
+                           ?? new ACommerce.Kit.Subscriptions.PlatformSettings();
+            Services.Subscriptions.TenantPlanAdminService.SaveTransferInstructions(
+                s, settings, req.Form["instructions"].ToString(), by, DateTime.UtcNow);
+            await s.SaveChangesAsync();
+            return Results.Redirect("/admin/transfer?saved=1");
         }).DisableAntiforgery();
 
         // ─── Admin: propose / decide a tenant theme ─────────────────────

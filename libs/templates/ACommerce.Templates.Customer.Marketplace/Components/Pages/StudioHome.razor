@@ -103,6 +103,26 @@
             }
             else
             {
+                @* لافِتَةُ الباقَة — لِلمَتاجِرِ الخارِجَةِ عَن السَرَيان
+                   وَحدَها، ومَعَها تَعليماتُ التَحويلِ إلى وَسايِل كَما
+                   كَتَبَها مُشرِفُ المَنَصَّة. وبِلا وَثيقَةِ باقَةٍ لا
+                   تُصَيَّر — فَاستوديو كُلّ رائِدٍ اليَومَ كَما هُوَ
+                   بايتاً. *@
+                @foreach (var t in myApps.Where(a => Renewable(a.Slug)))
+                {
+                    <div class="st-card">
+                        <strong>@t.Name — @PlanStateLabel(t.Slug)</strong>
+                        <p style="margin:6px 0 0;font-size:13px;color:var(--st-muted);">
+                            @L.Markup("studio.plan.hidden_at") @HiddenAtText(t.Slug)
+                        </p>
+                        <p style="margin:8px 0 0;font-size:13px;white-space:pre-wrap;">
+                            @(string.IsNullOrWhiteSpace(transferInstructions)
+                                ? L["studio.plan.transfer_missing"]
+                                : transferInstructions)
+                        </p>
+                    </div>
+                }
+
                 <div class="studio-list">
                     @foreach (var t in myApps)
                     {
@@ -189,6 +209,40 @@
     List<(string Slug, Services.Deals.Deal Deal)> recentDeals = new();
     string? currentTier;
 
+    /// <summary>باقاتُ تَطبيقاتي في وَسايِل، ونَصُّ تَعليمات التَحويل.
+    /// وبِلا وَثيقَةِ باقَةٍ لا يُصَيَّر شَيء — التَكافُؤُ الصِفريّ.</summary>
+    IReadOnlyDictionary<string, ACommerce.Kit.Subscriptions.TenantPlan> myPlans =
+        new Dictionary<string, ACommerce.Kit.Subscriptions.TenantPlan>();
+    string transferInstructions = "";
+
+    [Microsoft.AspNetCore.Components.Inject]
+    Services.Queries.PlatformBillingQueries Billing { get; set; } = default!;
+
+    ACommerce.Kit.Subscriptions.TenantPlanState PlanState(string slug)
+    {
+        myPlans.TryGetValue(slug, out var p);
+        return ACommerce.Kit.Subscriptions.TenantPlanPolicy.Derive(p, DateTime.UtcNow);
+    }
+
+    /// <summary>مَتجَرٌ يَحتاج تَجديداً — في السَماحِ أَو مُخفىً. والسارِي
+    /// لا لافِتَةَ لَه: لافِتَةٌ تَظهَر لِلجَميع لا تُرى.</summary>
+    bool Renewable(string slug)
+        => PlanState(slug) is ACommerce.Kit.Subscriptions.TenantPlanState.Grace
+                           or ACommerce.Kit.Subscriptions.TenantPlanState.Suspended;
+
+    string PlanStateLabel(string slug) => PlanState(slug) switch
+    {
+        ACommerce.Kit.Subscriptions.TenantPlanState.Grace     => L["studio.plan.state_grace"],
+        ACommerce.Kit.Subscriptions.TenantPlanState.Suspended => L["studio.plan.state_suspended"],
+        _                                                     => L["studio.plan.state_active"]
+    };
+
+    string HiddenAtText(string slug)
+    {
+        myPlans.TryGetValue(slug, out var p);
+        return ACommerce.Kit.Subscriptions.TenantPlanPolicy.HiddenAt(p)?.ToString("yyyy-MM-dd") ?? "—";
+    }
+
     [Microsoft.AspNetCore.Components.Inject] NavigationManager Nav { get; set; } = default!;
     [Microsoft.AspNetCore.Components.Inject] Services.Incubator.StudioTierService TierSvc { get; set; } = default!;
     [Microsoft.AspNetCore.Components.Inject] Services.Deals.DealsService Deals { get; set; } = default!;
@@ -206,6 +260,9 @@
         myApps = (await Tenants.ListOwnedByAsync(uid)).ToList();
         var u = await TierSvc.GetUserAsync(uid);
         currentTier = u?.Tier ?? "spark";
+
+        myPlans = await Billing.AllPlansAsync();
+        transferInstructions = (await Billing.SettingsAsync()).TransferInstructions;
 
         // اِجمَع آخِر الـ deals مِن كُلّ تَطبيقات هذا المُستَخدِم.
         foreach (var t in myApps)

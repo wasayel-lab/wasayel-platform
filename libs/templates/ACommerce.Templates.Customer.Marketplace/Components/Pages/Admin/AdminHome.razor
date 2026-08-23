@@ -2,6 +2,7 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject NavigationManager Nav
 @inject L L
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.PlatformBillingQueries Billing
 
 @*
     لَوحَة تَحَكُّم المنصَّة (admin) — لِإدارَة المُستَأجِرين.
@@ -47,6 +48,12 @@
                تَنَقُّلِها هي نَفسِها؛ فَمَن لَم يَحفَظ العُنوانَ لَم
                يَبلُغها مِن إقلاعٍ بارِد. والقاعِدَةُ ١٢: شاشَةٌ لا يَصِلُ
                إلَيها المُستَخدِم غَير مَوجودَة. *@
+            @* تَعليماتُ التَحويلِ إلى وَسايِل — نَصٌّ واحِدٌ يَراه كُلُّ
+               رائِدِ أَعمالٍ في استوديوهِ. ومَدخَلُه هُنا لِأَنّ الشاشَةَ
+               بِلا رابِطٍ إلَيها غَيرُ مَوجودَة (القاعِدَة ١٢). *@
+            <a class="ac-btn ac-btn-ghost" href="/admin/transfer">
+                <AcIcon Name="receipt" Size="18" /> @L.Markup("admin.home.transfer_cta")
+            </a>
             <a class="ac-btn ac-btn-ghost" href="/admin/audit">
                 <AcIcon Name="list" Size="18" /> @L.Markup("admin.nav.audit")@((MarkupString)"\n            ")
             </a>
@@ -91,6 +98,14 @@
                             {
                                 <span><AcIcon Name="user" Size="14" /> @t.Roles.Count @L.Markup("admin.home.roles_unit")</span>
                             }
+                            @* شارَةُ الباقَة — تَظهَر لِلخارِجِ عَن السَرَيان
+                               وَحدَه. فَالمَتاجِرُ القائِمَةُ كُلُّها بِلا
+                               وَثيقَةِ باقَة، وبِطاقاتُها لا تَتَغَيَّر
+                               بايتاً — وهذا هُوَ التَكافُؤُ الصِفريّ. *@
+                            @if (PlanBadge(t.Slug) is { } badge)
+                            {
+                                <span><AcIcon Name="receipt" Size="14" /> @badge</span>
+                            }
                         </div>
                     </a>
                     @* مُبَدِّل الهُوِيَّة البَصَرِيَّة — مَدخَلُه هُنا لا في
@@ -131,10 +146,27 @@
 
 @code {
     IReadOnlyList<Tenant>? tenants;
+    IReadOnlyDictionary<string, ACommerce.Kit.Subscriptions.TenantPlan> plans =
+        new Dictionary<string, ACommerce.Kit.Subscriptions.TenantPlan>();
 
     protected override async Task OnInitializedAsync()
     {
         tenants = await Tenants.ListAsync();
+        plans   = await Billing.AllPlansAsync();
+    }
+
+    /// <summary>نَصُّ الشارَة، أَو `null` لِمَن لا شَأنَ لَه: بِلا
+    /// باقَةٍ أَو سارٍ. **لا شارَةَ «كُلُّ شَيءٍ بِخَير»** — الشارَةُ
+    /// تُوجَد لِتُرى، ولَو ظَهَرَت على الجَميع لَم تُرَ.</summary>
+    string? PlanBadge(string slug)
+    {
+        plans.TryGetValue(slug, out var plan);
+        return ACommerce.Kit.Subscriptions.TenantPlanPolicy.Derive(plan, DateTime.UtcNow) switch
+        {
+            ACommerce.Kit.Subscriptions.TenantPlanState.Grace     => L["admin.home.plan_grace"],
+            ACommerce.Kit.Subscriptions.TenantPlanState.Suspended => L["admin.home.plan_suspended"],
+            _ => null
+        };
     }
 
     static string ChannelIcon(string channel) => channel switch

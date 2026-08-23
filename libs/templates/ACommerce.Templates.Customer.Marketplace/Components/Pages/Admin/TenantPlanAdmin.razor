@@ -1,0 +1,147 @@
+@page "/admin/tenants/{slug}/plan"
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.PlatformBillingQueries Billing
+@inject L L
+@using ACommerce.Kit.Subscriptions
+
+@*
+    باقَةُ المَتجَرِ في **وَسايِل** — يَضبُطُها مُشرِفُ المَنَصَّة وَحدَه.
+    ولا دَورَةَ اعتِمادٍ هُنا: القابِضُ هُوَ المُقِرّ، فَلا مَعنى لِأَن
+    يَطلُبَ مِن نَفسِه.
+
+    والحالَةُ المَعروضَةُ **مُشتَقَّةٌ مِن الوَقت** لا مَحفوظَة — فَما
+    تَراه الشاشَةُ هُوَ ما يَراه الحارِسُ بِالضَبط، ولا وَظيفَةَ
+    دَورِيَّةَ بَينَهُما تَتَأَخَّر.
+*@
+
+<RequirePlatformAdmin>
+<div class="acs-page acm-admin">
+    @if (tenant is null)
+    {
+        <AcEmptyState IconName="info" Title="@L["admin.tenant.not_found"]" />
+    }
+    else
+    {
+        <div class="acm-admin-head">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/admin/tenants/{Slug}")">
+                    <AcIcon Name="arrow-right" Size="16" />
+                </a>
+                <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("admin.tenant_plan.heading") @tenant.Name</h1>
+            </div>
+        </div>
+
+        @if (Err is not null)   { <AcAlert Variant="danger"  Message="@FormatError(Err)" /> }
+        @if (Saved == "1")      { <AcAlert Variant="success" Message="@L["admin.tenant_plan.saved"]" /> }
+
+        <AcCard>
+            <ChildContent>
+                <h3 style="margin-top:0;">@L.Markup("admin.tenant_plan.state_title")</h3>
+                <p style="margin:0 0 6px;">
+                    <span class="ac-chip ac-chip-sm">@StateLabel</span>
+                </p>
+                @if (plan is null)
+                {
+                    <p style="margin:0;font-size:13px;color:var(--ac-text-muted);">
+                        @L.Markup("admin.tenant_plan.state_none_hint")
+                    </p>
+                }
+                else
+                {
+                    <p style="margin:0;font-size:13px;color:var(--ac-text-muted);">
+                        @L.Markup("admin.tenant_plan.expires_at") @plan.ExpiresAt.ToString("yyyy-MM-dd") ·
+                        @L.Markup("admin.tenant_plan.hidden_at") @HiddenAtText
+                    </p>
+                    <form method="post" action="@($"/admin/tenants/{Slug}/plan/status")" style="margin-top:10px;">
+                        <input type="hidden" name="action" value="@(plan.Status == PlatformPlanStatuses.Stopped ? "resume" : "stop")" />
+                        <AcButton Type="submit" Variant="ghost" Size="sm"
+                                  Text="@(plan.Status == PlatformPlanStatuses.Stopped ? L["admin.tenant_plan.resume"] : L["admin.tenant_plan.stop"])" />
+                    </form>
+                }
+            </ChildContent>
+        </AcCard>
+
+        <form method="post" action="@($"/admin/tenants/{Slug}/plan/save")">
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">@L.Markup("admin.tenant_plan.set_title")</h3>
+
+                    <AcField Label="@L["admin.tenant_plan.field_plan"]" Required="true">
+                        <select name="plan" class="ac-input" required>
+                            @foreach (var d in PlatformPlanCatalog.All)
+                            {
+                                <option value="@d.Slug" selected="@(plan?.PlanId == d.Slug)">@d.LabelAr</option>
+                            }
+                        </select>
+                    </AcField>
+
+                    <AcField Label="@L["admin.tenant_plan.field_starts"]" Required="true">
+                        <input type="date" name="starts" class="ac-input" required
+                               value="@((plan?.StartsAt ?? DateTime.UtcNow).ToString("yyyy-MM-dd"))" />
+                    </AcField>
+
+                    <AcField Label="@L["admin.tenant_plan.field_expires"]" Required="true">
+                        <input type="date" name="expires" class="ac-input" required
+                               value="@(plan?.ExpiresAt.ToString("yyyy-MM-dd") ?? "")" />
+                    </AcField>
+
+                    <AcField Label="@L["admin.tenant_plan.field_grace"]"
+                             Hint="@L["admin.tenant_plan.grace_hint"]">
+                        <input type="number" name="grace" class="ac-input" min="0"
+                               max="@TenantPlanPolicy.MaxGraceDays"
+                               value="@(plan?.GraceDays ?? PlatformPlanCatalog.DefaultGraceDays)" />
+                    </AcField>
+
+                    <AcField Label="@L["admin.tenant_plan.field_price"]"
+                             Hint="@L["admin.tenant_plan.price_hint"]">
+                        <input type="number" name="price" class="ac-input" min="0" step="0.01"
+                               value="@(plan?.Price ?? 0m)" />
+                    </AcField>
+                </ChildContent>
+            </AcCard>
+
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">@L.Markup("admin.tenant_plan.cancel")</a>
+                <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
+                    <AcIcon Name="check" Size="18" /> @L.Markup("admin.tenant_plan.save")
+                </button>
+            </div>
+        </form>
+    }
+</div>
+</RequirePlatformAdmin>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "err")]   public string? Err { get; set; }
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+
+    Tenant? tenant;
+    TenantPlan? plan;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        tenant = await Tenants.FindAsync(Slug);
+        plan   = await Billing.PlanAsync(Slug);
+    }
+
+    string StateLabel => TenantPlanPolicy.Derive(plan, DateTime.UtcNow) switch
+    {
+        TenantPlanState.Active    => L["admin.tenant_plan.state_active"],
+        TenantPlanState.Grace     => L["admin.tenant_plan.state_grace"],
+        TenantPlanState.Suspended => L["admin.tenant_plan.state_suspended"],
+        _                         => L["admin.tenant_plan.state_none"]
+    };
+
+    string HiddenAtText => TenantPlanPolicy.HiddenAt(plan)?.ToString("yyyy-MM-dd") ?? "—";
+
+    string FormatError(string err) => err switch
+    {
+        TenantPlanPolicy.PlanUnknown   => L["admin.tenant_plan.err_plan"],
+        TenantPlanPolicy.PeriodInvalid => L["admin.tenant_plan.err_period"],
+        TenantPlanPolicy.GraceNegative => L["admin.tenant_plan.err_grace"],
+        TenantPlanPolicy.PriceNegative => L["admin.tenant_plan.err_price"],
+        "tenant_plan_missing"          => L["admin.tenant_plan.err_missing"],
+        _ => err
+    };
+}

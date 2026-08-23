@@ -1,0 +1,54 @@
+@page "/admin/transfer"
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.PlatformBillingQueries Billing
+@inject L L
+
+@*
+    تَعليماتُ التَحويلِ إلى **وَسايِل** — نَصٌّ واحِدٌ لِلمَنَصَّة كُلِّها،
+    يَراه رائِدُ الأَعمال في الاستوديو مَعَ حالَةِ باقَتِه.
+
+    ولِماذا نَصٌّ مُحَرَّرٌ لا حَرفِيَّةٌ في الكود: يَحمِل آيباناً
+    يَتَغَيَّر بِلا نَشر — وحَرفِيَّةٌ في الكود تَجعَل تَغييرَ رَقمِ
+    حِسابٍ **إصداراً**.
+*@
+
+<RequirePlatformAdmin>
+<div class="acs-page acm-admin">
+    <div class="acm-admin-head">
+        <div style="display:flex;align-items:center;gap:8px;">
+            <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin">
+                <AcIcon Name="arrow-right" Size="16" />
+            </a>
+            <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("admin.transfer.heading")</h1>
+        </div>
+    </div>
+
+    @if (Saved == "1") { <AcAlert Variant="success" Message="@L["admin.transfer.saved"]" /> }
+
+    <form method="post" action="/admin/transfer/save">
+        <AcCard>
+            <ChildContent>
+                <AcField Label="@L["admin.transfer.field"]" Hint="@L["admin.transfer.hint"]">
+                    <textarea name="instructions" rows="6" maxlength="800"
+                              class="ac-input">@settings.TransferInstructions</textarea>
+                </AcField>
+            </ChildContent>
+        </AcCard>
+
+        <div style="display:flex;gap:8px;margin-top:16px;">
+            <a class="ac-btn ac-btn-ghost" href="/admin">@L.Markup("admin.transfer.cancel")</a>
+            <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
+                <AcIcon Name="check" Size="18" /> @L.Markup("admin.transfer.save")
+            </button>
+        </div>
+    </form>
+</div>
+</RequirePlatformAdmin>
+
+@code {
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+
+    ACommerce.Kit.Subscriptions.PlatformSettings settings = new();
+
+    protected override async Task OnParametersSetAsync()
+        => settings = await Billing.SettingsAsync();
+}
