@@ -84,10 +84,6 @@ else
                 <AcActionCard Label="@L["tenant.manage.link_roles"]"       IconName="user"     Variant="surface" Href="@($"/admin/tenants/{Slug}/roles?from=tenant")" />
                 <AcActionCard Label="@L["tenant.manage.link_users"]"  IconName="user"     Variant="surface" Href="@($"/admin/tenants/{Slug}/users?from=tenant")" />
                 <AcActionCard Label="@L["tenant.manage.link_branding"]"      IconName="settings" Variant="surface" Href="@($"/admin/tenants/{Slug}/branding?from=tenant")" />
-                @* والمَدخَلُ الثاني إلى شاشَة الاعتِماد — لَوحَةُ
-                   المَتجَر داخِلَ المَتجَر. مُشرِفٌ يَدخُل مِن هُنا لا
-                   مِن `/admin` يَجِد الطَلَباتِ في مَكانِها. *@
-                <AcActionCard Label="@L["admin.tenant_edit.subs_title"]"     IconName="receipt"  Variant="surface" Href="@($"/admin/tenants/{Slug}/subscriptions?from=tenant")" />
             </div>
         </ChildContent>
     </AcCard>

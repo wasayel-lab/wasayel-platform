@@ -105,23 +105,11 @@
                 </ChildContent>
             </AcCard>
 
-            @* تَعليماتُ الحَوالَة البَنكِيَّة — نَصُّ المُستَأجِر لا
-               حَرفِيَّةٌ في الكود. يَراه مَن طَلَبَ باقَةً بِسِعر بَعدَ
-               أَن يُفتَحَ طَلَبُه، ومَعَه رَقمُ الطَلَب. وحِسابُ كُلّ
-               مَتجَرٍ يَختَلِف ويَتَغَيَّر بِلا نَشر — فَحَرفِيَّةٌ في
-               الكود كانَت سَتَجعَل تَغييرَ آيبانٍ إصداراً. *@
-            <AcCard>
-                <ChildContent>
-                    <h3 style="margin-top:0;">@L.Markup("admin.tenant_branding.section_bank")</h3>
-                    <AcField Label="@L["admin.tenant_branding.field_bank"]">
-                        <textarea name="bank_transfer" rows="4" maxlength="600"
-                                  class="ac-input">@tenant.BankTransferInstructions</textarea>
-                    </AcField>
-                    <small style="color:var(--ac-text-muted);font-size:11px;">
-                        @L.Markup("admin.tenant_branding.bank_hint")
-                    </small>
-                </ChildContent>
-            </AcCard>
+            @* حُذِفَت بِطاقَةُ «تَعليمات الحَوالَة البَنكِيَّة» يَومَ
+               ‏2026-08-23: التاجِرُ لا يَستَلِم حَوالات (قَرارُ المالِك)،
+               فَالحَقلُ الَّذي يَعرِض آيبانَه لِمُشتَرٍ لَم يَعُد لَه
+               مَعنى. والتَحويلُ صارَ إلى **وَسايِل** ونَصُّ تَعليماتِه
+               يُحَرِّرُه مُشرِفُ المَنَصَّة مِن `/admin`. *@
 
             <div style="display:flex;gap:8px;margin-top:16px;">
                 <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">@L.Markup("admin.tenant_branding.cancel")</a>

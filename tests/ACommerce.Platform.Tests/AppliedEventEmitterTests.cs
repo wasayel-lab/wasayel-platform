@@ -201,19 +201,19 @@ public class AppliedEventEmitterTests
     ///
     /// <para><b>والباعِثُ الواحِد انتَقَل — والاختِبارُ يَتبَعُه بِقَرارٍ
     /// مَرئيّ</b>: كانَ في جِسم <c>MarketplaceTemplateExtensions.cs</c>،
-    /// وصارَ في <c>Services/Subscriptions/SubscriptionRequestService.cs</c>
-    /// يَومَ أُغلِقَ تَسريبُ الباقَة المَجّانِيَّة. والسَبَبُ أَنّ
-    /// المَسارَينِ — المَجّانيّ بِنَقرَة، والمَدفوعَ بَعدَ اعتِماد
-    /// المُشرِف — يَجِب أَن يَلتَقِيا عِندَ <b>حَدَثٍ واحِد</b>؛
-    /// وباعِثانِ في مَوضِعَين كانا سَيَنجَرِفانِ في الحِصَّة أَو
-    /// المُدَّة. <b>والعَدَدُ لَم يَتَغَيَّر: واحِدٌ كَما كان.</b></para>
+    /// ثُمَّ في <c>Services/Subscriptions/SubscriptionRequestService.cs</c>،
+    /// وصارَ في <c>Services/Subscriptions/PlanSubscribeService.cs</c> يَومَ
+    /// ‏2026-08-23. والسَبَبُ أَنّ دَورَةَ «طَلَبِ اشتِراكٍ مُعَلَّقٍ ←
+    /// اعتِماد» حُذِفَت كامِلَةً: قَرارُ المالِك «لا تَسمَح لِلتاجِر
+    /// بِاستِلام حَوالات»، فَلَم يَبقَ مَسارٌ مَدفوعٌ يَلتَقي بِالمَجّانيّ
+    /// أَصلاً. <b>والعَدَدُ لَم يَتَغَيَّر: واحِدٌ كَما كان.</b></para>
     /// </summary>
     [Fact]
     public void SubscriptionCreated_now_has_exactly_one_emitter_in_the_template()
     {
         var sites = EmitterSites("SubscriptionCreated").ToArray();
         var only = Assert.Single(sites);
-        Assert.EndsWith("Subscriptions/SubscriptionRequestService.cs", only, StringComparison.Ordinal);
+        Assert.EndsWith("Subscriptions/PlanSubscribeService.cs", only, StringComparison.Ordinal);
     }
 
     // ─── الأَدَوات ────────────────────────────────────────────────────

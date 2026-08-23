@@ -27,12 +27,7 @@ public sealed record BrandingSaveRequest(
     string TagLine,
     string City,
     string BrandColor,
-    string? AuthChannel,
-    // تَعليماتُ الحَوالَة البَنكِيَّة. و`null` تَعني «لا تُغَيِّر»
-    // بِنَفس عَقد `AuthChannel` حَرفاً، ولِنَفس العِلَّة المَقيسَة:
-    // سَطحُ الاستوديو لا يُدير هذا الحَقل، فَلَو كانَ إلزامِيّاً
-    // لَكانَ حِفظُ الاسمِ مِن الاستوديو يَمحو آيبانَ المَتجَر صامِتاً.
-    string? BankTransferInstructions = null);
+    string? AuthChannel);
 
 /// <summary>
 /// <para><b>حِفظُ الهُوِيَّة البَصَرِيَّة — تَعريفٌ واحِد يُنادِيه
@@ -94,10 +89,6 @@ public static class BrandingSaveService
         // الافتِراضيّ». راجِع شَرح BrandingSaveRequest.
         if (r.AuthChannel is not null)
             t.AuthChannel = AuthChannels.NormalizeOrDefault(r.AuthChannel.Trim());
-
-        // ونَفسُ العَقد لِتَعليمات الحَوالَة — راجِع BrandingSaveRequest.
-        if (r.BankTransferInstructions is not null)
-            t.BankTransferInstructions = r.BankTransferInstructions.Trim();
 
         session.Store(t);
         return TenantConfigResult.Saved;

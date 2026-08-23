@@ -8,50 +8,26 @@
 @inject L L
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantPlanService PlanSvc
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
-@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @using ACommerce.Kit.Subscriptions
 
 <div class="acs-page">
 <h1 class="acm-wizard-title">@L.Markup("plans.list.title")</h1>
 
 @*
-    بِطاقَةُ الطَلَب المُعَلَّق — تُعرَض قَبلَ الباقات لِأَنَّها
-    الجَوابُ عَن «ماذا يَحدُث الآن؟». وفيها **رَقمُ الطَلَب** الَّذي
-    يُطابِقُ بِه المُشرِفُ الحَوالَةَ، و**تَعليماتُ التَحويل** كَما
-    كَتَبَها المَتجَر.
+    **الباقاتُ بِسِعرٍ لا تُعرَض هُنا** ما دامَ المَتجَرُ بِلا مُزَوِّدِ
+    دَفعٍ مَضبوط — وذاكَ حالُ كُلّ مَتجَرٍ اليَوم. القَرارُ حَرفيّاً مِن
+    المالِك (‏2026-08-23): «لا تَسمَح لِلتاجِر بِاستِلام حَوالات»،
+    و«إمّا بَيعٌ بِلا رُسوم أَو تَكامُلُ بَوّابَةِ دَفعٍ خاصَّةٍ بِه
+    لاحِقاً».
 
-    ولِماذا لا يُترَك المُستَخدِمُ بِلا شَيء: الباقَةُ بِسِعر لَم
-    تَعُد تُمنَح بِنَقرَة، فَنَقرَةٌ بِلا أَثَرٍ مَرئيّ تَبدو عُطلاً —
-    وهي أَسوَأُ مِن زِرٍّ لا يوجَد.
+    وما كانَ هُنا قَبلَ اليَوم — بِطاقَةُ طَلَبٍ مُعَلَّقٍ بِرَقمِ مَرجِعٍ
+    وتَعليماتِ حَوالَةٍ إلى حِسابِ التاجِر — حُذِفَ بِكامِلِه: لا يُترَك
+    زِرٌّ يَقول «قَريباً» ولا آلِيَّةٌ مُعَطَّلَةٌ تَنتَظِر مُستَهلِكاً
+    (القاعِدَة ١).
 *@
-@if (pending.Count > 0)
+@if (ErrorMessage is not null)
 {
-    <AcCard>
-        <ChildContent>
-            <h3 style="margin-top:0;">@L.Markup("plans.request.pending_title")</h3>
-            @foreach (var r in pending)
-            {
-                <p style="margin:0 0 4px;">
-                    <strong>@r.PlanName</strong> ·
-                    @r.Price.ToString("N0") @((MarkupString)Money.Unit(style: MoneyUnitStyle.Name)) ·
-                    <span class="ac-chip ac-chip-sm">@StatusLabel(r.Status)</span>
-                </p>
-                <p style="margin:0 0 12px;font-size:13px;color:var(--ac-text-muted);">
-                    @L.Markup("plans.request.reference", r.Id)
-                </p>
-            }
-            <h4 style="margin:12px 0 4px;">@L.Markup("plans.request.transfer_title")</h4>
-            @if (string.IsNullOrWhiteSpace(bankInstructions))
-            {
-                <p style="margin:0;font-size:13px;color:var(--ac-text-muted);">@L.Markup("plans.request.transfer_missing")</p>
-            }
-            else
-            {
-                <p style="margin:0;font-size:13px;white-space:pre-wrap;">@bankInstructions</p>
-            }
-            <p style="margin:12px 0 0;font-size:12px;color:var(--ac-text-muted);">@L.Markup("plans.request.note")</p>
-        </ChildContent>
-    </AcCard>
+    <AcAlert Variant="danger">@ErrorMessage</AcAlert>
 }
 
 @if (plans is null)
@@ -81,19 +57,10 @@ else
                     </ul>
                     @if (Auth.IsAuthenticated)
                     {
-                        @* والزِرُّ يَقول ما يَفعَل: الباقَةُ بِسِعر
-                           **تُطلَب** ولا تُمنَح. الوَعدُ الَّذي لا
-                           يُوفى أَسوَأُ مِن وَعدٍ لا يُقال. *@
                         <form method="post" action="@($"/{Slug}/plans/{p.Id}/subscribe")">
                             <AcButton Type="submit" Variant="primary" Size="sm" Class="ac-btn-block"
-                                      Text="@(SubscriptionRequestPolicy.RequiresApproval(p) ? L["plans.card.request"] : L["plans.card.subscribe"])" />
+                                      Text="@L["plans.card.subscribe"]" />
                         </form>
-                        @if (SubscriptionRequestPolicy.RequiresApproval(p))
-                        {
-                            <small style="display:block;margin-top:6px;color:var(--ac-text-muted);font-size:11px;">
-                                @L.Markup("plans.card.price_note")
-                            </small>
-                        }
                     }
                     else
                     {
@@ -111,19 +78,17 @@ else
 @code {
     [Parameter] public string Slug { get; set; } = "";
     [Parameter] public string? Role { get; set; }
+    [SupplyParameterFromQuery] public string? Err { get; set; }
     IReadOnlyList<ACommerce.Kit.Subscriptions.Plan>? plans;
 
-    /// <summary>طَلَباتي المُعَلَّقَة في هذا المَتجَر — قِراءَةٌ بَحتَة.
-    /// وفارِغَةٌ لِكُلّ مَن لَم يَطلُب شَيئاً، أَي لِكُلّ زائِرٍ
-    /// اليَوم.</summary>
-    IReadOnlyList<SubscriptionRequest> pending = Array.Empty<SubscriptionRequest>();
-    string bankInstructions = "";
-
-    string StatusLabel(string s) => s switch
+    /// <summary>رَمزُ الخَرق مِن <c>PlanPurchasePolicy</c> يَصير نَصّاً
+    /// مِن القامُوس. ولا يُبلَغ بِنَقرَةٍ عادِيَّةً — الباقَةُ المَدفوعَةُ
+    /// لا تُعرَض أَصلاً — لكِنّ طَلَباً مُباشِراً يُرَدّ بِرِسالَةٍ
+    /// مَقروءَة لا بِصَمت.</summary>
+    string? ErrorMessage => Err switch
     {
-        SubscriptionRequestStatuses.Approved => L["plans.request.status_approved"],
-        SubscriptionRequestStatuses.Rejected => L["plans.request.status_rejected"],
-        _                                    => L["plans.request.status_pending"]
+        PlanPurchasePolicy.PaidUnavailable => L["plans.list.err_paid_unavailable"],
+        _ => null
     };
 
     // المَوضِع الحَيّ لِتَعريفات الباقات. والتَكافُؤ صِفريّ: مُستَأجِر
@@ -131,12 +96,8 @@ else
     // المَرجِع — أَي هذه الصَفحَة بِعَينِها قَبل المَوجَة.
     protected override async Task OnParametersSetAsync()
     {
-        plans = await PlanSvc.VisiblePlansAsync(Slug);
-
-        if (!Auth.IsAuthenticated || Auth.UserId is null) return;
-        pending = (await Accounts.SubscriptionRequestsAsync(Slug, Auth.UserId.Value))
-            .Where(r => r.Status == SubscriptionRequestStatuses.Pending).ToList();
-        if (pending.Count > 0)
-            bankInstructions = (await Tenants.FindAsync(Slug))?.BankTransferInstructions ?? "";
+        var all = await PlanSvc.VisiblePlansAsync(Slug);
+        var tenant = await Tenants.FindAsync(Slug);
+        plans = PlanPurchasePolicy.Visible(all, tenant?.PaymentProviderConfigured ?? false);
     }
 }

@@ -74,33 +74,6 @@
             </AcCard>
         }
 
-        @* طَلَباتُ الاشتِراك — حالَةُ كُلّ طَلَبٍ ومَرجِعُه.
-           والمَدخَلُ إلى صَفحَة الباقات مَوجودٌ أَصلاً في شَبَكَة
-           الإجراءات أَدناه؛ وهذِه البِطاقَةُ تُجيب قَبلَ أَن يُسأَل:
-           «حَوَّلتُ المَبلَغَ، فَأَينَ باقَتي؟». وبِلا طَلَبٍ واحِد
-           لا تُصَيَّر — فَصَفحَةُ كُلّ مُستَخدِمٍ اليَومَ كَما هي. *@
-        @if (subscriptionRequests.Count > 0)
-        {
-            <AcCard>
-                <ChildContent>
-                    <h3 style="margin-top:0;">@L.Markup("me.subscription.requests_title")</h3>
-                    @foreach (var r in subscriptionRequests)
-                    {
-                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                            <span style="flex:1;">
-                                <strong>@r.PlanName</strong>
-                                <span style="display:block;color:var(--ac-text-muted);font-size:12px;">
-                                    @L.Markup("plans.request.reference", r.Id) ·
-                                    @L.Markup("me.subscription.requested_at") @r.CreatedAt.ToString("yyyy-MM-dd")
-                                </span>
-                            </span>
-                            <span class="ac-chip ac-chip-sm">@RequestStatusLabel(r.Status)</span>
-                        </div>
-                    }
-                </ChildContent>
-            </AcCard>
-        }
-
         <div class="acm-home-grid acm-stats-grid" style="margin-top:12px;">
             <a class="acm-stat-tile" href="@AuthSession.LinkFor(Slug, Role, $"favorites")">
                 <strong>@favoritesCount</strong>
@@ -168,18 +141,6 @@
     List<ACommerce.Kit.Roles.Role> tenantRoles = new();
     bool canManage;
 
-    /// <summary>طَلَباتُ الاشتِراك بِكُلّ حالاتِها — المَرفوضُ يُعرَض
-    /// أَيضاً، فَصاحِبُ الطَلَب يَستَحِقّ أَن يَعرِفَ أَنَّه رُفِض بَدَلَ
-    /// أَن يَنتَظِر.</summary>
-    IReadOnlyList<ACommerce.Kit.Subscriptions.SubscriptionRequest> subscriptionRequests
-        = Array.Empty<ACommerce.Kit.Subscriptions.SubscriptionRequest>();
-
-    string RequestStatusLabel(string s) => s switch
-    {
-        ACommerce.Kit.Subscriptions.SubscriptionRequestStatuses.Approved => L["plans.request.status_approved"],
-        ACommerce.Kit.Subscriptions.SubscriptionRequestStatuses.Rejected => L["plans.request.status_rejected"],
-        _                                                               => L["plans.request.status_pending"]
-    };
 
     protected override async Task OnParametersSetAsync()
     {
@@ -195,7 +156,6 @@
         favoritesCount       = summary.Favorites;
         conversationsCount   = summary.Conversations;
         notificationsCount   = summary.UnreadNotifications;
-        subscriptionRequests = await Accounts.SubscriptionRequestsAsync(Slug, Auth.UserId.Value);
 
         if (tenantRoles.Count > 0)
         {

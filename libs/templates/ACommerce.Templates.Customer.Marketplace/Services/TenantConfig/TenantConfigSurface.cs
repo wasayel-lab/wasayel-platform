@@ -36,13 +36,7 @@ public static class TenantConfigSurface
             req.Form["tagline"].ToString(),
             req.Form["city"].ToString(),
             req.Form["color"].ToString(),
-            req.Form.ContainsKey("channel") ? req.Form["channel"].ToString() : null,
-            // غِيابُ المِفتاح = «لا تُغَيِّر»؛ ووُجودُه فارِغاً = «امحُ».
-            // نَفسُ تَمييز `channel` حَرفاً — والسَطحُ الَّذي لا يَعرِض
-            // الحَقلَ لا يُرسِلُه، فَلا يَمحوه.
-            req.Form.ContainsKey("bank_transfer")
-                ? req.Form["bank_transfer"].ToString()
-                : null);
+            req.Form.ContainsKey("channel") ? req.Form["channel"].ToString() : null);
 
     public static CategoriesSaveRequest ReadCategories(HttpRequest req) =>
         new(req.Form["categories"].ToString());
