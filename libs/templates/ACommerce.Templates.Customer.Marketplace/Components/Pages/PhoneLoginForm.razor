@@ -28,12 +28,17 @@ else
         }
         <p class="acs-nafath-instruction">@L.Markup("auth.otp.code_sent_to") <strong>@Phone</strong></p>
 
+        @* الـplaceholder نَمَطٌ مُحايِد لا رَمزٌ صالِح: كانَ `123456` —
+           وهُوَ بِعَينِه رَمزُ المُزَوِّد الوَهميّ — فَيَقرَؤُه الزائِرُ
+           اقتِراحاً لا شَكلاً، ويَبقى مَعروضاً حَتّى مَعَ مُزَوِّدٍ
+           فِعليّ. لَوحَةُ رَمزِ التَطوير أَدناه (`DevHint`) هي المَوضِعُ
+           الَّذي يُقالُ فيه الرَمزُ الحَقيقيّ، وهي مَشروطَةٌ بِالقَناة. *@
         <AcField Label="@L["auth.otp.label_code"]" Required="true">
             <input type="text" name="code" required minlength="4" maxlength="6"
                    pattern="[0-9]{4,6}" autofocus
                    class="ac-input" style="direction:ltr;font-size:18px;
                           letter-spacing:.4em;text-align:center;"
-                   placeholder="123456" />
+                   placeholder="000000" />
         </AcField>
 
         @* الرَمزُ كانَ مَكتوباً ثابِتاً هُنا — يُعرَض لِكُلّ زائِر في كُلّ
