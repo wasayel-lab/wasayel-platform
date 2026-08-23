@@ -5,6 +5,7 @@
 @inject AuthSession Auth
 @inject L L
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.ShellQueries Shell
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.PlatformBillingQueries Billing
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
 
@@ -27,7 +28,26 @@
     var (topItems, bottomItems) = BuildNav(slug, activeRoleSlug, urlRole);
 }
 
-@if (Tenant.IsResolved)
+@if (Tenant.IsResolved && storeSuspended)
+{
+    @* ─── المَتجَرُ مُخفىً ────────────────────────────────────────────
+       انقَضَت باقَتُه ومُهلَتُها. **ولا يُحذَف شَيء** — البَياناتُ
+       كُلُّها في مَكانِها، والصَفحَةُ تَعود بِمُجَرَّد التَجديد.
+
+       ومَوضِعُ الفَحص هُنا لِأَنّ هذا هُوَ **الشِلُّ الواحِد** الَّذي
+       تَمُرّ بِه كُلُّ صَفَحات المَتجَر — فَحصٌ واحِدٌ لا فَحصٌ في كُلّ
+       صَفحَة يُنسى في الرابِعَة. وصَفَحاتُ `/admin` و`/studio` لا
+       يُصيبُها: مَساراتُها مَحجوزَةٌ فَـ`Tenant.IsResolved` كاذِبَةٌ
+       فيها، ومُشرِفُ المَنَصَّةِ يَبلُغ لَوحَتَه ويُجَدِّد. *@
+    <div class="acs-page">
+        <main>
+            <AcEmptyState IconName="info"
+                          Title="@(L["store.locked.title"])"
+                          Message="@(L["store.locked.body"])" />
+        </main>
+    </div>
+}
+else if (Tenant.IsResolved)
 {
     @* nav fixed-positioned: خارِج .acs-page حَتّى لا تُفَسَّر كَ overflow في فُحوص الـ runtime. *@
     @if (!chromeHidden)
@@ -122,6 +142,13 @@ else
     ACommerce.Kit.Theme.EffectiveTheme theme = ACommerce.Kit.Theme.ThemeCatalog.Default;
 
     string? listingPattern;
+
+    /// <summary>أَخَفِيَ هذا المَتجَرُ لِانقِضاء باقَتِه ومُهلَتِها؟
+    /// <b>وقيمَةُ البَدء `false`</b> — فَعَطَبٌ في القِراءَةِ يُبقي
+    /// المَتجَرَ مَعروضاً ولا يُخفيه، ومَتجَرٌ بِلا وَثيقَةِ باقَةٍ لا
+    /// يَتَغَيَّر لَه بايت.</summary>
+    bool storeSuspended;
+
     int unreadMessages;
     int unreadNotifications;
 
@@ -133,6 +160,13 @@ else
             Auth.Load(ctx, Tenant.Slug);
 
             theme = await Themes.EffectiveAsync(Tenant.Slug);
+
+            // باقَةُ المَتجَرِ في وَسايِل — الحالَةُ مُشتَقَّةٌ مِن الوَقت،
+            // فَما يَراه هذا الشِلُّ هُوَ ما يَراه الحارِسُ بِالضَبط ولا
+            // وَظيفَةَ دَورِيَّةَ بَينَهُما تَتَأَخَّر.
+            storeSuspended = !ACommerce.Kit.Subscriptions.TenantPlanPolicy.IsVisible(
+                ACommerce.Kit.Subscriptions.TenantPlanPolicy.Derive(
+                    await Billing.PlanAsync(Tenant.Slug), DateTime.UtcNow));
 
             // اِكتَشِف هَل لِلمَتجَر أَدوار — تَحديد عَرض الـ landing.
             try

@@ -26,13 +26,19 @@ public class CapabilityCatalogTests
     /// تَعليق يَشرَح سَحبَه. المَعجَم يَصِف ما يُحَدّ
     /// <b>اليَوم</b>.</para>
     ///
+    /// <para><b>والسابِعَةُ — <c>tenant.write</c></b> — دَخَلَت يَومَ
+    /// ‏2026-08-23 (‏ADR-003)، وهي أَوَّلُ قُدرَةٍ <b>على المُستَأجِر لا
+    /// على المُستَخدِم</b>: مَصدَرُ حَدِّها وَثيقَةُ <c>TenantPlan</c>،
+    /// وتُفحَص في تَوقيعِ كُلّ نُقطَةِ كِتابَةٍ في مَتجَر، ولا تُباع
+    /// في شاشَة.</para>
+    ///
     /// <para><b>والسادِسَةُ الَّتي دَخَلَت — <c>api.call</c></b> —
     /// دَخَلَت بِالشَرط نَفسِه مَقلوباً: <b>تُفحَص ولا تُباع</b>.
     /// <c>ApiKeyFilter</c> يَسأَلُها على كُلّ نُقطَةٍ تَحتَ
     /// <c>/api/v1</c>، ولا تُذكَر في شاشَةِ باقاتٍ واحِدَة.</para>
     /// </summary>
     [Fact]
-    public void Exactly_six_capabilities_and_they_are_these()
+    public void Exactly_seven_capabilities_and_they_are_these()
         => Assert.Equal(
             new[]
             {
@@ -42,6 +48,7 @@ public class CapabilityCatalogTests
                 "studio.build",
                 "studio.export",
                 "studio.refine",
+                "tenant.write",
             },
             CapabilityCatalog.Codes);
 
@@ -59,6 +66,7 @@ public class CapabilityCatalogTests
                 CapabilityCatalog.StudioBuild,
                 CapabilityCatalog.StudioExport,
                 CapabilityCatalog.StudioRefine,
+                CapabilityCatalog.TenantWrite,
             },
             CapabilityCatalog.Codes);
     }
@@ -93,7 +101,7 @@ public class CapabilityCatalogTests
     /// رايَةٌ لِأَنّ مَصدَرَها <c>AllowExport</c> ثُنائيٌّ
     /// أَصلاً.</summary>
     [Fact]
-    public void Four_are_quotas_and_exactly_two_are_flags()
+    public void Four_are_quotas_and_exactly_three_are_flags()
     {
         Assert.Equal(
             new[] { "listing.create", "studio.analyze", "studio.build", "studio.refine" },
@@ -101,14 +109,26 @@ public class CapabilityCatalogTests
                 .Select(c => c.Code).ToArray());
 
         Assert.Equal(
-            new[] { "api.call", "studio.export" },
+            new[] { "api.call", "studio.export", "tenant.write" },
             CapabilityCatalog.All.Where(c => c.Kind == CapabilityKinds.Flag)
                 .Select(c => c.Code).ToArray());
 
         Assert.True(CapabilityCatalog.IsQuota("listing.create"));
         Assert.False(CapabilityCatalog.IsQuota("studio.export"));
         Assert.False(CapabilityCatalog.IsQuota("api.call"));
+        Assert.False(CapabilityCatalog.IsQuota("tenant.write"));
         Assert.False(CapabilityCatalog.IsQuota("nope"));
+
+        // ونِطاقٌ ثانٍ دَخَلَ مَعَها (‏ADR-003): سِتٌّ على المُستَخدِم
+        // وواحِدَةٌ على المُستَأجِر. والفَرقُ لَيسَ تَصنيفاً: المُرَشِّحُ
+        // يَشتَرِط جَلسَةً لِلأولى ولا يَشتَرِطُها لِلثانِيَة.
+        Assert.True(CapabilityCatalog.IsTenantScoped("tenant.write"));
+        Assert.False(CapabilityCatalog.IsTenantScoped("listing.create"));
+        Assert.False(CapabilityCatalog.IsTenantScoped("nope"));
+        Assert.Equal(
+            new[] { "tenant.write" },
+            CapabilityCatalog.All.Where(c => c.Scope == CapabilityScopes.Tenant)
+                .Select(c => c.Code).ToArray());
     }
 
     /// <summary>المَعجَم بِلا تَكرار، ومُرَتَّب أَبجَدِيّاً —

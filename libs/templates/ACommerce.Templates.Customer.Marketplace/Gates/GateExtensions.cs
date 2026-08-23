@@ -90,6 +90,32 @@ public static class GateExtensions
     }
 
     /// <summary>
+    /// <para><b>باقَةُ المَتجَرِ سارِيَةٌ</b> — يُعلَن في تَوقيع كُلّ نُقطَةِ
+    /// كِتابَةٍ في مَتجَر. بَعدَ <c>ExpiresAt</c> تُرَدُّ الكِتابَةُ
+    /// وتَبقى القِراءَة، وبَعدَ مُهلَةِ السَماحِ يُخفى المَتجَر.</para>
+    ///
+    /// <para><b>ولا حارِسَ جَديد</b>: هذا <see cref="RequireEntitlement"/>
+    /// بِقُدرَةٍ مِن المَعجَم نَفسِه ومُرَشِّحٍ واحِدٍ لا ثانِيَ لَه
+    /// (القاعِدَة ٨). والاسمُ المُختَصَر لِأَنّ المَسارَ والرَمزَ
+    /// ثابِتانِ لِكُلّ النُقاط — ونُسخَةٌ مِنهُما في ثَلاثينَ مَوضِعاً
+    /// تَنجَرِف.</para>
+    ///
+    /// <para><b>ولا يَشتَرِط <see cref="RequireAuth{TBuilder}"/></b>:
+    /// القُدرَةُ على المُستَأجِر لا على المُستَخدِم، فَتَعمَل على
+    /// النُقاطِ الَّتي تُوَثِّق في أَجسامِها — وهي أَغلَبُ نُقاط
+    /// <c>/{slug}/…</c>.</para>
+    /// </summary>
+    public static TBuilder RequireStoreWritable<TBuilder>(this TBuilder b)
+        where TBuilder : IEndpointConventionBuilder
+        => b.RequireEntitlement(
+            ACommerce.Kit.Subscriptions.CapabilityCatalog.TenantWrite,
+            redirectPath: "", errCode: StoreLockedErrCode);
+
+    /// <summary>رَمزُ الرَدّ الَّذي تَقرَؤُه صَفحَةُ المَتجَر فَتَرسِم
+    /// نَصّاً مِن القامُوس. ثابِتٌ واحِدٌ لا سِلسِلَةٌ مَنثورَة.</summary>
+    public const string StoreLockedErrCode = "store_locked";
+
+    /// <summary>
     /// <para><b>مِفتاحُ API مَطلوب بِنِطاقٍ بِعَينِه</b> — الحارِسُ
     /// الوَحيد تَحتَ <c>/api/v1</c>. يَجمَع الاعتِمادَ والنِطاقَ
     /// واستِحقاقَ <c>api.call</c> في سَطرٍ واحِد، فَلا يُنسى نِصفُه.

@@ -195,6 +195,13 @@ public class EntitlementContractTests
     {
         "Entitlements.cs",
         "SubscriptionEntitlements.cs",
+        // ‏ADR-003: تَنفيذُ الاستِحقاقِ الثاني — مَصدَرُ حَقيقَتِه
+        // وَثيقَةُ باقَةِ المُستَأجِر. مِلَفُّ طَبَقَةٍ كَسابِقِه: يُعَرِّف
+        // الآلِيَّةَ ولا يَستَعمِلُها.
+        "TenantPlanEntitlements.cs",
+        // والمُوَجِّهُ الَّذي يَختارُ بَينَهُما — يَقرَأ `Handles` ولا
+        // يَفحَص قُدرَةً بِنَفسِه.
+        "GateContext.cs",
         "CapabilityCatalog.cs",
         "EntitlementFilter.cs",
         "GateExtensions.cs",

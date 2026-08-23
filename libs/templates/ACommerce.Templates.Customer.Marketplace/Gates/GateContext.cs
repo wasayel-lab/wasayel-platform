@@ -1,5 +1,7 @@
 using ACommerce.Kit.Auth.Server;
+using ACommerce.Kit.Subscriptions;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ACommerce.Templates.Customer.Marketplace.Gates;
 
@@ -49,6 +51,33 @@ public static class GateAccessors
     /// لِطَلَبٍ لَم يَمُرَّ بِـ<c>ApiKeyFilter</c>.</summary>
     public static Services.Api.ApiKeyPrincipal? ApiPrincipal(this HttpContext http)
         => http.Items[GateKeys.ApiPrincipal] as Services.Api.ApiKeyPrincipal;
+
+    /// <summary>
+    /// <para><b>تَنفيذُ الاستِحقاق الَّذي يَخدِم هذِه القُدرَة.</b>
+    /// صارَ التَنفيذُ اثنَين يَومَ ‏2026-08-23: تَيارُ اشتِراكِ
+    /// المُستَخدِم (<c>SubscriptionEntitlements</c>)، ووَثيقَةُ باقَةِ
+    /// المُستَأجِر (<c>TenantPlanEntitlements</c>).</para>
+    ///
+    /// <para><b>ولِماذا مُوَجِّهٌ لا تَنفيذٌ مُرَكَّب</b>:
+    /// <c>GetRequiredService&lt;IEntitlements&gt;()</c> يُعيد <b>آخِرَ
+    /// مُسَجَّل</b> صامِتاً — فَتَسجيلُ الثاني كانَ سَيَكسِر
+    /// <c>api.call</c> بِلا أَن يَحمَرَّ شَيء. والمُوَجِّهُ يَسأَل
+    /// <c>Handles</c>، ويَرمي إن لَم يَخدِمها أَحَد: <b>سوءُ التَركيب
+    /// عَطَبٌ مَسموع</b>، لا سَماحٌ صامِت.</para>
+    ///
+    /// <para>ومُستَهلِكاه اليَومَ اثنان — <c>EntitlementFilter</c> و
+    /// <c>ApiKeyFilter</c> — وهُما كُلُّ مَن يَقرَأ الاستِحقاقَ مِن
+    /// وِعاء الخِدمات.</para>
+    /// </summary>
+    public static IEntitlements Entitlements(this HttpContext http, string capability)
+    {
+        foreach (var e in http.RequestServices.GetServices<IEntitlements>())
+            if (e.Handles.Contains(capability))
+                return e;
+
+        throw new NotSupportedException(
+            $"لا تَنفيذَ استِحقاقٍ يَخدِم «{capability}» — تَركيبٌ ناقِص.");
+    }
 }
 
 /// <summary>إصدار الشُروط الحاليّ. بَدّله لِتُجبِر كُلّ المُستَخدِمين عَلى

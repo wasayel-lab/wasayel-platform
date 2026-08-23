@@ -95,6 +95,45 @@ public class WriteEndpointGuardTests
         // حارِسٌ لا يُرى** — والنُقطَتانِ المَحروستانِ بِه وَحدَه
         // كانَتا ستُعَدّانِ مَكشوفَتَين.
         ".RequireApiKey(",
+
+        // ‏ADR-003: باقَةُ المَتجَرِ سارِيَة. وهُوَ `RequireEntitlement`
+        // بِقُدرَةٍ مِن المَعجَم نَفسِه — يُسَجَّل هُنا بِاسمِه المُختَصَر
+        // لِلسَبَب نَفسِه: **رَمزُ حارِسٍ لا يَعرِفُه الفاحِصُ حارِسٌ لا
+        // يُرى**.
+        ".RequireStoreWritable(",
+    };
+
+    // ─── الحَدُّ الَّذي كَتَبَته ‏ADR-003 ──────────────────────────────
+    /// <summary>
+    /// <para><b>نُقاطُ الكِتابَةِ في مَتجَرٍ الَّتي لا تُفحَص باقَتُه</b> —
+    /// وكُلٌّ بِسَبَبِه. القائِمَةُ <b>ثُنائِيَّةُ الاتِّجاه</b>: مَسارٌ
+    /// جَديدٌ تَحتَ <c>/{slug}/</c> بِلا <c>RequireStoreWritable</c> وهُوَ
+    /// غَيرُ مُثَبَّتٍ يَحمَرّ، ومُثَبَّتٌ صارَ مَحروساً أَو زالَ
+    /// يَحمَرّ.</para>
+    ///
+    /// <para><b>والمِحوَرُ واحِد</b>: هَل هذا <b>مُحتَوىً يُنشَأ في
+    /// المَتجَر</b>؟ الدُخولُ لَيسَ كَذلك (وبِمَنعِه يُمنَع صاحِبُ
+    /// المَتجَرِ نَفسُه مِن رُؤيَةِ لافِتَةِ التَجديد)، وعَلاماتُ
+    /// القِراءَةِ والمُشاهَداتِ أَثَرُ <b>قِراءَة</b> نُقِلَ إلى نُقطَةٍ
+    /// (المَوجَة ٧) — ومَنعُها كانَ يُبقي عَدّاداتٍ حَمراءَ إلى الأَبَد
+    /// في مَتجَرٍ يُقرَأ ولا يُكتَب، وذاكَ عَينُ ما تَسمَح بِه مُهلَةُ
+    /// السَماح.</para>
+    /// </summary>
+    private sealed record UngatedStoreWrite(string Route, string WhyAr);
+
+    private static readonly UngatedStoreWrite[] PinnedUngatedStoreWrites =
+    {
+        new("/{slug}/auth/phone/login",   "الدُخولُ لَيسَ مُحتَوىً — ومَنعُه يَحجُب صاحِبَ المَتجَرِ عَن لافِتَةِ التَجديد."),
+        new("/{slug}/auth/phone/verify",  "نَفسُه — تَأكيدُ الرَمز يُنشِئ الجَلسَةَ ولا يُنشِئ مُحتَوىً في المَتجَر."),
+        new("/{slug}/auth/email/login",   "دُخولٌ بِالبَريد — نَفسُ حُجَّةِ مَسارِ الهاتِف: جَلسَةٌ لا مُحتَوى."),
+        new("/{slug}/auth/email/verify",  "تَأكيدُ رَمزِ البَريد — نَفسُ حُجَّةِ مَسارِ الهاتِف: جَلسَةٌ لا مُحتَوى."),
+        new("/{slug}/auth/nafath/login",  "دُخولٌ بِنَفاذ — نَفسُ حُجَّةِ مَسارِ الهاتِف: جَلسَةٌ لا مُحتَوى."),
+        new("/{slug}/auth/nafath/verify", "تَأكيدُ نَفاذ — نَفسُ حُجَّةِ مَسارِ الهاتِف: جَلسَةٌ لا مُحتَوى."),
+        new("/{slug}/auth/logout",        "خُروجٌ — لا يَلمِس قاعِدَةَ البَيانات أَصلاً، ومَنعُه يَحبِس الداخِلَ في مَتجَرٍ مُغلَق."),
+        new("/{slug}/terms/accept",       "قَبولُ الشُروط شَرطُ **القِراءَة** نَفسِها؛ ومَنعُه يُغلِق المَتجَرَ في مُهلَةِ السَماح."),
+        new("/{slug}/chats/{conversationId:guid}/read",  "عَلامَةُ قِراءَة — أَثَرُ قِراءَةٍ نُقِلَ إلى نُقطَة (المَوجَة ٧)، لا مُحتَوى."),
+        new("/{slug}/notifications/read", "عَلامَةُ قِراءَةِ الإشعارات — أَثَرُ قِراءَةٍ نُقِلَ إلى نُقطَة، لا مُحتَوى."),
+        new("/{slug}/listings/{id:guid}/view", "عَدّادُ مُشاهَدَة — أَثَرُ قِراءَةٍ نُقِلَ إلى نُقطَة، لا مُحتَوى."),
     };
 
     /// <summary>حارِسٌ في الجِسم — مَقبول لِأَنَّه الواقِع الغالِب في
@@ -139,6 +178,78 @@ public class WriteEndpointGuardTests
             "نُقطَة كِتابَة بِلا حارِس مُعلَن وغَير مُثَبَّتَة:\n  " +
             string.Join("\n  ", breaches) +
             "\nإمّا أَن تُحرَس بِقَرار نَظيرَتِها، أَو تُثَبَّت بِسَبَبِها في نَفس الكوميت.");
+    }
+
+    // ─── ‏ADR-003: الكِتابَةُ في مَتجَرٍ تَسأَل عَن باقَتِه ────────────
+
+    /// <summary>
+    /// <para><b>كُلُّ نُقطَةِ كِتابَةٍ تَحتَ <c>/{slug}/</c> تُعلِن
+    /// <c>RequireStoreWritable</c> — أَو تُثَبَّت بِسَبَبِها.</b> وهذا
+    /// هُوَ الفَرقُ بَينَ «سِياسَةٍ مَكتوبَةٍ في وَثيقَة» و«حَدٍّ
+    /// يُقاس»: مَتجَرٌ انتَهَت باقَتُه ونُقطَةٌ نُسِيَت ⇒ يَكتُب
+    /// اللاعِبُ فيها ولا يَشتَكي شَيء (القاعِدَة ٢).</para>
+    ///
+    /// <para><b>والفَحصُ يَطبَع ما فَحَصَه ويَفشَل إن كانَ صِفراً</b>
+    /// (القاعِدَة ١٠) — و«صِفرُ مُخالَفَة» بِلا عَدّادٍ لا يُمَيَّز مِن
+    /// أَداةٍ عَمياء.</para>
+    /// </summary>
+    [Fact]
+    public void Every_store_write_endpoint_declares_the_plan_gate()
+    {
+        var storeWrites = MinimalApiWriteEndpoints()
+            .Where(e => e.Route.StartsWith("/{slug}/", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(storeWrites.Count >= 40,
+            $"أَداة عَمياء: وُجِدَت {storeWrites.Count} نُقطَةَ كِتابَةٍ في مَتجَر — والمَقيس ‏40 فَأَكثَر.");
+
+        var pinned = PinnedUngatedStoreWrites.Select(p => p.Route).ToHashSet(StringComparer.Ordinal);
+        var gated  = storeWrites.Where(e => e.Body.Contains(".RequireStoreWritable(", StringComparison.Ordinal))
+                                .Select(e => e.Route).ToHashSet(StringComparer.Ordinal);
+
+        Assert.True(gated.Count > 0, "أَداة عَمياء: صِفرُ نُقطَةٍ تُعلِن الحارِس.");
+
+        var breaches = storeWrites
+            .Where(e => !gated.Contains(e.Route) && !pinned.Contains(e.Route))
+            .Select(e => e.Route).ToArray();
+
+        Assert.True(breaches.Length == 0,
+            $"نُقطَةُ كِتابَةٍ في مَتجَرٍ لا تَسأَل عَن باقَتِه ({gated.Count} مَحروسَة، " +
+            $"{pinned.Count} مُثَبَّتَة، مِن {storeWrites.Count}):\n  " +
+            string.Join("\n  ", breaches) +
+            "\nإمّا `.RequireStoreWritable()` في التَوقيع، أَو سَطرٌ في " +
+            "`PinnedUngatedStoreWrites` يَقول لِماذا — في نَفس الكوميت.");
+    }
+
+    /// <summary>ونِصفُها الآخَر: مُثَبَّتٌ صارَ مَحروساً أَو زالَ يَحمَرّ،
+    /// وسَبَبٌ فارِغٌ أَو قَصيرٌ يَحمَرّ — <b>فَالقائِمَةُ تَصِف الواقِعَ
+    /// أَو تَرِثّ حَتّى تَصيرَ قائِمَةَ إسكات.</b></summary>
+    [Fact]
+    public void No_pinned_store_write_outlives_its_reason()
+    {
+        var storeWrites = MinimalApiWriteEndpoints()
+            .Where(e => e.Route.StartsWith("/{slug}/", StringComparison.Ordinal))
+            .ToList();
+
+        var all = storeWrites.Select(e => e.Route).ToHashSet(StringComparer.Ordinal);
+        var gated = storeWrites.Where(e => e.Body.Contains(".RequireStoreWritable(", StringComparison.Ordinal))
+                               .Select(e => e.Route).ToHashSet(StringComparer.Ordinal);
+
+        var gone    = PinnedUngatedStoreWrites.Where(p => !all.Contains(p.Route)).Select(p => p.Route).ToArray();
+        var covered = PinnedUngatedStoreWrites.Where(p => gated.Contains(p.Route)).Select(p => p.Route).ToArray();
+
+        Assert.True(gone.Length == 0,
+            "مَسارٌ مُثَبَّتٌ لا وُجودَ لَه — يُرفَع:\n  " + string.Join("\n  ", gone));
+        Assert.True(covered.Length == 0,
+            "مَسارٌ مُثَبَّتٌ صارَ يُعلِن الحارِس — يُرفَع مِن القائِمَة:\n  "
+            + string.Join("\n  ", covered));
+
+        foreach (var p in PinnedUngatedStoreWrites)
+            Assert.True(p.WhyAr.Length > 30,
+                $"استِثناءٌ بِلا سَبَبٍ مَقروء: {p.Route}");
+
+        Assert.Equal(PinnedUngatedStoreWrites.Length,
+            PinnedUngatedStoreWrites.Select(p => p.Route).Distinct(StringComparer.Ordinal).Count());
     }
 
     /// <summary>

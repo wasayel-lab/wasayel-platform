@@ -14,6 +14,15 @@
 *@
 
 <div class="acs-page acm-home">
+    @* رَدُّ المُرَشِّح حينَ تَنتَهي باقَةُ المَتجَر: كِتابَةٌ مَرفوضَةٌ
+       تَعود إلى هُنا بِرَمزٍ ثابِت، فَتُرسَم رِسالَةٌ مِن القامُوس.
+       ونَقرَةٌ بِلا أَثَرٍ مَرئيٍّ تَبدو عُطلاً — وهي أَسوَأُ مِن
+       رَفضٍ يُقال. *@
+    @if (Err == ACommerce.Templates.Customer.Marketplace.Gates.GateExtensions.StoreLockedErrCode)
+    {
+        <AcAlert Variant="danger" Message="@(L["store.locked.write_denied"])" />
+    }
+
     @if (loaded is null)
     {
         <AcLoadingState />
@@ -204,6 +213,7 @@
 @code {
     [Parameter] public string Slug { get; set; } = "";
     [Parameter] public string? Role { get; set; }   // مِن /r/{role}/
+    [SupplyParameterFromQuery(Name = "err")]  public string? Err { get; set; }
     [SupplyParameterFromQuery(Name = "city")] public string? City { get; set; }
     [SupplyParameterFromQuery(Name = "kind")] public string? Kind { get; set; }
 

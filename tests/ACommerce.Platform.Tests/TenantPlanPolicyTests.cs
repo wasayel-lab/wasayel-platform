@@ -230,3 +230,70 @@ public class TenantPlanPolicyTests
         Assert.False(PlatformPlanStatuses.Contains("paused"));
     }
 }
+
+// ═══ الاستِحقاقُ على مُستَوى المَتجَر — الأُنبوبُ القائِمُ يَحمِلُه ═══
+
+public class TenantPlanEntitlementsTests
+{
+    private static readonly DateTime Now = new(2026, 08, 23, 12, 0, 0, DateTimeKind.Utc);
+
+    private static TenantPlan Plan(int daysToExpiry, int grace = 14) => new()
+    {
+        Id = "demo", PlanId = "manual", Status = PlatformPlanStatuses.Active,
+        StartsAt = Now.AddDays(-30), ExpiresAt = Now.AddDays(daysToExpiry), GraceDays = grace,
+    };
+
+    private static EntitlementResult Decide(TenantPlan? plan)
+        => TenantPlanEntitlements.Decide(plan, CapabilityCatalog.TenantWrite, Now);
+
+    /// <summary><b>التَكافُؤُ الصِفريّ عِندَ الحارِس نَفسِه</b>: كُلُّ
+    /// مَتجَرٍ قائِمٍ بِلا وَثيقَةِ باقَة، فَلَو رَدَّ هذا السَطرُ
+    /// مَنعاً لَأُغلِقَت المَنَصَّةُ كُلُّها في أَوَّل نَشر.</summary>
+    [Fact]
+    public void NoPlan_Allows()
+    {
+        var r = Decide(null);
+        Assert.True(r.Allowed);
+        Assert.Null(r.ReasonAr);
+    }
+
+    [Fact]
+    public void ActivePlan_Allows()
+        => Assert.True(Decide(Plan(+1)).Allowed);
+
+    /// <summary>وفي السَماحِ يُمنَع — <b>مَعَ سَبَبٍ مَقروء</b>. رَفضٌ
+    /// بِلا سَبَبٍ يَبدو عُطلاً.</summary>
+    [Fact]
+    public void InGrace_Denies_WithAReason()
+    {
+        var r = Decide(Plan(-1));
+        Assert.False(r.Allowed);
+        Assert.False(string.IsNullOrWhiteSpace(r.ReasonAr));
+    }
+
+    [Fact]
+    public void PastGrace_Denies()
+        => Assert.False(Decide(Plan(-30)).Allowed);
+
+    /// <summary>ورايَةٌ لا حِصَّة: الرَصيدُ «بِلا حَدّ» دائِماً — فَلا
+    /// شاشَةَ تَعرِض عَدّاداً لِشَيءٍ لا يُعَدّ.</summary>
+    [Fact]
+    public void ItIsAFlag_NotAQuota()
+    {
+        Assert.Equal(Entitlements.Unlimited, Decide(Plan(+1)).Remaining);
+        Assert.False(CapabilityCatalog.IsQuota(CapabilityCatalog.TenantWrite));
+    }
+
+    /// <summary><b>ولا يَخدِمُ ما لَيسَ لَه</b>: «سَمَحتُ لِأَنّي لا
+    /// أَعرِف» هُوَ عَينُ العَطَب الَّذي يَرميه
+    /// <c>SubscriptionEntitlements</c> — ونَفسُ الحارِسِ هُنا.</summary>
+    [Fact]
+    public async Task ItRefusesCapabilitiesItDoesNotServe()
+    {
+        var sut = new TenantPlanEntitlements(null!);
+        Assert.Single(sut.Handles);
+        Assert.Contains(CapabilityCatalog.TenantWrite, sut.Handles);
+        await Assert.ThrowsAsync<NotSupportedException>(
+            () => sut.PeekAsync("demo", Guid.Empty, CapabilityCatalog.ListingCreate));
+    }
+}

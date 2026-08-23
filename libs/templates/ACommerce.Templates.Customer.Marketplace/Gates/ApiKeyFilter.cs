@@ -76,7 +76,10 @@ public sealed class ApiKeyFilter : IEndpointFilter
         http.Items[GateKeys.SlugItem]     = principal.TenantSlug;
         http.Items[GateKeys.ApiPrincipal] = principal;
 
-        var ents = http.RequestServices.GetRequiredService<IEntitlements>();
+        // المُوَجِّهُ لا `GetRequiredService`: التَنفيذُ صارَ اثنَين
+        // (‏2026-08-23)، و`GetRequiredService` يُعيد آخِرَ مُسَجَّلٍ
+        // صامِتاً — فَكانَ سَيَكسِر هذا الفَحصَ بِلا أَن يَحمَرَّ شَيء.
+        var ents = http.Entitlements(CapabilityCatalog.ApiCall);
         var peek = await ents.PeekAsync(
             principal.TenantSlug, principal.ActorUserId,
             CapabilityCatalog.ApiCall, http.RequestAborted);

@@ -49,12 +49,19 @@ public sealed class EntitlementFilter : IEndpointFilter
     {
         var http   = ctx.HttpContext;
         var userId = http.UserIdOrNull();
-        if (userId is null) return Results.Unauthorized();
+
+        // ‏**قُدرَةٌ على المَتجَرِ كُلِّه لا تَسأَل عَن مُستَخدِم**: باقَةُ
+        // المُستَأجِر لا تَختَلِف بِاختِلاف الداخِل، والنُقاطُ الَّتي
+        // تُوَثِّق في أَجسامِها (وهي الأَغلَبِيَّة) لا يَملَأ لَها
+        // ‏`AuthFilter` هُوِيَّةً. فَاشتِراطُ الجَلسَةِ هُنا كانَ
+        // سَيَرُدُّها كُلَّها بِـ‏401 — عُطلاً يَبدو خَلَلاً لا سِياسَة.
+        if (userId is null && !CapabilityCatalog.IsTenantScoped(_capability))
+            return Results.Unauthorized();
 
         var slug = http.Slug();
-        var ents = http.RequestServices.GetRequiredService<IEntitlements>();
+        var ents = http.Entitlements(_capability);
 
-        var peek = await ents.PeekAsync(slug, userId.Value, _capability, http.RequestAborted);
+        var peek = await ents.PeekAsync(slug, userId ?? Guid.Empty, _capability, http.RequestAborted);
         if (!peek.Allowed)
             return Results.Redirect(AuthSession.LinkFor(
                 slug, http.Role(), $"{_redirectPath}?err={_errCode}"));

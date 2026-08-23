@@ -82,6 +82,13 @@ public static class MarketplaceTemplateExtensions
         services.AddScoped<ACommerce.Kit.Subscriptions.IEntitlements,
                            ACommerce.Kit.Subscriptions.SubscriptionEntitlements>();
 
+        // وتَنفيذٌ ثانٍ بِمَصدَرِ حَقيقَةٍ آخَر: وَثيقَةُ باقَةِ المُستَأجِر
+        // (‏ADR-003). يُقرَآنِ بِـ`http.Entitlements(capability)` الَّذي
+        // يَسأَل `Handles` — لا بِـ`GetRequiredService` الَّذي يُعيد آخِرَ
+        // مُسَجَّلٍ صامِتاً.
+        services.AddScoped<ACommerce.Kit.Subscriptions.IEntitlements,
+                           ACommerce.Kit.Subscriptions.TenantPlanEntitlements>();
+
         // ─── مُصادَقَة عُدَّة المَظهَر عِندَ الإقلاع ──────────────────────
         // مَسّ صَريح لِلكاتالوجَين هُنا — لا انتِظاراً لِأَوَّل طَلَب.
         // الثيم الافتِراضيّ يُصادَق مُكتَمِلاً، والحُزَم الثَلاث تُقرَأ
@@ -430,7 +437,8 @@ public static class MarketplaceTemplateExtensions
             await s.SaveChangesAsync();
             return Results.Redirect(Services.LocalRedirect.Resolve(
                 req.Form["return"].ToString(), $"/{slug}/listings/{id}"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── عَدّادُ المُشاهَدَة — أَثَرٌ جانِبيّ خارِجَ مَسار العَرض ────
         // كانَ `TenantListingDetail.razor` يُلحِق `ListingViewed` ويُودِع
@@ -496,7 +504,8 @@ public static class MarketplaceTemplateExtensions
                 convId = conv.Id;
             }
             return Results.Redirect(Link(req, slug, $"chats/{convId}"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── Pick role (after first login or via switch) ────────────────
         app.MapPost("/{slug}/me/role/save",
@@ -543,7 +552,8 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(Link(req, slug, $"me/role/onboarding"));
             return Results.Redirect(string.IsNullOrEmpty(picked.HomeRoute)
                 ? $"/{slug}" : $"/{slug}{picked.HomeRoute}");
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         app.MapPost("/{slug}/me/role/onboarding/save",
             async (string slug, HttpRequest req, IDocumentStore store) =>
@@ -584,7 +594,8 @@ public static class MarketplaceTemplateExtensions
             var active = tenant.Roles.FirstOrDefault(r => r.Slug == user.ActiveRole);
             return Results.Redirect(string.IsNullOrEmpty(active?.HomeRoute)
                 ? $"/{slug}" : $"/{slug}{active.HomeRoute}");
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── Profile save ───────────────────────────────────────────────
         app.MapPost("/{slug}/me/save",
@@ -661,7 +672,8 @@ public static class MarketplaceTemplateExtensions
             // كانَ الشَرط StartsWith("/") وَحدَه — يُمَرِّر //evil.com.
             return Results.Redirect(Services.LocalRedirect.Resolve(
                 req.Form["returnUrl"].ToString(), Link(req, slug, $"me")));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── Plans subscribe ────────────────────────────────────────────
         // **الباقَةُ بِسِعرٍ لا تُباعُ مِن هُنا إطلاقاً.** كانَ الجِسمُ
@@ -692,7 +704,8 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(Link(req, slug, $"plans?err={refusal}"));
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"me"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── Support open ticket ────────────────────────────────────────
         app.MapPost("/{slug}/support/open",
@@ -713,7 +726,8 @@ public static class MarketplaceTemplateExtensions
             s.Events.StartStream<ACommerce.Kit.Support.Ticket>(ev.Id, ev);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"support"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── Report listing — يَفتَح طَلَب دَعم مُسبَق التَعبِئَة ─────────
         app.MapPost("/{slug}/listings/{id:guid}/report",
@@ -743,7 +757,8 @@ public static class MarketplaceTemplateExtensions
                 $"{userName} بَلَّغَ عَن إعلان",
                 $"/admin/tenants/{slug}/tickets");
             return Results.Redirect(Link(req, slug, $"listings/{id}?reported=1"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── Create listing — gates: auth + terms + permission ──────────
         // الـ filters تَتَكَفَّل بِالتَّوثيق وَالشُروط وَ "listing.create".
@@ -931,7 +946,8 @@ public static class MarketplaceTemplateExtensions
           // الجَلسَة. الفَحص الآليّ يَربِط الطَرَفَين فَلا يَفتَرِقان.
           .RequireEntitlement(
               ACommerce.Kit.Subscriptions.CapabilityCatalog.ListingCreate,
-              redirectPath: "create-listing", errCode: "quota");
+              redirectPath: "create-listing", errCode: "quota")
+          .RequireStoreWritable();
 
         // ─── Edit listing — الفَجوَة الَّتي كَشَفَها إغلاقُ الثَغرَة ─────
         //
@@ -967,7 +983,8 @@ public static class MarketplaceTemplateExtensions
 
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"listings/{id}?saved=1"));
-        }).DisableAntiforgery().RequireAuth().RequireListingOwner();
+        }).DisableAntiforgery().RequireAuth().RequireListingOwner()
+          .RequireStoreWritable();
 
         // ─── Delete listing — نَفسُ الحارِسَين ونَفسُ الخِدمَة ──────────
         // الحَذفُ لَيِّن (`IsDeleted`)، فَهو قابِلٌ لِلعَكس بِحَدَثٍ
@@ -986,7 +1003,8 @@ public static class MarketplaceTemplateExtensions
 
             if (result.Ok) await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, "me/listings"));
-        }).DisableAntiforgery().RequireAuth().RequireListingOwner();
+        }).DisableAntiforgery().RequireAuth().RequireListingOwner()
+          .RequireStoreWritable();
 
         // ─── Saved Searches — create/delete/toggle ──────────────────────
         app.MapPost("/{slug}/searches/save",
@@ -1025,7 +1043,8 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect(Link(req, slug, $"me/searches?saved=1"));
 
             static string? NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         app.MapPost("/{slug}/searches/{id:guid}/delete",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
@@ -1042,7 +1061,8 @@ public static class MarketplaceTemplateExtensions
             s.Delete(ss);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"me/searches"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         app.MapPost("/{slug}/searches/{id:guid}/toggle",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
@@ -1060,7 +1080,8 @@ public static class MarketplaceTemplateExtensions
             s.Store(ss);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"me/searches"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── Submit offer on a listing ──────────────────────────────────
         app.MapPost("/{slug}/listings/{id:guid}/offers",
@@ -1136,7 +1157,8 @@ public static class MarketplaceTemplateExtensions
             s.Events.StartStream<ACommerce.Kit.Offers.Offer>(oid, ev);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"listings/{id}?offer=submitted"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── Accept an offer (listing owner) ────────────────────────────
         app.MapPost("/{slug}/offers/{id:guid}/accept",
@@ -1227,7 +1249,8 @@ public static class MarketplaceTemplateExtensions
                 url: $"/{slug}/chats/{conv.Id}",
                 tag: $"offer-{id}");
             return Results.Redirect(Link(req, slug, $"chats/{conv.Id}"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── Reject / Withdraw offer ────────────────────────────────────
         app.MapPost("/{slug}/offers/{id:guid}/reject",
@@ -1254,7 +1277,8 @@ public static class MarketplaceTemplateExtensions
             s.Events.Append(id, new ACommerce.Kit.Offers.OfferRejected(id, DateTime.UtcNow));
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"listings/{offer.ListingId}"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── Trip lifecycle — driver marks "arrived at pickup" ───────────
         // فَحص قُرب: السائِق يُرسِل مَوقِعَه الحاليّ، نُقارِنه مَع
@@ -1331,7 +1355,8 @@ public static class MarketplaceTemplateExtensions
                     tag: $"arrived-{listingId}");
             }
             return Results.Redirect(Link(req, slug, $"listings/{listingId}?trip=arrived"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── Trip lifecycle — complete / abort ──────────────────────────
         // كِلاهُما عَلى مُستَوى الإعلان (ListingId)، لِأَنّ ListingMatch
@@ -1374,7 +1399,8 @@ public static class MarketplaceTemplateExtensions
             }
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"listings/{listingId}?trip=completed"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         app.MapPost("/{slug}/trips/{listingId:guid}/abort",
             async (string slug, Guid listingId, HttpRequest req, IDocumentStore store) =>
@@ -1414,7 +1440,8 @@ public static class MarketplaceTemplateExtensions
             }
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"listings/{listingId}?trip=aborted"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         app.MapPost("/{slug}/offers/{id:guid}/withdraw",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
@@ -1434,7 +1461,8 @@ public static class MarketplaceTemplateExtensions
             s.Events.Append(id, new ACommerce.Kit.Offers.OfferWithdrawn(id, DateTime.UtcNow));
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"me/offers"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── PWA — Service Worker على الجَذر ──────────────────────────
         // الـ wwwroot لِلمَكتَبَة يُقَدَّم تَحت /_content/<lib>/، لكِنّ SW
@@ -1658,7 +1686,8 @@ public static class MarketplaceTemplateExtensions
             s.Store(user);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"me/area?saved=1"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── Start direct chat with another user ────────────────────────
         // مُستَخدَم في صَفحَة /{slug}/drivers — العَميل يَفتَح مُحادَثَة
@@ -1701,7 +1730,8 @@ public static class MarketplaceTemplateExtensions
             s.Store(conv);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"chats/{conv.Id}"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── تَعليمُ مُحادَثَةٍ مَقروءَة — أَمرٌ صَريح لا أَثَرٌ في عَرض ──
         // كانَ هذا التَصفيرُ يَقَع داخِلَ `ChatRoom.razor` في طَلَب `GET`:
@@ -1820,7 +1850,8 @@ public static class MarketplaceTemplateExtensions
                     url: $"/{slug}/chats/{conversationId}",
                     tag: $"chat-{conversationId}");
             return Results.Redirect(Link(req, slug, $"chats/{conversationId}"));
-        }).DisableAntiforgery().RequireAuth().RequireTerms();
+        }).DisableAntiforgery().RequireAuth().RequireTerms()
+          .RequireStoreWritable();
 
         // ─── Admin: create tenant ───────────────────────────────────────
         // نَموذَج SSR على /admin/tenants/new يُرسِل لِهُنا. عَلى الفَشَل نُعيد
@@ -2614,7 +2645,8 @@ public static class MarketplaceTemplateExtensions
             s.Store(cart);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, "cart"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // POST /{slug}/cart/{listingId}/qty — تَعديل كَمِّيَّة.
         app.MapPost("/{slug}/cart/{listingId:guid}/qty",
@@ -2634,7 +2666,8 @@ public static class MarketplaceTemplateExtensions
             s.Store(cart);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, "cart"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         app.MapPost("/{slug}/cart/clear", async (string slug, HttpRequest req, IDocumentStore store) =>
         {
@@ -2645,7 +2678,8 @@ public static class MarketplaceTemplateExtensions
             s.Delete<ACommerce.Kit.Cart.Cart>(userId);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, "cart"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // POST /{slug}/checkout/submit — تَحويل السَّلَّة إلى صَفقَة + إفراغ.
         // كُلّ بَند في السَّلَّة → Deal مُنفَصِل (لِأَنّ الـ Deal فيه الإعلان
@@ -2725,7 +2759,8 @@ public static class MarketplaceTemplateExtensions
             await s.SaveChangesAsync();
 
             return Results.Redirect(Link(req, slug, firstDealId == Guid.Empty ? "deals" : $"deals/{firstDealId}"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // POST /{slug}/vendor/{vendorId}/chat — اِبدَأ مُحادَثَة مَع بائِع.
         app.MapPost("/{slug}/vendor/{vendorId:guid}/chat",
@@ -2754,7 +2789,8 @@ public static class MarketplaceTemplateExtensions
             s.Store(convo);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"chat/{convo.Id}"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── Studio Reviews (تَقييم مُتَبادَل لِصَفقَة مُكتَمِلَة) ─────────
         app.MapPost("/studio/apps/{slug}/deals/{id:guid}/review",
@@ -2889,7 +2925,8 @@ public static class MarketplaceTemplateExtensions
                 await deals.AttachRefAsync(slug, deal.Id, "listing_owner", ownerGuid.ToString());
 
             return Results.Redirect(Link(req, slug, $"deals/{deal.Id}"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // مالِك الإعلان يَقبَل عَرضاً → Booked + يُصبِح الطَّرَف الثاني.
         app.MapPost("/{slug}/deals/{id:guid}/accept",
@@ -2905,7 +2942,8 @@ public static class MarketplaceTemplateExtensions
             await deals.AssignCounterpartyAsync(slug, id, userId, userName);
             await deals.AdvanceAsync(slug, id, deal.InitiatorId, userName, "قُبِلَ العَرض");
             return Results.Redirect(Link(req, slug, $"deals/{id}"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // أَيّ طَرَف يُحَرِّك المَرحَلَة التالِيَة بِحَسَب دَورِه.
         app.MapPost("/{slug}/deals/{id:guid}/advance",
@@ -2919,7 +2957,8 @@ public static class MarketplaceTemplateExtensions
             var note = req.Form["note"].ToString().Trim();
             await deals.AdvanceAsync(slug, id, userId, userName, note);
             return Results.Redirect(Link(req, slug, $"deals/{id}"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         app.MapPost("/{slug}/deals/{id:guid}/cancel",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
@@ -2937,7 +2976,8 @@ public static class MarketplaceTemplateExtensions
             var res = await deals.CancelAsync(slug, id, new Services.Deals.DealCanceller(userId, userName, IsStoreAdmin: false),
                 string.IsNullOrEmpty(reason) ? "إلغاء" : reason);
             return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}")));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // تَقييم الطَّرَف الآخَر بَعد اكتِمال الصَّفقَة.
         app.MapPost("/{slug}/deals/{id:guid}/review",
@@ -2961,7 +3001,8 @@ public static class MarketplaceTemplateExtensions
                 await reviews.SubmitAsync(slug, target, targetName, userId, userName,
                     rating, body, dealId: id, dealPattern: deal.Pattern);
             return Results.Redirect(Link(req, slug, $"deals/{id}"));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
 
         // ─── Admin: تَعليق/تَفعيل مُستَأجِر (إجراء مَنصَّة) ───────────────
         app.MapPost("/admin/tenants/{slug}/suspend",

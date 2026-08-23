@@ -23,11 +23,32 @@ public static class CapabilityKinds
     public static bool Contains(string kind) => All.Contains(kind, StringComparer.Ordinal);
 }
 
-/// <summary>قُدرَة واحِدَة: رَمزُها، ونَوع حَدِّها، ومَصدَر رَقمِها
-/// المَقيس. <see cref="SourceRef"/> ليسَ زينَةً — هو الشَرط الَّذي
-/// يَمنَع نُمُوَّ المَعجَم بِالخَيال: قُدرَة بِلا مَوضِع يَحُدُّها اليَوم
-/// لا تَدخُل.</summary>
-public sealed record Capability(string Code, string Kind, string SourceRef);
+/// <summary>نِطاقُ القُدرَة — <b>مَن يُسأَلُ عَنها</b>. مَعجَمٌ مُغلَقٌ
+/// بِقيمَتَين، وثالِثَةٌ تَحتاج سَطراً هُنا وقَراراً.</summary>
+public static class CapabilityScopes
+{
+    /// <summary>حَدٌّ عَلى <b>مُستَخدِمٍ</b> بِعَينِه — رَصيدُ باقَتِه أَو
+    /// رايَةُ مِفتاحِه. وهي كُلُّ ما كانَ في المَعجَم حَتّى ‏2026-08-23.</summary>
+    public const string User = "user";
+
+    /// <summary>حَدٌّ عَلى <b>المَتجَرِ كُلِّه</b> — لا يَختَلِف بِاختِلاف
+    /// المُستَخدِم، ويُسأَل عَنه حَتّى بِلا جَلسَة. مَصدَرُه وَثيقَةُ
+    /// `TenantPlan` (‏ADR-003).</summary>
+    public const string Tenant = "tenant";
+
+    public static readonly IReadOnlyList<string> All = new[] { Tenant, User };
+
+    public static bool Contains(string scope) => All.Contains(scope, StringComparer.Ordinal);
+}
+
+/// <summary>قُدرَة واحِدَة: رَمزُها، ونَوع حَدِّها، ونِطاقُها، ومَصدَر
+/// رَقمِها المَقيس. <see cref="SourceRef"/> ليسَ زينَةً — هو الشَرط
+/// الَّذي يَمنَع نُمُوَّ المَعجَم بِالخَيال: قُدرَة بِلا مَوضِع
+/// يَحُدُّها اليَوم لا تَدخُل. و<see cref="Scope"/> يَسقُط إلى
+/// <see cref="CapabilityScopes.User"/> — فَالقُدُراتُ السِتّ الَّتي
+/// سَبَقَتهُ لا يُمَسّ سَطرٌ مِنها.</summary>
+public sealed record Capability(
+    string Code, string Kind, string SourceRef, string Scope = CapabilityScopes.User);
 
 /// <summary>
 /// <para><b>مَعجَم القُدُرات المُغلَق — مَوضِع واحِد</b>. كُلّ سِلسِلَة
@@ -119,7 +140,25 @@ public static class CapabilityCatalog
     /// </summary>
     public const string ApiCall = "api.call";
 
-    /// <summary><b>القُدُرات السِتّ</b> — كُلّ ما يُحَدّ أَو يُباع اليَوم،
+    /// <summary>
+    /// <para><b>الكِتابَةُ في المَتجَر</b> — رايَةٌ <b>على المُستَأجِر
+    /// لا على المُستَخدِم</b>، وهي أَوَّلُ قُدرَةٍ بِنِطاقٍ
+    /// <see cref="CapabilityScopes.Tenant"/>.</para>
+    ///
+    /// <para><b>ولِماذا في هذا المَعجَم لا في حارِسٍ جَديد</b>: المُستَودَعُ
+    /// فيه أَربَعَةُ أَنابيبِ اعتِراضٍ مَبنِيَّةٍ ومَهجورَة (القاعِدَة ٨).
+    /// فَالحَدُّ الجَديدُ رَكِبَ الأُنبوبَ القائِمَ بِلا سَطرٍ واحِدٍ
+    /// جَديدٍ فيه: نَفسُ <c>EntitlementFilter</c>، ونَفسُ
+    /// <c>IEntitlements</c>، ونَفسُ البَوّابَةِ عِندَ التَركيب.</para>
+    ///
+    /// <para><b>ومَصدَرُ حَدِّها وَثيقَةُ <c>TenantPlan</c></b>: بَعدَ
+    /// <c>ExpiresAt</c> تُمنَع الكِتابَةُ وتَبقى القِراءَة، وبَعدَ
+    /// <c>GraceDays</c> يُخفى المَتجَر. <b>ولا وَثيقَةَ = لا حَدّ</b> —
+    /// وهو حالُ كُلّ مَتجَرٍ قائِم.</para>
+    /// </summary>
+    public const string TenantWrite = "tenant.write";
+
+    /// <summary><b>القُدُرات السَبع</b> — كُلّ ما يُحَدّ أَو يُباع اليَوم،
     /// مُرَتَّبَة أَبجَدِيّاً بِرَمزِها. الزِيادَة عَلَيها قَرار مُعلَن:
     /// سَطر هُنا + مَوضِع فَحص حَيّ + اختِبار سالِب يُثبِت المَنع.</summary>
     public static readonly IReadOnlyList<Capability> All = new[]
@@ -136,6 +175,9 @@ public static class CapabilityCatalog
             "TierLimits.AllowExport (StudioTier.cs:31) → MTE.cs:2462"),
         new Capability(StudioRefine, CapabilityKinds.Quota,
             "TierLimits.RefinesPerMonth (StudioTier.cs:30) → StudioUser.RefinesUsed"),
+        new Capability(TenantWrite, CapabilityKinds.Flag,
+            "TenantPlan.ExpiresAt/GraceDays (TenantPlan.cs) → TenantPlanPolicy.Derive",
+            CapabilityScopes.Tenant),
     };
 
     /// <summary>الرُموز وَحدَها، بِنَفس التَرتيب.</summary>
@@ -158,6 +200,13 @@ public static class CapabilityCatalog
     /// <see cref="CapabilityKinds.Flag"/> تُفحَص ولا تُستَهلَك.)</summary>
     public static bool IsQuota(string capability) =>
         Find(capability)?.Kind == CapabilityKinds.Quota;
+
+    /// <summary>هَل هذِه القُدرَةُ حَدٌّ عَلى <b>المَتجَرِ كُلِّه</b>؟
+    /// عِندَها لا يُسأَلُ عَن مُستَخدِم — والمُرَشِّحُ لا يَشتَرِط جَلسَةً
+    /// قَبلَ أَن يَرُدّ. غِيابُ هذا السَطر كانَ سَيَجعَل كُلّ نُقطَةِ
+    /// كِتابَةٍ بِلا `RequireAuth` تَرُدّ ‏401 بَدَلَ أَن تُفحَص.</summary>
+    public static bool IsTenantScoped(string capability) =>
+        Find(capability)?.Scope == CapabilityScopes.Tenant;
 
     /// <summary>
     /// <para><b>البَوّابَة</b> — تُنادى مِن كُلّ مَوضِع يَقبَل رَمز قُدرَة
