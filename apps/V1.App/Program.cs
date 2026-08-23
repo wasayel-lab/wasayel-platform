@@ -179,11 +179,25 @@ await using (var scope = app.Services.CreateAsyncScope())
     if (Environment.GetEnvironmentVariable("CART_SAMPLE_SEED") == "1")
         await CartSampleSeeder.RunAsync(scope.ServiceProvider);
 
-    // مَنح صَلاحِيَّة مُشرِف المَنصَّة صَراحَةً — ENV PLATFORM_ADMIN_PHONE،
-    // وخارِج التَطوير يَلزَم PLATFORM_ADMIN_BOOTSTRAP=1 مَعَه.
+    // مَنح صَلاحِيَّة مُشرِف المَنصَّة صَراحَةً — ENV PLATFORM_ADMIN_PHONE
+    // و/أَو PLATFORM_ADMIN_EMAIL، وخارِج التَطوير يَلزَم
+    // PLATFORM_ADMIN_BOOTSTRAP=1 مَعَهُما. البَريدُ أُضيفَ لِأَنّ الهاتِفَ
+    // يُغلَق في الإنتاج بِلا Auth__Sms__Provider (‏cd43b366)، والمالِكُ
+    // يَضبُط SMTP وَحدَه — فَمُعَرِّفٌ هاتِفيٌّ حَصريٌّ يَحبِسُه خارِجَ
+    // إدارَتِه. الجَدوَلُ والتَطبيعُ في PlatformAdminGrant (مُختَبَران).
     var granted = await PlatformAdminSeeder.RunAsync(docStore, app.Environment);
-    if (granted is not null)
-        app.Logger.LogWarning("[platform-admin] مُنِحَ {Phone} صَلاحِيَّة مُشرِف المَنصَّة", granted);
+    if (granted.Phone is not null)
+        app.Logger.LogWarning(
+            "[platform-admin] مُنِحَ الهاتِفُ {Phone} صَلاحِيَّةَ مُشرِف المَنصَّة", granted.Phone);
+    if (granted.Email is not null)
+        app.Logger.LogWarning(
+            "[platform-admin] مُنِحَ البَريدُ {Email} صَلاحِيَّةَ مُشرِف المَنصَّة", granted.Email);
+    // صيغَةٌ مُشَوَّهَةٌ تُغلِق ولا تَرتَدّ — تُقال بِاسم المُتَغَيِّر، وإلّا
+    // بَدا الصَمتُ نَجاحاً.
+    if (granted.EmailRejected)
+        app.Logger.LogWarning(
+            "[platform-admin] {Var} صيغَتُه غَير صالِحَة — لا مَنحَ بِالبَريد",
+            PlatformAdminSeeder.EmailVar);
 }
 
 // يَجِب أَن يُطَبَّق ForwardedHeaders قَبل أَيّ middleware يَقرَأ

@@ -10,6 +10,21 @@ public sealed class StudioUser
 {
     public Guid Id { get; set; }
     public string Phone { get; set; } = "";
+
+    /// <summary>البَريد الإلِكترونيّ — بِنَفس دَلالَة <see cref="Phone"/>:
+    /// مُعَرِّفُ هُوِيَّةٍ مُستَقِلّ، فارِغٌ لِمَن دَخَلَ بِالهاتِف.
+    ///
+    /// <para><b>يُخَزَّن دائِماً مُطَبَّعاً</b> بِـ
+    /// <c>EmailAddress.Normalize</c> (قَصّ + تَصغير) — نَفسِ الدالَّة الَّتي
+    /// يُطَبِّعُ بِها مَسارُ الدُخول قَبلَ البَحث. التَخزينُ المُطَبَّعُ هُوَ
+    /// ما يَجعَل المُقارَنَةَ غَيرَ حَسّاسَةٍ لِحالَةِ الأَحرُف **بِلا**
+    /// دالَّةِ مُقارَنَةٍ خاصَّةٍ في كُلّ استِعلام (والاستِعلامُ في Marten
+    /// يَقَع في Postgres، فَـ<c>StringComparison</c> لا تَعبُر إلَيه).</para>
+    ///
+    /// <para>حَقلٌ جَديد: وَثائِقُ سابِقَةٌ لا تَحمِلُه تُقرَأ بِـ<c>""</c>،
+    /// والاستِعلامُ عَنه بِعُنوانٍ غَيرِ فارِغٍ لا يَلتَقِطُها.</para></summary>
+    public string Email { get; set; } = "";
+
     public string FullName { get; set; } = "صاحِب المَشروع";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime LastLoginAt { get; set; } = DateTime.UtcNow;

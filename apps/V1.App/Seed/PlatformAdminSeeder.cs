@@ -3,49 +3,97 @@ using Marten;
 
 namespace ACommerce.V1.App.Seed;
 
+/// <summary>ما فُعِلَ فِعلاً في هذا الإقلاع — لِيُقالَ في اللوغ بِاسمِه.</summary>
+public readonly record struct PlatformAdminGrantResult(
+    string? Phone, string? Email, bool EmailRejected)
+{
+    public bool Any => Phone is not null || Email is not null;
+}
+
 /// <summary>
 /// مَنح صَلاحِيَّة مُشرِف المَنصَّة **صَراحَةً**: يُنشِئ (أَو يُرَقّي)
-/// <see cref="StudioUser"/> بِرَقم هاتِف مُعطى إلى <c>IsPlatformAdmin</c>.
+/// <see cref="StudioUser"/> بِرَقم هاتِف و/أَو بَريدٍ مُعطى إلى
+/// <c>IsPlatformAdmin</c>.
 ///
 /// <para><b>لِماذا يَلزَم:</b> ‏<see cref="StudioOwnershipSeeder"/> كانَ
 /// يُرَقّي أَوَّل مُستَخدِم ضِمناً — فَأَوَّل مَن يُسَجِّل يَملِك المَنصَّة
 /// بِلا فِعل واعٍ. حُذِفَ ذلكَ، وهذا بَديلُه: لا تُمنَح الصَلاحِيَّة إلّا
 /// بِقَرار مَن يَملِك الخادِم ومُتَغَيِّراتِ بيئَتِه.</para>
 ///
-/// <para><b>بَوّابَتان دائِماً:</b>
-/// ‏(أ) <c>PLATFORM_ADMIN_PHONE</c> — مَن. غِيابُه = لا عَمَل إطلاقاً.
-/// ‏(ب) بيئَة <c>Development</c>، أَو <c>PLATFORM_ADMIN_BOOTSTRAP=1</c>
-/// خارِجَها — إقرار صَريح أَنّ المَنح مَقصود في بيئَة حَقيقِيَّة.</para>
+/// <para><b>ولِماذا البَريدُ بِجِوار الهاتِف (‏2026-08-23):</b> بَعدَ
+/// <c>cd43b366</c> تُغلَق قَناةُ الرَسائِل في الإنتاج بِلا
+/// <c>Auth__Sms__Provider</c>، والمالِكُ سَيَضبُط SMTP وَحدَه. فَمُعَرِّفٌ
+/// هاتِفيٌّ حَصريٌّ يَعني أَنّ كُلّ دُخولٍ بِالبَريد مُستَخدِمٌ آخَرُ بِلا
+/// صَلاحِيَّة.</para>
+///
+/// <para><b>البَوّابَتان والتَطبيعُ في جَدوَلٍ نَقِيٍّ يُختَبَر</b> —
+/// <see cref="PlatformAdminGrant.Decide"/>. وهذا المِلَفُّ نِصفُ الـI/O
+/// وَحدَه: بَحثٌ، إنشاءٌ عِندَ الغِياب، تَرقِيَة.</para>
 ///
 /// <para>‏idempotent: مُستَخدِم مَوجود ومُرَقّى ← لا كِتابَة.</para>
+///
+/// <para><b>وحَدُّ ما يَفعَلُه هذا المِلَفّ — يُقال ولا يُبتَلَع:</b> المَنحُ
+/// يَكتُب الصَلاحِيَّة، ولا يَفتَح باباً. وبابُ جَلسَةِ الـstudio اليَوم
+/// (<c>POST /studio/auth/verify</c> ← <c>StudioAuth.VerifyAsync</c>) يَقبَل
+/// <b>الهاتِفَ وَحدَه</b>، فَالمَمنوحُ بِالبَريدِ مُهَيَّأٌ ولا يُبلَغ
+/// بِنَقرَةٍ بَعد. ذاكَ بابٌ يُبنى في مَوجَةٍ مُستَقِلَّة — وهُنا يُذكَر
+/// بِصَراحَة بَدَلَ أَن يُظَنّ العَكس.</para>
 /// </summary>
 public static class PlatformAdminSeeder
 {
-    public const string PhoneVar     = "PLATFORM_ADMIN_PHONE";
-    public const string BootstrapVar = "PLATFORM_ADMIN_BOOTSTRAP";
+    // مُحالَةٌ إلى الجَدوَل النَقِيّ — اسمُ المُتَغَيِّرِ يُكتَب مَرَّةً واحِدَة.
+    public const string PhoneVar     = PlatformAdminGrant.PhoneVar;
+    public const string EmailVar     = PlatformAdminGrant.EmailVar;
+    public const string BootstrapVar = PlatformAdminGrant.BootstrapVar;
 
-    /// <summary>يُعيد الهاتِف المَمنوح، أَو <c>null</c> لَو لَم يَعمَل.</summary>
-    public static async Task<string?> RunAsync(
+    /// <summary>يُعيد ما مُنِحَ فِعلاً، أَو حَقلَين فارِغَين لَو لَم يَعمَل.</summary>
+    public static async Task<PlatformAdminGrantResult> RunAsync(
         IDocumentStore store, IWebHostEnvironment env, CancellationToken ct = default)
     {
-        // البَوّابَة الأولى: طَلَب صَريح بِرَقم.
-        var phone = Environment.GetEnvironmentVariable(PhoneVar)?.Trim();
-        if (string.IsNullOrEmpty(phone)) return null;
+        var request = PlatformAdminGrant.Decide(
+            Environment.GetEnvironmentVariable(PhoneVar),
+            Environment.GetEnvironmentVariable(EmailVar),
+            env.IsDevelopment(),
+            Environment.GetEnvironmentVariable(BootstrapVar));
 
-        // البَوّابَة الثانِيَة: خارِج التَطوير يَلزَم إقرار مُنفَصِل.
-        if (!env.IsDevelopment() &&
-            Environment.GetEnvironmentVariable(BootstrapVar) != "1") return null;
+        if (request.IsEmpty)
+            return new(null, null, request.EmailRejected);
 
         await using var s = store.LightweightSession(StudioAuth.Tenant);
-        var user = (await s.Query<StudioUser>().Where(u => u.Phone == phone).ToListAsync(ct))
-            .FirstOrDefault();
+        var dirty = false;
 
-        if (user is { IsPlatformAdmin: true }) return phone;
+        if (request.Phone is { } phone)
+        {
+            var byPhone = (await s.Query<StudioUser>()
+                .Where(u => u.Phone == phone).ToListAsync(ct)).FirstOrDefault();
+            if (Promote(ref byPhone, () => new StudioUser { Id = Guid.NewGuid(), Phone = phone }))
+            { s.Store(byPhone!); dirty = true; }
+        }
 
-        user ??= new StudioUser { Id = Guid.NewGuid(), Phone = phone };
+        // البَريدُ مِفتاحُ هُوِيَّةٍ مُستَقِلّ — لا يُخلَط بِبَحث الهاتِف كَي
+        // لا يَلتَقِط مُستَخدِمي الهاتِف ذَوي الحَقل الفارِغ (نَفسُ عِلَّة
+        // <c>AuthHandlers.GetOrCreateUserAsync</c>). والقيمَةُ هُنا مُطَبَّعَةٌ
+        // سَلَفاً، والمُخَزَّنُ مُطَبَّعٌ سَلَفاً — فَالمُساواةُ في Postgres
+        // كافِيَةٌ ولا تَحتاج دالَّةَ حالَةِ أَحرُف.
+        if (request.Email is { } email)
+        {
+            var byEmail = (await s.Query<StudioUser>()
+                .Where(u => u.Email == email).ToListAsync(ct)).FirstOrDefault();
+            if (Promote(ref byEmail, () => new StudioUser { Id = Guid.NewGuid(), Email = email }))
+            { s.Store(byEmail!); dirty = true; }
+        }
+
+        if (dirty) await s.SaveChangesAsync(ct);
+        return new(request.Phone, request.Email, request.EmailRejected);
+    }
+
+    /// <summary>‏<c>true</c> = يَحتاج كِتابَة. مُستَخدِمٌ مَوجودٌ ومُرَقّى
+    /// يُعيد <c>false</c> بِلا لَمسِ الوَثيقَة (الـidempotency).</summary>
+    private static bool Promote(ref StudioUser? user, Func<StudioUser> create)
+    {
+        if (user is { IsPlatformAdmin: true }) return false;
+        user ??= create();
         user.IsPlatformAdmin = true;
-        s.Store(user);
-        await s.SaveChangesAsync(ct);
-        return phone;
+        return true;
     }
 }
