@@ -190,6 +190,14 @@ await using (var scope = app.Services.CreateAsyncScope())
     if (Environment.GetEnvironmentVariable("CART_SAMPLE_SEED") == "1")
         await CartSampleSeeder.RunAsync(scope.ServiceProvider);
 
+    // مُستَأجِرا **لَقطَة المَظهَر** — `theme-demo` و`owner-test`. ‏32
+    // صَفحَةً في `i18n-baseline` تَفتَرِضُهُما، ولا وُجودَ لَهُما في
+    // الإنتاج، فَكانَت البَوّابَةُ تَحمَرّ بِالبَيانات لا بِالكود.
+    // ‏ENV APPEARANCE_BASELINE_SEED=1، و**تَرفُض خارِجَ التَطوير**
+    // صَراحَةً لا صامِتَةً. التَفصيلُ في `AppearanceBaselineSeeder`.
+    if (Environment.GetEnvironmentVariable(AppearanceBaselineSeeder.EnvVar) == "1")
+        await AppearanceBaselineSeeder.RunAsync(scope.ServiceProvider, app.Environment);
+
     // مَنح صَلاحِيَّة مُشرِف المَنصَّة صَراحَةً — ENV PLATFORM_ADMIN_PHONE
     // و/أَو PLATFORM_ADMIN_EMAIL، وخارِج التَطوير يَلزَم
     // PLATFORM_ADMIN_BOOTSTRAP=1 مَعَهُما. البَريدُ أُضيفَ لِأَنّ الهاتِفَ

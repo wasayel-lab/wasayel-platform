@@ -502,14 +502,22 @@ normalize() {
 }
 
 # ── تَسجيل دُخول studio (‏admin و studio) ────────────────────────────
-# نُقطَتان: `/studio/auth/login` تَنقُل إلى مَرحَلَة الرَمز بِلا أَثَر،
-# و`/studio/auth/verify` هي الَّتي تَكتُب الكوكي. نَستَدعي الثانِيَة
-# مُباشَرَةً — الأولى لا حالَةَ لَها تُحفَظ (مَقيس في المَصدَر:
-# تُعيد Redirect فَقَط).
+# نُقطَتان: `/studio/auth/login` **تُصدِر** الرَمزَ عَبر القَناة، و
+# `/studio/auth/verify` تَستَهلِكُه وتَكتُب الكوكي.
+#
+# ‏2026-08-23 — **والأولى صارَت لازِمَة**. كانَت هذِه الدالَّةُ تَستَدعي
+# الثانِيَةَ وَحدَها لِأَنّ التَحَقُّقَ كانَ `code == "123456"` ثابِتاً
+# بِلا رَمزٍ مُصدَر. أَغلَقَ `942539b8` ذلكَ البابَ (رَمزٌ عَشوائيٌّ
+# مُجَزَّأٌ بِمُهلَة عَبر `AuthHandlers.IssueAttempt`)، فَصارَ الاستِدعاءُ
+# المُفرَد يَرتَدُّ بِلا كوكي — وأَداةُ اللَقطَة تَخرُج عِندَ أَوَّلِ
+# مِلَفّ. والرَمزُ في التَطوير يَبقى `123456` لِأَنّ `MockSmsChannel`
+# تُعلِن `DevHintCode`، و`AuthHandlers.NewCode` يُفَضِّلُه على العَشوائيّ.
+# فَنَفسُ شَكل `phone_login` أَدناه حَرفاً: أَصدِر ثُمَّ استَهلِك.
 studio_login() {
   local jar="$1" phone="$2"
+  curl -s -o /dev/null -X POST -d "phone=$phone" "$BASE_URL/studio/auth/login"
   curl -s -c "$jar" -o /dev/null \
-       -X POST -d "phone=$phone" -d "code=$DEV_CODE" \
+       -X POST -d "method=phone" -d "phone=$phone" -d "code=$DEV_CODE" \
        "$BASE_URL/studio/auth/verify"
   has_cookie "$jar" ".acommerce.studio"
 }
