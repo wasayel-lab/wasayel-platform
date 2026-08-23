@@ -112,6 +112,25 @@
                        صَفحَة المَتجَر وَحدَها: الصَفحَة خَلف بَوّابَة
                        مُشرِف المَنصَّة، وهذه هي لَوحَتُه. مَدخَلٌ خَلف
                        بَوّابَةٍ أَشَدّ مِن بَوّابَتِه لا يُبلَغ. *@
+                    @* وباقَةُ المَتجَرِ في وَسايِل — **مَدخَلُها هُنا
+                       بِالقِياس لا بِالتَناظُر**: بِطاقَةُ الباقَة في
+                       `/admin/tenants/{slug}` تَقَع خَلفَ
+                       `RequireTenantAdmin`، ومُشرِفُ المَنَصَّةِ **لا
+                       يَجتازُه** ما لَم يَملِك المَتجَرَ مِن الاستوديو —
+                       قِيسَ حَيّاً يَومَ ‏2026-08-23: `/admin/tenants/ejar`
+                       رَدَّت بِطاقَةَ رَفضٍ لِمُشرِفِ مَنَصَّةٍ مَمنوح.
+                       فَالمَدخَلُ الوَحيدُ الَّذي يُبلَغ فِعلاً هُوَ هذا،
+                       ولِنَفس عِلَّةِ زِرِّ الثيم أَسفَلَه بِالضَبط
+                       (القاعِدَة ١٢). *@
+                    <a href="@($"/admin/tenants/{t.Slug}/plan")"
+                       title="@(L["admin.home.plan_title"])"
+                       style="position:absolute;top:10px;inset-inline-end:86px;
+                              display:inline-flex;align-items:center;justify-content:center;
+                              width:32px;height:32px;border-radius:999px;
+                              background:var(--ac-bg-alt);color:var(--ac-text-muted);
+                              text-decoration:none;font-size:14px;">
+                        <AcIcon Name="receipt" Size="15" />
+                    </a>
                     <a href="@($"/admin/tenants/{t.Slug}/theme")"
                        title="@(L["admin.home.theme_title"])"
                        style="position:absolute;top:10px;inset-inline-end:48px;

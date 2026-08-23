@@ -1731,6 +1731,7 @@
   "admin.tenant_edit.plan_title": "باقَةُ المَنَصَّة",
   "admin.tenant_edit.plan_sub": "اشتِراكُ هذا المَتجَرِ في وَسايِل ومُدَّتُه",
   "admin.home.transfer_cta": "تَعليمات التَحويل",
+  "admin.home.plan_title": "باقَةُ المَنَصَّة",
   "admin.home.plan_grace": "مُهلَةُ سَماح",
   "admin.home.plan_suspended": "مُعَلَّق",
   "admin.tenant_plan.heading": "باقَةُ المَنَصَّة —",
