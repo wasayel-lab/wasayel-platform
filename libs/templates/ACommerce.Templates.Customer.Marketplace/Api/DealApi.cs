@@ -60,14 +60,19 @@ public static class DealApi
     /// <c>DealsService.CancelAsync</c> تَطلُب
     /// <c>DealCanceller</c> في تَوقيعِها، و
     /// <c>DealCancelAuthorization.Validate</c> تَرُدُّ
-    /// <c>actor_not_party</c>. فَهذِه الدالَّةُ <b>لَم تُحذَف</b> ولا
-    /// صارَت تَكراراً: هي تَحكُم <b>ما يَراهُ</b> السائِل
+    /// <c>actor_not_party</c>. فَهذِه الدالَّةُ <b>لَم تُحذَف</b>:
+    /// هي تَحكُم <b>ما يَراهُ</b> السائِل
     /// (‏<c>GET …/deals/{id}</c> يَرُدّ ‏404 لِغَيرِ الطَرَف — لا
     /// نُفشي وُجودَ مَورِد)، والخِدمَةُ تَحكُم <b>ما يَفعَلُه</b>.
-    /// حارِسانِ لِسُؤالَين، لا سَطرانِ لِسُؤالٍ واحِد.</para>
+    /// حارِسانِ لِسُؤالَين.</para>
+    ///
+    /// <para><b>‏2026-08-23 — ولَكِنَّهُما يَقرَآنِ تَعريفاً واحِداً</b>:
+    /// «طَرَف» يُكتَب مَرَّةً على الوَثيقَة (<c>Deal.IsParty</c>)،
+    /// وهذِه الدالَّةُ <b>تُحيلُ إلَيه ولا تُعيدُ كَتبَه</b> — فَلا
+    /// يَنجَرِفُ ما يَراهُ السائِلُ عَمّا يُسمَحُ لَه بِفِعلِه. مُثَبَّتٌ
+    /// بِـ<c>The_view_guard_and_the_cancel_guard_read_one_definition_of_party</c>.</para>
     /// </summary>
-    public static bool IsParty(Deal d, Guid actorId) =>
-        d.InitiatorId == actorId || d.CounterpartyId == actorId;
+    public static bool IsParty(Deal d, Guid actorId) => d.IsParty(actorId);
 
     /// <summary>
     /// <para><b>تَصنيفُ رَفضِ <c>AdvanceAsync</c></b> — الصَفقَةُ

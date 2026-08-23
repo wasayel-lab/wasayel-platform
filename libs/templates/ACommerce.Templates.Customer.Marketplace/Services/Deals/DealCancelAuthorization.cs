@@ -85,9 +85,9 @@ public static class DealCancelAuthorization
         if (deal is null)
             return new(DealNotFound, "لا صَفقَةَ بِهذا المُعَرِّف.");
 
-        if (!by.IsStoreAdmin &&
-            deal.InitiatorId != by.ActorId &&
-            deal.CounterpartyId != by.ActorId)
+        // «طَرَف» تَعريفٌ واحِدٌ على الوَثيقَة (`Deal.IsParty`) — لا
+        // يُعادُ كَتبُه هُنا، فَلا يَنجَرِفُ عَن نُسخَةِ الـAPI.
+        if (!by.IsStoreAdmin && !deal.IsParty(by.ActorId))
             return new(ActorNotParty,
                 "الفاعِلُ لَيسَ طَرَفاً في هذِه الصَفقَة ولا مُشرِفَ المَتجَر — " +
                 "والإلغاءُ يَستَرِدُّ المالَ، فَلا يَملِكُه غَيرُ أَطرافِها.");

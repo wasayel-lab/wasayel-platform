@@ -28,6 +28,27 @@ public sealed class Deal
     public Guid? CounterpartyId { get; set; }
     public string? CounterpartyName { get; set; }
 
+    /// <summary>
+    /// <para><b>هَل هذا الفاعِلُ طَرَفٌ في الصَفقَة؟</b> — التَعريفُ
+    /// <b>الواحِد</b> لِـ«طَرَف»: المُبادِرُ أَو الطَرَفُ الثاني. دالَّةٌ
+    /// نَقِيَّة على الوَثيقَة نَفسِها، لا تُكتَب ولا تُسَلسَل.</para>
+    ///
+    /// <para><b>ولِماذا هُنا وعَلى الوَثيقَة</b> (القاعِدَة ١: ثَلاثَةُ
+    /// مُستَهلِكينَ قَبلَ الاستِخراج — وقَد وُجِدوا): كانَ الشَرطُ
+    /// نَفسُه مَكتوباً <b>ثَلاثَ مَرّات</b> بِثَلاثِ صِيَغ —
+    /// <c>DealCancelAuthorization.Validate</c> (مَن يُلغي)،
+    /// و<c>DealsService.IsActorAllowed("either")</c> (مَن يُحَرِّك)،
+    /// و<c>DealApi.IsParty</c> (مَن يَرى) — وثَلاثُ نُسَخٍ لِسُؤالٍ
+    /// واحِدٍ تَنجَرِف. الثَلاثَةُ الآنَ تَقرَأُ هذا السَطر.</para>
+    ///
+    /// <para><b>والاستِثناءُ المَعلَن</b>: <c>ListForUserAsync</c> تَكتُب
+    /// الشَرطَ في تَعبيرِ LINQ لِأَنّ Marten لا يُتَرجِم نِداءَ دالَّة
+    /// إلى SQL — فَتِلكَ نُسخَةٌ رابِعَةٌ <b>مَقيسَةٌ ومُثَبَّتَة</b> في
+    /// <c>DealCancelAuthorizationTests</c>، لا صامِتَة.</para>
+    /// </summary>
+    public bool IsParty(Guid actorId) =>
+        InitiatorId == actorId || CounterpartyId == actorId;
+
     // ─── المال ──────────────────────────────────────────────────────
     public decimal AmountSar { get; set; }
     public decimal? CommissionSar { get; set; }    // عَلى المَنصَّة

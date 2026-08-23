@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+using ACommerce.Templates.Customer.Marketplace.Api;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
 using Xunit;
 
@@ -176,5 +178,109 @@ public class DealCancelAuthorizationTests
 
         // والرَفضُ يَصِلُ المُنادي: النَوعُ المُعاد يَحمِلُه.
         Assert.Equal(typeof(Task<DealCancelResult>), overloads[0].ReturnType);
+    }
+
+    // ─── «طَرَف» تَعريفٌ واحِد — Deal.IsParty ──────────────────────────
+
+    /// <summary><b>المُوجِبُ والسالِبُ لِلتَعريفِ الواحِد</b>: المُبادِرُ
+    /// والطَرَفُ الثاني طَرَفان؛ الغَريبُ و<c>Guid.Empty</c> لا — حَتّى
+    /// على صَفقَةٍ بِلا طَرَفٍ ثانٍ (‏<c>CounterpartyId == null</c> لا
+    /// يَجعَل المُعَرِّفَ الفارِغَ طَرَفاً).</summary>
+    [Fact]
+    public void Deal_IsParty_admits_both_parties_and_no_one_else()
+    {
+        var deal = DealOf();
+        Assert.True(deal.IsParty(Initiator));
+        Assert.True(deal.IsParty(Counterparty));
+        Assert.False(deal.IsParty(Stranger));
+        Assert.False(deal.IsParty(Guid.Empty));
+
+        var offerOnly = DealOf();
+        offerOnly.CounterpartyId = null;
+        Assert.True(offerOnly.IsParty(Initiator));
+        Assert.False(offerOnly.IsParty(Counterparty));
+        Assert.False(offerOnly.IsParty(Guid.Empty));
+    }
+
+    /// <summary>
+    /// <para><b>حارِسانِ لِسُؤالَين — وتَعريفٌ واحِد.</b>
+    /// <c>DealApi.IsParty</c> تَحكُم ما يَراهُ السائِل، و
+    /// <c>DealCancelAuthorization.Validate</c> تَحكُم ما يَفعَلُه؛ ولَو
+    /// حَمَلَ كُلٌّ مِنهُما نُسخَتَه مِن «طَرَف» لانجَرَفا يَوماً
+    /// فَرَأى مَن لا يُلغي أَو أَلغى مَن لا يَرى. فَهذا الاختِبارُ
+    /// يُساوي بَينَهُما على مَصفوفَةِ فاعِلين × صَفقات — لا على
+    /// حالَةٍ واحِدَة.</para>
+    /// </summary>
+    [Fact]
+    public void The_view_guard_and_the_cancel_guard_read_one_definition_of_party()
+    {
+        var withCounterparty = DealOf();
+        var offerOnly = DealOf();
+        offerOnly.CounterpartyId = null;
+
+        var actors = new[] { Initiator, Counterparty, Stranger, Guid.Empty, Guid.NewGuid() };
+        var deals  = new[] { withCounterparty, offerOnly };
+        var checkedPairs = 0;
+
+        foreach (var deal in deals)
+        foreach (var actor in actors)
+        {
+            var single = deal.IsParty(actor);
+            Assert.Equal(single, DealApi.IsParty(deal, actor));
+            Assert.Equal(single, DealCancelAuthorization.Validate(deal, By(actor)) is null);
+            checkedPairs++;
+        }
+
+        Assert.Equal(actors.Length * deals.Length, checkedPairs);   // القاعِدَة ١٠: العَدّادُ يُطبَع
+    }
+
+    /// <summary>
+    /// <para><b>الحَدُّ الَّذي لا يُقاس آلِيّاً يَنهار</b> (القاعِدَة ٢):
+    /// «تَعريفٌ واحِد» دَعوى حَتّى يُمسَح المَصدَر. يُمسَح مَشروعُ
+    /// السوق كُلُّه عَن شَرطِ «المُبادِرُ أَو الطَرَفُ الثاني» بِنَفسِ
+    /// المُعَرِّفِ على الطَرَفَين، ويُثَبَّت أَين يُسمَح بِظُهورِه:
+    /// <c>Deal.cs</c> (التَعريف) و<c>DealsService.cs</c> مَرَّةً واحِدَةً
+    /// (‏<c>ListForUserAsync</c>: تَعبيرُ LINQ يُتَرجِمُه Marten إلى SQL
+    /// ولا يَقبَل نِداءَ دالَّةٍ مَكانَه). ظُهورٌ ثالِثٌ — أَو انتِقالُ
+    /// الثاني — يُحمِّر هذا الاختِبار، فَيُقَرَّر في مُراجَعَةٍ لا
+    /// بِصَمت.</para>
+    /// </summary>
+    [Fact]
+    public void Party_is_spelled_once_outside_the_query_Marten_must_translate()
+    {
+        var root = ThemeZeroEquivalenceTests.RepoRoot;
+        var project = Path.Combine(root, "libs", "templates", "ACommerce.Templates.Customer.Marketplace");
+        Assert.True(Directory.Exists(project), $"لا مَشروعَ في {project}");
+
+        // المُعَرِّفُ نَفسُه على الطَرَفَين (\1) — فَلا يَلتَقِط
+        // «CounterpartyId == null && InitiatorId != ownerId» (عَرضٌ وارِد)،
+        // ويَلتَقِط الصِيغَتَين بِتَرتيبَيهِما.
+        var forward  = new Regex(@"(\w+\.)?InitiatorId\s*[!=]=\s*([\w.]+)\s*(\|\||&&)\s*(\w+\.)?CounterpartyId\s*[!=]=\s*\2\b");
+        var backward = new Regex(@"(\w+\.)?CounterpartyId\s*[!=]=\s*([\w.]+)\s*(\|\||&&)\s*(\w+\.)?InitiatorId\s*[!=]=\s*\2\b");
+
+        var files = Directory.EnumerateFiles(project, "*.*", SearchOption.AllDirectories)
+            .Where(f => f.EndsWith(".cs", StringComparison.Ordinal) || f.EndsWith(".razor", StringComparison.Ordinal))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                     && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .ToList();
+        Assert.True(files.Count > 0, "حارِسُ العَمى: صِفرُ مِلَفٍّ مَفحوص.");
+
+        var hits = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var f in files)
+        {
+            var text = File.ReadAllText(f);
+            var n = forward.Matches(text).Count + backward.Matches(text).Count;
+            if (n > 0) hits[Path.GetRelativePath(project, f).Replace('\\', '/')] = n;
+        }
+
+        var expected = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["Services/Deals/Deal.cs"]         = 1,   // التَعريفُ الواحِد
+            ["Services/Deals/DealsService.cs"] = 1,   // ListForUserAsync — LINQ لِـ Marten
+        };
+
+        Assert.Equal(
+            expected.OrderBy(k => k.Key).Select(k => $"{k.Key}:{k.Value}"),
+            hits.OrderBy(k => k.Key).Select(k => $"{k.Key}:{k.Value}"));
     }
 }

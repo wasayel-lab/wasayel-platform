@@ -320,7 +320,7 @@ public sealed class DealsService
     {
         "initiator"    => deal.InitiatorId == actorId,
         "counterparty" => deal.CounterpartyId == actorId,
-        "either"       => deal.InitiatorId == actorId || deal.CounterpartyId == actorId,
+        "either"       => deal.IsParty(actorId),   // التَعريفُ الواحِد — Deal.IsParty
         "platform"     => true,   // يَستَدعيها كود مَنصَّة — افتَرِض السَّماح
         _              => false
     };
