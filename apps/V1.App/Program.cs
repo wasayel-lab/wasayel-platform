@@ -1,4 +1,5 @@
 using ACommerce.Kit.Auth;
+using ACommerce.Kit.Auth.Providers.Brevo;
 using ACommerce.Kit.Auth.Providers.MockEmail;
 using ACommerce.Kit.Auth.Providers.MockNafath;
 using ACommerce.Kit.Auth.Providers.MockSms;
@@ -92,13 +93,23 @@ switch (AuthChannelSelection.Decide(AuthChannelKind.Nafath,
 }
 
 // قَناة البَريد — نَفسُ مِفتاح `Auth:Email:Provider` القائِم مُنذُ مَوجَةِ
-// البَريد، صارَ يَمُرّ بِالجَدوَل نَفسِه. كُلّ إعدادات SMTP مِن التَهيئَة،
-// لا سِرَّ في الكود؛ يَعمَل مَع أَيّ SMTP بِما فيه Azure Communication Services.
+// البَريد، صارَ يَمُرّ بِالجَدوَل نَفسِه. كُلّ الإعدادات مِن التَهيئَة،
+// لا سِرَّ في الكود.
+//
+// **ونَقلان لا مُزَوِّدان**: ‏`smtp` يَعمَل مَع أَيّ SMTP قِياسيّ (‏Azure
+// Communication Services، ‏SES، ‏Google Workspace)، و`brevo` يُرسِل عَبر
+// HTTPS على المَنفَذ ‏443. والفَرقُ مَقيسٌ لا نَظَريّ: الـSpace يَحجُب
+// مَنافِذَ SMTP الصادِرَة، فَقَناةُ SMTP مَضبوطَةً ضَبطاً صَحيحاً **لا
+// تُرسِل** — ‏`docs/DEPLOY.md` §٢·ب.
 switch (AuthChannelSelection.Decide(AuthChannelKind.Email,
             builder.Configuration[AuthChannelSelection.EmailProviderKey], isDev))
 {
     case AuthChannelProvider.Smtp:
         builder.Services.AddSmtpEmailChannel(opts =>
+            builder.Configuration.GetSection("Auth:Email").Bind(opts));
+        break;
+    case AuthChannelProvider.Brevo:
+        builder.Services.AddBrevoEmailChannel(opts =>
             builder.Configuration.GetSection("Auth:Email").Bind(opts));
         break;
     case AuthChannelProvider.Mock:

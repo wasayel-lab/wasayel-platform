@@ -26,6 +26,10 @@
          فِعليّ يُغلِق الإنتاجَ على المَضبوط. مَرجِعُ اختِبارٍ فَقَط. -->
     <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.MockEmail\ACommerce.Kit.Auth.Providers.MockEmail.csproj" />
     <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.Smtp\ACommerce.Kit.Auth.Providers.Smtp.csproj" />
+    <!-- قَناةُ البَريدِ عَبر HTTPS: الاختِبارُ يَلتَقِطُ طَلَبَها
+         بِـ`HttpMessageHandler` وَهمِيّ، فَلا مِفتاحَ حَقيقيّاً ولا
+         نِداءَ شَبَكَة. مَرجِعُ اختِبارٍ فَقَط. -->
+    <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.Brevo\ACommerce.Kit.Auth.Providers.Brevo.csproj" />
   </ItemGroup>
 
 </Project>

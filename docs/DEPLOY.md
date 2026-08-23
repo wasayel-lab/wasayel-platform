@@ -214,7 +214,8 @@ variables → ‏Actions:
 |---|---|---|
 | `PLATFORM_ADMIN_PHONE` | يَمنَح رَقماً صَلاحِيَّةَ مُشرِف المَنَصَّة | `Seed/PlatformAdminSeeder.cs` |
 | `PLATFORM_ADMIN_BOOTSTRAP=1` | **لازِم مَعَه خارِج Development** | نَفسُه |
-| `Auth__Email__Provider=smtp` + `Auth__Email__{Host,Port,Username,Password,From,FromName}` | بَريدٌ فِعليّ بَدَل الـmock | `Program.cs` |
+| `Auth__Email__Provider=brevo` + `Auth__Email__{ApiKey,From,FromName}` | بَريدٌ فِعليّ عَبر HTTPS — **المُوصى بِه في الـSpace**، §٢·ب | `Program.cs` |
+| `Auth__Email__Provider=smtp` + `Auth__Email__{Host,Port,Username,Password,From,FromName}` | بَريدٌ فِعليّ عَبر SMTP — **مَنافِذُه مَحجوبَةٌ في الـSpace**، §٢·ب | `Program.cs` |
 | `Agent__Provider` / `Agent__Model` / `Agent__ApiKey` | مُزَوِّد وَكيل الاستوديو | `Services/AgentProfiles.cs` |
 
 **وثَلاثَةٌ لا تُوضَع في الإنتاج أَبَداً** — بَذّاراتُ عَيِّناتٍ تَكتُب
@@ -256,12 +257,49 @@ variables → ‏Actions:
 
 المِفتاحُ في التَهيئَة `Auth:X:Provider`، وفي الـSpace يُكتَب بِشَرطَتَين
 سُفلِيَّتَين: `Auth__X__Provider`. **والأَسماءُ أَدناه مَقروءَةٌ مِن
-مِلَفّات الخِيارات نَفسِها** (`SmtpEmailOptions`، `TwilioOptions`،
-`NafathOptions`) لا مَنسوخَةٌ مِن وَثيقَة، ومُثَبَّتَةٌ في
+مِلَفّات الخِيارات نَفسِها** (`SmtpEmailOptions`، `BrevoEmailOptions`،
+`TwilioOptions`، `NafathOptions`) لا مَنسوخَةٌ مِن وَثيقَة، ومُثَبَّتَةٌ في
 `AuthChannelSelectionTests`.
 
-**١) البَريد الإلِكترونيّ** — يَعمَل مَع أَيّ SMTP قِياسيّ (‏Azure
-Communication Services، Amazon SES، Google Workspace…):
+**١) البَريد الإلِكترونيّ — نَقلان لا مُزَوِّدان**
+
+> **والفَرقُ بَينَهُما مَقيسٌ لا تَفضيليّ (‏2026-08-23)**: بِـ`smtp`
+> مَضبوطَةً ضَبطاً صَحيحاً (‏Gmail، المَنفَذ ‏587) قيسَ في الـSpace:
+>
+> | الطَلَب | الرَدّ |
+> |---|---|
+> | `POST /studio/auth/email/login` (‏`curl --max-time 90`) | `000` — **لا رَدَّ بَعدَ ‏90 ثانِيَة** |
+> | `POST /ejar/auth/email/login` (‏`curl --max-time 90`) | `000` — **لا رَدَّ بَعدَ ‏90 ثانِيَة** |
+>
+> الـSpace يَحجُب **مَنافِذَ SMTP الصادِرَة** (‏587/465)، فَالمُصافَحَةُ
+> تَنتَظِر تَحيَّةَ خادِمٍ لا تَصِل. أَي أَنّ الإعدادَ سَليمٌ والنَقلَ
+> مَقطوع. والمَنفَذُ الوَحيدُ المَضمونُ خُروجُه هُوَ **‏443**.
+>
+> **فَالمُوصى بِه في الـSpace: `brevo`.** ويَبقى `smtp` صالِحاً حَيثُ
+> تُفتَح مَنافِذُه (خادِمٌ خاصّ، ‏VPS، مُستَضيفٌ لا يَحجُب).
+>
+> وتَعليقُ الطَلَبِ نَفسُه عولِجَ بِمُهلَةٍ صارِمَةٍ في المَوجَةِ نَفسِها
+> (‏`OtpSendGuard`، ‏10 ثَوانٍ): ما عادَ يَعلَق، صارَ يَرتَدّ
+> `?err=send_failed`. **لكِنّ فَشَلاً صَريحاً لَيسَ دُخولاً** — فَالمُهلَةُ
+> تُصلِح الرِسالَةَ لِلمُستَخدِم، و`brevo` يُصلِح الوُصول.
+
+**١·أ) `brevo` — عَبر HTTPS (المَنفَذ ‏443). المُوصى بِه لِلـSpace:**
+
+| المُتَغَيِّر | القيمَة |
+|---|---|
+| `Auth__Email__Provider` | `brevo` |
+| `Auth__Email__ApiKey` | مِفتاحُ واجِهَةِ Brevo (‏`xkeysib-…`) |
+| `Auth__Email__From` | عُنوانُ المُرسِل — **نِطاقٌ مُصادَقٌ في حِسابِ Brevo**، وإلّا رَدَّت الواجِهَةُ ‏400 |
+| `Auth__Email__FromName` | اسمُ المُرسِل الظاهِر (اختِياريّ) |
+| `Auth__Email__TimeoutSeconds` | اختِياريّ، الافتِراضيّ `10` |
+
+`From` و`FromName` **هُما نَفسُهُما** المُستَعمَلانِ مَع `smtp` — نَفسُ قِسمِ
+`Auth:Email`، فَمَن ضَبَطَهُما لا يُعيدُ ضَبطَهُما. والمُتَبَدِّلُ عِندَ
+الانتِقال: تُوضَع `ApiKey` وتُحذَف (أَو تُترَك، فَتُتَجاهَل)
+`Host`/`Port`/`Username`/`Password`.
+
+**١·ب) `smtp` — يَعمَل مَع أَيّ SMTP قِياسيّ** (‏Azure Communication
+Services، Amazon SES، Google Workspace…) **حَيثُ لا تُحجَب مَنافِذُه**:
 
 | المُتَغَيِّر | القيمَة |
 |---|---|
@@ -272,6 +310,12 @@ Communication Services، Amazon SES، Google Workspace…):
 | `Auth__Email__Password` | كَلِمَةُ المُرور |
 | `Auth__Email__From` | عُنوانُ المُرسِل |
 | `Auth__Email__FromName` | اسمُ المُرسِل الظاهِر (اختِياريّ) |
+| `Auth__Email__TimeoutSeconds` | اختِياريّ، الافتِراضيّ `10`. والصِفرُ والسالِبُ يَرتَدّانِ إلَيه — **لا سَبيلَ لِـ«بِلا مُهلَة»**، فَهي العِلَّةُ نَفسُها |
+
+> **وسَقفُ الأُنبوبِ ‏12 ثانِيَة** (‏`OtpSendGuard.PipelineTimeout`): حارِسٌ
+> ثانٍ على مَسارِ الاستِدعاءِ المُشتَرَك، يَقطَع حَتّى لَو كانَ المُزَوِّدُ
+> بِلا مُهلَةٍ إطلاقاً. فَقيمَةٌ أَكبَرُ مِن ‏12 في `TimeoutSeconds`
+> **تُقَصُّ عِندَه** — والمُستَخدِمُ أَمامَ شاشَةٍ لا يَنتَظِرُ أَكثَر.
 
 **٢) الرَسائِلُ القَصيرَة** — Twilio:
 
@@ -350,7 +394,7 @@ Communication Services، Amazon SES، Google Workspace…):
 | الطَريقَة | القَناة | خارِجَ Development |
 |---|---|---|
 | بِالجَوّال | `IOtpChannel` (‏`Auth__Sms__Provider=twilio`) | بِلا ضَبط ⇒ **لا تُعرَض ولا تُقبَل** |
-| بِالبَريد | `IEmailOtpChannel` (‏`Auth__Email__Provider=smtp`) | بِلا ضَبط ⇒ **لا تُعرَض ولا تُقبَل** |
+| بِالبَريد | `IEmailOtpChannel` (‏`Auth__Email__Provider=brevo` أَو `smtp`) | بِلا ضَبط ⇒ **لا تُعرَض ولا تُقبَل** |
 
 والرَمزُ **عَشوائيٌّ سُداسيٌّ مُجَزَّأٌ بِـSHA-256 بِمُهلَةِ عَشرِ دَقائِق**،
 مِن مَخزَنِ `AuthHandlers` نَفسِه بِمُستَأجِر `_studio` — لا نُسخَةٍ ثانِيَة.

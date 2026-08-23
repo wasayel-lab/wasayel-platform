@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\ACommerce.Kit.Auth.Core\ACommerce.Kit.Auth.Core.csproj" />
+  </ItemGroup>
+  <!-- عُنوانُ الرِسالَة مِن القامُوس — نَفسُ مَصرِفِ قَناة SMTP، ونَفسُ
+       سَبَبِه (‏ADR-001 أ): مَشروعٌ وَرَقيٌّ لا يَقلِب سَهمَ الاعتِماد. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\core\ACommerce.Platform.I18n\ACommerce.Platform.I18n.csproj" />
+  </ItemGroup>
+</Project>

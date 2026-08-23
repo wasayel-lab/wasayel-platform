@@ -89,6 +89,59 @@ public class AuthChannelSelectionTests
         => Assert.Equal(AuthChannelProvider.Smtp,
             AuthChannelSelection.Decide(AuthChannelKind.Email, value, isDevelopment: false));
 
+    // ─── نَقلٌ ثانٍ لِلبَريد: `brevo` عَبر HTTPS ──────────────────────
+    // **السَبَبُ مَقيسٌ لا تَفضيليّ**: الـSpace يَحجُب مَنافِذَ SMTP
+    // الصادِرَة، فَـ`smtp` مَضبوطَةً ضَبطاً صَحيحاً تَفشَل. والـ443 يَعبُر.
+
+    [Theory]
+    [InlineData("brevo")]
+    [InlineData("BREVO")]
+    [InlineData("  brevo  ")]
+    public void Production_WithBrevo_SelectsIt(string value)
+        => Assert.Equal(AuthChannelProvider.Brevo,
+            AuthChannelSelection.Decide(AuthChannelKind.Email, value, isDevelopment: false));
+
+    /// <summary>و`brevo` **لِلبَريدِ وَحدَه**: القيمَةُ نَفسُها على قَناةِ
+    /// الرَسائِلِ أَو نَفاذٍ تُغلِق كَأَيّ قيمَةٍ مَجهولَة. الجَدوَلُ
+    /// لِكُلّ نَوعٍ مُستَقِلّ، ولا تَتَسَرَّب قيمَةٌ بَينَ الأَنواع.</summary>
+    [Theory]
+    [InlineData(AuthChannelKind.Sms)]
+    [InlineData(AuthChannelKind.Nafath)]
+    public void Brevo_IsNotAValueForOtherKinds(AuthChannelKind kind)
+        => Assert.Equal(AuthChannelProvider.None,
+            AuthChannelSelection.Decide(kind, "brevo", isDevelopment: false));
+
+    /// <summary>القيَمُ الفِعليَّةُ مُثَبَّتَة — يَكتُبُها المالِكُ بِيَدِه
+    /// في الـSpace، وحَرفٌ فيها يَعني باباً مُغلَقاً بِلا سَبَبٍ ظاهِر.</summary>
+    [Fact]
+    public void EmailKind_HasExactlyTwoRealTransports()
+    {
+        var values = AuthChannelSelection.RealProviders(AuthChannelKind.Email);
+        Assert.Equal(new[] { "smtp", "brevo" }, values.Select(v => v.Value));
+        Assert.Equal(
+            new[] { AuthChannelProvider.Smtp, AuthChannelProvider.Brevo },
+            values.Select(v => v.Provider));
+    }
+
+    [Theory]
+    [InlineData(AuthChannelKind.Sms, "twilio")]
+    [InlineData(AuthChannelKind.Nafath, "nafath")]
+    public void OtherKinds_KeepASingleRealTransport(AuthChannelKind kind, string value)
+    {
+        var only = Assert.Single(AuthChannelSelection.RealProviders(kind));
+        Assert.Equal(value, only.Value);
+    }
+
+    /// <summary>وقيمَةٌ مَجهولَةٌ تَبقى إغلاقاً بَعدَ إضافَةِ الثانِيَة —
+    /// الجَدوَلُ نَما ولَم يَنفَتِح.</summary>
+    [Theory]
+    [InlineData("brevo2")]
+    [InlineData("brev")]
+    [InlineData("sendinblue")]
+    public void Production_WithANearMissForBrevo_StillSelectsNothing(string value)
+        => Assert.Equal(AuthChannelProvider.None,
+            AuthChannelSelection.Decide(AuthChannelKind.Email, value, isDevelopment: false));
+
     // ─── التَطوير: كَما كان ───────────────────────────────────────────
 
     /// <summary>الطَبَقَةُ الحَيَّةُ والبَوّابَةُ البايتِيَّة تَعتَمِدان

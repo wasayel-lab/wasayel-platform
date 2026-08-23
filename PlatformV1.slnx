@@ -13,6 +13,7 @@
   <Folder Name="/libs/kits/" />
   <Folder Name="/libs/kits/Auth/">
     <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Core/ACommerce.Kit.Auth.Core.csproj" />
+    <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.Brevo/ACommerce.Kit.Auth.Providers.Brevo.csproj" />
     <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.MockEmail/ACommerce.Kit.Auth.Providers.MockEmail.csproj" />
     <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.MockNafath/ACommerce.Kit.Auth.Providers.MockNafath.csproj" />
     <Project Path="libs/kits/Auth/ACommerce.Kit.Auth.Providers.MockSms/ACommerce.Kit.Auth.Providers.MockSms.csproj" />

@@ -18,6 +18,9 @@
     <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.MockNafath\ACommerce.Kit.Auth.Providers.MockNafath.csproj" />
     <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.MockEmail\ACommerce.Kit.Auth.Providers.MockEmail.csproj" />
     <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.Smtp\ACommerce.Kit.Auth.Providers.Smtp.csproj" />
+    <!-- بَريدٌ عَبر HTTPS — الـSpace يَحجُب مَنافِذَ SMTP الصادِرَة، والـ443
+         هُوَ المَضمون. يُسَجَّل بِـAuth__Email__Provider=brevo وَحدَها. -->
+    <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.Brevo\ACommerce.Kit.Auth.Providers.Brevo.csproj" />
     <!-- مُزَوِّدا الإنتاج — يُسَجَّلان بِالتَهيئَة وَحدَها
          (Auth__Sms__Provider=twilio، Auth__Nafath__Provider=nafath).
          والإحالَةُ هُنا لِأَنّ deploy-manifest.sh يَمشي ProjectReference

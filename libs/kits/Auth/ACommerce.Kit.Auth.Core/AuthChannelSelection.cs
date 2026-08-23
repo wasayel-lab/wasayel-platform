@@ -36,7 +36,12 @@ public enum AuthChannelProvider
     Smtp,
 
     /// <summary>نَفاذ الفِعليَّة (يَقين/هَيئَة الاتِّصالات).</summary>
-    Nafath
+    Nafath,
+
+    /// <summary>‏Brevo — بَريدٌ فِعليٌّ عَبر HTTPS (المَنفَذ ‏443).
+    /// **بَديلُ SMTP حَيثُ تُحجَب مَنافِذُه** — وهي حالُ الـSpace
+    /// المَقيسَة، لا تَفضيلُ مُزَوِّدٍ على آخَر.</summary>
+    Brevo
 }
 
 /// <summary>
@@ -86,20 +91,41 @@ public static class AuthChannelSelection
     public static string EnvVarName(AuthChannelKind kind)
         => ConfigKey(kind).Replace(":", "__");
 
-    /// <summary>القيمَةُ الَّتي تَختار المُزَوِّدَ الفِعليّ لِكُلّ نَوع.</summary>
-    public static string RealProviderValue(AuthChannelKind kind) => kind switch
+    /// <summary>
+    /// القِيَمُ الَّتي تَختار مُزَوِّداً فِعليّاً لِكُلّ نَوع — **جَدوَل،
+    /// وقَد يَحمِلُ النَوعُ أَكثَرَ مِن قيمَة**.
+    ///
+    /// <para><b>ولِماذا صارَ جَدوَلاً (‏2026-08-23)</b>: لِلبَريدِ نَقلانِ
+    /// لا مُزَوِّدانِ مُتَنافِسان — ‏SMTP على ‏587/465، وBrevo على ‏443.
+    /// والـSpace يَحجُب الأَوَّلَ ولا يَحجُب الثاني. فَالقيمَةُ الثانِيَةُ
+    /// لَيسَت تَرَفاً بَل الطَريقَ الوَحيدَ الَّذي يَعبُر. ولَو بَقِيَ
+    /// الحَقلُ قيمَةً واحِدَةً لَكانَ الشَرطُ سَيُنسَخ خارِجَ هذا المِلَفّ
+    /// — وهو بِالضَبطِ ما وُضِعَ الجَدوَلُ لِيَمنَعَه.</para>
+    /// </summary>
+    public static IReadOnlyList<(string Value, AuthChannelProvider Provider)> RealProviders(
+        AuthChannelKind kind) => kind switch
     {
-        AuthChannelKind.Sms    => "twilio",
-        AuthChannelKind.Email  => "smtp",
-        AuthChannelKind.Nafath => "nafath",
+        AuthChannelKind.Sms    => new[] { ("twilio", AuthChannelProvider.Twilio) },
+        AuthChannelKind.Email  => new[]
+        {
+            ("smtp",  AuthChannelProvider.Smtp),
+            ("brevo", AuthChannelProvider.Brevo)
+        },
+        AuthChannelKind.Nafath => new[] { ("nafath", AuthChannelProvider.Nafath) },
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
+
+    /// <summary>أُولى القِيَم — **لَيسَت «المُوصى بِها»** بَل الأَقدَم،
+    /// وتَبقى لِلرَسائِلِ والاختِبارات. المُوصى بِه لِلـSpace مَكتوبٌ في
+    /// `docs/DEPLOY.md` §٢·ب بِسَبَبِه المَقيس.</summary>
+    public static string RealProviderValue(AuthChannelKind kind)
+        => RealProviders(kind)[0].Value;
 
     /// <summary>
     /// القَرار. **جَدوَلٌ لا شَرطٌ مَنثور**:
     /// <list type="bullet">
-    /// <item>القيمَةُ الفِعليَّة (`twilio`/`smtp`/`nafath`) ← المُزَوِّد
-    /// الفِعليّ، في أَيّ بيئَة.</item>
+    /// <item>قيمَةٌ فِعليَّة (`twilio`/`smtp`/`brevo`/`nafath`) ←
+    /// مُزَوِّدُها، في أَيّ بيئَة.</item>
     /// <item>وإلّا في <c>Development</c> ← المُحاكي (الطَبَقَةُ الحَيَّة
     /// تَعتَمِدُ عَلَيه، ولا يَتَغَيَّر شَيءٌ عَمّا كان).</item>
     /// <item>وإلّا ← <see cref="AuthChannelProvider.None"/>: **فَشَلٌ
@@ -112,14 +138,9 @@ public static class AuthChannelSelection
         AuthChannelKind kind, string? configured, bool isDevelopment)
     {
         var value = configured?.Trim();
-        if (string.Equals(value, RealProviderValue(kind), StringComparison.OrdinalIgnoreCase))
-            return kind switch
-            {
-                AuthChannelKind.Sms    => AuthChannelProvider.Twilio,
-                AuthChannelKind.Email  => AuthChannelProvider.Smtp,
-                AuthChannelKind.Nafath => AuthChannelProvider.Nafath,
-                _ => AuthChannelProvider.None
-            };
+        foreach (var (candidate, provider) in RealProviders(kind))
+            if (string.Equals(value, candidate, StringComparison.OrdinalIgnoreCase))
+                return provider;
         return isDevelopment ? AuthChannelProvider.Mock : AuthChannelProvider.None;
     }
 
