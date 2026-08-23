@@ -2412,7 +2412,7 @@ public static class MarketplaceTemplateExtensions
             HttpRequest req, [FromServices] IOtpChannel? channel, CancellationToken ct) =>
         {
             var phone = req.Form["phone"].ToString().Trim();
-            if (channel is null) return Results.Redirect("/studio/auth?err=phone_unavailable");
+            if (channel is null) return Results.Redirect(StudioDoorClosed(Services.Incubator.StudioAuthMethod.Phone));
             if (string.IsNullOrEmpty(phone)) return Results.Redirect("/studio/auth?err=phone");
             try { await Services.Incubator.StudioAuth.SendPhoneCodeAsync(channel, phone, ct); }
             catch (Exception) { return Results.Redirect("/studio/auth?err=send_failed"); }
@@ -2426,7 +2426,7 @@ public static class MarketplaceTemplateExtensions
             HttpRequest req, [FromServices] IEmailOtpChannel? channel, CancellationToken ct) =>
         {
             var email = EmailAddress.Normalize(req.Form["email"].ToString());
-            if (channel is null) return Results.Redirect("/studio/auth?err=email_unavailable");
+            if (channel is null) return Results.Redirect(StudioDoorClosed(Services.Incubator.StudioAuthMethod.Email));
             if (string.IsNullOrEmpty(email)) return Results.Redirect("/studio/auth?err=email");
             if (!EmailAddress.IsValid(email))
                 return Results.Redirect("/studio/auth?err=email_invalid");
@@ -3517,6 +3517,14 @@ public static class MarketplaceTemplateExtensions
 
     private static string Link(HttpRequest req, string slug, string path)
         => AuthSession.LinkFor(slug, RoleFromReferer(req), path);
+
+    /// <summary>رابِطُ الرَفض حينَ لا قَناةَ مُسَجَّلَةٌ لِطَريقَةِ دُخولِ
+    /// الاستوديو. <b>الرَمزُ مِن الجَدوَلِ لا مِن حَرفِيَّةٍ مَنسوخَة</b>:
+    /// الصَفحَةُ تَقرَأُ نَفسَ الرَمزِ لِتَختار رِسالَةَ القامُوس،
+    /// فَانحِرافُ حَرفٍ بَينَ المَوضِعَينِ يُعطي صَفحَةً بِلا
+    /// رِسالَة.</summary>
+    private static string StudioDoorClosed(Services.Incubator.StudioAuthMethod method)
+        => $"/studio/auth?err={Services.Incubator.StudioAuthDoor.UnavailableError(method)}";
 
     /// <summary>
     /// <para><b>هَل هذا الفَشَل تَضارُبُ نُسخَة تَيار؟</b> — أَي: خَسِرَ
