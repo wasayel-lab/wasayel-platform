@@ -2403,13 +2403,37 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect("/studio/auth");
         }).DisableAntiforgery();
 
-        app.MapPost("/studio/auth/login", (HttpRequest req) =>
+        // ─── بابُ الاستوديو — عَبر القَناة المُسَجَّلَة، والغِيابُ إغلاق ──
+        // ‏`IOtpChannel?` **اختِياريَّةٌ في التَوقيع** — نَفسُ شَكل نِقاط
+        // المُستَأجِرين: خارِجَ التَطوير بِلا `Auth__Sms__Provider` لا
+        // تُسَجَّلُ قَناةٌ أَصلاً، فَالإلزامُ يَرتَدُّ **500**. والرَفضُ
+        // يُقال بِرِسالَةٍ مِن القامُوس.
+        app.MapPost("/studio/auth/login", async (
+            HttpRequest req, [FromServices] IOtpChannel? channel, CancellationToken ct) =>
         {
-            // وهميّ: لا إرسال SMS — نَنتَقِل مُباشَرَةً لِمَرحَلَة الرَّمز.
             var phone = req.Form["phone"].ToString().Trim();
-            if (string.IsNullOrEmpty(phone))
-                return Results.Redirect("/studio/auth?err=phone");
-            return Results.Redirect($"/studio/auth?stage=verify&phone={Uri.EscapeDataString(phone)}");
+            if (channel is null) return Results.Redirect("/studio/auth?err=phone_unavailable");
+            if (string.IsNullOrEmpty(phone)) return Results.Redirect("/studio/auth?err=phone");
+            try { await Services.Incubator.StudioAuth.SendPhoneCodeAsync(channel, phone, ct); }
+            catch (Exception) { return Results.Redirect("/studio/auth?err=send_failed"); }
+            return Results.Redirect(
+                $"/studio/auth?stage=verify&method=phone&phone={Uri.EscapeDataString(phone)}");
+        }).DisableAntiforgery();
+
+        // نَظيرُه لِلبَريد — وهُوَ ما لَم يَكُن مَوجوداً إطلاقاً: المَمنوحُ
+        // بِـ`PLATFORM_ADMIN_EMAIL` كانَ مُهَيَّأً بِلا بابٍ يَبلُغُه.
+        app.MapPost("/studio/auth/email/login", async (
+            HttpRequest req, [FromServices] IEmailOtpChannel? channel, CancellationToken ct) =>
+        {
+            var email = EmailAddress.Normalize(req.Form["email"].ToString());
+            if (channel is null) return Results.Redirect("/studio/auth?err=email_unavailable");
+            if (string.IsNullOrEmpty(email)) return Results.Redirect("/studio/auth?err=email");
+            if (!EmailAddress.IsValid(email))
+                return Results.Redirect("/studio/auth?err=email_invalid");
+            try { await Services.Incubator.StudioAuth.SendEmailCodeAsync(channel, email, ct); }
+            catch (Exception) { return Results.Redirect("/studio/auth?err=send_failed"); }
+            return Results.Redirect(
+                $"/studio/auth?stage=verify&method=email&email={Uri.EscapeDataString(email)}");
         }).DisableAntiforgery();
 
         app.MapPost("/studio/auth/verify", async (
@@ -2417,12 +2441,17 @@ public static class MarketplaceTemplateExtensions
             IServiceScopeFactory scopeFactory,
             Services.Incubator.FeasibilityAnalysisService incubator) =>
         {
-            var phone = req.Form["phone"].ToString().Trim();
+            var method = Services.Incubator.StudioAuthDoor.Parse(req.Form["method"].ToString())
+                         ?? Services.Incubator.StudioAuthMethod.Phone;
+            var field = Services.Incubator.StudioAuthDoor.Slug(method);
+            var subject = Services.Incubator.StudioAuth.NormalizeSubject(
+                method, req.Form[field].ToString());
             var code  = req.Form["code"].ToString().Trim();
-            var user = await Services.Incubator.StudioAuth.VerifyAsync(store, res, phone, code);
-            if (user is null)
-                return Results.Redirect(
-                    $"/studio/auth?stage=verify&phone={Uri.EscapeDataString(phone)}&err=code");
+            var back  = $"/studio/auth?stage=verify&method={field}" +
+                        $"&{field}={Uri.EscapeDataString(subject)}";
+            var user = await Services.Incubator.StudioAuth.VerifyAsync(
+                store, res, method, subject, code);
+            if (user is null) return Results.Redirect($"{back}&err=code");
 
             // اِربِط المَتاجِر اليَتيمَة بِأَوَّل مُستَخدِم (لَو هذا أَوَّل تَسجيل).
             await Services.Incubator.StudioOwnershipSeeder.RunAsync(store);

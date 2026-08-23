@@ -1,5 +1,6 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Incubator.StudioTierService Tier
+@inject Services.PlatformAdminGuard PlatformGuard
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 @inject L L
 
@@ -38,6 +39,22 @@
                     <a class="studio-nav-item @(Active == "new" ? "active" : "")" href="/studio/new">
                         <AcIcon Name="plus" Size="18" /> @L.Markup("studio.nav.new_idea")@((MarkupString)"\n                    ")
                     </a>
+
+                    @* مَدخَلُ إدارَةِ المَنَصَّة — لِمُشرِفِها وَحدَه.
+                       كانَ **لا وُجودَ لَه**: الصَلاحِيَّةُ تُمنَح
+                       (‏`PLATFORM_ADMIN_*`) و`/admin` مَبنيَّةٌ ومَحروسَة،
+                       ولا رابِطَ إلَيها مِن أَيّ شاشَة — أَي ميزَةٌ لا
+                       تُبلَغ بِنَقرَة (القاعِدَة ١٢). ولِأَنَّه مَشروطٌ
+                       بِالحارِسِ نَفسِه (`PlatformAdminGuard` — التَعريفُ
+                       الوَحيدُ لِـ«مُشرِف مَنَصَّة»)، فَغَيرُ المُشرِفِ
+                       لا يَرى زِرّاً يَرُدُّه. *@
+                    @if (isPlatformAdmin)
+                    {
+                        <div class="studio-nav-section">@L.Markup("studio.nav.admin")</div>
+                        <a class="studio-nav-item @(Active == "admin" ? "active" : "")" href="/admin">
+                            <AcIcon Name="settings" Size="18" /> @L.Markup("studio.nav.admin")@((MarkupString)"\n                        ")
+                        </a>
+                    }
                 </nav>
                 <div class="studio-sidebar-footer">
                     @if (limits is not null)
@@ -86,11 +103,15 @@
 
     TierLimits? limits;
     string usageSummary = "";
+    bool isPlatformAdmin;
 
     protected override async Task OnInitializedAsync()
     {
         Auth.Load();
         if (!Auth.IsAuthenticated) return;
+        // نَفسُ الحارِسِ الَّذي تَسأَلُه `/admin` — لا تَعريفَ ثانٍ.
+        try { isPlatformAdmin = (await PlatformGuard.EvaluateAsync()).Allowed; }
+        catch { isPlatformAdmin = false; }
         try
         {
             var (user, l) = await Tier.ReadWithLimitsAsync(Auth.UserId!.Value);

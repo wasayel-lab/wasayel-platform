@@ -1,18 +1,30 @@
 @page "/studio/auth"
 @inject Services.Incubator.StudioAuth Auth
 @inject NavigationManager Nav
+@inject IServiceProvider Sp
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 @inject L L
 
 @*
-    دُخول studio وهميّ بِرَقم الهاتِف. مَرحَلَتان: إدخال الرَّقم ثُمَّ الرَّمز.
-    الرَّمز دائِماً "123456". إن كانَ المُستَخدِم مُسَجَّلاً، نُحَوِّله للوحَة.
+    دُخول studio — مَرحَلَتان (مُعَرِّف ثُمَّ رَمز)، وطَريقَتان (جَوّال
+    أَو بَريد) **حَسَبَ القَنَواتِ المُسَجَّلَةِ فِعلاً**.
+
+    كانَ الرَمزُ ثابِتاً `123456` مَكتوباً في هذِه الصَفحَةِ نَفسِها
+    ومُقارَناً بِثابِتٍ في `StudioAuth` بِلا شَرطِ بيئَة — وهذا البابُ
+    هُوَ المَوضِعُ الوَحيدُ الَّذي يُنتِج جَلسَةَ مُشرِفِ مَنَصَّة.
+    الآنَ: الرَمزُ يُطلَب مِن القَناة، والتَلميحُ لا يُعرَض إلّا إن
+    كانَت القَناةُ مُحاكيَةً فِعلاً (`DevHintCode`)، وما لا قَناةَ لَه
+    **لا يُعرَض زِرُّه** بَدَلَ أَن يَقودَ إلى رَفض (القاعِدَة ١٢).
 *@
 
 <div class="studio-root">
     @{
         Auth.Load();
         var redirect = Auth.IsAuthenticated;
+        var offered = StudioAuthDoor.Offered(PhoneChannel is not null, EmailChannel is not null);
+        var active = StudioAuthDoor.Active(Method, offered);
+        var isEmail = active == StudioAuthMethod.Email;
+        var subject = isEmail ? Email : Phone;
     }
     @if (redirect)
     {
@@ -26,68 +38,121 @@
                     <div class="auth-logo-mark">A</div>
                 </div>
 
-                @if (Stage == "verify")
+                @if (active is null)
+                {
+                    @* لا قَناةَ مُسَجَّلَة — إنتاجٌ بِلا مُزَوِّدٍ مَضبوط.
+                       لافِتَةٌ بِلا نَموذَج، نَفسُ شَكلِ صَفحَةِ دُخولِ
+                       المُستَأجِر بَعدَ `cd43b366`. *@
+                    <h1 class="auth-title">@L.Markup("studio.auth.login_title")</h1>
+                    <div class="st-field">
+                        <div class="st-chip st-chip-danger" style="width:100%;justify-content:center;">
+                            @L.Markup("studio.auth.closed")
+                        </div>
+                    </div>
+                }
+                else if (Stage == "verify")
                 {
                     <h1 class="auth-title">@L.Markup("studio.auth.code_title")</h1>
-                    <p class="auth-sub">@L.Markup("studio.auth.code_sent") @Phone</p>
+                    <p class="auth-sub">@L.Markup("studio.auth.code_sent") @subject</p>
 
-                    <div class="auth-dev-hint">
-                        <AcIcon Name="key" Size="16" /> @L.Markup("studio.auth.dev_hint") <strong>123456</strong>
-                    </div>
+                    @if (DevHintFor(active.Value) is { } hint)
+                    {
+                        <div class="auth-dev-hint">
+                            <AcIcon Name="key" Size="16" /> @L.Markup("studio.auth.dev_hint") <strong>@hint</strong>
+                        </div>
+                    }
 
-                    @if (Err == "code")
+                    @if (ErrorMessage is not null)
                     {
                         <div class="st-field">
                             <div class="st-chip st-chip-danger" style="width:100%;justify-content:center;">
-                                @((MarkupString)"\n                                ")@L.Markup("studio.auth.code_invalid")@((MarkupString)"\n                            ")
+                                @ErrorMessage
                             </div>
                         </div>
                     }
 
                     <form method="post" action="/studio/auth/verify">
-                        <input type="hidden" name="phone" value="@Phone" />
+                        <input type="hidden" name="method" value="@StudioAuthDoor.Slug(active.Value)" />
+                        <input type="hidden" name="@StudioAuthDoor.Slug(active.Value)" value="@subject" />
                         <div class="st-field">
                             <input name="code" inputmode="numeric" maxlength="6" required
                                    class="st-input auth-otp-input" placeholder="······"
                                    autocomplete="one-time-code" />
                         </div>
                         <button type="submit" class="st-btn st-btn-primary st-btn-block st-btn-lg">
-                            @((MarkupString)"\n                            ")@L.Markup("studio.auth.verify")@((MarkupString)"\n                        ")
+                            @L.Markup("studio.auth.verify")
                         </button>
                     </form>
                     <p style="text-align:center;margin-top:16px;">
-                        <a href="/studio/auth" style="color:var(--st-muted);font-size:13px;text-decoration:none;">
-                            ← @L.Markup("studio.auth.change_number")@((MarkupString)"\n                        ")
+                        <a href="@($"/studio/auth?method={StudioAuthDoor.Slug(active.Value)}")"
+                           style="color:var(--st-muted);font-size:13px;text-decoration:none;">
+                            ← @L.Markup(isEmail ? "studio.auth.change_email" : "studio.auth.change_number")
                         </a>
                     </p>
                 }
                 else
                 {
                     <h1 class="auth-title">@L.Markup("studio.auth.login_title")</h1>
-                    <p class="auth-sub">@L.Markup("studio.auth.login_sub")</p>
+                    <p class="auth-sub">@L.Markup(isEmail ? "studio.auth.login_sub_email" : "studio.auth.login_sub")</p>
 
-                    @if (Err == "phone")
+                    @if (offered.Count > 1)
+                    {
+                        @* الطَريقَتانِ مَعروضَتانِ لِأَنّ القَناتَينِ
+                           مُسَجَّلَتانِ — وواحِدَةٌ وَحدَها تَعني تَبويباً
+                           واحِداً لا تَبويبَينِ أَحَدُهُما يَرُدُّ «غَير
+                           مُتاح». *@
+                        <div class="st-field" style="display:flex;gap:8px;">
+                            @foreach (var m in offered)
+                            {
+                                <a href="@($"/studio/auth?method={StudioAuthDoor.Slug(m)}")"
+                                   class="st-btn st-btn-block @(m == active ? "st-btn-primary" : "st-btn-ghost")">
+                                    @L.Markup(m == StudioAuthMethod.Email
+                                        ? "studio.auth.tab_email" : "studio.auth.tab_phone")
+                                </a>
+                            }
+                        </div>
+                    }
+
+                    @if (ErrorMessage is not null)
                     {
                         <div class="st-field">
                             <div class="st-chip st-chip-danger" style="width:100%;justify-content:center;">
-                                @((MarkupString)"\n                                ")@L.Markup("studio.auth.phone_missing")@((MarkupString)"\n                            ")
+                                @ErrorMessage
                             </div>
                         </div>
                     }
 
-                    <form method="post" action="/studio/auth/login">
-                        <div class="st-field">
-                            <label class="st-label">@L.Markup("studio.auth.phone_label")</label>
-                            <input name="phone" inputmode="tel" required
-                                   class="st-input" placeholder="05xxxxxxxx" dir="ltr"
-                                   style="text-align:start;" />
-                        </div>
-                        <button type="submit" class="st-btn st-btn-primary st-btn-block st-btn-lg">
-                            @((MarkupString)"\n                            ")@L.Markup("studio.auth.send_code")@((MarkupString)"\n                        ")
-                        </button>
-                    </form>
+                    @if (isEmail)
+                    {
+                        <form method="post" action="/studio/auth/email/login">
+                            <div class="st-field">
+                                <label class="st-label">@L.Markup("studio.auth.email_label")</label>
+                                <input name="email" type="email" inputmode="email" required maxlength="254"
+                                       class="st-input" placeholder="name@example.com" dir="ltr"
+                                       autocomplete="email" value="@Email"
+                                       style="text-align:start;" />
+                            </div>
+                            <button type="submit" class="st-btn st-btn-primary st-btn-block st-btn-lg">
+                                @L.Markup("studio.auth.send_code")
+                            </button>
+                        </form>
+                    }
+                    else
+                    {
+                        <form method="post" action="/studio/auth/login">
+                            <div class="st-field">
+                                <label class="st-label">@L.Markup("studio.auth.phone_label")</label>
+                                <input name="phone" inputmode="tel" required
+                                       class="st-input" placeholder="05xxxxxxxx" dir="ltr"
+                                       value="@Phone" style="text-align:start;" />
+                            </div>
+                            <button type="submit" class="st-btn st-btn-primary st-btn-block st-btn-lg">
+                                @L.Markup("studio.auth.send_code")
+                            </button>
+                        </form>
+                    }
                     <p style="text-align:center;margin-top:18px;color:var(--st-faint);font-size:12px;">
-                        @((MarkupString)"\n                        ")@L.Markup("studio.auth.terms_note")@((MarkupString)"\n                    ")
+                        @L.Markup("studio.auth.terms_note")
                     </p>
                 }
             </div>
@@ -97,6 +162,36 @@
 
 @code {
     [SupplyParameterFromQuery] public string? Stage { get; set; }
+    [SupplyParameterFromQuery] public string? Method { get; set; }
     [SupplyParameterFromQuery] public string? Phone { get; set; }
+    [SupplyParameterFromQuery] public string? Email { get; set; }
     [SupplyParameterFromQuery] public string? Err { get; set; }
+
+    /// <summary>القَناةُ المُسَجَّلَةُ فِعلاً — و<c>null</c> يَعني «لَم
+    /// تُسَجَّل» لا «مُعَطَّلَة»: القَرارُ وَقَعَ في <c>Program.cs</c> عَبر
+    /// <c>AuthChannelSelection.Decide</c>، وهُنا يُقرَأ أَثَرُه.</summary>
+    ACommerce.Kit.Auth.IOtpChannel? PhoneChannel =>
+        Sp.GetService(typeof(ACommerce.Kit.Auth.IOtpChannel)) as ACommerce.Kit.Auth.IOtpChannel;
+
+    ACommerce.Kit.Auth.IEmailOtpChannel? EmailChannel =>
+        Sp.GetService(typeof(ACommerce.Kit.Auth.IEmailOtpChannel)) as ACommerce.Kit.Auth.IEmailOtpChannel;
+
+    /// <summary>تَلميحُ المُحاكي — <c>null</c> مَعَ مُزَوِّدٍ فِعليّ.
+    /// كانَ <c>123456</c> مَكتوباً في هذِه الصَفحَةِ بِلا شَرط، فَيُعرَض
+    /// حَتّى مَعَ مُزَوِّدٍ حَقيقيّ. الآنَ يُقرَأ مِن القَناةِ نَفسِها.</summary>
+    string? DevHintFor(StudioAuthMethod method) => method == StudioAuthMethod.Email
+        ? EmailChannel?.DevHintCode
+        : PhoneChannel?.DevHintCode;
+
+    string? ErrorMessage => Err switch
+    {
+        "phone"             => L["studio.auth.phone_missing"],
+        "email"             => L["studio.auth.email_missing"],
+        "email_invalid"     => L["studio.auth.email_invalid"],
+        "code"              => L["studio.auth.code_invalid"],
+        "send_failed"       => L["studio.auth.send_failed"],
+        "phone_unavailable" => L["studio.auth.phone_unavailable"],
+        "email_unavailable" => L["studio.auth.email_unavailable"],
+        _                   => null
+    };
 }

@@ -65,6 +65,7 @@ public class WriteEndpointGuardTests
         new("/{slug}/auth/nafath/request:w", "‏[WolverinePost] بَدء نَفاذ — يُنشِئ الجَلسَة، ولا جَلسَةَ قَبلَه."),
         new("/{slug}/auth/nafath/verify:w",  "‏[WolverinePost] تَأكيد نَفاذ — يُنشِئ الجَلسَة، ولا جَلسَةَ قَبلَه."),
         new("/studio/auth/login",         "طَلَب رَمز دُخول الـ studio — هذا هُوَ الدُخول نَفسُه."),
+        new("/studio/auth/email/login",   "نَظيرُ سابِقَتِها بِالبَريد — نَفسُ القَرار: الدُخول نَفسُه، ولا جَلسَةَ قَبلَه."),
         new("/studio/auth/verify",        "تَحَقُّق رَمز الـ studio — يُنشِئ الجَلسَة، فَلا جَلسَةَ قَبلَه."),
         new("/studio/begin",              "بَدء جَلسَة studio مَجهولَة قَبل الدُخول — يَكتُب cookie لا قاعِدَة بَيانات."),
 
