@@ -2397,7 +2397,7 @@ public static class MarketplaceTemplateExtensions
         {
             var prompt = req.Form["prompt"].ToString().Trim();
             if (!string.IsNullOrEmpty(prompt))
-                res.Cookies.Append("ac.studio.prompt", Uri.EscapeDataString(prompt),
+                res.Cookies.Append(StudioPromptCookie, Uri.EscapeDataString(prompt),
                     new CookieOptions { IsEssential = true, Path = "/",
                         Expires = DateTimeOffset.UtcNow.AddHours(2) });
             return Results.Redirect("/studio/auth");
@@ -2457,44 +2457,12 @@ public static class MarketplaceTemplateExtensions
             await Services.Incubator.StudioOwnershipSeeder.RunAsync(store);
 
             // مُطالَبَة مُعَلَّقَة؟ أَنشِئ جَلسَة وشَغِّل التَّحليل في الخَلفِيَّة.
-            var promptCookie = req.Cookies["ac.studio.prompt"];
-            if (!string.IsNullOrEmpty(promptCookie))
-            {
-                // قَبول الشُروط مَطلوب قَبل أَوَّل تَحليل.
-                await using (var consentQs = store.QuerySession(Services.Incubator.StudioAuth.Tenant))
-                {
-                    var consents = await consentQs.Query<Services.Incubator.ConsentRecord>()
-                        .Where(c => c.UserId == user.Id && c.Version == Services.Incubator.ConsentPolicy.CurrentVersion)
-                        .ToListAsync();
-                    if (consents.Count == 0)
-                        return Results.Redirect($"/studio/consent?returnUrl=/studio/auth/verify");
-                }
-
-                res.Cookies.Delete("ac.studio.prompt");
-                var prompt = Uri.UnescapeDataString(promptCookie);
-
-                // tier gate — هَل بَلَغ المُستَخدِم حَدّ تَحاليلِه؟
-                using var checkScope = scopeFactory.CreateScope();
-                var tier = checkScope.ServiceProvider
-                    .GetRequiredService<Services.Incubator.StudioTierService>();
-                var gate = await tier.CheckAnalyzeAsync(user.Id);
-                if (!gate.Allowed)
-                    return Results.Redirect($"/studio?upgrade=analyze");
-
-                var s = await incubator.StartAsync(user.Id, user.FullName);
-                await incubator.SaveAnswerAsync(s.Id, "description", prompt);
-                await incubator.MarkAnalyzingAsync(s.Id);
-                await tier.RecordAnalysisAsync(user.Id);
-                _ = Task.Run(async () =>
-                {
-                    using var scope = scopeFactory.CreateScope();
-                    var bg = scope.ServiceProvider
-                        .GetRequiredService<Services.Incubator.FeasibilityAnalysisService>();
-                    try { await bg.RunAnalysisAsync(s.Id); } catch { }
-                });
-                return Results.Redirect($"/studio/s/{s.Id}");
-            }
-            return Results.Redirect("/studio");
+            // الجِسمُ في `ResumeStudioPromptAsync` — ويُنادى مِن نُقطَةِ
+            // قَبولِ الشُروطِ أَيضاً، وذاكَ ما رَفَعَ الـ405.
+            return await ResumeStudioPromptAsync(
+                       req, res, user.Id, user.FullName,
+                       store, scopeFactory, incubator, checkConsent: true)
+                   ?? Results.Redirect("/studio");
         }).DisableAntiforgery();
 
         app.MapPost("/studio/logout", (HttpResponse res) =>
@@ -2503,9 +2471,19 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect("/");
         }).DisableAntiforgery();
 
-        // قَبول الشُروط — يَحفَظ ConsentRecord ويُحَوِّل لِـ returnUrl.
+        // قَبول الشُروط — يَحفَظ ConsentRecord، ثُمَّ **يَستَأنِف
+        // المُطالَبَةَ المُعَلَّقَةَ إن وُجِدَت**، وإلّا حَوَّلَ لِـ
+        // returnUrl.
+        //
+        // ‏**والاستِئنافُ هُنا لا إعادَةُ تَحويل**: كانَ
+        // `/studio/auth/verify` يُرسِل إلى هذِه الصَفحَةِ بِـ
+        // `returnUrl=/studio/auth/verify`، وتِلكَ النُقطَةُ `POST` فَقَط —
+        // فَكانَ القَبولُ يَنتَهي بِـ**‏405** لِكُلّ مُستَخدِمٍ جَديدٍ
+        // جاءَ بِفِكرَةٍ مِن صَفحَة الهُبوط.
         app.MapPost("/studio/consent/accept", async (
-            HttpRequest req, IDocumentStore store,
+            HttpRequest req, HttpResponse res, IDocumentStore store,
+            IServiceScopeFactory scopeFactory,
+            Services.Incubator.FeasibilityAnalysisService incubator,
             Services.Incubator.StudioAuth auth) =>
         {
             auth.Load();
@@ -2524,7 +2502,13 @@ public static class MarketplaceTemplateExtensions
                 UserAgent = req.Headers.UserAgent.ToString()
             });
             await s.SaveChangesAsync();
-            return Results.Redirect(returnUrl);
+
+            // الشُروطُ قُبِلَت الآن، فَلا يُعادُ فَحصُها
+            // (`checkConsent: false`) — وإلّا دارَت الصَفحَةُ على نَفسِها.
+            return await ResumeStudioPromptAsync(
+                       req, res, auth.UserId!.Value, auth.UserName ?? "",
+                       store, scopeFactory, incubator, checkConsent: false)
+                   ?? Results.Redirect(returnUrl);
         }).DisableAntiforgery();
 
         // تَقييم قِسم في دِراسَة (👍/👎) — لِتَحسين الـ prompt لاحِقاً.
@@ -3525,6 +3509,78 @@ public static class MarketplaceTemplateExtensions
     /// رِسالَة.</summary>
     private static string StudioDoorClosed(Services.Incubator.StudioAuthMethod method)
         => $"/studio/auth?err={Services.Incubator.StudioAuthDoor.UnavailableError(method)}";
+
+    /// <summary>كوكي المُطالَبَة المُعَلَّقَة — يُكتَب في
+    /// <c>/studio/begin</c> ويُستَهلَك مَرَّةً واحِدَة.</summary>
+    private const string StudioPromptCookie = "ac.studio.prompt";
+
+    /// <summary>
+    /// <para><b>استِئنافُ المُطالَبَةِ المُعَلَّقَة — مَوضِعٌ واحِد،
+    /// نُقطَتانِ تُنادِيانِه.</b> صاحِبُ الجَلسَةِ كَتَبَ فِكرَتَه في
+    /// صَفحَةِ الهُبوطِ قَبلَ أَن يَملِكَ حِساباً، فَحُفِظَت في كوكي.
+    /// وتُستَهلَك في مَوضِعَين: بَعدَ التَحَقُّقِ مُباشَرَةً لِمَن سَبَقَ
+    /// أَن وافَقَ على الشُروط، وبَعدَ القَبولِ لِمَن لَم يُوافِق.</para>
+    ///
+    /// <para><b>ولِماذا استُخرِجَت (‏2026-08-23)</b>: كانَ المَوضِعُ
+    /// الثاني يُنجَز بِإعادَةِ التَحويلِ إلى النُقطَةِ الأولى نَفسِها —
+    /// <c>/studio/consent?returnUrl=/studio/auth/verify</c> — وتِلكَ
+    /// النُقطَةُ <c>POST</c> فَقَط، فَكانَ التَحويلُ يَنتَهي إلى
+    /// <b>‏405</b> بَعدَ قَبولِ الشُروطِ مُباشَرَةً. أَي أَنّ أَوَّلَ
+    /// دُخولٍ لِمُستَخدِمٍ جَديدٍ بِفِكرَةٍ مَكتوبَة كانَ يَنتَهي بِخَطَإ
+    /// بروتوكول. والحَلُّ لَيسَ تَبديلَ الوِجهَة وَحدَه: وِجهَةٌ تُصَيَّر
+    /// بِـ<c>GET</c> تَرفَع الـ405 <b>وتُسقِط الفِكرَةَ صامِتَةً</b> —
+    /// لِأَنّ لا قارِئَ لِلكوكي غَيرَ هذا الجِسم. فَاستُخرِجَ الجِسمُ
+    /// ليُنادى مِن حَيثُ يَقَع القَرار.</para>
+    ///
+    /// <para>يُعيد <c>null</c> إن لَم تَكُن ثَمَّةَ مُطالَبَة — فَيُكمِل
+    /// المُنادي بِوِجهَتِه الطَبيعِيَّة.</para>
+    /// </summary>
+    private static async Task<IResult?> ResumeStudioPromptAsync(
+        HttpRequest req, HttpResponse res, Guid userId, string userName,
+        IDocumentStore store, IServiceScopeFactory scopeFactory,
+        Services.Incubator.FeasibilityAnalysisService incubator,
+        bool checkConsent)
+    {
+        var promptCookie = req.Cookies[StudioPromptCookie];
+        if (string.IsNullOrEmpty(promptCookie)) return null;
+
+        if (checkConsent)
+        {
+            await using var consentQs = store.QuerySession(Services.Incubator.StudioAuth.Tenant);
+            var consents = await consentQs.Query<Services.Incubator.ConsentRecord>()
+                .Where(c => c.UserId == userId &&
+                            c.Version == Services.Incubator.ConsentPolicy.CurrentVersion)
+                .ToListAsync();
+            if (consents.Count == 0)
+                // ‏**وِجهَةُ العَودَةِ صَفحَةٌ تُصَيَّر بِـ`GET`**، ولا
+                // تَحمِل استِئنافاً: نُقطَةُ القَبولِ نَفسُها تَستَأنِف
+                // بِالنِداءِ أَدناه.
+                return Results.Redirect("/studio/consent?returnUrl=/studio");
+        }
+
+        res.Cookies.Delete(StudioPromptCookie);
+        var prompt = Uri.UnescapeDataString(promptCookie);
+
+        // tier gate — هَل بَلَغ المُستَخدِم حَدّ تَحاليلِه؟
+        using var checkScope = scopeFactory.CreateScope();
+        var tier = checkScope.ServiceProvider
+            .GetRequiredService<Services.Incubator.StudioTierService>();
+        var gate = await tier.CheckAnalyzeAsync(userId);
+        if (!gate.Allowed) return Results.Redirect("/studio?upgrade=analyze");
+
+        var s = await incubator.StartAsync(userId, userName);
+        await incubator.SaveAnswerAsync(s.Id, "description", prompt);
+        await incubator.MarkAnalyzingAsync(s.Id);
+        await tier.RecordAnalysisAsync(userId);
+        _ = Task.Run(async () =>
+        {
+            using var scope = scopeFactory.CreateScope();
+            var bg = scope.ServiceProvider
+                .GetRequiredService<Services.Incubator.FeasibilityAnalysisService>();
+            try { await bg.RunAnalysisAsync(s.Id); } catch { }
+        });
+        return Results.Redirect($"/studio/s/{s.Id}");
+    }
 
     /// <summary>
     /// <para><b>هَل هذا الفَشَل تَضارُبُ نُسخَة تَيار؟</b> — أَي: خَسِرَ
