@@ -64,22 +64,30 @@ public sealed class StudioAuth
     public static async Task<string?> SendPhoneCodeAsync(
         IOtpChannel channel, string phone, CancellationToken ct = default)
         => await SendAsync(StudioAuthMethod.Phone, phone, channel.DevHintCode,
-            (code) => channel.SendOtpAsync(phone, code, ct));
+            (code, token) => channel.SendOtpAsync(phone, code, token), ct);
 
     /// <summary>نَظيرُه لِلبَريد — نَفسُ الجِسمِ بِقَناةٍ أُخرى.</summary>
     public static async Task<string?> SendEmailCodeAsync(
         IEmailOtpChannel channel, string email, CancellationToken ct = default)
         => await SendAsync(StudioAuthMethod.Email, email, channel.DevHintCode,
-            (code) => channel.SendOtpAsync(email, code, ct));
+            (code, token) => channel.SendOtpAsync(email, code, token), ct);
 
+    /// <summary><b>والرَمزُ يُمَرَّر ولا يُلتَقَط</b>: كانَ الـ<c>ct</c>
+    /// مَحبوساً في المُغلَق (‏<c>closure</c>) بَينَما المُهلَةُ تُقاس على
+    /// رَمزٍ آخَر — فَلا يَصِل الإلغاءُ إلى القَناة. الآنَ يَصنَع
+    /// <see cref="OtpSendGuard"/> الرَمزَ ويُمَرِّرُه إلى الإرسالِ نَفسِه،
+    /// فَالمُهلَةُ تَقطَع فِعلاً لا اسماً.</summary>
     private static async Task<string?> SendAsync(
-        StudioAuthMethod method, string subject, string? devHint, Func<string, Task> send)
+        StudioAuthMethod method, string subject, string? devHint,
+        Func<string, CancellationToken, Task> send, CancellationToken ct)
     {
         if (!AuthHandlers.TryConsumeSendQuota($"{Tenant}|{subject}"))
             throw new InvalidOperationException("rate_limited");
         var code = AuthHandlers.NewCode(devHint);
         AuthHandlers.IssueAttempt(Tenant, subject, code, StudioAuthDoor.Kind(method));
-        await send(code);
+        // نَفسُ حارِسِ الأُنبوبِ الَّذي يَمُرّ بِه بابُ المُستَأجِرين —
+        // ‏`OtpSendGuard`. بابُ الاستوديو عَلِقَ ‏90+ ثانِيَة في الإنتاج.
+        await OtpSendGuard.SendWithinAsync(token => send(code, token), ct);
         return devHint;
     }
 

@@ -139,7 +139,9 @@ public static class AuthHandlers
 
         var code = NewCode(channel.DevHintCode);
         var attemptId = IssueAttempt(tenantCtx.Slug, cmd.Phone, code, AuthKind.PhoneOtp);
-        await channel.SendOtpAsync(cmd.Phone, code, ct);
+        // الحارِسُ في الأُنبوبِ لا في كُلِّ مُزَوِّد — راجِع `OtpSendGuard`.
+        await OtpSendGuard.SendWithinAsync(
+            token => channel.SendOtpAsync(cmd.Phone, code, token), ct);
         return new OtpRequestResult(
             AttemptId: attemptId,
             DisplayCode: channel.DevHintCode ?? "",
@@ -181,7 +183,10 @@ public static class AuthHandlers
 
         var code = NewCode(channel.DevHintCode);
         var attemptId = IssueAttempt(tenantCtx.Slug, email, code, AuthKind.EmailOtp);
-        await channel.SendOtpAsync(email, code, ct);
+        // نَفسُ الحارِس — والعِلَّةُ المَقيسَةُ كانَت هُنا بِالضَبط:
+        // ‏`POST /{slug}/auth/email/login` عَلِقَ ‏90+ ثانِيَة بِلا رَدّ.
+        await OtpSendGuard.SendWithinAsync(
+            token => channel.SendOtpAsync(email, code, token), ct);
         return new OtpRequestResult(
             AttemptId: attemptId,
             DisplayCode: channel.DevHintCode ?? "",

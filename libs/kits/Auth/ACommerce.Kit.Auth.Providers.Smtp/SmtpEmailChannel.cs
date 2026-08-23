@@ -29,6 +29,19 @@ public sealed class SmtpEmailOptions
     /// <summary>اسم المُرسِل الظاهِر حينَ يَكون <see cref="From"/> عُنواناً
     /// مُجَرَّداً.</summary>
     public string FromName { get; set; } = "";
+
+    /// <summary>
+    /// مُهلَةُ الإرسالِ كامِلاً بِالثَواني — اتِّصالاً واعتِماداً وتَسليماً.
+    /// الافتِراضيّ <see cref="OtpSendGuard.DefaultTimeoutSeconds"/>، والصِفرُ
+    /// أَو السالِبُ يَرتَدُّ إلَيه (لا «بِلا مُهلَة»).
+    ///
+    /// <para><b>المَقيسُ الَّذي أَضافَها (‏2026-08-23)</b>: الـSpace يَحجُب
+    /// المَنافِذَ الصادِرَةَ ‏587/465، فَـ<c>ConnectAsync</c> بِلا مُهلَةٍ
+    /// عَلَّقَ الطَلَبَ أَكثَرَ مِن ‏90 ثانِيَة بِلا رَدّ — لا خَطَأً
+    /// يَقرَؤُه المُستَخدِمُ ولا صَفحَةَ رَمز. التَهيئَة:
+    /// <c>Auth__Email__TimeoutSeconds</c>.</para>
+    /// </summary>
+    public int TimeoutSeconds { get; set; } = OtpSendGuard.DefaultTimeoutSeconds;
 }
 
 /// <summary>
@@ -72,23 +85,14 @@ public sealed class SmtpEmailChannel : IEmailOtpChannel
         // لا في مُتَصَفِّح** — فَلُغَةُ الكوكي لَيسَت لُغَةَ القارِئ.
         // فَالعَرَبِيَّةُ صَراحَةً، وهي المَعجَمُ الإلزاميّ.
         //
-        // **وجِسمُ الرِسالَة يَبقى حَرفِيّاً — بِسَبَبٍ مَقيسٍ لا
-        // بِإهمال**: يَحمِل `<html>` و`<p>` و`&`، و`value_unsafe_markup`
-        // في `LocaleValidator` يَرفُض أَيّ قيمَةٍ فيها `< > &` (وهو
-        // يَحرُس `L.Markup` الَّذي يَكتُب بِلا تَرميز). فَقالَبُ رِسالَةٍ
-        // كامِلٌ لَيسَ «نَصّ مِفتاح» بَل مُستَند، وبابُه قَوالِبُ بَريدٍ
-        // لا قامُوسُ واجِهَة — وذاكَ قَرارٌ آخَر لَه مَوجَتُه.
-        msg.Subject = LocaleCatalog.Text(LocaleCatalog.Arabic, "auth.email.otp_subject");
+        // **وجِسمُ الرِسالَة صارَ في `OtpEmailMessage`** — مَوضِعٌ واحِدٌ
+        // تَقرَؤُه قَناتا البَريدِ الفِعليَّتان. ولِماذا هُوَ حَرفِيٌّ لا
+        // في القامُوس: مَشروحٌ هُناك (‏`value_unsafe_markup`).
+        msg.Subject = LocaleCatalog.Text(LocaleCatalog.Arabic, OtpEmailMessage.SubjectKey);
         msg.Body = new BodyBuilder
         {
-            TextBody = $"رَمز التَّحَقُّق: {code}\nصالِح لِعَشر دَقائِق. إن لَم تَطلُبه فَتَجاهَل هذِه الرِّسالَة.",
-            HtmlBody = $"""
-                <html dir="rtl"><body style="font-family:Tahoma,Arial;line-height:1.6;">
-                <p>رَمز التَّحَقُّق الخاصّ بِك:</p>
-                <p style="font-size:28px;font-weight:700;letter-spacing:.3em;direction:ltr;">{code}</p>
-                <p style="color:#6b7280;font-size:13px;">صالِح لِعَشر دَقائِق. إن لَم تَطلُبه فَتَجاهَل هذِه الرِّسالَة.</p>
-                </body></html>
-                """
+            TextBody = OtpEmailMessage.Text(code),
+            HtmlBody = OtpEmailMessage.Html(code)
         }.ToMessageBody();
 
         // المَنفَذ ٤٦٥ تَشفير ضِمنيّ؛ ما دونه STARTTLS متى دَعَمَه الخادِم.
@@ -96,15 +100,46 @@ public sealed class SmtpEmailChannel : IEmailOtpChannel
             ? SecureSocketOptions.SslOnConnect
             : SecureSocketOptions.StartTlsWhenAvailable;
 
-        using var client = new SmtpClient();
+        // ── المُهلَة: رَمزٌ مَربوطٌ بِرَمزِ الطَلَب، ومُؤَقِّتٌ مَعَه ──
+        // الـSpace يَحجُب ‏587/465 الصادِرَين، فَالمُصافَحَةُ تَعلَق عِندَ
+        // انتِظارِ تَحيَّةِ الخادِم (‏`220 …`) الَّتي لا تَأتي أَبَداً.
+        // و`SmtpClient.Timeout` وَحدَه لا يَكفي — يَحرُسُ عَمَلِيّاتِ
+        // القِراءَةِ والكِتابَةِ بَعدَ الاتِّصال، لا اتِّصالَ المِقبَسِ
+        // نَفسَه. فَالرَمزُ هُوَ الحارِس، والخاصِّيَّةُ تَعضُدُه.
+        var window = OtpSendGuard.Timeout(_opts.TimeoutSeconds);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(window);
+
+        // **ولِماذا ضِعفُ النافِذَةِ لا النافِذَةَ نَفسَها**: لَو تَساوَيا
+        // تَسابَقَ حارِسان على المُهلَةِ نَفسِها — فَمَرَّةً يَسبِق الرَمزُ
+        // فَتُقال «تَجاوُزُ مُهلَة»، ومَرَّةً تَسبِق الخاصِّيَّةُ فَيُقال
+        // خَطَأُ MailKit العامّ. قيسَ حَيّاً: بابانِ مُتَتالِيانِ بِنَفسِ
+        // الإعدادِ أَعطَيا رِسالَتَين. فَالرَمزُ يَسبِقُ دائِماً،
+        // والخاصِّيَّةُ سَقفٌ احتِياطيٌّ لَو سَقَطَ الرَمز.
+        using var client = new SmtpClient { Timeout = (int)window.TotalMilliseconds * 2 };
         try
         {
-            await client.ConnectAsync(_opts.Host, _opts.Port, security, ct);
+            await client.ConnectAsync(_opts.Host, _opts.Port, security, cts.Token);
             if (!string.IsNullOrEmpty(_opts.Username))
-                await client.AuthenticateAsync(_opts.Username, _opts.Password, ct);
-            await client.SendAsync(msg, ct);
-            await client.DisconnectAsync(quit: true, ct);
+                await client.AuthenticateAsync(_opts.Username, _opts.Password, cts.Token);
+            await client.SendAsync(msg, cts.Token);
+            await client.DisconnectAsync(quit: true, cts.Token);
             _logger.LogInformation("[Smtp] أُرسِلَ كود لِـ {Email}", email);
+        }
+        // **والحُكمُ لِرَمزِنا لا لِنَوعِ الاستِثناء** — بِقياسٍ حَيّ:
+        // ‏MailKit يَرمي `OperationCanceledException` حينَ يُلغى أَثناءَ
+        // قِراءَةِ التَحيَّة، ويَرمي خَطَأَ مِقبَسٍ عادِيّاً حينَ يُلغى
+        // أَثناءَ الاتِّصالِ نَفسِه. فَبابانِ مُتَتالِيانِ بِنَفسِ الإعدادِ
+        // أَعطَيا رِسالَتَينِ مُختَلِفَتَين. والسُؤالُ الصَحيحُ لَيسَ «ماذا
+        // رَمى؟» بَل **«هَل أَلغَينا نَحن؟»**.
+        catch (Exception) when (cts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            // تَجاوُزُ المُهلَة — لا انقِطاعُ طَلَب. يُقال بِاسمِه، ويَصير
+            // `send_failed` عِندَ النُقطَة بَدَلَ صَفحَةٍ تَدور.
+            var message = OtpSendGuard.TimeoutMessage(window);
+            _logger.LogError("[Smtp] {Message} — المُضيف {Host}:{Port}",
+                message, _opts.Host, _opts.Port);
+            throw new InvalidOperationException("SMTP " + message);
         }
         catch (Exception ex)
         {
