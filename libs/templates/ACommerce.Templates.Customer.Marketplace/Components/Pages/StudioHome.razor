@@ -125,7 +125,24 @@
                            يُرسَم زِرٌّ يَقول «قَريباً» (القاعِدَة ١٢):
                            التَحويلُ البَنكيُّ أَعلاه هُوَ الطَريقُ
                            القائِمُ دائِماً. *@
-                        @if (PayPalUrl(t.Slug) is { } payUrl)
+                        @*  دَفعٌ مُعَلَّقٌ أَنشَأَهُ المُشرِفُ لِهذا
+                            المَتجَرِ بِعَينِه (‏ADR-006) — **يُفتَحُ
+                            مُباشَرَةً**، ومَعَه مَبلَغُه ومُدَّتُه
+                            فَلا يُنقَر رابِطُ دَفعٍ بِلا مَعرِفَةِ ما
+                            يَشتَريه. ويَسبِق رابِطَ الاشتِراكِ لِأَنَّه
+                            الأَحدَثُ قَصداً: يُنشِئُه المُشرِفُ لِدَورَةٍ
+                            بِعَينِها. *@
+                        @if (PendingOrder(t.Slug) is { } order)
+                        {
+                            <a class="st-btn st-btn-primary" style="margin-top:10px;"
+                               href="@order.ApproveUrl" target="_blank" rel="noopener">
+                                @L.Markup("studio.plan.paypal_order")
+                            </a>
+                            <p style="margin:6px 0 0;font-size:13px;color:var(--st-muted);">
+                                @order.Amount @order.Currency · @order.Days @L.Markup("studio.plan.order_days_unit")
+                            </p>
+                        }
+                        else if (PayPalUrl(t.Slug) is { } payUrl)
                         {
                             <a class="st-btn st-btn-primary" style="margin-top:10px;"
                                href="@payUrl" target="_blank" rel="noopener">
@@ -227,6 +244,12 @@
         new Dictionary<string, ACommerce.Kit.Subscriptions.TenantPlan>();
     string transferInstructions = "";
 
+    /// <summary>الدَفعاتُ المُعَلَّقَةُ لِكُلّ مَتجَر — <b>استِعلامٌ
+    /// واحِدٌ لا واحِدٌ لِكُلّ مَتجَر</b>، وقامُوسٌ فارِغٌ يَعني لا
+    /// زِرَّ إطلاقاً (التَكافُؤُ الصِفريّ).</summary>
+    IReadOnlyDictionary<string, ACommerce.Kit.Subscriptions.PayPalOrderRecord> myOrders =
+        new Dictionary<string, ACommerce.Kit.Subscriptions.PayPalOrderRecord>();
+
     [Microsoft.AspNetCore.Components.Inject]
     Services.Queries.PlatformBillingQueries Billing { get; set; } = default!;
 
@@ -259,6 +282,13 @@
         return string.IsNullOrWhiteSpace(p?.PayPalApproveUrl) ? null : p!.PayPalApproveUrl;
     }
 
+    /// <summary>دَفعٌ مُعَلَّقٌ لِهذا المَتجَر — و<c>null</c> يَعني «لا
+    /// زِرّ». <b>ولا يُنشَأُ طَلَبٌ هُنا</b>: إنشاؤُه نِداءُ شَبَكَةٍ
+    /// يَملِكُه المُشرِف، وصَفحَةٌ تُنشِئُ طَلَباً عِندَ كُلّ تَصييرٍ
+    /// تُنشِئ عَشَرَةً في دَقيقَة.</summary>
+    ACommerce.Kit.Subscriptions.PayPalOrderRecord? PendingOrder(string slug)
+        => myOrders.TryGetValue(slug, out var o) ? o : null;
+
     string HiddenAtText(string slug)
     {
         myPlans.TryGetValue(slug, out var p);
@@ -284,6 +314,7 @@
         currentTier = u?.Tier ?? "spark";
 
         myPlans = await Billing.AllPlansAsync();
+        myOrders = await Billing.PendingOrdersAsync();
         transferInstructions = (await Billing.SettingsAsync()).TransferInstructions;
 
         // اِجمَع آخِر الـ deals مِن كُلّ تَطبيقات هذا المُستَخدِم.

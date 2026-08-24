@@ -180,6 +180,102 @@
             </AcCard>
         }
 
+        @*  رابِطُ دَفعٍ مَرِن (‏ADR-006) — **يُرسَم بِشَرطَينِ**:
+            مُزَوِّدٌ مُهَيَّأ، ووَثيقَةُ باقَةٍ مَضبوطَة. ولا يَحتاج
+            `paypalPlanId` إطلاقاً — **وهذا هُوَ المَقصود**: المَبلَغُ
+            والمُدَّةُ يُرسَلانِ لَحظَةَ الطَلَب، فَلا خُطَّةَ مُسبَقَةً
+            ولا صَفحَةَ لَوحَة.
+
+            **وبِلا باقَةٍ لا بِطاقَة** لا زِرٌّ يَقول «قَريباً»
+            (القاعِدَة ١٢): التَمديدُ يُحَرِّكُ تاريخَ وَثيقَةِ الباقَة،
+            فَبِلا وَثيقَةٍ لا شَيءَ يُحَرَّك — والرابِطُ كانَ سَيُنتِج
+            مالاً يَصِل ولا يُعرَف ماذا يُمَدَّدُ بِه. *@
+        @if (PayPal.IsConfigured && plan is not null)
+        {
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">@L.Markup("admin.tenant_plan.paypal_order_title")</h3>
+                    <p style="margin:0 0 10px;font-size:13px;color:var(--ac-text-muted);">
+                        @L.Markup("admin.tenant_plan.paypal_order_hint")
+                    </p>
+
+                    <form method="post" action="@($"/admin/tenants/{Slug}/plan/paypal-order")">
+                        <AcField Label="@L["admin.tenant_plan.paypal_order_amount"]" Required="true">
+                            <input type="number" name="amount" class="ac-input" required
+                                   min="0" step="0.01" value="" />
+                        </AcField>
+
+                        <AcField Label="@L["admin.tenant_plan.paypal_order_currency"]"
+                                 Hint="@L["admin.tenant_plan.paypal_order_currency_hint"]">
+                            <select name="currency" class="ac-input">
+                                @foreach (var c in PayPalCurrencies.Supported)
+                                {
+                                    <option value="@c" selected="@(c == PayPalCurrencies.Default)">@c</option>
+                                }
+                            </select>
+                        </AcField>
+
+                        <AcField Label="@L["admin.tenant_plan.paypal_order_days"]" Required="true"
+                                 Hint="@L["admin.tenant_plan.paypal_order_days_hint"]">
+                            <input type="number" name="days" class="ac-input" required
+                                   min="1" max="@PayPalOrderPolicy.MaxDays" value="" />
+                        </AcField>
+
+                        <AcField Label="@L["admin.tenant_plan.paypal_order_description"]">
+                            <input type="text" name="description" class="ac-input"
+                                   maxlength="@PayPalOrderPolicy.MaxDescriptionLength" value="" />
+                        </AcField>
+
+                        <AcButton Type="submit" Variant="ghost" Size="sm"
+                                  Text="@L["admin.tenant_plan.paypal_order_create"]" />
+                    </form>
+
+                    <h3 style="margin:18px 0 6px;">@L.Markup("admin.tenant_plan.paypal_order_list")</h3>
+                    @if (orders.Count == 0)
+                    {
+                        <p style="margin:0;font-size:13px;color:var(--ac-text-muted);">
+                            @L.Markup("admin.tenant_plan.paypal_order_none")
+                        </p>
+                    }
+                    else
+                    {
+                        @foreach (var o in orders)
+                        {
+                            <div style="border-top:1px solid var(--ac-border);padding-top:10px;margin-top:10px;">
+                                <p style="margin:0 0 4px;font-size:13px;">
+                                    <span class="ac-chip ac-chip-sm">@OrderStatusLabel(o.Status)</span>
+                                    @o.Amount @o.Currency · @o.Days @L.Markup("admin.tenant_plan.paypal_order_days_unit")
+                                </p>
+                                <p style="margin:0 0 4px;font-size:12px;color:var(--ac-text-muted);word-break:break-all;">
+                                    @o.Id · @o.CreatedAt.ToString("yyyy-MM-dd")
+                                </p>
+                                @if (!string.IsNullOrWhiteSpace(o.ApproveUrl))
+                                {
+                                    <p style="margin:0 0 6px;font-size:13px;word-break:break-all;">
+                                        <a href="@o.ApproveUrl" target="_blank" rel="noopener">@o.ApproveUrl</a>
+                                    </p>
+                                }
+                                @*  «التَقِط الآن» — ولا يُرسَم إلّا لِطَلَبٍ
+                                    لَم يُلتَقَط بَعد. زِرٌّ يُرسَم دائِماً
+                                    ويَرُدُّ ‏409 مَدخَلٌ يَضُرّ. *@
+                                @if (PayPalOrderStatuses.AwaitsCapture(o.Status))
+                                {
+                                    <form method="post" action="@($"/admin/tenants/{Slug}/plan/paypal-capture")">
+                                        <input type="hidden" name="@PayPalOrderSurfaceRef" value="@o.Id" />
+                                        <AcButton Type="submit" Variant="ghost" Size="sm"
+                                                  Text="@L["admin.tenant_plan.paypal_order_capture"]" />
+                                    </form>
+                                    <p style="margin:4px 0 0;font-size:12px;color:var(--ac-text-muted);">
+                                        @L.Markup("admin.tenant_plan.paypal_order_capture_hint")
+                                    </p>
+                                }
+                            </div>
+                        }
+                    }
+                </ChildContent>
+            </AcCard>
+        }
+
         <form method="post" action="@($"/admin/tenants/{Slug}/plan/save")">
             <AcCard>
                 <ChildContent>
@@ -238,13 +334,33 @@
     Tenant? tenant;
     TenantPlan? plan;
     PlatformPlanPayPal? bound;
+    IReadOnlyList<PayPalOrderRecord> orders = Array.Empty<PayPalOrderRecord>();
 
     protected override async Task OnParametersSetAsync()
     {
         tenant = await Tenants.FindAsync(Slug);
         plan   = await Billing.PlanAsync(Slug);
         bound  = await Billing.PayPalPlanAsync(plan?.PlanId);
+        orders = await Billing.OrdersForAsync(Slug);
     }
+
+    /// <summary>اسمُ حَقلِ المَرجِع — <b>يُقرَأُ مِن المُهايِئِ ولا
+    /// يُنسَخ</b>، فَلا يَنجَرِف بَينَ النَموذَجِ والنُقطَة.</summary>
+    const string PayPalOrderSurfaceRef =
+        ACommerce.Templates.Customer.Marketplace.Billing.PayPalOrderSurface.ReferenceField;
+
+    /// <summary>حالَةُ الطَلَبِ بِالعَرَبِيَّة — مِن القامُوسِ لا مِن
+    /// الكود، ومَعجَمٌ مُغلَقٌ يُقرَأُ مِن
+    /// <see cref="PayPalOrderStatuses"/>.</summary>
+    string OrderStatusLabel(string status) => status switch
+    {
+        PayPalOrderStatuses.Approved => L["admin.tenant_plan.paypal_status_approved"],
+        PayPalOrderStatuses.Captured => L["admin.tenant_plan.paypal_status_captured"],
+        PayPalOrderStatuses.Pending  => L["admin.tenant_plan.paypal_status_pending"],
+        PayPalOrderStatuses.Denied   => L["admin.tenant_plan.paypal_status_denied"],
+        PayPalOrderStatuses.Reversed => L["admin.tenant_plan.paypal_status_reversed"],
+        _                            => L["admin.tenant_plan.paypal_status_created"]
+    };
 
     string StateLabel => TenantPlanPolicy.Derive(plan, DateTime.UtcNow) switch
     {
@@ -296,6 +412,21 @@
         PayPalCatalogPolicy.AmountNotPositive   => L["admin.tenant_plan.err_paypal_plan_amount"],
         PayPalCatalogPolicy.CurrencyUnsupported => L["admin.tenant_plan.err_paypal_plan_currency"],
         PayPalCatalogPolicy.IntervalUnknown     => L["admin.tenant_plan.err_paypal_plan_period"],
+
+        // خُروقُ نَموذَجِ رابِطِ الدَفعِ المَرِن (‏ADR-006) — نَفسُ
+        // العادَة: رَمزٌ مِن مَعجَمٍ مُغلَقٍ ونَصٌّ مِن القامُوس.
+        PayPalOrderPolicy.TenantEmpty         => L["admin.tenant_plan.err_paypal_order_tenant"],
+        PayPalOrderPolicy.PlanMissing         => L["admin.tenant_plan.err_paypal_order_plan"],
+        PayPalOrderPolicy.AmountNotPositive   => L["admin.tenant_plan.err_paypal_order_amount"],
+        PayPalOrderPolicy.CurrencyUnsupported => L["admin.tenant_plan.err_paypal_order_currency"],
+        PayPalOrderPolicy.DaysOutOfRange      => L["admin.tenant_plan.err_paypal_order_days"],
+        PayPalOrderPolicy.DescriptionTooLong  => L["admin.tenant_plan.err_paypal_order_description"],
+        ACommerce.Templates.Customer.Marketplace.Billing.PayPalOrderSurface.OrderRefused
+            => L["admin.tenant_plan.err_paypal_order_failed"],
+        ACommerce.Templates.Customer.Marketplace.Billing.PayPalOrderSurface.OrderNotFound
+            => L["admin.tenant_plan.err_paypal_order_missing"],
+        ACommerce.Templates.Customer.Marketplace.Billing.PayPalOrderSurface.CaptureRefused
+            => L["admin.tenant_plan.err_paypal_capture"],
 
         // **خَطَأُ الاستِحقاقِ يُسَمّى ويُقالُ عِلاجُه** — وهُوَ
         // الاستِثناءُ الوَحيدُ مِن «تُعرَض رِسالَةُ PayPal كَما هي»:

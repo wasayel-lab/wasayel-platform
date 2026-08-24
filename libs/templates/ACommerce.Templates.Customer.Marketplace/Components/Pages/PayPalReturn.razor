@@ -1,0 +1,51 @@
+@page "/billing/paypal/return"
+@inject Services.Queries.PlatformBillingQueries Billing
+@inject L L
+
+@*
+    صَفحَةُ العَودَة — **قِراءَةٌ خالِصَة، ولا تُمَدِّد شَيئاً**
+    (‏ADR-006 §٤).
+
+    والسَبَبُ حِسابيٌّ لا ذَوقيّ: مِفتاحُ مَرَّة-واحِدَةٍ عِندَنا
+    `event_id` لا `capture_id`. فَلَو مَدَّدَت هذِه الصَفحَةُ أَيضاً
+    لَكانَ مِفتاحُها مُختَلِفاً **لا يَرتَطِمُ بِالأَوَّل — فَيَقَع
+    تَمديدانِ لِدَفعَةٍ واحِدَة**. والسِباقُ قائِمٌ لا مُحتَمَل: وَثيقَةُ
+    ‏EPS الرَسمِيَّةُ تُظهِر حَدَثَ الالتِقاطِ في الخُطوَةِ ‏5 وعَودَةَ
+    المُشتَري في الخُطوَةِ ‏6 — أَي أَنّ الحَدَثَ **يَسبِق** العَودَةَ
+    عادَةً.
+
+    **والعَودَةُ لَيسَت إثباتاً على أَيّ حال**: المُشتَرِكُ قَد يُوافِق
+    ثُمَّ يُغلِق المُتَصَفِّحَ قَبلَ العَودَة، وقَد يَعود دونَ أَن
+    يُوافِق. فَما تَقولُه هذِه الصَفحَةُ «تَمَّ استِلامُ مُوافَقَتِك»
+    لا «تَمَّ الدَفع».
+
+    ولا حارِسَ جَلسَةٍ هُنا: يَبلُغُها الدافِعُ قادِماً مِن PayPal،
+    وقَد لا يَملِك جَلسَةً عِندَنا أَصلاً. وما تَعرِضُه **مَرجِعُه
+    ولا شَيءَ آخَر** — لا مَبلَغَ ولا مَتجَرَ ولا حالَة، فَالمَرجِعُ
+    يَصِل في المَسار ويَملِكُه مَن يَملِك الرابِط.
+*@
+
+<div class="studio-root">
+    <div class="auth-wrap">
+        <div class="auth-card">
+            <h1 style="margin:0 0 10px;font-size:20px;">@L.Markup("billing.paypal.return_title")</h1>
+            <p style="margin:0 0 12px;line-height:1.8;">@L.Markup("billing.paypal.return_body")</p>
+            @if (!string.IsNullOrWhiteSpace(Reference))
+            {
+                <p style="margin:0 0 12px;font-size:12px;word-break:break-all;">
+                    @L.Markup("billing.paypal.return_reference") @Reference
+                </p>
+            }
+            <a class="st-btn st-btn-primary" href="/studio">@L.Markup("billing.paypal.back_studio")</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>مَرجِعُنا كَما وَضَعناهُ في رابِطِ العَودَة —
+    /// <b>ولا يُقرَأ <c>token</c> الَّذي تُلحِقُه PayPal</b>: اسمُ
+    /// مُتَغَيِّرٍ عِندَ طَرَفٍ ثالِثٍ لَيسَ عَقداً تُبنى عَلَيه
+    /// صَفحَة.</summary>
+    [SupplyParameterFromQuery(Name = ACommerce.Kit.Payments.Providers.PayPal.PayPalOrderPolicy.ReferenceQueryKey)]
+    public string? Reference { get; set; }
+}

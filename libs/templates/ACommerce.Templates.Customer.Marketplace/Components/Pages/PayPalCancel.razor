@@ -1,0 +1,24 @@
+@page "/billing/paypal/cancel"
+@inject L L
+
+@*
+    صَفحَةُ الإلغاء — يَبلُغُها الدافِعُ حينَ يَتراجَع على صَفحَةِ
+    PayPal. **ولا تَكتُب حَرفاً**: تَراجُعُ الدافِعِ لَيسَ حَدَثاً
+    مالِيّاً، ووَثيقَةُ الطَلَبِ تَبقى `created` — فَالرابِطُ نَفسُه
+    يَعمَل إن عادَ.
+
+    ولِماذا صَفحَةٌ أَصلاً: `cancel_url` مِن مُخَطَّطِ
+    `experience_context`، وإغفالُه يُعيدُ الدافِعَ إلى صَفحَةِ عَطَبٍ
+    عِندَ PayPal — **ومَدخَلٌ يَضُرّ أَسوَأُ مِن غِيابِ مَدخَل**
+    (القاعِدَة ١٢).
+*@
+
+<div class="studio-root">
+    <div class="auth-wrap">
+        <div class="auth-card">
+            <h1 style="margin:0 0 10px;font-size:20px;">@L.Markup("billing.paypal.cancel_title")</h1>
+            <p style="margin:0 0 12px;line-height:1.8;">@L.Markup("billing.paypal.cancel_body")</p>
+            <a class="st-btn st-btn-primary" href="/studio">@L.Markup("billing.paypal.back_studio")</a>
+        </div>
+    </div>
+</div>
