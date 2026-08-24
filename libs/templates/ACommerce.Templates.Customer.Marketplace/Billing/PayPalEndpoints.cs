@@ -112,13 +112,36 @@ public static class PayPalEndpoints
             if (!admin.Allowed) return Results.StatusCode(StatusCodes.Status403Forbidden);
 
             var plan = await session.LoadAsync<TenantPlan>(slug, http.RequestAborted);
-            var payPalPlanId = PlatformPlanCatalog.Find(plan?.PlanId)?.PayPalPlanId;
+            // مَصدَرانِ لِمُعَرِّفِ الخُطَّة (وَثيقَةُ الرِباطِ ثُمَّ
+            // المِلَفّ)، وقاعِدَةُ التَرجيحِ **في مَوضِعٍ واحِدٍ** تَقرَؤُه
+            // الشاشَةُ والنُقطَة — وإلّا عَرَضَت واحِداً وأَرسَلَت آخَر.
+            var bound = string.IsNullOrWhiteSpace(plan?.PlanId)
+                ? null
+                : await session.LoadAsync<PlatformPlanPayPal>(plan!.PlanId, http.RequestAborted);
+            var payPalPlanId = PlatformPlanPayPalBinding.Resolve(
+                PlatformPlanCatalog.Find(plan?.PlanId), bound);
             if (plan is null || !paypal.IsConfigured || string.IsNullOrWhiteSpace(payPalPlanId))
                 return PayPalSurface.LinkFailed(slug, PayPalSurface.LinkUnavailable);
 
             var by = admin.User is { } u ? $"studio · {u.Id}" : "platform-admin";
             var result = await paypal.CreateSubscriptionAsync(
                 payPalPlanId!, slug, PayPalSurface.LinkKey(slug, DateTime.UtcNow), http.RequestAborted);
+
+            // ─── فَشَلُ PayPal يُسَمّى، ولا يُخفى خَلفَ «تَعَذَّرَ» ───
+            //
+            // **العِلَّة**: هذا **بِالذاتِ** هُوَ المَوضِعُ الَّذي
+            // يُنتَظَر فيه `Merchant not enabled for reference
+            // transaction` — الخُطَّةُ تُنشَأُ بِنَجاح ثُمَّ يَفشَل
+            // تَفعيلُ أَوَّلِ اشتِراكٍ بِعَطَبِ استِحقاق. وكانَ يُبتَلَع
+            // كُلُّه في `LinkRefused` = «راجِع سِجِلَّ الخادِم»، فَيَذهَب
+            // المالِكُ يُفَتِّشُ لوغاً عَن عِلَّةٍ عِلاجُها **رِسالَةٌ
+            // إلى دَعمِ PayPal**.
+            //
+            // **والفَصلُ عَن `SaveApproveLink` مَقصود**: «‏PayPal رَفَضَت»
+            // غَيرُ «رَدَّت بِلا رابِطِ مُوافَقَة»، وخَلطُهُما يُعطي
+            // رِسالَةً واحِدَةً لِعِلَّتَينِ عِلاجُهُما مُختَلِف.
+            if (!string.IsNullOrWhiteSpace(result.FailureReason))
+                return PayPalSurface.LinkFailed(slug, PayPalFailure.ScreenCode(result.FailureReason));
 
             if (!Services.Subscriptions.PayPalBillingService.SaveApproveLink(
                     session, plan, result, by, DateTime.UtcNow))
@@ -128,6 +151,56 @@ public static class PayPalEndpoints
             await audit.WriteAsync(slug, admin.User?.Id, by,
                 Services.Subscriptions.PayPalBillingService.LinkAuditAction,
                 "Tenant", slug, note: result.SubscriptionId);
+            return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
+        }).DisableAntiforgery();
+
+        // ─── خُطَّةُ PayPal: تُنشَأُ مِن الشاشَة، فَاللَوحَةُ اختِيارِيَّة ──
+        //
+        // **العِلَّة**: خُطُواتُ `docs/DEPLOY.md` §٢·ج كانَت تَفتَرِض
+        // صَفحَةَ المُنتَجات/الخُطَط في لَوحَةِ PayPal، **وقَد تَعَذَّرَ
+        // على المالِكِ فَتحُها**. وهذِه النُقطَةُ تُنشِئُ المُنتَجَ
+        // والخُطَّةَ بِالواجِهَةِ REST **وتَكتُبُ المُعَرِّفَ في وَثيقَةِ
+        // الرِباطِ فَوراً** — فَلا يُطلَبُ مِن المالِكِ نَسخُ `P-…` إلى
+        // مِلَفٍّ ودَفعُه ونَشرُه.
+        //
+        // **والحارِسُ أَوَّلُ سَطر، قَبلَ قِراءَةِ حَقلٍ واحِد**
+        // (القاعِدَة ٦): التَخويلُ يَسبِق تَحَقُّقَ الحُقول، وإلّا صارَ
+        // خَطَأُ التَحَقُّقِ قِناعاً لِلثَغرَة.
+        app.MapPost("/admin/tenants/{slug}/plan/paypal-plan", async (
+            string slug, HttpRequest req, IDocumentSession session,
+            Services.Incubator.StudioAuth auth, PayPalGateway paypal,
+            Services.Audit.AuditWriter audit) =>
+        {
+            var admin = await Services.PlatformAdminGuard.EvaluateAsync(session.DocumentStore, auth);
+            if (!admin.Allowed) return Results.StatusCode(StatusCodes.Status403Forbidden);
+            if (!paypal.IsConfigured) return PayPalSurface.LinkFailed(slug, PayPalSurface.LinkUnavailable);
+
+            var ct = req.HttpContext.RequestAborted;
+            var plan = await session.LoadAsync<TenantPlan>(slug, ct);
+            var draft = PayPalCatalogPolicy.ReadDraft(
+                plan?.PlanId, req.Form["name"], req.Form["price"],
+                req.Form["currency"], req.Form["period"]);
+
+            var violations = PayPalCatalogPolicy.Validate(draft);
+            if (violations.Count > 0) return PayPalSurface.LinkFailed(slug, violations[0].Code);
+
+            var by = admin.User is { } u ? $"studio · {u.Id}" : "platform-admin";
+            PayPalCatalogPlan created;
+            // ورِسالَةُ PayPal تُعرَض كَما هي — رَمزُها ونَصُّها. و«فَشِلَ
+            // الإنشاء» وَحدَها تُرسِل المالِكَ يُخَمِّن.
+            // ونَفسُ التَصنيفِ الَّذي يَقرَؤُه مَسارُ رابِطِ الدَفع —
+            // خَطَأُ الاستِحقاقِ يُعطي رَمزَه، وما عَداهُ نَصَّ PayPal.
+            try { created = await paypal.CreateCatalogPlanAsync(draft, ct); }
+            catch (Exception ex) { return PayPalSurface.LinkFailed(slug, PayPalFailure.ScreenCode(ex.Message)); }
+
+            if (!Services.Subscriptions.PayPalBillingService.BindCatalogPlan(
+                    session, PayPalCatalogPolicy.BindingFor(draft, created, by, DateTime.UtcNow)))
+                return PayPalSurface.LinkFailed(slug, PayPalSurface.LinkRefused);
+
+            await session.SaveChangesAsync(ct);
+            await audit.WriteAsync(slug, admin.User?.Id, by,
+                Services.Subscriptions.PayPalBillingService.CatalogPlanAuditAction,
+                "PlatformPlan", draft.PlanSlug, note: created.PlanId);
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
         }).DisableAntiforgery();
 

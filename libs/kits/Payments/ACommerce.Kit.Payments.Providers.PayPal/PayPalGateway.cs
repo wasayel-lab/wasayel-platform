@@ -60,6 +60,34 @@ public sealed class PayPalGateway
             ? Task.FromResult(false)
             : _provider.VerifyWebhookSignatureAsync(headers, rawBody, ct);
 
+    /// <summary>
+    /// <para><b>يُنشِئ مُنتَجَ الكاتالوجِ ثُمَّ خُطَّةَ الفَوتَرَة،
+    /// ويُعيد المُعَرِّفَين.</b> والتَرتيبُ مُلزِمٌ لا تَفضيليّ:
+    /// مُنشِئُ الخُطَّةِ يَشتَرِط <c>product_id</c> قائِماً.</para>
+    ///
+    /// <para><b>ولِماذا التَركيبُ هُنا لا في النُقطَة</b>: النِداءانِ
+    /// <b>مُتَرابِطانِ بِمُخرَجِ الأَوَّلِ مُدخَلاً لِلثاني</b>، فَتَركُ
+    /// وَصلِهِما لِلنُقطَةِ يَجعَلُ التَرتيبَ سَطراً في جِسمٍ يُنسى —
+    /// وهُنا يُقاس بِمُعالِجٍ وَهمِيّ يَعُدُّ الطَلَبات (القاعِدَة ٢).</para>
+    ///
+    /// <para><b>ويَرمي ولا يُجيب «لا» صامِتاً</b>، بِخِلافِ
+    /// <see cref="CreateSubscriptionAsync"/>: تِلكَ تُنادى مِن نُقطَةٍ
+    /// تُحَوِّل، وهذِه مِن نَموذَجٍ يَنتَظِرُ مُشرِفٌ نَتيجَتَه —
+    /// و«لَم يَحدُث شَيء» بِلا سَبَبٍ أَسوَأُ مِن رِسالَةٍ تُسَمّي رَمزَ
+    /// PayPal. <b>والشاشَةُ لا تَرسِم النَموذَجَ أَصلاً بِلا تَهيئَة</b>،
+    /// فَهذا الرَميُ حِزامُ أَمانٍ ثانٍ لا الطَريقَ الأَوَّل.</para>
+    /// </summary>
+    public async Task<PayPalCatalogPlan> CreateCatalogPlanAsync(
+        PayPalPlanDraft draft, CancellationToken ct = default)
+    {
+        if (_provider is null)
+            throw new InvalidOperationException("PayPal غَير مُهَيَّأ في هذِه النُسخَة.");
+
+        var productId = await _provider.CreateCatalogProductAsync(draft, ct);
+        var planId    = await _provider.CreateBillingPlanAsync(productId, draft, ct);
+        return new PayPalCatalogPlan(productId, planId);
+    }
+
     /// <summary>يُنشِئ اشتِراكاً لِمَتجَرٍ بِخُطَّةِ PayPal المَذكورَةِ
     /// في تَعريفِ الباقَة، ويَضَع سلاجَ المَتجَرِ في
     /// <c>custom_id</c>.</summary>

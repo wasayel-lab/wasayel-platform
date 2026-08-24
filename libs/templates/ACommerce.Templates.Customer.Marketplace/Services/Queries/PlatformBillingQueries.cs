@@ -53,6 +53,28 @@ public sealed class PlatformBillingQueries
         catch { return new Dictionary<string, TenantPlan>(StringComparer.Ordinal); }
     }
 
+    /// <summary>
+    /// <para><b>رِباطُ باقَةِ المَنَصَّةِ بِخُطَّةِ PayPal، أَو
+    /// <c>null</c>.</b> ومُعَرِّفُها <b>سلاجُ الباقَة</b> لا سلاجُ
+    /// مَتجَر — الخُطَّةُ خَصيصَةُ الباقَة (‏ADR-004 §٣-ج).</para>
+    ///
+    /// <para><b>والسُقوطُ عِندَ الخَطَأ «لا رِباط» لا انفِجار</b>:
+    /// جَدوَلُ الرِباطِ لا يوجَد في قاعِدَةٍ لَم تُهاجَر بَعد، و
+    /// <c>null</c> تَعني رُجوعاً إلى قيمَةِ المِلَفّ — أَي سُلوكَ
+    /// اليَومِ حَرفاً.</para>
+    /// </summary>
+    public async Task<PlatformPlanPayPal?> PayPalPlanAsync(
+        string? planSlug, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(planSlug)) return null;
+        try
+        {
+            await using var s = _store.QuerySession();
+            return await s.LoadAsync<PlatformPlanPayPal>(planSlug, ct);
+        }
+        catch { return null; }
+    }
+
     /// <summary>إعداداتُ المَنَصَّة — وَثيقَةٌ جَديدَةٌ فارِغَةٌ حينَ لا
     /// تُخَزَّن بَعد، فَالشاشَةُ تَرسِم حَقلاً فارِغاً لا خَطَأً.</summary>
     public async Task<PlatformSettings> SettingsAsync(CancellationToken ct = default)

@@ -29,9 +29,24 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     public const string VerifySignaturePath = "/v1/notifications/verify-webhook-signature";
     public const string CapturesPath      = "/v2/payments/captures";
 
+    /// <summary>كاتالوجُ المُنتَجات — <c>POST</c> يُنشِئ، وهُوَ ما
+    /// يُغني عَن صَفحَةِ المُنتَجاتِ في اللَوحَة.</summary>
+    public const string ProductsPath      = "/v1/catalogs/products";
+
+    /// <summary>خُطَطُ الفَوتَرَة — والمُعَرِّفُ العائِدُ مِنها
+    /// (‏<c>P-…</c>) هُوَ ما يُخَزَّن ويُمَرَّر إلى إنشاءِ
+    /// الاشتِراك.</summary>
+    public const string PlansPath         = "/v1/billing/plans";
+
     /// <summary>اسمُ العَميلِ المُطَبَّع — التَسجيلُ والحَلُّ يَقرَآنِه
     /// مِن هُنا.</summary>
     public const string HttpClientName = "paypal";
+
+    /// <summary>رَأسُ مَرَّة-واحِدَة عِندَ PayPal — <b>يَحفَظُه الخادِمُ
+    /// ‏72 ساعَة</b>، وإعادَةُ المُحاوَلَةِ بِلا مِفتاحٍ تُنشِئ خُطَّةً
+    /// (أَو اشتِراكاً) ثانِياً. مَوضِعٌ واحِدٌ يَقرَؤُه المُنتِجُ
+    /// والمُختَبِر.</summary>
+    public const string RequestIdHeader = "PayPal-Request-Id";
 
     private readonly PayPalOptions _opts;
     private readonly HttpClient _http;
@@ -120,6 +135,164 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
         return msg;
     }
 
+    // ═══ الكاتالوج: مُنتَجٌ ثُمَّ خُطَّة — بِلا لَوحَة ═════════════════
+    //
+    // **العِلَّة**: خُطُواتُ `docs/DEPLOY.md` §٢·ج كانَت تَفتَرِض صَفحَةَ
+    // المُنتَجات/الخُطَط في لَوحَةِ PayPal، **وقَد تَعَذَّرَ على المالِكِ
+    // فَتحُها**. والواجِهَةُ REST تُنشِئُهُما بِنِداءَين — فَاللَوحَةُ
+    // تَصير طَريقاً أَوَّلَ لا شَرطاً.
+    //
+    // **والتَرتيبُ مُلزِمٌ لا تَفضيليّ**: مُنتَجٌ ثُمَّ خُطَّة. مُنشِئُ
+    // الخُطَّةِ يَشتَرِط `product_id` قائِماً، فَلا خُطَّةَ بِلا مُنتَج.
+    //
+    // **والفَشَلُ يَرمي ولا يُرجِع نَتيجَةً صامِتَة** (نَفسُ نَمَطِ
+    // `BrevoEmailChannel`): هذا نِداءٌ يُنادِيه **مُشرِفٌ يَنتَظِرُ
+    // شاشَة**، لا رِسالَةٌ آلِيَّةٌ تُعيدُها PayPal. ونَتيجَةٌ فارِغَةٌ
+    // تَعني «أُنشِئَت خُطَّةٌ لا مُعَرِّفَ لَها» — وذاكَ يُخَزَّن
+    // فَيَنكَسِر الدَفعُ بَعدَ أَيّام. والرِسالَةُ **تَحمِل رَمزَ PayPal
+    // ونَصَّه** لِيُعرَفَ ما يُصلَح، **ولا تَحمِل سِرّاً** (مُثَبَّتٌ
+    // بِاختِبارٍ سالِب).
+
+    /// <summary>
+    /// <para><b>يُنشِئ مُنتَجَ الكاتالوجِ ويُعيد مُعَرِّفَه
+    /// (‏<c>PROD-…</c>).</b></para>
+    ///
+    /// <para><b>ولا يُمَرَّرُ <c>id</c> إطلاقاً — وهذا فَخٌّ حَقيقيّ</b>:
+    /// مُخَطَّطُ المُنتَجِ يَسمَح بِمُعَرِّفٍ مِن ‏6 إلى ‏50 مِحرَفاً،
+    /// لكِنّ <b>مُنشِئَ الخُطَّةِ يَشتَرِط ‏22 مِحرَفاً بِالضَبط</b>
+    /// ونَمَط <c>^PROD-[A-Z0-9]*$</c>. فَتَمريرُ SKU خاصٍّ بِنا
+    /// <b>يَنجَح في إنشاءِ المُنتَج ثُمَّ تُرفَض الخُطَّة</b> — مُنتَجٌ
+    /// يَتيمٌ عِندَ PayPal ورِسالَةُ خَطَإٍ تُشير إلى النِداءِ الخَطَإ.
+    /// فَالمُعَرِّفُ يُتركُ لِـPayPal ويُخَزَّنُ ما تُعيدُه.</para>
+    /// </summary>
+    public async Task<string> CreateCatalogProductAsync(
+        PayPalPlanDraft draft, CancellationToken ct = default)
+    {
+        var dto = await PostForAsync<CatalogIdDto>(
+            ProductsPath, PayPalCatalogPolicy.ProductRequestId(draft),
+            new Dictionary<string, object>
+            {
+                ["name"]     = draft.TrimmedName,
+                ["type"]     = PayPalCatalogPolicy.ProductType,
+                ["category"] = PayPalCatalogPolicy.ProductCategory,
+            },
+            "إنشاءَ مُنتَجِ الكاتالوج", ct);
+
+        return string.IsNullOrWhiteSpace(dto.id)
+            ? throw new InvalidOperationException("PayPal رَدَّ بِلا مُعَرِّفِ مُنتَج.")
+            : dto.id!;
+    }
+
+    /// <summary>
+    /// <para><b>يُنشِئ خُطَّةَ الفَوتَرَةِ ويُعيد مُعَرِّفَها
+    /// (‏<c>P-…</c>)</b> — وهُوَ ما يُخَزَّن ويُمَرَّر إلى
+    /// <see cref="CreateSubscriptionAsync"/> بَعدَ ذلك.</para>
+    ///
+    /// <para><b>ودَورَةٌ اعتِيادِيَّةٌ واحِدَةٌ بِلا تَجرِبَة</b>:
+    /// <c>total_cycles = 0</c> أَي **لا نِهائِيَّة** — وهُوَ المَوضِعُ
+    /// الَّذي يُضبَط فيه التَجديدُ الدائِم، لا <c>auto_renewal</c>
+    /// المُهمَلَة على الاشتِراك.</para>
+    ///
+    /// <para><b>والافتِراضانِ يُضبَطانِ صَراحَةً لِأَنَّهُما قاسِيان</b>:
+    /// <c>setup_fee_failure_action</c> افتِراضُها <b>CANCEL</b> و
+    /// <c>payment_failure_threshold</c> افتِراضُها <b>صِفر</b> — أَي
+    /// إلغاءُ اشتِراكِ مَتجَرٍ عِندَ **أَوَّلِ** تَعَثُّرِ بِطاقَة.
+    /// فَتُكتَبانِ <c>CONTINUE</c> و<c>3</c> كَما في مِثالِ PayPal
+    /// الرَسميّ.</para>
+    ///
+    /// <para><b>ولا يُرسَل وَصف</b>: حَقلٌ اختِيارِيٌّ يُملَأُ بِنَصٍّ
+    /// مُخترَعٍ بَياناتُ مُنتَجٍ لا تُخترَع (القاعِدَة ١٦) — وسَقفُه
+    /// هُنا ‏127 لا ‏256 كَوَصفِ المُنتَج، فَرقٌ يُنسى فَيَرتَدُّ
+    /// النِداء.</para>
+    /// </summary>
+    public async Task<string> CreateBillingPlanAsync(
+        string productId, PayPalPlanDraft draft, CancellationToken ct = default)
+    {
+        var dto = await PostForAsync<CatalogIdDto>(
+            PlansPath, PayPalCatalogPolicy.PlanRequestId(productId, draft),
+            new Dictionary<string, object>
+            {
+                ["product_id"] = productId,
+                ["name"]       = draft.TrimmedName,
+                ["status"]     = PayPalCatalogPolicy.PlanStatusActive,
+                ["billing_cycles"] = new object[]
+                {
+                    new Dictionary<string, object>
+                    {
+                        ["tenure_type"]  = PayPalCatalogPolicy.TenureRegular,
+                        ["sequence"]     = 1,
+                        ["total_cycles"] = PayPalCatalogPolicy.InfiniteCycles,
+                        ["frequency"] = new Dictionary<string, object>
+                        {
+                            ["interval_unit"]  = draft.NormalizedInterval,
+                            ["interval_count"] = 1,
+                        },
+                        ["pricing_scheme"] = new Dictionary<string, object>
+                        {
+                            ["fixed_price"] = new Dictionary<string, object>
+                            {
+                                // سِلسِلَةٌ نَصِّيَّةٌ لا رَقَم — نَمَطُ
+                                // PayPal يَشتَرِط ذلك حَرفاً.
+                                ["value"]         = PayPalCurrencies.Money(
+                                                        draft.Amount, draft.NormalizedCurrency),
+                                ["currency_code"] = draft.NormalizedCurrency,
+                            },
+                        },
+                    },
+                },
+                ["payment_preferences"] = new Dictionary<string, object>
+                {
+                    ["auto_bill_outstanding"]    = true,
+                    ["setup_fee_failure_action"] = PayPalCatalogPolicy.SetupFeeFailureAction,
+                    ["payment_failure_threshold"] = PayPalCatalogPolicy.PaymentFailureThreshold,
+                },
+            },
+            "إنشاءَ خُطَّةِ الفَوتَرَة", ct);
+
+        return string.IsNullOrWhiteSpace(dto.id)
+            ? throw new InvalidOperationException("PayPal رَدَّ بِلا مُعَرِّفِ خُطَّة.")
+            : dto.id!;
+    }
+
+    /// <summary>نِداءُ إنشاءٍ واحِدٌ: رَأسُ مَرَّة-واحِدَة، وجِسمٌ،
+    /// ورَدٌّ يُقرَأ أَو يَرمي بِرَمزِ PayPal ونَصِّه.</summary>
+    private async Task<T> PostForAsync<T>(
+        string path, string requestId, object body, string whatAr, CancellationToken ct)
+        where T : class
+    {
+        using var msg = await AuthorizedAsync(HttpMethod.Post, path, ct);
+        msg.Headers.Add(RequestIdHeader, requestId);
+        msg.Content = JsonContent.Create(body);
+
+        using var resp = await SendAsync(msg, ct);
+        var raw = await resp.Content.ReadAsStringAsync(ct);
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            if (resp.StatusCode == HttpStatusCode.Unauthorized) _tokens.Invalidate();
+            _logger.LogError("[PayPal] فَشِل {What} {Status}: {Body}", whatAr, resp.StatusCode, raw);
+            throw new InvalidOperationException(
+                $"PayPal فَشِل {whatAr}: {(int)resp.StatusCode} — {Describe(raw)}");
+        }
+
+        return Deserialize<T>(raw)
+            ?? throw new InvalidOperationException($"PayPal رَدَّ على {whatAr} بِجِسمٍ غَيرِ مَقروء.");
+    }
+
+    /// <summary>رَمزُ الخَطَإ ونَصُّه كَما تَقولُهُما PayPal —
+    /// <b>لِيُعرَفَ ما يُصلَح</b>. و«‏422» وَحدَها تُرسِل المالِكَ
+    /// يُخَمِّن، و«‏UNIT_AMOUNT_NOT_ALLOWED» تَقولُ لَه أَينَ
+    /// المُشكِلَة.</summary>
+    private static string Describe(string body)
+    {
+        var e = Deserialize<ErrorDto>(body);
+        var code  = string.IsNullOrWhiteSpace(e?.name) ? "?" : e!.name!;
+        var issue = e?.details is { Length: > 0 } && !string.IsNullOrWhiteSpace(e.details[0].issue)
+            ? $" [{e.details[0].issue}]" : "";
+        var text  = string.IsNullOrWhiteSpace(e?.message) ? "" : $" — {e!.message}";
+        return code + issue + text;
+    }
+
     // ═══ الاشتِراك ════════════════════════════════════════════════════
 
     /// <summary>
@@ -143,7 +316,7 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
 
         // ‏PayPal-Request-Id هُوَ مِفتاحُ مَرَّة-واحِدَة عِندَ PayPal —
         // نَفسُ دَورِ `X-Idempotency-Key` في Moyasar، بِاسمٍ آخَر.
-        msg.Headers.Add("PayPal-Request-Id", idempotencyKey);
+        msg.Headers.Add(RequestIdHeader, idempotencyKey);
         msg.Content = JsonContent.Create(new Dictionary<string, object>
         {
             ["plan_id"]   = req.PlanId,
@@ -157,8 +330,18 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
         {
             if (resp.StatusCode == HttpStatusCode.Unauthorized) _tokens.Invalidate();
             _logger.LogError("[PayPal] فَشِل إنشاءُ الاشتِراك {Status}: {Body}", resp.StatusCode, body);
+
+            // **الرَمزُ والنَصُّ كَما تَقولُهُما PayPal، لا رَقَمُ
+            // الحالَةِ وَحدَه** — ونَفسُ صِياغَةِ مَسارِ الخُطَّةِ
+            // حَرفاً، فَيَقرَؤُهُما `PayPalFailure.ScreenCode` بِقاعِدَةٍ
+            // واحِدَة. و«‏422» وَحدَها كانَت تَبتَلِع
+            // `Merchant not enabled for reference transaction` — وهُوَ
+            // **الخَطَأُ الَّذي يُنتَظَر وُقوعُه هُنا بِالذاتِ**: خُطَّةٌ
+            // تَنجَح ثُمَّ أَوَّلُ اشتِراكٍ يَفشَل بِعَطَبِ استِحقاق.
+            // و`Describe` تَقرَأُ **جِسمَ رَدِّ PayPal وَحدَه** فَلا
+            // سِرَّ فيها (مُثَبَّتٌ بِاختِبارٍ سالِب).
             return new SubscriptionResult("", false, default,
-                $"PayPal فَشِل إنشاءُ الاشتِراك: {(int)resp.StatusCode}");
+                $"PayPal فَشِل إنشاءُ الاشتِراك: {(int)resp.StatusCode} — {Describe(body)}");
         }
 
         var dto = Deserialize<SubscriptionDto>(body);
@@ -350,5 +533,14 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     private sealed record AmountDto(string? currency_code, string? value);
     private sealed record CaptureDto(string? id, AmountDto? amount, DateTime? create_time);
     private sealed record VerificationDto(string? verification_status);
+
+    /// <summary>مُنتَجُ الكاتالوجِ وخُطَّةُ الفَوتَرَةِ يَرُدّانِ
+    /// حُقولاً كَثيرَة، و<b>المَقروءُ مِنهُما واحِد</b>: المُعَرِّف.
+    /// وقِراءَةُ ما لا يُستَعمَل تَجعَل تَغييرَ حَقلٍ عِندَ PayPal
+    /// كَسراً عِندَنا.</summary>
+    private sealed record CatalogIdDto(string? id);
+
+    private sealed record ErrorDetailDto(string? issue, string? description);
+    private sealed record ErrorDto(string? name, string? message, ErrorDetailDto[]? details);
 #pragma warning restore IDE1006
 }

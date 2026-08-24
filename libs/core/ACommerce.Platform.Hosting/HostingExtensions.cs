@@ -107,6 +107,15 @@ public static class HostingExtensions
                     .SingleTenanted()
                     .Identity(x => x.Id);
 
+                // رِباطُ باقَةِ المَنَصَّةِ بِخُطَّةِ PayPal — مُعَرِّفُه
+                // **سلاجُ الباقَة** لا سلاجُ مَتجَر: الخُطَّةُ خَصيصَةُ
+                // الباقَةِ لا خَصيصَةُ مُستَأجِر (‏ADR-004 §٣-ج).
+                // و`SingleTenanted` كَجارَتَيه ولِنَفس السَبَب: تُقرَأ
+                // في `/admin` قَبلَ أَن يُعرَفَ مُستَأجِرُ الطَلَب.
+                opts.Schema.For<ACommerce.Kit.Subscriptions.PlatformPlanPayPal>()
+                    .SingleTenanted()
+                    .Identity(x => x.Id);
+
                 // سِجِلُّ رِسائِل PayPal المُطَبَّقَة — مُعَرِّفُه
                 // `event_id`، والتَفَرُّدُ مِن مِفتاحِ الوَثيقَةِ نَفسِه
                 // فَإدراجٌ ثانٍ يَرتَدُّ مِن Postgres. و`SingleTenanted`

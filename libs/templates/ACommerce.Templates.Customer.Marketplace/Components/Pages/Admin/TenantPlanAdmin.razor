@@ -4,6 +4,7 @@
 @inject L L
 @inject ACommerce.Kit.Payments.Providers.PayPal.PayPalGateway PayPal
 @using ACommerce.Kit.Subscriptions
+@using ACommerce.Kit.Payments.Providers.PayPal
 
 @*
     باقَةُ المَتجَرِ في **وَسايِل** — يَضبُطُها مُشرِفُ المَنَصَّة وَحدَه.
@@ -61,6 +62,83 @@
                 }
             </ChildContent>
         </AcCard>
+
+        @*  إنشاءُ خُطَّةِ PayPal — **يُرسَم بِشَرطٍ واحِدٍ: مُزَوِّدٌ
+            مُهَيَّأ**. وبِلا تَهيئَةٍ **لا نَموذَجَ إطلاقاً** — لا حَقلٌ
+            يُملَأ ثُمَّ يُقال «‏PayPal غَير مُهَيَّأ» بَعدَ النَقر
+            (القاعِدَة ١٢).
+
+            **ولِماذا هُنا وقَد كانَت خُطوَةَ لَوحَة**: صَفحَةُ
+            المُنتَجات/الخُطَط في لَوحَةِ PayPal **تَعَذَّرَ على المالِكِ
+            فَتحُها**، وخُطُواتُ `docs/DEPLOY.md` §٢·ج تَفتَرِضُها.
+            فَالواجِهَةُ REST تُنشِئُهُما مِن هُنا، واللَوحَةُ تَصير
+            طَريقاً أَوَّلَ لا شَرطاً.
+
+            **والحُقولُ فارِغَةٌ يَملَؤُها المالِك** (القاعِدَة ١٦):
+            لا اسمَ باقَةٍ ولا سِعرَ في المُستَودَع. والعُملَةُ وَحدَها
+            تَحمِل قيمَةً افتِراضِيَّةً لِأَنَّها **مَقيسَةٌ لا
+            مَظنونَة** — والريالُ لَيسَ عُملَةَ مُعامَلَةٍ في PayPal
+            إطلاقاً. *@
+        @if (PayPal.IsConfigured)
+        {
+            <form method="post" action="@($"/admin/tenants/{Slug}/plan/paypal-plan")">
+                <AcCard>
+                    <ChildContent>
+                        <h3 style="margin-top:0;">@L.Markup("admin.tenant_plan.paypal_plan_title")</h3>
+                        <p style="margin:0 0 10px;font-size:13px;color:var(--ac-text-muted);">
+                            @L.Markup("admin.tenant_plan.paypal_plan_hint")
+                        </p>
+
+                        @if (BoundPlan is { } b)
+                        {
+                            <p style="margin:0 0 6px;font-size:13px;">
+                                <span class="ac-chip ac-chip-sm">@b.PlanId</span>
+                                <span class="ac-chip ac-chip-sm">@b.ProductId</span>
+                            </p>
+                            <p style="margin:0 0 6px;font-size:13px;color:var(--ac-text-muted);">
+                                @b.Name · @b.Amount @b.Currency · @b.IntervalUnit
+                            </p>
+                            @if (PayPalPlanResource(b.PlanId) is { } resource)
+                            {
+                                <p style="margin:0 0 10px;font-size:13px;word-break:break-all;">
+                                    @L.Markup("admin.tenant_plan.paypal_plan_resource") @resource
+                                </p>
+                            }
+                        }
+
+                        <AcField Label="@L["admin.tenant_plan.paypal_plan_name"]" Required="true">
+                            <input type="text" name="name" class="ac-input" required
+                                   maxlength="@PayPalCatalogPolicy.MaxNameLength" value="" />
+                        </AcField>
+
+                        <AcField Label="@L["admin.tenant_plan.paypal_plan_price"]" Required="true">
+                            <input type="number" name="price" class="ac-input" required
+                                   min="0" step="0.01" value="" />
+                        </AcField>
+
+                        <AcField Label="@L["admin.tenant_plan.paypal_plan_period"]" Required="true">
+                            <select name="period" class="ac-input" required>
+                                <option value="@PayPalPlanIntervals.Month">@L["admin.tenant_plan.paypal_plan_monthly"]</option>
+                                <option value="@PayPalPlanIntervals.Year">@L["admin.tenant_plan.paypal_plan_yearly"]</option>
+                            </select>
+                        </AcField>
+
+                        <AcField Label="@L["admin.tenant_plan.paypal_plan_currency"]"
+                                 Hint="@L["admin.tenant_plan.paypal_plan_currency_hint"]">
+                            <select name="currency" class="ac-input">
+                                @foreach (var c in PayPalCurrencies.Supported)
+                                {
+                                    <option value="@c" selected="@(c == PayPalCurrencies.Default)">@c</option>
+                                }
+                            </select>
+                        </AcField>
+
+                        <AcButton Type="submit" Variant="ghost" Size="sm"
+                                  Text="@L["admin.tenant_plan.paypal_plan_create"]" />
+                    </ChildContent>
+                </AcCard>
+            </form>
+        }
 
         @*  رابِطُ دَفع PayPal — **يُرسَم بِشَرطَينِ مَعاً**: خُطَّةٌ
             مَذكورَةٌ في تَعريفِ الباقَة (`paypalPlanId`)، ومُزَوِّدٌ
@@ -159,11 +237,13 @@
 
     Tenant? tenant;
     TenantPlan? plan;
+    PlatformPlanPayPal? bound;
 
     protected override async Task OnParametersSetAsync()
     {
         tenant = await Tenants.FindAsync(Slug);
         plan   = await Billing.PlanAsync(Slug);
+        bound  = await Billing.PayPalPlanAsync(plan?.PlanId);
     }
 
     string StateLabel => TenantPlanPolicy.Derive(plan, DateTime.UtcNow) switch
@@ -176,10 +256,23 @@
 
     string HiddenAtText => TenantPlanPolicy.HiddenAt(plan)?.ToString("yyyy-MM-dd") ?? "—";
 
-    /// <summary>خُطَّةُ PayPal مِن **تَعريفِ الباقَة** لا مِن وَثيقَةِ
-    /// المَتجَر — الرِبطُ بِالبَيانات لا بِالكود، وباقَةٌ واحِدَةٌ
-    /// لِخُطَّةٍ واحِدَة.</summary>
-    string? PayPalPlanId => PlatformPlanCatalog.Find(plan?.PlanId)?.PayPalPlanId;
+    /// <summary>خُطَّةُ PayPal مِن **الباقَة** لا مِن وَثيقَةِ المَتجَر
+    /// — الرِبطُ بِالبَيانات لا بِالكود، وباقَةٌ واحِدَةٌ لِخُطَّةٍ
+    /// واحِدَة. ومَصدَرانِ لِلقيمَةِ بِقاعِدَةِ تَرجيحٍ **واحِدَةٍ
+    /// تَقرَؤُها الشاشَةُ والنُقطَةُ مَعاً**.</summary>
+    string? PayPalPlanId => PlatformPlanPayPalBinding.Resolve(
+        PlatformPlanCatalog.Find(plan?.PlanId), bound);
+
+    /// <summary>الرِباطُ المَكتوبُ مِن هذِه الشاشَة — يُعرَض
+    /// لِيَعرِفَ المُشرِفُ ماذا أَنشَأَ، فَـ«‏P-…» وَحدَه لا يَقول
+    /// سِعراً ولا دَورِيَّة.</summary>
+    PlatformPlanPayPal? BoundPlan => bound;
+
+    /// <summary>عُنوانُ الخُطَّةِ كَمَورِدٍ في واجِهَةِ PayPal —
+    /// بِمُضيفِ البيئَةِ المَضبوطَة، <b>نَصّاً لا رابِطاً يُنقَر</b>
+    /// (المَورِدُ يَحتاج رَمزاً، ورابِطٌ يَرُدّ ‏401 مَدخَلٌ يَضُرّ).</summary>
+    string? PayPalPlanResource(string planId)
+        => PayPalEnvironment.PlanResourceUrl(PayPal.Options.Environment, planId);
 
     string FormatError(string err) => err switch
     {
@@ -194,6 +287,29 @@
             => L["admin.tenant_plan.err_paypal_unavailable"],
         ACommerce.Templates.Customer.Marketplace.Billing.PayPalSurface.LinkRefused
             => L["admin.tenant_plan.err_paypal_link"],
+
+        // خُروقُ نَموذَجِ الخُطَّة — رُموزٌ مِن مَعجَمٍ مُغلَقٍ في
+        // `PayPalCatalogPolicy`، ونَصُّها مِن القامُوس لا مِن الكود.
+        PayPalCatalogPolicy.PlanSlugEmpty       => L["admin.tenant_plan.err_paypal_plan_slug"],
+        PayPalCatalogPolicy.NameEmpty           => L["admin.tenant_plan.err_paypal_plan_name"],
+        PayPalCatalogPolicy.NameTooLong         => L["admin.tenant_plan.err_paypal_plan_name_long"],
+        PayPalCatalogPolicy.AmountNotPositive   => L["admin.tenant_plan.err_paypal_plan_amount"],
+        PayPalCatalogPolicy.CurrencyUnsupported => L["admin.tenant_plan.err_paypal_plan_currency"],
+        PayPalCatalogPolicy.IntervalUnknown     => L["admin.tenant_plan.err_paypal_plan_period"],
+
+        // **خَطَأُ الاستِحقاقِ يُسَمّى ويُقالُ عِلاجُه** — وهُوَ
+        // الاستِثناءُ الوَحيدُ مِن «تُعرَض رِسالَةُ PayPal كَما هي»:
+        // نَصُّها إنجِليزيٌّ يَقول **ما وَقَعَ** ولا يَقول **ما يُفعَل**،
+        // والعِلاجُ لَيسَ إعداداً يُبحَثُ عَنه في اللَوحَةِ بَل
+        // **رِسالَةٌ إلى دَعمِ PayPal بِطَلَبٍ مُحَدَّد**. ويَبلُغُ هذا
+        // المَوضِعَ مِن مَسارَين: إنشاءِ الخُطَّةِ وإنشاءِ رابِطِ
+        // الدَفع — بِتَصنيفٍ واحِدٍ يَقرَآنِه (`PayPalFailure`).
+        PayPalFailure.ReferenceTransactionsDisabled
+            => L["admin.tenant_plan.err_paypal_reference_transactions"],
+
+        // وما بَقِيَ **رِسالَةُ PayPal نَفسِها** بِرَمزِها ونَصِّها —
+        // تُعرَض كَما هي عَمداً: «فَشِلَ الإنشاء» تُرسِل المُشرِفَ
+        // يُخَمِّن، و«‏UNIT_AMOUNT_NOT_ALLOWED» تَقولُ لَه أَينَ يُصلِح.
         _ => err
     };
 }

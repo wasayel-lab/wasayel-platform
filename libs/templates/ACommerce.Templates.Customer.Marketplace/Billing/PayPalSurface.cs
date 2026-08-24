@@ -117,6 +117,13 @@ public static class PayPalSurface
     /// نُقطَةُ نَموذَجٍ في <c>/admin</c> يُنادِيها مُتَصَفِّحٌ، لا
     /// آلَة. (والطَبَقَةُ ١٠ تَمنَع التَحويلَ تَحتَ <c>/api/v1</c>
     /// وَحدَها، ولِهذا السَبَبِ بِعَينِه.)</summary>
+    ///
+    /// <para><b>والرَمزُ يُهرَّب</b>: مِنه ما هُوَ رِسالَةُ PayPal
+    /// نَفسِها بِرَمزِها ونَصِّها (وفيها مَسافاتٌ وأَقواسٌ وعَرَبِيَّة)،
+    /// ورِسالَةٌ غَيرُ مُهَرَّبَةٍ في مَسارٍ تُنتِج عُنواناً مَكسوراً
+    /// فَتَضيع العِلَّةُ الَّتي كانَت تُقال. وتَهريبُ رَمزٍ ASCII
+    /// (‏<c>paypal_unavailable</c>) يُعطي نَفسَه حَرفاً — فَلا يَتَغَيَّر
+    /// سُلوكُ ما كانَ.</para>
     public static IResult LinkFailed(string slug, string code)
-        => Results.Redirect($"/admin/tenants/{slug}/plan?err={code}");
+        => Results.Redirect($"/admin/tenants/{slug}/plan?err={Uri.EscapeDataString(code)}");
 }

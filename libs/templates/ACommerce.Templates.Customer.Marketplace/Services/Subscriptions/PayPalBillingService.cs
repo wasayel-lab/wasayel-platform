@@ -30,6 +30,11 @@ public static class PayPalBillingService
     public const string StoppedAuditAction = "platform.tenant_plan_paypal_renewal_stopped";
     public const string LinkAuditAction    = "platform.tenant_plan_paypal_link";
 
+    /// <summary>إنشاءُ خُطَّةِ PayPal مِن الشاشَة — <b>قَرارٌ إداريٌّ
+    /// بِأَثَرٍ نَقديّ</b> (يُنشِئ سِعراً يُخصَم شَهرِيّاً)، فَلَه
+    /// سَطرُ تَدقيقٍ كَجاراتِه.</summary>
+    public const string CatalogPlanAuditAction = "platform.paypal_catalog_plan_create";
+
     /// <summary>نِطاقُ التَدقيقِ لِرِسالَةٍ بِلا مُستَأجِرٍ مَعروف —
     /// نَفسُ <c>AuditWriter.PlatformScope</c> بِقيمَتِه، ويُقرَأُ مِن
     /// هُناك لا يُنسَخ.</summary>
@@ -70,6 +75,32 @@ public static class PayPalBillingService
     /// يَقول ماذا وَقَع لا «‏paypal».</summary>
     public static string AuditActionFor(PayPalBillingAction action)
         => action == PayPalBillingAction.Extend ? ExtendAuditAction : StoppedAuditAction;
+
+    /// <summary>
+    /// <para><b>يَكتُبُ رِباطَ الباقَةِ بِخُطَّةِ PayPal، ويُرجِعُ هَل
+    /// كُتِبَ شَيءٌ فِعلاً.</b> <c>false</c> تَعني <b>صِفرَ وَثيقَةٍ
+    /// مُخَزَّنَة</b> — وهُوَ ما يَفحَصُه اختِبارُ «بِلا مُعَرِّفِ
+    /// خُطَّةٍ لا كِتابَة».</para>
+    ///
+    /// <para><b>و<c>Store</c> لا <c>Insert</c> هُنا، بِخِلافِ سِجِلّ
+    /// مَرَّة-واحِدَة</b>: مِفتاحُ الوَثيقَةِ سلاجُ الباقَة، والمَقصودُ
+    /// أَنّ <b>الباقَةَ لَها رِباطٌ واحِدٌ</b> لا أَنّ الرِباطَ يُكتَب
+    /// مَرَّةً في العُمر. فَمُشرِفٌ يُصَحِّحُ سِعراً يَكتُب فَوقَه،
+    /// و<c>Insert</c> كانَت سَتَرُدُّ خَطَأَ قاعِدَةِ بَياناتٍ لا
+    /// يَفهَمُه أَحَد. <b>والتَكرارُ يُمنَع عِندَ PayPal نَفسِها</b>
+    /// بِمِفتاحٍ مُشتَقٍّ حَتمِيّاً مِن المُدخَلات
+    /// (<c>PayPalCatalogPolicy.PlanRequestId</c>) — فَنَقرَتانِ على
+    /// نَفسِ النَموذَجِ لا تُنشِئانِ خُطَّتَين.</para>
+    /// </summary>
+    public static bool BindCatalogPlan(IDocumentSession session, PlatformPlanPayPal? binding)
+    {
+        if (binding is null
+            || string.IsNullOrWhiteSpace(binding.Id)
+            || string.IsNullOrWhiteSpace(binding.PlanId)) return false;
+
+        session.Store(binding);
+        return true;
+    }
 
     /// <summary>
     /// <para><b>يَحفَظُ رابِطَ المُوافَقَةِ على وَثيقَةِ الباقَة.</b>
