@@ -55,6 +55,12 @@
     <ProjectReference Include="..\..\kits\SavedSearches\ACommerce.Kit.SavedSearches.Core\ACommerce.Kit.SavedSearches.Core.csproj" />
     <ProjectReference Include="..\..\kits\Reviews\ACommerce.Kit.Reviews.Core\ACommerce.Kit.Reviews.Core.csproj" />
     <ProjectReference Include="..\..\kits\Payments\ACommerce.Kit.Payments.Core\ACommerce.Kit.Payments.Core.csproj" />
+    <!-- ‏PayPal — النُقطَةُ والشاشَتانِ تَحتاج أَنواعَه: رُؤوسُ التَوقيع،
+         ومُعجَمُ الأَحداث، ودالَّةُ القَرارِ النَقِيَّة. وهذِه **لَيسَت
+         SDK** بَل عَقدُ واجِهَةٍ مُوَثَّق، ولا حُزمَةَ خارِجِيَّةَ تُضاف
+         (‏`Directory.Packages.props` بِلا تَغيير). ونِداءُ HTTP وَحدَه
+         خَلفَ `PayPalGateway`. -->
+    <ProjectReference Include="..\..\kits\Payments\ACommerce.Kit.Payments.Providers.PayPal\ACommerce.Kit.Payments.Providers.PayPal.csproj" />
     <ProjectReference Include="..\..\kits\Theme\ACommerce.Kit.Theme.Core\ACommerce.Kit.Theme.Core.csproj" />
     <!-- المال يُنَسَّق مِن مَوضِع واحِد (‏`ACommerce.Kit.Culture.Money`)
          بَدَل رَمز عُملَة مَحبوس في قيَم القامُوس. والعُدَّة قائِمَة

@@ -6,6 +6,7 @@ using ACommerce.Kit.Listings;
 using ACommerce.Platform.I18n;
 using ACommerce.Platform.Shared;
 using ACommerce.Templates.Customer.Marketplace.Api;
+using ACommerce.Templates.Customer.Marketplace.Billing;
 using ACommerce.Templates.Customer.Marketplace.Gates;
 using ACommerce.Templates.Customer.Marketplace.Services.TenantConfig;
 using Marten;
@@ -3481,6 +3482,12 @@ public static class MarketplaceTemplateExtensions
         // ─── سَطحُ الـAPI ────────────────────────────────────────────────
         // مِلَفٌّ مُنفَصِل — نِطاقُ الفاحِصَين ٩ و‏١٠ نَصِّيّ بِلا لَبس.
         app.MapApiV1();
+
+        // ─── فَوتَرَةُ PayPal ────────────────────────────────────────────
+        // مِلَفٌّ مُنفَصِلٌ لِنَفس السَبَب: نِطاقُ المُراجَعَةِ وسَقفُ
+        // النَزيفِ يُقاسانِ لَه وَحدَه. ونُقطَةُ الرِسالَةِ **بِلا
+        // مُستَأجِر** — `api` مَحجوزَةٌ في وَسيطِ المُستَأجِر.
+        app.MapPayPalBilling();
 
         return app;
     }
