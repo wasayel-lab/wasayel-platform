@@ -58,11 +58,24 @@ public sealed record PaymentResult(
     string? FailureReason = null,
     string? ReceiptUrl = null);
 
+/// <param name="ApproveUrl">
+/// <para><b>رابِطُ المُوافَقَةِ حينَ يَحتاج المُزَوِّدُ نَقرَةَ
+/// الدافِعِ عِندَه</b> (‏PayPal تُعيد <c>links[rel=approve]</c>).
+/// و<c>null</c> لِمُزَوِّدٍ يَخصِم بِبِطاقَةٍ مَحفوظَةٍ بِلا مُوافَقَةٍ
+/// خارِجِيَّة.</para>
+///
+/// <para><b>ولِماذا في العَقدِ المُشتَرَك لا في نَتيجَةِ PayPal
+/// وَحدَها</b>: «اشتِراكٌ بُدِئ» و«اشتِراكٌ فُعِّل» حالَتانِ
+/// مُختَلِفَتان في كُلّ مُزَوِّدٍ يَعمَل بِإعادَةِ التَوجيه، والفَرقُ
+/// بَينَهُما <b>هُوَ هذا الرابِط</b>. فَإخفاؤُه خَلفَ نَوعٍ خاصٍّ
+/// بِمُزَوِّدٍ يَعني أَنّ كُلَّ مُستَهلِكٍ يُعيد اكتِشافَه.</para>
+/// </param>
 public sealed record SubscriptionResult(
     string SubscriptionId,
     bool IsActive,
     DateTime CurrentPeriodEnd,
-    string? FailureReason = null);
+    string? FailureReason = null,
+    string? ApproveUrl = null);
 
 public sealed record Invoice(
     string PaymentId,

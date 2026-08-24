@@ -55,6 +55,7 @@
     <ProjectReference Include="..\..\libs\kits\Maps\ACommerce.Kit.Maps.Core\ACommerce.Kit.Maps.Core.csproj" />
     <ProjectReference Include="..\..\libs\kits\Delivery\ACommerce.Kit.Delivery.Core\ACommerce.Kit.Delivery.Core.csproj" />
     <ProjectReference Include="..\..\libs\kits\Payments\ACommerce.Kit.Payments.Core\ACommerce.Kit.Payments.Core.csproj" />
+    <ProjectReference Include="..\..\libs\kits\Payments\ACommerce.Kit.Payments.Providers.PayPal\ACommerce.Kit.Payments.Providers.PayPal.csproj" />
     <ProjectReference Include="..\..\libs\kits\Reviews\ACommerce.Kit.Reviews.Core\ACommerce.Kit.Reviews.Core.csproj" />
 
     <ProjectReference Include="..\..\libs\templates\ACommerce.Templates.Customer.Marketplace\ACommerce.Templates.Customer.Marketplace.csproj" />

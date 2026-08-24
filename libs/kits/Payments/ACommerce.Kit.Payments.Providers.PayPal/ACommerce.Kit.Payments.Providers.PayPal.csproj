@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\ACommerce.Kit.Payments.Core\ACommerce.Kit.Payments.Core.csproj" />
+  </ItemGroup>
+  <!-- وَثيقَةُ باقَةِ المُستَأجِر ووَثيقَةُ مَرَّة-واحِدَة تَعيشانِ في
+       `Subscriptions.Core`، والقَرارُ هُنا يَقرَؤُهُما ولا يَكتُبُهُما —
+       دالّاتٌ نَقِيَّة. نَفسُ عِلَّةِ اعتِماد `Providers.Brevo` عَلى
+       `Platform.I18n`: مَشروعٌ وَرَقيٌّ لا يَقلِب سَهمَ الاعتِماد. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\Subscriptions\ACommerce.Kit.Subscriptions.Core\ACommerce.Kit.Subscriptions.Core.csproj" />
+  </ItemGroup>
+</Project>

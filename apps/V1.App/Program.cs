@@ -12,6 +12,7 @@ using ACommerce.Kit.Delivery;
 using ACommerce.Kit.Files;
 using ACommerce.Kit.Maps;
 using ACommerce.Kit.Payments;
+using ACommerce.Kit.Payments.Providers.PayPal;
 using ACommerce.Kit.Realtime.Server;
 using ACommerce.Kit.Versions;
 using ACommerce.Platform.Hosting;
@@ -121,6 +122,17 @@ switch (AuthChannelSelection.Decide(AuthChannelKind.Email,
 builder.Services.AddMockMaps();
 builder.Services.AddMockDelivery();
 builder.Services.AddMockPayments();
+
+// ‏PayPal — **تَدَفُّقٌ آخَر لا بَديلٌ عَمّا فَوقَه**: هذا لِاشتِراكِ
+// المُستَأجِرِ في وَسايِل (‏ADR-004)، وذاكَ لِعَرَبونِ الصَفقاتِ داخِلَ
+// مَتجَر. ولِذلك لا يُسَجَّل عَلى `IPaymentProvider`.
+//
+// والتَسجيلُ **مَشروطٌ بِالتَهيئَة** كَقَنَواتِ الدُخول: بِلا
+// `Payments__PayPal__ClientId/ClientSecret/Environment` لا يُسَجَّل
+// مُزَوِّد، ويَقول `PayPalGateway.IsConfigured` «لا» — فَتُخفي
+// الشاشاتُ بِطاقَتَه وتَرُدُّ النُقطَةُ رَفضاً صَريحاً. **فَشَلٌ
+// مُغلَق، لا زِرٌّ يَقول «قَريباً»**.
+builder.Services.AddPayPalSubscriptions(builder.Configuration);
 
 // تَخزين مَلَفّات — Local (افتِراضيّ، صَفّ wwwroot/uploads). لِلإنتاج
 // بَدِّل بِـ AddAliyunOssFileStorage(...) أو AddGoogleCloudFileStorage(...).

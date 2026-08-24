@@ -71,6 +71,7 @@
     <Project Path="libs/kits/Payments/ACommerce.Kit.Payments.Core/ACommerce.Kit.Payments.Core.csproj" />
     <Project Path="libs/kits/Payments/ACommerce.Kit.Payments.Providers.Moyasar/ACommerce.Kit.Payments.Providers.Moyasar.csproj" />
     <Project Path="libs/kits/Payments/ACommerce.Kit.Payments.Providers.Noon/ACommerce.Kit.Payments.Providers.Noon.csproj" />
+    <Project Path="libs/kits/Payments/ACommerce.Kit.Payments.Providers.PayPal/ACommerce.Kit.Payments.Providers.PayPal.csproj" />
   </Folder>
   <Folder Name="/libs/kits/Profiles/">
     <Project Path="libs/kits/Profiles/ACommerce.Kit.Profiles.Core/ACommerce.Kit.Profiles.Core.csproj" />
