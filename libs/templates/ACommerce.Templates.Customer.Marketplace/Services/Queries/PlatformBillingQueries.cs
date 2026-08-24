@@ -1,3 +1,4 @@
+using ACommerce.Kit.Payments.Providers.PayPal;
 using ACommerce.Kit.Subscriptions;
 using Marten;
 
@@ -73,6 +74,60 @@ public sealed class PlatformBillingQueries
             return await s.LoadAsync<PlatformPlanPayPal>(planSlug, ct);
         }
         catch { return null; }
+    }
+
+    /// <summary>
+    /// <para><b>طَلَباتُ الدَفعِ المَرِنَةِ لِمَتجَرٍ واحِد</b>
+    /// (‏ADR-006) — الأَحدَثُ أَوَّلاً، لِشاشَةِ المُشرِف.</para>
+    ///
+    /// <para><b>والسُقوطُ عِندَ الخَطَأ «لا طَلَبات» لا انفِجار</b>:
+    /// جَدوَلُ الطَلَباتِ لا يوجَد في قاعِدَةٍ لَم تُهاجَر بَعد،
+    /// والقائِمَةُ الفارِغَةُ تَعني <b>سُلوكَ اليَومِ حَرفاً</b> — لا
+    /// بِطاقَةَ طَلَبات.</para>
+    /// </summary>
+    public async Task<IReadOnlyList<PayPalOrderRecord>> OrdersForAsync(
+        string? tenantSlug, int take = 20, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(tenantSlug)) return Array.Empty<PayPalOrderRecord>();
+        try
+        {
+            await using var s = _store.QuerySession();
+            var all = await s.Query<PayPalOrderRecord>()
+                .Where(o => o.TenantSlug == tenantSlug)
+                .OrderByDescending(o => o.CreatedAt).Take(take).ToListAsync(ct);
+            return all.ToList();
+        }
+        catch { return Array.Empty<PayPalOrderRecord>(); }
+    }
+
+    /// <summary>
+    /// <para><b>أَحدَثُ دَفعٍ مُعَلَّقٍ لِكُلّ مَتجَر</b> — لِلافِتَةِ
+    /// الاستوديو، بِاستِعلامٍ واحِدٍ لا واحِدٍ لِكُلّ مَتجَر.</para>
+    ///
+    /// <para><b>و«مُعَلَّق» تَعني «لَم يُلتَقَط بَعد»</b>: طَلَبٌ
+    /// مُلتَقَطٌ أَو مَرفوضٌ أَو مَعكوسٌ رابِطُه لا يُفضي إلى شَيء،
+    /// <b>ومَدخَلٌ يَضُرّ أَسوَأُ مِن غِيابِ مَدخَل</b> (القاعِدَة ١٢).</para>
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, PayPalOrderRecord>> PendingOrdersAsync(
+        CancellationToken ct = default)
+    {
+        try
+        {
+            await using var s = _store.QuerySession();
+            var open = await s.Query<PayPalOrderRecord>()
+                .Where(o => o.Status == PayPalOrderStatuses.Created
+                         || o.Status == PayPalOrderStatuses.Approved)
+                .ToListAsync(ct);
+
+            return open
+                .Where(o => !string.IsNullOrWhiteSpace(o.ApproveUrl))
+                .GroupBy(o => o.TenantSlug, StringComparer.Ordinal)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(o => o.CreatedAt).First(),
+                    StringComparer.Ordinal);
+        }
+        catch { return new Dictionary<string, PayPalOrderRecord>(StringComparer.Ordinal); }
     }
 
     /// <summary>إعداداتُ المَنَصَّة — وَثيقَةٌ جَديدَةٌ فارِغَةٌ حينَ لا

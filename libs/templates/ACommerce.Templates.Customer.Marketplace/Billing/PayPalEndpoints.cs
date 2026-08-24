@@ -80,6 +80,14 @@ public static class PayPalEndpoints
             if (gate != PayPalWebhookGate.Accepted)
                 return PayPalSurface.Rejected(log, gate);
 
+            // ─── مَسارُ الطَلَبات (‏ADR-006) — بابٌ واحِدٌ ومَعجَمان ──
+            // `PayPalOrderBillingPolicy.Parse` تُعطي `null` لِما لَيسَ
+            // حَدَثَ طَلَب، فَيَنزِل الجِسمُ إلى مَسارِ الاشتِراكاتِ
+            // **بِلا تَغييرِ حَرفٍ فيه**. سَطرُ تَفريعٍ واحِدٌ لا
+            // نُقطَةٌ ثانِيَة: الـwebhook واحِدٌ ومُعَرِّفُه واحِد.
+            if (PayPalOrderBillingPolicy.Parse(raw) is { } order)
+                return await PayPalOrderFlow.HandleAsync(order, session, paypal, audit, log, http);
+
             var e = PayPalBillingPolicy.Parse(raw);
             if (e is null) return PayPalSurface.Unreadable(log);
 
@@ -125,7 +133,7 @@ public static class PayPalEndpoints
 
             var by = admin.User is { } u ? $"studio · {u.Id}" : "platform-admin";
             var result = await paypal.CreateSubscriptionAsync(
-                payPalPlanId!, slug, PayPalSurface.LinkKey(slug, DateTime.UtcNow), http.RequestAborted);
+                payPalPlanId!, slug, PayPalSurface.LinkKey(slug, payPalPlanId!), http.RequestAborted);
 
             // ─── فَشَلُ PayPal يُسَمّى، ولا يُخفى خَلفَ «تَعَذَّرَ» ───
             //
@@ -201,6 +209,94 @@ public static class PayPalEndpoints
             await audit.WriteAsync(slug, admin.User?.Id, by,
                 Services.Subscriptions.PayPalBillingService.CatalogPlanAuditAction,
                 "PlatformPlan", draft.PlanSlug, note: created.PlanId);
+            return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
+        }).DisableAntiforgery();
+
+        // ─── رابِطُ دَفعٍ مَرِن: المَبلَغُ والمُدَّةُ لَحظَةَ الطَلَب ──
+        //
+        // **العِلَّة (‏ADR-006)**: مَسارُ الخُطَّةِ أَعلاه يَشتَرِط
+        // خُطَّةً مُعَرَّفَةً سَلَفاً عِندَ PayPal، ويَقوم تَحتَ
+        // الغِطاءِ على اتِّفاقِيَّةِ فَوتَرَة — أَي عائِلَةِ
+        // Reference Transactions الَّتي **تَحتاج استِحقاقاً لَم يُثبَت**.
+        // وهذا المَسارُ يُرسِل المَبلَغَ والعُملَةَ والوَصفَ ومَرجِعَنا
+        // في جِسمِ الطَلَبِ نَفسِه، فَيَفتَح صَفحَةَ دَفعٍ مُستَضافَةً
+        // **بِصِفرِ استِحقاق**.
+        //
+        // **والحارِسُ أَوَّلُ سَطر، قَبلَ قِراءَةِ حَقلٍ واحِد**
+        // (القاعِدَة ٦): التَخويلُ يَسبِق تَحَقُّقَ الحُقول، وإلّا صارَ
+        // خَطَأُ التَحَقُّقِ قِناعاً لِلثَغرَة.
+        app.MapPost("/admin/tenants/{slug}/plan/paypal-order", async (
+            string slug, HttpRequest req, IDocumentSession session,
+            Services.Incubator.StudioAuth auth, PayPalGateway paypal,
+            Services.Audit.AuditWriter audit) =>
+        {
+            var admin = await Services.PlatformAdminGuard.EvaluateAsync(session.DocumentStore, auth);
+            if (!admin.Allowed) return Results.StatusCode(StatusCodes.Status403Forbidden);
+            if (!paypal.IsConfigured) return PayPalOrderSurface.Failed(slug, PayPalSurface.LinkUnavailable);
+
+            var ct = req.HttpContext.RequestAborted;
+            var plan = await session.LoadAsync<TenantPlan>(slug, ct);
+            var draft = PayPalOrderSurface.DraftFrom(req, slug, plan);
+
+            var violations = PayPalOrderPolicy.Validate(draft);
+            if (violations.Count > 0) return PayPalOrderSurface.Failed(slug, violations[0].Code);
+
+            var by = admin.User is { } u ? $"studio · {u.Id}" : "platform-admin";
+            var reference = PayPalOrderPolicy.Reference(draft);
+            var result = await paypal.CreateOrderAsync(
+                draft, reference, PayPalOrderSurface.OriginFrom(req),
+                PayPalOrderPolicy.OrderRequestId(draft), ct);
+
+            // ورِسالَةُ PayPal تُعرَض كَما هي — رَمزُها ونَصُّها، بِنَفسِ
+            // التَصنيفِ الَّذي يَقرَؤُه مَسارا الخُطَّةِ والاشتِراك.
+            if (!string.IsNullOrWhiteSpace(result.FailureReason))
+                return PayPalOrderSurface.Failed(slug, PayPalFailure.ScreenCode(result.FailureReason));
+
+            if (!Services.Subscriptions.PayPalBillingService.SaveOrder(
+                    session, PayPalOrderSurface.RecordFor(draft, reference, result, by, DateTime.UtcNow)))
+                return PayPalOrderSurface.Failed(slug, PayPalOrderSurface.OrderRefused);
+
+            await session.SaveChangesAsync(ct);
+            await audit.WriteAsync(slug, admin.User?.Id, by,
+                Services.Subscriptions.PayPalBillingService.OrderAuditAction,
+                "TenantPlan", slug, note: $"{reference} · {result.OrderId}");
+            return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
+        }).DisableAntiforgery();
+
+        // ─── «التَقِط الآن» — المَخرَجُ اليَدَويُّ الَّذي يُبلَغ
+        //     بِالنَقر (القاعِدَة ١٢) ──────────────────────────────────
+        //
+        // **العِلَّة**: الالتِقاطُ يَقودُه الحَدَث. فَإن انقَطَعَت
+        // الأَحداثُ بَقِيَ طَلَبٌ وافَقَ عَلَيه الدافِعُ بِلا التِقاط —
+        // **وتُلغيه PayPal بَعدَ نافِذَتِه وتُعيدُ المالَ**. فَلِهذا
+        // الانقِطاعِ عِلاجٌ بِنَقرَة، لا بِأَمرِ كونسول.
+        app.MapPost("/admin/tenants/{slug}/plan/paypal-capture", async (
+            string slug, HttpRequest req, IDocumentSession session,
+            Services.Incubator.StudioAuth auth, PayPalGateway paypal) =>
+        {
+            var admin = await Services.PlatformAdminGuard.EvaluateAsync(session.DocumentStore, auth);
+            if (!admin.Allowed) return Results.StatusCode(StatusCodes.Status403Forbidden);
+            if (!paypal.IsConfigured) return PayPalOrderSurface.Failed(slug, PayPalSurface.LinkUnavailable);
+
+            var ct = req.HttpContext.RequestAborted;
+            var reference = req.Form[PayPalOrderSurface.ReferenceField].ToString().Trim();
+            var order = await session.LoadAsync<PayPalOrderRecord>(reference, ct);
+            if (order is null || order.TenantSlug != slug)
+                return PayPalOrderSurface.Failed(slug, PayPalOrderSurface.OrderNotFound);
+
+            var result = await paypal.CaptureOrderAsync(
+                order.OrderId, PayPalOrderPolicy.CaptureRequestId(order.Id), ct);
+            if (!string.IsNullOrWhiteSpace(result.FailureReason))
+                return PayPalOrderSurface.Failed(slug, PayPalFailure.ScreenCode(result.FailureReason));
+
+            // **ولا تُمَدَّدُ باقَةٌ مِن هُنا**: نَجاحُ الالتِقاطِ إثباتٌ
+            // صَحيحٌ ولا يُستَعمَلُ لِلتَمديد — رِسالَةُ
+            // `PAYMENT.CAPTURE.COMPLETED` هي وَحدَها الَّتي تُمَدِّد،
+            // بِمِفتاحِ `event_id` الَّذي يَمنَع الازدِواج.
+            order.CaptureId = string.IsNullOrWhiteSpace(result.CaptureId) ? order.CaptureId : result.CaptureId;
+            order.At = DateTime.UtcNow;
+            session.Store(order);
+            await session.SaveChangesAsync(ct);
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
         }).DisableAntiforgery();
 

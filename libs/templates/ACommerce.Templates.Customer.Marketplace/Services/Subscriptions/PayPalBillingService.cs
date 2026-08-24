@@ -73,8 +73,97 @@ public static class PayPalBillingService
 
     /// <summary>فِعلُ التَدقيقِ المُقابِلُ لِلقَرار — فَسَطرُ السِجِلّ
     /// يَقول ماذا وَقَع لا «‏paypal».</summary>
-    public static string AuditActionFor(PayPalBillingAction action)
-        => action == PayPalBillingAction.Extend ? ExtendAuditAction : StoppedAuditAction;
+    public static string AuditActionFor(PayPalBillingAction action) => action switch
+    {
+        PayPalBillingAction.Extend   => ExtendAuditAction,
+        PayPalBillingAction.Withdraw => WithdrawAuditAction,
+        _                            => StoppedAuditAction
+    };
+
+    // ═══ مَسارُ الطَلَبات (‏ADR-006) — ونَفسُ الكاتِبِ لا كاتِبٌ ثانٍ ═══
+
+    /// <summary>سَحبُ مُدَّةٍ بَعدَ استِردادٍ أَو عَكسِ دَفعَة —
+    /// <b>قَرارٌ إداريٌّ بِأَثَرٍ نَقديّ</b>، فَلَه سَطرُ تَدقيقٍ
+    /// بِاسمِه لا يُخلَط بِالتَمديد.</summary>
+    public const string WithdrawAuditAction = "platform.tenant_plan_paypal_withdraw";
+
+    /// <summary>إنشاءُ رابِطِ دَفعٍ مَرِن مِن الشاشَة.</summary>
+    public const string OrderAuditAction = "platform.tenant_plan_paypal_order";
+
+    /// <summary>التِقاطٌ نودِيَ — مِن الحَدَثِ أَو بِزِرٍّ يَدَوِيّ.</summary>
+    public const string CaptureAuditAction = "platform.tenant_plan_paypal_capture";
+
+    /// <summary>
+    /// <para><b>يُخَزِّنُ وَثيقَةَ الدَفعِ المُعَلَّق، ويُرجِعُ هَل
+    /// كُتِبَ شَيءٌ فِعلاً.</b> <c>false</c> تَعني <b>صِفرَ وَثيقَةٍ
+    /// مُخَزَّنَة</b> — وهُوَ ما يَفحَصُه اختِبارُ «رابِطٌ لَم تُعِدهُ
+    /// PayPal لا يُخَزَّن».</para>
+    ///
+    /// <para><b>و<c>Store</c> لا <c>Insert</c></b>: المِفتاحُ مَرجِعُنا
+    /// الحَتميّ، والمَقصودُ أَنّ <b>لِمُدخَلاتٍ واحِدَةٍ وَثيقَةً
+    /// واحِدَة</b> لا أَنّ الوَثيقَةَ تُكتَبُ مَرَّةً في العُمر.
+    /// فَنَقرَتانِ تَكتُبانِ فَوقَ الوَثيقَةِ نَفسِها،
+    /// و<c>PayPal-Request-Id</c> يَمنَع الطَلَبَ الثانِيَ عِندَ PayPal.</para>
+    /// </summary>
+    public static bool SaveOrder(IDocumentSession session, PayPalOrderRecord? order)
+    {
+        if (order is null
+            || string.IsNullOrWhiteSpace(order.Id)
+            || string.IsNullOrWhiteSpace(order.OrderId)
+            || string.IsNullOrWhiteSpace(order.ApproveUrl)) return false;
+
+        session.Store(order);
+        return true;
+    }
+
+    /// <summary>
+    /// <para><b>يُطَبِّقُ قَرارَ حَدَثِ طَلَب، ويُرجِعُ هَل كُتِبَ شَيءٌ
+    /// فِعلاً.</b></para>
+    ///
+    /// <para><b>والباعِثُ واحِدٌ لا اثنان</b> (القاعِدَة ٨): تَحريكُ
+    /// <c>ExpiresAt</c> وتَسجيلُ مِفتاحِ مَرَّة-واحِدَة يَقَعانِ في
+    /// <see cref="Apply"/> نَفسِها الَّتي يُنادِيها مَسارُ الاشتِراكات —
+    /// <b>نَفسُ الجَلسَةِ، ونَفسُ <c>PayPalWebhookRecord</c> المُدرَجِ
+    /// بِـ<c>Insert</c>، ونَفسُ المُعامَلَة</b>. وما يُضيفُه هذا المَسار
+    /// وَثيقَةُ الطَلَبِ وَحدَها.</para>
+    ///
+    /// <para><b>ولا سِجِلَّ مَرَّة-واحِدَةٍ لِما لا يُمَدِّد</b>: تَعليمُ
+    /// طَلَبٍ «مُعَلَّق» أَو «مَرفوض» لا يُدرِج صَفّاً، فَإعادَةُ
+    /// الإرسالِ تُعيدُ التَعليمَ نَفسَه — <b>وذاكَ عَمَلٌ لا ضَرَرَ في
+    /// تَكرارِه</b>، بِخِلافِ تَمديدٍ يُشتَرى بِمالٍ واحِدٍ مَرَّتَين.</para>
+    /// </summary>
+    public static bool ApplyOrder(
+        IDocumentSession session, TenantPlan? plan, PayPalOrderRecord? order,
+        PayPalOrderEvent e, PayPalOrderDecision decision, DateTime at)
+    {
+        if (!decision.Writes || order is null) return false;
+
+        var wrote = false;
+
+        if (decision.TouchesPlan && plan is not null)
+        {
+            var billing = new PayPalBillingDecision(
+                decision.Action == PayPalOrderAction.Extend
+                    ? PayPalBillingAction.Extend
+                    : PayPalBillingAction.Withdraw,
+                decision.NewExpiresAt, decision.ReasonAr);
+
+            // ‏`SubscriptionId` و`NextBillingTime` غائِبانِ عَمداً: هذا
+            // طَلَبٌ لا اشتِراك، فَلا يُكتَب حَقلٌ لا مَعنى لَه هُنا.
+            wrote = Apply(session, plan,
+                new PayPalWebhookEvent(e.EventId, e.EventType, order.TenantSlug, null, null),
+                billing, at);
+        }
+
+        if (decision.TouchesOrder)
+        {
+            PayPalOrderBillingPolicy.Apply(order, e, decision, at);
+            session.Store(order);
+            wrote = true;
+        }
+
+        return wrote;
+    }
 
     /// <summary>
     /// <para><b>يَكتُبُ رِباطَ الباقَةِ بِخُطَّةِ PayPal، ويُرجِعُ هَل
