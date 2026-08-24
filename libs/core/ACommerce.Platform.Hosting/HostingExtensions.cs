@@ -127,6 +127,16 @@ public static class HostingExtensions
                 opts.Schema.For<ACommerce.Kit.Subscriptions.PayPalWebhookRecord>()
                     .SingleTenanted()
                     .Identity(x => x.Id);
+
+                // وَثيقَةُ الدَفعِ المُعَلَّق — مُعَرِّفُها **مَرجِعُنا**
+                // (‏`custom_id`) لا مُعَرِّفُ الطَلَبِ عِندَ PayPal:
+                // الأَخيرُ لا يُعرَف إلّا بَعدَ النِداء، والمَرجِعُ
+                // يُرسَل فيه. و`SingleTenanted` كَجاراتِه ولِنَفسِ
+                // السَبَبِ حَرفاً: تُقرَأ وتُكتَب في نُقطَةٍ بِلا
+                // مُستَأجِرٍ مَحلول (‏ADR-006).
+                opts.Schema.For<ACommerce.Kit.Subscriptions.PayPalOrderRecord>()
+                    .SingleTenanted()
+                    .Identity(x => x.Id);
                 opts.Projections.Snapshot<ACommerce.Kit.Support.Ticket>(SnapshotLifecycle.Inline);
                 opts.Projections.Snapshot<ACommerce.Kit.Offers.Offer>(SnapshotLifecycle.Inline);
                 opts.Schema.For<ACommerce.Kit.Offers.ListingMatch>().Identity(x => x.Id);

@@ -153,7 +153,19 @@ public enum PayPalBillingAction
 
     /// <summary>نَفسُ <c>event_id</c> عولِجَ سَلَفاً — لا تَمديدَ
     /// ثانٍ.</summary>
-    Replay
+    Replay,
+
+    /// <summary>
+    /// <para><b>يُسحَبُ ما مُنِح</b> — استِردادٌ أَو عَكسُ دَفعَة
+    /// (‏ADR-006). يُحَرِّك <c>ExpiresAt</c> إلى الخَلفِ بِمِقدارِ ما
+    /// أَضافَتهُ الدَفعَةُ نَفسُها، <b>ولا يَمَسّ <c>Status</c></b>.</para>
+    ///
+    /// <para><b>وهُوَ عُضوٌ في هذا المَعجَمِ لا في مَعجَمٍ ثانٍ عَمداً</b>:
+    /// الكاتِبُ واحِد (‏<c>PayPalBillingService.Apply</c>)، ومَسارُ
+    /// الطَلَباتِ يُمَرِّرُ قَرارَه إلَيه بَدَلَ أَن يَفتَحَ باعِثَ
+    /// تَمديدٍ ثانِياً — «لا أُنبوبَ رابِع» (القاعِدَة ٨).</para>
+    /// </summary>
+    Withdraw
 }
 
 /// <summary>القَرارُ كامِلاً. <c>NewExpiresAt</c> ذاتُ مَعنىً عِندَ
@@ -166,7 +178,9 @@ public sealed record PayPalBillingDecision(
     /// <summary>أَتُكتَبُ وَثيقَةٌ أَصلاً؟ <b>هذا هُوَ تَعريفُ «صِفرُ
     /// كِتابَة»</b> الَّذي يَفحَصُه الاختِبار — لا فَحصُ قاعِدَةِ
     /// بَياناتٍ بَعدَ الحَدَث.</summary>
-    public bool Writes => Action is PayPalBillingAction.Extend or PayPalBillingAction.StopRenewal;
+    public bool Writes => Action is PayPalBillingAction.Extend
+                                 or PayPalBillingAction.StopRenewal
+                                 or PayPalBillingAction.Withdraw;
 }
 
 /// <summary>
@@ -365,6 +379,13 @@ public static class PayPalBillingPolicy
 
             case PayPalBillingAction.StopRenewal:
                 plan.RenewalCancelledAt = at;
+                break;
+
+            // **سَحبٌ لا إطفاء**: يُحَرَّكُ التاريخُ إلى الخَلفِ وَحدَه،
+            // و<c>Status</c> لا تُمَسّ — فَقَرارُ المُشرِفِ يَبقى فَوقَ
+            // كُلِّ حَرَكَةِ مال، صُعوداً كانَت أَو نُزولاً.
+            case PayPalBillingAction.Withdraw:
+                plan.ExpiresAt = decision.NewExpiresAt;
                 break;
 
             default:

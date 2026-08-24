@@ -38,6 +38,26 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     /// الاشتِراك.</summary>
     public const string PlansPath         = "/v1/billing/plans";
 
+    /// <summary><b>طَلَباتُ الدَفعِ المَرِنَة — Orders v2</b> (‏ADR-006).
+    /// <c>POST</c> يُنشِئ طَلَباً بِمَبلَغِه ويُعيد رابِطاً مُستَضافاً،
+    /// و<c>POST {OrdersPath}/{id}/capture</c> يَلتَقِط.</summary>
+    public const string OrdersPath        = "/v2/checkout/orders";
+
+    /// <summary>مَسارُ الالتِقاطِ لِطَلَبٍ بِعَينِه — <b>مَوضِعٌ واحِدٌ
+    /// يَقرَؤُه المُنتِجُ والمُختَبِر</b> بَدَلَ سِلسِلَةٍ تُركَّبُ في
+    /// مَوضِعَين.</summary>
+    public static string CapturePathFor(string orderId)
+        => $"{OrdersPath}/{orderId}/capture";
+
+    /// <summary>‏<c>Prefer: return=representation</c> — كُلُّ أَمثِلَةِ
+    /// الالتِقاطِ في المُواصَفَةِ (بِما فيها المَوسومَةُ «‏Minimal
+    /// Representation») تُظهِر <c>payments.captures[]</c> كامِلاً،
+    /// <b>ونَصُّ الاستِجابَةِ ‏201 يَقول «‏By default, the response is
+    /// minimal»</b>. مُتَناقِضٌ ولَم يُفصَل بِنِداءٍ حَقيقيّ — <b>فَيُرسَل
+    /// الرَأس: كُلفَتُه صِفرٌ واليَقينُ يَستَحِقّ</b>.</summary>
+    public const string PreferHeader = "Prefer";
+    public const string PreferRepresentation = "return=representation";
+
     /// <summary>اسمُ العَميلِ المُطَبَّع — التَسجيلُ والحَلُّ يَقرَآنِه
     /// مِن هُنا.</summary>
     public const string HttpClientName = "paypal";
@@ -359,6 +379,114 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
             ApproveUrl: approve);
     }
 
+    // ═══ طَلَبُ دَفعٍ مَرِن — Orders v2 (‏ADR-006) ════════════════════
+    //
+    // **ولا مُزَوِّدَ ثانِياً**: نَفسُ الصِنفِ ونَفسُ `HttpClient`
+    // بِمُهلَتِه ونَفسُ `PayPalTokenCache` ونَفسُ نَمَطِ الأَخطاء
+    // (‏`PayPalFailure` يَقرَأُ ما تُعيدُه هذِه الدَوالّ). فَما أُضيفَ
+    // نِداءانِ لا طَبَقَة.
+
+    /// <summary>
+    /// <para><b>يُنشِئ طَلَبَ دَفعٍ ويُعيد رابِطَ الصَفحَةِ
+    /// المُستَضافَة.</b> المَبلَغُ والعُملَةُ والوَصفُ ومَرجِعُنا
+    /// <b>مُعامَلاتٌ لَحظَةَ الطَلَب</b> — بِلا خُطَّةٍ مُسبَقَةٍ ولا
+    /// صَفحَةِ لَوحَة.</para>
+    ///
+    /// <para><b>ورابِطُ التَحويلِ يُلتَقَط بِوَسمَينِ لا بِواحِد</b>:
+    /// طَلَبٌ فيه <c>experience_context</c> — وهُوَ شَكلُنا — يَرُدّ
+    /// <c>payer-action</c> و<c>approve</c> <b>غائِبٌ أَصلاً</b>. والكودُ
+    /// القائِمُ في <see cref="CreateSubscriptionAsync"/> يَبحَث عَن
+    /// <c>approve</c> وَحدَه، <b>فَيُوَسَّع هُنا ولا يُنسَخ</b>
+    /// (<see cref="PayPalOrderPolicy.ApproveRels"/>).</para>
+    /// </summary>
+    public async Task<PayPalOrderResult> CreateOrderAsync(
+        PayPalOrderDraft draft, string reference, string origin,
+        string idempotencyKey, CancellationToken ct = default)
+    {
+        using var msg = await AuthorizedAsync(HttpMethod.Post, OrdersPath, ct);
+        msg.Headers.Add(RequestIdHeader, idempotencyKey);
+        msg.Content = JsonContent.Create(
+            PayPalOrderPolicy.CreateBody(draft, reference, origin));
+
+        using var resp = await SendAsync(msg, ct);
+        var body = await resp.Content.ReadAsStringAsync(ct);
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            if (resp.StatusCode == HttpStatusCode.Unauthorized) _tokens.Invalidate();
+            _logger.LogError("[PayPal] فَشِل إنشاءُ الطَلَب {Status}: {Body}", resp.StatusCode, body);
+            return new PayPalOrderResult("", "", null,
+                $"PayPal فَشِل إنشاءُ طَلَبِ الدَفع: {(int)resp.StatusCode} — {Describe(body)}");
+        }
+
+        var dto = Deserialize<OrderDto>(body);
+        if (dto is null || string.IsNullOrWhiteSpace(dto.id))
+            return new PayPalOrderResult("", "", null, "PayPal رَدَّ بِلا مُعَرِّفِ طَلَب.");
+
+        return new PayPalOrderResult(
+            dto.id!, dto.status ?? "", LinkFrom(dto.links), FailureReason: null);
+    }
+
+    /// <summary>
+    /// <para><b>يَلتَقِطُ المالَ لِطَلَبٍ وافَقَ عَلَيه الدافِع.</b>
+    /// الجِسمُ <c>{}</c> حَرفاً (<c>requestBody.required: false</c>،
+    /// والمِثالُ الرَسميُّ فارِغ).</para>
+    ///
+    /// <para><b>ورَأسُ مَرَّة-واحِدَة هُنا ضَرورَةٌ مالِيَّةٌ لا
+    /// تَرَف</b>: تَوجيهُ PayPal الصَريحُ عِندَ ‏5xx أَو انقِطاعِ شَبَكَة
+    /// «‏repeat the same /capture call at least once, with the same
+    /// PayPal-Request-Id header as before». وبِدونِه قَد يُلتَقَطُ
+    /// المَبلَغُ <b>مَرَّتَين</b>.</para>
+    ///
+    /// <para><b>ولا يُمَدَّدُ شَيءٌ مِن هُنا</b>: نَجاحُ الالتِقاطِ
+    /// إثباتٌ صَحيحٌ لكِنَّه <b>لا يُستَعمَلُ لِلتَمديد</b> — مِفتاحُ
+    /// مَرَّة-واحِدَةٍ عِندَنا <c>event_id</c> لا <c>capture_id</c>،
+    /// فَكاتِبانِ بِمِفتاحَينِ لا يَرتَطِمانِ يُمَدِّدانِ مَرَّتَين
+    /// لِدَفعَةٍ واحِدَة. التَمديدُ يَقَع عِندَ
+    /// <c>PAYMENT.CAPTURE.COMPLETED</c> وَحدَه.</para>
+    /// </summary>
+    public async Task<PayPalCaptureResult> CaptureOrderAsync(
+        string orderId, string idempotencyKey, CancellationToken ct = default)
+    {
+        using var msg = await AuthorizedAsync(HttpMethod.Post, CapturePathFor(orderId), ct);
+        msg.Headers.Add(RequestIdHeader, idempotencyKey);
+        msg.Headers.Add(PreferHeader, PreferRepresentation);
+        msg.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+
+        using var resp = await SendAsync(msg, ct);
+        var body = await resp.Content.ReadAsStringAsync(ct);
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            if (resp.StatusCode == HttpStatusCode.Unauthorized) _tokens.Invalidate();
+            _logger.LogError("[PayPal] فَشِل الالتِقاط {Status}: {Body}", resp.StatusCode, body);
+            return new PayPalCaptureResult("", "", null,
+                $"PayPal فَشِل التِقاطُ الطَلَب: {(int)resp.StatusCode} — {Describe(body)}");
+        }
+
+        var dto = Deserialize<CapturedOrderDto>(body);
+        var capture = dto?.purchase_units?.FirstOrDefault()?.payments?.captures?.FirstOrDefault();
+
+        // ورَدٌّ ناجِحٌ بِلا مُعَرِّفِ التِقاطٍ **لَيسَ فَشَلاً**: الرَأسُ
+        // `Prefer` مُرسَلٌ لكِنّ نَصَّ المُواصَفَةِ يُناقِض أَمثِلَتَها،
+        // والالتِقاطُ نَفسُه وَقَع. تَصِلُ الرِسالَةُ بِمُعَرِّفِه.
+        return new PayPalCaptureResult(
+            capture?.id ?? "", capture?.status ?? dto?.status ?? "",
+            capture?.seller_receivable_breakdown?.net_amount?.value,
+            FailureReason: null);
+    }
+
+    /// <summary>أَوَّلُ رابِطٍ رَمزُه في
+    /// <see cref="PayPalOrderPolicy.ApproveRels"/> — <b>لا اسمٌ
+    /// واحِد</b>.</summary>
+    private static string? LinkFrom(LinkDto[]? links)
+        => links is null
+            ? null
+            : PayPalOrderPolicy.ApproveRels
+                .Select(rel => links.FirstOrDefault(
+                    l => string.Equals(l.rel, rel, StringComparison.OrdinalIgnoreCase))?.href)
+                .FirstOrDefault(h => !string.IsNullOrWhiteSpace(h));
+
     /// <summary><b>يُلغي التَجديدَ عِندَ PayPal.</b> ولا يُطفِئ مَتجَراً:
     /// الإخفاءُ عِندَنا مُشتَقٌّ مِن الوَقتِ وَحدَه، فَمَن أَلغى في
     /// مُنتَصَفِ شَهرِه يُكمِلُه (‏ADR-003 §٢-ج).</summary>
@@ -542,5 +670,16 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
 
     private sealed record ErrorDetailDto(string? issue, string? description);
     private sealed record ErrorDto(string? name, string? message, ErrorDetailDto[]? details);
+
+    // ─── Orders v2 — والمَقروءُ أَقَلُّ ما يَكفي ─────────────────────
+    private sealed record OrderDto(string? id, string? status, LinkDto[]? links);
+    private sealed record NetAmountDto(string? currency_code, string? value);
+    private sealed record ReceivableDto(NetAmountDto? net_amount);
+    private sealed record CaptureItemDto(
+        string? id, string? status, AmountDto? amount, ReceivableDto? seller_receivable_breakdown);
+    private sealed record PaymentsDto(CaptureItemDto[]? captures);
+    private sealed record PurchaseUnitDto(PaymentsDto? payments);
+    private sealed record CapturedOrderDto(
+        string? id, string? status, PurchaseUnitDto[]? purchase_units);
 #pragma warning restore IDE1006
 }

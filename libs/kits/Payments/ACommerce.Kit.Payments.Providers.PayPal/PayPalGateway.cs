@@ -88,6 +88,36 @@ public sealed class PayPalGateway
         return new PayPalCatalogPlan(productId, planId);
     }
 
+    /// <summary>
+    /// <para><b>يُنشِئ طَلَبَ دَفعٍ مَرِناً ويُعيد رابِطَ الصَفحَةِ
+    /// المُستَضافَة</b> (‏ADR-006) — و«لا» بِلا انفِجارٍ حينَ لا
+    /// مُزَوِّدَ مُسَجَّلاً، كَجارَتِها
+    /// <see cref="CreateSubscriptionAsync"/> حَرفاً.</para>
+    ///
+    /// <para><b>وهُنا يَقَع الفاصِل</b>: التَوقيعُ يَقول
+    /// <c>(المُسَوَّدَة، مَرجِعُنا، مُضيفُنا، مِفتاحُ مَرَّة-واحِدَة)
+    /// → رابِط</c>، وهُوَ الشَكلُ الَّذي سَيَأخُذُه أَيُّ مُزَوِّدٍ
+    /// مَحَلِّيٍّ لاحِقاً. <b>ولا واجِهَةَ تُخترَعُ اليَومَ</b>: مُستَهلِكُها
+    /// الثاني غَيرُ مَوجود (القاعِدَة ١).</para>
+    /// </summary>
+    public Task<PayPalOrderResult> CreateOrderAsync(
+        PayPalOrderDraft draft, string reference, string origin, string idempotencyKey,
+        CancellationToken ct = default)
+        => _provider is null
+            ? Task.FromResult(new PayPalOrderResult(
+                "", "", null, "PayPal غَير مُهَيَّأ في هذِه النُسخَة."))
+            : _provider.CreateOrderAsync(draft, reference, origin, idempotencyKey, ct);
+
+    /// <summary>يَلتَقِطُ المالَ لِطَلَبٍ وافَقَ عَلَيه الدافِع — <b>ولا
+    /// يُمَدِّدُ باقَة</b>: التَمديدُ عِندَ
+    /// <c>PAYMENT.CAPTURE.COMPLETED</c> وَحدَه.</summary>
+    public Task<PayPalCaptureResult> CaptureOrderAsync(
+        string orderId, string idempotencyKey, CancellationToken ct = default)
+        => _provider is null
+            ? Task.FromResult(new PayPalCaptureResult(
+                "", "", null, "PayPal غَير مُهَيَّأ في هذِه النُسخَة."))
+            : _provider.CaptureOrderAsync(orderId, idempotencyKey, ct);
+
     /// <summary>يُنشِئ اشتِراكاً لِمَتجَرٍ بِخُطَّةِ PayPal المَذكورَةِ
     /// في تَعريفِ الباقَة، ويَضَع سلاجَ المَتجَرِ في
     /// <c>custom_id</c>.</summary>

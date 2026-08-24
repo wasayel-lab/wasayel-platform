@@ -325,9 +325,17 @@ public static class PayPalCatalogPolicy
     /// تُطَبِّعُ النَصّ، فَتَتَبَدَّلُ البَصمَةُ بِلا سَبَبٍ مَرئيّ.</summary>
     private const char FieldSeparator = '\u001F';
 
-    /// <summary>بَصمَةٌ ثابِتَةٌ عَبرَ العَمَلِيّات — ‏24 مِحرَفاً
-    /// سِتَّ عَشرِيّاً مِن ‏SHA-256.</summary>
-    private static string Fingerprint(params string[] parts)
+    /// <summary><para>بَصمَةٌ ثابِتَةٌ عَبرَ العَمَلِيّات — ‏24 مِحرَفاً
+    /// سِتَّ عَشرِيّاً مِن ‏SHA-256.</para>
+    ///
+    /// <para><b>وعامَّةٌ لِأَنّ مَسارَ الطَلَبات يَشتَقُّ مَفاتيحَه
+    /// بِها (‏<see cref="PayPalOrderPolicy"/>)</b> — <b>ودالَّةُ بَصمَةٍ
+    /// مَنسوخَةٌ أَخطَرُ مِن سِلسِلَةٍ مَنسوخَة</b>: نُسخَتانِ
+    /// تَختَلِفانِ في الفاصِلِ أَو في عَدَدِ البايتاتِ تُعطِيانِ
+    /// مِفتاحَينِ يَبدُوانِ صَحيحَينِ ولا يَرتَطِمان. وهذا لَيسَ
+    /// تَجريداً يَسبِق مُستَهلِكَه (القاعِدَة ١): الدالَّةُ قائِمَةٌ
+    /// ومُستَعمَلَةٌ، والمَكشوفُ رُؤيَتُها لا صِنفٌ جَديد.</para></summary>
+    public static string Fingerprint(params string[] parts)
         => Convert.ToHexString(
                 SHA256.HashData(Encoding.UTF8.GetBytes(string.Join(FieldSeparator, parts))), 0, 12)
             .ToLowerInvariant();
