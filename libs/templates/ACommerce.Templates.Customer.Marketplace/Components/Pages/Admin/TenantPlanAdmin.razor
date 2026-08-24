@@ -2,6 +2,7 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.PlatformBillingQueries Billing
 @inject L L
+@inject ACommerce.Kit.Payments.Providers.PayPal.PayPalGateway PayPal
 @using ACommerce.Kit.Subscriptions
 
 @*
@@ -60,6 +61,46 @@
                 }
             </ChildContent>
         </AcCard>
+
+        @*  رابِطُ دَفع PayPal — **يُرسَم بِشَرطَينِ مَعاً**: خُطَّةٌ
+            مَذكورَةٌ في تَعريفِ الباقَة (`paypalPlanId`)، ومُزَوِّدٌ
+            مُهَيَّأٌ في هذِه النُسخَة. وبِلا أَحَدِهِما **لا بِطاقَة
+            إطلاقاً** — لا زِرَّ يَقول «قَريباً» (القاعِدَة ١٢)،
+            فَالتَحويلُ البَنكيُّ هُوَ الطَريقُ القائِمُ ولَيسَ
+            بَديلاً ناقِصاً. *@
+        @if (PayPalPlanId is { Length: > 0 } && PayPal.IsConfigured && plan is not null)
+        {
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">@L.Markup("admin.tenant_plan.paypal_title")</h3>
+                    <p style="margin:0 0 10px;font-size:13px;color:var(--ac-text-muted);">
+                        @L.Markup("admin.tenant_plan.paypal_hint")
+                    </p>
+
+                    @if (!string.IsNullOrWhiteSpace(plan.PayPalApproveUrl))
+                    {
+                        <p style="margin:0 0 10px;font-size:13px;word-break:break-all;">
+                            <a href="@plan.PayPalApproveUrl" target="_blank" rel="noopener">
+                                @plan.PayPalApproveUrl
+                            </a>
+                        </p>
+                    }
+
+                    @if (plan.RenewalCancelledAt is { } cancelled)
+                    {
+                        <p style="margin:0 0 10px;font-size:13px;">
+                            @L.Markup("admin.tenant_plan.paypal_renewal_stopped")
+                            @cancelled.ToString("yyyy-MM-dd")
+                        </p>
+                    }
+
+                    <form method="post" action="@($"/admin/tenants/{Slug}/plan/paypal-link")">
+                        <AcButton Type="submit" Variant="ghost" Size="sm"
+                                  Text="@L["admin.tenant_plan.paypal_create"]" />
+                    </form>
+                </ChildContent>
+            </AcCard>
+        }
 
         <form method="post" action="@($"/admin/tenants/{Slug}/plan/save")">
             <AcCard>
@@ -135,6 +176,11 @@
 
     string HiddenAtText => TenantPlanPolicy.HiddenAt(plan)?.ToString("yyyy-MM-dd") ?? "—";
 
+    /// <summary>خُطَّةُ PayPal مِن **تَعريفِ الباقَة** لا مِن وَثيقَةِ
+    /// المَتجَر — الرِبطُ بِالبَيانات لا بِالكود، وباقَةٌ واحِدَةٌ
+    /// لِخُطَّةٍ واحِدَة.</summary>
+    string? PayPalPlanId => PlatformPlanCatalog.Find(plan?.PlanId)?.PayPalPlanId;
+
     string FormatError(string err) => err switch
     {
         TenantPlanPolicy.PlanUnknown   => L["admin.tenant_plan.err_plan"],
@@ -142,6 +188,12 @@
         TenantPlanPolicy.GraceNegative => L["admin.tenant_plan.err_grace"],
         TenantPlanPolicy.PriceNegative => L["admin.tenant_plan.err_price"],
         "tenant_plan_missing"          => L["admin.tenant_plan.err_missing"],
+        // بِالمِساحَةِ كامِلَةً: `Billing` هُنا اسمُ الخِدمَةِ المَحقونَة
+        // أَعلاه، فَاختِصارُ المِساحَةِ يُحيلُ إلَيها لا إلى المُهايِئ.
+        ACommerce.Templates.Customer.Marketplace.Billing.PayPalSurface.LinkUnavailable
+            => L["admin.tenant_plan.err_paypal_unavailable"],
+        ACommerce.Templates.Customer.Marketplace.Billing.PayPalSurface.LinkRefused
+            => L["admin.tenant_plan.err_paypal_link"],
         _ => err
     };
 }

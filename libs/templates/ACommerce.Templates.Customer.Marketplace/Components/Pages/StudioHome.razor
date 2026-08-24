@@ -120,6 +120,18 @@
                                 ? L["studio.plan.transfer_missing"]
                                 : transferInstructions)
                         </p>
+                        @* رابِطُ PayPal — **إن أَنشَأَهُ المُشرِفُ لِهذا
+                           المَتجَرِ وَحدَه**. وبِلا رابِطٍ مُخَزَّنٍ لا
+                           يُرسَم زِرٌّ يَقول «قَريباً» (القاعِدَة ١٢):
+                           التَحويلُ البَنكيُّ أَعلاه هُوَ الطَريقُ
+                           القائِمُ دائِماً. *@
+                        @if (PayPalUrl(t.Slug) is { } payUrl)
+                        {
+                            <a class="st-btn st-btn-primary" style="margin-top:10px;"
+                               href="@payUrl" target="_blank" rel="noopener">
+                                @L.Markup("studio.plan.paypal_pay")
+                            </a>
+                        }
                     </div>
                 }
 
@@ -236,6 +248,16 @@
         ACommerce.Kit.Subscriptions.TenantPlanState.Suspended => L["studio.plan.state_suspended"],
         _                                                     => L["studio.plan.state_active"]
     };
+
+    /// <summary>رابِطُ دَفعِ PayPal لِهذا المَتجَرِ إن خُزِّنَ —
+    /// و<c>null</c> يَعني «لا زِرّ». <b>ولا يُبنى الرابِطُ هُنا</b>:
+    /// إنشاؤُه نِداءُ شَبَكَةٍ يَملِكُه المُشرِف، وصَفحَةٌ تُنشِئُ
+    /// اشتِراكاً عِندَ كُلّ تَصييرٍ تُنشِئ عَشَرَةً في دَقيقَة.</summary>
+    string? PayPalUrl(string slug)
+    {
+        myPlans.TryGetValue(slug, out var p);
+        return string.IsNullOrWhiteSpace(p?.PayPalApproveUrl) ? null : p!.PayPalApproveUrl;
+    }
 
     string HiddenAtText(string slug)
     {
