@@ -58,6 +58,62 @@ public class PayPalRouteTests
         Assert.All(PayPalEventTypes.All, t => Assert.Contains(t, doc));
     }
 
+    /// <summary>
+    /// <para><b>وأَسماءُ أَحداثِ مَسارِ الطَلَباتِ السَبعَةِ كَذلك</b>
+    /// (‏ADR-006) — نَفسُ الحَدِّ حَرفاً، ولِنَفسِ السَبَبِ حَرفاً:
+    /// اسمٌ يُنسَخ بِخَطَإِ حَرفٍ **يَحمَرُّ هُنا** ولا يُكتَشَف مِن
+    /// دَفعَةٍ لَم تُمَدِّد.</para>
+    ///
+    /// <para><b>و<c>CHECKOUT.ORDER.COMPLETED</c> يُقاسُ سالِباً</b>:
+    /// وَصفُه الرَسميّ «‏For use by marketplaces and platforms only» —
+    /// فَلا يُشترَك فيه، ووُجودُه في المَعجَمِ يَعني اشتِراكاً في
+    /// حَدَثٍ لا يَصِل.</para>
+    /// </summary>
+    [Fact]
+    public void TheDeployDocument_NamesEveryOrderEventTypeTheCodeActsOn()
+    {
+        var doc = Read("docs/DEPLOY.md");
+
+        Assert.Equal(7, PayPalOrderEventTypes.All.Count);
+        Assert.All(PayPalOrderEventTypes.All, t => Assert.Contains(t, doc));
+        Assert.False(PayPalOrderEventTypes.Handles("CHECKOUT.ORDER.COMPLETED"));
+    }
+
+    /// <summary>ووَثيقَةُ النَشرِ تَحمِل <b>المَدى المَسموحَ
+    /// لِلمُدَّة</b> كَما يَقرَؤُه المُصادِق — فَما يَكتُبُه المُشرِفُ
+    /// اعتِماداً على الوَثيقَةِ هُوَ ما تَقبَلُه الشاشَة.</summary>
+    [Fact]
+    public void TheDeployDocument_CarriesTheDeclaredDurationCeiling()
+        => Assert.Contains($"1..{PayPalOrderPolicy.MaxDays}", Read("docs/DEPLOY.md"));
+
+    /// <summary>
+    /// <para><b>وصَفحَتا العَودَةِ والإلغاءِ تَحتَ مَقطَعٍ مَحجوز</b> —
+    /// أَي أَنّ وَسيطَ المُستَأجِرِ يَتَخَطّاهُما، فَلا يُستَعلَم عَن
+    /// مُستَأجِرٍ اسمُه «‏billing» عِندَ كُلِّ عَودَةِ دافِع.
+    /// <b>ومَقيسٌ مِن القائِمَةِ نَفسِها لا مَظنون.</b></para>
+    /// </summary>
+    [Fact]
+    public void TheReturnAndCancelPages_FallUnderAReservedFirstSegment()
+    {
+        Assert.StartsWith("/billing/", PayPalOrderPolicy.ReturnPath);
+        Assert.StartsWith("/billing/", PayPalOrderPolicy.CancelPath);
+
+        foreach (var path in new[] { PayPalOrderPolicy.ReturnPath, PayPalOrderPolicy.CancelPath })
+            Assert.Null(ACommerce.Platform.MultiTenancy.TenantResolverMiddleware.SlugFromPath(path));
+    }
+
+    /// <summary>والصَفحَتانِ مُسَجَّلَتانِ فِعلاً بِنَفسِ المَسارِ الَّذي
+    /// يُرسَل إلى PayPal — <b>فَما يُبنى في جِسمِ الطَلَبِ هُوَ ما
+    /// يُفتَح</b>. ورابِطُ عَودَةٍ إلى ‏404 يَترُك الدافِعَ على شاشَةِ
+    /// عَطَبٍ بَعدَ أَن يَدفَع.</summary>
+    [Fact]
+    public void TheReturnAndCancelPages_AreRegisteredAtExactlyThosePaths()
+    {
+        const string dir = "libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/";
+        Assert.Contains($"@page \"{PayPalOrderPolicy.ReturnPath}\"", Read(dir + "PayPalReturn.razor"));
+        Assert.Contains($"@page \"{PayPalOrderPolicy.CancelPath}\"", Read(dir + "PayPalCancel.razor"));
+    }
+
     /// <summary>ومُتَغَيِّراتُ الـSpace الأَربَعَةُ مَكتوبَةٌ
     /// بِحَرفِها — مَقروءَةً مِن مِلَفِّ الخِيارات لا مَنسوخَةً.</summary>
     [Fact]
