@@ -1062,21 +1062,17 @@ public class PayPalOrderTests
         Assert.False(PayPalOrderStatuses.CanTransition(PayPalOrderStatuses.Created, ""));
     }
 
-    /// <summary><b>و«قُبِض» كَلِمَةٌ يَملِكُها مَن يُمَدِّد وَحدَه</b>:
-    /// نِداءُ الالتِقاطِ لا يَكتُبُها — ولَو كَتَبَها بِلا تَمديدٍ
-    /// لَسَحَبَ استِردادٌ لاحِقٌ أَيّاماً لَم تُمنَح.</summary>
-    [Fact]
-    public void TheCaptureCall_NeverClaimsTheMoneyArrived()
-    {
-        var flow = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, OrderFlowFile));
-        var at = flow.IndexOf("public static async Task<PayPalCaptureResult> CaptureAsync",
-                              StringComparison.Ordinal);
-        Assert.True(at > 0, "أَداة عَمياء: لا نِداءَ التِقاطٍ مُوَحَّدٌ في المَصدَر.");
-
-        var body = flow[at..];
-        Assert.Contains("PayPalOrderStatuses.Approved", body);
-        Assert.DoesNotContain("PayPalOrderStatuses.Captured", body);
-    }
+    // **و«قُبِض» كَلِمَةٌ يَملِكُها مَن يُمَدِّد وَحدَه** — وكانَ
+    // هُنا `TheCaptureCall_NeverClaimsTheMoneyArrived` يَقرَأُ **نَصَّ
+    // المَصدَر** بِعَيبَينِ مُتَعاكِسَين: يَشتَرِط وُجودَ رَمزٍ وغِيابَ
+    // آخَر — فَـ`order.Status = "captured";` بِحَرفِيَّةٍ نَصِّيَّةٍ
+    // تَمُرُّ خَضراء — **ويَقتَطِعُ إلى آخِرِ المِلَفِّ لا آخِرِ
+    // الدالَّة**، فَذِكرُ الكَلِمَةِ في دالَّةٍ لاحِقَةٍ يُحمِرُّه بِلا
+    // عَطَب.
+    //
+    // صارَ الشَرطُ على **الوَثيقَةِ المُخَزَّنَةِ بَعدَ تَشغيلِ
+    // النُقطَة**:
+    // `PayPalEndpointBehaviourTests.TheManualCaptureEndpoint_WritesApprovedNeverCaptured_AndLeavesATrail`.
 
     // ═══ ١٣. مَرجِعٌ لِكُلِّ دَورَة — وإلّا دُهِسَ سِجِلُّ الشَهرِ
     //     السابِق ═══════════════════════════════════════════════════════
@@ -1253,16 +1249,23 @@ public class PayPalOrderTests
         Assert.False(PayPalOrderPolicy.CanCaptureNow(noOrderId));
     }
 
-    /// <summary><b>ونَفسُ الشَرطِ يَرسُمُ الزِرَّ ويَحرُسُ النُقطَة</b>
-    /// — قاعِدَةٌ واحِدَةٌ في مَوضِعٍ واحِد، فَلا تَنجَرِف الشاشَةُ عَن
-    /// الخادِم.</summary>
+    /// <summary>
+    /// <para><b>والشاشَةُ تَقرَأُ القاعِدَةَ نَفسَها لا نُسخَةً
+    /// مِنها</b> — فَلا يُرسَم زِرٌّ تَرُدُّه النُقطَة.</para>
+    ///
+    /// <para><b>ونِصفُ هذا الشَرطِ صارَ سُلوكِيّاً، ونِصفُه دَينٌ
+    /// مُعلَن</b>: طَرَفُ النُقطَةِ يُقاسُ بِتَشغيلِها في
+    /// <c>PayPalEndpointBehaviourTests.TheManualCaptureEndpoint_RefusesAnOrderAlreadyCaptured_WithoutCallingPayPal</c>
+    /// (رَدٌّ وعَدّادُ طَلَباتٍ خارِجَة). وطَرَفُ الشاشَةِ يَبقى
+    /// <b>نَصِّيّاً</b> لِأَنّ تَصييرَ مُكَوِّنِ Razor يَحتاج مُهَيِّئَ
+    /// تَصييرٍ لا وُجودَ لَه في المُستَودَع — <b>ويُقالُ صَراحَةً بَدَلَ
+    /// أَن يُدَّعى أَنَّه مَقيس</b> (القاعِدَة ١٠).</para>
+    /// </summary>
     [Fact]
-    public void TheButtonAndTheEndpoint_ReadTheSameRule()
+    public void TheCaptureButtonOnTheScreen_ReadsTheSharedRule()
     {
         var screen = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, PlanScreenFile));
-        Assert.Contains("PayPalOrderPolicy.CanCaptureNow(o)", screen);
-        Assert.Contains("PayPalOrderPolicy.CanCaptureNow(order)",
-            EndpointBody("/admin/tenants/{slug}/plan/paypal-capture"));
+        Assert.Contains(nameof(PayPalOrderPolicy.CanCaptureNow), screen);
     }
 
     /// <summary><b>ونِداءُ الالتِقاطِ واحِدٌ لِلمَسارَين</b>
@@ -1278,50 +1281,24 @@ public class PayPalOrderTests
         Assert.DoesNotContain("paypal.CaptureOrderAsync", body);
     }
 
-    /// <summary><b>وسَطرُ تَدقيقٍ لِنِداءِ التِقاطٍ بِيَدِ مُشرِف</b> —
-    /// جاراتُه الثَلاثُ تَكتُب، والثابِتُ <c>CaptureAuditAction</c>
-    /// يَدَّعي أَنَّه يَشمَلُها، وكانَت وَحدَها بِلا سَطر.</summary>
-    [Fact]
-    public void TheManualCapture_LeavesATrail()
-    {
-        var body = EndpointBody("/admin/tenants/{slug}/plan/paypal-capture");
-        Assert.Contains("audit.WriteAsync", body);
-        Assert.Contains("PayPalBillingService.CaptureAuditAction", body);
-    }
-
-    /// <summary>
-    /// <para><b>والحارِسُ مَوصولٌ فِعلاً بِالنُقطَة — لا دالَّةً نَقِيَّةً
-    /// يَتيمَة.</b> ‏<see cref="APaidOrdersRecord_IsNeverOverwritten"/>
-    /// تُثبِتُ أَنّ <c>IsOverwritable</c> <b>تَحكُم صَواباً</b>، ولا
-    /// تَقولُ حَرفاً عَن كَونِها <b>تُنادى</b>. والفَرقُ بَينَهُما هُوَ
-    /// الفَرقُ بَينَ قاعِدَةٍ ودَفتَرٍ مَنسِيّ (القاعِدَة ١).</para>
-    ///
-    /// <para><b>والكُلفَةُ الَّتي كَتَبَت هذا الاختِبار — مَقيسَةٌ
-    /// بِحَقنِ عَيبٍ مُصطَنَع</b>: حُذِفَ الحارِسُ مِن جِسمِ النُقطَةِ
-    /// كامِلاً، فَبَقِيَت <b>‏1537 اختِباراً كُلُّها خَضراء</b>. أَي أَنّ
-    /// نِصفَ الحاجِبِ الثاني («لا يُدهَسُ سِجِلُّ دَفعٍ مَقبوض») كانَ
-    /// <b>مُنَفَّذاً وغَيرَ مَحروس</b> — يَسقُط في أَوَّلِ إعادَةِ
-    /// صِياغَةٍ بِلا صَوت.</para>
-    ///
-    /// <para><b>والتَرتيبُ جُزءٌ مِن الشَرطِ لا زينَة</b>: الحارِسُ
-    /// <b>قَبلَ</b> <c>CreateOrderAsync</c> — وإلّا فُتِحَ طَلَبٌ عِندَ
-    /// PayPal ثُمَّ رُفِضَ حِفظُه، فَيَبقى في حِسابِ التاجِرِ طَلَبٌ
-    /// مُعَلَّقٌ لا وَثيقَةَ لَه عِندَنا.</para>
-    /// </summary>
-    [Fact]
-    public void TheOverwriteGuard_IsWiredIntoTheEndpoint_BeforeAnyCallToPayPal()
-    {
-        var body = EndpointBody("/admin/tenants/{slug}/plan/paypal-order");
-
-        Assert.Contains("PayPalOrderPolicy.IsOverwritable", body);
-        Assert.Contains("PayPalOrderSurface.OrderSettled", body);
-
-        var guard  = body.IndexOf("PayPalOrderPolicy.IsOverwritable", StringComparison.Ordinal);
-        var create = body.IndexOf("CreateOrderAsync", StringComparison.Ordinal);
-        Assert.True(create > 0, "أَداة عَمياء: لا نِداءَ إنشاءٍ في جِسمِ النُقطَة.");
-        Assert.True(guard < create,
-            $"الحارِسُ ({guard}) بَعدَ نِداءِ PayPal ({create}) — طَلَبٌ يُفتَح ثُمَّ يُرفَضُ حِفظُه.");
-    }
+    // **وسَطرُ التَدقيقِ لِنِداءِ التِقاطٍ بِيَدِ مُشرِف** — كانَ
+    // `TheManualCapture_LeavesATrail` يَفحَص وُجودَ `audit.WriteAsync`
+    // في النَصّ، وهو **حُضورٌ لا أَثَر**: سَطرٌ داخِلَ فَرعٍ لا يُنَفَّذ
+    // يَمُرّ. صارَ الشَرطُ على `AuditEntry` **مُخَزَّنَةٍ فِعلاً**
+    // بِنِطاقِها وفِعلِها، في
+    // `PayPalEndpointBehaviourTests.TheManualCaptureEndpoint_WritesApprovedNeverCaptured_AndLeavesATrail`.
+    //
+    // **وحارِسُ الدَهسِ كَذلك**: كانَ
+    // `TheOverwriteGuard_IsWiredIntoTheEndpoint_BeforeAnyCallToPayPal`
+    // يَفحَص `Contains("PayPalOrderPolicy.IsOverwritable")` وتَرتيبَ
+    // فِهرِسَين — **ونَزعُ `!` وَحدَه يَقلِبُ الحارِسَ وتَبقى خَضراء**.
+    // قيسَ ذلك بِحَقنِ العَيبِ بِعَينِه: النَصِّيُّ **خَضراء**
+    // والسُلوكِيُّ **حَمراء** بِرِسالَةٍ تُسَمّي ما وَقَع
+    // (‏`Collection: ["/v1/oauth2/token"]` — أَي أَنّ PayPal نودِيَت).
+    // فَصارَ الشَرطُ على الرَدِّ وعَدّادِ الطَلَباتِ الخارِجَةِ في
+    // `PayPalEndpointBehaviourTests.ThePaymentLinkEndpoint_OverASettledOrder_AnswersWithoutCallingPayPal`،
+    // ومَعَه طَرَفُه المُقابِلُ (‏`…_OverAFreshCycle_DoesCallPayPalAndStoresTheLink`)
+    // فَلا يُخلَط «لَم تُنادَ» بِـ«لا تُنادى أَبَداً».
 
     /// <summary><b>وأَقفالُ الطَلَباتِ لا تَنمو</b>: كانَ قامُوساً
     /// <b>لا يُفَرَّغُ أَبَداً</b> — سيمافورٌ لِكُلِّ مَرجِعٍ يَبقى ما
@@ -1382,21 +1359,53 @@ public class PayPalOrderTests
             Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
     }
 
-    /// <summary><b>ورائِدُ الأَعمالِ يَبلُغُ رابِطَ التَجديدِ المُبَكِّرِ
+    /// <summary>
+    /// <para><b>ورائِدُ الأَعمالِ يَبلُغُ رابِطَ التَجديدِ المُبَكِّرِ
     /// بِالنَقر</b> (القاعِدَة ١٢): مِرساةُ <c>max(الآن, ExpiresAt)</c>
     /// كُتِبَت لِلتَجديدِ المُبَكِّرِ بِعَينِه، والشَرطُ
     /// <c>Grace or Suspended</c> كانَ يَحجُبُ اللافِتَةَ عَن مَتجَرٍ
     /// سارٍ — <b>أَي عَن الحالَةِ الوَحيدَةِ الَّتي كُتِبَت لَها
-    /// المِرساة</b>.</summary>
+    /// المِرساة</b>.</para>
+    ///
+    /// <para><b>وعَيبانِ أُصلِحا هُنا، كِلاهُما في اتِّجاهِ الحُمرَةِ
+    /// الكاذِبَة</b>:</para>
+    /// <list type="number">
+    ///   <item>كانَ يُثَبِّتُ العِبارَةَ <c>"PendingOrder(slug) is not
+    ///   null"</c> <b>حَرفاً</b>، فَإعادَةُ صِياغَةٍ صِفريَّةِ الأَثَرِ
+    ///   (‏<c>is { }</c>، أَو تَبديلُ طَرَفَي <c>||</c>) تَكسِرُه بِلا
+    ///   عَطَب. صارَ الشَرطُ على <b>الرَمز</b> لا على العِبارَة.</item>
+    ///
+    ///   <item>وكانَ يَقرَأُ <b>جِسمَ الدالَّةِ ولا يَقرَأُ مَن
+    ///   يُنادِيها</b> — فَلا يَفحَص «يُبلَغُ بِالنَقر» وهُوَ ما سُمِّيَ
+    ///   بِه: دالَّةٌ صَحيحَةٌ لا يَستَعمِلُها التَصييرُ لافِتَةٌ لا
+    ///   تُرسَم. صارَ يَقرَأُ <b>حَلقَةَ التَصييرِ نَفسَها</b> وفَرعَ
+    ///   الرابِطِ داخِلَها.</item>
+    /// </list>
+    ///
+    /// <para><b>وما يَبقى دَيناً مُعلَناً</b>: هذا فَحصُ <b>وَصلٍ</b> لا
+    /// فَحصُ <b>تَصيير</b>. الجَزمُ بِأَنّ الوَسمَ يَظهَر يَحتاج
+    /// تَصييرَ مُكَوِّنِ Razor، ولا مُهَيِّئَ لَه في المُستَودَع
+    /// اليَوم.</para>
+    /// </summary>
     [Fact]
-    public void TheEarlyRenewalLink_IsReachableWhileTheStoreIsStillLive()
+    public void TheEarlyRenewalLink_IsWiredFromTheBannerRuleToTheRenderedList()
     {
         var studio = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, StudioHomeFile));
+
+        // ‏١) القاعِدَةُ تَشمَلُ الدَفعَ المُعَلَّق — بِالرَمزِ لا بِالعِبارَة.
         var at = studio.IndexOf("bool Renewable(string slug)", StringComparison.Ordinal);
         Assert.True(at > 0, "أَداة عَمياء: لا شَرطَ لافِتَةٍ في المَصدَر.");
-
         var rule = studio[at..studio.IndexOf(';', at)];
-        Assert.Contains("PendingOrder(slug) is not null", rule);
+        Assert.Contains("PendingOrder", rule);
+
+        // ‏٢) والتَصييرُ يَستَعمِلُها فِعلاً — وهذا ما لَم يَكُن يُفحَص.
+        Assert.Matches(@"Where\(\s*\w+\s*=>\s*Renewable\(", studio);
+
+        // ‏٣) والرابِطُ داخِلَ فَرعِ الدَفعِ المُعَلَّقِ لا خارِجَه.
+        var branch = studio.IndexOf("PendingOrder(t.Slug)", StringComparison.Ordinal);
+        Assert.True(branch > 0, "أَداة عَمياء: لا فَرعَ دَفعٍ مُعَلَّقٍ في التَصيير.");
+        var next = studio.IndexOf("else if", branch, StringComparison.Ordinal);
+        Assert.Contains("ApproveUrl", studio[branch..(next > branch ? next : studio.Length)]);
     }
 
     // ═══ ١٦. بابُ السَحبِ لا يُغلَق — والثابِتُ في مَوضِعٍ واحِد ══════
@@ -1607,9 +1616,6 @@ public class PayPalOrderTests
 
     private const string EndpointsFile =
         "libs/templates/ACommerce.Templates.Customer.Marketplace/Billing/PayPalEndpoints.cs";
-
-    private const string OrderFlowFile =
-        "libs/templates/ACommerce.Templates.Customer.Marketplace/Billing/PayPalOrderFlow.cs";
 
     private const string PlanScreenFile =
         "libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantPlanAdmin.razor";
