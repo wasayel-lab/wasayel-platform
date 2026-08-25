@@ -200,14 +200,23 @@
                     </p>
 
                     <form method="post" action="@($"/admin/tenants/{Slug}/plan/paypal-order")">
+                        @*  خُطوَةُ المَبلَغِ تَتبَع العُملَةَ المُختارَة:
+                            ‏JPY/HUF/TWD بِلا كُسورٍ عِندَ PayPal، و«‏0.5
+                            يَن» رَقَمٌ لا وُجودَ لَه. والمَخزونُ صارَ
+                            **المَصوغ**، فَلَولا هذِه الخُطوَةُ لَكَتَبَ
+                            المُشرِفُ ‏5000.5 ورَأى ‏5001 بَعدَ الحِفظِ
+                            بِلا أَن يُقالَ لَه شَيءٌ قَبلَها. *@
                         <AcField Label="@L["admin.tenant_plan.paypal_order_amount"]" Required="true">
                             <input type="number" name="amount" class="ac-input" required
-                                   min="0" step="0.01" value="" />
+                                   id="pp-order-amount" min="0" step="0.01" value="" />
                         </AcField>
 
                         <AcField Label="@L["admin.tenant_plan.paypal_order_currency"]"
                                  Hint="@L["admin.tenant_plan.paypal_order_currency_hint"]">
-                            <select name="currency" class="ac-input">
+                            @*  وقائِمَةُ العُملاتِ بِلا كُسورٍ تُقرَأُ مِن
+                                مَعجَمِها المُغلَقِ ولا تُنسَخ في js. *@
+                            <select name="currency" class="ac-input" id="pp-order-currency"
+                                    data-whole="@string.Join(",", PayPalCurrencies.WithoutDecimals)">
                                 @foreach (var c in PayPalCurrencies.Supported)
                                 {
                                     <option value="@c" selected="@(c == PayPalCurrencies.Default)">@c</option>
@@ -229,6 +238,17 @@
                         <AcButton Type="submit" Variant="ghost" Size="sm"
                                   Text="@L["admin.tenant_plan.paypal_order_create"]" />
                     </form>
+                    <script>
+                        (function () {
+                            var sel = document.getElementById('pp-order-currency');
+                            var amt = document.getElementById('pp-order-amount');
+                            if (!sel || !amt) return;
+                            var whole = (sel.getAttribute('data-whole') || '').split(',');
+                            function sync() { amt.step = whole.indexOf(sel.value) >= 0 ? '1' : '0.01'; }
+                            sel.addEventListener('change', sync);
+                            sync();
+                        })();
+                    </script>
 
                     <h3 style="margin:18px 0 6px;">@L.Markup("admin.tenant_plan.paypal_order_list")</h3>
                     @if (orders.Count == 0)
@@ -257,8 +277,17 @@
                                 }
                                 @*  «التَقِط الآن» — ولا يُرسَم إلّا لِطَلَبٍ
                                     لَم يُلتَقَط بَعد. زِرٌّ يُرسَم دائِماً
-                                    ويَرُدُّ ‏409 مَدخَلٌ يَضُرّ. *@
-                                @if (PayPalOrderStatuses.AwaitsCapture(o.Status))
+                                    ويَرُدُّ ‏409 مَدخَلٌ يَضُرّ.
+
+                                    **والشَرطُ مُعَرِّفُ الالتِقاطِ مَعَ
+                                    الحالَة، ويُقرَأُ مِن النُقطَةِ
+                                    نَفسِها** (`CanCaptureNow`): النِداءُ
+                                    الناجِحُ يُثَبِّتُ `CaptureId` وتَبقى
+                                    الحالَةُ «وافَقَ» حَتّى تَصِلَ
+                                    رِسالَةُ `COMPLETED` — فَالحالَةُ
+                                    وَحدَها كانَت تُبقي الزِرَّ مَرسوماً
+                                    بَعدَ نَجاحِه. *@
+                                @if (PayPalOrderPolicy.CanCaptureNow(o))
                                 {
                                     <form method="post" action="@($"/admin/tenants/{Slug}/plan/paypal-capture")">
                                         <input type="hidden" name="@PayPalOrderSurfaceRef" value="@o.Id" />
@@ -427,6 +456,10 @@
             => L["admin.tenant_plan.err_paypal_order_missing"],
         ACommerce.Templates.Customer.Marketplace.Billing.PayPalOrderSurface.CaptureRefused
             => L["admin.tenant_plan.err_paypal_capture"],
+        ACommerce.Templates.Customer.Marketplace.Billing.PayPalOrderSurface.OrderSettled
+            => L["admin.tenant_plan.err_paypal_order_settled"],
+        ACommerce.Templates.Customer.Marketplace.Billing.PayPalOrderSurface.CaptureNotAllowed
+            => L["admin.tenant_plan.err_paypal_capture_not_allowed"],
 
         // **خَطَأُ الاستِحقاقِ يُسَمّى ويُقالُ عِلاجُه** — وهُوَ
         // الاستِثناءُ الوَحيدُ مِن «تُعرَض رِسالَةُ PayPal كَما هي»:

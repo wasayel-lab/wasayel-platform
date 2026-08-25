@@ -65,6 +65,29 @@ public static class PayPalCurrencies
     public static bool Contains(string? code)
         => code is not null && Supported.Contains(code.Trim().ToUpperInvariant(), StringComparer.Ordinal);
 
+    /// <summary>
+    /// <para><b>أَنماطُ قِراءَةِ مَبلَغٍ نَصّاً — <c>NumberStyles.Number</c>
+    /// مَمنوعَةٌ هُنا، ويُقالُ لِماذا.</b> تِلكَ تَحمِل
+    /// <c>AllowThousands</c>، فَـ<c>"49,99"</c> — وهي كِتابَةُ نِصفِ
+    /// أوروبّا لِـ‏49.99 — تُقرَأُ <b>‏4999</b>: مِئَةُ ضِعفٍ بِفاصِلَةٍ
+    /// واحِدَة. والحَقلُ في الشاشَةِ <c>type="number"</c> لكِنّ النُقطَةَ
+    /// تَقبَلُ أَيَّ نَصٍّ يَصِلُها (‏<c>curl</c>، لُصوقٌ مِن جَدوَل،
+    /// مُتَصَفِّحٌ لا يُطَبِّق النَمَط).</para>
+    ///
+    /// <para><b>وتَحمِلُ أَيضاً <c>AllowLeadingSign</c> وقَد سَقَطَت
+    /// مَعَها</b>: مَبلَغٌ سالِبٌ لَيسَ مَبلَغاً، ونَمَطُ PayPal نَفسُه
+    /// يَقبَلُ الإشارَةَ فَتُرَدُّ ‏422 بَعدَ نَشر. وسُقوطُ القِراءَةِ
+    /// إلى صِفرٍ يَرتَدُّ بِخَرقٍ يُسَمّيه المُصادِق.</para>
+    ///
+    /// <para><b>ومَوضِعٌ واحِدٌ يَقرَؤُه ثَلاثَة</b>: قِراءَةُ نَموذَجِ
+    /// الخُطَّة، وقِراءَةُ نَموذَجِ الطَلَب، ومُقارَنَةُ المَبلَغِ
+    /// الواصِلِ بِالمَحفوظ. وكانَ السَطرُ مَنسوخاً في الثَلاثَة —
+    /// وثَلاثَةُ مَواضِعَ لِقاعِدَةٍ واحِدَةٍ تَنجَرِف
+    /// (القاعِدَة ٢).</para>
+    /// </summary>
+    public const NumberStyles MoneyStyles =
+        NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite;
+
     /// <summary>صِياغَةُ المَبلَغ كَما تَشتَرِطُها PayPal: <b>سِلسِلَةٌ
     /// نَصِّيَّةٌ</b> بِنَمَط <c>^((-?[0-9]+)|(-?([0-9]+)?[.][0-9]+))$</c>
     /// — أَي <c>"9.99"</c> لا <c>9.99</c>، وبِفاصِلَةٍ إنجِليزِيَّةٍ
@@ -209,7 +232,7 @@ public static class PayPalCatalogPolicy
         => new(
             (planSlug ?? "").Trim(),
             (name ?? "").Trim(),
-            decimal.TryParse(amount, NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : 0m,
+            decimal.TryParse(amount, PayPalCurrencies.MoneyStyles, CultureInfo.InvariantCulture, out var v) ? v : 0m,
             string.IsNullOrWhiteSpace(currency) ? PayPalCurrencies.Default : currency.Trim().ToUpperInvariant(),
             (interval ?? "").Trim().ToUpperInvariant());
 

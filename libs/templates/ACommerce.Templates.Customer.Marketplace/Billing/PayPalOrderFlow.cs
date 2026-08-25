@@ -45,7 +45,12 @@ public static class PayPalOrderFlow
 
         // ─── مُوافَقَةٌ لا مال: يُنادى الالتِقاط، ولا يُمَدَّدُ شَيء ───
         if (decision.Action == PayPalOrderAction.Capture && order is not null)
-            return await CaptureAsync(order!, session, paypal, log, decision, ct);
+        {
+            var captured = await CaptureAsync(order, session, paypal, log, ct);
+            log.LogInformation("[PayPal] Capture — الطَلَب {Order} ({Status}): {Reason}",
+                order.OrderId, captured.Status, decision.ReasonAr);
+            return Results.Ok(new { action = nameof(PayPalOrderAction.Capture), applied = true });
+        }
 
         if (!Services.Subscriptions.PayPalBillingService.ApplyOrder(
                 session, plan, order, e, decision, now))
@@ -71,12 +76,34 @@ public static class PayPalOrderFlow
     /// يُلغى بَعدَ نافِذَتِه ويُعادُ المالُ</b>. والحاجِزُ ضِدَّ
     /// الالتِقاطِ المُكَرَّرِ هُوَ <c>PayPal-Request-Id</c> الثابِتُ
     /// عِندَ PayPal نَفسِها، لا سِجِلٌّ عِندَنا.</para>
+    ///
+    /// <para><b>ونِداءٌ واحِدٌ لِلمَسارَين — والكُلفَةُ الَّتي
+    /// وَحَّدَتهُما</b> (القاعِدَة ٨): كانَت نُسخَتان — نُسخَةُ
+    /// الحَدَثِ تَأخُذُ القُفلَ وتَضبِط الحالَةَ وتُودِع، ونُسخَةُ زِرِّ
+    /// «التَقِط الآن» في جِسمِ النُقطَةِ <b>بِلا قُفلٍ ولا حالَة</b>.
+    /// أَي أَنّ الطَريقَ الَّذي وُجِدَ لِيُعالِجَ انقِطاعَ الأَحداثِ
+    /// كانَ أَضعَفَ حِراسَةً مِن الطَريقِ المُعتاد — <b>وهُوَ
+    /// بِالضَبطِ الطَريقُ الَّذي يُسلَكُ حينَ يَختَلُّ شَيء</b>.</para>
+    ///
+    /// <para><b>ومِفتاحُ القُفلِ مَرجِعُنا لا مُعَرِّفُ PayPal</b>:
+    /// <c>PayPal-Request-Id</c> يُشتَقُّ مِن <c>order.Id</c>، فَما
+    /// يَجِبُ تَسَلسُلُه هُوَ ما يَتَشارَكُ ذلك المِفتاحَ بِعَينِه.
+    /// و<c>OrderId</c> قَد يَكونُ فارِغاً فَيَجمَع كُلَّ الطَلَباتِ
+    /// الفارِغَةِ على قُفلٍ واحِد.</para>
+    ///
+    /// <para><b>ولا تَتَقَدَّمُ حالَةٌ بِنِداءٍ فاشِل</b>: الفَشَلُ
+    /// يُقالُ في اللوغ ولا يُكتَب. وعِندَ النَجاحِ يُثَبَّتُ
+    /// <c>CaptureId</c> — <b>وهُوَ ما يُخفي الزِرَّ</b> — وتَتَقَدَّمُ
+    /// الحالَةُ إلى <c>approved</c> إن جازَ الانتِقال. <b>ولا تُكتَبُ
+    /// <c>captured</c> مِن هُنا أَبَداً</b>: تِلكَ الكَلِمَةُ يَملِكُها
+    /// مَن يُمَدِّد، ولَو كُتِبَت بِلا تَمديدٍ لَسَحَبَ استِردادٌ
+    /// لاحِقٌ أَيّاماً لَم تُمنَح.</para>
     /// </summary>
-    private static async Task<IResult> CaptureAsync(
+    public static async Task<PayPalCaptureResult> CaptureAsync(
         PayPalOrderRecord order, IDocumentSession session, PayPalGateway paypal,
-        ILogger log, PayPalOrderDecision decision, CancellationToken ct)
+        ILogger log, CancellationToken ct)
     {
-        var gate = PayPalOrderLocks.For(order.OrderId);
+        var gate = PayPalOrderLocks.For(order.Id);
         await gate.WaitAsync(ct);
         try
         {
@@ -91,24 +118,24 @@ public static class PayPalOrderFlow
                 // ‏/admin/tenants/{slug}/plan.
                 log.LogError("[PayPal] فَشِل الالتِقاط لِلطَلَب {Order}: {Reason}",
                     order.OrderId, result.FailureReason);
+                return result;
             }
-            else if (result.CaptureId is { Length: > 0 })
-            {
-                order.CaptureId = result.CaptureId;
-            }
+
+            if (result.CaptureId is { Length: > 0 }) order.CaptureId = result.CaptureId;
+            order.NetAmount = result.NetAmount ?? order.NetAmount;
 
             // الحالَةُ تَبقى «وافَقَ» حَتّى تَصِلَ رِسالَةُ
             // `PAYMENT.CAPTURE.COMPLETED` — **نَجاحُ النِداءِ لا
-            // يُمَدِّد ولا يُعلِن وُصولَ المال**.
-            order.Status = PayPalOrderStatuses.Approved;
-            order.At     = DateTime.UtcNow;
+            // يُمَدِّد ولا يُعلِن وُصولَ المال**. وجَدوَلُ الانتِقالاتِ
+            // هُوَ الحَكَم: طَلَبٌ بَلَغَ `captured` سَلَفاً (وَصَلَ
+            // حَدَثُه أَوَّلاً) لا يَهبِطُ بِنِداءٍ يَدَوِيٍّ لاحِق.
+            if (PayPalOrderStatuses.CanTransition(order.Status, PayPalOrderStatuses.Approved))
+                order.Status = PayPalOrderStatuses.Approved;
+            order.At = DateTime.UtcNow;
             session.Store(order);
             await session.SaveChangesAsync(ct);
 
-            log.LogInformation("[PayPal] Capture — الطَلَب {Order} ({Status}): {Reason}",
-                order.OrderId, result.Status, decision.ReasonAr);
-
-            return Results.Ok(new { action = nameof(PayPalOrderAction.Capture), applied = true });
+            return result;
         }
         finally { gate.Release(); }
     }

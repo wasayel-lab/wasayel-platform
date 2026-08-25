@@ -386,6 +386,18 @@ public static class PayPalOrderBillingPolicy
                     $"اسمُ الحَدَثِ «مُكتَمِل» و resource.status «{e.ResourceStatus ?? "—"}» — " +
                     "الحَقلُ واقِعَةٌ والاسمُ دَعوى. لا تَمديد.");
 
+            // **ولا يُمنَحُ ما رُدَّ**: طَلَبٌ بَلَغَ حالَةً نِهائِيَّةً
+            // (‏`reversed`) عادَ مالُه وسُحِبَت أَيّامُه. و«مُكتَمِل»
+            // يَصِلُ بَعدَها واقِعَةٌ مُمكِنَةٌ لا نادِرَة: كُلُّ رَدٍّ
+            // غَيرِ ‏2xx يَجعَل PayPal تُعيد الإرسالَ **حَتّى ثَلاثَةِ
+            // أَيّام**، فَيَصِلُ التَأكيدُ بَعدَ الاستِرداد. والجَدوَلُ
+            // نَفسُه يَحكُم هُنا وفي `Apply` — قاعِدَةٌ واحِدَةٌ في
+            // مَوضِعٍ واحِد.
+            if (!PayPalOrderStatuses.CanTransition(order.Status, PayPalOrderStatuses.Captured))
+                return new(PayPalOrderAction.MarkOrder, default, order.Status,
+                    $"وَصَلَ «مُكتَمِل» على طَلَبٍ حالَتُه «{order.Status}» — " +
+                    "المالُ عادَ سَلَفاً، فَلا يُمنَحُ مَرَّتَين. يُعَلَّمُ ولا يُمَدَّد.");
+
             if (!MoneyMatches(e, order))
                 return new(PayPalOrderAction.AmountMismatch, default, "",
                     $"المَبلَغُ الواصِل «{e.Amount ?? "—"} {e.Currency ?? "—"}» " +
@@ -445,7 +457,7 @@ public static class PayPalOrderBillingPolicy
     public static bool MoneyMatches(PayPalOrderEvent e, PayPalOrderRecord order)
         => e.Currency is { Length: > 0 } cur
            && string.Equals(cur, order.Currency, StringComparison.OrdinalIgnoreCase)
-           && decimal.TryParse(e.Amount, NumberStyles.Number, CultureInfo.InvariantCulture, out var v)
+           && decimal.TryParse(e.Amount, PayPalCurrencies.MoneyStyles, CultureInfo.InvariantCulture, out var v)
            && v == order.Amount;
 
     // ─── الأَثَرُ على وَثيقَةِ الطَلَب — دالَّةٌ نَقِيَّةٌ أَيضاً ──────
@@ -465,8 +477,23 @@ public static class PayPalOrderBillingPolicy
     {
         if (!decision.TouchesOrder) return;
 
-        order.Status = decision.OrderStatus;
-        if (string.IsNullOrWhiteSpace(order.CaptureId) && e.CaptureId is { Length: > 0 } cap)
+        // **والحالَةُ تُكتَبُ بِاتِّجاهٍ واحِد** — جَدوَلُ الانتِقالاتِ
+        // في `PayPalOrderStatuses.CanTransition` هُوَ الحَكَم. وكانَ
+        // هذا السَطرُ يَكتُب بِلا فَحص، فَحَدَثٌ مُتَأَخِّرٌ أَو
+        // مُكَرَّرٌ يَهبِط بِالحالَةِ مِن `captured` إلى `pending` —
+        // ثُمَّ يَصِلُ الاستِردادُ فَيَجِدُ حارِسَ السَحبِ يَشتَرِط
+        // `captured`، **فَلا يُسحَبُ شَيء: المالُ يَعودُ والأَيّامُ
+        // تَبقى**.
+        if (PayPalOrderStatuses.CanTransition(order.Status, decision.OrderStatus))
+            order.Status = decision.OrderStatus;
+
+        // **ومُعَرِّفُ الالتِقاطِ مِن `links[rel=up]` أَوَّلاً** — في
+        // الاستِردادِ والعَكسِ يَكون `resource.id` مُعَرِّفَ
+        // **الاستِرداد** لا الالتِقاط، فَكِتابَتُه في `CaptureId`
+        // تَضَعُ في الحَقلِ مِفتاحاً لا يُطابِقُ شَيئاً — وهُوَ
+        // المِفتاحُ الوَحيدُ الَّذي يَربِط دَورَةَ الحَياةِ كُلَّها.
+        if (string.IsNullOrWhiteSpace(order.CaptureId)
+            && (e.UpCaptureId ?? e.CaptureId) is { Length: > 0 } cap)
             order.CaptureId = cap;
         if (string.IsNullOrWhiteSpace(order.OrderId) && e.OrderId is { Length: > 0 } oid)
             order.OrderId = oid;

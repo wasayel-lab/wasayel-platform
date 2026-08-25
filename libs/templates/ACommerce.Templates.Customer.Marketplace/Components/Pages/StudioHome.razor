@@ -259,11 +259,25 @@
         return ACommerce.Kit.Subscriptions.TenantPlanPolicy.Derive(p, DateTime.UtcNow);
     }
 
-    /// <summary>مَتجَرٌ يَحتاج تَجديداً — في السَماحِ أَو مُخفىً. والسارِي
-    /// لا لافِتَةَ لَه: لافِتَةٌ تَظهَر لِلجَميع لا تُرى.</summary>
+    /// <summary>
+    /// <para><b>مَتى تُرسَمُ لافِتَةُ الباقَة</b> — لِمَتجَرٍ خَرَجَ عَن
+    /// السَرَيان، <b>أَو لِمَتجَرٍ سارٍ لَه دَفعٌ مُعَلَّقٌ أَنشَأَهُ
+    /// المُشرِف</b>.</para>
+    ///
+    /// <para><b>والشَطرُ الثاني كانَ ناقِصاً، ويُقالُ ثَمَنُه</b>:
+    /// مِرساةُ التَمديدِ <c>max(الآن, ExpiresAt)</c> كُتِبَت
+    /// لِـ<b>التَجديدِ المُبَكِّر</b> — «مَن جَدَّدَ مُبَكِّراً لا
+    /// يُصادَر ما تَبَقّى لَه». والشَرطُ
+    /// <c>Grace or Suspended</c> كانَ يَمنَع رائِدَ الأَعمالِ مِن
+    /// رُؤيَةِ الرابِطِ <b>ما دامَ مَتجَرُه سارِياً</b> — أَي أَنّ
+    /// الحالَةَ الوَحيدَةَ الَّتي كُتِبَت لَها المِرساةُ هي الحالَةُ
+    /// الوَحيدَةُ الَّتي لا يُبلَغ فيها الرابِطُ بِالنَقر
+    /// (القاعِدَة ١٢).</para>
+    /// </summary>
     bool Renewable(string slug)
         => PlanState(slug) is ACommerce.Kit.Subscriptions.TenantPlanState.Grace
-                           or ACommerce.Kit.Subscriptions.TenantPlanState.Suspended;
+                           or ACommerce.Kit.Subscriptions.TenantPlanState.Suspended
+        || PendingOrder(slug) is not null;
 
     string PlanStateLabel(string slug) => PlanState(slug) switch
     {

@@ -73,8 +73,9 @@ public class PayPalOrderTests
 
     private static PayPalOrderDraft Draft(
         string slug = "ejar", decimal amount = 49m, string currency = "USD",
-        int days = 30, string description = "اشتِراكُ شَهر")
-        => new(slug, "manual", amount, currency, days, description);
+        int days = 30, string description = "اشتِراكُ شَهر",
+        string cycle = "2026-09-03")
+        => new(slug, "manual", amount, currency, days, description, cycle);
 
     /// <summary>باقَةُ شَهرٍ سارِيَة: تَنتَهي بَعدَ ‏10 أَيّام.</summary>
     private static TenantPlan Plan(string slug = "ejar") => new()
@@ -620,10 +621,17 @@ public class PayPalOrderTests
         var result = PayPalOrderSurface.NoWrite(log, e, d);
 
         Assert.Single(log.Lines.Where(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Error));
-        // ‏200 لا خَطَأ: الرِسالَةُ فُهِمَت وقَرارُنا أَلّا نَفعَل —
-        // ورَدُّ خَطَإٍ يَجعَل PayPal تُعيدُها ‏25 مَرَّةً في ثَلاثَةِ
-        // أَيّام.
-        Assert.Equal(StatusCodes.Status200OK,
+
+        // **و‏503 لا ‏200 — وهذا نَقضٌ لِما كُتِبَ هُنا أَوَّلاً،
+        // يُقالُ بِاسمِه**: كانَ السَطرُ يَقول «‏200 لا خَطَأ… ورَدُّ
+        // خَطَإٍ يَجعَل PayPal تُعيدُها ‏25 مَرَّةً في ثَلاثَةِ
+        // أَيّام». والإعادَةُ هُنا **مَكسَبٌ لا كُلفَة**: هذا الفَرعُ
+        // يَقول «المالُ وَصَلَ ويَنقُصُنا نَحنُ وَثيقَةً يُنشِئُها
+        // المُشرِف»، فَإعادَةُ الإرسالِ هي النافِذَةُ الَّتي
+        // تُطَبَّقُ فيها الرِسالَةُ بَعدَ الإصلاحِ **مِن تِلقاءِ
+        // نَفسِها**. ورَدُّ ‏200 يُلغيها فَلا يَبقى إلّا لوغٌ يُقرَأُ
+        // أَو لا يُقرَأ. التَفصيلُ في `docs/ADR-007`.
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable,
             Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
     }
 
@@ -864,7 +872,7 @@ public class PayPalOrderTests
             PayPalOrderPolicy.Validate(Draft(amount: 0m)).Select(v => v.Code));
 
         Assert.Contains(PayPalOrderPolicy.PlanMissing,
-            PayPalOrderPolicy.Validate(new PayPalOrderDraft("ejar", "", 49m, "USD", 30, ""))
+            PayPalOrderPolicy.Validate(new PayPalOrderDraft("ejar", "", 49m, "USD", 30, "", "2026-09-03"))
                 .Select(v => v.Code));
     }
 
@@ -875,7 +883,7 @@ public class PayPalOrderTests
     [Fact]
     public void ReadDraft_FallsToZero_AndOnlyTheCurrencyHasADefault()
     {
-        var d = PayPalOrderPolicy.ReadDraft("EJAR", "manual", "كَذا", null, "", null);
+        var d = PayPalOrderPolicy.ReadDraft("EJAR", "manual", "كَذا", null, "", null, null);
 
         Assert.Equal("ejar", d.NormalizedSlug);
         Assert.Equal(0m, d.Amount);
@@ -924,10 +932,452 @@ public class PayPalOrderTests
         Assert.False(PayPalOrderStatuses.AwaitsCapture(PayPalOrderStatuses.Captured));
     }
 
+    // ═══ ١٢. الحالَةُ تُكتَبُ بِاتِّجاهٍ واحِد — وإلّا عادَ المالُ
+    //     وبَقِيَت الأَيّام ═══════════════════════════════════════════
+    //
+    // **هذا القِسمُ كُلُّه مَكتوبٌ بِكُلفَةٍ مَقيسَةٍ بِتَشغيلِ
+    // التَجميعَة**: كانَ `Apply` يَكتُب الحالَةَ بِلا فَحصِ ما
+    // قَبلَها، فَحَدَثٌ مُتَأَخِّرٌ يَهبِط بِها مِن `captured` إلى
+    // `pending`، ثُمَّ يَصِلُ الاستِردادُ فَيَجِدُ حارِسَ السَحبِ
+    // يَشتَرِط `captured` — فَلا يُسحَبُ شَيء.
+
+    /// <summary><b>السيناريو المَقيسُ حَرفاً</b>: طَلَبٌ وَصَلَ مالُه،
+    /// ثُمَّ حَدَثُ «مُعَلَّق» مُتَأَخِّر، ثُمَّ استِردادٌ بِمَبلَغٍ
+    /// مُطابِق. <b>يَجِبُ أَن يُسحَب</b> — وقَبلَ الإصلاحِ كانَ
+    /// يُعَلَّمُ ولا يُسحَب: <b>المالُ يَعودُ والأَيّامُ تَبقى</b>.</summary>
+    [Fact]
+    public void ARefundStillWithdraws_AfterALateStatusEventOnACapturedOrder()
+    {
+        var plan  = Plan();
+        var order = Order(days: 30);
+
+        // ‏١) وَصَلَ المالُ فِعلاً — تُمَدَّدُ الباقَةُ وتَصيرُ الحالَةُ «قُبِض».
+        var completed = Event(id: "WH-CAP-1");
+        var extend = PayPalOrderBillingPolicy.Decide(completed, order, plan, false, Now);
+        Assert.Equal(PayPalOrderAction.Extend, extend.Action);
+        PayPalOrderBillingPolicy.Apply(order, completed, extend, Now);
+        PayPalBillingPolicy.Apply(plan,
+            new PayPalWebhookEvent(completed.EventId, completed.EventType, "ejar", null, null),
+            new PayPalBillingDecision(PayPalBillingAction.Extend, extend.NewExpiresAt, extend.ReasonAr), Now);
+
+        Assert.Equal(PayPalOrderStatuses.Captured, order.Status);
+        var granted = plan.ExpiresAt;
+
+        // ‏٢) حَدَثٌ مُتَأَخِّرٌ يَقول «الالتِقاطُ مُعَلَّق» —
+        //     **ولا يَهبِطُ بِالحالَة**.
+        var late = Event(type: PayPalOrderEventTypes.CapturePending, id: "WH-PEND-2", status: "PENDING");
+        var marked = PayPalOrderBillingPolicy.Decide(late, order, plan, false, Now);
+        Assert.Equal(PayPalOrderAction.MarkOrder, marked.Action);
+        PayPalOrderBillingPolicy.Apply(order, late, marked, Now);
+
+        Assert.Equal(PayPalOrderStatuses.Captured, order.Status);
+
+        // ‏٣) اُستُرِدَّ المال ⇒ **يُسحَب** ما مُنِح، لا يُعَلَّمُ وَحسب.
+        var refund = PayPalOrderBillingPolicy.Decide(
+            Event(type: PayPalOrderEventTypes.CaptureRefunded, id: "WH-REF-3",
+                  reference: null, upCapture: "3C6"),
+            order, plan, false, Now);
+
+        Assert.Equal(PayPalOrderAction.Withdraw, refund.Action);
+        Assert.True(refund.TouchesPlan);
+        Assert.Equal(granted.AddDays(-30), refund.NewExpiresAt);
+    }
+
+    /// <summary><b>ومُوافَقَةٌ مُكَرَّرَةٌ لا تَنقُضُ وُصولَ المال</b>:
+    /// ‏PayPal تُعيد إرسالَ الحَدَثِ نَفسِه ‏25 مَرَّةً، و
+    /// <c>CHECKOUT.ORDER.APPROVED</c> بَعدَ الالتِقاطِ كانَ يُنزِل
+    /// الحالَةَ إلى «وافَقَ» — فَيَنكَسِرُ حارِسُ السَحبِ نَفسُه.</summary>
+    [Fact]
+    public void ADuplicateApproval_NeverUnsaysThatTheMoneyArrived()
+    {
+        var order = Order(status: PayPalOrderStatuses.Captured);
+        var approved = Event(type: PayPalOrderEventTypes.OrderApproved, id: "WH-APP-9", status: "APPROVED");
+
+        PayPalOrderBillingPolicy.Apply(
+            order, approved,
+            new PayPalOrderDecision(PayPalOrderAction.MarkOrder, default,
+                                    PayPalOrderStatuses.Approved, "—"), Now);
+
+        Assert.Equal(PayPalOrderStatuses.Captured, order.Status);
+    }
+
+    /// <summary><b>ومالٌ عادَ لا يُمنَحُ ثانِيَةً</b>: «مُكتَمِل» يَصِلُ
+    /// بَعدَ الاستِردادِ واقِعَةٌ مُمكِنَة — كُلُّ رَدٍّ غَيرِ ‏2xx
+    /// يَجعَل PayPal تُعيد الإرسالَ ثَلاثَةَ أَيّام.</summary>
+    [Fact]
+    public void MoneyThatCameBack_IsNeverGrantedASecondTime()
+    {
+        var plan = Plan();
+        var before = plan.ExpiresAt;
+
+        var d = PayPalOrderBillingPolicy.Decide(
+            Event(), Order(status: PayPalOrderStatuses.Reversed), plan, false, Now);
+
+        Assert.Equal(PayPalOrderAction.MarkOrder, d.Action);
+        Assert.False(d.TouchesPlan);
+        Assert.Equal(before, plan.ExpiresAt);
+    }
+
+    /// <summary><b>جَدوَلُ الانتِقالاتِ كامِلاً — والنُزولُ مَمنوع.</b>
+    /// وكُلُّ خانَةٍ هُنا كانَت مَسموحَةً قَبلَ الإصلاح.</summary>
+    [Theory]
+    [InlineData(PayPalOrderStatuses.Captured, PayPalOrderStatuses.Pending)]
+    [InlineData(PayPalOrderStatuses.Captured, PayPalOrderStatuses.Approved)]
+    [InlineData(PayPalOrderStatuses.Captured, PayPalOrderStatuses.Denied)]
+    [InlineData(PayPalOrderStatuses.Captured, PayPalOrderStatuses.Created)]
+    [InlineData(PayPalOrderStatuses.Reversed, PayPalOrderStatuses.Captured)]
+    [InlineData(PayPalOrderStatuses.Reversed, PayPalOrderStatuses.Approved)]
+    [InlineData(PayPalOrderStatuses.Reversed, PayPalOrderStatuses.Pending)]
+    [InlineData(PayPalOrderStatuses.Pending,  PayPalOrderStatuses.Approved)]
+    [InlineData(PayPalOrderStatuses.Denied,   PayPalOrderStatuses.Pending)]
+    [InlineData(PayPalOrderStatuses.Approved, PayPalOrderStatuses.Created)]
+    public void AStatusNeverGoesBackwards(string from, string to)
+        => Assert.False(PayPalOrderStatuses.CanTransition(from, to));
+
+    /// <summary>وما يَتَقَدَّمُ يَمُرّ — <b>وأَهَمُّها «وَصَلَ المال»</b>:
+    /// لَو مُنِعَت <c>captured</c> مِن حالَةٍ ما لَانكَسَرَ حارِسُ
+    /// السَحبِ مِن الجِهَةِ الأُخرى.</summary>
+    [Theory]
+    [InlineData(PayPalOrderStatuses.Created,  PayPalOrderStatuses.Captured)]
+    [InlineData(PayPalOrderStatuses.Approved, PayPalOrderStatuses.Captured)]
+    [InlineData(PayPalOrderStatuses.Pending,  PayPalOrderStatuses.Captured)]
+    [InlineData(PayPalOrderStatuses.Denied,   PayPalOrderStatuses.Captured)]
+    [InlineData(PayPalOrderStatuses.Captured, PayPalOrderStatuses.Reversed)]
+    [InlineData(PayPalOrderStatuses.Created,  PayPalOrderStatuses.Approved)]
+    public void MoneyArriving_AlwaysWritesItself(string from, string to)
+        => Assert.True(PayPalOrderStatuses.CanTransition(from, to));
+
+    /// <summary>وحالَةٌ مَجهولَةٌ (وَثيقَةٌ أَقدَمُ مِن هذا الجَدوَل)
+    /// تُعامَلُ كَـ<c>created</c> — <b>فَلا يُغلِقُ حارِسٌ جَديدٌ باباً
+    /// بِسَبَبِ بَياناتٍ سابِقَةٍ عَلَيه</b>.</summary>
+    [Fact]
+    public void AnUnknownStoredStatus_IsTreatedAsTheBeginning_NotAsALockedDoor()
+    {
+        Assert.True(PayPalOrderStatuses.CanTransition("", PayPalOrderStatuses.Captured));
+        Assert.True(PayPalOrderStatuses.CanTransition(null, PayPalOrderStatuses.Captured));
+        Assert.True(PayPalOrderStatuses.CanTransition("whatever", PayPalOrderStatuses.Captured));
+
+        // وحالَةٌ خارِجَ المَعجَمِ لا تُكتَبُ أَبَداً.
+        Assert.False(PayPalOrderStatuses.CanTransition(PayPalOrderStatuses.Created, "settled"));
+        Assert.False(PayPalOrderStatuses.CanTransition(PayPalOrderStatuses.Created, ""));
+    }
+
+    /// <summary><b>و«قُبِض» كَلِمَةٌ يَملِكُها مَن يُمَدِّد وَحدَه</b>:
+    /// نِداءُ الالتِقاطِ لا يَكتُبُها — ولَو كَتَبَها بِلا تَمديدٍ
+    /// لَسَحَبَ استِردادٌ لاحِقٌ أَيّاماً لَم تُمنَح.</summary>
+    [Fact]
+    public void TheCaptureCall_NeverClaimsTheMoneyArrived()
+    {
+        var flow = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, OrderFlowFile));
+        var at = flow.IndexOf("public static async Task<PayPalCaptureResult> CaptureAsync",
+                              StringComparison.Ordinal);
+        Assert.True(at > 0, "أَداة عَمياء: لا نِداءَ التِقاطٍ مُوَحَّدٌ في المَصدَر.");
+
+        var body = flow[at..];
+        Assert.Contains("PayPalOrderStatuses.Approved", body);
+        Assert.DoesNotContain("PayPalOrderStatuses.Captured", body);
+    }
+
+    // ═══ ١٣. مَرجِعٌ لِكُلِّ دَورَة — وإلّا دُهِسَ سِجِلُّ الشَهرِ
+    //     السابِق ═══════════════════════════════════════════════════════
+
+    /// <summary><b>التَجديدُ الشَهرِيُّ العاديُّ لا يَدهَسُ وَثيقَةَ
+    /// الشَهرِ الماضي.</b> نَفسُ المَبلَغِ ونَفسُ المُدَّةِ ونَفسُ
+    /// الوَصف — <b>ومَرجِعانِ مُختَلِفان</b>، لِأَنّ الدَورَةَ
+    /// تَحَرَّكَت. وقَبلَ الإصلاحِ كانا واحِداً، فَتُمحى
+    /// <c>CaptureId</c> ولا يَجِدُ استِردادُ الشَهرِ السابِقِ ما
+    /// يَربِطُه: <b>باقَةٌ قائِمَةٌ ومالٌ عاد</b>.</summary>
+    [Fact]
+    public void TheNextCyclesLink_GetsItsOwnReference_SoThePaidRecordSurvives()
+    {
+        var plan = Plan();
+        var first = Draft(cycle: PayPalOrderPolicy.CycleOf(plan));
+
+        // ‏وَصَلَ المالُ فَتَحَرَّكَ تاريخُ الانتِهاءِ ‏30 يَوماً.
+        plan.ExpiresAt = plan.ExpiresAt.AddDays(30);
+        var second = Draft(cycle: PayPalOrderPolicy.CycleOf(plan));
+
+        Assert.NotEqual(PayPalOrderPolicy.Reference(first), PayPalOrderPolicy.Reference(second));
+        Assert.NotEqual(PayPalOrderPolicy.OrderRequestId(first), PayPalOrderPolicy.OrderRequestId(second));
+    }
+
+    /// <summary>ونَقرَتانِ في <b>الدَورَةِ نَفسِها</b> تَبقَيانِ
+    /// وَثيقَةً واحِدَةً — حَتمِيَّةُ المَرجِعِ لَم تُمَسّ.</summary>
+    [Fact]
+    public void TwoClicksInTheSameCycle_StillMakeOneDocument()
+        => Assert.Equal(
+            PayPalOrderPolicy.Reference(Draft(cycle: "2026-09-03")),
+            PayPalOrderPolicy.Reference(Draft(cycle: "2026-09-03")));
+
+    /// <summary><b>وشَبَكَةُ الأَمانِ تَحتَ ذلك</b>: وَثيقَةٌ تَجاوَزَت
+    /// انتِظارَ الالتِقاطِ لا يُكتَبُ فَوقَها — <b>مَهما تَطابَقَت
+    /// المُدخَلات</b>.</summary>
+    [Theory]
+    [InlineData(PayPalOrderStatuses.Captured)]
+    [InlineData(PayPalOrderStatuses.Denied)]
+    [InlineData(PayPalOrderStatuses.Reversed)]
+    public void APaidOrdersRecord_IsNeverOverwritten(string status)
+        => Assert.False(PayPalOrderPolicy.IsOverwritable(Order(status: status)));
+
+    /// <summary>وما لَم يَقَع فيه شَيءٌ لا يُستَرجَع يُكتَبُ فَوقَه —
+    /// فَلا يُرفَضُ على المالِكِ رابِطٌ لَم يُدفَع بَعد.</summary>
+    [Fact]
+    public void ALinkNobodyPaidYet_IsStillRewritable()
+    {
+        Assert.True(PayPalOrderPolicy.IsOverwritable(null));
+        Assert.True(PayPalOrderPolicy.IsOverwritable(Order()));
+        Assert.True(PayPalOrderPolicy.IsOverwritable(Order(status: PayPalOrderStatuses.Approved)));
+
+        // ‏لكِنّ مُعَرِّفَ التِقاطٍ مَحفوظاً يَقفِلُها ولَو كانَت الحالَةُ تَنتَظِر:
+        // **هُوَ المِفتاحُ الوَحيدُ الَّذي يَربِطُ الاستِردادَ**.
+        var captured = Order(status: PayPalOrderStatuses.Approved);
+        captured.CaptureId = "3C6";
+        Assert.False(PayPalOrderPolicy.IsOverwritable(captured));
+    }
+
+    // ═══ ١٤. المَبلَغُ تَعريفٌ واحِدٌ لا اثنان ═════════════════════════
+
+    /// <summary><b>‏5000.5 يَن</b>: تُرسَل <c>"5001"</c> لِأَنّ الينَّ
+    /// بِلا كُسور، وتَعودُ <c>5001</c>. وقَبلَ الإصلاحِ كانَ المَخزونُ
+    /// <c>5000.5</c> فَيَرتَدُّ التَأكيدُ بِـ<c>AmountMismatch</c> —
+    /// <b>قُبِضَ المالُ ولَم تُمَدَّد الباقَة، صامِتاً</b>.</summary>
+    [Fact]
+    public void AFractionalYen_IsStoredAsItIsCharged_SoTheCaptureExtends()
+    {
+        var draft = Draft(amount: 5000.5m, currency: "JPY");
+        Assert.Equal("5001", draft.MoneyValue);
+
+        var order = PayPalOrderSurface.RecordFor(
+            draft, PayPalOrderPolicy.Reference(draft),
+            new PayPalOrderResult("5O1", "CREATED", "https://www.paypal.com/checkoutnow?token=5O1", null),
+            "platform-admin", Now);
+
+        Assert.Equal(5001m, order.Amount);
+
+        var d = PayPalOrderBillingPolicy.Decide(
+            Event(amount: "5001", currency: "JPY"), order, Plan(), false, Now);
+
+        Assert.Equal(PayPalOrderAction.Extend, d.Action);
+    }
+
+    /// <summary>و<b>‏49.005 دولاراً</b> كَذلك — الكَسرُ الثالِثُ
+    /// يَختَفي عِندَ PayPal ويَبقى عِندَنا.</summary>
+    [Fact]
+    public void AThirdDecimalDollar_StillMatchesAtCapture()
+    {
+        var draft = Draft(amount: 49.005m);
+        var order = PayPalOrderSurface.RecordFor(
+            draft, PayPalOrderPolicy.Reference(draft),
+            new PayPalOrderResult("5O1", "CREATED", "https://www.paypal.com/checkoutnow?token=5O1", null),
+            "platform-admin", Now);
+
+        Assert.Equal(draft.MoneyValue, PayPalCurrencies.Money(order.Amount, order.Currency));
+        Assert.True(PayPalOrderBillingPolicy.MoneyMatches(
+            Event(amount: draft.MoneyValue), order));
+    }
+
+    /// <summary><b>وفاصِلُ الآلافِ لا يُقرَأُ مِئَةَ ضِعف</b>:
+    /// <c>"49,99"</c> — كِتابَةُ نِصفِ أوروبّا لِـ‏49.99 — كانَت
+    /// تُقرَأُ <b>‏4999</b> بِـ<c>NumberStyles.Number</c>، في
+    /// المَوضِعَين.</summary>
+    [Fact]
+    public void AThousandsSeparator_IsNeverReadAsAHundredfold()
+    {
+        var order = PayPalOrderPolicy.ReadDraft("ejar", "manual", "49,99", "USD", "30", "", "2026-09-03");
+        Assert.NotEqual(4999m, order.Amount);
+        Assert.Equal(0m, order.Amount);
+        Assert.Contains(PayPalOrderPolicy.AmountNotPositive,
+            PayPalOrderPolicy.Validate(order).Select(v => v.Code));
+
+        var plan = PayPalCatalogPolicy.ReadDraft("manual", "باقَة", "49,99", "USD", "MONTH");
+        Assert.NotEqual(4999m, plan.Amount);
+        Assert.Contains(PayPalCatalogPolicy.AmountNotPositive,
+            PayPalCatalogPolicy.Validate(plan).Select(v => v.Code));
+
+        // وكَذلك المُقارَنَةُ بِما يَصِل: نَمَطُ PayPal لا يَحمِل فاصِلَ
+        // آلافٍ أَصلاً، فَنَصٌّ يَحمِلُه **عَدَمُ تَطابُقٍ لا تَساهُل**.
+        Assert.False(PayPalOrderBillingPolicy.MoneyMatches(
+            Event(amount: "4,900"), Order(amount: 4900m)));
+    }
+
+    // ═══ ١٥. صَغائِرُ مَقيسَةٌ — ولِكُلٍّ أَثَرٌ يُسَمّى ═══════════════
+
+    /// <summary><b>مُعَرِّفُ الاستِردادِ لا يُكتَبُ في حَقلِ
+    /// الالتِقاط</b>: في <c>REFUNDED</c>/<c>REVERSED</c> يَكون
+    /// <c>resource.id</c> مُعَرِّفَ <b>الاسترداد</b>، والمِفتاحُ
+    /// الصَحيحُ في <c>links[rel=up]</c>. وكِتابَةُ الأَوَّلِ تَضَعُ في
+    /// الحَقلِ مِفتاحاً لا يُطابِقُ شَيئاً — <b>وهُوَ المِفتاحُ
+    /// الوَحيدُ الَّذي يَربِطُ دَورَةَ الحَياةِ كُلَّها</b>.</summary>
+    [Fact]
+    public void ARefundEvent_NeverWritesTheRefundIdIntoTheCaptureField()
+    {
+        var order = Order(status: PayPalOrderStatuses.Captured);
+        order.CaptureId = null;
+
+        // ‏`Event` تَضَعُ `CaptureId = "3C6"` (وهُوَ `resource.id`)،
+        // و`upCapture` هُوَ ما جاءَ مِن `links[rel=up]`.
+        var refund = Event(type: PayPalOrderEventTypes.CaptureRefunded,
+                           id: "WH-REF-1", reference: null, upCapture: "REAL-CAPTURE-7");
+
+        PayPalOrderBillingPolicy.Apply(
+            order, refund,
+            new PayPalOrderDecision(PayPalOrderAction.MarkOrder, default,
+                                    PayPalOrderStatuses.Reversed, "—"), Now);
+
+        Assert.Equal("REAL-CAPTURE-7", order.CaptureId);
+    }
+
+    /// <summary><b>وزِرُّ «التَقِط الآن» يَختَفي بَعدَ نَجاحِه</b> —
+    /// والفَيصَلُ مُعَرِّفُ الالتِقاطِ لا الحالَةُ وَحدَها: النِداءُ
+    /// الناجِحُ يُثَبِّتُه وتَبقى الحالَةُ «وافَقَ» حَتّى تَصِلَ
+    /// رِسالَةُ <c>COMPLETED</c>. <b>ونَقرَةٌ ثانِيَةٌ كانَت تَرتَدُّ
+    /// مِن PayPal بِـ<c>ORDER_ALREADY_CAPTURED</c> إنجِليزِيّاً
+    /// خامّاً</b>.</summary>
+    [Fact]
+    public void ACapturedOrder_NoLongerOffersTheCaptureButton()
+    {
+        Assert.True(PayPalOrderPolicy.CanCaptureNow(Order()));
+        Assert.True(PayPalOrderPolicy.CanCaptureNow(Order(status: PayPalOrderStatuses.Approved)));
+
+        var afterCapture = Order(status: PayPalOrderStatuses.Approved);
+        afterCapture.CaptureId = "3C6";
+        Assert.False(PayPalOrderPolicy.CanCaptureNow(afterCapture));
+
+        Assert.False(PayPalOrderPolicy.CanCaptureNow(Order(status: PayPalOrderStatuses.Captured)));
+        Assert.False(PayPalOrderPolicy.CanCaptureNow(Order(status: PayPalOrderStatuses.Reversed)));
+        Assert.False(PayPalOrderPolicy.CanCaptureNow(null));
+
+        // ‏وطَلَبٌ بِلا مُعَرِّفٍ عِندَ PayPal لا يُلتَقَط أَصلاً.
+        var noOrderId = Order();
+        noOrderId.OrderId = "";
+        Assert.False(PayPalOrderPolicy.CanCaptureNow(noOrderId));
+    }
+
+    /// <summary><b>ونَفسُ الشَرطِ يَرسُمُ الزِرَّ ويَحرُسُ النُقطَة</b>
+    /// — قاعِدَةٌ واحِدَةٌ في مَوضِعٍ واحِد، فَلا تَنجَرِف الشاشَةُ عَن
+    /// الخادِم.</summary>
+    [Fact]
+    public void TheButtonAndTheEndpoint_ReadTheSameRule()
+    {
+        var screen = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, PlanScreenFile));
+        Assert.Contains("PayPalOrderPolicy.CanCaptureNow(o)", screen);
+        Assert.Contains("PayPalOrderPolicy.CanCaptureNow(order)",
+            EndpointBody("/admin/tenants/{slug}/plan/paypal-capture"));
+    }
+
+    /// <summary><b>ونِداءُ الالتِقاطِ واحِدٌ لِلمَسارَين</b>
+    /// (القاعِدَة ٨): كانَ مَنسوخاً — نُسخَةُ الحَدَثِ تَأخُذُ القُفلَ
+    /// وتَكتُب، ونُسخَةُ الزِرِّ <b>بِلا قُفلٍ ولا حالَة</b>. أَي أَنّ
+    /// طَريقَ العِلاجِ كانَ أَضعَفَ مِن الطَريقِ المُعتاد.</summary>
+    [Fact]
+    public void TheManualCapture_GoesThroughTheSamePipeAsTheEvent()
+    {
+        var body = EndpointBody("/admin/tenants/{slug}/plan/paypal-capture");
+
+        Assert.Contains("PayPalOrderFlow.CaptureAsync", body);
+        Assert.DoesNotContain("paypal.CaptureOrderAsync", body);
+    }
+
+    /// <summary><b>وسَطرُ تَدقيقٍ لِنِداءِ التِقاطٍ بِيَدِ مُشرِف</b> —
+    /// جاراتُه الثَلاثُ تَكتُب، والثابِتُ <c>CaptureAuditAction</c>
+    /// يَدَّعي أَنَّه يَشمَلُها، وكانَت وَحدَها بِلا سَطر.</summary>
+    [Fact]
+    public void TheManualCapture_LeavesATrail()
+    {
+        var body = EndpointBody("/admin/tenants/{slug}/plan/paypal-capture");
+        Assert.Contains("audit.WriteAsync", body);
+        Assert.Contains("PayPalBillingService.CaptureAuditAction", body);
+    }
+
+    /// <summary><b>وأَقفالُ الطَلَباتِ لا تَنمو</b>: كانَ قامُوساً
+    /// <b>لا يُفَرَّغُ أَبَداً</b> — سيمافورٌ لِكُلِّ مَرجِعٍ يَبقى ما
+    /// بَقِيَت العَمَلِيَّة، والمَراجِعُ حَتمِيَّةٌ لا مُعادَة.</summary>
+    [Fact]
+    public void TheOrderLocks_NeverGrowWithTheNumberOfOrders()
+    {
+        var seen = new HashSet<SemaphoreSlim>();
+        for (var i = 0; i < 5_000; i++)
+            seen.Add(PayPalOrderLocks.For($"wsl-ejar-{i:x8}"));
+
+        Assert.True(seen.Count <= PayPalOrderLocks.Stripes,
+            $"عَدَدُ الأَقفال {seen.Count} فَوقَ السَقفِ {PayPalOrderLocks.Stripes}.");
+
+        // ونَفسُ المَرجِعِ يُعطي نَفسَ القُفل — وإلّا لَم يَتَسَلسَل شَيء.
+        Assert.Same(PayPalOrderLocks.For("wsl-ejar-abc123"), PayPalOrderLocks.For("wsl-ejar-abc123"));
+        Assert.Same(PayPalOrderLocks.For(" wsl-ejar-abc123 "), PayPalOrderLocks.For("wsl-ejar-abc123"));
+    }
+
+    /// <summary><b>مالٌ وَصَلَ ويَنقُصُنا نَحنُ وَثيقَة ⇒ رَمزٌ
+    /// تُعيدُ PayPal الرِسالَةَ عَلَيه.</b> ورَدُّ ‏200 كانَ يُلغي
+    /// إعادَةَ الإرسالِ الآليَّةَ (‏25 مُحاوَلَةً في ثَلاثَةِ أَيّام) —
+    /// وهي بِالضَبطِ النافِذَةُ الَّتي يُصلِحُ فيها المُشرِفُ النَقصَ
+    /// فَتُطَبَّقُ الرِسالَةُ مِن تِلقاءِ نَفسِها.</summary>
+    [Theory]
+    [InlineData(PayPalOrderAction.UnknownReference)]
+    [InlineData(PayPalOrderAction.UnknownTenant)]
+    public void MoneyWeCannotApplyYet_IsAnsweredWithACodeThatMakesPayPalTryAgain(PayPalOrderAction action)
+    {
+        Assert.True(PayPalOrderSurface.HealsOnRedelivery(action));
+
+        var result = PayPalOrderSurface.NoWrite(
+            new CapturingLogger(), Event(),
+            new PayPalOrderDecision(action, default, "", "—"));
+
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable,
+            Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
+    }
+
+    /// <summary><b>وما لا تَشفيهِ الإعادَةُ يَبقى ‏200</b>: المَبلَغانِ
+    /// لا يَتَحَرَّكُ أَحَدُهُما، وحالَةُ المَورِدِ لَقطَةٌ داخِلَ
+    /// الجِسمِ المُعاد. فَـ‏25 إعادَةً ضَجيجٌ لا يَشتَري
+    /// شَيئاً.</summary>
+    [Theory]
+    [InlineData(PayPalOrderAction.AmountMismatch)]
+    [InlineData(PayPalOrderAction.StatusNotCompleted)]
+    [InlineData(PayPalOrderAction.Replay)]
+    [InlineData(PayPalOrderAction.Ignored)]
+    public void AFailureRedeliveryCannotHeal_IsNotRepeatedForThreeDays(PayPalOrderAction action)
+    {
+        Assert.False(PayPalOrderSurface.HealsOnRedelivery(action));
+
+        var result = PayPalOrderSurface.NoWrite(
+            new CapturingLogger(), Event(),
+            new PayPalOrderDecision(action, default, "", "—"));
+
+        Assert.Equal(StatusCodes.Status200OK,
+            Assert.IsAssignableFrom<IStatusCodeHttpResult>(result).StatusCode);
+    }
+
+    /// <summary><b>ورائِدُ الأَعمالِ يَبلُغُ رابِطَ التَجديدِ المُبَكِّرِ
+    /// بِالنَقر</b> (القاعِدَة ١٢): مِرساةُ <c>max(الآن, ExpiresAt)</c>
+    /// كُتِبَت لِلتَجديدِ المُبَكِّرِ بِعَينِه، والشَرطُ
+    /// <c>Grace or Suspended</c> كانَ يَحجُبُ اللافِتَةَ عَن مَتجَرٍ
+    /// سارٍ — <b>أَي عَن الحالَةِ الوَحيدَةِ الَّتي كُتِبَت لَها
+    /// المِرساة</b>.</summary>
+    [Fact]
+    public void TheEarlyRenewalLink_IsReachableWhileTheStoreIsStillLive()
+    {
+        var studio = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, StudioHomeFile));
+        var at = studio.IndexOf("bool Renewable(string slug)", StringComparison.Ordinal);
+        Assert.True(at > 0, "أَداة عَمياء: لا شَرطَ لافِتَةٍ في المَصدَر.");
+
+        var rule = studio[at..studio.IndexOf(';', at)];
+        Assert.Contains("PendingOrder(slug) is not null", rule);
+    }
+
     // ─── أَدَوات ─────────────────────────────────────────────────────
 
     private const string EndpointsFile =
         "libs/templates/ACommerce.Templates.Customer.Marketplace/Billing/PayPalEndpoints.cs";
+
+    private const string OrderFlowFile =
+        "libs/templates/ACommerce.Templates.Customer.Marketplace/Billing/PayPalOrderFlow.cs";
+
+    private const string PlanScreenFile =
+        "libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/TenantPlanAdmin.razor";
+
+    private const string StudioHomeFile =
+        "libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioHome.razor";
 
     private static string EndpointSource()
         => File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, EndpointsFile));

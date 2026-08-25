@@ -243,6 +243,21 @@ public static class PayPalEndpoints
 
             var by = admin.User is { } u ? $"studio · {u.Id}" : "platform-admin";
             var reference = PayPalOrderPolicy.Reference(draft);
+
+            // ─── شَبَكَةُ الأَمان: لا يُدهَسُ سِجِلُّ دَفعٍ مَضى ─────
+            //
+            // **العِلَّة**: مِفتاحُ الوَثيقَةِ هُوَ المَرجِع، والكِتابَةُ
+            // `Store`. فَلَولا مُمَيِّزُ الدَورَةِ في البَصمَةِ لَكانَ
+            // تَجديدُ الشَهرِ التالي — بِنَفسِ المَبلَغِ والمُدَّة —
+            // يَكتُب فَوقَ وَثيقَةِ الشَهرِ السابِقِ فَيَمحو
+            // `CaptureId`: **باقَةٌ قائِمَةٌ ومالٌ عادَ بِلا سَحب**.
+            // والمُمَيِّزُ يَمنَعُ الحالَةَ المَعروفَة، وهذا يَمنَعُ ما
+            // لَم يُتَوَقَّع — **وقَبلَ النِداءِ لا بَعدَه**، فَلا
+            // يُفتَحُ طَلَبٌ عِندَ PayPal ثُمَّ يُرفَضُ حِفظُه.
+            if (!PayPalOrderPolicy.IsOverwritable(
+                    await session.LoadAsync<PayPalOrderRecord>(reference, ct)))
+                return PayPalOrderSurface.Failed(slug, PayPalOrderSurface.OrderSettled);
+
             var result = await paypal.CreateOrderAsync(
                 draft, reference, PayPalOrderSurface.OriginFrom(req),
                 PayPalOrderPolicy.OrderRequestId(draft), ct);
@@ -270,9 +285,21 @@ public static class PayPalEndpoints
         // الأَحداثُ بَقِيَ طَلَبٌ وافَقَ عَلَيه الدافِعُ بِلا التِقاط —
         // **وتُلغيه PayPal بَعدَ نافِذَتِه وتُعيدُ المالَ**. فَلِهذا
         // الانقِطاعِ عِلاجٌ بِنَقرَة، لا بِأَمرِ كونسول.
+        // **والنِداءُ نَفسُه لا نُسخَةٌ ثانِيَة** (القاعِدَة ٨): كانَ
+        // هُنا نِداءٌ مَنسوخٌ **بِلا قُفلٍ ولا تَحريكِ حالَة**، بَينَما
+        // نُسخَةُ الحَدَثِ تَأخُذُ القُفلَ وتَكتُب. أَي أَنّ طَريقَ
+        // العِلاجِ كانَ أَضعَفَ مِن الطَريقِ المُعتاد — وهُوَ الطَريقُ
+        // الَّذي يُسلَكُ حينَ يَختَلُّ شَيء. صارَ الاثنانِ يُنادِيانِ
+        // `PayPalOrderFlow.CaptureAsync`.
+        //
+        // **ولا تُمَدَّدُ باقَةٌ مِن هُنا**: نَجاحُ الالتِقاطِ إثباتٌ
+        // صَحيحٌ ولا يُستَعمَلُ لِلتَمديد — رِسالَةُ
+        // `PAYMENT.CAPTURE.COMPLETED` هي وَحدَها الَّتي تُمَدِّد،
+        // بِمِفتاحِ `event_id` الَّذي يَمنَع الازدِواج.
         app.MapPost("/admin/tenants/{slug}/plan/paypal-capture", async (
             string slug, HttpRequest req, IDocumentSession session,
-            Services.Incubator.StudioAuth auth, PayPalGateway paypal) =>
+            Services.Incubator.StudioAuth auth, PayPalGateway paypal,
+            Services.Audit.AuditWriter audit, ILogger<Log> log) =>
         {
             var admin = await Services.PlatformAdminGuard.EvaluateAsync(session.DocumentStore, auth);
             if (!admin.Allowed) return Results.StatusCode(StatusCodes.Status403Forbidden);
@@ -284,19 +311,23 @@ public static class PayPalEndpoints
             if (order is null || order.TenantSlug != slug)
                 return PayPalOrderSurface.Failed(slug, PayPalOrderSurface.OrderNotFound);
 
-            var result = await paypal.CaptureOrderAsync(
-                order.OrderId, PayPalOrderPolicy.CaptureRequestId(order.Id), ct);
+            // نَفسُ الشَرطِ الَّذي يَرسُمُ الزِرَّ يَقبَلُ النَقرَة —
+            // فَصَفحَةٌ قَديمَةٌ في تَبويبٍ مَفتوحٍ تَرتَدُّ بِعَرَبِيَّةٍ
+            // مِن القامُوس، لا بِـ`ORDER_ALREADY_CAPTURED` مِن PayPal.
+            if (!PayPalOrderPolicy.CanCaptureNow(order))
+                return PayPalOrderSurface.Failed(slug, PayPalOrderSurface.CaptureNotAllowed);
+
+            var result = await PayPalOrderFlow.CaptureAsync(order, session, paypal, log, ct);
             if (!string.IsNullOrWhiteSpace(result.FailureReason))
                 return PayPalOrderSurface.Failed(slug, PayPalFailure.ScreenCode(result.FailureReason));
 
-            // **ولا تُمَدَّدُ باقَةٌ مِن هُنا**: نَجاحُ الالتِقاطِ إثباتٌ
-            // صَحيحٌ ولا يُستَعمَلُ لِلتَمديد — رِسالَةُ
-            // `PAYMENT.CAPTURE.COMPLETED` هي وَحدَها الَّتي تُمَدِّد،
-            // بِمِفتاحِ `event_id` الَّذي يَمنَع الازدِواج.
-            order.CaptureId = string.IsNullOrWhiteSpace(result.CaptureId) ? order.CaptureId : result.CaptureId;
-            order.At = DateTime.UtcNow;
-            session.Store(order);
-            await session.SaveChangesAsync(ct);
+            // وسَطرُ تَدقيقٍ كَجاراتِه الثَلاث: نِداءُ التِقاطٍ بِيَدِ
+            // مُشرِفٍ حَرَكَةُ مالٍ لا قِراءَة، والثابِتُ نَفسُه
+            // (`CaptureAuditAction`) يَدَّعي أَنَّه يَشمَلُها.
+            var by = admin.User is { } u ? $"studio · {u.Id}" : "platform-admin";
+            await audit.WriteAsync(slug, admin.User?.Id, by,
+                Services.Subscriptions.PayPalBillingService.CaptureAuditAction,
+                "TenantPlan", slug, note: $"{order.Id} · {result.CaptureId}");
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
         }).DisableAntiforgery();
 

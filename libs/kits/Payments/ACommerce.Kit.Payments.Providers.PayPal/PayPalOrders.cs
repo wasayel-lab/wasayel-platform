@@ -63,6 +63,70 @@ public static class PayPalOrderStatuses
     /// لَه عِلاجٌ بِنَقرَة، لا بِأَمرِ كونسول (القاعِدَة ١٢).</summary>
     public static bool AwaitsCapture(string? status)
         => status is Created or Approved or Pending;
+
+    /// <summary>
+    /// <para><b>أَيَجوزُ الانتِقالُ مِن حالَةٍ إلى حالَة؟ — جَدوَلٌ
+    /// صَريحٌ في مَوضِعٍ واحِد.</b> والكِتابَةُ <b>أُحادِيَّةُ
+    /// الاتِّجاه</b>: ما بَلَغَ <c>captured</c> لا يَعودُ إلى ما دونَه،
+    /// وما بَلَغَ <c>reversed</c> لا يَعودُ إطلاقاً.</para>
+    ///
+    /// <para><b>والكُلفَةُ الَّتي كَتَبَت هذا الجَدوَل — مَقيسَةٌ
+    /// بِتَشغيلِ التَجميعَة</b>: كانَ <c>Apply</c> يَكتُب
+    /// <c>order.Status = decision.OrderStatus</c> <b>بِلا فَحصٍ
+    /// لِلحالَةِ السابِقَة</b>. فَحَدَثُ <c>PAYMENT.CAPTURE.PENDING</c>
+    /// مُتَأَخِّراً على طَلَبٍ حالَتُه <c>captured</c> كانَ يَهبِطُ
+    /// بِها إلى <c>pending</c>؛ ثُمَّ يَصِل
+    /// <c>PAYMENT.CAPTURE.REFUNDED</c> فَيَجِدُ حارِسَ السَحبِ
+    /// يَشتَرِط <c>captured</c> — <b>فَلا يُسحَبُ شَيء: المالُ يَعود
+    /// والأَيّامُ تَبقى</b>. وPayPal تُعيد الإرسالَ ‏25 مَرَّةً خِلالَ
+    /// ثَلاثَةِ أَيّام، فَالتَأَخُّرُ والتَكرارُ ليسا احتِمالاً
+    /// بَعيداً بَل عادَةَ الخِدمَة.</para>
+    ///
+    /// <para><b>ولِماذا جَدوَلٌ لا شَرطانِ مَنثوران</b>: القاعِدَةُ
+    /// تُقرَأُ في مَوضِعٍ واحِدٍ وتُختَبَرُ بِجَدوَلٍ كامِل — ‏36
+    /// خانَةً — بَدَلَ أَن تُنسَخَ في كُلِّ مَوضِعِ كِتابَة
+    /// (القاعِدَة ٢). ويَقرَؤُها اليَومَ ثَلاثَةُ كُتّاب:
+    /// <c>PayPalOrderBillingPolicy.Apply</c>، ونِداءُ الالتِقاطِ
+    /// المُوَحَّد، والقَرارُ نَفسُه قَبلَ أَن يُقَرِّرَ تَمديداً.</para>
+    ///
+    /// <para><b>ومُعامَلَةُ الحالَةِ المَجهولَةِ كَـ<c>created</c>
+    /// مَقصودَة</b>: وَثيقَةٌ قَديمَةٌ بِحَقلٍ فارِغٍ لا تُقفَل دونَ
+    /// كُلِّ انتِقال — <b>والتَكافُؤُ الصِفريُّ يَقتَضي أَلّا يُغلِقَ
+    /// حارِسٌ جَديدٌ باباً بِسَبَبِ بَياناتٍ سابِقَةٍ عَلَيه</b>.</para>
+    /// </summary>
+    public static bool CanTransition(string? from, string? to)
+    {
+        var target = (to ?? "").Trim();
+        if (!All.Contains(target, StringComparer.Ordinal)) return false;
+
+        var current = (from ?? "").Trim();
+        if (!All.Contains(current, StringComparer.Ordinal)) current = Created;
+
+        // نَفسُ الحالَةِ إلى نَفسِها: تَعليمٌ مُكَرَّرٌ لا ضَرَرَ فيه —
+        // يُنعِشُ الوَقتَ والسَبَبَ ولا يُبَدِّل شَيئاً يُقَرِّر.
+        if (string.Equals(current, target, StringComparison.Ordinal)) return true;
+
+        return current switch
+        {
+            Created  => true,
+            Approved => target is Captured or Pending or Denied or Reversed,
+            Pending  => target is Captured or Denied or Reversed,
+
+            // **ورَفضٌ لا يُغلِقُ بابَ المال**: التِقاطٌ رُفِضَ ثُمَّ
+            // نَجَحَ بِنِداءٍ ثانٍ واقِعَةٌ مُمكِنَة، و«وَصَلَ المال»
+            // يَجِبُ أَن يَكتُبَ <c>captured</c> دائِماً وإلّا انكَسَرَ
+            // حارِسُ السَحبِ مِن جِهَةٍ أُخرى.
+            Denied   => target is Captured or Reversed,
+
+            // **وَصَلَ المالُ ومُنِحَت الأَيّام**: لا يُنقَضُ ذلك إلّا
+            // بِعَودَةِ المال.
+            Captured => target is Reversed,
+
+            // **عادَ المالُ**: حالَةٌ نِهائِيَّةٌ مُعلَنَةٌ لا مُشتَقَّة.
+            Reversed => false,
+            _        => false
+        };
+    }
 }
 
 /// <summary>
@@ -85,13 +149,28 @@ public static class PayPalOrderStatuses
 /// الحَدَثِ ولا يُخترَع.</param>
 /// <param name="Description">ما يَراهُ الدافِعُ على صَفحَةِ PayPal —
 /// اختِياريّ.</param>
+/// <param name="Cycle"><b>مُمَيِّزُ الدَورَة — لا يُرسَل إلى PayPal
+/// إطلاقاً، ويَدخُل بَصمَةَ المَرجِعِ وَحدَها.</b> وهُوَ تاريخُ
+/// انتِهاءِ الباقَةِ القائِمُ يَومَ يُنشَأُ الرابِط
+/// (<see cref="PayPalOrderPolicy.CycleOf"/>).
+///
+/// <para><b>والكُلفَةُ الَّتي أَدخَلَتهُ</b>: المَرجِعُ كانَ بَصمَةَ
+/// مُدخَلاتِ المُسَوَّدَةِ وَحدَها، فَالتَجديدُ الشَهرِيُّ العاديُّ —
+/// نَفسُ المَبلَغِ ونَفسُ المُدَّةِ ونَفسُ الوَصف — يُعطي
+/// <b>المَرجِعَ نَفسَه</b>، ووَثيقَتُه تُكتَبُ بِـ<c>Store</c>
+/// فَتَدهَسُ سِجِلَّ الشَهرِ السابِق: يَضيعُ <c>CaptureId</c>
+/// وتَعودُ الحالَةُ <c>created</c>، فَلا يَجِدُ استِردادُ الشَهرِ
+/// السابِقِ ما يَربِطُه — <b>باقَةٌ قائِمَةٌ ومالٌ عاد</b>. وبِمُمَيِّزِ
+/// الدَورَةِ يَصيرُ التَجديدُ مَرجِعاً جَديداً <b>طَبيعِيّاً</b>،
+/// وتَبقى نَقرَتانِ في الدَورَةِ نَفسِها وَثيقَةً واحِدَة.</para></param>
 public sealed record PayPalOrderDraft(
     string  TenantSlug,
     string  PlanId,
     decimal Amount,
     string  Currency,
     int     Days,
-    string  Description)
+    string  Description,
+    string  Cycle)
 {
     public string NormalizedSlug => (TenantSlug ?? "").Trim().ToLowerInvariant();
 
@@ -118,6 +197,33 @@ public sealed record PayPalOrderDraft(
     /// هي نَفسُها الَّتي يَستَعمِلُها مَسارُ الخُطَط — فَلا صِياغَتانِ
     /// تَنجَرِفان.</summary>
     public string MoneyValue => PayPalCurrencies.Money(Amount, NormalizedCurrency);
+
+    /// <summary>
+    /// <para><b>المَبلَغُ الَّذي يُخصَمُ فِعلاً — وهُوَ ما يُخَزَّن.</b>
+    /// قِراءَةُ <see cref="MoneyValue"/> عَدَداً، فَـ<b>المُرسَلُ
+    /// والمَحفوظُ تَعريفٌ واحِدٌ لا اثنان</b>.</para>
+    ///
+    /// <para><b>والكُلفَةُ الَّتي كَتَبَتها</b>: الوَثيقَةُ كانَت
+    /// تُخَزِّن <c>Amount</c> خاماً بَينَما تَتَلَقّى PayPal
+    /// <see cref="MoneyValue"/> <b>مَصوغاً ومُدَوَّراً</b> (صيغَةُ
+    /// <c>"0"</c> لِعُملاتٍ بِلا كُسور: JPY/HUF/TWD)، و
+    /// <c>MoneyMatches</c> تُقارِنُ الواصِلَ بِالخام. فَـ
+    /// <c>5000.5 JPY</c> يُرسَل <c>"5001"</c> ويَعودُ <c>5001</c>
+    /// فَلا يُطابِق <c>5000.5</c> ⇒ <c>AmountMismatch</c> ⇒
+    /// <b>قُبِضَ المالُ ولَم تُمَدَّد الباقَة، صامِتاً</b>. وكَذلك
+    /// <c>49.005 USD</c>.</para>
+    ///
+    /// <para><b>ولِماذا التَطبيعُ لا الرَفض</b>: الرَفضُ يَجعَل
+    /// المُشرِفَ يُصَحِّحُ رَقَماً <b>صَحيحاً في عُملَتِه</b>
+    /// (‏<c>0.5 JPY</c> لا وُجودَ لَها أَصلاً)، والتَطبيعُ يَجعَل
+    /// المَخزونَ <b>بِعَينِه</b> ما يُقارَنُ بِه. والشاشَةُ تَعرِض
+    /// المَخزون، فَالمُشرِفُ يَرى ما يُخصَم لا ما كَتَب. وحارِسُ
+    /// الإدخالِ في النَموذَجِ (<c>step</c> بِحَسَبِ العُملَة) يَمنَعُ
+    /// الفارِقَ قَبلَ وُقوعِه.</para>
+    /// </summary>
+    public decimal NormalizedAmount
+        => decimal.TryParse(MoneyValue, PayPalCurrencies.MoneyStyles,
+                            CultureInfo.InvariantCulture, out var v) ? v : Amount;
 }
 
 /// <summary>خَرقٌ واحِدٌ في مُسَوَّدَةِ طَلَب. نَفسُ شَكلِ
@@ -278,14 +384,35 @@ public static class PayPalOrderPolicy
     /// </summary>
     public static PayPalOrderDraft ReadDraft(
         string? tenantSlug, string? planId,
-        string? amount, string? currency, string? days, string? description)
+        string? amount, string? currency, string? days, string? description, string? cycle)
         => new(
             (tenantSlug ?? "").Trim().ToLowerInvariant(),
             (planId ?? "").Trim(),
-            decimal.TryParse(amount, NumberStyles.Number, CultureInfo.InvariantCulture, out var a) ? a : 0m,
+            decimal.TryParse(amount, PayPalCurrencies.MoneyStyles, CultureInfo.InvariantCulture, out var a) ? a : 0m,
             string.IsNullOrWhiteSpace(currency) ? PayPalCurrencies.Default : currency.Trim().ToUpperInvariant(),
             int.TryParse(days, NumberStyles.Integer, CultureInfo.InvariantCulture, out var d) ? d : 0,
-            (description ?? "").Trim());
+            (description ?? "").Trim(),
+            (cycle ?? "").Trim());
+
+    /// <summary>
+    /// <para><b>مُمَيِّزُ الدَورَةِ الَّتي يُشتَرى لَها هذا الطَلَب</b> —
+    /// تاريخُ انتِهاءِ الباقَةِ القائِمُ لَحظَةَ إنشاءِ الرابِط.</para>
+    ///
+    /// <para><b>ولِماذا هذا بِعَينِه لا عَدّادُ طَلَبات</b>: هُوَ
+    /// <b>مُشتَقٌّ مِن حالَةٍ قائِمَةٍ ولا يُكتَب</b> — دالَّةٌ نَقِيَّةٌ
+    /// بِلا قِراءَةٍ ثانِيَةٍ ولا سِباق. ويَتَحَرَّكُ <b>بِالضَبط</b>
+    /// حينَ تُشتَرى دَورَةٌ جَديدَة: التَمديدُ يُحَرِّك
+    /// <c>ExpiresAt</c>، فَطَلَبُ الشَهرِ التالي يَحمِلُ مُمَيِّزاً
+    /// آخَرَ بِلا تَدَخُّل. ونَقرَتانِ في الدَورَةِ نَفسِها تَبقَيانِ
+    /// مَرجِعاً واحِداً — وهُوَ المَقصودُ مِن حَتمِيَّةِ
+    /// المَرجِع.</para>
+    ///
+    /// <para><b>وطَلَبٌ لَم يُدفَع لا يُنشِئ مَرجِعاً ثانِياً</b>: ما
+    /// دامَ <c>ExpiresAt</c> لَم يَتَحَرَّك، الرابِطُ المُعادُ إنشاؤُه
+    /// يَكتُب فَوقَ وَثيقَتِه نَفسِها — ولا شَيءَ فيها يَضيع.</para>
+    /// </summary>
+    public static string CycleOf(TenantPlan? plan)
+        => plan is null ? "" : plan.ExpiresAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     /// <summary>القائِمَةُ فارِغَةٌ تَعني مُسَوَّدَةً صالِحَة.</summary>
     public static IReadOnlyList<PayPalOrderViolation> Validate(PayPalOrderDraft? d)
@@ -389,12 +516,62 @@ public static class PayPalOrderPolicy
     public static string CaptureRequestId(string reference)
         => CaptureKeyPrefix + PayPalCatalogPolicy.Fingerprint((reference ?? "").Trim());
 
+    // **ومُمَيِّزُ الدَورَةِ داخِلَ البَصمَة** (‏`Cycle`): بِدونِه
+    // كانَ التَجديدُ الشَهرِيُّ العاديُّ — نَفسُ المَبلَغِ ونَفسِ
+    // المُدَّةِ ونَفسِ الوَصف — يُعطي المَرجِعَ نَفسَه فَيَدهَسُ
+    // وَثيقَةَ الشَهرِ السابِقِ ويَمحو `CaptureId`. والحُجَّةُ
+    // المَكتوبَةُ يَومَها («‏PayPal-Request-Id يَمنَعُ الطَلَبَ
+    // الثاني») **باطِلَةٌ بِنَصِّ المِلَفِّ نَفسِه**: نافِذَتُه سِتُّ
+    // ساعاتٍ افتِراضاً، والدَورَةُ شَهر.
     private static string Body(PayPalOrderDraft d)
         => PayPalCatalogPolicy.Fingerprint(
             d.NormalizedSlug, (d.PlanId ?? "").Trim(),
             d.MoneyValue, d.NormalizedCurrency,
             d.Days.ToString(CultureInfo.InvariantCulture),
-            d.TrimmedDescription);
+            d.TrimmedDescription, (d.Cycle ?? "").Trim());
+
+    // ═══ حُرّاسُ الوَثيقَةِ القائِمَة — دَوالُّ نَقِيَّةٌ تَقرَؤُها
+    //     الشاشَةُ والنُقطَة مَعاً ═════════════════════════════════════
+
+    /// <summary>
+    /// <para><b>أَيُكتَبُ فَوقَ وَثيقَةِ طَلَبٍ قائِمَة؟ — شَبَكَةُ
+    /// الأَمانِ تَحتَ مُمَيِّزِ الدَورَة.</b> ‏<c>true</c> حينَ لا
+    /// وَثيقَةَ أَصلاً، أَو حينَ <b>لَم يَقَع فيها شَيءٌ لا
+    /// يُستَرجَع</b>: لا مُعَرِّفَ التِقاطٍ، وحالَتُها تَنتَظِرُ
+    /// الالتِقاطَ بَعد.</para>
+    ///
+    /// <para><b>ولِماذا حارِسٌ ومُمَيِّزٌ مَعاً وأَحَدُهُما يَكفي
+    /// نَظَرِيّاً</b>: المُمَيِّزُ يَمنَع الاصطِدامَ في <b>الحالَةِ
+    /// المَعروفَة</b> (تَجديدٌ بَعدَ تَمديد)، والحارِسُ يَمنَعُه في
+    /// <b>ما لَم يُتَوَقَّع</b> — تاريخُ انتِهاءٍ أُعيدَ بِاليَدِ إلى
+    /// قيمَتِه السابِقَة، أَو وَثيقَةٌ أُنشِئَت قَبلَ هذا التَغيير.
+    /// والفارِقُ بَينَ الاثنَينِ هُوَ الفارِقُ بَينَ «لا يَقَع» و«لا
+    /// يُمكِنُ أَن يَقَع».</para>
+    /// </summary>
+    public static bool IsOverwritable(PayPalOrderRecord? existing)
+        => existing is null
+           || (string.IsNullOrWhiteSpace(existing.CaptureId)
+               && PayPalOrderStatuses.AwaitsCapture(existing.Status));
+
+    /// <summary>
+    /// <para><b>أَيُنادى الالتِقاطُ لِهذا الطَلَبِ الآن؟</b> — وهُوَ
+    /// <b>شَرطُ رَسمِ زِرِّ «التَقِط الآن» وشَرطُ قَبولِ نُقطَتِه
+    /// مَعاً</b>، مِن مَوضِعٍ واحِدٍ لا مِن قاعِدَتَينِ تَنجَرِفان.</para>
+    ///
+    /// <para><b>ومُعَرِّفُ الالتِقاطِ هُوَ الفَيصَل، لا الحالَةُ
+    /// وَحدَها</b>: نِداءٌ ناجِحٌ يُثَبِّتُ <c>CaptureId</c> بَينَما
+    /// تَبقى الحالَةُ <c>approved</c> حَتّى تَصِلَ رِسالَةُ
+    /// <c>COMPLETED</c> (فَلا يَكتُبُ <c>captured</c> إلّا مَن
+    /// يُمَدِّد). فَلَو كانَ الشَرطُ الحالَةَ وَحدَها لَبَقِيَ الزِرُّ
+    /// مَرسوماً بَعدَ نَجاحِه — <b>والنَقرَةُ الثانِيَةُ تَرتَدُّ مِن
+    /// PayPal بِـ<c>ORDER_ALREADY_CAPTURED</c> إنجِليزِيّاً خامّاً</b>.
+    /// (القاعِدَة ١٢: مَدخَلٌ يَضُرُّ أَسوَأُ مِن غِيابِ مَدخَل.)</para>
+    /// </summary>
+    public static bool CanCaptureNow(PayPalOrderRecord? order)
+        => order is not null
+           && !string.IsNullOrWhiteSpace(order.OrderId)
+           && string.IsNullOrWhiteSpace(order.CaptureId)
+           && PayPalOrderStatuses.AwaitsCapture(order.Status);
 
     // ═══ جِسمُ النِداءِ ورابِطاه ═══════════════════════════════════════
 
