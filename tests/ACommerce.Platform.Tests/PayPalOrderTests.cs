@@ -1399,6 +1399,210 @@ public class PayPalOrderTests
         Assert.Contains("PendingOrder(slug) is not null", rule);
     }
 
+    // ═══ ١٦. بابُ السَحبِ لا يُغلَق — والثابِتُ في مَوضِعٍ واحِد ══════
+    //
+    // **الثابِتُ المَحروسُ هُنا**: `order.Status == captured` لَحظَةَ
+    // وُصولِ الاستِرداد. عَلَيه وَحدَه يَقوم حارِسُ السَحب، وكُلُّ فَرعٍ
+    // يُخرِج الطَلَبَ مِن `captured` بِلا سَحبِ يَومٍ **يُغلِقُ بابَ
+    // السَحبِ إلى الأَبَد**: المالُ يَعودُ والأَيّامُ تَبقى.
+
+    /// <summary>
+    /// <para><b>‏<c>CHECKOUT.PAYMENT-APPROVAL.REVERSED</c> على طَلَبٍ
+    /// مَقبوضٍ لا يَكتُبُ حَرفاً — والاستِردادُ بَعدَه يَسحَب.</b></para>
+    ///
+    /// <para><b>والتَسَلسُلُ الَّذي كَتَبَ هذا الاختِبار — مَقيسٌ
+    /// بِتَشغيلِ التَجميعَة</b>: الباقَةُ <c>09-03 → 10-03</c> بِوُصولِ
+    /// المال، ثُمَّ يَصِلُ حَدَثُ نَقضِ المُوافَقَةِ فَيَكتُب
+    /// <c>reversed</c> <b>بِلا مَساسٍ بِالباقَة</b> (فَرعٌ بِلا أَيِّ
+    /// شَرطٍ على حالَةِ الطَلَب)، ثُمَّ يَصِلُ
+    /// <c>PAYMENT.CAPTURE.REFUNDED</c> بِمَبلَغٍ مُطابِقٍ فَيَجِدُ
+    /// حارِسَ السَحبِ يَشتَرِط <c>captured</c> — <b>فَلا يُسحَبُ شَيء
+    /// وتَبقى <c>10-03</c></b>.</para>
+    ///
+    /// <para><b>وجَدوَلُ الانتِقالاتِ عاجِزٌ عَن إغلاقِه</b>:
+    /// <c>captured → reversed</c> مَسموحٌ <b>عَمداً</b> لِأَنَّه انتِقالُ
+    /// السَحبِ نَفسُه. فَالحُكمُ لَيسَ «إلى أَيِّ حالَة» بَل <b>«بِأَيِّ
+    /// فِعل»</b>.</para>
+    /// </summary>
+    [Fact]
+    public void ApprovalReversed_OnACapturedOrder_LeavesTheRefundAbleToWithdraw()
+    {
+        var plan  = Plan();
+        var order = Order(days: 30);
+
+        // ‏١) وَصَلَ المال: ‏30 يَوماً تُضاف، والطَلَبُ يَصيرُ «قُبِض».
+        var arrival = PayPalOrderBillingPolicy.Decide(Event(), order, plan, false, Now);
+        Assert.Equal(PayPalOrderAction.Extend, arrival.Action);
+        plan.ExpiresAt = arrival.NewExpiresAt;
+        PayPalOrderBillingPolicy.Apply(order, Event(), arrival, Now);
+        Assert.Equal(PayPalOrderStatuses.Captured, order.Status);
+        var granted = plan.ExpiresAt;
+
+        // ‏٢) نَقضُ المُوافَقَةِ بِمُعَرِّفِ حَدَثٍ آخَر ⇒ **صِفرُ كِتابَة**.
+        var stray = Event(type: PayPalOrderEventTypes.ApprovalReversed, id: "WH-APR-1");
+        var strayDecision = PayPalOrderBillingPolicy.Decide(stray, order, plan, false, Now);
+        Assert.False(strayDecision.Writes);
+        PayPalOrderBillingPolicy.Apply(order, stray, strayDecision, Now);
+        Assert.Equal(PayPalOrderStatuses.Captured, order.Status);
+
+        // ‏٣) الاستِردادُ يَجِدُ البابَ مَفتوحاً ⇒ تُسحَبُ الأَيّامُ نَفسُها.
+        var refund = Event(type: PayPalOrderEventTypes.CaptureRefunded,
+                           id: "WH-REF-1", upCapture: "3C6");
+        var withdraw = PayPalOrderBillingPolicy.Decide(refund, order, plan, false, Now);
+        Assert.Equal(PayPalOrderAction.Withdraw, withdraw.Action);
+        Assert.Equal(granted.AddDays(-30), withdraw.NewExpiresAt);
+    }
+
+    /// <summary>ونَقضُ المُوافَقَةِ على طَلَبٍ <b>لَم يُقبَض بَعد</b>
+    /// يَبقى كَما كان — وهذِه هي حالَتُه الحَقيقِيَّةُ الوَحيدَة:
+    /// «انقَضَت النافِذَةُ قَبلَ الالتِقاط».</summary>
+    [Theory]
+    [InlineData(PayPalOrderStatuses.Created)]
+    [InlineData(PayPalOrderStatuses.Approved)]
+    [InlineData(PayPalOrderStatuses.Pending)]
+    public void ApprovalReversed_OnAnOrderStillAwaitingCapture_StillMarksIt(string status)
+    {
+        var d = PayPalOrderBillingPolicy.Decide(
+            Event(type: PayPalOrderEventTypes.ApprovalReversed, id: "WH-APR-1"),
+            Order(status: status), Plan(), false, Now);
+
+        Assert.Equal(PayPalOrderAction.MarkOrder, d.Action);
+        Assert.Equal(PayPalOrderStatuses.Reversed, d.OrderStatus);
+        Assert.False(d.TouchesPlan);
+    }
+
+    /// <summary>
+    /// <para><b>وغِيابُ وَثيقَةِ الباقَةِ لَحظَةَ الاستِرداد نَقصٌ
+    /// عِندَنا لا حُكمٌ على الطَلَب</b>: كانَ <c>|| plan is null</c>
+    /// مَطوِيّاً في حارِسِ السَحب، فَيَكتُب <c>reversed</c> على طَلَبٍ
+    /// <b>مَقبوض</b> — و<b>يُقفِلُ نافِذَةَ الإعادَةِ الَّتي كانَت
+    /// سَتَسحَب</b>: ‏200 لِPayPal، ووَثيقَةٌ لا تَعودُ
+    /// <c>captured</c> أَبَداً.</para>
+    ///
+    /// <para>والصَوابُ <c>UnknownTenant</c> — <b>صِفرُ كِتابَةٍ
+    /// و‏503</b> تَشفيها الإعادَة، كَما يَفعَل فَرعُ التَمديدِ
+    /// حَرفاً.</para>
+    /// </summary>
+    [Fact]
+    public void ARefundWithNoPlanDocument_WritesNothing_AndHealsOnRedelivery()
+    {
+        var order  = Order(status: PayPalOrderStatuses.Captured);
+        var refund = Event(type: PayPalOrderEventTypes.CaptureRefunded,
+                           id: "WH-REF-1", upCapture: "3C6");
+
+        var d = PayPalOrderBillingPolicy.Decide(refund, order, null, false, Now);
+        Assert.Equal(PayPalOrderAction.UnknownTenant, d.Action);
+        Assert.False(d.Writes);
+        Assert.True(PayPalOrderSurface.HealsOnRedelivery(d.Action));
+
+        PayPalOrderBillingPolicy.Apply(order, refund, d, Now);
+        Assert.Equal(PayPalOrderStatuses.Captured, order.Status);
+
+        // ويَضبُطُ المُشرِفُ الباقَةَ فَتُطَبَّقُ الإعادَةُ مِن تِلقاءِ نَفسِها.
+        var again = PayPalOrderBillingPolicy.Decide(refund, order, Plan(), false, Now);
+        Assert.Equal(PayPalOrderAction.Withdraw, again.Action);
+    }
+
+    /// <summary>
+    /// <para><b>والثابِتُ مَفروضٌ في مَوضِعٍ واحِدٍ يَمُرُّ بِه
+    /// الجَميع</b>: لا يَخرُجُ طَلَبٌ مِن <c>captured</c> إلّا
+    /// بِفِعلِ <see cref="PayPalOrderAction.Withdraw"/> — ولَو أَخطَأَ
+    /// فَرعٌ خامِسٌ يُكتَبُ غَداً، تَرُدُّه <c>Apply</c> بَدَلَ أَن
+    /// تُنَفِّذَه.</para>
+    ///
+    /// <para><b>ولِماذا هُنا لا في جَدوَلِ الانتِقالات</b>: الجَدوَلُ
+    /// يَعرِف الحالَتَينِ ولا يَعرِف الفِعل، و<c>captured → reversed</c>
+    /// انتِقالٌ <b>مَشروعٌ</b> بِفِعلٍ واحِدٍ ومَمنوعٌ بِما
+    /// عَداه.</para>
+    /// </summary>
+    [Fact]
+    public void OnlyAWithdrawal_TakesAnOrderOutOfCaptured()
+    {
+        var marked = Order(status: PayPalOrderStatuses.Captured);
+        PayPalOrderBillingPolicy.Apply(
+            marked, Event(),
+            new PayPalOrderDecision(PayPalOrderAction.MarkOrder, default,
+                                    PayPalOrderStatuses.Reversed, "—"), Now);
+        Assert.Equal(PayPalOrderStatuses.Captured, marked.Status);
+
+        var withdrawn = Order(status: PayPalOrderStatuses.Captured);
+        PayPalOrderBillingPolicy.Apply(
+            withdrawn, Event(),
+            new PayPalOrderDecision(PayPalOrderAction.Withdraw, default,
+                                    PayPalOrderStatuses.Reversed, "—"), Now);
+        Assert.Equal(PayPalOrderStatuses.Reversed, withdrawn.Status);
+
+        // وما دونَ «قُبِض» يُعَلَّمُ كَما كان — الحارِسُ يَحرُسُ
+        // الخُروجَ مِن «قُبِض» وَحدَه، لا كُلَّ تَعليمٍ بِـ`reversed`.
+        var approved = Order(status: PayPalOrderStatuses.Approved);
+        PayPalOrderBillingPolicy.Apply(
+            approved, Event(),
+            new PayPalOrderDecision(PayPalOrderAction.MarkOrder, default,
+                                    PayPalOrderStatuses.Reversed, "—"), Now);
+        Assert.Equal(PayPalOrderStatuses.Reversed, approved.Status);
+    }
+
+    // ═══ ١٧. طَلَبٌ واحِدٌ = التِقاطٌ واحِد ═══════════════════════════
+
+    /// <summary>
+    /// <para><b>رِسالَةُ «مُكتَمِل» ثانِيَةٌ بِمُعَرِّفِ حَدَثٍ آخَر لا
+    /// تَشتَري الأَيّامَ مَرَّتَين.</b> ‏<c>event_id</c> مُختَلِفٌ
+    /// فَسِجِلُّ مَرَّة-واحِدَةٍ لا يُوقِفُها، و
+    /// <c>CanTransition(captured, captured)</c> تُرجِع <c>true</c>
+    /// (فَرعُ «نَفسِ الحالَة» يَسبِقُ الجَدوَل) — فَكانَ الطَريقُ
+    /// مَفتوحاً: <b>مَقيسٌ ‏09-03 → 10-03 → 11-02</b> بِنَفسِ مُعَرِّفِ
+    /// الالتِقاطِ ونَفسِ المَبلَغ.</para>
+    ///
+    /// <para><b>ولا مُطلِقَ مَعروفاً لَه اليَوم</b> — وهذا بِعَينِه
+    /// السَبَب: الثابِتُ كانَ مَفروضاً بِطَبَقَةٍ واحِدَةٍ هي <b>وَصفُ
+    /// PayPal لِسُلوكِها</b>، وطَبَقَةٌ واحِدَةٌ عِندَ طَرَفٍ ثالِثٍ
+    /// لَيسَت حِراسَة.</para>
+    /// </summary>
+    [Fact]
+    public void ASecondCaptureCompleted_WithAFreshEventId_NeverBuysTheSameDaysTwice()
+    {
+        var plan  = Plan();
+        var order = Order(days: 30);
+
+        var first = PayPalOrderBillingPolicy.Decide(Event(), order, plan, false, Now);
+        Assert.Equal(PayPalOrderAction.Extend, first.Action);
+        plan.ExpiresAt = first.NewExpiresAt;
+        PayPalOrderBillingPolicy.Apply(order, Event(), first, Now);
+        var granted = plan.ExpiresAt;
+
+        var second = PayPalOrderBillingPolicy.Decide(
+            Event(id: "WH-CAP-2"), order, plan, false, Now);
+
+        Assert.Equal(PayPalOrderAction.Replay, second.Action);
+        Assert.False(second.Writes);
+        Assert.False(second.TouchesPlan);
+        Assert.Equal(granted, plan.ExpiresAt);
+    }
+
+    /// <summary>
+    /// <para><b>وأَوَّلُ «مُكتَمِل» بَعدَ نِداءِ التِقاطٍ ناجِحٍ ما
+    /// يَزالُ يُمَدِّد</b> — وهذا هُوَ القِياسُ الَّذي رَفَضَ الصِياغَةَ
+    /// الأولى لِلحارِس.</para>
+    ///
+    /// <para><b>القِياس</b>: «ارفُض التَمديدَ حينَ يَكونُ
+    /// <c>order.CaptureId</c> مَملوءاً ويُطابِق الواصِل» يَحجُب
+    /// <b>التَمديدَ الأَوَّلَ نَفسَه</b>:
+    /// <c>PayPalOrderFlow.CaptureAsync</c> يُثَبِّت <c>CaptureId</c>
+    /// ويَترُك الحالَةَ <c>approved</c>، ثُمَّ تَصِلُ رِسالَةُ
+    /// <c>COMPLETED</c> بِـ<b>نَفسِ</b> المُعَرِّف. فَالفَيصَلُ هُوَ
+    /// <c>Status == captured</c> — وهي كَلِمَةٌ لا يَكتُبُها إلّا مَن
+    /// مَدَّدَ فِعلاً.</para>
+    /// </summary>
+    [Fact]
+    public void TheFirstCompletedAfterASuccessfulCaptureCall_StillExtends()
+    {
+        var order = Order(status: PayPalOrderStatuses.Approved);
+        order.CaptureId = "3C6";   // ما ثَبَّتَه النِداءُ الناجِح — ونَفسُه في الحَدَث
+
+        var d = PayPalOrderBillingPolicy.Decide(Event(), order, Plan(), false, Now);
+        Assert.Equal(PayPalOrderAction.Extend, d.Action);
+    }
+
     // ─── أَدَوات ─────────────────────────────────────────────────────
 
     private const string EndpointsFile =

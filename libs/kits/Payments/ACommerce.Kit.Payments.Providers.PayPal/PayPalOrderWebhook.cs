@@ -131,7 +131,11 @@ public sealed record PayPalOrderEvent(
 /// مُغلَق</b>.</summary>
 public enum PayPalOrderAction
 {
-    /// <summary>نَفسُ <c>event_id</c> عولِجَ سَلَفاً — لا تَمديدَ ثانٍ.</summary>
+    /// <summary><b>هذِه الدَفعَةُ طُبِّقَت سَلَفاً — لا تَمديدَ ثانٍ.</b>
+    /// وبِمِفتاحَين لا واحِد: نَفسُ <c>event_id</c> في سِجِلِّ
+    /// مَرَّة-واحِدَة، <b>أَو</b> طَلَبٌ بَلَغَ <c>captured</c> فَوَصَلَه
+    /// «مُكتَمِل» ثانٍ بِمُعَرِّفِ حَدَثٍ آخَر — <b>وطَلَبٌ واحِدٌ =
+    /// التِقاطٌ واحِد</b>.</summary>
     Replay,
 
     /// <summary>نَوعٌ خارِجَ المَعجَم — لا كِتابَة.</summary>
@@ -332,7 +336,7 @@ public static class PayPalOrderBillingPolicy
     /// <para><b>ماذا يُفعَل بِحَدَثِ طَلَبٍ مُوَثَّق.</b></para>
     ///
     /// <para><b>ويُمَدِّدُ الباقَةَ حَدَثٌ واحِدٌ لا غَير</b>:
-    /// <c>PAYMENT.CAPTURE.COMPLETED</c>. وبِخَمسَةِ شُروطٍ مُجتَمِعَة،
+    /// <c>PAYMENT.CAPTURE.COMPLETED</c>. وبِسِتَّةِ شُروطٍ مُجتَمِعَة،
     /// كُلُّها <b>قَبلَ</b> أَيِّ كِتابَة:</para>
     /// <list type="number">
     ///   <item>البَوّابَةُ قَبِلَت (‏<c>PayPalBillingPolicy.Gate</c>) —
@@ -341,6 +345,9 @@ public static class PayPalOrderBillingPolicy
     ///   <item>نَوعُ الحَدَثِ هُوَ ذاك بِعَينِه.</item>
     ///   <item><c>resource.status == "COMPLETED"</c> — <b>شَرطٌ ثانٍ
     ///   مُستَقِلٌّ عَن اسمِ الحَدَث</b>.</item>
+    ///   <item><b>الطَلَبُ لَم يَبلُغ <c>captured</c> بَعد</b> — طَلَبٌ
+    ///   واحِدٌ = التِقاطٌ واحِدٌ = تَمديدٌ واحِد، ولَو تَبَدَّلَ
+    ///   <c>event_id</c>.</item>
     ///   <item>العُملَةُ والمَبلَغُ يُطابِقانِ المَحفوظَ في وَثيقَةِ
     ///   الدَفع — <b>يُتَحَقَّقانِ ولا يُفتَرَضان</b>.</item>
     ///   <item>المَرجِعُ يُقابِل وَثيقَةَ دَفعٍ ووَثيقَةَ باقَةٍ
@@ -350,6 +357,12 @@ public static class PayPalOrderBillingPolicy
     /// <para><b>ولا شَيءَ آخَرَ يُمَدِّد. البَتَّة.</b> ولا تُمَسُّ
     /// <c>Status</c> في أَيّ فَرع: إيقافُ المُشرِفِ اليَدَوِيُّ يَبقى
     /// فَوقَ كُلِّ دَفعَة.</para>
+    ///
+    /// <para><b>وثابِتٌ ثانٍ يَعبُرُ الفُروعَ كُلَّها</b>: لا يَخرُجُ
+    /// طَلَبٌ مِن <c>captured</c> إلّا بِفِعلِ
+    /// <see cref="PayPalOrderAction.Withdraw"/>. تَحرُسُه الفُروعُ
+    /// عِندَ القَرار، وتَرُدُّ خَرقَه <see cref="MayWriteStatus"/>
+    /// عِندَ الكِتابَة — <b>مَوضِعٌ واحِدٌ يَمُرُّ بِه الجَميع</b>.</para>
     /// </summary>
     public static PayPalOrderDecision Decide(
         PayPalOrderEvent e, PayPalOrderRecord? order, TenantPlan? plan,
@@ -374,9 +387,31 @@ public static class PayPalOrderBillingPolicy
                 $"وافَقَ الدافِعُ على الطَلَب «{order.OrderId}» — يُنادى الالتِقاط، ولا تَمديد.");
 
         // ─── انقَضَت نافِذَةُ المُوافَقَةِ فَأُعيدَ المالُ لِلمُشتَري ──
+        //
+        // **ولا يَنقُضُ حَدَثُ مُوافَقَةٍ دَفعَةً وَصَلَت**: مَعنى هذا
+        // الحَدَثِ «انقَضَت النافِذَةُ **قَبلَ** الالتِقاط»، فَوُصولُه
+        // على طَلَبٍ بَلَغَ `captured` يُناقِضُ نَفسَه — ولا يُصَدَّق.
+        //
+        // **والكُلفَةُ الَّتي كَتَبَت الشَرط — تَسَلسُلٌ مَقيس**: كانَ
+        // الفَرعُ بِلا أَيِّ شَرطٍ على حالَةِ الطَلَب، فَيَكتُب
+        // `reversed` على طَلَبٍ مَقبوضٍ **بِلا مَساسٍ بِالباقَة**؛ ثُمَّ
+        // يَصِلُ `PAYMENT.CAPTURE.REFUNDED` بِمَبلَغٍ مُطابِقٍ فَيَجِدُ
+        // حارِسَ السَحبِ يَشتَرِط `captured` — **فَلا يُسحَبُ شَيء:
+        // المالُ يَعودُ والأَيّامُ تَبقى**. الباقَةُ `09-03 → 10-03`
+        // ثُمَّ تَبقى `10-03`.
+        //
+        // **وجَدوَلُ الانتِقالاتِ عاجِزٌ عَن إغلاقِه**:
+        // `captured → reversed` مَسموحٌ **عَمداً** لِأَنَّه انتِقالُ
+        // السَحبِ نَفسُه. فَالشَرطُ هُنا على **الفِعل** لا على
+        // الحالَتَين، وشَبَكَتُه الأَخيرَةُ في `MayWriteStatus`.
         if (string.Equals(e.EventType, PayPalOrderEventTypes.ApprovalReversed, StringComparison.Ordinal))
-            return new(PayPalOrderAction.MarkOrder, default, PayPalOrderStatuses.Reversed,
-                "انقَضَت نافِذَةُ المُوافَقَةِ وأُعيدَ المالُ لِلمُشتَري — لا مَساسَ بِالباقَة.");
+            return PayPalOrderStatuses.AwaitsCapture(order.Status)
+                ? new(PayPalOrderAction.MarkOrder, default, PayPalOrderStatuses.Reversed,
+                    "انقَضَت نافِذَةُ المُوافَقَةِ وأُعيدَ المالُ لِلمُشتَري — لا مَساسَ بِالباقَة.")
+                : new(PayPalOrderAction.Ignored, default, "",
+                    $"‏{PayPalOrderEventTypes.ApprovalReversed} على طَلَبٍ حالَتُه " +
+                    $"«{order.Status}» — لا نافِذَةَ مُوافَقَةٍ تَنقَضي بَعدَ أَن حُسِمَ " +
+                    "الطَلَب. لا كِتابَة، ويَبقى بابُ السَحبِ مَفتوحاً لِلاسترداد.");
 
         // ─── ★ الحَدَثُ الَّذي يُمَدِّد ─────────────────────────────────
         if (string.Equals(e.EventType, PayPalOrderEventTypes.CaptureCompleted, StringComparison.Ordinal))
@@ -397,6 +432,33 @@ public static class PayPalOrderBillingPolicy
                 return new(PayPalOrderAction.MarkOrder, default, order.Status,
                     $"وَصَلَ «مُكتَمِل» على طَلَبٍ حالَتُه «{order.Status}» — " +
                     "المالُ عادَ سَلَفاً، فَلا يُمنَحُ مَرَّتَين. يُعَلَّمُ ولا يُمَدَّد.");
+
+            // **وطَلَبٌ واحِدٌ = التِقاطٌ واحِدٌ = تَمديدٌ واحِد.**
+            // الجَدوَلُ أَعلاهُ لا يَحرُس هذا: فَرعُ «نَفسِ الحالَة»
+            // يَسبِقُه، فَـ`CanTransition(captured, captured)` تُرجِع
+            // `true`. ورِسالَةٌ ثانِيَةٌ **بِمُعَرِّفِ حَدَثٍ آخَر**
+            // تَتَخَطّى سِجِلَّ مَرَّة-واحِدَة، فَتَمُرُّ وتُمَدِّد
+            // ثانِيَةً — **مَقيس: ‏09-03 → 10-03 → 11-02** بِنَفسِ
+            // مُعَرِّفِ الالتِقاطِ ونَفسِ المَبلَغ.
+            //
+            // **ولا مُطلِقَ مَعروفاً لَه اليَوم** — وهذا بِعَينِه
+            // السَبَب: الثابِتُ كانَ مَفروضاً بِطَبَقَةٍ واحِدَةٍ هي
+            // **وَصفُ PayPal لِسُلوكِها**، وطَبَقَةٌ واحِدَةٌ عِندَ
+            // طَرَفٍ ثالِثٍ لَيسَت حِراسَة.
+            //
+            // **والفَيصَلُ الحالَةُ لا مُعَرِّفُ الالتِقاط — بِقِياس**:
+            // «‏`CaptureId` مَملوءٌ ويُطابِقُ الواصِل» يَحجُبُ
+            // **التَمديدَ الأَوَّلَ نَفسَه**، لِأَنّ
+            // `PayPalOrderFlow.CaptureAsync` يُثَبِّتُ المُعَرِّفَ
+            // ويَترُكُ الحالَةَ `approved`، ثُمَّ تَصِلُ رِسالَةُ
+            // `COMPLETED` بِـ**نَفسِ** المُعَرِّف. و«قُبِض» كَلِمَةٌ لا
+            // يَكتُبُها إلّا مَن مَدَّدَ فِعلاً — فَهي وَحدَها تَقول
+            // «طُبِّقَ سَلَفاً».
+            if (string.Equals(order.Status, PayPalOrderStatuses.Captured, StringComparison.Ordinal))
+                return new(PayPalOrderAction.Replay, default, "",
+                    $"الطَلَب «{order.Id}» بَلَغَ «قُبِض» سَلَفاً بِالالتِقاط " +
+                    $"«{order.CaptureId ?? "—"}»، والحَدَث «{e.EventId}» يَحمِل " +
+                    $"«{e.UpCaptureId ?? e.CaptureId ?? "—"}» — لا تَمديدَ ثانٍ لِدَفعَةٍ واحِدَة.");
 
             if (!MoneyMatches(e, order))
                 return new(PayPalOrderAction.AmountMismatch, default, "",
@@ -433,10 +495,25 @@ public static class PayPalOrderBillingPolicy
             // **ولا يُسحَبُ ما لَم يُمنَح**: طَلَبٌ لَم يَبلُغ
             // `captured` لَم يُحَرِّك تاريخاً، فَسَحبُه يُصادِر مُدَّةً
             // اشتُرِيَت بِطَلَبٍ آخَر.
-            if (!string.Equals(order.Status, PayPalOrderStatuses.Captured, StringComparison.Ordinal)
-                || plan is null)
+            if (!string.Equals(order.Status, PayPalOrderStatuses.Captured, StringComparison.Ordinal))
                 return new(PayPalOrderAction.MarkOrder, default, PayPalOrderStatuses.Reversed,
                     $"‏{e.EventType} على طَلَبٍ حالَتُه «{order.Status}» — يُعَلَّمُ ولا يُسحَبُ ما لَم يُمنَح.");
+
+            // **وغِيابُ وَثيقَةِ الباقَةِ نَقصٌ عِندَنا لا حُكمٌ على
+            // الطَلَب** — فَيُفصَل عَن حارِسِ السَحبِ ويُسَمّى بِاسمِه،
+            // كَما يَفعَل فَرعُ التَمديدِ حَرفاً: **صِفرُ كِتابَةٍ
+            // و‏503 تَشفيها الإعادَة**.
+            //
+            // **والكُلفَةُ الَّتي فَصَلَته**: كانَ مَطوِيّاً في الحارِسِ
+            // (‏`|| plan is null`)، فَاستِردادٌ يَصِلُ ووَثيقَةُ
+            // الباقَةِ غائِبَةٌ كانَ يَكتُب `reversed` على طَلَبٍ
+            // **مَقبوض** ويَرُدُّ ‏200. فَتُقفَلُ نافِذَةُ الإعادَةِ
+            // الَّتي كانَت سَتَسحَب، **ولا تَعودُ الوَثيقَةُ
+            // `captured` أَبَداً**: عَطَبٌ ثالِثٌ بِنَفسِ الشَكل.
+            if (plan is null)
+                return new(PayPalOrderAction.UnknownTenant, default, "",
+                    $"المَتجَر «{order.TenantSlug}» بِلا وَثيقَةِ باقَة — لا كِتابَة. " +
+                    "يَضبُطُها المُشرِفُ مَرَّةً مِن /admin ثُمَّ تُعادُ الرِسالَة فَيُسحَب.");
 
             // **والسَحبُ كامِلٌ ولَو كانَ الاستِردادُ جُزئِيّاً، ويُقالُ
             // لِماذا**: المُدَّةُ لا تُباعُ بِالتَجزِئَة — نِصفُ مالٍ
@@ -459,6 +536,41 @@ public static class PayPalOrderBillingPolicy
            && string.Equals(cur, order.Currency, StringComparison.OrdinalIgnoreCase)
            && decimal.TryParse(e.Amount, PayPalCurrencies.MoneyStyles, CultureInfo.InvariantCulture, out var v)
            && v == order.Amount;
+
+    // ─── الثابِتُ الأَخير — مَوضِعٌ واحِدٌ يَمُرُّ بِه كُلُّ كاتِب ─────
+
+    /// <summary>
+    /// <para><b>أَتُكتَبُ هذِه الحالَةُ بِهذا الفِعل؟ — جَدوَلُ
+    /// الانتِقالاتِ زائِداً شَرطٌ واحِدٌ لا يَعرِفُه الجَدوَل.</b></para>
+    ///
+    /// <para><b>الثابِت</b>: <c>order.Status == captured</c> لَحظَةَ
+    /// وُصولِ الاستِرداد. عَلَيه وَحدَه يَقوم حارِسُ السَحب، فَكُلُّ
+    /// فَرعٍ يُخرِج الطَلَبَ مِن <c>captured</c> <b>بِلا سَحبِ يَوم</b>
+    /// يُغلِقُ بابَ السَحبِ إلى الأَبَد: <b>المالُ يَعودُ والأَيّامُ
+    /// تَبقى</b>.</para>
+    ///
+    /// <para><b>ولِماذا لا يُغلِقُه جَدوَلُ الانتِقالات</b>: الجَدوَلُ
+    /// يَعرِف الحالَتَينِ ولا يَعرِف الفِعل، و<c>captured → reversed</c>
+    /// <b>مَسموحٌ عَمداً</b> لِأَنَّه انتِقالُ السَحبِ نَفسُه. فَالحُكمُ
+    /// لَيسَ «إلى أَيِّ حالَة» بَل <b>«بِأَيِّ فِعل»</b>.</para>
+    ///
+    /// <para><b>وثَلاثَةُ كُتّابٍ خَرَقوهُ فِعلاً</b>، ولِذلك مَوضِعٌ
+    /// واحِدٌ لا ثَلاثَةُ شُروطٍ مَنثورَة: فَرعُ
+    /// <c>PAYMENT.CAPTURE.PENDING</c> المُتَأَخِّر (أَغلَقَهُ الجَدوَل)،
+    /// وفَرعُ <c>CHECKOUT.PAYMENT-APPROVAL.REVERSED</c> بِلا شَرطٍ على
+    /// الحالَة، و<c>plan is null</c> مَطوِيّاً في حارِسِ السَحب. وهذِه
+    /// الدالَّةُ تَرُدُّ **الرابِعَ الَّذي لَم يُكتَب بَعد**.</para>
+    /// </summary>
+    public static bool MayWriteStatus(string? from, string? to, PayPalOrderAction action)
+    {
+        if (!PayPalOrderStatuses.CanTransition(from, to)) return false;
+
+        var leavesCaptured =
+            string.Equals((from ?? "").Trim(), PayPalOrderStatuses.Captured, StringComparison.Ordinal)
+            && !string.Equals((to ?? "").Trim(), PayPalOrderStatuses.Captured, StringComparison.Ordinal);
+
+        return !leavesCaptured || action == PayPalOrderAction.Withdraw;
+    }
 
     // ─── الأَثَرُ على وَثيقَةِ الطَلَب — دالَّةٌ نَقِيَّةٌ أَيضاً ──────
 
@@ -484,7 +596,7 @@ public static class PayPalOrderBillingPolicy
         // ثُمَّ يَصِلُ الاستِردادُ فَيَجِدُ حارِسَ السَحبِ يَشتَرِط
         // `captured`، **فَلا يُسحَبُ شَيء: المالُ يَعودُ والأَيّامُ
         // تَبقى**.
-        if (PayPalOrderStatuses.CanTransition(order.Status, decision.OrderStatus))
+        if (MayWriteStatus(order.Status, decision.OrderStatus, decision.Action))
             order.Status = decision.OrderStatus;
 
         // **ومُعَرِّفُ الالتِقاطِ مِن `links[rel=up]` أَوَّلاً** — في

@@ -126,10 +126,14 @@ public static class PayPalOrderFlow
 
             // الحالَةُ تَبقى «وافَقَ» حَتّى تَصِلَ رِسالَةُ
             // `PAYMENT.CAPTURE.COMPLETED` — **نَجاحُ النِداءِ لا
-            // يُمَدِّد ولا يُعلِن وُصولَ المال**. وجَدوَلُ الانتِقالاتِ
-            // هُوَ الحَكَم: طَلَبٌ بَلَغَ `captured` سَلَفاً (وَصَلَ
-            // حَدَثُه أَوَّلاً) لا يَهبِطُ بِنِداءٍ يَدَوِيٍّ لاحِق.
-            if (PayPalOrderStatuses.CanTransition(order.Status, PayPalOrderStatuses.Approved))
+            // يُمَدِّد ولا يُعلِن وُصولَ المال**. و**نَفسُ حارِسِ
+            // الكِتابَةِ الَّذي تَمُرُّ بِه فُروعُ الرِسالَة**
+            // (‏`MayWriteStatus`) هُوَ الحَكَم هُنا أَيضاً — كاتِبانِ
+            // اثنانِ وحارِسٌ واحِد: طَلَبٌ بَلَغَ `captured` سَلَفاً
+            // (وَصَلَ حَدَثُه أَوَّلاً) لا يَهبِطُ بِنِداءٍ يَدَوِيٍّ
+            // لاحِق.
+            if (PayPalOrderBillingPolicy.MayWriteStatus(
+                    order.Status, PayPalOrderStatuses.Approved, PayPalOrderAction.Capture))
                 order.Status = PayPalOrderStatuses.Approved;
             order.At = DateTime.UtcNow;
             session.Store(order);
