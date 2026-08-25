@@ -1289,6 +1289,40 @@ public class PayPalOrderTests
         Assert.Contains("PayPalBillingService.CaptureAuditAction", body);
     }
 
+    /// <summary>
+    /// <para><b>والحارِسُ مَوصولٌ فِعلاً بِالنُقطَة — لا دالَّةً نَقِيَّةً
+    /// يَتيمَة.</b> ‏<see cref="APaidOrdersRecord_IsNeverOverwritten"/>
+    /// تُثبِتُ أَنّ <c>IsOverwritable</c> <b>تَحكُم صَواباً</b>، ولا
+    /// تَقولُ حَرفاً عَن كَونِها <b>تُنادى</b>. والفَرقُ بَينَهُما هُوَ
+    /// الفَرقُ بَينَ قاعِدَةٍ ودَفتَرٍ مَنسِيّ (القاعِدَة ١).</para>
+    ///
+    /// <para><b>والكُلفَةُ الَّتي كَتَبَت هذا الاختِبار — مَقيسَةٌ
+    /// بِحَقنِ عَيبٍ مُصطَنَع</b>: حُذِفَ الحارِسُ مِن جِسمِ النُقطَةِ
+    /// كامِلاً، فَبَقِيَت <b>‏1537 اختِباراً كُلُّها خَضراء</b>. أَي أَنّ
+    /// نِصفَ الحاجِبِ الثاني («لا يُدهَسُ سِجِلُّ دَفعٍ مَقبوض») كانَ
+    /// <b>مُنَفَّذاً وغَيرَ مَحروس</b> — يَسقُط في أَوَّلِ إعادَةِ
+    /// صِياغَةٍ بِلا صَوت.</para>
+    ///
+    /// <para><b>والتَرتيبُ جُزءٌ مِن الشَرطِ لا زينَة</b>: الحارِسُ
+    /// <b>قَبلَ</b> <c>CreateOrderAsync</c> — وإلّا فُتِحَ طَلَبٌ عِندَ
+    /// PayPal ثُمَّ رُفِضَ حِفظُه، فَيَبقى في حِسابِ التاجِرِ طَلَبٌ
+    /// مُعَلَّقٌ لا وَثيقَةَ لَه عِندَنا.</para>
+    /// </summary>
+    [Fact]
+    public void TheOverwriteGuard_IsWiredIntoTheEndpoint_BeforeAnyCallToPayPal()
+    {
+        var body = EndpointBody("/admin/tenants/{slug}/plan/paypal-order");
+
+        Assert.Contains("PayPalOrderPolicy.IsOverwritable", body);
+        Assert.Contains("PayPalOrderSurface.OrderSettled", body);
+
+        var guard  = body.IndexOf("PayPalOrderPolicy.IsOverwritable", StringComparison.Ordinal);
+        var create = body.IndexOf("CreateOrderAsync", StringComparison.Ordinal);
+        Assert.True(create > 0, "أَداة عَمياء: لا نِداءَ إنشاءٍ في جِسمِ النُقطَة.");
+        Assert.True(guard < create,
+            $"الحارِسُ ({guard}) بَعدَ نِداءِ PayPal ({create}) — طَلَبٌ يُفتَح ثُمَّ يُرفَضُ حِفظُه.");
+    }
+
     /// <summary><b>وأَقفالُ الطَلَباتِ لا تَنمو</b>: كانَ قامُوساً
     /// <b>لا يُفَرَّغُ أَبَداً</b> — سيمافورٌ لِكُلِّ مَرجِعٍ يَبقى ما
     /// بَقِيَت العَمَلِيَّة، والمَراجِعُ حَتمِيَّةٌ لا مُعادَة.</summary>
