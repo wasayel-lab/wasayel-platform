@@ -281,9 +281,13 @@ public static class PayPalOrderPolicy
     /// مُقابِل.</summary>
     public const string Intent = "CAPTURE";
 
-    /// <summary>يَفتَح صَفحَةَ الدُخولِ مُباشَرَةً بَدَلَ نَموذَجِ
-    /// الزائِر.</summary>
-    public const string LandingPage = "LOGIN";
+    /// <summary>يَهبِط الدافِعُ على <b>نَموذَجِ البِطاقَة</b> لا على
+    /// صَفحَةِ الدُخول. كانَت <c>LOGIN</c> فَشَكا المالِكُ أَنّ PayPal
+    /// تَطلُب حِساباً قَبلَ الدَفع (‏2026-08-25). وهذا <b>نِصفُ</b>
+    /// الشَرط: الإعدادُ <c>PayPal account optional</c> في حِسابِ
+    /// التاجِرِ هُوَ النِصفُ الآخَر — وبِإغلاقِه يُخفى الدَفعُ
+    /// بِالبِطاقَةِ مَهما أَرسَلنا.</summary>
+    public const string LandingPage = "GUEST_CHECKOUT";
 
     /// <summary>مُنتَجٌ رَقميّ — <b>ولا عُنوانَ شَحنٍ يُطلَب</b>.
     /// (⚠ صَفحَةُ حالاتِ الاستِعمالِ الرَسمِيَّةُ تَكتُب
