@@ -1,3 +1,4 @@
+using ACommerce.Kit.Payments.Providers.Paddle;
 using ACommerce.Kit.Payments.Providers.PayPal;
 using ACommerce.Kit.Subscriptions;
 using Marten;
@@ -128,6 +129,60 @@ public sealed class PlatformBillingQueries
                     StringComparer.Ordinal);
         }
         catch { return new Dictionary<string, PayPalOrderRecord>(StringComparer.Ordinal); }
+    }
+
+    /// <summary>
+    /// <para><b>مُعامَلاتُ Paddle لِمَتجَرٍ واحِد</b> — الأَحدَثُ
+    /// أَوَّلاً، لِشاشَةِ المُشرِف. ونَفسُ عادَةِ
+    /// <see cref="OrdersForAsync"/> حَرفاً: <b>السُقوطُ عِندَ الخَطَأ
+    /// «لا مُعامَلات» لا انفِجار</b> — جَدوَلُها لا يوجَد في قاعِدَةٍ
+    /// لَم تُهاجَر بَعد، والقائِمَةُ الفارِغَةُ تَعني سُلوكَ اليَومِ
+    /// حَرفاً.</para>
+    /// </summary>
+    public async Task<IReadOnlyList<PaddleTransactionRecord>> PaddleTransactionsForAsync(
+        string? tenantSlug, int take = 20, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(tenantSlug)) return Array.Empty<PaddleTransactionRecord>();
+        try
+        {
+            await using var s = _store.QuerySession();
+            var all = await s.Query<PaddleTransactionRecord>()
+                .Where(t => t.TenantSlug == tenantSlug)
+                .OrderByDescending(t => t.CreatedAt).Take(take).ToListAsync(ct);
+            return all.ToList();
+        }
+        catch { return Array.Empty<PaddleTransactionRecord>(); }
+    }
+
+    /// <summary>
+    /// <para><b>أَحدَثُ مُعامَلَةٍ تَنتَظِرُ دَفعاً لِكُلّ مَتجَر</b> —
+    /// لِلافِتَةِ الاستوديو، بِاستِعلامٍ واحِدٍ لا واحِدٍ لِكُلّ
+    /// مَتجَر.</para>
+    ///
+    /// <para><b>و«تَنتَظِر» تَعني «لَم يَصِل مالُها بَعد»</b>:
+    /// مُعامَلَةٌ اكتَمَلَت أَو أُلغِيَت أَو رُدَّ مالُها رابِطُها لا
+    /// يُفضي إلى شَيء، <b>ومَدخَلٌ يَضُرّ أَسوَأُ مِن غِيابِ
+    /// مَدخَل</b> (القاعِدَة ١٢).</para>
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, PaddleTransactionRecord>> PendingPaddleAsync(
+        CancellationToken ct = default)
+    {
+        try
+        {
+            await using var s = _store.QuerySession();
+            var open = await s.Query<PaddleTransactionRecord>()
+                .Where(t => t.Status == PaddleTransactionStatuses.Created)
+                .ToListAsync(ct);
+
+            return open
+                .Where(t => !string.IsNullOrWhiteSpace(t.CheckoutUrl))
+                .GroupBy(t => t.TenantSlug, StringComparer.Ordinal)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(t => t.CreatedAt).First(),
+                    StringComparer.Ordinal);
+        }
+        catch { return new Dictionary<string, PaddleTransactionRecord>(StringComparer.Ordinal); }
     }
 
     /// <summary>إعداداتُ المَنَصَّة — وَثيقَةٌ جَديدَةٌ فارِغَةٌ حينَ لا

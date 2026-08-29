@@ -137,6 +137,21 @@ public static class HostingExtensions
                 opts.Schema.For<ACommerce.Kit.Subscriptions.PayPalOrderRecord>()
                     .SingleTenanted()
                     .Identity(x => x.Id);
+
+                // وَثيقَةُ مُعامَلَةِ Paddle المُعَلَّقَة — نَفسُ العِلَّةِ
+                // ونَفسُ الشَكل: المُدَّةُ قَرارُ مُشرِفٍ لا تَقولُه
+                // رِسالَةُ المُزَوِّد، ومُعَرِّفُها **مَرجِعُنا**.
+                // و`SingleTenanted` كَجاراتِها حَرفاً: تُقرَأُ وتُكتَبُ
+                // في نُقطَةٍ بِلا مُستَأجِرٍ مَحلول.
+                //
+                // **ووَثيقَةٌ ثانِيَةٌ لا حَقلُ «مُزَوِّد» على الأولى**:
+                // مِفتاحُ Marten اسمُ الصِنف، فَالضَمُّ إعادَةُ تَسمِيَةِ
+                // صِنفٍ حَيٍّ في الإنتاج — جَدوَلٌ جَديدٌ وصُفوفٌ
+                // يَتيمَة. والتَعليلُ كامِلاً في رَأسِ
+                // `PaddleTransactionRecord.cs`.
+                opts.Schema.For<ACommerce.Kit.Subscriptions.PaddleTransactionRecord>()
+                    .SingleTenanted()
+                    .Identity(x => x.Id);
                 opts.Projections.Snapshot<ACommerce.Kit.Support.Ticket>(SnapshotLifecycle.Inline);
                 opts.Projections.Snapshot<ACommerce.Kit.Offers.Offer>(SnapshotLifecycle.Inline);
                 opts.Schema.For<ACommerce.Kit.Offers.ListingMatch>().Identity(x => x.Id);

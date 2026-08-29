@@ -12,6 +12,7 @@ using ACommerce.Kit.Delivery;
 using ACommerce.Kit.Files;
 using ACommerce.Kit.Maps;
 using ACommerce.Kit.Payments;
+using ACommerce.Kit.Payments.Providers.Paddle;
 using ACommerce.Kit.Payments.Providers.PayPal;
 using ACommerce.Kit.Realtime.Server;
 using ACommerce.Kit.Versions;
@@ -133,6 +134,20 @@ builder.Services.AddMockPayments();
 // الشاشاتُ بِطاقَتَه وتَرُدُّ النُقطَةُ رَفضاً صَريحاً. **فَشَلٌ
 // مُغلَق، لا زِرٌّ يَقول «قَريباً»**.
 builder.Services.AddPayPalSubscriptions(builder.Configuration);
+
+// ‏Paddle — **مُزَوِّدٌ ثانٍ بِجِوارِ PayPal لا بَدَلاً مِنه**، ولِنَفسِ
+// التَدَفُّقِ بِعَينِه (رائِدُ أَعمالٍ يَدفَع لِوَسايِل ثَمَنَ باقَتِه).
+// العِلَّةُ المَقيسَة: ‏PayPal تَطلُب مِن الدافِعِ حِسابَ PayPal ولا
+// تَعرِض نَموذَجَ بِطاقَة، وزَبائِنُ المالِكِ يَدفَعونَ بِبِطاقَةٍ بِلا
+// مَحفَظَة — وPaddle تاجِرُ تَسجيلٍ تَقبِضُ بِاسمِها.
+//
+// **والتَسجيلُ مَشروطٌ بِالتَهيئَةِ كَجارِه**: بِلا
+// `Payments__Paddle__ApiKey/Environment` لا يُسَجَّل مُزَوِّد، ويَقول
+// `PaddleGateway.CanSell` «لا» — فَتُخفي الشاشَةُ بِطاقَتَه وتَرُدُّ
+// النُقطَةُ رَفضاً صَريحاً. **وقيمَةُ بيئَةٍ خارِجَ `sandbox|live`
+// تُفشِلُ الإقلاعَ هُنا** ولا تُتَجاهَل: خَطَأُ إملاءٍ في مُتَغَيِّرٍ
+// يُخفي البِطاقَةَ صامِتاً، فَيَبحَثُ المالِكُ عَن زِرٍّ لا يَظهَر.
+builder.Services.AddPaddleBilling(builder.Configuration);
 
 // تَخزين مَلَفّات — Local (افتِراضيّ، صَفّ wwwroot/uploads). لِلإنتاج
 // بَدِّل بِـ AddAliyunOssFileStorage(...) أو AddGoogleCloudFileStorage(...).

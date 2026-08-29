@@ -100,12 +100,27 @@ public static class PayPalEventTypes
 /// — <b>مَوعِدُ الاستِحقاقِ القادِم كَما تَقولُه PayPal نَفسُها</b>. وهُوَ
 /// أَصدَقُ مَصدَرٍ لِتاريخِ الانتِهاءِ الجَديد، ولَيسَ رَقماً
 /// نَحسُبُه.</param>
+/// <param name="Provider">
+/// <para><b>مَن حَرَّكَ التاريخ — يُكتَبُ في <c>TenantPlan.SetBy</c>.</b>
+/// وقيمَتُه الافتِراضِيَّةُ <c>paypal</c>، <b>فَكُلُّ مُنادٍ قائِمٍ
+/// يَبقى كَما هُوَ بايتاً</b>.</para>
+///
+/// <para><b>ولِماذا وُجِدَ هذا الحَقلُ أَصلاً</b>: باعِثُ التَمديدِ
+/// واحِدٌ لا اثنان (القاعِدَة ٨) — <c>PayPalBillingService.Apply</c>
+/// هُوَ الَّذي يُحَرِّك <c>ExpiresAt</c> ويُدرِج سِجِلَّ
+/// مَرَّة-واحِدَة في نَفسِ المُعامَلَة، ويَمُرُّ بِه **مُزَوِّدانِ**:
+/// مَسارُ PayPal ومَسارُ Paddle. وكانَ السَطرُ يَكتُب <c>"paypal · …"</c>
+/// حَرفِيّاً، فَكانَ سِجِلُّ باقَةٍ مُدِّدَت بِبِطاقَةٍ عَبرَ Paddle
+/// <b>يَنسِبُها إلى PayPal</b> — وذاكَ سَطرُ تَدقيقٍ يَكذِب، وهُوَ
+/// أَسوَأُ مِن سَطرٍ غائِب.</para>
+/// </param>
 public sealed record PayPalWebhookEvent(
     string EventId,
     string EventType,
     string? TenantSlug,
     string? SubscriptionId,
-    DateTime? NextBillingTime);
+    DateTime? NextBillingTime,
+    string Provider = PayPalBillingPolicy.ProviderName);
 
 /// <summary>حالَةُ بابِ الرِسالَة — <b>مَعجَمٌ مُغلَق</b>، وثَلاثٌ مِن
 /// أَربَعٍ رَفض.</summary>
@@ -192,6 +207,12 @@ public sealed record PayPalBillingDecision(
 /// </summary>
 public static class PayPalBillingPolicy
 {
+    /// <summary><b>اسمُ المُزَوِّدِ كَما يُكتَبُ في
+    /// <c>TenantPlan.SetBy</c></b> — مَوضِعٌ واحِدٌ لا سِلسِلَةٌ
+    /// مَنثورَة، وهُوَ القيمَةُ الافتِراضِيَّةُ لِـ
+    /// <see cref="PayPalWebhookEvent.Provider"/>.</summary>
+    public const string ProviderName = "paypal";
+
     /// <summary>ما تُجيبُ بِه PayPal عِندَ تَوقيعٍ صَحيح.</summary>
     public const string VerificationSuccess = "SUCCESS";
 
@@ -395,7 +416,10 @@ public static class PayPalBillingPolicy
         if (e.SubscriptionId is { Length: > 0 } sub)
             plan.PayPalSubscriptionId = sub;
 
-        plan.SetBy = $"paypal · {e.EventType}";
+        // **واسمُ المُزَوِّدِ مِن الحَدَثِ لا حَرفِيّاً**: باعِثُ
+        // التَمديدِ واحِدٌ يَمُرُّ بِه PayPal وPaddle مَعاً، وسَطرٌ
+        // يَنسِب دَفعَةَ بِطاقَةٍ إلى PayPal سَطرُ تَدقيقٍ يَكذِب.
+        plan.SetBy = $"{e.Provider} · {e.EventType}";
         plan.SetAt = at;
     }
 
