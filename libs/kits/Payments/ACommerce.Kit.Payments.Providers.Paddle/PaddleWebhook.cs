@@ -109,9 +109,24 @@ public static class PaddleFieldValues
 /// و<c>data.subscription_id</c> في المُعامَلَة.</param>
 /// <param name="Status"><c>data.status</c> — <b>شَرطٌ ثانٍ مُستَقِلٌّ
 /// عَن اسمِ الحَدَث</b>.</param>
-/// <param name="AmountMinor"><c>data.details.totals.grand_total</c> —
-/// <b>ما يَدفَعُه الزَبونُ فِعلاً بَعدَ أَيِّ رَصيد</b>، بِأَصغَرِ
-/// وَحدَةٍ نَصّاً.</param>
+/// <param name="TotalMinor">
+/// <b><c>data.details.totals.total</c> — «‏Total after discount and
+/// tax»، وهُوَ <b>ما فُوتِرَ بِه</b> بِأَصغَرِ وَحدَةٍ نَصّاً.
+/// وهُوَ وَحدَه ما يُقارَنُ بِالمَحفوظ.</b>
+/// <para><b>ولِماذا هُوَ لا <c>grand_total</c></b>: نُرسِلُ سِعراً
+/// <c>tax_mode: internal</c> — «‏Prices are inclusive of tax» —
+/// فَالمَبلَغُ الَّذي نَحفَظُه هُوَ ما يُفوتَرُ بِه بَعدَ الضَريبَة،
+/// أَي <c>total</c> بِعَينِه. و<c>grand_total</c> «‏Total due …
+/// <b>after credits</b>» فَيَنقُصُ بِرَصيدِ الدافِعِ عِندَ Paddle —
+/// ومُقارَنَتُه بِمَحفوظِنا تَعني أَنّ مَن يَملِكُ رَصيداً لا
+/// تُمَدَّدُ باقَتُه أَبَداً.</para></param>
+/// <param name="SubtotalMinor"><c>details.totals.subtotal</c> —
+/// «قَبلَ الخَصمِ والضَريبَة». <b>يُقرَأُ لِلوغِ وَحدَه ولا
+/// يُقَرِّر</b>: هُوَ ما يَقولُ لَنا، عِندَ أَوَّلِ عَدَمِ تَطابُق،
+/// أَضَريبَةٌ كانَت أَم خَصماً.</param>
+/// <param name="GrandTotalMinor"><c>details.totals.grand_total</c> —
+/// <b>لِلوغِ وَحدَه كَذلك</b>: فَرقُه عَن <c>total</c> هُوَ رَصيدُ
+/// الدافِعِ مَقروءاً بِلا تَخمين.</param>
 /// <param name="Currency"><c>data.currency_code</c>.</param>
 /// <param name="AdjustmentAction"><c>data.action</c> في التَسوِيَة.</param>
 public sealed record PaddleEvent(
@@ -121,9 +136,11 @@ public sealed record PaddleEvent(
     string? TransactionId,
     string? SubscriptionId,
     string? Status,
-    string? AmountMinor,
+    string? TotalMinor,
     string? Currency,
-    string? AdjustmentAction);
+    string? AdjustmentAction,
+    string? SubtotalMinor = null,
+    string? GrandTotalMinor = null);
 
 /// <summary>ما تَقَرَّرَ فِعلُه بِحَدَثِ Paddle — <b>مَعجَمٌ
 /// مُغلَق</b>.</summary>
@@ -270,19 +287,30 @@ public static class PaddleBillingPolicy
                 ? Trim(Str(data, "id"))
                 : Trim(Str(data, "subscription_id"));
 
-            string? amount = null;
+            // **ثَلاثَةُ مَجاميعَ تُقرَأ، وواحِدٌ يُقَرِّر.**
+            // ‏`total` هُوَ المُقارَن، والآخَرانِ يَجعَلانِ سَطرَ
+            // الخَطَإِ يُجيبُ بِنَفسِه: فَرقُ `total` عَن `subtotal`
+            // ضَريبَةٌ أَو خَصم، وفَرقُ `grand_total` عَن `total`
+            // رَصيدُ دافِع.
+            string? total = null, subtotal = null, grand = null;
             if (data.TryGetProperty("details", out var details)
                 && details.ValueKind == JsonValueKind.Object
                 && details.TryGetProperty("totals", out var totals)
                 && totals.ValueKind == JsonValueKind.Object)
-                amount = Trim(Str(totals, "grand_total"));
+            {
+                total    = Trim(Str(totals, "total"));
+                subtotal = Trim(Str(totals, "subtotal"));
+                grand    = Trim(Str(totals, "grand_total"));
+            }
 
             return new(
                 id, type, reference, txn, sub,
                 Trim(Str(data, "status")),
-                amount,
+                total,
                 Trim(Str(data, "currency_code")),
-                Trim(Str(data, "action")));
+                Trim(Str(data, "action")),
+                subtotal,
+                grand);
         }
     }
 
@@ -418,10 +446,18 @@ public static class PaddleBillingPolicy
                     $"بِـ«{record.TransactionId}» — لا تَمديدَ ثانٍ لِدَفعَةٍ واحِدَة.");
             }
 
+            // **وسَطرُ عَدَمِ التَطابُقِ يَطبَعُ المَجاميعَ الثَلاثَةَ
+            //   لا المُقارَنَ وَحدَه**: بِلا حِسابِ Paddle حَقيقيٍّ
+            //   عِندَنا، **أَوَّلُ رِسالَةٍ تَفشَل هي قِياسُنا** —
+            //   فَتُجيبُ بِنَفسِها «أَضَريبَةٌ أُضيفَت فَوقَ السِعرِ؟
+            //   أَم خَصمٌ؟ أَم رَصيدُ دافِع؟» بَدَلَ رَقَمٍ واحِدٍ
+            //   يُرسِلُ المالِكَ يُخَمِّن.
             if (!MoneyMatches(e, record))
                 return new(PaddleAction.AmountMismatch, default, "",
-                    $"المَبلَغُ الواصِل «{e.AmountMinor ?? "—"} {e.Currency ?? "—"}» " +
-                    $"لا يُطابِق المَحفوظ «{record.AmountMinor} {record.Currency}» — لا تَمديد.");
+                    $"المَفوتَرُ الواصِل «{e.TotalMinor ?? "—"} {e.Currency ?? "—"}» " +
+                    $"لا يُطابِق المَحفوظ «{record.AmountMinor} {record.Currency}» — لا تَمديد. " +
+                    $"(‏subtotal={e.SubtotalMinor ?? "—"}، total={e.TotalMinor ?? "—"}، " +
+                    $"grand_total={e.GrandTotalMinor ?? "—"}.)");
 
             if (plan is null)
                 return new(PaddleAction.UnknownTenant, default, "",
@@ -483,15 +519,28 @@ public static class PaddleBillingPolicy
             $"نَوعُ الحَدَث «{e.EventType}» بِلا فِعلٍ مُعَرَّف.");
     }
 
-    /// <summary><b>يُتَحَقَّق ولا يُفتَرَض</b>: العُملَةُ حَرفاً
-    /// والمَبلَغُ بِأَصغَرِ وَحدَةٍ عَدَداً صَحيحاً. <b>والمُقارَنَةُ
-    /// بِما أُرسِلَ لا بِما كُتِبَ في الشاشَة</b> — تَعريفٌ واحِدٌ لا
-    /// اثنان. ونَصٌّ غَيرُ مَقروءٍ <b>عَدَمُ تَطابُقٍ لا
-    /// تَساهُل</b>.</summary>
+    /// <summary>
+    /// <para><b>يُتَحَقَّق ولا يُفتَرَض</b>: العُملَةُ حَرفاً
+    /// والمَبلَغُ بِأَصغَرِ وَحدَةٍ عَدَداً صَحيحاً. ونَصٌّ غَيرُ
+    /// مَقروءٍ <b>عَدَمُ تَطابُقٍ لا تَساهُل</b>.</para>
+    ///
+    /// <para><b>والطَرَفانِ بِتَعريفٍ واحِد</b>: نُرسِلُ سِعراً
+    /// <c>tax_mode: internal</c> فَالمَحفوظُ هُوَ <b>المَفوتَرُ
+    /// شامِلاً الضَريبَة</b>، ونُقارِنُه بِـ<c>details.totals.total</c>
+    /// — «‏Total after discount and tax». <b>وهذِه هي العِلَّةُ
+    /// كُلُّها</b>: قيمَةٌ تُرسَل بِتَعريفٍ وتُقارَنُ بِآخَرَ تُنتِج
+    /// «قُبِضَ ولَم يُمَدَّد» صامِتاً، وهُوَ بِعَينِه فَخُّ
+    /// <c>NormalizedAmount</c> في مَسارِ PayPal بِثَوبٍ آخَر.</para>
+    ///
+    /// <para><b>وما بَقِيَ مِن احتِمالٍ يُقالُ ولا يُبتلَع</b>: خَصمٌ
+    /// يُنقِصُ <c>total</c> ⇒ لا تَمديد (اتِّجاهٌ صَحيح)، ورَصيدُ
+    /// دافِعٍ يُنقِصُ <c>grand_total</c> وَحدَه ⇒ يُمَدَّد. والحُجَّةُ
+    /// والدَينُ في <c>docs/ADR-010</c>.</para>
+    /// </summary>
     public static bool MoneyMatches(PaddleEvent e, PaddleTransactionRecord record)
         => e.Currency is { Length: > 0 } cur
            && string.Equals(cur, record.Currency, StringComparison.OrdinalIgnoreCase)
-           && long.TryParse(e.AmountMinor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var got)
+           && long.TryParse(e.TotalMinor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var got)
            && long.TryParse(record.AmountMinor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var want)
            && got == want;
 

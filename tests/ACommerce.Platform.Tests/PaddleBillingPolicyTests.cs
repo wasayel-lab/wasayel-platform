@@ -54,10 +54,25 @@ public class PaddleBillingPolicyTests
             CreatedAt = Now, At = Now,
         };
 
+    /// <summary>عالَمٌ بِلا ضَريبَةٍ ولا رَصيد — الثَلاثَةُ سَواء.
+    /// وما اختَلَفَ فيه واحِدٌ عَن آخَرَ لَه
+    /// <see cref="CompletedBodyWithTotals"/>.</summary>
     private static string CompletedBody(
         string eventId = "evt_1", string status = "completed",
-        string grandTotal = "4900", string currency = "USD", string? reference = Reference,
+        string total = "4900", string currency = "USD", string? reference = Reference,
         string txn = "txn_01j")
+        => CompletedBodyWithTotals(
+            subtotal: total, tax: "0", total: total, grandTotal: total,
+            eventId: eventId, status: status, currency: currency,
+            reference: reference, txn: txn);
+
+    /// <summary><b>كُتلَةُ المَجاميعِ كامِلَةً</b> — كَما تُرسِلُها
+    /// Paddle حينَ تَكونُ ثَمَّ ضَريبَةٌ أَو رَصيدُ دافِع، فَتَفتَرِقُ
+    /// الحُقولُ الأَربَعَة.</summary>
+    private static string CompletedBodyWithTotals(
+        string subtotal, string tax, string total, string grandTotal,
+        string eventId = "evt_1", string status = "completed", string currency = "USD",
+        string? reference = Reference, string txn = "txn_01j")
         => $$$"""
         {
           "event_id": "{{{eventId}}}",
@@ -67,7 +82,12 @@ public class PaddleBillingPolicyTests
             "status": "{{{status}}}",
             "currency_code": "{{{currency}}}",
             "custom_data": { "wasayel_ref": "{{{reference}}}" },
-            "details": { "totals": { "subtotal": "{{{grandTotal}}}", "grand_total": "{{{grandTotal}}}" } }
+            "details": { "totals": {
+              "subtotal": "{{{subtotal}}}",
+              "tax": "{{{tax}}}",
+              "total": "{{{total}}}",
+              "grand_total": "{{{grandTotal}}}"
+            } }
           }
         }
         """;
@@ -217,7 +237,7 @@ public class PaddleBillingPolicyTests
     [Fact]
     public void ALowerAmount_DoesNotExtend()
     {
-        var e = PaddleBillingPolicy.Parse(CompletedBody(grandTotal: "100"))!;
+        var e = PaddleBillingPolicy.Parse(CompletedBody(total: "100"))!;
         var d = PaddleBillingPolicy.Decide(e, Record(), Plan(), alreadySeen: false, Now);
 
         Assert.Equal(PaddleAction.AmountMismatch, d.Action);
@@ -242,7 +262,7 @@ public class PaddleBillingPolicyTests
     [Fact]
     public void AHigherAmount_DoesNotExtendEither()
     {
-        var e = PaddleBillingPolicy.Parse(CompletedBody(grandTotal: "9800"))!;
+        var e = PaddleBillingPolicy.Parse(CompletedBody(total: "9800"))!;
         var d = PaddleBillingPolicy.Decide(e, Record(), Plan(), alreadySeen: false, Now);
 
         Assert.Equal(PaddleAction.AmountMismatch, d.Action);
@@ -253,10 +273,118 @@ public class PaddleBillingPolicyTests
     [Fact]
     public void TheAmountComparison_IsNumericNotTextual()
     {
-        var e = PaddleBillingPolicy.Parse(CompletedBody(grandTotal: "04900"))!;
+        var e = PaddleBillingPolicy.Parse(CompletedBody(total: "04900"))!;
         var d = PaddleBillingPolicy.Decide(e, Record(), Plan(), alreadySeen: false, Now);
 
         Assert.Equal(PaddleAction.Extend, d.Action);
+    }
+
+    // ═══ ٢-ب. تَعريفٌ واحِدٌ لِلمَبلَغ — ما أُرسِلَ هُوَ ما يُقارَن ════
+    //
+    // **المَقيسُ مِن مَرجِعِ Paddle حَرفاً** (‏`api-reference/
+    // transactions/get-transaction`):
+    //   · `subtotal`   — "Subtotal before discount, tax, and deductions.
+    //                     If an item, unit price multiplied by quantity."
+    //   · `total`      — "Total after discount and tax."
+    //   · `grand_total`— "Total due on a transaction after credits but
+    //                     before any payments."
+    // و`tax_mode` عَلى السِعر: `internal` — "Prices are inclusive of
+    // tax."، و`account_setting` — "Prices use the setting from your
+    // account."
+    //
+    // **فَالعَطَبُ الَّذي أَغلَقَتهُ هذِه المَجموعَة**: كُنّا نُرسِل
+    // السِعرَ بِـ`account_setting` — أَي **بِتَعريفٍ يُقَرِّرُه مِفتاحٌ
+    // في لَوحَةِ الحِساب لا نَقرَؤُه** — ونُقارِنُ الواصِلَ
+    // بِـ`grand_total`، وهُوَ **بَعدَ الضَريبَةِ وبَعدَ رَصيدِ
+    // الدافِع**. فَقيمَةٌ واحِدَةٌ بِتَعريفَينِ يَنجَرِفان: كُلُّ
+    // دَفعَةٍ حَقيقِيَّةٍ في حِسابٍ «الأَسعارُ لا تَشمَل الضَريبَة»
+    // تَرتَدُّ `AmountMismatch` — **قُبِضَ ولَم يُمَدَّد**.
+
+    /// <summary>
+    /// <para><b>ضَريبَةٌ تُضافُ فَوقَ السِعرِ لا تُمَدِّد — وهذا
+    /// صَحيح. والخَطَأُ كانَ أَنَّها لا تُشفى.</b></para>
+    ///
+    /// <para>‏49.00 وقَد أُضيفَ ‏15 % فَوقَها: <c>subtotal 4900</c>،
+    /// <c>tax 735</c>، <c>total 5635</c>. والمَحفوظُ ‏4900.
+    /// <b>و<c>AmountMismatch</c> كانَت تُرَدُّ ‏200 — فَتَتَوَقَّفُ
+    /// إعادَةُ Paddle ويَضيعُ القَبضُ نِهائِيّاً</b>. صارَت تُرَدُّ
+    /// ‏503: تُعادُ الرِسالَةُ فَتَشفيها تَهيئَةٌ تُصَحَّح، أَو
+    /// تُعادُ يَدَوِيّاً مِن لَوحَةِ Paddle.</para>
+    /// </summary>
+    [Fact]
+    public void TaxAddedOnTopOfThePrice_DoesNotExtend_ButTheFailureIsHealableNotFinal()
+    {
+        var e = PaddleBillingPolicy.Parse(CompletedBodyWithTotals(
+            subtotal: "4900", tax: "735", total: "5635", grandTotal: "5635"))!;
+        var d = PaddleBillingPolicy.Decide(e, Record(), Plan(), alreadySeen: false, Now);
+
+        Assert.Equal(PaddleAction.AmountMismatch, d.Action);
+        Assert.False(d.Writes);
+        Assert.True(ACommerce.Templates.Customer.Marketplace.Billing
+            .PaddleSurface.HealsOnRedelivery(d.Action));
+    }
+
+    /// <summary>
+    /// <para><b>وسِعرٌ شامِلٌ لِلضَريبَةِ يُمَدِّد</b> — وهُوَ العالَمُ
+    /// الَّذي يُثَبِّتُه <c>tax_mode: internal</c>: ‏4900 هي ما
+    /// يَدفَعُه الدافِع، ومِنها تَخرُج ‏639 ضَريبَةً فَيَبقى
+    /// <c>subtotal 4261</c>. <b>والمُقارَنَةُ عَلى <c>total</c>
+    /// فَتُطابِق.</b></para>
+    /// </summary>
+    [Fact]
+    public void ATaxInclusivePrice_Extends_BecauseTotalIsWhatWeBilled()
+    {
+        var e = PaddleBillingPolicy.Parse(CompletedBodyWithTotals(
+            subtotal: "4261", tax: "639", total: "4900", grandTotal: "4900"))!;
+        var d = PaddleBillingPolicy.Decide(e, Record(), Plan(), alreadySeen: false, Now);
+
+        Assert.Equal(PaddleAction.Extend, d.Action);
+    }
+
+    /// <summary>
+    /// <para><b>ودافِعٌ لَه رَصيدٌ عِندَ Paddle يُمَدَّدُ كَذلك.</b>
+    /// ‏<c>grand_total</c> «‏Total due … <b>after credits</b>» فَيَنزِل
+    /// بِمِقدارِ الرَصيد، و<c>total</c> يَبقى ما فُوتِرَ بِه.
+    /// والمُقارَنَةُ عَلى <c>grand_total</c> كانَت تَعني <b>«مَن
+    /// يَملِك رِيالَ رَصيدٍ لا تُمَدَّدُ باقَتُه أَبَداً»</b>.</para>
+    /// </summary>
+    [Fact]
+    public void APayerWithACreditBalance_StillExtends_BecauseWeCompareWhatWeBilled()
+    {
+        var e = PaddleBillingPolicy.Parse(CompletedBodyWithTotals(
+            subtotal: "4261", tax: "639", total: "4900", grandTotal: "4400"))!;
+        var d = PaddleBillingPolicy.Decide(e, Record(), Plan(), alreadySeen: false, Now);
+
+        Assert.Equal(PaddleAction.Extend, d.Action);
+    }
+
+    /// <summary><b>وخَصمٌ يُنقِصُ المَفوتَرَ لا يُمَدِّد</b> —
+    /// <c>total</c> «‏after discount and tax» فَيَهبِط، والاتِّجاهُ
+    /// صَحيح: نِصفُ مالٍ لا يَشتَري مُدَّةً كامِلَة.</summary>
+    [Fact]
+    public void ADiscountedTransaction_DoesNotExtend()
+    {
+        var e = PaddleBillingPolicy.Parse(CompletedBodyWithTotals(
+            subtotal: "4900", tax: "0", total: "3900", grandTotal: "3900"))!;
+        var d = PaddleBillingPolicy.Decide(e, Record(), Plan(), alreadySeen: false, Now);
+
+        Assert.Equal(PaddleAction.AmountMismatch, d.Action);
+    }
+
+    /// <summary><b>وسَطرُ الخَطَإِ يَطبَعُ الأَربَعَةَ لا واحِداً</b>:
+    /// أَوَّلُ رِسالَةٍ حَقيقِيَّةٍ تَفشَل تُجيبُ بِنَفسِها «أَضَريبَةٌ
+    /// أَم رَصيدٌ أَم خَصم؟» — بِلا حِسابِ Paddle ولا تَخمين.</summary>
+    [Fact]
+    public void TheMismatchReason_NamesEveryTotalItRead()
+    {
+        var e = PaddleBillingPolicy.Parse(CompletedBodyWithTotals(
+            subtotal: "4900", tax: "735", total: "5635", grandTotal: "5135"))!;
+        var d = PaddleBillingPolicy.Decide(e, Record(), Plan(), alreadySeen: false, Now);
+
+        Assert.Equal(PaddleAction.AmountMismatch, d.Action);
+        Assert.Contains("4900", d.ReasonAr, StringComparison.Ordinal);   // subtotal والمَحفوظ
+        Assert.Contains("5635", d.ReasonAr, StringComparison.Ordinal);   // total
+        Assert.Contains("5135", d.ReasonAr, StringComparison.Ordinal);   // grand_total
     }
 
     // ═══ ٣. اسمُ الحَدَثِ دَعوى، والحَقلُ واقِعَة ══════════════════════
@@ -913,6 +1041,25 @@ public class PaddleBillingPolicyTests
             body["custom_data"]);
 
         Assert.Equal(Reference, custom[PaddleTransactionPolicy.ReferenceKey]);
+    }
+
+    /// <summary>
+    /// <para><b>ووَضعُ الضَريبَةِ مُثَبَّتٌ لا مَتروكٌ لِلَوحَة.</b>
+    /// ‏<c>account_setting</c> — «‏Prices use the setting from your
+    /// account» — تَجعَل مَعنى الرَقَمِ الَّذي نَحفَظُه <b>يُقَرَّرُ
+    /// في مَكانٍ لا نَقرَؤُه</b>، فَنَفسُ الكودِ يُنتِج تَعريفَين.
+    /// و<c>internal</c> — «‏Prices are inclusive of tax» — تَجعَل
+    /// المَكتوبَ في الشاشَةِ هُوَ المَدفوعَ على البِطاقَةِ هُوَ
+    /// <c>total</c> الواصِل.</para>
+    /// </summary>
+    [Fact]
+    public void TheCreateBody_PinsTheTaxMode_SoTheStoredAmountHasOneMeaning()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(
+            PaddleTransactionPolicy.CreateBody(Draft(), Reference));
+
+        Assert.Contains("\"tax_mode\":\"internal\"", json);
+        Assert.DoesNotContain("account_setting", json);
     }
 
     /// <summary>والمَبلَغُ المُرسَلُ هُوَ <b>المَصوغُ بِأَصغَرِ

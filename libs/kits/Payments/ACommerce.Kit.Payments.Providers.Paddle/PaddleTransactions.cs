@@ -285,6 +285,34 @@ public static class PaddleTransactionPolicy
     /// هُوَ مَن يَحسِبُ الضَريبَةَ عَلَيها.</summary>
     public const string TaxCategory = "standard";
 
+    /// <summary>
+    /// <para><b>وَضعُ الضَريبَة — «السِعرُ شامِلٌ لَها».</b> ومَعجَمُ
+    /// Paddle أَربَعَةٌ، ونَصُّها حَرفاً: <c>internal</c> «‏Prices are
+    /// inclusive of tax»، و<c>external</c> «‏Prices are exclusive of
+    /// tax»، و<c>account_setting</c> «‏Prices use the setting from your
+    /// account»، و<c>location</c> «‏…depending on the country of the
+    /// transaction».</para>
+    ///
+    /// <para><b>وكانَت <c>account_setting</c>، وتِلكَ لَيسَت تَعريفاً
+    /// أَصلاً</b>: تُحيلُ مَعنى الرَقَمِ الَّذي نَحفَظُه إلى مِفتاحٍ
+    /// في لَوحَةِ الحِسابِ <b>لا نَقرَؤُه ولا نَملِكُه</b> — فَنَفسُ
+    /// الكودِ يُنتِج تَعريفَين، والمُقارَنَةُ عِندَ وُصولِ المالِ
+    /// تَرتَدُّ أَو تَمُرُّ بِحَسَبِ إعدادٍ خارِجَ المُستَودَع.</para>
+    ///
+    /// <para><b>ولِماذا «شامِل» لا «مُضاف»</b>: الرابِطُ يُرسَلُ
+    /// بِيَدِ مُشرِفٍ إلى زَبونٍ بِسِعرٍ قيلَ لَه، وزَبائِنُ المالِكِ
+    /// سُعودِيّون — <b>والسِعرُ المُعلَنُ لِلمُستَهلِكِ هُناكَ
+    /// يَشمَلُ الضَريبَة</b>. فَالمَكتوبُ في الشاشَةِ هُوَ المَدفوعُ
+    /// على البِطاقَةِ هُوَ <c>total</c> الواصِلُ في الرِسالَة:
+    /// <b>تَعريفٌ واحِدٌ عَبرَ الثَلاثَة</b>.</para>
+    ///
+    /// <para><b>وخَطَؤُه — إن كان — مَرئيٌّ قَبلَ المالِ لا
+    /// بَعدَه</b>: قيمَةٌ تَرفُضُها Paddle تُفشِلُ <c>POST
+    /// /transactions</c> فَيُعرَضُ نَصُّها لِلمُشرِفِ عِندَ إنشاءِ
+    /// الرابِط — لا عِندَ وُصولِ الدَفعَة.</para>
+    /// </summary>
+    public const string TaxMode = "internal";
+
     /// <summary>مُعامِلُ المُعامَلَةِ في رابِطِ الدَفع — <b>اسمٌ
     /// تَفرِضُه Paddle</b>، ويُقرَأُ في صَفحَتِنا الساكِنَة.</summary>
     public const string TransactionQueryKey = "_ptxn";
@@ -474,7 +502,7 @@ public static class PaddleTransactionPolicy
                     {
                         ["name"]        = Label(draft),
                         ["description"] = Label(draft),
-                        ["tax_mode"]    = "account_setting",
+                        ["tax_mode"]    = TaxMode,
                         ["unit_price"]  = new Dictionary<string, object>
                         {
                             ["amount"]        = draft.MinorAmount,

@@ -170,9 +170,15 @@ public class PaddleEndpointBehaviourTests
 
     // ─── جِسمُ الرِسالَةِ ورَأسُها ───────────────────────────────────
 
+    /// <summary><b>وكُتلَةُ المَجاميعِ كامِلَةٌ كَما تُرسِلُها
+    /// Paddle</b>: نُرسِلُ سِعراً شامِلاً لِلضَريبَة
+    /// (<c>tax_mode: internal</c>) فَالمَفوتَرُ هُوَ <c>total</c>،
+    /// و<c>subtotal</c> ما بَقِيَ بَعدَ نَزعِها.
+    /// و<b>المُقارَنَةُ على <c>total</c></b> — تَعريفٌ واحِدٌ لا
+    /// اثنان (‏<c>docs/ADR-010</c>).</summary>
     private static string CompletedBody(
         string eventId = "evt_1", string status = "completed",
-        string grandTotal = "4900", string currency = "USD", string reference = Reference)
+        string total = "4900", string currency = "USD", string reference = Reference)
         => $$$"""
         {
           "event_id": "{{{eventId}}}",
@@ -182,7 +188,10 @@ public class PaddleEndpointBehaviourTests
             "status": "{{{status}}}",
             "currency_code": "{{{currency}}}",
             "custom_data": { "wasayel_ref": "{{{reference}}}" },
-            "details": { "totals": { "grand_total": "{{{grandTotal}}}" } }
+            "details": { "totals": {
+              "subtotal": "{{{total}}}", "tax": "0",
+              "total": "{{{total}}}", "grand_total": "{{{total}}}"
+            } }
           }
         }
         """;
@@ -406,8 +415,18 @@ public class PaddleEndpointBehaviourTests
 
     // ═══ ٣. المالُ يُقارَنُ بِالمَحفوظ ═══════════════════════════════
 
-    /// <summary><b>دَفعٌ بِمَبلَغٍ أَقَلَّ لا يُمَدِّد</b> — والتاريخُ
-    /// المُخَزَّنُ لا يَتَحَرَّكُ يَوماً.</summary>
+    /// <summary>
+    /// <para><b>دَفعٌ بِمَبلَغٍ أَقَلَّ لا يُمَدِّد</b> — والتاريخُ
+    /// المُخَزَّنُ لا يَتَحَرَّكُ يَوماً.</para>
+    ///
+    /// <para><b>والرَدُّ ‏503 لا ‏200، وهذا تَبَدُّلٌ مَقصود</b>:
+    /// الكَمِّيَّةُ مَحبوسَةٌ ‏1..1 والسِعرُ مُثَبَّتٌ في المُعامَلَة،
+    /// فَالدافِعُ <b>لا يَملِكُ</b> أَن يَدفَعَ أَقَلّ — وعَدَمُ
+    /// التَطابُقِ عِلَّتُه عِندَنا (ضَريبَةٌ أَو خَصمٌ أَو رَصيد)
+    /// و<b>يُشفى بِالإعادَة</b>. ورَدُّ ‏200 كانَ يُوقِفُ إعادَةَ
+    /// Paddle فَيَصيرُ القَبضُ بِلا تَمديدٍ <b>نِهائِيّاً</b>
+    /// (‏<c>docs/ADR-010</c>).</para>
+    /// </summary>
     [Fact]
     public async Task ALowerAmount_ExtendsNothing()
     {
@@ -416,9 +435,9 @@ public class PaddleEndpointBehaviourTests
         var before = plan.ExpiresAt;
 
         await using var host = await PaddleHost.StartAsync(world, new PaddleCalls());
-        var response = await host.Client.SendAsync(Signed(CompletedBody(grandTotal: "100")));
+        var response = await host.Client.SendAsync(Signed(CompletedBody(total: "100")));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Contains(nameof(PaddleAction.AmountMismatch),
             await response.Content.ReadAsStringAsync());
 
