@@ -56,13 +56,14 @@ public class PaddleBillingPolicyTests
 
     private static string CompletedBody(
         string eventId = "evt_1", string status = "completed",
-        string grandTotal = "4900", string currency = "USD", string? reference = Reference)
+        string grandTotal = "4900", string currency = "USD", string? reference = Reference,
+        string txn = "txn_01j")
         => $$$"""
         {
           "event_id": "{{{eventId}}}",
           "event_type": "transaction.completed",
           "data": {
-            "id": "txn_01j",
+            "id": "{{{txn}}}",
             "status": "{{{status}}}",
             "currency_code": "{{{currency}}}",
             "custom_data": { "wasayel_ref": "{{{reference}}}" },
@@ -384,14 +385,14 @@ public class PaddleBillingPolicyTests
 
     private static string AdjustmentBody(
         string eventId = "evt_adj", string type = "adjustment.updated",
-        string action = "refund", string status = "approved")
+        string action = "refund", string status = "approved", string txn = "txn_01j")
         => $$$"""
         {
           "event_id": "{{{eventId}}}",
           "event_type": "{{{type}}}",
           "data": {
             "id": "adj_01j",
-            "transaction_id": "txn_01j",
+            "transaction_id": "{{{txn}}}",
             "action": "{{{action}}}",
             "status": "{{{status}}}",
             "currency_code": "USD"
@@ -475,6 +476,149 @@ public class PaddleBillingPolicyTests
 
         Assert.Equal(PaddleAction.MarkTransaction, d.Action);
         Assert.False(d.TouchesPlan);
+    }
+
+    // ═══ ٧-ب. جِسرُ الاسترداد يَتبَعُ المُعامَلَةَ الَّتي دَفَعَت ═══════
+    //
+    // **السيناريو المَقيس، بِأَربَعِ خُطُوات**: المُشرِفُ يَنقُر
+    // «أَنشِئ الرابِط» مَرَّتَينِ بِنَفسِ المَبلَغِ والمُدَّةِ والوَصف.
+    // المَرجِعُ **حَتميٌّ مِن المُدخَلات** فَهُوَ واحِد، والوَثيقَةُ
+    // ما زالَت `created` فَهي **قابِلَةٌ لِلكِتابَة**
+    // (`IsOverwritable`) — فَتُنشَأُ **مُعامَلَتانِ عِندَ Paddle**
+    // (لا رَأسَ مَرَّة-واحِدَةٍ في نِداءِ الإنشاء) وتَبقى **وَثيقَةٌ
+    // واحِدَةٌ تَحمِلُ الأَحدَثَ وَحدَه**. ثُمَّ يَدفَعُ الدافِعُ
+    // بِالرابِطِ **الأَوَّل**.
+    //
+    // وحَدَثُ الدَفعِ يَحمِلُ `custom_data` فَيُمَدِّدُ صَحيحاً. أَمّا
+    // **حَدَثُ التَسوِيَةِ فَبِلا `custom_data` إطلاقاً**، وجِسرُه
+    // الوَحيدُ `data.transaction_id` — يُبحَثُ بِه في
+    // `PaddleFlow.FindTransactionAsync` عَن وَثيقَةٍ
+    // `r.TransactionId == txn`. فَإن بَقِيَ في الوَثيقَةِ مُعَرِّفُ
+    // **النَقرَةِ الثانِيَة** لَم تَجِد الاستِعلامَةُ شَيئاً ⇒
+    // `UnknownReference` ⇒ ‏503 بِلا نِهايَة: **المالُ يَعودُ
+    // والأَيّامُ تَبقى**.
+
+    /// <summary>
+    /// <para><b>المالُ يَعودُ فَتُسحَبُ أَيّامُه — لِأَنّ التَمديدَ
+    /// يُثَبِّتُ مُعَرِّفَ المُعامَلَةِ الَّتي دَفَعَت.</b></para>
+    ///
+    /// <para><b>وهذا الاختِبارُ يَقيسُ الحَقلَ الَّذي تُرَشِّحُ عَلَيه
+    /// الاستِعلامَة</b> (<c>TransactionId</c>)، لا الاستِعلامَةَ
+    /// نَفسَها: جَلسَةُ الحُرّاسِ السُلوكِيَّةِ لا تُنَفِّذ
+    /// <c>Query</c> — دَينٌ مُعلَنٌ في رَأسِ
+    /// <c>PaddleEndpointBehaviourTests</c> ويُسَدَّدُ يَومَ يوجَد
+    /// حِسابُ Paddle حَقيقيّ.</para>
+    /// </summary>
+    [Fact]
+    public void TwoLinksOnePayment_TheRefundStillFindsItsDocument_SoTheDaysAreWithdrawn()
+    {
+        // النَقرَةُ الثانِيَةُ دَهَسَت الوَثيقَةَ بِمُعامَلَتِها هي.
+        var record = Record();
+        record.TransactionId = "txn_second_click";
+
+        // والدافِعُ فَتَحَ الرابِطَ الأَوَّل.
+        var paid = PaddleBillingPolicy.Parse(CompletedBody(txn: "txn_first_link"))!;
+        var extend = PaddleBillingPolicy.Decide(paid, record, Plan(), alreadySeen: false, Now);
+        Assert.Equal(PaddleAction.Extend, extend.Action);
+
+        PaddleBillingPolicy.Apply(record, paid, extend, Now);
+
+        // ← الجِسر: الوَثيقَةُ تَحمِلُ الآنَ المُعامَلَةَ الَّتي دَفَعَت.
+        Assert.Equal("txn_first_link", record.TransactionId);
+
+        // ثُمَّ يَصِلُ الاستِردادُ بِلا `custom_data`، ومِفتاحُه هذا.
+        var refund = PaddleBillingPolicy.Parse(
+            AdjustmentBody(txn: "txn_first_link"))!;
+        Assert.Null(refund.Reference);
+        Assert.Equal(record.TransactionId, refund.TransactionId);   // شَرطُ `FindTransactionAsync`
+
+        var plan = Plan();
+        var withdraw = PaddleBillingPolicy.Decide(refund, record, plan, alreadySeen: false, Now);
+
+        Assert.Equal(PaddleAction.Withdraw, withdraw.Action);
+        Assert.Equal(plan.ExpiresAt.AddDays(-30), withdraw.NewExpiresAt);
+    }
+
+    /// <summary><b>ومُعَرِّفُ الاشتِراكِ يَتبَعُ الدافِعَ كَذلك</b> —
+    /// قاعِدَةٌ واحِدَةٌ لا اثنَتان: مَن دَفَعَ هُوَ مَن يُعَرِّف
+    /// المُعامَلَة.</summary>
+    [Fact]
+    public void Extend_PinsTheSubscriptionIdOfThePayingTransaction_Too()
+    {
+        var record = Record();
+        record.SubscriptionId = "sub_from_the_second_click";
+
+        var body = CompletedBody(txn: "txn_first_link")
+            .Replace("\"status\": \"completed\"",
+                     "\"status\": \"completed\",\n    \"subscription_id\": \"sub_paid\"",
+                     StringComparison.Ordinal);
+
+        var e = PaddleBillingPolicy.Parse(body)!;
+        var d = PaddleBillingPolicy.Decide(e, record, Plan(), alreadySeen: false, Now);
+        PaddleBillingPolicy.Apply(record, e, d, Now);
+
+        Assert.Equal("sub_paid", record.SubscriptionId);
+    }
+
+    /// <summary><b>وما ليسَ تَمديداً لا يَدهَسُ شَيئاً</b>: حَدَثٌ
+    /// مُتَأَخِّرٌ على مُعامَلَةٍ حُسِمَت يُعَلِّمُ ولا يُبَدِّلُ
+    /// المُعَرِّفَ الَّذي يَربِطُ الاستِرداد.</summary>
+    [Fact]
+    public void AMarkingEvent_NeverRewritesThePayingTransactionId()
+    {
+        var record = Record(PaddleTransactionStatuses.Refunded);
+        record.TransactionId = "txn_that_paid";
+
+        var e = PaddleBillingPolicy.Parse(CompletedBody(eventId: "evt_late", txn: "txn_other"))!;
+        var d = PaddleBillingPolicy.Decide(e, record, Plan(), alreadySeen: false, Now);
+        Assert.Equal(PaddleAction.MarkTransaction, d.Action);
+
+        PaddleBillingPolicy.Apply(record, e, d, Now);
+
+        Assert.Equal("txn_that_paid", record.TransactionId);
+    }
+
+    /// <summary>
+    /// <para><b>ودَفعَتانِ لِمُعامَلَةٍ واحِدَةٍ لَيسَتا «إعادَةَ
+    /// إرسال» — تُسَمّى بِاسمِها.</b> ‏«‏Replay» تَقول «هذِه الرِسالَةُ
+    /// وَصَلَت مَرَّتَين»، والواقِعُ هُنا <b>مالٌ قُبِضَ مَرَّتَينِ
+    /// ومُدِّدَ مَرَّة</b>. وسَطرُ لوغٍ يَقولُ الأولى عَن الثانِيَةِ
+    /// <b>سَطرٌ يَكذِب</b>، وهُوَ أَسوَأُ مِن سَطرٍ غائِب.</para>
+    ///
+    /// <para><b>ولا يُشفى بِالإعادَة</b>: لا كِتابَةَ تُصلِحُ قَبضاً
+    /// ثانِياً عِندَ Paddle — يُرَدُّ يَدَوِيّاً مِن لَوحَتِها.
+    /// فَالرَدُّ ‏200 وسَطرُ خَطَإٍ يَصرُخ، ودَينٌ مُعلَنٌ في
+    /// <c>docs/DEPLOY.md</c> §٢·هـ.</para>
+    /// </summary>
+    [Fact]
+    public void ASecondPaidTransaction_OnTheSameReference_IsNamedNotDisguisedAsAReplay()
+    {
+        var record = Record(PaddleTransactionStatuses.Completed);
+        record.TransactionId = "txn_first_link";
+
+        var e = PaddleBillingPolicy.Parse(
+            CompletedBody(eventId: "evt_2", txn: "txn_second_click"))!;
+        var d = PaddleBillingPolicy.Decide(e, record, Plan(), alreadySeen: false, Now);
+
+        Assert.Equal(PaddleAction.DuplicatePayment, d.Action);
+        Assert.False(d.Writes);
+        Assert.Contains("txn_second_click", d.ReasonAr, StringComparison.Ordinal);
+    }
+
+    /// <summary>وإعادَةُ إرسالِ <b>نَفسِ</b> المُعامَلَةِ تَبقى
+    /// «‏Replay» — الفَرقُ مُعَرِّفُ المُعامَلَةِ لا عَدَدُ
+    /// الرَسائِل.</summary>
+    [Fact]
+    public void TheSameTransactionArrivingTwice_IsStillAReplay()
+    {
+        var record = Record(PaddleTransactionStatuses.Completed);
+        record.TransactionId = "txn_01j";
+
+        var e = PaddleBillingPolicy.Parse(CompletedBody(eventId: "evt_2"))!;
+        var d = PaddleBillingPolicy.Decide(e, record, Plan(), alreadySeen: false, Now);
+
+        Assert.Equal(PaddleAction.Replay, d.Action);
+        Assert.False(d.Writes);
     }
 
     // ═══ ٨. الثابِتُ الأَخير — لا يُغادَرُ «اكتَمَلَت» إلّا بِسَحب ════

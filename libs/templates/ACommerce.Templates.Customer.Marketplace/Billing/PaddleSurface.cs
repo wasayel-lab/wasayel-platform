@@ -72,17 +72,19 @@ public static class PaddleSurface
     public static bool HealsOnRedelivery(PaddleAction action)
         => action is PaddleAction.UnknownReference or PaddleAction.UnknownTenant;
 
-    /// <summary><b>قَرارٌ بِلا كِتابَة — ويُقالُ سَبَبُه.</b> وأَربَعَةُ
+    /// <summary><b>قَرارٌ بِلا كِتابَة — ويُقالُ سَبَبُه.</b> وخَمسَةُ
     /// فُروعٍ تُصَعَّدُ إلى <c>Error</c>: مَرجِعٌ مَجهول (مالٌ وَصَلَ
     /// ولا يُعرَف لِمَن)، ومَبلَغٌ لا يُطابِق، وحالَةٌ تُناقِض اسمَ
-    /// الحَدَث، ومَتجَرٌ بِلا باقَة. <b>وسِجِلٌّ يَصرُخ عِندَ كُلّ
-    /// شَيءٍ لا يُقرَأ.</b></summary>
+    /// الحَدَث، ومَتجَرٌ بِلا باقَة، <b>ودَفعَةٌ ثانِيَةٌ على نَفسِ
+    /// المَرجِع</b> (مالٌ قُبِضَ مَرَّتَينِ ومُدِّدَ مَرَّة).
+    /// <b>وسِجِلٌّ يَصرُخ عِندَ كُلّ شَيءٍ لا يُقرَأ.</b></summary>
     public static IResult NoWrite(ILogger log, PaddleEvent e, PaddleDecision d)
     {
         if (d.Action is PaddleAction.UnknownReference
                      or PaddleAction.UnknownTenant
                      or PaddleAction.AmountMismatch
-                     or PaddleAction.StatusNotCompleted)
+                     or PaddleAction.StatusNotCompleted
+                     or PaddleAction.DuplicatePayment)
             log.LogError("[Paddle] {Action} — الحَدَث {EventId} ({Type}): {Reason}",
                 d.Action, e.EventId, e.EventType, d.ReasonAr);
         else

@@ -171,7 +171,24 @@ public enum PaddleAction
     /// <summary><b>المَبلَغُ أَو العُملَةُ لا يُطابِقانِ
     /// المَحفوظ</b> — لا تَمديد. ودَفعٌ بِمَبلَغٍ أَقَلَّ لا يَشتَري
     /// مُدَّةً كامِلَة.</summary>
-    AmountMismatch
+    AmountMismatch,
+
+    /// <summary>
+    /// <para><b>مُعامَلَةٌ ثانِيَةٌ دُفِعَت على نَفسِ المَرجِع —
+    /// قُبِضَ مَرَّتَينِ ومُدِّدَ مَرَّة.</b></para>
+    ///
+    /// <para><b>وهي غَيرُ <see cref="Replay"/> ولَو تَشابَهَ
+    /// الأَثَر</b>: «إعادَةُ إرسال» تَقول «هذِه الرِسالَةُ وَصَلَت
+    /// مَرَّتَين»، وهذِه تَقول «<b>هذا مالٌ آخَر</b>». وسَطرُ لوغٍ
+    /// يَقولُ الأولى عَن الثانِيَةِ سَطرٌ يَكذِب.</para>
+    ///
+    /// <para><b>ولا تُشفى بِالإعادَة</b>: لا كِتابَةَ عِندَنا تَرُدُّ
+    /// قَبضاً وَقَعَ عِندَ Paddle. فَتُرَدُّ ‏200 (وإلّا هَمَرَت
+    /// الإعادَةُ على بابٍ لا يُفتَح) مَعَ سَطرِ خَطَإٍ يَصرُخ،
+    /// والرَدُّ يَدَوِيٌّ مِن لَوحَةِ Paddle. دَينٌ مُعلَنٌ في
+    /// <c>docs/DEPLOY.md</c> §٢·هـ.</para>
+    /// </summary>
+    DuplicatePayment
 }
 
 /// <summary>القَرارُ كامِلاً. <c>NewExpiresAt</c> ذاتُ مَعنىً عِندَ
@@ -371,9 +388,35 @@ public static class PaddleBillingPolicy
             // ورِسالَةٌ ثانِيَةٌ **بِمُعَرِّفِ حَدَثٍ آخَر** تَتَخَطّى
             // سِجِلَّ مَرَّة-واحِدَة، فَتَمُرُّ وتُمَدِّدُ ثانِيَة.
             if (string.Equals(record.Status, PaddleTransactionStatuses.Completed, StringComparison.Ordinal))
+            {
+                // **وهُنا يُفصَلُ حالانِ يَتَشابَه أَثَرُهُما ويَختَلِفُ
+                //   مَعناهُما اختِلافاً ماليّاً**:
+                //
+                // ١) **نَفسُ المُعامَلَة** وَصَلَت ثانِيَةً — إعادَةُ
+                //    إرسالٍ، ومالٌ واحِد.
+                // ٢) **مُعامَلَةٌ أُخرى** على نَفسِ المَرجِع — وذاكَ
+                //    **مالٌ ثانٍ قُبِضَ فِعلاً**: نَقرَتانِ عِندَ
+                //    المُشرِفِ تُنشِئانِ مُعامَلَتَينِ عِندَ Paddle
+                //    (لا رَأسَ مَرَّة-واحِدَةٍ في نِداءِ الإنشاء)
+                //    ووَثيقَةً واحِدَة، فَإن دُفِعَ الرابِطانِ
+                //    **قُبِضَ مَرَّتَينِ ومُدِّدَ مَرَّة**.
+                //
+                // ونِداؤُهُما بِاسمٍ واحِدٍ يَجعَل سَطرَ اللوغِ يَقول
+                // «لا تَمديدَ ثانٍ لِدَفعَةٍ واحِدَة» عَن **دَفعَتَين**
+                // — سَطرٌ يَكذِب، وهُوَ أَسوَأُ مِن سَطرٍ غائِب.
+                if (e.TransactionId is { Length: > 0 } arriving
+                    && record.TransactionId is { Length: > 0 } settled
+                    && !string.Equals(arriving, settled, StringComparison.Ordinal))
+                    return new(PaddleAction.DuplicatePayment, default, "",
+                        $"المُعامَلَة «{record.Id}» مُدِّدَت بِـ«{settled}»، ثُمَّ وَصَلَ " +
+                        $"«اكتَمَلَت» لِمُعامَلَةٍ أُخرى «{arriving}» بِنَفسِ المَرجِع — " +
+                        "قُبِضَ مَرَّتَينِ ومُدِّدَ مَرَّة. لا تَمديدَ ثانٍ، " +
+                        "والرَدُّ يَدَوِيٌّ مِن لَوحَةِ Paddle.");
+
                 return new(PaddleAction.Replay, default, "",
                     $"المُعامَلَة «{record.Id}» بَلَغَت «وَصَلَ المال» سَلَفاً " +
                     $"بِـ«{record.TransactionId}» — لا تَمديدَ ثانٍ لِدَفعَةٍ واحِدَة.");
+            }
 
             if (!MoneyMatches(e, record))
                 return new(PaddleAction.AmountMismatch, default, "",
@@ -489,8 +532,32 @@ public static class PaddleBillingPolicy
     /// ولا شَيءَ آخَر.</b> لا جَلسَةَ هُنا ولا إيداع — الخِدمَةُ في
     /// القالِبِ هي الَّتي تُخَزِّن.</para>
     ///
-    /// <para><b>والمُعَرِّفاتُ تُملَأُ ولا يُكتَبُ فَوقَها</b>: أَوَّلُ
-    /// مَن يَعرِفُها يُثَبِّتُها.</para>
+    /// <para>
+    /// <b>والمُعَرِّفاتُ تَتبَعُ المُعامَلَةَ الَّتي دَفَعَت — لا
+    /// أَوَّلَ مَن كَتَبَها.</b> كانَ الشَرطُ «إن كانَ الحَقلُ
+    /// فارِغاً»، <b>وكانَ ذلك يَكسِرُ جِسرَ الاسترداد</b>:
+    /// </para>
+    /// <list type="number">
+    ///   <item>يَنقُرُ المُشرِفُ «أَنشِئ الرابِط» مَرَّتَينِ بِنَفسِ
+    ///   المُدخَلات. المَرجِعُ حَتميٌّ فَهُوَ واحِد، والوَثيقَةُ ما
+    ///   زالَت تَنتَظِرُ دَفعاً فَتُكتَبُ فَوقَها — <b>مُعامَلَتانِ
+    ///   عِندَ Paddle، ووَثيقَةٌ واحِدَةٌ تَحمِلُ الأَحدَثَ
+    ///   وَحدَه</b>.</item>
+    ///   <item>يَدفَعُ الدافِعُ بِالرابِطِ <b>الأَوَّل</b>. وحَدَثُ
+    ///   الدَفعِ يَحمِلُ <c>custom_data</c> فَيُمَدِّدُ صَحيحاً.</item>
+    ///   <item>يَصِلُ الاستِردادُ. <b>وحَدَثُ التَسوِيَةِ بِلا
+    ///   <c>custom_data</c> إطلاقاً</b>، وجِسرُه الوَحيدُ
+    ///   <c>data.transaction_id</c> — فَيُبحَثُ عَن وَثيقَةٍ
+    ///   <c>TransactionId</c>ها ذاك. وهي تَحمِلُ مُعَرِّفَ النَقرَةِ
+    ///   <b>الثانِيَة</b> ⇒ لا وَثيقَة ⇒
+    ///   <see cref="PaddleAction.UnknownReference"/> ⇒ ‏503 بِلا
+    ///   نِهايَة: <b>المالُ يَعودُ والأَيّامُ تَبقى</b>.</item>
+    /// </list>
+    /// <para><b>فَالتَمديدُ يُثَبِّتُ المُعَرِّفَ بِلا شَرطِ
+    /// الفَراغ</b> — المُعامَلَةُ الَّتي دَفَعَت هي بِعَينِها الَّتي
+    /// يُشيرُ إلَيها أَيُّ استِردادٍ لاحِق. <b>وما ليسَ تَمديداً يَبقى
+    /// على القاعِدَةِ القَديمَة</b>: تَعليمٌ مُتَأَخِّرٌ لا يَدهَسُ
+    /// مُعَرِّفَ مَن دَفَع.</para>
     /// </summary>
     public static void Apply(
         PaddleTransactionRecord record, PaddleEvent e, PaddleDecision decision, DateTime at)
@@ -500,9 +567,18 @@ public static class PaddleBillingPolicy
         if (MayWriteStatus(record.Status, decision.TransactionStatus, decision.Action))
             record.Status = decision.TransactionStatus;
 
-        if (string.IsNullOrWhiteSpace(record.TransactionId) && e.TransactionId is { Length: > 0 } txn)
+        // **التَمديدُ وَحدَه يُعَرِّفُ المُعامَلَة** — وهُوَ يَقَعُ
+        // مَرَّةً واحِدَةً في عُمرِ الوَثيقَة (فَرعُ «بَلَغَت وَصَلَ
+        // المال» يَحرُسُ ما بَعدَه)، فَالكِتابَةُ هُنا كِتابَةٌ
+        // واحِدَةٌ لا دَهسٌ مُتَكَرِّر.
+        var paying = decision.Action == PaddleAction.Extend;
+
+        if (e.TransactionId is { Length: > 0 } txn
+            && (paying || string.IsNullOrWhiteSpace(record.TransactionId)))
             record.TransactionId = txn;
-        if (string.IsNullOrWhiteSpace(record.SubscriptionId) && e.SubscriptionId is { Length: > 0 } sub)
+
+        if (e.SubscriptionId is { Length: > 0 } sub
+            && (paying || string.IsNullOrWhiteSpace(record.SubscriptionId)))
             record.SubscriptionId = sub;
 
         record.ProviderStatus = e.Status;
