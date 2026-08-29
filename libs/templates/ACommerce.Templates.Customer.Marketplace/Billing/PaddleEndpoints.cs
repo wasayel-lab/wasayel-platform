@@ -166,13 +166,18 @@ public static class PaddleEndpoints
         // **وقِراءَةٌ خالِصَة**: صِفرُ جَلسَةٍ وصِفرُ كِتابَة، فَلا
         // تَحمَرُّ الطَبَقَةُ ٨ ولا حارِسُ «نُقطَةُ GET تُبَدِّل
         // حالَةً مُخَزَّنَة».
-        app.MapGet("/billing/paddle/config.json", (PaddleGateway paddle) =>
+        app.MapGet("/billing/paddle/config.json", (PaddleGateway paddle, ACommerce.Platform.I18n.L l) =>
             Results.Json(new
             {
-                enabled     = paddle.CanSell,
-                token       = paddle.CanSell ? paddle.ClientToken : "",
-                environment = paddle.Environment,
-                returnUrl   = PaddleTransactionPolicy.ReturnPath,
+                enabled        = paddle.CanSell,
+                token          = paddle.CanSell ? paddle.ClientToken : "",
+                environment    = paddle.Environment,
+                returnUrl      = PaddleTransactionPolicy.ReturnPath,
+                title          = l["billing.paddle.checkout_title"],
+                body           = l["billing.paddle.checkout_body"],
+                failedBody     = l["billing.paddle.checkout_failed"],
+                referenceLabel = l["billing.paddle.return_reference"],
+                backLabel      = l["billing.paypal.back_studio"],
             }));
 
         return app;

@@ -3,8 +3,10 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.PlatformBillingQueries Billing
 @inject L L
 @inject ACommerce.Kit.Payments.Providers.PayPal.PayPalGateway PayPal
+@inject ACommerce.Kit.Payments.Providers.Paddle.PaddleGateway Paddle
 @using ACommerce.Kit.Subscriptions
 @using ACommerce.Kit.Payments.Providers.PayPal
+@using ACommerce.Kit.Payments.Providers.Paddle
 
 @*
     باقَةُ المَتجَرِ في **وَسايِل** — يَضبُطُها مُشرِفُ المَنَصَّة وَحدَه.
@@ -305,6 +307,102 @@
             </AcCard>
         }
 
+        @*  رابِطُ دَفعٍ بِالبِطاقَة عَبر Paddle (‏ADR-009) — **يُرسَم
+            بِشَرطَينِ مَعاً**: مُزَوِّدٌ يَستَطيعُ أَن يَبيع
+            (`CanSell` = مِفتاحٌ وبيئَةٌ وسِرُّ تَوقيعٍ ورَمزُ عَميلٍ
+            وصَفحَةُ دَفع)، ووَثيقَةُ باقَةٍ مَضبوطَة.
+
+            **ولِماذا بِطاقَةٌ مُنفَصِلَةٌ لا مُبَدِّلُ مُزَوِّدٍ في
+            نَموذَجٍ واحِد**: حُقولُ المُزَوِّدَينِ لَيسَت واحِدَة —
+            عُملَةُ PayPal مِن مَعجَمٍ مُغلَقٍ بِخَمسٍ وعِشرينَ قيمَةً
+            (ولا ريالَ فيها)، وعُملَةُ Paddle **حَقلٌ حُرٌّ** لِأَنّ
+            قائِمَتَها لَم تُقَس. ونَموذَجٌ واحِدٌ بِمُبَدِّلٍ يُظهِرُ
+            حَقلاً ويُخفي آخَرَ بِـjs — أَو يَعرِض قائِمَةً خاطِئَةً
+            لِأَحَدِهِما. **والاختِيارُ حاصِلٌ ومَقروء**: عُنوانُ كُلِّ
+            بِطاقَةٍ يُسَمّي مُزَوِّدَها، والمُهَيَّأُ وَحدَه يُرسَم
+            (القاعِدَة ١٢). *@
+        @if (Paddle.CanSell && plan is not null)
+        {
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">@L.Markup("admin.tenant_plan.paddle_title")</h3>
+                    <p style="margin:0 0 10px;font-size:13px;color:var(--ac-text-muted);">
+                        @L.Markup("admin.tenant_plan.paddle_hint")
+                    </p>
+
+                    <form method="post" action="@($"/admin/tenants/{Slug}/plan/paddle-link")">
+                        <AcField Label="@L["admin.tenant_plan.paddle_amount"]" Required="true">
+                            <input type="number" name="amount" class="ac-input" required
+                                   min="0" step="0.01" value="" />
+                        </AcField>
+
+                        <AcField Label="@L["admin.tenant_plan.paddle_currency"]"
+                                 Hint="@L["admin.tenant_plan.paddle_currency_hint"]">
+                            @*  حَقلٌ حُرٌّ لا قائِمَة — والسَبَبُ أَنّ
+                                قائِمَةً مُخترَعَةً تَرفُض عُملَةً
+                                مَقبولَةً أَسوَأُ مِن غِيابِ قائِمَة
+                                (القاعِدَة ١٦). ونَمَطُ الإدخالِ
+                                يَحرُسُ الشَكلَ وَحدَه. *@
+                            <input type="text" name="currency" class="ac-input"
+                                   maxlength="3" pattern="[A-Za-z]{3}"
+                                   value="@PaddleCurrencies.Default" />
+                        </AcField>
+
+                        <AcField Label="@L["admin.tenant_plan.paddle_days"]" Required="true"
+                                 Hint="@L["admin.tenant_plan.paddle_days_hint"]">
+                            <input type="number" name="days" class="ac-input" required
+                                   min="1" max="@PaddleTransactionPolicy.MaxDays" value="" />
+                        </AcField>
+
+                        <AcField Label="@L["admin.tenant_plan.paddle_description"]"
+                                 Hint="@L["admin.tenant_plan.paddle_minor_hint"]">
+                            <input type="text" name="description" class="ac-input"
+                                   maxlength="@PaddleTransactionPolicy.MaxDescriptionLength" value="" />
+                        </AcField>
+
+                        <AcButton Type="submit" Variant="ghost" Size="sm"
+                                  Text="@L["admin.tenant_plan.paddle_create"]" />
+                    </form>
+
+                    <h3 style="margin:18px 0 6px;">@L.Markup("admin.tenant_plan.paddle_list")</h3>
+                    @if (paddleTransactions.Count == 0)
+                    {
+                        <p style="margin:0;font-size:13px;color:var(--ac-text-muted);">
+                            @L.Markup("admin.tenant_plan.paddle_none")
+                        </p>
+                    }
+                    else
+                    {
+                        @foreach (var t in paddleTransactions)
+                        {
+                            <div style="border-top:1px solid var(--ac-border);padding-top:10px;margin-top:10px;">
+                                <p style="margin:0 0 4px;font-size:13px;">
+                                    <span class="ac-chip ac-chip-sm">@PaddleStatusLabel(t.Status)</span>
+                                    @t.Amount @t.Currency · @t.Days @L.Markup("admin.tenant_plan.paypal_order_days_unit")
+                                </p>
+                                @*  المَبلَغُ المُرسَلُ بِأَصغَرِ وَحدَةٍ
+                                    يُعرَض نَصّاً — **فَخَطَأُ أُسٍّ
+                                    يُرى قَبلَ المالِ لا بَعدَه**. وهُوَ
+                                    بِعَينِه ما يُقارَنُ بِالواصِل. *@
+                                <p style="margin:0 0 4px;font-size:12px;color:var(--ac-text-muted);">
+                                    @L.Markup("admin.tenant_plan.paddle_minor_note") @t.AmountMinor @t.Currency
+                                </p>
+                                <p style="margin:0 0 4px;font-size:12px;color:var(--ac-text-muted);word-break:break-all;">
+                                    @t.Id · @t.CreatedAt.ToString("yyyy-MM-dd")
+                                </p>
+                                @if (!string.IsNullOrWhiteSpace(t.CheckoutUrl))
+                                {
+                                    <p style="margin:0 0 6px;font-size:13px;word-break:break-all;">
+                                        <a href="@t.CheckoutUrl" target="_blank" rel="noopener">@t.CheckoutUrl</a>
+                                    </p>
+                                }
+                            </div>
+                        }
+                    }
+                </ChildContent>
+            </AcCard>
+        }
+
         <form method="post" action="@($"/admin/tenants/{Slug}/plan/save")">
             <AcCard>
                 <ChildContent>
@@ -364,6 +462,7 @@
     TenantPlan? plan;
     PlatformPlanPayPal? bound;
     IReadOnlyList<PayPalOrderRecord> orders = Array.Empty<PayPalOrderRecord>();
+    IReadOnlyList<PaddleTransactionRecord> paddleTransactions = Array.Empty<PaddleTransactionRecord>();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -371,6 +470,7 @@
         plan   = await Billing.PlanAsync(Slug);
         bound  = await Billing.PayPalPlanAsync(plan?.PlanId);
         orders = await Billing.OrdersForAsync(Slug);
+        paddleTransactions = await Billing.PaddleTransactionsForAsync(Slug);
     }
 
     /// <summary>اسمُ حَقلِ المَرجِع — <b>يُقرَأُ مِن المُهايِئِ ولا
@@ -389,6 +489,17 @@
         PayPalOrderStatuses.Denied   => L["admin.tenant_plan.paypal_status_denied"],
         PayPalOrderStatuses.Reversed => L["admin.tenant_plan.paypal_status_reversed"],
         _                            => L["admin.tenant_plan.paypal_status_created"]
+    };
+
+    /// <summary>حالَةُ مُعامَلَةِ Paddle بِالعَرَبِيَّة — مِن
+    /// القامُوسِ لا مِن الكود، ومَعجَمٌ مُغلَقٌ يُقرَأُ مِن
+    /// <see cref="PaddleTransactionStatuses"/> لا يُنسَخ.</summary>
+    string PaddleStatusLabel(string status) => status switch
+    {
+        PaddleTransactionStatuses.Completed => L["admin.tenant_plan.paddle_status_completed"],
+        PaddleTransactionStatuses.Canceled  => L["admin.tenant_plan.paddle_status_canceled"],
+        PaddleTransactionStatuses.Refunded  => L["admin.tenant_plan.paddle_status_refunded"],
+        _                                   => L["admin.tenant_plan.paddle_status_created"]
     };
 
     string StateLabel => TenantPlanPolicy.Derive(plan, DateTime.UtcNow) switch
@@ -460,6 +571,24 @@
             => L["admin.tenant_plan.err_paypal_order_settled"],
         ACommerce.Templates.Customer.Marketplace.Billing.PayPalOrderSurface.CaptureNotAllowed
             => L["admin.tenant_plan.err_paypal_capture_not_allowed"],
+
+        // خُروقُ نَموذَجِ Paddle ورُموزُ سَطحِه — نَفسُ العادَة: رَمزٌ
+        // مِن مَعجَمٍ مُغلَقٍ ونَصٌّ مِن القامُوس. وما لا يُقابِلُه
+        // رَمزٌ **رِسالَةُ Paddle نَفسُها** تُعرَض كَما هي.
+        PaddleTransactionPolicy.TenantEmpty        => L["admin.tenant_plan.err_paddle_tenant"],
+        PaddleTransactionPolicy.PlanMissing        => L["admin.tenant_plan.err_paddle_plan"],
+        PaddleTransactionPolicy.AmountNotPositive  => L["admin.tenant_plan.err_paddle_amount"],
+        PaddleTransactionPolicy.CurrencyMalformed  => L["admin.tenant_plan.err_paddle_currency"],
+        PaddleTransactionPolicy.DaysOutOfRange     => L["admin.tenant_plan.err_paddle_days"],
+        PaddleTransactionPolicy.DescriptionTooLong => L["admin.tenant_plan.err_paddle_description"],
+        ACommerce.Templates.Customer.Marketplace.Billing.PaddleSurface.Unavailable
+            => L["admin.tenant_plan.err_paddle_unavailable"],
+        ACommerce.Templates.Customer.Marketplace.Billing.PaddleSurface.Refused
+            => L["admin.tenant_plan.err_paddle_refused"],
+        ACommerce.Templates.Customer.Marketplace.Billing.PaddleSurface.LinkMissing
+            => L["admin.tenant_plan.err_paddle_no_link"],
+        ACommerce.Templates.Customer.Marketplace.Billing.PaddleSurface.AlreadySettled
+            => L["admin.tenant_plan.err_paddle_settled"],
 
         // **خَطَأُ الاستِحقاقِ يُسَمّى ويُقالُ عِلاجُه** — وهُوَ
         // الاستِثناءُ الوَحيدُ مِن «تُعرَض رِسالَةُ PayPal كَما هي»:

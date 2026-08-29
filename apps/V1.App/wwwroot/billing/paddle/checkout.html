@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>وَسايِل</title>
+<!--
+  ═══ صَفحَةُ الدَفعِ — ساكِنَةٌ بِقَصد ═══════════════════════════════
+
+  **لِماذا صَفحَةُ HTML في `wwwroot` ولا مُكَوِّنُ Blazor**: هذِه هي
+  «رابِطُ الدَفعِ الافتِراضيّ» المُسَجَّلُ في لَوحَةِ Paddle. يُنشِئُ
+  الخادِمُ المُعامَلَةَ فَيَصيرُ الرابِطُ `…/checkout.html?_ptxn=txn_…`،
+  وتَفتَحُها `paddle.js` مِن ذلك المُعامِل. **ولا React ولا npm ولا
+  مُكَوِّنَ تَفاعُليّ** — والبَديلُ (أَن تَستَضيفَ Paddle الصَفحَةَ)
+  يَحتاج مُوافَقَةً إضافِيَّةً لِلوَضعِ المُباشِر، فَلا يُبنى عَلَيه
+  أَساس.
+
+  **والنُصوصُ تُجلَبُ مِن القامُوسِ لا تُكتَبُ هُنا** (القاعِدَة ١١):
+  ‏`/billing/paddle/config.json` تَرُدُّ رَمزَ العَميلِ والبيئَةَ
+  **ونُصوصَ الصَفحَة** مِن `ar.json`. والسَطرُ الوَحيدُ المَكتوبُ في
+  هذا المِلَفِّ سَطرُ «تَعَذَّرَ جَلبُ الإعداد» — ولا مَفَرَّ مِنه:
+  نَصٌّ يُقال حينَ يَتَعَذَّرُ جَلبُ النُصوص.
+
+  **ورَمزُ العَميلِ عَلَنيٌّ بِالتَصميم** — يُرسَل إلى كُلِّ مُتَصَفِّح.
+  ومِفتاحُ الـAPI وسِرُّ التَوقيعِ **لا يَمُرّانِ مِن هُنا إطلاقاً**
+  (مُثَبَّتٌ بِاختِبارٍ سالِب على جِسمِ `config.json`).
+-->
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: "Tajawal", "Segoe UI", system-ui, sans-serif; line-height: 1.8;
+    background: #f6f7f9; color: #16181d; padding: 24px;
+  }
+  @media (prefers-color-scheme: dark) { body { background: #101216; color: #e9ecf1; } }
+  .card { max-width: 520px; width: 100%; text-align: center; }
+  h1 { font-size: 20px; margin: 0 0 10px; }
+  p  { margin: 0 0 14px; }
+  a  { color: inherit; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1 id="pd-title"></h1>
+    <p id="pd-body"></p>
+    <p id="pd-ref" style="font-size:12px;opacity:.7;word-break:break-all;"></p>
+    <p><a id="pd-back" href="/studio">/studio</a></p>
+  </div>
+
+  <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+  <script>
+  (function () {
+    var q     = new URLSearchParams(window.location.search);
+    var txn   = q.get('_ptxn');
+    var ref   = q.get('ref') || '';
+    var title = document.getElementById('pd-title');
+    var body  = document.getElementById('pd-body');
+
+    function show(t, b) { title.textContent = t || ''; body.textContent = b || ''; }
+
+    // السَطرُ الوَحيدُ المَكتوبُ هُنا — يُقالُ حينَ يَتَعَذَّرُ جَلبُ
+    // النُصوصِ نَفسِها، فَلا يُمكِن أَن يَأتِيَ مِن القامُوس.
+    function offline() { show('وَسايِل', 'تَعَذَّرَ جَلبُ الإعداد. حَدِّث الصَفحَة.'); }
+
+    fetch('/billing/paddle/config.json', { headers: { 'accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (cfg) {
+        document.getElementById('pd-back').textContent = cfg.backLabel || '/studio';
+        if (ref) document.getElementById('pd-ref').textContent = (cfg.referenceLabel || '') + ' ' + ref;
+
+        if (!cfg.enabled || !cfg.token || !txn || typeof Paddle === 'undefined') {
+          show(cfg.title, cfg.failedBody);
+          return;
+        }
+
+        show(cfg.title, cfg.body);
+
+        // البيئَةُ تُضبَطُ قَبلَ التَهيئَة — وبِدونِها تُنادي نُسخَةُ
+        // الاختِبارِ مُضيفَ الإنتاج.
+        if (cfg.environment === 'sandbox') Paddle.Environment.set('sandbox');
+        Paddle.Initialize({ token: cfg.token });
+
+        var success = window.location.origin + cfg.returnUrl
+                    + (ref ? '?ref=' + encodeURIComponent(ref) : '');
+
+        Paddle.Checkout.open({
+          transactionId: txn,
+          settings: { displayMode: 'overlay', successUrl: success }
+        });
+      })
+      .catch(offline);
+  })();
+  </script>
+</body>
+</html>

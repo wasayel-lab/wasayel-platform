@@ -132,6 +132,24 @@
                             يَشتَريه. ويَسبِق رابِطَ الاشتِراكِ لِأَنَّه
                             الأَحدَثُ قَصداً: يُنشِئُه المُشرِفُ لِدَورَةٍ
                             بِعَينِها. *@
+                        @*  دَفعٌ بِالبِطاقَةِ عَبر Paddle (‏ADR-009) —
+                            **يَسبِقُ الاثنَينِ عَمداً**: رابِطا PayPal
+                            يَطلُبانِ مِن الدافِعِ حِسابَ PayPal، وهذا
+                            يَقبَلُ البِطاقَةَ مُباشَرَةً بِلا
+                            مَحفَظَة — وهُوَ العَطَبُ الَّذي فُتِحَ لَه
+                            هذا المَسار. ومَعَه مَبلَغُه ومُدَّتُه،
+                            فَلا يُنقَر رابِطُ دَفعٍ بِلا مَعرِفَةِ ما
+                            يَشتَريه. *@
+                        @if (PendingPaddle(t.Slug) is { } paddleTx)
+                        {
+                            <a class="st-btn st-btn-primary" style="margin-top:10px;"
+                               href="@paddleTx.CheckoutUrl" target="_blank" rel="noopener">
+                                @L.Markup("studio.plan.paddle_pay")
+                            </a>
+                            <p style="margin:6px 0 0;font-size:13px;color:var(--st-muted);">
+                                @paddleTx.Amount @paddleTx.Currency · @paddleTx.Days @L.Markup("studio.plan.order_days_unit")
+                            </p>
+                        }
                         @if (PendingOrder(t.Slug) is { } order)
                         {
                             <a class="st-btn st-btn-primary" style="margin-top:10px;"
@@ -250,6 +268,11 @@
     IReadOnlyDictionary<string, ACommerce.Kit.Subscriptions.PayPalOrderRecord> myOrders =
         new Dictionary<string, ACommerce.Kit.Subscriptions.PayPalOrderRecord>();
 
+    /// <summary>ومُعامَلاتُ Paddle المُعَلَّقَة — نَفسُ الشَكلِ
+    /// حَرفاً، وقامُوسٌ فارِغٌ يَعني لا زِرَّ إطلاقاً.</summary>
+    IReadOnlyDictionary<string, ACommerce.Kit.Subscriptions.PaddleTransactionRecord> myPaddle =
+        new Dictionary<string, ACommerce.Kit.Subscriptions.PaddleTransactionRecord>();
+
     [Microsoft.AspNetCore.Components.Inject]
     Services.Queries.PlatformBillingQueries Billing { get; set; } = default!;
 
@@ -277,7 +300,8 @@
     bool Renewable(string slug)
         => PlanState(slug) is ACommerce.Kit.Subscriptions.TenantPlanState.Grace
                            or ACommerce.Kit.Subscriptions.TenantPlanState.Suspended
-        || PendingOrder(slug) is not null;
+        || PendingOrder(slug) is not null
+        || PendingPaddle(slug) is not null;
 
     string PlanStateLabel(string slug) => PlanState(slug) switch
     {
@@ -302,6 +326,13 @@
     /// تُنشِئ عَشَرَةً في دَقيقَة.</summary>
     ACommerce.Kit.Subscriptions.PayPalOrderRecord? PendingOrder(string slug)
         => myOrders.TryGetValue(slug, out var o) ? o : null;
+
+    /// <summary>مُعامَلَةُ Paddle مُعَلَّقَةٌ لِهذا المَتجَر —
+    /// و<c>null</c> يَعني «لا زِرّ». <b>وتَسبِقُ الاثنَينِ في
+    /// العَرض</b>: هي وَحدَها الَّتي تَقبَل بِطاقَةً بِلا مَحفَظَة،
+    /// وهُوَ العَطَبُ الَّذي فُتِحَ لَه هذا المَسار.</summary>
+    ACommerce.Kit.Subscriptions.PaddleTransactionRecord? PendingPaddle(string slug)
+        => myPaddle.TryGetValue(slug, out var t) ? t : null;
 
     string HiddenAtText(string slug)
     {
@@ -329,6 +360,7 @@
 
         myPlans = await Billing.AllPlansAsync();
         myOrders = await Billing.PendingOrdersAsync();
+        myPaddle = await Billing.PendingPaddleAsync();
         transferInstructions = (await Billing.SettingsAsync()).TransferInstructions;
 
         // اِجمَع آخِر الـ deals مِن كُلّ تَطبيقات هذا المُستَخدِم.
