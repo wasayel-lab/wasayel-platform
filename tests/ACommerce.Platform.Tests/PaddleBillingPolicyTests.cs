@@ -580,6 +580,73 @@ public class PaddleBillingPolicyTests
         Assert.False(d.TouchesPlan);
     }
 
+    /// <summary>
+    /// <para><b>★ والتَعليمُ يَقَعُ فِعلاً، لا يُقالُ فَحَسب</b> —
+    /// وهذا هُوَ الشَطرُ الَّذي كانَ غائِباً عَن الحارِسِ فَوقَه
+    /// (<c>docs/ADR-011</c>): كانَ يُفحَص <b>ما قَرَّرَه القَرار</b>
+    /// ولا يُفحَص <b>ما كُتِبَ في الوَثيقَة</b>. والجَدوَلُ بِلا ضِلعِ
+    /// <c>(created → refunded)</c> كانَ يَبتَلِعُ الكِتابَةَ بِصَمت،
+    /// فَتَبقى الحالَةُ <c>created</c> ويَجِدُها أَيُّ «اكتَمَلَت»
+    /// لاحِقَةٍ صالِحَةً لِلتَمديد — <b>ثَلاثونَ يَوماً لِمالٍ
+    /// عاد</b>.</para>
+    ///
+    /// <para><b>ولا يَمَسُّ هذا حارِسَ السَحب</b>: المُعامَلَةُ لَم
+    /// تُغادِر <c>completed</c> لِأَنَّها لَم تَبلُغها، فَشَرطُ
+    /// <c>Withdraw</c> لا يَنطَبِق.</para>
+    /// </summary>
+    [Fact]
+    public void ARefund_OnATransactionThatNeverCompleted_ActuallyWritesRefunded()
+    {
+        var record = Record();
+        var e = PaddleBillingPolicy.Parse(AdjustmentBody())!;
+        var d = PaddleBillingPolicy.Decide(e, record, Plan(), alreadySeen: false, Now);
+
+        Assert.True(PaddleBillingPolicy.MayWriteStatus(
+            PaddleTransactionStatuses.Created, d.TransactionStatus, d.Action));
+
+        PaddleBillingPolicy.Apply(record, e, d, Now);
+
+        Assert.Equal(PaddleTransactionStatuses.Refunded, record.Status);
+        Assert.False(d.TouchesPlan);
+    }
+
+    /// <summary><b>وبَعدَ التَعليمِ لا يُشتَرى يَومٌ بِمالٍ عاد</b> —
+    /// الشَطرُ الماليُّ مِن نَفسِ العَطَب، مَقيساً بِرِسالَتَينِ
+    /// مُتَتالِيَتَينِ على وَثيقَةٍ واحِدَة.</summary>
+    [Fact]
+    public void AResentCompletion_AfterARefundOnAnUnpaidTransaction_ExtendsNothing()
+    {
+        var record = Record();
+        var refund = PaddleBillingPolicy.Parse(AdjustmentBody())!;
+        PaddleBillingPolicy.Apply(
+            record, refund,
+            PaddleBillingPolicy.Decide(refund, record, Plan(), alreadySeen: false, Now), Now);
+
+        var resent = PaddleBillingPolicy.Parse(CompletedBody(eventId: "evt_pay_again"))!;
+        var d = PaddleBillingPolicy.Decide(resent, record, Plan(), alreadySeen: false, Now);
+
+        Assert.Equal(PaddleAction.MarkTransaction, d.Action);
+        Assert.False(d.TouchesPlan);
+    }
+
+    /// <summary><b>والضِلعُ الجَديدُ لا يَفتَحُ الجَدوَلَ في
+    /// الاتِّجاهِ الآخَر</b> — الاختِبارُ السالِبُ المُقابِل
+    /// (القاعِدَة ٤): «عادَ المال» يُبلَغ مِن غَيرِ النِهائيّ، ولا
+    /// يُغادَرُ إلى شَيء.</summary>
+    [Theory]
+    [InlineData(PaddleTransactionStatuses.Created,   PaddleTransactionStatuses.Refunded,  true)]
+    [InlineData(PaddleTransactionStatuses.Canceled,  PaddleTransactionStatuses.Refunded,  true)]
+    [InlineData(PaddleTransactionStatuses.Completed, PaddleTransactionStatuses.Refunded,  true)]
+    [InlineData(PaddleTransactionStatuses.Refunded,  PaddleTransactionStatuses.Completed, false)]
+    [InlineData(PaddleTransactionStatuses.Refunded,  PaddleTransactionStatuses.Created,   false)]
+    [InlineData(PaddleTransactionStatuses.Refunded,  PaddleTransactionStatuses.Canceled,  false)]
+    [InlineData(PaddleTransactionStatuses.Completed, PaddleTransactionStatuses.Created,   false)]
+    [InlineData(PaddleTransactionStatuses.Completed, PaddleTransactionStatuses.Canceled,  false)]
+    [InlineData(PaddleTransactionStatuses.Canceled,  PaddleTransactionStatuses.Completed, false)]
+    public void MoneyReturned_IsReachableFromEveryNonFinalState_AndIsNeverLeft(
+        string from, string to, bool expected)
+        => Assert.Equal(expected, PaddleTransactionStatuses.CanTransition(from, to));
+
     /// <summary>ورَدٌّ قَضائيٌّ مُعتَمَدٌ يَسحَبُ كَما يَسحَبُ
     /// الاستِرداد — <b>المالُ عادَ في الحالَتَين</b>.</summary>
     [Fact]
@@ -776,6 +843,113 @@ public class PaddleBillingPolicyTests
             Now);
 
         Assert.Equal(PaddleTransactionStatuses.Completed, record.Status);
+    }
+
+    // ═══ ٨-ب. لا قَرارَ يَقولُ «اكتُب» وحارِسٌ يَرفُضُ بِصَمت ══════════
+    //
+    // **العائِلَةُ الَّتي كَتَبَت هذا المَسح**: الجَدوَلُ يَعرِف
+    // **الحالَتَينِ** ولا يَعرِف **الفِعل**، فَيُنتِج «قَرارٌ يَقولُ
+    // شَيئاً والكِتابَةُ تَرفُضُه بِلا صَوت». وقَعَت مَرَّتَينِ في
+    // مَسارِ PayPal ومَرَّةً هُنا (‏`docs/ADR-011`). **والضِلعُ
+    // الواحِدُ يُغلَق، والعائِلَةُ تُغلَقُ بِمَسحٍ يُحمِرُّ عَلى أَيِّ
+    // ضِلعٍ ناقِصٍ قادِم** (القاعِدَة ٢).
+    //
+    // **والمَسحُ يَتَمَدَّدُ مَعَ المَعجَمِ ولا يُحَدَّثُ بِاليَد**:
+    // يُشتَقُّ مِن `PaddleTransactionStatuses.All` و
+    // `PaddleEventTypes.All`، فَحالَةٌ جَديدَةٌ أَو نَوعٌ جَديدٌ
+    // يَدخُلانِ المَسحَ يَومَ يُضافان.
+
+    /// <summary><b>القَرارُ يَطلُبُ كِتابَةَ حالَةٍ والحارِسُ
+    /// يَرفُضُها</b> — وهُوَ ما يَقَعُ صامِتاً لِأَنّ
+    /// <c>ApplyTransaction</c> تَرُدُّ <c>wrote=true</c> بِمُجَرَّدِ
+    /// <c>TouchesTransaction</c>، فَيُودَعُ ويُدَقَّقُ ويُرَدُّ
+    /// ‏200 — <b>وتَتَوَقَّفُ إعادَةُ Paddle على حالَةٍ لَم
+    /// تَتَغَيَّر</b>.</summary>
+    private static bool IsSilentlySwallowed(string from, PaddleDecision d)
+        => d.TouchesTransaction
+           && d.TransactionStatus.Length > 0
+           && !string.Equals(d.TransactionStatus, from, StringComparison.Ordinal)
+           && !PaddleBillingPolicy.MayWriteStatus(from, d.TransactionStatus, d.Action);
+
+    /// <summary>كُلُّ شَكلِ حَدَثٍ مَعروفٍ — <b>مُشتَقٌّ مِن المَعجَمِ
+    /// لا مَكتوبٌ بِجِوارِه</b>، فَلا يَنجَرِف عَنه.</summary>
+    private static IEnumerable<(string Label, string Json)> EveryEventShape()
+    {
+        foreach (var type in PaddleEventTypes.All)
+        {
+            if (string.Equals(type, PaddleEventTypes.TransactionCompleted, StringComparison.Ordinal))
+            {
+                yield return ($"{type} · status=completed", CompletedBody(eventId: "evt_sweep"));
+                yield return ($"{type} · status=ready", CompletedBody(eventId: "evt_sweep", status: "ready"));
+                yield return ($"{type} · مَبلَغٌ مُخالِف", CompletedBody(eventId: "evt_sweep", total: "5635"));
+                yield return ($"{type} · مُعامَلَةٌ أُخرى", CompletedBody(eventId: "evt_sweep", txn: "txn_other"));
+            }
+            else if (PaddleEventTypes.IsAdjustment(type))
+            {
+                foreach (var action in new[] { "refund", "chargeback", "credit" })
+                foreach (var status in new[] { "approved", "pending_approval" })
+                    yield return ($"{type} · {action}/{status}",
+                        AdjustmentBody(eventId: "evt_sweep", type: type, action: action, status: status));
+            }
+            else
+            {
+                yield return (type, SubscriptionBody(type, "evt_sweep"));
+            }
+        }
+    }
+
+    /// <summary>
+    /// <para><b>★ الثابِتُ العائِليّ: كُلُّ زَوجٍ (حالَةٌ قائِمَةٌ ×
+    /// حَدَثٌ وارِد) — فَإمّا أَلّا يَطلُبَ القَرارُ كِتابَةً، وإمّا
+    /// أَن يَأذَنَ بِها الحارِس. ولا ثالِث.</b></para>
+    ///
+    /// <para><b>والأَداةُ تَعُدُّ ما فَحَصَته وتَفشَلُ إن كانَ
+    /// صِفراً</b> (القاعِدَة ١٠): «صِفرُ مُخالَفَة» بِلا عَدّادٍ لا
+    /// يُميَّز عَن أَداةٍ عَمياء.</para>
+    /// </summary>
+    [Fact]
+    public void NoDecision_AsksForAStatusWrite_ThatTheGuardRefusesSilently()
+    {
+        var swallowed = new List<string>();
+        var swept = 0;
+
+        foreach (var state in PaddleTransactionStatuses.All)
+        foreach (var (label, json) in EveryEventShape())
+        foreach (var plan in new TenantPlan?[] { Plan(), null })
+        {
+            var e = PaddleBillingPolicy.Parse(json)!;
+            var d = PaddleBillingPolicy.Decide(e, Record(state), plan, alreadySeen: false, Now);
+            swept++;
+
+            if (IsSilentlySwallowed(state, d))
+                swallowed.Add(
+                    $"«{state}» + {label} (الباقَة {(plan is null ? "غائِبَة" : "قائِمَة")}) ⇒ " +
+                    $"{d.Action} يَطلُبُ «{d.TransactionStatus}» والحارِسُ يَرفُض");
+        }
+
+        var floor = PaddleTransactionStatuses.All.Count * PaddleEventTypes.All.Count * 2;
+        Assert.True(swept >= floor,
+            $"المَسحُ غَطّى {swept} زَوجاً والأَرضِيَّةُ {floor} — أَداةٌ تَفحَصُ أَقَلَّ مِمّا تَدَّعي.");
+
+        Assert.True(swallowed.Count == 0,
+            $"مُبتلَعاتٌ صامِتَة ({swallowed.Count} مِن {swept} زَوجاً):\n" +
+            string.Join("\n", swallowed));
+    }
+
+    /// <summary><b>والأَداةُ تُقاسُ قَبلَ أَن يُوثَقَ بِها</b>
+    /// (القاعِدَة ١٠): عَيبٌ مَحقونٌ يُحمِرُّ الكاشِف، وكِتابَةٌ
+    /// مَشروعَةٌ لا تُحمِرُّه. وبِلا هذا يَكونُ «صِفرُ مُبتلَعات»
+    /// دَعوى كاشِفٍ لا نَتيجَةَ مَسح.</summary>
+    [Fact]
+    public void TheSwallowDetector_IsNotBlind_ItReddensOnAnInjectedImpossibleWrite()
+    {
+        var impossible = new PaddleDecision(
+            PaddleAction.MarkTransaction, default, PaddleTransactionStatuses.Completed, "");
+        Assert.True(IsSilentlySwallowed(PaddleTransactionStatuses.Refunded, impossible));
+
+        var lawful = new PaddleDecision(
+            PaddleAction.Withdraw, default, PaddleTransactionStatuses.Refunded, "");
+        Assert.False(IsSilentlySwallowed(PaddleTransactionStatuses.Completed, lawful));
     }
 
     // ═══ ٩. الاشتِراكُ حالَةٌ لا مال ═══════════════════════════════════

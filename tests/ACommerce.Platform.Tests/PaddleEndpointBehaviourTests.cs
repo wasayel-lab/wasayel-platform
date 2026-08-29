@@ -590,6 +590,63 @@ public class PaddleEndpointBehaviourTests
         Assert.Equal(before, world.Read<TenantPlan>(Slug)!.ExpiresAt);
     }
 
+    /// <summary>
+    /// <para><b>★ المالُ عادَ ⇒ لا يُشتَرى بِه يَومٌ واحِدٌ بَعدَ
+    /// ذلك — والمَسارُ ثَلاثُ رَسائِلَ لا رِسالَة.</b> وهذا هُوَ
+    /// العَطَبُ الَّذي كَتَبَ <c>docs/ADR-011</c>، مَقيساً مِن طَرَفِ
+    /// الشَبَكَةِ كَما وَقَع:</para>
+    /// <list type="number">
+    ///   <item><b>«اكتَمَلَت» تَصِلُ ووَثيقَةُ الباقَةِ غائِبَة</b> ⇒
+    ///   <c>UnknownTenant</c> · صِفرُ كِتابَة · ‏503 (تَشفيهِ
+    ///   الإعادَة) · الحالَةُ تَبقى <c>created</c>.</item>
+    ///   <item><b>الاستِردادُ يَصِلُ ويُعتَمَد</b> ⇒ القَرارُ
+    ///   <c>MarkTransaction</c> يَقولُ <c>refunded</c>. <b>وهُنا كانَ
+    ///   يُبتلَع</b>: الجَدوَلُ بِلا ضِلعِ
+    ///   <c>(created → refunded)</c> فَيَرفُضُ الحارِسُ الكِتابَةَ
+    ///   بِصَمت، ويُرَدُّ ‏200 فَتَتَوَقَّفُ إعادَةُ Paddle.</item>
+    ///   <item><b>يَضبُطُ المُشرِفُ الباقَةَ فَتُعادُ
+    ///   «اكتَمَلَت»</b> ⇒ تَجِدُ الحالَةَ <c>created</c> فَتُمَدِّد
+    ///   — <b>ثَلاثونَ يَوماً مُنِحَت لِمالٍ عاد</b>.</item>
+    /// </list>
+    /// <para><b>والحارِسُ هُنا يَقيسُ الأَثَرَ الماليَّ لا اسمَ
+    /// الفِعل</b>: تاريخُ الانتِهاءِ بَعدَ الرِسالَةِ الثالِثَةِ هُوَ
+    /// بِعَينِه ما كانَ قَبلَها.</para>
+    /// </summary>
+    [Fact]
+    public async Task AnApprovedRefundOnAnUnpaidTransaction_ClosesIt_SoAResentCompletionBuysNoDays()
+    {
+        // ‏«اكتَمَلَت» تَصِلُ ولا وَثيقَةَ باقَةٍ بَعد.
+        var world = new DocWorld().Put(Record(Reference));
+        await using var host = await PaddleHost.StartAsync(world, new PaddleCalls());
+
+        var arrival = await host.Client.SendAsync(Signed(CompletedBody("evt_pay")));
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, arrival.StatusCode);
+        Assert.Contains(nameof(PaddleAction.UnknownTenant),
+            await arrival.Content.ReadAsStringAsync());
+        Assert.Equal(PaddleTransactionStatuses.Created,
+            world.Read<PaddleTransactionRecord>(Reference)!.Status);
+
+        // الاستِردادُ يُعتَمَد — <b>فَتُغلَقُ المُعامَلَة</b>.
+        var refund = await host.Client.SendAsync(Signed(RefundBody("evt_back")));
+        Assert.Equal(HttpStatusCode.OK, refund.StatusCode);
+        Assert.Contains(nameof(PaddleAction.MarkTransaction),
+            await refund.Content.ReadAsStringAsync());
+        Assert.Equal(PaddleTransactionStatuses.Refunded,
+            world.Read<PaddleTransactionRecord>(Reference)!.Status);
+
+        // يَضبُطُ المُشرِفُ الباقَةَ، وتُعادُ «اكتَمَلَت».
+        var plan   = Plan();
+        var before = plan.ExpiresAt;
+        world.Put(plan);
+
+        var resent = await host.Client.SendAsync(Signed(CompletedBody("evt_pay_again")));
+        var body   = await resent.Content.ReadAsStringAsync();
+
+        Assert.DoesNotContain(nameof(PaddleAction.Extend), body, StringComparison.Ordinal);
+        Assert.Contains(nameof(PaddleAction.MarkTransaction), body);
+        Assert.Equal(before, world.Read<TenantPlan>(Slug)!.ExpiresAt);
+    }
+
     // ═══ ٧. نُقطَةُ الرابِط — الحارِسُ قَبلَ أَوَّلِ كِتابَة ═════════
 
     private static FormUrlEncodedContent LinkForm() => new(new Dictionary<string, string>
