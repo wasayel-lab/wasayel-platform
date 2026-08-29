@@ -58,27 +58,32 @@ public static class PaddleFlow
     }
 
     /// <summary>
-    /// <para><b>مِفتاحانِ نازِلان، ولِكُلٍّ سَبَبُ وُجودِه.</b></para>
+    /// <para><b>مِفتاحانِ، ولِكُلٍّ سَبَبُ وُجودِه — والثاني
+    /// <c>else</c> لا <c>fallback</c>.</b></para>
     /// <list type="number">
     ///   <item><b>مَرجِعُنا</b> (<c>data.custom_data</c>) — المِفتاحُ
     ///   الأَوَّليُّ لِلوَثيقَة، فَتَحميلٌ مُباشِرٌ بِلا
     ///   استِعلام.</item>
-    ///   <item><b>مُعَرِّفُ المُعامَلَة</b> — لِأَنّ <b>أَحداثَ
-    ///   التَسوِيَةِ لا تَحمِل <c>custom_data</c> المُعامَلَة</b>:
-    ///   الاستِردادُ كائِنٌ آخَرُ بِحُقولِه، وجِسرُه الوَحيدُ
+    ///   <item><b>مُعَرِّفُ المُعامَلَة</b> — <b>حينَ لا مَرجِعَ
+    ///   إطلاقاً</b>، وذاكَ حالُ أَحداثِ التَسوِيَة: الاستِردادُ
+    ///   كائِنٌ آخَرُ بِحُقولِه <b>لا يَحمِل <c>custom_data</c>
+    ///   المُعامَلَة</b>، وجِسرُه الوَحيدُ
     ///   <c>data.transaction_id</c>. <b>وبِلا هذا السَطرِ لا يُسحَبُ
-    ///   استِردادٌ أَبَداً</b> — المالُ يَعودُ والأَيّامُ
-    ///   تَبقى.</item>
+    ///   استِردادٌ أَبَداً</b> — المالُ يَعودُ والأَيّامُ تَبقى.</item>
     /// </list>
+    ///
+    /// <para><b>ولِماذا لا يُجَرَّبُ الثاني بَعدَ فَشَلِ الأَوَّل</b>:
+    /// مَرجِعٌ **مَوجودٌ ولا وَثيقَةَ لَه** لَن تَجِدَ لَه المُعَرِّفُ
+    /// وَثيقَةً أُخرى — نَحنُ مَن يَكتُبُ الاثنَينِ في وَثيقَةٍ
+    /// واحِدَة. فَالاستِعلامُ حينَئِذٍ **رِحلَةُ قاعِدَةِ بَياناتٍ
+    /// مَعروفَةُ النَتيجَة** على كُلِّ رِسالَةٍ بِمَرجِعٍ مَجهول —
+    /// وتِلكَ بِعَينِها الحالَةُ الَّتي تُعيدُها Paddle مِراراً.</para>
     /// </summary>
     public static async Task<PaddleTransactionRecord?> FindTransactionAsync(
         IQuerySession session, PaddleEvent e, CancellationToken ct = default)
     {
         if (e.Reference is { Length: > 0 } reference)
-        {
-            var byRef = await session.LoadAsync<PaddleTransactionRecord>(reference, ct);
-            if (byRef is not null) return byRef;
-        }
+            return await session.LoadAsync<PaddleTransactionRecord>(reference, ct);
 
         if (e.TransactionId is { Length: > 0 } txn)
             return await session.Query<PaddleTransactionRecord>()
