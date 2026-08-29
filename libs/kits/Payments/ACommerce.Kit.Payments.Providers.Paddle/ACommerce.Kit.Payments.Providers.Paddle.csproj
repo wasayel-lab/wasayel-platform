@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\ACommerce.Kit.Payments.Core\ACommerce.Kit.Payments.Core.csproj" />
+  </ItemGroup>
+  <!-- وَثيقَةُ باقَةِ المُستَأجِر ووَثيقَةُ المُعامَلَةِ المُعَلَّقَة
+       تَعيشانِ في `Subscriptions.Core`، والقَرارُ هُنا يَقرَؤُهُما ولا
+       يَكتُبُهُما — دالّاتٌ نَقِيَّة. نَفسُ اعتِمادِ
+       `Providers.PayPal` حَرفاً.
+
+       **ولا اعتِمادَ على `Providers.PayPal`** — ولا العَكس: مُزَوِّدانِ
+       أَخَوانِ لا يَرِثُ أَحَدُهُما الآخَر. وما يَشتَرِكانِ فيه فِعلاً
+       (تَحريكُ `TenantPlan` وسِجِلُّ مَرَّة-واحِدَة) يَسكُن في
+       القالِبِ فَوقَهُما، لا في أَحَدِهِما. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\Subscriptions\ACommerce.Kit.Subscriptions.Core\ACommerce.Kit.Subscriptions.Core.csproj" />
+  </ItemGroup>
+</Project>

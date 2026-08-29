@@ -61,6 +61,12 @@
          (‏`Directory.Packages.props` بِلا تَغيير). ونِداءُ HTTP وَحدَه
          خَلفَ `PayPalGateway`. -->
     <ProjectReference Include="..\..\kits\Payments\ACommerce.Kit.Payments.Providers.PayPal\ACommerce.Kit.Payments.Providers.PayPal.csproj" />
+    <!-- ‏Paddle — مُزَوِّدٌ ثانٍ **بِجِوارِ PayPal لا بَدَلاً مِنه**:
+         ‏PayPal تَطلُب مِن الدافِعِ حِسابَ PayPal ولا تَعرِض بِطاقَة،
+         وزَبائِنُ المالِكِ يَدفَعونَ بِبِطاقَةٍ بِلا مَحفَظَة. ونَفسُ
+         حُجَّةِ جارَتِه أَعلاهُ حَرفاً: أَنواعٌ ودَوالُّ نَقِيَّةٌ لا
+         SDK، وصِفرُ حُزمَةٍ خارِجِيَّةٍ تُضاف. -->
+    <ProjectReference Include="..\..\kits\Payments\ACommerce.Kit.Payments.Providers.Paddle\ACommerce.Kit.Payments.Providers.Paddle.csproj" />
     <ProjectReference Include="..\..\kits\Theme\ACommerce.Kit.Theme.Core\ACommerce.Kit.Theme.Core.csproj" />
     <!-- المال يُنَسَّق مِن مَوضِع واحِد (‏`ACommerce.Kit.Culture.Money`)
          بَدَل رَمز عُملَة مَحبوس في قيَم القامُوس. والعُدَّة قائِمَة
