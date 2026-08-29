@@ -1,0 +1,43 @@
+@page "/contact"
+@inject L L
+
+@*
+    صَفحَةُ التَواصُل — بَريدٌ نائِبٌ ورَوابِطُ الوَثائِق.
+
+    **ولا نَموذَجَ إرسالٍ هُنا عَمداً** (القاعِدَة ١): نَموذَجٌ بِلا
+    مُعالِجٍ يَستَقبِلُه زِرٌّ يَقولُ «قَريباً»، وبَريدٌ مَكتوبٌ
+    يَعمَلُ اليَومَ بِلا سَطرِ خادِمٍ واحِد. ويَومَ يُطلَبُ نَموذَجٌ
+    يُبنى بِمُعالِجِه في مَوجَتِه.
+*@
+
+<div class="acs-page">
+    <h1 class="wsl-doc-title">@L.Markup("platform.contact.title")</h1>
+    <p class="wsl-doc-lead">@L.Markup("platform.contact.intro")</p>
+
+    <p class="wsl-placeholder wsl-doc-note">@L.Markup("platform.doc.placeholder_note")</p>
+
+    <section class="wsl-doc-section">
+        <h2>@L.Markup("platform.contact.email_label")</h2>
+        <p><span class="wsl-placeholder">@L.Markup("platform.doc.contact_email")</span></p>
+        <p>@L.Markup("platform.contact.support_note")</p>
+    </section>
+
+    <section class="wsl-doc-section">
+        <h2>@L.Markup("platform.contact.entity_label")</h2>
+        <ul class="wsl-doc-facts">
+            <li><span class="wsl-placeholder">@L.Markup("platform.doc.entity_name")</span></li>
+            <li>@L.Markup("platform.contact.registration_label"): <span class="wsl-placeholder">@L.Markup("platform.doc.entity_registration")</span></li>
+            <li>@L.Markup("platform.contact.address_label"): <span class="wsl-placeholder">@L.Markup("platform.doc.entity_address")</span></li>
+        </ul>
+    </section>
+
+    <section class="wsl-doc-section">
+        <h2>@L.Markup("platform.contact.docs_title")</h2>
+        <nav class="wsl-doc-nav" aria-label="@(L["platform.footer.nav_label"])">
+            <a class="wsl-doc-navlink" href="/terms">@L.Markup("platform.footer.terms")</a>
+            <a class="wsl-doc-navlink" href="/privacy">@L.Markup("platform.footer.privacy")</a>
+            <a class="wsl-doc-navlink" href="/refunds">@L.Markup("platform.footer.refunds")</a>
+            <a class="wsl-doc-navlink" href="/pricing">@L.Markup("platform.footer.pricing")</a>
+        </nav>
+    </section>
+</div>

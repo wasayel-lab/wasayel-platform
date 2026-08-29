@@ -1,0 +1,59 @@
+@page "/pricing"
+@using ACommerce.Kit.Subscriptions
+@inject L L
+
+@*
+    صَفحَةُ الأَسعارِ العامَّة — **تَقرَأُ الكاتالوجَ القائِمَ ولا
+    تَختَرِعُ رَقماً** (القاعِدَة ١٦).
+
+    المَصدَرُ `PlatformPlanCatalog.All`، وهُوَ مَبثوثٌ مِن
+    `Definitions/*.plan.json`. و`PlatformPlanDefinition` **لا حَقلَ
+    سِعرٍ فيها أَصلاً** — السِعرُ يَملَؤُه المُشرِفُ لِكُلِّ مَتجَرٍ
+    عَلى حِدَة في `TenantPlan`. فَما دامَ الكاتالوجُ بِلا سِعرٍ
+    تَقولُ الصَفحَةُ «تَواصَل مَعَنا» ولا تَكتُبُ رَقماً لَم يُقَرَّر.
+
+    **ولا تُخلَطُ بِـ`Plans.razor`**: تِلكَ `/{slug}/plans` وتَبيعُ
+    باقاتِ **مَتجَرٍ لِزَبائِنِه**؛ وهذِه تَعرِضُ باقاتِ **المَنَصَّةِ
+    لِلمُشتَرِكين**.
+*@
+
+<div class="acs-page">
+    <h1 class="wsl-doc-title">@L.Markup("platform.pricing.title")</h1>
+    <p class="wsl-doc-lead">@L.Markup("platform.pricing.intro")</p>
+
+    @if (plans.Count == 0)
+    {
+        <AcEmptyState IconName="package" Title="@(L["platform.pricing.empty"])" />
+    }
+    else
+    {
+        <div class="wsl-price-grid">
+            @foreach (var p in plans)
+            {
+                <div class="wsl-price-card">
+                    <h2 class="wsl-price-name">@p.LabelAr</h2>
+                    <p class="wsl-price-value">@L.Markup("platform.pricing.no_price")</p>
+                    <p class="wsl-price-desc">@p.DescriptionAr</p>
+                    <p class="wsl-price-meta">
+                        @L.Markup("platform.pricing.grace_label"):
+                        @L.Markup("platform.pricing.grace_days", p.DefaultGraceDays)
+                    </p>
+                    <a class="wsl-price-cta" href="/contact">@L.Markup("platform.pricing.contact_cta")</a>
+                </div>
+            }
+        </div>
+    }
+
+    <p class="wsl-doc-meta">@L.Markup("platform.pricing.currency_note")</p>
+    <p class="wsl-doc-meta">
+        <a class="wsl-doc-navlink" href="/refunds">@L.Markup("platform.pricing.refund_link")</a>
+    </p>
+</div>
+
+@code {
+    /// <summary>الكاتالوجُ المَبثوثُ كَما هُوَ — بِتَرتيبِ المِلَفِّ
+    /// الفِهرِس، بِلا فَلتَرَةٍ ولا تَرتيبٍ مِن عِندِنا. وقِراءَتُه
+    /// ساكِنَةٌ كَسولَة: لا جَلسَةَ Marten في تَصييرِ صَفحَة
+    /// (الطَبَقَة ٨).</summary>
+    IReadOnlyList<PlatformPlanDefinition> plans = PlatformPlanCatalog.All;
+}

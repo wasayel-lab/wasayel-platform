@@ -1,0 +1,145 @@
+@page "/terms"
+@page "/terms/{Lang}"
+@using ACommerce.Templates.Customer.Marketplace.Services
+@inject L L
+
+@*
+    الشُروطُ والأَحكامُ عَلى مُستَوى المَنَصَّة — لا شُروطُ مُستَأجِر.
+
+    **وهي غَيرُ `LegalHub.razor`** وإن تَشابَهَ الاسم: تِلكَ
+    `/{slug}/legal` وتَخُصُّ التَعامُلَ داخِلَ مَتجَرٍ واحِد، وهذِه
+    تَخُصُّ العَقدَ بَينَ المُشتَرِكِ ووَسايِل. ودَمجُهُما كانَ
+    سَيَجعَلُ وَثيقَةً واحِدَةً تَدَّعي جُمهورَين.
+
+    **والفَرعُ الإنجليزيُّ مَسارٌ لا كوكي** — السَبَبُ الكامِلُ في
+    `PlatformDocLanguage`.
+*@
+
+<div class="acs-page">
+@if (!doc.IsRecognised)
+{
+    <p class="empty">@L.Markup("shell.error.not_found")</p>
+}
+else
+{
+    <article class="wsl-doc" dir="@doc.Dir" lang="@doc.Lang">
+        <h1 class="wsl-doc-title">@doc.Markup("platform.terms.title")</h1>
+        <p class="wsl-doc-meta">@doc.Markup("platform.doc.updated")</p>
+
+        <nav class="wsl-doc-nav" aria-label="@(doc["platform.footer.nav_label"])">
+            <a class="wsl-doc-navlink" href="@Href("privacy")">@doc.Markup("platform.footer.privacy")</a>
+            <a class="wsl-doc-navlink" href="@Href("refunds")">@doc.Markup("platform.footer.refunds")</a>
+            <a class="wsl-doc-navlink" href="@Href("contact")">@doc.Markup("platform.footer.contact")</a>
+            @if (doc.IsEnglish)
+            {
+                <a class="wsl-doc-navlink" href="/terms">@doc.Markup("platform.doc.lang_ar")</a>
+            }
+            else
+            {
+                <a class="wsl-doc-navlink" href="/terms/en">@doc.Markup("platform.doc.lang_en")</a>
+            }
+        </nav>
+
+        <p class="wsl-placeholder wsl-doc-note">@doc.Markup("platform.doc.placeholder_note")</p>
+
+        <p class="wsl-doc-lead">@doc.Markup("platform.terms.intro")</p>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.terms.s1_title")</h2>
+            <p>@doc.Markup("platform.terms.s1_body")</p>
+            <ul class="wsl-doc-facts">
+                <li><span class="wsl-placeholder">@doc.Markup("platform.doc.entity_name")</span></li>
+                <li><span class="wsl-placeholder">@doc.Markup("platform.doc.entity_registration")</span></li>
+                <li><span class="wsl-placeholder">@doc.Markup("platform.doc.entity_address")</span></li>
+            </ul>
+            <p>@doc.Markup("platform.terms.s1_note")</p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.terms.s2_title")</h2>
+            <p>@doc.Markup("platform.terms.s2_body")</p>
+            <p>@doc.Markup("platform.terms.s2_note")</p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.terms.s3_title")</h2>
+            <p>@doc.Markup("platform.terms.s3_body")</p>
+            <p>@doc.Markup("platform.terms.s3_note")</p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.terms.s4_title")</h2>
+            <p>@doc.Markup("platform.terms.s4_body")</p>
+            <p>@doc.Markup("platform.terms.s4_note")</p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.terms.s5_title")</h2>
+            <p>@doc.Markup("platform.terms.s5_body")</p>
+            <p><a class="wsl-doc-navlink" href="@Href("refunds")">@doc.Markup("platform.footer.refunds")</a></p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.terms.s6_title")</h2>
+            <p>@doc.Markup("platform.terms.s6_body")</p>
+            <p>@doc.Markup("platform.terms.s6_note")</p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.terms.s7_title")</h2>
+            <p>@doc.Markup("platform.terms.s7_body")</p>
+            <p>@doc.Markup("platform.terms.s7_note")</p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.terms.s8_title")</h2>
+            <p>@doc.Markup("platform.terms.s8_body")</p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.terms.s9_title")</h2>
+            <p>@doc.Markup("platform.terms.s9_body")</p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.terms.s10_title")</h2>
+            <p>@doc.Markup("platform.terms.s10_body")</p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.terms.s11_title")</h2>
+            <p>@doc.Markup("platform.terms.s11_body")</p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.terms.s12_title")</h2>
+            <p>@doc.Markup("platform.terms.s12_body")</p>
+            <p><span class="wsl-placeholder">@doc.Markup("platform.doc.entity_country")</span></p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.terms.s13_title")</h2>
+            <p>@doc.Markup("platform.terms.s13_body")</p>
+            <p><span class="wsl-placeholder">@doc.Markup("platform.doc.contact_email")</span></p>
+        </section>
+    </article>
+}
+</div>
+
+@code {
+    /// <summary>وَسيطُ اللُغَةِ مِن المَسار. <c>null</c> عَلى
+    /// <c>/terms</c>، و<c>en</c> عَلى <c>/terms/en</c>، وما عَداهُما
+    /// يُصَيَّرُ فَرعَ «غَير مَوجود» — فَلا يَفتَحُ المَسارُ فَضاءَ
+    /// عَناوينَ لا نِهائِيّاً بِنَفسِ المُحتَوى.</summary>
+    [Parameter] public string? Lang { get; set; }
+
+    PlatformDocLanguage doc = PlatformDocLanguage.FromRoute(null);
+
+    protected override void OnParametersSet()
+        => doc = PlatformDocLanguage.FromRoute(Lang);
+
+    /// <summary>رابِطُ وَثيقَةٍ شَقيقَةٍ <b>في نَفسِ اللُغَة</b> —
+    /// فَالمُراجِعُ الَّذي فَتَحَ الإنجليزِيَّةَ لا يَسقُطُ إلى
+    /// العَرَبِيَّةِ عِندَ أَوَّلِ نَقرَة.</summary>
+    string Href(string name) => doc.IsEnglish && name != "contact" ? $"/{name}/en" : $"/{name}";
+}

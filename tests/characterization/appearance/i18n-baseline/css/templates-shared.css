@@ -649,3 +649,150 @@
     max-height: 60vh;
     overflow-y: auto;
 }
+
+/* ── تَذييلُ المَنَصَّةِ ووَثائِقُها ────────────────────────────────────
+   كُلُّ لَونٍ هُنا رَمزٌ لا حَرفِيَّة، وكُلُّ مَسافَةٍ وقياسِ خَطٍّ
+   مِن القِيَمِ المَوجودَةِ أَصلاً في هذِه الأَوراق — فَعَدّادُ
+   الطَبَقَةِ الرابِعَةِ (ألوان/مَسافات/أَحجام) لا يَتَحَرَّكُ بِبَندٍ
+   واحِد. */
+
+.wsl-foot {
+    margin-top: 32px;
+    padding: 16px 0;
+    border-top: 1px solid var(--ac-border);
+    color: var(--ac-text-muted);
+}
+.wsl-foot-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+.wsl-foot-link {
+    color: var(--ac-text-muted);
+    font-size: 13px;
+    text-decoration: none;
+}
+.wsl-foot-link:hover { color: var(--ac-primary); text-decoration: underline; }
+.wsl-foot-rights {
+    margin: 0;
+    font-size: 13px;
+    color: var(--ac-text-muted);
+}
+
+/* العَلامَةُ النائِبَة — تُقرَأُ مِن آخِرِ الغُرفَة. */
+.wsl-placeholder {
+    display: inline-block;
+    padding: 4px 8px;
+    border: 1px dashed var(--ac-danger);
+    border-radius: var(--ac-radius-sm);
+    background: var(--ac-bg-alt);
+    color: var(--ac-danger-ink);
+    font-weight: var(--ac-font-weight-bold);
+}
+
+/* ── الوَثيقَةُ القانونِيَّة ───────────────────────────────────────── */
+.wsl-doc { color: var(--ac-text); }
+.wsl-doc-title {
+    font-size: 26px;
+    font-weight: 800;
+    margin: 0 0 8px;
+    color: var(--ac-text);
+}
+.wsl-doc-meta {
+    font-size: 13px;
+    color: var(--ac-text-muted);
+    margin: 0 0 12px;
+}
+.wsl-doc-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.wsl-doc-navlink { color: var(--ac-link); font-size: 14px; }
+.wsl-doc-note { margin-bottom: 16px; }
+.wsl-doc-lead {
+    font-size: 16px;
+    line-height: 1.9;
+    margin: 0 0 24px;
+    color: var(--ac-text);
+}
+.wsl-doc-section { margin-bottom: 24px; }
+.wsl-doc-section h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    color: var(--ac-text);
+}
+.wsl-doc-section p {
+    margin: 0 0 8px;
+    line-height: 1.9;
+}
+.wsl-doc-list,
+.wsl-doc-facts {
+    margin: 0 0 8px;
+    padding-inline-start: 20px;
+    line-height: 1.9;
+}
+.wsl-doc-facts { list-style: none; padding-inline-start: 0; }
+.wsl-doc-facts li { margin-bottom: 8px; }
+.wsl-doc-callout {
+    padding: 16px;
+    margin-bottom: 24px;
+    border: 1px solid var(--ac-success);
+    border-radius: var(--ac-radius-md);
+    background: var(--ac-bg-alt);
+}
+.wsl-doc-callout h2 {
+    font-size: 20px;
+    font-weight: 800;
+    margin: 0 0 8px;
+    color: var(--ac-text);
+}
+.wsl-doc-callout p { margin: 0; line-height: 1.9; }
+
+/* ── بِطاقاتُ الأَسعار ─────────────────────────────────────────────── */
+.wsl-price-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.wsl-price-card {
+    padding: 16px;
+    border: 1px solid var(--ac-border);
+    border-radius: var(--ac-radius-md);
+    background: var(--ac-surface);
+}
+.wsl-price-name {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    color: var(--ac-text);
+}
+.wsl-price-value {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    color: var(--ac-primary);
+}
+.wsl-price-desc {
+    margin: 0 0 8px;
+    line-height: 1.9;
+    color: var(--ac-text);
+}
+.wsl-price-meta {
+    font-size: 13px;
+    color: var(--ac-text-muted);
+    margin: 0 0 12px;
+}
+.wsl-price-cta {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: var(--ac-radius-sm);
+    background: var(--ac-primary);
+    color: var(--ac-on-primary);
+    font-weight: var(--ac-font-weight-bold);
+    text-decoration: none;
+}

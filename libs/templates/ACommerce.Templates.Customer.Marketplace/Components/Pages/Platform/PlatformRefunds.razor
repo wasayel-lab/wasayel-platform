@@ -1,0 +1,98 @@
+@page "/refunds"
+@page "/refunds/{Lang}"
+@using ACommerce.Templates.Customer.Marketplace.Services
+@inject L L
+
+@*
+    سِياسَةُ الاستِرداد.
+
+    ⚠ **ضَمانُ الثَلاثينَ يَوماً الْتِزامٌ مالِيٌّ حَقيقيّ لا نَصٌّ
+    شَكليّ**: هُوَ شَرطُ اعتِمادٍ عِندَ بَوّابَةِ الدَفع، ومَتى نُشِرَ
+    صارَ واجِبَ التَنفيذ. مَكتوبٌ هُنا صَريحاً بِرَقمِه لِأَنَّ
+    الغُموضَ فيه أَسوَأُ مِن غِيابِه.
+*@
+
+<div class="acs-page">
+@if (!doc.IsRecognised)
+{
+    <p class="empty">@L.Markup("shell.error.not_found")</p>
+}
+else
+{
+    <article class="wsl-doc" dir="@doc.Dir" lang="@doc.Lang">
+        <h1 class="wsl-doc-title">@doc.Markup("platform.refunds.title")</h1>
+        <p class="wsl-doc-meta">@doc.Markup("platform.doc.updated")</p>
+
+        <nav class="wsl-doc-nav" aria-label="@(doc["platform.footer.nav_label"])">
+            <a class="wsl-doc-navlink" href="@Href("terms")">@doc.Markup("platform.footer.terms")</a>
+            <a class="wsl-doc-navlink" href="@Href("privacy")">@doc.Markup("platform.footer.privacy")</a>
+            <a class="wsl-doc-navlink" href="@Href("contact")">@doc.Markup("platform.footer.contact")</a>
+            @if (doc.IsEnglish)
+            {
+                <a class="wsl-doc-navlink" href="/refunds">@doc.Markup("platform.doc.lang_ar")</a>
+            }
+            else
+            {
+                <a class="wsl-doc-navlink" href="/refunds/en">@doc.Markup("platform.doc.lang_en")</a>
+            }
+        </nav>
+
+        <p class="wsl-placeholder wsl-doc-note">@doc.Markup("platform.doc.placeholder_note")</p>
+
+        <p class="wsl-doc-lead">@doc.Markup("platform.refunds.intro")</p>
+
+        <div class="wsl-doc-callout">
+            <h2>@doc.Markup("platform.refunds.guarantee_title")</h2>
+            <p>@doc.Markup("platform.refunds.guarantee_body")</p>
+        </div>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.refunds.s1_title")</h2>
+            <p>@doc.Markup("platform.refunds.s1_body")</p>
+            <p><span class="wsl-placeholder">@doc.Markup("platform.doc.contact_email")</span></p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.refunds.s2_title")</h2>
+            <p>@doc.Markup("platform.refunds.s2_body")</p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.refunds.s3_title")</h2>
+            <p>@doc.Markup("platform.refunds.s3_body")</p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.refunds.s4_title")</h2>
+            <p>@doc.Markup("platform.refunds.s4_body")</p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.refunds.s5_title")</h2>
+            <p>@doc.Markup("platform.refunds.s5_body")</p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.refunds.s6_title")</h2>
+            <p>@doc.Markup("platform.refunds.s6_body")</p>
+        </section>
+
+        <section class="wsl-doc-section">
+            <h2>@doc.Markup("platform.refunds.s7_title")</h2>
+            <p>@doc.Markup("platform.refunds.s7_body")</p>
+            <p><span class="wsl-placeholder">@doc.Markup("platform.doc.contact_email")</span></p>
+        </section>
+    </article>
+}
+</div>
+
+@code {
+    [Parameter] public string? Lang { get; set; }
+
+    PlatformDocLanguage doc = PlatformDocLanguage.FromRoute(null);
+
+    protected override void OnParametersSet()
+        => doc = PlatformDocLanguage.FromRoute(Lang);
+
+    string Href(string name) => doc.IsEnglish && name != "contact" ? $"/{name}/en" : $"/{name}";
+}

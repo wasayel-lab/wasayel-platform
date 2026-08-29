@@ -46,6 +46,17 @@
     --st-success:      #16a34a;
     --st-warning:      #d97706;
     --st-danger:       #dc2626;
+    /* الثَلاثَةُ أَعلاهُ مَقصودَةٌ **لِلمِلء** (نُقطَة، شَريط، زِرّ
+       مُصمَت) وهُنالِكَ تَعمَل. وهي **نَصّاً تَسقُط**، مَقيسَةً على
+       ‏1280×900: ‏`#16a34a` على `#dcfce7` = ‏3.00، و`#d97706` على
+       `#fef3c7` = ‏2.86، و`#dc2626` على `#fee2e2` = ‏3.95، و`#d97706`
+       على أَبيَض = ‏3.19 — كُلُّها دونَ ‏4.5.
+       فَنُسخَةٌ نَصِّيَّة (‏دَرَجَة ‏700) بَدَلَ تَغيير الأَصل: تَغييرُ
+       الأَصلِ كانَ سَيَمَسّ كُلَّ مِلءٍ يَستَعمِلُه — وهي **لا تَفشَل
+       هُناكَ**، فَإصلاحُها هُناكَ إفسادُ ما يَعمَل. */
+    --st-success-text: #15803d;   /* green-700  — ‏4.57 على #dcfce7 */
+    --st-warning-text: #b45309;   /* amber-700  — ‏4.51 على #fef3c7، و‏5.02 على أَبيَض */
+    --st-danger-text:  #b91c1c;   /* red-700    — ‏5.30 على #fee2e2 */
     --st-radius:       14px;
     --st-radius-sm:    10px;
     --st-shadow:       0 1px 3px rgba(15,23,42,.06), 0 1px 2px rgba(15,23,42,.04);
@@ -94,9 +105,9 @@
     padding: 3px 10px; border-radius: var(--ac-radius-pill); font-size: 12px; font-weight: var(--ac-font-weight-bold);
     background: var(--st-primary-50); color: var(--st-primary-700);
 }
-.st-chip-success { background: #dcfce7; color: var(--st-success); }
-.st-chip-warning { background: #fef3c7; color: var(--st-warning); }
-.st-chip-danger  { background: #fee2e2; color: var(--st-danger); }
+.st-chip-success { background: #dcfce7; color: var(--st-success-text); }
+.st-chip-warning { background: #fef3c7; color: var(--st-warning-text); }
+.st-chip-danger  { background: #fee2e2; color: var(--st-danger-text); }
 
 /* ─── حقول الإدخال ──────────────────────────────────────────────── */
 .st-input, .st-textarea {
@@ -242,7 +253,12 @@
 }
 .studio-nav-item:hover { background: var(--st-sidebar-soft); color: #fff; }
 .studio-nav-item.active { background: var(--st-primary); color: #fff; }
-.studio-nav-section { font-size: 11px; color: var(--st-faint); padding: 14px 12px 6px; font-weight: 700; letter-spacing: .04em; }
+/* ‏`--st-faint` رَمزٌ **لِخَلفِيَّةٍ بَيضاء** — تَعليقُ تَعريفِه يَقولُها
+   حَرفاً: «‏7:1 on white». وهذا هو المَوضِعُ الوَحيدُ الَّذي يَهبِطُ فيه
+   على الشَريطِ الداكِن (‏`--st-sidebar` = ‏#0f172a)، فَتَصيرُ النِسبَةُ
+   ‏**2.36** — مَقيسَةً على عَشرِ صَفَحاتِ استوديو. ولا يُمَسّ الرَمز:
+   بَقِيَّةُ مَواضِعِه على أَبيَضَ وهي صَحيحَةٌ هُناك. */
+.studio-nav-section { font-size: 11px; color: #94a3b8; padding: 14px 12px 6px; font-weight: 700; letter-spacing: .04em; }
 .studio-sidebar-footer { border-top: 1px solid var(--st-sidebar-soft); padding-top: 12px; margin-top: 12px; }
 
 .studio-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }

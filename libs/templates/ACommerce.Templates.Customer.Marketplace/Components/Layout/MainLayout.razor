@@ -44,6 +44,7 @@
             <AcEmptyState IconName="info"
                           Title="@(L["store.locked.title"])"
                           Message="@(L["store.locked.body"])" />
+            <PlatformFooter />
         </main>
     </div>
 }
@@ -111,6 +112,8 @@ else if (Tenant.IsResolved)
         <main>
             @Body
 
+            <PlatformFooter />
+
             @if (!chromeHidden)
             {
                 <div class="acm-v2-bottom-nav-wrap">
@@ -123,7 +126,10 @@ else if (Tenant.IsResolved)
 else
 {
     <div class="acs-page" style="--ac-primary:#1D4ED8;">
-        <main>@Body</main>
+        <main>
+            @Body
+            <PlatformFooter />
+        </main>
     </div>
 }
 

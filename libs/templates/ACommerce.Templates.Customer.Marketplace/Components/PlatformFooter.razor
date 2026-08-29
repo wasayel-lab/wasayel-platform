@@ -1,0 +1,31 @@
+@inject L L
+
+@*
+    تَذييلُ المَنَصَّةِ المُوَحَّد — رَوابِطُ الوَثائِقِ الخَمس.
+
+    **ولِماذا في الشِلِّ لا في كُلِّ صَفحَة**: شَرطُ اعتِمادِ النِطاقِ
+    عِندَ بَوّابَةِ الدَفعِ نَصُّه أَنّ الزائِرَ يَبلُغُ الشُروطَ
+    وسِياسَتَي الاستِردادِ والخُصوصِيَّةِ **مِن قائِمَةِ المَوقِع** لا
+    بِرابِطٍ مُباشِرٍ يُرسَل. وقائِمَةُ هذا المَوقِعِ الوَحيدَةُ
+    العابِرَةُ لِكُلِّ الشاشاتِ هي `MainLayout` — فَمَوضِعٌ واحِدٌ
+    يَفتَحُ الخَمسَ مِن كُلِّ صَفحَة، لا خَمسَةُ رَوابِطَ تُنسى في
+    الصَفحَةِ الرابِعَة (القاعِدَة ١٢).
+
+    **والاسمُ النِظاميُّ نائِبٌ ظاهِرٌ عَمداً**: لا يُختَرَعُ اسمُ
+    كِيانٍ ولا رَقمُ سِجِلّ (القاعِدَة ١٦)، ووُقوعُه في تَذييلِ كُلِّ
+    صَفحَةٍ يَجعَلُ نِسيانَه مُستَحيلاً.
+*@
+
+<footer class="wsl-foot">
+    <nav class="wsl-foot-links" aria-label="@(L["platform.footer.nav_label"])">
+        <a class="wsl-foot-link" href="/terms">@L.Markup("platform.footer.terms")</a>
+        <a class="wsl-foot-link" href="/privacy">@L.Markup("platform.footer.privacy")</a>
+        <a class="wsl-foot-link" href="/refunds">@L.Markup("platform.footer.refunds")</a>
+        <a class="wsl-foot-link" href="/pricing">@L.Markup("platform.footer.pricing")</a>
+        <a class="wsl-foot-link" href="/contact">@L.Markup("platform.footer.contact")</a>
+    </nav>
+    <p class="wsl-foot-rights">
+        @L.Markup("platform.footer.rights")
+        <span class="wsl-placeholder">@L.Markup("platform.doc.entity_name")</span>
+    </p>
+</footer>
