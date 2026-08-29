@@ -63,6 +63,12 @@ public sealed class L
     /// لِلحَرفِيَّة الَّتي حَلَّ مَحَلَّها بايتاً بِبايت.</summary>
     public MarkupString Markup(string key) => new(this[key]);
 
+    /// <summary><b>أَنائِبٌ هُوَ نَصُّ هذا المِفتاحِ بَعد؟</b> —
+    /// بِلُغَةِ الطَلَبِ وبِسُقوطِها. تَقرَؤُها الشاشاتُ الَّتي
+    /// <b>لا يَجوزُ أَن تَعرِضَ نائِباً لِزائِر</b>؛ والقَرارُ في
+    /// <see cref="LocaleCatalog.IsPlaceholder"/>.</summary>
+    public bool IsPlaceholder(string key) => LocaleCatalog.IsPlaceholder(this[key]);
+
     /// <summary>النَصّ المُدمَج فيه وُسَطاء. كُلّ وَسيط <b>يُرَمَّز</b>
     /// قَبل الدَمج، فَاسمُ مُستَأجِر لا يَكتُب وَسماً. والأَرقام
     /// تَمُرّ بِلا تَغَيُّر (‏لا مَحرَفَ فيها يُرَمَّز)، فَيَبقى

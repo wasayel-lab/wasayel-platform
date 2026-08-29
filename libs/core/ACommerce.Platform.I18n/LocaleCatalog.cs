@@ -32,6 +32,43 @@ public static class LocaleCatalog
     /// <summary>رَمز اللُغَة الإلزامِيَّة. كُلّ سُقوط يَنتَهي هُنا.</summary>
     public const string Arabic = "ar";
 
+    // ─── العَلامَةُ النائِبَة — عَلامَةٌ صَريحَةٌ لا تَخمين ───────────
+
+    /// <summary>فاتِحَةُ القيمَةِ النائِبَة.</summary>
+    public const string PlaceholderOpen = "[[";
+
+    /// <summary>خاتِمَتُها.</summary>
+    public const string PlaceholderClose = "]]";
+
+    /// <summary>
+    /// <para><b>أَهذِه القيمَةُ نائِبَةٌ لَم تُملَأ بَعد؟</b> —
+    /// <b>عَلامَةٌ صَريحَةٌ في القيمَةِ نَفسِها</b>
+    /// (<c>[[ … ]]</c>)، لا تَخمينٌ مِن طولٍ أَو مُحتَوى.</para>
+    ///
+    /// <para><b>ولِماذا في القيمَةِ لا في قائِمَةِ مَفاتيح</b>:
+    /// القائِمَةُ تَنجَرِف — يُملَأُ مِفتاحٌ ويُنسى شَطبُه مِنها
+    /// فَيُخفى نَصٌّ صَحيح، أَو يُضافُ مِفتاحٌ نائِبٌ ولا يُدرَجُ
+    /// فيها فَيُعرَض لِزائِر. <b>والعَلامَةُ تَسقُطُ مَعَ القيمَةِ
+    /// حينَ تُملَأ</b>، فَلا شَيءَ يُنسى.</para>
+    ///
+    /// <para><b>وهي مُشتَرَكَةٌ عَبرَ اللُغات</b>: <c>ar.json</c>
+    /// و<c>en.json</c> يَكتُبانِ نَفسَ القَوسَين، فَالفَحصُ يَقَعُ
+    /// على القيمَةِ <b>في لُغَتِها هي</b> — والصَفحَةُ
+    /// الإنجليزِيَّةُ تُقَرِّرُ بِـ<c>en.json</c> لا
+    /// بِـ<c>ar.json</c>.</para>
+    /// </summary>
+    public static bool IsPlaceholder(string? value)
+    {
+        var v = (value ?? "").Trim();
+        return v.StartsWith(PlaceholderOpen, StringComparison.Ordinal)
+            && v.EndsWith(PlaceholderClose, StringComparison.Ordinal);
+    }
+
+    /// <summary>أَنائِبٌ هُوَ نَصُّ هذا المِفتاحِ في هذِه اللُغَة؟
+    /// — بِنَفسِ سُقوطِ <see cref="Text"/>.</summary>
+    public static bool IsPlaceholderKey(string lang, string key)
+        => IsPlaceholder(Text(lang, key));
+
     private const string ResourcePrefix =
         "ACommerce.Platform.I18n.Locales.";
 

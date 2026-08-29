@@ -11,6 +11,23 @@
 
 <RequirePlatformAdmin>
 <div class="acs-page acm-admin">
+    @* ═══ حُقولُ الكِيانِ لَم تُملَأ — الوَثائِقُ غَيرُ جاهِزَةٍ لِلتَقديم ═══
+
+       **ولِماذا هُنا لا في وَجهِ الزائِر**: النائِبُ غَيرُ المَملوءِ
+       عَملٌ **عَلى المُشرِفِ** لا خَبَرٌ لِزَبونِ التاجِر. فَالتَذييلُ
+       يَسقُطُ بِأَمانٍ إلى اسمِ المَنَصَّة، وهذا السَطرُ يَقولُ لِمَن
+       يَملِكُ الإصلاحَ ما يَنقُص.
+
+       **ولِماذا قَبلَ كُلِّ شَيءٍ في الصَفحَة**: هُوَ ما يَمنَع
+       تَقديماً مُبَكِّراً إلى مُراجِعِ Paddle يُرَدُّ لِأَنّ الوَثائِقَ
+       بِلا كِيانٍ نِظاميّ — وذاكَ رَدٌّ تُدفَعُ كُلفَتُه أَيّاماً. *@
+    @if (unfilledDocFields > 0)
+    {
+        <AcAlert Variant="warning"
+                 Title="@(L["admin.home.doc_fields_title"])"
+                 Message="@(L.Format("admin.home.doc_fields_body", unfilledDocFields))" />
+    }
+
     @* صَفحَة بِدايَة صاحِب المَتجَر الجَديد: ابدَأ بِتَحليل الفِكرَة قَبل الإنشاء. *@
     <AcCard Class="acm-incubator-hero">
         <ChildContent>
@@ -164,6 +181,12 @@
 </RequirePlatformAdmin>
 
 @code {
+    /// <summary>كَم حَقلَ كِيانٍ ما زالَ نائِباً — <b>يُقرَأُ مِن
+    /// القامُوسِ لا مِن قاعِدَةِ بَيانات</b>، فَلا جَلسَةَ ولا
+    /// انتِظار.</summary>
+    int unfilledDocFields =>
+        Services.PlatformDocFields.UnfilledCount(L.Lang);
+
     IReadOnlyList<Tenant>? tenants;
     IReadOnlyDictionary<string, ACommerce.Kit.Subscriptions.TenantPlan> plans =
         new Dictionary<string, ACommerce.Kit.Subscriptions.TenantPlan>();
