@@ -18,15 +18,44 @@ public sealed class TenantFromAnalysisFactory
     private readonly IDocumentStore _store;
     public TenantFromAnalysisFactory(IDocumentStore store) => _store = store;
 
-    /// <summary>يَفحَص مَدى تَوَفُّر الـ slug. يُعيد رِسالَة خَطَأ أَو null.</summary>
+    // ─── رُموزُ الخَرق — مَعجَمٌ مُغلَقٌ يَقرَؤُه القامُوسُ والاختِبار ─
+    //
+    // **وكانَت رَسائِلَ عَرَبِيَّةً مَكتوبَةً في الخِدمَة** تُمَرَّرُ
+    // في مُعامِلِ عُنوانٍ ثُمَّ تُعرَض كَما هي — نَصٌّ يَراهُ
+    // المُستَخدِم خارِجَ القامُوس (القاعِدَة ١١)، وأُختاهُ في نَفسِ
+    // النُقطَة (`name_required`, `color_invalid`) رَمزان. فَصارَت
+    // الأَربَعَةُ رُموزاً، وتُتَرجَم في الشاشَة.
+
+    public const string SlugRequired = "slug_required";
+    public const string SlugFormat   = "slug_format";
+    public const string SlugTaken    = "slug_taken";
+    public const string SlugReserved = "slug_reserved";
+
+    /// <summary>
+    /// <para><b>يَفحَص مَدى صَلاحِيَّةِ الـslug — شَكلاً وحَجزاً
+    /// وتَفَرُّداً.</b> يُعيد <b>رَمزَ خَرقٍ</b> أَو <c>null</c>.</para>
+    ///
+    /// <para><b>والحَجزُ شَرطٌ ثالِثٌ لَم يَكُن هُنا</b>: كانَ الفَحصُ
+    /// شَكلاً وتَفَرُّداً وَحدَهُما، و<c>ReservedPaths</c> مُستَهلِكُها
+    /// الوَحيدُ الوَسيط. فَمَتجَرٌ سلاجُه <c>pricing</c> أَو
+    /// <c>terms</c> أَو <c>contact</c> <b>يُنشَأُ بِنَجاحٍ ثُمَّ لا
+    /// يُحَلُّ أَبَداً</b> — واجِهَةُ مَتجَرٍ لا تُبلَغ، بِلا رِسالَةِ
+    /// خَطَإٍ ولا سَطرِ لوغ. وذاكَ أَسوَأُ مِن رَفضٍ صَريح: صاحِبُه
+    /// يَظُنُّ أَنَّه بَنى (القاعِدَة ١٢).</para>
+    ///
+    /// <para><b>والحَجزُ قَبلَ التَفَرُّد</b>: لا مَعنى لِرِحلَةِ
+    /// قاعِدَةِ بَياناتٍ لِاسمٍ لَن يُقبَلَ على أَيِّ حال.</para>
+    /// </summary>
     public async Task<string?> ValidateSlugAsync(string slug, CancellationToken ct = default)
     {
-        if (string.IsNullOrEmpty(slug)) return "اِكتُب مُعَرِّفاً.";
+        if (string.IsNullOrEmpty(slug)) return SlugRequired;
         if (!System.Text.RegularExpressions.Regex.IsMatch(slug, "^[a-z0-9_-]+$"))
-            return "المُعَرِّف يَجِب أَن يَكون حُروفاً صَغيرَة وأَرقاماً و - فَقَط.";
+            return SlugFormat;
+        if (ReservedTenantSlugs.Contains(slug)) return SlugReserved;
+
         await using var s = _store.QuerySession();
         var existing = await s.LoadAsync<Tenant>(slug, ct);
-        return existing is null ? null : "هذا المُعَرِّف مُستَخدَم مِن قَبل.";
+        return existing is null ? null : SlugTaken;
     }
 
     /// <summary>اِقتِراحات مَبدَئيَّة مِن تَحليل لِيَملَأ نَموذَج الإنشاء.</summary>

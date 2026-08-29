@@ -422,10 +422,21 @@
         currentTier = u?.Tier ?? "spark";
     }
 
+    // كُلُّ رَمزٍ يُقابِلُ مِفتاحاً في القامُوس. و`_ => err` تَبقى
+    // شَبَكَةَ أَمانٍ لا مَساراً: رَمزٌ بِلا مِفتاحٍ يُعرَض خاماً
+    // فَيُرى، ولا يُبتلَع صامِتاً.
     string FormatBuildErr(string err) => err switch
     {
         "name_required" => L["studio.study.err_name_required"],
         "color_invalid" => L["studio.study.err_color_invalid"],
+        Services.Incubator.TenantFromAnalysisFactory.SlugRequired
+            => L["studio.study.err_slug_required"],
+        Services.Incubator.TenantFromAnalysisFactory.SlugFormat
+            => L["studio.study.err_slug_format"],
+        Services.Incubator.TenantFromAnalysisFactory.SlugTaken
+            => L["studio.study.err_slug_taken"],
+        Services.Incubator.TenantFromAnalysisFactory.SlugReserved
+            => L["studio.study.err_slug_reserved"],
         _ => err
     };
 

@@ -48,13 +48,16 @@ public static class SeoDocuments
         "notifications", "manage", "create-listing"
     };
 
-    /// <summary>Slugs مَحجوزَة لا تُمَثِّل مُستَأجِراً عامّاً.</summary>
-    private static readonly HashSet<string> ReservedSlugs =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            "_admin", "admin", "api", "studio", "css", "js", "lib",
-            "health", "realtime", "favicon.ico"
-        };
+    // ‏Slugs مَحجوزَة لا تُمَثِّل مُستَأجِراً عامّاً —
+    // <see cref="ReservedTenantSlugs.All"/>، **لا نُسخَةً هُنا**.
+    //
+    // **وكانَت نُسخَةً، والانجِرافُ وَقَعَ فِعلاً**: عَشرَةُ أَسماءٍ
+    // هُنا مُقابِلَ ثَمانِيَةَ عَشَرَ في الوَسيط — بِلا `terms` ولا
+    // `billing` ولا إخوانِهِما. فَمَتجَرٌ سلاجُه `terms` كانَ
+    // **يُدرَجُ في خَريطَةِ المَوقِعِ لِلزاحِفِ وهُوَ لا يُفتَحُ
+    // أَصلاً** (الوَسيطُ يَحجِزُ الاسمَ فَلا يُحَلُّ المُستَأجِر).
+    // والاتِّجاهُ الوَحيدُ لِلتَغيير: أَسماءٌ **تُستَبعَدُ** مِن
+    // الخَريطَة، لا أَسماءٌ تُضاف.
 
     // ─── الرابِط الأَساسيّ ───────────────────────────────────────────────
 
@@ -73,7 +76,7 @@ public static class SeoDocuments
            && !string.IsNullOrWhiteSpace(t.Slug)
            && !t.IsSuspended
            && !t.Slug.StartsWith('_')
-           && !ReservedSlugs.Contains(t.Slug);
+           && !ReservedTenantSlugs.Contains(t.Slug);
 
     // ─── خَريطَة المَوقِع ────────────────────────────────────────────────
 
