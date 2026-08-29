@@ -138,4 +138,57 @@ public class TenantSlugResolutionTests
 
         Assert.Equal(3, resolved.Length);
     }
+
+    // ─── الجَديد: صَفَحاتُ المَنَصَّةِ الخَمس ─────────────────────────
+
+    /// <summary>
+    /// <para><b>الخَمسُ لا تَحُلُّ مُستَأجِراً</b> — وهذا هُوَ
+    /// المَقصود: هي صَفَحاتُ المَنَصَّةِ نَفسِها، والمُستَأجِرُ
+    /// لا يُقرَأُ مِن مَسارِها لِأَنَّه لَيسَ فيه.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("/terms")]
+    [InlineData("/privacy")]
+    [InlineData("/refunds")]
+    [InlineData("/pricing")]
+    [InlineData("/contact")]
+    [InlineData("/terms/en")]
+    [InlineData("/privacy/en")]
+    [InlineData("/refunds/en")]
+    public void The_platform_pages_resolve_no_tenant_from_the_path(string path)
+        => Assert.Null(TenantResolverMiddleware.SlugFromPath(path));
+
+    /// <summary>
+    /// <para><b>ولا مَسارَ مُستَأجِرٍ قائِمٍ يَنكَسِر</b>. الحَجزُ
+    /// يَقَعُ عَلى <b>المَقطَعِ الأَوَّلِ وَحدَه</b>، فَمَتجَرٌ اسمُه
+    /// <c>ashare</c> لَه صَفحَةُ <c>terms</c> داخِلِيَّة
+    /// (<c>/ashare/legal/terms</c>) ومَسارٌ فيه كَلِمَةُ
+    /// <c>pricing</c> — ولا واحِدَ مِنهُما يُمَسّ.</para>
+    ///
+    /// <para><b>وهذا هُوَ المَزلَقُ الَّذي يَكسِرُه حَجزٌ مَكتوبٌ
+    /// بِـ«يَحوي»</b> بَدَلَ «يُساوي المَقطَعَ الأَوَّل» — نَفسُ
+    /// المَزلَقِ الَّذي وُثِّقَ في «‏api» أَعلاه.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("/ashare/legal/terms", "ashare")]
+    [InlineData("/ashare/legal/privacy", "ashare")]
+    [InlineData("/ashare/legal/returns", "ashare")]
+    [InlineData("/ashare/plans", "ashare")]
+    [InlineData("/theme-demo/r/host/legal/terms", "theme-demo")]
+    [InlineData("/ejar/contact", "ejar")]
+    [InlineData("/ejar/pricing", "ejar")]
+    [InlineData("/order/refunds", "order")]
+    public void A_tenant_path_that_merely_contains_a_reserved_word_still_resolves(
+        string path, string expected)
+        => Assert.Equal(expected, TenantResolverMiddleware.SlugFromPath(path));
+
+    /// <summary>والحَجزُ لا يُبالي بِحالَةِ الحَرف، كَإخوَتِه.</summary>
+    [Theory]
+    [InlineData("/TERMS")]
+    [InlineData("/Privacy")]
+    [InlineData("/Refunds")]
+    [InlineData("/PRICING")]
+    [InlineData("/Contact")]
+    public void The_platform_pages_are_reserved_case_insensitively(string path)
+        => Assert.Null(TenantResolverMiddleware.SlugFromPath(path));
 }
