@@ -28,13 +28,14 @@ public sealed class PaddleGateway
         _provider = provider;
     }
 
-    /// <summary>أَيُمكِن نِداءُ الواجِهَة؟ (مِفتاحٌ + بيئَةٌ
-    /// مَعروفَة.)</summary>
-    public bool IsConfigured => _provider is not null && PaddleEnvironment.IsConfigured(_opts);
-
-    /// <summary>أَتُقبَلُ رِسالَةُ Webhook؟ يَزيدُ سِرَّ
-    /// الوِجهَة.</summary>
-    public bool CanVerifyWebhooks => PaddleEnvironment.CanVerifyWebhooks(_opts);
+    // **ولا `IsConfigured` ولا `CanVerifyWebhooks` هُنا — ويُقالُ
+    // لِماذا** (القاعِدَة ١): الدَرَجَتانِ الأُخرَيانِ مَوجودَتانِ
+    // دَوالَّ نَقِيَّةً في `PaddleEnvironment` ويَقرَؤُهُما مَن
+    // يَحتاجُهُما (البَوّابَةُ تَقرَأُ `CanVerifyWebhooks` بِنَفسِها
+    // مِن الخِيارات). وخَصيصَةٌ على الغِلافِ بِصِفرِ مُستَهلِكٍ في
+    // وَقتِ التَشغيل **تُقرَأُ يَوماً بِالخَطَإ مَكانَ
+    // <see cref="CanSell"/>** — فَتُرسَمُ بِطاقَةٌ تُنشِئ رابِطاً
+    // لا يُفتَح. تُضافُ يَومَ يوجَد مَن يُنادِيها.
 
     /// <summary><b>أَنَبيعُ فِعلاً؟</b> — وهذا وَحدَه ما يَرسُم
     /// البِطاقَةَ في <c>/admin</c> ويَفتَح الزِرَّ في
