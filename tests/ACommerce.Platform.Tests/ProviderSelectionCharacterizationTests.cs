@@ -302,6 +302,26 @@ public class ProviderSelectionCharacterizationTests
 
         var text = ProgramText;
         Assert.Contains("builder.Services.AddPaymentProvider(", text, StringComparison.Ordinal);
+
+        // ─── والوُسَطاءُ مُثَبَّتَةٌ، لا اسمُ الدالَّةِ وَحدَه ──────────
+        //
+        // **تَخفيفٌ وَقَعَ في مِلَفٍّ اسمُه «تَوصيف» (‏2026-08-30)**: كانَ
+        // التَأكيدُ حَرفِيَّةً تامَّةً (`AddPaymentProvider(isDev);`)
+        // فَضُيِّقَ إلى البادِئَةِ وَحدَها عِندَ إضافَةِ الوَسيطِ الثاني.
+        // والمُحَصِّلَةُ أَقوى في مَجموعِها، لكِنّ **هذا الفَحصَ بِعَينِه**
+        // صارَ أَقَلَّ تَحديداً: تَمريرُ `null` بَدَلَ قيمَةِ التَهيئَةِ
+        // يَبقى أَخضَرَ، ووَضعُ التَجرِبَةِ يَصيرُ غَيرَ قابِلٍ
+        // لِلبُلوغِ **بِلا فَحصٍ أَحمَرَ واحِد** — وهو بِعَينِه شَكلُ
+        // «الحَدُّ الَّذي لا يُقاسُ آلِيّاً يَنهار» (القاعِدَة ٢).
+        //
+        // والسَطرُ مُوَزَّعٌ على سَطرَين في المَصدَر، فَيُسَوّى الفَراغُ
+        // قَبلَ المُطابَقَة — تَنسيقٌ لا يَكسِرُ الفَحص، وتَبديلُ وَسيطٍ
+        // يَكسِرُه.
+        var flat = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
+        Assert.Contains(
+            "builder.Services.AddPaymentProvider( isDev, "
+          + "builder.Configuration[PaymentProviderSelection.ProviderKey]);",
+            flat, StringComparison.Ordinal);
         Assert.Contains("PaymentProviderSelection.AssertNoStubsOutsideDevelopment",
             text, StringComparison.Ordinal);
         // وحارِسٌ مَعكوسٌ بِجِوارِه: التَجرِبَةُ لا تَقَعُ بِالغِياب.

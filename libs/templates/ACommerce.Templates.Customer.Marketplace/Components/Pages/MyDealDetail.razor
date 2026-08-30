@@ -131,6 +131,28 @@
                     <span style="color:var(--ac-text-muted);">@L.Markup("deals.detail.other_party")</span>
                     <span>@(isInitiator ? (deal.CounterpartyName ?? L["deals.detail.awaiting_accept"]) : deal.InitiatorName)</span>
                 </div>
+
+                @* ─── وَضعُ التَجرِبَةِ يَبقى مُعلَناً **بَعدَ** النَقرَة ───
+                   كانَتِ الشارَةُ تُرسَمُ في `CheckoutPage` وَحدَها — أَي
+                   قَبلَ النَقرَةِ الأَخيرَةِ فَقَط — فَالعائِدُ إلى طَلَبِه
+                   لاحِقاً يَرى مَبلَغاً وطَرَفاً **بِلا أَيِّ مُذَكِّرٍ**
+                   بِأَنَّ الدَفعَ لَم يَقَع. والشَرطُ يُقرَأُ مِنَ
+                   المَرجِعِ الَّذي كَتَبَته النُقطَةُ نَفسُها
+                   (`payment_mode`)، لا مِن مُزَوِّدٍ يُحقَنُ هُنا: حالَةُ
+                   الطَلَبِ ساعَةَ وَقَعَ، لا حالَةُ الخادِمِ ساعَةَ يُقرَأ.
+                   ADR-025، والمِفتاحانِ هُما مِفتاحا الدَفعِ نَفسُهُما
+                   (القاعِدَة ٨). *@
+                @if (deal.Refs.TryGetValue(ACommerce.Kit.Payments.SimulatedPaymentProvider.ModeRefKey, out var payMode)
+                     && payMode == ACommerce.Kit.Payments.SimulatedPaymentProvider.ConfiguredValue)
+                {
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;
+                                border-top:1px solid var(--ac-border);">
+                        <span class="ac-chip ac-chip-sm">@L.Markup("checkout.payment.simulation_badge")</span>
+                        <span style="font-size:12px;color:var(--ac-text-muted);line-height:1.7;">
+                            @L.Markup("checkout.payment.simulation_hint")
+                        </span>
+                    </div>
+                }
             </ChildContent>
         </AcCard>
 

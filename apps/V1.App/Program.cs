@@ -242,8 +242,16 @@ AuthChannelSelection.AssertNoStubsOutsideDevelopment(
 // طَلَب. والسَبَبُ واحِد: «رَمزٌ ثابِتٌ ‏123456» و«نَجَحَ الدَفع
 // دائِماً» عَطَبٌ واحِدٌ بِوَجهَين — تَركيبُ الخِدماتِ وَحدَه هُوَ
 // الفَرقُ بَينَ مَنصَّةٍ تَقبِض وأُخرى تُوَزِّع باقاتِها مَجّاناً.
-var resolvedPayments = new[]
-    { PaymentProviderSelection.Describe(app.Services.GetService<IPaymentProvider>()) }
+// **و`GetServices` لا `GetService`** (‏2026-08-30): المُفرَدُ يُرجِعُ
+// **آخِرَ** تَسجيلٍ وَحدَه، فَسَطرُ `AddMockPayments()` شارِدٌ يَسبِقُ
+// سَطرَ الانتِقاءِ كانَ **يَبقى خَفِيّاً عَنِ الحارِس**. وهُوَ خامِلٌ
+// اليَوم — لا مُستَهلِكَ يَحقِنُ `IEnumerable<IPaymentProvider>`،
+// فَالثَلاثَةُ يَأخُذونَ المُفرَدَ ويَفوزُ آخِرُ تَسجيل — لكِنَّ
+// الحارِسَ الَّذي يَرى واحِداً مِن ثَلاثَةٍ لَيسَ حارِساً، وهذا
+// بِعَينِه شَكلُ العَطَبِ الَّذي كُتِبَ الحارِسُ لِأَجلِه: سَطرُ
+// تَسجيلٍ يَعودُ سَهواً.
+var resolvedPayments = app.Services.GetServices<IPaymentProvider>()
+    .Select(PaymentProviderSelection.Describe)
     .OfType<RegisteredPaymentProvider>()
     .ToArray();
 
