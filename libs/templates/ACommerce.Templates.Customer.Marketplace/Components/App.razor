@@ -191,7 +191,8 @@
         // ومَعجَمُ المَسارات العابِرَةِ وشَرطُ البَوّابَةِ مَنقولانِ
         // إلَيها حَرفاً بِلا تَغييرِ جَواب.
         string? pwaPath = ACommerce.Templates.Customer.Marketplace.Services.Ux
-            .PwaManifestDecision.Resolve(rawPath, Tenant.IsResolved, Tenant.Slug, roleForPwa);
+            .PwaManifestDecision.Resolve(rawPath, Tenant.IsResolved, Tenant.Slug,
+                                         roleForPwa, Tenant.HasRoles);
     }
     @if (pwaPath is not null)
     {
@@ -212,7 +213,12 @@
               href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.svg" />
         <link rel="apple-touch-icon"
               href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png" />
-        <meta name="apple-mobile-web-app-title" content="@L["shell.seo.site_name"]" />
+        @* واسمُ المَتجَرِ حَيثُ يوجَد: صَفحَةٌ عابِرَةٌ في مَتجَرٍ
+           (‏/{slug}/login مَثَلاً) كانَت تُعلِن «وَسايِل» — وهُوَ اسمُ
+           المَنَصَّةِ لا اسمُ المَتجَر، ويَظهَر في قائِمَةِ المُشارَكَة
+           وفي شاشَةِ التَثبيت. والسُقوطُ إلى اسمِ المَنَصَّةِ يَبقى
+           لِصَفَحاتِها هي. *@
+        <meta name="apple-mobile-web-app-title" content="@(Tenant.IsResolved ? Tenant.Name : L["shell.seo.site_name"])" />
     }
 
     <HeadOutlet />

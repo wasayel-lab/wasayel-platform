@@ -74,7 +74,8 @@ public sealed class TenantResolverMiddleware
 
         if (entity is not null)
             ctx.SetTenant(entity.Slug, entity.Name, entity.BrandColor, entity.AuthChannel,
-                          entity.TagLine, entity.City);
+                          entity.TagLine, entity.City,
+                          hasRoles: entity.Roles.Count > 0);
 
         await _next(ctx);
     }

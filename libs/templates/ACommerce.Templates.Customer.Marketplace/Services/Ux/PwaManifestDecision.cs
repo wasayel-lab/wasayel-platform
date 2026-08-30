@@ -12,10 +12,11 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Ux;
 /// لاحِقٍ <b>مَحصوراً حَيثُ قُصِد بِبُرهانٍ لا بِدَعوى</b>
 /// (القاعِدَة ١٣).</para>
 ///
-/// <para><b>وقاعِدَةُ اليَومِ كَما هي</b>: صَفحَةٌ عابِرَة لا تُثَبَّت؛
+/// <para><b>والقاعِدَة</b>: صَفحَةٌ عابِرَة لا تُثَبَّت؛
 /// ومَسارٌ فيه <c>/r/{role}/</c> يَحمِل manifest الدَور؛ ومَسارٌ بِلا
 /// دَورٍ ولَيسَ بَوّابَةً يَحمِل manifest السلاج؛ والبَوّابَةُ
-/// <c>/{slug}</c> لا تَحمِل شَيئاً.</para>
+/// <c>/{slug}</c> تَحمِلُه <b>إن لَم يَكُن لِلمَتجَرِ أَدوار</b>،
+/// وإلّا فَهي مُنتَقٍ لِلدَورِ فَلا تُثَبَّت.</para>
 /// </summary>
 public static class PwaManifestDecision
 {
@@ -36,14 +37,21 @@ public static class PwaManifestDecision
     /// <c>/api/{slug}/r/{role}</c>)، أَو <c>null</c> لِصَفحَةٍ لا
     /// تُثَبَّت.</summary>
     public static string? Resolve(
-        string path, bool tenantResolved, string tenantSlug, string? roleFromPath)
+        string path, bool tenantResolved, string tenantSlug,
+        string? roleFromPath, bool tenantHasRoles)
     {
         if (!tenantResolved || IsTransient(path)) return null;
 
         if (!string.IsNullOrEmpty(roleFromPath))
             return $"/api/{tenantSlug}/r/{roleFromPath}";
 
-        if (IsLauncher(path)) return null;
+        // **السَطرُ الوَحيدُ الَّذي تَغَيَّر**: كانَ
+        // `if (IsLauncher(path)) return null;` — فَبَوّابَةُ كُلّ مَتجَرٍ
+        // تَخرُج بِصِفرِ وَسمِ تَثبيت، بِأَدوارٍ أَو بِلا. والصَحيحُ أَنّ
+        // بَوّابَةَ مَتجَرِ الأَدوارِ **مُنتَقٍ لِلدَور** فَلا تُمَثِّل
+        // التَطبيق، وبَوّابَةَ مَتجَرٍ بِلا أَدوارٍ **هي التَطبيق** —
+        // وهي بِعَينِها الصَفحَةُ الَّتي يُشارِكُها صاحِبُ المَتجَر.
+        if (IsLauncher(path) && tenantHasRoles) return null;
 
         return $"/api/{tenantSlug}";
     }

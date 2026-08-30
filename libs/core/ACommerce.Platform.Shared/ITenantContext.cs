@@ -26,6 +26,12 @@ public interface ITenantContext
     string City { get; }
 
     bool IsResolved { get; }
+    /// <summary><b>أَلِهذا المَتجَرِ أَدوار؟</b> — والسُؤالُ لَيسَ
+    /// تَرَفاً: بَوّابَةُ مَتجَرِ الأَدوارِ <b>مُنتَقٍ لِلدَور</b>
+    /// فَلا تُمَثِّلُ التَطبيق؛ وبَوّابَةُ مَتجَرٍ بِلا أَدوارٍ
+    /// <b>هي التَطبيق</b>. وخَلطُهُما أَخرَجَ صَفحَةَ المُشارَكَةِ
+    /// بِصِفرِ وَسمِ تَثبيت. (‏Services.Ux.PwaManifestDecision)</summary>
+    bool HasRoles { get; }
 }
 
 public sealed class HttpItemTenantContext : ITenantContext
@@ -41,6 +47,7 @@ public sealed class HttpItemTenantContext : ITenantContext
     public string AuthChannel => (string?)_http.HttpContext?.Items[TenantKeys.AuthChannel] ?? "phone";
     public string TagLine     => (string?)_http.HttpContext?.Items[TenantKeys.TagLine] ?? "";
     public string City        => (string?)_http.HttpContext?.Items[TenantKeys.City]    ?? "";
+    public bool HasRoles      => _http.HttpContext?.Items[TenantKeys.HasRoles] is true;
 }
 
 public static class TenantKeys
@@ -51,6 +58,7 @@ public static class TenantKeys
     public const string AuthChannel = "Tenant.AuthChannel";
     public const string TagLine = "Tenant.TagLine";
     public const string City    = "Tenant.City";
+    public const string HasRoles = "Tenant.HasRoles";
 }
 
 public static class TenantContextExtensions
@@ -58,7 +66,8 @@ public static class TenantContextExtensions
     /// <summary><paramref name="tagLine"/> و <paramref name="city"/>
     /// اختِيارِيّان لِيَبقَى كُلّ مُستَدعٍ قائِم صالِحاً بِلا تَعديل.</summary>
     public static void SetTenant(this HttpContext ctx, string slug, string name,
-        string brandColor, string authChannel, string tagLine = "", string city = "")
+        string brandColor, string authChannel, string tagLine = "", string city = "",
+        bool hasRoles = false)
     {
         ctx.Items[TenantKeys.Slug]  = slug;
         ctx.Items[TenantKeys.Name]  = name;
@@ -66,5 +75,6 @@ public static class TenantContextExtensions
         ctx.Items[TenantKeys.AuthChannel] = authChannel;
         ctx.Items[TenantKeys.TagLine] = tagLine;
         ctx.Items[TenantKeys.City]    = city;
+        ctx.Items[TenantKeys.HasRoles] = hasRoles;
     }
 }

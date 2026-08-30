@@ -27,7 +27,7 @@ public class PwaManifestDecisionTests
     public void A_transient_page_carries_no_manifest(string path)
     {
         Assert.True(PwaManifestDecision.IsTransient(path));
-        Assert.Null(PwaManifestDecision.Resolve(path, true, "ashare", null));
+        Assert.Null(PwaManifestDecision.Resolve(path, true, "ashare", null, true));
     }
 
     [Theory]
@@ -44,7 +44,7 @@ public class PwaManifestDecisionTests
     [InlineData("/studio")]
     [InlineData("/studio/apps/ashare")]
     public void A_platform_page_carries_no_manifest(string path)
-        => Assert.Null(PwaManifestDecision.Resolve(path, false, "", null));
+        => Assert.Null(PwaManifestDecision.Resolve(path, false, "", null, true));
 
     // ─── ٣. البَوّابَة — المَقيسُ اليَوم ─────────────────────────────
 
@@ -57,13 +57,33 @@ public class PwaManifestDecisionTests
         Assert.False(PwaManifestDecision.IsLauncher("/"));
     }
 
-    /// <summary><b>هذا هُوَ السَطرُ الَّذي كَتَبَ العَطَب</b>: بَوّابَةُ
-    /// المَتجَرِ — وهي الصَفحَةُ الَّتي يُشارِكُها صاحِبُه ويَفتَحُها
-    /// الزائِر — تَخرُج بِصِفرِ وَسمِ تَثبيت، بَينَما صَفحَةٌ داخِلِيَّةٌ
-    /// تَخرُج بِواحِد.</summary>
+    /// <summary><b>بَوّابَةُ مَتجَرِ الأَدوارِ مُنتَقٍ لِلدَور</b>
+    /// فَلا تُمَثِّلُ التَطبيق — والتَثبيتُ مِنها يُثَبِّتُ شاشَةَ
+    /// اختِيار. <b>وهذا الصَفُّ لَم يَتَغَيَّر</b>.</summary>
     [Fact]
-    public void The_launcher_carries_no_manifest_today()
-        => Assert.Null(PwaManifestDecision.Resolve("/ashare", true, "ashare", null));
+    public void The_launcher_of_a_role_ful_store_still_carries_no_manifest()
+        => Assert.Null(PwaManifestDecision.Resolve("/injez", true, "injez", null, true));
+
+    /// <summary><b>والصَفُّ الوَحيدُ الَّذي تَغَيَّر</b>: بَوّابَةُ
+    /// مَتجَرٍ بِلا أَدوارٍ <b>هي التَطبيق</b> — وهي الصَفحَةُ الَّتي
+    /// يُشارِكُها صاحِبُ المَتجَر. المَقيسُ قَبلَ الإصلاح: <c>/ashare</c>
+    /// بِصِفرِ وَسمِ تَثبيت و<c>/ashare/explore</c> بِواحِد.</summary>
+    [Fact]
+    public void The_launcher_of_a_role_less_store_now_carries_the_slug_manifest()
+        => Assert.Equal("/api/ashare",
+            PwaManifestDecision.Resolve("/ashare", true, "ashare", null, false));
+
+    /// <summary>والفَرقُ مَحصورٌ في البَوّابَةِ وَحدَها: كُلُّ مَسارٍ
+    /// آخَرَ يُعطي نَفسَ الجَوابِ بِأَدوارٍ وبِلا.</summary>
+    [Theory]
+    [InlineData("/ashare/explore")]
+    [InlineData("/ashare/me")]
+    [InlineData("/ashare/login")]
+    [InlineData("/ashare/terms")]
+    public void Outside_the_launcher_the_answer_does_not_depend_on_roles(string path)
+        => Assert.Equal(
+            PwaManifestDecision.Resolve(path, true, "ashare", null, true),
+            PwaManifestDecision.Resolve(path, true, "ashare", null, false));
 
     [Theory]
     [InlineData("/ashare/explore")]
@@ -71,7 +91,7 @@ public class PwaManifestDecisionTests
     [InlineData("/ashare/me")]
     public void An_inner_page_of_a_role_less_store_carries_the_slug_manifest(string path)
         => Assert.Equal("/api/ashare",
-            PwaManifestDecision.Resolve(path, true, "ashare", null));
+            PwaManifestDecision.Resolve(path, true, "ashare", null, true));
 
     // ─── ٤. مَسارُ الدَور يَفوزُ دائِماً ────────────────────────────
 
@@ -80,10 +100,10 @@ public class PwaManifestDecisionTests
     [InlineData("/injez/r/driver/explore", "driver")]
     public void A_role_path_carries_the_role_manifest(string path, string role)
         => Assert.Equal($"/api/injez/r/{role}",
-            PwaManifestDecision.Resolve(path, true, "injez", role));
+            PwaManifestDecision.Resolve(path, true, "injez", role, true));
 
     [Fact]
     public void A_role_path_that_is_transient_still_carries_nothing()
         => Assert.Null(PwaManifestDecision.Resolve(
-            "/injez/r/rider/login", true, "injez", "rider"));
+            "/injez/r/rider/login", true, "injez", "rider", true));
 }

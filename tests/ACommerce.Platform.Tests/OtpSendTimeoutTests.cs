@@ -309,4 +309,5 @@ file sealed class ResolvedTenant(string slug) : ACommerce.Platform.Shared.ITenan
     public string TagLine => "";
     public string City => "";
     public bool IsResolved => true;
+    public bool HasRoles => false;
 }
