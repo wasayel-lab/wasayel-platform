@@ -79,6 +79,78 @@ public class StudioOwnerReachabilityTests
         Assert.Contains("/studio/apps/", page, StringComparison.Ordinal);
     }
 
+    // ═══ ٢) اقتِراحُ المَظهَر — دَورَةُ اعتِمادٍ بِلا طَرَفٍ يَقتَرِح ════
+    //
+    // **المَقيس**: ‏`theme/propose` و`theme/apply` و`theme/{slug}/decide`
+    // ثَلاثَتُها تَحتَ `/admin` بِـ`PlatformAdminGuard`، ولا
+    // `@page "/studio/apps/{slug}/theme"` في المُستَودَع. فَالمُستَأجِرُ
+    // يَضبُطُ `BrandColor` مِن `branding` **ولا يَبلُغُ ثيماً أَبَداً**.
+    // والاعتِمادُ نَفسُه قَرارُ مَنَصَّةٍ يَبقى (يُبَثُّ في `<head>`
+    // لِكُلِّ زائِر) — **والناقِصُ هُوَ الاقتِراحُ لا القَرار**.
+
+    /// <summary><b>شاشَةُ المَظهَرِ في الاستوديو تُبلَغُ بِنَقرَة، ولَها
+    /// نُقطَةٌ يَحرُسُها مالِكُ المَتجَر.</b></summary>
+    [Fact]
+    public void The_theme_screen_is_reachable_by_a_click_and_has_an_owner_guarded_endpoint()
+    {
+        var board = Board();
+        Assert.Contains("/studio/apps/{Slug}/theme", board, StringComparison.Ordinal);
+
+        var page = Read($"{TemplateRoot}/Components/Pages/StudioAppTheme.razor");
+        Assert.Contains("@page \"/studio/apps/{slug}/theme\"", page, StringComparison.Ordinal);
+        Assert.Contains("/studio/apps/{Slug}/theme/propose", page, StringComparison.Ordinal);
+        Assert.Contains("method=\"post\"", page, StringComparison.Ordinal);
+
+        var endpoints = Endpoints();
+        Assert.Contains("MapPost(\"/studio/apps/{slug}/theme/propose\"", endpoints, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <para><b>والاقتِراحُ اقتِراحٌ لا اعتِماد — وهذا هُوَ الحَدُّ الَّذي
+    /// لا يُتَجاوَز.</b> الاعتِمادُ يَبُثُّ الثيمَ في <c>&lt;head&gt;</c>
+    /// لِكُلِّ زائِر، فَيَبقى قَرارَ مَنَصَّةٍ بِحارِسِها.</para>
+    ///
+    /// <para>والفَحصُ نَصِّيّ: جِسمُ النُقطَةِ لا يَحوي <c>DecideAsync</c>
+    /// ولا <c>ApplyPreset</c> ولا <c>Approved</c>.</para>
+    /// </summary>
+    [Fact]
+    public void The_studio_may_propose_a_theme_but_never_approve_one()
+    {
+        var text = Endpoints();
+        var start = text.IndexOf("MapPost(\"/studio/apps/{slug}/theme/propose\"", StringComparison.Ordinal);
+        Assert.True(start > 0, "نُقطَةُ اقتِراحِ المَظهَرِ غَير مَوجودَة — الأَداةُ عَمياء.");
+        var body = text.Substring(start, Math.Min(1600, text.Length - start));
+
+        Assert.True(body.Contains("StudioOwnsAsync", StringComparison.Ordinal),
+            "نُقطَةُ الاقتِراحِ بِلا حارِسِ مِلكِيَّة.");
+
+        foreach (var forbidden in new[] { "DecideAsync", "ApplyPreset", "TenantThemeStatuses.Approved" })
+            Assert.False(body.Contains(forbidden, StringComparison.Ordinal),
+                $"نُقطَةُ الاستوديو تَعتَمِدُ الثيمَ بِنَفسِها («{forbidden}») — "
+                + "والاعتِمادُ يَبُثُّ في <head> لِكُلِّ زائِرٍ فَيَبقى قَرارَ مَنَصَّة.");
+    }
+
+    /// <summary><b>والجِسمُ يُقرَأُ مِن كاتالوجِ المَنَصَّةِ لا مِن
+    /// الطَلَب.</b> نَفسُ حُجَّةِ <c>ApplyPresetAsync</c> حَرفاً: لا
+    /// يَملِكُ صاحِبُ جَلسَةٍ مُخَوَّلَةٍ أَن يَحقِنَ ثيماً بِصِياغَةِ
+    /// طَلَب، <b>ولَيسَ لِأَنّ المُصادِقَ سَيَرُدُّه بَل لِأَنَّه لا
+    /// يُقرَأُ أَصلاً</b>.</summary>
+    [Fact]
+    public void The_proposed_theme_body_is_read_from_the_platform_catalog_not_from_the_request()
+    {
+        var service = Read($"{TemplateRoot}/Services/TenantThemeService.cs");
+        Assert.Contains("ProposePresetAsync", service, StringComparison.Ordinal);
+
+        var text = Endpoints();
+        var start = text.IndexOf("MapPost(\"/studio/apps/{slug}/theme/propose\"", StringComparison.Ordinal);
+        var body = text.Substring(start, Math.Min(1600, text.Length - start));
+
+        Assert.True(body.Contains("ProposePresetAsync", StringComparison.Ordinal),
+            "النُقطَةُ لا تَمُرُّ بِمَسارِ الحُزَمِ المُنَسَّقَة.");
+        Assert.False(body.Contains("\"definition\"", StringComparison.Ordinal),
+            "النُقطَةُ تَقرَأُ نَصَّ تَعريفٍ مِن الطَلَب — وذاكَ حَقنُ ثيمٍ بِصِياغَةِ طَلَب.");
+    }
+
     // ═══ المَفاتيحُ الَّتي تَقرَؤُها الصُفوفُ الجَديدَة ═════════════════
 
     /// <summary><b>ولا نَصَّ خارِجَ القامُوس</b> (القاعِدَة ١١) —
