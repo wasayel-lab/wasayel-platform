@@ -69,12 +69,35 @@ public static class TierCatalog
     /// مَعَها <see cref="FreeTierBeforeRaise"/> يَومَ يُكتَبُ
     /// السِعر.</para>
     /// </summary>
-    public const bool FreeTierTemporarilyRaised = false;
+    public const bool FreeTierTemporarilyRaised = true;
 
     public static readonly IReadOnlyDictionary<string, TierLimits> All = new Dictionary<string, TierLimits>
     {
-        ["spark"]  = new("spark",  "Spark",   99,  AnalysesPerMonth: 1, RefinesPerMonth: 3,
-                         StoresMax: 1, AllowExport: false),
+        // ═══ رَفعٌ **مُؤَقَّت** — حَتّى يَستَقِرَّ التَسعير ═══════════
+        //
+        // **الحالَةُ الَّتي رُفِعَت** (‏`FreeTierBeforeRaise`): ‏1 تَحليل
+        // · 3 تَحسينات · مَتجَرٌ واحِد · بِلا تَصديرِ دِراسَة. وهي
+        // **حالَةُ كُلِّ مُستَأجِرٍ في المُستَودَعِ كُلِّه** لا حالَةَ
+        // مَن اختارَ المَجّانِيَّة: `StudioUser.Tier` افتِراضُها
+        // `"spark"`، وكاتِبُها الوَحيدُ خَلفَ رَفضٍ لا يُعبَر. أَي
+        // أَنّ هذِه الأَرقامَ لَم تَكُن سِياسَةَ باقَةٍ بَل **سَقفَ
+        // المُنتَجِ كُلِّه**.
+        //
+        // **والأَرقامُ الجَديدَةُ مَنقولَةٌ لا مَنحوتَة** (القاعِدَة ١٦):
+        // هي بِحَرفِها أَرقامُ `scale` أَدناه — تَكليفُ المالِكِ يَومَ
+        // ‏2026-08-30 (‏40 · 200 · 40). فَلا رَقمَ يُخترَعُ هُنا، ويَبقى
+        // السَقفُ **مُنتَهِياً** فَتُغلَقُ البَوّابَةُ في وَجهِ حَلقَةٍ
+        // آلِيَّةٍ تُنفِقُ مِفتاحَ نَموذَجِ لُغَةِ المالِك — وهي بِعَينِها
+        // الكَلفَةُ الَّتي أَغلَقَتها المَوجَةُ السابِقَة.
+        //
+        // **وما لَم يُمَسّ**: السِعرُ ‏99 كَما هُوَ — الرَفعُ حُدودٌ لا
+        // تَسعير، ونَصُّ المالِكِ صَريح: لا يُفتَرَضُ سِعر. وحارِسُ
+        // `RefusePrice` بِحَرفِه، فَلا دَرَجَةَ بِسِعرٍ تُمنَحُ ذاتِيّاً.
+        //
+        // **والعَودَة** سَطران: `FreeTierTemporarilyRaised = false` وهذا
+        // السَطرُ يُعادُ مِن `FreeTierBeforeRaise`.
+        ["spark"]  = new("spark",  "Spark",   99,  AnalysesPerMonth: 40, RefinesPerMonth: 200,
+                         StoresMax: 40, AllowExport: true),
         ["lite"]   = new("lite",   "Lite",    199, AnalysesPerMonth: 3, RefinesPerMonth: 10,
                          StoresMax: 3, AllowExport: true),
         ["growth"] = new("growth", "Growth",  399, AnalysesPerMonth: 10, RefinesPerMonth: 50,

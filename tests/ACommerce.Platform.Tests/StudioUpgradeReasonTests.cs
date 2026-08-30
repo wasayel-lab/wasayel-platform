@@ -91,13 +91,36 @@ public class StudioUpgradeReasonTests
         Assert.False(t.AnalysesPerMonth - 1 >= t.AnalysesPerMonth);     // تَحتَه: يُسمَح
     }
 
-    /// <summary>وأَعلى الدَرَجاتِ لا تَقِلُّ عَن أَدناها في أَيّ
-    /// حَدّ — سُلَّمٌ لا يَنكَسِر.</summary>
+    /// <summary>
+    /// <para>وأَعلى الدَرَجاتِ لا تَقِلُّ عَن أَدناها في أَيّ حَدّ —
+    /// سُلَّمٌ لا يَنكَسِر.</para>
+    ///
+    /// <para><b>والسُلَّمُ يُقاسُ عَلى الدَرَجاتِ المَدفوعَةِ وَحدَها
+    /// ما دامَ الرَفعُ المُؤَقَّتُ قائِماً — ويُقالُ لِماذا</b>
+    /// (‏2026-08-30): قَرارُ المالِكِ رَفَعَ <c>spark</c> إلى سَقفِ
+    /// <c>scale</c> حَتّى يَستَقِرَّ التَسعير، فَصارَت المَجّانِيَّةُ
+    /// فَوقَ <c>lite</c> عَدَداً. <b>ولا مُستَخدِمَ يَختَبِرُ هذا
+    /// الانقِلاب</b>: ‏<c>SelfServiceCheckoutExists = false</c>
+    /// و<c>StudioTierPurchase.Refuse</c> يَرُدُّ الدَرَجاتِ الأَربَعَ،
+    /// والكاتِبُ الوَحيدُ لِـ<c>Tier</c> خَلفَ ذلكَ الرَفض — فَلا أَحَدَ
+    /// عَلى <c>lite</c> أَصلاً لِيَرى نَفسَه أَدنى مِن مَجّانِيّ.
+    /// السُلَّمُ يَحرُسُ سَطحَ بَيعٍ **لَم يوجَد بَعد**، وهو بِعَينِه
+    /// ما يَنتَظِرُه الرَفعُ المُؤَقَّت.</para>
+    ///
+    /// <para><b>والأَصلُ يَعودُ بِلا تَعديلِ حَرف</b>: يَومَ يَصيرُ
+    /// <see cref="TierCatalog.FreeTierTemporarilyRaised"/> بِـ
+    /// <c>false</c> يَشمَلُ الفَحصُ الدَرَجاتِ الأَربَعَ مِن جَديدٍ
+    /// تِلقائِيّاً. ولِذلكَ شَرطٌ لا حَذف.</para>
+    /// </summary>
     [Fact]
     public void The_ladder_never_goes_down()
     {
-        var order = new[] { "spark", "lite", "growth", "scale" }.Select(TierCatalog.For).ToArray();
-        Assert.Equal(4, order.Length);
+        var rungs = TierCatalog.FreeTierTemporarilyRaised
+            ? new[] { "lite", "growth", "scale" }
+            : new[] { "spark", "lite", "growth", "scale" };
+
+        var order = rungs.Select(TierCatalog.For).ToArray();
+        Assert.True(order.Length >= 3, $"أَداةٌ عَمياء: فُحِصَت {order.Length} دَرَجَة.");
 
         for (var i = 1; i < order.Length; i++)
         {
@@ -108,5 +131,22 @@ public class StudioUpgradeReasonTests
             Assert.True(order[i].StoresMax >= order[i - 1].StoresMax,
                 $"{order[i].Tier} مَتاجِرُه أَقَلُّ مِن {order[i - 1].Tier}");
         }
+    }
+
+    /// <summary><b>والرَفعُ المُؤَقَّتُ لا يَتَجاوَزُ السَقفَ
+    /// المُصَرَّحَ بِه</b> — الشَرطُ الَّذي يَحُلُّ مَحَلَّ دَرَجَةِ
+    /// السُلَّمِ المَرفوعَةِ أَعلاه، فَلا يَبقى الحَدُّ بِلا
+    /// فاحِص.</summary>
+    [Fact]
+    public void The_temporarily_raised_free_tier_never_exceeds_the_declared_ceiling()
+    {
+        if (!TierCatalog.FreeTierTemporarilyRaised) return;
+
+        var spark = TierCatalog.For("spark");
+        var scale = TierCatalog.For("scale");
+
+        Assert.True(spark.AnalysesPerMonth <= scale.AnalysesPerMonth, "spark فَوقَ سَقفِ التَحاليل");
+        Assert.True(spark.RefinesPerMonth  <= scale.RefinesPerMonth,  "spark فَوقَ سَقفِ التَحسينات");
+        Assert.True(spark.StoresMax        <= scale.StoresMax,        "spark فَوقَ سَقفِ المَتاجِر");
     }
 }
