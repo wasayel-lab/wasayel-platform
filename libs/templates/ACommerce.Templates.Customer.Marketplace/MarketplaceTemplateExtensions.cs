@@ -3434,9 +3434,20 @@ public static class MarketplaceTemplateExtensions
             if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))
                 return Results.Redirect($"/studio/s/{id}?build_err=color_invalid");
 
+            // القَناةُ **تُشتَقُّ مِن المُهَيَّإ في هذِه النُسخَة**، ولا
+            // تُكتَبُ ثابِتَةً. كانَت `"phone"` في المَصنَع، وعَلى نُسخَةٍ
+            // بِالبَريدِ وَحدَه (تَوصِيَة `docs/DEPLOY.md` §٢·ب) كانَ ذلكَ
+            // يُنتِج مَتجَراً لا يَدخُلُه أَحَد. ولا قَناةَ ⇒ **لا مَتجَرَ
+            // بِبابٍ مُغلَق**: رِسالَةٌ صَريحَةٌ يَقرَؤُها العَميل.
+            var channel = Services.Incubator.TenantAuthChannelDoor.Default(
+                Services.Incubator.TenantAuthChannelDoor.OfferedIn(http.RequestServices));
+            if (channel is null)
+                return Results.Redirect(
+                    $"/studio/s/{id}?build_err={Services.Incubator.TenantAuthChannelDoor.NoChannel}");
+
             var sector = session.Answers.TryGetValue("sector", out var sec) ? sec : "";
             await factory.CreateAsync(slug, name, color, tagLine, city,
-                session.SuggestedPattern, sector, ownerId, id);
+                session.SuggestedPattern, sector, channel, ownerId, id);
             await tier.RecordStoreBuiltAsync(ownerId);
             return Results.Redirect($"/studio/apps/{slug}?built=1");
         }).DisableAntiforgery();

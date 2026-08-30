@@ -1,12 +1,27 @@
 @page "/studio/apps/{slug}/branding"
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Queries.TenantDirectory Tenants
+@inject IServiceProvider Sp
 @inject L L
+@using ACommerce.Kit.Auth
 @using ACommerce.Kit.Tenants
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 
 @*
     تَحرير الهُويَّة البَصَريَّة لِتَطبيق العَميل داخِل studio.
-    اِسم، شِعار، مَدينَة، لَون. الـ AuthChannel يُدار مِن مَكان آخَر.
+    اِسم، شِعار، مَدينَة، لَون، **وقَناة الدُخول**.
+
+    ═══ ‏2026-08-30 — «الـ AuthChannel يُدار مِن مَكان آخَر» ═══════════
+    كانَ هذا السَطرُ هُنا، وكانَ صادِقاً وصفاً وكاذِباً أَثَراً:
+    «مَكانٌ آخَر» هُوَ `/admin`، أَي **المالِكُ بِيَدِه**. فَعَميلٌ
+    يَبني مَتجَرَه بِنَفسِه كانَ يَرى قَناتَه في `StudioApp.razor`
+    ولا يَملِكُ تَبديلَها — وإن كانَت غَيرَ مُهَيَّأَةٍ في هذِه
+    النُسخَة (وهي الحالُ حينَ يُشَغَّلُ المُستَضيفُ بِالبَريدِ وَحدَه،
+    `docs/DEPLOY.md` §٢·ب) فَبابُ مَتجَرِه مُغلَقٌ ولا سَبيلَ لَه.
+    الحَقلُ الآنَ هُنا، **ولا يَعرِضُ إلّا المُهَيَّأَ فِعلاً**:
+    زِرٌّ لِقَناةٍ غَيرِ مُسَجَّلَةٍ يُعيدُ إنتاجَ العَطَبِ مِن داخِلِ
+    الإصلاح، لِأَنّ `AuthChannels.NormalizeOrDefault` تَقبَلُ القيمَةَ
+    وتَكتُبُها (القاعِدَة ١٢: لا مَدخَلَ يَقودُ إلى رَفض).
 *@
 
 <StudioShell Title="@($"{L["studio.app_branding.title"]} {tenant?.Name ?? Slug}")" Active="home">
@@ -58,6 +73,41 @@
                         <code style="color:var(--st-muted);font-size:13px;direction:ltr;">@tenant.BrandColor</code>
                     </div>
                 </div>
+
+                @* قَناةُ الدُخول — نَفسُ أَزرارِ صَفحَةِ الإدارَة
+                   (‏`acm-radio-card*` في `site.css`)، **إلّا أَنَّها
+                   تُبنى مِن المَعروضِ لا مِن الثَلاثَةِ دائِماً**. *@
+                @{
+                    var offered = TenantAuthChannelDoor.OfferedIn(Sp);
+                    var chosen  = TenantAuthChannelDoor.Choose(tenant.AuthChannel, offered);
+                }
+                <div class="st-field">
+                    <label class="st-label">@L.Markup("studio.app_branding.section_auth")</label>
+                    @if (offered.Count == 0)
+                    {
+                        @* لا قَناةَ مُهَيَّأَة — يُقالُ صَراحَةً ولا
+                           يُعرَضُ زِرٌّ يَبني باباً مُغلَقاً. *@
+                        <div class="st-chip st-chip-danger" style="width:100%;justify-content:center;">
+                            @L.Markup("studio.app_branding.no_channel")
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="acm-radio-cards">
+                            @foreach (var c in offered)
+                            {
+                                <label class="acm-radio-card">
+                                    <input type="radio" name="channel" value="@c" checked="@(c == chosen)" />
+                                    <span class="acm-radio-card-body">
+                                        <strong><AcIcon Name="@IconFor(c)" Size="16" /> @L.Markup(LabelKey(c))</strong>
+                                        <span>@L.Markup(HintKey(c))</span>
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                    }
+                </div>
+
                 <button type="submit" class="st-btn st-btn-primary">@L.Markup("studio.app_branding.save")</button>
             </form>
         }
@@ -77,4 +127,28 @@
         tenant = await Tenants.FindAsync(Slug);
         if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) tenant = null;
     }
+
+    // المَفاتيحُ حَرفِيَّةٌ عَمداً — تُقرَأُ بِـgrep وتُقابَلُ
+    // بِالقامُوس، ومِفتاحٌ مُرَكَّبٌ بِالتَفسير يَختَفي عَن كُلّ
+    // فاحِص. ونَظائِرُها في الإدارَة `admin.tenant_branding.auth_*`.
+    static string LabelKey(string channel) => channel switch
+    {
+        AuthChannels.Nafath => "studio.app_branding.auth_nafath",
+        AuthChannels.Email  => "studio.app_branding.auth_email",
+        _                   => "studio.app_branding.auth_phone"
+    };
+
+    static string HintKey(string channel) => channel switch
+    {
+        AuthChannels.Nafath => "studio.app_branding.auth_nafath_hint",
+        AuthChannels.Email  => "studio.app_branding.auth_email_hint",
+        _                   => "studio.app_branding.auth_phone_hint"
+    };
+
+    static string IconFor(string channel) => channel switch
+    {
+        AuthChannels.Nafath => "key",
+        AuthChannels.Email  => "mail",
+        _                   => "phone"
+    };
 }
