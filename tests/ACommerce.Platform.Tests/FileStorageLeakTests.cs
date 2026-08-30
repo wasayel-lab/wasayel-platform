@@ -132,8 +132,25 @@ public class FileStorageLeakTests
 
         Assert.Contains("AWSSDK.S3", csproj, StringComparison.Ordinal);
 
+        // **التَعليقُ يُنزَع قَبلَ الفَحص**: المِلَفُّ يَشرَح لِماذا لا
+        // يَفعَل ما يَفعَلُه الجاران، فَيَذكُر `HMACSHA1` و`RSA.SignData`
+        // بِاسمِهِما. وأَداةٌ تَقرَأُ الشَرحَ كَأَنَّه فِعلٌ **أَداةٌ
+        // تَكذِب** — وقَد كَذَبَت فِعلاً في أَوَّلِ تَشغيلٍ لَها
+        // (القاعِدَة ١٠: الأَداةُ تُقاس قَبلَ أَن يُوثَقَ بِها).
+        var code = string.Join('\n', s3
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split('\n')
+            .Where(l =>
+            {
+                var t = l.TrimStart();
+                return !t.StartsWith("//", StringComparison.Ordinal)
+                    && !t.StartsWith("*", StringComparison.Ordinal);
+            }));
+        Assert.True(code.Length > 1000,
+            $"أَداة عَمياء: بَقِيَ {code.Length} مِحرَفاً بَعدَ نَزعِ التَعليق.");
+
         var handRolled = new[] { "HMACSHA1", "HMACSHA256", "RSA.Create", "SignData", "AWS4-HMAC" }
-            .Where(n => s3.Contains(n, StringComparison.Ordinal))
+            .Where(n => code.Contains(n, StringComparison.Ordinal))
             .ToArray();
         Assert.True(handRolled.Length == 0,
             "تَوقيعٌ مَكتوبٌ بِاليَد في مُزَوِّدِ التَخزين: " + string.Join("، ", handRolled)

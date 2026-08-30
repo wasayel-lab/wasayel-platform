@@ -18,11 +18,25 @@ public sealed class LocalFileStorageOptions
 }
 
 /// <summary>
-/// تَخزين مَحَلّيّ — مُلائِم لِلتَّطوير والـ self-hosted. يَكتُب على القُرص
-/// تَحتَ <see cref="LocalFileStorageOptions.RootPath"/>. الـ URL العامّ يَخدُم
-/// بِـ <c>UseStaticFiles</c> عَلى نَفس الـ host.
+/// تَخزين مَحَلّيّ — يَكتُب على القُرص تَحتَ
+/// <see cref="LocalFileStorageOptions.RootPath"/>، والـ URL العامّ يَخدُم
+/// بِـ<c>UseStaticFiles</c> عَلى نَفس الـ host.
+///
+/// <para><b>لِلتَطويرِ وَحدَه مُنذُ ‏2026-08-30</b>، ويَحمِل
+/// <see cref="IDevelopmentStubFileStorage"/> لِذلك. **والسَبَبُ مَقيسٌ لا
+/// مَظنون**: كانَ مُسَجَّلاً بِلا شَرطِ بيئَةٍ على `wwwroot/uploads`
+/// **داخِلَ الحاوِيَة**، وقُرصُ الـSpace زائِل — فَكُلُّ صورَةِ إعلانٍ
+/// أَو صورَةٍ شَخصِيَّةٍ تَذهَب عِندَ أَوَّلِ إعادَةِ نَشر، **ويَبقى
+/// رابِطُها في القاعِدَة** فَتُرسَم صورَةٌ مَكسورَةٌ لا فَراغٌ يُفهَم
+/// (‏`/uploads/…` يَرُدُّ ‏404 مَقيساً على النُسخَةِ المَنشورَة).
+/// التَفصيلُ في
+/// <c>docs/ADR-017-TENANT-IMAGES-OUTLIVE-THE-CONTAINER.md</c>.</para>
+///
+/// <para><b>وهُوَ لا يَكذِب</b> — يَكتُب ويَقرَأُ صِدقاً؛ عَيبُه أَنّ ما
+/// كَتَبَه يَذهَب. وذلك يَكفي لِحَملِ العَلامَة: الفَرقُ بَينَه وبَينَ
+/// مُحاكي الدَفعِ فيمَن يَخسَر، لا في نَوعِ الكَذِب.</para>
 /// </summary>
-public sealed class LocalFileStorage : IFileStorage
+public sealed class LocalFileStorage : IFileStorage, IDevelopmentStubFileStorage
 {
     private readonly LocalFileStorageOptions _opts;
     private readonly ILogger<LocalFileStorage> _logger;

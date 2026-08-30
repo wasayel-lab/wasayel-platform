@@ -107,7 +107,17 @@ public class EndpointBodyBleedTests
         // `StudioTierService` كَما هِيَ مُنذُ `/refine`. فَما دَخَلَ
         // هُنا: فَحصٌ ورَدّ، وفَحصٌ ورَدّ — لا سَطرَ حِسابٍ واحِد.
         // راجِع `LanguageModelQuotaGateTests`.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2555),
+        //
+        // ‏2555 ← 2559 يَوم ‏2026-08-30 (‏ADR-017): أَربَعَةُ أَسطُرِ
+        // `try`/`catch (FileStorageException)` حَولَ رَفعِ الصورَةِ
+        // الشَخصِيَّةِ في `POST /{slug}/me/save`. **ولا مَنطِقَ فيها
+        // إطلاقاً** — إحاطَةٌ لا حِساب، وهي بِعَينِها ما يَفعَلُه جِسمُ
+        // إنشاءِ الإعلانِ مُنذُ كُتِب (`catch { /* صَورَة فاشِلَة لا
+        // تَكسِر الإعلان */ }`). فَالمَوضِعانِ صارا واحِداً بَعدَ أَن
+        // كانَ أَحَدُهُما يَرُدُّ ‏500 على تَعديلِ اسمٍ لِأَنّ مَخزَنَ
+        // المِلَفّاتِ رَفَضَ الكِتابَة — والرَفضُ مَقصودٌ الآنَ لا
+        // عارِض. راجِع `FileStorageSelectionTests`.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2559),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -505,7 +515,14 @@ public class EndpointBodyBleedTests
     /// تَماماً، وحَجزٌ ذَرِّيٌّ مَكانَ قَلبِ حالَةٍ يَسبِقُ إطلاقاً.
     /// والقَرارُ خارِجَهُما كامِلاً (‏<c>TryClaimAnalysisAsync</c> و
     /// <c>StudioTierService</c>)، فَما دَخَلَ فَحصٌ ورَدّ.</remarks>
-    private const int PinnedTotal = 2796;
+    ///
+    /// <remarks><b>‏2796 ← 2800 في اليَومِ نَفسِه (‏ADR-017)</b>: أَربَعَةُ
+    /// أَسطُرِ <c>try</c>/<c>catch (FileStorageException)</c> حَولَ رَفعِ
+    /// الصورَةِ الشَخصِيَّة. <b>إحاطَةٌ لا حِساب</b> — ونَفسُ ما يَفعَلُه
+    /// جِسمُ إنشاءِ الإعلانِ مُنذُ كُتِب. والمُقابِلُ أَنّ تَعديلَ اسمٍ
+    /// لَم يَعُد يَرُدُّ ‏500 حينَ يَرفُض مَخزَنُ المِلَفّاتِ الكِتابَةَ
+    /// عَمداً.</remarks>
+    private const int PinnedTotal = 2800;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

@@ -33,6 +33,11 @@
          بِـ`HttpMessageHandler` وَهمِيّ، فَلا مِفتاحَ حَقيقيّاً ولا
          نِداءَ شَبَكَة. مَرجِعُ اختِبارٍ فَقَط. -->
     <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.Brevo\ACommerce.Kit.Auth.Providers.Brevo.csproj" />
+    <!-- مَخزَنُ الكائِنات: البُرهانُ يُقلِع مُستَمِعَ HTTP مَحَلِّيّاً
+         ويُوَجِّه العَميلَ إلَيه، فَيُقاس أَنّ التَوقيعَ ‏SigV4 يُكتَب
+         **مِن الحُزمَة** وأَنّ الدَلوَ والمِفتاحَ يَبلُغانِ الطَلَب —
+         بِلا اعتِمادِ R2 ولا نِداءِ شَبَكَةٍ خارِجَ المُضيف. -->
+    <ProjectReference Include="..\..\libs\kits\Files\ACommerce.Kit.Files.Providers.S3\ACommerce.Kit.Files.Providers.S3.csproj" />
   </ItemGroup>
 
 </Project>

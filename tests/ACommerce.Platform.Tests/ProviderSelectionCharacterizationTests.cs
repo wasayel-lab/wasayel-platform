@@ -1,4 +1,5 @@
 using ACommerce.Kit.Auth;
+using ACommerce.Kit.Files;
 using ACommerce.Kit.Payments;
 using Xunit;
 
@@ -96,8 +97,22 @@ public class ProviderSelectionCharacterizationTests
             "builder.Services.AddMockDelivery();", null,
             "libs/kits/Delivery/ACommerce.Kit.Delivery.Core/MockDeliveryProvider.cs"),
 
+        // ─── تَعديلٌ مُعلَنٌ ثانٍ — ‏2026-08-30، صَفُّ `files` ─────────
+        // كانَ `AddLocalFileStorage(…)` سَطراً عارِياً يَكتُب على قُرصِ
+        // الحاوِيَةِ الزائِل، فَتَذهَب صُوَرُ المُستَأجِرينَ عِندَ أَوَّلِ
+        // إعادَةِ نَشرٍ **ويَبقى رابِطُها في القاعِدَة**. صارَ القَرارُ
+        // دالَّةً نَقِيَّةً (`FileStorageSelection.Decide`) بِمِفتاحِ
+        // تَهيئَةٍ حَقيقيّ وحارِسَ إقلاعٍ يَرمي. التَفصيلُ في
+        // `docs/ADR-017-TENANT-IMAGES-OUTLIVE-THE-CONTAINER.md`.
+        //
+        // **وبِخِلافِ `payments`، لِلمِلَفّاتِ مِفتاحُ تَهيئَةٍ حَقيقيّ**
+        // ويُقالُ لِماذا: هُنا يوجَد تَنفيذٌ فِعليٌّ **يَبلُغُه
+        // التَطبيق** (‏`ACommerce.Kit.Files.Providers.S3` مُحالٌ إلَيه مِن
+        // `V1.App.csproj`)، فَالمِفتاحُ يَقبَل قيمَةً **تُسَجِّل شَيئاً**
+        // — وذلك بِعَينِه الشَرطُ الَّذي افتَقَدَه الدَفعُ فَتُرِكَ
+        // بِالبيئَةِ وَحدَها.
         new("files", "IFileStorage",
-            "builder.Services.AddLocalFileStorage(", null,
+            "builder.Services.AddLocalFileStorage(", FileStorageSelection.EndpointKey,
             "libs/kits/Files/ACommerce.Kit.Files.Core/LocalFileStorage.cs"),
 
         // ─── الواجِهَتانِ اللَّتانِ لا يَبلُغُهُما التَطبيق ──────────
@@ -211,10 +226,13 @@ public class ProviderSelectionCharacterizationTests
             else breaches.Add($"{r.Capability}: «{r.RegistrationToday}» لَم يَعُد سَطراً عارِياً.");
         }
 
-        // **ثَلاثَةٌ لا أَربَعَة مُنذُ ‏2026-08-30**: خَرَجَ `payments` مِن
-        // العُري إلى قَرارِ البيئَة. والرَقمُ مُثَبَّتٌ فَلا يَنزِل
-        // صامِتاً — ولا يَرتَفِع كَذلك.
-        Assert.True(bare == 3, $"أَداة عَمياء: وُجِدَ {bare} تَسجيلاً عارِياً — والمَقيس ٣.");
+        // **اثنانِ لا ثَلاثَة مُنذُ ‏2026-08-30 (المَوجَةُ الثانِيَة)**:
+        // خَرَجَ `payments` مِن العُري إلى قَرارِ البيئَة، ثُمَّ خَرَجَ
+        // `files` إلى قَرارِ التَهيئَة. والباقي `maps` و`delivery`
+        // — وحُكمُهُما مَقيسٌ ومَكتوبٌ في `docs/PROVIDER-STUB-DEBT.md`
+        // (‏صِفرُ مُستَهلِكٍ في وَقتِ التَشغيل، فَخَطَرُهُما صِفر).
+        // والرَقمُ مُثَبَّتٌ فَلا يَنزِل صامِتاً — ولا يَرتَفِع كَذلك.
+        Assert.True(bare == 2, $"أَداة عَمياء: وُجِدَ {bare} تَسجيلاً عارِياً — والمَقيس ٢.");
         Assert.True(breaches.Count == 0, string.Join("\n  ", breaches));
     }
 

@@ -57,6 +57,7 @@
     <Project Path="libs/kits/Files/ACommerce.Kit.Files.Core/ACommerce.Kit.Files.Core.csproj" />
     <Project Path="libs/kits/Files/ACommerce.Kit.Files.Providers.AliyunOss/ACommerce.Kit.Files.Providers.AliyunOss.csproj" />
     <Project Path="libs/kits/Files/ACommerce.Kit.Files.Providers.GoogleCloud/ACommerce.Kit.Files.Providers.GoogleCloud.csproj" />
+    <Project Path="libs/kits/Files/ACommerce.Kit.Files.Providers.S3/ACommerce.Kit.Files.Providers.S3.csproj" />
   </Folder>
   <Folder Name="/libs/kits/Listings/">
     <Project Path="libs/kits/Listings/ACommerce.Kit.Listings.Core/ACommerce.Kit.Listings.Core.csproj" />

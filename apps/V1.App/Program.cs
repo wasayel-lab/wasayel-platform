@@ -10,6 +10,7 @@ using ACommerce.Kit.Auth.Server;
 using ACommerce.Kit.Culture;
 using ACommerce.Kit.Delivery;
 using ACommerce.Kit.Files;
+using ACommerce.Kit.Files.Providers.S3;
 using ACommerce.Kit.Maps;
 using ACommerce.Kit.Payments;
 using ACommerce.Kit.Payments.Providers.Paddle;
@@ -157,13 +158,51 @@ builder.Services.AddPayPalSubscriptions(builder.Configuration);
 // يُخفي البِطاقَةَ صامِتاً، فَيَبحَثُ المالِكُ عَن زِرٍّ لا يَظهَر.
 builder.Services.AddPaddleBilling(builder.Configuration);
 
-// تَخزين مَلَفّات — Local (افتِراضيّ، صَفّ wwwroot/uploads). لِلإنتاج
-// بَدِّل بِـ AddAliyunOssFileStorage(...) أو AddGoogleCloudFileStorage(...).
-builder.Services.AddLocalFileStorage(opts =>
+// ─── تَخزينُ المِلَفّات — بِالتَهيئَة، وفَشَلٌ مُغلَقٌ في الإنتاج ────
+// كانَ `AddLocalFileStorage(…)` سَطراً عارِياً هُنا، يَكتُب في
+// `wwwroot/uploads` **داخِلَ الحاوِيَة** — وقُرصُ الـSpace زائِل.
+// فَصُوَرُ الإعلاناتِ والصُوَرُ الشَخصِيَّةُ تَذهَب عِندَ أَوَّلِ إعادَةِ
+// نَشرٍ **ويَبقى رابِطُها في القاعِدَة**، فَتُرسَم صورَةٌ مَكسورَةٌ لا
+// فَراغٌ يُفهَم. القَرارُ الآنَ دالَّةٌ نَقِيَّةٌ
+// (`FileStorageSelection.Decide`)، وهذِه السُطورُ أَثَرُها لا مَنطِقُها —
+// نَفسُ ما فُعِلَ بِقَنَواتِ الدُخولِ ومُزَوِّدِ الدَفعِ أَعلاه، ولا
+// أُنبوبَ رابِع. التَفصيلُ في `docs/ADR-017`.
+var s3Files = new S3StorageSettings(
+    builder.Configuration[FileStorageSelection.EndpointKey],
+    builder.Configuration[FileStorageSelection.BucketKey],
+    builder.Configuration[FileStorageSelection.AccessKeyIdKey],
+    builder.Configuration[FileStorageSelection.SecretAccessKeyKey],
+    builder.Configuration[FileStorageSelection.PublicBaseUrlKey]);
+
+// تَهيئَةٌ ناقِصَةٌ تُفشِل الإقلاعَ **هُنا** ولا تُتَجاهَل: مَن ضَبَطَ
+// أَربَعَةً مِن خَمسَةٍ قَصَدَ التَشغيل، وإسقاطُه صامِتاً إلى «لا
+// مَخزَن» يُخفي خَطَأَ إملاءٍ خَلفَ سُلوكٍ يَبدو مَقصوداً — نَفسُ ما
+// قَرَّرَته `AddPaddleBilling` لِقيمَةِ بيئَةٍ خارِجَ `sandbox|live`.
+FileStorageSelection.AssertConfigurationIsCompleteOrAbsent(s3Files);
+
+switch (FileStorageSelection.Decide(isDev, s3Files))
 {
-    opts.RootPath = Path.Combine(builder.Environment.WebRootPath ?? "wwwroot", "uploads");
-    opts.PublicPathPrefix = "/uploads";
-});
+    case FileStorageChoice.S3:
+        builder.Services.AddS3FileStorage(opts =>
+        {
+            opts.Endpoint        = s3Files.Endpoint!;
+            opts.Bucket          = s3Files.Bucket!;
+            opts.AccessKeyId     = s3Files.AccessKeyId!;
+            opts.SecretAccessKey = s3Files.SecretAccessKey!;
+            opts.PublicBaseUrl   = s3Files.PublicBaseUrl!;
+        });
+        break;
+    case FileStorageChoice.Local:
+        builder.Services.AddLocalFileStorage(opts =>
+        {
+            opts.RootPath = Path.Combine(builder.Environment.WebRootPath ?? "wwwroot", "uploads");
+            opts.PublicPathPrefix = "/uploads";
+        });
+        break;
+    default:
+        builder.Services.AddUnavailableFileStorage();
+        break;
+}
 
 // القالَب — يُسَجِّل AuthSession + HttpContextAccessor
 builder.Services.AddCustomerMarketplaceTemplate();
@@ -194,6 +233,17 @@ PaymentProviderSelection.AssertNoStubsOutsideDevelopment(
     app.Environment.IsDevelopment(),
     new[] { PaymentProviderSelection.Describe(app.Services.GetService<IPaymentProvider>()) }
         .OfType<RegisteredPaymentProvider>());
+
+// ─── وحارِسٌ ثالِثٌ بِنَفسِ الآلِيَّة: لا قُرصَ زائِلَ لِلصُوَر ───────
+// **ولا أُنبوبَ رابِع** (القاعِدَة ٨): نَفسُ الشَكلِ حَرفاً لِلمَرَّةِ
+// الثالِثَة. والعِلَّةُ واحِدَةٌ في الثَلاثِ — **تَركيبُ الخِدماتِ
+// وَحدَه** كانَ الفَرقَ بَينَ رَمزِ دُخولٍ ثابِتٍ وآخَرَ سِرّيّ، وبَينَ
+// باقَةٍ تُباع وأُخرى تُوهَب، وبَينَ صورَةٍ تَبقى وأُخرى تَذهَب
+// ويَبقى رابِطُها يَرسُم كَسراً.
+FileStorageSelection.AssertNoStubsOutsideDevelopment(
+    app.Environment.IsDevelopment(),
+    new[] { FileStorageSelection.Describe(app.Services.GetService<IFileStorage>()) }
+        .OfType<RegisteredFileStorage>());
 
 static RegisteredAuthChannel? Describe(AuthChannelKind kind, object? channel) => channel switch
 {
@@ -271,10 +321,18 @@ app.UseForwardedHeaders();
 
 app.UsePlatformHost();
 
-// تَفعيل خِدمَة المَلَفّات المَحَلِّيَّة (Local provider فَقَط — تُتَجاهَل لَو
-// السيرفِر يَستَخدِم Aliyun/GCS مَع CDN).
+// تَفعيل خِدمَة المَلَفّات المَحَلِّيَّة (Local provider فَقَط — تُتَجاهَل
+// لَو السيرفِر يَستَخدِم مَخزَنَ كائِناتٍ خارِجيّاً).
 if (app.Services.GetService<IFileStorage>() is LocalFileStorage)
     app.UseLocalFileStorage();
+else
+    // ─── السُقوطُ الآمِنُ لِرَوابِطِ `/uploads/` القَديمَة ─────────────
+    // **الحاجِزُ الأَوَّلُ هُوَ الكِتابَة** (‏ADR-017): خارِجَ التَطويرِ
+    // بِلا مَخزَنٍ دائِمٍ تَرمي `UnavailableFileStorage`، فَلا رابِطَ
+    // `/uploads/` جَديدٌ يُكتَب أَصلاً. وهذا الحاجِزُ الثاني لِما كُتِبَ
+    // **قَبلَ** ذلك أَو مِن جِهازِ تَطوير — والتَعليلُ كامِلاً في
+    // `MissingFilePlaceholder.cs`.
+    app.UseMissingFilePlaceholder();
 
 // W3 middleware — Culture + Version gate.
 app.UseCultureContext();

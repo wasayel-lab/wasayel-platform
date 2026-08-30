@@ -19,9 +19,14 @@ public class ProviderCatalogTests
     [Fact]
     public void The_catalog_loads_and_every_definition_passes_the_validator()
     {
+        // **ثَمانِيَةٌ لا سَبعَة مُنذُ ‏2026-08-30 (المَوجَةُ الثانِيَة)**:
+        // أُضيفَ `s3_object_storage` — مَخزَنُ الكائِناتِ الدائِمُ الَّذي
+        // حَلَّ مَحَلَّ القُرصِ الزائِلِ خارِجَ التَطوير (‏ADR-017).
+        // ونَوعُ اعتِمادِه `platform_key` كَجارَيه في الفَوتَرَة، فَلا
+        // يُعرَض على مُستَأجِرٍ ولا يَملَأُ لَه حَقلاً.
         var defs = ProviderCatalog.Definitions;
-        Assert.True(defs.Count == 7,
-            $"أَداة عَمياء: حُمِّلَ {defs.Count} تَعريفاً — والمَقيس ٧.");
+        Assert.True(defs.Count == 8,
+            $"أَداة عَمياء: حُمِّلَ {defs.Count} تَعريفاً — والمَقيس ٨.");
 
         foreach (var d in defs)
             Assert.True(ProviderDefinitionValidator.IsValid(d),
@@ -109,7 +114,15 @@ public class ProviderCatalogTests
         new("local_files",
             "libs/kits/Files/ACommerce.Kit.Files.Core/LocalFileStorage.cs",
             "AddSingleton<IFileStorage, LocalFileStorage>",
-            "التَنفيذُ القائِمُ المُسَجَّلُ بِلا شَرطٍ في Program.cs."),
+            "التَنفيذُ القائِم — **ولِلتَطويرِ وَحدَه مُنذُ ADR-017**: يَحمِل "
+            + "`IDevelopmentStubFileStorage`، وحارِسُ إقلاعٍ يُوقِف التَطبيقَ إن "
+            + "سُجِّلَ خارِجَ التَطوير. والمِرساةُ باقِيَةٌ لِأَنّ السَطرَ باقٍ."),
+
+        new("s3_object_storage",
+            "libs/kits/Files/ACommerce.Kit.Files.Providers.S3/S3FileStorage.cs",
+            "AddSingleton<IFileStorage, S3FileStorage>",
+            "مَخزَنُ الكائِناتِ الدائِم — سِرُّه سِرُّنا لا سِرُّ مُستَأجِر، "
+            + "ويُسَجَّل بِـ`Files__S3__*` وَحدَها. قائِمٌ ومَقيس."),
 
         new("paypal_subscriptions",
             "apps/V1.App/Program.cs",
@@ -158,8 +171,12 @@ public class ProviderCatalogTests
                 breaches.Add($"{a.Slug}: «{a.Needle}» لَم يَعُد في {a.SourceFile}");
         }
 
-        Assert.True(checkedAnchors == 6,
-            $"أَداة عَمياء: فُحِصَت {checkedAnchors} مِرساة — والمَقيس ٦.");
+        // **سَبعٌ لا سِتّ مُنذُ ‏2026-08-30 (المَوجَةُ الثانِيَة)**: مِرساةُ
+        // `s3_object_storage` سَطرُ `AddSingleton<IFileStorage, S3FileStorage>`
+        // في مَشروعٍ **مُحالٍ إلَيه مِن `V1.App.csproj`** — فَالتَعريفُ
+        // يَصِف شَيئاً يَبلُغ الـSpace، لا اسماً في مِلَفّ.
+        Assert.True(checkedAnchors == 7,
+            $"أَداة عَمياء: فُحِصَت {checkedAnchors} مِرساة — والمَقيس ٧.");
         Assert.True(breaches.Count == 0,
             "تَعريفُ مُزَوِّدٍ بِلا تَنفيذٍ حَيّ — مَقبَرَةٌ في البَيانات:\n  "
             + string.Join("\n  ", breaches));

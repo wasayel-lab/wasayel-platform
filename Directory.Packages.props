@@ -19,6 +19,10 @@
     <PackageVersion Include="StackExchange.Redis"                          Version="3.1.13" />
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.10" />
 
+    <!-- تَخزينُ كائِناتٍ مُتَوافِقٌ مَع S3 (‏Cloudflare R2) — العَميلُ
+         الرَسميُّ يَحمِل تَوقيعَ SigV4، فَلا يُكتَب بِاليَد. -->
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.102.4" />
+
     <!-- Excel export (feasibility study) -->
     <PackageVersion Include="ClosedXML" Version="0.105.1" />
 

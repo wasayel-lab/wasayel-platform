@@ -632,11 +632,23 @@ public static class MarketplaceTemplateExtensions
                 var ct = avatar.ContentType.ToLowerInvariant();
                 if (ct is "image/png" or "image/jpeg" or "image/webp" && avatar.Length <= 2 * 1024 * 1024)
                 {
-                    var ext = ct.Split('/')[1].Replace("jpeg", "jpg");
-                    var key = $"tenants/{slug}/avatars/{userId}.{ext}";
-                    await using var stream = avatar.OpenReadStream();
-                    var stored = await files.UploadAsync(key, stream, ct);
-                    newAvatarUrl = stored.PublicUrl;
+                    // فَشَلُ الصورَةِ لا يُسقِط حِفظَ الاسم — **نَفسُ ما
+                    // يَفعَلُه جِسمُ إنشاءِ الإعلانِ مُنذُ كُتِب**، وكانَ
+                    // هذا المَوضِعُ وَحدَه بِلا الْتِقاطٍ فَيَرُدُّ ‏500
+                    // على تَعديلِ اسمٍ لا عَلاقَةَ لَه بِالصورَة. صارَ
+                    // لَه مَعنىً حَقيقيٌّ مُنذُ ADR-017: خارِجَ التَطويرِ
+                    // بِلا مَخزَنٍ دائِمٍ تَرمي `UnavailableFileStorage`
+                    // عَمداً — والرَفضُ عِندَ الكِتابَةِ هُوَ ما يَمنَع
+                    // رابِطاً مُعَلَّقاً مِن الوُجود.
+                    try
+                    {
+                        var ext = ct.Split('/')[1].Replace("jpeg", "jpg");
+                        var key = $"tenants/{slug}/avatars/{userId}.{ext}";
+                        await using var stream = avatar.OpenReadStream();
+                        var stored = await files.UploadAsync(key, stream, ct);
+                        newAvatarUrl = stored.PublicUrl;
+                    }
+                    catch (ACommerce.Kit.Files.FileStorageException) { /* الاسمُ يُحفَظ، والصورَةُ لا */ }
                 }
             }
 

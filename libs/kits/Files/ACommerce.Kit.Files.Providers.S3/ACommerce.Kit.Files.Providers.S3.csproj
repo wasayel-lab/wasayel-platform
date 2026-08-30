@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\ACommerce.Kit.Files.Core\ACommerce.Kit.Files.Core.csproj" />
+    <!-- تَكامُلٌ لا بِناء: التَوقيعُ ‏SigV4 يَكتُبُه العَميلُ الرَسميّ.
+         والجارانِ في المُجَلَّدِ نَفسِه يَكتُبانِه بِاليَد — HMACSHA1 في
+         Aliyun وRSA/JWT في GCS — وذلك بِعَينِه ما لا يُعاد. -->
+    <PackageReference Include="AWSSDK.S3" />
+  </ItemGroup>
+</Project>

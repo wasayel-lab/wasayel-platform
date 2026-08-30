@@ -4,6 +4,7 @@
     "mock_maps",
     "mock_delivery",
     "local_files",
+    "s3_object_storage",
     "paypal_subscriptions",
     "paddle_billing",
     "moyasar_hosted"
