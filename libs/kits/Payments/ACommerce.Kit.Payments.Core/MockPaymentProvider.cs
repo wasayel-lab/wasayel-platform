@@ -165,11 +165,33 @@ public static class PaymentServiceExtensions
     /// </summary>
     public static IServiceCollection AddPaymentProvider(
         this IServiceCollection services, bool isDevelopment)
-        => PaymentProviderSelection.Decide(isDevelopment) switch
+        => services.AddPaymentProvider(isDevelopment, configured: null);
+
+    /// <summary>
+    /// <para><b>نَفسُ التَسجيلِ، والقيمَةُ المَكتوبَةُ في التَهيئَةِ
+    /// مُعامَلٌ</b> — والحِملُ القَديمُ يُفَوِّضُ إلَيه بِـ<c>null</c>،
+    /// فَما كانَ يَقَعُ يَقَعُ بِحَرفِه.</para>
+    /// </summary>
+    public static IServiceCollection AddPaymentProvider(
+        this IServiceCollection services, bool isDevelopment, string? configured)
+        => PaymentProviderSelection.Decide(isDevelopment, configured) switch
         {
-            PaymentProviderChoice.Mock => services.AddMockPayments(),
-            _                          => services.AddUnavailablePayments()
+            PaymentProviderChoice.Simulation => services.AddSimulatedPayments(),
+            PaymentProviderChoice.Mock       => services.AddMockPayments(),
+            _                                => services.AddUnavailablePayments()
         };
+
+    /// <summary>
+    /// <para><b>تَسجيلُ وَضعِ التَجرِبَة</b> — يَبقى عامّاً لِنَفسِ
+    /// سَبَبِ <c>AddMockPayments</c>: حارِسٌ بِلا طَريقٍ يُمسِكُه لا
+    /// يُقاس. والحارِسُ هُنا
+    /// <see cref="PaymentProviderSelection.AssertSimulationIsExplicit"/>.</para>
+    /// </summary>
+    public static IServiceCollection AddSimulatedPayments(this IServiceCollection services)
+    {
+        services.AddSingleton<IPaymentProvider, SimulatedPaymentProvider>();
+        return services;
+    }
 
     /// <summary>
     /// <para>تَسجيلٌ مُباشِرٌ لِلمُحاكي. <b>يَبقى عامّاً عَمداً</b>: هُوَ
