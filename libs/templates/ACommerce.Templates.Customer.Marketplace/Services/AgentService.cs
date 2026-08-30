@@ -804,6 +804,34 @@ public sealed class AgentToolExecutor
         var cats = ParseCategories(root);
         if (cats.Count == 0) return (false, "يَجِب فِئَة واحِدَة عَلى الأَقَلّ.");
 
+        // ─── بَوّابَةُ حِصَّةِ المَتاجِر — والتَخويلُ يَسبِقُ الكِتابَة ──
+        //
+        // **العِلَّةُ المَقيسَة (‏2026-08-30)**: هذا المَسارُ كانَ يُنشِئُ
+        // مُستَأجِراً **بِلا `CheckBuildAsync` ولا `RecordStoreBuiltAsync`**،
+        // بَينَما نَظيرُه `POST /studio/s/{id}/build` يَحرُسُ ويَعُدّ.
+        // فَحَصُ المِلكِيَّةِ كانَ قائِماً وفَحصُ الحِصَّةِ مَعدوماً —
+        // أَي أَنّ `StoresMax` (‏40 بَعدَ الرَفع) **لَم يَكُن سَقفاً**:
+        // يُخترَقُ كُلِّيّاً بِنَقرَةٍ في `/studio/agent`. وهذا يَنقُضُ
+        // حُجَّةَ الرَفعِ نَفسَها — «فَيَبقى السَقفُ مُنتَهِياً فَتُغلَقُ
+        // البَوّابَةُ في وَجهِ حَلقَةٍ آلِيَّة».
+        //
+        // **ولا رَقمَ يُخترَعُ هُنا** (القاعِدَة ١٦): نَفسُ الحَدِّ ونَفسُ
+        // العَدّادِ ونَفسُ رَمزِ الخَرقِ الَّذي تَقرَؤُهُ الشاشَة — ولا
+        // أُنبوبَ رابِع (القاعِدَة ٨).
+        //
+        // **و`ownerUserId == null` سُلطَةُ مُشرِفِ المَنصَّة** لا ثَغرَة:
+        // هُوَ نَفسُ الاستِثناءِ الَّذي يَقرَؤُهُ
+        // `LanguageModelQuotaGateTests.HasOwnerAuthority`.
+        var tierService = new Services.Incubator.StudioTierService(_store);
+        if (ownerUserId is Guid quotaOwner)
+        {
+            var gate = await tierService.CheckBuildAsync(quotaOwner, ct);
+            if (!gate.Allowed)
+                return (false,
+                    $"بَلَغتَ حَدَّ التَطبيقاتِ في باقَتِك ({gate.Used} مِن {gate.Limit}). "
+                  + "اِحذِف تَطبيقاً أَو اِرفَع باقَتَك مِن /studio/billing.");
+        }
+
         await using var s = _store.LightweightSession();
         var existing = await s.LoadAsync<Tenant>(slug, ct);
         if (existing is not null) return (false, $"الـ slug «{slug}» مَوجود بِالفِعل.");
@@ -819,6 +847,13 @@ public sealed class AgentToolExecutor
             CreatedAt = DateTime.UtcNow
         });
         await s.SaveChangesAsync(ct);
+
+        // والعَدُّ **بَعدَ** الكِتابَةِ الناجِحَة — نَفسُ تَرتيبِ
+        // `POST /studio/s/{id}/build` حَرفاً: لا يُحاسَبُ على مَتجَرٍ
+        // لَم يوجَد.
+        if (ownerUserId is Guid counted)
+            await tierService.RecordStoreBuiltAsync(counted, ct);
+
         return (true, $"تَمّ إنشاء «{slug}» بِـ {cats.Count} فِئَات.");
     }
 
