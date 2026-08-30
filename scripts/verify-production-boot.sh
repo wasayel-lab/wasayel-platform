@@ -167,10 +167,30 @@ else
     say "قاعِدَةُ البَيانات: تَعَذَّرَ استِخراجُ المُضيفِ مِن السِلسِلَة (لا يُطبَعُ مُحتَواها)"
 fi
 
-# ═══ ٢) البِناء — نَفسُ أَمرِ الـDockerfile حَرفاً ═══════════════════
+# ═══ ٢) البِناء — نَفسُ أَمرِ الـDockerfile حَرفاً، بِبَصمَةٍ ═════════
+#
+# ═══ والسِلسِلَةُ كامِلَةً في مَوضِعٍ واحِد ═══════════════════════════
+#
+# ‏CI يَقيسُ «مِلَفّ ← خاصِّيَّة ← سِمَة» عَلى `V1.App.dll`، والاختِباراتُ
+# تَقيسُ «سِمَة ← جِسمُ HTTP» عَلى مُضيفٍ مُصَغَّرٍ في مَكتَبَةِ
+# `Hosting`. **ولا واحِدَ مِنهُما يَصِلُ الطَرَفَينِ** على التَطبيقِ
+# الحَقيقيّ. وكانَت هذِه البَوّابَةُ تَنشُرُ **بِلا** الخاصِّيَّة، وفَحصُ
+# جِسمِها يَشتَرِطُ وُجودَ المِفتاحِ `"commit"` وَحدَه — فَتَخضَرُّ على
+# `"unknown"` وعلى قيمَةٍ يَشتَقُّها SourceLink مِن رَأسِ git سَواءً.
+#
+# فَتُمَرَّرُ بَصمَةٌ صِناعِيَّةٌ مَعلومَةٌ ويُشتَرَطُ أَن يَرُدَّها
+# الجِسمُ **حَرفاً**. عِندَها تُنَفَّذُ السِلسِلَةُ كامِلَةً — خاصِّيَّةٌ
+# ← سِمَةٌ ← تَسجيلٌ ← أُنبوبٌ كامِلٌ ← جِسمُ HTTP — على `V1.App` نَفسِه
+# في مَوضِعٍ واحِدٍ يُشَغَّلُ مَحَلِّيّاً قَبلَ الدَفع.
+#
+# **والقيمَةُ لَيسَت قيمَةَ CI**: تَطابُقُهُما كانَ سَيَجعَلُ ثابِتاً
+# مَكتوباً في مَوضِعَينِ يَمُرُّ لَو انقَطَعَ التَمرير.
+GATE_STAMP="00000000000000000000000000000000deadbeef"
+
 hr
-say "‏١/٤ نَشرٌ بِوَضع Release (نَفسُ أَمرِ الـDockerfile)…"
-if ! dotnet publish "$PROJECT" -c Release -o "$PUBLISH_DIR" --nologo > "$WORK/build.log" 2>&1; then
+say "‏١/٤ نَشرٌ بِوَضع Release (نَفسُ أَمرِ الـDockerfile) بِبَصمَة ${GATE_STAMP}…"
+if ! dotnet publish "$PROJECT" -c Release -o "$PUBLISH_DIR" --nologo \
+        -p:SourceRevisionId="$GATE_STAMP" > "$WORK/build.log" 2>&1; then
     hr
     echo "✗ فَشِلَ البِناء/النَشر — لا إقلاعَ ولا حُكمَ عَلى المَسارات."
     tail -n 60 "$WORK/build.log"
@@ -181,6 +201,17 @@ fi
     exit 2
 }
 say "    ✓ $(ls "$PUBLISH_DIR"/ACommerce*.dll 2>/dev/null | wc -l | tr -d ' ') تَجميعَة ACommerce* في المُخرَج"
+
+# والحَلَقَةُ الأولى تُقاسُ هُنا قَبلَ الإقلاع: هَل بَلَغَتِ الخاصِّيَّةُ
+# الثُنائِيّ؟ (‏نَفسُ شَكلِ الفَحصِ الَّذي يُنَفَّذُ في الـ`Dockerfile`.)
+GOT_STAMP="$(grep -aoE '1\.0\.0\+[0-9a-f]{40}' "$PUBLISH_DIR/$ASSEMBLY" 2>/dev/null | head -n 1 || true)"
+if [ "$GOT_STAMP" != "1.0.0+$GATE_STAMP" ]; then
+    hr
+    echo "✗ **كَسرٌ في آلِيَّةِ البَصمَة** — المُنتَظَر 1.0.0+$GATE_STAMP والمَقروء '${GOT_STAMP:-<لا شَيء>}'."
+    echo "  ‏ADR-019 يَقومُ على أَنّ -p:SourceRevisionId يُبَثُّ في AssemblyInformationalVersionAttribute."
+    exit 1
+fi
+say "    ✓ الثُنائِيُّ يَحمِل: $GOT_STAMP"
 
 # ═══ ٣) مَنفَذٌ حُرٌّ مَقيسٌ لا مَظنون ═══════════════════════════════
 # **ولا يُقاسُ بِـcurl**: على وِندوز، الاتِّصالُ بِمَنفَذٍ مُغلَقٍ لا
@@ -297,6 +328,7 @@ ROUTES=(
     "GET|/api/v1/deals|401"
     "GET|/api/billing/paddle|405"
     "GET|/health|200"
+    "HEAD|/health|200"
 )
 
 # ═══ ورَمزُ الحالَةِ وَحدَه أَعمى على `/health` — مَقيسٌ لا مَظنون ═════
@@ -313,8 +345,17 @@ ROUTES=(
 # بَصمَةً**، ولا تُثبِتُ أَنّ البَصمَةَ **صادِقَة** — الصِدقُ يُقاسُ في
 # ‏`Health_body_does_not_move_when_the_environment_moves` وفي بَوّابَةِ
 # النَشرِ الحَيَّة.
+#
+# ═══ و`"commit"` وَحدَه أَعمى بِدَورِه — العَيبُ حُقِنَ وقيسَ ══════════
+#
+# اشتِراطُ **وُجودِ المِفتاح** يَخضَرُّ على `"unknown"` وعلى رَقَمٍ
+# يَشتَقُّه SourceLink مِن رَأسِ git سَواءً — أَي أَنَّه يُثبِتُ
+# التَسجيلَ ولا يُثبِتُ أَنّ **البَصمَةَ المُمَرَّرَةَ هي الواصِلَة**.
+# فَالمَشروطُ الآنَ القيمَةُ حَرفاً: نُشِرَ بِـ`$GATE_STAMP` فَيَجِبُ
+# أَن يَرُدَّها الجِسمُ بِعَينِها. وبِهذا تُقاسُ السِلسِلَةُ كامِلَةً هُنا
+# لا في الإنتاج.
 declare -A BODY_MUST_CONTAIN=(
-    ["/health"]='"commit"'
+    ["GET|/health"]="\"commit\":\"${GATE_STAMP}\""
 )
 
 # ═══ والرَأسُ يُقاسُ على الأُنبوبِ الكامِلِ لا على مُضيفٍ مُصَغَّر ═════
@@ -331,8 +372,17 @@ declare -A BODY_MUST_CONTAIN=(
 # تَشغيلٍ لِهذا الفَحص: الرَأسُ كانَ حاضِراً صَحيحاً، **والأَداةُ هي
 # الَّتي انهارَت** فَاتَّهَمَت التَطبيقَ بِرَدٍّ قابِلٍ لِلتَخزين.
 # (القاعِدَة ١٠: الأَداةُ تُقاسُ قَبلَ أَن يُوثَقَ بِها.)
+#
+# **و`HEAD` مَعَ `GET`**: مُعظَمُ أَدَواتِ المُراقَبَةِ تَبعَثُ `HEAD`
+# افتِراضاً، و`MapGet` وَحدَه كانَ يُسقِطُ الطَلَبَ إلى `@page "/{slug}"`
+# فَيُرَدُّ ‏200 بِـ`text/html` — **مُراقِبٌ يَطمَئِنُّ إلى صَفحَةٍ لَيسَت
+# النُقطَة**. وهذا هو المَوضِعُ الوَحيدُ الَّذي يُقاسُ فيه ذلكَ على
+# الأُنبوبِ الكامِل؛ المُضيفُ المُصَغَّرُ في الاختِباراتِ لا يَحمِلُ
+# `/{slug}` أَصلاً فَلا يَرى الابتِلاع.
+# والقيمَةُ قائِمَةٌ بِفاصِلِ `;` — كُلُّ إبرَةٍ تُعَدُّ فَحصاً مُستَقِلّاً.
 declare -A HEADER_MUST_CONTAIN=(
-    ["/health"]='no-store'
+    ["GET|/health"]='no-store'
+    ["HEAD|/health"]='no-store;application/json'
 )
 
 ROUTE_FAILED=0
@@ -343,23 +393,38 @@ for entry in "${ROUTES[@]}"; do
     IFS='|' read -r method path expected <<< "$entry"
     body_file="$WORK/body.txt"
     hdr_file="$WORK/hdr.txt"
-    actual="$(curl -s -X "$method" -o "$body_file" -D "$hdr_file" -w '%{http_code}' \
-        --max-time 30 "http://127.0.0.1:$PORT$path" 2>/dev/null)"
+    # ‏`-X HEAD` يُعَلِّقُ curl حَتّى المُهلَة: يُرسِلُ HEAD ثُمَّ يَنتَظِرُ
+    # جِسماً يَعِدُ بِه `Content-Length` ولا يَأتي. و`--head` هو الشَكلُ
+    # الصَحيح. (تَعليقٌ يَبدو عَمَلاً أَسوَأُ مِن خَطَإٍ صَريح.)
+    if [ "$method" = "HEAD" ]; then
+        : > "$body_file"
+        actual="$(curl -s --head -o /dev/null -D "$hdr_file" -w '%{http_code}' \
+            --max-time 30 "http://127.0.0.1:$PORT$path" 2>/dev/null)"
+    else
+        actual="$(curl -s -X "$method" -o "$body_file" -D "$hdr_file" -w '%{http_code}' \
+            --max-time 30 "http://127.0.0.1:$PORT$path" 2>/dev/null)"
+    fi
     CHECKED=$((CHECKED + 1))
 
-    needle="${BODY_MUST_CONTAIN[$path]:-}"
+    key="${method}|${path}"
+
+    needle="${BODY_MUST_CONTAIN[$key]:-}"
     body_ok=1
     if [ -n "$needle" ]; then
         BODY_CHECKED=$((BODY_CHECKED + 1))
         grep -qF -- "$needle" "$body_file" 2>/dev/null || body_ok=0
     fi
 
-    hneedle="${HEADER_MUST_CONTAIN[$path]:-}"
+    hneedle="${HEADER_MUST_CONTAIN[$key]:-}"
     hdr_ok=1
     if [ -n "$hneedle" ]; then
-        HEADER_CHECKED=$((HEADER_CHECKED + 1))
-        tr -d '\r' < "$hdr_file" 2>/dev/null | tr 'A-Z' 'a-z' \
-            | grep -qF -- "$hneedle" || hdr_ok=0
+        tr -d '\r' < "$hdr_file" 2>/dev/null | tr 'A-Z' 'a-z' > "$WORK/hdr.norm"
+        IFS=';' read -r -a hneedles <<< "$hneedle"
+        for hn in "${hneedles[@]}"; do
+            [ -n "$hn" ] || continue
+            HEADER_CHECKED=$((HEADER_CHECKED + 1))
+            grep -qF -- "$hn" "$WORK/hdr.norm" || hdr_ok=0
+        done
     fi
 
     if [ "$actual" = "$expected" ] && [ "$body_ok" = "1" ] && [ "$hdr_ok" = "1" ]; then

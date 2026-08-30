@@ -693,8 +693,16 @@ public class WriteEndpointGuardTests
     /// <c>Every_get_endpoint_that_writes_is_treated_as_a_write_endpoint</c>:
     /// نُقطَةٌ تُعلَن <c>GET</c> وتَكتُب هي نُقطَةُ كِتابَة مَهما قالَ
     /// فِعلُها.</summary>
+    /// <remarks><b>و<c>MapMethods</c> كانَ ثَقباً مَقيساً في الماسِح</b>:
+    /// نُقطَةٌ تُسَجَّلُ بِه لا يَراها أَيٌّ مِن الفاحِصَينِ إطلاقاً —
+    /// فَلا تُعَدُّ في النَزيفِ ولا تُسأَلُ عَن حارِس. كُشِفَ يَومَ
+    /// ‏2026-08-30 حينَ سُجِّلَت <c>/health</c> بِـ<c>MapMethods</c>
+    /// (‏لِتُجيبَ HEAD)، فَاختَفَت مِن جَدوَلِ النَزيفِ كُلِّه بَينَما
+    /// هي حاضِرَةٌ تَخدِمُ على HTTP. **الماسِحُ الَّذي يَعمى عَن شَكلِ
+    /// تَسجيلٍ قائِمٍ يَقولُ «صِفرُ مُخالَفَة» ولا يُميَّزُ مِن أَداةٍ
+    /// عَمياء** (القاعِدَة ١٠).</remarks>
     private static readonly Regex MapAny =
-        new(@"\.Map(?:Get|Post|Put|Delete|Patch)\s*\(\s*""(?<route>[^""]+)""", RegexOptions.Compiled);
+        new(@"\.Map(?:Get|Post|Put|Delete|Patch|Methods)\s*\(\s*""(?<route>[^""]+)""", RegexOptions.Compiled);
 
     /// <summary>البادِئَة المُؤَهَّلَة اختِيارِيَّة عَمداً: حَقنُ عَيبٍ
     /// مُصطَنَع بِـ <c>[Wolverine.Http.WolverinePost(…)]</c> عَبَرَ
@@ -712,8 +720,15 @@ public class WriteEndpointGuardTests
     /// العَرض لا يَكتُب». وتُقرَأ بِنَمَطٍ خاصٍّ بِها لا بِطَرحِ
     /// الكاتِبَة مِن الكُلّ: الطَرحُ بِالمَسار يُخطِئ لَو حَمَلَ مَسارٌ
     /// واحِد فِعلَين.</summary>
+    ///
+    /// <para><b>و<c>MapMethods</c> يَدخُلُ هُنا مُتَحَفِّظاً</b>: قائِمَةُ
+    /// أَفعالِه لا تُقرَأُ بِتَعبيرٍ نَمَطِيّ، فَإدخالُها يَجعَلُ
+    /// نُقطَةَ <c>MapMethods</c> تَكتُبُ تَحمَرُّ هُنا ولَو أَعلَنَت
+    /// <c>POST</c>. وهذا هُوَ الخَطَأُ المُحتَمَلُ الصَحيح: تُسأَلُ
+    /// صَراحَةً بَدَلَ أَن تَمُرَّ صامِتَة. والبَديلُ — استِثناؤُها —
+    /// يُعيدُ الثَقبَ الَّذي كُشِفَ اليَوم.</para>
     private static readonly Regex MapRead =
-        new(@"\.MapGet\s*\(\s*""(?<route>[^""]+)""", RegexOptions.Compiled);
+        new(@"\.Map(?:Get|Methods)\s*\(\s*""(?<route>[^""]+)""", RegexOptions.Compiled);
 
     private static IEnumerable<Endpoint> MinimalApiGetEndpoints() => Scan(MapRead);
 
