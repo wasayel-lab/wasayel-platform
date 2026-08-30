@@ -3,6 +3,7 @@ using ACommerce.Platform.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -125,8 +126,21 @@ public class ForwardedHostSpoofTests
 {
     private const string Evil = "evil.example";
 
-    /// <summary>التَهيئَةُ المَشحونَةُ اليَوم — تُكتَبُ هُنا صَراحَةً
-    /// لِيَبقى المِجَسُّ قادِراً عَلى رُؤيَةِ التَسَرُّبِ بَعدَ
+    /// <summary>التَهيئَةُ الافتِراضِيَّةُ — <b>لا قائِمَةَ مُضيفاتٍ
+    /// مُهَيَّأَة</b>، وهي حالُ الإنتاجِ اليَوم.</summary>
+    private static void Closed(ForwardedHeadersOptions opts)
+        => new ForwardedHeadersPolicy().ApplyTo(opts);
+
+    /// <summary>وقائِمَةٌ مُسَمّاةٌ — كَما يَقرَؤُها
+    /// <c>FromConfiguration</c> مِن <c>ForwardedHeaders:AllowedHosts</c>.</summary>
+    private static Action<ForwardedHeadersOptions> Naming(params string[] hosts)
+        => opts => new ForwardedHeadersPolicy
+        {
+            AllowedHosts = ForwardedHeadersPolicy.ParseAllowedHosts(hosts)
+        }.ApplyTo(opts);
+
+    /// <summary>التَهيئَةُ الَّتي كانَت مَشحونَةً — تُكتَبُ هُنا
+    /// صَراحَةً لِيَبقى المِجَسُّ قادِراً عَلى رُؤيَةِ التَسَرُّبِ بَعدَ
     /// العِلاج.</summary>
     private static void ShippedConfiguration(ForwardedHeadersOptions opts)
     {
@@ -158,7 +172,7 @@ public class ForwardedHostSpoofTests
     [Fact]
     public async Task A_visitor_cannot_choose_the_host_the_page_advertises()
     {
-        var probe = await ProbeAsync(ForwardedHeadersPolicy.Apply,
+        var probe = await ProbeAsync(Closed,
             ("X-Forwarded-Proto", "https"),
             ("X-Forwarded-Host", Evil));
 
@@ -171,7 +185,7 @@ public class ForwardedHostSpoofTests
     [Fact]
     public async Task A_list_of_forwarded_hosts_does_not_pass_either()
     {
-        var probe = await ProbeAsync(ForwardedHeadersPolicy.Apply,
+        var probe = await ProbeAsync(Closed,
             ("X-Forwarded-Proto", "https"),
             ("X-Forwarded-Host", "aaa.example, bbb.example"));
 
@@ -185,7 +199,7 @@ public class ForwardedHostSpoofTests
     [Fact]
     public async Task Two_separate_forwarded_host_headers_do_not_pass_either()
     {
-        var probe = await ProbeAsync(ForwardedHeadersPolicy.Apply,
+        var probe = await ProbeAsync(Closed,
             ("X-Forwarded-Proto", "https"),
             ("X-Forwarded-Host", "aaa.example"),
             ("X-Forwarded-Host", Evil));
@@ -204,7 +218,7 @@ public class ForwardedHostSpoofTests
     [Fact]
     public async Task The_proxy_still_writes_the_scheme()
     {
-        var probe = await ProbeAsync(ForwardedHeadersPolicy.Apply,
+        var probe = await ProbeAsync(Closed,
             ("X-Forwarded-Proto", "https"));
 
         Assert.StartsWith("https://", probe);
@@ -241,7 +255,7 @@ public class ForwardedHostSpoofTests
     [Fact]
     public async Task The_forwarded_host_alone_does_not_pass_the_lock()
     {
-        var probe = await ProbeAsync(ForwardedHeadersPolicy.Apply,
+        var probe = await ProbeAsync(Closed,
             ("X-Forwarded-Host", Evil));
 
         Assert.DoesNotContain(Evil, probe);
@@ -269,10 +283,158 @@ public class ForwardedHostSpoofTests
     [Fact]
     public async Task The_forwarded_for_is_still_taken_from_any_client__measured_not_assumed()
     {
-        var probe = await ProbeAsync(ForwardedHeadersPolicy.Apply,
+        var probe = await ProbeAsync(Closed,
             ("X-Forwarded-Proto", "https"),
             ("X-Forwarded-For", "203.0.113.9"));
 
         Assert.EndsWith("|203.0.113.9", probe);
+    }
+
+    // ═══ ٥) والمُضيفُ يُصَدَّقُ إذا سُمِّي — القُفلُ لَيسَ باباً مَسدوداً ═══
+
+    /// <summary><b>ولِماذا قائِمَةٌ لا نَزعٌ نِهائيّ لِلعَلَم</b>:
+    /// المُستَضيفُ اليَومَ (‏HF) لا يُرسِلُ الرَأسَ أَصلاً — مَقيسٌ —
+    /// لكِنَّ وَسيطاً يُعيدُ كِتابَةَ <c>Host</c> يَحتاجُه، ونَقلَةُ
+    /// النِطاقاتِ الفَرعِيَّةِ (‏ADR-022) تَقرَأُ <c>Request.Host</c>.
+    /// فَالقُفلُ يُبقي البابَ مَوجوداً ويَشتَرِطُ أَن يُسَمّى مَن
+    /// يَدخُلُ مِنه.</summary>
+    [Fact]
+    public async Task A_named_host_is_trusted()
+    {
+        var probe = await ProbeAsync(Naming("shop.example"),
+            ("X-Forwarded-Proto", "https"),
+            ("X-Forwarded-Host", "shop.example"));
+
+        Assert.StartsWith("https://shop.example", probe);
+    }
+
+    [Fact]
+    public async Task And_only_it__an_unnamed_host_does_not_pass_the_named_list()
+    {
+        var probe = await ProbeAsync(Naming("shop.example"),
+            ("X-Forwarded-Proto", "https"),
+            ("X-Forwarded-Host", Evil));
+
+        Assert.DoesNotContain(Evil, probe);
+        Assert.Contains("127.0.0.1", probe);
+    }
+
+    /// <summary><b>و«‏<c>*</c>‏» لَيسَت تَسمِيَة</b> — يَقرَؤُها
+    /// <c>ForwardedHeadersMiddleware</c> «‏اِقبَل كُلَّ مُضيف‏»، أَي
+    /// العَطَبَ نَفسَه مَكتوباً بِيَدِ المُهَيِّئ. فَتُسقَطُ عِندَ
+    /// القِراءَةِ ويَبقى البابُ مُغلَقاً.</summary>
+    [Fact]
+    public async Task A_wildcard_is_not_a_name__it_closes_instead_of_opening_everything()
+    {
+        var probe = await ProbeAsync(Naming("*"),
+            ("X-Forwarded-Proto", "https"),
+            ("X-Forwarded-Host", Evil));
+
+        Assert.DoesNotContain(Evil, probe);
+    }
+
+    // ═══ ٦) والقِراءَةُ نَفسُها دالَّةٌ نَقِيَّةٌ تُقاسُ بِلا مُضيف ═══
+
+    [Fact]
+    public void With_nothing_configured_the_forwarded_host_flag_is_not_set()
+    {
+        var opts = new ForwardedHeadersOptions();
+        new ForwardedHeadersPolicy().ApplyTo(opts);
+
+        Assert.False(opts.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedHost));
+        Assert.True(opts.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedProto));
+        Assert.True(opts.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedFor));
+        Assert.Empty(opts.AllowedHosts);
+    }
+
+    [Fact]
+    public void With_a_named_list_the_flag_is_set_and_the_names_reach_the_options()
+    {
+        var opts = new ForwardedHeadersOptions();
+        new ForwardedHeadersPolicy
+        {
+            AllowedHosts = ForwardedHeadersPolicy.ParseAllowedHosts("a.example, b.example")
+        }.ApplyTo(opts);
+
+        Assert.True(opts.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedHost));
+        Assert.Equal(["a.example", "b.example"], opts.AllowedHosts);
+    }
+
+    /// <summary>ونَفسُ التَفريغَينِ في الحالَتَين — عُنوانُ حافَّةِ HF
+    /// غَيرُ مَعلومٍ ولا ثابِت، وقائِمَةُ وُكَلاءَ بِالتَخمينِ تُسقِطُ
+    /// الرُؤوسَ كُلَّها فَتَكسِرُ الكوكي.</summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("a.example")]
+    public void The_known_proxies_stay_empty_either_way(string configured)
+    {
+        var opts = new ForwardedHeadersOptions();
+        opts.KnownProxies.Add(System.Net.IPAddress.Loopback);
+
+        new ForwardedHeadersPolicy
+        {
+            AllowedHosts = ForwardedHeadersPolicy.ParseAllowedHosts(configured)
+        }.ApplyTo(opts);
+
+        Assert.Empty(opts.KnownProxies);
+        Assert.Empty(opts.KnownNetworks);
+    }
+
+    [Theory]
+    [InlineData("  A.Example  ", "a.example")]
+    [InlineData("a.example.", "a.example")]
+    [InlineData("a.example;b.example", "a.example|b.example")]
+    [InlineData("a.example a.example", "a.example")]
+    [InlineData("*.example.com", "*.example.com")]
+    public void The_named_list_is_normalised(string raw, string expected)
+        => Assert.Equal(expected,
+            string.Join('|', ForwardedHeadersPolicy.ParseAllowedHosts(raw)));
+
+    [Theory]
+    [InlineData("*")]
+    [InlineData("[::]")]
+    [InlineData("0.0.0.0")]
+    [InlineData(null)]
+    [InlineData("   ")]
+    public void A_wildcard_or_a_blank_names_nothing(string? raw)
+        => Assert.Empty(ForwardedHeadersPolicy.ParseAllowedHosts(raw));
+
+    /// <summary><b>والشَكلُ المَصفوفيُّ يُقرَأُ كَما يُقرَأُ النَصّ</b>:
+    /// ‏<c>config["…AllowedHosts"]</c> يُرجِعُ <c>null</c> عَلى مَصفوفَةِ
+    /// JSON، فَتَبدو التَهيئَةُ غائِبَةً وهي مَكتوبَة.</summary>
+    [Fact]
+    public void The_configuration_is_read_in_both_shapes()
+    {
+        var scalar = ConfigurationPath
+            .Combine("ForwardedHeaders", "AllowedHosts");
+
+        var fromText = ForwardedHeadersPolicy.FromConfiguration(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                    { [scalar] = "a.example, b.example" })
+                .Build());
+
+        var fromArray = ForwardedHeadersPolicy.FromConfiguration(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [$"{scalar}:0"] = "a.example",
+                    [$"{scalar}:1"] = "b.example",
+                })
+                .Build());
+
+        Assert.Equal(["a.example", "b.example"], fromText.AllowedHosts);
+        Assert.Equal(["a.example", "b.example"], fromArray.AllowedHosts);
+        Assert.True(fromText.TrustsForwardedHost);
+    }
+
+    [Fact]
+    public void An_empty_configuration_trusts_no_forwarded_host()
+    {
+        var policy = ForwardedHeadersPolicy.FromConfiguration(
+            new ConfigurationBuilder().Build());
+
+        Assert.False(policy.TrustsForwardedHost);
+        Assert.Empty(policy.AllowedHosts);
     }
 }

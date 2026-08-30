@@ -35,11 +35,16 @@ var processStartedAt = DateTimeOffset.UtcNow;
 var builder = WebApplication.CreateBuilder(args);
 
 // خَلف proxy (Hugging Face Spaces, Cloudflare, …) نَحتاج قِراءَة
-// X-Forwarded-* لِيَكشِف Request.IsHttps الصَّحيح — وإلّا AuthSession
+// X-Forwarded-Proto لِيَكشِف Request.IsHttps الصَّحيح — وإلّا AuthSession
 // يَحسِب الاتِّصال HTTP فَيَكسِر Secure cookies في الإنتاج.
-// والقَرار كُلُّه في `ForwardedHeadersPolicy` — لِيُقاس بِاختِبار.
+// **والمُضيف لا يُقرَأ مِن الرَأس إلّا إن سُمِّي** في التَهيئَة
+// (‏ForwardedHeaders:AllowedHosts) — وإلّا اختارَ أَيّ زائِرٍ النِطاقَ
+// الَّذي تُعلِنُه الصَفحَة عَن نَفسِها. القَرار كُلُّه في
+// `ForwardedHeadersPolicy` — لِيُقاس بِاختِبار — والتَعليل في
+// `docs/ADR-023-A-FORWARDED-HOST-IS-TRUSTED-ONLY-IF-IT-IS-NAMED.md`.
+var forwardedHeaders = ForwardedHeadersPolicy.FromConfiguration(builder.Configuration);
 builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(
-    ForwardedHeadersPolicy.Apply);
+    forwardedHeaders.ApplyTo);
 
 builder.AddPlatformHost(host => host
     .AddKitAssembly(typeof(ACommerce.Kit.Tenants.Server.TenantHandlers).Assembly)
@@ -320,6 +325,14 @@ await using (var scope = app.Services.CreateAsyncScope())
 // يَجِب أَن يُطَبَّق ForwardedHeaders قَبل أَيّ middleware يَقرَأ
 // Request.IsHttps / Scheme (الـ HTTPS redirect والكوكي والـ Auth).
 app.UseForwardedHeaders();
+
+// **وحالَةُ المُضيف تُقال بِاسمِها عِندَ الإقلاع**: قائِمَةٌ مَكتوبَةٌ
+// خَطَأً (‏`*` أَو مِفتاحٌ مُخطِئ) تَسقُط صامِتَةً، فَيَظُنّ المُهَيِّئ
+// الرَأسَ مَقروءاً وهُوَ مُغلَق — وصَمتٌ كَهذا يُشَخَّص بَعدَ ساعات.
+app.Logger.LogInformation("[forwarded-headers] X-Forwarded-Host: {Hosts}",
+    forwardedHeaders.TrustsForwardedHost
+        ? string.Join(", ", forwardedHeaders.AllowedHosts)
+        : "غَير مَقروء — لا قائِمَة مُهَيَّأَة (ForwardedHeaders:AllowedHosts)");
 
 app.UsePlatformHost();
 
