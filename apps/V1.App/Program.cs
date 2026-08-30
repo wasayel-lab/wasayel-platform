@@ -138,7 +138,13 @@ builder.Services.AddMockDelivery();
 // نَجاحاً وتَكتُب `Tier = "scale"` بِلا قَبض. القَرارُ الآنَ دالَّةٌ
 // نَقِيَّةٌ (`PaymentProviderSelection.Decide`)، وهذا السَطرُ أَثَرُها
 // لا مَنطِقُها — نَفسُ ما فُعِلَ بِقَنَواتِ الدُخولِ أَعلاه.
-builder.Services.AddPaymentProvider(isDev);
+//
+// **ووَضعُ التَجرِبَةِ يُضافُ فَوقَ هذا لا حَولَه** (‏ADR-025): قيمَةٌ
+// مَكتوبَةٌ صَراحَةً (`Payments__Provider=simulation`) تَختارُ مُزَوِّداً
+// **يُعلِنُ أَنَّه تَجرِبَة** — والغِيابُ لا يُنتِجُها أَبَداً، وحارِسٌ
+// مَعكوسٌ أَسفَلَ المِلَفِّ يَرمي لَو وَقَعَت بِلا كِتابَة.
+builder.Services.AddPaymentProvider(
+    isDev, builder.Configuration[PaymentProviderSelection.ProviderKey]);
 
 // ‏PayPal — **تَدَفُّقٌ آخَر لا بَديلٌ عَمّا فَوقَه**: هذا لِاشتِراكِ
 // المُستَأجِرِ في وَسايِل (‏ADR-004)، وذاكَ لِعَرَبونِ الصَفقاتِ داخِلَ
@@ -236,10 +242,24 @@ AuthChannelSelection.AssertNoStubsOutsideDevelopment(
 // طَلَب. والسَبَبُ واحِد: «رَمزٌ ثابِتٌ ‏123456» و«نَجَحَ الدَفع
 // دائِماً» عَطَبٌ واحِدٌ بِوَجهَين — تَركيبُ الخِدماتِ وَحدَه هُوَ
 // الفَرقُ بَينَ مَنصَّةٍ تَقبِض وأُخرى تُوَزِّع باقاتِها مَجّاناً.
+var resolvedPayments = new[]
+    { PaymentProviderSelection.Describe(app.Services.GetService<IPaymentProvider>()) }
+    .OfType<RegisteredPaymentProvider>()
+    .ToArray();
+
 PaymentProviderSelection.AssertNoStubsOutsideDevelopment(
-    app.Environment.IsDevelopment(),
-    new[] { PaymentProviderSelection.Describe(app.Services.GetService<IPaymentProvider>()) }
-        .OfType<RegisteredPaymentProvider>());
+    app.Environment.IsDevelopment(), resolvedPayments);
+
+// ─── وحارِسٌ **مَعكوس**: وَضعُ التَجرِبَةِ يُطلَبُ ولا يَقَعُ بِالغِياب ─
+// الحارِسُ فَوقَه يَمنَعُ مُحاكِياً تَسَرَّب، وهذا يَمنَعُ **تَجرِبَةً
+// وَقَعَت صامِتَة**: يَرمي إن حُلَّ مُزَوِّدٌ يَحمِلُ عَلامَةَ
+// التَجرِبَةِ بَينَما لا أَحَدَ كَتَبَ `Payments__Provider=simulation`.
+//
+// **وهذا هُوَ مَعنى «فَوقَ الحُرّاسِ لا حَولَها»**: وَضعُ التَجرِبَةِ
+// اختِيارٌ مُعلَنٌ لا بَديلٌ صامِتٌ عِندَ غِيابِ التَهيئَة — وADR-025
+// يَكتُبُ الحُجَّةَ كامِلَة.
+PaymentProviderSelection.AssertSimulationIsExplicit(
+    builder.Configuration[PaymentProviderSelection.ProviderKey], resolvedPayments);
 
 // ─── وحارِسٌ ثالِثٌ بِنَفسِ الآلِيَّة: لا قُرصَ زائِلَ لِلصُوَر ───────
 // **ولا أُنبوبَ رابِع** (القاعِدَة ٨): نَفسُ الشَكلِ حَرفاً لِلمَرَّةِ

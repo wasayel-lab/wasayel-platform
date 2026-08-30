@@ -2862,6 +2862,14 @@ public static class MarketplaceTemplateExtensions
                             idempotencyKey: $"deal_{deal.Id}");
                         await deals.AttachRefAsync(slug, deal.Id, "payment_id",     pr.PaymentId);
                         await deals.AttachRefAsync(slug, deal.Id, "payment_status", pr.Status.ToString());
+                        // **ووَضعُ التَجرِبَةِ يُعلَنُ في القاعِدَةِ لا
+                        // في الشاشَةِ وَحدَها** — بِالآلِيَّةِ نَفسِها
+                        // الَّتي تَكتُبُ المَرجِعَينِ فَوقَه، بِلا حَقلٍ
+                        // جَديدٍ ولا مَعجَمٍ ثانٍ. ADR-025.
+                        if (ACommerce.Kit.Payments.PaymentSimulationSurface.IsSimulated(payments))
+                            await deals.AttachRefAsync(slug, deal.Id,
+                                ACommerce.Kit.Payments.SimulatedPaymentProvider.ModeRefKey,
+                                ACommerce.Kit.Payments.SimulatedPaymentProvider.ConfiguredValue);
                     }
                     catch (Exception ex)
                     {

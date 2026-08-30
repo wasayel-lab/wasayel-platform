@@ -73,9 +73,16 @@ public class ProviderSelectionCharacterizationTests
 
     private static readonly CapabilityToday[] Rows =
     {
+        // ‏2026-08-30 (‏ADR-025): صارَ السَطرُ يُمَرِّرُ قيمَةَ التَهيئَةِ
+        // أَيضاً، وصارَ لِلدَفعِ **مِفتاح** بَعدَ أَن لَم يَكُن. وشَرطُ
+        // ‏ADR-014 §٢-ج لَم يُنقَض بَل استُوفِيَ: «يُضافُ المِفتاحُ يَومَ
+        // يوجَد لَه مُزَوِّدٌ يَختارُه» — ووُجِدَ
+        // (`SimulatedPaymentProvider`). والغِيابُ ما زالَ يُعطي المُحاكيَ
+        // في التَطويرِ والفَشَلَ المُغلَقَ خارِجَه، بِلا حَرفٍ مُبَدَّل.
         new("payments", "IPaymentProvider",
-            "builder.Services.AddPaymentProvider(isDev);", ByEnvironment,
+            "builder.Services.AddPaymentProvider(", "Payments:Provider",
             "libs/kits/Payments/ACommerce.Kit.Payments.Core/MockPaymentProvider.cs"),
+
 
         new("sms_otp", "IOtpChannel",
             "builder.Services.AddMockSmsChannel();", "Auth:Sms:Provider",
@@ -291,16 +298,26 @@ public class ProviderSelectionCharacterizationTests
     public void The_payment_capability_is_decided_by_environment_and_guarded_at_boot()
     {
         var row = Rows.Single(r => r.Capability == "payments");
-        Assert.Equal(ByEnvironment, row.ConfigKeyToday);
+        Assert.Equal(PaymentProviderSelection.ProviderKey, row.ConfigKeyToday);
 
         var text = ProgramText;
-        Assert.Contains("builder.Services.AddPaymentProvider(isDev);", text, StringComparison.Ordinal);
+        Assert.Contains("builder.Services.AddPaymentProvider(", text, StringComparison.Ordinal);
         Assert.Contains("PaymentProviderSelection.AssertNoStubsOutsideDevelopment",
             text, StringComparison.Ordinal);
+        // وحارِسٌ مَعكوسٌ بِجِوارِه: التَجرِبَةُ لا تَقَعُ بِالغِياب.
+        Assert.Contains("PaymentProviderSelection.AssertSimulationIsExplicit",
+            text, StringComparison.Ordinal);
 
-        // والقَرارُ نَفسُه، بِطَرَفَيه.
+        // والقَرارُ نَفسُه، بِطَرَفَيه — **بِلا حَرفٍ مُبَدَّل**.
         Assert.Equal(PaymentProviderChoice.Mock, PaymentProviderSelection.Decide(true));
         Assert.Equal(PaymentProviderChoice.Unavailable, PaymentProviderSelection.Decide(false));
+
+        // وبِالمِفتاحِ الصَريحِ وَحدَه تَقَعُ التَجرِبَة.
+        Assert.Equal(PaymentProviderChoice.Simulation,
+            PaymentProviderSelection.Decide(false, SimulatedPaymentProvider.ConfiguredValue));
+        Assert.Equal(PaymentProviderChoice.Unavailable,
+            PaymentProviderSelection.Decide(false, "mock"));
+
     }
 
     // ─── ٤. مَدى الحَياة — مَرَّةً لِكُلّ عَمَلِيَّةِ تَشغيل ──────────

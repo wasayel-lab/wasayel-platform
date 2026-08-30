@@ -135,9 +135,16 @@ public static class PaymentProviderSelection
     /// </summary>
     public static PaymentProviderChoice Decide(bool isDevelopment, string? configured)
     {
-        // ‏«الفَرعُ الصَريح» يُوصَلُ في كوميتِ العِلاج — والاختِبارُ
-        // يَحمَرُّ حَتّى يُوصَل.
-        _ = configured;
+        // ‏١) قيمَةٌ فِعلِيَّةٌ مَكتوبَةٌ صَراحَةً — في أَيِّ بيئَة.
+        //    والمُقارَنَةُ بِالثابِتِ لا بِحَرفِيَّةٍ مَنسوخَة، وبِـ
+        //    `Ordinal` بَعدَ قَصٍّ: قيمَةُ تَهيئَةٍ فيها مِسافَةٌ
+        //    تُقبَل، وقيمَةٌ تُشبِهُها ولا تُطابِقُها **تُرَدّ**.
+        if (string.Equals(configured?.Trim(), SimulatedPaymentProvider.ConfiguredValue,
+                StringComparison.OrdinalIgnoreCase))
+            return PaymentProviderChoice.Simulation;
+
+        // ‏٢) وإلّا في التَطوير: المُحاكي — كَما كانَ.
+        // ‏٣) وإلّا: الفَشَلُ المُغلَق — كَما كان.
         return isDevelopment ? PaymentProviderChoice.Mock : PaymentProviderChoice.Unavailable;
     }
 

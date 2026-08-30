@@ -1267,7 +1267,10 @@
   "checkout.payment.cash": "نَقد عِندَ التَّسليم",
   "checkout.payment.cash_hint": "اِدفَع عِندَما يَصِل طَلَبك",
   "checkout.payment.err_card_unavailable": "الدَفعُ بِالبِطاقَةِ غَيرُ مُتاحٍ في هذا المَتجَر — اختَر الدَفعَ عِندَ الاستِلام.",
-  "checkout.payment.title": "طَريقَة الدَّفع",
+  "checkout.payment.simulation_badge": "تَجرِبَة",
+  "checkout.payment.simulation_hint": "هذِه النُسخَةُ في وَضعِ التَجرِبَة: لا يُخصَمُ مِن بِطاقَتِكَ شَيء، ولا تُصدَرُ فاتورَة. الطَلَبُ يُسَجَّلُ مُعَلَّماً بِأَنَّه تَجرِبَة.",
+  
+"checkout.payment.title": "طَريقَة الدَّفع",
   "checkout.step.address": "العُنوان",
   "checkout.step.confirm": "تَأكيد",
   "checkout.step.payment": "الدَّفع",

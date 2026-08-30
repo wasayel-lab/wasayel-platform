@@ -4,8 +4,10 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
+@inject ACommerce.Kit.Payments.IPaymentProvider Payments
 @inject L L
 @using ACommerce.Kit.Cart
+@using ACommerce.Kit.Payments
 @using ACommerce.Templates.Customer.Marketplace.Services.Deals
 
 @*
@@ -109,8 +111,18 @@
                                     <input type="radio" name="pay" value="@CheckoutPayMethods.Card" required
                                            checked="@(EffectivePay == CheckoutPayMethods.Card)" />
                                     <span class="acm-radio-card-body">
-                                        <strong><AcIcon Name="credit-card" Size="16" /> @L.Markup("checkout.payment.card")</strong>
-                                        <span>@L.Markup("checkout.payment.card_hint")</span>
+                                        <strong>
+                                            <AcIcon Name="credit-card" Size="16" /> @L.Markup("checkout.payment.card")
+                                            @* **وَضعُ التَجرِبَةِ يُعلَنُ حَيثُ يُنقَر**: الشاشَةُ
+                                               والنُقطَةُ تَقرَآنِ `PaymentSimulationSurface`
+                                               نَفسَها، فَلا تَعرِضُ الشاشَةُ حَقيقِيّاً ما
+                                               سَيُحاكيهِ المُزَوِّد. ADR-025. *@
+                                            @if (Simulated)
+                                            {
+                                                <span class="ac-chip ac-chip-sm">@L.Markup("checkout.payment.simulation_badge")</span>
+                                            }
+                                        </strong>
+                                        <span>@(Simulated ? L["checkout.payment.simulation_hint"] : L["checkout.payment.card_hint"])</span>
                                     </span>
                                 </label>
                             }
@@ -154,6 +166,14 @@
                         <strong>@L.Markup("checkout.summary.ship_to")</strong> @Name · @Phone<br />
                         @Addr<br />
                         <strong>@L.Markup("checkout.summary.pay_with")</strong> @(EffectivePay == CheckoutPayMethods.Card ? L["checkout.payment.card_short"] : L["checkout.payment.cash"])
+                        @* وتُعادُ الكَلِمَةُ قَبلَ النَقرَةِ الأَخيرَة — لا
+                           تُقالُ مَرَّةً في خُطوَةٍ سابِقَةٍ ثُمَّ تُنسى. *@
+                        @if (Simulated && EffectivePay == CheckoutPayMethods.Card)
+                        {
+                            <span class="ac-chip ac-chip-sm">@L.Markup("checkout.payment.simulation_badge")</span>
+                            <br />
+                            <span>@L.Markup("checkout.payment.simulation_hint")</span>
+                        }
                     </div>
                 </ChildContent>
             </AcCard>
@@ -183,6 +203,11 @@
 
     Cart? cart;
     bool CardOffered;
+
+    /// <summary><b>أَمُزَوِّدُ هذِه النُسخَةِ في وَضعِ التَجرِبَة؟</b> —
+    /// نَفسُ المُسنَدِ الَّذي تَقرَؤُه النُقطَة، فَلا يَنجَرِفُ
+    /// طَرَفان.</summary>
+    bool Simulated => PaymentSimulationSurface.IsSimulated(Payments);
 
     /// <summary><b>طَريقَةُ الدَفعِ الَّتي سَتُرسَل</b> — مِن الدالَّةِ
     /// النَقِيَّةِ نَفسِها الَّتي تَقرَؤُها النُقطَة، فَلا تَعرِضُ

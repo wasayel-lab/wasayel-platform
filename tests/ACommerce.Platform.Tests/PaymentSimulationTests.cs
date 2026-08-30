@@ -186,7 +186,7 @@ public class PaymentSimulationTests
             program, StringComparison.Ordinal);
         Assert.Contains("PaymentProviderSelection.AssertSimulationIsExplicit",
             program, StringComparison.Ordinal);
-        Assert.Contains(PaymentProviderSelection.ProviderKey, program, StringComparison.Ordinal);
+        Assert.Contains(nameof(PaymentProviderSelection.ProviderKey), program, StringComparison.Ordinal);
     }
 
     // ═══ ٥) لا فاتورَةَ تَبدو حَقيقِيَّة ═══════════════════════════════
