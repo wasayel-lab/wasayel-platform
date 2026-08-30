@@ -184,6 +184,44 @@ public sealed class TenantThemeService : TenantDefinitionService<TenantThemeDefi
         return (true, $"طُبِّقَت حُزمَة «{preset.Label.Ar}» عَلى «{tenantSlug}». {decideMsg}");
     }
 
+    /// <summary>
+    /// <para><b>اقتِراحُ حُزمَةٍ — نِصفُ <see cref="ApplyPresetAsync"/>
+    /// الأَوَّلُ وَحدَه، بِلا اعتِماد.</b> وهذا هُوَ المَسارُ الَّذي
+    /// يَملِكُه <b>صاحِبُ المَتجَر</b>: يَختار، ويَبقى القَرارُ
+    /// لِلمَنَصَّة.</para>
+    ///
+    /// <para><b>ولِماذا الفَصلُ حَدٌّ لا تَفصيل</b>: الاعتِمادُ يَبُثُّ
+    /// الثيمَ في <c>&lt;head&gt;</c> <b>لِكُلِّ زائِر</b>، فَهُوَ قَرارُ
+    /// مَنَصَّةٍ بِحارِسِها. والاقتِراحُ يَكتُبُ وَثيقَةً
+    /// <b>مُعَلَّقَة</b> لا يَقرَؤُها التَصييرُ إطلاقاً
+    /// (<c>TenantThemeSet.FromDocuments</c> يَقبَلُ المُعتَمَدَ
+    /// وَحدَه) — فَأَسوَأُ ما يَفعَلُه مُستَأجِرٌ هُنا: صَفٌّ في
+    /// قائِمَةِ المُشرِف.</para>
+    ///
+    /// <para><b>ولا يُعادُ فَتحُ مُعتَمَدٍ هُنا</b> — بِخِلافِ
+    /// <see cref="ApplyPresetAsync"/>: ‏<c>ProposeAsync</c> تَرُدُّ
+    /// «لا يُعادُ تَعريفُ ثيمٍ مُعتَمَد»، وذاكَ بِعَينِه المَطلوب.
+    /// إعادَةُ الفَتحِ تَعني أَنّ صاحِبَ المَتجَرِ يَنزِعُ ثيماً
+    /// اعتَمَدَته المَنَصَّةُ بِنَقرَة — أَي اعتِماداً مَعكوساً
+    /// بِثَوبِ اقتِراح.</para>
+    ///
+    /// <para><b>والجِسمُ مِن الكاتالوجِ لا مِن الطَلَب</b>: ما يَصِلُ
+    /// اسمُ حُزمَة، ونَصُّها يُقرَأُ مِن المُستودَع. نَفسُ حُجَّةِ
+    /// <see cref="ApplyPresetAsync"/> حَرفاً.</para>
+    /// </summary>
+    public async Task<(bool Ok, string Message)> ProposePresetAsync(
+        string tenantSlug, string presetSlug, string by, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(tenantSlug))
+            return (false, "لا مُستَأجِر.");
+
+        var preset = ThemePresetCatalog.Find(presetSlug);
+        if (preset is null)
+            return (false, $"لا حُزمَة بِاسم «{presetSlug}» في كاتالوج المَنصَّة.");
+
+        return await ProposeAsync(tenantSlug, preset.Slug, preset.Json, by, ct);
+    }
+
     /// <summary>يُعيد وَثيقَة حُزمَة مُعتَمَدَة إلى «مُعَلَّق» — الخُطوَة
     /// الوَحيدَة الَّتي تُميِّز إعادَة التَطبيق عَن التَطبيق الأَوَّل.
     /// لا تُنشِئ ولا تَحذِف: غِياب الوَثيقَة لا شَيء يُفعَل بِه.</summary>

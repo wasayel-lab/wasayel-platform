@@ -1,0 +1,122 @@
+@page "/studio/apps/{slug}/theme"
+@inject Services.Incubator.StudioAuth Auth
+@inject Services.Queries.TenantDirectory Tenants
+@inject Services.TenantThemeService Themes
+@inject L L
+@using ACommerce.Kit.Tenants
+@using ACommerce.Kit.Theme
+
+@*
+    مَظهَرُ المَتجَر — صاحِبُه يَختارُ حُزمَةً ويَقتَرِحُها، والمَنَصَّةُ
+    تَعتَمِد.
+
+    **ولِماذا اقتِراحٌ لا تَطبيق**: الثيمُ المُعتَمَدُ يُبَثُّ في
+    <head> لِكُلِّ زائِرٍ لِهذا المَتجَر، فَاعتِمادُه قَرارُ مَنَصَّةٍ
+    بِحارِسِها — نَفسُ ما تَقولُه `/admin/tenants/{slug}/theme`. والَّذي
+    كانَ ناقِصاً هُوَ **الطَرَفُ الَّذي يَقتَرِح**: ثَلاثُ نُقاطٍ
+    لِلاعتِمادِ وصِفرُ نُقطَةٍ لِصاحِبِ المَتجَر.
+
+    وما يُرسَل **اسمُ حُزمَة** لا نَصُّ تَعريف — والجِسمُ يُقرَأُ مِن
+    `ThemePresetCatalog`، أَي مِن المُستودَع.
+*@
+
+<StudioShell Title="@($"{L["studio.app_theme.title"]} {tenant?.Name ?? Slug}")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← @L.Markup("studio.app_nav.settings")</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (tenant is null)
+        {
+            <div class="st-card">@L.Markup("studio.app.not_found")</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>@L.Markup("studio.app_theme.heading")</h1>
+                <p>@L.Markup("studio.app_theme.intro")</p>
+            </div>
+
+            @if (Saved == "1") { <div class="st-chip st-chip-success" style="margin-bottom:14px;"><AcIcon Name="check" Size="14" /> @L.Markup("studio.app_theme.proposed")</div> }
+            @if (!string.IsNullOrEmpty(Err)) { <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@Err</div> }
+
+            <div class="studio-list">
+                @foreach (var p in ThemePresetCatalog.All)
+                {
+                    var status = StatusOf(p.Slug);
+                    <div class="st-card" style="display:flex;align-items:flex-start;gap:14px;">
+                        <div style="flex:1;min-width:0;">
+                            <strong style="font-size:15px;">@p.Label.Ar</strong>
+
+                            @* مُعايَنَةٌ مُصَغَّرَة: الأَلوانُ مِن الحُزمَةِ
+                               نَفسِها — لا لَونَ مَكتوباً في هذِه الصَفحَة. *@
+                            <span style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+                                @foreach (var key in SwatchKeys)
+                                {
+                                    var v = p.Definition.Tokens.TryGetValue(key, out var raw) ? raw : null;
+                                    if (v is not null)
+                                    {
+                                        <span title="@key"
+                                              style="@($"width:26px;height:26px;border-radius:6px;background:{v};border:1px solid var(--st-border);display:inline-block;")"></span>
+                                    }
+                                }
+                            </span>
+
+                            <span style="display:block;margin-top:8px;font-size:12px;color:var(--st-muted);">
+                                @StatusLabel(status)
+                            </span>
+                        </div>
+
+                        @if (status is null)
+                        {
+                            <form method="post" action="@($"/studio/apps/{Slug}/theme/propose")" style="margin:0;">
+                                <input type="hidden" name="preset" value="@p.Slug" />
+                                <button type="submit" class="st-btn st-btn-primary">
+                                    <AcIcon Name="check" Size="14" /> @L.Markup("studio.app_theme.propose")
+                                </button>
+                            </form>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="st-card" style="margin-top:14px;">
+                <p style="margin:0;font-size:13px;color:var(--st-muted);">@L.Markup("studio.app_theme.decision_note")</p>
+            </div>
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+    [SupplyParameterFromQuery(Name = "err")]   public string? Err { get; set; }
+
+    Tenant? tenant;
+    IReadOnlyList<TenantThemeDefinition> definitions = Array.Empty<TenantThemeDefinition>();
+
+    /// <summary>رُموزُ المُعايَنَة — نَفسُ الثَلاثَةِ الَّتي تَعرِضُها
+    /// شاشَةُ المُشرِف، فَلا يَرى الطَرَفانِ لَونَينِ مُختَلِفَين.</summary>
+    static readonly string[] SwatchKeys = { "color.primary", "color.surface", "color.text" };
+
+    string? StatusOf(string presetSlug)
+        => definitions.FirstOrDefault(d => d.Slug == presetSlug)?.Status;
+
+    string StatusLabel(string? status) => status switch
+    {
+        TenantThemeStatuses.Approved => L["studio.app_theme.state_approved"],
+        TenantThemeStatuses.Pending  => L["studio.app_theme.state_pending"],
+        TenantThemeStatuses.Rejected => L["studio.app_theme.state_rejected"],
+        _                            => L["studio.app_theme.state_none"]
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        tenant = await Tenants.FindAsync(Slug);
+        // تَحَقُّقُ المِلكِيَّة — نَفسُ شَرطِ بَقِيَّةِ صَفَحاتِ الاستوديو.
+        if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) tenant = null;
+        if (tenant is null) return;
+        definitions = await Themes.ListAllAsync(Slug);
+    }
+}

@@ -3329,6 +3329,31 @@ public static class MarketplaceTemplateExtensions
                 $"/studio/apps/{slug}/branding", $"/studio/apps/{slug}/branding", "/studio");
         }).DisableAntiforgery();
 
+        // ─── Studio: اقتِراحُ حُزمَةِ مَظهَر ────────────────────────────
+        // **الناقِصُ كانَ الاقتِراحَ لا القَرار**: دَورَةُ اعتِمادِ
+        // المَظهَرِ كامِلَةٌ (‏`propose` → `decide`)، وثَلاثَةُ أَطرافِها
+        // تَحتَ `/admin` — فَلا طَرَفَ يَقتَرِح. والمُستَأجِرُ يَضبُطُ
+        // `BrandColor` مِن `branding` ولا يَبلُغُ ثيماً أَبَداً.
+        //
+        // **والاعتِمادُ يَبقى حَيثُ هُوَ**: يُبَثُّ في `<head>` لِكُلِّ
+        // زائِر، فَقَرارُ مَنَصَّةٍ بِحارِسِها. وما يَكتُبُه هذا المَسارُ
+        // وَثيقَةٌ **مُعَلَّقَة** لا يَقرَؤُها التَصييرُ إطلاقاً.
+        app.MapPost("/studio/apps/{slug}/theme/propose", async (
+            string slug, HttpRequest req, IDocumentStore store,
+            Services.Incubator.StudioAuth auth,
+            Services.TenantThemeService themes,
+            Services.Audit.AuditWriter audit) =>
+        {
+            if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
+            await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.theme_propose");
+
+            var (ok, msg) = await themes.ProposePresetAsync(
+                slug, req.Form["preset"].ToString().Trim(), $"studio · {auth.UserId}");
+
+            return Results.Redirect($"/studio/apps/{slug}/theme?" +
+                (ok ? "saved=1" : $"err={Uri.EscapeDataString(msg)}"));
+        }).DisableAntiforgery();
+
         app.MapPost("/studio/apps/{slug}/categories/save", async (
             string slug, HttpRequest req, IDocumentStore store,
             Services.Incubator.StudioAuth auth,

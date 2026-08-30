@@ -149,6 +149,18 @@ internal static class PinnedRoutes
         "/studio/apps/{slug}/regions/save",
         "/studio/apps/{slug}/pwa/save",
         "/studio/apps/{slug}/attributes/save",
+
+        // ─── سَطرٌ واحِدٌ يُضافُ بِقَرارٍ مَرئيّ: اقتِراحُ حُزمَةِ مَظهَر ──
+        //
+        // ‏`/studio/apps/{slug}/theme/propose` — وأَخذُه المَخزَنَ لَه
+        // **نَفسُ سَبَبِ أَخَواتِه السِتِّ فَوقَه حَرفاً**: حارِسُ
+        // المِلكِيَّة (`StudioOwnsAsync`) يَقرَأُ وَثيقَةَ `Tenant` وهي
+        // `SingleTenanted` — تُقرَأُ **قَبلَ** أَن يُعرَفَ مُستَأجِرُ
+        // الطَلَب، فَجَلسَةٌ بِسلاجِ المَسارِ لا تَراها. والأَثَرُ
+        // نَفسُه خارِجَ الجِسم في `TenantThemeService`، وهي تَفتَحُ
+        // جَلسَتَها بِسلاجِ المُستَأجِر كَما كانَت.
+        "/studio/apps/{slug}/theme/propose",
+
         "/admin/incubator/start",
         "/admin/incubator/{id:guid}/answer",
         "/admin/incubator/{id:guid}/analyze",

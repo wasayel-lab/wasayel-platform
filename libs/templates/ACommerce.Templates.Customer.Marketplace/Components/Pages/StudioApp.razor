@@ -90,6 +90,16 @@
                         <span>@L.Markup("studio.app.branding_sub")</span></div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
+                @* المَدخَلُ نِصفُ الميزَة (القاعِدَة ١٢): دَورَةُ
+                   اعتِمادِ المَظهَرِ كامِلَةٌ مُنذُ مَوجَةِ الثيم،
+                   وأَطرافُها الثَلاثَةُ تَحتَ `/admin` — فَلا طَرَفَ
+                   يَقتَرِح. والاعتِمادُ يَبقى قَرارَ مَنَصَّة. *@
+                <a class="studio-list-row" href="@($"/studio/apps/{Slug}/theme")">
+                    <span class="studio-list-icon st-chip-success"><AcIcon Name="sparkle" Size="16" /></span>
+                    <div class="studio-list-body"><strong>@L.Markup("studio.app.theme_title")</strong>
+                        <span>@L.Markup("studio.app.theme_sub")</span></div>
+                    <span style="color:var(--st-faint);">←</span>
+                </a>
                 <a class="studio-list-row" href="@($"/studio/apps/{Slug}/categories")">
                     <span class="studio-list-icon" style="background:#dcfce7;color:#15803d;"><AcIcon Name="list" Size="16" /></span>
                     <div class="studio-list-body"><strong>@L.Markup("studio.app.categories_title")</strong>
@@ -139,7 +149,7 @@
                    مَتجَرٍ جَديد**. حَلقَةٌ مُغلَقَةٌ: لوحَةُ المَتجَرِ
                    تولَدُ مَيِّتَةً ولا سَبيلَ لِإحيائِها. *@
                 <a class="studio-list-row" href="@($"/admin/tenants/{Slug}/users?from=studio")">
-                    <span class="studio-list-icon" style="background:#fef3c7;color:#854d0e;"><AcIcon Name="people" Size="16" /></span>
+                    <span class="studio-list-icon ac-chip-info"><AcIcon Name="people" Size="16" /></span>
                     <div class="studio-list-body"><strong>@L.Markup("studio.app.users_title")</strong>
                         <span>@L.Markup("studio.app.users_sub")</span></div>
                     <span style="color:var(--st-faint);">←</span>
