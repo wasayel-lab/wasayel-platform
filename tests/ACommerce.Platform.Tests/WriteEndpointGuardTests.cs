@@ -582,6 +582,65 @@ public class WriteEndpointGuardTests
             string.Join("\n  ", settled));
     }
 
+    // ─── تَوسِعَةُ ‏2026-08-30 (‏ADR-012): سُلطَةٌ فَوقَ سُلطَة ───────
+    //
+    // **ولِماذا تَوسِعَةٌ لا مِلَفٌّ جَديد** (القاعِدَة ٨): السُؤالُ هُوَ
+    // سُؤالُ هذا المِلَفِّ بِعَينِه — «هَل تُعلِنُ نُقطَةُ الكِتابَةِ
+    // حارِسَها؟» — بِزِيادَةِ دَرَجَة: نُقطَةٌ تَمَسُّ اعتِماداً
+    // **يَصرِفُ مِن جَيبِنا** (`platform_key`) لا يَكفيها حارِسُ
+    // المَتجَر. ومِلَفٌّ ثانٍ لِنَفسِ السُؤالِ يَنجَرِف عَن أَوَّلِه.
+
+    private sealed record TwoTierWrite(string Route, string TenantGuard, string PlatformGuard);
+
+    private static readonly TwoTierWrite[] TwoTierWrites =
+    {
+        new("/studio/apps/{slug}/providers/bind",
+            "TenantAdminGuard.CanAdministerAsync", "PlatformAdminGuard.EvaluateAsync"),
+    };
+
+    /// <summary><b>نُقطَةٌ تَربِط مُزَوِّداً مِن نَوع
+    /// <c>platform_key</c> تُعلِنُ حارِسَ المَنَصَّةِ فَوقَ حارِسِ
+    /// المَتجَر</b> — وإلّا رَبَطَ صاحِبُ مَتجَرٍ مُزَوِّداً نَدفَعُ
+    /// نَحنُ فاتورَتَه.</summary>
+    [Fact]
+    public void A_write_that_can_spend_platform_money_declares_both_guards()
+    {
+        var endpoints = MinimalApiWriteEndpoints()
+            .ToDictionary(e => e.Route, e => e.Body, StringComparer.Ordinal);
+
+        Assert.True(endpoints.Count >= 88,
+            $"أَداة عَمياء: وُجِدَت {endpoints.Count} نُقطَة كِتابَة — والمَقيس ٨٨.");
+        Assert.True(TwoTierWrites.Length > 0, "أَداة عَمياء: لا نُقطَةَ ذاتَ سُلطَتَين.");
+
+        var breaches = new List<string>();
+
+        foreach (var t in TwoTierWrites)
+        {
+            if (!endpoints.TryGetValue(t.Route, out var body))
+            {
+                breaches.Add($"{t.Route}: لا وُجودَ لَها — تُرفَع أَو يُصَحَّحُ المَسار.");
+                continue;
+            }
+
+            if (!body.Contains(t.TenantGuard, StringComparison.Ordinal))
+                breaches.Add($"{t.Route}: بِلا «{t.TenantGuard}».");
+
+            if (!body.Contains(t.PlatformGuard, StringComparison.Ordinal))
+                breaches.Add($"{t.Route}: بِلا «{t.PlatformGuard}» — " +
+                             "و`platform_key` يَصرِفُ مِن جَيبِ المَنَصَّة.");
+
+            // والتَرتيبُ جُزءٌ مِن الحُكم: حارِسُ المَتجَرِ أَوَّلاً،
+            // فَلا يُعرَفُ بِالرَدِّ مَن يَملِكُ ماذا.
+            var tenantAt = body.IndexOf(t.TenantGuard, StringComparison.Ordinal);
+            var platformAt = body.IndexOf(t.PlatformGuard, StringComparison.Ordinal);
+            if (tenantAt >= 0 && platformAt >= 0 && tenantAt > platformAt)
+                breaches.Add($"{t.Route}: حارِسُ المَنَصَّةِ سَبَقَ حارِسَ المَتجَر.");
+        }
+
+        Assert.True(breaches.Count == 0,
+            "سُلطَةٌ غَيرُ مُعلَنَةٍ في نُقطَةِ كِتابَة:\n  " + string.Join("\n  ", breaches));
+    }
+
     /// <summary>كُلّ استِثناء يُعلِن سَبَبَه — فَالقائِمَة دَينٌ مَوصوف
     /// لا قائِمَةُ إسكات.</summary>
     [Fact]

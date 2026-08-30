@@ -1,0 +1,195 @@
+@page "/studio/apps/{slug}/providers"
+@inject Services.Incubator.StudioAuth Auth
+@inject Services.Queries.TenantDirectory Tenants
+@inject Services.TenantProviderService Providers
+@inject L L
+@using ACommerce.Kit.Tenants
+@using ACommerce.Platform.Providers
+
+@*
+    تَكامُلاتُ مَتجَرٍ واحِد — رَبطٌ وسَحب.
+
+    **وقُدرَةٌ بِلا مُزَوِّدٍ يَربِطُه مُستَأجِرٌ لا تُرسَم إطلاقاً**
+    (القاعِدَة ١٢): لا تَبويبَ يَقول «قَريباً»، ولا صَفَّ يَردُّ
+    النَقرَةَ بِـ«لَيسَ بَعد». القائِمَةُ تُشتَقُّ مِن الكاتالوجِ
+    نَفسِه — فَيَومَ يُضافُ مِلَفُّ تَعريفٍ لِقُدرَةٍ أُخرى تَظهَرُ
+    بِلا لَمسِ سَطرٍ هُنا.
+
+    ولا جَلسَةَ Marten هُنا: الصَفحَةُ تَحقِنُ خِدمَةً (الطَبَقَة ٨
+    عِندَ صِفر، ولا تَرتَفِع).
+*@
+
+<StudioShell Title="@($"{L["studio.providers.title"]} {tenant?.Name ?? Slug}")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← @L.Markup("studio.app_nav.settings")</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (tenant is null)
+        {
+            <div class="st-card">@L.Markup("studio.app.not_found")</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>@L.Markup("studio.providers.heading")</h1>
+                <p>@L.Markup("studio.providers.intro")</p>
+            </div>
+
+            @if (errorKey is not null)
+            {
+                <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@L.Markup(errorKey)</div>
+            }
+            else if (noticeKey is not null)
+            {
+                <div class="st-chip st-chip-success" style="margin-bottom:14px;">@L.Markup(noticeKey)</div>
+            }
+
+            @foreach (var capability in ProviderCatalog.BindableCapabilities)
+            {
+                var offered = ProviderCatalog.TenantBindable(capability);
+                var current = Current(capability);
+                var currentDef = current is null ? null : ProviderCatalog.Find(current.ProviderSlug);
+
+                <div class="st-section-title">@L.Markup(CapabilityLabelKey(capability))</div>
+
+                @if (current is not null && currentDef is not null)
+                {
+                    <div class="st-card" style="margin-bottom:16px;">
+                        <div class="studio-list-body">
+                            <strong>@ProviderText.Get(currentDef.Label, L.Lang)</strong>
+                            <span class="@(current.IsActive ? "st-chip st-chip-success" : "st-chip st-chip-danger")">
+                                @L.Markup(current.IsActive ? "studio.providers.state_active" : "studio.providers.state_revoked")
+                            </span>
+                            <span>@L.Markup("studio.providers.bound_at") @current.BoundAt.ToString("yyyy-MM-dd")</span>
+                        </div>
+
+                        @* القيمَةُ المَعروضَةُ هي الصورَةُ المُعَتَّمَة —
+                           ونَوعُ الحَقلِ وَحدَه يُقَرِّرُ أَتُعرَض كامِلَةً
+                           أَم مُقَنَّعَة. لا سَطرَ هُنا يُقَرِّر. *@
+                        @foreach (var f in currentDef.Credential.Fields)
+                        {
+                            <div style="margin-top:8px;">
+                                <span style="color:var(--st-muted);font-size:12px;">@ProviderText.Get(f.Label, L.Lang)</span>
+                                <code style="display:block;direction:ltr;text-align:start;word-break:break-all;
+                                             background:var(--st-bg);padding:8px;border-radius:8px;">@Shown(current, f.Code)</code>
+                            </div>
+                        }
+
+                        <p style="color:var(--st-muted);font-size:13px;margin:10px 0 0;">
+                            <strong>@L.Markup("studio.providers.revocation_title")</strong>
+                            @ProviderText.Get(currentDef.Revocation, L.Lang)
+                        </p>
+
+                        @if (current.IsActive)
+                        {
+                            <form method="post" action="@($"/studio/apps/{Slug}/providers/{capability}/revoke")"
+                                  style="margin-top:12px;">
+                                <button type="submit" class="st-btn st-btn-ghost">@L.Markup("studio.providers.revoke_action")</button>
+                            </form>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="st-card" style="color:var(--st-muted);margin-bottom:16px;">
+                        @L.Markup("studio.providers.none_bound")
+                    </div>
+                }
+
+                @foreach (var def in offered)
+                {
+                    <form method="post" action="@($"/studio/apps/{Slug}/providers/bind")" class="st-card"
+                          style="margin-bottom:16px;">
+                        <input type="hidden" name="provider" value="@def.Slug" />
+
+                        <div class="st-section-title" style="margin-top:0;">@ProviderText.Get(def.Label, L.Lang)</div>
+                        <p style="color:var(--st-muted);font-size:13px;margin:0 0 10px;">@ProviderText.Get(def.Description, L.Lang)</p>
+
+                        @if (def.PhysicalGoodsOnly)
+                        {
+                            <p class="st-chip st-chip-warning" style="margin:0 0 10px;">@L.Markup("studio.providers.physical_only")</p>
+                        }
+
+                        @foreach (var f in def.Credential.Fields)
+                        {
+                            <label class="ac-chip-input-label" for="@($"{def.Slug}-{f.Code}")"
+                                   style="display:block;margin-top:10px;">@ProviderText.Get(f.Label, L.Lang)</label>
+                            <input class="ac-input" id="@($"{def.Slug}-{f.Code}")" name="@f.Code"
+                                   dir="ltr" required="@f.IsRequired" />
+                        }
+
+                        <div style="display:flex;gap:10px;align-items:center;margin-top:14px;">
+                            <button type="submit" class="st-btn st-btn-primary">@L.Markup("studio.providers.bind_action")</button>
+                            @if (!string.IsNullOrEmpty(def.DocsUrl))
+                            {
+                                <a class="st-btn st-btn-ghost" href="@def.DocsUrl" target="_blank" rel="noopener noreferrer">@L.Markup("studio.providers.docs_link")</a>
+                            }
+                        </div>
+                    </form>
+                }
+            }
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+    [SupplyParameterFromQuery(Name = "bound")] public string? Bound { get; set; }
+    [SupplyParameterFromQuery(Name = "revoked")] public string? Revoked { get; set; }
+
+    Tenant? tenant;
+    readonly Dictionary<string, TenantProviderBinding> bindings = new(StringComparer.Ordinal);
+    string? errorKey;
+    string? noticeKey;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        tenant = await Tenants.FindAsync(Slug);
+        if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) tenant = null;
+        if (tenant is null) return;
+
+        foreach (var capability in ProviderCatalog.BindableCapabilities)
+        {
+            var doc = await Providers.CurrentAsync(Slug, capability);
+            if (doc is not null) bindings[capability] = doc;
+        }
+
+        errorKey = ErrorKeyFor(Err);
+        noticeKey = Bound is not null ? "studio.providers.saved_ok"
+                  : Revoked is not null ? "studio.providers.revoked_ok"
+                  : null;
+    }
+
+    TenantProviderBinding? Current(string capability)
+        => bindings.TryGetValue(capability, out var d) ? d : null;
+
+    /// <summary>الصورَةُ المَعروضَةُ — مِن <c>ProviderSecrecy</c> لا مِن
+    /// هُنا. سِرٌّ لا يُعرَض بَعدَ حِفظِه، والنَوعُ هُوَ الحَكَم.</summary>
+    static string Shown(TenantProviderBinding b, string fieldCode)
+        => b.Values.TryGetValue(fieldCode, out var v) ? v.Censored : "";
+
+    // ─── تَسمِياتٌ مِن القامُوس، ومَعجَمٌ مُغلَقٌ لِلرُموز ──────────────
+    //
+    // ورَمزٌ غَير مَعروفٍ يُرَدُّ إلى `null` لا إلى مِفتاحٍ يُطبَع خاماً.
+    static string? ErrorKeyFor(string? code) => code switch
+    {
+        "provider_unknown"        => "studio.providers.err_provider_unknown",
+        "provider_not_bindable"   => "studio.providers.err_provider_not_bindable",
+        "capability_unknown"      => "studio.providers.err_capability_unknown",
+        "binding_not_found"       => "studio.providers.err_binding_not_found",
+        ProviderValueValidator.Required        => "studio.providers.err_field_required",
+        ProviderValueValidator.NotHttps        => "studio.providers.err_not_https",
+        ProviderValueValidator.HostNotAllowed  => "studio.providers.err_host_not_allowed",
+        ProviderValueValidator.PatternMismatch => "studio.providers.err_pattern",
+        _                         => null,
+    };
+
+    static string CapabilityLabelKey(string capability) => capability switch
+    {
+        ProviderCapabilities.Payments => "studio.providers.cap_payments",
+        _ => "studio.providers.provider_label",
+    };
+}

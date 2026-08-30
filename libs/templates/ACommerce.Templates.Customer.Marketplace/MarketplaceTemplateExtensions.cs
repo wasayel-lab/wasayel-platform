@@ -3163,6 +3163,29 @@ public static class MarketplaceTemplateExtensions
         // مُخرَج 403 مُوَحَّد بَدَلاً مِن تَكرارِه في كُلّ endpoint.
         static IResult Forbidden() => Results.StatusCode(StatusCodes.Status403Forbidden);
 
+        // ─── أَوَّلُ كاتِبٍ لِـ`Tenant.PaymentProviderConfigured` ─────────
+        //
+        // كانَ الحَقلُ بِصِفرِ كاتِبٍ وقارِئَين مُنذُ ‏ADR-003 — مُستَهلِكٌ
+        // مَبنِيٌّ يَنتَظِرُ كاتِبَه. والكاتِبُ **لَيسَ زِرَّ إدارَةٍ
+        // يَقلِبُه**، بَل سُؤالٌ يُجابُ مِن الرَبطِ نَفسِه: أَيُوجَدُ
+        // رابِطُ دَفعٍ مَملوءٌ يَنقُرُه الزَبون؟ فَرَبطٌ فَعّالٌ بِلا
+        // رابِطٍ **لا يَقلِبُه**، وسَحبُ الرَبطِ يُعيدُه `false` فَتَختَفي
+        // الباقاتُ المَدفوعَةُ في نَفسِ اللَحظَة.
+        static async Task SyncPaymentProviderFlagAsync(
+            IDocumentStore store, Services.TenantProviderService providers, string slug)
+        {
+            var collects = (await providers.ForAsync(slug)).CollectsMoney;
+
+            await using var s = store.LightweightSession();
+            var t = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+            if (t is null || t.PaymentProviderConfigured == collects) return;
+
+            t.PaymentProviderConfigured = collects;
+            s.Store(t);
+            await s.SaveChangesAsync();
+        }
+
+
         // سَطر audit واحِد لِكُلّ admin POST. الفاعِل قَد يَكون مالِك Studio
         // أَو مُستَخدِم داخِل المَتجَر بِـ tenant.manage — نَفس الشَّيء في الـ
         // log (إجراء إداريّ). الـ before/after للـ form يُجَمَّع كَ key=value
@@ -3491,6 +3514,83 @@ public static class MarketplaceTemplateExtensions
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
             return Results.Redirect(
                 $"/studio/apps/{slug}/keys" + (ok ? "" : "?err=key_not_found"));
+        }).DisableAntiforgery();
+
+
+        // ─── تَكامُلاتُ المَتجَر — رَبطُ مُزَوِّدٍ وسَحبُه ────────────────
+        //
+        // <b>يُبلَغ بِالنَقر</b> (القاعِدَة ١٢):
+        //   /studio ← بِطاقَةُ التَطبيق ← «التَكامُلات» ← اختَر مُزَوِّداً ← رَبط.
+        //
+        // <b>والحارِسُ يَسبِقُ قِراءَةَ أَوَّلِ حَقل</b> (القاعِدَة ٦):
+        // التَخويلُ قَبلَ التَحَقُّق، وإلّا صارَ خَطَأُ التَحَقُّقِ قِناعاً
+        // لِلثَغرَة. و`TenantAdminGuard` لا `StudioOwnsAsync` لِأَنّ
+        // التَكامُلَ إعدادُ مَتجَرٍ يُدارُ أَيضاً مِن داخِلِه بِصَلاحِيَّةِ
+        // `tenant.manage`.
+        //
+        // <b>و`platform_key` يُعلِنُ حارِسَه فَوقَ الحارِس</b>: مُزَوِّدٌ
+        // يَصرِفُ مِن جَيبِنا لا يَربِطُه صاحِبُ مَتجَر، والسُؤالُ يَقَع
+        // قَبلَ الرَدّ.
+        //
+        // والقَرارُ نَفسُه في `ProviderBindSurface` — نَظيرُ
+        // `ApiKeySurface` حَرفاً: جِسمُ النُقطَةِ لا يُختَبَر.
+        app.MapPost("/studio/apps/{slug}/providers/bind", async (
+            string slug, HttpRequest req, IDocumentStore store,
+            Services.Incubator.StudioAuth auth,
+            Services.TenantProviderService providers,
+            Services.Audit.AuditWriter audit) =>
+        {
+            if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
+                return Results.Redirect("/studio");
+
+            var read = Services.Providers.ProviderBindSurface.FromForm(req);
+            if (read.NeedsPlatformAdmin &&
+                !(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
+                return Forbidden();
+            if (read.RefusalCode is not null)
+                return Results.Redirect($"/studio/apps/{slug}/providers?err={read.RefusalCode}");
+
+            var before = Services.Providers.ProviderBindSurface.AuditLine(
+                await providers.CurrentAsync(slug, read.Capability));
+            var bound = await providers.BindAsync(
+                slug, read.Capability, read.ProviderSlug, read.Values,
+                auth.UserId?.ToString() ?? "");
+            await SyncPaymentProviderFlagAsync(store, providers, slug);
+
+            await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
+                "provider.bind", "provider", read.Capability, note: read.ProviderSlug,
+                ip: req.HttpContext.Connection.RemoteIpAddress?.ToString(),
+                before: before,
+                after: Services.Providers.ProviderBindSurface.AuditLine(bound));
+
+            return Results.Redirect($"/studio/apps/{slug}/providers?bound={read.Capability}");
+        }).DisableAntiforgery();
+
+        // السَحبُ يُوقِفُ **الآن** — ولِذلك لا يَمُرّ بِدَورَةِ اعتِماد.
+        app.MapPost("/studio/apps/{slug}/providers/{capability}/revoke", async (
+            string slug, string capability, HttpRequest req, IDocumentStore store,
+            Services.Incubator.StudioAuth auth,
+            Services.TenantProviderService providers,
+            Services.Audit.AuditWriter audit) =>
+        {
+            if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
+                return Results.Redirect("/studio");
+
+            var before = Services.Providers.ProviderBindSurface.AuditLine(
+                await providers.CurrentAsync(slug, capability));
+            var revoked = await providers.RevokeAsync(slug, capability);
+            if (revoked is null)
+                return Results.Redirect($"/studio/apps/{slug}/providers?err=binding_not_found");
+
+            await SyncPaymentProviderFlagAsync(store, providers, slug);
+
+            await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
+                "provider.revoke", "provider", capability, note: revoked.ProviderSlug,
+                ip: req.HttpContext.Connection.RemoteIpAddress?.ToString(),
+                before: before,
+                after: Services.Providers.ProviderBindSurface.AuditLine(revoked));
+
+            return Results.Redirect($"/studio/apps/{slug}/providers?revoked={capability}");
         }).DisableAntiforgery();
 
         // ─── سَطحُ الـAPI ────────────────────────────────────────────────
