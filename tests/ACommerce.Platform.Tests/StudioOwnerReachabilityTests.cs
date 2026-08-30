@@ -151,6 +151,70 @@ public class StudioOwnerReachabilityTests
             "النُقطَةُ تَقرَأُ نَصَّ تَعريفٍ مِن الطَلَب — وذاكَ حَقنُ ثيمٍ بِصِياغَةِ طَلَب.");
     }
 
+    // ═══ ٣) باقاتُ المَتجَر — وَثيقَةٌ بِصِفرِ كاتِبٍ في المُستَودَع ════
+    //
+    // **المَقيس**: ‏`TenantPlanDefinition` مُعَرَّفَةٌ، و`TenantPlanService`
+    // تَرِثُ `Propose/Decide`، و`Plans.razor` تَعرِضُها،
+    // و`TenantExportLedger` يُصَدِّرُها — **ولا نُقطَةَ `POST` ولا
+    // صَفحَةَ Razor تَكتُبُ واحِدَة**. فَالتاجِرُ لا يُؤَلِّفُ باقَةً ولا
+    // يُسَعِّرُها، ويَرى زُوّارُه كاتالوجَ المَنَصَّةِ وَحدَه. وذلكَ
+    // لَيسَ عَمَلاً يَدَوِيّاً بَل **مُتَعَذِّراً**.
+
+    /// <summary><b>شاشَةُ الباقاتِ في الاستوديو تُبلَغُ بِنَقرَة، ولَها
+    /// نُقطَةٌ تَكتُب.</b></summary>
+    [Fact]
+    public void The_store_plans_screen_is_reachable_by_a_click_and_has_a_writing_endpoint()
+    {
+        Assert.Contains("/studio/apps/{Slug}/plans", Board(), StringComparison.Ordinal);
+
+        var page = Read($"{TemplateRoot}/Components/Pages/StudioAppPlans.razor");
+        Assert.Contains("@page \"/studio/apps/{slug}/plans\"", page, StringComparison.Ordinal);
+        Assert.Contains("/studio/apps/{Slug}/plans/save", page, StringComparison.Ordinal);
+        Assert.Contains("method=\"post\"", page, StringComparison.Ordinal);
+
+        var endpoints = Endpoints();
+        Assert.Contains("MapPost(\"/studio/apps/{slug}/plans/save\"", endpoints, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <para><b>والوَثيقَةُ صارَ لَها كاتِبٌ فِعليّ</b> — لا تَعريفٌ
+    /// بِلا مُستَهلِك (القاعِدَة ١). والفَحصُ عَلى الخِدمَةِ نَفسِها
+    /// لِأَنّ النُقطَةَ قَد تُعادُ تَسمِيَتُها ولا يُعادُ الكاتِب.</para>
+    /// </summary>
+    [Fact]
+    public void The_tenant_plan_definition_document_finally_has_a_writer()
+    {
+        var service = Read($"{TemplateRoot}/Services/TenantPlanService.cs");
+        Assert.Contains("AuthorAsync", service, StringComparison.Ordinal);
+
+        var endpoints = Endpoints();
+        var start = endpoints.IndexOf("MapPost(\"/studio/apps/{slug}/plans/save\"", StringComparison.Ordinal);
+        Assert.True(start > 0, "نُقطَةُ حِفظِ الباقاتِ غَير مَوجودَة — الأَداةُ عَمياء.");
+        var body = endpoints.Substring(start, Math.Min(1800, endpoints.Length - start));
+
+        Assert.True(body.Contains("StudioOwnsAsync", StringComparison.Ordinal),
+            "نُقطَةُ الباقاتِ بِلا حارِسِ مِلكِيَّة.");
+        Assert.True(body.Contains("AuthorAsync", StringComparison.Ordinal),
+            "النُقطَةُ لا تَمُرُّ بِمَسارِ الكِتابَةِ المُصادَقِ عَلَيه.");
+    }
+
+    /// <summary>
+    /// <para><b>وما يُقرَأُ مِن الاستِمارَةِ يُبنى بِدالَّةٍ
+    /// نَقِيَّة</b> — فَالتَحويلُ مِن سَلاسِلِ نَموذَجٍ إلى أَرقامٍ
+    /// يُقاسُ بِلا طَلَبِ HTTP، والباقَةُ <b>مالٌ وحِصَّة</b> لا
+    /// تَسمِيَةٌ ولَون.</para>
+    /// </summary>
+    [Fact]
+    public void The_plan_form_is_read_by_a_pure_function_that_is_measured_on_its_own()
+    {
+        var surface = Read($"{TemplateRoot}/Services/Subscriptions/TenantPlanAuthoring.cs");
+        Assert.Contains("ReadDefinition", surface, StringComparison.Ordinal);
+
+        // ولا `HttpRequest` في مِلَفِّ القَرار — الدالَّةُ تَأخُذُ سَلاسِلَ.
+        Assert.False(surface.Contains("HttpRequest", StringComparison.Ordinal),
+            "دالَّةُ القَرارِ تَعرِفُ HTTP — فَلا تُقاسُ بِلا طَلَب.");
+    }
+
     // ═══ المَفاتيحُ الَّتي تَقرَؤُها الصُفوفُ الجَديدَة ═════════════════
 
     /// <summary><b>ولا نَصَّ خارِجَ القامُوس</b> (القاعِدَة ١١) —
