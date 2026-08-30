@@ -154,9 +154,22 @@ public static class SeoDocuments
         foreach (var p in DisallowedPrefixes)
             sb.Append("Disallow: ").Append(p).Append('\n');
 
-        // صَفَحات داخِل المُستَأجِر — الـ slug مُتَغَيِّر فَنَستَخدِم wildcard.
+        // صَفَحات داخِل المُستَأجِر — تُكتَب **بِالشَكلَين مَعاً**.
+        //
+        // **العِلَّةُ (‏ADR-022)**: الزاحِفُ يُطابِقُ القاعِدَةَ على
+        // **المَسارِ الَّذي يَراه**، لا على المَسارِ الَّذي يَصِلُ
+        // الخادِمَ بَعدَ حَقنِ السلاج. فَتَحتَ `{slug}.wasayel.tld`
+        // يَرى الزاحِفُ `/login` لا `/ashare/login`، و
+        // `Disallow: /*/login` **لا يُطابِقُها** — فَتُفتَحُ
+        // صَفَحاتُ الدُخولِ والسَلَّةِ والدَفعِ لِلزَحفِ **بِلا أَن
+        // يَحمَرَّ شَيء**. والسَطرانِ مَعاً يُغَطِّيانِ المِحوَرَين،
+        // وزِيادَةُ `/{p}` غَيرُ ضارَّةٍ في وَضعِ المَسار: لا صَفحَةَ
+        // عامَّةً بِهذِه الأَسماءِ على الجَذر.
         foreach (var p in DisallowedTenantPaths)
+        {
             sb.Append("Disallow: /*/").Append(p).Append('\n');
+            sb.Append("Disallow: /").Append(p).Append('\n');
+        }
 
         if (!string.IsNullOrEmpty(b))
             sb.Append('\n').Append("Sitemap: ").Append(b).Append("/sitemap.xml").Append('\n');
