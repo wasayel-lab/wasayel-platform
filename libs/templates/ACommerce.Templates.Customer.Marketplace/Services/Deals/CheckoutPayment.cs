@@ -3,10 +3,13 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Deals;
 // ═══ طَريقَةُ الدَفعِ عِندَ إتمامِ الشِراء — مَعجَمٌ مُغلَقٌ بِتَعريفٍ واحِد ══
 //
 // **العِلَّةُ المَقيسَة (‏2026-08-30)**: جِسمُ
-// `POST /{slug}/checkout/submit` كانَ يَشتَرِط `if (pay != "cod")` قَبلَ
+// `POST /{slug}/checkout/submit` كانَ يَشتَرِط `pay != «cod»` قَبلَ
 // نِداءِ مُزَوِّدِ الدَفع، **والاستِمارَةُ تُرسِل `card` أَو `cash`**
-// (‏`CheckoutPage.razor` السَطران ‏92 و‏99). والرَمزُ `"cod"` وَرَدَ
+// (‏`CheckoutPage.razor` السَطران ‏92 و‏99). والرَمزُ «cod» وَرَدَ
 // **مَرَّةً واحِدَةً في المُستَودَعِ كُلِّه**: في ذلكَ الشَرطِ نَفسِه.
+// (وهُوَ مَكتوبٌ هُنا بِعَلامَتَي اقتِباسٍ عَرَبِيَّتَينِ عَمداً:
+// الفاحِصُ يَمسَحُ التَعليقاتِ أَيضاً، وسِجِلُّ العِلَّةِ لا يُعيدُ
+// زَرعَ الرَمزِ الَّذي يَمنَعُه.)
 // فَالشَرطُ **لا يَكذِبُ أَبَداً** — أَي أَنّ كُلَّ طَلَبٍ يَستَدعي
 // `AuthorizeAsync`، **والدَفعُ عِندَ الاستِلامِ أَوَّلُها**؛ وفي الإنتاجِ
 // يَرُدُّ `UnavailablePaymentProvider` بِـ`Failed` فَيُعَلَّق
@@ -112,4 +115,20 @@ public static class CheckoutPaymentPolicy
     /// دائِماً.</summary>
     public static bool CallsProvider(string method)
         => string.Equals(method, CheckoutPayMethods.Card, StringComparison.Ordinal);
+
+    /// <summary>
+    /// <para><b>مَسارُ العَودَةِ عِندَ الرَفض</b> — دالَّةٌ نَقِيَّةٌ
+    /// تُعطي المَسارَ النِسبِيَّ لِخُطوَةِ الدَفعِ حامِلاً ما مَلَأَه
+    /// المُشتَري، فَلا يُعيد كِتابَةَ عُنوانِه.</para>
+    ///
+    /// <para><b>ولِماذا هُنا لا في جِسمِ النُقطَة</b>: بِناءُ عُنوانٍ
+    /// بِأَربَعَةِ مُعامِلاتٍ حِسابٌ يُختَبَر، وجِسمُ النُقطَةِ يَحمِلُ
+    /// نِداءً ورَدّاً لا حِساباً — وذاكَ عَقدُ
+    /// <c>EndpointBodyBleedTests</c>.</para>
+    /// </summary>
+    public static string RefusalPath(string refusal, string name, string phone, string addr)
+        => $"checkout?step=2&err={Uri.EscapeDataString(refusal)}"
+         + $"&name={Uri.EscapeDataString(name)}"
+         + $"&phone={Uri.EscapeDataString(phone)}"
+         + $"&addr={Uri.EscapeDataString(addr)}";
 }

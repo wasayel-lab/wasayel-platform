@@ -2802,6 +2802,21 @@ public static class MarketplaceTemplateExtensions
             if (cart is null || cart.Items.Count == 0) return Results.Redirect(Link(req, slug, "cart"));
 
             var tenant = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
+
+            // ─── طَريقَةُ الدَفع — قَرارٌ واحِدٌ تَقرَؤُه الشاشَةُ أَيضاً ──
+            // كانَ الشَرطُ هُنا `pay != «cod»` والاستِمارَةُ تُرسِل
+            // `card|cash` — فَلا يَكذِبُ أَبَداً، وكُلُّ طَلَبٍ يَستَدعي
+            // المُزَوِّد، **والدَفعُ عِندَ الاستِلامِ أَوَّلُها**.
+            //
+            // وبِطاقَةٌ في مَتجَرٍ لا يَقبِضُ **تُرَدُّ ولا تُبَدَّلُ
+            // صامِتَةً**: تَحويلُ طَلَبِ بِطاقَةٍ إلى نَقدٍ بِلا كَلِمَةٍ
+            // تَبديلُ عَقدٍ مِن تَحتِ المُشتَري. والسَلَّةُ تَبقى.
+            var (payMethod, payRefusal) = Services.Deals.CheckoutPaymentPolicy.Decide(
+                pay, tenant?.PaymentProviderConfigured ?? false);
+            if (payRefusal is not null)
+                return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
+                    .RefusalPath(payRefusal, name, phone, addr)));
+
             var pattern = PatternFromTenant(tenant);
             Guid firstDealId = Guid.Empty;
             foreach (var item in cart.Items)
@@ -2819,7 +2834,9 @@ public static class MarketplaceTemplateExtensions
                         ["qty"] = item.Quantity.ToString(),
                         ["addr"] = addr,
                         ["phone"] = phone,
-                        ["pay_method"] = pay
+                        // المُطَبَّعَةُ لا الخام — فَما يُقرَأُ مِن
+                        // الصَفقَةِ بَعدَ سَنَةٍ قيمَةٌ مِن المَعجَم.
+                        ["pay_method"] = payMethod
                     });
                 if (firstDealId == Guid.Empty) firstDealId = deal.Id;
                 if (listing.Attributes.TryGetValue("owner_id", out var oid))
@@ -2827,10 +2844,12 @@ public static class MarketplaceTemplateExtensions
 
                 // اِحجِز المَبلَغ عَبر مُزَوِّد الدَّفع (Authorize، لا
                 // capture بَعد — يَتِمّ الـ capture عِندَ تَأكيد البائِع).
-                // COD (دَفع عِندَ التَّسَلُّم) لا يَستَدعي المُزَوِّد.
+                // **والنَقدُ عِندَ الاستِلامِ لا يَستَدعي المُزَوِّد** —
+                // والقَرارُ مِن الدالَّةِ النَقِيَّةِ لا مِن حَرفِيَّةٍ
+                // في الجِسم.
                 // idempotency-key بِـ dealId يَمنَع تَكرار الـ authorize
                 // لَو أَعادَ المُستَخدِم submit بِنَفس النَّموذَج.
-                if (pay != "cod")
+                if (Services.Deals.CheckoutPaymentPolicy.CallsProvider(payMethod))
                 {
                     try
                     {

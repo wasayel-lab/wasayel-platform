@@ -1,10 +1,12 @@
 @page "/{slug}/checkout"
 @page "/{slug}/r/{role}/checkout"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
 @inject L L
 @using ACommerce.Kit.Cart
+@using ACommerce.Templates.Customer.Marketplace.Services.Deals
 
 @*
     Checkout مُتَعَدِّد الخُطوات — تَجرِبَة Order.V2:
@@ -87,16 +89,34 @@
                 <AcCard>
                     <ChildContent>
                         <h3 style="margin-top:0;">@L.Markup("checkout.payment.title")</h3>
+                        @if (ErrorMessage is { } err)
+                        {
+                            <AcAlert Variant="warning" Message="@err" />
+                        }
+                        @*
+                            **البِطاقَةُ لا تُعرَض في مَتجَرٍ لا يَقبِض** —
+                            نَفسُ ما تَفعَلُه `Plans.razor` بِـ
+                            `PlanPurchasePolicy.Visible` حَرفاً. وكانَت
+                            تُعرَض **مُؤَشَّرَةً افتِراضِيّاً** بِلا
+                            مُزَوِّدٍ خَلفَها، فَيَنتَهي الطَلَبُ بِـ
+                            `payment_status = Failed` عَلى صَفقَةٍ لَم
+                            يُطلَب فيها دَفعٌ أَصلاً.
+                        *@
                         <div class="acm-radio-cards">
+                            @if (CardOffered)
+                            {
+                                <label class="acm-radio-card">
+                                    <input type="radio" name="pay" value="@CheckoutPayMethods.Card" required
+                                           checked="@(EffectivePay == CheckoutPayMethods.Card)" />
+                                    <span class="acm-radio-card-body">
+                                        <strong><AcIcon Name="credit-card" Size="16" /> @L.Markup("checkout.payment.card")</strong>
+                                        <span>@L.Markup("checkout.payment.card_hint")</span>
+                                    </span>
+                                </label>
+                            }
                             <label class="acm-radio-card">
-                                <input type="radio" name="pay" value="card" required checked="@(Pay != "cash")" />
-                                <span class="acm-radio-card-body">
-                                    <strong><AcIcon Name="credit-card" Size="16" /> @L.Markup("checkout.payment.card")</strong>
-                                    <span>@L.Markup("checkout.payment.card_hint")</span>
-                                </span>
-                            </label>
-                            <label class="acm-radio-card">
-                                <input type="radio" name="pay" value="cash" checked="@(Pay == "cash")" />
+                                <input type="radio" name="pay" value="@CheckoutPayMethods.CashOnDelivery" required
+                                       checked="@(EffectivePay == CheckoutPayMethods.CashOnDelivery)" />
                                 <span class="acm-radio-card-body">
                                     <strong><AcIcon Name="cash" Size="16" /> @L.Markup("checkout.payment.cash")</strong>
                                     <span>@L.Markup("checkout.payment.cash_hint")</span>
@@ -133,7 +153,7 @@
                     <div style="font-size:13px;color:var(--ac-text-muted);">
                         <strong>@L.Markup("checkout.summary.ship_to")</strong> @Name · @Phone<br />
                         @Addr<br />
-                        <strong>@L.Markup("checkout.summary.pay_with")</strong> @(Pay == "cash" ? L["checkout.payment.cash"] : L["checkout.payment.card_short"])
+                        <strong>@L.Markup("checkout.summary.pay_with")</strong> @(EffectivePay == CheckoutPayMethods.Card ? L["checkout.payment.card_short"] : L["checkout.payment.cash"])
                     </div>
                 </ChildContent>
             </AcCard>
@@ -141,7 +161,7 @@
                 <input type="hidden" name="name"  value="@Name" />
                 <input type="hidden" name="phone" value="@Phone" />
                 <input type="hidden" name="addr"  value="@Addr" />
-                <input type="hidden" name="pay"   value="@Pay" />
+                <input type="hidden" name="pay"   value="@EffectivePay" />
                 <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="@L["checkout.action.submit"]" />
             </form>
         }
@@ -155,8 +175,25 @@
     [SupplyParameterFromQuery] public string Name { get; set; } = "";
     [SupplyParameterFromQuery] public string Phone { get; set; } = "";
     [SupplyParameterFromQuery] public string Addr { get; set; } = "";
-    [SupplyParameterFromQuery] public string Pay { get; set; } = "card";
+    [SupplyParameterFromQuery] public string Pay { get; set; } = CheckoutPayMethods.Card;
+
+    /// <summary>رَمزُ الرَفضِ المُعادُ مِن النُقطَة — <b>يُقرَأُ ولا
+    /// يُبتلَع</b>. نَفسُ شَكلِ <c>Plans.razor.Err</c>.</summary>
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+
     Cart? cart;
+    bool CardOffered;
+
+    /// <summary><b>طَريقَةُ الدَفعِ الَّتي سَتُرسَل</b> — مِن الدالَّةِ
+    /// النَقِيَّةِ نَفسِها الَّتي تَقرَؤُها النُقطَة، فَلا تَعرِضُ
+    /// الشاشَةُ ما سَتَرُدُّه.</summary>
+    string EffectivePay => CheckoutPaymentPolicy.Decide(Pay, CardOffered).Method;
+
+    string? ErrorMessage => Err switch
+    {
+        CheckoutPayMethods.CardUnavailable => L["checkout.payment.err_card_unavailable"],
+        _ => null
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -164,6 +201,8 @@
         if (!Auth.IsAuthenticated) return;
         if (Step < 1 || Step > 3) Step = 1;
         cart = await Accounts.CartAsync(Slug, Auth.UserId!.Value);
+        var tenant = await Tenants.FindAsync(Slug);
+        CardOffered = CheckoutPaymentPolicy.CardOffered(tenant?.PaymentProviderConfigured ?? false);
         if (Auth.UserName is { } un && string.IsNullOrEmpty(Name)) Name = un;
     }
 }

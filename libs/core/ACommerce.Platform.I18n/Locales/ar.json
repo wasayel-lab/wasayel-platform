@@ -1218,6 +1218,7 @@
   "checkout.payment.card_short": "بِطاقَة",
   "checkout.payment.cash": "نَقد عِندَ التَّسليم",
   "checkout.payment.cash_hint": "اِدفَع عِندَما يَصِل طَلَبك",
+  "checkout.payment.err_card_unavailable": "الدَفعُ بِالبِطاقَةِ غَيرُ مُتاحٍ في هذا المَتجَر — اختَر الدَفعَ عِندَ الاستِلام.",
   "checkout.payment.title": "طَريقَة الدَّفع",
   "checkout.step.address": "العُنوان",
   "checkout.step.confirm": "تَأكيد",

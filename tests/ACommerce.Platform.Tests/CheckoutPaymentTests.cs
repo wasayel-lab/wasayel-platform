@@ -124,17 +124,46 @@ public class CheckoutPaymentTests
             + "يَقودُ إلى فَشَلٍ مُبتلَع.");
     }
 
-    /// <summary><b>والرَفضُ يُرى.</b> رَمزُ الخَرقِ يُقرَأُ في الشاشَةِ
+    /// <summary>
+    /// <para><b>والرَفضُ يُرى.</b> رَمزُ الخَرقِ يُقرَأُ في الشاشَةِ
     /// لِيُختارَ نَصُّ القامُوس — نَفسُ سابِقَةِ
-    /// <c>StudioBilling.razor</c>.</summary>
+    /// <c>StudioBilling.razor</c>.</para>
+    ///
+    /// <para><b>ويُبحَثُ عَن الثابِتِ لا عَن قيمَتِه</b>: الشاشَةُ
+    /// الَّتي تَكتُب <c>"pay_card_unavailable"</c> حَرفِيّاً هي
+    /// بِعَينِها المَعجَمُ المُغلَقُ ذو الطَرَفَينِ الَّذي كَتَبَ هذا
+    /// المِلَفّ. فَالمَطلوبُ أَن تَقرَأَ <b>الثابِت</b>.</para>
+    /// </summary>
     [Fact]
     public void A_refused_card_choice_must_say_so_on_screen_and_not_be_swallowed()
     {
         var razor = CheckoutRazor();
 
-        Assert.True(razor.Contains(CheckoutPayMethods.CardUnavailable, StringComparison.Ordinal),
+        Assert.True(razor.Contains(nameof(CheckoutPayMethods.CardUnavailable), StringComparison.Ordinal),
             "الشاشَةُ لا تَقرَأُ رَمزَ الرَفض — فَالنُقطَةُ تَرُدُّ "
             + "والمُستَخدِمُ يَرى الصَفحَةَ نَفسَها بِلا كَلِمَة.");
+
+        Assert.False(razor.Contains($"\"{CheckoutPayMethods.CardUnavailable}\"", StringComparison.Ordinal),
+            "الشاشَةُ تَكتُبُ الرَمزَ حَرفِيّاً — وذاكَ طَرَفٌ يَنجَرِف.");
+    }
+
+    /// <summary><b>ومَسارُ العَودَةِ يَحمِلُ ما مَلَأَه المُشتَري</b> —
+    /// فَلا يُعيدُ كِتابَةَ عُنوانِه بَعدَ رَفضٍ لَيسَ مِن
+    /// صُنعِه.</summary>
+    [Fact]
+    public void The_refusal_path_carries_back_everything_the_buyer_typed()
+    {
+        var path = CheckoutPaymentPolicy.RefusalPath(
+            CheckoutPayMethods.CardUnavailable, "أَبو خالِد", "+966500000000", "الرياض، حَيّ النَخيل");
+
+        Assert.StartsWith("checkout?step=2&", path, StringComparison.Ordinal);
+        Assert.Contains($"err={CheckoutPayMethods.CardUnavailable}", path, StringComparison.Ordinal);
+        Assert.Contains("name=", path, StringComparison.Ordinal);
+        Assert.Contains("phone=", path, StringComparison.Ordinal);
+        Assert.Contains("addr=", path, StringComparison.Ordinal);
+
+        // مُرَمَّزٌ لا خام — فاصِلَةٌ أَو مِسافَةٌ في العُنوانِ لا تَكسِرُه.
+        Assert.DoesNotContain(" ", path, StringComparison.Ordinal);
     }
 
     // ═══ ٣) الجَدوَلُ النَقِيّ — بِطَرَفَيه ═════════════════════════════
