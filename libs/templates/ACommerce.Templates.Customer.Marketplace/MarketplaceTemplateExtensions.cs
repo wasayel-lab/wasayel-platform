@@ -713,10 +713,12 @@ public static class MarketplaceTemplateExtensions
             var configured = (await tenants.FindAsync(slug))?.PaymentProviderConfigured ?? false;
 
             await using var s = store.LightweightSession(slug);
-            var refusal = await Services.Subscriptions.PlanSubscribeService.SubscribeAsync(
+            var outcome = await Services.Subscriptions.PlanSubscribeService.SubscribeAsync(
                 s, planId, userId, configured, DateTime.UtcNow, Guid.NewGuid());
-            if (refusal is not null)
-                return Results.Redirect(Link(req, slug, $"plans?err={refusal}"));
+            if (outcome.Refusal is not null)
+                return Results.Redirect(Link(req, slug, $"plans?err={outcome.Refusal}"));
+            if (outcome.PayAtProvider)
+                return Results.Redirect(Link(req, slug, $"plans/{planId}/pay"));
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"me"));
         }).DisableAntiforgery()

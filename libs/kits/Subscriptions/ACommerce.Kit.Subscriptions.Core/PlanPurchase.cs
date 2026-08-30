@@ -53,6 +53,48 @@ public static class PlanPurchasePolicy
     /// مُتَساوِيَة — فَمَتجَرٌ كُلُّ باقاتِه مَجّانِيَّةٌ لا يَمُرّ
     /// بِفَرزٍ ولا نَسخ، ولا تَتَغَيَّر صَفحَتُه بايتاً.</para>
     /// </summary>
+    // ─── المَسار — ثَلاثَةُ مَخارِجَ لا اثنان ─────────────────────────
+    //
+    // <b>ولِماذا مَخرَجٌ ثالِث</b>: `Refuse` تَقول «مَمنوع» أَو «مَسموح»،
+    // و«مَسموح» في مَسارِ الاشتِراكِ تَعني <b>مَنحاً ذاتِيّاً بِلا
+    // قَبض</b>. وذلكَ صَحيحٌ لِلمَجّانِيَّةِ وحدَها. فَيَومَ صارَ
+    // لِلمَتجَرِ مُزَوِّدُ دَفع، «مَسموح» لِباقَةٍ بِسِعرٍ يَجِب أَن
+    // تَعني <b>«ادفَع عِندَ مُزَوِّدِه»</b> لا «خُذها».
+    //
+    // <b>وهذا هُوَ بِعَينِه العَطَبُ الَّذي وَثَّقَه ADR-002</b>: النُقطَةُ
+    // كانَت تُحَمِّلُ الباقَةَ <b>وتَتَجاهَل `Price`</b> فَتَمنَحُ
+    // الحِصَّةَ بِنَقرَة. وفَتحُ الحَقلِ `PaymentProviderConfigured`
+    // بِكاتِبٍ حَقيقيٍّ كانَ سَيُعيدُ العَطَبَ مِن بابٍ آخَر لَولا هذا
+    // المَخرَج.
+    //
+    // <b>والتَكافُؤُ الصِفريّ</b>: عِندَ `paymentProviderConfigured ==
+    // false` — وهو حالُ كُلّ مَتجَرٍ قَبلَ هذِه المَوجَة — الجَوابُ
+    // <b>مُطابِقٌ لِـ`Refuse` حَرفاً</b>، ومَقيسٌ بِاختِبار.
+    public enum PlanPurchaseRoute
+    {
+        /// <summary>تُمنَح ذاتِيّاً — المَجّانِيَّةُ وَحدَها.</summary>
+        Grant,
+
+        /// <summary>تُرَدّ بِرَمزٍ مِن المَعجَمِ المُغلَق.</summary>
+        Refuse,
+
+        /// <summary>تُدفَع عِندَ مُزَوِّدِ التاجِر — <b>ووَسايِل لَيسَت
+        /// في المَسار، بِالبِناءِ لا بِالنِيَّة</b>. ولا اشتِراكَ
+        /// يُفتَح هُنا: لا بُرهانَ دَفعٍ في هذا النَوع.</summary>
+        PayAtProvider,
+    }
+
+    public static (PlanPurchaseRoute Route, string? Refusal) Decide(
+        Plan? plan, bool paymentProviderConfigured)
+    {
+        if (plan is null) return (PlanPurchaseRoute.Refuse, PlanNotFound);
+        if (plan.Price <= 0m) return (PlanPurchaseRoute.Grant, null);
+
+        return paymentProviderConfigured
+            ? (PlanPurchaseRoute.PayAtProvider, null)
+            : (PlanPurchaseRoute.Refuse, PaidUnavailable);
+    }
+
     public static IReadOnlyList<Plan> Visible(
         IReadOnlyList<Plan> plans, bool paymentProviderConfigured)
     {

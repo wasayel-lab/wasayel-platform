@@ -1,0 +1,91 @@
+@page "/{slug}/plans/{planId}/pay"
+@page "/{slug}/r/{role}/plans/{planId}/pay"
+@inject AuthSession Auth
+@inject L L
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantPlanService PlanSvc
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantProviderService Providers
+@using ACommerce.Kit.Subscriptions
+@using ACommerce.Platform.Providers
+
+@*
+    صَفحَةُ الدَفع — **تُصَيِّرُ رابِطَ التاجِرِ المُخَزَّنَ، لا أَكثَر**.
+
+    الزَبونُ يَدفَعُ عِندَ مُزَوِّدِ التاجِرِ إلى حِسابِ التاجِر.
+    **ووَسايِل لَيسَت في المَسار — بِالبِناءِ لا بِالنِيَّة**: لا نُقطَةَ
+    تَقبِض، ولا حِسابَ وَسيطاً، ولا تَقسيمَ مَبلَغ. وذاكَ قَيدٌ
+    تَرخيصيٌّ لا ذَوق: جَمعُ المالِ نِيابَةً عَن الغَيرِ نَشاطُ
+    مُؤَسَّسَةِ دَفعٍ مُرَخَّصَة.
+
+    **ولا اشتِراكَ يُفتَحُ هُنا**: الرابِطُ المُستَضافُ لا يُعطي
+    بُرهانَ دَفع (لا سِرَّ وارِدٍ يُتَحَقَّقُ بِه ولا جَلبَ حالَة)،
+    ومَنحُ الحِصَّةِ بِلا بُرهانٍ هُوَ ثَغرَةُ ‏ADR-002 بِعَينِها.
+
+    ولا جَلسَةَ Marten هُنا: الصَفحَةُ تَحقِنُ خِدمَتَين.
+*@
+
+<div class="acs-page">
+    <h1 class="acm-wizard-title">@L.Markup("plans.pay.title")</h1>
+
+    @if (plan is null)
+    {
+        <AcAlert Variant="danger">@L["plans.list.err_paid_unavailable"]</AcAlert>
+        <a class="st-btn st-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, "plans")">@L.Markup("plans.pay.back")</a>
+    }
+    else if (!Auth.IsAuthenticated)
+    {
+        <a class="ac-login-cta ac-login-cta-block"
+           href="@AuthSession.LinkFor(Slug, Role, $"login?returnUrl=/{Slug}/plans")">@L.Markup("plans.card.login_cta")</a>
+    }
+    else if (link is null)
+    {
+        @* فَشَلٌ مُغلَق: بِلا رابِطٍ مَربوطٍ لا يُرسَم زِرٌّ يَقول
+           «قَريباً» — تُقالُ العِلَّةُ ويُعادُ إلى القائِمَة. *@
+        <AcAlert Variant="danger">@L["plans.list.err_paid_unavailable"]</AcAlert>
+        <a class="st-btn st-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, "plans")">@L.Markup("plans.pay.back")</a>
+    }
+    else
+    {
+        <AcCard>
+            <ChildContent>
+                <h3 style="margin:0 0 8px;">@plan.Name</h3>
+                <p style="color:var(--ac-primary);font-weight:700;font-size:1.5rem;">
+                    @plan.Price.ToString("N0")
+                    <span style="font-size:0.8rem;">@((MarkupString)Money.Unit(style: MoneyUnitStyle.Name)) / @(plan.DaysPeriod) @L.Markup("common.unit.day")</span>
+                </p>
+
+                <p style="font-size:14px;">@L.Markup("plans.pay.intro")</p>
+
+                @* رابِطٌ خارِجيٌّ صَريح: `rel="noopener noreferrer"`
+                   لِئَلّا تَملِكَ الصَفحَةُ الهَدَفُ نافِذَتَنا. والمُضيفُ
+                   مَفحوصٌ عِندَ الرَبطِ بِسياجِ مِلَفِّ المُزَوِّد. *@
+                <a class="ac-login-cta ac-login-cta-block" href="@link"
+                   target="_blank" rel="noopener noreferrer"
+                   style="display:block;text-align:center;padding:10px;background:var(--ac-primary);color:var(--ac-on-primary);
+                          border-radius:var(--ac-radius-sm);text-decoration:none;">@L.Markup("plans.pay.cta")</a>
+
+                <p style="color:var(--ac-muted);font-size:13px;margin:12px 0 0;">@L.Markup("plans.pay.notice")</p>
+            </ChildContent>
+        </AcCard>
+
+        <a class="st-btn st-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, "plans")">@L.Markup("plans.pay.back")</a>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string PlanId { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
+
+    Plan? plan;
+    string? link;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var all = await PlanSvc.VisiblePlansAsync(Slug);
+        plan = all.FirstOrDefault(p => p.Id == PlanId && p.Price > 0m);
+        if (plan is null) return;
+
+        var set = await Providers.ForAsync(Slug);
+        link = set.For(ProviderCapabilities.Payments)?.PaymentLink;
+    }
+}

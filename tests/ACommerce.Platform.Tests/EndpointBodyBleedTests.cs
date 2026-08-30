@@ -83,7 +83,14 @@ public class EndpointBodyBleedTests
         // `TenantProviderService`. فَما بَقِيَ في الجِسمَين: حارِسٌ،
         // وحارِسٌ ثانٍ لِـ`platform_key`، ونِداءٌ، وسَطرُ تَدقيق،
         // ورُدود — ‏12 سَطراً لِلنُقطَة، تَحتَ مُتَوَسِّطِ المِلَفّ.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2548),
+        //
+        // ‏2548 ← 2550 في نَفسِ اليَوم: سَطرانِ في نُقطَةِ الاشتِراك.
+        // ‏`SubscribeAsync` صارَت تُرجِع **ثَلاثَةَ مَخارِجَ لا
+        // اثنَين**، والثالِثُ تَحويلٌ إلى صَفحَةِ الدَفعِ عِندَ
+        // مُزَوِّدِ التاجِر. والقَرارُ نَفسُه في
+        // `PlanPurchasePolicy.Decide` — دالَّةٌ نَقِيَّةٌ لا سَطرَ لَها
+        // هُنا؛ والسَطرانِ تَحويلٌ لا حِساب.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2550),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -475,7 +482,7 @@ public class EndpointBodyBleedTests
     /// <para><b>وما بَقِيَ في الجِسمَينِ حِراسَةٌ لا حِساب</b>: حارِسُ
     /// المَتجَر، وحارِسُ المَنَصَّةِ فَوقَه لِـ<c>platform_key</c>
     /// (يَصرِفُ مِن جَيبِنا)، ونِداءٌ، وسَطرا تَدقيق، ورُدود.</para></remarks>
-    private const int PinnedTotal = 2789;
+    private const int PinnedTotal = 2791;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ
