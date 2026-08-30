@@ -31,3 +31,6 @@ appsettings.Local.json
 # حَزمَة المُستَثمِرين — بَيانات غُرفَة الصَفقَة، لا تُتتَبَّع
 docs/Wasayel_Package-*/
 docs/Wasayel_Package-*.zip
+
+# تَهيئَةُ بَوّابَةِ الإقلاعِ الإنتاجيّ — مَحَلِّيَّةٌ ولا تُتتَبَّع
+scripts/.prod-gate.env

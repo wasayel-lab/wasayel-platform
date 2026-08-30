@@ -1,0 +1,337 @@
+#!/usr/bin/env bash
+# Usage: ./scripts/verify-production-boot.sh [--keep-log]
+#
+# ═══════════════════════════════════════════════════════════════════════
+#  البَوّابَةُ الوَحيدَةُ الَّتي كانَت سَتُمسِك حادِثَةَ `BindAsync`
+# ═══════════════════════════════════════════════════════════════════════
+#
+#  **الكَلفَةُ الَّتي كَتَبَت هذا المِلَفّ (‏2026-08-30)**: دالَّةٌ اسمُها
+#  `BindAsync` في `TenantProviderService` اصطَدَمَت بِاصطِلاحِ الرَبطِ
+#  المُخَصَّصِ في minimal API لَدى ASP.NET Core — فَالإطارُ يَبحَثُ عَن
+#  `static BindAsync(HttpContext, ParameterInfo)` في كُلّ نَوعٍ يَظهَر
+#  وَسيطاً في لامدا، ووَجَدَ دالَّةً بِالاسمِ نَفسِه بِتَوقيعٍ مُختَلِف،
+#  فَرَمى عِندَ **بِناءِ خارِطَةِ المَسارات** — أَي قَبلَ أَوَّلِ طَلَب.
+#  والنَتيجَة: ‏503 عَلى كُلّ مَسار.
+#
+#  **وما لَم يُمسِكها**: ‏1967 اختِباراً أَخضَر، وCI أَخضَر، ونَشرٌ ناجِح.
+#  لِأَنّ الاختِباراتِ تَستَدعي الخِدَماتِ ولا تَبني خارِطَةَ المَسارات
+#  في وَضعِ Production، والـCI يَبني ولا يُقلِع، والنَشرُ يَدفَعُ ولا
+#  يَسأَل. **الشَيءُ الوَحيدُ الَّذي يَكشِفُها إقلاعٌ فِعليّ**.
+#
+#  **ولِماذا `Production` لا `Development`**: الفَرقُ لَيسَ تَجميلاً —
+#  حُرّاسُ الإقلاع (‏`AuthChannelSelection.AssertNoStubsOutsideDevelopment`
+#  و`PaymentProviderSelection.AssertNoStubsOutsideDevelopment`) لا تَعمَل
+#  إلّا خارِجَ التَطوير، وتَركيبُ الخِدَماتِ نَفسُه يَختَلِف (لا مُحاكي
+#  رَسائِل، ولا مُزَوِّدَ دَفعٍ مُحاكٍ). فَإقلاعُ التَطويرِ يَمُرّ
+#  بِرَسمٍ بَيانِيٍّ **آخَر** غَيرِ الَّذي يَعمَل في الـSpace.
+#
+# ─── ماذا تَفعَل ───────────────────────────────────────────────────────
+#   ١. تَنشُر بِـ`Release` بِنَفسِ أَمرِ الـ`Dockerfile` حَرفاً.
+#   ٢. تُقلِع الثُنائيَّ المَنشور بِـ`ASPNETCORE_ENVIRONMENT=Production`
+#      عَلى مَنفَذٍ حُرٍّ مَقيسٍ لا مَظنون.
+#   ٣. تَنتَظِر **بِمُهلَة** (‏`BOOT_TIMEOUT`، افتِراضُها 90 ثانِيَة).
+#      الانتِظارُ المَفتوح أَسوَأُ مِن الخَطَإِ الصَريح: عِندَ انقِضاءِ
+#      المُهلَة تُقتَل العَمَلِيَّةُ ويُطبَع السِجِلُّ كامِلاً ويُرجَع فَشَل.
+#   ٤. تَطلُب مَساراتٍ فِعليَّةً وتُقارِن الرَمزَ بِالمُتَوَقَّع.
+#   ٥. تَقتُل العَمَلِيَّةَ دائِماً (‏`trap`).
+#
+# ─── رُموزُ الخُروج — والفَرقُ الَّذي يَجعَلُ البَوّابَةَ ذاتَ قيمَة ───
+#   0 — عَبَرَت.
+#   1 — **كَسرٌ في الكود**: سَقَطَ الإقلاعُ أَو رَدَّ مَسارٌ رَمزاً غَيرَ
+#       المُتَوَقَّع. هذا ما يَجِبُ أَن يَمنَعَ الدَفع.
+#   2 — فَشِلَ البِناء/النَشر.
+#   3 — **تَهيئَةٌ ناقِصَةٌ عِندَ المُشَغِّل**: مُتَغَيِّرٌ غائِبٌ أَو
+#       أَداةٌ غائِبَة. لَيسَ حُكماً عَلى الكود، ولا يُقال عَنه «عَبَرَت»
+#       ولا «انكَسَرَ». الخَلطُ بَينَ ١ و٣ هُوَ ما يَجعَلُ بَوّابَةً
+#       بِلا قيمَة.
+#
+# ─── التَهيئَة ─────────────────────────────────────────────────────────
+#  المُتَغَيِّرُ الإلزامِيُّ الوَحيد: `ConnectionStrings__Postgres`
+#  (‏`HostingExtensions.AddPlatformHost` يَرمي «Postgres connection string
+#  missing» بِدونِه). يُقرَأ مِن البيئَة، أَو مِن مِلَفٍّ **اختِيارِيّ**
+#  غَيرِ مُتَتَبَّع: `scripts/.prod-gate.env` — يُصدَر بِـ`source` فَيَقبَل
+#  الإسنادَ المُباشِرَ أَو الإحالَةَ إلى مِلَفِّ سِرٍّ خارِجيّ:
+#
+#      # scripts/.prod-gate.env
+#      ConnectionStrings__Postgres="$(tr -d '\r\n' < /path/to/connection.txt)"
+#
+#  **ولا يُطبَع مُحتَوى السِرِّ أَبَداً** — لا في السِجِلّ ولا في الخَطَإ.
+#  المَطبوعُ عَن القاعِدَة: بَصمَةُ `sha256` مِن ثَمانِيَة أَحرُف لِمُضيفِها،
+#  ولاحِقَةُ المُضيف. يَكفيانِ لِلتَمييزِ بَينَ فَرعٍ وآخَر ولا يُفشِيانِ
+#  اسمَ المُضيفِ ولا كَلِمَةَ المُرور.
+#
+#  **وقاعِدَةُ الإنتاج لا يُقلَع عَلَيها**: الشَجَرَةُ هُنا تَعمَل عَلى
+#  **فَرعِ Neon** مَنسوخ (‏`CLAUDE.md` § بيئَة التَطوير). البَوّابَةُ
+#  تُقلِع وتَبذُر — أَي **تَكتُب** — فَتَوجيهُها إلى الإنتاج يُلَوِّثُه.
+#  البَصمَةُ المَطبوعَةُ هي ما يَجعَل هذا قابِلاً لِلمُراجَعَة.
+# ═══════════════════════════════════════════════════════════════════════
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$ROOT" || exit 3
+
+KEEP_LOG=0
+[ "${1:-}" = "--keep-log" ] && KEEP_LOG=1
+
+PROJECT="apps/V1.App/V1.App.csproj"
+ASSEMBLY="V1.App.dll"
+ENV_FILE="$SCRIPT_DIR/.prod-gate.env"
+BOOT_TIMEOUT="${BOOT_TIMEOUT:-90}"
+TENANT_SLUG="${GATE_TENANT_SLUG:-ashare}"
+
+WORK="$(mktemp -d)"
+PUBLISH_DIR="$WORK/publish"
+APP_LOG="$WORK/app.log"
+APP_PID=""
+
+# ─── التَنظيفُ يَقَعُ دائِماً ───────────────────────────────────────────
+# العَمَلِيَّةُ المُعَلَّقَةُ تَحجُز المَنفَذَ وتُفشِل الجَولَةَ التالِيَة
+# بِسَبَبٍ لا عَلاقَةَ لَه بِالكود — فَتَصيرُ البَوّابَةُ مَصدَرَ ضَجيج.
+cleanup() {
+    if [ -n "$APP_PID" ] && kill -0 "$APP_PID" 2>/dev/null; then
+        kill "$APP_PID" 2>/dev/null || true
+        for _ in 1 2 3 4 5 6 7 8 9 10; do
+            kill -0 "$APP_PID" 2>/dev/null || break
+            sleep 0.5
+        done
+        kill -9 "$APP_PID" 2>/dev/null || true
+    fi
+    if [ "$KEEP_LOG" = "1" ] && [ -f "$APP_LOG" ]; then
+        cp "$APP_LOG" "$ROOT/production-boot.log" 2>/dev/null \
+            && echo "السِجِلُّ مَحفوظٌ في: production-boot.log"
+    fi
+    rm -rf "$WORK"
+}
+trap cleanup EXIT INT TERM
+
+hr() { echo "───────────────────────────────────────────────────────────"; }
+say() { echo "  $*"; }
+
+# ═══ ٠) الأَدَواتُ تُفحَصُ بِنِداءٍ حَقيقيّ، لا يُفتَرَضُ وُجودُها ═══
+MISSING_TOOLS=""
+for t in dotnet curl; do
+    command -v "$t" >/dev/null 2>&1 || MISSING_TOOLS="$MISSING_TOOLS $t"
+done
+if [ -n "$MISSING_TOOLS" ]; then
+    echo "✗ تَهيئَةٌ ناقِصَة — أَدَواتٌ غائِبَة:$MISSING_TOOLS"
+    echo '  (dotnet يَأتي مِن DOTNET_ROOT/PATH — راجِع CLAUDE.md § بيئَة التَطوير)'
+    exit 3
+fi
+
+echo "═══════════════════════════════════════════════════════════"
+echo "   بَوّابَةُ الإقلاعِ الإنتاجيّ — verify-production-boot"
+echo "═══════════════════════════════════════════════════════════"
+
+# ═══ ١) التَهيئَة — تُقرَأ، وما يَنقُصُ يُقالُ بِاسمِه ═══════════════
+if [ -f "$ENV_FILE" ]; then
+    say "تَهيئَةٌ مَحَلِّيَّة: scripts/.prod-gate.env — تُقرَأ (ولا تُطبَع)"
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
+else
+    say "لا مِلَفَّ scripts/.prod-gate.env — تُقرَأُ المُتَغَيِّراتُ مِن البيئَة"
+fi
+
+MISSING_VARS=""
+[ -n "${ConnectionStrings__Postgres:-}" ] || MISSING_VARS="$MISSING_VARS ConnectionStrings__Postgres"
+
+if [ -n "$MISSING_VARS" ]; then
+    hr
+    echo "✗ تَهيئَةٌ ناقِصَةٌ عِندَ المُشَغِّل — **لَيسَ حُكماً عَلى الكود**."
+    echo "  المُتَغَيِّراتُ الغائِبَةُ بِأَسمائِها:$MISSING_VARS"
+    echo ""
+    echo "  الحَلّ — أَنشِئ scripts/.prod-gate.env (غَيرُ مُتَتَبَّع) بِسَطر:"
+    echo "      ConnectionStrings__Postgres=\"\$(tr -d '\\r\\n' < /path/to/connection.txt)\""
+    echo "  أَو صَدِّر المُتَغَيِّرَ في البيئَة قَبلَ تَشغيلِ البَوّابَة."
+    echo ""
+    echo "  ولا تُوَجِّهها إلى قاعِدَةِ الإنتاج: البَوّابَةُ تُقلِعُ وتَبذُر"
+    echo "  — أَي تَكتُب. المَقصودُ فَرعُ Neon مَنسوخ."
+    exit 3
+fi
+
+# بَصمَةُ القاعِدَة — تَمييزٌ بِلا إفشاء. تُشتَقُّ مِن المُضيفِ وَحدَه.
+DB_HOST="$(printf '%s' "${ConnectionStrings__Postgres}" \
+    | sed -n 's/.*[Hh]ost=\([^;]*\).*/\1/p' | tr -d ' ')"
+if [ -n "$DB_HOST" ]; then
+    DB_SUFFIX="$(printf '%s' "$DB_HOST" | awk -F. 'NF>1{print $(NF-1)"."$NF} NF<=1{print $0}')"
+    if command -v sha256sum >/dev/null 2>&1; then
+        DB_FP="$(printf '%s' "$DB_HOST" | sha256sum | cut -c1-8)"
+    else
+        DB_FP="غَير مَقيسَة"
+    fi
+    say "قاعِدَةُ البَيانات: ***.${DB_SUFFIX}  (بَصمَةُ المُضيف sha256:${DB_FP})"
+else
+    say "قاعِدَةُ البَيانات: تَعَذَّرَ استِخراجُ المُضيفِ مِن السِلسِلَة (لا يُطبَعُ مُحتَواها)"
+fi
+
+# ═══ ٢) البِناء — نَفسُ أَمرِ الـDockerfile حَرفاً ═══════════════════
+hr
+say "‏١/٤ نَشرٌ بِوَضع Release (نَفسُ أَمرِ الـDockerfile)…"
+if ! dotnet publish "$PROJECT" -c Release -o "$PUBLISH_DIR" --nologo > "$WORK/build.log" 2>&1; then
+    hr
+    echo "✗ فَشِلَ البِناء/النَشر — لا إقلاعَ ولا حُكمَ عَلى المَسارات."
+    tail -n 60 "$WORK/build.log"
+    exit 2
+fi
+[ -f "$PUBLISH_DIR/$ASSEMBLY" ] || {
+    echo "✗ النَشرُ نَجَحَ ولا $ASSEMBLY في المُخرَج — مُخرَجٌ لا يُقلَع."
+    exit 2
+}
+say "    ✓ $(ls "$PUBLISH_DIR"/ACommerce*.dll 2>/dev/null | wc -l | tr -d ' ') تَجميعَة ACommerce* في المُخرَج"
+
+# ═══ ٣) مَنفَذٌ حُرٌّ مَقيسٌ لا مَظنون ═══════════════════════════════
+# **ولا يُقاسُ بِـcurl**: على وِندوز، الاتِّصالُ بِمَنفَذٍ مُغلَقٍ لا
+# يُرَدُّ بِـRST بَل يُسقَط، فَيُرجِعُ curl الرَمزَ 28 (انقَضَت المُهلَة)
+# لا 7 (تَعَذَّرَ الاتِّصال) — فَيَبدو **كُلُّ** مَنفَذٍ مَشغولاً وتَفشَل
+# البَوّابَةُ بِسَبَبٍ لا وُجودَ لَه. قيسَ فِعلاً: مَنفَذانِ مُغلَقانِ
+# أَعطَيا 28. فَالمَصدَرُ الآنَ جَدوَلُ المَقابِسِ مِن نِظامِ التَشغيل.
+port_in_use() {
+    local p="$1"
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltn 2>/dev/null | grep -qE "[:.]${p}[[:space:]]"
+    else
+        # ‏netstat يَعمَل على وِندوز (‏LISTENING) وعلى لينكس (‏LISTEN).
+        netstat -an 2>/dev/null | grep -iE "LISTEN" | grep -qE "[:.]${p}[[:space:]]"
+    fi
+}
+if ! command -v ss >/dev/null 2>&1 && ! command -v netstat >/dev/null 2>&1; then
+    echo "✗ تَهيئَةٌ ناقِصَة: لا ss ولا netstat — لا سَبيلَ لِقياسِ مَنفَذٍ حُرّ."
+    exit 3
+fi
+PORT=""
+for candidate in $(seq 5171 5199); do
+    port_in_use "$candidate" || { PORT="$candidate"; break; }
+done
+if [ -z "$PORT" ]; then
+    echo "✗ تَهيئَةٌ ناقِصَة: لا مَنفَذَ حُرٌّ في المَدى 5171–5199."
+    exit 3
+fi
+say "‏٢/٤ المَنفَذ: $PORT (مَقيسٌ حُرّاً)"
+
+# ═══ ٤) الإقلاع — بِوَضع Production، وبِمُهلَة ═══════════════════════
+hr
+say "‏٣/٤ إقلاعٌ بِـASPNETCORE_ENVIRONMENT=Production…"
+
+(
+    cd "$PUBLISH_DIR" || exit 1
+    ASPNETCORE_ENVIRONMENT=Production \
+    ASPNETCORE_URLS="http://127.0.0.1:$PORT" \
+    DOTNET_ENVIRONMENT=Production \
+    exec dotnet "$ASSEMBLY"
+) > "$APP_LOG" 2>&1 &
+APP_PID=$!
+
+BOOTED=0
+WAITED=0
+while [ "$WAITED" -lt "$BOOT_TIMEOUT" ]; do
+    if ! kill -0 "$APP_PID" 2>/dev/null; then
+        hr
+        echo "✗ **كَسرٌ في الكود** — العَمَلِيَّةُ ماتَت أَثناءَ الإقلاعِ بَعدَ ${WAITED}ث."
+        echo ""
+        echo "─── سِجِلُّ التَطبيقِ كامِلاً ───"
+        cat "$APP_LOG"
+        echo "─── نِهايَةُ السِجِلّ ───"
+        echo ""
+        # التَمييزُ الوَحيدُ المَشروع: رِسالَةُ سِلسِلَةِ الاتِّصالِ
+        # الغائِبَة تَعني تَهيئَةً لا كَسراً.
+        if grep -q "Postgres connection string missing" "$APP_LOG"; then
+            echo "التَشخيص: **تَهيئَةٌ ناقِصَة** لا كَسرٌ — ConnectionStrings__Postgres."
+            exit 3
+        fi
+        exit 1
+    fi
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$PORT/" 2>/dev/null)"
+    if [ -n "$code" ] && [ "$code" != "000" ]; then BOOTED=1; break; fi
+    sleep 2
+    WAITED=$((WAITED + 2))
+done
+
+if [ "$BOOTED" != "1" ]; then
+    hr
+    echo "✗ **انقَضَت المُهلَة** — لَم يُجِب التَطبيقُ خِلالَ ${BOOT_TIMEOUT}ث."
+    echo "  (‏تَعليقٌ يَبدو عَمَلاً أَسوَأُ مِن خَطَإٍ صَريح — لِذلكَ يُقتَلُ هُنا.)"
+    echo ""
+    echo "─── سِجِلُّ التَطبيقِ كامِلاً ───"
+    cat "$APP_LOG"
+    echo "─── نِهايَةُ السِجِلّ ───"
+    exit 1
+fi
+say "    ✓ أَجابَ بَعدَ ${WAITED}ث"
+
+# ═══ ٥) المَسارات — رَمزٌ مُتَوَقَّعٌ لِكُلٍّ، والفَشَلُ يُشَخَّص ═══
+# **الرُموزُ مُشتَقَّةٌ مِن الإنتاجِ الحَيِّ لا مُختَرَعَة** (قيسَت
+# ‏2026-08-30 عَلى acommerceecommerce-acommerce-ecommerce.hf.space).
+#
+#   /                       200  صَفحَةُ المَنَصَّة       Landing.razor
+#   /terms /pricing /privacy 200  صَفَحاتُ المَنَصَّة      Pages/Platform/
+#   /<slug>                 200  **مَسارُ مُستَأجِر**     TenantHome.razor
+#   /api/<slug>/manifest.json 200 **مَسارُ API لِمُستَأجِر** (يَقرَأُ Marten)
+#   /api/push/vapid-key     200  مَسارُ API عامّ
+#   /api/v1/deals           401  سَطحُ /api/v1 — الرَفضُ **رَمزٌ مُعَرَّف**
+#                                لا 500؛ وهو ما يُثبِتُ أَنّ الأُنبوبَ حَيّ
+#   /api/billing/paddle     405  الويبهوك — GET يُثبِتُ تَسجيلَ POST بِلا
+#                                إرسالِ أَيّ جِسمٍ إلى مُعالِجِ الدَفع
+#
+# ولِماذا لَيسَت كُلُّها 200: بَوّابَةٌ تَقبَلُ 200 وَحدَها كانَت
+# سَتُجبِرُنا عَلى حَملِ مِفتاحِ API في السكريبت — والمَقصودُ إثباتُ أَنّ
+# **خارِطَةَ المَسارات بُنِيَت**، وذاكَ ما تُثبِتُه 401 و405 تَماماً كَما
+# تُثبِتُه 200. وحادِثَةُ `BindAsync` كانَت سَتَظهَرُ في **كُلِّها**:
+# ‏503 قَبلَ أَيّ مُعالِج.
+hr
+say "‏٤/٤ فَحصُ المَسارات على http://127.0.0.1:$PORT"
+echo ""
+
+ROUTES=(
+    "GET|/|200"
+    "GET|/terms|200"
+    "GET|/pricing|200"
+    "GET|/privacy|200"
+    "GET|/${TENANT_SLUG}|200"
+    "GET|/api/${TENANT_SLUG}/manifest.json|200"
+    "GET|/api/push/vapid-key|200"
+    "GET|/api/v1/deals|401"
+    "GET|/api/billing/paddle|405"
+)
+
+ROUTE_FAILED=0
+CHECKED=0
+for entry in "${ROUTES[@]}"; do
+    IFS='|' read -r method path expected <<< "$entry"
+    body_file="$WORK/body.txt"
+    actual="$(curl -s -X "$method" -o "$body_file" -w '%{http_code}' \
+        --max-time 30 "http://127.0.0.1:$PORT$path" 2>/dev/null)"
+    CHECKED=$((CHECKED + 1))
+    if [ "$actual" = "$expected" ]; then
+        printf '  ✓ %-6s %-34s %s\n' "$method" "$path" "$actual"
+    else
+        printf '  ✗ %-6s %-34s %s (المُتَوَقَّع %s)\n' "$method" "$path" "${actual:-<لا رَدّ>}" "$expected"
+        echo "      ─── مَقطَعٌ مِن الجِسم ───"
+        head -c 600 "$body_file" 2>/dev/null | sed 's/^/      /'
+        echo ""
+        echo "      ─────────────────────────"
+        ROUTE_FAILED=1
+    fi
+done
+
+# حارِسُ العَمى: أَداةٌ فَحَصَت صِفراً لا تُميَّزُ عَن أَداةٍ فَحَصَت كُلَّ شَيء.
+if [ "$CHECKED" -eq 0 ]; then
+    echo "✗ BLIND CHECK: صِفرُ مَسارٍ مَفحوص — البَوّابَةُ تَحرُسُ لا شَيء."
+    exit 1
+fi
+
+hr
+if [ "$ROUTE_FAILED" -ne 0 ]; then
+    echo "✗ **كَسرٌ في الكود** — مَسارٌ رَدَّ رَمزاً غَيرَ المُتَوَقَّع."
+    echo ""
+    echo "─── سِجِلُّ التَطبيقِ (آخِرُ 120 سَطراً) — الرَمزُ وَحدَه لا يُشَخِّص ───"
+    tail -n 120 "$APP_LOG"
+    echo "─── نِهايَةُ السِجِلّ ───"
+    exit 1
+fi
+
+echo "✅ عَبَرَت — $CHECKED مَساراً، كُلٌّ بِرَمزِه المُتَوَقَّع، مِن إقلاعٍ"
+echo "   فِعليٍّ بِوَضع Production."
+exit 0
