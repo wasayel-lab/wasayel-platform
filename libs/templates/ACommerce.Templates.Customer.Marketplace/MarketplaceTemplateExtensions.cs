@@ -76,6 +76,12 @@ public static class MarketplaceTemplateExtensions
         // حَرفاً: الكاش بِمِفتاح المُستَأجِر يَجِب أَن يَعبُر الطَلَبات.
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.TenantPlanService>();
 
+        // مُزَوِّدو المُستَأجِرِ وَقتَ التَشغيل — Singleton بِنَفس
+        // المُبَرِّرِ حَرفاً: الكاشُ بِمِفتاحِ المُستَأجِرِ يَجِب أَن
+        // يَعبُرَ الطَلَبات، والعَزلُ يَقَع في جَلسَةِ السلاجِ لا في
+        // عُمرِ الخِدمَة.
+        services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.TenantProviderService>();
+
         // ─── الاستِحقاق ──────────────────────────────────────────────────
         // Scoped لا Singleton: بِلا كاش — الرَصيد حالَة تَتَغَيَّر بِكُلّ
         // عَمَلِيَّة، وكاشُها هو بِعَينِه ما يَجعَل الفَحص يَكذِب. والقِراءَة
@@ -154,6 +160,14 @@ public static class MarketplaceTemplateExtensions
             // بِالسِياسَة العامَّة — والعَزلُ مَجّانيّ: مِفتاحُ
             // مُستَأجِرٍ لا يُصادِف مِفتاحَ آخَر.
             opts.Schema.For<Api.ApiIdempotencyRecord>().Identity(x => x.Id);
+
+            // ورَبطُ المُزَوِّدِ <b>مَحصورٌ بِالمُستَأجِر</b>
+            // بِالسِياسَةِ العامَّة (`AllDocumentsAreMultiTenanted`)،
+            // فَالعَزلُ مَجّانِيٌّ بِصِفرِ سَطر: لا استِعلامَ عابِراً
+            // لِلمُستَأجِرينَ مُمكِنٌ أَصلاً. ومُعَرِّفُه <b>هُوَ
+            // القُدرَة</b> — رَبطٌ فَعّالٌ واحِدٌ لِكُلّ قُدرَة.
+            opts.Schema.For<ACommerce.Platform.Providers.TenantProviderBinding>()
+                .Identity(x => x.Id);
         });
 
         return services;

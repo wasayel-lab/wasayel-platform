@@ -77,6 +77,10 @@
          يَستَخدِمُها مُباشَرَةً، فَلا يُترَك وُصولُها رَهناً بِمَرجِع
          عُدَّة أُخرى قَد يُنزَع. -->
     <ProjectReference Include="..\..\core\ACommerce.Platform.Flows\ACommerce.Platform.Flows.csproj" />
+    <!-- كاتالوجُ تَعريفاتِ المُزَوِّدين ووَثيقَةُ الرَبط — يَستَهلِكُهُما
+         `TenantProviderService` وشاشَةُ التَكامُلاتِ ونُقطَتا الرَبطِ
+         والسَحب. -->
+    <ProjectReference Include="..\..\core\ACommerce.Platform.Providers\ACommerce.Platform.Providers.csproj" />
     <ProjectReference Include="..\..\core\ACommerce.Platform.I18n\ACommerce.Platform.I18n.csproj" />
   </ItemGroup>
 </Project>

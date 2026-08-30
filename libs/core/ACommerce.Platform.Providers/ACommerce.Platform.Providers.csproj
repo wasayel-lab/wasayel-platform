@@ -9,9 +9,13 @@
     <EmbeddedResource Include="Definitions\**\*.json" />
   </ItemGroup>
 
-  <!-- ولا إحالَةَ مَشروعٍ واحِدَة: المَعجَمُ أَسماءٌ لا أَنواع.
-       ‏`ProviderCapabilities` يَحمِل أَسماءَ الواجِهاتِ التِسع نَصّاً،
-       فَلا تَجُرّ هذِه المَكتَبَةُ عُدَّةً واحِدَة، ويَجوز لِأَيّ
-       طَبَقَةٍ أَن تُحيلَها. -->
+  <!-- إحالَةٌ واحِدَة: عَقدُ وَثيقَةِ تَعريفِ المُستَأجِر
+       (ITenantDefinitionDocument) — لِتَرِثَ وَثيقَةُ الرَبطِ مَكانيكا
+       TenantDefinitionService القائِمَة بَدَل أُنبوبٍ رابِع
+       (القاعِدَة ٨). ولا تُحيلُ هذِه المَكتَبَةُ عُدَّةً واحِدَة:
+       مَعجَمُ القُدُراتِ أَسماءٌ نَصِّيَّةٌ لا أَنواع. -->
+  <ItemGroup>
+    <ProjectReference Include="..\ACommerce.Platform.Flows\ACommerce.Platform.Flows.csproj" />
+  </ItemGroup>
 
 </Project>
