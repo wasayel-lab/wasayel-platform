@@ -21,6 +21,16 @@ using ACommerce.Platform.Hosting;
 using ACommerce.Templates.Customer.Marketplace;
 using ACommerce.Templates.Customer.Marketplace.Components;
 using ACommerce.V1.App.Seed;
+using System.Reflection;
+
+// ═══ لَحظَةُ الإقلاعِ تُلتَقَطُ هُنا، لا عِندَ تَسجيلِ النُقطَة ═══════
+// ‏`MapBuildIdentity` يُنادى قَبلَ `app.Run()` — أَي **بَعدَ** كُتلَةِ
+// البَذرِ الَّتي تَفتَحُ جَلسَةَ Marten وتُشَغِّلُ أَربَعَ بَذّارات. وعلى
+// فَرعِ Neon بارِدٍ يَستَأنِف، الفارِقُ عَشَراتُ الثَواني بِسُهولَة.
+// فَتَقييمُ `DateTimeOffset.UtcNow` هُناكَ كانَ سَيُسَمّي «لَحظَةَ
+// انتِهاءِ البَذر» إقلاعاً — ومَن يُشَخِّصُ «مُنذُ مَتى تَخدِمُ هذِه
+// الحاوِيَة» يَأخُذُ رَقماً يُسقِطُ زَمَنَ الإقلاعِ صامِتاً.
+var processStartedAt = DateTimeOffset.UtcNow;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -342,6 +352,17 @@ app.UseVersionGate();
 app.MapCustomerMarketplaceTemplate();
 
 app.MapHub<RealtimeHub>("/realtime");
+
+// ═══ الثُنائِيُّ يَحمِلُ إيداعَه (‏ADR-019) ══════════════════════════
+// نُقطَةُ `/health` تُجيبُ «أَيُّ إيداعٍ يَخدِمُ الآن؟» مِن العَمَلِيَّةِ
+// نَفسِها. والبَصمَةُ **مَبثوثَةٌ في الثُنائِيِّ وَقتَ البِناء**
+// (`-p:SourceRevisionId=` في الـ`Dockerfile`)، فَلا تَستَطيعُ حاوِيَةٌ
+// قَديمَةٌ أَن تَدَّعِيَ إيداعاً جَديداً. والتَعليلُ كامِلاً في
+// `BuildIdentity.cs` وفي `docs/ADR-019-…`.
+app.MapBuildIdentity(
+    typeof(Program).Assembly
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
+    processStartedAt);
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

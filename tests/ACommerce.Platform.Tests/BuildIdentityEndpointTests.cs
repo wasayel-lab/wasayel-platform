@@ -336,7 +336,7 @@ public class BuildIdentityEndpointTests
     [Fact]
     public void Dockerfile_refuses_to_publish_without_a_stamp()
     {
-        var docker = ReadRepoFile("Dockerfile");
+        var docker = StripHashComments(ReadRepoFile("Dockerfile"));
 
         Assert.Contains("-p:SourceRevisionId=", docker, StringComparison.Ordinal);
         Assert.Contains(".source-revision", docker, StringComparison.Ordinal);
@@ -362,7 +362,7 @@ public class BuildIdentityEndpointTests
     [Fact]
     public void Deploy_workflow_writes_the_stamp_after_staging_and_before_committing()
     {
-        var wf = ReadRepoFile(".github", "workflows", "deploy-hf.yml");
+        var wf = StripHashComments(ReadRepoFile(".github", "workflows", "deploy-hf.yml"));
 
         var stage = wf.IndexOf("deploy-manifest.sh --stage", StringComparison.Ordinal);
         var write = wf.IndexOf("/.source-revision", StringComparison.Ordinal);
@@ -384,12 +384,20 @@ public class BuildIdentityEndpointTests
     [Fact]
     public void Deploy_workflow_asserts_the_live_space_serves_this_commit()
     {
-        var wf = ReadRepoFile(".github", "workflows", "deploy-hf.yml");
+        var raw = ReadRepoFile(".github", "workflows", "deploy-hf.yml");
+
+        // الشُروطُ تُقرَأُ مِن **الكود** لا مِن التَعليقِ الشارِح — وإلّا
+        // اخضَرَّ الحارِسُ على وَظيفَةٍ تَصِفُ ما لا تَفعَل.
+        var wf = StripHashComments(raw);
 
         Assert.Contains("/health", wf, StringComparison.Ordinal);
         Assert.Contains("application/json", wf, StringComparison.Ordinal);
         Assert.Contains("no-store", wf, StringComparison.Ordinal);
         Assert.Contains("HF_SPACE_URL", wf, StringComparison.Ordinal);
+        // نَقضُ التَخزينِ بِالطَلَبِ وفَحصُ آثارِ وَسيطٍ مُخَزِّن — في
+        // البَوّابَةِ الآلِيَّةِ لا في قائِمَةٍ يَدَوِيَّةٍ تُنَفَّذُ مَرَّةً.
+        Assert.Contains("probe=", wf, StringComparison.Ordinal);
+        Assert.Contains("cf-cache-status", wf, StringComparison.Ordinal);
 
         // خَطُّ الأَساسِ يُقاسُ **قَبلَ الدَفع**: بِدونِه تَخضَرُّ
         // إعادَةُ تَشغيلِ الوَظيفَةِ على نَفسِ الإيداعِ خِلالَ ثَوانٍ
@@ -399,7 +407,8 @@ public class BuildIdentityEndpointTests
 
         // والتَعليقُ الَّذي كانَ يَقتَرِحُ النُقطَةَ يُحذَف — فَقَد
         // نُفِّذَت. اقتِراحٌ باقٍ بَعدَ التَنفيذِ يُوَرِّثُ القارِئَ شَكّاً.
-        Assert.DoesNotContain("اقتِراحُ نُقطَة", wf, StringComparison.Ordinal);
+        // **ويُفحَصُ الخام**: المَقصودُ تَعليقٌ لا كود.
+        Assert.DoesNotContain("اقتِراحُ نُقطَة", raw, StringComparison.Ordinal);
     }
 
     // ─── ١٠) النُقطَةُ مُسَجَّلَةٌ فِعلاً في التَطبيق ───────────────────
@@ -434,6 +443,12 @@ public class BuildIdentityEndpointTests
 
         Assert.Contains("/health", gate, StringComparison.Ordinal);
         Assert.Contains("BODY_MUST_CONTAIN", gate, StringComparison.Ordinal);
+
+        // والرَأسُ يُقاسُ على **الأُنبوبِ الكامِل** لا على مُضيفٍ
+        // مُصَغَّر: ‏Serilog وStaticFiles وRouting وحَلُّ المُستَأجِرِ
+        // وبَوّابَةُ الإصدار، ومُصَيِّرُ Razor يَضبُطُ `Cache-Control`
+        // بِنَفسِه على الصَفَحات. فَهُنا يُثبَتُ أَنّ رَأسَنا هو الواصِل.
+        Assert.Contains("HEADER_MUST_CONTAIN", gate, StringComparison.Ordinal);
     }
 
     // ─── ١١) رَأسُ العَميلِ لا يَقلِبُ جَوابَ نُقطَةِ الهُوِيَّة ────────
@@ -502,4 +517,21 @@ public class BuildIdentityEndpointTests
         text = Regex.Replace(text, @"//[^\n]*", " ");
         return text;
     }
+
+    /// <summary><b>تَعليقُ <c>#</c> في YAML وDockerfile — والأَداةُ
+    /// قيسَت بِخَطَئِها قَبلَ أَن يُوثَقَ بِها</b> (القاعِدَة ١٠).
+    ///
+    /// <para>أَوَّلُ نُسخَةٍ مِن هذَينِ الفاحِصَينِ قَرَأَت النَصَّ خاماً،
+    /// فَوَقَعَت في العَطَبِ الَّذي تَحرُسُه بِعَينِه — <b>مَرَّتَين</b>:
+    /// حارِسُ الـ<c>Dockerfile</c> اتَّهَمَ التَعليقَ الَّذي <b>يَشرَحُ
+    /// لِماذا رُفِضَ <c>ARG SOURCE_REVISION_ID=unknown</c></b> بِأَنَّه
+    /// الاستِعمالُ نَفسُه؛ وحارِسُ التَرتيبِ وَجَدَ «<c>git add -A</c>»
+    /// في تَعليقٍ يَسبِقُ الكِتابَةَ فَحَكَمَ أَنّ البَصمَةَ تُكتَبُ
+    /// بَعدَ الإيداع. <b>الأَداةُ كانَت تَكذِب، لا المَفحوص.</b></para>
+    ///
+    /// <para>ويُشطَبُ السَطرُ الَّذي أَوَّلُ مِحرَفٍ غَيرِ فارِغٍ فيه
+    /// <c>#</c> — لا كُلُّ <c>#</c> أَينَما وَقَع، فَذاكَ يَبتُرُ
+    /// سَلاسِلَ الأَوامِرِ في <c>run:</c>.</para></summary>
+    private static string StripHashComments(string text)
+        => Regex.Replace(text, @"(?m)^[ \t]*#.*$", "");
 }

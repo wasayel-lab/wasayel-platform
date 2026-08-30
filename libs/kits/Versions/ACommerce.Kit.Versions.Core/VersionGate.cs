@@ -33,10 +33,32 @@ public sealed class VersionGateMiddleware
     public VersionGateMiddleware(RequestDelegate next, IOptions<VersionGateOptions> opts)
     { _next = next; _opts = opts.Value; }
 
+    /// <summary>
+    /// <para><b>المَساراتُ الَّتي لا تَملِكُ هذِه البَوّابَةُ أَن
+    /// تَقلِبَ جَوابَها.</b></para>
+    ///
+    /// <para><b>العِلَّة</b>: <c>/health</c> نُقطَةُ <b>هُوِيَّةِ بِناءٍ
+    /// وحَياة</b> — مُستَهلِكُها كاشِفُ النَشرِ وطَرَفٌ ثالِثٌ يُشَغِّلُ
+    /// <c>curl</c>، لا مُستَخدِمٌ أَمامَ شاشَة. وهذا الوَسيطُ يَسبِقُها في
+    /// <c>Program.cs</c>، فَكانَ طَلَبٌ يَحمِلُ <c>X-App-Version</c>
+    /// أَدنى مِن المَدعوم يَرُدُّ <b>‏426 بِلا <c>commit</c> وبِلا
+    /// <c>no-store</c></b>. أَي أَنّ <b>رَأسَ عَميلٍ يَقلِبُ جَوابَ
+    /// نُقطَةِ الهُوِيَّة</b>: مُراقِبٌ يَبعَثُ إصدارَ عَميلِه يَقرَأُ
+    /// ‏426 دائِماً فَيُعلِنُ الخِدمَةَ ساقِطَةً وهي تَعمَل؛ وبَوّابَةُ
+    /// النَشرِ لَو شُغِّلَت مِن عَميلٍ يَضبُطُه تُعَلَّقُ حَتّى تَنفَدَ
+    /// الميزانِيَّةُ ثُمَّ تُفشِلُ نَشراً سَليماً.</para>
+    ///
+    /// <para><b>ولِماذا حَرفِيَّةٌ هُنا لا إعداد</b> (القاعِدَة ١):
+    /// مُستَهلِكٌ واحِد. وتَصيرُ إعداداً حينَ يوجَدُ ثانٍ، لا قَبلَه.</para>
+    /// </summary>
+    private static readonly string[] ExemptPaths = { "/health" };
+
     public async Task InvokeAsync(HttpContext ctx)
     {
         var v = ctx.Request.Headers["X-App-Version"].ToString();
-        if (!string.IsNullOrEmpty(v) && Compare(v, _opts.MinimumSupported) < 0)
+        if (!string.IsNullOrEmpty(v)
+            && !ExemptPaths.Any(p => ctx.Request.Path.StartsWithSegments(p))
+            && Compare(v, _opts.MinimumSupported) < 0)
         {
             ctx.Response.StatusCode = StatusCodes.Status426UpgradeRequired;
             ctx.Response.Headers["X-Required-Version"] = _opts.MinimumSupported;

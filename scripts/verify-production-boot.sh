@@ -274,6 +274,8 @@ say "    ✓ أَجابَ بَعدَ ${WAITED}ث"
 #                                لا 500؛ وهو ما يُثبِتُ أَنّ الأُنبوبَ حَيّ
 #   /api/billing/paddle     405  الويبهوك — GET يُثبِتُ تَسجيلَ POST بِلا
 #                                إرسالِ أَيّ جِسمٍ إلى مُعالِجِ الدَفع
+#   /health                 200  **هُوِيَّةُ البِناء** (‏ADR-019) — ويُفحَصُ
+#                                **جِسمُها** لا رَمزُها، انظُر أَدناه
 #
 # ولِماذا لَيسَت كُلُّها 200: بَوّابَةٌ تَقبَلُ 200 وَحدَها كانَت
 # سَتُجبِرُنا عَلى حَملِ مِفتاحِ API في السكريبت — والمَقصودُ إثباتُ أَنّ
@@ -294,20 +296,91 @@ ROUTES=(
     "GET|/api/push/vapid-key|200"
     "GET|/api/v1/deals|401"
     "GET|/api/billing/paddle|405"
+    "GET|/health|200"
+)
+
+# ═══ ورَمزُ الحالَةِ وَحدَه أَعمى على `/health` — مَقيسٌ لا مَظنون ═════
+#
+# ‏`TenantHome.razor` (`@page "/{slug}"`) **يَبتَلِعُ `/health` ويَرُدُّ
+# ‏200 بِـ`text/html`** — قيسَ على المَوقِعِ الحَيِّ يَومَ ‏2026-08-30
+# قَبلَ تَنفيذِ النُقطَة: ‏200 · `text/html; charset=utf-8` · ‏30,812
+# بايتاً. فَلَو اكتَفَت هذِه البَوّابَةُ بِالرَمز، لَكانَ **حَذفُ سَطرِ
+# `app.MapBuildIdentity(...)` مِن `Program.cs` يَمُرُّ بِها خَضراءَ إلى
+# الأَبَد** — تَقولُ «سُجِّلَ» وهي لَم تَفحَصِ التَسجيلَ قَطّ. وهذا
+# بِعَينِه ما تُسَمّيه القاعِدَة ١٠ أَداةً عَمياء.
+#
+# **وحَدُّها مُصَرَّحٌ بِه**: تُثبِتُ أَنّ المَسارَ **سُجِّلَ ويَرُدُّ
+# بَصمَةً**، ولا تُثبِتُ أَنّ البَصمَةَ **صادِقَة** — الصِدقُ يُقاسُ في
+# ‏`Health_body_does_not_move_when_the_environment_moves` وفي بَوّابَةِ
+# النَشرِ الحَيَّة.
+declare -A BODY_MUST_CONTAIN=(
+    ["/health"]='"commit"'
+)
+
+# ═══ والرَأسُ يُقاسُ على الأُنبوبِ الكامِلِ لا على مُضيفٍ مُصَغَّر ═════
+# ‏`Health_forbids_caching` يُثبِتُ الرَأسَ على مُضيفٍ يَحمِلُ النُقطَةَ
+# وَحدَها. وهُنا الأُنبوبُ كامِلٌ — ‏Serilog وStaticFiles وRouting
+# وAntiforgery وحَلُّ المُستَأجِرِ والثَقافَةُ وبَوّابَةُ الإصدارِ ثُمَّ
+# النِقاط — و**مُصَيِّرُ Razor يَضبُطُ `Cache-Control` بِنَفسِه على
+# الصَفَحات**. فَإثباتُ أَنّ رَأسَنا يَصِلُ **مِن هُنا** لا مِن هُناك.
+#
+# **والقيمَةُ صَغيرَةُ الأَحرُفِ عَمداً، والمُقارَنَةُ تُطَبِّعُ الرُؤوسَ
+# قَبلَها** — لا بِـ`grep -i`. والسَبَبُ مَقيسٌ لا احتِياطيّ: ‏`grep -qiF`
+# في GNU grep ‏3.0 على Git Bash **يَنهار بِـSIGABRT** (خَرَجَ ‏134)،
+# بَينَما `-qF` و`-qi` كُلٌّ وَحدَه يَعمَل. وقَد وَقَعَ فِعلاً في أَوَّلِ
+# تَشغيلٍ لِهذا الفَحص: الرَأسُ كانَ حاضِراً صَحيحاً، **والأَداةُ هي
+# الَّتي انهارَت** فَاتَّهَمَت التَطبيقَ بِرَدٍّ قابِلٍ لِلتَخزين.
+# (القاعِدَة ١٠: الأَداةُ تُقاسُ قَبلَ أَن يُوثَقَ بِها.)
+declare -A HEADER_MUST_CONTAIN=(
+    ["/health"]='no-store'
 )
 
 ROUTE_FAILED=0
 CHECKED=0
+BODY_CHECKED=0
+HEADER_CHECKED=0
 for entry in "${ROUTES[@]}"; do
     IFS='|' read -r method path expected <<< "$entry"
     body_file="$WORK/body.txt"
-    actual="$(curl -s -X "$method" -o "$body_file" -w '%{http_code}' \
+    hdr_file="$WORK/hdr.txt"
+    actual="$(curl -s -X "$method" -o "$body_file" -D "$hdr_file" -w '%{http_code}' \
         --max-time 30 "http://127.0.0.1:$PORT$path" 2>/dev/null)"
     CHECKED=$((CHECKED + 1))
-    if [ "$actual" = "$expected" ]; then
-        printf '  ✓ %-6s %-34s %s\n' "$method" "$path" "$actual"
+
+    needle="${BODY_MUST_CONTAIN[$path]:-}"
+    body_ok=1
+    if [ -n "$needle" ]; then
+        BODY_CHECKED=$((BODY_CHECKED + 1))
+        grep -qF -- "$needle" "$body_file" 2>/dev/null || body_ok=0
+    fi
+
+    hneedle="${HEADER_MUST_CONTAIN[$path]:-}"
+    hdr_ok=1
+    if [ -n "$hneedle" ]; then
+        HEADER_CHECKED=$((HEADER_CHECKED + 1))
+        tr -d '\r' < "$hdr_file" 2>/dev/null | tr 'A-Z' 'a-z' \
+            | grep -qF -- "$hneedle" || hdr_ok=0
+    fi
+
+    if [ "$actual" = "$expected" ] && [ "$body_ok" = "1" ] && [ "$hdr_ok" = "1" ]; then
+        if [ -n "$needle" ]; then
+            printf '  ✓ %-6s %-34s %s  (الجِسمُ يَحمِل %s · والرَأسُ %s)\n' \
+                "$method" "$path" "$actual" "$needle" "${hneedle:-—}"
+        else
+            printf '  ✓ %-6s %-34s %s\n' "$method" "$path" "$actual"
+        fi
     else
-        printf '  ✗ %-6s %-34s %s (المُتَوَقَّع %s)\n' "$method" "$path" "${actual:-<لا رَدّ>}" "$expected"
+        if [ "$body_ok" != "1" ]; then
+            printf '  ✗ %-6s %-34s %s (الرَمزُ صَحيحٌ والجِسمُ لا يَحمِل %s — المَسارُ مُبتَلَع)\n' \
+                "$method" "$path" "$actual" "$needle"
+        elif [ "$hdr_ok" != "1" ]; then
+            printf '  ✗ %-6s %-34s %s (الجِسمُ صَحيحٌ والرَأسُ لا يَحمِل %s — رَدٌّ قابِلٌ لِلتَخزين)\n' \
+                "$method" "$path" "$actual" "$hneedle"
+            echo "      ─── الرُؤوس ───"
+            sed 's/^/      /' "$hdr_file" 2>/dev/null
+        else
+            printf '  ✗ %-6s %-34s %s (المُتَوَقَّع %s)\n' "$method" "$path" "${actual:-<لا رَدّ>}" "$expected"
+        fi
         echo "      ─── مَقطَعٌ مِن الجِسم ───"
         head -c 600 "$body_file" 2>/dev/null | sed 's/^/      /'
         echo ""
@@ -321,6 +394,16 @@ if [ "$CHECKED" -eq 0 ]; then
     echo "✗ BLIND CHECK: صِفرُ مَسارٍ مَفحوص — البَوّابَةُ تَحرُسُ لا شَيء."
     exit 1
 fi
+# وعَدّادٌ ثانٍ لِلفَحصِ الثاني: جَدوَلُ الأَجسامِ الفارِغُ يَجعَلُ
+# فَحصَ الجِسمِ زينَةً صامِتَة، ولا يُميَّزُ ذلك عَن مُطابَقَةٍ ناجِحَة.
+if [ "$BODY_CHECKED" -eq 0 ]; then
+    echo "✗ BLIND CHECK: صِفرُ جِسمٍ مَفحوص — الرَمزُ وَحدَه أَعمى على المَساراتِ المُبتَلَعَة."
+    exit 1
+fi
+if [ "$HEADER_CHECKED" -eq 0 ]; then
+    echo "✗ BLIND CHECK: صِفرُ رَأسٍ مَفحوص — ورَدٌّ مُخَزَّنٌ على /health هو الكَذِبَةُ بِعَينِها."
+    exit 1
+fi
 
 hr
 if [ "$ROUTE_FAILED" -ne 0 ]; then
@@ -332,6 +415,7 @@ if [ "$ROUTE_FAILED" -ne 0 ]; then
     exit 1
 fi
 
-echo "✅ عَبَرَت — $CHECKED مَساراً، كُلٌّ بِرَمزِه المُتَوَقَّع، مِن إقلاعٍ"
+echo "✅ عَبَرَت — $CHECKED مَساراً، كُلٌّ بِرَمزِه المُتَوَقَّع (‏ومِنها"
+echo "   $BODY_CHECKED مَفحوصُ الجِسم و$HEADER_CHECKED مَفحوصُ الرَأس)، مِن إقلاعٍ"
 echo "   فِعليٍّ بِوَضع Production."
 exit 0
