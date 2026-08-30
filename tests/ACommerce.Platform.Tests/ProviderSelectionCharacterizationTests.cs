@@ -116,10 +116,26 @@ public class ProviderSelectionCharacterizationTests
             "libs/kits/Files/ACommerce.Kit.Files.Core/LocalFileStorage.cs"),
 
         // ─── الواجِهَتانِ اللَّتانِ لا يَبلُغُهُما التَطبيق ──────────
+        //
+        // **‏2026-08-30 (‏ADR-018): المَصدَرُ صارَ مِلَفَّ الواجِهَةِ
+        // نَفسِه** — وكانَ مِلَفَّ تَنفيذٍ. والسَبَبُ أَنّ التَنفيذَينِ
+        // **حُذِفا**: ‏`SmtpNotificationChannel` (‏87 سَطراً) و
+        // `FirebaseNotificationChannel` (‏158) و`RedisCache` (‏97) —
+        // ثَلاثَتُها بِصِفرِ إحالَةٍ مِن أَيّ `csproj` مَشحون، أَي أَنّها
+        // **تُبنى ولا تَبلُغ الـSpace**.
+        //
+        // **والقِياسُ صارَ أَقوى لا أَضعَف**: كانَ يَسأَل «أَيوجَد
+        // `AddSingleton` في مِلَفِّ تَنفيذٍ ما؟» — وذلك يَخضَرُّ لِتَنفيذٍ
+        // مَيِّت. وصارَ يَسأَل **«أَتوجَد الواجِهَةُ وهَل يُسَجِّلُها
+        // أَحَد؟»**، فَيُثَبِّت الحُكمَ الفِعليّ: قُدرَةٌ مُعلَنَةٌ
+        // بِصِفرِ تَنفيذٍ مَشحون.
         new("notifications", "INotificationChannel",
             "", null,
-            "libs/kits/Notifications/ACommerce.Kit.Notifications.Providers.Smtp/SmtpNotificationChannel.cs"),
+            "libs/kits/Notifications/ACommerce.Kit.Notifications.Core/Channels.cs"),
 
+        // و`ICache` بَقِيَ — ويُقالُ لِماذا (‏ADR-018 §٤): ‏`InMemoryCache`
+        // فيه لا يَطلُب خادِماً خارِجِيّاً، والمَحذوفُ هُوَ `RedisCache`
+        // الَّذي يَطلُبُ خادِمَ Redis لا وُجودَ لَه في النَشر.
         new("cache", "ICache",
             "", null,
             "libs/kits/Cache/ACommerce.Kit.Cache.Core/ICache.cs"),
@@ -187,6 +203,35 @@ public class ProviderSelectionCharacterizationTests
         foreach (var fragment in new[] { "Notifications.Providers.", @"kits\Cache\" })
             Assert.False(csproj.Contains(fragment, StringComparison.Ordinal),
                 $"إحالَةُ «{fragment}» صارَت في `V1.App.csproj` — والتَوصيفُ قاسَ غِيابَها.");
+
+        // ‏(ج) **ولا تَنفيذَ في الشَجَرَةِ يُسَجِّلُهُما إطلاقاً** —
+        // أُضيفَ يَومَ ‏2026-08-30 (‏ADR-018) بَعدَ حَذفِ التَنفيذاتِ
+        // الثَلاثَة (‏`SmtpNotificationChannel` و
+        // `FirebaseNotificationChannel` و`RedisCache`). **والفَرقُ أَنّ
+        // الشَطرَينِ أَعلاه يَقيسانِ التَركيبَ والشَحن، وهذا يَقيسُ
+        // الشَجَرَةَ نَفسَها**: مَشروعٌ جَديدٌ يُنشَأ ولا يُحالُ إلَيه
+        // يُحمِرُّ هُنا فَوراً، بَدَلَ أَن يَنتَظِرَ جَولَةَ جَردٍ بَعدَ
+        // سَنَة. وهذا بِعَينِه ما مَنَعَ اكتِشافَ العَشَرَةِ الَّتي
+        // حُذِفَت.
+        var libs = Path.Combine(RepoRoot, "libs");
+        var scanned = 0;
+        var registrars = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(libs, "*.cs", SearchOption.AllDirectories))
+        {
+            var sep = Path.DirectorySeparatorChar;
+            if (file.Contains($"{sep}obj{sep}", StringComparison.Ordinal)
+             || file.Contains($"{sep}bin{sep}", StringComparison.Ordinal)) continue;
+            scanned++;
+            var text = File.ReadAllText(file);
+            foreach (var iface in new[] { "INotificationChannel", "ICache" })
+                if (text.Contains($"AddSingleton<{iface}", StringComparison.Ordinal)
+                    && !file.EndsWith("ICache.cs", StringComparison.Ordinal))
+                    registrars.Add($"{iface} ← {Path.GetFileName(file)}");
+        }
+        Assert.True(scanned > 200, $"أَداة عَمياء: مُسِحَ {scanned} مِلَفّاً تَحتَ `libs/` — والمُتَوَقَّعُ مِئات.");
+        Assert.True(registrars.Count == 0,
+            "تَنفيذٌ يُسَجِّل قُدرَةً وُصِفَت بِأَنّ التَطبيقَ لا يَبلُغُها:\n  "
+            + string.Join("\n  ", registrars));
 
         // وحارِسُ العَمى: المِلَفّانِ قُرِئا فِعلاً.
         Assert.True(program.Length > 4000 && csproj.Length > 2000,
@@ -274,8 +319,21 @@ public class ProviderSelectionCharacterizationTests
             var src = File.ReadAllText(path);
             checkedRows++;
 
-            if (!src.Contains($"AddSingleton<{r.Interface}", StringComparison.Ordinal))
-                breaches.Add($"{r.Capability}: لا `AddSingleton<{r.Interface}` في {r.RegistrationSource}.");
+            // **الصُفوفُ المُسَجَّلَةُ**: يُقاسُ مَدى الحَياةِ في مِلَفِّ
+            // التَنفيذ. **والصُفوفُ بِلا تَسجيل**: يُقاسُ أَنّ الواجِهَةَ
+            // مُعلَنَةٌ **وأَنّ لا تَنفيذَ مَشحوناً يُسَجِّلُها** — وهذا
+            // ما تَغَيَّرَ يَومَ ‏2026-08-30 (‏ADR-018) حينَ حُذِفَت
+            // تَنفيذاتٌ لا يَبلُغُها البِناء.
+            if (r.RegistrationToday.Length > 0)
+            {
+                if (!src.Contains($"AddSingleton<{r.Interface}", StringComparison.Ordinal))
+                    breaches.Add($"{r.Capability}: لا `AddSingleton<{r.Interface}` في {r.RegistrationSource}.");
+            }
+            else
+            {
+                if (!src.Contains($"interface {r.Interface}", StringComparison.Ordinal))
+                    breaches.Add($"{r.Capability}: لا إعلانَ `interface {r.Interface}` في {r.RegistrationSource}.");
+            }
 
             // ولا واحِدٌ مِنها يَرى المُستَأجِر — وهذِه هي العِلَّةُ
             // الَّتي تَأتي المَوجَةُ لِأَجلِها، فَتُقاس قَبلَها.

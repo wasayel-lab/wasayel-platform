@@ -1,6 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <ProjectReference Include="..\ACommerce.Kit.Files.Core\ACommerce.Kit.Files.Core.csproj" />
-  </ItemGroup>
-</Project>

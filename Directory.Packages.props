@@ -15,9 +15,11 @@
     <!-- Web Push (PWA notifications) -->
     <PackageVersion Include="WebPush" Version="1.0.13" />
 
-    <!-- Cache + Realtime backplane -->
-    <PackageVersion Include="StackExchange.Redis"                          Version="3.1.13" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.10" />
+    <!-- ‏(رُفِعَ يَومَ ‏2026-08-30 — ‏ADR-018: ‏`StackExchange.Redis` و
+         `Microsoft.AspNetCore.SignalR.StackExchangeRedis`. كانَتا
+         تَخدُمانِ مَشروعَينِ بِصِفرِ إحالَةٍ مِن أَيّ `csproj` مَشحون،
+         ولا خادِمَ Redis في النَشرِ أَصلاً. حُذِفَ المَشروعانِ
+         فَسَقَطَتِ الحُزمَتان مَعَهُما.) -->
 
     <!-- تَخزينُ كائِناتٍ مُتَوافِقٌ مَع S3 (‏Cloudflare R2) — العَميلُ
          الرَسميُّ يَحمِل تَوقيعَ SigV4، فَلا يُكتَب بِاليَد. -->

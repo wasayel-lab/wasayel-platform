@@ -55,8 +55,6 @@
     <ProjectReference Include="..\..\libs\kits\Reports\ACommerce.Kit.Reports.Server\ACommerce.Kit.Reports.Server.csproj" />
     <ProjectReference Include="..\..\libs\kits\Versions\ACommerce.Kit.Versions.Core\ACommerce.Kit.Versions.Core.csproj" />
     <ProjectReference Include="..\..\libs\kits\Files\ACommerce.Kit.Files.Core\ACommerce.Kit.Files.Core.csproj" />
-    <ProjectReference Include="..\..\libs\kits\Files\ACommerce.Kit.Files.Providers.AliyunOss\ACommerce.Kit.Files.Providers.AliyunOss.csproj" />
-    <ProjectReference Include="..\..\libs\kits\Files\ACommerce.Kit.Files.Providers.GoogleCloud\ACommerce.Kit.Files.Providers.GoogleCloud.csproj" />
     <!-- مَخزَنُ الكائِناتِ الدائِم — يُسَجَّل بِـFiles__S3__* وَحدَها.
          والإحالَةُ هُنا لِأَنّ deploy-manifest.sh يَمشي ProjectReference
          تَعَدِّيّاً: مَشروعٌ غَيرُ مُحالٍ لا يَبلُغ الـSpace أَصلاً. -->

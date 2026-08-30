@@ -112,8 +112,9 @@ sig     = HMAC-SHA256( key = TokenSecret , data = "{userId}|{tenantSlug}|{expUni
 
 | المَوضِع | الاتِّجاه |
 |---|---|
-| `Payments.Providers.Moyasar/MoyasarPaymentProvider.cs:13` `SecretApiKey` | صادِر |
+| ~~`Payments.Providers.Moyasar/…` `SecretApiKey`~~ | **حُذِفَ — ‏ADR-018.** كانَ يَعني أَنّ وَسايِل تَحمِل سِرَّ بَوّابَةِ التاجِرِ وتَقبِضُ بِاسمِه، وذلك عَكسُ `ADR-003`. والبَديلُ بَياناتٌ لا كود: `moyasar_hosted.provider.json` |
 | `Auth.Providers.Nafath/NafathChannel.cs:15` `ClientSecret` | صادِر |
+| `Files.Providers.S3/S3FileStorage.cs` `SecretAccessKey` | صادِر — سِرُّ المَنَصَّةِ لِمَخزَنِ كائِناتِها (‏ADR-017) |
 | `Services/AgentBackends.cs:115` `x-api-key` (‏Anthropic) · `:234` (‏Gemini) | صادِر |
 
 **لا سَطر واحِد يَقرَأ مِفتاحاً وارِداً، ولا وَثيقَة تُخَزِّنُه، ولا مَسار يُصدِرُه.**
