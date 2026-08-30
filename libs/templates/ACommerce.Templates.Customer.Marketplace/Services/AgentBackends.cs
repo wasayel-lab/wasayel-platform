@@ -43,6 +43,43 @@ public interface IAgentBackend
     Task<AgentBackendResponse> CallAsync(AgentRequest req, CancellationToken ct);
 }
 
+
+// ─── صَوتُ الخَطَأ — يَقولُ الخادِمَ لا الصَنف ────────────────────────
+//
+// **العِلَّةُ المَقيسَة (‏2026-08-31)**: الشاشَةُ قالَت
+// `OpenAI 401: {"message":"Invalid API Key","code":"invalid_api_key"}`
+// وذلكَ الجِسمُ **جِسمُ Groq** لا جِسمُ OpenAI. البادِئَةُ كانَت
+// حَرفِيَّةً مَكتوبَةً في ثَلاثِ خَلفِيّاتٍ سَبعَ مَرّات — أَي اسمَ
+// **الصَنفِ الَّذي سَأَل** لا اسمَ **الخادِمِ الَّذي رَدّ**؛ و
+// `OpenAIBackend` وَحدَه يَخدِمُ Groq وCerebras وOpenRouter وOllama.
+//
+// ‏`82200f1f` عالَجَ الطَرَفَ الأَوَّلَ (سَطرُ الإقلاع) — وذاكَ
+// يُقرَأُ في سِجِلِّ الحاوِيَة، ولا يَبلُغُه مَن يَرى الشاشَة. وهذِه
+// تُعالِجُ الطَرَفَ الثاني: **الرِسالَةُ نَفسُها تَحمِلُ المُزَوِّدَ
+// والعُنوانَ**، فَيُقرَأُ التَشخيصُ حَيثُ يَقَعُ العَطَب.
+//
+// **ولا مِفتاحَ فيها ولا جُزءٌ مِنه** — تَسميَةٌ وعُنوانٌ ورَمزٌ
+// وجِسمُ الخادِمِ مَقصوصاً، لا غَير.
+public static class AgentErrorText
+{
+    /// <summary>«‏groq (https://api.groq.com/openai/)» — التَسميَةُ
+    /// والعُنوانُ الفِعلِيّ.</summary>
+    public static string Where(string providerName, string endpoint)
+        => $"{providerName} ({endpoint})";
+
+    /// <summary>رَدٌّ غَيرُ ناجِح: تَسميَةٌ وعُنوانٌ ورَمزٌ وجِسم.</summary>
+    public static string Http(string providerName, string endpoint, int status, string body)
+        => $"{Where(providerName, endpoint)} {status}: {body}";
+
+    /// <summary>استِثناءٌ في النِداء — والعُنوانُ هُنا أَهَمُّ ما يُقال
+    /// (‏مَنفَذٌ مَقفولٌ أَو مُضيفٌ لا يُحَلّ).</summary>
+    public static string Exception(string providerName, string endpoint, string message)
+        => $"{Where(providerName, endpoint)} exception: {message}";
+
+    /// <summary>رَدٌّ ناجِحٌ بِشَكلٍ لا يُقرَأ.</summary>
+    public static string Malformed(string providerName, string endpoint, string what)
+        => $"{Where(providerName, endpoint)}: {what}";
+}
 // ─── Factory ─────────────────────────────────────────────────────────
 // الخَلفيّات خيارات-صِرفَة: تَأخُذ <see cref="AgentProfile"/> مَحلولاً ولا
 // تَقرَأ إعدادات ولا بيئَة بِنَفسِها. كُلّ الحَلّ في AgentProfileResolver،
@@ -131,7 +168,7 @@ public sealed class AnthropicBackend : IAgentBackend
             var json = await resp.Content.ReadAsStringAsync(ct);
             if (!resp.IsSuccessStatusCode)
                 return new AgentBackendResponse(null, null,
-                    $"Anthropic {(int)resp.StatusCode}: {Truncate(json, 500)}");
+                    AgentErrorText.Http(ProviderName, Endpoint, (int)resp.StatusCode, Truncate(json, 500)));
 
             using var doc = JsonDocument.Parse(json);
             string? text = null;
@@ -151,7 +188,8 @@ public sealed class AnthropicBackend : IAgentBackend
         }
         catch (Exception ex)
         {
-            return new AgentBackendResponse(null, null, "Anthropic exception: " + ex.Message);
+            return new AgentBackendResponse(null, null,
+                AgentErrorText.Exception(ProviderName, Endpoint, ex.Message));
         }
     }
 
@@ -250,7 +288,7 @@ public sealed class GeminiBackend : IAgentBackend
             var json = await resp.Content.ReadAsStringAsync(ct);
             if (!resp.IsSuccessStatusCode)
                 return new AgentBackendResponse(null, null,
-                    $"Gemini {(int)resp.StatusCode}: {Truncate(json, 500)}");
+                    AgentErrorText.Http(ProviderName, Endpoint, (int)resp.StatusCode, Truncate(json, 500)));
 
             using var doc = JsonDocument.Parse(json);
             string? text = null;
@@ -280,7 +318,8 @@ public sealed class GeminiBackend : IAgentBackend
         }
         catch (Exception ex)
         {
-            return new AgentBackendResponse(null, null, "Gemini exception: " + ex.Message);
+            return new AgentBackendResponse(null, null,
+                AgentErrorText.Exception(ProviderName, Endpoint, ex.Message));
         }
     }
 
@@ -396,12 +435,13 @@ public sealed class OpenAIBackend : IAgentBackend
             var json = await resp.Content.ReadAsStringAsync(ct);
             if (!resp.IsSuccessStatusCode)
                 return new AgentBackendResponse(null, null,
-                    $"OpenAI {(int)resp.StatusCode}: {Truncate(json, 500)}");
+                    AgentErrorText.Http(ProviderName, Endpoint, (int)resp.StatusCode, Truncate(json, 500)));
 
             using var doc = JsonDocument.Parse(json);
             var choices = doc.RootElement.GetProperty("choices");
             if (choices.GetArrayLength() == 0)
-                return new AgentBackendResponse(null, null, "OpenAI: no choices");
+                return new AgentBackendResponse(null, null,
+                    AgentErrorText.Malformed(ProviderName, Endpoint, "no choices"));
             var msg = choices[0].GetProperty("message");
 
             string? text = msg.TryGetProperty("content", out var c) &&
@@ -421,7 +461,8 @@ public sealed class OpenAIBackend : IAgentBackend
         }
         catch (Exception ex)
         {
-            return new AgentBackendResponse(null, null, "OpenAI exception: " + ex.Message);
+            return new AgentBackendResponse(null, null,
+                AgentErrorText.Exception(ProviderName, Endpoint, ex.Message));
         }
     }
 
