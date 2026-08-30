@@ -2430,13 +2430,39 @@ public static class MarketplaceTemplateExtensions
         // صَفحَة الهبوط تُرسِل المُطالَبَة هُنا؛ نَحفَظها في cookie مُؤَقَّت
         // ثُمَّ نُحَوِّل لِلدُخول. بَعد الدُخول الناجِح نُنشِئ جَلسَة تَحليل
         // بِالمُطالَبَة ونُشَغِّلها.
-        app.MapPost("/studio/begin", (HttpRequest req, HttpResponse res) =>
+        // **ومَن دَخَلَ أَصلاً يُستَأنَفُ هُنا، لا يُرسَلُ إلى بابٍ
+        // دَخَلَه.** كانَ التَحويلُ إلى `/studio/auth` غَيرَ مَشروط،
+        // وتِلكَ تَرى الجَلسَةَ قائِمَةً فَتَقفِزُ إلى `/studio` —
+        // **والكَعكَةُ تَبقى غَيرَ مُستَهلَكَة**، فَلا تَحليلَ يُبدَأ
+        // ولا رِسالَةَ تُقال. قيسَ حَيّاً ‏2026-08-30: الكَعكَةُ
+        // مَملوءَةٌ في المُتَصَفِّحِ والصَفحَةُ تَقولُ «لا أَفكار بَعد».
+        // فَالتَدَفُّقُ كانَ أَخضَرَ لِأَوَّلِ زيارَةٍ في العُمرِ
+        // وأَحمَرَ لِكُلِّ زيارَةٍ بَعدَها (القاعِدَة ١٢).
+        app.MapPost("/studio/begin", async (
+            HttpRequest req, HttpResponse res, IDocumentStore store,
+            IServiceScopeFactory scopeFactory,
+            Services.Incubator.FeasibilityAnalysisService incubator,
+            Services.Incubator.StudioAuth auth) =>
         {
             var prompt = req.Form["prompt"].ToString().Trim();
             if (!string.IsNullOrEmpty(prompt))
                 res.Cookies.Append(StudioPromptCookie, Uri.EscapeDataString(prompt),
                     new CookieOptions { IsEssential = true, Path = "/",
                         Expires = DateTimeOffset.UtcNow.AddHours(2) });
+
+            auth.Load();
+            if (auth.IsAuthenticated)
+                // المُطالَبَةُ تُمَرَّرُ صَريحَةً: الكَعكَةُ كُتِبَت على
+                // `Response` في هذا الطَلَبِ نَفسِه، **ولا تَظهَرُ في
+                // `Request.Cookies`** — فَقِراءَةُ الطَلَبِ وَحدَها
+                // تَرُدُّ `null` ويَسكُتُ العَطَبُ كَما كان.
+                return await ResumeStudioPromptAsync(
+                           req, res, auth.UserId!.Value, auth.UserName ?? "",
+                           store, scopeFactory, incubator,
+                           checkConsent: true,
+                           promptOverride: string.IsNullOrEmpty(prompt) ? null : prompt)
+                       ?? Results.Redirect("/studio");
+
             return Results.Redirect("/studio/auth");
         }).DisableAntiforgery();
 
@@ -3881,10 +3907,22 @@ public static class MarketplaceTemplateExtensions
         HttpRequest req, HttpResponse res, Guid userId, string userName,
         IDocumentStore store, IServiceScopeFactory scopeFactory,
         Services.Incubator.FeasibilityAnalysisService incubator,
-        bool checkConsent)
+        bool checkConsent,
+        string? promptOverride = null)
     {
-        var promptCookie = req.Cookies[StudioPromptCookie];
-        if (string.IsNullOrEmpty(promptCookie)) return null;
+        // **مَصدَرانِ لِلمُطالَبَة، وأَحَدُهُما لا غِنى عَنه**: بابُ
+        // الدُخولِ ونُقطَةُ الشُروطِ يَقرَآنِها مِن كَعكَةِ **طَلَبٍ
+        // سابِق**؛ و`‎/studio/begin` يُمَرِّرُها صَريحَةً لِأَنَّه هُوَ
+        // مَن كَتَبَها للتَوّ على `Response` — وكَعكَةُ الرَدِّ لا
+        // تَظهَرُ في `Request.Cookies` أَبَداً.
+        var raw = promptOverride;
+        if (string.IsNullOrEmpty(raw))
+        {
+            var promptCookie = req.Cookies[StudioPromptCookie];
+            if (string.IsNullOrEmpty(promptCookie)) return null;
+            raw = Uri.UnescapeDataString(promptCookie);
+        }
+        if (string.IsNullOrEmpty(raw)) return null;
 
         if (checkConsent)
         {
@@ -3901,7 +3939,7 @@ public static class MarketplaceTemplateExtensions
         }
 
         res.Cookies.Delete(StudioPromptCookie);
-        var prompt = Uri.UnescapeDataString(promptCookie);
+        var prompt = raw;
 
         // tier gate — هَل بَلَغ المُستَخدِم حَدّ تَحاليلِه؟
         using var checkScope = scopeFactory.CreateScope();
