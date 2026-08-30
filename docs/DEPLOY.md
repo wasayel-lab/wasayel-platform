@@ -220,6 +220,7 @@ variables → ‏Actions:
 | `Auth__Email__Provider=brevo` + `Auth__Email__{ApiKey,From,FromName}` | بَريدٌ فِعليّ عَبر HTTPS — **المُوصى بِه في الـSpace**، §٢·ب | `Program.cs` |
 | `Auth__Email__Provider=smtp` + `Auth__Email__{Host,Port,Username,Password,From,FromName}` | بَريدٌ فِعليّ عَبر SMTP — **مَنافِذُه مَحجوبَةٌ في الـSpace**، §٢·ب | `Program.cs` |
 | `Agent__Provider` / `Agent__Model` / `Agent__ApiKey` | مُزَوِّد وَكيل الاستوديو | `Services/AgentProfiles.cs` |
+| `Payments__Provider=simulation` | **وَضعُ تَجرِبَةِ الدَفع** — مُزَوِّدٌ يُعلِنُ أَنَّه تَجرِبَة: يَنجَح، ولا يُحَرِّكُ مالاً، ولا يُصدِرُ فاتورَة، ومَراجِعُه `pay_sim_…`، وشارَةُ «تَجرِبَة» تَظهَرُ في إتمامِ الشِراء. **والغِيابُ لا يُنتِجُه أَبَداً** — وحارِسُ إقلاعٍ مَعكوسٌ يَرمي لَو سُجِّلَ بِلا هذِه القيمَة. ‏ADR-025 | `Program.cs` |
 | `Files__S3__*` (الخَمسَة) | **مَخزَنُ صُوَرِ المُستَأجِرين** — بِدونِها لا تُرفَع صورَةٌ في الإنتاج. §٢·ز | `Program.cs` |
 
 **وثَلاثَةٌ لا تُوضَع في الإنتاج أَبَداً** — بَذّاراتُ عَيِّناتٍ تَكتُب

@@ -187,7 +187,7 @@ public class EndpointBodyBleedTests
         // `TenantPlanAuthoring.ReadDefinition` (نَقِيَّةٌ، مَقيسَةٌ
         // بِعِشرينَ حالَة)، والكِتابَةُ في
         // `TenantPlanService.AuthorAsync` بِالمُصادِقِ مَرَّتَينِ كَما
-        // هُوَ. راجِع `TenantPlanAuthoringTests` و‏ADR-021.
+        // هُوَ. راجِع `TenantPlanAuthoringTests` و‏ADR-024.
 
                 //
         // ‏2618 ← 2622 يَومَ ‏2026-08-30 (‏ADR-025): أَربَعَةُ أَسطُرٍ في

@@ -3346,7 +3346,7 @@ public static class MarketplaceTemplateExtensions
         // والقِراءَةُ والمُصادَقَةُ والكِتابَةُ **كُلُّها خارِجَ الجِسم**:
         // `TenantPlanAuthoring.ReadDefinition` نَقِيَّةٌ مَقيسَةٌ
         // بِعِشرينَ حالَة، و`TenantPlanService.AuthorAsync` تَمُرُّ
-        // بِالمُصادِقِ مَرَّتَينِ كَما هُوَ. راجِع ADR-021.
+        // بِالمُصادِقِ مَرَّتَينِ كَما هُوَ. راجِع ADR-024.
         app.MapPost("/studio/apps/{slug}/plans/save", async (
             string slug, HttpRequest req, IDocumentStore store,
             Services.Incubator.StudioAuth auth,
