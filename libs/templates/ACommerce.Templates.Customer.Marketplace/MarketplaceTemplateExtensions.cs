@@ -3396,9 +3396,32 @@ public static class MarketplaceTemplateExtensions
         // وهي تَرُدّ 302 إلى صَفحَة النَجاح. والحارِس هُنا هُوَ
         // <b>قَرارُهُما نَفسُه حَرفِيّاً</b> — جَلسَة studio صالِحَة، ثُمَّ
         // مِلكِيَّة الدِراسَة — لا حارِسٌ ثانٍ مَكتوب بِيَدٍ ثانِيَة.
+        //
+        // ═══ ‏2026-08-30 — والحارِسُ الأَوَّلُ لَم يَكُنِ الحارِسَ كُلَّه ═══
+        //
+        // أُضيفَت جَلسَةُ الاستوديو والمِلكِيَّةُ ولَم تُضَف <b>بَوّابَةُ
+        // الحِصَّة</b>: قائِمَةُ الوُسَطاءِ لا تَحوي
+        // <c>StudioTierService</c> إطلاقاً. فَصاحِبُ دِراسَةٍ عَلى
+        // <c>spark</c> (تَحليلٌ واحِدٌ شَهرِيّاً) يَنقُر «إعادَة»
+        // بِلا سَقف، وكُلُّ نَقرَةٍ <b>نِداءا</b> نَموذَجِ لُغَةٍ بِـ
+        // <c>MaxTokens: 8000</c> عَلى <b>مِفتاحِ المالِك</b>.
+        //
+        // والعِلاجُ بَندان لا بَند، لِأَنّ البَوّابَةَ وَحدَها فَحصٌ
+        // ثُمَّ إطلاقٌ بِنافِذَةٍ بَينَهُما:
+        //   ‏١. <c>CheckAnalyzeAsync</c> — نَفسُ بَوّابَةِ
+        //      `ResumeStudioPromptAsync`، ونَفسُ شَكلِ `/refine`.
+        //   ‏٢. <c>TryClaimAnalysisAsync</c> — حَجزٌ ذَرِّيٌّ بِمِفتاحِ
+        //      فَرادَةٍ في Postgres، فَخَمسونَ طَلَباً عَلى نَفسِ
+        //      المُعَرِّفِ يَفوزُ مِنها واحِد.
+        //
+        // <b>والتَرتيبُ جُزءٌ مِنَ العِلاج</b>: البَوّابَةُ تَسبِقُ
+        // الحَجز (فَلا يُقلَبُ شَيءٌ لِمَن تَجاوَزَ حِصَّتَه)، والحَجزُ
+        // يَسبِقُ العَدّ (فَخاسِرُ السِباقِ لا يُنفِقُ حِصَّةً)،
+        // والعَدُّ يَسبِقُ الإطلاق.
         app.MapPost("/studio/s/{id:guid}/analyze", async (
             Guid id, IServiceScopeFactory scopeFactory,
             Services.Incubator.StudioAuth auth,
+            Services.Incubator.StudioTierService tier,
             Services.Incubator.FeasibilityAnalysisService svc) =>
         {
             auth.Load();
@@ -3408,7 +3431,19 @@ public static class MarketplaceTemplateExtensions
             if (session is null || session.OwnerUserId != auth.UserId!.Value)
                 return Results.Redirect("/studio");
 
-            await svc.MarkAnalyzingAsync(id);
+            var gate = await tier.CheckAnalyzeAsync(auth.UserId!.Value);
+            if (!gate.Allowed)
+                return Results.Redirect($"/studio/s/{id}?upgrade={gate.BreachCode}");
+
+            // الحَجزُ والتَشغيلُ لا يَفتَرِقان. وكُلُّ ما لَيسَ
+            // `Claimed` يَعني «لا تُطلِق» — والوِجهَةُ صَفحَةُ
+            // الدِراسَةِ نَفسُها، وهي تَقولُ «التَحليلُ جارٍ» بِحالَتِها
+            // لا بِرِسالَةٍ ثانِيَة. فَالرَفضُ يُرى ولا يُبتلَع.
+            var claim = await svc.TryClaimAnalysisAsync(id);
+            if (claim != Services.Incubator.FeasibilityAnalysisService.ClaimOutcome.Claimed)
+                return Results.Redirect($"/studio/s/{id}");
+
+            await tier.RecordAnalysisAsync(auth.UserId!.Value);
             _ = Task.Run(async () =>
             {
                 using var scope = scopeFactory.CreateScope();
@@ -3456,17 +3491,29 @@ public static class MarketplaceTemplateExtensions
         {
             if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
                 return Forbidden();
-            // عيّن الحالة فوراً (متزامن) لتعرض صفحة الدراسة المؤشّر،
-            // ثم شغّل التحليل الطويل في الخلفية بنطاق DI جديد.
-            await svc.MarkAnalyzingAsync(id);
-            _ = Task.Run(async () =>
+
+            // الحَجزُ يَقلِبُ الحالَةَ فَوراً (مُتَزامِناً) لِتَعرِضَ
+            // صَفحَةُ الدِراسَةِ المُؤَشِّر، ثُمَّ يُشَغَّلُ التَحليلُ
+            // الطَويلُ في الخَلفِيَّةِ بِنِطاقِ DI جَديد.
+            //
+            // <b>ولِماذا يُحجَزُ مَسارُ المُشرِفِ أَيضاً وهُوَ
+            // مِفتاحُه</b>: المِفتاحُ مِفتاحُه، والفاتورَةُ فاتورَتُه —
+            // ولِذلك لا بَوّابَةَ حِصَّةٍ هُنا. لكِنَّ نَقرَتَينِ
+            // مُتَتالِيَتَينِ عَلى زِرٍّ لا يَستَجيبُ فَوراً كانَتا
+            // تُشَغِّلانِ تَحليلَينِ عَلى نَفسِ الدِراسَة — وذاكَ
+            // إنفاقٌ مُضاعَفٌ بِلا خَصمٍ يَستَفيدُ مِنه.
+            if (await svc.TryClaimAnalysisAsync(id)
+                == Services.Incubator.FeasibilityAnalysisService.ClaimOutcome.Claimed)
             {
-                using var scope = scopeFactory.CreateScope();
-                var bg = scope.ServiceProvider
-                    .GetRequiredService<Services.Incubator.FeasibilityAnalysisService>();
-                try { await bg.RunAnalysisAsync(id); }
-                catch { /* الحالة تبقى Analyzing؛ تظهر مهلة في الواجهة */ }
-            });
+                _ = Task.Run(async () =>
+                {
+                    using var scope = scopeFactory.CreateScope();
+                    var bg = scope.ServiceProvider
+                        .GetRequiredService<Services.Incubator.FeasibilityAnalysisService>();
+                    try { await bg.RunAnalysisAsync(id); }
+                    catch { /* الحالة تبقى Analyzing؛ تظهر مهلة في الواجهة */ }
+                });
+            }
             return Results.Redirect($"/admin/incubator/{id}/study");
         }).DisableAntiforgery();
 

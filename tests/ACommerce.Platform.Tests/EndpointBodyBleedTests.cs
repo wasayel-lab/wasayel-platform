@@ -90,7 +90,24 @@ public class EndpointBodyBleedTests
         // مُزَوِّدِ التاجِر. والقَرارُ نَفسُه في
         // `PlanPurchasePolicy.Decide` — دالَّةٌ نَقِيَّةٌ لا سَطرَ لَها
         // هُنا؛ والسَطرانِ تَحويلٌ لا حِساب.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2550),
+        //
+        // ‏2550 ← 2555 في نَفسِ اليَوم: **حِراسَةٌ لا حِساب**، وهذا
+        // بِعَينِه ما يَسمَحُ بِه هذا السِجِلّ. نُقطَتا التَحليلِ
+        // (‏`/studio/s/{id}/analyze` و`/admin/incubator/{id}/analyze`)
+        // كانَتا تَقلِبانِ الحالَةَ ثُمَّ تُطلِقانِ نِداءَ نَموذَجِ
+        // لُغَةٍ — الأولى **بِلا بَوّابَةِ حِصَّةٍ إطلاقاً**. فَأُضيفَ
+        // إلَيهِما: وَسيطُ `StudioTierService` في **التَوقيع**،
+        // و`CheckAnalyzeAsync` قَبلَ كُلِّ شَيء، و`TryClaimAnalysisAsync`
+        // مَكانَ `MarkAnalyzingAsync`، و`RecordAnalysisAsync` بَعدَ
+        // الفَوز.
+        //
+        // **والقَرارُ كُلُّه خارِجَ الجِسمَين**: الحَجزُ الذَرِّيُّ في
+        // `FeasibilityAnalysisService.TryClaimAnalysisAsync` (مُعامَلَةٌ
+        // واحِدَةٌ بِمِفتاحِ فَرادَة)، والبَوّابَةُ في
+        // `StudioTierService` كَما هِيَ مُنذُ `/refine`. فَما دَخَلَ
+        // هُنا: فَحصٌ ورَدّ، وفَحصٌ ورَدّ — لا سَطرَ حِسابٍ واحِد.
+        // راجِع `LanguageModelQuotaGateTests`.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2555),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -482,7 +499,13 @@ public class EndpointBodyBleedTests
     /// <para><b>وما بَقِيَ في الجِسمَينِ حِراسَةٌ لا حِساب</b>: حارِسُ
     /// المَتجَر، وحارِسُ المَنَصَّةِ فَوقَه لِـ<c>platform_key</c>
     /// (يَصرِفُ مِن جَيبِنا)، ونِداءٌ، وسَطرا تَدقيق، ورُدود.</para></remarks>
-    private const int PinnedTotal = 2791;
+    ///
+    /// <remarks><b>‏2791 ← 2796 يَومَ ‏2026-08-30</b>: خَمسَةُ أَسطُرِ
+    /// حِراسَةٍ في نُقطَتَي التَحليل — بَوّابَةُ حِصَّةٍ كانَت غائِبَةً
+    /// تَماماً، وحَجزٌ ذَرِّيٌّ مَكانَ قَلبِ حالَةٍ يَسبِقُ إطلاقاً.
+    /// والقَرارُ خارِجَهُما كامِلاً (‏<c>TryClaimAnalysisAsync</c> و
+    /// <c>StudioTierService</c>)، فَما دَخَلَ فَحصٌ ورَدّ.</remarks>
+    private const int PinnedTotal = 2796;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

@@ -91,6 +91,151 @@ public sealed class FeasibilityAnalysisService
     public Task MarkAnalyzingAsync(Guid id, CancellationToken ct = default)
         => SetStatusAsync(id, IncubatorStatus.Analyzing, ct);
 
+    // ─── الحَجز: مَرَّةٌ واحِدَةٌ في نَفسِ المُعامَلَة ─────────────────
+
+    /// <summary>جَوابُ مُحاوَلَةِ الحَجز — مَعجَمٌ مُغلَقٌ بِأَربَعَةٍ
+    /// لا خامِسَ لَها.</summary>
+    public enum ClaimOutcome
+    {
+        /// <summary>حُجِزَت — ولِهذا الطَلَبِ وَحدَه أَن يُطلِقَ التَحليل.</summary>
+        Claimed,
+        /// <summary>لا جَلسَةَ بِهذا المُعَرِّف.</summary>
+        NotFound,
+        /// <summary>قَيدَ التَحليلِ سَلَفاً — لا تُعادُ ولا تُنفِقُ نِداءً.</summary>
+        AlreadyRunning,
+        /// <summary>خَسِرَ السِباقَ عَلى نَفسِ التَشغيلَة — وغَيرُه يُطلِقُها.</summary>
+        LostRace,
+    }
+
+    /// <summary>
+    /// <para><b>يَحجُزُ الجَلسَةَ لِتَشغيلَةِ تَحليلٍ واحِدَة — والحَجزُ
+    /// والقَلبُ في مُعامَلَةٍ واحِدَة.</b></para>
+    ///
+    /// <para><b>العِلَّةُ الَّتي كَتَبَت هذِه الدالَّة (‏2026-08-30)</b>:
+    /// كانَ المَسارُ <c>MarkAnalyzingAsync</c> ثُمَّ <c>Task.Run</c> —
+    /// أَي <b>فَحصٌ ثُمَّ إطلاق</b> بِنافِذَةٍ بَينَهُما. فَخَمسونَ
+    /// طَلَباً مُتَوازِياً عَلى <b>نَفسِ المُعَرِّف</b> تَعبُرُ
+    /// جَميعاً، وتُطلِقُ خَمسينَ تَحليلاً = <b>مِئَةَ</b> نِداءِ
+    /// نَموذَجِ لُغَةٍ (لِأَنّ <see cref="RunAnalysisAsync"/> يُحاوِلُ
+    /// مَرَّتَين) عَلى مِفتاحِ المالِك.</para>
+    ///
+    /// <para><b>والقَرارُ هُنا هُوَ الكِتابَةُ نَفسُها</b>: إدخالُ
+    /// <see cref="AnalysisRunClaim"/> بِمِفتاحٍ مُشتَقٍّ مِن
+    /// (المُعَرِّف، رَقمِ التَشغيلَة) — و<c>Insert</c> لا
+    /// <c>Store</c>، لِأَنّ <c>Store</c> يَكتُبُ فَوقَ المَوجودِ فَلا
+    /// يَصطَدِمُ بِأَحَد. الخاسِرُ يَرتَدُّ بِمُعامَلَتِه كامِلَةً،
+    /// فَلا يُقلَبُ لَه شَيءٌ ولا يُنفَقُ لَه نِداء.</para>
+    ///
+    /// <para><b>ويَفشَلُ مُغلَقاً</b>: كُلُّ ما لَيسَ
+    /// <see cref="ClaimOutcome.Claimed"/> يَعني «لا تُطلِق».</para>
+    /// </summary>
+    public async Task<ClaimOutcome> TryClaimAnalysisAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var session = _store.LightweightSession(IncubatorTenant);
+        var s = await session.LoadAsync<IncubatorSession>(id, ct);
+        if (s is null) return ClaimOutcome.NotFound;
+
+        // جَلسَةٌ قَيدَ التَحليلِ لا تُعاد — ولا نُصَعِّدُ الأَمرَ إلى
+        // اصطِدامِ مِفتاحٍ لِنَقولَ ما تَقولُه الحالَةُ نَفسُها.
+        if (s.Status == IncubatorStatus.Analyzing && !IsStale(s, DateTime.UtcNow))
+            return ClaimOutcome.AlreadyRunning;
+
+        var attempt = s.AnalysisRuns;
+        session.Insert(new AnalysisRunClaim
+        {
+            Id = ClaimId(id, attempt), SessionId = id, Attempt = attempt,
+        });
+
+        s.AnalysisRuns = attempt + 1;
+        s.Status = IncubatorStatus.Analyzing;
+        s.UpdatedAt = DateTime.UtcNow;
+        session.Store(s);
+
+        try
+        {
+            await session.SaveChangesAsync(ct);
+            return ClaimOutcome.Claimed;
+        }
+        catch (Exception ex) when (IsDuplicateKey(ex))
+        {
+            return ClaimOutcome.LostRace;
+        }
+    }
+
+    /// <summary>مِفتاحُ تَشغيلَةٍ واحِدَة. <c>N</c> بِلا شَرَطات
+    /// لِيَبقى المِفتاحُ قَصيراً وثابِتَ الشَكل.</summary>
+    public static string ClaimId(Guid sessionId, int attempt)
+        => $"{sessionId:N}#{attempt}";
+
+    /// <summary>
+    /// <para><b>مَتى تُعتَبَرُ تَشغيلَةٌ «قَيدَ التَحليل» مَهجورَة</b> —
+    /// و<b>الرَقَمُ مَحسوبٌ مِنَ الكودِ لا مُختَرَعاً</b> (القاعِدَة
+    /// ١٦): مُهلَةُ عَميلِ HTTP في الخَلفِيّاتِ الثَلاثِ جَميعاً
+    /// <c>60</c> ثانِيَة (‏<c>AgentBackends.cs</c>)، و
+    /// <see cref="RunAnalysisAsync"/> يُحاوِلُ <b>مَرَّتَين</b> —
+    /// فَأَقصى عُمرٍ مُمكِنٍ لِتَشغيلَةٍ حَيَّةٍ دَقيقَتان. والضِعفُ
+    /// هامِشُ أَمانٍ لِلشَبَكَةِ وقاعِدَةِ البَيانات.</para>
+    ///
+    /// <para><b>ولِماذا يوجَدُ هذا أَصلاً</b>: بِلا مُهلَةِ تَقادُمٍ،
+    /// عَمَلِيَّةٌ تَموتُ في مُنتَصَفِ التَحليلِ تَترُكُ الدِراسَةَ
+    /// <c>Analyzing</c> <b>إلى الأَبَد</b> — فَيَصيرُ مَنعُ
+    /// التَكرارِ حَبساً، ونَقرَةُ «إعادَة» زِرّاً لا يَفعَلُ شَيئاً.
+    /// وذاكَ عَطَبٌ أَسوَأُ مِنَ الَّذي جاءَ يُعالِجُه.</para>
+    ///
+    /// <para><b>ولا يَفتَحُ هذا نافِذَةَ سِباقٍ ثانِيَة</b>: التَقادُمُ
+    /// يُقَرِّرُ مَن <b>يُحاوِل</b>، والفَرادَةُ تُقَرِّرُ مَن
+    /// <b>يَفوز</b> — فَخَمسونَ طَلَباً عَلى جَلسَةٍ مُتَقادِمَةٍ
+    /// يَقرَؤونَ نَفسَ رَقمِ التَشغيلَةِ ويَتَصادَمونَ عَلى نَفسِ
+    /// المِفتاح.</para>
+    /// </summary>
+    public static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(4);
+
+    internal static bool IsStale(IncubatorSession s, DateTime nowUtc)
+        => nowUtc - s.UpdatedAt >= StaleAfter;
+
+    /// <summary>
+    /// <para><b>أَخَرقُ فَرادَةٍ هذا؟</b> — ويُفحَصُ بِشَكلَينِ لا
+    /// بِواحِد، و<b>الثاني كَشَفَه القياسُ لا التَخمين</b>.</para>
+    ///
+    /// <para><b>الكِلفَةُ الَّتي كَتَبَت هذا التَعليق (‏2026-08-30)</b>:
+    /// كانَت النُسخَةُ الأولى تَفحَصُ
+    /// <c>Npgsql.PostgresException{SqlState:"23505"}</c> وَحدَه — وهُوَ
+    /// الشَكلُ المَكتوبُ في <c>MarketplaceTemplateExtensions</c>
+    /// لِتَضارُبِ التَيّار، فَبَدا القِياسُ عَلَيه سَليماً. وأَوَّلُ
+    /// تَصادُمٍ حَقيقيٍّ مَحقونٍ في البُرهانِ الحَيِّ أَظهَرَ أَنّ
+    /// Marten <b>يُحَوِّلُ</b> الاستِثناءَ عِندَ الإدخالِ إلى
+    /// <c>JasperFx.DocumentAlreadyExistsException</c>
+    /// (‏<c>ExceptionTransformExtensions.TransformAndThrow</c>) —
+    /// و<c>InnerException</c> لا يَحمِلُ الأَصل. فَالمُرَشِّحُ كانَ
+    /// <b>لا يُطابِقُ شَيئاً أَبَداً</b>، والخاسِرُ كانَ سَيَرتَدُّ
+    /// بِـ<c>500</c> بَدَلَ رَفضٍ نَظيف.</para>
+    ///
+    /// <para><b>والدَرسُ في سَطر</b>: الفَرعُ الَّذي لَم يُنَفَّذ
+    /// دَعوى. والبُرهانُ الأَوَّلُ أَعطى «فائِزٌ واحِد» وهُوَ
+    /// <c>lost=0</c> — أَي أَنّ الفَرعَ الَّذي يَقومُ عَلَيه العِلاجُ
+    /// كُلُّه لَم يَمُرَّ بِه أَحَد. (القاعِدَة ١٠.)</para>
+    ///
+    /// <para><b>ويُفحَصُ بِالاسمِ لا بِالنَوع</b>: النَوعُ في
+    /// <c>JasperFx.Core</c> ولا يُشيرُ إلَيه هذا المَشروعُ
+    /// مُباشَرَةً، وإضافَةُ مَرجِعٍ لِأَجلِ <c>catch</c> واحِدٍ
+    /// تَجريدٌ يَسبِقُ مُستَهلِكَه. ونَفسُ شَكلِ
+    /// <c>IsStreamVersionConflict</c> في مِلَفِّ النِقاط.</para>
+    ///
+    /// <para><b>وما لا يَبتَلِعُه</b>: أَيُّ فَشَلٍ آخَرَ يُرفَعُ كَما
+    /// هُوَ. مُرَشِّحٌ يَبتَلِعُ ما لا يَفهَمُ يَجعَلُ انقِطاعَ
+    /// الشَبَكَةِ يُقرَأُ «خَسِرَ السِباق» — فَتَبدو الجَلسَةُ
+    /// مَحجوزَةً لِأَحَدٍ لا وُجودَ لَه.</para>
+    /// </summary>
+    private static bool IsDuplicateKey(Exception? ex)
+    {
+        for (var e = ex; e is not null; e = e.InnerException)
+        {
+            if (e.GetType().Name == "DocumentAlreadyExistsException") return true;
+            if (e is Npgsql.PostgresException { SqlState: "23505" }) return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// يُعيد توليد قِسم واحِد مِن الدِراسَة (مَثَلاً <c>risks</c> أَو
     /// <c>marketSizing</c>) بِناءً على مُلاحَظَة المُستَخدِم، ويَدمُجه في
