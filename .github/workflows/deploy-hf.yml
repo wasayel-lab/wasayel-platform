@@ -166,21 +166,105 @@ jobs:
       # فَيُلتَقَطُ `startedAt` الآنَ، ويُشتَرَطُ بَعدَ الدَفعِ أَن
       # **يَتَقَدَّم** — أَي أَن تَكونَ حاوِيَةٌ قَد دارَت فِعلاً. ودِقَّةُ
       # الثانِيَةِ تَكفي: بِناءُ الـSpace دَقائِقُ لا أَجزاءُ ثانِيَة.
-      # وغِيابُ خَطِّ أَساسٍ حالَةٌ مَشروعَة (‏أَوَّلُ نَشرٍ لِلنُقطَة).
+      #
+      # ═══ وخَطُّ أَساسٍ فارِغٌ كانَ يُلغي هذا الحارِسَ صامِتاً ═══════
+      #
+      # الصيغَةُ الأولى قالَت «غِيابُ خَطِّ أَساسٍ حالَةٌ مَشروعَة (أَوَّلُ
+      # نَشرٍ لِلنُقطَة)» فَمَرَّرَت الفارِغَ. **والفارِغُ حالَتان لا
+      # حالَة**: «‏استُطلِعَ ولا نُقطَةَ هُناك» و«‏فَشِلَ الاستِطلاع». وفي
+      # الثانِيَةِ — مُهلَةٌ عابِرَةٌ أَو ‏5xx لَحظِيّ — يُتَخَطّى الشَرطُ
+      # كُلُّه، فَيَمُرُّ **بِالضَبطِ** السيناريو الَّذي كُتِبَ الحارِسُ
+      # لَه: حاوِيَةٌ قَديمَةٌ تَحمِلُ `sha` سَلفاً تَرُدُّ ثَلاثَ
+      # استِطلاعاتٍ مُتَّفِقَةٍ في ثَوانٍ ⇒ أَخضَر، ثُمَّ يَفشَلُ بِناءُ HF.
+      #
+      # فَالحالاتُ ثَلاثٌ صَريحَةٌ: `measured` (‏شوهِدَ `startedAt` صالِح)
+      # و`absent` (‏أَجابَ HTTP ولا نُقطَةَ — أَوَّلُ نَشرٍ فِعلاً)
+      # و`failed` (‏لَم يُجِب أَصلاً). والثالِثَةُ **لا تُمَرَّر**: يُشتَرَطُ
+      # أَن يَكونَ `startedAt` الحَيُّ **بَعدَ لَحظَةِ بَدءِ الدَفع** —
+      # أَي حاوِيَةً دارَت في هذِه الجَولَة. والساعَتانِ UTC وبِنَفسِ
+      # الشَكل، فَالمُقارَنَةُ المُعجَمِيَّةُ هي الزَمَنِيَّة؛ ويُطرَحُ
+      # ‏120ث احتِياطاً لِانحِرافِ الساعات، **وهو مُصَرَّحٌ بِه لا مَخفيّ**.
+      #
+      # ═══ وثَلاثُ عَيِّناتٍ لا واحِدَة ═══════════════════════════════
+      # النُسَخُ مُتَعَدِّدَة (‏`x-proxied-replica` يُثبِتُ ذلك)، وعَيِّنَةٌ
+      # واحِدَةٌ تَلتَقِطُ نُسخَةً واحِدَة — فَتَعبُرُ نُسخَةٌ قَديمَةٌ
+      # أُخرى الحارِسَ بِـ`startedAt` مُختَلِفٍ وهي قَديمَة.
+      #
+      # ═══ ولا يُكتَبُ في `$GITHUB_ENV` ما لَم يُصادَق ═════════════════
+      # القيمَتانِ مُشتَقَّتانِ مِن **رَدٍّ بَعيد**، والكِتابَةُ في
+      # `$GITHUB_ENV` بِلا تَصديقٍ تَجعَلُ سَطراً في جِسمِ JSON يَحقِنُ
+      # مُتَغَيِّراً في الخَطَواتِ التالِيَة — **بِما فيها `sha` الَّذي
+      # تُقارِنُ بِه البَوّابَةُ نَفسُها**. أَي أَنّ الطَرَفَ الَّذي
+      # وُضِعَت لِكَشفِه يَستَطيعُ الكَذِبَ عَلَيها. فَـ40 مِحرَفاً
+      # سِتّينِيّاً، و‏ISO-8601 بِـZ، وإلّا فَفارِغ.
       - name: Measure the live baseline before pushing
         env:
+          HF_SPACE:     ${{ vars.HF_SPACE }}
           HF_SPACE_URL: ${{ vars.HF_SPACE_URL }}
+          HF_TOKEN:     ${{ secrets.HF_TOKEN }}
         run: |
           set -uo pipefail
-          base_commit=""; base_started=""
-          if [ -n "${HF_SPACE_URL:-}" ]; then
-            body="$(curl -sS --max-time 20 "https://${HF_SPACE_URL}/health" 2>/dev/null || true)"
-            base_commit="$(printf '%s' "${body}" | jq -r '.commit // empty' 2>/dev/null || true)"
-            base_started="$(printf '%s' "${body}" | jq -r '.startedAt // empty' 2>/dev/null || true)"
+
+          # ═══ المُضيفُ يُقرَأُ مِن الـAPI، ولا يُشتَقُّ تَخميناً ═══════
+          # كانَ غِيابُ `vars.HF_SPACE_URL` يَجعَلُ البَوّابَةَ الحَيَّةَ
+          # — وهي **المُصَدِّقُ الوَحيدُ** على أَنّ الرَقَمَ المُعلَنَ هو
+          # `sha` — تُحَذِّرُ وتَخرُجُ بِصِفر. وقيسَ اليَومَ أَنَّه غَيرُ
+          # مَضبوطٍ فِعلاً، فَالحارِسُ كُلُّه كانَ أَعمى.
+          # والاشتِقاقُ مِن ترويسَةِ `link` كانَ تَخميناً بِحَقّ — أَمّا
+          # `‏.host` في رَدِّ الـAPI فَهو **تَصريحُ HF نَفسِه** بِمُضيفِ
+          # الـSpace. قيسَ بِلا رَمز: ‏200 و
+          # `"host":"https://acommerceecommerce-acommerce-ecommerce.hf.space"`.
+          live_host="${HF_SPACE_URL:-}"
+          host_src="vars.HF_SPACE_URL"
+          if [ -z "${live_host}" ]; then
+            api_body="$(curl -sS --max-time 20 -H "Authorization: Bearer ${HF_TOKEN}" \
+                        "https://huggingface.co/api/spaces/${HF_SPACE}" 2>/dev/null || true)"
+            h="$(printf '%s' "${api_body}" | jq -r '.host // empty' 2>/dev/null || true)"
+            h="${h#https://}"; h="${h#http://}"; h="${h%%/*}"
+            case "${h}" in
+              *[!a-zA-Z0-9.-]*|"") h="" ;;
+            esac
+            live_host="${h}"
+            host_src="huggingface API .host"
           fi
+          echo "live_host=${live_host}" >> "$GITHUB_ENV"
+          echo "المُضيفُ الحَيّ: ${live_host:-<لا شَيء>}  (المَصدَر: ${host_src})"
+
+          deploy_floor="$(date -u -d '-120 seconds' +%Y-%m-%dT%H:%M:%SZ)"
+          echo "deploy_floor=${deploy_floor}" >> "$GITHUB_ENV"
+
+          base_commit=""; base_starts=""; base_state="failed"; answered=0; seen=0
+          if [ -n "${live_host}" ]; then
+            for i in 1 2 3; do
+              code="$(curl -sS --max-time 20 -o "${RUNNER_TEMP}/base.json" -w '%{http_code}' \
+                      "https://${live_host}/health?baseline=${GITHUB_RUN_ID}-${i}" 2>/dev/null)" || code="000"
+              case "${code}" in 000|5??) : ;; *) answered=1 ;; esac
+              c="$(jq -r '.commit // empty'    < "${RUNNER_TEMP}/base.json" 2>/dev/null || true)"
+              s="$(jq -r '.startedAt // empty' < "${RUNNER_TEMP}/base.json" 2>/dev/null || true)"
+              case "${c}" in *[!0-9a-f]*) c="" ;; esac
+              [ "${#c}" -eq 40 ] || c=""
+              printf '%s' "${s}" \
+                | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$' || s=""
+              if [ -n "${s}" ]; then
+                seen=1
+                base_commit="${c}"
+                case ",${base_starts}," in *",${s},"*) : ;; *) base_starts="${base_starts:+${base_starts},}${s}" ;; esac
+              fi
+              echo "  عَيِّنَة ${i}: code=${code} commit=${c:-<لا شَيء>} startedAt=${s:-<لا شَيء>}"
+              sleep 3
+            done
+            if   [ "${seen}" = "1" ];     then base_state="measured"
+            elif [ "${answered}" = "1" ]; then base_state="absent"
+            else                               base_state="failed"
+            fi
+          else
+            base_state="nohost"
+          fi
+
           echo "base_commit=${base_commit}"   >> "$GITHUB_ENV"
-          echo "base_started=${base_started}" >> "$GITHUB_ENV"
-          echo "خَطُّ الأَساس: commit=${base_commit:-<لا شَيء>} startedAt=${base_started:-<لا شَيء>}"
+          echo "base_starts=${base_starts}"   >> "$GITHUB_ENV"
+          echo "base_state=${base_state}"     >> "$GITHUB_ENV"
+          echo "خَطُّ الأَساس [${base_state}]: commit=${base_commit:-<لا شَيء>} startedAt∈{${base_starts:-<لا شَيء>}} · أَرضِيَّةُ الزَمَن=${deploy_floor}"
 
       - name: Push the filtered tree to the Space
         env:
@@ -196,6 +280,20 @@ jobs:
           sha="$(git rev-parse HEAD)"
           echo "sha=${sha}" >> "$GITHUB_ENV"
           echo "إيداع المَصدَر: ${sha}"
+
+          # ═══ `base_commit` كانَ يُلتَقَطُ ويُطبَعُ ولا يُقرَأُ في تَأكيد ═══
+          # وهو **أَدَقُّ إشارَةٍ مُتاحَةٍ** إلى الحالَةِ الَّتي كُتِبَ لَها
+          # خَطُّ الأَساس: إن كانَ الحَيُّ يَحمِلُ `sha` **قَبلَ** الدَفع،
+          # فَشَرطُ «‏commit == sha» يَخضَرُّ بِلا أَن يَصِلَ بِناءٌ جَديد،
+          # والبُرهانُ الوَحيدُ الباقي هو تَقَدُّمُ `startedAt`. يُقالُ
+          # صَراحَةً في السِجِلِّ والمُلَخَّصِ لِئَلّا يُقرَأَ الأَخضَرُ
+          # أَكثَرَ مِمّا يَقول.
+          if [ "${base_state:-}" = "measured" ] && [ "${base_commit:-}" = "${sha}" ]; then
+            echo "::warning::الحَيُّ كانَ يَحمِلُ ${sha} قَبلَ الدَفع — مُطابَقَةُ البَصمَةِ وَحدَها لا تُثبِتُ وُصولَ بِناءٍ جَديد؛ البُرهانُ تَقَدُّمُ startedAt."
+            echo "base_same=1" >> "$GITHUB_ENV"
+          else
+            echo "base_same=0" >> "$GITHUB_ENV"
+          fi
 
           # الرَقَمُ الَّذي لا أَمرَ يُنتِجُه يَتَعَفَّن — **وقَد تَعَفَّنَ
           # هُنا فِعلاً**: كانَ المُلَخَّصُ يَقول «‏مِن 757 مُتَتَبَّعاً»
@@ -244,7 +342,13 @@ jobs:
 
           # والرَمزُ لا يُطبَع: يُبنى الـURL في المُتَغَيِّر ولا يُصدَّر،
           # وGitHub يُقَنِّع قيمَةَ السِرّ في السِجِلّ عَلى كُلّ حال.
-          git push --force \
+          # ═══ ولا يُنادى شَيءٌ بِلا مُهلَة ══════════════════════════════
+          # كانَ هذا **الانتِظارَ المَفتوحَ الوَحيدَ** في الوَظيفَة: دَفعٌ
+          # إلى مُضيفٍ لا يُجيبُ لا يَفشَل — يَعلَقُ حَتّى تَنتَهي مُهلَةُ
+          # الوَظيفَةِ كامِلَةً (‏25 دَقيقَة)، فَيُخَلِّفُ نَشراً لا أَحَدَ
+          # قَرَأَ نَتيجَتَه. **تَعليقٌ يَبدو عَمَلاً أَسوَأُ مِن خَطَإٍ
+          # صَريح.**
+          timeout 300 git push --force \
             "https://${user}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}.git" \
             "HEAD:refs/heads/main"
 
@@ -323,33 +427,53 @@ jobs:
       - name: Assert the live Space serves this commit
         env:
           HF_SPACE:     ${{ vars.HF_SPACE }}
-          HF_SPACE_URL: ${{ vars.HF_SPACE_URL }}
           WAIT:         ${{ vars.HF_HEALTH_WAIT_SECONDS }}
         run: |
           set -uo pipefail
 
-          # ‏**غِيابُ المُتَغَيِّرِ لا يوقِفُ نَشراً** — يُسَمّى بِعَينِه
-          # ويُقالُ في المُلَخَّصِ إنّ الحَيَّ **لَم يُقَس**. وفَحصٌ
-          # إلزاميٌّ يُفشِلُ الوَظيفَةَ كانَ سَيُوقِفُ كُلَّ تَحديثٍ
-          # لِلخِدمَة — بِما فيه إصلاحٌ أَمنيٌّ عاجِل — حَتّى يُنقَرَ
-          # إعدادٌ يَدَوِيّ. **ولا يُشتَقُّ المُضيفُ تَخميناً**: الاشتِقاق
-          # مَبنيٌّ على رَصدَةٍ واحِدَةٍ مِن ترويسَةِ `link` الحَيَّة ولا
-          # يُوَثِّقُه شَيءٌ، واشتِقاقٌ خاطِئٌ يَستَطلِعُ مُضيفاً غَيرَ
-          # مَوجودٍ فَيَتَّهِمُ نَشراً سَليماً.
-          if [ -z "${HF_SPACE_URL:-}" ]; then
-            echo "::warning::‏vars.HF_SPACE_URL غَير مَضبوط — الحَيُّ لَم يُقَس، والنَشرُ لَم يُوقَف."
-            echo "المَطلوب — Settings → Secrets and variables → Actions → Variables:"
-            echo "  · HF_SPACE_URL = acommerceecommerce-acommerce-ecommerce.hf.space"
-            echo "| الحَيُّ يَخدِم | ⚠️ لَم يُقَس — \`vars.HF_SPACE_URL\` غَير مَضبوط |" \
+          # ‏**والمُضيفُ لَم يَعُد مَشروطاً بِإعدادٍ يَدَوِيّ**: يُقرَأُ في
+          # خُطوَةِ خَطِّ الأَساسِ مِن `vars.HF_SPACE_URL` إن ضُبِط، وإلّا
+          # مِن **حَقلِ `.host` في رَدِّ API الـSpace** — وهو تَصريحُ HF
+          # بِمُضيفِ الـSpace لا اشتِقاقٌ مِن ترويسَة. وقيسَ أَنّ
+          # `vars.HF_SPACE_URL` **غَيرُ مَضبوطٍ فِعلاً** يَومَ ‏2026-08-30،
+          # أَي أَنّ المُصَدِّقَ الوَحيدَ على «الرَقَمُ المُعلَنُ هُوَ
+          # `sha`» كانَ **يَخرُجُ بِصِفرٍ في كُلِّ نَشر**. وبَقاءُ الحالَةِ
+          # غَيرَ مُوقِفَةٍ لِلنَشرِ خِيارٌ مُصَرَّحٌ بِه؛ أَمّا بَقاؤُها
+          # **غَيرَ مَقيسَةٍ بِلا سَبَب** فَلا.
+          if [ -z "${live_host:-}" ]; then
+            echo "::warning::تَعَذَّرَ تَحديدُ المُضيفِ الحَيّ — لا vars.HF_SPACE_URL ولا .host مِن الـAPI. الحَيُّ لَم يُقَس، والنَشرُ لَم يُوقَف."
+            echo "| الحَيُّ يَخدِم | ⚠️ لَم يُقَس — لا مُضيفَ مَعروفاً |" \
               >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
           budget="${WAIT:-900}"
-          base="https://${HF_SPACE_URL}/health"
+          base="https://${live_host}/health"
           t0=$(date +%s)
           code=""; ctype=""; commit=""; started=""; cc=""; hdr=""; probes=0
-          agree=0; last_commit=""
+          agree=0; last_commit=""; last_fail="لَم يُستَطلَع بَعد"
+
+          # ═══ آثارُ التَخزينِ تُقاسُ بِالقيمَةِ لا بِالحُضور ══════════════
+          # الصيغَةُ الأولى عَدَّت **وُجودَ** `age|etag|x-cache|
+          # cf-cache-status` دَليلَ تَخزين. وهذا مَقلوبٌ في نِصفِ الحالات:
+          # `cf-cache-status: DYNAMIC|BYPASS|MISS` و`Age: 0` أَدِلَّةٌ على
+          # **عَدَمِ** التَخزين، و`ETag` مُصادِقٌ لا مَخزَن. فَحافَّةٌ
+          # واحِدَةٌ تُضيفُ رَأساً مُطَمئِنّاً كانَت تَجعَلُ **كُلَّ نَشرٍ
+          # سَليمٍ أَحمَر** — وبَوّابَةٌ تَصرُخُ دائِماً لا تُميَّزُ مِن
+          # مُعَطَّلَة. (وقيسَ اليَومَ أَنّ حافَّةَ HF تُعيدُ كِتابَةَ
+          # رُؤوسٍ أُخرى — `vary`, `x-proxied-*` — وتُمَرِّرُ
+          # `cache-control` كَما هو، ولا تَحقِنُ أَيّاً مِن الأَربَعَة.)
+          cache_evidence() {
+            local h n age
+            h="$(printf '%s' "$1" | tr 'A-Z' 'a-z')"
+            n=0
+            age="$(printf '%s' "${h}" | grep '^age:' | head -1 | tr -dc '0-9')"
+            if [ -n "${age}" ] && [ "${age}" -gt 0 ] 2>/dev/null; then n=$(( n + 1 )); fi
+            printf '%s' "${h}" | grep -qE '^x-cache:.*hit'                        && n=$(( n + 1 ))
+            printf '%s' "${h}" | grep -qE '^cf-cache-status: *(hit|stale|revalidated|updating)' && n=$(( n + 1 ))
+            printf '%s' "${h}" | grep -qE '^x-proxied-cache:.*hit'                && n=$(( n + 1 ))
+            echo "${n}"
+          }
 
           while :; do
             elapsed=$(( $(date +%s) - t0 ))
@@ -376,18 +500,43 @@ jobs:
 
             # طَبَقَةُ تَخزينٍ وَسيطَة: لَم تُرصَد اليَوم، وتُفحَصُ آلِيّاً
             # لا في قائِمَةٍ يَدَوِيَّةٍ تُنَفَّذُ مَرَّةً واحِدَة.
-            cached="$(printf '%s' "${hdr}" \
-                      | grep -icE '^(age|etag|x-cache|cf-cache-status):' || true)"
+            cached="$(cache_evidence "${hdr}")"
 
-            ok=1
-            [ "${code}" = "200" ] || ok=0
-            [ "${ctype#application/json}" != "${ctype}" ] || ok=0
-            [ "${commit}" = "${sha}" ] || ok=0
-            printf '%s' "${cc}" | grep -qi 'no-store' || ok=0
-            [ "${cached}" -eq 0 ] || ok=0
-            # ‏`startedAt` تَقَدَّمَ ⇒ حاوِيَةٌ دارَت فِعلاً. وغِيابُ خَطِّ
-            # أَساسٍ حالَةٌ مَشروعَة تَمُرّ.
-            if [ -n "${base_started:-}" ] && [ "${started}" = "${base_started}" ]; then ok=0; fi
+            # ═══ والفَشَلُ يُسَمّى، وإلّا كَذَبَ الحُكمُ في مُرادِه ══════
+            # لَو ثَبَتَ `commit == sha` على كُلِّ استِطلاعٍ وسَقَطَ شَرطٌ
+            # آخَرُ دائِماً (‏رَأسُ وَسيطٍ، أَو `content-type` تَغَيَّر، أَو
+            # `cache-control` جُرِّد)، تُستَنفَدُ الميزانِيَّةُ ويُقالُ
+            # «البِناءُ لَم يَجهَز» — **والبِناءُ جاهِز**. فَيُحفَظُ آخِرُ
+            # شَرطٍ سَقَطَ ويُسَمّى في الحُكم.
+            ok=1; fail=""
+            [ "${code}" = "200" ] || { ok=0; fail="الرَمز ${code:-<لا رَدّ>} لا 200"; }
+            [ "${ctype#application/json}" != "${ctype}" ] || { ok=0; fail="النَوع ${ctype:-<لا شَيء>} لا application/json (‏المَسارُ مُبتَلَع؟)"; }
+            [ "${commit}" = "${sha}" ] || { ok=0; fail="البَصمَة ${commit:-<لا شَيء>} لا ${sha}"; }
+            printf '%s' "${cc}" | grep -qi 'no-store' || { ok=0; fail="لا no-store في «${cc:-<لا رَأس>}»"; }
+            [ "${cached}" -eq 0 ] || { ok=0; fail="آثارُ تَخزينٍ وَسيط (${cached})"; }
+
+            # ═══ خَطُّ الأَساس — بِحالَتِه لا بِفَراغِه ═════════════════
+            #  · measured — يُشتَرَطُ `startedAt` **خارِجَ** كُلِّ عَيِّنَة.
+            #  · absent   — أَجابَ HTTP ولا نُقطَة ⇒ أَوَّلُ نَشرٍ، يَمُرّ.
+            #  · failed   — لَم يُجِب أَصلاً ⇒ **لا يُمَرَّر**: يُشتَرَطُ
+            #    أَن يَكونَ الإقلاعُ بَعدَ أَرضِيَّةِ زَمَنِ الدَفع، فَلا
+            #    تَعبُرُ حاوِيَةٌ قَديمَةٌ تَحمِلُ `sha` سَلفاً.
+            #  · nohost   — لا يُبلَغُ هُنا (‏خُرِجَ سَلفاً).
+            case "${base_state:-failed}" in
+              measured)
+                case ",${base_starts:-}," in
+                  *",${started},"*) ok=0; fail="startedAt=${started} لَم يَتَقَدَّم عَن خَطِّ الأَساس" ;;
+                esac
+                ;;
+              failed)
+                if ! [ "${started}" \> "${deploy_floor}" ]; then
+                  ok=0
+                  fail="خَطُّ الأَساسِ فَشِلَ قِياسُه، و startedAt=${started:-<لا شَيء>} لَيسَ بَعدَ ${deploy_floor}"
+                fi
+                ;;
+              *) : ;;
+            esac
+            [ "${ok}" = "1" ] || last_fail="${fail}"
 
             if [ "${ok}" = "1" ]; then
               # ولا يُخضَرُّ على عَيِّنَةٍ واحِدَة: ثَلاثُ استِطلاعاتٍ
@@ -397,11 +546,53 @@ jobs:
               if [ "${commit}" = "${last_commit}" ]; then agree=$(( agree + 1 )); else agree=1; fi
               last_commit="${commit}"
               if [ "${agree}" -ge 3 ]; then
+                # ═══ والمَسارُ العاري — الَّذي يُنادِيه المُراقِبُ فِعلاً ═══
+                #
+                # سِلسِلَةُ الاستِعلامِ تَمنَعُ التَخزينَ **وتَمنَعُ
+                # كَشفَه مَعاً**: كُلُّ استِطلاعٍ يَحمِلُ `probe=` فَيُغَيِّرُ
+                # مِفتاحَ التَخزينِ عِندَ أَيِّ وَسيط. فَما بُرهِنَ أَعلاهُ
+                # أَنّ **رَدّاً مَنقوضَ التَخزينِ** يَحمِلُ البَصمَةَ
+                # الصَحيحَة — ولَم يُفحَص قَطُّ العُنوانُ العاري
+                # `‏/health`، وهو الَّذي يُنادِيه المُراقِبُ وتُقرَأُ مِنه
+                # الهُوِيَّةُ لاحِقاً. **ورَدٌّ مُخَزَّنٌ عَلَيه هُوَ
+                # بِالضَبطِ الكَذِبَةُ الَّتي بُنِيَت النُقطَةُ لِمَنعِها.**
+                #
+                # والقِياس: طَلَبانِ عارِيانِ بِفارِقِ ‏3ث؛ يُشتَرَطُ
+                # **تَقَدُّمُ `Date`** (‏رَدٌّ مَخزونٌ يُجَمِّدُ لَحظَةَ
+                # تَخزينِه) وصِفرُ آثارِ تَخزينٍ في كِلَيهِما.
+                bare_ok=1; bare_why=""
+                curl -sS --max-time 20 -D "${RUNNER_TEMP}/b1.hdr" -o "${RUNNER_TEMP}/b1.json" "${base}" >/dev/null 2>&1 || bare_ok=0
+                sleep 3
+                curl -sS --max-time 20 -D "${RUNNER_TEMP}/b2.hdr" -o "${RUNNER_TEMP}/b2.json" "${base}" >/dev/null 2>&1 || bare_ok=0
+                h1="$(tr -d '\r' < "${RUNNER_TEMP}/b1.hdr" 2>/dev/null || true)"
+                h2="$(tr -d '\r' < "${RUNNER_TEMP}/b2.hdr" 2>/dev/null || true)"
+                d1="$(printf '%s' "${h1}" | grep -i '^date:' | head -1 || true)"
+                d2="$(printf '%s' "${h2}" | grep -i '^date:' | head -1 || true)"
+                bc1="$(jq -r '.commit // empty' < "${RUNNER_TEMP}/b1.json" 2>/dev/null || true)"
+                ev1="$(cache_evidence "${h1}")"; ev2="$(cache_evidence "${h2}")"
+                [ "${bare_ok}" = "1" ] || bare_why="فَشِلَ طَلَبٌ عارٍ"
+                [ "${bc1}" = "${sha}" ] || { bare_ok=0; bare_why="المَسارُ العاري يَرُدُّ ${bc1:-<لا شَيء>}"; }
+                [ -n "${d1}" ] && [ "${d1}" != "${d2}" ] || { bare_ok=0; bare_why="‏Date لَم يَتَقَدَّم بَينَ طَلَبَينِ بِفارِقِ 3ث (${d1:-<لا رَأس>}) — رَدٌّ مُجَمَّد"; }
+                { [ "${ev1}" -eq 0 ] && [ "${ev2}" -eq 0 ]; } || { bare_ok=0; bare_why="آثارُ تَخزينٍ على المَسارِ العاري (${ev1}/${ev2})"; }
+
+                if [ "${bare_ok}" != "1" ]; then
+                  echo "::error::المَسارُ العاري /health مُخَزَّنٌ أَو يَرُدُّ غَيرَ ما يَرُدُّه المَنقوض: ${bare_why}"
+                  {
+                    echo "| الحَيُّ يَخدِم | \`${commit}\` — بَعدَ \`${elapsed}\`ث |"
+                    echo "| المَسارُ العاري | ❌ ${bare_why} |"
+                  } >> "$GITHUB_STEP_SUMMARY"
+                  exit 1
+                fi
+
                 echo "✅ الحَيُّ يَخدِمُ ${sha} بَعدَ ${elapsed}ث (‏${probes} استِطلاعاً، ${agree} مُتَّفِقَة)"
+                echo "✅ المَسارُ العاري غَيرُ مُخَزَّن: Date تَقَدَّمَ، وصِفرُ آثارِ تَخزين"
                 {
                   echo "| الحَيُّ يَخدِم | \`${commit}\` — بَعدَ \`${elapsed}\`ث، \`${probes}\` استِطلاعاً |"
-                  echo "| بَدَأَت | \`${started}\` (‏خَطُّ الأَساس \`${base_started:-<لا شَيء>}\`) |"
+                  echo "| بَدَأَت | \`${started}\` (‏خَطُّ الأَساس [\`${base_state}\`] \`${base_starts:-<لا شَيء>}\`) |"
+                  echo "| الحَيُّ قَبلَ الدَفع | \`${base_commit:-<لا شَيء>}\`$( [ "${base_same:-0}" = "1" ] && printf ' ⚠️ نَفسُ البَصمَة — البُرهانُ تَقَدُّمُ startedAt' )|"
+                  echo "| المَسارُ العاري | ✅ غَيرُ مُخَزَّن (‏Date تَقَدَّم · آثارُ تَخزين 0/0) |"
                   echo "| النُسخَة | \`${replica:-<لا رَأس>}\` |"
+                  echo "| المُضيف | \`${live_host}\` |"
                 } >> "$GITHUB_STEP_SUMMARY"
                 exit 0
               fi
@@ -409,7 +600,10 @@ jobs:
               agree=0
             fi
 
-            echo "…${elapsed}ث/${budget} [${probes}]: code=${code} type=${ctype} commit=${commit:-<لا شَيء>} started=${started:-<لا شَيء>} cached=${cached}"
+            echo "…${elapsed}ث/${budget} [${probes}]: code=${code} type=${ctype} commit=${commit:-<لا شَيء>} started=${started:-<لا شَيء>} cached=${cached} — ${last_fail}"
+            # والميزانِيَّةُ تُفحَصُ قَبلَ النَومِ أَيضاً: فَحصٌ في رَأسِ
+            # الحَلقَةِ وَحدَه يَتَجاوَزُ الحَدَّ بِقَدرِ نَومَةٍ ومُهلَة.
+            [ $(( $(date +%s) - t0 + 15 )) -ge "${budget}" ] && break
             sleep 15
           done
 
@@ -420,8 +614,15 @@ jobs:
           if [ -n "${commit}" ] && [ "${commit}" != "${sha}" ] && [ "${#commit}" -eq 40 ]; then
             verdict="عَدَمُ مُطابَقَة: الحَيُّ يَخدِمُ \`${commit}\` والمَدفوعُ \`${sha}\`"
             echo "::error::${verdict} — تَراجَعْ بِـworkflow_dispatch على آخِرِ إيداعٍ أَخضَرَ مَعروف."
+          elif [ "${commit}" = "${sha}" ]; then
+            # **حُمرَةٌ ثالِثَةٌ كانَت مُبتَلَعَةً في الثانِيَة**: البَصمَةُ
+            # مُطابِقَةٌ وسَقَطَ شَرطٌ آخَرُ حَتّى نَفادِ الميزانِيَّة —
+            # فَيُقالُ «البِناءُ لَم يَجهَز» **والبِناءُ جاهِز**. الشَرطُ
+            # الساقِطُ مَحفوظٌ ويُسَمّى.
+            verdict="البَصمَةُ مُطابِقَةٌ (\`${sha}\`) وشَرطٌ آخَرُ ساقِط: ${last_fail}"
+            echo "::error::${verdict} — البِناءُ وَصَلَ؛ العَطَبُ في الشَرطِ المُسَمّى لا في الانتِظار."
           else
-            verdict="البِناءُ لَم يَجهَز خِلالَ \`${budget}\`ث (‏آخِرُ ما قيسَ: code=\`${code}\` type=\`${ctype}\`)"
+            verdict="البِناءُ لَم يَجهَز خِلالَ \`${budget}\`ث (‏آخِرُ شَرطٍ ساقِط: ${last_fail})"
             echo "::error::${verdict}"
           fi
           echo "سِجِلّ البِناء: https://huggingface.co/spaces/${HF_SPACE}?logs=build"
@@ -430,7 +631,10 @@ jobs:
           # هي الوَحيدَةُ الَّتي تُقرَأُ لاحِقاً، وكانَت الوَحيدَةَ بِلا جَدوَل.
           {
             echo "| الحَيُّ يَخدِم | ❌ ${verdict} |"
+            echo "| آخِرُ شَرطٍ ساقِط | ${last_fail} |"
+            echo "| خَطُّ الأَساس | \`${base_state:-?}\` · commit=\`${base_commit:-<لا شَيء>}\` · startedAt∈{\`${base_starts:-<لا شَيء>}\`} |"
             echo "| استِطلاعات | \`${probes}\` في \`$(( $(date +%s) - t0 ))\`ث |"
             echo "| النُسخَة | \`${replica:-<لا رَأس>}\` |"
+            echo "| المُضيف | \`${live_host}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
           exit 1
