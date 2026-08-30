@@ -21,7 +21,15 @@
         @* زِرّ الرُجوع يَحتَرِم سِياق الدُّخول: لَو جَئنا مِن إدارَة
            المَتجَر (from=tenant) نَعود إلَيها، وإلَّا (افتِراضيّاً)
            نَعود لِصَفحَة ادمن المَنصَّة. *@
-        string backHref = From == "tenant" ? $"/{Slug}/r/admin/manage" : $"/admin/tenants/{Slug}";
+        @* و«‏studio» ثالِثَةٌ: صاحِبُ المَتجَرِ يَصِلُ مِن لَوحَةِ
+           تَطبيقِه لِيُعَيِّنَ أَوَّلَ مُشرِف، فَيَعودُ إلَيها لا إلى
+           لَوحَةِ المَنَصَّة. *@
+        string backHref = From switch
+        {
+            "tenant" => $"/{Slug}/r/admin/manage",
+            "studio" => $"/studio/apps/{Slug}",
+            _        => $"/admin/tenants/{Slug}"
+        };
         <div class="acm-admin-head">
             <div style="display:flex;align-items:center;gap:8px;">
                 <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@backHref">

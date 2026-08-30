@@ -130,6 +130,20 @@
                         <span>@L.Markup("studio.app.deals_sub")</span></div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
+                @* المَدخَلُ نِصفُ الميزَة لا مُهِمَّةٌ تالِيَة
+                   (القاعِدَة ١٢): شاشَةُ مُستَخدِمي المَتجَرِ قائِمَةٌ
+                   وحارِسُها يَقبَلُ **مالِكَ المَتجَرِ مِن الاستوديو**
+                   (`TenantAdminGuard.IsStudioOwner`) — والرابِطُ
+                   الوَحيدُ إلَيها كانَ في `TenantManage.razor`، وتِلكَ
+                   خَلفَ `tenant.manage` الَّتي **لا يَحمِلُها أَحَدٌ في
+                   مَتجَرٍ جَديد**. حَلقَةٌ مُغلَقَةٌ: لوحَةُ المَتجَرِ
+                   تولَدُ مَيِّتَةً ولا سَبيلَ لِإحيائِها. *@
+                <a class="studio-list-row" href="@($"/admin/tenants/{Slug}/users?from=studio")">
+                    <span class="studio-list-icon" style="background:#fef3c7;color:#854d0e;"><AcIcon Name="people" Size="16" /></span>
+                    <div class="studio-list-body"><strong>@L.Markup("studio.app.users_title")</strong>
+                        <span>@L.Markup("studio.app.users_sub")</span></div>
+                    <span style="color:var(--st-faint);">←</span>
+                </a>
                 <a class="studio-list-row" href="@($"/studio/apps/{Slug}/console")">
                     <span class="studio-list-icon" style="background:#fee2e2;color:#b91c1c;"><AcIcon Name="bar-chart" Size="16" /></span>
                     <div class="studio-list-body"><strong>@L.Markup("studio.app.console_title")</strong>

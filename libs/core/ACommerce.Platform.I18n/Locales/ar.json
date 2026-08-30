@@ -639,6 +639,8 @@
   "studio.app.roles_title": "الأَدوار (التَّطبيقات الفَرعيَّة)",
   "studio.app.section_design": "التَّصميم والتَّهيئَة",
   "studio.app.section_ops": "التَّشغيل والمُتابَعَة",
+  "studio.app.users_title": "مُستَخدِمو المَتجَر",
+  "studio.app.users_sub": "عَيِّن أَوَّلَ مُشرِفٍ لِمَتجَرِك — بِدونِه لا تُفتَحُ لوحَةُ إدارَتِه",
   "studio.app.stat_auth": "قَناة الدُخول",
   "studio.app.stat_categories": "الفِئات",
   "studio.app.stat_city": "المَدينَة",
