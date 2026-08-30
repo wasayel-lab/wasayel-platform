@@ -2551,33 +2551,44 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect($"/studio/s/{id}#section-{section}");
         }).DisableAntiforgery();
 
-        // اختِيار باقَة — حاليّاً لا تَكامُل دَفع، يُسَجِّل النِيَّة فَقَط
-        // (يُحَدِّث الـ Tier مُباشَرَةً في الـ MVP).
+        // ─── اختِيارُ دَرَجَة — والمَدفوعَةُ لا تُمنَح ذاتِيّاً ──────
+        //
+        // **ما كانَ هُنا (‏حَتّى 2026-08-30)**: يُنادي
+        // `payments.CreateSubscriptionAsync` — وجَوابُ المُحاكي «نَجَحَ»
+        // دائِماً — ثُمَّ يَكتُب `u.Tier = tier` ويَحفَظ. أَي **تَرقِيَةٌ
+        // إلى `scale` (‏999 ريالاً) بِنَقرَةٍ وبِلا دَفع**، ومَعَها
+        // حُدودُ `int.MaxValue` عَلى مِفتاحِ نَموذَجِ لُغَةِ المالِك.
+        //
+        // **والقَرارُ لَيسَ جَديداً**: هُوَ بِحَرفِه ما عالَجَته ‏ADR-003
+        // في `POST /{slug}/plans/{planId}/subscribe` — «باقَةٌ
+        // `Price > 0` لا تُمنَح ذاتِيّاً، والمَجّانِيَّةُ تَبقى
+        // ذاتِيَّة». فَنَفسُ الدالَّةِ ونَفسُ رَمزِ الخَرقِ ونَفسُ
+        // المَعجَم، لا أُنبوبٌ ثانٍ (القاعِدَة ٨).
+        //
+        // **والحارِسُ أَوَّلُ سَطرٍ بَعدَ الهُوِيَّة، قَبلَ أَيّ
+        // تَحميلٍ أَو نِداء** (القاعِدَة ٦): التَخويلُ يَسبِق تَحَقُّقَ
+        // الحُقول، وإلّا صارَ خَطَأُ التَحَقُّقِ قِناعاً لِلثَغرَة.
+        //
+        // **ولا مُزَوِّدَ دَفعٍ في هذا الجِسمِ إطلاقاً**: ما يُمنَح هُنا
+        // مَجّانيٌّ بِتَعريفِه، ولا يُقبَض عَلَيه شَيء. ونِداءُ مُزَوِّدٍ
+        // لا يُقارَن جَوابُه بِقَبضٍ حَقيقيٍّ **هُوَ الثَغرَةُ نَفسُها**.
         app.MapPost("/studio/billing/select", async (
             string tier, HttpRequest req, IDocumentStore store,
             Services.Incubator.StudioAuth auth,
-            ACommerce.Kit.Payments.IPaymentProvider payments,
             Services.Audit.AuditWriter audit) =>
         {
             auth.Load();
             if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
-            if (!Services.Incubator.TierCatalog.All.TryGetValue(tier, out var limits))
-                return Results.Redirect("/studio/billing?err=tier");
+
+            var refusal = Services.Incubator.StudioTierPurchase.Refuse(tier);
+            if (refusal is not null)
+                return Results.Redirect($"/studio/billing?err={refusal}");
+
+            var limits = Services.Incubator.TierCatalog.For(tier);
 
             await using var s = store.LightweightSession(Services.Incubator.StudioAuth.Tenant);
             var u = await s.LoadAsync<Services.Incubator.StudioUser>(auth.UserId!.Value);
             if (u is null) return Results.Redirect("/studio/billing");
-
-            // أَنشِئ اشتِراكاً مُتَكَرِّراً عَبر مُزَوِّد الدَّفع (mock الآن).
-            // idempotency: نَفس المُستَخدِم + الباقَة + الشَّهر = نَفس النَّتيجَة.
-            var idem = $"sub_{u.Id}_{tier}_{DateTime.UtcNow:yyyyMM}";
-            var result = await payments.CreateSubscriptionAsync(new(
-                CustomerId: u.Id.ToString(), PlanId: tier,
-                MonthlyAmountSar: limits.MonthlyPriceSar,
-                CustomerPhone: u.Phone), idem);
-
-            if (!result.IsActive)
-                return Results.Redirect($"/studio/billing?err=payment");
 
             u.Tier = tier;
             s.Store(u);
@@ -2585,8 +2596,8 @@ public static class MarketplaceTemplateExtensions
 
             await audit.WriteAsync(Services.Audit.AuditWriter.PlatformScope,
                 u.Id, u.FullName,
-                "billing.subscription.create", "subscription", result.SubscriptionId,
-                note: $"tier={tier} amount={limits.MonthlyPriceSar} period_end={result.CurrentPeriodEnd:yyyy-MM-dd}",
+                "billing.tier.self_grant", "studio_tier", tier,
+                note: $"tier={tier} amount={limits.MonthlyPriceSar}",
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
 
             return Results.Redirect("/studio/billing?selected=1");

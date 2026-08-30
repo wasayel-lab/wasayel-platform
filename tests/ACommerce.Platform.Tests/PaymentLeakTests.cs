@@ -93,14 +93,41 @@ public class PaymentLeakTests
         Assert.True(start > 0, "نُقطَةُ `/studio/billing/select` غَير مَوجودَة — الأَداةُ عَمياء.");
         var body = text.Substring(start, Math.Min(2400, text.Length - start));
 
-        Assert.True(body.Contains("PlanPurchasePolicy", StringComparison.Ordinal),
-            "نُقطَةُ اختِيارِ الدَرَجَةِ لا تَمُرّ بِـ`PlanPurchasePolicy` — وهي القَرارُ "
-            + "القائِمُ في المُستودَع مُنذُ ‏ADR-003 لِنَفسِ السُؤالِ حَرفاً: «أَتُمنَح "
-            + "باقَةٌ بِسِعرٍ ذاتِيّاً؟». أُنبوبٌ ثانٍ لِنَفسِ القَرارِ يَنجَرِف (القاعِدَة ٨).");
+        Assert.True(body.Contains("StudioTierPurchase.Refuse", StringComparison.Ordinal),
+            "نُقطَةُ اختِيارِ الدَرَجَةِ لا تَسأَل «أَتُمنَح ذاتِيّاً؟» قَبلَ الكِتابَة.");
 
         Assert.False(body.Contains("payments.CreateSubscriptionAsync", StringComparison.Ordinal),
             "النُقطَةُ ما زالَت تُنادي مُزَوِّدَ الدَفع — وجَوابُه في المُحاكي «نَجَحَ» "
             + "دائِماً، فَالنِداءُ نَفسُه هُوَ الثَغرَة.");
+
+        // **والقَرارُ هُوَ القَرارُ القائِمُ لا نَظيرٌ لَه** (القاعِدَة ٨):
+        // نَفسُ رَمزِ الخَرقِ الَّذي تَقرَؤُه `Plans.razor` مُنذُ ‏ADR-003.
+        Assert.Equal(ACommerce.Kit.Subscriptions.PlanPurchasePolicy.PaidUnavailable,
+            StudioTierPurchase.Refuse("scale"));
+        Assert.Equal(ACommerce.Kit.Subscriptions.PlanPurchasePolicy.PlanNotFound,
+            StudioTierPurchase.Refuse("does-not-exist"));
+
+        // وكُلُّ دَرَجَةٍ بِسِعرٍ تُرَدّ — لا واحِدَةٌ تُفلِت.
+        var selfGrantable = TierCatalog.All.Values
+            .Where(t => StudioTierPurchase.IsSelfGrantable(t.Tier))
+            .Where(t => t.MonthlyPriceSar > 0)
+            .Select(t => $"{t.Tier} ({t.MonthlyPriceSar})")
+            .ToArray();
+        Assert.True(TierCatalog.All.Count >= 4,
+            $"أَداة عَمياء: فُحِصَت {TierCatalog.All.Count} دَرَجَة.");
+        Assert.True(selfGrantable.Length == 0,
+            "دَرَجاتٌ بِسِعرٍ ما زالَت تُمنَح ذاتِيّاً: " + string.Join("، ", selfGrantable));
+    }
+
+    /// <summary>والمَجّانِيَّةُ تَبقى ذاتِيَّةً — نَفسُ نَصِّ ‏ADR-003
+    /// حَرفاً. القاعِدَةُ على السِعرِ لا على قائِمَةِ أَسماء.</summary>
+    [Fact]
+    public void A_zero_priced_tier_would_still_be_granted_without_payment()
+    {
+        Assert.Null(ACommerce.Kit.Subscriptions.PlanPurchasePolicy.RefusePrice(
+            0m, StudioTierPurchase.SelfServiceCheckoutExists));
+        Assert.NotNull(ACommerce.Kit.Subscriptions.PlanPurchasePolicy.RefusePrice(
+            1m, StudioTierPurchase.SelfServiceCheckoutExists));
     }
 
     /// <summary>ولا زِرَّ يُرسَم لِدَرَجَةٍ لا تُباع — مَدخَلٌ يَرُدُّ

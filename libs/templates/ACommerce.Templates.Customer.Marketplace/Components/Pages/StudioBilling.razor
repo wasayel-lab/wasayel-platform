@@ -2,11 +2,23 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Incubator.StudioTierService TierSvc
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+@using ACommerce.Kit.Subscriptions
 @inject L L
 
 @*
-    صَفحَة باقَات وفَوتَرَة — حاليّاً عَرض فَقَط (لا تَكامُل دَفع).
-    الزِرّ "اِختَر" يُسَجِّل النِيَّة في الـ DB كَ pending — لِلتَّكامُل لاحِقاً.
+    صَفحَة الباقات والاستِهلاك.
+
+    **ولا تَبيع** (‏2026-08-30): الدَرَجَةُ بِسِعرٍ لا تُمنَح ذاتِيّاً،
+    فَلا يُرسَم لَها زِرّ — نَفسُ ما فَعَلَته `Plans.razor` بِـ
+    `PlanPurchasePolicy.Visible` بَعدَ ‏ADR-003، ولِنَفسِ السَبَبِ حَرفاً:
+    مَدخَلٌ يَرُدُّ «لَيسَ بَعد» لَيسَ مَدخَلاً (القاعِدَة ١٢). والشاشَةُ
+    والنُقطَةُ يَقرَآنِ **الدالَّةَ نَفسَها** (`StudioTierPurchase`)،
+    فَلا تَعرِض الشاشَةُ ما تَرُدُّه النُقطَة.
+
+    وانحِرافٌ واحِدٌ عَن `Visible` يُقالُ ولا يُبتلَع: **دَرَجَةُ
+    المُستَخدِمِ الحالِيَّةُ تُرسَم ولَو لَم تُبَع** — فَهي بَيانُ حالٍ
+    لا عَرضُ بَيع، وزِرُّها مُعَطَّلٌ كَما كان. وبِدونِها تَصير الشَبَكَةُ
+    فارِغَةً تَماماً، فَتُرى الصَفحَةُ مَكسورَةً لا صادِقَة.
 *@
 
 <StudioShell Title="@(L["studio.billing.head_title"])" Active="">
@@ -15,6 +27,19 @@
             <h1>@L.Markup("studio.billing.title")</h1>
             <p>@L.Markup("studio.billing.subtitle")</p>
         </div>
+
+        @* رَمزُ الخَرقِ يَصير جُملَةً مَقروءَة. **ولا يُبلَغ بِنَقرَةٍ
+           عادِيَّة** — الدَرَجَةُ المَدفوعَةُ لا يُرسَم لَها زِرّ —
+           لكِنّ طَلَباً مُباشِراً يُرَدُّ بِرِسالَةٍ لا بِصَمت. نَفسُ
+           شَكلِ `Plans.razor.ErrorMessage`. *@
+        @if (ErrorMessage is not null)
+        {
+            @* اللَونانِ رَمزانِ لا حَرفِيّان — الطَبَقَةُ ١ تُحمِرُّ عَلى
+               أَيّ لَونٍ مَكتوبٍ في السَطر. *@
+            <div class="st-card" style="border:1px solid var(--st-danger);color:var(--st-danger-text);margin-bottom:18px;">
+                @ErrorMessage
+            </div>
+        }
 
         @if (currentTier is not null)
         {
@@ -25,16 +50,16 @@
                     var l = TierCatalog.For(currentTier);
                     <span style="color:var(--st-muted);font-size:13px;display:block;margin-top:6px;">
                         @((MarkupString)"\n                        ")@L.Markup("studio.billing.consumed")
-                        @user.AnalysesUsed / @Cap(l.AnalysesPerMonth) @L.Markup("studio.billing.unit_analyses") ·
-                        @user.RefinesUsed / @Cap(l.RefinesPerMonth) @L.Markup("studio.billing.unit_refines") ·
-                        @user.StoresBuilt / @Cap(l.StoresMax) @L.Markup("studio.billing.unit_apps")@((MarkupString)"\n                    ")
+                        @user.AnalysesUsed / @l.AnalysesPerMonth @L.Markup("studio.billing.unit_analyses") ·
+                        @user.RefinesUsed / @l.RefinesPerMonth @L.Markup("studio.billing.unit_refines") ·
+                        @user.StoresBuilt / @l.StoresMax @L.Markup("studio.billing.unit_apps")@((MarkupString)"\n                    ")
                     </span>
                 }
             </div>
         }
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">
-            @foreach (var t in TierCatalog.All.Values)
+            @foreach (var t in TierCatalog.All.Values.Where(Shown))
             {
                 var isCurrent = t.Tier == currentTier;
                 <div class="st-card"
@@ -49,9 +74,9 @@
                         @t.MonthlyPriceSar <span style="font-size:13px;color:var(--st-muted);font-weight:400;">@((MarkupString)L.Format("studio.billing.per_month", Money.Unit()))</span>
                     </div>
                     <ul style="margin:0 0 16px;padding-inline-start:18px;font-size:14px;line-height:1.9;color:var(--st-ink-700);">
-                        <li>@Cap(t.AnalysesPerMonth) @L.Markup("studio.billing.per_analyses")</li>
-                        <li>@Cap(t.RefinesPerMonth) @L.Markup("studio.billing.per_refines")</li>
-                        <li>@Cap(t.StoresMax) @L.Markup("studio.billing.per_apps")</li>
+                        <li>@t.AnalysesPerMonth @L.Markup("studio.billing.per_analyses")</li>
+                        <li>@t.RefinesPerMonth @L.Markup("studio.billing.per_refines")</li>
+                        <li>@t.StoresMax @L.Markup("studio.billing.per_apps")</li>
                         @if (t.AllowExport)        { <li>@L.Markup("studio.billing.export")</li> }
                         @* «أَنماط مُخَصَّصَة» سُحِبَت مِن البَيع: لا مَسار
                            يَختار فيه المُستَخدِم نَمَط تَطبيقِه أَصلاً — النَمَط
@@ -85,6 +110,23 @@
     StudioUser? user;
     string? currentTier;
 
+    [SupplyParameterFromQuery] public string? Err { get; set; }
+
+    /// <summary>رَمزُ الخَرقِ مِن <c>PlanPurchasePolicy</c> — نَفسُ
+    /// المَعجَمِ المُغلَقِ الَّذي تَقرَؤُه <c>Plans.razor</c>، فَلا
+    /// مَعجَمَ ثانٍ يَنجَرِف.</summary>
+    string? ErrorMessage => Err switch
+    {
+        PlanPurchasePolicy.PaidUnavailable => L["studio.billing.err_paid_unavailable"],
+        PlanPurchasePolicy.PlanNotFound    => L["studio.billing.err_tier"],
+        _ => null
+    };
+
+    /// <summary>تُرسَم إن كانَت تُمنَح ذاتِيّاً، أَو كانَت دَرَجَةَ
+    /// المُستَخدِمِ الحالِيَّة (بَيانُ حالٍ لا عَرضُ بَيع).</summary>
+    bool Shown(TierLimits t)
+        => StudioTierPurchase.IsSelfGrantable(t.Tier) || t.Tier == currentTier;
+
     protected override async Task OnInitializedAsync()
     {
         Auth.Load();
@@ -92,6 +134,4 @@
         user = await TierSvc.GetUserAsync(Auth.UserId!.Value);
         currentTier = user?.Tier ?? "spark";
     }
-
-    string Cap(int v) => v == int.MaxValue ? L["studio.billing.unlimited"] : v.ToString();
 }

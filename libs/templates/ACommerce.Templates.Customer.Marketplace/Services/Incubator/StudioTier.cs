@@ -67,6 +67,73 @@ public static class TierCatalog
 }
 
 /// <summary>
+/// <para><b>هَل تُمنَح هذِه الدَرَجَةُ ذاتِيّاً؟ — تَفويضٌ إلى
+/// <see cref="ACommerce.Kit.Subscriptions.PlanPurchasePolicy"/>، لا
+/// قَرارٌ جَديد.</b></para>
+///
+/// <para><b>العِلَّةُ المَقيسَة (‏2026-08-30)</b>:
+/// <c>POST /studio/billing/select</c> كانَ يُنادي مُزَوِّدَ الدَفعِ
+/// (وجَوابُه في المُحاكي «نَجَحَ» دائِماً) ثُمَّ يَكتُب
+/// <c>u.Tier = tier</c> ويَحفَظ. فَأَيُّ مُستَخدِمِ استوديو يَرفَع
+/// نَفسَه إلى <c>scale</c> (‏999 ريالاً) <b>بِنَقرَةٍ واحِدَةٍ وبِلا
+/// دَفع</b>. وهذا بِحَرفِه العَطَبُ الَّذي وَثَّقَته ‏ADR-002 §١ في
+/// <c>POST /{slug}/plans/{planId}/subscribe</c> — «يُحَمِّلُ الباقَةَ
+/// <b>ويَتَجاهَل <c>Price</c></b>» — وعولِجَ هُناكَ يَومَ ‏2026-08-23
+/// بِـ‏ADR-003. <b>وهذِه النُقطَةُ هي المَوضِعُ الوَحيدُ الَّذي لَم
+/// يَبلُغه العِلاج.</b></para>
+///
+/// <para><b>ولا مَعجَمَ خَرقٍ جَديداً</b> (القاعِدَة ٨): نَفسُ
+/// <c>PlanPurchasePolicy.PaidUnavailable</c> الَّذي تَقرَؤُه
+/// <c>Plans.razor</c> ويُقاسُ في
+/// <c>PlanMoneyPathCharacterizationTests</c>.</para>
+/// </summary>
+public static class StudioTierPurchase
+{
+    /// <summary>
+    /// <para><b>أَيوجَد مَسارُ دَفعٍ <u>ذاتيٌّ</u> لِدَرَجَةِ
+    /// الاستوديو؟ — لا، ويُقالُ لِماذا بِالقياسِ لا بِالرَأي.</b></para>
+    ///
+    /// <list type="number">
+    ///   <item>مَسارُ Paddle/PayPal القائِمُ يَنتَهي إلى
+    ///   <c>TenantPlan.ExpiresAt</c> بِسلاجِ مُستَأجِر
+    ///   (<c>PayPalBillingService.Apply</c>) — و<c>StudioUser</c>
+    ///   وَثيقَةٌ أُخرى في إيجارٍ آخَر <b>بِلا حَقلِ انتِهاءٍ
+    ///   إطلاقاً</b>. فَرَبطُها يَعني <b>باعِثَ تَمديدٍ ثانِياً</b>،
+    ///   وهُوَ ما تَمنَعُه ‏ADR-009 §٢-ب بِاسمِه.</item>
+    ///
+    ///   <item>إنشاءُ المُعامَلَةِ عِندَ Paddle مَحروسٌ بِـ
+    ///   <c>PlatformAdminGuard</c> بِالتَصميم — لا نُقطَةَ ذاتِيَّةَ
+    ///   الخِدمَةِ أَصلاً.</item>
+    ///
+    ///   <item>و<b>مُدَّةُ اشتِراكِ الدَرَجَة</b> غَيرُ مَوجودَةٍ في
+    ///   أَيّ وَثيقَة — و<c>PeriodDays = 30</c> فَترَةُ حِصَّةٍ لا
+    ///   فَترَةُ اشتِراك. فَاختِراعُها خَرقٌ لِلقاعِدَة ١٦.</item>
+    /// </list>
+    ///
+    /// <para><b>ولِماذا ثابِتٌ لا مِفتاحُ تَهيئَة</b>: مِفتاحٌ يُقلَبُ
+    /// إلى <c>true</c> لا يَفتَح شَيئاً — لا مَسارَ خَلفَه — فَيَصير
+    /// <b>زِرّاً يَقول «قَريباً»</b> بِثَوبِ إعداد. يَتَبَدَّل هذا
+    /// الثابِتُ يَومَ يوجَد المَسار، ومَعَه يُحمَرُّ اختِبارُه.</para>
+    /// </summary>
+    public const bool SelfServiceCheckoutExists = false;
+
+    /// <summary>رَمزُ الخَرق، أَو <c>null</c> إن جازَ المَنحُ ذاتِيّاً.
+    /// و<c>tier</c> خارِجَ الكاتالوج يُرَدُّ بِـ
+    /// <c>PlanPurchasePolicy.PlanNotFound</c>.</summary>
+    public static string? Refuse(string? tier)
+        => ACommerce.Kit.Subscriptions.PlanPurchasePolicy.RefusePrice(
+            tier is not null && TierCatalog.All.TryGetValue(tier, out var t)
+                ? t.MonthlyPriceSar
+                : (decimal?)null,
+            SelfServiceCheckoutExists);
+
+    /// <summary>أَتُرسَمُ لَها نَقرَةُ اختِيار؟ — <b>الشاشَةُ
+    /// والنُقطَةُ يَقرَآنِ الدالَّةَ نَفسَها</b>، فَلا تَعرِض الشاشَةُ
+    /// ما تَرُدُّه النُقطَة.</summary>
+    public static bool IsSelfGrantable(string tier) => Refuse(tier) is null;
+}
+
+/// <summary>
 /// <para><b>سَبَبُ دَعوَةِ التَرقِيَة — مَعجَمٌ مُغلَقٌ بِتَعريفٍ
 /// واحِد.</b> أَربَعَةٌ لا خامِس، وهي بِعَينِها قيَمُ <c>?upgrade=</c>
 /// في العُنوان.</para>

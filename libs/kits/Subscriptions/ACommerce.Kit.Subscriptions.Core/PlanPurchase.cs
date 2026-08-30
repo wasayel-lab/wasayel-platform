@@ -36,16 +36,51 @@ public static class PlanPurchasePolicy
 
     // ─── القَرار ─────────────────────────────────────────────────────
 
+    /// <summary>
+    /// <para><b>القاعِدَةُ عَلى السِعرِ وَحدَه</b> — بِلا وَثيقَةِ باقَة.
+    /// بِلا سِعرٍ تُمنَح دائِماً؛ وبِسِعرٍ لا تُمنَح إلّا مَعَ مُزَوِّدِ
+    /// دَفعٍ مَضبوط.</para>
+    ///
+    /// <para><b>ولِماذا انفَصَلَت عَن <see cref="Plan"/> (‏2026-08-30)</b>:
+    /// السُؤالُ نَفسُه حَرفاً — «أَتُمنَح باقَةٌ بِسِعرٍ ذاتِيّاً؟» —
+    /// يُطرَح على <b>دَرَجَةِ الاستوديو</b> (<c>TierLimits</c>)، وهي
+    /// لَيسَت <c>Plan</c> ولا تَصيرُ واحِدَة. وكانَ الجَوابُ هُناكَ
+    /// «نَعَم، خُذها» فَتَسَرَّبَ الإيراد. والبَديلُ عَن هذا التَعميمِ
+    /// نَسخُ الشَرطِ في مِلَفٍّ ثانٍ — <b>أُنبوبٌ ثانٍ لِقَرارٍ واحِدٍ
+    /// يَنجَرِف</b> (القاعِدَة ٨).</para>
+    ///
+    /// <para><b>والتَكافُؤُ صِفريّ</b>: الحِملُ القائِمُ على
+    /// <see cref="Plan"/> يُفَوِّض إلى هذا حَرفاً، فَلا يَتَغَيَّر جَوابُ
+    /// مُنادٍ واحِدٍ بايتاً — و<c>PlanMoneyPathCharacterizationTests</c>
+    /// يَبقى أَخضَرَ بِلا تَعديلِ حَرف (القاعِدَة ٣).</para>
+    /// </summary>
+    public static bool IsPurchasable(decimal price, bool paymentProviderConfigured)
+        => price <= 0m || paymentProviderConfigured;
+
     /// <summary>باقَةٌ بِلا سِعرٍ تُباعُ دائِماً؛ وبِسِعرٍ لا تُباع إلّا
     /// مَعَ مُزَوِّدِ دَفعٍ مَضبوط.</summary>
     public static bool IsPurchasable(Plan plan, bool paymentProviderConfigured)
-        => plan.Price <= 0m || paymentProviderConfigured;
+        => IsPurchasable(plan.Price, paymentProviderConfigured);
+
+    /// <summary>
+    /// <para>رَمزُ الخَرق، أَو <c>null</c> إن جازَ المَنح. و<c>null</c>
+    /// سِعراً يَعني «لا بَندَ بِهذا المُعَرِّف».</para>
+    ///
+    /// <para><b>واسمٌ مُختَلِفٌ لا حِملٌ ثانٍ، ويُقالُ لِماذا</b>:
+    /// <c>Refuse(null, …)</c> مَكتوبَةٌ في اختِبارَينِ قائِمَين،
+    /// وحِملانِ يَقبَلانِ <c>null</c> يَجعَلانِها <b>مُبهَمَةً فَلا
+    /// تُبنى</b>. والقاعِدَةُ ٣ تَقول: التَوصيفُ يَخضَرُّ بَعدَ التَبديلِ
+    /// <b>بِلا تَعديلِ حَرف</b> — فَالاسمُ هُوَ الَّذي يَتَبَدَّل، لا
+    /// الاختِبار.</para>
+    /// </summary>
+    public static string? RefusePrice(decimal? price, bool paymentProviderConfigured)
+        => price is null ? PlanNotFound
+         : IsPurchasable(price.Value, paymentProviderConfigured) ? null
+         : PaidUnavailable;
 
     /// <summary>رَمزُ الخَرق، أَو <c>null</c> إن جازَ الشِراء.</summary>
     public static string? Refuse(Plan? plan, bool paymentProviderConfigured)
-        => plan is null ? PlanNotFound
-         : IsPurchasable(plan, paymentProviderConfigured) ? null
-         : PaidUnavailable;
+        => RefusePrice(plan?.Price, paymentProviderConfigured);
 
     /// <summary>
     /// <para>الباقاتُ المَعروضَة. <b>والتَكافُؤُ بِالمَرجِع مَقصود</b>:
