@@ -38,6 +38,12 @@
          **مِن الحُزمَة** وأَنّ الدَلوَ والمِفتاحَ يَبلُغانِ الطَلَب —
          بِلا اعتِمادِ R2 ولا نِداءِ شَبَكَةٍ خارِجَ المُضيف. -->
     <ProjectReference Include="..\..\libs\kits\Files\ACommerce.Kit.Files.Providers.S3\ACommerce.Kit.Files.Providers.S3.csproj" />
+    <!-- بَوّابَةُ الإصدار: نُقطَةُ هُوِيَّةِ البِناءِ تَقَعُ **خَلفَ**
+         `UseVersionGate` في `Program.cs`، ورَأسُ `X-App-Version` قَديمٌ
+         كانَ يَقلِبُ جَوابَها إلى ‏426. فَالبُرهانُ يَحتاج تَركيبَ
+         الوَسيطِ نَفسِه لا مُحاكاتَه — يُقاسُ المَسارُ لا المُعالِجُ
+         وَحدَه. مَرجِعُ اختِبارٍ فَقَط. -->
+    <ProjectReference Include="..\..\libs\kits\Versions\ACommerce.Kit.Versions.Core\ACommerce.Kit.Versions.Core.csproj" />
   </ItemGroup>
 
 </Project>
