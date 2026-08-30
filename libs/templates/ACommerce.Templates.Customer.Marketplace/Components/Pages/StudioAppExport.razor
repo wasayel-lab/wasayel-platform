@@ -1,0 +1,178 @@
+@page "/studio/apps/{slug}/export"
+@inject Services.Incubator.StudioAuth Auth
+@inject Services.Queries.TenantDirectory Tenants
+@inject Services.Queries.AuditLogQueries Audit
+@inject Services.Export.TenantExportService Export
+@inject L L
+@using ACommerce.Kit.Tenants
+@using ACommerce.Templates.Customer.Marketplace.Services.Export
+
+@*
+    التَخارُج — الشاشَةُ الَّتي تُنتِجُ عَيناً يَملِكُها المُستَخدِمُ
+    ويَخرُجُ بِها (القاعِدَة ١٧). لا شَرحَ لِما هُوَ التَخارُج، بَل
+    **هذِه بَياناتُك، بِهذِه الأَعداد، وهذا ما لا يَخرُجُ ولِماذا**.
+
+    والأَعدادُ تُقرَأُ مِن **خِدمَةِ التَصديرِ نَفسِها** لا مِن
+    استِعلامٍ آخَر: رَقمٌ يُعرَض مِن مَصدَرٍ ورَقمٌ يُسَلَّم مِن آخَرَ
+    يَنجَرِفانِ، فَتَعِدُ الشاشَةُ بِما لا تُسَلِّمُه الحَقيبَة.
+
+    ولا جَلسَةَ Marten هُنا: الصَفحَةُ تَحقِن خِدَمات (الطَبَقَة ٨
+    عِندَ صِفر، ولا تَرتَفِع).
+*@
+
+<StudioShell Title="@($"{L["studio.export.title"]} — {tenant?.Name ?? Slug}")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← @L.Markup("studio.app_nav.settings")</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (tenant is null)
+        {
+            <div class="st-card">@L.Markup("studio.app.not_found")</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>@L.Markup("studio.export.heading")</h1>
+                <p>@L.Markup("studio.export.intro")</p>
+            </div>
+
+            @if (errorKey is not null)
+            {
+                <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@L.Markup(errorKey)</div>
+            }
+
+            <div class="st-card">
+                <div class="st-section-title">@L.Markup("studio.export.contents_title")</div>
+                <p style="color:var(--st-muted);font-size:13px;margin:0 0 12px;">@L.Markup("studio.export.contents_body")</p>
+
+                <form method="post" action="@($"/studio/apps/{Slug}/export.zip")">
+                    <button type="submit" class="st-btn st-btn-primary">
+                        <AcIcon Name="download" Size="16" /> @L.Markup("studio.export.action")
+                    </button>
+                </form>
+
+                <p style="color:var(--st-muted);font-size:12px;margin:12px 0 0;">
+                    @if (lastExport is null)
+                    {
+                        @L.Markup("studio.export.last_never")
+                    }
+                    else
+                    {
+                        @L.Markup("studio.export.last_at",
+                                  lastExport.At.ToString("yyyy-MM-dd HH:mm"),
+                                  string.IsNullOrWhiteSpace(lastExport.ActorName) ? "—" : lastExport.ActorName)
+                    }
+                </p>
+            </div>
+
+            <div class="st-section-title">@L.Markup("studio.export.counts_title")</div>
+            <div class="st-card" style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <thead>
+                        <tr style="text-align:start;">
+                            <th style="text-align:start;padding:6px 4px;">@L.Markup("studio.export.col_class")</th>
+                            <th style="text-align:start;padding:6px 4px;">@L.Markup("studio.export.col_rows")</th>
+                            <th style="text-align:start;padding:6px 4px;">@L.Markup("studio.export.col_file")</th>
+                            <th style="text-align:start;padding:6px 4px;">@L.Markup("studio.export.col_group")</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in counts)
+                        {
+                            <tr style="border-top:1px solid var(--st-line);">
+                                <td style="padding:6px 4px;direction:ltr;text-align:start;">@c.TypeName</td>
+                                <td style="padding:6px 4px;">
+                                    @if (c.ErrorAr is null)
+                                    {
+                                        @c.Rows
+                                    }
+                                    else
+                                    {
+                                        <span class="st-chip st-chip-danger" title="@c.ErrorAr">@L.Markup("studio.export.read_error")</span>
+                                    }
+                                </td>
+                                <td style="padding:6px 4px;direction:ltr;text-align:start;">@FileOf(c)</td>
+                                <td style="padding:6px 4px;">
+                                    @(c.Disposition == ExportDisposition.ExportOwner
+                                        ? L["studio.export.owner_group"]
+                                        : L["studio.export.store_group"])
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="st-section-title">@L.Markup("studio.export.excluded_title")</div>
+            <p style="color:var(--st-muted);font-size:13px;margin:0 0 10px;">@L.Markup("studio.export.excluded_intro")</p>
+            <div class="studio-list">
+                @foreach (var e in TenantExportLedger.Excluded)
+                {
+                    <div class="studio-list-row" style="cursor:default;align-items:flex-start;">
+                        <span class="studio-list-icon st-chip-danger"><AcIcon Name="shield" Size="16" /></span>
+                        <div class="studio-list-body">
+                            <strong style="direction:ltr;text-align:start;">@e.TypeName</strong>
+                            <span>@e.WhyAr</span>
+                        </div>
+                    </div>
+                }
+                @foreach (var f in TenantExportRedaction.Fields)
+                {
+                    <div class="studio-list-row" style="cursor:default;align-items:flex-start;">
+                        <span class="studio-list-icon ac-chip-info"><AcIcon Name="sliders" Size="16" /></span>
+                        <div class="studio-list-body">
+                            <strong style="direction:ltr;text-align:start;">@f.TypeName.@f.Property</strong>
+                            <span>@f.WhyAr</span>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="st-section-title">@L.Markup("studio.export.responsibility_title")</div>
+            <div class="st-card" style="border:1px solid var(--st-warning);">
+                <p style="margin:0;font-size:13px;">@L.Markup("studio.export.responsibility_body")</p>
+            </div>
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+
+    Tenant? tenant;
+    IReadOnlyList<ExportCount> counts = Array.Empty<ExportCount>();
+    Services.Audit.AuditEntry? lastExport;
+    string? errorKey;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        errorKey = ErrorKeyFor(Err);
+        if (!Auth.IsAuthenticated) return;
+
+        tenant = await Tenants.FindAsync(Slug);
+        if (TenantExportAuthorization.Decide(Slug, tenant, Auth.UserId) != TenantExportRefusal.None)
+        {
+            tenant = null;
+            return;
+        }
+
+        counts = await Export.CountAsync(tenant!, Auth.UserId!.Value);
+        lastExport = await Audit.LastAsync(Slug, TenantExportAudit.Action);
+    }
+
+    static string FileOf(ExportCount c)
+        => TenantExportLedger.Find(c.TypeName)?.JsonPath ?? "—";
+
+    // مَعجَمٌ مُغلَقٌ لِلرُموز — ورَمزٌ مَجهولٌ يُرَدُّ إلى null لا إلى
+    // مِفتاحٍ يُطبَع خاماً على الشاشَة.
+    static string? ErrorKeyFor(string? code) => code switch
+    {
+        "slug_missing"     => "studio.export.err_slug_missing",
+        "slug_reserved"    => "studio.export.err_slug_reserved",
+        "tenant_not_found" => "studio.export.err_tenant_not_found",
+        "not_owner"        => "studio.export.err_not_owner",
+        _                  => null,
+    };
+}
