@@ -17,7 +17,10 @@ namespace ACommerce.Platform.Tests;
 // **العِلَّةُ المَقيسَةُ الَّتي كَتَبَت هذا المِلَفّ (‏2026-08-30)**: اكتَمَلَ
 // نَشرٌ ناجِح، ورَدَّ المَوقِعُ ‏200 على تِسعَةِ مَسارات — **وتَعَذَّرَ
 // إثباتُ أَيِّ إيداعٍ يَخدِمُه الـSpace**. ‏`huggingface.co/api/spaces/…`
-// يَرُدُّ ‏401 بِلا رَمز؛ ورَأسُ `x-proxied-replica` يُثبِتُ **تَبَدُّلَ
+// يَصِفُ **مُستودَعَ** الـSpace ولا يَقولُ أَيَّ بِناءٍ يَخدِمُ الآن
+// (‏وتَصحيحٌ مَقيسٌ ‏2026-08-30: «يَرُدُّ ‏401 بِلا رَمز» غَيرُ صَحيح —
+// قيسَ ‏200 بِلا رَمز، والـSpace عامّ؛ ‏ADR-019 §١)؛
+// ورَأسُ `x-proxied-replica` يُثبِتُ **تَبَدُّلَ
 // حاوِيَةٍ لا هُوِيَّةَ بِناء**؛ و`runtime.stage` — بِنَصِّ الوَظيفَةِ
 // نَفسِها — **خَبَرٌ لا بُرهان**.
 //
@@ -327,6 +330,96 @@ public class BuildIdentityEndpointTests
         Assert.Equal(first, second);
     }
 
+    // ─── ٦·ب) المُراقِبُ يَبعَثُ HEAD — والنُقطَةُ كانَت تَسقُط ─────────
+
+    /// <summary><b>العِلَّة</b>: <c>MapGet</c> يُطابِقُ GET وَحدَه.
+    /// و<b>الأَسوَأُ لَيسَ ‏405</b>: في التَطبيقِ الحَقيقيِّ يَنزِلُ
+    /// طَلَبُ HEAD إلى <c>@page "/{slug}"</c> فَيُرَدُّ ‏200 بِـ
+    /// <c>text/html</c> — فَيَقرَأُ المُراقِبُ صَفحَةَ مُستَأجِرٍ
+    /// ويَحسِبُها النُقطَةَ سَليمَة. **كَذِبٌ في اتِّجاهِ السَلامَة.**
+    ///
+    /// <para>وهُنا يُقاسُ التَسجيلُ فَقَط (المُضيفُ المُصَغَّرُ لا يَحمِلُ
+    /// <c>/{slug}</c>)؛ والابتِلاعُ نَفسُه يُقاسُ على الأُنبوبِ الكامِلِ
+    /// في <c>verify-production-boot.sh</c>.</para></summary>
+    [Fact]
+    public async Task Health_answers_HEAD_because_that_is_what_monitors_send()
+    {
+        await using var host = await HealthHost.StartAsync($"1.0.0+{Sha}", Boot);
+
+        using var req = new HttpRequestMessage(HttpMethod.Head, "/health");
+        var res = await host.Client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.StartsWith("application/json",
+            res.Content.Headers.ContentType?.ToString() ?? "", StringComparison.Ordinal);
+        Assert.Contains("no-store", res.Headers.CacheControl?.ToString() ?? "",
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("", await res.Content.ReadAsStringAsync());
+    }
+
+    // ─── ٨·ب) الـDockerfile يُبَرهِنُ الأَثَرَ لا النِيَّةَ وَحدَها ──────
+
+    /// <summary><b>الثَغرَةُ الَّتي يَسُدُّها، مَقيسَةً بِحَقن</b>:
+    /// <c>-p:IncludeSourceRevisionInInformationalVersion=false</c> يُلغي
+    /// بَثَّ السِمَةِ فَتَرُدُّ النُقطَةُ <c>"unknown"</c>، **وحارِسُ
+    /// المِلَفِّ يَمُرُّ ويَطبَعُ «البَصمَة: …»**. ومَوضِعُ الخاصِّيَّةِ
+    /// الطَبيعيُّ <c>Directory.Build.props</c>، وهو **مِن المِلَفّاتِ
+    /// المَنسوخَةِ إلى الـSpace** — فَالثَغرَةُ داخِلَ الشَجَرَةِ
+    /// المُصدَّقَة. فَالمَشروطُ أَن يُقرَأَ الثُنائِيُّ بَعدَ النَشرِ
+    /// وتُطابَقَ القيمَةُ حَرفاً.</summary>
+    [Fact]
+    public void Dockerfile_proves_the_stamp_reached_the_binary()
+    {
+        var docker = StripHashComments(ReadRepoFile("Dockerfile"));
+
+        Assert.Contains("/publish/V1.App.dll", docker, StringComparison.Ordinal);
+        Assert.Contains("1\\.0\\.0\\+[0-9a-f]{40}", docker, StringComparison.Ordinal);
+        Assert.Contains("1.0.0+$rev", docker, StringComparison.Ordinal);
+    }
+
+    // ─── ٩·ب) التَجهيزُ مِن الإيداعِ لا مِن شَجَرَةِ العَمَل ────────────
+
+    /// <summary><b>العَيبُ مُعادُ إنتاجُه</b>: ثُنائيٌّ بُنِيَ مِن شَجَرَةٍ
+    /// فيها تَعديلٌ غَيرُ مودَعٍ أَعلَنَ <b>رَأسَ الشَجَرَةِ النَظيف</b>
+    /// وهُوَ يَخدِمُ شَيئاً آخَر. وكانَ الطَرَفانِ مِن مَصدَرَين:
+    /// المُحتَوى بِـ<c>cp -p</c> مِن شَجَرَةِ العَمَل، والرَقَمُ مِن
+    /// <c>git rev-parse HEAD</c>. فَـ«الرَقَمُ المُعلَنُ هُوَ الإيداعُ
+    /// الَّذي بُنِيَ مِنه» كانَ يَصمُدُ <b>بِتَرتيبِ خَطَواتِ الوَظيفَةِ
+    /// لا بِحارِس</b> — وتَرتيبُ الخَطَواتِ يَتَغَيَّرُ في PR واحِد.</summary>
+    [Fact]
+    public void Deploy_manifest_stages_from_the_commit_not_the_working_tree()
+    {
+        var sh = StripHashComments(ReadRepoFile("scripts", "deploy-manifest.sh"));
+
+        Assert.Contains("git show \"HEAD:$f\"", sh, StringComparison.Ordinal);
+        Assert.DoesNotContain("cp -p \"$f\"", sh, StringComparison.Ordinal);
+        // والانحِرافُ يُقاسُ ويُطبَع — فَالمُشَغِّلُ المَحَلِّيُّ يَعرِفُ
+        // أَنّ تَعديلَه لَم يَذهَب، ولا يُكتَشَفُ ذلك مِن نَتيجَةٍ غامِضَة.
+        Assert.Contains("drift", sh, StringComparison.Ordinal);
+    }
+
+    // ─── ١٠·ب) السِلسِلَةُ كامِلَةً في مَوضِعٍ واحِدٍ على V1.App ────────
+
+    /// <summary><b>ما كانَ ناقِصاً</b>: ‏CI يَقيسُ «مِلَفّ ← خاصِّيَّة ←
+    /// سِمَة»، والاختِباراتُ تَقيسُ «سِمَة ← جِسم» على مُضيفٍ مُصَغَّر،
+    /// وبَوّابَةُ الإقلاعِ كانَت تَنشُرُ <b>بِلا</b> الخاصِّيَّةِ وتَشتَرِطُ
+    /// وُجودَ المِفتاحِ <c>"commit"</c> وَحدَه — فَتَخضَرُّ على
+    /// <c>"unknown"</c> سَواءً. فَالسِلسِلَةُ كامِلَةً لَم تُنَفَّذ قَطُّ
+    /// على <c>V1.App</c> في مَوضِعٍ واحِد. الآنَ تُمَرَّرُ بَصمَةٌ
+    /// مَعلومَةٌ ويُشتَرَطُ أَن يَرُدَّها الجِسمُ حَرفاً.</summary>
+    [Fact]
+    public void The_production_boot_gate_runs_the_whole_chain_on_the_real_app()
+    {
+        var gate = ReadRepoFile("scripts", "verify-production-boot.sh");
+
+        Assert.Contains("GATE_STAMP=", gate, StringComparison.Ordinal);
+        Assert.Contains("-p:SourceRevisionId=\"$GATE_STAMP\"", gate, StringComparison.Ordinal);
+        Assert.Contains("\\\"commit\\\":\\\"${GATE_STAMP}\\\"", gate, StringComparison.Ordinal);
+        // و`HEAD` مَعَ `GET`: هُنا وَحدَه يُقاسُ الابتِلاعُ على الأُنبوبِ
+        // الكامِلِ الَّذي يَحمِلُ `/{slug}`.
+        Assert.Contains("\"HEAD|/health|200\"", gate, StringComparison.Ordinal);
+    }
+
     // ─── ٧) الدالَّةُ النَقِيَّة — مُوجِباً وسالِباً ────────────────────
 
     [Theory]
@@ -422,12 +515,125 @@ public class BuildIdentityEndpointTests
         // إعادَةُ تَشغيلِ الوَظيفَةِ على نَفسِ الإيداعِ خِلالَ ثَوانٍ
         // على **الحاوِيَةِ القَديمَة** — بَوّابَةٌ خَضراءُ قَبلَ أَن
         // تَعمَلَ لَيسَت بَوّابَة.
-        Assert.Contains("base_started", wf, StringComparison.Ordinal);
+        Assert.Contains("base_starts", wf, StringComparison.Ordinal);
 
         // والتَعليقُ الَّذي كانَ يَقتَرِحُ النُقطَةَ يُحذَف — فَقَد
         // نُفِّذَت. اقتِراحٌ باقٍ بَعدَ التَنفيذِ يُوَرِّثُ القارِئَ شَكّاً.
         // **ويُفحَصُ الخام**: المَقصودُ تَعليقٌ لا كود.
         Assert.DoesNotContain("اقتِراحُ نُقطَة", raw, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>وخَطُّ أَساسٍ فارِغٌ كانَ يُلغي الحارِسَ صامِتاً — وهي
+    /// الحالَةُ الَّتي كُتِبَ الحارِسُ لَها بِعَينِها.</b>
+    ///
+    /// <para>الفارِغُ حالَتان: «‏أَجابَ HTTP ولا نُقطَة» (‏أَوَّلُ نَشر —
+    /// مَشروعَة) و«‏فَشِلَ الاستِطلاع» (‏مُهلَةٌ عابِرَة أَو ‏5xx). وكانَ
+    /// الشَرطُ <c>[ -n "$base_started" ]</c> يُمَرِّرُ الثانِيَةَ كَما
+    /// يُمَرِّرُ الأولى، فَتَعبُرُ حاوِيَةٌ قَديمَةٌ تَحمِلُ
+    /// <c>sha</c> سَلفاً بِثَلاثِ استِطلاعاتٍ مُتَّفِقَةٍ في ثَوانٍ ثُمَّ
+    /// يَفشَلُ بِناءُ HF. فَالحالاتُ صارَت مُسَمّاةً، ولِـ<c>failed</c>
+    /// أَرضِيَّةٌ زَمَنِيَّةٌ تُلتَقَطُ قَبلَ الدَفع.</para></summary>
+    [Fact]
+    public void Deploy_workflow_tells_a_failed_baseline_from_an_absent_one()
+    {
+        var wf = StripHashComments(ReadRepoFile(".github", "workflows", "deploy-hf.yml"));
+
+        Assert.Contains("base_state", wf, StringComparison.Ordinal);
+        Assert.Contains("deploy_floor", wf, StringComparison.Ordinal);
+        Assert.Contains("measured", wf, StringComparison.Ordinal);
+        Assert.Contains("absent", wf, StringComparison.Ordinal);
+
+        // والشَرطُ القَديمُ — «‏فارِغٌ ⇒ مُرَّ» — لا يَعودُ إلى الوَظيفَةِ
+        // بِصيغَتِه الأولى: هُوَ الثَغرَةُ نَفسُها.
+        Assert.DoesNotContain("[ -n \"${base_started:-}\" ]", wf, StringComparison.Ordinal);
+
+        // و`base_commit` كانَ يُلتَقَطُ ويُطبَعُ **ولا يُقرَأُ في تَأكيد**،
+        // وهُوَ أَدَقُّ إشارَةٍ إلى الحالَة: الحَيُّ يَحمِلُ `sha` سَلفاً.
+        Assert.Contains("base_same", wf, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>والقيمَتانِ مِن رَدٍّ بَعيدٍ لا تُكتَبانِ في
+    /// <c>$GITHUB_ENV</c> بِلا تَصديق</b>: سَطرٌ في جِسمِ JSON يَحقِنُ
+    /// مُتَغَيِّراً في الخَطَواتِ التالِيَة — <b>بِما فيها
+    /// <c>sha</c> الَّذي تُقارِنُ بِه البَوّابَةُ نَفسُها</b>. أَي أَنّ
+    /// الطَرَفَ الَّذي وُضِعَت لِكَشفِه يَستَطيعُ الكَذِبَ عَلَيها.</summary>
+    [Fact]
+    public void Deploy_workflow_validates_remote_values_before_exporting_them()
+    {
+        var wf = StripHashComments(ReadRepoFile(".github", "workflows", "deploy-hf.yml"));
+
+        Assert.Contains("[0-9]{4}-[0-9]{2}-[0-9]{2}T", wf, StringComparison.Ordinal);
+        Assert.Contains("*[!0-9a-f]*", wf, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>والمَسارُ العاري يُفحَصُ أَيضاً</b>: سِلسِلَةُ
+    /// الاستِعلامِ <c>probe=</c> تَمنَعُ التَخزينَ <b>وتَمنَعُ كَشفَه
+    /// مَعاً</b> — فَما بُرهِنَ هُوَ أَنّ رَدّاً مَنقوضَ التَخزينِ صَحيح،
+    /// ولَم يُفحَص قَطُّ العُنوانُ الَّذي يُنادِيه المُراقِبُ فِعلاً.
+    /// <b>ورَدٌّ مُخَزَّنٌ عَلَيه هُوَ الكَذِبَةُ بِعَينِها.</b></summary>
+    [Fact]
+    public void Deploy_workflow_probes_the_bare_path_too()
+    {
+        var wf = StripHashComments(ReadRepoFile(".github", "workflows", "deploy-hf.yml"));
+
+        Assert.Contains("bare_ok", wf, StringComparison.Ordinal);
+        Assert.Contains("b1.hdr", wf, StringComparison.Ordinal);
+        Assert.Contains("^date:", wf, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>وآثارُ التَخزينِ تُقرَأُ بِالقيمَةِ لا بِالحُضور</b>:
+    /// <c>cf-cache-status: DYNAMIC|BYPASS|MISS</c> و<c>Age: 0</c> أَدِلَّةٌ
+    /// على <b>عَدَمِ</b> التَخزين، و<c>ETag</c> مُصادِقٌ لا مَخزَن. فَعَدُّ
+    /// الحُضورِ كانَ يَجعَلُ حافَّةً واحِدَةً تُضيفُ رَأساً مُطَمئِنّاً
+    /// تُحمِرُّ <b>كُلَّ نَشرٍ سَليم</b>.</summary>
+    [Fact]
+    public void Deploy_workflow_reads_cache_evidence_by_value_not_by_presence()
+    {
+        var wf = StripHashComments(ReadRepoFile(".github", "workflows", "deploy-hf.yml"));
+
+        Assert.Contains("cache_evidence", wf, StringComparison.Ordinal);
+        Assert.Contains("hit|stale|revalidated", wf, StringComparison.Ordinal);
+        Assert.DoesNotContain("'^(age|etag|x-cache|cf-cache-status):'", wf, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>والحُكمُ يُسَمّي الشَرطَ الساقِط</b>: لَو ثَبَتَت
+    /// المُطابَقَةُ وسَقَطَ شَرطٌ آخَرُ حَتّى نَفادِ الميزانِيَّة، كانَ
+    /// يُقالُ «البِناءُ لَم يَجهَز» <b>والبِناءُ جاهِز</b> — حُمرَةٌ
+    /// تُرسِلُ القارِئَ إلى العِلاجِ الخَطَإ.</summary>
+    [Fact]
+    public void Deploy_workflow_names_the_condition_that_failed()
+    {
+        var wf = StripHashComments(ReadRepoFile(".github", "workflows", "deploy-hf.yml"));
+        Assert.Contains("last_fail", wf, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>ولا يُنادى شَيءٌ بِلا مُهلَة</b>: <c>git push</c> كانَ
+    /// الانتِظارَ المَفتوحَ الوَحيدَ في الوَظيفَة — يَعلَقُ حَتّى تَنتَهي
+    /// مُهلَةُ الوَظيفَةِ كامِلَةً فَيُخَلِّفُ نَشراً لا أَحَدَ قَرَأَ
+    /// نَتيجَتَه. <b>تَعليقٌ يَبدو عَمَلاً أَسوَأُ مِن خَطَإٍ صَريح.</b></summary>
+    [Fact]
+    public void Deploy_workflow_bounds_the_push_with_a_timeout()
+    {
+        var wf = StripHashComments(ReadRepoFile(".github", "workflows", "deploy-hf.yml"));
+        Assert.Contains("timeout 300 git push", wf, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>والمُصَدِّقُ الوَحيدُ لا يَبقى مَشروطاً بِنَقرَةٍ
+    /// يَدَوِيَّة</b>: قيسَ يَومَ ‏2026-08-30 أَنّ <c>vars.HF_SPACE_URL</c>
+    /// <b>غَيرُ مَضبوطٍ فِعلاً</b> — أَي أَنّ البَوّابَةَ الحَيَّةَ كانَت
+    /// تُحَذِّرُ وتَخرُجُ بِصِفرٍ في كُلِّ نَشر، وكُلُّ ثَغرَةٍ تَحتَها
+    /// تُشحَنُ خَضراء. والاشتِقاقُ مِن ترويسَةِ <c>link</c> كانَ تَخميناً
+    /// بِحَقّ؛ أَمّا <c>.host</c> في رَدِّ API الـSpace فَهُوَ
+    /// <b>تَصريحُ HF بِمُضيفِ الـSpace</b> — قيسَ بِلا رَمز: ‏200 و
+    /// <c>"host":"https://…hf.space"</c>.</summary>
+    [Fact]
+    public void Deploy_workflow_resolves_the_live_host_without_a_manual_variable()
+    {
+        var wf = StripHashComments(ReadRepoFile(".github", "workflows", "deploy-hf.yml"));
+
+        Assert.Contains("live_host", wf, StringComparison.Ordinal);
+        Assert.Contains(".host // empty", wf, StringComparison.Ordinal);
+        Assert.Contains("HF_SPACE_URL", wf, StringComparison.Ordinal);
     }
 
     // ─── ١٠) النُقطَةُ مُسَجَّلَةٌ فِعلاً في التَطبيق ───────────────────
