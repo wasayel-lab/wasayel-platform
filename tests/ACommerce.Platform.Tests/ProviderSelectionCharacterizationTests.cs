@@ -1,4 +1,5 @@
 using ACommerce.Kit.Auth;
+using ACommerce.Kit.Payments;
 using Xunit;
 
 namespace ACommerce.Platform.Tests;
@@ -18,9 +19,22 @@ namespace ACommerce.Platform.Tests;
 // ثالِثَ لَهُما، وكِلتاهُما تُقاسانِ هُنا:
 //
 //   • **بِلا شَرطٍ إطلاقاً** — سَطرُ تَسجيلٍ عارٍ في `Program.cs`
-//     (‏`AddMockMaps` و`AddMockDelivery` و`AddMockPayments`
-//     و`AddLocalFileStorage`). فَالمُحاكي هُوَ الجَوابُ في الإنتاجِ
-//     كَما في التَطوير.
+//     (‏`AddMockMaps` و`AddMockDelivery` و`AddLocalFileStorage`).
+//     فَالمُحاكي هُوَ الجَوابُ في الإنتاجِ كَما في التَطوير.
+//
+// ─── تَعديلٌ مُعلَنٌ — ‏2026-08-30، صَفُّ `payments` وَحدَه ──────────
+//
+// **هذا المِلَفُّ يَصِف «جَوابَ اليَوم»، وجَوابُ اليَومِ لِلدَفعِ تَغَيَّر
+// عَمداً** — فَيُعَدَّل الصَفُّ ويُقالُ لِماذا، ولا يُترَك يَصِف ماضِياً.
+// كانَ `AddMockPayments()` سَطراً عارِياً والمُحاكي يَقول «نَجَحَ الدَفع»
+// دائِماً، فَكانَت `‏/studio/billing/select` تَقرَأُ نَجاحاً وتَكتُب
+// `Tier = "scale"` (‏999 ريالاً) بِلا قَبض. صارَ القَرارُ دالَّةً
+// نَقِيَّةً (`PaymentProviderSelection.Decide`) وحارِسَ إقلاعٍ يَرمي —
+// نَفسُ آلِيَّةِ قَنَواتِ الدُخولِ حَرفاً. التَفصيلُ في
+// `docs/ADR-014-THE-PAYMENT-STUB-STOPS-AT-DEVELOPMENT.md`.
+//
+// **والعارِيَةُ صارَت ثَلاثاً لا أَربَعاً**، والمَشروطَةُ أَربَعاً لا
+// ثَلاثاً. والرَقمانِ مُثَبَّتانِ أَدناه فَلا يَنزِلانِ صامِتَين.
 //   • **بِلا تَسجيلٍ أَصلاً** — ‏`INotificationChannel` و`ICache`:
 //     واجِهَتانِ قائِمَتانِ لا يَبلُغُهُما `Program.cs` ولا يُحيلُ
 //     مَشروعَ تَنفيذِهِما أَيُّ `csproj` في التَطبيق. وذلك **مَقيسٌ
@@ -40,7 +54,8 @@ public class ProviderSelectionCharacterizationTests
     /// <param name="RegistrationToday">نِداءُ التَسجيلِ في
     /// <c>Program.cs</c> — والفارِغُ يَعني «لا تَسجيلَ إطلاقاً».</param>
     /// <param name="ConfigKeyToday">مِفتاحُ التَهيئَةِ الَّذي يَقرِّر —
-    /// و<c>null</c> يَعني «بِلا شَرط».</param>
+    /// و<c>null</c> يَعني «بِلا شَرط»، و<see cref="ByEnvironment"/> تَعني
+    /// «مَشروطٌ بِالبيئَةِ وَحدَها، بِلا مِفتاح».</param>
     /// <param name="RegistrationSource">مِلَفُّ العُدَّةِ الَّذي فيه
     /// سَطرُ <c>AddSingleton</c>، ليُقاس مَدى الحَياة لا يُدَّعى.</param>
     private sealed record CapabilityToday(
@@ -50,10 +65,15 @@ public class ProviderSelectionCharacterizationTests
         string? ConfigKeyToday,
         string RegistrationSource);
 
+    /// <summary>«مَشروطٌ بِالبيئَةِ لا بِمِفتاحِ تَهيئَة» — قيمَةٌ
+    /// مُمَيَّزَةٌ لا تُساوي أَيَّ مِفتاحٍ حَقيقيّ، فَلا تُقرَأُ يَوماً
+    /// مِفتاحاً.</summary>
+    private const string ByEnvironment = "(environment)";
+
     private static readonly CapabilityToday[] Rows =
     {
         new("payments", "IPaymentProvider",
-            "builder.Services.AddMockPayments();", null,
+            "builder.Services.AddPaymentProvider(isDev);", ByEnvironment,
             "libs/kits/Payments/ACommerce.Kit.Payments.Core/MockPaymentProvider.cs"),
 
         new("sms_otp", "IOtpChannel",
@@ -191,8 +211,33 @@ public class ProviderSelectionCharacterizationTests
             else breaches.Add($"{r.Capability}: «{r.RegistrationToday}» لَم يَعُد سَطراً عارِياً.");
         }
 
-        Assert.True(bare == 4, $"أَداة عَمياء: وُجِدَ {bare} تَسجيلاً عارِياً — والمَقيس ٤.");
+        // **ثَلاثَةٌ لا أَربَعَة مُنذُ ‏2026-08-30**: خَرَجَ `payments` مِن
+        // العُري إلى قَرارِ البيئَة. والرَقمُ مُثَبَّتٌ فَلا يَنزِل
+        // صامِتاً — ولا يَرتَفِع كَذلك.
+        Assert.True(bare == 3, $"أَداة عَمياء: وُجِدَ {bare} تَسجيلاً عارِياً — والمَقيس ٣.");
         Assert.True(breaches.Count == 0, string.Join("\n  ", breaches));
+    }
+
+    /// <summary>
+    /// <para><b>والدَفعُ يَمُرُّ بِقَرارِ بيئَةٍ مَقيس</b> — لا بِمِفتاحِ
+    /// تَهيئَة، ويُقالُ لِماذا: لا تَنفيذَ فِعليّاً لِـ
+    /// <c>IPaymentProvider</c> يَبلُغُه التَطبيقُ اليَوم، فَمِفتاحٌ
+    /// يَقبَل قيمَةً لا تُسَجِّل شَيئاً شَرطٌ لا يَكذِبُ أَبَداً.</para>
+    /// </summary>
+    [Fact]
+    public void The_payment_capability_is_decided_by_environment_and_guarded_at_boot()
+    {
+        var row = Rows.Single(r => r.Capability == "payments");
+        Assert.Equal(ByEnvironment, row.ConfigKeyToday);
+
+        var text = ProgramText;
+        Assert.Contains("builder.Services.AddPaymentProvider(isDev);", text, StringComparison.Ordinal);
+        Assert.Contains("PaymentProviderSelection.AssertNoStubsOutsideDevelopment",
+            text, StringComparison.Ordinal);
+
+        // والقَرارُ نَفسُه، بِطَرَفَيه.
+        Assert.Equal(PaymentProviderChoice.Mock, PaymentProviderSelection.Decide(true));
+        Assert.Equal(PaymentProviderChoice.Unavailable, PaymentProviderSelection.Decide(false));
     }
 
     // ─── ٤. مَدى الحَياة — مَرَّةً لِكُلّ عَمَلِيَّةِ تَشغيل ──────────

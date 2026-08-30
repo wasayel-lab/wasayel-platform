@@ -5,12 +5,18 @@ namespace ACommerce.Kit.Payments;
 
 /// <summary>
 /// مُزَوِّد دَفع وَهميّ — يُحاكي authorize/capture/refund + إنشاء
-/// اشتِراك. يَنجَح دائِماً (إلّا لَو الـ amount &lt;= 0). يُولِّد
-/// invoice رَقم تَسلسُليّ. يُخزَّن في الذاكِرَة.
+/// اشتِراك. يَنجَح دائِماً (إلّا لَو الـ amount &lt;= 0). يُخزَّن في
+/// الذاكِرَة.
+///
+/// <para><b>وهُوَ مُحاكٍ تَطويريٌّ بِالعَلامَة لا بِالتَعليق</b>
+/// (<see cref="IDevelopmentStubPaymentProvider"/>): «يَنجَح دائِماً» في
+/// الإنتاج تَعني <b>باقَةً تُمنَح بِلا قَبض</b> و<b>صَفقَةً تُعَلَّم
+/// بِدَفعٍ لَم يَقَع</b>. فَحارِسُ الإقلاع يَرمي إن سُجِّلَ خارِجَ
+/// <c>Development</c> — قَبلَ أَوَّلِ طَلَبٍ لا بَعدَ أَوَّلِ ضَحِيَّة.</para>
 ///
 /// لاستِبدالُه بـ Moyasar/Tap لاحِقاً: نَفس الواجِهَة، تَنفيذ HTTP.
 /// </summary>
-public sealed class MockPaymentProvider : IPaymentProvider
+public sealed class MockPaymentProvider : IPaymentProvider, IDevelopmentStubPaymentProvider
 {
     private readonly ConcurrentDictionary<string, MockPayment> _payments = new();
     private readonly ConcurrentDictionary<string, MockSubscription> _subs = new();
@@ -91,19 +97,29 @@ public sealed class MockPaymentProvider : IPaymentProvider
         return Task.FromResult(true);
     }
 
+    /// <summary>
+    /// <para><b>لا فاتورَة — والمُحاكي أَقَلُّ مَن يَحِقُّ لَه إصدارُها.</b>
+    /// نَفسُ جَوابِ <c>NoonPaymentProvider</c> حَرفاً.</para>
+    ///
+    /// <para><b>وما حُذِفَ هُنا يُقالُ ولا يُبتلَع</b> (‏2026-08-30):
+    /// كانَت تُرجِع رَقماً ضَريبيّاً <b>مُخترَعاً</b> (بِحُروفِه في
+    /// <c>docs/ADR-014</c>، ولا يُكتَب في مِلَفِّ كودٍ بَعدَ اليَوم)
+    /// واحتِسابَ ضَريبَةٍ ‏15٪ و<c>PdfUrl</c>
+    /// إلى نُقطَةٍ مُعَلَّقٍ عَلَيها في السَطرِ نَفسِه بِأَنَّها
+    /// «مُستَقبَلِيَّة» — أَي <b>رابِطَ فاتورَةٍ لا يَفتَح شَيئاً</b>.
+    /// ورَقَمٌ ضَريبيٌّ مُلَفَّقٌ في وَثيقَةٍ تُعرَض على تاجِر
+    /// <b>خَطَرٌ قانونيٌّ لا عَيبٌ تَجميليّ</b> (القاعِدَة ١٦: لا
+    /// تُخترَع بَياناتُ مُنتَج). والبَديلُ لَيسَ رَقَماً آخَرَ بَل
+    /// <c>null</c>: إمّا فاتورَةٌ حَقيقِيَّةٌ مِن مُزَوِّدٍ قَبَض، أَو
+    /// لا فاتورَة. وجارَتُنا <c>PayPalPaymentProvider</c> سَبَقَت إلى
+    /// نَفسِ الحُكمِ بِتَرْكِ الحَقلِ فارِغاً بَدَلَ اشتِقاقِ ‏15٪.</para>
+    /// </summary>
     public Task<Invoice?> GetInvoiceAsync(string paymentId, CancellationToken ct = default)
-    {
-        if (!_payments.TryGetValue(paymentId, out var p)) return Task.FromResult<Invoice?>(null);
-        var sub = Math.Round(p.AmountSar / 1.15m, 2);     // VAT 15% inclusive
-        var vat = Math.Round(p.AmountSar - sub, 2);
-        return Task.FromResult<Invoice?>(new(
-            p.Id, p.InvoiceNumber, sub, vat, p.AmountSar,
-            SellerName: "ACommerce",
-            SellerVatNumber: "300000000000003",   // VAT وَهميّ
-            IssuedAt: p.CreatedAt,
-            PdfUrl: $"/api/payments/invoice/{p.Id}.pdf"));   // endpoint مُستَقبَليّ
-    }
+        => Task.FromResult<Invoice?>(null);
 
+    /// <summary>رَقمُ الفاتورَةِ الداخِليّ — يُخَزَّن في وَثيقَةِ الدَفعِ
+    /// المُحاكاةِ لِلتَشخيصِ، ولا يُصَدَّر في مُستَنَدٍ يُعرَض على
+    /// أَحَد.</summary>
     private string NextInvoice()
         => $"INV-{DateTime.UtcNow:yyyy}-{Interlocked.Increment(ref _invoiceCounter):D6}";
 
@@ -139,9 +155,42 @@ public sealed class MockPaymentProvider : IPaymentProvider
 
 public static class PaymentServiceExtensions
 {
+    /// <summary>
+    /// <para><b>يُسَجِّل مُزَوِّدَ الدَفعِ المُوافِقَ لِلبيئَة — ونُقطَةُ
+    /// النِداءِ الوَحيدَةُ في <c>Program.cs</c>.</b></para>
+    ///
+    /// <para>المَنطِقُ كُلُّه في <see cref="PaymentProviderSelection.Decide"/>
+    /// (دالَّةٌ نَقِيَّةٌ تُقاس بِجَدوَل)، وهذِه أَثَرُها لا قَرارُها —
+    /// نَفسُ شَكلِ <c>AuthChannelSelection</c> وسَطرِ تَسجيلِه.</para>
+    /// </summary>
+    public static IServiceCollection AddPaymentProvider(
+        this IServiceCollection services, bool isDevelopment)
+        => PaymentProviderSelection.Decide(isDevelopment) switch
+        {
+            PaymentProviderChoice.Mock => services.AddMockPayments(),
+            _                          => services.AddUnavailablePayments()
+        };
+
+    /// <summary>
+    /// <para>تَسجيلٌ مُباشِرٌ لِلمُحاكي. <b>يَبقى عامّاً عَمداً</b>: هُوَ
+    /// بِعَينِه السَطرُ الَّذي يَعود يَوماً سَهواً إلى <c>Program.cs</c>،
+    /// وحارِسُ الإقلاع
+    /// (<see cref="PaymentProviderSelection.AssertNoStubsOutsideDevelopment"/>)
+    /// مَوجودٌ لِيُمسِكَه — وحارِسٌ بِلا طَريقٍ يُمسِكُه لا يُقاس. نَفسُ
+    /// حُجَّةِ بَقاءِ <c>AddMockSmsChannel()</c> عامّاً.</b></para>
+    /// </summary>
     public static IServiceCollection AddMockPayments(this IServiceCollection services)
     {
         services.AddSingleton<IPaymentProvider, MockPaymentProvider>();
+        return services;
+    }
+
+    /// <summary>الفَشَلُ المُغلَق — مُسَجَّلٌ دائِماً خارِجَ التَطوير
+    /// فَلا يَنفَجِر حَلُّ <c>DealsService</c>، ويَرُدُّ كُلَّ نِداءٍ
+    /// بِسَبَبٍ مَقروء.</summary>
+    public static IServiceCollection AddUnavailablePayments(this IServiceCollection services)
+    {
+        services.AddSingleton<IPaymentProvider, UnavailablePaymentProvider>();
         return services;
     }
 }

@@ -120,9 +120,17 @@ switch (AuthChannelSelection.Decide(AuthChannelKind.Email,
 }
 
 // مُزَوِّدو البِنيَة (mock — استَبدِلهم لاحِقاً بِـ Moyasar/Saee/Google Maps).
+// **وحُكمُهُما مَقيسٌ ومَكتوبٌ لا مَظنون**: ‏`docs/PROVIDER-STUB-DEBT.md`.
 builder.Services.AddMockMaps();
 builder.Services.AddMockDelivery();
-builder.Services.AddMockPayments();
+
+// ─── مُزَوِّدُ الدَفع — بِالبيئَة، وفَشَلٌ مُغلَقٌ في الإنتاج ─────────
+// كانَ `AddMockPayments()` سَطراً عارِياً هُنا، والمُحاكي يَقول «نَجَحَ
+// الدَفع» لِكُلّ نِداء — فَكانَت `‏/studio/billing/select` تَقرَأُ
+// نَجاحاً وتَكتُب `Tier = "scale"` بِلا قَبض. القَرارُ الآنَ دالَّةٌ
+// نَقِيَّةٌ (`PaymentProviderSelection.Decide`)، وهذا السَطرُ أَثَرُها
+// لا مَنطِقُها — نَفسُ ما فُعِلَ بِقَنَواتِ الدُخولِ أَعلاه.
+builder.Services.AddPaymentProvider(isDev);
 
 // ‏PayPal — **تَدَفُّقٌ آخَر لا بَديلٌ عَمّا فَوقَه**: هذا لِاشتِراكِ
 // المُستَأجِرِ في وَسايِل (‏ADR-004)، وذاكَ لِعَرَبونِ الصَفقاتِ داخِلَ
@@ -175,6 +183,17 @@ AuthChannelSelection.AssertNoStubsOutsideDevelopment(
         Describe(AuthChannelKind.Email,  app.Services.GetService<IEmailOtpChannel>()),
         Describe(AuthChannelKind.Nafath, app.Services.GetService<INafathChannel>())
     }.OfType<RegisteredAuthChannel>());
+
+// ─── وحارِسٌ ثانٍ بِنَفسِ الآلِيَّة: لا مُزَوِّدَ دَفعٍ مُحاكٍ ────────
+// **ولا أُنبوبَ رابِع** (القاعِدَة ٨): نَفسُ الشَكلِ حَرفاً — عَلامَةٌ
+// على المُحاكي، ودالَّةٌ نَقِيَّةٌ تَقرَؤُها، ورَميٌ قَبلَ أَوَّلِ
+// طَلَب. والسَبَبُ واحِد: «رَمزٌ ثابِتٌ ‏123456» و«نَجَحَ الدَفع
+// دائِماً» عَطَبٌ واحِدٌ بِوَجهَين — تَركيبُ الخِدماتِ وَحدَه هُوَ
+// الفَرقُ بَينَ مَنصَّةٍ تَقبِض وأُخرى تُوَزِّع باقاتِها مَجّاناً.
+PaymentProviderSelection.AssertNoStubsOutsideDevelopment(
+    app.Environment.IsDevelopment(),
+    new[] { PaymentProviderSelection.Describe(app.Services.GetService<IPaymentProvider>()) }
+        .OfType<RegisteredPaymentProvider>());
 
 static RegisteredAuthChannel? Describe(AuthChannelKind kind, object? channel) => channel switch
 {
