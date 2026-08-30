@@ -84,31 +84,50 @@ file sealed class HealthHost : IAsyncDisposable
     /// <summary><paramref name="withVersionGate"/> يُركِّبُ
     /// <c>UseVersionGate</c> قَبلَ النِقاط — بِنَفسِ تَرتيبِ
     /// <c>Program.cs</c> — فَيُقاسُ المَسارُ لا المُعالِجُ وَحدَه.</summary>
+    /// <summary><b>ولِماذا حَلقَةُ إعادَة</b>: ‏`FreePort` تُغلِقُ
+    /// المُستَمِعَ ثُمَّ يُفتَحُ المَنفَذُ مَرَّةً أُخرى — فَبَينَهُما
+    /// فُرجَةٌ يَستَطيعُ فيها **مُضيفٌ في صَنفٍ آخَر** (وxUnit يُشَغِّلُ
+    /// الأَصنافَ مُتَوازِيَةً) أَن يَختَطِفَ نَفسَ الرَقَم. وقَد وَقَعَ
+    /// فِعلاً: فَشَلٌ واحِدٌ عابِرٌ في جَولَةٍ مِن أَربَع، لَم يَتَكَرَّر
+    /// في الثَلاثِ التالِيَة. **وبَوّابَةٌ تَحمَرُّ بِلا ذَنبٍ تُعَطَّلُ
+    /// بَعدَ أُسبوع** — فَالإعادَةُ ثَمَنُها ثَلاثَةُ أَسطُر.</summary>
     public static async Task<HealthHost> StartAsync(
         string? informationalVersion,
         DateTimeOffset startedAt,
         bool withVersionGate = false)
     {
-        var builder = WebApplication.CreateSlimBuilder();
-        builder.Logging.ClearProviders();
-        if (withVersionGate)
-            builder.Services.AddVersionGate(o => o.MinimumSupported = "1.0.0");
-
-        var port = FreePort();
-        var app = builder.Build();
-        app.Urls.Add($"http://127.0.0.1:{port}");
-        if (withVersionGate)
-            app.UseVersionGate();
-        app.MapBuildIdentity(informationalVersion, startedAt);
-        await app.StartAsync();
-
-        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
+        for (var attempt = 1; ; attempt++)
         {
-            BaseAddress = new Uri($"http://127.0.0.1:{port}"),
-            Timeout = TimeSpan.FromSeconds(20),
-        };
+            var builder = WebApplication.CreateSlimBuilder();
+            builder.Logging.ClearProviders();
+            if (withVersionGate)
+                builder.Services.AddVersionGate(o => o.MinimumSupported = "1.0.0");
 
-        return new HealthHost(app, client);
+            var port = FreePort();
+            var app = builder.Build();
+            app.Urls.Add($"http://127.0.0.1:{port}");
+            if (withVersionGate)
+                app.UseVersionGate();
+            app.MapBuildIdentity(informationalVersion, startedAt);
+
+            try
+            {
+                await app.StartAsync();
+            }
+            catch (IOException) when (attempt < 5)
+            {
+                await app.DisposeAsync();
+                continue;
+            }
+
+            var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
+            {
+                BaseAddress = new Uri($"http://127.0.0.1:{port}"),
+                Timeout = TimeSpan.FromSeconds(20),
+            };
+
+            return new HealthHost(app, client);
+        }
     }
 
     public async ValueTask DisposeAsync()
