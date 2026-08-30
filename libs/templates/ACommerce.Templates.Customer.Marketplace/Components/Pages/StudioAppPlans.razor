@@ -1,0 +1,154 @@
+@page "/studio/apps/{slug}/plans"
+@inject Services.Incubator.StudioAuth Auth
+@inject Services.Queries.TenantDirectory Tenants
+@inject Services.TenantPlanService Plans
+@inject L L
+@using ACommerce.Kit.Tenants
+@using ACommerce.Kit.Subscriptions
+
+@*
+    باقاتُ المَتجَر — يُؤَلِّفُها صاحِبُه لِمُستَخدِمي مَتجَرِه،
+    ويَراها زُوّارُه على `/{slug}/plans`.
+
+    **ولا اعتِمادَ مَنَصَّةٍ هُنا، ويُقالُ لِماذا** (‏ADR-021): نِطاقُ
+    الأَثَرِ مَتجَرٌ واحِد — نَفسُ نِطاقِ الفِئاتِ والمُدُنِ والأَدوارِ
+    الَّتي يَكتُبُها صاحِبُه اليَومَ بِلا اعتِماد. بِخِلافِ الثيمِ
+    (يُبَثُّ لِكُلِّ زائِر) والدَورِ المُؤَلَّفِ (يُضيفُ صَلاحِيّاتٍ
+    خارِجَ الكاتالوج).
+
+    **ولا مالَ يَتَحَرَّك**: الباقَةُ بِسِعرٍ لا تُمنَحُ ذاتِيّاً
+    (`PlanPurchasePolicy` · ADR-003)، ولا تُعرَضُ أَصلاً لِزائِرِ مَتجَرٍ
+    لا يَقبِض.
+*@
+
+<StudioShell Title="@($"{L["studio.app_plans.title"]} {tenant?.Name ?? Slug}")" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← @L.Markup("studio.app_nav.settings")</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (tenant is null)
+        {
+            <div class="st-card">@L.Markup("studio.app.not_found")</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1>@L.Markup("studio.app_plans.heading")</h1>
+                <p>@L.Markup("studio.app_plans.intro")</p>
+            </div>
+
+            @if (Saved == "1") { <div class="st-chip st-chip-success" style="margin-bottom:14px;"><AcIcon Name="check" Size="14" /> @L.Markup("studio.app.saved")</div> }
+            @if (ErrorMessage is { } err) { <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@err</div> }
+
+            @if (!tenant.PaymentProviderConfigured)
+            {
+                <div class="st-card" style="margin-bottom:14px;">
+                    <p style="margin:0;font-size:13px;">@L.Markup("studio.app_plans.no_collector")</p>
+                    <a class="st-btn st-btn-ghost" style="margin-top:10px;" href="@($"/studio/apps/{Slug}/providers")">
+                        @L.Markup("studio.app.providers_title")
+                    </a>
+                </div>
+            }
+
+            @if (authored.Count > 0)
+            {
+                <div class="st-card">
+                    <h3 style="margin-top:0;">@L.Markup("studio.app_plans.list_title") (@authored.Count)</h3>
+                    <div class="studio-list">
+                        @foreach (var d in authored)
+                        {
+                            <div class="studio-list-row">
+                                <div class="studio-list-body">
+                                    <strong>@d.Label.Ar</strong>
+                                    <span>
+                                        @d.Slug ·
+                                        @(d.Price <= 0m ? L["studio.app_plans.free"] : L.Format("studio.app_plans.price", d.Price)) ·
+                                        @L.Format("studio.app_plans.quota", d.ListingsQuota) ·
+                                        @L.Format("studio.app_plans.days", d.DaysPeriod)
+                                        @if (!d.IsActive) { <text> · @L.Markup("studio.app_plans.inactive")</text> }
+                                    </span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="st-card">
+                <h3 style="margin-top:0;">@L.Markup("studio.app_plans.new_title")</h3>
+                <p style="font-size:13px;color:var(--st-muted);">@L.Markup("studio.app_plans.edit_hint")</p>
+                <form method="post" action="@($"/studio/apps/{Slug}/plans/save")">
+                    <div class="st-field">
+                        <label class="st-label">@L.Markup("studio.app_plans.slug_label")</label>
+                        <input class="st-input" name="slug" dir="ltr" required maxlength="40" />
+                    </div>
+                    <div class="st-field">
+                        <label class="st-label">@L.Markup("studio.app_plans.label_label")</label>
+                        <input class="st-input" name="label_ar" required maxlength="60" />
+                    </div>
+                    <div class="st-field">
+                        <label class="st-label">@L.Markup("studio.app_plans.desc_label")</label>
+                        <input class="st-input" name="desc_ar" required maxlength="160" />
+                    </div>
+                    <div class="st-field">
+                        <label class="st-label">@L.Markup("studio.app_plans.price_label")</label>
+                        <input class="st-input" name="price" dir="ltr" type="number" min="0" step="1" value="0" />
+                    </div>
+                    <div class="st-field">
+                        <label class="st-label">@L.Markup("studio.app_plans.quota_label")</label>
+                        <input class="st-input" name="quota" dir="ltr" type="number" min="0" step="1" value="10" />
+                    </div>
+                    <div class="st-field">
+                        <label class="st-label">@L.Markup("studio.app_plans.days_label")</label>
+                        <input class="st-input" name="days" dir="ltr" type="number" min="1" max="730" step="1" value="30" />
+                    </div>
+                    <div class="st-field">
+                        <label class="st-label">
+                            <input name="active" type="checkbox" value="1" checked />
+                            @L.Markup("studio.app_plans.active_label")
+                        </label>
+                    </div>
+                    <button type="submit" class="st-btn st-btn-primary">
+                        <AcIcon Name="check" Size="14" /> @L.Markup("studio.app_plans.save")
+                    </button>
+                </form>
+            </div>
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+    [SupplyParameterFromQuery(Name = "err")]   public string? Err { get; set; }
+
+    Tenant? tenant;
+    IReadOnlyList<PlanDefinition> authored = Array.Empty<PlanDefinition>();
+
+    /// <summary>رَمزُ الخَرقِ يُتَرجَمُ في الشاشَة — <b>ورَمزٌ مَجهولٌ
+    /// يُعرَضُ خاماً ولا يُبتلَع</b>: رَفضٌ لا يُرى أَسوَأُ مِن رَفضٍ
+    /// بِرَمزٍ إنجليزيّ.</summary>
+    string? ErrorMessage => string.IsNullOrEmpty(Err) ? null : Err switch
+    {
+        "slug_empty"                => L["studio.app_plans.err_slug_empty"],
+        "slug_pattern"              => L["studio.app_plans.err_slug_pattern"],
+        "slug_shadows_seeded_plan"  => L["studio.app_plans.err_slug_reserved"],
+        "localized_arabic_missing"  => L["studio.app_plans.err_arabic_missing"],
+        "price_negative"            => L["studio.app_plans.err_price_negative"],
+        "quota_negative"            => L["studio.app_plans.err_quota_negative"],
+        "period_not_positive"       => L["studio.app_plans.err_period"],
+        "period_too_long"           => L["studio.app_plans.err_period_long"],
+        _                           => Err
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        tenant = await Tenants.FindAsync(Slug);
+        // تَحَقُّقُ المِلكِيَّة — نَفسُ شَرطِ بَقِيَّةِ صَفَحاتِ الاستوديو.
+        if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) tenant = null;
+        if (tenant is null) return;
+        authored = (await Plans.ForAsync(Slug)).Authored;
+    }
+}

@@ -161,6 +161,15 @@ internal static class PinnedRoutes
         // جَلسَتَها بِسلاجِ المُستَأجِر كَما كانَت.
         "/studio/apps/{slug}/theme/propose",
 
+        // ─── وسَطرٌ ثانٍ بِنَفسِ السَبَبِ حَرفاً: تَأليفُ باقَةِ مَتجَر ──
+        //
+        // ‏`/studio/apps/{slug}/plans/save` — حارِسُ المِلكِيَّةِ نَفسُه
+        // يَقرَأُ وَثيقَةَ `Tenant` الـ`SingleTenanted`. والأَثَرُ خارِجَ
+        // الجِسمِ في `TenantPlanService.AuthorAsync`، وهي تَفتَحُ
+        // جَلسَتَها بِسلاجِ المُستَأجِر.
+        "/studio/apps/{slug}/plans/save",
+
+
         "/admin/incubator/start",
         "/admin/incubator/{id:guid}/answer",
         "/admin/incubator/{id:guid}/analyze",

@@ -3329,6 +3329,39 @@ public static class MarketplaceTemplateExtensions
                 $"/studio/apps/{slug}/branding", $"/studio/apps/{slug}/branding", "/studio");
         }).DisableAntiforgery();
 
+        // ─── Studio: تَأليفُ باقَةٍ لِمُستَخدِمي المَتجَر ───────────────
+        // **أَوَّلُ كاتِبٍ لِـ`TenantPlanDefinition` في المُستَودَع**:
+        // كانَت الوَثيقَةُ مُعَرَّفَةً والخِدمَةُ تَرِثُ `Propose/Decide`
+        // و`/{slug}/plans` تَعرِضُها والتَخارُجُ يُصَدِّرُها — **وصِفرُ
+        // كاتِب**. فَالتاجِرُ لا يُؤَلِّفُ باقَةً ولا يُسَعِّرُها.
+        //
+        // والقِراءَةُ والمُصادَقَةُ والكِتابَةُ **كُلُّها خارِجَ الجِسم**:
+        // `TenantPlanAuthoring.ReadDefinition` نَقِيَّةٌ مَقيسَةٌ
+        // بِعِشرينَ حالَة، و`TenantPlanService.AuthorAsync` تَمُرُّ
+        // بِالمُصادِقِ مَرَّتَينِ كَما هُوَ. راجِع ADR-021.
+        app.MapPost("/studio/apps/{slug}/plans/save", async (
+            string slug, HttpRequest req, IDocumentStore store,
+            Services.Incubator.StudioAuth auth,
+            Services.TenantPlanService plans,
+            Services.Audit.AuditWriter audit) =>
+        {
+            if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
+            await LogTenantConfigChangeAsync(audit, req, slug, auth,
+                Services.Subscriptions.TenantPlanAuthoring.AuditAction);
+
+            var (definition, violations) = Services.Subscriptions.TenantPlanAuthoring.ReadDefinition(
+                req.Form["slug"], req.Form["label_ar"], req.Form["desc_ar"],
+                req.Form["price"], req.Form["quota"], req.Form["days"],
+                req.Form["active"].ToString() != "0");
+
+            var page = $"/studio/apps/{slug}/plans";
+            if (violations.Count > 0)
+                return Results.Redirect($"{page}?err={Uri.EscapeDataString(violations[0].Code)}");
+
+            var (ok, msg) = await plans.AuthorAsync(slug, definition, $"studio · {auth.UserId}");
+            return Results.Redirect(ok ? $"{page}?saved=1" : $"{page}?err={Uri.EscapeDataString(msg)}");
+        }).DisableAntiforgery();
+
         // ─── Studio: اقتِراحُ حُزمَةِ مَظهَر ────────────────────────────
         // **الناقِصُ كانَ الاقتِراحَ لا القَرار**: دَورَةُ اعتِمادِ
         // المَظهَرِ كامِلَةٌ (‏`propose` → `decide`)، وثَلاثَةُ أَطرافِها

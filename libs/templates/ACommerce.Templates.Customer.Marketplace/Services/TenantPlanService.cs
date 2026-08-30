@@ -86,6 +86,84 @@ public sealed class TenantPlanService
 
     // ─── ما يَخُصّ الباقات وَحدَها ───────────────────────────────────
 
+    /// <summary>
+    /// <para><b>يُؤَلِّف صاحِبُ المَتجَرِ باقَةً لِمُستَخدِمي
+    /// مَتجَرِه — أَوَّلُ كاتِبٍ لِهذِه الوَثيقَةِ في
+    /// المُستَودَع.</b></para>
+    ///
+    /// <para><b>ولِماذا يَقتَرِح ويَعتَمِد مَعاً، ويُقالُ لِماذا</b>
+    /// (‏ADR-021): مِعيارُ بَقاءِ الاعتِمادِ بَشَرِيّاً في هذا
+    /// المُستَودَعِ هُوَ <b>نِطاقُ الأَثَر</b> لا نَوعُ الوَثيقَة —
+    /// وثِقُلُه مَقيسٌ في جارَتَيه:
+    /// <list type="bullet">
+    ///   <item><b>الثيم</b> يُبَثُّ في <c>&lt;head&gt;</c> لِكُلِّ
+    ///   زائِرٍ، فَاعتِمادُه قَرارُ مَنَصَّة.</item>
+    ///   <item><b>الدَورُ المُؤَلَّف</b> يُضيفُ صَلاحِيّاتٍ
+    ///   <b>خارِجَ كاتالوجِ المَنَصَّة</b>، فَاعتِمادُه قَرارُ
+    ///   مَنَصَّة.</item>
+    ///   <item><b>وباقَةُ المَتجَر</b> لا تَفعَل أَيّاً مِنهُما:
+    ///   تُعرَضُ على <c>/{slug}/plans</c> وَحدَها — نَفسُ نِطاقِ
+    ///   فِئاتِ المَتجَرِ ومُدُنِه وأَدوارِه، وكُلُّها يَكتُبُها
+    ///   صاحِبُه اليَومَ مِن <c>/studio/apps/{slug}/*</c>
+    ///   <b>بِلا اعتِمادٍ إطلاقاً</b>.</item>
+    /// </list></para>
+    ///
+    /// <para><b>ولا مالَ يَتَحَرَّك</b>: الباقَةُ بِسِعرٍ
+    /// <b>لا تُمنَحُ ذاتِيّاً</b> (<c>PlanPurchasePolicy</c> · ‏ADR-003)
+    /// ولا تُعرَضُ أَصلاً لِزائِرِ مَتجَرٍ لا يَقبِض
+    /// (<c>PlanPurchasePolicy.Visible</c>). فَأَقصى ما يَفعَلُه
+    /// التَأليفُ: صَفٌّ في صَفحَةِ باقاتِ مَتجَرٍ واحِد.</para>
+    ///
+    /// <para><b>والمُصادِقُ يَعمَلُ مَرَّتَينِ كَما هُوَ</b> — عِندَ
+    /// التَخزينِ وعِندَ الاعتِماد — ولا يُلمَسُ حَرفٌ مِنه. وإعادَةُ
+    /// الفَتحِ قَبلَ الاقتِراحِ هي بِعَينِها ما تَفعَلُه
+    /// <c>TenantThemeService.ApplyPresetAsync</c>: تَحريرُ باقَةٍ
+    /// قائِمَةٍ عَمَلٌ عادِيٌّ لِصاحِبِها، لا «إعادَةُ تَعريفٍ مِن
+    /// تَحتِ المُشرِف».</para>
+    /// </summary>
+    public async Task<(bool Ok, string Message)> AuthorAsync(
+        string tenantSlug, PlanDefinition definition, string by, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(tenantSlug)) return (false, "لا مُستَأجِر.");
+
+        await ReopenIfApprovedAsync(tenantSlug, definition.Slug, by, ct);
+
+        var json = PlanDefinitionLoader.ToJson(definition);
+        var (proposed, proposeMsg) = await ProposeAsync(tenantSlug, definition.Slug, json, by, ct);
+        if (!proposed) return (false, proposeMsg);
+
+        return await DecideAsync(tenantSlug, definition.Slug, TenantPlanStatuses.Approved, by, ct);
+    }
+
+    /// <summary>يُعيد وَثيقَةَ باقَةٍ مُعتَمَدَةٍ إلى «مُعَلَّق» — وهي
+    /// الخُطوَةُ الوَحيدَةُ الَّتي تُمَيِّزُ تَحريرَ باقَةٍ قائِمَةٍ
+    /// عَن تَأليفِ أُولى. لا تُنشِئ ولا تَحذِف: غِيابُ الوَثيقَةِ لا
+    /// شَيءَ يُفعَلُ بِه. نَفسُ جِسمِ
+    /// <c>TenantThemeService.ReopenIfApprovedAsync</c> — <b>نُسخَةٌ
+    /// ثانِيَةٌ لا ثالِثَة</b>، فَلا تُستَخرَج بَعد (القاعِدَة ١).</summary>
+    private async Task ReopenIfApprovedAsync(
+        string tenantSlug, string slug, string by, CancellationToken ct)
+    {
+        try
+        {
+            await using var s = Store.LightweightSession(tenantSlug);
+            var doc = await s.LoadAsync<TenantPlanDefinition>(slug, ct);
+            if (doc is not { Status: TenantPlanStatuses.Approved }) return;
+
+            doc.Status    = TenantPlanStatuses.Pending;
+            doc.DecidedBy = by;
+            doc.DecidedAt = null;
+            s.Store(doc);
+            await s.SaveChangesAsync(ct);
+            Invalidate(tenantSlug);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"[plans] تَعَذَّرَ إعادَةُ فَتحِ «{slug}» في «{tenantSlug}»: {ex.Message}");
+        }
+    }
+
     /// <summary>نَفس القِراءَة بِلا كاش — لِمَسارات تَملِك المَخزَن
     /// ولا تَملِك الخِدمَة.</summary>
     public static Task<TenantPlanSet> ReadUncachedAsync(
