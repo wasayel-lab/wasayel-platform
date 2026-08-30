@@ -116,7 +116,7 @@ public sealed class TenantProviderService
     /// <summary>يَكتُبُ رَبطاً فَعّالاً لِقُدرَةٍ واحِدَة — ويَسحَبُ ما
     /// قَبلَه بِالكِتابَةِ فَوقَه (لا تَحريرَ في المَوضِع: الوَثيقَةُ
     /// تُستَبدَل، والقَديمُ لا يَبقى فَعّالاً).</summary>
-    public async Task<TenantProviderBinding> BindAsync(
+    public async Task<TenantProviderBinding> BindProviderAsync(
         string tenantSlug, string capability, string providerSlug,
         IReadOnlyDictionary<string, StoredValue> values,
         string by, CancellationToken ct = default)

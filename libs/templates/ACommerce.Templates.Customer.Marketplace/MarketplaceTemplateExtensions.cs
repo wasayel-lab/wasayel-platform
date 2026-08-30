@@ -3554,7 +3554,7 @@ public static class MarketplaceTemplateExtensions
 
             var before = Services.Providers.ProviderBindSurface.AuditLine(
                 await providers.CurrentAsync(slug, read.Capability));
-            var bound = await providers.BindAsync(
+            var bound = await providers.BindProviderAsync(
                 slug, read.Capability, read.ProviderSlug, read.Values,
                 auth.UserId?.ToString() ?? "");
             await SyncPaymentProviderFlagAsync(store, providers, slug);
