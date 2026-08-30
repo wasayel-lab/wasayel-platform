@@ -243,6 +243,97 @@ public class ProviderCatalogTests
         }
     }
 
+    // ─── ٦-ب. مَسارُ الإضافَة — بَياناتٌ لا كود ──────────────────────
+    //
+    // **هذا هُوَ اختِبارُ نَجاحِ التَجريدِ لا دَعواه**: مُزَوِّدٌ جَديدٌ
+    // بِنَوعٍ لا يَحمِلُ سِرّاً يُكَلِّف مِلَفَّ بَياناتٍ وسَطراً في
+    // الفِهرِس — و**صِفرَ سَطرِ كود**. فَلا `Program.cs` ولا خِزانَةَ
+    // ولا شاشَةَ ولا نُقطَةَ كِتابَةٍ ولا تَدقيق.
+    //
+    // ويُقاسُ بِالنَفي: لَو ذَكَرَ مَوضِعٌ واحِدٌ في المَصدَرِ سلاجَ
+    // مُزَوِّدٍ بِعَينِه، لَاحتاجَ المُزَوِّدُ التالي تَعديلَ ذلكَ
+    // المَوضِع — وهُوَ بِعَينِه ما يَجعَل الكاتالوجَ زينَةً.
+
+    [Fact]
+    public void No_source_file_outside_the_catalogue_names_a_provider_slug()
+    {
+        var slugs = ProviderCatalog.Definitions.Select(d => d.Slug).ToArray();
+        Assert.True(slugs.Length > 0, "أَداة عَمياء: صِفرُ سلاجٍ مَفحوص.");
+
+        var scanned = 0;
+        var breaches = new List<string>();
+
+        foreach (var root in new[] { "libs", "apps" })
+        {
+            var dir = Path.Combine(RepoRoot, root);
+            if (!Directory.Exists(dir)) continue;
+
+            foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+            {
+                var norm = f.Replace('\\', '/');
+                if (norm.Contains("/obj/", StringComparison.Ordinal) ||
+                    norm.Contains("/bin/", StringComparison.Ordinal)) continue;
+                if (!norm.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) &&
+                    !norm.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)) continue;
+
+                scanned++;
+                var text = File.ReadAllText(f);
+                foreach (var slug in slugs)
+                    if (text.Contains(slug, StringComparison.Ordinal))
+                        breaches.Add($"{Path.GetRelativePath(RepoRoot, f).Replace('\\', '/')} ← «{slug}»");
+            }
+        }
+
+        Assert.True(scanned > 300, $"أَداة عَمياء: مُسِحَ {scanned} مِلَفّاً — والمَقيس مِئات.");
+        Assert.True(breaches.Count == 0,
+            "سلاجُ مُزَوِّدٍ مَكتوبٌ في الكود — فَالمُزَوِّدُ التالي يَحتاج تَعديلَه:\n  "
+            + string.Join("\n  ", breaches));
+    }
+
+    [Fact]
+    public void A_new_hosted_link_provider_needs_only_a_data_file()
+    {
+        // مُزَوِّدٌ وَهمِيٌّ يُكتَبُ كَما يُكتَبُ الحَقيقيّ — ويَمُرّ
+        // بِنَفسِ القارِئِ ونَفسِ المُصادِق، ويَخرُج «يَربِطُه
+        // مُستَأجِر» بِلا سَطرِ كودٍ واحِد.
+        const string json = """
+            {
+              "slug": "paytabs_paylink",
+              "capability": "payments",
+              "label": { "ar": "بَي تابس — رابِط دَفع", "en": null },
+              "description": { "ar": "رابِطُ دَفعٍ تُنشِئُه مِن لَوحَتِك.", "en": null },
+              "docsUrl": null,
+              "physicalGoodsOnly": true,
+              "credential": {
+                "kind": "hosted_link",
+                "fields": [
+                  { "code": "paylink_url",
+                    "kind": "hosted_link",
+                    "label": { "ar": "رابِط الدَفع", "en": null },
+                    "isRequired": true,
+                    "pattern": null,
+                    "hostAllowlist": ["paytabs.com"] }
+                ]
+              },
+              "webhook": null,
+              "revocation": { "ar": "احذِف الرابِطَ مِن لَوحَتِك ثُمَّ اسحَب الرَبطَ هُنا.", "en": null }
+            }
+            """;
+
+        var d = ProviderDefinitionLoader.ParseDefinition(json);
+
+        Assert.Empty(ProviderDefinitionValidator.Validate(d));
+        Assert.True(d.IsTenantBindable);
+        Assert.Equal(ProviderCapabilities.Payments, d.Capability);
+        Assert.Equal(CredentialKinds.HostedLink, d.HighestFieldKind);
+
+        // والقيمَةُ تُفحَص بِسياجِها هي، لا بِسياجِ جارِها.
+        var field = d.Credential.Fields[0];
+        Assert.Null(ProviderValueValidator.Refuse(field, "https://paytabs.com/pay/1"));
+        Assert.Equal(ProviderValueValidator.HostNotAllowed,
+            ProviderValueValidator.Refuse(field, "https://moyasar.com/i/1"));
+    }
+
     // ─── ٧. القارِئُ يَرفُض ما لا يَعرِف ─────────────────────────────
 
     [Fact]
