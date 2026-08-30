@@ -43,6 +43,34 @@ public sealed record TierLimits(
 
 public static class TierCatalog
 {
+    /// <summary>
+    /// <para><b>حُدودُ الدَرَجَةِ المَجّانِيَّةِ <u>قَبلَ</u> الرَفعِ
+    /// المُؤَقَّت</b> — مَحفوظَةٌ بَياناتٍ لا تَعليقاً، فَالعَودَةُ يَومَ
+    /// يَستَقِرُّ التَسعيرُ سَطرٌ واحِدٌ لا أَثَرٌ يُعادُ
+    /// اكتِشافُه.</para>
+    ///
+    /// <para><b>ولِماذا سِجِلٌّ كامِلٌ لا ثَلاثَةُ أَعداد</b>: الرَفعُ
+    /// مَسَّ أَربَعَةَ حُقولٍ لا ثَلاثَة (‏<c>AllowExport</c> مِنها)،
+    /// وسِجِلٌّ واحِدٌ يَحمِلُها كُلَّها يَمنَعُ أَن يُعادَ ثَلاثَةٌ
+    /// ويُنسى رابِع.</para>
+    /// </summary>
+    public static readonly TierLimits FreeTierBeforeRaise =
+        new("spark", "Spark", 99, AnalysesPerMonth: 1, RefinesPerMonth: 3,
+            StoresMax: 1, AllowExport: false);
+
+    /// <summary>
+    /// <para><b>أَمَرفوعَةٌ الدَرَجَةُ المَجّانِيَّةُ رَفعاً
+    /// مُؤَقَّتاً؟</b> — عَلامَةٌ يَقرَؤُها الاختِبار، فَالرَفعُ
+    /// حالَةٌ مُعلَنَةٌ لا انجِرافٌ صامِت.</para>
+    ///
+    /// <para><b>قَرارُ المالِكِ يَومَ ‏2026-08-30</b>: تُرفَعُ الحُدودُ
+    /// <b>حَتّى يَستَقِرَّ التَسعير</b> — ولا يُفتَرَضُ سِعرٌ ولا
+    /// يُبنى بَيعٌ ذاتيّ. فَهذِه العَلامَةُ تَعودُ <c>false</c> وتَعودُ
+    /// مَعَها <see cref="FreeTierBeforeRaise"/> يَومَ يُكتَبُ
+    /// السِعر.</para>
+    /// </summary>
+    public const bool FreeTierTemporarilyRaised = false;
+
     public static readonly IReadOnlyDictionary<string, TierLimits> All = new Dictionary<string, TierLimits>
     {
         ["spark"]  = new("spark",  "Spark",   99,  AnalysesPerMonth: 1, RefinesPerMonth: 3,
