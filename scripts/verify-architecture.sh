@@ -208,4 +208,88 @@ fi
 
 [ "$LOOSE" -gt 0 ] && echo "  ($LOOSE ledger entries are looser than reality — tightening is free.)"
 echo "✅ Layer 8 green — no new page reached for a Marten session."
+
+# ═══════════════════════════════════════════════════════════════════════
+#  الطَبَقَة ٨-ب — كاتالوجُ المُزَوِّدين بَياناتٌ لا كود (‏ADR-012)
+# ───────────────────────────────────────────────────────────────────────
+#  القاعِدَة ٢: «لا SDK خارِجيّاً يُنادى مُباشَرَةً» حَدٌّ لا يَحفَظُه
+#  اسمٌ ولا وَثيقَة — يَحفَظُه فاحِصٌ يَفشَل عِندَ خَرقِه. وهذا
+#  الفاحِصُ يَسأَل ثَلاثَةَ أَسئِلَة يُجابُ عَنها **بِالعَدّ**:
+#
+#    ١. كَم مِلَفَّ تَعريفٍ في الكاتالوج؟ (وصِفرٌ = أَداةٌ عَمياء)
+#    ٢. أَكُلُّ مِلَفٍّ عَلى القُرصِ مَذكورٌ في الفِهرِس؟ — فَتَعريفٌ
+#       يُبنى ولا يُحَمَّل هُوَ **المَقبَرَةُ نَفسُها** الَّتي وَقَعَت
+#       في الكود: سَبعَةُ مَشاريعِ مُزَوِّدين لا يُحيلُها csproj.
+#    ٣. أَتُحيلُ مَكتَبَةُ الكاتالوجِ عُدَّةً واحِدَة؟ — المَعجَمُ
+#       أَسماءٌ نَصِّيَّةٌ لا أَنواع، وأَيُّ إحالَةِ عُدَّةٍ تَقلِب
+#       اتِّجاهَ الاعتِماد.
+#
+#  وحارِسُ العَمى هُنا كَما فَوقَه: العَدَدُ يُطبَع، والصِفرُ يُحمِر.
+# ═══════════════════════════════════════════════════════════════════════
+
+PROV_DIR="libs/core/ACommerce.Platform.Providers/Definitions"
+PROV_CSPROJ="libs/core/ACommerce.Platform.Providers/ACommerce.Platform.Providers.csproj"
+PROV_FAIL=0
+
+echo ""
+echo "═══════════════════════════════════════════════"
+echo "   Layer 8b — provider catalogue is data"
+echo "═══════════════════════════════════════════════"
+echo ""
+
+if [ ! -d "$PROV_DIR" ]; then
+    echo "  ✗ BLIND CHECK: $PROV_DIR غَير مَوجود — الفاحِصُ لا يَجِد ما يَفحَص." >&2
+    exit 1
+fi
+
+PROV_FILES=$(find "$PROV_DIR" -name '*.provider.json' | wc -l | tr -d ' ')
+PROV_INDEXED=$(grep -oE '"[a-z][a-z0-9_]*"' "$PROV_DIR/providers.index.json" | tr -d '"' | grep -cv '^providers$')
+
+echo "--- Measurement ---"
+echo "  provider definition files: $PROV_FILES"
+echo "  slugs listed in the index: $PROV_INDEXED"
+echo ""
+
+if [ "$PROV_FILES" -eq 0 ]; then
+    echo "  ✗ BLIND CHECK: صِفرُ مِلَفِّ تَعريف — «صِفر مُخالَفَة» مِن أَداةٍ فَحَصَت صِفراً." >&2
+    exit 1
+fi
+
+# ١. كُلُّ مِلَفٍّ عَلى القُرصِ مَذكورٌ في الفِهرِس.
+for f in "$PROV_DIR"/*.provider.json; do
+    slug=$(basename "$f" .provider.json)
+    if ! grep -q "\"$slug\"" "$PROV_DIR/providers.index.json"; then
+        echo "  ✗ ORPHAN: $slug.provider.json غَير مَذكورٍ في providers.index.json —"
+        echo "      يُبنى ولا يُحَمَّل. هذِه هي مَقبَرَةُ السَبعَةِ الأَيتام في البَيانات."
+        PROV_FAIL=1
+    fi
+done
+
+# ٢. وكُلُّ سلاجٍ في الفِهرِسِ لَه مِلَفّ.
+while read -r slug; do
+    [ -z "$slug" ] && continue
+    [ "$slug" = "providers" ] && continue
+    if [ ! -f "$PROV_DIR/$slug.provider.json" ]; then
+        echo "  ✗ MISSING: الفِهرِسُ يَذكُر «$slug» ولا مِلَفَّ لَه — يُفشِلُ الإقلاع."
+        PROV_FAIL=1
+    fi
+done < <(grep -oE '"[a-z][a-z0-9_]*"' "$PROV_DIR/providers.index.json" | tr -d '"')
+
+# ٣. مَكتَبَةُ الكاتالوجِ لا تُحيلُ عُدَّةً واحِدَة.
+KIT_REFS=$(grep -cE 'ProjectReference[^>]*kits' "$PROV_CSPROJ" || true)
+echo "  kit references from the catalogue library: $KIT_REFS"
+if [ "$KIT_REFS" -ne 0 ]; then
+    echo "  ✗ المَكتَبَةُ صارَت تُحيلُ عُدَّة — المَعجَمُ أَسماءٌ لا أَنواع،"
+    echo "      وأَيُّ إحالَةٍ تَقلِبُ اتِّجاهَ الاعتِماد."
+    PROV_FAIL=1
+fi
+
+echo ""
+if [ "$PROV_FAIL" -eq 1 ]; then
+    echo "Layer 8b red — تَعريفُ مُزَوِّدٍ لا يَبلُغ القارِئ، أَو الكاتالوجُ جَرَّ عُدَّة."
+    exit 1
+fi
+
+echo "✅ Layer 8b green — $PROV_FILES تَعريفاً كُلُّها في الفِهرِس، وصِفرُ إحالَةِ عُدَّة."
+
 exit 0
