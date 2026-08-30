@@ -186,33 +186,12 @@
             ? ACommerce.Templates.Customer.Marketplace.AuthSession.ExtractRoleFromPath(pctx.Request.Path)
             : null;
 
-        // مَسارات عابِرَة: لا تُمَثِّل التَّطبيق نَفسه.
-        var isTransient = rawPath.Contains("/login")
-                       || rawPath.Contains("/verify")
-                       || rawPath.Contains("/terms")
-                       || rawPath.Contains("/logout")
-                       || rawPath.Contains("/auth/")
-                       || rawPath.StartsWith("/admin");
-
-        // launcher: المَسار = "/{slug}" بِدون أَيّ شَيء بَعدَه. لِلمَتاجِر
-        // ذات الأَدوار (إنجيز)، هذه الصَفحَة لِاختِيار الدَور لا لِلاستِخدام —
-        // التَّثبيت يَجِب أَن يَكون مِن داخِل دَور.
-        var pathSegments = rawPath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var isLauncher = pathSegments.Length == 1;
-
-        // قاعِدَة الـ manifest:
-        //  - عابِرَة → لا manifest (لا تَظهَر القابِليَّة لِلتَّثبيت)
-        //  - URL فيه /r/{role}/ → manifest الدَور
-        //  - بِلا /r/ و لَيس launcher → manifest الـ slug (لِمَتاجِر بِلا أَدوار)
-        //  - launcher بِدون /r/ → لا manifest (نَنتَظِر دُخول الدَور)
-        string? pwaPath = null;
-        if (Tenant.IsResolved && !isTransient)
-        {
-            if (!string.IsNullOrEmpty(roleForPwa))
-                pwaPath = $"/api/{Tenant.Slug}/r/{roleForPwa}";
-            else if (!isLauncher)
-                pwaPath = $"/api/{Tenant.Slug}";
-        }
+        // القَرارُ نَفسُه في `Services.Ux.PwaManifestDecision` — دالَّةٌ
+        // نَقِيَّةٌ تُقاسُ بِجَدوَلٍ بِلا مُتَصَفِّح (القاعِدَة ٢).
+        // ومَعجَمُ المَسارات العابِرَةِ وشَرطُ البَوّابَةِ مَنقولانِ
+        // إلَيها حَرفاً بِلا تَغييرِ جَواب.
+        string? pwaPath = ACommerce.Templates.Customer.Marketplace.Services.Ux
+            .PwaManifestDecision.Resolve(rawPath, Tenant.IsResolved, Tenant.Slug, roleForPwa);
     }
     @if (pwaPath is not null)
     {
