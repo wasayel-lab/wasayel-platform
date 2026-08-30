@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ACommerce.Kit.Auth;
 using ACommerce.Kit.Roles;
 using ACommerce.Kit.Tenants;
 using Marten;
@@ -81,11 +82,26 @@ public sealed class TenantFromAnalysisFactory
         return new BuildSuggestion(name, color, tagLine, city, pattern);
     }
 
-    /// <summary>يُنشِئ Tenant فِعليّ + يَربِطه بِالـ analysis والمالِك.
-    /// يَفتَرِض أَنّ الـ slug صالِح وغَير مُستَخدَم (نادِيِ ValidateSlugAsync أَوَّلاً).</summary>
+    /// <summary>
+    /// <para>يُنشِئ Tenant فِعليّ + يَربِطه بِالـ analysis والمالِك.
+    /// يَفتَرِض أَنّ الـ slug صالِح وغَير مُستَخدَم (نادِيِ
+    /// ValidateSlugAsync أَوَّلاً).</para>
+    ///
+    /// <para><b>و<c>authChannel</c> مُعامَلٌ لا ثابِت — وهذا هُوَ
+    /// الفَرقُ بَينَ مَتجَرٍ يُبنى ويُدخَل وآخَرَ يُبنى ولا يُدخَل.</b>
+    /// كانَ السَطرُ هُنا <c>AuthChannel = "phone"</c> مَكتوبَةً، وعَلى
+    /// نُسخَةٍ مَضبوطَةٍ بِالبَريدِ وَحدَه — وهي تَوصِيَةُ
+    /// <c>docs/DEPLOY.md</c> §٢·ب لِأَنّ المُستَضيفَ يَحجُبُ مَنافِذَ
+    /// SMTP — كانَ ذلكَ يُنتِج مَتجَراً على قَناةٍ غَيرِ مُسَجَّلَة:
+    /// لافِتَةٌ حَمراءُ بَدَلَ نَموذَجِ الدُخول، ولا يَفتَحُه إلّا
+    /// المالِكُ بِيَدِه. القَناةُ الآنَ تُشتَقُّ في النُقطَةِ مِن
+    /// <see cref="TenantAuthChannelDoor"/>، والمَصنَعُ يَكتُبُ ما
+    /// أُعطِيَ ولا يَختَرِعُ.</para>
+    /// </summary>
     public async Task<Tenant> CreateAsync(
         string slug, string name, string color, string tagLine, string city,
-        string pattern, string sector, Guid ownerId, Guid? sourceAnalysisId,
+        string pattern, string sector, string authChannel,
+        Guid ownerId, Guid? sourceAnalysisId,
         CancellationToken ct = default)
     {
         var categories = CategoriesForSector(sector, pattern).ToList();
@@ -94,7 +110,7 @@ public sealed class TenantFromAnalysisFactory
         var tenant = new Tenant
         {
             Id = slug, Name = name, BrandColor = color, TagLine = tagLine, City = city,
-            AuthChannel = "phone",
+            AuthChannel = AuthChannels.NormalizeOrDefault(authChannel),
             Categories = categories,
             Roles = roles,
             OwnerUserId = ownerId,

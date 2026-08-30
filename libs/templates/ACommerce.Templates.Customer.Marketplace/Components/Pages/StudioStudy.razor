@@ -437,6 +437,11 @@
             => L["studio.study.err_slug_taken"],
         Services.Incubator.TenantFromAnalysisFactory.SlugReserved
             => L["studio.study.err_slug_reserved"],
+        // لا قَناةَ مُهَيَّأَة ⇒ لَم يُبنَ المَتجَر. **رِسالَةٌ صَريحَةٌ
+        // لا مَتجَرٌ بِبابٍ مُغلَق** — وكانَ يُبنى بِـ`"phone"` ثابِتَةً
+        // ثُمَّ يَكتَشِفُ صاحِبُه أَنّ أَحَداً لا يَدخُلُه.
+        Services.Incubator.TenantAuthChannelDoor.NoChannel
+            => L["studio.study.err_no_auth_channel"],
         _ => err
     };
 
