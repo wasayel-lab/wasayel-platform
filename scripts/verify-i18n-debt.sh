@@ -213,7 +213,23 @@ PERL
 wsl_find cs "$WSL_ALL_ROOTS" > "$TMP/csfiles.txt"
 CS_CNT=$(wc -l < "$TMP/csfiles.txt" | tr -d ' ')
 xargs -a "$TMP/csfiles.txt" -d '\n' perl "$TMP/sinks.pl" > "$TMP/sinkraw.txt"
-SINK_TOTAL=$(awk '$1=="SINK_TOTAL"{print $2}' "$TMP/sinkraw.txt")
+# `xargs` splits the argument list when it exceeds the OS limit, so the perl
+# script runs more than once and prints SINK_TOTAL more than once.  Taking the
+# first (or, worse, concatenating) yielded the literal string "0\n0": both
+# integer comparisons below then died with
+#   [: 0\n0: integer expression expected
+# and — because neither branch ran — neither set FAIL, so the layer printed
+# "green" no matter how far the debt rose.  Measured: reproduces from a
+# 26-char repo path on Git Bash, does not reproduce from a 19-char one; the
+# counter was silently dead on some checkouts and alive on others.  Sum the
+# records, and require at least one — a missing record is a blind tool, not a
+# zero. (Rule 10: a tool is measured before it is trusted.)
+SINK_RECORDS=$(awk '$1=="SINK_TOTAL"{n++} END{print n+0}' "$TMP/sinkraw.txt")
+if [ "$SINK_RECORDS" -eq 0 ]; then
+    echo "  ✗ BLIND: the sink scanner emitted no SINK_TOTAL record — it did not run."
+    exit 1
+fi
+SINK_TOTAL=$(awk '$1=="SINK_TOTAL"{s+=$2} END{print s+0}' "$TMP/sinkraw.txt")
 awk '$1=="SINK"{ p=$3; for(i=4;i<=NF;i++) p=p" "$i; sub(ROOT"/","",p); print "sink:"p"|"$2 }' \
     ROOT="$ROOT" "$TMP/sinkraw.txt" | sort > "$TMP/sinkcur.txt"
 
