@@ -1,0 +1,23 @@
+{
+  "slug": "moyasar_hosted",
+  "capability": "payments",
+  "label": { "ar": "مُيَسِّر — رابِط دَفع", "en": null },
+  "description": { "ar": "تُنشِئ الفاتورَة مِن لَوحَة مُيَسِّر وتَلصَق رابِطَها هُنا. المالُ يَصِلُ حِسابَك مُباشَرَةً، ووَسايِل لا تَمُرّ بِه.", "en": null },
+  "docsUrl": "https://docs.moyasar.com/guides/invoices/creating-invoices/",
+  "physicalGoodsOnly": true,
+  "credential": {
+    "kind": "hosted_link",
+    "fields": [
+      {
+        "code": "invoice_url",
+        "kind": "hosted_link",
+        "label": { "ar": "رابِط الدَفع", "en": null },
+        "isRequired": true,
+        "pattern": null,
+        "hostAllowlist": ["moyasar.com"]
+      }
+    ]
+  },
+  "webhook": null,
+  "revocation": { "ar": "احذِف الرابِطَ مِن لَوحَة مُيَسِّر، ثُمَّ اسحَب الرَبطَ هُنا.", "en": null }
+}

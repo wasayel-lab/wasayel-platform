@@ -1,0 +1,11 @@
+{
+  "slug": "local_files",
+  "capability": "files",
+  "label": { "ar": "تَخزينٌ مَحَلِّيّ", "en": null },
+  "description": { "ar": "التَنفيذُ القائِمُ اليَومَ — مِلَفّاتٌ في صَفِّ wwwroot/uploads، بِلا اعتِمادٍ ولا مُزَوِّدٍ خارِجيّ. وَصفٌ لِما هُوَ قائِم.", "en": null },
+  "docsUrl": null,
+  "physicalGoodsOnly": false,
+  "credential": { "kind": "none", "fields": [] },
+  "webhook": null,
+  "revocation": { "ar": "لا اعتِمادَ يُسحَب — لا شَيءَ مُخَزَّن.", "en": null }
+}

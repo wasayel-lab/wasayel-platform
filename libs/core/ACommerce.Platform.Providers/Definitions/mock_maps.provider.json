@@ -1,0 +1,11 @@
+{
+  "slug": "mock_maps",
+  "capability": "maps",
+  "label": { "ar": "مُحاكي الخَرائِط", "en": null },
+  "description": { "ar": "التَنفيذُ القائِمُ اليَومَ لِكُلّ مَتجَر — يُسَجَّل بِلا شَرطِ تَهيئَة. وَصفٌ لِما هُوَ قائِم.", "en": null },
+  "docsUrl": null,
+  "physicalGoodsOnly": false,
+  "credential": { "kind": "none", "fields": [] },
+  "webhook": null,
+  "revocation": { "ar": "لا اعتِمادَ يُسحَب — لا شَيءَ مُخَزَّن.", "en": null }
+}

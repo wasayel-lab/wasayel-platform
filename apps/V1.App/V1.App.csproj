@@ -6,6 +6,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\libs\core\ACommerce.Platform.Hosting\ACommerce.Platform.Hosting.csproj" />
     <ProjectReference Include="..\..\libs\core\ACommerce.Platform.MultiTenancy\ACommerce.Platform.MultiTenancy.csproj" />
+    <!-- كاتالوجُ تَعريفاتِ المُزَوِّدين (بَياناتٌ مَضمونَة). والإحالَةُ
+         هُنا صَريحَةٌ لِأَنّ deploy-manifest.sh يَمشي ProjectReference
+         تَعَدِّيّاً: مَشروعٌ غَيرُ مُحالٍ لا يَبلُغ الـSpace أَصلاً —
+         وسَبعَةُ مَشاريعِ مُزَوِّدين تُبنى ولا تَبلُغُه هُوَ الدَرسُ
+         الَّذي كَتَبَ هذا السَطر. -->
+    <ProjectReference Include="..\..\libs\core\ACommerce.Platform.Providers\ACommerce.Platform.Providers.csproj" />
     <ProjectReference Include="..\..\libs\core\ACommerce.Platform.Shared\ACommerce.Platform.Shared.csproj" />
 
     <ProjectReference Include="..\..\libs\kits\Tenants\ACommerce.Kit.Tenants.Core\ACommerce.Kit.Tenants.Core.csproj" />

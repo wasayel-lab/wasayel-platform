@@ -1,0 +1,11 @@
+{
+  "slug": "mock_payments",
+  "capability": "payments",
+  "label": { "ar": "مُحاكي الدَفع", "en": null },
+  "description": { "ar": "التَنفيذُ القائِمُ اليَومَ لِكُلّ مَتجَر — يُسَجَّل بِلا شَرطِ تَهيئَة ولا يَقبِض ريالاً. هذا المِلَفُّ وَصفٌ لِما هُوَ قائِم، لا خِياراً يُعرَض.", "en": null },
+  "docsUrl": null,
+  "physicalGoodsOnly": false,
+  "credential": { "kind": "none", "fields": [] },
+  "webhook": null,
+  "revocation": { "ar": "لا اعتِمادَ يُسحَب — لا شَيءَ مُخَزَّن.", "en": null }
+}

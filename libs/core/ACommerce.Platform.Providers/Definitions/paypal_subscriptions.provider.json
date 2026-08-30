@@ -1,0 +1,11 @@
+{
+  "slug": "paypal_subscriptions",
+  "capability": "payments",
+  "label": { "ar": "باي بال — اشتِراكات وَسايِل", "en": null },
+  "description": { "ar": "بِه يَدفَعُ المُستَأجِرُ ثَمَنَ باقَتِه لِوَسايِل. الاعتِمادُ اعتِمادُنا نَحن في سِرِّ المَنَصَّة، ولا يَملِكُه مُستَأجِرٌ ولا يَملَأُ لَه حَقلاً.", "en": null },
+  "docsUrl": "https://developer.paypal.com/docs/subscriptions/",
+  "physicalGoodsOnly": false,
+  "credential": { "kind": "platform_key", "fields": [] },
+  "webhook": null,
+  "revocation": { "ar": "يُبَدَّل سِرُّ المَنَصَّةِ مِن لَوحَةِ النَشر — ولا يُسحَبُ مِن شاشَةِ مُستَأجِر.", "en": null }
+}

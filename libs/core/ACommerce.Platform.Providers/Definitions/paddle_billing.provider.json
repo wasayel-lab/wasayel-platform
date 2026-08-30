@@ -1,0 +1,11 @@
+{
+  "slug": "paddle_billing",
+  "capability": "payments",
+  "label": { "ar": "بادِل — اشتِراكات وَسايِل", "en": null },
+  "description": { "ar": "مُزَوِّدٌ ثانٍ بِجِوارِ باي بال لِنَفسِ التَدَفُّق: تاجِرُ تَسجيلٍ يَقبَلُ البِطاقَةَ مِن مُستَأجِرٍ بِلا مَحفَظَة. الاعتِمادُ اعتِمادُنا في سِرِّ المَنَصَّة.", "en": null },
+  "docsUrl": "https://developer.paddle.com/build/overview",
+  "physicalGoodsOnly": false,
+  "credential": { "kind": "platform_key", "fields": [] },
+  "webhook": null,
+  "revocation": { "ar": "يُبَدَّل سِرُّ المَنَصَّةِ مِن لَوحَةِ النَشر — ولا يُسحَبُ مِن شاشَةِ مُستَأجِر.", "en": null }
+}

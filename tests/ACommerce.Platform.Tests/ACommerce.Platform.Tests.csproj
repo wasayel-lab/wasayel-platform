@@ -13,6 +13,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\libs\templates\ACommerce.Templates.Customer.Marketplace\ACommerce.Templates.Customer.Marketplace.csproj" />
     <ProjectReference Include="..\..\libs\core\ACommerce.Platform.Flows\ACommerce.Platform.Flows.csproj" />
+    <!-- كاتالوجُ تَعريفاتِ المُزَوِّدين — المُصادِقُ والقارِئُ يُقاسانِ
+         هُنا: لِكُلّ رَمزِ خَرقٍ اختِبارٌ موجِبٌ وسالِب (القاعِدَة ٤). -->
+    <ProjectReference Include="..\..\libs\core\ACommerce.Platform.Providers\ACommerce.Platform.Providers.csproj" />
     <!-- Reports.Core لا يَصِل إلى القالِب — ومُقابَلَة وَصف التَدَفُّق
          بِتَعداد ReportStatus تَحتاجُه. مَرجِع اختِبار فَقَط. -->
     <ProjectReference Include="..\..\libs\kits\Reports\ACommerce.Kit.Reports.Core\ACommerce.Kit.Reports.Core.csproj" />

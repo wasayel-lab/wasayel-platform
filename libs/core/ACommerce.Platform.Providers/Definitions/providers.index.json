@@ -1,0 +1,11 @@
+{
+  "providers": [
+    "mock_payments",
+    "mock_maps",
+    "mock_delivery",
+    "local_files",
+    "paypal_subscriptions",
+    "paddle_billing",
+    "moyasar_hosted"
+  ]
+}
