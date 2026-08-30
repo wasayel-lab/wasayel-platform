@@ -236,6 +236,7 @@ public class LiveAnalysisClaimRaceProofTests
         public string ProviderName => "proof";
         public string DefaultModel => "proof";
         public bool IsConfigured => false;
+        public string Endpoint => "proof://never-called/";
         public Task<ACommerce.Templates.Customer.Marketplace.Services.AgentBackendResponse> CallAsync(
             ACommerce.Templates.Customer.Marketplace.Services.AgentRequest req, CancellationToken ct)
             => throw new InvalidOperationException("الحَجزُ نادى نَموذَجَ لُغَة — وهذا ما يَمنَعُه.");

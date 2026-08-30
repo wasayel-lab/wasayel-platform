@@ -31,6 +31,15 @@ public interface IAgentBackend
     string ProviderName { get; }
     string DefaultModel { get; }
     bool IsConfigured { get; }
+
+    /// <summary>
+    /// العُنوان الَّذي **سَيُنادى فِعلاً** — مَقروءاً مِن
+    /// <c>HttpClient.BaseAddress</c> نَفسِه لا مُعاداً بِناؤُه مِن الإعدادات.
+    /// وُجِدَ لِسَطرِ الإقلاع: مُزَوِّدٌ مَحلولٌ خَطَأً يُرسِلُ المِفتاحَ إلى
+    /// خادِمٍ لا يَعرِفُه فَيَرُدّ ‏401، وتُقرَأ المُصادَقَةُ حِصَّةً نافِدَة.
+    /// </summary>
+    string Endpoint { get; }
+
     Task<AgentBackendResponse> CallAsync(AgentRequest req, CancellationToken ct);
 }
 
@@ -67,6 +76,7 @@ public sealed class AnthropicBackend : IAgentBackend
     public string ProviderName => "anthropic";
     public string DefaultModel => "claude-sonnet-4-6";
     public bool IsConfigured => !string.IsNullOrEmpty(_apiKey);
+    public string Endpoint => Http.BaseAddress!.ToString();
 
     public async Task<AgentBackendResponse> CallAsync(AgentRequest req, CancellationToken ct)
     {
@@ -205,6 +215,7 @@ public sealed class GeminiBackend : IAgentBackend
     public string ProviderName => "gemini";
     public string DefaultModel => "gemini-2.0-flash";
     public bool IsConfigured => !string.IsNullOrEmpty(_apiKey);
+    public string Endpoint => Http.BaseAddress!.ToString();
 
     public async Task<AgentBackendResponse> CallAsync(AgentRequest req, CancellationToken ct)
     {
@@ -330,6 +341,9 @@ public sealed class OpenAIBackend : IAgentBackend
 
     /// <summary>العُنوان الفِعليّ — لِلتَحَقُّق ولِتَمييز الخَلفيّات في السِجِلّ.</summary>
     public string BaseUrl => _http.BaseAddress!.ToString();
+
+    /// <inheritdoc/>
+    public string Endpoint => BaseUrl;
 
     private static string InferProvider(string baseUrl)
     {

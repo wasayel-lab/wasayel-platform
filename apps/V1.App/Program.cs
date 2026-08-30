@@ -362,6 +362,49 @@ app.Logger.LogInformation("[forwarded-headers] X-Forwarded-Host: {Hosts}",
         ? string.Join(", ", forwardedHeaders.AllowedHosts)
         : "غَير مَقروء — لا قائِمَة مُهَيَّأَة (ForwardedHeaders:AllowedHosts)");
 
+// ═══ الوَكيلُ يُعلِنُ وِجهَتَه عِندَ الإقلاع ═══════════════════════════
+// **العِلَّةُ المَقيسَة (‏2026-08-31)**: رِحلَةُ عَميلٍ حَيَّةٍ تَوَقَّفَت عِندَ
+// «حَلِّل فِكرَتي» بِـ`OpenAI 401`. والرِسالَةُ تَقولُ ما رَدَّهُ الخادِم،
+// ولا تَقولُ **أَيَّ خادِمٍ نودِيَ أَصلاً** — و`OpenAIBackend` يَسقُط إلى
+// `https://api.openai.com/` كُلَّما غابَ `BaseUrl`. فَمِفتاحُ مُزَوِّدٍ آخَرَ
+// يُرسَلُ إلى OpenAI فَتُرَدُّ **مُصادَقَةٌ فاشِلَة**، وتُقرَأُ «حِصَّةً
+// نافِدَة»، ويُشَخَّصُ العَطَبُ في الجِهَةِ الخَطَأ ساعاتٍ.
+// السَطرُ يَقولُ: المُزَوِّدَ المَحلول، والعُنوانَ الفِعليَّ **مَقروءاً مِن
+// `HttpClient.BaseAddress` نَفسِه**، والنَموذَج، **وأَمِفتاحٌ مَضبوطٌ أَم لا
+// — بِلا طَبعِ قيمَةٍ ولا جُزءٍ مِنها**. الدَليلُ في `docs/AGENT-KEYS.md`.
+try
+{
+    var agentBackends = app.Services
+        .GetRequiredService<ACommerce.Templates.Customer.Marketplace.Services.IAgentBackendProvider>();
+
+    foreach (var agentName in new[]
+    {
+        ACommerce.Templates.Customer.Marketplace.Services.AgentNames.Analysis,
+        ACommerce.Templates.Customer.Marketplace.Services.AgentNames.Studio
+    })
+    {
+        var profile = agentBackends.ProfileFor(agentName);
+        var backend = agentBackends.For(agentName);
+        app.Logger.LogInformation(
+            "[agent] {Agent}: المُزَوِّد={Provider} · التَسميَة={Label} · العُنوان={Endpoint} · "
+            + "النَموذَج={Model} · المِفتاح={KeyState}",
+            agentName,
+            profile.Provider,
+            backend.ProviderName,
+            backend.Endpoint,
+            agentBackends.ModelFor(agentName),
+            string.IsNullOrWhiteSpace(profile.ApiKey) ? "غَير مَضبوط" : "مَضبوط");
+    }
+}
+catch (Exception ex)
+{
+    // عُنوانٌ مُشَوَّهٌ يَرمي في مُنشِئ `HttpClient`. الوَكيلُ مُعَطَّلٌ حينَئِذٍ
+    // على أَيّ حال، وبَقِيَّةُ المِنَصَّةِ لا تَسقُط مَعَه — لكِنّ السَبَبَ
+    // يُقال. ونَصُّ الاستِثناءِ هُنا عَن العُنوانِ لا عَن المِفتاح.
+    app.Logger.LogWarning(
+        "[agent] تَعَذَّرَ حَلُّ مِلَفّاتِ الوُكَلاء عِندَ الإقلاع: {Reason}", ex.Message);
+}
+
 app.UsePlatformHost();
 
 // تَفعيل خِدمَة المَلَفّات المَحَلِّيَّة (Local provider فَقَط — تُتَجاهَل
