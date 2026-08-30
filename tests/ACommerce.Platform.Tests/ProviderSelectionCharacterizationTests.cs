@@ -1,0 +1,270 @@
+using ACommerce.Kit.Auth;
+using Xunit;
+
+namespace ACommerce.Platform.Tests;
+
+// ═══ تَوصيفُ اختِيارِ المُزَوِّد — «أَيُّ تَنفيذٍ يُسَجَّل لِأَيّ تَهيئَة» ═══
+//
+// **يُكتَب ويَخضَرّ ويُودَع في كوميتٍ مُستَقِلّ قَبلَ تَبديلِ حَرف، ثُمَّ
+// لا يُمَسّ** (القاعِدَة ٣). فَمُرورُه بَعدَ مَوجَةِ رَبطِ المُزَوِّدين
+// هُوَ بُرهانُ أَنّ **كُلَّ مُستَأجِرٍ قائِمٍ اليَوم لا يَمُرّ بِسَطرِ
+// قَرارٍ إضافيّ**، وأَنّ سُلوكَ `Program.cs` كَما هُوَ حَرفاً.
+//
+// ─── ما يُثَبَّت، ولِماذا هذا الشَكل ─────────────────────────────────
+//
+// ‏`AuthChannelSelection.Decide` مَقيسٌ بِجَدوَلٍ سَلَفاً لِثَلاثِ قُدُرات؛
+// وهذا المِلَفّ **يَمُدّ الشَكلَ نَفسَه إلى التِسع كُلِّها** — بِما فيها
+// السِتّ الَّتي لا دالَّةَ قَرارٍ لَها اليَوم. ولِلسِتِّ صورَتانِ لا
+// ثالِثَ لَهُما، وكِلتاهُما تُقاسانِ هُنا:
+//
+//   • **بِلا شَرطٍ إطلاقاً** — سَطرُ تَسجيلٍ عارٍ في `Program.cs`
+//     (‏`AddMockMaps` و`AddMockDelivery` و`AddMockPayments`
+//     و`AddLocalFileStorage`). فَالمُحاكي هُوَ الجَوابُ في الإنتاجِ
+//     كَما في التَطوير.
+//   • **بِلا تَسجيلٍ أَصلاً** — ‏`INotificationChannel` و`ICache`:
+//     واجِهَتانِ قائِمَتانِ لا يَبلُغُهُما `Program.cs` ولا يُحيلُ
+//     مَشروعَ تَنفيذِهِما أَيُّ `csproj` في التَطبيق. وذلك **مَقيسٌ
+//     لا مَظنون**، وهُوَ بِعَينِه ما تَصِفُه القاعِدَةُ ١ في
+//     `CLAUDE.md` («‏527 سَطر تَجريد تَراسُل لا يَبلُغُها
+//     `Program.cs`»).
+//
+// ─── حارِسُ العَمى (القاعِدَة ١٠) ────────────────────────────────────
+// كُلُّ فَحصٍ يَطبَع عَدَدَ ما فَحَص ويَحمَرُّ عِندَ الصِفر: «صِفر
+// مُخالَفَة» مِن أَداةٍ فَحَصَت صِفراً لا يُمَيَّز عَن أَداةٍ فَحَصَت
+// كُلَّ شَيء.
+public class ProviderSelectionCharacterizationTests
+{
+    /// <summary>صَفٌّ واحِدٌ = قُدرَةٌ واحِدَة، بِجَوابِها اليَوم.</summary>
+    /// <param name="Capability">اسمُ القُدرَة — مَعجَمٌ مُغلَق.</param>
+    /// <param name="Interface">الواجِهَةُ القائِمَة في العُدَّة.</param>
+    /// <param name="RegistrationToday">نِداءُ التَسجيلِ في
+    /// <c>Program.cs</c> — والفارِغُ يَعني «لا تَسجيلَ إطلاقاً».</param>
+    /// <param name="ConfigKeyToday">مِفتاحُ التَهيئَةِ الَّذي يَقرِّر —
+    /// و<c>null</c> يَعني «بِلا شَرط».</param>
+    /// <param name="RegistrationSource">مِلَفُّ العُدَّةِ الَّذي فيه
+    /// سَطرُ <c>AddSingleton</c>، ليُقاس مَدى الحَياة لا يُدَّعى.</param>
+    private sealed record CapabilityToday(
+        string Capability,
+        string Interface,
+        string RegistrationToday,
+        string? ConfigKeyToday,
+        string RegistrationSource);
+
+    private static readonly CapabilityToday[] Rows =
+    {
+        new("payments", "IPaymentProvider",
+            "builder.Services.AddMockPayments();", null,
+            "libs/kits/Payments/ACommerce.Kit.Payments.Core/MockPaymentProvider.cs"),
+
+        new("sms_otp", "IOtpChannel",
+            "builder.Services.AddMockSmsChannel();", "Auth:Sms:Provider",
+            "libs/kits/Auth/ACommerce.Kit.Auth.Providers.MockSms/MockSmsChannel.cs"),
+
+        new("email_otp", "IEmailOtpChannel",
+            "builder.Services.AddMockEmailChannel();", "Auth:Email:Provider",
+            "libs/kits/Auth/ACommerce.Kit.Auth.Providers.MockEmail/MockEmailChannel.cs"),
+
+        new("nafath", "INafathChannel",
+            "builder.Services.AddMockNafathChannel(", "Auth:Nafath:Provider",
+            "libs/kits/Auth/ACommerce.Kit.Auth.Providers.MockNafath/MockNafathChannel.cs"),
+
+        new("maps", "IMapsProvider",
+            "builder.Services.AddMockMaps();", null,
+            "libs/kits/Maps/ACommerce.Kit.Maps.Core/MockMapsProvider.cs"),
+
+        new("delivery", "IDeliveryProvider",
+            "builder.Services.AddMockDelivery();", null,
+            "libs/kits/Delivery/ACommerce.Kit.Delivery.Core/MockDeliveryProvider.cs"),
+
+        new("files", "IFileStorage",
+            "builder.Services.AddLocalFileStorage(", null,
+            "libs/kits/Files/ACommerce.Kit.Files.Core/LocalFileStorage.cs"),
+
+        // ─── الواجِهَتانِ اللَّتانِ لا يَبلُغُهُما التَطبيق ──────────
+        new("notifications", "INotificationChannel",
+            "", null,
+            "libs/kits/Notifications/ACommerce.Kit.Notifications.Providers.Smtp/SmtpNotificationChannel.cs"),
+
+        new("cache", "ICache",
+            "", null,
+            "libs/kits/Cache/ACommerce.Kit.Cache.Core/ICache.cs"),
+    };
+
+    private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;
+
+    private static string ProgramText =>
+        File.ReadAllText(Path.Combine(RepoRoot, "apps", "V1.App", "Program.cs"));
+
+    private static string AppCsprojText =>
+        File.ReadAllText(Path.Combine(RepoRoot, "apps", "V1.App", "V1.App.csproj"));
+
+    // ─── ١. الجَدوَلُ نَفسُه ─────────────────────────────────────────
+
+    [Fact]
+    public void Nine_capabilities_are_pinned_and_none_repeats()
+    {
+        Assert.Equal(9, Rows.Length);
+        Assert.Equal(9, Rows.Select(r => r.Capability).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(9, Rows.Select(r => r.Interface).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    // ─── ٢. التَسجيلُ في `Program.cs` — حَرفاً ────────────────────────
+
+    [Fact]
+    public void Every_registered_capability_appears_in_Program_exactly_once()
+    {
+        var text = ProgramText;
+        Assert.True(text.Length > 4000,
+            $"أَداة عَمياء: `Program.cs` طولُه {text.Length} مِحرَفاً — لَم يُقرَأ.");
+
+        var checkedRows = 0;
+        var breaches = new List<string>();
+
+        foreach (var r in Rows.Where(r => r.RegistrationToday.Length > 0))
+        {
+            checkedRows++;
+            var count = CountOccurrences(text, r.RegistrationToday);
+            if (count != 1)
+                breaches.Add($"{r.Capability}: «{r.RegistrationToday}» ظَهَرَ {count} مَرَّة لا مَرَّةً واحِدَة.");
+        }
+
+        Assert.True(checkedRows == 7, $"أَداة عَمياء: فُحِصَ {checkedRows} صَفّاً — والمَقيس ٧.");
+        Assert.True(breaches.Count == 0,
+            "اختِيارُ المُزَوِّدِ اليَومَ لَيسَ ما وُصِف:\n  " + string.Join("\n  ", breaches));
+    }
+
+    [Fact]
+    public void The_two_unreached_capabilities_have_no_registration_and_no_project_reference()
+    {
+        var program = ProgramText;
+        var csproj = AppCsprojText;
+
+        // ‏(أ) لا نِداءَ تَسجيلٍ في `Program.cs`.
+        foreach (var call in new[]
+                 {
+                     "AddSmtpNotifications", "AddFirebaseNotifications",
+                     "AddRedisCache", "AddInMemoryCache",
+                 })
+            Assert.False(program.Contains(call, StringComparison.Ordinal),
+                $"«{call}» صارَ في `Program.cs` — التَوصيفُ قالَ إنّ القُدرَةَ لا يَبلُغُها التَطبيق.");
+
+        // ‏(ب) ولا إحالَةَ مَشروعٍ تَحمِلُها إلى الـSpace.
+        foreach (var fragment in new[] { "Notifications.Providers.", @"kits\Cache\" })
+            Assert.False(csproj.Contains(fragment, StringComparison.Ordinal),
+                $"إحالَةُ «{fragment}» صارَت في `V1.App.csproj` — والتَوصيفُ قاسَ غِيابَها.");
+
+        // وحارِسُ العَمى: المِلَفّانِ قُرِئا فِعلاً.
+        Assert.True(program.Length > 4000 && csproj.Length > 2000,
+            "أَداة عَمياء: أَحَدُ المِلَفَّينِ لَم يُقرَأ.");
+    }
+
+    // ─── ٣. المَشروطُ يَمُرّ بِالجَدوَل، وغَيرُ المَشروطِ عارٍ ────────
+
+    [Theory]
+    [InlineData("sms_otp", AuthChannelKind.Sms)]
+    [InlineData("email_otp", AuthChannelKind.Email)]
+    [InlineData("nafath", AuthChannelKind.Nafath)]
+    public void Conditional_capabilities_go_through_the_measured_table(
+        string capability, AuthChannelKind kind)
+    {
+        var row = Rows.Single(r => r.Capability == capability);
+        Assert.NotNull(row.ConfigKeyToday);
+        Assert.Equal(row.ConfigKeyToday, AuthChannelSelection.ConfigKey(kind));
+
+        Assert.Contains($"AuthChannelSelection.Decide(AuthChannelKind.{kind}",
+            ProgramText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Unconditional_capabilities_are_registered_with_no_condition_at_all()
+    {
+        var text = ProgramText.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var bare = 0;
+        var breaches = new List<string>();
+
+        foreach (var r in Rows.Where(r => r.ConfigKeyToday is null && r.RegistrationToday.Length > 0))
+        {
+            // سَطرٌ عارٍ = يَبدَأ عِندَ العَمودِ صِفر، أَي خارِجَ أَيّ
+            // `switch` أَو `if`. وهذا هُوَ **بِعَينِه** ما يَجعَل
+            // المُحاكِيَ جَوابَ الإنتاج.
+            if (text.Contains("\n" + r.RegistrationToday, StringComparison.Ordinal)) bare++;
+            else breaches.Add($"{r.Capability}: «{r.RegistrationToday}» لَم يَعُد سَطراً عارِياً.");
+        }
+
+        Assert.True(bare == 4, $"أَداة عَمياء: وُجِدَ {bare} تَسجيلاً عارِياً — والمَقيس ٤.");
+        Assert.True(breaches.Count == 0, string.Join("\n  ", breaches));
+    }
+
+    // ─── ٤. مَدى الحَياة — مَرَّةً لِكُلّ عَمَلِيَّةِ تَشغيل ──────────
+
+    [Fact]
+    public void Every_capability_is_resolved_once_per_process_not_per_tenant()
+    {
+        var checkedRows = 0;
+        var breaches = new List<string>();
+
+        foreach (var r in Rows)
+        {
+            var path = Path.Combine(RepoRoot, r.RegistrationSource.Replace('/', Path.DirectorySeparatorChar));
+            Assert.True(File.Exists(path), $"مَصدَرُ تَسجيلِ «{r.Capability}» مَفقود: {r.RegistrationSource}");
+
+            var src = File.ReadAllText(path);
+            checkedRows++;
+
+            if (!src.Contains($"AddSingleton<{r.Interface}", StringComparison.Ordinal))
+                breaches.Add($"{r.Capability}: لا `AddSingleton<{r.Interface}` في {r.RegistrationSource}.");
+
+            // ولا واحِدٌ مِنها يَرى المُستَأجِر — وهذِه هي العِلَّةُ
+            // الَّتي تَأتي المَوجَةُ لِأَجلِها، فَتُقاس قَبلَها.
+            if (src.Contains("ITenantContext", StringComparison.Ordinal))
+                breaches.Add($"{r.Capability}: صارَ يَذكُر ITenantContext في تَسجيلِه.");
+        }
+
+        Assert.True(checkedRows == 9, $"أَداة عَمياء: فُحِصَ {checkedRows} مَصدَراً — والمَقيس ٩.");
+        Assert.True(breaches.Count == 0,
+            "مَدى حَياةِ المُزَوِّدِ لَيسَ ما وُصِف:\n  " + string.Join("\n  ", breaches));
+    }
+
+    // ─── ٥. جَدوَلُ القَرارِ الثُلاثيّ — كامِلاً ──────────────────────
+    //
+    // نَفسُ الدالَّةِ الَّتي يَقيسُها `AuthChannelSelectionTests`،
+    // مُعادَةً هُنا **في إطارِ القُدُرات** لِأَنّ هذا المِلَفَّ هُوَ
+    // الطَرَفُ المُقارَنُ بَعدَ المَوجَة: مَن يَقرَؤُه وَحدَه يَعرِف
+    // جَوابَ التِسعِ كامِلَةً بِلا أَن يَفتَحَ مِلَفّاً آخَر.
+
+    [Theory]
+    // SMS
+    [InlineData(AuthChannelKind.Sms, null, true, AuthChannelProvider.Mock)]
+    [InlineData(AuthChannelKind.Sms, null, false, AuthChannelProvider.None)]
+    [InlineData(AuthChannelKind.Sms, "", true, AuthChannelProvider.Mock)]
+    [InlineData(AuthChannelKind.Sms, "twilio", false, AuthChannelProvider.Twilio)]
+    [InlineData(AuthChannelKind.Sms, "TWILIO", false, AuthChannelProvider.Twilio)]
+    [InlineData(AuthChannelKind.Sms, "mock", false, AuthChannelProvider.None)]
+    [InlineData(AuthChannelKind.Sms, "unifonic", false, AuthChannelProvider.None)]
+    // Email
+    [InlineData(AuthChannelKind.Email, null, true, AuthChannelProvider.Mock)]
+    [InlineData(AuthChannelKind.Email, null, false, AuthChannelProvider.None)]
+    [InlineData(AuthChannelKind.Email, "smtp", false, AuthChannelProvider.Smtp)]
+    [InlineData(AuthChannelKind.Email, "brevo", false, AuthChannelProvider.Brevo)]
+    [InlineData(AuthChannelKind.Email, "moyasar", false, AuthChannelProvider.None)]
+    // Nafath
+    [InlineData(AuthChannelKind.Nafath, null, true, AuthChannelProvider.Mock)]
+    [InlineData(AuthChannelKind.Nafath, null, false, AuthChannelProvider.None)]
+    [InlineData(AuthChannelKind.Nafath, "nafath", false, AuthChannelProvider.Nafath)]
+    [InlineData(AuthChannelKind.Nafath, "mock", true, AuthChannelProvider.Mock)]
+    public void The_three_conditional_capabilities_decide_exactly_as_today(
+        AuthChannelKind kind, string? configured, bool isDev, AuthChannelProvider expected)
+        => Assert.Equal(expected, AuthChannelSelection.Decide(kind, configured, isDev));
+
+    // ─── أَدَوات ─────────────────────────────────────────────────────
+
+    private static int CountOccurrences(string haystack, string needle)
+    {
+        var n = 0;
+        for (var i = haystack.IndexOf(needle, StringComparison.Ordinal);
+             i >= 0;
+             i = haystack.IndexOf(needle, i + needle.Length, StringComparison.Ordinal))
+            n++;
+        return n;
+    }
+}
