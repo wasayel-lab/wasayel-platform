@@ -115,6 +115,63 @@ public static class TierCatalog
 
     public static TierLimits For(string tier)
         => All.TryGetValue(tier, out var t) ? t : All["spark"];
+
+    /// <summary>
+    /// <para><b>أَتَفوقُ <paramref name="candidate"/> على
+    /// <paramref name="current"/> فِعلاً؟</b> — لا أَغلى ثَمَناً، بَل
+    /// <b>أَوسَعُ حَدّاً</b>: لا تَنقُصُ في أَيِّ حَدٍّ، وتَزيدُ في
+    /// واحِدٍ عَلى الأَقَلّ.</para>
+    ///
+    /// <para><b>ولِماذا دالَّةٌ نَقِيَّةٌ هُنا لا تَرتيبٌ مَكتوبٌ في
+    /// الشاشَة</b> (القاعِدَة ٢): التَرتيبُ الثابِتُ
+    /// (<c>spark → lite → growth → scale</c>) كانَ صَحيحاً ما دامَتِ
+    /// الأَسعارُ والحُدودُ تَصعَدُ مَعاً. ويَومَ رُفِعَتِ
+    /// المَجّانِيَّةُ إلى سَقفِ <c>scale</c> انفَصَلَ الأَمران —
+    /// فَصارَ التَرتيبُ الثابِتُ يَعرِضُ <b>تَنازُلاً بِثَمَن</b>. دالَّةٌ
+    /// تُحسَبُ مِنَ الأَرقامِ نَفسِها تَبقى صَحيحَةً على
+    /// <b>طَرَفَي</b> العَلَم، فَلا تَحتاجُ أَن تُذكَرَ يَومَ
+    /// يُقلَب.</para>
+    /// </summary>
+    public static bool Exceeds(TierLimits candidate, TierLimits current)
+        => candidate.AnalysesPerMonth >= current.AnalysesPerMonth
+        && candidate.RefinesPerMonth  >= current.RefinesPerMonth
+        && candidate.StoresMax        >= current.StoresMax
+        && (candidate.AllowExport || !current.AllowExport)
+        && (candidate.AnalysesPerMonth > current.AnalysesPerMonth
+         || candidate.RefinesPerMonth  > current.RefinesPerMonth
+         || candidate.StoresMax        > current.StoresMax
+         || (candidate.AllowExport && !current.AllowExport));
+
+    /// <summary>
+    /// <para><b>الدَرَجَةُ الَّتي تُعرَضُ تَرقِيَةً لِمَن هُوَ على
+    /// <paramref name="currentTier"/></b> — أَرخَصُ دَرَجَةٍ
+    /// <see cref="Exceeds">تَفوقُه فِعلاً</see>، أَو <c>null</c> إن لَم
+    /// توجَد.</para>
+    ///
+    /// <para><b>العِلَّةُ المَقيسَة (‏2026-08-30)</b>: كانَت
+    /// <c>UpgradePrompt.razor</c> تَحمِلُ سُلَّماً ثابِتاً
+    /// (<c>"spark" =&gt; lite</c>). وبَعدَ رَفعِ المَجّانِيَّةِ إلى
+    /// ‏40 تَحليلاً · 200 تَحسيناً · 40 مَتجَراً، صارَتِ اللافِتَةُ
+    /// تَعرِضُ على مَن بَلَغَ حَدَّه: <b>«تَرقِيَة إلى Lite — ‏199
+    /// ر.س / شهر»</b> مُقابِلَ <b>3 تَحاليل</b> وهُوَ يَملِك ‏40 —
+    /// أَي أَن يَدفَعَ لِيَنزِل إلى ثُلثِ عُشرِ ما عِندَه. ويَبلُغُها
+    /// أَنشَطُ المُستَخدِمينَ بِالنَقر: <c>/studio</c> و صَفحَةُ أَيِّ
+    /// دِراسَة، بِأَيِّ <c>?upgrade=</c>.</para>
+    ///
+    /// <para><b>وحينَ لا توجَد دَرَجَةٌ أَوسَع</b> — وهي حالُ
+    /// المَجّانِيَّةِ المَرفوعَةِ اليَوم — تُرَدُّ <c>null</c>،
+    /// فَتَقولُ اللافِتَةُ «بَلَغتَ حَدَّك» <b>بِلا زِرِّ بَيع</b>.
+    /// وذلك هُوَ الصِدق: لا شَيءَ يُباعُ لِمَن يَملِكُ السَقف.</para>
+    /// </summary>
+    public static TierLimits? NextAbove(string currentTier)
+    {
+        var current = For(currentTier);
+        return All.Values
+            .Where(t => !string.Equals(t.Tier, current.Tier, StringComparison.Ordinal))
+            .Where(t => Exceeds(t, current))
+            .OrderBy(t => t.MonthlyPriceSar)
+            .FirstOrDefault();
+    }
 }
 
 /// <summary>

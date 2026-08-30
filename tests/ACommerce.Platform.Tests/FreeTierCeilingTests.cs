@@ -45,6 +45,18 @@ public class FreeTierCeilingTests
         Assert.True(TierCatalog.All.Count >= 4,
             $"أَداةٌ عَمياء: فُحِصَت {TierCatalog.All.Count} دَرَجَة — والمَقيسُ أَربَع.");
 
+        // ‏**والفَحصُ يَصِفُ الحالَتَينِ لا واحِدَة** — وإلّا كَذَبَت
+        // دَعوى «العَودَةُ سَطران». انظُر التَعليقَ أَعلى المِلَفّ.
+        if (!TierCatalog.FreeTierTemporarilyRaised)
+        {
+            var before = TierCatalog.FreeTierBeforeRaise;
+            Assert.Equal(before.AnalysesPerMonth, Spark.AnalysesPerMonth);
+            Assert.Equal(before.RefinesPerMonth,  Spark.RefinesPerMonth);
+            Assert.Equal(before.StoresMax,        Spark.StoresMax);
+            Assert.Equal(before.AllowExport,      Spark.AllowExport);
+            return;
+        }
+
         Assert.Equal(Scale.AnalysesPerMonth, Spark.AnalysesPerMonth);
         Assert.Equal(Scale.RefinesPerMonth,  Spark.RefinesPerMonth);
         Assert.Equal(Scale.StoresMax,        Spark.StoresMax);
@@ -61,6 +73,11 @@ public class FreeTierCeilingTests
     [Fact]
     public void Study_export_is_reachable_by_every_tenant_once_the_free_tier_is_raised()
     {
+        // مَشروطٌ بِالرَفع: يَومَ يَعودُ التَسعيرُ تَعودُ `spark` بِلا
+        // تَصدير، وذلكَ سِياسَةُ باقَةٍ لا عَطَب. والحارِسُ الَّذي
+        // يَبقى في الحالَتَينِ هُوَ `The_export_gate_is_not_a_dead_guard`.
+        if (!TierCatalog.FreeTierTemporarilyRaised) return;
+
         var locked = TierCatalog.All.Values
             .Where(t => !t.AllowExport)
             .Select(t => t.Tier)
@@ -84,18 +101,18 @@ public class FreeTierCeilingTests
     [Fact]
     public void The_raise_is_declared_temporary_and_carries_the_values_it_replaced()
     {
-        Assert.True(TierCatalog.FreeTierTemporarilyRaised,
-            "الرَفعُ غَيرُ مُعلَّمٍ مُؤَقَّتاً — ورَفعٌ بِلا عَلامَةٍ "
-            + "يَصيرُ دائِماً بِالنِسيان.");
-
         var before = TierCatalog.FreeTierBeforeRaise;
         Assert.Equal("spark", before.Tier);
 
-        // القِيَمُ المَحفوظَةُ هي حالَةُ ما قَبلَ الرَفعِ حَرفاً.
+        // القِيَمُ المَحفوظَةُ تَبقى مَحفوظَةً على **طَرَفَي** العَلَم —
+        // فَهي التاريخُ لا الحالَة. أَمّا المُقارَنَةُ بِالمَعمولِ بِه
+        // فَمَشروطَةٌ بِالرَفع.
         Assert.Equal(1,     before.AnalysesPerMonth);
         Assert.Equal(3,     before.RefinesPerMonth);
         Assert.Equal(1,     before.StoresMax);
         Assert.False(before.AllowExport);
+
+        if (!TierCatalog.FreeTierTemporarilyRaised) return;
 
         // وهي **دونَ** المَعمولِ بِه الآن — وإلّا فَالرَفعُ لَم يَقَع.
         Assert.True(Spark.AnalysesPerMonth > before.AnalysesPerMonth);

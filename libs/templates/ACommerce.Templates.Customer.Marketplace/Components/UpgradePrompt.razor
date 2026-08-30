@@ -42,13 +42,10 @@
     /// <summary>الباقَة الحالِيَّة (لِحِساب التالِيَة).</summary>
     [Parameter] public string CurrentTier { get; set; } = "spark";
 
-    TierLimits? Next => CurrentTier switch
-    {
-        "spark"  => TierCatalog.For("lite"),
-        "lite"   => TierCatalog.For("growth"),
-        "growth" => TierCatalog.For("scale"),
-        _ => null
-    };
+    @* السُلَّمُ يُحسَبُ مِنَ الحُدودِ لا يُكتَبُ ثابِتاً — وإلّا عَرَضَ
+       تَنازُلاً بِثَمَن يَومَ تُرفَعُ المَجّانِيَّة. الحُجَّةُ كامِلَةً
+       على `TierCatalog.NextAbove`. *@
+    TierLimits? Next => TierCatalog.NextAbove(CurrentTier);
 
     @* الرَمزُ مِن `StudioUpgradeReason` لا نَصٌّ حَرفيّ: المَعجَمُ
        المُغلَقُ لَه تَعريفٌ واحِد، فَخَطَأُ إملاءٍ يَصير خَطَأَ
