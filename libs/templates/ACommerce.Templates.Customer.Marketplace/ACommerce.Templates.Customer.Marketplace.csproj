@@ -54,6 +54,12 @@
     <ProjectReference Include="..\..\kits\Offers\ACommerce.Kit.Offers.Core\ACommerce.Kit.Offers.Core.csproj" />
     <ProjectReference Include="..\..\kits\SavedSearches\ACommerce.Kit.SavedSearches.Core\ACommerce.Kit.SavedSearches.Core.csproj" />
     <ProjectReference Include="..\..\kits\Reviews\ACommerce.Kit.Reviews.Core\ACommerce.Kit.Reviews.Core.csproj" />
+    <!-- ‏`Report` وَثيقَةُ مُستَأجِرٍ حَيَّة، ومُستَهلِكُها هُنا
+         **مَوجودٌ وَقتَ التَشغيل** (القاعِدَة ١): سِجِلُّ التَخارُج
+         يُصَنِّفُها ويُصَدِّرُها بِنَوعِها لا بِاسمِها — واسمٌ نَصّيٌّ
+         كانَ يَسقُط صامِتاً عِندَ إعادَةِ تَسمِيَة. والعُدَّةُ ورَقَةٌ:
+         ‏Marten وَحدَه، بِلا مَرجِعٍ آخَر. -->
+    <ProjectReference Include="..\..\kits\Reports\ACommerce.Kit.Reports.Core\ACommerce.Kit.Reports.Core.csproj" />
     <ProjectReference Include="..\..\kits\Payments\ACommerce.Kit.Payments.Core\ACommerce.Kit.Payments.Core.csproj" />
     <!-- ‏PayPal — النُقطَةُ والشاشَتانِ تَحتاج أَنواعَه: رُؤوسُ التَوقيع،
          ومُعجَمُ الأَحداث، ودالَّةُ القَرارِ النَقِيَّة. وهذِه **لَيسَت

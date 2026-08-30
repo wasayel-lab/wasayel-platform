@@ -154,6 +154,16 @@
                         <span>@L.Markup("studio.app.keys_sub")</span></div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
+                @* المَدخَلُ نِصفُ الميزَة لا مُهِمَّةٌ تالِيَة
+                   (القاعِدَة ١٢): شاشَةُ التَخارُجِ مَبنِيَّةٌ
+                   ومُختَبَرَة، وبِلا هذا السَطرِ **غَيرُ مَوجودَة** —
+                   والتَخارُجُ هُوَ المُنتَج لا ميزَةٌ فيه. *@
+                <a class="studio-list-row" href="@($"/studio/apps/{Slug}/export")">
+                    <span class="studio-list-icon st-chip-success"><AcIcon Name="download" Size="16" /></span>
+                    <div class="studio-list-body"><strong>@L.Markup("studio.export.nav_title")</strong>
+                        <span>@L.Markup("studio.export.nav_sub")</span></div>
+                    <span style="color:var(--st-faint);">←</span>
+                </a>
             </div>
         }
     </ChildContent>

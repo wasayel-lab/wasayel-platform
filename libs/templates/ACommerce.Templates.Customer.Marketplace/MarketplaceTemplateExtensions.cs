@@ -132,6 +132,14 @@ public static class MarketplaceTemplateExtensions
         // سِجِلّ التَّدقيق (مَن فَعَل ماذا، مَتى).
         services.AddScoped<Services.Audit.AuditWriter>();
 
+        // ─── التَخارُج — الحَقيبَةُ الَّتي يَخرُجُ بِها العَميل ──────────
+        // ‏Scoped كَجاراتِها: تَقرَأُ حالَةً تَتَغَيَّر، ولا كاشَ لَها.
+        // ومُستَهلِكاها قائِمانِ: نُقطَةُ `‏/studio/apps/{slug}/export.zip`
+        // وشاشَةُ `‏/studio/apps/{slug}/export` الَّتي تَعرِضُ الأَعدادَ
+        // **مِن هذِه الخِدمَةِ نَفسِها** — وإلّا انجَرَفَ المَعروضُ عَن
+        // المُسَلَّم.
+        services.AddScoped<Services.Export.TenantExportService>();
+
         // ─── سَطحُ الـAPI — المَوجَةُ الأولى ─────────────────────────────
         // ثَلاثُ خِدماتٍ لِثَلاثَةِ مُستَهلِكينَ قائِمين: المُرَشِّح،
         // ونُقطَتا الاستوديو، وشاشَةُ المَفاتيح. ولا رابِعَة تُبنى
@@ -2644,6 +2652,40 @@ public static class MarketplaceTemplateExtensions
                 contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 fileDownloadName: $"feasibility-{id:N}.xlsx");
         });
+
+        // ═══ التَخارُج — حَقيبَةُ بَياناتِ المَتجَرِ كامِلَةً (‏ADR-020) ═══
+        //
+        // **‏`POST` لا `GET`، والفَرقُ مَفروضٌ بِفاحِصٍ قائِم**:
+        // ‏`WriteEndpointGuardTests.No_get_endpoint_writes_state` يُحمِرُّ
+        // أَيَّ `MapGet` فيه رَمزُ كِتابَة — والتَصديرُ يَكتُبُ قَيدَ
+        // تَدقيق. والفِعلُ المُعلَنُ يُطابِقُ الواقِع.
+        //
+        // **والتَخويلُ أَوَّلُ سَطرٍ بَعدَ الهُوِيَّة** (القاعِدَة ٦)،
+        // ودالَّتُه هي نَفسُها الَّتي تَقرَؤُها الشاشَةُ والخِدمَة —
+        // فَثَلاثَةُ مَواضِعَ لا تَنجَرِف.
+        // **والمَنطِقُ كُلُّه في الخِدمَة**: الجِسمُ يَحُلُّ الهُوِيَّةَ
+        // والمُستَأجِرَ ويَرُدّ، ولا يَجمَعُ ولا يُدَقِّقُ ولا يَبني
+        // أَرشيفاً — فَما يَقَع في جِسمِ نُقطَةٍ لا يُختَبَرُ إلّا
+        // بِطَلَبِ HTTP كامِل.
+        app.MapPost("/studio/apps/{slug}/export.zip", async (
+            string slug, HttpRequest req,
+            Services.Incubator.StudioAuth auth,
+            Services.Queries.TenantDirectory tenants,
+            Services.Export.TenantExportService export,
+            CancellationToken ct) =>
+        {
+            auth.Load();
+            if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
+
+            var result = await export.ProduceAsync(
+                slug, await tenants.FindAsync(slug, ct), auth.UserId, auth.UserName,
+                req.HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+
+            return result.Refusal != Services.Export.TenantExportRefusal.None
+                ? Results.Redirect($"/studio/apps/{slug}/export?err=" +
+                      Services.Export.TenantExportAuthorization.Code(result.Refusal))
+                : Results.File(result.Zip!, "application/zip", result.FileName);
+        }).DisableAntiforgery();
 
         // إعادَة تَوليد قِسم واحِد مِن الدِراسَة (refine) بِناءً عَلى مُلاحَظَة.
         app.MapPost("/studio/s/{id:guid}/refine", async (

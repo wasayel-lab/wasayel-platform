@@ -43,4 +43,31 @@ public sealed class AuditLogQueries
             return Array.Empty<AuditEntry>();
         }
     }
+
+    /// <summary>
+    /// <para><b>آخِرُ قَيدٍ بِفِعلٍ بِعَينِه في نِطاق</b> — تَسأَلُه
+    /// شاشَةُ التَخارُج: «مَتى كانَ آخِرُ تَصدير، وبِمَن؟».</para>
+    ///
+    /// <para><b>ولِماذا استِعلامٌ مُوَجَّهٌ لا فَلتَرَةُ صَفحَةٍ فَوقَ
+    /// <see cref="RecentAsync"/></b>: آخِرُ تَصديرٍ قَد يَسبِقُ ثَلاثَمِئَةِ
+    /// قَيدٍ مِن نَشاطٍ يَوميّ، فَتَقولُ الشاشَةُ «لَم تُصَدِّر بَعد»
+    /// لِمَن صَدَّرَ أَمس — <b>سَطرٌ يَكذِب</b>. ونَفسُ السُقوطِ الآمِنِ
+    /// حَرفاً: جَدوَلٌ غَيرُ مُنشَأٍ يُعطي <c>null</c> لا رَمياً.</para>
+    /// </summary>
+    public async Task<AuditEntry?> LastAsync(
+        string scope, string action, CancellationToken ct = default)
+    {
+        try
+        {
+            await using var s = _store.QuerySession(scope);
+            return await s.Query<AuditEntry>()
+                .Where(a => a.Action == action)
+                .OrderByDescending(a => a.At)
+                .FirstOrDefaultAsync(ct);
+        }
+        catch
+        {
+            return null;
+        }
+    }
 }
