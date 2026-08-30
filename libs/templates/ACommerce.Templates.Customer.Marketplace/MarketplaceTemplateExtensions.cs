@@ -2608,9 +2608,13 @@ public static class MarketplaceTemplateExtensions
             if (session.AnalysisJson is null)
                 return Results.Redirect($"/studio/s/{id}");
 
+            // ‏`Export` لا `refine`: هذا **حَجبُ ميزَةٍ لا خَرقُ حِصَّة**،
+            // وكانَت الشاشَةُ تَقول «بَلَغتَ حَدَّ التَحسينات» لِمَن لَم
+            // يَبلُغه — سَطرٌ يَكذِب.
             var (_, limits) = await tier.ReadWithLimitsAsync(auth.UserId!.Value);
             if (!limits.AllowExport)
-                return Results.Redirect($"/studio/s/{id}?upgrade=refine");
+                return Results.Redirect(
+                    $"/studio/s/{id}?upgrade={Services.Incubator.StudioUpgradeReason.Export}");
 
             var bytes = exporter.Export(session);
             return Results.File(bytes,
@@ -2634,7 +2638,7 @@ public static class MarketplaceTemplateExtensions
 
             var gate = await tier.CheckRefineAsync(auth.UserId!.Value);
             if (!gate.Allowed)
-                return Results.Redirect($"/studio/s/{id}?upgrade=refine");
+                return Results.Redirect($"/studio/s/{id}?upgrade={gate.BreachCode}");
             await tier.RecordRefineAsync(auth.UserId!.Value);
 
             // شَغِّل في الخَلفِيَّة، لا نُعَلِّق الـ POST عَلى الـ LLM.
@@ -3349,7 +3353,7 @@ public static class MarketplaceTemplateExtensions
 
             var gate = await tier.CheckBuildAsync(ownerId);
             if (!gate.Allowed)
-                return Results.Redirect($"/studio/s/{id}?upgrade=build");
+                return Results.Redirect($"/studio/s/{id}?upgrade={gate.BreachCode}");
 
             var slug    = req.Form["slug"].ToString().Trim().ToLowerInvariant();
             var name    = req.Form["name"].ToString().Trim();
@@ -3696,7 +3700,7 @@ public static class MarketplaceTemplateExtensions
         var tier = checkScope.ServiceProvider
             .GetRequiredService<Services.Incubator.StudioTierService>();
         var gate = await tier.CheckAnalyzeAsync(userId);
-        if (!gate.Allowed) return Results.Redirect("/studio?upgrade=analyze");
+        if (!gate.Allowed) return Results.Redirect($"/studio?upgrade={gate.BreachCode}");
 
         var s = await incubator.StartAsync(userId, userName);
         await incubator.SaveAnswerAsync(s.Id, "description", prompt);

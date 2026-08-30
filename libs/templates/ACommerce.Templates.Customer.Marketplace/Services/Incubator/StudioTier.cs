@@ -3,7 +3,18 @@ using Marten;
 namespace ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 
 /// <summary>
-/// <para>حُدود الباقَة لِمُدَّة ٣٠ يَوم. <c>int.MaxValue</c> = بِلا حَدّ.</para>
+/// <para>حُدود الباقَة لِمُدَّة ٣٠ يَوم. <b>وكُلُّ حَدٍّ مُنتَهٍ — لا
+/// <c>int.MaxValue</c> بَعدَ اليَوم.</b></para>
+///
+/// <para><b>العِلَّةُ المَقيسَة (‏2026-08-30)</b>: كانَت <c>scale</c>
+/// تَحمِل <c>int.MaxValue</c> في الحُدودِ الثَلاثَة، فَشَرطُ البَوّابَةِ
+/// <c>u.AnalysesUsed &gt;= l.AnalysesPerMonth</c> <b>لا يَصدُق أَبَداً</b>
+/// — أَي بَوّابَةٌ مَكتوبَةٌ لا تُغلَق. وكُلُّ تَحليلٍ نِداءُ نَموذَجِ
+/// لُغَةٍ على <b>مِفتاحِ المالِك</b>: فَالحَدُّ اللانِهائيُّ لَيسَ
+/// كَرَماً في باقَةٍ بَل <b>فاتورَةً مَفتوحَةً على حِسابِه</b>. وقَد
+/// اجتَمَعَ ذلك مَعَ تَرقِيَةٍ ذاتِيَّةٍ بِلا دَفعٍ في
+/// <c>/studio/billing/select</c>، فَصارَ أَيُّ زائِرٍ يَملِك سَقفاً
+/// لا نِهائِيّاً على مِفتاحٍ لَيسَ لَه.</para>
 ///
 /// <para><b>سُحِبَ <c>AllowCustomPattern</c></b> (كانَ <c>false</c> في
 /// spark و lite، و<c>true</c> في growth و scale). كانَ يُعرَض ميزَةً
@@ -40,13 +51,62 @@ public static class TierCatalog
                          StoresMax: 3, AllowExport: true),
         ["growth"] = new("growth", "Growth",  399, AnalysesPerMonth: 10, RefinesPerMonth: 50,
                          StoresMax: 10, AllowExport: true),
-        ["scale"]  = new("scale",  "Scale",   999, AnalysesPerMonth: int.MaxValue,
-                         RefinesPerMonth: int.MaxValue, StoresMax: int.MaxValue,
+        // ‏`scale` — أَرقامٌ **مُنتَهِيَة**، مَصدَرُها تَكليفُ المالِكِ
+        // يَومَ ‏2026-08-30 (‏40 تَحليلاً · 200 تَحسيناً · 40 مَتجَراً)
+        // لا اجتِهادُ الكود (القاعِدَة ١٦). وهي أَربَعَةُ أَضعافِ
+        // `growth` في التَحاليلِ والمَتاجِر — فَالسَقفُ يَبقى بَعيداً
+        // عَن مُستَخدِمٍ حَقيقيّ، وقَريباً بِما يَكفي لِيُغلِقَ البابَ
+        // في وَجهِ حَلقَةٍ آلِيَّة.
+        ["scale"]  = new("scale",  "Scale",   999, AnalysesPerMonth: 40,
+                         RefinesPerMonth: 200, StoresMax: 40,
                          AllowExport: true),
     };
 
     public static TierLimits For(string tier)
         => All.TryGetValue(tier, out var t) ? t : All["spark"];
+}
+
+/// <summary>
+/// <para><b>سَبَبُ دَعوَةِ التَرقِيَة — مَعجَمٌ مُغلَقٌ بِتَعريفٍ
+/// واحِد.</b> أَربَعَةٌ لا خامِس، وهي بِعَينِها قيَمُ <c>?upgrade=</c>
+/// في العُنوان.</para>
+///
+/// <para><b>ولِماذا صارَت ثَوابِتَ</b> (‏2026-08-30): كانَت مَكتوبَةً
+/// <b>حَرفِيّاً في ثَمانِيَةِ مَواضِع</b> — أَربَعٍ تَكتُبُها في
+/// العُنوان وثَلاثٍ تُطابِقُها في <c>UpgradePrompt.razor</c>. ومَعجَمٌ
+/// مُغلَقٌ بِلا تَعريفٍ واحِدٍ يَنجَرِف: خَطَأُ إملاءٍ في طَرَفٍ يَجعَل
+/// الرِسالَةَ <b>تَصمُت</b> — أَي رَفضاً واقِعاً وشاشَةً لا تَقول
+/// شَيئاً، وهُوَ بِعَينِه «الرَفضُ المُبتلَع».</para>
+///
+/// <para><b>وانجِرافٌ وُجِدَ عِندَ العَدّ ويُقالُ ولا يُبتلَع</b>:
+/// نُقطَةُ التَصديرِ كانَت تَرُدُّ بِـ<c>?upgrade=refine</c> —
+/// فَتَقولُ الشاشَةُ «بَلَغتَ حَدَّ التَحسينات» لِمَن لَم يَبلُغه،
+/// و<b>سَطرٌ يَكذِب أَسوَأُ مِن سَطرٍ غائِب</b>. صارَ لَها
+/// <see cref="Export"/> بِنَصِّها.</para>
+/// </summary>
+public static class StudioUpgradeReason
+{
+    /// <summary>بَلَغَ حَدَّ التَحاليلِ الشَهريّ.</summary>
+    public const string Analyses = "analyze";
+
+    /// <summary>بَلَغَ حَدَّ التَحسينات.</summary>
+    public const string Refines = "refine";
+
+    /// <summary>بَلَغَ حَدَّ التَطبيقاتِ المَبنِيَّة.</summary>
+    public const string Stores = "build";
+
+    /// <summary>ميزَةُ التَصديرِ لَيسَت في باقَتِه — <b>حَجبُ ميزَةٍ
+    /// لا خَرقُ حِصَّة</b>، ولِذلك رَمزٌ رابِعٌ لا إعادَةُ استِعمالِ
+    /// ثالِث.</summary>
+    public const string Export = "export";
+
+    /// <summary>رُموزُ خَرقِ الحِصَّةِ وَحدَها — ما تُصدِرُه
+    /// <see cref="StudioTierService.GateCheck"/>.</summary>
+    public static readonly IReadOnlyList<string> QuotaCodes =
+        new[] { Analyses, Refines, Stores };
+
+    public static readonly IReadOnlyList<string> All =
+        new[] { Analyses, Refines, Stores, Export };
 }
 
 /// <summary>
@@ -113,33 +173,43 @@ public sealed class StudioTierService
         return (user, TierCatalog.For(user.Tier));
     }
 
-    public sealed record GateCheck(bool Allowed, int Used, int Limit, string? Reason);
+    /// <summary>
+    /// <para>نَتيجَةُ البَوّابَة. <b>و<see cref="BreachCode"/> رَمزٌ مِن
+    /// <see cref="StudioUpgradeReason"/> لا جُملَةٌ عَرَبِيَّة</b>.</para>
+    ///
+    /// <para><b>ولِماذا تَبَدَّلَ الحَقل</b> (‏2026-08-30): كانَ
+    /// <c>Reason</c> جُملَةً مَكتوبَةً في الكودِ ولَه <b>صِفرُ
+    /// مُستَهلِك</b> — المُنادونَ الثَلاثَةُ يَقرَؤونَ <c>Allowed</c>
+    /// وَحدَها ثُمَّ يُعيدونَ التَوجيهَ بِنَصٍّ <b>حَرفيٍّ</b>
+    /// (<c>?upgrade=analyze</c>) تُطابِقُه <c>UpgradePrompt</c> بِنَصٍّ
+    /// حَرفيٍّ آخَر. فَكانَ لَدَينا مَعجَمٌ مُغلَقٌ بِلا تَعريفٍ
+    /// واحِد — يَنجَرِف بِخَطَأِ إملاءٍ فَتَصمُت الرِسالَة، وجُملَةٌ
+    /// عَرَبِيَّةٌ في C# لا يَراها أَحَد.</para>
+    /// </summary>
+    public sealed record GateCheck(bool Allowed, int Used, int Limit, string? BreachCode);
 
     public async Task<GateCheck> CheckAnalyzeAsync(Guid uid, CancellationToken ct = default)
     {
         var (u, l) = await ReadWithLimitsAsync(uid, ct);
-        if (u.AnalysesUsed >= l.AnalysesPerMonth)
-            return new(false, u.AnalysesUsed, l.AnalysesPerMonth,
-                "بَلَغتَ حَدّ تَحاليل هذه الباقَة لِهذا الشَّهر.");
-        return new(true, u.AnalysesUsed, l.AnalysesPerMonth, null);
+        return u.AnalysesUsed >= l.AnalysesPerMonth
+            ? new(false, u.AnalysesUsed, l.AnalysesPerMonth, StudioUpgradeReason.Analyses)
+            : new(true,  u.AnalysesUsed, l.AnalysesPerMonth, null);
     }
 
     public async Task<GateCheck> CheckRefineAsync(Guid uid, CancellationToken ct = default)
     {
         var (u, l) = await ReadWithLimitsAsync(uid, ct);
-        if (u.RefinesUsed >= l.RefinesPerMonth)
-            return new(false, u.RefinesUsed, l.RefinesPerMonth,
-                "بَلَغتَ حَدّ التَّحسينات لِهذا الشَّهر.");
-        return new(true, u.RefinesUsed, l.RefinesPerMonth, null);
+        return u.RefinesUsed >= l.RefinesPerMonth
+            ? new(false, u.RefinesUsed, l.RefinesPerMonth, StudioUpgradeReason.Refines)
+            : new(true,  u.RefinesUsed, l.RefinesPerMonth, null);
     }
 
     public async Task<GateCheck> CheckBuildAsync(Guid uid, CancellationToken ct = default)
     {
         var (u, l) = await ReadWithLimitsAsync(uid, ct);
-        if (u.StoresBuilt >= l.StoresMax)
-            return new(false, u.StoresBuilt, l.StoresMax,
-                "بَلَغتَ حَدّ التَّطبيقات لِهذه الباقَة.");
-        return new(true, u.StoresBuilt, l.StoresMax, null);
+        return u.StoresBuilt >= l.StoresMax
+            ? new(false, u.StoresBuilt, l.StoresMax, StudioUpgradeReason.Stores)
+            : new(true,  u.StoresBuilt, l.StoresMax, null);
     }
 
     public Task RecordAnalysisAsync(Guid uid, CancellationToken ct = default)

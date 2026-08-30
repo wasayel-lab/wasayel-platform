@@ -50,33 +50,35 @@
         _ => null
     };
 
+    @* الرَمزُ مِن `StudioUpgradeReason` لا نَصٌّ حَرفيّ: المَعجَمُ
+       المُغلَقُ لَه تَعريفٌ واحِد، فَخَطَأُ إملاءٍ يَصير خَطَأَ
+       تَرجَمَةٍ لا رِسالَةً تَصمُت. *@
     string TitleFor(string reason) => reason switch
     {
-        "analyze" => L["upgrade.title.analyze"],
-        "refine"  => L["upgrade.title.refine"],
-        "build"   => L["upgrade.title.build"],
+        StudioUpgradeReason.Analyses => L["upgrade.title.analyze"],
+        StudioUpgradeReason.Refines  => L["upgrade.title.refine"],
+        StudioUpgradeReason.Stores   => L["upgrade.title.build"],
         _ => L["upgrade.title.feature"]
     };
 
     string MessageFor(string reason) => reason switch
     {
-        "analyze" => L["upgrade.msg.analyze"],
-        "refine"  => L["upgrade.msg.refine"],
-        "build"   => L["upgrade.msg.build"],
+        StudioUpgradeReason.Analyses => L["upgrade.msg.analyze"],
+        StudioUpgradeReason.Refines  => L["upgrade.msg.refine"],
+        StudioUpgradeReason.Stores   => L["upgrade.msg.build"],
+        StudioUpgradeReason.Export   => L["upgrade.msg.export"],
         _ => ""
     };
 
+    @* كُلُّ حَدٍّ مُنتَهٍ مُنذُ ‏2026-08-30، فَفَرعُ «بِلا حَدّ» صارَ
+       شَرطاً لا يَصدُقُ أَبَداً — وحِراسَةُ مَعدومٍ أَسوَأُ مِن
+       غِيابِها (نَفسُ حُكمِ `AllowCustomPattern`). التَفصيلُ ورَقمُ
+       كُلِّ حَدٍّ في `StudioTier.cs`. *@
     IEnumerable<string> BenefitsFor(TierLimits t)
     {
-        if (t.AnalysesPerMonth != int.MaxValue)
-            yield return L.Format("upgrade.benefit.analyses", t.AnalysesPerMonth);
-        else yield return L["upgrade.benefit.analyses_max"];
-        if (t.RefinesPerMonth != int.MaxValue)
-            yield return L.Format("upgrade.benefit.refines", t.RefinesPerMonth);
-        else yield return L["upgrade.benefit.refines_max"];
-        if (t.StoresMax != int.MaxValue)
-            yield return L.Format("upgrade.benefit.stores", t.StoresMax);
-        else yield return L["upgrade.benefit.stores_max"];
+        yield return L.Format("upgrade.benefit.analyses", t.AnalysesPerMonth);
+        yield return L.Format("upgrade.benefit.refines", t.RefinesPerMonth);
+        yield return L.Format("upgrade.benefit.stores", t.StoresMax);
         if (t.AllowExport)         yield return L["upgrade.benefit.export"];
         // «أَنماط مُخَصَّصَة» سُحِبَت — لا مَسار لَها. التَفصيل في StudioTier.cs.
     }
