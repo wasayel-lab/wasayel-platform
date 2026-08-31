@@ -85,6 +85,66 @@ public class EntitlementContractTests
             () => ents.ConsumeAsync(null!, "t", Guid.NewGuid(), capability));
     }
 
+    // ─── الاستِحقاقُ يُطلَبُ بِقُدرَتِه، ولا يُحقَنُ في تَوقيعِ نُقطَة ──
+
+    /// <summary>
+    /// <para><b>لا نُقطَةَ تَأخُذ <c>IEntitlements</c> وَسيطاً.</b>
+    /// تَسجيلُ التَنفيذِ مُتَعَدِّد (<c>SubscriptionEntitlements</c> ثُمَّ
+    /// <c>TenantPlanEntitlements</c>)، وحَقنُ الواجِهَةِ في تَوقيعِ
+    /// لامدا هُوَ <c>GetRequiredService&lt;IEntitlements&gt;()</c>
+    /// حَرفاً — <b>فَيُعطي آخِرَ مُسَجَّلٍ صامِتاً</b>. والمَسارُ
+    /// الصَحيحُ واحِدٌ: <c>http.Entitlements(capability)</c> الَّذي
+    /// يَسأَلُ <c>Handles</c> ويَرمي إن لَم يَخدِمها أَحَد.</para>
+    ///
+    /// <para><b>الكِلفَةُ الَّتي كَتَبَت هذا الفَحص (‏قيسَ حَيّاً
+    /// ‏2026-08-31)</b>: <c>POST /{slug}/listings/create</c> كانَ
+    /// يَحقِنُ <c>IEntitlements ents</c>، فَصارَ يَستَلِمُ
+    /// <c>TenantPlanEntitlements</c> (يَخدِمُ <c>tenant.write</c>
+    /// وَحدَها) ويَسأَلُه <c>listing.create</c> ⇒ <b>‏500
+    /// <c>NotSupportedException</c> على كُلِّ نَشرِ إعلانٍ في كُلِّ
+    /// مَتجَر</b>. دَخَلَ العَطَبُ مَعَ التَسجيلِ الثاني في
+    /// <c>2782d1ab</c> (‏2026-08-23) وعاشَ <b>‏110 كوميتاتٍ وثَمانِيَةَ
+    /// أَيّام</b> — <b>والتَعليقُ فَوقَ ذلكَ التَسجيلِ نَفسِه كانَ
+    /// يَصِفُ هذا العَطَبَ بِالاسم</b>. تَعليقٌ يَتَنَبَّأُ ولا
+    /// يُحَمِّر: تِلكَ هي القاعِدَة ٢ بِعَينِها — «الحَدُّ الَّذي لا
+    /// يُقاسُ آلِيّاً يَنهار».</para>
+    /// </summary>
+    [Fact]
+    public void No_endpoint_takes_the_entitlement_interface_as_a_parameter()
+    {
+        var endpoints = WriteEndpointGuardTests.AllMinimalApiEndpoints().ToList();
+
+        // عَدّاد: أَداةٌ تَفحَصُ صِفراً أَداةٌ عَمياء (القاعِدَة ١٠).
+        Assert.True(endpoints.Count >= 99,
+            $"أَداة عَمياء: وُجِدَت {endpoints.Count} نُقطَة minimal API — والمَقيس ‏99 فَأَكثَر.");
+
+        var injectors = endpoints
+            .Where(e =>
+            {
+                var arrow = e.Body.IndexOf("=>", StringComparison.Ordinal);
+                return arrow >= 0 && EntitlementParameter.IsMatch(e.Body[..arrow]);
+            })
+            .Select(e => $"{e.Route}   ({e.File})")
+            .ToArray();
+
+        Console.WriteLine(
+            $"· قِياس حَقن الاستِحقاق: {injectors.Length} نُقطَة تَحقِن IEntitlements " +
+            $"مِن {endpoints.Count} نُقطَة.");
+
+        Assert.True(injectors.Length == 0,
+            "نُقطَة تَحقِن IEntitlements في تَوقيعِها — الوِعاءُ يُعطيها آخِرَ مُسَجَّلٍ " +
+            "صامِتاً، فَتَسأَلُ تَنفيذاً لا يَخدِمُ قُدرَتَها ويَرتَدُّ ‏500:\n  " +
+            string.Join("\n  ", injectors) +
+            "\nالمَسار الصَحيح: http.Entitlements(CapabilityCatalog.<القُدرَة>) — " +
+            "يَسأَلُ Handles ويَرمي عِندَ تَركيبٍ ناقِص، لا يَسمَحُ صامِتاً.");
+    }
+
+    /// <summary><c>IEntitlements</c> كَنَوعِ وَسيط — بِحَدِّ كَلِمَة كَي
+    /// لا يُطابِقَ اسماً يَنتَهي بِه، وبِـ<c>\s+\w</c> كَي لا يُطابِقَ
+    /// نِداءً مِثلَ <c>GetServices&lt;IEntitlements&gt;()</c>.</summary>
+    private static readonly Regex EntitlementParameter =
+        new(@"\bIEntitlements\s+\w", RegexOptions.Compiled);
+
     /// <summary>ورَمزٌ خارِج المَعجَم كُلِّه يَرمي قَبل ذلك — البَوّابَة
     /// الأُولى قَبل الثانِيَة.</summary>
     [Theory]

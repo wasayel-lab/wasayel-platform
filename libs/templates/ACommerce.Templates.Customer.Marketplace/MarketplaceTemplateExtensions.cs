@@ -803,10 +803,28 @@ public static class MarketplaceTemplateExtensions
             async (string slug, HttpContext http, HttpRequest req, IDocumentStore store, L l,
                    Microsoft.AspNetCore.SignalR.IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> hub,
                    ACommerce.Templates.Customer.Marketplace.Services.WebPushService push,
-                   ACommerce.Kit.Files.IFileStorage files,
-                   ACommerce.Kit.Subscriptions.IEntitlements ents) =>
+                   ACommerce.Kit.Files.IFileStorage files) =>
         {
             var userId = http.UserId();
+
+            // ─── الاستِحقاقُ يُطلَب بِقُدرَتِه، لا يُحقَن ────────────────
+            //
+            // **العِلَّةُ المَقيسَةُ حَيّاً (‏2026-08-31)**: كانَ
+            // `IEntitlements ents` مَحقوناً في التَوقيع — وذاكَ
+            // `GetRequiredService<IEntitlements>()` حَرفاً، **فَيُعيدُ
+            // آخِرَ مُسَجَّلٍ صامِتاً**. ومُنذُ `2782d1ab` (‏2026-08-23)
+            // صارَ الآخِرُ `TenantPlanEntitlements` الَّذي يَخدِم
+            // `tenant.write` وَحدَها — فَكُلُّ نَشرِ إعلانٍ في **كُلِّ
+            // مَتجَر** يَرتَدُّ **‏500** بِـ`NotSupportedException`.
+            // ‏110 كوميتاتٍ وثَمانِيَةُ أَيّامٍ مَرَّت عَلَيها.
+            //
+            // **والتَعليقُ فَوقَ التَسجيلِ نَفسِه كانَ قَد تَنَبَّأَ بِها
+            // بِالاسم**: «يُقرَآنِ بِـ`http.Entitlements(capability)` —
+            // لا بِـ`GetRequiredService` الَّذي يُعيدُ آخِرَ مُسَجَّلٍ
+            // صامِتاً». فَالعِلاجُ لَيسَ قَراراً جَديداً بَل **الرُجوعُ
+            // إلى المُوَجِّهِ القائِمِ** الَّذي يَقرَؤُهُ
+            // `EntitlementFilter` و`ApiKeyFilter` (القاعِدَة ٨).
+            var ents = http.Entitlements(ACommerce.Kit.Subscriptions.CapabilityCatalog.ListingCreate);
 
             var title       = req.Form["title"].ToString().Trim();
             var description = req.Form["description"].ToString().Trim();
