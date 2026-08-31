@@ -105,7 +105,7 @@ public sealed class TenantFromAnalysisFactory
         CancellationToken ct = default)
     {
         var categories = CategoriesForSector(sector, pattern).ToList();
-        var roles = RolesForPattern(pattern).ToList();
+        var roles = RolesFor(pattern).ToList();
 
         var tenant = new Tenant
         {
@@ -178,7 +178,7 @@ public sealed class TenantFromAnalysisFactory
         _ => "ecommerce"
     };
 
-    private static IReadOnlyList<Role> RolesForPattern(string pattern)
+    public static IReadOnlyList<Role> RolesFor(string? pattern)
     {
         Role MakeRole(string slug, int order, bool isDefault = false)
         {
