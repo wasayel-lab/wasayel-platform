@@ -38,8 +38,8 @@ else
     // tenant_admin لا يُمكِن أَن يُسَكِّن نَفسَه — يُمنَح بِفِعل إداريّ
     // مُنفَصِل (سَنُضيف الواجِهَة لاحِقاً، أَو يَتِم عَبر DB seed). كُلّ
     // أَدوار العُمَلاء/المُزَوِّدين قابِلَة لِلاختِيار الذاتيّ.
-    var selectable = tenant.Roles
-        .Where(r => !IsAdminRole(r.CatalogSlug))
+    var selectable = ACommerce.Templates.Customer.Marketplace.Gates
+        .SelfGrantPolicy.SelfGrantable(tenant.Roles)
         .OrderBy(r => r.SortOrder)
         .ToList();
 
@@ -89,5 +89,7 @@ else
     }
 
     // أَدوار مَحظورَة عَن الاختِيار الذاتيّ — تُمنَح فَقَط بِفِعل إداريّ.
-    static bool IsAdminRole(string catalogSlug) => catalogSlug == "tenant_admin";
+    // كانَت هذِه نُسخَةً رابِعَةً لِلقاعِدَةِ نَفسِها، فَصارَت نِداءً
+    // لِـ`Gates.SelfGrantPolicy` (‏ADR-028): الشاشَةُ والنُقطَةُ
+    // تُنادِيانِ نَفسَ السِياسَةِ فَلا يَنحَرِفُ طَرَفٌ عَن طَرَف.
 }

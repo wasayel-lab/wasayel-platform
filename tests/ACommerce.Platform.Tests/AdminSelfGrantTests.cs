@@ -1,4 +1,6 @@
 using System.Text.RegularExpressions;
+using ACommerce.Kit.Roles;
+using ACommerce.Templates.Customer.Marketplace.Gates;
 using Xunit;
 
 namespace ACommerce.Platform.Tests;
@@ -57,7 +59,11 @@ public class AdminSelfGrantTests
         new(@"^\s*(app\.Map\w+\(|(private|public|internal|protected)\s|static\s)",
             RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    private sealed record Pinned(string File, int Line, string WhyAr);
+    /// <summary>مَوضِعٌ مُثَبَّت. <b>ويُعَرَّفُ بِنَصِّ الإسنادِ لا
+    /// بِرَقمِ السَطر</b> — فَرَقمُ السَطرِ يَنزاحُ بِأَيِّ تَعديلٍ فَوقَه،
+    /// فَتَصيرُ القائِمَةُ تُحمِرُّ لِأَسبابٍ لا عَلاقَةَ لَها
+    /// بِالأَمن.</summary>
+    private sealed record Pinned(string File, string Statement, string WhyAr);
 
     /// <summary>
     /// <para><b>مَواضِعُ كِتابَةِ الدَورِ المُثَبَّتَة</b> — وكُلٌّ
@@ -66,19 +72,33 @@ public class AdminSelfGrantTests
     /// </summary>
     private static readonly Pinned[] PinnedWrites =
     {
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2018,
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs",
+            "user.ActiveRole = \"tenant_admin\";",
             "مَنحُ الإداريِّ مِن `/admin/tenants/{slug}/users` — مَحروسٌ بِـ`TenantAdminGuard.CanAdministerAsync` ومُسَجَّلٌ في التَدقيق. هذِه هي القَناةُ المُعتَمَدَةُ لِلمَنح، فَحارِسُ المَنعِ الذاتيِّ عَلَيها خَطَأ."),
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2046,
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs",
+            "user.ActiveRole = fallback?.Slug ?? \"\";",
             "سَحبُ الإداريِّ مِن نَفسِ الصَفحَة — مَحروسٌ بِنَفسِ الحارِسِ ومُسَجَّل. والسَحبُ يَنزِلُ بِالصَلاحِيَّةِ ولا يَرفَعُها."),
-        new("apps/V1.App/Seed/AppearanceBaselineSeeder.cs", 506,
+        new("apps/V1.App/Seed/AppearanceBaselineSeeder.cs",
+            "ActiveRole = activeRole,",
             "بَذرَةُ لَقطاتِ المَظهَر — تَعمَلُ في التَطويرِ وَحدَه ولا يَبلُغُها طَلَبُ HTTP، والدَورُ فيها ثابِتٌ في الكودِ لا مِن استِمارَة."),
-        new("apps/V1.App/Seed/TestDataSeeder.cs", 80,
+        new("apps/V1.App/Seed/TestDataSeeder.cs",
+            "ActiveRole = slugRole,",
             "بَذرَةُ بَياناتِ التَجرِبَة — نَفسُ الحُجَّة: لا مَدخَلَ HTTP، والدَورُ مُشتَقٌّ مِن سلاجِ المُستَأجِرِ لا مِن مُستَخدِم."),
-        new("apps/V1.App/Seed/TestDataSeeder.cs", 90,
+        new("apps/V1.App/Seed/TestDataSeeder.cs",
+            "user.ActiveRole = slugRole;",
             "نَفسُ البَذرَة، فَرعُ التَحديث — نَفسُ الحُجَّة حَرفاً."),
     };
 
-    private sealed record Write(string File, int Line, string Window);
+    private sealed record Write(string File, int Line, string Statement, string Window)
+    {
+        /// <summary>هُوِيَّةُ المَوضِعِ في القائِمَةِ المُثَبَّتَة —
+        /// مِلَفٌّ ونَصُّ إسناد، لا رَقمُ سَطر.</summary>
+        public string Key => $"{File}  ::  {Statement}";
+
+        /// <summary>وما يُطبَعُ لِلإنسان يَحمِلُ السَطرَ لِيُفتَحَ
+        /// مُباشَرَةً — الرَقَمُ لِلعَينِ لا لِلمُطابَقَة.</summary>
+        public string Label => $"{File}:{Line}  {Statement}";
+    }
 
     private static IEnumerable<string> SourceFiles()
     {
@@ -112,7 +132,8 @@ public class AdminSelfGrantTests
                 if (!ActiveRoleWrite.IsMatch(lines[i])) continue;
                 var j = i;
                 while (j > 0 && !BlockStart.IsMatch(lines[j])) j--;
-                hits.Add(new(Rel(file), i + 1, string.Join('\n', lines[j..(i + 1)])));
+                hits.Add(new(Rel(file), i + 1, lines[i].Trim(),
+                    string.Join('\n', lines[j..(i + 1)])));
             }
         }
         return hits;
@@ -147,7 +168,7 @@ public class AdminSelfGrantTests
 
         var naked = formFed
             .Where(w => !w.Window.Contains(PolicyToken, StringComparison.Ordinal))
-            .Select(w => $"{w.File}:{w.Line}")
+            .Select(w => w.Label)
             .ToArray();
 
         Assert.True(naked.Length == 0,
@@ -209,13 +230,13 @@ public class AdminSelfGrantTests
             $"أَداةٌ عَمياء: وُجِدَ {writes.Count} مَوضِعَ كِتابَةٍ لِلدَور — والمَقيسُ ٩ فَأَكثَر.");
 
         var pinned = PinnedWrites
-            .Select(p => $"{p.File}:{p.Line}")
+            .Select(p => $"{p.File}  ::  {p.Statement}")
             .ToHashSet(StringComparer.Ordinal);
 
         var breaches = writes
             .Where(w => !w.Window.Contains(PolicyToken, StringComparison.Ordinal))
-            .Where(w => !pinned.Contains($"{w.File}:{w.Line}"))
-            .Select(w => $"{w.File}:{w.Line}")
+            .Where(w => !pinned.Contains(w.Key))
+            .Select(w => w.Label)
             .ToArray();
 
         Assert.True(breaches.Length == 0,
@@ -232,31 +253,88 @@ public class AdminSelfGrantTests
     public void No_pinned_role_write_outlives_its_reason()
     {
         var writes = ActiveRoleWrites();
-        var all = writes.Select(w => $"{w.File}:{w.Line}").ToHashSet(StringComparer.Ordinal);
+        var all = writes.Select(w => w.Key).ToHashSet(StringComparer.Ordinal);
         var declaring = writes
             .Where(w => w.Window.Contains(PolicyToken, StringComparison.Ordinal))
-            .Select(w => $"{w.File}:{w.Line}")
+            .Select(w => w.Key)
             .ToHashSet(StringComparer.Ordinal);
 
         var gone = PinnedWrites
-            .Where(p => !all.Contains($"{p.File}:{p.Line}"))
-            .Select(p => $"{p.File}:{p.Line}")
+            .Select(p => $"{p.File}  ::  {p.Statement}")
+            .Where(k => !all.Contains(k))
             .ToArray();
 
         var covered = PinnedWrites
-            .Where(p => declaring.Contains($"{p.File}:{p.Line}"))
-            .Select(p => $"{p.File}:{p.Line}")
+            .Select(p => $"{p.File}  ::  {p.Statement}")
+            .Where(k => declaring.Contains(k))
             .ToArray();
 
         Assert.True(gone.Length == 0,
-            "مَوضِعٌ مُثَبَّتٌ لا وُجودَ لَه — يُرفَعُ أَو يُصَحَّحُ رَقمُه:\n  " + string.Join("\n  ", gone));
+            "مَوضِعٌ مُثَبَّتٌ لا وُجودَ لَه — يُرفَعُ أَو يُصَحَّحُ نَصُّه:\n  " + string.Join("\n  ", gone));
         Assert.True(covered.Length == 0,
             "مَوضِعٌ مُثَبَّتٌ صارَ يُعلِنُ السِياسَةَ — يُرفَعُ مِن القائِمَة:\n  " + string.Join("\n  ", covered));
 
         foreach (var p in PinnedWrites)
-            Assert.True(p.WhyAr.Length > 30, $"استِثناءٌ بِلا سَبَبٍ مَقروء: {p.File}:{p.Line}");
+            Assert.True(p.WhyAr.Length > 30, $"استِثناءٌ بِلا سَبَبٍ مَقروء: {p.File}  ::  {p.Statement}");
 
         Assert.Equal(PinnedWrites.Length,
-            PinnedWrites.Select(p => $"{p.File}:{p.Line}").Distinct(StringComparer.Ordinal).Count());
+            PinnedWrites.Select(p => $"{p.File}  ::  {p.Statement}").Distinct(StringComparer.Ordinal).Count());
+    }
+
+    // ─── السِياسَةُ نَفسُها — مُوجَبٌ وسالِبٌ لِكُلِّ فَرع ─────────────
+
+    private static Role RoleWith(string slug, string catalogSlug) =>
+        new() { Slug = slug, CatalogSlug = catalogSlug, Label = slug };
+
+    /// <summary>الفَرعُ المُوجَب: الإداريُّ يُرَدُّ بِأَيِّ اسمَيه.
+    /// والأُختانِ اختَلَفَتا في الحَقلِ لا في القَرار (إحداهُما
+    /// <c>CatalogSlug</c> والأُخرى <c>Slug</c>)، فَالاتِّحادُ يَسُدُّ
+    /// الاسمَينِ مَعاً.</summary>
+    [Theory]
+    [InlineData("tenant_admin", "tenant_admin")]
+    [InlineData("tenant_admin", "vendor")]
+    [InlineData("store_boss", "tenant_admin")]
+    public void The_admin_role_is_refused_by_either_of_its_names(string slug, string catalogSlug)
+    {
+        Assert.True(SelfGrantPolicy.IsAdminRole(RoleWith(slug, catalogSlug)));
+        Assert.True(SelfGrantPolicy.RefusesSelfGrant(slug, RoleWith(slug, catalogSlug)));
+        Assert.Empty(SelfGrantPolicy.SelfGrantable(new[] { RoleWith(slug, catalogSlug) }));
+    }
+
+    /// <summary>والفَرعُ السالِب: كُلُّ دَورٍ آخَرَ يُسَكَّنُ ذاتِيّاً كَما
+    /// كانَ — فَالحارِسُ يَسُدُّ باباً واحِداً لا يُغلِقُ المَتجَر.</summary>
+    [Theory]
+    [InlineData("customer")]
+    [InlineData("vendor")]
+    [InlineData("driver")]
+    [InlineData("tenant_administrator")]
+    public void Every_other_role_stays_self_grantable(string slug)
+    {
+        var role = RoleWith(slug, slug);
+        Assert.False(SelfGrantPolicy.IsAdminRole(role));
+        Assert.False(SelfGrantPolicy.RefusesSelfGrant(slug, role));
+        Assert.Contains(SelfGrantPolicy.SelfGrantable(new[] { role }), r => r.Slug == slug);
+    }
+
+    /// <summary><b>والسلاجُ الخامُّ يُرَدُّ ولَو تَعَذَّرَ تَحميلُ
+    /// الدَور</b>: <c>null</c> مَكانَ الدَورِ المُحَمَّلِ يَعني «لَم
+    /// أَجِده»، لا «مَسموح». وهذا هُوَ الفَرقُ بَينَ حارِسٍ يَصمُدُ
+    /// عِندَ تَعَذُّرِ القِراءَةِ وحارِسٍ يَنفَتِحُ عِندَها.</summary>
+    [Fact]
+    public void A_raw_admin_slug_is_refused_even_when_the_role_cannot_be_loaded()
+    {
+        Assert.True(SelfGrantPolicy.RefusesSelfGrant(SelfGrantPolicy.AdminSlug, null));
+        Assert.False(SelfGrantPolicy.RefusesSelfGrant("customer", null));
+        Assert.False(SelfGrantPolicy.RefusesSelfGrant("", null));
+        Assert.False(SelfGrantPolicy.RefusesSelfGrant(null, null));
+    }
+
+    /// <summary>ورَمزُ الخَرقِ هُوَ الرَمزُ الَّذي كانَت تَرُدُّ بِه
+    /// الأُختُ مُنذُ كُتِبَت — فَالسُلوكُ مَأخوذٌ لا مُختَرَع.</summary>
+    [Fact]
+    public void The_refusal_code_is_the_one_the_sister_already_returned()
+    {
+        Assert.Equal("admin_self_grant", SelfGrantPolicy.RefusalCode);
+        Assert.Equal("tenant_admin", SelfGrantPolicy.AdminSlug);
     }
 }

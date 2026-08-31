@@ -43,7 +43,7 @@ public static class EffectiveRole
     /// الأُخرى يَمنَحُها المُستَخدِم لِنَفسِه بِدُخول <c>as={role}</c>
     /// (<c>AssignRoleAsync</c>)، أَمّا هذا فَيُمنَح يَدَويّاً مِن
     /// <c>/admin/tenants/{slug}/users</c> فَقَط.</summary>
-    private const string AdminRole = "tenant_admin";
+    private const string AdminRole = SelfGrantPolicy.AdminSlug;
 
     /// <summary>بُرهان المِلكِيَّة: هَل يَحمِل المُتَصَفِّح cookie جَلسَة
     /// صالِحَة لِهذا <paramref name="role"/> تَخُصّ <paramref name="userId"/>

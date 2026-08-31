@@ -550,9 +550,14 @@ public static class MarketplaceTemplateExtensions
             var picked = tenant.Roles.FirstOrDefault(r => r.Slug == role);
             if (picked is null) return Results.Redirect(Link(req, slug, $"me/role?err=invalid_role"));
             // أَدوار إداريَّة لا يُمكِن مَنحُها ذاتيّاً — يُجَهَّز التَّعيين
-            // مِن قِبَل إداريّ آخَر أَو DB seed.
-            if (picked.CatalogSlug == "tenant_admin")
-                return Results.Redirect(Link(req, slug, $"me/role?err=admin_self_grant"));
+            // مِن قِبَل إداريّ آخَر أَو DB seed. **والقَرارُ هُنا هُوَ
+            // المَرجِع**: كانَ مَكتوباً في هذا الجِسمِ وَحدَه، فَانحَرَفَت
+            // عَنه أُختُه `POST /{slug}/me/save` وبَقِيَت مَفتوحَة. صارَ
+            // السَطرُ يُنادي السِياسَةَ نَفسَها الَّتي تُنادِيها الشاشَة
+            // وسائِرُ نِقاطِ الكِتابَة (‏ADR-028) — بِلا تَغييرِ سُلوكٍ
+            // هُنا بِحَرف.
+            if (Gates.SelfGrantPolicy.IsAdminRole(picked))
+                return Results.Redirect(Link(req, slug, $"me/role?err={Gates.SelfGrantPolicy.RefusalCode}"));
 
             await using var s = store.LightweightSession(slug);
             var user = await s.LoadAsync<User>(userId);
@@ -629,6 +634,23 @@ public static class MarketplaceTemplateExtensions
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
+
+            // ─── التَخويلُ يَسبِقُ تَحَقُّقَ الحُقولِ وكُلَّ أَثَر ─────────
+            // **كانَ هذا الجِسمُ يَكتُب `user.ActiveRole` مِن الاستِمارَةِ
+            // بِلا حارِسٍ إطلاقاً**، وأُختُه `POST /{slug}/me/role/save`
+            // تَمنَعُ التَرَقِّيَ صَراحَةً — فَالتَناقُضُ بَينَ الأُختَينِ
+            // كانَ هُوَ الثَغرَة. وأُثبِتَ أَثَرُها فِعلاً: عُضوٌ عادِيٌّ
+            // رَفَعَ نَفسَه إلى `tenant_admin` بِطَلَبٍ واحِد، ثُمَّ قَرَأَ
+            // صَفحَةَ الأَعضاءِ وفيها رَقمُ هاتِف، وكَتَبَ في هُوِيَّةِ
+            // المَتجَرِ بِنَجاح. (‏ADR-028)
+            //
+            // **ومَوضِعُه هُنا لا أَسفَل** (القاعِدَة ٦): تَحتَه رَفعُ صورَةٍ
+            // إلى المَخزَنِ الدائِم — أَثَرٌ يَقَعُ خارِجَ القاعِدَة. فَحارِسٌ
+            // بَعدَه يَترُكُ المُتَرَقِّيَ يَكتُبُ مِلَفّاً قَبلَ أَن يُرَدّ.
+            var activeRole = req.Form["activeRole"].ToString().Trim();
+            if (await RefusesSelfGrantAsync(store, slug, activeRole))
+                return Results.Redirect(Link(req, slug, $"me/edit?err={Gates.SelfGrantPolicy.RefusalCode}"));
+
             var fullName = req.Form["fullName"].ToString().Trim();
             if (fullName.Length == 0) return Results.Redirect(Link(req, slug, $"me/edit"));
 
@@ -671,7 +693,8 @@ public static class MarketplaceTemplateExtensions
             user.UpdatedAt = DateTime.UtcNow;
 
             // الدَور النَّشِط (يَظهَر فَقَط لَو المَتجَر يُعَرِّف أَدواراً).
-            var activeRole = req.Form["activeRole"].ToString().Trim();
+            // قُرِئَ وحُسِمَ أَعلى الجِسمِ قَبلَ أَيِّ أَثَر — فَما يَبلُغُ
+            // هُنا دَورٌ مَرَّ بِـ`SelfGrantPolicy` وَحدَه.
             if (!string.IsNullOrEmpty(activeRole)) user.ActiveRole = activeRole;
 
             // خَصائِص ديناميكِيَّة: attr_<Code> = بروفايل عامّ،
@@ -4351,17 +4374,42 @@ public static class MarketplaceTemplateExtensions
         return (tenant, set);
     }
 
+    /// <summary>
+    /// <para><b>أَتُرَدُّ هذِه النُقلَة؟</b> نِصفُ الـI/O مِن
+    /// <see cref="Gates.SelfGrantPolicy"/>: يُحَمِّلُ الدَورَ ويَسأَلُ
+    /// السِياسَةَ النَقِيَّة. <b>والسلاجُ الخامُّ يُفحَصُ قَبلَ
+    /// التَحميل</b> — لَو تَعَذَّرَ تَحميلُ المُستَأجِرِ لَعادَ الدَورُ
+    /// فارِغاً، فَفَحصُ المُحَمَّلِ وَحدَه كانَ يَجعَلُ تَعَذُّرَ
+    /// القِراءَةِ ثَغرَة.</para>
+    ///
+    /// <para>وهُوَ هُنا لا في جِسمِ النُقطَة لِأَنّ الجِسمَ مَوضِعُ
+    /// حارِسٍ ورَدٍّ لا مَوضِعُ مَنطِق (‏<c>EndpointBodyBleedTests</c>) —
+    /// وسَطرانِ في النُقطَةِ يُغنِيانِ عَن عَشَرَة.</para>
+    /// </summary>
+    private static async Task<bool> RefusesSelfGrantAsync(
+        IDocumentStore store, string slug, string requestedRole)
+    {
+        if (string.IsNullOrEmpty(requestedRole)) return false;
+        if (Gates.SelfGrantPolicy.IsAdminSlug(requestedRole)) return true;
+        var tenant = await LoadTenantWithRolesAsync(store, slug);
+        var picked = tenant?.Roles.FirstOrDefault(r => r.Slug == requestedRole);
+        return Gates.SelfGrantPolicy.IsAdminRole(picked);
+    }
+
     // تَسكين دَور لِمُستَخدِم بَعد تَوثيقِه — يُستَدعَى مِن /verify عِندَ
     // وُجود ?as=role مِن صَفحَة الدُخول. tenant_admin مَمنوع: يَجِب أَن
     // يُمنَح يَدَويّاً مِن /admin/tenants/{slug}/users.
     private static async Task AssignRoleAsync(
         string slug, Guid userId, string roleSlug, IDocumentStore store)
     {
-        if (roleSlug == "tenant_admin") return;
+        // نَفسُ سِياسَةِ الأُختَين — كانَت مَكتوبَةً هُنا بِصيغَةٍ ثالِثَة
+        // (‏`roleSlug ==` بَدَل `CatalogSlug ==`). صارَت نِداءً واحِداً
+        // (‏ADR-028)، والفَحصُ يَشمَلُ الآنَ الاسمَينِ مَعاً.
+        if (Gates.SelfGrantPolicy.IsAdminSlug(roleSlug)) return;
         var tenant = await LoadTenantWithRolesAsync(store, slug);
         if (tenant is null) return;
         var picked = tenant.Roles.FirstOrDefault(r => r.Slug == roleSlug);
-        if (picked is null) return;
+        if (picked is null || Gates.SelfGrantPolicy.IsAdminRole(picked)) return;
 
         await using var s = store.LightweightSession(slug);
         var user = await s.LoadAsync<ACommerce.Kit.Auth.User>(userId);
@@ -4389,8 +4437,18 @@ public static class MarketplaceTemplateExtensions
         if (user is null) return $"/{slug}";
 
         // إن لَم يُعطَ asRole + لا ActiveRole + دَور واحِد → اِضبِطه تِلقائيّاً.
+        //
+        // **والبابُ الثالِث** (‏ADR-028): هذا السَطرُ كانَ يُسَكِّنُ الدَورَ
+        // الوَحيدَ **أَيّاً كان**. فَمَتجَرٌ حُصِرَت أَدوارُه في
+        // `tenant_admin` مِن شاشَةِ الأَدوارِ كانَ يَمنَحُ الإدارَةَ
+        // **لِكُلِّ مَن سَجَّلَ فيه**، بِلا استِمارَةٍ ولا نِيَّة. ولا
+        // يُنادى المُهاجِمُ هُنا — والنَتيجَةُ واحِدَة، وهذا بِعَينِه
+        // سَبَبُ أَن يَكونَ الحارِسُ سِياسَةً لا شَرطاً في جِسمٍ واحِد.
+        // والبَديلُ صَريح: يُحَوَّلُ إلى `/{slug}/me/role` فَيَرى أَنَّ
+        // المَتجَرَ بِلا دَورٍ قابِلٍ لِلاختِيار.
         if (string.IsNullOrEmpty(asRole) &&
-            tenant.Roles.Count == 1 && string.IsNullOrEmpty(user.ActiveRole))
+            tenant.Roles.Count == 1 && string.IsNullOrEmpty(user.ActiveRole) &&
+            !Gates.SelfGrantPolicy.IsAdminRole(tenant.Roles[0]))
         {
             user.ActiveRole = tenant.Roles[0].Slug;
             t.Store(user);

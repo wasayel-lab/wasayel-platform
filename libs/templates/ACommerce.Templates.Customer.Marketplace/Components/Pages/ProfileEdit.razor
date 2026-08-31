@@ -74,13 +74,22 @@ else
            بِلا دَور في الـ URL (مَثَلاً مِن /{slug}/me/edit مُباشَرَة).
            إذا دَخَلَ المُستَخدِم مِن /r/{role}/me/edit فالدَور مَعروف
            وَنُثَبِّتُه ضِمنياً — لا داعِيَ لِسؤالِه مَرَّةً أُخرى. *@
-        @if (tenant.Roles.Count > 0 && string.IsNullOrEmpty(Role))
+        @* الدَورُ الإداريُّ لا يُعرَضُ هُنا — نَفسُ تَصفِيَةِ
+           `RolePicker.razor` ونَفسُ السِياسَةِ الَّتي تَرُدُّ
+           `POST /{slug}/me/save`. وكانَ يُعرَضُ لِكُلِّ عُضو، فَيَرفَعُ
+           نَفسَه بِنَقرَة (‏ADR-028). *@
+        @{
+            var selectableRoles = ACommerce.Templates.Customer.Marketplace.Gates
+                .SelfGrantPolicy.SelfGrantable(tenant.Roles)
+                .OrderBy(r => r.SortOrder).ToList();
+        }
+        @if (selectableRoles.Count > 0 && string.IsNullOrEmpty(Role))
         {
             <AcCard>
                 <ChildContent>
                     <h3 style="margin-top:0;">@L.Markup("profile.section.role")</h3>
                     <div class="acm-radio-cards">
-                        @foreach (var r in tenant.Roles.OrderBy(r => r.SortOrder))
+                        @foreach (var r in selectableRoles)
                         {
                             <label class="acm-radio-card">
                                 <input type="radio" name="activeRole" value="@r.Slug"
@@ -98,10 +107,14 @@ else
                 </ChildContent>
             </AcCard>
         }
-        else if (!string.IsNullOrEmpty(Role))
+        else if (!string.IsNullOrEmpty(Role) &&
+                 !ACommerce.Templates.Customer.Marketplace.Gates.SelfGrantPolicy.IsAdminSlug(Role))
         {
             @* الدَور مَفروض مِن الـ URL — مَرِّرْه بِـ hidden field
-               حَتَّى يَستَقبِله /me/save كَ activeRole بِلا تَغيير. *@
+               حَتَّى يَستَقبِله /me/save كَ activeRole بِلا تَغيير.
+               **وإن كانَ إداريّاً لا يُمَرَّر**: النُقطَةُ تَرُدُّه،
+               فَتَمريرُه كانَ يُفشِلُ حِفظَ اسمِ الإداريِّ نَفسِه. وبِلا
+               الحَقلِ يَبقى `ActiveRole` كَما هُوَ — وهُوَ المَطلوب. *@
             <input type="hidden" name="activeRole" value="@Role" />
         }
 
