@@ -1,0 +1,68 @@
+{
+  "id": "platform_disclosure_art6",
+  "level": "platform",
+  "label": { "ar": "م.٦ — الإفصاحُ عَن هُوِيَّةِ المَنَصَّة", "en": null },
+  "source": {
+    "authority": "نِظامُ التِجارَةِ الإلِكترونِيَّة — هَيئَةُ الخُبَراءِ بِمَجلِسِ الوُزَراء",
+    "reference": "المادَّةُ السادِسَة",
+    "url": "https://laws.boe.gov.sa/BoeLaws/Laws/LawDetails/360de590-0286-4fa5-a243-aa9100c31979/1",
+    "quotedAr": "على موفر الخدمة الإفصاح في محله الإلكتروني عن البيانات الآتية: أ- اسمه أو أي بيان مميز له، وعنوانه، ما لم يكن مسجلاً لدى إحدى جهات توثيق المحلات الإلكترونية. ب- وسائل الاتصال به. ج- اسم السجل المقيد فيه ورقمه إن كان مقيداً في سجل تجاري أو سجل آخر متاح للعموم. د- البيانات الأخرى التي تحددها اللائحة.",
+    "penaltyAr": "م.١٨: إنذار · غَرامَةٌ لا تَزيدُ عَلى مِليونِ ريال · إيقافُ مُزاوَلَةِ النَشاط · حَجبُ المَحَلِّ الإلِكترونيّ."
+  },
+  "evidence": [
+    {
+      "code": "entity_name",
+      "kind": "text_filled",
+      "target": "platform.doc.entity_name",
+      "rejectionCode": "platform_entity_name_placeholder",
+      "label": { "ar": "اسمُ الكِيانِ النِظاميّ (م.٦/أ)", "en": null },
+      "remedyRoute": "/contact",
+      "remedy": { "ar": "يُملَأُ المِفتاح platform.doc.entity_name بِاسمِ الكِيانِ كَما في السِجِلّ. ولا يُخترَعُ (القاعِدَة ١٦).", "en": null }
+    },
+    {
+      "code": "entity_address",
+      "kind": "text_filled",
+      "target": "platform.doc.entity_address",
+      "rejectionCode": "platform_entity_address_placeholder",
+      "label": { "ar": "العُنوانُ الوَطَنيّ (م.٦/أ)", "en": null },
+      "remedyRoute": "/contact",
+      "remedy": { "ar": "يُملَأُ المِفتاح platform.doc.entity_address بِالعُنوانِ الوَطَنيّ.", "en": null }
+    },
+    {
+      "code": "contact_channel",
+      "kind": "text_filled",
+      "target": "platform.doc.contact_email",
+      "rejectionCode": "platform_contact_email_placeholder",
+      "label": { "ar": "وَسيلَةُ الاتِّصال (م.٦/ب)", "en": null },
+      "remedyRoute": "/contact",
+      "remedy": { "ar": "يُملَأُ المِفتاح platform.doc.contact_email بِبَريدٍ يَعمَل.", "en": null }
+    },
+    {
+      "code": "registration_number",
+      "kind": "text_filled",
+      "target": "platform.doc.entity_registration",
+      "rejectionCode": "platform_entity_registration_placeholder",
+      "label": { "ar": "اسمُ السِجِلِّ ورَقمُه (م.٦/ج)", "en": null },
+      "remedyRoute": "/contact",
+      "remedy": { "ar": "يُملَأُ المِفتاح platform.doc.entity_registration بِرَقمِ السِجِلِّ التِجاريّ.", "en": null }
+    },
+    {
+      "code": "disclosure_page_reachable",
+      "kind": "route_reachable",
+      "target": "/contact",
+      "rejectionCode": "platform_disclosure_route_absent",
+      "label": { "ar": "صَفحَةُ الإفصاحِ تُبلَغُ بِالنَقر", "en": null },
+      "remedyRoute": "/contact",
+      "remedy": { "ar": "مَسارٌ مُسَجَّلٌ ورابِطٌ في تَذييلِ المَنَصَّة.", "en": null }
+    }
+  ],
+  "notCheckable": [
+    {
+      "code": "art6_d_regulation_fields",
+      "reason": {
+        "ar": "الفَقرَة (د) تُحيلُ إلى اللائِحَةِ التَنفيذِيَّةِ لِتَحديدِ «البَياناتِ الأُخرى». والنُسخَةُ الرَسمِيَّةُ الَّتي نُزِّلَت خَرَجَت بِخَريطَةِ مَحارِفَ مَكسورَة (إبدالٌ مَنهَجِيّ: ذ←ر، ر←ز، ك←ت) فَلا يُعتَمَدُ عَلَيها ولا يُنقَلُ عَنها. فَهذا الشاهِدُ ناقِصٌ بِالضَرورَةِ حَتّى تُقرَأَ اللائِحَةُ مِن نُسخَةٍ سَليمَة — والقاعِدَة ١٦ تَمنَعُ تَخمينَه.",
+        "en": null
+      }
+    }
+  ]
+}

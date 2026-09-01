@@ -1,0 +1,42 @@
+{
+  "id": "platform_ugc_prepublication_filter",
+  "level": "platform",
+  "label": { "ar": "تَرشيحُ المُحتَوى المُنشَأ قَبلَ النَشر (‏App Store 1.2)", "en": null },
+  "source": {
+    "authority": "Apple App Store Review Guidelines",
+    "reference": "1.2 User-Generated Content",
+    "url": "https://developer.apple.com/app-store/review/guidelines/",
+    "quotedAr": "A method for filtering objectionable material from being posted to the app.",
+    "penaltyAr": "رَفضُ المُراجَعَة أَو إزالَةُ التَطبيق."
+  },
+  "evidence": [
+    {
+      "code": "prepublication_filter_endpoint",
+      "kind": "route_reachable",
+      "target": "/{slug}/listings/moderation/queue",
+      "rejectionCode": "prepublication_filter_absent",
+      "label": { "ar": "مُرَشِّحٌ يَقَعُ قَبلَ النَشر", "en": null },
+      "remedyRoute": null,
+      "remedy": { "ar": "قَرارُ مالِك: مُراجَعَةٌ بَشَرِيَّةٌ قَبلَ النَشر (وتُحَمِّلُ المَنَصَّةَ مَسؤولِيَّةَ ما تُجيزُه وتُبطِلُ إقرارَ الشُروطِ الحاليّ)، أَم مُرَشِّحُ كَلِماتٍ آلِيٌّ مَعَ الإزالَةِ اللاحِقَة؟ القَرارُ يُوازِنُ كُلفَةَ تَشغيلٍ بِمَسؤولِيَّةٍ قانونِيَّة.", "en": null }
+    },
+    {
+      "code": "no_selfdeclared_absence_of_review",
+      "kind": "text_free_of",
+      "target": "platform.terms.s7_body",
+      "forbiddenPhrases": ["لا نُراجِعُه مُسبَقاً", "لا نُراجِعُها مُسبَقاً"],
+      "rejectionCode": "terms_declare_no_prepublication_review",
+      "label": { "ar": "الشُروطُ لا تُقِرُّ بِغِيابِ المُراجَعَةِ المُسبَقَة", "en": null },
+      "remedyRoute": "/terms",
+      "remedy": { "ar": "النَصُّ الحالِيُّ يُقِرُّ بِعَدَمِ المُراجَعَةِ المُسبَقَة — وذلكَ إقرارٌ بِخِلافِ ما يَشتَرِطُه بَندُ المَتجَر. يُبنى المُرَشِّحُ ثُمَّ يُصَحَّحُ النَصّ، لا العَكس.", "en": null }
+    }
+  ],
+  "notCheckable": [
+    {
+      "code": "filter_quality",
+      "reason": {
+        "ar": "«‏from being posted» آلِيَّةُ تَشغيلٍ لا نَصّ. والفَحصُ اللَفظِيُّ هُنا يُضَلِّلُ مَرَّتَين: يُخضِرُ البَندَ لِوُجودِ كَلِمَةِ «إشراف» بَينَما المَوجودُ إزالَةٌ بَعدَ النَشرِ لا مَنعٌ قَبلَه. فَالشاهِدُ مَسارٌ، وجَودَةُ المُرَشِّحِ نَفسِها خارِجَ ما يُقاسُ هُنا.",
+        "en": null
+      }
+    }
+  ]
+}

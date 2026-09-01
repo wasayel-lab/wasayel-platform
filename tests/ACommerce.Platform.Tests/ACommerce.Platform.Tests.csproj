@@ -16,6 +16,13 @@
     <!-- كاتالوجُ تَعريفاتِ المُزَوِّدين — المُصادِقُ والقارِئُ يُقاسانِ
          هُنا: لِكُلّ رَمزِ خَرقٍ اختِبارٌ موجِبٌ وسالِب (القاعِدَة ٤). -->
     <ProjectReference Include="..\..\libs\core\ACommerce.Platform.Providers\ACommerce.Platform.Providers.csproj" />
+    <!-- كاتالوجُ الالتِزاماتِ النِظامِيَّة — المُصادِقُ والقارِئُ
+         والفاحِصُ يُقاسونَ هُنا: لِكُلِّ رَمزِ خَرقٍ اختِبارٌ موجِبٌ
+         وسالِب (القاعِدَة ٤)، ومِجَسٌّ بِحَقنِ العَيبِ يَقيسُ الفاحِصَ
+         نَفسَه. مَرجِعٌ صَريحٌ لا مُتَوارَث: القالِبُ يُحيلُه اليَومَ،
+         واعتِمادُ الفَحصِ عَلى إحالَةِ غَيرِه يَجعَلُه رَهناً
+         بِقَرارٍ في مَشروعٍ آخَر. -->
+    <ProjectReference Include="..\..\libs\kits\Compliance\ACommerce.Kit.Compliance.Core\ACommerce.Kit.Compliance.Core.csproj" />
     <!-- Reports.Core لا يَصِل إلى القالِب — ومُقابَلَة وَصف التَدَفُّق
          بِتَعداد ReportStatus تَحتاجُه. مَرجِع اختِبار فَقَط. -->
     <ProjectReference Include="..\..\libs\kits\Reports\ACommerce.Kit.Reports.Core\ACommerce.Kit.Reports.Core.csproj" />

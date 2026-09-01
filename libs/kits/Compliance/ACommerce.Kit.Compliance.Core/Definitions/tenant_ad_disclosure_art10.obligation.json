@@ -1,0 +1,50 @@
+{
+  "id": "tenant_ad_disclosure_art10",
+  "level": "tenant",
+  "label": { "ar": "م.١٠ — بَياناتُ الإعلانِ الإلِكترونيّ", "en": null },
+  "source": {
+    "authority": "نِظامُ التِجارَةِ الإلِكترونِيَّة — هَيئَةُ الخُبَراءِ بِمَجلِسِ الوُزَراء",
+    "reference": "المادَّةُ العاشِرَة",
+    "url": "https://laws.boe.gov.sa/BoeLaws/Laws/LawDetails/360de590-0286-4fa5-a243-aa9100c31979/1",
+    "quotedAr": "يُعد الإعلان الإلكتروني من الوثائق التعاقدية المكملة للعقود وملزمة لأطراف العقد. يجب أن يتضمن الإعلان الإلكتروني ما يأتي: أ- اسم المنتج أو الخدمة المعلن عنها. ب- اسم موفر الخدمة، وأي بيان مميز له. ج- وسائل الاتصال بموفر الخدمة.",
+    "penaltyAr": "م.١٨: إنذار · غَرامَةٌ لا تَزيدُ عَلى مِليونِ ريال · إيقافُ مُزاوَلَةِ النَشاط · حَجبُ المَحَلِّ الإلِكترونيّ."
+  },
+  "evidence": [
+    {
+      "code": "listing_page_reachable",
+      "kind": "route_reachable",
+      "target": "/{slug}/listings/{id}",
+      "rejectionCode": "listing_page_route_absent",
+      "label": { "ar": "صَفحَةُ الإعلانِ تُبلَغُ بِالنَقر (م.١٠/٢أ)", "en": null },
+      "remedyRoute": null,
+      "remedy": { "ar": "مَسارُ تَفصيلِ الإعلانِ يَعرِضُ اسمَ المُنتَجِ وسِعرَه.", "en": null }
+    },
+    {
+      "code": "vendor_profile_reachable",
+      "kind": "route_reachable",
+      "target": "/{slug}/vendor/{vendorId}",
+      "rejectionCode": "vendor_profile_route_absent",
+      "label": { "ar": "اسمُ البائِعِ يُبلَغُ مِن الإعلان (م.١٠/٢ب)", "en": null },
+      "remedyRoute": null,
+      "remedy": { "ar": "رابِطُ البائِعِ عَلى صَفحَةِ الإعلان.", "en": null }
+    },
+    {
+      "code": "vendor_contact_on_ad",
+      "kind": "text_filled",
+      "target": "legal.listing.vendor_contact_note",
+      "rejectionCode": "vendor_contact_on_ad_absent",
+      "label": { "ar": "وَسيلَةُ اتِّصالٍ بِالبائِعِ بِبَيانٍ ظاهِر (م.١٠/٢ج)", "en": null },
+      "remedyRoute": "/{slug}/legal/merchant",
+      "remedy": { "ar": "الاتِّصالُ اليَومَ زِرُّ مُحادَثَةٍ داخِلِيٌّ («اسأَل البائِع») ولا بَيانَ اتِّصالٍ ظاهِراً. يُملَأُ المِفتاح legal.listing.vendor_contact_note بِما يُفصِحُ عَن وَسيلَةِ الاتِّصالِ المُعتَمَدَة.", "en": null }
+    }
+  ],
+  "notCheckable": [
+    {
+      "code": "art10_1_contractual_effect",
+      "reason": {
+        "ar": "«الإعلانُ مِن الوَثائِقِ التَعاقُدِيَّةِ المُكَمِّلَةِ ومُلزِمَةٌ لِأَطرافِ العَقد» أَثَرٌ قانونِيٌّ لا عُنصُرٌ ظاهِر. لا شاهِدَ لَه يُفحَص، ويَخرُجُ مِن هذا المِلَفِّ كُلِّيّاً — والفَقرَةُ ٢ وَحدَها هي المَفحوصَة. وأَثَرُها العَمَلِيّ: كُلُّ وَعدٍ مَنشورٍ يَصيرُ دَيناً، ومِنه الوَعدُ المَقيسُ في تَبويبِ الاستِرجاع.",
+        "en": null
+      }
+    }
+  ]
+}

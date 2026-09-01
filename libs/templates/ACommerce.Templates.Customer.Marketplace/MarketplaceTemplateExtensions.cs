@@ -114,6 +114,11 @@ public static class MarketplaceTemplateExtensions
         services.AddScoped<Services.TenantAdminGuard>();
         services.AddScoped<Services.PlatformAdminGuard>();
 
+        // جامِعُ لَقطَةِ الامتِثال — يَقرَأُ قامُوسَ النُصوصِ وجَدوَلَ
+        // نِهاياتِ التَطبيقِ الحَيّ، ولا يَحكُم. والحُكمُ في
+        // `ComplianceInspector` وَحدَه، دالَّةً نَقِيَّة.
+        services.AddScoped<Services.Compliance.ComplianceProbe>();
+
         // ─── طبقة التحليل الاستثماري (الحاضنة) ──────────────────────────
         services.AddSingleton<Services.Incubator.SaudiDataProvider>();
         services.AddSingleton<Services.Incubator.FeasibilityPromptBuilder>();

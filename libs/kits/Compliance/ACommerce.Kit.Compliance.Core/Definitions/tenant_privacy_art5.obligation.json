@@ -1,0 +1,59 @@
+{
+  "id": "tenant_privacy_art5",
+  "level": "tenant",
+  "label": { "ar": "م.٥ — حِمايَةُ بَياناتِ المُستَهلِك (المَتجَر)", "en": null },
+  "source": {
+    "authority": "نِظامُ التِجارَةِ الإلِكترونِيَّة — هَيئَةُ الخُبَراءِ بِمَجلِسِ الوُزَراء",
+    "reference": "المادَّةُ الخامِسَة",
+    "url": "https://laws.boe.gov.sa/BoeLaws/Laws/LawDetails/360de590-0286-4fa5-a243-aa9100c31979/1",
+    "quotedAr": "لا يجوز لموفر الخدمة استعمال بيانات المستهلك الشخصية أو اتصالاته الإلكترونية لأغراض غير مصرح لها أو مسموح بها، أو الإفصاح عنها لجهة أخرى، بمقابل أو بدون مقابل، إلا بموافقة المستهلك الذي تتعلق به البيانات الشخصية أو إذا اقتضت الأنظمة ذلك.",
+    "penaltyAr": "م.١٨: إنذار · غَرامَةٌ لا تَزيدُ عَلى مِليونِ ريال · إيقافُ مُزاوَلَةِ النَشاط · حَجبُ المَحَلِّ الإلِكترونيّ."
+  },
+  "evidence": [
+    {
+      "code": "store_privacy_published",
+      "kind": "text_present",
+      "target": "legal.privacy.title",
+      "rejectionCode": "store_privacy_policy_absent",
+      "label": { "ar": "سِياسَةُ خُصوصِيَّةِ المَتجَرِ مَنشورَة", "en": null },
+      "remedyRoute": "/{slug}/legal/privacy",
+      "remedy": { "ar": "تُنشَرُ في تَبويبِ «الخُصوصِيَّة» مِن المَعلوماتِ القانونِيَّة.", "en": null }
+    },
+    {
+      "code": "collected_data_listed",
+      "kind": "text_present",
+      "target": "legal.privacy.intro",
+      "rejectionCode": "store_privacy_collected_data_absent",
+      "label": { "ar": "ما يُجمَعُ مِن بَياناتٍ مَذكور", "en": null },
+      "remedyRoute": "/{slug}/legal/privacy",
+      "remedy": { "ar": "تُذكَرُ البَياناتُ المَجموعَةُ وغَرَضُ كُلٍّ مِنها.", "en": null }
+    },
+    {
+      "code": "third_party_sharing_stated",
+      "kind": "text_present",
+      "target": "legal.privacy.no_selling",
+      "rejectionCode": "store_privacy_sharing_absent",
+      "label": { "ar": "مَعَ مَن تُشارَكُ البَياناتُ مَذكور", "en": null },
+      "remedyRoute": "/{slug}/legal/privacy",
+      "remedy": { "ar": "يُذكَرُ الإفصاحُ لِأَطرافٍ ثالِثَةٍ وشَرطُه.", "en": null }
+    },
+    {
+      "code": "legal_hub_reachable",
+      "kind": "route_reachable",
+      "target": "/{slug}/legal/{section}",
+      "rejectionCode": "store_legal_hub_route_absent",
+      "label": { "ar": "المَعلوماتُ القانونِيَّةُ تُبلَغُ بِالنَقر", "en": null },
+      "remedyRoute": "/{slug}/legal/privacy",
+      "remedy": { "ar": "مَسارٌ مُسَجَّلٌ ومَدخَلٌ في صَفحَةِ «حِسابي».", "en": null }
+    }
+  ],
+  "notCheckable": [
+    {
+      "code": "tenant_specific_text",
+      "reason": {
+        "ar": "نَصُّ `LegalHub` اليَومَ مُوَحَّدٌ لِكُلِّ المُستَأجِرين ولا يُخَصَّص — و`Terms.razor` يَعتَرِفُ صَراحَةً: «لِكُلّ مَتجَر يُمكِن لاحِقاً تَخصيص نَصّ الشُروط (TenantTermsHtml) — حاليّاً نَستَخدِم نَصّ عامّ». فَهذا الشاهِدُ يُقاسُ اليَومَ عَلى نَصِّ المَنَصَّةِ لِكُلِّ مَتجَر، ولا يُميِّزُ مَتجَراً عَن مَتجَر.",
+        "en": null
+      }
+    }
+  ]
+}

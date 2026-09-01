@@ -1,0 +1,59 @@
+{
+  "id": "tenant_disclosure_art6",
+  "level": "tenant",
+  "label": { "ar": "م.٦ — الإفصاحُ عَن هُوِيَّةِ التاجِر", "en": null },
+  "source": {
+    "authority": "نِظامُ التِجارَةِ الإلِكترونِيَّة — هَيئَةُ الخُبَراءِ بِمَجلِسِ الوُزَراء",
+    "reference": "المادَّةُ السادِسَة",
+    "url": "https://laws.boe.gov.sa/BoeLaws/Laws/LawDetails/360de590-0286-4fa5-a243-aa9100c31979/1",
+    "quotedAr": "على موفر الخدمة الإفصاح في محله الإلكتروني عن البيانات الآتية: أ- اسمه أو أي بيان مميز له، وعنوانه. ب- وسائل الاتصال به. ج- اسم السجل المقيد فيه ورقمه إن كان مقيداً في سجل تجاري أو سجل آخر متاح للعموم.",
+    "penaltyAr": "م.١٨: إنذار · غَرامَةٌ لا تَزيدُ عَلى مِليونِ ريال · إيقافُ مُزاوَلَةِ النَشاط · حَجبُ المَحَلِّ الإلِكترونيّ."
+  },
+  "evidence": [
+    {
+      "code": "merchant_identity_published",
+      "kind": "text_filled",
+      "target": "legal.merchant.identity",
+      "rejectionCode": "merchant_identity_absent",
+      "label": { "ar": "اسمُ التاجِرِ وعُنوانُه في مَتجَرِه (م.٦/أ)", "en": null },
+      "remedyRoute": "/{slug}/legal/merchant",
+      "remedy": { "ar": "يُملَأُ المِفتاح legal.merchant.identity. ولا يُخترَعُ اسمُ كِيانٍ ولا عُنوان (القاعِدَة ١٦).", "en": null }
+    },
+    {
+      "code": "merchant_contact_published",
+      "kind": "text_filled",
+      "target": "legal.merchant.contact",
+      "rejectionCode": "merchant_contact_absent",
+      "label": { "ar": "وَسائِلُ الاتِّصالِ بِالتاجِر (م.٦/ب)", "en": null },
+      "remedyRoute": "/{slug}/legal/merchant",
+      "remedy": { "ar": "يُملَأُ المِفتاح legal.merchant.contact بِوَسيلَةٍ تَعمَل.", "en": null }
+    },
+    {
+      "code": "merchant_registration_published",
+      "kind": "text_filled",
+      "target": "legal.merchant.registration",
+      "rejectionCode": "merchant_registration_absent",
+      "label": { "ar": "اسمُ السِجِلِّ ورَقمُه (م.٦/ج)", "en": null },
+      "remedyRoute": "/{slug}/legal/merchant",
+      "remedy": { "ar": "يُملَأُ المِفتاح legal.merchant.registration، أَو يُذكَرُ صَراحَةً أَنَّ النَشاطَ غَيرُ مُقَيَّدٍ في سِجِلٍّ مُتاحٍ لِلعُموم.", "en": null }
+    },
+    {
+      "code": "merchant_disclosure_reachable",
+      "kind": "route_reachable",
+      "target": "/{slug}/legal/{section}",
+      "rejectionCode": "merchant_disclosure_route_absent",
+      "label": { "ar": "الإفصاحُ يُبلَغُ بِالنَقر", "en": null },
+      "remedyRoute": "/{slug}/legal/merchant",
+      "remedy": { "ar": "تَبويبٌ في المَعلوماتِ القانونِيَّةِ يَعرِضُ الحُقولَ الثَلاثَة.", "en": null }
+    }
+  ],
+  "notCheckable": [
+    {
+      "code": "per_tenant_values",
+      "reason": {
+        "ar": "قِيَمُ هذِه الحُقولِ اليَومَ في قامُوسِ المَنَصَّةِ لا في وَثيقَةِ المُستَأجِر — فَمَلؤُها يَملَأُها لِكُلِّ المَتاجِر. وحَقلٌ عَلى `Tenant` لِكُلِّ مَتجَرٍ قَرارُ مالِك: أَيُطلَبُ مِن كُلِّ تاجِرٍ عِندَ الإنشاء، أَم يَبقى إفصاحُ المَنَصَّةِ نائِباً عَنه؟",
+        "en": null
+      }
+    }
+  ]
+}

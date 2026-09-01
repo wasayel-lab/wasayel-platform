@@ -1,0 +1,57 @@
+{
+  "id": "platform_abuse_reporting",
+  "level": "platform",
+  "label": { "ar": "آلِيَّةُ تَبليغٍ مَعَ استِجابَة (‏App Store 1.2)", "en": null },
+  "source": {
+    "authority": "Apple App Store Review Guidelines",
+    "reference": "1.2 User-Generated Content",
+    "url": "https://developer.apple.com/app-store/review/guidelines/",
+    "quotedAr": "A mechanism to report offensive content and timely responses to concerns.",
+    "penaltyAr": "رَفضُ المُراجَعَة أَو إزالَةُ التَطبيق."
+  },
+  "evidence": [
+    {
+      "code": "listing_report_endpoint",
+      "kind": "route_reachable",
+      "target": "/{slug}/listings/{id}/report",
+      "rejectionCode": "listing_report_endpoint_absent",
+      "label": { "ar": "تَبليغٌ عَن إعلان", "en": null },
+      "remedyRoute": null,
+      "remedy": { "ar": "نُقطَةُ تَبليغٍ عَلى صَفحَةِ الإعلان.", "en": null }
+    },
+    {
+      "code": "moderator_response_screen",
+      "kind": "route_reachable",
+      "target": "/studio/apps/{slug}/tickets/{id}",
+      "rejectionCode": "moderator_response_screen_absent",
+      "label": { "ar": "شاشَةُ رَدٍّ عَلى البَلاغ", "en": null },
+      "remedyRoute": null,
+      "remedy": { "ar": "شاشَةٌ يَرُدُّ مِنها المُشرِفُ ويُغلِقُ البَلاغ.", "en": null }
+    },
+    {
+      "code": "user_report_endpoint",
+      "kind": "route_reachable",
+      "target": "/{slug}/users/{id}/report",
+      "rejectionCode": "user_report_endpoint_absent",
+      "label": { "ar": "تَبليغٌ عَن مُستَخدِمٍ أَو مُحادَثَة", "en": null },
+      "remedyRoute": null,
+      "remedy": { "ar": "قَرارُ مالِك: التَبليغُ اليَومَ عَن الإعلاناتِ وَحدَها؛ و‏`ChatRoom.razor` بِصِفرِ نُقطَةِ تَبليغ. يُبنى عِندَ حَسمِ مَن يَستَقبِلُ البَلاغَ وكَيفَ يُغلَق.", "en": null }
+    }
+  ],
+  "notCheckable": [
+    {
+      "code": "timely_responses",
+      "reason": {
+        "ar": "«‏timely responses» قِياسُ زَمَنٍ عَلى تَذاكِرَ حَيَّة، لا مُفرَدَةٌ في قامُوسٍ ولا مَسارٌ في جَدوَل. الاستِجابَةُ مَوجودَةٌ آلِيّاً (نَموذَجُ رَدٍّ وإغلاق)، وسُرعَتُها تُقاسُ عَلى بَياناتِ التَشغيلِ لا هُنا.",
+        "en": null
+      }
+    },
+    {
+      "code": "reports_kit_is_dead_code",
+      "reason": {
+        "ar": "فَخٌّ مَقيسٌ يَجِبُ أَن يَعرِفَه مَن يُوَسِّعُ هذا البَند: حُزمَة `libs/kits/Reports/` كودٌ مَيِّت — ‏`SubmitReport|ResolveReport` بِصِفرِ مُنادٍ مِن التَطبيق، لِأَنَّ المَسارَ الحَيَّ يَكتُبُ `Ticket` لا `Report`. فَفاحِصٌ يَعُدُّ المَشاريعَ بَدَلَ الشُهودِ سَيُخضِرُ هذا البَندَ كَذِباً.",
+        "en": null
+      }
+    }
+  ]
+}

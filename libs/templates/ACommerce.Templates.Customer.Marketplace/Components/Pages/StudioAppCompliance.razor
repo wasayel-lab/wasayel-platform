@@ -1,0 +1,153 @@
+@page "/studio/apps/{slug}/compliance"
+@using ACommerce.Kit.Compliance
+@using ACommerce.Kit.Tenants
+@inject Services.Incubator.StudioAuth Auth
+@inject Services.Queries.TenantDirectory Tenants
+@inject Services.Compliance.ComplianceProbe Probe
+@inject L L
+
+@*
+    لَوحَةُ الامتِثالِ النِظاميّ — **وهي المَدخَلُ الَّذي يَجعَلُ
+    الفاحِصَ مَوجوداً** (القاعِدَة ١٢). فاحِصٌ يُقاسُ في اختِبارٍ ولا
+    يَراهُ صاحِبُ المَتجَرِ لا يَسُدُّ مُخالَفَةً واحِدَة.
+
+    وتَعرِضُ ثَلاثَةَ أَشياءَ لِكُلِّ بَند: **الشاهِدَ ومَصدَرَه
+    ورابِطَ سَدِّه** — لا حُكماً مُجَرَّداً. والمَصدَرُ مَنقولٌ
+    بِجِوارِه لِيُقرَأَ لا لِيُصَدَّق.
+
+    **والعَدّادُ جُزءٌ مِن العَقد** (القاعِدَة ١٠): «صِفرُ نَقص» بِلا
+    عَدَدٍ لا يُميَّزُ عَن أَداةٍ لا تَرى.
+*@
+
+<StudioShell Title="@(tenant?.Name ?? L["studio.app.title_fallback"])" Active="home">
+    <TopBarActions>
+        <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">@L.Markup("studio.app_nav.my_board")</a>
+    </TopBarActions>
+    <ChildContent>
+        @if (tenant is null)
+        {
+            <div class="st-card">@L.Markup("studio.app.not_found")</div>
+        }
+        else
+        {
+            <div class="studio-page-head">
+                <h1 style="margin:0;">@L.Markup("studio.compliance.title")</h1>
+                <p style="margin:4px 0 0;color:var(--st-muted);font-size:14px;">@L.Markup("studio.compliance.lead")</p>
+            </div>
+
+            @foreach (var report in new[] { tenantReport!, platformReport! })
+            {
+                <div class="st-section-title">
+                    @(report.Subject.Level == ComplianceLevels.Tenant
+                        ? L["studio.compliance.tenant_title"]
+                        : L["studio.compliance.platform_title"])
+                </div>
+
+                @if (report.IsBlind)
+                {
+                    <div class="st-card ac-alert ac-alert-danger">
+                        @L.Markup("studio.compliance.blind")
+                    </div>
+                }
+                else
+                {
+                    <div class="st-card" style="font-size:13px;color:var(--st-muted);">
+                        @L.Markup("studio.compliance.counter",
+                                  report.ObligationsInspected, report.EvidenceChecked,
+                                  report.ObligationsSatisfied, report.EvidenceMissing)
+                    </div>
+                }
+
+                @foreach (var r in report.Results)
+                {
+                    <div class="st-card">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <span class="@(r.IsSatisfied ? "st-chip-success" : "st-chip-danger")"
+                                  style="padding:4px 10px;border-radius:999px;font-size:12px;">
+                                @(r.IsSatisfied ? L["studio.compliance.satisfied"] : L["studio.compliance.missing_badge"])
+                            </span>
+                            <strong style="flex:1;">@ComplianceText.Get(r.Obligation.Label, L.Lang)</strong>
+                        </div>
+
+                        <p style="margin:8px 0 0;font-size:12px;color:var(--st-muted);">
+                            @L.Markup("studio.compliance.source_label"): @r.Obligation.Source.Authority — @r.Obligation.Source.Reference
+                        </p>
+                        <blockquote style="margin:6px 0;font-size:12px;color:var(--st-muted);border-inline-start:3px solid var(--st-faint);padding-inline-start:10px;">
+                            @r.Obligation.Source.QuotedAr
+                        </blockquote>
+                        @if (!string.IsNullOrEmpty(r.Obligation.Source.PenaltyAr))
+                        {
+                            <p style="margin:0;font-size:12px;color:var(--ac-danger-ink);">
+                                @L.Markup("studio.compliance.penalty_label"): @r.Obligation.Source.PenaltyAr
+                            </p>
+                        }
+
+                        @foreach (var e in r.Evidence)
+                        {
+                            <div style="margin-top:10px;padding-inline-start:10px;
+                                        border-inline-start:3px solid @(e.IsMissing ? "var(--ac-danger)" : "var(--st-success)");">
+                                <strong style="font-size:13px;">@ComplianceText.Get(e.Requirement.Label, L.Lang)</strong>
+                                <p style="margin:4px 0;font-size:12px;color:var(--st-muted);">@e.DetailAr</p>
+
+                                @if (e.IsMissing)
+                                {
+                                    <p style="margin:4px 0;font-size:11px;color:var(--st-muted);">
+                                        @L.Markup("studio.compliance.rejection_label"): <code>@e.RejectionCode</code>
+                                    </p>
+                                    <p style="margin:4px 0;font-size:12px;">
+                                        @L.Markup("studio.compliance.remedy_label"):
+                                        @ComplianceText.Get(e.Requirement.Remedy, L.Lang)
+                                    </p>
+                                    @if (!string.IsNullOrEmpty(e.Requirement.RemedyRoute))
+                                    {
+                                        <a class="st-btn st-btn-light"
+                                           href="@ResolveRemedy(e.Requirement.RemedyRoute!)">@L.Markup("studio.compliance.fix_link")</a>
+                                    }
+                                }
+                            </div>
+                        }
+
+                        @if (r.Obligation.NotCheckable.Count > 0)
+                        {
+                            <details style="margin-top:10px;">
+                                <summary style="font-size:12px;cursor:pointer;">@L.Markup("studio.compliance.uncheckable_title")</summary>
+                                <p style="font-size:11px;color:var(--st-muted);margin:6px 0 0;">@L.Markup("studio.compliance.uncheckable_note")</p>
+                                <ul style="font-size:12px;color:var(--st-muted);">
+                                    @foreach (var n in r.Obligation.NotCheckable)
+                                    {
+                                        <li>@ComplianceText.Get(n.Reason, L.Lang)</li>
+                                    }
+                                </ul>
+                            </details>
+                        }
+                    </div>
+                }
+            }
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    Tenant? tenant;
+    ComplianceReport? tenantReport;
+    ComplianceReport? platformReport;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        tenant = await Tenants.FindAsync(Slug);
+        if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) tenant = null;
+        if (tenant is null) return;
+
+        tenantReport   = ComplianceInspector.Inspect(Probe.TenantSubject(Slug, tenant.Name));
+        platformReport = ComplianceInspector.Inspect(Probe.PlatformSubject(Slug));
+    }
+
+    /// <summary>يُبَدِّلُ الوَسيطَ <c>{slug}</c> في رابِطِ السَدِّ
+    /// بِسِلاجِ هذا المَتجَر — فَالرابِطُ يَفتَحُ المَوضِعَ نَفسَه لا
+    /// نَمَطاً يُقرَأ.</summary>
+    string ResolveRemedy(string route) => route.Replace("{slug}", Slug, StringComparison.Ordinal);
+}

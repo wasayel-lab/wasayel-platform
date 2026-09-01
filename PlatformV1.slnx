@@ -30,6 +30,9 @@
     <Project Path="libs/kits/Cart/ACommerce.Kit.Cart.Core/ACommerce.Kit.Cart.Core.csproj" />
     <Project Path="libs/kits/Cart/ACommerce.Kit.Cart.Server/ACommerce.Kit.Cart.Server.csproj" />
   </Folder>
+  <Folder Name="/libs/kits/Compliance/">
+    <Project Path="libs/kits/Compliance/ACommerce.Kit.Compliance.Core/ACommerce.Kit.Compliance.Core.csproj" />
+  </Folder>
   <Folder Name="/libs/kits/Culture/">
     <Project Path="libs/kits/Culture/ACommerce.Kit.Culture.Core/ACommerce.Kit.Culture.Core.csproj" />
   </Folder>

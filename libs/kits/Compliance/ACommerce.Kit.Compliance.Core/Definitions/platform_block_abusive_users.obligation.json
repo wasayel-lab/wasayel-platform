@@ -1,0 +1,33 @@
+{
+  "id": "platform_block_abusive_users",
+  "level": "platform",
+  "label": { "ar": "حَجبُ المُسيئين (‏App Store 1.2)", "en": null },
+  "source": {
+    "authority": "Apple App Store Review Guidelines",
+    "reference": "1.2 User-Generated Content",
+    "url": "https://developer.apple.com/app-store/review/guidelines/",
+    "quotedAr": "The ability to block abusive users from the service.",
+    "penaltyAr": "رَفضُ المُراجَعَة أَو إزالَةُ التَطبيق."
+  },
+  "evidence": [
+    {
+      "code": "block_endpoint",
+      "kind": "route_reachable",
+      "target": "/{slug}/users/{id}/block",
+      "rejectionCode": "user_block_endpoint_absent",
+      "label": { "ar": "فِعلُ حَظرٍ يَملِكُه المُستَخدِمُ أَو المُشرِف", "en": null },
+      "remedyRoute": null,
+      "remedy": { "ar": "قَرارُ مالِك: أَبِيَدِ مُشرِفِ المَتجَر، أَم بِيَدِ مالِكِ المَنَصَّة، أَم حَظرٌ بَينَ مُستَخدِمَين؟ وأَبِل تَطلُبُ القُدرَةَ ولا تُسَمّي الفاعِل، والثَلاثَةُ تَحتاجُ شاشاتٍ مُختَلِفَة.", "en": null }
+    },
+    {
+      "code": "suspension_promise_is_kept",
+      "kind": "route_reachable",
+      "target": "/{slug}/users/{id}/suspend",
+      "rejectionCode": "account_suspension_endpoint_absent",
+      "label": { "ar": "تَعليقُ الحِسابِ المَوعودُ في الشُروط", "en": null },
+      "remedyRoute": null,
+      "remedy": { "ar": "الشُروطُ تَبيعُ ما لا تَفرِضُه: platform.terms.s3_note يَقولُ «يَحِقُّ لَنا رَفضُ إنشاءِ حِسابٍ أَو تَعليقُه» و‏legal.terms.violations يَقولُ التَعليقَ الفَوريّ — وصِفرُ مُنَفِّذ. يُبنى المُنَفِّذُ أَو يُصَحَّحُ الوَعد.", "en": null }
+    }
+  ],
+  "notCheckable": []
+}

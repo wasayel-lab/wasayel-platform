@@ -1,0 +1,48 @@
+{
+  "id": "tenant_licence_art9",
+  "level": "tenant",
+  "label": { "ar": "م.٩ — بَياناتُ التَرخيصِ لِلمِهَنِ المُنَظَّمَة", "en": null },
+  "source": {
+    "authority": "نِظامُ التِجارَةِ الإلِكترونِيَّة — هَيئَةُ الخُبَراءِ بِمَجلِسِ الوُزَراء",
+    "reference": "المادَّةُ التاسِعَة",
+    "url": "https://laws.boe.gov.sa/BoeLaws/Laws/LawDetails/360de590-0286-4fa5-a243-aa9100c31979/1",
+    "quotedAr": "على موفر الخدمة الذي يمارس مهنة تخضع لتنظيم معين، وتتطلب ترخيصاً أو تصريحاً بممارستها، الإفصاح عما يأتي: أ- الجهة المسجل لديها، وبيانات الترخيص أو التصريح الصادر عنها. ب- اللقب المهني المعمول به، والدولة التي منحته.",
+    "penaltyAr": "م.١٨: إنذار · غَرامَةٌ لا تَزيدُ عَلى مِليونِ ريال · إيقافُ مُزاوَلَةِ النَشاط · حَجبُ المَحَلِّ الإلِكترونيّ."
+  },
+  "evidence": [
+    {
+      "code": "licence_authority_and_number",
+      "kind": "text_filled",
+      "target": "legal.merchant.licence_authority",
+      "rejectionCode": "licence_authority_absent",
+      "label": { "ar": "الجِهَةُ المُرَخِّصَةُ ورَقمُ التَرخيص (م.٩/أ)", "en": null },
+      "remedyRoute": "/{slug}/legal/merchant",
+      "remedy": { "ar": "يُملَأُ المِفتاح legal.merchant.licence_authority. ولا يُخترَعُ رَقمُ تَرخيصٍ ولا اسمُ جِهَة (القاعِدَة ١٦).", "en": null }
+    },
+    {
+      "code": "professional_title_and_country",
+      "kind": "text_filled",
+      "target": "legal.merchant.licence_title",
+      "rejectionCode": "licence_title_absent",
+      "label": { "ar": "اللَقَبُ المِهَنِيُّ والدَولَةُ المانِحَة (م.٩/ب)", "en": null },
+      "remedyRoute": "/{slug}/legal/merchant",
+      "remedy": { "ar": "يُملَأُ المِفتاح legal.merchant.licence_title.", "en": null }
+    }
+  ],
+  "notCheckable": [
+    {
+      "code": "who_is_subject",
+      "reason": {
+        "ar": "المادَّةُ مَشروطَة: عِيادَةٌ أَو مَكتَبٌ هَندَسِيٌّ أَو مُحاماةٌ تَخضَع، وسوقُ سِلَعٍ مُستَعمَلَةٍ لا تَخضَع. فَالفاحِصُ يَحتاجُ سِمَةَ نَمَطٍ تَقولُ أَيُّ مَتجَرٍ يَخضَعُ لَها — ولا سِمَةَ اليَوم. وحَتّى تُحسَم، يُعرَضُ البَندُ لِكُلِّ مَتجَرٍ لِيُقَرِّرَ صاحِبُه، ولا يُفتَرَضُ خُضوعُه ولا إعفاؤُه.",
+        "en": null
+      }
+    },
+    {
+      "code": "who_verifies",
+      "reason": {
+        "ar": "قَرارُ مالِك: مَن يَتَحَقَّقُ مِن صِحَّةِ الرَقَم — المالِك، أَم إقرارٌ مِن التاجِر، أَم تَكامُلٌ مَعَ جِهَةِ التَرخيص؟ والفاحِصُ يَقيسُ الامتِلاءَ لا الصِحَّة.",
+        "en": null
+      }
+    }
+  ]
+}

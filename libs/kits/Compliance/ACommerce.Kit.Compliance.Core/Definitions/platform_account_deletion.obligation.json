@@ -1,0 +1,70 @@
+{
+  "id": "platform_account_deletion",
+  "level": "platform",
+  "label": { "ar": "حَذفُ الحِسابِ داخِلَ التَطبيق (‏App Store 5.1.1(v))", "en": null },
+  "source": {
+    "authority": "Apple App Store Review Guidelines",
+    "reference": "5.1.1(v) Account Sign-In",
+    "url": "https://developer.apple.com/app-store/review/guidelines/",
+    "quotedAr": "If your app supports account creation, you must also offer account deletion within the app.",
+    "penaltyAr": "رَفضُ المُراجَعَة أَو إزالَةُ التَطبيق. والحُكمُ عَلى التَطبيقِ كُلِّه لا عَلى مُستَأجِرٍ واحِد."
+  },
+  "evidence": [
+    {
+      "code": "store_privacy_does_not_refer_outside",
+      "kind": "text_free_of",
+      "target": "legal.privacy.deletion",
+      "forbiddenPhrases": ["تَواصَل عَبر", "صَفحَة الدَّعم", "راسِلنا", "بِمُراسَلَتِنا"],
+      "rejectionCode": "store_privacy_refers_deletion_outside_app",
+      "label": { "ar": "خُصوصِيَّةُ المَتجَرِ لا تُحيلُ الحَذفَ إلى خارِجِ التَطبيق", "en": null },
+      "remedyRoute": "/{slug}/me/delete",
+      "remedy": { "ar": "يُعادُ صَوغُ المِفتاح legal.privacy.deletion لِيَدُلَّ عَلى المَسارِ داخِلَ التَطبيق.", "en": null }
+    },
+    {
+      "code": "platform_privacy_does_not_refer_outside",
+      "kind": "text_free_of",
+      "target": "platform.privacy.s6_body",
+      "forbiddenPhrases": ["بِمُراسَلَتِنا", "بِمُراسَلَتِنَا"],
+      "rejectionCode": "platform_privacy_refers_deletion_outside_app",
+      "label": { "ar": "خُصوصِيَّةُ المَنَصَّةِ لا تُحيلُ الحَذفَ إلى المُراسَلَة", "en": null },
+      "remedyRoute": "/privacy",
+      "remedy": { "ar": "يُعادُ صَوغُ المِفتاح platform.privacy.s6_body لِيَدُلَّ عَلى المَسارِ داخِلَ التَطبيق.", "en": null }
+    },
+    {
+      "code": "deletion_screen_reachable",
+      "kind": "route_reachable",
+      "target": "/{slug}/me/delete",
+      "rejectionCode": "account_deletion_screen_absent",
+      "label": { "ar": "شاشَةُ حَذفِ الحِسابِ تُبلَغُ بِالنَقر", "en": null },
+      "remedyRoute": "/{slug}/me/delete",
+      "remedy": { "ar": "شاشَةٌ داخِلَ التَطبيقِ يَبلُغُها المُستَخدِمُ مِن «حِسابي».", "en": null }
+    },
+    {
+      "code": "deletion_endpoint_present",
+      "kind": "route_reachable",
+      "target": "/{slug}/me/delete/confirm",
+      "rejectionCode": "account_deletion_endpoint_absent",
+      "label": { "ar": "نُقطَةُ التَنفيذِ الفِعليِّ لِلحَذف", "en": null },
+      "remedyRoute": "/{slug}/me/delete",
+      "remedy": { "ar": "نُقطَةٌ تُنَفِّذُ الحَذفَ فِعلاً — وشاشَةٌ بِلا نُقطَةٍ وَعدٌ لا فِعل.", "en": null }
+    },
+    {
+      "code": "deletion_scope_published",
+      "kind": "text_present",
+      "target": "account.delete.retained_note",
+      "rejectionCode": "account_deletion_scope_unstated",
+      "label": { "ar": "ما يُحذَفُ وما يُحتَفَظُ بِه مَنشورٌ لِلمُستَخدِم", "en": null },
+      "remedyRoute": "/{slug}/me/delete",
+      "remedy": { "ar": "تُذكَرُ حُدودُ الحَذفِ صَراحَةً — فَحَذفٌ يُخفي ما يُبقيه يَعِدُ بِما لا يَفي.", "en": null }
+    }
+  ],
+  "notCheckable": [
+    {
+      "code": "actual_erasure_in_storage",
+      "reason": {
+        "ar": "أَنَّ البَياناتِ زالَت فِعلاً مِن كُلِّ مَخزَنٍ (نُسَخُ الاحتِياطِ ومَجرى الأَحداثِ ومَخزَنُ المِلَفّات) شاهِدٌ مِن قاعِدَةِ البَياناتِ لا مِن مَسارٍ مُسَجَّل. وهذا الفاحِصُ يَقيسُ أَنَّ المَسارَ مَوجودٌ وأَنَّ النَصَّ لا يُحيلُ إلى الخارِج — لا أَنَّ الحَذفَ تامّ.",
+        "en": null
+      }
+    }
+  ]
+}

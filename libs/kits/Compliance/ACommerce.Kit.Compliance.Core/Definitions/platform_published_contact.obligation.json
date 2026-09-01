@@ -1,0 +1,33 @@
+{
+  "id": "platform_published_contact",
+  "level": "platform",
+  "label": { "ar": "بَياناتُ اتِّصالٍ مَنشورَة (‏App Store 1.2)", "en": null },
+  "source": {
+    "authority": "Apple App Store Review Guidelines",
+    "reference": "1.2 User-Generated Content",
+    "url": "https://developer.apple.com/app-store/review/guidelines/",
+    "quotedAr": "Published contact information so users can easily reach you.",
+    "penaltyAr": "رَفضُ المُراجَعَة أَو إزالَةُ التَطبيق."
+  },
+  "evidence": [
+    {
+      "code": "contact_page_reachable",
+      "kind": "route_reachable",
+      "target": "/contact",
+      "rejectionCode": "contact_page_route_absent",
+      "label": { "ar": "صَفحَةُ التَواصُلِ تُبلَغُ بِالنَقر", "en": null },
+      "remedyRoute": "/contact",
+      "remedy": { "ar": "مَسارٌ مُسَجَّلٌ ورابِطٌ في التَذييل.", "en": null }
+    },
+    {
+      "code": "contact_value_is_real",
+      "kind": "text_filled",
+      "target": "platform.doc.contact_email",
+      "rejectionCode": "contact_value_still_placeholder",
+      "label": { "ar": "قيمَةُ التَواصُلِ حَقيقِيَّةٌ لا نائِبَة", "en": null },
+      "remedyRoute": "/contact",
+      "remedy": { "ar": "يُملَأُ المِفتاح platform.doc.contact_email. وصَفحَةٌ تَعرِضُ نائِباً لَيسَت «بَياناتٍ مَنشورَة».", "en": null }
+    }
+  ],
+  "notCheckable": []
+}

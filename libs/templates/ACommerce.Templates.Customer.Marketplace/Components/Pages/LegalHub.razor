@@ -23,6 +23,22 @@
            href="@AuthSession.LinkFor(Slug, Role, "legal/privacy")">@L.Markup("legal.hub.tab_privacy")</a>
         <a class="ac-chip @(Section == "returns" ? "ac-chip-active" : "")"
            href="@AuthSession.LinkFor(Slug, Role, "legal/returns")">@L.Markup("legal.hub.tab_returns")</a>
+        @* التَبويبانِ الجَديدانِ يَظهَرانِ **حينَ يُملَآن لا قَبلَه**
+           (القاعِدَة ١٢): تَبويبٌ يَعرِضُ نائِباً لِزائِرٍ أَسوَأُ مِن
+           غِيابِه، ومَدخَلٌ يُجيبُ بِـ«قَريباً» لَيسَ مَدخَلاً.
+           و`L.IsPlaceholder` هُوَ نَفسُ القَرارِ الَّذي يَقيسُه
+           `ComplianceInspector` — فَما يُخفى هُنا يَظهَرُ أَحمَرَ في
+           لَوحَةِ الامتِثال، ولا يَختَفي مِن العَينَين مَعاً. *@
+        @if (!L.IsPlaceholder("legal.merchant.identity"))
+        {
+            <a class="ac-chip @(Section == "merchant" ? "ac-chip-active" : "")"
+               href="@AuthSession.LinkFor(Slug, Role, "legal/merchant")">@L.Markup("legal.hub.tab_merchant")</a>
+        }
+        @if (!L.IsPlaceholder("legal.delay.body"))
+        {
+            <a class="ac-chip @(Section == "delay" ? "ac-chip-active" : "")"
+               href="@AuthSession.LinkFor(Slug, Role, "legal/delay")">@L.Markup("legal.hub.tab_delay")</a>
+        }
     </div>
 
     <AcCard>
@@ -38,6 +54,28 @@
                 </ul>
                 <p>@L.Markup("legal.privacy.no_selling")</p>
                 <p>@L.Markup("legal.privacy.deletion")</p>
+            }
+            else if (Section == "merchant" && !L.IsPlaceholder("legal.merchant.identity"))
+            {
+                <h2>@L.Markup("legal.merchant.title")</h2>
+                <ul>
+                    <li>@L.Markup("legal.merchant.identity")</li>
+                    <li>@L.Markup("legal.merchant.contact")</li>
+                    <li>@L.Markup("legal.merchant.registration")</li>
+                    @if (!L.IsPlaceholder("legal.merchant.licence_authority"))
+                    {
+                        <li>@L.Markup("legal.merchant.licence_authority")</li>
+                    }
+                    @if (!L.IsPlaceholder("legal.merchant.licence_title"))
+                    {
+                        <li>@L.Markup("legal.merchant.licence_title")</li>
+                    }
+                </ul>
+            }
+            else if (Section == "delay" && !L.IsPlaceholder("legal.delay.body"))
+            {
+                <h2>@L.Markup("legal.delay.title")</h2>
+                <p>@L.Markup("legal.delay.body")</p>
             }
             else if (Section == "returns")
             {

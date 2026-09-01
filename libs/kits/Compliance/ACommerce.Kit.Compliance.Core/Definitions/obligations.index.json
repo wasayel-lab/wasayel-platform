@@ -1,0 +1,17 @@
+{
+  "obligations": [
+    "platform_privacy_art5",
+    "platform_disclosure_art6",
+    "platform_account_deletion",
+    "platform_published_contact",
+    "platform_abuse_reporting",
+    "platform_block_abusive_users",
+    "platform_ugc_prepublication_filter",
+    "tenant_privacy_art5",
+    "tenant_disclosure_art6",
+    "tenant_licence_art9",
+    "tenant_ad_disclosure_art10",
+    "tenant_returns_art13",
+    "tenant_delay_cancellation_art14"
+  ]
+}

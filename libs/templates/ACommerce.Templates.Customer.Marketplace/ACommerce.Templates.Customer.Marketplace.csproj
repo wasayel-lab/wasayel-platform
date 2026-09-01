@@ -88,5 +88,10 @@
          والسَحب. -->
     <ProjectReference Include="..\..\core\ACommerce.Platform.Providers\ACommerce.Platform.Providers.csproj" />
     <ProjectReference Include="..\..\core\ACommerce.Platform.I18n\ACommerce.Platform.I18n.csproj" />
+    <!-- كاتالوجُ الالتِزاماتِ النِظامِيَّة — يَستَهلِكُه `ComplianceProbe`
+         ولَوحَةُ `/studio/apps/{slug}/compliance`. والعُدَّةُ ورَقَةٌ
+         بِلا مَرجِعٍ واحِد (فاحِصٌ نَقِيٌّ فَوقَ لَقطَةٍ مُمَرَّرَة)،
+         فَلا يَتَسَرَّبُ شَيءٌ إلى القالِبِ عَبرَها. -->
+    <ProjectReference Include="..\..\kits\Compliance\ACommerce.Kit.Compliance.Core\ACommerce.Kit.Compliance.Core.csproj" />
   </ItemGroup>
 </Project>
