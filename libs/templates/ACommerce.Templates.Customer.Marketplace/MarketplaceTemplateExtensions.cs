@@ -738,6 +738,60 @@ public static class MarketplaceTemplateExtensions
         }).DisableAntiforgery()
           .RequireStoreWritable();
 
+        // ─── حَذفُ الحِسابِ داخِلَ التَطبيق ──────────────────────────────
+        //
+        // **المُخالَفَةُ الَّتي بَنَت هذِه النُقطَة**: شَرطُ المَتجَر
+        // ‏5.1.1(v) يوجِبُ حَذفَ الحِسابِ داخِلَ التَطبيق، وكانَ الوُرودُ
+        // الوَحيدُ لِعِبارَةِ حَذفِ الحِسابِ في المُستودَعِ كُلِّه هُوَ
+        // الجُملَةَ الَّتي تُحيلُ المُستَخدِمَ إلى صَفحَةِ الدَعم.
+        //
+        // **والقَرارُ كُلُّه في دالَّةٍ نَقِيَّة** (القاعِدَة ٦):
+        // `AccountDeletion.Validate` تُخَوِّل، و`Erase` تُحدِثُ الأَثَر —
+        // فَالجِسمُ هُنا يُطَبِّقُهُما ولا يَحمِلُ سَطرَ قَرارٍ واحِد،
+        // ويُقاسُ القَرارُ بِلا قاعِدَةِ بَيانات.
+        //
+        // **والتَرتيبُ مَقصود**: يُمحى المُحتَوى الشَخصيّ، ثُمَّ يُحفَظ،
+        // ثُمَّ تُمسَح كوكيزُ كُلِّ الأَدوار. جَلسَةٌ تَبقى بَعدَ حَذفٍ
+        // تَعرِض شاشاتٍ لِحِسابٍ لَم يَعُد.
+        //
+        // **ويَحقِنُ `IDocumentSession` لا `IDocumentStore`** (القاعِدَة ٧):
+        // الجَلسَةُ المَحقونَة تَحمِلُ مُستَأجِرَ المَسارِ ويُركَّبُ
+        // حَولَها الوَسيطُ المُعامَلاتيّ — ونُقطَةٌ تَفتَحُ جَلسَتَها
+        // بِيَدِها تَخرُجُ مِن المُعامَلَةِ ومِن الصُندوقِ الصادِر.
+        // وسِجِلُّ `PinnedRoutes.StoreTakers` وُجِدَ لِيَتَقَلَّص، فَلا
+        // يُضافُ إلَيه سَطرٌ جَديدٌ ما دامَ الشَكلُ الصَحيحُ مُتاحاً.
+        app.MapPost("/{slug}/me/delete/confirm",
+            async (string slug, HttpContext http, HttpRequest req, IDocumentSession session,
+                   Services.Queries.TenantDirectory tenants, L l) =>
+        {
+            var token = AuthSession.ResolveToken(req, slug);
+            var parsed = AuthHandlers.ParseToken(token);
+            if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
+            var (userId, tenantSlug, _) = parsed.Value;
+            if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
+
+            var user = await session.LoadAsync<User>(userId);
+
+            // كَلِمَةُ التَأكيدِ مِن القامُوسِ لا حَرفِيَّةً في بَوّابَة
+            // (القاعِدَة ١١) — والمَعروضُ عَلى الشاشَةِ هُوَ المُقارَنُ بِه.
+            var violation = ACommerce.Kit.Auth.AccountDeletion.Validate(
+                user, req.Form["confirm"].ToString(), l["account.delete.confirm_word"]);
+
+            if (violation is not null)
+                return Results.Redirect(Link(req, slug, $"me/delete?err={violation.Code}"));
+
+            ACommerce.Kit.Auth.AccountDeletion.Erase(user!, DateTime.UtcNow);
+            session.Store(user!);
+            await session.SaveChangesAsync();
+
+            var tenant = await tenants.FindAsync(slug);
+            AuthSession.ClearAllCookiesForTenant(http.Response, slug,
+                tenant?.Roles.Select(r => r.Slug) ?? Array.Empty<string>());
+
+            return Results.Redirect($"/{slug}?deleted=1");
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
+
         // ─── Plans subscribe ────────────────────────────────────────────
         // **الباقَةُ بِسِعرٍ لا تُباعُ مِن هُنا إطلاقاً.** كانَ الجِسمُ
         // يُحَمِّل الباقَةَ **ويَتَجاهَل `Price`** فَيَمنَح الحِصَّةَ

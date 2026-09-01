@@ -87,6 +87,9 @@ public class AdminSelfGrantTests
         new("apps/V1.App/Seed/TestDataSeeder.cs",
             "user.ActiveRole = slugRole;",
             "نَفسُ البَذرَة، فَرعُ التَحديث — نَفسُ الحُجَّة حَرفاً."),
+        new("libs/kits/Auth/ACommerce.Kit.Auth.Core/AccountDeletion.cs",
+            "user.ActiveRole = \"\";",
+            "مَحوُ الدَورِ عِندَ حَذفِ الحِساب — **نُزولٌ إلى لا شَيء، لا مَنحٌ ولا تَرَقٍّ**. والقيمَةُ ثابِتَةٌ في الكودِ (سِلسِلَةٌ فارِغَة) لا مِن استِمارَة، فَلا مَدخَلَ يَختارُها. وحارِسُ المَنعِ الذاتيِّ عَلَيها يَقلِبُ مَعناه: كانَ سَيَمنَعُ المُستَخدِمَ مِن **التَخَلّي** عَن دَورِه."),
     };
 
     private sealed record Write(string File, int Line, string Statement, string Window)

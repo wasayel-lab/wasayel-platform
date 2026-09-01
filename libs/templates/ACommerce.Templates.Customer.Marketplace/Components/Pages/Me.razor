@@ -113,7 +113,19 @@
             <AcActionCard Label="@(L["me.action.legal"])" IconName="info"     Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"legal")" />
         </div>
 
+        @* المَدخَلُ نِصفُ الميزَة لا مُهِمَّةٌ تالِيَة (القاعِدَة ١٢):
+           شاشَةُ حَذفِ الحِسابِ مَبنِيَّةٌ ونُقطَتُها تَعمَل، وبِلا هذا
+           السَطرِ **غَيرُ مَوجودَة** — وشَرطُ المَتجَر ‏5.1.1(v) يوجِبُ
+           أَن يَبلُغَها المُستَخدِمُ بِالنَقر داخِلَ التَطبيق، لا أَن
+           يُراسِلَ الدَعم. *@
         <div style="margin-top:16px;">
+            <a class="ac-btn ac-btn-ghost" style="width:100%;color:var(--ac-danger-ink);"
+               href="@AuthSession.LinkFor(Slug, Role, $"me/delete")">
+                <AcIcon Name="trash" Size="18" /> @L.Markup("account.delete.entry")@((MarkupString)"\n            ")
+            </a>
+        </div>
+
+        <div style="margin-top:8px;">
             <form method="post" action="@($"/{Slug}/auth/logout")" style="margin:0;">
                 <button type="submit" class="ac-btn ac-btn-ghost"
                         style="color:var(--ac-danger-ink);width:100%;">

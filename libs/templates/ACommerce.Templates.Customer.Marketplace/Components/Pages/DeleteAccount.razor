@@ -1,0 +1,81 @@
+@page "/{slug}/me/delete"
+@page "/{slug}/r/{role}/me/delete"
+@inject AuthSession Auth
+@inject L L
+
+@*
+    حَذفُ الحِسابِ داخِلَ التَطبيق — شَرطُ المَتجَر ‏5.1.1(v).
+
+    **ولِماذا شاشَةٌ وسيطَةٌ لا زِرٌّ في «حِسابي»**: الحَذفُ لا رُجوعَ
+    فيه، والزِرُّ المُجاوِرُ لِزِرِّ الخُروجِ يُضغَطُ سَهواً. والشاشَةُ
+    تَحمِلُ ما لا يَحمِلُه زِرّ: **ما يُحذَفُ وما يَبقى ولِماذا** —
+    وحَذفٌ يُخفي ما يُبقيه يَعِدُ بِما لا يَفي.
+
+    **والنَصُّ كُلُّه مِن القامُوس** (القاعِدَة ١١): صِفرُ حَرفِيَّةٍ
+    عَرَبِيَّةٍ في هذا المِلَفّ.
+*@
+
+<div class="acs-page">
+    <h1 class="acm-wizard-title">@L.Markup("account.delete.title")</h1>
+
+    @if (!Auth.IsAuthenticated)
+    {
+        <AcEmptyState IconName="user"
+                      Title="@(L["me.login.title"])"
+                      Message="@(L["me.login.message"])"
+                      ActionLabel="@(L["auth.action.login"])"
+                      ActionHref="@AuthSession.LinkFor(Slug, Role, $"login")" />
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(Err))
+        {
+            <AcCard>
+                <ChildContent>
+                    <p style="color:var(--ac-danger-ink);margin:0;">@L.Markup("account.delete.mismatch")</p>
+                </ChildContent>
+            </AcCard>
+        }
+
+        <AcCard>
+            <ChildContent>
+                <p>@L.Markup("account.delete.lead")</p>
+
+                <h3>@L.Markup("account.delete.removed_title")</h3>
+                <p>@L.Markup("account.delete.removed_items")</p>
+
+                <h3>@L.Markup("account.delete.retained_title")</h3>
+                <p>@L.Markup("account.delete.retained_note")</p>
+
+                <p style="color:var(--ac-danger-ink);font-weight:600;">@L.Markup("account.delete.irreversible")</p>
+            </ChildContent>
+        </AcCard>
+
+        <AcCard>
+            <ChildContent>
+                <form method="post" action="@($"/{Slug}/me/delete/confirm")" style="margin:0;">
+                    <label for="confirm">@L.Markup("account.delete.confirm_label")</label>
+                    <input id="confirm" name="confirm" type="text" class="ac-input"
+                           autocomplete="off"
+                           placeholder="@(L["account.delete.confirm_word"])" />
+
+                    <div style="display:flex;gap:8px;margin-top:12px;">
+                        <button type="submit" class="ac-btn ac-btn-danger">@L.Markup("account.delete.submit")@((MarkupString)"\n                        ")
+                        </button>
+                        <a class="ac-btn ac-btn-ghost"
+                           href="@AuthSession.LinkFor(Slug, Role, $"me")">@L.Markup("account.delete.cancel")</a>
+                    </div>
+                </form>
+            </ChildContent>
+        </AcCard>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
+
+    /// <summary>رَمزُ الرَفضِ العائِدُ مِن النُقطَة — مِن مَعجَمِ
+    /// <c>AccountDeletion.All</c> المُغلَق.</summary>
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+}
