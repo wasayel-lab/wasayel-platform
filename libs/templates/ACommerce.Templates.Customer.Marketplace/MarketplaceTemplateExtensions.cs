@@ -754,14 +754,25 @@ public static class MarketplaceTemplateExtensions
         // ثُمَّ تُمسَح كوكيزُ كُلِّ الأَدوار. جَلسَةٌ تَبقى بَعدَ حَذفٍ
         // تَعرِض شاشاتٍ لِحِسابٍ لَم يَعُد.
         //
-        // **ويَحقِنُ `IDocumentSession` لا `IDocumentStore`** (القاعِدَة ٧):
-        // الجَلسَةُ المَحقونَة تَحمِلُ مُستَأجِرَ المَسارِ ويُركَّبُ
-        // حَولَها الوَسيطُ المُعامَلاتيّ — ونُقطَةٌ تَفتَحُ جَلسَتَها
-        // بِيَدِها تَخرُجُ مِن المُعامَلَةِ ومِن الصُندوقِ الصادِر.
-        // وسِجِلُّ `PinnedRoutes.StoreTakers` وُجِدَ لِيَتَقَلَّص، فَلا
-        // يُضافُ إلَيه سَطرٌ جَديدٌ ما دامَ الشَكلُ الصَحيحُ مُتاحاً.
+        // **ويَأخُذُ `IDocumentStore` ويَفتَحُ الجَلسَةَ بِالسلاج — وهذا
+        // تَصحيحٌ مَقيسٌ لا تَفضيل** (‏سَطرٌ في `PinnedRoutes.StoreTakers`
+        // بِسَبَبِه). كُتِبَت هذِه النُقطَةُ أَوَّلَ مَرَّةٍ تَحقِنُ
+        // `IDocumentSession` على أَنَّ «الجَلسَةَ المَحقونَةَ تَحمِلُ
+        // مُستَأجِرَ المَسار» — وذلكَ صَحيحٌ لِسَلاسِلِ **Wolverine.Http**
+        // وَحدَها، فَـ`opts.TenantId.IsRouteArgumentNamed("slug")` لا يَبلُغُ
+        // Minimal API (‏`HostingExtensions` يَقولُها، والقِياسُ الحَيُّ في
+        // `LiveOutboxTenantProofTests`: ‏`[minimal/detect=on] *DEFAULT*`).
+        // و`User` وَثيقَةٌ مُتَعَدِّدَةُ الإيجار، فَكانَت
+        // `LoadAsync<User>` تَرُدُّ `null` **صامِتَةً** فَتَرتَدُّ النَقرَةُ
+        // بِـ`err=user_not_found` ولا يُحذَفُ حِساب: **شاشَةُ حَذفٍ لا
+        // تَحذِف**، وهي أَسوَأُ مِن غِيابِ الشاشَة.
+        //
+        // والسِجِلُّ وُجِدَ لِيَتَقَلَّص — ويُضافُ إلَيه هُنا سَطرٌ لِأَنَّ
+        // هذا **الشَكلُ الوَحيدُ المُمكِنُ اليَوم**: يَومَ تُرَحَّلُ
+        // النُقطَةُ إلى Wolverine.Http يُرفَعُ السَطرُ وتَعودُ الجَلسَةُ
+        // مَحقونَةً بِمُستَأجِرِها.
         app.MapPost("/{slug}/me/delete/confirm",
-            async (string slug, HttpContext http, HttpRequest req, IDocumentSession session,
+            async (string slug, HttpContext http, HttpRequest req, IDocumentStore store,
                    Services.Queries.TenantDirectory tenants, L l) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
@@ -770,6 +781,7 @@ public static class MarketplaceTemplateExtensions
             var (userId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
 
+            await using var session = store.LightweightSession(slug);
             var user = await session.LoadAsync<User>(userId);
 
             // كَلِمَةُ التَأكيدِ مِن القامُوسِ لا حَرفِيَّةً في بَوّابَة

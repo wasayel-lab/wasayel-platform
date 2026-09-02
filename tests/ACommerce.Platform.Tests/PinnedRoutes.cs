@@ -234,5 +234,21 @@ internal static class PinnedRoutes
         // ويُرفَعانِ يَومَ يُرَحَّلُ الأَربَعَةَ عَشَرَ مَعاً.
         "/studio/apps/{slug}/providers/bind",
         "/studio/apps/{slug}/providers/{capability}/revoke",
+
+        // ─── ‏2026-09-02: سَطرٌ يُضافُ لِأَنَّ البَديلَ كانَ لا يَعمَل ──
+        //
+        // نُقطَةُ تَنفيذِ حَذفِ الحِساب. كُتِبَت أَوَّلَ مَرَّةٍ تَحقِنُ
+        // `IDocumentSession` — الشَكلَ المُفَضَّلَ في هذا السِجِلِّ نَفسِه —
+        // فَلَم تَحذِف حِساباً واحِداً: جَلسَةُ Minimal API تَحمِلُ
+        // `*DEFAULT*`، و`User` مُتَعَدِّدَةُ الإيجار، فَـ`LoadAsync` تَرُدُّ
+        // `null` صامِتَةً. القِياسُ الحَيّ: ‏302 إلى
+        // `me/delete?err=user_not_found` و`deletedAt=null` بَعدَ النَقر.
+        //
+        // فَالسَطرُ هُنا **دَينٌ يُتَّخَذ لِأَنَّ عَدَمَه كانَ عَطَباً**، لا
+        // انزِلاق. ويُرفَعُ يَومَ تُرَحَّلُ النُقطَةُ إلى Wolverine.Http
+        // حَيثُ يَقَعُ كَشفُ المُستَأجِرِ فِعلاً — والحَدُّ الَّذي يَمنَعُ
+        // تِكرارَ العَطَبِ مَفروضٌ بِفَحصٍ لا بِنِيَّة:
+        // `No_minimal_api_endpoint_reads_a_tenanted_document_from_an_injected_session`.
+        "/{slug}/me/delete/confirm",
     };
 }
