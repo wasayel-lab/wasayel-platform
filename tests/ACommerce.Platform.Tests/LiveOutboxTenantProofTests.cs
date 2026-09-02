@@ -249,4 +249,53 @@ public class LiveOutboxTenantProofTests
             "أَداة عَمياء: النُقطَة لَم تُستَدعَ إطلاقاً.");
         return facts!;
     }
+
+    /// <summary>
+    /// <para><b>والطَرَفُ الثالِث — وهُوَ الَّذي كانَ تَعليقاً فَصارَ
+    /// قِياساً</b>: نُقطَةُ <b>Minimal API</b> تَحقِنُ الجَلسَةَ نَفسَها،
+    /// على مُضيفٍ كَشفُ المُستَأجِرِ فيه <b>مُفَعَّل</b> — وتَحمِلُ
+    /// <c>*DEFAULT*</c> لا وَسيطَ المَسار.</para>
+    ///
+    /// <para><b>ولِماذا يُكتَبُ هذا الآن</b>: الجُملَةُ كانَت مَكتوبَةً في
+    /// <c>PinnedRoutes</c> و<c>HostingExtensions</c> نَصّاً — ولَم تَمنَع
+    /// أَحَداً، لِأَنّ رِسالَةَ فَحصٍ مُجاوِرَةً كانَت تَقولُ عَكسَها.
+    /// وحينَ التَقى النَصّانِ في رَأسِ كاتِبٍ واحِدٍ خَرَجَت
+    /// <c>/{slug}/me/delete/confirm</c> تَحقِنُ الجَلسَةَ، فَصارَت شاشَةُ
+    /// حَذفِ الحِسابِ <b>تَنقُرُ ولا تَحذِف</b>. <b>والجُملَةُ الَّتي لا
+    /// يُنتِجُها أَمرٌ تُقرَأُ ولا تُصَدَّق</b> — فَهذا هُوَ الأَمر.</para>
+    /// </summary>
+    [Fact]
+    public async Task Minimal_api_session_does_not_carry_the_route_tenant_even_with_detection_on()
+    {
+        if (!Enabled || string.IsNullOrEmpty(ConnectionString)) return;
+
+        var port = FreePort();
+        await using var app = BuildApp(port, detectTenantFromRoute: true);
+
+        // نَفسُ المُضيفِ الَّذي تَعمَلُ عَلَيه نُقطَةُ Wolverine أَعلاه —
+        // فَالفَرقُ الوَحيدُ بَينَ الطَرَفَين هُوَ الأُنبوب.
+        app.MapPost("/{slug}/zz-minimal-tenant-proof",
+            (string slug, IDocumentSession session) => session.TenantId);
+
+        await app.StartAsync();
+
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+        var res = await http.PostAsync(
+            $"http://127.0.0.1:{port}/{RouteTenant}/zz-minimal-tenant-proof",
+            new StringContent(""));
+        res.EnsureSuccessStatusCode();
+        var tenantId = (await res.Content.ReadAsStringAsync()).Trim();
+
+        await app.StopAsync();
+
+        Console.WriteLine($"[minimal/detect=on] TenantId={tenantId}");
+
+        Assert.False(string.IsNullOrWhiteSpace(tenantId),
+            "أَداة عَمياء: النُقطَة رَدَّت فارِغاً — لا حُكمَ على مُستَأجِرٍ لَم يُقرَأ.");
+
+        // الحُكم: كَشفُ المُستَأجِرِ مُفَعَّلٌ، ومَع ذلك **لا يَبلُغُ**
+        // جَلسَةَ Minimal API. وهذا بِعَينِه سَبَبُ سَطرِ
+        // ‏`/{slug}/me/delete/confirm` في PinnedRoutes.StoreTakers.
+        Assert.NotEqual(RouteTenant, tenantId);
+    }
 }
