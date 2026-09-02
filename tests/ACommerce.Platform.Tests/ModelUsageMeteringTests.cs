@@ -139,6 +139,65 @@ public class ModelUsageMeteringTests(ITestOutputHelper output)
         Assert.Equal(1000, u.InputTokens + u.CacheReadTokens);
     }
 
+    /// <summary>
+    /// <para><b>والعَقدُ واحِدٌ في الثَلاث: مِفتاحٌ داخِليٌّ غائِبٌ =
+    /// <c>null</c>، لا أَصفار.</b> كانَ جيميناي يَنفَرِدُ بِقَبولِ
+    /// <c>usageMetadata</c> فارِغاً فَيُرجِعُ أَربَعَةَ أَصفارٍ
+    /// تُقرَأُ «نِداءٌ بِلا كِلفَة» — بَينَما أَخَواه يَشتَرِطانِ
+    /// مِفتاحاً. تَبايُنٌ في العَقدِ نَفسِه، وقَد أُزيل.</para>
+    /// </summary>
+    [Fact]
+    public void An_empty_usage_object_is_unmeasured_in_all_three_backends()
+    {
+        Assert.Null(GeminiBackend.ReadUsage(Root("""{ "usageMetadata": { } }""")));
+        Assert.Null(AnthropicBackend.ReadUsage(Root("""{ "usage": { } }""")));
+        Assert.Null(OpenAIBackend.ReadUsage(Root("""{ "usage": { } }""")));
+
+        // وأَصفارٌ **مُصَرَّحٌ بِها** تُقرَأُ أَصفاراً مَقيسَة — الفَرقُ
+        // بَينَ «لَم يُقَس» و«قيسَ فَكانَ صِفراً» مَحفوظ.
+        var z = GeminiBackend.ReadUsage(Root("""{ "usageMetadata": { "promptTokenCount": 0 } }"""));
+        Assert.NotNull(z);
+        Assert.Equal(0, z!.InputTokens);
+    }
+
+    /// <summary>
+    /// <para><b>وتوكناتُ التَفكيرِ عِندَ جيميناي تُفَوتَرُ مُخرَجاً
+    /// ولا تَدخُلُ في <c>candidatesTokenCount</c>.</b> النَموذَجُ
+    /// الافتِراضيُّ اليَومَ (<c>gemini-2.0-flash</c>) لا يُوَلِّدُها،
+    /// لكِنّ النَموذَجَ يُضبَطُ بِـ<c>Agents:{Name}:Model</c> وأَيُّ
+    /// نَموذَجٍ مِن سِلسِلَةِ ‏2.5 يُفَوتِرُها — فَإسقاطُها كانَ
+    /// يُنقِصُ الفاتورَةَ صامِتاً. و<c>toolUsePromptTokenCount</c>
+    /// مُدخَلٌ <b>خارِجَ</b> <c>promptTokenCount</c> فَيُضافُ ولا
+    /// يُطرَح.</para>
+    /// </summary>
+    [Fact]
+    public void Gemini_thinking_and_tool_use_tokens_are_not_dropped()
+    {
+        var u = GeminiBackend.ReadUsage(Root("""
+            {
+              "candidates": [ { "content": { "parts": [ { "text": "…" } ] } } ],
+              "usageMetadata": {
+                "promptTokenCount": 1000,
+                "candidatesTokenCount": 50,
+                "cachedContentTokenCount": 800,
+                "thoughtsTokenCount": 700,
+                "toolUsePromptTokenCount": 120,
+                "totalTokenCount": 1870
+              }
+            }
+            """));
+
+        Assert.NotNull(u);
+        Assert.Equal(320, u!.InputTokens);    // ‏(1000 − 800) + 120
+        Assert.Equal(750, u.OutputTokens);    // ‏50 + 700
+        Assert.Equal(0,   u.CacheWriteTokens);
+        Assert.Equal(800, u.CacheReadTokens);
+
+        // ومَجموعُ الأَربَعَةِ = مَجموعُ جوجل المُعلَن.
+        Assert.Equal(1870,
+            u.InputTokens + u.OutputTokens + u.CacheWriteTokens + u.CacheReadTokens);
+    }
+
     /// <summary>ونَفسُ العِلَّةِ عِندَ OpenAI: <c>prompt_tokens</c>
     /// يَشمَلُ <c>prompt_tokens_details.cached_tokens</c>.</summary>
     [Fact]
@@ -247,6 +306,137 @@ public class ModelUsageMeteringTests(ITestOutputHelper output)
         Assert.Contains("pricing", raw, StringComparison.OrdinalIgnoreCase);
     }
 
+    // ─── المُصادِق: سِتَّةُ رُموزٍ، لِكُلٍّ موجِبٌ وسالِب ──────────────
+
+    private static string PricingRaw =>
+        File.ReadAllText(Path.Combine(TemplateRoot, "Data", "model-pricing.json"));
+
+    /// <summary>
+    /// <para><b>المِلَفُّ الفِعليُّ يَجتازُ المُصادَقَةَ الصارِمَة.</b>
+    /// وهذا هُوَ الطَرَفُ الموجِبُ لِكُلِّ رَمزِ خَرقٍ مَعاً: لا
+    /// عُملَةَ غَريبَة، ولا وَحدَةَ غَريبَة، ولا جَدوَلَ فارِغ، ولا
+    /// مِفتاحَ فارِغ، ولا سِعرَ غَيرَ مُوجَب، ولا سِعرَ بِلا
+    /// تاريخ.</para>
+    /// </summary>
+    [Fact]
+    public void The_shipped_pricing_file_passes_the_strict_reader()
+    {
+        var parsed = ModelPricingCatalog.Parse(PricingRaw);
+        output.WriteLine($"نَماذِجُ الجَدوَل: {string.Join("، ", parsed.Keys)}");
+        Assert.True(parsed.Count >= 3, $"أَداةٌ عَمياء: قُرِئَ {parsed.Count} نَموذَجاً.");
+        Assert.Empty(ModelPricingValidator.Validate(
+            ModelPricingValidator.Currency, ModelPricingValidator.Unit, parsed));
+
+        // والجَدوَلُ الحَيُّ هو نَفسُه المِلَفّ — لا نُسخَةٌ ثانِيَة.
+        Assert.Equal(parsed.Count, ModelPricingCatalog.All.Count);
+    }
+
+    /// <summary>
+    /// <para><b>ومِفتاحٌ مَجهولٌ خَطَأٌ صَريحٌ لا «لَم يُملَأ بَعد».</b>
+    /// هذا هُوَ العَطَبُ بِعَينِه الَّذي كانَ القارِئُ المُتَساهِلُ
+    /// يَبتَلِعُه: «<c>cache_write</c>» مَكانَ «<c>cacheWrite</c>»
+    /// يُقرَأُ سِعراً فارِغاً، فَتَبقى الكِلفَةُ <c>null</c> ويُقرَأُ
+    /// الأَمرُ <b>تَأَخُّراً في التَسعير</b> لا خَطَأً في المِلَفّ —
+    /// أَي فاتورَةٌ مَنقوصَةٌ بِلا صَوت.</para>
+    /// </summary>
+    [Fact]
+    public void A_misspelled_price_key_is_an_error_not_an_unfilled_price()
+    {
+        var typo = PricingRaw.Replace("\"cacheWrite\"", "\"cache_write\"", StringComparison.Ordinal);
+        Assert.NotEqual(PricingRaw, typo);   // حارِسُ عَمى: الاستِبدالُ وَقَعَ فِعلاً
+
+        var ex = Assert.ThrowsAny<Exception>(() => ModelPricingCatalog.Parse(typo));
+        output.WriteLine($"رَدُّ القارِئِ الصارِم: {ex.GetType().Name}: {ex.Message}");
+
+        // ولَو كانَ القارِئُ مُتَساهِلاً لَمَرَّ الحَرفُ ولَبَقِيَ
+        // السِعرُ «فارِغاً» — فَيُقاسُ الفَرقُ لا يُدَّعى.
+        Assert.Contains("cache_write", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>ولِكُلِّ رَمزِ خَرقٍ طَرَفٌ سالِبٌ يُحمِرُّ بِه — وإلّا
+    /// كانَ المُصادِقُ حِبراً.</summary>
+    [Theory]
+    [InlineData("currency_out_of_vocabulary", "\"currency\": \"USD\"", "\"currency\": \"SAR\"")]
+    [InlineData("unit_out_of_vocabulary",     "\"unit\": \"perMillionTokens\"", "\"unit\": \"perThousandTokens\"")]
+    public void Each_header_violation_code_has_a_failing_case(string code, string from, string to)
+    {
+        Assert.Contains(code, ModelPricingValidator.Codes);
+
+        var broken = PricingRaw.Replace(from, to, StringComparison.Ordinal);
+        Assert.NotEqual(PricingRaw, broken);   // حارِسُ عَمى
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ModelPricingCatalog.Parse(broken));
+        Assert.Contains(code, ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>والرُموزُ الأَربَعَةُ الباقِيَةُ تُقاسُ عَلى
+    /// <c>Validate</c> مُباشَرَةً — أَجسامٌ لا تُكتَبُ في مِلَفِّ
+    /// المُستَودَعِ أَصلاً.</summary>
+    [Fact]
+    public void Each_model_violation_code_has_a_failing_case_and_a_passing_one()
+    {
+        var ok = new ModelPrice(1m, 2m, 3m, 4m, "2026-09-02");
+        var good = new Dictionary<string, ModelPrice>(StringComparer.Ordinal) { ["m"] = ok };
+        var C = ModelPricingValidator.Currency;
+        var U = ModelPricingValidator.Unit;
+
+        // الطَرَفُ الموجِب — لا خَرقَ في جَدوَلٍ سَليم.
+        Assert.Empty(ModelPricingValidator.Validate(C, U, good));
+
+        static string[] CodesOf(IReadOnlyList<ModelPriceViolation> v)
+            => v.Select(x => x.Code).ToArray();
+
+        // ‏models_empty
+        Assert.Contains("models_empty", CodesOf(ModelPricingValidator.Validate(
+            C, U, new Dictionary<string, ModelPrice>(StringComparer.Ordinal))));
+
+        // ‏model_key_blank
+        Assert.Contains("model_key_blank", CodesOf(ModelPricingValidator.Validate(
+            C, U, new Dictionary<string, ModelPrice>(StringComparer.Ordinal) { ["  "] = ok })));
+
+        // ‏price_not_positive — والصِفرُ هُوَ الحالَةُ المَقصودَة.
+        Assert.Contains("price_not_positive", CodesOf(ModelPricingValidator.Validate(
+            C, U, new Dictionary<string, ModelPrice>(StringComparer.Ordinal)
+            { ["m"] = ok with { CacheReadPerMillionUsd = 0m } })));
+
+        // ‏priced_at_missing — سِعرٌ مَملوءٌ بِلا تاريخِ قِراءَة.
+        Assert.Contains("priced_at_missing", CodesOf(ModelPricingValidator.Validate(
+            C, U, new Dictionary<string, ModelPrice>(StringComparer.Ordinal)
+            { ["m"] = ok with { PricedAtUtc = null } })));
+
+        // ولا يُطلَبُ التاريخُ مِن نَموذَجٍ كُلُّ أَسعارِه `null` — وهي
+        // حالُ المِلَفِّ اليَوم.
+        Assert.Empty(ModelPricingValidator.Validate(
+            C, U, new Dictionary<string, ModelPrice>(StringComparer.Ordinal)
+            { ["m"] = new ModelPrice(null, null, null, null, null) }));
+
+        // وكُلُّ رَمزٍ مُعلَنٍ مَذكورٌ في هذا الفَحصِ أَو في أَخيه.
+        Assert.Equal(6, ModelPricingValidator.Codes.Count);
+        Assert.Equal(6, ModelPricingValidator.Codes.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    /// <summary>
+    /// <para><b>وجَدوَلٌ فاسِدٌ لا يَكسِرُ مَسارَ النِداء</b> (القاعِدَة
+    /// ٧): <see cref="ModelPricingCatalog.Parse"/> يَرمي بِرَمزِه —
+    /// وذاكَ مَدخَلُ الفَحص — بَينَما <c>All</c> يَبتَلِعُ مَسموعاً
+    /// ويُعطي جَدوَلاً فارِغاً، فَتَصيرُ كُلُّ كِلفَةٍ «غَيرَ مَعروفَة»
+    /// ولا يُنتَجُ رَقَمٌ خاطِئٌ أَبَداً.</para>
+    /// </summary>
+    [Fact]
+    public void A_broken_pricing_table_never_produces_a_wrong_number()
+    {
+        // لا سِعرَ يُخترَع عِندَ الجَهل: `null` لا صِفر.
+        Assert.Null(ModelPricingCatalog.CostUsd(
+            (ModelPrice?)null, new AgentUsage(1_000_000, 1_000_000, 1_000_000, 1_000_000)));
+
+        var line = ModelCallRecord.For(
+            "_incubator", null, "anthropic", "نَموذَجٌ-لا-وُجودَ-لَه",
+            ModelCallOperation.Analyze, new AgentUsage(5, 5, 5, 5), success: true);
+        Assert.Null(line.CostUsd);
+        Assert.True(line.UsageMeasured);
+        Assert.Equal(5, line.InputTokens);
+    }
+
     /// <summary>نَموذَجٌ في الجَدوَلِ وأَسعارُه لَم تُملَأ: يُقاسُ
     /// ولا يُسَعَّر — الكِلفَةُ <c>null</c> «غَيرُ مَعروفَة» لا
     /// <c>0</c> «مَجّانيّ».</summary>
@@ -291,15 +481,19 @@ public class ModelUsageMeteringTests(ITestOutputHelper output)
     [Fact]
     public void The_cost_prices_the_four_counters_with_four_different_prices()
     {
-        // سِعرٌ مُصطَنَعٌ لِلبُرهانِ وَحدَه — لا يُكتَبُ في مِلَفِّ
-        // البَيانات، ولا يُدَّعى أَنَّه سِعرُ أَحَد.
-        var price = new ModelPrice(3m, 15m, 3.75m, 0.30m, "probe");
+        // سِعرٌ مُصطَنَعٌ لِلبُرهانِ وَحدَه — أَرقامٌ **لا تُطابِقُ
+        // جَدوَلَ أَيِّ مُزَوِّد** عَمداً: النُسخَةُ الأولى استَعمَلَت
+        // ‏(‏3 · 15 · 3.75 · 0.30) ووَصَفَتها بِأَنَّها «لَيسَت سِعرَ
+        // أَحَد» — وهي حَرفاً أَسعارُ Claude Sonnet المَنشورَة. والخَطَرُ
+        // أَن تُنقَلَ يَوماً إلى `model-pricing.json` بِاعتِبارِها حَشواً
+        // (القاعِدَة ١٦: لا سِعرَ يُخترَع).
+        var price = new ModelPrice(8m, 26m, 9m, 0.4m, "probe");
         var cost = ModelPricingCatalog.CostUsd(price, new AgentUsage(1_000_000, 1_000_000, 1_000_000, 1_000_000));
 
-        Assert.Equal(3m + 15m + 3.75m + 0.30m, cost);
+        Assert.Equal(8m + 26m + 9m + 0.4m, cost);
 
         // ونِصفُ مِليونٍ يُعطي نِصفَ السِعر — الوَحدَةُ «لِكُلِّ مِليون».
-        Assert.Equal(1.5m, ModelPricingCatalog.CostUsd(price, new AgentUsage(500_000, 0, 0, 0)));
+        Assert.Equal(4m, ModelPricingCatalog.CostUsd(price, new AgentUsage(500_000, 0, 0, 0)));
 
         // وقِراءَةُ الكاشِ لَيسَت مُدخَلاً عادِيّاً.
         Assert.NotEqual(
@@ -372,31 +566,100 @@ public class ModelUsageMeteringTests(ITestOutputHelper output)
     /// <para><b>ولا يَحمِلُ نَصَّ الطَلَبِ ولا نَصَّ الرَدّ.</b> يُفحَصُ
     /// بِالبِنيَةِ لا بِالنِيَّة: لا حَقلَ نَصِّيّاً خارِجَ الأَربَعَةِ
     /// المُعرَّفَة، فَلا مَوضِعَ يُدَسُّ فيه مُحتَوىً بَعدَ اليَوم.</para>
+    ///
+    /// <para><b>ويُفحَصُ النَوعُ لا الاسمُ ولا <c>string</c> وَحدَه</b>:
+    /// النُسخَةُ السابِقَةُ كانَت تَمُرُّ عَلى
+    /// <c>List&lt;string&gt;</c> و<c>Dictionary&lt;string,string&gt;</c>
+    /// و<c>object</c> بِاسمٍ مُحايِد — وهي كُلُّها مَواضِعُ يُدَسُّ فيها
+    /// المُحتَوى. فَالمَسموحُ الآنَ <b>مَعجَمُ أَنواعٍ مُغلَق</b>: أَربَعَةُ
+    /// حُقولٍ نَصِّيَّةٍ مُسَمّاة، وسِواها عَدَدٌ أَو مُعَرِّفٌ أَو
+    /// مَنطِقِيٌّ أَو زَمَن — لا حاوِيَةَ ولا نَوعَ مَفتوح.</para>
     /// </summary>
     [Fact]
     public void The_line_has_nowhere_to_hold_the_prompt_or_the_answer()
     {
-        var allowed = new HashSet<string>(StringComparer.Ordinal)
+        var allowedStrings = new HashSet<string>(StringComparer.Ordinal)
         { "TenantId", "Provider", "Model", "Operation" };
 
-        var stringProps = typeof(ModelCallRecord)
+        // مَعجَمُ الأَنواعِ المُغلَق: لا نَصَّ إلّا بِاسمٍ مَسموح، ولا
+        // حاوِيَةَ إطلاقاً.
+        var scalars = new HashSet<Type>
+        {
+            typeof(Guid), typeof(Guid?), typeof(int), typeof(int?),
+            typeof(long), typeof(long?), typeof(decimal), typeof(decimal?),
+            typeof(bool), typeof(bool?), typeof(DateTime), typeof(DateTime?),
+        };
+
+        var props = typeof(ModelCallRecord)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.PropertyType == typeof(string))
-            .Select(p => p.Name)
             .ToArray();
 
-        output.WriteLine($"حُقولٌ نَصِّيَّةٌ في السَطر: {string.Join("، ", stringProps)}");
+        var stringProps = props.Where(p => p.PropertyType == typeof(string))
+            .Select(p => p.Name).ToArray();
+
+        output.WriteLine($"حُقولُ السَطر: {props.Length} — نَصِّيَّةٌ مِنها: {string.Join("، ", stringProps)}");
         Assert.True(stringProps.Length >= 4, "أَداةٌ عَمياء: لا حُقولَ نَصِّيَّةً أَصلاً.");
+        Assert.True(props.Length >= 12, $"أَداةٌ عَمياء: فُحِصَ {props.Length} حَقلاً فَقَط.");
 
-        var extra = stringProps.Where(n => !allowed.Contains(n)).ToArray();
-        Assert.True(extra.Length == 0,
-            "حَقلٌ نَصِّيٌّ جَديدٌ في سَطرِ القياس — وهُوَ مَوضِعٌ يَتَسَرَّبُ "
-            + "إلَيه نَصُّ الطَلَبِ أَو الرَدّ:\n  " + string.Join("\n  ", extra));
+        var leaky = props
+            .Where(p => !(p.PropertyType == typeof(string)
+                            ? allowedStrings.Contains(p.Name)
+                            : scalars.Contains(p.PropertyType)))
+            .Select(p => $"{p.PropertyType.Name} {p.Name}")
+            .ToArray();
 
-        foreach (var p in typeof(ModelCallRecord).GetProperties())
+        Assert.True(leaky.Length == 0,
+            "حَقلٌ في سَطرِ القياسِ خارِجَ مَعجَمِ الأَنواعِ المَسموح — وهُوَ "
+            + "مَوضِعٌ يَتَسَرَّبُ إلَيه نَصُّ الطَلَبِ أَو الرَدّ:\n  "
+            + string.Join("\n  ", leaky));
+
+        foreach (var p in props)
             Assert.DoesNotMatch(
                 new Regex("text|prompt|response|content|body|message|answer", RegexOptions.IgnoreCase),
                 p.Name);
+    }
+
+    /// <summary>
+    /// <para><b>وحارِسُ الخُصوصِيَّةِ نَفسُه يُقاسُ بِعَيبٍ مَحقون</b>
+    /// (القاعِدَة ١٠): الشَرطُ يُطَبَّقُ عَلى نَوعٍ بَديلٍ يَحمِلُ
+    /// حاوِيَةً بِاسمٍ مُحايِد — و<b>يَجِبُ</b> أَن يُمسَك. وإلّا كانَ
+    /// «صِفرُ تَسَرُّب» جَوابَ حارِسٍ أَعمى.</para>
+    /// </summary>
+    [Fact]
+    public void The_privacy_guard_catches_a_container_field_with_an_innocent_name()
+    {
+        var scalars = new HashSet<Type>
+        {
+            typeof(Guid), typeof(Guid?), typeof(int), typeof(decimal?),
+            typeof(bool), typeof(DateTime),
+        };
+        var allowedStrings = new HashSet<string>(StringComparer.Ordinal) { "TenantId" };
+
+        static string[] Leaks(Type t, HashSet<Type> scalars, HashSet<string> allowedStrings) => t
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => !(p.PropertyType == typeof(string)
+                            ? allowedStrings.Contains(p.Name)
+                            : scalars.Contains(p.PropertyType)))
+            .Select(p => p.Name).ToArray();
+
+        Assert.Equal(new[] { "Extra" }, Leaks(typeof(LeakyProbe), scalars, allowedStrings));
+        Assert.Empty(Leaks(typeof(CleanProbe), scalars, allowedStrings));
+    }
+
+    private sealed class LeakyProbe
+    {
+        public string TenantId { get; set; } = "";
+        public int InputTokens { get; set; }
+        /// <summary>حاوِيَةٌ بِاسمٍ مُحايِدٍ — تَمُرُّ مِن أَيِّ فَحصٍ
+        /// يَنظُرُ في <c>string</c> وَحدَه.</summary>
+        public List<string> Extra { get; set; } = new();
+    }
+
+    private sealed class CleanProbe
+    {
+        public string TenantId { get; set; } = "";
+        public int InputTokens { get; set; }
+        public bool Success { get; set; }
     }
 
     /// <summary>مَعجَمُ العَمَلِيّاتِ مُغلَقٌ بِثَلاثٍ — وهي الأَبوابُ
@@ -462,6 +725,92 @@ public class ModelUsageMeteringTests(ITestOutputHelper output)
         var empty = ModelCallTotals.Of(Array.Empty<ModelCallRecord>());
         Assert.Equal(0, empty.Calls);
         Assert.Equal(0m, empty.CostUsd);
+    }
+
+    /// <summary>
+    /// <para><b>«لَم يُقَس» لا يَنهارُ إلى «صِفر».</b> رَدُّ ‏401 بِلا
+    /// جِسمٍ مَقروءٍ يُخَزَّنُ بِأَربَعَةِ أَصفار، ونِداءٌ صِفرِيٌّ
+    /// حَقيقيٌّ يُخَزَّنُ بِأَربَعَةِ أَصفارٍ أَيضاً — فَبِلا حَقلٍ
+    /// يُفَرِّقُ بَينَهُما يُقَلِّلُ كُلُّ تَقريرٍ الفاتورَةَ دونَ أَن
+    /// يَقول. وهُوَ نَفسُ ثابِتِ <see cref="AgentUsage"/> المُعلَنِ
+    /// نَصّاً: «<c>null</c> لا أَصفار: لَم يُقَس ≠ لَم يُنفَق».</para>
+    ///
+    /// <para><b>و«لَم يُقَس» غَيرُ «لَم يُسَعَّر»</b>: الأَوَّلُ نَقصٌ
+    /// في التوكناتِ نَفسِها، والثاني نَقصٌ في السِعر — وعَدّادانِ
+    /// مُنفَصِلانِ لِأَنّ خَلطَهُما يُنقِصُ الفاتورَةَ مَرَّتَين.</para>
+    /// </summary>
+    [Fact]
+    public void An_unmeasured_call_is_not_the_same_as_a_zero_call()
+    {
+        var blind = ModelCallRecord.For(
+            "_incubator", null, "anthropic", "claude-sonnet-4-6",
+            ModelCallOperation.Analyze, usage: null, success: false);
+
+        var real = ModelCallRecord.For(
+            "_incubator", null, "anthropic", "claude-sonnet-4-6",
+            ModelCallOperation.Analyze, new AgentUsage(0, 0, 0, 0), success: true);
+
+        Assert.False(blind.UsageMeasured);
+        Assert.True(real.UsageMeasured);
+
+        // والأَربَعَةُ مُتَطابِقَةٌ بَينَهُما — فَالحَقلُ وَحدَه
+        // يُفَرِّق.
+        Assert.Equal(blind.InputTokens, real.InputTokens);
+        Assert.Equal(blind.OutputTokens, real.OutputTokens);
+
+        var t = ModelCallTotals.Of(new[] { blind, real });
+        Assert.Equal(2, t.Calls);
+        Assert.Equal(1, t.UnmeasuredCalls);
+        Assert.Equal(2, t.UncostedCalls);   // لا سِعرَ في الجَدوَلِ بَعد
+    }
+
+    /// <summary>
+    /// <para><b>ولَحظَةُ السَطرِ وَحدَةٌ واحِدَةٌ عَلى طَرَفَي
+    /// المَسار.</b> عَمودُ <c>AtUtc</c> عِندَ Postgres هو
+    /// <c>timestamp without time zone</c>، وNpgsql يَرفُضُ وَسيطاً
+    /// بِـ<c>Kind=Utc</c> عَلَيه — فَكانَت
+    /// <c>ReadModelUsageAsync(uid, DateTime.UtcNow.AddDays(-30))</c>
+    /// تَرمي عَلى قاعِدَةٍ حَقيقِيَّةٍ بَينَما الكِتابَةُ تَعمَل. هذا
+    /// الفَحصُ يُثَبِّتُ الاختِيار: <c>Unspecified</c> بِتَوقيتٍ
+    /// عالَميّ، عِندَ الكِتابَةِ وعِندَ القِراءَةِ مَعاً.</para>
+    /// </summary>
+    [Fact]
+    public void The_timestamp_is_one_unit_on_both_ends_of_the_path()
+    {
+        // ١) الكِتابَةُ تُطَبِّع.
+        var utc = new DateTime(2026, 9, 2, 10, 0, 0, DateTimeKind.Utc);
+        var line = ModelCallRecord.For(
+            "_incubator", null, "anthropic", "claude-sonnet-4-6",
+            ModelCallOperation.Analyze, new AgentUsage(1, 1, 1, 1), true, atUtc: utc);
+
+        Assert.Equal(DateTimeKind.Unspecified, line.AtUtc.Kind);
+        Assert.Equal(utc.Ticks, line.AtUtc.Ticks);
+
+        // والافتِراضيُّ (‏`DateTime.UtcNow`) كَذلك.
+        var now = ModelCallRecord.For(
+            "_incubator", null, "anthropic", "m", ModelCallOperation.Build, null, true);
+        Assert.Equal(DateTimeKind.Unspecified, now.AtUtc.Kind);
+        Assert.Equal(DateTimeKind.Unspecified, new ModelCallRecord().AtUtc.Kind);
+
+        // ٢) و`Local` يُحَوَّلُ إلى عالَمِيٍّ أَوَّلاً — فَلا تُخَزَّنُ
+        //    ساعَةُ جِهازٍ بِاسمِ ساعَةٍ عالَمِيَّة.
+        var local = utc.ToLocalTime();
+        Assert.Equal(utc.Ticks, ModelCallRecord.Instant(local).Ticks);
+        Assert.Equal(DateTimeKind.Unspecified, ModelCallRecord.Instant(local).Kind);
+
+        // ٣) والتَطبيعُ ثابِتٌ (‏idempotent) فَلا يَنزاحُ بِتَكرارِه.
+        var once = ModelCallRecord.Instant(utc);
+        Assert.Equal(once, ModelCallRecord.Instant(once));
+
+        // ٤) وجانِبُ القِراءَةِ يُطَبِّعُ بِنَفسِ الدالَّة — مَقيسٌ
+        //    بِالمَصدَرِ لِأَنّ إثباتَه بِقاعِدَةٍ حَيَّةٍ في
+        //    `LiveModelUsageMeteringProofTests`.
+        var src = File.ReadAllText(Path.Combine(
+            TemplateRoot, "Services", "Incubator", "StudioTier.cs"));
+        var read = BlockAfter(src, "public async Task<Metering.ModelCallTotals> ReadModelUsageAsync");
+        Assert.NotNull(read);
+        Assert.Contains("ModelCallRecord.Instant(sinceUtc)", read!, StringComparison.Ordinal);
+        Assert.DoesNotContain("r.AtUtc >= sinceUtc", read, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -542,25 +891,62 @@ public class ModelUsageMeteringTests(ITestOutputHelper output)
     public void The_scanner_catches_an_injected_silent_call_site()
     {
         const string silent = """
-            var req = new AgentRequest(systemPrompt, messages,
-                Array.Empty<AgentToolDef>(), _model, MaxTokens: 3000);
-            var resp = await _backend.CallAsync(req, ct);
-            if (resp.Error is not null) return;
+            public async Task RefineAsync(CancellationToken ct)
+            {
+                var req = new AgentRequest(systemPrompt, messages,
+                    Array.Empty<AgentToolDef>(), _model, MaxTokens: 3000);
+                var resp = await _backend.CallAsync(req, ct);
+                if (resp.Error is not null) return;
+            }
             """;
 
         const string metered = """
-            var req = new AgentRequest(systemPrompt, messages,
-                Array.Empty<AgentToolDef>(), _model, MaxTokens: 3000);
-            var resp = await _backend.CallAsync(req, ct);
-            await _tier.RecordModelCallAsync(ModelCallRecord.For(
-                IncubatorTenant, s.OwnerUserId, _backend.ProviderName, _model,
-                ModelCallOperation.Refine, resp.Usage, resp.Error is null), ct);
-            if (resp.Error is not null) return;
+            public async Task RefineAsync(CancellationToken ct)
+            {
+                var req = new AgentRequest(systemPrompt, messages,
+                    Array.Empty<AgentToolDef>(), _model, MaxTokens: 3000);
+                var resp = await _backend.CallAsync(req, ct);
+                await _tier.RecordModelCallAsync(ModelCallRecord.For(
+                    IncubatorTenant, s.OwnerUserId, _backend.ProviderName, _model,
+                    ModelCallOperation.Refine, resp.Usage, resp.Error is null), ct);
+                if (resp.Error is not null) return;
+            }
             """;
 
-        Assert.Contains(CallMarker, silent, StringComparison.Ordinal);
-        Assert.DoesNotContain("RecordModelCallAsync", silent, StringComparison.Ordinal);
-        Assert.Contains("RecordModelCallAsync", metered, StringComparison.Ordinal);
+        // ═══ والفَحصُ يَستَدعي الماسِحَ نَفسَه ═══════════════════════
+        //
+        // النُسخَةُ السابِقَةُ مِن هذا الفَحصِ لَم تُنادِ
+        // `BackendCallSites` إطلاقاً — كانَت تُؤَكِّدُ
+        // `Assert.Contains` عَلى سِلسِلَتَينِ مَكتوبَتَينِ فيه، أَي
+        // أَنَّها تَختَبِرُ `string.Contains` لا الأَداة. وهو بِعَينِه
+        // ما تُحَذِّرُ مِنه القاعِدَة ١٠: «الأَداةُ تُقاسُ قَبلَ أَن
+        // يُوثَقَ بِها». فَالعَيبُ يُحقَنُ الآنَ في **شَجَرَةٍ
+        // مُؤَقَّتَةٍ** يَمسَحُها الماسِحُ فِعلاً — بِلا لَمسِ
+        // المُستَودَع.
+        var tmp = Path.Combine(Path.GetTempPath(), "wasayel-scanner-probe-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tmp, "Deep", "Nested"));
+        try
+        {
+            // في مُجَلَّدٍ **مُتَداخِلٍ**: القائِمَةُ اليَدَوِيَّةُ
+            // السابِقَةُ كانَت عَمياءَ عَنه تَماماً.
+            File.WriteAllText(Path.Combine(tmp, "Deep", "Nested", "ZzSilentProbe.cs"), silent);
+            var caught = BackendCallSites(tmp).ToList();
+
+            Assert.True(caught.Count == 1,
+                $"الماسِحُ لَم يَرَ المَوضِعَ المَحقونَ في مُجَلَّدٍ مُتَداخِل (وَجَدَ {caught.Count}).");
+            Assert.DoesNotContain("RecordModelCallAsync", caught[0].Window, StringComparison.Ordinal);
+
+            // ونَظيرُه المُسَجِّلُ يَمُرّ — وإلّا كانَ الماسِحُ
+            // يُحمِرُّ عَلى كُلِّ شَيءٍ فَلا يُمَيِّزُ.
+            File.WriteAllText(Path.Combine(tmp, "Deep", "Nested", "ZzSilentProbe.cs"), metered);
+            var clean = BackendCallSites(tmp).ToList();
+            Assert.Single(clean);
+            Assert.Contains("RecordModelCallAsync", clean[0].Window, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(tmp, recursive: true);
+        }
 
         // وفَحصُ التَرتيبِ يُقاسُ بِعَيبٍ مَحقونٍ أَيضاً: تَسجيلٌ بَعدَ
         // القَفز لا يُمسِكُ المُحاوَلَةَ الفاشِلَة.
@@ -585,16 +971,29 @@ public class ModelUsageMeteringTests(ITestOutputHelper output)
 
     private sealed record CallSite(string Where, string File, string Window);
 
-    /// <summary>كُلُّ نِداءٍ لِلخَلفِيَّةِ في المُستَودَع، ومَعَه
-    /// نافِذَةُ الجُملَةِ الَّتي تَلي — حَتّى بِدايَةِ الدالَّةِ
-    /// التالِيَة.</summary>
-    private static IEnumerable<CallSite> BackendCallSites()
+    /// <summary>
+    /// <para>كُلُّ نِداءٍ لِلخَلفِيَّةِ <b>تَحتَ الجِذرِ المُعطى
+    /// بِكامِلِ عُمقِه</b>، ومَعَه نافِذَةُ الجُملَةِ الَّتي تَلي —
+    /// حَتّى بِدايَةِ الدالَّةِ التالِيَة.</para>
+    ///
+    /// <para><b>ولِماذا مَسحٌ لا قائِمَةٌ بِاليَد</b>: القائِمَةُ
+    /// السابِقَةُ كانَت مِلَفَّينِ مُثبَّتَينِ نَصّاً، فَـ«كُلُّ مَوضِعِ
+    /// نِداءٍ يَكتُبُ سَطراً» كانَ في الحَقيقَةِ «كُلُّ مَوضِعٍ في
+    /// هذَينِ المِلَفَّين» — ومَوضِعٌ رابِعٌ في مِلَفٍّ جَديدٍ لا يَراه
+    /// الفاحِصُ إطلاقاً، وحارِسُ العَمى <c>Count &gt;= 3</c> يَبقى
+    /// أَخضَرَ لِأَنَّه يَعُدُّ ما وَجَدَ لا ما يَنبَغي أَن يَجِد.
+    /// وهذا بِعَينِه صِنفُ العَطَبِ الَّذي كَتَبَ القاعِدَةَ ٢.</para>
+    ///
+    /// <para><b>و<paramref name="root"/> وَسيطٌ لا ثابِت</b> لِيُقاسَ
+    /// الماسِحُ نَفسُه بِعَيبٍ مَحقونٍ في شَجَرَةٍ مُؤَقَّتَة، بِلا
+    /// لَمسِ المُستَودَع (القاعِدَة ١٠).</para>
+    /// </summary>
+    private static IEnumerable<CallSite> BackendCallSites(string? root = null)
     {
-        var files = new[]
-        {
-            Path.Combine(TemplateRoot, "Services", "AgentService.cs"),
-            Path.Combine(TemplateRoot, "Services", "Incubator", "FeasibilityAnalysisService.cs"),
-        };
+        root ??= Path.Combine(TemplateRoot, "Services");
+        var files = Directory
+            .EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
+            .OrderBy(f => f, StringComparer.Ordinal);
 
         var nextMember = new Regex(@"\n    (?:public|private|internal|protected)\b", RegexOptions.Compiled);
 
