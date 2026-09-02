@@ -17,6 +17,13 @@ public sealed class FeasibilityAnalysisService
     private readonly string _model;
     private readonly FeasibilityPromptBuilder _prompt;
 
+    /// <summary>كاتِبُ سُطورِ القياس. يُبنى مِن نَفسِ المَخزَنِ لا
+    /// يُحقَن — تَماماً كَما يَفعَل <c>AgentService.CreateTenantAsync</c>
+    /// مَعَ بَوّابَةِ المَتاجِر: <see cref="StudioTierService"/> غِلافٌ
+    /// بِلا حالَةٍ فَوقَ <c>IDocumentStore</c>، وحَقنُه كانَ سَيَربِطَ
+    /// عُمرَ هذِه الخِدمَةِ بِعُمرِه بِلا مُقابِل.</summary>
+    private readonly StudioTierService _tier;
+
     // مِلَفّ «Analysis» — وَكيل التَحليل يَستَحِقّ نَموذجاً أَذكى مِن وَكيل
     // الاستوديو (دِراسَة جَدوى كامِلَة بِـ JSON مُهَيكَل)، فَلَه مِلَفُّه
     // المُستَقِلّ: مُزَوِّد ومِفتاح وعُنوان ونَموذج. بِلا تَهيئَة مُسَمّاة
@@ -28,6 +35,7 @@ public sealed class FeasibilityAnalysisService
         _backend = agents.For(AgentNames.Analysis);
         _model = agents.ModelFor(AgentNames.Analysis);
         _prompt = prompt;
+        _tier = new StudioTierService(store);
     }
 
     /// <summary>النَموذج الفِعليّ لِوَكيل التَحليل (لِلعَرض والتَحَقُّق).</summary>
@@ -271,6 +279,14 @@ public sealed class FeasibilityAnalysisService
         var req = new AgentRequest(systemPrompt, messages,
             Array.Empty<AgentToolDef>(), _model, MaxTokens: 3000);
         var resp = await _backend.CallAsync(req, ct);
+
+        // القياسُ **قَبلَ** فَرعِ الخَطَأ: تَحسينٌ فَشِلَ أَنفَقَ
+        // توكناتٍ كَتَحسينٍ نَجَح، وسِجِلٌّ يُسقِطُ الفاشِلَ يُخفي
+        // إنفاقاً وَقَع.
+        await _tier.RecordModelCallAsync(Metering.ModelCallRecord.For(
+            IncubatorTenant, s.OwnerUserId, _backend.ProviderName, _model,
+            Metering.ModelCallOperation.Refine, resp.Usage, resp.Error is null), ct);
+
         if (resp.Error is not null) return;
         var newJson = ExtractJson(resp.Text);
         if (newJson is null) return;
@@ -364,6 +380,24 @@ public sealed class FeasibilityAnalysisService
             var req = new AgentRequest(systemPrompt, messages,
                 Array.Empty<AgentToolDef>(), _model, MaxTokens: 8000);
             var resp = await _backend.CallAsync(req, ct);
+
+            // ─── سَطرُ قياسٍ **لِكُلِّ مُحاوَلَة**، الفاشِلَةِ قَبلَ
+            //     الناجِحَة ──────────────────────────────────────────
+            // وهذا أَهَمُّ مَوضِعٍ في المَوجَةِ كُلِّها: الحَلقَةُ
+            // تُحاوِلُ **مَرَّتَين**، والمُحاوَلَةُ الأولى الفاشِلَةُ
+            // أَنفَقَت `MaxTokens: 8000` مِثلَ الثانِيَة تَماماً — بَل
+            // رُبَّما أَكثَر، فَرَدٌّ غَيرُ صالِحِ JSON هو رَدٌّ
+            // **مُكتَمِلُ التَوليد**. فَتَسجيلُ الناجِحَةِ وَحدَها
+            // يُخفي حَتّى نِصفَ الفاتورَة، ويَجعَلُ التَقريرَ يَقولُ
+            // «تَحليلٌ واحِدٌ بِكَذا» عَن نِدائَينِ اثنَين.
+            //
+            // ولِذلك يَقَعُ التَسجيلُ **قَبلَ** `continue` لا بَعدَه.
+            // ويَقيسُ التَرتيبَ
+            // `ModelUsageMeteringTests.The_analysis_loop_records_before_it_skips_a_failed_attempt`.
+            await _tier.RecordModelCallAsync(Metering.ModelCallRecord.For(
+                IncubatorTenant, s.OwnerUserId, _backend.ProviderName, _model,
+                Metering.ModelCallOperation.Analyze, resp.Usage, resp.Error is null), ct);
+
             if (resp.Error is not null) { lastError = resp.Error; continue; }
             json = ExtractJson(resp.Text);
             if (json is null) lastError = "الردّ لم يكن JSON صالحاً.";

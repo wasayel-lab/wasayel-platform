@@ -405,6 +405,68 @@ public sealed class StudioTierService
     /// زادَ عَدّاداً مِن فَترَةٍ مُنقَضِيَة. والدَوَران والزِيادَة في
     /// <b>حِفظٍ واحِد</b>، فَلا تَقَع إحداهُما دونَ الأُخرى.</para>
     /// </summary>
+    // ═══ قياسُ استِهلاكِ نَماذِجِ اللُغَة ═════════════════════════════
+    //
+    // **ولِماذا هُنا لا في خِدمَةٍ جَديدَة** (القاعِدَة ٨: لا أُنبوبَ
+    // رابِع): هذِه هي الخِدمَةُ الَّتي تَعرِفُ إيجارَ الاستوديو
+    // وتَملِكُ عَدّاداتِ `StudioUser`، والسُؤالُ الَّذي يُجابُ بِهذا
+    // السَطرِ («كَم أَنفَقَ هذا المُستَخدِم؟») هو سُؤالُ العَدّادِ
+    // نَفسِه بِوَحدَةٍ أَدَقّ. خِدمَةٌ ثانِيَةٌ تَفتَحُ جَلسَةً ثانِيَةً
+    // على نَفسِ الإيجارِ لِنَفسِ السُؤالِ تَجريدٌ بِلا مُستَهلِكٍ
+    // يُميِّزُه.
+
+    /// <summary>
+    /// <para><b>يَكتُبُ سَطرَ نِداءٍ واحِد — والفَشَلُ في الكِتابَةِ لا
+    /// يَكسِرُ المَسار.</b></para>
+    ///
+    /// <para><b>ولِماذا يُبتلَعُ الاستِثناءُ هُنا وحدَه</b>: القياسُ
+    /// <b>مُراقِبٌ لا حارِس</b>. البَوّابَةُ (<see cref="CheckAnalyzeAsync"/>)
+    /// تَرفَعُ ما يَقَعُ لِأَنّ عُبورَها بِلا عَدٍّ ثُغرَة؛ وهذا
+    /// السَطرُ يَصِفُ نِداءً <b>وَقَعَ فِعلاً</b> — فَتَعَذُّرُ وَصفِه
+    /// يَنقُصُ تَقريراً، ورَفعُه يَقتُلُ تَحليلاً اكتَمَل. ومُستَخدِمٌ
+    /// يَخسَرُ دِراسَتَه لِأَنّ صَفَّ قياسٍ لَم يُكتَب عَطَبٌ أَسوَأُ
+    /// مِنَ العَطَبِ الَّذي جاءَ القياسُ يَكشِفُه.</para>
+    ///
+    /// <para><b>ولا يَصمُتُ</b>: يُطبَعُ التَحذيرُ بِنَفسِ صيغَةِ
+    /// <c>TenantThemeService</c>/<c>TenantProviderService</c> — ابتِلاعٌ
+    /// مَسموعٌ لا ابتِلاعٌ صامِت.</para>
+    /// </summary>
+    public async Task RecordModelCallAsync(
+        Metering.ModelCallRecord line, CancellationToken ct = default)
+    {
+        try
+        {
+            await using var s = _store.LightweightSession(StudioAuth.Tenant);
+            s.Store(line);
+            await s.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"[metering] تَعَذَّرَ تَسجيلُ سَطرِ استِهلاكِ نَموذَجِ لُغَة "
+              + $"(‏{line.Provider}/{line.Model}/{line.Operation}): {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <para><b>القِراءَةُ التَجميعِيَّة</b> — نَقِيَّةُ الأَثَر:
+    /// <c>QuerySession</c> فَلا تَملِكُ أَن تَكتُبَ أَصلاً (‏نَفسُ
+    /// حُجَّةِ <see cref="ReadWithLimitsAsync"/>).</para>
+    ///
+    /// <para><paramref name="userId"/> <c>null</c> = كُلُّ
+    /// المُستَخدِمين — أَي فاتورَةُ المالِكِ الكامِلَةُ مِن
+    /// <paramref name="sinceUtc"/>.</para>
+    /// </summary>
+    public async Task<Metering.ModelCallTotals> ReadModelUsageAsync(
+        Guid? userId, DateTime sinceUtc, CancellationToken ct = default)
+    {
+        await using var qs = _store.QuerySession(StudioAuth.Tenant);
+        IQueryable<Metering.ModelCallRecord> q = qs.Query<Metering.ModelCallRecord>()
+            .Where(r => r.AtUtc >= sinceUtc);
+        if (userId is Guid u) q = q.Where(r => r.UserId == u);
+        return Metering.ModelCallTotals.Of(await q.ToListAsync(ct));
+    }
+
     private async Task Bump(Guid uid, Action<StudioUser> mutate, CancellationToken ct)
     {
         await using var s = _store.LightweightSession(StudioAuth.Tenant);

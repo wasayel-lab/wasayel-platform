@@ -24,7 +24,42 @@ public sealed record AgentMessage(
 public sealed record AgentToolCallOut(string Id, string Name, string InputJson);
 public sealed record AgentToolResult(string ToolCallId, string ToolName, string Content);
 public sealed record AgentToolDef(string Name, string Description, string InputSchemaJson);
-public sealed record AgentBackendResponse(string? Text, AgentToolCallOut? ToolCall, string? Error);
+/// <summary>
+/// <para><b>استِهلاكُ نِداءٍ واحِد — أَربَعَةُ عَدّاداتٍ
+/// <u>مُتَبايِنَة</u>.</b> «مُتَبايِنَة» شَرطٌ في الوَحدَةِ لا وَصفٌ
+/// لَها: <c>InputTokens</c> هُنا <b>لا يَشمَل</b> ما قُرِئَ مِنَ
+/// الكاشِ ولا ما كُتِبَ فيه، فَمَجموعُ ما دَخَلَ هو
+/// <c>Input + CacheWrite + CacheRead</c>.</para>
+///
+/// <para><b>ولِماذا أَربَعَةٌ لا رَقمانِ</b>: الكاشُ يُفَوتَرُ
+/// بِسِعرَينِ مُختَلِفَينِ عَنِ المُدخَلِ العادِيّ — كِتابَتُه أَغلى
+/// وقِراءَتُه أَرخَصُ بِكَثير. وجَمعُ الثَلاثَةِ في رَقَمٍ واحِدٍ
+/// يَمحو أَثَرَ <c>cache_control</c> الَّذي فُعِّلَ لِأَجلِه، فَلا
+/// يُعرَفُ أَنَفَعَ أَم ضَرّ.</para>
+///
+/// <para><b>والتَطبيعُ يَقَعُ في كُلِّ خَلفِيَّةٍ على حِدَة</b>: مِن
+/// المُزَوِّدينَ الثَلاثَةِ <b>واحِدٌ فَقَط</b> (أَنثروبيك) يَرُدُّ
+/// الأَربَعَةَ مُتَبايِنَةً أَصلاً؛ والآخَرانِ يَضُمّانِ المُخَزَّنَ
+/// داخِلَ عَدَدِ المُدخَل — فَيُطرَح، وإلّا حُسِبَ مَرَّتَين.</para>
+/// </summary>
+public sealed record AgentUsage(
+    int InputTokens, int OutputTokens, int CacheWriteTokens, int CacheReadTokens);
+
+/// <param name="Usage">‏<c>null</c> إن لَم يَحمِل الرَدُّ استِهلاكاً
+/// مَقروءاً (‏خَطَأُ HTTP، أَو استِثناءُ شَبَكَة). و<c>null</c> لا
+/// أَصفار: «لَم يُقَس» غَيرُ «لَم يُنفَق».</param>
+public sealed record AgentBackendResponse(
+    string? Text, AgentToolCallOut? ToolCall, string? Error, AgentUsage? Usage = null);
+
+/// <summary>قِراءَةُ عَدَدٍ صَحيحٍ غَيرِ سالِبٍ مِن كائِنِ الاستِهلاك —
+/// الحَقلُ الغائِبُ صِفر، لِأَنّ المُزَوِّدينَ يُسقِطونَ حُقولَ الكاشِ
+/// حينَ لا كاش.</summary>
+internal static class UsageJson
+{
+    public static int NonNegative(JsonElement obj, string key)
+        => obj.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Number
+           && v.TryGetInt32(out var n) && n > 0 ? n : 0;
+}
 
 public interface IAgentBackend
 {
@@ -184,7 +219,7 @@ public sealed class AnthropicBackend : IAgentBackend
                         block.GetProperty("name").GetString() ?? "",
                         block.GetProperty("input").GetRawText());
             }
-            return new AgentBackendResponse(text, tool, null);
+            return new AgentBackendResponse(text, tool, null, ReadUsage(doc.RootElement));
         }
         catch (Exception ex)
         {
@@ -229,6 +264,35 @@ public sealed class AnthropicBackend : IAgentBackend
                 });
             return new { role = "assistant", content = blocks.ToArray() };
         }
+    }
+
+    /// <summary>
+    /// <para><b>شَكلُ أَنثروبيك</b>:
+    /// <c>usage.{input_tokens, output_tokens, cache_creation_input_tokens,
+    /// cache_read_input_tokens}</c>.</para>
+    ///
+    /// <para><b>وهُوَ المُزَوِّدُ الوَحيدُ الَّذي يَرُدُّ الأَربَعَةَ
+    /// مُتَبايِنَةً أَصلاً</b>: <c>input_tokens</c> عِندَه <b>لا
+    /// يَشمَلُ</b> المُخَزَّن، فَلا طَرحَ هُنا. ولا يُفتَرَضُ ذلك عَن
+    /// غَيرِه (‏<c>No_backend_reads_another_backends_shape</c>).</para>
+    ///
+    /// <para>و<c>cache_creation_input_tokens</c> هو ثَمَنُ
+    /// <c>cache_control</c> الَّذي يَضَعُه <see cref="CallAsync"/> على
+    /// آخِرِ أَداةٍ وعلى كُتلَةِ النِظام — أَي أَنّ التَعليقَ «‏≈80%
+    /// خَصم» صارَ لَه عَدّاد.</para>
+    /// </summary>
+    public static AgentUsage? ReadUsage(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("usage", out var u)
+            || u.ValueKind != JsonValueKind.Object
+            || !u.TryGetProperty("input_tokens", out _)) return null;
+
+        return new AgentUsage(
+            UsageJson.NonNegative(u, "input_tokens"),
+            UsageJson.NonNegative(u, "output_tokens"),
+            UsageJson.NonNegative(u, "cache_creation_input_tokens"),
+            UsageJson.NonNegative(u, "cache_read_input_tokens"));
     }
 
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
@@ -314,7 +378,7 @@ public sealed class GeminiBackend : IAgentBackend
                     }
                 }
             }
-            return new AgentBackendResponse(text, tool, null);
+            return new AgentBackendResponse(text, tool, null, ReadUsage(doc.RootElement));
         }
         catch (Exception ex)
         {
@@ -347,6 +411,37 @@ public sealed class GeminiBackend : IAgentBackend
                 }
             });
         return new { role, parts = parts.ToArray() };
+    }
+
+    /// <summary>
+    /// <para><b>شَكلُ جيميناي</b>:
+    /// <c>usageMetadata.{promptTokenCount, candidatesTokenCount,
+    /// cachedContentTokenCount}</c> — اسمٌ آخَرُ ومَعجَمٌ آخَر.</para>
+    ///
+    /// <para><b>و<c>promptTokenCount</c> يَشمَلُ المُخَزَّن</b> (خِلافُ
+    /// أَنثروبيك حَرفاً) — فَلَو خُزِّنَ كَما وَرَدَ لَحُسِبَتِ
+    /// التوكناتُ المُخَزَّنَةُ <b>مَرَّتَين</b>: بِسِعرِ المُدخَلِ
+    /// وبِسِعرِ القِراءَة. والوَحدَةُ المُعلَنَةُ
+    /// (<see cref="AgentUsage"/>) أَربَعَةٌ مُتَبايِنَة، فَيُطرَح.</para>
+    ///
+    /// <para><b>ولا كِتابَةَ كاشٍ تُعَدُّ هُنا</b>: كاشُ جيميناي
+    /// (<c>cachedContents</c>) يُنشَأُ بِنِداءٍ مُستَقِلٍّ ويُفَوتَرُ
+    /// بِالتَخزينِ لا بِالكِتابَة، و<see cref="CallAsync"/> لا يُنشِئُه
+    /// أَصلاً. فَصِفرٌ هُنا <b>مَقيسٌ لا مُهمَل</b>.</para>
+    /// </summary>
+    public static AgentUsage? ReadUsage(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("usageMetadata", out var u)
+            || u.ValueKind != JsonValueKind.Object) return null;
+
+        var prompt = UsageJson.NonNegative(u, "promptTokenCount");
+        var cached = UsageJson.NonNegative(u, "cachedContentTokenCount");
+        return new AgentUsage(
+            Math.Max(0, prompt - cached),
+            UsageJson.NonNegative(u, "candidatesTokenCount"),
+            0,
+            cached);
     }
 
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
@@ -457,7 +552,7 @@ public sealed class OpenAIBackend : IAgentBackend
                     fn.GetProperty("name").GetString() ?? "",
                     fn.GetProperty("arguments").GetString() ?? "{}");
             }
-            return new AgentBackendResponse(text, tool, null);
+            return new AgentBackendResponse(text, tool, null, ReadUsage(doc.RootElement));
         }
         catch (Exception ex)
         {
@@ -499,6 +594,40 @@ public sealed class OpenAIBackend : IAgentBackend
                 };
             return new { role = "user", content = m.Text ?? "" };
         }
+    }
+
+    /// <summary>
+    /// <para><b>شَكلُ OpenAI ومُتَوافِقاتِه</b>:
+    /// <c>usage.{prompt_tokens, completion_tokens,
+    /// prompt_tokens_details.cached_tokens}</c>.</para>
+    ///
+    /// <para><b>ويَتَقاسَمُ الاسمَ <c>usage</c> مَعَ أَنثروبيك
+    /// ويُخالِفُه في المَعجَمِ كُلِّه</b> — فَالقارِئُ يَنظُرُ في
+    /// المِفتاحِ الداخِليِّ لا في الاسمِ الخارِجيّ، ويُقاسُ ذلك
+    /// بِإعطاءِ كُلِّ قارِئٍ جِسمَ الآخَر.</para>
+    ///
+    /// <para><b>و<c>prompt_tokens</c> يَشمَلُ المُخَزَّن</b> كَما عِندَ
+    /// جيميناي — فَيُطرَح. والتَخزينُ هُنا <b>تِلقائيٌّ بِلا
+    /// إعداد</b> (‏prefix &gt; 1024 توكن) كَما يَقولُ تَعليقُ
+    /// <see cref="CallAsync"/>، فَلا عَدّادَ كِتابَةٍ يَرُدُّه
+    /// المُزَوِّدُ ولا كِتابَةَ تُفَوتَر.</para>
+    /// </summary>
+    public static AgentUsage? ReadUsage(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("usage", out var u)
+            || u.ValueKind != JsonValueKind.Object
+            || !u.TryGetProperty("prompt_tokens", out _)) return null;
+
+        var cached = u.TryGetProperty("prompt_tokens_details", out var d)
+                     && d.ValueKind == JsonValueKind.Object
+            ? UsageJson.NonNegative(d, "cached_tokens") : 0;
+
+        return new AgentUsage(
+            Math.Max(0, UsageJson.NonNegative(u, "prompt_tokens") - cached),
+            UsageJson.NonNegative(u, "completion_tokens"),
+            0,
+            cached);
     }
 
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";

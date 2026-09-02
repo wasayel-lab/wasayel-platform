@@ -64,6 +64,26 @@ public sealed class AgentService
     private static string SessionIdFor(string? scopeId)
         => string.IsNullOrEmpty(scopeId) ? AgentSession.SessionId : "scope:" + scopeId;
 
+    /// <summary>
+    /// <para><b>صاحِبُ الجَلسَة — مُشتَقٌّ مِن مُعَرِّفِها لا
+    /// مُختَرَع.</b> ‏<c>StudioAgent.razor</c> يَبني النِطاقَ
+    /// <c>"studio-" + userId.ToString("N")</c>، و<see cref="SessionIdFor"/>
+    /// يَبني المُعَرِّفَ <c>"scope:" + scopeId</c> — فَالقِراءَةُ عَكسُ
+    /// الكِتابَةِ حَرفاً، ولا مَصدَرَ ثانٍ لِنَفسِ الحَقيقَة.</para>
+    ///
+    /// <para><b>وجَلسَةُ مُشرِفِ المَنَصَّةِ المُشتَرَكَةُ بِلا
+    /// مُستَخدِم</b>: <c>null</c> لا <c>Guid.Empty</c> — «لا مُستَخدِمَ»
+    /// لَيسَ «المُستَخدِمُ الصِفر»، وصِفرٌ في عَمودِ هُوِيَّةٍ يُجمَعُ
+    /// لاحِقاً كَأَنَّه شَخصٌ واحِد.</para>
+    /// </summary>
+    public static Guid? UserIdFromSessionId(string? sessionId)
+    {
+        const string prefix = "scope:studio-";
+        if (sessionId is null || !sessionId.StartsWith(prefix, StringComparison.Ordinal))
+            return null;
+        return Guid.TryParseExact(sessionId[prefix.Length..], "N", out var id) ? id : null;
+    }
+
     public async Task<AgentSession> LoadSessionAsync(string? scopeId = null, CancellationToken ct = default)
     {
         await using var s = _store.QuerySession(AdminTenant);
@@ -141,6 +161,25 @@ public sealed class AgentService
 
         var resp = await _backend.CallAsync(
             new AgentRequest(system, messages, tools, _model, MaxTokens: 2048), ct);
+
+        // ─── سَطرُ القياس — قَبلَ فَرعِ الخَطَأ ────────────────────
+        // مُحادَثَةُ الوَكيلِ هي المُنفِقُ الوَحيدُ المُثَبَّتُ بِلا
+        // بَوّابَةِ حِصَّةٍ في `LanguageModelQuotaGateTests.PinnedUngated`
+        // — «لا حَدَّ لِرَسائِلِ الوَكيلِ في `TierLimits` ولا في أَيّ
+        // وَثيقَة». وهذا السَطرُ **لا يُغلِقُ** ذلك البابَ (الرَقَمُ ما
+        // زالَ مِن حَقِّ المالِكِ أَن يَقولَه، والقاعِدَةُ ١٦ قائِمَة)
+        // — لكِنَّه يَجعَلُ ما يَخرُجُ مِنه **مَقيساً**: البابُ
+        // المَفتوحُ الَّذي يُقاسُ خَرجُه يُغلَقُ يَوماً بِرَقَمٍ
+        // مَقروءٍ لا بِتَخمين.
+        //
+        // ونَفسُ إيجارِ الجَلسَة (`_admin`) ومُستَخدِمُها المُشتَقُّ
+        // مِن مُعَرِّفِها — لا مَصدَرَ ثانٍ.
+        await new Services.Incubator.StudioTierService(_store).RecordModelCallAsync(
+            Services.Metering.ModelCallRecord.For(
+                AdminTenant, UserIdFromSessionId(session.Id),
+                _backend.ProviderName, _model,
+                Services.Metering.ModelCallOperation.Build, resp.Usage,
+                resp.Error is null), ct);
 
         if (resp.Error is not null)
         {
