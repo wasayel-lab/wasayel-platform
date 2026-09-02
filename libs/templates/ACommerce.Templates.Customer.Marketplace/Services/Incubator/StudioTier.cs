@@ -396,15 +396,6 @@ public sealed class StudioTierService
     public Task RecordStoreBuiltAsync(Guid uid, CancellationToken ct = default)
         => Bump(uid, u => u.StoresBuilt++, ct);
 
-    /// <summary>
-    /// <para><b>الكِتابَة الصَريحَة</b> — ونُقطَة المَعنى الَّتي تَقَع
-    /// عِندَها: استِهلاك الحِصَّة فِعلاً. هُنا وَحدَه يُثَبَّت دَوَران
-    /// الفَترَة في قاعِدَة البَيانات، لا عِندَ كُلّ رَسم.</para>
-    ///
-    /// <para>والتَرتيب مَقصود: يَدور أَوَّلاً ثُمَّ يَزيد — وإلّا
-    /// زادَ عَدّاداً مِن فَترَةٍ مُنقَضِيَة. والدَوَران والزِيادَة في
-    /// <b>حِفظٍ واحِد</b>، فَلا تَقَع إحداهُما دونَ الأُخرى.</para>
-    /// </summary>
     // ═══ قياسُ استِهلاكِ نَماذِجِ اللُغَة ═════════════════════════════
     //
     // **ولِماذا هُنا لا في خِدمَةٍ جَديدَة** (القاعِدَة ٨: لا أُنبوبَ
@@ -456,17 +447,37 @@ public sealed class StudioTierService
     /// <para><paramref name="userId"/> <c>null</c> = كُلُّ
     /// المُستَخدِمين — أَي فاتورَةُ المالِكِ الكامِلَةُ مِن
     /// <paramref name="sinceUtc"/>.</para>
+    ///
+    /// <para><b>و<paramref name="sinceUtc"/> يُطَبَّعُ بِنَفسِ وَحدَةِ
+    /// الكِتابَة</b> (<see cref="Metering.ModelCallRecord.Instant"/>):
+    /// عَمودُ <c>AtUtc</c> عِندَ Postgres هو
+    /// <c>timestamp without time zone</c>، وNpgsql يَرفُضُ وَسيطاً
+    /// بِـ<c>Kind=Utc</c> عَلَيه بِـ<c>ArgumentException</c> — أَي أَنّ
+    /// هذِه الدالَّةَ كانَت تَرمي لِكُلِّ مُستَدعٍ طَبيعيّ (‏والاسمُ
+    /// <c>sinceUtc</c> يَدعو إلى ذلكَ بِعَينِه) بَينَما الكِتابَةُ
+    /// تَعمَل. مُبرهَنٌ حَيّاً في
+    /// <c>LiveModelUsageMeteringProofTests</c>.</para>
     /// </summary>
     public async Task<Metering.ModelCallTotals> ReadModelUsageAsync(
         Guid? userId, DateTime sinceUtc, CancellationToken ct = default)
     {
+        var since = Metering.ModelCallRecord.Instant(sinceUtc);
         await using var qs = _store.QuerySession(StudioAuth.Tenant);
         IQueryable<Metering.ModelCallRecord> q = qs.Query<Metering.ModelCallRecord>()
-            .Where(r => r.AtUtc >= sinceUtc);
+            .Where(r => r.AtUtc >= since);
         if (userId is Guid u) q = q.Where(r => r.UserId == u);
         return Metering.ModelCallTotals.Of(await q.ToListAsync(ct));
     }
 
+    /// <summary>
+    /// <para><b>الكِتابَة الصَريحَة</b> — ونُقطَة المَعنى الَّتي تَقَع
+    /// عِندَها: استِهلاك الحِصَّة فِعلاً. هُنا وَحدَه يُثَبَّت دَوَران
+    /// الفَترَة في قاعِدَة البَيانات، لا عِندَ كُلّ رَسم.</para>
+    ///
+    /// <para>والتَرتيب مَقصود: يَدور أَوَّلاً ثُمَّ يَزيد — وإلّا
+    /// زادَ عَدّاداً مِن فَترَةٍ مُنقَضِيَة. والدَوَران والزِيادَة في
+    /// <b>حِفظٍ واحِد</b>، فَلا تَقَع إحداهُما دونَ الأُخرى.</para>
+    /// </summary>
     private async Task Bump(Guid uid, Action<StudioUser> mutate, CancellationToken ct)
     {
         await using var s = _store.LightweightSession(StudioAuth.Tenant);

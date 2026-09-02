@@ -431,15 +431,34 @@ public sealed class GeminiBackend : IAgentBackend
     /// </summary>
     public static AgentUsage? ReadUsage(JsonElement root)
     {
+        // ويَشتَرِطُ المِفتاحَ الداخِليَّ كَجارَيه: `usageMetadata`
+        // فارِغٌ لَيسَ «أَصفاراً مَقيسَة» بَل «لَم يُقَس» — والعَقدُ
+        // واحِدٌ في الثَلاث، فَلا يَنفَرِدُ واحِدٌ بِجَوابٍ آخَر.
         if (root.ValueKind != JsonValueKind.Object
             || !root.TryGetProperty("usageMetadata", out var u)
-            || u.ValueKind != JsonValueKind.Object) return null;
+            || u.ValueKind != JsonValueKind.Object
+            || !u.TryGetProperty("promptTokenCount", out _)) return null;
 
         var prompt = UsageJson.NonNegative(u, "promptTokenCount");
         var cached = UsageJson.NonNegative(u, "cachedContentTokenCount");
+
+        // **وتوكناتُ التَفكيرِ تُفَوتَرُ مُخرَجاً** ولا تَدخُلُ في
+        // `candidatesTokenCount`: النَموذَجُ الافتِراضِيُّ اليَومَ
+        // (`gemini-2.0-flash`) لا يُوَلِّدُها فَالحَقلُ غائِبٌ وقيمَتُه
+        // صِفر، لكِنّ النَموذَجَ يُضبَطُ بِـ`Agents:{Name}:Model` وأَيُّ
+        // نَموذَجٍ مِن سِلسِلَةِ ‏2.5 يُفَوتِرُها — فَإسقاطُها يُنقِصُ
+        // الفاتورَةَ صامِتاً.
+        var thoughts = UsageJson.NonNegative(u, "thoughtsTokenCount");
+
+        // و`toolUsePromptTokenCount` مُدخَلٌ خارِجَ
+        // `promptTokenCount` (المَجموعُ عِندَ جوجل =
+        // ‏prompt + candidates + thoughts + toolUsePrompt) — فَيُضاف
+        // ولا يُطرَح.
+        var toolUse = UsageJson.NonNegative(u, "toolUsePromptTokenCount");
+
         return new AgentUsage(
-            Math.Max(0, prompt - cached),
-            UsageJson.NonNegative(u, "candidatesTokenCount"),
+            Math.Max(0, prompt - cached) + toolUse,
+            UsageJson.NonNegative(u, "candidatesTokenCount") + thoughts,
             0,
             cached);
     }

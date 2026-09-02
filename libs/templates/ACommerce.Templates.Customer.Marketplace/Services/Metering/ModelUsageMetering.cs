@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services.Metering;
 
@@ -19,6 +20,24 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Metering;
 // يُغَيِّرُه المُزَوِّدُ لا نَحن. سِعرٌ مَحبوسٌ في كودٍ يَحتاجُ بِناءً
 // ونَشراً لِيُصَحَّح، وسَطرٌ خامٌ بِلا سِعرٍ يُسَعَّرُ لاحِقاً بِأَثَرٍ
 // رَجعيّ — فَالخامُ يَبقى والسِعرُ يَتَحَرَّك.
+//
+// ═══ شَرطُ الاستِخراجِ — القاعِدَة ١ داخِلَ المِلَفِّ نَفسِه ═══════════
+//
+// **دَينٌ مُعلَنٌ لا ادِّعاءُ إنجاز**: الكِتابَةُ لَها ثَلاثَةُ
+// مُستَهلِكينَ أَحياءَ ومُثَبَّتَةٌ بِماسِح (`AgentService` ·
+// `RefineSectionAsync` · `RunAnalysisAsync`)، أَمّا **القِراءَةُ
+// التَجميعِيَّة** (`StudioTierService.ReadModelUsageAsync` و
+// `ModelCallTotals` و`ModelPricingCatalog.All`) فَمُستَهلِكُها اليَومَ
+// **الاختِبارُ وَحدَه** — وذلك خَرقٌ مُعلَنٌ لِلقاعِدَةِ ١ («التَجريدُ
+// لا يَسبِقُ مُستَهلِكَه»)، مَكتوبٌ في ‏ADR-031 §٣ ومَكتوبٌ هُنا
+// لِأَنّ القاعِدَةَ تَشتَرِطُ الاثنَين.
+//
+// **وشَرطُ سُقوطِ الدَين**: أَوَّلُ شاشَةٍ تَعرِضُ الإنفاقَ لِمالِكِ
+// المَنَصَّةِ (لَوحُ الاستوديو) تَستَهلِكُ `ReadModelUsageAsync` —
+// فَإن مَرَّت مَوجَةٌ ولَم تُبنَ تِلكَ الشاشَة، **تُحذَفُ القِراءَةُ
+// التَجميعِيَّةُ** ويَبقى سَطرُ الكِتابَةِ وَحدَه؛ فَالخامُ
+// المُخَزَّنُ يُقرَأُ بِاستِعلامٍ عِندَ الحاجَة، والتَجميعُ بِلا
+// شاشَةٍ كودٌ مَيِّتٌ بِكامِلِ كِلفَتِه.
 
 /// <summary>
 /// <para><b>نَوعُ العَمَلِيَّةِ الَّتي أَنفَقَتِ النِداء — مَعجَمٌ
@@ -110,11 +129,54 @@ public sealed class ModelCallRecord
     public decimal? CostUsd { get; set; }
 
     public bool Success { get; set; }
-    public DateTime AtUtc { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// <para><b>هَل قُرِئَ الاستِهلاكُ أَصلاً؟</b> <c>false</c> =
+    /// «لَم يُقَس» (‏رَدُّ ‏401 بِلا جِسمٍ مَقروء، أَو استِثناءُ
+    /// شَبَكَة)، و<c>true</c> = «قيسَ فَكانَ كَذا» ولَو كانَ الأَربَعَةُ
+    /// أَصفاراً.</para>
+    ///
+    /// <para><b>ولِماذا حَقلٌ لا اشتِقاق</b>: بِلا هذا الحَقلِ
+    /// يَنهارُ «لَم يُقَس» إلى «صِفر» — فَيُخَزَّنُ رَدٌّ أَعمى
+    /// مُطابِقاً لِنِداءٍ صِفرِيٍّ حَقيقِيّ، ويُقَلِّلُ كُلُّ تَقريرٍ
+    /// الفاتورَةَ دونَ أَن يَقول. وهو نَفسُ ثابِتِ
+    /// <see cref="AgentUsage"/>: «<c>null</c> لا أَصفار».</para>
+    /// </summary>
+    public bool UsageMeasured { get; set; } = true;
+
+    public DateTime AtUtc { get; set; } = Instant(DateTime.UtcNow);
+
+    /// <summary>
+    /// <para><b>وَحدَةُ الزَمَنِ الواحِدَةُ لِهذِه الوَثيقَة —
+    /// <c>DateTimeKind.Unspecified</c> بِتَوقيتٍ عالَميّ.</b></para>
+    ///
+    /// <para><b>الكِلفَةُ الَّتي كَتَبَت هذا</b>: عَمودُ Marten
+    /// لِحَقلِ <see cref="AtUtc"/> هو
+    /// <c>timestamp without time zone</c>، وNpgsql <b>يَرفُضُ</b>
+    /// وَسيطاً بِـ<c>Kind=Utc</c> عَلَيه
+    /// (<c>ArgumentException: Cannot write DateTime with Kind=UTC…</c>).
+    /// فَـ<c>ReadModelUsageAsync(userId, DateTime.UtcNow.AddDays(-30))</c>
+    /// — وهُوَ ما يُمَرِّرُه <b>كُلُّ مُستَدعٍ طَبيعيّ</b> — كانَ
+    /// يَرمي عَلى Postgres حَقيقيٍّ بَينَما الكِتابَةُ تَعمَل: أَي
+    /// سِجِلٌّ يُملَأُ ولا يُقرَأ.</para>
+    ///
+    /// <para><b>والعِلاجُ وَحدَةٌ واحِدَةٌ عَلى الطَرَفَين</b>: تُطَبَّعُ
+    /// اللَحظَةُ هُنا عِندَ الكِتابَةِ وتُطَبَّعُ حُدودُ المُدَّةِ عِندَ
+    /// القِراءَة — فَلا يَبقى في المَسارِ <c>Kind</c> يَختَلِفُ عَنِ
+    /// العَمود. و<c>Local</c> يُحَوَّلُ إلى عالَميٍّ أَوَّلاً، فَلا
+    /// تُخَزَّنُ ساعَةُ جِهازٍ باسمِ ساعَةٍ عالَمِيَّة.</para>
+    /// </summary>
+    public static DateTime Instant(DateTime t) => t.Kind switch
+    {
+        DateTimeKind.Utc   => DateTime.SpecifyKind(t, DateTimeKind.Unspecified),
+        DateTimeKind.Local => DateTime.SpecifyKind(t.ToUniversalTime(), DateTimeKind.Unspecified),
+        _                  => t,
+    };
 
     /// <summary>يَبني السَطرَ ويُسَعِّرُه. <paramref name="usage"/>
-    /// <c>null</c> (‏رَدٌّ بِلا جِسمٍ مَقروء) يُعطي أَصفاراً — والسَطرُ
-    /// يُكتَبُ على كُلِّ حال، فَنِداءٌ وَقَعَ يُعَدّ.</summary>
+    /// <c>null</c> (‏رَدٌّ بِلا جِسمٍ مَقروء) يُعطي أَصفاراً
+    /// <b>مَوسومَةً</b> بِـ<see cref="UsageMeasured"/> = <c>false</c> —
+    /// والسَطرُ يُكتَبُ على كُلِّ حال، فَنِداءٌ وَقَعَ يُعَدّ.</summary>
     public static ModelCallRecord For(
         string tenantId, Guid? userId, string provider, string model,
         string operation, AgentUsage? usage, bool success, DateTime? atUtc = null)
@@ -129,9 +191,10 @@ public sealed class ModelCallRecord
             OutputTokens     = usage?.OutputTokens     ?? 0,
             CacheWriteTokens = usage?.CacheWriteTokens ?? 0,
             CacheReadTokens  = usage?.CacheReadTokens  ?? 0,
+            UsageMeasured    = usage is not null,
             CostUsd   = ModelPricingCatalog.CostUsd(model, usage),
             Success   = success,
-            AtUtc     = atUtc ?? DateTime.UtcNow,
+            AtUtc     = Instant(atUtc ?? DateTime.UtcNow),
         };
 }
 
@@ -151,6 +214,97 @@ public sealed record ModelPrice(
     public bool IsComplete =>
         InputPerMillionUsd is not null && OutputPerMillionUsd is not null &&
         CacheWritePerMillionUsd is not null && CacheReadPerMillionUsd is not null;
+}
+
+/// <summary>نَفسُ شَكلِ <c>ProviderDefinitionViolation</c> و
+/// <c>RoleDefinitionViolation</c> حَرفاً (القاعِدَة ٤).</summary>
+public sealed record ModelPriceViolation(string Code, string MessageAr);
+
+/// <summary>
+/// <para><b>مُصادِقُ جَدوَلِ الأَسعار — سِتَّةُ رُموزِ خَرق، ولِكُلٍّ
+/// اختِبارٌ موجِبٌ وسالِب</b> (القاعِدَة ٤).</para>
+///
+/// <para><b>ولِماذا مُصادِقٌ لا قارِئٌ مُتَساهِل</b>: القارِئُ
+/// المُتَساهِلُ يَقرَأُ مِفتاحاً مَكتوباً خَطَأً («<c>cache_write</c>»
+/// مَكانَ «<c>cacheWrite</c>») «لَم يُملَأ بَعد» — فَتَبقى الكِلفَةُ
+/// <c>null</c> ويُقرَأُ العَطَبُ <b>تَأَخُّراً في التَسعير</b> لا
+/// خَطَأً في المِلَفّ. وذلك بِعَينِه الشَكلُ الَّذي تَلتَزِمُه ثَمانِيَةُ
+/// مُحَمِّلينَ في المُستَودَع: <c>UnmappedMemberHandling.Disallow</c>
+/// + رُموزُ خَرقٍ مُعلَنَة.</para>
+/// </summary>
+public static class ModelPricingValidator
+{
+    /// <summary>الرُموزُ السِتَّة — مُعلَنَةً لِيُقاسَ أَنّ لِكُلٍّ
+    /// اختِبارَين، لا لِتُقرَأَ في تَعليق.</summary>
+    public static readonly IReadOnlyList<string> Codes = new[]
+    {
+        "currency_out_of_vocabulary",
+        "unit_out_of_vocabulary",
+        "models_empty",
+        "model_key_blank",
+        "price_not_positive",
+        "priced_at_missing",
+    };
+
+    public const string Currency = "USD";
+    public const string Unit     = "perMillionTokens";
+
+    public static IReadOnlyList<ModelPriceViolation> Validate(
+        string? currency, string? unit, IReadOnlyDictionary<string, ModelPrice> models)
+    {
+        var v = new List<ModelPriceViolation>();
+
+        // العُملَةُ والوَحدَةُ لَيسَتا زينَة: الصيغَةُ في
+        // `CostUsd` تَقسِمُ عَلى مِليونٍ وتُرجِعُ دولاراً — فَمِلَفٌّ
+        // يَقولُ «رِيال» أَو «لِكُلِّ أَلف» يُنتِجُ رَقَماً خاطِئاً
+        // بِصَمت، وهو أَسوَأُ مِن لا رَقَم.
+        if (!string.Equals(currency, Currency, StringComparison.Ordinal))
+            v.Add(new("currency_out_of_vocabulary",
+                $"العُملَة «{currency}» خارِج المَعجَم — المُتَوَقَّع «{Currency}» "
+                + "لِأَنّ `CostUsd` تُرجِعُ دولاراً."));
+
+        if (!string.Equals(unit, Unit, StringComparison.Ordinal))
+            v.Add(new("unit_out_of_vocabulary",
+                $"الوَحدَة «{unit}» خارِج المَعجَم — المُتَوَقَّع «{Unit}» "
+                + "لِأَنّ الصيغَة تَقسِم عَلى مِليون."));
+
+        if (models.Count == 0)
+            v.Add(new("models_empty", "جَدوَل الأَسعار بِلا نَموذَجٍ واحِد."));
+
+        foreach (var (model, p) in models)
+        {
+            if (string.IsNullOrWhiteSpace(model))
+                v.Add(new("model_key_blank", "مِفتاح نَموذَجٍ فارِغ في الجَدوَل."));
+
+            var filled = 0;
+            foreach (var (field, value) in new (string, decimal?)[]
+            {
+                ("input",      p.InputPerMillionUsd),
+                ("output",     p.OutputPerMillionUsd),
+                ("cacheWrite", p.CacheWritePerMillionUsd),
+                ("cacheRead",  p.CacheReadPerMillionUsd),
+            })
+            {
+                if (value is null) continue;
+                filled++;
+
+                // صِفرٌ مَمنوع: يُقرَأُ «مَجّانيّ» فَيُطمئِنُ كَذِباً
+                // (القاعِدَة ١٦).
+                if (value <= 0m)
+                    v.Add(new("price_not_positive",
+                        $"سِعرٌ غَيرُ مُوجَبٍ في «{model}.{field}» = {value} — الفارِغُ `null` لا صِفر."));
+            }
+
+            // وسِعرٌ بِلا تاريخِ قِراءَةٍ لا يُدقَّق: الأَسعارُ
+            // تَتَغَيَّرُ بِقَرارِ المُزَوِّد، ورَقَمٌ بِلا تاريخٍ لا
+            // يُعرَفُ أَقَديمٌ هُوَ أَم جَديد.
+            if (filled > 0 && string.IsNullOrWhiteSpace(p.PricedAtUtc))
+                v.Add(new("priced_at_missing",
+                    $"«{model}» فيه سِعرٌ مَملوءٌ ولا `pricedAtUtc` — رَقَمٌ لا يُدقَّق."));
+        }
+
+        return v;
+    }
 }
 
 /// <summary>
@@ -194,32 +348,90 @@ public static class ModelPricingCatalog
              + usage.CacheReadTokens  / million * price.CacheReadPerMillionUsd!.Value;
     }
 
-    private static IReadOnlyDictionary<string, ModelPrice> Load()
+    // ─── القِراءَةُ الصارِمَة — شَكلُ عائِلَةِ التَعريفاتِ حَرفاً ────
+
+    private static readonly JsonSerializerOptions Options = new()
     {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = false,
+        // مِفتاحٌ مَجهولٌ في مِلَفِّ بَياناتٍ = خَطَأٌ صَريحٌ لا تَجاهُلٌ
+        // صامِت. وهذا هُوَ العَطَبُ بِعَينِه: «cache_write» مَكانَ
+        // «cacheWrite» كانَ يُقرَأُ «لَم يُملَأ».
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+        ReadCommentHandling = JsonCommentHandling.Disallow,
+        AllowTrailingCommas = false,
+    };
+
+    private sealed record PriceEntry
+    {
+        public decimal? Input { get; init; }
+        public decimal? Output { get; init; }
+        public decimal? CacheWrite { get; init; }
+        public decimal? CacheRead { get; init; }
+        public string? PricedAtUtc { get; init; }
+    }
+
+    private sealed record PricingFile
+    {
+        public IReadOnlyList<string> Note { get; init; } = [];
+        public string? Currency { get; init; }
+        public string? Unit { get; init; }
+        public IReadOnlyDictionary<string, PriceEntry> Models { get; init; }
+            = new Dictionary<string, PriceEntry>(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// <para><b>يُحَلِّلُ ويُصادِقُ ويَرمي بِرَمزِ الخَرق</b> — بِلا
+    /// ابتِلاع. وهذا هُوَ المَدخَلُ الَّذي يَستَعمِلُه الفَحصُ، وهو
+    /// نَفسُ عَقدِ <c>ProviderDefinitionLoader.ParseDefinition</c>.</para>
+    /// </summary>
+    public static IReadOnlyDictionary<string, ModelPrice> Parse(string json)
+    {
+        var file = JsonSerializer.Deserialize<PricingFile>(json, Options)
+            ?? throw new InvalidOperationException("جَدوَل الأَسعار أَعطى null.");
+
         var map = new Dictionary<string, ModelPrice>(StringComparer.Ordinal);
-        using var stream = typeof(ModelPricingCatalog).Assembly
-            .GetManifestResourceStream(Resource);
-        if (stream is null) return map;
+        foreach (var (name, e) in file.Models)
+            map[name] = new ModelPrice(
+                e.Input, e.Output, e.CacheWrite, e.CacheRead, e.PricedAtUtc);
 
-        using var doc = JsonDocument.Parse(stream);
-        if (!doc.RootElement.TryGetProperty("models", out var models)
-            || models.ValueKind != JsonValueKind.Object) return map;
+        var violations = ModelPricingValidator.Validate(file.Currency, file.Unit, map);
+        if (violations.Count > 0)
+            throw new InvalidOperationException(
+                "جَدوَل أَسعار النَماذِج لا يَجتاز المُصادَقَة: "
+                + string.Join(" | ", violations.Select(v => $"{v.Code}: {v.MessageAr}")));
 
-        foreach (var m in models.EnumerateObject())
-            map[m.Name] = new ModelPrice(
-                Money(m.Value, "input"),
-                Money(m.Value, "output"),
-                Money(m.Value, "cacheWrite"),
-                Money(m.Value, "cacheRead"),
-                m.Value.TryGetProperty("pricedAtUtc", out var at) && at.ValueKind == JsonValueKind.String
-                    ? at.GetString() : null);
         return map;
     }
 
-    /// <summary><c>null</c> يَبقى <c>null</c> — ولا يُقرَأُ صِفراً.</summary>
-    private static decimal? Money(JsonElement obj, string key)
-        => obj.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Number
-            ? v.GetDecimal() : null;
+    /// <summary>
+    /// <para><b>والتَحميلُ لا يَكسِرُ المَسار</b> (القاعِدَة ٧ في
+    /// التَكليف، وحُجَّةُ «القياسُ مُراقِبٌ لا حارِس» نَفسُها): مِلَفٌّ
+    /// فاسِدٌ يُعطي جَدوَلاً <b>فارِغاً</b> فَتَصيرُ كُلُّ كِلفَةٍ
+    /// <c>null</c> «غَيرَ مَعروفَة» — ولا يُنتِجُ رَقَماً خاطِئاً
+    /// أَبَداً — ويُطبَعُ التَحذيرُ مَسموعاً. أَمّا الخَطَأُ نَفسُه
+    /// فَيُمسَكُ في الفَحصِ عَبرَ <see cref="Parse"/> الَّذي يَرمي.</para>
+    /// </summary>
+    private static IReadOnlyDictionary<string, ModelPrice> Load()
+    {
+        try
+        {
+            using var stream = typeof(ModelPricingCatalog).Assembly
+                .GetManifestResourceStream(Resource)
+                ?? throw new InvalidOperationException(
+                    $"المَورِد «{Resource}» غَير مُضَمَّن في المُجَمَّعَة.");
+
+            using var reader = new StreamReader(stream);
+            return Parse(reader.ReadToEnd());
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"[metering] تَعَذَّرَت قِراءَةُ جَدوَلِ أَسعارِ النَماذِج — "
+              + $"كُلُّ كِلفَةٍ تَبقى «غَيرَ مَعروفَة»: {ex.Message}");
+            return new Dictionary<string, ModelPrice>(StringComparer.Ordinal);
+        }
+    }
 }
 
 /// <summary>
@@ -232,7 +444,7 @@ public static class ModelPricingCatalog
 public sealed record ModelCallTotals(
     int Calls, int Failures,
     long InputTokens, long OutputTokens, long CacheWriteTokens, long CacheReadTokens,
-    decimal CostUsd, int UncostedCalls)
+    decimal CostUsd, int UncostedCalls, int UnmeasuredCalls)
 {
     public static ModelCallTotals Of(IEnumerable<ModelCallRecord> lines)
     {
@@ -245,6 +457,11 @@ public sealed record ModelCallTotals(
             CacheWriteTokens: list.Sum(l => (long)l.CacheWriteTokens),
             CacheReadTokens:  list.Sum(l => (long)l.CacheReadTokens),
             CostUsd:          list.Sum(l => l.CostUsd ?? 0m),
-            UncostedCalls:    list.Count(l => l.CostUsd is null));
+            UncostedCalls:    list.Count(l => l.CostUsd is null),
+            // «لَم يُقَس» عَدَدٌ مُستَقِلٌّ عَن «لَم يُسَعَّر»:
+            // الأَوَّلُ نَقصٌ في التوكناتِ نَفسِها، والثاني نَقصٌ في
+            // السِعر. وتَقريرٌ يَخلِطُهُما يُقَلِّلُ الفاتورَةَ
+            // مَرَّتَين.
+            UnmeasuredCalls:  list.Count(l => !l.UsageMeasured));
     }
 }
