@@ -74,6 +74,20 @@ internal sealed class DocWorld
     /// <summary>ما كُتِبَ مِن نَوعٍ بِعَينِه — «لَم تُكتَب وَثيقَةُ
     /// طَلَبٍ» شَرطٌ يُعَدّ.</summary>
     public int Wrote<T>() => Stored.Count(x => x is T);
+
+    /// <summary>
+    /// <para><b>ما يَقَعُ بَينَ جَلسَتَين — اختِيارِيٌّ، و<c>null</c> افتِراضاً</b>:
+    /// يُنادى بِاسمِ كُلِّ عُضوٍ بَعدَ عَدِّه وقَبلَ تَنفيذِه، فَيُدخِلُ الاختِبارُ
+    /// كِتابَةً ثالِثَةً (إلغاءً، قَبولاً ثانِياً) <b>في مَوضِعٍ مُسَمّى</b> مِن
+    /// مَسارٍ يَفتَحُ جَلَساتٍ مُتَتالِيَة — والسِباقُ يَصيرُ تَرتيباً حَتمِيّاً
+    /// لا حَظّاً.</para>
+    ///
+    /// <para><b>المُستَهلِكُ الثالِث، ولا تَغييرَ عَلى الأَوَّلَين</b> (‏2026-10-11؛
+    /// <c>DealAcceptStaleSnapshotCharacterizationTests</c>): مُستَهلِكا
+    /// PayPal وPaddle لا يَضبِطانِه، فَسَطرُ النِداءِ في <c>MartenProxy</c> لا
+    /// يَعمَلُ لَهُما — صِفرُ تَغييرٍ في ما يَقيسان.</para>
+    /// </summary>
+    public Action<string>? BeforeMember { get; set; }
 }
 
 /// <summary>
@@ -102,6 +116,7 @@ internal class MartenProxy : DispatchProxy
     {
         var name = method!.Name;
         _world.Members.Add(name);
+        _world.BeforeMember?.Invoke(name);
 
         switch (name)
         {
