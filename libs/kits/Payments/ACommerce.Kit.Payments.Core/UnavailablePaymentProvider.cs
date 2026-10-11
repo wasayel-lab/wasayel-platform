@@ -55,3 +55,28 @@ public sealed class UnavailablePaymentProvider : IPaymentProvider
     public Task<Invoice?> GetInvoiceAsync(string paymentId, CancellationToken ct = default)
         => Task.FromResult<Invoice?>(null);
 }
+
+/// <summary>
+/// <para><b>أَيَستَطيعُ مُزَوِّدُ هذِه النُسخَةِ القَبضَ فِعلاً؟</b> — مُسنَدٌ
+/// واحِدٌ تَقرَؤُه شاشَةُ إتمامِ الشِراءِ ونُقطَتُها مَعاً، عَلى سابِقَةِ
+/// <c>PaymentSimulationSurface.IsSimulated</c> حَرفاً: القَرارُ مَوضِعٌ واحِد،
+/// والطَرَفانِ يُنادِيانِه.</para>
+///
+/// <para><b>العِلَّةُ المَقيسَة (‏ADR-032 §٢‑د، ‏2026-10-11)</b>: كانَ خِيارُ
+/// البِطاقَةِ يُشتَقُّ مِن <c>Tenant.PaymentProviderConfigured</c> وَحدَه —
+/// أَي مِن رابِطٍ مُستَضافٍ لَصَقَه المُستَأجِر — بَينَما البِطاقَةُ تُنادي
+/// <c>IPaymentProvider</c> <b>العامَّ</b>، وهُوَ في الإنتاجِ هذا الصِنفُ
+/// بِعَينِه فَيَرُدُّ <c>Failed</c> لِكُلِّ حَجز. فَكانَ المُشتَري يُعرَضُ
+/// عَلَيه بابٌ يُفضي إلى فَشَلٍ مُؤَكَّد (القاعِدَة ١٢).</para>
+///
+/// <para><b>ولِماذا نَفيُ هذا الصِنفِ لا واجِهَةُ عَلامَةٍ جَديدَة</b>:
+/// المُزَوِّدُ الَّذي «لا يَستَطيع» واحِدٌ مُسَمّى — الفَشَلُ المُغلَق —
+/// وما سِواهُ (المُحاكي في التَطوير، والتَجرِبَةُ المُعلَنَة، وأَيُّ بَوّابَةٍ
+/// تُدمَجُ لاحِقاً) يُجيبُ حَجزَه. وتَجريدٌ ثانٍ لِحالَةٍ واحِدَةٍ هُوَ
+/// الدَينُ الَّذي كَتَبَت القاعِدَةُ الأولى بِسِتِّ حالاتٍ مَقيسَة.</para>
+/// </summary>
+public static class PaymentChargeSurface
+{
+    public static bool CanCharge(IPaymentProvider? provider)
+        => provider is not null && provider is not UnavailablePaymentProvider;
+}

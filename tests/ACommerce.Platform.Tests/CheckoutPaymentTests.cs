@@ -1,3 +1,4 @@
+using ACommerce.Kit.Payments;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
 using Xunit;
 
@@ -182,8 +183,9 @@ public class CheckoutPaymentTests
     public void Cash_on_delivery_never_reaches_the_provider_in_any_store()
     {
         foreach (var collects in new[] { true, false })
+        foreach (var canCharge in new[] { true, false })
         {
-            var (method, refusal) = CheckoutPaymentPolicy.Decide("cash", collects);
+            var (method, refusal) = CheckoutPaymentPolicy.Decide("cash", collects, canCharge);
             Assert.Equal(CheckoutPayMethods.CashOnDelivery, method);
             Assert.Null(refusal);
             Assert.False(CheckoutPaymentPolicy.CallsProvider(method));
@@ -193,7 +195,7 @@ public class CheckoutPaymentTests
     [Fact]
     public void Card_in_a_store_that_collects_reaches_the_provider()
     {
-        var (method, refusal) = CheckoutPaymentPolicy.Decide("card", paymentProviderConfigured: true);
+        var (method, refusal) = CheckoutPaymentPolicy.Decide("card", paymentProviderConfigured: true, providerCanCharge: true);
         Assert.Equal(CheckoutPayMethods.Card, method);
         Assert.Null(refusal);
         Assert.True(CheckoutPaymentPolicy.CallsProvider(method));
@@ -204,9 +206,68 @@ public class CheckoutPaymentTests
     [Fact]
     public void Card_in_a_store_that_does_not_collect_is_refused_with_a_code()
     {
-        var (method, refusal) = CheckoutPaymentPolicy.Decide("card", paymentProviderConfigured: false);
+        var (method, refusal) = CheckoutPaymentPolicy.Decide("card", paymentProviderConfigured: false, providerCanCharge: true);
         Assert.Equal(CheckoutPayMethods.CardUnavailable, refusal);
         Assert.False(CheckoutPaymentPolicy.CallsProvider(method));
+    }
+
+    // ═══ ٤) المُزَوِّدُ يُسأَلُ عَن قُدرَتِه قَبلَ أَن يُنادى — ‏ADR-032 §٢‑د ═══
+    //
+    // **المَدخَلُ الَّذي كانَ يَضُرّ** (موجَزُ الفَجَوات P0-1، ‏2026-10-10): رابِطٌ
+    // مُستَضافٌ مَلصوقٌ يَقلِبُ `PaymentProviderConfigured` فَتُعرَضُ البِطاقَةُ
+    // وتُنادي `IPaymentProvider` العامَّ — وهُوَ في الإنتاجِ
+    // `UnavailablePaymentProvider` يَرُدُّ `Failed` دائِماً. فَيُختَمُ
+    // `payment_status = Failed` عَلى الصَفقَةِ وتَبقى `Offered`. وكانَ بِلا
+    // اختِبارٍ يُحمِرُّ إن عاد — وهذِه الأَربَعَةُ هي ذاكَ الاختِبار.
+
+    /// <summary><b>الموجِبُ خَلِيَّةٌ واحِدَة</b>: المَتجَرُ يَقبِضُ
+    /// والمُزَوِّدُ يَستَطيع. <b>والسالِبُ ثَلاث</b> — ومِنها الخَلِيَّةُ
+    /// الَّتي كانَت مَفتوحَة: رابِطٌ مَلصوقٌ ومُزَوِّدٌ لا يَقبِض.</summary>
+    [Theory]
+    [InlineData(true,  true,  true)]
+    [InlineData(true,  false, false)]   // P0-1 بِعَينِه: كانَ `true`
+    [InlineData(false, true,  false)]
+    [InlineData(false, false, false)]
+    public void Card_is_offered_only_when_the_store_collects_and_the_provider_can_charge(
+        bool collects, bool canCharge, bool offered)
+        => Assert.Equal(offered, CheckoutPaymentPolicy.CardOffered(collects, canCharge));
+
+    /// <summary>وطَلَبُ بِطاقَةٍ في تِلكَ الخَلِيَّةِ <b>يُرَدُّ بِرَمزٍ</b>
+    /// ولا يُبَدَّلُ صامِتاً ولا يُنادى المُزَوِّد.</summary>
+    [Fact]
+    public void Card_is_refused_with_a_code_when_the_platform_provider_cannot_charge_even_with_a_pasted_link()
+    {
+        var (method, refusal) = CheckoutPaymentPolicy.Decide("card", paymentProviderConfigured: true, providerCanCharge: false);
+        Assert.Equal(CheckoutPayMethods.CashOnDelivery, method);
+        Assert.Equal(CheckoutPayMethods.CardUnavailable, refusal);
+        Assert.False(CheckoutPaymentPolicy.CallsProvider(method));
+    }
+
+    /// <summary><b>مَن يَستَطيعُ القَبضَ ومَن لا</b>: الفَشَلُ المُغلَقُ
+    /// (مُزَوِّدُ الإنتاجِ بِلا تَهيئَة) لا؛ والمُحاكي والتَجرِبَةُ المُعلَنَةُ
+    /// نَعَم — وهُما لا يُسَجَّلانِ خارِجَ التَطويرِ إلّا بِكِتابَةٍ صَريحَة
+    /// (‏ADR-025).</summary>
+    [Fact]
+    public void The_closed_failure_provider_cannot_charge_and_the_development_providers_can()
+    {
+        Assert.False(PaymentChargeSurface.CanCharge(new UnavailablePaymentProvider()));
+        Assert.False(PaymentChargeSurface.CanCharge(null));
+        Assert.True(PaymentChargeSurface.CanCharge(new MockPaymentProvider()));
+        Assert.True(PaymentChargeSurface.CanCharge(new SimulatedPaymentProvider()));
+    }
+
+    /// <summary>والشاشَةُ والنُقطَةُ تَسأَلانِ المُسنَدَ نَفسَه — فَلا تَعرِضُ
+    /// الشاشَةُ خِياراً سَتَرُدُّه النُقطَة.</summary>
+    [Fact]
+    public void Both_readers_ask_the_provider_whether_it_can_charge()
+    {
+        Assert.Contains("PaymentChargeSurface.CanCharge(Payments)", CheckoutRazor(), StringComparison.Ordinal);
+
+        var text = Endpoints();
+        var start = text.IndexOf("/{slug}/checkout/submit", StringComparison.Ordinal);
+        Assert.True(start > 0, "نُقطَةُ إتمامِ الشِراءِ غَير مَوجودَة — الأَداةُ عَمياء.");
+        var body = text.Substring(start, Math.Min(4000, text.Length - start));
+        Assert.Contains("PaymentChargeSurface.CanCharge(payments)", body, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -28,6 +28,16 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Deals;
 // والمُشتَرَكُ بَينَهُما مُدخَلٌ واحِدٌ هُوَ
 // `Tenant.PaymentProviderConfigured` — **ودَلالَتُه واحِدَة**: «هذا
 // المَتجَرُ يَقبِض».
+//
+// **ومُدخَلٌ ثانٍ مُنذُ ‏2026-10-11 (‏ADR-032 §٢‑د)**: «هذا المَتجَرُ
+// يَقبِض» كانَ يُجابُ مِن رابِطٍ مُستَضافٍ لَصَقَه المُستَأجِرُ وَحدَه،
+// بَينَما البِطاقَةُ تُنادي `IPaymentProvider` **العامَّ** — وهُوَ في
+// الإنتاجِ `UnavailablePaymentProvider` يَرُدُّ `Failed` لِكُلِّ حَجز. فَكانَ
+// يُعرَضُ عَلى المُشتَري بابٌ يُفضي إلى فَشَلٍ مُؤَكَّد (موجَزُ الفَجَوات
+// P0-1). فَصارَ القَرارُ يَطلُبُ الطَرَفَين: المَتجَرُ يَقبِض **ومُزَوِّدُ
+// النُسخَةِ يَستَطيعُ القَبضَ فِعلاً** (`PaymentChargeSurface.CanCharge`).
+// وإلى أَن يوجَدَ مُزَوِّدُ مَفاتيحٍ لِلمُستَأجِر، لا تُعرَضُ البِطاقَةُ
+// في الإنتاجِ لِمَن لَصَقَ رابِطاً — ولا «قَريباً».
 
 /// <summary>
 /// <para><b>طُرُقُ الدَفعِ المَعروضَةُ في إتمامِ الشِراء</b> — قيمَتانِ
@@ -62,16 +72,24 @@ public static class CheckoutPaymentPolicy
 {
     /// <summary>
     /// <para><b>أَتُعرَضُ البِطاقَةُ أَصلاً؟</b> — <c>true</c> فَقَط
-    /// حينَ يَقبِضُ هذا المَتجَر.</para>
+    /// حينَ يَقبِضُ هذا المَتجَر <b>ويَستَطيعُ مُزَوِّدُ النُسخَةِ
+    /// القَبضَ فِعلاً</b>.</para>
     ///
     /// <para><b>والشاشَةُ والنُقطَةُ تَقرَآنِ هذِه الدالَّةَ
     /// نَفسَها</b> — سابِقَةُ <c>Plans.razor</c> و
     /// <c>PlanPurchasePolicy.Visible</c> حَرفاً: فَلا تَعرِضُ الشاشَةُ
     /// خِياراً سَتَرُدُّه النُقطَة، ولا يُرسَمُ زِرٌّ يَقودُ إلى فَشَلٍ
     /// مُبتلَع (القاعِدَة ١٢).</para>
+    ///
+    /// <para><b>ولِماذا وَسيطانِ لا واحِد</b> (‏ADR-032 §٢‑د): العَلَمُ
+    /// الأَوَّلُ رابِطٌ لَصَقَه المُستَأجِر، والثاني قُدرَةُ المُزَوِّدِ
+    /// العامِّ الَّذي سَتُنادِيه البِطاقَةُ فِعلاً — وفي الإنتاجِ هُوَ
+    /// الفَشَلُ المُغلَق. ولا حِملَ زائِداً بِوَسيطٍ واحِد: دالَّةٌ
+    /// تُجيبُ «نَعَم» بِلا أَن تَسأَلَ المُزَوِّدَ هي البابُ الَّذي
+    /// أُغلِقَ هُنا.</para>
     /// </summary>
-    public static bool CardOffered(bool paymentProviderConfigured)
-        => paymentProviderConfigured;
+    public static bool CardOffered(bool paymentProviderConfigured, bool providerCanCharge)
+        => paymentProviderConfigured && providerCanCharge;
 
     /// <summary>
     /// <para><b>ما اختارَهُ المُشتَري مُطَبَّعاً</b> — قيمَةٌ خارِجَ
@@ -100,11 +118,11 @@ public static class CheckoutPaymentPolicy
     /// </list>
     /// </summary>
     public static (string Method, string? Refusal) Decide(
-        string? requested, bool paymentProviderConfigured)
+        string? requested, bool paymentProviderConfigured, bool providerCanCharge)
     {
         var method = Normalize(requested);
 
-        if (method == CheckoutPayMethods.Card && !CardOffered(paymentProviderConfigured))
+        if (method == CheckoutPayMethods.Card && !CardOffered(paymentProviderConfigured, providerCanCharge))
             return (CheckoutPayMethods.CashOnDelivery, CheckoutPayMethods.CardUnavailable);
 
         return (method, null);

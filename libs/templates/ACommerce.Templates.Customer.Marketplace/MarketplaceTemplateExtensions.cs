@@ -2949,8 +2949,12 @@ public static class MarketplaceTemplateExtensions
             // وبِطاقَةٌ في مَتجَرٍ لا يَقبِضُ **تُرَدُّ ولا تُبَدَّلُ
             // صامِتَةً**: تَحويلُ طَلَبِ بِطاقَةٍ إلى نَقدٍ بِلا كَلِمَةٍ
             // تَبديلُ عَقدٍ مِن تَحتِ المُشتَري. والسَلَّةُ تَبقى.
-            var (payMethod, payRefusal) = Services.Deals.CheckoutPaymentPolicy.Decide(
-                pay, tenant?.PaymentProviderConfigured ?? false);
+            //
+            // **والمُزَوِّدُ يُسأَلُ عَن قُدرَتِه قَبلَ أَن يُنادى** (‏ADR-032
+            // §٢‑د، ‏2026-10-11): رابِطٌ مَلصوقٌ وَحدَه كانَ يَفتَحُ البِطاقَةَ
+            // عَلى `UnavailablePaymentProvider` في الإنتاج — فَشَلٌ مُؤَكَّد.
+            var (payMethod, payRefusal) = Services.Deals.CheckoutPaymentPolicy.Decide(pay,
+                tenant?.PaymentProviderConfigured ?? false, ACommerce.Kit.Payments.PaymentChargeSurface.CanCharge(payments));
             if (payRefusal is not null)
                 return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
                     .RefusalPath(payRefusal, name, phone, addr)));

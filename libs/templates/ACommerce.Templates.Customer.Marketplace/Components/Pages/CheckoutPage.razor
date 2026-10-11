@@ -202,7 +202,19 @@
     [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
 
     Cart? cart;
-    bool CardOffered;
+
+    /// <summary>أَيَقبِضُ هذا المَتجَر؟ — رابِطٌ مَملوء (‏<c>Tenant.PaymentProviderConfigured</c>).</summary>
+    bool TenantCollects;
+
+    /// <summary><b>أَيَستَطيعُ مُزَوِّدُ هذِه النُسخَةِ القَبضَ فِعلاً؟</b> —
+    /// في الإنتاجِ هُوَ الفَشَلُ المُغلَقُ فَلا. نَفسُ المُسنَدِ الَّذي
+    /// تَقرَؤُه النُقطَة (‏ADR-032 §٢‑د)، فَلا يَنجَرِفُ طَرَفان.</summary>
+    bool ProviderCanCharge => PaymentChargeSurface.CanCharge(Payments);
+
+    /// <summary>البِطاقَةُ تُعرَضُ حينَ يَقبِضُ المَتجَرُ <b>ويَستَطيعُ
+    /// المُزَوِّدُ القَبض</b> — وكانَت تُعرَضُ بِالأَوَّلِ وَحدَه، فَيَنتَهي
+    /// الطَلَبُ في الإنتاجِ بِـ`payment_status = Failed` حَتماً.</summary>
+    bool CardOffered => CheckoutPaymentPolicy.CardOffered(TenantCollects, ProviderCanCharge);
 
     /// <summary><b>أَمُزَوِّدُ هذِه النُسخَةِ في وَضعِ التَجرِبَة؟</b> —
     /// نَفسُ المُسنَدِ الَّذي تَقرَؤُه النُقطَة، فَلا يَنجَرِفُ
@@ -212,7 +224,7 @@
     /// <summary><b>طَريقَةُ الدَفعِ الَّتي سَتُرسَل</b> — مِن الدالَّةِ
     /// النَقِيَّةِ نَفسِها الَّتي تَقرَؤُها النُقطَة، فَلا تَعرِضُ
     /// الشاشَةُ ما سَتَرُدُّه.</summary>
-    string EffectivePay => CheckoutPaymentPolicy.Decide(Pay, CardOffered).Method;
+    string EffectivePay => CheckoutPaymentPolicy.Decide(Pay, TenantCollects, ProviderCanCharge).Method;
 
     string? ErrorMessage => Err switch
     {
@@ -227,7 +239,7 @@
         if (Step < 1 || Step > 3) Step = 1;
         cart = await Accounts.CartAsync(Slug, Auth.UserId!.Value);
         var tenant = await Tenants.FindAsync(Slug);
-        CardOffered = CheckoutPaymentPolicy.CardOffered(tenant?.PaymentProviderConfigured ?? false);
+        TenantCollects = tenant?.PaymentProviderConfigured ?? false;
         if (Auth.UserName is { } un && string.IsNullOrEmpty(Name)) Name = un;
     }
 }

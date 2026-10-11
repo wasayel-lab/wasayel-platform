@@ -23,6 +23,14 @@ namespace ACommerce.Platform.Tests;
 // دائِماً. فَيُختَمُ `payment_status = Failed` عَلى الصَفقَةِ وتَبقى `Offered`
 // ويُحالُ المُشتَري إلَيها بِلا كَلِمَة. **ولا اختِبارَ يُحمِرُّ إن عاد** — حَتّى
 // هذا المِلَفّ، الَّذي يُثَبِّتُه أَوَّلاً كَما هُوَ.
+//
+// **ما مُسَّ في كوميتِ §٢‑د (‏2026-10-11)، بِقَرارٍ مَرئِيّ**: الصُفوفُ الَّتي
+// كانَت تُثَبِّتُ «`CardOffered` عَلَمُ المُستَأجِرِ وَحدَه» و«القارِئانِ لا
+// يَسأَلانِ المُزَوِّد» و«رابِطٌ مَلصوقٌ يَعرِضُ بِطاقَةً عَلى مُزَوِّدٍ لا
+// يَقبِض» و«النَصُّ يُسَمّي بَوّابَتَينِ غَيرَ مُدمَجَتَين» — انقَلَبَت إلى
+// نَقائِضِها. وجَدوَلُ `Decide` بَقِيَ بِخَلاياهُ الاثنَتَي عَشرَةَ حَرفاً
+// مَعَ وَسيطٍ ثالِثٍ `providerCanCharge: true` فَرَضَه التَوقيعُ لا المَعنى،
+// وأُضيفَ إلَيه عَمودُ «المُزَوِّدُ لا يَقبِض».
 
 public class CheckoutPaymentPolicyCharacterizationTests
 {
@@ -89,7 +97,23 @@ public class CheckoutPaymentPolicyCharacterizationTests
     [InlineData(null,    false, "cash", null)]
     public void The_decision_table_today(string? requested, bool configured, string method, string? refusal)
     {
-        var (m, r) = CheckoutPaymentPolicy.Decide(requested, configured);
+        var (m, r) = CheckoutPaymentPolicy.Decide(requested, configured, providerCanCharge: true);
+        Assert.Equal(method, m);
+        Assert.Equal(refusal, r);
+    }
+
+    /// <summary><b>العَمودُ الَّذي أَضافَه §٢‑د</b>: حينَ لا يَستَطيعُ المُزَوِّدُ
+    /// القَبضَ، البِطاقَةُ تُرَدُّ بِرَمزٍ في كُلِّ مَتجَرٍ — ولا شَيءَ غَيرُها
+    /// يَتَغَيَّر.</summary>
+    [Theory]
+    [InlineData("card",  true,  "cash", "pay_card_unavailable")]   // P0-1 بِعَينِه: رابِطٌ مَلصوقٌ ومُزَوِّدٌ لا يَقبِض
+    [InlineData("card",  false, "cash", "pay_card_unavailable")]
+    [InlineData("cash",  true,  "cash", null)]
+    [InlineData("cod",   true,  "cash", null)]
+    [InlineData(null,    true,  "cash", null)]
+    public void The_decision_table_when_the_provider_cannot_charge(string? requested, bool configured, string method, string? refusal)
+    {
+        var (m, r) = CheckoutPaymentPolicy.Decide(requested, configured, providerCanCharge: false);
         Assert.Equal(method, m);
         Assert.Equal(refusal, r);
     }
@@ -99,46 +123,51 @@ public class CheckoutPaymentPolicyCharacterizationTests
     [Fact]
     public void Only_a_card_outcome_ever_calls_the_provider()
     {
-        Assert.True(CheckoutPaymentPolicy.CallsProvider(CheckoutPaymentPolicy.Decide("card", true).Method));
-        Assert.False(CheckoutPaymentPolicy.CallsProvider(CheckoutPaymentPolicy.Decide("card", false).Method));
-        Assert.False(CheckoutPaymentPolicy.CallsProvider(CheckoutPaymentPolicy.Decide("cash", true).Method));
+        Assert.True(CheckoutPaymentPolicy.CallsProvider(CheckoutPaymentPolicy.Decide("card", true, true).Method));
+        Assert.False(CheckoutPaymentPolicy.CallsProvider(CheckoutPaymentPolicy.Decide("card", false, true).Method));
+        Assert.False(CheckoutPaymentPolicy.CallsProvider(CheckoutPaymentPolicy.Decide("card", true, false).Method));
+        Assert.False(CheckoutPaymentPolicy.CallsProvider(CheckoutPaymentPolicy.Decide("cash", true, true).Method));
     }
 
-    // ═══ ٢) الصَفُّ الَّذي سَيَنقَلِبُ — `CardOffered` عَلَمُ المُستَأجِرِ وَحدَه ══
+    // ═══ ٢) الصَفُّ الَّذي انقَلَب — `CardOffered` يَطلُبُ العَلَمَ وقُدرَةَ المُزَوِّدِ مَعاً ══
 
-    /// <summary><b>اليَوم: <c>CardOffered(x) == x</c></b>، والدالَّةُ تَقبَلُ
-    /// <c>bool</c> واحِداً — لا مُزَوِّدَ ولا قُدرَةَ قَبض. مَقيسٌ بِالانعِكاسِ
-    /// لا بِالدَعوى، <b>وهذا هُوَ الصَفُّ الَّذي يُقلِبُه ADR-032 §٢‑د</b>:
-    /// «لا يُشتَقُّ مِن `CollectsMoney` وَحدَه بَل مِن مُزَوِّدٍ يَستَطيعُ
-    /// القَبضَ فِعلاً لِهذا المُستَأجِر».</summary>
+    /// <summary><b>كانَ <c>CardOffered(x) == x</c> بِـ<c>bool</c> واحِد</b>
+    /// (كوميتُ التَوصيف ‏3d6c255)؛ وصارَ بِـ<c>bool</c>َين لا حِملَ
+    /// واحِدِيَّ الوَسيطِ بِجِوارِهِما — فَلا سَبيلَ إلى الجَوابِ «نَعَم»
+    /// بِلا سُؤالِ المُزَوِّد. مَقيسٌ بِالانعِكاسِ لا بِالدَعوى (‏ADR-032
+    /// §٢‑د).</summary>
     [Fact]
-    public void CardOffered_today_mirrors_the_tenant_flag_and_asks_the_provider_nothing()
+    public void CardOffered_now_demands_the_tenant_flag_and_a_provider_that_can_charge()
     {
-        Assert.True(CheckoutPaymentPolicy.CardOffered(true));
-        Assert.False(CheckoutPaymentPolicy.CardOffered(false));
+        Assert.True(CheckoutPaymentPolicy.CardOffered(true, true));
+        Assert.False(CheckoutPaymentPolicy.CardOffered(true, false));
+        Assert.False(CheckoutPaymentPolicy.CardOffered(false, true));
 
-        var offered = typeof(CheckoutPaymentPolicy).GetMethod(nameof(CheckoutPaymentPolicy.CardOffered))!;
-        Assert.Equal(new[] { typeof(bool) }, offered.GetParameters().Select(p => p.ParameterType));
+        var offered = typeof(CheckoutPaymentPolicy).GetMethods().Where(m => m.Name == nameof(CheckoutPaymentPolicy.CardOffered)).ToArray();
+        Assert.Single(offered);
+        Assert.Equal(new[] { typeof(bool), typeof(bool) }, offered[0].GetParameters().Select(p => p.ParameterType));
 
-        var decide = typeof(CheckoutPaymentPolicy).GetMethod(nameof(CheckoutPaymentPolicy.Decide))!;
-        Assert.Equal(new[] { typeof(string), typeof(bool) }, decide.GetParameters().Select(p => p.ParameterType));
+        var decide = typeof(CheckoutPaymentPolicy).GetMethods().Where(m => m.Name == nameof(CheckoutPaymentPolicy.Decide)).ToArray();
+        Assert.Single(decide);
+        Assert.Equal(new[] { typeof(string), typeof(bool), typeof(bool) }, decide[0].GetParameters().Select(p => p.ParameterType));
     }
 
     /// <summary>والقارِئانِ — الشاشَةُ والنُقطَةُ — يُمَرِّرانِ عَلَمَ
-    /// المُستَأجِرِ وَحدَه، ولا يَسأَلانِ <c>IPaymentProvider</c> عَن
-    /// قُدرَتِه (الشاشَةُ تَسأَلُه عَن <b>التَجرِبَة</b> فَقَط).</summary>
+    /// المُستَأجِرِ <b>وقُدرَةَ المُزَوِّدِ</b> مِن المُسنَدِ نَفسِه
+    /// (<c>PaymentChargeSurface.CanCharge</c>)، فَلا يَنجَرِفُ طَرَفان.</summary>
     [Fact]
-    public void Both_readers_pass_only_the_tenant_flag_today()
+    public void Both_readers_pass_the_tenant_flag_and_the_providers_charge_capability()
     {
         var razor = CheckoutRazor();
-        Assert.Contains("CheckoutPaymentPolicy.CardOffered(tenant?.PaymentProviderConfigured ?? false)",
-            razor, StringComparison.Ordinal);
+        Assert.Contains("TenantCollects = tenant?.PaymentProviderConfigured ?? false;", razor, StringComparison.Ordinal);
+        Assert.Contains("PaymentChargeSurface.CanCharge(Payments)", razor, StringComparison.Ordinal);
+        Assert.Contains("CheckoutPaymentPolicy.CardOffered(TenantCollects, ProviderCanCharge)", razor, StringComparison.Ordinal);
+        Assert.Contains("CheckoutPaymentPolicy.Decide(Pay, TenantCollects, ProviderCanCharge)", razor, StringComparison.Ordinal);
 
         var body = CheckoutSubmitBody();
-        Assert.Contains("CheckoutPaymentPolicy.Decide(", body, StringComparison.Ordinal);
-        Assert.Contains("pay, tenant?.PaymentProviderConfigured ?? false);", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("CanCharge", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("CanCharge", razor, StringComparison.Ordinal);
+        Assert.Contains("CheckoutPaymentPolicy.Decide(pay,", body, StringComparison.Ordinal);
+        Assert.Contains("tenant?.PaymentProviderConfigured ?? false, ACommerce.Kit.Payments.PaymentChargeSurface.CanCharge(payments));",
+            body, StringComparison.Ordinal);
     }
 
     // ═══ ٣) السِلسِلَةُ كامِلَةً — رابِطٌ مَلصوقٌ ⇒ بِطاقَةٌ تُعرَضُ ⇒ مُزَوِّدٌ يَفشَل ══
@@ -178,38 +207,46 @@ public class CheckoutPaymentPolicyCharacterizationTests
     }
 
     /// <summary>
-    /// <para><b>P0-1 بِحَرفِه، مُثَبَّتاً كَما هُوَ اليَوم</b>: مُستَأجِرٌ لَصَقَ
-    /// رابِطَ مُيَسِّر ⇒ يَقبِض ⇒ تُعرَضُ البِطاقَةُ ⇒ طَلَبُها يُقبَلُ
-    /// ويُنادى المُزَوِّدُ — <b>وهُوَ في الإنتاجِ لا يَستَطيعُ القَبض</b>.
-    /// فَالبابُ مَفتوحٌ عَلى فَشَلٍ مُؤَكَّد. هذا الاختِبارُ يَحمَرُّ يَومَ
-    /// يُغلَقُ البابُ — وذاكَ مَقصود: يُقلَبُ في كوميتِ §٢‑د إلى
-    /// نَقيضِه، لا يُحذَف.</para>
+    /// <para><b>P0-1 مُغلَقاً — نَقيضُ ما كانَ مُثَبَّتاً</b>: مُستَأجِرٌ لَصَقَ
+    /// رابِطَ مُيَسِّر ⇒ يَقبِض ⇒ <b>ولا تُعرَضُ البِطاقَةُ</b> لِأَنّ مُزَوِّدَ
+    /// الإنتاجِ لا يَستَطيعُ القَبض؛ وطَلَبُها يُرَدُّ بِرَمزٍ ولا يُنادى
+    /// المُزَوِّد. وفي التَطويرِ (المُحاكي) تُعرَضُ كَما كانَت — فَالتَغييرُ
+    /// مَحصورٌ حَيثُ قُصِد (القاعِدَة ١٣).</para>
     /// </summary>
     [Fact]
-    public void Today_a_pasted_link_offers_a_card_whose_provider_cannot_charge_in_production()
+    public void A_pasted_link_alone_no_longer_offers_a_card_when_the_production_provider_cannot_charge()
     {
         var collects = TenantProviderSet.FromDocuments("t", new[] { Bound("https://moyasar.com/i/inv_1") }).CollectsMoney;
         Assert.True(collects);
-        Assert.True(CheckoutPaymentPolicy.CardOffered(collects));
 
-        var (method, refusal) = CheckoutPaymentPolicy.Decide("card", collects);
-        Assert.Equal(CheckoutPayMethods.Card, method);
-        Assert.Null(refusal);
-        Assert.True(CheckoutPaymentPolicy.CallsProvider(method));
-
-        // والمُزَوِّدُ الَّذي سَيُنادى في الإنتاج:
+        // الإنتاج: الفَشَلُ المُغلَق.
         Assert.Equal(PaymentProviderChoice.Unavailable, PaymentProviderSelection.Decide(false, null));
+        var production = PaymentChargeSurface.CanCharge(new UnavailablePaymentProvider());
+        Assert.False(production);
+        Assert.False(CheckoutPaymentPolicy.CardOffered(collects, production));
+
+        var (method, refusal) = CheckoutPaymentPolicy.Decide("card", collects, production);
+        Assert.Equal(CheckoutPayMethods.CashOnDelivery, method);
+        Assert.Equal(CheckoutPayMethods.CardUnavailable, refusal);
+        Assert.False(CheckoutPaymentPolicy.CallsProvider(method));
+
+        // التَطوير: المُحاكي يَقبِض (مُحاكاةً) — فَالبِطاقَةُ تُعرَضُ كَما كانَت.
+        Assert.Equal(PaymentProviderChoice.Mock, PaymentProviderSelection.Decide(true, null));
+        Assert.True(CheckoutPaymentPolicy.CardOffered(collects, PaymentChargeSurface.CanCharge(new MockPaymentProvider())));
     }
 
-    /// <summary>والنَصُّ المَعروضُ عَلى الخِيارِ يُسَمّي بَوّابَتَينِ غَيرَ
-    /// مُدمَجَتَين — <b>مُثَبَّتٌ كَما هُوَ</b> لِيُصَحَّحَ في كوميتِ §٢‑د
-    /// نَفسِه (موجَزُ الفَجَوات P0-1: «وتَصحيحُ `ar.json:1276` في الكوميتِ
-    /// نَفسِه»).</summary>
+    /// <summary>والنَصُّ المَعروضُ عَلى الخِيارِ <b>لَم يَعُد يُسَمّي</b>
+    /// بَوّابَتَينِ غَيرَ مُدمَجَتَين (كانَ «بِطاقَة (Moyasar/Noon)» —
+    /// `ar.json:1276`)، ولا شَبَكَتَي بِطاقاتٍ في تَلميحِه (كانَ «مَدى أَو
+    /// فيزا»). والصِياغَةُ الجَديدَةُ مُسَجَّلَةٌ في سِجِلِّ أَسئِلَةِ
+    /// المالِك «أ» قابِلَةً لِلنَقض.</summary>
     [Fact]
-    public void Today_the_card_label_names_gateways_that_are_not_integrated()
+    public void The_card_label_no_longer_names_gateways_that_are_not_integrated()
     {
         var ar = Source("libs", "core", "ACommerce.Platform.I18n", "Locales", "ar.json");
-        Assert.Contains("\"checkout.payment.card\": \"بِطاقَة (Moyasar/Noon)\"", ar, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"checkout.payment.card\": \"بِطاقَة (Moyasar/Noon)\"", ar, StringComparison.Ordinal);
+        Assert.Contains("\"checkout.payment.card\": \"الدَفع بِالبِطاقَة\"", ar, StringComparison.Ordinal);
+        Assert.DoesNotContain("مَدى أَو فيزا", ar, StringComparison.Ordinal);
 
         // ولا تَكامُلَ لِأَيٍّ مِنهُما يَبلُغُ `IPaymentProvider`: صِفرُ صِنفٍ
         // يُنَفِّذُه بِاسمِهِما تَحتَ `libs/`.
