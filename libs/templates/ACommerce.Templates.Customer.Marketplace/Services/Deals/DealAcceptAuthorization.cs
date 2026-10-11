@@ -19,7 +19,9 @@ public sealed record DealAcceptViolation(string Code, string MessageAr);
 /// الإداريُّ المُنفَصِل (<c>/studio/apps/{slug}/deals/{id}/advance</c>).</para>
 /// </summary>
 /// <param name="ActorId">المُستَخدِمُ الَّذي سَيَصيرُ الطَرَفَ المُقابِلَ ويُنسَبُ
-/// إلَيه سَطرُ <c>assigned</c>.</param>
+/// إلَيه سَطرُ <c>assigned</c>. (وفي صَفقَةِ السَلَّةِ هُوَ الطَرَفُ مِن الوِلادَةِ بِسَطرِ
+/// <c>bound</c> — ‏ADR-033 §٦‑ب‑١ — فَلا <c>assigned</c> عِندَ قَبولِه، ويُنسَبُ إلَيه سَطرُ
+/// <c>advanced</c> وَحدَه. صُحِّحَ ‏2026-10-11، مُراجَعَةٌ ثالِثَة.)</param>
 /// <param name="ActorName">اسمُه كَما يُكتَبُ في السِجِلّ.</param>
 public sealed record DealAcceptor(Guid ActorId, string ActorName);
 

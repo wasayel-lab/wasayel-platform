@@ -86,6 +86,13 @@ internal sealed class DocWorld
     /// <c>DealAcceptStaleSnapshotCharacterizationTests</c>): مُستَهلِكا
     /// PayPal وPaddle لا يَضبِطانِه، فَسَطرُ النِداءِ في <c>MartenProxy</c> لا
     /// يَعمَلُ لَهُما — صِفرُ تَغييرٍ في ما يَقيسان.</para>
+    ///
+    /// <para><b>وصُحِّحَ العَدُّ ‏2026-10-11 (مُراجَعَةٌ ثالِثَة) — ولا يُعادُ حَرفٌ فَوقَه</b>: «الثالِث» كانَ
+    /// الرابِعَ — <c>TenantSlugResolutionTests</c> يَبني <c>DocWorld</c> مُنذُ <c>ace0e04</c> (‏56 حالَة) —
+    /// واختِباراتُ PayPal وPaddle السُلوكِيَّةُ ‏33 لا ‏37 كَما قالَ كوميتُه (مَقيسٌ بِـ<c>--filter</c>). واليَومَ
+    /// سَبعَةُ مِلَفّاتٍ تَبني العالَمَ (‏<c>grep -l "new DocWorld()"</c>)، ولا يَضبِطُ الخُطّافَ مِنها إلّا
+    /// <c>DealAcceptStaleSnapshotCharacterizationTests</c>؛ والدَعوى الَّتي صَدَقَت بِحَرفِها: الخُطّافُ
+    /// <c>null</c> افتِراضاً فَلا يَتَغَيَّرُ ما يَقيسُه غَيرُه.</para>
     /// </summary>
     public Action<string>? BeforeMember { get; set; }
 }
