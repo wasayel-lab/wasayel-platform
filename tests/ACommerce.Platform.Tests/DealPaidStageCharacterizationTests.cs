@@ -184,7 +184,10 @@ public class DealPaidStageCharacterizationTests
         Assert.DoesNotContain("\"legal.terms.item_commission\"", ar, StringComparison.Ordinal);
         Assert.DoesNotContain("\"deals.detail.commission_label\"", ar, StringComparison.Ordinal);
         Assert.DoesNotContain("بِجَمع عَمولَة", ar, StringComparison.Ordinal);
-        Assert.Contains("\"legal.terms.item_subscription_only\"", ar, StringComparison.Ordinal);
+        // ‏2026-10-11 (S5·٥): كانَ هُنا `Assert.Contains` لِبَندِ «الاشتِراكِ وَحدَه» الَّذي حَلَّ مَحَلَّ
+        // العَمولَة — وحُذِفَ مِن شُروطِ المُشتَري لِأَنَّه نَموذَجُ إيرادِ المَنَصَّةِ لا شَرطٌ عَلَيه، ولا
+        // مِفتاحَ في `platform.terms.*` يَتَكَلَّمُ في الإيرادِ لِيُنقَلَ إلَيه (`LegalCheckoutTextsCharacterizationTests`).
+        Assert.DoesNotContain("\"legal.terms.item_subscription_only\"", ar, StringComparison.Ordinal);
     }
 
     // ═══ ٢) القَبضُ — ما يَبقى بَعدَ الخُطوَة 3 بِلا تَعديلِ حَرف ═══════════

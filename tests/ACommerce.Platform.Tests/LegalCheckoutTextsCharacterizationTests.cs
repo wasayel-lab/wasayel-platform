@@ -20,7 +20,7 @@ namespace ACommerce.Platform.Tests;
 // المَتجَر» والبِطاقَةُ تُنادي `IPaymentProvider` **العامَّ لِلنُسخَة** — رَبطُ المَتجَرِ عَلَمٌ لا مُزَوِّد.
 //
 // **ما يُقلَبُ في كوميتِ النَصِّ بِاسمِه**: فُحوصُ «اليَوم» الثَلاثَة (القيَمُ القَديمَةُ ومَواضِعُها
-// في لَقَطاتِ الأَساس). **وما يَبقى بِحَرفِه** — وهو سَبَبُ أَنّ النُصوصَ لا تَصدُق: الجُملَةُ
+// في لَقَطاتِ الأَساس) — وقُلِبَت ‏2026-10-11 فُحوصَ ثَباتٍ لِلجَديد. **وما يَبقى بِحَرفِه** — وهو سَبَبُ أَنّ النُصوصَ لا تَصدُق: الجُملَةُ
 // شاهِدُ الامتِثالِ لِلإفصاحِ لِأَطرافٍ ثالِثَة، ولا شاشَةَ تَجمَعُ بَياناتِ بِطاقَة، والبِطاقَةُ
 // تَقبِضُ بِمُزَوِّدِ النُسخَة، ولا شَرطَ مَنَصَّةٍ يَتَكَلَّمُ في الإيراد.
 
@@ -50,45 +50,60 @@ public class LegalCheckoutTextsCharacterizationTests
     private static int Count(string haystack, string needle)
         => Regex.Matches(haystack, Regex.Escape(needle)).Count;
 
-    // ─── (١) «اليَوم» — يُقلَبُ في كوميتِ النَصِّ بِاسمِه ──────────────────────
+    // ─── (١) «اليَوم» — قُلِبَ ‏2026-10-11 في كوميتِ النَصِّ بِاسمِه ───────────────
+    //
+    // كانَت هُنا ثَلاثَةُ فُحوصٍ تُثَبِّتُ القيَمَ القَديمَةَ بِحَرفِها: «تَخزين الدَّفع آمِن عَبر
+    // مُزَوِّدين مُعتَمَدين (Moyasar / Noon — PCI-DSS)»، وبَندُ «الإقرار … إيرادُها اشتِراكُ صاحِب
+    // المَتجَر وَحدَه» ثالِثَ أَربَعَة، و«عَبر مُزَوِّد الدَفع المُفَعَّل في هذا المَتجَر». وصارَت
+    // فُحوصَ ثَباتٍ لِلصِياغَةِ الجَديدَة (سِجِلُّ المالِك «أ» S5·٥)، ولَقَطاتُ الأَساسِ الثَلاثُ
+    // بُدِّلَت بِإحلالٍ حَرفِيّ.
 
-    /// <summary>صَفحَةُ خُصوصِيَّةِ كُلِّ مَتجَرٍ تَعِدُ بِتَخزينِ دَفعٍ «آمِن» عِندَ بَوّابَتَينِ
-    /// لا تَكامُلَ لِأَيٍّ مِنهُما — بِحَرفِ القامُوسِ وبِحَرفِ لَقطَةِ الأَساس (والسَطرُ الجَديدُ
-    /// والمَسافاتُ داخِلَ القيمَةِ بَقِيَّةُ تَرحيلٍ مِن سَطرَينِ في الصَفحَة).</summary>
+    /// <summary>صَفحَةُ خُصوصِيَّةِ كُلِّ مَتجَرٍ تَقولُ ما يَصدُق: لا بَيعَ لِطَرَفٍ ثالِث (شاهِدُ
+    /// الامتِثالِ باقٍ)، ولا تُخَزِّنُ المَنَصَّةُ بَياناتِ بِطاقات، والدَفعُ — حينَ يُفَعِّلُ المَتجَرُ
+    /// مُزَوِّداً — عَلى صَفَحاتِ ذلكَ المُزَوِّدِ نَفسِه. ولا اسمَ بَوّابَةٍ ولا شَهادَةَ لَم تُنَل.</summary>
     [Fact]
-    public void Today_the_privacy_page_says_payment_storage_is_secure_through_Moyasar_and_Noon_PCI_DSS()
+    public void The_privacy_page_says_the_platform_stores_no_card_data_and_payment_runs_on_the_providers_own_pages()
     {
         var value = LocaleCatalog.Find(LocaleCatalog.Arabic, NoSellingKey);
         Assert.Equal(
-            "لا نَبيع بَياناتك لِأَيّ طَرَف ثالِث. تَخزين الدَّفع آمِن\n                   عَبر مُزَوِّدين مُعتَمَدين (Moyasar / Noon — PCI-DSS).",
+            "لا نَبيع بَياناتك لِأَيّ طَرَف ثالِث. ولا تُخَزِّن المَنصَّة بَيانات بِطاقات الدَّفع: حينَ يُفَعِّل المَتجَر مُزَوِّد دَفع، يَتِمّ الدَّفع على صَفَحات ذلك المُزَوِّد نَفسِه.",
             value);
-        Assert.Equal(1, Count(Baseline("ashare-legal-privacy.html"), value!));
+        foreach (var gone in new[] { "Moyasar", "Noon", "PCI-DSS", "آمِن" })
+            Assert.DoesNotContain(gone, value!, StringComparison.Ordinal);
+
+        var baseline = Baseline("ashare-legal-privacy.html");
+        Assert.Equal(1, Count(baseline, value!));
+        Assert.Equal(0, Count(baseline, "PCI-DSS"));
     }
 
-    /// <summary>شُروطُ كُلِّ مَتجَرٍ تَجعَلُ المُشتَري «مُوافِقاً عَلى» نَموذَجِ إيرادِ المَنَصَّة —
-    /// بَندٌ ثالِثٌ مِن أَربَعَةٍ تَحتَ «فَأَنتَ مُوافِق على:».</summary>
+    /// <summary>شُروطُ كُلِّ مَتجَرٍ لا تَجعَلُ المُشتَري «مُوافِقاً عَلى» نَموذَجِ إيرادِ المَنَصَّة:
+    /// ثَلاثَةُ بُنودٍ تَحتَ «فَأَنتَ مُوافِق على:» بِتَرتيبِها، والمِفتاحُ خارِجَ المَعجَم.</summary>
     [Fact]
-    public void Today_the_store_terms_make_the_buyer_agree_to_the_platforms_revenue_model()
+    public void The_store_terms_no_longer_make_the_buyer_agree_to_the_platforms_revenue_model()
     {
         var hub = Template("Components", "Pages", "LegalHub.razor");
         var list = Regex.Match(hub, @"<p>@L\.Markup\(""legal\.terms\.intro""\)</p>\s*<ol>(?<items>.*?)</ol>", RegexOptions.Singleline);
         Assert.True(list.Success, "قائِمَةُ الشُروطِ غائِبَةٌ عَن LegalHub.razor.");
-        Assert.Equal(4, Count(list.Groups["items"].Value, "<li>"));
-        Assert.Contains($"<li>@L.Markup(\"{SubscriptionOnlyKey}\")</li>", list.Groups["items"].Value, StringComparison.Ordinal);
-
-        var value = LocaleCatalog.Find(LocaleCatalog.Arabic, SubscriptionOnlyKey);
         Assert.Equal(
-            "الإقرار بِأَنّ المَنصَّة لا تَجمَع عَمولَة على الصَّفقات: إيرادُها اشتِراكُ صاحِب المَتجَر وَحدَه، ولا تَمُرّ بِها أَموالُ الصَّفقات.",
-            value);
-        Assert.Equal(1, Count(Baseline("ashare-legal-terms.html"), $"<li>{value}</li>"));
+            new[] { "legal.terms.item_lawful", "legal.terms.item_accuracy", "legal.terms.item_disputes" },
+            Regex.Matches(list.Groups["items"].Value, @"<li>@L\.Markup\(""(?<k>[^""]+)""\)</li>")
+                 .Select(m => m.Groups["k"].Value).ToArray());
+
+        Assert.Null(LocaleCatalog.Find(LocaleCatalog.Arabic, SubscriptionOnlyKey));
+        Assert.DoesNotContain(SubscriptionOnlyKey, LocaleCatalog.Lexicon);
+
+        var baseline = Baseline("ashare-legal-terms.html");
+        Assert.Equal(0, Count(baseline, "إيرادُها اشتِراكُ صاحِب المَتجَر"));
+        Assert.Equal(3, Count(Regex.Match(baseline, "<ol>.*?</ol>", RegexOptions.Singleline).Value, "<li>"));
     }
 
-    /// <summary>تَلميحُ البِطاقَةِ يُسَمّي «مُزَوِّد الدَفع المُفَعَّل في هذا المَتجَر».</summary>
+    /// <summary>تَلميحُ البِطاقَةِ يُسَمّي ما تُنادِيه البِطاقَةُ فِعلاً: مُزَوِّدَ دَفعِ المَنَصَّة.</summary>
     [Fact]
-    public void Today_the_card_hint_names_a_provider_enabled_in_this_store()
+    public void The_card_hint_names_the_platforms_payment_provider()
     {
         var value = LocaleCatalog.Find(LocaleCatalog.Arabic, CardHintKey);
-        Assert.Equal("دَفعٌ بِالبِطاقَة عَبر مُزَوِّد الدَفع المُفَعَّل في هذا المَتجَر", value);
+        Assert.Equal("دَفعٌ بِالبِطاقَة عَبر مُزَوِّد دَفعِ المَنصَّة", value);
+        Assert.DoesNotContain("هذا المَتجَر", value!, StringComparison.Ordinal);
         Assert.Equal(1, Count(Baseline("member-checkout-pay.html"), $"<span>{value}</span>"));
     }
 
