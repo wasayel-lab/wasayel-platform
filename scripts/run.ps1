@@ -37,6 +37,17 @@ Write-Host ""
 # سِرِّ الجَلسَةِ عِندَ الإقلاعِ بِـ`auth_secret_default` ما لَم يُضبَط
 # ACOMMERCE_AUTH_SECRET (مَقيس؛ `AuthTokenSecretPolicy.AssertSafeOutsideDevelopment` في
 # `Program.cs`). وهذا السكربتُ لِلتَطويرِ المَحَلِّيِّ وَحدَه.
+#
+# **ولِلتَشغيلِ وَحدَه لا لِلجَلسَة** (‏2026-10-11): `$env:` يَكتُبُ في عَمَلِيَّةِ PowerShell
+# المُستَدعِيَةِ نَفسِها، فَكانَت Development تَبقى بَعدَ خُروجِ السكربت — و`dotnet run` تالٍ في
+# الجَلسَةِ نَفسِها يُقلِعُ Development صامِتاً فَيُخفي الحارِسَ نَفسَه (مَقيس: قَبلَ السكربتِ
+# غائِبَة أَو Staging، وبَعدَه Development). فَالقيمَةُ السابِقَةُ تُحفَظُ وتُعادُ في `finally` —
+# وهو يَجري حَتّى عِندَ إيقافِ الخادِمِ بِـCtrl+C.
+$previousEnvironment = $env:ASPNETCORE_ENVIRONMENT
 $env:ASPNETCORE_ENVIRONMENT = "Development"
-
-dotnet run --no-launch-profile --project apps/V1.App --urls=http://localhost:5050
+try {
+    dotnet run --no-launch-profile --project apps/V1.App --urls=http://localhost:5050
+}
+finally {
+    $env:ASPNETCORE_ENVIRONMENT = $previousEnvironment
+}

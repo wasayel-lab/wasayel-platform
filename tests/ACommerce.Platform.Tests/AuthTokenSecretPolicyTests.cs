@@ -302,4 +302,33 @@ public class AuthTokenSecretPolicyTests
         Assert.True(set >= 0, $"{script} لا يَضبِطُ البيئَة — يُقلِعُ Production فَيَموتُ بِـauth_secret_default.");
         Assert.True(run > set, $"{script} يَضبِطُ البيئَةَ بَعدَ `dotnet run` أَو لا يُشَغِّلُه.");
     }
+
+    /// <summary>
+    /// <para><b>و<c>run.ps1</c> يُعيدُ قيمَةَ المُستَدعي بَعدَ التَشغيل</b> (‏2026-10-11، مُراجَعَةُ <c>27dd4e9</c>):
+    /// <c>$env:</c> في PowerShell يَكتُبُ في جَلسَةِ المُستَدعي نَفسِها، فَكانَت Development تَبقى بَعدَ السكربت
+    /// و<c>dotnet run</c> تالٍ يُقلِعُها صامِتاً فَيُخفي الحارِس. مَقيسٌ بِـpwsh 7.6.6 وظِلالٍ لِـpsql وdotnet:
+    /// قَبلَ الإصلاحِ تَبقى Development بَعدَ الخُروجِ وبَعدَ Ctrl+C؛ وبَعدَه تَعودُ القيمَةُ السابِقَة (غائِبَةً
+    /// أَو Staging) — والابنُ يَرى Development في الحالَين. و<c>run.sh</c> لا يَحتاجُه: <c>export</c> في سكربتٍ
+    /// لا يَبلُغُ الصَدَفَةَ المُستَدعِيَة.</para>
+    /// <para>ويُفحَصُ الشَكلُ: حِفظٌ قَبلَ الضَبط، والتَشغيلُ داخِلَ <c>try</c>، والإعادَةُ في <c>finally</c>
+    /// بَعدَه، ولا إسنادَ ثالِثَ لِلمُتَغَيِّر.</para>
+    /// </summary>
+    [Fact]
+    public void RunPs1_RestoresTheCallersEnvironment_InFinally_AfterTheRun()
+    {
+        var text = File.ReadAllText(Path.Combine(RepoRoot, "scripts", "run.ps1"));
+        Assert.True(text.Length > 500, "أَداةٌ عَمياء: run.ps1 لَم يُقرَأ.");
+
+        var save    = text.IndexOf("$previousEnvironment = $env:ASPNETCORE_ENVIRONMENT", StringComparison.Ordinal);
+        var set     = text.IndexOf("$env:ASPNETCORE_ENVIRONMENT = \"Development\"", StringComparison.Ordinal);
+        var guarded = set < 0 ? -1 : text.IndexOf("try {", set, StringComparison.Ordinal);
+        var run     = text.IndexOf("dotnet run --no-launch-profile", StringComparison.Ordinal);
+        var fin     = text.IndexOf("finally {", StringComparison.Ordinal);
+        var restore = text.IndexOf("$env:ASPNETCORE_ENVIRONMENT = $previousEnvironment", StringComparison.Ordinal);
+
+        Assert.True(save >= 0 && save < set, "run.ps1 لا يَحفَظُ قيمَةَ المُستَدعي قَبلَ أَن يَضبِطَ Development.");
+        Assert.True(guarded > set && run > guarded, "run.ps1 لا يُشَغِّلُ الخادِمَ داخِلَ try بَعدَ الضَبط.");
+        Assert.True(fin > run && restore > fin, "run.ps1 لا يُعيدُ القيمَةَ في finally بَعدَ التَشغيل — تَبقى في جَلسَةِ المُستَدعي.");
+        Assert.Equal(2, Regex.Matches(text, Regex.Escape("$env:ASPNETCORE_ENVIRONMENT =")).Count);
+    }
 }
