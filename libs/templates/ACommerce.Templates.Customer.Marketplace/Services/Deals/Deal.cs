@@ -8,7 +8,10 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Deals;
 ///
 /// <para>الإِنفِراد: لا أَحد يَكتُب الحالَة مُباشَرَةً — كُلّ تَغيير يَمُرّ
 /// عَبر <see cref="DealsService"/> الَّذي يَفحَص الـ state machine ويَكتُب
-/// في الـ Timeline (للـ audit). إِشعار الأَطراف يَخرُج تِلقائيّاً.</para>
+/// في الـ Timeline (للـ audit). <b>ولا إشعارَ يَخرُجُ مِن الخِدمَةِ نَفسِها</b>: إشعارُ
+/// الأَطرافِ يُرَكَّبُ في <see cref="DealNotices"/> عَلى الأُنبوبِ القائِمِ ويُنادى مِن
+/// نُقطَتَي <c>/checkout/submit</c> (لِمالِكِ الإعلان) و<c>/accept</c> (لِلمُشتَري)
+/// وَحدَهُما — وكانَ هذا التَعليقُ يَقول «يَخرُج تِلقائيّاً» بِصِفرِ مُنتِج (P1-5).</para>
 ///
 /// <para>Marten doc تَحت tenant الـ slug (conjoined).</para>
 /// </summary>

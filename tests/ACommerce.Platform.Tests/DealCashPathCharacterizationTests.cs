@@ -265,30 +265,34 @@ public class DealCashPathCharacterizationTests
     // ═══ ٣) لا طَرَفَ عِندَ الوِلادَة، ولا إشعارَ في المَسارَين ═══════════════
 
     /// <summary><c>/checkout/submit</c> يُلحِقُ <c>listing_owner</c> <b>ويَربُطُ البائِعَ
-    /// طَرَفاً مِن الوِلادَة</b> (قُلِبَ شَطرُ الرَبطِ في ‏ADR-033 §٦ — كانَ صِفراً) —
-    /// ولا يَكتُبُ إشعاراً ولا يُنادي الجَرَسَ ولا الدَفعَ الفَوريّ بَعد: فَالبائِعُ لا
-    /// يَعلَمُ أَنّ طَلَباً وَصَلَ إلّا إن فَتَحَ «صَفقات» بِنَفسِه (موجَزُ الفَجَوات
-    /// P1-5) — يُقلَبُ في كوميتِه.</summary>
+    /// طَرَفاً مِن الوِلادَة</b> (قُلِبَ شَطرُ الرَبطِ في ‏ADR-033 §٦ — كانَ صِفراً)،
+    /// <b>ويُشعِرُه بَعدَ الحَفظ</b> (قُلِبَ شَطرُ الإشعارِ في P1-5 — كانَ صِفرَ
+    /// <c>Notification</c>/<c>NudgeAsync</c>/<c>push.</c> فَالبائِعُ لا يَعلَمُ بِالطَلَبِ
+    /// إلّا إن فَتَحَ «صَفقات» بِنَفسِه). والتَركيبُ في <c>DealNotices</c> لا في الجِسم
+    /// (<c>DealNoticesTests</c>).</summary>
     [Fact]
-    public void Checkout_submit_attaches_the_owner_ref_and_binds_him_but_notifies_nobody_today()
+    public void Checkout_submit_attaches_the_owner_ref_binds_him_and_now_notifies_him_through_the_service()
     {
         var submit = Endpoint("/{slug}/checkout/submit");
         Assert.Equal(1, Count(submit, "await deals.AttachRefAsync(slug, deal.Id, \"listing_owner\", oid);"));
         Assert.Equal(1, Count(submit, "await deals.BindListingOwnerAsync(slug, deal.Id, oid);"));
         Assert.Equal(0, Count(submit, "AssignCounterpartyAsync("));   // الرَبطُ في الخِدمَةِ لا في الجِسم
-        Assert.Equal(0, Count(submit, "Notification"));
+        Assert.Equal(1, Count(submit, "await notices.NotifyNewDealsAsync(slug, born, l);"));
+        Assert.Equal(0, Count(submit, "new ACommerce.Kit.Notifications.Notification"));   // التَركيبُ في الخِدمَةِ لا في الجِسم
         Assert.Equal(0, Count(submit, "NudgeAsync("));
         Assert.Equal(0, Count(submit, "push."));
     }
 
-    /// <summary>و<c>/accept</c> لا يُشعِرُ المُشتَري بِأَنّ طَلَبَه قُبِل — بَينَما
-    /// نُقطَةُ قَبولِ العَرضِ في عِدَّةِ العُروض تَفعَل (<c>offer_accepted</c>).</summary>
+    /// <summary><b>قُلِبَ</b> (P1-5): كانَ <c>/accept</c> لا يُشعِرُ المُشتَري بِأَنّ طَلَبَه
+    /// قُبِل — بَينَما نُقطَةُ قَبولِ العَرضِ في عِدَّةِ العُروض تَفعَل (<c>offer_accepted</c>).
+    /// وصارَ يُشعِرُه عَلى النَسَقِ نَفسِه عَبرَ <c>DealNotices</c> بَعدَ قَبولٍ ناجِحٍ وَحدَه.</summary>
     [Fact]
-    public void The_accept_endpoint_notifies_nobody_today()
+    public void The_accept_endpoint_now_notifies_the_buyer_through_the_service_on_success()
     {
         var accept = Endpoint("/{slug}/deals/{id:guid}/accept");
         Assert.Contains("deals.AcceptAsync(", accept, StringComparison.Ordinal);
-        Assert.Equal(0, Count(accept, "Notification"));
+        Assert.Equal(1, Count(accept, "if (res.Ok) await notices.NotifyAcceptedAsync(slug, res.Deal!, userName, l);"));
+        Assert.Equal(0, Count(accept, "new ACommerce.Kit.Notifications.Notification"));
         Assert.Equal(0, Count(accept, "NudgeAsync("));
         Assert.Equal(0, Count(accept, "push."));
 
@@ -298,12 +302,15 @@ public class DealCashPathCharacterizationTests
         Assert.True(Count(offers, "await NudgeAsync(hub, slug,") >= 3);
     }
 
-    /// <summary>تَعليقُ <c>Deal.cs</c> يَقول «إِشعار الأَطراف يَخرُج تِلقائيّاً» —
-    /// و<c>DealsService</c> لا تَذكُرُ كَلِمَةَ <c>Notification</c> حَرفاً. دَعوى بِلا كود.</summary>
+    /// <summary><b>قُلِبَ شَطرُه</b> (P1-5): كانَ تَعليقُ <c>Deal.cs</c> يَقول «إِشعار الأَطراف
+    /// يَخرُج تِلقائيّاً» بِصِفرِ مُنتِج — وصارَ يُسَمّي المُنتِجَ <c>DealNotices</c> ومَوضِعَي
+    /// نِدائِه. <b>وما بَقِيَ حَرفاً</b>: <c>DealsService</c> نَفسُها لا تَذكُرُ
+    /// <c>Notification</c> — الإشعارُ عِندَ النُقطَتَينِ لا في مَكينَةِ الحالَة.</summary>
     [Fact]
-    public void Deal_cs_claims_automatic_notification_while_the_service_writes_none_today()
+    public void Deal_cs_now_names_the_producer_while_the_service_itself_still_writes_none()
     {
-        Assert.Contains("إِشعار الأَطراف يَخرُج تِلقائيّاً", DealSource(), StringComparison.Ordinal);
+        Assert.DoesNotContain("إِشعار الأَطراف يَخرُج تِلقائيّاً", DealSource(), StringComparison.Ordinal);
+        Assert.Contains("DealNotices", DealSource(), StringComparison.Ordinal);
         Assert.Equal(0, Count(DealsServiceSource(), "Notification"));
     }
 

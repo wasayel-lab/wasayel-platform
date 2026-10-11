@@ -1,0 +1,316 @@
+using System.Text;
+using ACommerce.Kit.Notifications;
+using ACommerce.Kit.Payments;
+using ACommerce.Platform.I18n;
+using ACommerce.Templates.Customer.Marketplace.Services;
+using ACommerce.Templates.Customer.Marketplace.Services.Deals;
+using Marten;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Xunit;
+using Xunit.Abstractions;
+
+namespace ACommerce.Platform.Tests;
+
+// ═══ إشعاراتُ الصَفقَةِ عَلى الأُنبوبِ القائِم — P1-5 ═══════════════════════════
+//
+// **المَقيسُ قَبلَ هذا الكوميت** (موجَزُ الفَجَوات P1-5؛ مُثَبَّتٌ في
+// `DealCashPathCharacterizationTests` ‏5554975): `/checkout/submit` و`/accept` بِصِفرِ
+// `Notification`/`NudgeAsync`/`push.`؛ `DealsService` لا تَذكُرُ `Notification` حَرفاً؛
+// `Notifications.razor` يَرسُمُ أَيقونَةً لِنَوعَي `deal`/`deal_advanced` بِصِفرِ مُنتِج؛ و
+// `Deal.cs` يَدَّعي «إِشعار الأَطراف يَخرُج تِلقائيّاً». فَالبائِعُ لا يَعلَمُ بِالطَلَبِ إلّا
+// إن فَتَحَ «صَفقات» بِنَفسِه، والمُشتَري لا يَعلَمُ أَنّ طَلَبَه قُبِل.
+//
+// **والقَرار** (القاعِدَة ٨ — الأُنبوبُ القائِمُ لا رابِع): `DealNotices` تُرَكِّبُ الوَثيقَةَ
+// بِدَوالٍّ نَقِيَّةٍ مِن القامُوس، وتَمشي الأُنبوبَ نَفسَه الَّذي تَمشيه `chats/{id}/send`
+// و`offer_accepted`: تَخزينٌ ثُمَّ حَفظٌ ثُمَّ جَرَسٌ ثُمَّ دَفعٌ فَوريّ. النُصوصُ تُثَبَّتُ
+// كَما تُثَبَّتُ في `NotificationTextTests` — بِمُقابَلَةِ `l.Format` بِالتَعبيرِ الصَريح،
+// فَيَمُرُّ الطَرَفانِ بِنَفسِ المُنَسِّق.
+
+public class DealNoticesTests
+{
+    private static L Fresh() => new(new HttpContextAccessor());
+
+    private static readonly Guid Buyer  = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    private static readonly Guid Seller = Guid.Parse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+
+    private static Deal CartDeal(decimal amount = 150m, string title = "سِلعَة")
+    {
+        var d = new Deal
+        {
+            Id = Guid.NewGuid(), Pattern = "marketplace", AmountSar = amount, ListingTitle = title,
+            InitiatorId = Buyer, InitiatorName = "مُشتَرٍ", CounterpartyId = Seller, CounterpartyName = "بائِع",
+        };
+        d.Refs[DealsService.ListingOwnerRef] = Seller.ToString();
+        d.Attributes[CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.CashOnDelivery;
+        return d;
+    }
+
+    // ─── التَركيبُ النَقِيّ ──────────────────────────────────────────────────
+
+    [Fact]
+    public void NewDealFor_targets_the_owner_with_type_deal_and_links_to_the_deal()
+    {
+        var l = Fresh();
+        var deal = CartDeal();
+        var at = new DateTime(2026, 10, 11, 9, 0, 0, DateTimeKind.Utc);
+        var n = DealNotices.NewDealFor("shop", deal, Seller, l, at);
+
+        Assert.Equal(Seller, n.UserId);
+        Assert.Equal(DealNotices.NewDealType, n.Type);
+        Assert.Equal("deal", n.Type);
+        Assert.Equal($"/shop/deals/{deal.Id}", n.RelatedUrl);
+        Assert.Equal(at, n.At);
+        Assert.False(n.IsRead);
+        Assert.NotEqual(Guid.Empty, n.Id);
+        Assert.Equal(l["notifications.deal_new.title"], n.Title);
+        Assert.Equal(l.Format("notifications.deal_new.body", deal.ListingTitle, deal.AmountSar), n.Body);
+    }
+
+    [Theory]
+    [InlineData(150)]
+    [InlineData(0)]
+    [InlineData(12.5)]
+    [InlineData(350000)]
+    public void NewDeal_texts_carry_the_listing_title_and_the_amount(decimal amount)
+    {
+        var l = Fresh();
+        var title = "ساعَة يَد";
+        Assert.Equal("طَلَبٌ جَديدٌ عَلى إعلانِكَ", l["notifications.deal_new.title"]);
+        Assert.Equal($"طَلَبٌ عَلى «{title}» بِـ {amount:N0} ريال — افتَح الصَّفقَة لِقَبولِه.",
+            l.Format("notifications.deal_new.body", title, amount));
+        Assert.Equal($"طَلَبٌ عَلى «{title}» بِـ {amount:N0} ريال.",
+            DealNotices.NewDealPushBody(CartDeal(amount, title), l));
+    }
+
+    [Fact]
+    public void AcceptedFor_targets_the_initiator_with_type_deal_advanced_and_names_the_acceptor()
+    {
+        var l = Fresh();
+        var deal = CartDeal(title: "ساعَة يَد");
+        var n = DealNotices.AcceptedFor("shop", deal, "أَبو خالِد", l, DateTime.UtcNow);
+
+        Assert.Equal(Buyer, n.UserId);
+        Assert.Equal(DealNotices.AcceptedType, n.Type);
+        Assert.Equal("deal_advanced", n.Type);
+        Assert.Equal($"/shop/deals/{deal.Id}", n.RelatedUrl);
+        Assert.Equal("قَبِلَ البائِعُ طَلَبَكَ ✓", n.Title);
+        Assert.Equal("أَبو خالِد قَبِلَ طَلَبَكَ عَلى «ساعَة يَد» — افتَح الصَّفقَة لِمُتابَعَتِها.", n.Body);
+        Assert.Equal("أَبو خالِد قَبِلَ طَلَبَكَ عَلى «ساعَة يَد».", DealNotices.AcceptedPushBody(deal, "أَبو خالِد", l));
+    }
+
+    // ─── المَصدَر — الأُنبوبُ والنَوعانِ ومَوضِعا النِداء ─────────────────────────
+
+    private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;
+    private const string Template = "libs/templates/ACommerce.Templates.Customer.Marketplace";
+
+    private static string Source(params string[] parts)
+    {
+        var path = Path.Combine(RepoRoot, Path.Combine(parts));
+        Assert.True(File.Exists(path), $"مَصدَرٌ مَفقود: {path} — الأَداةُ عَمياء.");
+        var text = File.ReadAllText(path);
+        Assert.True(text.Length > 500, $"أَداةٌ عَمياء: {path} لَم يُقرَأ.");
+        return text;
+    }
+
+    private static string Segment(string source, string from, string to)
+    {
+        var start = source.IndexOf(from, StringComparison.Ordinal);
+        Assert.True(start > 0, $"‏`{from}` غَيرُ مَوجود — الأَداةُ عَمياء.");
+        var end = source.IndexOf(to, start + from.Length, StringComparison.Ordinal);
+        Assert.True(end > start, $"‏`{to}` لا يَتلو `{from}` — الأَداةُ عَمياء.");
+        return WriteEndpointGuardTests.StripComments(source.Substring(start, end - start));
+    }
+
+    private static int Count(string text, string needle)
+    {
+        var n = 0;
+        for (var i = text.IndexOf(needle, StringComparison.Ordinal); i >= 0;
+             i = text.IndexOf(needle, i + needle.Length, StringComparison.Ordinal))
+            n++;
+        return n;
+    }
+
+    /// <summary>الأَيقونَةُ اليَتيمَةُ صارَ لَها مُنتِج: النَوعانِ هُما بِحَرفِهِما ما تَرسُمُه
+    /// شاشَةُ الإشعارات.</summary>
+    [Fact]
+    public void The_types_are_the_ones_the_notifications_screen_already_draws()
+    {
+        var screen = Source(Template, "Components", "Pages", "Notifications.razor");
+        Assert.Contains("\"deal\" or \"deal_advanced\"", screen, StringComparison.Ordinal);
+        Assert.Equal("deal", DealNotices.NewDealType);
+        Assert.Equal("deal_advanced", DealNotices.AcceptedType);
+    }
+
+    /// <summary>الأُنبوبُ بِتَرتيبِه في كُلٍّ مِن الدالَّتَين: تَخزينٌ، ثُمَّ حَفظٌ، ثُمَّ جَرَسٌ
+    /// (<c>NudgeAsync</c> نَفسُها لا نُسخَةٌ ثانِيَة)، ثُمَّ دَفعٌ فَوريّ.</summary>
+    [Fact]
+    public void Both_methods_walk_the_existing_pipe_in_order_store_save_nudge_push()
+    {
+        var src = Source(Template, "Services", "Deals", "DealNotices.cs");
+        foreach (var (from, to) in new[]
+        {
+            ("public async Task<int> NotifyNewDealsAsync(", "public async Task NotifyAcceptedAsync("),
+            ("public async Task NotifyAcceptedAsync(", "\n}"),
+        })
+        {
+            var body = Segment(src, from, to);
+            var store = body.IndexOf("s.Store(n);", StringComparison.Ordinal);
+            var save  = body.IndexOf("SaveChangesAsync(ct);", StringComparison.Ordinal);
+            var nudge = body.IndexOf("MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,", StringComparison.Ordinal);
+            var push  = body.IndexOf("_push.SendAsync(_store, slug,", StringComparison.Ordinal);
+            Assert.True(store > 0 && save > store && nudge > save && push > nudge,
+                $"تَرتيبُ الأُنبوبِ في `{from}`: store={store} save={save} nudge={nudge} push={push}");
+        }
+
+        var endpoints = Source(Template, "MarketplaceTemplateExtensions.cs");
+        Assert.Contains("internal static async Task NudgeAsync(", endpoints, StringComparison.Ordinal);
+        Assert.Equal(2, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
+    }
+
+    /// <summary><c>/checkout/submit</c>: الصَفَقاتُ ذَواتُ المالِكِ تُجمَعُ في الحَلقَةِ،
+    /// والإشعارُ <b>بَعدَ الحَفظ</b>؛ و<c>/accept</c>: إشعارُ المُشتَري بَعدَ قَبولٍ ناجِحٍ
+    /// وَحدَه. والتَركيبُ في الخِدمَةِ لا في الجِسم.</summary>
+    [Fact]
+    public void Checkout_submit_notifies_owners_after_the_save_and_accept_notifies_the_buyer_on_success()
+    {
+        var endpoints = Source(Template, "MarketplaceTemplateExtensions.cs");
+        var submit = Segment(endpoints, "\"/{slug}/checkout/submit\"", ".RequireStoreWritable();");
+        var born   = submit.IndexOf("var born = new List<Guid>();", StringComparison.Ordinal);
+        var bind   = submit.IndexOf("await deals.BindListingOwnerAsync(slug, deal.Id, oid);", StringComparison.Ordinal);
+        var add    = submit.IndexOf("born.Add(deal.Id);", StringComparison.Ordinal);
+        var save   = submit.LastIndexOf("await s.SaveChangesAsync();", StringComparison.Ordinal);
+        var notify = submit.IndexOf("await notices.NotifyNewDealsAsync(slug, born, l);", StringComparison.Ordinal);
+        Assert.True(born > 0 && bind > born && add > bind && save > add && notify > save,
+            $"تَرتيبُ الإشعارِ في النُقطَة: born={born} bind={bind} add={add} save={save} notify={notify}");
+        Assert.Equal(0, Count(submit, "new ACommerce.Kit.Notifications.Notification"));   // التَركيبُ في الخِدمَة
+
+        var accept = Segment(endpoints, "\"/{slug}/deals/{id:guid}/accept\"", ".RequireStoreWritable();");
+        var call   = accept.IndexOf("deals.AcceptAsync(", StringComparison.Ordinal);
+        var tell   = accept.IndexOf("if (res.Ok) await notices.NotifyAcceptedAsync(slug, res.Deal!, userName, l);", StringComparison.Ordinal);
+        Assert.True(call > 0 && tell > call, $"إشعارُ المُشتَري لا يَتلو القَبول: call={call} tell={tell}");
+    }
+
+    /// <summary>الخِدمَةُ نَفسُها ما زالَت لا تُشعِر — المُنتِجُ <c>DealNotices</c> وَحدَها،
+    /// وتَعليقُ <c>Deal.cs</c> يُسَمّيها بَدَلَ دَعوى «يَخرُج تِلقائيّاً».</summary>
+    [Fact]
+    public void DealsService_still_notifies_nobody_and_Deal_cs_names_the_real_producer()
+    {
+        Assert.Equal(0, Count(Source(Template, "Services", "Deals", "DealsService.cs"), "Notification"));
+        var deal = Source(Template, "Services", "Deals", "Deal.cs");
+        Assert.DoesNotContain("إِشعار الأَطراف يَخرُج تِلقائيّاً", deal, StringComparison.Ordinal);
+        Assert.Contains("DealNotices", deal, StringComparison.Ordinal);
+    }
+}
+
+// ─── البُرهانُ الحَيّ — الإشعارُ يُكتَبُ فِعلاً عَلى Postgres ───────────────────
+//
+// يَتَخَطّى نَفسَه ما لَم تُضبَط WASAYEL_LIVE_PROOF=1 و ConnectionStrings__Postgres، بِنَفسِ
+// عَقدِ `LiveDealAcceptSequenceProofTests` حَرفاً. الجَرَسُ مِن حاوِيَةِ SignalR بِلا
+// خادِم (يَبتَلِعُ `NudgeAsync` فَشَلَه)، والدَفعُ الفَوريُّ بِمَفاتيحٍ مُوَلَّدَةٍ ولا
+// اشتِراكاتَ لِلمُستَخدِمِ فَلا يُرسَلُ شَيء — المَقيسُ هُنا **الوَثيقَةُ**: لِمَن كُتِبَت
+// وبِأَيِّ نَوع، وأَنّ صَفقَةً بِلا مالِكٍ أَو غَيرَ مَوجودَةٍ لا تُشعِرُ أَحَداً.
+
+public class LiveDealNoticesProofTests(ITestOutputHelper output)
+{
+    private static bool Enabled =>
+        Environment.GetEnvironmentVariable("WASAYEL_LIVE_PROOF") == "1";
+
+    private static string? ConnectionString =>
+        Environment.GetEnvironmentVariable("ConnectionStrings__Postgres");
+
+    private static string ResilientConnection =>
+        ConnectionString!.TrimEnd(';') + ";Timeout=60;Command Timeout=120";
+
+    private static DocumentStore BuildStore() => DocumentStore.For(o =>
+    {
+        o.Connection(ResilientConnection);
+        o.DatabaseSchemaName = "platform";
+        o.Policies.AllDocumentsAreMultiTenanted();
+        o.Events.TenancyStyle = global::JasperFx.MultiTenancy.TenancyStyle.Conjoined;
+        o.Schema.For<ACommerce.Kit.Tenants.Tenant>().SingleTenanted().Identity(x => x.Id);
+        o.AutoCreateSchemaObjects = JasperFx.AutoCreate.All;
+    });
+
+    private sealed class ForbiddenPaymentProvider : IPaymentProvider
+    {
+        private static InvalidOperationException Touched() => new("الإشعارُ لا يَمَسُّ المال — نودِيَ مُزَوِّدُ الدَفع.");
+        public string ProviderName => "forbidden";
+        public Task<PaymentResult> AuthorizeAsync(PaymentRequest req, string idempotencyKey, CancellationToken ct = default) => throw Touched();
+        public Task<PaymentResult> CaptureAsync(string paymentId, decimal? amount = null, CancellationToken ct = default) => throw Touched();
+        public Task<PaymentResult> RefundAsync(string paymentId, decimal amount, string reason, CancellationToken ct = default) => throw Touched();
+        public Task<SubscriptionResult> CreateSubscriptionAsync(SubscriptionRequest req, string idempotencyKey, CancellationToken ct = default) => throw Touched();
+        public Task<bool> CancelSubscriptionAsync(string subscriptionId, CancellationToken ct = default) => throw Touched();
+        public Task<Invoice?> GetInvoiceAsync(string paymentId, CancellationToken ct = default) => throw Touched();
+    }
+
+    [Fact]
+    public async Task A_new_cart_deal_notifies_its_listing_owner_once_and_acceptance_notifies_the_buyer()
+    {
+        if (!Enabled || string.IsNullOrEmpty(ConnectionString)) return;
+
+        void Log(string line) => output.WriteLine(line);
+
+        await using var store = BuildStore();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSignalR();
+        await using var sp = services.BuildServiceProvider();
+        var hub = sp.GetRequiredService<IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub>>();
+        var push = new WebPushService(new ConfigurationBuilder().Build(), NullLogger<WebPushService>.Instance);
+        var deals = new DealsService(store, new ForbiddenPaymentProvider());
+        var notices = new DealNotices(store, hub, push);
+        var l = new L(new HttpContextAccessor());
+
+        var slug = "zz-proof-" + Guid.NewGuid().ToString("N")[..8];
+        var buyer = Guid.NewGuid();
+        var seller = Guid.NewGuid();
+
+        try
+        {
+            var deal = await deals.StartAsync(slug, "marketplace", buyer, "مُشتَرٍ", null, "سِلعَة", 150m,
+                new() { [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.CashOnDelivery });
+            await deals.AttachRefAsync(slug, deal.Id, DealsService.ListingOwnerRef, seller.ToString());
+            await deals.BindListingOwnerAsync(slug, deal.Id, seller.ToString());
+            var orphan = await deals.StartAsync(slug, "marketplace", buyer, "مُشتَرٍ", null, "بِلا مالِك", 10m);
+
+            // ١) إشعارُ المالِك: صَفقَةٌ بِمالِك، وصَفقَةٌ بِلا مالِك، ومُعَرِّفٌ لا صَفقَةَ لَه — واحِدٌ يُشعَر.
+            var sent = await notices.NotifyNewDealsAsync(slug, new[] { deal.Id, orphan.Id, Guid.NewGuid() }, l);
+            Assert.Equal(1, sent);
+            await using (var q = store.QuerySession(slug))
+            {
+                var forSeller = await q.Query<Notification>().Where(n => n.UserId == seller).ToListAsync();
+                Assert.Single(forSeller);
+                Assert.Equal(DealNotices.NewDealType, forSeller[0].Type);
+                Assert.Equal($"/{slug}/deals/{deal.Id}", forSeller[0].RelatedUrl);
+                Assert.False(forSeller[0].IsRead);
+                Assert.Equal(0, await q.Query<Notification>().CountAsync(n => n.UserId == buyer));
+                Log($"إشعارُ المالِك: sent={sent} · type={forSeller[0].Type} · url={forSeller[0].RelatedUrl} · body={forSeller[0].Body}");
+            }
+
+            // ٢) القَبولُ ثُمَّ إشعارُ المُشتَري.
+            var accepted = await deals.AcceptAsync(slug, deal.Id, new DealAcceptor(seller, "بائِع"));
+            Assert.True(accepted.Ok, accepted.Violation?.MessageAr);
+            await notices.NotifyAcceptedAsync(slug, accepted.Deal!, "بائِع", l);
+            await using (var q = store.QuerySession(slug))
+            {
+                var forBuyer = await q.Query<Notification>().Where(n => n.UserId == buyer).ToListAsync();
+                Assert.Single(forBuyer);
+                Assert.Equal(DealNotices.AcceptedType, forBuyer[0].Type);
+                Assert.Equal($"/{slug}/deals/{deal.Id}", forBuyer[0].RelatedUrl);
+                Assert.Equal(1, await q.Query<Notification>().CountAsync(n => n.UserId == seller));   // لا إشعارَ ثانِياً لِلمالِك
+                Log($"إشعارُ المُشتَري: type={forBuyer[0].Type} · body={forBuyer[0].Body}");
+            }
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            foreach (var d in await s.Query<Deal>().ToListAsync()) s.Delete(d);
+            foreach (var n in await s.Query<Notification>().ToListAsync()) s.Delete(n);
+            await s.SaveChangesAsync();
+        }
+    }
+}

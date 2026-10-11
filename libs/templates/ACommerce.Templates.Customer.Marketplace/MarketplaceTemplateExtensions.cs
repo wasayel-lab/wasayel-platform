@@ -130,6 +130,8 @@ public static class MarketplaceTemplateExtensions
 
         // خَدَمات الـ Deals (تَدَفُّق العَمَلِيّات المُوَحَّد).
         services.AddScoped<Services.Deals.DealsService>();
+        // إشعاراتُ الصَفقَةِ عَلى الأُنبوبِ القائِم (P1-5) — تَحقِنُ المَخزَنَ والجَرَسَ والدَفعَ.
+        services.AddScoped<Services.Deals.DealNotices>();
 
         // التَّقييمات (تَقييم مُتَبادَل بَعد اكتِمال صَفقَة).
         services.AddScoped<ACommerce.Kit.Reviews.ReviewsService>();
@@ -2934,7 +2936,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/checkout/submit",
             async (string slug, HttpRequest req, IDocumentStore store,
                    Services.Deals.DealsService deals,
-                   ACommerce.Kit.Payments.IPaymentProvider payments) =>
+                   ACommerce.Kit.Payments.IPaymentProvider payments, Services.Deals.DealNotices notices, L l) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
@@ -2970,6 +2972,8 @@ public static class MarketplaceTemplateExtensions
 
             var pattern = PatternFromTenant(tenant);
             Guid firstDealId = Guid.Empty;
+            // الصَفَقاتُ الَّتي لَها مالِكٌ — يُشعَرُ بَعدَ الحَفظِ لا داخِلَ الحَلقَة (P1-5).
+            var born = new List<Guid>();
             foreach (var item in cart.Items)
             {
                 var listing = await s.LoadAsync<Listing>(item.ListingId);
@@ -3000,6 +3004,7 @@ public static class MarketplaceTemplateExtensions
                     // Shipping · Delivered) تُسَمّيه مِن أَوَّلِ لَحظَة، و`/accept`
                     // يَبقى فِعلَه هُوَ — بِهُوِيَّتِه لا بِاستِعارَةِ المُبادِر.
                     await deals.BindListingOwnerAsync(slug, deal.Id, oid);
+                    born.Add(deal.Id);
                 }
 
                 // اِحجِز المَبلَغ عَبر مُزَوِّد الدَّفع (Authorize، لا
@@ -3043,6 +3048,10 @@ public static class MarketplaceTemplateExtensions
 
             s.Delete<ACommerce.Kit.Cart.Cart>(userId);
             await s.SaveChangesAsync();
+            // **بَعدَ الحَفظ**: إشعارٌ لِمالِكِ إعلانِ كُلِّ صَفقَةٍ عَلى الأُنبوبِ القائِم
+            // (وَثيقَةٌ ثُمَّ جَرَسٌ ثُمَّ دَفعٌ فَوريّ) — كانَ صِفراً، فَالبائِعُ لا يَعلَمُ
+            // بِالطَلَبِ إلّا إن فَتَحَ «صَفقات» بِنَفسِه (P1-5). التَركيبُ في `DealNotices`.
+            await notices.NotifyNewDealsAsync(slug, born, l);
 
             return Results.Redirect(Link(req, slug, firstDealId == Guid.Empty ? "deals" : $"deals/{firstDealId}"));
         }).DisableAntiforgery()
@@ -3234,13 +3243,15 @@ public static class MarketplaceTemplateExtensions
         // والرَفضُ يَعودُ إلى الصَفحَةِ بِرَمزِه — نَسَقُ `/cancel` نَفسُه.
         app.MapPost("/{slug}/deals/{id:guid}/accept",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
-                   Services.Deals.DealsService deals) =>
+                   Services.Deals.DealsService deals, Services.Deals.DealNotices notices, L l) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
             var userName = AuthSession.ResolveUserName(req, slug) ?? "المالِك";
             var res = await deals.AcceptAsync(slug, id, new Services.Deals.DealAcceptor(userId, userName));
+            // والمُشتَري يَعلَمُ أَنّ طَلَبَه قُبِل — عَلى نَسَقِ `offer_accepted` (P1-5).
+            if (res.Ok) await notices.NotifyAcceptedAsync(slug, res.Deal!, userName, l);
             return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}")));
         }).DisableAntiforgery()
           .RequireStoreWritable();
@@ -4340,7 +4351,9 @@ public static class MarketplaceTemplateExtensions
     // الـ client (JS في App.razor) يَستَمِع لِـ "unread_changed" عَلى hub
     // /realtime ويُحَدِّث الـ badges. آمِنَة لِلاستِدعاء حَتَّى لَو الـ hub
     // غَير مُتاح — اِلتِقاط الاستِثناء بِصَمت.
-    private static async Task NudgeAsync(
+    // `internal` لا `private` مُنذُ P1-5: `Services.Deals.DealNotices` تُنادي الجَرَسَ
+    // نَفسَه — أُنبوبٌ واحِدٌ لا نُسخَةٌ ثانِيَة (القاعِدَة ٨).
+    internal static async Task NudgeAsync(
         Microsoft.AspNetCore.SignalR.IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> hub,
         string slug, Guid userId)
     {
