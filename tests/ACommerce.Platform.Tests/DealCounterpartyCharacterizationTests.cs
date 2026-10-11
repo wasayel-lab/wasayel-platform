@@ -406,7 +406,8 @@ public class DealCounterpartyCharacterizationTests
         var recheck  = accept.IndexOf("var stale = DealAcceptAuthorization.Validate(fresh, by);", StringComparison.Ordinal);
         var refuse2  = accept.IndexOf("if (stale is not null) return DealAcceptResult.Refused(stale, fresh);", StringComparison.Ordinal);
         var next     = accept.IndexOf("var next = DealsPolicy.Next(deal)", StringComparison.Ordinal);
-        var move     = accept.IndexOf("return DealAcceptResult.Accepted(await MoveAsync(s, deal, next, by.ActorId, by.ActorName, \"قُبِلَ العَرض\", ct));", StringComparison.Ordinal);
+        // (والمُلاحَظَةُ `null` لا «قُبِلَ العَرض» — مُراجَعَةُ المَوجَةِ الثانِيَة، ‏2026-10-11.)
+        var move     = accept.IndexOf("return DealAcceptResult.Accepted(await MoveAsync(s, deal, next, by.ActorId, by.ActorName, null, ct));", StringComparison.Ordinal);
         Assert.True(load > 0 && validate > load && refuse > validate && assign > refuse
                     && fresh > assign && recheck > fresh && refuse2 > recheck && next > refuse2 && move > next,
             $"سَلسَلَةُ القَبولِ تَغَيَّرَت: load={load} validate={validate} refuse={refuse} assign={assign} " +
@@ -459,7 +460,8 @@ public class DealCounterpartyCharacterizationTests
         Assert.Contains("var (payMethod, payRefusal) = Services.Deals.CheckoutPaymentPolicy.Decide(pay,", submit, StringComparison.Ordinal);
         Assert.Contains("var amount = item.UnitPriceSar * item.Quantity;", submit, StringComparison.Ordinal);
         Assert.Contains("amountSar: amount,", submit, StringComparison.Ordinal);
-        Assert.Contains("[\"pay_method\"] = payMethod", submit, StringComparison.Ordinal);
+        // بِالثابِتِ لا بِالحَرفِيَّة (مُراجَعَةُ المَوجَةِ الثانِيَة، ‏2026-10-11 — `DealCashPolicyTests`).
+        Assert.Contains("[Services.Deals.CheckoutPayMethods.AttributeKey] = payMethod", submit, StringComparison.Ordinal);
         Assert.Contains("await deals.AttachRefAsync(slug, deal.Id, \"listing_owner\", oid);", submit, StringComparison.Ordinal);
 
         Assert.Equal("cash", CheckoutPayMethods.CashOnDelivery);
@@ -641,7 +643,8 @@ public class LiveDealAcceptSequenceProofTests(ITestOutputHelper output)
             // **قُلِبَ بِقَرارٍ مَرئِيّ** (‏ADR-033 §٦): كانَ `buyer` — المُبادِرُ بِاسمِ القابِل.
             Assert.Equal(seller, advanced.ActorId!.Value);
             Assert.Equal("بائِع", advanced.ActorName);
-            Assert.Equal("قُبِلَ العَرض", advanced.Note);
+            // **قُلِبَ** (مُراجَعَةُ المَوجَةِ الثانِيَة، ‏2026-10-11): كانَت «قُبِلَ العَرض» حَرفِيَّةً في المَخزَن.
+            Assert.Null(advanced.Note);
             Log($"قَبولُ المالِك: Stage={after.Stage} · counterparty={after.CounterpartyName} · " +
                 $"advanced actor={(advanced.ActorId == seller ? "acceptor" : advanced.ActorId == buyer ? "initiator" : "other")} name={advanced.ActorName} note={advanced.Note}");
 

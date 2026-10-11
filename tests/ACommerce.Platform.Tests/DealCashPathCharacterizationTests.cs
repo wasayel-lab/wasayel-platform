@@ -215,7 +215,8 @@ public class DealCashPathCharacterizationTests
     public void AcceptAsync_now_moves_as_the_acceptor_and_has_no_advance_result_to_ignore()
     {
         var accept = AcceptBody();
-        Assert.Contains("MoveAsync(s, deal, next, by.ActorId, by.ActorName, \"قُبِلَ العَرض\", ct)", accept, StringComparison.Ordinal);
+        // (والمُلاحَظَةُ `null` لا «قُبِلَ العَرض» — مُراجَعَةُ المَوجَةِ الثانِيَة، ‏2026-10-11.)
+        Assert.Contains("MoveAsync(s, deal, next, by.ActorId, by.ActorName, null, ct)", accept, StringComparison.Ordinal);
         Assert.DoesNotContain("deal.InitiatorId", accept, StringComparison.Ordinal);
         Assert.DoesNotContain("advanced.Deal ?? deal", accept, StringComparison.Ordinal);
         Assert.Equal(0, Count(accept, "AdvanceAsync("));

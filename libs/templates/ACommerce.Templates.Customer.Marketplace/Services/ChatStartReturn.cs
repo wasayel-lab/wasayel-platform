@@ -23,4 +23,11 @@ public static class ChatStartReturn
     /// أَو <c>&amp;err=</c> إن حَمَلَ استِعلاماً.</summary>
     public static string Failure(string origin, string code)
         => origin + (origin.Contains('?') ? "&" : "?") + "err=" + code;
+
+    /// <summary><b>رابِطُ الدُخولِ الَّذي يَعودُ إلى المَنشَأ</b> — والمَنشَأُ <b>مُرَمَّزٌ</b> قيمَةً واحِدَةً لِـ
+    /// <c>returnUrl</c> (مُراجَعَةُ المَوجَةِ الثانِيَة، ‏2026-10-11): كانَ يُحشَرُ خاماً في
+    /// <c>login?returnUrl={origin}</c>، فَمَنشَأٌ يَحمِلُ استِعلاماً (<c>…?tab=1&amp;err=x</c>) يَنقَسِمُ عَلى صَفحَةِ
+    /// الدُخولِ إلى مُعامِلَين ويَعودُ المُستَخدِمُ إلى نِصفِه. والمَنشَأُ مَحلولٌ سَلَفاً بِـ
+    /// <see cref="LocalRedirect.Resolve"/> — التَرميزُ لا يَحكُمُ مَحَلِّيَّتَه، يَنقُلُه فَقَط.</summary>
+    public static string Login(string origin) => "login?returnUrl=" + Uri.EscapeDataString(origin);
 }

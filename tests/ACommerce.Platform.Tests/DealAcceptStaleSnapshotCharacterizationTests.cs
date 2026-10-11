@@ -167,7 +167,7 @@ public class DealAcceptStaleSnapshotCharacterizationTests
         var moves = after.Timeline.Where(e => e.Action == "advanced").ToArray();
         Assert.Single(moves);
         Assert.Equal((DealStage.Offered, DealStage.Booked), (moves[0].StageBefore, moves[0].StageAfter));
-        Assert.Equal("قُبِلَ العَرض", moves[0].Note);
+        Assert.Null(moves[0].Note);   // كانَت «قُبِلَ العَرض» حَرفِيَّةً — أُسقِطَت (مُراجَعَةُ المَوجَةِ الثانِيَة، ‏2026-10-11)
     }
 
     // ═══ ٢) ما لا يُقلَب — كِتابَةٌ بَينَ الجَلسَتَينِ لا تَمَسُّ ما تَفحَصُه البَوّابَة ═════════

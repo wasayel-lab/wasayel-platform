@@ -105,12 +105,18 @@ public class DealCashPolicyTests
     // ═══ ١) المِفتاحُ والقاعِدَة ═══════════════════════════════════════════
 
     /// <summary>الكاتِبُ (<c>/checkout/submit</c>) والقارِئُ (<c>DealsPolicy</c>) يَقرَآنِ
-    /// نَفسَ الحَرف — والحَرفُ مُثَبَّتٌ في النُقطَةِ كَما كانَ.</summary>
+    /// نَفسَ الحَرف — والحَرفُ مُثَبَّتٌ في النُقطَةِ كَما كانَ.
+    /// <para><b>قُلِبَ بِاسمِه</b> (مُراجَعَةُ المَوجَةِ الثانِيَة، ‏2026-10-11): كانَ
+    /// <c>The_attribute_key_is_the_letter_the_checkout_writes</c> — الكاتِبُ بِحَرفِيَّةٍ <c>"pay_method"</c> تُطابِقُ
+    /// الثابِتَ صُدفَةَ نَسخ، والقارِئُ بِالثابِت. وصارَ الكاتِبُ الثابِتَ نَفسَه (السَطرُ هُوَ هُوَ عَدّاً)، فَتَغييرُ
+    /// الحَرفِ في مَوضِعٍ واحِدٍ يَبلُغُ الاثنَين.</para></summary>
     [Fact]
-    public void The_attribute_key_is_the_letter_the_checkout_writes()
+    public void The_checkout_writes_the_attribute_key_constant_the_policy_reads()
     {
         Assert.Equal("pay_method", CheckoutPayMethods.AttributeKey);
-        Assert.Contains("[\"pay_method\"] = payMethod", Endpoint("/{slug}/checkout/submit"), StringComparison.Ordinal);
+        var submit = Endpoint("/{slug}/checkout/submit");
+        Assert.Contains("[Services.Deals.CheckoutPayMethods.AttributeKey] = payMethod", submit, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"pay_method\"", submit, StringComparison.Ordinal);
     }
 
     /// <summary><b>القاعِدَةُ الواحِدَة</b>: <c>Paid</c> وَحدَها، لِلنَقدِ وَحدَه.</summary>
@@ -194,6 +200,35 @@ public class DealCashPolicyTests
     {
         Assert.Equal(DealStage.Shipping, DealsPolicy.Next("marketplace", DealStage.Paid, CheckoutPayMethods.CashOnDelivery));
         Assert.Equal(DealStage.Shipping, DealsPolicy.Next(Cash(DealStage.Paid)));
+    }
+
+    /// <summary><b>المُوجِب</b> (مُراجَعَةُ المَوجَةِ الثانِيَة، ‏2026-10-11): صَفقَةُ النَقدِ القَديمَةُ الواقِفَةُ عِندَ
+    /// <c>Paid</c> تَأخُذُ قائِمَةً فيها <c>Paid</c> في مَوضِعِها — كانَت بِلاها فَلا يَجِدُ الـstepper مَرحَلَتَها
+    /// (<c>IndexOf</c> = ‏‎-1) ولا يُعَلِّمُ مُنجَزاً ولا حالِيّاً.</summary>
+    [Fact]
+    public void A_legacy_cash_deal_standing_at_Paid_keeps_Paid_in_its_stage_list_so_the_stepper_finds_it()
+    {
+        var legacy = Cash(DealStage.Paid);
+        var stages = DealsPolicy.StagesFor(legacy);
+        Assert.Equal(DealsPolicy.StagesFor("marketplace"), stages);
+        Assert.Equal(3, stages.ToList().IndexOf(DealStage.Paid));
+        Assert.Equal(new[] { DealStage.Offered, DealStage.Booked, DealStage.Confirmed },
+            stages.Where(st => stages.ToList().IndexOf(st) < stages.ToList().IndexOf(legacy.Stage)).ToArray());
+    }
+
+    /// <summary><b>السالِب</b>: صَفقَةُ نَقدٍ في أَيِّ مَرحَلَةٍ سِوى <c>Paid</c> لا تَرى <c>Paid</c> في قائِمَتِها —
+    /// الإبقاءُ لِمَرحَلَةِ الصَفقَةِ وَحدَها، والبِطاقَةُ كَما كانَت.</summary>
+    [Fact]
+    public void A_cash_deal_at_any_other_stage_never_lists_Paid_and_a_card_deal_always_does()
+    {
+        var checkedStages = 0;
+        foreach (var stage in DealsPolicy.StagesFor("marketplace").Where(st => st != DealStage.Paid))
+        {
+            Assert.DoesNotContain(DealStage.Paid, DealsPolicy.StagesFor(Cash(stage)));
+            Assert.Contains(DealStage.Paid, DealsPolicy.StagesFor(Card(stage)));
+            checkedStages++;
+        }
+        Assert.Equal(6, checkedStages);
     }
 
     // ═══ ٣) الفاعِلُ — الخِدمَةُ والشاشَةُ مِن دالَّةٍ واحِدَة ═══════════════════
@@ -424,7 +459,8 @@ public class DealCashPolicyTests
         var validate = accept.IndexOf("var violation = DealAcceptAuthorization.Validate(loaded, by);", StringComparison.Ordinal);
         var assign   = accept.IndexOf("await AssignCounterpartyAsync(tenantSlug, dealId, by.ActorId, by.ActorName, ct);", StringComparison.Ordinal);
         var next     = accept.IndexOf("var next = DealsPolicy.Next(deal)", StringComparison.Ordinal);
-        var move     = accept.IndexOf("return DealAcceptResult.Accepted(await MoveAsync(s, deal, next, by.ActorId, by.ActorName, \"قُبِلَ العَرض\", ct));", StringComparison.Ordinal);
+        // (والمُلاحَظَةُ `null` لا «قُبِلَ العَرض» — مُراجَعَةُ المَوجَةِ الثانِيَة، ‏2026-10-11؛ الصَفُّ التالي.)
+        var move     = accept.IndexOf("return DealAcceptResult.Accepted(await MoveAsync(s, deal, next, by.ActorId, by.ActorName, null, ct));", StringComparison.Ordinal);
         Assert.True(validate > 0 && assign > validate && next > assign && move > next,
             $"سَلسَلَةُ القَبولِ: validate={validate} assign={assign} next={next} move={move}");
         Assert.Equal(0, Count(accept, "AdvanceAsync("));
@@ -434,6 +470,23 @@ public class DealCashPolicyTests
         Assert.Contains("return new(true, await MoveAsync(s, deal, next.Value, actorId, actorName, note, ct), null);", AdvanceBody(), StringComparison.Ordinal);
         Assert.Equal(3, Count(WriteEndpointGuardTests.StripComments(DealsServiceSource()), "MoveAsync("));   // التَعريفُ ونِداءان
         Assert.Null(typeof(DealsService).GetMethod("MoveAsync", BindingFlags.Public | BindingFlags.Instance));   // لا بابَ ثالِثاً مِن خارِجِ الخِدمَة
+    }
+
+    /// <summary><b>القَبولُ لا يَكتُبُ مُلاحَظَةً عَرَبِيَّةً في السِجِلّ</b> (مُراجَعَةُ المَوجَةِ الثانِيَة، ‏2026-10-11؛
+    /// القاعِدَة ١١): كانَ «قُبِلَ العَرض» يُكتَبُ في <c>Note</c> سَطرِ <c>advanced</c> نَصّاً لا مِفتاحاً، ويُرسَمُ
+    /// خاماً في سِجِلِّ الاستوديو. أُسقِطَ — وسَطرُ <c>advanced</c> نَفسُه يَقولُها مِن تَسمِيَتَي الكاتالوج:
+    /// «عَرض/طَلَب ← حَجز». <b>المُوجِب</b>: الحَرفِيَّةُ صِفرٌ في كودِ الخِدمَة؛ <b>والسالِب</b>: الشاشَتانِ ما زالَتا
+    /// تَرسُمانِ السَطرَ بِالتَسمِيَتَين.</summary>
+    [Fact]
+    public void The_accept_move_writes_no_literal_note_and_the_timeline_says_it_through_the_stage_labels()
+    {
+        var code = WriteEndpointGuardTests.StripComments(DealsServiceSource());
+        Assert.DoesNotContain("قُبِلَ العَرض", code, StringComparison.Ordinal);
+        Assert.Equal(1, Count(code, "MoveAsync(s, deal, next, by.ActorId, by.ActorName, null, ct)"));
+
+        Assert.Equal("عَرض/طَلَب ← حَجز", $"{DealsPolicy.LabelAr(DealStage.Offered)} ← {DealsPolicy.LabelAr(DealStage.Booked)}");
+        Assert.Contains("\"advanced\" => $\"{DealsPolicy.LabelAr(e.StageBefore)} ← {DealsPolicy.LabelAr(e.StageAfter)}\"", DealPageSource(), StringComparison.Ordinal);
+        Assert.Contains("\"advanced\"  => $\"{DealsPolicy.LabelAr(e.StageBefore)} ← {DealsPolicy.LabelAr(e.StageAfter)}\"", StudioPageSource(), StringComparison.Ordinal);
     }
 
     // ═══ ٦) هُوِيَّةُ المالِكِ بِالقيمَة ══════════════════════════════════════

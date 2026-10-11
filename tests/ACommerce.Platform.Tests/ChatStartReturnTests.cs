@@ -55,6 +55,30 @@ public class ChatStartReturnTests
         Assert.Equal(Birthplace + "?err=partner_missing", ChatStartReturn.Failure(origin, ChatStartReturn.PartnerMissing));
     }
 
+    /// <summary><b>المُوجِب</b> (مُراجَعَةُ المَوجَةِ الثانِيَة، ‏2026-10-11): مَنشَأٌ يَحمِلُ استِعلاماً يَعبُرُ صَفحَةَ
+    /// الدُخولِ <b>قيمَةً واحِدَة</b> — كانَ يُحشَرُ خاماً فَيَنقَسِمُ عِندَ <c>&amp;</c> ويَعودُ المُستَخدِمُ إلى نِصفِه.</summary>
+    [Fact]
+    public void A_query_bearing_origin_crosses_the_login_page_as_one_returnUrl_value()
+    {
+        const string origin = "/shop/deals/0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f?tab=1&err=partner_missing";
+        var login = ChatStartReturn.Login(origin);
+        Assert.Equal("login?returnUrl=%2Fshop%2Fdeals%2F0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f%3Ftab%3D1%26err%3Dpartner_missing", login);
+
+        var query = System.Web.HttpUtility.ParseQueryString(login[(login.IndexOf('?') + 1)..]);
+        Assert.Single(query.AllKeys);
+        Assert.Equal(origin, query["returnUrl"]);
+    }
+
+    /// <summary><b>السالِب</b>: مَنشَأٌ بِلا استِعلامٍ يَعودُ بِحَرفِه أَيضاً — التَرميزُ لا يُغَيِّرُ الوِجهَةَ ولا
+    /// مَحَلِّيَّتَها (تِلكَ حُكمُ <c>LocalRedirect.Resolve</c> قَبلَه).</summary>
+    [Fact]
+    public void A_plain_origin_round_trips_unchanged_through_the_login_link()
+    {
+        var login = ChatStartReturn.Login(Birthplace);
+        Assert.Equal("login?returnUrl=%2Fshop%2Fdrivers", login);
+        Assert.Equal(Birthplace, System.Web.HttpUtility.ParseQueryString(login[(login.IndexOf('?') + 1)..])["returnUrl"]);
+    }
+
     [Fact]
     public void The_code_has_a_dictionary_key_through_the_deal_refusal_lexicon()
     {
@@ -99,7 +123,10 @@ public class ChatStartReturnTests
         Assert.Contains("var origin = Services.LocalRedirect.Resolve(req.Form[\"returnUrl\"].ToString(), Link(req, slug, $\"drivers\"));", body, StringComparison.Ordinal);
         Assert.Contains("if (partner is null) return Results.Redirect(Services.ChatStartReturn.Failure(origin, Services.ChatStartReturn.PartnerMissing));", body, StringComparison.Ordinal);
         Assert.Contains("if (meId == userId) return Results.Redirect(origin);", body, StringComparison.Ordinal);
-        Assert.Contains("login?returnUrl={origin}", body, StringComparison.Ordinal);
+        // والدُخولُ يَحمِلُ المَنشَأَ مُرَمَّزاً قيمَةً واحِدَة — كانَ `login?returnUrl={origin}` خاماً
+        // (مُراجَعَةُ المَوجَةِ الثانِيَة، ‏2026-10-11؛ الصَفّانِ أَدناه).
+        Assert.Contains("return Results.Redirect(Link(req, slug, Services.ChatStartReturn.Login(origin)));", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("login?returnUrl={origin}", body, StringComparison.Ordinal);
         Assert.Equal(0, Count(body, "return Results.Redirect(Link(req, slug, $\"drivers\"));"));
 
         // والتَعليقُ فَوقَ الأُنبوبِ يُسَمّي المُستَهلِكَ الثاني بِاسمِ مِلَفِّه.

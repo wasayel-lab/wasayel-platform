@@ -54,8 +54,8 @@ public static class CheckoutPayMethods
     public const string CashOnDelivery = "cash";
 
     /// <summary><b>مِفتاحُ طَريقَةِ الدَفعِ في <c>Deal.Attributes</c></b> — يَكتُبُه
-    /// <c>POST /{slug}/checkout/submit</c> بِحَرفِه (مُثَبَّتٌ في
-    /// <c>DealCounterpartyCharacterizationTests</c>) ويَقرَؤُه <c>DealsPolicy</c>
+    /// <c>POST /{slug}/checkout/submit</c> بِهذا الثابِتِ نَفسِه (كانَ بِحَرفِيَّةٍ تُطابِقُه — صارَ الثابِتَ
+    /// ‏2026-10-11؛ مُثَبَّتٌ في <c>DealCashPolicyTests</c>) ويَقرَؤُه <c>DealsPolicy</c>
     /// لِيُسقِطَ مَرحَلَةَ <c>Paid</c> عَن النَقد (‏ADR-033 §٦). الكاتِبُ والقارِئُ
     /// يَقرَآنِ نَفسَ الحَرف — نَسَقُ <c>DealsService.ListingOwnerRef</c>.</summary>
     public const string AttributeKey = "pay_method";

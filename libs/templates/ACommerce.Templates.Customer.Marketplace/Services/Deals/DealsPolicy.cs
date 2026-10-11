@@ -105,8 +105,16 @@ public static class DealsPolicy
         return next;
     }
 
-    /// <summary>مِن الصَفقَةِ نَفسِها — المَوضِعُ الَّذي تَقرَؤُه الخِدمَةُ والشاشَة.</summary>
-    public static IReadOnlyList<DealStage> StagesFor(Deal deal) => StagesFor(deal.Pattern, PayMethodOf(deal));
+    /// <summary>مِن الصَفقَةِ نَفسِها — المَوضِعُ الَّذي تَقرَؤُه الخِدمَةُ والشاشَة.
+    /// <para><b>ومَرحَلَةٌ مُسقَطَةٌ تَقِفُ عِندَها الصَفقَةُ تَبقى في القائِمَة</b> (مُراجَعَةُ المَوجَةِ الثانِيَة،
+    /// ‏2026-10-11): صَفقَةُ نَقدٍ قَديمَةٌ بَلَغَت <c>Paid</c> قَبلَ الإسقاطِ كانَت تَأخُذُ قائِمَةً بِلا
+    /// <c>Paid</c>، فَلا يَجِدُ الـstepper مَرحَلَتَها (<c>IndexOf</c> = ‏‎-1) ولا يُعَلِّمُ شَيئاً — لا مُنجَزاً ولا
+    /// حالِيّاً. فَتُبقى المُسقَطَةُ حَيثُ هِيَ مَرحَلَةُ الصَفقَة، ولا تَظهَرُ لِغَيرِها.</para></summary>
+    public static IReadOnlyList<DealStage> StagesFor(Deal deal)
+    {
+        var payMethod = PayMethodOf(deal);
+        return StagesFor(deal.Pattern).Where(s => !Skips(s, payMethod) || s == deal.Stage).ToArray();
+    }
 
     /// <summary>مِن الصَفقَةِ نَفسِها — المَوضِعُ الَّذي تَقرَؤُه الخِدمَةُ والشاشَة.</summary>
     public static DealStage? Next(Deal deal) => Next(deal.Pattern, deal.Stage, PayMethodOf(deal));

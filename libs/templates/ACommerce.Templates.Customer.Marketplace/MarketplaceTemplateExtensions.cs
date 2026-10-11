@@ -1856,7 +1856,7 @@ public static class MarketplaceTemplateExtensions
             var origin = Services.LocalRedirect.Resolve(req.Form["returnUrl"].ToString(), Link(req, slug, $"drivers"));
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
-            if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl={origin}"));
+            if (parsed is null) return Results.Redirect(Link(req, slug, Services.ChatStartReturn.Login(origin)));
             var (meId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
             if (meId == userId) return Results.Redirect(origin);
@@ -2935,16 +2935,14 @@ public static class MarketplaceTemplateExtensions
 
         // POST /{slug}/checkout/submit — تَحويل السَّلَّة إلى صَفقَة + إفراغ.
         // كُلّ بَند في السَّلَّة → Deal مُنفَصِل (لِأَنّ الـ Deal فيه الإعلان
-        // وكُلّ بَند قَد يَكون مالِكُه مُختَلِف). تَدخُلُ الصَفقَةُ بِمَرحَلَة
-        // **Offered** بِلا طَرَفٍ مُقابِل (‏`DealsService.StartAsync`)، ولا
-        // يُخرِجُها إلّا قَبولُ مالِكِ الإعلانِ عَبرَ `/deals/{id}/accept` أَو
-        // المَسارُ الإداريّ (‏ADR-033 §٢‑ج‑أ). وكانَ هذا التَعليقُ يَقول
-        // «Booked مُباشَرَةً» — وهُوَ ما لا يَفعَلُه الكود (صُحِّحَ ‏2026-10-11).
-        // **وصُحِّحَ ثانِيَةً في اليَومِ نَفسِه (مُراجَعَةٌ ثالِثَة) — ولا يُعادُ حَرفٌ فَوقَه**:
-        // «بِلا طَرَفٍ مُقابِل» صَدَقَ حَتّى `8769fa4` — مالِكُ الإعلانِ يُربَطُ طَرَفاً مِن
-        // الوِلادَةِ أَدناه (`BindListingOwnerAsync`، إلّا أَن يَكونَ المُشتَري نَفسَه — `3a92617`)؛
-        // و«لا يُخرِجُها إلّا القَبول» لا يَصدُق: المُشتَري يُحَرِّكُ `Offered` بِنَفسِه بِصَفِّ
-        // `initiator` (سُلوكٌ قائِمٌ يُقالُ في ‏ADR-033 §٦‑ج).
+        // وكُلّ بَند قَد يَكون مالِكُه مُختَلِف). تَدخُلُ الصَفقَةُ بِمَرحَلَة **Offered**
+        // (‏`DealsService.StartAsync`) **ومالِكُ إعلانِها طَرَفٌ مُقابِلٌ مِن الوِلادَة** —
+        // `BindListingOwnerAsync` أَدناه — إلّا أَن يَكونَ المُشتَري نَفسَه، أَو إعلاناً لا يَحمِلُ
+        // `owner_id` مُعَرِّفاً (إعلاناتُ البَذر)، فَتولَدُ بِلا طَرَف. **ولا يُخرِجُها مِن `Offered` إلّا
+        // الطَرَف**: قَبولُ البائِعِ عَبرَ `/deals/{id}/accept`، أَو المَسارُ الإداريُّ بِجانِبِ المَتجَر —
+        // فاعِلُ `Booked` الطَرَفُ المُقابِل، والمُشتَري لا يَحجِزُ طَلَبَه (‏ADR-033 §٦‑ط). وتاريخُ هذا
+        // التَعليقِ — «Booked مُباشَرَةً» ثُمَّ «بِلا طَرَفٍ» ثُمَّ «المُشتَري يُحَرِّكُ Offered» — في ‏ADR-033
+        // §٢‑ج‑أ و§٦‑ب‑١ و§٦‑ط: كُلٌّ صَدَقَ يَومَه وأُعيدَت كِتابَتُه إلى الكودِ ‏2026-10-11.
         app.MapPost("/{slug}/checkout/submit",
             async (string slug, HttpRequest req, IDocumentStore store,
                    Services.Deals.DealsService deals,
@@ -3004,8 +3002,9 @@ public static class MarketplaceTemplateExtensions
                         [Services.Deals.Deal.DeliveryAddressAttribute] = addr,
                         [Services.Deals.Deal.DeliveryPhoneAttribute] = phone,
                         // المُطَبَّعَةُ لا الخام — فَما يُقرَأُ مِن
-                        // الصَفقَةِ بَعدَ سَنَةٍ قيمَةٌ مِن المَعجَم.
-                        ["pay_method"] = payMethod
+                        // الصَفقَةِ بَعدَ سَنَةٍ قيمَةٌ مِن المَعجَم. وبِالثابِتِ الَّذي يَقرَأُ بِه
+                        // `DealsPolicy` لا بِحَرفِيَّة — الكاتِبُ والقارِئُ حَرفٌ واحِد.
+                        [Services.Deals.CheckoutPayMethods.AttributeKey] = payMethod
                     });
                 if (firstDealId == Guid.Empty) firstDealId = deal.Id;
                 if (listing.Attributes.TryGetValue("owner_id", out var oid))
