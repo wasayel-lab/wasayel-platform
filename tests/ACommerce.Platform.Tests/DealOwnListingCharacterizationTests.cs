@@ -263,36 +263,53 @@ public class DealOwnListingCharacterizationTests
         return (deals, world, deal.Id);
     }
 
-    /// <summary><b>اليَوم</b> (يُقلَبُ بِاسمِه في الكوميتِ التالي): أَوَّلُ نَقرَةٍ إدارِيَّةٍ عَلى صَفقَةِ البَذرَةِ تَجعَلُ
-    /// مالِكَ التَطبيقِ طَرَفَها المُقابِلَ وهُوَ مُبادِرُها — <c>InitiatorId == CounterpartyId</c> بِسَطرِ <c>assigned</c>
-    /// بِاسمِه — ثُمَّ يَمشيها وَحدَه بِالنَقرَةِ نَفسِها إلى <c>Completed</c> (كُلُّ صَفٍّ في الكاتالوجِ يُسَمّيه: هُوَ
-    /// المُبادِرُ والطَرَف). والبابُ إلَيها زِرٌّ في الاستوديو لا طَلَبٌ مَصنوع.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-11، مُراجَعَةُ الموجَةِ الثانِيَةِ الرابِعَة): كانَ
+    /// <c>Today_the_studio_path_makes_the_app_owner_both_parties_of_his_own_demo_deal_and_walks_it_alone_to_Completed</c> —
+    /// أَوَّلُ نَقرَةٍ إدارِيَّةٍ عَلى صَفقَةِ البَذرَةِ تَجعَلُ مالِكَ التَطبيقِ طَرَفَها المُقابِلَ وهُوَ مُبادِرُها، ثُمَّ يَمشيها
+    /// وَحدَه بِسِتِّ نَقَراتٍ إلى <c>Completed</c> (مُوَدَعٌ في <c>17a201a</c>). وصارَ الفَحصُ في الكاتِبِ الوَحيد
+    /// (<c>AssignCounterpartyAsync</c>): لا يُعَيَّنُ المُبادِرُ طَرَفاً، فَتَبقى صَفقَةُ البَذرَةِ بِلا طَرَف، والتَحريكُ
+    /// بِمالِكِ التَطبيقِ يُرَدُّ — <c>Booked</c> تَطلُبُ <c>counterparty</c> (‏ADR-033 §٦‑ط) — فَتَقِفُ عِندَ
+    /// <c>Offered</c> بِلا سَطرٍ يُكتَب. <b>وأَثَرُه يُقال</b>: الصَفقَةُ التَجريبِيَّةُ لا تُمشى مِن الاستوديو بَعدَ اليَوم
+    /// (سِجِلُّ المالِكِ «ب»).</summary>
     [Fact]
-    public void Today_the_studio_path_makes_the_app_owner_both_parties_of_his_own_demo_deal_and_walks_it_alone_to_Completed()
+    public void The_studio_path_cannot_make_the_app_owner_his_own_counterparty_and_his_demo_deal_stays_at_Offered()
     {
         var appOwner = Guid.Parse("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
         var (deals, world, id) = StudioSeedDeal(appOwner);
+        var savesBefore = world.SaveCalls;
 
         var first = StudioAdvance(deals, id, appOwner);
-        Assert.True(first.Ok, first.Reason);
+        Assert.False(first.Ok);
+        Assert.Contains("counterparty", first.Reason ?? "", StringComparison.Ordinal);
+
         var deal = world.Read<Deal>(id.ToString())!;
         Assert.Equal(appOwner, deal.InitiatorId);
-        Assert.Equal(appOwner, deal.CounterpartyId);
-        Assert.Equal(DealStage.Booked, deal.Stage);
-        Assert.Equal(appOwner, deal.Timeline.Single(e => e.Action == "assigned").ActorId);
+        Assert.Null(deal.CounterpartyId);
+        Assert.Null(deal.CounterpartyName);
+        Assert.Equal(DealStage.Offered, deal.Stage);
+        Assert.Equal(DealStatus.Active, deal.Status);
+        Assert.DoesNotContain(deal.Timeline, e => e.Action is "assigned" or "advanced");
+        Assert.Equal(savesBefore, world.SaveCalls);   // لا تَعيينَ ولا تَحريك — صِفرُ حِفظ
+    }
 
-        var clicks = 1;
-        while (deal.Status == DealStatus.Active && clicks < 20)
-        {
-            var r = StudioAdvance(deals, id, appOwner);
-            Assert.True(r.Ok, $"النَقرَةُ {clicks + 1} رُدَّت: {r.Reason}");
-            clicks++;
-        }
-        Assert.Equal(DealStatus.Completed, deal.Status);
-        Assert.Equal(DealStage.Reviewed, deal.Stage);
-        // نَقرَةٌ لِكُلِّ انتِقالٍ في الكاتالوج: عَرض ← حَجز ← تَأكيد ← دَفع ← شَحن ← تَسليم ← تَقييم (سِتّ).
-        Assert.Equal(DealsPolicy.StagesFor("marketplace").Count - 1, clicks);
-        Assert.Equal(6, clicks);
-        Assert.All(deal.Timeline.Where(e => e.Action == "advanced"), e => Assert.Equal(appOwner, e.ActorId));
+    /// <summary><b>الكاتِبُ الوَحيدُ نَفسُه — مُوجِبٌ وسالِب</b>: <c>AssignCounterpartyAsync</c> تُعيدُ الصَفقَةَ بِلا
+    /// تَغييرٍ ولا حِفظٍ حينَ يَكونُ المُعَيَّنُ مُبادِرَها، وتُعَيِّنُ غَيرَه كَما كانَت (سَطرُ <c>assigned</c> بِاسمِه).</summary>
+    [Fact]
+    public void AssignCounterpartyAsync_never_makes_the_initiator_the_counterparty_and_still_assigns_anyone_else()
+    {
+        var appOwner = Guid.Parse("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
+        var (deals, world, id) = StudioSeedDeal(appOwner);
+        var savesBefore = world.SaveCalls;
+
+        var self = Now(deals.AssignCounterpartyAsync(Slug, id, appOwner, "مالِك التَّطبيق"));
+        Assert.NotNull(self);
+        Assert.Null(self!.CounterpartyId);
+        Assert.Equal(savesBefore, world.SaveCalls);
+
+        var other = Now(deals.AssignCounterpartyAsync(Slug, id, Seller, "بائِع"));
+        Assert.Equal(Seller, other!.CounterpartyId);
+        Assert.Equal("بائِع", other.CounterpartyName);
+        Assert.Equal(Seller, other.Timeline.Single(e => e.Action == "assigned").ActorId);
+        Assert.Equal(savesBefore + 1, world.SaveCalls);
     }
 }

@@ -120,7 +120,8 @@ public sealed class DealsService
     /// والمَسارِ الإداريّ، و<see cref="DealEvent.BoundAtBirth"/> لِرَبطِ البائِعِ عِندَ
     /// وِلادَةِ صَفقَةِ السَلَّة (‏ADR-033 §٦) — فَلا تُسَمّي الشاشَةُ رَبطاً «قُبِلَ
     /// العَرض». (بَعدَ <paramref name="ct"/> عَمداً: نِداءاتُ القَبولِ والمَسارِ
-    /// الإداريِّ المُثَبَّتَةُ حَرفاً لا تَتَحَرَّك.)</summary>
+    /// الإداريِّ المُثَبَّتَةُ حَرفاً لا تَتَحَرَّك.) <b>ولا تُعَيِّنُ المُبادِرَ طَرَفاً</b> (‏2026-10-11):
+    /// تُعيدُ الصَفقَةَ بِلا تَغييرٍ حينَ <c>counterpartyId == InitiatorId</c> — الثابِتُ في الكاتِبِ الوَحيد.</summary>
     public async Task<Deal?> AssignCounterpartyAsync(
         string tenantSlug, Guid dealId,
         Guid counterpartyId, string? counterpartyName,
@@ -130,6 +131,10 @@ public sealed class DealsService
         var deal = await s.LoadAsync<Deal>(dealId, ct);
         if (deal is null || deal.Status != DealStatus.Active) return deal;
         if (deal.CounterpartyId is not null) return deal;
+        // ولا يَكونُ المَرءُ طَرَفَي صَفقَتِه — هُنا في الكاتِبِ الوَحيدِ لا في نِداءٍ بِعَينِه (مُراجَعَةُ الموجَةِ
+        // الثانِيَةِ الرابِعَة، ‏2026-10-11): كانَ الفَحصُ في `BindListingOwnerAsync` وَحدَها، والمَسارُ الإداريُّ يُعَيِّنُ
+        // مالِكَ التَطبيقِ طَرَفاً لِصَفقَةِ بَذرَتِه وهو مُبادِرُها. يُعادُ ما قُرِئَ بِلا كِتابَة.
+        if (deal.InitiatorId == counterpartyId) return deal;
         deal.CounterpartyId = counterpartyId;
         deal.CounterpartyName = counterpartyName;
         deal.UpdatedAt = DateTime.UtcNow;
@@ -164,15 +169,18 @@ public sealed class DealsService
     /// كانَت قَبلَ <c>8769fa4</c>: يُحَرِّكُ المُبادِرُ <c>Offered</c> ويَقِفُ عِندَ <c>Booked</c>،
     /// والقَبولُ يَرُدُّه بِـ<c>actor_is_initiator</c>. ويُعادُ ما قُرِئَ بِلا كِتابَة؛ ولَقطَةُ القِراءَةِ
     /// لا تَتَقادَمُ هُنا لِأَنّ المُبادِرَ لا يَتَغَيَّرُ بَعدَ الوِلادَة.</para>
+    ///
+    /// <para><b>وانتَقَلَ الفَحصُ إلى الكاتِبِ الوَحيد</b> (‏2026-10-11، مُراجَعَةُ الموجَةِ الثانِيَةِ الرابِعَة):
+    /// كانَ هُنا وَحدَه — فَالمَسارُ الإداريُّ يُعَيِّنُ مالِكَ التَطبيقِ طَرَفاً لِصَفقَةٍ هو مُبادِرُها — وصارَ في
+    /// <see cref="AssignCounterpartyAsync"/>، الَّتي تَمُرُّ بِها هذِه وكُلُّ مَسارٍ يُعَيِّن. والنَتيجَةُ هُنا هي هي.</para>
     /// </summary>
     public async Task<Deal?> BindListingOwnerAsync(
         string tenantSlug, Guid dealId, string ownerRef, CancellationToken ct = default)
     {
         if (!Guid.TryParse(ownerRef, out var ownerId)) return null;
         await using var q = _store.QuerySession(tenantSlug);
-        // ولا يَكونُ المَرءُ طَرَفَي صَفقَتِه — مالِكٌ هُوَ المُبادِرُ لا يُربَط (‏ADR-033 §٦‑ب‑١ مُلحَقاً).
-        var deal = await q.LoadAsync<Deal>(dealId, ct);
-        if (deal is null || deal.InitiatorId == ownerId) return deal;
+        // ولا يَكونُ المَرءُ طَرَفَي صَفقَتِه — مالِكٌ هُوَ المُبادِرُ لا يُربَط (‏ADR-033 §٦‑ب‑١ مُلحَقاً)؛ والفَحصُ
+        // انتَقَلَ ‏2026-10-11 إلى `AssignCounterpartyAsync` — الكاتِبِ الوَحيد — فَيَحرُسُ المَسارَ الإداريَّ أَيضاً.
         var owner = await q.LoadAsync<ACommerce.Kit.Auth.User>(ownerId, ct);
         // وَثيقَةٌ غائِبَة: الهُوِيَّةُ تُربَطُ والاسمُ غائِبٌ لا فارِغ — `null` ما يَقرَؤُه كُلُّ قارِئٍ غِياباً (`?? "—"`،
         // `is not null`)؛ وكانَ `?? ""` فَيُرسَمُ فَراغاً وسَهماً مُعَلَّقاً في قائِمَةِ الاستوديو (‏2026-10-11، مُراجَعَةٌ ثانِيَة).
