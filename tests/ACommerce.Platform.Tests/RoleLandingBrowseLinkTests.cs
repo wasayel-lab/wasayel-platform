@@ -58,4 +58,46 @@ public class RoleLandingBrowseLinkTests
         Assert.Equal(1, Regex.Matches(RoleLandingVisitorDoorCharacterizationTests.RoleLanding(),
             Regex.Escape("roles.landing.have_account")).Count);
     }
+
+    /// <summary>
+    /// <para><b>لَقَطاتُ الأَساسِ الحَيَّةُ تَحمِلُ الرابِطَ كَما يُرسَم</b> (‏2026-10-11، مُراجَعَةُ
+    /// <c>bce68ed</c>؛ ‏ADR-035 §٢‑٤ مُلحَق): التِقاطٌ حَيٌّ قَبلَ الرابِطِ وبَعدَه — ‏59 صَفحَةً عامَّة
+    /// عَلى قاعِدَةٍ مَحَلِّيَّةٍ مُرمِيَّة، بِـ<c>curl</c> وَحدَه — اختَلَفَت فيه أَربَعٌ لا غَير، هي صَفَحاتُ
+    /// البَوّابَة، وكُلٌّ بِسَطرَينِ (‏132 بايتاً) فَوقَ سَطرِ «لَدَيكَ حِساب». فَأُعيدَ تَثبيتُ الأَربَعِ في
+    /// <c>i18n-baseline/</c> بِذلك الفَرقِ نَفسِه.</para>
+    /// <para>والرابِطُ مِن جَذرِ المُستَأجِرِ حَتّى عَلى <c>/{slug}/r/{role}</c> — وسَطرُ الدُخولِ تَحتَه
+    /// يَحمِلُ الدَور. واللَقطَةُ المُجَمَّدَةُ <c>baseline/</c> «ما كان» (يَقرَؤُها
+    /// <c>ComponentVariantCharacterizationTests</c> تَوصيفاً لِما قَبلَ المُتَغايِرات) لا تَحمِلُه ولا تُمَسّ.</para>
+    /// </summary>
+    [Fact]
+    public void The_live_baselines_of_the_role_gateway_carry_the_link_once_above_the_have_account_line()
+    {
+        var appearance = Path.Combine(RepoRoot, "tests", "characterization", "appearance");
+        var link = $"    <div class=\"acm-role-landing-foot\"><a href=\"/ashare/explore\">{BrowseText}</a></div>\n\n";
+        var gateway = new Dictionary<string, string>
+        {
+            ["ashare-portal"]        = "/ashare/login",
+            ["ashare-role-customer"] = "/ashare/r/customer/login",
+            ["ashare-role-host"]     = "/ashare/r/host/login",
+            ["ashare-role-vendor"]   = "/ashare/r/vendor/login",
+        };
+
+        foreach (var (page, login) in gateway)
+        {
+            var html = File.ReadAllText(Path.Combine(appearance, "i18n-baseline", page + ".html"));
+            Assert.Equal(1, Regex.Matches(html, Regex.Escape(link)).Count);
+            Assert.Contains(link + $"    <div class=\"acm-role-landing-foot\"><a href=\"{login}\">", html, StringComparison.Ordinal);
+        }
+
+        var carriers = Directory.GetFiles(Path.Combine(appearance, "i18n-baseline"), "*.html");
+        Assert.True(carriers.Length > 100, $"أَداةٌ عَمياء: {carriers.Length} لَقطَةً فَقَط.");
+        Assert.Equal(
+            gateway.Keys.OrderBy(k => k, StringComparer.Ordinal).ToArray(),
+            carriers.Where(f => File.ReadAllText(f).Contains(BrowseText, StringComparison.Ordinal))
+                    .Select(f => Path.GetFileNameWithoutExtension(f)).OrderBy(k => k, StringComparer.Ordinal).ToArray());
+
+        var frozen = Directory.GetFiles(Path.Combine(appearance, "baseline"), "*.html");
+        Assert.True(frozen.Length >= 6, $"أَداةٌ عَمياء: {frozen.Length} لَقطَةً مُجَمَّدَةً فَقَط.");
+        Assert.DoesNotContain(frozen, f => File.ReadAllText(f).Contains(BrowseText, StringComparison.Ordinal));
+    }
 }
