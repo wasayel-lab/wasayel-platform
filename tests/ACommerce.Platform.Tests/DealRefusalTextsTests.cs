@@ -52,6 +52,27 @@ public class DealRefusalTextsTests
         Assert.Equal(10, checked_);   // 6 + 3 + 1 — المُشتَرَكُ يُفحَصُ مَرَّتَين ويَصِلُ مِفتاحاً واحِداً
     }
 
+    /// <summary><b>نَصُّ «بِلا مالِكِ إعلان» يُسَمّي مَن يُحَرِّكُها حَقّاً</b> (‏2026-10-11، مُراجَعَةُ الموجَةِ الثانِيَةِ
+    /// الثانِيَة): كانَ «يُحَرِّكُها مُشرِفُ المَتجَر وَحدَه» — ولا دَورَ «مُشرِف مَتجَر» يُحَرِّكُ صَفقَة: البابُ الوَحيدُ
+    /// الَّذي يُعَيِّنُ طَرَفاً لِصَفقَةٍ بِلا طَرَفٍ ويُحَرِّكُها مَسارُ الاستوديو، خَلفَ <c>StudioOwnsAsync</c> — مالِكُ
+    /// المَتجَرِ نَفسُه. فَالنَصُّ يُقاسُ بِالكودِ الَّذي يَصِفُه: إن انتَقَلَ البابُ احمَرَّ هذا.</summary>
+    [Fact]
+    public void The_listing_owner_missing_text_names_the_store_owner_in_the_studio_who_alone_moves_it()
+    {
+        var text = LocaleCatalog.Text(LocaleCatalog.Arabic, DealRefusalTexts.KeyFor(DealAcceptAuthorization.ListingOwnerMissing)!);
+        Assert.Equal("هذِه الصَّفقَة بِلا مالِكِ إعلانٍ مُسَجَّل — يُحَرِّكُها مالِكُ المَتجَر مِن الاستوديو وَحدَه.", text);
+        Assert.DoesNotContain("مُشرِف", text, StringComparison.Ordinal);
+
+        var endpoints = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs")));
+        var start = endpoints.IndexOf("\"/studio/apps/{slug}/deals/{id:guid}/advance\"", StringComparison.Ordinal);
+        Assert.True(start > 0, "مَسارُ الاستوديو لِلتَحريكِ غَيرُ مَوجود — الأَداةُ عَمياء.");
+        var studio = endpoints.Substring(start, endpoints.IndexOf(".DisableAntiforgery();", start, StringComparison.Ordinal) - start);
+        var owns   = studio.IndexOf("if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect(\"/studio\");", StringComparison.Ordinal);
+        var assign = studio.IndexOf("if (deal.CounterpartyId is null)", StringComparison.Ordinal);
+        Assert.True(owns > 0 && assign > owns, $"البابُ لا يَسأَلُ المِلكِيَّةَ قَبلَ التَعيين: owns={owns} assign={assign}");
+    }
+
     /// <summary><b>السالِب</b>: رَمزٌ خارِجَ المَعجَم، أَو غِيابٌ، أَو فَراغ — لا مِفتاحَ،
     /// فَلا شَريطَ ولا مِفتاحَ خاماً عَلى الشاشَة.</summary>
     [Theory]
