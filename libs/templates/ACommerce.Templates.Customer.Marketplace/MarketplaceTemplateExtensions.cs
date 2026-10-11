@@ -3210,7 +3210,7 @@ public static class MarketplaceTemplateExtensions
         // عميل يُقَدِّم عَرضاً على إعلان → يُنشِئ Deal(Offered).
         app.MapPost("/{slug}/listings/{id:guid}/deal",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
-                   Services.Deals.DealsService deals) =>
+                   Services.Deals.DealsService deals, Services.Deals.DealNotices notices, L l) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/listings/{id}"));
@@ -3237,6 +3237,11 @@ public static class MarketplaceTemplateExtensions
 
             if (oid is not null && Guid.TryParse(oid, out var ownerGuid))
                 await deals.AttachRefAsync(slug, deal.Id, "listing_owner", ownerGuid.ToString());
+            // **ومالِكُ الإعلانِ يُشعَرُ بِالعَرض** — كانَ هذا المَسارُ يُولِدُ الصَفقَةَ بِصِفرِ إشعارٍ
+            // و`/checkout/submit` يُشعِر (فَجوَةٌ تَرَكَتها P1-5): البائِعُ لا يَعلَمُ بِعَرضٍ يَنتَظِرُ قَبولَه
+            // إلّا إن فَتَحَ «صَفقات». النِداءُ نَفسُه بَعدَ أَن حُفِظَت الصَفقَةُ ومَرجِعُها، والتَركيبُ في
+            // `DealNotices` (عَرضٌ عَلى إعلانٍ بِلا مالِكٍ لا يُشعِرُ أَحَداً — تَقرَأُ المَرجِعَ المَحفوظ).
+            await notices.NotifyNewDealsAsync(slug, new[] { deal.Id }, l);
 
             return Results.Redirect(Link(req, slug, $"deals/{deal.Id}"));
         }).DisableAntiforgery()

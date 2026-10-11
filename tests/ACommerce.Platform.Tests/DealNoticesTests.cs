@@ -194,6 +194,43 @@ public class DealNoticesTests
         Assert.True(call > 0 && tell > call, $"إشعارُ المُشتَري لا يَتلو القَبول: call={call} tell={tell}");
     }
 
+    /// <summary><b>ومَسارُ العَرضِ عَلى إعلان</b> (<c>/{slug}/listings/{id}/deal</c>) — كانَ يُولِدُ الصَفقَةَ
+    /// بِصِفرِ إشعارٍ و<c>/checkout/submit</c> يُشعِر (فَجوَةٌ تَرَكَتها P1-5)، فَالبائِعُ لا يَعلَمُ بِعَرضٍ
+    /// يَنتَظِرُ قَبولَه. صارَ يُنادي الأُنبوبَ نَفسَه <b>بَعدَ</b> أَن حُفِظَت الصَفقَةُ ومَرجِعُ مالِكِها، والتَركيبُ
+    /// في الخِدمَةِ لا في الجِسم. (قيسَ أَحمَرَ عَلى الكودِ قَبلَ النِداء: لا نِداءَ في المَقطَع.)</summary>
+    [Fact]
+    public void The_offer_path_notifies_the_listing_owner_once_the_deal_and_its_owner_ref_are_saved()
+    {
+        var endpoints = Source(Template, "MarketplaceTemplateExtensions.cs");
+        var offer  = Segment(endpoints, "\"/{slug}/listings/{id:guid}/deal\"", ".RequireStoreWritable();");
+        var start  = offer.IndexOf("var deal = await deals.StartAsync(slug, pattern,", StringComparison.Ordinal);
+        var attach = offer.IndexOf("await deals.AttachRefAsync(slug, deal.Id, \"listing_owner\", ownerGuid.ToString());", StringComparison.Ordinal);
+        var notify = offer.IndexOf("await notices.NotifyNewDealsAsync(slug, new[] { deal.Id }, l);", StringComparison.Ordinal);
+        var back   = offer.IndexOf("return Results.Redirect(Link(req, slug, $\"deals/{deal.Id}\"));", StringComparison.Ordinal);
+        Assert.True(start > 0 && attach > start && notify > attach && back > notify,
+            $"تَرتيبُ الإشعارِ في مَسارِ العَرض: start={start} attach={attach} notify={notify} back={back}");
+        Assert.Equal(1, Count(offer, "NotifyNewDealsAsync("));
+        Assert.Contains("Services.Deals.DealNotices notices, L l) =>", offer, StringComparison.Ordinal);
+        Assert.Equal(0, Count(offer, "new ACommerce.Kit.Notifications.Notification"));   // التَركيبُ في الخِدمَة
+        Assert.Equal(0, Count(offer, "NudgeAsync("));
+        Assert.Equal(0, Count(offer, "push."));
+    }
+
+    /// <summary><b>والمَسارُ الإداريُّ يَبقى كَما هُو</b>: بَذرَةُ الاستوديو تُولِدُ صَفقَةَ عَرضٍ تَجريبِيَّةً
+    /// مُبادِرُها مالِكُ التَطبيقِ نَفسُه وبِلا إعلانٍ ولا مَرجِعِ مالِك — فَلا أَحَدَ يُشعَر، ولا نِداءَ هُناك.
+    /// ونُقطَةُ التَقَدُّمِ الإدارِيَّة لا تُولِدُ صَفقَة.</summary>
+    [Fact]
+    public void The_studio_seed_path_births_a_demo_deal_without_an_owner_and_notifies_nobody()
+    {
+        var endpoints = Source(Template, "MarketplaceTemplateExtensions.cs");
+        var seed = Segment(endpoints, "\"/studio/apps/{slug}/deals/seed\"", ".DisableAntiforgery();");
+        Assert.Equal(1, Count(seed, "deals.StartAsync(slug, pattern,"));
+        Assert.Contains("listingId: null,", seed, StringComparison.Ordinal);
+        Assert.Equal(0, Count(seed, "AttachRefAsync("));
+        Assert.Equal(0, Count(seed, "notices."));
+        Assert.Equal(0, Count(seed, "Notification"));
+    }
+
     /// <summary>الخِدمَةُ نَفسُها ما زالَت لا تُشعِر — المُنتِجُ <c>DealNotices</c> وَحدَها،
     /// وتَعليقُ <c>Deal.cs</c> يُسَمّيها بَدَلَ دَعوى «يَخرُج تِلقائيّاً».</summary>
     [Fact]
@@ -304,6 +341,59 @@ public class LiveDealNoticesProofTests(ITestOutputHelper output)
                 Assert.Equal(1, await q.Query<Notification>().CountAsync(n => n.UserId == seller));   // لا إشعارَ ثانِياً لِلمالِك
                 Log($"إشعارُ المُشتَري: type={forBuyer[0].Type} · body={forBuyer[0].Body}");
             }
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            foreach (var d in await s.Query<Deal>().ToListAsync()) s.Delete(d);
+            foreach (var n in await s.Query<Notification>().ToListAsync()) s.Delete(n);
+            await s.SaveChangesAsync();
+        }
+    }
+
+    /// <summary><b>مَسارُ العَرضِ عَلى إعلانٍ بِتَسَلسُلِ نُقطَتِه</b> (‏`StartAsync` بِلا طَريقَةِ دَفع، ثُمَّ مَرجِعُ
+    /// المالِكِ بِلا رَبط، ثُمَّ النِداءُ نَفسُه): مالِكُ الإعلانِ يُشعَرُ مَرَّةً بِنَوعِ `deal`، والمُبادِرُ لا؛
+    /// وعَرضٌ عَلى إعلانٍ بِلا مالِكٍ لا يُشعِرُ أَحَداً.</summary>
+    [Fact]
+    public async Task An_offer_on_a_listing_notifies_its_owner_and_an_offer_on_an_ownerless_listing_notifies_nobody()
+    {
+        if (!Enabled || string.IsNullOrEmpty(ConnectionString)) return;
+
+        void Log(string line) => output.WriteLine(line);
+
+        await using var store = BuildStore();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSignalR();
+        await using var sp = services.BuildServiceProvider();
+        var hub = sp.GetRequiredService<IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub>>();
+        var push = new WebPushService(new ConfigurationBuilder().Build(), NullLogger<WebPushService>.Instance);
+        var deals = new DealsService(store, new ForbiddenPaymentProvider());
+        var notices = new DealNotices(store, hub, push);
+        var l = new L(new HttpContextAccessor());
+
+        var slug = "zz-proof-" + Guid.NewGuid().ToString("N")[..8];
+        var buyer = Guid.NewGuid();
+        var seller = Guid.NewGuid();
+
+        try
+        {
+            var offer = await deals.StartAsync(slug, "marketplace", buyer, "مُشتَرٍ", Guid.NewGuid(), "سِلعَة", 120m);
+            await deals.AttachRefAsync(slug, offer.Id, "listing_owner", seller.ToString());
+            var sent = await notices.NotifyNewDealsAsync(slug, new[] { offer.Id }, l);
+
+            var ownerless = await deals.StartAsync(slug, "marketplace", buyer, "مُشتَرٍ", Guid.NewGuid(), "بِلا مالِك", 10m);
+            var none = await notices.NotifyNewDealsAsync(slug, new[] { ownerless.Id }, l);
+
+            Assert.Equal(1, sent);
+            Assert.Equal(0, none);
+            await using var q = store.QuerySession(slug);
+            var forSeller = await q.Query<Notification>().Where(n => n.UserId == seller).ToListAsync();
+            Assert.Single(forSeller);
+            Assert.Equal(DealNotices.NewDealType, forSeller[0].Type);
+            Assert.Equal($"/{slug}/deals/{offer.Id}", forSeller[0].RelatedUrl);
+            Assert.Equal(0, await q.Query<Notification>().CountAsync(n => n.UserId == buyer));
+            Log($"عَرضٌ عَلى إعلان: sent={sent} · type={forSeller[0].Type} · body={forSeller[0].Body} · بِلا مالِك: sent={none}");
         }
         finally
         {
