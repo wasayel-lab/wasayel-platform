@@ -231,6 +231,42 @@ public class DealCashPolicyTests
         Assert.Equal(DealTurnView.For("marketplace", DealStage.Confirmed, DealSide.Initiator), card);
     }
 
+    /// <summary><b>ما بَقِيَ مِن عَرَضِ P1-3 — يُقالُ ويُثَبَّتُ بِاسمِه</b> (مُراجَعَةُ ‏2026-10-11 عَلى
+    /// <c>8769fa4</c>؛ ‏ADR-033 §٦‑ج مُلحَقاً): إسقاطُ <c>Paid</c> نَقَلَ «دَورُكَ الآن … تَأكيد: شَحن»
+    /// مِن <c>Paid</c> إلى <c>Confirmed</c> ولَم يُزِله. صَفُّ <c>Confirmed = either</c> يَجعَلُ الدَورَ
+    /// لِلمُشتَري (المُبادِر) والتالي <c>Shipping</c>، فَتَقولُ لَه البِطاقَةُ «دَورُكَ الآن» ويُرسَمُ لَه
+    /// زِرُّ «تَأكيد: شَحن» وهُوَ لا يَشحَن — والمُحَرِّكُ يَقبَلُ نَقرَتَه، فَالواجِهَةُ لا تَكذِبُ عَلى
+    /// البَوّابَة. <b>والسالِبُ الَّذي يَقيسُه الصَفُّ السابِقُ</b> («لا دَفعَ» لِمُشتَري النَقد) لا يَنفي
+    /// هذا. يَبقى حَتّى يُجيبَ المالِكُ «ب» S4·٤: فَإن اختارَ (٢) — فاعِلُ <c>Confirmed</c> لِلنَقدِ
+    /// <c>counterparty</c> وَحدَه — نُفِّذَ قاعِدَةَ كودٍ خَلفَ <c>CheckoutPayMethods.CashOnDelivery</c>
+    /// كَـ<c>Skips</c> بِمُوجِبٍ وسالِب، لا تَبديلاً لِصَفِّ الكاتالوجِ المُشتَرَك، وقُلِبَ هذا الصَفُّ
+    /// بِاسمِه.</summary>
+    [Fact]
+    public void Today_the_cash_buyer_at_Confirmed_is_still_told_it_is_his_turn_and_offered_confirm_Shipping()
+    {
+        var deal = Cash(DealStage.Confirmed);
+
+        // البِطاقَة: الدَورُ لِلمُشتَري، والفاعِلُ «أَنتَ أَو الطَرَفُ الآخَر»، والتالي شَحن.
+        var buyer = DealTurnView.For(deal, DealSide.Initiator);
+        Assert.True(buyer.IsMine);
+        Assert.Equal("either", buyer.ActorKey);
+        Assert.Equal(DealStage.Shipping, buyer.NextStage);
+
+        // الشاشَة: «دَورُكَ الآن» حَيثُ `turn.IsMine`، وزِرُّ «{confirm_prefix} {LabelAr(next)}» حَيثُ
+        // `canAdvance` — و`either` = المُبادِرُ أَو الطَرَف.
+        var page = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(DealPageSource()));
+        Assert.Contains("var mine = acceptCase || turn.IsMine;", page, StringComparison.Ordinal);
+        Assert.Contains("else if (canAdvance && nextStage is { } ns)", page, StringComparison.Ordinal);
+        Assert.Contains("Text=\"@($\"{L[\"deals.detail.confirm_prefix\"]} {DealsPolicy.LabelAr(ns)}\")\"", page, StringComparison.Ordinal);
+        Assert.Contains("\"either\" => isInitiator || deal.CounterpartyId == uid,", page, StringComparison.Ordinal);
+        Assert.Equal("دَورُكَ الآن", LocaleCatalog.Text(LocaleCatalog.Arabic, "deals.detail.turn_mine"));
+        Assert.Equal("تَأكيد: شَحن",
+            $"{LocaleCatalog.Text(LocaleCatalog.Arabic, "deals.detail.confirm_prefix")} {DealsPolicy.LabelAr(buyer.NextStage!.Value)}");
+
+        // والمُحَرِّك: نَقرَةُ المُشتَري تَمُرُّ مِن بَوّابَةِ الفاعِل.
+        Assert.True(Allowed(deal, Buyer, DealsPolicy.Actor(deal.Stage)));
+    }
+
     /// <summary>الخِدمَةُ والشاشَتانِ والـAPI وشَرحُ التَدَفُّقِ يَقرَؤونَ الدالَّةَ
     /// نَفسَها مِن الصَفقَة، <b>ولا مَوضِعَ باقٍ</b> يَشتَقُّ التالي مِن
     /// (النَمَط، المَرحَلَة) وَحدَهُما — بِالعَدِّ عَلى <c>libs/</c> و<c>apps/</c>.</summary>
