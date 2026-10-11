@@ -164,6 +164,51 @@ public class StudioStorePatternTests
         Assert.Equal(AppPattern.Rental, PatternProfileResolver.PatternOf(store));
         Assert.False(PatternProfileResolver.Of(store).UsesCart);
     }
+
+    /// <summary>
+    /// <para><b>ومَخرَجٌ مُعاكِسٌ ثانٍ — كاتِبٌ ثانٍ يَبلُغُه المالِك</b> (‏2026-10-11، مُراجَعَةُ
+    /// <c>c4278c0</c>): وَكيلُ الاستوديو (<c>/studio/agent</c>) يَعرِضُ في مُوَجِّهِ نِظامِه
+    /// <c>commercial</c> تَجميعاً لِلفِئات، ومُخَطَّطُ الفِئَةِ يَقبَلُ أَيَّ نَصٍّ في <c>kind</c>، و
+    /// <c>ParseCategories</c> يَكتُبُه بِحُروفٍ صَغيرَةٍ بِلا فَحص — في <c>create_tenant</c> و
+    /// <c>set_categories</c> كِلَيهِما، بِهُوِيَّةِ المالِكِ مِن الصَفحَة. فَمَتجَرُ مُنتَجاتٍ يُبنى أَو
+    /// يُعَدَّلُ بِالوَكيلِ قَد يولَدُ إيجاراً بِلا سَلَّة.</para>
+    /// <para>مُثَبَّتٌ بِجِوارِ المُحَرِّرِ لِأَنَّه قَرارُ ل‑١ المُؤَجَّلُ نَفسُه (مُصادِقُ قيَمِ الكِند):
+    /// مَن يَبنيه يُحمِرُّ الفَحصَينِ مَعاً بِقَصدٍ ويَقلِبُهُما في كوميتِه (‏ADR-034 §٣‑٢ مُلحَق).</para>
+    /// </summary>
+    [Fact]
+    public void The_studio_agent_offers_commercial_as_a_grouping_and_writes_any_kind_so_its_product_store_turns_Rental()
+    {
+        var template = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs", "templates", "ACommerce.Templates.Customer.Marketplace");
+        var agent = File.ReadAllText(Path.Combine(template, "Services", "AgentService.cs"));
+        Assert.Contains("الفِئات تُجَمَّع بِـ \"kind\": residential, commercial, events, vehicles,",
+            agent, StringComparison.Ordinal);
+        Assert.Contains("Kind  = TryStr(c, \"kind\", out var k) ? k.ToLowerInvariant() : \"\",",
+            agent, StringComparison.Ordinal);
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(
+            agent, System.Text.RegularExpressions.Regex.Escape("var cats = ParseCategories(root);")).Count);
+
+        var page = File.ReadAllText(Path.Combine(template, "Components", "Pages", "StudioAgent.razor"));
+        Assert.Contains("await Executor.ExecuteAsync(turn.Tool.Name, turn.Tool.InputJson, _userId);",
+            page, StringComparison.Ordinal);
+
+        const string payload = """{"slug":"probe-store","categories":[{"slug":"products","label":"مُنتَجات","icon":"🛍️","kind":"Commercial"},{"slug":"deals","label":"عُروض","icon":"🏷️","kind":"commercial"}]}""";
+        var verdict = ACommerce.Templates.Customer.Marketplace.Services.AgentToolValidator.Validate("set_categories", payload);
+        Assert.True(verdict.IsValid, string.Join(" | ", verdict.Errors));
+
+        var store = new Tenant
+        {
+            Id = Slug,
+            Roles = TenantFromAnalysisFactory.RolesFor("").ToList(),
+            Categories = new()
+            {
+                new Category { Slug = "products", Label = "مُنتَجات", Kind = "commercial", SortOrder = 0 },
+                new Category { Slug = "deals",    Label = "عُروض",    Kind = "commercial", SortOrder = 1 },
+            },
+        };
+        Assert.Equal(AppPattern.Rental, PatternProfileResolver.PatternOf(store));
+        Assert.False(PatternProfileResolver.Of(store).UsesCart);
+    }
 }
 
 // ═══ البُرهانُ عَلى Postgres — الكاتِبُ الحَقيقيُّ ثُمَّ القارِئُ عَلى ما قُرِئَ مِن القاعِدَة ═══
