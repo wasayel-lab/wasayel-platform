@@ -184,8 +184,9 @@
 ### 4.1 الكيان
 
 `Deal` وثيقة Marten تحت مستأجرها، تجمع: النمط، الطرفين
-(`Initiator`/`Counterparty`)، المبلغ (`AmountSar` + `CommissionSar`
-للمنصة)، المرحلة، الحالة، مراجع الكائنات الخارجية (`Refs`: PaymentId،
+(`Initiator`/`Counterparty`)، المبلغ (`AmountSar` وحده — حقل العمولة
+`CommissionSar` أُسقِط بـADR-032 §٢‑ب، 2026-10-11)، المرحلة، الحالة،
+مراجع الكائنات الخارجية (`Refs`: PaymentId،
 ShipmentId، ReviewId…)، خصائص ديناميكية لكل نمط (`Attributes`)، و**الخط
 الزمني** (`Timeline`).
 

@@ -102,73 +102,89 @@ public class DealPaidStageCharacterizationTests
         return n;
     }
 
-    // ═══ ١) العَمولَة — ما سَيُسقَطُ في الخُطوَة 3، مُثَبَّتاً أَوَّلاً ═════════
+    // ═══ ١) العَمولَة — أُسقِطَت في الخُطوَة 3، والتَوصيفُ انقَلَبَ بِقَرارٍ مَرئِيّ ═══
+    //
+    // **ما كانَ هُنا قَبلَ ‏2026-10-11** (كوميتُ التَوصيف ‏522f706): أَربَعَةُ فُحوصٍ
+    // تُثَبِّتُ `PlatformCommissionRate == 0.025m`، وكِتابَةَ `CommissionSar` مَرَّةً
+    // داخِلَ كُتلَةِ Paid بِحارِسَيها، وسَطرَ «عمولة» بِاسمِ «المَنصَّة»، وبَذرَةً
+    // تَكتُبُ ‏٥٪. **وهذِه هي بِعَينِها الأَسطُرُ الَّتي يُسقِطُها ADR-032 §٢‑ب**،
+    // فَهي الوَحيدَةُ الَّتي مُسَّت — وانقَلَبَت إلى نَقيضِها لِتَحرُسَ أَلّا تَعودَ
+    // العَمولَةُ صامِتَةً. وشَطرُ القَبضِ أَدناه لَم يُمَسَّ حَرفاً (القاعِدَة ٣).
 
-    /// <summary><b>النِسبَةُ ثابِتٌ صَلبٌ ‏2.5%</b> — بِلا سَنَدٍ في
-    /// <c>docs/</c> (‏ADR-029 §٧·د)، ويُقرَأُ هُنا مِن الكودِ لا يُكتَبُ
-    /// بِاليَد، فَهذا السَطرُ هُوَ ما يَكسِرُ البِناءَ يَومَ يُحذَفُ
-    /// الثابِت — <b>وذلكَ مَقصود</b>: التَوصيفُ يُمَسُّ يَومَها بِقَرارٍ
-    /// مَرئِيٍّ في كوميتٍ يَقولُ لِماذا.</summary>
+    /// <summary><b>لا ثابِتَ نِسبَةٍ ولا حَقلَ عَمولَةٍ في النَوعَين</b> —
+    /// بِالانعِكاسِ لا بِالدَعوى.</summary>
     [Fact]
-    public void The_commission_rate_today_is_two_and_a_half_percent_hard_coded()
-        => Assert.Equal(0.025m, DealsService.PlatformCommissionRate);
-
-    /// <summary><b>العَمولَةُ تُكتَبُ مَرَّةً واحِدَةً في وَقتِ التَشغيل</b> —
-    /// مَوضِعٌ واحِدٌ في كُلِّ <c>libs/</c>، وهُوَ داخِلَ كُتلَةِ
-    /// <c>Paid</c> وَحدَها، مَحروساً بِـ<c>CommissionSar is null</c>
-    /// (مَرَّةً لا مَرَّتَين) و<c>AmountSar &gt; 0</c>، ومُدَوَّراً إلى
-    /// هَلَلَتَين.</summary>
-    [Fact]
-    public void The_commission_is_written_exactly_once_and_only_on_entering_Paid()
+    public void No_commission_rate_constant_and_no_commission_field_remain_on_the_types()
     {
-        var service = DealsServiceSource();
-        Assert.Equal(1, Count(service, "CommissionSar ="));
+        Assert.Null(typeof(DealsService).GetField("PlatformCommissionRate"));
+        Assert.Null(typeof(Deal).GetProperty("CommissionSar"));
+        Assert.DoesNotContain(typeof(Deal).GetProperties(),
+            p => p.Name.Contains("Commission", StringComparison.OrdinalIgnoreCase));
+    }
 
-        var block = PaidBlock();
-        Assert.Contains("deal.CommissionSar = Math.Round(deal.AmountSar * PlatformCommissionRate, 2);",
-            block, StringComparison.Ordinal);
+    /// <summary><b>ولا كاتِبَ ولا قارِئَ لِعَمولَةٍ في وَقتِ التَشغيل</b>: كُلُّ
+    /// `.cs`/`.razor` تَحتَ <c>libs/</c> و<c>apps/</c> خالٍ مِن
+    /// <c>CommissionSar</c> خارِجَ التَعليقات — والعَدّادُ يُطبَعُ
+    /// فَلا يُقالُ «صِفر» بِلا عَدٍّ (القاعِدَة ١٠).</summary>
+    [Fact]
+    public void No_runtime_code_writes_or_reads_a_commission_any_more()
+    {
+        var scanned = 0;
+        var hits = new List<string>();
+        foreach (var root in new[] { "libs", "apps" })
+        foreach (var f in Directory.EnumerateFiles(Path.Combine(RepoRoot, root), "*.*", SearchOption.AllDirectories))
+        {
+            if (!f.EndsWith(".cs", StringComparison.Ordinal) && !f.EndsWith(".razor", StringComparison.Ordinal)) continue;
+            if (f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
+                f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)) continue;
+            scanned++;
+            var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(f)));
+            if (code.Contains("CommissionSar", StringComparison.Ordinal) ||
+                code.Contains("PlatformCommissionRate", StringComparison.Ordinal))
+                hits.Add(Path.GetRelativePath(RepoRoot, f));
+        }
 
-        // الحُرّاسُ في الشَرطِ نَفسِه — لا في سَطرٍ لاحِق.
+        Assert.True(scanned > 200, $"أَداةٌ عَمياء: فُحِصَ {scanned} مِلَفّاً.");
+        Assert.True(hits.Count == 0, "عَمولَةٌ عادَت إلى الكود: " + string.Join("، ", hits));
+    }
+
+    /// <summary>كُتلَةُ <c>Paid</c> لا تُلحِقُ سَطرَ «عمولة» ولا تَكتُبُ
+    /// بِاسمِ «المَنصَّة»؛ وحارِسُ <c>AmountSar &gt; 0</c> باقٍ عَلى
+    /// شَرطِها كَما كان.</summary>
+    [Fact]
+    public void The_Paid_block_no_longer_announces_a_commission_and_keeps_its_amount_guard()
+    {
+        var block = WriteEndpointGuardTests.StripComments(PaidBlock());
+        Assert.DoesNotContain("عمولة", block, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"المَنصَّة\"", block, StringComparison.Ordinal);
+
         var body = AdvanceBody();
         var at = body.IndexOf("next == DealStage.Paid", StringComparison.Ordinal);
         var condition = body.Substring(at, body.IndexOf('{', at) - at);
-        Assert.Contains("deal.CommissionSar is null", condition, StringComparison.Ordinal);
         Assert.Contains("deal.AmountSar > 0", condition, StringComparison.Ordinal);
-
-        // ولا كاتِبَ آخَرَ في وَقتِ التَشغيل: كُلُّ `.cs`/`.razor` تَحتَ `libs/`.
-        var writers = Directory.EnumerateFiles(Path.Combine(RepoRoot, "libs"), "*.*", SearchOption.AllDirectories)
-            .Where(f => (f.EndsWith(".cs", StringComparison.Ordinal) || f.EndsWith(".razor", StringComparison.Ordinal))
-                     && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                     && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Where(f => File.ReadAllText(f).Contains("CommissionSar =", StringComparison.Ordinal))
-            .Select(f => Path.GetRelativePath(RepoRoot, f))
-            .ToArray();
-        Assert.Equal(
-            new[] { Path.Combine("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Deals", "DealsService.cs") },
-            writers);
     }
 
-    /// <summary>وسَطرُ الخَطِّ الزَمَنيِّ «عمولة ‏2.5% = …» يُلحَقُ مَعَها
-    /// بِاسمِ «المَنصَّة» فاعِلاً.</summary>
+    /// <summary>والبَذرَةُ لا تَكتُبُ عَمولَةً — فَلا شاشَةَ تَجرِبَةٍ تَعرِضُ
+    /// ما لا يَحسُبُه الكود (كانَت ‏٥٪ مُقابِلَ ‏٢٫٥٪).</summary>
     [Fact]
-    public void A_timeline_note_announces_the_commission_in_the_platforms_name()
-    {
-        var block = PaidBlock();
-        Assert.Contains("$\"عمولة {PlatformCommissionRate:P1} = {deal.CommissionSar} ر.س\"", block, StringComparison.Ordinal);
-        Assert.Contains("\"المَنصَّة\"", block, StringComparison.Ordinal);
-    }
-
-    /// <summary><b>والبَذرَةُ تُناقِضُ الكود</b> (‏ADR-029 §٧·د، مَقيسٌ):
-    /// <c>TestDataSeeder</c> تَكتُبُ ‏5 مِن ‏100 و‏12.5 مِن ‏250 — أَي
-    /// <b>‏٥٪</b> لا ‏٢٫٥٪. يُثَبَّتُ التَناقُضُ كَما هُوَ، لِأَنّ
-    /// الخُطوَةَ 3 تَحذِفُ الطَرَفَينِ مَعاً.</summary>
-    [Fact]
-    public void The_seed_writes_a_five_percent_commission_that_contradicts_the_code()
+    public void The_seed_no_longer_writes_a_commission()
     {
         var seed = SeederSource();
-        Assert.Contains("AmountSar = 100, CommissionSar = 5,", seed, StringComparison.Ordinal);
-        Assert.Contains("AmountSar = 250, CommissionSar = 12.5m,", seed, StringComparison.Ordinal);
-        Assert.NotEqual(5m, Math.Round(100m * DealsService.PlatformCommissionRate, 2));
+        Assert.DoesNotContain("CommissionSar", seed, StringComparison.Ordinal);
+        Assert.Contains("AmountSar = 100,", seed, StringComparison.Ordinal);
+        Assert.Contains("AmountSar = 250,", seed, StringComparison.Ordinal);
+    }
+
+    /// <summary>والقامُوسُ لا يَعِدُ بِعَمولَةٍ في شُروطِ أَيِّ مَتجَر، ولا
+    /// يَحمِلُ مِفتاحَ عَرضِها اليَتيم.</summary>
+    [Fact]
+    public void The_dictionary_no_longer_declares_a_commission_in_any_stores_terms()
+    {
+        var ar = Source("libs", "core", "ACommerce.Platform.I18n", "Locales", "ar.json");
+        Assert.DoesNotContain("\"legal.terms.item_commission\"", ar, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"deals.detail.commission_label\"", ar, StringComparison.Ordinal);
+        Assert.DoesNotContain("بِجَمع عَمولَة", ar, StringComparison.Ordinal);
+        Assert.Contains("\"legal.terms.item_subscription_only\"", ar, StringComparison.Ordinal);
     }
 
     // ═══ ٢) القَبضُ — ما يَبقى بَعدَ الخُطوَة 3 بِلا تَعديلِ حَرف ═══════════
@@ -248,6 +264,10 @@ public class DealPaidStageCharacterizationTests
 // المَخزَن. يَمشي صَفقَتَين مِن `Offered` إلى `Paid` ثُمَّ خُطوَةً بَعدَها:
 // واحِدَةٌ بِـ`payment_id` (بِطاقَة) وواحِدَةٌ بِلا (نَقد) — ويَعُدُّ نِداءاتَ
 // `CaptureAsync` عَلى مُزَوِّدٍ مُسَجِّلٍ لا مُحاكٍ.
+//
+// **ما مُسَّ هُنا في كوميتِ الإسقاط** (‏ADR-032 §٢‑ب): تَأكيداتُ
+// `CommissionSar == 2.50m` الثَلاثُ وَحدَها — حُذِفَت مَعَ الحَقل. والقَبضُ
+// وعَدُّه وسَطرُ `captured` كَما كُتِبَت أَوَّلَ مَرَّة.
 
 public class LiveDealPaidStageProofTests(ITestOutputHelper output)
 {
@@ -300,7 +320,7 @@ public class LiveDealPaidStageProofTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task Entering_Paid_writes_the_commission_once_and_captures_once_only_with_a_payment_id()
+    public async Task Entering_Paid_captures_once_and_only_with_a_payment_id()
     {
         if (!Enabled || string.IsNullOrEmpty(ConnectionString)) return;
 
@@ -335,12 +355,11 @@ public class LiveDealPaidStageProofTests(ITestOutputHelper output)
 
             var cardPaid = (await deals.LoadAsync(slug, card.Id))!;
             var cashPaid = (await deals.LoadAsync(slug, cash.Id))!;
-            Log($"بِطاقَة: Stage={cardPaid.Stage} Commission={cardPaid.CommissionSar} status={cardPaid.Refs.GetValueOrDefault("payment_status")}");
-            Log($"نَقد:    Stage={cashPaid.Stage} Commission={cashPaid.CommissionSar} captures={payments.Captured.Count}");
+            Log($"بِطاقَة: Stage={cardPaid.Stage} status={cardPaid.Refs.GetValueOrDefault("payment_status")}");
+            Log($"نَقد:    Stage={cashPaid.Stage} captures={payments.Captured.Count}");
 
             Assert.Equal(DealStage.Paid, cardPaid.Stage);
-            Assert.Equal(2.50m, cardPaid.CommissionSar);
-            Assert.Equal(2.50m, cashPaid.CommissionSar);
+            Assert.Equal(DealStage.Paid, cashPaid.Stage);
             Assert.Equal(new[] { "auth_live" }, payments.Captured);
             Assert.Equal(nameof(PaymentStatus.Captured), cardPaid.Refs["payment_status"]);
             Assert.False(cashPaid.Refs.ContainsKey("payment_status"));
@@ -348,10 +367,9 @@ public class LiveDealPaidStageProofTests(ITestOutputHelper output)
             // خُطوَةٌ بَعدَ Paid — لا كِتابَةَ ثانِيَةً ولا قَبضَ ثانِياً.
             Assert.True((await deals.AdvanceAsync(slug, card.Id, buyer, "مُشتَرٍ")).Ok);   // Paid → Shipping
             var after = (await deals.LoadAsync(slug, card.Id))!;
-            Assert.Equal(2.50m, after.CommissionSar);
             Assert.Single(payments.Captured);
             Assert.Equal(1, after.Timeline.Count(e => e.Action == "captured"));
-            Log($"بَعدَ Paid: Stage={after.Stage} captures={payments.Captured.Count} — كُتِبَت مَرَّةً وقُبِضَت مَرَّة.");
+            Log($"بَعدَ Paid: Stage={after.Stage} captures={payments.Captured.Count} — قُبِضَت مَرَّةً لا مَرَّتَين.");
         }
         finally
         {

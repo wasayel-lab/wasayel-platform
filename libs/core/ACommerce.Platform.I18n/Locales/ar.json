@@ -126,7 +126,7 @@
   "legal.terms.intro": "باستِخدامِك المَنصَّة، فَأَنتَ مُوافِق على:",
   "legal.terms.item_lawful": "عَدَم نَشر إعلانات مُخالِفَة لِلأَنظِمَة المَحَلِّيَّة.",
   "legal.terms.item_accuracy": "تَحَمُّل مَسؤولِيَّة دِقَّة بَياناتك ومُعامَلاتك.",
-  "legal.terms.item_commission": "السَّماح لِلمَنصَّة بِجَمع عَمولَة على الصَّفقات النَّاجِحَة (٢٫٥٪).",
+  "legal.terms.item_subscription_only": "الإقرار بِأَنّ المَنصَّة لا تَجمَع عَمولَة على الصَّفقات: إيرادُها اشتِراكُ صاحِب المَتجَر وَحدَه، ولا تَمُرّ بِها أَموالُ الصَّفقات.",
   "legal.terms.item_disputes": "قَبول حَلّ النِزاعات عَبر آلِيّات المَنصَّة الداخِلِيَّة.",
   "legal.terms.violations": "الانتِهاكات تُؤَدّي لِتَعليق فَوريّ بِلا تَعويض.",
 
@@ -1174,7 +1174,6 @@
   "deals.detail.awaiting_other": "بانتِظار الطَّرَف الآخَر لِـ:",
   "deals.detail.back": "← صَفقاتي",
   "deals.detail.cancel_action": "إلغاء الصَّفقَة",
-  "deals.detail.commission_label": "عمولة المَنصَّة",
   "deals.detail.completed": "اكتَمَلَت الصَّفقَة بِنَجاح",
   "deals.detail.confirm_prefix": "تَأكيد:",
   "deals.detail.event_assigned": "قُبِلَ العَرض",

@@ -18,10 +18,6 @@ public sealed class DealsService
         _payments = payments;
     }
 
-    /// <summary>نِسبَة عمولة المَنصَّة على قيمَة الصَّفقَة عِندَ الدَّفع.
-    /// قابِلَة لِلتَّكوين لاحِقاً لِكُلّ مُستَأجِر/باقَة. حاليّاً ٢.٥٪.</summary>
-    public const decimal PlatformCommissionRate = 0.025m;
-
     /// <summary>مِفتاحُ مَرجِعِ مالِكِ الإعلان في <see cref="Deal.Refs"/> —
     /// يُلحِقُه مَسارُ إنشاءِ العَرض. مُعَرَّفٌ هُنا لِأَنّ الكاتِبَ
     /// والقارِئَ يَجِبُ أَن يَقرَآ نَفسَ الحَرف.</summary>
@@ -158,17 +154,23 @@ public sealed class DealsService
         deal.Timeline.Add(new(before, next.Value, "advanced",
             actorId, actorName, note, DateTime.UtcNow));
 
-        // عِندَ الوُصول لِمَرحَلَة الدَّفع، اِحسُب عمولة المَنصَّة (نَموذَج
-        // الإيراد: اشتِراك + عمولة تَشغيل). تُخزَّن على الصَّفقَة لِلتَّسوِيَة.
-        if (next == DealStage.Paid && deal.CommissionSar is null && deal.AmountSar > 0)
+        // عِندَ الوُصول لِمَرحَلَة الدَّفع: اِسحَب الإذن المَحجوز في
+        // /checkout/submit (Authorize) → Capture.
+        //
+        // **ولا عَمولَةَ مَنصَّة هُنا بَعدَ اليَوم** (‏ADR-032 §٢‑ب، ‏2026-10-11):
+        // كانَت هذِه الكُتلَةُ تَحسُبُ `CommissionSar = 2.5%` وتُلحِقُ سَطرَ
+        // «عمولة» بِاسمِ «المَنصَّة» عَلى كُلِّ صَفقَةٍ تَبلُغُ Paid — بِما فيها
+        // النَقد — وإيرادُ وَسايِل اشتِراكُ المُستَأجِرِ وَحدَه (‏ق‑٦). فَأُسقِطَت
+        // النِسبَةُ والحَقلُ والسَطر، **وبَقِيَ القَبضُ كَما هُوَ بِحَرفِه**:
+        // حارِسُ `AmountSar > 0` كانَ يَحرُسُ الكُتلَةَ كُلَّها فَبَقِيَ عَلى
+        // القَبض؛ أَمّا `CommissionSar is null` فَكانَ حارِسَ «مَرَّةً لا
+        // مَرَّتَين» لِلعَمولَة وَحدَها، والمَرحَلَةُ تُدخَلُ مَرَّةً في
+        // مَكينَةِ الحالَةِ — فَلا أَثَرَ لِسُقوطِه عَلى القَبض.
+        //
+        // لَو لا payment_id (دَفع نَقدا/COD) نَتَجاوَز.
+        // فَشَل Capture لا يَكسِر التَّقَدُّم — يُسَجَّل لِلمُراجَعَة.
+        if (next == DealStage.Paid && deal.AmountSar > 0)
         {
-            deal.CommissionSar = Math.Round(deal.AmountSar * PlatformCommissionRate, 2);
-            deal.Timeline.Add(new(next.Value, next.Value, "note", null, "المَنصَّة",
-                $"عمولة {PlatformCommissionRate:P1} = {deal.CommissionSar} ر.س", DateTime.UtcNow));
-
-            // اِسحَب الإذن المَحجوز في /checkout/submit (Authorize) →
-            // Capture. لَو لا payment_id (دَفع نَقدا/COD) نَتَجاوَز.
-            // فَشَل Capture لا يَكسِر التَّقَدُّم — يُسَجَّل لِلمُراجَعَة.
             if (deal.Refs.TryGetValue("payment_id", out var pid) && !string.IsNullOrEmpty(pid))
             {
                 try

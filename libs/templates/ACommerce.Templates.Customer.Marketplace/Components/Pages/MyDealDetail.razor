@@ -120,13 +120,10 @@
                     <span style="color:var(--ac-text-muted);">@L.Markup("deals.detail.amount_label")</span>
                     <strong>@((MarkupString)ACommerce.Kit.Culture.Money.Format(deal.AmountSar))</strong>
                 </div>
-                @if (deal.CommissionSar is { } c)
-                {
-                    <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px;">
-                        <span style="color:var(--ac-text-muted);">@L.Markup("deals.detail.commission_label")</span>
-                        <span>@c.ToString("N2") @((MarkupString)ACommerce.Kit.Culture.Money.Unit())</span>
-                    </div>
-                }
+                @* ولا صَفَّ عَمولَةٍ هُنا بَعدَ اليَوم: كانَ يُعرَضُ «عمولة
+                   المَنصَّة» لِلطَرَفَين مِن `CommissionSar`، وأُسقِطَ مَعَ
+                   الحَقلِ بِـADR-032 §٢‑ب (‏2026-10-11) — لا عَمولَةَ عَلى
+                   الصَفَقات، والإيرادُ اشتِراكُ المُستَأجِرِ وَحدَه. *@
                 <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px;">
                     <span style="color:var(--ac-text-muted);">@L.Markup("deals.detail.other_party")</span>
                     <span>@(isInitiator ? (deal.CounterpartyName ?? L["deals.detail.awaiting_accept"]) : deal.InitiatorName)</span>

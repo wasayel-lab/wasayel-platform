@@ -211,7 +211,7 @@ public static class TestDataSeeder
             ListingTitle = "إعلان اختِبار — صَفقَة نَشِطَة",
             InitiatorId = initiator.Id, InitiatorName = initiator.FullName,
             CounterpartyId = counterparty.Id, CounterpartyName = counterparty.FullName,
-            AmountSar = 100, CommissionSar = 5,
+            AmountSar = 100,
             Stage = DealStage.Paid, Status = DealStatus.Active,
             CreatedAt = now.AddHours(-26), UpdatedAt = now.AddHours(-3),
             Timeline =
@@ -229,7 +229,7 @@ public static class TestDataSeeder
             ListingTitle = "إعلان اختِبار — صَفقَة مُكتَمِلَة",
             InitiatorId = initiator.Id, InitiatorName = initiator.FullName,
             CounterpartyId = counterparty.Id, CounterpartyName = counterparty.FullName,
-            AmountSar = 250, CommissionSar = 12.5m,
+            AmountSar = 250,
             Stage = DealStage.Received, Status = DealStatus.Completed,
             CreatedAt = now.AddDays(-6), UpdatedAt = now.AddDays(-1),
             Timeline =
