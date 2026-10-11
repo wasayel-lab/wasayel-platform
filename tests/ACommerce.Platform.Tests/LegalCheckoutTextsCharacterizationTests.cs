@@ -57,23 +57,66 @@ public class LegalCheckoutTextsCharacterizationTests
     // المَتجَر وَحدَه» ثالِثَ أَربَعَة، و«عَبر مُزَوِّد الدَفع المُفَعَّل في هذا المَتجَر». وصارَت
     // فُحوصَ ثَباتٍ لِلصِياغَةِ الجَديدَة (سِجِلُّ المالِك «أ» S5·٥)، ولَقَطاتُ الأَساسِ الثَلاثُ
     // بُدِّلَت بِإحلالٍ حَرفِيّ.
+    //
+    // **وصُحِّحَت جُملَةُ الخُصوصِيَّةِ ثانِيَةً ‏2026-10-11 (مُراجَعَةُ `592162c`)**: شَطرُها «حينَ
+    // يُفَعِّل المَتجَر مُزَوِّد دَفع، يَتِمّ الدَّفع على صَفَحات ذلك المُزَوِّد نَفسِه» عَمَّمَ عَلى
+    // صَفحَةِ كُلِّ مَتجَرٍ ما يَصدُقُ عَلى بابِ الباقاتِ وَحدَه — وإتمامُ الشِراءِ يَقبِضُ عَلى الخادِمِ
+    // بِمُزَوِّدِ النُسخَة، وتَلميحُ البِطاقَةِ في المَتجَرِ نَفسِه يَقولُ ذلك. فَسَقَطَ الشَطرُ وبَقِيَ
+    // ما يَصدُقُ عَلى البابَين، والفَحصُ الَّذي يَلي القيمَةَ يُثَبِّتُ السَبَب.
 
     /// <summary>صَفحَةُ خُصوصِيَّةِ كُلِّ مَتجَرٍ تَقولُ ما يَصدُق: لا بَيعَ لِطَرَفٍ ثالِث (شاهِدُ
-    /// الامتِثالِ باقٍ)، ولا تُخَزِّنُ المَنَصَّةُ بَياناتِ بِطاقات، والدَفعُ — حينَ يُفَعِّلُ المَتجَرُ
-    /// مُزَوِّداً — عَلى صَفَحاتِ ذلكَ المُزَوِّدِ نَفسِه. ولا اسمَ بَوّابَةٍ ولا شَهادَةَ لَم تُنَل.</summary>
+    /// الامتِثالِ باقٍ)، ولا تُخَزِّنُ المَنَصَّةُ بَياناتِ بِطاقات — ولا تَعِدُ بِصَفحَةِ مُزَوِّدٍ لا
+    /// يَفتَحُها إتمامُ الشِراء. ولا اسمَ بَوّابَةٍ ولا شَهادَةَ لَم تُنَل.</summary>
     [Fact]
-    public void The_privacy_page_says_the_platform_stores_no_card_data_and_payment_runs_on_the_providers_own_pages()
+    public void The_privacy_page_says_the_platform_stores_no_card_data_and_promises_no_providers_page()
     {
         var value = LocaleCatalog.Find(LocaleCatalog.Arabic, NoSellingKey);
         Assert.Equal(
-            "لا نَبيع بَياناتك لِأَيّ طَرَف ثالِث. ولا تُخَزِّن المَنصَّة بَيانات بِطاقات الدَّفع: حينَ يُفَعِّل المَتجَر مُزَوِّد دَفع، يَتِمّ الدَّفع على صَفَحات ذلك المُزَوِّد نَفسِه.",
+            "لا نَبيع بَياناتك لِأَيّ طَرَف ثالِث. ولا تُخَزِّن المَنصَّة بَيانات بِطاقات الدَّفع.",
             value);
-        foreach (var gone in new[] { "Moyasar", "Noon", "PCI-DSS", "آمِن" })
+        foreach (var gone in new[] { "Moyasar", "Noon", "PCI-DSS", "آمِن", "صَفَحات ذلك المُزَوِّد" })
             Assert.DoesNotContain(gone, value!, StringComparison.Ordinal);
 
         var baseline = Baseline("ashare-legal-privacy.html");
-        Assert.Equal(1, Count(baseline, value!));
+        Assert.Equal(1, Count(baseline, $"<p>{value}</p>"));
         Assert.Equal(0, Count(baseline, "PCI-DSS"));
+        Assert.Equal(0, Count(baseline, "صَفَحات ذلك المُزَوِّد"));
+    }
+
+    /// <summary>
+    /// <para><b>ولِماذا لا تَعِدُ الجُملَةُ بِصَفحَةِ المُزَوِّد</b>: صَفحَةُ المُزَوِّدِ بابُ
+    /// <b>الباقاتِ وَحدَها</b>. رابِطُ المَتجَرِ المُستَضافُ يُقرَأُ بِنَوعِ حَقلِه لا بِاسمِه
+    /// (<c>TenantProviderBinding.PaymentLink</c>)، ولا يَقرَؤُه إلّا <c>PlanPay.razor</c> فَيُصَيِّرُه
+    /// رابِطاً خارِجِيّاً؛ وإتمامُ الشِراءِ — بابُ البِضاعَةِ والصَفَقات — لا يَقرَؤُه، بَل يَقبِضُ عَلى
+    /// الخادِمِ بِمُزَوِّدِ النُسخَةِ ثُمَّ يَرتَدُّ إلى صَفحَةِ الصَفقَةِ داخِلَ المَتجَر.</para>
+    /// <para>فَيَومَ يَخرُجُ إتمامُ الشِراءِ إلى صَفحَةِ مُزَوِّدٍ يَحمَرُّ هذا الفَحصُ، ويُعادُ نَصُّ
+    /// الخُصوصِيَّةِ لِيُسَمّيَها — لا قَبلَه.</para>
+    /// </summary>
+    [Fact]
+    public void The_providers_own_page_opens_for_store_plans_alone_and_checkout_charges_inside_the_store()
+    {
+        var code = new[] { "libs", "apps" }
+            .SelectMany(d => Directory.EnumerateFiles(Path.Combine(RepoRoot, d), "*.*", SearchOption.AllDirectories))
+            .Where(f => (f.EndsWith(".cs", StringComparison.Ordinal) || f.EndsWith(".razor", StringComparison.Ordinal))
+                     && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                     && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .ToArray();
+        Assert.True(code.Length > 300, $"أَداةٌ عَمياء: {code.Length} مِلَفّاً فَقَط.");
+        Assert.Equal(
+            new[] { "PlanPay.razor" },
+            code.Where(f => Regex.IsMatch(File.ReadAllText(f), @"\.PaymentLink\b"))
+                .Select(f => Path.GetFileName(f)).ToArray());
+
+        var plan = Template("Components", "Pages", "PlanPay.razor");
+        Assert.Contains("link = set.For(ProviderCapabilities.Payments)?.PaymentLink;", plan, StringComparison.Ordinal);
+        Assert.Equal(1, Count(plan, "href=\"@link\""));
+
+        var endpoints = Template("MarketplaceTemplateExtensions.cs");
+        const string backToTheDeal =
+            "return Results.Redirect(Link(req, slug, firstDealId == Guid.Empty ? \"deals\" : $\"deals/{firstDealId}\"));";
+        Assert.Equal(1, Count(endpoints, backToTheDeal));
+        Assert.True(endpoints.IndexOf("payments.AuthorizeAsync(", StringComparison.Ordinal)
+                    < endpoints.IndexOf(backToTheDeal, StringComparison.Ordinal));
     }
 
     /// <summary>شُروطُ كُلِّ مَتجَرٍ لا تَجعَلُ المُشتَري «مُوافِقاً عَلى» نَموذَجِ إيرادِ المَنَصَّة:
