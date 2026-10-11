@@ -44,7 +44,7 @@ public sealed class StudioQueries
     {
         await using var s = _store.QuerySession(StudioAuth.Tenant);
         var existing = await s.Query<ConsentRecord>()
-            .Where(c => c.UserId == userId && c.Version == version)
+            .Where(ConsentPolicy.AcceptedBy(userId, version))
             .ToListAsync(ct);
         return existing.Count > 0;
     }

@@ -4060,9 +4060,12 @@ public static class MarketplaceTemplateExtensions
         if (checkConsent)
         {
             await using var consentQs = store.QuerySession(Services.Incubator.StudioAuth.Tenant);
+            // الشَرطُ نَفسُه الَّذي يَسأَلُه بابُ صَفحَةِ الشُروط — مُسنَدٌ واحِدٌ لا
+            // نُسخَتان (القاعِدَة ٨)، فَرَفعُ الإصدارِ يُعيدُ الجَميعَ إلى الصَفحَةِ
+            // مِن المَوضِعَين مَعاً.
             var consents = await consentQs.Query<Services.Incubator.ConsentRecord>()
-                .Where(c => c.UserId == userId &&
-                            c.Version == Services.Incubator.ConsentPolicy.CurrentVersion)
+                .Where(Services.Incubator.ConsentPolicy.AcceptedBy(
+                    userId, Services.Incubator.ConsentPolicy.CurrentVersion))
                 .ToListAsync();
             if (consents.Count == 0)
                 // ‏**وِجهَةُ العَودَةِ صَفحَةٌ تُصَيَّر بِـ`GET`**، ولا
