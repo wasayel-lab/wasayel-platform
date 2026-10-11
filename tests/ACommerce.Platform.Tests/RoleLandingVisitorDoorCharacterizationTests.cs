@@ -15,7 +15,8 @@ namespace ACommerce.Platform.Tests;
 // والشَريطُ يَظهَرُ عَلى `/{slug}/explore` — فَالفَجوَةُ في البابِ لا في الصَفحَة.
 //
 // **ما يُقلَبُ في كوميتِ الرابِطِ ويُقالُ في جِسمِه**: الفَحصُ الأَوَّلُ وَحدَه
-// (`Today_…`) — فَالسُلوكُ المُثَبَّتُ فيه هُوَ الفَجوَةُ نَفسُها. **وما يَبقى بِحَرفِه**:
+// (`Today_…`، وقُلِبَ ‏2026-10-11 إلى `The_role_landing_carries_one_link_…`) — فَالسُلوكُ
+// المُثَبَّتُ فيه كانَ الفَجوَةَ نَفسَها. **وما يَبقى بِحَرفِه**:
 // الفُحوصُ الأَربَعَةُ بَعدَه — فَرعُ `TenantHome` الَّذي يُرسِلُ الزائِرَ إلى البَوّابَة،
 // وإخفاءُ الشَريطِ عَلى `/{slug}` وَحدَه، وغِيابُ بَوّابَةِ الدُخولِ عَن الاستِكشاف،
 // وأَنّ مَتجَرَ الاستوديو يولَدُ بِأَدوار. ولا يَمَسُّ الكوميتُ ذاكَ الفَرعَ ولا الإخفاء —
@@ -43,25 +44,34 @@ public class RoleLandingVisitorDoorCharacterizationTests
 
     internal static string RoleLanding() => Template("Components", "RoleLanding.razor");
 
-    // ─── (١) الفَجوَة: البَوّابَةُ بِلا رابِطِ مُحتَوى — يُقلَبُ في كوميتِ الرابِط ───
+    // ─── (١) الفَجوَة: البَوّابَةُ بِلا رابِطِ مُحتَوى — قُلِبَ في كوميتِ الرابِط ───
 
     /// <summary>
-    /// <para><b>بَوّابَةُ الأَدوارِ اليَومَ رابِطان لا ثالِثَ لَهُما</b>: بِطاقَةُ كُلِّ
-    /// دَورٍ إلى <c>r/{role}/login</c>، وسَطرُ «لَدَيكَ حِساب» إلى <c>login</c>. ولا
-    /// كَلِمَةَ <c>explore</c> في المِلَفِّ كُلِّه — فَالزائِرُ لا يَرى بِضاعَةً قَبلَ
-    /// التَسجيل.</para>
+    /// <para><b>قُلِبَ ‏2026-10-11 (‏ADR-035)</b> — وكانَ «اليَوم»: رابِطانِ لا ثالِثَ
+    /// لَهُما ولا كَلِمَةَ <c>explore</c> في المِلَفّ. <b>والآن ثَلاثَة</b>: بِطاقَةُ كُلِّ
+    /// دَورٍ إلى <c>r/{role}/login</c>، و<b>رابِطٌ واحِدٌ إلى <c>explore</c> مِن جَذرِ
+    /// المُستَأجِر</b> بِمِفتاحِ قامُوس، ثُمَّ سَطرُ «لَدَيكَ حِساب» إلى <c>login</c> تَحتَه.</para>
     /// </summary>
     [Fact]
-    public void Today_the_role_landing_carries_no_link_to_explore_only_role_logins_and_login()
+    public void The_role_landing_carries_one_link_to_explore_above_the_have_account_line()
     {
         var razor = RoleLanding();
 
-        Assert.DoesNotContain("explore", razor, StringComparison.OrdinalIgnoreCase);
+        const string browse = "<a href=\"@AuthSession.LinkFor(Slug, null, \"explore\")\">@L.Markup(\"roles.landing.browse\")</a>";
+        Assert.Equal(1, Count(razor, browse));
+        Assert.Equal(1, Count(razor, "\"explore\""));
 
-        Assert.Equal(2, Count(razor, "AuthSession.LinkFor("));
+        Assert.Equal(3, Count(razor, "AuthSession.LinkFor("));
         Assert.Contains("AuthSession.LinkFor(Slug, null, $\"r/{r.Slug}/login\")", razor, StringComparison.Ordinal);
         Assert.Contains("AuthSession.LinkFor(Slug, Role, $\"login\")", razor, StringComparison.Ordinal);
-        Assert.Equal(2, Count(razor, "<a "));
+        Assert.Equal(3, Count(razor, "<a "));
+
+        // فَوقَ سَطرِ «لَدَيكَ حِساب» وبَعدَ بِطاقاتِ الأَدوار — لا قَبلَها ولا بَدَلَها.
+        var cards = razor.IndexOf("acm-role-landing-cards", StringComparison.Ordinal);
+        var link  = razor.IndexOf(browse, StringComparison.Ordinal);
+        var login = razor.IndexOf("@L.Markup(\"roles.landing.have_account\")", StringComparison.Ordinal);
+        Assert.True(cards >= 0 && link > cards && login > link,
+            $"تَرتيبٌ غَيرُ المَقصود: البِطاقات {cards}، الاستِكشاف {link}، الدُخول {login}.");
     }
 
     // ─── (٢) ما يَبقى بِحَرفِه بَعدَ الرابِط ─────────────────────────────────
