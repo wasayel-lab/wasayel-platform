@@ -121,8 +121,12 @@ public static class AuthHandlers
     /// في <c>Program.cs</c>) إن بَقِيَ الافتِراضيُّ أَو فَرَغَ أَو قَصُرَ عَن ٣٢.
     /// **والاسمُ والحَرفِيَّةُ والحَدُّ في مَوضِعٍ واحِدٍ هُناك لا هُنا** (‏2026-10-11):
     /// كانَ هذا السَطرُ وَحدَه يَحمِلُها بِلا حارِسٍ ولا وَثيقَةٍ ولا فَحص — فَكُلُّ
-    /// كوكي في الـSpace بِلا المُتَغَيِّرِ كانَ قابِلاً لِلتَزوير (‏P0-2).</summary>
-    public static string TokenSecret { get; set; } =
+    /// كوكي في الـSpace بِلا المُتَغَيِّرِ كانَ قابِلاً لِلتَزوير (‏P0-2).
+    /// <b>والضابِطُ خاصٌّ مُنذُ ‏2026-10-11 (صِغارُ مُراجَعَةِ الموجَةِ ١)</b>: الحارِسُ
+    /// يَقيسُ القيمَةَ مَرَّةً عِندَ الإقلاع، وضابِطٌ عامٌّ كانَ يَسمَحُ بِتَبديلِها
+    /// بَعدَه بِلا فَحص — وإسنادُه خارِجَ هذا المِلَفِّ صِفرٌ مَقيس (‏`grep`)، فَلا
+    /// مُستَهلِكَ يُكسَر. مُثَبَّتٌ في <c>AuthTokenSecretPolicyTests</c>.</summary>
+    public static string TokenSecret { get; private set; } =
         Environment.GetEnvironmentVariable(AuthTokenSecretPolicy.EnvVarName)
         ?? AuthTokenSecretPolicy.DevelopmentFallback;
 

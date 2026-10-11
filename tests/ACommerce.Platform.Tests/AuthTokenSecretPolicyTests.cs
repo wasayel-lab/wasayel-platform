@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Text.RegularExpressions;
 using ACommerce.Kit.Auth;
 using ACommerce.Kit.Auth.Server;
 using Xunit;
@@ -234,5 +236,49 @@ public class AuthTokenSecretPolicyTests
         var call = program.Substring(secret, program.IndexOf(';', secret) - secret);
         Assert.Contains("app.Environment.IsDevelopment()", call);
         Assert.Contains("AuthHandlers.TokenSecret", call);
+    }
+
+    // ─── صِغارُ مُراجَعَةِ الموجَةِ ١ (‏2026-10-11): ما يَقيسُه الحارِسُ لا يُبَدَّلُ بَعدَه،
+    //     والبَوّابَةُ لا تَحمِلُ حَدّاً ولا مَعجَماً يَنجَرِفانِ عَن السِياسَة ─────────
+
+    /// <summary>`TokenSecret` بِلا ضابِطٍ عامّ: الحارِسُ يَقيسُ القيمَةَ الفِعلِيَّةَ مَرَّةً عِندَ
+    /// الإقلاع، وضابِطٌ عامٌّ كانَ يَسمَحُ بِتَبديلِها بَعدَه بِلا فَحصٍ ولا أَثَر. وإسنادُه خارِجَ
+    /// `AuthHandlers.cs` كانَ صِفراً مَقيساً قَبلَ أَن يَصيرَ خاصّاً — فَالحَدُّ بُنِيَ لا قيلَ،
+    /// وعَودَةُ `public set` تُحمِرُّ هُنا.</summary>
+    [Fact]
+    public void TokenSecret_HasNoPublicSetter_SoNothingRewritesItAfterTheBootGuard()
+    {
+        var prop = typeof(AuthHandlers).GetProperty(
+            nameof(AuthHandlers.TokenSecret), BindingFlags.Public | BindingFlags.Static);
+
+        Assert.NotNull(prop);
+        Assert.True(prop!.GetMethod?.IsPublic ?? false, "القِراءَةُ نَفسُها لَم تَعُد عامَّة.");
+        Assert.False(prop.SetMethod?.IsPublic ?? false,
+            "ضابِطٌ عامٌّ عادَ عَلى TokenSecret — يُبَدَّلُ السِرُّ بَعدَ حارِسِ الإقلاعِ بِلا فَحص.");
+    }
+
+    /// <summary>
+    /// <para><b>بَوّابَةُ الإقلاعِ الإنتاجيِّ تَحمِلُ الحَدَّ والمَعجَمَ حَرفِيَّين</b> — `-lt 32`
+    /// قَبلَ النَشرِ و`auth_secret_(missing|default|short)` في سِجِلِّ التَطبيقِ بَعدَ مَوتِه. فَتُربَطُ
+    /// هُنا بِالسِياسَة: حَدٌّ يَتَبَدَّلُ في الكودِ وَحدَه، أَو رَمزٌ رابِعٌ يُضافُ إلى `All`، يُحمِرُّ
+    /// هذا الفَحصَ بَدَلَ أَن تَقرَأَ البَوّابَةُ تَهيئَةً ناقِصَةً كَسراً (رَمزُ خُروجِ ١ لا ٣).</para>
+    /// </summary>
+    [Fact]
+    public void VerifyProductionBoot_CarriesThePolicysMinimum_AndMatchesExactlyItsViolationCodes()
+    {
+        var script = File.ReadAllText(Path.Combine(RepoRoot, "scripts", "verify-production-boot.sh"));
+        Assert.True(script.Length > 1000, "أَداةٌ عَمياء: verify-production-boot.sh لَم يُقرَأ.");
+
+        Assert.Contains($"[ \"$SECRET_LEN\" -lt {AuthTokenSecretPolicy.MinimumLength} ]", script, StringComparison.Ordinal);
+        Assert.Contains($"${{{AuthTokenSecretPolicy.EnvVarName}:-}}", script, StringComparison.Ordinal);
+
+        var grep = Regex.Match(script, @"grep -oE '(?<re>auth_secret_\((?<alts>[a-z_|]+)\))'");
+        Assert.True(grep.Success, "نَمَطُ رُموزِ الخَرقِ غائِبٌ عَن البَوّابَة.");
+
+        var pattern = new Regex("^" + grep.Groups["re"].Value + "$");
+        Assert.All(AuthTokenSecretPolicy.All, code => Assert.Matches(pattern, code));
+
+        var listed = grep.Groups["alts"].Value.Split('|').Select(a => "auth_secret_" + a).OrderBy(c => c, StringComparer.Ordinal);
+        Assert.Equal(AuthTokenSecretPolicy.All.OrderBy(c => c, StringComparer.Ordinal), listed);
     }
 }
