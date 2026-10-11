@@ -261,9 +261,11 @@ public class DealPaidStageCharacterizationTests
 //
 // يَتَخَطّى نَفسَه ما لَم تُضبَط WASAYEL_LIVE_PROOF=1 و ConnectionStrings__Postgres،
 // بِنَفسِ عَقدِ `LiveModelUsageMeteringProofTests` حَرفاً — ومِنه نُسِخَ تَركيبُ
-// المَخزَن. يَمشي صَفقَتَين مِن `Offered` إلى `Paid` ثُمَّ خُطوَةً بَعدَها:
-// واحِدَةٌ بِـ`payment_id` (بِطاقَة) وواحِدَةٌ بِلا (نَقد) — ويَعُدُّ نِداءاتَ
-// `CaptureAsync` عَلى مُزَوِّدٍ مُسَجِّلٍ لا مُحاكٍ.
+// المَخزَن. يَمشي صَفقَتَين مِن `Offered` ثَلاثَ خُطُواتٍ ثُمَّ خُطوَةً بَعدَها:
+// واحِدَةٌ بِـ`payment_id` (بِطاقَة) تَبلُغُ `Paid` وتُقبَض، وواحِدَةٌ بِلا (نَقد)
+// — **تَتَخَطّى `Paid` إلى `Shipping` مُنذُ ‏ADR-033 §٦** (كانَت تَبلُغُها بِلا دَفع)
+// وتَكتُبُ سَطرَ القَبضِ النَقديِّ عِندَ `Delivered` — ويَعُدُّ نِداءاتَ `CaptureAsync`
+// عَلى مُزَوِّدٍ مُسَجِّلٍ لا مُحاكٍ.
 //
 // **ما مُسَّ هُنا في كوميتِ الإسقاط** (‏ADR-032 §٢‑ب): تَأكيداتُ
 // `CommissionSar == 2.50m` الثَلاثُ وَحدَها — حُذِفَت مَعَ الحَقل. والقَبضُ
@@ -350,7 +352,7 @@ public class LiveDealPaidStageProofTests(ITestOutputHelper output)
                 await deals.AssignCounterpartyAsync(slug, id, seller, "بائِع");
                 Assert.True((await deals.AdvanceAsync(slug, id, buyer,  "مُشتَرٍ")).Ok);   // Offered → Booked
                 Assert.True((await deals.AdvanceAsync(slug, id, seller, "بائِع")).Ok);     // Booked → Confirmed
-                Assert.True((await deals.AdvanceAsync(slug, id, buyer,  "مُشتَرٍ")).Ok);   // Confirmed → Paid
+                Assert.True((await deals.AdvanceAsync(slug, id, buyer,  "مُشتَرٍ")).Ok);   // Confirmed → Paid (بِطاقَة) / Shipping (نَقد)
             }
 
             var cardPaid = (await deals.LoadAsync(slug, card.Id))!;
@@ -359,7 +361,11 @@ public class LiveDealPaidStageProofTests(ITestOutputHelper output)
             Log($"نَقد:    Stage={cashPaid.Stage} captures={payments.Captured.Count}");
 
             Assert.Equal(DealStage.Paid, cardPaid.Stage);
-            Assert.Equal(DealStage.Paid, cashPaid.Stage);
+            // **قُلِبَ بِقَرارٍ مَرئِيّ** (‏ADR-033 §٦، ‏2026-10-11): كانَ `Paid` — صَفقَةُ
+            // النَقدِ كانَت تَزورُ «دَفع» بِلا دَفع. وصارَت تَتَخَطّاها إلى `Shipping`؛
+            // والقَبضُ لِلبِطاقَةِ وَحدَها كَما كان — وهُوَ ما يَحرُسُه هذا البُرهان.
+            Assert.Equal(DealStage.Shipping, cashPaid.Stage);
+            Assert.DoesNotContain(cashPaid.Timeline, e => e.StageAfter == DealStage.Paid);
             Assert.Equal(new[] { "auth_live" }, payments.Captured);
             Assert.Equal(nameof(PaymentStatus.Captured), cardPaid.Refs["payment_status"]);
             Assert.False(cashPaid.Refs.ContainsKey("payment_status"));
@@ -370,6 +376,15 @@ public class LiveDealPaidStageProofTests(ITestOutputHelper output)
             Assert.Single(payments.Captured);
             Assert.Equal(1, after.Timeline.Count(e => e.Action == "captured"));
             Log($"بَعدَ Paid: Stage={after.Stage} captures={payments.Captured.Count} — قُبِضَت مَرَّةً لا مَرَّتَين.");
+
+            // والنَقدُ: البائِعُ يُسَلِّمُ (Shipping → Delivered) فَيُكتَبُ سَطرُ القَبضِ
+            // النَقديِّ بِاسمِه — ولا نِداءَ لِمُزَوِّدِ الدَفعِ قَطّ.
+            Assert.True((await deals.AdvanceAsync(slug, cash.Id, seller, "بائِع")).Ok);     // Shipping → Delivered
+            var delivered = (await deals.LoadAsync(slug, cash.Id))!;
+            Assert.Equal(DealStage.Delivered, delivered.Stage);
+            Assert.Equal(1, delivered.Timeline.Count(e => e.Action == DealEvent.CashOnDelivery));
+            Assert.Single(payments.Captured);
+            Log($"نَقدٌ عِندَ التَسليم: Stage={delivered.Stage} سَطرُ القَبض={delivered.Timeline.Count(e => e.Action == DealEvent.CashOnDelivery)} captures={payments.Captured.Count}");
         }
         finally
         {

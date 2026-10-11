@@ -34,8 +34,9 @@ public sealed class DealsService
     public static bool IsIncomingOfferFor(Deal deal, Guid ownerId) =>
         deal.CounterpartyId is null
         && deal.InitiatorId != ownerId
-        && deal.Refs.TryGetValue(ListingOwnerRef, out var lo)
-        && lo == ownerId.ToString();
+        // بِقيمَةِ المُعَرِّفِ لا بِحَرفِ النَصّ — نَفسُ مُقارَنَةِ `Validate` والشاشَة
+        // (‏ADR-033 §٦)؛ وكانَت `lo == ownerId.ToString()`.
+        && DealAcceptAuthorization.OwnerIdOf(deal) == ownerId;
 
     /// <summary><para>قائِمَة الصَّفقات على إعلانات يَملِكها مُستَخدِم
     /// مُعَيَّن (لِعَرض «عُروض على إعلاناتي»).</para>
@@ -107,11 +108,16 @@ public sealed class DealsService
     }
 
     /// <summary>عَيِّن الطَّرَف الثاني (الـ counterparty) عَلى الـ Deal —
-    /// عادَةً عِندَ مَرحَلَة Booked (بائِع يَقبَل، سائِق يَأخُذ الرحلَة، …).</summary>
+    /// عادَةً عِندَ مَرحَلَة Booked (بائِع يَقبَل، سائِق يَأخُذ الرحلَة، …).
+    /// <paramref name="action"/> اسمُ سَطرِ السِجِلّ: <c>assigned</c> لِلقَبولِ
+    /// والمَسارِ الإداريّ، و<see cref="DealEvent.BoundAtBirth"/> لِرَبطِ البائِعِ عِندَ
+    /// وِلادَةِ صَفقَةِ السَلَّة (‏ADR-033 §٦) — فَلا تُسَمّي الشاشَةُ رَبطاً «قُبِلَ
+    /// العَرض». (بَعدَ <paramref name="ct"/> عَمداً: نِداءاتُ القَبولِ والمَسارِ
+    /// الإداريِّ المُثَبَّتَةُ حَرفاً لا تَتَحَرَّك.)</summary>
     public async Task<Deal?> AssignCounterpartyAsync(
         string tenantSlug, Guid dealId,
         Guid counterpartyId, string counterpartyName,
-        CancellationToken ct = default)
+        CancellationToken ct = default, string action = "assigned")
     {
         await using var s = _store.LightweightSession(tenantSlug);
         var deal = await s.LoadAsync<Deal>(dealId, ct);
@@ -120,7 +126,7 @@ public sealed class DealsService
         deal.CounterpartyId = counterpartyId;
         deal.CounterpartyName = counterpartyName;
         deal.UpdatedAt = DateTime.UtcNow;
-        deal.Timeline.Add(new(deal.Stage, deal.Stage, "assigned",
+        deal.Timeline.Add(new(deal.Stage, deal.Stage, action,
             counterpartyId, counterpartyName, null, DateTime.UtcNow));
         s.Store(deal);
         await s.SaveChangesAsync(ct);
@@ -128,19 +134,48 @@ public sealed class DealsService
     }
 
     /// <summary>
-    /// <para><b>مالِكُ الإعلانِ يَقبَلُ العَرض</b> — يَصيرُ الطَرَفَ المُقابِلَ
-    /// وتَمضي الصَفقَةُ مِن <c>Offered</c>. <b>والحارِسُ في التَوقيع</b>
-    /// (القاعِدَة ٦): <see cref="DealAcceptor"/> إلزامِيّ، ولا حِملٌ زائِدٌ
-    /// بِـ<c>Guid actorId</c>؛ والقَرارُ كُلُّه في
+    /// <para><b>البائِعُ طَرَفٌ مُقابِلٌ مِن الوِلادَة</b> (‏ADR-033 §٦، ‏2026-10-11):
+    /// يُنادِيها <c>/checkout/submit</c> بَعدَ إلحاقِ <c>listing_owner</c>، فَتَربُطُ
+    /// مالِكَ الإعلانِ طَرَفاً بِاسمِه مِن وَثيقَتِه وتَكتُبُ سَطرَ
+    /// <see cref="DealEvent.BoundAtBirth"/> — لا <c>assigned</c>، فَالقَبولُ لَم يَقَع
+    /// بَعد. ومَرجِعٌ لَيسَ مُعَرِّفاً لا يَربُطُ أَحَداً ويُرجِعُ <c>null</c>؛ ووَثيقَةُ
+    /// مُستَخدِمٍ غائِبَةٌ تُربَطُ بِالهُوِيَّةِ وبِلا اسم — الهُوِيَّةُ مِن الإعلانِ
+    /// وهي الحُكم، والاسمُ زينَةُ عَرض.</para>
+    ///
+    /// <para><b>ولِماذا هُنا لا في جِسمِ النُقطَة</b>: تَحليلُ المُعَرِّفِ وقِراءَةُ
+    /// الاسمِ حِسابٌ، وجِسمُ النُقطَةِ مُثَبَّتُ السَقف (<c>EndpointBodyBleedTests</c>).
+    /// وتَمُرُّ بِـ<see cref="AssignCounterpartyAsync"/> لا حَولَها — فَعَدُّ «مَن
+    /// يُعَيِّنُ طَرَفاً» في <c>DealCounterpartyCharacterizationTests</c> يَراها.</para>
+    /// </summary>
+    public async Task<Deal?> BindListingOwnerAsync(
+        string tenantSlug, Guid dealId, string ownerRef, CancellationToken ct = default)
+    {
+        if (!Guid.TryParse(ownerRef, out var ownerId)) return null;
+        await using var q = _store.QuerySession(tenantSlug);
+        var owner = await q.LoadAsync<ACommerce.Kit.Auth.User>(ownerId, ct);
+        return await AssignCounterpartyAsync(tenantSlug, dealId, ownerId, owner?.FullName ?? "", ct, DealEvent.BoundAtBirth);
+    }
+
+    /// <summary>
+    /// <para><b>مالِكُ الإعلانِ يَقبَلُ العَرض</b> — يَصيرُ الطَرَفَ المُقابِلَ (إن
+    /// لَم يَكُن رُبِطَ عِندَ الوِلادَة) وتَمضي الصَفقَةُ مِن <c>Offered</c>.
+    /// <b>والحارِسُ في التَوقيع</b> (القاعِدَة ٦): <see cref="DealAcceptor"/>
+    /// إلزامِيّ، ولا حِملٌ زائِدٌ بِـ<c>Guid actorId</c>؛ والقَرارُ كُلُّه في
     /// <see cref="DealAcceptAuthorization.Validate"/> النَقِيَّة، والجِسمُ
     /// يُطَبِّقُه ولا يَحمِلُه — عَلى نَسَقِ <see cref="CancelAsync"/>.</para>
     ///
-    /// <para><b>وما يَقَعُ بَعدَ التَخويلِ هُوَ بِحَرفِه ما كانَت تَفعَلُه
-    /// النُقطَةُ</b> (‏2026-10-11، ‏ADR-033 §٢‑ج‑أ): تَعيينُ الطَرَفِ ثُمَّ
-    /// <see cref="AdvanceAsync"/> بِفاعِلٍ هُوَ <b>المُبادِر</b> — لِأَنّ
-    /// مَرحَلَةَ <c>Offered</c> تَطلُبُ <c>initiator</c> — بِاسمِ القابِلِ
-    /// ومُلاحَظَةِ «قُبِلَ العَرض». ومَن فاعِلُ <c>Shipping</c> وصَفقَةِ
-    /// النَقدِ قَرارٌ مُؤَجَّلٌ إلى كوميتِ الخُطوَة 3 هُناك، لا هُنا.</para>
+    /// <para><b>والانتِقالُ بِهُوِيَّةِ القابِلِ لا بِاستِعارَةِ المُبادِر</b>
+    /// (‏ADR-033 §٦، ‏2026-10-11): كانَ ما بَعدَ التَخويلِ يُنادي
+    /// <see cref="AdvanceAsync"/> بِـ<c>deal.InitiatorId</c> بِاسمِ القابِل — لِأَنّ
+    /// صَفَّ <c>Offered</c> في الكاتالوج يَطلُبُ <c>initiator</c> — ويُرجِعُ
+    /// <c>Accepted</c> بِلا قِراءَةِ النَتيجَة. فَصارَ القَبولُ انتِقالاً لَه
+    /// بَوّابَتُه: <c>Validate</c> أَثبَتَت أَنّ الفاعِلَ مالِكُ الإعلانِ وأَنّ
+    /// الصَفقَةَ في <c>Offered</c> فَعّالَةً طَرَفُها هُوَ أَو لا طَرَفَ لَها، ثُمَّ
+    /// <see cref="MoveAsync"/> نَفسُها الَّتي تَكتُبُ لِـ<c>AdvanceAsync</c> — بِفاعِلٍ
+    /// هُوَ القابِل. وبَوّابَةُ فاعِلِ المَرحَلَةِ لا تُسأَلُ هُنا لِأَنّ سُؤالَها
+    /// «مَن يُحَرِّكُ Offered بِلا قَبول» وجَوابُه المُبادِرُ كَما كان. ولا نَتيجَةَ
+    /// تُهمَل: كُلُّ رَفضٍ رَمزٌ قَبلَ أَيِّ كِتابَة، و<c>Accepted</c> لا تُرجَعُ إلّا
+    /// بَعدَ أَن حُفِظَ الانتِقال.</para>
     /// </summary>
     public async Task<DealAcceptResult> AcceptAsync(
         string tenantSlug, Guid dealId, DealAcceptor by, CancellationToken ct = default)
@@ -149,16 +184,25 @@ public sealed class DealsService
 
         var violation = DealAcceptAuthorization.Validate(loaded, by);
         if (violation is not null) return DealAcceptResult.Refused(violation, loaded);
-        // ‏`Validate` تَرُدّ `deal_not_found` عِندَ العَدَم، فَما بَعدَها غَيرُ عَدَم.
-        var deal = loaded!;
 
+        // بِلا أَثَرٍ حَيثُ رُبِطَ البائِعُ عِندَ الوِلادَة (صَفقَةُ السَلَّة) — ويُعَيِّنُ
+        // القابِلَ حَيثُ لا طَرَفَ (عَرضٌ عَلى إعلان).
         await AssignCounterpartyAsync(tenantSlug, dealId, by.ActorId, by.ActorName, ct);
-        var advanced = await AdvanceAsync(tenantSlug, dealId, deal.InitiatorId, by.ActorName, "قُبِلَ العَرض", ct);
-        return DealAcceptResult.Accepted(advanced.Deal ?? deal);
+
+        await using var s = _store.LightweightSession(tenantSlug);
+        // ‏`Validate` رَدَّت العَدَمَ وغَيرَ `Offered`، فَما هُنا صَفقَةٌ في `Offered`
+        // ولَها تالٍ في كُلِّ تَعريفٍ يَعرِفُه الكاتالوج (`Booked`) — فَالعَدَمُ خَرقُ
+        // ثابِتٍ لا حالَةُ مُستَخدِم، ولا يُلَبَّسُ رَمزاً مِن مَعجَمِ التَخويل.
+        var deal = (await s.LoadAsync<Deal>(dealId, ct))!;
+        var next = DealsPolicy.Next(deal)
+            ?? throw new InvalidOperationException($"‏Offered بِلا تالٍ في النَمَط «{deal.Pattern}» — خَرقُ ثابِتِ الكاتالوج.");
+        return DealAcceptResult.Accepted(await MoveAsync(s, deal, next, by.ActorId, by.ActorName, "قُبِلَ العَرض", ct));
     }
 
     /// <summary>اِنتَقِل لِلمَرحَلَة التالِيَة في النَّمَط. يَفحَص أَنّ الفاعِل
-    /// يَملِك حَقّ تَحريك هذه المَرحَلَة (initiator/counterparty/either).</summary>
+    /// يَملِك حَقّ تَحريك هذه المَرحَلَة (initiator/counterparty/either).
+    /// والتالي بِوَعيِ طَريقَةِ الدَفع (<see cref="DealsPolicy.Next(Deal)"/>):
+    /// صَفقَةُ النَقدِ لا تَزورُ <c>Paid</c> (‏ADR-033 §٦).</summary>
     public async Task<DealAdvanceResult> AdvanceAsync(
         string tenantSlug, Guid dealId, Guid actorId, string actorName,
         string? note = null, CancellationToken ct = default)
@@ -169,7 +213,7 @@ public sealed class DealsService
         if (deal.Status != DealStatus.Active)
             return new(false, deal, $"الصَّفقَة في حالَة {deal.Status} — لا يُمكِن المُتابَعَة.");
 
-        var next = DealsPolicy.Next(deal.Pattern, deal.Stage);
+        var next = DealsPolicy.Next(deal);
         if (next is null)
             return new(false, deal, "هذه آخِر مَرحَلَة، لا تالٍ.");
 
@@ -178,10 +222,27 @@ public sealed class DealsService
         if (!IsActorAllowed(deal, actorId, required))
             return new(false, deal, $"يَتَطَلَّب فاعِلاً مِن نَوع: {required}");
 
+        return new(true, await MoveAsync(s, deal, next.Value, actorId, actorName, note, ct), null);
+    }
+
+    /// <summary>
+    /// <para><b>الانتِقالُ نَفسُه بَعدَ أَن حُسِمَ حَقُّ الفاعِل</b> — يَكتُبُ
+    /// المَرحَلَةَ والسِجِلَّ، ويَقبِضُ عِندَ <c>Paid</c>، ويُسَجِّلُ القَبضَ النَقديَّ
+    /// عِندَ <c>Delivered</c>، ويُكمِلُ عِندَ <c>Reviewed</c>، ويَحفَظ. مُشتَرَكٌ بَينَ
+    /// بَوّابَتَين: <see cref="AdvanceAsync"/> (فاعِلُ المَرحَلَةِ مِن الكاتالوج) و
+    /// <see cref="AcceptAsync"/> (<c>DealAcceptAuthorization</c>) — فَكِتابَةُ الحالَةِ
+    /// في مَوضِعٍ واحِدٍ وإن تَعَدَّدَت أَبوابُها (‏ADR-033 §٦). ولا يَرُدُّ
+    /// نَتيجَةً ذاتَ عَلَم: ما يُرفَضُ يُرفَضُ عِندَ البَوّابَةِ قَبلَه، فَعَلَمٌ هُنا
+    /// شَرطٌ لا يَكذِبُ أَبَداً.</para>
+    /// </summary>
+    private async Task<Deal> MoveAsync(
+        IDocumentSession s, Deal deal, DealStage next, Guid actorId, string actorName,
+        string? note, CancellationToken ct)
+    {
         var before = deal.Stage;
-        deal.Stage = next.Value;
+        deal.Stage = next;
         deal.UpdatedAt = DateTime.UtcNow;
-        deal.Timeline.Add(new(before, next.Value, "advanced",
+        deal.Timeline.Add(new(before, next, "advanced",
             actorId, actorName, note, DateTime.UtcNow));
 
         // عِندَ الوُصول لِمَرحَلَة الدَّفع: اِسحَب الإذن المَحجوز في
@@ -207,18 +268,27 @@ public sealed class DealsService
                 {
                     var cr = await _payments.CaptureAsync(pid, deal.AmountSar, ct);
                     deal.Refs["payment_status"] = cr.Status.ToString();
-                    deal.Timeline.Add(new(next.Value, next.Value, "captured",
+                    deal.Timeline.Add(new(next, next, "captured",
                         actorId, actorName,
                         $"capture {cr.Status} {cr.AmountSar:0.00} SAR", DateTime.UtcNow));
                 }
                 catch (Exception ex)
                 {
                     deal.Refs["capture_error"] = ex.Message;
-                    deal.Timeline.Add(new(next.Value, next.Value, "capture_failed",
+                    deal.Timeline.Add(new(next, next, "capture_failed",
                         actorId, actorName, ex.Message, DateTime.UtcNow));
                 }
             }
         }
+
+        // نَقدٌ عِندَ الاستِلام: بُلوغُ Delivered هُوَ لَحظَةُ القَبضِ عِندَ البائِع
+        // — يُكتَبُ سَطرٌ بِاسمِه في السِجِلّ، ونَصُّه مِن القامُوسِ عِندَ العَرض
+        // (`deals.detail.event_cash_on_delivery`) لا هُنا (القاعِدَة ١١). ولا مالَ
+        // يَتَحَرَّكُ: المَنصَّةُ لا تَقبِضُ ثَمَنَ الصَفقَةِ ولا تَرُدُّه (‏ق‑٦).
+        // ‏ADR-033 §٦ — والمَرحَلَةُ `Paid` لَم تُزَر لِهذِه الصَفقَةِ أَصلاً.
+        if (next == DealStage.Delivered && DealsPolicy.IsCashOnDelivery(deal))
+            deal.Timeline.Add(new(next, next, DealEvent.CashOnDelivery,
+                actorId, actorName, null, DateTime.UtcNow));
 
         // اكتمال الـ Deal عِندَ Reviewed.
         if (next == DealStage.Reviewed && DealsPolicy.StagesFor(deal.Pattern).Last() == DealStage.Reviewed)
@@ -228,7 +298,7 @@ public sealed class DealsService
 
         s.Store(deal);
         await s.SaveChangesAsync(ct);
-        return new(true, deal, null);
+        return deal;
     }
 
     /// <summary>

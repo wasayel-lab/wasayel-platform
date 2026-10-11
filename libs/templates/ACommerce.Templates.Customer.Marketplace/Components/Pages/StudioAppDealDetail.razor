@@ -74,7 +74,7 @@
             {
                 <div class="st-section-title">@L.Markup("studio.deal.actions")</div>
                 <div class="st-card" style="display:flex;gap:10px;flex-wrap:wrap;">
-                    @if (DealsPolicy.Next(deal.Pattern, deal.Stage) is { } next)
+                    @if (DealsPolicy.Next(deal) is { } next)
                     {
                         <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/advance")"
                               style="display:flex;gap:8px;flex:1;min-width:200px;">
@@ -189,7 +189,8 @@
         var t = await Tenants.FindAsync(Slug);
         if (t is null || t.OwnerUserId != Auth.UserId!.Value) return;
         deal = await Deals.LoadAsync(Slug, Id);
-        if (deal is not null) stages = DealsPolicy.StagesFor(deal.Pattern).ToList();
+        // بِوَعيِ طَريقَةِ الدَفع (‏ADR-033 §٦): صَفقَةُ النَقدِ لا تَرسُمُ خُطوَةَ «دَفع».
+        if (deal is not null) stages = DealsPolicy.StagesFor(deal).ToList();
     }
 
     static string ActionIcon(string action) => action switch
@@ -203,6 +204,8 @@
     {
         "created"   => L["studio.deal.event_created"],
         "assigned"  => L["studio.deal.event_assigned"],
+        DealEvent.BoundAtBirth   => L["studio.deal.event_bound"],
+        DealEvent.CashOnDelivery => L["studio.deal.event_cash_on_delivery"],
         "advanced"  => $"{DealsPolicy.LabelAr(e.StageBefore)} ← {DealsPolicy.LabelAr(e.StageAfter)}",
         "cancelled" => L["studio.deal.event_cancelled"],
         "disputed"  => L["studio.deal.event_disputed"],

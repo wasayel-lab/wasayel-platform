@@ -13,8 +13,14 @@ namespace ACommerce.Platform.Tests;
 // القاعِدَة ٣: التَوصيفُ يَخضَرُّ قَبلَ التَبديل، في كوميتٍ مُستَقِلّ.
 //
 // **ما يُثَبِّتُه هذا المِلَفُّ هُوَ ما سَيُقلَبُ في كوميتِ الخُطوَة 3 (شَطرُ
-// الصَفَقات) بِقَرارٍ مَرئِيّ** — فَيُكتَبُ كَما هُوَ اليَوم (‏2026-10-11، ‏52eaaa2)
-// لِيَكونَ الفَرقُ بَينَ «قَبل» و«بَعد» مَقيساً لا مَوصوفاً:
+// الصَفَقات) بِقَرارٍ مَرئِيّ** — فَكُتِبَ كَما كانَ يَومَه (‏2026-10-11، ‏52eaaa2؛
+// كوميتُ التَوصيف ‏5554975) لِيَكونَ الفَرقُ بَينَ «قَبل» و«بَعد» مَقيساً لا مَوصوفاً.
+//
+// **ثُمَّ قُلِبَت صُفوفُ البَندَين ١ و٢ وشَطرِ الدَورِ مِن ٤ في الكوميتِ التالي بِقَرارٍ
+// مَرئِيّ** (‏ADR-033 §٦): كُلُّ صَفٍّ مَقلوبٍ يَحمِلُ «قُلِبَ» في عُنوانِه أَو شَرحِه،
+// ويُثبِّتُ النَقيضَ بِاسمِه — لا يُحذَفُ ولا يُسكَت. وما بَقِيَ مِن ٣ و٤ (الإشعارُ،
+// والعُنوانُ، و`err`، وأُنبوبُ المُحادَثَة) يَبقى حَرفاً حَتّى كوميتاتِ P1-4 وP1-5.
+// وما كانَ يَومَ التَوصيف:
 //   ١) السِياسَةُ عَمياءُ عَن طَريقَةِ الدَفع: صَفقَةُ `cash` تَمشي
 //      Confirmed → Paid → Shipping كَصَفقَةِ البِطاقَة، و`Paid` يُحَرِّكُها
 //      المُشتَري وَحدَه — فَيَرى «دَورُكَ الآن: تَأكيد: شَحن» وهُوَ لا يَشحَن.
@@ -116,132 +122,160 @@ public class DealCashPathCharacterizationTests
 
     // ═══ ١) السِياسَةُ عَمياءُ عَن طَريقَةِ الدَفع ═══════════════════════════
 
-    /// <summary><c>DealsPolicy</c> و<c>DealPatternCatalog</c> و<c>DealTurnView</c> لا
-    /// تَعرِفُ كَلِمَةَ <c>pay_method</c> ولا مَعجَمَ <c>CheckoutPayMethods</c>؛ و
-    /// <c>Next</c> و<c>StagesFor</c> بِحِملٍ واحِدٍ لِكُلٍّ، لا مُعامِلَ فيه لِطَريقَةِ
-    /// الدَفع — فَلا سَبيلَ لِأَن تُجيبَ سُؤالاً عَن النَقد.</summary>
+    /// <summary><b>قُلِبَ</b> (‏ADR-033 §٦): كانَت <c>DealsPolicy</c> و
+    /// <c>DealPatternCatalog</c> و<c>DealTurnView</c> لا تَعرِفُ كَلِمَةَ <c>pay_method</c>
+    /// ولا مَعجَمَ <c>CheckoutPayMethods</c>، و<c>Next</c> و<c>StagesFor</c> و<c>For</c>
+    /// بِحِملٍ واحِدٍ لِكُلٍّ. وصارَ لِكُلٍّ ثَلاثَةُ أَحمال — والحِملُ القَديمُ بِحَرفِه
+    /// وجَوابِه. <b>والكاتالوجُ وَحدَه بَقِيَ أَعمى عَن الدَفع</b>: النَمَطُ بَياناتٌ
+    /// والإسقاطُ كودٌ في السِياسَة (القاعِدَة ٥).</summary>
     [Fact]
-    public void The_policy_has_no_pay_method_in_its_vocabulary_or_its_signatures_today()
+    public void The_policy_now_knows_the_pay_method_while_the_catalog_stays_blind_to_it()
     {
-        foreach (var src in new[] { PolicySource(), CatalogSource(), TurnViewSource() })
-        {
-            var code = WriteEndpointGuardTests.StripComments(src);
-            Assert.DoesNotContain("pay_method", code, StringComparison.Ordinal);
-            Assert.DoesNotContain("CheckoutPayMethods", code, StringComparison.Ordinal);
-            Assert.DoesNotContain("CashOnDelivery", code, StringComparison.Ordinal);
-        }
+        var catalog = WriteEndpointGuardTests.StripComments(CatalogSource());
+        Assert.DoesNotContain("pay_method", catalog, StringComparison.Ordinal);
+        Assert.DoesNotContain("CheckoutPayMethods", catalog, StringComparison.Ordinal);
+        Assert.DoesNotContain("CashOnDelivery", catalog, StringComparison.Ordinal);
 
-        Assert.Single(typeof(DealsPolicy).GetMethods().Where(m => m.Name == nameof(DealsPolicy.Next)));
-        Assert.Single(typeof(DealsPolicy).GetMethods().Where(m => m.Name == nameof(DealsPolicy.StagesFor)));
-        Assert.Single(typeof(DealTurnView).GetMethods().Where(m => m.Name == nameof(DealTurnView.For)));
+        var policy = WriteEndpointGuardTests.StripComments(PolicySource());
+        Assert.Contains("CheckoutPayMethods.AttributeKey", policy, StringComparison.Ordinal);
+        Assert.Contains("CheckoutPayMethods.CashOnDelivery", policy, StringComparison.Ordinal);
+        Assert.Contains("stage == DealStage.Paid && IsCashOnDelivery(payMethod)", policy, StringComparison.Ordinal);
+        Assert.DoesNotContain("pay_method", policy, StringComparison.Ordinal);   // الحَرفُ في المَعجَمِ وَحدَه
+        Assert.DoesNotContain("pay_method", WriteEndpointGuardTests.StripComments(TurnViewSource()), StringComparison.Ordinal);
+
+        Assert.Equal(3, typeof(DealsPolicy).GetMethods().Count(m => m.Name == nameof(DealsPolicy.Next)));
+        Assert.Equal(3, typeof(DealsPolicy).GetMethods().Count(m => m.Name == nameof(DealsPolicy.StagesFor)));
+        Assert.Equal(3, typeof(DealTurnView).GetMethods().Count(m => m.Name == nameof(DealTurnView.For)));
     }
 
-    /// <summary>صَفقَةُ النَقدِ تَمشي <c>Confirmed → Paid → Shipping</c> كَصَفقَةِ
-    /// البِطاقَةِ حَرفاً، و<c>Paid</c> لا يُحَرِّكُها إلّا المُشتَري — أَي أَنّ
-    /// البائِعَ لا يَستَطيعُ نَقلَ صَفقَةِ نَقدٍ مُؤَكَّدَةٍ إلى الشَحنِ بِنَفسِه
-    /// (موجَزُ الفَجَوات P1-3).</summary>
+    /// <summary><b>قُلِبَ شَطرُه</b> (‏ADR-033 §٦): كانَت صَفقَةُ النَقدِ تَمشي
+    /// <c>Confirmed → Paid → Shipping</c> كَصَفقَةِ البِطاقَةِ حَرفاً، و<c>Paid</c> لا
+    /// يُحَرِّكُها إلّا المُشتَري — فَالبائِعُ لا يَستَطيعُ نَقلَ صَفقَةِ نَقدٍ مُؤَكَّدَةٍ
+    /// إلى الشَحنِ بِنَفسِه (P1-3). وصارَت <c>Confirmed → Shipping</c> لِلنَقدِ وَحدَه؛
+    /// <b>وما لَم يُقلَب يُثَبَّتُ حَرفاً</b>: الجَدوَلُ بِلا طَريقَةِ دَفعٍ كَما كان، وفاعِلُ
+    /// كُلِّ مَرحَلَةٍ كَما كان، وصَفقَةٌ قَديمَةٌ عِندَ <c>Paid</c> تَمضي.</summary>
     [Fact]
-    public void A_cash_deal_walks_Confirmed_then_Paid_then_Shipping_today_and_Paid_waits_for_the_buyer()
+    public void A_cash_deal_walks_Confirmed_then_Shipping_now_while_the_pattern_table_and_the_actors_are_unchanged()
     {
         var confirmed = CashDeal(counterparty: Seller, stage: DealStage.Confirmed);
-        Assert.Equal(DealStage.Paid, DealsPolicy.Next(confirmed.Pattern, confirmed.Stage));
+        Assert.Equal(DealStage.Paid, DealsPolicy.Next(confirmed.Pattern, confirmed.Stage));        // الجَدوَلُ كَما كان
+        Assert.Equal(DealStage.Shipping, DealsPolicy.Next(confirmed));                                // والصَفقَةُ تَتَخَطّى
         Assert.Equal("either", DealsPolicy.Actor(confirmed.Stage));
         Assert.True(Allowed(confirmed, Buyer, "either"));
         Assert.True(Allowed(confirmed, Seller, "either"));
 
         var paid = CashDeal(counterparty: Seller, stage: DealStage.Paid);
         Assert.Equal(DealStage.Shipping, DealsPolicy.Next(paid.Pattern, paid.Stage));
+        Assert.Equal(DealStage.Shipping, DealsPolicy.Next(paid));                                     // القَديمَةُ لا تُحبَس
         Assert.Equal("initiator", DealsPolicy.Actor(paid.Stage));
         Assert.True(Allowed(paid, Buyer, "initiator"));
         Assert.False(Allowed(paid, Seller, "initiator"));
 
         var shipping = CashDeal(counterparty: Seller, stage: DealStage.Shipping);
         Assert.Equal(DealStage.Delivered, DealsPolicy.Next(shipping.Pattern, shipping.Stage));
+        Assert.Equal(DealStage.Delivered, DealsPolicy.Next(shipping));
         Assert.Equal("counterparty", DealsPolicy.Actor(shipping.Stage));
         Assert.True(Allowed(shipping, Seller, "counterparty"));
         Assert.False(Allowed(shipping, Buyer, "counterparty"));
 
-        // والمَسارُ نَفسُه لِلبِطاقَة — لا فَرقَ تَقرَؤُه السِياسَة.
+        // والجَدوَلُ بِلا طَريقَةِ دَفعٍ كَما كان — والنَقدُ وَحدَه يُسقِطُ «دَفع».
         Assert.Equal(
             new[] { DealStage.Offered, DealStage.Booked, DealStage.Confirmed, DealStage.Paid, DealStage.Shipping, DealStage.Delivered, DealStage.Reviewed },
             DealsPolicy.StagesFor("marketplace").ToArray());
+        Assert.Equal(
+            new[] { DealStage.Offered, DealStage.Booked, DealStage.Confirmed, DealStage.Shipping, DealStage.Delivered, DealStage.Reviewed },
+            DealsPolicy.StagesFor(confirmed).ToArray());
     }
 
-    /// <summary><c>AdvanceAsync</c> تَقرَأُ التالِيَ مِن (النَمَط، المَرحَلَة) وَحدَهُما،
-    /// ولا تَذكُرُ النَقدَ ولا <c>Delivered</c> — فَلا سَطرَ في السِجِلِّ يَقولُ
-    /// «يُقبَضُ عِندَ التَسليم» لِأَحَد.</summary>
+    /// <summary><b>قُلِبَ</b> (‏ADR-033 §٦): كانَت <c>AdvanceAsync</c> تَقرَأُ التالِيَ مِن
+    /// (النَمَط، المَرحَلَة) وَحدَهُما ولا تَذكُرُ النَقدَ ولا <c>Delivered</c>. وصارَت
+    /// تَقرَأُ <c>Next(deal)</c>، و<c>MoveAsync</c> تَكتُبُ سَطرَ القَبضِ النَقديِّ عِندَ
+    /// <c>Delivered</c> — والحَرفُ <c>pay_method</c> لا يَظهَرُ في الخِدمَة: المِفتاحُ مِن
+    /// المَعجَمِ وَحدَه.</summary>
     [Fact]
-    public void AdvanceAsync_reads_pattern_and_stage_only_and_writes_no_cash_on_delivery_line_today()
+    public void AdvanceAsync_now_reads_the_deal_and_MoveAsync_writes_the_cash_on_delivery_line()
     {
         var advance = AdvanceBody();
-        Assert.Contains("var next = DealsPolicy.Next(deal.Pattern, deal.Stage);", advance, StringComparison.Ordinal);
+        Assert.Contains("var next = DealsPolicy.Next(deal);", advance, StringComparison.Ordinal);
+        Assert.DoesNotContain("DealsPolicy.Next(deal.Pattern, deal.Stage)", advance, StringComparison.Ordinal);
+        Assert.Contains("if (next == DealStage.Delivered && DealsPolicy.IsCashOnDelivery(deal))", advance, StringComparison.Ordinal);
+        Assert.Contains("DealEvent.CashOnDelivery,", advance, StringComparison.Ordinal);
         Assert.DoesNotContain("pay_method", advance, StringComparison.Ordinal);
         Assert.DoesNotContain("CheckoutPayMethods", advance, StringComparison.Ordinal);
-        Assert.DoesNotContain("DealStage.Delivered", advance, StringComparison.Ordinal);
     }
 
     // ═══ ٢) القَبولُ اليَوم: فاعِلٌ مُستَعار، ونَتيجَةٌ مُهمَلَة، ومُقارَنَةٌ نَصِّيَّة ═══
 
-    /// <summary><c>AcceptAsync</c> تُحَرِّكُ بِـ<c>deal.InitiatorId</c> بِاسمِ القابِل
-    /// (السَلسَلَةُ بِحَرفِها في <c>DealCounterpartyCharacterizationTests</c>) <b>ولا
-    /// تَقرَأُ <c>advanced.Ok</c></b>: تُرجِعُ <c>Accepted</c> أَيّاً كانَت نَتيجَةُ
-    /// التَقَدُّم — رَفضٌ يُبتلَع.</summary>
+    /// <summary><b>قُلِبَ</b> (‏ADR-033 §٦): كانَت <c>AcceptAsync</c> تُحَرِّكُ بِـ
+    /// <c>deal.InitiatorId</c> بِاسمِ القابِل ولا تَقرَأُ <c>advanced.Ok</c> — رَفضٌ
+    /// يُبتلَع. وصارَت تَنتَقِلُ بِـ<c>by.ActorId</c> عَبرَ <c>MoveAsync</c>، ولا نَتيجَةَ
+    /// تُهمَل لِأَنّ لا نَتيجَةَ: الرَفضُ كُلُّه رُموزُ <c>Validate</c> قَبلَ الكِتابَة،
+    /// و<c>Accepted</c> بَعدَ الحَفظ.</summary>
     [Fact]
-    public void AcceptAsync_returns_Accepted_without_reading_the_advance_result_today()
+    public void AcceptAsync_now_moves_as_the_acceptor_and_has_no_advance_result_to_ignore()
     {
         var accept = AcceptBody();
-        Assert.Contains("deal.InitiatorId, by.ActorName, \"قُبِلَ العَرض\"", accept, StringComparison.Ordinal);
-        Assert.Contains("return DealAcceptResult.Accepted(advanced.Deal ?? deal);", accept, StringComparison.Ordinal);
-        Assert.DoesNotContain("advanced.Ok", accept, StringComparison.Ordinal);
+        Assert.Contains("MoveAsync(s, deal, next, by.ActorId, by.ActorName, \"قُبِلَ العَرض\", ct)", accept, StringComparison.Ordinal);
+        Assert.DoesNotContain("deal.InitiatorId", accept, StringComparison.Ordinal);
+        Assert.DoesNotContain("advanced.Deal ?? deal", accept, StringComparison.Ordinal);
+        Assert.Equal(0, Count(accept, "AdvanceAsync("));
     }
 
-    /// <summary>مَرجِعُ المالِكِ يُقارَنُ <b>نَصّاً</b> بِـ<c>ActorId.ToString()</c> في
-    /// <c>Validate</c> و<c>IsIncomingOfferFor</c> وفي الشاشَة — فَنَفسُ الـGuid
-    /// بِصيغَةٍ أُخرى (أَحرُفٌ كَبيرَة، أَو <c>N</c> بِلا شَرطات) <b>لَيسَ
-    /// المالِك</b> اليَوم، وتُجابُ «لَستَ المالِك».</summary>
+    /// <summary><b>قُلِبَ</b> (‏ADR-033 §٦): كانَ مَرجِعُ المالِكِ يُقارَنُ <b>نَصّاً</b>
+    /// بِـ<c>ActorId.ToString()</c> في <c>Validate</c> و<c>IsIncomingOfferFor</c> وفي
+    /// الشاشَة — فَنَفسُ الـGuid بِصيغَةٍ أُخرى (أَحرُفٌ كَبيرَة، أَو <c>N</c> بِلا
+    /// شَرطات) «لَيسَ المالِك». وصارَ يُقارَنُ بِالقيمَةِ عَبرَ
+    /// <c>DealAcceptAuthorization.OwnerIdOf</c> — دالَّةٌ واحِدَةٌ لِلمَواضِعِ الثَلاثَة.</summary>
     [Fact]
-    public void The_owner_ref_is_compared_as_a_raw_string_so_another_format_of_the_same_guid_is_not_the_owner_today()
+    public void The_owner_ref_is_now_compared_by_guid_value_in_the_gate_the_list_and_the_screen()
     {
         var upper = CashDeal(); upper.Refs[DealsService.ListingOwnerRef] = Seller.ToString("D").ToUpperInvariant();
         var n     = CashDeal(); n.Refs[DealsService.ListingOwnerRef]     = Seller.ToString("N");
 
-        Assert.Equal(DealAcceptAuthorization.ActorNotListingOwner, DealAcceptAuthorization.Validate(upper, new DealAcceptor(Seller, "بائِع"))!.Code);
-        Assert.Equal(DealAcceptAuthorization.ActorNotListingOwner, DealAcceptAuthorization.Validate(n,     new DealAcceptor(Seller, "بائِع"))!.Code);
-        Assert.False(DealsService.IsIncomingOfferFor(upper, Seller));
-        Assert.False(DealsService.IsIncomingOfferFor(n, Seller));
-        // والصيغَةُ الَّتي يَكتُبُها الكاتِبُ (`ToString()` = D صَغيرَة) تَمُرّ.
+        Assert.Null(DealAcceptAuthorization.Validate(upper, new DealAcceptor(Seller, "بائِع")));
+        Assert.Null(DealAcceptAuthorization.Validate(n,     new DealAcceptor(Seller, "بائِع")));
+        Assert.True(DealsService.IsIncomingOfferFor(upper, Seller));
+        Assert.True(DealsService.IsIncomingOfferFor(n, Seller));
+        // والصيغَةُ الَّتي يَكتُبُها الكاتِبُ (`ToString()` = D صَغيرَة) تَمُرُّ كَما كانَت.
         Assert.Null(DealAcceptAuthorization.Validate(CashDeal(), new DealAcceptor(Seller, "بائِع")));
         Assert.True(DealsService.IsIncomingOfferFor(CashDeal(), Seller));
 
         var validate = WriteEndpointGuardTests.StripComments(Source(Template, "Services", "Deals", "DealAcceptAuthorization.cs"));
-        Assert.Contains("if (owner != by.ActorId.ToString())", validate, StringComparison.Ordinal);
-        Assert.Contains("isListingOwner = ownerRef == uid.ToString() || deal.CounterpartyId == uid;", DealPageSource(), StringComparison.Ordinal);
+        Assert.DoesNotContain("owner != by.ActorId.ToString()", validate, StringComparison.Ordinal);
+        Assert.Contains("if (ownerId != by.ActorId)", validate, StringComparison.Ordinal);
+        Assert.Contains("isListingOwner = DealAcceptAuthorization.OwnerIdOf(deal) == uid || deal.CounterpartyId == uid;", DealPageSource(), StringComparison.Ordinal);
     }
 
-    /// <summary>صَفقَةٌ لَها طَرَفٌ مُقابِلٌ — وإن كانَ هُوَ مالِكَ الإعلانِ نَفسَه —
-    /// تُجابُ <c>deal_already_accepted</c> في <c>Offered</c>: فَرَبطُ البائِعِ عِندَ
-    /// الوِلادَةِ (الطَريقُ الأَوَّلُ في ‏ADR-033 §٢‑ج‑أ) يَستَلزِمُ قَلبَ هذا الصَفّ.</summary>
+    /// <summary><b>قُلِبَ</b> (‏ADR-033 §٦): كانَت صَفقَةٌ لَها طَرَفٌ مُقابِلٌ — وإن كانَ
+    /// هُوَ مالِكَ الإعلانِ نَفسَه — تُجابُ <c>deal_already_accepted</c> في <c>Offered</c>.
+    /// وصارَ البائِعُ يُربَطُ عِندَ الوِلادَة (الطَريقُ الأَوَّلُ في §٢‑ج‑أ) فَيَقبَلُ هُوَ،
+    /// ولا يَقبَلُ غَيرُه، ولا تُقبَلُ ثانِيَةً بَعدَ <c>Offered</c>.</summary>
     [Fact]
-    public void A_deal_whose_counterparty_is_already_the_listing_owner_cannot_be_accepted_by_them_today()
+    public void A_deal_whose_counterparty_is_already_the_listing_owner_is_now_accepted_by_them_and_by_nobody_else()
     {
         var bound = CashDeal(counterparty: Seller);
         Assert.Equal(DealStage.Offered, bound.Stage);
+        Assert.Null(DealAcceptAuthorization.Validate(bound, new DealAcceptor(Seller, "بائِع")));
+        Assert.Equal(DealAcceptAuthorization.ActorNotListingOwner,
+            DealAcceptAuthorization.Validate(bound, new DealAcceptor(Guid.NewGuid(), "غَريب"))!.Code);
         Assert.Equal(DealAcceptAuthorization.DealAlreadyAccepted,
-            DealAcceptAuthorization.Validate(bound, new DealAcceptor(Seller, "بائِع"))!.Code);
+            DealAcceptAuthorization.Validate(CashDeal(counterparty: Seller, stage: DealStage.Booked), new DealAcceptor(Seller, "بائِع"))!.Code);
     }
 
     // ═══ ٣) لا طَرَفَ عِندَ الوِلادَة، ولا إشعارَ في المَسارَين ═══════════════
 
-    /// <summary><c>/checkout/submit</c> يُلحِقُ <c>listing_owner</c> ولا يَربُطُ طَرَفاً
-    /// مُقابِلاً ولا يَكتُبُ إشعاراً ولا يُنادي الجَرَسَ ولا الدَفعَ الفَوريّ —
-    /// فَالبائِعُ لا يَعلَمُ أَنّ طَلَباً وَصَلَ إلّا إن فَتَحَ «صَفقات» بِنَفسِه
-    /// (موجَزُ الفَجَوات P1-5).</summary>
+    /// <summary><c>/checkout/submit</c> يُلحِقُ <c>listing_owner</c> <b>ويَربُطُ البائِعَ
+    /// طَرَفاً مِن الوِلادَة</b> (قُلِبَ شَطرُ الرَبطِ في ‏ADR-033 §٦ — كانَ صِفراً) —
+    /// ولا يَكتُبُ إشعاراً ولا يُنادي الجَرَسَ ولا الدَفعَ الفَوريّ بَعد: فَالبائِعُ لا
+    /// يَعلَمُ أَنّ طَلَباً وَصَلَ إلّا إن فَتَحَ «صَفقات» بِنَفسِه (موجَزُ الفَجَوات
+    /// P1-5) — يُقلَبُ في كوميتِه.</summary>
     [Fact]
-    public void Checkout_submit_attaches_the_owner_ref_but_binds_no_counterparty_and_notifies_nobody_today()
+    public void Checkout_submit_attaches_the_owner_ref_and_binds_him_but_notifies_nobody_today()
     {
         var submit = Endpoint("/{slug}/checkout/submit");
         Assert.Equal(1, Count(submit, "await deals.AttachRefAsync(slug, deal.Id, \"listing_owner\", oid);"));
-        Assert.Equal(0, Count(submit, "AssignCounterpartyAsync("));
+        Assert.Equal(1, Count(submit, "await deals.BindListingOwnerAsync(slug, deal.Id, oid);"));
+        Assert.Equal(0, Count(submit, "AssignCounterpartyAsync("));   // الرَبطُ في الخِدمَةِ لا في الجِسم
         Assert.Equal(0, Count(submit, "Notification"));
         Assert.Equal(0, Count(submit, "NudgeAsync("));
         Assert.Equal(0, Count(submit, "push."));
@@ -275,29 +309,38 @@ public class DealCashPathCharacterizationTests
 
     // ═══ ٤) صَفحَةُ الصَفقَةِ وأُنبوبُ المُحادَثَة ═══════════════════════════
 
-    /// <summary>«دَورُكَ الآن» والـstepper والمَرحَلَةُ التالِيَةُ تُشتَقُّ مِن
-    /// <c>(deal.Pattern, deal.Stage)</c> وَحدَهُما — فَالمُشتَري في صَفقَةِ نَقدٍ عِندَ
-    /// <c>Paid</c> يُقالُ لَه «دَورُكَ الآن … تَأكيد: شَحن» والبائِعُ «بانتِظار».</summary>
+    /// <summary><b>قُلِبَ شَطرُه</b> (‏ADR-033 §٦): كانَت «دَورُكَ الآن» والـstepper
+    /// والمَرحَلَةُ التالِيَةُ تُشتَقُّ مِن <c>(deal.Pattern, deal.Stage)</c> وَحدَهُما —
+    /// فَالمُشتَري في صَفقَةِ نَقدٍ عِندَ <c>Paid</c> يُقالُ لَه «دَورُكَ الآن … تَأكيد:
+    /// شَحن». وصارَت تُشتَقُّ مِن الصَفقَةِ نَفسِها (بِطَريقَةِ دَفعِها)، وشَرحُ التَدَفُّقِ
+    /// يَأخُذُ <c>PayMethod</c>. <b>وما لَم يُقلَب يُثَبَّتُ حَرفاً</b>: حالَةُ القَبولِ
+    /// الخاصَّة، وبَوّابَةُ <c>canAdvance</c>، والحِملُ القَديمُ لِـ<c>DealTurnView.For</c>
+    /// بِجَوابِه.</summary>
     [Fact]
-    public void The_deal_page_derives_turn_and_stepper_from_pattern_and_stage_alone_today()
+    public void The_deal_page_now_derives_turn_and_stepper_from_the_deal_itself_and_the_accept_case_is_unchanged()
     {
         var page = DealPageSource();
-        Assert.Contains("Services.Ux.DealTurnView.For(deal.Pattern, deal.Stage, mySide)", page, StringComparison.Ordinal);
-        Assert.Contains("stages = DealsPolicy.StagesFor(deal.Pattern).ToList();", page, StringComparison.Ordinal);
-        Assert.Contains("nextStage = DealsPolicy.Next(deal.Pattern, deal.Stage);", page, StringComparison.Ordinal);
+        Assert.Contains("Services.Ux.DealTurnView.For(deal, mySide)", page, StringComparison.Ordinal);
+        Assert.Contains("stages = DealsPolicy.StagesFor(deal).ToList();", page, StringComparison.Ordinal);
+        Assert.Contains("nextStage = DealsPolicy.Next(deal);", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("For(deal.Pattern, deal.Stage, mySide)", page, StringComparison.Ordinal);
         Assert.Contains("var acceptCase = deal.Stage == DealStage.Offered && isListingOwner && !isInitiator;", page, StringComparison.Ordinal);
         Assert.Contains("var mine = acceptCase || turn.IsMine;", page, StringComparison.Ordinal);
         var gate = Squash(page);
         Assert.Contains("\"initiator\" => isInitiator, \"counterparty\" => deal.CounterpartyId == uid, \"either\" => isInitiator || deal.CounterpartyId == uid,", gate, StringComparison.Ordinal);
 
+        // الحِملُ القَديمُ بِجَوابِه القَديم — فَلا مُستَهلِكٌ قَديمٌ تَغَيَّرَ تَحتَه.
         var buyerAtPaid  = DealTurnView.For("marketplace", DealStage.Paid, DealSide.Initiator);
         var sellerAtPaid = DealTurnView.For("marketplace", DealStage.Paid, DealSide.Counterparty);
         Assert.True(buyerAtPaid.IsMine);
         Assert.Equal(DealStage.Shipping, buyerAtPaid.NextStage);
         Assert.False(sellerAtPaid.IsMine);
+        // والصَفقَةُ النَقديَّةُ لا تَبلُغُ Paid أَصلاً — فَلا بِطاقَةَ تَقولُ ذلك لِمُشتَريها.
+        var cashAtConfirmed = DealTurnView.For(CashDeal(counterparty: Seller, stage: DealStage.Confirmed), DealSide.Counterparty);
+        Assert.Equal(DealStage.Shipping, cashAtConfirmed.NextStage);
 
-        Assert.Contains("var stages = DealsPolicy.StagesFor(Pattern).ToList();", FlowExplainerSource(), StringComparison.Ordinal);
-        Assert.DoesNotContain("PayMethod", FlowExplainerSource(), StringComparison.Ordinal);
+        Assert.Contains("var stages = DealsPolicy.StagesFor(Pattern, PayMethod).ToList();", FlowExplainerSource(), StringComparison.Ordinal);
+        Assert.Contains("PayMethod=\"@DealsPolicy.PayMethodOf(deal)\"", page, StringComparison.Ordinal);
     }
 
     /// <summary>لا سَطرَ يَرسُمُ <c>Attributes</c> (عُنوانُ التَوصيلِ وهاتِفُ المُشتَري

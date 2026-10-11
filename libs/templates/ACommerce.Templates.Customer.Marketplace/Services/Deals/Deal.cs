@@ -81,8 +81,19 @@ public enum DealStatus
 public sealed record DealEvent(
     DealStage StageBefore,
     DealStage StageAfter,
-    string Action,          // advanced | cancelled | disputed | assigned | note | refund
+    string Action,          // created | assigned | bound | advanced | captured | capture_failed | cash_on_delivery | cancelled | refunded | refund_failed | disputed | note
     Guid? ActorId,
     string? ActorName,
     string? Note,
-    DateTime At);
+    DateTime At)
+{
+    /// <summary>البائِعُ رُبِطَ طَرَفاً مُقابِلاً عِندَ وِلادَةِ صَفقَةِ السَلَّة — لا
+    /// قَبولاً (‏ADR-033 §٦). يُمَيَّزُ عَن <c>assigned</c> لِأَنّ الشاشَةَ تُسَمّي تِلكَ
+    /// «قُبِلَ العَرض»، وهذا لَم يُقبَل بَعد. الثابِتُ هُنا لِأَنّ الكاتِبَ
+    /// (<c>DealsService</c>) والقارِئَ (<c>MyDealDetail</c>) يَقرَآنِ نَفسَ الحَرف.</summary>
+    public const string BoundAtBirth = "bound";
+
+    /// <summary>بُلوغُ <c>Delivered</c> في صَفقَةِ نَقدٍ هُوَ لَحظَةُ القَبضِ عِندَ
+    /// البائِع (‏ADR-033 §٦) — والنَصُّ مِن القامُوسِ عِندَ العَرض، لا هُنا.</summary>
+    public const string CashOnDelivery = "cash_on_delivery";
+}

@@ -53,8 +53,16 @@ public static class DealTurnView
     /// المُحَرِّك.
     /// </summary>
     public static DealTurn For(string pattern, DealStage stage, DealSide side)
+        => For(pattern, stage, side, payMethod: null);
+
+    /// <summary>نَفسُها بِوَعيِ طَريقَةِ الدَفع (‏ADR-033 §٦): التالي مِن
+    /// <see cref="DealsPolicy.Next(string, DealStage, string?)"/>، فَلا تَعِدُ البِطاقَةُ
+    /// مُشتَريَ نَقدٍ بِـ«تَأكيد: دَفع» ولا تُجلِسُه عِندَ مَرحَلَةٍ لا تَزورُها
+    /// صَفقَتُه. والحِملُ الثُلاثِيُّ أَعلاه = <c>null</c> (الطَريقُ كامِلاً) فَلا
+    /// مُستَهلِكٌ قَديمٌ تَغَيَّرَ جَوابُه.</summary>
+    public static DealTurn For(string pattern, DealStage stage, DealSide side, string? payMethod)
     {
-        var next  = DealsPolicy.Next(pattern, stage);
+        var next  = DealsPolicy.Next(pattern, stage, payMethod);
         var actor = DealsPolicy.Actor(stage);
 
         var mine = next is not null && side switch
@@ -66,6 +74,11 @@ public static class DealTurnView
 
         return new DealTurn(mine, actor, next, next is null);
     }
+
+    /// <summary>مِن الصَفقَةِ نَفسِها — المَوضِعُ الَّذي تَقرَؤُه الشاشَة، فَالنَمَطُ
+    /// والمَرحَلَةُ وطَريقَةُ الدَفعِ مِن وَثيقَةٍ واحِدَة.</summary>
+    public static DealTurn For(Deal deal, DealSide side)
+        => For(deal.Pattern, deal.Stage, side, DealsPolicy.PayMethodOf(deal));
 
     // ─── تَسمِيات الفاعِلين — مَفاتيح لا جُمَل ───────────────────────
     //

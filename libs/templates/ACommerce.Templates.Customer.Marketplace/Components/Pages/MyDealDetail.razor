@@ -40,10 +40,14 @@
            سَيَرفُضُه المُحَرِّك. *@
         @if (deal.Status == DealStatus.Active)
         {
-            var turn = Services.Ux.DealTurnView.For(deal.Pattern, deal.Stage, mySide);
+            @* مِن الصَفقَةِ نَفسِها لا مِن (النَمَط، المَرحَلَة) وَحدَهُما: طَريقَةُ
+               الدَفعِ تُسقِطُ «دَفع» عَن النَقد (‏ADR-033 §٦)، فَلا يُقالُ لِمُشتَري
+               نَقدٍ «دَورُكَ الآن: تَأكيد: شَحن» عِندَ مَرحَلَةٍ لا تَزورُها صَفقَتُه. *@
+            var turn = Services.Ux.DealTurnView.For(deal, mySide);
             @* حالَة خاصَّة قائِمَة: عِندَ Offered يَقبَل مالِك الإعلان
-               العَرض بِزِرّ مُنفَصِل (يُعَيِّنُه طَرَفاً ثانِياً) — إجراء
-               حَقيقيّ مَطلوب مِنه رَغم أَنّ فاعِل المَرحَلَة هو المُبادِر. *@
+               العَرض بِزِرّ مُنفَصِل (يَصيرُ طَرَفاً ثانِياً إن لَم يُربَط عِندَ
+               الوِلادَة) — إجراء حَقيقيّ مَطلوب مِنه رَغم أَنّ فاعِل المَرحَلَة
+               هو المُبادِر. *@
             var acceptCase = deal.Stage == DealStage.Offered && isListingOwner && !isInitiator;
             var mine = acceptCase || turn.IsMine;
             <div class="acm-turn @(mine ? "is-mine" : "is-waiting")">
@@ -87,7 +91,7 @@
         @* شَرح التَدَفُّق كامِلاً — فَوق الـ stepper لا بَدَلاً مِنه:
            الـ stepper يَقول «أَينَ نَحنُ»، وهذا يَقول «ما الطَريق ومَن
            يُحَرِّك كُلّ خُطوَة». *@
-        <FlowExplainer Pattern="@deal.Pattern" Side="@mySide"
+        <FlowExplainer Pattern="@deal.Pattern" PayMethod="@DealsPolicy.PayMethodOf(deal)" Side="@mySide"
                        CurrentStage="@deal.Stage" />
 
         @* stepper *@
@@ -287,14 +291,21 @@
         // فَحص أَنّني طَرَف في الصَّفقَة.
         var ownerRef = deal.Refs.TryGetValue("listing_owner", out var lo) ? lo : null;
         isInitiator = deal.InitiatorId == uid;
-        isListingOwner = ownerRef == uid.ToString() || deal.CounterpartyId == uid;
+        // هُوِيَّةُ المالِكِ بِقيمَةِ المُعَرِّفِ لا بِحَرفِ النَصّ — الدالَّةُ نَفسُها
+        // الَّتي تَقرَؤُها نُقطَةُ `/accept` (`DealAcceptAuthorization.Validate`)، فَما
+        // تَرسُمُه الشاشَةُ هُوَ ما تَقبَلُه النُقطَة (‏ADR-033 §٦). وكانَت
+        // `ownerRef == uid.ToString()`.
+        isListingOwner = DealAcceptAuthorization.OwnerIdOf(deal) == uid || deal.CounterpartyId == uid;
         if (!isInitiator && !isListingOwner) { deal = null; return; }
         vendorId = Guid.TryParse(ownerRef, out var ownerGuid) ? ownerGuid : deal.CounterpartyId;
         if (vendorId == uid) vendorId = null;
 
         mySide = Services.Ux.DealTurnView.SideOf(uid, deal.InitiatorId, deal.CounterpartyId);
-        stages = DealsPolicy.StagesFor(deal.Pattern).ToList();
-        nextStage = DealsPolicy.Next(deal.Pattern, deal.Stage);
+        // مِن الصَفقَةِ نَفسِها: طَريقَةُ الدَفعِ تُسقِطُ «دَفع» عَن النَقدِ في
+        // الـstepper والمَرحَلَةِ التالِيَةِ مَعاً (‏ADR-033 §٦) — نَفسُ الدالَّةِ
+        // الَّتي يُحَرِّكُ بِها `DealsService.AdvanceAsync`.
+        stages = DealsPolicy.StagesFor(deal).ToList();
+        nextStage = DealsPolicy.Next(deal);
         // مَن يُحَرِّك المَرحَلَة الحاليَّة؟
         var required = DealsPolicy.Actor(deal.Stage);
         canAdvance = required switch
@@ -314,6 +325,8 @@
     {
         "created" => L["deals.detail.event_created"],
         "assigned" => L["deals.detail.event_assigned"],
+        DealEvent.BoundAtBirth => L["deals.detail.event_bound"],
+        DealEvent.CashOnDelivery => L["deals.detail.event_cash_on_delivery"],
         "advanced" => $"{DealsPolicy.LabelAr(e.StageBefore)} ← {DealsPolicy.LabelAr(e.StageAfter)}",
         "cancelled" => L["deals.detail.event_cancelled"],
         "disputed" => L["deals.detail.event_disputed"],

@@ -40,7 +40,9 @@ public static class DealApi
 {
     public static DealDto ToDto(Deal d)
     {
-        var next = DealsPolicy.Next(d.Pattern, d.Stage);
+        // بِوَعيِ طَريقَةِ الدَفع (‏ADR-033 §٦) — نَفسُ الدالَّةِ الَّتي تَقرَؤُها
+        // الخِدمَةُ والشاشَة، فَلا يَعِدُ العَقدُ بِمَرحَلَةٍ سَيَرفُضُها المُحَرِّك.
+        var next = DealsPolicy.Next(d);
         return new DealDto(
             d.Id, d.Pattern, d.Stage.ToString(), DealsPolicy.LabelAr(d.Stage), d.Status.ToString(),
             d.InitiatorId, d.CounterpartyId, d.ListingId, d.ListingTitle, d.AmountSar,
@@ -77,7 +79,7 @@ public static class DealApi
     public static string AdvanceRejectionCode(Deal deal)
     {
         if (deal.Status != DealStatus.Active) return ApiErrorCatalog.DealNotActive;
-        if (DealsPolicy.Next(deal.Pattern, deal.Stage) is null) return ApiErrorCatalog.DealFinalStage;
+        if (DealsPolicy.Next(deal) is null) return ApiErrorCatalog.DealFinalStage;
         return ApiErrorCatalog.ActorNotAllowed;
     }
 

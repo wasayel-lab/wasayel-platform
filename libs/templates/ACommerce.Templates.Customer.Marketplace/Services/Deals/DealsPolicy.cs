@@ -38,4 +38,63 @@ public static class DealsPolicy
     /// <summary>تَسمِيَة المَرحَلَة — تُعرَض في الواجِهات.</summary>
     public static string LabelAr(DealStage s)
         => DealPatternCatalog.LabelFor(s);
+
+    // ═══ طَريقَةُ الدَفعِ تُسقِطُ مَرحَلَةً — قاعِدَةُ كودٍ خَلفَ مِفتاح ═══════════
+    //
+    // ‏ADR-033 §٦ (‏2026-10-11): صَفقَةُ النَقدِ عِندَ الاستِلامِ لا تَمُرُّ
+    // بِـ`Paid` قَبلَ الشَحن — «مَدفوعَة» قَبلَ التَسليمِ وَصفٌ لا يَصدُقُ عَلَيها،
+    // والمُشتَري كانَ يَرى «دَورُكَ الآن: تَأكيد: شَحن» وهُوَ لا يَشحَن، والبائِعُ
+    // لا يَستَطيعُ نَقلَها إلى الشَحنِ بِنَفسِه (موجَزُ الفَجَوات P1-3).
+    //
+    // **ولِماذا كودٌ هُنا لا صَفٌّ في الكاتالوج** (‏CLAUDE.md القاعِدَتان ٤ و٥):
+    // النَمَطُ بَياناتٌ (مَراحِلُ وفاعِلون) ويَبقى كَما هُو — الجَدوَلُ الذَهَبِيُّ في
+    // `DealsPolicyCharacterizationTests` لَم يُمَسَّ حَرفاً، و`Next(pattern, stage)`
+    // تُجيبُ كَما كانَت. أَمّا «أَيُّ مَرحَلَةٍ تُسقَط» فَحِسابٌ عَلى **حالَةِ وَقتِ
+    // التَشغيل** (ما اختارَهُ المُشتَري عِندَ الباب) لا اختِيارٌ مِن مَجموعَةٍ
+    // مُنتَهِيَةٍ في التَعريف، فَيَبقى كوداً خَلفَ مِفتاحٍ واحِد:
+    // `CheckoutPayMethods.CashOnDelivery`. والدَوالُّ نَقِيَّةٌ تَقرَؤُها الخِدمَةُ
+    // والشاشَةُ والـAPI مِن مَوضِعٍ واحِد — فَلا تَعِدُ الواجِهَةُ بِمَرحَلَةٍ
+    // سَيَرفُضُها المُحَرِّك (القاعِدَة ١٢).
+    //
+    // **وما لا يَتَغَيَّر**: صَفقَةٌ بِلا `pay_method` (عَرضٌ عَلى إعلان، أَو بَذرَةُ
+    // الاستوديو) أَو بِطاقَةٌ تَمشي الطَريقَ كامِلاً كَما كانَت.
+
+    /// <summary>طَريقَةُ الدَفعِ المَكتوبَةُ عَلى الصَفقَة، أَو <c>null</c> حَيثُ لَم
+    /// تُكتَب — <b>ولا يُطَبَّعُ الغِيابُ نَقداً</b> هُنا: الغِيابُ يَعني «الطَريقَ
+    /// كامِلاً»، بِخِلافِ <c>CheckoutPaymentPolicy.Normalize</c> الَّتي تُجيبُ سُؤالَ
+    /// القَبضِ عِندَ الباب.</summary>
+    public static string? PayMethodOf(Deal deal)
+        => deal.Attributes.TryGetValue(CheckoutPayMethods.AttributeKey, out var m) ? m : null;
+
+    /// <summary>نَقدٌ عِندَ الاستِلام — بِحَرفِ المَعجَم (Ordinal).</summary>
+    public static bool IsCashOnDelivery(string? payMethod)
+        => string.Equals(payMethod, CheckoutPayMethods.CashOnDelivery, StringComparison.Ordinal);
+
+    public static bool IsCashOnDelivery(Deal deal) => IsCashOnDelivery(PayMethodOf(deal));
+
+    /// <summary><b>القاعِدَةُ الواحِدَة</b>: <c>Paid</c> تُسقَطُ عَن النَقد — ولا
+    /// مَرحَلَةَ أُخرى ولا طَريقَةَ أُخرى.</summary>
+    public static bool Skips(DealStage stage, string? payMethod)
+        => stage == DealStage.Paid && IsCashOnDelivery(payMethod);
+
+    /// <summary>مَراحِلُ النَمَطِ بَعدَ إسقاطِ ما تُسقِطُه طَريقَةُ الدَفع — لِلـstepper
+    /// وشَرحِ التَدَفُّق، فَلا تُرسَمُ خُطوَةٌ لَن تُزار.</summary>
+    public static IReadOnlyList<DealStage> StagesFor(string pattern, string? payMethod)
+        => StagesFor(pattern).Where(s => !Skips(s, payMethod)).ToArray();
+
+    /// <summary>المَرحَلَةُ التالِيَةُ بِوَعيِ طَريقَةِ الدَفع — تَتَخَطّى المُسقَطَةَ
+    /// إلى ما بَعدَها. ومَرحَلَةٌ مُسقَطَةٌ بَلَغَتها صَفقَةٌ قَديمَةٌ قَبلَ هذا
+    /// القَرارِ تَمضي مِنها إلى تاليها كَالمُعتاد — لا تُحبَس.</summary>
+    public static DealStage? Next(string pattern, DealStage current, string? payMethod)
+    {
+        var next = Next(pattern, current);
+        while (next is { } n && Skips(n, payMethod)) next = Next(pattern, n);
+        return next;
+    }
+
+    /// <summary>مِن الصَفقَةِ نَفسِها — المَوضِعُ الَّذي تَقرَؤُه الخِدمَةُ والشاشَة.</summary>
+    public static IReadOnlyList<DealStage> StagesFor(Deal deal) => StagesFor(deal.Pattern, PayMethodOf(deal));
+
+    /// <summary>مِن الصَفقَةِ نَفسِها — المَوضِعُ الَّذي تَقرَؤُه الخِدمَةُ والشاشَة.</summary>
+    public static DealStage? Next(Deal deal) => Next(deal.Pattern, deal.Stage, PayMethodOf(deal));
 }

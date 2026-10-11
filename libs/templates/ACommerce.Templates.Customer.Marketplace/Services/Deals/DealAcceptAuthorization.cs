@@ -63,8 +63,8 @@ public static class DealAcceptAuthorization
     public const string DealNotFound = "deal_not_found";
 
     /// <summary>الصَفقَةُ لا تَحمِلُ مَرجِعَ مالِكِ إعلانٍ أَصلاً (أَو تَحمِلُه
-    /// فَراغاً) — فَلا أَحَدَ يَملِكُ قَبولَها مِن هُنا؛ مَسارُها الإداريُّ
-    /// وَحدَه.</summary>
+    /// فَراغاً أَو بِغَيرِ صيغَةِ مُعَرِّف) — فَلا أَحَدَ يَملِكُ قَبولَها مِن هُنا؛
+    /// مَسارُها الإداريُّ وَحدَه.</summary>
     public const string ListingOwnerMissing = "listing_owner_missing";
 
     /// <summary>الصَفقَةُ تَحمِلُ مَرجِعَ مالِكِ إعلانٍ، والفاعِلُ لَيسَ
@@ -78,8 +78,9 @@ public static class DealAcceptAuthorization
     /// <summary>الصَفقَةُ خَرَجَت مِن <c>Active</c> — لا شَيءَ يُقبَل.</summary>
     public const string DealNotActive = "deal_not_active";
 
-    /// <summary>لِلصَفقَةِ طَرَفٌ مُقابِلٌ أَصلاً — القَبولُ وَقَعَ مَرَّةً، ولا
-    /// يَقَعُ ثانِيَة.</summary>
+    /// <summary>القَبولُ وَقَعَ مَرَّةً ولا يَقَعُ ثانِيَة: الصَفقَةُ تَجاوَزَت
+    /// <c>Offered</c>، أَو لَها طَرَفٌ مُقابِلٌ غَيرُ القابِل. (كانَ المِعيارُ «لَها
+    /// طَرَفٌ» وَحدَه — قَبلَ أَن يُربَطَ البائِعُ عِندَ الوِلادَة، ‏ADR-033 §٦.)</summary>
     public const string DealAlreadyAccepted = "deal_already_accepted";
 
     /// <summary>المَعجَمُ المُغلَق — سِتَّةٌ لا سابِعَ لَها. (خَمسَةٌ في
@@ -102,21 +103,36 @@ public static class DealAcceptAuthorization
         return code;
     }
 
+    /// <summary>
+    /// <para><b>هُوِيَّةُ مالِكِ الإعلانِ عَلى الصَفقَةِ بِقيمَةِ <c>Guid</c></b> — أَو
+    /// <c>null</c> حَيثُ لا مَرجِعَ، أَو مَرجِعٌ لَيسَ مُعَرِّفاً. كانَت المُقارَنَةُ
+    /// نَصّاً (<c>owner != by.ActorId.ToString()</c>) فَصيغَةُ <c>N</c> أَو الأَحرُفُ
+    /// الكَبيرَةُ لِنَفسِ المُعَرِّفِ «لَيسَت المالِك» (مُراجَعَةُ ‏2026-10-11؛ ‏ADR-033
+    /// §٦) وصارَت بِالقيمَة. <b>والشاشَةُ تَقرَأُ هذِه الدالَّةَ نَفسَها</b>
+    /// (<c>MyDealDetail.isListingOwner</c>) و<c>DealsService.IsIncomingOfferFor</c>
+    /// كَذلك — فَلا يَفتَرِقُ ما يُرسَمُ عَمّا يُقبَل: حَقيقَةٌ واحِدَةٌ لِلشاشَةِ
+    /// والنُقطَةِ والقائِمَة.</para>
+    /// </summary>
+    public static Guid? OwnerIdOf(Deal deal)
+        => deal.Refs.TryGetValue(DealsService.ListingOwnerRef, out var owner) && Guid.TryParse(owner, out var id)
+            ? id : null;
+
     /// <summary><c>null</c> يَعني مُخَوَّل. والتَرتيبُ مَقصود: الغِياب، ثُمَّ
-    /// التَخويل (مَرجِعُ المالِكِ مَوجود، ثُمَّ هُوَ الفاعِل، ثُمَّ لَيسَ
+    /// التَخويل (مَرجِعُ المالِكِ مَوجودٌ ومُعَرِّفٌ، ثُمَّ هُوَ الفاعِل، ثُمَّ لَيسَ
     /// المُبادِر)، ثُمَّ الحالَة (فَعّالَة، ثُمَّ غَيرُ مَقبولَةٍ بَعد). ومَرجِعٌ
-    /// فارِغٌ كَغِيابِه — لا يُقرَأُ فَراغٌ مالِكاً.</summary>
+    /// فارِغٌ أَو لَيسَ مُعَرِّفاً كَغِيابِه — لا يُقرَأُ فَراغٌ مالِكاً.</summary>
     public static DealAcceptViolation? Validate(Deal? deal, DealAcceptor by)
     {
         if (deal is null)
             return new(DealNotFound, "لا صَفقَةَ بِهذا المُعَرِّف.");
 
-        if (!deal.Refs.TryGetValue(DealsService.ListingOwnerRef, out var owner) || string.IsNullOrWhiteSpace(owner))
+        var ownerId = OwnerIdOf(deal);
+        if (ownerId is null)
             return new(ListingOwnerMissing,
-                "الصَفقَةُ لا تَحمِلُ مَرجِعَ مالِكِ إعلان — فَلا أَحَدَ يَملِكُ قَبولَها مِن هُنا؛ " +
-                "تُحَرَّكُ مِن المَسارِ الإداريِّ لِمالِكِ التَطبيقِ وَحدَه.");
+                "الصَفقَةُ لا تَحمِلُ مَرجِعَ مالِكِ إعلان (أَو تَحمِلُه بِغَيرِ صيغَةِ مُعَرِّف) — " +
+                "فَلا أَحَدَ يَملِكُ قَبولَها مِن هُنا؛ تُحَرَّكُ مِن المَسارِ الإداريِّ لِمالِكِ التَطبيقِ وَحدَه.");
 
-        if (owner != by.ActorId.ToString())
+        if (ownerId != by.ActorId)
             return new(ActorNotListingOwner,
                 "الفاعِلُ لَيسَ مالِكَ الإعلانِ الَّذي عُرِضَ عَلَيه — ومَن يَقبَلُ العَرضَ " +
                 "يَصيرُ الطَرَفَ الَّذي يُؤَكِّدُ ويَشحَنُ ويُدفَعُ لَه، فَلا يَملِكُه غَيرُ المالِك.");
@@ -129,9 +145,16 @@ public static class DealAcceptAuthorization
             return new(DealNotActive,
                 $"الصَفقَةُ في حالَة {deal.Status} — لا شَيءَ يُقبَل.");
 
-        if (deal.CounterpartyId is not null)
+        // «قُبِلَت أَصلاً» — بِمِعيارَينِ لا واحِد (‏ADR-033 §٦، ‏2026-10-11): الصَفقَةُ
+        // تَجاوَزَت `Offered` (فَالقَبولُ هُوَ ما يُخرِجُها مِنها، ولا يَقَعُ ثانِيَة)،
+        // أَو طَرَفُها المُقابِلُ غَيرُ القابِلِ (المَسارُ الإداريُّ عَيَّنَ مالِكَ
+        // التَطبيق). أَمّا صَفقَةُ السَلَّةِ المَربوطَةُ بِمالِكِ إعلانِها عِندَ الوِلادَةِ
+        // فَطَرَفُها هُوَ القابِلُ نَفسُه وهي في `Offered` — فَتَمُرُّ لِيَقبَلَها. وكانَ
+        // المِعيارُ «لَها طَرَفٌ» وَحدَه، يَومَ كانَ الطَرَفُ لا يُكتَبُ إلّا بِالقَبول.
+        if (deal.Stage != DealStage.Offered || (deal.CounterpartyId is { } other && other != by.ActorId))
             return new(DealAlreadyAccepted,
-                "لِلصَفقَةِ طَرَفٌ مُقابِلٌ أَصلاً — القَبولُ وَقَعَ مَرَّةً ولا يَقَعُ ثانِيَة.");
+                "القَبولُ وَقَعَ مَرَّةً ولا يَقَعُ ثانِيَة — الصَفقَةُ تَجاوَزَت مَرحَلَةَ العَرضِ، " +
+                "أَو لَها طَرَفٌ مُقابِلٌ غَيرُك.");
 
         return null;
     }

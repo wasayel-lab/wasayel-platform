@@ -123,6 +123,32 @@ public class DealAcceptAuthorizationTests
         Assert.Equal(DealAcceptAuthorization.ActorNotListingOwner, v.Code);
     }
 
+    /// <summary><b>المَرجِعُ يُقارَنُ بِقيمَةِ المُعَرِّفِ لا بِحَرفِ النَصّ</b>
+    /// (مُراجَعَةُ ‏2026-10-11؛ ‏ADR-033 §٦): كانَ <c>owner != by.ActorId.ToString()</c>
+    /// فَكاتِبٌ يَكتُبُ <c>N</c> أَو أَحرُفاً كَبيرَةً يَجعَلُ المالِكَ غَريباً. والمَرجِعُ
+    /// الَّذي لَيسَ مُعَرِّفاً أَصلاً كَغِيابِه.</summary>
+    [Theory]
+    [InlineData("N")]
+    [InlineData("B")]
+    [InlineData("UPPER")]
+    public void The_owner_ref_in_another_guid_format_is_still_the_owner(string format)
+    {
+        var d = Incoming();
+        d.Refs[DealsService.ListingOwnerRef] = format == "UPPER" ? Owner.ToString("D").ToUpperInvariant() : Owner.ToString(format);
+        Assert.Null(DealAcceptAuthorization.Validate(d, By(Owner)));
+        Assert.Equal(DealAcceptAuthorization.ActorNotListingOwner, DealAcceptAuthorization.Validate(d, By(Stranger))!.Code);
+        Assert.Equal(Owner, DealAcceptAuthorization.OwnerIdOf(d));
+    }
+
+    [Fact]
+    public void An_owner_ref_that_is_not_a_guid_counts_as_missing()
+    {
+        var d = Incoming();
+        d.Refs[DealsService.ListingOwnerRef] = "not-a-guid";
+        Assert.Null(DealAcceptAuthorization.OwnerIdOf(d));
+        Assert.Equal(DealAcceptAuthorization.ListingOwnerMissing, DealAcceptAuthorization.Validate(d, By(Owner))!.Code);
+    }
+
     // ─── سالِب — الثَغرَةُ نَفسُها، ورَمزٌ لِكُلِّ مِحوَر ─────────────────
 
     /// <summary><b>هذا هُوَ الاختِبارُ الَّذي كانَ سَيَحمَرُّ قَبلَ هذا
@@ -164,13 +190,31 @@ public class DealAcceptAuthorizationTests
 
     /// <summary>قَبولٌ ثانٍ — نَقرَةٌ مُكَرَّرَةٌ أَو مُتَسابِقَة — يُرَدُّ بِرَمزٍ لا
     /// يُبتلَعُ صامِتاً كَما كانَ (<c>AssignCounterpartyAsync</c> تُرجِعُ الصَفقَةَ
-    /// بِلا تَغييرٍ ثُمَّ يُحاوَلُ التَقَدُّمُ بِفاعِلٍ خاطِئ).</summary>
+    /// بِلا تَغييرٍ ثُمَّ يُحاوَلُ التَقَدُّمُ بِفاعِلٍ خاطِئ).
+    ///
+    /// <para><b>قُلِبَ مِعيارُه بِقَرارٍ مَرئِيّ</b> (‏ADR-033 §٦، ‏2026-10-11): كانَ
+    /// «لَها طَرَفٌ» وَحدَه — يَومَ كانَ الطَرَفُ لا يُكتَبُ إلّا بِالقَبول. وصارَ البائِعُ
+    /// يُربَطُ طَرَفاً عِندَ وِلادَةِ صَفقَةِ السَلَّة، فَـ«قُبِلَت أَصلاً» صارَ: تَجاوَزَت
+    /// <c>Offered</c>، أَو طَرَفُها غَيرُ القابِل. والمالِكُ المَربوطُ في <c>Offered</c>
+    /// يَمُرّ.</para></summary>
     [Fact]
-    public void A_deal_that_already_has_a_counterparty_answers_deal_already_accepted()
+    public void A_deal_that_left_Offered_or_is_held_by_another_party_answers_deal_already_accepted()
     {
+        // القَبولُ وَقَعَ: الصَفقَةُ في Booked وطَرَفُها المالِك.
         var accepted = Incoming();
         accepted.CounterpartyId = Owner;
+        accepted.Stage = DealStage.Booked;
         Assert.Equal(DealAcceptAuthorization.DealAlreadyAccepted, DealAcceptAuthorization.Validate(accepted, By(Owner))!.Code);
+
+        // طَرَفُها غَيرُ القابِل — المَسارُ الإداريُّ عَيَّنَ مالِكَ التَطبيق.
+        var takenByAdmin = Incoming();
+        takenByAdmin.CounterpartyId = Stranger;
+        Assert.Equal(DealAcceptAuthorization.DealAlreadyAccepted, DealAcceptAuthorization.Validate(takenByAdmin, By(Owner))!.Code);
+
+        // والمُوجِبُ المُقابِل: مَربوطَةٌ بِالمالِكِ عِندَ الوِلادَةِ وما زالَت في Offered — يَقبَلُها.
+        var bound = Incoming();
+        bound.CounterpartyId = Owner;
+        Assert.Null(DealAcceptAuthorization.Validate(bound, By(Owner)));
     }
 
     // ─── التَرتيب — القاعِدَة ٦: التَخويلُ يَسبِقُ فَحصَ الحالَة ────────
@@ -203,7 +247,9 @@ public class DealAcceptAuthorizationTests
     [Fact]
     public void Every_violation_carries_an_arabic_message_that_says_why()
     {
-        var accepted = Incoming(); accepted.CounterpartyId = Owner;
+        // مَقبولَةٌ أَصلاً: تَجاوَزَت Offered وطَرَفُها المالِك. (كانَت «لَها طَرَفٌ» في
+        // Offered تَكفي — وصارَ ذلك حالَ البائِعِ المَربوطِ عِندَ الوِلادَة، ‏ADR-033 §٦.)
+        var accepted = Incoming(); accepted.CounterpartyId = Owner; accepted.Stage = DealStage.Booked;
         // المُبادِرُ يَقبَلُ عَرضَه عَلى إعلانِه هُوَ (المَرجِعُ يُشيرُ إلَيه) —
         // فَيَمُرُّ فَحصا المَرجِعِ والمالِكِ ويَقِفُ عِندَ «أَنتَ المُبادِر».
         var self = Incoming();

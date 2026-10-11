@@ -90,7 +90,8 @@ public class DealCounterpartyCharacterizationTests
 
     // أَجسامُ دَوالِّ الخِدمَة — كُلٌّ مِن تَوقيعِه إلى تَوقيعِ التالي.
     private static string StartBody()   => Segment(DealsServiceSource(), "public async Task<Deal> StartAsync(",               "public async Task<Deal?> AssignCounterpartyAsync(");
-    private static string AssignBody()  => Segment(DealsServiceSource(), "public async Task<Deal?> AssignCounterpartyAsync(", "public async Task<DealAcceptResult> AcceptAsync(");
+    // (كانَ طَرَفُها `AcceptAsync`؛ وصارَ `BindListingOwnerAsync` حينَ وُلِدَت بَينَهُما — ‏ADR-033 §٦.)
+    private static string AssignBody()  => Segment(DealsServiceSource(), "public async Task<Deal?> AssignCounterpartyAsync(", "public async Task<Deal?> BindListingOwnerAsync(");
     private static string AcceptBody()  => Segment(DealsServiceSource(), "public async Task<DealAcceptResult> AcceptAsync(",  "public async Task<DealAdvanceResult> AdvanceAsync(");
     private static string AdvanceBody() => Segment(DealsServiceSource(), "public async Task<DealAdvanceResult> AdvanceAsync(", "public async Task<DealCancelResult> CancelAsync(");
     private static string AttachBody()  => Segment(DealsServiceSource(), "public async Task<Deal?> AttachRefAsync(",          "public async Task<Deal?> LoadAsync(");
@@ -260,9 +261,16 @@ public class DealCounterpartyCharacterizationTests
 
     /// <summary><c>AssignCounterpartyAsync</c> تُرجِعُ الصَفقَةَ <b>بِلا تَغيير</b> إن
     /// كانَ لَها طَرَفٌ أَو خَرَجَت مِن <c>Active</c> — الحارِسانِ قَبلَ الكِتابَة —
-    /// وتُلحِقُ سَطرَ <c>assigned</c> مَنسوباً إلى الطَرَفِ المُعَيَّن. ولا تَسأَلُ
+    /// وتُلحِقُ سَطراً مَنسوباً إلى الطَرَفِ المُعَيَّن. ولا تَسأَلُ
     /// المَرجِعَ: <b>مَن يُنادِيها هُوَ مَن يُقَرِّرُ مَن الطَرَف</b> — ولِذلِك
-    /// اختَلَفَ المَسارانِ أَدناه.</summary>
+    /// اختَلَفَت المَساراتُ أَدناه.
+    ///
+    /// <para><b>قُلِبَ حَرفٌ واحِدٌ هُنا بِقَرارٍ مَرئِيّ</b> (‏ADR-033 §٦، ‏2026-10-11): اسمُ
+    /// السَطرِ كانَ <c>"assigned"</c> حَرفِيّاً وصارَ وَسيطاً <c>action</c> افتِراضِيُّه
+    /// <c>"assigned"</c> — لِأَنّ رَبطَ البائِعِ عِندَ وِلادَةِ صَفقَةِ السَلَّةِ يَمُرُّ مِن
+    /// هذِه الدالَّةِ نَفسِها (لا حَولَها) ويَكتُبُ <c>bound</c>، والشاشَةُ تُسَمّي
+    /// <c>assigned</c> «قُبِلَ العَرض» وهُوَ لَم يُقبَل. وبَعدَ <c>ct</c> عَمداً كَي تَبقى
+    /// نِداءاتُ القَبولِ والمَسارِ الإداريِّ المُثَبَّتَةُ أَدناه بِحَرفِها.</para></summary>
     [Fact]
     public void AssignCounterpartyAsync_is_a_no_op_once_a_counterparty_is_set_or_the_deal_left_Active()
     {
@@ -272,20 +280,27 @@ public class DealCounterpartyCharacterizationTests
         var write    = assign.IndexOf("deal.CounterpartyId = counterpartyId;", StringComparison.Ordinal);
         Assert.True(inactive > 0 && taken > inactive && write > taken,
             $"حارِسا التَعيينِ لا يَسبِقانِ الكِتابَة: inactive={inactive} taken={taken} write={write}");
-        Assert.Contains("deal.Timeline.Add(new(deal.Stage, deal.Stage, \"assigned\",", assign, StringComparison.Ordinal);
+        Assert.Contains("CancellationToken ct = default, string action = \"assigned\")", assign, StringComparison.Ordinal);
+        Assert.Contains("deal.Timeline.Add(new(deal.Stage, deal.Stage, action,", assign, StringComparison.Ordinal);
         Assert.Contains("counterpartyId, counterpartyName, null, DateTime.UtcNow));", assign, StringComparison.Ordinal);
         Assert.DoesNotContain("listing_owner", assign, StringComparison.Ordinal);
         Assert.DoesNotContain("ListingOwnerRef", assign, StringComparison.Ordinal);
     }
 
-    /// <summary><b>مَساران لا ثالِث</b> يُعَيِّنانِ طَرَفاً في وَقتِ التَشغيل —
+    /// <summary><b>ثَلاثَةُ مَساراتٍ لا رابِع</b> تُعَيِّنُ طَرَفاً في وَقتِ التَشغيل —
     /// بِالعَدِّ عَلى كُلِّ <c>.cs</c>/<c>.razor</c> تَحتَ <c>libs/</c> و<c>apps/</c>
-    /// خارِجَ التَعليقات، والعَدّادُ يُطبَعُ فَلا يُقالُ «اثنان» بِلا عَدّ (القاعِدَة
-    /// ١٠): نِداءٌ في <c>AcceptAsync</c> ونِداءٌ في المَسارِ الإداريّ، والتَعريفُ
-    /// نَفسُه. فَإن وُلِدَ ثالِثٌ (كَتَعيينِ مالِكِ الإعلانِ عِندَ إنشاءِ صَفقَةِ
-    /// السَلَّة — الطَريقُ الأَوَّلُ في الخُطوَة 3) أَحمَرَّ هذا الصَفُّ بِقَرارٍ مَرئِيّ.</summary>
+    /// خارِجَ التَعليقات، والعَدّادُ يُطبَعُ فَلا يُقالُ «ثَلاثَة» بِلا عَدّ (القاعِدَة
+    /// ١٠): نِداءٌ في <c>AcceptAsync</c>، ونِداءٌ في <c>BindListingOwnerAsync</c>
+    /// (رَبطُ مالِكِ الإعلانِ عِندَ وِلادَةِ صَفقَةِ السَلَّة)، ونِداءٌ في المَسارِ
+    /// الإداريّ، والتَعريفُ نَفسُه.
+    ///
+    /// <para><b>أَحمَرَّ هذا الصَفُّ كَما وَعَد، وقُلِبَ بِقَرارٍ مَرئِيّ</b> (‏ADR-033 §٦،
+    /// ‏2026-10-11): كانَ «مَسارانِ لا ثالِث» ونَصَّ عَلى أَنّ الثالِثَ المُتَوَقَّعَ هُوَ
+    /// «تَعيينُ مالِكِ الإعلانِ عِندَ إنشاءِ صَفقَةِ السَلَّة — الطَريقُ الأَوَّلُ في
+    /// الخُطوَة 3» — وهُوَ ما اختيرَ. فَصارَ ثَلاثَةً، والمَسارُ الثالِثُ في الخِدمَةِ
+    /// لا في جِسمِ النُقطَة.</para></summary>
     [Fact]
-    public void Exactly_two_runtime_paths_assign_a_counterparty_and_both_are_named_here()
+    public void Exactly_three_runtime_paths_assign_a_counterparty_and_all_are_named_here()
     {
         var scanned = 0;
         var hits = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -305,9 +320,9 @@ public class DealCounterpartyCharacterizationTests
         const string service   = "libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Deals/DealsService.cs";
         const string endpoints = "libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs";
         Assert.Equal(new[] { endpoints, service }, hits.Keys.OrderBy(k => k, StringComparer.Ordinal).ToArray());
-        Assert.Equal(2, hits[service]);     // التَعريفُ + نِداءُ AcceptAsync
-        Assert.Equal(1, hits[endpoints]);   // المَسارُ الإداريُّ وَحدَه — نُقطَةُ /accept لا تُعَيِّنُ بِنَفسِها
-        Assert.Equal(3, hits.Values.Sum());
+        Assert.Equal(3, hits[service]);     // التَعريفُ + نِداءُ AcceptAsync + نِداءُ BindListingOwnerAsync (رَبطُ البائِعِ عِندَ الوِلادَة)
+        Assert.Equal(1, hits[endpoints]);   // المَسارُ الإداريُّ وَحدَه — نُقطَتا /accept و/checkout/submit لا تُعَيِّنانِ بِنَفسَيهِما
+        Assert.Equal(4, hits.Values.Sum());
     }
 
     /// <summary><b>مَسارُ <c>/accept</c>: الطَرَفُ هُوَ القابِل، والقابِلُ لا يَكونُ
@@ -356,38 +371,40 @@ public class DealCounterpartyCharacterizationTests
 
     // ═══ ٣) ما بَعدَ التَخويلِ في `AcceptAsync` — السَلسَلَةُ بِحَرفِها ═══════
 
-    /// <summary><b>السَلسَلَةُ المَنقولَةُ مِن جِسمِ النُقطَةِ في ‏2d8cf5f، بِحَرفِها</b>:
-    /// تَحميلٌ، ثُمَّ <c>Validate</c>، ثُمَّ رَفضٌ بِرَمزٍ إن خُرِق، ثُمَّ تَعيينُ
-    /// القابِلِ طَرَفاً، ثُمَّ <c>AdvanceAsync</c> <b>بِفاعِلٍ هُوَ المُبادِر</b>
-    /// (<c>deal.InitiatorId</c>) <b>بِاسمِ القابِل</b> (<c>by.ActorName</c>)
-    /// ومُلاحَظَةِ «قُبِلَ العَرض»، ثُمَّ إرجاعُ الصَفقَةِ المُتَقَدِّمَة. نِداءٌ
-    /// واحِدٌ لِكُلٍّ، ولا يُمَرَّرُ <c>by.ActorId</c> فاعِلاً قَطّ.</summary>
+    /// <summary><b>السَلسَلَةُ — قُلِبَ شَطرُها الأَخيرُ بِقَرارٍ مَرئِيّ</b> (‏ADR-033 §٦،
+    /// ‏2026-10-11): كانَت كَما نُقِلَت مِن جِسمِ النُقطَةِ في ‏2d8cf5f — تَحميلٌ، ثُمَّ
+    /// <c>Validate</c>، ثُمَّ رَفضٌ بِرَمز، ثُمَّ تَعيينُ القابِلِ طَرَفاً، ثُمَّ
+    /// <c>AdvanceAsync</c> <b>بِفاعِلٍ هُوَ المُبادِر</b> بِاسمِ القابِل، ثُمَّ
+    /// <c>Accepted</c> بِلا قِراءَةِ النَتيجَة. وصارَ ما بَعدَ التَعيين: تَحميلٌ في
+    /// جَلسَةِ كِتابَة، ثُمَّ <c>Next(deal)</c>، ثُمَّ <c>MoveAsync</c> <b>بِفاعِلٍ هُوَ
+    /// القابِل</b> (<c>by.ActorId</c>) ومُلاحَظَةِ «قُبِلَ العَرض»، و<c>Accepted</c> بَعدَ
+    /// الحَفظ. ولا نِداءَ لِـ<c>AdvanceAsync</c> ولا لِـ<c>deal.InitiatorId</c> بَعدَ اليَوم.</summary>
     [Fact]
-    public void AcceptAsync_validates_then_assigns_the_acceptor_then_advances_as_the_initiator_in_the_acceptors_name()
+    public void AcceptAsync_validates_then_assigns_the_acceptor_then_moves_as_the_acceptor_through_MoveAsync()
     {
         var accept = AcceptBody();
         var load     = accept.IndexOf("var loaded = await LoadAsync(tenantSlug, dealId, ct);", StringComparison.Ordinal);
         var validate = accept.IndexOf("var violation = DealAcceptAuthorization.Validate(loaded, by);", StringComparison.Ordinal);
         var refuse   = accept.IndexOf("if (violation is not null) return DealAcceptResult.Refused(violation, loaded);", StringComparison.Ordinal);
         var assign   = accept.IndexOf("await AssignCounterpartyAsync(tenantSlug, dealId, by.ActorId, by.ActorName, ct);", StringComparison.Ordinal);
-        var advance  = accept.IndexOf("var advanced = await AdvanceAsync(tenantSlug, dealId, deal.InitiatorId, by.ActorName, \"قُبِلَ العَرض\", ct);", StringComparison.Ordinal);
-        var ret      = accept.IndexOf("return DealAcceptResult.Accepted(advanced.Deal ?? deal);", StringComparison.Ordinal);
-        Assert.True(load > 0 && validate > load && refuse > validate && assign > refuse && advance > assign && ret > advance,
-            $"سَلسَلَةُ القَبولِ تَغَيَّرَت: load={load} validate={validate} refuse={refuse} assign={assign} advance={advance} return={ret}");
+        var next     = accept.IndexOf("var next = DealsPolicy.Next(deal)", StringComparison.Ordinal);
+        var move     = accept.IndexOf("return DealAcceptResult.Accepted(await MoveAsync(s, deal, next, by.ActorId, by.ActorName, \"قُبِلَ العَرض\", ct));", StringComparison.Ordinal);
+        Assert.True(load > 0 && validate > load && refuse > validate && assign > refuse && next > assign && move > next,
+            $"سَلسَلَةُ القَبولِ تَغَيَّرَت: load={load} validate={validate} refuse={refuse} assign={assign} next={next} move={move}");
 
         Assert.Equal(1, Count(accept, "AssignCounterpartyAsync("));
-        Assert.Equal(1, Count(accept, "AdvanceAsync("));
-        Assert.DoesNotContain("AdvanceAsync(tenantSlug, dealId, by.ActorId", accept, StringComparison.Ordinal);
+        Assert.Equal(0, Count(accept, "AdvanceAsync("));
+        Assert.DoesNotContain("deal.InitiatorId", accept, StringComparison.Ordinal);
     }
 
-    /// <summary><b>ولِماذا المُبادِرُ لا القابِل — مَقيسٌ لا مَشروح</b>: لَحظَةَ نِداءِ
-    /// <c>AdvanceAsync</c> داخِلَ <c>AcceptAsync</c> الصَفقَةُ في <c>Offered</c> وقَد
-    /// عُيِّنَ القابِلُ طَرَفاً؛ و<c>Offered</c> تَطلُبُ <c>initiator</c>، فَالقابِلُ
-    /// مَردود. انجِرافُ الحَرفِ إلى <c>by.ActorId</c> يَجعَلُ كُلَّ قَبولٍ يُعَيِّنُ
-    /// الطَرَفَ ثُمَّ يَفشَلُ في التَقَدُّمِ صامِتاً (الفَشَلُ يُرجَعُ في
-    /// <c>DealAdvanceResult</c> ولا يُرمى).</summary>
+    /// <summary><b>ولِماذا لَم يَعُد المُبادِرُ فاعِلَ القَبول — مَقيسٌ لا مَشروح</b>:
+    /// صَفُّ <c>Offered</c> ما زالَ يَطلُبُ <c>initiator</c>، فَالقابِلُ مَردودٌ عَلى
+    /// مَسارِ <c>AdvanceAsync</c> العامّ — كانَ هذا سَبَبَ الاستِعارَة. وصارَ القَبولُ
+    /// انتِقالاً لَه بَوّابَتُه (<c>Validate</c>) ولا يَمُرُّ بِهذِه البَوّابَة، فَبَقِيَ
+    /// الصَفُّ بِحَرفِه (‏ADR-033 §٦): «مَن يُحَرِّكُ Offered بِلا قَبول» جَوابُه
+    /// المُبادِرُ كَما كان.</summary>
     [Fact]
-    public void Why_the_initiator_is_the_actor_a_drift_to_the_acceptor_would_be_refused_at_Offered()
+    public void Offered_still_asks_the_initiator_on_the_general_advance_path_so_acceptance_has_its_own_gate()
     {
         Assert.Equal("initiator", DealsPolicy.Actor(DealStage.Offered));
         Assert.Equal(DealStage.Booked, DealsPolicy.Next("marketplace", DealStage.Offered));
@@ -471,11 +488,12 @@ public class DealCounterpartyCharacterizationTests
 // يَتَخَطّى نَفسَه ما لَم تُضبَط WASAYEL_LIVE_PROOF=1 و ConnectionStrings__Postgres،
 // بِنَفسِ عَقدِ `LiveDealPaidStageProofTests` حَرفاً — ومِنه نُسِخَ تَركيبُ
 // المَخزَن. يُنشِئُ صَفقَةَ سَلَّةٍ نَقديَّةً بِمَرجِعِ مالِكِ إعلان، ويَقيسُ أَنّ
-// مالِكَ الإعلانِ لا يُحَرِّكُ `Offered` بِنَفسِه، وأَنّ الغَريبَ يُرَدُّ بِرَمزِه
-// بِلا كِتابَة، وأَنّ قَبولَ المالِكِ يُعَيِّنُه طَرَفاً ويَمضي `Offered → Booked`
-// بِسَطرٍ فاعِلُه **المُبادِرُ** بِاسمِ **القابِل** ومُلاحَظَةِ «قُبِلَ العَرض»،
+// مالِكَ الإعلانِ لا يُحَرِّكُ `Offered` بِنَفسِه عَبرَ `AdvanceAsync`، وأَنّ الغَريبَ
+// يُرَدُّ بِرَمزِه بِلا كِتابَة، وأَنّ قَبولَ المالِكِ يُعَيِّنُه طَرَفاً ويَمضي
+// `Offered → Booked` بِسَطرٍ فاعِلُه **القابِلُ نَفسُه** ومُلاحَظَةِ «قُبِلَ العَرض»
+// (كانَ فاعِلُه المُبادِرَ بِاسمِ القابِل — قُلِبَ بِقَرارٍ مَرئِيّ، ‏ADR-033 §٦)،
 // وأَنّ القَبولَ الثاني يُرَدُّ — ومُزَوِّدُ الدَفعِ يَرمي عِندَ أَيِّ نِداء، فَإن
-// مَسَّ القَبولُ المالَ أَحمَرّ.
+// مَسَّ القَبولُ المالَ أَحمَرّ. **شُغِّلَ عَلى Postgres المَحَلِّيِّ قَبلَ القَلبِ وبَعدَه.**
 
 public class LiveDealAcceptSequenceProofTests(ITestOutputHelper output)
 {
@@ -527,7 +545,7 @@ public class LiveDealAcceptSequenceProofTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task Accepting_assigns_the_listing_owner_and_moves_Offered_to_Booked_as_the_initiator_in_the_owners_name()
+    public async Task Accepting_assigns_the_listing_owner_and_moves_Offered_to_Booked_as_the_owner_themselves()
     {
         if (!Enabled || string.IsNullOrEmpty(ConnectionString)) return;
 
@@ -566,7 +584,7 @@ public class LiveDealAcceptSequenceProofTests(ITestOutputHelper output)
             Log($"غَريبٌ يَقبَل: {refused.Violation.Code} · Stage={untouched.Stage} · counterparty=null");
 
             // ٣) مالِكُ الإعلانِ يَقبَل — يَصيرُ الطَرَفَ، وتَمضي Offered → Booked
-            //    بِفاعِلٍ هُوَ المُبادِرُ بِاسمِ القابِل.
+            //    بِفاعِلٍ هُوَ القابِلُ نَفسُه (كانَ المُبادِرَ بِاسمِه — ‏ADR-033 §٦).
             var accepted = await deals.AcceptAsync(slug, deal.Id, new DealAcceptor(seller, "بائِع"));
             Assert.True(accepted.Ok, accepted.Violation?.MessageAr);
             var after = (await deals.LoadAsync(slug, deal.Id))!;
@@ -585,11 +603,12 @@ public class LiveDealAcceptSequenceProofTests(ITestOutputHelper output)
             Assert.Equal("advanced", advanced.Action);
             Assert.Equal(DealStage.Offered, advanced.StageBefore);
             Assert.Equal(DealStage.Booked, advanced.StageAfter);
-            Assert.Equal(buyer, advanced.ActorId!.Value);
+            // **قُلِبَ بِقَرارٍ مَرئِيّ** (‏ADR-033 §٦): كانَ `buyer` — المُبادِرُ بِاسمِ القابِل.
+            Assert.Equal(seller, advanced.ActorId!.Value);
             Assert.Equal("بائِع", advanced.ActorName);
             Assert.Equal("قُبِلَ العَرض", advanced.Note);
             Log($"قَبولُ المالِك: Stage={after.Stage} · counterparty={after.CounterpartyName} · " +
-                $"advanced actor={(advanced.ActorId == buyer ? "initiator" : "other")} name={advanced.ActorName} note={advanced.Note}");
+                $"advanced actor={(advanced.ActorId == seller ? "acceptor" : advanced.ActorId == buyer ? "initiator" : "other")} name={advanced.ActorName} note={advanced.Note}");
 
             // ٤) قَبولٌ ثانٍ — رَمزٌ لا صَمت.
             var twice = await deals.AcceptAsync(slug, deal.Id, new DealAcceptor(seller, "بائِع"));

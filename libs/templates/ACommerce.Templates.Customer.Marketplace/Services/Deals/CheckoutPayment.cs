@@ -53,6 +53,13 @@ public static class CheckoutPayMethods
     /// إطلاقاً</b>. وكانَ يَمُرّ.</summary>
     public const string CashOnDelivery = "cash";
 
+    /// <summary><b>مِفتاحُ طَريقَةِ الدَفعِ في <c>Deal.Attributes</c></b> — يَكتُبُه
+    /// <c>POST /{slug}/checkout/submit</c> بِحَرفِه (مُثَبَّتٌ في
+    /// <c>DealCounterpartyCharacterizationTests</c>) ويَقرَؤُه <c>DealsPolicy</c>
+    /// لِيُسقِطَ مَرحَلَةَ <c>Paid</c> عَن النَقد (‏ADR-033 §٦). الكاتِبُ والقارِئُ
+    /// يَقرَآنِ نَفسَ الحَرف — نَسَقُ <c>DealsService.ListingOwnerRef</c>.</summary>
+    public const string AttributeKey = "pay_method";
+
     public static readonly IReadOnlyList<string> All = new[] { Card, CashOnDelivery };
 
     /// <summary>رَمزُ الخَرقِ حينَ تُطلَبُ البِطاقَةُ في مَتجَرٍ لا
