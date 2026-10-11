@@ -1,0 +1,137 @@
+using System.Text.RegularExpressions;
+using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
+using Xunit;
+
+namespace ACommerce.Platform.Tests;
+
+// ═══ تَوصيفُ بابِ الزائِرِ عَلى `/{slug}` — قَبلَ رابِطِ الاستِكشاف (P1-2) ═══════════
+//
+// **المَقيسُ** (موجَزُ الفَجَوات P1-2؛ ‏ADR-032 §٢‑أ «مَوقِعُ وَيبٍ … عَلى طَريقَةِ
+// سَلَّة»؛ ‏`RELEASE-READINESS.md:58-61` قاسَهُ ولَم يُقَرِّرْه): الزائِرُ غَيرُ المُسَجَّلِ
+// لِمَتجَرٍ ذي أَدوار — وكُلُّ مَتجَرٍ مِن الاستوديو ذو أَدوار — يَرى عَلى `/{slug}`
+// `RoleLanding` وَحدَها: بِطاقاتُ أَدوارٍ تَفتَحُ `r/{role}/login`، ورابِطُ `login`،
+// **ولا رابِطَ مُحتَوىً واحِد**؛ والشَريطُ مَخفِيٌّ عَلى ذلكَ المَسارِ بِعَينِه، فَلا
+// تَبويبَ `explore` يُنقَر. **والقُدرَةُ قائِمَة**: `TenantExplore` بِلا بَوّابَةِ دُخول،
+// والشَريطُ يَظهَرُ عَلى `/{slug}/explore` — فَالفَجوَةُ في البابِ لا في الصَفحَة.
+//
+// **ما يُقلَبُ في كوميتِ الرابِطِ ويُقالُ في جِسمِه**: الفَحصُ الأَوَّلُ وَحدَه
+// (`Today_…`) — فَالسُلوكُ المُثَبَّتُ فيه هُوَ الفَجوَةُ نَفسُها. **وما يَبقى بِحَرفِه**:
+// الفُحوصُ الأَربَعَةُ بَعدَه — فَرعُ `TenantHome` الَّذي يُرسِلُ الزائِرَ إلى البَوّابَة،
+// وإخفاءُ الشَريطِ عَلى `/{slug}` وَحدَه، وغِيابُ بَوّابَةِ الدُخولِ عَن الاستِكشاف،
+// وأَنّ مَتجَرَ الاستوديو يولَدُ بِأَدوار. ولا يَمَسُّ الكوميتُ ذاكَ الفَرعَ ولا الإخفاء —
+// رَسمُ مُحتَوىً عَلى `/{slug}` أَو إظهارُ الشَريطِ هُناكَ خِيارا المالِكِ الأَكبَران.
+
+public class RoleLandingVisitorDoorCharacterizationTests
+{
+    private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;
+
+    private static string Template(params string[] parts)
+    {
+        var path = Path.Combine(new[] { RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace" }
+            .Concat(parts).ToArray());
+        Assert.True(File.Exists(path), $"مَصدَرٌ مَفقود: {path} — الأَداةُ عَمياءُ بِلا طَرَفٍ مَقروء.");
+        var text = File.ReadAllText(path);
+        Assert.True(text.Length > 500, $"أَداةٌ عَمياء: {path} طولُه {text.Length} مِحرَفاً — لَم يُقرَأ.");
+        return text;
+    }
+
+    /// <summary>المَصدَرُ بِمَسافاتٍ مَطوِيَّة — فَالفَحصُ عَلى الكودِ لا عَلى التَنسيق.</summary>
+    private static string Flat(string text) => Regex.Replace(text, @"\s+", " ");
+
+    private static int Count(string haystack, string needle)
+        => Regex.Matches(haystack, Regex.Escape(needle)).Count;
+
+    internal static string RoleLanding() => Template("Components", "RoleLanding.razor");
+
+    // ─── (١) الفَجوَة: البَوّابَةُ بِلا رابِطِ مُحتَوى — يُقلَبُ في كوميتِ الرابِط ───
+
+    /// <summary>
+    /// <para><b>بَوّابَةُ الأَدوارِ اليَومَ رابِطان لا ثالِثَ لَهُما</b>: بِطاقَةُ كُلِّ
+    /// دَورٍ إلى <c>r/{role}/login</c>، وسَطرُ «لَدَيكَ حِساب» إلى <c>login</c>. ولا
+    /// كَلِمَةَ <c>explore</c> في المِلَفِّ كُلِّه — فَالزائِرُ لا يَرى بِضاعَةً قَبلَ
+    /// التَسجيل.</para>
+    /// </summary>
+    [Fact]
+    public void Today_the_role_landing_carries_no_link_to_explore_only_role_logins_and_login()
+    {
+        var razor = RoleLanding();
+
+        Assert.DoesNotContain("explore", razor, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Equal(2, Count(razor, "AuthSession.LinkFor("));
+        Assert.Contains("AuthSession.LinkFor(Slug, null, $\"r/{r.Slug}/login\")", razor, StringComparison.Ordinal);
+        Assert.Contains("AuthSession.LinkFor(Slug, Role, $\"login\")", razor, StringComparison.Ordinal);
+        Assert.Equal(2, Count(razor, "<a "));
+    }
+
+    // ─── (٢) ما يَبقى بِحَرفِه بَعدَ الرابِط ─────────────────────────────────
+
+    /// <summary>
+    /// <para><b>الزائِرُ غَيرُ المُسَجَّلِ لِمَتجَرٍ ذي أَدوارٍ يَرى البَوّابَةَ عَلى
+    /// <c>/{slug}</c></b> — فَرعُ <c>TenantHome</c> بِحَرفِه. ولا يُمَسُّ: رَسمُ رَئيسِيَّةِ
+    /// الدَورِ الافتِراضيِّ لِلزائِرِ خِيارُ المالِكِ الأَكبَر.</para>
+    /// </summary>
+    [Fact]
+    public void A_visitor_of_a_store_with_roles_gets_the_role_landing_on_the_store_root()
+    {
+        var home = Flat(Template("Components", "Pages", "TenantHome.razor"));
+
+        Assert.Contains(
+            "else if (loaded.Roles.Count > 0 && (!Auth.IsAuthenticated || activeRole is null))",
+            home, StringComparison.Ordinal);
+        Assert.Contains("<RoleLanding Slug=\"@Slug\" Tenant=\"loaded\" Role=\"@Role\"/>", home, StringComparison.Ordinal);
+        Assert.Equal(1, Count(home, "<RoleLanding "));
+    }
+
+    /// <summary>
+    /// <para><b>الشَريطُ مَخفِيٌّ عَلى <c>/{slug}</c> العاري وَحدَه</b> لِلزائِرِ في مَتجَرٍ
+    /// ذي أَدوار — فَـ<c>/{slug}/explore</c> لَيسَ «المَدخَل» ويَظهَرُ عَلَيهِ الشَريطُ
+    /// بِتَبويبِ الاستِكشافِ في التَبويباتِ الافتِراضِيَّة. ولا يُمَسُّ الإخفاءُ عَلى
+    /// <c>/{slug}</c>: إظهارُه هُناكَ خِيارٌ لِلمالِك.</para>
+    /// </summary>
+    [Fact]
+    public void The_chrome_is_hidden_only_on_the_bare_store_root_so_explore_shows_the_nav()
+    {
+        var layout = Flat(Template("Components", "Layout", "MainLayout.razor"));
+
+        Assert.Contains(
+            "var isEntry = trimmed.Equals($\"/{slug}\", StringComparison.OrdinalIgnoreCase) && tenantHasRoles && !Auth.IsAuthenticated;",
+            layout, StringComparison.Ordinal);
+        Assert.Contains("var chromeHidden = isLogin || isEntry;", layout, StringComparison.Ordinal);
+        Assert.Contains("Add(\"explore\", L[\"shell.nav.explore\"], \"search\");", layout, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <para><b>الاستِكشافُ بِلا بَوّابَةِ دُخول</b>: الجَلسَةُ تُقرَأُ فيه مَرَّتَينِ لِلمُفَضَّلَةِ
+    /// وَحدَها (إظهارُ القَلبِ ومُعَرِّفُ المُستَخدِم)، ولا تَحويلَ ولا رابِطَ دُخولٍ ولا
+    /// صِفَةَ تَخويل — فَالبابُ إلَيه يَكفي، والصَفحَةُ قائِمَة.</para>
+    /// </summary>
+    [Fact]
+    public void Explore_has_no_login_gate_and_reads_the_session_only_for_favourites()
+    {
+        var explore = Template("Components", "Pages", "TenantExplore.razor");
+
+        Assert.Contains("@page \"/{slug}/explore\"", explore, StringComparison.Ordinal);
+        Assert.Equal(2, Count(explore, "Auth.IsAuthenticated"));
+        Assert.Contains("ShowFavorite=\"@Auth.IsAuthenticated\"", explore, StringComparison.Ordinal);
+        Assert.Contains("Auth.IsAuthenticated ? Auth.UserId : null", explore, StringComparison.Ordinal);
+
+        foreach (var gate in new[] { "Redirect", "NavigateTo", "login", "[Authorize" })
+            Assert.DoesNotContain(gate, explore, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <para><b>وكُلُّ مَتجَرٍ مِن الاستوديو ذو أَدوار</b> — فَرعُ السُقوطِ في
+    /// <c>RolesFor</c> يُخرِجُ <c>{customer, vendor, tenant_admin}</c> (‏ADR-027) — فَجَذرُه
+    /// لِلزائِرِ هُوَ البَوّابَةُ دائِماً، ولَيسَ حالَةً نادِرَة.</para>
+    /// </summary>
+    [Fact]
+    public void Every_store_born_from_the_studio_has_roles_so_its_root_is_the_role_landing()
+    {
+        var roles = TenantFromAnalysisFactory.RolesFor(new IncubatorSession().SuggestedPattern);
+
+        Assert.NotEmpty(roles);
+        Assert.Equal(new[] { "customer", "vendor", "tenant_admin" }, roles.Select(r => r.CatalogSlug).ToArray());
+        Assert.Equal("customer", Assert.Single(roles, r => r.IsDefault).CatalogSlug);
+    }
+}
