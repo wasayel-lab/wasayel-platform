@@ -37,23 +37,35 @@ public sealed record DealAcceptor(Guid ActorId, string ActorName);
 /// يَرى الشاشَة. وفاحِصُ القاعِدَة ٦ يَقبَلُ <c>AuthSession.ResolveToken</c>
 /// حارِساً فَلَم يَرَ الفَرق.</para>
 ///
-/// <para><b>والقَديمُ يَبقى حَيثُ لا مَرجِعَ مالِك — بِقَرارٍ مَكتوبٍ لا
-/// بِالسُقوط</b>: <c>listing_owner</c> يُلحَقُ في مَسارَي العَرضِ والسَلَّةِ
-/// <b>فَقَط حينَ يَحمِلُ الإعلانُ <c>owner_id</c></b>
-/// (<c>MarketplaceTemplateExtensions.cs</c> — <c>/listings/{id}/deal</c> و
-/// <c>/checkout/submit</c>)، وكُلُّ إعلانٍ يُنشَأُ مِن <c>/listings/create</c>
-/// يَحمِلُه (‏<c>:950</c>)؛ فَما يَخلو مِنه إعلاناتُ البَذرِ والعَيِّناتِ
-/// القَديمَة. لِهذِه وَحدَها يُبقى السُلوكُ القَديم — مُسَمّىً في
-/// <see cref="IsLegacyUnowned"/> — ويُسَجَّلُ في سِجِلِّ أَسئِلَةِ المالِك.</para>
+/// <para><b>ولا استِثناءَ لِصَفقَةٍ بِلا مَرجِعِ مالِك — تُغلَقُ لا تُفتَح</b>:
+/// النُسخَةُ الأولى مِن هذا المِلَفّ (‏2d8cf5f، ‏2026-10-11) أَبقَت لَها
+/// السُلوكَ القَديمَ (أَيُّ مُسَجَّلٍ غَيرِ المُبادِرِ يَقبَل) بِحُجَّةِ إعلاناتِ
+/// البَذر. والمَقيسُ في المُراجَعَةِ نَفسِ اليَوم: <b>كُلُّ مَسارِ إنشاءِ
+/// إعلانٍ يَكتُبُ <c>owner_id</c></b> (<c>MarketplaceTemplateExtensions.cs:950</c>،
+/// <c>TestDataSeeder.cs:132</c>، <c>AppearanceBaselineSeeder.cs:254,274</c>)،
+/// فَالاستِثناءُ لا يَحرُسُ مَساراً حَيّاً بَل وَثائِقَ قَديمَةً غَيرَ مَعدودَة —
+/// وهُوَ عَينُ الثَغرَةِ مَفتوحَةً لَها، وخُروجٌ عَن ‏ADR-033 §٢‑ج‑أ («لِمالِكِ
+/// الإعلانِ وَحدَه») بِلا ADR (القاعِدَة ١٥). فَصارَ الغِيابُ رَمزاً سادِساً
+/// <see cref="ListingOwnerMissing"/>، والصَفقَةُ اليَتيمَةُ تُحَرَّكُ مِن المَسارِ
+/// الإداريِّ وَحدَه (يُعَيِّنُ مالِكَ التَطبيقِ طَرَفاً — <c>:3332</c>). والشاشَةُ
+/// كانَت أَصلاً لا تَرسُمُ زِرَّ القَبولِ لِهذِه (<c>isListingOwner</c> يَقرَأُ
+/// المَرجِعَ نَفسَه) — فَالنُقطَةُ الآنَ تَقولُ ما تَقولُه الشاشَة.</para>
 ///
 /// <para><b>ولِماذا التَخويلُ يَسبِقُ فَحصَ الحالَة</b> (القاعِدَة ٦): لَو رُتِّبَ
 /// العَكسُ لَصارَ «الصَفقَةُ مَقبولَةٌ أَصلاً» جَواباً يَتَسَرَّبُ إلى غَيرِ
-/// المالِك. الغِيابُ وَحدَه يَسبِق، لِأَنَّه لا يُفشي شَيئاً.</para>
+/// المالِك. الغِيابُ وَحدَه يَسبِق، لِأَنَّه لا يُفشي شَيئاً. وغِيابُ المَرجِعِ
+/// يَسبِقُ هُوِيَّةَ الفاعِلِ لِأَنَّه صِفَةُ الصَفقَةِ لا الفاعِل: لا مالِكَ
+/// يُقارَنُ بِه، فَلا مَعنى لِسُؤالِ «أَأَنتَ هُوَ».</para>
 /// </summary>
 public static class DealAcceptAuthorization
 {
     /// <summary>لا صَفقَةَ بِهذا المُعَرِّفِ في هذا المُستَأجِر.</summary>
     public const string DealNotFound = "deal_not_found";
+
+    /// <summary>الصَفقَةُ لا تَحمِلُ مَرجِعَ مالِكِ إعلانٍ أَصلاً (أَو تَحمِلُه
+    /// فَراغاً) — فَلا أَحَدَ يَملِكُ قَبولَها مِن هُنا؛ مَسارُها الإداريُّ
+    /// وَحدَه.</summary>
+    public const string ListingOwnerMissing = "listing_owner_missing";
 
     /// <summary>الصَفقَةُ تَحمِلُ مَرجِعَ مالِكِ إعلانٍ، والفاعِلُ لَيسَ
     /// هُوَ.</summary>
@@ -70,9 +82,12 @@ public static class DealAcceptAuthorization
     /// يَقَعُ ثانِيَة.</summary>
     public const string DealAlreadyAccepted = "deal_already_accepted";
 
-    /// <summary>المَعجَمُ المُغلَق — خَمسَةٌ لا سادِسَ لَها.</summary>
+    /// <summary>المَعجَمُ المُغلَق — سِتَّةٌ لا سابِعَ لَها. (خَمسَةٌ في
+    /// ‏2d8cf5f؛ والسادِسُ <see cref="ListingOwnerMissing"/> بِقَرارٍ مَرئِيٍّ
+    /// في المُراجَعَةِ — بَدَلَ استِثناءٍ كانَ يُبقي الثَغرَةَ لِلصَفقَةِ
+    /// اليَتيمَة.)</summary>
     public static readonly IReadOnlyList<string> All =
-        new[] { DealNotFound, ActorNotListingOwner, ActorIsInitiator, DealNotActive, DealAlreadyAccepted };
+        new[] { DealNotFound, ListingOwnerMissing, ActorNotListingOwner, ActorIsInitiator, DealNotActive, DealAlreadyAccepted };
 
     public static bool Contains(string code) => All.Contains(code, StringComparer.Ordinal);
 
@@ -87,22 +102,21 @@ public static class DealAcceptAuthorization
         return code;
     }
 
-    /// <summary><b>صَفقَةٌ بِلا مَرجِعِ مالِكِ إعلان</b> — الحالَةُ الوَحيدَةُ
-    /// الَّتي يُبقى فيها السُلوكُ القَديم (أَيُّ مُسَجَّلٍ غَيرِ المُبادِرِ
-    /// يَقبَل)، وهي حالَةُ إعلاناتِ البَذرِ والعَيِّناتِ لا إعلاناتِ
-    /// المُستَخدِمين.</summary>
-    public static bool IsLegacyUnowned(Deal deal) =>
-        !deal.Refs.TryGetValue(DealsService.ListingOwnerRef, out var lo) || string.IsNullOrWhiteSpace(lo);
-
     /// <summary><c>null</c> يَعني مُخَوَّل. والتَرتيبُ مَقصود: الغِياب، ثُمَّ
-    /// التَخويل (المالِك، ثُمَّ المُبادِر)، ثُمَّ الحالَة (فَعّالَة، ثُمَّ
-    /// غَيرُ مَقبولَةٍ بَعد).</summary>
+    /// التَخويل (مَرجِعُ المالِكِ مَوجود، ثُمَّ هُوَ الفاعِل، ثُمَّ لَيسَ
+    /// المُبادِر)، ثُمَّ الحالَة (فَعّالَة، ثُمَّ غَيرُ مَقبولَةٍ بَعد). ومَرجِعٌ
+    /// فارِغٌ كَغِيابِه — لا يُقرَأُ فَراغٌ مالِكاً.</summary>
     public static DealAcceptViolation? Validate(Deal? deal, DealAcceptor by)
     {
         if (deal is null)
             return new(DealNotFound, "لا صَفقَةَ بِهذا المُعَرِّف.");
 
-        if (!IsLegacyUnowned(deal) && deal.Refs[DealsService.ListingOwnerRef] != by.ActorId.ToString())
+        if (!deal.Refs.TryGetValue(DealsService.ListingOwnerRef, out var owner) || string.IsNullOrWhiteSpace(owner))
+            return new(ListingOwnerMissing,
+                "الصَفقَةُ لا تَحمِلُ مَرجِعَ مالِكِ إعلان — فَلا أَحَدَ يَملِكُ قَبولَها مِن هُنا؛ " +
+                "تُحَرَّكُ مِن المَسارِ الإداريِّ لِمالِكِ التَطبيقِ وَحدَه.");
+
+        if (owner != by.ActorId.ToString())
             return new(ActorNotListingOwner,
                 "الفاعِلُ لَيسَ مالِكَ الإعلانِ الَّذي عُرِضَ عَلَيه — ومَن يَقبَلُ العَرضَ " +
                 "يَصيرُ الطَرَفَ الَّذي يُؤَكِّدُ ويَشحَنُ ويُدفَعُ لَه، فَلا يَملِكُه غَيرُ المالِك.");

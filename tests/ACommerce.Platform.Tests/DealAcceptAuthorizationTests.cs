@@ -21,6 +21,15 @@ namespace ACommerce.Platform.Tests;
 /// كُتِبَ وهي ما زالَت تُعَيِّنُ الناقِرَ بِنَفسِها، فَأَحمَرَّ، ثُمَّ وُصِلَت
 /// بِـ<c>AcceptAsync</c> فَاخضَرّ — في الكوميتِ نَفسِه، لِأَنّ الحُزمَةَ لا
 /// تُودَعُ حَمراء.</para>
+///
+/// <para><b>والقَلبُ المَرئِيُّ الثاني (مُراجَعَةُ ‏2026-10-11)</b>: النُسخَةُ
+/// الأولى أَبقَت لِلصَفقَةِ بِلا <c>Refs[listing_owner]</c> السُلوكَ القَديمَ
+/// (أَيُّ مُسَجَّلٍ غَيرِ المُبادِرِ يَقبَل) وثَبَّتَته هُنا اختِباراً. والمَقيسُ
+/// أَنّ كُلَّ مَسارِ إنشاءِ إعلانٍ يَكتُبُ <c>owner_id</c>، فَالاستِثناءُ كانَ
+/// الثَغرَةَ نَفسَها لِوَثائِقٍ قَديمَةٍ غَيرِ مَعدودَة، وخُروجاً عَن ‏ADR-033
+/// §٢‑ج‑أ بِلا ADR. فَصارَ الغِيابُ رَمزاً سادِساً <c>listing_owner_missing</c>
+/// — والصُفوفُ الَّتي كانَت تُثبِّتُ القَديمَ قُلِبَت هُنا إلى نَقيضِها بِاسمِها،
+/// لا حُذِفَت صامِتَة.</para>
 /// </summary>
 public class DealAcceptAuthorizationTests
 {
@@ -47,10 +56,13 @@ public class DealAcceptAuthorizationTests
 
     // ─── المَعجَم ──────────────────────────────────────────────────────
 
+    /// <summary>سِتَّةٌ مُنذُ المُراجَعَة (كانَت خَمسَة): السادِسُ
+    /// <c>listing_owner_missing</c> بَدَلَ استِثناءِ <c>IsLegacyUnowned</c>
+    /// الَّذي حُذِف — نُمُوُّ المَعجَمِ قَرارٌ مَرئِيٌّ هُنا لا انزِلاق.</summary>
     [Fact]
-    public void Exactly_five_violation_codes_and_they_are_these()
+    public void Exactly_six_violation_codes_and_they_are_these()
         => Assert.Equal(
-            new[] { "deal_not_found", "actor_not_listing_owner", "actor_is_initiator", "deal_not_active", "deal_already_accepted" },
+            new[] { "deal_not_found", "listing_owner_missing", "actor_not_listing_owner", "actor_is_initiator", "deal_not_active", "deal_already_accepted" },
             DealAcceptAuthorization.All);
 
     [Fact]
@@ -62,7 +74,7 @@ public class DealAcceptAuthorizationTests
     {
         foreach (var c in DealAcceptAuthorization.All)
             Assert.Equal(c, DealAcceptAuthorization.Require(c));
-        Assert.Equal(5, DealAcceptAuthorization.All.Count);
+        Assert.Equal(6, DealAcceptAuthorization.All.Count);
     }
 
     // ─── مُوجِب — مَن يَملِكُ القَبول ──────────────────────────────────
@@ -74,22 +86,41 @@ public class DealAcceptAuthorizationTests
         Assert.True(DealAcceptAuthorization.IsAllowed(Incoming(), By(Owner)));
     }
 
-    /// <summary><b>القَديمُ يَبقى حَيثُ لا مَرجِعَ مالِك — بِقَرارٍ مَكتوب</b>:
-    /// صَفقَةٌ عَلى إعلانِ بَذرٍ أَو عَيِّنَةٍ بِلا <c>owner_id</c> يَقبَلُها أَيُّ
-    /// مُسَجَّلٍ غَيرِ المُبادِر، كَما كانَ. مُسَمّىً في
-    /// <c>IsLegacyUnowned</c> ومُسَجَّلٌ في سِجِلِّ أَسئِلَةِ المالِك.</summary>
+    /// <summary><b>قُلِبَ في المُراجَعَة — كانَ يُثبِّتُ النَقيض</b>: صَفقَةٌ بِلا
+    /// <c>Refs[listing_owner]</c> كانَت تُقبَلُ مِن أَيِّ غَريب (<c>Assert.Null</c>
+    /// عَلى <c>Validate(legacy, By(Stranger))</c>)، وصارَت مُغلَقَةً عَلى الجَميعِ
+    /// بِرَمزِها — الغَريبِ والمُبادِرِ مَعاً، لِأَنّ الغِيابَ صِفَةُ الصَفقَةِ لا
+    /// الفاعِل. ومَرجِعٌ فارِغٌ كَغِيابِه. مَسارُها الإداريُّ وَحدَه.</summary>
     [Fact]
-    public void A_deal_without_a_listing_owner_ref_keeps_the_legacy_rule_and_says_so()
+    public void A_deal_without_a_listing_owner_ref_is_closed_to_everyone_with_its_own_code()
     {
-        var legacy = Incoming(withOwnerRef: false);
-        Assert.True(DealAcceptAuthorization.IsLegacyUnowned(legacy));
-        Assert.False(DealAcceptAuthorization.IsLegacyUnowned(Incoming()));
-        Assert.Null(DealAcceptAuthorization.Validate(legacy, By(Stranger)));
+        var orphan = Incoming(withOwnerRef: false);
+        Assert.Equal(DealAcceptAuthorization.ListingOwnerMissing, DealAcceptAuthorization.Validate(orphan, By(Stranger))!.Code);
+        Assert.Equal(DealAcceptAuthorization.ListingOwnerMissing, DealAcceptAuthorization.Validate(orphan, By(Offerer))!.Code);
+        Assert.Equal(DealAcceptAuthorization.ListingOwnerMissing, DealAcceptAuthorization.Validate(orphan, By(Owner))!.Code);
+        Assert.False(DealAcceptAuthorization.IsAllowed(orphan, By(Stranger)));
 
         // ومَرجِعٌ فارِغٌ كَغِيابِه — لا يُقرَأُ فَراغٌ مالِكاً.
         var blank = Incoming(withOwnerRef: false);
         blank.Refs[DealsService.ListingOwnerRef] = "   ";
-        Assert.True(DealAcceptAuthorization.IsLegacyUnowned(blank));
+        Assert.Equal(DealAcceptAuthorization.ListingOwnerMissing, DealAcceptAuthorization.Validate(blank, By(Stranger))!.Code);
+
+        // والغِيابُ يَسبِقُ الحالَةَ كَسائِرِ التَخويل — صَفقَةٌ يَتيمَةٌ مُكتَمِلَةٌ
+        // بِطَرَفٍ لا تُجيبُ «مَقبولَةٌ أَصلاً» بَل «لا مالِك».
+        var settled = Incoming(DealStatus.Completed, withOwnerRef: false);
+        settled.CounterpartyId = Owner;
+        Assert.Equal(DealAcceptAuthorization.ListingOwnerMissing, DealAcceptAuthorization.Validate(settled, By(Stranger))!.Code);
+    }
+
+    /// <summary>والسالِب: صَفقَةٌ تَحمِلُ المَرجِعَ لا تُجيبُ هذا الرَمزَ أَبَداً —
+    /// المالِكُ يُخَوَّل، والغَريبُ يُرَدُّ بِـ«لَستَ المالِك» لا بِـ«لا مالِك».</summary>
+    [Fact]
+    public void A_deal_with_a_listing_owner_ref_never_answers_listing_owner_missing()
+    {
+        Assert.Null(DealAcceptAuthorization.Validate(Incoming(), By(Owner)));
+        var v = DealAcceptAuthorization.Validate(Incoming(), By(Stranger));
+        Assert.NotEqual(DealAcceptAuthorization.ListingOwnerMissing, v!.Code);
+        Assert.Equal(DealAcceptAuthorization.ActorNotListingOwner, v.Code);
     }
 
     // ─── سالِب — الثَغرَةُ نَفسُها، ورَمزٌ لِكُلِّ مِحوَر ─────────────────
@@ -109,11 +140,16 @@ public class DealAcceptAuthorizationTests
     [Fact]
     public void The_initiator_may_not_accept_their_own_offer()
     {
-        // بِمَرجِعٍ يُشيرُ إلَيه (أَضافَ إعلانَه إلى سَلَّتِه) وبِلا مَرجِع.
+        // بِمَرجِعٍ يُشيرُ إلَيه (أَضافَ إعلانَه إلى سَلَّتِه).
         var own = Incoming();
         own.Refs[DealsService.ListingOwnerRef] = Offerer.ToString();
         Assert.Equal(DealAcceptAuthorization.ActorIsInitiator, DealAcceptAuthorization.Validate(own, By(Offerer))!.Code);
-        Assert.Equal(DealAcceptAuthorization.ActorIsInitiator,
+
+        // وبِلا مَرجِع: كانَ يُجابُ «أَنتَ المُبادِر» (الصَفُّ القَديمُ هُنا)،
+        // وصارَ يُجابُ «لا مالِك» — الغِيابُ صِفَةُ الصَفقَةِ ويَسبِقُ هُوِيَّةَ
+        // الفاعِل. قُلِبَ بِقَرارٍ مَرئِيّ في المُراجَعَة؛ والمُبادِرُ مَردودٌ في
+        // الحالَين.
+        Assert.Equal(DealAcceptAuthorization.ListingOwnerMissing,
             DealAcceptAuthorization.Validate(Incoming(withOwnerRef: false), By(Offerer))!.Code);
     }
 
@@ -168,12 +204,14 @@ public class DealAcceptAuthorizationTests
     public void Every_violation_carries_an_arabic_message_that_says_why()
     {
         var accepted = Incoming(); accepted.CounterpartyId = Owner;
-        // المُبادِرُ يَقبَلُ عَرضَه عَلى إعلانٍ بِلا مَرجِعِ مالِك — فَلا يَسبِقُه
-        // فَحصُ المالِكِ إلى الجَواب.
-        var self = Incoming(withOwnerRef: false);
+        // المُبادِرُ يَقبَلُ عَرضَه عَلى إعلانِه هُوَ (المَرجِعُ يُشيرُ إلَيه) —
+        // فَيَمُرُّ فَحصا المَرجِعِ والمالِكِ ويَقِفُ عِندَ «أَنتَ المُبادِر».
+        var self = Incoming();
+        self.Refs[DealsService.ListingOwnerRef] = Offerer.ToString();
         var cases = new (Deal? Deal, DealAcceptor By)[]
         {
             (null,                               By(Owner)),
+            (Incoming(withOwnerRef: false),      By(Stranger)),
             (Incoming(),                         By(Stranger)),
             (self,                               By(Offerer)),
             (Incoming(DealStatus.Disputed),      By(Owner)),
@@ -189,7 +227,7 @@ public class DealAcceptAuthorizationTests
             Assert.True(v.MessageAr.Length > 10, $"«{v.Code}» بِرِسالَةٍ أَقصَرَ مِن أَن تُفَسِّر.");
             seen.Add(v.Code);
         }
-        // الحالاتُ الخَمسُ تُخرِجُ الرُموزَ الخَمسَةَ كُلَّها — لا رَمزَ بِلا مَسار.
+        // الحالاتُ السِتُّ تُخرِجُ الرُموزَ السِتَّةَ كُلَّها — لا رَمزَ بِلا مَسار.
         Assert.Equal(DealAcceptAuthorization.All.OrderBy(c => c, StringComparer.Ordinal), seen.OrderBy(c => c, StringComparer.Ordinal));
     }
 
