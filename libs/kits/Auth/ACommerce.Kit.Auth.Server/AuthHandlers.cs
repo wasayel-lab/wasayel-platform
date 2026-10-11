@@ -116,11 +116,15 @@ public static class AuthHandlers
     }
 
     /// <summary>سِرّ تَوقيع الـ token — يُحَمَّل مِن ENV عِندَ بَدء التَّطبيق.
-    /// لَو فارِغ نَستَخدِم سِرّ افتِراضيّ (تَطوير فَقَط)؛ في الإنتاج
-    /// ضَع <c>ACOMMERCE_AUTH_SECRET</c> بِـ ٣٢+ حَرفاً عَشوائِيّاً.</summary>
+    /// لَو غابَ نَستَخدِم سِرّ التَطويرِ الافتِراضيّ؛ **وخارِجَ Development
+    /// يَرمي حارِسُ الإقلاعِ** (<c>AuthTokenSecretPolicy.AssertSafeOutsideDevelopment</c>
+    /// في <c>Program.cs</c>) إن بَقِيَ الافتِراضيُّ أَو فَرَغَ أَو قَصُرَ عَن ٣٢.
+    /// **والاسمُ والحَرفِيَّةُ والحَدُّ في مَوضِعٍ واحِدٍ هُناك لا هُنا** (‏2026-10-11):
+    /// كانَ هذا السَطرُ وَحدَه يَحمِلُها بِلا حارِسٍ ولا وَثيقَةٍ ولا فَحص — فَكُلُّ
+    /// كوكي في الـSpace بِلا المُتَغَيِّرِ كانَ قابِلاً لِلتَزوير (‏P0-2).</summary>
     public static string TokenSecret { get; set; } =
-        Environment.GetEnvironmentVariable("ACOMMERCE_AUTH_SECRET")
-        ?? "dev-only-secret-please-set-ACOMMERCE_AUTH_SECRET-in-production-32+";
+        Environment.GetEnvironmentVariable(AuthTokenSecretPolicy.EnvVarName)
+        ?? AuthTokenSecretPolicy.DevelopmentFallback;
 
     // ── Phone OTP ─────────────────────────────────────────────────────
     // ملاحَظَة: لا [WolverinePost] هُنا. القالِب (MarketplaceTemplate) يُسَجِّل

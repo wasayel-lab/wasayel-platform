@@ -236,6 +236,18 @@ AuthChannelSelection.AssertNoStubsOutsideDevelopment(
         Describe(AuthChannelKind.Nafath, app.Services.GetService<INafathChannel>())
     }.OfType<RegisteredAuthChannel>());
 
+// ─── وحارِسٌ عَلى سِرِّ تَوقيعِ الجَلسَة: لا حَرفِيَّةَ عَلَنِيَّةً خارِجَ التَطوير ─
+// **نَفسُ الشَكلِ حَرفاً ولا أُنبوبَ رابِع** (القاعِدَة ٨): دالَّةٌ نَقِيَّةٌ
+// تُقاسُ بِجَدوَل (‏`AuthTokenSecretPolicy.Validate`)، ورَميٌ هُنا قَبلَ أَوَّلِ
+// طَلَب. والعِلَّةُ أُختُ ما فَوقَها: `AuthHandlers.TokenSecret` يَرتَدُّ عِندَ
+// غِيابِ `ACOMMERCE_AUTH_SECRET` إلى حَرفِيَّةٍ مَكتوبَةٍ في الكود، فَيَصيرُ كُلُّ
+// كوكي — وجَلسَةُ مُشرِفِ المَنَصَّةِ ذاتُها، فَهي بِالدالَّةِ نَفسِها — قابِلاً
+// لِلتَزوير بِمَعرِفَةِ `userId` و`slug` (‏2026-10-11، P0-2). **والمَفحوصُ القيمَةُ
+// الفِعلِيَّةُ الَّتي تُوَقِّع** لا المُتَغَيِّرُ وَحدَه؛ وفي Development صامِتٌ
+// فَلا يَتَغَيَّرُ `dotnet run` بِلا مُتَغَيِّر.
+AuthTokenSecretPolicy.AssertSafeOutsideDevelopment(
+    app.Environment.IsDevelopment(), AuthHandlers.TokenSecret);
+
 // ─── وحارِسٌ ثانٍ بِنَفسِ الآلِيَّة: لا مُزَوِّدَ دَفعٍ مُحاكٍ ────────
 // **ولا أُنبوبَ رابِع** (القاعِدَة ٨): نَفسُ الشَكلِ حَرفاً — عَلامَةٌ
 // على المُحاكي، ودالَّةٌ نَقِيَّةٌ تَقرَؤُها، ورَميٌ قَبلَ أَوَّلِ
