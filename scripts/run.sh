@@ -30,4 +30,11 @@ echo "  /ejar → إيجار (بُرتُقاليّ)"
 echo "  /admin/tenants → JSON API"
 echo ""
 
+# البيئَةُ صَراحَةً (‏2026-10-11): `--no-launch-profile` يَتَخَطّى `launchSettings.json`
+# الَّذي يَضبِطُ Development، فَتَسقُطُ البيئَةُ إلى Production — وفيها يَرمي حارِسُ
+# سِرِّ الجَلسَةِ عِندَ الإقلاعِ بِـ`auth_secret_default` ما لَم يُضبَط
+# ACOMMERCE_AUTH_SECRET (مَقيس؛ `AuthTokenSecretPolicy.AssertSafeOutsideDevelopment` في
+# `Program.cs`). وهذا السكربتُ لِلتَطويرِ المَحَلِّيِّ وَحدَه.
+export ASPNETCORE_ENVIRONMENT=Development
+
 exec dotnet run --no-launch-profile --project apps/V1.App --urls=http://localhost:5050

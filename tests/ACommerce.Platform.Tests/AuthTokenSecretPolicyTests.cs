@@ -281,4 +281,25 @@ public class AuthTokenSecretPolicyTests
         var listed = grep.Groups["alts"].Value.Split('|').Select(a => "auth_secret_" + a).OrderBy(c => c, StringComparer.Ordinal);
         Assert.Equal(AuthTokenSecretPolicy.All.OrderBy(c => c, StringComparer.Ordinal), listed);
     }
+
+    /// <summary>
+    /// <para><b>سكربتا التَشغيلِ المَحَلِّيِّ يَضبِطانِ Development قَبلَ `dotnet run --no-launch-profile`</b>:
+    /// `--no-launch-profile` يَتَخَطّى `launchSettings.json` الَّذي يَضبِطُها، فَكانَت البيئَةُ تَسقُطُ إلى
+    /// Production ويَموتُ الإقلاعُ بِـ`auth_secret_default` — مَقيسٌ بِإقلاعٍ فِعلِيٍّ ‏2026-10-11 (بِلا
+    /// المُتَغَيِّرِ: الحارِس؛ وبِـDevelopment: يَمُرُّ ويَقِفُ عِندَ قاعِدَةِ المِجَسِّ الوَهمِيَّة). ويُفحَصُ
+    /// التَرتيبُ لا الوُجودُ وَحدَه.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("run.sh", "export ASPNETCORE_ENVIRONMENT=Development")]
+    [InlineData("run.ps1", "$env:ASPNETCORE_ENVIRONMENT = \"Development\"")]
+    public void LocalRunScripts_SetDevelopment_BeforeRunningWithoutALaunchProfile(string script, string line)
+    {
+        var text = File.ReadAllText(Path.Combine(RepoRoot, "scripts", script));
+        Assert.True(text.Length > 500, $"أَداةٌ عَمياء: {script} لَم يُقرَأ.");
+
+        var set = text.IndexOf(line, StringComparison.Ordinal);
+        var run = text.IndexOf("dotnet run --no-launch-profile", StringComparison.Ordinal);
+        Assert.True(set >= 0, $"{script} لا يَضبِطُ البيئَة — يُقلِعُ Production فَيَموتُ بِـauth_secret_default.");
+        Assert.True(run > set, $"{script} يَضبِطُ البيئَةَ بَعدَ `dotnet run` أَو لا يُشَغِّلُه.");
+    }
 }

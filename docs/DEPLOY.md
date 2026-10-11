@@ -187,11 +187,14 @@ variables → ‏Actions:
 و`vars.HF_USER` و`vars.HF_SPACE_URL` و`vars.HF_HEALTH_WAIT_SECONDS`
 ولا شَيءَ سِواها.
 
-### ٤) سِلسِلَة اتِّصال الإنتاج — **في الـSpace لا في GitHub**
-الحاوِيَةُ تَعمَل بِـ`ASPNETCORE_ENVIRONMENT=Production`، وبِلا سِلسِلَة
-اتِّصال **يَسقُط التَطبيقُ عِندَ الإقلاع** بِـ
+### ٤) سِرّا الإنتاجِ الإلزامِيّان: سِلسِلَةُ الاتِّصالِ وسِرُّ تَوقيعِ الجَلسَة — **في الـSpace لا في GitHub**
+الحاوِيَةُ تَعمَل بِـ`ASPNETCORE_ENVIRONMENT=Production`، و**بِلا أَيٍّ مِن
+الاثنَينِ يَسقُطُ التَطبيقُ عِندَ الإقلاع**: بِلا سِلسِلَة اتِّصالٍ بِـ
 `InvalidOperationException: Postgres connection string missing`
-(‏`HostingExtensions.AddPlatformHost`).
+(‏`HostingExtensions.AddPlatformHost`)، وبِلا `ACOMMERCE_AUTH_SECRET` (أَو
+بِأَقصَرَ مِن ‏32) بِـ`auth_secret_default` (أَو `auth_secret_missing`/`auth_secret_short`)
+مِن `AuthTokenSecretPolicy.AssertSafeOutsideDevelopment` (‏`Program.cs`) مُنذُ
+‏2026-10-11 — والعُنوانُ كانَ يُسَمّي الأَوَّلَ وَحدَه.
 
 الـSpace → ‏Settings → ‏**Variables and secrets** → ‏New **secret**:
 
