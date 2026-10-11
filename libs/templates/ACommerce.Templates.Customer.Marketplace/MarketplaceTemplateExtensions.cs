@@ -3292,9 +3292,13 @@ public static class MarketplaceTemplateExtensions
         }).DisableAntiforgery()
           .RequireStoreWritable();
 
+        // **والبائِعُ المَربوطُ يُلغي عِندَ `Offered` — رَفضُه لِلطَلَب — والمُشتَري يُخبَر** (‏ADR-033 §٦‑ج
+        // مُلحَقاً، ‏2026-10-11): الرَبطُ عِندَ الوِلادَةِ جَعَلَ البائِعَ طَرَفاً يَملِكُ الإلغاءَ مِن أَوَّلِ لَحظَة
+        // (`DealCancelAuthorization`)، فَأُبقِيَ وثُبِّتَ — وكانَ الإلغاءُ صامِتاً. القَرارُ «مَن يُشعَر»
+        // والتَركيبُ في `DealNotices`؛ ومَن يُلغي طَلَبَه هُوَ لا يُشعَر.
         app.MapPost("/{slug}/deals/{id:guid}/cancel",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
-                   Services.Deals.DealsService deals) =>
+                   Services.Deals.DealsService deals, Services.Deals.DealNotices notices, L l) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
@@ -3307,6 +3311,7 @@ public static class MarketplaceTemplateExtensions
             // يُلغي صَفقَتَه هُوَ لا صَفقَةَ غَيرِه.
             var res = await deals.CancelAsync(slug, id, new Services.Deals.DealCanceller(userId, userName, IsStoreAdmin: false),
                 string.IsNullOrEmpty(reason) ? "إلغاء" : reason);
+            if (res.Ok) await notices.NotifyCancelledAsync(slug, res.Deal!, userId, userName, l);
             return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}")));
         }).DisableAntiforgery()
           .RequireStoreWritable();

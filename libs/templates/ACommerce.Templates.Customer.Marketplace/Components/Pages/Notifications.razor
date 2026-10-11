@@ -78,7 +78,8 @@
         "saved_search_match" => "search",
         "offer_received" or "offer_accepted" or "offer_rejected" => "tag",
         "chat" or "message" => "message-square",
-        "deal" or "deal_advanced" => "shopping-bag",
+        // ‏`deal_cancelled` ثالِثُها (‏2026-10-11): إلغاءُ غَيرِ المُشتَري طَلَبَه — `DealNotices.CancelledType`.
+        "deal" or "deal_advanced" or "deal_cancelled" => "shopping-bag",
         "ticket" => "alert-circle",
         _ => "bell"
     };

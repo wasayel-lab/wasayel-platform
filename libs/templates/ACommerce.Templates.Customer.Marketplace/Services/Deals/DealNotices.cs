@@ -29,7 +29,9 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Deals;
 /// <see cref="DealAcceptAuthorization.OwnerIdOf"/> — فَصَفقَةٌ بِلا مالِكٍ لا تُشعِرُ أَحَداً.</para>
 ///
 /// <para><b>والنَوعانِ هُما ما تَعرِفُه شاشَةُ الإشعاراتِ أَصلاً</b>: <c>deal</c> لِلطَلَبِ
-/// الجَديد، و<c>deal_advanced</c> لِقَبولِه — فَالأَيقونَةُ اليَتيمَةُ صارَ لَها مُنتِج.</para>
+/// الجَديد، و<c>deal_advanced</c> لِقَبولِه — فَالأَيقونَةُ اليَتيمَةُ صارَ لَها مُنتِج. <b>وثالِثٌ
+/// ‏2026-10-11</b>: <c>deal_cancelled</c> حينَ يُلغي غَيرُ المُشتَري طَلَبَه (نُقطَةُ <c>/cancel</c>)،
+/// أُضيفَ إلى مِفتاحِ الأَيقونَةِ نَفسِه في الشاشَة.</para>
 /// </summary>
 public sealed class DealNotices
 {
@@ -38,6 +40,11 @@ public sealed class DealNotices
 
     /// <summary>قَبِلَ البائِعُ طَلَبَ المُشتَري.</summary>
     public const string AcceptedType = "deal_advanced";
+
+    /// <summary>أَلغى غَيرُ المُشتَري طَلَبَه — البائِعُ المَربوطُ يَرفُضُه عِندَ <c>Offered</c> أَو
+    /// يُلغيه بَعدَها (‏ADR-033 §٦‑ج مُلحَقاً، ‏2026-10-11). نَوعٌ ثالِثٌ تَرسُمُه شاشَةُ الإشعاراتِ
+    /// بِأَيقونَةِ النَوعَينِ الأَوَّلَين.</summary>
+    public const string CancelledType = "deal_cancelled";
 
     private readonly IDocumentStore _store;
     private readonly IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> _hub;
@@ -86,6 +93,25 @@ public sealed class DealNotices
     public static string AcceptedPushBody(Deal deal, string acceptorName, L l)
         => l.Format("notifications.deal_accepted.push_body", acceptorName, deal.ListingTitle);
 
+    /// <summary>إشعارُ المُشتَري (المُبادِر) بِأَنّ غَيرَه أَلغى طَلَبَه — بِاسمِ المُلغي وعُنوانِ الإعلان.</summary>
+    public static Notification CancelledFor(string slug, Deal deal, string cancellerName, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = deal.InitiatorId,
+        Type = CancelledType,
+        Title = l["notifications.deal_cancelled.title"],
+        Body = l.Format("notifications.deal_cancelled.body", cancellerName, deal.ListingTitle),
+        RelatedUrl = $"/{slug}/deals/{deal.Id}",
+        At = at,
+    };
+
+    public static string CancelledPushBody(Deal deal, string cancellerName, L l)
+        => l.Format("notifications.deal_cancelled.push_body", cancellerName, deal.ListingTitle);
+
+    /// <summary>مَن يُشعَرُ بِالإلغاء: المُشتَري، ما لَم يَكُن هُوَ المُلغي — فَمَن يُلغي طَلَبَه لا
+    /// يُخبَرُ بِما فَعَلَه.</summary>
+    public static bool TellsTheBuyer(Deal deal, Guid cancellerId) => cancellerId != deal.InitiatorId;
+
     // ─── الأُنبوب — تَخزينٌ ثُمَّ جَرَسٌ ثُمَّ دَفع ──────────────────────────
 
     /// <summary>بَعدَ حَفظِ <c>/checkout/submit</c>: إشعارٌ واحِدٌ لِمالِكِ إعلانِ كُلِّ
@@ -131,5 +157,24 @@ public sealed class DealNotices
         await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
         await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, AcceptedPushBody(deal, acceptorName, l),
             url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
+    }
+
+    /// <summary>بَعدَ إلغاءٍ ناجِحٍ في <c>/cancel</c>: إشعارٌ لِلمُشتَري بِاسمِ المُلغي إن لَم يَكُن هُوَ
+    /// (<see cref="TellsTheBuyer"/>). كانَ الإلغاءُ صامِتاً: البائِعُ المَربوطُ عِندَ الوِلادَةِ يَرفُضُ
+    /// الطَلَبَ عِندَ <c>Offered</c> والمُشتَري لا يَعلَمُ إلّا إن فَتَحَ صَفقَتَه. تُرجِعُ هَل أُشعِر.</summary>
+    public async Task<bool> NotifyCancelledAsync(
+        string slug, Deal deal, Guid cancellerId, string cancellerName, L l, CancellationToken ct = default)
+    {
+        if (!TellsTheBuyer(deal, cancellerId)) return false;
+        var n = CancelledFor(slug, deal, cancellerName, l, DateTime.UtcNow);
+        await using (var s = _store.LightweightSession(slug))
+        {
+            s.Store(n);
+            await s.SaveChangesAsync(ct);
+        }
+        await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
+        await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, CancelledPushBody(deal, cancellerName, l),
+            url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
+        return true;
     }
 }
