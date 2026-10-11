@@ -262,7 +262,9 @@
         else if (deal.Status == DealStatus.Completed)
         {
             <AcAlert Variant="success" Message="@L["deals.detail.completed"]" />
-            @if (!alreadyReviewed && deal.CounterpartyId is not null)
+            @* الاستِمارَةُ مِن البَوّابَةِ الَّتي تُطَبِّقُها النُقطَة (‏ADR-033 §٦‑ح) — كانَ شَرطُها هُنا
+               «لَها طَرَف» والنُقطَةُ لا تَسأَلُ شَيئاً؛ فَصارَ ما يُرسَمُ هُوَ ما يُقبَل. *@
+            @if (!alreadyReviewed && canReview)
             {
                 <AcCard>
                     <ChildContent>
@@ -326,6 +328,9 @@
     Deal? deal;
     List<DealStage> stages = new();
     bool isInitiator, isListingOwner, canAdvance, alreadyReviewed;
+    /// <summary>الناظِرُ يُقَيِّمُ هذِه الصَفقَة — <see cref="DealReviewAuthorization.IsAllowed"/> نَفسُها الَّتي
+    /// تُطَبِّقُها <c>/review</c> (‏ADR-033 §٦‑ح)، فَلا تُرسَمُ استِمارَةٌ تَرُدُّها النُقطَة.</summary>
+    bool canReview;
     DealStage? nextStage;
     /// <summary>بَياناتُ التَوصيلِ تُرسَمُ لِمَن يُسَلِّمُ وَحدَه — الطَرَفُ المُقابِلُ
     /// أَو مالِكُ الإعلانِ، ولَيسَ المُشتَري (P1-4).</summary>
@@ -384,6 +389,7 @@
             _ => false
         };
         alreadyReviewed = await Reviews.HasReviewedAsync(Slug, uid, Id);
+        canReview = DealReviewAuthorization.IsAllowed(deal, new DealReviewer(uid, Auth.UserName ?? ""));
     }
 
     // ‏لَيسَت `static` بَعدَ اليَوم: قيَمُها صارَت مِن `L` وهو مَحقونٌ

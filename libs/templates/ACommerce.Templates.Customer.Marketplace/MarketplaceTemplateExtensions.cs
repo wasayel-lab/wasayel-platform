@@ -132,6 +132,8 @@ public static class MarketplaceTemplateExtensions
         services.AddScoped<Services.Deals.DealsService>();
         // إشعاراتُ الصَفقَةِ عَلى الأُنبوبِ القائِم (P1-5) — تَحقِنُ المَخزَنَ والجَرَسَ والدَفعَ.
         services.AddScoped<Services.Deals.DealNotices>();
+        // تَقييمُ الطَرَفِ الآخَرِ خَلفَ بَوّابَتِه (‏ADR-033 §٦‑ح) — عَلى خِدمَتَي الصَفَقاتِ والتَقييماتِ القائِمَتَين.
+        services.AddScoped<Services.Deals.DealReviews>();
 
         // التَّقييمات (تَقييم مُتَبادَل بَعد اكتِمال صَفقَة).
         services.AddScoped<ACommerce.Kit.Reviews.ReviewsService>();
@@ -3291,10 +3293,18 @@ public static class MarketplaceTemplateExtensions
           .RequireStoreWritable();
 
         // تَقييم الطَّرَف الآخَر بَعد اكتِمال الصَّفقَة.
+        //
+        // **والحارِسُ في تَوقيعِ الخِدمَة** (القاعِدَة ٦؛ المُراجَعَةُ الثالِثَةُ عَلى `8769fa4`،
+        // ‏2026-10-11؛ ‏ADR-033 §٦‑ح): كانَ هذا الجِسمُ يَختارُ الهَدَفَ — `CounterpartyId` لِلمُبادِرِ
+        // و`InitiatorId` لِمَن سِواه — ويَكتُبُ ما دامَ مَوجوداً، بِلا سُؤالٍ عَن الاكتِمالِ ولا
+        // العُضوِيَّةِ ولا النَفس؛ فَلَمّا رُبِطَ البائِعُ عِندَ الوِلادَةِ صارَ لِمُشتَري السَلَّةِ هَدَفٌ
+        // مِن لَحظَةِ الطَلَب. القَرارُ كُلُّه في `DealReviewAuthorization.Validate` النَقِيَّة، وهذا
+        // المَسارُ يُصَرِّحُ بِهُوِيَّةِ الكاتِبِ فَقَط. **والرَفضُ لا يُحمَلُ في `?err`**: الشاشَةُ تَرسُمُ
+        // الاستِمارَةَ مِن البَوّابَةِ نَفسِها، فَلا يَبلُغُه إلّا طَلَبٌ لَم تَرسُمه — ويَعودُ إلى حَيثُ
+        // كانَ يَعود (لا صَفقَة ← «صَفقاتي»، وإلّا صَفحَتُها).
         app.MapPost("/{slug}/deals/{id:guid}/review",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
-                   Services.Deals.DealsService deals,
-                   ACommerce.Kit.Reviews.ReviewsService reviews) =>
+                   Services.Deals.DealReviews reviews) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
@@ -3303,15 +3313,8 @@ public static class MarketplaceTemplateExtensions
             if (!int.TryParse(req.Form["rating"].ToString(), out var rating)) rating = 5;
             var body = req.Form["body"].ToString().Trim();
 
-            var deal = await deals.LoadAsync(slug, id);
-            if (deal is null) return Results.Redirect(Link(req, slug, "deals"));
-            var (target, targetName) = deal.InitiatorId == userId
-                ? (deal.CounterpartyId ?? Guid.Empty, deal.CounterpartyName ?? "—")
-                : (deal.InitiatorId, deal.InitiatorName);
-            if (target != Guid.Empty && !await reviews.HasReviewedAsync(slug, userId, id))
-                await reviews.SubmitAsync(slug, target, targetName, userId, userName,
-                    rating, body, dealId: id, dealPattern: deal.Pattern);
-            return Results.Redirect(Link(req, slug, $"deals/{id}"));
+            var res = await reviews.SubmitAsync(slug, id, new Services.Deals.DealReviewer(userId, userName), rating, body);
+            return Results.Redirect(Link(req, slug, res.Deal is null ? "deals" : $"deals/{id}"));
         }).DisableAntiforgery()
           .RequireStoreWritable();
 

@@ -31,6 +31,12 @@ namespace ACommerce.Platform.Tests;
 // كيتُ التَقييماتِ وما يَعُدُّه، وما تُرسِلُه الاستِمارَةُ وتَقرَؤُه النُقطَة — لا يَمَسُّها شَيء.
 // والمَسارُ الإداريُّ (`/studio/apps/{slug}/deals/{id}/review`، تَقييمٌ «نِيابَةً عَن» أَحَدِ
 // الطَرَفَينِ خَلفَ `StudioOwnsAsync`) خارِجَ هذا المِلَفّ.
+//
+// **ثُمَّ قُلِبَت صُفوفُ «اليَوم» الثَلاثَةُ في الكوميتِ التالي** (‏ADR-033 §٦‑ح، ‏2026-10-11): النُقطَةُ
+// تُنادي `DealReviews.SubmitAsync` بِسِجِلِّ كاتِبٍ ولا تَحمِلُ قَراراً، والبَوّابَةُ النَقِيَّةُ
+// `DealReviewAuthorization.Validate` تَرُدُّ غَيرَ الطَرَفِ والنَفسَ وغَيرَ المُكتَمِلَةِ قَبلَ أَيِّ قِراءَةٍ
+// لِلتَقييماتِ أَو كِتابَة، والشاشَةُ تَرسُمُ الاستِمارَةَ مِن البَوّابَةِ نَفسِها — كُلٌّ بِاسمٍ جَديدٍ يَقولُ
+// النَقيضَ ويَحمِلُ «قُلِبَ» في شَرحِه. وقِسمُ ما لا يُقلَبُ بِحَرفِه: بَصمَتُه قَبلَ البَوّابَةِ وبَعدَها واحِدَة.
 
 public class DealReviewCharacterizationTests
 {
@@ -110,67 +116,104 @@ public class DealReviewCharacterizationTests
         return world.Read<Deal>(deal.Id.ToString())!;
     }
 
-    // ═══ ١) «اليَوم» — تُقلَبُ بِاسمِها في كوميتِ البَوّابَة ═══════════════════════════════
-
-    /// <summary><b>اليَوم</b>: قاعِدَةٌ واحِدَةٌ تَختارُ الهَدَف — المُبادِرُ يُقَيِّمُ الطَرَفَ المُقابِل،
-    /// وكُلُّ مَن سِواه يُقَيِّمُ المُبادِر — وشَرطا كِتابَةٍ لا ثالِثَ لَهُما: هَدَفٌ مَوجودٌ، ولَم يُقَيِّم
-    /// الكاتِبُ هذِه الصَفقَة. ولا حَرفَ في الجِسمِ عَن الحالَة، ولا عَن عُضوِيَّةِ الكاتِب، ولا عَن أَن
-    /// يَكونَ الهَدَفُ هُوَ الكاتِب.</summary>
-    [Fact]
-    public void Today_the_review_endpoint_picks_a_target_by_one_rule_and_writes_whenever_it_exists_asking_neither_completion_nor_party_nor_self()
+    /// <summary>صَفقَةُ السَلَّةِ نَفسُها وعالَمُها — لِيُبنى عَلَيه بابُ التَقييمِ الحَقيقِيّ
+    /// (<see cref="DealReviews"/> فَوقَ <see cref="ReviewsService"/> عَلى المَخزَنِ نَفسِه).</summary>
+    private static (DocWorld World, Guid Id) CashCartWorld()
     {
-        var review = ReviewEndpoint();
-
-        Assert.Contains("var deal = await deals.LoadAsync(slug, id);", review, StringComparison.Ordinal);
-        Assert.Contains("var (target, targetName) = deal.InitiatorId == userId", review, StringComparison.Ordinal);
-        Assert.Contains("? (deal.CounterpartyId ?? Guid.Empty, deal.CounterpartyName ?? \"—\")", review, StringComparison.Ordinal);
-        Assert.Contains(": (deal.InitiatorId, deal.InitiatorName);", review, StringComparison.Ordinal);
-        Assert.Contains("if (target != Guid.Empty && !await reviews.HasReviewedAsync(slug, userId, id))", review, StringComparison.Ordinal);
-        Assert.Equal(1, Count(review, "await reviews.SubmitAsync(slug, target, targetName, userId, userName,"));
-
-        foreach (var absent in new[] { "Status", "Completed", "Stage", "CounterpartyId == userId", "CounterpartyId != userId",
-                                       "target == userId", "target != userId", "Validate(", "IsAllowed(" })
-            Assert.DoesNotContain(absent, review, StringComparison.Ordinal);
+        var world = new DocWorld();
+        var deals = new DealsService(world.Store, new ForbiddenPaymentProvider());
+        var deal = Now(deals.StartAsync(Slug, "marketplace", Buyer, "مُشتَرٍ", null, "سِلعَة", 100m,
+            new() { [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.CashOnDelivery }));
+        Now(deals.AttachRefAsync(Slug, deal.Id, DealsService.ListingOwnerRef, Seller.ToString()));
+        Now(deals.BindListingOwnerAsync(Slug, deal.Id, Seller.ToString()));
+        return (world, deal.Id);
     }
 
-    /// <summary><b>اليَوم</b>: صَفقَةُ السَلَّةِ كَما يُولِدُها <c>/checkout/submit</c> بَعدَ <c>8769fa4</c>
-    /// تَحمِلُ البائِعَ في <c>CounterpartyId</c> وهي في <c>Offered</c> فَعّالَةٌ لَم يُقبَل مِنها شَيء —
-    /// فَشَرطُ الكِتابَةِ أَعلاه («هَدَفٌ مَوجود») يَصدُقُ لِمُشتَريها مِن لَحظَةِ الطَلَب، والهَدَفُ
-    /// البائِع. وصَفقَةُ السَلَّةِ قَبلَ الرَبطِ كانَت بِلا طَرَف — فَالهَدَفُ فارِغٌ ولا كِتابَة.</summary>
+    private static string DealReviewsService()
+        => WriteEndpointGuardTests.StripComments(Source(Template, "Services", "Deals", "DealReviews.cs"));
+
+    // ═══ ١) ما كانَ «اليَوم» — قُلِبَت بِاسمِها (‏ADR-033 §٦‑ح) ═════════════════════════════
+
+    /// <summary><b>قُلِبَ</b> (المُراجَعَةُ الثالِثَةُ عَلى <c>8769fa4</c>، ‏2026-10-11؛ ‏ADR-033 §٦‑ح): كانَ
+    /// الجِسمُ يَختارُ الهَدَفَ بِقاعِدَةٍ واحِدَةٍ ويَكتُبُ بِشَرطَينِ لا ثالِثَ لَهُما — هَدَفٌ مَوجودٌ ولَم
+    /// يُقَيِّم الكاتِب — بِلا حَرفٍ عَن الحالَةِ ولا العُضوِيَّةِ ولا النَفس. وصارَ نِداءً واحِداً لِـ
+    /// <c>DealReviews.SubmitAsync</c> بِسِجِلِّ كاتِبٍ في التَوقيع، والخِدمَةُ تُطَبِّقُ
+    /// <c>DealReviewAuthorization.Validate</c> قَبلَ «قَيَّمَ مِن قَبل» وقَبلَ الكِتابَة — ولا قاعِدَةَ
+    /// هَدَفٍ ولا شَرطَ كِتابَةٍ في الجِسم.</summary>
     [Fact]
-    public void Today_a_cart_deal_bound_at_birth_hands_its_buyer_the_seller_as_target_at_Offered_before_any_acceptance()
+    public void The_review_endpoint_applies_the_gate_through_DealReviews_and_carries_no_decision_of_its_own()
+    {
+        var review = ReviewEndpoint();
+        Assert.Contains("Services.Deals.DealReviews reviews) =>", review, StringComparison.Ordinal);
+        Assert.Contains("var res = await reviews.SubmitAsync(slug, id, new Services.Deals.DealReviewer(userId, userName), rating, body);",
+            review, StringComparison.Ordinal);
+        Assert.Contains("return Results.Redirect(Link(req, slug, res.Deal is null ? \"deals\" : $\"deals/{id}\"));",
+            review, StringComparison.Ordinal);
+        Assert.Equal(1, Count(review, "SubmitAsync("));
+        foreach (var gone in new[] { "deals.LoadAsync(", "deal.InitiatorId == userId", "CounterpartyId", "Guid.Empty",
+                                     "HasReviewedAsync(", "ReviewsService" })
+            Assert.DoesNotContain(gone, review, StringComparison.Ordinal);
+
+        var service  = DealReviewsService();
+        var load     = service.IndexOf("var deal = await _deals.LoadAsync(tenantSlug, dealId, ct);", StringComparison.Ordinal);
+        var validate = service.IndexOf("var violation = DealReviewAuthorization.Validate(deal, by);", StringComparison.Ordinal);
+        var refuse   = service.IndexOf("if (violation is not null) return DealReviewResult.Refused(violation, deal);", StringComparison.Ordinal);
+        var once     = service.IndexOf("if (await _reviews.HasReviewedAsync(tenantSlug, by.ActorId, dealId, ct))", StringComparison.Ordinal);
+        var write    = service.IndexOf("var review = await _reviews.SubmitAsync(tenantSlug, targetId, targetName, by.ActorId, by.ActorName,", StringComparison.Ordinal);
+        Assert.True(load > 0 && validate > load && refuse > validate && once > refuse && write > once,
+            $"سَلسَلَةُ التَقييمِ تَغَيَّرَت: load={load} validate={validate} refuse={refuse} once={once} write={write}");
+        Assert.Equal(1, Count(service, "DealReviewAuthorization.Validate("));
+        Assert.Equal(1, Count(service, "_reviews.SubmitAsync("));
+    }
+
+    /// <summary><b>قُلِبَ</b> (المُراجَعَةُ الثالِثَةُ عَلى <c>8769fa4</c>، ‏2026-10-11؛ ‏ADR-033 §٦‑ح): كانَت
+    /// صَفقَةُ السَلَّةِ المَربوطَةُ عِندَ الوِلادَةِ تُعطي مُشتَريها البائِعَ هَدَفاً في <c>Offered</c> قَبلَ
+    /// أَيِّ قَبول، وشَرطُ الكِتابَةِ «هَدَفٌ مَوجود» يَصدُق. وصارَت البَوّابَةُ تَرُدُّه — وتَرُدُّ البائِعَ —
+    /// بِـ<c>deal_not_completed</c>، والبابُ الحَقيقِيُّ فَوقَ عالَمِ الوَثائِقِ لا يَكتُبُ تَقييماً ولا يَسأَلُ
+    /// «قَيَّمَ مِن قَبل» (يُعَدّ). وصَفقَةُ السَلَّةِ بِلا رَبطٍ كَذلك.</summary>
+    [Fact]
+    public void A_cart_deal_bound_at_birth_is_refused_a_review_until_it_completes()
     {
         var deal = CashCartDeal();
         Assert.Equal(DealStage.Offered, deal.Stage);
         Assert.Equal(DealStatus.Active, deal.Status);
-        Assert.Equal(Buyer, deal.InitiatorId);
         Assert.Equal(Seller, deal.CounterpartyId);
-        Assert.DoesNotContain(deal.Timeline, e => e.Action is "assigned" or "advanced");
+        Assert.Equal(DealReviewAuthorization.DealNotCompleted,
+            DealReviewAuthorization.Validate(deal, new DealReviewer(Buyer, "مُشتَرٍ"))!.Code);
+        Assert.Equal(DealReviewAuthorization.DealNotCompleted,
+            DealReviewAuthorization.Validate(deal, new DealReviewer(Seller, "بائِع"))!.Code);
+        Assert.Equal(DealReviewAuthorization.DealNotCompleted,
+            DealReviewAuthorization.Validate(CashCartDeal(bound: false), new DealReviewer(Buyer, "مُشتَرٍ"))!.Code);
 
-        Assert.Null(CashCartDeal(bound: false).CounterpartyId);
-
-        var review = ReviewEndpoint();
-        Assert.Contains("? (deal.CounterpartyId ?? Guid.Empty,", review, StringComparison.Ordinal);
-        Assert.Contains("if (target != Guid.Empty &&", review, StringComparison.Ordinal);
+        var (world, id) = CashCartWorld();
+        var reviews = new DealReviews(new DealsService(world.Store, new ForbiddenPaymentProvider()), new ReviewsService(world.Store));
+        var res = Now(reviews.SubmitAsync(Slug, id, new DealReviewer(Buyer, "مُشتَرٍ"), 1, "تَقييمٌ قَبلَ أَيِّ قَبول"));
+        Assert.False(res.Ok);
+        Assert.Equal(DealReviewAuthorization.DealNotCompleted, res.Violation!.Code);
+        Assert.Null(res.Review);
+        Assert.Equal(0, world.Wrote<Review>());
+        Assert.DoesNotContain("Query", world.Touches);
     }
 
-    /// <summary><b>اليَوم</b>: الشاشَةُ تَرسُمُ الاستِمارَةَ بِشَرطِها هِيَ — الصَفقَةُ <c>Completed</c> ولَها
-    /// طَرَفٌ ولَم يُقَيِّم الناظِرُ بَعد، وغَيرُ الطَرَفِ تُغلَقُ عَلَيه الصَفحَة — والنُقطَةُ لا تَقرَأُ
-    /// شَيئاً مِن ذلك: الشَرطُ في الشاشَةِ وَحدَها، و<c>curl</c> لا يَرى الشاشَة.</summary>
+    /// <summary><b>قُلِبَ</b> (المُراجَعَةُ الثالِثَةُ عَلى <c>8769fa4</c>، ‏2026-10-11؛ ‏ADR-033 §٦‑ح): كانَت
+    /// الشاشَةُ تَرسُمُ الاستِمارَةَ بِشَرطِها هِيَ — <c>Completed</c> ولَها طَرَف — والنُقطَةُ لا تَقرَأُ مِنه
+    /// شَيئاً. وصارَت الشاشَةُ تَقرَأُ <c>DealReviewAuthorization.IsAllowed</c> — البَوّابَةَ الَّتي يُطَبِّقُها
+    /// البابُ خَلفَ النُقطَة — فَما يُرسَمُ هُوَ ما يُقبَل، والصَفقَةُ الَّتي طَرَفاها واحِدٌ لا تُرسَمُ لَها
+    /// استِمارَة.</summary>
     [Fact]
-    public void Today_the_page_draws_the_review_form_from_its_own_condition_and_the_endpoint_reads_none_of_it()
+    public void The_page_draws_the_review_form_from_the_same_gate_the_endpoint_applies()
     {
         var page = DealPage();
         var completed = page.IndexOf("else if (deal.Status == DealStatus.Completed)", StringComparison.Ordinal);
-        var form      = page.IndexOf("@if (!alreadyReviewed && deal.CounterpartyId is not null)", StringComparison.Ordinal);
+        var form      = page.IndexOf("@if (!alreadyReviewed && canReview)", StringComparison.Ordinal);
         var post      = page.IndexOf("/deals/{deal.Id}/review\")", StringComparison.Ordinal);
         Assert.True(completed > 0 && form > completed && post > form,
-            $"الاستِمارَةُ لا تَقَعُ تَحتَ شَرطِ الشاشَة: completed={completed} form={form} post={post}");
+            $"الاستِمارَةُ لا تَقَعُ تَحتَ البَوّابَة: completed={completed} form={form} post={post}");
+        Assert.Contains("canReview = DealReviewAuthorization.IsAllowed(deal, new DealReviewer(uid, Auth.UserName ?? \"\"));",
+            page, StringComparison.Ordinal);
+        Assert.DoesNotContain("@if (!alreadyReviewed && deal.CounterpartyId is not null)", page, StringComparison.Ordinal);
         Assert.Contains("if (!isInitiator && !isListingOwner) { deal = null; return; }", page, StringComparison.Ordinal);
-
-        var review = ReviewEndpoint();
-        Assert.DoesNotContain("alreadyReviewed", review, StringComparison.Ordinal);
-        Assert.DoesNotContain("DealStatus", review, StringComparison.Ordinal);
+        Assert.Contains("DealReviewAuthorization.Validate(deal, by)", DealReviewsService(), StringComparison.Ordinal);
     }
 
     // ═══ ٢) ما لا تَمَسُّه البَوّابَة — بِحَرفِه ════════════════════════════════════════
