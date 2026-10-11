@@ -130,29 +130,30 @@ public class DealOwnListingCharacterizationTests
     /// يُسَمّيه — مِن <c>Offered</c> إلى <c>Reviewed</c> فَـ<c>Completed</c> بِخَمسِ نَقَرات. وصارَ يُحَرِّكُ
     /// <c>Offered → Booked</c> وَحدَها (صَفُّ <c>initiator</c> — سُلوكٌ قائِمٌ يُقالُ في §٦‑ج) ثُمَّ يُرَدُّ:
     /// <c>Booked</c> تَطلُبُ <c>counterparty</c> ولا طَرَف، والقَبولُ يَرُدُّه بِـ<c>actor_is_initiator</c>
-    /// — فَلا تَبلُغُ <c>Completed</c> ولا يَكونُ لَها هَدَفُ تَقييم.</summary>
+    /// — فَلا تَبلُغُ <c>Completed</c> ولا يَكونُ لَها هَدَفُ تَقييم.
+    /// <para><b>وقُلِبَ ثانِيَةً بِاسمِه</b> (‏ADR-033 §٦‑ط، ‏2026-10-11): كانَ
+    /// <c>The_buyer_of_his_own_listing_stops_at_Booked_and_cannot_accept_his_own_order</c> — يُحَرِّكُ
+    /// <c>Offered → Booked</c> بِصَفِّ <c>initiator</c> (فاعِلِ المَرحَلَةِ الحالِيَّة). وصارَ الخُروجُ مِن <c>Offered</c>
+    /// دُخولَ <c>Booked</c> وفاعِلُها الطَرَفُ المُقابِل — ولا طَرَفَ لِصَفقَتِه — فَلا يُحَرِّكُها خُطوَةً: تَبقى
+    /// في <c>Offered</c> بِلا سَطرِ <c>advanced</c>، والقَبولُ يَرُدُّه كَما كان.</para></summary>
     [Fact]
-    public void The_buyer_of_his_own_listing_stops_at_Booked_and_cannot_accept_his_own_order()
+    public void The_buyer_of_his_own_listing_cannot_move_it_out_of_Offered_and_cannot_accept_his_own_order()
     {
         var (deals, world, id) = CheckoutDeal(Buyer, Buyer);
 
         var booked = Now(deals.AdvanceAsync(Slug, id, Buyer, "مُشتَرٍ"));
-        Assert.True(booked.Ok, booked.Reason);
-        Assert.Equal(DealStage.Booked, booked.Deal!.Stage);
-
-        var onward = Now(deals.AdvanceAsync(Slug, id, Buyer, "مُشتَرٍ"));
-        Assert.False(onward.Ok);
-        Assert.Contains("counterparty", onward.Reason ?? "", StringComparison.Ordinal);
+        Assert.False(booked.Ok);
+        Assert.Contains("counterparty", booked.Reason ?? "", StringComparison.Ordinal);
 
         var accept = Now(deals.AcceptAsync(Slug, id, new DealAcceptor(Buyer, "مُشتَرٍ")));
         Assert.False(accept.Ok);
         Assert.Equal(DealAcceptAuthorization.ActorIsInitiator, accept.Violation!.Code);
 
         var after = world.Read<Deal>(id.ToString())!;
-        Assert.Equal(DealStage.Booked, after.Stage);
+        Assert.Equal(DealStage.Offered, after.Stage);
         Assert.Equal(DealStatus.Active, after.Status);
         Assert.Null(after.CounterpartyId);
-        Assert.Single(after.Timeline, e => e.Action == "advanced");
+        Assert.DoesNotContain(after.Timeline, e => e.Action == "advanced");
     }
 
     // ═══ ٢) ما لا يَمَسُّه الإصلاح ══════════════════════════════════════════════════

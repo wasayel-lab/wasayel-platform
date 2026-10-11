@@ -3016,6 +3016,9 @@ public static class MarketplaceTemplateExtensions
 
                 // اِحجِز المَبلَغ عَبر مُزَوِّد الدَّفع (Authorize، لا
                 // capture بَعد — يَتِمّ الـ capture عِندَ تَأكيد البائِع).
+                // (و«عِندَ تَأكيدِ البائِع» لَم يَصدُق حَرفاً: القَبضُ عِندَ دُخولِ `Paid` في `MoveAsync`، وكانَ
+                // يُدخِلُها أَيُّ الطَرَفَين؛ ومُنذُ ‏ADR-033 §٦‑ط (‏2026-10-11) يُدخِلُها المُشتَري وَحدَه — فاعِلُ
+                // `Paid` — بِنَقرَةِ «تَأكيد: دَفع». يُصَحَّحُ ولا يُعادُ حَرفٌ فَوقَه.)
                 // **والنَقدُ عِندَ الاستِلامِ لا يَستَدعي المُزَوِّد** —
                 // والقَرارُ مِن الدالَّةِ النَقِيَّةِ لا مِن حَرفِيَّةٍ
                 // في الجِسم.
@@ -3388,9 +3391,12 @@ public static class MarketplaceTemplateExtensions
                 await deals.AssignCounterpartyAsync(slug, id,
                     auth.UserId!.Value, "مالِك التَّطبيق");
 
-            var actorId = deal.Stage == Services.Deals.DealStage.Offered
-                ? deal.InitiatorId
-                : (deal.CounterpartyId ?? auth.UserId!.Value);
+            // يُحَرِّكُ بِهُوِيَّةِ جانِبِ المَتجَر — الطَرَفِ المُقابِلِ، أَو مالِكِ التَطبيقِ إن لَم يَكُن —
+            // ولا يَستَعيرُ المُشتَري بَعدَ اليَوم (‏ADR-033 §٦‑ط، ‏2026-10-11): كانَ يَستَعيرُ المُبادِرَ عِندَ
+            // `Offered` لِأَنّ الخِدمَةَ كانَت تَسأَلُ فاعِلَ المَرحَلَةِ الحالِيَّة؛ وتَسأَلُ اليَومَ فاعِلَ
+            // المَدخولَة (`Booked` = الطَرَف) — فَيَمضي بِما يَمضي بِه جانِبُ المَتجَرِ ويَقِفُ عِندَ خُطوَةِ
+            // المُشتَري (يَدفَع، يَستَلِم) كَما وَقَفَ عِندَها قَبلُ بِمَرحَلَةٍ أَبعَد.
+            var actorId = deal.CounterpartyId ?? auth.UserId!.Value;
             var result = await deals.AdvanceAsync(slug, id, actorId, "مالِك التَّطبيق (إداريّ)", note);
             if (result.Ok && result.Deal is not null)
                 await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",

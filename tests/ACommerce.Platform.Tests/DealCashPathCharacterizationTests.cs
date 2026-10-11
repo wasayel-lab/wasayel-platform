@@ -337,11 +337,14 @@ public class DealCashPathCharacterizationTests
         Assert.Contains("\"initiator\" => isInitiator, \"counterparty\" => deal.CounterpartyId == uid, \"either\" => isInitiator || deal.CounterpartyId == uid,", gate, StringComparison.Ordinal);
 
         // الحِملُ القَديمُ بِجَوابِه القَديم — فَلا مُستَهلِكٌ قَديمٌ تَغَيَّرَ تَحتَه.
+        // **قُلِبَ شَطرُ الدَور** (‏ADR-033 §٦‑ط، ‏2026-10-11): كانَ الدَورُ عِندَ `Paid` لِلمُشتَري (فاعِلُ
+        // `Paid`) والتالي «شَحن» — يُعلِنُ الشَحنَ عَن البائِع. وصارَ الخُروجُ مِن `Paid` دُخولَ `Shipping`
+        // وفاعِلُها الطَرَف: الدَورُ لِلبائِعِ والمُشتَري يَنتَظِر؛ والتالي بِحَرفِه.
         var buyerAtPaid  = DealTurnView.For("marketplace", DealStage.Paid, DealSide.Initiator);
         var sellerAtPaid = DealTurnView.For("marketplace", DealStage.Paid, DealSide.Counterparty);
-        Assert.True(buyerAtPaid.IsMine);
+        Assert.False(buyerAtPaid.IsMine);
         Assert.Equal(DealStage.Shipping, buyerAtPaid.NextStage);
-        Assert.False(sellerAtPaid.IsMine);
+        Assert.True(sellerAtPaid.IsMine);
         // والصَفقَةُ النَقديَّةُ لا تَبلُغُ Paid أَصلاً — فَلا بِطاقَةَ تَقولُ ذلك لِمُشتَريها.
         var cashAtConfirmed = DealTurnView.For(CashDeal(counterparty: Seller, stage: DealStage.Confirmed), DealSide.Counterparty);
         Assert.Equal(DealStage.Shipping, cashAtConfirmed.NextStage);

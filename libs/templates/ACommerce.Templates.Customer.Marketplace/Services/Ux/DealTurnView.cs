@@ -17,7 +17,9 @@ public enum DealSide
 /// <param name="IsMine">هَل الإجراء التالي مَطلوب مِنّي أَنا؟</param>
 /// <param name="ActorKey">الفاعِل المُخَوَّل كَما تُعلِنُه
 /// <see cref="DealsPolicy.Actor"/> — أَحَد أَربَعَة: initiator |
-/// counterparty | either | platform.</param>
+/// counterparty | either | platform. <b>وهُوَ فاعِلُ الخُروجِ مِن المَرحَلَة</b>
+/// (<see cref="DealsPolicy.RequiredActorToLeave(string, DealStage, string?)"/> — فاعِلُ التالي،
+/// ‏ADR-033 §٦‑ط)، وعِندَ آخِرِ مَرحَلَةٍ فاعِلُها هِيَ كَما كان.</param>
 /// <param name="NextStage">المَرحَلَة الَّتي يَنتَقِل إلَيها التَقَدُّم،
 /// أَو <c>null</c> عِندَ آخِر مَرحَلَة.</param>
 /// <param name="IsFinished">لا مَرحَلَة تالِيَة — انتَهى التَدَفُّق.</param>
@@ -51,6 +53,9 @@ public static class DealTurnView
     /// <b>المَرحَلَة الحاليَّة</b> — نَفس القاعِدَة الَّتي يَفرِضُها
     /// <c>DealsService.AdvanceAsync</c>، فَلا تَفتَرِق الواجِهَة عَن
     /// المُحَرِّك.
+    /// <para><b>وصارَ فاعِلَ المَرحَلَةِ التالِيَة — والقاعِدَةُ هي هي</b> (‏ADR-033 §٦‑ط، ‏2026-10-11؛
+    /// ولا يُعادُ حَرفٌ فَوقَه): المُحَرِّكُ يَسأَلُ اليَومَ <c>DealsPolicy.RequiredActorToLeave</c>، فَتَسأَلُها
+    /// الواجِهَةُ نَفسَها — وكانَت «الحالِيَّة» إزاحَةَ مَرحَلَةٍ تَقولُ لِلمُشتَري «دَورُكَ الآن: تَأكيد: حَجز».</para>
     /// </summary>
     public static DealTurn For(string pattern, DealStage stage, DealSide side)
         => For(pattern, stage, side, payMethod: null);
@@ -63,7 +68,11 @@ public static class DealTurnView
     public static DealTurn For(string pattern, DealStage stage, DealSide side, string? payMethod)
     {
         var next  = DealsPolicy.Next(pattern, stage, payMethod);
-        var actor = DealsPolicy.Actor(stage);
+        // مَن يُخرِجُ الصَفقَةَ مِن مَرحَلَتِها: فاعِلُ التالي — الدالَّةُ نَفسُها الَّتي يَفرِضُها
+        // المُحَرِّك (‏ADR-033 §٦‑ط). وعِندَ آخِرِ مَرحَلَةٍ لا خُروج، فَيَبقى المِفتاحُ فاعِلَها هِيَ
+        // كَما كانَ (`IsMine` كاذِبٌ هُناكَ أَيّاً كان) — فَسَطرُ الانتِظارِ لِصَفقَةٍ فَعّالَةٍ انتَهَت
+        // مَراحِلُها (`classifieds`) لا يَتَغَيَّرُ حَرفاً.
+        var actor = DealsPolicy.RequiredActorToLeave(pattern, stage, payMethod) ?? DealsPolicy.Actor(stage);
 
         var mine = next is not null && side switch
         {

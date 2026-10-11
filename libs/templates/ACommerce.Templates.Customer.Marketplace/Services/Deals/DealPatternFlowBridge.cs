@@ -40,6 +40,12 @@ public static class DealPatternFlowBridge
     /// <c>DealsPolicy.Actor(deal.Stage)</c> أَي فاعِل المَرحَلَة
     /// الحاليَّة لا التالِيَة.</para>
     ///
+    /// <para><b>وصارَ يَملِكُه فاعِلُ المَرحَلَةِ الهَدَف — والسَبَبُ هُوَ هُوَ</b> (‏ADR-033 §٦‑ط،
+    /// ‏2026-10-11؛ ولا يُعادُ حَرفٌ فَوقَه): <c>DealsService</c> يَفحَصُ اليَومَ
+    /// <c>DealsPolicy.RequiredActorToLeave</c> — فاعِلَ التالي — فَالجِسرُ يُسقِطُ ما يَفرِضُه الكودُ كَما
+    /// كان (‏FLOWS-INVENTORY: «كَما يَفرِضُه الكود»). والانتِقالُ المُنشِئُ كانَ يَقرَأُ فاعِلَ المَرحَلَةِ
+    /// الأولى أَصلاً (مَن يُنشِئُ <c>Offered</c>) — فَصارَت القِراءَتانِ واحِدَة: فاعِلُ المَرحَلَةِ مَن يَدخُلُها.</para>
+    ///
     /// <para>والمَرحَلَة الأَخيرَة <b>نِهائيَّة</b>: لا تالِيَ لَها في
     /// النَمَط. وهذا يَشمَل <c>classifieds</c> المُنتَهي عِندَ
     /// <c>Confirmed</c> قَصداً.</para>
@@ -80,7 +86,7 @@ public static class DealPatternFlowBridge
             transitions.Add(new FlowTransition(
                 from.Stage.ToString(),
                 to.Stage.ToString(),
-                from.Actor,
+                to.Actor,
                 new FlowLabel(to.LabelAr, to.Stage.ToString()),
                 effects));
         }

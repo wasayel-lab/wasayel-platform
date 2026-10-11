@@ -219,14 +219,18 @@ public class DealCounterpartyCharacterizationTests
 
     /// <summary><c>AdvanceAsync</c> تَفحَصُ فاعِلَ <b>المَرحَلَةِ الحالِيَّة</b> لا
     /// التالِيَة، وتَقيسُ الطَرَفَ بِـ<c>deal.CounterpartyId == actorId</c> في ذِراعِ
-    /// <c>switch</c> لا تَقرَأُ <c>Refs</c> إطلاقاً.</summary>
+    /// <c>switch</c> لا تَقرَأُ <c>Refs</c> إطلاقاً.
+    /// <para><b>قُلِبَ شَطرُه الأَوَّل</b> (‏ADR-033 §٦‑ط، ‏2026-10-11): كانَ
+    /// <c>AdvanceAsync_checks_the_actor_of_the_current_stage_…</c> — <c>Actor(deal.Stage)</c>، إزاحَةُ مَرحَلَةٍ في
+    /// قِراءَةِ عَمودِ الفاعِل. وصارَت تَفحَصُ فاعِلَ المَرحَلَةِ المَدخولَة بِالدالَّةِ الواحِدَة
+    /// <c>DealsPolicy.RequiredActorToLeave</c>؛ والقِياسُ بِالهُوِيَّةِ بِلا <c>Refs</c> بِحَرفِه.</para></summary>
     [Fact]
-    public void AdvanceAsync_checks_the_actor_of_the_current_stage_and_measures_the_counterparty_by_identity()
+    public void AdvanceAsync_checks_the_actor_of_the_entered_stage_and_measures_the_counterparty_by_identity()
     {
         var advance = AdvanceBody();
-        Assert.Contains("var required = DealsPolicy.Actor(deal.Stage);", advance, StringComparison.Ordinal);
+        Assert.Contains("var required = DealsPolicy.RequiredActorToLeave(deal)!;", advance, StringComparison.Ordinal);
         Assert.Contains("if (!IsActorAllowed(deal, actorId, required))", advance, StringComparison.Ordinal);
-        Assert.DoesNotContain("DealsPolicy.Actor(next", advance, StringComparison.Ordinal);
+        Assert.DoesNotContain("DealsPolicy.Actor(deal.Stage)", advance, StringComparison.Ordinal);
 
         var gate = Squash(ActorGateBody());
         Assert.Contains("\"initiator\" => deal.InitiatorId == actorId,", gate, StringComparison.Ordinal);
@@ -348,9 +352,14 @@ public class DealCounterpartyCharacterizationTests
     /// بَعد — ولا يُقرَأُ <c>listing_owner</c> فيه حَرفاً، فَـ<c>CounterpartyId ≠
     /// listing_owner</c> عَلى هذا المَسارِ ما لَم يَتَّفِقا صُدفَةً. والفاعِلُ الَّذي
     /// يُحَرِّكُ بِه: المُبادِرُ عِندَ <c>Offered</c> وإلّا الطَرَفُ المُقابِلُ أَو
-    /// مالِكُ التَطبيق. وهُوَ المَسارُ الوَحيدُ لِلصَفقَةِ اليَتيمَة (‏db64c7b).</summary>
+    /// مالِكُ التَطبيق. وهُوَ المَسارُ الوَحيدُ لِلصَفقَةِ اليَتيمَة (‏db64c7b).
+    /// <para><b>قُلِبَ شَطرُ الفاعِل</b> (‏ADR-033 §٦‑ط، ‏2026-10-11): كانَ
+    /// <c>The_admin_path_makes_the_app_owner_the_counterparty_and_never_reads_…</c> — يَستَعيرُ المُبادِرَ عِندَ
+    /// <c>Offered</c> لِأَنّ الخِدمَةَ كانَت تَسأَلُ فاعِلَ المَرحَلَةِ الحالِيَّة. وصارَت تَسأَلُ فاعِلَ المَدخولَة
+    /// (<c>Booked</c> = الطَرَف)، فَيُحَرِّكُ المَسارُ بِجانِبِ المَتجَرِ وَحدَه (الطَرَفُ أَو مالِكُ التَطبيق) ولا
+    /// يَستَعيرُ المُشتَري — ويَقِفُ عِندَ خُطوَتِه (يَدفَع، يَستَلِم): مَقيسٌ في <c>DealActorToLeaveTests</c>.</para></summary>
     [Fact]
-    public void The_admin_path_makes_the_app_owner_the_counterparty_and_never_reads_the_listing_owner_ref()
+    public void The_admin_path_makes_the_app_owner_the_counterparty_moves_as_the_store_side_and_never_reads_the_listing_owner_ref()
     {
         var admin = Endpoint("/studio/apps/{slug}/deals/{id:guid}/advance", ".DisableAntiforgery();");
         Assert.Contains("if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect(\"/studio\");", admin, StringComparison.Ordinal);
@@ -360,9 +369,9 @@ public class DealCounterpartyCharacterizationTests
         Assert.True(guard > 0 && assign > guard, $"التَعيينُ الإداريُّ بِلا حارِسِ «لا طَرَفَ بَعد»: guard={guard} assign={assign}");
         Assert.Contains("auth.UserId!.Value, \"مالِك التَّطبيق\");", admin, StringComparison.Ordinal);
 
-        Assert.Contains("var actorId = deal.Stage == Services.Deals.DealStage.Offered", admin, StringComparison.Ordinal);
-        Assert.Contains("? deal.InitiatorId", admin, StringComparison.Ordinal);
-        Assert.Contains(": (deal.CounterpartyId ?? auth.UserId!.Value);", admin, StringComparison.Ordinal);
+        Assert.Contains("var actorId = deal.CounterpartyId ?? auth.UserId!.Value;", admin, StringComparison.Ordinal);
+        Assert.DoesNotContain("deal.InitiatorId", admin, StringComparison.Ordinal);
+        Assert.DoesNotContain("DealStage.Offered", admin, StringComparison.Ordinal);
         Assert.Contains("deals.AdvanceAsync(slug, id, actorId, \"مالِك التَّطبيق (إداريّ)\", note)", admin, StringComparison.Ordinal);
 
         Assert.DoesNotContain("listing_owner", admin, StringComparison.Ordinal);
@@ -414,16 +423,25 @@ public class DealCounterpartyCharacterizationTests
     /// مَسارِ <c>AdvanceAsync</c> العامّ — كانَ هذا سَبَبَ الاستِعارَة. وصارَ القَبولُ
     /// انتِقالاً لَه بَوّابَتُه (<c>Validate</c>) ولا يَمُرُّ بِهذِه البَوّابَة، فَبَقِيَ
     /// الصَفُّ بِحَرفِه (‏ADR-033 §٦): «مَن يُحَرِّكُ Offered بِلا قَبول» جَوابُه
-    /// المُبادِرُ كَما كان.</summary>
+    /// المُبادِرُ كَما كان.
+    /// <para><b>قُلِبَ</b> (‏ADR-033 §٦‑ط، ‏2026-10-11): كانَ
+    /// <c>Offered_still_asks_the_initiator_on_the_general_advance_path_so_acceptance_has_its_own_gate</c> — يَقرَأُ
+    /// صَفَّ <c>Offered</c> سُؤالَ الخُروجِ مِنها. وصَفُّه بِحَرفِه (<c>initiator</c> — مَن يُنشِئُ العَرض)، لَكِنَّ
+    /// الخُروجَ مِنها دُخولُ <c>Booked</c> وفاعِلُها الطَرَفُ المُقابِل: فَالمُشتَري مَردودٌ عَلى المَسارِ العامّ
+    /// (لا يَحجِزُ طَلَبَه بِنَفسِه)، والبائِعُ المَربوطُ يَمُرّ — والقَبولُ يَسأَلُ البَوّابَةَ نَفسَها.</para></summary>
     [Fact]
-    public void Offered_still_asks_the_initiator_on_the_general_advance_path_so_acceptance_has_its_own_gate()
+    public void Offered_is_left_by_the_counterparty_on_the_general_advance_path_and_acceptance_asks_the_same_gate()
     {
         Assert.Equal("initiator", DealsPolicy.Actor(DealStage.Offered));
         Assert.Equal(DealStage.Booked, DealsPolicy.Next("marketplace", DealStage.Offered));
 
         var justAssigned = CartDeal(counterparty: Seller);
-        Assert.True(Allowed(justAssigned, Buyer, "initiator"));
-        Assert.False(Allowed(justAssigned, Seller, "initiator"));
+        var required = DealsPolicy.RequiredActorToLeave(justAssigned);
+        Assert.Equal("counterparty", required);
+        Assert.False(Allowed(justAssigned, Buyer, required!));
+        Assert.True(Allowed(justAssigned, Seller, required!));
+
+        Assert.Contains("if (!IsActorAllowed(deal, by.ActorId, DealsPolicy.RequiredActorToLeave(deal)!))", AcceptBody(), StringComparison.Ordinal);
     }
 
     // ═══ ٤) صَفقَةُ النَقدِ تَحمِلُ `pay_method` و`AmountSar` ═══════════════
@@ -579,12 +597,17 @@ public class LiveDealAcceptSequenceProofTests(ITestOutputHelper output)
                 new() { ["pay_method"] = CheckoutPayMethods.CashOnDelivery });
             await deals.AttachRefAsync(slug, deal.Id, DealsService.ListingOwnerRef, seller.ToString());
 
-            // ١) مالِكُ الإعلانِ لا يُحَرِّكُ Offered بِنَفسِه — المَرحَلَةُ لِلمُبادِر.
-            //    وهذا هُوَ السَبَبُ المَقيسُ لِأَن يَكونَ فاعِلُ AcceptAsync المُبادِرَ لا القابِل.
+            // ١) مالِكُ الإعلانِ لا يُحَرِّكُ Offered بِنَفسِه قَبلَ أَن يَصيرَ الطَرَف — ولا المُشتَري.
+            //    **قُلِبَ** (‏ADR-033 §٦‑ط، ‏2026-10-11): كانَ رَدُّه «initiator» — المَرحَلَةُ لِلمُبادِر،
+            //    والمُشتَري يَمُرّ. وصارَ الخُروجُ مِن Offered دُخولَ Booked وفاعِلُها الطَرَف: لا طَرَفَ بَعد،
+            //    فَيُرَدّانِ كِلاهُما بِـ«counterparty» — والقَبولُ هُوَ ما يَجعَلُ المالِكَ الطَرَف.
             var ownerMoves = await deals.AdvanceAsync(slug, deal.Id, seller, "بائِع");
             Assert.False(ownerMoves.Ok);
-            Assert.Contains("initiator", ownerMoves.Reason ?? "");
-            Log($"مالِكُ الإعلانِ يُحَرِّكُ Offered بِنَفسِه: Ok={ownerMoves.Ok} — {ownerMoves.Reason}");
+            Assert.Contains("counterparty", ownerMoves.Reason ?? "");
+            var buyerMoves = await deals.AdvanceAsync(slug, deal.Id, buyer, "مُشتَرٍ");
+            Assert.False(buyerMoves.Ok);
+            Assert.Contains("counterparty", buyerMoves.Reason ?? "");
+            Log($"مالِكُ الإعلانِ يُحَرِّكُ Offered بِنَفسِه: Ok={ownerMoves.Ok} — {ownerMoves.Reason} · والمُشتَري: Ok={buyerMoves.Ok}");
 
             // ٢) غَريبٌ يَقبَل — يُرَدُّ بِرَمزِه ولا يُكتَبُ شَيء.
             var refused = await deals.AcceptAsync(slug, deal.Id, new DealAcceptor(stranger, "غَريب"));

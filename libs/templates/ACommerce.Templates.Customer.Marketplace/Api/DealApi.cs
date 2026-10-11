@@ -43,10 +43,15 @@ public static class DealApi
         // بِوَعيِ طَريقَةِ الدَفع (‏ADR-033 §٦) — نَفسُ الدالَّةِ الَّتي تَقرَؤُها
         // الخِدمَةُ والشاشَة، فَلا يَعِدُ العَقدُ بِمَرحَلَةٍ سَيَرفُضُها المُحَرِّك.
         var next = DealsPolicy.Next(d);
+        // و`actor_for_current_stage` = مَن تَنتَظِرُه المَرحَلَةُ الحالِيَّةُ لِيُخرِجَها — فاعِلُ التالي،
+        // الدالَّةُ الَّتي يَفرِضُها المُحَرِّك (‏ADR-033 §٦‑ط، ‏2026-10-11). كانَ `Actor(d.Stage)` فَيَقولُ
+        // «initiator» عِندَ `Paid` والمُحَرِّكُ يَطلُبُ البائِع؛ والاسمُ باقٍ بِحَرفِه حِفظاً لِلعَقد. وعِندَ
+        // آخِرِ مَرحَلَةٍ لا يُخرِجُها أَحَد، فَيَبقى فاعِلَها كَما كانَ — المِفتاحُ نَفسُه الَّذي تَرسُمُه الشاشَة
+        // (`DealTurnView`)، فَلا يَتَغَيَّرُ جَوابُ صَفقَةٍ مُكتَمِلَة.
         return new DealDto(
             d.Id, d.Pattern, d.Stage.ToString(), DealsPolicy.LabelAr(d.Stage), d.Status.ToString(),
             d.InitiatorId, d.CounterpartyId, d.ListingId, d.ListingTitle, d.AmountSar,
-            next?.ToString(), DealsPolicy.Actor(d.Stage),
+            next?.ToString(), DealsPolicy.RequiredActorToLeave(d) ?? DealsPolicy.Actor(d.Stage),
             d.CreatedAt, d.UpdatedAt);
     }
 
@@ -95,7 +100,7 @@ public static class DealApi
         {
             stage = result.Deal.Stage.ToString(),
             status = result.Deal.Status.ToString(),
-            required_actor = DealsPolicy.Actor(result.Deal.Stage),
+            required_actor = DealsPolicy.RequiredActorToLeave(result.Deal) ?? DealsPolicy.Actor(result.Deal.Stage),
         });
     }
 

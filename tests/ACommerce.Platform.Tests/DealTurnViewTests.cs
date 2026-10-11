@@ -12,6 +12,12 @@ namespace ACommerce.Platform.Tests;
 // المُستَخدِمَ بِإجراء يَرفُضُه DealsService (أَو تُخفي إجراءً يَملِكُه).
 // لِذلِك الاختِبار المِحوَريّ يُقارِن IsMine بِـ DealsPolicy.Actor نَفسِها
 // عَبر كُلّ الأَنماط وَكُلّ المَراحِل.
+//
+// **ثُمَّ قُلِبَت أَربَعَةُ صُفوفٍ بِأَسمائِها** (‏ADR-033 §٦‑ط، ‏2026-10-11؛ ولا يُعادُ حَرفٌ فَوقَه):
+// المُحَرِّكُ صارَ يَسأَلُ `DealsPolicy.RequiredActorToLeave` — فاعِلَ المَرحَلَةِ المَدخولَة لا
+// الحالِيَّة — فَالحارِسُ المِحوَريُّ يُقارِنُ بِها هِيَ (والغايَةُ هي هي: الواجِهَةُ = المُحَرِّك)،
+// والحالاتُ المَحسوسَةُ الثَلاثُ كانَت تُثَبِّتُ الإزاحَةَ نَفسَها: «الراكِبُ نَشَرَ الطَلَبَ فَدَورُه»
+// قَرَأَت فاعِلَ `Offered` مَن أَدخَلَها ثُمَّ أَعطَته الخُروجَ مِنها.
 
 public class DealTurnViewTests
 {
@@ -54,13 +60,17 @@ public class DealTurnViewTests
 
     // ─── الحارِس المِحوَريّ: الواجِهَة = السِّياسَة ────────────────────
 
+    /// <summary><b>قُلِبَ</b> (‏ADR-033 §٦‑ط، ‏2026-10-11): كانَ <c>IsMine_MatchesDealsPolicyActor_ForEveryStage</c>
+    /// يُقارِنُ بِـ<c>DealsPolicy.Actor(stage)</c> — فاعِلِ المَرحَلَةِ الحالِيَّة، وهُوَ ما كانَ يَسأَلُه
+    /// المُحَرِّك. وصارَ المُحَرِّكُ يَسأَلُ فاعِلَ المَرحَلَةِ المَدخولَة، فَيُقارَنُ بِه هُوَ — الغايَةُ نَفسُها:
+    /// لا تَعِدُ الواجِهَةُ بِما يَرفُضُه <c>DealsService</c>.</summary>
     [Theory]
     [MemberData(nameof(Patterns))]
-    public void IsMine_MatchesDealsPolicyActor_ForEveryStage(string pattern)
+    public void IsMine_MatchesTheActorRequiredToLeave_ForEveryStage(string pattern)
     {
         foreach (var stage in DealsPolicy.StagesFor(pattern))
         {
-            var actor    = DealsPolicy.Actor(stage);
+            var actor    = DealsPolicy.RequiredActorToLeave(pattern, stage, payMethod: null);
             var isLast   = DealsPolicy.Next(pattern, stage) is null;
 
             var asInitiator = DealTurnView.For(pattern, stage, DealSide.Initiator);
@@ -97,30 +107,45 @@ public class DealTurnViewTests
 
     // ─── حالات مَحسوسَة (لِتَوثيق السُّلوك المُتَوَقَّع صَراحَةً) ────────
 
+    /// <summary><b>قُلِبَ</b> (‏ADR-033 §٦‑ط، ‏2026-10-11): كانَ <c>Trip_Offered_IsTheRidersTurn_NotTheDrivers</c>
+    /// — «Offered فاعِلُها initiator (الراكِب نَشَرَ الطَلَب)» ثُمَّ الدَورُ لَه: قَرَأَ الفاعِلَ مَن أَدخَلَها
+    /// وأَعطاه الخُروجَ مِنها. والخُروجُ مِن <c>Offered</c> دُخولُ <c>Booked</c> — «سائِق يَقبَل» بِحَرفِ تَعليقِ
+    /// النَمَطِ في الكاتالوج — فَالدَورُ لِلسائِقِ والراكِبُ يَنتَظِر.</summary>
     [Fact]
-    public void Trip_Offered_IsTheRidersTurn_NotTheDrivers()
+    public void Trip_Offered_IsTheDriversTurn_ToTakeIt_NotTheRiders()
     {
-        // trip: Offered فاعِلُها initiator (الراكِب نَشَرَ الطَلَب).
         var rider  = DealTurnView.For("trip", DealStage.Offered, DealSide.Initiator);
         var driver = DealTurnView.For("trip", DealStage.Offered, DealSide.Counterparty);
 
-        Assert.True(rider.IsMine);
-        Assert.False(driver.IsMine);
-        Assert.Equal(DealStage.Booked, rider.NextStage);
+        Assert.True(driver.IsMine);
+        Assert.False(rider.IsMine);
+        Assert.Equal(DealStage.Booked, driver.NextStage);
+        Assert.Equal("counterparty", driver.ActorKey);
     }
 
+    /// <summary><b>قُلِبَ</b> (‏ADR-033 §٦‑ط): كانَ <c>Trip_Booked_IsTheDriversTurn</c> — فاعِلُ <c>Booked</c>
+    /// (السائِقُ يَقبَل) يُخرِجُها. والخُروجُ مِنها دُخولُ <c>Confirmed</c> — «بَدء الرَّحلَة»، وفاعِلُها
+    /// <c>either</c> — فَالدَورُ لِلطَرَفَين.</summary>
     [Fact]
-    public void Trip_Booked_IsTheDriversTurn()
+    public void Trip_Booked_IsEithersTurn_ToStartTheTrip()
     {
         Assert.True(DealTurnView.For("trip", DealStage.Booked, DealSide.Counterparty).IsMine);
-        Assert.False(DealTurnView.For("trip", DealStage.Booked, DealSide.Initiator).IsMine);
+        Assert.True(DealTurnView.For("trip", DealStage.Booked, DealSide.Initiator).IsMine);
+        Assert.Equal(DealStage.Confirmed, DealTurnView.For("trip", DealStage.Booked, DealSide.Initiator).NextStage);
     }
 
+    /// <summary><b>قُلِبَ</b> (‏ADR-033 §٦‑ط): كانَ <c>Confirmed_IsEithersTurn</c> — فاعِلُ <c>Confirmed</c>
+    /// يُخرِجُها، فَالبائِعُ يُدخِلُ صَفقَةَ البِطاقَةِ «دَفع» عَن المُشتَري (ويَقبِضُ بِنَقرَتِه). والخُروجُ
+    /// مِنها دُخولُ <c>Paid</c> وفاعِلُها <c>initiator</c> — المُشتَري يَدفَع، والبائِعُ يَنتَظِر.</summary>
     [Fact]
-    public void Confirmed_IsEithersTurn()
+    public void Marketplace_Confirmed_IsTheBuyersTurn_ToPay_AndTheSellerWaits()
     {
-        Assert.True(DealTurnView.For("marketplace", DealStage.Confirmed, DealSide.Initiator).IsMine);
-        Assert.True(DealTurnView.For("marketplace", DealStage.Confirmed, DealSide.Counterparty).IsMine);
+        var buyer  = DealTurnView.For("marketplace", DealStage.Confirmed, DealSide.Initiator);
+        var seller = DealTurnView.For("marketplace", DealStage.Confirmed, DealSide.Counterparty);
+        Assert.True(buyer.IsMine);
+        Assert.False(seller.IsMine);
+        Assert.Equal(DealStage.Paid, buyer.NextStage);
+        Assert.Equal("initiator", seller.ActorKey);
     }
 
     [Fact]

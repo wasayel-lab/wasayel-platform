@@ -350,13 +350,19 @@ public class LiveDealPaidStageProofTests(ITestOutputHelper output)
             var cash = await deals.StartAsync(slug, "marketplace", buyer, "مُشتَرٍ", null, "نَقد", 100m,
                 new() { ["pay_method"] = CheckoutPayMethods.CashOnDelivery });
 
+            // **قُلِبَ فاعِلو المَشي** (‏ADR-033 §٦‑ط، ‏2026-10-11): كانَ المُشتَري يُخرِجُ `Offered` ويُدخِلُ
+            // النَقدَ «شَحن»، لِأَنّ الخِدمَةَ كانَت تَسأَلُ فاعِلَ المَرحَلَةِ الحالِيَّة. وتَسأَلُ اليَومَ فاعِلَ
+            // المَدخولَة: البائِعُ يَحجِز، والمُشتَري يَدفَع (بِطاقَة)، والبائِعُ يَشحَن (نَقد). والمَقيسُ — القَبضُ
+            // مَرَّةً عِندَ دُخولِ `Paid` بِمُعَرِّفِ دَفعٍ وَحدَه — بِحَرفِه.
             foreach (var id in new[] { card.Id, cash.Id })
             {
                 await deals.AssignCounterpartyAsync(slug, id, seller, "بائِع");
-                Assert.True((await deals.AdvanceAsync(slug, id, buyer,  "مُشتَرٍ")).Ok);   // Offered → Booked
+                Assert.True((await deals.AdvanceAsync(slug, id, seller, "بائِع")).Ok);     // Offered → Booked
                 Assert.True((await deals.AdvanceAsync(slug, id, seller, "بائِع")).Ok);     // Booked → Confirmed
-                Assert.True((await deals.AdvanceAsync(slug, id, buyer,  "مُشتَرٍ")).Ok);   // Confirmed → Paid (بِطاقَة) / Shipping (نَقد)
             }
+            Assert.True((await deals.AdvanceAsync(slug, card.Id, buyer, "مُشتَرٍ")).Ok);    // Confirmed → Paid (بِطاقَة: المُشتَري يَدفَع)
+            Assert.False((await deals.AdvanceAsync(slug, cash.Id, buyer, "مُشتَرٍ")).Ok);   // Confirmed → Shipping لَيسَ لِلمُشتَري
+            Assert.True((await deals.AdvanceAsync(slug, cash.Id, seller, "بائِع")).Ok);     // Confirmed → Shipping (نَقد: البائِعُ يَشحَن)
 
             var cardPaid = (await deals.LoadAsync(slug, card.Id))!;
             var cashPaid = (await deals.LoadAsync(slug, cash.Id))!;
@@ -373,8 +379,9 @@ public class LiveDealPaidStageProofTests(ITestOutputHelper output)
             Assert.Equal(nameof(PaymentStatus.Captured), cardPaid.Refs["payment_status"]);
             Assert.False(cashPaid.Refs.ContainsKey("payment_status"));
 
-            // خُطوَةٌ بَعدَ Paid — لا كِتابَةَ ثانِيَةً ولا قَبضَ ثانِياً.
-            Assert.True((await deals.AdvanceAsync(slug, card.Id, buyer, "مُشتَرٍ")).Ok);   // Paid → Shipping
+            // خُطوَةٌ بَعدَ Paid — لا كِتابَةَ ثانِيَةً ولا قَبضَ ثانِياً. (والشاحِنُ البائِعُ — قُلِبَ، §٦‑ط.)
+            Assert.False((await deals.AdvanceAsync(slug, card.Id, buyer, "مُشتَرٍ")).Ok);  // Paid → Shipping لَيسَ لِلمُشتَري
+            Assert.True((await deals.AdvanceAsync(slug, card.Id, seller, "بائِع")).Ok);    // Paid → Shipping
             var after = (await deals.LoadAsync(slug, card.Id))!;
             Assert.Single(payments.Captured);
             Assert.Equal(1, after.Timeline.Count(e => e.Action == "captured"));

@@ -128,10 +128,13 @@ public static class DealPatternValidator
         // لا مَرحَلَة يَتيمَة (٢): مَرحَلَة غَير نِهائيَّة لا يَملِك أَحَد
         // تَحريكَها (فاعِلُها خارِج الأَربَعَة الَّتي يَفهَمُها
         // DealsService.IsActorAllowed).
+        // **وتَحريكُها = دُخولُ تاليها** (‏ADR-033 §٦‑ط، ‏2026-10-11؛ ولا يُعادُ حَرفٌ فَوقَه): المُحَرِّكُ
+        // يَسأَلُ فاعِلَ المَرحَلَةِ المَدخولَة (`DealsPolicy.RequiredActorToLeave`)، فَالمَرحَلَةُ يَتيمَةٌ
+        // حينَ يَكونُ فاعِلُ **تاليها** خارِجَ الأَربَعَة — وكانَ الفَحصُ يَقرَأُ فاعِلَها هِيَ.
         foreach (var r in d.Stages)
-            if (d.Next(r.Stage) is not null && !DealPatternCatalog.Actors.Contains(r.Actor))
+            if (d.Next(r.Stage) is { } next && !DealPatternCatalog.Actors.Contains(d.ActorFor(next) ?? ""))
                 v.Add(new("orphan_stage_unmovable",
-                    $"المَرحَلَة «{r.Stage}» لا يَملِك أَحَد تَحريكَها (فاعِل «{r.Actor}»)."));
+                    $"المَرحَلَة «{r.Stage}» لا يَملِك أَحَد تَحريكَها (فاعِلُ تاليها «{next}» = «{d.ActorFor(next)}»)."));
 
         return v;
     }

@@ -24,6 +24,8 @@ namespace ACommerce.Platform.Tests;
 // (`DealPaidStageCharacterizationTests`). **وما يُقالُ ولا يُقَرَّرُ هُنا**: صَفُّ
 // `Confirmed = either` بَقِيَ بَياناتٍ كَما هُو، فَالمُشتَري أَيضاً يَستَطيعُ نَقلَ
 // صَفقَةِ نَقدٍ مُؤَكَّدَةٍ إلى `Shipping` — سُؤالٌ لِلمالِك (سِجِلُّ «ب»).
+// **وأُغلِقَ ‏2026-10-11 (‏ADR-033 §٦‑ط) — ولا يُعادُ حَرفٌ فَوقَه**: الخُروجُ مِن `Confirmed` يَسأَلُ
+// اليَومَ فاعِلَ المَدخولَة (`Shipping` = الطَرَف) فَلا يَنقُلُها المُشتَري، والصَفُّ `either` بِحَرفِه.
 
 public class DealCashPolicyTests
 {
@@ -199,7 +201,11 @@ public class DealCashPolicyTests
     /// <summary><b>المُوجِب</b>: عِندَ <c>Confirmed</c> يَنقُلُ البائِعُ (الطَرَفُ
     /// المُقابِل) صَفقَةَ النَقدِ إلى <c>Shipping</c> مُباشَرَةً — وهُوَ ما لَم يَكُن
     /// يَستَطيعُه (P1-3). والصَفُّ <c>Confirmed = either</c> بَياناتٌ لَم تُمَسّ،
-    /// فَالمُشتَري أَيضاً يَمُرُّ مِن البَوّابَة — يُقالُ ولا يُبتلَع.</summary>
+    /// فَالمُشتَري أَيضاً يَمُرُّ مِن البَوّابَة — يُقالُ ولا يُبتلَع.
+    /// <para><b>وأُلحِقَ ‏2026-10-11 (‏ADR-033 §٦‑ط) — ولا يُعادُ حَرفٌ فَوقَه</b>: «المُشتَري أَيضاً يَمُرُّ» صَدَقَ
+    /// يَومَ كانَت الخِدمَةُ تَسأَلُ فاعِلَ المَرحَلَةِ الحالِيَّة؛ وتَسأَلُ اليَومَ فاعِلَ المَدخولَة
+    /// (<c>Shipping</c> = الطَرَف) فَالمُشتَري مَردود — مَقيسٌ في الصَفِّ التالي. وما يُثَبِّتُه هذا الصَفُّ
+    /// باقٍ بِحَرفِه: الصَفُّ <c>either</c> في الكاتالوج، ودَلالَةُ <c>either</c> في البَوّابَة، ودَورُ البائِع.</para></summary>
     [Fact]
     public void At_Confirmed_the_counterparty_moves_a_cash_deal_straight_to_Shipping_and_the_catalog_row_still_says_either()
     {
@@ -240,31 +246,40 @@ public class DealCashPolicyTests
     /// هذا. يَبقى حَتّى يُجيبَ المالِكُ «ب» S4·٤: فَإن اختارَ (٢) — فاعِلُ <c>Confirmed</c> لِلنَقدِ
     /// <c>counterparty</c> وَحدَه — نُفِّذَ قاعِدَةَ كودٍ خَلفَ <c>CheckoutPayMethods.CashOnDelivery</c>
     /// كَـ<c>Skips</c> بِمُوجِبٍ وسالِب، لا تَبديلاً لِصَفِّ الكاتالوجِ المُشتَرَك، وقُلِبَ هذا الصَفُّ
-    /// بِاسمِه.</summary>
+    /// بِاسمِه.
+    /// <para><b>قُلِبَ بِاسمِه — بِلا قاعِدَةِ نَقدٍ ثانِيَة</b> (‏ADR-033 §٦‑ط، ‏2026-10-11؛ يُغلِقُ «ب» S4·٤): كانَ
+    /// <c>Today_the_cash_buyer_at_Confirmed_is_still_told_it_is_his_turn_and_offered_confirm_Shipping</c>. والجُملَةُ لَم
+    /// تَكُن سُؤالَ نَقدٍ بَل عَرَضَ إزاحَةٍ في قِراءَةِ عَمودِ الفاعِل: الخِدمَةُ والشاشَةُ تَسأَلانِ فاعِلَ المَرحَلَةِ
+    /// الحالِيَّة (<c>Confirmed = either</c>). وصارَتا تَسأَلانِ فاعِلَ المَدخولَة (<c>Shipping</c> = الطَرَف) — فَالمُشتَري
+    /// «بانتِظار الطَّرَف الآخَر لِـ: شَحن» بِلا زِرّ، والبائِعُ وَحدَه يُعلِنُ الشَحن، والمُحَرِّكُ يَرُدُّ نَقرَةَ المُشتَري.
+    /// والصَفُّ <c>either</c> في الكاتالوجِ لَم يُمَسّ — هُوَ اليَومَ مَن يُؤَدّي «تَأكيد» لا مَن يُخرِجُ مِنها.</para></summary>
     [Fact]
-    public void Today_the_cash_buyer_at_Confirmed_is_still_told_it_is_his_turn_and_offered_confirm_Shipping()
+    public void The_cash_buyer_at_Confirmed_is_no_longer_told_it_is_his_turn_and_the_seller_alone_confirms_Shipping()
     {
         var deal = Cash(DealStage.Confirmed);
 
-        // البِطاقَة: الدَورُ لِلمُشتَري، والفاعِلُ «أَنتَ أَو الطَرَفُ الآخَر»، والتالي شَحن.
+        // البِطاقَة: الدَورُ لِلبائِع، والمُشتَري يَنتَظِرُ «الطَرَفَ الآخَر»، والتالي شَحن.
         var buyer = DealTurnView.For(deal, DealSide.Initiator);
-        Assert.True(buyer.IsMine);
-        Assert.Equal("either", buyer.ActorKey);
+        var seller = DealTurnView.For(deal, DealSide.Counterparty);
+        Assert.False(buyer.IsMine);
+        Assert.True(seller.IsMine);
+        Assert.Equal("counterparty", buyer.ActorKey);
+        Assert.Equal("deals.actor.counterparty", DealTurnView.ActorLabelKey(buyer.ActorKey, DealSide.Initiator));
         Assert.Equal(DealStage.Shipping, buyer.NextStage);
 
-        // الشاشَة: «دَورُكَ الآن» حَيثُ `turn.IsMine`، وزِرُّ «{confirm_prefix} {LabelAr(next)}» حَيثُ
-        // `canAdvance` — و`either` = المُبادِرُ أَو الطَرَف.
+        // الشاشَة: `canAdvance` مِن الدالَّةِ نَفسِها، فَالمُشتَري يَرى سَطرَ الانتِظارِ لا الزِرّ.
         var page = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(DealPageSource()));
         Assert.Contains("var mine = acceptCase || turn.IsMine;", page, StringComparison.Ordinal);
-        Assert.Contains("else if (canAdvance && nextStage is { } ns)", page, StringComparison.Ordinal);
-        Assert.Contains("Text=\"@($\"{L[\"deals.detail.confirm_prefix\"]} {DealsPolicy.LabelAr(ns)}\")\"", page, StringComparison.Ordinal);
-        Assert.Contains("\"either\" => isInitiator || deal.CounterpartyId == uid,", page, StringComparison.Ordinal);
-        Assert.Equal("دَورُكَ الآن", LocaleCatalog.Text(LocaleCatalog.Arabic, "deals.detail.turn_mine"));
-        Assert.Equal("تَأكيد: شَحن",
-            $"{LocaleCatalog.Text(LocaleCatalog.Arabic, "deals.detail.confirm_prefix")} {DealsPolicy.LabelAr(buyer.NextStage!.Value)}");
+        Assert.Contains("var required = DealsPolicy.RequiredActorToLeave(deal);", page, StringComparison.Ordinal);
+        Assert.Contains("\"counterparty\" => deal.CounterpartyId == uid,", page, StringComparison.Ordinal);
+        Assert.Contains("else if (nextStage is { } waiting)", page, StringComparison.Ordinal);
+        Assert.Equal("بانتِظار الطَّرَف الآخَر لِـ: شَحن",
+            $"{LocaleCatalog.Text(LocaleCatalog.Arabic, "deals.detail.awaiting_other")} {DealsPolicy.LabelAr(buyer.NextStage!.Value)}");
 
-        // والمُحَرِّك: نَقرَةُ المُشتَري تَمُرُّ مِن بَوّابَةِ الفاعِل.
-        Assert.True(Allowed(deal, Buyer, DealsPolicy.Actor(deal.Stage)));
+        // والمُحَرِّك: نَقرَةُ المُشتَري تُرَدُّ، ونَقرَةُ البائِعِ تَمُرّ — مِن الدالَّةِ نَفسِها.
+        var required = DealsPolicy.RequiredActorToLeave(deal)!;
+        Assert.False(Allowed(deal, Buyer, required));
+        Assert.True(Allowed(deal, Seller, required));
     }
 
     /// <summary>الخِدمَةُ والشاشَتانِ والـAPI وشَرحُ التَدَفُّقِ يَقرَؤونَ الدالَّةَ

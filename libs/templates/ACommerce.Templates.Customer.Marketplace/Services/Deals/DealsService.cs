@@ -190,6 +190,14 @@ public sealed class DealsService
     /// تُهمَل: كُلُّ رَفضٍ رَمزٌ قَبلَ أَيِّ كِتابَة، و<c>Accepted</c> لا تُرجَعُ إلّا
     /// بَعدَ أَن حُفِظَ الانتِقال.</para>
     ///
+    /// <para><b>وصارَت تُسأَلُ — ولا استِثناءَ لِلقَبولِ بَعدَ اليَوم</b> (‏ADR-033 §٦‑ط، ‏2026-10-11؛
+    /// ولا يُعادُ حَرفٌ فَوقَه): «جَوابُه المُبادِر» كانَ إزاحَةَ مَرحَلَةٍ في قِراءَةِ عَمودِ الفاعِل —
+    /// الخِدمَةُ تَسأَلُ فاعِلَ المَرحَلَةِ الحالِيَّة. والسُؤالُ اليَومَ فاعِلُ المَرحَلَةِ المَدخولَة:
+    /// <c>Booked</c> = <c>counterparty</c>، والقابِلُ صارَ الطَرَفَ قَبلَه (بِالتَعيينِ أَو مِن الوِلادَة)،
+    /// فَالقَبولُ يَمُرُّ مِن البَوّابَةِ نَفسِها الَّتي يَمُرُّ مِنها <see cref="AdvanceAsync"/>. وما بَقِيَ
+    /// خاصّاً بِه لَيسَ استِثناءً مِن القاعِدَة بَل شَرطُها: مَن يَحِقُّ لَه أَن يَصيرَ الطَرَفَ
+    /// (<c>Validate</c>)، وتَعيينُه حَيثُ لا طَرَف، وإشعارُ المُشتَري عِندَ النُقطَة.</para>
+    ///
     /// <para><b>واللَقطَةُ قَد تَتَقادَم — فَيُعادُ الفَحصُ في جَلسَةِ الكِتابَة</b>
     /// (مُراجَعَةُ ‏2026-10-11؛ ‏ADR-033 §٦‑ب‑٢ مُلحَقاً): <c>Validate</c> الأولى تَفحَصُ لَقطَةَ
     /// جَلسَةِ قِراءَة، وما يُحفَظُ بَعدَها — إلغاءُ المُشتَري، أَو قَبولٌ ثانٍ مِن نَقرَةٍ
@@ -230,12 +238,20 @@ public sealed class DealsService
         var deal = fresh!;
         var next = DealsPolicy.Next(deal)
             ?? throw new InvalidOperationException($"‏Offered بِلا تالٍ في النَمَط «{deal.Pattern}» — خَرقُ ثابِتِ الكاتالوج.");
+        // والبَوّابَةُ نَفسُها الَّتي تَسأَلُها `AdvanceAsync` — فاعِلُ المَرحَلَةِ المَدخولَة (`Booked` =
+        // `counterparty`) — لا استِثناءَ لِلقَبول (‏ADR-033 §٦‑ط). `Validate` عَلى هذِه الوَثيقَةِ أَثبَتَت أَنّ
+        // طَرَفَها القابِلُ أَو لا طَرَف، والتَعيينُ أَعلاه كَتَبَه — فَلا تَرُدُّ إلّا إن مَحَت كِتابَةٌ ضائِعَةٌ
+        // تَعيينَه (لا تَزامُنَ تَفاؤُلِيَّ عَلى `Deal`، §٦‑ب‑٢): خَرقُ ثابِتٍ يُرمى، ولا تُكتَبُ `Booked` بِلا طَرَف.
+        if (!IsActorAllowed(deal, by.ActorId, DealsPolicy.RequiredActorToLeave(deal)!))
+            throw new InvalidOperationException($"القابِلُ لَيسَ طَرَفَ الصَفقَةِ «{deal.Id}» بَعدَ تَعيينِه — خَرقُ ثابِت.");
         return DealAcceptResult.Accepted(await MoveAsync(s, deal, next, by.ActorId, by.ActorName, "قُبِلَ العَرض", ct));
     }
 
     /// <summary>اِنتَقِل لِلمَرحَلَة التالِيَة في النَّمَط. يَفحَص أَنّ الفاعِل
-    /// يَملِك حَقّ تَحريك هذه المَرحَلَة (initiator/counterparty/either).
-    /// والتالي بِوَعيِ طَريقَةِ الدَفع (<see cref="DealsPolicy.Next(Deal)"/>):
+    /// يَملِك حَقّ <b>دُخولِ المَرحَلَةِ التالِيَة</b> (initiator/counterparty/either) —
+    /// <see cref="DealsPolicy.RequiredActorToLeave(Deal)"/>، فاعِلُ التالي لا فاعِلُ الحالِيَّة
+    /// (‏ADR-033 §٦‑ط، ‏2026-10-11؛ كانَ يَسأَلُ فاعِلَ الحالِيَّة فَيُحَرِّكُ المُشتَري طَلَبَه إلى
+    /// «حَجز» ويُعلِنُ «شَحن»). والتالي بِوَعيِ طَريقَةِ الدَفع (<see cref="DealsPolicy.Next(Deal)"/>):
     /// صَفقَةُ النَقدِ لا تَزورُ <c>Paid</c> (‏ADR-033 §٦).</summary>
     public async Task<DealAdvanceResult> AdvanceAsync(
         string tenantSlug, Guid dealId, Guid actorId, string actorName,
@@ -251,8 +267,9 @@ public sealed class DealsService
         if (next is null)
             return new(false, deal, "هذه آخِر مَرحَلَة، لا تالٍ.");
 
-        // فَحص الفاعِل: مَن المَسموح لَه بِتَحريك المَرحَلَة الحاليَّة؟
-        var required = DealsPolicy.Actor(deal.Stage);
+        // فَحص الفاعِل: مَن يَدخُلُ المَرحَلَةَ التالِيَة؟ — فاعِلُها لا فاعِلُ الحالِيَّة (‏ADR-033 §٦‑ط)،
+        // بِالدالَّةِ الَّتي تَقرَؤُها الشاشَةُ والـAPI؛ ولا تُرجِعُ `null` وثَمَّ تالٍ.
+        var required = DealsPolicy.RequiredActorToLeave(deal)!;
         if (!IsActorAllowed(deal, actorId, required))
             return new(false, deal, $"يَتَطَلَّب فاعِلاً مِن نَوع: {required}");
 

@@ -131,6 +131,36 @@ public class DealPatternValidatorTests
             }),
             "orphan_stage_unmovable");
 
+    /// <summary><b>المُوجِب</b> (‏ADR-033 §٦‑ط، ‏2026-10-11): تَحريكُ مَرحَلَةٍ = دُخولُ تاليها، فَفاعِلٌ خارِجَ
+    /// الأَربَعَةِ عَلى <b>آخِرِ</b> مَرحَلَةٍ يَحبِسُ ما قَبلَها — كانَ الفَحصُ يَتَخَطّى الأَخيرَةَ فَلا يَراه في T6.</summary>
+    [Fact]
+    public void Rejects_A_StageWhoseNextIsEnteredByNobody()
+    {
+        var codes = DealPatternValidator.ValidateProperties(new DealPatternDefinition("stuck_last", new[]
+            {
+                DealPatternCatalog.Row(DealStage.Offered),
+                DealPatternCatalog.Row(DealStage.Booked),
+                new DealStageRule(DealStage.Confirmed, "ghost", "تَأكيد"),
+            })).ToArray();
+        Assert.Single(codes, c => c.Code == "orphan_stage_unmovable");
+        Assert.Contains("Booked", codes.Single(c => c.Code == "orphan_stage_unmovable").MessageAr, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>السالِب</b>: فاعِلُ المَرحَلَةِ الأولى يُنشِئُها ولا يَسأَلُه المُحَرِّكُ عِندَ الخُروج، فَلا
+    /// يَحبِسُ T6 شَيئاً بِه — وT5 يَرُدُّه بِرَمزِه هُوَ (<c>actor_out_of_vocabulary</c>).</summary>
+    [Fact]
+    public void A_FirstStageActorOutsideTheVocabulary_IsAStructuralBreach_NotAnUnmovableStage()
+    {
+        var def = new DealPatternDefinition("ghost_first", new[]
+            {
+                new DealStageRule(DealStage.Offered, "ghost", "عَرض"),
+                DealPatternCatalog.Row(DealStage.Booked),
+                DealPatternCatalog.Row(DealStage.Confirmed),
+            });
+        Assert.DoesNotContain(DealPatternValidator.ValidateProperties(def), v => v.Code == "orphan_stage_unmovable");
+        Assert.Contains(DealPatternValidator.ValidateStructure(def), v => v.Code == "actor_out_of_vocabulary");
+    }
+
     // ─── خَصائِص عامَّة عَلى الكاتالوج ────────────────────────────────
 
     [Theory]
