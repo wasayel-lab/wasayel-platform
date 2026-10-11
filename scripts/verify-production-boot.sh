@@ -46,14 +46,23 @@
 #       بِلا قيمَة.
 #
 # ─── التَهيئَة ─────────────────────────────────────────────────────────
-#  المُتَغَيِّرُ الإلزامِيُّ الوَحيد: `ConnectionStrings__Postgres`
+#  المُتَغَيِّرانِ الإلزامِيّان: `ConnectionStrings__Postgres`
 #  (‏`HostingExtensions.AddPlatformHost` يَرمي «Postgres connection string
-#  missing» بِدونِه). يُقرَأ مِن البيئَة، أَو مِن مِلَفٍّ **اختِيارِيّ**
-#  غَيرِ مُتَتَبَّع: `scripts/.prod-gate.env` — يُصدَر بِـ`source` فَيَقبَل
-#  الإسنادَ المُباشِرَ أَو الإحالَةَ إلى مِلَفِّ سِرٍّ خارِجيّ:
+#  missing» بِدونِه)، و`ACOMMERCE_AUTH_SECRET` بِـ32+ مِحرَفاً — مُنذُ
+#  ‏2026-10-11 يَرمي `AuthTokenSecretPolicy.AssertSafeOutsideDevelopment`
+#  في `Program.cs` خارِجَ التَطويرِ بِأَحَدِ `auth_secret_default` /
+#  `auth_secret_missing` / `auth_secret_short`، فَإقلاعُ Production بِلا
+#  سِرٍّ **يَموتُ بِقَصد** (كانَ قَبلَها يُقلِعُ صامِتاً عَلى حَرفِيَّةٍ في
+#  الكودِ فَيُوَقِّعُ كُلَّ كوكي بِسِرٍّ يَعرِفُه الجَميع — P0-2). والبَوّابَةُ
+#  تُسَمّي ذلكَ تَهيئَةً (‏3) لا كَسراً (‏1)، قَبلَ النَشرِ بِفَحصِ الطولِ
+#  وبَعدَ المَوتِ بِقِراءَةِ الرَمزِ مِن السِجِلّ. يُقرَآنِ مِن البيئَة، أَو
+#  مِن مِلَفٍّ **اختِيارِيّ** غَيرِ مُتَتَبَّع: `scripts/.prod-gate.env` —
+#  يُصدَر بِـ`source` فَيَقبَل الإسنادَ المُباشِرَ أَو الإحالَةَ إلى مِلَفِّ
+#  سِرٍّ خارِجيّ:
 #
 #      # scripts/.prod-gate.env
 #      ConnectionStrings__Postgres="$(tr -d '\r\n' < /path/to/connection.txt)"
+#      ACOMMERCE_AUTH_SECRET="$(openssl rand -hex 32)"   # سِرُّ البَوّابَة، لا سِرُّ الإنتاج
 #
 #  **ولا يُطبَع مُحتَوى السِرِّ أَبَداً** — لا في السِجِلّ ولا في الخَطَإ.
 #  المَطبوعُ عَن القاعِدَة: بَصمَةُ `sha256` مِن ثَمانِيَة أَحرُف لِمُضيفِها،
@@ -137,20 +146,37 @@ fi
 
 MISSING_VARS=""
 [ -n "${ConnectionStrings__Postgres:-}" ] || MISSING_VARS="$MISSING_VARS ConnectionStrings__Postgres"
+[ -n "${ACOMMERCE_AUTH_SECRET:-}" ]      || MISSING_VARS="$MISSING_VARS ACOMMERCE_AUTH_SECRET"
 
 if [ -n "$MISSING_VARS" ]; then
     hr
     echo "✗ تَهيئَةٌ ناقِصَةٌ عِندَ المُشَغِّل — **لَيسَ حُكماً عَلى الكود**."
     echo "  المُتَغَيِّراتُ الغائِبَةُ بِأَسمائِها:$MISSING_VARS"
     echo ""
-    echo "  الحَلّ — أَنشِئ scripts/.prod-gate.env (غَيرُ مُتَتَبَّع) بِسَطر:"
+    echo "  الحَلّ — أَنشِئ scripts/.prod-gate.env (غَيرُ مُتَتَبَّع) بِسَطرَين:"
     echo "      ConnectionStrings__Postgres=\"\$(tr -d '\\r\\n' < /path/to/connection.txt)\""
-    echo "  أَو صَدِّر المُتَغَيِّرَ في البيئَة قَبلَ تَشغيلِ البَوّابَة."
+    echo "      ACOMMERCE_AUTH_SECRET=\"\$(openssl rand -hex 32)\""
+    echo "  أَو صَدِّر المُتَغَيِّرَينِ في البيئَة قَبلَ تَشغيلِ البَوّابَة."
     echo ""
     echo "  ولا تُوَجِّهها إلى قاعِدَةِ الإنتاج: البَوّابَةُ تُقلِعُ وتَبذُر"
     echo "  — أَي تَكتُب. المَقصودُ فَرعُ Neon مَنسوخ."
     exit 3
 fi
+
+# وطولُ السِرِّ يُقاسُ هُنا قَبلَ نَشرٍ يَستَغرِقُ دَقيقَة: حارِسُ التَطبيقِ
+# سَيَرمي `auth_secret_short` عَلى كُلِّ حال، لكِنّ البَوّابَةَ تَقولُه بِاسمِه
+# الآنَ وتُوَفِّرُ الدَقيقَة. **ويُطبَعُ الطولُ وَحدَه، لا القيمَة** — نَفسُ
+# حُكمِ سِلسِلَةِ الاتِّصال. والحَدُّ 32 هُوَ `AuthTokenSecretPolicy.MinimumLength`
+# (‏مُثَبَّتٌ في `AuthTokenSecretPolicyTests.VariableName_AndMinimum_ArePinned`).
+SECRET_LEN=${#ACOMMERCE_AUTH_SECRET}
+if [ "$SECRET_LEN" -lt 32 ]; then
+    hr
+    echo "✗ تَهيئَةٌ ناقِصَةٌ عِندَ المُشَغِّل — **لَيسَ حُكماً عَلى الكود**."
+    echo "  ACOMMERCE_AUTH_SECRET أَقصَرُ مِن 32 مِحرَفاً (طولُه $SECRET_LEN) — رَمزُ الخَرق: auth_secret_short."
+    echo "  الحَلّ: ACOMMERCE_AUTH_SECRET=\"\$(openssl rand -hex 32)\" في scripts/.prod-gate.env أَو في البيئَة."
+    exit 3
+fi
+say "سِرُّ تَوقيعِ الجَلسَة: مَضبوط (طولُه $SECRET_LEN مِحرَفاً — لا يُطبَع)"
 
 # بَصمَةُ القاعِدَة — تَمييزٌ بِلا إفشاء. تُشتَقُّ مِن المُضيفِ وَحدَه.
 DB_HOST="$(printf '%s' "${ConnectionStrings__Postgres}" \
@@ -270,6 +296,15 @@ while [ "$WAITED" -lt "$BOOT_TIMEOUT" ]; do
         # الغائِبَة تَعني تَهيئَةً لا كَسراً.
         if grep -q "Postgres connection string missing" "$APP_LOG"; then
             echo "التَشخيص: **تَهيئَةٌ ناقِصَة** لا كَسرٌ — ConnectionStrings__Postgres."
+            exit 3
+        fi
+        # والتَمييزُ الثاني بِنَفسِ الحُكم (‏2026-10-11): حارِسُ سِرِّ التَوقيعِ
+        # يَرمي بِرَمزٍ مِن مَعجَمِ `AuthTokenSecretPolicy.All` — ثَلاثَةٌ لا
+        # رابِعَ لَها، ويُقرَأُ بِحَرفِه. تَهيئَةٌ لا كَسر: سِرٌّ عَلَنِيٌّ أَو
+        # فارِغٌ أَو قَصيرٌ بَلَغَ عَمَلِيَّةَ Production.
+        secret_code="$(grep -oE 'auth_secret_(missing|default|short)' "$APP_LOG" | head -n 1 || true)"
+        if [ -n "$secret_code" ]; then
+            echo "التَشخيص: **تَهيئَةٌ ناقِصَة** لا كَسرٌ — ACOMMERCE_AUTH_SECRET (رَمزُ الخَرق: $secret_code)."
             exit 3
         fi
         exit 1

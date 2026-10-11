@@ -86,7 +86,7 @@ sig     = HMAC-SHA256( key = TokenSecret , data = "{userId}|{tenantSlug}|{expUni
 - التَحَقُّق `ParseToken` (‏:261) يَشتَرِط **٤ حُقول**، ويُقارِن بِـ
   `CryptographicOperations.FixedTimeEquals` (‏:272)، ويَرفُض المُنتَهي (‏:277).
 - الصَلاحِيَّة **٣٠ يَوماً** (‏:255)، والكوكي بِنَفس المُدَّة (`AuthSession.cs:171`).
-- السِرّ مِن `ACOMMERCE_AUTH_SECRET`، **وبِسِرّ تَطوير افتِراضيّ إن غابَ** (‏:60-62).
+- السِرّ مِن `ACOMMERCE_AUTH_SECRET`، **وبِسِرّ تَطوير افتِراضيّ إن غابَ** (‏:60-62) — **في Development وَحدَها مُنذُ ‏2026-10-11**: خارِجَها يَرمي حارِسُ الإقلاعِ `AuthTokenSecretPolicy.AssertSafeOutsideDevelopment` (‏`Program.cs`) إن بَقِيَ الافتِراضيُّ أَو فَرَغَ أَو قَصُرَ عَن ‏32 مِحرَفاً (‏`DEPLOY.md` §٢·ب).
 
 ### ٢٫٢ ما يَحمِلُه التوكن — وما لا يَحمِلُه
 

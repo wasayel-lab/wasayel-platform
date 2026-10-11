@@ -68,7 +68,7 @@
 | 8 | **عميلُ البوّابة**: صنفُ `HttpClient` واحدٌ بلا واجهة (القاعدة ١) + دالّةٌ نقيّةٌ `GatewayPaymentProof.Gate(invoice, deal)` برموزِ خرقٍ ثابتة | `libs/kits/Payments/<kit>/` | اختبارٌ لكلِّ رمز، وعدّادٌ يُطبَع |
 | 9 | **نقاطٌ** في `Billing/TenantGatewayEndpoints.cs` بمساراتٍ حرفيّة: `GET …/pay/return` قراءةٌ خالصة، `POST …/payments/verify` حارسُه قبلَ أيِّ حقل | ملفٌّ جديد | صفُّ `PinnedCeilings` **ورفعُ** `PinnedTotal` و`PinnedEndpointCount` في الكوميتِ نفسِه (‏`EndpointBodyBleedTests.cs:964-985`) · `WriteEndpointGuardTests` |
 | 10 | `DealsService.ConfirmGatewayPaymentAsync` تكتُبُ `Refs[payment_id]` و`Refs[payment_status]=Captured` وسطرَ Timeline، و`AdvanceAsync` يتجاوزُ `CaptureAsync` حينَ `Captured` | `DealsService.cs` | التكرارُ بلا أثر |
-| 11 | `DEPLOY.md` يكسِبُ `Providers__Kek__v1`؛ غيابُ KEK **يُخفي** بطاقةَ المزوّدِ ولا يعرِضُها ويرفُضُها | `docs/DEPLOY.md` · `docs/README.md` | — |
+| 11 | `DEPLOY.md` يكسِبُ `Providers__Kek__v1`؛ غيابُ KEK **يُخفي** بطاقةَ المزوّدِ ولا يعرِضُها ويرفُضُها. **ومعه `ACOMMERCE_AUTH_SECRET`** (موجزُ الفجوات P0-2 — نُفِّذ ‏2026-10-11 قبلَ الخزانة: `AuthTokenSecretPolicy` حارسُ إقلاعٍ بثلاثةِ رموز، وصفٌّ في `DEPLOY.md` §٢·ب وجدولِ المتغيّرات، وفحصٌ في `verify-production-boot.sh`؛ وغيابُه **يُسقِطُ الإقلاعَ** لا يُخفي شيئًا، لأنّ البديلَ حرفيّةٌ علنيّة توقّعُ كلَّ كوكي) | `docs/DEPLOY.md` · `docs/README.md` | — |
 
 ---
 
