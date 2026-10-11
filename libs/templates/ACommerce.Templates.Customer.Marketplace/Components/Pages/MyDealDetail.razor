@@ -163,7 +163,11 @@
                    كَتَبَها عِندَ الباب) ولا لِثالِث (الصَفحَةُ تُغلَقُ عَلى غَيرِ الطَرَفَين
                    أَعلاه). ومَعَها سَطرُ إفصاحٍ مِن القامُوس: لِلتَسليمِ وَحدَه (‏PDPL،
                    `PRODUCTION-PLAN.md:229`). والمِفتاحانِ ثابِتا `Deal` الَّذَينِ يَكتُبُ
-                   بِهِما `/checkout/submit` — حَرفٌ واحِدٌ لِلكاتِبِ والقارِئ. *@
+                   بِهِما `/checkout/submit` — حَرفٌ واحِدٌ لِلكاتِبِ والقارِئ.
+                   **ولا تُرسَمُ فارِغَةً** (‏2026-10-11، مُراجَعَةٌ ثانِيَة): كانَ العُنوانُ
+                   والإفصاحُ يُرسَمانِ لِلبائِعِ وإن لَم تَحمِل الصَفقَةُ عُنواناً ولا هاتِفاً —
+                   وهذِه حالُ كُلِّ صَفقَةٍ مِن مَسارِ العَرضِ عَلى إعلان (لا يَكتُبُ إلّا `note`)،
+                   فَيُقالُ «لِلتَسليمِ وَحدَه» عَن لا شَيء. صارَت تُرسَمُ بِحُضورِ أَحَدِهِما. *@
                 @if (deliveryVisible)
                 {
                     <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--ac-border);font-size:13px;">
@@ -341,7 +345,8 @@
     bool canReview;
     DealStage? nextStage;
     /// <summary>بَياناتُ التَوصيلِ تُرسَمُ لِمَن يُسَلِّمُ وَحدَه — الطَرَفُ المُقابِلُ
-    /// أَو مالِكُ الإعلانِ، ولَيسَ المُشتَري (P1-4).</summary>
+    /// أَو مالِكُ الإعلانِ، ولَيسَ المُشتَري (P1-4) — <b>وبِحُضورِ عُنوانٍ أَو هاتِف</b>
+    /// (‏2026-10-11): صَفقَةُ مَسارِ العَرضِ لا تَحمِلُ أَيّاً مِنهُما.</summary>
     bool deliveryVisible;
     string? buyerAddr, buyerPhone;
     /// <summary>البائِعُ الَّذي يُراسِلُه المُبادِر: مالِكُ الإعلانِ مِن
@@ -374,12 +379,16 @@
         // بَياناتُ التَوصيلِ لِمَن يُسَلِّمُ وَحدَه — لا لِلمُشتَري (بَياناتُه هُوَ) ولا
         // لِثالِث (أُغلِقَت الصَفحَةُ عَلَيه أَعلاه). وبِثابِتَي `Deal` لا بِحَرفِيَّة،
         // فَالقارِئُ يَقرَأُ ما كَتَبَه `/checkout/submit` بِحَرفِه (P1-4).
-        deliveryVisible = !isInitiator && isListingOwner;
-        if (deliveryVisible)
+        if (!isInitiator && isListingOwner)
         {
             buyerAddr  = deal.Attributes.TryGetValue(Deal.DeliveryAddressAttribute, out var a) ? a : null;
             buyerPhone = deal.Attributes.TryGetValue(Deal.DeliveryPhoneAttribute, out var p) ? p : null;
         }
+        // والكُتلَةُ بِحُضورِ أَحَدِهِما لا بِمَوقِعِ الناظِرِ وَحدَه (‏2026-10-11): كانَت
+        // `deliveryVisible = !isInitiator && isListingOwner;` فَتُرسَمُ لِلبائِعِ عُنواناً وإفصاحاً
+        // بِلا سَطرٍ تَحتَهُما في كُلِّ صَفقَةٍ مِن مَسارِ العَرض. ولا يُقرَأُ أَيٌّ مِنهُما إلّا لِلبائِع
+        // أَعلاه — فَالحُضورُ يَحمِلُ الحارِسَ مَعَه.
+        deliveryVisible = !string.IsNullOrEmpty(buyerAddr) || !string.IsNullOrEmpty(buyerPhone);
 
         mySide = Services.Ux.DealTurnView.SideOf(uid, deal.InitiatorId, deal.CounterpartyId);
         // مِن الصَفقَةِ نَفسِها: طَريقَةُ الدَفعِ تُسقِطُ «دَفع» عَن النَقدِ في

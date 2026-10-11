@@ -367,7 +367,10 @@ public class DealCashPathCharacterizationTests
         var page = DealPageSource();
         var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(page));
         Assert.Equal(2, Count(code, "deal.Attributes.TryGetValue(Deal.Delivery"));
-        Assert.Contains("deliveryVisible = !isInitiator && isListingOwner;", code, StringComparison.Ordinal);
+        // والحارِسُ نَفسُه صارَ حارِسَ القِراءَة، والرُؤيَةُ بِحُضورِ ما قُرِئ (‏2026-10-11، مُراجَعَةٌ
+        // ثانِيَة — `DealDetailDeliveryDisclosureTests`): كانَت `deliveryVisible = !isInitiator && isListingOwner;`.
+        Assert.Contains("if (!isInitiator && isListingOwner)", code, StringComparison.Ordinal);
+        Assert.Contains("deliveryVisible = !string.IsNullOrEmpty(buyerAddr) || !string.IsNullOrEmpty(buyerPhone);", code, StringComparison.Ordinal);
         Assert.Contains("[SupplyParameterFromQuery(Name = \"err\")]", page, StringComparison.Ordinal);
         Assert.Contains("DealRefusalTexts.KeyFor(Err)", page, StringComparison.Ordinal);
         Assert.DoesNotContain("@inject IDocumentStore Store", page, StringComparison.Ordinal);

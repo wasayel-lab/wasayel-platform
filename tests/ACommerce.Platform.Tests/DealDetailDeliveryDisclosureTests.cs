@@ -99,12 +99,17 @@ public class DealDetailDeliveryDisclosureTests
 
     /// <summary><b>لِمَن يُرسَم</b>: الشَرطُ <c>!isInitiator &amp;&amp; isListingOwner</c>
     /// بِحَرفِه، والمَفاتيحُ الأَربَعَةُ داخِلَ فَرعِه <b>ولا مَرَّةً خارِجَه</b> — فَلا
-    /// نُسخَةَ لِلمُشتَري ولا لِثالِث.</summary>
+    /// نُسخَةَ لِلمُشتَري ولا لِثالِث. <b>قُلِبَ شَطرُ الشَرط</b> (‏2026-10-11، مُراجَعَةٌ
+    /// ثانِيَة): كانَ <c>deliveryVisible = !isInitiator &amp;&amp; isListingOwner;</c> فَيُرسَمُ
+    /// العُنوانُ والإفصاحُ لِلبائِعِ بِلا سَطرٍ تَحتَهُما؛ وصارَ الشَرطُ حارِسَ <b>القِراءَة</b>،
+    /// والكُتلَةُ بِحُضورِ أَحَدِ ما قُرِئ.</summary>
     [Fact]
     public void The_delivery_block_is_rendered_inside_the_vendor_branch_and_nowhere_else()
     {
         var page = Page();
-        Assert.Contains("deliveryVisible = !isInitiator && isListingOwner;", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("deliveryVisible = !isInitiator && isListingOwner;", PageCode(), StringComparison.Ordinal);
+        Assert.Contains("if (!isInitiator && isListingOwner)", PageCode(), StringComparison.Ordinal);
+        Assert.Contains("deliveryVisible = !string.IsNullOrEmpty(buyerAddr) || !string.IsNullOrEmpty(buyerPhone);", PageCode(), StringComparison.Ordinal);
 
         var at = page.IndexOf("@if (deliveryVisible)", StringComparison.Ordinal);
         Assert.True(at > 0, "لا فَرعَ `@if (deliveryVisible)` في الصَفحَة — الأَداةُ عَمياء.");
@@ -127,9 +132,10 @@ public class DealDetailDeliveryDisclosureTests
     public void The_attributes_are_read_only_behind_the_vendor_guard_and_by_the_shared_constants()
     {
         var code = PageCode();
-        // الأَخيرُ لا الأَوَّل: الأَوَّلُ فَرعُ المارك-أَب (`@if`)، والأَخيرُ حارِسُ `@code`.
-        var at = code.LastIndexOf("if (deliveryVisible)", StringComparison.Ordinal);
-        Assert.True(at > 0 && at > code.IndexOf("@code", StringComparison.Ordinal), "لا حارِسَ `if (deliveryVisible)` في `@code` — الأَداةُ عَمياء.");
+        // حارِسُ القِراءَةِ في `@code` بَعدَ اليَوم شَرطُ مَوقِعِ الناظِرِ بِحَرفِه — كانَ
+        // `if (deliveryVisible)` يَومَ كانَت الرُؤيَةُ هِيَ المَوقِع (قُلِبَ ‏2026-10-11).
+        var at = code.LastIndexOf("if (!isInitiator && isListingOwner)", StringComparison.Ordinal);
+        Assert.True(at > 0 && at > code.IndexOf("@code", StringComparison.Ordinal), "لا حارِسَ `if (!isInitiator && isListingOwner)` في `@code` — الأَداةُ عَمياء.");
         var guarded = BlockFrom(code, at);
 
         Assert.Contains("deal.Attributes.TryGetValue(Deal.DeliveryAddressAttribute, out var", guarded, StringComparison.Ordinal);
@@ -152,6 +158,42 @@ public class DealDetailDeliveryDisclosureTests
         // كِتابَةُ القامُوسِ لا قِراءَةُ الاستِمارَة.)
         Assert.DoesNotContain("[\"addr\"] = addr", submit, StringComparison.Ordinal);
         Assert.DoesNotContain("[\"phone\"] = phone", submit, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>الصَفُّ السالِب — صَفقَةُ مَسارِ العَرض</b> (‏2026-10-11، مُراجَعَةٌ ثانِيَة):
+    /// <c>POST /{slug}/listings/{id}/deal</c> لا يَكتُبُ في <c>Attributes</c> إلّا <c>note</c> —
+    /// فَلا عُنوانَ ولا هاتِفَ في أَيِّ صَفقَةٍ يُولِدُها، وكانَت الكُتلَةُ تُرسَمُ لِبائِعِها
+    /// عُنواناً وإفصاحاً عَن لا شَيء. والمُوجِبُ بِجِوارِه: <c>/checkout/submit</c> يَكتُبُ
+    /// الاثنَين. والرُؤيَةُ لا تُشتَقُّ إلّا مِمّا قُرِئ — فَلا مَصدَرَ ثالِثَ يُرسِمُها.</summary>
+    [Fact]
+    public void An_offer_path_deal_carries_neither_value_so_its_vendor_sees_no_empty_delivery_block()
+    {
+        var endpoints = Source(Template, "MarketplaceTemplateExtensions.cs");
+        var start = endpoints.IndexOf("\"/{slug}/listings/{id:guid}/deal\"", StringComparison.Ordinal);
+        Assert.True(start > 0, "نُقطَةُ مَسارِ العَرضِ غَيرُ مَوجودَة — الأَداةُ عَمياء.");
+        var end = endpoints.IndexOf(".RequireStoreWritable();", start, StringComparison.Ordinal);
+        var offer = WriteEndpointGuardTests.StripComments(endpoints.Substring(start, end - start));
+
+        // ما يَكتُبُه مَسارُ العَرضِ في `Attributes` — بِحَرفِه، ولا شَيءَ سِواه.
+        Assert.Equal(1, Count(offer, "attributes:"));
+        Assert.Contains("attributes: string.IsNullOrEmpty(note) ? null : new() { [\"note\"] = note });", offer, StringComparison.Ordinal);
+        Assert.Equal(0, Count(offer, "Deal.Delivery"));
+        Assert.Equal(0, Count(offer, "[\"addr\"]"));
+        Assert.Equal(0, Count(offer, "[\"phone\"]"));
+        Assert.Equal(0, Count(offer, "Attributes["));
+
+        // والمُوجِبُ: كاتِبُ الاثنَينِ واحِد.
+        var submit = CheckoutSubmit();
+        Assert.Equal(1, Count(submit, "[Services.Deals.Deal.DeliveryAddressAttribute] ="));
+        Assert.Equal(1, Count(submit, "[Services.Deals.Deal.DeliveryPhoneAttribute] ="));
+
+        // والصَفحَة: الرُؤيَةُ تُكتَبُ مَرَّةً واحِدَة، مِن الحُضورِ وَحدَه — فَصَفقَةٌ لا تَحمِلُ
+        // أَيّاً مِنهُما لا تُرسَمُ لَها كُتلَة (أَحمَرُ عَلى الكودِ السابِق: الرُؤيَةُ كانَت المَوقِع).
+        var code = PageCode();
+        Assert.Equal(1, Count(code, "deliveryVisible ="));
+        Assert.Contains("deliveryVisible = !string.IsNullOrEmpty(buyerAddr) || !string.IsNullOrEmpty(buyerPhone);", code, StringComparison.Ordinal);
+        Assert.Equal(1, Count(code, "buyerAddr  ="));
+        Assert.Equal(1, Count(code, "buyerPhone ="));
     }
 
     /// <summary>وحَقنُ <c>IDocumentStore</c> المَيِّتُ زال: كانَ يُحقَنُ ولا يُقرَأ
