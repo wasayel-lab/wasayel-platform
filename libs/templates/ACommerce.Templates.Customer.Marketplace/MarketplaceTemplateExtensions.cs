@@ -3034,6 +3034,15 @@ public static class MarketplaceTemplateExtensions
           .RequireStoreWritable();
 
         // POST /{slug}/vendor/{vendorId}/chat — اِبدَأ مُحادَثَة مَع بائِع.
+        //
+        // كانَ يَرتَدُّ إلى `chat/{id}` — مَسارٌ **لا صَفحَةَ لَه**: صِفرُ `@page`
+        // بِـ`/{slug}/chat/` في المُستَودَع (مَقيس ‏2026-10-11)، وغُرفَةُ
+        // المُحادَثَةِ `chats/{conversationId}` (`ChatRoom.razor`). فَكانَ زِرُّ
+        // «تَواصَل مَع البائِع» في `VendorProfile` يُنشِئُ المُحادَثَةَ **ثُمَّ
+        // يُسقِطُ الناقِرَ عَلى «غَيرُ مَوجود»** — بابٌ يَفتَحُ عَلى لا شَيء
+        // (القاعِدَة ١٢)؛ وأُنبوبا البَدءِ الآخَران (`listings/{id}/chat`،
+        // `users/{userId}/chat`) يَرتَدّانِ إلى `chats/` أَصلاً. مُثَبَّتٌ في
+        // `ChatStartRedirectTests`.
         app.MapPost("/{slug}/vendor/{vendorId:guid}/chat",
             async (string slug, Guid vendorId, HttpRequest req, IDocumentStore store) =>
         {
@@ -3049,7 +3058,7 @@ public static class MarketplaceTemplateExtensions
                          || (c.OwnerId == vendorId && c.PartnerId == userId))
                 .FirstOrDefaultAsync();
             if (existing is not null)
-                return Results.Redirect(Link(req, slug, $"chat/{existing.Id}"));
+                return Results.Redirect(Link(req, slug, $"chats/{existing.Id}"));
             var convo = new ACommerce.Kit.Chat.Conversation
             {
                 Id = Guid.NewGuid(),
@@ -3059,7 +3068,7 @@ public static class MarketplaceTemplateExtensions
             };
             s.Store(convo);
             await s.SaveChangesAsync();
-            return Results.Redirect(Link(req, slug, $"chat/{convo.Id}"));
+            return Results.Redirect(Link(req, slug, $"chats/{convo.Id}"));
         }).DisableAntiforgery()
           .RequireStoreWritable();
 
