@@ -2877,6 +2877,11 @@ public static class MarketplaceTemplateExtensions
             await using var s = store.LightweightSession(slug);
             var listing = await s.LoadAsync<Listing>(id);
             if (listing is null) return Results.Redirect(Link(req, slug, "explore"));
+            // **ولا يَشتَري المَرءُ إعلانَه** (‏ADR-033 §٦‑ب‑١ مُلحَقاً، ‏2026-10-11): كانَ هذا البابُ يَأخُذُ أَيَّ
+            // إعلانٍ — والشاشَةُ وَحدَها تُخفي زِرَّ السَلَّةِ عَن مالِكِه، و`curl` لا يَرى الشاشَة — فَتولَدُ صَفقَةٌ
+            // يَطلُبُ فيها المالِكُ مِن نَفسِه. يُرَدُّ قَبلَ أَيِّ كِتابَةٍ بِرَمزِ مَسارِ العَرضِ نَفسِه (`?err=self`)
+            // وتَقرَؤُه صَفحَةُ الإعلانِ مِن القامُوس؛ والهُوِيَّةُ بِقيمَةِ المُعَرِّفِ بِالمُحَلِّلِ القائِم.
+            if (ParseListingOwnerId(listing) == userId) return Results.Redirect(Link(req, slug, $"listings/{id}?err=self"));
             int.TryParse(req.Form["qty"].ToString(), out var qty);
             if (qty <= 0) qty = 1;
             var cart = await s.LoadAsync<ACommerce.Kit.Cart.Cart>(userId)

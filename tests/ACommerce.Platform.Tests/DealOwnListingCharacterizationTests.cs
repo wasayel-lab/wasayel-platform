@@ -33,6 +33,10 @@ namespace ACommerce.Platform.Tests;
 // مُستَخدِمُها عِندَ `Booked` ويَرُدُّه القَبولُ بِـ`actor_is_initiator` — كُلٌّ بِاسمٍ جَديدٍ يَقولُ
 // النَقيضَ ويَحمِلُ «قُلِبَ» في شَرحِه، لا يُحذَفُ ولا يُسكَت. وقِسمُ ما لا يُقلَبُ بِحَرفِه: بَصمَتُه
 // قَبلَ الإصلاحِ وبَعدَه واحِدَة.
+//
+// **ثُمَّ في تَيّارِ S6a (‏2026-10-11) — ولا يُعادُ حَرفٌ فَوقَه**: قُلِبَ صَفُّ «اليَوم» الباقي بِاسمِه —
+// `cart/add` يَرُدُّ المالِكَ بِـ`?err=self` وتَقولُه صَفحَةُ الإعلان؛ وقُلِبَ «يَقِفُ عِندَ Booked» إلى
+// «لا يُخرِجُها مِن Offered» حينَ صارَ الخُروجُ يَسأَلُ فاعِلَ المَرحَلَةِ المَدخولَة (‏ADR-033 §٦‑ط).
 
 public class DealOwnListingCharacterizationTests
 {
@@ -177,14 +181,19 @@ public class DealOwnListingCharacterizationTests
     /// <summary><b>اليَوم، ويَبقى بَعدَ الإصلاح</b>: <c>cart/add</c> يَأخُذُ أَيَّ إعلانٍ — لا يَقرَأُ
     /// <c>owner_id</c> ولا يَرُدُّ — والشاشَةُ وَحدَها تُخفي زِرَّ السَلَّةِ عَن مالِكِه؛ ومَسارُ العَرضِ
     /// يَرُدُّه بِـ<c>?err=self</c>. فَالبابُ إلى صَفقَةٍ عَلى إعلانِ المُشتَري نَفسِه طَلَبٌ مَصنوعٌ لا نَقرَة —
-    /// ويُقلَبُ هذا الصَفُّ بِاسمِه يَومَ يُقَرَّرُ بابُه.</summary>
+    /// ويُقلَبُ هذا الصَفُّ بِاسمِه يَومَ يُقَرَّرُ بابُه.
+    /// <para><b>قُلِبَ بِاسمِه — قُرِّرَ بابُه</b> (‏ADR-033 §٦‑ب‑١ مُلحَقاً، ‏2026-10-11): كانَ
+    /// <c>Today_cart_add_takes_any_listing_and_only_the_listing_page_hides_the_button_from_its_owner</c>. وصارَ
+    /// <c>cart/add</c> يَرُدُّ مالِكَ الإعلانِ قَبلَ أَيِّ كِتابَةٍ بِرَمزِ مَسارِ العَرضِ نَفسِه، وصَفحَةُ الإعلانِ —
+    /// الَّتي لَم تَكُن تَقرَأُ <c>self</c> — تَقولُه مِن القامُوس لِلبابَين. والزِرُّ ما زالَ مَخفِيّاً عَن المالِك.</para></summary>
     [Fact]
-    public void Today_cart_add_takes_any_listing_and_only_the_listing_page_hides_the_button_from_its_owner()
+    public void Cart_add_refuses_the_owners_own_listing_with_err_self_before_any_write_and_the_listing_page_says_why()
     {
         var cartAdd = Endpoint("/{slug}/listings/{id:guid}/cart/add");
-        Assert.Contains("var listing = await s.LoadAsync<Listing>(id);", cartAdd, StringComparison.Ordinal);
-        Assert.DoesNotContain("owner_id", cartAdd, StringComparison.Ordinal);
-        Assert.DoesNotContain("err=self", cartAdd, StringComparison.Ordinal);
+        var load   = cartAdd.IndexOf("var listing = await s.LoadAsync<Listing>(id);", StringComparison.Ordinal);
+        var refuse = cartAdd.IndexOf("if (ParseListingOwnerId(listing) == userId) return Results.Redirect(Link(req, slug, $\"listings/{id}?err=self\"));", StringComparison.Ordinal);
+        var write  = cartAdd.IndexOf("s.Store(cart);", StringComparison.Ordinal);
+        Assert.True(load > 0 && refuse > load && write > refuse, $"رَدُّ المالِكِ لا يَسبِقُ الكِتابَة: load={load} refuse={refuse} write={write}");
 
         Assert.Contains("?err=self", Endpoint("/{slug}/listings/{id:guid}/deal"), StringComparison.Ordinal);
 
@@ -192,5 +201,33 @@ public class DealOwnListingCharacterizationTests
         var hide = page.IndexOf("@if (!isOwner && !isOfferBased)", StringComparison.Ordinal);
         var cart = page.IndexOf("/cart/add\")", StringComparison.Ordinal);
         Assert.True(hide > 0 && cart > hide, $"زِرُّ السَلَّةِ لا يَقَعُ تَحتَ حارِسِ المالِك: hide={hide} cart={cart}");
+        Assert.Contains("else if (Err == \"self\")", page, StringComparison.Ordinal);
+        Assert.Contains("<AcAlert Variant=\"danger\" Message=\"@L[\"listings.detail.err_self\"]\" />", page, StringComparison.Ordinal);
+        var text = ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "listings.detail.err_self");
+        Assert.NotEqual("listings.detail.err_self", text);
+        Assert.False(ACommerce.Platform.I18n.LocaleCatalog.IsPlaceholder(text));
+    }
+
+    /// <summary><b>المُوجِبُ والسالِبُ لِلهُوِيَّةِ الَّتي يَرُدُّ بِها البابُ</b> — المُحَلِّلُ القائِمُ
+    /// (<c>ParseListingOwnerId</c>) بِقيمَةِ المُعَرِّفِ: المالِكُ بِأَيِّ صيغَةٍ لِمُعَرِّفِه يُرَدّ، وغَيرُه
+    /// يُضيف، وإعلانٌ بِلا <c>owner_id</c> (بَذرَةٌ بِلا مالِك) لا يَرُدُّ أَحَداً.</summary>
+    [Fact]
+    public void The_cart_add_owner_check_compares_the_guid_value_and_lets_everyone_else_through()
+    {
+        var parse = typeof(ACommerce.Templates.Customer.Marketplace.MarketplaceTemplateExtensions)
+            .GetMethod("ParseListingOwnerId", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+            ?? throw new InvalidOperationException("‏`ParseListingOwnerId` غَيرُ مَوجودَة — الأَداةُ عَمياء.");
+        Guid? OwnerOf(string? ownerId)
+        {
+            var l = new ACommerce.Kit.Listings.Listing { Id = Guid.NewGuid(), Title = "سِلعَة" };
+            if (ownerId is not null) l.Attributes["owner_id"] = ownerId;
+            return (Guid?)parse.Invoke(null, new object[] { l });
+        }
+
+        foreach (var format in new[] { Buyer.ToString(), Buyer.ToString("D").ToUpperInvariant(), Buyer.ToString("N") })
+            Assert.True(OwnerOf(format) == Buyer, $"المالِكُ بِصيغَةِ «{format}» لَم يُرَدّ.");
+        Assert.False(OwnerOf(Seller.ToString()) == Buyer);
+        Assert.Null(OwnerOf(null));
+        Assert.Null(OwnerOf("not-a-guid"));
     }
 }

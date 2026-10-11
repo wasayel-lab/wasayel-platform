@@ -195,6 +195,12 @@ else
     {
         <AcAlert Variant="danger" Message="@L["listings.detail.err_self_offer"]" />
     }
+    else if (Err == "self")
+    {
+        @* `self` — رَمزُ بابَي الطَلَبِ عَلى الإعلانِ (العَرضُ والإضافَةُ إلى السَلَّة) حينَ يَكونُ الطالِبُ
+           مالِكَه: كانَ مَسارُ العَرضِ يَرتَدُّ بِه إلى هُنا والصَفحَةُ لا تَقرَؤُه (‏ADR-033 §٦‑ب‑١ مُلحَقاً). *@
+        <AcAlert Variant="danger" Message="@L["listings.detail.err_self"]" />
+    }
 
     @if (Trip == "completed") { <AcAlert Variant="success" Message="@L["listings.detail.trip_completed"]" /> }
     @if (Trip == "aborted")   { <AcAlert Variant="warning" Message="@L["listings.detail.trip_aborted"]" /> }

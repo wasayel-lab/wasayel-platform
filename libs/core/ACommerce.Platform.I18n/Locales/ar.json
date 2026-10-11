@@ -321,7 +321,8 @@
   "profile.action.cancel": "إلغاء",
   "profile.action.save": "حِفظ التَعديلات",
 
-  "common.unit.reply": "ردّ",
+  "common.unit.reply": "ردّ"
+,
 
   "admin.nav.tenants": "المُستَأجِرون",
   "admin.nav.monitor": "المُراقَبَة",
@@ -998,6 +999,7 @@
   "listings.detail.err_offer_geo": "يَجِب السَّماح بِالوُصول إلى مَوقِعكَ لِتَقديم العَرض. اِسمَح بِالإذن مِن مُتَصَفِّحكَ ثُمّ أَعِد المُحاوَلَة.",
   "listings.detail.err_offer_price": "السِعر يَجِب أَن يَكون أَكبَر مِن صِفر.",
   "listings.detail.err_self_offer": "لا يُمكِنُكَ تَقديم عَرض عَلى إعلانِكَ.",
+  "listings.detail.err_self": "هذا إعلانُكَ — لا يُمكِنُكَ طَلَبُه ولا إضافَتُه إلى سَلَّتِكَ.",
   "listings.detail.fav_add": "أَضِف لِلمُفَضَّلَة",
   "listings.detail.fav_remove": "أَزِل مِن المُفَضَّلَة",
   "listings.detail.featured": "مُمَيَّز",
