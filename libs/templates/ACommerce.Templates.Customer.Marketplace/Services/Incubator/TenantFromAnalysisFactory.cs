@@ -200,9 +200,19 @@ public sealed class TenantFromAnalysisFactory
         var s = string.IsNullOrEmpty(sector) ? PatternToSector(pattern) : sector;
         return s switch
         {
+            // **كِندٌ فارِغٌ لا `"commercial"`** (‏ADR-034، ‏2026-10-11). كانَت
+            // الفِئَتانِ هُنا بِكِندِ `"commercial"` — وهي في مُعجَمِ المُستَودَعِ
+            // **عَقارٌ تِجارِيّ** (مَحَلّاتُ قِطاعِ `realestate` أَدناه، ومَكاتِبُ
+            // `ejar` ومَحَلّاتُه) — و`PatternProfileResolver.PatternOf` يَقرَؤُها
+            // إيجاراً بِلا سَلَّة، وكَذلكَ نُسخَتُه في `MainLayout.razor`. وهذا
+            // الفَرعُ مَقصِدُ مَسارِ العَميلِ كُلِّه (القِطاعُ `""` والنَمَطُ يَسقُطُ
+            // إلى `marketplace`)، فَكانَ كُلُّ مَتجَرٍ مِن `/studio/begin` يولَدُ
+            // بِلا استِمارَةٍ إلى `cart/add` ولا تَبويبِ سَلَّة (‏FLGAP-04). والفارِغُ
+            // هُوَ ما تُبذَرُ بِه `theme-demo` وما يَكتُبُه فَرعُ السُقوطِ أَدناه:
+            // «فِئَةٌ رَئيسِيَّةٌ بِلا تَجميع» (‏`Category.Kind`). والقارِئُ لَم يُمَسّ.
             "ecommerce" => new[] {
-                C("products",   "مُنتَجات",  "🛍️", "commercial", 0),
-                C("deals",      "عُروض",     "🏷️", "commercial", 1)
+                C("products",   "مُنتَجات",  "🛍️", "", 0),
+                C("deals",      "عُروض",     "🏷️", "", 1)
             },
             "fnb" => new[] {
                 C("restaurants", "مَطاعِم", "🍽️", "fnb", 0),
