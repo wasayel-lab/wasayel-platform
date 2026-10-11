@@ -36,6 +36,12 @@ namespace ACommerce.Platform.Tests;
 // **وما يُقلَبُ وما لا يُقلَب** (القاعِدَة ٣): صَفّا «اليَوم» يُقلَبانِ بِاسمِهِما في كوميتِ
 // الإصلاح؛ وصَفُّ الكِتابَةِ الَّتي لا تَمَسُّ ما تَفحَصُه البَوّابَةُ يَبقى بِحَرفِه — إعادَةُ الفَحصِ
 // لا تَرُدُّ قَبولاً سَليماً.
+//
+// **ثُمَّ قُلِبَ صَفّا «اليَوم» في الكوميتِ التالي** (‏ADR-033 §٦‑ب‑٢ مُلحَقاً، ‏2026-10-11):
+// `Validate` تُعادُ عَلى وَثيقَةِ جَلسَةِ الكِتابَةِ قَبلَ كِتابَةِ الانتِقال، فَالإلغاءُ المُتَداخِلُ
+// يَرُدُّ القَبولَ بِـ`deal_not_active` والقَبولُ الثاني يُرَدُّ بِـ`deal_already_accepted` — كُلٌّ
+// بِاسمٍ جَديدٍ يَقولُ النَقيضَ ويَحمِلُ «قُلِبَ» في شَرحِه، لا يُحذَفُ ولا يُسكَت. وصَفّا المُوجِبِ
+// بِحَرفِهِما: بَصمَةُ مَقطَعِهِما قَبلَ الإصلاحِ وبَعدَه واحِدَة.
 
 public class DealAcceptStaleSnapshotCharacterizationTests
 {
@@ -100,40 +106,50 @@ public class DealAcceptStaleSnapshotCharacterizationTests
 
     private static DealAcceptor BySeller => new(Seller, "بائِع");
 
-    // ═══ ١) «اليَوم» — يُقلَبانِ بِاسمِهِما في كوميتِ الإصلاح ═══════════════════════
+    // ═══ ١) ما كانَ «اليَوم» — قُلِبا بِاسمِهِما (‏ADR-033 §٦‑ب‑٢ مُلحَقاً) ═══════════════
 
-    /// <summary><b>اليَوم</b>: يُلغي المُشتَري بَعدَ أَن فُحِصَت لَقطَةُ القَبولِ وقَبلَ جَلسَةِ
-    /// الانتِقال — فَيُكتَبُ <c>advanced</c> فَوقَ الصَفقَةِ المُلغاة (حالَتُها <c>Cancelled</c>
-    /// ومَرحَلَتُها <c>Booked</c>)، ويُرجَعُ <c>Accepted</c> فَيُشعَرُ المُشتَري بِقَبولِ ما أَلغاه.
-    /// وهُوَ سِجِلُّ المِجَسِّ الحَيِّ بِحَرفِه: <c>[created, note, bound, cancelled, advanced]</c>.</summary>
+    /// <summary><b>قُلِبَ</b> (‏ADR-033 §٦‑ب‑٢ مُلحَقاً، ‏2026-10-11): كانَ إلغاءُ المُشتَري بَعدَ أَن
+    /// فُحِصَت لَقطَةُ القَبولِ وقَبلَ جَلسَةِ الانتِقالِ يَترُكُ <c>advanced</c> يُكتَبُ فَوقَ الصَفقَةِ
+    /// المُلغاة (حالَتُها <c>Cancelled</c> ومَرحَلَتُها <c>Booked</c>) ويُرجِعُ <c>Accepted</c> — سِجِلُّ
+    /// المِجَسِّ الحَيِّ بِحَرفِه <c>[created, note, bound, cancelled, advanced]</c>. وصارَت <c>Validate</c>
+    /// تُعادُ عَلى وَثيقَةِ جَلسَةِ الكِتابَة: يُرَدُّ القَبولُ بِـ<c>deal_not_active</c>، ولا يَكتُبُ
+    /// القَبولُ عَلى المُلغاةِ شَيئاً (يُعَدُّ في عالَمِ الوَثائِق)، فَلا يُشعَرُ المُشتَري بِقَبولِ ما
+    /// أَلغاه — <c>/accept</c> لا تُشعِرُ إلّا عِندَ <c>Ok</c>.</summary>
     [Fact]
-    public void Today_a_buyer_cancel_between_the_snapshot_and_the_write_session_gets_advanced_written_onto_the_cancelled_deal_and_Ok()
+    public void A_buyer_cancel_between_the_snapshot_and_the_write_session_is_refused_with_deal_not_active_and_nothing_is_written_onto_the_cancelled_deal()
     {
         var (deals, world, id) = CashCartDeal();
         DealCancelResult? cancel = null;
+        var writesAfterCancel = -1;
         var fired = Between(world, () =>
-            cancel = Now(deals.CancelAsync(Slug, id, new DealCanceller(Buyer, "مُشتَرٍ", IsStoreAdmin: false), "عَدَلتُ عَن الطَلَب")));
+        {
+            cancel = Now(deals.CancelAsync(Slug, id, new DealCanceller(Buyer, "مُشتَرٍ", IsStoreAdmin: false), "عَدَلتُ عَن الطَلَب"));
+            writesAfterCancel = world.Wrote<Deal>();
+        });
 
         var accept = Now(deals.AcceptAsync(Slug, id, BySeller));
 
         Assert.Equal(1, fired());
         Assert.True(cancel!.Ok);
-        Assert.True(accept.Ok);
-        Assert.Null(accept.Violation);
+        Assert.False(accept.Ok);
+        Assert.Equal(DealAcceptAuthorization.DealNotActive, accept.Violation!.Code);
+        Assert.Equal(writesAfterCancel, world.Wrote<Deal>());
         var after = world.Read<Deal>(id.ToString())!;
         Assert.Equal(DealStatus.Cancelled, after.Status);
-        Assert.Equal(DealStage.Booked, after.Stage);
-        Assert.Equal(new[] { "created", "note", "bound", "cancelled", "advanced" },
+        Assert.Equal(DealStage.Offered, after.Stage);
+        Assert.Equal(new[] { "created", "note", "bound", "cancelled" },
             after.Timeline.Select(e => e.Action).ToArray());
-        Assert.Equal(Seller, after.Timeline[^1].ActorId);
     }
 
-    /// <summary><b>اليَوم</b>: نَقرَةٌ ثانِيَةٌ مِن البائِعِ نَفسِه — فُحِصَت لَقطَتُها في
-    /// <c>Offered</c>، ثُمَّ أَتَمَّت الأولى قَبولَها كُلَّه قَبلَ جَلسَةِ انتِقالِها — فَتَمضي الصَفقَةُ
-    /// ثانِيَةً <c>Booked → Confirmed</c> بِمُلاحَظَةِ «قُبِلَ العَرض»، والقَبولانِ <c>Ok</c> (فَإشعاران
-    /// لِلمُشتَري مِن <c>/accept</c>). مِرآةُ الحالَةِ الواحِدَةِ مِن مِئَةٍ في المِجَسّ.</summary>
+    /// <summary><b>قُلِبَ</b> (‏ADR-033 §٦‑ب‑٢ مُلحَقاً، ‏2026-10-11): كانَت نَقرَةُ القَبولِ الثانِيَةُ —
+    /// لَقطَتُها في <c>Offered</c>، والأولى أَتَمَّت قَبولَها كُلَّه قَبلَ جَلسَةِ انتِقالِها — تُحَرِّكُ
+    /// الصَفقَةَ ثانِيَةً <c>Booked → Confirmed</c> بِمُلاحَظَةِ «قُبِلَ العَرض»، والقَبولانِ <c>Ok</c>
+    /// فَإشعاران. وصارَت تُرَدُّ بِـ<c>deal_already_accepted</c> عَلى وَثيقَةِ جَلسَتِها، فَتَمضي
+    /// الصَفقَةُ مَرَّةً واحِدَةً ويَصِلُ المُشتَري إشعارٌ واحِد. <b>والتَداخُلُ التامّ</b> — كِلا
+    /// التَحميلَينِ قَبلَ كِلا الحِفظَين — يُرجِعُ <c>Ok</c> مَرَّتَينِ بِلا تَزامُنٍ تَفاؤُلِيٍّ عَلى
+    /// <c>Deal</c>؛ لا يُمَثِّلُه عالَمُ الذاكِرَة، ويُقالُ في ‏ADR-033 §٦‑ب‑٢.</summary>
     [Fact]
-    public void Today_a_second_accept_that_lands_between_the_first_snapshot_and_its_write_session_moves_the_deal_again_and_both_are_Ok()
+    public void A_second_accept_that_lands_between_the_first_snapshot_and_its_write_session_is_refused_with_deal_already_accepted_and_the_deal_moves_once()
     {
         var (deals, world, id) = CashCartDeal();
         DealAcceptResult? landed = null;
@@ -143,16 +159,15 @@ public class DealAcceptStaleSnapshotCharacterizationTests
 
         Assert.Equal(1, fired());
         Assert.True(landed!.Ok);
-        Assert.True(stale.Ok);
-        Assert.Null(stale.Violation);
+        Assert.False(stale.Ok);
+        Assert.Equal(DealAcceptAuthorization.DealAlreadyAccepted, stale.Violation!.Code);
         var after = world.Read<Deal>(id.ToString())!;
         Assert.Equal(DealStatus.Active, after.Status);
-        Assert.Equal(DealStage.Confirmed, after.Stage);
+        Assert.Equal(DealStage.Booked, after.Stage);
         var moves = after.Timeline.Where(e => e.Action == "advanced").ToArray();
-        Assert.Equal(2, moves.Length);
+        Assert.Single(moves);
         Assert.Equal((DealStage.Offered, DealStage.Booked), (moves[0].StageBefore, moves[0].StageAfter));
-        Assert.Equal((DealStage.Booked, DealStage.Confirmed), (moves[1].StageBefore, moves[1].StageAfter));
-        Assert.All(moves, m => Assert.Equal("قُبِلَ العَرض", m.Note));
+        Assert.Equal("قُبِلَ العَرض", moves[0].Note);
     }
 
     // ═══ ٢) ما لا يُقلَب — كِتابَةٌ بَينَ الجَلسَتَينِ لا تَمَسُّ ما تَفحَصُه البَوّابَة ═════════

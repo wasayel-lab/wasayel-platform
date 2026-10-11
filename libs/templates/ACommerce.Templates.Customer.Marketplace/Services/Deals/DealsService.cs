@@ -176,6 +176,18 @@ public sealed class DealsService
     /// «مَن يُحَرِّكُ Offered بِلا قَبول» وجَوابُه المُبادِرُ كَما كان. ولا نَتيجَةَ
     /// تُهمَل: كُلُّ رَفضٍ رَمزٌ قَبلَ أَيِّ كِتابَة، و<c>Accepted</c> لا تُرجَعُ إلّا
     /// بَعدَ أَن حُفِظَ الانتِقال.</para>
+    ///
+    /// <para><b>واللَقطَةُ قَد تَتَقادَم — فَيُعادُ الفَحصُ في جَلسَةِ الكِتابَة</b>
+    /// (مُراجَعَةُ ‏2026-10-11؛ ‏ADR-033 §٦‑ب‑٢ مُلحَقاً): <c>Validate</c> الأولى تَفحَصُ لَقطَةَ
+    /// جَلسَةِ قِراءَة، وما يُحفَظُ بَعدَها — إلغاءُ المُشتَري، أَو قَبولٌ ثانٍ مِن نَقرَةٍ
+    /// مُزدَوِجَة — لا تَراه: فَكانَ <c>advanced</c> يُكتَبُ فَوقَ صَفقَةٍ مُلغاةٍ ويُرجَعُ
+    /// <c>Accepted</c>، ونَقرَةٌ ثانِيَةٌ تُحَرِّكُ <c>Booked → Confirmed</c>. فَتُعادُ
+    /// <c>Validate</c> نَفسُها عَلى الوَثيقَةِ الَّتي سَتُكتَب، قَبلَ كِتابَةِ الانتِقال،
+    /// بِرَمزَيها القائِمَين — لا سابِعَ. <b>وما لا تُغلِقُه، ويُقال</b>: كِتابَةٌ تَقَعُ بَعدَ
+    /// ذاكَ التَحميلِ وقَبلَ حِفظِه تَضيعُ بِآخِرِ كاتِب (لا تَزامُنَ تَفاؤُلِيَّ عَلى
+    /// <c>Deal</c> — مَوجَةٌ لاحِقَةٌ بِقَرارِها)، فَقَبولانِ مُتَداخِلانِ تَماماً يُرجِعانِ
+    /// <c>Accepted</c> مَرَّتَين؛ وفي العَرضِ بِلا طَرَفٍ تَسبِقُ كِتابَةُ التَعيينِ — عَلى صَفقَةٍ
+    /// فَعّالَةٍ ساعَتَها — إعادَةَ الفَحص.</para>
     /// </summary>
     public async Task<DealAcceptResult> AcceptAsync(
         string tenantSlug, Guid dealId, DealAcceptor by, CancellationToken ct = default)
@@ -190,10 +202,19 @@ public sealed class DealsService
         await AssignCounterpartyAsync(tenantSlug, dealId, by.ActorId, by.ActorName, ct);
 
         await using var s = _store.LightweightSession(tenantSlug);
-        // ‏`Validate` رَدَّت العَدَمَ وغَيرَ `Offered`، فَما هُنا صَفقَةٌ في `Offered`
-        // ولَها تالٍ في كُلِّ تَعريفٍ يَعرِفُه الكاتالوج (`Booked`) — فَالعَدَمُ خَرقُ
-        // ثابِتٍ لا حالَةُ مُستَخدِم، ولا يُلَبَّسُ رَمزاً مِن مَعجَمِ التَخويل.
-        var deal = (await s.LoadAsync<Deal>(dealId, ct))!;
+        // اللَقطَةُ أَعلاه مِن جَلسَةِ قِراءَةٍ وقَد تَقادَمَت: إلغاءٌ أَو قَبولٌ ثانٍ حُفِظَ بَعدَها
+        // لا تَراه `Validate` الأولى. فَتُعادُ نَفسُها عَلى وَثيقَةِ هذِه الجَلسَةِ — الَّتي
+        // سَتُكتَب — قَبلَ كِتابَةِ الانتِقال، بِرَمزَيها القائِمَين `deal_not_active` و
+        // `deal_already_accepted` (‏ADR-033 §٦‑ب‑٢ مُلحَقاً، ‏2026-10-11).
+        var fresh = await s.LoadAsync<Deal>(dealId, ct);
+        var stale = DealAcceptAuthorization.Validate(fresh, by);
+        if (stale is not null) return DealAcceptResult.Refused(stale, fresh);
+
+        // ‏`Validate` عَلى هذِه الوَثيقَةِ رَدَّت العَدَمَ وغَيرَ الفَعّالَةِ وغَيرَ `Offered`، فَما هُنا
+        // صَفقَةٌ فَعّالَةٌ في `Offered` ولَها تالٍ في كُلِّ تَعريفٍ يَعرِفُه الكاتالوج (`Booked`) —
+        // فَالعَدَمُ خَرقُ ثابِتٍ لا حالَةُ مُستَخدِم، ولا يُلَبَّسُ رَمزاً مِن مَعجَمِ التَخويل. (وكانَ
+        // هذا التَعليقُ يَقولُ ذلك عَن لَقطَةِ القِراءَة، وهي لا تَضمَنُه — مُراجَعَةُ ‏2026-10-11.)
+        var deal = fresh!;
         var next = DealsPolicy.Next(deal)
             ?? throw new InvalidOperationException($"‏Offered بِلا تالٍ في النَمَط «{deal.Pattern}» — خَرقُ ثابِتِ الكاتالوج.");
         return DealAcceptResult.Accepted(await MoveAsync(s, deal, next, by.ActorId, by.ActorName, "قُبِلَ العَرض", ct));

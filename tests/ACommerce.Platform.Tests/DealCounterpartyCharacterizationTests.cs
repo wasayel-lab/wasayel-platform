@@ -378,19 +378,31 @@ public class DealCounterpartyCharacterizationTests
     /// <c>Accepted</c> بِلا قِراءَةِ النَتيجَة. وصارَ ما بَعدَ التَعيين: تَحميلٌ في
     /// جَلسَةِ كِتابَة، ثُمَّ <c>Next(deal)</c>، ثُمَّ <c>MoveAsync</c> <b>بِفاعِلٍ هُوَ
     /// القابِل</b> (<c>by.ActorId</c>) ومُلاحَظَةِ «قُبِلَ العَرض»، و<c>Accepted</c> بَعدَ
-    /// الحَفظ. ولا نِداءَ لِـ<c>AdvanceAsync</c> ولا لِـ<c>deal.InitiatorId</c> بَعدَ اليَوم.</summary>
+    /// الحَفظ. ولا نِداءَ لِـ<c>AdvanceAsync</c> ولا لِـ<c>deal.InitiatorId</c> بَعدَ اليَوم.
+    ///
+    /// <para><b>وقُلِبَ ثانِيَةً بِاسمِه</b> (مُراجَعَةُ ‏2026-10-11 عَلى <c>8769fa4</c>؛ ‏ADR-033 §٦‑ب‑٢
+    /// مُلحَقاً): كانَ ما بَعدَ تَحميلِ جَلسَةِ الكِتابَةِ <c>Next</c> ثُمَّ <c>MoveAsync</c> بِلا فَحص —
+    /// <c>Validate</c> واحِدَةٌ عَلى لَقطَةِ جَلسَةِ قِراءَةٍ قَد تَتَقادَم، فَكانَ <c>advanced</c> يُكتَبُ
+    /// فَوقَ صَفقَةٍ أُلغِيَت بَينَهُما (‏<c>DealAcceptStaleSnapshotCharacterizationTests</c>). وصارَ
+    /// بَينَهُما إعادَةُ <c>Validate</c> عَلى تِلكَ الوَثيقَةِ ورَفضٌ بِرَمزِها — <c>Validate</c> مَرَّتان.</para></summary>
     [Fact]
-    public void AcceptAsync_validates_then_assigns_the_acceptor_then_moves_as_the_acceptor_through_MoveAsync()
+    public void AcceptAsync_validates_then_assigns_then_revalidates_the_write_session_document_then_moves_as_the_acceptor_through_MoveAsync()
     {
         var accept = AcceptBody();
         var load     = accept.IndexOf("var loaded = await LoadAsync(tenantSlug, dealId, ct);", StringComparison.Ordinal);
         var validate = accept.IndexOf("var violation = DealAcceptAuthorization.Validate(loaded, by);", StringComparison.Ordinal);
         var refuse   = accept.IndexOf("if (violation is not null) return DealAcceptResult.Refused(violation, loaded);", StringComparison.Ordinal);
         var assign   = accept.IndexOf("await AssignCounterpartyAsync(tenantSlug, dealId, by.ActorId, by.ActorName, ct);", StringComparison.Ordinal);
+        var fresh    = accept.IndexOf("var fresh = await s.LoadAsync<Deal>(dealId, ct);", StringComparison.Ordinal);
+        var recheck  = accept.IndexOf("var stale = DealAcceptAuthorization.Validate(fresh, by);", StringComparison.Ordinal);
+        var refuse2  = accept.IndexOf("if (stale is not null) return DealAcceptResult.Refused(stale, fresh);", StringComparison.Ordinal);
         var next     = accept.IndexOf("var next = DealsPolicy.Next(deal)", StringComparison.Ordinal);
         var move     = accept.IndexOf("return DealAcceptResult.Accepted(await MoveAsync(s, deal, next, by.ActorId, by.ActorName, \"قُبِلَ العَرض\", ct));", StringComparison.Ordinal);
-        Assert.True(load > 0 && validate > load && refuse > validate && assign > refuse && next > assign && move > next,
-            $"سَلسَلَةُ القَبولِ تَغَيَّرَت: load={load} validate={validate} refuse={refuse} assign={assign} next={next} move={move}");
+        Assert.True(load > 0 && validate > load && refuse > validate && assign > refuse
+                    && fresh > assign && recheck > fresh && refuse2 > recheck && next > refuse2 && move > next,
+            $"سَلسَلَةُ القَبولِ تَغَيَّرَت: load={load} validate={validate} refuse={refuse} assign={assign} " +
+            $"fresh={fresh} recheck={recheck} refuse2={refuse2} next={next} move={move}");
+        Assert.Equal(2, Count(accept, "DealAcceptAuthorization.Validate("));
 
         Assert.Equal(1, Count(accept, "AssignCounterpartyAsync("));
         Assert.Equal(0, Count(accept, "AdvanceAsync("));
