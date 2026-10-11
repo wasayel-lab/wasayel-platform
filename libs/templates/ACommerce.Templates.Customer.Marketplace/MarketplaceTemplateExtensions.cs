@@ -2977,8 +2977,10 @@ public static class MarketplaceTemplateExtensions
                     attributes: new()
                     {
                         ["qty"] = item.Quantity.ToString(),
-                        ["addr"] = addr,
-                        ["phone"] = phone,
+                        // بِالثابِتَينِ لا بِحَرفِيَّة: القارِئُ (تَفصيلُ الصَفقَةِ لِلبائِع)
+                        // يَقرَأُ نَفسَ الحَرف (P1-4).
+                        [Services.Deals.Deal.DeliveryAddressAttribute] = addr,
+                        [Services.Deals.Deal.DeliveryPhoneAttribute] = phone,
                         // المُطَبَّعَةُ لا الخام — فَما يُقرَأُ مِن
                         // الصَفقَةِ بَعدَ سَنَةٍ قيمَةٌ مِن المَعجَم.
                         ["pay_method"] = payMethod

@@ -343,18 +343,22 @@ public class DealCashPathCharacterizationTests
         Assert.Contains("PayMethod=\"@DealsPolicy.PayMethodOf(deal)\"", page, StringComparison.Ordinal);
     }
 
-    /// <summary>لا سَطرَ يَرسُمُ <c>Attributes</c> (عُنوانُ التَوصيلِ وهاتِفُ المُشتَري
-    /// مَكتوبانِ في الصَفقَةِ ولا يَراهُما البائِع — P1-4)، ولا مُعامِلَ <c>err</c>
-    /// (رَفضُ <c>/accept</c> و<c>/cancel</c> يَرتَدُّ بِرَمزٍ لا تَقرَؤُه الصَفحَة)،
-    /// وحَقنُ <c>IDocumentStore</c> مَيِّتٌ: يُحقَنُ ولا يُقرَأ.</summary>
+    /// <summary><b>قُلِبَ شَطرُه</b> (P1-4): كانَ لا سَطرَ يَرسُمُ <c>Attributes</c>
+    /// (عُنوانُ التَوصيلِ وهاتِفُ المُشتَري مَكتوبانِ في الصَفقَةِ ولا يَراهُما
+    /// البائِع) وحَقنُ <c>IDocumentStore</c> مَيِّتٌ يُحقَنُ ولا يُقرَأ — فَصارا يُرسَمانِ
+    /// لِلبائِعِ وَحدَه خَلفَ حارِسٍ (<c>DealDetailDeliveryDisclosureTests</c>) وزالَ
+    /// الحَقن. <b>وما بَقِيَ حَرفاً</b>: لا مُعامِلَ <c>err</c> — رَفضُ <c>/accept</c>
+    /// و<c>/cancel</c> يَرتَدُّ بِرَمزٍ لا تَقرَؤُه الصَفحَة (يُقلَبُ في كوميتِه).</summary>
     [Fact]
-    public void The_deal_page_renders_no_delivery_attributes_reads_no_err_and_carries_a_dead_store_injection_today()
+    public void The_deal_page_now_renders_delivery_attributes_behind_the_vendor_guard_but_still_reads_no_err()
     {
         var page = DealPageSource();
-        Assert.Equal(0, Count(page, "Attributes["));
+        var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(page));
+        Assert.Equal(2, Count(code, "deal.Attributes.TryGetValue(Deal.Delivery"));
+        Assert.Contains("deliveryVisible = !isInitiator && isListingOwner;", code, StringComparison.Ordinal);
         Assert.DoesNotContain("SupplyParameterFromQuery", page, StringComparison.Ordinal);
-        Assert.Contains("@inject IDocumentStore Store", page, StringComparison.Ordinal);
-        Assert.Equal(0, Regex.Matches(WriteEndpointGuardTests.StripMarkupComments(page), @"\bStore\s*\.").Count);
+        Assert.DoesNotContain("@inject IDocumentStore Store", page, StringComparison.Ordinal);
+        Assert.Equal(0, Regex.Matches(code, @"\bStore\s*\.").Count);
 
         // ورَفضُ النُقطَتَينِ يَصِلُ بِـ`?err=` — إلى صَفحَةٍ لا تَقرَؤُه.
         Assert.Contains("$\"?err={res.Violation!.Code}\"", Endpoint("/{slug}/deals/{id:guid}/accept"), StringComparison.Ordinal);

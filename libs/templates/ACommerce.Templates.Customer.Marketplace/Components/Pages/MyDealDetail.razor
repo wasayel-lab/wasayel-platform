@@ -1,6 +1,5 @@
 @page "/{slug}/deals/{id:guid}"
 @page "/{slug}/r/{role}/deals/{id:guid}"
-@inject IDocumentStore Store
 @inject AuthSession Auth
 @inject Services.Deals.DealsService Deals
 @inject ACommerce.Kit.Reviews.ReviewsService Reviews
@@ -132,6 +131,39 @@
                     <span style="color:var(--ac-text-muted);">@L.Markup("deals.detail.other_party")</span>
                     <span>@(isInitiator ? (deal.CounterpartyName ?? L["deals.detail.awaiting_accept"]) : deal.InitiatorName)</span>
                 </div>
+
+                @* ─── بَياناتُ التَوصيلِ — لِمَن يُسَلِّمُ وَحدَه (P1-4) ───
+                   `/checkout/submit` يَكتُبُ العُنوانَ والهاتِفَ في `Attributes` ولَم
+                   تَرسُمهُما أَيُّ شاشَةٍ (مَقيس: صِفرُ `Attributes[` في صَفحاتِ الصَفقَةِ
+                   الأَربَع) — فَالبائِعُ لا يَعرِفُ إلى أَينَ يَشحَن. تُرسَمُ لِلطَرَفِ
+                   المُقابِلِ أَو مالِكِ الإعلانِ وَحدَه: لا لِلمُشتَري (بَياناتُه هُوَ،
+                   كَتَبَها عِندَ الباب) ولا لِثالِث (الصَفحَةُ تُغلَقُ عَلى غَيرِ الطَرَفَين
+                   أَعلاه). ومَعَها سَطرُ إفصاحٍ مِن القامُوس: لِلتَسليمِ وَحدَه (‏PDPL،
+                   `PRODUCTION-PLAN.md:229`). والمِفتاحانِ ثابِتا `Deal` الَّذَينِ يَكتُبُ
+                   بِهِما `/checkout/submit` — حَرفٌ واحِدٌ لِلكاتِبِ والقارِئ. *@
+                @if (deliveryVisible)
+                {
+                    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--ac-border);font-size:13px;">
+                        <strong style="display:block;margin-bottom:4px;">@L.Markup("deals.detail.delivery_title")</strong>
+                        @if (!string.IsNullOrEmpty(buyerAddr))
+                        {
+                            <div style="display:flex;justify-content:space-between;gap:8px;">
+                                <span style="color:var(--ac-text-muted);">@L.Markup("deals.detail.delivery_addr")</span>
+                                <span>@buyerAddr</span>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(buyerPhone))
+                        {
+                            <div style="display:flex;justify-content:space-between;gap:8px;margin-top:4px;">
+                                <span style="color:var(--ac-text-muted);">@L.Markup("deals.detail.delivery_phone")</span>
+                                <span dir="ltr">@buyerPhone</span>
+                            </div>
+                        }
+                        <span style="display:block;margin-top:6px;font-size:12px;color:var(--ac-text-muted);line-height:1.7;">
+                            @L.Markup("deals.detail.delivery_disclosure")
+                        </span>
+                    </div>
+                }
 
                 @* ─── «تَواصَل مَع البائِع» — البابُ الَّذي يُسَمّيه نَصُّ الاستِرجاع ───
                    `legal.returns.how` يُحيلُ المُشتَريَ إلى هذا الزِرِّ بِاسمِه عَلى
@@ -273,6 +305,10 @@
     List<DealStage> stages = new();
     bool isInitiator, isListingOwner, canAdvance, alreadyReviewed;
     DealStage? nextStage;
+    /// <summary>بَياناتُ التَوصيلِ تُرسَمُ لِمَن يُسَلِّمُ وَحدَه — الطَرَفُ المُقابِلُ
+    /// أَو مالِكُ الإعلانِ، ولَيسَ المُشتَري (P1-4).</summary>
+    bool deliveryVisible;
+    string? buyerAddr, buyerPhone;
     /// <summary>البائِعُ الَّذي يُراسِلُه المُبادِر: مالِكُ الإعلانِ مِن
     /// <c>Refs[listing_owner]</c>، وإلّا الطَرَفُ المُقابِلُ بَعدَ القَبول؛
     /// و<c>null</c> حَيثُ لا يُعرَفُ أَو كانَ هُوَ أَنا — فَلا يُرسَمُ الزِرّ.</summary>
@@ -299,6 +335,16 @@
         if (!isInitiator && !isListingOwner) { deal = null; return; }
         vendorId = Guid.TryParse(ownerRef, out var ownerGuid) ? ownerGuid : deal.CounterpartyId;
         if (vendorId == uid) vendorId = null;
+
+        // بَياناتُ التَوصيلِ لِمَن يُسَلِّمُ وَحدَه — لا لِلمُشتَري (بَياناتُه هُوَ) ولا
+        // لِثالِث (أُغلِقَت الصَفحَةُ عَلَيه أَعلاه). وبِثابِتَي `Deal` لا بِحَرفِيَّة،
+        // فَالقارِئُ يَقرَأُ ما كَتَبَه `/checkout/submit` بِحَرفِه (P1-4).
+        deliveryVisible = !isInitiator && isListingOwner;
+        if (deliveryVisible)
+        {
+            buyerAddr  = deal.Attributes.TryGetValue(Deal.DeliveryAddressAttribute, out var a) ? a : null;
+            buyerPhone = deal.Attributes.TryGetValue(Deal.DeliveryPhoneAttribute, out var p) ? p : null;
+        }
 
         mySide = Services.Ux.DealTurnView.SideOf(uid, deal.InitiatorId, deal.CounterpartyId);
         // مِن الصَفقَةِ نَفسِها: طَريقَةُ الدَفعِ تُسقِطُ «دَفع» عَن النَقدِ في

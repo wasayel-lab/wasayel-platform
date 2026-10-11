@@ -50,6 +50,14 @@ public sealed class Deal
     /// التَّسليم، تَفاصيل ضامِنَة، …).</summary>
     public Dictionary<string, string> Attributes { get; set; } = new();
 
+    /// <summary>مِفتاحا عُنوانِ التَوصيلِ وهاتِفِ المُشتَري في <see cref="Attributes"/> —
+    /// يَكتُبُهُما <c>/checkout/submit</c> ويَقرَؤُهُما تَفصيلُ الصَفقَةِ <b>لِلبائِعِ
+    /// وَحدَه</b> (P1-4؛ ‏PDPL في <c>PRODUCTION-PLAN.md:229</c>). ثابِتانِ هُنا لِأَنّ
+    /// الكاتِبَ والقارِئَ يَجِبُ أَن يَقرَآ نَفسَ الحَرف — نَسَقُ
+    /// <c>DealsService.ListingOwnerRef</c>.</summary>
+    public const string DeliveryAddressAttribute = "addr";
+    public const string DeliveryPhoneAttribute = "phone";
+
     /// <summary>سَجلّ الزَّمَن لِكُلّ تَحَوُّل — مَصدَر الحَقيقَة لِلـ audit.</summary>
     public List<DealEvent> Timeline { get; set; } = new();
 
