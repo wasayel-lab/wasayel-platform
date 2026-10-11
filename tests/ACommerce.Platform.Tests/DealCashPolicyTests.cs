@@ -461,7 +461,10 @@ public class DealCashPolicyTests
         var body = BindBody();
         Assert.Contains("if (!Guid.TryParse(ownerRef, out var ownerId)) return null;", body, StringComparison.Ordinal);
         Assert.Contains("LoadAsync<ACommerce.Kit.Auth.User>(ownerId, ct)", body, StringComparison.Ordinal);
-        Assert.Contains("AssignCounterpartyAsync(tenantSlug, dealId, ownerId, owner?.FullName ?? \"\", ct, DealEvent.BoundAtBirth)", body, StringComparison.Ordinal);
+        // **قُلِبَ** (‏2026-10-11، مُراجَعَةٌ ثانِيَة): كانَ `owner?.FullName ?? ""` — فَراغٌ يُرسَمُ فَراغاً؛ وصارَ الاسمُ
+        // غائِباً `null` حينَ تَغيبُ الوَثيقَة (الصَفُّ `An_owner_without_a_user_document_…` أَعلاه).
+        Assert.Contains("AssignCounterpartyAsync(tenantSlug, dealId, ownerId, owner?.FullName, ct, DealEvent.BoundAtBirth)", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("owner?.FullName ?? \"\"", body, StringComparison.Ordinal);
 
         var assign = AssignBody();
         Assert.Contains("CancellationToken ct = default, string action = \"assigned\")", assign, StringComparison.Ordinal);
@@ -472,6 +475,60 @@ public class DealCashPolicyTests
         Assert.Contains("DealEvent.BoundAtBirth   => L[\"studio.deal.event_bound\"]", StudioPageSource(), StringComparison.Ordinal);
         Assert.NotEqual("deals.detail.event_bound", LocaleCatalog.Text(LocaleCatalog.Arabic, "deals.detail.event_bound"));
         Assert.NotEqual("studio.deal.event_bound", LocaleCatalog.Text(LocaleCatalog.Arabic, "studio.deal.event_bound"));
+    }
+
+    /// <summary>مُزَوِّدٌ يَرمي عِندَ أَيِّ نِداء — الرَبطُ عِندَ الوِلادَةِ لا يَمَسُّ المال.</summary>
+    private sealed class NoPayments : ACommerce.Kit.Payments.IPaymentProvider
+    {
+        private static InvalidOperationException Touched() => new("الرَبطُ لا يَمَسُّ المال — نودِيَ مُزَوِّدُ الدَفع.");
+        public string ProviderName => "forbidden";
+        public Task<ACommerce.Kit.Payments.PaymentResult> AuthorizeAsync(ACommerce.Kit.Payments.PaymentRequest req, string idempotencyKey, CancellationToken ct = default) => throw Touched();
+        public Task<ACommerce.Kit.Payments.PaymentResult> CaptureAsync(string paymentId, decimal? amount = null, CancellationToken ct = default) => throw Touched();
+        public Task<ACommerce.Kit.Payments.PaymentResult> RefundAsync(string paymentId, decimal amount, string reason, CancellationToken ct = default) => throw Touched();
+        public Task<ACommerce.Kit.Payments.SubscriptionResult> CreateSubscriptionAsync(ACommerce.Kit.Payments.SubscriptionRequest req, string idempotencyKey, CancellationToken ct = default) => throw Touched();
+        public Task<bool> CancelSubscriptionAsync(string subscriptionId, CancellationToken ct = default) => throw Touched();
+        public Task<ACommerce.Kit.Payments.Invoice?> GetInvoiceAsync(string paymentId, CancellationToken ct = default) => throw Touched();
+    }
+
+    /// <summary><b>وَثيقَةُ المالِكِ الغائِبَة — صَفُّها</b> (‏2026-10-11، مُراجَعَةُ الموجَةِ الثانِيَةِ الثانِيَة):
+    /// الهُوِيَّةُ مِن الإعلانِ هي الحُكمُ فَتُربَط، <b>والاسمُ غائِبٌ لا فارِغ</b> — <c>null</c> هو ما يَقرَؤُه كُلُّ
+    /// قارِئٍ غِياباً (<c>?? "—"</c> في الاستوديو والتَقييم، و<c>is not null</c> في قائِمَةِ الاستوديو، و«بانتِظار
+    /// القَبول» لِلمُشتَري). كانَ <c>owner?.FullName ?? ""</c> فَيُكتَبُ فَراغاً يُرسَمُ فَراغاً وسَهماً مُعَلَّقاً
+    /// («⇄ ») في قائِمَةِ الاستوديو. والمُوجِبُ بِجِوارِه: وَثيقَةٌ حاضِرَةٌ تُربَطُ بِاسمِها.</summary>
+    [Fact]
+    public void An_owner_without_a_user_document_is_bound_by_identity_with_no_name_and_one_with_it_by_his_name()
+    {
+        var world = new DocWorld();
+        var deals = new DealsService(world.Store, new NoPayments());
+        T Done<T>(Task<T> t)
+        {
+            Assert.True(t.IsCompleted, "نِداءٌ لَم يَكتَمِل في عالَمٍ مُتَزامِن — الأَداةُ تَكذِب.");
+            return t.GetAwaiter().GetResult();
+        }
+        Deal Born(Guid owner)
+        {
+            var d = Done(deals.StartAsync("zz-bind-name", "marketplace", Buyer, "مُشتَرٍ", null, "سِلعَة", 100m,
+                new() { [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.CashOnDelivery }));
+            Done(deals.AttachRefAsync("zz-bind-name", d.Id, DealsService.ListingOwnerRef, owner.ToString()));
+            Done(deals.BindListingOwnerAsync("zz-bind-name", d.Id, owner.ToString()));
+            return world.Read<Deal>(d.Id.ToString())!;
+        }
+
+        // السالِب: لا وَثيقَةَ لِلمالِك — يُربَطُ بِهُوِيَّتِه، والاسمُ وسَطرُ `bound` بِلا اسم.
+        var ghost = Born(Seller);
+        Assert.Equal(Seller, ghost.CounterpartyId);
+        Assert.Null(ghost.CounterpartyName);
+        var line = Assert.Single(ghost.Timeline, e => e.Action == DealEvent.BoundAtBirth);
+        Assert.Equal(Seller, line.ActorId);
+        Assert.Null(line.ActorName);
+
+        // المُوجِب: وَثيقَةٌ حاضِرَة — يُربَطُ بِاسمِه مِنها.
+        var named = Guid.NewGuid();
+        world.Put(new ACommerce.Kit.Auth.User { Id = named, FullName = "مَتجَرُ النَخلَة" });
+        var known = Born(named);
+        Assert.Equal(named, known.CounterpartyId);
+        Assert.Equal("مَتجَرُ النَخلَة", known.CounterpartyName);
+        Assert.Equal("مَتجَرُ النَخلَة", Assert.Single(known.Timeline, e => e.Action == DealEvent.BoundAtBirth).ActorName);
     }
 
     /// <summary><b>المُوجِب</b>: المالِكُ المَربوطُ عِندَ الوِلادَةِ يَقبَلُ في

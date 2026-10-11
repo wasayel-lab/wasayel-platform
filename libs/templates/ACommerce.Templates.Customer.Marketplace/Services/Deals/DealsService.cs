@@ -123,7 +123,7 @@ public sealed class DealsService
     /// الإداريِّ المُثَبَّتَةُ حَرفاً لا تَتَحَرَّك.)</summary>
     public async Task<Deal?> AssignCounterpartyAsync(
         string tenantSlug, Guid dealId,
-        Guid counterpartyId, string counterpartyName,
+        Guid counterpartyId, string? counterpartyName,
         CancellationToken ct = default, string action = "assigned")
     {
         await using var s = _store.LightweightSession(tenantSlug);
@@ -147,7 +147,8 @@ public sealed class DealsService
     /// <see cref="DealEvent.BoundAtBirth"/> — لا <c>assigned</c>، فَالقَبولُ لَم يَقَع
     /// بَعد. ومَرجِعٌ لَيسَ مُعَرِّفاً لا يَربُطُ أَحَداً ويُرجِعُ <c>null</c>؛ ووَثيقَةُ
     /// مُستَخدِمٍ غائِبَةٌ تُربَطُ بِالهُوِيَّةِ وبِلا اسم — الهُوِيَّةُ مِن الإعلانِ
-    /// وهي الحُكم، والاسمُ زينَةُ عَرض.</para>
+    /// وهي الحُكم، والاسمُ زينَةُ عَرض. («بِلا اسم» = <c>null</c> لا <c>""</c> مُنذُ
+    /// ‏2026-10-11 — الغِيابُ الَّذي يَقرَؤُه كُلُّ قارِئ.)</para>
     ///
     /// <para><b>ولِماذا هُنا لا في جِسمِ النُقطَة</b>: تَحليلُ المُعَرِّفِ وقِراءَةُ
     /// الاسمِ حِسابٌ، وجِسمُ النُقطَةِ مُثَبَّتُ السَقف (<c>EndpointBodyBleedTests</c>).
@@ -173,7 +174,9 @@ public sealed class DealsService
         var deal = await q.LoadAsync<Deal>(dealId, ct);
         if (deal is null || deal.InitiatorId == ownerId) return deal;
         var owner = await q.LoadAsync<ACommerce.Kit.Auth.User>(ownerId, ct);
-        return await AssignCounterpartyAsync(tenantSlug, dealId, ownerId, owner?.FullName ?? "", ct, DealEvent.BoundAtBirth);
+        // وَثيقَةٌ غائِبَة: الهُوِيَّةُ تُربَطُ والاسمُ غائِبٌ لا فارِغ — `null` ما يَقرَؤُه كُلُّ قارِئٍ غِياباً (`?? "—"`،
+        // `is not null`)؛ وكانَ `?? ""` فَيُرسَمُ فَراغاً وسَهماً مُعَلَّقاً في قائِمَةِ الاستوديو (‏2026-10-11، مُراجَعَةٌ ثانِيَة).
+        return await AssignCounterpartyAsync(tenantSlug, dealId, ownerId, owner?.FullName, ct, DealEvent.BoundAtBirth);
     }
 
     /// <summary>
