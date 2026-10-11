@@ -129,6 +129,29 @@
                     <span>@(isInitiator ? (deal.CounterpartyName ?? L["deals.detail.awaiting_accept"]) : deal.InitiatorName)</span>
                 </div>
 
+                @* ─── «تَواصَل مَع البائِع» — البابُ الَّذي يُسَمّيه نَصُّ الاستِرجاع ───
+                   `legal.returns.how` يُحيلُ المُشتَريَ إلى هذا الزِرِّ بِاسمِه عَلى
+                   هذِه الصَفحَة، وكانَت بِلا أَيِّ مَدخَلٍ إلى البائِع (مُراجَعَةُ
+                   ‏2026-10-11: صِفرُ `href`/`form` إلى `vendor/` أَو `chat` هُنا؛
+                   والمَدخَلُ الوَحيدُ مِن جِهَةِ المُشتَري إلى صَفحَةِ البائِعِ في
+                   `TenantListingDetail` مَشروطٌ بِتَقييمٍ واحِدٍ فَأَكثَر) — نَصٌّ
+                   يَعِدُ بِبابٍ لا يُفضي، وهُوَ عَينُ ما أَغلَقَته P0-5.
+                   الأُنبوبُ القائِمُ `POST /{slug}/users/{id}/chat` (القاعِدَة ٨):
+                   يَرفُضُ النَفسَ، ويَشتَرِطُ وُجودَ الطَرَف، ويَجِدُ المُحادَثَةَ
+                   القائِمَةَ بِأَيِّ اتِّجاه، ويَرتَدُّ إلى `chats/{id}`. والبائِعُ
+                   `Refs[listing_owner]` ثُمَّ `CounterpartyId`، ويُرسَمُ لِلمُبادِرِ
+                   وَحدَه وحَيثُ يُعرَف — لا زِرَّ يَعِدُ بِما لا يَفتَح (القاعِدَة ١٢).
+                   والتَسمِيَةُ مِفتاحُ صَفحَةِ البائِعِ نَفسُه، فَالنَصُّ والزِرُّ
+                   حَرفٌ واحِدٌ يُقاسُ في `ReturnsPolicyTextTests`. *@
+                @if (isInitiator && vendorId is { } vid)
+                {
+                    <form method="post" action="@($"/{Slug}/users/{vid}/chat")" style="margin-top:8px;">
+                        <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm ac-btn-block">
+                            <AcIcon Name="message" Size="14" /> @L.Markup("vendors.profile.contact")
+                        </button>
+                    </form>
+                }
+
                 @* ─── وَضعُ التَجرِبَةِ يَبقى مُعلَناً **بَعدَ** النَقرَة ───
                    كانَتِ الشارَةُ تُرسَمُ في `CheckoutPage` وَحدَها — أَي
                    قَبلَ النَقرَةِ الأَخيرَةِ فَقَط — فَالعائِدُ إلى طَلَبِه
@@ -246,6 +269,10 @@
     List<DealStage> stages = new();
     bool isInitiator, isListingOwner, canAdvance, alreadyReviewed;
     DealStage? nextStage;
+    /// <summary>البائِعُ الَّذي يُراسِلُه المُبادِر: مالِكُ الإعلانِ مِن
+    /// <c>Refs[listing_owner]</c>، وإلّا الطَرَفُ المُقابِلُ بَعدَ القَبول؛
+    /// و<c>null</c> حَيثُ لا يُعرَفُ أَو كانَ هُوَ أَنا — فَلا يُرسَمُ الزِرّ.</summary>
+    Guid? vendorId;
     /// <summary>مَوقِعي مِن الصَّفقَة — يُغَذّي «دَورُكَ الآن» وَشَرح
     /// التَدَفُّق («صاحِب الطَلَب» تُصبِح «أَنتَ»).</summary>
     Services.Ux.DealSide mySide = Services.Ux.DealSide.Observer;
@@ -262,6 +289,8 @@
         isInitiator = deal.InitiatorId == uid;
         isListingOwner = ownerRef == uid.ToString() || deal.CounterpartyId == uid;
         if (!isInitiator && !isListingOwner) { deal = null; return; }
+        vendorId = Guid.TryParse(ownerRef, out var ownerGuid) ? ownerGuid : deal.CounterpartyId;
+        if (vendorId == uid) vendorId = null;
 
         mySide = Services.Ux.DealTurnView.SideOf(uid, deal.InitiatorId, deal.CounterpartyId);
         stages = DealsPolicy.StagesFor(deal.Pattern).ToList();

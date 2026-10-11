@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using ACommerce.Kit.Compliance;
 using ACommerce.Platform.I18n;
 using Xunit;
@@ -24,6 +25,17 @@ namespace ACommerce.Platform.Tests;
 // `/{slug}/deals/{id}/return`) يَنتَظِرُ قَرارَ المالِكِ م‑٣ — لا يُبنى هُنا
 // ولا يُخفى: يُثَبَّتُ أَحمَرَ حَتّى يُقرَّر، فَيَومَ يُبنى يَحمَرُّ هذا الفَحصُ
 // ويُرفَعُ بِقَرارٍ مَرئِيّ.
+//
+// **والدَورَةُ الثانِيَة (مُراجَعَةُ ‏2026-10-11)**: النَصُّ الأَوَّلُ البَديلُ قالَ
+// «تَواصَل مَع البائِع مِن صَفحَة الصَّفقَة … أَو بِمُراسَلَتِه» — **وصَفحَةُ
+// الصَفقَةِ كانَت بِلا أَيِّ مَدخَلٍ إلى البائِع** (صِفرُ `href`/`form` إلى
+// `vendor/` أَو `chat` في `MyDealDetail.razor`؛ والمَدخَلُ الوَحيدُ مِن جِهَةِ
+// المُشتَري في `TenantListingDetail` مَشروطٌ بِتَقييمٍ واحِدٍ فَأَكثَر) — أَي
+// عَينُ عَيبِ P0-5 بِصِياغَةٍ أُخرى، والفَحصُ هُنا كانَ يَقيسُ «صَفقاتي» وَحدَها.
+// فَصارَت الصَفحَةُ تَحمِلُ زِرَّ «تَواصَل مَع البائِع» (مِفتاحُ صَفحَةِ البائِعِ
+// نَفسُه، عَلى أُنبوبِ `users/{id}/chat` القائِم)، وصارَ النَصُّ يُسَمّي الصَفحَةَ
+// والزِرَّ بِحَرفِ قامُوسِهِما — **وكُلُّ «…» في النَصِّ يُقاسُ أَنَّه قيمَةُ
+// مِفتاحٍ حَيّ، وأَنّ الصَفحَةَ تَرسُمُه، وأَنّ أُنبوبَه وغُرفَتَه مُسَجَّلان**.
 
 public class ReturnsPolicyTextTests
 {
@@ -73,7 +85,7 @@ public class ReturnsPolicyTextTests
     }
 
     /// <summary>ويُسَمّي البائِعَ مُلتَزِماً، ولا يَعِدُ بِصَفحَةٍ أَو زِرٍّ لا
-    /// وُجودَ لَهُما.</summary>
+    /// وُجودَ لَهُما — ويُسَمّي الزِرَّ المَوجودَ بِحَرفِه.</summary>
     [Fact]
     public void The_text_names_the_vendor_as_the_liable_party_and_promises_no_button()
     {
@@ -82,6 +94,7 @@ public class ReturnsPolicyTextTests
 
         Assert.Contains("البائِع", how!, StringComparison.Ordinal);
         Assert.Contains("صَفقاتي", how, StringComparison.Ordinal);            // الصَفحَةُ المَوجودَةُ فِعلاً
+        Assert.Contains("«تَواصَل مَع البائِع»", how, StringComparison.Ordinal); // الزِرُّ المَوجودُ فِعلاً عَلى صَفحَةِ الصَفقَة
         Assert.DoesNotContain("طَلَباتي", how, StringComparison.Ordinal);     // صَفحَةٌ لا وُجودَ لَها لِلمُشتَرَيات
         Assert.DoesNotContain("«اِستِرجاع»", how, StringComparison.Ordinal);  // زِرٌّ لا وُجودَ لَه
         Assert.DoesNotContain("تَستَرجِع", how, StringComparison.Ordinal);
@@ -106,6 +119,55 @@ public class ReturnsPolicyTextTests
                 "                   المَنصَّة تَستَرجِع بِكَامِل المَبلَغ في ٣-٥ أَيّام عَمَل.",
         }));
         Assert.Contains("refund_liability_contradicts_platform_terms", report.RejectionCodes);
+    }
+
+    // ─── البابُ الَّذي يُسَمّيه النَصُّ مَوجودٌ ويُفضي ─────────────────
+
+    private static readonly Regex QuotedLabel = new("«([^»]+)»", RegexOptions.Compiled);
+
+    /// <summary><b>كُلُّ «…» في النَصِّ المَنشورِ قيمَةُ مِفتاحٍ حَيّ</b> — لا
+    /// اسمَ شاشَةٍ أَو زِرٍّ مُختَرَع. والعَدُّ يُطبَع: صِفرُ تَسمِيَةٍ يَعني أَداةً
+    /// عَمياء لا نَصّاً بَريئاً.</summary>
+    [Fact]
+    public void Every_label_the_returns_text_quotes_is_a_live_dictionary_value()
+    {
+        var how = LocaleCatalog.Find(LocaleCatalog.Arabic, "legal.returns.how")!;
+        var quoted = QuotedLabel.Matches(how).Select(m => m.Groups[1].Value).ToList();
+        Assert.True(quoted.Count >= 2, $"أَداةٌ عَمياء: {quoted.Count} تَسمِيَةً مُقتَبَسَةً فَقَط في النَصّ.");
+
+        var values = LocaleCatalog.Raw(LocaleCatalog.Arabic).Select(e => e.Value).ToHashSet(StringComparer.Ordinal);
+        foreach (var label in quoted)
+            Assert.True(values.Contains(label), $"«{label}» لَيسَت قيمَةَ أَيِّ مِفتاحٍ في القامُوس — بابٌ مُسَمّىً لا وُجودَ لَه.");
+
+        // والتَسمِيَتانِ بِعَينِهِما: صَفحَةُ «صَفقاتي» وزِرُّ صَفحَةِ البائِع.
+        Assert.Equal(LocaleCatalog.Find(LocaleCatalog.Arabic, "deals.mine.title"), quoted[0]);
+        Assert.Equal(LocaleCatalog.Find(LocaleCatalog.Arabic, "vendors.profile.contact"), quoted[1]);
+    }
+
+    /// <summary>
+    /// <para><b>وصَفحَةُ الصَفقَةِ تَحمِلُ الزِرَّ الَّذي يُسَمّيه النَصّ، وبابُه
+    /// يُفضي</b>: المِفتاحُ نَفسُه يُرسَمُ في <c>MyDealDetail.razor</c> لِلمُبادِرِ
+    /// حَيثُ يُعرَفُ البائِع، عَلى أُنبوبِ <c>users/{id}/chat</c> القائِم، والأُنبوبُ
+    /// وغُرفَةُ المُحادَثَةِ مُسَجَّلانِ بِالماسِحِ الواحِد (القاعِدَة ٨). هذا هُوَ
+    /// الفَحصُ الَّذي كانَ سَيَحمَرُّ عَلى الصَفحَةِ قَبلَ هذا الكوميت.</para>
+    /// </summary>
+    [Fact]
+    public void The_deal_page_carries_the_contact_button_the_text_names_and_its_pipe_and_room_exist()
+    {
+        var page = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "MyDealDetail.razor"));
+        Assert.True(page.Length > 1000, "أَداةٌ عَمياء: `MyDealDetail.razor` لَم يُقرَأ.");
+
+        Assert.Contains("@L.Markup(\"vendors.profile.contact\")", page, StringComparison.Ordinal);
+        Assert.Contains("@if (isInitiator && vendorId is { } vid)", page, StringComparison.Ordinal);
+        Assert.Contains("action=\"@($\"/{Slug}/users/{vid}/chat\")\"", page, StringComparison.Ordinal);
+
+        // والبائِعُ يُقرَأُ مِن المَرجِعِ الَّذي تَكتُبُه نُقاطُ العَرضِ والسَلَّة، لا مِن سِلسِلَةٍ ثانِيَة.
+        Assert.Contains("vendorId = Guid.TryParse(ownerRef, out var ownerGuid) ? ownerGuid : deal.CounterpartyId;", page, StringComparison.Ordinal);
+
+        var routes = ComplianceInspectorTests.RepoRoutes;
+        Assert.Contains("/{slug}/users/{userId}/chat", routes);
+        Assert.Contains("/{slug}/chats/{conversationId}", routes);
     }
 
     // ─── الأَحمَرُ المُعلَن ─────────────────────────────────────────────
