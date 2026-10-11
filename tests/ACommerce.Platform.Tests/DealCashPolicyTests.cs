@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.RegularExpressions;
 using ACommerce.Platform.I18n;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
 using ACommerce.Templates.Customer.Marketplace.Services.Ux;
@@ -343,7 +344,14 @@ public class DealCashPolicyTests
         Assert.Contains("var stages = DealsPolicy.StagesFor(Pattern, PayMethod).ToList();", explainer, StringComparison.Ordinal);
         Assert.Contains("[Parameter] public string? PayMethod { get; set; }", explainer, StringComparison.Ordinal);
 
+        // **ووُسِّعَ الفاحِصُ ‏2026-10-11 (مُراجَعَةُ الموجَةِ الثانِيَةِ الثانِيَة)**: كانَ يَبحَثُ عَن حَرفَينِ
+        // اثنَين — `Next(deal.Pattern, deal.Stage)` و`Next(d.Pattern, d.Stage)` — فَيَعمى عَن اسمِ مُتَغَيِّرٍ ثالِث
+        // وعَن الحِملَينِ الأَعمَيَينِ الآخَرَين. صارَ يَعُدُّ بِنَمَطٍ كُلَّ حِملٍ أَعمى عَن طَريقَةِ الدَفعِ بِأَيِّ اسم —
+        // خارِجَ `DealsPolicy` و`DealTurnView` (تَعريفُ الحِملِ وتَنفيذُه) — بِقائِمَةِ سَماحٍ مُسَمّاةٍ يُعَدُّ مَدخَلُها
+        // فَلا تَبلى؛ والنَمَطُ نَفسُه مَقيسٌ بِعَيِّناتٍ مَحقونَةٍ في `The_pay_blind_scanner_catches_any_name_…` أَدناه.
         var scanned = 0;
+        var matched = 0;
+        var allowedSeen = 0;
         var strays = new List<string>();
         foreach (var root in new[] { "libs", "apps" })
         foreach (var f in Directory.EnumerateFiles(Path.Combine(RepoRoot, root), "*.*", SearchOption.AllDirectories))
@@ -352,14 +360,64 @@ public class DealCashPolicyTests
             if (f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
                 f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)) continue;
             scanned++;
+            var rel = Path.GetRelativePath(RepoRoot, f).Replace('\\', '/');
+            if (PayBlindHomes.Contains(rel)) continue;
             var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(f)));
-            if (code.Contains("Next(deal.Pattern, deal.Stage)", StringComparison.Ordinal) ||
-                code.Contains("Next(d.Pattern, d.Stage)", StringComparison.Ordinal))
-                strays.Add(Path.GetRelativePath(RepoRoot, f));
+            foreach (Match m in PayBlind.Matches(code))
+            {
+                matched++;
+                if (PayBlindAllowed.Any(a => a.File == rel && a.Call == m.Value)) allowedSeen++;
+                else strays.Add($"{rel}: {m.Value}");
+            }
         }
         Assert.True(scanned > 200, $"أَداةٌ عَمياء: فُحِصَ {scanned} مِلَفّاً.");
-        Assert.True(strays.Count == 0, "مَوضِعٌ يَشتَقُّ التالي بِلا طَريقَةِ الدَفع: " + string.Join("، ", strays));
+        Assert.True(strays.Count == 0 && allowedSeen == PayBlindAllowed.Length,
+            $"فُحِصَ {scanned} مِلَفّاً وطابَقَ {matched} نِداءً أَعمى، المَسموحُ مِنها {allowedSeen} مِن {PayBlindAllowed.Length} — " +
+            "مَوضِعٌ يَشتَقُّ التالي بِلا طَريقَةِ الدَفع: " + string.Join("، ", strays));
+
+        // والمَسموحُ الوَحيدُ في مَوضِعِه المُسَمّى: خِتامُ `MoveAsync` — آخِرُ مَرحَلَةٍ لا تَتَعَلَّقُ بِطَريقَةِ الدَفع
+        // (`Skips` تُسقِطُ `Paid` وَحدَها، فَـ`Last()` هِيَ هِيَ لِلنَقدِ والبِطاقَة).
+        Assert.Contains("DealsPolicy.StagesFor(deal.Pattern).Last() == DealStage.Reviewed", MoveBody(), StringComparison.Ordinal);
     }
+
+    /// <summary>الحِملُ الأَعمى عَن طَريقَةِ الدَفع — بِأَيِّ اسمِ مُتَغَيِّر: <c>Next(x.Pattern, x.Stage)</c>
+    /// بِلا ثالِث، و<c>StagesFor(x.Pattern)</c> بِلا ثانٍ، و<c>DealTurnView.For(x.Pattern, x.Stage, side)</c>
+    /// بِلا رابِع.</summary>
+    private static readonly Regex PayBlind = new(
+        @"\bNext\(\s*\w+\.Pattern\s*,\s*\w+\.Stage\s*\)" +
+        @"|\bStagesFor\(\s*\w+\.Pattern\s*\)" +
+        @"|\bDealTurnView\.For\(\s*\w+\.Pattern\s*,\s*\w+\.Stage\s*,\s*[^,()]+\)",
+        RegexOptions.CultureInvariant);
+
+    /// <summary>بَيتا الحِملِ الأَعمى: تَعريفُه وتَنفيذُ الحِملِ المُبصِرِ فَوقَه — لا يُفحَصانِ بِه.</summary>
+    private static readonly HashSet<string> PayBlindHomes = new(StringComparer.Ordinal)
+    {
+        $"{Template}/Services/Deals/DealsPolicy.cs",
+        $"{Template}/Services/Ux/DealTurnView.cs",
+    };
+
+    /// <summary>قائِمَةُ السَماحِ المُسَمّاة — كُلُّ مَدخَلٍ يُعَدُّ، فَمَدخَلٌ لا يُطابِقُه شَيءٌ يُحمِرُّ الفاحِص.</summary>
+    private static readonly (string File, string Call)[] PayBlindAllowed =
+    {
+        ($"{Template}/Services/Deals/DealsService.cs", "StagesFor(deal.Pattern)"),
+    };
+
+    /// <summary><b>الأَداةُ مَقيسَةٌ قَبلَ أَن يُوثَقَ بِها</b> (القاعِدَة ١٠): عَيِّناتٌ مَحقونَةٌ بِأَسماءٍ لَم
+    /// يَعرِفها الفاحِصُ القَديم تُطابَق، والحِملُ المُبصِرُ لا يُطابَق.</summary>
+    [Theory]
+    [InlineData("var n = DealsPolicy.Next(x.Pattern, x.Stage);", true)]
+    [InlineData("var n = DealsPolicy.Next( order.Pattern , order.Stage );", true)]
+    [InlineData("var all = DealsPolicy.StagesFor(item.Pattern).ToList();", true)]
+    [InlineData("var t = Services.Ux.DealTurnView.For(row.Pattern, row.Stage, mySide);", true)]
+    [InlineData("var n = DealsPolicy.Next(x.Pattern, x.Stage, DealsPolicy.PayMethodOf(x));", false)]
+    [InlineData("var all = DealsPolicy.StagesFor(x.Pattern, pay);", false)]
+    [InlineData("var t = DealTurnView.For(x.Pattern, x.Stage, side, pay);", false)]
+    [InlineData("var n = DealsPolicy.Next(deal);", false)]
+    [InlineData("var all = DealsPolicy.StagesFor(deal);", false)]
+    [InlineData("var t = DealTurnView.For(deal, side);", false)]
+    [InlineData("var all = DealsPolicy.StagesFor(pattern);", false)]
+    public void The_pay_blind_scanner_catches_any_name_and_spares_the_pay_aware_overloads(string line, bool blind)
+        => Assert.Equal(blind, PayBlind.IsMatch(line));
 
     // ═══ ٤) سَطرُ القَبضِ عِندَ التَسليم ════════════════════════════════════
 
