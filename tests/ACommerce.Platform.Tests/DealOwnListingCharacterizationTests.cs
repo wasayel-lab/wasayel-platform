@@ -230,4 +230,69 @@ public class DealOwnListingCharacterizationTests
         Assert.Null(OwnerOf(null));
         Assert.Null(OwnerOf("not-a-guid"));
     }
+
+    // ═══ ٣) المَسارُ الإداريّ — «ولا يَكونُ المَرءُ طَرَفَي صَفقَتِه» خارِجَ `BindListingOwnerAsync` ═══════════
+    //
+    // مُراجَعَةُ الموجَةِ الثانِيَةِ الرابِعَة (‏2026-10-11): الثابِتُ يَسكُنُ `BindListingOwnerAsync` وَحدَها، والمَسارُ
+    // الإداريُّ `POST /studio/apps/{slug}/deals/{id}/advance` يُعَيِّنُ `auth.UserId` طَرَفاً حَيثُ لا طَرَفَ بِلا سُؤالٍ
+    // عَن المُبادِر — وبَذرَةُ الاستوديو (`/studio/apps/{slug}/deals/seed`) تُولِدُ صَفقَةً تَجريبِيَّةً **مُبادِرُها مالِكُ
+    // التَطبيقِ نَفسُه**. فَتُوَصَّفُ «اليَوم» بِاسمِها هُنا قَبلَ أَن يُنقَلَ الفَحصُ إلى الكاتِبِ الوَحيد
+    // (`AssignCounterpartyAsync`) في الكوميتِ التالي.
+
+    /// <summary>نَقرَةٌ عَلى «→ التالي» في تَفصيلِ صَفقَةِ الاستوديو — بِتَسَلسُلِ النُقطَةِ حَرفاً (مُثَبَّتٌ في
+    /// <c>DealCounterpartyCharacterizationTests.The_admin_path_…</c>): تَحميلٌ، ثُمَّ تَعيينُ مالِكِ التَطبيقِ حَيثُ لا
+    /// طَرَف، ثُمَّ التَحريكُ بِـ<c>CounterpartyId</c> اللَقطَةِ أَو مالِكِ التَطبيق. واللَقطَةُ تُقرَأُ قَبلَ التَعيين —
+    /// كَما في Marten حَيثُ <c>LoadAsync</c> نُسخَةٌ مُستَقِلَّة.</summary>
+    private static DealAdvanceResult StudioAdvance(DealsService deals, Guid id, Guid appOwner)
+    {
+        var deal = Now(deals.LoadAsync(Slug, id))!;
+        var snapshotCounterparty = deal.CounterpartyId;
+        if (snapshotCounterparty is null)
+            Now(deals.AssignCounterpartyAsync(Slug, id, appOwner, "مالِك التَّطبيق"));
+        var actorId = snapshotCounterparty ?? appOwner;
+        return Now(deals.AdvanceAsync(Slug, id, actorId, "مالِك التَّطبيق (إداريّ)", ""));
+    }
+
+    /// <summary>صَفقَةُ البَذرَةِ التَجريبِيَّةُ بِتَسَلسُلِ نُقطَتِها: مُبادِرُها مالِكُ التَطبيقِ نَفسُه، بِلا إعلانٍ ولا
+    /// مَرجِع.</summary>
+    private static (DealsService Deals, DocWorld World, Guid Id) StudioSeedDeal(Guid appOwner)
+    {
+        var world = new DocWorld();
+        var deals = new DealsService(world.Store, new ForbiddenPaymentProvider());
+        var deal = Now(deals.StartAsync(Slug, "marketplace", appOwner, "صاحِب الفِكرَة", null, "عَمَلِيَّة تَجريبيَّة — marketplace", 250m));
+        return (deals, world, deal.Id);
+    }
+
+    /// <summary><b>اليَوم</b> (يُقلَبُ بِاسمِه في الكوميتِ التالي): أَوَّلُ نَقرَةٍ إدارِيَّةٍ عَلى صَفقَةِ البَذرَةِ تَجعَلُ
+    /// مالِكَ التَطبيقِ طَرَفَها المُقابِلَ وهُوَ مُبادِرُها — <c>InitiatorId == CounterpartyId</c> بِسَطرِ <c>assigned</c>
+    /// بِاسمِه — ثُمَّ يَمشيها وَحدَه بِالنَقرَةِ نَفسِها إلى <c>Completed</c> (كُلُّ صَفٍّ في الكاتالوجِ يُسَمّيه: هُوَ
+    /// المُبادِرُ والطَرَف). والبابُ إلَيها زِرٌّ في الاستوديو لا طَلَبٌ مَصنوع.</summary>
+    [Fact]
+    public void Today_the_studio_path_makes_the_app_owner_both_parties_of_his_own_demo_deal_and_walks_it_alone_to_Completed()
+    {
+        var appOwner = Guid.Parse("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
+        var (deals, world, id) = StudioSeedDeal(appOwner);
+
+        var first = StudioAdvance(deals, id, appOwner);
+        Assert.True(first.Ok, first.Reason);
+        var deal = world.Read<Deal>(id.ToString())!;
+        Assert.Equal(appOwner, deal.InitiatorId);
+        Assert.Equal(appOwner, deal.CounterpartyId);
+        Assert.Equal(DealStage.Booked, deal.Stage);
+        Assert.Equal(appOwner, deal.Timeline.Single(e => e.Action == "assigned").ActorId);
+
+        var clicks = 1;
+        while (deal.Status == DealStatus.Active && clicks < 20)
+        {
+            var r = StudioAdvance(deals, id, appOwner);
+            Assert.True(r.Ok, $"النَقرَةُ {clicks + 1} رُدَّت: {r.Reason}");
+            clicks++;
+        }
+        Assert.Equal(DealStatus.Completed, deal.Status);
+        Assert.Equal(DealStage.Reviewed, deal.Stage);
+        // نَقرَةٌ لِكُلِّ انتِقالٍ في الكاتالوج: عَرض ← حَجز ← تَأكيد ← دَفع ← شَحن ← تَسليم ← تَقييم (سِتّ).
+        Assert.Equal(DealsPolicy.StagesFor("marketplace").Count - 1, clicks);
+        Assert.Equal(6, clicks);
+        Assert.All(deal.Timeline.Where(e => e.Action == "advanced"), e => Assert.Equal(appOwner, e.ActorId));
+    }
 }
