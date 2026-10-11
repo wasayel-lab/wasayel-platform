@@ -31,6 +31,17 @@
             @(string.IsNullOrEmpty(deal.ListingTitle) ? L["deals.detail.title_fallback"] : deal.ListingTitle)
         </h1>
 
+        @* ─── رَفضُ النُقطَةِ يُقرَأُ هُنا لا يُبتلَع ───
+           `/accept` و`/cancel` تَرتَدّانِ إلى هذِه الصَفحَةِ بِـ`?err=<code>`، وأُنبوبُ
+           المُحادَثَةِ يَعودُ إلَيها بِـ`partner_missing` — وكانَت بِلا مُعامِلٍ يَقرَؤُه
+           (مُراجَعَةُ المَوجَة ١)، فَالنَقرَةُ المَرفوضَةُ تَعودُ بِصَفحَةٍ كَأَنَّ شَيئاً لَم
+           يَكُن. الرَمزُ مِن مَعجَمَي التَخويلِ وأُنبوبِ المُحادَثَة (`DealRefusalTexts`)
+           والكَلامُ في القامُوس — نَسَقُ `store.locked.write_denied` في `TenantHome`. *@
+        @if (DealRefusalTexts.KeyFor(Err) is { } errKey)
+        {
+            <AcAlert Variant="danger" Message="@L[errKey]" />
+        }
+
         @* ─── «دَورُكَ الآن» ────────────────────────────────────────────
            أَعلى نُقطَة تَحفيز: تُخبِر هذا المُستَخدِم تَحديداً هَل
            الإجراء التالي مِنه أَم لا. الفاعِل المُخَوَّل مَقروء مِن
@@ -182,6 +193,9 @@
                 @if (isInitiator && vendorId is { } vid)
                 {
                     <form method="post" action="@($"/{Slug}/users/{vid}/chat")" style="margin-top:8px;">
+                        @* المَنشَأ: فَشَلُ الأُنبوبِ (بائِعٌ حُذِفَ حِسابُه) يَعودُ إلى هذِه الصَفحَةِ
+                           بِرَمزِه لا إلى صَفحَةِ السائِقينَ مَولِدِه (`ChatStartReturn`). *@
+                        <input type="hidden" name="returnUrl" value="@AuthSession.LinkFor(Slug, Role, $"deals/{deal.Id}")" />
                         <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm ac-btn-block">
                             <AcIcon Name="message" Size="14" /> @L.Markup("vendors.profile.contact")
                         </button>
@@ -300,6 +314,10 @@
     [Parameter] public string Slug { get; set; } = "";
     [Parameter] public string? Role { get; set; }
     [Parameter] public Guid Id { get; set; }
+    /// <summary>رَمزُ رَفضٍ ارتَدَّت بِه نُقطَةٌ (<c>/accept</c>، <c>/cancel</c>، أُنبوبُ
+    /// المُحادَثَة) — يُحَلُّ نَصّاً بِـ<see cref="DealRefusalTexts.KeyFor"/>، ولا يُرسَمُ
+    /// لِرَمزٍ خارِجَ المَعجَم.</summary>
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
 
     Deal? deal;
     List<DealStage> stages = new();

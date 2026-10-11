@@ -347,16 +347,18 @@ public class DealCashPathCharacterizationTests
     /// (عُنوانُ التَوصيلِ وهاتِفُ المُشتَري مَكتوبانِ في الصَفقَةِ ولا يَراهُما
     /// البائِع) وحَقنُ <c>IDocumentStore</c> مَيِّتٌ يُحقَنُ ولا يُقرَأ — فَصارا يُرسَمانِ
     /// لِلبائِعِ وَحدَه خَلفَ حارِسٍ (<c>DealDetailDeliveryDisclosureTests</c>) وزالَ
-    /// الحَقن. <b>وما بَقِيَ حَرفاً</b>: لا مُعامِلَ <c>err</c> — رَفضُ <c>/accept</c>
-    /// و<c>/cancel</c> يَرتَدُّ بِرَمزٍ لا تَقرَؤُه الصَفحَة (يُقلَبُ في كوميتِه).</summary>
+    /// الحَقن. <b>ثُمَّ قُلِبَ شَطرُ <c>err</c></b> (C2): كانَ رَفضُ <c>/accept</c>
+    /// و<c>/cancel</c> يَرتَدُّ بِرَمزٍ لا تَقرَؤُه الصَفحَة — فَصارَ يُقرَأُ ويُرسَمُ مِن
+    /// القامُوسِ عَبرَ <c>DealRefusalTexts</c> (<c>DealRefusalTextsTests</c>).</summary>
     [Fact]
-    public void The_deal_page_now_renders_delivery_attributes_behind_the_vendor_guard_but_still_reads_no_err()
+    public void The_deal_page_now_renders_delivery_attributes_behind_the_vendor_guard_and_reads_err()
     {
         var page = DealPageSource();
         var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(page));
         Assert.Equal(2, Count(code, "deal.Attributes.TryGetValue(Deal.Delivery"));
         Assert.Contains("deliveryVisible = !isInitiator && isListingOwner;", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("SupplyParameterFromQuery", page, StringComparison.Ordinal);
+        Assert.Contains("[SupplyParameterFromQuery(Name = \"err\")]", page, StringComparison.Ordinal);
+        Assert.Contains("DealRefusalTexts.KeyFor(Err)", page, StringComparison.Ordinal);
         Assert.DoesNotContain("@inject IDocumentStore Store", page, StringComparison.Ordinal);
         Assert.Equal(0, Regex.Matches(code, @"\bStore\s*\.").Count);
 
@@ -365,21 +367,22 @@ public class DealCashPathCharacterizationTests
         Assert.Contains("$\"?err={res.Violation!.Code}\"", Endpoint("/{slug}/deals/{id:guid}/cancel"), StringComparison.Ordinal);
     }
 
-    /// <summary>أُنبوبُ <c>POST /{slug}/users/{userId}/chat</c> — مَولودُ صَفحَةِ
-    /// السائِقين، وصارَ لَه مُستَهلِكٌ ثانٍ (زِرُّ «تَواصَل مَع البائِع» عَلى صَفحَةِ
-    /// الصَفقَة) — يُسقِطُ كُلَّ فَشَلٍ عَلى <c>drivers</c>: الدُخولُ، والنَفسُ، والطَرَفُ
-    /// المَحذوف؛ ولا يَقرَأُ <c>returnUrl</c>، والصَفحَةُ لا تُرسِلُه.</summary>
+    /// <summary><b>قُلِبَ</b> (C2): كانَ أُنبوبُ <c>POST /{slug}/users/{userId}/chat</c> —
+    /// مَولودُ صَفحَةِ السائِقين، ومُستَهلِكُه الثاني زِرُّ «تَواصَل مَع البائِع» — يُسقِطُ
+    /// كُلَّ فَشَلٍ عَلى <c>drivers</c> ولا يَقرَأُ <c>returnUrl</c>، والصَفحَةُ لا تُرسِلُه.
+    /// وصارَ يَقرَأُ مَنشَأَه ويَعودُ إلَيه بِرَمزِه عِندَ الطَرَفِ المَحذوف
+    /// (<c>ChatStartReturnTests</c>)؛ ومَسقَطُ الرَأسِ بِلا مَنشَأٍ كَما كان.</summary>
     [Fact]
-    public void The_user_chat_pipe_sends_every_failure_to_drivers_and_knows_no_origin_today()
+    public void The_user_chat_pipe_now_reads_its_origin_and_sends_a_deleted_partner_back_with_a_code()
     {
         var pipe = Endpoint("/{slug}/users/{userId:guid}/chat");
-        Assert.Contains("login?returnUrl=/{slug}/drivers", pipe, StringComparison.Ordinal);
-        Assert.Equal(2, Count(pipe, "Link(req, slug, $\"drivers\")"));
-        Assert.Contains("if (partner is null) return Results.Redirect(Link(req, slug, $\"drivers\"));", pipe, StringComparison.Ordinal);
-        Assert.DoesNotContain("req.Form[\"returnUrl\"]", pipe, StringComparison.Ordinal);
+        Assert.Contains("var origin = Services.LocalRedirect.Resolve(req.Form[\"returnUrl\"].ToString(), Link(req, slug, $\"drivers\"));", pipe, StringComparison.Ordinal);
+        Assert.Contains("Services.ChatStartReturn.Failure(origin, Services.ChatStartReturn.PartnerMissing)", pipe, StringComparison.Ordinal);
+        Assert.Equal(0, Count(pipe, "return Results.Redirect(Link(req, slug, $\"drivers\"));"));
+        Assert.Equal(1, Count(pipe, "Link(req, slug, $\"drivers\")"));   // مَسقَطُ الرَأسِ باقٍ سُقوطاً لِلمَنشَأ
 
         var page = DealPageSource();
         Assert.Contains("action=\"@($\"/{Slug}/users/{vid}/chat\")\"", page, StringComparison.Ordinal);
-        Assert.DoesNotContain("name=\"returnUrl\"", page, StringComparison.Ordinal);
+        Assert.Equal(1, Count(page, "name=\"returnUrl\""));
     }
 }

@@ -1839,22 +1839,28 @@ public static class MarketplaceTemplateExtensions
           .RequireStoreWritable();
 
         // ─── Start direct chat with another user ────────────────────────
-        // مُستَخدَم في صَفحَة /{slug}/drivers — العَميل يَفتَح مُحادَثَة
-        // مُباشَرَة مَع سائِق بِلا حاجَة لِنَشر طَلَب مِشوار.
+        // مُستَهلِكان: صَفحَةُ /{slug}/drivers — مَولِدُه — (العَميل يَفتَح مُحادَثَة
+        // مُباشَرَة مَع سائِق بِلا حاجَة لِنَشر طَلَب مِشوار)، وزِرُّ «تَواصَل مَع
+        // البائِع» عَلى صَفحَةِ الصَفقَة `MyDealDetail.razor` (‏S1·٧). كانَ يُسقِطُ
+        // كُلَّ فَشَلٍ عَلى `/drivers` — فَمُشتَرٍ حُذِفَ حِسابُ بائِعِه يُقذَفُ إلى
+        // صَفحَةِ السائِقينَ بِلا كَلِمَة. فَصارَ يَقرَأُ مَنشَأَه مِن `returnUrl`
+        // (بِـ`LocalRedirect.Resolve` القائِمَة — القاعِدَة ٨ — وإلّا مَسقَطُ الرَأس)
+        // ويَعودُ إلَيه عِندَ الطَرَفِ المَحذوفِ بِرَمزِه (`ChatStartReturn.Failure`).
         app.MapPost("/{slug}/users/{userId:guid}/chat",
             async (string slug, Guid userId, HttpRequest req, IDocumentStore store, L l) =>
         {
+            var origin = Services.LocalRedirect.Resolve(req.Form["returnUrl"].ToString(), Link(req, slug, $"drivers"));
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
-            if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/drivers"));
+            if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl={origin}"));
             var (meId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
-            if (meId == userId) return Results.Redirect(Link(req, slug, $"drivers"));
+            if (meId == userId) return Results.Redirect(origin);
             var meName = AuthSession.ResolveUserName(req, slug) ?? "أنا";
 
             await using var s = store.LightweightSession(slug);
             var partner = await s.LoadAsync<User>(userId);
-            if (partner is null) return Results.Redirect(Link(req, slug, $"drivers"));
+            if (partner is null) return Results.Redirect(Services.ChatStartReturn.Failure(origin, Services.ChatStartReturn.PartnerMissing));
 
             // ابحَث عَن مُحادَثَة قائِمَة بَين الاثنَين (بِلا ListingId).
             var existing = (await s.Query<Conversation>()
