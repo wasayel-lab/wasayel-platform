@@ -49,7 +49,16 @@
 
         @if (users.Count == 0)
         {
-            <AcEmptyState IconName="user" Title="@L["admin.tenant_users.empty"]" />
+            @* المَتجَرُ الجَديدُ يولَدُ بِصِفرِ مُستَخدِم: المَصنَعُ يَضبُطُ
+               `OwnerUserId` ولا يُنشِئُ لِلمالِكِ مُستَخدِماً في واجِهَةِ
+               مَتجَرِه (‏ADR-032 §٦‑هـ). فَكانَ العُنوانُ وَحدَه يَعِدُ
+               بِتَعيينِ أَوَّلِ مُشرِفٍ ولا يَقولُ كَيف — والسَبيلُ قائِم:
+               المُستَخدِمُ يولَدُ بِأَوَّلِ دُخولٍ مِن `/{slug}/login`
+               (`AuthHandlers.GetOrCreateUserAsync`)، ثُمَّ يَعودُ المالِكُ
+               إلى هُنا فَيَمنَحُ نَفسَه. نَصٌّ لا زِرّ: عَدَدُ النَقراتِ
+               يُقاسُ قَبلَ أَن يُبنى (موجَزُ الفَجَوات P0-8، ‏2026-10-11). *@
+            <AcEmptyState IconName="user" Title="@L["admin.tenant_users.empty"]"
+                          Message="@(L.Format("admin.tenant_users.empty_hint", Slug))" />
         }
         else
         {
