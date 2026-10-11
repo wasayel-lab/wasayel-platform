@@ -97,6 +97,53 @@ public class DealDetailDeliveryDisclosureTests
         Assert.Contains("وَحدَه", disclosure, StringComparison.Ordinal);
     }
 
+    /// <summary><b>الإفصاحُ حَدُّ غَرَضٍ لا حَظرُ مُشارَكَة</b> (‏2026-10-11، مُراجَعَةٌ ثانِيَة): كانَ
+    /// يَقولُ لِلبائِعِ «ولا تُشارَك مَع أَحَد» — والبائِعُ يَشحَنُ بِناقِلٍ لا يَبلُغُ المُشتَريَ إلّا
+    /// بِالعُنوانِ والهاتِف، فَالنَصُّ يَنهى عَمّا لا يَتِمُّ التَسليمُ إلّا بِه. صارَ يَحصُرُ الغَرَض
+    /// (تَسليمُ هذا الطَلَبِ وَحدَه) ويُجيزُ مَن يوصِلُه عَن البائِع — لا أَحَدَ سِواه.</summary>
+    [Fact]
+    public void The_vendor_disclosure_limits_the_purpose_and_permits_the_carrier()
+    {
+        var disclosure = LocaleCatalog.Text(LocaleCatalog.Arabic, "deals.detail.delivery_disclosure");
+        Assert.Equal(
+            "شارَكَها المُشتَري مَعَكَ لِتَسليم هذا الطَلَب وَحدَه — لا تُستَعمَل لِغَيرِه، ولا تُعطى إلّا لِمَن يوصِلُه عَنكَ (نِظام حِمايَة البَيانات الشَخصِيَّة).",
+            disclosure);
+        Assert.DoesNotContain("ولا تُشارَك مَع أَحَد", disclosure, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>والمُشتَري يُقالُ لَه عِندَ الكِتابَة</b> (‏2026-10-11، مُراجَعَةٌ ثانِيَة): الهاتِفُ
+    /// والعُنوانُ يُكتَبانِ في الخُطوَةِ الأولى مِن إتمامِ الشِراءِ ويَصِلانِ إلى البائِعِ وناقِلِه — ولا
+    /// سَطرَ كانَ يَقولُ ذلك هُناك (مَقيس: صِفرُ مِفتاحٍ عَن المُستَلِمِ في <c>CheckoutPage.razor</c>).
+    /// سَطرٌ واحِدٌ مِن القامُوس، داخِلَ الخُطوَةِ الأولى وَحدَها قَبلَ أَوَّلِ حَقل؛ واللَقطَةُ
+    /// المُودَعَةُ لِتِلكَ الخُطوَةِ تَحمِلُه مَرَّةً، ولِلخُطُواتِ الأُخرى صِفراً.</summary>
+    [Fact]
+    public void The_buyer_is_told_at_checkout_step_one_who_receives_the_phone_and_address()
+    {
+        const string key = "checkout.address.disclosure";
+        var line = LocaleCatalog.Text(LocaleCatalog.Arabic, key);
+        Assert.NotEqual(key, line);
+        Assert.False(LocaleCatalog.IsPlaceholder(line), $"‏{key} نائِب.");
+        Assert.Equal("يَصِلُ هاتِفُكَ وعُنوانُكَ إلى البائِعِ ومَن يوصِلُ طَلَبَكَ عَنه — لِتَسليمِ هذا الطَلَبِ وَحدَه.", line);
+
+        var page = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(
+            Source(Template, "Components", "Pages", "CheckoutPage.razor")));
+        Assert.Equal(1, Count(page, $"\"{key}\""));
+        var at = page.IndexOf("@if (Step == 1)", StringComparison.Ordinal);
+        Assert.True(at > 0, "لا فَرعَ `@if (Step == 1)` في صَفحَةِ إتمامِ الشِراء — الأَداةُ عَمياء.");
+        var step1 = BlockFrom(page, at);
+        Assert.Equal(1, Count(step1, $"@L.Markup(\"{key}\")"));
+        // قَبلَ أَوَّلِ حَقل: يُقرَأُ قَبلَ أَن يُكتَبَ ما يَصِفُه — إفصاحٌ عِندَ الجَمعِ لا بَعدَه.
+        var firstInput = step1.IndexOf("name=\"name\"", StringComparison.Ordinal);
+        Assert.True(firstInput > 0, "لا حَقلَ `name` في الخُطوَةِ الأولى — الأَداةُ عَمياء.");
+        Assert.True(step1.IndexOf(key, StringComparison.Ordinal) < firstInput,
+            "السَطرُ بَعدَ الحُقول — يُقرَأُ بَعدَ أَن يُكتَبَ ما يَصِفُه.");
+
+        Assert.Equal(1, Count(LegalCheckoutTextsCharacterizationTests.Baseline("member-checkout.html"), line));
+        foreach (var other in new[] { "member-checkout-pay.html", "member-checkout-confirm-cash.html",
+                                      "member-checkout-confirm-card.html", "member2-checkout-empty.html" })
+            Assert.Equal(0, Count(LegalCheckoutTextsCharacterizationTests.Baseline(other), line));
+    }
+
     /// <summary><b>لِمَن يُرسَم</b>: الشَرطُ <c>!isInitiator &amp;&amp; isListingOwner</c>
     /// بِحَرفِه، والمَفاتيحُ الأَربَعَةُ داخِلَ فَرعِه <b>ولا مَرَّةً خارِجَه</b> — فَلا
     /// نُسخَةَ لِلمُشتَري ولا لِثالِث. <b>قُلِبَ شَطرُ الشَرط</b> (‏2026-10-11، مُراجَعَةٌ

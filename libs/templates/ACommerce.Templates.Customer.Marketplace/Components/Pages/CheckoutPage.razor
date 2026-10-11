@@ -67,6 +67,10 @@
                 <AcCard>
                     <ChildContent>
                         <h3 style="margin-top:0;">@L.Markup("checkout.address.title")</h3>
+                        @* لِمَن يَصِلُ ما يُكتَبُ هُنا — قَبلَ أَوَّلِ حَقل (‏2026-10-11، مُراجَعَةٌ ثانِيَة): الهاتِفُ
+                           والعُنوانُ يُكتَبانِ في الصَفقَةِ ويُرسَمانِ لِلبائِعِ وَحدَه بِإفصاحٍ يُجيزُ مَن يوصِلُ
+                           عَنه (`MyDealDetail`، P1-4)، ولَم يَكُن المُشتَري يُقالُ لَه ذلك عِندَ الكِتابَة. *@
+                        <div class="ac-text-muted ac-text-sm ac-mb-sm">@L.Markup("checkout.address.disclosure")</div>
                         <AcField Label="@L["checkout.address.name"]" Required="true">
                             <input name="name" required class="ac-input" value="@Name" />
                         </AcField>
