@@ -146,12 +146,25 @@ public sealed class DealsService
     /// الاسمِ حِسابٌ، وجِسمُ النُقطَةِ مُثَبَّتُ السَقف (<c>EndpointBodyBleedTests</c>).
     /// وتَمُرُّ بِـ<see cref="AssignCounterpartyAsync"/> لا حَولَها — فَعَدُّ «مَن
     /// يُعَيِّنُ طَرَفاً» في <c>DealCounterpartyCharacterizationTests</c> يَراها.</para>
+    ///
+    /// <para><b>إلّا أَن يَكونَ المالِكُ هُوَ المُبادِرَ نَفسَه — فَلا يُربَطُ أَحَد</b> (المُراجَعَةُ
+    /// الثالِثَةُ عَلى <c>8769fa4</c>، ‏2026-10-11؛ ‏ADR-033 §٦‑ب‑١ مُلحَقاً): كانَت تَربُطُه ولَو
+    /// اشتَرى إعلانَه هُوَ — وبابُ ذلك طَلَبٌ مَصنوعٌ إلى <c>cart/add</c> الَّذي لا يَقرَأُ
+    /// <c>owner_id</c> — فَتولَدُ صَفقَةٌ طَرَفاها واحِدٌ يَمشيها وَحدَه إلى <c>Completed</c> ثُمَّ
+    /// يَصيرُ هَدَفَ تَقييمِ نَفسِه، خِلافَ «ولا يَكونُ المَرءُ طَرَفَي صَفقَتِه»
+    /// (<see cref="DealAcceptAuthorization.ActorIsInitiator"/>). فَتولَدُ الآنَ بِلا طَرَفٍ كَما
+    /// كانَت قَبلَ <c>8769fa4</c>: يُحَرِّكُ المُبادِرُ <c>Offered</c> ويَقِفُ عِندَ <c>Booked</c>،
+    /// والقَبولُ يَرُدُّه بِـ<c>actor_is_initiator</c>. ويُعادُ ما قُرِئَ بِلا كِتابَة؛ ولَقطَةُ القِراءَةِ
+    /// لا تَتَقادَمُ هُنا لِأَنّ المُبادِرَ لا يَتَغَيَّرُ بَعدَ الوِلادَة.</para>
     /// </summary>
     public async Task<Deal?> BindListingOwnerAsync(
         string tenantSlug, Guid dealId, string ownerRef, CancellationToken ct = default)
     {
         if (!Guid.TryParse(ownerRef, out var ownerId)) return null;
         await using var q = _store.QuerySession(tenantSlug);
+        // ولا يَكونُ المَرءُ طَرَفَي صَفقَتِه — مالِكٌ هُوَ المُبادِرُ لا يُربَط (‏ADR-033 §٦‑ب‑١ مُلحَقاً).
+        var deal = await q.LoadAsync<Deal>(dealId, ct);
+        if (deal is null || deal.InitiatorId == ownerId) return deal;
         var owner = await q.LoadAsync<ACommerce.Kit.Auth.User>(ownerId, ct);
         return await AssignCounterpartyAsync(tenantSlug, dealId, ownerId, owner?.FullName ?? "", ct, DealEvent.BoundAtBirth);
     }

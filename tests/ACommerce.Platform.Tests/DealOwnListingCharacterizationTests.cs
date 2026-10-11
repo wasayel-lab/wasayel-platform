@@ -27,6 +27,12 @@ namespace ACommerce.Platform.Tests;
 // **وما يُقلَبُ وما لا يُقلَب** (القاعِدَة ٣): صَفّا «اليَوم» الأَوَّلانِ يُقلَبانِ بِاسمِهِما في كوميتِ
 // الإصلاح؛ وصَفُّ المالِكِ الآخَرِ يَبقى بِحَرفِه — الرَبطُ لِبائِعٍ غَيرِ المُشتَري لا يَتَغَيَّر. وصَفُّ
 // `cart/add` يَبقى «اليَوم» بَعدَ الإصلاح: لا يَمَسُّه، ويُقلَبُ بِاسمِه يَومَ يُقَرَّرُ بابُه.
+//
+// **ثُمَّ قُلِبَ صَفّا «اليَوم» في الكوميتِ التالي** (‏ADR-033 §٦‑ب‑١ مُلحَقاً، ‏2026-10-11):
+// `BindListingOwnerAsync` لا تَربُطُ مالِكاً هُوَ المُبادِر، فَتولَدُ الصَفقَةُ بِلا طَرَفٍ ويَقِفُ
+// مُستَخدِمُها عِندَ `Booked` ويَرُدُّه القَبولُ بِـ`actor_is_initiator` — كُلٌّ بِاسمٍ جَديدٍ يَقولُ
+// النَقيضَ ويَحمِلُ «قُلِبَ» في شَرحِه، لا يُحذَفُ ولا يُسكَت. وقِسمُ ما لا يُقلَبُ بِحَرفِه: بَصمَتُه
+// قَبلَ الإصلاحِ وبَعدَه واحِدَة.
 
 public class DealOwnListingCharacterizationTests
 {
@@ -96,44 +102,57 @@ public class DealOwnListingCharacterizationTests
         return (deals, world, deal.Id);
     }
 
-    // ═══ ١) «اليَوم» — يُقلَبانِ بِاسمِهِما في كوميتِ الإصلاح ═══════════════════════════
+    // ═══ ١) ما كانَ «اليَوم» — قُلِبا بِاسمِهِما (‏ADR-033 §٦‑ب‑١ مُلحَقاً) ═══════════════
 
-    /// <summary><b>اليَوم</b>: مُشتَرٍ أَضافَ إعلانَه هُوَ إلى سَلَّتِه يُربَطُ طَرَفاً مُقابِلاً لِنَفسِه عِندَ
-    /// الوِلادَة — المُبادِرُ والطَرَفُ واحِد، وسَطرُ <c>bound</c> بِاسمِه.</summary>
+    /// <summary><b>قُلِبَ</b> (المُراجَعَةُ الثالِثَةُ عَلى <c>8769fa4</c>، ‏2026-10-11؛ ‏ADR-033 §٦‑ب‑١
+    /// مُلحَقاً): كانَ مُشتَرٍ أَضافَ إعلانَه هُوَ إلى سَلَّتِه يُربَطُ طَرَفاً مُقابِلاً لِنَفسِه عِندَ
+    /// الوِلادَة — المُبادِرُ والطَرَفُ واحِد، وسَطرُ <c>bound</c> بِاسمِه. وصارَ لا يُربَطُ أَحَد: الصَفقَةُ
+    /// تولَدُ بِلا طَرَفٍ ولا سَطرِ <c>bound</c> كَما كانَت قَبلَ <c>8769fa4</c>، ومَرجِعُ المالِكِ باقٍ
+    /// عَلَيها — المالِكُ مَعروفٌ ولَم يُربَط.</summary>
     [Fact]
-    public void Today_a_cart_deal_on_the_buyers_own_listing_binds_him_as_his_own_counterparty()
+    public void A_cart_deal_on_the_buyers_own_listing_is_not_bound_and_is_born_without_a_counterparty()
     {
         var (_, world, id) = CheckoutDeal(Buyer, Buyer);
 
         var deal = world.Read<Deal>(id.ToString())!;
         Assert.Equal(Buyer, deal.InitiatorId);
-        Assert.Equal(Buyer, deal.CounterpartyId);
-        Assert.Equal(new[] { "created", "note", DealEvent.BoundAtBirth },
+        Assert.Null(deal.CounterpartyId);
+        Assert.Null(deal.CounterpartyName);
+        Assert.Equal(new[] { "created", "note" },
             deal.Timeline.Select(e => e.Action).ToArray());
-        Assert.Equal(Buyer, deal.Timeline[^1].ActorId);
+        Assert.Equal(Buyer, DealAcceptAuthorization.OwnerIdOf(deal));
+        Assert.Equal(DealStage.Offered, deal.Stage);
+        Assert.Equal(DealStatus.Active, deal.Status);
     }
 
-    /// <summary><b>اليَوم</b>: مُستَخدِمُها الوَحيدُ يَمشيها وَحدَه بِبابِ المَشيِ العامّ — كُلُّ صَفٍّ في
-    /// الكاتالوجِ يُسَمّيه (<c>initiator</c> و<c>counterparty</c> و<c>either</c>) — مِن <c>Offered</c> إلى
-    /// <c>Reviewed</c> فَـ<c>Completed</c>، بِلا قَبولٍ ولا طَرَفٍ ثانٍ.</summary>
+    /// <summary><b>قُلِبَ</b> (المُراجَعَةُ الثالِثَةُ عَلى <c>8769fa4</c>، ‏2026-10-11؛ ‏ADR-033 §٦‑ب‑١
+    /// مُلحَقاً): كانَ مُستَخدِمُها الوَحيدُ يَمشيها وَحدَه بِبابِ المَشيِ العامّ — كُلُّ صَفٍّ في الكاتالوجِ
+    /// يُسَمّيه — مِن <c>Offered</c> إلى <c>Reviewed</c> فَـ<c>Completed</c> بِخَمسِ نَقَرات. وصارَ يُحَرِّكُ
+    /// <c>Offered → Booked</c> وَحدَها (صَفُّ <c>initiator</c> — سُلوكٌ قائِمٌ يُقالُ في §٦‑ج) ثُمَّ يُرَدُّ:
+    /// <c>Booked</c> تَطلُبُ <c>counterparty</c> ولا طَرَف، والقَبولُ يَرُدُّه بِـ<c>actor_is_initiator</c>
+    /// — فَلا تَبلُغُ <c>Completed</c> ولا يَكونُ لَها هَدَفُ تَقييم.</summary>
     [Fact]
-    public void Today_the_single_user_of_such_a_deal_walks_it_alone_from_Offered_to_Completed()
+    public void The_buyer_of_his_own_listing_stops_at_Booked_and_cannot_accept_his_own_order()
     {
         var (deals, world, id) = CheckoutDeal(Buyer, Buyer);
 
-        var path = new List<string>();
-        for (var step = 0; step < 5; step++)
-        {
-            var moved = Now(deals.AdvanceAsync(Slug, id, Buyer, "مُشتَرٍ"));
-            Assert.True(moved.Ok, moved.Reason);
-            path.Add($"{moved.Deal!.Stage}/{moved.Deal.Status}");
-        }
+        var booked = Now(deals.AdvanceAsync(Slug, id, Buyer, "مُشتَرٍ"));
+        Assert.True(booked.Ok, booked.Reason);
+        Assert.Equal(DealStage.Booked, booked.Deal!.Stage);
 
-        Assert.Equal(new[] { "Booked/Active", "Confirmed/Active", "Shipping/Active", "Delivered/Active", "Reviewed/Completed" },
-            path.ToArray());
+        var onward = Now(deals.AdvanceAsync(Slug, id, Buyer, "مُشتَرٍ"));
+        Assert.False(onward.Ok);
+        Assert.Contains("counterparty", onward.Reason ?? "", StringComparison.Ordinal);
+
+        var accept = Now(deals.AcceptAsync(Slug, id, new DealAcceptor(Buyer, "مُشتَرٍ")));
+        Assert.False(accept.Ok);
+        Assert.Equal(DealAcceptAuthorization.ActorIsInitiator, accept.Violation!.Code);
+
         var after = world.Read<Deal>(id.ToString())!;
-        Assert.Equal(DealStatus.Completed, after.Status);
-        Assert.All(after.Timeline.Where(e => e.Action == "advanced"), e => Assert.Equal(Buyer, e.ActorId));
+        Assert.Equal(DealStage.Booked, after.Stage);
+        Assert.Equal(DealStatus.Active, after.Status);
+        Assert.Null(after.CounterpartyId);
+        Assert.Single(after.Timeline, e => e.Action == "advanced");
     }
 
     // ═══ ٢) ما لا يَمَسُّه الإصلاح ══════════════════════════════════════════════════
