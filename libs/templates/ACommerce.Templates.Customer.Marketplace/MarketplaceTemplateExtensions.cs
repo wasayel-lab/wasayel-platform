@@ -2920,8 +2920,11 @@ public static class MarketplaceTemplateExtensions
 
         // POST /{slug}/checkout/submit — تَحويل السَّلَّة إلى صَفقَة + إفراغ.
         // كُلّ بَند في السَّلَّة → Deal مُنفَصِل (لِأَنّ الـ Deal فيه الإعلان
-        // وكُلّ بَند قَد يَكون مالِكُه مُختَلِف). يَدخُل Deals بِمَرحَلَة Booked
-        // مُباشَرَةً (السَّلَّة تَعني أَنّ المُشتَري ثَبَّتَ النِيَّة).
+        // وكُلّ بَند قَد يَكون مالِكُه مُختَلِف). تَدخُلُ الصَفقَةُ بِمَرحَلَة
+        // **Offered** بِلا طَرَفٍ مُقابِل (‏`DealsService.StartAsync`)، ولا
+        // يُخرِجُها إلّا قَبولُ مالِكِ الإعلانِ عَبرَ `/deals/{id}/accept` أَو
+        // المَسارُ الإداريّ (‏ADR-033 §٢‑ج‑أ). وكانَ هذا التَعليقُ يَقول
+        // «Booked مُباشَرَةً» — وهُوَ ما لا يَفعَلُه الكود (صُحِّحَ ‏2026-10-11).
         app.MapPost("/{slug}/checkout/submit",
             async (string slug, HttpRequest req, IDocumentStore store,
                    Services.Deals.DealsService deals,
@@ -3016,7 +3019,7 @@ public static class MarketplaceTemplateExtensions
                     catch (Exception ex)
                     {
                         // فَشَل الدَّفع لا يَكسِر الـ POST بِأَكمَلِه — الصَّفقَة
-                        // تَبقى في حالَة Booked لكِن مَعلَّمَة بِخَطَأ، والمالِك
+                        // تَبقى في حالَة Offered لكِن مَعلَّمَة بِخَطَأ، والمالِك
                         // يَستَطيع رُؤيَتها يَدَويّاً.
                         await deals.AttachRefAsync(slug, deal.Id, "payment_error", ex.Message);
                     }
@@ -3197,6 +3200,14 @@ public static class MarketplaceTemplateExtensions
           .RequireStoreWritable();
 
         // مالِك الإعلان يَقبَل عَرضاً → Booked + يُصبِح الطَّرَف الثاني.
+        //
+        // **والحارِسُ في تَوقيعِ الخِدمَة** (القاعِدَة ٦؛ ‏ADR-033 §٢‑ج‑أ،
+        // ‏2026-10-11): كانَت هذِه النُقطَةُ تُعَيِّنُ **الناقِرَ نَفسَه** طَرَفاً
+        // مُقابِلاً لِأَيِّ صَفقَةٍ بِجَلسَةِ مَتجَرٍ وَحدَها (موجَزُ الفَجَوات
+        // P0-3) — والشاشَةُ تُخفي الزِرَّ عَن غَيرِ المالِك، و`curl` لا يَرى
+        // الشاشَة. القَرارُ كُلُّه في `DealAcceptAuthorization.Validate`
+        // النَقِيَّة، وهذا المَسارُ يُصَرِّحُ بِهُوِيَّةِ القابِلِ فَقَط؛
+        // والرَفضُ يَعودُ إلى الصَفحَةِ بِرَمزِه — نَسَقُ `/cancel` نَفسُه.
         app.MapPost("/{slug}/deals/{id:guid}/accept",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
                    Services.Deals.DealsService deals) =>
@@ -3205,11 +3216,8 @@ public static class MarketplaceTemplateExtensions
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
             var userName = AuthSession.ResolveUserName(req, slug) ?? "المالِك";
-            var deal = await deals.LoadAsync(slug, id);
-            if (deal is null) return Results.Redirect(Link(req, slug, "deals"));
-            await deals.AssignCounterpartyAsync(slug, id, userId, userName);
-            await deals.AdvanceAsync(slug, id, deal.InitiatorId, userName, "قُبِلَ العَرض");
-            return Results.Redirect(Link(req, slug, $"deals/{id}"));
+            var res = await deals.AcceptAsync(slug, id, new Services.Deals.DealAcceptor(userId, userName));
+            return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}")));
         }).DisableAntiforgery()
           .RequireStoreWritable();
 

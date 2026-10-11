@@ -127,6 +127,36 @@ public sealed class DealsService
         return deal;
     }
 
+    /// <summary>
+    /// <para><b>مالِكُ الإعلانِ يَقبَلُ العَرض</b> — يَصيرُ الطَرَفَ المُقابِلَ
+    /// وتَمضي الصَفقَةُ مِن <c>Offered</c>. <b>والحارِسُ في التَوقيع</b>
+    /// (القاعِدَة ٦): <see cref="DealAcceptor"/> إلزامِيّ، ولا حِملٌ زائِدٌ
+    /// بِـ<c>Guid actorId</c>؛ والقَرارُ كُلُّه في
+    /// <see cref="DealAcceptAuthorization.Validate"/> النَقِيَّة، والجِسمُ
+    /// يُطَبِّقُه ولا يَحمِلُه — عَلى نَسَقِ <see cref="CancelAsync"/>.</para>
+    ///
+    /// <para><b>وما يَقَعُ بَعدَ التَخويلِ هُوَ بِحَرفِه ما كانَت تَفعَلُه
+    /// النُقطَةُ</b> (‏2026-10-11، ‏ADR-033 §٢‑ج‑أ): تَعيينُ الطَرَفِ ثُمَّ
+    /// <see cref="AdvanceAsync"/> بِفاعِلٍ هُوَ <b>المُبادِر</b> — لِأَنّ
+    /// مَرحَلَةَ <c>Offered</c> تَطلُبُ <c>initiator</c> — بِاسمِ القابِلِ
+    /// ومُلاحَظَةِ «قُبِلَ العَرض». ومَن فاعِلُ <c>Shipping</c> وصَفقَةِ
+    /// النَقدِ قَرارٌ مُؤَجَّلٌ إلى كوميتِ الخُطوَة 3 هُناك، لا هُنا.</para>
+    /// </summary>
+    public async Task<DealAcceptResult> AcceptAsync(
+        string tenantSlug, Guid dealId, DealAcceptor by, CancellationToken ct = default)
+    {
+        var loaded = await LoadAsync(tenantSlug, dealId, ct);
+
+        var violation = DealAcceptAuthorization.Validate(loaded, by);
+        if (violation is not null) return DealAcceptResult.Refused(violation, loaded);
+        // ‏`Validate` تَرُدّ `deal_not_found` عِندَ العَدَم، فَما بَعدَها غَيرُ عَدَم.
+        var deal = loaded!;
+
+        await AssignCounterpartyAsync(tenantSlug, dealId, by.ActorId, by.ActorName, ct);
+        var advanced = await AdvanceAsync(tenantSlug, dealId, deal.InitiatorId, by.ActorName, "قُبِلَ العَرض", ct);
+        return DealAcceptResult.Accepted(advanced.Deal ?? deal);
+    }
+
     /// <summary>اِنتَقِل لِلمَرحَلَة التالِيَة في النَّمَط. يَفحَص أَنّ الفاعِل
     /// يَملِك حَقّ تَحريك هذه المَرحَلَة (initiator/counterparty/either).</summary>
     public async Task<DealAdvanceResult> AdvanceAsync(
