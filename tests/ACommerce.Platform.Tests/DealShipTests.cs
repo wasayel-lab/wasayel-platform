@@ -1019,6 +1019,42 @@ public class DealShipTests
         Assert.Equal(asked, w.Oto.CallsTo(OtoClient.OrderStatusPath));
     }
 
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم» — خُطوَةٌ مَحجوزَةٌ عِندَ OTO بابُها مَردودٌ، والبِطاقَةُ تَقولُ لِلبائِعِ «دَورُكَ الآن» بِزِرٍّ إلى مِنطَقَةِ إجراءٍ
+    /// فارِغَة</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، البَندُ A0 (x)، ‏2026-10-12؛ ‏ADR-033 §٧‑ح‑٣‑٢ و§٧‑ي‑٦ (أ)): طَلَبٌ عِندَ OTO والناقِلُ
+    /// غائِب، أَو طَلَبٌ أَغلَقَته OTO — البائِعُ مَن يُخرِجُها (<c>IsMine</c>)، وبَوّابَةُ «أَكمِل الشَّحن» تَرُدُّه، و«تَأكيد: شَحن» لا يُرسَمُ
+    /// (<c>heldByCarrier</c>). والبِطاقَةُ تُرسَمُ لِكُلِّ صَفقَةٍ فَعّالَةٍ بِـ<c>mine</c> وزِرِّ <c>#deal-action</c>، وفَرعُ الخُطوَةِ المَحجوزَةِ لا
+    /// يَرسُمُ شَيئاً. يُثَبَّتُ قَبلَ قَلبِه (القاعِدَة ٣).</para>
+    /// </summary>
+    [Fact]
+    public void Today_a_held_step_whose_resume_is_refused_still_tells_the_vendor_it_is_his_turn_with_a_cta_to_an_empty_action_area()
+    {
+        var placed = With(d => d.Refs[DealShipping.OrderRef] = d.Id.ToString("N"));
+        var closed = With(d => { d.Refs[DealShipping.OrderRef] = d.Id.ToString("N"); d.Refs[DealShipping.ClosedRef] = "canceled"; });
+        var checkedStates = 0;
+        foreach (var (deal, carrier) in new[] { (placed, false), (closed, true) })
+        {
+            Assert.True(DealShipping.AwaitsCarrier(deal));
+            Assert.True(DealsService.CanMove(deal, Seller));
+            Assert.False(DealShipAuthorization.IsAllowed(deal, Vendor, carrier));
+            Assert.True(ACommerce.Templates.Customer.Marketplace.Services.Ux.DealTurnView
+                .For(deal, ACommerce.Templates.Customer.Marketplace.Services.Ux.DealSide.Counterparty).IsMine);
+            checkedStates++;
+        }
+        Assert.Equal(2, checkedStates);
+
+        var page = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(DealPage()));
+        var card = page.IndexOf("@if (deal.Status == DealStatus.Active)", StringComparison.Ordinal);
+        var turn = page.IndexOf("var turn = Services.Ux.DealTurnView.For(deal, mySide);", StringComparison.Ordinal);
+        var cta  = page.IndexOf("href=\"#deal-action\"", StringComparison.Ordinal);
+        Assert.True(card > 0 && turn > card && cta > turn, $"البِطاقَة: {card}/{turn}/{cta}");
+        Assert.DoesNotContain("shipHeld", page, StringComparison.Ordinal);
+        var held    = page.IndexOf("else if (canAdvance && heldByCarrier)", StringComparison.Ordinal);
+        var generic = page.IndexOf("else if (canAdvance && nextStage is { } ns)", StringComparison.Ordinal);
+        Assert.True(held > 0 && generic > held, $"الفَرعان: {held}/{generic}");
+        Assert.DoesNotContain("<", page[held..generic], StringComparison.Ordinal);
+    }
+
     /// <summary><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_the_studio_admin_path_draws_and_moves_a_deal_whose_order_is_at_OTO_into_Shipping_without_a_label</c>
     /// (‏<c>e52ba8f</c>). <b>والآن</b>: <see cref="DealsService.AdminPathCanMove"/> تَرُدُّها — فَلا يَرسُمُ الاستوديو «→ شَحن» ولا تَكتُبُ
     /// نُقطَتُه — وتَسَلسُلُها (لَو بَلَغَه طَلَبٌ مَصنوع) يُرَدُّ بِـ<c>deal_awaits_carrier</c> بِلا كِتابَة.</summary>
