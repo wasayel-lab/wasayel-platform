@@ -227,13 +227,14 @@ public class LiveDealConcurrencyProofTests(ITestOutputHelper output)
         }
     }
 
-    /// <summary><b>اليَوم — يُقلَبُ بِاسمِه في كوميتِ الإصلاح</b> (مُراجَعَةُ تَيّارِ S6a الأولى، ‏2026-10-12): إلحاقٌ — مَرجِعُ إذنِ دَفعٍ
-    /// كَما يُلحِقُه <c>/checkout/submit</c> <b>بَعدَ</b> رَبطِ البائِع — يَقرَأُ الصَفقَةَ ويَقِفُ قَبلَ الحِفظ، ثُمَّ يَتِمُّ قَبولُ البائِعِ
-    /// المَربوطِ ويُحفَظ، ثُمَّ يُستَأنَف: يَرُدُّه Marten، و<c>AttachRefAsync</c> تَعودُ بِالمَخزَّنِ <b>بِلا المَرجِع</b> ولا تَرمي، ولا
-    /// مُنادِيَ يَقرَأُ ما تُرجِعُه. فَالقَبولُ قائِمٌ والمَرجِعُ ضاع — إذنٌ مَحجوزٌ عِندَ المُزَوِّدِ لا يُقبَضُ عِندَ <c>Paid</c> ولا يُستَرجَعُ
-    /// عِندَ الإلغاء. وظَنُّ ‏ADR-036 §٢ («صَفقَةٌ وُلِدَت في الطَلَبِ نَفسِه لا يَعرِفُ مُعَرِّفَها غَيرُه») لا يَصدُقُ هُنا.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏ADR-036 §٧، ‏2026-10-12): كانَ
+    /// <c>Today_an_attach_held_past_an_accept_returns_the_stored_deal_without_its_ref_and_the_ref_is_lost</c> (مُودَعٌ في <c>f9f9711</c>،
+    /// مَقيسٌ ثَلاثاً: «قَبول: ok=True · إلحاق: — · النِهائِيَّة: Active/Booked · سِجِلّ: created,note,bound,advanced»). <b>وصارَ</b>: الإلحاقُ —
+    /// مَرجِعُ إذنِ دَفعٍ كَما يُلحِقُه <c>/checkout/submit</c> — يَقرَأُ الصَفقَةَ ويَقِفُ قَبلَ الحِفظ، ثُمَّ يَتِمُّ قَبولُ البائِعِ المَربوطِ
+    /// ويُحفَظ، ثُمَّ يُستَأنَف: يَرُدُّه Marten، فَيُعادُ عَلى ما كُتِب — <b>يَبقى الاثنان</b>: <c>Booked</c> بِسَطرِ <c>advanced</c> واحِد،
+    /// والمَرجِعُ عَلَيها بِسَطرِ إلحاقٍ واحِد (الإعادَةُ تَقرَأُ نُسخَةً لا تَحمِلُ المُحاوَلَةَ المَردودَة).</summary>
     [Fact]
-    public async Task Today_an_attach_held_past_an_accept_returns_the_stored_deal_without_its_ref_and_the_ref_is_lost()
+    public async Task An_attach_held_past_an_accept_is_re_applied_and_both_writes_stand()
     {
         if (!Enabled || string.IsNullOrEmpty(ConnectionString)) return;
 
@@ -265,15 +266,15 @@ public class LiveDealConcurrencyProofTests(ITestOutputHelper output)
             var attached = await attaching.WaitAsync(TimeSpan.FromSeconds(60));
 
             var final = (await plain.LoadAsync(slug, born.Id))!;
-            output.WriteLine($"قَبول: ok={accept.Ok} · إلحاق: {attached?.Refs.GetValueOrDefault("payment_id") ?? "—"} · النِهائِيَّة: " +
+            output.WriteLine($"قَبول: ok={accept.Ok} · إلحاق: {attached?.Refs.GetValueOrDefault("payment_id")} · النِهائِيَّة: " +
                              $"{final.Status}/{final.Stage} · سِجِلّ: {string.Join(",", final.Timeline.Select(e => e.Action))}");
 
             Assert.True(accept.Ok, accept.Violation?.MessageAr);
-            Assert.NotNull(attached);
-            Assert.False(attached!.Refs.ContainsKey("payment_id"));
+            Assert.Equal("auth_live", attached!.Refs["payment_id"]);
             Assert.Equal((DealStatus.Active, DealStage.Booked), (final.Status, final.Stage));
-            Assert.False(final.Refs.ContainsKey("payment_id"));
-            Assert.DoesNotContain(final.Timeline, e => e.Action == "note" && e.Note == "attach payment_id=auth_live");
+            Assert.Equal("auth_live", final.Refs["payment_id"]);
+            Assert.Single(final.Timeline, e => e.Action == "advanced");
+            Assert.Single(final.Timeline, e => e.Action == "note" && e.Note == "attach payment_id=auth_live");
         }
         finally
         {
@@ -384,9 +385,13 @@ public class DealConcurrencyRefusalTests
         Assert.Equal(saves, world.SaveCalls);
     }
 
-    /// <summary>والأَبوابُ بِلا قَناةِ رَفضٍ (لا مُنادِيَ يَقرَأُ ما تُرجِعُه) لا تَرمي: تُعيدُ ما في المَخزَنِ ولا تَحفَظ.</summary>
+    /// <summary>والأَبوابُ بِلا قَناةِ رَفضٍ (لا مُنادِيَ يَقرَأُ ما تُرجِعُه) لا تَرمي: تُعيدُ ما في المَخزَنِ ولا تَحفَظ.
+    /// <para><b>قُلِبَ شَطرُ الإلحاقِ بِاسمِه</b> (‏ADR-036 §٧، ‏2026-10-12): كانَ
+    /// <c>Assign_dispute_and_attach_return_the_stored_deal_on_a_version_conflict_and_do_not_throw</c> — والإلحاقُ مِنها يُسقِطُ مَرجِعَه
+    /// عِندَ التَعارُضِ عَلى ظَنٍّ لَم يَصدُق («صَفقَةٌ وُلِدَت في الطَلَبِ نَفسِه»). وصارَ يُعادُ تَطبيقُه — صُفوفُه أَدناه؛ والتَعيينُ
+    /// والنِزاعُ كَما كانا بِحَرفِهِما.</para></summary>
     [Fact]
-    public void Assign_dispute_and_attach_return_the_stored_deal_on_a_version_conflict_and_do_not_throw()
+    public void Assign_and_dispute_return_the_stored_deal_on_a_version_conflict_and_do_not_throw()
     {
         var (world, deals, id) = CartDeal();
         var offer = Now(deals.StartAsync(Slug, "marketplace", Buyer, "مُشتَرٍ", Guid.NewGuid(), "عَرض", 50m));
@@ -396,8 +401,93 @@ public class DealConcurrencyRefusalTests
         Assert.NotNull(Now(deals.AssignCounterpartyAsync(Slug, offer.Id, Seller, "بائِع")));
         ConflictOnNextSave(world, id);
         Assert.NotNull(Now(deals.DisputeAsync(Slug, id, Seller, "بائِع", "نِزاع")));
-        ConflictOnNextSave(world, id);
-        Assert.NotNull(Now(deals.AttachRefAsync(Slug, id, "k", "v")));
+        Assert.Equal(saves, world.SaveCalls);
+    }
+
+    // ─── الإلحاقُ يُعادُ تَطبيقُه — مُنادوه بِأَسمائِهِم (‏ADR-036 §٧) ─────────────────────────────────────
+    //
+    // **وكِتابَةُ الآخَرِ تَقَعُ فِعلاً بَينَ تَحميلِ الإلحاقِ وحِفظِه**: الخُطّافُ عِندَ حِفظِ الإلحاقِ الأَوَّلِ يُنادي الكاتِبَ الآخَرَ
+    // (خِدمَةً حَقيقِيَّةً تَحفَظ) ثُمَّ يَرمي ما يَرميه Marten — فَيُقاسُ أَنّ الكِتابَتَينِ تَبقَيان، لا أَنّ المَرجِعَ «لَم يُكتَب».
+    // (والعالَمُ يُعيدُ الكائِنَ نَفسَه، فَسَطرُ `note` يُعَدُّ في البُرهانِ الحَيِّ أَدناه لا هُنا.)
+
+    /// <summary>الحِفظُ التالي: يُحفَظُ <paramref name="otherWrite"/> أَوَّلاً، ثُمَّ يَرمي ما يَرميه Marten — مَرَّةً واحِدَة.</summary>
+    private static void OtherWriterSavesFirst(DocWorld world, Guid id, Action otherWrite)
+    {
+        var armed = true;
+        world.BeforeMember = name =>
+        {
+            if (name != "SaveChangesAsync" || !armed) return;
+            armed = false;
+            otherWrite();
+            throw new JasperFx.ConcurrencyException(typeof(Deal), id);
+        };
+    }
+
+    /// <summary><b>مُنادي <c>/checkout/submit</c></b>: مَرجِعُ إذنِ الدَفعِ يُلحَقُ والبائِعُ المَربوطُ يَقبَلُ بَينَ تَحميلِه وحِفظِه —
+    /// <b>يَبقى الاثنان</b>: الصَفقَةُ في <c>Booked</c> بِسَطرِ <c>advanced</c>، و<c>payment_id</c> عَلَيها فَيُقبَضُ عِندَ <c>Paid</c>.
+    /// وكانَ الإلحاقُ يَعودُ بِالمَخزَّنِ بِلا المَرجِع — إذنٌ مَحجوزٌ لا يُقبَضُ ولا يُستَرجَع.</summary>
+    [Fact]
+    public void A_payment_ref_attached_while_the_bound_vendor_accepts_lands_and_the_acceptance_stands()
+    {
+        var (world, deals, id) = CartDeal();
+        DealAcceptResult? accepted = null;
+        OtherWriterSavesFirst(world, id, () => accepted = Now(deals.AcceptAsync(Slug, id, new DealAcceptor(Seller, "بائِع"))));
+        var saves = world.SaveCalls;
+
+        var back = Now(deals.AttachRefAsync(Slug, id, "payment_id", "auth_1"));
+
+        Assert.True(accepted!.Ok, accepted.Violation?.Code);
+        Assert.Equal("auth_1", back!.Refs["payment_id"]);
+        var stored = world.Read<Deal>(id.ToString())!;
+        Assert.Equal("auth_1", stored.Refs["payment_id"]);
+        Assert.Equal(DealStage.Booked, stored.Stage);
+        Assert.Single(stored.Timeline, e => e.Action == "advanced");
+        Assert.Equal(saves + 2, world.SaveCalls);   // حِفظُ القَبولِ وحِفظُ الإلحاقِ المُعاد — والمَردودُ لا يُعَدّ
+    }
+
+    /// <summary><b>مُنادي تَقييمِ الاستوديو</b> (<c>POST /studio/apps/{slug}/deals/{id}/review</c> — يُلحِقُ <c>review_cp</c>/<c>review_init</c>
+    /// بِصَفقَةٍ قائِمَة، فَعّالَةً عِندَ <c>Delivered</c> أَو <c>Received</c>): المُشتَري يَختِمُها بَينَ تَحميلِ الإلحاقِ وحِفظِه —
+    /// يَبقى الاثنان: الصَفقَةُ <c>Completed</c> والمَرجِعُ عَلَيها.</summary>
+    [Fact]
+    public void A_studio_review_ref_lands_even_when_the_deal_is_completed_meanwhile()
+    {
+        var world = new DocWorld();
+        var deals = new DealsService(world.Store, new ForbiddenPaymentProvider());
+        var deal = new Deal
+        {
+            Id = Guid.NewGuid(), TenantSlug = Slug, Pattern = "marketplace", Stage = DealStage.Delivered, AmountSar = 100,
+            InitiatorId = Buyer, InitiatorName = "مُشتَرٍ", CounterpartyId = Seller, CounterpartyName = "بائِع",
+        };
+        deal.Attributes[CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.CashOnDelivery;
+        world.Put(deal);
+        var reviewId = Guid.NewGuid().ToString("N");
+        OtherWriterSavesFirst(world, deal.Id, () => Assert.True(Now(deals.AdvanceAsync(Slug, deal.Id, Buyer, "مُشتَرٍ")).Ok));
+
+        Now(deals.AttachRefAsync(Slug, deal.Id, "review_cp", reviewId));
+
+        var stored = world.Read<Deal>(deal.Id.ToString())!;
+        Assert.Equal(reviewId, stored.Refs["review_cp"]);
+        Assert.Equal((DealStage.Reviewed, DealStatus.Completed), (stored.Stage, stored.Status));
+    }
+
+    /// <summary><b>والحَدّ — بِصَوت</b>: ثَلاثُ مُحاوَلاتٍ كُلُّها مَردودَةٌ ⇒ يَصعَدُ <c>JasperFx.ConcurrencyException</c> إلى المُنادي، ولا
+    /// يُحفَظُ شَيء، ولا رابِعَة — لا حَلقَةٌ بِلا نِهايَةٍ ولا إسقاطٌ صامِت.</summary>
+    [Fact]
+    public void An_attach_that_keeps_losing_gives_up_loudly_after_three_attempts_and_saves_nothing()
+    {
+        var (world, deals, id) = CartDeal();
+        var conflicts = 0;
+        world.BeforeMember = name =>
+        {
+            if (name != "SaveChangesAsync") return;
+            conflicts++;
+            throw new JasperFx.ConcurrencyException(typeof(Deal), id);
+        };
+        var saves = world.SaveCalls;
+
+        Assert.Throws<JasperFx.ConcurrencyException>(() => Now(deals.AttachRefAsync(Slug, id, "payment_id", "auth_1")));
+
+        Assert.Equal(3, conflicts);
         Assert.Equal(saves, world.SaveCalls);
     }
 

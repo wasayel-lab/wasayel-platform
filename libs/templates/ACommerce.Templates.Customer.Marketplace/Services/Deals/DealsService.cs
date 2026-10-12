@@ -45,6 +45,11 @@ public sealed class DealsService
     /// <para><b>ولا تَرحيلَ في المُخَطَّط</b> (مَقيس ‏2026-10-12): مُخَطَّطُ <c>platform</c> كُلُّه ‏513 سَطرَ DDL مُتَطابِقَةٌ
     /// بِالتَسجيلِ وبِدونِه — العَمودُ <c>mt_version</c> قائِمٌ في كُلِّ جَدوَلِ وَثيقَة، والفَحصُ في جُملَةِ التَحديثِ لا في
     /// دالَّةٍ في القاعِدَة.</para>
+    ///
+    /// <para><b>دِقَّةٌ مُلحَقَةٌ ‏2026-10-12 — ولا يُعادُ حَرفٌ فَوقَها</b> (‏ADR-036 §٧): «مُخَطَّطُ <c>platform</c> كُلُّه» أَوسَعُ مِمّا قيس —
+    /// المُفرَغانِ مِن قاعِدَتَينِ مُرمِيَّتَينِ لا تَحمِلانِ إلّا <c>mt_doc_deal</c> (‏<c>CREATE TABLE</c> واحِد) ودَوالَّ Marten المُساعِدَة
+    /// (<c>mt_jsonb_*</c>، <c>mt_grams_*</c>، <c>mt_immutable_*</c>، <c>mt_safe_*</c>)؛ والنَتيجَةُ صادِقَةٌ عَلَيه: DDL جَدوَلِ الصَفقَةِ
+    /// واحِدٌ بِالتَسجيلِ وبِدونِه، وصِفرُ دالَّةِ <c>mt_upsert</c>/<c>mt_update</c>/<c>mt_insert</c> لِكُلِّ نَوع في Marten 9.</para>
     /// </summary>
     public static void RegisterDocument(StoreOptions opts)
         => opts.Schema.For<Deal>().UseOptimisticConcurrency(true);
@@ -256,6 +261,11 @@ public sealed class DealsService
     /// <c>Deal</c> — مَوجَةٌ لاحِقَةٌ بِقَرارِها)، فَقَبولانِ مُتَداخِلانِ تَماماً يُرجِعانِ
     /// <c>Accepted</c> مَرَّتَين؛ وفي العَرضِ بِلا طَرَفٍ تَسبِقُ كِتابَةُ التَعيينِ — عَلى صَفقَةٍ
     /// فَعّالَةٍ ساعَتَها — إعادَةَ الفَحص.</para>
+    ///
+    /// <para><b>وأُغلِقَ «ما لا تُغلِقُه» أَعلاه ‏2026-10-12 — ولا يُعادُ حَرفٌ فَوقَه</b> (‏ADR-036): صارَت وَثيقَةُ <c>Deal</c> بِتَزامُنٍ
+    /// تَفاؤُلِيّ، فَكِتابَةٌ تَقَعُ بَعدَ ذاكَ التَحميلِ وقَبلَ حِفظِه تَرُدُّ هذا الحِفظَ بِـ<see cref="ChangedMeanwhile"/> ولا تَضيع؛
+    /// وقَبولانِ مُتَداخِلانِ تَماماً يُرجِعانِ <c>Accepted</c> مَرَّةً و<c>deal_changed_meanwhile</c> مَرَّة (‏<c>LiveDealConcurrencyProofTests</c>:
+    /// «الثاني: ok=True · الأَوَّل: ok=False code=deal_changed_meanwhile · advanced=1»).</para>
     /// </summary>
     public async Task<DealAcceptResult> AcceptAsync(
         string tenantSlug, Guid dealId, DealAcceptor by, CancellationToken ct = default)
@@ -500,24 +510,42 @@ public sealed class DealsService
         return deal;
     }
 
-    /// <summary>اِربِط كائِناً خارِجيّاً (مَثَلاً PaymentId بَعد الدَّفع).</summary>
+    /// <summary>كَم مَرَّةً يُحاوَلُ الإلحاقُ حينَ تُعارِضُه نُسخَة (‏ADR-036 §٧): الأولى، وإعادَتانِ عَلى ما كُتِبَ بَعدَها.
+    /// ثَلاثُ كِتاباتٍ أُخرى تَقَعُ كُلٌّ مِنها بَينَ تَحميلٍ وحِفظٍ مُتَتالِيَين عَطَبٌ لا ازدِحام — فَيَصعَدُ الاستِثناءُ ولا يُبتلَع.</summary>
+    private const int AttachAttempts = 3;
+
+    /// <summary>
+    /// <para>اِربِط كائِناً خارِجيّاً (مَثَلاً PaymentId بَعد الدَّفع).</para>
+    ///
+    /// <para><b>ويُعادُ تَطبيقُه عِندَ تَعارُضِ النُسخَة — لا يُسقَط</b> (‏ADR-036 §٧، ‏2026-10-12؛ مُراجَعَةُ تَيّارِ S6a الأولى):
+    /// المَرجِعُ يُسَجِّلُ أَثَراً وَقَعَ خارِجَ الصَفقَة — إذنَ دَفعٍ حَجَزَه المُزَوِّد، أَو تَقييماً كُتِب، أَو مالِكَ الإعلان — ولا
+    /// يَتَّخِذُ قَراراً عَلى حالِها؛ فَإعادَتُه عَلى الوَثيقَةِ الَّتي كَتَبَها غَيرُه دَمجُ مِفتاحٍ لا يُخفي مَن سَبَق ولا يُطَبِّقُ
+    /// قَراراً قَديماً (عِلَّةُ رَفضِ الإعادَةِ في §٤ لا تَنطَبِق). وكانَ التَعارُضُ يُعيدُ المَخزَّنَ بِلا المَرجِعِ ولا يَقرَؤُه
+    /// مُنادٍ — فَإذنُ دَفعٍ في <c>/checkout/submit</c> يَضيعُ إن قَبِلَ البائِعُ المَربوطُ أَو أَلغى بَينَ تَحميلِ الإلحاقِ وحِفظِه،
+    /// فَلا يُقبَضُ ولا يُستَرجَع. وكُلُّ مُحاوَلَةٍ بِجَلسَةٍ جَديدَةٍ تَقرَأُ آخِرَ ما كُتِب؛ وبَعدَ <see cref="AttachAttempts"/>
+    /// يَصعَدُ الاستِثناءُ إلى المُنادي بِصَوت.</para>
+    /// </summary>
     public async Task<Deal?> AttachRefAsync(
         string tenantSlug, Guid dealId, string key, string value,
         CancellationToken ct = default)
     {
-        await using var s = _store.LightweightSession(tenantSlug);
-        var deal = await s.LoadAsync<Deal>(dealId, ct);
-        if (deal is null) return null;
-        deal.Refs[key] = value;
-        deal.UpdatedAt = DateTime.UtcNow;
-        deal.Timeline.Add(new(deal.Stage, deal.Stage, "note", null, null,
-            $"attach {key}={value}", DateTime.UtcNow));
-        s.Store(deal);
-        // تَعارُضُ النُسخَة (‏ADR-036): لَم يُلحَق المَرجِع — يُعادُ ما في المَخزَنِ الآن. ومُنادوها اليَومَ يُلحِقونَ بِصَفقَةٍ
-        // وُلِدَت في الطَلَبِ نَفسِه لا يَعرِفُ مُعَرِّفَها غَيرُه؛ والكاتِبُ الوارِدُ مِن OTO (الموجَةُ ٣) يُقَرِّرُ إعادَةَ التَطبيق.
-        try { await s.SaveChangesAsync(ct); }
-        catch (JasperFx.ConcurrencyException) { return await LoadAsync(tenantSlug, dealId, ct); }
-        return deal;
+        for (var attempt = 1; ; attempt++)
+        {
+            await using var s = _store.LightweightSession(tenantSlug);
+            var deal = await s.LoadAsync<Deal>(dealId, ct);
+            if (deal is null) return null;
+            deal.Refs[key] = value;
+            deal.UpdatedAt = DateTime.UtcNow;
+            deal.Timeline.Add(new(deal.Stage, deal.Stage, "note", null, null,
+                $"attach {key}={value}", DateTime.UtcNow));
+            s.Store(deal);
+            // تَعارُضُ النُسخَة (‏ADR-036 §٧): كَتَبَ غَيرُ هذا الطَلَبِ الصَفقَةَ بَعدَ تَحميلِها — يُعادُ الإلحاقُ عَلى ما كُتِب.
+            // (وكانَ هُنا: «ومُنادوها اليَومَ يُلحِقونَ بِصَفقَةٍ وُلِدَت في الطَلَبِ نَفسِه لا يَعرِفُ مُعَرِّفَها غَيرُه» — ولَم يَصدُق:
+            // نُقطَةُ تَقييمِ الاستوديو تُلحِقُ بِصَفقَةٍ قائِمَة، و`/checkout/submit` تُلحِقُ مَراجِعَ الدَفعِ بَعدَ أَن رُبِطَ البائِعُ
+            // فَصارَت الصَفقَةُ في قائِمَتِه؛ ولا يُعادُ حَرفٌ فَوقَه.)
+            try { await s.SaveChangesAsync(ct); return deal; }
+            catch (JasperFx.ConcurrencyException) when (attempt < AttachAttempts) { }
+        }
     }
 
     public async Task<Deal?> LoadAsync(string tenantSlug, Guid dealId, CancellationToken ct = default)
