@@ -166,6 +166,21 @@ public class DealReviewCharacterizationTests
         Assert.Equal(1, Count(service, "_reviews.SubmitAsync("));
     }
 
+    /// <summary><b>ولا حَقنَ مَيِّتاً في تَوقيعِها</b> (‏2026-10-12، مُراجَعَةُ الموجَةِ الثانِيَةِ الرابِعَة): بَقِيَ
+    /// <c>IDocumentStore store</c> في التَوقيعِ بَعدَ أَن صارَ الجِسمُ نِداءً واحِداً لِـ<c>DealReviews</c> — بِصِفرِ
+    /// استِعمالٍ في الجِسم، و<c>RequireStoreWritable</c> يَحُلُّ ما يَحتاجُه مِن خَدَماتِ الطَلَبِ بِنَفسِه
+    /// (<c>EntitlementFilter</c> لا يَقرَأُ وُسَطاءَ النُقطَة). حَقنٌ يُطلَبُ ولا يُقرَأُ دَعوى تَبعِيَّةٍ لا وُجودَ لَها.</summary>
+    [Fact]
+    public void The_review_endpoint_injects_no_dead_document_store()
+    {
+        var review = ReviewEndpoint();
+        Assert.DoesNotContain("IDocumentStore", review, StringComparison.Ordinal);
+        Assert.DoesNotContain("store.", review, StringComparison.Ordinal);
+        Assert.Contains("async (string slug, Guid id, HttpRequest req,", review, StringComparison.Ordinal);
+        Assert.Contains(".RequireStoreWritable();", Segment(Source(Template, "MarketplaceTemplateExtensions.cs"),
+            "\"/{slug}/deals/{id:guid}/review\"", "// ─── Admin"), StringComparison.Ordinal);
+    }
+
     /// <summary><b>قُلِبَ</b> (المُراجَعَةُ الثالِثَةُ عَلى <c>8769fa4</c>، ‏2026-10-11؛ ‏ADR-033 §٦‑ح): كانَت
     /// صَفقَةُ السَلَّةِ المَربوطَةُ عِندَ الوِلادَةِ تُعطي مُشتَريها البائِعَ هَدَفاً في <c>Offered</c> قَبلَ
     /// أَيِّ قَبول، وشَرطُ الكِتابَةِ «هَدَفٌ مَوجود» يَصدُق. وصارَت البَوّابَةُ تَرُدُّه — وتَرُدُّ البائِعَ —

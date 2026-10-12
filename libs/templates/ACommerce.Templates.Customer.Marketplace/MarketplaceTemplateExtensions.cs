@@ -3327,7 +3327,7 @@ public static class MarketplaceTemplateExtensions
         // الاستِمارَةَ مِن البَوّابَةِ نَفسِها، فَلا يَبلُغُه إلّا طَلَبٌ لَم تَرسُمه — ويَعودُ إلى حَيثُ
         // كانَ يَعود (لا صَفقَة ← «صَفقاتي»، وإلّا صَفحَتُها).
         app.MapPost("/{slug}/deals/{id:guid}/review",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store,
+            async (string slug, Guid id, HttpRequest req,
                    Services.Deals.DealReviews reviews) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
