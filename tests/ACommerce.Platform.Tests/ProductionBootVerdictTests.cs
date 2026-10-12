@@ -162,6 +162,10 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
     [InlineData("28P01", "password authentication failed for user \"owner\"")]
     [InlineData("28000", "no pg_hba.conf entry for host")]
     [InlineData("3D000", "database \"neondb_x\" does not exist")]
+    [InlineData("08000", "connection exception")]
+    [InlineData("08001", "could not establish connection")]
+    [InlineData("08003", "connection does not exist")]
+    [InlineData("08004", "server rejected the connection")]
     [InlineData("08006", "connection failure")]
     [InlineData("57P03", "the database system is starting up")]
     public void A_database_that_does_not_serve_is_the_operators_named_by_its_sqlstate(string sqlState, string message)
@@ -226,16 +230,23 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
 
     // ─── ٤. الفَرعانِ يَسأَلانِ الدالَّةَ نَفسَها ───────────────────────────────────────────────────────
 
+    /// <summary>(‏2026-10-12، الجَولَة ١ — كانَ اسمُه <c>The_death_branch_and_the_route_branch_both_ask_the_one_verdict</c> ويَشتَرِطُ
+    /// نِداءَينِ عَلى <c>$APP_LOG</c> كُلِّه، وهذا ما أَسقَطَ كَسراً بَعدَ سَطرٍ عابِرٍ في 3 — قُلِبَ بِقَرارٍ مَرئِيّ): فَرعُ المَوتِ يَسأَلُ
+    /// السِجِلَّ (والدالَّةُ تُضَيِّقُه إلى الاستِثناءِ القاتِل)، وفَرعُ المَساراتِ يَسأَلُ <c>route_verdict</c> بِجَوابِ البَوّابَةِ نَفسِها.</summary>
     [Fact]
-    public void The_death_branch_and_the_route_branch_both_ask_the_one_verdict()
+    public void The_death_branch_asks_the_log_and_the_route_branch_asks_the_gates_own_readiness_measure()
     {
         var gate = Gate();
-        Assert.Equal(1, Regex.Matches(gate, @"^boot_verdict\(\) \{", RegexOptions.Multiline).Count);
-        Assert.Equal(2, Regex.Matches(gate, Regex.Escape("boot_verdict \"$APP_LOG\"")).Count);
+        Assert.Single(Regex.Matches(gate, @"^boot_verdict\(\) \{", RegexOptions.Multiline));
+        Assert.Single(Regex.Matches(gate, @"^route_verdict\(\) \{", RegexOptions.Multiline));
+        Assert.Single(Regex.Matches(gate, @"^readiness_answer\(\) \{", RegexOptions.Multiline));
+        Assert.Single(Regex.Matches(gate, Regex.Escape("boot_verdict \"$APP_LOG\"")));
         Assert.Contains("        boot_verdict \"$APP_LOG\"\n        exit $?", gate, StringComparison.Ordinal);
+        Assert.Contains("    verdict_line=\"$(route_verdict \"$APP_LOG\" \"$READY_ANSWER\")\"", gate, StringComparison.Ordinal);
         Assert.Contains("    exit \"$verdict\"", gate, StringComparison.Ordinal);
-        Assert.True(gate.IndexOf(End, StringComparison.Ordinal) < gate.IndexOf("boot_verdict \"$APP_LOG\"", StringComparison.Ordinal),
-            "الدالَّةُ تُعَرَّفُ بَعدَ أَوَّلِ نِداء.");
+        Assert.Contains("boot_verdict <(grep -F '[readiness]' \"$log\"", RouteFunction(), StringComparison.Ordinal);
+        Assert.True(gate.IndexOf(RouteEnd, StringComparison.Ordinal) < gate.IndexOf("boot_verdict \"$APP_LOG\"", StringComparison.Ordinal),
+            "الدالَّتانِ تُعَرَّفانِ بَعدَ أَوَّلِ نِداء.");
     }
 
     // ─── ٥. المَنفَذُ الحُرُّ بِلا ss ولا netstat — `/proc/net/tcp` مُشَغَّلاً عَلى مَقبِسٍ حَقيقِيّ ─────────────
@@ -315,48 +326,216 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         Assert.Contains("| Secrets | Repository secret (اختِياريّ، ‏2026-10-12) | `BOOT_GATE_CONNECTION_STRING` |", deploy, StringComparison.Ordinal);
     }
 
-    // ─── ٧. تَوصيفُ «اليَوم» — الدالَّةُ تَقرَأُ أَوَّلَ سَطرٍ مِن مَعجَمِها في السِجِلِّ كُلِّه (مُراجَعَةُ تَيّارِ S10، الجَولَة ١) ─────
+    // ─── ٧. تَوصيفُ «اليَوم» ثُمَّ قَلبُه — الحُكمُ مِن الاستِثناءِ القاتِلِ ومِن قِياسِ البَوّابَةِ لا مِن أَوَّلِ سَطرٍ في السِجِلّ ─────
+    //    (مُراجَعَةُ تَيّارِ S10، الجَولَة ١)
     //
-    // **المَقيس** (قَبلَ أَيِّ تَعديل — القاعِدَة ٣): `boot_verdict` تَبحَثُ في السِجِلِّ كُلِّه عَن أَوَّلِ SqlState وأَيِّ «Failed to
-    // connect»، وفَرعُ المَساراتِ يُناديها عَلى `$APP_LOG` كُلِّه (صَفُّ ٤) — فَلا تَسأَلُ ما الَّذي أَسقَطَ المَسارَ أَو قَتَلَ العَمَلِيَّة.
-    // وصِنفُ 08 بِنَجمَةٍ يَضُمُّ ‏08P01 (protocol_violation — خَطَأُ عَميلٍ أَو كود). فَكَسرٌ في الكودِ يُقرَأُ «عِندَ المُشَغِّل» (3)
-    // إن سَبَقَه سَطرُ قاعِدَةٍ عابِر — وفي CI يَصيرُ 3 ‏`::warning::` فَيُنشَرُ الكَسر. **هذِه الصُفوفُ تُثَبِّتُ «اليَوم» بِحَرفِه
-    // لِتُقلَبَ بِأَسمائِها في الكوميتِ الَّذي يَليه**، والسِجِلّانِ الأَوَّلانِ سِجِلّا المُراجَعَةِ نَفسَيهِما.
+    // **المَقيسُ قَبل** (‏`1267794`، صُفوفُ «Today_» الثَلاثَة): `boot_verdict` تَأخُذُ أَوَّلَ SqlState وأَيَّ «Failed to connect» في
+    // السِجِلِّ كُلِّه، وفَرعُ المَساراتِ يُناديها عَلى `$APP_LOG` كُلِّه، وصِنفُ 08 بِنَجمَةٍ يَضُمُّ ‏08P01 — فَكَسرٌ في الكودِ بَعدَ سَطرِ
+    // قاعِدَةٍ عابِرٍ يُقرَأُ 3، وفي CI ‏`::warning::` فَيُنشَر. **وقُلِبَت بِأَسمائِها هُنا**: فَرعُ المَوتِ يُقرَأُ مِن الاستِثناءِ الَّذي
+    // قَتَلَ العَمَلِيَّة، وفَرعُ المَساراتِ مِن جَوابِ `GET /health/ready` في التَشغيلِ نَفسِه (`route_verdict`)، وصِنفُ 08 بِرُموزِه الخَمسَة.
 
-    /// <summary>سَطرُ قاعِدَةٍ عابِرٌ (تَحذيرٌ أُعيدَت بَعدَه المُحاوَلَة) ثُمَّ سُقوطُ مَسارٍ بِاستِثناءٍ مِن الكود.</summary>
+    private const string RouteStart = "# ─── بِدايَةُ route_verdict ───";
+    private const string RouteEnd = "# ─── نِهايَةُ route_verdict ───";
+
+    private static string RouteFunction() => Slice(Gate(), RouteStart, RouteEnd);
+
+    /// <summary>يُشَغِّلُ <c>route_verdict</c> (ومَعَها <c>boot_verdict</c> الَّتي تُناديها) عَلى سِجِلٍّ مَصنوعٍ وجَوابِ جاهِزِيَّة.</summary>
+    private (int Code, string Line) RouteVerdict(string log, string readyAnswer)
+    {
+        var dir = Directory.CreateTempSubdirectory("wasayel-route-log-");
+        try
+        {
+            var path = Path.Combine(dir.FullName, "app.log");
+            File.WriteAllText(path, log, new UTF8Encoding(false));
+            var result = RunBash(VerdictFunction() + "\n" + RouteFunction() + "\nroute_verdict \"$1\" \"$2\"", path, readyAnswer);
+            output.WriteLine($"[{readyAnswer}] → {result.Code} · {result.Line}");
+            return result;
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    /// <summary><b>سَطرُ قِياسِ الجاهِزِيَّةِ كَما يَكتُبُه <c>Readiness.cs</c> نَفسُه</b> — القالَبُ يُقرَأُ مِن المَصدَرِ لا يُنسَخ، ويُصَيَّرُ
+    /// بِالاستِثناءِ الحَقيقيِّ كَما صَيَّرَه Serilog في السِجِلِّ الحَيِّ (‏«[22:43:50 WRN] [readiness] القاعِدَةُ لا تُجيب: PostgresException:
+    /// 55000: …»). فَإن تَغَيَّرَ القالَبُ أَو وَسمُه احمَرَّت الصُفوفُ الَّتي تَقرَؤُه بِأَسمائِها.</summary>
+    private static string ReadinessLine(Exception ex)
+    {
+        var source = File.ReadAllText(Path.Combine(RepoRoot, "libs", "core", "ACommerce.Platform.Hosting", "Readiness.cs"));
+        var m = Regex.Match(source, @"log\.LogWarning\(""(?<template>\[readiness\][^""]*)"", ex\.GetType\(\)\.Name, ex\.Message\)");
+        Assert.True(m.Success, "قالَبُ سَطرِ الجاهِزِيَّةِ في Readiness.cs غائِبٌ أَو تَغَيَّرَ شَكلُه — والبَوّابَةُ تَقرَؤُه بِوَسمِه.");
+        var rendered = m.Groups["template"].Value
+            .Replace("{Type}", ex.GetType().Name, StringComparison.Ordinal)
+            .Replace("{Message}", ex.Message, StringComparison.Ordinal);
+        return "[12:00:00 WRN] " + rendered + "\n";
+    }
+
+    /// <summary>سَطرُ قاعِدَةٍ عابِرٌ (تَحذيرٌ أُعيدَت بَعدَه المُحاوَلَة) ثُمَّ سُقوطُ مَسارٍ بِاستِثناءٍ مِن الكود — سِجِلُّ المُراجَعَةِ بِحَرفِه.</summary>
     private const string TransientConnectThenCodeFailure =
         "[WRN] Npgsql.NpgsqlException (0x80004005): Failed to connect to 10.1.2.3:5432 (transient, retried…)\n"
         + "HTTP GET / responded 500\n"
         + "System.NullReferenceException: Object reference not set to an instance of an object.\n";
 
+    /// <summary>كانَ <c>Today_a_route_failure_after_an_earlier_transient_connect_line_reads_as_the_operators</c> (‏3): البَوّابَةُ قاسَت
+    /// القاعِدَةَ تَخدِمُ في هذا التَشغيل، فَسُقوطُ المَسارِ مِن الكود — وسَطرُ «Failed to connect» قَبلَه لا يُقرَأ.</summary>
     [Fact]
-    public void Today_a_route_failure_after_an_earlier_transient_connect_line_reads_as_the_operators()
+    public void A_route_failure_while_readiness_answered_ready_is_code_breakage_whatever_the_log_holds()
     {
         if (NoBash(output)) return;
-        var (code, line) = Verdict(TransientConnectThenCodeFailure);
-        Assert.Equal(3, code);
-        Assert.Contains("القاعِدَةُ لا تُبلَغ", line, StringComparison.Ordinal);
+        var (code, line) = RouteVerdict(TransientConnectThenCodeFailure, "ready");
+        Assert.Equal(1, code);
+        Assert.Contains("كَسرٌ في الكود", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("القاعِدَةُ لا تُبلَغ", line, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Today_sqlstate_08P01_protocol_violation_reads_as_a_server_that_does_not_accept_connections()
+    /// <summary>كانَ <c>Today_sqlstate_08P01_protocol_violation_reads_as_a_server_that_does_not_accept_connections</c> (‏3): صِنفُ 08
+    /// بِرُموزِه الخَمسَة، وما سِواها مِنه شَكٌّ — ‏08P01 رِسالَةٌ لا يَفهَمُها الخادِم، و‏08007 نَتيجَةُ مُعامَلَةٍ مَجهولَة.</summary>
+    [Theory]
+    [InlineData("08P01", "bind message has 70000 parameter formats but 0 parameters")]
+    [InlineData("08007", "transaction resolution unknown")]
+    public void Class_08_codes_outside_the_named_five_are_code_breakage(string sqlState, string message)
     {
         if (NoBash(output)) return;
-        var (code, line) = Verdict(Unhandled(new PostgresException(
-            "bind message has 70000 parameter formats but 0 parameters", "ERROR", "ERROR", "08P01")));
-        Assert.Equal(3, code);
-        Assert.Contains("SqlState 08P01", line, StringComparison.Ordinal);
+        var (code, line) = Verdict(Unhandled(new PostgresException(message, "ERROR", "ERROR", sqlState)));
+        Assert.Equal(1, code);
+        Assert.Contains("كَسرٌ في الكود", line, StringComparison.Ordinal);
     }
 
-    /// <summary>وفي فَرعِ المَوتِ مِثلُه: سَطرُ قاعِدَةٍ عابِرٌ ثُمَّ استِثناءٌ قاتِلٌ مِن الكود.</summary>
+    /// <summary>كانَ <c>Today_a_boot_death_by_a_code_exception_after_an_earlier_transient_connect_line_reads_as_the_operators</c> (‏3):
+    /// المَوتُ يُقرَأُ مِن الاستِثناءِ الَّذي قَتَلَ العَمَلِيَّة.</summary>
     [Fact]
-    public void Today_a_boot_death_by_a_code_exception_after_an_earlier_transient_connect_line_reads_as_the_operators()
+    public void A_boot_death_is_read_from_the_exception_that_killed_it_not_from_an_earlier_transient_connect_line()
     {
         if (NoBash(output)) return;
         var (code, line) = Verdict(
             "[WRN] Npgsql.NpgsqlException (0x80004005): Failed to connect to 10.1.2.3:5432 (transient, retried…)\n"
             + Unhandled(new NullReferenceException("Object reference not set to an instance of an object.")));
+        Assert.Equal(1, code);
+        Assert.Contains("كَسرٌ في الكود", line, StringComparison.Ordinal);
+    }
+
+    /// <summary>والاتِّجاهُ الآخَرُ لِلتَضييقِ نَفسِه: سَطرٌ سابِقٌ بِرَمزٍ مِن الكود (‏42P01 مُلتَقَطٌ مُسَجَّل) لا يَحجُبُ سَبَبَ المَوتِ
+    /// الحَقيقيّ — كانَت الدالَّةُ تَأخُذُ أَوَّلَ SqlState في السِجِلِّ فَتَقرَأُ هذا 1.</summary>
+    [Fact]
+    public void A_boot_death_by_a_database_that_does_not_serve_is_the_operators_whatever_sqlstate_an_earlier_line_logged()
+    {
+        if (NoBash(output)) return;
+        var (code, line) = Verdict(
+            "[WRN] [seed] handled: Npgsql.PostgresException (0x80004005): 42P01: relation \"x\" does not exist\n    SqlState: 42P01\n"
+            + Unhandled(new PostgresException("too many connections for role \"gate_probe\"", "FATAL", "FATAL", "53300")));
         Assert.Equal(3, code);
-        Assert.Contains("القاعِدَةُ لا تُبلَغ", line, StringComparison.Ordinal);
+        Assert.Contains("SqlState 53300", line, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>القاعِدَةُ قيسَت ساقِطَةً بِنُقطَتِها</b> (‏503 ‏<c>"ready":false</c>) وسَطرُ قِياسِها يُسَمّي سَبَباً مِن المَعجَم ⇒ 3 —
+    /// و‑٥ بِعَينِه (‏53000)، والقاعِدَةُ الَّتي لا تُبلَغ.</summary>
+    [Fact]
+    public void A_route_failure_while_readiness_measured_the_database_down_is_the_operators_named_by_the_measures_own_line()
+    {
+        if (NoBash(output)) return;
+        var quota = RouteVerdict(
+            ReadinessLine(new PostgresException(
+                "Your account or project has exceeded the compute time quota. Upgrade your plan to increase limits.", "FATAL", "FATAL", "53000"))
+            + "[12:00:01 ERR] An unhandled exception has occurred while executing the request.\n",
+            "not_ready");
+        Assert.Equal(3, quota.Code);
+        Assert.Contains("SqlState 53000", quota.Line, StringComparison.Ordinal);
+
+        var unreachable = RouteVerdict(
+            ReadinessLine(new NpgsqlException("Failed to connect to 127.0.0.1:5999", new SocketException((int)SocketError.ConnectionRefused))),
+            "not_ready");
+        Assert.Equal(3, unreachable.Code);
+        Assert.Contains("القاعِدَةُ لا تُبلَغ", unreachable.Line, StringComparison.Ordinal);
+    }
+
+    /// <summary>والسالِب: النُقطَةُ قاسَت «غَيرُ جاهِز» وسَطرُ قِياسِها رَمزٌ مِن الكود (استِعلامُها مَكسور) ⇒ 1 — وسَطرُ «Failed to connect»
+    /// عابِرٌ في مَوضِعٍ آخَرَ مِن السِجِلِّ لا يُقرَأ: سُطورُ <c>[readiness]</c> وَحدَها.</summary>
+    [Fact]
+    public void A_readiness_measure_failing_by_a_code_sqlstate_is_code_breakage_whatever_else_the_log_holds()
+    {
+        if (NoBash(output)) return;
+        var (code, line) = RouteVerdict(
+            TransientConnectThenCodeFailure
+            + ReadinessLine(new PostgresException("relation \"probe\" does not exist", "ERROR", "ERROR", "42P01")),
+            "not_ready");
+        Assert.Equal(1, code);
+        Assert.Contains("كَسرٌ في الكود", line, StringComparison.Ordinal);
+    }
+
+    /// <summary>ولا قِياسَ ⇒ لا «عِندَ المُشَغِّل»: لَم تُسأَل النُقطَة، أَو ابتَلَعَتها صَفحَة (‏200 بِلا جَوابِها)، أَو ‏500، أَو لا رَدّ —
+    /// ولَو كانَ في السِجِلِّ كُلُّ سُطورِ المَعجَم.</summary>
+    [Theory]
+    [InlineData("unasked")]
+    [InlineData("200")]
+    [InlineData("500")]
+    [InlineData("000")]
+    public void A_route_failure_without_the_gates_own_not_ready_measure_is_code_breakage(string readyAnswer)
+    {
+        if (NoBash(output)) return;
+        var everyCause = TransientConnectThenCodeFailure
+            + ReadinessLine(new PostgresException("quota", "FATAL", "FATAL", "53000"))
+            + Unhandled(new PostgresException("too many connections", "FATAL", "FATAL", "53300"));
+        var (code, line) = RouteVerdict(everyCause, readyAnswer);
+        Assert.Equal(1, code);
+        Assert.Contains("لَم يَقِس القاعِدَة", line, StringComparison.Ordinal);
+    }
+
+    /// <summary>والجَوابُ يُحفَظُ مِن جَدوَلِ المَساراتِ نَفسِه — <b>مُشَغَّلاً لا مَقروءاً</b>: <c>readiness_answer</c> تُقطَعُ وتُسأَلُ بِرَمزٍ
+    /// وجِسمٍ حَقيقِيَّين؛ جَوابا <c>Readiness.cs</c> وَحدَهُما حالان، وما سِواهُما يُعادُ رَمزُه (والمُختَلِطُ — ‏503 بِـ<c>true</c> — لَيسَ قِياساً).
+    /// والحَلقَةُ تُناديها لِـ<c>GET /health/ready</c> وَحدَه، و«لَم يُسأَل» قَبلَها — ووَسمُ السَطرِ الَّذي تَقرَؤُه البَوّابَةُ وَسمُ النُقطَةِ حَرفاً.</summary>
+    [Theory]
+    [InlineData("200", "{\"ready\":true}", "ready")]
+    [InlineData("503", "{\"ready\":false}", "not_ready")]
+    [InlineData("200", "<!DOCTYPE html><html dir=\"rtl\">…</html>", "200")]
+    [InlineData("503", "{\"ready\":true}", "503")]
+    [InlineData("200", "{\"ready\":false}", "200")]
+    [InlineData("500", "", "500")]
+    [InlineData("", "", "000")]
+    public void The_gate_keeps_the_readiness_answer_from_its_own_route_table_and_greps_the_endpoints_own_tag(
+        string actual, string body, string expected)
+    {
+        var gate = Gate();
+        Assert.Contains("    \"GET|/health/ready|200\"", gate, StringComparison.Ordinal);
+        var init = gate.IndexOf("READY_ANSWER=\"unasked\"", StringComparison.Ordinal);
+        var loop = gate.IndexOf("for entry in \"${ROUTES[@]}\"; do", StringComparison.Ordinal);
+        Assert.True(init > 0 && loop > init, "READY_ANSWER لا يَبدَأُ «لَم يُسأَل» قَبلَ حَلقَةِ المَسارات.");
+        Assert.Contains("    if [ \"$key\" = \"GET|/health/ready\" ]; then\n        READY_ANSWER=\"$(readiness_answer \"$actual\" \"$body_file\")\"",
+            gate, StringComparison.Ordinal);
+
+        var readiness = File.ReadAllText(Path.Combine(RepoRoot, "libs", "core", "ACommerce.Platform.Hosting", "Readiness.cs"));
+        Assert.Contains("ex => log.LogWarning(\"[readiness] ", readiness, StringComparison.Ordinal);
+        Assert.Contains("new { ready = true }", readiness, StringComparison.Ordinal);
+        Assert.Contains("new { ready = false }, statusCode: StatusCodes.Status503ServiceUnavailable", readiness, StringComparison.Ordinal);
+
+        if (NoBash(output)) return;
+        var dir = Directory.CreateTempSubdirectory("wasayel-ready-body-");
+        try
+        {
+            var path = Path.Combine(dir.FullName, "body.txt");
+            File.WriteAllText(path, body, new UTF8Encoding(false));
+            var (code, line) = RunBash(RouteFunction() + "\nreadiness_answer \"$1\" \"$2\"", actual, path);
+            output.WriteLine($"{(actual.Length == 0 ? "<لا رَدّ>" : actual)} · {body} → {line}");
+            Assert.Equal(0, code);
+            Assert.Equal(expected, line);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>وسَطرُ المَسارِ السّاقِطِ يَقولُ رَمزَه أَوَّلاً — مَقيسٌ حَيّاً: ‏<c>/health/ready</c> بِـ‏503 كانَ يُطبَعُ «الرَمزُ صَحيحٌ … المَسارُ
+    /// مُبتَلَع» لِأَنّ فَحصَ الجِسمِ سُئِلَ قَبلَ الرَمز. فَالرَمزُ أَوَّلاً، والجِسمُ والرَأسُ حينَ يَصِحّ.</summary>
+    [Fact]
+    public void A_failed_route_names_its_wrong_status_before_any_body_or_header_reason()
+    {
+        var gate = Gate();
+        var status = gate.IndexOf("        if [ \"$actual\" != \"$expected\" ]; then", StringComparison.Ordinal);
+        var body = gate.IndexOf("        elif [ \"$body_ok\" != \"1\" ]; then", StringComparison.Ordinal);
+        var header = gate.IndexOf("        elif [ \"$hdr_ok\" != \"1\" ]; then", StringComparison.Ordinal);
+        Assert.True(status > 0 && body > status && header > body,
+            $"تَرتيبُ أَسبابِ السُقوطِ: الرَمز {status} · الجِسم {body} · الرَأس {header} — الرَمزُ يُسأَلُ أَوَّلاً.");
+        Assert.Contains("(المُتَوَقَّع %s)", gate[status..body], StringComparison.Ordinal);
     }
 }
