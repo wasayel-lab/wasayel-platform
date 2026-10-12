@@ -129,15 +129,22 @@ check_selector() {
         return
     fi
 
+    # The block is fed to grep as a here-string, never as `echo "$block" | grep -q`.
+    # Measured 2026-10-12: bash's builtin echo is line-buffered, so a multi-line
+    # block reaches the pipe in several writes; `grep -q` exits on the first
+    # match, the next write gets SIGPIPE (141), and `set -o pipefail` turns a
+    # FOUND property into a reported "missing" one.  Under 8 parallel runs the
+    # pipe form failed 4 of 96 runs, each on a different contract; the
+    # here-string form has no writer to kill.
     local missing="" prop
     for prop in $required; do
         case "$prop" in
-            border)        echo "$block" | grep -qE '(^|[ ;{])border(-(width|style|color|top|right|bottom|left|inline|block))?:' || missing="$missing $prop" ;;
-            border-bottom) echo "$block" | grep -qE '(^|[ ;{])border(-bottom)?:'                                              || missing="$missing $prop" ;;
-            padding)       echo "$block" | grep -qE '(^|[ ;{])padding(-(top|right|bottom|left|inline|block))?:'                || missing="$missing $prop" ;;
-            margin-bottom) echo "$block" | grep -qE '(^|[ ;{])margin(-bottom)?:'                                              || missing="$missing $prop" ;;
-            background)    echo "$block" | grep -qE '(^|[ ;{])background(-color|-image)?:'                                    || missing="$missing $prop" ;;
-            *)             echo "$block" | grep -qE "(^|[ ;{])${prop}:"                                                       || missing="$missing $prop" ;;
+            border)        grep -qE '(^|[ ;{])border(-(width|style|color|top|right|bottom|left|inline|block))?:' <<< "$block" || missing="$missing $prop" ;;
+            border-bottom) grep -qE '(^|[ ;{])border(-bottom)?:'                                              <<< "$block" || missing="$missing $prop" ;;
+            padding)       grep -qE '(^|[ ;{])padding(-(top|right|bottom|left|inline|block))?:'                <<< "$block" || missing="$missing $prop" ;;
+            margin-bottom) grep -qE '(^|[ ;{])margin(-bottom)?:'                                              <<< "$block" || missing="$missing $prop" ;;
+            background)    grep -qE '(^|[ ;{])background(-color|-image)?:'                                    <<< "$block" || missing="$missing $prop" ;;
+            *)             grep -qE "(^|[ ;{])${prop}:"                                                       <<< "$block" || missing="$missing $prop" ;;
         esac
     done
 
