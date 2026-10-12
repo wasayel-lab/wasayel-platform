@@ -471,6 +471,23 @@ public class OtoClientTests
         Assert.True(res.Ok);
     }
 
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم» — ‏5xx مِن نُقطَةِ الرَمزِ يُسَمّى «رَمزٌ مَرفوض»</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12):
+    /// <c>FetchTokenAsync</c> تَرُدُّ كُلَّ رَدٍّ غَيرِ ناجِحٍ بِـ<c>oto_token_refused</c>، بَينَما مَعجَمُ العَميلِ يَقولُ في <c>Unreachable</c>
+    /// «لا جَواب: انقِطاعٌ، أَو مُهلَةٌ، أَو ‏5xx»، و<c>PostAsync</c> تُصَنِّفُ ‏≥500 «لا جَواب». فَعُطلُ خادِمِ OTO لَحظَةَ تَبادُلِ الرَمزِ
+    /// يَقولُ لِلبائِعِ «رَفَضَت OTO رَمزَ حِسابِ الشَّحن» فَيُفَتِّشُ عَن رَمزٍ سَليم. يُثَبَّتُ قَبلَ قَلبِه (القاعِدَة ٣).</para>
+    /// </summary>
+    [Fact]
+    public async Task Today_a_5xx_from_the_token_endpoint_is_called_token_refused()
+    {
+        var handler = new OtoScriptedHandler().Then(HttpStatusCode.ServiceUnavailable, "<html/>");
+        var res = await Client(handler).CreateOrderAsync(Refresh, CashDraft());
+
+        Assert.Equal(OtoFailures.TokenRefused, res.Failure!.Code);
+        Assert.Equal(503, res.Failure.HttpStatus);
+        Assert.Single(handler.Requests);
+    }
+
     /// <summary><b>فَشَلُ الشَبَكَةِ رَمزٌ لا استِثناء</b> — انقِطاعٌ، أَو ‏5xx: يَعودُ
     /// <c>oto_unreachable</c> ولا يَرمي إلى النُقطَة.</summary>
     [Fact]
