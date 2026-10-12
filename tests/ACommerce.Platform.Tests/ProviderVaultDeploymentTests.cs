@@ -360,4 +360,98 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
         if (vaultReason == "لَيسَ base64")
             Assert.DoesNotMatch(new Regex(@"المَقيس: \d"), text);
     }
+
+    // ─── ٧. وما يُخفيه الغِيابُ اليَومَ — ثَلاثَةُ أَبوابٍ لا بِطاقَةٌ واحِدَة (‏2026-10-12، تَيّارُ S10، «ب» S8·١٥) ───
+    //
+    // **المَقيسُ قَبل**: سَطرُ ⚠ الغِيابِ في البَوّابَةِ وفِقرَةُ «ما يَقَعُ بِلا ضَبطٍ» في §٢·ح يُسَمِّيانِ بِطاقَةَ المِفتاحِ السِرِّيِّ
+    // في «التَكامُلات» وَحدَها — كَما كانَ يَومَ الخُطوَة 11. ثُمَّ صارَ المِفتاحُ شَرطَ بابَينِ آخَرَين: البِطاقَةُ في إتمامِ الشِراءِ
+    // بِمِفتاحِ المَتجَر (‏ADR-032 الخُطُوات 8–10: `CheckoutCardFacts.ChargerCanCharge` يَطلُبُ خِزانَةً تَفُكّ) ومَدخَلا شَحنِ البائِعِ
+    // عِندَ OTO (‏ADR-033 الخُطوَتانِ 7 و8: `VendorShippingSurface.InputFor` لا يَرسُمُ شَيئاً بِلا خِزانَة). فَالمُشَغِّلُ الَّذي يَقرَأُ
+    // ⚠ يَظُنُّ الغِيابَ يُخفي بِطاقَةً في الإعداداتِ — وهُوَ يُطفِئُ الدَفعَ بِالبِطاقَةِ وشَحنَ البائِعين. **والسَبَبُ يُقاسُ لا يُكتَب**:
+    // الدالَّتانِ النَقِيَّتانِ تُسأَلانِ بِخِزانَةٍ مُتاحَةٍ وأُخرى لا، والنَصُّ يَتبَعُهُما في الاتِّجاهَين.
+
+    private static readonly ProviderVault AvailableVault = ProviderVault.FromKek(ValidKek);
+    private static readonly ProviderVault NoVault = ProviderVault.FromKek(null);
+
+    /// <summary>أَتُعرَضُ البِطاقَةُ بِمِفتاحِ المَتجَرِ بِخِزانَةٍ تَفُكُّ ولا تُعرَضُ بِدونِها؟</summary>
+    private static bool CheckoutCardNeedsTheVault()
+    {
+        static bool Offered(bool vault) => new ACommerce.Templates.Customer.Marketplace.Services.Deals.CheckoutCardFacts(
+            StoreCollects: false, SealedKeyBound: true, VaultCanUnseal: vault, GatewayClientRegistered: true,
+            InstanceCanCharge: false).CardOffered;
+        return Offered(true) && !Offered(false);
+    }
+
+    /// <summary>أَيُرسَمُ لِلبائِعِ مَدخَلُ شَحنِه بِبيئَةِ OTO مَفتوحَةٍ وخِزانَةٍ تَختِم، ولا يُرسَمُ بِدونِها؟</summary>
+    private static bool VendorShippingNeedsTheVault()
+    {
+        var open = new ACommerce.Kit.Delivery.OtoOptions { Environment = ACommerce.Kit.Delivery.OtoEnvironment.Staging };
+        static ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput Input(
+            ACommerce.Kit.Delivery.OtoOptions o, ProviderVault v)
+            => ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingSurface.InputFor(o, v);
+        return Input(open, AvailableVault) != ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput.None
+            && Input(open, NoVault) == ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput.None;
+    }
+
+    /// <summary>سُطورُ ⚠ الغِيابِ والتَلَفِ في كُتلَةِ المِفتاح — اثنانِ بِالضَبط.</summary>
+    private static string[] AbsentAndMalformedWarnings(string block)
+    {
+        var lines = block.Split('\n').Select(l => l.Trim())
+            .Where(l => l.StartsWith("say \"⚠ مِفتاحُ الخِزانَةِ Providers__Kek__v1 ", StringComparison.Ordinal)
+                     && l.Contains(ProviderVault.Unavailable, StringComparison.Ordinal))
+            .ToArray();
+        Assert.Equal(2, lines.Length);
+        return lines;
+    }
+
+    [Fact]
+    public void VerifyProductionBoot_the_absent_kek_warning_names_every_door_the_vault_closes_measured_from_the_code()
+    {
+        var card = CheckoutCardNeedsTheVault();
+        var vendor = VendorShippingNeedsTheVault();
+        output.WriteLine($"البِطاقَةُ في إتمامِ الشِراءِ تَطلُبُ الخِزانَة: {card} · مَدخَلُ شَحنِ البائِعِ يَطلُبُها: {vendor}");
+
+        foreach (var w in AbsentAndMalformedWarnings(KekBlock(Read("scripts", "verify-production-boot.sh"))))
+        {
+            Assert.Contains("«التَكامُلات»", w, StringComparison.Ordinal);
+            Assert.Equal(card, w.Contains("إتمامِ الشِراءِ بِمِفتاحِ المَتجَر", StringComparison.Ordinal));
+            Assert.Equal(vendor, w.Contains("مَدخَلُ شَحنِه عِندَ OTO", StringComparison.Ordinal));
+            Assert.Contains("ولا يَسقُطُ الإقلاع (DEPLOY.md §٢·ح)", w, StringComparison.Ordinal);
+        }
+
+        // ومُشَغَّلَةً: الغِيابُ يَطبَعُ الأَبوابَ بِأَسمائِها (والتَلَفُ في صُفوفِ ٥ و٦ بِرَمزِه وسَبَبِه).
+        if (OperatingSystem.IsWindows()) return;
+        var (status, text) = RunKekBlock(null);
+        Assert.Equal(0, status);
+        Assert.Equal(card, text.Contains("إتمامِ الشِراءِ بِمِفتاحِ المَتجَر", StringComparison.Ordinal));
+        Assert.Equal(vendor, text.Contains("مَدخَلُ شَحنِه عِندَ OTO", StringComparison.Ordinal));
+    }
+
+    /// <summary><b>و§٢·ح يَقولُ الأَبوابَ نَفسَها</b> — في فِقرَةِ «ما يَقَعُ بِلا ضَبط»، بِالسَبَبِ المَقيسِ نَفسِه.</summary>
+    [Fact]
+    public void DeployDoc_vault_section_names_every_door_the_absence_closes()
+    {
+        var deploy = Read("docs", "DEPLOY.md");
+        var start = deploy.IndexOf("### ما يَقَع بِلا ضَبطٍ — وهو الحالُ الآن", deploy.IndexOf("## ٢·ح.", StringComparison.Ordinal),
+            StringComparison.Ordinal);
+        var end = deploy.IndexOf("### يُضبَطُ مَعَ عَميلِ البَوّابَة", start, StringComparison.Ordinal);
+        Assert.True(start > 0 && end > start, "فِقرَةُ «ما يَقَعُ بِلا ضَبط» في §٢·ح غائِبَةٌ أَو تَغَيَّرَ تَرتيبُها.");
+        var section = deploy[start..end];
+
+        Assert.Equal(CheckoutCardNeedsTheVault(), section.Contains("إتمامِ الشِراءِ بِمِفتاحِ المَتجَر", StringComparison.Ordinal));
+        Assert.Equal(VendorShippingNeedsTheVault(), section.Contains("مَدخَلا شَحنِ البائِعِ عِندَ OTO", StringComparison.Ordinal));
+    }
+
+    /// <summary><b>ورَأسُ البَوّابَةِ لا يَقولُ إنّها تُنَبِّهُ عَلى المِفتاحِ الصالِح</b> بَعدَ أَن صارَ المَختومُ يَقبِض — الجُملَةُ القَديمَةُ
+    /// باقِيَةٌ تاريخاً، ويَليها تَصحيحُها المُؤَرَّخُ حينَ يَقبِضُ المَختومُ وَحدَه (الاتِّجاهانِ كَصَفِّ ٤).</summary>
+    [Fact]
+    public void VerifyProductionBoot_header_closes_the_valid_kek_warning_once_a_sealed_key_collects()
+    {
+        var script = Read("scripts", "verify-production-boot.sh");
+        var header = script[..script.IndexOf("set -uo pipefail", StringComparison.Ordinal)];
+        var sealedCollects = ProviderSealedKeyDoorsTests.SealedOnly().CollectsMoney;
+
+        Assert.Equal(sealedCollects, header.Contains("**ولَم يَعُد يُنَبَّهُ عَلَيه**", StringComparison.Ordinal));
+        Assert.Equal(sealedCollects, header.Contains("مَدخَلَ شَحنِه عِندَ OTO", StringComparison.Ordinal));
+    }
 }
