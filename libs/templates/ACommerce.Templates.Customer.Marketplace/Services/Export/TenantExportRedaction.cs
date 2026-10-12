@@ -142,10 +142,17 @@ public static class TenantExportRedaction
             {
                 var kind = node?["kind"]?.GetValue<string>() ?? CredentialKinds.None;
                 var plain = node?["plain"]?.GetValue<string>();
+
+                // والمَختومُ (عَمودُ `cipher` مَملوء) يَخرُجُ بِالوَجهِ الَّذي يَعرِضُه الاستوديو — القِناعُ
+                // والذَيلُ المَحفوظ (`StoredValue.Censored`) — لا فارِغاً كَما كانَ حَتّى ‏2026-10-12:
+                // `plain` لَه null فَكانَ `Censor` يُعيدُ "". ولا عَمودَ ظَرفٍ يَخرُجُ في الحالَين.
+                var isSealed = node?["cipher"] is not null;
                 censored[field] = new JsonObject
                 {
                     ["kind"] = kind,
-                    ["value"] = ProviderSecrecy.Censor(kind, plain),
+                    ["value"] = isSealed
+                        ? ProviderSecrecy.CensorSealed(kind, node?["tail4"]?.GetValue<string>())
+                        : ProviderSecrecy.Censor(kind, plain),
                 };
             }
             row["values"] = censored;
