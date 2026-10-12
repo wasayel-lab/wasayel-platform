@@ -85,7 +85,7 @@ internal sealed class ShipCapturingLogger : Microsoft.Extensions.Logging.ILogger
         Exception? exception, Func<TState, Exception?, string> formatter) => Lines.Add(formatter(state, exception));
 }
 
-public class DealShipTests
+public class DealShipTests(ITestOutputHelper output)
 {
     internal const string Slug = DealShipping.DemoStore;
     internal static readonly Guid Buyer   = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
@@ -1020,39 +1020,125 @@ public class DealShipTests
     }
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم» — خُطوَةٌ مَحجوزَةٌ عِندَ OTO بابُها مَردودٌ، والبِطاقَةُ تَقولُ لِلبائِعِ «دَورُكَ الآن» بِزِرٍّ إلى مِنطَقَةِ إجراءٍ
-    /// فارِغَة</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، البَندُ A0 (x)، ‏2026-10-12؛ ‏ADR-033 §٧‑ح‑٣‑٢ و§٧‑ي‑٦ (أ)): طَلَبٌ عِندَ OTO والناقِلُ
-    /// غائِب، أَو طَلَبٌ أَغلَقَته OTO — البائِعُ مَن يُخرِجُها (<c>IsMine</c>)، وبَوّابَةُ «أَكمِل الشَّحن» تَرُدُّه، و«تَأكيد: شَحن» لا يُرسَمُ
-    /// (<c>heldByCarrier</c>). والبِطاقَةُ تُرسَمُ لِكُلِّ صَفقَةٍ فَعّالَةٍ بِـ<c>mine</c> وزِرِّ <c>#deal-action</c>، وفَرعُ الخُطوَةِ المَحجوزَةِ لا
-    /// يَرسُمُ شَيئاً. يُثَبَّتُ قَبلَ قَلبِه (القاعِدَة ٣).</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_a_held_step_whose_resume_is_refused_still_tells_the_vendor_it_is_his_turn_with_a_cta_to_an_empty_action_area</c>
+    /// (‏<c>2a77321</c>): طَلَبٌ عِندَ OTO والناقِلُ غائِب، أَو طَلَبٌ أَغلَقَته OTO — البِطاقَةُ تَقولُ لِلبائِعِ «دَورُكَ الآن» بِزِرٍّ إلى مِنطَقَةِ إجراءٍ
+    /// فارِغَة. <b>والآن</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، البَندُ A0 (x)، ‏2026-10-12؛ ‏ADR-033 §٧‑ل): <see cref="DealShipAuthorization.HeldRefusal"/>
+    /// تُجيبُ بِرَمزِ البَوّابَةِ في الحالَين، فَلا تُرسَمُ البِطاقَةُ (<c>shipHeldKey is null</c> في شَرطِها) ويُرسَمُ نَصُّ الرَمزِ في مِنطَقَةِ
+    /// الإجراءِ بَعدَ استِمارَةِ الشَحنِ لا داخِلَ فَرعِ الخُطوَةِ المَحجوزَة (وهو باقٍ بِلا وَسم)، ولا يُكَرَّرُ إن قالَه شَريطُ <c>?err=</c>.</para>
     /// </summary>
     [Fact]
-    public void Today_a_held_step_whose_resume_is_refused_still_tells_the_vendor_it_is_his_turn_with_a_cta_to_an_empty_action_area()
+    public void A_held_step_whose_resume_is_refused_draws_no_turn_card_and_the_gates_own_text_in_the_action_area()
     {
         var placed = With(d => d.Refs[DealShipping.OrderRef] = d.Id.ToString("N"));
         var closed = With(d => { d.Refs[DealShipping.OrderRef] = d.Id.ToString("N"); d.Refs[DealShipping.ClosedRef] = "canceled"; });
         var checkedStates = 0;
-        foreach (var (deal, carrier) in new[] { (placed, false), (closed, true) })
+        foreach (var (deal, carrier, code) in new[]
+                 {
+                     (placed, false, DealShipAuthorization.CarrierUnavailable),
+                     (closed, true, DealShipAuthorization.OrderClosedAtOto),
+                 })
         {
             Assert.True(DealShipping.AwaitsCarrier(deal));
             Assert.True(DealsService.CanMove(deal, Seller));
             Assert.False(DealShipAuthorization.IsAllowed(deal, Vendor, carrier));
-            Assert.True(ACommerce.Templates.Customer.Marketplace.Services.Ux.DealTurnView
-                .For(deal, ACommerce.Templates.Customer.Marketplace.Services.Ux.DealSide.Counterparty).IsMine);
+            Assert.Equal(code, DealShipAuthorization.HeldRefusal(deal, Vendor, carrier));
+            Assert.NotNull(DealRefusalTexts.KeyFor(code));
             checkedStates++;
         }
         Assert.Equal(2, checkedStates);
 
         var page = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(DealPage()));
-        var card = page.IndexOf("@if (deal.Status == DealStatus.Active)", StringComparison.Ordinal);
+        Assert.Contains(
+            "shipHeldKey = DealRefusalTexts.KeyFor(DealShipAuthorization.HeldRefusal(deal, new DealShipper(uid, Auth.UserName ?? \"\"), Shipping.CarrierReady(Slug)));",
+            page, StringComparison.Ordinal);
+        var card = page.IndexOf("@if (deal.Status == DealStatus.Active && shipHeldKey is null)", StringComparison.Ordinal);
         var turn = page.IndexOf("var turn = Services.Ux.DealTurnView.For(deal, mySide);", StringComparison.Ordinal);
         var cta  = page.IndexOf("href=\"#deal-action\"", StringComparison.Ordinal);
         Assert.True(card > 0 && turn > card && cta > turn, $"البِطاقَة: {card}/{turn}/{cta}");
-        Assert.DoesNotContain("shipHeld", page, StringComparison.Ordinal);
+
+        var ship  = page.IndexOf("@if (canShip)", StringComparison.Ordinal);
+        var alert = page.IndexOf("else if (shipHeldKey is { } held && held != DealRefusalTexts.KeyFor(Err))", StringComparison.Ordinal);
+        var text  = page.IndexOf("<AcAlert Variant=\"warning\" Message=\"@L[held]\" />", StringComparison.Ordinal);
+        var accept = page.IndexOf("@if (deal.Stage == DealStage.Offered && isListingOwner && !isInitiator)", StringComparison.Ordinal);
+        Assert.True(ship > 0 && alert > ship && text > alert && accept > text, $"مِنطَقَةُ الإجراء: {ship}/{alert}/{text}/{accept}");
+
         var held    = page.IndexOf("else if (canAdvance && heldByCarrier)", StringComparison.Ordinal);
         var generic = page.IndexOf("else if (canAdvance && nextStage is { } ns)", StringComparison.Ordinal);
         Assert.True(held > 0 && generic > held, $"الفَرعان: {held}/{generic}");
         Assert.DoesNotContain("<", page[held..generic], StringComparison.Ordinal);
+    }
+
+    /// <summary><b><see cref="DealShipAuthorization.HeldRefusal"/> — مُوجَبٌ وسالِبٌ لِكُلِّ شَرط</b> (مُراجَعَةُ المَوجَة 3a، ‏2026-10-12): الرَمزانِ
+    /// بِحَرفِ البَوّابَة؛ والسالِب: بابٌ مَفتوح، ولا طَلَب، والمُشتَري، والغَريب، وصَفقَةٌ مُلغاة، وصَفقَةٌ عِندَ «شَحن».</summary>
+    [Fact]
+    public void Held_refusal_positive_and_negative()
+    {
+        Deal Placed(Action<Deal>? more = null) => With(d =>
+        {
+            d.Refs[DealShipping.OrderRef] = d.Id.ToString("N");
+            more?.Invoke(d);
+        });
+
+        Assert.Equal(DealShipAuthorization.CarrierUnavailable, DealShipAuthorization.HeldRefusal(Placed(), Vendor, carrierReady: false));
+        Assert.Equal(DealShipAuthorization.OrderClosedAtOto,
+            DealShipAuthorization.HeldRefusal(Placed(d => d.Refs[DealShipping.ClosedRef] = "returned"), Vendor, carrierReady: false));
+
+        Assert.Null(DealShipAuthorization.HeldRefusal(Placed(), Vendor, carrierReady: true));                              // بابُها مَفتوح
+        Assert.Null(DealShipAuthorization.HeldRefusal(Ready(), Vendor, carrierReady: false));                              // لا طَلَب
+        Assert.Null(DealShipAuthorization.HeldRefusal(Placed(), new DealShipper(Buyer, "مُشتَرٍ"), carrierReady: false));   // المُشتَري يَنتَظِر
+        Assert.Null(DealShipAuthorization.HeldRefusal(Placed(), new DealShipper(Stranger, "غَريب"), carrierReady: false));
+        Assert.Null(DealShipAuthorization.HeldRefusal(Placed(d => d.Status = DealStatus.Cancelled), Vendor, carrierReady: false));
+        Assert.Null(DealShipAuthorization.HeldRefusal(Placed(d => d.Stage = DealStage.Shipping), Vendor, carrierReady: false));
+    }
+
+    /// <summary><b>عَلى الشَبَكَةِ كُلِّها</b>: <see cref="DealShipAuthorization.HeldRefusal"/> تُجيبُ بِرَمزٍ حَيثُ تَصدُقُ <c>AwaitsCarrier</c>
+    /// و<c>CanMove</c> والبَوّابَةُ تَرُدُّ — لا أَكثَرَ ولا أَقَلّ — ورَمزُها رَمزُ البَوّابَةِ بِحَرفِه ولَه نَصٌّ في القامُوس؛ ويُطبَعُ ما فُحِص (القاعِدَة ١٠).</summary>
+    [Fact]
+    public void Held_refusal_is_exactly_a_held_step_whose_resume_the_gate_refuses()
+    {
+        var checkedCases = 0;
+        var byCode = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var stage in Enum.GetValues<DealStage>())
+        foreach (var status in Enum.GetValues<DealStatus>())
+        foreach (var pay in new[] { CheckoutPayMethods.CashOnDelivery, CheckoutPayMethods.Card, null })
+        foreach (var placed in new[] { false, true })
+        foreach (var closed in new[] { false, true })
+        foreach (var carrier in new[] { false, true })
+        foreach (var actor in new[] { Seller, Buyer, Stranger })
+        {
+            var deal = With(d =>
+            {
+                d.Stage = stage;
+                d.Status = status;
+                if (pay is null) d.Attributes.Remove(CheckoutPayMethods.AttributeKey);
+                else d.Attributes[CheckoutPayMethods.AttributeKey] = pay;
+                if (placed) d.Refs[DealShipping.OrderRef] = d.Id.ToString("N");
+                if (closed) d.Refs[DealShipping.ClosedRef] = "canceled";
+            });
+            var by = new DealShipper(actor, "");
+            var expected = DealShipping.AwaitsCarrier(deal) && DealsService.CanMove(deal, actor)
+                ? DealShipAuthorization.Validate(deal, by, carrier)?.Code
+                : null;
+            var code = DealShipAuthorization.HeldRefusal(deal, by, carrier);
+            Assert.Equal(expected, code);
+            if (code is not null)
+            {
+                Assert.NotNull(DealRefusalTexts.KeyFor(code));
+                byCode[code] = byCode.GetValueOrDefault(code) + 1;
+            }
+            checkedCases++;
+        }
+        var line = $"فُحِصَ {checkedCases} حالَة: خُطوَةٌ مَحجوزَةٌ بِلا بابٍ {byCode.Values.Sum()} — " +
+                   string.Join("، ", byCode.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key} {kv.Value}"));
+        output.WriteLine(line);
+        Assert.True(checkedCases >= 2000, $"أَداةٌ عَمياء: {checkedCases} حالَة (‏8 × 4 × 3 × 2 × 2 × 2 × 3 = 2304).");
+        // البائِعُ وَحدَه، فَعّالَةً بِطَلَبٍ وتاليها «شَحن»: النَقدُ عِندَ Confirmed وPaid — بِلا ناقِلٍ وطَلَبٌ مَفتوح (2)، ومُغلَقٌ بِناقِلٍ وبِلاه (4)؛
+        // وصَفقَةُ بِطاقَةٍ (أَو بِلا طَريقَة) عِندَ Paid بِطَلَبٍ عِندَ OTO — لا تَقَعُ (`/ship` تَرُدُّ غَيرَ النَقدِ قَبلَ OTO) والشَبَكَةُ تَصنَعُها —
+        // رَمزُ البَوّابَةِ نَفسُه `deal_not_cash` (2 × 4 = 8).
+        Assert.Equal(2, byCode.GetValueOrDefault(DealShipAuthorization.CarrierUnavailable));
+        Assert.Equal(4, byCode.GetValueOrDefault(DealShipAuthorization.OrderClosedAtOto));
+        Assert.Equal(8, byCode.GetValueOrDefault(DealShipAuthorization.DealNotCash));
+        Assert.Equal(14, byCode.Values.Sum());
     }
 
     /// <summary><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_the_studio_admin_path_draws_and_moves_a_deal_whose_order_is_at_OTO_into_Shipping_without_a_label</c>

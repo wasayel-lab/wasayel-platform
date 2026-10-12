@@ -135,6 +135,21 @@ public static class DealShipAuthorization
 
     public static bool IsAllowed(Deal? deal, DealShipper by, bool carrierReady)
         => Validate(deal, by, carrierReady) is null;
+
+    /// <summary>
+    /// <para><b>خُطوَةٌ مَحجوزَةٌ عِندَ OTO لا بابَ لَها — رَمزُ البَوّابَةِ الَّذي يُفَسِّرُها</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، البَندُ A0 (x)،
+    /// ‏2026-10-12؛ ‏ADR-033 §٧‑ل): لِمَن يُخرِجُ الصَفقَةَ (<see cref="DealsService.CanMove"/>) وتاليها «شَحن» وطَلَبُها عِندَ OTO
+    /// (<see cref="DealShipping.AwaitsCarrier"/>) — فَلا «تَأكيد: شَحن» لَه — <b>والبَوّابَةُ تَرُدُّ «أَكمِل الشَّحن»</b>: رَمزُ رَدِّها بِحَرفِه
+    /// (<see cref="CarrierUnavailable"/> حينَ يَغيبُ الناقِل، <see cref="OrderClosedAtOto"/> حينَ أَغلَقَت OTO الطَلَب). و<c>null</c> لِكُلِّ ما
+    /// سِواه، ومِنه خُطوَةٌ بابُها مَفتوح.</para>
+    ///
+    /// <para>تَقرَؤُها الصَفحَةُ فَلا تَقولُ «دَورُكَ الآن» عَن خُطوَةٍ لا بابَ لَها، وتَرسُمُ نَصَّ الرَمزِ نَفسِه الَّذي تَرتَدُّ بِه <c>/ship</c> —
+    /// فَما يُقالُ هُوَ ما تُجيبُ بِه النُقطَة (القاعِدَة ١٢). وقَرارُ ما يُفعَلُ بِطَلَباتِ مَتجَرٍ غابَ ناقِلُه لِلمالِك («أ» S7·١٦ (ج)).</para>
+    /// </summary>
+    public static string? HeldRefusal(Deal deal, DealShipper by, bool carrierReady)
+        => DealShipping.AwaitsCarrier(deal) && DealsService.CanMove(deal, by.ActorId)
+            ? Validate(deal, by, carrierReady)?.Code
+            : null;
 }
 
 /// <summary>نَتيجَةُ الشَحن — الرَفضُ يَصِلُ المُنادي بِرَمزِه (مِن مَعجَمِ البَوّابَة، أَو

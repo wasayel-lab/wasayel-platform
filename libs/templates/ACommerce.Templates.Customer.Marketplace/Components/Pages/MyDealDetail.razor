@@ -50,7 +50,10 @@
            DealsPolicy.Actor عَبر DealTurnView — نَفس القاعِدَة الَّتي
            يَفرِضُها DealsService.AdvanceAsync، فَلا تَعِد البِطاقَة بِما
            سَيَرفُضُه المُحَرِّك. *@
-        @if (deal.Status == DealStatus.Active)
+        @* ولا بِطاقَةَ لِخُطوَةٍ مَحجوزَةٍ لا بابَ لَها (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 §٧‑ل): طَلَبُها عِندَ OTO والناقِلُ
+           غائِبٌ أَو الطَلَبُ مُغلَق — كانَت تَقولُ لِلبائِعِ «دَورُكَ الآن» بِزِرٍّ إلى مِنطَقَةِ إجراءٍ فارِغَة (تَوصيفُه `2a77321`). ونَصُّ رَمزِ
+           البَوّابَةِ في مِنطَقَةِ الإجراءِ أَدناه (`shipHeldKey`). *@
+        @if (deal.Status == DealStatus.Active && shipHeldKey is null)
         {
             @* مِن الصَفقَةِ نَفسِها لا مِن (النَمَط، المَرحَلَة) وَحدَهُما: طَريقَةُ
                الدَفعِ تُسقِطُ «دَفع» عَن النَقد (‏ADR-033 §٦)، فَلا يُقالُ لِمُشتَري
@@ -300,6 +303,12 @@
                     </span>
                 </form>
             }
+            else if (shipHeldKey is { } held && held != DealRefusalTexts.KeyFor(Err))
+            {
+                @* خُطوَتُه «شَحن» وطَلَبُها عِندَ OTO والبَوّابَةُ تَرُدُّ «أَكمِل الشَّحن»: نَصُّ رَمزِها — ما تَرتَدُّ بِه `/ship` — لا فَراغ
+                   (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 §٧‑ل)؛ ولا يُكَرَّرُ إن كانَ شَريطُ `?err=` أَعلاه يَقولُه. *@
+                <AcAlert Variant="warning" Message="@L[held]" />
+            }
 
             @* مالِك الإعلان يَقبَل العَرض (الصَّفقَة في Offered وأَنا المالِك ولَستُ المُبادِر) *@
             @if (deal.Stage == DealStage.Offered && isListingOwner && !isInitiator)
@@ -420,6 +429,10 @@
     /// فَتَرُدُّ «تَأكيد: شَحن» بِـ<c>deal_awaits_carrier</c>: فَلا يُرسَمُ لِمَن خُطوَتُه هذِه، وبابُها «أَكمِل الشَّحن» (مُراجَعَةُ تَيّارِ S7
     /// الثانِيَة، ‏2026-10-12؛ القاعِدَة ١٢).</summary>
     bool heldByCarrier;
+    /// <summary>مِفتاحُ نَصِّ الرَمزِ الَّذي تَرُدُّ بِه البَوّابَةُ «أَكمِل الشَّحن» لِمَن خُطوَتُه مَحجوزَةٌ عِندَ OTO —
+    /// <see cref="DealShipAuthorization.HeldRefusal"/> — و<c>null</c> حَيثُ لا خُطوَةَ مَحجوزَةً لِلناظِرِ أَو بابُها مَفتوح: يُخفي بِطاقَةَ
+    /// «دَورُكَ الآن» ويُرسَمُ في مِنطَقَةِ الإجراء (مُراجَعَةُ المَوجَة 3a، ‏2026-10-12).</summary>
+    string? shipHeldKey;
     /// <summary>رابِطا البوليصَةِ والتَتَبُّعِ لِلطَرَفَين — <see cref="DealShipping.LinksOf"/>: <c>https</c> وَحدَه، و<c>null</c> لِما غاب.</summary>
     string? labelUrl, trackingUrl;
     DealStage? nextStage;
@@ -497,6 +510,8 @@
         shipResumes = canShip && DealShipping.IsPlaced(deal);
         // وخُطوَةٌ طَلَبُها عِندَ OTO لا يُرسَمُ لَها «تَأكيد: شَحن» — الدالَّةُ الَّتي يَرُدُّ بِها المُحَرِّك (مُراجَعَةُ تَيّارِ S7 الثانِيَة).
         heldByCarrier = DealShipping.AwaitsCarrier(deal);
+        // وخُطوَةٌ مَحجوزَةٌ لا بابَ لَها: رَمزُ البَوّابَةِ الَّذي يُفَسِّرُها، بِالفاعِلِ والناقِلِ أَنفُسِهِما (مُراجَعَةُ المَوجَة 3a، ‏2026-10-12).
+        shipHeldKey = DealRefusalTexts.KeyFor(DealShipAuthorization.HeldRefusal(deal, new DealShipper(uid, Auth.UserName ?? ""), Shipping.CarrierReady(Slug)));
     }
 
     // ‏لَيسَت `static` بَعدَ اليَوم: قيَمُها صارَت مِن `L` وهو مَحقونٌ
