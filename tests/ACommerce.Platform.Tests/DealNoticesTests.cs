@@ -130,6 +130,59 @@ public class DealNoticesTests
         Assert.False(DealNotices.TellsTheBuyer(deal, Buyer));
     }
 
+    /// <summary><b>مالِكُ الإعلانِ الَّذي هو المُشتَري لا يُشعَرُ بِطَلَبِه</b> (‏2026-10-11، مُراجَعَةُ الموجَةِ الثانِيَةِ
+    /// الرابِعَة): الإشعارُ يَقولُ «افتَح الصَّفقَة لِقَبولِه» والقَبولُ يَرُدُّه بِـ<c>actor_is_initiator</c> — بابٌ لا يُفتَح.
+    /// المُوجِب: مالِكٌ غَيرُ المُشتَري هو المُستَلِم؛ والسالِب: مالِكٌ هو المُشتَري، أَو لا مالِك — لا أَحَد.</summary>
+    [Fact]
+    public void The_new_deal_recipient_is_the_listing_owner_unless_he_is_the_buyer()
+    {
+        Assert.Equal(Seller, DealNotices.NewDealRecipient(CartDeal()));
+
+        var own = CartDeal();
+        own.Refs[DealsService.ListingOwnerRef] = Buyer.ToString();
+        own.CounterpartyId = null;
+        Assert.Null(DealNotices.NewDealRecipient(own));
+
+        var orphan = CartDeal();
+        orphan.Refs.Remove(DealsService.ListingOwnerRef);
+        Assert.Null(DealNotices.NewDealRecipient(orphan));
+    }
+
+    /// <summary>والأُنبوبُ يَقرَأُ الدالَّةَ نَفسَها — بِالخِدمَةِ في عالَمِ الوَثائِق: صَفقَةٌ مالِكُها المُشتَري لا تُكتَبُ لَها
+    /// وَثيقَةُ إشعارٍ ولا يُحفَظُ شَيء، وصَفقَةٌ مالِكُها غَيرُه تُكتَبُ لِمالِكِها مَرَّة.</summary>
+    [Fact]
+    public void NotifyNewDealsAsync_skips_an_owner_who_is_the_buyer_and_tells_any_other_owner_once()
+    {
+        var world = new DocWorld();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSignalR();
+        var hub = services.BuildServiceProvider().GetRequiredService<IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub>>();
+        var push = new WebPushService(new ConfigurationBuilder().Build(), NullLogger<WebPushService>.Instance);
+        var notices = new DealNotices(world.Store, hub, push);
+        var l = Fresh();
+
+        var own = CartDeal();
+        own.Refs[DealsService.ListingOwnerRef] = Buyer.ToString();
+        own.CounterpartyId = null;
+        var other = CartDeal();
+        world.Put(own).Put(other);
+        var savesBefore = world.SaveCalls;
+
+        var none = notices.NotifyNewDealsAsync("shop", new[] { own.Id }, l);
+        Assert.True(none.IsCompleted);
+        Assert.Equal(0, none.Result);
+        Assert.Equal(0, world.Wrote<Notification>());
+        Assert.Equal(savesBefore, world.SaveCalls);
+
+        var one = notices.NotifyNewDealsAsync("shop", new[] { own.Id, other.Id }, l);
+        Assert.True(one.IsCompleted);
+        Assert.Equal(1, one.Result);
+        var told = Assert.Single(world.Stored.OfType<Notification>());
+        Assert.Equal(Seller, told.UserId);
+        Assert.Equal($"/shop/deals/{other.Id}", told.RelatedUrl);
+    }
+
     // ─── المَصدَر — الأُنبوبُ والنَوعانِ ومَوضِعا النِداء ─────────────────────────
 
     private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;

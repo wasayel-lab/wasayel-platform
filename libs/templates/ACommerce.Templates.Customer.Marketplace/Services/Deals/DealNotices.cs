@@ -74,6 +74,12 @@ public sealed class DealNotices
         At = at,
     };
 
+    /// <summary>مَن يُشعَرُ بِالطَلَبِ الجَديد: مالِكُ الإعلانِ — <b>ما لَم يَكُن هو المُشتَري</b> (‏2026-10-11،
+    /// مُراجَعَةُ الموجَةِ الثانِيَةِ الرابِعَة): نَصُّه «افتَح الصَّفقَة لِقَبولِه» والقَبولُ يَرُدُّه بِـ
+    /// <see cref="DealAcceptAuthorization.ActorIsInitiator"/> — بابٌ لا يُفتَحُ لَه. و<c>null</c> لِصَفقَةٍ بِلا مالِك.</summary>
+    public static Guid? NewDealRecipient(Deal deal)
+        => DealAcceptAuthorization.OwnerIdOf(deal) is { } owner && owner != deal.InitiatorId ? owner : null;
+
     /// <summary>مَتنُ الدَفعِ الفَوريِّ لِلطَلَبِ الجَديد — أَقصَرُ مِن مَتنِ الوَثيقَة.</summary>
     public static string NewDealPushBody(Deal deal, L l)
         => l.Format("notifications.deal_new.push_body", deal.ListingTitle, deal.AmountSar);
@@ -116,7 +122,8 @@ public sealed class DealNotices
 
     /// <summary>بَعدَ حَفظِ <c>/checkout/submit</c>: إشعارٌ واحِدٌ لِمالِكِ إعلانِ كُلِّ
     /// صَفقَةٍ وُلِدَت. تُقرَأُ الصَفَقاتُ مِن المَخزَنِ (ما حُفِظَ لا ما في الذاكِرَة)، وصَفقَةٌ
-    /// بِلا مالِكٍ تُتَجاوَز. تُرجِعُ عَدَدَ ما أُشعِر — فَلا يُقالُ «أُشعِروا» بِلا عَدّ.</summary>
+    /// بِلا مالِكٍ — أَو مالِكُها مُشتَريها (<see cref="NewDealRecipient"/>) — تُتَجاوَز. تُرجِعُ عَدَدَ ما
+    /// أُشعِر — فَلا يُقالُ «أُشعِروا» بِلا عَدّ.</summary>
     public async Task<int> NotifyNewDealsAsync(
         string slug, IReadOnlyList<Guid> dealIds, L l, CancellationToken ct = default)
     {
@@ -127,7 +134,7 @@ public sealed class DealNotices
             {
                 var deal = await s.LoadAsync<Deal>(id, ct);
                 if (deal is null) continue;
-                var ownerId = DealAcceptAuthorization.OwnerIdOf(deal);
+                var ownerId = NewDealRecipient(deal);
                 if (ownerId is null) continue;
                 var n = NewDealFor(slug, deal, ownerId.Value, l, DateTime.UtcNow);
                 s.Store(n);
