@@ -423,6 +423,44 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         Assert.Equal(DealStage.Confirmed, Stored(w).Stage);
     }
 
+    /// <summary>
+    /// <para><b>إشعاراتٌ لِصَفقَةٍ رَدَّت عَلَيها <c>/ship</c> بِـ<c>shipment_unconfirmed</c> — تَوصيفُ ما يَقَعُ اليَوم</b> (مُراجَعَةُ تَيّارِ S7
+    /// الثانِيَة، ‏2026-10-12؛ ‏ADR-033 §٧‑ج‑٣ و§٧‑ح): كانَ مَقيساً بِمِجَسٍّ لَم يُودَع (القاعِدَة ٢). إن أَنشَأَت OTO الشُحنَةَ بَعدَ نَقرَةِ البائِعِ
+    /// وقَبلَ «أَكمِل الشَّحن»: إشعارُ <c>searchingDriver</c> يُجابُ ‏200 <c>not_delivered</c> ويُكتَبُ رابِطا البوليصَةِ والتَتَبُّعِ عَلى صَفقَةٍ عِندَ
+    /// <c>Confirmed</c>؛ وإشعارُ <c>delivered</c> بَعدَه يُجابُ ‏200 <c>deal_not_shipping</c> بِلا انتِقال — و‏200 لا تُعيدُه OTO. فَـ«أَكمِل الشَّحن»
+    /// بَعدَها تُخرِجُها إلى «شَحن» (‏<c>delivered</c> مِن حالاتِ الشُحنَة)، والتَسليمُ يَدَوِيٌّ بِـ«تَأكيد: تَسليم»: يَضيعُ التَسليمُ الآلِيُّ في هذا
+    /// التَرتيبِ لا نَقرَةٌ واحِدَة. لا يُقلَبُ هُنا — الخِيارُ لِلمالِك (سِجِلُّه «أ»).</para>
+    /// </summary>
+    [Fact]
+    public async Task After_shipment_unconfirmed_notices_write_the_links_on_the_Confirmed_deal_and_a_delivery_answers_200_so_it_is_not_resent()
+    {
+        var w = await DealShipTests.ConfirmedCashDeal();
+        w.Oto.Routes[OtoClient.OrderStatusPath] = body =>
+            OtoRouteHandler.Tracking(OtoRouteHandler.OrderIdIn(body), status: "missingData", label: null);
+        Assert.Equal(DealShipping.ShipmentUnconfirmed, (await w.Shipping.ShipAsync(Slug, w.Id, DealShipTests.Vendor, "Riyadh")).Code);
+
+        OtoSays(w, "searchingDriver");
+        var searching = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id, status: "searchingDriver"));
+        Assert.Equal(OtoOrderStatusGate.NotDelivered, searching.Code);
+        Assert.Equal(200, OtoOrderStatusGate.StatusFor(searching.Code));
+        Assert.Equal((DealStatus.Active, DealStage.Confirmed), (Stored(w).Status, Stored(w).Stage));
+        Assert.Equal((Label, TrackingUrl), DealShipping.LinksOf(Stored(w)));
+
+        OtoSays(w, "delivered");
+        var delivered = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id));
+        Assert.Equal(OtoOrderStatusGate.DealNotShipping, delivered.Code);
+        Assert.Equal(200, OtoOrderStatusGate.StatusFor(delivered.Code));
+        Assert.Equal((DealStatus.Active, DealStage.Confirmed), (Stored(w).Status, Stored(w).Stage));
+
+        // والطَريقُ بَعدَه: «أَكمِل الشَّحن» تَسأَلُ OTO فَتَجِدُ `delivered` بِبوليصَةٍ فَتُخرِجُها إلى «شَحن»، والتَسليمُ بِيَدِ البائِع.
+        Assert.True((await w.Shipping.ShipAsync(Slug, w.Id, DealShipTests.Vendor, city: null)).Ok);
+        Assert.Equal(DealStage.Shipping, Stored(w).Stage);
+        Assert.False(DealShipping.AwaitsCarrier(Stored(w)));
+        Assert.True((await w.Deals.AdvanceAsync(Slug, w.Id, Seller, "بائِع", "")).Ok);
+        Assert.Equal(DealStage.Delivered, Stored(w).Stage);
+        Assert.Single(Stored(w).Timeline, e => e.Action == DealEvent.CashOnDelivery);
+    }
+
     [Fact]
     public async Task A_deal_without_a_counterparty_is_not_moved_by_a_delivery()
     {
