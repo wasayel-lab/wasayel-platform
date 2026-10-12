@@ -204,7 +204,11 @@ public class DealAcceptAuthorizationTests
     /// يَصدُقُ عَلَيها بِإعادَةِ <c>Validate</c> في جَلسَةِ الكِتابَة
     /// (<c>DealAcceptStaleSnapshotCharacterizationTests</c>)، <b>إلّا التَداخُلَ التامّ</b> — كِلا
     /// التَحميلَينِ قَبلَ كِلا الحِفظَين — فَلا تَزامُنَ تَفاؤُلِيَّ عَلى <c>Deal</c> (‏ADR-033 §٦‑ب‑٢
-    /// مُلحَقاً).</para></summary>
+    /// مُلحَقاً).</para>
+    ///
+    /// <para><b>وأُغلِقَ التَداخُلُ التامُّ ‏2026-10-12 — ولا يُعادُ حَرفٌ فَوقَه</b> (‏ADR-036): بِالتَزامُنِ التَفاؤُلِيِّ عَلى <c>Deal</c>
+    /// يُرَدُّ ثاني الحِفظَينِ بِـ<c>deal_changed_meanwhile</c>، فَقَبولانِ مُتَداخِلانِ تَماماً يُعطِيانِ قَبولاً واحِداً ورَفضاً واحِداً
+    /// (‏<c>LiveDealConcurrencyProofTests.Two_overlapping_accepts_yield_one_acceptance_and_one_deal_changed_meanwhile</c>).</para></summary>
     [Fact]
     public void A_deal_that_left_Offered_or_is_held_by_another_party_answers_deal_already_accepted()
     {
