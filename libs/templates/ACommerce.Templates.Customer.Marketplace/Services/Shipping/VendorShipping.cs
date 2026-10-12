@@ -135,6 +135,88 @@ public static class ListingVendorGate
     public static bool IsAllowed(Guid? userId, int ownedListings) => Admit(userId, null, ownedListings).Vendor is not null;
 }
 
+// ═══ جِهَةُ تَواصُلِ البائِعِ المُتَحَقَّقُ مِنها — بابُ التَسجيلِ وَحدَه (مُراجَعَةُ تَيّارِ S8، الجولة 2، ‏2026-10-12؛ ‏ADR-033 §٧‑ف) ═══════
+//
+// الخُطوَة 8 تُسقِطُ حارِسَ المُديرِ عَن بابِ التَسجيلِ لِأَنّ «بَياناتُ التَسجيلِ بَياناتُ البائِعِ فَالفِعلُ فِعلُه» — وكانَ الكودُ يَقولُها ولا يُلزِمُها:
+// بَريدٌ وجَوّالٌ يَكتُبُهُما أَيُّ بائِعٍ عَن أَيِّ أَحَدٍ يُرسَلانِ إلى OTO بِالرَمزِ السوقِيّ (تَوصيفُه `dcfebfe`). **فَالمُرسَلُ مِن جِهَتَيِ التَواصُلِ ما
+// تَحَقَّقنا أَنَّه لِصاحِبِ الجَلسَة**: البَريدُ أَو الجَوّالُ الَّذي دَخَلَ بِه المَتجَرَ بِرَمزٍ أُرسِلَ إلَيه (`User.EmailVerified`/`PhoneVerified` — يَرفَعُهُما
+// `AuthHandlers` عِندَ نَجاحِ الرَمزِ وَحدَه). والدُخولُ بِقَناةٍ واحِدَة، فَلِلمُستَخدِمِ جِهَةٌ مُتَحَقَّقٌ مِنها واحِدَةٌ في الغالِب: تُقفَلُ هِيَ، والأُخرى
+// يَكتُبُها — وما يَبقى مَفتوحاً يُقالُ في ‏ADR-033 §٧‑ف وسِجِلِّ المالِكِ «ب» S8·٢١.
+
+/// <summary>
+/// <para><b>سِجِلُّ السُلطَة: بائِعٌ يُسَجَّلُ عِندَ OTO بِجِهَةِ تَواصُلٍ تَحَقَّقنا أَنَّها لَه.</b> لا يُبنى إلّا بِبَوّابَتِه
+/// (<see cref="VendorContactGate.Admit"/>)، و<see cref="VendorShippingService.RegisterAsync"/> تَطلُبُه في تَوقيعِها — نَسَقُ <see cref="ListingVendor"/>.</para>
+/// <para><b>ولا يُطبَعُ</b>: فيه بَياناتُ تَواصُل — <c>ToString</c> بِلاها.</para>
+/// </summary>
+public sealed class VendorRegistrant
+{
+    internal VendorRegistrant(ListingVendor vendor, string? verifiedEmail, string? verifiedMobile)
+    {
+        Vendor = vendor;
+        VerifiedEmail = verifiedEmail;
+        VerifiedMobile = verifiedMobile;
+    }
+
+    public ListingVendor Vendor { get; }
+
+    /// <summary>بَريدُه المُتَحَقَّقُ مِنه مُطَبَّعاً بِدالَّةِ الدُخولِ نَفسِها (<c>EmailAddress.Normalize</c>) — أَو <c>null</c>.</summary>
+    public string? VerifiedEmail { get; }
+
+    /// <summary>جَوّالُه المُتَحَقَّقُ مِنه أَرقاماً كَما دَخَلَ بِه — بِلا تَحويلِ صيغَة (‏ADR-033 §٧‑س.5) — أَو <c>null</c>.</summary>
+    public string? VerifiedMobile { get; }
+
+    /// <summary>
+    /// <para><b>الاستِمارَةُ كَما تُدَقَّقُ وتُرسَل — دالَّةٌ نَقِيَّة</b>: كُلُّ جِهَةِ تَواصُلٍ مُتَحَقَّقٍ مِنها تَحِلُّ مَحَلَّ ما في خانَتِها، فَما كُتِبَ فيها لا
+    /// يُقرَأُ أَصلاً (والصَفحَةُ تَرسُمُها مَملوءَةً مُقفَلَة)؛ والأُخرى كَما كَتَبَها البائِع. بَوّابَةٌ تَقرَأُ حالَةً مَخزونَةً وتَحويلٌ نَقِيٌّ لا يَتَشارَكانِ أُنبوباً
+    /// (القاعِدَة ٧): البَوّابَةُ تَبني السِجِلَّ، وهذِه تَقرَؤُه.</para>
+    /// </summary>
+    public VendorRegistrationForm Bind(VendorRegistrationForm form)
+        => form with { Email = VerifiedEmail ?? form.Email, Mobile = VerifiedMobile ?? form.Mobile };
+
+    public override string ToString()
+        => $"VendorRegistrant(email={(VerifiedEmail is null ? "typed" : "verified")}, mobile={(VerifiedMobile is null ? "typed" : "verified")})";
+}
+
+/// <summary>ما خَرَجَ مِن بَوّابَةِ جِهَةِ التَواصُل: سِجِلٌّ أَو خَرقٌ — واحِدٌ لا اثنان.</summary>
+public sealed record VendorRegistrantAdmission(VendorRegistrant? Registrant, ListingVendorViolation? Violation);
+
+/// <summary>
+/// <para><b>بَوّابَةُ جِهَةِ التَواصُلِ المُتَحَقَّقِ مِنها — دالَّةٌ نَقِيَّةٌ بِاسمِها</b>، تَلي <see cref="ListingVendorGate"/> في نُقطَةِ التَسجيلِ
+/// وتَسبِقُ قِراءَةَ الاستِمارَة (القاعِدَة ٦)، وتَقرَؤُها الصَفحَةُ نَفسُها فَلا تَرسُمُ استِمارَةً تَرُدُّها. وثيقَةُ المُستَخدِمِ يَقرَؤُها المُنادي
+/// (<c>AccountQueries.ProfileAsync</c>) ويُمَرِّرُها. <b>خَرقٌ أَوَّلٌ لا قائِمَة</b> — عائِلَةُ بَوّابات التَخويلِ عَلى حالَةٍ مَخزونَة (سِجِلُّ المالِكِ «أ» S8·١).</para>
+/// </summary>
+public static class VendorContactGate
+{
+    /// <summary>لا بَريدَ ولا جَوّالَ تَحَقَّقنا أَنَّه لِلبائِع — أَو لا وَثيقَةَ لَه، أَو لِغَيرِه، أَو مَحذوفَة.</summary>
+    public const string ContactUnverified = "vendor_contact_unverified";
+
+    public static readonly IReadOnlyList<string> All = new[] { ContactUnverified };
+
+    public static VendorRegistrantAdmission Admit(ListingVendor vendor, ACommerce.Kit.Auth.User? account)
+    {
+        if (account is null || account.Id != vendor.UserId || account.DeletedAt is not null)
+            return new(null, new(ContactUnverified, "لا حِسابَ لِلبائِعِ في المَتجَرِ يُعرَفُ بِه — فَلا جِهَةَ تَواصُلٍ مُتَحَقَّقٌ مِنها."));
+
+        var email = account.EmailVerified && ACommerce.Kit.Auth.EmailAddress.IsValid(account.Email)
+            ? ACommerce.Kit.Auth.EmailAddress.Normalize(account.Email) : null;
+        var mobile = account.PhoneVerified ? DigitsOrNull(account.Phone) : null;
+        if (email is null && mobile is null)
+            return new(null, new(ContactUnverified, "التَسجيلُ عِندَ OTO بِبَريدٍ أَو جَوّالٍ تَحَقَّقنا أَنَّه لِلبائِع — ولا شَيءَ مِنهُما في حِسابِه."));
+
+        return new(new VendorRegistrant(vendor, email, mobile), null);
+    }
+
+    public static bool IsAllowed(ListingVendor vendor, ACommerce.Kit.Auth.User? account) => Admit(vendor, account).Registrant is not null;
+
+    /// <summary>الجَوّالُ أَرقاماً — بِلا مَسافاتٍ ولا «+» في أَوَّلِه، كَما يُرسَلُ (<see cref="VendorRegistrationForm.MobileDigits"/>) — أَو <c>null</c>
+    /// لِما لَيسَ أَرقاماً (مُعَرِّفُ نَفاذ <c>NID-…</c> مَثَلاً، ولا يُرفَعُ لَه <c>PhoneVerified</c> أَصلاً).</summary>
+    private static string? DigitsOrNull(string? phone)
+    {
+        var digits = (phone ?? "").Replace(" ", "", StringComparison.Ordinal).TrimStart('+');
+        return digits.Length > 0 && digits.All(c => c is >= '0' and <= '9') ? digits : null;
+    }
+}
+
 // ═══ استِمارَةُ التَسجيلِ عِندَ OTO ومُدَقِّقُها (‏ADR-033 الخُطوَة 8، تَيّارُ S8، ‏2026-10-12) ═══════════════════════
 
 /// <summary>
@@ -319,7 +401,17 @@ public sealed class VendorShippingService
     /// <summary>مَدخَلُ البائِعِ القائِمُ لا يُفَكُّ هُنا (مِفتاحُ الخِزانَةِ تَبَدَّلَ، أَو سِياقٌ لا يُطابِق) — فَلا يُعادُ بِه تَسجيلُ الوارِد.</summary>
     public const string EntryUnreadable = "vendor_entry_unreadable";
 
-    public static readonly IReadOnlyList<string> Codes = new[] { PasteClosed, TokenMissing, VaultUnavailable, RegisterClosed, EntryUnreadable };
+    /// <summary>بَلَغَ البائِعُ حَدَّ مُحاوَلاتِ «Register» في السّاعَة — حِصَّةُ الإرسالِ القائِمَةُ نَفسُها (مُراجَعَةُ تَيّارِ S8، الجولة 2، ‏2026-10-12).</summary>
+    public const string RegisterRateLimited = "vendor_register_rate_limited";
+
+    public static readonly IReadOnlyList<string> Codes = new[] { PasteClosed, TokenMissing, VaultUnavailable, RegisterClosed, EntryUnreadable, RegisterRateLimited };
+
+    /// <summary>
+    /// <para><b>مِفتاحُ حَدِّ المُحاوَلاتِ في حِصَّةِ الإرسالِ القائِمَة</b> (<c>AuthHandlers.TryConsumeSendQuota</c>، «‏tenant|subject»): بائِعٌ في مَتجَر.
+    /// والحِصَّةُ أُنبوبُ المِنَصَّةِ لِما يُكَلِّفُ نِداءً خارِجِيّاً بِكُلِّ مُحاوَلَة — عَشرٌ في السّاعَة، يُناديها بابُ الاستوديو مِن خارِجِ مِلَفِّها كَهذا
+    /// (القاعِدَة ٨) — فَلا رَقَمَ جَديد (القاعِدَة ١٦). <b>حَدُّ مُحاوَلاتٍ لا حِصَّةُ باقَة</b>: لا يُعَدُّ عَلى باقَةِ المُستَأجِرِ ولا يَمَسُّ الاستِحقاقات.</para>
+    /// </summary>
+    public static string RegisterAttemptKey(string tenantSlug, Guid listingOwner) => $"{tenantSlug}|oto-register:{listingOwner:D}";
 
     /// <summary>فِعلُ سَطرِ الأَثَرِ قَبلَ نِداءِ التَسجيل — يَكتُبُه كاتِبُ الأَثَرِ القائِم (‏ADR-033 الخُطوَة 8).</summary>
     public const string RegisterAuditAction = "provider.vendor.register";
@@ -384,14 +476,18 @@ public sealed class VendorShippingService
     /// <c>delivery:{listing_owner}</c> مَعَ تَسجيلِ الوارِدِ بِالمَسارِ الَّذي يَسلُكُه اللَصق.</para>
     /// <para><b>ومَن لَه مَدخَلٌ فَعّال</b> — سَجَّلَ أَو لَصَقَ قَبلُ — لا يُسَجَّلُ حِسابٌ ثانٍ: سَطرُ الأَثَرِ ثُمَّ يُعادُ تَسجيلُ وارِدِه بِرَمزِه
     /// المَختوم (زِرُّ «أَعِد المُحاوَلَة» حينَ لَم يُسَجَّل). <b>ولا استِهلاكَ لِحِصَّة</b>: لا تَمُرُّ هذِه الخِدمَةُ بِالاستِحقاقات.</para>
+    /// <para><b>ومُنذُ مُراجَعَةِ تَيّارِ S8، الجولة 2 (‏2026-10-12؛ ‏ADR-033 §٧‑ف)</b>: التَوقيعُ يَطلُبُ <see cref="VendorRegistrant"/> لا <see cref="ListingVendor"/> —
+    /// فَلا تُنادى بِلا جِهَةِ تَواصُلٍ مُتَحَقَّقٍ مِنها — والاستِمارَةُ تُدَقَّقُ وتُرسَلُ <b>مَربوطَةً بِها</b> (<see cref="VendorRegistrant.Bind"/>)؛ و<b>حَدُّ
+    /// المُحاوَلاتِ بَعدَ التَدقيقِ وقَبلَ الأَثَر</b>: استِمارَةٌ تُرَدُّ لا تَستَهلِكُ مُحاوَلَة، ومُحاوَلَةٌ فَوقَ الحَدِّ لا سَطرَ لَها ولا نِداء.</para>
     /// </summary>
     public async Task<VendorShippingResult> RegisterAsync(
-        string tenantSlug, ListingVendor vendor, VendorRegistrationForm form, string inboundUrl,
+        string tenantSlug, VendorRegistrant registrant, VendorRegistrationForm form, string inboundUrl,
         string? ip = null, CancellationToken ct = default)
     {
         if (Input != VendorShippingInput.Register)
             return new(_vault.IsAvailable ? RegisterClosed : VaultUnavailable, null, null);
 
+        var vendor = registrant.Vendor;
         var owner = vendor.UserId;
         var entryId = TenantProviderBinding.VendorEntryId(ProviderCapabilities.Delivery, owner);
         var before = await _providers.VendorEntryAsync(tenantSlug, ProviderCapabilities.Delivery, owner, ct);
@@ -400,12 +496,20 @@ public sealed class VendorShippingService
         string token;
         if (kept is null)
         {
-            if (VendorRegistrationValidator.Validate(form).FirstOrDefault() is { } invalid)
+            var sent = registrant.Bind(form);
+            if (VendorRegistrationValidator.Validate(sent).FirstOrDefault() is { } invalid)
                 return new(invalid.Code, before, null);
+
+            if (!global::ACommerce.Kit.Auth.Server.AuthHandlers.TryConsumeSendQuota(RegisterAttemptKey(tenantSlug, owner)))
+            {
+                _log.LogInformation("[OTO] vendor {Slug}/{Owner} ← register refused ({Code})",
+                    tenantSlug, owner.ToString("D"), RegisterRateLimited);
+                return new(RegisterRateLimited, before, null);
+            }
 
             await _audit.WriteAsync(tenantSlug, owner, vendor.Name, RegisterAuditAction, "provider", entryId,
                 note: "register", ip: ip, ct: ct);
-            var registered = await _oto.RegisterVendorAsync(_opts.MarketplaceToken, form.ToOto(), ct);
+            var registered = await _oto.RegisterVendorAsync(_opts.MarketplaceToken, sent.ToOto(), ct);
             if (registered.Value is not { } account)
             {
                 _log.LogInformation("[OTO] vendor {Slug}/{Owner} ← register refused ({Code})",

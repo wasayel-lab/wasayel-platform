@@ -125,4 +125,20 @@ public class OtoDeployDocTests
             "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Deals", "DealShipping.cs"));
         Assert.Contains("← verified (age {Age} ms)", service, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// <para><b>والدَليلُ يَقولُ ما يُرسَلُ في التَسجيلِ كَما يُرسِلُه الكود</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S8، الجَولَة 2؛ ‏ADR-033 §٧‑ف): جِهَةُ التَواصُلِ
+    /// المُتَحَقَّقُ مِنها مُقفَلَة، ومَن لا جِهَةَ لَه يُرَدُّ بِرَمزِه، والمُحاوَلاتُ مَحدودَة — والرَمزانِ مِن ثابِتَيهِما، فَرَمزٌ يُعادُ تَسمِيَتُه بِلا الدَليلِ
+    /// يَحمَرُّ هُنا.</para>
+    /// </summary>
+    [Fact]
+    public void The_deploy_section_says_register_sends_the_verified_contact_and_bounds_attempts()
+    {
+        var section = Section();
+        Assert.Contains($"`{ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorContactGate.ContactUnverified}`", section, StringComparison.Ordinal);
+        Assert.Contains($"`{ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingService.RegisterRateLimited}`", section, StringComparison.Ordinal);
+        Assert.Contains("«عَن نَفسِه» صارَ يُلزَم", section, StringComparison.Ordinal);
+        Assert.Contains("مَرسوماً في النَموذَجِ مُقفَلاً", section, StringComparison.Ordinal);
+        Assert.Contains("عَشرٌ في السّاعَةِ", section, StringComparison.Ordinal);
+    }
 }

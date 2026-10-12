@@ -202,14 +202,15 @@ public class VendorShippingTests(ITestOutputHelper output)
 
     /// <summary>لِكُلِّ رَمزٍ يَصِلُ الصَفحَةَ نَصٌّ عَرَبِيٌّ حَيّ — مَعجَما البَوّابَةِ والخِدمَةِ بِلا تَداخُل. <b>ومُنذُ الخُطوَة 8 (‏2026-10-12)</b>:
     /// ومَعجَمُ مُدَقِّقِ استِمارَةِ التَسجيلِ (‏14) ومَعجَمُ فَشَلِ عَميلِ OTO (‏5، رَدُّ «Register») — والخِدمَةُ ‏3 ← 5 (`vendor_register_closed`،
-    /// `vendor_entry_unreadable`)؛ فَالعَدُّ ‏5 ← 26.</summary>
+    /// `vendor_entry_unreadable`)؛ فَالعَدُّ ‏5 ← 26. <b>ومُنذُ مُراجَعَةِ تَيّارِ S8، الجولة 2 (‏2026-10-12؛ ‏ADR-033 §٧‑ف)</b>: مَعجَمُ بَوّابَةِ جِهَةِ التَواصُلِ
+    /// (‏1: `vendor_contact_unverified`)، والخِدمَةُ ‏5 ← 6 (`vendor_register_rate_limited`)؛ فَالعَدُّ ‏26 ← 28.</summary>
     [Fact]
     public void Every_refusal_code_of_the_vendor_surface_has_an_arabic_text()
     {
-        var codes = ListingVendorGate.All.Concat(VendorShippingService.Codes)
+        var codes = ListingVendorGate.All.Concat(VendorShippingService.Codes).Concat(VendorContactGate.All)
             .Concat(VendorRegistrationValidator.All).Concat(OtoFailures.All).ToArray();
         output.WriteLine($"رُموزُ سَطحِ البائِع: {codes.Length} — {string.Join(" · ", codes)}");
-        Assert.Equal(26, codes.Length);
+        Assert.Equal(28, codes.Length);
         Assert.Equal(codes.Length, codes.Distinct(StringComparer.Ordinal).Count());
         foreach (var code in codes)
         {
@@ -938,6 +939,22 @@ public class VendorShippingTests(ITestOutputHelper output)
     private static OtoOptions Registering() => Opts(marketplaceToken: Marketplace);
 
     /// <summary>
+    /// <para><b>بائِعٌ يُسَجَّلُ بِجِهَةِ تَواصُلٍ تَحَقَّقنا مِنها</b> (مُراجَعَةُ تَيّارِ S8، الجولة 2، ‏2026-10-12: تَوقيعُ <c>RegisterAsync</c> يَطلُبُ السِجِلَّ لا
+    /// البائِع) — بِالبَوّابَةِ نَفسِها لا بِمُنشِئٍ داخِلِيّ. وافتِراضُه جَوّالٌ دَخَلَ بِه هُوَ جَوّالُ <see cref="Form"/> أَرقاماً (‏966500000000)، والبَريدُ
+    /// يَكتُبُه — فَما تُرسِلُه الصُفوفُ القائِمَةُ إلى OTO لا يَتَغَيَّرُ بِحَرف.</para>
+    /// </summary>
+    internal static VendorRegistrant Registrant(Guid? id = null, string? email = null, string? phone = "966500000000")
+        => VendorContactGate.Admit(Vendor(id), Account(id, email, phone)).Registrant!;
+
+    /// <summary>وَثيقَةُ مُستَخدِمٍ كَما يَكتُبُها الدُخول: البَريدُ أَو الجَوّالُ المُعطى مُتَحَقَّقٌ مِنه، والغائِبُ فارِغٌ غَيرُ مُتَحَقَّق.</summary>
+    internal static ACommerce.Kit.Auth.User Account(Guid? id = null, string? email = null, string? phone = null) => new()
+    {
+        Id = id ?? Seller, TenantSlug = Slug,
+        Email = email ?? "", EmailVerified = email is not null,
+        Phone = phone ?? "", PhoneVerified = phone is not null,
+    };
+
+    /// <summary>
     /// <para><b>المُوجَب</b>: سَطرُ الأَثَرِ مَكتوبٌ <b>قَبلَ أَوَّلِ نِداءٍ إلى OTO</b> (يُقاسُ عِندَ النِداءِ نَفسِه)؛ و«Register» بِالرَمزِ السوقِيّ؛ ورَمزُ الحِسابِ
     /// الجَديدُ مَختوماً في <c>delivery:{listing_owner}</c> بِسِياقِه؛ والوارِدُ مُسَجَّلاً بِرَمزِ البائِعِ الجَديدِ لا السوقِيّ؛ ورابِطُ التَفعيلِ
     /// <b>مَرَّةً واحِدَة</b> لِلبائِعِ نَفسِه.</para>
@@ -952,7 +969,7 @@ public class VendorShippingTests(ITestOutputHelper output)
         var surface = Surface(w, Registering(), reveal: reveal);
         Assert.Equal(VendorShippingInput.Register, surface.Input);
 
-        var res = await surface.RegisterAsync(Slug, Vendor(), Form(), Inbound, ip: "203.0.113.7");
+        var res = await surface.RegisterAsync(Slug, Registrant(), Form(), Inbound, ip: "203.0.113.7");
 
         Assert.True(res.Ok, res.Code);
         Assert.Equal(1, auditsAtFirstCall);
@@ -988,7 +1005,7 @@ public class VendorShippingTests(ITestOutputHelper output)
         w.Oto.Routes[OtoClient.RegisterPath] = _ => OtoRouteHandler.Json(status, answer);
         var surface = Surface(w, Registering());
 
-        var res = await surface.RegisterAsync(Slug, Vendor(), Form(), Inbound);
+        var res = await surface.RegisterAsync(Slug, Registrant(), Form(), Inbound);
 
         Assert.Equal(code, res.Code);
         Assert.Null(Entry(w));
@@ -1005,7 +1022,7 @@ public class VendorShippingTests(ITestOutputHelper output)
     {
         var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
         var stored = w.Docs.Stored.Count;
-        var res = await Surface(w, Registering()).RegisterAsync(Slug, Vendor(), Form(vat: true) with { CrNumber = "" }, Inbound);
+        var res = await Surface(w, Registering()).RegisterAsync(Slug, Registrant(), Form(vat: true) with { CrNumber = "" }, Inbound);
 
         Assert.Equal(VendorRegistrationValidator.CrNumberInvalid, res.Code);
         Assert.Empty(w.Oto.Calls);
@@ -1023,7 +1040,7 @@ public class VendorShippingTests(ITestOutputHelper output)
         var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
         var stored = w.Docs.Stored.Count;
         var res = await Surface(w, Opts(environment, marketplaceToken), vault ? null : ProviderVault.FromKek(null))
-            .RegisterAsync(Slug, Vendor(), Form(), Inbound);
+            .RegisterAsync(Slug, Registrant(), Form(), Inbound);
 
         Assert.Equal(code, res.Code);
         Assert.Empty(w.Oto.Calls);
@@ -1042,7 +1059,7 @@ public class VendorShippingTests(ITestOutputHelper output)
         w.Oto.Before = _ => auditsAtFirstCall ??= w.Docs.Wrote<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>();
         var surface = Surface(w, Registering());
 
-        var res = await surface.RegisterAsync(Slug, Vendor(), Form() with { Consent = false, Email = "" }, Inbound);
+        var res = await surface.RegisterAsync(Slug, Registrant(), Form() with { Consent = false, Email = "" }, Inbound);
 
         Assert.True(res.Ok, res.Code);
         Assert.Equal(1, auditsAtFirstCall);
@@ -1059,73 +1076,223 @@ public class VendorShippingTests(ITestOutputHelper output)
         // ومَدخَلٌ لا يُفَكّ — مَختومٌ بِمِفتاحٍ آخَر.
         var other = await DealShipTests.ConfirmedCashDeal();
         other.Docs.Put(DealShipTests.VendorEntry(DealShipTests.NewVault(), Slug, Seller));
-        var unreadable = await Surface(other, Registering()).RegisterAsync(Slug, Vendor(), Form(), Inbound);
+        var unreadable = await Surface(other, Registering()).RegisterAsync(Slug, Registrant(), Form(), Inbound);
         Assert.Equal(VendorShippingService.EntryUnreadable, unreadable.Code);
         Assert.Empty(other.Oto.Calls);
     }
 
-    // ─── تَوصيفُ «اليَوم» — مُراجَعَةُ تَيّارِ S8، الجولة 2 (‏2026-10-12): بابُ التَسجيلِ يُنفِقُ الرَمزَ السوقِيَّ بِبَريدٍ وجَوّالٍ يَكتُبُهُما الطالِب ───
+    // ─── جِهَةُ التَواصُلِ المُتَحَقَّقُ مِنها وحَدُّ المُحاوَلات — مُراجَعَةُ تَيّارِ S8، الجولة 2 (‏2026-10-12؛ ‏ADR-033 §٧‑ف) ───
     //
-    // الخُطوَة 8 تُسقِطُ حارِسَ المُديرِ لِأَنّ «بَياناتُ التَسجيلِ بَياناتُ البائِعِ فَالفِعلُ فِعلُه» — والكودُ يَقولُها ولا يُلزِمُها: لا شَيءَ يَربِطُ البَريدَ
-    // والجَوّالَ المُرسَلَينِ إلى OTO بِما تَحَقَّقنا أَنَّه لِصاحِبِ الجَلسَة (`User.EmailVerified` و`User.PhoneVerified`)، والمُحاوَلاتُ الفاشِلَةُ بِلا حَدّ —
-    // والدَورُ «بائِع» يَختارُه الزائِرُ لِنَفسِه. أَربَعَةُ صُفوفٍ تُثَبِّتُ «اليَوم» قَبلَ قَلبِه (القاعِدَة ٣)، وتُقلَبُ بِأَسمائِها في كوميتِ الإصلاح.
+    // الخُطوَة 8 تُسقِطُ حارِسَ المُديرِ لِأَنّ «بَياناتُ التَسجيلِ بَياناتُ البائِعِ فَالفِعلُ فِعلُه» — وكانَ الكودُ يَقولُها ولا يُلزِمُها (تَوصيفُه `dcfebfe`:
+    // أَربَعَةُ صُفوفِ «اليَوم» قُلِبَت هُنا بِأَسمائِها). صارَ: بَوّابَةٌ نَقِيَّةٌ تَبني مِن وَثيقَةِ صاحِبِ الجَلسَةِ سِجِلّاً يَطلُبُه تَوقيعُ الخِدمَة، فَيُرسَلُ في كُلِّ
+    // خانَةٍ ما تَحَقَّقنا مِنه لا ما كُتِب؛ وحَدُّ مُحاوَلاتٍ مِن حِصَّةِ الإرسالِ القائِمَة (عَشرٌ في السّاعَة) بَعدَ التَدقيقِ وقَبلَ الأَثَر. والصُفوفُ الجَديدَةُ
+    // بِبائِعينَ جُدُدٍ (`Guid.NewGuid()`): الحِصَّةُ عَدّادٌ واحِدٌ في العَمَلِيَّة، فَلا يَأكُلُ صَفٌّ حَدَّ صَفّ.
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b>: البَريدُ والجَوّالُ المُرسَلانِ إلى «Register» هُما ما كُتِبَ في الاستِمارَة — ولِلبائِعِ في المَتجَرِ بَريدٌ تَحَقَّقنا
-    /// أَنَّه لَه، فَلا يُسأَلُ ولا يُرسَل.</summary>
+    /// <summary>
+    /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_the_register_sends_the_typed_email_and_mobile_whoever_they_belong_to</c> (‏<c>dcfebfe</c>): يُرسَلُ ما كُتِبَ
+    /// ولِلبائِعِ بَريدٌ مُتَحَقَّقٌ مِنه. <b>والآن</b>: البَريدُ المُتَحَقَّقُ مِنه يُرسَلُ في خانَتِه ولَو كُتِبَ غَيرُه، والجَوّالُ — غَيرُ المُتَحَقَّقِ مِنه — كَما
+    /// كُتِب؛ وبِالعَكسِ لِمَن دَخَلَ بِجَوّالِه.</para>
+    /// </summary>
     [Fact]
-    public async Task Today_the_register_sends_the_typed_email_and_mobile_whoever_they_belong_to()
+    public async Task The_register_sends_the_vendors_verified_contact_in_place_of_a_typed_one()
     {
-        var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
-        w.Docs.Put(new ACommerce.Kit.Auth.User { Id = Seller, TenantSlug = Slug, Email = "seller.own@example.com", EmailVerified = true });
+        var typed = Form() with { Email = "someone.else@example.com", Mobile = "966511111111" };
 
-        var res = await Surface(w, Registering()).RegisterAsync(Slug, Vendor(),
-            Form() with { Email = "someone.else@example.com", Mobile = "966511111111" }, Inbound);
+        var byEmail = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
+        Assert.True((await Surface(byEmail, Registering())
+            .RegisterAsync(Slug, Registrant(Guid.NewGuid(), email: "Seller.Own@Example.com", phone: null), typed, Inbound)).Ok);
+        var byPhone = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
+        Assert.True((await Surface(byPhone, Registering())
+            .RegisterAsync(Slug, Registrant(Guid.NewGuid(), phone: "966533333333"), typed, Inbound)).Ok);
 
-        Assert.True(res.Ok, res.Code);
-        var body = JsonDocument.Parse(w.Oto.Calls.Single(c => c.Path == OtoClient.RegisterPath).Body!).RootElement;
-        Assert.Equal(("someone.else@example.com", "966511111111"),
-            (body.GetProperty("email").GetString(), body.GetProperty("mobileNumber").GetString()));
+        static (string?, string?) Sent(DealShipTests.World w)
+        {
+            var body = JsonDocument.Parse(w.Oto.Calls.Single(c => c.Path == OtoClient.RegisterPath).Body!).RootElement;
+            return (body.GetProperty("email").GetString(), body.GetProperty("mobileNumber").GetString());
+        }
+        Assert.Equal(("seller.own@example.com", "966511111111"), Sent(byEmail));
+        Assert.Equal(("someone.else@example.com", "966533333333"), Sent(byPhone));
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b>: المُحاوَلاتُ الفاشِلَةُ بِلا حَدّ — إحدى عَشرَةَ مُحاوَلَةً تَرُدُّها OTO تَبلُغُها كُلُّها بِالرَمزِ السوقِيّ، ولِكُلٍّ سَطرُ أَثَر.
-    /// وحِصَّةُ الإرسالِ القائِمَةُ في المِنَصَّةِ لِما يُكَلِّفُ نِداءً خارِجِيّاً — <c>AuthHandlers.TryConsumeSendQuota</c> — عَشرٌ في الساعَة.</summary>
+    /// <summary>
+    /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_failed_registers_have_no_bound_and_each_reaches_OTO_with_the_marketplace_token</c> (‏<c>dcfebfe</c>): إحدى عَشرَةَ
+    /// مُحاوَلَةً تَبلُغُ OTO. <b>والآن — <c>vendor_register_rate_limited</c> مُوجَباً</b>: العَشرُ الأولى تَبلُغُها (حِصَّةُ الإرسالِ القائِمَة)، والحادِيَةَ عَشرَةَ
+    /// تُرَدُّ بِرَمزِها <b>قَبلَ الأَثَرِ وقَبلَ OTO</b> — عَشرَةُ نِداءاتٍ وعَشرَةُ أَسطُرِ أَثَر، ولا حِفظ.</para>
+    /// </summary>
     [Fact]
-    public async Task Today_failed_registers_have_no_bound_and_each_reaches_OTO_with_the_marketplace_token()
+    public async Task Registers_beyond_the_send_quota_answer_rate_limited_before_the_audit_and_OTO()
     {
         var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
         w.Oto.Routes[OtoClient.RegisterPath] = _ => OtoRouteHandler.Json(HttpStatusCode.BadRequest, "{\"success\": false, \"otoErrorCode\": \"OTO1001\"}");
         var surface = Surface(w, Registering());
-        var owner = Guid.NewGuid();
+        var registrant = Registrant(Guid.NewGuid());
 
+        var codes = new List<string?>();
         for (var i = 0; i < 11; i++)
-            Assert.Equal(OtoFailures.Refused, (await surface.RegisterAsync(Slug, Vendor(owner), Form(), Inbound)).Code);
+            codes.Add((await surface.RegisterAsync(Slug, registrant, Form(), Inbound)).Code);
 
-        Assert.Equal(11, w.Oto.CallsTo(OtoClient.RegisterPath));
-        Assert.Equal(11, w.Docs.Wrote<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>());
+        output.WriteLine(string.Join(" · ", codes));
+        Assert.Equal(Enumerable.Repeat<string?>(OtoFailures.Refused, 10).Append(VendorShippingService.RegisterRateLimited), codes);
+        Assert.Equal(10, w.Oto.CallsTo(OtoClient.RegisterPath));
+        Assert.Equal(10, w.Docs.Wrote<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>());
+        Assert.Equal(0, w.Docs.Wrote<TenantProviderBinding>());
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b>: نُقطَةُ التَسجيلِ لا تَسأَلُ حِسابَ البائِعِ عَن شَيءٍ قَبلَ الاستِمارَة — بَوّابَةُ الهُوِيَّةِ ثُمَّ الاستِمارَةُ ثُمَّ الخِدمَةُ
-    /// بِالبائِعِ نَفسِه.</summary>
+    /// <summary><b><c>vendor_register_rate_limited</c> سالِباً</b>: الحَدُّ لِبائِعٍ في مَتجَر بِمِفتاحِ الحِصَّةِ «tenant|subject» — <b>بائِعٌ آخَرُ ومَتجَرٌ آخَرُ لا
+    /// يَرِثانِه</b>؛ واستِمارَةٌ تُرَدُّ لا تَستَهلِكُ مُحاوَلَة (إحدى عَشرَةَ مَردودَةً ثُمَّ الصالِحَةُ تَمضي)؛ ومَن لَه مَدخَلٌ يُعيدُ تَسجيلَ وارِدِه بِرَمزِه هُوَ فَلا
+    /// يَمَسُّه الحَدّ.</summary>
     [Fact]
-    public void Today_the_register_endpoint_asks_the_vendors_account_nothing_before_the_form()
+    public async Task Vendor_register_rate_limited_negative_another_vendor_another_store_a_refused_form_and_a_kept_entry_are_not_bounded()
+    {
+        var owner = Guid.NewGuid();
+        var key = VendorShippingService.RegisterAttemptKey(Slug, owner);
+        Assert.Equal($"{Slug}|oto-register:{owner:D}", key);
+        for (var i = 0; i < 10; i++) Assert.True(ACommerce.Kit.Auth.Server.AuthHandlers.TryConsumeSendQuota(key));
+
+        var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
+        var surface = Surface(w, Registering());
+        Assert.Equal(VendorShippingService.RegisterRateLimited, (await surface.RegisterAsync(Slug, Registrant(owner), Form(), Inbound)).Code);
+        Assert.Empty(w.Oto.Calls);
+
+        Assert.True((await surface.RegisterAsync(Slug, Registrant(Guid.NewGuid()), Form(), Inbound)).Ok);        // بائِعٌ آخَرُ في المَتجَر
+        Assert.True((await surface.RegisterAsync("owner-test", Registrant(owner), Form(), Inbound)).Ok);          // البائِعُ نَفسُه في مَتجَرٍ آخَر
+
+        var fresh = Guid.NewGuid();
+        for (var i = 0; i < 11; i++)
+            Assert.Equal(VendorRegistrationValidator.ConsentMissing,
+                (await surface.RegisterAsync(Slug, Registrant(fresh), Form() with { Consent = false }, Inbound)).Code);
+        Assert.True((await surface.RegisterAsync(Slug, Registrant(fresh), Form(), Inbound)).Ok);                // المَردودَةُ لَم تَستَهلِك
+
+        w.Docs.Put(DealShipTests.VendorEntry(w.Vault, Slug, owner));                                             // مَدخَلُه في هذا المَتجَر
+        var inbound = await surface.RegisterAsync(Slug, Registrant(owner), Form(), Inbound);
+        Assert.True(inbound.Ok, inbound.Code);
+        Assert.Equal("inbound", w.Docs.Stored.OfType<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>().Last().Note);
+    }
+
+    /// <summary>
+    /// <para><b><c>vendor_contact_unverified</c> مُوجَباً وسالِباً</b> — مُوجَبُه: لا وَثيقَة، أَو وَثيقَةُ غَيرِه، أَو مَحذوفَة، أَو بَريدٌ وجَوّالٌ غَيرُ مُتَحَقَّقٍ
+    /// مِنهُما، أَو مَن دَخَلَ بِنَفاذ (<c>NID-…</c> بِلا <c>PhoneVerified</c> — كَما يَكتُبُه <c>AuthHandlers</c>)، أَو «مُتَحَقَّقٌ» لَيسَ بَريداً ولا أَرقاماً.
+    /// وسالِبُه: بَريدٌ مُتَحَقَّقٌ وَحدَه، أَو جَوّالٌ وَحدَه، أَو كِلاهُما — والسِجِلُّ يَحمِلُ ما تَحَقَّقنا مِنه وَحدَه، والبَريدُ مُطَبَّعاً بِدالَّةِ الدُخولِ نَفسِها،
+    /// والجَوّالُ أَرقاماً بِلا «+» ولا مَسافات؛ ولا يُطبَعُ شَيءٌ مِنهُما.</para>
+    /// </summary>
+    [Fact]
+    public void Vendor_contact_unverified_positive_and_negative()
+    {
+        var vendor = Vendor();
+        var deleted = Account(email: "seller@example.com");
+        deleted.DeletedAt = DealShipTests.Now.UtcDateTime;
+        var refused = new ACommerce.Kit.Auth.User?[]
+        {
+            null,
+            Account(Stranger, email: "seller@example.com"),
+            deleted,
+            new() { Id = Seller, Email = "seller@example.com", Phone = "966500000000" },
+            new() { Id = Seller, Phone = "NID-1010101010", NationalId = "1010101010" },
+            new() { Id = Seller, Email = "not-an-email", EmailVerified = true, Phone = "NID-1010101010", PhoneVerified = true },
+        };
+        foreach (var account in refused)
+        {
+            var admission = VendorContactGate.Admit(vendor, account);
+            Assert.Null(admission.Registrant);
+            Assert.Equal(VendorContactGate.ContactUnverified, admission.Violation!.Code);
+            Assert.False(VendorContactGate.IsAllowed(vendor, account));
+        }
+
+        var byEmail = VendorContactGate.Admit(vendor, Account(email: " Seller@Example.com ")).Registrant!;
+        var byPhone = VendorContactGate.Admit(vendor, Account(phone: "+966 500000000")).Registrant!;
+        var both = VendorContactGate.Admit(vendor, Account(email: "seller@example.com", phone: "966500000000")).Registrant!;
+        Assert.Equal(("seller@example.com", (string?)null), (byEmail.VerifiedEmail, byEmail.VerifiedMobile));
+        Assert.Equal(((string?)null, "966500000000"), (byPhone.VerifiedEmail, byPhone.VerifiedMobile));
+        Assert.Equal(("seller@example.com", "966500000000"), (both.VerifiedEmail, both.VerifiedMobile));
+        Assert.Same(vendor, both.Vendor);
+        Assert.Null(VendorContactGate.Admit(vendor, Account(email: "seller@example.com")).Violation);
+        Assert.Equal(new[] { VendorContactGate.ContactUnverified }, VendorContactGate.All);
+        Assert.DoesNotContain("seller@example.com", both.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("966500000000", both.ToString(), StringComparison.Ordinal);
+    }
+
+    /// <summary><b>الرَبطُ دالَّةٌ نَقِيَّة</b>: كُلُّ جِهَةٍ مُتَحَقَّقٍ مِنها تَحِلُّ مَحَلَّ ما في خانَتِها والأُخرى كَما كُتِبَت، وسائِرُ الحُقولِ بِحَرفِها — فَالمُدَقِّقُ يَرى
+    /// ما يُرسَل: خانَةٌ مُقفَلَةٌ جاءَت فارِغَةً لا تُنتِجُ رَمزاً، وخانَةٌ مَفتوحَةٌ فارِغَةٌ تُنتِجُ رَمزَها.</summary>
+    [Fact]
+    public void The_registrant_binds_each_verified_channel_and_leaves_the_other_as_typed()
+    {
+        var typed = Form() with { Email = "", Mobile = "" };
+
+        var byEmail = Registrant(email: "seller@example.com", phone: null).Bind(typed);
+        var byPhone = Registrant().Bind(typed);
+        var both = Registrant(email: "seller@example.com").Bind(typed);
+
+        Assert.Equal(typed with { Email = "seller@example.com" }, byEmail);
+        Assert.Equal(new[] { VendorRegistrationValidator.MobileInvalid }, Codes(byEmail));
+        Assert.Equal(typed with { Mobile = "966500000000" }, byPhone);
+        Assert.Equal(new[] { VendorRegistrationValidator.EmailInvalid }, Codes(byPhone));
+        Assert.Equal(typed with { Email = "seller@example.com", Mobile = "966500000000" }, both);
+        Assert.Empty(Codes(both));
+    }
+
+    /// <summary>
+    /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_the_register_endpoint_asks_the_vendors_account_nothing_before_the_form</c> (‏<c>dcfebfe</c>). <b>والآن</b>: الجَلسَةُ ثُمَّ
+    /// <c>ListingVendorGate.Admit</c> ثُمَّ وَثيقَةُ صاحِبِ الجَلسَةِ وبَوّابَةُ جِهَةِ التَواصُل — <b>قَبلَ قِراءَةِ الاستِمارَة</b> (القاعِدَة ٦) — ثُمَّ الخِدمَةُ
+    /// بِالسِجِلِّ لا بِالبائِع، ورَدُّ البَوّابَةِ بِرَمزِها إلى «إعلاناتي».</para>
+    /// </summary>
+    [Fact]
+    public void The_register_endpoint_admits_the_verified_contact_after_the_vendor_and_before_the_form()
     {
         var body = RegisterEndpointBody();
-        Assert.DoesNotContain("ProfileAsync", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("VendorContactGate", body, StringComparison.Ordinal);
-        Assert.Contains("vendors.RegisterAsync(slug, vendor,", body, StringComparison.Ordinal);
+        var vendor = body.IndexOf("Services.Shipping.ListingVendorGate.Admit(", StringComparison.Ordinal);
+        var account = body.IndexOf("accounts.ProfileAsync(slug, userId)", StringComparison.Ordinal);
+        var contact = body.IndexOf("Services.Shipping.VendorContactGate.Admit(vendor,", StringComparison.Ordinal);
+        var form = body.IndexOf("VendorRegistrationForm.Read(req.Form)", StringComparison.Ordinal);
+        var call = body.IndexOf("vendors.RegisterAsync(slug, registrant,", StringComparison.Ordinal);
+        output.WriteLine($"بائِع={vendor} · وَثيقَة={account} · جِهَة={contact} · استِمارَة={form} · نِداء={call}");
+        Assert.True(vendor > 0 && account > vendor && contact > vendor && form > account && form > contact && call > contact,
+            $"التَرتيبُ مَكسور: {vendor}/{account}/{contact}/{form}/{call}");
+        Assert.Contains("shipping_err={contact.Violation!.Code}", body, StringComparison.Ordinal);
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b>: خانَتا البَريدِ والجَوّالِ في استِمارَةِ التَسجيلِ فارِغَتانِ يَكتُبُ فيهِما الطالِبُ ما شاء — بِلا قيمَةٍ ولا قَفل.</summary>
+    /// <summary>
+    /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_the_register_form_leaves_email_and_mobile_for_anyone_to_type</c> (‏<c>dcfebfe</c>). <b>والآن</b>: كُلٌّ مِن الخانَتَينِ
+    /// تُرسَمُ بِقيمَةِ السِجِلِّ مُقفَلَةً حَيثُ تَحَقَّقنا مِنها (<c>value</c> و<c>readonly</c> مِنه، و<c>null</c> لا يُرسَمُ فَتَبقى مَفتوحَة) — والنُقطَةُ لا تَقرَأُ
+    /// المُقفَلَةَ أَصلاً (<c>VendorRegistrant.Bind</c>).</para>
+    /// </summary>
     [Fact]
-    public void Today_the_register_form_leaves_email_and_mobile_for_anyone_to_type()
+    public void The_register_form_draws_each_verified_channel_prefilled_and_locked()
     {
-        foreach (var field in new[] { "EmailField", "MobileField" })
+        foreach (var (field, held) in new[] { ("EmailField", "VerifiedEmail"), ("MobileField", "VerifiedMobile") })
         {
             var input = RegisterInput(field);
             output.WriteLine(input);
-            Assert.DoesNotContain("readonly", input, StringComparison.Ordinal);
-            Assert.DoesNotContain("value=", input, StringComparison.Ordinal);
+            Assert.Contains($"value=\"@verified.{held}\"", input, StringComparison.Ordinal);
+            Assert.Contains($"readonly=\"@(verified.{held} is not null)\"", input, StringComparison.Ordinal);
         }
+    }
+
+    /// <summary><b>بائِعٌ تَرُدُّه بَوّابَةُ جِهَةِ التَواصُلِ لا تُرسَمُ لَه استِمارَةٌ ولا زِرُّ إعادَة</b> (القاعِدَة ١٢ — لا بابَ يُرَدّ): الصَفحَةُ تَسأَلُ البَوّابَةَ نَفسَها
+    /// بِوَثيقَتِه؛ نَموذَجُ الإعادَةِ داخِلَ <c>@if (registrant is not null)</c>، واستِمارَةُ التَسجيلِ داخِلَ <c>else if (registrant is { } verified)</c>، والقِسمُ كُلُّه
+    /// لا يُرسَمُ بِلا رابِطٍ ولا مَدخَلٍ ولا سِجِلّ.</summary>
+    [Fact]
+    public void A_vendor_the_contact_gate_refuses_is_drawn_neither_the_register_form_nor_its_retry()
+    {
+        var page = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(Path.Combine(
+            RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "MyListings.razor"))));
+        const string Enum = "ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput.";
+        var branch = Block(page, page.IndexOf("else if (shippingInput == " + Enum + "Register)", StringComparison.Ordinal));
+        var action = Regex.Escape("action=\"@($\"/{Slug}/me/shipping/oto/register\")\"");
+
+        const string SectionGuard = "@if (activationLink is not null || shippingView is not null || registrant is not null)";
+        const string RetryGuard = "@if (registrant is not null)";
+        const string FormGuard = "else if (registrant is { } verified)";
+        var section = Block(branch, branch.IndexOf(SectionGuard, StringComparison.Ordinal) + SectionGuard.Length);
+        var retry = Block(branch, branch.IndexOf(RetryGuard, StringComparison.Ordinal) + RetryGuard.Length);
+        var form = Block(branch, branch.IndexOf(FormGuard, StringComparison.Ordinal) + FormGuard.Length);
+
+        output.WriteLine($"قِسم={section.Length} · إعادَة={retry.Length} · استِمارَة={form.Length}");
+        Assert.Contains("<section id=\"vendor-shipping\"", section, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(retry, action));
+        Assert.Single(Regex.Matches(form, action));
+        Assert.Equal(2, Regex.Matches(section, action).Count);
+        Assert.Contains("registrant = Vs.VendorContactGate.Admit(", page, StringComparison.Ordinal);
+        Assert.Contains("await Accounts.ProfileAsync(Slug, Auth.UserId!.Value)", page, StringComparison.Ordinal);
     }
 
     /// <summary>جِسمُ نُقطَةِ التَسجيلِ نَصّاً — مِن مَسارِها الحَرفِيِّ إلى سِلسِلَتِها، بِلا تَعليقات.</summary>
@@ -1375,10 +1542,10 @@ public class LiveVendorShippingProofTests(ITestOutputHelper output)
                 new ACommerce.Templates.Customer.Marketplace.Services.Api.ApiKeyRevealStore(
                     new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions())));
 
-            var ok = await surface.RegisterAsync(slug, ListingVendorGate.Admit(accepted, "بائِع", 1).Vendor!,
+            var ok = await surface.RegisterAsync(slug, VendorShippingTests.Registrant(accepted),
                 VendorShippingTests.Form(), "https://wasayel.example/x");
             oto.Routes[OtoClient.RegisterPath] = _ => OtoRouteHandler.Json(HttpStatusCode.BadRequest, "{\"success\": false}");
-            var no = await surface.RegisterAsync(slug, ListingVendorGate.Admit(refused, "بائِع", 1).Vendor!,
+            var no = await surface.RegisterAsync(slug, VendorShippingTests.Registrant(refused),
                 VendorShippingTests.Form(), "https://wasayel.example/x");
 
             var entry = (await providers.VendorEntryAsync(slug, ProviderCapabilities.Delivery, accepted))!;

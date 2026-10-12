@@ -53,6 +53,9 @@ public static class VendorShippingEndpoints
         // البائِعِ الشَخصِيَّةُ تُرسَلُ إلى طَرَفٍ ثالِثٍ وتُنشِئُ حِساباً بِاسمِه — فَالفِعلُ فِعلُه لا فِعلُ مُديرٍ يَنوبُ عَنه (نَقضُ ‏ADR-012 §٢‑ب
         // المُعلَنُ في تَرويسَةِ ‏ADR-033؛ مُثَبَّتٌ بِصَفٍّ مُسَمّى في `WriteEndpointGuardTests`). وسَطرُ الأَثَرِ قَبلَ أَوَّلِ نِداءٍ في الخِدمَة.
         // والرَدُّ إلى «إعلاناتي» بِرَمزِه — نَسَقُ اللَصق.
+        // **وجِهَةُ التَواصُلِ المُتَحَقَّقُ مِنها بَعدَ الهُوِيَّةِ وقَبلَ الاستِمارَة** (مُراجَعَةُ تَيّارِ S8، الجولة 2، ‏2026-10-12؛ ‏ADR-033 §٧‑ف):
+        // «الفِعلُ فِعلُه» كانَ يُقالُ ولا يُلزَم — صارَت `VendorContactGate.Admit` بِوَثيقَةِ صاحِبِ الجَلسَةِ تَبني `VendorRegistrant` الَّذي
+        // يَطلُبُه تَوقيعُ الخِدمَة، فَيُرسَلُ إلى OTO بَريدُه أَو جَوّالُه الَّذي تَحَقَّقنا مِنه لا ما يُكتَبُ في خانَتِه.
         app.MapPost("/{slug}/me/shipping/oto/register",
             async (string slug, HttpRequest req, Services.Queries.AccountQueries accounts,
                    Services.Shipping.VendorShippingService vendors) =>
@@ -64,8 +67,11 @@ public static class VendorShippingEndpoints
             var admitted = Services.Shipping.ListingVendorGate.Admit(userId, AuthSession.ResolveUserName(req, slug), owned);
             if (admitted.Vendor is not { } vendor)
                 return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, $"me/listings?shipping_err={admitted.Violation!.Code}"));
+            var contact = Services.Shipping.VendorContactGate.Admit(vendor, await accounts.ProfileAsync(slug, userId));
+            if (contact.Registrant is not { } registrant)
+                return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, $"me/listings?shipping_err={contact.Violation!.Code}"));
 
-            var res = await vendors.RegisterAsync(slug, vendor, Services.Shipping.VendorRegistrationForm.Read(req.Form),
+            var res = await vendors.RegisterAsync(slug, registrant, Services.Shipping.VendorRegistrationForm.Read(req.Form),
                 Services.Shipping.VendorShippingSurface.InboundUrl(Billing.PayPalOrderSurface.OriginFrom(req), slug),
                 req.HttpContext.Connection.RemoteIpAddress?.ToString());
             return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug,
