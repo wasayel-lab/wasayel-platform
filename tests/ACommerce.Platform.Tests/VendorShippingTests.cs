@@ -288,6 +288,21 @@ public class VendorShippingTests(ITestOutputHelper output)
         return captured.ToString();
     }
 
+    /// <summary>نَظيرُه لِمَسارٍ لا مُتَزامِن (‏2026-10-12، مُراجَعَةُ تَيّارِ S8، الجولة 2) — ومَسارُ عالَمِ الوَثائِقِ يَتِمُّ مُتَزامِناً، فَلا يَخرُجُ سَطرُه
+    /// بَعدَ الاستِعادَة. ولا يُنادى إلّا مِن هذا الصِنف: صُفوفُه تَتَتابَعُ فَلا يَتَسابَقُ مُحَوِّلانِ لِلمَجرى.</summary>
+    private static async Task<string> StderrOfAsync(Func<Task> act)
+    {
+        var original = Console.Error;
+        var captured = new StringWriter();
+        Console.SetError(TextWriter.Synchronized(captured));
+        try { await act(); }
+        finally { Console.SetError(original); }
+        return captured.ToString();
+    }
+
+    /// <summary>كَم مَرَّةً سُئِلَ عالَمُ الوَثائِقِ استِعلاماً (<c>Query</c>) — «لَم تُسأَلْ مَداخِلُ المَتجَر» شَرطٌ يُعَدّ لا يُستَنتَج.</summary>
+    private static int Asked(DealShipTests.World w) => w.Docs.Members.Count(m => m == "Query");
+
     /// <summary>
     /// <para><b>والقاعِدَةُ هي ما يُسكِتُ القِراءَة — مَقيسَة</b>: بِلا القاعِدَةِ كانَ المَدخَلُ يَسقُطُ أَيضاً (مُعَرِّفُه لا يُساوي قُدرَةً) ولَكِن
     /// بِسَطرِ خَطَإٍ «يَحمِلُ مُزَوِّدَ قُدرَةٍ أُخرى» في كُلِّ قِراءَةٍ لِلمَتجَر — فَصَفُّ المَجموعَةِ وَحدَه أَعمى عَنها (طَفرَةُ حَذفِها تَمُرُّ خَضراء،
@@ -638,6 +653,12 @@ public class VendorShippingTests(ITestOutputHelper output)
         Assert.Empty(w.Oto.Calls);
     }
 
+    /// <summary>
+    /// <para><b>وصارَ «ولا يُفتَحُ المَتجَرُ بِالمَداخِل» مَقيساً ‏2026-10-12 (مُراجَعَةُ تَيّارِ S8، الجولة 2)</b> — كانَ الاسمُ يَقولُه ولا يَفحَصُه: عالَمُ الوَثائِقِ
+    /// يَرمي عِندَ الاستِعلامِ عَمداً، و<c>HasVendorEntriesAsync</c> يَبتَلِعُ الرَميَ «لا»، فَكانَ <c>False</c> لِـ«ashare» يَصدُقُ بِالخِزانَةِ وبِغَيرِها —
+    /// وحَذفُ شَرطِ الخِزانَةِ مِن <c>CarrierReadyForStoreAsync</c> يَمُرُّ أَخضَرَ في ‏3485 صَفّاً (مَقيس). <b>فَالمَقيسُ الآن ما يَنفَردُ بِه شَرطُ
+    /// الخِزانَة</b>: بِلا خِزانَةٍ لا تُسأَلُ مَداخِلُ المَتجَرِ أَصلاً — صِفرُ استِعلامٍ وصِفرُ سَطرِ فَشَل — ومُوجَبُه الصَفُّ التالي.</para>
+    /// </summary>
     [Fact]
     public async Task Without_a_vault_a_vendor_entry_is_no_carrier_and_the_store_is_not_opened_by_entries()
     {
@@ -650,9 +671,36 @@ public class VendorShippingTests(ITestOutputHelper output)
 
         Assert.False(await shipping.CarrierReadyForAsync(Slug, deal));
         Assert.Null(await shipping.CarrierForAsync(Slug, deal));
-        Assert.False(await shipping.CarrierReadyForStoreAsync("ashare"));
+        var asked = Asked(w);
+        var stderr = await StderrOfAsync(async () => Assert.False(await shipping.CarrierReadyForStoreAsync("ashare")));
+        Assert.Equal(asked, Asked(w));                                      // مَداخِلُ المَتجَرِ لَم تُسأَل — لا خِزانَةَ تَفُكُّ ما فيها
+        Assert.DoesNotContain("«ashare»", stderr, StringComparison.Ordinal);    // ولا سَطرَ فَشَل: لَم يُسأَلْ شَيء
         Assert.True(await shipping.CarrierReadyForStoreAsync(Slug));      // رَمزُ التَهيئَةِ لِمَتجَرِ العَرضِ يَفتَحُ الوارِدَ كَما كان
         Assert.False(await (await DealShipTests.ConfirmedCashDeal(environment: OtoEnvironment.Production)).Shipping.CarrierReadyForStoreAsync(Slug));
+    }
+
+    /// <summary>
+    /// <para><b>والمُوجَب: بِخِزانَةٍ تُسأَلُ مَداخِلُ المَتجَر</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S8، الجولة 2) — مَتجَرٌ غَيرُ مَتجَرِ العَرضِ فَلا رَمزَ تَهيئَةٍ
+    /// يُجيبُ قَبلَها. <b>وعالَمُ الوَثائِقِ لا يُجيبُ الاستِعلام</b> (<c>Query</c> يَرمي فيه عَمداً) — فَهذا الصَفُّ لا يَرى الجَوابَ ولا يَدَّعيه: يَرى أَنّ
+    /// السُؤالَ وَقَع، وأَنّ استِعلاماً يَفشَلُ «لا ناقِل» (فَشَلٌ مُغلَق: ‏404 بِلا قِراءَة) <b>بِسَطرِ فَشَلِه في مَجرى الخَطَإ يُسَمّي المَتجَر</b> — فَلا
+    /// يَلتَبِسُ بِـ«لا مَداخِل». و«نَعَم» حَيثُ مَدخَلٌ فَعّالٌ يُقاسُ عَلى Postgres وَحدَه
+    /// (<c>LiveVendorShippingProofTests.A_store_with_only_vendor_entries_opens_the_inbound_with_a_vault_and_not_without_one_on_Postgres</c>).</para>
+    /// </summary>
+    [Fact]
+    public async Task With_a_vault_a_store_asks_its_vendor_entries_and_a_query_that_fails_is_no_carrier_with_its_failure_line()
+    {
+        const string store = "owner-test";
+        var w = await DealShipTests.ConfirmedCashDeal();
+        Assert.Null(DealShipping.VendorTokenFor(Opts(), store));
+        var asked = Asked(w);
+
+        var stderr = await StderrOfAsync(async () => Assert.False(await w.Shipping.CarrierReadyForStoreAsync(store)));
+
+        output.WriteLine($"سُؤالُ المَداخِل: {Asked(w) - asked} · مَجرى الخَطَإ: «{stderr.Trim()}»");
+        Assert.Equal(asked + 1, Asked(w));
+        Assert.Contains("[providers]", stderr, StringComparison.Ordinal);
+        Assert.Contains($"«{store}»", stderr, StringComparison.Ordinal);
+        Assert.Contains("«Query»", stderr, StringComparison.Ordinal);       // جَلسَةُ الاختِبارِ لا تُنَفِّذُ الاستِعلام — CI لا يَرى الجَواب
     }
 
     // ═══ ٦. النُقطَة ═══════════════════════════════════════════════════
@@ -1172,6 +1220,48 @@ public class LiveVendorShippingProofTests(ITestOutputHelper output)
                 foreach (var b in await s.Query<TenantProviderBinding>().ToListAsync()) s.Delete(b);
                 await s.SaveChangesAsync();
             }
+        }
+    }
+
+    /// <summary>
+    /// <para><b>شَرطُ الخِزانَةِ في «أَلِلمَتجَرِ ناقِل؟» عَلى Postgres</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S8، الجولة 2): مَتجَرٌ لَيسَ فيه إلّا مَدخَلُ بائِعٍ فَعّال —
+    /// لا رَمزَ تَهيئَةٍ لَه — <b>مَداخِلُه «نَعَم» بِالخِزانَةِ وبِغَيرِها، والوارِدُ مَفتوحٌ بِخِزانَةٍ ومُغلَقٌ بِلاها</b>: مَدخَلٌ لا يُفَكُّ لا يَفتَحُ وارِداً.
+    /// وما لا يَراه عالَمُ الوَثائِقِ (جَوابُ الاستِعلام) يُقاسُ هُنا — وكانَ الصَفُّ الحَيُّ أَعلاه بِخِزانَةٍ وَحدَها، فَحَذفُ الشَرطِ يَمُرُّ أَخضَرَ فيه.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_store_with_only_vendor_entries_opens_the_inbound_with_a_vault_and_not_without_one_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = "vs-zz-v-" + Guid.NewGuid().ToString("N")[..8];
+        var seller = Guid.NewGuid();
+        try
+        {
+            var providers = new TenantProviderService(store);
+            var vault = DealShipTests.NewVault();
+            var entry = DealShipTests.VendorEntry(vault, slug, seller);
+            await providers.BindVendorAsync(slug, ProviderCapabilities.Delivery, seller, entry.ProviderSlug,
+                entry.Values, entry.WebhookId, null, seller.ToString("D"));
+
+            var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, RefreshToken = "RT-live-proof" });
+            DealShipping ShippingWith(ProviderVault keys) => new(new DealsService(store, new ForbiddenPaymentProvider()),
+                new OtoClient(new HttpClient(new OtoRouteHandler()), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options,
+                null, providers, keys, new FixedClock(DealShipTests.Now));
+            Assert.Null(DealShipping.VendorTokenFor(options.Value, slug));
+
+            var entries = await providers.HasVendorEntriesAsync(slug, ProviderCapabilities.Delivery);
+            var withVault = await ShippingWith(vault).CarrierReadyForStoreAsync(slug);
+            var withoutVault = await ShippingWith(ProviderVault.FromKek(null)).CarrierReadyForStoreAsync(slug);
+
+            output.WriteLine($"مَداخِل: {entries} · الوارِدُ بِخِزانَة: {withVault} · بِلا خِزانَة: {withoutVault}");
+            Assert.Equal((true, true, false), (entries, withVault, withoutVault));
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            foreach (var b in await s.Query<TenantProviderBinding>().ToListAsync()) s.Delete(b);
+            await s.SaveChangesAsync();
         }
     }
 

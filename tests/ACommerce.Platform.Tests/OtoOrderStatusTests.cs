@@ -1137,6 +1137,33 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         Assert.Equal(0, tripwire.Reads);
     }
 
+    /// <summary>
+    /// <para><b>مَتجَرٌ لا يَفتَحُه إلّا مَدخَلُ بائِعٍ، بِلا خِزانَة: ‏404 فارِغٌ بِلا قِراءَةٍ ولا سُؤالٍ لِمَداخِلِه</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S8، الجولة 2)
+    /// — خِدمَةُ الشَحنِ بِمَداخِلِ البائِعينَ وخِزانَةٍ لا مِفتاحَ لَها، والمَتجَرُ غَيرُ مَتجَرِ العَرضِ فَلا رَمزَ تَهيئَةٍ يَفتَحُه. وعالَمُ الوَثائِقِ يَرمي
+    /// عِندَ الاستِعلامِ ويَبتَلِعُه <c>HasVendorEntriesAsync</c> «لا»، فَـ‏404 وَحدَه يَصدُقُ بِشَرطِ الخِزانَةِ وبِغَيرِه؛ <b>وعَدُّ الاستِعلامِ يَنفَرِدُ بِه</b>:
+    /// صِفرٌ هُنا. والمُوجَبُ — بِخِزانَةٍ يُقرَأُ الجِسم — عَلى Postgres
+    /// (<c>LiveOtoOrderStatusProofTests.A_store_with_only_vendor_entries_reads_the_inbound_body_with_a_vault_and_answers_404_unread_without_one_on_Postgres</c>).</para>
+    /// </summary>
+    [Fact]
+    public async Task A_store_with_only_vendor_entries_and_no_vault_answers_404_without_reading_or_asking_its_entries()
+    {
+        var w = await ShippedCashDeal();
+        var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, RefreshToken = DealShipTests.ConfigToken });
+        var shipping = new DealShipping(w.Deals,
+            new OtoClient(new HttpClient(w.Oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options,
+            null, w.Providers, ProviderVault.FromKek(null), new FixedClock(DealShipTests.Now));
+        var asked = w.Docs.Members.Count(m => m == "Query");
+        var tripwire = new BodyTripwire(throws: true);
+        await using var host = await OtoHost.StartAsync(shipping, tripwire);
+
+        using var resp = await host.PostAsync("owner-test", NoticeJson(w.Id.ToString("N")));
+
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+        Assert.Equal("", await resp.Content.ReadAsStringAsync());
+        Assert.Equal(0, tripwire.Reads);
+        Assert.Equal(asked, w.Docs.Members.Count(m => m == "Query"));
+    }
+
     /// <summary><b>إشعارٌ بِلا تَوقيعٍ أَو بِسِرٍّ آخَرَ ‏401 فارِغ</b> — ولا تُسأَلُ OTO ولا تُكتَبُ الصَفقَة (تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 §٧‑م).
     /// والسالِب: المُوَقَّعُ بِسِرِّ البائِعِ يَمُرُّ إلى سُؤالِ OTO ويُكتَبُ التَسليم.</summary>
     [Fact]
@@ -1534,5 +1561,55 @@ public class LiveOtoOrderStatusProofTests(ITestOutputHelper output)
         Assert.Equal((DealStatus.Active, DealStage.Delivered), (final.Status, final.Stage));
         Assert.Single(final.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Delivered);
         Assert.DoesNotContain(final.Timeline, e => e.StageAfter == DealStage.Reviewed);
+    }
+
+    /// <summary>
+    /// <para><b>الوارِدُ عَبرَ HTTP عَلى Postgres لِمَتجَرٍ لا يَفتَحُه إلّا مَدخَلُ بائِع</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S8، الجولة 2): <b>بِخِزانَةٍ يُقرَأُ الجِسمُ</b>
+    /// (المِجَسُّ يَرمي عِندَ أَوَّلِ قِراءَةٍ فَيَصيرُ ‏500 — بُرهانُ «قُرِئ»)، <b>وبِلاها ‏404 فارِغٌ بِصِفرِ قِراءَة</b>. والمَتجَرُ مُستَأجِرٌ مُؤَقَّتٌ لا رَمزَ
+    /// تَهيئَةٍ لَه، فَلا يَفتَحُه إلّا مَدخَلُه — وجَوابُ «أَفيه مَدخَل؟» مِن Postgres، وهُوَ ما لا يُجيبُه عالَمُ الوَثائِق.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_store_with_only_vendor_entries_reads_the_inbound_body_with_a_vault_and_answers_404_unread_without_one_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = "vs-zz-h-" + Guid.NewGuid().ToString("N")[..8];
+        var seller = Guid.NewGuid();
+        try
+        {
+            var providers = new TenantProviderService(store);
+            var vault = DealShipTests.NewVault();
+            var entry = DealShipTests.VendorEntry(vault, slug, seller);
+            await providers.BindVendorAsync(slug, ProviderCapabilities.Delivery, seller, entry.ProviderSlug,
+                entry.Values, entry.WebhookId, null, seller.ToString("D"));
+            var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, RefreshToken = "RT-live-proof" });
+            DealShipping ShippingWith(ProviderVault keys) => new(new DealsService(store, new ForbiddenPaymentProvider()),
+                new OtoClient(new HttpClient(new OtoRouteHandler()), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options,
+                null, providers, keys, new FixedClock(DealShipTests.Now));
+            var notice = OtoOrderStatusTests.NoticeJson(Guid.NewGuid().ToString("N"));
+
+            var opened = new BodyTripwire(throws: true);
+            HttpStatusCode openedStatus;
+            await using (var host = await OtoHost.StartAsync(ShippingWith(vault), opened))
+            using (var resp = await host.PostAsync(slug, notice))
+                openedStatus = resp.StatusCode;
+
+            var closed = new BodyTripwire(throws: true);
+            HttpStatusCode closedStatus;
+            string closedBody;
+            await using (var host = await OtoHost.StartAsync(ShippingWith(ProviderVault.FromKek(null)), closed))
+            using (var resp = await host.PostAsync(slug, notice))
+                (closedStatus, closedBody) = (resp.StatusCode, await resp.Content.ReadAsStringAsync());
+
+            output.WriteLine($"بِخِزانَة: {(int)openedStatus} وقِراءات {opened.Reads} · بِلاها: {(int)closedStatus} وقِراءات {closed.Reads}");
+            Assert.Equal(HttpStatusCode.InternalServerError, openedStatus);
+            Assert.True(opened.Reads > 0, $"قِراءاتُ الجِسمِ بِخِزانَة: {opened.Reads}");
+            Assert.Equal((HttpStatusCode.NotFound, "", 0), (closedStatus, closedBody, closed.Reads));
+        }
+        finally
+        {
+            await WipeAsync(store, slug);
+        }
     }
 }
