@@ -74,26 +74,12 @@ public static class ProviderSecrecy
         return Mask;
     }
 
-    /// <summary><b>لَقطَةُ الرَبطِ كَما تُكتَب في التَدقيق</b> —
-    /// مُعَتَّمَةً بِالبِناء لا بِالنِيَّة: الدالَّةُ لا تَقبَل نَصّاً
-    /// صَريحاً إلّا مِن نَوعٍ يُعرَض.</summary>
-    public static string ForAudit(
-        string? providerSlug, string status,
-        IEnumerable<KeyValuePair<string, string>> kindsByField,
-        Func<string, string?> rawOf)
-    {
-        var parts = kindsByField
-            .OrderBy(p => p.Key, StringComparer.Ordinal)
-            .Select(p => $"{p.Key}={Censor(p.Value, rawOf(p.Key))}");
-
-        return $"provider={providerSlug ?? "-"}; status={status}; " +
-               string.Join("; ", parts);
-    }
-
-    /// <summary><b>لَقطَةُ الرَبطِ مِن قيَمِه المُخَزَّنَة</b> (‏2026-10-12) — كُلُّ
-    /// قيمَةٍ بِصورَتِها هي (<c>StoredValue.Censored</c>): الصَريحَةُ بِـ<see cref="Censor"/>
-    /// حَرفاً كَما في الحِملِ أَعلاه، والمَختومَةُ بِذَيلِها المَحفوظِ — ولا نَصَّ
-    /// صَريحاً لَها يُمَرَّرُ أَصلاً. والشَكلُ والتَرتيبُ هُما شَكلُ الحِملِ أَعلاه.</summary>
+    /// <summary><b>لَقطَةُ الرَبطِ كَما تُكتَب في التَدقيق — مِن قيَمِه المُخَزَّنَة</b>:
+    /// كُلُّ قيمَةٍ بِصورَتِها هي (<c>StoredValue.Censored</c>) — الصَريحَةُ بِـ<see cref="Censor"/>
+    /// والمَختومَةُ بِذَيلِها المَحفوظ — ولا نَصَّ صَريحاً يُمَرَّرُ إلَيها أَصلاً: مُعَتَّمَةً
+    /// بِالبِناء لا بِالنِيَّة. (‏2026-10-12: كانَ بِجِوارِها حِملٌ يَأخُذُ النَصَّ الصَريحَ بِدالَّة،
+    /// ومُستَهلِكُه الوَحيدُ <c>ProviderBindSurface.AuditLine</c> انتَقَلَ إلى هذِه — فَحُذِفَ
+    /// ونُقِلَ صَفّا اختِبارِه إلَيها بِتَوَقُّعاتِهِما حَرفاً؛ القاعِدَة ١.)</summary>
     public static string ForAudit(
         string? providerSlug, string status,
         IEnumerable<KeyValuePair<string, StoredValue>> values)

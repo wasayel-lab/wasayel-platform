@@ -101,7 +101,15 @@ public static class ProviderBindSurface
                     code => req.Form[code].ToString(), tenantSlug, vault);
 
     /// <summary>النِصفُ النَقِيُّ <b>بِلا خِزانَة</b> — ما يَحتاجُها يُرَدُّ
-    /// بِـ<see cref="VaultUnavailable"/>. الفَشَلُ المُغلَقُ هُوَ الافتِراض.</summary>
+    /// بِـ<see cref="VaultUnavailable"/>. الفَشَلُ المُغلَقُ هُوَ الافتِراض.
+    /// <para><b>ولا مُستَهلِكَ لَه وَقتَ التَشغيل — يُقالُ ولا يُبتلَع</b> (‏2026-10-12، مُراجَعَةُ
+    /// التَيّار): كانَ نِصفَ النُقطَةِ النَقِيَّ حَتّى صارَت النُقطَةُ تُنادي الرُباعِيَّةَ بِالخِزانَةِ
+    /// المُسَجَّلَة (‏ADR-032 الخُطوَة 7)؛ ومُستَهلِكوه اليَومَ سَبعَةُ صُفوفٍ في
+    /// <c>ProviderBindSurfaceTests</c> تَقرَأُ «بِلا خِزانَة» بِاسمِها. <b>ويَبقى لِأَنّه سَطرٌ يُحيلُ
+    /// إلى الرُباعِيَّةِ الحَيَّةِ نَفسِها</b> — صُفوفُه تَقيسُ الكودَ الَّذي يُشَغَّلُ لا نُسخَةً مِنه،
+    /// بِخِلافِ حِملِ <c>ProviderSecrecy.ForAudit</c> القَديمِ الَّذي كانَ مَنطِقاً ثانِياً فَحُذِف.
+    /// <b>ويُحذَفُ</b> يَومَ يُمَسُّ أَوَّلُ تِلكَ الصُفوفِ لِسَبَبٍ آخَر: تُنادي
+    /// <c>FromForm(slug, field, "", null)</c> ويَسقُطُ هذا السَطر.</para></summary>
     public static Read FromForm(string providerSlug, Func<string, string?> field)
         => FromForm(providerSlug, field, tenantSlug: "", vault: null);
 
