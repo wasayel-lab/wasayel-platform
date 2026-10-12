@@ -1064,6 +1064,92 @@ public class VendorShippingTests(ITestOutputHelper output)
         Assert.Empty(other.Oto.Calls);
     }
 
+    // ─── تَوصيفُ «اليَوم» — مُراجَعَةُ تَيّارِ S8، الجولة 2 (‏2026-10-12): بابُ التَسجيلِ يُنفِقُ الرَمزَ السوقِيَّ بِبَريدٍ وجَوّالٍ يَكتُبُهُما الطالِب ───
+    //
+    // الخُطوَة 8 تُسقِطُ حارِسَ المُديرِ لِأَنّ «بَياناتُ التَسجيلِ بَياناتُ البائِعِ فَالفِعلُ فِعلُه» — والكودُ يَقولُها ولا يُلزِمُها: لا شَيءَ يَربِطُ البَريدَ
+    // والجَوّالَ المُرسَلَينِ إلى OTO بِما تَحَقَّقنا أَنَّه لِصاحِبِ الجَلسَة (`User.EmailVerified` و`User.PhoneVerified`)، والمُحاوَلاتُ الفاشِلَةُ بِلا حَدّ —
+    // والدَورُ «بائِع» يَختارُه الزائِرُ لِنَفسِه. أَربَعَةُ صُفوفٍ تُثَبِّتُ «اليَوم» قَبلَ قَلبِه (القاعِدَة ٣)، وتُقلَبُ بِأَسمائِها في كوميتِ الإصلاح.
+
+    /// <summary><b>تَوصيفُ «اليَوم»</b>: البَريدُ والجَوّالُ المُرسَلانِ إلى «Register» هُما ما كُتِبَ في الاستِمارَة — ولِلبائِعِ في المَتجَرِ بَريدٌ تَحَقَّقنا
+    /// أَنَّه لَه، فَلا يُسأَلُ ولا يُرسَل.</summary>
+    [Fact]
+    public async Task Today_the_register_sends_the_typed_email_and_mobile_whoever_they_belong_to()
+    {
+        var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
+        w.Docs.Put(new ACommerce.Kit.Auth.User { Id = Seller, TenantSlug = Slug, Email = "seller.own@example.com", EmailVerified = true });
+
+        var res = await Surface(w, Registering()).RegisterAsync(Slug, Vendor(),
+            Form() with { Email = "someone.else@example.com", Mobile = "966511111111" }, Inbound);
+
+        Assert.True(res.Ok, res.Code);
+        var body = JsonDocument.Parse(w.Oto.Calls.Single(c => c.Path == OtoClient.RegisterPath).Body!).RootElement;
+        Assert.Equal(("someone.else@example.com", "966511111111"),
+            (body.GetProperty("email").GetString(), body.GetProperty("mobileNumber").GetString()));
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم»</b>: المُحاوَلاتُ الفاشِلَةُ بِلا حَدّ — إحدى عَشرَةَ مُحاوَلَةً تَرُدُّها OTO تَبلُغُها كُلُّها بِالرَمزِ السوقِيّ، ولِكُلٍّ سَطرُ أَثَر.
+    /// وحِصَّةُ الإرسالِ القائِمَةُ في المِنَصَّةِ لِما يُكَلِّفُ نِداءً خارِجِيّاً — <c>AuthHandlers.TryConsumeSendQuota</c> — عَشرٌ في الساعَة.</summary>
+    [Fact]
+    public async Task Today_failed_registers_have_no_bound_and_each_reaches_OTO_with_the_marketplace_token()
+    {
+        var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
+        w.Oto.Routes[OtoClient.RegisterPath] = _ => OtoRouteHandler.Json(HttpStatusCode.BadRequest, "{\"success\": false, \"otoErrorCode\": \"OTO1001\"}");
+        var surface = Surface(w, Registering());
+        var owner = Guid.NewGuid();
+
+        for (var i = 0; i < 11; i++)
+            Assert.Equal(OtoFailures.Refused, (await surface.RegisterAsync(Slug, Vendor(owner), Form(), Inbound)).Code);
+
+        Assert.Equal(11, w.Oto.CallsTo(OtoClient.RegisterPath));
+        Assert.Equal(11, w.Docs.Wrote<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>());
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم»</b>: نُقطَةُ التَسجيلِ لا تَسأَلُ حِسابَ البائِعِ عَن شَيءٍ قَبلَ الاستِمارَة — بَوّابَةُ الهُوِيَّةِ ثُمَّ الاستِمارَةُ ثُمَّ الخِدمَةُ
+    /// بِالبائِعِ نَفسِه.</summary>
+    [Fact]
+    public void Today_the_register_endpoint_asks_the_vendors_account_nothing_before_the_form()
+    {
+        var body = RegisterEndpointBody();
+        Assert.DoesNotContain("ProfileAsync", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("VendorContactGate", body, StringComparison.Ordinal);
+        Assert.Contains("vendors.RegisterAsync(slug, vendor,", body, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم»</b>: خانَتا البَريدِ والجَوّالِ في استِمارَةِ التَسجيلِ فارِغَتانِ يَكتُبُ فيهِما الطالِبُ ما شاء — بِلا قيمَةٍ ولا قَفل.</summary>
+    [Fact]
+    public void Today_the_register_form_leaves_email_and_mobile_for_anyone_to_type()
+    {
+        foreach (var field in new[] { "EmailField", "MobileField" })
+        {
+            var input = RegisterInput(field);
+            output.WriteLine(input);
+            Assert.DoesNotContain("readonly", input, StringComparison.Ordinal);
+            Assert.DoesNotContain("value=", input, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>جِسمُ نُقطَةِ التَسجيلِ نَصّاً — مِن مَسارِها الحَرفِيِّ إلى سِلسِلَتِها، بِلا تَعليقات.</summary>
+    private static string RegisterEndpointBody()
+    {
+        var code = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "Shipping", "VendorShippingEndpoints.cs")));
+        var start = code.IndexOf("app.MapPost(\"/{slug}/me/shipping/oto/register\"", StringComparison.Ordinal);
+        Assert.True(start > 0, "النُقطَةُ لَيسَت بِمَسارِها الحَرفِيّ — الأَداةُ عَمياء.");
+        return code[start..code.IndexOf(".RequireStoreWritable();", start, StringComparison.Ordinal)];
+    }
+
+    /// <summary>وَسمُ مُدخَلِ حَقلٍ مِن حُقولِ القارِئِ في «إعلاناتي» — مِن <c>&lt;input</c> إلى <c>/&gt;</c> — بِلا تَعليقات.</summary>
+    private static string RegisterInput(string fieldConstant)
+    {
+        var page = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(Path.Combine(
+            RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "MyListings.razor"))));
+        var at = page.IndexOf($"name=\"@Vs.VendorRegistrationForm.{fieldConstant}\"", StringComparison.Ordinal);
+        Assert.True(at > 0, $"لا مُدخَلَ لِـ{fieldConstant} — الأَداةُ عَمياء.");
+        Assert.Equal(-1, page.IndexOf($"name=\"@Vs.VendorRegistrationForm.{fieldConstant}\"", at + 1, StringComparison.Ordinal));
+        var open = page.LastIndexOf("<input", at, StringComparison.Ordinal);
+        return page[open..(page.IndexOf("/>", at, StringComparison.Ordinal) + 2)];
+    }
+
     /// <summary><b>ولا استِهلاكَ لِحِصَّة</b>: لا الخِدمَةُ ولا نُقطَتاها تَمَسّانِ الاستِحقاقات — فاحِصٌ نَصِّيٌّ يَعُدُّ ما قَرَأ.</summary>
     [Fact]
     public void The_vendor_shipping_paths_consume_no_quota()
