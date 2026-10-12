@@ -152,6 +152,9 @@ public static class MarketplaceTemplateExtensions
         // حِسابُ الشَحنِ لِلبائِعِ داخِلَ المَتجَر (‏ADR-033 الخُطوَة 7، تَيّارُ S8، ‏2026-10-12) — عَلى خِدمَةِ المُزَوِّدينَ والخِزانَةِ
         // وعَميلِ OTO القائِمَة؛ والمَدخَلُ وَثيقَةُ الرَبطِ نَفسُها بِمُعَرِّفٍ مُرَكَّب، فَلا خِزانَةَ ثانِيَةَ ولا وَثيقَةَ ثانِيَة.
         services.AddScoped<Services.Shipping.VendorShippingService>();
+        // التَحَقُّقُ مِن دَفعِ المُشتَري عِندَ بَوّابَةِ المَتجَر (‏ADR-032 الخُطوَة 9، تَيّارُ S9، ‏2026-10-12) — عَلى خِدمَةِ الصَفَقاتِ وخِدمَةِ
+        // المُزَوِّدينَ والخِزانَةِ وعَميلِ البَوّابَةِ القائِمَة؛ مُستَهلِكُها نُقطَةُ `/{slug}/payments/verify` في `Billing/TenantGatewayEndpoints.cs`.
+        services.AddScoped<Services.Deals.GatewayPayments>();
 
         // التَّقييمات (تَقييم مُتَبادَل بَعد اكتِمال صَفقَة).
         services.AddScoped<ACommerce.Kit.Reviews.ReviewsService>();
@@ -4077,6 +4080,10 @@ public static class MarketplaceTemplateExtensions
         app.MapOtoShipping();
         // وسَطحُ البائِع (‏ADR-033 الخُطوَة 7، ‏2026-10-12) — مِلَفٌّ ثالِثٌ لِلسَبَبِ نَفسِه.
         app.MapVendorShipping();
+
+        // ─── التَحَقُّقُ مِن الدَفعِ عِندَ بَوّابَةِ المَتجَر (‏ADR-032 الخُطوَة 9، ‏2026-10-12) ─────────────────
+        // مِلَفٌّ مُنفَصِلٌ لِلسَبَبِ نَفسِه: نِطاقُ المُراجَعَةِ وسَقفُ النَزيفِ لَه وَحدَه. وصَفحَةُ العَودَةِ مُكَوِّنُ Razor لا نُقطَة.
+        app.MapTenantGateway();
 
         return app;
     }

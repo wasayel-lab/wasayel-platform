@@ -1,0 +1,46 @@
+using ACommerce.Kit.Auth.Server;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+
+namespace ACommerce.Templates.Customer.Marketplace.Billing;
+
+/// <summary>
+/// <para><b>نُقطَةُ التَحَقُّقِ مِن دَفعِ المُشتَري عِندَ بَوّابَةِ المَتجَر</b> (‏ADR-032 §٢‑هـ الخُطوَة 9) — مِلَفٌّ مُنفَصِلٌ عَلى نَسَقِ
+/// <c>PaddleEndpoints</c> و<c>OtoShippingEndpoints</c>: نِطاقُ المُراجَعَةِ «هذا المِلَفّ»، وسَقفُ نَزيفِه يُقاسُ وَحدَه
+/// (<c>EndpointBodyBleedTests</c>).</para>
+///
+/// <para><b>والعَودَةُ مِن البَوّابَةِ صَفحَةٌ لا نُقطَة</b> — <c>Components/Pages/GatewayPayReturn.razor</c> عَلى
+/// <c>/{slug}/pay/return</c>: قِراءَةٌ خالِصَةٌ تَرسُمُ النَتيجَةَ وزِرّاً واحِداً يُرسِلُ إلى هُنا. ولِماذا لَيسَت <c>MapGet</c> في هذا
+/// المِلَفِّ كَما كَتَبَ صَفُّ الخُطوَة: صَفَحاتُ المَتجَرِ مُكَوِّناتُ Razor تَحتَ قالَبِه وثيمِه، و<c>MapGet</c> يَرسُمُ صَفحَةً يَحتاجُ
+/// أُنبوبَ تَصييرٍ لا وُجودَ لَه في المُستَودَع (القاعِدَة ٨) — وسابِقَتُه <c>PayPalReturn.razor</c>. و«الـGET لا يَكتُب» مَفروضٌ عَلَيها
+/// بِـ<c>No_razor_page_writes_state</c> كَما يُفرَضُ عَلى <c>MapGet</c> بِـ<c>No_get_endpoint_writes_state</c> (‏ADR-032 §٨‑ب).</para>
+///
+/// <para><b>والمَسارُ مَكتوبٌ حَرفاً لا بِثابِت</b> — حُجَّةُ <c>PaddleEndpoints</c> بِعَينِها: فَواحِصُ النِقاطِ نَصِّيَّةٌ تَقرَأُ
+/// <c>MapPost("…"</c>، ونُقطَةٌ تُسَجَّلُ بِثابِتٍ لا يَراها عَدّادُ النَزيفِ ولا فاحِصُ الحُرّاس.</para>
+/// </summary>
+public static class TenantGatewayEndpoints
+{
+    public static IEndpointRouteBuilder MapTenantGateway(this IEndpointRouteBuilder app)
+    {
+        // ─── المُشتَري يَطلُبُ إثباتَ دَفعِه ───────────────────────────────────
+        //
+        // **الحارِسُ قَبلَ أَيِّ حَقل** (القاعِدَة ٦): الجَلسَةُ أَوَّلاً، ومِنها سِجِلُّ السُلطَةِ `DealPayer` الَّذي يَطلُبُه تَوقيعُ
+        // `GatewayPayments.VerifyAsync` — ثُمَّ يُقرَأُ حَقلُ الصَفقَةِ المَرجِع. والقَرارُ «أَهذِه صَفقَتُه وعَلَيها فاتورَة؟» في
+        // `DealPayAuthorization` النَقِيَّةِ قَبلَ فَكِّ المِفتاحِ وقَبلَ البَوّابَة؛ والبُرهانُ في `GatewayPaymentProof.Gate` النَقِيَّة.
+        // **وبِلا `RequireStoreWritable`** — مُثَبَّتٌ بِسَبَبِه في `PinnedUngatedStoreWrites`: دَفعٌ وَقَعَ عِندَ البَوّابَةِ خَبَرٌ عَن مالٍ
+        // قُبِضَ لا مُحتَوىً يَكتُبُه المَتجَر. **ولا يُمَرَّرُ إلغاءُ الطَلَب** (`RequestAborted`) — نَسَقُ `/ship`: مُهلَةُ العَميلِ تَحُدُّ النِداء.
+        app.MapPost("/{slug}/payments/verify",
+            async (string slug, HttpRequest req, Services.Deals.GatewayPayments gateway) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null) return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, "login"));
+            var (userId, _, _) = parsed.Value;
+            var payer = new Services.Deals.DealPayer(userId);
+            var res = await gateway.VerifyAsync(slug, payer, req.Form[Services.Deals.GatewayReturn.DealKey].ToString());
+            return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, Services.Deals.GatewayReturn.AfterVerify(res)));
+        }).DisableAntiforgery();
+
+        return app;
+    }
+}

@@ -1,0 +1,529 @@
+using System.Net;
+using System.Security.Cryptography;
+using System.Text;
+using ACommerce.Kit.Auth.Server;
+using ACommerce.Kit.Payments;
+using ACommerce.Platform.I18n;
+using ACommerce.Platform.Providers;
+using ACommerce.Templates.Customer.Marketplace;
+using ACommerce.Templates.Customer.Marketplace.Billing;
+using ACommerce.Templates.Customer.Marketplace.Services;
+using ACommerce.Templates.Customer.Marketplace.Services.Deals;
+using ACommerce.Templates.Customer.Marketplace.Services.Providers;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Xunit;
+using Xunit.Abstractions;
+
+namespace ACommerce.Platform.Tests;
+
+// ═══ العَودَةُ مِن بَوّابَةِ المَتجَرِ ونُقطَةُ التَحَقُّق — ‏ADR-032 §٢‑هـ الخُطوَة 9 ═════════════════════════════
+//
+// **ما يُقاسُ هُنا**: (١) سُلطَةُ الدافِعِ بِرُموزِها الثَلاثَة — مُوجَبٌ وسالِبٌ لِكُلٍّ؛ (٢) عَقدُ صَفحَةِ العَودَة — قِراءَةُ المَرجِعِ
+// ومَسارُ الرَدِّ ومَعجَمُ الشَريطِ بِنُصوصٍ حَيَّةٍ في القامُوس؛ (٣) الخِدمَةُ: السُلطَةُ قَبلَ فَكِّ المِفتاحِ وقَبلَ البَوّابَة، والمِفتاحُ
+// المَفكوكُ هُوَ ما يَبلُغُ رَأسَ المُصادَقَة، والبُرهانُ مِن `GatewayPaymentProof.Gate`، و**صِفرُ كِتابَةٍ** في هذِه الخُطوَة؛ (٤) النُقطَةُ
+// مُشَغَّلَةً عَلى مُضيفٍ مُصَغَّر: الحارِسُ قَبلَ أَيِّ حَقلٍ **سُلوكاً لا نَصّاً**؛ (٥) الصَفحَةُ لا تَسأَلُ البَوّابَةَ ولا تَكتُب.
+//
+// **ولا مِفتاحَ بَوّابَةٍ حَقيقيّاً هُنا** — مُعالِجُ `MoyasarClientTests` يُعيدُ رُدودَ الوَثيقَة، والمِفتاحُ مَختومٌ بِخِزانَةٍ حَقيقِيَّةٍ
+// ومِفتاحٍ رَئيسٍ عَشوائِيٍّ لِكُلِّ عالَم. والبُرهانُ الحَيُّ بِمِفتاحِ اختِبارٍ عِندَ المالِكِ في سِجِلِّه «ج».
+
+/// <summary>لوغٌ يُلتَقَطُ نَصّاً — لِيُقاسَ أَنّ المِفتاحَ لا يَبلُغُه.</summary>
+internal sealed class GatewayCapturingLogger : ILogger<GatewayPayments>
+{
+    public List<string> Lines { get; } = new();
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+    public bool IsEnabled(LogLevel logLevel) => true;
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+        Func<TState, Exception?, string> formatter) => Lines.Add(formatter(state, exception));
+}
+
+public class TenantGatewayEndpointsTests(ITestOutputHelper output)
+{
+    private const string Slug = "zz-gateway";
+    private const string Key = MoyasarClientTests.Key;
+    private const string InvoiceId = MoyasarClientTests.InvoiceId;
+    private static readonly Guid Buyer = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    private static readonly Guid Other = Guid.Parse("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+
+    private static string Root => ThemeZeroEquivalenceTests.RepoRoot;
+    private static string Template(params string[] parts)
+        => File.ReadAllText(Path.Combine(new[] { Root, "libs", "templates", "ACommerce.Templates.Customer.Marketplace" }.Concat(parts).ToArray()));
+
+    // ═══ ١) سُلطَةُ الدافِع — ثَلاثَةُ رُموزٍ، مُوجَبٌ وسالِبٌ لِكُلٍّ ═══════════════════════════════════════
+
+    private static Deal PaidByGateway(Guid initiator, string? invoice = InvoiceId)
+    {
+        var d = new Deal { Id = Guid.NewGuid(), TenantSlug = Slug, InitiatorId = initiator, AmountSar = 150m };
+        if (invoice is not null) d.Refs[GatewayPaymentProof.InvoiceRef] = invoice;
+        return d;
+    }
+
+    [Fact]
+    public void The_lexicon_is_three_codes_and_deal_not_found_is_the_accept_lexicons_own()
+    {
+        Assert.Equal(new[] { "deal_not_found", "actor_not_payer", "gateway_invoice_missing" }, DealPayAuthorization.All);
+        Assert.Equal(DealAcceptAuthorization.DealNotFound, DealPayAuthorization.DealNotFound);
+        Assert.Equal(DealPayAuthorization.All.Count, DealPayAuthorization.All.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void The_buyer_of_a_deal_carrying_its_invoice_may_verify_it()
+    {
+        var deal = PaidByGateway(Buyer);
+        Assert.Null(DealPayAuthorization.Validate(deal, new DealPayer(Buyer)));
+        Assert.True(DealPayAuthorization.IsAllowed(deal, new DealPayer(Buyer)));
+
+        // ولا يَسأَلُ عَن حالِ الصَفقَة: دَفعٌ وَقَعَ ثُمَّ أُلغِيَت الصَفقَةُ يُثبَتُ ولا يُبتلَع.
+        deal.Status = DealStatus.Cancelled;
+        Assert.Null(DealPayAuthorization.Validate(deal, new DealPayer(Buyer)));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void No_deal_is_deal_not_found_and_a_present_one_is_not(bool present)
+    {
+        var refusal = DealPayAuthorization.Validate(present ? PaidByGateway(Buyer) : null, new DealPayer(Buyer));
+        Assert.Equal(present ? null : DealPayAuthorization.DealNotFound, refusal?.Code);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Another_users_deal_is_actor_not_payer_and_ones_own_is_not(bool foreign)
+    {
+        var refusal = DealPayAuthorization.Validate(PaidByGateway(foreign ? Other : Buyer), new DealPayer(Buyer));
+        Assert.Equal(foreign ? DealPayAuthorization.ActorNotPayer : null, refusal?.Code);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(InvoiceId)]
+    public void A_deal_without_a_recorded_invoice_is_gateway_invoice_missing_and_one_with_it_is_not(string? invoice)
+    {
+        var deal = PaidByGateway(Buyer, invoice);
+        var refusal = DealPayAuthorization.Validate(deal, new DealPayer(Buyer));
+        Assert.Equal(string.IsNullOrWhiteSpace(invoice) ? DealPayAuthorization.InvoiceMissing : null, refusal?.Code);
+    }
+
+    // ═══ ٢) عَقدُ صَفحَةِ العَودَة ════════════════════════════════════════════════════════════
+
+    /// <summary><b>المَرجِعُ مِن رَأسِ القيمَة</b>: المُعَرِّفُ بِصيغَةِ <c>N</c>، وما يُلحَقُ بَعدَه بِلا «&amp;» صَحيحَة لا يُضَيِّعُه —
+    /// الوَثيقَةُ لا تَقولُ أَتُلحِقُ البَوّابَةُ مُعامِلاتٍ بِرابِطِ العَودَة. وما سِواه <c>null</c>.</summary>
+    [Fact]
+    public void The_reference_is_read_from_the_head_of_the_value_and_nothing_else_parses()
+    {
+        var id = Guid.NewGuid();
+        Assert.Equal(id, GatewayReturn.DealIdOf(id.ToString("N")));
+        Assert.Equal(id, GatewayReturn.DealIdOf(id.ToString("N") + "?id=7c2f8a1e&status=paid"));
+        Assert.Null(GatewayReturn.DealIdOf(id.ToString("D")));
+        Assert.Null(GatewayReturn.DealIdOf("not-a-deal"));
+        Assert.Null(GatewayReturn.DealIdOf(id.ToString("N")[..31]));
+        Assert.Null(GatewayReturn.DealIdOf(""));
+        Assert.Null(GatewayReturn.DealIdOf(null));
+    }
+
+    [Fact]
+    public void The_return_path_carries_the_deal_and_the_code_and_a_proven_payment_goes_to_the_deal_page()
+    {
+        var id = Guid.Parse("11111111-2222-4333-8444-555555555555");
+        Assert.Equal("pay/return?deal=11111111222243338444555555555555&err=gateway_invoice_unpaid",
+            GatewayReturn.PathFor(id, GatewayPaymentProof.InvoiceUnpaid));
+        Assert.Equal("pay/return?err=deal_not_found", GatewayReturn.PathFor(null, DealPayAuthorization.DealNotFound));
+        Assert.Equal("pay/return?deal=11111111222243338444555555555555", GatewayReturn.PathFor(id, null));
+        Assert.Equal("pay/return", GatewayReturn.PathFor(null, null));
+
+        Assert.Equal("pay/return?deal=11111111222243338444555555555555&err=gateway_refused",
+            GatewayReturn.AfterVerify(new GatewayVerifyResult(id, null, MoyasarFailures.Refused)));
+        var proven = GatewayPaymentProof.Gate(
+            new MoyasarInvoice(InvoiceId, "paid", 15000, "SAR", null, GatewayPaymentProof.MetadataFor(new[] { id })),
+            new[] { new Deal { Id = id, AmountSar = 150m, Refs = { [GatewayPaymentProof.InvoiceRef] = InvoiceId } } }).Payment;
+        Assert.NotNull(proven);
+        Assert.Equal($"deals/{id}", GatewayReturn.AfterVerify(new GatewayVerifyResult(id, proven, null)));
+    }
+
+    /// <summary><b>المَعجَمُ اتِّحادُ المَعاجِمِ الثَلاثَة</b> — سُلطَةُ الدافِعِ وفَشَلُ العَميلِ وبَوّابَةُ البُرهان — ثَلاثَةَ عَشَرَ بِلا تَكرار؛
+    /// والمِفتاحُ بِالبادِئَةِ في المَقطَعِ الثالِث؛ وما خارِجَه <c>null</c>.</summary>
+    [Fact]
+    public void The_strip_lexicon_is_the_union_of_the_three_lexicons_with_one_key_each()
+    {
+        var expected = DealPayAuthorization.All.Concat(MoyasarFailures.All).Concat(GatewayPaymentProof.Codes)
+            .OrderBy(c => c, StringComparer.Ordinal);
+        Assert.Equal(expected, GatewayReturn.Codes.OrderBy(c => c, StringComparer.Ordinal));
+        Assert.Equal(13, GatewayReturn.Codes.Count);
+        Assert.All(GatewayReturn.Codes, c => Assert.Equal(GatewayReturn.TextPrefix + c, GatewayReturn.KeyFor(c)));
+        Assert.All(GatewayReturn.Codes, c => Assert.Equal(3, GatewayReturn.KeyFor(c)!.Split('.').Length));
+        Assert.Null(GatewayReturn.KeyFor("not_a_code"));
+        Assert.Null(GatewayReturn.KeyFor(DealsService.ChangedMeanwhile));
+        Assert.Null(GatewayReturn.KeyFor(null));
+    }
+
+    /// <summary><b>لِكُلِّ رَمزٍ نَصٌّ عَرَبِيٌّ حَيّ</b> — لا نائِبٌ ولا المِفتاحُ خاماً — ولِنُصوصِ الصَفحَةِ الأَربَعَةِ كَذلك. والعَدّادُ يُطبَع.</summary>
+    [Fact]
+    public void Every_strip_code_and_every_page_text_has_a_live_arabic_text()
+    {
+        var keys = GatewayReturn.Codes.Select(c => GatewayReturn.KeyFor(c)!)
+            .Concat(new[] { "pay.return.title", "pay.return.need_login", "pay.return.pending", "pay.return.verify" })
+            .ToArray();
+        var checkedCount = 0;
+        foreach (var key in keys)
+        {
+            var text = LocaleCatalog.Text(LocaleCatalog.Arabic, key);
+            Assert.NotEqual(key, text);
+            Assert.False(LocaleCatalog.IsPlaceholder(text), $"‏{key} نائِب.");
+            Assert.True(text.Length > 8, $"‏{key} بِنَصٍّ أَقصَرَ مِن أَن يُفهَم.");
+            checkedCount++;
+        }
+        output.WriteLine($"· نُصوصُ صَفحَةِ العَودَة: {checkedCount} مِفتاحاً حَيّاً (‏13 رَمزاً + ‏4 نُصوص).");
+        Assert.Equal(17, checkedCount);
+    }
+
+    // ═══ ٣) الخِدمَة — السُلطَةُ قَبلَ المِفتاح، والمِفتاحُ قَبلَ البَوّابَة، وصِفرُ كِتابَة ═══════════════════════
+
+    private sealed record World(
+        DocWorld Docs, DealsService Deals, GatewayPayments Gateway, MoyasarScriptedHandler Moyasar,
+        DealMoneyClaimFirstTests.RecordingPaymentProvider Platform, Guid[] Ids, GatewayCapturingLogger Log);
+
+    /// <summary>تَعريفُ الدَفعِ الَّذي يَحمِلُ مِفتاحاً سِرِّيّاً مَختوماً — مِن الكاتالوجِ لا بِسلاجِه.</summary>
+    private static ProviderDefinition SealedKeyDefinition()
+        => ProviderCatalog.Definitions.Single(d => d.Capability == ProviderCapabilities.Payments
+            && d.Credential.Fields.Any(f => f.Kind == CredentialKinds.SecretKey && ProviderVault.Seals(f.Kind)));
+
+    /// <summary>رَبطُ الدَفعِ كَما تَكتُبُه نُقطَةُ الرَبط — مِن <c>ProviderBindSurface.FromForm</c> نَفسِها، مَختوماً بِسِياقِ
+    /// <paramref name="sealedFor"/> (مَتجَرُ العالَمِ افتِراضاً، ومَتجَرٌ آخَرُ لِظَرفٍ مَنسوخ).</summary>
+    private static TenantProviderBinding PaymentsBinding(ProviderVault vault, string sealedFor = Slug,
+        string status = TenantProviderBinding.StatusActive)
+    {
+        var read = ProviderBindSurface.FromForm(SealedKeyDefinition().Slug, _ => Key, sealedFor, vault);
+        Assert.Null(read.RefusalCode);
+        return new TenantProviderBinding
+        {
+            Id = read.Capability, Slug = read.Capability, TenantSlug = Slug, ProviderSlug = read.ProviderSlug,
+            Status = status, Values = new Dictionary<string, StoredValue>(read.Values, StringComparer.Ordinal),
+            BoundBy = "owner", BoundAt = new DateTime(2026, 10, 12, 0, 0, 0, DateTimeKind.Utc),
+        };
+    }
+
+    private static ProviderVault NewVault() => ProviderVault.FromKek(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
+
+    /// <summary>
+    /// <para>عالَمُ سَلَّةٍ دُفِعَت بِفاتورَةٍ واحِدَة: صَفقَتانِ لِلمُشتَري (‏100 و‏50 ريالاً = ‏15000 هَلَلَة) عَلى كُلٍّ مِنهُما مُعَرِّفُ
+    /// الفاتورَة، ورَبطُ دَفعٍ بِمِفتاحٍ مَختوم. <paramref name="binding"/> يُبنى بِخِزانَةِ العالَم — أَو <c>null</c> فَلا رَبط؛
+    /// و<paramref name="serviceVault"/> خِزانَةُ الخِدمَةِ إن خالَفَت خِزانَةَ الخَتم.</para>
+    /// </summary>
+    private static async Task<World> PaidCart(
+        Func<ProviderVault, TenantProviderBinding?>? binding = null, ProviderVault? serviceVault = null)
+    {
+        var docs = new DocWorld();
+        var platform = new DealMoneyClaimFirstTests.RecordingPaymentProvider();
+        var deals = new DealsService(docs.Store, platform);
+        var ids = new List<Guid>();
+        foreach (var amount in new[] { 100m, 50m })
+        {
+            var deal = await deals.StartAsync(Slug, "marketplace", Buyer, "مُشتَرٍ", null, "سِلعَة", amount, new()
+            {
+                [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.Card,
+            });
+            await deals.AttachRefAsync(Slug, deal.Id, GatewayPaymentProof.InvoiceRef, InvoiceId);
+            ids.Add(deal.Id);
+        }
+
+        var vault = NewVault();
+        if ((binding ?? (v => PaymentsBinding(v)))(vault) is { } b) docs.Put(b);
+
+        var moyasar = new MoyasarScriptedHandler();
+        var log = new GatewayCapturingLogger();
+        var gateway = new GatewayPayments(deals, new TenantProviderService(docs.Store), serviceVault ?? vault,
+            new MoyasarClient(new HttpClient(moyasar), NullLogger<MoyasarClient>.Instance), log);
+        return new World(docs, deals, gateway, moyasar, platform, ids.ToArray(), log);
+    }
+
+    private static string PaidInvoice(World w, string status = "paid", IReadOnlyList<Guid>? listed = null)
+        => MoyasarClientTests.InvoiceJson(status, 15000, metadata: GatewayPaymentProof.MetadataFor(listed ?? w.Ids));
+
+    private static string BasicOf(string key) => Convert.ToBase64String(Encoding.UTF8.GetBytes(key + ":"));
+
+    /// <summary>
+    /// <para><b>المُوجِبُ كامِلاً</b>: صَفقَةُ المُشتَري المَرجِعُ ← المِفتاحُ يُفَكُّ ← <c>GET /v1/invoices/{id}</c> واحِدٌ بِـ
+    /// <c>Authorization: Basic</c> مِن <b>المِفتاحِ المَفكوكِ نَفسِه</b> ← البَوّابَةُ تُثبِتُ الدَفعَ بِصَفقَتَيه. <b>وصِفرُ كِتابَة</b>: لا حِفظَ
+    /// ولا وَثيقَة — الكاتِبُ خُطوَةُ الصَفِّ العاشِر — <b>وصِفرُ نِداءٍ لِمُزَوِّدِ النُسخَة</b>. واللوغُ بِلا المِفتاح.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_paid_invoice_is_proven_with_the_unsealed_key_and_nothing_is_written()
+    {
+        var w = await PaidCart();
+        w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w));
+        var (saves, stored) = (w.Docs.SaveCalls, w.Docs.Stored.Count);
+
+        var res = await w.Gateway.VerifyAsync(Slug, new DealPayer(Buyer), w.Ids[0].ToString("N"));
+
+        Assert.True(res.Ok, res.Code);
+        Assert.Equal(w.Ids[0], res.DealId);
+        Assert.Equal(InvoiceId, res.Payment!.InvoiceId);
+        Assert.Equal(w.Ids.OrderBy(x => x), res.Payment.DealIds.OrderBy(x => x));
+        Assert.Equal((15000L, "SAR"), (res.Payment.Amount, res.Payment.Currency));
+
+        var get = Assert.Single(w.Moyasar.Requests);
+        Assert.Equal((HttpMethod.Get, $"https://api.moyasar.com/v1/invoices/{InvoiceId}"), (get.Method, get.RequestUri!.ToString()));
+        Assert.Equal(("Basic", BasicOf(Key)), (get.Headers.Authorization!.Scheme, get.Headers.Authorization.Parameter));
+
+        Assert.Equal((saves, stored), (w.Docs.SaveCalls, w.Docs.Stored.Count));
+        Assert.Empty(w.Platform.Calls);
+        Assert.DoesNotContain(w.Log.Lines, l => l.Contains(Key, StringComparison.Ordinal) || l.Contains(Key[^4..], StringComparison.Ordinal));
+        Assert.Contains(w.Log.Lines, l => l.Contains("proven", StringComparison.Ordinal));
+    }
+
+    /// <summary><b>السُلطَةُ أَوَّلاً</b> — صَفقَةُ غَيرِه، أَو بِلا فاتورَة، أَو لا صَفقَة: رَمزُها، <b>وصِفرُ نِداءٍ لِلبَوّابَة</b>
+    /// (المِفتاحُ لا يُفَكُّ أَصلاً)، وصِفرُ كِتابَة.</summary>
+    [Theory]
+    [InlineData("foreign", DealPayAuthorization.ActorNotPayer)]
+    [InlineData("no_invoice", DealPayAuthorization.InvoiceMissing)]
+    [InlineData("unknown", DealPayAuthorization.DealNotFound)]
+    [InlineData("garbage", DealPayAuthorization.DealNotFound)]
+    public async Task Authority_is_asked_before_the_key_and_the_gateway(string kind, string code)
+    {
+        var w = await PaidCart();
+        var referenced = w.Ids[0];
+        string? dealRef = referenced.ToString("N");
+        var payer = new DealPayer(Buyer);
+        switch (kind)
+        {
+            case "foreign": payer = new DealPayer(Other); break;
+            case "no_invoice":
+                w.Docs.Read<Deal>(referenced.ToString())!.Refs.Remove(GatewayPaymentProof.InvoiceRef); break;
+            case "unknown": dealRef = Guid.NewGuid().ToString("N"); break;
+            case "garbage": dealRef = "<script>"; break;
+        }
+        w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w));
+        var (saves, stored) = (w.Docs.SaveCalls, w.Docs.Stored.Count);
+
+        var res = await w.Gateway.VerifyAsync(Slug, payer, dealRef);
+
+        Assert.False(res.Ok);
+        Assert.Equal(code, res.Code);
+        Assert.Equal(kind is "foreign" or "no_invoice" ? referenced : null, res.DealId);
+        Assert.Empty(w.Moyasar.Requests);
+        Assert.Equal((saves, stored), (w.Docs.SaveCalls, w.Docs.Stored.Count));
+    }
+
+    /// <summary><b>لا مِفتاحَ يُفَكُّ ← <c>gateway_not_configured</c> بِلا نِداء</b>: لا رَبط، رَبطٌ مَسحوب، خِزانَةٌ بِلا مِفتاحٍ رَئيس، ظَرفٌ
+    /// مَختومٌ بِسِياقِ مَتجَرٍ آخَر (مَنسوخٌ إلى هُنا)، وخِزانَةٌ بِمِفتاحٍ رَئيسٍ آخَر. والمُوجِبُ المُقابِلُ في الصَفِّ الأَوَّل.</summary>
+    [Theory]
+    [InlineData("no_binding")]
+    [InlineData("revoked")]
+    [InlineData("vault_unavailable")]
+    [InlineData("sealed_for_another_store")]
+    [InlineData("another_master_key")]
+    public async Task No_key_that_opens_is_gateway_not_configured_without_a_call(string kind)
+    {
+        var w = kind switch
+        {
+            "no_binding"               => await PaidCart(_ => null),
+            "revoked"                  => await PaidCart(v => PaymentsBinding(v, status: TenantProviderBinding.StatusRevoked)),
+            "vault_unavailable"        => await PaidCart(serviceVault: ProviderVault.FromKek(null)),
+            "sealed_for_another_store" => await PaidCart(v => PaymentsBinding(v, sealedFor: "zz-other-store")),
+            "another_master_key"       => await PaidCart(serviceVault: NewVault()),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+        };
+        w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w));
+
+        var res = await w.Gateway.VerifyAsync(Slug, new DealPayer(Buyer), w.Ids[0].ToString("N"));
+
+        Assert.Equal(MoyasarFailures.NotConfigured, res.Code);
+        Assert.Equal(w.Ids[0], res.DealId);
+        Assert.Empty(w.Moyasar.Requests);
+    }
+
+    /// <summary><b>البَوّابَةُ تَحكُم — والخِدمَةُ لا تُليِّن</b>: فاتورَةٌ لَم تُدفَع؛ وفاتورَةٌ تُسَمّي صَفقَةَ غَيرِه — مَبلَغُها يُطابِقُ
+    /// المَجموعَ لَو حُسِبَت صَفقَتُه، فَيَعبُرُ البُرهانُ لَو حُمِّلَت؛ ولا تُحَمَّل، فَأَوَّلُ خَرقٍ المَبلَغ (`gateway_amount_mismatch`)؛
+    /// وفاتورَةٌ لا تُسَمّي المَرجِع؛ ورَفضُ البَوّابَة (‏404) — كُلٌّ بِرَمزِه، وصِفرُ كِتابَة.</summary>
+    [Theory]
+    [InlineData("unpaid", GatewayPaymentProof.InvoiceUnpaid)]
+    [InlineData("lists_a_foreign_deal", GatewayPaymentProof.AmountMismatch)]
+    [InlineData("omits_the_reference", GatewayPaymentProof.DealsMismatch)]
+    [InlineData("gateway_404", MoyasarFailures.Refused)]
+    public async Task The_gateway_and_the_proof_decide_and_the_service_does_not_soften(string kind, string code)
+    {
+        var w = await PaidCart();
+        switch (kind)
+        {
+            case "unpaid": w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "initiated")); break;
+            case "lists_a_foreign_deal":
+                // صَفقَةُ غَيرِه بِالفاتورَةِ نَفسِها مُسَجَّلَةً عَلَيها، بِمَبلَغٍ يُكمِلُ المَجموعَ لَو حُسِبَت — ولا تُحسَب.
+                var foreign = await w.Deals.StartAsync(Slug, "marketplace", Other, "غَيرُه", null, "سِلعَة", 50m);
+                await w.Deals.AttachRefAsync(Slug, foreign.Id, GatewayPaymentProof.InvoiceRef, InvoiceId);
+                w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, listed: new[] { w.Ids[0], foreign.Id }));
+                break;
+            case "omits_the_reference": w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, listed: new[] { w.Ids[1] })); break;
+            case "gateway_404":
+                w.Moyasar.Then(HttpStatusCode.NotFound, """{"type":"invalid_request_error","message":"Object not found"}""");
+                break;
+        }
+        var (saves, stored) = (w.Docs.SaveCalls, w.Docs.Stored.Count);
+
+        var res = await w.Gateway.VerifyAsync(Slug, new DealPayer(Buyer), w.Ids[0].ToString("N"));
+
+        Assert.False(res.Ok);
+        Assert.Equal(code, res.Code);
+        Assert.Single(w.Moyasar.Requests);
+        Assert.Equal((saves, stored), (w.Docs.SaveCalls, w.Docs.Stored.Count));
+    }
+
+    /// <summary><b>ومَرجِعٌ أَلحَقَت بِه البَوّابَةُ «?…» بِلا «&amp;»</b> — الصَفقَةُ تُقرَأُ مِن رَأسِه، فَلا يَخسَرُ مَن دَفَعَ صَفقَتَه.</summary>
+    [Fact]
+    public async Task A_reference_with_trailing_gateway_parameters_still_reaches_the_deal()
+    {
+        var w = await PaidCart();
+        w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w));
+
+        var res = await w.Gateway.VerifyAsync(Slug, new DealPayer(Buyer), w.Ids[1].ToString("N") + "?id=7c2f8a1e&status=paid");
+
+        Assert.True(res.Ok, res.Code);
+        Assert.Equal(w.Ids[1], res.DealId);
+    }
+
+    // ═══ ٤) النُقطَةُ مُشَغَّلَة — الحارِسُ قَبلَ أَيِّ حَقلٍ سُلوكاً ═══════════════════════════════════════
+
+    private static int FreePort()
+    {
+        using var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
+    }
+
+    /// <summary>مُضيفٌ مُصَغَّرٌ يَحمِلُ <c>MapTenantGateway</c> وَحدَها — نَسَقُ <c>PayPalHost</c>: نَفسُ المُوَجِّهِ ورَبطِ الوُسَطاءِ
+    /// وقِراءَةِ النَموذَج، ولا مُتابَعَةَ تَحويل (رَمزُ الرَدِّ في <c>Location</c> هُوَ المَقيس).</summary>
+    private static async Task<(WebApplication App, HttpClient Client)> HostAsync(World w)
+    {
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+        builder.Services.AddSingleton(w.Gateway);
+        var port = FreePort();
+        var app = builder.Build();
+        app.Urls.Add($"http://127.0.0.1:{port}");
+        app.MapTenantGateway();
+        await app.StartAsync();
+        return (app, new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+        {
+            BaseAddress = new Uri($"http://127.0.0.1:{port}"),
+        });
+    }
+
+    private static HttpRequestMessage Verify(HttpContent content, Guid? sessionUser)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, $"/{Slug}/payments/verify") { Content = content };
+        if (sessionUser is { } u)
+            req.Headers.Add("Cookie", $"{AuthSession.CookieName(Slug)}={AuthHandlers.MakeToken(u, Slug)}");
+        return req;
+    }
+
+    /// <summary>
+    /// <para><b>الحارِسُ قَبلَ أَيِّ حَقلٍ — مَقيساً بِالسُلوكِ لا بِتَرتيبِ نَصّ</b>: طَلَبٌ بِلا جَلسَةٍ جِسمُه JSON لا استِمارَة. لَو قُرِئَ
+    /// حَقلٌ قَبلَ الحارِسِ لَرَمى <c>req.Form</c> («Incorrect Content-Type») فَأَجابَت النُقطَةُ ‏500؛ والمَقيسُ ‏302 إلى الدُخولِ بِلا
+    /// نِداءٍ لِلبَوّابَة. ثُمَّ المُشتَري بِاستِمارَتِه: إلى صَفحَةِ الصَفقَة؛ وغَيرُه: إلى صَفحَةِ العَودَةِ بِرَمزِه — بِلا نِداء.</para>
+    /// </summary>
+    [Fact]
+    public async Task The_endpoint_asks_the_session_before_reading_any_field_and_returns_each_outcome_to_its_page()
+    {
+        var w = await PaidCart();
+        w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w));
+        var (app, client) = await HostAsync(w);
+        try
+        {
+            var anonymous = await client.SendAsync(Verify(
+                new StringContent("{\"deal\":\"x\"}", Encoding.UTF8, "application/json"), sessionUser: null));
+            Assert.Equal(HttpStatusCode.Redirect, anonymous.StatusCode);
+            Assert.Equal($"/{Slug}/login", anonymous.Headers.Location!.OriginalString);
+            Assert.Empty(w.Moyasar.Requests);
+
+            var form = (Guid id) => new FormUrlEncodedContent(new Dictionary<string, string> { [GatewayReturn.DealKey] = id.ToString("N") });
+
+            var foreign = await client.SendAsync(Verify(form(w.Ids[0]), Other));
+            Assert.Equal(HttpStatusCode.Redirect, foreign.StatusCode);
+            Assert.Equal($"/{Slug}/pay/return?deal={w.Ids[0]:N}&err={DealPayAuthorization.ActorNotPayer}",
+                foreign.Headers.Location!.OriginalString);
+            Assert.Empty(w.Moyasar.Requests);
+
+            var buyer = await client.SendAsync(Verify(form(w.Ids[0]), Buyer));
+            Assert.Equal(HttpStatusCode.Redirect, buyer.StatusCode);
+            Assert.Equal($"/{Slug}/deals/{w.Ids[0]}", buyer.Headers.Location!.OriginalString);
+            Assert.Single(w.Moyasar.Requests);
+
+            w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "initiated"));
+            var unpaid = await client.SendAsync(Verify(form(w.Ids[0]), Buyer));
+            Assert.Equal($"/{Slug}/pay/return?deal={w.Ids[0]:N}&err={GatewayPaymentProof.InvoiceUnpaid}",
+                unpaid.Headers.Location!.OriginalString);
+        }
+        finally
+        {
+            client.Dispose();
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
+    /// <summary><b>ونَصُّ النُقطَةِ يُطابِقُ ما قيسَ سُلوكاً</b>: المَسارُ حَرفِيّ، والجَلسَةُ ثُمَّ سِجِلُّ السُلطَةِ ثُمَّ الحَقل، والرَدُّ مِن
+    /// <c>GatewayReturn.AfterVerify</c>، ولا <c>RequestAborted</c> ولا <c>RequireStoreWritable</c> (مُثَبَّتَةٌ بِسَبَبِها). والتَسجيلُ
+    /// والرَبطُ في القالِبِ سَطرانِ مُسَمَّيان.</summary>
+    [Fact]
+    public void The_endpoint_text_declares_the_guard_before_the_field_and_the_template_wires_it()
+    {
+        var file = WriteEndpointGuardTests.StripComments(Template("Billing", "TenantGatewayEndpoints.cs"));
+        var at = file.IndexOf("app.MapPost(\"/{slug}/payments/verify\"", StringComparison.Ordinal);
+        Assert.True(at >= 0, "أَداةٌ عَمياء: لا نُقطَةَ تَحَقُّقٍ بِمَسارِها الحَرفِيّ.");
+        var body = file[at..file.IndexOf(".DisableAntiforgery();", at, StringComparison.Ordinal)];
+
+        var session = body.IndexOf("AuthSession.ResolveToken(req, slug)", StringComparison.Ordinal);
+        var payer = body.IndexOf("new Services.Deals.DealPayer(userId)", StringComparison.Ordinal);
+        var field = body.IndexOf("req.Form[", StringComparison.Ordinal);
+        Assert.True(session >= 0 && payer > session && field > payer, $"التَرتيب: جَلسَة {session} ← سُلطَة {payer} ← حَقل {field}.");
+        Assert.Equal(1, body.Split("req.Form[").Length - 1);
+        Assert.Contains("gateway.VerifyAsync(slug, payer, ", body, StringComparison.Ordinal);
+        Assert.Contains("Services.Deals.GatewayReturn.AfterVerify(res)", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("RequestAborted", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(".RequireStoreWritable(", file, StringComparison.Ordinal);
+
+        var template = Template("MarketplaceTemplateExtensions.cs");
+        Assert.Equal(1, template.Split("services.AddScoped<Services.Deals.GatewayPayments>();").Length - 1);
+        Assert.Equal(1, template.Split("app.MapTenantGateway();").Length - 1);
+    }
+
+    // ═══ ٥) صَفحَةُ العَودَة — قِراءَةٌ خالِصَةٌ لا تَسأَلُ البَوّابَة ═══════════════════════════════════════
+
+    /// <summary>
+    /// <para><b>الـGET صَفحَةٌ لا نُقطَة، ولا يَسأَلُ البَوّابَةَ ولا يَكتُب</b>: مَساراها (بِلا دَورٍ وبِدَور)، ولا <c>MapGet</c> عَلى المَسارِ
+    /// نَفسِه في أَيِّ مِلَفٍّ (لا تَنازُعَ في التَوجيه)، ولا خِدمَةَ بَوّابَةٍ ولا عَميلَ ولا تَحَقُّقَ في الكود؛ والسُلطَةُ سُلطَةُ النُقطَةِ
+    /// نَفسُها؛ واستِمارَةٌ واحِدَةٌ بِزِرٍّ واحِدٍ تُرسِلُ إلى نُقطَةِ التَحَقُّقِ بِالحَقلِ الَّذي تَقرَؤُه. و«لا تَكتُب» يُفرَضُ عَلَيها كَما
+    /// يُفرَضُ عَلى كُلِّ صَفحَة (<c>No_razor_page_writes_state</c>).</para>
+    /// </summary>
+    [Fact]
+    public void The_return_page_is_a_pure_read_that_renders_one_button_posting_to_verify()
+    {
+        var raw = Template("Components", "Pages", "GatewayPayReturn.razor");
+        Assert.Contains("@page \"/{slug}/pay/return\"", raw, StringComparison.Ordinal);
+        Assert.Contains("@page \"/{slug}/r/{role}/pay/return\"", raw, StringComparison.Ordinal);
+
+        var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(raw));
+        foreach (var outbound in new[] { "GatewayPayments", "MoyasarClient", "VerifyAsync", "FetchInvoiceAsync" })
+            Assert.DoesNotContain(outbound, code, StringComparison.Ordinal);
+        Assert.Contains("DealPayAuthorization.Validate(deal, new DealPayer(Auth.UserId!.Value))", code, StringComparison.Ordinal);
+
+        Assert.Equal(1, code.Split("<form").Length - 1);
+        Assert.Equal(1, code.Split("type=\"submit\"").Length - 1);
+        Assert.Contains("<form method=\"post\" action=\"@($\"/{Slug}/payments/verify\")\">", code, StringComparison.Ordinal);
+        Assert.Contains("name=\"@GatewayReturn.DealKey\"", code, StringComparison.Ordinal);
+        Assert.Contains("[SupplyParameterFromQuery(Name = GatewayReturn.DealKey)]", code, StringComparison.Ordinal);
+        Assert.Contains("GatewayReturn.KeyFor(Err)", code, StringComparison.Ordinal);
+
+        var routes = WriteEndpointGuardTests.AllMinimalApiEndpoints().Select(e => e.Route).ToList();
+        Assert.True(routes.Count > 100, $"أَداةٌ عَمياء: {routes.Count} نُقطَة.");
+        Assert.DoesNotContain("/{slug}/pay/return", routes);
+        Assert.Contains("/{slug}/payments/verify", routes);
+    }
+}
