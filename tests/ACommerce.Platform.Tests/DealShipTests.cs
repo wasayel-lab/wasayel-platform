@@ -3,9 +3,11 @@ using System.Text.Json;
 using ACommerce.Kit.Delivery;
 using ACommerce.Kit.Payments;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
+using Marten;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace ACommerce.Platform.Tests;
 
@@ -550,6 +552,98 @@ public class DealShipTests
         Assert.DoesNotContain(deal.Timeline, e => e.StageAfter == DealStage.Delivered);
     }
 
+    // ═══ ٤‑ب. كِتابَةٌ تَسبِقُ حِفظَ مَرجِعِ الطَلَب — يُعادُ الإلحاقُ ولا يَضيع (‏ADR-036 §٧ و§١٠) ═══════════════
+    //
+    // ‏2026-10-12، إلحاقُ المُنَسِّقِ (٢) عَلى P1-6: «تَخزينُ رَقمِ طَلَبِ OTO أَو رابِطِ البوليصَةِ في `Deal.Refs` قَد يَضيعُ
+    // صامِتاً». الطَلَبُ أُنشِئَ عِندَ OTO قَبلَ أَن يُكتَبَ مَرجِعُه، فَمَرجِعٌ يَضيعُ = طَلَبٌ هُناكَ لا تَعرِفُه الصَفقَة. وإلحاقُه
+    // بِـ`AttachRefAsync` الَّتي يُعادُ تَطبيقُها عِندَ التَعارُضِ مُنذُ ‏ADR-036 §٧ — وهذِه الصُفوفُ تَقيسُه عَلى مَسارِ `/ship` نَفسِه:
+    // كاتِبٌ آخَرُ يَحفَظُ بَينَ تَحميلِ إلحاقِ `oto_order_id` وحِفظِه، ثُمَّ يُرَدُّ الحِفظُ كَما يَرُدُّه Marten (الخُطّافُ نَفسُه
+    // الَّذي تَقيسُ بِه صُفوفُ الوارِد — مُسَلَّحاً عِندَ «Create Order»). والبُرهانُ الحَيُّ عَلى Postgres في آخِرِ المِلَفّ.
+
+    /// <summary><b>المُوجَب</b>: كِتابَةٌ لا تَمَسُّ الشَحنَ (مَرجِعٌ يُلحَق) تَغلِبُ حِفظَ مَرجِعِ الطَلَب — فَيُعادُ الإلحاقُ عَلى ما
+    /// كُتِب: تَبقى الكِتابَتان، ويُكتَبُ مَرجِعُ الطَلَبِ مَرَّةً، وتَخرُجُ الصَفقَةُ إلى الشَحنِ بِلا طَلَبٍ ثانٍ.</summary>
+    [Fact]
+    public async Task A_write_that_wins_the_save_of_the_order_ref_is_kept_and_the_ref_is_re_applied_so_the_deal_ships()
+    {
+        var w = await ConfirmedCashDeal();
+        var conflicts = OtoOrderStatusTests.OthersWinTheSave(w,
+            () => w.Deals.AttachRefAsync(Slug, w.Id, "probe_note", "1"), armAt: OtoClient.CreateOrderPath);
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+
+        Assert.Equal(1, conflicts());
+        Assert.True(res.Ok, res.Code);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.Equal((DealStatus.Active, DealStage.Shipping), (deal.Status, deal.Stage));
+        Assert.Equal(w.Id.ToString("N"), deal.Refs[DealShipping.OrderRef]);
+        Assert.Equal("540789", deal.Refs[DealShipping.OtoIdRef]);
+        Assert.Equal("1", deal.Refs["probe_note"]);
+        Assert.Single(deal.Timeline, e => e.Action == "note" && e.Note == $"attach {DealShipping.OrderRef}={w.Id:N}");
+        Assert.Single(deal.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Shipping);
+        Assert.Equal(1, w.Oto.CallsTo(OtoClient.CreateOrderPath));
+    }
+
+    /// <summary><b>السالِب</b>: إلغاءُ المُشتَري يَغلِبُ حِفظَ مَرجِعِ الطَلَب — فَيُعادُ الإلحاقُ عَلى الصَفقَةِ المُلغاة: المَرجِعُ
+    /// قائِمٌ (طَلَبٌ عِندَ OTO تَعرِفُه الصَفقَةُ فَيُلغى مِن لَوحَةِ البائِع)، والانتِقالُ يُرَدُّ بِـ<c>deal_changed_meanwhile</c>،
+    /// ولا يُسأَلُ «Order Tracking».</summary>
+    [Fact]
+    public async Task A_cancel_that_wins_the_save_of_the_order_ref_keeps_the_ref_on_the_cancelled_deal_and_moves_nothing()
+    {
+        var w = await ConfirmedCashDeal();
+        var conflicts = OtoOrderStatusTests.OthersWinTheSave(w, async () =>
+            Assert.True((await w.Deals.CancelAsync(Slug, w.Id,
+                new DealCanceller(Buyer, "مُشتَرٍ", IsStoreAdmin: false), "عَدَلتُ")).Ok),
+            armAt: OtoClient.CreateOrderPath);
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+
+        Assert.Equal(1, conflicts());
+        Assert.False(res.Ok);
+        Assert.Equal(DealsService.ChangedMeanwhile, res.Code);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.Equal((DealStatus.Cancelled, DealStage.Confirmed), (deal.Status, deal.Stage));
+        Assert.Equal(w.Id.ToString("N"), deal.Refs[DealShipping.OrderRef]);
+        Assert.Equal("540789", deal.Refs[DealShipping.OtoIdRef]);
+        Assert.Single(deal.Timeline, e => e.Action == "note" && e.Note == $"attach {DealShipping.OrderRef}={w.Id:N}");
+        Assert.DoesNotContain(deal.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Shipping);
+        Assert.Equal(1, w.Oto.CallsTo(OtoClient.CreateOrderPath));
+        Assert.Equal(0, w.Oto.CallsTo(OtoClient.OrderStatusPath));
+    }
+
+    /// <summary><b>والحَدّ</b> (‏ADR-036 §٧‑٢): ثَلاثُ خَسائِرَ تَصعَدُ بِاستِثناءِ Marten نَفسِه — لا إسقاطٌ صامِتٌ ولا رابِعَة — ولا
+    /// يُكتَبُ في الصَفقَةِ شَيء؛ <b>والطَلَبُ عِندَ OTO لا يَضيع</b>: النَقرَةُ التالِيَةُ تَلقى «‏OTO1063 — Order Id is already exist»
+    /// فَتَتَبَنّاه مِن «Order Tracking» بِمُعَرِّفِنا (‏<see cref="An_order_OTO_already_holds_under_our_id_is_adopted_not_recreated"/>)
+    /// وتُخرِجُ الصَفقَةَ إلى الشَحن.</summary>
+    [Fact]
+    public async Task Three_lost_saves_of_the_order_ref_surface_Martens_exception_and_the_next_click_adopts_the_order()
+    {
+        var w = await ConfirmedCashDeal();
+        var conflicts = OtoOrderStatusTests.OthersWinTheSave(w, () => Task.CompletedTask,
+            times: int.MaxValue, armAt: OtoClient.CreateOrderPath);
+        var saves = w.Docs.SaveCalls;
+
+        await Assert.ThrowsAsync<JasperFx.ConcurrencyException>(() => w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh"));
+
+        Assert.Equal(3, conflicts());
+        Assert.Equal(saves, w.Docs.SaveCalls);
+        var lost = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.Equal(DealStage.Confirmed, lost.Stage);
+        Assert.False(lost.Refs.ContainsKey(DealShipping.OrderRef));
+
+        w.Docs.BeforeMember = null;
+        w.Oto.Routes[OtoClient.CreateOrderPath] = _ => OtoRouteHandler.Json(HttpStatusCode.BadRequest,
+            "{\"success\":false,\"otoErrorCode\":\"OTO1063\",\"otoErrorMessage\":\"Order Id is already exist\"}");
+
+        var again = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+
+        Assert.True(again.Ok, again.Code);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.Equal(DealStage.Shipping, deal.Stage);
+        Assert.Equal(w.Id.ToString("N"), deal.Refs[DealShipping.OrderRef]);
+        Assert.Equal("540789", deal.Refs[DealShipping.OtoIdRef]);
+        Assert.Equal(2, w.Oto.CallsTo(OtoClient.CreateOrderPath));
+    }
+
     // ═══ ٥. المُحَرِّك — «مِن» المَقروءَةِ، و`CanMove` ═════════════════════════════
 
     [Fact]
@@ -710,5 +804,141 @@ public class DealShipTests
         // ولا قَرارَ في الجِسم: لا مَرحَلَةٌ ولا طَريقَةُ دَفعٍ ولا مَرجِعُ مالِكٍ يُقرَأ هُنا.
         foreach (var decision in new[] { "DealStage.", "pay_method", "listing_owner", "Refs[" })
             Assert.DoesNotContain(decision, body, StringComparison.Ordinal);
+    }
+}
+
+// ═══ البُرهانُ الحَيّ — مَرجِعُ الطَلَبِ عَلى Postgres لا يَضيعُ حينَ تَسبِقُه كِتابَة (‏ADR-036 §١٠) ═══════════════
+//
+// إلحاقُ المُنَسِّقِ (٢) عَلى P1-6 بِحَرفِه: «يُعادُ تَطبيقُه … أَو يُرفَعُ خَطَأٌ مُسَمّى، بِاختِبارٍ حَيٍّ عَلى Postgres المَحَلِّيّ».
+// بَوّابَةُ الحِفظِ نَفسُها (`SaveGate`، ‏DealConcurrencyTests) والمُستَأجِرُ المُستَعارُ نَفسُه (`TenantAlias`، ‏OtoOrderStatusTests):
+// تُنشِئُ نُقطَةُ الشَحنِ الطَلَبَ عِندَ OTO (مُعالِجٌ يُعيدُ رَدَّ الوَثيقَة — لا شَبَكَة) وتَقرَأُ الصَفقَةَ لِتُلحِقَ `oto_order_id`
+// وتَقِفُ قَبلَ الحِفظ؛ ثُمَّ تُكتَبُ كِتابَةٌ أُخرى وتُحفَظ؛ ثُمَّ تُستَأنَف — فَيَرُدُّها Marten نَفسُه، ويُعادُ الإلحاق.
+// مُبَوَّبٌ بِـWASAYEL_LIVE_PROOF=1 وConnectionStrings__Postgres، ومُستَأجِرٌ مُؤَقَّتٌ يُمسَحُ بَعدَه.
+
+public class LiveDealShipProofTests(ITestOutputHelper output)
+{
+    private sealed class ForbiddenPaymentProvider : IPaymentProvider
+    {
+        private static InvalidOperationException Touched() => new("صَفقَةُ النَقدِ لا تَمَسُّ المال — نودِيَ مُزَوِّدُ الدَفع.");
+        public string ProviderName => "forbidden";
+        public Task<PaymentResult> AuthorizeAsync(PaymentRequest req, string idempotencyKey, CancellationToken ct = default) => throw Touched();
+        public Task<PaymentResult> CaptureAsync(string paymentId, decimal? amount = null, CancellationToken ct = default) => throw Touched();
+        public Task<PaymentResult> RefundAsync(string paymentId, decimal amount, string reason, CancellationToken ct = default) => throw Touched();
+        public Task<SubscriptionResult> CreateSubscriptionAsync(SubscriptionRequest req, string idempotencyKey, CancellationToken ct = default) => throw Touched();
+        public Task<bool> CancelSubscriptionAsync(string subscriptionId, CancellationToken ct = default) => throw Touched();
+        public Task<Invoice?> GetInvoiceAsync(string paymentId, CancellationToken ct = default) => throw Touched();
+    }
+
+    private static bool Enabled
+        => LiveDealConcurrencyProofTests.Enabled && !string.IsNullOrEmpty(LiveDealConcurrencyProofTests.ConnectionString);
+
+    /// <summary>صَفقَةُ نَقدٍ عِندَ <c>Confirmed</c> بِبائِعِها طَرَفاً — بِالخِدمَةِ الحَقيقِيَّةِ عَلى المَخزَنِ الحَقيقِيّ.</summary>
+    private static async Task<Deal> ConfirmedAsync(DealsService plain, string slug, Guid buyer, Guid seller)
+    {
+        var born = await plain.StartAsync(slug, "marketplace", buyer, "مُشتَرٍ", null, "سِلعَة", 150m, new()
+        {
+            [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.CashOnDelivery,
+            [Deal.DeliveryAddressAttribute] = "حَيُّ المِثال",
+            [Deal.DeliveryPhoneAttribute] = "0500000000",
+        });
+        await plain.AttachRefAsync(slug, born.Id, DealsService.ListingOwnerRef, seller.ToString());
+        await plain.BindListingOwnerAsync(slug, born.Id, seller.ToString());
+        Assert.True((await plain.AcceptAsync(slug, born.Id, new DealAcceptor(seller, "بائِع"))).Ok);
+        Assert.True((await plain.AdvanceAsync(slug, born.Id, seller, "بائِع")).Ok);   // ← Confirmed
+        var confirmed = (await plain.LoadAsync(slug, born.Id))!;
+        Assert.Equal(DealStage.Confirmed, confirmed.Stage);
+        return confirmed;
+    }
+
+    /// <summary>سَطرُ السِجِلِّ لِلطِباعَة — والإلحاقُ بِمِفتاحِه لا بِقيمَتِه.</summary>
+    private static string Line(DealEvent e) => e switch
+    {
+        { Action: "advanced" } => $"advanced→{e.StageAfter}",
+        { Action: "note", Note: { } n } when n.StartsWith("attach ", StringComparison.Ordinal) && n.Contains('=') => n[..n.IndexOf('=')],
+        _ => e.Action,
+    };
+
+    private async Task<(DealShipResult Result, Deal Final, OtoRouteHandler Oto)> RaceAsync(
+        Func<DealsService, string, Guid, Guid, Task> otherWrite)
+    {
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = DealShipping.DemoStore + "-zz-" + Guid.NewGuid().ToString("N")[..8];
+        var buyer = Guid.NewGuid();
+        var seller = Guid.NewGuid();
+        try
+        {
+            var plain = new DealsService(store, new ForbiddenPaymentProvider());
+            var deal = await ConfirmedAsync(plain, slug, buyer, seller);
+
+            // الرَمزُ لِـtheme-demo وَحدَه — فَالشَحنُ يُنادى بِاسمِه، والمُستَأجِرُ المُؤَقَّتُ يُمَرَّرُ إلى المَخزَنِ تَحتَه.
+            var gate = new SaveGate.Gate();
+            var oto = new OtoRouteHandler();
+            var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, RefreshToken = "RT-live-proof" });
+            var shipping = new DealShipping(
+                new DealsService(SaveGate.Wrap(TenantAlias.Wrap(store, DealShipping.DemoStore, slug), gate), new ForbiddenPaymentProvider()),
+                new OtoClient(new HttpClient(oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options);
+
+            // أَوَّلُ حِفظٍ في هذا التَدَفُّقِ حِفظُ `oto_order_id`: ما قَبلَه قِراءَةٌ ونِداءُ OTO.
+            var sending = Task.Run(async () =>
+            {
+                gate.Marked.Value = true;
+                return await shipping.ShipAsync(DealShipping.DemoStore, deal.Id, new DealShipper(seller, "بائِع"), "Riyadh");
+            });
+            await gate.Reached.Task.WaitAsync(TimeSpan.FromSeconds(60));
+            await otherWrite(plain, slug, deal.Id, buyer);
+            gate.Release.TrySetResult();
+            var result = await sending.WaitAsync(TimeSpan.FromSeconds(60));
+
+            var final = (await plain.LoadAsync(slug, deal.Id))!;
+            output.WriteLine($"الشَحن: {(result.Ok ? "ok" : result.Code)} · النِهائِيَّة: {final.Status}/{final.Stage} · " +
+                             $"oto_order_id: {(final.Refs.ContainsKey(DealShipping.OrderRef) ? "مَكتوب" : "—")} · " +
+                             $"Create Order: {oto.CallsTo(OtoClient.CreateOrderPath)} · سِجِلّ: " +
+                             string.Join(",", final.Timeline.Select(Line)));
+            return (result, final, oto);
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            foreach (var d in await s.Query<Deal>().ToListAsync()) s.Delete(d);
+            await s.SaveChangesAsync();
+        }
+    }
+
+    /// <summary><b>المُوجَب</b>: مَرجِعٌ يُلحَقُ ويُحفَظُ بَينَ تَحميلِ إلحاقِ <c>oto_order_id</c> وحِفظِه — يَرُدُّ Marten الحِفظ، فَيُعادُ
+    /// الإلحاقُ عَلى ما كُتِب: الكِتابَتانِ قائِمَتان، وسَطرُ إلحاقٍ واحِد، والصَفقَةُ عِندَ الشَحنِ بِطَلَبٍ واحِد.</summary>
+    [Fact]
+    public async Task A_write_saved_between_the_order_ref_load_and_its_save_stands_and_the_ref_is_re_applied()
+    {
+        if (!Enabled) return;
+
+        var (result, final, oto) = await RaceAsync((plain, slug, id, _) => plain.AttachRefAsync(slug, id, "probe_note", "live"));
+
+        Assert.True(result.Ok, result.Code);
+        Assert.Equal((DealStatus.Active, DealStage.Shipping), (final.Status, final.Stage));
+        Assert.Equal(final.Id.ToString("N"), final.Refs[DealShipping.OrderRef]);
+        Assert.Equal("540789", final.Refs[DealShipping.OtoIdRef]);
+        Assert.Equal("live", final.Refs["probe_note"]);
+        Assert.Single(final.Timeline, e => e.Action == "note" && e.Note == $"attach {DealShipping.OrderRef}={final.Id:N}");
+        Assert.Single(final.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Shipping);
+        Assert.Equal(1, oto.CallsTo(OtoClient.CreateOrderPath));
+    }
+
+    /// <summary><b>السالِب</b>: المُشتَري يُلغي ويُحفَظُ إلغاؤُه بَينَهُما — يُعادُ الإلحاقُ عَلى الصَفقَةِ المُلغاة فَيَبقى مَرجِعُ
+    /// الطَلَب (طَلَبٌ عِندَ OTO تَعرِفُه الصَفقَة)، والانتِقالُ يُرَدُّ بِـ<c>deal_changed_meanwhile</c>، ولا يُسأَلُ «Order Tracking».</summary>
+    [Fact]
+    public async Task A_cancel_saved_between_the_order_ref_load_and_its_save_keeps_the_ref_and_the_deal_does_not_move()
+    {
+        if (!Enabled) return;
+
+        var (result, final, oto) = await RaceAsync(async (plain, slug, id, buyer) =>
+            Assert.True((await plain.CancelAsync(slug, id, new DealCanceller(buyer, "مُشتَرٍ", IsStoreAdmin: false), "عَدَلتُ")).Ok));
+
+        Assert.Equal(DealsService.ChangedMeanwhile, result.Code);
+        Assert.Equal((DealStatus.Cancelled, DealStage.Confirmed), (final.Status, final.Stage));
+        Assert.Equal(final.Id.ToString("N"), final.Refs[DealShipping.OrderRef]);
+        Assert.Single(final.Timeline, e => e.Action == "note" && e.Note == $"attach {DealShipping.OrderRef}={final.Id:N}");
+        Assert.DoesNotContain(final.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Shipping);
+        Assert.Equal(1, oto.CallsTo(OtoClient.CreateOrderPath));
+        Assert.Equal(0, oto.CallsTo(OtoClient.OrderStatusPath));
     }
 }

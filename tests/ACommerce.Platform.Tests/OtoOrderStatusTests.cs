@@ -459,15 +459,20 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
     /// والعالَمُ يُعيدُ الكائِنَ نَفسَه، فَطَفرَةُ المُحاوَلَةِ المَردودَةِ تَبقى فيه؛ فَيُعيدُ الخُطّافُ المَخزَنَ إلى ما كانَ
     /// قَبلَها (وَثيقَةٌ مُستَنسَخَةٌ عِندَ سُؤالِ OTO) ثُمَّ يُشَغِّلُ الكاتِبَ الآخَرَ عَلَيه — وذلك ما يَكونُ في Postgres: الحِفظُ
     /// المَردودُ لا يَقَع. ويُعيدُ عَدَدَ ما رَدّ.</para>
+    ///
+    /// <para><b>و<paramref name="armAt"/> — ‏2026-10-12، إلحاقُ المُنَسِّقِ (٢) عَلى P1-6</b>: مَسارُ OTO الَّذي يُستَنسَخُ عِندَه المَخزَن.
+    /// افتِراضُه «Order Tracking» كَما كانَ لِصُفوفِ الوارِدِ هُنا بِحَرفِها؛ وصُفوفُ <c>DealShipTests</c> تُسَلِّحُه عِندَ «Create
+    /// Order» فَيَقَعُ تَعارُضُها عَلى حِفظِ مَرجِعِ الطَلَب — أَداةٌ واحِدَةٌ لا نُسخَتانِ تَنجَرِفان، فَهي <c>internal</c>.</para>
     /// </summary>
-    private static Func<int> OthersWinTheSave(DealShipTests.World w, Func<Task> otherWrite, int times = 1)
+    internal static Func<int> OthersWinTheSave(DealShipTests.World w, Func<Task> otherWrite, int times = 1,
+        string armAt = OtoClient.OrderStatusPath)
     {
         Deal? stored = null;
         var conflicts = 0;
         var inOther = false;
         w.Oto.Before = path =>
         {
-            if (path == OtoClient.OrderStatusPath) stored = Clone(Stored(w));
+            if (path == armAt) stored = Clone(Stored(w));
         };
         w.Docs.BeforeMember = name =>
         {
