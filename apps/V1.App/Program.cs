@@ -130,7 +130,15 @@ switch (AuthChannelSelection.Decide(AuthChannelKind.Email,
 // مُزَوِّدو البِنيَة (mock — استَبدِلهم لاحِقاً بِـ Moyasar/Saee/Google Maps).
 // **وحُكمُهُما مَقيسٌ ومَكتوبٌ لا مَظنون**: ‏`docs/PROVIDER-STUB-DEBT.md`.
 builder.Services.AddMockMaps();
-builder.Services.AddMockDelivery();
+
+// ─── الشَحن — عَميلُ OTO في مَوضِعِ المُحاكي (‏ADR-033 الخُطوَة 3) ──────────
+// كانَ هُنا `AddMockDelivery()` سَطراً عارِياً بِصِفرِ مُستَهلِك، ومُحاكيه يَعرِضُ
+// هاتِفَ مَندوبٍ عَشوائِيّاً — «رَقمُ إنسانٍ قَد يَرِنّ». حُذِفَ في كوميتِ أَوَّلِ
+// مُستَهلِكٍ كَما شَرَطَ `PROVIDER-STUB-DEBT.md`، وحَلَّ مَحَلَّه عَميلٌ واحِدٌ بِلا
+// واجِهَة. **ولا يُنادى OTO** إلّا بِـ`Shipping__Oto__Environment=staging` ورَمزِ
+// تَحديثِ بائِع؛ وقيمَةُ بيئَةٍ خارِجَ المَعجَمِ تُفشِلُ الإقلاعَ هُنا كَما تُفشِلُه
+// عِندَ Paddle.
+builder.Services.AddOtoShipping(builder.Configuration);
 
 // ─── مُزَوِّدُ الدَفع — بِالبيئَة، وفَشَلٌ مُغلَقٌ في الإنتاج ─────────
 // كانَ `AddMockPayments()` سَطراً عارِياً هُنا، والمُحاكي يَقول «نَجَحَ

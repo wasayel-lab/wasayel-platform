@@ -59,8 +59,21 @@ public class CheckoutPaymentTests
     {
         var roots = new[] { Path.Combine(RepoRoot, "libs"), Path.Combine(RepoRoot, "apps") };
 
+        // ─── استِثناءٌ مُسَمّى — ‏2026-10-12 (‏ADR-033 الخُطوَة 3) ─────────────────
+        // ‏`"cod"` هُنا **مُفرَدَةُ OTO لا رَمزُ إتمامِ الشِراء**: قيمَةُ `payment_method` في
+        // طَلَبِ `createOrder` كَما تَقولُها وَثيقَتُهم («‏Possible values: cod, paid»)،
+        // ويُرسِلُها العَميلُ نَفسُه إلى OTO — فَلَها كاتِبٌ، وهُوَ ما يَسأَلُ عَنه هذا
+        // الفاحِص. والمِلَفُّ مُسَمّى بِحَرفِه لا بِنَمَط، وإن زالَ مِنه الحَرفُ أَحمَرَّ الصَفُّ
+        // حَتّى يُرفَعَ الاستِثناء.
+        var pinned = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["libs/kits/Delivery/ACommerce.Kit.Delivery.Core/OtoClient.cs"] =
+                "قيمَةُ payment_method عِندَ OTO — يُرسِلُها OtoClient.CreateOrderAsync نَفسُه.",
+        };
+
         var scanned = 0;
         var hits = new List<string>();
+        var pinnedSeen = new List<string>();
 
         foreach (var root in roots)
         foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
@@ -72,11 +85,16 @@ public class CheckoutPaymentTests
 
             scanned++;
             var text = File.ReadAllText(file);
-            if (text.Contains("\"cod\"", StringComparison.Ordinal))
-                hits.Add(Path.GetRelativePath(RepoRoot, file));
+            if (!text.Contains("\"cod\"", StringComparison.Ordinal)) continue;
+            var rel = Path.GetRelativePath(RepoRoot, file).Replace('\\', '/');
+            if (pinned.ContainsKey(rel)) pinnedSeen.Add(rel);
+            else hits.Add(rel);
         }
 
         Assert.True(scanned > 200, $"أَداةٌ عَمياء: فُحِصَ {scanned} مِلَفّاً.");
+        Assert.True(pinnedSeen.Count == pinned.Count,
+            "استِثناءٌ مُسَمّى لَم يَعُد يَحمِلُ الحَرف — يُرفَع: "
+            + string.Join("، ", pinned.Keys.Except(pinnedSeen)));
         Assert.True(hits.Count == 0,
             "الرَمزُ \"cod\" ما زالَ في المَصدَر، ولا تُرسِلُه استِمارَةٌ: "
             + string.Join("، ", hits));

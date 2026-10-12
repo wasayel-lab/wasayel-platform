@@ -30,9 +30,14 @@ public class ProviderCatalogTests
         // `secret_key`، في الكوميتِ نَفسِه الَّذي أَدخَلَ النَوعَ المَعجَم،
         // وبَعدَ أَن بُنِيَت خِزانَتُه (‏`ProviderVault`). والثَمانِيَةُ مَقيسَةٌ
         // قَبلَه بِهذا الفَحصِ نَفسِه أَخضَرَ عِندَ `b0b4b85`.
+        //
+        // **ثَمانِيَةٌ لا تِسعَة مُنذُ ‏2026-10-12 (‏ADR-033 الخُطوَة 3)**: حُذِفَ `mock_delivery` في
+        // كوميتِ أَوَّلِ مُستَهلِكٍ لِلشَحن — عَميلِ OTO — كَما شَرَطَ `PROVIDER-STUB-DEBT.md`. وصَفُّ
+        // الـADR كَتَبَ «‏8→7» يَومَ كُتِب، ثُمَّ أَضافَت خُطوَةُ ‏ADR-032 السادِسَةُ `moyasar_api` قَبلَه
+        // فَصارَ ‏9→8 — والتِسعَةُ مَقيسَةٌ قَبلَه بِهذا الفَحصِ نَفسِه أَخضَرَ عِندَ `a5155d0`.
         var defs = ProviderCatalog.Definitions;
-        Assert.True(defs.Count == 9,
-            $"أَداة عَمياء: حُمِّلَ {defs.Count} تَعريفاً — والمَقيس ٩.");
+        Assert.True(defs.Count == 8,
+            $"أَداة عَمياء: حُمِّلَ {defs.Count} تَعريفاً — والمَقيس ٨.");
 
         foreach (var d in defs)
             Assert.True(ProviderDefinitionValidator.IsValid(d),
@@ -112,10 +117,10 @@ public class ProviderCatalogTests
             "AddSingleton<IMapsProvider, MockMapsProvider>",
             "التَنفيذُ القائِمُ المُسَجَّلُ بِلا شَرطٍ في Program.cs."),
 
-        new("mock_delivery",
-            "libs/kits/Delivery/ACommerce.Kit.Delivery.Core/MockDeliveryProvider.cs",
-            "AddSingleton<IDeliveryProvider, MockDeliveryProvider>",
-            "التَنفيذُ القائِمُ المُسَجَّلُ بِلا شَرطٍ في Program.cs."),
+        // ‏`mock_delivery` حُذِفَ ‏2026-10-12 مَعَ مِرساتِه (‏ADR-033 الخُطوَة 3): مِرساتُه كانَت سَطرَ
+        // `AddSingleton<IDeliveryProvider, MockDeliveryProvider>` — مُحاكٍ بِصِفرِ مُستَهلِكٍ يُسَجَّلُ عارِياً،
+        // وحَلَّ مَحَلَّه عَميلُ OTO الَّذي لا يُنَفِّذُ الواجِهَة. وتَعريفُ OTO نَفسُه خُطوَةُ ‏ADR-033 السادِسَة
+        // — ومِرساتُه يَومَئِذٍ سَطرُ تَسجيلِ العَميل.
 
         new("local_files",
             "libs/kits/Files/ACommerce.Kit.Files.Core/LocalFileStorage.cs",
@@ -201,8 +206,12 @@ public class ProviderCatalogTests
         // `moyasar_api` سَطرُ `ProviderVault.Seals` في مَشروعٍ يُحيلُه القالِب،
         // ثُمَّ سَطرُ تَسجيلِ الخِزانَةِ في القالِبِ نَفسِه (الخُطوَة 7) — والعَدَدُ
         // ثَمانٍ في الحالَين؛ والسَبعُ مَقيسَةٌ قَبلَها أَخضَرَ عِندَ `b0b4b85`.
-        Assert.True(checkedAnchors == 8,
-            $"أَداة عَمياء: فُحِصَت {checkedAnchors} مِرساة — والمَقيس ٨.");
+        //
+        // **سَبعٌ لا ثَمانٍ مُنذُ ‏2026-10-12 (‏ADR-033 الخُطوَة 3)**: سَقَطَت مِرساةُ `mock_delivery`
+        // مَعَ تَعريفِها ومُحاكيها — وصَفُّ الـADR كَتَبَ «‏7→6» قَبلَ أَن تُضيفَ خُطوَةُ ‏ADR-032
+        // السادِسَةُ مِرساةَ `moyasar_api`. والثَمانُ مَقيسَةٌ قَبلَه أَخضَرَ عِندَ `a5155d0`.
+        Assert.True(checkedAnchors == 7,
+            $"أَداة عَمياء: فُحِصَت {checkedAnchors} مِرساة — والمَقيس ٧.");
         Assert.True(breaches.Count == 0,
             "تَعريفُ مُزَوِّدٍ بِلا تَنفيذٍ حَيّ — مَقبَرَةٌ في البَيانات:\n  "
             + string.Join("\n  ", breaches));

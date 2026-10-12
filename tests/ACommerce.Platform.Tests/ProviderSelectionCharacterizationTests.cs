@@ -100,9 +100,16 @@ public class ProviderSelectionCharacterizationTests
             "builder.Services.AddMockMaps();", null,
             "libs/kits/Maps/ACommerce.Kit.Maps.Core/MockMapsProvider.cs"),
 
+        // ─── تَعديلٌ مُعلَنٌ ثالِث — ‏2026-10-12، صَفُّ `delivery` (‏ADR-033 الخُطوَة 3) ─────
+        // كانَ `AddMockDelivery()` سَطراً عارِياً ومَصدَرُه مِلَفَّ المُحاكي. **حُذِفَ المُحاكي
+        // وسَطرُه في كوميتِ أَوَّلِ مُستَهلِكٍ لِلشَحن** — كَما شَرَطَ `PROVIDER-STUB-DEBT.md` —
+        // وحَلَّ مَحَلَّه عَميلُ OTO (`AddOtoShipping`) الَّذي **لا يُنَفِّذُ** `IDeliveryProvider`
+        // (القاعِدَة ١: لا تُمَدُّ الواجِهَةُ قَبلَ مُستَهلِكِها). فَصارَ الصَفُّ عَلى نَسَقِ صَفَّي
+        // `notifications`/`cache` أَدناه: المَصدَرُ مِلَفُّ الواجِهَةِ نَفسِه، وبِلا سَطرِ تَسجيل —
+        // والقُدرَةُ مُعلَنَةٌ بِصِفرِ تَنفيذٍ يُسَجِّلُها. والرَقَمانِ أَدناه (‏7→6 و‏2→1) يَقولانِه.
         new("delivery", "IDeliveryProvider",
-            "builder.Services.AddMockDelivery();", null,
-            "libs/kits/Delivery/ACommerce.Kit.Delivery.Core/MockDeliveryProvider.cs"),
+            "", null,
+            "libs/kits/Delivery/ACommerce.Kit.Delivery.Core/IDeliveryProvider.cs"),
 
         // ─── تَعديلٌ مُعلَنٌ ثانٍ — ‏2026-08-30، صَفُّ `files` ─────────
         // كانَ `AddLocalFileStorage(…)` سَطراً عارِياً يَكتُب على قُرصِ
@@ -186,7 +193,9 @@ public class ProviderSelectionCharacterizationTests
                 breaches.Add($"{r.Capability}: «{r.RegistrationToday}» ظَهَرَ {count} مَرَّة لا مَرَّةً واحِدَة.");
         }
 
-        Assert.True(checkedRows == 7, $"أَداة عَمياء: فُحِصَ {checkedRows} صَفّاً — والمَقيس ٧.");
+        // **سِتَّةٌ لا سَبعَة مُنذُ ‏2026-10-12 (‏ADR-033 الخُطوَة 3)**: صَفُّ `delivery` بِلا سَطرِ تَسجيلٍ
+        // بَعدَ حَذفِ المُحاكي. والسَبعَةُ مَقيسَةٌ قَبلَه أَخضَرَ عِندَ `a5155d0`.
+        Assert.True(checkedRows == 6, $"أَداة عَمياء: فُحِصَ {checkedRows} صَفّاً — والمَقيس ٦.");
         Assert.True(breaches.Count == 0,
             "اختِيارُ المُزَوِّدِ اليَومَ لَيسَ ما وُصِف:\n  " + string.Join("\n  ", breaches));
     }
@@ -284,7 +293,12 @@ public class ProviderSelectionCharacterizationTests
         // — وحُكمُهُما مَقيسٌ ومَكتوبٌ في `docs/PROVIDER-STUB-DEBT.md`
         // (‏صِفرُ مُستَهلِكٍ في وَقتِ التَشغيل، فَخَطَرُهُما صِفر).
         // والرَقمُ مُثَبَّتٌ فَلا يَنزِل صامِتاً — ولا يَرتَفِع كَذلك.
-        Assert.True(bare == 2, $"أَداة عَمياء: وُجِدَ {bare} تَسجيلاً عارِياً — والمَقيس ٢.");
+        //
+        // **واحِدٌ لا اثنانِ مُنذُ ‏2026-10-12 (‏ADR-033 الخُطوَة 3)**: خَرَجَ `delivery` — لا إلى قَرارِ
+        // تَهيئَةٍ بَل إلى العَدَم: حُذِفَ المُحاكي وسَطرُه في كوميتِ أَوَّلِ مُستَهلِكٍ لِلشَحن، والعَميلُ
+        // الَّذي حَلَّ مَحَلَّه لا يُنَفِّذُ الواجِهَة. والباقي `maps` وَحدَه — ومُستَهلِكُه الوَحيدُ كانَ
+        // المُحاكي المَحذوف، فَصارَ بِصِفرِ مُستَهلِك (`PROVIDER-STUB-DEBT.md` §٣ مُلحَقاً).
+        Assert.True(bare == 1, $"أَداة عَمياء: وُجِدَ {bare} تَسجيلاً عارِياً — والمَقيس ١.");
         Assert.True(breaches.Count == 0, string.Join("\n  ", breaches));
     }
 

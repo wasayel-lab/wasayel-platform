@@ -51,6 +51,10 @@
          الوَسيطِ نَفسِه لا مُحاكاتَه — يُقاسُ المَسارُ لا المُعالِجُ
          وَحدَه. مَرجِعُ اختِبارٍ فَقَط. -->
     <ProjectReference Include="..\..\libs\kits\Versions\ACommerce.Kit.Versions.Core\ACommerce.Kit.Versions.Core.csproj" />
+    <!-- عَميلُ OTO (‏ADR-033 الخُطوَة 3): يُقاسُ بِمُعالِجٍ وَهمِيٍّ يُعيدُ رُدودَ الوَثيقَةِ
+         بِأَشكالِها — فَلا رَمزَ حَقيقيّاً ولا نِداءَ شَبَكَة. مَرجِعٌ صَريحٌ لا مُتَوارَث،
+         بِحُجَّةِ مَرجِعِ Compliance أَعلاه. -->
+    <ProjectReference Include="..\..\libs\kits\Delivery\ACommerce.Kit.Delivery.Core\ACommerce.Kit.Delivery.Core.csproj" />
   </ItemGroup>
 
 </Project>
