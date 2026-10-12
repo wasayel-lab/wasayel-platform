@@ -160,6 +160,75 @@ public sealed class TenantProviderService
         return doc;
     }
 
+    // ─── مَدخَلُ البائِع — استِعلامٌ بِمِفتاحِه لا بِـ`TenantProviderSet.For` (‏ADR-033 §٢‑ج‑٢ والخُطوَة 7؛ تَيّارُ S8، ‏2026-10-12) ───
+    //
+    // الوَثيقَةُ نَفسُها بِمُعَرِّفٍ مُرَكَّبٍ `{capability}:{listing_owner}` (`TenantProviderBinding.VendorEntryId`)، ومُجموعَةُ المَتجَرِ
+    // تَتَجاوَزُها بِقاعِدَةٍ مُسَمّاة — فَلا يَمَسُّ مَدخَلُ بائِعٍ لَقطَةَ المَتجَرِ ولا كاشَها. والقِراءَةُ هُنا بِجَلسَةِ المُستَأجِرِ نَفسِها.
+
+    /// <summary>مَدخَلُ بائِعٍ لِقُدرَة — فَعّالاً أَو مَسحوباً — أَو <c>null</c>. فَشَلُ القِراءَةِ يُكتَبُ ويُعادُ <c>null</c>: «لا مَدخَل»
+    /// فَشَلٌ مُغلَق (لا رَمزَ يُحَلّ).</summary>
+    public async Task<TenantProviderBinding?> VendorEntryAsync(
+        string tenantSlug, string capability, Guid listingOwner, CancellationToken ct = default)
+    {
+        try
+        {
+            await using var s = Store.QuerySession(tenantSlug);
+            return await s.LoadAsync<TenantProviderBinding>(
+                TenantProviderBinding.VendorEntryId(capability, listingOwner), ct);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ListFailureAr(tenantSlug, ex.Message));
+            return null;
+        }
+    }
+
+    /// <summary>أَفي المَتجَرِ مَدخَلُ بائِعٍ فَعّالٌ لِهذِه القُدرَة؟ — يَسأَلُه وارِدُ الناقِلِ قَبلَ أَن يَقرَأَ جِسماً. والفَشَلُ «لا».</summary>
+    public async Task<bool> HasVendorEntriesAsync(
+        string tenantSlug, string capability, CancellationToken ct = default)
+    {
+        var prefix = ProviderCapabilities.Require(capability) + TenantProviderBinding.VendorEntrySeparator;
+        try
+        {
+            await using var s = Store.QuerySession(tenantSlug);
+            return await s.Query<TenantProviderBinding>()
+                .AnyAsync(d => d.Id.StartsWith(prefix) && d.Status == TenantProviderBinding.StatusActive, ct);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ListFailureAr(tenantSlug, ex.Message));
+            return false;
+        }
+    }
+
+    /// <summary>يَكتُبُ مَدخَلَ بائِعٍ فَعّالاً — يَحِلُّ مَحَلَّ ما قَبلَه (الوَثيقَةُ تُستَبدَل) — بِقيَمٍ مَختومَةٍ يَبنيها المُنادي.
+    /// ولا يُبطِلُ كاشَ المَتجَر: المَدخَلُ لا يَدخُلُ لَقطَتَه.</summary>
+    public async Task<TenantProviderBinding> BindVendorAsync(
+        string tenantSlug, string capability, Guid listingOwner, string providerSlug,
+        IReadOnlyDictionary<string, StoredValue> values, string? webhookId, string? webhookRefusal,
+        string by, CancellationToken ct = default)
+    {
+        var doc = new TenantProviderBinding
+        {
+            Id             = TenantProviderBinding.VendorEntryId(capability, listingOwner),
+            Slug           = capability,
+            TenantSlug     = tenantSlug,
+            ProviderSlug   = providerSlug,
+            Status         = TenantProviderBinding.StatusActive,
+            Values         = new Dictionary<string, StoredValue>(values, StringComparer.Ordinal),
+            BoundBy        = by,
+            BoundAt        = DateTime.UtcNow,
+            RevokedAt      = null,
+            WebhookId      = webhookId,
+            WebhookRefusal = webhookRefusal,
+        };
+
+        await using var s = Store.LightweightSession(tenantSlug);
+        s.Store(doc);
+        await s.SaveChangesAsync(ct);
+        return doc;
+    }
+
     /// <summary>الرَبطُ الحاليُّ لِقُدرَةٍ — فَعّالاً كانَ أَو
     /// مَسحوباً — لِتَرسُمَه الشاشَة.</summary>
     public async Task<TenantProviderBinding?> CurrentAsync(

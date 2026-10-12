@@ -5,6 +5,8 @@ using System.Text;
 using System.Text.Json;
 using ACommerce.Kit.Delivery;
 using ACommerce.Kit.Payments;
+using ACommerce.Platform.Providers;
+using ACommerce.Templates.Customer.Marketplace.Services;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
 using ACommerce.Templates.Customer.Marketplace.Shipping;
 using Marten;
@@ -40,15 +42,28 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
     private const string Label = "https://app.tryoto.com/print/awb?enc=y";
     private const string TrackingUrl = "https://app.tryoto.com/otoflex-tracking?enc=x";
 
-    /// <summary>جِسمُ الإشعارِ بِحُقولِ وَثيقَةِ OTO («Webhook»): ‏<c>orderId</c> و<c>otoId</c> و<c>status</c> و<c>timestamp</c>.</summary>
-    internal static string NoticeJson(string orderId, string? otoId = OurOtoId, string status = "delivered")
-        => JsonSerializer.Serialize(new Dictionary<string, object?>
-        {
-            ["orderId"] = orderId, ["otoId"] = otoId, ["status"] = status, ["timestamp"] = "1595941360328",
-        });
+    /// <summary>خَتمُ مِثالِ الوَثيقَةِ بِحَرفِه — وهُوَ ساعَةُ العالَم (<see cref="DealShipTests.Now"/>).</summary>
+    internal const string DocTimestamp = "1595941360328";
 
-    internal static OtoOrderStatusNotice Notice(Guid dealId, string? otoId = OurOtoId, string status = "delivered")
-        => OtoOrderStatusGate.Admit(true, NoticeJson(dealId.ToString("N"), otoId, status)).Notice!;
+    /// <summary>
+    /// <para>جِسمُ الإشعارِ بِحُقولِ وَثيقَةِ OTO («Webhook»): ‏<c>orderId</c> و<c>otoId</c> و<c>status</c> و<c>timestamp</c>.</para>
+    /// <para><b>و<c>signature</c> مُنذُ ‏2026-10-12</b> (تَيّارُ S8، ‏ADR-033 الخُطوَة 7): ‏Base64 لِبَصمَةِ ‏HmacSHA256 بِسِرِّ بائِعِ العالَمِ
+    /// عَلى <c>orderId:status:timestamp</c> — كَما تُوَقِّعُ OTO. و<paramref name="secret"/> <c>null</c> يُسقِطُ الحَقلَ كُلَّه (إشعارٌ بِلا تَوقيع).</para>
+    /// </summary>
+    internal static string NoticeJson(string orderId, string? otoId = OurOtoId, string status = "delivered",
+        string? secret = DealShipTests.WebhookSecret, string timestamp = DocTimestamp)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["orderId"] = orderId, ["otoId"] = otoId, ["status"] = status, ["timestamp"] = timestamp,
+        };
+        if (secret is not null) body["signature"] = OtoWebhookSignature.Compute(secret, orderId, status, timestamp);
+        return JsonSerializer.Serialize(body);
+    }
+
+    internal static OtoOrderStatusNotice Notice(Guid dealId, string? otoId = OurOtoId, string status = "delivered",
+        string? secret = DealShipTests.WebhookSecret, string timestamp = DocTimestamp)
+        => OtoOrderStatusGate.Admit(true, NoticeJson(dealId.ToString("N"), otoId, status, secret, timestamp)).Notice!;
 
     // ─── صَفقَةٌ عِندَ الشَحنِ — كُلُّ صَفٍّ يُغَيِّرُ فيها شَيئاً واحِداً (البَوّابَةُ النَقِيَّة) ───────────────
 
@@ -90,11 +105,16 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
 
     // ═══ ١. البَوّابَة ═══════════════════════════════════════════════════
 
+    /// <summary><b>أَربَعَةَ عَشَرَ مُنذُ ‏2026-10-12</b> — كانَ <c>The_lexicon_is_ten_closed_codes_…</c>: رُموزُ التَوقيعِ الأَربَعَةُ أُضيفَت
+    /// بَعدَ العَشَرَةِ بِلا مَساسٍ بِها (تَيّارُ S8، ‏ADR-033 الخُطوَة 7).</summary>
     [Fact]
-    public void The_lexicon_is_ten_closed_codes_two_shared_by_value_and_the_success_is_outside_it()
+    public void The_lexicon_is_fourteen_closed_codes_two_shared_by_value_and_the_success_is_outside_it()
     {
-        Assert.Equal(10, OtoOrderStatusGate.All.Count);
-        Assert.Equal(10, OtoOrderStatusGate.All.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(14, OtoOrderStatusGate.All.Count);
+        Assert.Equal(14, OtoOrderStatusGate.All.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(new[] { OtoOrderStatusGate.NoticeUnverifiable, OtoOrderStatusGate.SignatureMissing,
+                             OtoOrderStatusGate.SignatureStale, OtoOrderStatusGate.SignatureMismatch },
+            OtoOrderStatusGate.All.Skip(10));
         Assert.Equal(DealShipAuthorization.CarrierUnavailable, OtoOrderStatusGate.CarrierUnavailable);
         Assert.Equal(DealAcceptAuthorization.DealNotActive, OtoOrderStatusGate.DealNotActive);
         Assert.DoesNotContain(OtoOrderStatusGate.Delivered, OtoOrderStatusGate.All);
@@ -234,6 +254,10 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
     [InlineData(OtoOrderStatusGate.DealNotActive, 200)]
     [InlineData(OtoOrderStatusGate.DealNotShipping, 200)]
     [InlineData(OtoOrderStatusGate.ActorCannotDeliver, 200)]
+    [InlineData(OtoOrderStatusGate.NoticeUnverifiable, 401)]
+    [InlineData(OtoOrderStatusGate.SignatureMissing, 401)]
+    [InlineData(OtoOrderStatusGate.SignatureStale, 401)]
+    [InlineData(OtoOrderStatusGate.SignatureMismatch, 401)]
     public void Each_code_has_one_answer(string code, int status)
         => Assert.Equal(status, OtoOrderStatusGate.StatusFor(code));
 
@@ -242,6 +266,115 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
     {
         Assert.All(OtoOrderStatusGate.All, c => Assert.InRange(OtoOrderStatusGate.StatusFor(c), 200, 503));
         Assert.Throws<ArgumentOutOfRangeException>(() => OtoOrderStatusGate.StatusFor("oto_refused"));
+    }
+
+    // ═══ ١‑أ. التَوقيع — بِسِرِّ بائِعِ الصَفقَة، قَبلَ سُؤالِ OTO (تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 الخُطوَة 7 و§٧‑م) ═══════════
+    //
+    // ‏`Verify` نَقِيَّة: السِرُّ والإشعارُ والساعَةُ مُدخَلاتُها. والتَرتيبُ تَرتيبُ `PaddleWebhookGuard.Gate`: لا سِرّ ← لا تَوقيع ←
+    // خارِجَ النافِذَة ← لا يُطابِق. لِكُلِّ رَمزٍ مُوجَبٌ وسالِب (القاعِدَة ٤).
+
+    private const string Secret = DealShipTests.WebhookSecret;
+    private static DateTimeOffset Now => DealShipTests.Now;
+
+    /// <summary>إشعارٌ بِجِسمٍ مَكتوبٍ يَدَوِيّاً — لِحُقولٍ يُسقِطُها أَو يُفسِدُها الصَفّ.</summary>
+    private static OtoOrderStatusNotice Raw(Dictionary<string, object?> body)
+        => OtoOrderStatusGate.Admit(true, JsonSerializer.Serialize(body)).Notice!;
+
+    [Fact]
+    public void Notice_unverifiable_positive_and_negative()
+    {
+        Assert.Equal(OtoOrderStatusGate.NoticeUnverifiable, OtoOrderStatusGate.Verify(Notice(DealId), null, Now)!.Code);
+        Assert.Equal(OtoOrderStatusGate.NoticeUnverifiable, OtoOrderStatusGate.Verify(Notice(DealId), "", Now)!.Code);
+        Assert.Null(OtoOrderStatusGate.Verify(Notice(DealId), Secret, Now));
+    }
+
+    [Fact]
+    public void Signature_missing_positive_and_negative()
+    {
+        var id = DealId.ToString("N");
+        Assert.Equal(OtoOrderStatusGate.SignatureMissing, OtoOrderStatusGate.Verify(Notice(DealId, secret: null), Secret, Now)!.Code);
+        Assert.Equal(OtoOrderStatusGate.SignatureMissing, OtoOrderStatusGate.Verify(Raw(new()
+        {
+            ["orderId"] = id, ["status"] = "delivered", ["timestamp"] = DocTimestamp, ["signature"] = "  ",
+        }), Secret, Now)!.Code);
+        // خَتمٌ لا يُقرَأُ رَقَماً — ولَو وَقَّعَه المُرسِلُ بِحَرفِه.
+        foreach (var stamp in new[] { "yesterday", "-1595941360328", "1595941360328.5" })
+            Assert.Equal(OtoOrderStatusGate.SignatureMissing, OtoOrderStatusGate.Verify(Raw(new()
+            {
+                ["orderId"] = id, ["status"] = "delivered", ["timestamp"] = stamp,
+                ["signature"] = OtoWebhookSignature.Compute(Secret, id, "delivered", stamp),
+            }), Secret, Now)!.Code);
+        Assert.Equal(OtoOrderStatusGate.SignatureMissing, OtoOrderStatusGate.Verify(Raw(new()
+        {
+            ["orderId"] = id, ["status"] = "delivered",
+            ["signature"] = OtoWebhookSignature.Compute(Secret, id, "delivered", DocTimestamp),
+        }), Secret, Now)!.Code);
+        Assert.Equal(OtoOrderStatusGate.SignatureMissing, OtoOrderStatusGate.Verify(Raw(new()
+        {
+            ["orderId"] = id, ["timestamp"] = DocTimestamp, ["signature"] = OtoWebhookSignature.Compute(Secret, id, "", DocTimestamp),
+        }), Secret, Now)!.Code);
+        // والخَتمُ رَقَماً في الجِسمِ يُقرَأُ كَما يُقرَأُ نَصّاً.
+        Assert.Null(OtoOrderStatusGate.Verify(Raw(new()
+        {
+            ["orderId"] = id, ["status"] = "delivered", ["timestamp"] = 1595941360328L,
+            ["signature"] = OtoWebhookSignature.Compute(Secret, id, "delivered", DocTimestamp),
+        }), Secret, Now));
+    }
+
+    /// <summary>النافِذَةُ خَمسُ ثَوانٍ بِطَرَفَيها، قَبلُ وبَعدُ: ‏5000 مِلّي ثانِيَةٍ داخِلَها و‏5001 خارِجَها — بِتَوقيعٍ صَحيحٍ في كُلِّ صَفّ.</summary>
+    [Theory]
+    [InlineData(-5001, true)]
+    [InlineData(5001, true)]
+    [InlineData(-600_000, true)]
+    [InlineData(-5000, false)]
+    [InlineData(5000, false)]
+    [InlineData(0, false)]
+    public void Signature_stale_positive_and_negative(long offsetMs, bool stale)
+    {
+        var stamp = (Now.ToUnixTimeMilliseconds() + offsetMs).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(stale ? OtoOrderStatusGate.SignatureStale : null,
+            OtoOrderStatusGate.Verify(Notice(DealId, timestamp: stamp), Secret, Now)?.Code);
+    }
+
+    [Fact]
+    public void Signature_mismatch_positive_and_negative()
+    {
+        var id = DealId.ToString("N");
+        Assert.Equal(OtoOrderStatusGate.SignatureMismatch, OtoOrderStatusGate.Verify(Notice(DealId), "another-secret", Now)!.Code);
+        Assert.Equal(OtoOrderStatusGate.SignatureMismatch, OtoOrderStatusGate.Verify(Notice(DealId, secret: "another-secret"), Secret, Now)!.Code);
+        // كُلُّ جُزءٍ مِن النَصِّ المُوَقَّعِ يُغَيِّرُ البَصمَة: الحالُ، والمُعَرِّفُ، والخَتم.
+        var signed = OtoWebhookSignature.Compute(Secret, id, "outForDelivery", DocTimestamp);
+        Assert.Equal(OtoOrderStatusGate.SignatureMismatch, OtoOrderStatusGate.Verify(Raw(new()
+            { ["orderId"] = id, ["status"] = "delivered", ["timestamp"] = DocTimestamp, ["signature"] = signed }), Secret, Now)!.Code);
+        Assert.Equal(OtoOrderStatusGate.SignatureMismatch, OtoOrderStatusGate.Verify(Raw(new()
+        {
+            ["orderId"] = Guid.NewGuid().ToString("N"), ["status"] = "delivered", ["timestamp"] = DocTimestamp,
+            ["signature"] = OtoWebhookSignature.Compute(Secret, id, "delivered", DocTimestamp),
+        }), Secret, Now)!.Code);
+        Assert.Equal(OtoOrderStatusGate.SignatureMismatch, OtoOrderStatusGate.Verify(Raw(new()
+        {
+            ["orderId"] = id, ["status"] = "delivered", ["timestamp"] = "1595941360329",
+            ["signature"] = OtoWebhookSignature.Compute(Secret, id, "delivered", DocTimestamp),
+        }), Secret, Now)!.Code);
+        Assert.Equal(OtoOrderStatusGate.SignatureMismatch, OtoOrderStatusGate.Verify(Raw(new()
+            { ["orderId"] = id, ["status"] = "delivered", ["timestamp"] = DocTimestamp, ["signature"] = "not base64 !" }), Secret, Now)!.Code);
+        Assert.Null(OtoOrderStatusGate.Verify(Notice(DealId), Secret, Now));
+    }
+
+    /// <summary>التَرتيب: السِرُّ أَوَّلاً (لا يُقرَأُ إشعارٌ لا يُتَحَقَّقُ مِنه)، ثُمَّ الحُضور، ثُمَّ النافِذَةُ قَبلَ المُطابَقَة — فَإعادَةُ لَعِبٍ
+    /// قَديمَةٌ بِتَوقيعٍ صَحيحٍ تُجابُ «خارِجَ النافِذَة» لا «يُطابِق».</summary>
+    [Fact]
+    public void The_verification_answers_secret_then_presence_then_window_then_match()
+    {
+        var stale = (Now.ToUnixTimeMilliseconds() - 60_000).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(OtoOrderStatusGate.NoticeUnverifiable,
+            OtoOrderStatusGate.Verify(Notice(DealId, secret: null, timestamp: stale), null, Now)!.Code);
+        Assert.Equal(OtoOrderStatusGate.SignatureMissing,
+            OtoOrderStatusGate.Verify(Notice(DealId, secret: null, timestamp: stale), Secret, Now)!.Code);
+        Assert.Equal(OtoOrderStatusGate.SignatureStale,
+            OtoOrderStatusGate.Verify(Notice(DealId, secret: "another-secret", timestamp: stale), Secret, Now)!.Code);
+        Assert.Equal(OtoOrderStatusGate.SignatureStale,
+            OtoOrderStatusGate.Verify(Notice(DealId, timestamp: stale), Secret, Now)!.Code);
     }
 
     // ═══ ٢. الخِدمَة — عالَمُ الوَثائِقِ ووَثيقَةُ OTO ═══════════════════════════════
@@ -542,6 +675,95 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         Assert.Equal(calls, w.Oto.Calls.Count);
     }
 
+    // ─── ٢‑أ. التَوقيعُ في الخِدمَة — بَعدَ المُطابَقَة، قَبلَ سُؤالِ OTO وقَبلَ أَيِّ كِتابَة (تَيّارُ S8، ‏2026-10-12) ─────────────
+    //
+    // السِرُّ سِرُّ بائِعِ الصَفقَة (مَدخَلُه المَختوم)، فَيُعرَفُ بَعدَ أَن يُطابِقَ الإشعارُ صَفقَةً — وإشعارٌ لِطَلَبٍ لَيسَ مِن صَفَقاتِ
+    // المَتجَرِ يُجابُ ‏200 «لا شَأنَ لَنا» كَما كان: حِسابُ البائِعِ عِندَ OTO قَد يَحمِلُ طَلَباتٍ مِن غَيرِ مَتجَرِنا.
+
+    /// <summary>خِدمَةٌ عَلى العالَمِ نَفسِه — مَداخِلُه وخِزانَتُه وساعَتُه — بِلوغٍ يُلتَقَط.</summary>
+    private static DealShipping Logged(DealShipTests.World w, ShipCapturingLogger log)
+    {
+        var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, RefreshToken = DealShipTests.ConfigToken });
+        return new DealShipping(w.Deals,
+            new OtoClient(new HttpClient(w.Oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance),
+            options, log, w.Providers, w.Vault, new FixedClock(DealShipTests.Now));
+    }
+
+    /// <summary>إشعارٌ لا يَتَحَقَّقُ — بِلا تَوقيع، أَو خارِجَ النافِذَة، أَو بِسِرٍّ آخَر — يُجابُ بِرَمزِه ‏401: لا تُسأَلُ OTO، ولا يُكتَبُ
+    /// حَرف، وسَطرُ اللوغِ يَحمِلُ الرَمزَ والانحِرافَ ولا يَحمِلُ السِرّ.</summary>
+    [Theory]
+    [InlineData("unsigned", OtoOrderStatusGate.SignatureMissing)]
+    [InlineData("stale", OtoOrderStatusGate.SignatureStale)]
+    [InlineData("forged", OtoOrderStatusGate.SignatureMismatch)]
+    public async Task A_notice_that_does_not_verify_asks_OTO_nothing_and_writes_nothing(string kind, string code)
+    {
+        var w = await ShippedCashDeal();
+        OtoSays(w, "delivered");
+        var calls = w.Oto.Calls.Count;
+        var stored = w.Docs.Stored.Count;
+        var saves = w.Docs.SaveCalls;
+        var log = new ShipCapturingLogger();
+        var stale = (DealShipTests.Now.ToUnixTimeMilliseconds() - 6_000).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var notice = kind switch
+        {
+            "unsigned" => Notice(w.Id, secret: null),
+            "stale"    => Notice(w.Id, timestamp: stale),
+            _          => Notice(w.Id, secret: "another-secret"),
+        };
+
+        var outcome = await Logged(w, log).ReceiveAsync(Slug, notice);
+
+        Assert.Equal(code, outcome.Code);
+        Assert.Equal(401, OtoOrderStatusGate.StatusFor(outcome.Code));
+        Assert.Equal(calls, w.Oto.Calls.Count);
+        Assert.Equal(stored, w.Docs.Stored.Count);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+        Assert.Equal(DealStage.Shipping, Stored(w).Stage);
+        var line = Assert.Single(log.Lines);
+        Assert.Contains(code, line, StringComparison.Ordinal);
+        Assert.DoesNotContain(DealShipTests.WebhookSecret, line, StringComparison.Ordinal);
+        Assert.Contains(kind == "stale" ? "drift 6000 ms" : "drift 0 ms", line, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>الاحتِياطُ بِلا سِرٍّ — فَشَلٌ مُغلَق</b>: بائِعٌ لا مَدخَلَ لَه في مَتجَرِ العَرضِ يَشحَنُ بِرَمزِ التَهيئَة، وإشعارُ صَفقَتِه — ولَو
+    /// وُقِّعَ — يُجابُ <c>notice_unverifiable</c> ‏401: لا تُسأَلُ OTO ولا يُكتَب. والسالِبُ: عالَمُ المَدخَلِ يُكتَبُ فيه التَسليم (صُفوفُ هذا القِسم).</summary>
+    [Fact]
+    public async Task Without_a_vendor_entry_the_fallback_ships_but_its_notices_are_unverifiable_and_write_nothing()
+    {
+        var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
+        var shipped = await w.Shipping.ShipAsync(Slug, w.Id, DealShipTests.Vendor, "Riyadh");
+        Assert.True(shipped.Ok, shipped.Code);
+        Assert.Contains(DealShipTests.ConfigToken, w.Oto.Calls.First(c => c.Path == OtoClient.RefreshTokenPath).Body!, StringComparison.Ordinal);
+        OtoSays(w, "delivered");
+        var calls = w.Oto.Calls.Count;
+        var saves = w.Docs.SaveCalls;
+
+        var outcome = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id));
+
+        Assert.Equal(OtoOrderStatusGate.NoticeUnverifiable, outcome.Code);
+        Assert.Equal(401, OtoOrderStatusGate.StatusFor(outcome.Code));
+        Assert.Equal(calls, w.Oto.Calls.Count);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+        Assert.Equal(DealStage.Shipping, Stored(w).Stage);
+    }
+
+    /// <summary><b>مَدخَلٌ لا يُفَكُّ لا يَسقُطُ إلى الاحتِياط</b>: المَدخَلُ نَفسُه مَختوماً بِمِفتاحٍ رَئيسٍ آخَرَ (تَبَدَّلَ المِفتاح) — فَلا رَمزَ ولا
+    /// سِرّ، ويُجابُ <c>carrier_unavailable</c> بِلا سُؤالِ OTO ولا كِتابَة، ولَو كانَ رَمزُ التَهيئَةِ مَضبوطاً لِمَتجَرِ العَرض.</summary>
+    [Fact]
+    public async Task A_vendor_entry_that_does_not_open_answers_carrier_unavailable_and_never_falls_back()
+    {
+        var w = await ShippedCashDeal();
+        w.Docs.Put(DealShipTests.VendorEntry(DealShipTests.NewVault(), Slug, Seller));
+        OtoSays(w, "delivered");
+        var calls = w.Oto.Calls.Count;
+
+        var outcome = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id));
+
+        Assert.Equal(OtoOrderStatusGate.CarrierUnavailable, outcome.Code);
+        Assert.Equal(calls, w.Oto.Calls.Count);
+        Assert.Equal(DealStage.Shipping, Stored(w).Stage);
+    }
+
     // ═══ ٣. تَعارُضُ النُسخَة — يُعادُ القَرارُ عَلى المَخزون (‏ADR-036 الخُطوَة 3) ═══════════════════════
 
     private static Deal Clone(Deal d) => JsonSerializer.Deserialize<Deal>(JsonSerializer.Serialize(d))!;
@@ -684,6 +906,11 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         Add(Decided(With(d => d.Status = DealStatus.Cancelled)));
         Add(Decided(With(d => d.Stage = DealStage.Confirmed)));
         Add(Decided(With(d => d.CounterpartyId = null)));
+        // ورُموزُ التَوقيعِ الأَربَعَةُ مِن `Verify` نَفسِها (‏2026-10-12، تَيّارُ S8).
+        Add(OtoOrderStatusGate.Verify(Notice(DealId), null, DealShipTests.Now)?.Code);
+        Add(OtoOrderStatusGate.Verify(Notice(DealId, secret: null), DealShipTests.WebhookSecret, DealShipTests.Now)?.Code);
+        Add(OtoOrderStatusGate.Verify(Notice(DealId), DealShipTests.WebhookSecret, DealShipTests.Now.AddMinutes(1))?.Code);
+        Add(OtoOrderStatusGate.Verify(Notice(DealId), "another-secret", DealShipTests.Now)?.Code);
 
         var w = await ShippedCashDeal();
         w.Oto.Routes[OtoClient.OrderStatusPath] = _ => OtoRouteHandler.Json(HttpStatusCode.BadGateway, "{}");
@@ -736,6 +963,29 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
             .Select(w => receive.IndexOf(w, StringComparison.Ordinal)).Where(i => i >= 0).ToArray();
         Assert.True(ask > 0 && writes.Length > 0, $"أَداةٌ عَمياء: سُؤال={ask} كِتابات={writes.Length}");
         Assert.True(writes.All(i => i > ask), "كِتابَةٌ تَسبِقُ سُؤالَ OTO في ReceiveAsync.");
+    }
+
+    /// <summary><b>التَوقيعُ قَبلَ سُؤالِ OTO وبَعدَ المُطابَقَة</b> في نَصِّ <c>ReceiveAsync</c> (تَيّارُ S8، ‏2026-10-12): المُطابَقَةُ تُعَرِّفُ البائِعَ،
+    /// وسِرُّه يُفَكُّ بَعدَها، و<c>Verify</c> قَبلَ <c>GetOrderStatusAsync</c> — فَلا يُسأَلُ OTO بِإشعارٍ لَم يَتَحَقَّق.</summary>
+    [Fact]
+    public void The_signature_is_verified_after_the_match_and_before_OTO_is_asked_in_the_service()
+    {
+        var path = Path.Combine(RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace",
+            "Services", "Deals", "DealShipping.cs");
+        var code = WriteEndpointGuardTests.StripComments(File.ReadAllText(path));
+        var from = code.IndexOf("public async Task<OtoNoticeOutcome> ReceiveAsync(", StringComparison.Ordinal);
+        var to = code.IndexOf("private async Task<OtoNoticeOutcome> DeliverAsync(", from, StringComparison.Ordinal);
+        Assert.True(from > 0 && to > from, "‏ReceiveAsync غَيرُ مَوجودَة — الأَداةُ عَمياء.");
+        var receive = code[from..to];
+
+        var match = receive.IndexOf("OtoOrderStatusGate.Match(", StringComparison.Ordinal);
+        var carrier = receive.IndexOf("CarrierForAsync(", StringComparison.Ordinal);
+        var verify = receive.IndexOf("OtoOrderStatusGate.Verify(", StringComparison.Ordinal);
+        var ask = receive.IndexOf("_oto.GetOrderStatusAsync(", StringComparison.Ordinal);
+        output.WriteLine($"ReceiveAsync: مُطابَقَة={match} · ناقِل={carrier} · تَوقيع={verify} · سُؤال={ask}");
+        Assert.True(match > 0 && carrier > match && verify > carrier && ask > verify,
+            $"التَرتيبُ مَكسور: مُطابَقَة={match} ناقِل={carrier} تَوقيع={verify} سُؤال={ask}");
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(receive, @"_oto\.GetOrderStatusAsync\(").Count);
     }
 
     [Fact]
@@ -800,13 +1050,43 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         var w = await ShippedCashDeal();
         var calls = w.Oto.Calls.Count;
         var tripwire = new BodyTripwire(throws: true);
-        await using var host = await OtoHost.StartAsync(w.Shipping, tripwire);
+        // خِدمَةُ رَمزِ التَهيئَةِ وَحدَه (تَيّارُ S8، ‏2026-10-12): سُؤالُ هذا الصَفِّ «أَيَتَسَرَّبُ رَمزُ التَهيئَةِ إلى مَتجَرٍ آخَر؟» — وشَطرُ
+        // «لا مَدخَلَ بائِعٍ في ذلك المَتجَر» يُسأَلُ عَلى Postgres (‏`LiveVendorShippingProofTests`): عالَمُ الوَثائِقِ بِلا إيجارٍ ولا استِعلام.
+        await using var host = await OtoHost.StartAsync(ShippingIn(w, OtoEnvironment.Staging), tripwire);
 
         using var resp = await host.PostAsync("ashare", NoticeJson(w.Id.ToString("N")));
 
         Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
         Assert.Equal(calls, w.Oto.Calls.Count);
         Assert.Equal(0, tripwire.Reads);
+    }
+
+    /// <summary><b>إشعارٌ بِلا تَوقيعٍ أَو بِسِرٍّ آخَرَ ‏401 فارِغ</b> — ولا تُسأَلُ OTO ولا تُكتَبُ الصَفقَة (تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 §٧‑م).
+    /// والسالِب: المُوَقَّعُ بِسِرِّ البائِعِ يَمُرُّ إلى سُؤالِ OTO ويُكتَبُ التَسليم.</summary>
+    [Fact]
+    public async Task An_unsigned_or_forged_notice_is_answered_401_and_neither_asks_OTO_nor_writes()
+    {
+        var w = await ShippedCashDeal();
+        OtoSays(w, "delivered");
+        var calls = w.Oto.Calls.Count;
+        var saves = w.Docs.SaveCalls;
+        await using var host = await OtoHost.StartAsync(w.Shipping);
+
+        using (var unsigned = await host.PostAsync(Slug, NoticeJson(w.Id.ToString("N"), secret: null)))
+        {
+            Assert.Equal(HttpStatusCode.Unauthorized, unsigned.StatusCode);
+            Assert.Equal("", await unsigned.Content.ReadAsStringAsync());
+        }
+        using (var forged = await host.PostAsync(Slug, NoticeJson(w.Id.ToString("N"), secret: "another-secret")))
+            Assert.Equal(HttpStatusCode.Unauthorized, forged.StatusCode);
+
+        Assert.Equal(calls, w.Oto.Calls.Count);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+        Assert.Equal(DealStage.Shipping, Stored(w).Stage);
+
+        using (var signed = await host.PostAsync(Slug, NoticeJson(w.Id.ToString("N"))))
+            Assert.Equal(HttpStatusCode.OK, signed.StatusCode);
+        Assert.Equal(DealStage.Delivered, Stored(w).Stage);
     }
 
     [Fact]
@@ -999,13 +1279,34 @@ public class LiveOtoOrderStatusProofTests(ITestOutputHelper output)
         return shipped;
     }
 
-    private static DealShipping Receiver(IDocumentStore store, OtoRouteHandler oto)
+    /// <summary>
+    /// <para>الوارِدُ عَلى المَخزَنِ الحَقيقِيّ. <b>ومُنذُ ‏2026-10-12</b> (تَيّارُ S8، ‏ADR-033 الخُطوَة 7): لِلبائِعِ مَدخَلٌ مَختومٌ في المُستَأجِرِ
+    /// المُؤَقَّت — يَكتُبُه <c>TenantProviderService.BindVendorAsync</c> نَفسُه عَلى Postgres (<paramref name="providersStore"/>) — فَيُتَحَقَّقُ مِن
+    /// تَوقيعِ الإشعارِ بِسِرِّه قَبلَ سُؤالِ OTO كَما في الإنتاج. و<paramref name="dealsStore"/> مَخزَنُ الصَفَقاتِ (مُبَوَّباً في السِباق).</para>
+    /// </summary>
+    private static async Task<DealShipping> ReceiverAsync(IDocumentStore dealsStore, IDocumentStore providersStore,
+        OtoRouteHandler oto, Guid seller)
     {
         oto.Routes[OtoClient.OrderStatusPath] = body =>
             OtoRouteHandler.Tracking(OtoRouteHandler.OrderIdIn(body), status: "delivered");
+        var vault = DealShipTests.NewVault();
+        var providers = new TenantProviderService(providersStore);
+        var entry = DealShipTests.VendorEntry(vault, DealShipping.DemoStore, seller);
+        await providers.BindVendorAsync(DealShipping.DemoStore, ProviderCapabilities.Delivery, seller, entry.ProviderSlug,
+            entry.Values, entry.WebhookId, null, seller.ToString("D"));
         var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, RefreshToken = "RT-live-proof" });
-        return new DealShipping(new DealsService(store, new ForbiddenPaymentProvider()),
-            new OtoClient(new HttpClient(oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options);
+        return new DealShipping(new DealsService(dealsStore, new ForbiddenPaymentProvider()),
+            new OtoClient(new HttpClient(oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options,
+            null, providers, vault, new FixedClock(DealShipTests.Now));
+    }
+
+    /// <summary>يُمسَحُ المُستَأجِرُ المُؤَقَّت: صَفَقاتُه ومَداخِلُ بائِعيه.</summary>
+    internal static async Task WipeAsync(IDocumentStore store, string slug)
+    {
+        await using var s = store.LightweightSession(slug);
+        foreach (var d in await s.Query<Deal>().ToListAsync()) s.Delete(d);
+        foreach (var b in await s.Query<TenantProviderBinding>().ToListAsync()) s.Delete(b);
+        await s.SaveChangesAsync();
     }
 
     private async Task<(OtoNoticeOutcome Outcome, Deal Final)> RaceAsync(Func<DealsService, string, Guid, Guid, Task> otherWrite)
@@ -1021,7 +1322,8 @@ public class LiveOtoOrderStatusProofTests(ITestOutputHelper output)
 
             // الرَمزُ لِـtheme-demo وَحدَه — فَالوارِدُ يُنادى بِاسمِه، والمُستَأجِرُ المُؤَقَّتُ يُمَرَّرُ إلى المَخزَنِ تَحتَه.
             var gate = new SaveGate.Gate();
-            var receiver = Receiver(SaveGate.Wrap(TenantAlias.Wrap(store, DealShipping.DemoStore, slug), gate), new OtoRouteHandler());
+            var receiver = await ReceiverAsync(SaveGate.Wrap(TenantAlias.Wrap(store, DealShipping.DemoStore, slug), gate),
+                TenantAlias.Wrap(store, DealShipping.DemoStore, slug), new OtoRouteHandler(), seller);
 
             var receiving = Task.Run(async () =>
             {
@@ -1040,9 +1342,7 @@ public class LiveOtoOrderStatusProofTests(ITestOutputHelper output)
         }
         finally
         {
-            await using var s = store.LightweightSession(slug);
-            foreach (var d in await s.Query<Deal>().ToListAsync()) s.Delete(d);
-            await s.SaveChangesAsync();
+            await WipeAsync(store, slug);
         }
     }
 
@@ -1090,7 +1390,8 @@ public class LiveOtoOrderStatusProofTests(ITestOutputHelper output)
             await plain.AttachRefAsync(slug, born.Id, DealShipping.OtoIdRef, "540789");
 
             var oto = new OtoRouteHandler();
-            var receiver = Receiver(TenantAlias.Wrap(store, DealShipping.DemoStore, slug), oto);
+            var aliased = TenantAlias.Wrap(store, DealShipping.DemoStore, slug);
+            var receiver = await ReceiverAsync(aliased, aliased, oto, seller);
             oto.Routes[OtoClient.OrderStatusPath] = body =>
                 OtoRouteHandler.Tracking(OtoRouteHandler.OrderIdIn(body), status: "searchingDriver");
             var first = await receiver.ReceiveAsync(DealShipping.DemoStore, OtoOrderStatusTests.Notice(born.Id, status: "searchingDriver"));
@@ -1112,9 +1413,7 @@ public class LiveOtoOrderStatusProofTests(ITestOutputHelper output)
         }
         finally
         {
-            await using var s = store.LightweightSession(slug);
-            foreach (var d in await s.Query<Deal>().ToListAsync()) s.Delete(d);
-            await s.SaveChangesAsync();
+            await WipeAsync(store, slug);
         }
     }
 

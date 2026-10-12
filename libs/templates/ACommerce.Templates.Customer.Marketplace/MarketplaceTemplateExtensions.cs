@@ -145,6 +145,9 @@ public static class MarketplaceTemplateExtensions
         // شَحنُ الصَفَقاتِ عَبرَ OTO (‏ADR-033 الخُطوَة 3) — عَلى خِدمَةِ الصَفَقاتِ القائِمَةِ وعَميلِ OTO
         // الَّذي يُسَجِّلُه المُضيف (`AddOtoShipping`)، فَلا أُنبوبَ ثانِيَ لِلانتِقال.
         services.AddScoped<Services.Deals.DealShipping>();
+        // حِسابُ الشَحنِ لِلبائِعِ داخِلَ المَتجَر (‏ADR-033 الخُطوَة 7، تَيّارُ S8، ‏2026-10-12) — عَلى خِدمَةِ المُزَوِّدينَ والخِزانَةِ
+        // وعَميلِ OTO القائِمَة؛ والمَدخَلُ وَثيقَةُ الرَبطِ نَفسُها بِمُعَرِّفٍ مُرَكَّب، فَلا خِزانَةَ ثانِيَةَ ولا وَثيقَةَ ثانِيَة.
+        services.AddScoped<Services.Shipping.VendorShippingService>();
 
         // التَّقييمات (تَقييم مُتَبادَل بَعد اكتِمال صَفقَة).
         services.AddScoped<ACommerce.Kit.Reviews.ReviewsService>();
@@ -194,6 +197,8 @@ public static class MarketplaceTemplateExtensions
             // فَالعَزلُ مَجّانِيٌّ بِصِفرِ سَطر: لا استِعلامَ عابِراً
             // لِلمُستَأجِرينَ مُمكِنٌ أَصلاً. ومُعَرِّفُه <b>هُوَ
             // القُدرَة</b> — رَبطٌ فَعّالٌ واحِدٌ لِكُلّ قُدرَة.
+            // ومَدخَلُ البائِعِ الوَثيقَةُ نَفسُها بِمُعَرِّفٍ مُرَكَّبٍ `{capability}:{listing_owner}` (‏ADR-033 الخُطوَة 7، ‏2026-10-12) —
+            // لا يُصادِفُ مُعَرِّفَ قُدرَة، ومُجموعَةُ المَتجَرِ تَتَجاوَزُه بِقاعِدَةٍ مُسَمّاة (`TenantProviderBinding.IsVendorEntryId`).
             opts.Schema.For<ACommerce.Platform.Providers.TenantProviderBinding>()
                 .Identity(x => x.Id);
 
@@ -4066,6 +4071,8 @@ public static class MarketplaceTemplateExtensions
         // ─── الشَحنُ عَبرَ OTO (‏ADR-033 الخُطوَة 3) ─────────────────────────
         // مِلَفٌّ مُنفَصِلٌ لِلسَبَبِ نَفسِه: نِطاقُ المُراجَعَةِ وسَقفُ النَزيفِ لَه وَحدَه.
         app.MapOtoShipping();
+        // وسَطحُ البائِع (‏ADR-033 الخُطوَة 7، ‏2026-10-12) — مِلَفٌّ ثالِثٌ لِلسَبَبِ نَفسِه.
+        app.MapVendorShipping();
 
         return app;
     }

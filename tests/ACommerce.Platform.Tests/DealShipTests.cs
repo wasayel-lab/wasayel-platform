@@ -2,8 +2,11 @@ using System.Net;
 using System.Text.Json;
 using ACommerce.Kit.Delivery;
 using ACommerce.Kit.Payments;
+using ACommerce.Platform.Providers;
 using ACommerce.Templates.Customer.Marketplace.Api;
+using ACommerce.Templates.Customer.Marketplace.Services;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
+using ACommerce.Templates.Customer.Marketplace.Services.Shipping;
 using Marten;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -34,6 +37,8 @@ namespace ACommerce.Platform.Tests;
 internal sealed class OtoRouteHandler : HttpMessageHandler
 {
     public List<(string Path, string? Body)> Calls { get; } = new();
+    /// <summary>فِعلُ كُلِّ طَلَبٍ بِتَرتيبِ <see cref="Calls"/> — <c>POST</c> أَو <c>PUT</c> لِتَسجيلِ الوارِد (تَيّارُ S8، ‏2026-10-12).</summary>
+    public List<HttpMethod> Methods { get; } = new();
     /// <summary>رَدُّ كُلِّ مَسارٍ بِجِسمِ طَلَبِه — «Order Tracking» يُعيدُ المُعَرِّفَ الَّذي سُئِلَ عَنه
     /// كَما في مِثالِ الوَثيقَة (<c>"orderId": "OID-23331-9749"</c> في الطَلَبِ والرَدّ).</summary>
     public Dictionary<string, Func<string?, HttpResponseMessage>> Routes { get; } = new(StringComparer.Ordinal);
@@ -45,6 +50,10 @@ internal sealed class OtoRouteHandler : HttpMessageHandler
             "{\"access_token\":\"ACCESS-1\",\"success\":true,\"token_type\":\"Bearer\",\"expires_in\":\"3600\"}");
         Routes[OtoClient.CreateOrderPath] = _ => Json(HttpStatusCode.OK, "{\"success\":true,\"otoId\":540789}");
         Routes[OtoClient.OrderStatusPath] = body => Tracking(OrderIdIn(body));
+        // تَسجيلُ الوارِد (‏2026-10-12): رَدّا الوَثيقَةِ بِحَرفِهِما — الإنشاءُ بِـ`id`، والتَحديثُ (جِسمٌ يَحمِلُ `id`) بِلاه.
+        Routes[OtoClient.WebhookPath] = body => body is not null && JsonDocument.Parse(body).RootElement.TryGetProperty("id", out _)
+            ? Json(HttpStatusCode.OK, "{\"success\": true, \"message\": \"webhook has been updated\"}")
+            : Json(HttpStatusCode.OK, "{\"success\": true, \"id\": \"59\", \"message\": \"webhook has been created\"}");
     }
 
     public static HttpResponseMessage Json(HttpStatusCode status, string body)
@@ -70,9 +79,16 @@ internal sealed class OtoRouteHandler : HttpMessageHandler
         var path = request.RequestUri!.AbsolutePath;
         var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(ct);
         Calls.Add((path, body));
+        Methods.Add(request.Method);
         Before?.Invoke(path);
         return Routes.TryGetValue(path, out var r) ? r(body) : Json(HttpStatusCode.NotFound, "{}");
     }
+}
+
+/// <summary>ساعَةٌ واقِفَة — نافِذَةُ تَوقيعِ الوارِدِ تُقاسُ بِطَرَفَيها لا بِساعَةِ الآلَة (تَيّارُ S8، ‏2026-10-12).</summary>
+internal sealed class FixedClock(DateTimeOffset now) : TimeProvider
+{
+    public override DateTimeOffset GetUtcNow() => now;
 }
 
 /// <summary>لوغٌ يُلتَقَطُ نَصّاً لِخِدمَةِ الشَحن — لِيُقاسَ ما يَحمِلُه سَطرُ الرَفض (‏2026-10-12، مُراجَعَةُ المَوجَة 3a).</summary>
@@ -364,10 +380,65 @@ public class DealShipTests(ITestOutputHelper output)
     // ═══ ٤. المَسارُ كامِلاً — عالَمُ الوَثائِقِ ووَثيقَةُ OTO ════════════════════════════
 
     /// <summary>عالَمُ الشَحن — <c>internal</c> لِأَنّ <c>OtoOrderStatusTests</c> يَبني عَلَيه وارِدَه: نُسخَتانِ مِن أَداةِ
-    /// قِياسٍ تَنجَرِفان.</summary>
-    internal sealed record World(DocWorld Docs, DealsService Deals, DealShipping Shipping, OtoRouteHandler Oto, Guid Id);
+    /// قِياسٍ تَنجَرِفان. <b>و<c>Vault</c> و<c>Providers</c> مُنذُ ‏2026-10-12</b> (تَيّارُ S8، ‏ADR-033 الخُطوَة 7): خِزانَةُ العالَمِ
+    /// ومَداخِلُ بائِعيه — لِيُقرَأَ ما خُتِمَ ويُختَمَ ما يُضافُ بِالخِزانَةِ نَفسِها.</summary>
+    internal sealed record World(DocWorld Docs, DealsService Deals, DealShipping Shipping, OtoRouteHandler Oto, Guid Id,
+        ProviderVault Vault, TenantProviderService Providers);
 
-    internal static async Task<World> ConfirmedCashDeal(string? environment = OtoEnvironment.Staging)
+    // ─── مَدخَلُ البائِعِ في العالَم (تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 الخُطوَة 7) ─────────────────────────
+    //
+    // الرَمزُ صارَ رَمزَ بائِعِ الصَفقَة: مَدخَلُه `delivery:{listing_owner}` بِرَمزِ تَحديثٍ وسِرِّ وارِدٍ مَختومَينِ بِخِزانَةٍ حَقيقِيَّةٍ
+    // ومِفتاحِ اختِبارٍ عَشوائِيٍّ لِكُلِّ عالَم. ورَمزُ البائِعِ غَيرُ رَمزِ التَهيئَة — فَيُقاسُ في جِسمِ طَلَبِ الرَمزِ أَيُّهُما طُلِبَ بِه.
+
+    /// <summary>رَمزُ تَحديثِ البائِعِ في مَدخَلِه.</summary>
+    internal const string VendorToken = "RT-vendor-bbbb";
+
+    /// <summary>رَمزُ التَهيئَةِ الاحتِياطيُّ لِمَتجَرِ العَرض — كَما كانَ في هذا العالَمِ قَبلَ الخُطوَة 7.</summary>
+    internal const string ConfigToken = "RT-theme-demo";
+
+    /// <summary>سِرُّ وارِدِ البائِعِ في مَدخَلِه — بِه تُوَقَّعُ إشعاراتُ الاختِبار (<c>OtoOrderStatusTests.NoticeJson</c>).</summary>
+    internal const string WebhookSecret = "whsec-test-vendor-bbbb";
+
+    /// <summary>ساعَةُ العالَم: خَتمُ مِثالِ الوَثيقَةِ نَفسُه («‏"timestamp": "1595941360328"» في قِسمِ «Webhook»)، فَإشعارُ الاختِبارِ
+    /// يَحمِلُ خَتمَ الوَثيقَةِ بِحَرفِه ويَقَعُ في النافِذَة.</summary>
+    internal static readonly DateTimeOffset Now = DateTimeOffset.FromUnixTimeMilliseconds(1595941360328);
+
+    internal static ProviderVault NewVault()
+        => ProviderVault.FromKek(Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)));
+
+    /// <summary>مَدخَلُ بائِعٍ بِقيَمٍ مَختومَةٍ بِسِياقِ <c>tenant|delivery|field|listing_owner</c> — كَما تَكتُبُه خِدمَةُ السَطح.
+    /// و<paramref name="secret"/> <c>null</c> يُسقِطُ سِرَّ الوارِد (تَسجيلٌ لَم يَنجَح بَعد).</summary>
+    internal static TenantProviderBinding VendorEntry(ProviderVault vault, string tenant, Guid owner,
+        string token = VendorToken, string? secret = WebhookSecret, string status = TenantProviderBinding.StatusActive)
+    {
+        var refresh = VendorShippingSurface.RefreshField!;
+        var webhook = VendorShippingSurface.WebhookField!;
+        var values = new Dictionary<string, StoredValue>(StringComparer.Ordinal)
+        {
+            [refresh] = StoredValue.Sealed(vault, CredentialKinds.SecretKey, token, VendorShippingSurface.AadFor(tenant, refresh, owner)),
+        };
+        if (secret is not null)
+            values[webhook] = StoredValue.Sealed(vault, CredentialKinds.IssuedSecret, secret, VendorShippingSurface.AadFor(tenant, webhook, owner));
+        return new TenantProviderBinding
+        {
+            Id = TenantProviderBinding.VendorEntryId(ProviderCapabilities.Delivery, owner),
+            Slug = ProviderCapabilities.Delivery,
+            TenantSlug = tenant,
+            ProviderSlug = VendorShippingSurface.Definition!.Slug,
+            Status = status,
+            Values = values,
+            BoundBy = owner.ToString("D"),
+            BoundAt = DateTime.UtcNow,
+            WebhookId = secret is null ? null : "59",
+        };
+    }
+
+    /// <summary>
+    /// <para>صَفقَةُ نَقدٍ عِندَ «تأكيد». و<paramref name="vendorEntry"/> (‏2026-10-12): افتِراضُه <c>true</c> — لِبائِعِها مَدخَلٌ
+    /// مَختومٌ فَيُشحَنُ بِرَمزِه ويُتَحَقَّقُ مِن وارِدِه بِسِرِّه؛ و<c>false</c> يُبقي العالَمَ كَما كانَ قَبلَ الخُطوَة 7: رَمزُ التَهيئَةِ
+    /// الاحتِياطيُّ وَحدَه بِلا سِرّ.</para>
+    /// </summary>
+    internal static async Task<World> ConfirmedCashDeal(string? environment = OtoEnvironment.Staging, bool vendorEntry = true)
     {
         var docs = new DocWorld();
         var deals = new DealsService(docs.Store, new ForbiddenPaymentProvider());
@@ -383,10 +454,15 @@ public class DealShipTests(ITestOutputHelper output)
         Assert.True((await deals.AdvanceAsync(Slug, deal.Id, Seller, "بائِع")).Ok);
         Assert.Equal(DealStage.Confirmed, (await deals.LoadAsync(Slug, deal.Id))!.Stage);
 
+        var vault = NewVault();
+        var providers = new TenantProviderService(docs.Store);
+        if (vendorEntry) docs.Put(VendorEntry(vault, Slug, Seller));
+
         var oto = new OtoRouteHandler();
-        var options = Options.Create(new OtoOptions { Environment = environment ?? "", RefreshToken = "RT-theme-demo" });
+        var options = Options.Create(new OtoOptions { Environment = environment ?? "", RefreshToken = ConfigToken });
         var client = new OtoClient(new HttpClient(oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance);
-        return new World(docs, deals, new DealShipping(deals, client, options), oto, deal.Id);
+        var shipping = new DealShipping(deals, client, options, null, providers, vault, new FixedClock(Now));
+        return new World(docs, deals, shipping, oto, deal.Id, vault, providers);
     }
 
     [Fact]
@@ -687,7 +763,8 @@ public class DealShipTests(ITestOutputHelper output)
     public async Task Without_an_open_environment_the_carrier_is_unavailable_and_nothing_leaves()
     {
         var w = await ConfirmedCashDeal(environment: OtoEnvironment.Production);
-        Assert.False(w.Shipping.CarrierReady(Slug));
+        // كانَ `CarrierReady(Slug)` — رَمزُ التَهيئَةِ لِلمَتجَر؛ والسُؤالُ صارَ لِبائِعِ الصَفقَة (تَيّارُ S8، ‏2026-10-12)، والجَوابُ هُوَ هُوَ.
+        Assert.False(await w.Shipping.CarrierReadyForAsync(Slug, await w.Deals.LoadAsync(Slug, w.Id)));
 
         var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
 
@@ -1048,8 +1125,11 @@ public class DealShipTests(ITestOutputHelper output)
         Assert.Equal(2, checkedStates);
 
         var page = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(DealPage()));
+        // والناقِلُ ناقِلُ بائِعِ الصَفقَة (تَيّارُ S8، ‏2026-10-12): كانَ `Shipping.CarrierReady(Slug)`، وصارَ المُتَغَيِّرَ الواحِدَ الَّذي يَقرَؤُه
+        // `canShip` و`shipHeldKey` مَعاً — فَالفاعِلُ والناقِلُ أَنفُسُهُما كَما كانا.
+        Assert.Contains("var carrier = await Shipping.CarrierReadyForAsync(Slug, deal);", page, StringComparison.Ordinal);
         Assert.Contains(
-            "shipHeldKey = DealRefusalTexts.KeyFor(DealShipAuthorization.HeldRefusal(deal, new DealShipper(uid, Auth.UserName ?? \"\"), Shipping.CarrierReady(Slug)));",
+            "shipHeldKey = DealRefusalTexts.KeyFor(DealShipAuthorization.HeldRefusal(deal, new DealShipper(uid, Auth.UserName ?? \"\"), carrier));",
             page, StringComparison.Ordinal);
         var card = page.IndexOf("@if (deal.Status == DealStatus.Active && shipHeldKey is null)", StringComparison.Ordinal);
         var turn = page.IndexOf("var turn = Services.Ux.DealTurnView.For(deal, mySide);", StringComparison.Ordinal);
@@ -1429,8 +1509,10 @@ public class DealShipTests(ITestOutputHelper output)
         Assert.Contains("@inject Services.Deals.DealShipping Shipping", code, StringComparison.Ordinal);
         Assert.DoesNotContain("IDocumentSession", code, StringComparison.Ordinal);
         Assert.DoesNotContain("IDocumentStore", code, StringComparison.Ordinal);
+        // والناقِلُ بِالدالَّةِ الَّتي تَسأَلُها `/ship` نَفسُها — ناقِلُ بائِعِ الصَفقَة (تَيّارُ S8، ‏2026-10-12؛ كانَ `Shipping.CarrierReady(Slug)`).
+        Assert.Contains("var carrier = await Shipping.CarrierReadyForAsync(Slug, deal);", code, StringComparison.Ordinal);
         Assert.Contains(
-            "canShip = DealShipAuthorization.IsAllowed(deal, new DealShipper(uid, Auth.UserName ?? \"\"), Shipping.CarrierReady(Slug));",
+            "canShip = DealShipAuthorization.IsAllowed(deal, new DealShipper(uid, Auth.UserName ?? \"\"), carrier);",
             code, StringComparison.Ordinal);
         Assert.Contains("shipResumes = canShip && DealShipping.IsPlaced(deal);", code, StringComparison.Ordinal);
 

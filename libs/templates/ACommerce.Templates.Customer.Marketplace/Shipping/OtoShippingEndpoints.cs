@@ -59,10 +59,12 @@ public static class OtoShippingEndpoints
         // **ولا يُقرَأُ الجِسمُ بِلا ناقِل** (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛ تَوصيفُه `ecb278a`): كانَ `ReadToEndAsync` يَسبِقُ
         // البَوّابَةَ فَيُقرَأُ كُلُّه ثُمَّ يُجابُ ‏404 — والدَليلُ والبَوّابَةُ يَقولانِ «لا يُقرَأ». فَيُسأَلُ الناقِلُ أَوَّلاً ولا يُقرَأُ إلّا مَعَه،
         // والبَوّابَةُ هي هي: `Admit` تُجيبُ `carrier_unavailable` قَبلَ أَن تَنظُرَ في النَصّ.
+        // **والناقِلُ صارَ «لِلمَتجَرِ ناقِلٌ أَصلاً»** (تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 الخُطوَة 7): رَمزُ التَهيئَةِ لِمَتجَرِ العَرض، أَو مَدخَلُ بائِعٍ
+        // فَعّالٌ واحِدٌ عَلى الأَقَلّ — ويُتَحَقَّقُ مِن تَوقيعِ الإشعارِ بِسِرِّ بائِعِ صَفقَتِه في `ReceiveAsync` قَبلَ سُؤالِ OTO.
         app.MapPost("/{slug}/shipping/oto/order-status",
             async (string slug, HttpRequest req, Services.Deals.DealShipping shipping, ILogger<Log> log) =>
         {
-            var carrier = shipping.CarrierReady(slug);
+            var carrier = await shipping.CarrierReadyForStoreAsync(slug, req.HttpContext.RequestAborted);
             var raw = carrier ? await new StreamReader(req.Body).ReadToEndAsync(req.HttpContext.RequestAborted) : null;
             var admitted = Services.Deals.OtoOrderStatusGate.Admit(carrier, raw);
             var code = admitted.Notice is { } notice

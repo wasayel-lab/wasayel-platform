@@ -36,6 +36,15 @@ public sealed class OtoOptions
     /// <summary>مُهلَةُ النِداءِ بِالثَواني — <see cref="OtoEnvironment.DefaultTimeoutSeconds"/>،
     /// والصِفرُ أَو السالِبُ يَرتَدُّ إلَيها.</summary>
     public int TimeoutSeconds { get; set; } = OtoEnvironment.DefaultTimeoutSeconds;
+
+    /// <summary>
+    /// <para><c>Shipping:Oto:MarketplaceToken</c> — <b>الرَمزُ السوقِيُّ</b> («‏It requires a special kind of token provided by OTO.
+    /// Regular refresh tokens will not work here.» — قِسمُ «Marketplace › Register»): سِرُّ المَنَصَّةِ لا سِرُّ مُستَأجِر (‏ADR-033 §٢‑أ،
+    /// <c>platform_key</c>)، يَمنَحُه فَريقُ OTO (‏`SHGAP-01`). <b>وحُضورُه يُطفِئُ اللَصق</b>: سَطحُ البائِعِ يَعرِضُ مَدخَلاً واحِداً
+    /// (تَيّارُ S8، ‏2026-10-12؛ دالَّةُ «أَيُّ المَدخَلَين» في القالِب)، وغِيابُه يُخفي مَسارَ <c>register</c> ولا يُسقِطُ تَعريفَ المُزَوِّد.
+    /// ولا يُكتَبُ في لوغٍ ولا عُنوان.</para>
+    /// </summary>
+    public string MarketplaceToken { get; set; } = "";
 }
 
 /// <summary>
@@ -55,6 +64,8 @@ public static class OtoEnvironment
     public const string SectionKey       = "Shipping:Oto";
     public const string EnvironmentKey   = "Shipping:Oto:Environment";
     public const string RefreshTokenKey  = "Shipping:Oto:RefreshToken";
+    /// <summary>الرَمزُ السوقِيُّ (تَيّارُ S8، ‏2026-10-12) — <see cref="OtoOptions.MarketplaceToken"/>.</summary>
+    public const string MarketplaceTokenKey = "Shipping:Oto:MarketplaceToken";
 
     public const string Staging    = "staging";
     public const string Production = "production";

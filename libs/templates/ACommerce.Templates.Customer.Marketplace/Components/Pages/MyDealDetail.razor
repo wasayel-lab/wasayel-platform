@@ -506,12 +506,15 @@
         // البوليصَة (‏ADR-033 الخُطوَة 3): رابِطاها لِلطَرَفَين بِالدالَّةِ الَّتي يَقرَأُ بِها الشَحنُ والوارِد، واستِمارَتُها بِالبَوّابَةِ
         // الَّتي تُطَبِّقُها النُقطَة — فَما يُرسَمُ هُوَ ما يُقبَل.
         (labelUrl, trackingUrl) = DealShipping.LinksOf(deal);
-        canShip = DealShipAuthorization.IsAllowed(deal, new DealShipper(uid, Auth.UserName ?? ""), Shipping.CarrierReady(Slug));
+        // والناقِلُ ناقِلُ بائِعِ الصَفقَة — مَدخَلُه في الخِزانَةِ أَو احتِياطُ التَهيئَة — بِالدالَّةِ الَّتي تَسأَلُها `/ship` (تَيّارُ S8، ‏2026-10-12؛
+        // كانَ `Shipping.CarrierReady(Slug)`: رَمزُ التَهيئَةِ لِلمَتجَرِ كُلِّه).
+        var carrier = await Shipping.CarrierReadyForAsync(Slug, deal);
+        canShip = DealShipAuthorization.IsAllowed(deal, new DealShipper(uid, Auth.UserName ?? ""), carrier);
         shipResumes = canShip && DealShipping.IsPlaced(deal);
         // وخُطوَةٌ طَلَبُها عِندَ OTO لا يُرسَمُ لَها «تَأكيد: شَحن» — الدالَّةُ الَّتي يَرُدُّ بِها المُحَرِّك (مُراجَعَةُ تَيّارِ S7 الثانِيَة).
         heldByCarrier = DealShipping.AwaitsCarrier(deal);
         // وخُطوَةٌ مَحجوزَةٌ لا بابَ لَها: رَمزُ البَوّابَةِ الَّذي يُفَسِّرُها، بِالفاعِلِ والناقِلِ أَنفُسِهِما (مُراجَعَةُ المَوجَة 3a، ‏2026-10-12).
-        shipHeldKey = DealRefusalTexts.KeyFor(DealShipAuthorization.HeldRefusal(deal, new DealShipper(uid, Auth.UserName ?? ""), Shipping.CarrierReady(Slug)));
+        shipHeldKey = DealRefusalTexts.KeyFor(DealShipAuthorization.HeldRefusal(deal, new DealShipper(uid, Auth.UserName ?? ""), carrier));
     }
 
     // ‏لَيسَت `static` بَعدَ اليَوم: قيَمُها صارَت مِن `L` وهو مَحقونٌ

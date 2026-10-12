@@ -17,12 +17,22 @@ public sealed record OtoNoticeViolation(string Code, string MessageAr);
 /// </summary>
 public sealed class OtoOrderStatusNotice
 {
-    internal OtoOrderStatusNotice(string orderId, string? otoId, string? status)
+    internal OtoOrderStatusNotice(string orderId, string? otoId, string? status,
+        string? timestamp = null, string? signature = null)
     {
         OrderId = orderId;
         OtoId = otoId;
         Status = status;
+        Timestamp = timestamp;
+        Signature = signature;
     }
+
+    /// <summary>خَتمُ وَقتِ الحَدَثِ كَما في الإشعار — مِلّي ثانِيَةٍ مُنذُ عَهدِ يونِكس نَصّاً («‏timestamp : Unix epoch timestamp (in
+    /// milliseconds)»). جُزءٌ مِن النَصِّ المُوَقَّع، ويُقاسُ بِه انحِرافُ الإشعار (تَيّارُ S8، ‏2026-10-12).</summary>
+    public string? Timestamp { get; }
+
+    /// <summary>تَوقيعُ OTO كَما في جِسمِ الإشعار (‏Base64 لِبَصمَةِ ‏HMAC-SHA256 عَلى <c>orderId:status:timestamp</c>).</summary>
+    public string? Signature { get; }
 
     /// <summary>مُعَرِّفُنا كَما أَرسَلناه في «Create Order» — مُعَرِّفُ الصَفقَةِ بِصيغَةِ <c>N</c>.</summary>
     public string OrderId { get; }
@@ -93,10 +103,28 @@ public static class OtoOrderStatusGate
     /// <summary>المُحَرِّكُ لا يُخرِجُها بِطَرَفِها المُقابِل — فَلا يُكتَبُ انتِقالٌ سَيُرَدّ.</summary>
     public const string ActorCannotDeliver = "actor_cannot_deliver";
 
+    // ─── التَوقيع — أَربَعَةٌ تُضافُ ‏2026-10-12 (تَيّارُ S8، ‏ADR-033 الخُطوَة 7 و§٧‑م؛ ولا يُعادُ حَرفٌ فَوقَ العَشَرَة) ───────────
+
+    /// <summary>لا سِرَّ وارِدٍ لِبائِعِ هذِه الصَفقَة — لا مَدخَلَ لَه، أَو صَفقَةٌ يَشحَنُها رَمزُ التَهيئَةِ الاحتِياطِيّ وهُوَ بِلا سِرّ — فَلا
+    /// يُتَحَقَّقُ مِن الإشعارِ ولا يُصَدَّق: فَشَلٌ مُغلَق. ‏401.</summary>
+    public const string NoticeUnverifiable = "notice_unverifiable";
+
+    /// <summary>الإشعارُ بِلا <c>signature</c> أَو بِلا <c>timestamp</c> يُقرَأُ رَقَماً أَو بِلا <c>status</c> — نِصفُ النَصِّ المُوَقَّعِ غائِب. ‏401.</summary>
+    public const string SignatureMissing = "signature_missing";
+
+    /// <summary>خَتمُ الوَقتِ خارِجَ النافِذَة (<see cref="ACommerce.Kit.Delivery.OtoWebhookSignature.ToleranceSeconds"/>) — إعادَةُ لَعِبٍ
+    /// أَو تَأَخُّرٌ؛ وانحِرافُه يُطبَعُ في اللوغ. ‏401.</summary>
+    public const string SignatureStale = "signature_stale";
+
+    /// <summary>التَوقيعُ لا يُطابِقُ بَصمَةَ سِرِّ البائِع — مُقارَنَةٌ ثابِتَةُ الزَمَن. ‏401.</summary>
+    public const string SignatureMismatch = "signature_mismatch";
+
+    /// <summary>المَعجَمُ المُغلَق — عَشَرَةٌ، و<b>أَربَعَةَ عَشَرَ ‏2026-10-12</b> بِرُموزِ التَوقيعِ الأَربَعَةِ بَعدَها.</summary>
     public static readonly IReadOnlyList<string> All = new[]
     {
         CarrierUnavailable, NoticeUnreadable, OrderUnknown, OrderMismatch, StateUnconfirmed,
         NotDelivered, AlreadyDelivered, DealNotActive, DealNotShipping, ActorCannotDeliver,
+        NoticeUnverifiable, SignatureMissing, SignatureStale, SignatureMismatch,
     };
 
     /// <summary>النَتيجَةُ الَّتي تَكتُب: خَرَجَت الصَفقَةُ إلى <c>Delivered</c>. لَيسَت خَرقاً فَلَيسَت في <see cref="All"/>.</summary>
@@ -128,7 +156,9 @@ public static class OtoOrderStatusGate
             var root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Object || Text(root, "orderId") is not { } orderId)
                 return Refused(NoticeUnreadable, "إشعارٌ بِلا orderId.");
-            return new(new OtoOrderStatusNotice(orderId, Text(root, "otoId"), Text(root, "status")), null);
+            // و`timestamp` و`signature` مِن الجِسمِ نَفسِه (‏2026-10-12، تَيّارُ S8) — يُقرَآنِ هُنا ويُتَحَقَّقُ بِهِما في `Verify`.
+            return new(new OtoOrderStatusNotice(orderId, Text(root, "otoId"), Text(root, "status"),
+                Text(root, "timestamp"), Text(root, "signature")), null);
         }
         catch (JsonException)
         {
@@ -148,6 +178,32 @@ public static class OtoOrderStatusGate
 
         if (notice.OtoId is { } said && OtoIdOf(deal) is { } held && !string.Equals(said, held, StringComparison.Ordinal))
             return new(OrderMismatch, "مُعَرِّفُ OTO في الإشعارِ غَيرُ المَكتوبِ في الصَفقَة.");
+
+        return null;
+    }
+
+    // ─── بَينَ الثانِيَةِ والثالِثَة: التَوقيعُ بِسِرِّ بائِعِ الصَفقَة (‏2026-10-12، تَيّارُ S8) ─────────────────
+
+    /// <summary>
+    /// <para><b>أَصَدَرَ هذا الإشعارُ عَن OTO بِسِرِّ بائِعِ الصَفقَة؟ — دالَّةٌ نَقِيَّة</b> (‏ADR-033 الخُطوَة 7 و§٧‑م). تُسأَلُ بَعدَ أَن
+    /// طابَقَ الإشعارُ صَفقَةً في المَتجَرِ (<see cref="Match"/> — فَبِها يُعرَفُ البائِعُ وسِرُّه) <b>وقَبلَ سُؤالِ OTO وقَبلَ أَيِّ كِتابَة</b>.
+    /// والتَرتيبُ تَرتيبُ <c>PaddleWebhookGuard.Gate</c>: لا سِرّ ← لا تَوقيع ← خارِجَ النافِذَة ← لا يُطابِق. <c>null</c> يَعني: يُسأَلُ OTO.</para>
+    /// <para><b>والإشعارُ ما زالَ إشارَةً لا بُرهاناً</b>: التَوقيعُ يَقولُ «مِن OTO»، والحالُ يُجلَبُ مِنها بَعدَه كَما كان.</para>
+    /// </summary>
+    public static OtoNoticeViolation? Verify(OtoOrderStatusNotice notice, string? secret, DateTimeOffset now)
+    {
+        if (string.IsNullOrEmpty(secret))
+            return new(NoticeUnverifiable, "لا سِرَّ وارِدٍ لِبائِعِ هذِه الصَفقَة — لا يُصَدَّقُ إشعارٌ لا يُتَحَقَّقُ مِنه.");
+
+        if (string.IsNullOrWhiteSpace(notice.Signature) || notice.Status is null
+            || ACommerce.Kit.Delivery.OtoWebhookSignature.DriftMilliseconds(notice.Timestamp, now) is not { } drift)
+            return new(SignatureMissing, "إشعارٌ بِلا تَوقيعٍ أَو بِلا خَتمِ وَقتٍ يُقرَأُ أَو بِلا حال.");
+
+        if (!ACommerce.Kit.Delivery.OtoWebhookSignature.IsFresh(drift))
+            return new(SignatureStale, $"خَتمُ الوَقتِ خارِجَ النافِذَة — انحِرافُه {drift} مِلّي ثانِيَة.");
+
+        if (!ACommerce.Kit.Delivery.OtoWebhookSignature.Matches(secret, notice.OrderId, notice.Status, notice.Timestamp!, notice.Signature))
+            return new(SignatureMismatch, "التَوقيعُ لا يُطابِقُ بَصمَةَ سِرِّ البائِع.");
 
         return null;
     }
@@ -215,6 +271,8 @@ public static class OtoOrderStatusGate
     {
         CarrierUnavailable => 404,
         NoticeUnreadable => 400,
+        // ‏401 لِإشعارٍ لا يُتَحَقَّقُ مِنه أَو لا يُطابِق (‏2026-10-12، تَيّارُ S8): لا يُكتَبُ شَيءٌ ولا تُسأَلُ OTO.
+        NoticeUnverifiable or SignatureMissing or SignatureStale or SignatureMismatch => 401,
         StateUnconfirmed or DealsService.ChangedMeanwhile => 503,
         Delivered or Shipped or OrderUnknown or OrderMismatch or NotDelivered or AlreadyDelivered
             or DealNotActive or DealNotShipping or ActorCannotDeliver => 200,

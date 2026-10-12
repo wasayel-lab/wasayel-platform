@@ -639,6 +639,157 @@ public class OtoClientTests
         Assert.Equal(key, OtoTokenCache.KeyOf(Refresh));
         Assert.NotEqual(key, OtoTokenCache.KeyOf(Refresh + "x"));
     }
+
+    // ─── تَسجيلُ الوارِد — «Webhook › webhook» (تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 الخُطوَة 7) ─────────────────────
+    //
+    // الرُدودُ بِأَمثِلَةِ الوَثيقَةِ حَرفاً: «‏{"success": true, "id": "59", "message": "webhook has been created"}» لِلإنشاء،
+    // و«‏{"success": true, "message": "webhook has been updated"}» لِلتَحديث.
+
+    private const string InboundUrl = "https://wasayel.example/theme-demo/shipping/oto/order-status";
+    private const string IssuedSecret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    [Fact]
+    public async Task Registering_the_inbound_posts_the_documented_body_with_the_vendor_bearer_and_returns_the_new_id()
+    {
+        var handler = new OtoScriptedHandler()
+            .ThenToken("ACCESS-VENDOR")
+            .Then(HttpStatusCode.OK, "{\"success\": true, \"id\": \"59\", \"message\": \"webhook has been created\"}");
+
+        var res = await Client(handler).RegisterWebhookAsync(Refresh, InboundUrl, IssuedSecret);
+
+        Assert.True(res.Ok, res.Failure?.Code);
+        Assert.Equal("59", res.Value);
+        Assert.Contains(Refresh, handler.Bodies[0]!, StringComparison.Ordinal);
+        var req = handler.Requests[1];
+        Assert.Equal(HttpMethod.Post, req.Method);
+        Assert.Equal(OtoEnvironment.StagingBaseUrl + OtoClient.WebhookPath, req.RequestUri!.ToString());
+        Assert.Equal("Bearer ACCESS-VENDOR", req.Headers.Authorization!.ToString());
+        var body = BodyOf(handler, 1);
+        Assert.Equal(new[] { "method", "url", "secretKey", "webhookType" },
+            body.EnumerateObject().Select(p => p.Name).ToArray());
+        Assert.Equal("post", body.GetProperty("method").GetString());
+        Assert.Equal(InboundUrl, body.GetProperty("url").GetString());
+        Assert.Equal(IssuedSecret, body.GetProperty("secretKey").GetString());
+        Assert.Equal(OtoClient.OrderStatusWebhookType, body.GetProperty("webhookType").GetString());
+        Assert.Equal("orderStatus", OtoClient.OrderStatusWebhookType);
+        Assert.Equal("/rest/v2/webhook", OtoClient.WebhookPath);
+    }
+
+    [Fact]
+    public async Task Re_registering_puts_the_same_body_with_the_existing_id_and_keeps_it()
+    {
+        var handler = new OtoScriptedHandler()
+            .ThenToken()
+            .Then(HttpStatusCode.OK, "{\"success\": true, \"message\": \"webhook has been updated\"}");
+
+        var res = await Client(handler).RegisterWebhookAsync(Refresh, InboundUrl, IssuedSecret, existingId: "59");
+
+        Assert.True(res.Ok, res.Failure?.Code);
+        Assert.Equal("59", res.Value);
+        Assert.Equal(HttpMethod.Put, handler.Requests[1].Method);
+        Assert.Equal(OtoEnvironment.StagingBaseUrl + OtoClient.WebhookPath, handler.Requests[1].RequestUri!.ToString());
+        var body = BodyOf(handler, 1);
+        Assert.Equal("59", body.GetProperty("id").GetString());
+        Assert.Equal(IssuedSecret, body.GetProperty("secretKey").GetString());
+        Assert.Equal(InboundUrl, body.GetProperty("url").GetString());
+    }
+
+    /// <summary>إنشاءٌ يَنجَحُ بِلا <c>id</c> لا يُقرَأ — فَلا يُحفَظُ تَسجيلٌ لا مُعَرِّفَ لَه؛ ورَفضٌ بِشَكلِ الوَثيقَةِ <c>oto_refused</c>؛ ولا شَيءَ
+    /// يُرسَلُ بِلا بيئَة. ولا يَظهَرُ السِرُّ المُصدَرُ في سَطرِ لوغ.</summary>
+    [Fact]
+    public async Task A_registration_without_an_id_is_unreadable_a_refusal_is_refused_and_the_secret_never_reaches_a_log()
+    {
+        var log = new OtoCapturingLogger();
+        var handler = new OtoScriptedHandler()
+            .ThenToken()
+            .Then(HttpStatusCode.OK, "{\"success\": true, \"message\": \"webhook has been created\"}")
+            .Then(HttpStatusCode.BadRequest, "{\"success\": false, \"otoErrorCode\": \"OTO1001\"}");
+        var client = Client(handler, log: log);
+
+        Assert.Equal(OtoFailures.Unreadable, (await client.RegisterWebhookAsync(Refresh, InboundUrl, IssuedSecret)).Failure!.Code);
+        Assert.Equal(OtoFailures.Refused, (await client.RegisterWebhookAsync(Refresh, InboundUrl, IssuedSecret, "59")).Failure!.Code);
+        Assert.Equal(OtoFailures.NotConfigured,
+            (await Client(handler, Opts("")).RegisterWebhookAsync(Refresh, InboundUrl, IssuedSecret)).Failure!.Code);
+
+        Assert.Equal(3, handler.Requests.Count);
+        Assert.True(log.Lines.Count >= 1, $"أَداة عَمياء: {log.Lines.Count} سَطرَ لوغ.");
+        Assert.All(log.Lines, l => Assert.DoesNotContain(IssuedSecret, l, StringComparison.Ordinal));
+    }
+
+    // ─── تَوقيعُ الوارِد — ‏HmacSHA256 عَلى «orderId:status:timestamp» بِـBase64 (تَيّارُ S8، ‏2026-10-12) ─────────────
+
+    /// <summary>
+    /// <para><b>قيَمٌ مَعروفَةُ الجَواب</b> — بَصمَةٌ حُسِبَت خارِجَ الكودِ (‏Python ‏<c>hmac.new(b"key1234", b"1234:delivered:1595941360328",
+    /// sha256)</c> ثُمَّ ‏Base64) عَلى مُعَرِّفِ مِثالِ الوَثيقَةِ (<c>"orderId": "1234"</c>) وخَتمِه وكَلِمَةِ حالِه. فَإن انقَلَبَ تَرتيبُ الأَجزاءِ أَو
+    /// الفاصِلُ أَو الخوارِزمِيَّةُ أَو التَرميزُ احمَرَّ الصَفّ.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("1234", "delivered", "WzRX4VySGrlFmZMgRQx54Dz0mf3Nns6Tzmq/kUC5x7g=")]
+    [InlineData("1234", "outForDelivery", "ULY/YD5qLyeU8xMLuHmmc4YxBcufrjAg17AMIBQxs4k=")]
+    public void The_signature_is_base64_hmac_sha256_over_orderId_status_timestamp(string orderId, string status, string expected)
+    {
+        Assert.Equal("1234:" + status + ":1595941360328", OtoWebhookSignature.SignedText(orderId, status, "1595941360328"));
+        Assert.Equal(expected, OtoWebhookSignature.Compute("key1234", orderId, status, "1595941360328"));
+        Assert.True(OtoWebhookSignature.Matches("key1234", orderId, status, "1595941360328", expected));
+        Assert.True(OtoWebhookSignature.Matches("key1234", orderId, status, "1595941360328", " " + expected + " "));
+    }
+
+    [Theory]
+    [InlineData("key1235", "1234", "delivered", "1595941360328")]
+    [InlineData("key1234", "1235", "delivered", "1595941360328")]
+    [InlineData("key1234", "1234", "Delivered", "1595941360328")]
+    [InlineData("key1234", "1234", "delivered", "1595941360329")]
+    public void Any_change_in_the_secret_or_the_signed_text_does_not_match(string secret, string orderId, string status, string timestamp)
+        => Assert.False(OtoWebhookSignature.Matches(secret, orderId, status, timestamp, "WzRX4VySGrlFmZMgRQx54Dz0mf3Nns6Tzmq/kUC5x7g="));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("not base64 !")]
+    [InlineData("WzRX4VySGrlFmZMgRQx54Dz0mf3Nns6Tzmq/kUC5x7g")]
+    [InlineData("AAAA")]
+    public void A_missing_malformed_or_short_signature_does_not_match_and_never_throws(string? signature)
+        => Assert.False(OtoWebhookSignature.Matches("key1234", "1234", "delivered", "1595941360328", signature));
+
+    [Fact]
+    public void The_issued_secret_is_32_random_bytes_as_64_lowercase_hex_characters_under_the_255_limit()
+    {
+        var secrets = Enumerable.Range(0, 16).Select(_ => OtoWebhookSignature.NewSecret()).ToList();
+        Assert.Equal(32, OtoWebhookSignature.SecretBytes);
+        Assert.All(secrets, x => Assert.Matches("^[0-9a-f]{64}$", x));
+        Assert.Equal(secrets.Count, secrets.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(secrets, x => Assert.True(x.Length <= 255));
+    }
+
+    [Theory]
+    [InlineData("1595941360328", 0L)]
+    [InlineData("1595941355328", 5000L)]
+    [InlineData("1595941365329", 5001L)]
+    [InlineData("0", 1595941360328L)]
+    public void The_drift_is_absolute_milliseconds_from_now(string timestamp, long drift)
+        => Assert.Equal(drift, OtoWebhookSignature.DriftMilliseconds(timestamp, DateTimeOffset.FromUnixTimeMilliseconds(1595941360328)));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("yesterday")]
+    [InlineData("-5")]
+    [InlineData("+5")]
+    [InlineData("1.5")]
+    [InlineData(" 15 ")]
+    [InlineData("99999999999999999999")]
+    public void A_timestamp_that_is_not_plain_digits_has_no_drift(string? timestamp)
+        => Assert.Null(OtoWebhookSignature.DriftMilliseconds(timestamp, DateTimeOffset.FromUnixTimeMilliseconds(1595941360328)));
+
+    [Fact]
+    public void The_window_is_five_seconds_inclusive()
+    {
+        Assert.Equal(5, OtoWebhookSignature.ToleranceSeconds);
+        Assert.True(OtoWebhookSignature.IsFresh(0));
+        Assert.True(OtoWebhookSignature.IsFresh(5000));
+        Assert.False(OtoWebhookSignature.IsFresh(5001));
+    }
 }
 
 // ─── البُرهانُ الحَيّ — عَلى `staging-api.tryoto.com` بِرَمزِ المالِك ────────────────

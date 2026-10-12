@@ -41,6 +41,13 @@ public sealed class OtoClient
     public const string CreateOrderPath         = "/rest/v2/createOrder";
     public const string OrderStatusPath         = "/rest/v2/orderStatus";
 
+    /// <summary>تَسجيلُ عُنوانِ الوارِدِ وتَحديثُه — <c>POST</c> يُنشِئُ و<c>PUT</c> يُحَدِّثُ بِـ<c>id</c> (قِسمُ «Webhook › webhook»
+    /// في الوَثائِقِ العامَّة، مُصَيَّراً ‏2026-10-12؛ تَيّارُ S8، ‏ADR-033 الخُطوَة 7).</summary>
+    public const string WebhookPath            = "/rest/v2/webhook";
+
+    /// <summary>نَوعُ الوارِدِ الَّذي نُسَجِّلُه: «orderStatus sends order status changes» — بِحَرفِ حَقلِ <c>webhookType</c>.</summary>
+    public const string OrderStatusWebhookType = "orderStatus";
+
     /// <summary>قِيَمُ <c>payment_method</c> كَما تَقولُها الوَثيقَة: «‏Possible values:
     /// cod, paid».</summary>
     public const string CashOnDelivery = "cod";
@@ -229,6 +236,40 @@ public sealed class OtoClient
             Text(root, "trackingUrl")));
     }
 
+    /// <summary>
+    /// <para><b>يُسَجِّلُ عُنوانَ وارِدِ <c>orderStatus</c> عِندَ حِسابِ البائِعِ — أَو يُحَدِّثُه</b> (تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033
+    /// الخُطوَة 7 و§٧‑م). العَمَلِيَّةُ الرابِعَة — والثَلاثُ أَعلاه بِحالِها. <c>POST /rest/v2/webhook</c> بِـ
+    /// <c>{"method": "post", "url", "secretKey", "webhookType": "orderStatus"}</c> («‏secretKey · With this key message is signed and
+    /// receiver validate.(Character limit is 255)»)، ورَدُّه «‏{"success": true, "id": "59", "message": "webhook has been created"}» —
+    /// فَيُعادُ <c>id</c>. و<b>حينَ يُعطى <paramref name="existingId"/></b>: <c>PUT</c> بِالجِسمِ نَفسِه ومَعَه <c>id</c> («‏allows updating
+    /// an already registered webhook by providing its unique ID … such as URL, secretKey»)، ورَدُّه بِلا <c>id</c> فَيُعادُ القائِم.</para>
+    ///
+    /// <para><b>ولا يُرسَلُ <c>authorizationKey</c> ولا <c>timestampFormat</c> ولا <c>orderPrefix</c></b>: الأَوَّلُ لا تَكتُبُ الوَثيقَةُ
+    /// اسمَ الرَأسِ الَّذي يَعودُ فيه (سِجِلُّ المالِكِ «ب»)، والثاني يُبقي <c>timestamp</c> بِصيغَتِه الوَحيدَةِ المَوصوفَة («Unix epoch
+    /// timestamp (in milliseconds)») — وهي ما يَدخُلُ النَصَّ المُوَقَّع — والثالِثُ لِطَلَباتٍ بِبادِئَةٍ لا نُرسِلُها.</para>
+    /// </summary>
+    public async Task<OtoResult<string>> RegisterWebhookAsync(
+        string refreshToken, string url, string secretKey, string? existingId = null, CancellationToken ct = default)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["method"]      = "post",
+            ["url"]         = url,
+            ["secretKey"]   = secretKey,
+            ["webhookType"] = OrderStatusWebhookType,
+        };
+        if (existingId is not null) body["id"] = existingId;
+
+        var res = await PostAsync(refreshToken, WebhookPath, body, "webhook", ct,
+            existingId is null ? HttpMethod.Post : HttpMethod.Put);
+        if (!res.Ok) return OtoResult<string>.Fail(res.Failure!);
+
+        if (existingId is not null) return OtoResult<string>.Success(existingId);
+        return Text(res.Value, "id") is { } id
+            ? OtoResult<string>.Success(id)
+            : Unreadable<string>("webhook", "id");
+    }
+
     // ═══ الرَمز ════════════════════════════════════════════════════════
 
     /// <summary>
@@ -290,7 +331,8 @@ public sealed class OtoClient
     /// لا يُقرَأ ← <see cref="OtoFailures.Unreadable"/>.</para>
     /// </summary>
     private async Task<OtoResult<JsonElement>> PostAsync(
-        string refreshToken, string path, object body, string operation, CancellationToken ct)
+        string refreshToken, string path, object body, string operation, CancellationToken ct,
+        HttpMethod? method = null)
     {
         if (BaseUrl is null || string.IsNullOrWhiteSpace(refreshToken))
             return Fail<JsonElement>(OtoFailures.NotConfigured, operation, null, null);
@@ -303,7 +345,8 @@ public sealed class OtoClient
             var token = await AccessTokenAsync(refreshToken, ct);
             if (token.Value is not { } bearer) return OtoResult<JsonElement>.Fail(token.Failure!);
 
-            using var msg = new HttpRequestMessage(HttpMethod.Post, BaseUrl + path) { Content = Json(body) };
+            // ‏`PUT` لِتَحديثِ تَسجيلِ الوارِدِ وَحدَه (‏2026-10-12)؛ وكُلُّ ما سِواه `POST` كَما كان.
+            using var msg = new HttpRequestMessage(method ?? HttpMethod.Post, BaseUrl + path) { Content = Json(body) };
             msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
 
             var sent = await SendAsync(msg, operation, ct);

@@ -188,6 +188,46 @@ public sealed class TenantProviderBinding : ITenantDefinitionDocument
 
     [JsonIgnore]
     public bool IsActive => Status == StatusActive;
+
+    // ─── مَدخَلُ البائِع — الوَثيقَةُ نَفسُها بِمُعَرِّفٍ مُرَكَّب (‏ADR-033 §٢‑ج‑٢ والخُطوَة 7؛ تَيّارُ S8، ‏2026-10-12) ─────
+    //
+    // **لا وَثيقَةَ ثانِيَة** (القاعِدَة ٨): قيَمُ البائِعِ في المَتجَرِ — رَمزُ تَحديثِ حِسابِه عِندَ الناقِلِ ورَمزُ وارِدِه — تَسكُنُ
+    // هذِه الوَثيقَةَ بِأَعمِدَةِ ظَرفِها وإيجارِها المُقتَرِن، بِمُعَرِّفِ `{capability}:{listing_owner}` و`Slug` القُدرَة. ولا يَقرَؤُها
+    // `TenantProviderSet.For` — مُجموعَةُ المَتجَرِ تَتَجاوَزُها بِقاعِدَةٍ مُسَمّاة (`IsVendorEntryId`) — بَل استِعلامٌ بِمِفتاحِ البائِع.
+
+    /// <summary>فاصِلُ مُعَرِّفِ مَدخَلِ البائِع — لا يَحمِلُه مُعَرِّفُ قُدرَةٍ (المَعجَمُ أَسماءٌ بِلا <c>:</c>).</summary>
+    public const char VendorEntrySeparator = ':';
+
+    /// <summary><b>مُعَرِّفُ مَدخَلِ البائِع</b>: <c>{capability}:{listing_owner}</c> — والمالِكُ بِصيغَةِ <c>D</c> كَما يُكتَبُ
+    /// في مَرجِعِ <c>listing_owner</c> عَلى الصَفقَة. القُدرَةُ مِن المَعجَمِ وإلّا يُرمى.</summary>
+    public static string VendorEntryId(string capability, Guid listingOwner)
+        => $"{ProviderCapabilities.Require(capability)}{VendorEntrySeparator}{listingOwner:D}";
+
+    /// <summary>
+    /// <para><b>أَهذا مُعَرِّفُ مَدخَلِ بائِع؟ — القاعِدَةُ المُسَمّاة</b>: قُدرَةٌ مِن المَعجَمِ ثُمَّ <c>:</c> ثُمَّ مُعَرِّفٌ بِصيغَةِ
+    /// <c>D</c>. وما سِواه — ومِنه قُدرَةٌ خارِجَ المَعجَمِ أَو لاحِقَةٌ لَيسَت مُعَرِّفاً — لَيسَ مَدخَلَ بائِع.</para>
+    /// </summary>
+    public static bool IsVendorEntryId(string? id, out string capability, out Guid listingOwner)
+    {
+        capability = "";
+        listingOwner = Guid.Empty;
+        if (string.IsNullOrEmpty(id)) return false;
+
+        var at = id.IndexOf(VendorEntrySeparator);
+        if (at <= 0 || !ProviderCapabilities.Contains(id[..at])) return false;
+        if (!Guid.TryParseExact(id[(at + 1)..], "D", out var owner)) return false;
+
+        (capability, listingOwner) = (id[..at], owner);
+        return true;
+    }
+
+    /// <summary><b>تَسجيلُ الوارِدِ عِندَ المُزَوِّدِ لِمَدخَلِ البائِع</b> — مُعَرِّفُ التَسجيلِ كَما أَعادَه (‏<c>"id"</c> في رَدِّ
+    /// «Webhook» عِندَ OTO)، و<c>null</c> حَيثُ لَم يُسَجَّل بَعد. يَقرَؤُه سَطحُ البائِعِ فَيَقولُ أَتَصِلُ الإشعارات.</summary>
+    public string? WebhookId { get; set; }
+
+    /// <summary>رَمزُ فَشَلِ آخِرِ مُحاوَلَةِ تَسجيلٍ لِلوارِد (مِن مَعجَمِ فَشَلِ العَميل)، و<c>null</c> حينَ نَجَحَت أَو لَم تُحاوَل.
+    /// والسِرُّ الَّذي يَتَحَقَّقُ بِه الوارِدُ لا يُبَدَّلُ إلّا حينَ تَنجَح — فَلا يَفتَرِقُ ما عِندَنا عَمّا عِندَ المُزَوِّد.</summary>
+    public string? WebhookRefusal { get; set; }
 }
 
 /// <summary>مُزَوِّدٌ مَحلولٌ لِمُستَأجِر: التَعريفُ + القيَم.</summary>
@@ -276,6 +316,11 @@ public sealed class TenantProviderSet
                      .OrderBy(d => d.BoundAt)
                      .ThenBy(d => d.Id, StringComparer.Ordinal))
         {
+            // **مَدخَلُ بائِعٍ لَيسَ رَبطَ مَتجَر — قاعِدَةٌ مُسَمّاةٌ لا فَرعُ تَحذير** (‏ADR-033 §٢‑ج‑٢، تَيّارُ S8، ‏2026-10-12):
+            // مُعَرِّفُه `{capability}:{listing_owner}` ويُقرَأُ بِمِفتاحِ البائِع، فَيُتَجاوَزُ هُنا صامِتاً — وكانَ يَقَعُ في
+            // «يَحمِلُ مُزَوِّدَ قُدرَةٍ أُخرى» بِسَطرِ خَطَإٍ لِكُلِّ قِراءَة. ومَتجَرٌ لَيسَ فيه إلّا مَداخِلُ بائِعينَ يَبقى `Platform` نَفسَه.
+            if (TenantProviderBinding.IsVendorEntryId(doc.Id, out _, out _)) continue;
+
             var def = ProviderCatalog.Find(doc.ProviderSlug);
             if (def is null)
             {
