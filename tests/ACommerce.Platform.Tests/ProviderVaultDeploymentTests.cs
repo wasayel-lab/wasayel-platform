@@ -18,7 +18,9 @@ namespace ACommerce.Platform.Tests;
 // **وما يُقاسُ هُنا، لا يُدَّعى**: (١) القاعِدَةُ مِن التَسجيلِ الحَقيقيِّ في القالِب — تَهيئَةٌ
 // بِلا مِفتاحٍ أَو بِمِفتاحٍ تالِف ⇒ خِزانَةٌ غَيرُ مُتاحَة ⇒ البِطاقَةُ لا تُعرَضُ والرَبطُ يُرَدُّ قَبلَ
 // أَوَّلِ حَقل، والرابِطُ المُستَضافُ كَما كان؛ (٢) `DEPLOY.md` يُسَمّي المُتَغَيِّرَ بِحَرفِ الكودِ
-// ويُعطي أَمراً لا قيمَة؛ (٣) البَوّابَةُ تُنَبِّهُ بِالحَدِّ والرَمزِ نَفسَيهِما ولا تَخرُجُ بِهِما.
+// ويُعطي أَمراً لا قيمَة؛ (٣) البَوّابَةُ تُنَبِّهُ بِالحَدِّ والرَمزِ نَفسَيهِما ولا تَخرُجُ بِهِما؛
+// (٤) — مُراجَعَةُ ‏2026-10-12 — والمَضبوطُ الصالِحُ يُنَبَّهُ عَلَيه أَيضاً ما دامَ المِفتاحُ المَختومُ
+// لا يَقبِض، بِسَبَبٍ يُقاسُ مِن الكودِ لا يُكتَبُ ثابِتاً.
 public class ProviderVaultDeploymentTests(ITestOutputHelper output)
 {
     private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;
@@ -155,5 +157,60 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
                     < script.IndexOf("# ─── مِفتاحُ الخِزانَة (", StringComparison.Ordinal));
         Assert.True(script.IndexOf("# ─── مِفتاحُ الخِزانَة (", StringComparison.Ordinal)
                     < script.IndexOf("dotnet publish", StringComparison.Ordinal));
+    }
+
+    // ─── ٤. والمَضبوطُ الصالِحُ يُنَبَّهُ عَلَيه ما دامَ المَختومُ لا يَقبِض (مُراجَعَةُ ‏2026-10-12) ───
+    //
+    // **المَقيسُ قَبل**: فَرعُ «يُفَكُّ إلى ‏32 بايتاً» كانَ يَطبَعُ «مَضبوط» وَحدَه — سَطرَ نَجاحٍ بِلا ⚠
+    // لِلحالِ الَّتي يَنهى عَنها DEPLOY.md §٢·ح: ضَبطُ المِفتاحِ يُظهِرُ بِطاقَةَ المِفتاحِ السِرِّيّ،
+    // ورَبطُها يَحِلُّ مَحَلَّ رابِطِ الدَفعِ المُستَضاف (`BindProviderAsync`: الوَثيقَةُ بِمُعَرِّفِ القُدرَة)
+    // ولا يَقبِضُ بِه شَيءٌ قَبلَ عَميلِ البَوّابَة (‏ADR-032 الخُطوَة 8). **والسَبَبُ لا يُكتَبُ هُنا ثابِتاً
+    // بَل يُقاس**: رَبطُ المِفتاحِ وَحدَه كَما تَكتُبُه نُقطَةُ الرَبط (`ProviderSealedKeyDoorsTests.SealedOnly`)
+    // أَيَقبِض؟ — والتَنبيهُ وفِقرَةُ DEPLOY.md يَتبَعانِه في الاتِّجاهَين: يَحمَرُّ الصَفُّ إن سَقَطا
+    // والمَختومُ لا يَقبِض، أَو بَقِيا بَعدَ أَن يَقبِض. فَكوميتُ الخُطوَة 8 الَّذي يَقلِبُ `CollectsMoney`
+    // يَحذِفُهُما مَعَه أَو يَحمَرُّ هذا الصَفُّ بِاسمِه.
+
+    /// <summary>سُطورُ <c>say</c> في فَرعِ «مَضبوطٍ يُفَكُّ إلى ‏32 بايتاً» — مِن مُقارَنَةِ الحَدِّ إلى
+    /// <c>else</c> الَّتي تَليها.</summary>
+    private static string[] SetAndValidSays(string block)
+    {
+        var then = block.IndexOf($"[ \"$KEK_BYTES\" = \"{ProviderVault.KekBytes}\" ]; then", StringComparison.Ordinal);
+        Assert.True(then > 0, "فَرعُ المَضبوطِ الصالِحِ غائِبٌ عَن كُتلَةِ المِفتاح.");
+        var otherwise = block.IndexOf("\n    else", then, StringComparison.Ordinal);
+        Assert.True(otherwise > then, "نِهايَةُ فَرعِ المَضبوطِ غائِبَة — تَغَيَّرَ شَكلُ الكُتلَة.");
+        return block[then..otherwise].Split('\n')
+            .Select(l => l.Trim())
+            .Where(l => l.StartsWith("say ", StringComparison.Ordinal))
+            .ToArray();
+    }
+
+    [Fact]
+    public void VerifyProductionBoot_warns_on_a_valid_kek_exactly_while_a_sealed_key_collects_nothing()
+    {
+        var sealedCollects = ProviderSealedKeyDoorsTests.SealedOnly().CollectsMoney;
+
+        var says = SetAndValidSays(KekBlock(Read("scripts", "verify-production-boot.sh")));
+        var warnings = says.Where(l => l.StartsWith("say \"⚠", StringComparison.Ordinal)).ToArray();
+        output.WriteLine($"المِفتاحُ المَختومُ وَحدَه يَقبِض: {sealedCollects} · سُطورُ فَرعِ المَضبوط: {says.Length} · مِنها ⚠: {warnings.Length}");
+        Assert.True(says.Length >= 1, "أَداةٌ عَمياء: فَرعُ المَضبوطِ بِلا سَطرِ طِباعَة.");
+
+        // الحالُ نَفسُه يُقالُ بِاسمِه أَوَّلاً في الحالَين — «مَضبوط» لا يَختَفي.
+        Assert.StartsWith("say \"مِفتاحُ الخِزانَة: مَضبوط", says[0], StringComparison.Ordinal);
+
+        // والتَنبيهُ يَتبَعُ سَبَبَه في الاتِّجاهَين، ويُسَمّي الأَثَرَ والفِقرَة.
+        Assert.Equal(sealedCollects ? 0 : 1, warnings.Length);
+        Assert.All(warnings, w =>
+        {
+            Assert.Contains("عَميلُ البَوّابَةِ غَيرُ مَبنِيّ", w, StringComparison.Ordinal);
+            Assert.Contains("يَحِلُّ مَحَلَّ رابِطِ الدَفع", w, StringComparison.Ordinal);
+            Assert.Contains("DEPLOY.md §٢·ح", w, StringComparison.Ordinal);
+        });
+
+        // وفِقرَةُ DEPLOY.md الَّتي يُحيلُ إلَيها تَتبَعُ السَبَبَ نَفسَه — لا تَبقى بَعدَه ولا تَسقُطُ قَبلَه.
+        var deploy = Read("docs", "DEPLOY.md");
+        Assert.Equal(!sealedCollects,
+            deploy.Contains("### ⚠️ لا يُضبَطُ في الإنتاجِ قَبلَ عَميلِ البَوّابَة", StringComparison.Ordinal));
+        Assert.Equal(!sealedCollects,
+            deploy.Contains("**ومَعَه سَطرُ ⚠ «وعَميلُ البَوّابَةِ غَيرُ مَبنِيّ»**", StringComparison.Ordinal));
     }
 }

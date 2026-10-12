@@ -30,8 +30,9 @@ public class ProviderSealedKeyDoorsTests
     private const string Key = "sk_live_9f3b7c2d41aa58e6";
 
     /// <summary>رَبطٌ كَما تَكتُبُه نُقطَةُ الرَبطِ لِمِفتاحٍ سِرِّيٍّ وَحدَه — مِن
-    /// <c>ProviderBindSurface.FromForm</c> نَفسِها لا مَبنِيّاً بِاليَد.</summary>
-    private static TenantProviderSet SealedOnly()
+    /// <c>ProviderBindSurface.FromForm</c> نَفسِها لا مَبنِيّاً بِاليَد. ويَقرَؤُه
+    /// <c>ProviderVaultDeploymentTests</c> سَبَباً لِتَنبيهِ بَوّابَةِ الإقلاع.</summary>
+    internal static TenantProviderSet SealedOnly()
     {
         var vault = ProviderVault.FromKek(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
         var read = ProviderBindSurface.FromForm("moyasar_api", _ => Key, "t", vault);
