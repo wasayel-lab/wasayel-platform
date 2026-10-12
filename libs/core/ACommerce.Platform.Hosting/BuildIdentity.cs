@@ -76,7 +76,7 @@ public static class BuildIdentity
     /// يُسافِرُ مَعَ الجِسمِ المُخَزَّن. نَقضُ التَخزينِ بِالطَلَبِ
     /// وفَحصُ <c>age</c>/<c>etag</c>/<c>x-cache</c> يَقَعانِ في بَوّابَةِ
     /// النَشر، لا هُنا.</para></summary>
-    private const string NoStore = "no-store, no-cache, must-revalidate, max-age=0";
+    internal const string NoStore = "no-store, no-cache, must-revalidate, max-age=0";
 
     /// <summary>
     /// <para>البَصمَةُ مِن <c>AssemblyInformationalVersionAttribute</c>:

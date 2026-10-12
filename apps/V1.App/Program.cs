@@ -383,6 +383,15 @@ app.Logger.LogInformation("[forwarded-headers] X-Forwarded-Host: {Hosts}",
         ? string.Join(", ", forwardedHeaders.AllowedHosts)
         : "غَير مَقروء — لا قائِمَة مُهَيَّأَة (ForwardedHeaders:AllowedHosts)");
 
+// ═══ صَفحَةُ خَطَإٍ واحِدَة — بَعدَ الرُؤوسِ المُمَرَّرَةِ وقَبلَ الأُنبوبِ كُلِّه (‏2026-10-12، P3-4) ══
+// كانَ مَسارٌ بِلا صَفحَةٍ يُرَدُّ ‏404 بِـ‏0 بايت، وانقِطاعُ القاعِدَةِ ‏500 بِـ‏0 بايت (مَقيسٌ بِوَضعِ Production) — صَفحَةٌ
+// بَيضاءُ لا تَقولُ لِلزائِرِ شَيئاً ولا لِلمُشَخِّصِ أَيَّ بِناءٍ رَدَّها. والصَفحَةُ تُكتَبُ مِن القامُوسِ بِلا Razor لِأَنّ
+// `App.razor` يَقرَأُ القاعِدَة، وخارِجَ Development وَحدَه، ولِطَلَبٍ يَقرَأُ HTML وَحدَه — والتَعليلُ في `ErrorPages.cs`.
+// والسِلسِلَةُ تُقرَأُ مَرَّةً وتُمَرَّرُ إلى هُنا وإلى `/health`، فَالبِناءُ في الصَفحَةِ هُوَ البِناءُ في النُقطَة.
+var buildVersion = typeof(Program).Assembly
+    .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+app.UsePlatformErrorPages(buildVersion);
+
 // ═══ الوَكيلُ يُعلِنُ وِجهَتَه عِندَ الإقلاع ═══════════════════════════
 // **العِلَّةُ المَقيسَة (‏2026-08-31)**: رِحلَةُ عَميلٍ حَيَّةٍ تَوَقَّفَت عِندَ
 // «حَلِّل فِكرَتي» بِـ`OpenAI 401`. والرِسالَةُ تَقولُ ما رَدَّهُ الخادِم،
@@ -456,10 +465,12 @@ app.MapHub<RealtimeHub>("/realtime");
 // (`-p:SourceRevisionId=` في الـ`Dockerfile`)، فَلا تَستَطيعُ حاوِيَةٌ
 // قَديمَةٌ أَن تَدَّعِيَ إيداعاً جَديداً. والتَعليلُ كامِلاً في
 // `BuildIdentity.cs` وفي `docs/ADR-019-…`.
-app.MapBuildIdentity(
-    typeof(Program).Assembly
-        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
-    processStartedAt);
+app.MapBuildIdentity(buildVersion, processStartedAt);
+
+// ═══ وجاهِزِيَّةٌ تَسأَلُ القاعِدَة — مَسارٌ آخَرُ لا جَوابٌ آخَرُ لِـ`/health` (‏2026-10-12، P3-4) ══
+// ‏`/health` يَبقى ‏200 دائِماً (‏ADR-019 §٥) ووَظيفَةُ النَشرِ تَستَطلِعُه كَما هُوَ. و`/health/ready` يَرُدُّ ‏503 مَعَ
+// `Retry-After` حينَ لا تُجيبُ القاعِدَة — والتَعليلُ وسَبَبُ المَسارِ في `Readiness.cs`.
+app.MapReadiness();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

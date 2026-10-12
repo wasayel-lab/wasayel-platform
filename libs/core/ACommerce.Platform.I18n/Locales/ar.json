@@ -1837,6 +1837,14 @@
   "vendors.profile.reviews_title": "آخِر التَّقييمات",
 
   "shell.error.not_found": "صَفحَة غير مَوجودَة.",
+  "shell.error.not_found_hint": "الرابِطُ الَّذي فَتَحتَه لا يُشيرُ إلى صَفحَةٍ قائِمَة — رُبَّما نُقِلَت أَو حُذِفَت.",
+  "shell.error.request_title": "تَعَذَّرَ قَبولُ هذا الطَلَب.",
+  "shell.error.request_hint": "عُد إلى الصَفحَةِ السابِقَةِ وأَعِد المُحاوَلَة.",
+  "shell.error.server_title": "حَدَثَ خَطَأٌ مِن جِهَتِنا.",
+  "shell.error.server_hint": "لَيسَ العَيبُ في ما فَعَلتَه. أَعِد المُحاوَلَةَ بَعدَ قَليل.",
+  "shell.error.home": "إلى الصَفحَةِ الرَئيسِيَّة",
+  "shell.error.status": "رَمزُ الحالَة",
+  "shell.error.build": "البِناء",
 
   "roles.picker.suffix": "؟",
 
