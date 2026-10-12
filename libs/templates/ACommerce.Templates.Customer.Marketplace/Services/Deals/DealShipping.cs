@@ -1,4 +1,6 @@
 using ACommerce.Kit.Delivery;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services.Deals;
@@ -61,6 +63,14 @@ public static class DealShipAuthorization
     /// الإداريُّ مالِكَ التَطبيق). يُسأَلُ قَبلَ OTO كَي لا تُنشَأَ بوليصَةٌ لِانتِقالٍ مَردود.</summary>
     public const string ActorCannotShip = "actor_cannot_ship";
 
+    /// <summary>
+    /// <para><b>طَلَبُ الصَفقَةِ عِندَ OTO في حالٍ لا يَعودُ مِنه</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 §٧‑ح‑٣‑١):
+    /// <see cref="DealShipping.ClosedAtOto"/> — الحالُ الَّذي كَتَبَه آخِرُ جَوابٍ مِن OTO في <see cref="DealShipping.ClosedRef"/>. فَلا
+    /// «أَكمِل الشَّحن» يُرسَمُ لَه ولا يُقبَلُ — كانَ يُجابُ <c>shipment_unconfirmed</c> كُلَّ نَقرَةٍ بِلا نِهايَة (تَوصيفُه <c>d1a6b83</c>) — ومَخرَجُه
+    /// الإلغاء. يَسبِقُ سُؤالَ الناقِل: حالُ الطَلَبِ عِندَ OTO لا يَتَغَيَّرُ بِغِيابِ رَمزِنا.</para>
+    /// </summary>
+    public const string OrderClosedAtOto = "oto_order_closed";
+
     /// <summary>لا رَمزَ ناقِلٍ يُحَلُّ لِهذا المَتجَر — فَالاستِمارَةُ لا تُرسَمُ أَصلاً.</summary>
     public const string CarrierUnavailable = "carrier_unavailable";
 
@@ -70,11 +80,12 @@ public static class DealShipAuthorization
     /// <summary>حَقلُ مَدينَةِ المُستَلِمِ فارِغ — ‏<c>city</c> إلزامِيٌّ في «Create Order».</summary>
     public const string DeliveryCityMissing = "delivery_city_missing";
 
-    /// <summary>المَعجَمُ المُغلَق — عَشَرَةٌ لا حادِيَ عَشَر.</summary>
+    /// <summary>المَعجَمُ المُغلَق — عَشَرَةٌ لا حادِيَ عَشَر. <b>صارَت أَحَدَ عَشَر ‏2026-10-12</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8):
+    /// <see cref="OrderClosedAtOto"/> بَعدَ <see cref="ActorCannotShip"/> وقَبلَ <see cref="CarrierUnavailable"/> — ولا ثانِيَ عَشَر.</summary>
     public static readonly IReadOnlyList<string> All = new[]
     {
         DealNotFound, ListingOwnerMissing, ActorNotShipper, DealNotActive, DealNotCash,
-        DealNotReadyToShip, ActorCannotShip, CarrierUnavailable,
+        DealNotReadyToShip, ActorCannotShip, OrderClosedAtOto, CarrierUnavailable,
         DeliveryDataMissing, DeliveryCityMissing,
     };
 
@@ -103,6 +114,9 @@ public static class DealShipAuthorization
         if (!DealsService.CanMove(deal, by.ActorId))
             return new(ActorCannotShip, "المُحَرِّكُ لا يُخرِجُ الصَفقَةَ إلى الشَحنِ بِهذا الفاعِل.");
 
+        if (DealShipping.ClosedAtOto(deal))
+            return new(OrderClosedAtOto, $"طَلَبُ الصَفقَةِ عِندَ OTO في حالٍ لا يَعودُ مِنه («{deal.Refs[DealShipping.ClosedRef]}»).");
+
         if (!carrierReady)
             return new(CarrierUnavailable, "لا رَمزَ ناقِلٍ يُحَلُّ لِهذا المَتجَر.");
 
@@ -130,6 +144,10 @@ public sealed record DealShipResult(bool Ok, string? Code, Deal? Deal)
 {
     public static DealShipResult Refused(string code, Deal? deal) => new(false, code, deal);
     public static DealShipResult Shipped(Deal deal) => new(true, null, deal);
+
+    /// <summary>كَلِمَةُ الحالِ الَّتي أَجابَت بِها OTO حينَ رُدَّ الشَحنُ بَعدَ سُؤالِها — لِلوغِ وَحدَه (مُراجَعَةُ المَوجَة 3a، ‏2026-10-12)؛
+    /// و<c>null</c> حَيثُ لَم تُسأَل أَو لَم تُجِب.</summary>
+    public string? OtoStatus { get; init; }
 }
 
 /// <summary>
@@ -162,6 +180,13 @@ public sealed class DealShipping
     /// <summary>رابِطُ تَتَبُّعِ الشُحنَة (<c>trackingUrl</c>) — يُعرَضُ لِلطَرَفَين.</summary>
     public const string TrackingRef = "oto_tracking_url";
 
+    /// <summary>
+    /// <para><b>حالُ طَلَبٍ أَغلَقَته OTO</b> — كَلِمَةُ الحالِ النِهائِيِّ (<see cref="OtoClient.TerminalStatuses"/>) كَما أَجابَت بِها «Order
+    /// Tracking» حينَ سُئِلَت في <see cref="ShipAsync"/> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12). يَقرَؤُه <see cref="ClosedAtOto"/>
+    /// فَلا يُرسَمُ «أَكمِل الشَّحن» ولا يُقبَل.</para>
+    /// </summary>
+    public const string ClosedRef = "oto_closed_status";
+
     /// <summary>المَتجَرُ الوَحيدُ الَّذي يُحَلُّ لَه رَمزٌ في هذِه المَوجَة — مَتجَرُ لَقطَةِ المَظهَر
     /// (‏ADR-033 §٢‑هـ القاعِدَة ٩: «بمتجرِ <c>theme-demo</c> … و<c>ashare</c> لا يُمسّ»).</summary>
     public const string DemoStore = "theme-demo";
@@ -193,12 +218,16 @@ public sealed class DealShipping
     private readonly DealsService _deals;
     private readonly OtoClient _oto;
     private readonly OtoOptions _opts;
+    private readonly ILogger<DealShipping> _log;
 
-    public DealShipping(DealsService deals, OtoClient oto, IOptions<OtoOptions> opts)
+    /// <summary><paramref name="log"/> اختِيارِيٌّ (مُراجَعَةُ المَوجَة 3a، ‏2026-10-12): سَطرُ الرَفضِ بَعدَ سُؤالِ OTO يَحمِلُ كَلِمَةَ حالِها
+    /// وَحدَها — لا رَمزاً ولا جِسماً — فَيُقرَأُ في اللوغِ لِماذا لا تَتَقَدَّمُ صَفقَة. والحاوِيَةُ تُعطيه، والاختِباراتُ تُنشِئُ الخِدمَةَ بِلاه.</summary>
+    public DealShipping(DealsService deals, OtoClient oto, IOptions<OtoOptions> opts, ILogger<DealShipping>? log = null)
     {
         _deals = deals;
         _oto = oto;
         _opts = opts.Value;
+        _log = log ?? NullLogger<DealShipping>.Instance;
     }
 
     /// <summary>
@@ -240,6 +269,17 @@ public sealed class DealShipping
     /// </summary>
     public static bool AwaitsCarrier(Deal deal)
         => DealsPolicy.Next(deal) == DealStage.Shipping && IsPlaced(deal);
+
+    /// <summary>
+    /// <para><b>طَلَبُها عِندَ OTO وأَغلَقَته OTO — دالَّةٌ نَقِيَّةٌ واحِدَةٌ لِلصَفحَةِ ولِلنُقطَة</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛
+    /// ‏ADR-033 §٧‑ح‑٣‑١): لِلصَفقَةِ طَلَبٌ (<see cref="IsPlaced"/>) وفي <see cref="ClosedRef"/> حالٌ مِن <see cref="OtoClient.TerminalStatuses"/>.
+    /// تَسأَلُها <see cref="DealShipAuthorization.Validate"/> — فَتَرُدُّ <c>/ship</c> بِـ<see cref="DealShipAuthorization.OrderClosedAtOto"/> قَبلَ سُؤالِ OTO،
+    /// ولا تَرسُمُ الصَفحَةُ «أَكمِل الشَّحن» (<c>canShip</c> مِن البَوّابَةِ نَفسِها): ما يُرسَمُ هُوَ ما يُقبَل (القاعِدَة ١٢).</para>
+    /// </summary>
+    public static bool ClosedAtOto(Deal deal)
+        => IsPlaced(deal)
+           && deal.Refs.TryGetValue(ClosedRef, out var status)
+           && OtoClient.TerminalStatuses.Contains(status, StringComparer.Ordinal);
 
     public static string? AttributeOf(Deal deal, string key)
         => deal.Attributes.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : null;
@@ -335,7 +375,17 @@ public sealed class DealShipping
 
         // نَجاحُ «Create Order» طَلَبٌ لا شُحنَة: تُسأَلُ OTO قَبلَ أَن تَتَحَرَّكَ الصَفقَة — ولا «شَحنَ» بِلا شُحنَةٍ وبوليصَة.
         var state = (await _oto.GetOrderStatusAsync(token!, OrderIdOf(deal), CancellationToken.None)).Value;
-        if (!ShipmentConfirmed(current, state)) return DealShipResult.Refused(ShipmentUnconfirmed, current);
+
+        // وطَلَبٌ أَغلَقَته OTO لا يَعودُ إلى شُحنَة: يُكتَبُ حالُه فَيَختَفي «أَكمِل الشَّحن» ويُرَدُّ بِرَمزِه لا بِـ`shipment_unconfirmed` كُلَّ نَقرَة
+        // (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛ تَوصيفُه `d1a6b83`). وجَوابٌ لِطَلَبٍ غَيرِ طَلَبِنا لا يُغلِقُ شَيئاً.
+        if (state is { IsTerminal: true } && string.Equals(state.OrderId, OrderIdOf(deal), StringComparison.Ordinal))
+        {
+            current = await _deals.AttachRefAsync(tenantSlug, dealId, ClosedRef, state.Status, CancellationToken.None) ?? current;
+            return Logged(tenantSlug, DealShipResult.Refused(DealShipAuthorization.OrderClosedAtOto, current) with { OtoStatus = state.Status });
+        }
+
+        if (!ShipmentConfirmed(current, state))
+            return Logged(tenantSlug, DealShipResult.Refused(ShipmentUnconfirmed, current) with { OtoStatus = state?.Status });
 
         // كُلُّ رَدٍّ هُنا «تَغَيَّرَت في الأَثناء»: البَوّابَةُ مَرَّت عَلى ما قُرِئ، والانتِقالُ رَأى غَيرَه
         // (تَعارُضُ نُسخَة، أَو مَرحَلَةٌ غَيرُ `seen`، أَو صَفقَةٌ أُلغِيَت بَينَهُما).
@@ -345,6 +395,14 @@ public sealed class DealShipping
         if (!moved.Ok) return DealShipResult.Refused(DealsService.ChangedMeanwhile, moved.Deal);
 
         return DealShipResult.Shipped(await AttachLinksAsync(tenantSlug, moved.Deal!, state!, CancellationToken.None));
+    }
+
+    /// <summary>سَطرُ الرَفضِ بَعدَ سُؤالِ OTO — الرَمزُ وكَلِمَةُ حالِها وَحدَهُما (لا رَمزَ وُصولٍ ولا جِسم)، ومُعَرِّفُ الصَفقَة؛ ويُعيدُ النَتيجَةَ كَما هي.</summary>
+    private DealShipResult Logged(string tenantSlug, DealShipResult result)
+    {
+        _log.LogInformation("[OTO] ship {Slug}/{Deal} ← {Code} (OTO: {Status})",
+            tenantSlug, result.Deal?.Id.ToString("N") ?? "—", result.Code, result.OtoStatus ?? "—");
+        return result;
     }
 
     /// <summary>

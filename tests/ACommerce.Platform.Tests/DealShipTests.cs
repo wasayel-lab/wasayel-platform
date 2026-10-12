@@ -75,6 +75,16 @@ internal sealed class OtoRouteHandler : HttpMessageHandler
     }
 }
 
+/// <summary>لوغٌ يُلتَقَطُ نَصّاً لِخِدمَةِ الشَحن — لِيُقاسَ ما يَحمِلُه سَطرُ الرَفض (‏2026-10-12، مُراجَعَةُ المَوجَة 3a).</summary>
+internal sealed class ShipCapturingLogger : Microsoft.Extensions.Logging.ILogger<DealShipping>
+{
+    public List<string> Lines { get; } = new();
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+    public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+    public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state,
+        Exception? exception, Func<TState, Exception?, string> formatter) => Lines.Add(formatter(state, exception));
+}
+
 public class DealShipTests
 {
     internal const string Slug = DealShipping.DemoStore;
@@ -135,11 +145,13 @@ public class DealShipTests
 
     // ═══ ١. البَوّابَة — لِكُلِّ رَمزٍ مُوجَبٌ وسالِب ═══════════════════════════════
 
+    /// <summary><b>قُلِبَ بِاسمِه</b> — كانَ <c>The_lexicon_is_ten_closed_codes_and_three_are_the_accept_codes_by_value</c>: صارَ المَعجَمُ أَحَدَ عَشَرَ
+    /// بِـ<c>oto_order_closed</c> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12)، ولا ثانِيَ عَشَر.</summary>
     [Fact]
-    public void The_lexicon_is_ten_closed_codes_and_three_are_the_accept_codes_by_value()
+    public void The_lexicon_is_eleven_closed_codes_and_three_are_the_accept_codes_by_value()
     {
-        Assert.Equal(10, DealShipAuthorization.All.Count);
-        Assert.Equal(10, DealShipAuthorization.All.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(11, DealShipAuthorization.All.Count);
+        Assert.Equal(11, DealShipAuthorization.All.Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(DealAcceptAuthorization.DealNotFound, DealShipAuthorization.DealNotFound);
         Assert.Equal(DealAcceptAuthorization.ListingOwnerMissing, DealShipAuthorization.ListingOwnerMissing);
         Assert.Equal(DealAcceptAuthorization.DealNotActive, DealShipAuthorization.DealNotActive);
@@ -219,6 +231,25 @@ public class DealShipTests
         Assert.Equal(DealShipAuthorization.ActorCannotShip, Code(With(d => d.CounterpartyId = AppOwner)));
         Assert.Equal(DealShipAuthorization.ActorCannotShip, Code(With(d => d.CounterpartyId = null)));
         Assert.Null(Code(With(d => d.CounterpartyId = Seller)));
+    }
+
+    /// <summary><b>طَلَبٌ أَغلَقَته OTO</b> (مُراجَعَةُ المَوجَة 3a، ‏2026-10-12): مُوجَبٌ — طَلَبٌ قائِمٌ وحالُه المَكتوبُ نِهائِيّ — وسالِبٌ لِكُلِّ
+    /// شَرط: حالٌ غَيرُ نِهائِيّ، ولا طَلَبَ بِلا مَرجِعِه، ولا مَكتوب؛ والتَرتيبُ (القاعِدَة ٦): الغَريبُ يُجابُ «لَستَ المالِك» لا «أُغلِق».</summary>
+    [Fact]
+    public void Order_closed_at_OTO_positive_and_negative()
+    {
+        Deal Placed(string? closed) => With(d =>
+        {
+            d.Refs[DealShipping.OrderRef] = "0f8fad5bd9cb469fa165705ed7eb6e2a";
+            if (closed is not null) d.Refs[DealShipping.ClosedRef] = closed;
+        });
+
+        Assert.Equal(DealShipAuthorization.OrderClosedAtOto, Code(Placed("canceled")));
+        Assert.Equal(DealShipAuthorization.OrderClosedAtOto, Code(Placed("shipmentCanceled"), carrierReady: false));  // قَبلَ الناقِل
+        Assert.Null(Code(Placed("searchingDriver")));
+        Assert.Null(Code(Placed(null)));
+        Assert.Null(Code(With(d => d.Refs[DealShipping.ClosedRef] = "canceled")));                                 // بِلا طَلَب
+        Assert.Equal(DealShipAuthorization.ActorNotShipper, Code(Placed("canceled"), new DealShipper(Stranger, "غَريب")));
     }
 
     /// <summary><b>طَلَبٌ مِن مُحاوَلَةٍ سابِقَةٍ لا يَسُدُّ الطَريق</b>: صَفقَةٌ عِندَ خُطوَةِ الشَحنِ ولَها
@@ -557,18 +588,17 @@ public class DealShipTests
     }
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم» — طَلَبٌ تُمسِكُه OTO في حالٍ نِهائِيٍّ يُجابُ «أَكمِل الشَّحن» فيه بِـ<c>shipment_unconfirmed</c> كُلَّ نَقرَة، والبابُ
-    /// يَبقى مَرسوماً</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 §٧‑ح‑٣‑١): الحالاتُ الأَربَعُ الَّتي يُسَمّيها ذاكَ البَند —
-    /// <c>canceled</c> و<c>deleted</c> («Order Management») و<c>returned</c> («Returned») و<c>shipmentCanceled</c> («Tracking and Return Management»)
-    /// في «List Of Statuses» — لَيسَت مِن حالاتِ الشُحنَةِ فَلا تُثبِتُ شَيئاً، و<c>IsPlaced</c> يَمنَعُ طَلَباً جَديداً: نَقرَتانِ ونَتيجَةٌ واحِدَة،
-    /// وبَوّابَةُ الاستِمارَةِ تُجيزُها بَعدَهُما فَيُرسَمُ البابُ نَفسُه. يُثَبَّتُ قَبلَ قَلبِه (القاعِدَة ٣).</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_a_resume_on_an_order_OTO_holds_in_a_terminal_state_answers_shipment_unconfirmed_every_click_and_the_door_stays</c>
+    /// (‏<c>d1a6b83</c>): الحالاتُ الأَربَعُ النِهائِيَّةُ في «List Of Statuses» (‏ADR-033 §٧‑ح‑٣‑١) كانَت تُجابُ <c>shipment_unconfirmed</c> كُلَّ نَقرَةٍ والبابُ
+    /// مَرسوم. <b>والآن</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12): النَقرَةُ الأولى تَسأَلُ OTO فَتُجابُ <c>oto_order_closed</c> ويُكتَبُ الحالُ في
+    /// <c>oto_closed_status</c>، والثانِيَةُ تُرَدُّ عِندَ البَوّابَةِ بِلا سُؤالٍ — والبَوّابَةُ الَّتي تَرسُمُ بِها الصَفحَةُ البابَ تَرُدُّه.</para>
     /// </summary>
     [Theory]
     [InlineData("canceled")]
     [InlineData("deleted")]
     [InlineData("returned")]
     [InlineData("shipmentCanceled")]
-    public async Task Today_a_resume_on_an_order_OTO_holds_in_a_terminal_state_answers_shipment_unconfirmed_every_click_and_the_door_stays(string status)
+    public async Task A_resume_on_an_order_OTO_holds_in_a_terminal_state_answers_oto_order_closed_writes_the_status_and_hides_the_door(string status)
     {
         var w = await ConfirmedCashDeal();
         await w.Deals.AttachRefAsync(Slug, w.Id, DealShipping.OrderRef, w.Id.ToString("N"));
@@ -579,13 +609,60 @@ public class DealShipTests
         var first = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, city: null);
         var second = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, city: null);
 
-        Assert.Equal(DealShipping.ShipmentUnconfirmed, first.Code);
-        Assert.Equal(DealShipping.ShipmentUnconfirmed, second.Code);
+        Assert.Equal(DealShipAuthorization.OrderClosedAtOto, first.Code);
+        Assert.Equal(status, first.OtoStatus);
+        Assert.Equal(DealShipAuthorization.OrderClosedAtOto, second.Code);
         var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
         Assert.Equal((DealStatus.Active, DealStage.Confirmed), (deal.Status, deal.Stage));
-        Assert.True(DealShipAuthorization.IsAllowed(deal, Vendor, carrierReady: true));   // الصَفحَةُ تَرسُمُ «أَكمِل الشَّحن» مِن جَديد
+        Assert.Equal(status, deal.Refs[DealShipping.ClosedRef]);
+        Assert.True(DealShipping.ClosedAtOto(deal));
+        Assert.False(DealShipAuthorization.IsAllowed(deal, Vendor, carrierReady: true));   // الصَفحَةُ لا تَرسُمُ «أَكمِل الشَّحن»
         Assert.Equal(0, w.Oto.CallsTo(OtoClient.CreateOrderPath));
-        Assert.Equal(2, w.Oto.CallsTo(OtoClient.OrderStatusPath));
+        Assert.Equal(1, w.Oto.CallsTo(OtoClient.OrderStatusPath));                         // الثانِيَةُ لا تَسأَلُ OTO
+    }
+
+    /// <summary><b>والسالِبُ الخِدمِيّ</b>: حالٌ غَيرُ نِهائِيٍّ (<c>missingData</c>) يُجابُ <c>shipment_unconfirmed</c> كَما كان ولا يُكتَبُ حال؛
+    /// وحالٌ نِهائِيٌّ لِطَلَبٍ غَيرِ طَلَبِنا لا يُغلِقُ صَفقَتَنا.</summary>
+    [Theory]
+    [InlineData("missingData", null)]
+    [InlineData("canceled", "OID-23331-9749")]
+    public async Task A_resume_that_is_not_our_terminal_order_neither_closes_nor_writes_a_status(string status, string? otherOrderId)
+    {
+        var w = await ConfirmedCashDeal();
+        await w.Deals.AttachRefAsync(Slug, w.Id, DealShipping.OrderRef, w.Id.ToString("N"));
+        await w.Deals.AttachRefAsync(Slug, w.Id, DealShipping.OtoIdRef, "540789");
+        w.Oto.Routes[OtoClient.OrderStatusPath] = body =>
+            OtoRouteHandler.Tracking(otherOrderId ?? OtoRouteHandler.OrderIdIn(body), status: status, label: null);
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, city: null);
+
+        Assert.Equal(DealShipping.ShipmentUnconfirmed, res.Code);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.False(deal.Refs.ContainsKey(DealShipping.ClosedRef));
+        Assert.True(DealShipAuthorization.IsAllowed(deal, Vendor, carrierReady: true));
+    }
+
+    /// <summary><b>اللوغُ يَحمِلُ كَلِمَةَ حالِ OTO وَحدَها</b> (مُراجَعَةُ المَوجَة 3a، ‏2026-10-12): سَطرُ الرَفضِ بَعدَ سُؤالِها يَقولُ الرَمزَ والحال،
+    /// ولا يَحمِلُ رَمزَ التَحديثِ ولا رَمزَ الوُصول.</summary>
+    [Fact]
+    public async Task The_refusal_after_asking_OTO_logs_the_status_word_and_never_a_token()
+    {
+        var w = await ConfirmedCashDeal();
+        await w.Deals.AttachRefAsync(Slug, w.Id, DealShipping.OrderRef, w.Id.ToString("N"));
+        w.Oto.Routes[OtoClient.OrderStatusPath] = body =>
+            OtoRouteHandler.Tracking(OtoRouteHandler.OrderIdIn(body), status: "canceled", label: null);
+        var log = new ShipCapturingLogger();
+        var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, RefreshToken = "RT-theme-demo" });
+        var shipping = new DealShipping(w.Deals,
+            new OtoClient(new HttpClient(w.Oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options, log);
+
+        await shipping.ShipAsync(Slug, w.Id, Vendor, city: null);
+
+        var line = Assert.Single(log.Lines);
+        Assert.Contains(DealShipAuthorization.OrderClosedAtOto, line, StringComparison.Ordinal);
+        Assert.Contains("canceled", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("RT-theme-demo", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("ACCESS-1", line, StringComparison.Ordinal);
     }
 
     [Fact]

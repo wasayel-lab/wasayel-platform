@@ -280,7 +280,10 @@
                **ولا يُرسَمُ حَيثُ الطَلَبُ عِندَ OTO** (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12؛ ولا يُعادُ حَرفٌ فَوقَه): بَعدَ
                `shipment_unconfirmed` كانَ يُرسَمُ بِجِوارِ «أَكمِل الشَّحن» فَيُخرِجُها إلى «شَحن» بِلا سُؤالِ OTO ولا بوليصَة
                (تَوصيفُه `e52ba8f`). صارَت `AdvanceAsync` تَرُدُّه بِـ`deal_awaits_carrier` (`DealShipping.AwaitsCarrier`)، فَخُطوَةُ
-               البائِعِ هُنا بابُها «أَكمِل الشَّحن» وَحدَه (`heldByCarrier` أَدناه). *@
+               البائِعِ هُنا بابُها «أَكمِل الشَّحن» وَحدَه (`heldByCarrier` أَدناه).
+               **ولا «أَكمِل الشَّحن» لِطَلَبٍ أَغلَقَته OTO** (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12): `canShip` مِن البَوّابَةِ نَفسِها، وهي تَسأَلُ
+               `DealShipping.ClosedAtOto` — الدالَّةَ الَّتي تَرُدُّ بِها النُقطَة. ونَصُّ الاستِئنافِ مِن مِفتاحِه (`ship_resume_hint`) لا نَصُّ الإنشاء:
+               كانَ «يُنشِئُ طَلَباً…» يُرسَمُ تَحتَ زِرٍّ لا يُنشِئُ شَيئاً. *@
             @if (canShip)
             {
                 <form method="post" action="@($"/{Slug}/deals/{deal.Id}/ship")" style="margin-bottom:8px;">
@@ -293,7 +296,7 @@
                     <AcButton Type="submit" Variant="primary" Size="lg" Block="true"
                               Text="@(shipResumes ? L["deals.detail.ship_resume"] : L["deals.detail.ship_submit"])" />
                     <span style="display:block;margin-top:6px;font-size:12px;color:var(--ac-text-muted);line-height:1.7;">
-                        @L.Markup("deals.detail.ship_hint")
+                        @L.Markup(shipResumes ? "deals.detail.ship_resume_hint" : "deals.detail.ship_hint")
                     </span>
                 </form>
             }

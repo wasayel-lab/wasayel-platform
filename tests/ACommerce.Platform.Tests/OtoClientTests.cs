@@ -393,6 +393,24 @@ public class OtoClientTests
     public void Only_a_documented_forward_status_means_a_shipment_exists(string status, bool exists)
         => Assert.Equal(exists, new OtoOrderState("o", null, status, null, null).HasShipment);
 
+    /// <summary><b>الحالاتُ النِهائِيَّةُ الأَربَع</b> بِحَرفِ «List Of Statuses» (مُراجَعَةُ المَوجَة 3a، ‏2026-10-12؛ ‏ADR-033 §٧‑ح‑٣‑١): مُوجَبٌ
+    /// لِكُلٍّ وسالِبٌ لِحالِ شُحنَةٍ ولِحالٍ قَبلَها ولِحالَتَي نِهايَةٍ لَم يُسَمِّهِما البَندُ ولِحَرفٍ كَبير؛ ولا حالَ في القائِمَتَينِ مَعاً.</summary>
+    [Theory]
+    [InlineData("canceled", true)]
+    [InlineData("deleted", true)]
+    [InlineData("returned", true)]
+    [InlineData("shipmentCanceled", true)]
+    [InlineData("searchingDriver", false)]
+    [InlineData("missingData", false)]
+    [InlineData("lostOrDamaged", false)]
+    [InlineData("destroyed", false)]
+    [InlineData("Canceled", false)]
+    public void Only_the_four_documented_terminal_statuses_close_an_order(string status, bool terminal)
+    {
+        Assert.Equal(terminal, new OtoOrderState("o", null, status, null, null).IsTerminal);
+        Assert.Empty(OtoClient.TerminalStatuses.Intersect(OtoClient.ShipmentStatuses));
+    }
+
     /// <summary>فَحصُ السِعرِ بِالحُقولِ الثَلاثَةِ الإلزامِيَّة، والخِياراتُ مِن <c>deliveryCompany</c>.</summary>
     [Fact]
     public async Task Fee_check_posts_the_three_required_fields_and_reads_the_options()

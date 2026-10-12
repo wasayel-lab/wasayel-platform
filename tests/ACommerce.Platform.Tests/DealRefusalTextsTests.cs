@@ -41,7 +41,8 @@ public class DealRefusalTextsTests
         // 6 + 3 − 2 مُشتَرَكَين (deal_not_found، deal_not_active) + 1 + 1 = 9؛
         // ثُمَّ الشَحن: 10 − 3 مُشتَرَكَةٍ مَعَ القَبول (deal_not_found، listing_owner_missing، deal_not_active) = 7،
         // وعَميلُ OTO 5 — فَـ9 + 7 + 5 = 21؛ ثُمَّ `shipment_unconfirmed` — 22؛ ثُمَّ `deal_awaits_carrier` — 23.
-        Assert.Equal(23, DealRefusalTexts.Codes.Count);
+        // ثُمَّ `oto_order_closed` (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12) — عُضوٌ حادِيَ عَشَرَ في بَوّابَةِ الشَحن، يَدخُلُ بِها: 23 ← 24.
+        Assert.Equal(24, DealRefusalTexts.Codes.Count);
         Assert.Equal(DealRefusalTexts.Codes.Count, DealRefusalTexts.Codes.Distinct(StringComparer.Ordinal).Count());
     }
 
@@ -67,7 +68,8 @@ public class DealRefusalTextsTests
         }
         // 6 + 3 + 1 + 1 (‏ADR-036) + 10 + 5 (‏ADR-033 الخُطوَة 3) — المُشتَرَكُ يُفحَصُ مَرَّتَين ويَصِلُ مِفتاحاً واحِداً
         // — + 1 (`shipment_unconfirmed`، مُراجَعَةُ تَيّارِ S7، ‏2026-10-12): 26 ← 27؛ + 1 (`deal_awaits_carrier`، المُراجَعَةُ الثانِيَة): 27 ← 28.
-        Assert.Equal(28, checked_);
+        // + 1 (`oto_order_closed`، مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12 — في بَوّابَةِ الشَحن): 28 ← 29.
+        Assert.Equal(29, checked_);
     }
 
     /// <summary><b>نَصُّ «بِلا مالِكِ إعلان» يُسَمّي مَن يُحَرِّكُها حَقّاً</b> (‏2026-10-11، مُراجَعَةُ الموجَةِ الثانِيَةِ

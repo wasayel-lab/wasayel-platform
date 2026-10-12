@@ -74,6 +74,21 @@ public sealed class OtoClient
         DeliveredStatus,
     };
 
+    /// <summary>
+    /// <para><b>الحالاتُ الَّتي لا يَعودُ مِنها الطَلَبُ إلى شُحنَةٍ ذاهِبَة</b> — بِحَرفِ «‏List Of Statuses» (مُصَيَّرَةً ‏2026-10-12؛ مُراجَعَةُ
+    /// المَوجَة 3a، تَيّارُ S8): «‏canceled · Order Management · Order is canceled»، و«‏deleted · Order Management · Order is deleted»،
+    /// و«‏returned · Returned · Order is returned back to origin»، و«‏shipmentCanceled · Tracking and Return Management · Shipment is
+    /// canceled». وهي الأَربَعُ الَّتي سَمّاها ‏ADR-033 §٧‑ح‑٣‑١: طَلَبٌ فيها يُجابُ «أَكمِل الشَّحن» بِلا نِهايَة — والمُعَرِّفُ مُعَرِّفُ
+    /// الصَفقَةِ فَلا يُنشَأُ ثانٍ (OTO1063).</para>
+    ///
+    /// <para><b>قائِمَةُ سَماحٍ لا تَخمين</b>: <c>lostOrDamaged</c> («Shipment is lost or damaged») و<c>destroyed</c> («Package was damaged
+    /// beyond delivery») يَصِفانِ نِهايَةً أَيضاً ولَيسا هُنا — لَم يُسَمِّهِما البَند، ويُقاسانِ عَلى بيئَةِ الاختِبار (سِجِلُّ المالِكِ «ب» S8).</para>
+    /// </summary>
+    public static readonly IReadOnlyList<string> TerminalStatuses = new[]
+    {
+        "canceled", "deleted", "returned", "shipmentCanceled",
+    };
+
     private readonly HttpClient _http;
     private readonly OtoOptions _opts;
     private readonly OtoTokenCache _tokens;
@@ -425,6 +440,9 @@ public sealed record OtoOrderState(string OrderId, string? OtoId, string Status,
 
     /// <summary>لِلطَلَبِ عِندَ OTO شُحنَةٌ أُنشِئَت — حالُه مِن <see cref="OtoClient.ShipmentStatuses"/>.</summary>
     public bool HasShipment => OtoClient.ShipmentStatuses.Contains(Status, StringComparer.Ordinal);
+
+    /// <summary>الطَلَبُ عِندَ OTO في حالٍ لا يَعودُ مِنه — حالُه مِن <see cref="OtoClient.TerminalStatuses"/> (‏2026-10-12).</summary>
+    public bool IsTerminal => OtoClient.TerminalStatuses.Contains(Status, StringComparer.Ordinal);
 }
 
 /// <summary>فَشَلٌ مُسَمّى — <c>Code</c> مِن <see cref="OtoFailures"/> لِلاختِبارِ واللوغِ
