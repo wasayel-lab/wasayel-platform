@@ -443,7 +443,9 @@ public class EndpointBodyBleedTests
         // **‏11 ← 22 في الكوميتِ التالي (‏2026-10-12)**: نُقطَةُ وارِدِ OTO `POST /{slug}/shipping/oto/order-status`
         // في ‏11 سَطراً — قِراءَةُ الجِسمِ الخامّ، والبَوّابَةُ النَقِيَّةُ `OtoOrderStatusGate.Admit`، ونِداءٌ واحِدٌ
         // لِـ`DealShipping.ReceiveAsync`، وسَطرُ لوغ، والرَدُّ مِن `StatusFor` النَقِيَّة. وصِفرُ سَطرِ قَرارٍ كَذلك.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Shipping/OtoShippingEndpoints.cs", 22),
+        // **‏22 ← 23 (‏2026-10-12، مُراجَعَةُ المَوجَة 3a، تَيّارُ S8)**: سَطرُ `var carrier = shipping.CarrierReady(slug);` قَبلَ قِراءَةِ الجِسم —
+        // فَلا يُقرَأُ بِلا ناقِل (كانَ يُقرَأُ كُلُّه ثُمَّ يُجابُ ‏404). والقَرارُ ما زالَ في `Admit` النَقِيَّة؛ والسَطرُ سُؤالٌ لا قَرار.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Shipping/OtoShippingEndpoints.cs", 23),
 
         // ─── مِلَفٌّ خامِس — هُوِيَّةُ البِناء (‏ADR-019) ─────────────
         //
@@ -889,7 +891,9 @@ public class EndpointBodyBleedTests
     /// <remarks><b>‏2917 ← 2928 يَوم ‏2026-10-12</b> (‏ADR-033 الخُطوَة 3): نُقطَةُ وارِدِ OTO
     /// <c>POST /{slug}/shipping/oto/order-status</c> في المِلَفِّ نَفسِه، ‏11 سَطراً بِلا سَطرِ قَرار. طَبَعَ العَدّادُ
     /// «‏2917 → 2928» و«‏130 → 131»، و<b>‏11 = 11</b> — سَقفُ المِلَفِّ ‏11 ← 22، ومِلَفُّ القالِبِ ‏2659 لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 2928;
+    /// <remarks><b>‏2928 ← 2929 يَوم ‏2026-10-12</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8): سَطرُ سُؤالِ الناقِلِ قَبلَ قِراءَةِ جِسمِ الوارِد —
+    /// فَلا يُقرَأُ الجِسمُ لِمَتجَرٍ بِلا ناقِل. سَقفُ المِلَفِّ ‏22 ← 23، و<b>‏1 = 1</b>، وعَدَدُ النِقاطِ لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 2929;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

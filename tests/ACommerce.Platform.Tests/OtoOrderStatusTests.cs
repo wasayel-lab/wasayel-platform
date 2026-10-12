@@ -703,36 +703,56 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم» — النُقطَةُ تَقرَأُ الجِسمَ كُلَّه ثُمَّ تُجيبُ ‏404 لِمَتجَرٍ بِلا ناقِل</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8،
-    /// ‏2026-10-12): `ReadToEndAsync` قَبلَ `OtoOrderStatusGate.Admit`، والبَوّابَةُ تُجيبُ <c>carrier_unavailable</c> بِلا نَظَرٍ في النَصّ —
-    /// بَينَما دَليلُ النَشرِ §٢·ط وتَعليقُ البَوّابَةِ («قَبلَ أَيِّ قِراءَة») وسِجِلُّ المالِكِ S7·٤ (١) واسمُ الصَفِّ التالي يَقولونَ «لا يُقرَأ».
-    /// يُقاسُ بِجِسمٍ يَعُدُّ قِراءاتِه، ويُثَبَّتُ قَبلَ قَلبِه (القاعِدَة ٣).</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_the_inbound_route_reads_the_whole_body_before_answering_404_without_a_carrier</c>
+    /// (‏<c>ecb278a</c>): <c>ReadToEndAsync</c> كانَ يَسبِقُ البَوّابَةَ فَيُقرَأُ الجِسمُ كُلُّه ثُمَّ يُجابُ ‏404 (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8،
+    /// ‏2026-10-12). <b>والآن</b>: الناقِلُ يُسأَلُ أَوَّلاً ولا يُقرَأُ الجِسمُ بِدونِه — جِسمٌ يَرمي عِندَ أَوَّلِ قِراءَةٍ (فَقِراءَتُه ‏500) ويُجابُ
+    /// ‏404 فارِغاً بِصِفرِ قِراءَة.</para>
     /// </summary>
     [Fact]
-    public async Task Today_the_inbound_route_reads_the_whole_body_before_answering_404_without_a_carrier()
+    public async Task Without_a_carrier_the_inbound_route_answers_404_before_reading_the_body()
     {
         var w = await ShippedCashDeal();
-        var tripwire = new BodyTripwire(throws: false);
+        var tripwire = new BodyTripwire(throws: true);
         await using var host = await OtoHost.StartAsync(ShippingIn(w, OtoEnvironment.Production), tripwire);
 
         using var resp = await host.PostAsync(Slug, NoticeJson(w.Id.ToString("N")));
 
         Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
-        Assert.True(tripwire.Reads > 0, $"قِراءاتُ الجِسم: {tripwire.Reads}");
+        Assert.Equal("", await resp.Content.ReadAsStringAsync());
+        Assert.Equal(0, tripwire.Reads);
     }
 
-    /// <summary>ورَمزُ <c>theme-demo</c> لا يُحَلُّ لِمَتجَرٍ آخَر: الوارِدُ إلى <c>ashare</c> ‏404 ولا يُقرَأ.</summary>
+    /// <summary><b>والسالِب</b>: بِالناقِلِ يُقرَأُ الجِسمُ — فَالجِسمُ الَّذي يَرمي يَصيرُ ‏500، والأَداةُ لا تَمُرُّ خَضراءَ عَلى مَسارٍ لا يَقرَأُ شَيئاً.</summary>
+    [Fact]
+    public async Task With_a_carrier_the_inbound_route_does_read_the_body()
+    {
+        var w = await ShippedCashDeal();
+        var tripwire = new BodyTripwire(throws: true);
+        await using var host = await OtoHost.StartAsync(w.Shipping, tripwire);
+
+        using var resp = await host.PostAsync(Slug, NoticeJson(w.Id.ToString("N")));
+
+        Assert.Equal(HttpStatusCode.InternalServerError, resp.StatusCode);
+        Assert.True(tripwire.Reads > 0, $"قِراءاتُ الجِسم: {tripwire.Reads}");
+        Assert.Equal(DealStage.Shipping, Stored(w).Stage);
+    }
+
+    /// <summary>ورَمزُ <c>theme-demo</c> لا يُحَلُّ لِمَتجَرٍ آخَر: الوارِدُ إلى <c>ashare</c> ‏404 ولا يُقرَأ.
+    /// <b>(وصارَ «ولا يُقرَأ» مَقيساً ‏2026-10-12 — مُراجَعَةُ المَوجَة 3a: كانَ الاسمُ يَقولُه ولا يَفحَصُه، وكانَ الجِسمُ يُقرَأ؛ فَالجِسمُ
+    /// الَّذي يَرمي مَلفوفٌ هُنا، وكانَ سَيُحمِرُّ هذا الصَفَّ قَبلَ الإصلاح.)</b></summary>
     [Fact]
     public async Task Another_store_on_the_same_staging_token_answers_404_without_reading()
     {
         var w = await ShippedCashDeal();
         var calls = w.Oto.Calls.Count;
-        await using var host = await OtoHost.StartAsync(w.Shipping);
+        var tripwire = new BodyTripwire(throws: true);
+        await using var host = await OtoHost.StartAsync(w.Shipping, tripwire);
 
         using var resp = await host.PostAsync("ashare", NoticeJson(w.Id.ToString("N")));
 
         Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
         Assert.Equal(calls, w.Oto.Calls.Count);
+        Assert.Equal(0, tripwire.Reads);
     }
 
     [Fact]
