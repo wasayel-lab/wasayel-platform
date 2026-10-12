@@ -90,6 +90,10 @@ public static class MarketplaceTemplateExtensions
         services.AddSingleton(sp => ACommerce.Platform.Providers.ProviderVault.FromKek(
             sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()[ACommerce.Platform.Providers.ProviderVault.KekConfigKey]));
 
+        // عَميلُ بَوّابَةِ المُستَأجِر (‏ADR-032 الخُطوَة 8) — يُسَجَّلُ دائِماً بِجِوارِ الخِزانَةِ الَّتي تَفُكُّ مِفتاحَه: لا يَحمِلُ سِرّاً،
+        // ومِفتاحُ المُستَأجِرِ يُفَكُّ لِكُلِّ نِداءٍ ويُمَرَّرُ إلَيه. وبابُ البِطاقَةِ يُرسَمُ حَيثُ يُحَلُّ مِفتاحٌ مَختومٌ وتَفُكُّه الخِزانَة.
+        ACommerce.Kit.Payments.MoyasarClientExtensions.AddMoyasarGateway(services);
+
         // ─── الاستِحقاق ──────────────────────────────────────────────────
         // Scoped لا Singleton: بِلا كاش — الرَصيد حالَة تَتَغَيَّر بِكُلّ
         // عَمَلِيَّة، وكاشُها هو بِعَينِه ما يَجعَل الفَحص يَكذِب. والقِراءَة
