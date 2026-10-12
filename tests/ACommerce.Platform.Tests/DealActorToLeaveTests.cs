@@ -222,7 +222,10 @@ public class DealActorToLeaveTests
 
         // والاستِثناءُ الوَحيدُ مُسَمّىً لا مُستَنتَج: سُقوطُ العَرضِ عِندَ آخِرِ مَرحَلَةٍ —
         // `RequiredActorToLeave(…) ?? DealsPolicy.Actor(…)` — حَيثُ لا خُروجَ ولا قَرار (المِفتاحُ كَما كانَ).
-        const string Fallback = "?? DealsPolicy.";
+        // **ووُسِّعَ الفاحِصُ ‏2026-10-12 (مُراجَعَةُ تَيّارِ S6a الأولى) — ولا يُعادُ حَرفٌ فَوقَه**: كانَ يَبحَثُ عَن أَربَعِ
+        // كِتاباتٍ حَرفِيَّة (`Actor(deal.Stage)`، `Actor(d.Stage)`، `Actor(result.Deal.Stage)`، `ActorFor(deal.Stage)`) فَيَعمى
+        // عَن اسمٍ خامِس — عَمى «لا مَوضِعَ يَشتَقُّ التالي» نَفسُه قَبلَ `66a2278`. صارَ نَمَطاً بِأَيِّ اسم (<see cref="CurrentStageActor"/>)
+        // مَقيساً بِعَيِّناتٍ مَحقونَةٍ في <c>The_current_stage_actor_scanner_catches_any_name_and_spares_the_right_readings</c>.
         var scanned = 0;
         var fallbacks = 0;
         var strays = new List<string>();
@@ -234,21 +237,61 @@ public class DealActorToLeaveTests
                 f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)) continue;
             scanned++;
             var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(f)));
-            foreach (var needle in new[] { "Actor(deal.Stage)", "Actor(d.Stage)", "Actor(result.Deal.Stage)", "ActorFor(deal.Stage)" })
-                for (var at = code.IndexOf(needle, StringComparison.Ordinal); at >= 0; at = code.IndexOf(needle, at + needle.Length, StringComparison.Ordinal))
-                {
-                    var head = code[..at];
-                    if (head.EndsWith(Fallback, StringComparison.Ordinal) && head.TrimEnd()[..^Fallback.Length].TrimEnd().EndsWith(")", StringComparison.Ordinal)
-                        && head.LastIndexOf("RequiredActorToLeave(", StringComparison.Ordinal) > head.LastIndexOf(';'))
-                        fallbacks++;
-                    else
-                        strays.Add($"{Path.GetRelativePath(RepoRoot, f)} ← {needle}");
-                }
+            var (fileStrays, fileFallbacks) = CurrentStageActorReads(code);
+            fallbacks += fileFallbacks;
+            strays.AddRange(fileStrays.Select(s => $"{Path.GetRelativePath(RepoRoot, f)} ← {s}"));
         }
         Assert.True(scanned > 200, $"أَداةٌ عَمياء: فُحِصَ {scanned} مِلَفّاً.");
         Assert.True(strays.Count == 0 && fallbacks == 2,
             $"فُحِصَ {scanned} مِلَفّاً، وسُقوطُ العَرضِ عِندَ آخِرِ مَرحَلَةٍ {fallbacks} (المُتَوَقَّعُ ٢ في DealApi) — " +
             "مَوضِعٌ يَسأَلُ فاعِلَ المَرحَلَةِ الحالِيَّة: " + string.Join("، ", strays));
+    }
+
+    /// <summary>سُؤالُ فاعِلِ مَرحَلَةِ صَفقَةٍ قائِمَة — بِأَيِّ اسمٍ ولِأَيِّ عُمقِ وُصول: <c>DealsPolicy.Actor(x.Stage)</c> و
+    /// <c>Actor(x.Stage)</c> و<c>DealPatternCatalog.ActorFor(x.Y.Stage)</c>. ولا يُطابِقُ قِراءَةَ مَرحَلَةٍ بِعَينِها
+    /// (<c>Actor(stage)</c>، <c>Actor(next)</c>، <c>Actor(DealStage.Paid)</c>) ولا <c>RequiredActorToLeave</c>.</summary>
+    private static readonly System.Text.RegularExpressions.Regex CurrentStageActor = new(
+        @"\b(?:DealsPolicy\.)?Actor(?:For)?\(\s*[\w.]+\.Stage\s*\)",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>كُلُّ مُطابَقَةٍ في <paramref name="code"/>: سُقوطُ عَرضٍ مُسَمّىً (<c>RequiredActorToLeave(…) ?? …</c> في الجُملَةِ
+    /// نَفسِها) يُعَدّ، وما سِواه شارِد.</summary>
+    private static (List<string> Strays, int Fallbacks) CurrentStageActorReads(string code)
+    {
+        var strays = new List<string>();
+        var fallbacks = 0;
+        foreach (System.Text.RegularExpressions.Match m in CurrentStageActor.Matches(code))
+        {
+            var head = code[..m.Index].TrimEnd();
+            if (head.EndsWith("??", StringComparison.Ordinal) && head[..^2].TrimEnd().EndsWith(")", StringComparison.Ordinal)
+                && head.LastIndexOf("RequiredActorToLeave(", StringComparison.Ordinal) > head.LastIndexOf(';'))
+                fallbacks++;
+            else
+                strays.Add(m.Value);
+        }
+        return (strays, fallbacks);
+    }
+
+    /// <summary><b>الأَداةُ مَقيسَةٌ قَبلَ أَن يُوثَقَ بِها</b> (القاعِدَة ١٠): عَيِّناتٌ مَحقونَةٌ بِأَسماءٍ لَم يَعرِفها الفاحِصُ القَديمُ
+    /// تُعَدُّ شارِدَة، والقِراءاتُ الصَحيحَةُ لا تُطابَق، وسُقوطُ العَرضِ المُسَمّى يُعَدُّ سُقوطاً لا شُروداً.</summary>
+    [Theory]
+    [InlineData("var a = DealsPolicy.Actor(current.Stage);", 1, 0)]
+    [InlineData("var a = DealPatternCatalog.ActorFor(x.Stage);", 1, 0)]
+    [InlineData("var a = DealsPolicy.Actor( order.Deal.Stage );", 1, 0)]
+    [InlineData("if (Actor(row.Stage) == \"initiator\") return;", 1, 0)]
+    [InlineData("var a = DealsPolicy.Actor(stage);", 0, 0)]
+    [InlineData("var a = Actor(next);", 0, 0)]
+    [InlineData("var a = DealsPolicy.Actor(DealStage.Paid);", 0, 0)]
+    [InlineData("var a = DealsPolicy.RequiredActorToLeave(deal);", 0, 0)]
+    [InlineData("var a = DealPatternCatalog.ActorFor(stage);", 0, 0)]
+    [InlineData("var k = DealsPolicy.RequiredActorToLeave(row) ?? DealsPolicy.Actor(row.Stage);", 0, 1)]
+    [InlineData("var x = Foo(); var k = bar ?? DealsPolicy.Actor(row.Stage);", 1, 0)]
+    [InlineData("var r = DealsPolicy.RequiredActorToLeave(row); var k = Foo() ?? DealsPolicy.Actor(row.Stage);", 1, 0)]
+    public void The_current_stage_actor_scanner_catches_any_name_and_spares_the_right_readings(string line, int strays, int fallbacks)
+    {
+        var (found, fell) = CurrentStageActorReads(line);
+        Assert.True(found.Count == strays && fell == fallbacks,
+            $"«{line}»: شارِدٌ {found.Count} (المُتَوَقَّعُ {strays})، وسُقوطٌ {fell} (المُتَوَقَّعُ {fallbacks}).");
     }
 
     /// <summary>عَقدُ الـAPI يَقولُ ما سَيَسأَلُه المُحَرِّك: <c>actor_for_current_stage</c> = مَن تَنتَظِرُه المَرحَلَةُ
