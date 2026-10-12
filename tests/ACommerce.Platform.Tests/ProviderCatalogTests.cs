@@ -384,6 +384,41 @@ public class ProviderCatalogTests
             ProviderDefinitionValidator.Validate(widened).Select(v => v.Code).ToArray());
     }
 
+    /// <summary>
+    /// <para><b>«ولا حِصَّة» في وَصفِ التَعريفِ كَما أَمَرَ بِه ‏ADR-033</b> (الرَأسُ: «ولا حصّةَ على الرمزِ السوقيّ — ما يُنفَقُ من محفظةِ البائعِ لا يُعَدُّ
+    /// على وسايل — ويُقالُ ذلك في وصفِ تعريفِ OTO (الخطوة 6)»؛ مُراجَعَةُ تَيّارِ S8، الجَولَة 1، ‏2026-10-12): الصَفُّ عُلِّمَ «نُفِّذ» والوَصفُ لا يَقولُها.
+    /// فَالوَصفُ يَقولُها الآن، <b>والكودُ يَصدُقُها</b>: لا مَسارَ شَحنٍ — اللَصقُ والتَسجيلُ والبوليصَةُ والوارِدُ والعَميل — يَمَسُّ الاستِحقاقات؛
+    /// فاحِصٌ نَصِّيٌّ يَعُدُّ ما قَرَأَ ويَفشَلُ عَلى الصِفر (يَمُدُّ <c>VendorShippingTests.The_vendor_shipping_paths_consume_no_quota</c> مِن مِلَفَّينِ إلى خَمسَة).</para>
+    /// </summary>
+    [Fact]
+    public void The_vendor_shipping_definition_says_its_spending_is_not_counted_against_wasayel_and_no_shipping_path_consumes_quota()
+    {
+        var d = Assert.Single(ProviderCatalog.ForCapability(ProviderCapabilities.Delivery));
+        var ar = ProviderText.Get(d.Description, "ar");
+        Assert.Contains("ولا حِصَّةَ عَلى الاعتِمادِ السّوقِيّ", ar, StringComparison.Ordinal);
+        Assert.Contains("ما يُنفَقُ مِن مَحفَظَةِ البائِعِ عِندَ OTO لا يُعَدُّ عَلى وَسايِل", ar, StringComparison.Ordinal);
+        Assert.Contains("حِصَّةً مِن باقَةِ المُستَأجِر", ar, StringComparison.Ordinal);
+
+        string Template(params string[] parts) => Path.Combine(new[] { RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace" }.Concat(parts).ToArray());
+        var files = new[]
+        {
+            Template("Services", "Shipping", "VendorShipping.cs"),
+            Template("Shipping", "VendorShippingEndpoints.cs"),
+            Template("Services", "Deals", "DealShipping.cs"),
+            Template("Shipping", "OtoShippingEndpoints.cs"),
+            Path.Combine(RepoRoot, "libs", "kits", "Delivery", "ACommerce.Kit.Delivery.Core", "OtoClient.cs"),
+        };
+        var read = 0;
+        foreach (var f in files)
+        {
+            var code = WriteEndpointGuardTests.StripComments(File.ReadAllText(f));
+            read += code.Length > 500 ? 1 : 0;
+            foreach (var quota in new[] { "ConsumeAsync", "IEntitlements", "RequireEntitlement", "EntitlementFilter", "QuotaConsumed" })
+                Assert.DoesNotContain(quota, code, StringComparison.Ordinal);
+        }
+        Assert.Equal(files.Length, read);
+    }
+
     /// <summary><b>غِيابُ الاعتِمادِ السوقِيِّ لا يُسقِطُ التَعريف</b> (‏ADR-033 الخُطوَة 6: «غيابُ الرمزِ السوقيِّ بالبيئةِ يُخفي
     /// مسارَ <c>register</c> ولا يُسقِطُ التعريف»): القارِئُ لا يَقرَأُ تَهيئَةً أَصلاً (لا <c>IConfiguration</c> في مَشروعِه)،
     /// فَالتَعريفُ في الكاتالوجِ بِلا مُتَغَيِّرِ شَحنٍ واحِد.</summary>
