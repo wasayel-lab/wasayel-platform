@@ -30,6 +30,15 @@ namespace ACommerce.Platform.Providers;
 /// الخُطوَة 4) و<b>في الكوميتِ نَفسِه</b> مَعَ أَوَّلِ مِلَفٍّ يُعلِنُه
 /// (مِلَفُّ مِفتاحِ بَوّابَةِ الدَفع، الخُطوَة 6) — فَالقائِمَةُ انكَمَشَت
 /// بِقَرارٍ مَرئيّ لا بِمِلَفٍّ تَسَلَّل.</para>
+///
+/// <para><b>و<c>issued_secret</c> دَخَلَ المَعجَمَ ‏2026-10-12</b> (‏ADR-033 §٢‑هـ الخُطوَتانِ 5 و6؛
+/// تَيّارُ S8) — في الكوميتِ نَفسِه مَعَ أَوَّلِ مِلَفٍّ يُعلِنُه (تَعريفُ حِسابِ الشَحنِ عِندَ OTO: رَمزُ
+/// الوارِدِ الَّذي نُصدِرُه لِكُلِّ بائِع). <b>وبِعَمودٍ ثالِثٍ غَيرِ ما كُتِبَ لَه أَعلاه — يُقالُ ولا
+/// يُبتَلَع</b>: لا يُخَزَّنُ تَجزِئَةً بَل يُختَمُ في الخِزانَة، لِأَنّ OTO تَوقِّعُ إشعارَها بِه («Signed
+/// "orderId:status:timestamp" with "HmacSHA256" method … Secret key for the signature you can provide
+/// during webhook configuration» — قِسمُ «Webhook» في وَثائِقِها) فَلا يُتَحَقَّقُ مِن التَوقيعِ إلّا بِه
+/// صَريحاً. والفارِقُ عَن <c>shared_secret</c> باقٍ في عَمودِ «مَن يُوَلِّدُه»: هذا نُوَلِّدُه نَحن ونُسَلِّمُه
+/// لِلمُزَوِّد، وذاكَ يُوَلِّدُه المُزَوِّدُ ويُسَلِّمُه لَنا (‏ADR-033 §٧‑م).</para>
 /// </summary>
 public static class CredentialKinds
 {
@@ -61,7 +70,12 @@ public static class CredentialKinds
     /// <summary>‏SHA-256 وَحدَه، يُعرَض مَرَّةً عِندَ الإصدارِ ولا
     /// يُسترَجَع أَبَداً. نَظيرُه القائِم <c>ApiKeyDocument.SecretHash</c>
     /// — و<b>أُنبوبُه قائِمٌ خارِجَ هذا المَعجَم</b>، فَلا مِلَفَّ
-    /// مُزَوِّدٍ يُعلِنُه.</summary>
+    /// مُزَوِّدٍ يُعلِنُه.
+    /// <para><b>وصارَ ‏2026-10-12 (‏ADR-033 §٧‑م؛ ولا يُعادُ حَرفٌ فَوقَه)</b>: سِرٌّ <b>نُصدِرُه نَحن</b> ونُسَلِّمُه
+    /// لِلمُزَوِّدِ لِيَوقِّعَ بِه وارِدَه — يُختَمُ في الخِزانَةِ ويُسترَجَعُ لِلتَحَقُّقِ مِن التَوقيعِ وَحدَه، ولا يُعرَضُ
+    /// مِنه شَيءٌ أَبَداً (لا ذَيل). وتَجزِئَةُ <c>ApiKeyDocument</c> باقِيَةٌ لِمَفاتيحِ الـAPI كَما هي: هُناكَ
+    /// يُقارَنُ حامِلُ رَمز، وهُنا يُحسَبُ تَوقيعٌ يَحتاجُ السِرَّ نَفسَه. ويُعلِنُه اليَومَ تَعريفُ حِسابِ الشَحنِ
+    /// عِندَ OTO.</para></summary>
     public const string IssuedSecret = "issued_secret";
 
     /// <summary>مُشَفَّرٌ ولا يُعرَض ويُسترَجَع (سِرُّ webhook).
@@ -89,9 +103,11 @@ public static class CredentialKinds
 
     /// <summary><b>المَعجَمُ الَّذي يُفرَض.</b> أَربَعَةٌ (ثَلاثَةٌ حَتّى
     /// ‏2026-10-12)، ولِكُلٍّ مِلَفُّ تَعريفٍ مَشحونٌ يُعلِنُه — وذلكَ مَفحوصٌ
-    /// آلِيّاً (‏<c>ProviderCatalogTests</c>). والتَرتيبُ تَرتيبُ السُلَّم.</summary>
+    /// آلِيّاً (‏<c>ProviderCatalogTests</c>). والتَرتيبُ تَرتيبُ السُلَّم.
+    /// <b>خَمسَةٌ ‏2026-10-12</b> (‏ADR-033 الخُطوَتانِ 5 و6): <see cref="IssuedSecret"/> بَينَ
+    /// <see cref="HostedLink"/> و<see cref="SecretKey"/> بِرُتبَتِه.</summary>
     public static readonly IReadOnlyList<string> All =
-        new[] { None, HostedLink, SecretKey, PlatformKey };
+        new[] { None, HostedLink, IssuedSecret, SecretKey, PlatformKey };
 
     /// <summary><b>ما هُوَ خارِجَ المَعجَمِ عَمداً</b> — ولِكُلٍّ سَبَبٌ
     /// واحِد: خِزانَتُه لَم تُبنَ بَعد (أَو أُنبوبُه قائِمٌ في مَوضِعٍ
@@ -99,7 +115,7 @@ public static class CredentialKinds
     /// مِنها — فَالقائِمَةُ تَنكَمِش بِقَرارٍ مَرئيّ ولا تَتَسَلَّل
     /// بِمِلَفّ.</summary>
     public static readonly IReadOnlyList<string> NotYetInVocabulary =
-        new[] { PublishedKey, DelegatedGrant, IssuedSecret, SharedSecret, CredentialFile };
+        new[] { PublishedKey, DelegatedGrant, SharedSecret, CredentialFile };
 
     private static readonly HashSet<string> Set = new(All, StringComparer.Ordinal);
 
@@ -128,7 +144,7 @@ public static class CredentialKinds
         [HostedLink]     = 1,   // نَصٌّ صَريحٌ عامّ
         [PublishedKey]   = 2,   // نَصٌّ صَريحٌ يُصَيَّر
         [DelegatedGrant] = 3,   // مُعَرِّفٌ صَريحٌ لَيسَ سِرّاً
-        [IssuedSecret]   = 4,   // تَجزِئَةٌ لا تُسترَجَع
+        [IssuedSecret]   = 4,   // نُصدِرُه نَحن (كانَ «تَجزِئَةٌ لا تُسترَجَع»؛ يُختَمُ مُنذُ ‏2026-10-12 — ‏ADR-033 §٧‑م)
         [SharedSecret]   = 5,   // مُشَفَّرٌ لِلتَحَقُّقِ مِن وارِد
         [SecretKey]      = 6,   // مُشَفَّرٌ يُطلَبُ بِه
         [CredentialFile] = 7,   // كُتلَةٌ مُشَفَّرَة

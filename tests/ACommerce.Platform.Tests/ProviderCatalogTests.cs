@@ -35,9 +35,13 @@ public class ProviderCatalogTests
         // كوميتِ أَوَّلِ مُستَهلِكٍ لِلشَحن — عَميلِ OTO — كَما شَرَطَ `PROVIDER-STUB-DEBT.md`. وصَفُّ
         // الـADR كَتَبَ «‏8→7» يَومَ كُتِب، ثُمَّ أَضافَت خُطوَةُ ‏ADR-032 السادِسَةُ `moyasar_api` قَبلَه
         // فَصارَ ‏9→8 — والتِسعَةُ مَقيسَةٌ قَبلَه بِهذا الفَحصِ نَفسِه أَخضَرَ عِندَ `a5155d0`.
+        //
+        // **تِسعَةٌ لا ثَمانِيَة مُنذُ ‏2026-10-12 (‏ADR-033 الخُطوَة 6، تَيّارُ S8)**: أُضيفَ تَعريفُ حِسابِ الشَحنِ
+        // عِندَ OTO — `platform_key` بِحَقلَي بائِعٍ (`secret_key`، `issued_secret`) — في الكوميتِ الَّذي أَدخَلَ
+        // `issued_secret` المَعجَم. والثَمانِيَةُ مَقيسَةٌ قَبلَه بِهذا الفَحصِ نَفسِه أَخضَرَ عِندَ `8e7330d`.
         var defs = ProviderCatalog.Definitions;
-        Assert.True(defs.Count == 8,
-            $"أَداة عَمياء: حُمِّلَ {defs.Count} تَعريفاً — والمَقيس ٨.");
+        Assert.True(defs.Count == 9,
+            $"أَداة عَمياء: حُمِّلَ {defs.Count} تَعريفاً — والمَقيس ٩.");
 
         foreach (var d in defs)
             Assert.True(ProviderDefinitionValidator.IsValid(d),
@@ -160,6 +164,16 @@ public class ProviderCatalogTests
             + "صَريحاً ولا يُعرَضُ مِنه إلّا ذَيلُه. وعَميلُ البَوّابَةِ الَّذي يَطلُبُ "
             + "بِه (الخُطوَة 8) لَم يُبنَ بَعد، فَلا قَبضَ بِه حَتّى يُبنى."),
 
+        // ‏2026-10-12 (‏ADR-033 الخُطوَة 6، تَيّارُ S8): مِرساةُ حِسابِ الشَحنِ عِندَ OTO سَطرُ تَسجيلِ عَميلِه
+        // في المُضيف — العَميلُ الَّذي يَطلُبُ بِرَمزِ تَحديثِ البائِعِ (حَقلِ التَعريفِ الأَوَّل) ويُنشِئُ البوليصَة.
+        // **وحَقلا البائِعِ لا كاتِبَ لَهُما بَعد**: سَطحُ البائِعِ الخُطوَة 7 — والمِرساةُ تَقولُ «يُنادى»، لا «يُلصَق».
+        new("oto_vendor_account",
+            "apps/V1.App/Program.cs",
+            "builder.Services.AddOtoShipping(builder.Configuration);",
+            "عَميلُ OTO المُسَجَّلُ بِهذا السَطرِ يَطلُبُ بِرَمزِ تَحديثِ حِسابِ البائِعِ ويُنشِئُ بوليصَةَ صَفقَتِه "
+            + "ويَسأَلُ عَن حالِ طَلَبِها — ونُقطَةُ الوارِدِ الَّتي يُعلِنُها التَعريفُ قائِمَةٌ بِمَسارِها الحَرفِيّ. "
+            + "وحَقلا البائِعِ يُكتَبانِ مِن سَطحِه في الخُطوَة 7، لا قَبلَها."),
+
         // ← الوَحيدُ بِلا مِرساةِ كود، وذلكَ **هُوَ** الدَعوى.
         new("moyasar_hosted",
             "", "",
@@ -210,8 +224,11 @@ public class ProviderCatalogTests
         // **سَبعٌ لا ثَمانٍ مُنذُ ‏2026-10-12 (‏ADR-033 الخُطوَة 3)**: سَقَطَت مِرساةُ `mock_delivery`
         // مَعَ تَعريفِها ومُحاكيها — وصَفُّ الـADR كَتَبَ «‏7→6» قَبلَ أَن تُضيفَ خُطوَةُ ‏ADR-032
         // السادِسَةُ مِرساةَ `moyasar_api`. والثَمانُ مَقيسَةٌ قَبلَه أَخضَرَ عِندَ `a5155d0`.
-        Assert.True(checkedAnchors == 7,
-            $"أَداة عَمياء: فُحِصَت {checkedAnchors} مِرساة — والمَقيس ٧.");
+        //
+        // **ثَمانٍ لا سَبع مُنذُ ‏2026-10-12 (‏ADR-033 الخُطوَة 6، تَيّارُ S8)**: مِرساةُ تَعريفِ حِسابِ الشَحنِ عِندَ OTO
+        // سَطرُ `AddOtoShipping` في `Program.cs`. والسَبعُ مَقيسَةٌ قَبلَه أَخضَرَ عِندَ `8e7330d`.
+        Assert.True(checkedAnchors == 8,
+            $"أَداة عَمياء: فُحِصَت {checkedAnchors} مِرساة — والمَقيس ٨.");
         Assert.True(breaches.Count == 0,
             "تَعريفُ مُزَوِّدٍ بِلا تَنفيذٍ حَيّ — مَقبَرَةٌ في البَيانات:\n  "
             + string.Join("\n  ", breaches));
@@ -313,6 +330,87 @@ public class ProviderCatalogTests
 
         // ونَوعُ الرَبطِ لا يَنزِلُ تَحتَ حَقلِه.
         Assert.Equal(CredentialKinds.SecretKey, d.HighestFieldKind);
+    }
+
+    /// <summary><b>حِسابُ الشَحنِ عِندَ OTO</b> (‏ADR-033 الخُطوَة 6 بِحَرفِها و§٢‑ج‑١): قُدرَةُ <c>delivery</c>، ونَوعُ رَبطٍ
+    /// <c>platform_key</c> (الاعتِمادُ السوقِيُّ سِرُّنا)، وحَقلا <b>بائِعٍ</b> سِرِّيّانِ تَختِمُهُما الخِزانَة — رَمزُ تَحديثِه
+    /// (<c>secret_key</c>) ورَمزُ وارِدِه (<c>issued_secret</c>) — بِلا سياج؛ و<c>webhook</c> مُعلَنٌ بِمَسارِ الوارِدِ الحَرفِيِّ
+    /// نَفسِه وبِحَقلِ <c>issued_secret</c> (القاعِدَة ٦)؛ <b>ولا صَفَّ لَه في الاستوديو</b> (لا يَربِطُه مُستَأجِر). والمُصادِقُ يَرُدُّه
+    /// إن نَزَلَ حَقلٌ تَحتَ السِرِّيّ (السالِب).</summary>
+    [Fact]
+    public void The_vendor_shipping_definition_declares_two_sealed_vendor_fields_a_verified_webhook_and_no_studio_row()
+    {
+        var d = Assert.Single(ProviderCatalog.ForCapability(ProviderCapabilities.Delivery));
+        Assert.Equal("oto_vendor_account", d.Slug);
+        Assert.Equal(CredentialKinds.PlatformKey, d.Credential.Kind);
+        Assert.False(d.IsTenantBindable);
+        Assert.Empty(ProviderCatalog.TenantBindable(ProviderCapabilities.Delivery));
+        Assert.Equal(new[] { ProviderCapabilities.Payments }, ProviderCatalog.BindableCapabilities);
+        Assert.True(ProviderDefinitionValidator.IsValid(d));
+        // و`binding_kind_below_field_kind` لا يُمَسّ: أَعلى الحَقلَينِ `secret_key` (‏6) تَحتَ `platform_key` (‏8).
+        Assert.Equal(CredentialKinds.SecretKey, d.HighestFieldKind);
+        Assert.True(CredentialKinds.Rank(d.Credential.Kind) > CredentialKinds.Rank(d.HighestFieldKind));
+
+        Assert.Equal(new[] { ("refresh_token", CredentialKinds.SecretKey), ("webhook_secret", CredentialKinds.IssuedSecret) },
+            d.Credential.Fields.Select(f => (f.Code, f.Kind)).ToArray());
+        foreach (var f in d.Credential.Fields)
+        {
+            Assert.True(f.IsRequired);
+            Assert.Empty(f.HostAllowlist);
+            Assert.True(CredentialKinds.IsSecretLike(f.Kind));
+            Assert.True(ProviderVault.Seals(f.Kind), $"«{f.Code}» مِن نَوعٍ لا تَختِمُه الخِزانَة.");
+            Assert.True(ProviderText.HasArabic(f.Label));
+        }
+
+        Assert.NotNull(d.Webhook);
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Shipping.OtoShippingEndpoints.OrderStatusPath, d.Webhook!.Path);
+        Assert.Equal("webhook_secret", d.Webhook.Verify);
+        Assert.True(CredentialKinds.CanVerifyWebhook(d.Credential.Fields.Single(f => f.Code == d.Webhook.Verify).Kind));
+        Assert.Equal("https://apis.tryoto.com/", d.DocsUrl);
+
+        // السالِب: حَقلٌ رابِطٌ تَحتَ الاعتِمادِ السوقِيّ يُرَدُّ بِرَمزِه — الشَرطُ المُعَدَّلُ نَفسُه.
+        var widened = d with
+        {
+            Credential = d.Credential with
+            {
+                Fields = d.Credential.Fields.Append(new ProviderFieldDefinition
+                {
+                    Code = "pay_link", Kind = CredentialKinds.HostedLink,
+                    Label = new Dictionary<string, string?> { ["ar"] = "رابِط" }, HostAllowlist = new[] { "tryoto.com" },
+                }).ToArray(),
+            },
+        };
+        Assert.Equal(new[] { "platform_key_requires_owner_grant" },
+            ProviderDefinitionValidator.Validate(widened).Select(v => v.Code).ToArray());
+    }
+
+    /// <summary><b>غِيابُ الاعتِمادِ السوقِيِّ لا يُسقِطُ التَعريف</b> (‏ADR-033 الخُطوَة 6: «غيابُ الرمزِ السوقيِّ بالبيئةِ يُخفي
+    /// مسارَ <c>register</c> ولا يُسقِطُ التعريف»): القارِئُ لا يَقرَأُ تَهيئَةً أَصلاً (لا <c>IConfiguration</c> في مَشروعِه)،
+    /// فَالتَعريفُ في الكاتالوجِ بِلا مُتَغَيِّرِ شَحنٍ واحِد. <b>ومَسارُ <c>register</c> لا وُجودَ لَه اليَوم</b> — صِفرُ نُقطَةٍ تُناديه
+    /// وصِفرُ مَسارٍ يَحمِلُه في نُقاطِ الشَحن — يُثَبَّتُ هُنا ويُقلَبُ بِاسمِه يَومَ يُبنى خَلفَ الاعتِمادِ السوقِيّ (الخُطوَة 8).</summary>
+    [Fact]
+    public void The_vendor_shipping_definition_needs_no_configuration_and_no_register_path_exists_yet()
+    {
+        var providersDir = Path.Combine(RepoRoot, "libs", "core", "ACommerce.Platform.Providers");
+        var scanned = 0;
+        foreach (var f in Directory.EnumerateFiles(providersDir, "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Replace('\\', '/').Contains("/obj/") && !f.Replace('\\', '/').Contains("/bin/")))
+        {
+            scanned++;
+            Assert.DoesNotContain("IConfiguration", File.ReadAllText(f), StringComparison.Ordinal);
+        }
+        Assert.True(scanned >= 5, $"أَداةٌ عَمياء: مُسِحَ {scanned} مِلَفّاً.");
+        Assert.DoesNotContain("Microsoft.Extensions.Configuration",
+            File.ReadAllText(Path.Combine(providersDir, "ACommerce.Platform.Providers.csproj")), StringComparison.Ordinal);
+        Assert.Single(ProviderCatalog.ForCapability(ProviderCapabilities.Delivery));
+
+        var endpoints = File.ReadAllText(Path.Combine(RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "Shipping", "OtoShippingEndpoints.cs"));
+        var client = File.ReadAllText(Path.Combine(RepoRoot, "libs", "kits", "Delivery",
+            "ACommerce.Kit.Delivery.Core", "OtoClient.cs"));
+        Assert.True(endpoints.Length > 1000 && client.Length > 1000, "أَداةٌ عَمياء: مِلَفّا الشَحنِ لَم يُقرَآ.");
+        Assert.DoesNotContain("/rest/v2/register", client, StringComparison.Ordinal);
+        Assert.DoesNotContain("register", endpoints, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

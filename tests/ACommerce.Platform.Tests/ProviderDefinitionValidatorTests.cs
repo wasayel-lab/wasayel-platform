@@ -359,14 +359,30 @@ public class ProviderDefinitionValidatorTests
 
     // ─── ١٢. platform_key_requires_owner_grant ───────────────────────
 
+    /// <summary><b>قُلِبَ بِاسمِه ‏2026-10-12</b> (‏ADR-033 §٢‑ج‑١ والخُطوَة 6، تَيّارُ S8): كانَ
+    /// <c>platform_key_requires_owner_grant_fires_when_a_tenant_could_fill_it</c> — «أَيُّ حَقلٍ تَحتَ <c>platform_key</c>
+    /// يُرفَض»، وسالِبُه حَقلٌ مِن نَوعِ <c>platform_key</c>. وصارَ الشَرطُ «حَقلٌ <b>غَيرُ سِرِّيِّ الشَكل</b>»: الاعتِمادُ
+    /// السوقِيُّ سِرُّنا، وتَحتَه حَقلا بائِعٍ سِرِّيّانِ يُختَمان. <b>المُوجِب</b> (لا يُنتِجُ الرَمز): بِلا حَقل، وبِحَقلِ
+    /// <c>secret_key</c>، وبِحَقلِ <c>issued_secret</c>، وبِهِما مَعاً (شَكلُ تَعريفِ OTO). <b>والسالِب</b> (يُنتِجُه): حَقلٌ
+    /// رابِطٌ (<c>hosted_link</c> بِسياجِه، فَلا يُنتِجُ إلّا هذا الرَمز)، وحَقلٌ <c>none</c>. والرُموزُ اثنا عَشَرَ كَما كانَت.</summary>
     [Fact]
-    public void platform_key_requires_owner_grant_fires_when_a_tenant_could_fill_it()
+    public void platform_key_requires_owner_grant_fires_only_for_a_field_that_is_not_secret_like()
     {
         Assert.DoesNotContain("platform_key_requires_owner_grant",
             CodesOf(NoFieldsWithKind(CredentialKinds.PlatformKey)));
-        Assert.Contains("platform_key_requires_owner_grant", CodesOf(PlatformKeyWithField()));
+        Assert.Empty(CodesOf(PlatformKeyWith(CredentialKinds.SecretKey)));
+        Assert.Empty(CodesOf(PlatformKeyWith(CredentialKinds.IssuedSecret)));
+        Assert.Empty(CodesOf(PlatformKeyWith(CredentialKinds.SecretKey, CredentialKinds.IssuedSecret)));
+
+        Assert.Equal(new[] { "platform_key_requires_owner_grant" }, CodesOf(PlatformKeyWithField()));
+        Assert.Contains("platform_key_requires_owner_grant", CodesOf(PlatformKeyWith(CredentialKinds.None)));
+        Assert.Contains("platform_key_requires_owner_grant",
+            CodesOf(PlatformKeyWith(CredentialKinds.SecretKey, CredentialKinds.None)));
+        Assert.Equal(12, ProviderDefinitionValidator.Codes.Count);
     }
 
+    /// <summary>السالِبُ في <see cref="AllBreachingDefinitions"/>: حَقلٌ رابِطٌ بِسياجِه تَحتَ <c>platform_key</c>
+    /// (كانَ حَقلاً مِن نَوعِ <c>platform_key</c> — وهو سِرِّيُّ الشَكلِ فَلَم يَعُد يُنتِجُ الرَمزَ ‏2026-10-12).</summary>
     private static ProviderDefinition PlatformKeyWithField() => Valid() with
     {
         Credential = new ProviderCredentialDefinition
@@ -376,10 +392,22 @@ public class ProviderDefinitionValidatorTests
             {
                 new ProviderFieldDefinition
                 {
-                    Code = "client_secret", Kind = CredentialKinds.PlatformKey,
-                    Label = Ar("سِرُّ العَميل"),
+                    Code = "invoice_url", Kind = CredentialKinds.HostedLink,
+                    Label = Ar("رابِط"), HostAllowlist = new[] { "moyasar.com" },
                 },
             },
+        },
+    };
+
+    private static ProviderDefinition PlatformKeyWith(params string[] kinds) => Valid() with
+    {
+        Credential = new ProviderCredentialDefinition
+        {
+            Kind = CredentialKinds.PlatformKey,
+            Fields = kinds.Select((k, i) => new ProviderFieldDefinition
+            {
+                Code = $"f{i}", Kind = k, Label = Ar("حَقلُ بائِع"), IsRequired = true,
+            }).ToArray(),
         },
     };
 
@@ -406,6 +434,29 @@ public class ProviderDefinitionValidatorTests
         Assert.Throws<ArgumentException>(() => CredentialKinds.Require(CredentialKinds.CredentialFile));
         Assert.Throws<ArgumentException>(() => CredentialKinds.Require("invented"));
         Assert.Equal(CredentialKinds.SecretKey, CredentialKinds.Require(CredentialKinds.SecretKey));
+    }
+
+    /// <summary><b>‏<c>issued_secret</c> في المَعجَمِ المُلزِمِ ‏2026-10-12</b> (‏ADR-033 الخُطوَتانِ 5 و6): مُوجَبٌ — يُقبَلُ في
+    /// <c>Require</c> وفي <c>All</c> بِرُتبَتِه بَينَ <c>hosted_link</c> و<c>secret_key</c>، وحَقلٌ مِنه لا يُنتِجُ
+    /// <c>field_kind_out_of_vocabulary</c>، ويَصلُحُ لِلتَحَقُّقِ مِن وارِد؛ وسالِبٌ — جارُه <c>shared_secret</c> باقٍ
+    /// خارِجَ المَعجَمِ يُرمى ويُرَدُّ حَقلُه، و<c>issued_secret</c> لَيسَ في القائِمَةِ المُؤَجَّلَةِ بَعدُ.</summary>
+    [Fact]
+    public void Issued_secret_is_enforced_now_and_its_neighbour_shared_secret_is_still_deferred()
+    {
+        Assert.Equal(CredentialKinds.IssuedSecret, CredentialKinds.Require(CredentialKinds.IssuedSecret));
+        Assert.Equal(new[]
+            {
+                CredentialKinds.None, CredentialKinds.HostedLink, CredentialKinds.IssuedSecret,
+                CredentialKinds.SecretKey, CredentialKinds.PlatformKey,
+            },
+            CredentialKinds.All.ToArray());
+        Assert.DoesNotContain(CredentialKinds.IssuedSecret, CredentialKinds.NotYetInVocabulary);
+        Assert.DoesNotContain("field_kind_out_of_vocabulary", CodesOf(WithFieldKind(CredentialKinds.IssuedSecret)));
+        Assert.True(CredentialKinds.CanVerifyWebhook(CredentialKinds.IssuedSecret));
+
+        Assert.Throws<ArgumentException>(() => CredentialKinds.Require(CredentialKinds.SharedSecret));
+        Assert.Contains(CredentialKinds.SharedSecret, CredentialKinds.NotYetInVocabulary);
+        Assert.Contains("field_kind_out_of_vocabulary", CodesOf(WithFieldKind(CredentialKinds.SharedSecret)));
     }
 
     [Fact]

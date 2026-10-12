@@ -304,8 +304,12 @@ public class ProviderVaultTests(ITestOutputHelper output)
 
     // ═══ ٥) ما تَختِمُه الخِزانَة، وما يَبقى صَريحاً أَو مَرفوضاً ════════════════
 
+    /// <summary><b>قُلِبَ بِاسمِه ‏2026-10-12</b> (‏ADR-033 §٧‑م، تَيّارُ S8): كانَ
+    /// <c>The_vault_seals_secret_key_and_nothing_else_today</c> — نَوعٌ واحِدٌ تَختِمُه الخِزانَة. وصارَ
+    /// <c>issued_secret</c> ثانِيَهُما: دَخَلَ المَعجَمَ مَعَ تَعريفِ حِسابِ الشَحنِ عِندَ OTO، وOTO تَوقِّعُ
+    /// بِه إشعارَها فَلا يُتَحَقَّقُ مِن التَوقيعِ إلّا بِه صَريحاً — فَيُختَمُ ولا يُجَزَّأ. وما سِواهُما يُرَدُّ كَما كان.</summary>
     [Fact]
-    public void The_vault_seals_secret_key_and_nothing_else_today()
+    public void The_vault_seals_secret_key_and_issued_secret_and_nothing_else()
     {
         var vault = NewVault();
         var kinds = CredentialKinds.All.Concat(CredentialKinds.NotYetInVocabulary)
@@ -315,7 +319,7 @@ public class ProviderVaultTests(ITestOutputHelper output)
         var sealable = 0;
         foreach (var k in kinds)
         {
-            Assert.Equal(k == CredentialKinds.SecretKey, ProviderVault.Seals(k));
+            Assert.Equal(k is CredentialKinds.SecretKey or CredentialKinds.IssuedSecret, ProviderVault.Seals(k));
             if (ProviderVault.Seals(k)) { sealable++; continue; }
 
             Assert.Throws<InvalidOperationException>(
@@ -323,7 +327,32 @@ public class ProviderVaultTests(ITestOutputHelper output)
         }
 
         output.WriteLine($"فُحِصَ {kinds.Length} نَوعاً؛ تَختِمُ الخِزانَةُ {sealable}.");
-        Assert.Equal(1, sealable);
+        Assert.Equal(2, sealable);
+    }
+
+    /// <summary><b>رَمزُ الوارِدِ المُصدَرُ لِبائِع</b> (‏ADR-033 §٧‑م و§٢‑ج‑٢): يُختَمُ بِسِياقِ مَدخَلِ البائِعِ ويُفَكُّ بِه
+    /// وَحدَه — سِياقُ بائِعٍ آخَرَ أَو حَقلٍ آخَرَ يُرمى — <b>ولا ذَيلَ لَه</b> (لا يُعرَضُ مِنه شَيءٌ أَبَداً)، وصورَتُه القِناعُ وَحدَه.</summary>
+    [Fact]
+    public void An_issued_webhook_secret_seals_without_a_tail_and_opens_only_in_its_vendor_context()
+    {
+        var vault = NewVault();
+        const string owner = "3f2b8c1e-0000-4000-8000-000000000042";
+        const string other = "3f2b8c1e-0000-4000-8000-000000000043";
+        var issued = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        var aad = ProviderVault.AadOf("t", ProviderCapabilities.Delivery, "webhook_secret", owner);
+
+        var v = StoredValue.Sealed(vault, CredentialKinds.IssuedSecret, issued, aad);
+
+        Assert.Equal(issued, v.Unseal(vault, aad));
+        Assert.Null(v.Tail4);
+        Assert.Null(v.Plain);
+        Assert.Equal(ProviderSecrecy.Mask, v.Censored);
+        Assert.ThrowsAny<CryptographicException>(() =>
+            v.Unseal(vault, ProviderVault.AadOf("t", ProviderCapabilities.Delivery, "webhook_secret", other)));
+        Assert.ThrowsAny<CryptographicException>(() =>
+            v.Unseal(vault, ProviderVault.AadOf("t", ProviderCapabilities.Delivery, "refresh_token", owner)));
+        foreach (var w in Windows(issued, 4).Distinct())
+            Assert.DoesNotContain(w, v.ToString(), StringComparison.Ordinal);
     }
 
     /// <summary><b>الفَشَلُ المُغلَقُ القائِمُ يَبقى — قَبلَ دُخولِ <c>secret_key</c>

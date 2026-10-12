@@ -173,8 +173,13 @@ public sealed class ProviderVault
     /// تَجزِئَةٌ لا تُختَم (أُنبوبُها قائِم)، و<c>platform_key</c> لَيسَ في خِزانَةِ
     /// المُستَأجِرِ أَصلاً. و<c>shared_secret</c>/<c>credential_file</c> يَدخُلانِ هُنا
     /// يَومَ يُعلِنُهُما مِلَفُّ تَعريف — لا قَبلَه (القاعِدَة ١).</para>
+    ///
+    /// <para><b>و<c>issued_secret</c> يُختَمُ مُنذُ ‏2026-10-12</b> (‏ADR-033 §٧‑م؛ ولا يُعادُ حَرفٌ فَوقَه): دَخَلَ
+    /// المَعجَمَ مَعَ أَوَّلِ مِلَفٍّ يُعلِنُه — رَمزُ الوارِدِ الَّذي نُصدِرُه لِكُلِّ بائِعٍ ونُسَلِّمُه لِـOTO — وOTO
+    /// تَوقِّعُ بِه إشعارَها (‏HmacSHA256)، فَالتَحَقُّقُ يَحتاجُه صَريحاً: «تَجزِئَةٌ لا تُسترجَع» كانَت سَتَجعَلُ
+    /// التَوقيعَ غَيرَ قابِلٍ لِلتَحَقُّق. ولا ذَيلَ لَه (<c>ProviderSecrecy.ShowsTail</c> لِـ<c>secret_key</c> وَحدَه).</para>
     /// </summary>
-    public static bool Seals(string kind) => kind is CredentialKinds.SecretKey;
+    public static bool Seals(string kind) => kind is CredentialKinds.SecretKey or CredentialKinds.IssuedSecret;
 
     /// <summary>
     /// <para><b>السِياقُ المَربوطُ بِالخَتمِ (‏AAD)</b> — أَجزاءٌ تُوصَلُ بِـ<c>|</c>
