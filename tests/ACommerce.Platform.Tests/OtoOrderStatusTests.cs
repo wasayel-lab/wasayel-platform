@@ -321,15 +321,20 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         }), Secret, Now));
     }
 
-    /// <summary>النافِذَةُ خَمسُ ثَوانٍ بِطَرَفَيها، قَبلُ وبَعدُ: ‏5000 مِلّي ثانِيَةٍ داخِلَها و‏5001 خارِجَها — بِتَوقيعٍ صَحيحٍ في كُلِّ صَفّ.</summary>
+    /// <summary>النافِذَةُ خَمسُ ثَوانٍ بِطَرَفَيها، قَبلُ وبَعدُ: ‏5000 مِلّي ثانِيَةٍ داخِلَها و‏5001 خارِجَها — بِتَوقيعٍ صَحيحٍ في كُلِّ صَفّ.
+    /// <para>(<b>قُلِبَ بِاسمِه ‏2026-10-12 — مُراجَعَةُ تَيّارِ S8، الجَولَة 1؛ ‏ADR-033 §٧‑ع</b> — كانَ <c>Signature_stale_positive_and_negative</c>:
+    /// <c>offsetMs</c> = الخَتمُ ناقِصاً الساعَة. المُوجَبُ خَتمٌ يَسبِقُها بِأَكثَرَ مِن ‏5000 (‏5001، وعَشرُ دَقائِق)؛ والسالِبُ كُلُّ خَتمٍ مَضى
+    /// مَهما طالَ عُمرُه — ‏−5001 و‏−600000 كانا مُوجَبَين وصارا سالِبَين، ومَعَهُما يَومٌ كامِل.)</para></summary>
     [Theory]
-    [InlineData(-5001, true)]
     [InlineData(5001, true)]
-    [InlineData(-600_000, true)]
+    [InlineData(600_000, true)]
+    [InlineData(-5001, false)]
+    [InlineData(-600_000, false)]
+    [InlineData(-86_400_000, false)]
     [InlineData(-5000, false)]
     [InlineData(5000, false)]
     [InlineData(0, false)]
-    public void Signature_stale_positive_and_negative(long offsetMs, bool stale)
+    public void Signature_stale_is_a_stamp_ahead_of_the_clock_positive_and_negative(long offsetMs, bool stale)
     {
         var stamp = (Now.ToUnixTimeMilliseconds() + offsetMs).ToString(System.Globalization.CultureInfo.InvariantCulture);
         Assert.Equal(stale ? OtoOrderStatusGate.SignatureStale : null,
@@ -362,11 +367,13 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
     }
 
     /// <summary>التَرتيب: السِرُّ أَوَّلاً (لا يُقرَأُ إشعارٌ لا يُتَحَقَّقُ مِنه)، ثُمَّ الحُضور، ثُمَّ النافِذَةُ قَبلَ المُطابَقَة — فَإعادَةُ لَعِبٍ
-    /// قَديمَةٌ بِتَوقيعٍ صَحيحٍ تُجابُ «خارِجَ النافِذَة» لا «يُطابِق».</summary>
+    /// قَديمَةٌ بِتَوقيعٍ صَحيحٍ تُجابُ «خارِجَ النافِذَة» لا «يُطابِق».
+    /// <para>(<b>يُلحَقُ ‏2026-10-12 — مُراجَعَةُ تَيّارِ S8، الجَولَة 1؛ ‏ADR-033 §٧‑ع؛ ولا يُعادُ حَرفٌ فَوقَه</b>: «إعادَةُ لَعِبٍ قَديمَةٌ» لا تُرَدُّ بَعدَ
+    /// اليَومِ عَلى عُمرِها — تُطابِقُ وتُسأَلُ OTO — فَخَتمُ هذا الصَفِّ صارَ يَسبِقُ الساعَةَ بِدَقيقَةٍ بَعدَ أَن كانَ قَبلَها بِدَقيقَة؛ والتَرتيبُ بِحَرفِه.)</para></summary>
     [Fact]
     public void The_verification_answers_secret_then_presence_then_window_then_match()
     {
-        var stale = (Now.ToUnixTimeMilliseconds() - 60_000).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var stale = (Now.ToUnixTimeMilliseconds() + 60_000).ToString(System.Globalization.CultureInfo.InvariantCulture);
         Assert.Equal(OtoOrderStatusGate.NoticeUnverifiable,
             OtoOrderStatusGate.Verify(Notice(DealId, secret: null, timestamp: stale), null, Now)!.Code);
         Assert.Equal(OtoOrderStatusGate.SignatureMissing,
@@ -691,7 +698,9 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
     }
 
     /// <summary>إشعارٌ لا يَتَحَقَّقُ — بِلا تَوقيع، أَو خارِجَ النافِذَة، أَو بِسِرٍّ آخَر — يُجابُ بِرَمزِه ‏401: لا تُسأَلُ OTO، ولا يُكتَبُ
-    /// حَرف، وسَطرُ اللوغِ يَحمِلُ الرَمزَ والانحِرافَ ولا يَحمِلُ السِرّ.</summary>
+    /// حَرف، وسَطرُ اللوغِ يَحمِلُ الرَمزَ والانحِرافَ ولا يَحمِلُ السِرّ.
+    /// <para>(<b>يُلحَقُ ‏2026-10-12 — مُراجَعَةُ تَيّارِ S8، الجَولَة 1؛ ‏ADR-033 §٧‑ع</b>: «خارِجَ النافِذَة» خَتمٌ يَسبِقُ الساعَةَ بِسِتِّ ثَوانٍ بَعدَ أَن كانَ
+    /// قَبلَها بِسِتّ — فَذاكَ صارَ يُطابِقُ ويُسأَلُ OTO (صَفُّ «بَعدَ حَدَثِه» أَدناه)؛ و«الانحِرافُ» صارَ «العُمرَ» بِإشارَتِه: <c>age -6000 ms</c>.)</para></summary>
     [Theory]
     [InlineData("unsigned", OtoOrderStatusGate.SignatureMissing)]
     [InlineData("stale", OtoOrderStatusGate.SignatureStale)]
@@ -704,7 +713,7 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         var stored = w.Docs.Stored.Count;
         var saves = w.Docs.SaveCalls;
         var log = new ShipCapturingLogger();
-        var stale = (DealShipTests.Now.ToUnixTimeMilliseconds() - 6_000).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var stale = (DealShipTests.Now.ToUnixTimeMilliseconds() + 6_000).ToString(System.Globalization.CultureInfo.InvariantCulture);
         var notice = kind switch
         {
             "unsigned" => Notice(w.Id, secret: null),
@@ -723,46 +732,44 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         var line = Assert.Single(log.Lines);
         Assert.Contains(code, line, StringComparison.Ordinal);
         Assert.DoesNotContain(DealShipTests.WebhookSecret, line, StringComparison.Ordinal);
-        Assert.Contains(kind == "stale" ? "drift 6000 ms" : "drift 0 ms", line, StringComparison.Ordinal);
+        Assert.Contains(kind == "stale" ? "age -6000 ms" : "age 0 ms", line, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم»</b> (مُراجَعَةُ تَيّارِ S8، ‏2026-10-12؛ يُقلَبُ بِاسمِه في الكوميتِ التالي): إشعارٌ <b>مُوَقَّعٌ صَحيحاً</b> بِسِرِّ بائِعِ
-    /// الصَفقَةِ يَصِلُ بَعدَ حَدَثِه بِسِتِّ ثَوانٍ أَو بِعَشرِ دَقائِقَ يُجابُ <c>signature_stale</c> ‏401 <b>قَبلَ أَن تُسأَلَ OTO</b> — لِأَنّ النافِذَةَ تَقيسُ
-    /// <c>|الآن − timestamp|</c>، و<c>timestamp</c> في قِسمِ «Webhook» مِن وَثيقَةِ OTO «‏Unix epoch timestamp (in milliseconds) indicating when the
-    /// event occurred» لا وَقتُ الإرسال، و<c>dcStatus</c> «‏status coming from the delivery company» — حالٌ يَمُرُّ مِن شَرِكَةِ التَوصيلِ إلى OTO
-    /// إلَينا. فَيَبقى التَسليمُ عِندَ «شَحن» ولا يَصِلُ فاحِصَ الحَقيقَة (‏Order Tracking) أَصلاً.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_a_correctly_signed_notice_that_arrives_after_its_event_is_refused_stale_before_OTO_is_asked</c>
+    /// (‏<c>0549f2e</c>؛ مُراجَعَةُ تَيّارِ S8، الجَولَة 1؛ ‏ADR-033 §٧‑ع): إشعارٌ <b>مُوَقَّعٌ صَحيحاً</b> بِسِرِّ بائِعِ الصَفقَةِ يَصِلُ بَعدَ حَدَثِه بِسِتِّ
+    /// ثَوانٍ أَو بِعَشرِ دَقائِقَ <b>يَبلُغُ فاحِصَ الحَقيقَة</b> (‏Order Tracking) — وكانَ يُرَدُّ ‏401 <c>signature_stale</c> قَبلَه — فَتُسأَلُ OTO مَرَّةً
+    /// واحِدَة، وتَخرُجُ الصَفقَةُ إلى «تسليم» بِجَوابِها، وسَطرُ اللوغِ الواحِدُ يَحمِلُ عُمرَ الإشعارِ ولا يَحمِلُ السِرّ.</para>
     /// </summary>
     [Theory]
     [InlineData(6_000L)]
     [InlineData(600_000L)]
-    public async Task Today_a_correctly_signed_notice_that_arrives_after_its_event_is_refused_stale_before_OTO_is_asked(long ageMs)
+    public async Task A_correctly_signed_notice_minutes_after_its_event_still_reaches_the_Order_Tracking_fetch(long ageMs)
     {
         var w = await ShippedCashDeal();
         OtoSays(w, "delivered");
         var asked = w.Oto.CallsTo(OtoClient.OrderStatusPath);
-        var saves = w.Docs.SaveCalls;
         var log = new ShipCapturingLogger();
         var stamp = DealShipTests.Now.ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
 
         // الحَدَثُ عِندَ ساعَةِ العالَم، والإشعارُ يَصِلُ بَعدَه بِـ`ageMs` — بِتَوقيعٍ صَحيحٍ عَلى خَتمِ الحَدَثِ نَفسِه.
         var outcome = await Logged(w, log, DealShipTests.Now.AddMilliseconds(ageMs)).ReceiveAsync(Slug, Notice(w.Id, timestamp: stamp));
 
-        Assert.Equal(OtoOrderStatusGate.SignatureStale, outcome.Code);
-        Assert.Equal(401, OtoOrderStatusGate.StatusFor(outcome.Code));
-        Assert.Equal(asked, w.Oto.CallsTo(OtoClient.OrderStatusPath));
-        Assert.Equal(saves, w.Docs.SaveCalls);
-        Assert.Equal(DealStage.Shipping, Stored(w).Stage);
-        Assert.Contains($"drift {ageMs} ms", Assert.Single(log.Lines), StringComparison.Ordinal);
+        Assert.Equal(OtoOrderStatusGate.Delivered, outcome.Code);
+        Assert.Equal(200, OtoOrderStatusGate.StatusFor(outcome.Code));
+        Assert.Equal(asked + 1, w.Oto.CallsTo(OtoClient.OrderStatusPath));
+        Assert.Equal(DealStage.Delivered, Stored(w).Stage);
+        var line = Assert.Single(log.Lines);
+        Assert.Contains($"← verified (age {ageMs} ms)", line, StringComparison.Ordinal);
+        Assert.DoesNotContain(DealShipTests.WebhookSecret, line, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم»</b> (مُراجَعَةُ تَيّارِ S8، ‏2026-10-12؛ يُقلَبُ بِاسمِه في الكوميتِ التالي): إشعارٌ مُوَقَّعٌ أُجيبَ ‏503 (لَم تُجِب OTO عَن
-    /// حالِه) <b>تُعيدُه OTO بِخَتمِ الحَدَثِ نَفسِه</b> — فَالخَتمُ جُزءٌ مِن النَصِّ المُوَقَّع — فَإعادَتُه بَعدَ عَشرِ دَقائِقَ تُجابُ
-    /// <c>signature_stale</c> ولَو أَجابَت OTO الآن «delivered»: ما رَدَدناه ‏503 لِتُعيدَه لا يَمُرُّ إذا أَعادَتْه.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_OTO_resending_a_notice_it_was_answered_503_for_is_refused_stale_ten_minutes_later</c> (‏<c>0549f2e</c>؛
+    /// ‏ADR-033 §٧‑ع): ما رَدَدناه ‏503 لِتُعيدَه OTO يَمُرُّ إذا أَعادَتْه — بِخَتمِ الحَدَثِ نَفسِه بَعدَ عَشرِ دَقائِق — فَتُسأَلُ OTO ويُكتَبُ التَسليم.</para>
     /// </summary>
     [Fact]
-    public async Task Today_OTO_resending_a_notice_it_was_answered_503_for_is_refused_stale_ten_minutes_later()
+    public async Task OTO_resending_a_notice_it_was_answered_503_for_is_verified_again_and_written_ten_minutes_later()
     {
         var w = await ShippedCashDeal();
         var notice = Notice(w.Id);
@@ -775,10 +782,22 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         var asked = w.Oto.CallsTo(OtoClient.OrderStatusPath);
         var again = await Logged(w, new ShipCapturingLogger(), DealShipTests.Now.AddMinutes(10)).ReceiveAsync(Slug, notice);
 
-        Assert.Equal(OtoOrderStatusGate.SignatureStale, again.Code);
-        Assert.Equal(401, OtoOrderStatusGate.StatusFor(again.Code));
-        Assert.Equal(asked, w.Oto.CallsTo(OtoClient.OrderStatusPath));
-        Assert.Equal(DealStage.Shipping, Stored(w).Stage);
+        Assert.Equal(OtoOrderStatusGate.Delivered, again.Code);
+        Assert.Equal(200, OtoOrderStatusGate.StatusFor(again.Code));
+        Assert.Equal(asked + 1, w.Oto.CallsTo(OtoClient.OrderStatusPath));
+        Assert.Equal(DealStage.Delivered, Stored(w).Stage);
+    }
+
+    /// <summary><b>والتَوقيعُ يَحرُسُ الإشعارَ المُتَأَخِّرَ كَما يَحرُسُ الحاضِر</b> (‏2026-10-12، ‏ADR-033 §٧‑ع): خَتمٌ مَضى عَلَيه عَشرُ دَقائِقَ لا يُرَدُّ عَلى
+    /// عُمرِه، فَيُسأَلُ ما بَعدَ النافِذَة — بِلا تَوقيعٍ <c>signature_missing</c>، وبِسِرٍّ آخَرَ <c>signature_mismatch</c>، وبِسِرِّ البائِعِ لا خَرق.</summary>
+    [Fact]
+    public void A_late_notice_still_needs_the_vendors_signature()
+    {
+        var late = Now.AddMinutes(10);
+        Assert.Equal(OtoOrderStatusGate.SignatureMissing, OtoOrderStatusGate.Verify(Notice(DealId, secret: null), Secret, late)!.Code);
+        Assert.Equal(OtoOrderStatusGate.SignatureMismatch, OtoOrderStatusGate.Verify(Notice(DealId, secret: "another-secret"), Secret, late)!.Code);
+        Assert.Equal(OtoOrderStatusGate.NoticeUnverifiable, OtoOrderStatusGate.Verify(Notice(DealId), null, late)!.Code);
+        Assert.Null(OtoOrderStatusGate.Verify(Notice(DealId), Secret, late));
     }
 
     /// <summary><b>الاحتِياطُ بِلا سِرٍّ — فَشَلٌ مُغلَق</b>: بائِعٌ لا مَدخَلَ لَه في مَتجَرِ العَرضِ يَشحَنُ بِرَمزِ التَهيئَة، وإشعارُ صَفقَتِه — ولَو
@@ -962,10 +981,11 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         Add(Decided(With(d => d.Status = DealStatus.Cancelled)));
         Add(Decided(With(d => d.Stage = DealStage.Confirmed)));
         Add(Decided(With(d => d.CounterpartyId = null)));
-        // ورُموزُ التَوقيعِ الأَربَعَةُ مِن `Verify` نَفسِها (‏2026-10-12، تَيّارُ S8).
+        // ورُموزُ التَوقيعِ الأَربَعَةُ مِن `Verify` نَفسِها (‏2026-10-12، تَيّارُ S8). و`signature_stale` بِساعَةٍ تَتَأَخَّرُ عَن الخَتمِ دَقيقَةً
+        // (‏2026-10-12، الجَولَة 1، ‏ADR-033 §٧‑ع): كانَت تَسبِقُه دَقيقَة — وإشعارٌ مَضى عَلَيه دَقيقَةٌ لا يُرَدُّ بَعدَ اليَومِ عَلى عُمرِه.
         Add(OtoOrderStatusGate.Verify(Notice(DealId), null, DealShipTests.Now)?.Code);
         Add(OtoOrderStatusGate.Verify(Notice(DealId, secret: null), DealShipTests.WebhookSecret, DealShipTests.Now)?.Code);
-        Add(OtoOrderStatusGate.Verify(Notice(DealId), DealShipTests.WebhookSecret, DealShipTests.Now.AddMinutes(1))?.Code);
+        Add(OtoOrderStatusGate.Verify(Notice(DealId), DealShipTests.WebhookSecret, DealShipTests.Now.AddMinutes(-1))?.Code);
         Add(OtoOrderStatusGate.Verify(Notice(DealId), "another-secret", DealShipTests.Now)?.Code);
 
         var w = await ShippedCashDeal();
@@ -1142,6 +1162,33 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
 
         using (var signed = await host.PostAsync(Slug, NoticeJson(w.Id.ToString("N"))))
             Assert.Equal(HttpStatusCode.OK, signed.StatusCode);
+        Assert.Equal(DealStage.Delivered, Stored(w).Stage);
+    }
+
+    /// <summary><b>عَبرَ HTTP كَما تَراه OTO</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S8، الجَولَة 1؛ ‏ADR-033 §٧‑ع): خادِمٌ ساعَتُه بَعدَ الحَدَثِ بِعَشرِ دَقائِق —
+    /// الإشعارُ المُزَوَّرُ ‏401 فارِغٌ بِلا سُؤالٍ ولا كِتابَة، والمُوَقَّعُ بِسِرِّ البائِعِ ‏200 والصَفقَةُ «تسليم». وكانَ المُوَقَّعُ يُجابُ ‏401 فَتُعيدُه OTO
+    /// بِالخَتمِ نَفسِه ولا يَمُرّ.</summary>
+    [Fact]
+    public async Task Ten_minutes_after_its_event_a_signed_notice_is_answered_200_and_delivers_and_a_forged_one_401()
+    {
+        var w = await ShippedCashDeal();
+        OtoSays(w, "delivered");
+        var calls = w.Oto.Calls.Count;
+        var asked = w.Oto.CallsTo(OtoClient.OrderStatusPath);
+        var saves = w.Docs.SaveCalls;
+        await using var host = await OtoHost.StartAsync(Logged(w, new ShipCapturingLogger(), DealShipTests.Now.AddMinutes(10)));
+
+        using (var forged = await host.PostAsync(Slug, NoticeJson(w.Id.ToString("N"), secret: "another-secret")))
+        {
+            Assert.Equal(HttpStatusCode.Unauthorized, forged.StatusCode);
+            Assert.Equal("", await forged.Content.ReadAsStringAsync());
+        }
+        Assert.Equal(calls, w.Oto.Calls.Count);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+
+        using (var signed = await host.PostAsync(Slug, NoticeJson(w.Id.ToString("N"))))
+            Assert.Equal(HttpStatusCode.OK, signed.StatusCode);
+        Assert.Equal(asked + 1, w.Oto.CallsTo(OtoClient.OrderStatusPath));
         Assert.Equal(DealStage.Delivered, Stored(w).Stage);
     }
 

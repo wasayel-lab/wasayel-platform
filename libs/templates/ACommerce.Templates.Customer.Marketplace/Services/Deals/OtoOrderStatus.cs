@@ -113,7 +113,10 @@ public static class OtoOrderStatusGate
     public const string SignatureMissing = "signature_missing";
 
     /// <summary>خَتمُ الوَقتِ خارِجَ النافِذَة (<see cref="ACommerce.Kit.Delivery.OtoWebhookSignature.ToleranceSeconds"/>) — إعادَةُ لَعِبٍ
-    /// أَو تَأَخُّرٌ؛ وانحِرافُه يُطبَعُ في اللوغ. ‏401.</summary>
+    /// أَو تَأَخُّرٌ؛ وانحِرافُه يُطبَعُ في اللوغ. ‏401.
+    /// <para>(<b>يُلحَقُ ‏2026-10-12 — مُراجَعَةُ تَيّارِ S8، الجَولَة 1؛ ‏ADR-033 §٧‑ع؛ ولا يُعادُ حَرفٌ فَوقَه</b>: «أَو تَأَخُّرٌ» لَم يَعُد يُرَدّ —
+    /// <c>timestamp</c> عِندَ OTO وَقتُ الحَدَثِ لا وَقتُ الإرسال، فَالرَمزُ لِخَتمٍ <b>يَسبِقُ ساعَتَنا</b> بِأَكثَرَ مِن النافِذَةِ وَحدَه
+    /// (<see cref="ACommerce.Kit.Delivery.OtoWebhookSignature.IsAhead"/>)، ويُطبَعُ عُمرُه في اللوغ. والاسمُ باقٍ: رَمزٌ في مَعجَمٍ مُغلَقٍ يَقرَؤُه اللوغُ والدَليل.)</para></summary>
     public const string SignatureStale = "signature_stale";
 
     /// <summary>التَوقيعُ لا يُطابِقُ بَصمَةَ سِرِّ البائِع — مُقارَنَةٌ ثابِتَةُ الزَمَن. ‏401.</summary>
@@ -189,6 +192,8 @@ public static class OtoOrderStatusGate
     /// طابَقَ الإشعارُ صَفقَةً في المَتجَرِ (<see cref="Match"/> — فَبِها يُعرَفُ البائِعُ وسِرُّه) <b>وقَبلَ سُؤالِ OTO وقَبلَ أَيِّ كِتابَة</b>.
     /// والتَرتيبُ تَرتيبُ <c>PaddleWebhookGuard.Gate</c>: لا سِرّ ← لا تَوقيع ← خارِجَ النافِذَة ← لا يُطابِق. <c>null</c> يَعني: يُسأَلُ OTO.</para>
     /// <para><b>والإشعارُ ما زالَ إشارَةً لا بُرهاناً</b>: التَوقيعُ يَقولُ «مِن OTO»، والحالُ يُجلَبُ مِنها بَعدَه كَما كان.</para>
+    /// <para>(<b>يُلحَقُ ‏2026-10-12 — مُراجَعَةُ تَيّارِ S8، الجَولَة 1؛ ‏ADR-033 §٧‑ع</b>: «خارِجَ النافِذَة» صارَ خَتماً يَسبِقُ ساعَتَنا وَحدَه — فَإشعارٌ صَحيحُ
+    /// التَوقيعِ يَمُرُّ إلى سُؤالِ OTO مَهما تَأَخَّرَ عَن حَدَثِه، وإعادَةُ OTO لَه تَمُرُّ كَذلك. والتَرتيبُ هو هو.)</para>
     /// </summary>
     public static OtoNoticeViolation? Verify(OtoOrderStatusNotice notice, string? secret, DateTimeOffset now)
     {
@@ -196,11 +201,11 @@ public static class OtoOrderStatusGate
             return new(NoticeUnverifiable, "لا سِرَّ وارِدٍ لِبائِعِ هذِه الصَفقَة — لا يُصَدَّقُ إشعارٌ لا يُتَحَقَّقُ مِنه.");
 
         if (string.IsNullOrWhiteSpace(notice.Signature) || notice.Status is null
-            || ACommerce.Kit.Delivery.OtoWebhookSignature.DriftMilliseconds(notice.Timestamp, now) is not { } drift)
+            || ACommerce.Kit.Delivery.OtoWebhookSignature.AgeMilliseconds(notice.Timestamp, now) is not { } age)
             return new(SignatureMissing, "إشعارٌ بِلا تَوقيعٍ أَو بِلا خَتمِ وَقتٍ يُقرَأُ أَو بِلا حال.");
 
-        if (!ACommerce.Kit.Delivery.OtoWebhookSignature.IsFresh(drift))
-            return new(SignatureStale, $"خَتمُ الوَقتِ خارِجَ النافِذَة — انحِرافُه {drift} مِلّي ثانِيَة.");
+        if (ACommerce.Kit.Delivery.OtoWebhookSignature.IsAhead(age))
+            return new(SignatureStale, $"خَتمُ الوَقتِ يَسبِقُ ساعَتَنا خارِجَ النافِذَة — عُمرُه {age} مِلّي ثانِيَة.");
 
         if (!ACommerce.Kit.Delivery.OtoWebhookSignature.Matches(secret, notice.OrderId, notice.Status, notice.Timestamp!, notice.Signature))
             return new(SignatureMismatch, "التَوقيعُ لا يُطابِقُ بَصمَةَ سِرِّ البائِع.");

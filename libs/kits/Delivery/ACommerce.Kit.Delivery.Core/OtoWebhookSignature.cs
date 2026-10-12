@@ -28,6 +28,12 @@ public static class OtoWebhookSignature
     /// يُضبَطُ بِالمَقيسِ عَلى staging (سِجِلُّ المالِكِ «ب»). والانحِرافُ بِالقيمَةِ المُطلَقَة: ساعَتُنا قَد تَتَقَدَّمُ كَما تَتَأَخَّر.</para>
     /// <para><b>وما يَحمي إن ضاقَت النافِذَةُ أَو اتَّسَعَت</b>: الإشعارُ إشارَةٌ لا بُرهان — حالُ الطَلَبِ يُسأَلُ عَنه OTO قَبلَ أَيِّ كِتابَة،
     /// فَإشعارٌ أُعيدَ لَعِبُه بِتَوقيعِه لا يَكتُبُ ما لَم تَقُلْه OTO الآن.</para>
+    /// <para>(<b>يُلحَقُ ‏2026-10-12 — مُراجَعَةُ تَيّارِ S8، الجَولَة 1؛ ‏ADR-033 §٧‑ع؛ ولا يُعادُ حَرفٌ فَوقَه</b>: «ما يُكَلِّفُ» أَعلاه وَقَعَ وقيس —
+    /// إشعارٌ صَحيحُ التَوقيعِ يَصِلُ بَعدَ حَدَثِه بِأَكثَرَ مِن خَمسٍ يُرَدُّ قَبلَ أَن تُسأَلَ OTO، وإعادَتُها لَه تَحمِلُ الخَتمَ نَفسَه فَلا تَمُرُّ
+    /// أَبَداً (تَوصيفُه <c>0549f2e</c>). <b>فَالنافِذَةُ صارَت طَرَفاً واحِداً</b>: لا يُرَدُّ إشعارٌ عَلى عُمرِه — التَوقيعُ يَقولُ «مِن OTO»، وفاحِصُ
+    /// الحَقيقَةِ يَقولُ «ما الحالُ الآن» — ويُرَدُّ وَحدَه خَتمٌ <b>يَسبِقُ ساعَتَنا</b> بِأَكثَرَ مِن هذِه الثَواني (<see cref="IsAhead"/>): حَدَثٌ لَم يَقَعْ
+    /// بَعد. والخَمسُ هُنا سَماحُ اختِلافِ الساعَتَين — وهُوَ ما تَعنيه خَمسُ <c>PaddleWebhookGuard</c> في هذا الطَرَفِ بِعَينِه، فَلا رَقَمَ جَديد.
+    /// وثَمَنُه يُقال: إشعارٌ حَقيقِيٌّ أُعيدَ لَعِبُه بَعدَ أَيّامٍ يُكَلِّفُ سُؤالاً واحِداً لِـOTO عَن طَلَبِه، ولا يَكتُبُ ما لا تَقولُه الآن.)</para>
     /// </summary>
     public const int ToleranceSeconds = 5;
 
@@ -61,13 +67,17 @@ public static class OtoWebhookSignature
         return CryptographicOperations.FixedTimeEquals(Sign(secret, orderId, status, timestamp), received);
     }
 
-    /// <summary>انحِرافُ <paramref name="timestamp"/> (مِلّي ثانِيَةٍ مُنذُ عَهدِ يونِكس) عَن <paramref name="now"/> بِالقيمَةِ المُطلَقَة —
-    /// و<c>null</c> لِخَتمٍ لا يُقرَأُ رَقَماً.</summary>
-    public static long? DriftMilliseconds(string? timestamp, DateTimeOffset now)
+    /// <summary>
+    /// <para><b>عُمرُ الإشعار</b>: <paramref name="now"/> ناقِصاً <paramref name="timestamp"/> (مِلّي ثانِيَةٍ مُنذُ عَهدِ يونِكس) <b>بِإشارَتِه</b> —
+    /// مُوجَبٌ لِحَدَثٍ مَضى، وسالِبٌ لِخَتمٍ يَسبِقُ ساعَتَنا — و<c>null</c> لِخَتمٍ لا يُقرَأُ رَقَماً.</para>
+    /// <para>(‏2026-10-12، مُراجَعَةُ تَيّارِ S8، الجَولَة 1: كانَ <c>DriftMilliseconds</c> بِالقيمَةِ المُطلَقَة — فَلا يُفَرِّقُ تَأَخُّراً مِن سَبق.)</para>
+    /// </summary>
+    public static long? AgeMilliseconds(string? timestamp, DateTimeOffset now)
         => long.TryParse(timestamp, NumberStyles.None, CultureInfo.InvariantCulture, out var ms)
-            ? Math.Abs(now.ToUnixTimeMilliseconds() - ms)
+            ? now.ToUnixTimeMilliseconds() - ms
             : null;
 
-    /// <summary>داخِلَ النافِذَة؟ (<see cref="ToleranceSeconds"/>).</summary>
-    public static bool IsFresh(long driftMilliseconds) => driftMilliseconds <= ToleranceSeconds * 1000L;
+    /// <summary><b>خَتمٌ يَسبِقُ ساعَتَنا بِأَكثَرَ مِن <see cref="ToleranceSeconds"/></b> — حَدَثٌ لَم يَقَعْ بَعد. وما سِواه لا يُرَدُّ عَلى زَمَنِه مَهما
+    /// تَأَخَّر (‏2026-10-12، مُراجَعَةُ تَيّارِ S8، الجَولَة 1؛ كانَ <c>IsFresh</c> بِطَرَفَين).</summary>
+    public static bool IsAhead(long ageMilliseconds) => ageMilliseconds < -ToleranceSeconds * 1000L;
 }

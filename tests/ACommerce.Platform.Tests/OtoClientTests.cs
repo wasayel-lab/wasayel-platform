@@ -762,14 +762,17 @@ public class OtoClientTests
         Assert.All(secrets, x => Assert.True(x.Length <= 255));
     }
 
+    /// <summary><b>قُلِبَ بِاسمِه</b> — كانَ <c>The_drift_is_absolute_milliseconds_from_now</c> (‏2026-10-12، مُراجَعَةُ تَيّارِ S8، الجَولَة 1؛ ‏ADR-033 §٧‑ع):
+    /// العُمرُ بِإشارَتِه — مُوجَبٌ لِحَدَثٍ مَضى وسالِبٌ لِخَتمٍ يَسبِقُ الساعَة — فَالصَفُّ الثالِثُ كانَ ‏5001 وصارَ ‏−5001.</summary>
     [Theory]
     [InlineData("1595941360328", 0L)]
     [InlineData("1595941355328", 5000L)]
-    [InlineData("1595941365329", 5001L)]
+    [InlineData("1595941365329", -5001L)]
     [InlineData("0", 1595941360328L)]
-    public void The_drift_is_absolute_milliseconds_from_now(string timestamp, long drift)
-        => Assert.Equal(drift, OtoWebhookSignature.DriftMilliseconds(timestamp, DateTimeOffset.FromUnixTimeMilliseconds(1595941360328)));
+    public void The_age_is_signed_milliseconds_before_now(string timestamp, long age)
+        => Assert.Equal(age, OtoWebhookSignature.AgeMilliseconds(timestamp, DateTimeOffset.FromUnixTimeMilliseconds(1595941360328)));
 
+    /// <summary><b>قُلِبَ بِاسمِه</b> — كانَ <c>A_timestamp_that_is_not_plain_digits_has_no_drift</c>؛ الصُفوفُ بِحَرفِها.</summary>
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -779,16 +782,22 @@ public class OtoClientTests
     [InlineData("1.5")]
     [InlineData(" 15 ")]
     [InlineData("99999999999999999999")]
-    public void A_timestamp_that_is_not_plain_digits_has_no_drift(string? timestamp)
-        => Assert.Null(OtoWebhookSignature.DriftMilliseconds(timestamp, DateTimeOffset.FromUnixTimeMilliseconds(1595941360328)));
+    public void A_timestamp_that_is_not_plain_digits_has_no_age(string? timestamp)
+        => Assert.Null(OtoWebhookSignature.AgeMilliseconds(timestamp, DateTimeOffset.FromUnixTimeMilliseconds(1595941360328)));
 
+    /// <summary>
+    /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>The_window_is_five_seconds_inclusive</c> بِطَرَفَين (‏2026-10-12، مُراجَعَةُ تَيّارِ S8، الجَولَة 1؛ ‏ADR-033 §٧‑ع):
+    /// النافِذَةُ تَرُدُّ خَتماً يَسبِقُ الساعَةَ بِأَكثَرَ مِن خَمسِ ثَوانٍ وَحدَه — ‏5000 داخِلَها و‏5001 خارِجَها — ولا تَرُدُّ عُمراً مَهما طال:
+    /// خَتمُ OTO وَقتُ الحَدَثِ لا وَقتُ الإرسال.</para>
+    /// </summary>
     [Fact]
-    public void The_window_is_five_seconds_inclusive()
+    public void The_window_refuses_only_a_stamp_more_than_five_seconds_ahead_of_now()
     {
         Assert.Equal(5, OtoWebhookSignature.ToleranceSeconds);
-        Assert.True(OtoWebhookSignature.IsFresh(0));
-        Assert.True(OtoWebhookSignature.IsFresh(5000));
-        Assert.False(OtoWebhookSignature.IsFresh(5001));
+        Assert.True(OtoWebhookSignature.IsAhead(-5001));
+        Assert.True(OtoWebhookSignature.IsAhead(long.MinValue));
+        foreach (var age in new[] { -5000L, 0L, 5000L, 5001L, 600_000L, 86_400_000L, long.MaxValue })
+            Assert.False(OtoWebhookSignature.IsAhead(age), $"عُمرُ {age} مِلّي ثانِيَةٍ رُدَّ عَلى زَمَنِه.");
     }
 }
 

@@ -574,12 +574,15 @@ public sealed class DealShipping
         if (await CarrierForAsync(tenantSlug, deal!, ct) is not { } carrier)
             return new(OtoOrderStatusGate.CarrierUnavailable, deal);
         var at = _clock.GetUtcNow();
+        var age = OtoWebhookSignature.AgeMilliseconds(notice.Timestamp, at)?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "—";
         if (OtoOrderStatusGate.Verify(notice, carrier.WebhookSecret, at) is { } unverified)
         {
-            _log.LogInformation("[OTO] orderStatus {Slug}/{Deal} ← {Code} (drift {Drift} ms)", tenantSlug, notice.OrderId,
-                unverified.Code, OtoWebhookSignature.DriftMilliseconds(notice.Timestamp, at)?.ToString() ?? "—");
+            _log.LogInformation("[OTO] orderStatus {Slug}/{Deal} ← {Code} (age {Age} ms)", tenantSlug, notice.OrderId, unverified.Code, age);
             return new(unverified.Code, deal);
         }
+        // والمُتَحَقَّقُ مِنه يُطبَعُ عُمرُه أَيضاً (‏2026-10-12، مُراجَعَةُ تَيّارِ S8، الجَولَة 1؛ ‏ADR-033 §٧‑ع): لا يُرَدُّ إشعارٌ عَلى عُمرِه بَعدَ اليَوم،
+        // فَبِهذا السَطرِ يُقاسُ عَلى staging كَم تَتَأَخَّرُ OTO بَينَ الحَدَثِ والإرسال («ب» S8·١٠ (١)) — ولا سِرَّ فيه ولا رَمز.
+        _log.LogInformation("[OTO] orderStatus {Slug}/{Deal} ← verified (age {Age} ms)", tenantSlug, notice.OrderId, age);
 
         // الإشعارُ إشارَةٌ لا بُرهان: حالُ الطَلَبِ مِن OTO نَفسِها قَبلَ أَيِّ كِتابَة.
         var fetched = await _oto.GetOrderStatusAsync(carrier.RefreshToken, notice.OrderId, ct);

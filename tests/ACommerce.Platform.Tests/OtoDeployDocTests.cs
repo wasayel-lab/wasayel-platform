@@ -104,4 +104,25 @@ public class OtoDeployDocTests
         Assert.Contains($"`{OtoOrderStatusGate.NoticeUnverifiable}`", section, StringComparison.Ordinal);
         Assert.Contains("‏`401`", section, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// <para><b>والدَليلُ يَقولُ النافِذَةَ كَما يُطَبِّقُها الكود</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S8، الجَولَة 1؛ ‏ADR-033 §٧‑ع): لا يُرَدُّ إشعارٌ عَلى عُمرِه،
+    /// و<c>signature_stale</c> لِخَتمٍ يَسبِقُ الساعَةَ بِأَكثَرَ مِن خَمسِ ثَوانٍ وَحدَه — والرَمزُ مِن ثابِتِه، والخَمسُ مِن <c>ToleranceSeconds</c>، وكَلِمَةُ اللوغِ
+    /// كَما تَكتُبُها الخِدمَة. دَليلٌ يَعودُ إلى «خِلالَ خَمسِ ثَوانٍ» بِلا إلحاقِه، أَو كودٌ يَعودُ إلى الطَرَفَين، يَحمَرُّ أَحَدُهُما هُنا أَو في <c>OtoClientTests</c>.</para>
+    /// </summary>
+    [Fact]
+    public void The_deploy_section_says_the_window_refuses_only_a_stamp_ahead_of_our_clock()
+    {
+        var section = Section();
+        Assert.Equal(5, OtoWebhookSignature.ToleranceSeconds);
+        Assert.False(OtoWebhookSignature.IsAhead(600_000));
+        Assert.True(OtoWebhookSignature.IsAhead(-5001));
+        Assert.Contains($"`{OtoOrderStatusGate.SignatureStale}`", section, StringComparison.Ordinal);
+        Assert.Contains("لَم يَعُد شَرطاً عَلى عُمرِ الإشعار", section, StringComparison.Ordinal);
+        Assert.Contains("إلّا خَتمٌ يَسبِقُ ساعَتَنا بِأَكثَرَ مِن خَمسِ ثَوانٍ", section, StringComparison.Ordinal);
+        Assert.Contains("`← verified (age N ms)`", section, StringComparison.Ordinal);
+        var service = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Deals", "DealShipping.cs"));
+        Assert.Contains("← verified (age {Age} ms)", service, StringComparison.Ordinal);
+    }
 }
