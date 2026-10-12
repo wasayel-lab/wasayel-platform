@@ -70,7 +70,10 @@ public sealed class ProviderVault
     /// تُكتَبُ في عَمودِ <c>KekVersion</c> مَعَ كُلِّ خَتم.</summary>
     public const int KekVersion = 1;
 
-    /// <summary>‏AES-256 — والرَقَمُ مِن ‏ADR-032 §٢‑هـ الخُطوَة 4 لا مُختَرَع.</summary>
+    /// <summary>‏AES-256 — <b>قَرارٌ هَندَسِيٌّ لا رَقَمٌ مِن الصَفّ</b> (تَصحيحُ ‏2026-10-12): صَفُّ
+    /// ‏ADR-032 §٢‑هـ الخُطوَة 4 يَقولُ «AES-GCM» بِلا طول، ولا يَقولُه ‏ADR-012 ولا مُستَودَعُ البَحث.
+    /// فَاختيرَ أَطوَلُ مِفتاحٍ يَقبَلُه AES-GCM (‏128 أَو 192 أَو 256 بِتّاً)، وهُوَ ما يُوَلِّدُه أَمرُ
+    /// <c>DEPLOY.md</c> §٢·ح (<c>openssl rand -base64 32</c>) — ‏ADR-032 §٧‑ح.</summary>
     public const int KekBytes = 32;
 
     /// <summary>‏96 بِتّاً: الطولُ القِياسيُّ لِـAES-GCM، وجَديدٌ عَشوائِيٌّ لِكُلِّ خَتم.</summary>
