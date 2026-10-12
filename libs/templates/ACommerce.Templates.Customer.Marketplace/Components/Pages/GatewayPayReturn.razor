@@ -31,6 +31,18 @@
         <AcEmptyState IconName="info" Title="@L[refusalKey]"
                       ActionLabel="@L["deals.detail.back"]" ActionHref="@AuthSession.LinkFor(Slug, Role, "deals")" />
     }
+    else if (confirmed)
+    {
+        @* ثَبَتَ الدَفعُ وكُتِب (‏ADR-032 الخُطوَة 10): قِراءَةٌ لِما كَتَبَه التَأكيدُ — `GatewayReturn.IsConfirmed` — لا سُؤالٌ لِلبَوّابَة؛
+           فَلا زِرَّ تَحَقُّقٍ لِدَفعٍ ثَبَت. *@
+        <h1 class="acm-wizard-title">@L.Markup("pay.return.title")</h1>
+        <AcCard>
+            <ChildContent>
+                <p>@L.Markup("pay.return.confirmed")</p>
+                <a class="ac-btn ac-btn-primary" href="@AuthSession.LinkFor(Slug, Role, $"deals/{dealId}")">@L.Markup("pay.return.open_deal")</a>
+            </ChildContent>
+        </AcCard>
+    }
     else
     {
         <h1 class="acm-wizard-title">@L.Markup("pay.return.title")</h1>
@@ -47,6 +59,11 @@
                     <input type="hidden" name="@GatewayReturn.DealKey" value="@dealId.ToString("N")" />
                     <button type="submit" class="ac-btn ac-btn-primary">@L.Markup("pay.return.verify")</button>
                 </form>
+                @* ومَن لَم يُكمِل الدَفعَ يَعودُ إلى صَفحَتِه — رابِطُها كَما كَتَبَه إتمامُ الشِراء (‏ADR-032 الخُطوَة 10)، ولا يُرسَمُ بِلا رابِط. *@
+                @if (payUrl is not null)
+                {
+                    <a class="ac-btn ac-btn-ghost" href="@payUrl" rel="noopener noreferrer">@L.Markup("pay.return.complete_payment")</a>
+                }
             </ChildContent>
         </AcCard>
 
@@ -67,6 +84,10 @@
     Guid dealId;
     /// <summary>نَصُّ رَفضِ السُلطَةِ لِلناظِر — و<c>null</c> حينَ يَتَحَقَّقُ مِن هذِه الصَفقَة، فَيُرسَمُ الزِرّ.</summary>
     string? refusalKey;
+    /// <summary>ثَبَتَ دَفعُ الصَفقَةِ وكُتِب — <see cref="GatewayReturn.IsConfirmed"/> (‏ADR-032 الخُطوَة 10).</summary>
+    bool confirmed;
+    /// <summary>رابِطُ صَفحَةِ الدَفعِ المُستَضافَة — <see cref="GatewayReturn.PayUrlOf"/>، و<c>null</c> فَلا «أَكمِل الدَّفع».</summary>
+    string? payUrl;
 
     protected override async Task OnInitializedAsync()
     {
@@ -75,5 +96,8 @@
         var deal = GatewayReturn.DealIdOf(DealRef) is { } id ? await Deals.LoadAsync(Slug, id) : null;
         refusalKey = GatewayReturn.KeyFor(DealPayAuthorization.Validate(deal, new DealPayer(Auth.UserId!.Value))?.Code);
         dealId = deal?.Id ?? Guid.Empty;
+        if (refusalKey is not null || deal is null) return;
+        confirmed = GatewayReturn.IsConfirmed(deal);
+        payUrl = GatewayReturn.PayUrlOf(deal);
     }
 }

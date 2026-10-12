@@ -41,11 +41,12 @@ internal sealed class GatewayCapturingLogger : ILogger<GatewayPayments>
 
 public class TenantGatewayEndpointsTests(ITestOutputHelper output)
 {
-    private const string Slug = "zz-gateway";
-    private const string Key = MoyasarClientTests.Key;
-    private const string InvoiceId = MoyasarClientTests.InvoiceId;
-    private static readonly Guid Buyer = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
-    private static readonly Guid Other = Guid.Parse("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+    internal const string Slug = "zz-gateway";
+    internal const string Key = MoyasarClientTests.Key;
+    internal const string InvoiceId = MoyasarClientTests.InvoiceId;
+    internal static readonly Guid Buyer = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    internal static readonly Guid Seller = Guid.Parse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    internal static readonly Guid Other = Guid.Parse("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
 
     private static string Root => ThemeZeroEquivalenceTests.RepoRoot;
     private static string Template(params string[] parts)
@@ -184,18 +185,20 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
 
     // ═══ ٣) الخِدمَة — السُلطَةُ قَبلَ المِفتاح، والمِفتاحُ قَبلَ البَوّابَة، وصِفرُ كِتابَة ═══════════════════════
 
-    private sealed record World(
+    /// <summary>عالَمُ البَوّابَة — <c>internal</c> (‏2026-10-12، ‏ADR-032 الخُطوَة 10): <c>GatewayPaymentConfirmTests</c> يَبني عَلَيه التَأكيدَ
+    /// وإتمامَ الشِراء — نُسخَتانِ مِن أَداةِ قِياسٍ تَنجَرِفان.</summary>
+    internal sealed record World(
         DocWorld Docs, DealsService Deals, GatewayPayments Gateway, MoyasarScriptedHandler Moyasar,
         DealMoneyClaimFirstTests.RecordingPaymentProvider Platform, Guid[] Ids, GatewayCapturingLogger Log);
 
     /// <summary>تَعريفُ الدَفعِ الَّذي يَحمِلُ مِفتاحاً سِرِّيّاً مَختوماً — مِن الكاتالوجِ لا بِسلاجِه.</summary>
-    private static ProviderDefinition SealedKeyDefinition()
+    internal static ProviderDefinition SealedKeyDefinition()
         => ProviderCatalog.Definitions.Single(d => d.Capability == ProviderCapabilities.Payments
             && d.Credential.Fields.Any(f => f.Kind == CredentialKinds.SecretKey && ProviderVault.Seals(f.Kind)));
 
     /// <summary>رَبطُ الدَفعِ كَما تَكتُبُه نُقطَةُ الرَبط — مِن <c>ProviderBindSurface.FromForm</c> نَفسِها، مَختوماً بِسِياقِ
     /// <paramref name="sealedFor"/> (مَتجَرُ العالَمِ افتِراضاً، ومَتجَرٌ آخَرُ لِظَرفٍ مَنسوخ).</summary>
-    private static TenantProviderBinding PaymentsBinding(ProviderVault vault, string sealedFor = Slug,
+    internal static TenantProviderBinding PaymentsBinding(ProviderVault vault, string sealedFor = Slug,
         string status = TenantProviderBinding.StatusActive)
     {
         var read = ProviderBindSurface.FromForm(SealedKeyDefinition().Slug, _ => Key, sealedFor, vault);
@@ -208,15 +211,18 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         };
     }
 
-    private static ProviderVault NewVault() => ProviderVault.FromKek(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
+    internal static ProviderVault NewVault() => ProviderVault.FromKek(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
 
     /// <summary>
     /// <para>عالَمُ سَلَّةٍ دُفِعَت بِفاتورَةٍ واحِدَة: صَفقَتانِ لِلمُشتَري (‏100 و‏50 ريالاً = ‏15000 هَلَلَة) عَلى كُلٍّ مِنهُما مُعَرِّفُ
     /// الفاتورَة، ورَبطُ دَفعٍ بِمِفتاحٍ مَختوم. <paramref name="binding"/> يُبنى بِخِزانَةِ العالَم — أَو <c>null</c> فَلا رَبط؛
     /// و<paramref name="serviceVault"/> خِزانَةُ الخِدمَةِ إن خالَفَت خِزانَةَ الخَتم.</para>
+    /// <para>و<paramref name="withSeller"/> (‏2026-10-12، ‏ADR-032 الخُطوَة 10): بائِعٌ مالِكُ إعلانِ كُلِّ صَفقَةٍ مَربوطٌ طَرَفاً كَما يَربِطُه
+    /// إتمامُ الشِراء — لِيُقبَلَ ويُؤَكَّدَ ويُشعَر؛ و<paramref name="invoice"/> <c>false</c> يُولِدُها بِلا فاتورَة (لِفَتحِها).</para>
     /// </summary>
-    private static async Task<World> PaidCart(
-        Func<ProviderVault, TenantProviderBinding?>? binding = null, ProviderVault? serviceVault = null)
+    internal static async Task<World> PaidCart(
+        Func<ProviderVault, TenantProviderBinding?>? binding = null, ProviderVault? serviceVault = null,
+        bool withSeller = false, bool invoice = true)
     {
         var docs = new DocWorld();
         var platform = new DealMoneyClaimFirstTests.RecordingPaymentProvider();
@@ -228,7 +234,12 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
             {
                 [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.Card,
             });
-            await deals.AttachRefAsync(Slug, deal.Id, GatewayPaymentProof.InvoiceRef, InvoiceId);
+            if (invoice) await deals.AttachRefAsync(Slug, deal.Id, GatewayPaymentProof.InvoiceRef, InvoiceId);
+            if (withSeller)
+            {
+                await deals.AttachRefAsync(Slug, deal.Id, DealsService.ListingOwnerRef, Seller.ToString());
+                await deals.BindListingOwnerAsync(Slug, deal.Id, Seller.ToString());
+            }
             ids.Add(deal.Id);
         }
 
@@ -242,22 +253,25 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         return new World(docs, deals, gateway, moyasar, platform, ids.ToArray(), log);
     }
 
-    private static string PaidInvoice(World w, string status = "paid", IReadOnlyList<Guid>? listed = null)
+    internal static string PaidInvoice(World w, string status = "paid", IReadOnlyList<Guid>? listed = null)
         => MoyasarClientTests.InvoiceJson(status, 15000, metadata: GatewayPaymentProof.MetadataFor(listed ?? w.Ids));
 
-    private static string BasicOf(string key) => Convert.ToBase64String(Encoding.UTF8.GetBytes(key + ":"));
+    internal static string BasicOf(string key) => Convert.ToBase64String(Encoding.UTF8.GetBytes(key + ":"));
 
     /// <summary>
     /// <para><b>المُوجِبُ كامِلاً</b>: صَفقَةُ المُشتَري المَرجِعُ ← المِفتاحُ يُفَكُّ ← <c>GET /v1/invoices/{id}</c> واحِدٌ بِـ
-    /// <c>Authorization: Basic</c> مِن <b>المِفتاحِ المَفكوكِ نَفسِه</b> ← البَوّابَةُ تُثبِتُ الدَفعَ بِصَفقَتَيه. <b>وصِفرُ كِتابَة</b>: لا حِفظَ
-    /// ولا وَثيقَة — الكاتِبُ خُطوَةُ الصَفِّ العاشِر — <b>وصِفرُ نِداءٍ لِمُزَوِّدِ النُسخَة</b>. واللوغُ بِلا المِفتاح.</para>
+    /// <c>Authorization: Basic</c> مِن <b>المِفتاحِ المَفكوكِ نَفسِه</b> ← البَوّابَةُ تُثبِتُ الدَفعَ بِصَفقَتَيه. <b>وصِفرُ نِداءٍ لِمُزَوِّدِ
+    /// النُسخَة</b>، واللوغُ بِلا المِفتاح.</para>
+    /// <para><b>قُلِبَ بِاسمِه ‏2026-10-12 (‏ADR-032 الخُطوَة 10، تَيّارُ S9 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)</b> — كانَ
+    /// <c>A_paid_invoice_is_proven_with_the_unsealed_key_and_nothing_is_written</c>: «وصِفرُ كِتابَة — الكاتِبُ خُطوَةُ الصَفِّ العاشِر».
+    /// وجاءَ الكاتِب: الدَفعُ الثابِتُ يُكتَبُ عَلى كُلِّ صَفقَةٍ مَرَّةً (<c>payment_id</c> الفاتورَة، و<c>payment_status = Captured</c>، وسَطرُ
+    /// <c>gateway_paid</c>)، ويُعادُ ما كُتِبَ الآن؛ <b>والتَحَقُّقُ الثاني لا يَكتُبُ شَيئاً</b> — لا حِفظَ ولا وَثيقَة — ولا يُعيدُ صَفقَة.</para>
     /// </summary>
     [Fact]
-    public async Task A_paid_invoice_is_proven_with_the_unsealed_key_and_nothing_is_written()
+    public async Task A_paid_invoice_is_proven_with_the_unsealed_key_and_recorded_once_on_every_deal()
     {
         var w = await PaidCart();
-        w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w));
-        var (saves, stored) = (w.Docs.SaveCalls, w.Docs.Stored.Count);
+        w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w)).Then(HttpStatusCode.OK, PaidInvoice(w));
 
         var res = await w.Gateway.VerifyAsync(Slug, new DealPayer(Buyer), w.Ids[0].ToString("N"));
 
@@ -266,15 +280,31 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         Assert.Equal(InvoiceId, res.Payment!.InvoiceId);
         Assert.Equal(w.Ids.OrderBy(x => x), res.Payment.DealIds.OrderBy(x => x));
         Assert.Equal((15000L, "SAR"), (res.Payment.Amount, res.Payment.Currency));
+        Assert.Equal(w.Ids.OrderBy(x => x), res.Confirmed.OrderBy(x => x));
 
         var get = Assert.Single(w.Moyasar.Requests);
         Assert.Equal((HttpMethod.Get, $"https://api.moyasar.com/v1/invoices/{InvoiceId}"), (get.Method, get.RequestUri!.ToString()));
         Assert.Equal(("Basic", BasicOf(Key)), (get.Headers.Authorization!.Scheme, get.Headers.Authorization.Parameter));
 
-        Assert.Equal((saves, stored), (w.Docs.SaveCalls, w.Docs.Stored.Count));
+        foreach (var id in w.Ids)
+        {
+            var deal = w.Docs.Read<Deal>(id.ToString())!;
+            Assert.Equal((InvoiceId, "Captured"), (deal.Refs["payment_id"], deal.Refs["payment_status"]));
+            var line = Assert.Single(deal.Timeline, e => e.Action == DealEvent.GatewayPaid);
+            Assert.Equal((Buyer, DealStage.Offered), (line.ActorId!.Value, line.StageAfter));
+            Assert.Equal(DealStage.Offered, deal.Stage);   // لا قَفزَ فَوقَ المَراحِل: «دَفع» بَعدَ «تأكيد».
+        }
         Assert.Empty(w.Platform.Calls);
         Assert.DoesNotContain(w.Log.Lines, l => l.Contains(Key, StringComparison.Ordinal) || l.Contains(Key[^4..], StringComparison.Ordinal));
         Assert.Contains(w.Log.Lines, l => l.Contains("proven", StringComparison.Ordinal));
+
+        // ‏والثاني: يُثبِتُ ولا يَكتُب.
+        var (saves, stored) = (w.Docs.SaveCalls, w.Docs.Stored.Count);
+        var again = await w.Gateway.VerifyAsync(Slug, new DealPayer(Buyer), w.Ids[1].ToString("N"));
+        Assert.True(again.Ok, again.Code);
+        Assert.Empty(again.Confirmed);
+        Assert.Equal((saves, stored), (w.Docs.SaveCalls, w.Docs.Stored.Count));
+        Assert.All(w.Ids, id => Assert.Single(w.Docs.Read<Deal>(id.ToString())!.Timeline, e => e.Action == DealEvent.GatewayPaid));
     }
 
     /// <summary><b>السُلطَةُ أَوَّلاً</b> — صَفقَةُ غَيرِه، أَو بِلا فاتورَة، أَو لا صَفقَة: رَمزُها، <b>وصِفرُ نِداءٍ لِلبَوّابَة</b>
@@ -404,6 +434,16 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
         builder.Services.AddSingleton(w.Gateway);
+        // إشعارُ البائِعينَ بَعدَ التَحَقُّق (‏ADR-032 الخُطوَة 10): الأُنبوبُ القائِمُ بِعالَمِ الوَثائِقِ نَفسِه — نَسَقُ `DealNoticesTests`.
+        builder.Services.AddSignalR();
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<L>();
+        builder.Services.AddSingleton(new ACommerce.Templates.Customer.Marketplace.Services.WebPushService(
+            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(),
+            NullLogger<ACommerce.Templates.Customer.Marketplace.Services.WebPushService>.Instance));
+        builder.Services.AddSingleton(sp => new DealNotices(w.Docs.Store,
+            sp.GetRequiredService<Microsoft.AspNetCore.SignalR.IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub>>(),
+            sp.GetRequiredService<ACommerce.Templates.Customer.Marketplace.Services.WebPushService>()));
         var port = FreePort();
         var app = builder.Build();
         app.Urls.Add($"http://127.0.0.1:{port}");

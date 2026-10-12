@@ -79,7 +79,8 @@
         "offer_received" or "offer_accepted" or "offer_rejected" => "tag",
         "chat" or "message" => "message-square",
         // ‏`deal_cancelled` ثالِثُها (‏2026-10-11): إلغاءُ غَيرِ المُشتَري طَلَبَه — `DealNotices.CancelledType`.
-        "deal" or "deal_advanced" or "deal_cancelled" => "shopping-bag",
+        // و`deal_paid` رابِعُها (‏2026-10-12، ‏ADR-032 الخُطوَة 10): ثَبَتَ دَفعُ الطَلَبِ عِندَ بَوّابَةِ المَتجَر — `DealNotices.PaidType`.
+        "deal" or "deal_advanced" or "deal_cancelled" or "deal_paid" => "shopping-bag",
         "ticket" => "alert-circle",
         _ => "bell"
     };

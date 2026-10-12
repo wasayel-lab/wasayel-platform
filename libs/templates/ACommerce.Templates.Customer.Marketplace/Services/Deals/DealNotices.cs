@@ -46,6 +46,10 @@ public sealed class DealNotices
     /// بِأَيقونَةِ النَوعَينِ الأَوَّلَين.</summary>
     public const string CancelledType = "deal_cancelled";
 
+    /// <summary>دَفَعَ المُشتَري ثَمَنَ الطَلَبِ عِندَ بَوّابَةِ المَتجَرِ وثَبَتَ الدَفعُ مِن الخادِم (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12)
+    /// — نَوعٌ رابِعٌ تَرسُمُه شاشَةُ الإشعاراتِ بِأَيقونَةِ الثَلاثَةِ الأُولى.</summary>
+    public const string PaidType = "deal_paid";
+
     private readonly IDocumentStore _store;
     private readonly IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> _hub;
     private readonly WebPushService _push;
@@ -113,6 +117,22 @@ public sealed class DealNotices
 
     public static string CancelledPushBody(Deal deal, string cancellerName, L l)
         => l.Format("notifications.deal_cancelled.push_body", cancellerName, deal.ListingTitle);
+
+    /// <summary>إشعارُ مالِكِ الإعلانِ بِأَنّ ثَمَنَ الطَلَبِ دُفِعَ عِندَ بَوّابَةِ المَتجَر — عُنوانُ الإعلانِ والمَبلَغُ في المَتن.
+    /// والمُستَلِمُ مَن يُستَلِمُ الطَلَبَ الجَديدَ نَفسُه (<see cref="NewDealRecipient"/>).</summary>
+    public static Notification PaidFor(string slug, Deal deal, Guid ownerId, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = ownerId,
+        Type = PaidType,
+        Title = l["notifications.deal_paid.title"],
+        Body = l.Format("notifications.deal_paid.body", deal.ListingTitle, deal.AmountSar),
+        RelatedUrl = $"/{slug}/deals/{deal.Id}",
+        At = at,
+    };
+
+    public static string PaidPushBody(Deal deal, L l)
+        => l.Format("notifications.deal_paid.push_body", deal.ListingTitle, deal.AmountSar);
 
     /// <summary>مَن يُشعَرُ بِالإلغاء: المُشتَري، ما لَم يَكُن هُوَ المُلغي — فَمَن يُلغي طَلَبَه لا
     /// يُخبَرُ بِما فَعَلَه.</summary>
@@ -183,5 +203,34 @@ public sealed class DealNotices
         await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, CancelledPushBody(deal, cancellerName, l),
             url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         return true;
+    }
+
+    /// <summary>بَعدَ أَن يَثبُتَ دَفعُ فاتورَةِ البَوّابَةِ ويُكتَبَ (<c>/payments/verify</c>؛ ‏ADR-032 الخُطوَة 10): إشعارٌ واحِدٌ لِمالِكِ إعلانِ
+    /// كُلِّ صَفقَةٍ كُتِبَ عَلَيها الدَفعُ <b>الآن</b> — فَالتَحَقُّقُ الثاني لا يُشعِرُ ثانِيَة. بِتَرتيبِ الأُنبوبِ نَفسِه، وصَفقَةٌ بِلا مالِكٍ —
+    /// أَو مالِكُها مُشتَريها — تُتَجاوَز. تُرجِعُ عَدَدَ ما أُشعِر.</summary>
+    public async Task<int> NotifyPaidAsync(
+        string slug, IReadOnlyList<Guid> dealIds, L l, CancellationToken ct = default)
+    {
+        if (dealIds.Count == 0) return 0;
+        var sent = new List<(Guid UserId, Guid DealId, Notification N, string PushBody)>();
+        await using (var s = _store.LightweightSession(slug))
+        {
+            foreach (var id in dealIds)
+            {
+                var deal = await s.LoadAsync<Deal>(id, ct);
+                if (deal is null || NewDealRecipient(deal) is not { } ownerId) continue;
+                var n = PaidFor(slug, deal, ownerId, l, DateTime.UtcNow);
+                s.Store(n);
+                sent.Add((ownerId, deal.Id, n, PaidPushBody(deal, l)));
+            }
+            if (sent.Count > 0) await s.SaveChangesAsync(ct);
+        }
+
+        foreach (var (userId, dealId, n, pushBody) in sent)
+        {
+            await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, userId);
+            await _push.SendAsync(_store, slug, userId, n.Title, pushBody, url: n.RelatedUrl, tag: $"deal-{dealId}", ct: ct);
+        }
+        return sent.Count;
     }
 }

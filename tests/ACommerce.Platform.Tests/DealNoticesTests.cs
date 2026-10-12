@@ -225,8 +225,10 @@ public class DealNoticesTests
         Assert.Equal("deal", DealNotices.NewDealType);
         Assert.Equal("deal_advanced", DealNotices.AcceptedType);
         // والثالِثُ (‏2026-10-11) في مِفتاحِ الأَيقونَةِ نَفسِه — لا يَسقُطُ إلى الجَرَسِ العامّ.
-        Assert.Contains("\"deal\" or \"deal_advanced\" or \"deal_cancelled\" => \"shopping-bag\"", screen, StringComparison.Ordinal);
+        // والرابِعُ (‏2026-10-12، ‏ADR-032 الخُطوَة 10) في المِفتاحِ نَفسِه — ثَبَتَ دَفعُ الطَلَبِ عِندَ بَوّابَةِ المَتجَر؛ والسَطرُ يُقرَأُ بِحَرفِه الجَديد.
+        Assert.Contains("\"deal\" or \"deal_advanced\" or \"deal_cancelled\" or \"deal_paid\" => \"shopping-bag\"", screen, StringComparison.Ordinal);
         Assert.Equal("deal_cancelled", DealNotices.CancelledType);
+        Assert.Equal("deal_paid", DealNotices.PaidType);
     }
 
     /// <summary>الأُنبوبُ بِتَرتيبِه في كُلٍّ مِن الدالَّتَين: تَخزينٌ، ثُمَّ حَفظٌ، ثُمَّ جَرَسٌ
@@ -240,7 +242,9 @@ public class DealNoticesTests
             ("public async Task<int> NotifyNewDealsAsync(", "public async Task NotifyAcceptedAsync("),
             ("public async Task NotifyAcceptedAsync(", "public async Task<bool> NotifyCancelledAsync("),
             // والثالِثَةُ (‏2026-10-11) بِالتَرتيبِ نَفسِه — وكانَت الثانِيَةُ تَمتَدُّ إلى آخِرِ الصِنف.
-            ("public async Task<bool> NotifyCancelledAsync(", "\n}"),
+            // والرابِعَةُ (‏2026-10-12، ‏ADR-032 الخُطوَة 10) بِالتَرتيبِ نَفسِه؛ والثالِثَةُ صارَت تَنتَهي عِندَها لا عِندَ آخِرِ الصِنف.
+            ("public async Task<bool> NotifyCancelledAsync(", "public async Task<int> NotifyPaidAsync("),
+            ("public async Task<int> NotifyPaidAsync(", "\n}"),
         })
         {
             var body = Segment(src, from, to);
@@ -255,7 +259,8 @@ public class DealNoticesTests
         var endpoints = Source(Template, "MarketplaceTemplateExtensions.cs");
         Assert.Contains("internal static async Task NudgeAsync(", endpoints, StringComparison.Ordinal);
         // ثَلاثَةٌ لا اثنان (‏2026-10-11): لِكُلِّ دالَّةِ أُنبوبٍ جَرَسٌ واحِد، بِالدالَّةِ نَفسِها.
-        Assert.Equal(3, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
+        // وأَربَعَةٌ مُنذُ ‏2026-10-12 (‏ADR-032 الخُطوَة 10): `NotifyPaidAsync` رابِعَةُ دَوالِّ الأُنبوب — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
+        Assert.Equal(4, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
     }
 
     /// <summary><c>/checkout/submit</c>: الصَفَقاتُ ذَواتُ المالِكِ تُجمَعُ في الحَلقَةِ،

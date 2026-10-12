@@ -35,6 +35,7 @@ public class DealRefusalTextsTests
             .Concat(ACommerce.Kit.Delivery.OtoFailures.All)
             .Append(DealShipping.ShipmentUnconfirmed)
             .Append(DealShipping.DealAwaitsCarrier)
+            .Append(GatewayPayments.DealAwaitsPayment)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(c => c, StringComparer.Ordinal);
         Assert.Equal(expected, DealRefusalTexts.Codes.OrderBy(c => c, StringComparer.Ordinal));
@@ -42,7 +43,8 @@ public class DealRefusalTextsTests
         // ثُمَّ الشَحن: 10 − 3 مُشتَرَكَةٍ مَعَ القَبول (deal_not_found، listing_owner_missing، deal_not_active) = 7،
         // وعَميلُ OTO 5 — فَـ9 + 7 + 5 = 21؛ ثُمَّ `shipment_unconfirmed` — 22؛ ثُمَّ `deal_awaits_carrier` — 23.
         // ثُمَّ `oto_order_closed` (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12) — عُضوٌ حادِيَ عَشَرَ في بَوّابَةِ الشَحن، يَدخُلُ بِها: 23 ← 24.
-        Assert.Equal(24, DealRefusalTexts.Codes.Count);
+        // ثُمَّ `deal_awaits_payment` (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12) — رَمزُ «فاتورَتُها لَم تُدفَع» مِن `AdvanceAsync`: 24 ← 25.
+        Assert.Equal(25, DealRefusalTexts.Codes.Count);
         Assert.Equal(DealRefusalTexts.Codes.Count, DealRefusalTexts.Codes.Distinct(StringComparer.Ordinal).Count());
     }
 
@@ -56,7 +58,8 @@ public class DealRefusalTextsTests
                      .Append(DealsService.ChangedMeanwhile)
                      .Concat(DealShipAuthorization.All).Concat(ACommerce.Kit.Delivery.OtoFailures.All)
                      .Append(DealShipping.ShipmentUnconfirmed)
-                     .Append(DealShipping.DealAwaitsCarrier))
+                     .Append(DealShipping.DealAwaitsCarrier)
+                     .Append(GatewayPayments.DealAwaitsPayment))
         {
             var key = DealRefusalTexts.KeyFor(code);
             Assert.Equal(DealRefusalTexts.Prefix + code, key);
@@ -69,7 +72,8 @@ public class DealRefusalTextsTests
         // 6 + 3 + 1 + 1 (‏ADR-036) + 10 + 5 (‏ADR-033 الخُطوَة 3) — المُشتَرَكُ يُفحَصُ مَرَّتَين ويَصِلُ مِفتاحاً واحِداً
         // — + 1 (`shipment_unconfirmed`، مُراجَعَةُ تَيّارِ S7، ‏2026-10-12): 26 ← 27؛ + 1 (`deal_awaits_carrier`، المُراجَعَةُ الثانِيَة): 27 ← 28.
         // + 1 (`oto_order_closed`، مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12 — في بَوّابَةِ الشَحن): 28 ← 29.
-        Assert.Equal(29, checked_);
+        // + 1 (`deal_awaits_payment`، ‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12): 29 ← 30.
+        Assert.Equal(30, checked_);
     }
 
     /// <summary><b>نَصُّ «بِلا مالِكِ إعلان» يُسَمّي مَن يُحَرِّكُها حَقّاً</b> (‏2026-10-11، مُراجَعَةُ الموجَةِ الثانِيَةِ

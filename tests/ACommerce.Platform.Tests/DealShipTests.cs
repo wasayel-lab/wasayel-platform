@@ -1397,7 +1397,10 @@ public class DealShipTests(ITestOutputHelper output)
         Assert.True(files.Length > 200, "أَداةٌ عَمياء — " + line);
         // سِتَّةٌ مُنذُ ‏2026-10-12 (مُراجَعَةُ المَوجَة 3a — كانَت خَمسَة): `/advance` والمَسارُ الإداريُّ (5 لِكُلٍّ) — في MarketplaceTemplateExtensions —
         // والـAPI (6)، و`ShipAsync` (8) ودُخولُ الوارِدِ «شَحن» (8) ووارِدُ التَسليم (7) في DealShipping. بابٌ سابِعٌ يُحمِرُّ هذا فَيُسأَلُ عَنه في مُراجَعَة.
-        Assert.True(calls.Count == 6, line);
+        // **وسُئِلَ عَن السابِعِ فَأُجيب** (‏2026-10-12، ‏ADR-032 الخُطوَة 10، تَيّارُ S9): `GatewayPayments.VerifyAsync` (7) — بَعدَ أَن تُثبِتَ البَوّابَةُ
+        // الدَفعَ ويُكتَب، يُدخِلُ «دَفع» صَفقَةً تاليها «دَفع» بِمُشتَريها فاعِلاً (`from:` المَرحَلَةُ المَقروءَة) — بِبَوّابَةِ الانتِقالِ نَفسِها، ولا جَوابَ
+        // OTO يَحمِلُه: سَبعَةُ مُعامِلاتٍ بِلا `shipment:`، فَالحامِلانِ أَدناه كَما كانا.
+        Assert.True(calls.Count == 7, line);
         var carrying = calls.Where(c => c.Args >= 8 || c.Named).ToList();
         Assert.True(carrying.Count == 2 && carrying.All(c => c.File == "DealShipping.cs"), line);
     }

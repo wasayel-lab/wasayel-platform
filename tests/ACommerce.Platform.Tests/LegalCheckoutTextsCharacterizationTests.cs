@@ -91,9 +91,15 @@ public class LegalCheckoutTextsCharacterizationTests
     /// الخادِمِ بِمُزَوِّدِ النُسخَةِ ثُمَّ يَرتَدُّ إلى صَفحَةِ الصَفقَةِ داخِلَ المَتجَر.</para>
     /// <para>فَيَومَ يَخرُجُ إتمامُ الشِراءِ إلى صَفحَةِ مُزَوِّدٍ يَحمَرُّ هذا الفَحصُ، ويُعادُ نَصُّ
     /// الخُصوصِيَّةِ لِيُسَمّيَها — لا قَبلَه.</para>
+    /// <para><b>قُلِبَ بِاسمِه ‏2026-10-12 (‏ADR-032 الخُطوَة 10، تَيّارُ S9 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)</b> — كانَ
+    /// <c>The_providers_own_page_opens_for_store_plans_alone_and_checkout_charges_inside_the_store</c>: إتمامُ الشِراءِ صارَ يَخرُجُ
+    /// إلى صَفحَةِ الدَفعِ المُستَضافَةِ <b>لِبَوّابَةِ المَتجَرِ وَحدَها</b> — رابِطُ فاتورَةٍ أَنشَأَتها <c>GatewayPayments.OpenInvoiceAsync</c> بِمِفتاحِ
+    /// المَتجَر، لا رابِطُ <c>PaymentLink</c> المَلصوق — ويَعودُ إلى صَفحَةِ الصَفقَةِ في ما سِواه كَما كان. <b>ونَصُّ الخُصوصِيَّةِ لَم يُعَد</b>:
+    /// جُملَتُه «ولا تُخَزِّن المَنصَّة بَيانات بِطاقات الدَّفع» صادِقَةٌ بِحَرفِها (المُشتَري يَكتُبُ بِطاقَتَه عَلى صَفحَةِ البَوّابَة، لا عِندَنا)،
+    /// وتَسمِيَةُ البَوّابَةِ في سِياسَةِ الخُصوصِيَّةِ نَصٌّ قانونِيٌّ يُقَرِّرُه المالِك — سِجِلُّه «ب» S9، ‏ADR-032 §٨‑ج.</para>
     /// </summary>
     [Fact]
-    public void The_providers_own_page_opens_for_store_plans_alone_and_checkout_charges_inside_the_store()
+    public void The_providers_link_opens_for_store_plans_alone_and_checkout_leaves_the_store_only_for_its_gateways_hosted_invoice()
     {
         var code = new[] { "libs", "apps" }
             .SelectMany(d => Directory.EnumerateFiles(Path.Combine(RepoRoot, d), "*.*", SearchOption.AllDirectories))
@@ -112,11 +118,14 @@ public class LegalCheckoutTextsCharacterizationTests
         Assert.Equal(1, Count(plan, "href=\"@link\""));
 
         var endpoints = Template("MarketplaceTemplateExtensions.cs");
-        const string backToTheDeal =
-            "return Results.Redirect(Link(req, slug, firstDealId == Guid.Empty ? \"deals\" : $\"deals/{firstDealId}\"));";
-        Assert.Equal(1, Count(endpoints, backToTheDeal));
+        const string backToTheDealOrTheGateway =
+            "return Results.Redirect(opened?.Url ?? Link(req, slug, firstDealId == Guid.Empty ? \"deals\" : $\"deals/{firstDealId}\"));";
+        Assert.Equal(1, Count(endpoints, backToTheDealOrTheGateway));
         Assert.True(endpoints.IndexOf("payments.AuthorizeAsync(", StringComparison.Ordinal)
-                    < endpoints.IndexOf(backToTheDeal, StringComparison.Ordinal));
+                    < endpoints.IndexOf(backToTheDealOrTheGateway, StringComparison.Ordinal));
+        // و`opened` لا يَأتي إلّا مِن فاتورَةِ بَوّابَةِ المَتجَر — مَوضِعٌ واحِدٌ يُسنِدُه.
+        Assert.Equal(1, Count(endpoints, "var opened = viaGateway && created.Count > 0 ? await gateway.OpenInvoiceAsync("));
+        Assert.Equal(1, Count(endpoints, "opened ="));
     }
 
     /// <summary>شُروطُ كُلِّ مَتجَرٍ لا تَجعَلُ المُشتَري «مُوافِقاً عَلى» نَموذَجِ إيرادِ المَنَصَّة:

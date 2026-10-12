@@ -317,6 +317,14 @@
                     <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="@L["deals.detail.accept_offer"]" />
                 </form>
             }
+            else if (canAdvance && awaitsPayment)
+            {
+                @* خُطوَتُه «دَفع» وعَلى الصَفقَةِ فاتورَةُ بَوّابَةٍ لَم يَثبُت دَفعُها (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12): بابُها «أَكمِل الدَّفع»
+                   إلى صَفحَةِ العَودَة — هُناكَ رابِطُ الفاتورَةِ وزِرُّ التَحَقُّق — لا «تَأكيد: دَفع» تَرُدُّه `AdvanceAsync` بِـ`deal_awaits_payment`.
+                   وقَبلَ فَرعِ الخُطوَةِ المَحجوزَةِ عِندَ OTO لا بَعدَه: ذاكَ لا يَرسُمُ شَيئاً ويُقاسُ أَنَّه لا يَرسُم، ولا تَجتَمِعُ الحالَتان (تالٍ واحِد). *@
+                <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
+                   href="@AuthSession.LinkFor(Slug, Role, GatewayReturn.PathFor(deal.Id, null))">@L.Markup("deals.detail.complete_payment")</a>
+            }
             else if (canAdvance && heldByCarrier)
             {
                 @* خُطوَتُه «شَحن» وطَلَبُها عِندَ OTO: بابُها «أَكمِل الشَّحن» أَعلاه — لا «تَأكيد: شَحن» تَرُدُّه `AdvanceAsync` بِـ
@@ -429,6 +437,9 @@
     /// فَتَرُدُّ «تَأكيد: شَحن» بِـ<c>deal_awaits_carrier</c>: فَلا يُرسَمُ لِمَن خُطوَتُه هذِه، وبابُها «أَكمِل الشَّحن» (مُراجَعَةُ تَيّارِ S7
     /// الثانِيَة، ‏2026-10-12؛ القاعِدَة ١٢).</summary>
     bool heldByCarrier;
+    /// <summary>تاليها «دَفع» وعَلَيها فاتورَةُ بَوّابَةٍ لَم يَثبُت دَفعُها — <see cref="GatewayPayments.AwaitsPayment"/> نَفسُها الَّتي تَسأَلُها
+    /// <c>AdvanceAsync</c> فَتَرُدُّ «تَأكيد: دَفع» بِـ<c>deal_awaits_payment</c>: فَبابُ الناظِرِ هُنا «أَكمِل الدَّفع» (‏ADR-032 الخُطوَة 10).</summary>
+    bool awaitsPayment;
     /// <summary>مِفتاحُ نَصِّ الرَمزِ الَّذي تَرُدُّ بِه البَوّابَةُ «أَكمِل الشَّحن» لِمَن خُطوَتُه مَحجوزَةٌ عِندَ OTO —
     /// <see cref="DealShipAuthorization.HeldRefusal"/> — و<c>null</c> حَيثُ لا خُطوَةَ مَحجوزَةً لِلناظِرِ أَو بابُها مَفتوح: يُخفي بِطاقَةَ
     /// «دَورُكَ الآن» ويُرسَمُ في مِنطَقَةِ الإجراء (مُراجَعَةُ المَوجَة 3a، ‏2026-10-12).</summary>
@@ -513,6 +524,8 @@
         shipResumes = canShip && DealShipping.IsPlaced(deal);
         // وخُطوَةٌ طَلَبُها عِندَ OTO لا يُرسَمُ لَها «تَأكيد: شَحن» — الدالَّةُ الَّتي يَرُدُّ بِها المُحَرِّك (مُراجَعَةُ تَيّارِ S7 الثانِيَة).
         heldByCarrier = DealShipping.AwaitsCarrier(deal);
+        // وخُطوَةٌ فاتورَتُها لَم تُدفَع لا يُرسَمُ لَها «تَأكيد: دَفع» — الدالَّةُ الَّتي يَرُدُّ بِها المُحَرِّك (‏ADR-032 الخُطوَة 10، ‏2026-10-12).
+        awaitsPayment = GatewayPayments.AwaitsPayment(deal);
         // وخُطوَةٌ مَحجوزَةٌ لا بابَ لَها: رَمزُ البَوّابَةِ الَّذي يُفَسِّرُها، بِالفاعِلِ والناقِلِ أَنفُسِهِما (مُراجَعَةُ المَوجَة 3a، ‏2026-10-12).
         shipHeldKey = DealRefusalTexts.KeyFor(DealShipAuthorization.HeldRefusal(deal, new DealShipper(uid, Auth.UserName ?? ""), carrier));
     }
@@ -526,6 +539,8 @@
         "assigned" => L["deals.detail.event_assigned"],
         DealEvent.BoundAtBirth => L["deals.detail.event_bound"],
         DealEvent.CashOnDelivery => L["deals.detail.event_cash_on_delivery"],
+        DealEvent.GatewayPaid => L["deals.detail.event_gateway_paid"],
+        DealEvent.GatewayRefundDue => L["deals.detail.event_gateway_refund_due"],
         "advanced" => $"{DealsPolicy.LabelAr(e.StageBefore)} ← {DealsPolicy.LabelAr(e.StageAfter)}",
         "cancelled" => L["deals.detail.event_cancelled"],
         "disputed" => L["deals.detail.event_disputed"],

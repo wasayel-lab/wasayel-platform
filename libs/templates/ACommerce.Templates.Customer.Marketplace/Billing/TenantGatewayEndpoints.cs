@@ -1,4 +1,5 @@
 using ACommerce.Kit.Auth.Server;
+using ACommerce.Platform.I18n;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -30,14 +31,19 @@ public static class TenantGatewayEndpoints
         // `DealPayAuthorization` النَقِيَّةِ قَبلَ فَكِّ المِفتاحِ وقَبلَ البَوّابَة؛ والبُرهانُ في `GatewayPaymentProof.Gate` النَقِيَّة.
         // **وبِلا `RequireStoreWritable`** — مُثَبَّتٌ بِسَبَبِه في `PinnedUngatedStoreWrites`: دَفعٌ وَقَعَ عِندَ البَوّابَةِ خَبَرٌ عَن مالٍ
         // قُبِضَ لا مُحتَوىً يَكتُبُه المَتجَر. **ولا يُمَرَّرُ إلغاءُ الطَلَب** (`RequestAborted`) — نَسَقُ `/ship`: مُهلَةُ العَميلِ تَحُدُّ النِداء.
+        //
+        // **والدَفعُ الثابِتُ يُكتَبُ في الخِدمَةِ ويُشعَرُ بِه البائِعُ هُنا** (‏ADR-032 الخُطوَة 10، ‏2026-10-12 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق):
+        // `VerifyAsync` تَكتُبُ بِـ`ConfirmGatewayPaymentAsync` وتُدخِلُ ما يَقِفُ قَبلَ «دَفع» بِالمُشتَري، وتُرجِعُ ما كُتِبَ الآنَ وَحدَه —
+        // فَيُشعَرُ مالِكُ إعلانِ كُلٍّ عَلى الأُنبوبِ القائِمِ (`DealNotices`) بَعدَ الحِفظِ ومَرَّةً، نَسَقُ `/checkout/submit`.
         app.MapPost("/{slug}/payments/verify",
-            async (string slug, HttpRequest req, Services.Deals.GatewayPayments gateway) =>
+            async (string slug, HttpRequest req, Services.Deals.GatewayPayments gateway, Services.Deals.DealNotices notices, L l) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
             var payer = new Services.Deals.DealPayer(userId);
             var res = await gateway.VerifyAsync(slug, payer, req.Form[Services.Deals.GatewayReturn.DealKey].ToString());
+            await notices.NotifyPaidAsync(slug, res.Confirmed, l);
             return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, Services.Deals.GatewayReturn.AfterVerify(res)));
         }).DisableAntiforgery();
 

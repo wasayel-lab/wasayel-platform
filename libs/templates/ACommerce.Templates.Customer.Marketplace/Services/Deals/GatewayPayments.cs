@@ -15,6 +15,10 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Deals;
 // الفاتورَةَ بِه، وتَعرِضُها مَعَ صَفَقاتِها عَلى `GatewayPaymentProof.Gate`. **ولا تَكتُبُ شَيئاً في هذِه الخُطوَة**: كاتِبُ «مَدفوع» عَلى
 // الصَفقَةِ خُطوَةُ ‏ADR-032 العاشِرَة (`ConfirmGatewayPaymentAsync`) ويَطلُبُ في تَوقيعِه ما تُخرِجُه البَوّابَة (`ProvenGatewayPayment`).
 //
+// **وجاءَت العاشِرَةُ (‏2026-10-12، تَيّارُ S9 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)**: الدَفعُ الثابِتُ يُكتَبُ عَلى صَفَقاتِه بِـ
+// `DealsService.ConfirmGatewayPaymentAsync`، وما تَقِفُ مِنها قَبلَ «دَفع» تَدخُلُها بِفاعِلِها — المُشتَري نَفسُه، بِبَوّابَةِ `AdvanceAsync` لا
+// حَولَها. وإتمامُ الشِراءِ بِالبِطاقَةِ يَفتَحُ الفاتورَةَ الواحِدَةَ هُنا (`OpenInvoiceAsync`)، وما لَم يُدفَع لا يَدخُلُ «دَفع» (`AwaitsPayment`).
+//
 // **والعَودَةُ لَيسَت بُرهاناً، والزِرُّ لَيسَ بُرهاناً**: يَضغَطُه مَن دَفَعَ ومَن لَم يَدفَع — والبُرهانُ جَوابُ البَوّابَةِ بِمِفتاحِ المَتجَر.
 
 /// <summary>
@@ -68,6 +72,16 @@ public static class DealPayAuthorization
 public sealed record GatewayVerifyResult(Guid? DealId, ProvenGatewayPayment? Payment, string? Code)
 {
     public bool Ok => Payment is not null;
+
+    /// <summary>الصَفَقاتُ الَّتي كُتِبَ عَلَيها الدَفعُ <b>في هذا التَحَقُّق</b> — فَيُشعَرُ بائِعوها مَرَّة (‏ADR-032 الخُطوَة 10). وفارِغَةٌ
+    /// لِلرَفضِ ولِلتَحَقُّقِ الثاني مِن الدَفعِ نَفسِه.</summary>
+    public IReadOnlyList<Guid> Confirmed { get; init; } = Array.Empty<Guid>();
+}
+
+/// <summary>نَتيجَةُ فَتحِ الفاتورَةِ في إتمامِ الشِراء: رابِطُ الصَفحَةِ المُستَضافَةِ أَو رَمزٌ مِن <see cref="MoyasarFailures"/> — ولا ثالِث.</summary>
+public sealed record GatewayCheckout(string? Url, string? Code)
+{
+    public bool Ok => Url is not null;
 }
 
 /// <summary>
@@ -112,6 +126,23 @@ public static class GatewayReturn
     public static string AfterVerify(GatewayVerifyResult r)
         => r.Ok && r.DealId is { } id ? $"deals/{id}" : PathFor(r.DealId, r.Code);
 
+    /// <summary>
+    /// <para><b>أَثَبَتَ دَفعُ هذِه الصَفقَةِ عِندَ البَوّابَةِ وكُتِب؟</b> (‏ADR-032 الخُطوَة 10، ‏2026-10-12) — «Captured» ومَرجِعُ الدَفعِ
+    /// فاتورَتُها. تَقرَؤُه صَفحَةُ العَودَةِ فَتَقولُ «ثَبَتَ دَفعُك» بَدَلَ زِرِّ التَحَقُّق — قِراءَةٌ لِما كَتَبَه التَأكيد، لا سُؤالٌ لِلبَوّابَة.</para>
+    /// </summary>
+    public static bool IsConfirmed(Deal deal) => DealsService.IsCaptured(deal) && GatewayPayments.CollectedByGateway(deal);
+
+    /// <summary>
+    /// <para><b>رابِطُ صَفحَةِ الدَفعِ المُستَضافَةِ لِهذِه الصَفقَة</b> — كَما كَتَبَه إتمامُ الشِراء (<see cref="GatewayPayments.InvoiceUrlRef"/>)،
+    /// و<c>null</c> لِما لَيسَ رابِطاً مُطلَقاً بِـ<c>https</c> أَو <c>http</c> (مِثالُ الوَثيقَةِ نَفسُه <c>http://checkout.moyasar.com/…</c>):
+    /// فَلا يُرسَمُ <c>javascript:</c> ولا رابِطٌ نِسبِيٌّ في «أَكمِل الدَّفع».</para>
+    /// </summary>
+    public static string? PayUrlOf(Deal deal)
+        => deal.Refs.TryGetValue(GatewayPayments.InvoiceUrlRef, out var url)
+           && Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp)
+            ? url
+            : null;
+
     /// <summary>بادِئَةُ مَفاتيحِ الشَريطِ — اصطِلاحُ القامُوسِ ثَلاثَةُ مَقاطِع (<c>LocaleValidator.KeyPattern</c>)، فَالرَمزُ في الثالِث.</summary>
     public const string TextPrefix = "pay.return.err_";
 
@@ -135,6 +166,42 @@ public static class GatewayReturn
 /// </summary>
 public sealed class GatewayPayments
 {
+    // ─── مَراجِعُ الصَفقَةِ ورَمزُ الحارِس — الكاتِبُ والقارِئُ حَرفٌ واحِد (‏ADR-032 الخُطوَة 10، ‏2026-10-12) ─────────
+
+    /// <summary>رابِطُ صَفحَةِ الدَفعِ المُستَضافَةِ عَلى الصَفقَة — يَكتُبُه إتمامُ الشِراءِ مَعَ <see cref="GatewayPaymentProof.InvoiceRef"/>،
+    /// وتَقرَؤُه صَفحَةُ العَودَةِ فَتَرسُمُ «أَكمِل الدَّفع» لِمَن لَم يَدفَع بَعد.</summary>
+    public const string InvoiceUrlRef = "gateway_invoice_url";
+
+    /// <summary>
+    /// <para><b>عَلى الصَفقَةِ فاتورَةُ بَوّابَةٍ لَم يَثبُت دَفعُها، وتاليها «دَفع»</b> — رَمزُ <see cref="DealsService.AdvanceAsync"/> حينَ
+    /// تَصدُقُ <see cref="AwaitsPayment"/>. يَبلُغُه زِرُّ «تَأكيد: دَفع» (<c>/advance</c> ← <c>?err=</c>) والـAPI (‏409)؛ والصَفحَةُ لا تَرسُمُ
+    /// ذلكَ الزِرَّ لَها — بابُها «أَكمِل الدَّفع». نَسَقُ <see cref="DealShipping.DealAwaitsCarrier"/>.</para>
+    /// </summary>
+    public const string DealAwaitsPayment = "deal_awaits_payment";
+
+    /// <summary>أَعَلى الصَفقَةِ فاتورَةُ بَوّابَةٍ سَجَّلَها إتمامُ الشِراء؟</summary>
+    public static bool HasInvoice(Deal deal)
+        => deal.Refs.TryGetValue(GatewayPaymentProof.InvoiceRef, out var invoice) && !string.IsNullOrWhiteSpace(invoice);
+
+    /// <summary>
+    /// <para><b>أَتَنتَظِرُ الصَفقَةُ دَفعَ فاتورَتِها؟</b> — تاليها «دَفع»، وعَلَيها فاتورَةُ بَوّابَة، ولَم يُكتَب دَفعُها
+    /// (<see cref="DealsService.IsCaptured"/>). دالَّةٌ نَقِيَّةٌ تَقرَؤُها <see cref="DealsService.AdvanceAsync"/> قَبلَ الكِتابَة،
+    /// وصَفحَةُ الصَفقَةِ فَتَرسُمُ «أَكمِل الدَّفع» مَكانَ «تَأكيد: دَفع» — فَما يُرسَمُ هُوَ ما يُقبَل.</para>
+    /// <para><b>ولِماذا لا يَكفي حارِسُ القَبض</b>: القَبضُ عِندَ «دَفع» يَتَجاوَزُ صَفقَةً بِلا <c>payment_id</c> ويَمضي الانتِقال — فَصَفقَةُ
+    /// بِطاقَةٍ لَم تُدفَع فاتورَتُها كانَت تَدخُلُ «دَفع» ثُمَّ «شَحن» بِلا مال.</para>
+    /// </summary>
+    public static bool AwaitsPayment(Deal deal)
+        => HasInvoice(deal) && DealsPolicy.Next(deal) == DealStage.Paid && !DealsService.IsCaptured(deal);
+
+    /// <summary>
+    /// <para><b>أَقَبَضَت بَوّابَةُ المَتجَرِ ثَمَنَ هذِه الصَفقَة؟</b> — مَرجِعُ الدَفعِ هُوَ الفاتورَةُ المُسَجَّلَةُ عَلَيها (يَكتُبُهُما التَأكيد).
+    /// يَقرَؤُه الإلغاءُ فَلا يُنادي مُزَوِّدَ النُسخَةِ بِاستِرجاعِ مالٍ في حِسابِ المَتجَر.</para>
+    /// </summary>
+    public static bool CollectedByGateway(Deal deal)
+        => HasInvoice(deal)
+           && deal.Refs.TryGetValue("payment_id", out var paymentId)
+           && string.Equals(paymentId, deal.Refs[GatewayPaymentProof.InvoiceRef], StringComparison.OrdinalIgnoreCase);
+
     private readonly DealsService _deals;
     private readonly TenantProviderService _providers;
     private readonly ProviderVault _vault;
@@ -190,9 +257,82 @@ public sealed class GatewayPayments
 
         var invoice = fetched.Value!;
         var admitted = GatewayPaymentProof.Gate(invoice, await InvoiceDealsAsync(tenantSlug, deal, invoice, by, ct));
-        return Logged(tenantSlug, admitted.Payment is { } proven
-            ? new(deal.Id, proven, null)
-            : new(deal.Id, null, admitted.Violation!.Code));
+        if (admitted.Payment is not { } proven)
+            return Logged(tenantSlug, new(deal.Id, null, admitted.Violation!.Code));
+
+        // ─── الخُطوَة 10: الدَفعُ الثابِتُ يُكتَبُ، وما يَقِفُ قَبلَ «دَفع» يَدخُلُها بِفاعِلِها ─────────────────────────
+        // الكاتِبُ يَطلُبُ ما أَخرَجَته البَوّابَةُ في تَوقيعِه، ولا يَكتُبُ عَلى ما كُتِب. ثُمَّ صَفقَةٌ تاليها «دَفع» وقَد قُبِضَت تَدخُلُها
+        // **بِبَوّابَةِ الانتِقالِ نَفسِها** والمُشتَري فاعِلُها — قاعِدَةُ الكاتالوجِ (`Paid` = المُبادِر)، لا تَجاوُزٌ لِفَحصِ الفاعِل؛ وما
+        // قَبلَ ذلكَ يَبقى حَتّى يَبلُغَها ويُدخِلَها المُشتَري بِزِرِّه (والقَبضُ يَتَجاوَزُها: «Captured»). ورَدُّ الانتِقالِ لا يَكسِرُ التَأكيد.
+        var confirmed = await _deals.ConfirmGatewayPaymentAsync(tenantSlug, proven, ct);
+        foreach (var paidId in proven.DealIds)
+            if (await _deals.LoadAsync(tenantSlug, paidId, ct) is { Status: DealStatus.Active } d
+                && DealsPolicy.Next(d) == DealStage.Paid && DealsService.IsCaptured(d))
+                await _deals.AdvanceAsync(tenantSlug, d.Id, by.ActorId, d.InitiatorName, null, ct, from: d.Stage);
+
+        return Logged(tenantSlug, new GatewayVerifyResult(deal.Id, proven, null) { Confirmed = confirmed.Select(c => c.Id).ToArray() });
+    }
+
+    /// <summary>
+    /// <para><b>أَيَفتَحُ هذا المَتجَرُ فاتورَةً الآن؟</b> — مِفتاحٌ مَختومٌ في رَبطِ الدَفعِ تَفُكُّه هذِه الخِزانَة. يَسأَلُه إتمامُ الشِراءِ
+    /// مَرَّةً قَبلَ أَن يُولِدَ الصَفَقات، فَيَختارُ بِه بَينَ فاتورَةِ البَوّابَةِ وطَريقِ مُزَوِّدِ النُسخَة.</para>
+    /// </summary>
+    public async Task<bool> ReadyAsync(string tenantSlug, CancellationToken ct = default)
+        => await SecretKeyAsync(tenantSlug, ct) is not null;
+
+    /// <summary>
+    /// <para><b>فاتورَةٌ واحِدَةٌ لِسَلَّةِ المُشتَري كُلِّها</b> (‏ADR-032 §٢‑هـ الخُطوَة 10): صَفَقاتُ <paramref name="dealIds"/> — وُلِدَت لِلتَّوّ
+    /// بِطَريقَةِ «بِطاقَة» — بِمَجموعِها بِالهَلَلَةِ وبِمُعَرِّفاتِها في <c>metadata</c>، ورابِطُ العَودَةِ <paramref name="returnUrl"/> لِلنَجاحِ
+    /// ولِلرُجوع. فَإن فُتِحَت كُتِبَ عَلى كُلِّ صَفقَةٍ مُعَرِّفُها ورابِطُها، وأُعيدَ الرابِطُ لِيُحَوَّلَ إلَيه المُشتَري.</para>
+    ///
+    /// <para><b>وإن لَم تُفتَح — أُلغِيَت الصَفَقاتُ بِاسمِ مُشتَريها</b>: لا صَفقَةَ بِطاقَةٍ تَبقى بِلا فاتورَةٍ يُدفَعُ بِها، ولا خُصِمَ شَيء؛
+    /// والسَلَّةُ لا تُحذَفُ (النُقطَةُ تَرجِعُ قَبلَ حَذفِها) فَيُعيدُ المُحاوَلَةَ أَو يَختارُ النَقد. والرَمزُ في اللوغِ لِلمُراجَعَة.</para>
+    /// <para>و<paramref name="l"/> لِنَصَّينِ يَراهُما الناس: وَصفُ الفاتورَةِ عَلى صَفحَةِ البَوّابَة، وسَبَبُ الإلغاء.</para>
+    /// </summary>
+    public async Task<GatewayCheckout> OpenInvoiceAsync(
+        string tenantSlug, DealPayer by, IReadOnlyList<Guid> dealIds, string storeName, string returnUrl,
+        ACommerce.Platform.I18n.L l, CancellationToken ct = default)
+    {
+        var deals = new List<Deal>();
+        foreach (var id in dealIds)
+            if (await _deals.LoadAsync(tenantSlug, id, ct) is { } d && d.InitiatorId == by.ActorId) deals.Add(d);
+
+        var amount = MoyasarClient.ToSmallestUnit(deals.Sum(d => d.AmountSar));
+        string? code = deals.Count != dealIds.Count || !GatewayPaymentProof.FitsOneInvoice(deals.Count) || amount is null
+            ? MoyasarFailures.Invalid
+            : null;
+
+        MoyasarInvoice? invoice = null;
+        if (code is null)
+        {
+            if (await SecretKeyAsync(tenantSlug, ct) is not { } key)
+                code = MoyasarFailures.NotConfigured;
+            else
+            {
+                var draft = new MoyasarInvoiceDraft(amount!.Value, l.Format("pay.invoice.description", storeName), returnUrl, returnUrl,
+                    GatewayPaymentProof.MetadataFor(deals.Select(d => d.Id).ToArray()));
+                var created = await _client.CreateInvoiceAsync(key, draft, ct);
+                if (created.Ok) invoice = created.Value; else code = created.Failure!.Code;
+            }
+        }
+
+        if (invoice is null)
+        {
+            foreach (var d in deals)
+                await _deals.CancelAsync(tenantSlug, d.Id, new DealCanceller(by.ActorId, d.InitiatorName, IsStoreAdmin: false),
+                    l["checkout.payment.cancel_gateway_open_failed"], ct);
+            _log.LogWarning("[gateway] open invoice {Slug} for {Count} deal(s) ← {Code} — cancelled, nothing charged",
+                tenantSlug, deals.Count, code);
+            return new GatewayCheckout(null, code);
+        }
+
+        foreach (var d in deals)
+        {
+            await _deals.AttachRefAsync(tenantSlug, d.Id, GatewayPaymentProof.InvoiceRef, invoice.Id, ct);
+            await _deals.AttachRefAsync(tenantSlug, d.Id, InvoiceUrlRef, invoice.Url!, ct);
+        }
+        _log.LogInformation("[gateway] open invoice {Slug} for {Count} deal(s) ← opened", tenantSlug, deals.Count);
+        return new GatewayCheckout(invoice.Url, null);
     }
 
     /// <summary>

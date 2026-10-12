@@ -282,6 +282,62 @@ public class DealStudioAdvanceDoorTests(ITestOutputHelper output)
         Assert.True(enteredShipping.Count == 0, line + " — " + string.Join("، ", enteredShipping.Take(5).Select(Name)));
     }
 
+    /// <summary>
+    /// <para><b>وصَفقَةٌ عَلَيها فاتورَةُ بَوّابَةٍ لَم تُدفَع — الدالَّةُ والتَسَلسُلُ يَتَّفِقانِ حالَةً حالَة، ولا يَدخُلُ «دَفع» مِنها شَيء</b>
+    /// (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12): المَصفوفَةُ نَفسُها وكُلُّ صَفقَةٍ فيها بِـ<c>gateway_invoice_id</c> ولا «Captured». صارَت
+    /// <c>AdvanceAsync</c> تَرُدُّ بِـ<c>deal_awaits_payment</c> دُخولَ «دَفع» قَبلَ أَن يَثبُتَ الدَفعُ (<see cref="GatewayPayments.AwaitsPayment"/>)،
+    /// و<see cref="DealsService.AdminPathCanMove"/> تَسأَلُها — نَسَقُ صَفِّ OTO أَعلاه حَرفاً. وبِلا سُؤالِها رَسَمَ الاستوديو «→ دَفع» يُرَدُّ
+    /// بِلا كَلِمَةٍ حَيثُ مالِكُ التَطبيقِ هُوَ المُبادِر (مَقيسٌ قَبلَ سَطرِ الدالَّة — §٨‑ج). وما تاليه «دَفع» يُعَدُّ ويُشتَرَطُ أَن لا يَكونَ
+    /// صِفراً (القاعِدَة ١٠).</para>
+    /// </summary>
+    [Fact]
+    public void For_deals_whose_gateway_invoice_is_unpaid_the_predicate_answers_the_sequence_and_no_door_enters_Paid()
+    {
+        var bare = new List<Case>();
+        var gated = new List<Case>();
+        var awaiting = 0;
+        foreach (var pattern in Patterns)
+        foreach (var pay in Pays)
+        foreach (var stage in DealsPolicy.StagesFor(pattern))
+        foreach (var (name, initiator, counterparty) in Parties)
+        foreach (var status in Statuses)
+        {
+            foreach (var (list, sequence) in new (List<Case>, Func<DealsService, Deal, DealAdvanceResult?>)[]
+                     {
+                         (bare, (deals, d) => EndpointSequence(deals, d.Id)),
+                         (gated, GatedEndpoint),
+                     })
+            {
+                var (deals, world, deal) = At(pattern, pay, stage, initiator, counterparty, status);
+                deal.Refs[GatewayPaymentProof.InvoiceRef] = "inv_" + deal.Id.ToString("N");
+                var before = Copy(deal);
+                var draws = DealsService.AdminPathCanMove(before, AppOwner);
+                var saves = world.SaveCalls;
+                var res = sequence(deals, before);
+                list.Add(new Case(pattern, pay, stage, name, status, draws, res?.Ok ?? false, world.SaveCalls > saves, before));
+            }
+            if (status == DealStatus.Active && DealsPolicy.Next(pattern, stage, pay) == DealStage.Paid) awaiting++;
+        }
+
+        var disagree = bare.Where(c => c.PageDraws != c.Moves).ToList();
+        var drawnButRefused = gated.Where(c => c.PageDraws && !c.Moves).ToList();
+        var hiddenButMoves = gated.Where(c => !c.PageDraws && c.Moves).ToList();
+        var refusedAfterWriting = gated.Where(c => !c.Moves && c.Wrote).ToList();
+        var enteredPaid = bare.Concat(gated)
+            .Where(c => c.Moves && DealsPolicy.Next(c.Pattern, c.Stage, c.Pay) == DealStage.Paid).ToList();
+        var line = $"فُحِصَ {bare.Count} حالَة بِفاتورَةِ بَوّابَةٍ لَم تُدفَع (مَرَّتَين): تُجيزُ الدالَّةُ {bare.Count(c => c.PageDraws)}؛ خِلافُها والتَسَلسُلِ " +
+                   $"{disagree.Count}؛ زِرٌّ يُرَدُّ {drawnButRefused.Count}، ومَخفِيٌّ يَتَحَرَّكُ {hiddenButMoves.Count}، ومَردودٌ بَعدَ كِتابَةٍ " +
+                   $"{refusedAfterWriting.Count}؛ فَعّالَةٌ تاليها «دَفع» {awaiting}، دَخَلَتها {enteredPaid.Count}.";
+        output.WriteLine(line);
+
+        Assert.True(bare.Count > 1000 && awaiting > 0 && bare.Count(c => c.PageDraws) > 0, line);
+        Assert.True(disagree.Count == 0, line + " — " + string.Join("، ", disagree.Take(8).Select(Name)));
+        Assert.True(drawnButRefused.Count == 0, line + " — " + string.Join("، ", drawnButRefused.Take(5).Select(Name)));
+        Assert.True(hiddenButMoves.Count == 0, line + " — " + string.Join("، ", hiddenButMoves.Take(5).Select(Name)));
+        Assert.True(refusedAfterWriting.Count == 0, line + " — " + string.Join("، ", refusedAfterWriting.Take(5).Select(Name)));
+        Assert.True(enteredPaid.Count == 0, line + " — " + string.Join("، ", enteredPaid.Take(5).Select(Name)));
+    }
+
     // ═══ ٢) مُوجِبٌ وسالِبٌ بِأَسمائِهِما ═════════════════════════════════════════════════
 
     /// <summary>

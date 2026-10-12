@@ -2972,7 +2972,7 @@ public static class MarketplaceTemplateExtensions
         // §٢‑ج‑أ و§٦‑ب‑١ و§٦‑ط: كُلٌّ صَدَقَ يَومَه وأُعيدَت كِتابَتُه إلى الكودِ ‏2026-10-11.
         app.MapPost("/{slug}/checkout/submit",
             async (string slug, HttpRequest req, IDocumentStore store,
-                   Services.Deals.DealsService deals,
+                   Services.Deals.DealsService deals, Services.Deals.GatewayPayments gateway,
                    ACommerce.Kit.Payments.IPaymentProvider payments, Services.Deals.DealNotices notices, L l) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
@@ -3007,10 +3007,15 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
                     .RefusalPath(payRefusal, name, phone, addr)));
 
+            // ─── بَوّابَةُ المَتجَر (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12) ─────────────────────────────
+            // البِطاقَةُ في مَتجَرٍ يَفُكُّ مِفتاحَ بَوّابَتِه تُدفَعُ عَلى صَفحَتِها المُستَضافَةِ بَعدَ أَن تولَدَ الصَفَقات: فاتورَةٌ واحِدَةٌ
+            // لِلسَلَّةِ كُلِّها، ولا حَجزَ عِندَ الباب — فَنافِذَةُ ‏ADR-036 §٨‑٣ لا تَقَعُ لَها. ويُسأَلُ مَرَّةً قَبلَ الحَلقَة؛ وما سِواه كَما كان.
+            var viaGateway = Services.Deals.CheckoutPaymentPolicy.CallsProvider(payMethod) && await gateway.ReadyAsync(slug);
             var pattern = PatternFromTenant(tenant);
             Guid firstDealId = Guid.Empty;
             // الصَفَقاتُ الَّتي لَها مالِكٌ — يُشعَرُ بَعدَ الحَفظِ لا داخِلَ الحَلقَة (P1-5).
             var born = new List<Guid>();
+            var created = new List<Guid>();
             foreach (var item in cart.Items)
             {
                 var listing = await s.LoadAsync<Listing>(item.ListingId);
@@ -3034,6 +3039,7 @@ public static class MarketplaceTemplateExtensions
                         [Services.Deals.CheckoutPayMethods.AttributeKey] = payMethod
                     });
                 if (firstDealId == Guid.Empty) firstDealId = deal.Id;
+                created.Add(deal.Id);
                 // **والحَجزُ ومَراجِعُه قَبلَ الرَبط** (‏ADR-036 §٨، ‏2026-10-12؛ مُراجَعَةُ تَيّارِ S6a الأولى — ولا
                 // يُعادُ حَرفٌ فَوقَه): كانَت كُتلَةُ الدَفعِ بَعدَ رَبطِ البائِع، والصَفقَةُ بَعدَ الرَبطِ في قائِمَتِه وهو
                 // طَرَفٌ يُلغي عِندَ `Offered` — فَإلغاؤُه أَثناءَ نِداءِ المُزَوِّدِ لا يَجِدُ `payment_id` فَلا يُستَرجَعُ شَيء،
@@ -3051,6 +3057,8 @@ public static class MarketplaceTemplateExtensions
                 // لَو أَعادَ المُستَخدِم submit بِنَفس النَّموذَج.
                 if (Services.Deals.CheckoutPaymentPolicy.CallsProvider(payMethod))
                 {
+                    // وبِبَوّابَةِ المَتجَرِ لا حَجزَ هُنا — الفاتورَةُ بَعدَ الحَلقَة (‏ADR-032 الخُطوَة 10).
+                    if (!viaGateway)
                     try
                     {
                         var pr = await payments.AuthorizeAsync(new(
@@ -3092,6 +3100,14 @@ public static class MarketplaceTemplateExtensions
                 }
             }
 
+            // **الفاتورَةُ الواحِدَةُ قَبلَ حَذفِ السَلَّة** (‏ADR-032 الخُطوَة 10): بِمَجموعِ الصَفَقاتِ ومُعَرِّفاتِها، ورابِطُ العَودَةِ صَفحَةُ
+            // `pay/return` بِالصَفقَةِ الأولى. وإن لَم تُفتَح أَلغَت الخِدمَةُ الصَفَقاتِ بِاسمِ المُشتَري ولَم يُخصَم شَيء — فَتَعودُ الاستِمارَةُ
+            // بِرَمزِها والسَلَّةُ كَما هي. وإن فُتِحَت حُوِّلَ المُشتَري إلى صَفحَةِ الدَفعِ المُستَضافَة.
+            var opened = viaGateway && created.Count > 0 ? await gateway.OpenInvoiceAsync(slug, new Services.Deals.DealPayer(userId), created,
+                tenant?.Name ?? slug, Billing.PayPalOrderSurface.OriginFrom(req) + Link(req, slug, Services.Deals.GatewayReturn.PathFor(firstDealId, null)), l) : null;
+            if (opened is { Ok: false }) return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
+                .RefusalPath(Services.Deals.CheckoutPayMethods.GatewayOpenFailed, name, phone, addr)));
+
             s.Delete<ACommerce.Kit.Cart.Cart>(userId);
             await s.SaveChangesAsync();
             // **بَعدَ الحَفظ**: إشعارٌ لِمالِكِ إعلانِ كُلِّ صَفقَةٍ عَلى الأُنبوبِ القائِم
@@ -3099,7 +3115,7 @@ public static class MarketplaceTemplateExtensions
             // بِالطَلَبِ إلّا إن فَتَحَ «صَفقات» بِنَفسِه (P1-5). التَركيبُ في `DealNotices`.
             await notices.NotifyNewDealsAsync(slug, born, l);
 
-            return Results.Redirect(Link(req, slug, firstDealId == Guid.Empty ? "deals" : $"deals/{firstDealId}"));
+            return Results.Redirect(opened?.Url ?? Link(req, slug, firstDealId == Guid.Empty ? "deals" : $"deals/{firstDealId}"));
         }).DisableAntiforgery()
           .RequireStoreWritable();
 

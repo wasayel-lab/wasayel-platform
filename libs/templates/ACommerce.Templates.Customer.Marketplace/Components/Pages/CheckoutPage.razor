@@ -233,6 +233,7 @@
     string? ErrorMessage => Err switch
     {
         CheckoutPayMethods.CardUnavailable => L["checkout.payment.err_card_unavailable"],
+        CheckoutPayMethods.GatewayOpenFailed => L["checkout.payment.err_gateway_open_failed"],
         _ => null
     };
 

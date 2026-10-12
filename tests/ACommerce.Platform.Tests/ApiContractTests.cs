@@ -27,16 +27,21 @@ public class ApiContractTests
     /// <para><b>قُلِبَ بِاسمِه — صارَت ثَلاثَةَ عَشَر</b> (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12؛ ‏ADR-033 §٧‑ح): كانَ
     /// <c>Exactly_twelve_error_codes_and_they_are_these</c>. والثالِثَ عَشَرَ <c>deal_awaits_carrier</c> (‏409) مُنتِجُه حَيٌّ —
     /// <c>DealApi.FromAdvance</c> مِن رَمزِ الخِدمَةِ نَفسِه، حينَ تَرُدُّ <c>AdvanceAsync</c> صَفقَةً طَلَبُها عِندَ OTO — واختِبارُ حالَتِه في
-    /// الصَفِّ التالي وصَفّا التَصنيفِ أَدناه.</para></summary>
+    /// الصَفِّ التالي وصَفّا التَصنيفِ أَدناه.</para>
+    /// <para><b>قُلِبَ بِاسمِه — صارَت أَربَعَةَ عَشَر</b> (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12): كانَ
+    /// <c>Exactly_thirteen_error_codes_and_they_are_these</c>. والرابِعَ عَشَرَ <c>deal_awaits_payment</c> (‏409) مُنتِجُه حَيٌّ —
+    /// <c>DealApi.FromAdvance</c> مِن رَمزِ الخِدمَةِ نَفسِه، حينَ تَرُدُّ <c>AdvanceAsync</c> صَفقَةً عَلَيها فاتورَةُ بَوّابَةٍ لَم يَثبُت دَفعُها —
+    /// واختِبارُ حالَتِه في الصَفِّ التالي وصَفّا التَصنيفِ أَدناه.</para></summary>
     [Fact]
-    public void Exactly_thirteen_error_codes_and_they_are_these()
+    public void Exactly_fourteen_error_codes_and_they_are_these()
         => Assert.Equal(
             new[]
             {
                 "auth_missing", "auth_invalid",
                 "scope_missing", "entitlement_denied", "actor_not_allowed",
                 "not_found",
-                "deal_not_active", "deal_final_stage", "deal_changed_meanwhile", "deal_awaits_carrier", "idempotency_in_progress",
+                "deal_not_active", "deal_final_stage", "deal_changed_meanwhile", "deal_awaits_carrier", "deal_awaits_payment",
+                "idempotency_in_progress",
                 "idempotency_key_required", "validation_failed",
             },
             ApiErrorCatalog.Codes);
@@ -72,6 +77,7 @@ public class ApiContractTests
     [InlineData("deal_final_stage", 409)]
     [InlineData("deal_changed_meanwhile", 409)]
     [InlineData("deal_awaits_carrier", 409)]
+    [InlineData("deal_awaits_payment", 409)]
     [InlineData("idempotency_in_progress", 409)]
     [InlineData("idempotency_key_required", 422)]
     [InlineData("validation_failed", 422)]
@@ -305,6 +311,39 @@ public class ApiContractTests
 
         var raced = DealApi.FromAdvance(new DealAdvanceResult(false, deal, "…", DealsService.ChangedMeanwhile));
         Assert.Contains("\"deal_changed_meanwhile\"", ApiJson.Serialize(raced.Payload), StringComparison.Ordinal);
+    }
+
+    /// <summary><b>فاتورَةُ الصَفقَةِ عِندَ بَوّابَةِ المَتجَرِ لَم تُدفَع ‏409 بِرَمزِها</b> (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12) — نَسَقُ صَفِّ
+    /// الناقِلِ أَعلاه حَرفاً: رَمزُ الخِدمَةِ يُقرَأُ قَبلَ تَصنيفِ الحالَة، وإلّا قيلَ «فاعِلٌ غَيرُ مُخَوَّل» (‏403) عَن المُشتَري الَّذي يُدخِلُها
+    /// «دَفع» و<c>required_actor</c> هُوَ (مَقيسٌ قَبلَ سَطرِ <c>FromAdvance</c>: ‏403 حَيثُ يُنتَظَرُ ‏409). <b>والسالِب</b>:
+    /// رَفضُ فاعِلٍ بِلا رَمزٍ عَلى الصَفقَةِ نَفسِها يَبقى ‏403، ورَمزُ الناقِلِ يَبقى رَمزَه.</summary>
+    [Fact]
+    public void A_deal_awaiting_its_gateway_payment_answers_409_deal_awaits_payment_and_other_refusals_keep_their_codes()
+    {
+        var deal = DealAt(DealStage.Confirmed);
+        var awaits = DealApi.FromAdvance(new DealAdvanceResult(false, deal, "…", GatewayPayments.DealAwaitsPayment));
+        Assert.Equal(409, awaits.Status);
+        Assert.Contains("\"deal_awaits_payment\"", ApiJson.Serialize(awaits.Payload), StringComparison.Ordinal);
+        Assert.DoesNotContain("actor_not_allowed", ApiJson.Serialize(awaits.Payload), StringComparison.Ordinal);
+
+        var actor = DealApi.FromAdvance(new DealAdvanceResult(false, deal, "يَتَطَلَّب فاعِلاً مِن نَوع: initiator"));
+        Assert.Equal(403, actor.Status);
+        Assert.Contains("\"actor_not_allowed\"", ApiJson.Serialize(actor.Payload), StringComparison.Ordinal);
+
+        var carrier = DealApi.FromAdvance(new DealAdvanceResult(false, deal, "…", DealShipping.DealAwaitsCarrier));
+        Assert.Contains("\"deal_awaits_carrier\"", ApiJson.Serialize(carrier.Payload), StringComparison.Ordinal);
+    }
+
+    /// <summary><b>ورِسالَتُه تُسَمّي البابَ الَّذي يُثبِتُ الدَفعَ بِحَرفِ زِرِّه في القامُوس</b> (<c>pay.return.verify</c>) — نَسَقُ رِسالَةِ الناقِل:
+    /// لا وَعدَ بِنَقلٍ لا يُؤَدّيه كود، ولا «يَدخُلُها» بِلا شَرطِه.</summary>
+    [Fact]
+    public void The_deal_awaits_payment_message_names_the_verify_button_and_says_this_door_accepts_the_deal_after_it()
+    {
+        var message = ApiErrorCatalog.Require(ApiErrorCatalog.DealAwaitsPayment).MessageAr;
+        var verify = LocaleCatalog.Text(LocaleCatalog.Arabic, "pay.return.verify");
+        Assert.Contains($"«{verify}»", message, StringComparison.Ordinal);
+        Assert.Contains("لا تَدخُلُ «دَفع»", message, StringComparison.Ordinal);
+        Assert.Contains("وبَعدَه يَقبَلُها هذا الباب", message, StringComparison.Ordinal);
     }
 
     /// <summary><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_the_deal_awaits_carrier_message_says_the_carrier_moves_the_deal_and_names_neither_the_resume_nor_the_label</c>

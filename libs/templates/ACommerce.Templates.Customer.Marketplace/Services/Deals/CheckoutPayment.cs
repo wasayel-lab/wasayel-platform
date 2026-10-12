@@ -67,6 +67,11 @@ public static class CheckoutPayMethods
     /// فَلا رَفضَ مُبتلَع.</summary>
     public const string CardUnavailable = "pay_card_unavailable";
 
+    /// <summary>رَمزُ الرَدِّ حينَ تَعَذَّرَ فَتحُ فاتورَةِ بَوّابَةِ المَتجَرِ بَعدَ أَن وُلِدَت الصَفَقات (‏ADR-032 الخُطوَة 10، ‏2026-10-12):
+    /// أَلغَتها الخِدمَةُ بِاسمِ المُشتَري ولَم يُخصَم شَيء، والسَلَّةُ كَما هي. <b>يُقرَأُ في الشاشَةِ لِيُختارَ نَصُّ القامُوس</b>؛ ورَمزُ
+    /// البَوّابَةِ نَفسُه في اللوغِ لِلمُراجَعَة.</summary>
+    public const string GatewayOpenFailed = "pay_gateway_open_failed";
+
     public static bool Contains(string? value)
         => value is not null && All.Contains(value, StringComparer.Ordinal);
 }

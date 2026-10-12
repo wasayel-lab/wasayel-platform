@@ -54,6 +54,11 @@ public static class ApiErrorCatalog
     /// يُثبِتُ الناقِلُ شُحنَتَها» — وَعدٌ بِنَقلٍ لا يُؤَدّيه كودٌ يَومَ كُتِبَت، ولا تُسَمّي البوليصَة. وما يُدخِلُها اليَومَ جَوابٌ مِن OTO يُثبِتُ
     /// الشُحنَةَ والبوليصَةَ عِندَ «أَكمِل الشَّحن» (<c>ShipAsync</c>) أَو عِندَ إشعارٍ مِنها (<c>DeliverAsync</c>، §٧‑ط) — والرِسالَةُ تَقولُهُما.</para></summary>
     public const string DealAwaitsCarrier      = "deal_awaits_carrier";
+    /// <summary>عَلى الصَفقَةِ فاتورَةُ بَوّابَةِ المَتجَرِ ولَم يَثبُت دَفعُها، وتاليها «دَفع» (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12) —
+    /// مُنتِجُه <c>DealApi.FromAdvance</c> مِن رَمزِ الخِدمَةِ نَفسِه (<c>GatewayPayments.DealAwaitsPayment</c>)؛ ‏409 تَعارُضُ حالَةٍ نَسَقَ
+    /// <see cref="DealAwaitsCarrier"/> حَرفاً — وتَصنيفُ الحالَةِ كانَ سَيَقولُ «فاعِلٌ غَيرُ مُخَوَّل» (‏403) عَن المُشتَري نَفسِه، و<c>required_actor</c>
+    /// فيه هُوَ (مَقيسٌ قَبلَ سَطرِه: ‏403). ورِسالَتُه تُسَمّي الزِرَّ الَّذي يُثبِتُ الدَفعَ بِحَرفِه في القامُوس.</summary>
+    public const string DealAwaitsPayment      = "deal_awaits_payment";
     public const string IdempotencyInProgress  = "idempotency_in_progress";
     public const string IdempotencyKeyRequired = "idempotency_key_required";
     public const string ValidationFailed       = "validation_failed";
@@ -61,7 +66,8 @@ public static class ApiErrorCatalog
     /// <summary>الأَحَدَ عَشَرَ رَمزاً — مُرَتَّبَةً بِحالَتِها ثُمَّ
     /// بِرَمزِها. <b>صارَت اثنَي عَشَر ‏2026-10-12</b> (‏ADR-036): <see cref="DealChangedMeanwhile"/>
     /// بَعدَ أُختَيهِ في ‏409. <b>ثُمَّ ثَلاثَةَ عَشَر</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S7 الثانِيَة؛ ‏ADR-033 §٧‑ح):
-    /// <see cref="DealAwaitsCarrier"/> بَعدَ أَخَواتِه الثَلاثِ في ‏409.</summary>
+    /// <see cref="DealAwaitsCarrier"/> بَعدَ أَخَواتِه الثَلاثِ في ‏409. <b>ثُمَّ أَربَعَةَ عَشَر</b> (‏2026-10-12، ‏ADR-032 الخُطوَة 10، تَيّارُ S9):
+    /// <see cref="DealAwaitsPayment"/> بَعدَ أَخَواتِه الأَربَعِ في ‏409.</summary>
     public static readonly IReadOnlyList<ApiErrorCode> All = new[]
     {
         new ApiErrorCode(AuthMissing, StatusCodes.Status401Unauthorized,
@@ -84,6 +90,8 @@ public static class ApiErrorCatalog
             "تَغَيَّرَت الصَفقَةُ في الأَثناء — أَعِد المُحاوَلَة بِطَلَبٍ جَديد."),
         new ApiErrorCode(DealAwaitsCarrier, StatusCodes.Status409Conflict,
             "طَلَبُ شَحنِ هذِه الصَفقَةِ عِندَ OTO — لا تَدخُلُ «شَحن» بِهذا الباب؛ تَدخُلُها حينَ يُثبِتُ جَوابُ OTO شُحنَتَها وبوليصَتَها: بِـ«أَكمِل الشَّحن» عِندَ البائِع، أَو بِإشعارٍ مِن OTO."),
+        new ApiErrorCode(DealAwaitsPayment, StatusCodes.Status409Conflict,
+            "عَلى هذِه الصَفقَةِ فاتورَةُ بَوّابَةِ المَتجَرِ ولَم يَثبُت دَفعُها — لا تَدخُلُ «دَفع» حَتّى يَتَحَقَّقَ الخادِمُ مِن دَفعِ فاتورَتِها لَدى البَوّابَة: بِـ«تَحَقَّق مِن الدَّفع» عَلى صَفحَةِ العَودَةِ بَعدَ الدَّفع؛ وبَعدَه يَقبَلُها هذا الباب."),
         new ApiErrorCode(IdempotencyInProgress, StatusCodes.Status409Conflict,
             "طَلَبٌ بِنَفس مِفتاح مَرَّة-واحِدَة ما زالَ قَيدَ التَنفيذ."),
         new ApiErrorCode(IdempotencyKeyRequired, StatusCodes.Status422UnprocessableEntity,

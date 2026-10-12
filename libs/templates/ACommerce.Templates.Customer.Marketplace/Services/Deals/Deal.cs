@@ -92,7 +92,7 @@ public enum DealStatus
 public sealed record DealEvent(
     DealStage StageBefore,
     DealStage StageAfter,
-    string Action,          // created | assigned | bound | advanced | captured | capture_failed | cash_on_delivery | cancelled | refunded | refund_failed | disputed | note
+    string Action,          // created | assigned | bound | advanced | captured | capture_failed | cash_on_delivery | cancelled | refunded | refund_failed | disputed | note | gateway_paid | gateway_refund_due
     Guid? ActorId,
     string? ActorName,
     string? Note,
@@ -107,4 +107,12 @@ public sealed record DealEvent(
     /// <summary>بُلوغُ <c>Delivered</c> في صَفقَةِ نَقدٍ هُوَ لَحظَةُ القَبضِ عِندَ
     /// البائِع (‏ADR-033 §٦) — والنَصُّ مِن القامُوسِ عِندَ العَرض، لا هُنا.</summary>
     public const string CashOnDelivery = "cash_on_delivery";
+
+    /// <summary>دَفعٌ أَثبَتَته بَوّابَةُ المَتجَرِ مِن الخادِمِ وكُتِبَ عَلى الصَفقَة (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12) — يَكتُبُه
+    /// <c>DealsService.ConfirmGatewayPaymentAsync</c> وَحدَه، والنَصُّ مِن القامُوسِ عِندَ العَرض؛ و<c>Note</c> مُعَرِّفُ الفاتورَةِ لِلمُراجَعَة.</summary>
+    public const string GatewayPaid = "gateway_paid";
+
+    /// <summary>مالٌ قَبَضَته بَوّابَةُ المَتجَرِ عَن صَفقَةٍ أُلغِيَت — استِرجاعُه مُستَحَقٌّ عِندَ البَوّابَةِ نَفسِها، يَستَرجِعُه صاحِبُ المَتجَرِ
+    /// مِن لَوحَتِها؛ ولا نِداءَ عِندَنا (مُزَوِّدُ النُسخَةِ لا يَعرِفُ المَرجِع). يَكتُبُه الإلغاءُ بَعدَ الدَفع، والتَأكيدُ بَعدَ الإلغاء.</summary>
+    public const string GatewayRefundDue = "gateway_refund_due";
 }

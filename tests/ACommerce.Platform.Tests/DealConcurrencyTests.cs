@@ -550,11 +550,17 @@ public class DealConcurrencyRefusalTests
             ("CancelAsync",             "public async Task<DealCancelResult> CancelAsync(",  "public async Task<Deal?> DisputeAsync("),
             ("DisputeAsync",            "public async Task<Deal?> DisputeAsync(",            "public async Task<Deal?> AttachRefAsync("),
             ("AttachRefAsync",          "public async Task<Deal?> AttachRefAsync(",          "public async Task<Deal?> LoadAsync("),
+            // ‏ADR-032 الخُطوَة 10 (تَيّارُ S9، ‏2026-10-12): بابٌ سابِعٌ يَكتُبُ بِحَلقَةِ الإلحاقِ نَفسِها (`RecordAsync` — تَقرَأُ ثُمَّ تُعيدُ عِندَ
+            // التَعارُض)، فَالتِقاطُه التِقاطُها ومَقطَعُه يَبلُغُها؛ ولا حِفظَ لَه ولا التِقاطَ خاصَّين.
+            ("ConfirmGatewayPaymentAsync", "public async Task<IReadOnlyList<Deal>> ConfirmGatewayPaymentAsync(", "public async Task<Deal?> LoadAsync("),
         };
         var missing = writers.Where(w => !Segment(service, w.From, w.To).Contains("catch (JasperFx.ConcurrencyException)", StringComparison.Ordinal))
                              .Select(w => w.Name).ToArray();
         Assert.True(missing.Length == 0, $"فُحِصَ {writers.Length} باباً؛ لا يَلتَقِطُ التَعارُض: {string.Join("، ", missing)}");
-        Assert.Equal(writers.Length, Count(service, "catch (JasperFx.ConcurrencyException)"));
+        // سَبعَةُ أَبوابٍ وسِتَّةُ مَواضِعِ التِقاط (‏2026-10-12): الإلحاقُ وتَأكيدُ دَفعِ البَوّابَةِ يَشتَرِكانِ في حَلقَةِ `RecordAsync` — وكانَ
+        // العَدَدانِ واحِداً (`writers.Length`) حينَ كانَ لِكُلِّ بابٍ التِقاطُه.
+        Assert.Equal(6, Count(service, "catch (JasperFx.ConcurrencyException)"));
+        Assert.DoesNotContain("SaveChangesAsync(", Segment(service, "public async Task<IReadOnlyList<Deal>> ConfirmGatewayPaymentAsync(", "private Task<Deal?> RecordAsync("), StringComparison.Ordinal);
 
         // كُلُّ `SaveChangesAsync(` في الخِدمَةِ مَحسوب: سِتَّة — الإدراجُ والتَعيينُ والانتِقالُ والإلغاءُ والنِزاعُ والإلحاق.
         Assert.Equal(6, Count(service, "SaveChangesAsync("));
