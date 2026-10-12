@@ -134,6 +134,14 @@ public sealed class DealNotices
     public static string PaidPushBody(Deal deal, L l)
         => l.Format("notifications.deal_paid.push_body", deal.ListingTitle, deal.AmountSar);
 
+    /// <summary>
+    /// <para><b>مَن يُشعَرُ بِالدَفع</b>: مُستَلِمُ الطَلَبِ الجَديدِ نَفسُه (<see cref="NewDealRecipient"/>) — <b>ما دامَت الصَفقَةُ قائِمَة</b>
+    /// (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الأولى). نَصُّه «دَفَعَ المُشتَري ثَمَنَ طَلَبِه ✓ … افتَحِ الصَّفقَة لِمُتابَعَتِها»، وصَفقَةٌ مُلغاةٌ أَو في
+    /// نِزاعٍ لا يُتابِعُها بائِعُها — وكانَ دَفعٌ وَقَعَ عَلى طَلَبٍ أَلغاه البائِعُ نَفسُه يُبَشَّرُ بِه بِعَلامَةِ ✓. ودَفعُ المُلغاةِ مَكتوبٌ عَلَيها
+    /// بِسَطرِ «استِرجاعُه مُستَحَقٌّ عِندَ بَوّابَةِ المَتجَر» يَراهُ صاحِبُ المَتجَرِ في سِجِلِّها. و<c>null</c> لِما سِوى ذلك.</para>
+    /// </summary>
+    public static Guid? PaidRecipient(Deal deal) => deal.Status == DealStatus.Active ? NewDealRecipient(deal) : null;
+
     /// <summary>مَن يُشعَرُ بِالإلغاء: المُشتَري، ما لَم يَكُن هُوَ المُلغي — فَمَن يُلغي طَلَبَه لا
     /// يُخبَرُ بِما فَعَلَه.</summary>
     public static bool TellsTheBuyer(Deal deal, Guid cancellerId) => cancellerId != deal.InitiatorId;
@@ -207,7 +215,9 @@ public sealed class DealNotices
 
     /// <summary>بَعدَ أَن يَثبُتَ دَفعُ فاتورَةِ البَوّابَةِ ويُكتَبَ (<c>/payments/verify</c>؛ ‏ADR-032 الخُطوَة 10): إشعارٌ واحِدٌ لِمالِكِ إعلانِ
     /// كُلِّ صَفقَةٍ كُتِبَ عَلَيها الدَفعُ <b>الآن</b> — فَالتَحَقُّقُ الثاني لا يُشعِرُ ثانِيَة. بِتَرتيبِ الأُنبوبِ نَفسِه، وصَفقَةٌ بِلا مالِكٍ —
-    /// أَو مالِكُها مُشتَريها — تُتَجاوَز. تُرجِعُ عَدَدَ ما أُشعِر.</summary>
+    /// أَو مالِكُها مُشتَريها — تُتَجاوَز. تُرجِعُ عَدَدَ ما أُشعِر.
+    /// (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الأولى — ولا يُعادُ حَرفٌ فَوقَه: والمُستَلِمُ <see cref="PaidRecipient"/> — صَفقَةٌ لَم تَعُد قائِمَةً
+    /// تُتَجاوَزُ أَيضاً، ودَفعُها مَكتوبٌ عَلَيها.)</summary>
     public async Task<int> NotifyPaidAsync(
         string slug, IReadOnlyList<Guid> dealIds, L l, CancellationToken ct = default)
     {
@@ -218,7 +228,7 @@ public sealed class DealNotices
             foreach (var id in dealIds)
             {
                 var deal = await s.LoadAsync<Deal>(id, ct);
-                if (deal is null || NewDealRecipient(deal) is not { } ownerId) continue;
+                if (deal is null || PaidRecipient(deal) is not { } ownerId) continue;
                 var n = PaidFor(slug, deal, ownerId, l, DateTime.UtcNow);
                 s.Store(n);
                 sent.Add((ownerId, deal.Id, n, PaidPushBody(deal, l)));

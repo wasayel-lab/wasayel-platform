@@ -18,6 +18,11 @@
     فاتورَة — فَما يُرسَمُ هُوَ ما يُقبَل. ورَمزُ رَفضِ النُقطَةِ يَعودُ في `?err=` ويُقرَأُ مِن القامُوسِ بِـ`GatewayReturn.KeyFor`.
 
     **والنَصُّ كُلُّه مِن القامُوس** (القاعِدَة ١١): صِفرُ حَرفِيَّةٍ عَرَبِيَّةٍ خارِجَ التَعليق.
+
+    **والحالُ تُسأَلُ** (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الأولى — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): السُلطَةُ لا تَسأَلُ عَن الحالِ عَمداً — دَفعٌ
+    وَقَعَ عَلى طَلَبٍ أُلغِيَ يُسَجَّلُ ولا يُبتلَع، فَالزِرُّ باقٍ — لكِنّ الصَفحَةَ كانَت تَرسُمُ لِلمُلغى رابِطَ «أَكمِلِ الدَّفعَ» ونَصَّ «طَلَبُك
+    قائِمٌ»، وبَعدَ دَفعِه «يُتابِعُه البائِع». فَالرابِطُ لِلقائِمِ وَحدَه (`GatewayReturn.PayUrlOf`)، ونَصُّ الحالِ مِن دالَّةٍ واحِدَةٍ بِشَرطِ
+    الكاتِبِ نَفسِه (`GatewayReturn.StateKeyOf` — المُلغى يُقالُ لَه «أُلغِيَ، واستِرجاعُ ما دَفَعتَ عَلى المَتجَرِ مِن لَوحَةِ بَوّابَتِه»).
 *@
 
 <div class="acs-page">
@@ -38,7 +43,7 @@
         <h1 class="acm-wizard-title">@L.Markup("pay.return.title")</h1>
         <AcCard>
             <ChildContent>
-                <p>@L.Markup("pay.return.confirmed")</p>
+                <p>@L.Markup(stateKey)</p>
                 <a class="ac-btn ac-btn-primary" href="@AuthSession.LinkFor(Slug, Role, $"deals/{dealId}")">@L.Markup("pay.return.open_deal")</a>
             </ChildContent>
         </AcCard>
@@ -54,7 +59,7 @@
 
         <AcCard>
             <ChildContent>
-                <p>@L.Markup("pay.return.pending")</p>
+                <p>@L.Markup(stateKey)</p>
                 <form method="post" action="@($"/{Slug}/payments/verify")">
                     <input type="hidden" name="@GatewayReturn.DealKey" value="@dealId.ToString("N")" />
                     <button type="submit" class="ac-btn ac-btn-primary">@L.Markup("pay.return.verify")</button>
@@ -88,6 +93,8 @@
     bool confirmed;
     /// <summary>رابِطُ صَفحَةِ الدَفعِ المُستَضافَة — <see cref="GatewayReturn.PayUrlOf"/>، و<c>null</c> فَلا «أَكمِل الدَّفع».</summary>
     string? payUrl;
+    /// <summary>نَصُّ حالِ الصَفقَة — <see cref="GatewayReturn.StateKeyOf"/>: قائِمَةٌ أَو مُلغاة × ثَبَتَ دَفعُها أَو لا (‏2026-10-12).</summary>
+    string stateKey = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -99,5 +106,6 @@
         if (refusalKey is not null || deal is null) return;
         confirmed = GatewayReturn.IsConfirmed(deal);
         payUrl = GatewayReturn.PayUrlOf(deal);
+        stateKey = GatewayReturn.StateKeyOf(deal);
     }
 }

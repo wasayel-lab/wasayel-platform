@@ -74,7 +74,8 @@ public sealed record GatewayVerifyResult(Guid? DealId, ProvenGatewayPayment? Pay
     public bool Ok => Payment is not null;
 
     /// <summary>الصَفَقاتُ الَّتي كُتِبَ عَلَيها الدَفعُ <b>في هذا التَحَقُّق</b> — فَيُشعَرُ بائِعوها مَرَّة (‏ADR-032 الخُطوَة 10). وفارِغَةٌ
-    /// لِلرَفضِ ولِلتَحَقُّقِ الثاني مِن الدَفعِ نَفسِه.</summary>
+    /// لِلرَفضِ ولِلتَحَقُّقِ الثاني مِن الدَفعِ نَفسِه. (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الأولى — ولا يُعادُ حَرفٌ فَوقَه: وفيها المُلغاةُ
+    /// إن دُفِعَت — يُكتَبُ دَفعُها ولا يُبتلَع؛ والإشعارُ لِبائِعِ القائِمَةِ وَحدَها، <c>DealNotices.PaidRecipient</c>.)</summary>
     public IReadOnlyList<Guid> Confirmed { get; init; } = Array.Empty<Guid>();
 }
 
@@ -136,12 +137,32 @@ public static class GatewayReturn
     /// <para><b>رابِطُ صَفحَةِ الدَفعِ المُستَضافَةِ لِهذِه الصَفقَة</b> — كَما كَتَبَه إتمامُ الشِراء (<see cref="GatewayPayments.InvoiceUrlRef"/>)،
     /// و<c>null</c> لِما لَيسَ رابِطاً مُطلَقاً بِـ<c>https</c> أَو <c>http</c> (مِثالُ الوَثيقَةِ نَفسُه <c>http://checkout.moyasar.com/…</c>):
     /// فَلا يُرسَمُ <c>javascript:</c> ولا رابِطٌ نِسبِيٌّ في «أَكمِل الدَّفع».</para>
+    /// <para><b>ولِصَفقَةٍ قائِمَةٍ وَحدَها</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الأولى — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): البائِعُ المَربوطُ
+    /// عِندَ الوِلادَةِ يُشعَرُ بِالطَلَبِ قَبلَ الدَفعِ ويَرفُضُه عِندَ «عرض»، والعَميلُ بِلا عَمَلِيَّةِ إبطال (§٨‑أ) فَالفاتورَةُ تَبقى قابِلَةً
+    /// لِلدَّفع — وكانَ «أَكمِلِ الدَّفعَ» يُرسَمُ لِطَلَبٍ مُلغًى فَيُدعى المُشتَري إلى دَفعِ ما لَم يَعُد قائِماً (القاعِدَة ١٢: مَدخَلٌ يَضُرّ).
+    /// وصَفقَةٌ في نِزاعٍ أَو مُكتَمِلَةٌ لا تُدعى إلى دَفعٍ أَيضاً. وزِرُّ التَحَقُّقِ باقٍ لِكُلِّ صَفقَة: دَفعٌ وَقَعَ يُسَجَّلُ ولا يُبتلَع.</para>
     /// </summary>
     public static string? PayUrlOf(Deal deal)
-        => deal.Refs.TryGetValue(GatewayPayments.InvoiceUrlRef, out var url)
+        => deal.Status == DealStatus.Active
+           && deal.Refs.TryGetValue(GatewayPayments.InvoiceUrlRef, out var url)
            && Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp)
             ? url
             : null;
+
+    /// <summary>
+    /// <para><b>نَصُّ حالِ الصَفقَةِ عَلى صَفحَةِ العَودَة — أَربَعَةٌ لا خامِس</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الأولى): ثَبَتَ دَفعُها
+    /// أَم لا (<see cref="IsConfirmed"/>) × أُلغِيَت أَم لا — <b>بِشَرطِ الكاتِبِ نَفسِه</b>: <c>DealsService.ConfirmGatewayPaymentAsync</c>
+    /// يَكتُبُ <see cref="DealEvent.GatewayRefundDue"/> لِلمُلغاةِ وَحدَها، فَالصَفحَةُ تَقولُ «مُلغًى، واستِرجاعُه عَلى المَتجَرِ مِن لَوحَةِ
+    /// بَوّابَتِه» لِما يُكتَبُ لَه ذلكَ السَطرُ لا لِغَيرِه. وكانَت تَقولُ لِلمُلغاةِ «طَلَبُك قائِمٌ في صَفقاتي» قَبلَ الدَفع، و«يُتابِعُه البائِعُ
+    /// مِن هُنا» بَعدَه — ولا قائِمَ ولا مُتابِع. والصَفحَةُ لا تَرسُمُ نَصَّ حالٍ إلّا بِهذِه الدالَّة.</para>
+    /// </summary>
+    public static string StateKeyOf(Deal deal) => (deal.Status == DealStatus.Cancelled, IsConfirmed(deal)) switch
+    {
+        (false, false) => "pay.return.pending",
+        (false, true)  => "pay.return.confirmed",
+        (true,  false) => "pay.return.cancelled_pending",
+        (true,  true)  => "pay.return.cancelled_confirmed",
+    };
 
     /// <summary>بادِئَةُ مَفاتيحِ الشَريطِ — اصطِلاحُ القامُوسِ ثَلاثَةُ مَقاطِع (<c>LocaleValidator.KeyPattern</c>)، فَالرَمزُ في الثالِث.</summary>
     public const string TextPrefix = "pay.return.err_";
@@ -300,6 +321,12 @@ public sealed class GatewayPayments
     /// <para><b>وإن لَم تُفتَح — أُلغِيَت الصَفَقاتُ بِاسمِ مُشتَريها</b>: لا صَفقَةَ بِطاقَةٍ تَبقى بِلا فاتورَةٍ يُدفَعُ بِها، ولا خُصِمَ شَيء؛
     /// والسَلَّةُ لا تُحذَفُ (النُقطَةُ تَرجِعُ قَبلَ حَذفِها) فَيُعيدُ المُحاوَلَةَ أَو يَختارُ النَقد. والرَمزُ في اللوغِ لِلمُراجَعَة.</para>
     /// <para>و<paramref name="l"/> لِنَصَّينِ يَراهُما الناس: وَصفُ الفاتورَةِ عَلى صَفحَةِ البَوّابَة، وسَبَبُ الإلغاء.</para>
+    /// <para><b>وتُفَوتَرُ القائِمَةُ وَحدَها</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الأولى — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): البائِعُ مَربوطٌ
+    /// مُنذُ الوِلادَةِ فَالصَفقَةُ في قائِمَتِه، ويُلغيها عِندَ «عرض» — وكانَت صَفقَةٌ أَلغاها بَينَ وِلادَتِها والفَتحِ تَدخُلُ الفاتورَةَ بِمَبلَغِها
+    /// ويُكتَبُ عَلَيها رابِطُها. فَلا تُحَمَّلُ إلّا <c>Active</c>، فَتَنقُصُ القائِمَةُ عَن المُعَرِّفاتِ ويُرَدُّ الفَتحُ بِرَمزِ صَفقَةِ غَيرِه
+    /// نَفسِه (<see cref="MoyasarFailures.Invalid"/>): لا فاتورَةَ ولا خَصم، والباقِيَةُ تُلغى والسَلَّةُ كَما هي. <b>وما لا يُغلِقُه</b>: إلغاءٌ
+    /// يَقَعُ بَعدَ التَحميلِ وقَبلَ الإلحاقِ (أَثناءَ نِداءَي البَوّابَة) يَبقى في الفاتورَة — ولا إبطالَ في العَميل (§٨‑أ)؛ وصَفحَةُ العَودَةِ
+    /// وإشعارُ الدَفعِ يَسأَلانِ الحالَ بَعدَها (<see cref="GatewayReturn.PayUrlOf"/>، <c>DealNotices.PaidRecipient</c>).</para>
     /// </summary>
     public async Task<GatewayCheckout> OpenInvoiceAsync(
         string tenantSlug, DealPayer by, IReadOnlyList<Guid> dealIds, string storeName, string returnUrl,
@@ -307,7 +334,7 @@ public sealed class GatewayPayments
     {
         var deals = new List<Deal>();
         foreach (var id in dealIds)
-            if (await _deals.LoadAsync(tenantSlug, id, ct) is { } d && d.InitiatorId == by.ActorId) deals.Add(d);
+            if (await _deals.LoadAsync(tenantSlug, id, ct) is { Status: DealStatus.Active } d && d.InitiatorId == by.ActorId) deals.Add(d);
 
         var amount = MoyasarClient.ToSmallestUnit(deals.Sum(d => d.AmountSar));
         string? code = deals.Count != dealIds.Count || !GatewayPaymentProof.FitsOneInvoice(deals.Count) || amount is null
