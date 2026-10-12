@@ -316,4 +316,48 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
         var key = kek?.Trim() ?? "";
         if (key.Length >= 8) Assert.DoesNotContain(key, text, StringComparison.Ordinal);
     }
+
+    // ─── ٦. وما تَقولُه سَبَبُ الخِزانَةِ نَفسُه — بَعدَ فَصلِ حالِ الفَكِّ عَن العَدّ (مُراجَعَةُ ‏2026-10-12) ───
+    //
+    // **المَقيسُ قَبل** (الكُتلَةُ مُشَغَّلَةً عِندَ `ddbf8c5`): «not base64 !!» ⇒ «المَقيس: 6»، و‏43 مِحرَفاً بِلا
+    // حَشوٍ ⇒ «لا يُفَكُّ إلى 32 بايتاً … المَقيس: 32»، والبَياضُ وأَبجَدِيَّةُ URL ⇒ «المَقيس: 0». الحُكمُ صَحيحٌ
+    // (الصَفُّ ٥) والسَبَبُ المَطبوعُ لا — لِأَنّ الإسنادَ تَحتَ `pipefail` كانَ يَأخُذُ عَدَّ `wc -c` ولَو سَقَطَ الفَكّ.
+    // فَهُنا يُشتَرَطُ أَن تَقولَ الكُتلَةُ سَبَبَ الخِزانَةِ نَفسَه — رِسالَةُ `ProviderVault.Validate` ونَظيرُها:
+    // غائِبٌ ↔ غائِب، «لَيسَ base64» ↔ «لَيسَ base64 صالِحاً»، «يُفَكُّ إلى N بايتاً» ↔ «المَقيس: N».
+    [Theory]
+    [InlineData("absent",        "غائِب",                "غائِب —")]
+    [InlineData("empty",         "غائِب",                "غائِب —")]
+    [InlineData("blank",         "غائِب",                "غائِب —")]
+    [InlineData("valid",         null,                    "مَضبوط (يُفَكُّ إلى 32 بايتاً")]
+    [InlineData("valid+newline", null,                    "مَضبوط (يُفَكُّ إلى 32 بايتاً")]
+    [InlineData("not-base64",    "لَيسَ base64",          "المَقيس: لَيسَ base64 صالِحاً)")]
+    [InlineData("16-bytes",      "يُفَكُّ إلى 16 بايتاً", "المَقيس: 16)")]
+    [InlineData("unpadded-43",   "لَيسَ base64",          "المَقيس: لَيسَ base64 صالِحاً)")]
+    [InlineData("url-safe",      "لَيسَ base64",          "المَقيس: لَيسَ base64 صالِحاً)")]
+    public void The_kek_block_says_the_vaults_own_reason_absent_not_base64_or_the_decoded_length(
+        string shape, string? vaultReason, string blockSays)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            output.WriteLine($"[{shape}] Windows — لا bash مَعلومَ المَوضِع؛ يُقاسُ هذا الصَفُّ في CI (‏ubuntu).");
+            return;
+        }
+
+        var kek = KekOf(shape);
+        var violations = ProviderVault.Validate(kek);
+        var (_, text) = RunKekBlock(kek);
+        output.WriteLine($"[{shape}] الخِزانَة: {(violations.Count == 0 ? "مُتاحَة" : violations[0].MessageAr)}");
+        output.WriteLine(text);
+
+        // سَبَبُ الخِزانَةِ أَوَّلاً — فَالصَفُّ يُقارِنُ بِالحَقيقَةِ لا بِتَوَقُّعٍ مَكتوبٍ وَحدَه.
+        if (vaultReason is null) Assert.Empty(violations);
+        else Assert.Contains(vaultReason, Assert.Single(violations).MessageAr, StringComparison.Ordinal);
+
+        // ونَظيرُه في الكُتلَة.
+        Assert.Contains(blockSays, text, StringComparison.Ordinal);
+
+        // ولا عَدَدٌ جُزئِيٌّ لِما لا يُفَكّ.
+        if (vaultReason == "لَيسَ base64")
+            Assert.DoesNotMatch(new Regex(@"المَقيس: \d"), text);
+    }
 }
