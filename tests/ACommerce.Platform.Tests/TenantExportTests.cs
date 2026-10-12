@@ -547,6 +547,32 @@ public class TenantExportTests(ITestOutputHelper output)
         Assert.DoesNotContain("kekVersion", text, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary><b>تَوصيفُ «اليَوم» (‏2026-10-12، مُراجَعَةُ تَيّارِ الخِزانَة)</b>: القيمَةُ المَختومَةُ تَخرُجُ في
+    /// التَصديرِ <b>فارِغَة</b> — التَعتيمُ يَقرَأُ <c>plain</c> وَحدَه، وهُوَ <c>null</c> لِلمَختوم — والاستوديو
+    /// يَعرِضُها قِناعاً وذَيلاً (<c>StoredValue.Censored</c>). فَمَن يَقرَأُ تَصديرَه يَرى مِفتاحاً مَربوطاً كَأَنّه
+    /// فارِغ. لا تَسَرُّبَ — أَعمِدَةُ الظَرفِ لا تَخرُج — بَل وَجهانِ لِلقيمَةِ نَفسِها. مُثَبَّتٌ لِيُقلَب.</summary>
+    [Fact]
+    public void Today_a_sealed_value_exports_as_an_empty_value_while_the_studio_shows_its_mask_and_tail()
+    {
+        var vault = ProviderVault.FromKek(Convert.ToBase64String(
+            System.Security.Cryptography.RandomNumberGenerator.GetBytes(ProviderVault.KekBytes)));
+        var key = StoredValue.Sealed(vault, CredentialKinds.SecretKey, "sk_live_9f3b7c2d41aa58e6",
+            ProviderVault.AadOf("ejar", ProviderCapabilities.Payments, "secret_key"));
+        var binding = new TenantProviderBinding
+        {
+            Id = ProviderCapabilities.Payments, Slug = ProviderCapabilities.Payments,
+            TenantSlug = "ejar", ProviderSlug = "moyasar_api",
+            Values = { ["secret_key"] = key },
+        };
+
+        var row = TenantExportRedaction.Apply(
+            "TenantProviderBinding", TenantExportRedaction.ToJson(binding));
+        var exported = row!["values"]!["secret_key"]!["value"]!.GetValue<string>();
+
+        Assert.Equal(ProviderSecrecy.Mask + "58e6", key.Censored);      // ما يَعرِضُه الاستوديو
+        Assert.Equal("", exported);                                       // وما يَخرُجُ في التَصدير
+    }
+
     /// <summary><b>وكُلُّ حَقلٍ في قائِمَةِ الحَذفِ يُسَمّي خاصِّيَّةً
     /// قائِمَةً فِعلاً</b> — فَقائِمَةٌ تَحذِفُ اسماً لا وُجودَ لَه
     /// تُطَمئِنُ ولا تَحمي، وهي بِعَينِها الأَداةُ العَمياء.</summary>
