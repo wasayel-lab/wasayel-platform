@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text;
 using System.Text.RegularExpressions;
 using ACommerce.Platform.Providers;
 using ACommerce.Templates.Customer.Marketplace;
@@ -212,5 +214,106 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
             deploy.Contains("### ⚠️ لا يُضبَطُ في الإنتاجِ قَبلَ عَميلِ البَوّابَة", StringComparison.Ordinal));
         Assert.Equal(!sealedCollects,
             deploy.Contains("**ومَعَه سَطرُ ⚠ «وعَميلُ البَوّابَةِ غَيرُ مَبنِيّ»**", StringComparison.Ordinal));
+    }
+
+    // ─── ٥. الكُتلَةُ تُشَغَّلُ لا تُقرَأُ فَحَسب — حُكمُها حُكمُ الخِزانَة (مُراجَعَةُ ‏2026-10-12) ───
+    //
+    // الصَفّانِ ٣ و٤ يَقرَآنِ نَصَّ السِكربت، والنَصُّ لا يُري ما تَطبَعُه الكُتلَةُ فِعلاً: الإسنادُ تَحتَ
+    // `pipefail` لا يُرى إلّا بِالتَشغيل. فَهُنا تُشَغَّلُ الكُتلَةُ نَفسُها — مَقطوعَةً بِـ`KekBlock` كَما هِيَ،
+    // بَعدَ ما يَسبِقُها في البَوّابَةِ وتَحتاجُه (`set -uo pipefail` و`say`) — بِـbash لِكُلِّ شَكلِ مُدخَل،
+    // ويُقارَنُ حُكمُها («مَضبوط» أَم تَنبيهٌ) بِحُكمِ `ProviderVault.FromKek` — الحَقيقَةِ الَّتي تُنَبِّهُ عَنها.
+    // **وعَلى Windows لا bash مَعلومَ المَوضِع**: يُطبَعُ ذلكَ ويُرجَع، عَلى نَسَقِ الصُفوفِ الحَيَّةِ المُبَوَّبَة؛
+    // وCI (‏ubuntu) يُشَغِّلُه دائِماً، وغِيابُ `/bin/bash` عَلى غَيرِ Windows يُفشِلُ بِاسمِ الأَداة (القاعِدَة ١٤).
+
+    private static readonly string ValidKek =
+        Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(ProviderVault.KekBytes));
+
+    /// <summary>شَكلُ المُدخَلِ بِاسمِه — والقيمَةُ تُبنى هُنا لا تُكتَب: لا مِفتاحَ ثابِتاً في المُستَودَع.</summary>
+    private static string? KekOf(string shape) => shape switch
+    {
+        "absent"        => null,
+        "empty"         => "",
+        "blank"         => " \t ",
+        "valid"         => ValidKek,
+        "valid+newline" => ValidKek + "\n",
+        "not-base64"    => "not base64 !!",
+        "16-bytes"      => "AAAAAAAAAAAAAAAAAAAAAA==",          // ‏AES-128 لا يُقبَل
+        "unpadded-43"   => ValidKek.TrimEnd('='),               // ‏43 مِحرَفاً بِلا حَشو
+        "url-safe"      => Convert.ToBase64String(Enumerable.Repeat((byte)0xFF, ProviderVault.KekBytes).ToArray())
+                               .Replace('/', '_').Replace('+', '-'),
+        _ => throw new ArgumentOutOfRangeException(nameof(shape), shape, "شَكلٌ لا يَعرِفُه الصَفّ."),
+    };
+
+    /// <summary>يُشَغِّلُ كُتلَةَ المِفتاحِ وَحدَها بِـbash بِمُتَغَيِّرٍ مَضبوطٍ أَو مَمحُوّ — ويُرجِعُ رَمزَ خُروجِها
+    /// ومُخرَجَها (الخَطَأُ مَدموجٌ فيه).</summary>
+    private static (int Status, string Text) RunKekBlock(string? kek)
+    {
+        Assert.True(File.Exists("/bin/bash"), "أَداةٌ غائِبَة: /bin/bash — لا تُشَغَّلُ الكُتلَةُ بِدونِها.");
+        var block = KekBlock(Read("scripts", "verify-production-boot.sh"));
+
+        var dir = Directory.CreateTempSubdirectory("wasayel-kek-block-");
+        try
+        {
+            var file = Path.Combine(dir.FullName, "kek-block.sh");
+            File.WriteAllText(file, "set -uo pipefail\nexec 2>&1\nsay() { echo \"  $*\"; }\n" + block,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+            var psi = new ProcessStartInfo("/bin/bash", new[] { file })
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                StandardOutputEncoding = Encoding.UTF8,
+            };
+            psi.Environment.Remove(ProviderVault.KekEnvironmentVariable);
+            if (kek is not null) psi.Environment[ProviderVault.KekEnvironmentVariable] = kek;
+
+            using var p = Process.Start(psi)!;
+            var text = p.StandardOutput.ReadToEnd();
+            Assert.True(p.WaitForExit(10_000), "كُتلَةُ المِفتاحِ لَم تَنتَهِ في عَشرِ ثَوانٍ.");
+            return (p.ExitCode, text);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("absent")]
+    [InlineData("empty")]
+    [InlineData("blank")]
+    [InlineData("valid")]
+    [InlineData("valid+newline")]
+    [InlineData("not-base64")]
+    [InlineData("16-bytes")]
+    [InlineData("unpadded-43")]
+    [InlineData("url-safe")]
+    public void The_kek_block_run_by_bash_gives_the_vaults_verdict_exits_zero_and_never_prints_the_key(string shape)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            output.WriteLine($"[{shape}] Windows — لا bash مَعلومَ المَوضِع؛ يُقاسُ هذا الصَفُّ في CI (‏ubuntu).");
+            return;
+        }
+
+        var kek = KekOf(shape);
+        var (status, text) = RunKekBlock(kek);
+        var available = ProviderVault.FromKek(kek).IsAvailable;
+        var set = text.Contains("مِفتاحُ الخِزانَة: مَضبوط", StringComparison.Ordinal);
+        output.WriteLine($"[{shape}] رَمزُ الخُروج {status} · الخِزانَة: {(available ? "مُتاحَة" : "غَيرُ مُتاحَة")} · البَوّابَة: {(set ? "مَضبوط" : "تَنبيه")}");
+        output.WriteLine(text);
+
+        Assert.False(string.IsNullOrWhiteSpace(text), "أَداةٌ عَمياء: الكُتلَةُ لَم تَطبَع شَيئاً.");
+
+        // تُنَبِّهُ ولا تُفشِل — في كُلِّ شَكل.
+        Assert.Equal(0, status);
+
+        // وحُكمُها حُكمُ الخِزانَةِ الَّتي تُنَبِّهُ عَنها: «مَضبوط» حَيثُ تَختِمُ وَحدَه، ورَمزُ الخَرقِ حَيثُ لا.
+        Assert.Equal(available, set);
+        if (!available) Assert.Contains(ProviderVault.Unavailable, text, StringComparison.Ordinal);
+
+        // ولا تَطبَعُ المِفتاح.
+        var key = kek?.Trim() ?? "";
+        if (key.Length >= 8) Assert.DoesNotContain(key, text, StringComparison.Ordinal);
     }
 }
