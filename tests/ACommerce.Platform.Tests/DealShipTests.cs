@@ -556,6 +556,38 @@ public class DealShipTests
         Assert.Equal(2, w.Oto.CallsTo(OtoClient.OrderStatusPath));
     }
 
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم» — طَلَبٌ تُمسِكُه OTO في حالٍ نِهائِيٍّ يُجابُ «أَكمِل الشَّحن» فيه بِـ<c>shipment_unconfirmed</c> كُلَّ نَقرَة، والبابُ
+    /// يَبقى مَرسوماً</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 §٧‑ح‑٣‑١): الحالاتُ الأَربَعُ الَّتي يُسَمّيها ذاكَ البَند —
+    /// <c>canceled</c> و<c>deleted</c> («Order Management») و<c>returned</c> («Returned») و<c>shipmentCanceled</c> («Tracking and Return Management»)
+    /// في «List Of Statuses» — لَيسَت مِن حالاتِ الشُحنَةِ فَلا تُثبِتُ شَيئاً، و<c>IsPlaced</c> يَمنَعُ طَلَباً جَديداً: نَقرَتانِ ونَتيجَةٌ واحِدَة،
+    /// وبَوّابَةُ الاستِمارَةِ تُجيزُها بَعدَهُما فَيُرسَمُ البابُ نَفسُه. يُثَبَّتُ قَبلَ قَلبِه (القاعِدَة ٣).</para>
+    /// </summary>
+    [Theory]
+    [InlineData("canceled")]
+    [InlineData("deleted")]
+    [InlineData("returned")]
+    [InlineData("shipmentCanceled")]
+    public async Task Today_a_resume_on_an_order_OTO_holds_in_a_terminal_state_answers_shipment_unconfirmed_every_click_and_the_door_stays(string status)
+    {
+        var w = await ConfirmedCashDeal();
+        await w.Deals.AttachRefAsync(Slug, w.Id, DealShipping.OrderRef, w.Id.ToString("N"));
+        await w.Deals.AttachRefAsync(Slug, w.Id, DealShipping.OtoIdRef, "540789");
+        w.Oto.Routes[OtoClient.OrderStatusPath] = body =>
+            OtoRouteHandler.Tracking(OtoRouteHandler.OrderIdIn(body), status: status, label: null);
+
+        var first = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, city: null);
+        var second = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, city: null);
+
+        Assert.Equal(DealShipping.ShipmentUnconfirmed, first.Code);
+        Assert.Equal(DealShipping.ShipmentUnconfirmed, second.Code);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.Equal((DealStatus.Active, DealStage.Confirmed), (deal.Status, deal.Stage));
+        Assert.True(DealShipAuthorization.IsAllowed(deal, Vendor, carrierReady: true));   // الصَفحَةُ تَرسُمُ «أَكمِل الشَّحن» مِن جَديد
+        Assert.Equal(0, w.Oto.CallsTo(OtoClient.CreateOrderPath));
+        Assert.Equal(2, w.Oto.CallsTo(OtoClient.OrderStatusPath));
+    }
+
     [Fact]
     public async Task A_refusal_at_the_gate_sends_nothing_to_OTO_and_writes_nothing()
     {
