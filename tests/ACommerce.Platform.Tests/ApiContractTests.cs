@@ -306,6 +306,19 @@ public class ApiContractTests
         Assert.Contains("\"deal_changed_meanwhile\"", ApiJson.Serialize(raced.Payload), StringComparison.Ordinal);
     }
 
+    /// <summary><b>تَوصيفُ «اليَوم» — رِسالَةُ <c>deal_awaits_carrier</c> تَقولُ إنّ الناقِلَ يُدخِلُ الصَفقَةَ «شَحن» ولا تُسَمّي البابَ ولا
+    /// البوليصَة</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، البَندُ A0 (ix)، ‏2026-10-12): كُتِبَت قَبلَ أَن يُدخِلَها الوارِدُ «شَحن» (‏ADR-033 §٧‑ط)،
+    /// وما يُدخِلُها اليَومَ جَوابُ OTO يُثبِتُ شُحنَتَها <b>وبوليصَتَها</b> — بِـ«أَكمِل الشَّحن» عِندَ البائِعِ أَو بِإشعارٍ مِن OTO. يُثَبَّتُ قَبلَ قَلبِه (القاعِدَة ٣).</summary>
+    [Fact]
+    public void Today_the_deal_awaits_carrier_message_says_the_carrier_moves_the_deal_and_names_neither_the_resume_nor_the_label()
+    {
+        var message = ApiErrorCatalog.Require(ApiErrorCatalog.DealAwaitsCarrier).MessageAr;
+        Assert.Equal("طَلَبُ شَحنِ هذِه الصَفقَةِ عِندَ الناقِل — تَدخُلُ «شَحن» حينَ يُثبِتُ الناقِلُ شُحنَتَها، لا بِهذا الباب.", message);
+        Assert.DoesNotContain("أَكمِل الشَّحن", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("بوليصَت", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("OTO", message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void A_cancel_that_cancelled_answers_200()
         => Assert.Equal(200,
