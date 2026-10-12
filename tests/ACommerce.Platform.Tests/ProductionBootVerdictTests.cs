@@ -314,4 +314,49 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         var deploy = File.ReadAllText(Path.Combine(RepoRoot, "docs", "DEPLOY.md"));
         Assert.Contains("| Secrets | Repository secret (اختِياريّ، ‏2026-10-12) | `BOOT_GATE_CONNECTION_STRING` |", deploy, StringComparison.Ordinal);
     }
+
+    // ─── ٧. تَوصيفُ «اليَوم» — الدالَّةُ تَقرَأُ أَوَّلَ سَطرٍ مِن مَعجَمِها في السِجِلِّ كُلِّه (مُراجَعَةُ تَيّارِ S10، الجَولَة ١) ─────
+    //
+    // **المَقيس** (قَبلَ أَيِّ تَعديل — القاعِدَة ٣): `boot_verdict` تَبحَثُ في السِجِلِّ كُلِّه عَن أَوَّلِ SqlState وأَيِّ «Failed to
+    // connect»، وفَرعُ المَساراتِ يُناديها عَلى `$APP_LOG` كُلِّه (صَفُّ ٤) — فَلا تَسأَلُ ما الَّذي أَسقَطَ المَسارَ أَو قَتَلَ العَمَلِيَّة.
+    // وصِنفُ 08 بِنَجمَةٍ يَضُمُّ ‏08P01 (protocol_violation — خَطَأُ عَميلٍ أَو كود). فَكَسرٌ في الكودِ يُقرَأُ «عِندَ المُشَغِّل» (3)
+    // إن سَبَقَه سَطرُ قاعِدَةٍ عابِر — وفي CI يَصيرُ 3 ‏`::warning::` فَيُنشَرُ الكَسر. **هذِه الصُفوفُ تُثَبِّتُ «اليَوم» بِحَرفِه
+    // لِتُقلَبَ بِأَسمائِها في الكوميتِ الَّذي يَليه**، والسِجِلّانِ الأَوَّلانِ سِجِلّا المُراجَعَةِ نَفسَيهِما.
+
+    /// <summary>سَطرُ قاعِدَةٍ عابِرٌ (تَحذيرٌ أُعيدَت بَعدَه المُحاوَلَة) ثُمَّ سُقوطُ مَسارٍ بِاستِثناءٍ مِن الكود.</summary>
+    private const string TransientConnectThenCodeFailure =
+        "[WRN] Npgsql.NpgsqlException (0x80004005): Failed to connect to 10.1.2.3:5432 (transient, retried…)\n"
+        + "HTTP GET / responded 500\n"
+        + "System.NullReferenceException: Object reference not set to an instance of an object.\n";
+
+    [Fact]
+    public void Today_a_route_failure_after_an_earlier_transient_connect_line_reads_as_the_operators()
+    {
+        if (NoBash(output)) return;
+        var (code, line) = Verdict(TransientConnectThenCodeFailure);
+        Assert.Equal(3, code);
+        Assert.Contains("القاعِدَةُ لا تُبلَغ", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Today_sqlstate_08P01_protocol_violation_reads_as_a_server_that_does_not_accept_connections()
+    {
+        if (NoBash(output)) return;
+        var (code, line) = Verdict(Unhandled(new PostgresException(
+            "bind message has 70000 parameter formats but 0 parameters", "ERROR", "ERROR", "08P01")));
+        Assert.Equal(3, code);
+        Assert.Contains("SqlState 08P01", line, StringComparison.Ordinal);
+    }
+
+    /// <summary>وفي فَرعِ المَوتِ مِثلُه: سَطرُ قاعِدَةٍ عابِرٌ ثُمَّ استِثناءٌ قاتِلٌ مِن الكود.</summary>
+    [Fact]
+    public void Today_a_boot_death_by_a_code_exception_after_an_earlier_transient_connect_line_reads_as_the_operators()
+    {
+        if (NoBash(output)) return;
+        var (code, line) = Verdict(
+            "[WRN] Npgsql.NpgsqlException (0x80004005): Failed to connect to 10.1.2.3:5432 (transient, retried…)\n"
+            + Unhandled(new NullReferenceException("Object reference not set to an instance of an object.")));
+        Assert.Equal(3, code);
+        Assert.Contains("القاعِدَةُ لا تُبلَغ", line, StringComparison.Ordinal);
+    }
 }
