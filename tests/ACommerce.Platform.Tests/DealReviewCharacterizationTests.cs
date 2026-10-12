@@ -265,4 +265,48 @@ public class DealReviewCharacterizationTests
             $"تَرويسَةُ النُقطَةِ تَغَيَّرَت: session={session} login={login} rating={rating} body={body}");
         Assert.Contains("}).DisableAntiforgery()", review, StringComparison.Ordinal);
     }
+
+    // ═══ ٣) «اليَوم» — البائِعُ وَحدَه يُكمِلُ صَفقَةَ النَقدِ ويُقَيِّمُ مُشتَريها «مُوَثَّقاً» ═══════════════════
+    //
+    // مُراجَعَةُ الموجَةِ الثانِيَةِ الرابِعَة (‏2026-10-12): النَقدُ يَتَخَطّى `Paid` (‏ADR-033 §٦‑ب‑٣)، ونَمَطُ
+    // `marketplace` بِلا `Received`، وفاعِلُ كُلِّ مَرحَلَةٍ مَدخولَةٍ بَعدَها الطَرَفُ أَو أَيٌّ مِنهُما (§٦‑ط) — فَلا خُطوَةَ
+    // لِلمُشتَري في الطَريقِ كُلِّه. **يُثَبَّتُ ولا يُقَرَّر**: سُؤالٌ لِلمالِكِ «ب» (هَل يَتَطَلَّبُ إكمالُ صَفقَةِ النَقدِ، أَو
+    // تَقييمُ البائِعِ لِلمُشتَري «مُوَثَّقاً»، خُطوَةً مِن المُشتَري؟) وسَطرٌ مُؤَرَّخٌ في ‏ADR-033 §٦‑ج.
+
+    /// <summary><b>اليَوم</b>: البائِعُ المَربوطُ عِندَ الوِلادَةِ يَقبَلُ صَفقَةَ النَقدِ ثُمَّ يَمشيها وَحدَه — حَجز ← تَأكيد
+    /// ← شَحن ← تَسليم ← تَقييم — إلى <c>Completed</c> بِلا نَقرَةٍ واحِدَةٍ مِن المُشتَري، ثُمَّ تُجيزُ بَوّابَةُ التَقييمِ
+    /// (‏ADR-033 §٦‑ح) تَقييمَه لِلمُشتَري، والبابُ يُمَرِّرُ مُعَرِّفَ الصَفقَةِ فَيَسِمُه الكيتُ «مُوَثَّقاً»
+    /// (<c>VerifiedTransaction</c>) — لِطَلَبٍ رُبَّما لَم يُسَلَّم. يُقلَبُ بِاسمِه يَومَ يُجيبُ المالِك.</summary>
+    [Fact]
+    public void Today_the_seller_alone_walks_a_cash_deal_to_Completed_and_his_review_of_the_buyer_is_verified()
+    {
+        var (world, id) = CashCartWorld();
+        var deals = new DealsService(world.Store, new ForbiddenPaymentProvider());
+
+        var accepted = Now(deals.AcceptAsync(Slug, id, new DealAcceptor(Seller, "بائِع")));
+        Assert.True(accepted.Ok, accepted.Violation?.MessageAr);
+        var stages = new List<DealStage> { accepted.Deal!.Stage };
+        var clicks = 1;
+        while (world.Read<Deal>(id.ToString())!.Status == DealStatus.Active && clicks < 10)
+        {
+            var r = Now(deals.AdvanceAsync(Slug, id, Seller, "بائِع"));
+            Assert.True(r.Ok, $"النَقرَةُ {clicks + 1} رُدَّت: {r.Reason}");
+            stages.Add(r.Deal!.Stage);
+            clicks++;
+        }
+
+        var deal = world.Read<Deal>(id.ToString())!;
+        Assert.Equal(DealStatus.Completed, deal.Status);
+        Assert.Equal(new[] { DealStage.Booked, DealStage.Confirmed, DealStage.Shipping, DealStage.Delivered, DealStage.Reviewed },
+            stages.ToArray());
+        Assert.All(deal.Timeline.Where(e => e.Action == "advanced"), e => Assert.Equal(Seller, e.ActorId));
+        Assert.Contains(deal.Timeline, e => e.Action == DealEvent.CashOnDelivery && e.ActorId == Seller);
+
+        Assert.Null(DealReviewAuthorization.Validate(deal, new DealReviewer(Seller, "بائِع")));
+        Assert.Equal((Buyer, "مُشتَرٍ"), DealReviewAuthorization.TargetOf(deal, Seller));
+        Assert.Contains("dealId: dealId, dealPattern: deal!.Pattern", DealReviewsService(), StringComparison.Ordinal);
+        var review = Now(new ReviewsService(world.Store).SubmitAsync(Slug, Buyer, "مُشتَرٍ", Seller, "بائِع", 1, "لَم يَستَلِم",
+            dealId: id, dealPattern: deal.Pattern));
+        Assert.True(review.VerifiedTransaction);
+    }
 }
