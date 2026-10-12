@@ -415,13 +415,30 @@ public sealed class DealShipping
     }
 
     /// <summary>القَرارُ ثُمَّ الانتِقال — ويُعادُ القَرارُ عَلى المَخزونِ بَعدَ كُلِّ رَدّ: <see cref="NoticeAttempts"/> كِتابَةً
-    /// عَلى الأَكثَر، وقَرارٌ أَخيرٌ عَلى ما كُتِبَ بَعدَ آخِرِها (فَتَسليمٌ سَبَقَ يُجابُ «سَبَق» لا ‏503).</summary>
+    /// عَلى الأَكثَر، وقَرارٌ أَخيرٌ عَلى ما كُتِبَ بَعدَ آخِرِها (فَتَسليمٌ سَبَقَ يُجابُ «سَبَق» لا ‏503).
+    /// <para>(<b>ويُلحَقُ ‏2026-10-12 — مُراجَعَةُ المَوجَة 3a، تَيّارُ S8؛ ‏ADR-033 §٧‑ط</b>: صَفقَةٌ عِندَ «تأكيد» بِطَلَبِها يُثبِتُ الجَوابُ شُحنَتَها
+    /// وبوليصَتَها (<see cref="OtoOrderStatusGate.ShipsFirst"/>) تَدخُلُ «شَحن» أَوَّلاً — بِالبائِعِ طَرَفاً مُقابِلاً ومِن المَرحَلَةِ الَّتي قُرِئَت
+    /// وبِالجَوابِ مَحمولاً، كَما تُدخِلُها «أَكمِل الشَّحن» — ثُمَّ يُسأَلُ التَسليمُ عَلى ما كُتِب. والكِتابَةُ مِن الحِصَّةِ نَفسِها، ولا انتِقالَ
+    /// لِصَفقَةٍ عِندَ «شَحن»: لا تَصدُقُ عَلَيها <see cref="AwaitsCarrier"/>.)</para></summary>
     private async Task<OtoNoticeOutcome> DeliverAsync(string tenantSlug, Deal deal, OtoOrderState state)
     {
         var current = deal;
+        var shipped = false;
         for (var attempt = 1; ; attempt++)
         {
-            if (OtoOrderStatusGate.Decide(current, state) is { } refusal) return new(refusal.Code, current);
+            if (OtoOrderStatusGate.ShipsFirst(current, state))
+            {
+                if (attempt > NoticeAttempts) return new(DealsService.ChangedMeanwhile, current);
+                var entered = await _deals.AdvanceAsync(tenantSlug, current.Id, current.CounterpartyId!.Value,
+                    current.CounterpartyName ?? "", null, CancellationToken.None, current.Stage, state);
+                if (entered.Deal is not { } now) return new(OtoOrderStatusGate.OrderUnknown, null);
+                shipped |= entered.Ok;
+                current = now;
+                continue;
+            }
+
+            if (OtoOrderStatusGate.Decide(current, state) is { } refusal)
+                return new(shipped && refusal.Code == OtoOrderStatusGate.NotDelivered ? OtoOrderStatusGate.Shipped : refusal.Code, current);
             if (attempt > NoticeAttempts) return new(DealsService.ChangedMeanwhile, current);
 
             var moved = await _deals.AdvanceAsync(tenantSlug, current.Id, current.CounterpartyId!.Value,

@@ -1048,9 +1048,14 @@ public class DealShipTests
     /// و<c>apps/</c> يُعَدُّ ويُقسَمُ مُعامِلاتٍ عَلى المُستَوى الأَعلى (والنُصوصُ المُقتَبَسَةُ تُتَخَطّى — في نِداءِ الاستوديو قَوسانِ داخِلَ
     /// نَصّ)، وما حَمَلَ ثامِناً أَو <c>shipment:</c> مُسَمّى واحِدٌ — في <c>DealShipping.cs</c>، بَعدَ <c>ShipmentConfirmed</c>. فَبابٌ عامٌّ
     /// يُضافُ وهو يَحمِلُ جَواباً يَحمَرُّ هذا بِاسمِ مِلَفِّه.</para>
+    ///
+    /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>Only_the_ship_path_hands_an_OTO_answer_to_the_transition</c> (خَمسَةُ نِداءاتٍ وحامِلٌ واحِد).
+    /// <b>والآن</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 §٧‑ط): سادِسٌ يَحمِلُ الجَوابَ — وارِدُ OTO يُدخِلُ «شَحن» صَفقَةً عِندَ «تأكيد»
+    /// بِطَلَبِها حينَ يُثبِتُ الجَوابُ المَجلوبُ شُحنَتَها (<c>OtoOrderStatusGate.ShipsFirst</c>). فَالحامِلانِ كِلاهُما في <c>DealShipping.cs</c>
+    /// وبَعدَ سُؤالِ OTO، ونِداءٌ سابِعٌ أَو حامِلٌ خارِجَه يَحمَرُّ كَما كان.</para>
     /// </summary>
     [Fact]
-    public void Only_the_ship_path_hands_an_OTO_answer_to_the_transition()
+    public void Only_the_OTO_paths_in_DealShipping_hand_an_OTO_answer_to_the_transition()
     {
         var files = new[] { "libs", "apps" }
             .SelectMany(d => Directory.EnumerateFiles(Path.Combine(RepoRoot, d), "*.*", SearchOption.AllDirectories))
@@ -1073,11 +1078,11 @@ public class DealShipTests
                    string.Join("، ", calls.Select(c => $"{c.File}({c.Args})"));
         Console.WriteLine("· " + line);
         Assert.True(files.Length > 200, "أَداةٌ عَمياء — " + line);
-        // خَمسَةٌ اليَوم: `/advance` والمَسارُ الإداريُّ (5 لِكُلٍّ) — في MarketplaceTemplateExtensions — والـAPI (6)، و`ShipAsync` (8)
-        // ووارِدُ OTO (7) في DealShipping. بابٌ سادِسٌ يُحمِرُّ هذا فَيُسأَلُ عَنه في مُراجَعَة.
-        Assert.True(calls.Count == 5, line);
+        // سِتَّةٌ مُنذُ ‏2026-10-12 (مُراجَعَةُ المَوجَة 3a — كانَت خَمسَة): `/advance` والمَسارُ الإداريُّ (5 لِكُلٍّ) — في MarketplaceTemplateExtensions —
+        // والـAPI (6)، و`ShipAsync` (8) ودُخولُ الوارِدِ «شَحن» (8) ووارِدُ التَسليم (7) في DealShipping. بابٌ سابِعٌ يُحمِرُّ هذا فَيُسأَلُ عَنه في مُراجَعَة.
+        Assert.True(calls.Count == 6, line);
         var carrying = calls.Where(c => c.Args >= 8 || c.Named).ToList();
-        Assert.True(carrying.Count == 1 && carrying[0].File == "DealShipping.cs", line);
+        Assert.True(carrying.Count == 2 && carrying.All(c => c.File == "DealShipping.cs"), line);
     }
 
     /// <summary>مُعامِلاتُ النِداءِ عَلى المُستَوى الأَعلى مِن القَوسِ عِندَ <paramref name="open"/> — والنُصوصُ (<c>"…"</c> و<c>'…'</c>) تُتَخَطّى.</summary>

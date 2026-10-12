@@ -408,9 +408,13 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         Assert.DoesNotContain(Stored(w).Timeline, e => e.StageAfter == DealStage.Delivered);
     }
 
-    /// <summary>صَفقَةٌ لَها طَلَبٌ ولَم تَخرُج إلى الشَحن (رُدَّ انتِقالُها) — التَسليمُ لا يَقفِزُ فَوقَ الشَحن.</summary>
+    /// <summary>صَفقَةٌ لَها طَلَبٌ ولَم تَخرُج إلى الشَحن (رُدَّ انتِقالُها) — التَسليمُ لا يَقفِزُ فَوقَ الشَحن.
+    /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>A_delivery_for_a_deal_still_at_Confirmed_does_not_jump_over_Shipping</c> (‏<c>e96c482</c>): «delivered» بِبوليصَةٍ
+    /// عَلى صَفقَةٍ عِندَ «تأكيد» بِطَلَبِها يُجابُ <c>deal_not_shipping</c> فَلا تُعيدُه OTO ويَضيعُ التَسليمُ الآلِيّ. <b>والآن</b> (مُراجَعَةُ المَوجَة 3a،
+    /// تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 §٧‑ط): الجَوابُ يُثبِتُ الشُحنَةَ والبوليصَة فَتَدخُلُ «شَحن» ثُمَّ «تَسليم» — بِالبائِعِ في الاثنَين، ولا قَفزَ:
+    /// سَطرا انتِقالٍ مُتَتالِيان.</para></summary>
     [Fact]
-    public async Task A_delivery_for_a_deal_still_at_Confirmed_does_not_jump_over_Shipping()
+    public async Task A_delivery_for_a_deal_still_at_Confirmed_passes_through_Shipping_when_OTO_confirms_the_shipment()
     {
         var w = await DealShipTests.ConfirmedCashDeal();
         await w.Deals.AttachRefAsync(Slug, w.Id, DealShipping.OrderRef, w.Id.ToString("N"));
@@ -419,20 +423,45 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
 
         var outcome = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id));
 
-        Assert.Equal(OtoOrderStatusGate.DealNotShipping, outcome.Code);
-        Assert.Equal(DealStage.Confirmed, Stored(w).Stage);
+        Assert.Equal(OtoOrderStatusGate.Delivered, outcome.Code);
+        var deal = Stored(w);
+        Assert.Equal(DealStage.Delivered, deal.Stage);
+        var moves = deal.Timeline.Where(e => e.Action == "advanced").Select(e => (e.StageBefore, e.StageAfter, e.ActorId)).ToArray();
+        Assert.Contains((DealStage.Confirmed, DealStage.Shipping, Seller), moves);
+        Assert.Contains((DealStage.Shipping, DealStage.Delivered, Seller), moves);
+        Assert.Single(deal.Timeline, e => e.Action == DealEvent.CashOnDelivery);
+    }
+
+    /// <summary><b>والسالِب</b> (‏2026-10-12، ‏ADR-033 §٧‑ط): جَوابٌ لا يُثبِتُ الشُحنَة — <c>missingData</c> بِلا بوليصَة — لا يُدخِلُ «شَحن»: تَبقى
+    /// الصَفقَةُ عِندَ «تأكيد» بِطَلَبِها، ويُجابُ <c>not_delivered</c> ‏200 كَما كان.</summary>
+    [Fact]
+    public async Task A_notice_whose_answer_does_not_confirm_the_shipment_leaves_the_Confirmed_deal_where_it_is()
+    {
+        var w = await DealShipTests.ConfirmedCashDeal();
+        await w.Deals.AttachRefAsync(Slug, w.Id, DealShipping.OrderRef, w.Id.ToString("N"));
+        await w.Deals.AttachRefAsync(Slug, w.Id, DealShipping.OtoIdRef, OurOtoId);
+        w.Oto.Routes[OtoClient.OrderStatusPath] = body =>
+            OtoRouteHandler.Tracking(OtoRouteHandler.OrderIdIn(body), status: "missingData", label: null);
+
+        var outcome = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id, status: "missingData"));
+
+        Assert.Equal(OtoOrderStatusGate.NotDelivered, outcome.Code);
+        Assert.Equal((DealStatus.Active, DealStage.Confirmed), (Stored(w).Status, Stored(w).Stage));
+        Assert.DoesNotContain(Stored(w).Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Shipping);
     }
 
     /// <summary>
-    /// <para><b>إشعاراتٌ لِصَفقَةٍ رَدَّت عَلَيها <c>/ship</c> بِـ<c>shipment_unconfirmed</c> — تَوصيفُ ما يَقَعُ اليَوم</b> (مُراجَعَةُ تَيّارِ S7
-    /// الثانِيَة، ‏2026-10-12؛ ‏ADR-033 §٧‑ج‑٣ و§٧‑ح): كانَ مَقيساً بِمِجَسٍّ لَم يُودَع (القاعِدَة ٢). إن أَنشَأَت OTO الشُحنَةَ بَعدَ نَقرَةِ البائِعِ
-    /// وقَبلَ «أَكمِل الشَّحن»: إشعارُ <c>searchingDriver</c> يُجابُ ‏200 <c>not_delivered</c> ويُكتَبُ رابِطا البوليصَةِ والتَتَبُّعِ عَلى صَفقَةٍ عِندَ
-    /// <c>Confirmed</c>؛ وإشعارُ <c>delivered</c> بَعدَه يُجابُ ‏200 <c>deal_not_shipping</c> بِلا انتِقال — و‏200 لا تُعيدُه OTO. فَـ«أَكمِل الشَّحن»
-    /// بَعدَها تُخرِجُها إلى «شَحن» (‏<c>delivered</c> مِن حالاتِ الشُحنَة)، والتَسليمُ يَدَوِيٌّ بِـ«تَأكيد: تَسليم»: يَضيعُ التَسليمُ الآلِيُّ في هذا
-    /// التَرتيبِ لا نَقرَةٌ واحِدَة. لا يُقلَبُ هُنا — الخِيارُ لِلمالِك (سِجِلُّه «أ»).</para>
+    /// <para><b>إشعاراتٌ لِصَفقَةٍ رَدَّت عَلَيها <c>/ship</c> بِـ<c>shipment_unconfirmed</c></b> (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12؛ ‏ADR-033 §٧‑ج‑٣
+    /// و§٧‑ح): كانَ مَقيساً بِمِجَسٍّ لَم يُودَع (القاعِدَة ٢).</para>
+    ///
+    /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>After_shipment_unconfirmed_notices_write_the_links_on_the_Confirmed_deal_and_a_delivery_answers_200_so_it_is_not_resent</c>
+    /// (‏<c>dace4bd</c>، ‏<c>71fcd5e</c>): إشعارُ <c>searchingDriver</c> كانَ يُجابُ <c>not_delivered</c> ويَكتُبُ الرابِطَينِ عَلى صَفقَةٍ عِندَ «تأكيد»، ثُمَّ
+    /// <c>delivered</c> يُجابُ ‏200 <c>deal_not_shipping</c> فَلا تُعيدُه OTO — ويَضيعُ التَسليمُ الآلِيّ. <b>والآن</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8،
+    /// ‏2026-10-12؛ ‏ADR-033 §٧‑ط؛ سِجِلُّ المالِكِ «أ» S8): الجَوابُ المَجلوبُ الَّذي يُثبِتُ الشُحنَةَ والبوليصَةَ يُدخِلُها «شَحن» بِالبائِعِ — كَما تُدخِلُها
+    /// «أَكمِل الشَّحن» — فَيُجابُ <c>shipped</c> ‏200، و<c>delivered</c> بَعدَه يُكتَبُ تَسليماً بِسَطرِ القَبضِ النَقديّ.</para>
     /// </summary>
     [Fact]
-    public async Task After_shipment_unconfirmed_notices_write_the_links_on_the_Confirmed_deal_and_a_delivery_answers_200_so_it_is_not_resent()
+    public async Task After_shipment_unconfirmed_a_notice_whose_shipment_OTO_confirms_moves_the_deal_into_Shipping_and_the_later_delivery_is_written()
     {
         var w = await DealShipTests.ConfirmedCashDeal();
         w.Oto.Routes[OtoClient.OrderStatusPath] = body =>
@@ -441,24 +470,49 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
 
         OtoSays(w, "searchingDriver");
         var searching = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id, status: "searchingDriver"));
-        Assert.Equal(OtoOrderStatusGate.NotDelivered, searching.Code);
+        Assert.Equal(OtoOrderStatusGate.Shipped, searching.Code);
         Assert.Equal(200, OtoOrderStatusGate.StatusFor(searching.Code));
-        Assert.Equal((DealStatus.Active, DealStage.Confirmed), (Stored(w).Status, Stored(w).Stage));
+        Assert.Equal((DealStatus.Active, DealStage.Shipping), (Stored(w).Status, Stored(w).Stage));
         Assert.Equal((Label, TrackingUrl), DealShipping.LinksOf(Stored(w)));
+        var entered = Assert.Single(Stored(w).Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Shipping);
+        Assert.Equal((DealStage.Confirmed, Seller), (entered.StageBefore, entered.ActorId));
 
         OtoSays(w, "delivered");
         var delivered = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id));
-        Assert.Equal(OtoOrderStatusGate.DealNotShipping, delivered.Code);
+        Assert.Equal(OtoOrderStatusGate.Delivered, delivered.Code);
         Assert.Equal(200, OtoOrderStatusGate.StatusFor(delivered.Code));
-        Assert.Equal((DealStatus.Active, DealStage.Confirmed), (Stored(w).Status, Stored(w).Stage));
-
-        // والطَريقُ بَعدَه: «أَكمِل الشَّحن» تَسأَلُ OTO فَتَجِدُ `delivered` بِبوليصَةٍ فَتُخرِجُها إلى «شَحن»، والتَسليمُ بِيَدِ البائِع.
-        Assert.True((await w.Shipping.ShipAsync(Slug, w.Id, DealShipTests.Vendor, city: null)).Ok);
-        Assert.Equal(DealStage.Shipping, Stored(w).Stage);
-        Assert.Equal(DealStage.Delivered, DealsPolicy.Next(Stored(w)));
-        Assert.True((await w.Deals.AdvanceAsync(Slug, w.Id, Seller, "بائِع", "")).Ok);
-        Assert.Equal(DealStage.Delivered, Stored(w).Stage);
+        Assert.Equal((DealStatus.Active, DealStage.Delivered), (Stored(w).Status, Stored(w).Stage));
         Assert.Single(Stored(w).Timeline, e => e.Action == DealEvent.CashOnDelivery);
+    }
+
+    /// <summary><b>البَوّابَةُ النَقِيَّة — مُوجَبٌ وسالِبٌ لِكُلِّ شَرطٍ في <see cref="OtoOrderStatusGate.ShipsFirst"/></b> (‏2026-10-12، ‏ADR-033 §٧‑ط):
+    /// صَفقَةٌ عِندَ «تأكيد» بِطَلَبِها وجَوابٌ يُثبِتُ الشُحنَةَ والبوليصَةَ تَدخُلُ «شَحن»؛ وكُلُّ شَرطٍ يُكسَرُ وَحدَه يَرُدُّها.</summary>
+    [Fact]
+    public void Ships_first_positive_and_negative()
+    {
+        Deal Confirmed(Action<Deal>? change = null)
+            => With(d => { d.Stage = DealStage.Confirmed; change?.Invoke(d); });
+
+        Assert.True(OtoOrderStatusGate.ShipsFirst(Confirmed(), State("searchingDriver")));
+        Assert.True(OtoOrderStatusGate.ShipsFirst(Confirmed(), State("delivered")));
+
+        Assert.False(OtoOrderStatusGate.ShipsFirst(Shipping(), State("searchingDriver")));                        // عِندَ «شَحن» أَصلاً
+        Assert.False(OtoOrderStatusGate.ShipsFirst(Confirmed(d => d.Refs.Remove(DealShipping.OrderRef)), State())); // لا طَلَبَ عِندَ OTO
+        Assert.False(OtoOrderStatusGate.ShipsFirst(Confirmed(), State("missingData")));                           // لا شُحنَة
+        Assert.False(OtoOrderStatusGate.ShipsFirst(Confirmed(), new OtoOrderState(DealId.ToString("N"), OurOtoId, "searchingDriver", null, TrackingUrl))); // لا بوليصَة
+        Assert.False(OtoOrderStatusGate.ShipsFirst(Confirmed(), State("searchingDriver", otoId: "30514281")));     // مُعَرِّفُ OTO آخَر
+        Assert.False(OtoOrderStatusGate.ShipsFirst(Confirmed(), State("searchingDriver", orderId: "OID-23331-9749"))); // طَلَبٌ آخَر
+        Assert.False(OtoOrderStatusGate.ShipsFirst(Confirmed(d => d.Status = DealStatus.Cancelled), State()));    // غَيرُ فَعّالَة
+        Assert.False(OtoOrderStatusGate.ShipsFirst(Confirmed(d => d.CounterpartyId = null), State()));            // لا بائِعَ يُحَرِّك
+    }
+
+    /// <summary>و<see cref="OtoOrderStatusGate.Shipped"/> نَتيجَةٌ تَكتُبُ لا خَرق: خارِجَ المَعجَم، وجَوابُها ‏200 فَلا تُعيدُه OTO.</summary>
+    [Fact]
+    public void Shipped_is_a_writing_outcome_outside_the_lexicon_answered_200()
+    {
+        Assert.DoesNotContain(OtoOrderStatusGate.Shipped, OtoOrderStatusGate.All);
+        Assert.NotEqual(OtoOrderStatusGate.Delivered, OtoOrderStatusGate.Shipped);
+        Assert.Equal(200, OtoOrderStatusGate.StatusFor(OtoOrderStatusGate.Shipped));
     }
 
     [Fact]
@@ -1006,6 +1060,62 @@ public class LiveOtoOrderStatusProofTests(ITestOutputHelper output)
         Assert.Equal("live", final.Refs["probe_note"]);
         Assert.Single(final.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Delivered);
         Assert.Single(final.Timeline, e => e.Action == DealEvent.CashOnDelivery);
+    }
+
+    /// <summary><b>دُخولُ «شَحن» مِن الوارِدِ عَلى Postgres</b> (‏2026-10-12، مُراجَعَةُ المَوجَة 3a؛ ‏ADR-033 §٧‑ط): صَفقَةٌ عِندَ «تأكيد» بِمَرجِعَي
+    /// طَلَبِها، وOTO تُجيبُ <c>searchingDriver</c> بِبوليصَة ⇒ <c>shipped</c> والصَفقَةُ عِندَ «شَحن» بِالبائِع؛ ثُمَّ <c>delivered</c> ⇒ «تَسليم»
+    /// بِسَطرِ القَبضِ النَقديّ — بِالمَخزَنِ الحَقيقيِّ وتَزامُنِه التَفاؤُليّ.</summary>
+    [Fact]
+    public async Task A_notice_whose_shipment_OTO_confirms_moves_a_Confirmed_deal_into_Shipping_then_Delivered_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = DealShipping.DemoStore + "-zz-" + Guid.NewGuid().ToString("N")[..8];
+        var seller = Guid.NewGuid();
+        try
+        {
+            var plain = new DealsService(store, new ForbiddenPaymentProvider());
+            var born = await plain.StartAsync(slug, "marketplace", Guid.NewGuid(), "مُشتَرٍ", null, "سِلعَة", 150m, new()
+            {
+                [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.CashOnDelivery,
+                [Deal.DeliveryAddressAttribute] = "حَيُّ المِثال",
+                [Deal.DeliveryPhoneAttribute] = "0500000000",
+            });
+            await plain.AttachRefAsync(slug, born.Id, DealsService.ListingOwnerRef, seller.ToString());
+            await plain.BindListingOwnerAsync(slug, born.Id, seller.ToString());
+            Assert.True((await plain.AcceptAsync(slug, born.Id, new DealAcceptor(seller, "بائِع"))).Ok);
+            Assert.True((await plain.AdvanceAsync(slug, born.Id, seller, "بائِع")).Ok);   // ← Confirmed
+            await plain.AttachRefAsync(slug, born.Id, DealShipping.OrderRef, born.Id.ToString("N"));
+            await plain.AttachRefAsync(slug, born.Id, DealShipping.OtoIdRef, "540789");
+
+            var oto = new OtoRouteHandler();
+            var receiver = Receiver(TenantAlias.Wrap(store, DealShipping.DemoStore, slug), oto);
+            oto.Routes[OtoClient.OrderStatusPath] = body =>
+                OtoRouteHandler.Tracking(OtoRouteHandler.OrderIdIn(body), status: "searchingDriver");
+            var first = await receiver.ReceiveAsync(DealShipping.DemoStore, OtoOrderStatusTests.Notice(born.Id, status: "searchingDriver"));
+            var shipped = (await plain.LoadAsync(slug, born.Id))!;
+
+            oto.Routes[OtoClient.OrderStatusPath] = body =>
+                OtoRouteHandler.Tracking(OtoRouteHandler.OrderIdIn(body), status: "delivered");
+            var second = await receiver.ReceiveAsync(DealShipping.DemoStore, OtoOrderStatusTests.Notice(born.Id));
+            var final = (await plain.LoadAsync(slug, born.Id))!;
+
+            output.WriteLine($"الأَوَّل: {first.Code} · {shipped.Status}/{shipped.Stage} · الثاني: {second.Code} · {final.Status}/{final.Stage} · سِجِلّ: " +
+                             string.Join(",", final.Timeline.Select(e => e.Action == "advanced" ? $"advanced→{e.StageAfter}" : e.Action)));
+            Assert.Equal(OtoOrderStatusGate.Shipped, first.Code);
+            Assert.Equal((DealStatus.Active, DealStage.Shipping), (shipped.Status, shipped.Stage));
+            Assert.Equal(OtoOrderStatusGate.Delivered, second.Code);
+            Assert.Equal((DealStatus.Active, DealStage.Delivered), (final.Status, final.Stage));
+            Assert.Single(final.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Shipping && e.ActorId == seller);
+            Assert.Single(final.Timeline, e => e.Action == DealEvent.CashOnDelivery);
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            foreach (var d in await s.Query<Deal>().ToListAsync()) s.Delete(d);
+            await s.SaveChangesAsync();
+        }
     }
 
     /// <summary><b>السالِب</b>: البائِعُ يُعلِنُ «تَسليم» بِزِرِّه ويُحفَظُ بَينَ قَرارِ الوارِدِ وحِفظِه — يَرُدُّ Marten الحِفظ، ويُعادُ

@@ -53,6 +53,11 @@ public sealed record OtoNoticeOutcome(string Code, Deal? Deal, string? OtoFailur
 /// <para><b>وما يُكتَبُ انتِقالٌ واحِد</b>: <c>Shipping → Delivered</c> عَبرَ <see cref="DealsService.AdvanceAsync"/> بِالطَرَفِ
 /// المُقابِلِ (السِياسَةُ تُقَرِّر: فاعِلُ <c>Delivered</c> = <c>counterparty</c>)، ورابِطا البوليصَةِ والتَتَبُّعِ حينَ
 /// يَتَغَيَّران. وكُلُّ رَمزٍ غَيرِ ذلك لا يَكتُب.</para>
+///
+/// <para>(<b>ومَعَه انتِقالٌ ثانٍ — يُلحَقُ ‏2026-10-12، مُراجَعَةُ المَوجَة 3a، تَيّارُ S8؛ ‏ADR-033 §٧‑ط؛ ولا يُعادُ حَرفٌ فَوقَه</b>:
+/// <c>Confirmed → Shipping</c> لِصَفقَةٍ طَلَبُها عِندَ OTO حينَ يُثبِتُ الجَوابُ المَجلوبُ شُحنَتَها وبوليصَتَها (<see cref="ShipsFirst"/>) — بِالبائِعِ
+/// طَرَفاً مُقابِلاً وبِالجَوابِ مَحمولاً إلى <see cref="DealsService.AdvanceAsync"/>، ثُمَّ يُسأَلُ التَسليمُ عَلى ما كُتِب. ونَتيجَتُه
+/// <see cref="Shipped"/> حينَ لا تَسليمَ بَعدُ.)</para>
 /// </summary>
 public static class OtoOrderStatusGate
 {
@@ -96,6 +101,12 @@ public static class OtoOrderStatusGate
 
     /// <summary>النَتيجَةُ الَّتي تَكتُب: خَرَجَت الصَفقَةُ إلى <c>Delivered</c>. لَيسَت خَرقاً فَلَيسَت في <see cref="All"/>.</summary>
     public const string Delivered = "delivered";
+
+    /// <summary>
+    /// <para><b>النَتيجَةُ الثانِيَةُ الَّتي تَكتُب: دَخَلَت الصَفقَةُ «شَحن» بِجَوابٍ أَثبَتَت فيه OTO شُحنَتَها وبوليصَتَها، ولَم تُسَلَّم بَعد</b>
+    /// (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 §٧‑ط). لَيسَت خَرقاً فَلَيسَت في <see cref="All"/>، وجَوابُها ‏200.</para>
+    /// </summary>
+    public const string Shipped = "shipped";
 
     // ─── المَرحَلَةُ الأولى: الإشعارُ الخامّ ───────────────────────────────
 
@@ -150,8 +161,7 @@ public static class OtoOrderStatusGate
     /// </summary>
     public static OtoNoticeViolation? Decide(Deal deal, OtoOrderState state)
     {
-        if (!string.Equals(state.OrderId, deal.Refs.GetValueOrDefault(DealShipping.OrderRef), StringComparison.Ordinal)
-            || (OtoIdOf(deal) is { } held && !string.Equals(state.OtoId, held, StringComparison.Ordinal)))
+        if (!IdsAgree(deal, state))
             return new(OrderMismatch, "جَوابُ OTO لِطَلَبٍ غَيرِ المَكتوبِ في الصَفقَة.");
 
         if (!state.IsDelivered)
@@ -173,6 +183,30 @@ public static class OtoOrderStatusGate
     }
 
     /// <summary>
+    /// <para><b>أَيُدخِلُ هذا الجَوابُ الصَفقَةَ «شَحن» قَبلَ سُؤالِ التَسليم؟ — دالَّةٌ نَقِيَّة</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛
+    /// ‏ADR-033 §٧‑ط). نَعَم حينَ يَصدُقُ كُلُّ ما يَصدُقُ عِندَ «أَكمِل الشَّحن» بِالجَوابِ نَفسِه: المُعَرِّفانِ لِطَلَبِ الصَفقَة، وهي فَعّالَة،
+    /// وتاليها «شَحن» وطَلَبُها عِندَ OTO (<see cref="DealShipping.AwaitsCarrier"/>)، وOTO تُثبِتُ شُحنَتَها وبوليصَتَها
+    /// (<see cref="DealShipping.ShipmentConfirmed"/>)، والمُحَرِّكُ يُخرِجُها بِطَرَفِها المُقابِل — البائِع (<see cref="DealsService.CanMove"/>).</para>
+    ///
+    /// <para><b>لِماذا</b>: بَعدَ <c>shipment_unconfirmed</c> تَبقى الصَفقَةُ عِندَ «تأكيد» بِطَلَبِها، فَإن أَنشَأَت OTO الشُحنَةَ وأَرسَلَت إشعاراتِها
+    /// قَبلَ نَقرَةِ البائِعِ الثانِيَة كُتِبَت البوليصَةُ عَلى صَفقَةٍ عِندَ «تأكيد»، وأُجيبَ «delivered» بَعدَها ‏200 <see cref="DealNotShipping"/> فَلا
+    /// تُعيدُه OTO — فَيَضيعُ التَسليمُ الآلِيُّ (تَوصيفُه <c>dace4bd</c>). والانتِقالُ نَفسُه يَمُرُّ بِـ<see cref="DealsService.AdvanceAsync"/> بِالجَوابِ
+    /// مَحمولاً، فَتُعادُ الشُروطُ عَلى الصَفقَةِ الَّتي سَتُكتَب ولا يُصَدَّقُ المُنادي.</para>
+    /// </summary>
+    public static bool ShipsFirst(Deal deal, OtoOrderState state)
+        => IdsAgree(deal, state)
+           && deal.Status == DealStatus.Active
+           && DealShipping.AwaitsCarrier(deal)
+           && DealShipping.ShipmentConfirmed(deal, state)
+           && deal.CounterpartyId is { } counterparty
+           && DealsService.CanMove(deal, counterparty);
+
+    /// <summary>جَوابُ OTO لِطَلَبِ هذِه الصَفقَة: <c>orderId</c> = <c>oto_order_id</c>، و<c>otoId</c> — إن كُتِبَ — واحِد.</summary>
+    private static bool IdsAgree(Deal deal, OtoOrderState state)
+        => string.Equals(state.OrderId, deal.Refs.GetValueOrDefault(DealShipping.OrderRef), StringComparison.Ordinal)
+           && (OtoIdOf(deal) is not { } held || string.Equals(state.OtoId, held, StringComparison.Ordinal));
+
+    /// <summary>
     /// <para><b>رَدُّ النُقطَة — دالَّةٌ نَقِيَّة.</b> ‏404 لِمَتجَرٍ بِلا ناقِل (كَأَن لا نُقطَة)، و‏400 لِجِسمٍ لا يُقرَأ، و‏503
     /// حَيثُ لَم يُكتَب ما كانَ يَنبَغي أَن يُكتَب (لَم تُجِب OTO، أَو غَلَبَت التَعارُضاتُ المُحاوَلات) فَتُعيدُ OTO الإرسال،
     /// و‏200 لِكُلِّ ما سِواه: كُتِبَ، أَو لا شَيءَ يُكتَبُ لِهذا الإشعارِ أَبَداً — وإعادَتُه لا تُغَيِّرُ شَيئاً.</para>
@@ -182,7 +216,7 @@ public static class OtoOrderStatusGate
         CarrierUnavailable => 404,
         NoticeUnreadable => 400,
         StateUnconfirmed or DealsService.ChangedMeanwhile => 503,
-        Delivered or OrderUnknown or OrderMismatch or NotDelivered or AlreadyDelivered
+        Delivered or Shipped or OrderUnknown or OrderMismatch or NotDelivered or AlreadyDelivered
             or DealNotActive or DealNotShipping or ActorCannotDeliver => 200,
         _ => throw new ArgumentOutOfRangeException(nameof(code), code, "رَمزٌ خارِجَ مَعجَمِ الوارِد."),
     };
