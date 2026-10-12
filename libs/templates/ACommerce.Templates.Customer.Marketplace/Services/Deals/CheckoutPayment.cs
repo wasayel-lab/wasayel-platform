@@ -38,6 +38,9 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Deals;
 // النُسخَةِ يَستَطيعُ القَبضَ فِعلاً** (`PaymentChargeSurface.CanCharge`).
 // وإلى أَن يوجَدَ مُزَوِّدُ مَفاتيحٍ لِلمُستَأجِر، لا تُعرَضُ البِطاقَةُ
 // في الإنتاجِ لِمَن لَصَقَ رابِطاً — ولا «قَريباً».
+//
+// **ووُجِدَ (‏2026-10-12، ‏ADR-032 الخُطوَة 8 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)**: مَتجَرٌ رَبَطَ مِفتاحَ بَوّابَتِه مَختوماً تُعرَضُ لَه البِطاقَةُ
+// بِه — `CheckoutCardFacts` أَدناه، مُدخَلاتُها تُحسَبُ مَرَّةً ويَقرَؤُها الطَرَفان — ومَن لَصَقَ رابِطاً وَحدَه عَلى ما كان.
 
 /// <summary>
 /// <para><b>طُرُقُ الدَفعِ المَعروضَةُ في إتمامِ الشِراء</b> — قيمَتانِ
@@ -74,6 +77,42 @@ public static class CheckoutPayMethods
 
     public static bool Contains(string? value)
         => value is not null && All.Contains(value, StringComparer.Ordinal);
+}
+
+/// <summary>
+/// <para><b>مُدخَلاتُ قَرارِ البِطاقَةِ الخَمسَة — تُحسَبُ مَرَّةً، والقَرارُ نَقِيٌّ هُنا</b> (‏ADR-032 الخُطوَة 8 — شَطرُ <c>CardOffered</c>، تَيّارُ S9،
+/// ‏2026-10-12؛ القاعِدَة ٧): يَحسُبُها <c>GatewayPayments.CardFactsAsync</c> مِن المُخَزَّنِ مَرَّةً لِكُلِّ طَلَب، ويَقرَؤُها طَرَفا إتمامِ الشِراءِ
+/// — الشاشَةُ تَرسُمُ بِها البِطاقَةَ والنُقطَةُ تَقبَلُ بِها وتَختارُ الطَريق — فَلا يَعرِضُ أَحَدُهُما ما يَرُدُّه الآخَر.</para>
+///
+/// <para><b>البِطاقَةُ تُعرَضُ بِمِفتاحِ المَتجَرِ حينَ تَجتَمِعُ الثَلاثَة</b>: (أ) <see cref="SealedKeyBound"/> رَبطُ دَفعٍ بِمِفتاحٍ سِرِّيٍّ مَختوم،
+/// (ب) <see cref="VaultCanUnseal"/> خِزانَةٌ تَفُكّ، (ج) <see cref="GatewayClientRegistered"/> عَميلُ البَوّابَةِ مُسَجَّل — <b>في كُلِّ بيئَة</b>،
+/// ومُزَوِّدُ النُسخَةِ لا يُسأَلُ لَها: مَتجَرٌ رَبَطَ مِفتاحَه لا يَقبِضُ بِغَيرِه أَبَداً (لا مُحاكيَ التَطويرِ ولا وَضعَ التَجرِبَة). وإن غابَت
+/// (ب) أَو (ج) لَم تُعرَض — ولا تَسقُطُ إلى مُزَوِّدِ النُسخَة.</para>
+///
+/// <para><b>ومَتجَرٌ بِلا مِفتاحٍ عَلى ما كانَ بِحَرفِه</b> (‏ADR-032 §٢‑د، الموجَةُ الأولى): عَلَمُ المَتجَرِ ويَقبِضُ مُزَوِّدُ النُسخَةِ فِعلاً —
+/// <b>وفي الإنتاجِ لا يَقبِضُ</b> (<c>UnavailablePaymentProvider</c>) فَلا بِطاقَةَ لَه أَبَداً؛ ويَبقى في التَطويرِ ووَضعِ التَجرِبَةِ (‏ADR-025)
+/// كَما كان، وهُوَ ما يُثَبِّتُه صَفُّ الموجَةِ الأولى <c>A_pasted_link_alone_no_longer_offers_a_card_when_the_production_provider_cannot_charge</c>
+/// بِلا تَعديلِ حَرف. فَفي الإنتاجِ: البِطاقَةُ ⇔ (أ) ∧ (ب) ∧ (ج) — مَقيسٌ في <c>CheckoutCardFactsTests</c>.</para>
+///
+/// <para><b>ولا قَرارَ ثانٍ</b>: <see cref="CardOffered"/> هِيَ <see cref="CheckoutPaymentPolicy.CardOffered"/> القائِمَةُ بِمُدخَلَيها — «يَقبِضُ
+/// المَتجَر» و«يَستَطيعُ القَبضَ مَن سَيُنادى» — والطَرَفانِ يُمَرِّرانِ <see cref="Collects"/> و<see cref="ChargerCanCharge"/> إلى <c>Decide</c>.</para>
+/// </summary>
+public sealed record CheckoutCardFacts(
+    bool StoreCollects, bool SealedKeyBound, bool VaultCanUnseal, bool GatewayClientRegistered, bool InstanceCanCharge)
+{
+    /// <summary><b>البِطاقَةُ تَمُرُّ بِبَوّابَةِ المَتجَرِ بِمِفتاحِه</b> — كُلَّما رُبِطَ مِفتاحٌ مَختوم. تَقرَؤُه النُقطَةُ فَتَفتَحُ الفاتورَةَ ولا تَحجِزُ
+    /// عِندَ مُزَوِّدِ النُسخَة، والشاشَةُ فَتَقولُ أَينَ يُدفَعُ ولا تَرسُمُ شارَةَ تَجرِبَةٍ لا تَعنيه.</summary>
+    public bool ThroughGateway => SealedKeyBound;
+
+    /// <summary>«يَقبِضُ هذا المَتجَر» — بِمِفتاحٍ مَربوطٍ أَو بِعَلَمِه (<c>Tenant.PaymentProviderConfigured</c>). والمِفتاحُ يُقرَأُ مِن الرَبطِ
+    /// الحَيِّ لا مِن العَلَمِ المُخَزَّن: رَبطٌ خُتِمَ قَبلَ أَن يَعُدَّه <c>CollectsMoney</c> لا يَنتَظِرُ مُزامَنَةَ العَلَم.</summary>
+    public bool Collects => SealedKeyBound || StoreCollects;
+
+    /// <summary>«يَستَطيعُ القَبضَ مَن سَيُنادى» — بَوّابَةُ المَتجَرِ بِخِزانَةٍ تَفُكُّ وعَميلٍ مُسَجَّل، أَو مُزَوِّدُ النُسخَةِ لِمَتجَرٍ بِلا مِفتاح.</summary>
+    public bool ChargerCanCharge => SealedKeyBound ? VaultCanUnseal && GatewayClientRegistered : InstanceCanCharge;
+
+    /// <summary>القَرار — بِالدالَّةِ القائِمَةِ نَفسِها.</summary>
+    public bool CardOffered => CheckoutPaymentPolicy.CardOffered(Collects, ChargerCanCharge);
 }
 
 /// <summary>

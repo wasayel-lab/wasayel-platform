@@ -205,10 +205,12 @@ public sealed class GatewayPayments
     private readonly DealsService _deals;
     private readonly TenantProviderService _providers;
     private readonly ProviderVault _vault;
-    private readonly MoyasarClient _client;
+    /// <summary>عَميلُ البَوّابَة — و<c>null</c> حينَ لا يُسَجِّلُه المُضيف (‏ADR-032 الخُطوَة 8، ‏2026-10-12): مُدخَلُ «(ج) العَميلُ مُسَجَّل»
+    /// في <see cref="CardFactsAsync"/> مَقيساً مِن الحَقنِ نَفسِه لا مِن دَعوى؛ وبِدونِه لا فاتورَةَ ولا جَلبَ — <see cref="MoyasarFailures.NotConfigured"/>.</summary>
+    private readonly MoyasarClient? _client;
     private readonly ILogger<GatewayPayments> _log;
 
-    public GatewayPayments(DealsService deals, TenantProviderService providers, ProviderVault vault, MoyasarClient client,
+    public GatewayPayments(DealsService deals, TenantProviderService providers, ProviderVault vault, MoyasarClient? client = null,
         ILogger<GatewayPayments>? log = null)
     {
         _deals = deals;
@@ -222,12 +224,11 @@ public sealed class GatewayPayments
     /// <para><b>حَقلُ المِفتاحِ المَختومِ في رَبطِ الدَفع</b> — الحَقلُ الَّذي يُعلِنُه التَعريفُ بِنَوعِ <c>secret_key</c> وقيمَتُه مَختومَة؛
     /// و<c>null</c> لِرَبطٍ غائِبٍ أَو لِقُدرَةٍ أُخرى أَو بِلا مِفتاحٍ مَختوم. <b>بِالنَوعِ لا بِسلاجِ المُزَوِّد</b> — الكاتالوجُ بَيانات،
     /// و<c>Exactly_one_payments_definition_carries_a_sealed_secret_key_field</c> يَحمَرُّ يَومَ يَصيرُ فيه ثانٍ.</para>
+    /// <para><b>وصارَ تَعريفُه في النَواة</b> (‏ADR-032 الخُطوَة 8، ‏2026-10-12 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <c>ResolvedProvider.SealedSecretKeyField</c>
+    /// بِحَرفِ ما كانَ هُنا — يَقرَؤُه <c>CollectsMoney</c> مُنذُ قُلِب، فَلا يَفتَرِقُ «يَقبِضُ بِالمِفتاح» عَمّا يُفَكُّ لِلنِداء (القاعِدَة ٨).</para>
     /// </summary>
     public static ProviderFieldDefinition? SealedKeyFieldOf(ResolvedProvider? payments)
-        => payments is not null && payments.Capability == ProviderCapabilities.Payments
-            ? payments.Definition.Credential.Fields.FirstOrDefault(f =>
-                f.Kind == CredentialKinds.SecretKey && payments.Values.TryGetValue(f.Code, out var v) && v.IsSealed)
-            : null;
+        => payments?.SealedSecretKeyField;
 
     /// <summary>
     /// <para><b>التَحَقُّقُ مِن دَفعِ صَفقَةٍ عِندَ البَوّابَة — بِالتَرتيب، ولا يُقلَب</b>:</para>
@@ -248,7 +249,7 @@ public sealed class GatewayPayments
         if (DealPayAuthorization.Validate(deal, by) is { } refusal)
             return Logged(tenantSlug, new(deal?.Id, null, refusal.Code));
 
-        if (await SecretKeyAsync(tenantSlug, ct) is not { } key)
+        if (_client is null || await SecretKeyAsync(tenantSlug, ct) is not { } key)
             return Logged(tenantSlug, new(deal!.Id, null, MoyasarFailures.NotConfigured));
 
         var fetched = await _client.FetchInvoiceAsync(key, deal!.Refs[GatewayPaymentProof.InvoiceRef], ct);
@@ -274,11 +275,22 @@ public sealed class GatewayPayments
     }
 
     /// <summary>
-    /// <para><b>أَيَفتَحُ هذا المَتجَرُ فاتورَةً الآن؟</b> — مِفتاحٌ مَختومٌ في رَبطِ الدَفعِ تَفُكُّه هذِه الخِزانَة. يَسأَلُه إتمامُ الشِراءِ
-    /// مَرَّةً قَبلَ أَن يُولِدَ الصَفَقات، فَيَختارُ بِه بَينَ فاتورَةِ البَوّابَةِ وطَريقِ مُزَوِّدِ النُسخَة.</para>
+    /// <para><b>مُدخَلاتُ قَرارِ البِطاقَة — تُحسَبُ هُنا مَرَّةً، ويَقرَؤُها طَرَفا إتمامِ الشِراء</b> (‏ADR-032 الخُطوَة 8 — شَطرُ <c>CardOffered</c>،
+    /// تَيّارُ S9، ‏2026-10-12؛ القاعِدَة ٧): الشاشَةُ (<c>CheckoutPage.razor</c>) والنُقطَةُ (<c>/checkout/submit</c>) تُنادِيانِها بِالمُدخَلَينِ
+    /// القائِمَين — عَلَمِ المَتجَرِ وقُدرَةِ مُزَوِّدِ النُسخَة — وتُضيفُ هي الثَلاثَةَ الَّتي تَخُصُّ بَوّابَةَ المَتجَر: <b>(أ)</b> رَبطُ دَفعٍ بِمِفتاحٍ
+    /// سِرِّيٍّ مَختوم — مِن الرَبطِ الحَيِّ بِالحَلِّ نَفسِه الَّذي يَفُكُّ بِه المِفتاحُ لِلنِداء؛ <b>(ب)</b> خِزانَةٌ تَفُكّ (مِفتاحٌ رَئيسٌ مَضبوط)؛
+    /// <b>(ج)</b> عَميلُ البَوّابَةِ مُسَجَّل. والقَرارُ نَقِيٌّ في <see cref="CheckoutCardFacts"/> — هُنا يُقرَأُ المُخَزَّن، وهُناكَ يُقَرَّر.</para>
+    /// <para><b>ولا يُفَكُّ هُنا شَيء</b>: المِفتاحُ يُفَكُّ عِندَ فَتحِ الفاتورَةِ لِلنِداءِ الواحِد — وظَرفٌ لا يُفتَحُ يَومَئِذٍ يُلغي الصَفَقاتِ
+    /// بِرَمزِه ولا يُخصَمُ شَيء (<see cref="OpenInvoiceAsync"/>). <b>وحَلَّت مَحَلَّ <c>ReadyAsync</c></b> (الخُطوَة 10) الَّتي كانَت تَفُكُّه
+    /// لِتُجيب «أَيَفتَحُ المَتجَرُ فاتورَة؟» — مُستَهلِكُها الوَحيدُ النُقطَة، وصارَت تَقرَأُ <see cref="CheckoutCardFacts.ThroughGateway"/>.</para>
     /// </summary>
-    public async Task<bool> ReadyAsync(string tenantSlug, CancellationToken ct = default)
-        => await SecretKeyAsync(tenantSlug, ct) is not null;
+    public async Task<CheckoutCardFacts> CardFactsAsync(
+        string tenantSlug, bool storeCollects, bool instanceCanCharge, CancellationToken ct = default)
+        => new(storeCollects,
+               SealedKeyFieldOf(await PaymentsBindingAsync(tenantSlug, ct)) is not null,
+               _vault.IsAvailable,
+               _client is not null,
+               instanceCanCharge);
 
     /// <summary>
     /// <para><b>فاتورَةٌ واحِدَةٌ لِسَلَّةِ المُشتَري كُلِّها</b> (‏ADR-032 §٢‑هـ الخُطوَة 10): صَفَقاتُ <paramref name="dealIds"/> — وُلِدَت لِلتَّوّ
@@ -305,7 +317,7 @@ public sealed class GatewayPayments
         MoyasarInvoice? invoice = null;
         if (code is null)
         {
-            if (await SecretKeyAsync(tenantSlug, ct) is not { } key)
+            if (_client is null || await SecretKeyAsync(tenantSlug, ct) is not { } key)
                 code = MoyasarFailures.NotConfigured;
             else
             {
@@ -346,10 +358,7 @@ public sealed class GatewayPayments
     {
         if (!_vault.IsAvailable) return null;
 
-        var current = await _providers.CurrentAsync(tenantSlug, ProviderCapabilities.Payments, ct);
-        var payments = TenantProviderSet
-            .FromDocuments(tenantSlug, current is null ? Array.Empty<TenantProviderBinding>() : new[] { current })
-            .For(ProviderCapabilities.Payments);
+        var payments = await PaymentsBindingAsync(tenantSlug, ct);
         if (SealedKeyFieldOf(payments) is not { } field) return null;
 
         try
@@ -361,6 +370,16 @@ public sealed class GatewayPayments
             _log.LogWarning("[gateway] {Slug} payments key does not open — no key", tenantSlug);
             return null;
         }
+    }
+
+    /// <summary>رَبطُ الدَفعِ الحَيُّ مَحلولاً — بِمُعَرِّفِه (<c>CurrentAsync</c>، لا لَقطَةُ الكاش) وبِـ<c>TenantProviderSet.FromDocuments</c>
+    /// نَفسِها؛ يَقرَؤُه فَكُّ المِفتاحِ ومُدخَلُ «(أ)» في <see cref="CardFactsAsync"/> (‏2026-10-12)، فَلا يَفتَرِقُ «مَربوطٌ بِمِفتاح» عَمّا يُفَكّ.</summary>
+    private async Task<ResolvedProvider?> PaymentsBindingAsync(string tenantSlug, CancellationToken ct)
+    {
+        var current = await _providers.CurrentAsync(tenantSlug, ProviderCapabilities.Payments, ct);
+        return TenantProviderSet
+            .FromDocuments(tenantSlug, current is null ? Array.Empty<TenantProviderBinding>() : new[] { current })
+            .For(ProviderCapabilities.Payments);
     }
 
     /// <summary>

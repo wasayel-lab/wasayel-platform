@@ -437,7 +437,11 @@ public class GatewayPaymentConfirmTests(ITestOutputHelper output)
             Assert.Equal(at, body.LastIndexOf(needle, StringComparison.Ordinal));
             return at;
         }
-        var ask     = At("var viaGateway = Services.Deals.CheckoutPaymentPolicy.CallsProvider(payMethod) && await gateway.ReadyAsync(slug);");
+        // (‏2026-10-12، ‏ADR-032 الخُطوَة 8 — شَطرُ `CardOffered`: «يُسأَلُ مَرَّةً» صارَ مُدخَلَ القَرارِ نَفسَه — `CardFactsAsync` قَبلَ `Decide`
+        // و`card.ThroughGateway` هُنا — لا `ReadyAsync` الَّتي كانَت تَفُكُّ المِفتاحَ لِتُجيب؛ والتَرتيبُ بَعدَه كَما كان.)
+        var facts   = At("var card = await gateway.CardFactsAsync(slug,");
+        var ask     = At("var viaGateway = Services.Deals.CheckoutPaymentPolicy.CallsProvider(payMethod) && card.ThroughGateway;");
+        Assert.True(facts < ask, $"facts={facts} ask={ask}");
         var loop    = At("foreach (var item in cart.Items)");
         var guard   = At("if (!viaGateway)");
         var hold    = At("var pr = await payments.AuthorizeAsync(new(");

@@ -847,15 +847,18 @@ public static class MarketplaceTemplateExtensions
         //
         // **والمَجّانِيَّة لَم تُمَسّ**: `Price == 0` تُمنَح ذاتِيّاً
         // بِنَفس الحَدَث ونَفس المَجرى.
+        //
+        // **والمُدخَلُ رابِطٌ تُصَيِّرُه `PlanPay` لا «يَقبِض»** (‏ADR-032 الخُطوَة 8، ‏2026-10-12 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): كانَ
+        // `Tenant.PaymentProviderConfigured`، وصارَ يَصدُقُ لِمِفتاحٍ مَختومٍ بِلا رابِط — فَتُحالُ الباقَةُ إلى صَفحَةٍ بِلا رابِط.
         app.MapPost("/{slug}/plans/{planId}/subscribe",
             async (string slug, string planId, HttpRequest req, IDocumentStore store,
-                   Services.Queries.TenantDirectory tenants) =>
+                   Services.TenantProviderService providers) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/plans"));
             var (userId, _, _) = parsed.Value;
-            var configured = (await tenants.FindAsync(slug))?.PaymentProviderConfigured ?? false;
+            var configured = (await providers.ForAsync(slug)).PlansPayable;
 
             await using var s = store.LightweightSession(slug);
             var outcome = await Services.Subscriptions.PlanSubscribeService.SubscribeAsync(
@@ -3001,8 +3004,13 @@ public static class MarketplaceTemplateExtensions
             // **والمُزَوِّدُ يُسأَلُ عَن قُدرَتِه قَبلَ أَن يُنادى** (‏ADR-032
             // §٢‑د، ‏2026-10-11): رابِطٌ مَلصوقٌ وَحدَه كانَ يَفتَحُ البِطاقَةَ
             // عَلى `UnavailablePaymentProvider` في الإنتاج — فَشَلٌ مُؤَكَّد.
-            var (payMethod, payRefusal) = Services.Deals.CheckoutPaymentPolicy.Decide(pay,
-                tenant?.PaymentProviderConfigured ?? false, ACommerce.Kit.Payments.PaymentChargeSurface.CanCharge(payments));
+            //
+            // **ومَتجَرٌ رَبَطَ مِفتاحَه يَقبِضُ بِبَوّابَتِه** (‏ADR-032 الخُطوَة 8 — شَطرُ `CardOffered`، ‏2026-10-12؛ ولا يُعادُ حَرفٌ فَوقَ
+            // ما سَبَق): المُدخَلانِ أَعلاه كَما كانا، وتُحسَبُ مَعَهُما مَرَّةً — بِالدالَّةِ الَّتي تُناديها الشاشَةُ بِحَرفِها — ثَلاثَةُ البَوّابَة
+            // (مِفتاحٌ مَختومٌ مَربوط، خِزانَةٌ تَفُكّ، عَميلٌ مُسَجَّل)؛ والقَرارُ نَقِيٌّ في `CheckoutCardFacts`. فَفي الإنتاجِ البِطاقَةُ بِالثَلاثَةِ
+            // لا بِغَيرِها، ومَتجَرٌ بِمِفتاحٍ لا يَقبِضُ بِمُزَوِّدِ النُسخَةِ في أَيِّ بيئَة.
+            var card = await gateway.CardFactsAsync(slug, tenant?.PaymentProviderConfigured ?? false, ACommerce.Kit.Payments.PaymentChargeSurface.CanCharge(payments));
+            var (payMethod, payRefusal) = Services.Deals.CheckoutPaymentPolicy.Decide(pay, card.Collects, card.ChargerCanCharge);
             if (payRefusal is not null)
                 return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
                     .RefusalPath(payRefusal, name, phone, addr)));
@@ -3010,7 +3018,8 @@ public static class MarketplaceTemplateExtensions
             // ─── بَوّابَةُ المَتجَر (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12) ─────────────────────────────
             // البِطاقَةُ في مَتجَرٍ يَفُكُّ مِفتاحَ بَوّابَتِه تُدفَعُ عَلى صَفحَتِها المُستَضافَةِ بَعدَ أَن تولَدَ الصَفَقات: فاتورَةٌ واحِدَةٌ
             // لِلسَلَّةِ كُلِّها، ولا حَجزَ عِندَ الباب — فَنافِذَةُ ‏ADR-036 §٨‑٣ لا تَقَعُ لَها. ويُسأَلُ مَرَّةً قَبلَ الحَلقَة؛ وما سِواه كَما كان.
-            var viaGateway = Services.Deals.CheckoutPaymentPolicy.CallsProvider(payMethod) && await gateway.ReadyAsync(slug);
+            // (‏2026-10-12، الخُطوَة 8: والسُؤالُ صارَ مُدخَلَ القَرارِ نَفسَه — `card.ThroughGateway` — لا فَكّاً ثانِياً لِلمِفتاح.)
+            var viaGateway = Services.Deals.CheckoutPaymentPolicy.CallsProvider(payMethod) && card.ThroughGateway;
             var pattern = PatternFromTenant(tenant);
             Guid firstDealId = Guid.Empty;
             // الصَفَقاتُ الَّتي لَها مالِكٌ — يُشعَرُ بَعدَ الحَفظِ لا داخِلَ الحَلقَة (P1-5).

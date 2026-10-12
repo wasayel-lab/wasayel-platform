@@ -5,6 +5,7 @@
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
 @inject ACommerce.Kit.Payments.IPaymentProvider Payments
+@inject ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayPayments Gateway
 @inject L L
 @using ACommerce.Kit.Cart
 @using ACommerce.Kit.Payments
@@ -126,7 +127,9 @@
                                                 <span class="ac-chip ac-chip-sm">@L.Markup("checkout.payment.simulation_badge")</span>
                                             }
                                         </strong>
-                                        <span>@(Simulated ? L["checkout.payment.simulation_hint"] : L["checkout.payment.card_hint"])</span>
+                                        @* **وأَينَ يُدفَعُ يُقالُ حَيثُ يُنقَر** (‏ADR-032 الخُطوَة 8، ‏2026-10-12): بِمِفتاحِ المَتجَرِ عَلى صَفحَةِ بَوّابَتِه —
+                                           ولا شارَةَ تَجرِبَةٍ لِبِطاقَةٍ لا يَمَسُّها مُزَوِّدُ النُسخَة (`Simulated` يَسأَلُ `ThroughGateway`). *@
+                                        <span>@(Facts.ThroughGateway ? L["checkout.payment.card_hint_gateway"] : Simulated ? L["checkout.payment.simulation_hint"] : L["checkout.payment.card_hint"])</span>
                                     </span>
                                 </label>
                             }
@@ -178,6 +181,11 @@
                             <br />
                             <span>@L.Markup("checkout.payment.simulation_hint")</span>
                         }
+                        @if (Facts.ThroughGateway && EffectivePay == CheckoutPayMethods.Card)
+                        {
+                            <br />
+                            <span>@L.Markup("checkout.payment.card_hint_gateway")</span>
+                        }
                     </div>
                 </ChildContent>
             </AcCard>
@@ -207,28 +215,30 @@
 
     Cart? cart;
 
-    /// <summary>أَيَقبِضُ هذا المَتجَر؟ — رابِطٌ مَملوء (‏<c>Tenant.PaymentProviderConfigured</c>).</summary>
-    bool TenantCollects;
+    /// <summary>
+    /// <para><b>مُدخَلاتُ قَرارِ البِطاقَةِ مَحسوبَةً مَرَّةً</b> (‏ADR-032 الخُطوَة 8 — شَطرُ <c>CardOffered</c>، ‏2026-10-12): عَلَمُ المَتجَرِ
+    /// (‏<c>Tenant.PaymentProviderConfigured</c>) وقُدرَةُ مُزَوِّدِ النُسخَة (<c>PaymentChargeSurface.CanCharge</c>) — كَما كانا — ومَعَهُما
+    /// ما تَحسُبُه <c>GatewayPayments.CardFactsAsync</c>: مِفتاحٌ مَختومٌ مَربوط، وخِزانَةٌ تَفُكّ، وعَميلُ بَوّابَةٍ مُسَجَّل. <b>والنُقطَةُ
+    /// تُنادي الدالَّةَ نَفسَها بِالمُدخَلَينِ نَفسَيهِما</b> وتُقَرِّرُ بِـ<see cref="CheckoutCardFacts"/> نَفسِها — فَلا تَعرِضُ الشاشَةُ ما سَتَرُدُّه.</para>
+    /// <para>كانَ هُنا <c>TenantCollects</c> و<c>ProviderCanCharge</c> يُمَرَّرانِ إلى <c>CardOffered</c> و<c>Decide</c> — وكانَت البِطاقَةُ
+    /// تَقبِضُ بِمُزَوِّدِ النُسخَةِ وَحدَه؛ وصارَت لِمَتجَرٍ رَبَطَ مِفتاحَه تَقبِضُ بِبَوّابَتِه.</para>
+    /// </summary>
+    CheckoutCardFacts Facts = new(StoreCollects: false, SealedKeyBound: false, VaultCanUnseal: false,
+        GatewayClientRegistered: false, InstanceCanCharge: false);
 
-    /// <summary><b>أَيَستَطيعُ مُزَوِّدُ هذِه النُسخَةِ القَبضَ فِعلاً؟</b> —
-    /// في الإنتاجِ هُوَ الفَشَلُ المُغلَقُ فَلا. نَفسُ المُسنَدِ الَّذي
-    /// تَقرَؤُه النُقطَة (‏ADR-032 §٢‑د)، فَلا يَنجَرِفُ طَرَفان.</summary>
-    bool ProviderCanCharge => PaymentChargeSurface.CanCharge(Payments);
-
-    /// <summary>البِطاقَةُ تُعرَضُ حينَ يَقبِضُ المَتجَرُ <b>ويَستَطيعُ
-    /// المُزَوِّدُ القَبض</b> — وكانَت تُعرَضُ بِالأَوَّلِ وَحدَه، فَيَنتَهي
-    /// الطَلَبُ في الإنتاجِ بِـ`payment_status = Failed` حَتماً.</summary>
-    bool CardOffered => CheckoutPaymentPolicy.CardOffered(TenantCollects, ProviderCanCharge);
+    /// <summary>البِطاقَةُ تُعرَضُ بِما تُقَرِّرُه <see cref="CheckoutCardFacts.CardOffered"/> — والنُقطَةُ تَقبَلُ بِالمُدخَلاتِ نَفسِها.</summary>
+    bool CardOffered => Facts.CardOffered;
 
     /// <summary><b>أَمُزَوِّدُ هذِه النُسخَةِ في وَضعِ التَجرِبَة؟</b> —
     /// نَفسُ المُسنَدِ الَّذي تَقرَؤُه النُقطَة، فَلا يَنجَرِفُ
-    /// طَرَفان.</summary>
-    bool Simulated => PaymentSimulationSurface.IsSimulated(Payments);
+    /// طَرَفان. <b>ولا يُسأَلُ لِبِطاقَةٍ تَمُرُّ بِبَوّابَةِ المَتجَر</b>
+    /// (‏2026-10-12): لا يَمَسُّها مُزَوِّدُ النُسخَة، فَشارَتُه عَلَيها كَذِب.</summary>
+    bool Simulated => !Facts.ThroughGateway && PaymentSimulationSurface.IsSimulated(Payments);
 
     /// <summary><b>طَريقَةُ الدَفعِ الَّتي سَتُرسَل</b> — مِن الدالَّةِ
     /// النَقِيَّةِ نَفسِها الَّتي تَقرَؤُها النُقطَة، فَلا تَعرِضُ
     /// الشاشَةُ ما سَتَرُدُّه.</summary>
-    string EffectivePay => CheckoutPaymentPolicy.Decide(Pay, TenantCollects, ProviderCanCharge).Method;
+    string EffectivePay => CheckoutPaymentPolicy.Decide(Pay, Facts.Collects, Facts.ChargerCanCharge).Method;
 
     string? ErrorMessage => Err switch
     {
@@ -244,7 +254,7 @@
         if (Step < 1 || Step > 3) Step = 1;
         cart = await Accounts.CartAsync(Slug, Auth.UserId!.Value);
         var tenant = await Tenants.FindAsync(Slug);
-        TenantCollects = tenant?.PaymentProviderConfigured ?? false;
+        Facts = await Gateway.CardFactsAsync(Slug, tenant?.PaymentProviderConfigured ?? false, PaymentChargeSurface.CanCharge(Payments));
         if (Auth.UserName is { } un && string.IsNullOrEmpty(Name)) Name = un;
     }
 }

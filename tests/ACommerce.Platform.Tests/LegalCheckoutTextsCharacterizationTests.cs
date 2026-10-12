@@ -206,26 +206,41 @@ public class LegalCheckoutTextsCharacterizationTests
     /// تَحقِنانِ <c>IPaymentProvider</c> العامَّ وتُنادي النُقطَةُ <c>AuthorizeAsync</c> عَلَيه؛ ورَبطُ
     /// المَتجَرِ (<c>PaymentProviderConfigured</c>) عَلَمٌ لا يَكفي وَحدَه لِعَرضِ البِطاقَة. والتَلميحُ
     /// يُرسَمُ مَرَّةً واحِدَةً بِجِوارِ بِطاقَةٍ مَعروضَة، ويُخلي مَكانَه لِتَلميحِ التَجرِبَة.</para>
+    /// <para><b>قُلِبَ بِاسمِه ‏2026-10-12 (‏ADR-032 الخُطوَة 8 — شَطرُ <c>CardOffered</c>، تَيّارُ S9 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)</b> — كانَ
+    /// <c>The_card_path_charges_through_the_instances_IPaymentProvider_not_a_store_binding</c>. <b>والآن</b>: مَتجَرٌ رَبَطَ مِفتاحَ بَوّابَتِه يَقبِضُ
+    /// بِه — فاتورَةٌ عَلى صَفحَتِها، ولا حَجزَ عِندَ مُزَوِّدِ النُسخَة؛ ومَتجَرٌ بِلا مِفتاحٍ عَلى ما كانَ بِحَرفِه (<c>IPaymentProvider</c> العامُّ
+    /// و<c>AuthorizeAsync</c> واحِدٌ خَلفَ حارِسِ الطَريق). والتَلميحُ يَقولُ أَينَ يُدفَع: صَفحَةُ البَوّابَةِ لِبِطاقَتِها، وتَلميحُ التَجرِبَةِ لِما
+    /// يُحاكيهِ مُزَوِّدُ النُسخَةِ وَحدَه.</para>
     /// </summary>
     [Fact]
-    public void The_card_path_charges_through_the_instances_IPaymentProvider_not_a_store_binding()
+    public void The_card_path_charges_through_the_stores_gateway_by_its_key_and_through_the_instances_provider_only_without_one()
     {
         var page = Template("Components", "Pages", "CheckoutPage.razor");
         Assert.Contains("@inject ACommerce.Kit.Payments.IPaymentProvider Payments", page, StringComparison.Ordinal);
-        Assert.Contains("bool ProviderCanCharge => PaymentChargeSurface.CanCharge(Payments);", page, StringComparison.Ordinal);
-        Assert.Contains("bool CardOffered => CheckoutPaymentPolicy.CardOffered(TenantCollects, ProviderCanCharge);", page, StringComparison.Ordinal);
+        Assert.Contains("@inject ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayPayments Gateway", page, StringComparison.Ordinal);
+        Assert.Contains("bool CardOffered => Facts.CardOffered;", page, StringComparison.Ordinal);
+        Assert.Contains("bool Simulated => !Facts.ThroughGateway && PaymentSimulationSurface.IsSimulated(Payments);", page, StringComparison.Ordinal);
         Assert.Equal(1, Count(page,
-            "@(Simulated ? L[\"checkout.payment.simulation_hint\"] : L[\"checkout.payment.card_hint\"])"));
+            "@(Facts.ThroughGateway ? L[\"checkout.payment.card_hint_gateway\"] : Simulated ? L[\"checkout.payment.simulation_hint\"] : L[\"checkout.payment.card_hint\"])"));
         Assert.True(page.IndexOf("@if (CardOffered)", StringComparison.Ordinal)
                     < page.IndexOf("L[\"checkout.payment.card_hint\"]", StringComparison.Ordinal));
 
         var endpoints = Template("MarketplaceTemplateExtensions.cs");
         Assert.Contains("ACommerce.Kit.Payments.IPaymentProvider payments", endpoints, StringComparison.Ordinal);
         Assert.Equal(1, Count(endpoints, "payments.AuthorizeAsync("));
+        Assert.Equal(1, Count(endpoints, "if (!viaGateway)"));
+        Assert.True(endpoints.IndexOf("if (!viaGateway)", StringComparison.Ordinal)
+                    < endpoints.IndexOf("payments.AuthorizeAsync(", StringComparison.Ordinal));
 
+        // بِمِفتاحٍ مَختومٍ: البَوّابَة — ولا تَسقُطُ إلى مُزَوِّدِ النُسخَةِ حينَ لا تَفُكُّ الخِزانَة. وبِلا مِفتاحٍ: مُزَوِّدُ النُسخَةِ كَما كان.
+        Assert.True(new CheckoutCardFacts(false, true, true, true, InstanceCanCharge: false).ThroughGateway);
+        Assert.False(new CheckoutCardFacts(true, true, false, true, InstanceCanCharge: true).CardOffered);
         Assert.False(CheckoutPaymentPolicy.CardOffered(paymentProviderConfigured: true, providerCanCharge: false));
         Assert.True(CheckoutPaymentPolicy.CardOffered(paymentProviderConfigured: true, providerCanCharge: true));
         Assert.False(PaymentChargeSurface.CanCharge(new UnavailablePaymentProvider()));
+
+        var ar = Source("libs", "core", "ACommerce.Platform.I18n", "Locales", "ar.json");
+        Assert.Contains("\"checkout.payment.card_hint_gateway\": \"دَفعٌ بِالبِطاقَةِ عَلى صَفحَةِ بَوّابَةِ دَفعِ المَتجَر", ar, StringComparison.Ordinal);
     }
 
     /// <summary>

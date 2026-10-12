@@ -1319,6 +1319,7 @@
   "checkout.gate.need_login": "تَحتاج دُخول",
   "checkout.payment.card": "الدَفع بِالبِطاقَة",
   "checkout.payment.card_hint": "دَفعٌ بِالبِطاقَة عَبر مُزَوِّد دَفعِ المَنصَّة",
+  "checkout.payment.card_hint_gateway": "دَفعٌ بِالبِطاقَةِ عَلى صَفحَةِ بَوّابَةِ دَفعِ المَتجَر — تُحَوَّلُ إلَيها بَعدَ تَأكيدِ الطَّلَب، ثُمَّ تَعودُ إلى هُنا لِنَتَحَقَّقَ مِن دَفعِك.",
   "checkout.payment.card_short": "بِطاقَة",
   "checkout.payment.cash": "نَقد عِندَ التَّسليم",
   "checkout.payment.cash_hint": "اِدفَع عِندَما يَصِل طَلَبك",

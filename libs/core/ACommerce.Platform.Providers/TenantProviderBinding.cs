@@ -254,12 +254,30 @@ public sealed record ResolvedProvider(
     /// ويَبلُغُ زِرُّها <c>PlanPay</c> بِلا رابِطٍ يُصَيِّرُه (بابٌ يُجيبُ «غَيرُ مُتاح»).
     /// يُضافُ مَعَ العَميلِ بِسَطرٍ هُنا، ويَنقَلِبُ مَعَه صَفُّ
     /// <c>A_sealed_key_alone_collects_nothing_yet_so_no_card_and_no_paid_plan_opens</c>.</para>
+    /// <para><b>وأُضيفَ مَعَ العَميلِ (‏2026-10-12، ‏ADR-032 الخُطوَة 8 — شَطرُ <c>CollectsMoney</c>؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)</b>:
+    /// رابِطٌ مَملوءٌ <b>أَو</b> مِفتاحٌ سِرِّيٌّ مَختوم (<see cref="SealedSecretKeyField"/>) — صارَ المَختومُ يَطلُبُ بِه عَميلُ البَوّابَةِ
+    /// ويَقبِضُ بِه إتمامُ الشِراءِ عَلى صَفحَتِها. وانقَلَبَت مَعَه ثَلاثَةُ صُفوفٍ بِأَسمائِها (§٨‑د). <b>والباقاتُ المَدفوعَةُ لا تَقرَؤُه بَعدَ
+    /// اليَوم</b> — صَفحَتُها تُصَيِّرُ الرابِطَ وَحدَه، فَبابُها <see cref="TenantProviderSet.PlansPayable"/>: مَتجَرٌ بِمِفتاحٍ وَحدَه يَقبِضُ
+    /// ولا يَعرِضُ باقَةً بِسِعر.</para>
     /// </summary>
     public bool CollectsMoney =>
         Definition.Capability == ProviderCapabilities.Payments &&
-        Definition.Credential.Fields
+        (Definition.Credential.Fields
             .Where(f => CredentialKinds.IsLink(f.Kind))
-            .Any(f => !string.IsNullOrWhiteSpace(Explicit(f.Code)));
+            .Any(f => !string.IsNullOrWhiteSpace(Explicit(f.Code)))
+         || SealedSecretKeyField is not null);
+
+    /// <summary>
+    /// <para><b>حَقلُ المِفتاحِ السِرِّيِّ المَختومِ في رَبطِ الدَفع</b> (‏ADR-032 الخُطوَة 8، ‏2026-10-12) — الحَقلُ الَّذي يُعلِنُه التَعريفُ
+    /// بِنَوعِ <see cref="CredentialKinds.SecretKey"/> وقيمَتُه مَختومَة؛ و<c>null</c> لِقُدرَةٍ غَيرِ الدَفعِ أَو بِلا مِفتاحٍ مَختوم.
+    /// <b>بِالنَوعِ لا بِسلاجِ المُزَوِّد</b> — الكاتالوجُ بَيانات. تَعريفٌ واحِدٌ يَقرَؤُه <see cref="CollectsMoney"/> وعَميلُ البَوّابَةِ في
+    /// القالِب (<c>GatewayPayments.SealedKeyFieldOf</c> يُحيلُ إلَيه) — فَلا يَفتَرِقُ «يَقبِضُ بِالمِفتاح» عَمّا يُفَكُّ لِلنِداء.</para>
+    /// </summary>
+    public ProviderFieldDefinition? SealedSecretKeyField =>
+        Definition.Capability == ProviderCapabilities.Payments
+            ? Definition.Credential.Fields.FirstOrDefault(f =>
+                f.Kind == CredentialKinds.SecretKey && Values.TryGetValue(f.Code, out var v) && v.IsSealed)
+            : null;
 
     /// <summary>أَوَّلُ رابِطِ دَفعٍ مَملوء — وهُوَ ما تُصَيِّرُه صَفحَةُ
     /// الدَفع.</summary>
@@ -268,6 +286,11 @@ public sealed record ResolvedProvider(
             .Where(f => CredentialKinds.IsLink(f.Kind))
             .Select(f => Explicit(f.Code))
             .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+
+    /// <summary>أَفي الرَبطِ رابِطُ دَفعٍ مَملوء؟ — <b>حُضورُه لا قيمَتُه</b> (‏ADR-032 الخُطوَة 8، ‏2026-10-12): يَقرَؤُه بابُ الباقاتِ
+    /// (<see cref="TenantProviderSet.PlansPayable"/>)، والقيمَةُ لا يَقرَؤُها إلّا <c>PlanPay.razor</c> فَيُصَيِّرُها — كَما يُثَبِّتُ
+    /// <c>LegalCheckoutTextsCharacterizationTests</c>.</summary>
+    public bool HasPaymentLink => PaymentLink is not null;
 }
 
 /// <summary>
@@ -305,6 +328,15 @@ public sealed class TenantProviderSet
         _byCapability.TryGetValue(capability, out var r) ? r : null;
 
     public bool CollectsMoney => For(ProviderCapabilities.Payments)?.CollectsMoney == true;
+
+    /// <summary>
+    /// <para><b>أَتُدفَعُ باقاتُ هذا المَتجَرِ المَدفوعَة؟</b> (‏ADR-032 الخُطوَة 8، ‏2026-10-12) — رابِطُ دَفعٍ مَملوءٌ في رَبطِ الدَفع، وهُوَ
+    /// ما تُصَيِّرُه صَفحَةُ الباقَة (<c>PlanPay.razor</c>) وَحدَه. كانَت أَبوابُ الباقاتِ تَقرَأُ «يَقبِض» (<see cref="CollectsMoney"/>
+    /// عَبرَ <c>Tenant.PaymentProviderConfigured</c>) يَومَ كانَ «يَقبِض» رابِطاً وَحدَه؛ فَلَمّا صارَ المِفتاحُ المَختومُ يَقبِضُ بِفاتورَةِ
+    /// البَوّابَةِ في إتمامِ الشِراء — ولا فاتورَةَ لِباقَة — صارَت تَقرَأُ هذا: مَتجَرٌ بِمِفتاحٍ وَحدَه لا يَعرِضُ باقَةً بِسِعرٍ ولا يُحيلُ
+    /// إلى صَفحَةٍ بِلا رابِط. يَقرَؤُه بابُ الباقاتِ وصَفحَتُها ونُقطَةُ الاشتِراكِ ومُلاحَظَةُ الاستوديو.</para>
+    /// </summary>
+    public bool PlansPayable => For(ProviderCapabilities.Payments)?.HasPaymentLink == true;
 
     public static TenantProviderSet FromDocuments(
         string? tenantSlug, IEnumerable<TenantProviderBinding> docs)
