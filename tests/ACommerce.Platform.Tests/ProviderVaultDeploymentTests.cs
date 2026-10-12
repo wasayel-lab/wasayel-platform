@@ -454,4 +454,71 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
         Assert.Equal(sealedCollects, header.Contains("**ولَم يَعُد يُنَبَّهُ عَلَيه**", StringComparison.Ordinal));
         Assert.Equal(sealedCollects, header.Contains("مَدخَلَ شَحنِه عِندَ OTO", StringComparison.Ordinal));
     }
+
+    // ─── ٨. ورَفعُ السَبَبِ القَديمِ لا يَعني «لا عائِق» — §٢·ح يُسَمّي بَواقِيَ الأَبوابِ الَّتي يَفتَحُها الضَبط (‏2026-10-12، مُراجَعَةُ تَيّارِ S10) ───
+    //
+    // **المَقيسُ قَبل**: إلحاقُ `47986c8` في §٢·ح خَتَمَ بِـ«ولا عائِقَ في الكودِ بَعدُ دونَ ضَبطِه في الإنتاج — مَتى يُضبَطُ قَرارُك»،
+    // والبابُ الَّذي يَفتَحُه الضَبطُ — البِطاقَةُ بِمِفتاحِ المَتجَر (الصَفُّ ٧: `CheckoutCardNeedsTheVault`) — تُحصي عَلَيه ‏ADR-032 §٨‑ز
+    // بَواقِيَ لا يُغلِقُها الكود، وبُرهانُه الحَيُّ «ج» S9·١٠ لَم يُشَغَّل؛ وأَسقَطَت الجُملَةُ شَرطَ «بعدَ البرهانِ الحيِّ» الَّذي في رَأسِ
+    // ‏ADR-032. فَصارَت مَشطوبَةً تاريخاً، وقِسمُ «قَبلَ «مَتى»» يُسَمّي البَواقِيَ وقَراراتِها. **والشَرطُ يُقاسُ لا يُكتَب**: الدالَّتانِ
+    // النَقِيَّتانِ تَقولانِ أَيُّ البابَينِ يَطلُبُ الخِزانَة، وبَواقي §٨‑ز تُعَدُّ مِن ‏ADR-032 نَفسِه (وصِفرُها أَداةٌ عَمياء — القاعِدَة ١٠).
+    // **والاتِّجاهُ واحِد** عَن قَصد: الوَثائِقُ تُلحَقُ ولا تُمحى، فَلا يُطلَبُ مِنها حَذفُ الإحالَةِ يَومَ يَسقُطُ الشَرط.
+
+    /// <summary>قِسمُ §٢·ح كُلُّه — مِن عُنوانِه إلى عُنوانِ §٢·ط.</summary>
+    private static string VaultSection(string deploy)
+    {
+        var start = deploy.IndexOf("## ٢·ح.", StringComparison.Ordinal);
+        var end = deploy.IndexOf("## ٢·ط.", start + 1, StringComparison.Ordinal);
+        Assert.True(start > 0 && end > start, "§٢·ح أَو §٢·ط غائِبٌ أَو تَغَيَّرَ تَرتيبُهُما.");
+        return deploy[start..end];
+    }
+
+    /// <summary>بَواقي ‏ADR-032 §٨‑ز بِعَناوينِها — البُنودُ المُرَقَّمَةُ تَحتَ «وما لا يُغلِقُه» حَتّى «البرهان».</summary>
+    private static string[] Adr032SectionZResiduals()
+    {
+        var file = Directory.GetFiles(Path.Combine(RepoRoot, "docs"), "ADR-032-*.md");
+        Assert.Single(file);
+        var adr = Read("docs", Path.GetFileName(file[0]));
+
+        var eight = adr.IndexOf("## ٨. إلحاقُ", StringComparison.Ordinal);
+        var z = adr.IndexOf("### ز. إلحاقُ", Math.Max(eight, 0), StringComparison.Ordinal);
+        Assert.True(eight > 0 && z > eight, "‏ADR-032 §٨‑ز غائِبٌ أَو تَغَيَّرَ عُنوانُه.");
+        var open = adr.IndexOf("- **وما لا يُغلِقُه — ويُقالُ ولا يُبتلَع**:", z, StringComparison.Ordinal);
+        var proof = open < 0 ? -1 : adr.IndexOf("- **البرهان**:", open, StringComparison.Ordinal);
+        Assert.True(open > z && proof > open, "قائِمَةُ «وما لا يُغلِقُه» في ‏ADR-032 §٨‑ز غائِبَةٌ أَو تَغَيَّرَ تَرتيبُها.");
+
+        return Regex.Matches(adr[open..proof], @"^[ \t]+\d+\.[ \t]+\*\*([^*\n]+)\*\*", RegexOptions.Multiline)
+            .Select(m => m.Groups[1].Value.Trim())
+            .ToArray();
+    }
+
+    [Fact]
+    public void DeployDoc_vault_section_names_the_open_residuals_of_the_doors_the_kek_opens_and_says_no_obstacle_only_struck()
+    {
+        var card = CheckoutCardNeedsTheVault();
+        var vendor = VendorShippingNeedsTheVault();
+        var residuals = Adr032SectionZResiduals();
+        output.WriteLine($"البِطاقَةُ في إتمامِ الشِراءِ تَطلُبُ الخِزانَة: {card} · مَدخَلُ شَحنِ البائِعِ يَطلُبُها: {vendor}");
+        output.WriteLine($"بَواقي ‏ADR-032 §٨‑ز: {residuals.Length} — {string.Join(" · ", residuals)}");
+        Assert.True(residuals.Length > 0, "أَداةٌ عَمياء: صِفرُ بَواقٍ في ‏ADR-032 §٨‑ز.");
+
+        var section = VaultSection(Read("docs", "DEPLOY.md"));
+        var unstruck = Regex.Replace(section, "~~.*?~~", string.Empty, RegexOptions.Singleline);
+
+        // «لا عائِق» باقِيَةٌ تاريخاً — مَشطوبَةً لا غَير.
+        const string noObstacle = "ولا عائِقَ في";
+        var all = Regex.Matches(section, Regex.Escape(noObstacle)).Count;
+        output.WriteLine($"«{noObstacle}» في §٢·ح: {all} · بِلا شَطب: {Regex.Matches(unstruck, Regex.Escape(noObstacle)).Count}");
+        Assert.True(all > 0, "أَداةٌ عَمياء: الجُملَةُ المَشطوبَةُ نَفسُها غائِبَة — والوَثائِقُ تُلحَقُ ولا تُمحى.");
+        Assert.DoesNotContain(noObstacle, unstruck, StringComparison.Ordinal);
+
+        if (card)
+            foreach (var cite in new[] { "ADR-032 §٨‑ز", "«ب» S9·١٤", "«ب» S9·١٦", "«ج» S9·١٠" })
+                Assert.True(unstruck.Contains(cite, StringComparison.Ordinal),
+                    $"البِطاقَةُ تَطلُبُ الخِزانَةَ و§٢·ح لا يُسَمّي {cite} — فَـ«مَتى» تُقالُ بِلا بَواقيها.");
+        if (vendor)
+            foreach (var cite in new[] { "ADR-033 §٧‑ف", "«ب» S8·٢١", "«ج» S8·١١", "Shipping__Oto__Environment" })
+                Assert.True(unstruck.Contains(cite, StringComparison.Ordinal),
+                    $"مَدخَلُ البائِعِ يَطلُبُ الخِزانَةَ و§٢·ح لا يُسَمّي {cite}.");
+    }
 }
