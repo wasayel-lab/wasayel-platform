@@ -124,7 +124,8 @@ public static class DealShipAuthorization
 }
 
 /// <summary>نَتيجَةُ الشَحن — الرَفضُ يَصِلُ المُنادي بِرَمزِه (مِن مَعجَمِ البَوّابَة، أَو
-/// <see cref="OtoFailures"/>، أَو <see cref="DealsService.ChangedMeanwhile"/>).</summary>
+/// <see cref="OtoFailures"/>، أَو <see cref="DealsService.ChangedMeanwhile"/>، أَو — بَعدَ أَن وُجِدَ الطَلَبُ عِندَ OTO —
+/// <see cref="DealShipping.ShipmentUnconfirmed"/>).</summary>
 public sealed record DealShipResult(bool Ok, string? Code, Deal? Deal)
 {
     public static DealShipResult Refused(string code, Deal? deal) => new(false, code, deal);
@@ -135,7 +136,8 @@ public sealed record DealShipResult(bool Ok, string? Code, Deal? Deal)
 /// <para><b>شَحنُ الصَفَقاتِ عَبرَ OTO</b> — المُستَهلِكُ الأَوَّلُ لِـ<see cref="OtoClient"/>
 /// (‏ADR-033 §٢‑هـ القاعِدَة ١: «المستهلكُ الأوّلُ هو <c>DealStage.Shipping</c>»). يُنشِئُ
 /// طَلَباً بِشُحنَتِه ومَبلَغِ تَحصيلِه، ويَكتُبُ مُعَرِّفَيه في <see cref="Deal.Refs"/> المُصَمَّمِ
-/// لِذلك («PaymentId، ShipmentId …»)، ثُمَّ يُخرِجُ الصَفقَةَ إلى <c>Shipping</c> <b>عَبرَ
+/// لِذلك («PaymentId، ShipmentId …»)، ثُمَّ — <b>حينَ تُثبِتُ OTO شُحنَتَه وبوليصَتَها</b> (<see cref="ShipmentConfirmed"/>؛
+/// مُراجَعَةُ تَيّارِ S7، ‏2026-10-12) — يُخرِجُ الصَفقَةَ إلى <c>Shipping</c> <b>عَبرَ
 /// <see cref="DealsService.AdvanceAsync"/> نَفسِها</b> — فاعِلُها البائِعُ والسِياسَةُ تَحكُم.</para>
 ///
 /// <para><b>ورَمزُ البائِعِ في هذِه المَوجَةِ مِن التَهيئَةِ وَحدَها</b> (‏ADR-033 §٢‑هـ القاعِدَة ٩):
@@ -168,6 +170,16 @@ public sealed class DealShipping
     /// والمُستَلِمُ في المَملَكَة — ‏ISO2 كَما في أَمثِلَةِ الوَثيقَة (<c>"country": "SA"</c>).</summary>
     public const string Currency = "SAR";
     public const string Country  = "SA";
+
+    /// <summary>
+    /// <para><b>لَم تُثبِت OTO شُحنَةَ الطَلَب</b> — رَمزُ <see cref="ShipAsync"/> حينَ يوجَدُ الطَلَبُ عِندَها (مَرجِعاه مَكتوبانِ
+    /// في الصَفقَة) ولا يُثبِتُ «Order Tracking» شُحنَتَه وبوليصَتَها (<see cref="ShipmentConfirmed"/>) — أَو لا يُجيب. فَالصَفقَةُ
+    /// عِندَ خُطوَتِها بِمَرجِعَيها، والنَقرَةُ التالِيَةُ تَستَأنِفُ (<see cref="IsPlaced"/>) فَتَسأَلُ مِن جَديد.</para>
+    ///
+    /// <para><b>ولا يُعادُ رَمزُ فَشَلِ OTO هُنا</b>: نُصوصُ <c>oto_refused</c> و<c>oto_token_refused</c> و<c>oto_unreadable</c> في
+    /// القامُوسِ تَقولُ «ولَم يُكتَب في الصَّفقَة شَيء» — وقَد كُتِبَ المَرجِعان. ولَيسَ مِن مَعجَمِ البَوّابَة: يَقَعُ بَعدَ OTO لا قَبلَها.</para>
+    /// </summary>
+    public const string ShipmentUnconfirmed = "shipment_unconfirmed";
 
     private readonly DealsService _deals;
     private readonly OtoClient _oto;
@@ -225,20 +237,46 @@ public sealed class DealShipping
         deal.ListingTitle);
 
     /// <summary>
+    /// <para><b>أَتُثبِتُ OTO شُحنَةَ طَلَبِ الصَفقَةِ وبوليصَتَها؟ — دالَّةٌ نَقِيَّة.</b> جَوابُ «Order Tracking» عَن مُعَرِّفِنا
+    /// (<see cref="OrderIdOf"/>) بِحالٍ مِن <see cref="OtoClient.ShipmentStatuses"/> ورابِطِ بوليصَةٍ <c>https</c>. وكُلُّ ما سِواه
+    /// — لا جَواب، أَو جَوابٌ لِطَلَبٍ آخَر، أَو حالٌ قَبلَ الشُحنَةِ أَو خارِجَها، أَو بِلا بوليصَة — لا يُثبِت.</para>
+    ///
+    /// <para><b>لِماذا لا يَكفي نَجاحُ «Create Order»</b> (مُراجَعَةُ تَيّارِ S7، ‏2026-10-12؛ تَوصيفُه في <c>843badc</c>): قِسمُه في
+    /// وَثيقَةِ OTO — «‏If you send the createShipment: true parameter and the delivery company returns an error during shipment
+    /// creation, you must register the shipmentError webhook in order to receive and view the error details»؛ فَالنَجاحُ طَلَبٌ لا
+    /// شُحنَة. <b>ولِماذا البوليصَةُ شَرطٌ مَعَ الحال</b>: هي العَينُ الَّتي يَخرُجُ بِها البائِع (القاعِدَة ١٧)، واستِمارَةُ الشَحنِ
+    /// تَعِدُ بِها («وتَظهَرُ البوليصَةُ ورابِطُ التَّتَبُّع هُنا») — فَلا «شَحنَ» بِلا بوليصَةٍ يَطبَعُها.</para>
+    /// </summary>
+    public static bool ShipmentConfirmed(Deal deal, OtoOrderState? state)
+        => state is not null
+           && string.Equals(state.OrderId, OrderIdOf(deal), StringComparison.Ordinal)
+           && state.HasShipment
+           && IsHttps(state.LabelUrl);
+
+    /// <summary>
     /// <para><b>يَشحَن</b>: البَوّابَةُ أَوَّلاً عَلى الصَفقَةِ كَما في المَخزَن، ثُمَّ «Create Order» (أَو تَبَنّي
-    /// طَلَبٍ تَحمِلُه OTO بِمُعَرِّفِنا — <see cref="PlaceAsync"/>)، ثُمَّ المُعَرِّفانِ في المَراجِع، ثُمَّ الانتِقالُ
-    /// إلى <c>Shipping</c> بِالبائِعِ مِن المَرحَلَةِ الَّتي رَأَتها البَوّابَة (<c>from</c>)، ثُمَّ — بِلا شَرط —
-    /// رابِطا البوليصَةِ والتَتَبُّعِ إن أَعطَتهُما OTO الآن (وإلّا يَأتِيانِ مَعَ إشعارِ الحال).</para>
+    /// طَلَبٍ تَحمِلُه OTO بِمُعَرِّفِنا — <see cref="PlaceAsync"/>)، ثُمَّ المُعَرِّفانِ في المَراجِع، <b>ثُمَّ «Order Tracking»
+    /// — ولا انتِقالَ حَتّى تُثبِتَ OTO شُحنَةَ الطَلَبِ وبوليصَتَها</b> (<see cref="ShipmentConfirmed"/>؛ وإلّا
+    /// <see cref="ShipmentUnconfirmed"/> والصَفقَةُ عِندَ خُطوَتِها بِمَرجِعَيها، فَالنَقرَةُ التالِيَةُ تَستَأنِفُ وتَسأَلُ مِن جَديد)،
+    /// ثُمَّ الانتِقالُ إلى <c>Shipping</c> بِالبائِعِ مِن المَرحَلَةِ الَّتي رَأَتها البَوّابَة (<c>from</c>)، ثُمَّ رابِطا البوليصَةِ
+    /// والتَتَبُّعِ مِن الجَوابِ نَفسِه.</para>
+    ///
+    /// <para>(وكانَ هُنا — حَتّى مُراجَعَةِ تَيّارِ S7 ‏2026-10-12، وتَوصيفُه في <c>843badc</c> —: «ثُمَّ الانتِقالُ إلى <c>Shipping</c>
+    /// بِالبائِعِ مِن المَرحَلَةِ الَّتي رَأَتها البَوّابَة (<c>from</c>)، ثُمَّ — بِلا شَرط — رابِطا البوليصَةِ والتَتَبُّعِ إن أَعطَتهُما
+    /// OTO الآن (وإلّا يَأتِيانِ مَعَ إشعارِ الحال)». فَكانَت الصَفقَةُ تَتَحَرَّكُ عَلى نَجاحِ «Create Order» وَحدَه — وهُوَ طَلَبٌ لا
+    /// شُحنَة — فَطَلَبٌ لَم تُنشَأ شُحنَتُه يَصيرُ «شَحناً» بِلا بوليصَةٍ ولا استِمارَةٍ ولا رَمز. ولا يُعادُ حَرفٌ فَوقَه.)</para>
     ///
     /// <para><b>والتَرتيبُ مَقصود</b>: المَراجِعُ قَبلَ الانتِقال — لَو رُدَّ الانتِقالُ (أَلغى المُشتَري
     /// أَثناءَ نِداءِ OTO، أَو تَعارَضَت نُسخَة) بَقِيَ مُعَرِّفُ الطَلَبِ مَكتوباً، فَالإعادَةُ تَستَأنِفُ ولا تُنشِئُ
-    /// ثانِياً (<see cref="IsPlaced"/>). والإلحاقُ يُعادُ تَطبيقُه عِندَ التَعارُض (‏ADR-036 §٧). <b>وبَعدَ الأَثَرِ
+    /// ثانِياً (<see cref="IsPlaced"/>). والإلحاقُ يُعادُ تَطبيقُه عِندَ التَعارُض (‏ADR-036 §٧). <b>وصَفقَةٌ أُلغِيَت أَو تَحَرَّكَت
+    /// أَثناءَ نِداءِ OTO لا تُسأَلُ عَنها OTO</b>: انتِقالُها مَردودٌ لا مَحالَة، فَيُجابُ رَمزُه قَبلَ السُؤال. <b>وبَعدَ الأَثَرِ
     /// لا إلغاء</b>: ما يَلي طَلَباً أُنشِئَ يَجري بِـ<see cref="CancellationToken.None"/> — مَرجِعُه يَجِبُ أَن
     /// يَقَع.</para>
     ///
     /// <para><b>وما لا يُغلِقُه — يُقالُ ولا يُبتلَع</b> (‏ADR-036 §٣‑١): الأَثَرُ الخارِجيُّ يَسبِقُ الحِفظَ
     /// المَفحوص؛ فَانتِقالٌ مَردودٌ لِأَنّ المُشتَري أَلغى يَترُكُ طَلَباً عِندَ OTO لِصَفقَةٍ مُلغاة —
-    /// مَرجِعُه في الصَفقَة، ويُلغى مِن لَوحَةِ البائِعِ عِندَ OTO.</para>
+    /// مَرجِعُه في الصَفقَة، ويُلغى مِن لَوحَةِ البائِعِ عِندَ OTO. <b>ولا يُسَجَّلُ إشعارُ <c>shipmentError</c></b> في هذِه
+    /// المَوجَة: سَبَبُ شُحنَةٍ لَم تُنشَأ يُقرَأُ في لَوحَةِ البائِعِ عِندَ OTO، والصَفقَةُ لا تَتَحَرَّكُ بِدونِها.</para>
     /// </summary>
     public async Task<DealShipResult> ShipAsync(
         string tenantSlug, Guid dealId, DealShipper by, string? city, CancellationToken ct = default)
@@ -250,6 +288,7 @@ public sealed class DealShipping
         if (refusal is not null) return DealShipResult.Refused(refusal.Code, deal);
 
         var seen = deal!.Stage;
+        var current = deal;
         if (!IsPlaced(deal))
         {
             var noCity = DealShipAuthorization.ValidateCity(city);
@@ -259,19 +298,23 @@ public sealed class DealShipping
             if (placed.Value is not { } order) return DealShipResult.Refused(placed.Failure!.Code, deal);
 
             await _deals.AttachRefAsync(tenantSlug, dealId, OrderRef, order.OrderId, CancellationToken.None);
-            await _deals.AttachRefAsync(tenantSlug, dealId, OtoIdRef, order.OtoId, CancellationToken.None);
+            current = await _deals.AttachRefAsync(tenantSlug, dealId, OtoIdRef, order.OtoId, CancellationToken.None);
+
+            // أُلغِيَت أَو تَحَرَّكَت أَثناءَ نِداءِ OTO: انتِقالُها مَردودٌ لا مَحالَة — فَلا تُسأَلُ OTO عَن شُحنَتِها.
+            if (current is not { Status: DealStatus.Active } || current.Stage != seen)
+                return DealShipResult.Refused(DealsService.ChangedMeanwhile, current);
         }
+
+        // نَجاحُ «Create Order» طَلَبٌ لا شُحنَة: تُسأَلُ OTO قَبلَ أَن تَتَحَرَّكَ الصَفقَة — ولا «شَحنَ» بِلا شُحنَةٍ وبوليصَة.
+        var state = (await _oto.GetOrderStatusAsync(token!, OrderIdOf(deal), CancellationToken.None)).Value;
+        if (!ShipmentConfirmed(current, state)) return DealShipResult.Refused(ShipmentUnconfirmed, current);
 
         // كُلُّ رَدٍّ هُنا «تَغَيَّرَت في الأَثناء»: البَوّابَةُ مَرَّت عَلى ما قُرِئ، والانتِقالُ رَأى غَيرَه
         // (تَعارُضُ نُسخَة، أَو مَرحَلَةٌ غَيرُ `seen`، أَو صَفقَةٌ أُلغِيَت بَينَهُما).
         var moved = await _deals.AdvanceAsync(tenantSlug, dealId, by.ActorId, by.ActorName, null, CancellationToken.None, seen);
         if (!moved.Ok) return DealShipResult.Refused(DealsService.ChangedMeanwhile, moved.Deal);
 
-        var state = await _oto.GetOrderStatusAsync(token!, OrderIdOf(deal), CancellationToken.None);
-        var shipped = state.Value is { } s
-            ? await AttachLinksAsync(tenantSlug, moved.Deal!, s, CancellationToken.None)
-            : moved.Deal!;
-        return DealShipResult.Shipped(shipped);
+        return DealShipResult.Shipped(await AttachLinksAsync(tenantSlug, moved.Deal!, state!, CancellationToken.None));
     }
 
     /// <summary>

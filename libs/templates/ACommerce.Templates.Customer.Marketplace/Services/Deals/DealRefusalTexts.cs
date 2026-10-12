@@ -35,6 +35,9 @@ public static class DealRefusalTexts
             // عَميلِ OTO الخُماسيّ، وكُلُّها تَرتَدُّ إلى هذِه الصَفحَةِ بِـ`?err=`.
             .Concat(DealShipAuthorization.All)
             .Concat(ACommerce.Kit.Delivery.OtoFailures.All)
+            // ورَمزُ «لَم تُثبِت OTO الشُحنَة» (مُراجَعَةُ تَيّارِ S7، ‏2026-10-12): الطَلَبُ عِندَها ومَرجِعاه مَكتوبان، فَلا يُعادُ
+            // رَمزُ فَشَلٍ نَصُّه «ولَم يُكتَب في الصَّفقَة شَيء».
+            .Append(DealShipping.ShipmentUnconfirmed)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 

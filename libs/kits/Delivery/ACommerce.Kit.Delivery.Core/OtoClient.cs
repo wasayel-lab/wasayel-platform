@@ -50,6 +50,30 @@ public sealed class OtoClient
     /// to end customer successfully» في «‏List Of Statuses».</summary>
     public const string DeliveredStatus = "delivered";
 
+    /// <summary>
+    /// <para><b>الحالاتُ الَّتي تَعني أَنّ لِلطَلَبِ عِندَ OTO شُحنَةً ذاهِبَةً أُنشِئَت</b> — بِحَرفِ «‏List Of Statuses»
+    /// (‏2026-10-12؛ مُراجَعَةُ تَيّارِ S7): صُفوفُ المَراحِلِ «Creation» و«Pickup» و«Transit» و«Delivery» كُلُّها وبِتَرتيبِها،
+    /// أَوَّلُها «‏searchingDriver · Creation · Shipment created and waiting for delivery company to assign driver». وما
+    /// قَبلَها — «Order Management» و«Warehouse Management»، ومِنها «‏missingData · The order is missing required information
+    /// to proceed with shipment creation» — طَلَبٌ بِلا شُحنَة؛ وما بَعدَها رُجوعٌ أَو إلغاءٌ أَو شُحنَةٌ عَكسِيَّة.</para>
+    ///
+    /// <para><b>قائِمَةُ سَماحٍ لا قائِمَةُ مَنع</b>: حالٌ لا تَعرِفُه — ومِنه <c>shipmentProcessing</c> الَّذي في مِثالِ قِسمِ
+    /// «Webhook» ولَيسَ في القائِمَة — لا يُعَدُّ شُحنَة، فَيُعادُ السُؤالُ ولا تَتَقَدَّمُ صَفقَةٌ عَلى ظَنّ. و<c>pickupAttemted</c>
+    /// بِحَرفِ الوَثيقَة.</para>
+    /// </summary>
+    public static readonly IReadOnlyList<string> ShipmentStatuses = new[]
+    {
+        // Creation
+        "searchingDriver", "shipmentCreated", "goingToPickup", "arrivedPickup", "pickupAttemted",
+        // Pickup
+        "pickedUp",
+        // Transit
+        "arrivedDestinationTerminal", "arrivedTerminal", "departedTerminal", "inTransit", "arrivedOriginTerminal",
+        "outForDelivery", "arrivedDestination", "shipmentInProgress", "undeliveredAttempt", "shipmentOnHold", "heldForPickup",
+        // Delivery
+        DeliveredStatus,
+    };
+
     private readonly HttpClient _http;
     private readonly OtoOptions _opts;
     private readonly OtoTokenCache _tokens;
@@ -118,6 +142,15 @@ public sealed class OtoClient
     /// <c>pickupLocationCode</c> («‏Predefined pickup address of store/warehouse. If not
     /// exist, OTO assigns automatically»): عُنوانُ البائِعِ لا يَعرِفُه الكود، ومَكانُه
     /// مَواقِعُ الاستِلامِ في حِسابِه.</para>
+    ///
+    /// <para><b>ونِصفُ ما اقتُبِسَ أَعلاه — يُلحَقُ ‏2026-10-12 (مُراجَعَةُ تَيّارِ S7) ولا يُمحى</b>: جُملَةُ «‏This will
+    /// automatically create the shipment» مِن صَفحَةِ «Create a Shipment»، وقِسمُ «Create Order» نَفسُه يُكمِلُها: «‏Note: If
+    /// you send the createShipment: true parameter and the delivery company returns an error during shipment creation, you
+    /// must register the shipmentError webhook in order to receive and view the error details». <b>فَنَجاحُ هذا النِداءِ طَلَبٌ
+    /// لا شُحنَة</b> — والشُحنَةُ تُقرَأُ مِن «Order Tracking» (<see cref="OtoOrderState.HasShipment"/>) قَبلَ أَن تَتَحَرَّكَ
+    /// صَفقَة. <b>وجَدوَلُ حُقولِه يَسِمُ <c>senderInformation</c> بِـ«yes»</b> («‏Sender data (can not be used together with
+    /// pickupLocationCode.)»)، وكُلُّ مِثالٍ مِن أَمثِلَتِه الثَلاثَةَ عَشَرَ يُرسِلُه أَو <c>pickupLocationCode</c> (في رَأسِه أَو في
+    /// عَناصِرِه) — فَإغفالُهُما هُنا غَيرُ مَقيس، يَتبَعُه سِجِلُّ المالِكِ «ب» S7·٣ (١) ولا يُظَنُّ بِه.</para>
     /// </summary>
     public async Task<OtoResult<OtoCreatedOrder>> CreateOrderAsync(
         string refreshToken, OtoOrderDraft draft, CancellationToken ct = default)
@@ -382,6 +415,9 @@ public sealed record OtoCreatedOrder(string OrderId, string OtoId);
 public sealed record OtoOrderState(string OrderId, string? OtoId, string Status, string? LabelUrl, string? TrackingUrl)
 {
     public bool IsDelivered => string.Equals(Status, OtoClient.DeliveredStatus, StringComparison.Ordinal);
+
+    /// <summary>لِلطَلَبِ عِندَ OTO شُحنَةٌ أُنشِئَت — حالُه مِن <see cref="OtoClient.ShipmentStatuses"/>.</summary>
+    public bool HasShipment => OtoClient.ShipmentStatuses.Contains(Status, StringComparer.Ordinal);
 }
 
 /// <summary>فَشَلٌ مُسَمّى — <c>Code</c> مِن <see cref="OtoFailures"/> لِلاختِبارِ واللوغِ

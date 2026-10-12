@@ -25,19 +25,21 @@ public class DealRefusalTextsTests
         // ورَمزُ تَعارُضِ النُسخَةِ عُضوٌ تاسِع (‏ADR-036، ‏2026-10-12) — يُضافُ هُنا بِاسمِه، والعَدُّ 8 ← 9.
         // ورُموزُ نُقطَةِ الشَحنِ ومَعجَمُ عَميلِ OTO (‏ADR-033 الخُطوَة 3، ‏2026-10-12) — يُضافانِ هُنا بِاسمَيهِما،
         // والعَدُّ 9 ← 21.
+        // ورَمزُ «لَم تُثبِت OTO الشُحنَة» (مُراجَعَةُ تَيّارِ S7، ‏2026-10-12) — يُضافُ هُنا بِاسمِه، والعَدُّ 21 ← 22.
         var expected = DealAcceptAuthorization.All
             .Concat(DealCancelAuthorization.All)
             .Append(ChatStartReturn.PartnerMissing)
             .Append(DealsService.ChangedMeanwhile)
             .Concat(DealShipAuthorization.All)
             .Concat(ACommerce.Kit.Delivery.OtoFailures.All)
+            .Append(DealShipping.ShipmentUnconfirmed)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(c => c, StringComparer.Ordinal);
         Assert.Equal(expected, DealRefusalTexts.Codes.OrderBy(c => c, StringComparer.Ordinal));
         // 6 + 3 − 2 مُشتَرَكَين (deal_not_found، deal_not_active) + 1 + 1 = 9؛
         // ثُمَّ الشَحن: 10 − 3 مُشتَرَكَةٍ مَعَ القَبول (deal_not_found، listing_owner_missing، deal_not_active) = 7،
-        // وعَميلُ OTO 5 — فَـ9 + 7 + 5 = 21.
-        Assert.Equal(21, DealRefusalTexts.Codes.Count);
+        // وعَميلُ OTO 5 — فَـ9 + 7 + 5 = 21؛ ثُمَّ `shipment_unconfirmed` — 22.
+        Assert.Equal(22, DealRefusalTexts.Codes.Count);
         Assert.Equal(DealRefusalTexts.Codes.Count, DealRefusalTexts.Codes.Distinct(StringComparer.Ordinal).Count());
     }
 
@@ -49,7 +51,8 @@ public class DealRefusalTextsTests
         var checked_ = 0;
         foreach (var code in DealAcceptAuthorization.All.Concat(DealCancelAuthorization.All).Append(ChatStartReturn.PartnerMissing)
                      .Append(DealsService.ChangedMeanwhile)
-                     .Concat(DealShipAuthorization.All).Concat(ACommerce.Kit.Delivery.OtoFailures.All))
+                     .Concat(DealShipAuthorization.All).Concat(ACommerce.Kit.Delivery.OtoFailures.All)
+                     .Append(DealShipping.ShipmentUnconfirmed))
         {
             var key = DealRefusalTexts.KeyFor(code);
             Assert.Equal(DealRefusalTexts.Prefix + code, key);
@@ -60,7 +63,8 @@ public class DealRefusalTextsTests
             checked_++;
         }
         // 6 + 3 + 1 + 1 (‏ADR-036) + 10 + 5 (‏ADR-033 الخُطوَة 3) — المُشتَرَكُ يُفحَصُ مَرَّتَين ويَصِلُ مِفتاحاً واحِداً
-        Assert.Equal(26, checked_);
+        // — + 1 (`shipment_unconfirmed`، مُراجَعَةُ تَيّارِ S7، ‏2026-10-12): 26 ← 27.
+        Assert.Equal(27, checked_);
     }
 
     /// <summary><b>نَصُّ «بِلا مالِكِ إعلان» يُسَمّي مَن يُحَرِّكُها حَقّاً</b> (‏2026-10-11، مُراجَعَةُ الموجَةِ الثانِيَةِ
@@ -93,6 +97,34 @@ public class DealRefusalTextsTests
         Assert.Equal("deals.detail.err_deal_changed_meanwhile", DealRefusalTexts.KeyFor(DealsService.ChangedMeanwhile));
         Assert.Equal("تَغَيَّرَت الصَفقَةُ في الأَثناء — أَعِد المُحاوَلَة",
             LocaleCatalog.Text(LocaleCatalog.Arabic, "deals.detail.err_deal_changed_meanwhile"));
+    }
+
+    /// <summary><b>نَصُّ «لَم تُثبِت OTO الشُحنَة» لا يَقولُ «لَم يُكتَب شَيء»</b> (مُراجَعَةُ تَيّارِ S7، ‏2026-10-12): يُرَدُّ بِه
+    /// <c>/ship</c> بَعدَ أَن وُجِدَ الطَلَبُ عِندَ OTO وكُتِبَ مَرجِعاه — ولِذلك لَم يُعَد رَمزُ فَشَلِ العَميل: ثَلاثَةٌ مِن نُصوصِه
+    /// تَقولُ «ولَم يُكتَب في الصَّفقَة شَيء». والنَصُّ يُسَمّي ما بَقِيَ (الصَفقَةُ عِندَ خُطوَتِها) وأَينَ السَبَب (لَوحَةُ OTO).</summary>
+    [Fact]
+    public void The_shipment_unconfirmed_text_does_not_say_nothing_was_written_and_points_to_the_OTO_panel()
+    {
+        Assert.Equal("shipment_unconfirmed", DealShipping.ShipmentUnconfirmed);
+        var key = DealRefusalTexts.KeyFor(DealShipping.ShipmentUnconfirmed);
+        Assert.Equal("deals.detail.err_shipment_unconfirmed", key);
+        var text = LocaleCatalog.Text(LocaleCatalog.Arabic, key!);
+        Assert.DoesNotContain("لَم يُكتَب", text, StringComparison.Ordinal);
+        Assert.Contains("بَقِيَت الصَّفقَةُ عِندَ خُطوَتِها", text, StringComparison.Ordinal);
+        Assert.Contains("لَوحَتِكَ عِندَ OTO", text, StringComparison.Ordinal);
+
+        var saysNothingWritten = 0;
+        foreach (var code in new[]
+                 {
+                     ACommerce.Kit.Delivery.OtoFailures.Refused, ACommerce.Kit.Delivery.OtoFailures.TokenRefused,
+                     ACommerce.Kit.Delivery.OtoFailures.Unreadable,
+                 })
+        {
+            Assert.Contains("ولَم يُكتَب في الصَّفقَة شَيء",
+                LocaleCatalog.Text(LocaleCatalog.Arabic, DealRefusalTexts.KeyFor(code)!), StringComparison.Ordinal);
+            saysNothingWritten++;
+        }
+        Assert.Equal(3, saysNothingWritten);
     }
 
     /// <summary><b>السالِب</b>: رَمزٌ خارِجَ المَعجَم، أَو غِيابٌ، أَو فَراغ — لا مِفتاحَ،

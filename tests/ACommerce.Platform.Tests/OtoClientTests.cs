@@ -358,6 +358,41 @@ public class OtoClientTests
     public void Only_the_documented_status_word_counts_as_delivered(string status, bool delivered)
         => Assert.Equal(delivered, new OtoOrderState("o", null, status, null, null).IsDelivered);
 
+    /// <summary><b>حالاتُ الشُحنَةِ القائِمَةِ بِحَرفِ «‏List Of Statuses» وبِتَرتيبِه</b> (مُراجَعَةُ تَيّارِ S7، ‏2026-10-12): صُفوفُ
+    /// المَراحِلِ «Creation» (‏5) و«Pickup» (‏1) و«Transit» (‏11) و«Delivery» (‏1) — اثنَتا وسَبعونَ صَفّاً في الجَدوَل، هذِه
+    /// ثَمانِيَةَ عَشَرَ مِنها؛ و<c>pickupAttemted</c> بِحَرفِ الوَثيقَة.</summary>
+    [Fact]
+    public void The_shipment_statuses_are_the_documented_forward_stages_in_order()
+    {
+        Assert.Equal(new[]
+        {
+            "searchingDriver", "shipmentCreated", "goingToPickup", "arrivedPickup", "pickupAttemted",
+            "pickedUp",
+            "arrivedDestinationTerminal", "arrivedTerminal", "departedTerminal", "inTransit", "arrivedOriginTerminal",
+            "outForDelivery", "arrivedDestination", "shipmentInProgress", "undeliveredAttempt", "shipmentOnHold", "heldForPickup",
+            "delivered",
+        }, OtoClient.ShipmentStatuses);
+        Assert.Equal(18, OtoClient.ShipmentStatuses.Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(OtoClient.DeliveredStatus, OtoClient.ShipmentStatuses);
+    }
+
+    /// <summary>قائِمَةُ سَماح: حالٌ ذاهِبٌ مِنها شُحنَة؛ وما قَبلَها أَو خارِجَها — أَو حالٌ لا تَعرِفُه القائِمَة، أَو حَرفٌ
+    /// كَبيرٌ في غَيرِ مَوضِعِه — لا.</summary>
+    [Theory]
+    [InlineData("searchingDriver", true)]
+    [InlineData("pickupAttemted", true)]
+    [InlineData("delivered", true)]
+    [InlineData("new", false)]
+    [InlineData("missingData", false)]
+    [InlineData("assignedToWarehouse", false)]
+    [InlineData("canceled", false)]
+    [InlineData("shipmentCanceled", false)]
+    [InlineData("returned", false)]
+    [InlineData("shipmentProcessing", false)]
+    [InlineData("SearchingDriver", false)]
+    public void Only_a_documented_forward_status_means_a_shipment_exists(string status, bool exists)
+        => Assert.Equal(exists, new OtoOrderState("o", null, status, null, null).HasShipment);
+
     /// <summary>فَحصُ السِعرِ بِالحُقولِ الثَلاثَةِ الإلزامِيَّة، والخِياراتُ مِن <c>deliveryCompany</c>.</summary>
     [Fact]
     public async Task Fee_check_posts_the_three_required_fields_and_reads_the_options()

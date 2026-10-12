@@ -22,6 +22,8 @@ namespace ACommerce.Platform.Tests;
 //      وما يُكتَب، وأَنّ الرَفضَ قَبلَ OTO لا يُرسِلُ طَلَباً ولا يَكتُب، وأَنّ إلغاءً أَو شَحناً يَدَوِيّاً
 //      أَثناءَ نِداءِ OTO لا يُحَرِّكُ الصَفقَةَ مَرَّتَين، وأَنّ الإعادَةَ تَستَأنِفُ ولا تُنشِئُ طَلَباً ثانِياً،
 //      وأَنّ طَلَباً ضاعَ رَدُّه يُتَبَنّى مِن «Order Tracking» بِمُعَرِّفِنا وَحدَه.
+//   ٤) ولا «شَحنَ» حَتّى تُثبِتَ OTO الشُحنَةَ وبوليصَتَها (مُراجَعَةُ تَيّارِ S7، ‏2026-10-12): «Order Tracking» قَبلَ الانتِقال،
+//      وما لا يُثبِتُه يُرَدُّ بِـ`shipment_unconfirmed` والصَفقَةُ عِندَ خُطوَتِها بِمَرجِعَيها، والاستِئنافُ يَسأَلُ مِن جَديد.
 
 /// <summary>مُعالِجٌ يُجيبُ بِحَسَبِ المَسار — ويُنادي خُطّافاً قَبلَ الرَدِّ (إلغاءٌ أَو شَحنٌ يَدَوِيٌّ
 /// «أَثناءَ نِداءِ OTO» يَصيرُ تَرتيباً حَتمِيّاً لا حَظّاً).</summary>
@@ -383,19 +385,23 @@ public class DealShipTests
         Assert.Equal("Riyadh", body.GetProperty("customer").GetProperty("city").GetString());
     }
 
+    // ═══ ٤‑أ. «Create Order» طَلَبٌ لا شُحنَة — لا «شَحنَ» حَتّى تُثبِتَ OTO الشُحنَةَ وبوليصَتَها ═══════════════════
+    //
+    // مُراجَعَةُ تَيّارِ S7 (‏2026-10-12؛ تَوصيفُ «اليَوم» في 843badc): قِسمُ «Create Order» — «‏If you send the createShipment:
+    // true parameter and the delivery company returns an error during shipment creation, you must register the shipmentError
+    // webhook in order to receive and view the error details». فَتُسأَلُ OTO قَبلَ الانتِقال، ويُرَدُّ ما لا تُثبِتُه بِـ
+    // `shipment_unconfirmed` والصَفقَةُ عِندَ خُطوَتِها بِمَرجِعَيها — والنَقرَةُ التالِيَةُ تَستَأنِفُ وتَسأَلُ مِن جَديد.
+
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم» — يُقلَبُ بِاسمِه في الكوميتِ التالي</b> (مُراجَعَةُ تَيّارِ S7، ‏2026-10-12؛ القاعِدَة ٣، عَلى
-    /// سابِقَةِ <c>f79bd42</c>/<c>f699138</c>): «Create Order» يَنجَحُ بِـ<c>otoId</c>، و«Order Tracking» يُجيبُ بَعدَه
-    /// <c>missingData</c> — «‏The order is missing required information to proceed with shipment creation» في «‏List Of
-    /// Statuses» — بِلا <c>printAWBURL</c>. وقِسمُ «Create Order» نَفسُه يَقولُ إنّ خَطَأَ الناقِلِ في إنشاءِ الشُحنَةِ مَعَ
-    /// <c>createShipment: true</c> لا يَصِلُ إلّا بِإشعارِ <c>shipmentError</c>: فَالنَجاحُ طَلَبٌ لا شُحنَة.</para>
-    ///
-    /// <para><b>واليَوم</b>: تَخرُجُ الصَفقَةُ إلى <c>Shipping</c> <b>قَبلَ</b> أَن تُسأَلَ OTO (المَرحَلَةُ لَحظَةَ السُؤالِ
-    /// <c>Shipping</c>)، ولا بوليصَةَ تُكتَب — فَالطَرَفانِ يَرَيانِ «شَحن» بِلا كُتلَةِ بوليصَة، واستِمارَةُ الشَحنِ تَختَفي
-    /// (تاليها لَم يَعُد الشَحن)، ولا رَمزَ يَصِلُ الصَفحَة.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_a_created_order_whose_shipment_OTO_has_not_created_moves_the_deal_to_Shipping_without_a_label</c>
+    /// (‏<c>843badc</c>): «Create Order» يَنجَحُ بِـ<c>otoId</c>، و«Order Tracking» يُجيبُ <c>missingData</c> — «‏The order is
+    /// missing required information to proceed with shipment creation» — بِلا <c>printAWBURL</c>. <b>والآن</b>: تُسأَلُ OTO
+    /// والصَفقَةُ عِندَ <c>Confirmed</c>، ويُرَدُّ <c>shipment_unconfirmed</c>، والصَفقَةُ فَعّالَةٌ عِندَ خُطوَتِها بِمَرجِعَي طَلَبِها بِلا
+    /// انتِقالٍ ولا بوليصَة — وبَوّابَةُ الاستِمارَةِ تُجيزُها مُستَأنَفَة (<see cref="DealShipping.IsPlaced"/>)، فَالصَفحَةُ تَرسُمُ
+    /// «أَكمِل الشَّحن» بِلا مَدينَة.</para>
     /// </summary>
     [Fact]
-    public async Task Today_a_created_order_whose_shipment_OTO_has_not_created_moves_the_deal_to_Shipping_without_a_label()
+    public async Task A_created_order_whose_shipment_OTO_has_not_created_stays_at_its_step_with_its_refs_and_answers_shipment_unconfirmed()
     {
         var w = await ConfirmedCashDeal();
         w.Oto.Routes[OtoClient.OrderStatusPath] = body =>
@@ -408,17 +414,142 @@ public class DealShipTests
 
         var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
 
-        Assert.True(res.Ok, res.Code);
-        Assert.Equal(DealStage.Shipping, stageWhenAsked);
+        Assert.False(res.Ok);
+        Assert.Equal(DealShipping.ShipmentUnconfirmed, res.Code);
+        Assert.Equal(DealStage.Confirmed, stageWhenAsked);
         var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
-        Assert.Equal((DealStatus.Active, DealStage.Shipping), (deal.Status, deal.Stage));
+        Assert.Equal((DealStatus.Active, DealStage.Confirmed), (deal.Status, deal.Stage));
         Assert.Equal(w.Id.ToString("N"), deal.Refs[DealShipping.OrderRef]);
         Assert.Equal("540789", deal.Refs[DealShipping.OtoIdRef]);
         Assert.Null(DealShipping.LinksOf(deal).Label);
-        Assert.Single(deal.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Shipping);
-        Assert.False(DealShipAuthorization.IsAllowed(deal, Vendor, carrierReady: true));
+        Assert.Null(DealShipping.LinksOf(deal).Tracking);
+        Assert.DoesNotContain(deal.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Shipping);
+        Assert.True(DealShipAuthorization.IsAllowed(deal, Vendor, carrierReady: true));
+        Assert.True(DealShipping.IsPlaced(deal));
         Assert.Equal(1, w.Oto.CallsTo(OtoClient.CreateOrderPath));
         Assert.Equal(1, w.Oto.CallsTo(OtoClient.OrderStatusPath));
+    }
+
+    /// <summary><b>السالِبُ لِلرَمز</b>: شُحنَةٌ أُنشِئَت (<c>searchingDriver</c> — «‏Shipment created and waiting for delivery company
+    /// to assign driver») بِبوليصَة — تُسأَلُ OTO والصَفقَةُ عِندَ <c>Confirmed</c> مَرَّةً واحِدَة، ثُمَّ تَخرُجُ إلى الشَحن،
+    /// والبوليصَةُ مِن الجَوابِ نَفسِه لا مِن سُؤالٍ ثانٍ.</summary>
+    [Fact]
+    public async Task OTO_is_asked_about_the_shipment_before_the_deal_moves_and_the_label_comes_from_that_answer()
+    {
+        var w = await ConfirmedCashDeal();
+        DealStage? stageWhenAsked = null;
+        w.Oto.Before = path =>
+        {
+            if (path == OtoClient.OrderStatusPath) stageWhenAsked ??= w.Docs.Read<Deal>(w.Id.ToString())!.Stage;
+        };
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+
+        Assert.True(res.Ok, res.Code);
+        Assert.Equal(DealStage.Confirmed, stageWhenAsked);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.Equal(DealStage.Shipping, deal.Stage);
+        Assert.Equal("https://app.tryoto.com/print/awb?enc=y", DealShipping.LinksOf(deal).Label);
+        Assert.Equal(1, w.Oto.CallsTo(OtoClient.OrderStatusPath));
+    }
+
+    /// <summary><b>كُلُّ حالٍ ذاهِبٍ مِن «‏List Of Statuses» يُثبِتُ الشُحنَةَ لِطَلَبِنا بِبوليصَة</b> — عَلى القائِمَةِ نَفسِها
+    /// (<see cref="OtoClient.ShipmentStatuses"/>)، والعَدُّ يُقال (القاعِدَة ١٠).</summary>
+    [Fact]
+    public void Every_documented_forward_status_with_an_https_label_for_our_order_confirms_the_shipment()
+    {
+        var deal = Ready();
+        var checkedStatuses = 0;
+        foreach (var status in OtoClient.ShipmentStatuses)
+        {
+            Assert.True(DealShipping.ShipmentConfirmed(deal,
+                new OtoOrderState(deal.Id.ToString("N"), "540789", status, "https://app.tryoto.com/print/awb?enc=y", null)), status);
+            checkedStatuses++;
+        }
+        Assert.True(checkedStatuses == 18, $"أَداةٌ عَمياء: {checkedStatuses} حالاً (‏Creation 5 + Pickup 1 + Transit 11 + Delivery 1 = 18).");
+    }
+
+    /// <summary><b>حالٌ قَبلَ الشُحنَةِ أَو خارِجَها لا يُثبِتُها — ولَو بِبوليصَة</b>: صُفوفُ «Order Management» و«Warehouse
+    /// Management» (طَلَبٌ بِلا شُحنَة)، والإلغاءُ والرُجوع، وحالٌ لا تَعرِفُه القائِمَة (<c>shipmentProcessing</c> مِن مِثالِ
+    /// «Webhook»).</summary>
+    [Theory]
+    [InlineData("new")]
+    [InlineData("missingData")]
+    [InlineData("assignedToWarehouse")]
+    [InlineData("packed")]
+    [InlineData("canceled")]
+    [InlineData("deleted")]
+    [InlineData("shipmentCanceled")]
+    [InlineData("returned")]
+    [InlineData("informationUpdate")]
+    [InlineData("shipmentProcessing")]
+    public void A_status_before_or_outside_the_forward_shipment_does_not_confirm_it(string status)
+    {
+        var deal = Ready();
+        Assert.False(DealShipping.ShipmentConfirmed(deal,
+            new OtoOrderState(deal.Id.ToString("N"), "540789", status, "https://app.tryoto.com/print/awb?enc=y", null)));
+    }
+
+    /// <summary><b>وبِلا جَوابٍ، أَو لِطَلَبٍ آخَر، أَو بِلا بوليصَةٍ <c>https</c> — لا إثبات</b>؛ والمُوجَبُ الضابِطُ بِجِوارِها.</summary>
+    [Fact]
+    public void Without_an_answer_for_our_order_with_an_https_label_the_shipment_is_not_confirmed()
+    {
+        var deal = Ready();
+        var ours = deal.Id.ToString("N");
+        OtoOrderState State(string orderId, string? label) => new(orderId, "540789", "searchingDriver", label, null);
+
+        Assert.True(DealShipping.ShipmentConfirmed(deal, State(ours, "https://app.tryoto.com/print/awb?enc=y")));
+        Assert.False(DealShipping.ShipmentConfirmed(deal, null));
+        Assert.False(DealShipping.ShipmentConfirmed(deal, State(ours, null)));
+        Assert.False(DealShipping.ShipmentConfirmed(deal, State(ours, "http://app.tryoto.com/print/awb?enc=y")));
+        Assert.False(DealShipping.ShipmentConfirmed(deal, State(ours, "javascript:alert(1)")));
+        Assert.False(DealShipping.ShipmentConfirmed(deal, State("OID-23331-9749", "https://app.tryoto.com/print/awb?enc=y")));
+        Assert.False(DealShipping.ShipmentConfirmed(deal, State(deal.Id.ToString(), "https://app.tryoto.com/print/awb?enc=y")));
+    }
+
+    /// <summary><b>«Order Tracking» لا يُجيبُ بَعدَ أَن أُنشِئَ الطَلَب</b> (‏503): لا يُعادُ <c>oto_unreachable</c> بَل
+    /// <c>shipment_unconfirmed</c> — مَرجِعا الطَلَبِ مَكتوبانِ والصَفقَةُ عِندَ خُطوَتِها، فَالنَقرَةُ التالِيَةُ تَستَأنِف.</summary>
+    [Fact]
+    public async Task An_order_tracking_that_does_not_answer_after_the_order_was_created_answers_shipment_unconfirmed_and_keeps_the_refs()
+    {
+        var w = await ConfirmedCashDeal();
+        w.Oto.Routes[OtoClient.OrderStatusPath] = _ => OtoRouteHandler.Json(HttpStatusCode.ServiceUnavailable, "{}");
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+
+        Assert.Equal(DealShipping.ShipmentUnconfirmed, res.Code);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.Equal((DealStatus.Active, DealStage.Confirmed), (deal.Status, deal.Stage));
+        Assert.Equal(w.Id.ToString("N"), deal.Refs[DealShipping.OrderRef]);
+        Assert.Equal("540789", deal.Refs[DealShipping.OtoIdRef]);
+        Assert.Equal(1, w.Oto.CallsTo(OtoClient.CreateOrderPath));
+        Assert.Equal(1, w.Oto.CallsTo(OtoClient.OrderStatusPath));
+    }
+
+    /// <summary><b>الاستِئنافُ يَسأَلُ مِن جَديد</b>: نَقرَةٌ أولى تَلقى طَلَباً بِلا شُحنَة (<c>new</c>، بِلا بوليصَة) فَتُرَدّ؛ ونَقرَةٌ
+    /// ثانِيَةٌ — بِلا مَدينَة، كَما تَرسُمُها الصَفحَةُ مُستَأنَفَة — تَلقى الشُحنَةَ قائِمَةً فَتُخرِجُ الصَفقَةَ إلى الشَحنِ بِبوليصَتِها،
+    /// بِلا «Create Order» ثانٍ.</summary>
+    [Fact]
+    public async Task The_resume_asks_OTO_again_and_moves_once_the_shipment_and_its_label_exist()
+    {
+        var w = await ConfirmedCashDeal();
+        w.Oto.Routes[OtoClient.OrderStatusPath] = body =>
+            OtoRouteHandler.Tracking(OtoRouteHandler.OrderIdIn(body), status: "new", label: null);
+
+        var first = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+        Assert.Equal(DealShipping.ShipmentUnconfirmed, first.Code);
+        Assert.Equal(DealStage.Confirmed, (await w.Deals.LoadAsync(Slug, w.Id))!.Stage);
+
+        w.Oto.Routes[OtoClient.OrderStatusPath] = body => OtoRouteHandler.Tracking(OtoRouteHandler.OrderIdIn(body));
+        var again = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, city: null);
+
+        Assert.True(again.Ok, again.Code);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.Equal(DealStage.Shipping, deal.Stage);
+        Assert.Equal("https://app.tryoto.com/print/awb?enc=y", DealShipping.LinksOf(deal).Label);
+        Assert.Single(deal.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Shipping);
+        Assert.Equal(1, w.Oto.CallsTo(OtoClient.CreateOrderPath));
+        Assert.Equal(2, w.Oto.CallsTo(OtoClient.OrderStatusPath));
     }
 
     [Fact]
