@@ -42,12 +42,17 @@ public static class ApiErrorCatalog
     public const string NotFound               = "not_found";
     public const string DealNotActive          = "deal_not_active";
     public const string DealFinalStage         = "deal_final_stage";
+    /// <summary>كَتَبَ غَيرُ هذا الطَلَبِ الصَفقَةَ بَعدَ أَن قَرَأَها (‏ADR-036، ‏2026-10-12) — مُنتِجُه
+    /// <c>DealApi.FromAdvance</c>/<c>FromCancel</c> مِن رَمزِ الخِدمَةِ نَفسِه. وجَوابُه نِهائِيٌّ لِمِفتاحِ
+    /// مَرَّةٍ-واحِدَةٍ كَكُلِّ جَواب: الإعادَةُ طَلَبٌ جَديدٌ بِمِفتاحٍ جَديد.</summary>
+    public const string DealChangedMeanwhile   = "deal_changed_meanwhile";
     public const string IdempotencyInProgress  = "idempotency_in_progress";
     public const string IdempotencyKeyRequired = "idempotency_key_required";
     public const string ValidationFailed       = "validation_failed";
 
     /// <summary>الأَحَدَ عَشَرَ رَمزاً — مُرَتَّبَةً بِحالَتِها ثُمَّ
-    /// بِرَمزِها.</summary>
+    /// بِرَمزِها. <b>صارَت اثنَي عَشَر ‏2026-10-12</b> (‏ADR-036): <see cref="DealChangedMeanwhile"/>
+    /// بَعدَ أُختَيهِ في ‏409.</summary>
     public static readonly IReadOnlyList<ApiErrorCode> All = new[]
     {
         new ApiErrorCode(AuthMissing, StatusCodes.Status401Unauthorized,
@@ -66,6 +71,8 @@ public static class ApiErrorCatalog
             "الصَفقَة لَيسَت في حالَةٍ تَقبَل هذا الإجراء."),
         new ApiErrorCode(DealFinalStage, StatusCodes.Status409Conflict,
             "الصَفقَة في آخِر مَرحَلَة — لا تالِيَ لَها."),
+        new ApiErrorCode(DealChangedMeanwhile, StatusCodes.Status409Conflict,
+            "تَغَيَّرَت الصَفقَةُ في الأَثناء — أَعِد المُحاوَلَة بِطَلَبٍ جَديد."),
         new ApiErrorCode(IdempotencyInProgress, StatusCodes.Status409Conflict,
             "طَلَبٌ بِنَفس مِفتاح مَرَّة-واحِدَة ما زالَ قَيدَ التَنفيذ."),
         new ApiErrorCode(IdempotencyKeyRequired, StatusCodes.Status422UnprocessableEntity,

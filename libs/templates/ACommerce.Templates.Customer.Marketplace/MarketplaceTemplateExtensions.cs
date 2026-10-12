@@ -185,6 +185,10 @@ public static class MarketplaceTemplateExtensions
             // القُدرَة</b> — رَبطٌ فَعّالٌ واحِدٌ لِكُلّ قُدرَة.
             opts.Schema.For<ACommerce.Platform.Providers.TenantProviderBinding>()
                 .Identity(x => x.Id);
+
+            // والصَفقَةُ <b>بِتَزامُنٍ تَفاؤُلِيّ</b> (‏ADR-036، ‏2026-10-12): كِتابَتانِ قَرَأَتا النُسخَةَ نَفسَها لا تَمحو
+            // أَخيرَتُهُما الأُولى — تُرَدُّ بِرَمزٍ. والتَسجيلُ دالَّةُ الخِدمَةِ الكاتِبَةِ نَفسِها، يُناديها البُرهانُ الحَيُّ أَيضاً.
+            Services.Deals.DealsService.RegisterDocument(opts);
         });
 
         return services;
@@ -3287,8 +3291,8 @@ public static class MarketplaceTemplateExtensions
             var (userId, _, _) = parsed.Value;
             var userName = AuthSession.ResolveUserName(req, slug) ?? "مُستَخدِم";
             var note = req.Form["note"].ToString().Trim();
-            await deals.AdvanceAsync(slug, id, userId, userName, note);
-            return Results.Redirect(Link(req, slug, $"deals/{id}"));
+            var res = await deals.AdvanceAsync(slug, id, userId, userName, note);
+            return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Code is { } code ? $"?err={code}" : "")));
         }).DisableAntiforgery()
           .RequireStoreWritable();
 

@@ -18,16 +18,20 @@ public class ApiContractTests
 
     /// <summary><b>أَحَدَ عَشَرَ رَمزاً ولا ثانِيَ عَشَر.</b> والرَمزُ
     /// الَّذي يُضاف هُنا يَحتاج مُنتِجاً حَيّاً واختِبارَ حالَة —
-    /// وإلّا فَهُوَ سَطحٌ بِصِفر مُستَهلِك.</summary>
+    /// وإلّا فَهُوَ سَطحٌ بِصِفر مُستَهلِك.
+    /// <para><b>قُلِبَ بِاسمِه — صارَت اثنَي عَشَر</b> (‏ADR-036، ‏2026-10-12): كانَ
+    /// <c>Exactly_eleven_error_codes_and_they_are_these</c>. والثانِيَ عَشَرَ <c>deal_changed_meanwhile</c> (‏409) مُنتِجُه
+    /// حَيٌّ — <c>DealApi.FromAdvance</c>/<c>FromCancel</c> مِن رَمزِ الخِدمَة — واختِبارُ حالَتِه في الصَفِّ التالي وصَفّا
+    /// التَصنيفِ أَدناه.</para></summary>
     [Fact]
-    public void Exactly_eleven_error_codes_and_they_are_these()
+    public void Exactly_twelve_error_codes_and_they_are_these()
         => Assert.Equal(
             new[]
             {
                 "auth_missing", "auth_invalid",
                 "scope_missing", "entitlement_denied", "actor_not_allowed",
                 "not_found",
-                "deal_not_active", "deal_final_stage", "idempotency_in_progress",
+                "deal_not_active", "deal_final_stage", "deal_changed_meanwhile", "idempotency_in_progress",
                 "idempotency_key_required", "validation_failed",
             },
             ApiErrorCatalog.Codes);
@@ -61,6 +65,7 @@ public class ApiContractTests
     [InlineData("not_found", 404)]
     [InlineData("deal_not_active", 409)]
     [InlineData("deal_final_stage", 409)]
+    [InlineData("deal_changed_meanwhile", 409)]
     [InlineData("idempotency_in_progress", 409)]
     [InlineData("idempotency_key_required", 422)]
     [InlineData("validation_failed", 422)]
@@ -258,6 +263,23 @@ public class ApiContractTests
         => Assert.Equal(409, DealApi.FromCancel(DealCancelResult.Refused(
             new DealCancelViolation(DealCancelAuthorization.DealNotActive, "…"),
             DealAt(DealStage.Booked, DealStatus.Cancelled))).Status);
+
+    /// <summary><b>تَعارُضُ النُسخَةِ ‏409 بِرَمزِه</b> (‏ADR-036، ‏2026-10-12) — في التَقَدُّمِ يُقرَأُ رَمزُ الخِدمَةِ قَبلَ
+    /// تَصنيفِ الحالَة، وإلّا قيلَ «فاعِلٌ غَيرُ مُخَوَّل» (‏403) عَن مُخَوَّلٍ سَبَقَه غَيرُه؛ وفي الإلغاءِ بِرَمزِ المُخالَفَةِ نَفسِه
+    /// لا بِسُقوطِه إلى ‏422.</summary>
+    [Fact]
+    public void A_write_that_lost_the_version_race_answers_409_deal_changed_meanwhile()
+    {
+        var advance = DealApi.FromAdvance(new DealAdvanceResult(false, DealAt(DealStage.Booked), "…", DealsService.ChangedMeanwhile));
+        Assert.Equal(409, advance.Status);
+        Assert.Contains("\"deal_changed_meanwhile\"", ApiJson.Serialize(advance.Payload), StringComparison.Ordinal);
+        Assert.Equal("actor_not_allowed", DealApi.AdvanceRejectionCode(DealAt(DealStage.Booked)));   // ما كانَ سَيُقال
+
+        var cancel = DealApi.FromCancel(DealCancelResult.Refused(
+            new DealCancelViolation(DealsService.ChangedMeanwhile, "…"), DealAt(DealStage.Booked)));
+        Assert.Equal(409, cancel.Status);
+        Assert.Contains("\"deal_changed_meanwhile\"", ApiJson.Serialize(cancel.Payload), StringComparison.Ordinal);
+    }
 
     [Fact]
     public void A_cancel_that_cancelled_answers_200()

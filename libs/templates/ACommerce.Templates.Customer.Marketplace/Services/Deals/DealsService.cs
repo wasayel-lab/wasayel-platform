@@ -23,6 +23,32 @@ public sealed class DealsService
     /// والقارِئَ يَجِبُ أَن يَقرَآ نَفسَ الحَرف.</summary>
     public const string ListingOwnerRef = "listing_owner";
 
+    /// <summary>
+    /// <para><b>«تَغَيَّرَت الصَفقَةُ في الأَثناء» — رَمزُ رَفضٍ واحِدٌ لِكُلِّ بابِ كِتابَةٍ عَلى الصَفقَة</b> (‏ADR-036،
+    /// ‏2026-10-12): وَثيقَةُ <see cref="Deal"/> مُسَجَّلَةٌ بِتَزامُنٍ تَفاؤُلِيّ (<see cref="RegisterDocument"/>)، فَحِفظُ
+    /// صَفقَةٍ كَتَبَها غَيرُ هذا الطَلَبِ بَعدَ أَن قَرَأَها يَرمي <c>JasperFx.ConcurrencyException</c> — فَيَصيرُ هذا الرَمزَ
+    /// عِندَ المُنادي، لا ‏500، ولا يُكتَبُ شَيء. وكانَت الكِتابَتانِ تُحفَظانِ والأَخيرَةُ تَمحو الأولى بِصَمت
+    /// (<c>LiveDealConcurrencyProofTests</c>، ‏<c>bf01f30</c>).</para>
+    /// </summary>
+    public const string ChangedMeanwhile = "deal_changed_meanwhile";
+
+    /// <summary>رِسالَةُ المُراجِعِ البَشَرِيِّ لِلرَمزِ — نَسَقُ <c>MessageAr</c> في مَعاجِمِ الرَفض؛ والشاشَةُ تَقرَأُ
+    /// القامُوسَ بِالرَمز (<see cref="DealRefusalTexts"/>) لا هذا.</summary>
+    private const string ChangedMeanwhileAr = "كَتَبَ غَيرُ هذا الطَلَبِ الصَفقَةَ بَعدَ أَن قَرَأَها — فَلَم يُكتَب شَيء.";
+
+    /// <summary>
+    /// <para><b>تَسجيلُ وَثيقَةِ الصَفقَةِ في Marten</b> — نِداءٌ واحِدٌ يُنادى مِن تَركيبِ القالِب
+    /// (<c>ConfigureMarten</c> في <c>MarketplaceTemplateExtensions</c>) ومِن البُرهانِ الحَيّ، فَما يُقاسُ هُوَ ما يُشَغَّل
+    /// (القاعِدَة ٢). <c>UseOptimisticConcurrency</c>: كُلُّ حِفظٍ لِصَفقَةٍ مَوجودَةٍ يَشتَرِطُ أَنّ نُسخَتَها (<c>mt_version</c>)
+    /// هِيَ الَّتي قُرِئَت في الجَلسَةِ نَفسِها — وحِفظُ صَفقَةٍ لَم تُقرَأ في الجَلسَةِ يُرَدُّ أَيضاً (مَقيس).</para>
+    ///
+    /// <para><b>ولا تَرحيلَ في المُخَطَّط</b> (مَقيس ‏2026-10-12): مُخَطَّطُ <c>platform</c> كُلُّه ‏513 سَطرَ DDL مُتَطابِقَةٌ
+    /// بِالتَسجيلِ وبِدونِه — العَمودُ <c>mt_version</c> قائِمٌ في كُلِّ جَدوَلِ وَثيقَة، والفَحصُ في جُملَةِ التَحديثِ لا في
+    /// دالَّةٍ في القاعِدَة.</para>
+    /// </summary>
+    public static void RegisterDocument(StoreOptions opts)
+        => opts.Schema.For<Deal>().UseOptimisticConcurrency(true);
+
     /// <summary><para><b>عَرضٌ عَلى إعلانٍ لَم يُقبَل بَعد — بِلا طَرَفٍ مُقابِل — ومالِكُ إعلانِه
     /// <paramref name="ownerId"/> ولَيسَ هُوَ مَن بادَر</b> — دالَّةٌ <b>نَقِيَّة</b> فَتُختَبَر
     /// بِلا قاعِدَة بَيانات، بِمُوجَبٍ وسالِب.</para>
@@ -141,7 +167,10 @@ public sealed class DealsService
         deal.Timeline.Add(new(deal.Stage, deal.Stage, action,
             counterpartyId, counterpartyName, null, DateTime.UtcNow));
         s.Store(deal);
-        await s.SaveChangesAsync(ct);
+        // تَعارُضُ النُسخَة (‏ADR-036): لَم يُكتَب التَعيين — يُعادُ ما في المَخزَنِ الآن، ومُنادوها يُعيدونَ الفَحص
+        // (القَبولُ يُعيدُ `Validate` عَلى وَثيقَةِ جَلسَةِ كِتابَتِه). لا قَناةَ رَفضٍ لَها: لا مُنادِيَ يَقرَأُ ما تُرجِعُه.
+        try { await s.SaveChangesAsync(ct); }
+        catch (JasperFx.ConcurrencyException) { return await LoadAsync(tenantSlug, dealId, ct); }
         return deal;
     }
 
@@ -260,12 +289,21 @@ public sealed class DealsService
         // `counterparty`) — لا استِثناءَ لِلقَبول (‏ADR-033 §٦‑ط). `Validate` عَلى هذِه الوَثيقَةِ أَثبَتَت أَنّ
         // طَرَفَها القابِلُ أَو لا طَرَف، والتَعيينُ أَعلاه كَتَبَه — فَلا تَرُدُّ إلّا إن مَحَت كِتابَةٌ ضائِعَةٌ
         // تَعيينَه (لا تَزامُنَ تَفاؤُلِيَّ عَلى `Deal`، §٦‑ب‑٢): خَرقُ ثابِتٍ يُرمى، ولا تُكتَبُ `Booked` بِلا طَرَف.
+        // **وصارَ الرَدُّ رَمزاً لا رَمياً** (‏ADR-036، ‏2026-10-12): بِالتَزامُنِ التَفاؤُلِيِّ لا كِتابَةَ تَضيع — فَالطَريقُ
+        // الوَحيدُ إلى هُنا تَعيينٌ لَم يُكتَب لِأَنّ الصَفقَةَ تَغَيَّرَت بَينَ قِراءَتِه وحِفظِه؛ فَهو «تَغَيَّرَت في الأَثناء»
+        // لا خَرقُ ثابِت. ولا تُكتَبُ `Booked` بِلا طَرَف.
         if (!IsActorAllowed(deal, by.ActorId, DealsPolicy.RequiredActorToLeave(deal)!))
-            throw new InvalidOperationException($"القابِلُ لَيسَ طَرَفَ الصَفقَةِ «{deal.Id}» بَعدَ تَعيينِه — خَرقُ ثابِت.");
+            return DealAcceptResult.Refused(new DealAcceptViolation(ChangedMeanwhile, ChangedMeanwhileAr), deal);
         // ولا مُلاحَظَةَ بِحَرفِيَّةٍ عَرَبِيَّةٍ في السِجِلّ (مُراجَعَةُ المَوجَةِ الثانِيَة، ‏2026-10-11): كانَت «قُبِلَ
         // العَرض» تُكتَبُ في المَخزَنِ نَصّاً لا مِفتاحاً (القاعِدَة ١١) — وسَطرُ `advanced` نَفسُه يَقولُها:
         // «عَرض/طَلَب ← حَجز» مِن تَسمِيَتَي الكاتالوج.
-        return DealAcceptResult.Accepted(await MoveAsync(s, deal, next, by.ActorId, by.ActorName, null, ct));
+        // وحِفظُ الانتِقالِ يَشتَرِطُ النُسخَةَ الَّتي قُرِئَت أَعلاه (‏ADR-036): إلغاءٌ أَو قَبولٌ ثانٍ حُفِظَ بَينَهُما يَرُدُّه.
+        try { return DealAcceptResult.Accepted(await MoveAsync(s, deal, next, by.ActorId, by.ActorName, null, ct)); }
+        catch (JasperFx.ConcurrencyException)
+        {
+            return DealAcceptResult.Refused(new DealAcceptViolation(ChangedMeanwhile, ChangedMeanwhileAr),
+                await LoadAsync(tenantSlug, dealId, ct));
+        }
     }
 
     /// <summary>اِنتَقِل لِلمَرحَلَة التالِيَة في النَّمَط. يَفحَص أَنّ الفاعِل
@@ -294,7 +332,12 @@ public sealed class DealsService
         if (!IsActorAllowed(deal, actorId, required))
             return new(false, deal, $"يَتَطَلَّب فاعِلاً مِن نَوع: {required}");
 
-        return new(true, await MoveAsync(s, deal, next.Value, actorId, actorName, note, ct), null);
+        // وحِفظُ الانتِقالِ يَشتَرِطُ النُسخَةَ الَّتي قُرِئَت (‏ADR-036): نَقرَتانِ مُتَداخِلَتانِ تَمضي أولاهُما وتُرَدُّ الأُخرى.
+        try { return new(true, await MoveAsync(s, deal, next.Value, actorId, actorName, note, ct), null); }
+        catch (JasperFx.ConcurrencyException)
+        {
+            return new(false, await LoadAsync(tenantSlug, dealId, ct), ChangedMeanwhileAr, ChangedMeanwhile);
+        }
     }
 
     /// <summary>
@@ -427,7 +470,15 @@ public sealed class DealsService
         deal.Timeline.Add(new(deal.Stage, deal.Stage, "cancelled",
             actorId, actorName, reason, DateTime.UtcNow));
         s.Store(deal);
-        await s.SaveChangesAsync(ct);
+        // تَعارُضُ النُسخَة (‏ADR-036): قَبولٌ أَو تَقَدُّمٌ حُفِظَ بَعدَ قِراءَةِ هذا الإلغاءِ لا يُمحى بِه — يُرَدُّ بِرَمزِه.
+        // **وما لا يُغلِقُه** (‏ADR-036 §٣): الاستِرجاعُ أَعلاه يَقَعُ قَبلَ هذا الحِفظ، فَإلغاءٌ مَردودٌ هُنا قَد يَتلو
+        // استِرجاعاً وَقَع ولَم يُسَجَّل — خُطوَتُه في الـADR قَبلَ أَيِّ مُزَوِّدِ دَفعٍ حَقيقِيّ.
+        try { await s.SaveChangesAsync(ct); }
+        catch (JasperFx.ConcurrencyException)
+        {
+            return DealCancelResult.Refused(new DealCancelViolation(ChangedMeanwhile, ChangedMeanwhileAr),
+                await LoadAsync(tenantSlug, dealId, ct));
+        }
         return DealCancelResult.Cancelled(deal);
     }
 
@@ -443,7 +494,9 @@ public sealed class DealsService
         deal.Timeline.Add(new(deal.Stage, deal.Stage, "disputed",
             actorId, actorName, reason, DateTime.UtcNow));
         s.Store(deal);
-        await s.SaveChangesAsync(ct);
+        // تَعارُضُ النُسخَة (‏ADR-036): لَم يُكتَب النِزاع — يُعادُ ما في المَخزَنِ الآن (المُنادي الإداريُّ يَعودُ إلى الصَفقَة).
+        try { await s.SaveChangesAsync(ct); }
+        catch (JasperFx.ConcurrencyException) { return await LoadAsync(tenantSlug, dealId, ct); }
         return deal;
     }
 
@@ -460,7 +513,10 @@ public sealed class DealsService
         deal.Timeline.Add(new(deal.Stage, deal.Stage, "note", null, null,
             $"attach {key}={value}", DateTime.UtcNow));
         s.Store(deal);
-        await s.SaveChangesAsync(ct);
+        // تَعارُضُ النُسخَة (‏ADR-036): لَم يُلحَق المَرجِع — يُعادُ ما في المَخزَنِ الآن. ومُنادوها اليَومَ يُلحِقونَ بِصَفقَةٍ
+        // وُلِدَت في الطَلَبِ نَفسِه لا يَعرِفُ مُعَرِّفَها غَيرُه؛ والكاتِبُ الوارِدُ مِن OTO (الموجَةُ ٣) يُقَرِّرُ إعادَةَ التَطبيق.
+        try { await s.SaveChangesAsync(ct); }
+        catch (JasperFx.ConcurrencyException) { return await LoadAsync(tenantSlug, dealId, ct); }
         return deal;
     }
 
@@ -500,4 +556,6 @@ public sealed class DealsService
     };
 }
 
-public sealed record DealAdvanceResult(bool Ok, Deal? Deal, string? Reason);
+/// <summary>نَتيجَةُ التَقَدُّم. <paramref name="Code"/> رَمزُ رَفضٍ مِن مَعجَمٍ حَيثُ يوجَد — اليَومَ
+/// <see cref="DealsService.ChangedMeanwhile"/> وَحدَه (‏ADR-036)؛ وسائِرُ الرَفضِ في <paramref name="Reason"/> نَصّاً كَما كان.</summary>
+public sealed record DealAdvanceResult(bool Ok, Deal? Deal, string? Reason, string? Code = null);

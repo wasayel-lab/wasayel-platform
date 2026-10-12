@@ -94,6 +94,10 @@ public static class DealApi
     {
         if (result.Deal is null) return ApiOutcome.Error(ApiErrorCatalog.NotFound);
         if (result.Ok) return ApiOutcome.Ok(ToDto(result.Deal));
+        // رَمزُ الخِدمَةِ قَبلَ تَصنيفِ الحالَة (‏ADR-036): الصَفقَةُ المُرفَقَةُ هُنا ما في المَخزَنِ بَعدَ التَعارُض،
+        // فَتَصنيفُها كانَ سَيَقولُ «فاعِلٌ غَيرُ مُخَوَّل» عَن فاعِلٍ مُخَوَّلٍ سَبَقَه غَيرُه.
+        if (result.Code == DealsService.ChangedMeanwhile)
+            return ApiOutcome.Error(ApiErrorCatalog.DealChangedMeanwhile, new { stage = result.Deal.Stage.ToString() });
 
         var code = AdvanceRejectionCode(result.Deal);
         return ApiOutcome.Error(code, new
@@ -127,6 +131,9 @@ public static class DealApi
             DealCancelAuthorization.ActorNotParty => ApiOutcome.Error(ApiErrorCatalog.NotFound),
             DealCancelAuthorization.DealNotActive => ApiOutcome.Error(
                 ApiErrorCatalog.DealNotActive,
+                new { status = result.Deal?.Status.ToString() }),
+            DealsService.ChangedMeanwhile => ApiOutcome.Error(
+                ApiErrorCatalog.DealChangedMeanwhile,
                 new { status = result.Deal?.Status.ToString() }),
             _ => ApiOutcome.Error(ApiErrorCatalog.ValidationFailed),
         };

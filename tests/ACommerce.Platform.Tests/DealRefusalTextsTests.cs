@@ -22,14 +22,16 @@ public class DealRefusalTextsTests
     [Fact]
     public void The_lexicon_is_the_union_of_both_authorizations_and_the_chat_pipe_code_with_shared_codes_once()
     {
+        // ورَمزُ تَعارُضِ النُسخَةِ عُضوٌ تاسِع (‏ADR-036، ‏2026-10-12) — يُضافُ هُنا بِاسمِه، والعَدُّ 8 ← 9.
         var expected = DealAcceptAuthorization.All
             .Concat(DealCancelAuthorization.All)
             .Append(ChatStartReturn.PartnerMissing)
+            .Append(DealsService.ChangedMeanwhile)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(c => c, StringComparer.Ordinal);
         Assert.Equal(expected, DealRefusalTexts.Codes.OrderBy(c => c, StringComparer.Ordinal));
-        // 6 + 3 − 2 مُشتَرَكَين (deal_not_found، deal_not_active) + 1 = 8
-        Assert.Equal(8, DealRefusalTexts.Codes.Count);
+        // 6 + 3 − 2 مُشتَرَكَين (deal_not_found، deal_not_active) + 1 + 1 = 9
+        Assert.Equal(9, DealRefusalTexts.Codes.Count);
         Assert.Equal(DealRefusalTexts.Codes.Count, DealRefusalTexts.Codes.Distinct(StringComparer.Ordinal).Count());
     }
 
@@ -39,7 +41,8 @@ public class DealRefusalTextsTests
     public void Every_code_of_both_lexicons_and_the_chat_pipe_has_a_live_arabic_text()
     {
         var checked_ = 0;
-        foreach (var code in DealAcceptAuthorization.All.Concat(DealCancelAuthorization.All).Append(ChatStartReturn.PartnerMissing))
+        foreach (var code in DealAcceptAuthorization.All.Concat(DealCancelAuthorization.All).Append(ChatStartReturn.PartnerMissing)
+                     .Append(DealsService.ChangedMeanwhile))
         {
             var key = DealRefusalTexts.KeyFor(code);
             Assert.Equal(DealRefusalTexts.Prefix + code, key);
@@ -49,7 +52,7 @@ public class DealRefusalTextsTests
             Assert.True(text.Length > 10, $"‏{key} بِنَصٍّ أَقصَرَ مِن أَن يُفَسِّر.");
             checked_++;
         }
-        Assert.Equal(10, checked_);   // 6 + 3 + 1 — المُشتَرَكُ يُفحَصُ مَرَّتَين ويَصِلُ مِفتاحاً واحِداً
+        Assert.Equal(11, checked_);   // 6 + 3 + 1 + 1 (‏ADR-036) — المُشتَرَكُ يُفحَصُ مَرَّتَين ويَصِلُ مِفتاحاً واحِداً
     }
 
     /// <summary><b>نَصُّ «بِلا مالِكِ إعلان» يُسَمّي مَن يُحَرِّكُها حَقّاً</b> (‏2026-10-11، مُراجَعَةُ الموجَةِ الثانِيَةِ
@@ -71,6 +74,17 @@ public class DealRefusalTextsTests
         var owns   = studio.IndexOf("if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect(\"/studio\");", StringComparison.Ordinal);
         var assign = studio.IndexOf("if (deal.CounterpartyId is null)", StringComparison.Ordinal);
         Assert.True(owns > 0 && assign > owns, $"البابُ لا يَسأَلُ المِلكِيَّةَ قَبلَ التَعيين: owns={owns} assign={assign}");
+    }
+
+    /// <summary><b>نَصُّ تَعارُضِ النُسخَةِ بِحَرفِه</b> (‏ADR-036، ‏2026-10-12): يُرسَمُ لِـ<c>?err=deal_changed_meanwhile</c>
+    /// عَلى صَفحَةِ الصَفقَةِ بَعدَ <c>/accept</c> أَو <c>/cancel</c> أَو <c>/advance</c> — والمُحاوَلَةُ الثانِيَةُ تَقرَأُ ما كُتِب.</summary>
+    [Fact]
+    public void The_changed_meanwhile_code_reads_the_dictionary_text_verbatim()
+    {
+        Assert.Equal("deal_changed_meanwhile", DealsService.ChangedMeanwhile);
+        Assert.Equal("deals.detail.err_deal_changed_meanwhile", DealRefusalTexts.KeyFor(DealsService.ChangedMeanwhile));
+        Assert.Equal("تَغَيَّرَت الصَفقَةُ في الأَثناء — أَعِد المُحاوَلَة",
+            LocaleCatalog.Text(LocaleCatalog.Arabic, "deals.detail.err_deal_changed_meanwhile"));
     }
 
     /// <summary><b>السالِب</b>: رَمزٌ خارِجَ المَعجَم، أَو غِيابٌ، أَو فَراغ — لا مِفتاحَ،
@@ -107,5 +121,7 @@ public class DealRefusalTextsTests
         var endpoints = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
             "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs"));
         Assert.Equal(2, endpoints.Split("$\"?err={res.Violation!.Code}\"").Length - 1);
+        // و`/advance` يَرتَدُّ بِرَمزِ نَتيجَتِه حينَ يوجَد (‏ADR-036): اليَومَ تَعارُضُ النُسخَةِ وَحدَه.
+        Assert.Equal(1, endpoints.Split("(res.Code is { } code ? $\"?err={code}\" : \"\")").Length - 1);
     }
 }

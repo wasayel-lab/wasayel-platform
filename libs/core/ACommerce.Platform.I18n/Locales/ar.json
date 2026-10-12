@@ -1186,6 +1186,7 @@
   "deals.detail.err_actor_not_listing_owner": "لا يَقبَلُ العَرضَ إلّا مالِكُ الإعلان.",
   "deals.detail.err_actor_not_party": "لا يُلغي الصَّفقَةَ إلّا طَرَفاها.",
   "deals.detail.err_deal_already_accepted": "قُبِلَت الصَّفقَة مِن قَبل — لا يَقَعُ القَبولُ ثانِيَة.",
+  "deals.detail.err_deal_changed_meanwhile": "تَغَيَّرَت الصَفقَةُ في الأَثناء — أَعِد المُحاوَلَة",
   "deals.detail.err_deal_not_active": "الصَّفقَة لَم تَعُد نَشِطَة — لا إجراءَ عَلَيها.",
   "deals.detail.err_deal_not_found": "لا صَفقَةَ بِهذا المُعَرِّف.",
   "deals.detail.err_listing_owner_missing": "هذِه الصَّفقَة بِلا مالِكِ إعلانٍ مُسَجَّل — يُحَرِّكُها مالِكُ المَتجَر مِن الاستوديو وَحدَه.",

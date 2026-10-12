@@ -28,6 +28,8 @@ public static class DealRefusalTexts
         DealAcceptAuthorization.All
             .Concat(DealCancelAuthorization.All)
             .Append(ChatStartReturn.PartnerMissing)
+            // ورَمزُ تَعارُضِ النُسخَة (‏ADR-036، ‏2026-10-12) — تُرجِعُه `/accept` و`/cancel` و`/advance` جَميعاً.
+            .Append(DealsService.ChangedMeanwhile)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 

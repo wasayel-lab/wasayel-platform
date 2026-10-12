@@ -85,8 +85,9 @@ public class LiveDealConcurrencyProofTests(ITestOutputHelper output)
     private static string ResilientConnection =>
         ConnectionString!.TrimEnd(';') + ";Timeout=60;Command Timeout=120";
 
-    /// <summary>تَركيبُ المَخزَنِ كَما يُرَكِّبُه المُضيف — بِلا تَسجيلٍ لِوَثيقَةِ <see cref="Deal"/> بَعد: هذا ما يُشَغَّلُ
-    /// اليَوم.</summary>
+    /// <summary>تَركيبُ المَخزَنِ كَما يُرَكِّبُه المُضيف — <b>ووَثيقَةُ <see cref="Deal"/> بِالدالَّةِ الَّتي يُناديها تَركيبُ
+    /// القالِب</b> (<see cref="DealsService.RegisterDocument"/>، ‏ADR-036): فَما يُقاسُ هُنا هُوَ ما يُشَغَّل. (كانَ بِلا تَسجيلٍ
+    /// يَومَ وُلِدَ المِلَفُّ في <c>bf01f30</c> — ذاكَ ما كانَ يُشَغَّل.)</summary>
     private static DocumentStore BuildStore() => DocumentStore.For(o =>
     {
         o.Connection(ResilientConnection);
@@ -94,6 +95,7 @@ public class LiveDealConcurrencyProofTests(ITestOutputHelper output)
         o.Policies.AllDocumentsAreMultiTenanted();
         o.Events.TenancyStyle = global::JasperFx.MultiTenancy.TenancyStyle.Conjoined;
         o.Schema.For<ACommerce.Kit.Tenants.Tenant>().SingleTenanted().Identity(x => x.Id);
+        DealsService.RegisterDocument(o);
         o.AutoCreateSchemaObjects = JasperFx.AutoCreate.All;
     });
 
@@ -109,12 +111,13 @@ public class LiveDealConcurrencyProofTests(ITestOutputHelper output)
         public Task<Invoice?> GetInvoiceAsync(string paymentId, CancellationToken ct = default) => throw Touched();
     }
 
-    /// <summary><b>اليَوم</b> (يُقلَبُ بِاسمِه في كوميتِ ‏ADR-036): المُشتَري يُلغي صَفقَةَ سَلَّتِه النَقدِيَّةَ والبائِعُ المَربوطُ
-    /// يَقبَلُها في الأَثناء — الإلغاءُ قَرَأَ الصَفقَةَ قَبلَ القَبولِ ويَحفَظُ بَعدَه. <b>فَيَنجَحُ الاثنان</b>: القَبولُ يُرجِعُ
-    /// <c>Accepted</c> (والنُقطَةُ تُشعِرُ المُشتَريَ بِقَبولِ ما أَلغاه)، والإلغاءُ يُرجِعُ <c>Cancelled</c> ويَكتُبُ وَثيقَتَه
-    /// فَوقَ القَبول: الصَفقَةُ مُلغاةٌ عِندَ <c>Offered</c> وسَطرُ <c>advanced</c> الَّذي كَتَبَه القَبولُ زالَ مِن السِجِلّ.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏ADR-036، ‏2026-10-12): كانَ
+    /// <c>Today_a_cancel_saved_after_an_accept_overwrites_it_and_both_report_success</c> — الإلغاءُ قَرَأَ الصَفقَةَ قَبلَ القَبولِ
+    /// وحَفِظَ بَعدَه فَكَتَبَ فَوقَه ونَجَحَ الاثنان (مَقيسٌ في <c>bf01f30</c>: «Cancelled/Offered · سِجِلّ: created,note,bound,
+    /// cancelled»). <b>وصارَ جِلسَتانِ قَرَأَتا الصَفقَةَ نَفسَها وحَفِظَتا: نَجاحٌ واحِدٌ و<c>deal_changed_meanwhile</c> واحِد</b> —
+    /// القَبولُ قائِمٌ (<c>Booked</c> بِسَطرِ <c>advanced</c>)، والإلغاءُ لَم يُكتَب؛ وإعادَتُه تَقرَأُ ما كُتِبَ فَتَمضي.</summary>
     [Fact]
-    public async Task Today_a_cancel_saved_after_an_accept_overwrites_it_and_both_report_success()
+    public async Task A_cancel_saved_after_an_accept_is_refused_deal_changed_meanwhile_and_the_accept_stands()
     {
         if (!Enabled || string.IsNullOrEmpty(ConnectionString)) return;
 
@@ -146,15 +149,23 @@ public class LiveDealConcurrencyProofTests(ITestOutputHelper output)
             var cancel = await cancelling.WaitAsync(TimeSpan.FromSeconds(60));
 
             var final = (await plain.LoadAsync(slug, born.Id))!;
-            output.WriteLine($"قَبول: ok={accept.Ok} · إلغاء: ok={cancel.Ok} · النِهائِيَّة: {final.Status}/{final.Stage} · " +
-                             $"سِجِلّ: {string.Join(",", final.Timeline.Select(e => e.Action))}");
+            output.WriteLine($"قَبول: ok={accept.Ok} · إلغاء: ok={cancel.Ok} code={cancel.Violation?.Code} · النِهائِيَّة: " +
+                             $"{final.Status}/{final.Stage} · سِجِلّ: {string.Join(",", final.Timeline.Select(e => e.Action))}");
 
+            Assert.Equal(1, new[] { accept.Ok, cancel.Ok }.Count(ok => ok));
             Assert.True(accept.Ok, accept.Violation?.MessageAr);
-            Assert.Equal(DealStage.Booked, accept.Deal!.Stage);
-            Assert.True(cancel.Ok, cancel.Violation?.MessageAr);
-            Assert.Equal(DealStatus.Cancelled, final.Status);
-            Assert.Equal(DealStage.Offered, final.Stage);
-            Assert.DoesNotContain(final.Timeline, e => e.Action == "advanced");
+            Assert.False(cancel.Ok);
+            Assert.Equal(DealsService.ChangedMeanwhile, cancel.Violation!.Code);
+            Assert.Equal(DealStatus.Active, cancel.Deal!.Status);          // ما في المَخزَنِ بَعدَ التَعارُض
+            Assert.Equal(DealStatus.Active, final.Status);
+            Assert.Equal(DealStage.Booked, final.Stage);
+            Assert.Single(final.Timeline, e => e.Action == "advanced");
+            Assert.DoesNotContain(final.Timeline, e => e.Action == "cancelled");
+
+            // «أَعِد المُحاوَلَة»: الإعادَةُ تَقرَأُ ما كُتِبَ فَتَمضي — إلغاءٌ عِندَ `Booked`.
+            var retry = await plain.CancelAsync(slug, born.Id, new DealCanceller(buyer, "مُشتَرٍ", IsStoreAdmin: false), "عَدَلتُ");
+            Assert.True(retry.Ok, retry.Violation?.MessageAr);
+            Assert.Equal((DealStatus.Cancelled, DealStage.Booked), (retry.Deal!.Status, retry.Deal.Stage));
         }
         finally
         {
@@ -162,5 +173,264 @@ public class LiveDealConcurrencyProofTests(ITestOutputHelper output)
             foreach (var d in await s.Query<Deal>().ToListAsync()) s.Delete(d);
             await s.SaveChangesAsync();
         }
+    }
+
+    /// <summary><b>قَبولانِ مُتَداخِلانِ مِن البائِعِ نَفسِه</b> (نَقرَتانِ؛ ‏ADR-033 §٦‑ب‑٢ قاسَ «‏`Accepted` مَرَّتَين 99/100» فَإشعارَين):
+    /// الأَوَّلُ يَقرَأُ ويَقِفُ قَبلَ الحِفظ، والثاني يَتِمّ، ثُمَّ يُستَأنَفُ الأَوَّل — <b>قَبولٌ واحِدٌ و<c>deal_changed_meanwhile</c>
+    /// واحِد</b>، وسَطرُ <c>advanced</c> واحِدٌ في السِجِلّ.</summary>
+    [Fact]
+    public async Task Two_overlapping_accepts_yield_one_acceptance_and_one_deal_changed_meanwhile()
+    {
+        if (!Enabled || string.IsNullOrEmpty(ConnectionString)) return;
+
+        await using var store = BuildStore();
+        var slug = "zz-occ-" + Guid.NewGuid().ToString("N")[..8];
+        var buyer = Guid.NewGuid();
+        var seller = Guid.NewGuid();
+
+        try
+        {
+            var plain = new DealsService(store, new ForbiddenPaymentProvider());
+            var born = await plain.StartAsync(slug, "marketplace", buyer, "مُشتَرٍ", null, "سِلعَة", 150m,
+                new() { [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.CashOnDelivery });
+            await plain.AttachRefAsync(slug, born.Id, DealsService.ListingOwnerRef, seller.ToString());
+            await plain.BindListingOwnerAsync(slug, born.Id, seller.ToString());
+
+            var gate = new SaveGate.Gate();
+            var deals = new DealsService(SaveGate.Wrap(store, gate), new ForbiddenPaymentProvider());
+
+            var first = Task.Run(async () =>
+            {
+                gate.Marked.Value = true;
+                return await deals.AcceptAsync(slug, born.Id, new DealAcceptor(seller, "بائِع"));
+            });
+            await gate.Reached.Task.WaitAsync(TimeSpan.FromSeconds(60));
+            var second = await deals.AcceptAsync(slug, born.Id, new DealAcceptor(seller, "بائِع"));
+            gate.Release.TrySetResult();
+            var held = await first.WaitAsync(TimeSpan.FromSeconds(60));
+
+            var final = (await plain.LoadAsync(slug, born.Id))!;
+            output.WriteLine($"الثاني: ok={second.Ok} · الأَوَّل: ok={held.Ok} code={held.Violation?.Code} · النِهائِيَّة: " +
+                             $"{final.Status}/{final.Stage} · advanced={final.Timeline.Count(e => e.Action == "advanced")}");
+
+            Assert.True(second.Ok, second.Violation?.MessageAr);
+            Assert.False(held.Ok);
+            Assert.Equal(DealsService.ChangedMeanwhile, held.Violation!.Code);
+            Assert.Equal(DealStage.Booked, final.Stage);
+            Assert.Single(final.Timeline, e => e.Action == "advanced");
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            foreach (var d in await s.Query<Deal>().ToListAsync()) s.Delete(d);
+            await s.SaveChangesAsync();
+        }
+    }
+}
+
+// ─── بِلا قاعِدَة: كُلُّ بابِ كِتابَةٍ يُحَوِّلُ التَعارُضَ رَمزاً لا ‏500 (‏ADR-036) ─────────────────────────────
+//
+// عالَمُ الوَثائِقِ في الذاكِرَة (`EndpointDocWorld.cs`) والخِدمَةُ الحَقيقِيَّة؛ والتَعارُضُ يُحقَنُ بِخُطّافِ العالَمِ
+// (`BeforeMember`) عِندَ أَوَّلِ `SaveChangesAsync` بِاستِثناءِ Marten نَفسِه (`JasperFx.ConcurrencyException`، مَقيسٌ نَوعُه
+// عَلى Postgres: «Optimistic concurrency check failed for …Deal #…») — فَيُقاسُ أَنّ كُلَّ بابٍ يَلتَقِطُه، لا أَنّ Marten يَرميه
+// (ذاكَ في البُرهانِ الحَيِّ أَعلاه). والعالَمُ يُعيدُ الكائِنَ نَفسَه لا نُسخَة، فَما «لَم يُكتَب» يُقاسُ بِعَدّادِ الحِفظِ لا بِالحالَة.
+
+public class DealConcurrencyRefusalTests
+{
+    private const string Slug = "zz-occ-world";
+    private static readonly Guid Buyer  = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    private static readonly Guid Seller = Guid.Parse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+
+    private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;
+    private const string Template = "libs/templates/ACommerce.Templates.Customer.Marketplace";
+
+    private sealed class ForbiddenPaymentProvider : IPaymentProvider
+    {
+        private static InvalidOperationException Touched() => new("صَفقَةُ النَقدِ لا تَمَسُّ المال — نودِيَ مُزَوِّدُ الدَفع.");
+        public string ProviderName => "forbidden";
+        public Task<PaymentResult> AuthorizeAsync(PaymentRequest req, string idempotencyKey, CancellationToken ct = default) => throw Touched();
+        public Task<PaymentResult> CaptureAsync(string paymentId, decimal? amount = null, CancellationToken ct = default) => throw Touched();
+        public Task<PaymentResult> RefundAsync(string paymentId, decimal amount, string reason, CancellationToken ct = default) => throw Touched();
+        public Task<SubscriptionResult> CreateSubscriptionAsync(SubscriptionRequest req, string idempotencyKey, CancellationToken ct = default) => throw Touched();
+        public Task<bool> CancelSubscriptionAsync(string subscriptionId, CancellationToken ct = default) => throw Touched();
+        public Task<Invoice?> GetInvoiceAsync(string paymentId, CancellationToken ct = default) => throw Touched();
+    }
+
+    private static T Now<T>(Task<T> task)
+    {
+        Assert.True(task.IsCompleted, "نِداءٌ لَم يَكتَمِل في عالَمٍ مُتَزامِن — الأَداةُ تَكذِب.");
+        return task.GetAwaiter().GetResult();
+    }
+
+    /// <summary>صَفقَةُ سَلَّةٍ نَقدِيَّةٌ مَربوطٌ بائِعُها عِندَ الوِلادَة — بِتَسَلسُلِ <c>/checkout/submit</c>.</summary>
+    private static (DocWorld World, DealsService Deals, Guid Id) CartDeal()
+    {
+        var world = new DocWorld();
+        var deals = new DealsService(world.Store, new ForbiddenPaymentProvider());
+        var deal = Now(deals.StartAsync(Slug, "marketplace", Buyer, "مُشتَرٍ", null, "سِلعَة", 100m,
+            new() { [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.CashOnDelivery }));
+        Now(deals.AttachRefAsync(Slug, deal.Id, DealsService.ListingOwnerRef, Seller.ToString()));
+        Now(deals.BindListingOwnerAsync(Slug, deal.Id, Seller.ToString()));
+        return (world, deals, deal.Id);
+    }
+
+    /// <summary>الحِفظُ التالي يَرمي ما يَرميه Marten حينَ كَتَبَ غَيرُ الجَلسَةِ الصَفقَةَ بَعدَ قِراءَتِها — مَرَّةً واحِدَة.</summary>
+    private static void ConflictOnNextSave(DocWorld world, Guid id)
+    {
+        var armed = true;
+        world.BeforeMember = name =>
+        {
+            if (name != "SaveChangesAsync" || !armed) return;
+            armed = false;
+            throw new JasperFx.ConcurrencyException(typeof(Deal), id);
+        };
+    }
+
+    [Fact]
+    public void Advance_turns_a_version_conflict_into_deal_changed_meanwhile()
+    {
+        var (world, deals, id) = CartDeal();
+        ConflictOnNextSave(world, id);
+        var saves = world.SaveCalls;
+
+        var res = Now(deals.AdvanceAsync(Slug, id, Seller, "بائِع"));
+        Assert.False(res.Ok);
+        Assert.Equal(DealsService.ChangedMeanwhile, res.Code);
+        Assert.NotNull(res.Deal);
+        Assert.Equal(saves, world.SaveCalls);
+    }
+
+    [Fact]
+    public void Accept_turns_a_version_conflict_into_deal_changed_meanwhile()
+    {
+        var (world, deals, id) = CartDeal();
+        ConflictOnNextSave(world, id);
+        var saves = world.SaveCalls;
+
+        var res = Now(deals.AcceptAsync(Slug, id, new DealAcceptor(Seller, "بائِع")));
+        Assert.False(res.Ok);
+        Assert.Equal(DealsService.ChangedMeanwhile, res.Violation!.Code);
+        Assert.NotNull(res.Deal);
+        Assert.Equal(saves, world.SaveCalls);
+    }
+
+    [Fact]
+    public void Cancel_turns_a_version_conflict_into_deal_changed_meanwhile()
+    {
+        var (world, deals, id) = CartDeal();
+        ConflictOnNextSave(world, id);
+        var saves = world.SaveCalls;
+
+        var res = Now(deals.CancelAsync(Slug, id, new DealCanceller(Buyer, "مُشتَرٍ", IsStoreAdmin: false), "عَدَلتُ"));
+        Assert.False(res.Ok);
+        Assert.Equal(DealsService.ChangedMeanwhile, res.Violation!.Code);
+        Assert.NotNull(res.Deal);
+        Assert.Equal(saves, world.SaveCalls);
+    }
+
+    /// <summary>والأَبوابُ بِلا قَناةِ رَفضٍ (لا مُنادِيَ يَقرَأُ ما تُرجِعُه) لا تَرمي: تُعيدُ ما في المَخزَنِ ولا تَحفَظ.</summary>
+    [Fact]
+    public void Assign_dispute_and_attach_return_the_stored_deal_on_a_version_conflict_and_do_not_throw()
+    {
+        var (world, deals, id) = CartDeal();
+        var offer = Now(deals.StartAsync(Slug, "marketplace", Buyer, "مُشتَرٍ", Guid.NewGuid(), "عَرض", 50m));
+        var saves = world.SaveCalls;
+
+        ConflictOnNextSave(world, offer.Id);
+        Assert.NotNull(Now(deals.AssignCounterpartyAsync(Slug, offer.Id, Seller, "بائِع")));
+        ConflictOnNextSave(world, id);
+        Assert.NotNull(Now(deals.DisputeAsync(Slug, id, Seller, "بائِع", "نِزاع")));
+        ConflictOnNextSave(world, id);
+        Assert.NotNull(Now(deals.AttachRefAsync(Slug, id, "k", "v")));
+        Assert.Equal(saves, world.SaveCalls);
+    }
+
+    // ─── المَصدَر: تَسجيلٌ واحِد، وكُلُّ بابِ كِتابَةٍ يَلتَقِط ───────────────────────────────────────
+
+    private static string Code(params string[] parts)
+    {
+        var path = Path.Combine(RepoRoot, Path.Combine(parts));
+        Assert.True(File.Exists(path), $"مَصدَرٌ مَفقود: {path} — الأَداةُ عَمياء.");
+        var text = File.ReadAllText(path);
+        Assert.True(text.Length > 500, $"أَداةٌ عَمياء: {path} لَم يُقرَأ.");
+        return WriteEndpointGuardTests.StripComments(text);
+    }
+
+    private static string Segment(string source, string from, string to)
+    {
+        var start = source.IndexOf(from, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"‏`{from}` غَيرُ مَوجود — الأَداةُ عَمياء.");
+        var end = source.IndexOf(to, start + from.Length, StringComparison.Ordinal);
+        Assert.True(end > start, $"‏`{to}` لا يَتلو `{from}` — الأَداةُ عَمياء.");
+        return source.Substring(start, end - start);
+    }
+
+    /// <summary>تَسجيلٌ واحِدٌ في المُستَودَعِ كُلِّه، يُناديه تَركيبُ القالِب — والبُرهانُ الحَيُّ يُنادي الدالَّةَ نَفسَها.</summary>
+    [Fact]
+    public void The_deal_document_is_registered_once_with_optimistic_concurrency_through_the_template()
+    {
+        var service = Code(Template, "Services", "Deals", "DealsService.cs");
+        Assert.Contains("public static void RegisterDocument(StoreOptions opts)", service, StringComparison.Ordinal);
+        Assert.Contains("=> opts.Schema.For<Deal>().UseOptimisticConcurrency(true);", service, StringComparison.Ordinal);
+        Assert.Equal(1, Count(Code(Template, "MarketplaceTemplateExtensions.cs"), "Services.Deals.DealsService.RegisterDocument(opts);"));
+
+        var scanned = 0;
+        var hits = 0;
+        foreach (var root in new[] { "libs", "apps" })
+        foreach (var f in Directory.EnumerateFiles(Path.Combine(RepoRoot, root), "*.cs", SearchOption.AllDirectories))
+        {
+            if (f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
+                f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)) continue;
+            scanned++;
+            hits += Count(WriteEndpointGuardTests.StripComments(File.ReadAllText(f)), "UseOptimisticConcurrency(");
+        }
+        Assert.True(scanned > 200 && hits == 1, $"فُحِصَ {scanned} مِلَفّاً و`UseOptimisticConcurrency(` {hits} — المُتَوَقَّعُ واحِد.");
+    }
+
+    /// <summary><b>كُلُّ بابِ كِتابَةٍ عامٍّ في الخِدمَةِ يَلتَقِطُ التَعارُض</b> — بِاسمِه؛ وقائِمَةُ مَن لا يَلتَقِطُ مُسَمّاةٌ بِسَبَبِها:
+    /// <c>StartAsync</c> يُدرِجُ وَثيقَةً بِمُعَرِّفٍ جَديدٍ فَلا نُسخَةَ تُعارِضُه، و<c>BindListingOwnerAsync</c> يَكتُبُ عَبرَ
+    /// <c>AssignCounterpartyAsync</c>، و<c>MoveAsync</c> الخاصَّةُ تَرمي إلى بابَيها اللَذَينِ يَلتَقِطان. والعَدُّ يُطبَعُ عِندَ الفَشَل.</summary>
+    [Fact]
+    public void Every_public_deal_writer_catches_the_version_conflict_and_the_exceptions_are_named()
+    {
+        var service = Code(Template, "Services", "Deals", "DealsService.cs");
+        var writers = new (string Name, string From, string To)[]
+        {
+            ("AssignCounterpartyAsync", "public async Task<Deal?> AssignCounterpartyAsync(", "public async Task<Deal?> BindListingOwnerAsync("),
+            ("AcceptAsync",             "public async Task<DealAcceptResult> AcceptAsync(",  "public async Task<DealAdvanceResult> AdvanceAsync("),
+            ("AdvanceAsync",            "public async Task<DealAdvanceResult> AdvanceAsync(", "private async Task<Deal> MoveAsync("),
+            ("CancelAsync",             "public async Task<DealCancelResult> CancelAsync(",  "public async Task<Deal?> DisputeAsync("),
+            ("DisputeAsync",            "public async Task<Deal?> DisputeAsync(",            "public async Task<Deal?> AttachRefAsync("),
+            ("AttachRefAsync",          "public async Task<Deal?> AttachRefAsync(",          "public async Task<Deal?> LoadAsync("),
+        };
+        var missing = writers.Where(w => !Segment(service, w.From, w.To).Contains("catch (JasperFx.ConcurrencyException)", StringComparison.Ordinal))
+                             .Select(w => w.Name).ToArray();
+        Assert.True(missing.Length == 0, $"فُحِصَ {writers.Length} باباً؛ لا يَلتَقِطُ التَعارُض: {string.Join("، ", missing)}");
+        Assert.Equal(writers.Length, Count(service, "catch (JasperFx.ConcurrencyException)"));
+
+        // كُلُّ `SaveChangesAsync(` في الخِدمَةِ مَحسوب: سِتَّة — الإدراجُ والتَعيينُ والانتِقالُ والإلغاءُ والنِزاعُ والإلحاق.
+        Assert.Equal(6, Count(service, "SaveChangesAsync("));
+        Assert.DoesNotContain("catch (JasperFx.ConcurrencyException)", Segment(service, "public async Task<Deal> StartAsync(", "public async Task<Deal?> AssignCounterpartyAsync("), StringComparison.Ordinal);
+        Assert.DoesNotContain("SaveChangesAsync(", Segment(service, "public async Task<Deal?> BindListingOwnerAsync(", "public async Task<DealAcceptResult> AcceptAsync("), StringComparison.Ordinal);
+    }
+
+    /// <summary>و<c>/advance</c> يَحمِلُ رَمزَ نَتيجَتِه إلى الصَفحَة — كانَ يُسقِطُ النَتيجَةَ كُلَّها.</summary>
+    [Fact]
+    public void The_member_advance_endpoint_carries_the_result_code_to_the_deal_page()
+    {
+        var endpoints = Code(Template, "MarketplaceTemplateExtensions.cs");
+        var advance = Segment(endpoints, "\"/{slug}/deals/{id:guid}/advance\"", ".RequireStoreWritable();");
+        Assert.Contains("var res = await deals.AdvanceAsync(slug, id, userId, userName, note);", advance, StringComparison.Ordinal);
+        Assert.Contains("return Results.Redirect(Link(req, slug, $\"deals/{id}\" + (res.Code is { } code ? $\"?err={code}\" : \"\")));",
+            advance, StringComparison.Ordinal);
+    }
+
+    private static int Count(string text, string needle)
+    {
+        var n = 0;
+        for (var i = text.IndexOf(needle, StringComparison.Ordinal); i >= 0;
+             i = text.IndexOf(needle, i + needle.Length, StringComparison.Ordinal))
+            n++;
+        return n;
     }
 }
