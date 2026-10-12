@@ -47,11 +47,14 @@ internal sealed class OtoRouteHandler : HttpMessageHandler
     public static string? OrderIdIn(string? body)
         => body is null ? null : JsonDocument.Parse(body).RootElement.GetProperty("orderId").GetString();
 
+    /// <summary>و<paramref name="label"/> <c>null</c> يُسقِطُ <c>printAWBURL</c> مِن الرَدّ — طَلَبٌ بِلا بوليصَة (مُراجَعَةُ
+    /// التَيّار، ‏2026-10-12). افتِراضُه الرابِطُ الَّذي كانَ مَكتوباً هُنا بِحَرفِه، فَالمُنادونَ القائِمونَ لا يَتَحَرَّكون.</summary>
     public static HttpResponseMessage Tracking(string? orderId, string otoId = "540789", string status = "searchingDriver",
-        string trackingUrl = "https://app.tryoto.com/otoflex-tracking?enc=x")
+        string trackingUrl = "https://app.tryoto.com/otoflex-tracking?enc=x", string? label = "https://app.tryoto.com/print/awb?enc=y")
         => Json(HttpStatusCode.OK,
             "{\"success\":true,\"orderId\":" + JsonSerializer.Serialize(orderId) + ",\"otoId\":\"" + otoId + "\"," +
-            "\"status\":" + JsonSerializer.Serialize(status) + ",\"printAWBURL\":\"https://app.tryoto.com/print/awb?enc=y\"," +
+            "\"status\":" + JsonSerializer.Serialize(status) + "," +
+            (label is null ? "" : "\"printAWBURL\":" + JsonSerializer.Serialize(label) + ",") +
             "\"trackingUrl\":" + JsonSerializer.Serialize(trackingUrl) + "}");
 
     public int CallsTo(string path) => Calls.Count(c => c.Path == path);
@@ -378,6 +381,44 @@ public class DealShipTests
         Assert.Equal("cod", body.GetProperty("payment_method").GetString());
         Assert.Equal(150m, body.GetProperty("amount_due").GetDecimal());
         Assert.Equal("Riyadh", body.GetProperty("customer").GetProperty("city").GetString());
+    }
+
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم» — يُقلَبُ بِاسمِه في الكوميتِ التالي</b> (مُراجَعَةُ تَيّارِ S7، ‏2026-10-12؛ القاعِدَة ٣، عَلى
+    /// سابِقَةِ <c>f79bd42</c>/<c>f699138</c>): «Create Order» يَنجَحُ بِـ<c>otoId</c>، و«Order Tracking» يُجيبُ بَعدَه
+    /// <c>missingData</c> — «‏The order is missing required information to proceed with shipment creation» في «‏List Of
+    /// Statuses» — بِلا <c>printAWBURL</c>. وقِسمُ «Create Order» نَفسُه يَقولُ إنّ خَطَأَ الناقِلِ في إنشاءِ الشُحنَةِ مَعَ
+    /// <c>createShipment: true</c> لا يَصِلُ إلّا بِإشعارِ <c>shipmentError</c>: فَالنَجاحُ طَلَبٌ لا شُحنَة.</para>
+    ///
+    /// <para><b>واليَوم</b>: تَخرُجُ الصَفقَةُ إلى <c>Shipping</c> <b>قَبلَ</b> أَن تُسأَلَ OTO (المَرحَلَةُ لَحظَةَ السُؤالِ
+    /// <c>Shipping</c>)، ولا بوليصَةَ تُكتَب — فَالطَرَفانِ يَرَيانِ «شَحن» بِلا كُتلَةِ بوليصَة، واستِمارَةُ الشَحنِ تَختَفي
+    /// (تاليها لَم يَعُد الشَحن)، ولا رَمزَ يَصِلُ الصَفحَة.</para>
+    /// </summary>
+    [Fact]
+    public async Task Today_a_created_order_whose_shipment_OTO_has_not_created_moves_the_deal_to_Shipping_without_a_label()
+    {
+        var w = await ConfirmedCashDeal();
+        w.Oto.Routes[OtoClient.OrderStatusPath] = body =>
+            OtoRouteHandler.Tracking(OtoRouteHandler.OrderIdIn(body), status: "missingData", label: null);
+        DealStage? stageWhenAsked = null;
+        w.Oto.Before = path =>
+        {
+            if (path == OtoClient.OrderStatusPath) stageWhenAsked ??= w.Docs.Read<Deal>(w.Id.ToString())!.Stage;
+        };
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+
+        Assert.True(res.Ok, res.Code);
+        Assert.Equal(DealStage.Shipping, stageWhenAsked);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.Equal((DealStatus.Active, DealStage.Shipping), (deal.Status, deal.Stage));
+        Assert.Equal(w.Id.ToString("N"), deal.Refs[DealShipping.OrderRef]);
+        Assert.Equal("540789", deal.Refs[DealShipping.OtoIdRef]);
+        Assert.Null(DealShipping.LinksOf(deal).Label);
+        Assert.Single(deal.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Shipping);
+        Assert.False(DealShipAuthorization.IsAllowed(deal, Vendor, carrierReady: true));
+        Assert.Equal(1, w.Oto.CallsTo(OtoClient.CreateOrderPath));
+        Assert.Equal(1, w.Oto.CallsTo(OtoClient.OrderStatusPath));
     }
 
     [Fact]
