@@ -266,10 +266,16 @@
                          Message="@($"{L["deals.detail.awaiting_other"]} {DealsPolicy.LabelAr(waiting)}")" />
             }
 
+            @* الإلغاءُ لِمَن تُلغي لَه النُقطَة — `DealCancelAuthorization.IsAllowed` نَفسُها بِسِجِلِّ السُلطَةِ نَفسِه (القاعِدَة ١٢؛
+               مُراجَعَةُ تَيّارِ S6a الأولى، ‏2026-10-12): كانَت تُرسَمُ لِكُلِّ ناظِرٍ لِصَفقَةٍ فَعّالَة، فَيَرى مالِكُ إعلانِ العَرضِ قَبلَ
+               أَن يَقبَلَ استِمارَةً تُرَدُّ بِـ`actor_not_party`. (والأَسطُرُ الداخِلِيَّةُ بِمَسافاتِها كَما كانَت — فَلا بايتَ يَتَغَيَّرُ لِطَرَف.) *@
+            @if (canCancel)
+            {
             <form method="post" action="@($"/{Slug}/deals/{deal.Id}/cancel")" style="margin-top:8px;">
                 <input name="reason" class="ac-input" placeholder="@L["deals.detail.cancel_reason_placeholder"]" style="margin-bottom:6px;" />
                 <AcButton Type="submit" Variant="ghost" Block="true" Text="@L["deals.detail.cancel_action"]" />
             </form>
+            }
         }
         else if (deal.Status == DealStatus.Completed)
         {
@@ -343,6 +349,9 @@
     /// <summary>الناظِرُ يُقَيِّمُ هذِه الصَفقَة — <see cref="DealReviewAuthorization.IsAllowed"/> نَفسُها الَّتي
     /// تُطَبِّقُها <c>/review</c> (‏ADR-033 §٦‑ح)، فَلا تُرسَمُ استِمارَةٌ تَرُدُّها النُقطَة.</summary>
     bool canReview;
+    /// <summary>الناظِرُ يُلغي هذِه الصَفقَة — <see cref="DealCancelAuthorization.IsAllowed"/> نَفسُها الَّتي تُطَبِّقُها <c>/cancel</c>
+    /// بِسِجِلِّ السُلطَةِ نَفسِه (<c>IsStoreAdmin: false</c>)، فَلا تُرسَمُ استِمارَةٌ تَرُدُّها النُقطَة (‏2026-10-12).</summary>
+    bool canCancel;
     DealStage? nextStage;
     /// <summary>بَياناتُ التَوصيلِ تُرسَمُ لِمَن يُسَلِّمُ وَحدَه — الطَرَفُ المُقابِلُ
     /// أَو مالِكُ الإعلانِ، ولَيسَ المُشتَري (P1-4) — <b>وبِحُضورِ عُنوانٍ أَو هاتِف</b>
@@ -410,6 +419,7 @@
         };
         alreadyReviewed = await Reviews.HasReviewedAsync(Slug, uid, Id);
         canReview = DealReviewAuthorization.IsAllowed(deal, new DealReviewer(uid, Auth.UserName ?? ""));
+        canCancel = DealCancelAuthorization.IsAllowed(deal, new DealCanceller(uid, Auth.UserName ?? "", IsStoreAdmin: false));
     }
 
     // ‏لَيسَت `static` بَعدَ اليَوم: قيَمُها صارَت مِن `L` وهو مَحقونٌ

@@ -209,28 +209,48 @@ public class DealVendorCancelTests
         }
     }
 
-    /// <summary><b>اليَوم — يُقلَبُ بِاسمِه في كوميتِ الإصلاح</b>: الاستِمارَةُ تَلي سِلسِلَةَ الإجراءاتِ بِلا حارِسٍ خاصّ (لا شَيءَ بَينَ
-    /// قَوسِ آخِرِ <c>else if</c> وبَينَها)، فَتُرسَمُ لِكُلِّ ناظِرٍ لِصَفقَةٍ فَعّالَة — ومِنهُم مالِكُ إعلانِ العَرضِ الَّذي تَرُدُّه النُقطَةُ
-    /// بِـ<c>actor_not_party</c>: مِن أَربَعَةِ ناظِرينَ يُرَدُّ واحِدٌ وتُرسَمُ لَه.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (مُراجَعَةُ تَيّارِ S6a الأولى، ‏2026-10-12): كانَ
+    /// <c>Today_the_member_deal_page_draws_the_cancel_form_to_the_unbound_listing_owner_whom_the_endpoint_refuses</c> (مُودَعٌ في
+    /// <c>8b891ed</c>) — الاستِمارَةُ تَلي سِلسِلَةَ الإجراءاتِ بِلا حارِسٍ خاصّ، فَتُرسَمُ لِلناظِرينَ الأَربَعَةِ وتَرُدُّ النُقطَةُ «offer/owner».
+    /// <b>وصارَت تُرسَمُ بِـ<c>canCancel</c> = <see cref="DealCancelAuthorization.IsAllowed"/> بِسِجِلِّ السُلطَةِ الَّذي تَبنيه النُقطَةُ
+    /// نَفسُه</b> (<c>IsStoreAdmin: false</c>): ثَلاثَةٌ تُرسَمُ لَهُم ويُلغونَ، ومالِكُ العَرضِ قَبلَ القَبولِ لا تُرسَمُ لَه — وصِفرُ بابٍ يُرَدّ.
+    /// (وسُؤالُ «أَيَرفُضُ المالِكُ العَرض؟» باقٍ لِلمالِكِ في «ب» S6a·٨: إن صارَ نَعَم فَفي <c>Validate</c>، والصَفحَةُ تَتبَعُها.)</summary>
     [Fact]
-    public void Today_the_member_deal_page_draws_the_cancel_form_to_the_unbound_listing_owner_whom_the_endpoint_refuses()
+    public void The_member_deal_page_draws_the_cancel_form_exactly_for_whom_the_endpoint_cancels()
     {
         var page = MemberDealPage();
         var form = page.IndexOf(CancelForm, StringComparison.Ordinal);
         Assert.True(form > 0, "استِمارَةُ الإلغاءِ غَيرُ مَوجودَة — الأَداةُ عَمياء.");
-        Assert.EndsWith("}", page[..form].TrimEnd(), StringComparison.Ordinal);
-        Assert.DoesNotContain("DealCancelAuthorization", page, StringComparison.Ordinal);
+        var head = page[..form].TrimEnd();
+        Assert.EndsWith("{", head, StringComparison.Ordinal);
+        Assert.EndsWith("@if (canCancel)", head[..^1].TrimEnd(), StringComparison.Ordinal);
+        Assert.Contains("canCancel = DealCancelAuthorization.IsAllowed(deal, new DealCanceller(uid, Auth.UserName ?? \"\", IsStoreAdmin: false));",
+            page, StringComparison.Ordinal);
+
+        // والنُقطَةُ تَبني السِجِلَّ نَفسَه — `IsStoreAdmin: false` — فَما تُجيزُه الشاشَةُ تُجيزُه هِيَ.
+        var endpoints = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs"));
+        var at = endpoints.IndexOf("\"/{slug}/deals/{id:guid}/cancel\"", StringComparison.Ordinal);
+        Assert.True(at > 0, "نُقطَةُ `/cancel` غَيرُ مَوجودَة — الأَداةُ عَمياء.");
+        var cancel = endpoints[at..endpoints.IndexOf(".RequireStoreWritable();", at, StringComparison.Ordinal)];
+        Assert.Contains("new Services.Deals.DealCanceller(userId, userName, IsStoreAdmin: false)", cancel, StringComparison.Ordinal);
 
         var drawnButRefused = new List<string>();
+        var drawn = 0;
         var checkedViewers = 0;
         foreach (var (name, deal, viewer) in Viewers())
         {
             checkedViewers++;
-            var drawn = deal.Status == DealStatus.Active;
+            var draws = deal.Status == DealStatus.Active
+                        && DealCancelAuthorization.IsAllowed(deal, new DealCanceller(viewer, "ناظِر", IsStoreAdmin: false));
             var refused = DealCancelAuthorization.Validate(deal, new DealCanceller(viewer, "ناظِر", IsStoreAdmin: false)) is not null;
-            if (drawn && refused) drawnButRefused.Add(name);
+            if (draws) drawn++;
+            if (draws && refused) drawnButRefused.Add(name);
         }
         Assert.Equal(4, checkedViewers);
-        Assert.Equal(new[] { "offer/owner" }, drawnButRefused);
+        Assert.Equal(3, drawn);
+        Assert.Empty(drawnButRefused);
+        Assert.False(DealCancelAuthorization.IsAllowed(Viewers().Single(v => v.Name == "offer/owner").Deal,
+            new DealCanceller(Seller, "بائِع", IsStoreAdmin: false)));
     }
 }
