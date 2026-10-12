@@ -78,3 +78,48 @@ jobs:
 
       - name: Static verification layers 1-5, 7
         run: ./scripts/verify-static.sh
+
+  # ═══ بَوّابَةُ الإقلاعِ الإنتاجيِّ عَلى فَرعِ Neon — حينَ يوجَدُ سِرُّه (‏2026-10-12، P3-2) ═══════════
+  #
+  # الوَظيفَتانِ أَعلاه تَبنِيانِ وتَختَبِرانِ وتَقرَآنِ المَصدَرَ ولا تُقلِعان، و`verify-production-boot.sh` يُقلِعُ الثُنائِيَّ
+  # المَنشورَ بِوَضعِ Production عَلى قاعِدَةٍ حَقيقِيَّةٍ ويَطلُبُ مَساراتِه — الشَيءُ الوَحيدُ الَّذي أَمسَكَ حادِثَةَ `BindAsync`
+  # (‏DEPLOY.md §٢·و). وكانَ لا يُشَغَّلُ إلّا بِاليَد. **والقاعِدَةُ فَرعُ Neon مَنسوخٌ لا الإنتاج**: البَوّابَةُ تُقلِعُ وتَبذُر.
+  #
+  # **وغِيابُ السِرِّ لا يُفشِلُ شَيئاً**: ‏`::notice::` وسَطرُ «لَم يُقَس» في المُلَخَّص — طَلَباتُ الدَمجِ مِن نُسَخٍ مُتَفَرِّعَةٍ
+  # لا تَرى الأَسرار، ومُستَودَعٌ بِلا السِرِّ لا يُوقَفُ عَن البِناء. **ورَمزُ 3** (ما عِندَ المُشَغِّل — حِصَّةُ Neon مَثَلاً، و‑٥)
+  # ‏`::warning::` لا فَشَل: لَيسَ حُكماً عَلى الكود (§٢·و)، ونَسَقُه «لَم يُقَس» في `deploy-hf.yml`. و1 أَو 2 تُفشِلُ الوَظيفَة.
+  # ‏`secrets` لا يُقرَأُ في شَرطِ خُطوَة، فَيُسنَدُ إلى مُتَغَيِّرِ الوَظيفَةِ ويُسأَلُ عَن حُضورِه هُناك.
+  production-boot:
+    runs-on: ubuntu-latest
+    env:
+      BOOT_GATE_CONNECTION_STRING: ${{ secrets.BOOT_GATE_CONNECTION_STRING }}
+    steps:
+      - name: No Neon branch secret — the boot gate is not measured
+        if: env.BOOT_GATE_CONNECTION_STRING == ''
+        run: |
+          echo "::notice::بَوّابَةُ الإقلاعِ لَم تُشَغَّل — السِرُّ BOOT_GATE_CONNECTION_STRING غائِب (فَرعُ Neon مَنسوخ، لا الإنتاج). DEPLOY.md §٢·و."
+          echo "### بَوّابَةُ الإقلاعِ الإنتاجيّ: لَم يُقَس — السِرُّ \`BOOT_GATE_CONNECTION_STRING\` غائِب" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v4
+        if: env.BOOT_GATE_CONNECTION_STRING != ''
+
+      - uses: actions/setup-dotnet@v4
+        if: env.BOOT_GATE_CONNECTION_STRING != ''
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Production boot gate on the Neon branch
+        if: env.BOOT_GATE_CONNECTION_STRING != ''
+        run: |
+          export ConnectionStrings__Postgres="${BOOT_GATE_CONNECTION_STRING}"
+          # سِرُّ البَوّابَةِ لا سِرُّ الإنتاج — يُوَلَّدُ لِكُلِّ تَشغيلٍ ولا يُحفَظ.
+          export ACOMMERCE_AUTH_SECRET="$(openssl rand -hex 32)"
+          code=0
+          ./scripts/verify-production-boot.sh || code=$?
+          case "$code" in
+            0) echo "### بَوّابَةُ الإقلاعِ الإنتاجيّ: عَبَرَت" >> "$GITHUB_STEP_SUMMARY" ;;
+            3) echo "::warning::بَوّابَةُ الإقلاع: ما عِندَ المُشَغِّل (3) — لَيسَ حُكماً عَلى الكود؛ سَطرُ «التَشخيص» أَعلاه يُسَمّيه."
+               echo "### بَوّابَةُ الإقلاعِ الإنتاجيّ: لَم يُقَس — ما عِندَ المُشَغِّل (3)" >> "$GITHUB_STEP_SUMMARY" ;;
+            *) echo "### بَوّابَةُ الإقلاعِ الإنتاجيّ: ✗ رَمزُ ${code}" >> "$GITHUB_STEP_SUMMARY"
+               exit "$code" ;;
+          esac
