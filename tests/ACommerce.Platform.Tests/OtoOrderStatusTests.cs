@@ -702,6 +702,25 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         Assert.Equal(DealStage.Shipping, Stored(w).Stage);
     }
 
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم» — النُقطَةُ تَقرَأُ الجِسمَ كُلَّه ثُمَّ تُجيبُ ‏404 لِمَتجَرٍ بِلا ناقِل</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8،
+    /// ‏2026-10-12): `ReadToEndAsync` قَبلَ `OtoOrderStatusGate.Admit`، والبَوّابَةُ تُجيبُ <c>carrier_unavailable</c> بِلا نَظَرٍ في النَصّ —
+    /// بَينَما دَليلُ النَشرِ §٢·ط وتَعليقُ البَوّابَةِ («قَبلَ أَيِّ قِراءَة») وسِجِلُّ المالِكِ S7·٤ (١) واسمُ الصَفِّ التالي يَقولونَ «لا يُقرَأ».
+    /// يُقاسُ بِجِسمٍ يَعُدُّ قِراءاتِه، ويُثَبَّتُ قَبلَ قَلبِه (القاعِدَة ٣).</para>
+    /// </summary>
+    [Fact]
+    public async Task Today_the_inbound_route_reads_the_whole_body_before_answering_404_without_a_carrier()
+    {
+        var w = await ShippedCashDeal();
+        var tripwire = new BodyTripwire(throws: false);
+        await using var host = await OtoHost.StartAsync(ShippingIn(w, OtoEnvironment.Production), tripwire);
+
+        using var resp = await host.PostAsync(Slug, NoticeJson(w.Id.ToString("N")));
+
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+        Assert.True(tripwire.Reads > 0, $"قِراءاتُ الجِسم: {tripwire.Reads}");
+    }
+
     /// <summary>ورَمزُ <c>theme-demo</c> لا يُحَلُّ لِمَتجَرٍ آخَر: الوارِدُ إلى <c>ashare</c> ‏404 ولا يُقرَأ.</summary>
     [Fact]
     public async Task Another_store_on_the_same_staging_token_answers_404_without_reading()
@@ -762,7 +781,9 @@ file sealed class OtoHost : IAsyncDisposable
         return port;
     }
 
-    public static async Task<OtoHost> StartAsync(DealShipping shipping)
+    /// <summary>و<paramref name="tripwire"/> — اختِيارِيٌّ (‏2026-10-12، مُراجَعَةُ المَوجَة 3a): يَلُفُّ جِسمَ كُلِّ طَلَبٍ في الخادِمِ
+    /// فَتُعَدُّ قِراءاتُه أَو تُرمى — «لا يُقرَأُ الجِسم» شَرطٌ يُعَدّ لا يُستَنتَج. بِلا شَيءٍ يَبقى المُضيفُ كَما كان.</summary>
+    public static async Task<OtoHost> StartAsync(DealShipping shipping, BodyTripwire? tripwire = null)
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
@@ -771,6 +792,8 @@ file sealed class OtoHost : IAsyncDisposable
         var port = FreePort();
         var app = builder.Build();
         app.Urls.Add($"http://127.0.0.1:{port}");
+        if (tripwire is not null)
+            app.Use(async (ctx, next) => { ctx.Request.Body = tripwire.Wrap(ctx.Request.Body); await next(); });
         app.MapOtoShipping();
         await app.StartAsync();
 
@@ -790,6 +813,43 @@ file sealed class OtoHost : IAsyncDisposable
         _client.Dispose();
         await _app.StopAsync();
         await _app.DisposeAsync();
+    }
+}
+
+/// <summary>
+/// <para><b>جِسمُ طَلَبٍ يَعُدُّ قِراءاتِه — أَو يَرمي عِندَ أَوَّلِها</b> (‏2026-10-12، مُراجَعَةُ المَوجَة 3a). يَلُفُّه <c>OtoHost</c>
+/// حَولَ جِسمِ الطَلَبِ في الخادِم؛ فَـ<c>throws: true</c> يَجعَلُ أَيَّ قِراءَةٍ ‏500 — و‏404 فارِغٌ بَعدَه بُرهانُ «لَم يُقرَأ».</para>
+/// </summary>
+internal sealed class BodyTripwire(bool throws)
+{
+    private int _reads;
+
+    public int Reads => Volatile.Read(ref _reads);
+
+    public Stream Wrap(Stream inner) => new Counting(inner, this);
+
+    private void Touched()
+    {
+        Interlocked.Increment(ref _reads);
+        if (throws) throw new InvalidOperationException("قُرِئَ جِسمُ الطَلَب — والمَسارُ يَقولُ إنّه لا يُقرَأ.");
+    }
+
+    private sealed class Counting(Stream inner, BodyTripwire owner) : Stream
+    {
+        public override bool CanRead => inner.CanRead;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) { owner.Touched(); return inner.Read(buffer, offset, count); }
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        { owner.Touched(); return await inner.ReadAsync(buffer, ct); }
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct)
+            => ReadAsync(buffer.AsMemory(offset, count), ct).AsTask();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }
 
