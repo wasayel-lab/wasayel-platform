@@ -218,21 +218,33 @@ public class DealPaidStageCharacterizationTests
     /// <summary>ونَتيجَةُ القَبضِ تُكتَبُ في <c>Refs["payment_status"]</c>
     /// وسَطرِ <c>captured</c>؛ وفَشَلُه <b>لا يَكسِرُ التَقَدُّم</b>:
     /// يُسَجَّلُ في <c>Refs["capture_error"]</c> وسَطرِ
-    /// <c>capture_failed</c> وتَمضي المَرحَلَة.</summary>
+    /// <c>capture_failed</c> وتَمضي المَرحَلَة.
+    /// <para><b>وقُلِبَ مِنه بِاسمِه ما يَصِفُ التَرتيبَ وَحدَه</b> (‏ADR-036 الخُطوَة 2، ‏2026-10-12 — ولا يُعادُ حَرفٌ فَوقَه): كانَت
+    /// النَتيجَةُ تُكتَبُ عَلى <c>deal</c> — نُسخَةِ الانتِقالِ قَبلَ حِفظِه — وكانَ «الحِفظُ بَعدَ الكُتلَة». وصارَ الانتِقالُ يُحفَظُ أَوَّلاً
+    /// (المُطالَبَة)، والكُتلَةُ بَعدَه في <c>CaptureClaimedAsync</c>، ونَتيجَتُها عَلى الصَفقَةِ المَقروءَةِ ثانِيَةً <c>stored</c>. والمَعنى
+    /// الَّذي كَتَبَ الصَفَّ باقٍ بِحَرفِه: النَتيجَةُ في <c>payment_status</c> وسَطرِ <c>captured</c>، والفَشَلُ في <c>capture_error</c>
+    /// وسَطرِ <c>capture_failed</c>، والمَرحَلَةُ تُحفَظُ في الحالَين — قَبلَ القَبضِ لا بَعدَه. والسُلوكُ في <c>DealMoneyClaimFirstTests</c>.</para></summary>
     [Fact]
     public void A_capture_result_is_recorded_and_a_failure_does_not_block_the_stage()
     {
         var block = PaidBlock();
-        Assert.Contains("deal.Refs[\"payment_status\"] = cr.Status.ToString();", block, StringComparison.Ordinal);
+        Assert.Contains("stored.Refs[\"payment_status\"] = cr.Status.ToString();", block, StringComparison.Ordinal);
         Assert.Contains("\"captured\"", block, StringComparison.Ordinal);
         Assert.Contains("catch (Exception ex)", block, StringComparison.Ordinal);
-        Assert.Contains("deal.Refs[\"capture_error\"] = ex.Message;", block, StringComparison.Ordinal);
+        Assert.Contains("stored.Refs[\"capture_error\"] = ex.Message;", block, StringComparison.Ordinal);
         Assert.Contains("\"capture_failed\"", block, StringComparison.Ordinal);
 
-        // والحِفظُ بَعدَ الكُتلَةِ لا داخِلَ `catch` — فَالمَرحَلَةُ تُحفَظُ في الحالَين.
+        // والحِفظُ قَبلَ الكُتلَةِ لا بَعدَها — قُلِبَ بِاسمِه (‏ADR-036 الخُطوَة 2): كانَ «بَعدَ الكُتلَةِ لا داخِلَ `catch`». فَالانتِقالُ
+        // يُحفَظُ في `MoveAsync` داخِلَ التِقاطِ التَعارُض، ثُمَّ يُنادى القَبضُ بَعدَ الالتِقاطِ لا داخِلَه — فَالمَرحَلَةُ تُحفَظُ في الحالَين،
+        // ومَن رُدَّ حِفظُه لا يَقبِض.
         var body = AdvanceBody();
-        Assert.True(body.LastIndexOf("SaveChangesAsync(ct)", StringComparison.Ordinal)
-                  > body.IndexOf("capture_failed", StringComparison.Ordinal));
+        var claim   = body.IndexOf("moved = await MoveAsync(s, deal, next.Value, actorId, actorName, note, ct);", StringComparison.Ordinal);
+        var caught  = body.IndexOf("catch (JasperFx.ConcurrencyException)", Math.Max(claim, 0), StringComparison.Ordinal);
+        var capture = body.IndexOf("await CaptureClaimedAsync(tenantSlug, moved,", StringComparison.Ordinal);
+        Assert.True(claim > 0 && caught > claim && capture > caught,
+            $"تَرتيبُ المُطالَبَة: الحِفظ={claim} الالتِقاط={caught} القَبض={capture}");
+        Assert.Contains("await s.SaveChangesAsync(ct);",
+            body.Substring(body.IndexOf("private async Task<Deal> MoveAsync(", StringComparison.Ordinal)), StringComparison.Ordinal);
     }
 
     /// <summary><b>الدَفعُ عِندَ الاستِلامِ لا يَبلُغُ القَبضَ أَبَداً</b> —

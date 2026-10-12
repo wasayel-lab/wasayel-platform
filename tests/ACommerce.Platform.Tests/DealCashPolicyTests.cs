@@ -582,7 +582,9 @@ public class DealCashPolicyTests
         Assert.DoesNotContain("deal.InitiatorId", accept, StringComparison.Ordinal);
         Assert.DoesNotContain("advanced.Deal ?? deal", accept, StringComparison.Ordinal);
 
-        Assert.Contains("return new(true, await MoveAsync(s, deal, next.Value, actorId, actorName, note, ct), null);", AdvanceBody(), StringComparison.Ordinal);
+        // (‏2026-10-12، ‏ADR-036 الخُطوَة 2 — ولا يُعادُ حَرفٌ فَوقَه: كانَ `return new(true, await MoveAsync(…), null);` — صارَ إسناداً لِأَنّ
+        // القَبضَ بَعدَ المُطالَبَةِ يُنادى خارِجَ التِقاطِ التَعارُض. والفاعِلُ هُوَ هُوَ: المُحَرِّكُ بِهُوِيَّتِه.)
+        Assert.Contains("moved = await MoveAsync(s, deal, next.Value, actorId, actorName, note, ct);", AdvanceBody(), StringComparison.Ordinal);
         Assert.Equal(3, Count(WriteEndpointGuardTests.StripComments(DealsServiceSource()), "MoveAsync("));   // التَعريفُ ونِداءان
         Assert.Null(typeof(DealsService).GetMethod("MoveAsync", BindingFlags.Public | BindingFlags.Instance));   // لا بابَ ثالِثاً مِن خارِجِ الخِدمَة
     }

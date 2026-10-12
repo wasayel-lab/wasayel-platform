@@ -371,11 +371,17 @@ public sealed class DealsService
             return new(false, deal, AwaitsCarrierAr, DealShipping.DealAwaitsCarrier);
 
         // وحِفظُ الانتِقالِ يَشتَرِطُ النُسخَةَ الَّتي قُرِئَت (‏ADR-036): نَقرَتانِ مُتَداخِلَتانِ تَمضي أولاهُما وتُرَدُّ الأُخرى.
-        try { return new(true, await MoveAsync(s, deal, next.Value, actorId, actorName, note, ct), null); }
+        Deal moved;
+        try { moved = await MoveAsync(s, deal, next.Value, actorId, actorName, note, ct); }
         catch (JasperFx.ConcurrencyException)
         {
             return new(false, await LoadAsync(tenantSlug, dealId, ct), ChangedMeanwhileAr, ChangedMeanwhile);
         }
+        // **والقَبضُ بَعدَ الحِفظِ المَفحوصِ لا قَبلَه — وخارِجَ التِقاطِ التَعارُض** (‏ADR-036 الخُطوَة 2، ‏2026-10-12): كانَ يَقَعُ
+        // داخِلَ `MoveAsync` قَبلَ حِفظِها، فَانتِقالٌ يُرَدُّ هُنا بِـ`deal_changed_meanwhile` يَكونُ قَد قَبَضَ ولَم يُسَجِّل، و«أَعِد
+        // المُحاوَلَة» تَقبِضُ ثانِيَةً (`DealMoneyClaimFirstTests`). ونَتيجَتُه بَعدَ هذا السَطرِ كِتابَةٌ ثانِيَةٌ تُعادُ عَلى ما كُتِب؛
+        // فَإن غَلَبَها التَعارُضُ ثَلاثاً صَعِدَ إلى المُنادي بِصَوت (‏500) — لا يُقالُ «لَم يُكتَب» عَن انتِقالٍ كُتِبَ وقَبضٍ وَقَع.
+        return new(true, await CaptureClaimedAsync(tenantSlug, moved, next.Value, actorId, actorName, ct), null);
     }
 
     /// <summary>
@@ -387,6 +393,12 @@ public sealed class DealsService
     /// في مَوضِعٍ واحِدٍ وإن تَعَدَّدَت أَبوابُها (‏ADR-033 §٦). ولا يَرُدُّ
     /// نَتيجَةً ذاتَ عَلَم: ما يُرفَضُ يُرفَضُ عِندَ البَوّابَةِ قَبلَه، فَعَلَمٌ هُنا
     /// شَرطٌ لا يَكذِبُ أَبَداً.</para>
+    ///
+    /// <para><b>ولا يَقبِضُ بَعدَ اليَوم — يُطالِب</b> (‏ADR-036 الخُطوَة 2، ‏2026-10-12؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): «ويَقبِضُ
+    /// عِندَ <c>Paid</c>» أَعلاه كانَ قَبضاً قَبلَ الحِفظِ المَفحوص، فَحِفظٌ يَرُدُّه التَعارُضُ يَكونُ قَد تَلا قَبضاً لَم يُسَجَّل. فَصارَ
+    /// حِفظُ هذِه الدالَّةِ <b>المُطالَبَةَ</b>: الانتِقالُ يُكتَبُ بِفَحصِ النُسخَة، ثُمَّ يَقبِضُ <see cref="CaptureClaimedAsync"/> مَن كَسَبَها،
+    /// ثُمَّ تُكتَبُ نَتيجَتُه بِقِراءَةٍ وإعادَة. وبابُ <see cref="AcceptAsync"/> لا يُناديها لِأَنّه لا يُدخِلُ <c>Paid</c>: يُخرِجُ
+    /// <c>Offered</c> إلى <c>Booked</c> في كُلِّ نَمَطٍ في الكاتالوج — مُثَبَّتٌ بِصَفٍّ يَعُدُّ الأَنماط.</para>
     /// </summary>
     private async Task<Deal> MoveAsync(
         IDocumentSession s, Deal deal, DealStage next, Guid actorId, string actorName,
@@ -397,42 +409,6 @@ public sealed class DealsService
         deal.UpdatedAt = DateTime.UtcNow;
         deal.Timeline.Add(new(before, next, "advanced",
             actorId, actorName, note, DateTime.UtcNow));
-
-        // عِندَ الوُصول لِمَرحَلَة الدَّفع: اِسحَب الإذن المَحجوز في
-        // /checkout/submit (Authorize) → Capture.
-        //
-        // **ولا عَمولَةَ مَنصَّة هُنا بَعدَ اليَوم** (‏ADR-032 §٢‑ب، ‏2026-10-11):
-        // كانَت هذِه الكُتلَةُ تَحسُبُ `CommissionSar = 2.5%` وتُلحِقُ سَطرَ
-        // «عمولة» بِاسمِ «المَنصَّة» عَلى كُلِّ صَفقَةٍ تَبلُغُ Paid — بِما فيها
-        // النَقد — وإيرادُ وَسايِل اشتِراكُ المُستَأجِرِ وَحدَه (‏ق‑٦). فَأُسقِطَت
-        // النِسبَةُ والحَقلُ والسَطر، **وبَقِيَ القَبضُ كَما هُوَ بِحَرفِه**:
-        // حارِسُ `AmountSar > 0` كانَ يَحرُسُ الكُتلَةَ كُلَّها فَبَقِيَ عَلى
-        // القَبض؛ أَمّا `CommissionSar is null` فَكانَ حارِسَ «مَرَّةً لا
-        // مَرَّتَين» لِلعَمولَة وَحدَها، والمَرحَلَةُ تُدخَلُ مَرَّةً في
-        // مَكينَةِ الحالَةِ — فَلا أَثَرَ لِسُقوطِه عَلى القَبض.
-        //
-        // لَو لا payment_id (دَفع نَقدا/COD) نَتَجاوَز.
-        // فَشَل Capture لا يَكسِر التَّقَدُّم — يُسَجَّل لِلمُراجَعَة.
-        if (next == DealStage.Paid && deal.AmountSar > 0)
-        {
-            if (deal.Refs.TryGetValue("payment_id", out var pid) && !string.IsNullOrEmpty(pid))
-            {
-                try
-                {
-                    var cr = await _payments.CaptureAsync(pid, deal.AmountSar, ct);
-                    deal.Refs["payment_status"] = cr.Status.ToString();
-                    deal.Timeline.Add(new(next, next, "captured",
-                        actorId, actorName,
-                        $"capture {cr.Status} {cr.AmountSar:0.00} SAR", DateTime.UtcNow));
-                }
-                catch (Exception ex)
-                {
-                    deal.Refs["capture_error"] = ex.Message;
-                    deal.Timeline.Add(new(next, next, "capture_failed",
-                        actorId, actorName, ex.Message, DateTime.UtcNow));
-                }
-            }
-        }
 
         // نَقدٌ عِندَ الاستِلام: بُلوغُ Delivered هُوَ لَحظَةُ القَبضِ عِندَ البائِع
         // — يُكتَبُ سَطرٌ بِاسمِه في السِجِلّ، ونَصُّه مِن القامُوسِ عِندَ العَرض
@@ -451,6 +427,68 @@ public sealed class DealsService
 
         s.Store(deal);
         await s.SaveChangesAsync(ct);
+        return deal;
+    }
+
+    /// <summary>
+    /// <para><b>القَبضُ عِندَ دُخولِ <c>Paid</c> — بَعدَ المُطالَبَةِ لا قَبلَها</b> (‏ADR-036 الخُطوَة 2، ‏2026-10-12): يُناديها
+    /// <see cref="AdvanceAsync"/> <b>بَعدَ</b> أَن حَفِظَت <see cref="MoveAsync"/> الانتِقالَ بِفَحصِ النُسخَةِ وخارِجَ التِقاطِ تَعارُضِه —
+    /// فَمَن رُدَّ حِفظُه لا يَبلُغُها ولا يَقبِضُ شَيئاً، ومَن كَسَبَه يَقبِضُ مَرَّةً، ونَتيجَتُه كِتابَةٌ ثانِيَةٌ عَبرَ
+    /// <see cref="RecordAsync"/> تُقرَأُ فيها الصَفقَةُ وتُعادُ عَلى ما كُتِب (الأُنبوبُ القائِمُ لِلإلحاق، §٧ — لا رابِع).</para>
+    ///
+    /// <para><b>وما لا تُغلِقُه — يُقال</b>: نِداءٌ يَقَعُ ثُمَّ تَسقُطُ العَمَلِيَّةُ قَبلَ تَسجيلِ نَتيجَتِه يَترُكُ الصَفقَةَ عِندَ <c>Paid</c>
+    /// بِلا سَطرِ <c>captured</c> ولا <c>capture_failed</c> — مَرئِيَّةً لِلمُراجَعَة، ولا تُقبَضُ ثانِيَةً لِأَنّ الدُخولَ مَرَّة. «مَرَّةً
+    /// عَلى الأَكثَر» لا «مَرَّةً عَلى الأَقَلّ».</para>
+    /// </summary>
+    private async Task<Deal> CaptureClaimedAsync(
+        string tenantSlug, Deal deal, DealStage next, Guid actorId, string actorName, CancellationToken ct)
+    {
+        // عِندَ الوُصول لِمَرحَلَة الدَّفع: اِسحَب الإذن المَحجوز في
+        // /checkout/submit (Authorize) → Capture.
+        //
+        // **ولا عَمولَةَ مَنصَّة هُنا بَعدَ اليَوم** (‏ADR-032 §٢‑ب، ‏2026-10-11):
+        // كانَت هذِه الكُتلَةُ تَحسُبُ `CommissionSar = 2.5%` وتُلحِقُ سَطرَ
+        // «عمولة» بِاسمِ «المَنصَّة» عَلى كُلِّ صَفقَةٍ تَبلُغُ Paid — بِما فيها
+        // النَقد — وإيرادُ وَسايِل اشتِراكُ المُستَأجِرِ وَحدَه (‏ق‑٦). فَأُسقِطَت
+        // النِسبَةُ والحَقلُ والسَطر، **وبَقِيَ القَبضُ كَما هُوَ بِحَرفِه**:
+        // حارِسُ `AmountSar > 0` كانَ يَحرُسُ الكُتلَةَ كُلَّها فَبَقِيَ عَلى
+        // القَبض؛ أَمّا `CommissionSar is null` فَكانَ حارِسَ «مَرَّةً لا
+        // مَرَّتَين» لِلعَمولَة وَحدَها، والمَرحَلَةُ تُدخَلُ مَرَّةً في
+        // مَكينَةِ الحالَةِ — فَلا أَثَرَ لِسُقوطِه عَلى القَبض.
+        //
+        // لَو لا payment_id (دَفع نَقدا/COD) نَتَجاوَز.
+        // فَشَل Capture لا يَكسِر التَّقَدُّم — يُسَجَّل لِلمُراجَعَة.
+        //
+        // (‏2026-10-12، ‏ADR-036 الخُطوَة 2 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: نُقِلَت هذِه الكُتلَةُ بِحَرفِها مِن `MoveAsync` قَبلَ حِفظِها
+        // إلى هُنا بَعدَه، وصارَت النَتيجَةُ تُكتَبُ عَلى الصَفقَةِ المَقروءَةِ ثانِيَةً `stored` لا عَلى نُسخَةِ المُطالَبَة.)
+        if (next == DealStage.Paid && deal.AmountSar > 0)
+        {
+            if (deal.Refs.TryGetValue("payment_id", out var pid) && !string.IsNullOrEmpty(pid))
+            {
+                Action<Deal> outcome;
+                try
+                {
+                    var cr = await _payments.CaptureAsync(pid, deal.AmountSar, ct);
+                    outcome = stored =>
+                    {
+                        stored.Refs["payment_status"] = cr.Status.ToString();
+                        stored.Timeline.Add(new(next, next, "captured",
+                            actorId, actorName,
+                            $"capture {cr.Status} {cr.AmountSar:0.00} SAR", DateTime.UtcNow));
+                    };
+                }
+                catch (Exception ex)
+                {
+                    outcome = stored =>
+                    {
+                        stored.Refs["capture_error"] = ex.Message;
+                        stored.Timeline.Add(new(next, next, "capture_failed",
+                            actorId, actorName, ex.Message, DateTime.UtcNow));
+                    };
+                }
+                return await RecordAsync(tenantSlug, deal.Id, outcome, ct) ?? deal;
+            }
+        }
         return deal;
     }
 
@@ -479,29 +517,6 @@ public sealed class DealsService
         // ‏`Validate` تَرُدّ `deal_not_found` عِندَ العَدَم، فَما بَعدَها غَيرُ عَدَم.
         var deal = loaded!;
 
-        // إن كانَ في الصَّفقَة مَعامَلَة دَفع (Refs["payment_id"] مَوضوع
-        // عِندَ /checkout/submit)، أَرجِع المَبلَغ كامِلاً قَبل تَعليم
-        // الحالَة Cancelled. لَو الإسترِجاع فَشَل، لا نَكسِر الإلغاء —
-        // نُسَجِّل خَطَأ في Timeline ونُسَلسِل (المُدير يَدخُل يَدَويّاً).
-        if (deal.Refs.TryGetValue("payment_id", out var pid) && !string.IsNullOrEmpty(pid))
-        {
-            try
-            {
-                var rr = await _payments.RefundAsync(pid, deal.AmountSar, reason, ct);
-                deal.Refs["refund_id"]     = rr.PaymentId;
-                deal.Refs["refund_status"] = rr.Status.ToString();
-                deal.Timeline.Add(new(deal.Stage, deal.Stage, "refunded",
-                    actorId, actorName,
-                    $"refund {rr.Status} {rr.AmountSar:0.00} SAR", DateTime.UtcNow));
-            }
-            catch (Exception ex)
-            {
-                deal.Refs["refund_error"] = ex.Message;
-                deal.Timeline.Add(new(deal.Stage, deal.Stage, "refund_failed",
-                    actorId, actorName, ex.Message, DateTime.UtcNow));
-            }
-        }
-
         deal.Status = DealStatus.Cancelled;
         deal.CancelReason = reason;
         deal.UpdatedAt = DateTime.UtcNow;
@@ -511,11 +526,46 @@ public sealed class DealsService
         // تَعارُضُ النُسخَة (‏ADR-036): قَبولٌ أَو تَقَدُّمٌ حُفِظَ بَعدَ قِراءَةِ هذا الإلغاءِ لا يُمحى بِه — يُرَدُّ بِرَمزِه.
         // **وما لا يُغلِقُه** (‏ADR-036 §٣): الاستِرجاعُ أَعلاه يَقَعُ قَبلَ هذا الحِفظ، فَإلغاءٌ مَردودٌ هُنا قَد يَتلو
         // استِرجاعاً وَقَع ولَم يُسَجَّل — خُطوَتُه في الـADR قَبلَ أَيِّ مُزَوِّدِ دَفعٍ حَقيقِيّ.
+        // **وأُغلِقَ ‏2026-10-12 (‏ADR-036 الخُطوَة 2) — ولا يُعادُ حَرفٌ فَوقَه**: «أَعلاه» صارَ «أَدناه» — هذا الحِفظُ هُوَ المُطالَبَة،
+        // والاستِرجاعُ لا يَبلُغُه إلّا إلغاءٌ كُتِب؛ فَالمَردودُ لا يَستَرجِعُ شَيئاً، و«أَعِد المُحاوَلَة» تَستَرجِعُ مَرَّةً.
         try { await s.SaveChangesAsync(ct); }
         catch (JasperFx.ConcurrencyException)
         {
             return DealCancelResult.Refused(new DealCancelViolation(ChangedMeanwhile, ChangedMeanwhileAr),
                 await LoadAsync(tenantSlug, dealId, ct));
+        }
+
+        // إن كانَ في الصَّفقَة مَعامَلَة دَفع (Refs["payment_id"] مَوضوع
+        // عِندَ /checkout/submit)، أَرجِع المَبلَغ كامِلاً قَبل تَعليم
+        // الحالَة Cancelled. لَو الإسترِجاع فَشَل، لا نَكسِر الإلغاء —
+        // نُسَجِّل خَطَأ في Timeline ونُسَلسِل (المُدير يَدخُل يَدَويّاً).
+        // (‏2026-10-12، ‏ADR-036 الخُطوَة 2 — ولا يُعادُ حَرفٌ فَوقَه: «قَبل تَعليم الحالَة» صارَ «بَعدَ حِفظِها»؛ ونَتيجَةُ الاستِرجاعِ
+        // كِتابَةٌ ثانِيَةٌ عَبرَ `RecordAsync` تُقرَأُ فيها الصَفقَةُ وتُعادُ عَلى ما كُتِب، وبَعدَ ثالِثِ تَعارُضٍ تَصعَدُ بِصَوت.)
+        if (deal.Refs.TryGetValue("payment_id", out var pid) && !string.IsNullOrEmpty(pid))
+        {
+            Action<Deal> outcome;
+            try
+            {
+                var rr = await _payments.RefundAsync(pid, deal.AmountSar, reason, ct);
+                outcome = stored =>
+                {
+                    stored.Refs["refund_id"]     = rr.PaymentId;
+                    stored.Refs["refund_status"] = rr.Status.ToString();
+                    stored.Timeline.Add(new(stored.Stage, stored.Stage, "refunded",
+                        actorId, actorName,
+                        $"refund {rr.Status} {rr.AmountSar:0.00} SAR", DateTime.UtcNow));
+                };
+            }
+            catch (Exception ex)
+            {
+                outcome = stored =>
+                {
+                    stored.Refs["refund_error"] = ex.Message;
+                    stored.Timeline.Add(new(stored.Stage, stored.Stage, "refund_failed",
+                        actorId, actorName, ex.Message, DateTime.UtcNow));
+                };
+            }
+            deal = await RecordAsync(tenantSlug, dealId, outcome, ct) ?? deal;
         }
         return DealCancelResult.Cancelled(deal);
     }
@@ -556,16 +606,33 @@ public sealed class DealsService
     public async Task<Deal?> AttachRefAsync(
         string tenantSlug, Guid dealId, string key, string value,
         CancellationToken ct = default)
+        => await RecordAsync(tenantSlug, dealId, deal =>
+        {
+            deal.Refs[key] = value;
+            deal.Timeline.Add(new(deal.Stage, deal.Stage, "note", null, null,
+                $"attach {key}={value}", DateTime.UtcNow));
+        }, ct);
+
+    /// <summary>
+    /// <para><b>تَسجيلُ أَثَرٍ وَقَعَ خارِجَ الصَفقَة — بِقِراءَةٍ وإعادَة</b> (‏ADR-036 §٧، والخُطوَة 2): حَلقَةُ
+    /// <see cref="AttachRefAsync"/> نَفسُها بِحَرفِها، أُخرِجَت مِنها ‏2026-10-12 لِأَنّ مُستَهلِكَينِ آخَرَينِ وُلِدا بِالحاجَةِ نَفسِها:
+    /// نَتيجَةُ الاستِرجاعِ في <see cref="CancelAsync"/> ونَتيجَةُ القَبضِ في <see cref="CaptureClaimedAsync"/> — كِلاهُما يُسَجِّلُ
+    /// ما رَدَّه المُزَوِّدُ بَعدَ أَن حُفِظَت المُطالَبَة، ولا يَتَّخِذُ قَراراً عَلى حالِ الصَفقَة. فَهي الأُنبوبُ القائِمُ لا رابِع
+    /// (القاعِدَة ٨)، وعَدُّ مَواضِعِ الحِفظِ في الخِدمَةِ باقٍ سِتّاً.</para>
+    ///
+    /// <para>كُلُّ مُحاوَلَةٍ بِجَلسَةٍ جَديدَةٍ تَقرَأُ آخِرَ ما كُتِبَ وتُطَبِّقُ <paramref name="record"/> عَلَيه؛ وبَعدَ
+    /// <see cref="AttachAttempts"/> يَصعَدُ الاستِثناءُ إلى المُنادي بِصَوت.</para>
+    /// </summary>
+    private async Task<Deal?> RecordAsync(
+        string tenantSlug, Guid dealId, Action<Deal> record, CancellationToken ct)
     {
         for (var attempt = 1; ; attempt++)
         {
             await using var s = _store.LightweightSession(tenantSlug);
             var deal = await s.LoadAsync<Deal>(dealId, ct);
             if (deal is null) return null;
-            deal.Refs[key] = value;
+            record(deal);
             deal.UpdatedAt = DateTime.UtcNow;
-            deal.Timeline.Add(new(deal.Stage, deal.Stage, "note", null, null,
-                $"attach {key}={value}", DateTime.UtcNow));
             s.Store(deal);
             // تَعارُضُ النُسخَة (‏ADR-036 §٧): كَتَبَ غَيرُ هذا الطَلَبِ الصَفقَةَ بَعدَ تَحميلِها — يُعادُ الإلحاقُ عَلى ما كُتِب.
             // (وكانَ هُنا: «ومُنادوها اليَومَ يُلحِقونَ بِصَفقَةٍ وُلِدَت في الطَلَبِ نَفسِه لا يَعرِفُ مُعَرِّفَها غَيرُه» — ولَم يَصدُق:
