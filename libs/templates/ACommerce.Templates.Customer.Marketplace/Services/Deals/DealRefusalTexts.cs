@@ -30,6 +30,11 @@ public static class DealRefusalTexts
             .Append(ChatStartReturn.PartnerMissing)
             // ورَمزُ تَعارُضِ النُسخَة (‏ADR-036، ‏2026-10-12) — تُرجِعُه `/accept` و`/cancel` و`/advance` جَميعاً.
             .Append(DealsService.ChangedMeanwhile)
+            // ورُموزُ نُقطَةِ الشَحن (‏ADR-033 الخُطوَة 3، ‏2026-10-12): بَوّابَتُها — والمُشتَرَكُ مَعَ القَبولِ
+            // (`deal_not_found`، `listing_owner_missing`، `deal_not_active`) مِفتاحٌ واحِد — ومَعجَمُ فَشَلِ
+            // عَميلِ OTO الخُماسيّ، وكُلُّها تَرتَدُّ إلى هذِه الصَفحَةِ بِـ`?err=`.
+            .Concat(DealShipAuthorization.All)
+            .Concat(ACommerce.Kit.Delivery.OtoFailures.All)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 

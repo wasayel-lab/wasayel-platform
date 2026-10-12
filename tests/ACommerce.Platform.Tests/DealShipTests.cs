@@ -1,0 +1,599 @@
+using System.Net;
+using System.Text.Json;
+using ACommerce.Kit.Delivery;
+using ACommerce.Kit.Payments;
+using ACommerce.Templates.Customer.Marketplace.Services.Deals;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Xunit;
+
+namespace ACommerce.Platform.Tests;
+
+// ═══ شَحنُ الصَفقَةِ عَبرَ OTO — البَوّابَةُ قَبلَ OTO، والانتِقالُ بِالسِياسَةِ لا حَولَها ═══════════
+//
+// ‏ADR-033 §٢‑هـ الخُطوَة 3 (‏2026-10-12): `POST /{slug}/deals/{id:guid}/ship` يُنشِئُ طَلَباً بِشُحنَتِه
+// (`createShipment: true`) ومَبلَغِ التَحصيلِ لِصَفقَةِ نَقد، ويَكتُبُ مُعَرِّفَيه في `Deal.Refs`، ثُمَّ
+// يُخرِجُ الصَفقَةَ إلى `Shipping` عَبرَ `DealsService.AdvanceAsync` بِالبائِع. يُقاسُ هُنا:
+//   ١) البَوّابَةُ النَقِيَّة — لِكُلِّ رَمزٍ مِن العَشَرَةِ مُوجَبٌ وسالِب، والتَرتيب (القاعِدَتان ٤ و٦).
+//   ٢) الرَمزُ لا يُحَلُّ إلّا لِـ`theme-demo` عَلى `staging` (‏ADR-033 §٢‑د والقاعِدَة ٩).
+//   ٣) المَسارُ كامِلاً عَلى عالَمِ الوَثائِقِ في الذاكِرَة ومُعالِجٍ يُعيدُ رُدودَ وَثيقَةِ OTO: ما يُرسَل،
+//      وما يُكتَب، وأَنّ الرَفضَ قَبلَ OTO لا يُرسِلُ طَلَباً ولا يَكتُب، وأَنّ إلغاءً أَو شَحناً يَدَوِيّاً
+//      أَثناءَ نِداءِ OTO لا يُحَرِّكُ الصَفقَةَ مَرَّتَين، وأَنّ الإعادَةَ تَستَأنِفُ ولا تُنشِئُ طَلَباً ثانِياً،
+//      وأَنّ طَلَباً ضاعَ رَدُّه يُتَبَنّى مِن «Order Tracking» بِمُعَرِّفِنا وَحدَه.
+
+/// <summary>مُعالِجٌ يُجيبُ بِحَسَبِ المَسار — ويُنادي خُطّافاً قَبلَ الرَدِّ (إلغاءٌ أَو شَحنٌ يَدَوِيٌّ
+/// «أَثناءَ نِداءِ OTO» يَصيرُ تَرتيباً حَتمِيّاً لا حَظّاً).</summary>
+internal sealed class OtoRouteHandler : HttpMessageHandler
+{
+    public List<(string Path, string? Body)> Calls { get; } = new();
+    /// <summary>رَدُّ كُلِّ مَسارٍ بِجِسمِ طَلَبِه — «Order Tracking» يُعيدُ المُعَرِّفَ الَّذي سُئِلَ عَنه
+    /// كَما في مِثالِ الوَثيقَة (<c>"orderId": "OID-23331-9749"</c> في الطَلَبِ والرَدّ).</summary>
+    public Dictionary<string, Func<string?, HttpResponseMessage>> Routes { get; } = new(StringComparer.Ordinal);
+    public Action<string>? Before { get; set; }
+
+    public OtoRouteHandler()
+    {
+        Routes[OtoClient.RefreshTokenPath] = _ => Json(HttpStatusCode.OK,
+            "{\"access_token\":\"ACCESS-1\",\"success\":true,\"token_type\":\"Bearer\",\"expires_in\":\"3600\"}");
+        Routes[OtoClient.CreateOrderPath] = _ => Json(HttpStatusCode.OK, "{\"success\":true,\"otoId\":540789}");
+        Routes[OtoClient.OrderStatusPath] = body => Tracking(OrderIdIn(body));
+    }
+
+    public static HttpResponseMessage Json(HttpStatusCode status, string body)
+        => new(status) { Content = new StringContent(body) };
+
+    public static string? OrderIdIn(string? body)
+        => body is null ? null : JsonDocument.Parse(body).RootElement.GetProperty("orderId").GetString();
+
+    public static HttpResponseMessage Tracking(string? orderId, string otoId = "540789")
+        => Json(HttpStatusCode.OK,
+            "{\"success\":true,\"orderId\":" + JsonSerializer.Serialize(orderId) + ",\"otoId\":\"" + otoId + "\"," +
+            "\"status\":\"searchingDriver\",\"printAWBURL\":\"https://app.tryoto.com/print/awb?enc=y\"," +
+            "\"trackingUrl\":\"https://app.tryoto.com/otoflex-tracking?enc=x\"}");
+
+    public int CallsTo(string path) => Calls.Count(c => c.Path == path);
+
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        var path = request.RequestUri!.AbsolutePath;
+        var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(ct);
+        Calls.Add((path, body));
+        Before?.Invoke(path);
+        return Routes.TryGetValue(path, out var r) ? r(body) : Json(HttpStatusCode.NotFound, "{}");
+    }
+}
+
+public class DealShipTests
+{
+    private const string Slug = DealShipping.DemoStore;
+    private static readonly Guid Buyer    = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    private static readonly Guid Seller   = Guid.Parse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    private static readonly Guid Stranger = Guid.Parse("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+    private static readonly Guid AppOwner = Guid.Parse("dddddddd-dddd-4ddd-8ddd-dddddddddddd");
+
+    private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;
+
+    private sealed class ForbiddenPaymentProvider : IPaymentProvider
+    {
+        private static InvalidOperationException Touched() => new("صَفقَةُ النَقدِ لا تَمَسُّ المال — نودِيَ مُزَوِّدُ الدَفع.");
+        public string ProviderName => "forbidden";
+        public Task<PaymentResult> AuthorizeAsync(PaymentRequest req, string idempotencyKey, CancellationToken ct = default) => throw Touched();
+        public Task<PaymentResult> CaptureAsync(string paymentId, decimal? amount = null, CancellationToken ct = default) => throw Touched();
+        public Task<PaymentResult> RefundAsync(string paymentId, decimal amount, string reason, CancellationToken ct = default) => throw Touched();
+        public Task<SubscriptionResult> CreateSubscriptionAsync(SubscriptionRequest req, string idempotencyKey, CancellationToken ct = default) => throw Touched();
+        public Task<bool> CancelSubscriptionAsync(string subscriptionId, CancellationToken ct = default) => throw Touched();
+        public Task<Invoice?> GetInvoiceAsync(string paymentId, CancellationToken ct = default) => throw Touched();
+    }
+
+    // ─── صَفقَةٌ جاهِزَةٌ لِلشَحن — وكُلُّ صَفٍّ يُغَيِّرُ فيها شَيئاً واحِداً ──────────────
+
+    private static Deal Ready() => new()
+    {
+        Id = Guid.Parse("0f8fad5b-d9cb-469f-a165-705ed7eb6e2a"),
+        TenantSlug = Slug,
+        Pattern = "marketplace",
+        InitiatorId = Buyer,
+        InitiatorName = "مُشتَرٍ",
+        CounterpartyId = Seller,
+        CounterpartyName = "بائِع",
+        ListingTitle = "سِلعَة",
+        AmountSar = 150m,
+        Stage = DealStage.Confirmed,
+        Status = DealStatus.Active,
+        Refs = new() { [DealsService.ListingOwnerRef] = Seller.ToString() },
+        Attributes = new()
+        {
+            [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.CashOnDelivery,
+            [Deal.DeliveryAddressAttribute] = "حَيُّ المِثال، شارِعُ الاختِبار",
+            [Deal.DeliveryPhoneAttribute] = "0500000000",
+        },
+    };
+
+    private static readonly DealShipper Vendor = new(Seller, "بائِع");
+
+    private static string? Code(Deal? deal, DealShipper? by = null, bool carrierReady = true)
+        => DealShipAuthorization.Validate(deal, by ?? Vendor, carrierReady)?.Code;
+
+    private static Deal With(Action<Deal> change)
+    {
+        var d = Ready();
+        change(d);
+        return d;
+    }
+
+    // ═══ ١. البَوّابَة — لِكُلِّ رَمزٍ مُوجَبٌ وسالِب ═══════════════════════════════
+
+    [Fact]
+    public void The_lexicon_is_ten_closed_codes_and_three_are_the_accept_codes_by_value()
+    {
+        Assert.Equal(10, DealShipAuthorization.All.Count);
+        Assert.Equal(10, DealShipAuthorization.All.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(DealAcceptAuthorization.DealNotFound, DealShipAuthorization.DealNotFound);
+        Assert.Equal(DealAcceptAuthorization.ListingOwnerMissing, DealShipAuthorization.ListingOwnerMissing);
+        Assert.Equal(DealAcceptAuthorization.DealNotActive, DealShipAuthorization.DealNotActive);
+        // ورَمزُ «لَيسَ المالِك» غَيرُ رَمزِ القَبول: نَصُّ ذاكَ «لا يَقبَلُ العَرضَ إلّا مالِكُ الإعلان».
+        Assert.NotEqual(DealAcceptAuthorization.ActorNotListingOwner, DealShipAuthorization.ActorNotShipper);
+    }
+
+    /// <summary>السالِبُ الجامِع: صَفقَةُ نَقدٍ مُؤَكَّدَةٌ مَربوطٌ بائِعُها، بِعُنوانٍ وهاتِفٍ ورَمزِ ناقِل —
+    /// تَمُرُّ لِمالِكِ إعلانِها، ومَدينَةٌ مَكتوبَةٌ تَمُرّ.</summary>
+    [Fact]
+    public void A_confirmed_cash_deal_passes_the_gate_for_its_listing_owner_with_a_city()
+    {
+        Assert.Null(Code(Ready()));
+        Assert.True(DealShipAuthorization.IsAllowed(Ready(), Vendor, carrierReady: true));
+        Assert.Null(DealShipAuthorization.ValidateCity("Riyadh"));
+    }
+
+    [Fact]
+    public void Deal_not_found_positive_and_negative()
+    {
+        Assert.Equal(DealShipAuthorization.DealNotFound, Code(null));
+        Assert.NotEqual(DealShipAuthorization.DealNotFound, Code(Ready()));
+    }
+
+    [Fact]
+    public void Listing_owner_missing_positive_and_negative()
+    {
+        Assert.Equal(DealShipAuthorization.ListingOwnerMissing, Code(With(d => d.Refs.Clear())));
+        Assert.Equal(DealShipAuthorization.ListingOwnerMissing,
+            Code(With(d => d.Refs[DealsService.ListingOwnerRef] = "not-a-guid")));
+        // بِالقيمَةِ لا بِالحَرف: صيغَةُ N لِلمُعَرِّفِ نَفسِه مالِكٌ — الدالَّةُ الواحِدَةُ مَعَ `/accept`.
+        Assert.Null(Code(With(d => d.Refs[DealsService.ListingOwnerRef] = Seller.ToString("N"))));
+    }
+
+    [Fact]
+    public void Actor_not_shipper_positive_and_negative()
+    {
+        Assert.Equal(DealShipAuthorization.ActorNotShipper, Code(Ready(), new DealShipper(Stranger, "غَريب")));
+        Assert.Equal(DealShipAuthorization.ActorNotShipper, Code(Ready(), new DealShipper(Buyer, "مُشتَرٍ")));
+        Assert.Null(Code(Ready(), new DealShipper(Seller, "")));
+    }
+
+    [Fact]
+    public void Deal_not_active_positive_and_negative()
+    {
+        Assert.Equal(DealShipAuthorization.DealNotActive, Code(With(d => d.Status = DealStatus.Cancelled)));
+        Assert.Equal(DealShipAuthorization.DealNotActive, Code(With(d => d.Status = DealStatus.Disputed)));
+        Assert.Null(Code(With(d => d.Status = DealStatus.Active)));
+    }
+
+    [Fact]
+    public void Deal_not_cash_positive_and_negative()
+    {
+        Assert.Equal(DealShipAuthorization.DealNotCash,
+            Code(With(d => d.Attributes[CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.Card)));
+        Assert.Equal(DealShipAuthorization.DealNotCash,
+            Code(With(d => d.Attributes.Remove(CheckoutPayMethods.AttributeKey))));
+        Assert.Null(Code(With(d => d.Attributes[CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.CashOnDelivery)));
+    }
+
+    [Fact]
+    public void Deal_not_ready_to_ship_positive_and_negative()
+    {
+        Assert.Equal(DealShipAuthorization.DealNotReadyToShip, Code(With(d => d.Stage = DealStage.Booked)));
+        Assert.Equal(DealShipAuthorization.DealNotReadyToShip, Code(With(d => d.Stage = DealStage.Shipping)));
+        Assert.Equal(DealShipAuthorization.DealNotReadyToShip, Code(With(d => d.Stage = DealStage.Delivered)));
+        Assert.Null(Code(With(d => d.Stage = DealStage.Confirmed)));
+        // صَفقَةُ نَقدٍ قَديمَةٌ بَلَغَت `Paid` قَبلَ الإسقاطِ تاليها `Shipping` — تُشحَن.
+        Assert.Null(Code(With(d => d.Stage = DealStage.Paid)));
+    }
+
+    /// <summary>المُحَرِّكُ يَحكُم: طَرَفٌ مُقابِلٌ غَيرُ مالِكِ الإعلانِ (عَيَّنَ المَسارُ الإداريُّ مالِكَ
+    /// التَطبيق) ⇒ لا بوليصَةَ لِانتِقالٍ سَيُرَدّ.</summary>
+    [Fact]
+    public void Actor_cannot_ship_positive_and_negative()
+    {
+        Assert.Equal(DealShipAuthorization.ActorCannotShip, Code(With(d => d.CounterpartyId = AppOwner)));
+        Assert.Equal(DealShipAuthorization.ActorCannotShip, Code(With(d => d.CounterpartyId = null)));
+        Assert.Null(Code(With(d => d.CounterpartyId = Seller)));
+    }
+
+    /// <summary><b>طَلَبٌ مِن مُحاوَلَةٍ سابِقَةٍ لا يَسُدُّ الطَريق</b>: صَفقَةٌ عِندَ خُطوَةِ الشَحنِ ولَها
+    /// <c>oto_order_id</c> تَمُرُّ — فَتُستَأنَفُ ولا يُنشَأُ ثانٍ — وبَعدَ الشَحنِ تُرَدُّ بِرَمزِ الخُطوَة.</summary>
+    [Fact]
+    public void An_order_from_an_earlier_attempt_passes_the_gate_and_marks_a_resume()
+    {
+        var placed = With(d => d.Refs[DealShipping.OrderRef] = "0f8fad5bd9cb469fa165705ed7eb6e2a");
+        Assert.Null(Code(placed));
+        Assert.True(DealShipping.IsPlaced(placed));
+
+        Assert.False(DealShipping.IsPlaced(Ready()));
+        Assert.False(DealShipping.IsPlaced(With(d => d.Refs[DealShipping.OrderRef] = " ")));
+        // المِفتاحُ بِعَينِه لا أَيُّ مَرجِعٍ لِـOTO.
+        Assert.False(DealShipping.IsPlaced(With(d => d.Refs[DealShipping.LabelRef] = "https://app.tryoto.com/print/awb?enc=y")));
+
+        Assert.Equal(DealShipAuthorization.DealNotReadyToShip, Code(With(d =>
+        {
+            d.Refs[DealShipping.OrderRef] = "0f8fad5bd9cb469fa165705ed7eb6e2a";
+            d.Stage = DealStage.Shipping;
+        })));
+    }
+
+    [Fact]
+    public void Carrier_unavailable_positive_and_negative()
+    {
+        Assert.Equal(DealShipAuthorization.CarrierUnavailable, Code(Ready(), carrierReady: false));
+        Assert.Null(Code(Ready(), carrierReady: true));
+    }
+
+    [Fact]
+    public void Delivery_data_missing_positive_and_negative()
+    {
+        Assert.Equal(DealShipAuthorization.DeliveryDataMissing,
+            Code(With(d => d.Attributes.Remove(Deal.DeliveryAddressAttribute))));
+        Assert.Equal(DealShipAuthorization.DeliveryDataMissing,
+            Code(With(d => d.Attributes[Deal.DeliveryPhoneAttribute] = "   ")));
+        Assert.Null(Code(Ready()));
+    }
+
+    [Fact]
+    public void Delivery_city_missing_positive_and_negative()
+    {
+        Assert.Equal(DealShipAuthorization.DeliveryCityMissing, DealShipAuthorization.ValidateCity(null)!.Code);
+        Assert.Equal(DealShipAuthorization.DeliveryCityMissing, DealShipAuthorization.ValidateCity("  ")!.Code);
+        Assert.Null(DealShipAuthorization.ValidateCity("الرياض"));
+    }
+
+    /// <summary>التَرتيب (القاعِدَة ٦): غَريبٌ عَلى صَفقَةِ بِطاقَةٍ غَيرِ جاهِزَةٍ بِلا ناقِلٍ يُجابُ
+    /// «لَستَ المالِك» — لا يَعرِفُ حالَ صَفقَةٍ لَيسَت لَه.</summary>
+    [Fact]
+    public void Identity_is_answered_before_any_state_of_the_deal()
+    {
+        var mixed = With(d =>
+        {
+            d.Attributes[CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.Card;
+            d.Stage = DealStage.Booked;
+            d.Attributes.Remove(Deal.DeliveryAddressAttribute);
+        });
+        Assert.Equal(DealShipAuthorization.ActorNotShipper,
+            Code(mixed, new DealShipper(Stranger, "غَريب"), carrierReady: false));
+        Assert.Equal(DealShipAuthorization.DealNotCash, Code(mixed, carrierReady: false));
+    }
+
+    // ═══ ٢. الرَمزُ لِلمَتجَرِ الواحِدِ عَلى الاختِبارِ وَحدَه ═════════════════════════
+
+    [Theory]
+    [InlineData("staging", "RT-1", "theme-demo", "RT-1")]
+    [InlineData(" Staging ", " RT-1 ", "theme-demo", "RT-1")]
+    [InlineData("production", "RT-1", "theme-demo", null)]
+    [InlineData("", "RT-1", "theme-demo", null)]
+    [InlineData("staging", "", "theme-demo", null)]
+    [InlineData("staging", "RT-1", "ashare", null)]
+    [InlineData("staging", "RT-1", "Theme-Demo", null)]
+    public void The_vendor_token_resolves_for_theme_demo_on_staging_only(
+        string environment, string token, string slug, string? expected)
+        => Assert.Equal(expected, DealShipping.VendorTokenFor(
+            new OtoOptions { Environment = environment, RefreshToken = token }, slug));
+
+    // ═══ ٣. المُسَوَّدَةُ والرَوابِط — دَوالُّ نَقِيَّة ═══════════════════════════════
+
+    [Fact]
+    public void The_draft_is_cash_on_delivery_for_the_deal_amount_to_the_buyer_at_the_vendor_city()
+    {
+        var deal = Ready();
+        var draft = DealShipping.DraftFor(deal, "  Riyadh ");
+
+        Assert.Equal(deal.Id.ToString("N"), draft.OrderId);
+        Assert.Equal(OtoClient.CashOnDelivery, draft.PaymentMethod);
+        Assert.Equal(150m, draft.Amount);
+        Assert.Equal(150m, draft.AmountDue);
+        Assert.Equal("SAR", draft.Currency);
+        Assert.Equal("سِلعَة", draft.ItemDescription);
+        Assert.Equal(new OtoCustomer("مُشتَرٍ", "0500000000", "حَيُّ المِثال، شارِعُ الاختِبار", "Riyadh", "SA"), draft.Customer);
+    }
+
+    [Theory]
+    [InlineData("https://app.tryoto.com/print/awb?enc=y", true)]
+    [InlineData("http://app.tryoto.com/print/awb?enc=y", false)]
+    [InlineData("javascript:alert(1)", false)]
+    [InlineData("www.example.com", false)]
+    [InlineData("", false)]
+    public void Only_absolute_https_links_are_kept_or_shown(string url, bool kept)
+    {
+        Assert.Equal(kept, DealShipping.IsHttps(url));
+        var deal = With(d => { d.Refs[DealShipping.LabelRef] = url; d.Refs[DealShipping.TrackingRef] = url; });
+        var (label, tracking) = DealShipping.LinksOf(deal);
+        Assert.Equal(kept ? url : null, label);
+        Assert.Equal(kept ? url : null, tracking);
+    }
+
+    // ═══ ٤. المَسارُ كامِلاً — عالَمُ الوَثائِقِ ووَثيقَةُ OTO ════════════════════════════
+
+    private sealed record World(DocWorld Docs, DealsService Deals, DealShipping Shipping, OtoRouteHandler Oto, Guid Id);
+
+    private static async Task<World> ConfirmedCashDeal(string? environment = OtoEnvironment.Staging)
+    {
+        var docs = new DocWorld();
+        var deals = new DealsService(docs.Store, new ForbiddenPaymentProvider());
+        var deal = await deals.StartAsync(Slug, "marketplace", Buyer, "مُشتَرٍ", null, "سِلعَة", 150m, new()
+        {
+            [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.CashOnDelivery,
+            [Deal.DeliveryAddressAttribute] = "حَيُّ المِثال، شارِعُ الاختِبار",
+            [Deal.DeliveryPhoneAttribute] = "0500000000",
+        });
+        await deals.AttachRefAsync(Slug, deal.Id, DealsService.ListingOwnerRef, Seller.ToString());
+        await deals.BindListingOwnerAsync(Slug, deal.Id, Seller.ToString());
+        Assert.True((await deals.AcceptAsync(Slug, deal.Id, new DealAcceptor(Seller, "بائِع"))).Ok);
+        Assert.True((await deals.AdvanceAsync(Slug, deal.Id, Seller, "بائِع")).Ok);
+        Assert.Equal(DealStage.Confirmed, (await deals.LoadAsync(Slug, deal.Id))!.Stage);
+
+        var oto = new OtoRouteHandler();
+        var options = Options.Create(new OtoOptions { Environment = environment ?? "", RefreshToken = "RT-theme-demo" });
+        var client = new OtoClient(new HttpClient(oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance);
+        return new World(docs, deals, new DealShipping(deals, client, options), oto, deal.Id);
+    }
+
+    [Fact]
+    public async Task Shipping_creates_the_order_writes_both_ids_and_moves_the_cash_deal_to_Shipping_as_the_vendor()
+    {
+        var w = await ConfirmedCashDeal();
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+
+        Assert.True(res.Ok, res.Code);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.Equal(DealStage.Shipping, deal.Stage);
+        Assert.Equal(w.Id.ToString("N"), deal.Refs[DealShipping.OrderRef]);
+        Assert.Equal("540789", deal.Refs[DealShipping.OtoIdRef]);
+        Assert.Equal("https://app.tryoto.com/print/awb?enc=y", deal.Refs[DealShipping.LabelRef]);
+        Assert.Equal("https://app.tryoto.com/otoflex-tracking?enc=x", deal.Refs[DealShipping.TrackingRef]);
+
+        // الانتِقالُ بِالبائِعِ مِن المُحَرِّكِ نَفسِه — سَطرُ `advanced` واحِدٌ إلى الشَحن، فاعِلُه البائِع.
+        var shipped = Assert.Single(deal.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Shipping);
+        Assert.Equal(Seller, shipped.ActorId);
+        Assert.Equal(DealStage.Confirmed, shipped.StageBefore);
+
+        // وما أُرسِلَ إلى OTO: طَلَبٌ واحِدٌ بِشُحنَتِه ومَبلَغِ التَحصيل، ثُمَّ حالُه بِمُعَرِّفِنا.
+        Assert.Equal(1, w.Oto.CallsTo(OtoClient.CreateOrderPath));
+        Assert.Equal(w.Id.ToString("N"), OtoRouteHandler.OrderIdIn(
+            Assert.Single(w.Oto.Calls, c => c.Path == OtoClient.OrderStatusPath).Body));
+        var body = JsonDocument.Parse(w.Oto.Calls.Single(c => c.Path == OtoClient.CreateOrderPath).Body!).RootElement;
+        Assert.True(body.GetProperty("createShipment").GetBoolean());
+        Assert.Equal("cod", body.GetProperty("payment_method").GetString());
+        Assert.Equal(150m, body.GetProperty("amount_due").GetDecimal());
+        Assert.Equal("Riyadh", body.GetProperty("customer").GetProperty("city").GetString());
+    }
+
+    [Fact]
+    public async Task A_refusal_at_the_gate_sends_nothing_to_OTO_and_writes_nothing()
+    {
+        var w = await ConfirmedCashDeal();
+        var stored = w.Docs.Stored.Count;
+        var saves = w.Docs.SaveCalls;
+
+        var stranger = await w.Shipping.ShipAsync(Slug, w.Id, new DealShipper(Stranger, "غَريب"), "Riyadh");
+        var noCity   = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, " ");
+
+        Assert.Equal(DealShipAuthorization.ActorNotShipper, stranger.Code);
+        Assert.Equal(DealShipAuthorization.DeliveryCityMissing, noCity.Code);
+        Assert.Empty(w.Oto.Calls);
+        Assert.Equal(stored, w.Docs.Stored.Count);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+    }
+
+    /// <summary>بِلا بيئَةٍ مَفتوحَةٍ لا رَمزَ يُحَلّ — فَلا نِداءَ ولا كِتابَة (والاستِمارَةُ لا تُرسَمُ أَصلاً).</summary>
+    [Fact]
+    public async Task Without_an_open_environment_the_carrier_is_unavailable_and_nothing_leaves()
+    {
+        var w = await ConfirmedCashDeal(environment: OtoEnvironment.Production);
+        Assert.False(w.Shipping.CarrierReady(Slug));
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+
+        Assert.Equal(DealShipAuthorization.CarrierUnavailable, res.Code);
+        Assert.Empty(w.Oto.Calls);
+    }
+
+    [Fact]
+    public async Task An_OTO_refusal_returns_its_code_and_writes_nothing_on_the_deal()
+    {
+        var w = await ConfirmedCashDeal();
+        w.Oto.Routes[OtoClient.CreateOrderPath] = _ => OtoRouteHandler.Json(HttpStatusCode.BadRequest,
+            "{\"success\":false,\"otoErrorCode\":\"OTO1006\",\"otoErrorMessage\":\"Credit is not enough\"}");
+        // ولا طَلَبَ بِمُعَرِّفِنا عِندَها — «‏OTO1002 — The order ID does not exist».
+        w.Oto.Routes[OtoClient.OrderStatusPath] = _ => OtoRouteHandler.Json(HttpStatusCode.BadRequest,
+            "{\"success\":false,\"otoErrorCode\":\"OTO1002\",\"otoErrorMessage\":\"The order ID does not exist\"}");
+        var saves = w.Docs.SaveCalls;
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+
+        Assert.Equal(OtoFailures.Refused, res.Code);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.Equal(DealStage.Confirmed, deal.Stage);
+        Assert.False(deal.Refs.ContainsKey(DealShipping.OrderRef));
+        Assert.Equal(saves, w.Docs.SaveCalls);
+        Assert.Equal(1, w.Oto.CallsTo(OtoClient.OrderStatusPath));
+    }
+
+    /// <summary><b>رَدٌّ ضاعَ بَعدَ أَن أُنشِئَ الطَلَب</b> (‏500 أَو مُهلَة)، <b>وإعادَةٌ لَقِيَت «‏OTO1063 — Order Id is
+    /// already exist»</b>: الطَلَبُ هُناكَ بِمُعَرِّفِنا، فَيُتَبَنّى مِن «Order Tracking» — يُكتَبُ مَرجِعاه وتَخرُجُ
+    /// الصَفقَةُ إلى الشَحن — ولا يُنشَأُ ثانٍ. وبِلا تَبَنٍّ لا تُكتَبُ مَراجِعُ أَبَداً.</summary>
+    [Theory]
+    [InlineData(500, "{}")]
+    [InlineData(400, "{\"success\":false,\"otoErrorCode\":\"OTO1063\",\"otoErrorMessage\":\"Order Id is already exist\"}")]
+    public async Task An_order_OTO_already_holds_under_our_id_is_adopted_not_recreated(int status, string body)
+    {
+        var w = await ConfirmedCashDeal();
+        w.Oto.Routes[OtoClient.CreateOrderPath] = _ => OtoRouteHandler.Json((HttpStatusCode)status, body);
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+
+        Assert.True(res.Ok, res.Code);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.Equal(DealStage.Shipping, deal.Stage);
+        Assert.Equal(w.Id.ToString("N"), deal.Refs[DealShipping.OrderRef]);
+        Assert.Equal("540789", deal.Refs[DealShipping.OtoIdRef]);
+        Assert.Equal(1, w.Oto.CallsTo(OtoClient.CreateOrderPath));
+        Assert.All(w.Oto.Calls.Where(c => c.Path == OtoClient.OrderStatusPath),
+            c => Assert.Equal(w.Id.ToString("N"), OtoRouteHandler.OrderIdIn(c.Body)));
+    }
+
+    /// <summary>ولا يُتَبَنّى إلّا مُعَرِّفُنا: جَوابُ «Order Tracking» لِطَلَبٍ آخَرَ لا يُكتَبُ — يَبقى فَشَلُ
+    /// الإنشاءِ بِرَمزِه.</summary>
+    [Fact]
+    public async Task An_order_tracking_answer_for_another_order_id_is_not_adopted()
+    {
+        var w = await ConfirmedCashDeal();
+        w.Oto.Routes[OtoClient.CreateOrderPath] = _ => OtoRouteHandler.Json(HttpStatusCode.InternalServerError, "{}");
+        w.Oto.Routes[OtoClient.OrderStatusPath] = _ => OtoRouteHandler.Tracking("OID-23331-9749", "30514281");
+        var saves = w.Docs.SaveCalls;
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+
+        Assert.Equal(OtoFailures.Unreachable, res.Code);
+        Assert.Equal(DealStage.Confirmed, (await w.Deals.LoadAsync(Slug, w.Id))!.Stage);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+    }
+
+    /// <summary>ولا سُؤالَ حَيثُ لَم يَبلُغ الطَلَبُ OTO: رَمزٌ مَرفوضٌ يُرَدُّ بِرَمزِه ولا يُسأَلُ عَن طَلَب.</summary>
+    [Fact]
+    public async Task A_refused_token_neither_creates_nor_asks_order_tracking()
+    {
+        var w = await ConfirmedCashDeal();
+        w.Oto.Routes[OtoClient.RefreshTokenPath] = _ => OtoRouteHandler.Json(HttpStatusCode.BadRequest,
+            "{\"success\":false}");
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+
+        Assert.Equal(OtoFailures.TokenRefused, res.Code);
+        Assert.Equal(0, w.Oto.CallsTo(OtoClient.CreateOrderPath));
+        Assert.Equal(0, w.Oto.CallsTo(OtoClient.OrderStatusPath));
+    }
+
+    /// <summary><b>الإعادَةُ تَستَأنِف</b>: مُحاوَلَةٌ سابِقَةٌ كَتَبَت مَرجِعَي الطَلَبِ ولَم يَقَع انتِقالُها (رُدَّ
+    /// بِـ<c>deal_changed_meanwhile</c> ونَصُّه «أَعِد المُحاوَلَة») — فَالإعادَةُ تُخرِجُها إلى الشَحنِ بِلا «Create
+    /// Order» ثانٍ ولا مَدينَة، وتَجلِبُ رابِطَيه بِالمُعَرِّفِ المَكتوب.</summary>
+    [Fact]
+    public async Task A_retry_after_a_refused_advance_resumes_without_a_second_order()
+    {
+        var w = await ConfirmedCashDeal();
+        await w.Deals.AttachRefAsync(Slug, w.Id, DealShipping.OrderRef, w.Id.ToString("N"));
+        await w.Deals.AttachRefAsync(Slug, w.Id, DealShipping.OtoIdRef, "540789");
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, city: null);
+
+        Assert.True(res.Ok, res.Code);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.Equal(DealStage.Shipping, deal.Stage);
+        Assert.Equal(0, w.Oto.CallsTo(OtoClient.CreateOrderPath));
+        Assert.Equal("https://app.tryoto.com/print/awb?enc=y", deal.Refs[DealShipping.LabelRef]);
+        Assert.Equal(w.Id.ToString("N"), OtoRouteHandler.OrderIdIn(
+            Assert.Single(w.Oto.Calls, c => c.Path == OtoClient.OrderStatusPath).Body));
+    }
+
+    /// <summary><b>إلغاءُ المُشتَري أَثناءَ نِداءِ OTO</b>: الطَلَبُ أُنشِئَ هُناكَ فَيُكتَبُ مَرجِعُه (لا بوليصَةَ
+    /// ثانِيَة)، والانتِقالُ يُرَدُّ بِـ<c>deal_changed_meanwhile</c> — الصَفقَةُ مُلغاةٌ عِندَ <c>Confirmed</c>.</summary>
+    [Fact]
+    public async Task A_cancel_during_the_OTO_call_keeps_the_order_refs_and_does_not_move_the_deal()
+    {
+        var w = await ConfirmedCashDeal();
+        w.Oto.Before = path =>
+        {
+            if (path != OtoClient.CreateOrderPath) return;
+            var d = w.Docs.Read<Deal>(w.Id.ToString())!;
+            d.Status = DealStatus.Cancelled;
+        };
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+
+        Assert.False(res.Ok);
+        Assert.Equal(DealsService.ChangedMeanwhile, res.Code);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.Equal(DealStatus.Cancelled, deal.Status);
+        Assert.Equal(DealStage.Confirmed, deal.Stage);
+        Assert.Equal(w.Id.ToString("N"), deal.Refs[DealShipping.OrderRef]);
+        Assert.Equal(0, w.Oto.CallsTo(OtoClient.OrderStatusPath));
+    }
+
+    /// <summary><b>شَحنٌ يَدَوِيٌّ أَثناءَ نِداءِ OTO لا يُحَرِّكُها مَرَّتَين</b>: أَعلَنَ البائِعُ «شَحن» بِزِرِّ
+    /// <c>/advance</c> بَينَ القِراءَةِ والانتِقال — فَالانتِقالُ مِن <c>Confirmed</c> يُرَدُّ ولا تَمضي إلى «تَسليم».</summary>
+    [Fact]
+    public async Task A_manual_ship_during_the_OTO_call_is_not_advanced_a_second_time()
+    {
+        var w = await ConfirmedCashDeal();
+        w.Oto.Before = path =>
+        {
+            if (path == OtoClient.CreateOrderPath)
+                Assert.True(w.Deals.AdvanceAsync(Slug, w.Id, Seller, "بائِع").GetAwaiter().GetResult().Ok);
+        };
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+
+        Assert.Equal(DealsService.ChangedMeanwhile, res.Code);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.Equal(DealStage.Shipping, deal.Stage);
+        Assert.Single(deal.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Shipping);
+        Assert.DoesNotContain(deal.Timeline, e => e.StageAfter == DealStage.Delivered);
+    }
+
+    // ═══ ٥. المُحَرِّك — «مِن» المَقروءَةِ، و`CanMove` ═════════════════════════════
+
+    [Fact]
+    public async Task AdvanceAsync_from_refuses_a_stage_other_than_the_one_read_without_writing()
+    {
+        var w = await ConfirmedCashDeal();
+        var saves = w.Docs.SaveCalls;
+
+        var wrong = await w.Deals.AdvanceAsync(Slug, w.Id, Seller, "بائِع", null, default, DealStage.Booked);
+        Assert.False(wrong.Ok);
+        Assert.Equal(DealsService.ChangedMeanwhile, wrong.Code);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+
+        var right = await w.Deals.AdvanceAsync(Slug, w.Id, Seller, "بائِع", null, default, DealStage.Confirmed);
+        Assert.True(right.Ok);
+        Assert.Equal(DealStage.Shipping, right.Deal!.Stage);
+    }
+
+    [Fact]
+    public void CanMove_is_the_advance_gate_without_writing()
+    {
+        Assert.True(DealsService.CanMove(Ready(), Seller));
+        Assert.False(DealsService.CanMove(Ready(), Buyer));            // `Shipping` = الطَرَفُ المُقابِل
+        Assert.False(DealsService.CanMove(Ready(), Stranger));
+        Assert.False(DealsService.CanMove(With(d => d.Status = DealStatus.Cancelled), Seller));
+        Assert.False(DealsService.CanMove(With(d => { d.Pattern = "classifieds"; }), Seller));   // آخِرُ مَرحَلَة
+        Assert.True(DealsService.CanMove(With(d => d.Stage = DealStage.Booked), Buyer));          // `Confirmed` = أَيُّهُما
+    }
+
+    // ═══ ٦. النُقطَة — مَسارٌ حَرفِيّ، والحارِسُ في التَوقيع ═══════════════════════════
+
+    [Fact]
+    public void The_ship_endpoint_is_a_literal_route_whose_guard_is_in_the_signature()
+    {
+        var path = Path.Combine(RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace",
+            "Shipping", "OtoShippingEndpoints.cs");
+        var code = WriteEndpointGuardTests.StripComments(File.ReadAllText(path));
+        var start = code.IndexOf("app.MapPost(\"/{slug}/deals/{id:guid}/ship\"", StringComparison.Ordinal);
+        Assert.True(start > 0, "نُقطَةُ الشَحنِ غَيرُ مَوجودَةٍ بِمَسارٍ حَرفِيّ — الأَداةُ عَمياء.");
+        var body = code[start..code.IndexOf(".RequireStoreWritable();", start, StringComparison.Ordinal)];
+
+        var shipper = body.IndexOf("new Services.Deals.DealShipper(", StringComparison.Ordinal);
+        var ship = body.IndexOf("shipping.ShipAsync(", StringComparison.Ordinal);
+        Assert.True(shipper > 0 && ship > shipper, $"سِجِلُّ السُلطَةِ لا يَسبِقُ النِداء: {shipper}/{ship}");
+        Assert.Contains("?err={res.Code}", body, StringComparison.Ordinal);
+        // ولا قَرارَ في الجِسم: لا مَرحَلَةٌ ولا طَريقَةُ دَفعٍ ولا مَرجِعُ مالِكٍ يُقرَأ هُنا.
+        foreach (var decision in new[] { "DealStage.", "pay_method", "listing_owner", "Refs[" })
+            Assert.DoesNotContain(decision, body, StringComparison.Ordinal);
+    }
+}

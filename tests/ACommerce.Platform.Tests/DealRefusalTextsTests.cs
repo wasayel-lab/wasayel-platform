@@ -23,15 +23,21 @@ public class DealRefusalTextsTests
     public void The_lexicon_is_the_union_of_both_authorizations_and_the_chat_pipe_code_with_shared_codes_once()
     {
         // ورَمزُ تَعارُضِ النُسخَةِ عُضوٌ تاسِع (‏ADR-036، ‏2026-10-12) — يُضافُ هُنا بِاسمِه، والعَدُّ 8 ← 9.
+        // ورُموزُ نُقطَةِ الشَحنِ ومَعجَمُ عَميلِ OTO (‏ADR-033 الخُطوَة 3، ‏2026-10-12) — يُضافانِ هُنا بِاسمَيهِما،
+        // والعَدُّ 9 ← 21.
         var expected = DealAcceptAuthorization.All
             .Concat(DealCancelAuthorization.All)
             .Append(ChatStartReturn.PartnerMissing)
             .Append(DealsService.ChangedMeanwhile)
+            .Concat(DealShipAuthorization.All)
+            .Concat(ACommerce.Kit.Delivery.OtoFailures.All)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(c => c, StringComparer.Ordinal);
         Assert.Equal(expected, DealRefusalTexts.Codes.OrderBy(c => c, StringComparer.Ordinal));
-        // 6 + 3 − 2 مُشتَرَكَين (deal_not_found، deal_not_active) + 1 + 1 = 9
-        Assert.Equal(9, DealRefusalTexts.Codes.Count);
+        // 6 + 3 − 2 مُشتَرَكَين (deal_not_found، deal_not_active) + 1 + 1 = 9؛
+        // ثُمَّ الشَحن: 10 − 3 مُشتَرَكَةٍ مَعَ القَبول (deal_not_found، listing_owner_missing، deal_not_active) = 7،
+        // وعَميلُ OTO 5 — فَـ9 + 7 + 5 = 21.
+        Assert.Equal(21, DealRefusalTexts.Codes.Count);
         Assert.Equal(DealRefusalTexts.Codes.Count, DealRefusalTexts.Codes.Distinct(StringComparer.Ordinal).Count());
     }
 
@@ -42,7 +48,8 @@ public class DealRefusalTextsTests
     {
         var checked_ = 0;
         foreach (var code in DealAcceptAuthorization.All.Concat(DealCancelAuthorization.All).Append(ChatStartReturn.PartnerMissing)
-                     .Append(DealsService.ChangedMeanwhile))
+                     .Append(DealsService.ChangedMeanwhile)
+                     .Concat(DealShipAuthorization.All).Concat(ACommerce.Kit.Delivery.OtoFailures.All))
         {
             var key = DealRefusalTexts.KeyFor(code);
             Assert.Equal(DealRefusalTexts.Prefix + code, key);
@@ -52,7 +59,8 @@ public class DealRefusalTextsTests
             Assert.True(text.Length > 10, $"‏{key} بِنَصٍّ أَقصَرَ مِن أَن يُفَسِّر.");
             checked_++;
         }
-        Assert.Equal(11, checked_);   // 6 + 3 + 1 + 1 (‏ADR-036) — المُشتَرَكُ يُفحَصُ مَرَّتَين ويَصِلُ مِفتاحاً واحِداً
+        // 6 + 3 + 1 + 1 (‏ADR-036) + 10 + 5 (‏ADR-033 الخُطوَة 3) — المُشتَرَكُ يُفحَصُ مَرَّتَين ويَصِلُ مِفتاحاً واحِداً
+        Assert.Equal(26, checked_);
     }
 
     /// <summary><b>نَصُّ «بِلا مالِكِ إعلان» يُسَمّي مَن يُحَرِّكُها حَقّاً</b> (‏2026-10-11، مُراجَعَةُ الموجَةِ الثانِيَةِ

@@ -9,6 +9,7 @@ using ACommerce.Templates.Customer.Marketplace.Api;
 using ACommerce.Templates.Customer.Marketplace.Billing;
 using ACommerce.Templates.Customer.Marketplace.Gates;
 using ACommerce.Templates.Customer.Marketplace.Services.TenantConfig;
+using ACommerce.Templates.Customer.Marketplace.Shipping;
 using Marten;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -141,6 +142,9 @@ public static class MarketplaceTemplateExtensions
         services.AddScoped<Services.Deals.DealNotices>();
         // تَقييمُ الطَرَفِ الآخَرِ خَلفَ بَوّابَتِه (‏ADR-033 §٦‑ح) — عَلى خِدمَتَي الصَفَقاتِ والتَقييماتِ القائِمَتَين.
         services.AddScoped<Services.Deals.DealReviews>();
+        // شَحنُ الصَفَقاتِ عَبرَ OTO (‏ADR-033 الخُطوَة 3) — عَلى خِدمَةِ الصَفَقاتِ القائِمَةِ وعَميلِ OTO
+        // الَّذي يُسَجِّلُه المُضيف (`AddOtoShipping`)، فَلا أُنبوبَ ثانِيَ لِلانتِقال.
+        services.AddScoped<Services.Deals.DealShipping>();
 
         // التَّقييمات (تَقييم مُتَبادَل بَعد اكتِمال صَفقَة).
         services.AddScoped<ACommerce.Kit.Reviews.ReviewsService>();
@@ -4059,6 +4063,10 @@ public static class MarketplaceTemplateExtensions
         // السَبَبِ حَرفاً، ونُقطَةُ الرِسالَةِ **بِلا مُستَأجِر**.
         app.MapPaddleBilling();
 
+        // ─── الشَحنُ عَبرَ OTO (‏ADR-033 الخُطوَة 3) ─────────────────────────
+        // مِلَفٌّ مُنفَصِلٌ لِلسَبَبِ نَفسِه: نِطاقُ المُراجَعَةِ وسَقفُ النَزيفِ لَه وَحدَه.
+        app.MapOtoShipping();
+
         return app;
     }
 
@@ -4076,7 +4084,10 @@ public static class MarketplaceTemplateExtensions
         catch { return null; }
     }
 
-    private static string Link(HttpRequest req, string slug, string path)
+    // ‏`internal` لا `private` (‏2026-10-12، ‏ADR-033 الخُطوَة 3): نُقطَتا الشَحنِ في مِلَفِّهِما
+    // (`Shipping/OtoShippingEndpoints.cs`) تَرتَدّانِ إلى صَفحَةِ الصَفقَةِ بِالدَورِ نَفسِه — نُسخَةٌ ثانِيَةٌ
+    // مِن قِراءَةِ الدَورِ تَنجَرِف.
+    internal static string Link(HttpRequest req, string slug, string path)
         => AuthSession.LinkFor(slug, RoleFromReferer(req), path);
 
     /// <summary>رابِطُ الرَفض حينَ لا قَناةَ مُسَجَّلَةٌ لِطَريقَةِ دُخولِ

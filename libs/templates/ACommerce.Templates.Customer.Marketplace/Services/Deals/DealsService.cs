@@ -322,15 +322,25 @@ public sealed class DealsService
     /// (‏ADR-033 §٦‑ط، ‏2026-10-11؛ كانَ يَسأَلُ فاعِلَ الحالِيَّة فَيُحَرِّكُ المُشتَري طَلَبَه إلى
     /// «حَجز» ويُعلِنُ «شَحن»). والتالي بِوَعيِ طَريقَةِ الدَفع (<see cref="DealsPolicy.Next(Deal)"/>):
     /// صَفقَةُ النَقدِ لا تَزورُ <c>Paid</c> (‏ADR-033 §٦).</summary>
+    /// <param name="from">
+    /// <para><b>المَرحَلَةُ الَّتي قَرَأَها المُنادي فَقَرَّرَ عَلَيها</b> — اختِيارِيٌّ، و<c>null</c> افتِراضاً
+    /// (بَعدَ <paramref name="ct"/> عَمداً: النِداءاتُ القائِمَةُ لا تَتَحَرَّك). مُنادِياهُ نُقطَةُ الشَحنِ والوارِدُ مِن
+    /// OTO (‏ADR-033 الخُطوَة 3): يُنادِيانِ OTO بَينَ قِراءَتِهِما والانتِقال، وهذا التَحميلُ جَديدٌ فَلا تَراه
+    /// النُسخَةُ المُتَفائِلَة — فَلَو أَعلَنَ البائِعُ «تَسليم» بِيَدِه أَثناءَ نِداءِ الوارِد لَمَضى هذا مِن
+    /// <c>Delivered</c> إلى <c>Reviewed</c> بِاسمِه. فَمَرحَلَةٌ غَيرُ المَقروءَةِ تُرَدُّ بِـ<see cref="ChangedMeanwhile"/>
+    /// قَبلَ أَيِّ كِتابَة — الرَمزُ نَفسُه لا رَمزٌ جَديد.</para>
+    /// </param>
     public async Task<DealAdvanceResult> AdvanceAsync(
         string tenantSlug, Guid dealId, Guid actorId, string actorName,
-        string? note = null, CancellationToken ct = default)
+        string? note = null, CancellationToken ct = default, DealStage? from = null)
     {
         await using var s = _store.LightweightSession(tenantSlug);
         var deal = await s.LoadAsync<Deal>(dealId, ct);
         if (deal is null) return new(false, null, "deal not found");
         if (deal.Status != DealStatus.Active)
             return new(false, deal, $"الصَّفقَة في حالَة {deal.Status} — لا يُمكِن المُتابَعَة.");
+        if (from is { } expected && deal.Stage != expected)
+            return new(false, deal, ChangedMeanwhileAr, ChangedMeanwhile);
 
         var next = DealsPolicy.Next(deal);
         if (next is null)
@@ -593,6 +603,17 @@ public sealed class DealsService
         return IsActorAllowed(new Deal { InitiatorId = deal.InitiatorId, CounterpartyId = counterparty },
             deal.CounterpartyId ?? appOwnerId, required);
     }
+
+    /// <summary>
+    /// <para><b>أَيُخرِجُ هذا الفاعِلُ الصَفقَةَ مِن مَرحَلَتِها؟</b> — بَوّابَةُ <see cref="AdvanceAsync"/> نَفسُها بِلا
+    /// كِتابَة: فَعّالَة، لَها تالٍ، و<see cref="IsActorAllowed"/> بِفاعِلِ المَرحَلَةِ المَدخولَة. تَقرَؤُها بَوّابَةُ الشَحنِ
+    /// (‏<c>DealShipAuthorization</c>، ‏ADR-033 الخُطوَة 3) قَبلَ أَن تُنادى OTO — فَلا تُنشَأُ بوليصَةٌ لِصَفقَةٍ
+    /// سَيَرُدُّ المُحَرِّكُ انتِقالَها، ولا يُلتَفُّ عَلى فاحِصِ الفاعِل: السِياسَةُ تُقَرِّر.</para>
+    /// </summary>
+    public static bool CanMove(Deal deal, Guid actorId)
+        => deal.Status == DealStatus.Active
+           && DealsPolicy.RequiredActorToLeave(deal) is { } required
+           && IsActorAllowed(deal, actorId, required);
 
     static bool IsActorAllowed(Deal deal, Guid actorId, string required) => required switch
     {
