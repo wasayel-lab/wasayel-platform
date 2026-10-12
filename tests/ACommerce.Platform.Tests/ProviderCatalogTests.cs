@@ -24,9 +24,15 @@ public class ProviderCatalogTests
         // حَلَّ مَحَلَّ القُرصِ الزائِلِ خارِجَ التَطوير (‏ADR-017).
         // ونَوعُ اعتِمادِه `platform_key` كَجارَيه في الفَوتَرَة، فَلا
         // يُعرَض على مُستَأجِرٍ ولا يَملَأُ لَه حَقلاً.
+        //
+        // **تِسعَةٌ لا ثَمانِيَة مُنذُ ‏2026-10-12 (‏ADR-032 الخُطوَتانِ 5 و6)**:
+        // أُضيفَ `moyasar_api` — مِفتاحُ البَوّابَةِ السِرِّيُّ بِنَوعِ
+        // `secret_key`، في الكوميتِ نَفسِه الَّذي أَدخَلَ النَوعَ المَعجَم،
+        // وبَعدَ أَن بُنِيَت خِزانَتُه (‏`ProviderVault`). والثَمانِيَةُ مَقيسَةٌ
+        // قَبلَه بِهذا الفَحصِ نَفسِه أَخضَرَ عِندَ `b0b4b85`.
         var defs = ProviderCatalog.Definitions;
-        Assert.True(defs.Count == 8,
-            $"أَداة عَمياء: حُمِّلَ {defs.Count} تَعريفاً — والمَقيس ٨.");
+        Assert.True(defs.Count == 9,
+            $"أَداة عَمياء: حُمِّلَ {defs.Count} تَعريفاً — والمَقيس ٩.");
 
         foreach (var d in defs)
             Assert.True(ProviderDefinitionValidator.IsValid(d),
@@ -134,6 +140,19 @@ public class ProviderCatalogTests
             "AddPaddleBilling",
             "مُزَوِّدُ فَوتَرَةٍ ثانٍ بِجِوارِ الأَوَّلِ — قائِمٌ ومَقيس."),
 
+        // ‏2026-10-12 (‏ADR-032 الخُطوَة 6): المِرساةُ سَطرُ الخِزانَةِ الَّذي
+        // يُعلِنُ أَنّها تَختِمُ `secret_key` — هُوَ ما يَجعَلُ حَقلَ هذا
+        // التَعريفِ حَيّاً (يُختَمُ ويُخَزَّنُ ويُعرَضُ ذَيلُه). **والعَميلُ الَّذي
+        // يَطلُبُ بِالمِفتاحِ لَم يُكتَب** (‏ADR-032 الخُطوَة 8) — فَالمِرساةُ
+        // تَقولُ «يُختَم»، لا «يَقبِض».
+        new("moyasar_api",
+            "libs/core/ACommerce.Platform.Providers/ProviderVault.cs",
+            "public static bool Seals(string kind) => kind is CredentialKinds.SecretKey;",
+            "مِفتاحُ البَوّابَةِ السِرِّيّ: حَقلُه الوَحيدُ مِن نَوعٍ تَختِمُه الخِزانَةُ — "
+            + "هذا السَطرُ — فَلا يُخَزَّنُ صَريحاً ولا يُعرَضُ مِنه إلّا ذَيلُه. "
+            + "وعَميلُ البَوّابَةِ الَّذي يَطلُبُ بِه (الخُطوَة 8) لَم يُبنَ بَعد، "
+            + "فَلا قَبضَ بِه حَتّى يُبنى."),
+
         // ← الوَحيدُ بِلا مِرساةِ كود، وذلكَ **هُوَ** الدَعوى.
         new("moyasar_hosted",
             "", "",
@@ -175,8 +194,12 @@ public class ProviderCatalogTests
         // `s3_object_storage` سَطرُ `AddSingleton<IFileStorage, S3FileStorage>`
         // في مَشروعٍ **مُحالٍ إلَيه مِن `V1.App.csproj`** — فَالتَعريفُ
         // يَصِف شَيئاً يَبلُغ الـSpace، لا اسماً في مِلَفّ.
-        Assert.True(checkedAnchors == 7,
-            $"أَداة عَمياء: فُحِصَت {checkedAnchors} مِرساة — والمَقيس ٧.");
+        //
+        // **ثَمانٍ لا سَبع مُنذُ ‏2026-10-12 (‏ADR-032 الخُطوَة 6)**: مِرساةُ
+        // `moyasar_api` سَطرُ `ProviderVault.Seals` في مَشروعٍ يُحيلُه القالِب
+        // — والسَبعُ مَقيسَةٌ قَبلَها بِهذا الفَحصِ نَفسِه أَخضَرَ عِندَ `b0b4b85`.
+        Assert.True(checkedAnchors == 8,
+            $"أَداة عَمياء: فُحِصَت {checkedAnchors} مِرساة — والمَقيس ٨.");
         Assert.True(breaches.Count == 0,
             "تَعريفُ مُزَوِّدٍ بِلا تَنفيذٍ حَيّ — مَقبَرَةٌ في البَيانات:\n  "
             + string.Join("\n  ", breaches));
@@ -199,8 +222,12 @@ public class ProviderCatalogTests
         var bindable = ProviderCatalog.BindableCapabilities;
         Assert.Equal(new[] { ProviderCapabilities.Payments }, bindable);
 
+        // **اثنانِ لا واحِد مُنذُ ‏2026-10-12**: الكاتالوجُ يَقولُ «يَملَؤُه
+        // مُستَأجِر» لِمِفتاحِ البَوّابَةِ أَيضاً. وما تَرسُمُه الشاشَةُ مِنهُما
+        // سُؤالُ السَطحِ لا البَيانات (‏`ProviderBindSurface.Offered`) — مُقاسٌ
+        // في `ProviderBindSurfaceTests`.
         var offered = ProviderCatalog.TenantBindable(ProviderCapabilities.Payments);
-        Assert.Equal(new[] { "moyasar_hosted" }, offered.Select(d => d.Slug).ToArray());
+        Assert.Equal(new[] { "moyasar_hosted", "moyasar_api" }, offered.Select(d => d.Slug).ToArray());
 
         // وقُدرَةٌ بِلا مُزَوِّدٍ مُتاحٍ لا تُرسَم إطلاقاً — ولا «قَريباً».
         foreach (var c in ProviderCapabilities.All.Where(c => c != ProviderCapabilities.Payments))
@@ -227,6 +254,53 @@ public class ProviderCatalogTests
         Assert.True(field.IsRequired);
         Assert.Null(d.Webhook);
         Assert.Equal("مُيَسِّر — رابِط دَفع", ProviderText.Get(d.Label, "ar"));
+    }
+
+    /// <summary><b>مِفتاحُ البَوّابَةِ السِرِّيّ</b> (‏ADR-032 الخُطوَة 6 بِحَرفِها):
+    /// نَوعُ رَبطٍ <c>secret_key</c>، وحَقلٌ واحِدٌ بِنَمَطِ <c>^sk_(live|test)_</c>،
+    /// و<c>hostAllowlist: []</c>، و<c>webhook: null</c>. والسِياجُ الفارِغُ لَيسَ
+    /// سَهواً: المُصادِقُ يَرُدُّ سِرّاً يَحمِلُ مُضيفين.</summary>
+    [Fact]
+    public void The_secret_key_provider_declares_one_sealed_field_no_fence_and_no_webhook()
+    {
+        var d = ProviderCatalog.Find("moyasar_api");
+        Assert.NotNull(d);
+        Assert.Equal(ProviderCapabilities.Payments, d!.Capability);
+        Assert.Equal(CredentialKinds.SecretKey, d.Credential.Kind);
+        Assert.True(d.IsTenantBindable);
+        Assert.Null(d.Webhook);
+
+        var field = Assert.Single(d.Credential.Fields);
+        Assert.Equal("secret_key", field.Code);
+        Assert.Equal(CredentialKinds.SecretKey, field.Kind);
+        Assert.True(field.IsRequired);
+        Assert.Equal("^sk_(live|test)_", field.Pattern);
+        Assert.Empty(field.HostAllowlist);
+        Assert.True(ProviderVault.Seals(field.Kind));
+
+        // النَمَطُ يُفحَصُ عِندَ الكِتابَة بِالدالَّةِ الَّتي تُناديها النُقطَة.
+        Assert.Null(ProviderValueValidator.Refuse(field, "sk_test_abc123"));
+        Assert.Null(ProviderValueValidator.Refuse(field, "sk_live_abc123"));
+        Assert.Equal(ProviderValueValidator.PatternMismatch,
+            ProviderValueValidator.Refuse(field, "pk_live_abc123"));
+        Assert.Equal(ProviderValueValidator.PatternMismatch,
+            ProviderValueValidator.Refuse(field, "sk_prod_abc123"));
+        Assert.Equal(ProviderValueValidator.Required,
+            ProviderValueValidator.Refuse(field, "  "));
+
+        // والسِياجُ الفارِغُ مَفروض: سِرٌّ بِمُضيفٍ يُرَدُّ بِرَمزِه.
+        var fenced = d with
+        {
+            Credential = d.Credential with
+            {
+                Fields = new[] { field with { HostAllowlist = new[] { "moyasar.com" } } },
+            },
+        };
+        Assert.Contains("host_allowlist_forbidden_for_secret",
+            ProviderDefinitionValidator.Validate(fenced).Select(v => v.Code));
+
+        // ونَوعُ الرَبطِ لا يَنزِلُ تَحتَ حَقلِه.
+        Assert.Equal(CredentialKinds.SecretKey, d.HighestFieldKind);
     }
 
     [Fact]

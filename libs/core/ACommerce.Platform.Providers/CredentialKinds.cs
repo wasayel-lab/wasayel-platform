@@ -18,13 +18,18 @@ namespace ACommerce.Platform.Providers;
 /// يَفحَصُها، القاعِدَة ١٢). والانضِباطُ مَنقولٌ حَرفاً عَن
 /// <c>Capability.SourceRef</c> في <c>CapabilityCatalog</c>.</para>
 ///
-/// <para><b>وأَثَرُه فَشَلٌ مُغلَقٌ لا وَعد</b>: لا خِزانَةَ في هذِه
-/// المَوجَة، فَـ<c>secret_key</c> و<c>shared_secret</c>
+/// <para><b>وأَثَرُه فَشَلٌ مُغلَقٌ لا وَعد</b>: <c>shared_secret</c>
 /// و<c>credential_file</c> و<c>issued_secret</c> و<c>published_key</c>
 /// و<c>delegated_grant</c> <b>خارِجَ المَعجَمِ المُلزِم</b> — فَمِلَفُّ
 /// تَعريفٍ يُعلِن أَحَدَها <b>يُفشِل الإقلاع</b> بِرَمزِه. أَي أَنّ
 /// «لا سِرَّ يُخَزَّن قَبلَ أَن تُبنى خِزانَتُه» جُملَةٌ يَفرِضُها
 /// الكود، لا جُملَةٌ في تَقرير.</para>
+///
+/// <para><b>و<c>secret_key</c> دَخَلَ المَعجَمَ ‏2026-10-12</b> (‏ADR-032 §٢‑هـ
+/// الخُطوَة 5) — <b>بَعدَ</b> أَن بُنِيَت خِزانَتُه (<c>ProviderVault</c>،
+/// الخُطوَة 4) و<b>في الكوميتِ نَفسِه</b> مَعَ أَوَّلِ مِلَفٍّ يُعلِنُه
+/// (مِلَفُّ مِفتاحِ بَوّابَةِ الدَفع، الخُطوَة 6) — فَالقائِمَةُ انكَمَشَت
+/// بِقَرارٍ مَرئيّ لا بِمِلَفٍّ تَسَلَّل.</para>
 /// </summary>
 public static class CredentialKinds
 {
@@ -58,7 +63,8 @@ public static class CredentialKinds
     public const string SharedSecret = "shared_secret";
 
     /// <summary>مُشَفَّر، يُعرَض مِنه آخِرُ أَربَعَةِ مَحارِف.
-    /// يَنتَظِر الخِزانَة.</summary>
+    /// تَختِمُه الخِزانَة (<c>ProviderVault</c>) مُنذُ ‏2026-10-12، ومِلَفُّه
+    /// المَقيس: مِفتاحُ بَوّابَةِ الدَفعِ السِرِّيّ.</summary>
     public const string SecretKey = "secret_key";
 
     /// <summary>كُتلَةٌ مُشَفَّرَة، يُعرَض اسمُها وبَصمَتُها.
@@ -75,11 +81,11 @@ public static class CredentialKinds
 
     // ─── المَعجَمُ المُلزِم — ما يُعلِنُه مِلَفٌّ حَيّ اليَوم ─────────
 
-    /// <summary><b>المَعجَمُ الَّذي يُفرَض.</b> ثَلاثَةٌ، ولِكُلٍّ
-    /// مِلَفُّ تَعريفٍ مَشحونٌ يُعلِنُه — وذلكَ مَفحوصٌ آلِيّاً
-    /// (‏<c>ProviderDefinitionCatalogTests</c>).</summary>
+    /// <summary><b>المَعجَمُ الَّذي يُفرَض.</b> أَربَعَةٌ (ثَلاثَةٌ حَتّى
+    /// ‏2026-10-12)، ولِكُلٍّ مِلَفُّ تَعريفٍ مَشحونٌ يُعلِنُه — وذلكَ مَفحوصٌ
+    /// آلِيّاً (‏<c>ProviderCatalogTests</c>). والتَرتيبُ تَرتيبُ السُلَّم.</summary>
     public static readonly IReadOnlyList<string> All =
-        new[] { None, HostedLink, PlatformKey };
+        new[] { None, HostedLink, SecretKey, PlatformKey };
 
     /// <summary><b>ما هُوَ خارِجَ المَعجَمِ عَمداً</b> — ولِكُلٍّ سَبَبٌ
     /// واحِد: خِزانَتُه لَم تُبنَ بَعد (أَو أُنبوبُه قائِمٌ في مَوضِعٍ
@@ -87,7 +93,7 @@ public static class CredentialKinds
     /// مِنها — فَالقائِمَةُ تَنكَمِش بِقَرارٍ مَرئيّ ولا تَتَسَلَّل
     /// بِمِلَفّ.</summary>
     public static readonly IReadOnlyList<string> NotYetInVocabulary =
-        new[] { PublishedKey, DelegatedGrant, IssuedSecret, SharedSecret, SecretKey, CredentialFile };
+        new[] { PublishedKey, DelegatedGrant, IssuedSecret, SharedSecret, CredentialFile };
 
     private static readonly HashSet<string> Set = new(All, StringComparer.Ordinal);
 

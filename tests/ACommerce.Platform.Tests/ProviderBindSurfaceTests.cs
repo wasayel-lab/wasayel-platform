@@ -209,4 +209,71 @@ public class ProviderBindSurfaceTests
 
         Assert.Equal("provider=-; status=-", ProviderBindSurface.AuditLine(null));
     }
+
+    // ─── ٥. ما يَحتاجُ الخِزانَةَ لا يُرسَمُ ولا يُكتَبُ ما دامَت لا تَبلُغُ السَطح ──
+    //
+    // ‏2026-10-12 (‏ADR-032 الخُطوَتانِ 5 و6): دَخَلَ مِفتاحُ البَوّابَةِ السِرِّيُّ
+    // الكاتالوجَ، ولا خِزانَةَ تَبلُغُ هذا السَطحَ في الكوميتِ نَفسِه — فَلَولا هذا
+    // الحَدُّ لَرُسِمَت بِطاقَتُه ولَبَلَغَ السِرُّ `StoredValue.Explicit` فَرَمَت:
+    // ‏500 عِندَ النَقر. البِطاقَةُ لا تُرسَم، والنُقطَةُ تَرُدُّ قَبلَ أَوَّلِ حَقل.
+
+    [Fact]
+    public void A_provider_whose_field_the_vault_seals_is_refused_before_any_field_is_read()
+    {
+        var reads = 0;
+        var read = ProviderBindSurface.FromForm("moyasar_api", _ =>
+        {
+            reads++;
+            return "sk_live_9f3b7c2d41aa58e6";
+        });
+
+        Assert.Equal(ProviderBindSurface.VaultUnavailable, read.RefusalCode);
+        Assert.Equal("vault_unavailable", read.RefusalCode);
+        Assert.Equal(0, reads);
+        Assert.Empty(read.Values);
+        Assert.False(read.NeedsPlatformAdmin);
+        Assert.Equal("moyasar_api", read.ProviderSlug);
+        Assert.True(ProviderBindSurface.NeedsVault(read.Definition!));
+    }
+
+    [Fact]
+    public void The_screen_offers_what_the_surface_can_store_and_the_endpoint_refuses_the_rest()
+    {
+        var catalog = ProviderCatalog.TenantBindable(ProviderCapabilities.Payments)
+            .Select(d => d.Slug).ToArray();
+        var offered = ProviderBindSurface.Offered(ProviderCapabilities.Payments)
+            .Select(d => d.Slug).ToArray();
+
+        Assert.Equal(new[] { "moyasar_hosted", "moyasar_api" }, catalog);
+        Assert.Equal(new[] { "moyasar_hosted" }, offered);
+        Assert.Equal(new[] { ProviderCapabilities.Payments }, ProviderBindSurface.OfferedCapabilities.ToArray());
+
+        // والمُسنَدُ واحِد: ما لا يُرسَمُ هُوَ بِعَينِه ما تَرُدُّه النُقطَةُ بِرَمزِ الخِزانَة.
+        var compared = 0;
+        foreach (var d in ProviderCatalog.TenantBindable(ProviderCapabilities.Payments))
+        {
+            compared++;
+            var refusedForVault = ProviderBindSurface.FromForm(d.Slug, _ => "").RefusalCode
+                                  == ProviderBindSurface.VaultUnavailable;
+            Assert.Equal(!offered.Contains(d.Slug), refusedForVault);
+        }
+        Assert.True(compared == 2, $"أَداةٌ عَمياء: قورِنَ {compared} مُزَوِّداً.");
+    }
+
+    /// <summary>والشاشَةُ تَقرَأُ قائِمَةَ السَطحِ لا قائِمَةَ الكاتالوج — وإلّا رَسَمَت
+    /// بِطاقَةً تَرُدُّها النُقطَة (القاعِدَة ١٢). مَقيسٌ نَصّاً لِأَنّ الصَفحَةَ لا تُصَيَّرُ
+    /// في وَحدَة.</summary>
+    [Fact]
+    public void The_studio_screen_reads_the_surface_list_not_the_catalog_list()
+    {
+        var path = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "StudioProviders.razor");
+        var razor = File.ReadAllText(path);
+        Assert.True(razor.Length > 1000, "أَداةٌ عَمياء: الصَفحَةُ لَم تُقرَأ.");
+
+        Assert.Contains("ProviderBindSurface.Offered(capability)", razor, StringComparison.Ordinal);
+        Assert.Contains("ProviderBindSurface.OfferedCapabilities", razor, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProviderCatalog.TenantBindable(", razor, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProviderCatalog.BindableCapabilities", razor, StringComparison.Ordinal);
+    }
 }

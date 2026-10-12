@@ -37,6 +37,35 @@ public static class ProviderBindSurface
     public const string ProviderUnknown = "provider_unknown";
     public const string ProviderNotBindable = "provider_not_bindable";
 
+    /// <summary>رَمزُ الخِزانَةِ نَفسُه (<c>ProviderVault.Unavailable</c>) لا نَسخَةٌ
+    /// تَنجَرِف: مُزَوِّدٌ حَقلُه سِرٌّ تَختِمُه الخِزانَة، والخِزانَةُ لا تَبلُغُ هذا
+    /// السَطح.</summary>
+    public const string VaultUnavailable = ProviderVault.Unavailable;
+
+    /// <summary>أَيَحمِلُ هذا التَعريفُ حَقلاً تَختِمُه الخِزانَة؟ — مُشتَقٌّ مِن
+    /// <c>ProviderVault.Seals</c> لا مِن قائِمَةِ سلاجات (الكاتالوجُ بَيانات).</summary>
+    public static bool NeedsVault(ProviderDefinition d)
+        => d.Credential.Fields.Any(f => ProviderVault.Seals(f.Kind));
+
+    /// <summary>
+    /// <para><b>ما تَعرِضُه الشاشَةُ لِلرَبط</b> — ما يَربِطُه مُستَأجِرٌ في
+    /// الكاتالوج، <b>إلّا</b> ما يَحتاجُ خِزانَةً لا تَبلُغُ هذا السَطح. فَلا تُرسَمُ
+    /// بِطاقَةٌ يَرُدُّها <see cref="FromForm(string, Func{string, string?})"/> —
+    /// ولا «قَريباً» (القاعِدَة ١٢). والشاشَةُ والنُقطَةُ تَقرَآنِ المُسنَدَ نَفسَه
+    /// (<see cref="NeedsVault"/>).</para>
+    /// <para><b>ولِماذا هُنا لا في <c>ProviderCatalog.TenantBindable</c></b>: ذاكَ
+    /// سُؤالُ البَيانات («أَيَملَؤُه مُستَأجِر؟»)، وهذا سُؤالُ السَطح («أَيَستَطيعُ
+    /// هذا السَطحُ خَتمَ ما يُملَأ؟»). خَلطُهُما يُغَيِّرُ جَوابَ الكاتالوجِ لِكُلِّ
+    /// قارِئٍ بِحالِ شاشَة.</para>
+    /// </summary>
+    public static IReadOnlyList<ProviderDefinition> Offered(string capability)
+        => ProviderCatalog.TenantBindable(capability).Where(d => !NeedsVault(d)).ToArray();
+
+    /// <summary>القُدُراتُ الَّتي تُرسَم — بِتَرتيبِ المَعجَمِ، وقُدرَةٌ بِلا مُزَوِّدٍ
+    /// مَعروضٍ لا تُرسَمُ إطلاقاً.</summary>
+    public static IReadOnlyList<string> OfferedCapabilities =>
+        ProviderCapabilities.All.Where(c => Offered(c).Count > 0).ToArray();
+
     private static readonly IReadOnlyDictionary<string, StoredValue> NoValues =
         new Dictionary<string, StoredValue>(0, StringComparer.Ordinal);
 
@@ -54,6 +83,11 @@ public static class ProviderBindSurface
         // النَوعُ يُعلَنُ قَبلَ الرَفض: نُقطَةُ الكِتابَةِ تَسأَلُ
         // `PlatformAdminGuard` عَلى هذا الأَساس.
         if (!def.IsTenantBindable) return new(ProviderNotBindable, def, NoValues);
+
+        // ومُزَوِّدٌ حَقلُه سِرٌّ تَختِمُه الخِزانَة يُرَدُّ **قَبلَ قِراءَةِ أَوَّلِ
+        // حَقل** ما دامَت الخِزانَةُ لا تَبلُغُ هذا السَطح — فَلا يَبلُغُ السِرُّ
+        // `StoredValue.Explicit` الَّتي تَرميه، ولا يُكتَبُ صَريحاً بِحال.
+        if (NeedsVault(def)) return new(VaultUnavailable, def, NoValues);
 
         var values = new Dictionary<string, StoredValue>(StringComparer.Ordinal);
 

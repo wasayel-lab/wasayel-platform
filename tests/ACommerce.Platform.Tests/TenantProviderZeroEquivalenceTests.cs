@@ -130,18 +130,37 @@ public class TenantProviderZeroEquivalenceTests
         Assert.Equal("https://moyasar.com/i/1", ok.Plain);
     }
 
+    /// <summary>
+    /// <para><b>صَفٌّ انقَلَبَ بِقَرارٍ مَرئيّ (‏2026-10-12، ‏ADR-032 الخُطوَتانِ 5
+    /// و6)</b>: كانَ اسمُه <c>No_stored_value_in_the_shipped_catalog_can_be_a_secret</c>
+    /// — «كُلُّ حَقلٍ في كُلّ تَعريفٍ مَشحونٍ يَقبَلُ قيمَةً صَريحَة» — صورَةَ «لا سِرَّ
+    /// يُخَزَّن قَبلَ أَن تُبنى خِزانَتُه» يَومَ لَم تَكُن خِزانَة. ثُمَّ بُنِيَت
+    /// (‏<c>ProviderVault</c>، ‏<c>b0b4b85</c>)، ودَخَلَ مِفتاحُ البَوّابَةِ الكاتالوجَ
+    /// بِحَقلٍ سِرِّيٍّ واحِد — فَكانَ الصَفُّ سَيَحمَرُّ عَلى ما قَصَدَتهُ الخُطوَة.</para>
+    /// <para><b>والحارِسُ نَفسُه يُقاسُ عِندَ حَدِّه الجَديد</b>: صِفرُ حَقلٍ يَحتاجُ
+    /// خِزانَةً لَم تُبنَ — أَي كُلُّ حَقلٍ سِرِّيٍّ مَشحونٍ مِن نَوعٍ تَختِمُه الخِزانَةُ
+    /// المَبنِيَّة، وعَدَدُها مُثَبَّتٌ فَلا يَنمو صامِتاً، وما سِواهُ يَقبَلُ قيمَةً
+    /// صَريحَةً كَما كانَ الصَفُّ يَقولُ لِكُلِّ حَقل.</para>
+    /// </summary>
     [Fact]
-    public void No_stored_value_in_the_shipped_catalog_can_be_a_secret()
+    public void Every_secret_field_in_the_shipped_catalog_is_one_the_built_vault_seals()
     {
-        // كُلُّ حَقلٍ في كُلّ تَعريفٍ مَشحونٍ يَقبَلُ قيمَةً صَريحَة —
-        // أَي أَنّ صِفرَ حَقلٍ يَحتاجُ خِزانَةً لَم تُبنَ.
         var fields = ProviderCatalog.Definitions
             .SelectMany(d => d.Credential.Fields).ToArray();
 
         Assert.True(fields.Length > 0, "أَداة عَمياء: صِفرُ حَقلٍ مَفحوص.");
-        foreach (var f in fields)
-            Assert.False(CredentialKinds.IsSecretLike(f.Kind),
+
+        var secret = fields.Where(f => CredentialKinds.IsSecretLike(f.Kind)).ToArray();
+        foreach (var f in secret)
+            Assert.True(ProviderVault.Seals(f.Kind),
                 $"الحَقل «{f.Code}» مِن نَوعٍ يَحتاج خِزانَةً غَير مَبنِيَّة.");
+
+        // ‏واحِدٌ اليَوم: مِفتاحُ البَوّابَة.
+        Assert.Equal("secret_key", Assert.Single(secret).Code);
+
+        foreach (var f in fields.Except(secret))
+            Assert.False(CredentialKinds.IsSecretLike(f.Kind),
+                $"الحَقل «{f.Code}» سِرِّيٌّ خارِجَ ما عُدّ.");
     }
 
     // ─── ٤. تَعايُشُ نُسخَتَي المِفتاح ───────────────────────────────

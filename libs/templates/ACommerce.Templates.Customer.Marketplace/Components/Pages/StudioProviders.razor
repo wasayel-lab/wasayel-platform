@@ -13,7 +13,9 @@
     (القاعِدَة ١٢): لا تَبويبَ يَقول «قَريباً»، ولا صَفَّ يَردُّ
     النَقرَةَ بِـ«لَيسَ بَعد». القائِمَةُ تُشتَقُّ مِن الكاتالوجِ
     نَفسِه — فَيَومَ يُضافُ مِلَفُّ تَعريفٍ لِقُدرَةٍ أُخرى تَظهَرُ
-    بِلا لَمسِ سَطرٍ هُنا.
+    بِلا لَمسِ سَطرٍ هُنا. **ومِن الكاتالوجِ عَبرَ `ProviderBindSurface.Offered`**
+    (‏2026-10-12): مُزَوِّدٌ حَقلُه سِرٌّ تَختِمُه الخِزانَةُ لا يُرسَمُ ما دامَت
+    الخِزانَةُ لا تَبلُغُ هذا السَطح — فَلا تُرسَمُ بِطاقَةٌ تَرُدُّها النُقطَة.
 
     ولا جَلسَةَ Marten هُنا: الصَفحَةُ تَحقِنُ خِدمَةً (الطَبَقَة ٨
     عِندَ صِفر، ولا تَرتَفِع).
@@ -44,9 +46,9 @@
                 <div class="st-chip st-chip-success" style="margin-bottom:14px;">@L.Markup(noticeKey)</div>
             }
 
-            @foreach (var capability in ProviderCatalog.BindableCapabilities)
+            @foreach (var capability in Services.Providers.ProviderBindSurface.OfferedCapabilities)
             {
-                var offered = ProviderCatalog.TenantBindable(capability);
+                var offered = Services.Providers.ProviderBindSurface.Offered(capability);
                 var current = Current(capability);
                 var currentDef = current is null ? null : ProviderCatalog.Find(current.ProviderSlug);
 
@@ -151,7 +153,7 @@
         if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) tenant = null;
         if (tenant is null) return;
 
-        foreach (var capability in ProviderCatalog.BindableCapabilities)
+        foreach (var capability in Services.Providers.ProviderBindSurface.OfferedCapabilities)
         {
             var doc = await Providers.CurrentAsync(Slug, capability);
             if (doc is not null) bindings[capability] = doc;

@@ -1,0 +1,23 @@
+{
+  "slug": "moyasar_api",
+  "capability": "payments",
+  "label": { "ar": "مُيَسِّر — مِفتاح سِرِّيّ", "en": null },
+  "description": { "ar": "تَلصَق مِفتاحَك السِرِّيَّ مِن لَوحَة مُيَسِّر هُنا فَيُختَم في خِزانَة وَسايِل، ولا يُعرَض مِنه بَعدَ حِفظِه إلّا آخِرُ أَربَعَة مَحارِف. حِسابُ مُيَسِّر حِسابُك، ووَسايِل لا تَمُرّ بِمالِه.", "en": null },
+  "docsUrl": "https://docs.moyasar.com/api/authentication",
+  "physicalGoodsOnly": true,
+  "credential": {
+    "kind": "secret_key",
+    "fields": [
+      {
+        "code": "secret_key",
+        "kind": "secret_key",
+        "label": { "ar": "المِفتاح السِرِّيّ", "en": null },
+        "isRequired": true,
+        "pattern": "^sk_(live|test)_",
+        "hostAllowlist": []
+      }
+    ]
+  },
+  "webhook": null,
+  "revocation": { "ar": "اسحَب الرَبطَ هُنا فَيَتَوَقَّف عِندَنا الآن — ولا يُبطِل ذلكَ المِفتاحَ عِندَ مُيَسِّر: إبطالُه أَو تَبديلُه مِن لَوحَة مُيَسِّر نَفسِها.", "en": null }
+}

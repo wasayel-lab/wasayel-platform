@@ -95,7 +95,9 @@ public class ProviderDefinitionValidatorTests
         {
             Credential = Valid().Credential with { Kind = "vaulted_thing" },
         };
-        yield return WithFieldKind("secret_key");
+        // ‏`credential_file` لا `secret_key` مُنذُ ‏2026-10-12: دَخَلَ الثاني المَعجَمَ
+        // (‏ADR-032 الخُطوَة 5)، فَلَم يَعُد يُنتِجُ هذا الرَمز.
+        yield return WithFieldKind("credential_file");
         yield return DuplicateFieldCodes();
         yield return Valid() with { Label = NoArabic };
         yield return LinkWithoutAllowlist();
@@ -171,12 +173,19 @@ public class ProviderDefinitionValidatorTests
 
     // ─── ٥. field_kind_out_of_vocabulary ─────────────────────────────
 
+    /// <summary><b>‏`credential_file` بَدَلَ `secret_key` مُنذُ ‏2026-10-12</b> (‏ADR-032
+    /// §٢‑هـ الخُطوَة 5 بِحَرفِها): الثاني دَخَلَ المَعجَمَ مَعَ خِزانَتِه ومِلَفِّه، فَصارَ
+    /// سالِبُ هذا الرَمزِ نَوعاً ما زالَ بِلا خِزانَة — والموجِبُ الجَديدُ يَقولُه.</summary>
     [Fact]
     public void field_kind_out_of_vocabulary_fires_for_a_kind_with_no_vault_yet()
     {
         Assert.DoesNotContain("field_kind_out_of_vocabulary", CodesOf(Valid()));
-        Assert.Contains("field_kind_out_of_vocabulary", CodesOf(WithFieldKind("secret_key")));
+        Assert.Contains("field_kind_out_of_vocabulary", CodesOf(WithFieldKind("credential_file")));
         Assert.Contains("field_kind_out_of_vocabulary", CodesOf(WithFieldKind("invented")));
+
+        // و`secret_key` في المَعجَمِ الآن: لا يُنتِجُ هذا الرَمز (بَل «نَوعُ الرَبطِ
+        // أَدنى مِن حَقلِه» لِأَنّ `WithFieldKind` تَربِطُ بِـ`hosted_link`).
+        Assert.DoesNotContain("field_kind_out_of_vocabulary", CodesOf(WithFieldKind("secret_key")));
     }
 
     private static ProviderDefinition WithFieldKind(string kind) => Valid() with
@@ -280,6 +289,8 @@ public class ProviderDefinitionValidatorTests
     //
     // ‏`platform_key` هُوَ النَوعُ الوَحيدُ الشَبيهُ بِالسِرِّ داخِلَ
     // المَعجَمِ المُلزِمِ اليَوم — فَبِه يُقاسُ الرَمز.
+    // (‏2026-10-12: صارَ `secret_key` ثانِيَهُما في المَعجَم، ويُقاسُ بِه الرَمزُ
+    // أَيضاً عَلى مِلَفِّه المَشحون — `ProviderCatalogTests.The_secret_key_provider_…`.)
 
     [Fact]
     public void host_allowlist_forbidden_for_secret_fires_when_a_secret_carries_hosts()
@@ -391,8 +402,10 @@ public class ProviderDefinitionValidatorTests
     {
         Assert.Equal(CredentialKinds.HostedLink,
             CredentialKinds.Require(CredentialKinds.HostedLink));
-        Assert.Throws<ArgumentException>(() => CredentialKinds.Require(CredentialKinds.SecretKey));
+        // ‏`credential_file` بَدَلَ `secret_key` مُنذُ ‏2026-10-12 (‏ADR-032 الخُطوَة 5).
+        Assert.Throws<ArgumentException>(() => CredentialKinds.Require(CredentialKinds.CredentialFile));
         Assert.Throws<ArgumentException>(() => CredentialKinds.Require("invented"));
+        Assert.Equal(CredentialKinds.SecretKey, CredentialKinds.Require(CredentialKinds.SecretKey));
     }
 
     [Fact]
