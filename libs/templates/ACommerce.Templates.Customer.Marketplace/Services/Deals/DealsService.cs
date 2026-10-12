@@ -12,10 +12,20 @@ public sealed class DealsService
 {
     private readonly IDocumentStore _store;
     private readonly ACommerce.Kit.Payments.IPaymentProvider _payments;
-    public DealsService(IDocumentStore store, ACommerce.Kit.Payments.IPaymentProvider payments)
+
+    /// <summary>
+    /// <para><b>مُلغي فاتورَةِ البَوّابَةِ بَعدَ الإلغاء</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الثانِيَة؛ ‏ADR-032 §٨‑ز): يُسَجِّلُه القالِبُ
+    /// بِجِوارِ <see cref="GatewayPayments"/> فَيَحقِنُه المُضيف، ويُناديه الإلغاءُ بَعدَ حِفظِه لِصَفقَةٍ عَلَيها فاتورَةٌ لَم يُقبَض بِها. و<c>null</c>
+    /// حينَ لا يُحقَن — اختِباراتُ الخِدمَةِ والبُرهانُ الحَيّ — فَلا يُسأَلُ عَن فاتورَةٍ عِندَ الإلغاءِ كَما كانَ قَبلَه. (بَعدَ <c>payments</c>
+    /// اختِيارِيّاً عَمداً: البِناءاتُ القائِمَةُ لا تَتَحَرَّك.)</para>
+    /// </summary>
+    private readonly GatewayInvoiceCloser? _invoices;
+
+    public DealsService(IDocumentStore store, ACommerce.Kit.Payments.IPaymentProvider payments, GatewayInvoiceCloser? invoices = null)
     {
         _store = store;
         _payments = payments;
+        _invoices = invoices;
     }
 
     /// <summary>مِفتاحُ مَرجِعِ مالِكِ الإعلان في <see cref="Deal.Refs"/> —
@@ -599,6 +609,12 @@ public sealed class DealsService
             }
             deal = await RecordAsync(tenantSlug, dealId, outcome, ct) ?? deal;
         }
+        // (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الثانِيَة؛ ‏ADR-032 §٨‑ز — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: **وفاتورَةُ بَوّابَةٍ لَم يُقبَض بِها تُلغى عِندَ
+        // البَوّابَةِ إن كانَت هذِه آخِرَ صَفقَةٍ قائِمَةٍ تَدفَعُ لَها**. كانَت تَبقى قابِلَةً لِلدَّفعِ فَيَدفَعُ المُشتَري ثَمَنَ طَلَبٍ مُلغًى مِن الصَفحَةِ
+        // المَفتوحَةِ أَمامَه — تَوصيفُه `GatewayInvoiceCancelTests`. بَعدَ الحِفظِ كَالاستِرجاع، وما يَعودُ رَمزٌ في اللوغِ لا يَرُدُّ الإلغاء؛
+        // والمُحَمِّلُ بِلا إلغاءِ الطَلَبِ عَمداً — الأَثَرُ يَتبَعُ ما حُفِظ.)
+        else if (GatewayPayments.HasInvoice(deal) && _invoices is not null)
+            await _invoices.CloseIfLastAsync(tenantSlug, deal, id => LoadAsync(tenantSlug, id));
         return DealCancelResult.Cancelled(deal);
     }
 

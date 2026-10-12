@@ -141,6 +141,9 @@ public static class GatewayReturn
     /// عِندَ الوِلادَةِ يُشعَرُ بِالطَلَبِ قَبلَ الدَفعِ ويَرفُضُه عِندَ «عرض»، والعَميلُ بِلا عَمَلِيَّةِ إبطال (§٨‑أ) فَالفاتورَةُ تَبقى قابِلَةً
     /// لِلدَّفع — وكانَ «أَكمِلِ الدَّفعَ» يُرسَمُ لِطَلَبٍ مُلغًى فَيُدعى المُشتَري إلى دَفعِ ما لَم يَعُد قائِماً (القاعِدَة ١٢: مَدخَلٌ يَضُرّ).
     /// وصَفقَةٌ في نِزاعٍ أَو مُكتَمِلَةٌ لا تُدعى إلى دَفعٍ أَيضاً. وزِرُّ التَحَقُّقِ باقٍ لِكُلِّ صَفقَة: دَفعٌ وَقَعَ يُسَجَّلُ ولا يُبتلَع.</para>
+    /// <para>(‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الثانِيَة — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: «بِلا عَمَلِيَّةِ إبطال» صارَ «بِإلغاءٍ لِآخِرِ قائِمَة»
+    /// — الفاتورَةُ تُلغى عِندَ البَوّابَةِ حينَ تُلغى آخِرُ صَفقَةٍ قائِمَةٍ تَدفَعُ لَها، <see cref="GatewayInvoiceCloser"/>؛ وأُختٌ قائِمَةٌ تُبقيها
+    /// مَفتوحَة، فَالرابِطُ لِلقائِمَةِ وَحدَها كَما هُوَ.)</para>
     /// </summary>
     public static string? PayUrlOf(Deal deal)
         => deal.Status == DealStatus.Active
@@ -270,7 +273,7 @@ public sealed class GatewayPayments
         if (DealPayAuthorization.Validate(deal, by) is { } refusal)
             return Logged(tenantSlug, new(deal?.Id, null, refusal.Code));
 
-        if (_client is null || await SecretKeyAsync(tenantSlug, ct) is not { } key)
+        if (_client is null || await SecretKeyAsync(_providers, _vault, _log, tenantSlug, ct) is not { } key)
             return Logged(tenantSlug, new(deal!.Id, null, MoyasarFailures.NotConfigured));
 
         var fetched = await _client.FetchInvoiceAsync(key, deal!.Refs[GatewayPaymentProof.InvoiceRef], ct);
@@ -308,7 +311,7 @@ public sealed class GatewayPayments
     public async Task<CheckoutCardFacts> CardFactsAsync(
         string tenantSlug, bool storeCollects, bool instanceCanCharge, CancellationToken ct = default)
         => new(storeCollects,
-               SealedKeyFieldOf(await PaymentsBindingAsync(tenantSlug, ct)) is not null,
+               SealedKeyFieldOf(await PaymentsBindingAsync(_providers, tenantSlug, ct)) is not null,
                _vault.IsAvailable,
                _client is not null,
                instanceCanCharge);
@@ -327,6 +330,9 @@ public sealed class GatewayPayments
     /// نَفسِه (<see cref="MoyasarFailures.Invalid"/>): لا فاتورَةَ ولا خَصم، والباقِيَةُ تُلغى والسَلَّةُ كَما هي. <b>وما لا يُغلِقُه</b>: إلغاءٌ
     /// يَقَعُ بَعدَ التَحميلِ وقَبلَ الإلحاقِ (أَثناءَ نِداءَي البَوّابَة) يَبقى في الفاتورَة — ولا إبطالَ في العَميل (§٨‑أ)؛ وصَفحَةُ العَودَةِ
     /// وإشعارُ الدَفعِ يَسأَلانِ الحالَ بَعدَها (<see cref="GatewayReturn.PayUrlOf"/>، <c>DealNotices.PaidRecipient</c>).</para>
+    /// <para>(‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الثانِيَة — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: «ولا إبطالَ في العَميل» لَم يَعُد — لِلعَميلِ إلغاءٌ
+    /// (<see cref="MoyasarClient.CancelInvoiceAsync"/>) يُناديه <see cref="GatewayInvoiceCloser"/> بَعدَ إلغاءٍ كُتِب؛ وذلكَ الإلغاءُ في النافِذَةِ لا
+    /// يَبلُغُه لِأَنّ الصَفقَةَ بِلا مَرجِعِ فاتورَةٍ ساعَتَها، فَيَبقى كَما قيل.)</para>
     /// </summary>
     public async Task<GatewayCheckout> OpenInvoiceAsync(
         string tenantSlug, DealPayer by, IReadOnlyList<Guid> dealIds, string storeName, string returnUrl,
@@ -344,7 +350,7 @@ public sealed class GatewayPayments
         MoyasarInvoice? invoice = null;
         if (code is null)
         {
-            if (_client is null || await SecretKeyAsync(tenantSlug, ct) is not { } key)
+            if (_client is null || await SecretKeyAsync(_providers, _vault, _log, tenantSlug, ct) is not { } key)
                 code = MoyasarFailures.NotConfigured;
             else
             {
@@ -380,30 +386,34 @@ public sealed class GatewayPayments
     /// المَتجَر — فَلا قاعِدَةَ قَبولٍ ثانِيَة. ويُفَكُّ بِسِياقِ <c>tenant|payments|field</c> الَّذي خَتَمَه بِه سَطحُ الرَبط
     /// (<see cref="ProviderBindSurface.AadFor"/>)؛ وظَرفٌ لا يُفتَحُ بِسِياقِه — مَنسوخٌ مِن مَتجَرٍ آخَر، أَو مِفتاحٌ رَئيسٌ آخَر — «لا مِفتاح».</para>
     /// <para><b>واللوغُ لا يَحمِلُ المِفتاحَ ولا ذَيلَه</b>: المَتجَرُ وَحدَه.</para>
+    /// <para><b>وصارَت ساكِنَةً بِمُدخَلاتِها</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الثانِيَة — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): وُلِدَ لَها
+    /// مُستَهلِكٌ ثانٍ لا يَملِكُ هذِه الخِدمَة — <see cref="GatewayInvoiceCloser"/> مِن الإلغاء، و<see cref="GatewayPayments"/> تَحقِنُ
+    /// <see cref="DealsService"/> فَلا تُحقَنُ فيها. فَالفَكُّ في مَوضِعٍ واحِدٍ لِلاثنَين (القاعِدَة ٨)، والجِسمُ بِحَرفِه.</para>
     /// </summary>
-    private async Task<string?> SecretKeyAsync(string tenantSlug, CancellationToken ct)
+    internal static async Task<string?> SecretKeyAsync(
+        TenantProviderService providers, ProviderVault vault, ILogger log, string tenantSlug, CancellationToken ct)
     {
-        if (!_vault.IsAvailable) return null;
+        if (!vault.IsAvailable) return null;
 
-        var payments = await PaymentsBindingAsync(tenantSlug, ct);
+        var payments = await PaymentsBindingAsync(providers, tenantSlug, ct);
         if (SealedKeyFieldOf(payments) is not { } field) return null;
 
         try
         {
-            return payments!.Values[field.Code].Unseal(_vault, ProviderBindSurface.AadFor(tenantSlug, payments.Capability, field.Code));
+            return payments!.Values[field.Code].Unseal(vault, ProviderBindSurface.AadFor(tenantSlug, payments.Capability, field.Code));
         }
         catch (CryptographicException)
         {
-            _log.LogWarning("[gateway] {Slug} payments key does not open — no key", tenantSlug);
+            log.LogWarning("[gateway] {Slug} payments key does not open — no key", tenantSlug);
             return null;
         }
     }
 
     /// <summary>رَبطُ الدَفعِ الحَيُّ مَحلولاً — بِمُعَرِّفِه (<c>CurrentAsync</c>، لا لَقطَةُ الكاش) وبِـ<c>TenantProviderSet.FromDocuments</c>
     /// نَفسِها؛ يَقرَؤُه فَكُّ المِفتاحِ ومُدخَلُ «(أ)» في <see cref="CardFactsAsync"/> (‏2026-10-12)، فَلا يَفتَرِقُ «مَربوطٌ بِمِفتاح» عَمّا يُفَكّ.</summary>
-    private async Task<ResolvedProvider?> PaymentsBindingAsync(string tenantSlug, CancellationToken ct)
+    private static async Task<ResolvedProvider?> PaymentsBindingAsync(TenantProviderService providers, string tenantSlug, CancellationToken ct)
     {
-        var current = await _providers.CurrentAsync(tenantSlug, ProviderCapabilities.Payments, ct);
+        var current = await providers.CurrentAsync(tenantSlug, ProviderCapabilities.Payments, ct);
         return TenantProviderSet
             .FromDocuments(tenantSlug, current is null ? Array.Empty<TenantProviderBinding>() : new[] { current })
             .For(ProviderCapabilities.Payments);
@@ -436,5 +446,140 @@ public sealed class GatewayPayments
         _log.LogInformation("[gateway] verify {Slug} deal {Deal} ← {Code}",
             tenantSlug, r.DealId?.ToString("D") ?? "—", r.Ok ? "proven" : r.Code);
         return r;
+    }
+}
+
+// ═══ إلغاءُ فاتورَةِ البَوّابَةِ حينَ تُلغى آخِرُ صَفقَةٍ قائِمَةٍ تَدفَعُ لَها (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الثانِيَة؛ ‏ADR-032 §٨‑ز) ═══════
+//
+// البائِعُ يُشعَرُ بِالطَلَبِ بَعدَ فَتحِ الفاتورَةِ والمُشتَري عَلى صَفحَةِ البَوّابَة، ويُلغيه بابٌ تَرسُمُه صَفحَتُه — وكانَت الفاتورَةُ تَبقى
+// قابِلَةً لِلدَّفعِ عِندَ البَوّابَةِ ولَو أُلغِيَت كُلُّ صَفقَةٍ تَدفَعُ لَها (تَوصيفُه `GatewayInvoiceCancelTests`): يَدفَعُها المُشتَري مِن الصَفحَةِ
+// المَفتوحَةِ أَمامَه، فَيُؤخَذُ مالُه عَن طَلَبٍ مُلغًى ويُستَرَدُّ يَدَوِيّاً (§٨‑ج.6). ووَثيقَةُ البَوّابَةِ تَعرِفُ «Cancel invoice»
+// (`MoyasarClient.CancelInvoiceAsync`). فَبَعدَ أَن يُحفَظَ الإلغاءُ — المُطالَبَةُ أَوَّلاً (‏ADR-036 الخُطوَة 2) — تُجلَبُ الفاتورَةُ بِمِفتاحِ
+// المَتجَرِ وتُحَمَّلُ الصَفَقاتُ الَّتي تُسَمّيها، وتُسأَلُ `GatewayInvoiceClosing` النَقِيَّة: **أَهذِه فاتورَتُها، وأَمَفتوحَةٌ هي، وأَلا قائِمَةَ
+// عَلَيها لَم تُدفَع؟** — فَإن صَدَقَت الثَلاثُ أُلغِيَت عِندَ البَوّابَة. وأُختٌ قائِمَةٌ تُبقيها: الفاتورَةُ تَدفَعُ لَها، وإلغاؤها وفَتحُ أُخرى
+// بِالباقي قَرارُ مُنتَجٍ لا يُتَّخَذُ هُنا («ب» S9·١٤). **وفَشَلُ أَيِّ خُطوَةٍ رَمزٌ في اللوغِ لا يَرُدُّ الإلغاء** — قَد حُفِظَ قَبلَها.
+
+/// <summary>سَبَبٌ لِإبقاءِ الفاتورَةِ مَفتوحَةً بَعدَ إلغاءِ صَفقَةٍ عَلَيها — <c>Code</c> مِن <see cref="GatewayInvoiceClosing.All"/>.</summary>
+public sealed record GatewayInvoiceCloseViolation(string Code, string MessageAr);
+
+/// <summary>
+/// <para><b>أَيُلغي إلغاءُ هذِه الصَفقَةِ فاتورَتَها عِندَ البَوّابَة؟</b> — بَوّابَةٌ نَقِيَّةٌ بِثَلاثَةِ رُموزٍ لا رابِعَ لَها (القاعِدَة ٤)، لِكُلٍّ مُوجَبٌ
+/// وسالِبٌ في <c>GatewayInvoiceCancelTests</c>. تَسأَلُ الفاتورَةَ كَما جُلِبَت لِلتَّوّ، والصَفقَةَ المُلغاة، والصَفَقاتِ الَّتي تُسَمّيها الفاتورَة —
+/// بِتَرتيبٍ ثابِت، ولا شَبَكَةَ ولا Marten ولا وَقت.</para>
+/// <para><b>ورُموزُها لا تَبلُغُ شاشَة</b>: اللوغُ وَحدَه يَحمِلُها، فَلَيسَت في <see cref="GatewayReturn.Codes"/> ولا نَصَّ لَها في القامُوس.</para>
+/// </summary>
+public static class GatewayInvoiceClosing
+{
+    /// <summary>الفاتورَةُ لَيسَت فاتورَةَ هذِه الصَفقَة — لَيسَت المُسَجَّلَةَ عَلَيها (<see cref="GatewayPaymentProof.InvoiceRef"/>)، أَو بَياناتُها لا
+    /// تُسَمّيها أَو لا تُقرَأُ أَو أَطوَلُ مِن فاتورَةٍ واحِدَة: فَلا تُلغى بِإلغائِها.</summary>
+    public const string NotListed = "gateway_invoice_not_listed";
+
+    /// <summary>حالُ الفاتورَةِ عِندَ البَوّابَةِ لَيسَ <see cref="MoyasarClient.OpenStatus"/> — دُفِعَت، أَو أُلغِيَت، أَو انتَهَت، أَو حالٌ لا تَشرَحُه
+    /// الوَثيقَة: فَلا يُلغى ما دُفِع، ولا يُنادى عَلى ما لا يُعرَفُ جَوابُه.</summary>
+    public const string NotOpen = "gateway_invoice_not_open";
+
+    /// <summary>صَفقَةٌ تُسَمّيها الفاتورَةُ قائِمَةٌ لَم يُكتَب دَفعُها (<see cref="Owed"/>) — الفاتورَةُ ما زالَت تَدفَعُ لَها.</summary>
+    public const string StillOwed = "gateway_invoice_still_owed";
+
+    /// <summary>المَعجَمُ المُغلَق — ثَلاثَةٌ لا رابِعَ لَها.</summary>
+    public static readonly IReadOnlyList<string> All = new[] { NotListed, NotOpen, StillOwed };
+
+    /// <summary>أَتَدفَعُ الفاتورَةُ لِهذِه الصَفقَة؟ — قائِمَةٌ لَم يُكتَب دَفعُها (<see cref="DealsService.IsCaptured"/>). و«القائِمَةُ» بِحَرفِ
+    /// <see cref="GatewayReturn.PayUrlOf"/> و<c>DealNotices.PaidRecipient</c> و<see cref="GatewayPayments.OpenInvoiceAsync"/>: <c>Active</c> وَحدَها.</summary>
+    public static bool Owed(Deal deal) => deal.Status == DealStatus.Active && !DealsService.IsCaptured(deal);
+
+    /// <summary>
+    /// <para><b>كُلُّ سَبَبٍ لِإبقاءِ الفاتورَة</b> — الفاتورَةُ فاتورَتُها، ثُمَّ الحال، ثُمَّ الصَفَقاتُ الَّتي تَدفَعُ لَها: <paramref name="named"/> كَما
+    /// حَمَّلَها المُنادي مِمّا تُسَمّيه البَيانات، و<paramref name="cancelled"/> مَعَها — وما في <paramref name="named"/> ولا تُسَمّيه البَياناتُ
+    /// لا يُحسَب. فارِغَةٌ = تُلغى.</para>
+    /// </summary>
+    public static IReadOnlyList<GatewayInvoiceCloseViolation> Validate(MoyasarInvoice invoice, Deal cancelled, IReadOnlyList<Deal> named)
+    {
+        var v = new List<GatewayInvoiceCloseViolation>();
+        var listed = GatewayPaymentProof.DealIdsIn(invoice.Metadata);
+
+        if (!cancelled.Refs.TryGetValue(GatewayPaymentProof.InvoiceRef, out var recorded)
+            || !string.Equals(recorded, invoice.Id, StringComparison.OrdinalIgnoreCase)
+            || listed is null || listed.Count > GatewayPaymentProof.MaxDealsPerInvoice || !listed.Contains(cancelled.Id))
+            v.Add(new(NotListed, "الفاتورَةُ لَيسَت فاتورَةَ هذِه الصَفقَة — لا تُلغى بِإلغائِها."));
+
+        if (!string.Equals(invoice.Status, MoyasarClient.OpenStatus, StringComparison.Ordinal))
+            v.Add(new(NotOpen, $"حالُ الفاتورَةِ «{invoice.Status}» لا «{MoyasarClient.OpenStatus}» — لا تُلغى."));
+
+        if (named.Where(d => listed?.Contains(d.Id) == true).Append(cancelled).Any(Owed))
+            v.Add(new(StillOwed, "صَفقَةٌ تُسَمّيها الفاتورَةُ قائِمَةٌ لَم تُدفَع — الفاتورَةُ تَدفَعُ لَها فَتَبقى."));
+
+        return v;
+    }
+
+    public static bool IsValid(MoyasarInvoice invoice, Deal cancelled, IReadOnlyList<Deal> named)
+        => Validate(invoice, cancelled, named).Count == 0;
+}
+
+/// <summary>
+/// <para><b>يُلغي فاتورَةَ البَوّابَةِ بَعدَ إلغاءِ آخِرِ صَفقَةٍ قائِمَةٍ تَدفَعُ لَها</b> — يُناديه <see cref="DealsService.CancelAsync"/> بَعدَ حِفظِ
+/// الإلغاءِ لِصَفقَةٍ عَلَيها فاتورَةٌ لَم يُقبَض بِها، نَسَقَ الاستِرجاع: الأَثَرُ لِمَن كَسَبَ الحِفظ. يَفُكُّ مِفتاحَ المَتجَرِ لِلنِداءِ الواحِدِ بِالدالَّةِ
+/// الَّتي تَفُكُّه بِها <see cref="GatewayPayments"/> (القاعِدَة ٨)، ويَجلِبُ الفاتورَة، ويُحَمِّلُ ما تُسَمّيه مِن صَفَقاتٍ بِحَدِّ الوَثيقَة،
+/// ويَسأَلُ <see cref="GatewayInvoiceClosing"/>، ثُمَّ يُلغيها عِندَ البَوّابَةِ إن صَدَقَت.</para>
+/// <para><b>ولا يَرُدُّ الإلغاءَ ولا يَرمي لِفَشَلِ البَوّابَة</b>: ما يَعودُ رَمزٌ مِن مَعجَمٍ مُغلَقٍ يُكتَبُ في اللوغِ ويُرجَع — <c>null</c> «أُلغِيَت
+/// عِندَ البَوّابَة»، وإلّا <see cref="DealPayAuthorization.InvoiceMissing"/> أَو رَمزٌ مِن <see cref="GatewayInvoiceClosing.All"/> أَو مِن
+/// <see cref="MoyasarFailures.All"/>. <b>ولا يُمَرَّرُ إلغاءُ الطَلَب</b> (نَسَقُ <c>/ship</c> والتَحَقُّق): الإلغاءُ حُفِظَ قَبلَه فَأَثَرُه يَتبَعُه
+/// ولَو انقَطَعَ المُنادي، ومُهلَةُ العَميلِ تَحُدُّ كُلَّ نِداء.</para>
+/// <para><b>ولِماذا صِنفٌ لا دالَّةٌ في <see cref="GatewayPayments"/></b> (القاعِدَة ١): تِلكَ تَحقِنُ <see cref="DealsService"/>، فَلا تُحقَنُ فيها؛
+/// وهذا لا يَحقِنُ الخِدمَةَ بَل يَأخُذُ مِنها مُحَمِّلَ الصَفَقاتِ لِلنِداءِ الواحِد. مُستَهلِكُه وَقتَ التَشغيلِ واحِدٌ مُسَمّى — الإلغاء.</para>
+/// </summary>
+public sealed class GatewayInvoiceCloser
+{
+    private readonly TenantProviderService _providers;
+    private readonly ProviderVault _vault;
+    /// <summary>عَميلُ البَوّابَة — و<c>null</c> حينَ لا يُسَجِّلُه المُضيف، فَلا جَلبَ ولا إلغاء (<see cref="MoyasarFailures.NotConfigured"/>).</summary>
+    private readonly MoyasarClient? _client;
+    private readonly ILogger<GatewayInvoiceCloser> _log;
+
+    public GatewayInvoiceCloser(TenantProviderService providers, ProviderVault vault, MoyasarClient? client = null,
+        ILogger<GatewayInvoiceCloser>? log = null)
+    {
+        _providers = providers;
+        _vault = vault;
+        _client = client;
+        _log = log ?? NullLogger<GatewayInvoiceCloser>.Instance;
+    }
+
+    /// <summary>
+    /// <para><b>بِالتَرتيب، ولا يُقلَب</b>: (١) عَلى الصَفقَةِ مَرجِعُ فاتورَة — وإلّا لا نِداء؛ (٢) مِفتاحُ المَتجَرِ يُفَكُّ — وإلّا لا نِداء؛
+    /// (٣) الفاتورَةُ تُجلَبُ بِمَرجِعِها؛ (٤) الصَفَقاتُ الَّتي تُسَمّيها تُحَمَّلُ بِـ<paramref name="load"/> — ثَلاثونَ عَلى الأَكثَر؛ (٥) البَوّابَةُ
+    /// النَقِيَّة؛ (٦) الإلغاءُ عِندَ البَوّابَة. و<paramref name="cancelled"/> الصَفقَةُ كَما حُفِظَ إلغاؤها.</para>
+    /// </summary>
+    public async Task<string?> CloseIfLastAsync(string tenantSlug, Deal cancelled, Func<Guid, Task<Deal?>> load)
+    {
+        if (!GatewayPayments.HasInvoice(cancelled))
+            return Logged(tenantSlug, cancelled, DealPayAuthorization.InvoiceMissing);
+
+        if (_client is null
+            || await GatewayPayments.SecretKeyAsync(_providers, _vault, _log, tenantSlug, CancellationToken.None) is not { } key)
+            return Logged(tenantSlug, cancelled, MoyasarFailures.NotConfigured);
+
+        var fetched = await _client.FetchInvoiceAsync(key, cancelled.Refs[GatewayPaymentProof.InvoiceRef]);
+        if (!fetched.Ok) return Logged(tenantSlug, cancelled, fetched.Failure!.Code);
+        var invoice = fetched.Value!;
+
+        var named = new List<Deal>();
+        if (GatewayPaymentProof.DealIdsIn(invoice.Metadata) is { } ids && ids.Count <= GatewayPaymentProof.MaxDealsPerInvoice)
+            foreach (var id in ids)
+                if (await load(id) is { } d) named.Add(d);
+
+        if (GatewayInvoiceClosing.Validate(invoice, cancelled, named) is { Count: > 0 } kept)
+            return Logged(tenantSlug, cancelled, kept[0].Code);
+
+        var closed = await _client.CancelInvoiceAsync(key, invoice.Id);
+        return Logged(tenantSlug, cancelled, closed.Ok ? null : closed.Failure!.Code, closed.Value?.Status);
+    }
+
+    /// <summary>سَطرُ اللوغ: المَتجَرُ والصَفقَةُ والنَتيجَة — لا مِفتاحٌ ولا رابِطُ فاتورَة.</summary>
+    private string? Logged(string tenantSlug, Deal cancelled, string? code, string? status = null)
+    {
+        _log.LogInformation("[gateway] close invoice {Slug} deal {Deal} ← {Outcome}",
+            tenantSlug, cancelled.Id.ToString("D"), code ?? $"cancelled at the gateway (status {status ?? "—"})");
+        return code;
     }
 }

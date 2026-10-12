@@ -373,4 +373,67 @@ public class MoyasarClientTests(ITestOutputHelper output)
         Assert.True(scanned > 0, "أَداةٌ عَمياء: صِفرُ تَعريف.");
         Assert.Single(keyed);
     }
+
+    // ═══ ٥) العَمَلِيَّةُ الثالِثَة — إلغاءُ الفاتورَة (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الثانِيَة) ═══════════════════════
+    //
+    // مِن صَفحَةِ «Cancel invoice» (`docs.moyasar.com/api/invoices/06-cancel-invoice`، مَقروءَةً ‏2026-10-12): `PUT /invoices/:id/cancel`،
+    // ومُعامِلُ المَسارِ uuid، ولا جِسم؛ والرَدُّ ‏200 الفاتورَةُ بِمِثالِها «canceled»، و‏401 «authentication_error» و‏403 «api_error · User not
+    // authorized» و‏404 «record_not_found» بِأَشكالِها.
+
+    /// <summary><b>المُوجِب</b>: نِداءٌ واحِد — <c>PUT /v1/invoices/{id}/cancel</c> بِلا جِسمٍ وبِـ<c>Authorization: Basic</c> مِن المِفتاحِ ونُقطَتَين،
+    /// ويُقرَأُ رَدُّه الفاتورَةَ بِحالِها «canceled». والمَسارُ مِن ثابِتَي العَميلِ نَفسَيهِما، والمِفتاحُ لا يَبلُغُ العُنوانَ ولا اللوغ.</summary>
+    [Fact]
+    public async Task Cancelling_an_invoice_puts_to_its_cancel_path_without_a_body_and_reads_the_documented_shape()
+    {
+        var log = new MoyasarCapturingLogger();
+        var handler = new MoyasarScriptedHandler().Then(HttpStatusCode.OK, InvoiceJson("canceled"));
+
+        var res = await Client(handler, log).CancelInvoiceAsync(Key, InvoiceId);
+
+        Assert.True(res.Ok, res.Failure?.Code);
+        Assert.Equal((InvoiceId, "canceled", 15000L), (res.Value!.Id, res.Value.Status, res.Value.Amount));
+        Assert.False(res.Value.IsPaid);
+        var put = Assert.Single(handler.Requests);
+        Assert.Equal((HttpMethod.Put, $"https://api.moyasar.com/v1/invoices/{InvoiceId}/cancel"), (put.Method, put.RequestUri!.ToString()));
+        Assert.Equal(MoyasarClient.BaseUrl + MoyasarClient.InvoicesPath + "/" + InvoiceId + MoyasarClient.CancelSuffix, put.RequestUri.ToString());
+        Assert.Null(handler.Bodies[0]);
+        Assert.Equal(("Basic", BasicOf(Key)), (put.Headers.Authorization!.Scheme, put.Headers.Authorization.Parameter));
+        Assert.DoesNotContain(Key, put.RequestUri.ToString(), StringComparison.Ordinal);
+        Assert.All(log.Lines, l => Assert.DoesNotContain("sk_", l, StringComparison.Ordinal));
+        Assert.DoesNotContain(Key, res.Value.ToString(), StringComparison.Ordinal);
+    }
+
+    /// <summary><b>السالِب</b>: بِلا مِفتاحٍ أَو بِمُعَرِّفٍ لَيسَ uuid لا نِداءَ أَصلاً (<c>gateway_not_configured</c>، <c>gateway_invalid_request</c>)؛
+    /// ورُدودُ الوَثيقَةِ ‏401 و‏403 و‏404 <c>gateway_refused</c> بِحالِها، و‏503 <c>gateway_unreachable</c>، ونَجاحٌ لا يُقرَأُ <c>gateway_unreadable</c> —
+    /// المَعجَمُ الخُماسيُّ نَفسُه لا سادِس. والعَدَدُ يُطبَع.</summary>
+    [Fact]
+    public async Task Cancelling_calls_nothing_without_a_key_or_a_uuid_and_returns_each_gateway_failure_by_its_code()
+    {
+        var silent = new MoyasarScriptedHandler();
+        Assert.Equal(MoyasarFailures.NotConfigured, (await Client(silent).CancelInvoiceAsync("  ", InvoiceId)).Failure!.Code);
+        var badIds = new[] { "../invoices", InvoiceId + "/cancel", "", "not-a-uuid" };
+        foreach (var id in badIds)
+            Assert.Equal(MoyasarFailures.Invalid, (await Client(silent).CancelInvoiceAsync(Key, id)).Failure!.Code);
+        Assert.Empty(silent.Requests);
+
+        var refusals = new (HttpStatusCode Status, string Body)[]
+        {
+            (HttpStatusCode.Unauthorized, "{\"type\":\"authentication_error\",\"message\":\"Invalid authorization credentials\",\"errors\":null}"),
+            (HttpStatusCode.Forbidden, "{\"type\":\"api_error\",\"message\":\"User not authorized\",\"errors\":null}"),
+            (HttpStatusCode.NotFound, "{\"type\":\"record_not_found\",\"message\":\"The <object type> record you were looking for was not found.\",\"errors\":null}"),
+        };
+        foreach (var (status, body) in refusals)
+        {
+            var h = new MoyasarScriptedHandler().Then(status, body);
+            var r = await Client(h).CancelInvoiceAsync(Key, InvoiceId);
+            Assert.Equal((MoyasarFailures.Refused, (int)status), (r.Failure!.Code, r.Failure.HttpStatus));
+            Assert.Single(h.Requests);
+        }
+
+        var down = new MoyasarScriptedHandler().Then(HttpStatusCode.ServiceUnavailable, "");
+        Assert.Equal(MoyasarFailures.Unreachable, (await Client(down).CancelInvoiceAsync(Key, InvoiceId)).Failure!.Code);
+        var odd = new MoyasarScriptedHandler().Then(HttpStatusCode.OK, "not json");
+        Assert.Equal(MoyasarFailures.Unreadable, (await Client(odd).CancelInvoiceAsync(Key, InvoiceId)).Failure!.Code);
+        output.WriteLine($"بِلا نِداء: {1 + badIds.Length} · رَفضُ البَوّابَة: {refusals.Length} · بِلا جَواب: 1 · لا يُقرَأ: 1");
+    }
 }

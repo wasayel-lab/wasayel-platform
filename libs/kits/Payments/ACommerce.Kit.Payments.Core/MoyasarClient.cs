@@ -42,6 +42,10 @@ namespace ACommerce.Kit.Payments;
 ///   <item><c>https://docs.moyasar.com/api/invoices/04-show-invoice</c> — <c>GET /invoices/:id</c>، وحالُ الفاتورَةِ مِن مَعجَمٍ مُغلَق:
 ///   <c>initiated</c>، <c>paid</c>، <c>failed</c>، <c>refunded</c>، <c>canceled</c>، <c>on_hold</c>، <c>expired</c>، <c>voided</c>؛
 ///   ورُدودُ الخَطَإ ‏401 و‏403 و‏404 بِجِسمٍ فيه <c>type</c> و<c>message</c>.</item>
+///   <item><c>https://docs.moyasar.com/api/invoices/06-cancel-invoice</c> (مَقروءَةً ‏2026-10-12، أُلحِقَت بِالعَمَلِيَّةِ الثالِثَةِ أَدناه) —
+///   <c>PUT /invoices/:id/cancel</c> بِلا جِسم: «Cancel an existing Moyasar invoice so it can no longer be paid by the customer»؛
+///   ومُعامِلُ المَسارِ «id · uuid · required · ID of invoice to cancel»، والرَدُّ ‏200 «Successful operation» الفاتورَةُ بِحالِها (مِثالُه
+///   <c>"status": "canceled"</c>)، و‏401 و‏403 و‏404 بِأَشكالِ الجَلب. <b>ولا تَقولُ</b> أَيَّ حالٍ يَقبَلُ الإلغاءَ ولا بِمَ يُجابُ ما سِواه.</item>
 /// </list>
 ///
 /// <para><b>شَرطُ استِخراجِ واجِهَةٍ مِنه — مَكتوبٌ هُنا كَما تَطلُبُ القاعِدَةُ ١</b>: ثَلاثَةُ مُستَهلِكينَ وَقتَ التَشغيلِ يَحتاجونَ
@@ -49,6 +53,14 @@ namespace ACommerce.Kit.Payments;
 /// تَعريفُها لا سَطرٌ في الكود. والكاتالوجُ اليَومَ فيه تَعريفُ دَفعٍ واحِدٌ بِحَقلٍ سِرِّيّ، ومُستَهلِكا هذا الصِنفِ في التَيّارِ
 /// نَفسِه: نُقطَتا العَودَةِ والتَحَقُّقِ (الخُطوَة 9) وإتمامُ الشِراءِ بِالبِطاقَة (الخُطوَة 10). فَلا واجِهَة، ولا مُحاكيَ يُسَجَّلُ
 /// مَكانَه — والاختِباراتُ تُعيدُ رُدودَ الوَثيقَةِ بِمُعالِجٍ مُزَيَّف.</para>
+///
+/// <para><b>وجاءَت ثالِثَة — ‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الثانِيَة (ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)</b>: «عَمَلِيَّتَينِ لا ثالِثَةَ لَهُما»
+/// صَدَقَت عَلى ما بُنِيَ يَومَها، وكانَت الوَثيقَةُ تَعرِفُ إلغاءَ الفاتورَةِ ولَم تُقرَأ صَفحَتُه (القاعِدَة ١٦: يُقرَأُ ولا يُخَمَّن). فَصارَ
+/// <b>إلغاءُ فاتورَةٍ مُستَضافَةٍ</b> (<see cref="CancelInvoiceAsync"/>) — مُستَهلِكُه وَقتَ التَشغيلِ إلغاءُ آخِرِ صَفقَةٍ قائِمَةٍ تَدفَعُ لَها
+/// (<c>GatewayInvoiceCloser</c> مِن <c>DealsService.CancelAsync</c>)، فَلا يَدفَعُ مُشتَرٍ ثَمَنَ طَلَبٍ مُلغًى مِن صَفحَةٍ مَفتوحَةٍ أَمامَه.
+/// <b>وصَفحَةُ «Update Invoice» مُلتَبِسَة — ويُقال</b>: مُقَدِّمَتُها «Update the details of an existing Moyasar invoice, such as its amount,
+/// description, or expiry date»، وجَدوَلُ جِسمِها <c>metadata</c> وَحدَه؛ فَتَعديلُ المَبلَغِ غَيرُ مَقروءٍ يَقيناً ولا يُبنى عَلَيه. وشَرطُ
+/// الاستِخراجِ أَعلاه لَم يَتَغَيَّر.</para>
 /// </summary>
 public sealed class MoyasarClient
 {
@@ -58,11 +70,18 @@ public sealed class MoyasarClient
     public const string BaseUrl = "https://api.moyasar.com/v1";
     public const string InvoicesPath = "/invoices";
 
+    /// <summary>ذَيلُ مَسارِ الإلغاءِ بَعدَ مُعَرِّفِ الفاتورَة — «<c>PUT /invoices/:id/cancel</c>» بِحَرفِ صَفحَةِ «Cancel invoice» (‏2026-10-12).</summary>
+    public const string CancelSuffix = "/cancel";
+
     /// <summary>العُملَةُ الوَحيدَةُ الَّتي تُنشِئُ بِها المَنَصَّةُ فاتورَة — أَسعارُ المَتاجِرِ بِالرِيال.</summary>
     public const string Currency = "SAR";
 
     /// <summary>حالُ الفاتورَةِ المَدفوعَة — مِن مَعجَمِ <c>InvoiceStatus</c> بِحَرفِه.</summary>
     public const string PaidStatus = "paid";
+
+    /// <summary>حالُ الفاتورَةِ المَفتوحَةِ الَّتي لَم تُدفَع — مِن مَعجَمِ <c>InvoiceStatus</c> بِحَرفِه، وهي حالُ مِثالِ رَدِّ «Create Invoice» نَفسِه
+    /// (<c>"status": "initiated"</c>، مَقروءاً ‏2026-10-12). والوَثيقَةُ لا تَشرَحُ سائِرَ الحالات، فَلا يُلغى إلّا ما كانَ عَلَيها.</summary>
+    public const string OpenStatus = "initiated";
 
     /// <summary>أَصغَرُ مَبلَغٍ تَقبَلُه الفاتورَة بِالهَلَلَة — «‏Possible values: &gt;= 100».</summary>
     public const long MinimumAmount = 100;
@@ -137,6 +156,29 @@ public sealed class MoyasarClient
         if (!Guid.TryParse(invoiceId, out var id)) return Fail<MoyasarInvoice>(MoyasarFailures.Invalid, operation, null);
 
         var res = await SendAsync(secretKey, HttpMethod.Get, InvoicesPath + "/" + id.ToString("D"), null, operation, ct);
+        if (!res.Ok) return MoyasarResult<MoyasarInvoice>.Fail(res.Failure!);
+        return Read(res.Value) is { } invoice
+            ? MoyasarResult<MoyasarInvoice>.Success(invoice)
+            : Unreadable<MoyasarInvoice>(operation, "id");
+    }
+
+    // ─── والثالِثَة — ‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الثانِيَة ─────────────────────────────────
+
+    /// <summary>
+    /// <para><b>إلغاءُ فاتورَةٍ مُستَضافَةٍ فَلا تُدفَع</b> — <c>PUT /invoices/:id/cancel</c> بِلا جِسمٍ وبِمِفتاحِ المُستَأجِر: «Cancel an existing
+    /// Moyasar invoice so it can no longer be paid by the customer». والمُعَرِّفُ يُفحَصُ قَبلَ أَن يَدخُلَ العُنوانَ كَالجَلبِ حَرفاً، والرَدُّ ‏200
+    /// الفاتورَةُ بِحالِها كَما قالَتها البَوّابَة، وكُلُّ فَشَلٍ رَمزُه مِن المَعجَمِ الخُماسيِّ نَفسِه — لا سادِس.</para>
+    /// <para><b>وما لا تَقولُه الوَثيقَة — ويُقال</b>: أَيَّ حالٍ يَقبَلُ الإلغاء، وبِمَ يُجابُ إلغاءُ فاتورَةٍ دُفِعَت أَو أُلغِيَت. فَلا يُناديه
+    /// مُستَهلِكُه إلّا عَلى فاتورَةٍ جَلَبَها لِلتَّوِّ بِحالِ <see cref="OpenStatus"/>، وما يُجابُ بِه غَيرُ ذلكَ يُقاسُ في البُرهانِ الحَيّ.</para>
+    /// </summary>
+    public async Task<MoyasarResult<MoyasarInvoice>> CancelInvoiceAsync(
+        string secretKey, string invoiceId, CancellationToken ct = default)
+    {
+        const string operation = "cancel invoice";
+        if (string.IsNullOrWhiteSpace(secretKey)) return Fail<MoyasarInvoice>(MoyasarFailures.NotConfigured, operation, null);
+        if (!Guid.TryParse(invoiceId, out var id)) return Fail<MoyasarInvoice>(MoyasarFailures.Invalid, operation, null);
+
+        var res = await SendAsync(secretKey, HttpMethod.Put, InvoicesPath + "/" + id.ToString("D") + CancelSuffix, null, operation, ct);
         if (!res.Ok) return MoyasarResult<MoyasarInvoice>.Fail(res.Failure!);
         return Read(res.Value) is { } invoice
             ? MoyasarResult<MoyasarInvoice>.Success(invoice)
