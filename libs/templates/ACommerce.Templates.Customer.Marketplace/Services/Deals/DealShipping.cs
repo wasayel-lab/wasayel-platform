@@ -299,6 +299,61 @@ public sealed class DealShipping
             : created;
     }
 
+    /// <summary>كَم مَرَّةً يُقَرَّرُ الانتِقالُ ويُكتَبُ حينَ يُعارِضُه حِفظٌ (‏ADR-036 الخُطوَة 3): الأولى، وإعادَتانِ عَلى ما
+    /// كُتِبَ بَعدَها — عَدَدُ <c>AttachAttempts</c> في <see cref="DealsService"/>. وبَعدَها ‏503 فَتُعيدُ OTO الإرسال.</summary>
+    public const int NoticeAttempts = 3;
+
+    /// <summary>
+    /// <para><b>وارِدُ <c>orderStatus</c></b> (‏ADR-033 §٢‑هـ القاعِدَة ٦): الإشعارُ المَقبولُ إشارَةٌ — يُطابَقُ عَلى الصَفقَةِ
+    /// المَخزونَة، <b>ثُمَّ تُسأَلُ OTO عَن الطَلَبِ بِرَمزِ البائِعِ قَبلَ أَيِّ كِتابَة</b>، ثُمَّ يُقَرَّرُ عَلى جَوابِها:
+    /// <c>Shipping → Delivered</c> بِالطَرَفِ المُقابِل، ورابِطا البوليصَةِ والتَتَبُّعِ حينَ يَتَغَيَّران. والإشعارُ
+    /// المُكَرَّرُ بِلا أَثَر (<see cref="OtoOrderStatusGate.AlreadyDelivered"/>، والرابِطانِ لا يُكتَبانِ بِلا تَغيير).</para>
+    ///
+    /// <para><b>وعِندَ تَعارُضِ النُسخَةِ يُعادُ القَرارُ لا الكِتابَة</b> (‏ADR-036 الخُطوَة 3 والمُلحَقُ §٩): ما رَدَّه
+    /// <see cref="DealsService.AdvanceAsync"/> يُعيدُ الصَفقَةَ كَما في المَخزَنِ الآن، فَتُسأَلُ <see cref="OtoOrderStatusGate.Decide"/>
+    /// عَلَيها مِن جَديد — كِتابَةٌ لا تَمَسُّ التَسليمَ (رابِطٌ، مُلاحَظَة) يُكتَبُ بَعدَها الانتِقال، وتَسليمٌ يَدَوِيٌّ سَبَقَه
+    /// يُجابُ «سَبَق» بِلا انتِقالٍ ثانٍ، وإلغاءٌ يُجابُ بِرَمزِه. و<c>from = Shipping</c> يَحرُسُ ما بَينَ القَرارِ والحِفظ.
+    /// ولا يُناقِضُ ذلك رَفضَ §٤ «إعادَةَ المُحاوَلَةِ داخِلَ الخِدمَة»: عِلَّتُه قَرارُ صاحِبِ نَقرَةٍ اتُّخِذَ عَلى حالٍ قَديم،
+    /// وهُنا لا نَقرَةَ ولا قَرارَ قَديم — الحَقيقَةُ مَجلوبَةٌ الآن مِن OTO، والقَرارُ يُحسَبُ عَلى المَخزونِ الآن.</para>
+    /// </summary>
+    public async Task<OtoNoticeOutcome> ReceiveAsync(
+        string tenantSlug, OtoOrderStatusNotice notice, CancellationToken ct = default)
+    {
+        var token = VendorTokenFor(_opts, tenantSlug);
+        if (token is null) return new(OtoOrderStatusGate.CarrierUnavailable, null);
+
+        var deal = notice.DealId is { } id ? await _deals.LoadAsync(tenantSlug, id, ct) : null;
+        if (OtoOrderStatusGate.Match(notice, deal) is { } unmatched) return new(unmatched.Code, deal);
+
+        // الإشعارُ إشارَةٌ لا بُرهان: حالُ الطَلَبِ مِن OTO نَفسِها قَبلَ أَيِّ كِتابَة.
+        var fetched = await _oto.GetOrderStatusAsync(token, notice.OrderId, ct);
+        if (fetched.Value is not { } state)
+            return new(OtoOrderStatusGate.StateUnconfirmed, deal, fetched.Failure!.Code);
+
+        var outcome = await DeliverAsync(tenantSlug, deal!, state);
+        return outcome.Code is OtoOrderStatusGate.OrderMismatch or DealsService.ChangedMeanwhile || outcome.Deal is not { } now
+            ? outcome
+            : outcome with { Deal = await AttachLinksAsync(tenantSlug, now, state, CancellationToken.None) };
+    }
+
+    /// <summary>القَرارُ ثُمَّ الانتِقال — ويُعادُ القَرارُ عَلى المَخزونِ بَعدَ كُلِّ رَدّ: <see cref="NoticeAttempts"/> كِتابَةً
+    /// عَلى الأَكثَر، وقَرارٌ أَخيرٌ عَلى ما كُتِبَ بَعدَ آخِرِها (فَتَسليمٌ سَبَقَ يُجابُ «سَبَق» لا ‏503).</summary>
+    private async Task<OtoNoticeOutcome> DeliverAsync(string tenantSlug, Deal deal, OtoOrderState state)
+    {
+        var current = deal;
+        for (var attempt = 1; ; attempt++)
+        {
+            if (OtoOrderStatusGate.Decide(current, state) is { } refusal) return new(refusal.Code, current);
+            if (attempt > NoticeAttempts) return new(DealsService.ChangedMeanwhile, current);
+
+            var moved = await _deals.AdvanceAsync(tenantSlug, current.Id, current.CounterpartyId!.Value,
+                current.CounterpartyName ?? "", null, CancellationToken.None, DealStage.Shipping);
+            if (moved.Ok) return new(OtoOrderStatusGate.Delivered, moved.Deal);
+            if (moved.Deal is not { } stored) return new(OtoOrderStatusGate.OrderUnknown, null);
+            current = stored;
+        }
+    }
+
     /// <summary>
     /// <para><b>رابِطا البوليصَةِ والتَتَبُّعِ مِن حالٍ جَلَبناه</b> — يُكتَبُ ما تَغَيَّرَ وَحدَه (التَكرارُ بِلا
     /// أَثَر)، وما لَيسَ عُنواناً مُطلَقاً بِـ<c>https</c> لا يُكتَب: الرابِطُ يُرسَمُ <c>href</c> لِلطَرَفَين.</para>

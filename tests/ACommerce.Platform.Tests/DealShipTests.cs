@@ -45,11 +45,12 @@ internal sealed class OtoRouteHandler : HttpMessageHandler
     public static string? OrderIdIn(string? body)
         => body is null ? null : JsonDocument.Parse(body).RootElement.GetProperty("orderId").GetString();
 
-    public static HttpResponseMessage Tracking(string? orderId, string otoId = "540789")
+    public static HttpResponseMessage Tracking(string? orderId, string otoId = "540789", string status = "searchingDriver",
+        string trackingUrl = "https://app.tryoto.com/otoflex-tracking?enc=x")
         => Json(HttpStatusCode.OK,
             "{\"success\":true,\"orderId\":" + JsonSerializer.Serialize(orderId) + ",\"otoId\":\"" + otoId + "\"," +
-            "\"status\":\"searchingDriver\",\"printAWBURL\":\"https://app.tryoto.com/print/awb?enc=y\"," +
-            "\"trackingUrl\":\"https://app.tryoto.com/otoflex-tracking?enc=x\"}");
+            "\"status\":" + JsonSerializer.Serialize(status) + ",\"printAWBURL\":\"https://app.tryoto.com/print/awb?enc=y\"," +
+            "\"trackingUrl\":" + JsonSerializer.Serialize(trackingUrl) + "}");
 
     public int CallsTo(string path) => Calls.Count(c => c.Path == path);
 
@@ -65,9 +66,9 @@ internal sealed class OtoRouteHandler : HttpMessageHandler
 
 public class DealShipTests
 {
-    private const string Slug = DealShipping.DemoStore;
-    private static readonly Guid Buyer    = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
-    private static readonly Guid Seller   = Guid.Parse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    internal const string Slug = DealShipping.DemoStore;
+    internal static readonly Guid Buyer   = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    internal static readonly Guid Seller  = Guid.Parse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
     private static readonly Guid Stranger = Guid.Parse("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
     private static readonly Guid AppOwner = Guid.Parse("dddddddd-dddd-4ddd-8ddd-dddddddddddd");
 
@@ -109,7 +110,7 @@ public class DealShipTests
         },
     };
 
-    private static readonly DealShipper Vendor = new(Seller, "بائِع");
+    internal static readonly DealShipper Vendor = new(Seller, "بائِع");
 
     private static string? Code(Deal? deal, DealShipper? by = null, bool carrierReady = true)
         => DealShipAuthorization.Validate(deal, by ?? Vendor, carrierReady)?.Code;
@@ -320,9 +321,11 @@ public class DealShipTests
 
     // ═══ ٤. المَسارُ كامِلاً — عالَمُ الوَثائِقِ ووَثيقَةُ OTO ════════════════════════════
 
-    private sealed record World(DocWorld Docs, DealsService Deals, DealShipping Shipping, OtoRouteHandler Oto, Guid Id);
+    /// <summary>عالَمُ الشَحن — <c>internal</c> لِأَنّ <c>OtoOrderStatusTests</c> يَبني عَلَيه وارِدَه: نُسخَتانِ مِن أَداةِ
+    /// قِياسٍ تَنجَرِفان.</summary>
+    internal sealed record World(DocWorld Docs, DealsService Deals, DealShipping Shipping, OtoRouteHandler Oto, Guid Id);
 
-    private static async Task<World> ConfirmedCashDeal(string? environment = OtoEnvironment.Staging)
+    internal static async Task<World> ConfirmedCashDeal(string? environment = OtoEnvironment.Staging)
     {
         var docs = new DocWorld();
         var deals = new DealsService(docs.Store, new ForbiddenPaymentProvider());

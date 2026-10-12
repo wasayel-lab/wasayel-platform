@@ -76,10 +76,12 @@ internal class SaveGate : DispatchProxy
 
 public class LiveDealConcurrencyProofTests(ITestOutputHelper output)
 {
-    private static bool Enabled =>
+    // ‏`internal` لا `private` (‏2026-10-12، ‏ADR-036 الخُطوَة 3): صَفّا وارِدِ OTO الحَيّانِ (`LiveOtoOrderStatusProofTests`)
+    // يُرَكِّبانِ المَخزَنَ نَفسَه بِالبَوّابَةِ نَفسِها — تَركيبٌ ثانٍ يَنجَرِفُ عَمّا يُشَغِّلُه المُضيف.
+    internal static bool Enabled =>
         Environment.GetEnvironmentVariable("WASAYEL_LIVE_PROOF") == "1";
 
-    private static string? ConnectionString =>
+    internal static string? ConnectionString =>
         Environment.GetEnvironmentVariable("ConnectionStrings__Postgres");
 
     private static string ResilientConnection =>
@@ -88,7 +90,7 @@ public class LiveDealConcurrencyProofTests(ITestOutputHelper output)
     /// <summary>تَركيبُ المَخزَنِ كَما يُرَكِّبُه المُضيف — <b>ووَثيقَةُ <see cref="Deal"/> بِالدالَّةِ الَّتي يُناديها تَركيبُ
     /// القالِب</b> (<see cref="DealsService.RegisterDocument"/>، ‏ADR-036): فَما يُقاسُ هُنا هُوَ ما يُشَغَّل. (كانَ بِلا تَسجيلٍ
     /// يَومَ وُلِدَ المِلَفُّ في <c>bf01f30</c> — ذاكَ ما كانَ يُشَغَّل.)</summary>
-    private static DocumentStore BuildStore() => DocumentStore.For(o =>
+    internal static DocumentStore BuildStore() => DocumentStore.For(o =>
     {
         o.Connection(ResilientConnection);
         o.DatabaseSchemaName = "platform";

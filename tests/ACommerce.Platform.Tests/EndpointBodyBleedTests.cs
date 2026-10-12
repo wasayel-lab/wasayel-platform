@@ -440,7 +440,10 @@ public class EndpointBodyBleedTests
         // **نُقطَةٌ واحِدَةٌ في ‏11 سَطراً**: `POST /{slug}/deals/{id:guid}/ship` — جَلسَةٌ، وسِجِلُّ سُلطَةٍ
         // (`DealShipper`)، ونِداءٌ واحِدٌ لِـ`DealShipping.ShipAsync`، ورَدّ. **وصِفرُ سَطرِ قَرار**: البَوّابَةُ
         // في `DealShipAuthorization` النَقِيَّة، والطَلَبُ والمَراجِعُ والانتِقالُ في الخِدمَة.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Shipping/OtoShippingEndpoints.cs", 11),
+        // **‏11 ← 22 في الكوميتِ التالي (‏2026-10-12)**: نُقطَةُ وارِدِ OTO `POST /{slug}/shipping/oto/order-status`
+        // في ‏11 سَطراً — قِراءَةُ الجِسمِ الخامّ، والبَوّابَةُ النَقِيَّةُ `OtoOrderStatusGate.Admit`، ونِداءٌ واحِدٌ
+        // لِـ`DealShipping.ReceiveAsync`، وسَطرُ لوغ، والرَدُّ مِن `StatusFor` النَقِيَّة. وصِفرُ سَطرِ قَرارٍ كَذلك.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Shipping/OtoShippingEndpoints.cs", 22),
 
         // ─── مِلَفٌّ خامِس — هُوِيَّةُ البِناء (‏ADR-019) ─────────────
         //
@@ -883,7 +886,10 @@ public class EndpointBodyBleedTests
     /// <c>Shipping/OtoShippingEndpoints.cs</c> — بِنُقطَةِ الشَحن <c>POST /{slug}/deals/{id:guid}/ship</c>
     /// في ‏11 سَطراً بِلا سَطرِ قَرار. طَبَعَ العَدّادُ «‏2906 → 2917» و«‏129 → 130»، و<b>‏11 = 11</b> — كُلُّ
     /// الزِيادَةِ في المِلَفِّ الجَديد، ومِلَفُّ القالِبِ ‏2659 لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 2917;
+    /// <remarks><b>‏2917 ← 2928 يَوم ‏2026-10-12</b> (‏ADR-033 الخُطوَة 3): نُقطَةُ وارِدِ OTO
+    /// <c>POST /{slug}/shipping/oto/order-status</c> في المِلَفِّ نَفسِه، ‏11 سَطراً بِلا سَطرِ قَرار. طَبَعَ العَدّادُ
+    /// «‏2917 → 2928» و«‏130 → 131»، و<b>‏11 = 11</b> — سَقفُ المِلَفِّ ‏11 ← 22، ومِلَفُّ القالِبِ ‏2659 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 2928;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ
@@ -1019,7 +1025,11 @@ public class EndpointBodyBleedTests
     /// — يُنشِئُ طَلَباً وشُحنَتَه بِحِسابِ البائِعِ عِندَ OTO ثُمَّ يُحَرِّكُ الصَفقَةَ — فَلا يَكونُ <c>GET</c>،
     /// ولا يَكفيه <c>/advance</c>: ذاكَ يُحَرِّكُ وَحدَه ولا يَعرِفُ ناقِلاً. وصَفحَةُ الصَفقَةِ تَرسُمُ استِمارَتَه
     /// حَيثُ تُجيزُها البَوّابَةُ نَفسُها.</para>
-    private const int PinnedEndpointCount = 130;
+    /// <para>وثامِنَةَ عَشرَةَ يَومَ ‏2026-10-12 (‏ADR-033 الخُطوَة 3) — <b>نُقطَةٌ واحِدَة</b>:
+    /// <c>POST /{slug}/shipping/oto/order-status</c>. وهي الحالَةُ السابِعَةُ نَفسُها (رِسالَةُ PayPal): <b>أَتمَتَةُ عَمَلٍ
+    /// يَدَوِيٍّ قائِم</b> — «تَسليم» كانَ يُعلِنُه البائِعُ بِزِرِّ <c>/advance</c>، وصارَ يَقَعُ أَيضاً بِإشعارٍ تُؤَكِّدُه OTO
+    /// نَفسُها حينَ نَسأَلُها؛ والزِرُّ باقٍ بِلا تَغييرِ حَرف — طَريقٌ ثانٍ لا بَديل. ومُنادِيها خادِمُ OTO فَلا تَكونُ صَفحَة.</para>
+    private const int PinnedEndpointCount = 131;
 
     // ─── الفَحص ───────────────────────────────────────────────────────
 
