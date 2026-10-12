@@ -37,7 +37,13 @@ public static class CredentialKinds
 
     /// <summary>لا شَيءَ عِندَ السُكون. مُزَوِّدُه المَقيس:
     /// <c>MockPayments</c>, <c>MockMaps</c>, <c>MockDelivery</c>,
-    /// <c>LocalFileStorage</c> — مُسَجَّلَةٌ اليَومَ بِلا شَرط.</summary>
+    /// <c>LocalFileStorage</c> — مُسَجَّلَةٌ اليَومَ بِلا شَرط.
+    /// <b>وكَفَّ «اليَومَ بِلا شَرط» عَن الصِدقِ — يُقالُ تَحتَه ولا يُمحى (‏2026-10-12، مَقيسٌ في
+    /// <c>Program.cs</c>)</b>: لا يُسَجَّلُ مِنها بِلا شَرطٍ إلّا <c>MockMaps</c> (<c>AddMockMaps()</c>)؛
+    /// و<c>MockPayments</c> بِالبيئَة (<c>PaymentProviderSelection.Decide</c>، ‏ADR-014)، و<c>LocalFileStorage</c>
+    /// بِالتَهيئَة (<c>FileStorageSelection.Decide</c>، ‏ADR-017)، و<c>MockDelivery</c> حُذِفَ مَعَ تَعريفِه
+    /// (‏ADR-033 الخُطوَة 3). والنَوعُ باقٍ: تُعلِنُه ثَلاثَةُ تَعريفاتٍ في الكاتالوج — مُحاكيا الدَفعِ والخَرائِط،
+    /// والتَخزينُ المَحَلِّيّ.</summary>
     public const string None = "none";
 
     /// <summary>نَصٌّ صَريح، <b>يُعرَض</b> (رابِطٌ عامّ) ويُسترَجَع.
