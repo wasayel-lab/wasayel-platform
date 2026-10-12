@@ -38,6 +38,9 @@ public static class DealRefusalTexts
             // ورَمزُ «لَم تُثبِت OTO الشُحنَة» (مُراجَعَةُ تَيّارِ S7، ‏2026-10-12): الطَلَبُ عِندَها ومَرجِعاه مَكتوبان، فَلا يُعادُ
             // رَمزُ فَشَلٍ نَصُّه «ولَم يُكتَب في الصَّفقَة شَيء».
             .Append(DealShipping.ShipmentUnconfirmed)
+            // ورَمزُ «طَلَبُها عِندَ OTO» (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12): تُرجِعُه `AdvanceAsync` لِبابٍ عامٍّ لا يَحمِلُ جَوابَ OTO،
+            // فَيَبلُغُ الصَفحَةَ مِن `/advance` بِـ`?err=` — والصَفحَةُ لا تَرسُمُ ذلك الزِرَّ، فَلا يَصِلُه إلّا سِباقٌ أَو طَلَبٌ مَصنوع.
+            .Append(DealShipping.DealAwaitsCarrier)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 

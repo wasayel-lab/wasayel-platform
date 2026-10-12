@@ -26,6 +26,7 @@ public class DealRefusalTextsTests
         // ورُموزُ نُقطَةِ الشَحنِ ومَعجَمُ عَميلِ OTO (‏ADR-033 الخُطوَة 3، ‏2026-10-12) — يُضافانِ هُنا بِاسمَيهِما،
         // والعَدُّ 9 ← 21.
         // ورَمزُ «لَم تُثبِت OTO الشُحنَة» (مُراجَعَةُ تَيّارِ S7، ‏2026-10-12) — يُضافُ هُنا بِاسمِه، والعَدُّ 21 ← 22.
+        // ورَمزُ «طَلَبُها عِندَ OTO» (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12) — يُضافُ هُنا بِاسمِه، والعَدُّ 22 ← 23.
         var expected = DealAcceptAuthorization.All
             .Concat(DealCancelAuthorization.All)
             .Append(ChatStartReturn.PartnerMissing)
@@ -33,13 +34,14 @@ public class DealRefusalTextsTests
             .Concat(DealShipAuthorization.All)
             .Concat(ACommerce.Kit.Delivery.OtoFailures.All)
             .Append(DealShipping.ShipmentUnconfirmed)
+            .Append(DealShipping.DealAwaitsCarrier)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(c => c, StringComparer.Ordinal);
         Assert.Equal(expected, DealRefusalTexts.Codes.OrderBy(c => c, StringComparer.Ordinal));
         // 6 + 3 − 2 مُشتَرَكَين (deal_not_found، deal_not_active) + 1 + 1 = 9؛
         // ثُمَّ الشَحن: 10 − 3 مُشتَرَكَةٍ مَعَ القَبول (deal_not_found، listing_owner_missing، deal_not_active) = 7،
-        // وعَميلُ OTO 5 — فَـ9 + 7 + 5 = 21؛ ثُمَّ `shipment_unconfirmed` — 22.
-        Assert.Equal(22, DealRefusalTexts.Codes.Count);
+        // وعَميلُ OTO 5 — فَـ9 + 7 + 5 = 21؛ ثُمَّ `shipment_unconfirmed` — 22؛ ثُمَّ `deal_awaits_carrier` — 23.
+        Assert.Equal(23, DealRefusalTexts.Codes.Count);
         Assert.Equal(DealRefusalTexts.Codes.Count, DealRefusalTexts.Codes.Distinct(StringComparer.Ordinal).Count());
     }
 
@@ -52,7 +54,8 @@ public class DealRefusalTextsTests
         foreach (var code in DealAcceptAuthorization.All.Concat(DealCancelAuthorization.All).Append(ChatStartReturn.PartnerMissing)
                      .Append(DealsService.ChangedMeanwhile)
                      .Concat(DealShipAuthorization.All).Concat(ACommerce.Kit.Delivery.OtoFailures.All)
-                     .Append(DealShipping.ShipmentUnconfirmed))
+                     .Append(DealShipping.ShipmentUnconfirmed)
+                     .Append(DealShipping.DealAwaitsCarrier))
         {
             var key = DealRefusalTexts.KeyFor(code);
             Assert.Equal(DealRefusalTexts.Prefix + code, key);
@@ -63,8 +66,8 @@ public class DealRefusalTextsTests
             checked_++;
         }
         // 6 + 3 + 1 + 1 (‏ADR-036) + 10 + 5 (‏ADR-033 الخُطوَة 3) — المُشتَرَكُ يُفحَصُ مَرَّتَين ويَصِلُ مِفتاحاً واحِداً
-        // — + 1 (`shipment_unconfirmed`، مُراجَعَةُ تَيّارِ S7، ‏2026-10-12): 26 ← 27.
-        Assert.Equal(27, checked_);
+        // — + 1 (`shipment_unconfirmed`، مُراجَعَةُ تَيّارِ S7، ‏2026-10-12): 26 ← 27؛ + 1 (`deal_awaits_carrier`، المُراجَعَةُ الثانِيَة): 27 ← 28.
+        Assert.Equal(28, checked_);
     }
 
     /// <summary><b>نَصُّ «بِلا مالِكِ إعلان» يُسَمّي مَن يُحَرِّكُها حَقّاً</b> (‏2026-10-11، مُراجَعَةُ الموجَةِ الثانِيَةِ
@@ -127,6 +130,28 @@ public class DealRefusalTextsTests
         Assert.Equal(3, saysNothingWritten);
     }
 
+    /// <summary><b>نَصُّ «طَلَبُها عِندَ OTO» يُسَمّي البابَ الَّذي يُخرِجُها</b> (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12): يُرَدُّ بِه
+    /// <c>/advance</c> عَلى صَفقَةٍ طَلَبُها عِندَ OTO — والصَفحَةُ لا تَرسُمُ ذلك الزِرّ، فَلا يَبلُغُه إلّا سِباقٌ أَو طَلَبٌ مَصنوع —
+    /// فَالنَصُّ يُسَمّي «أَكمِل الشَّحن» بِحَرفِ زِرِّه في القامُوس (أَوَّلِ مَقطَعَيه) وتَسمِيَةَ المَرحَلَةِ مِن الكاتالوج، ولا يَعِدُ بِإعادَةِ
+    /// المُحاوَلَةِ مِن البابِ الَّذي رُدّ. والسالِب: لَيسَ نَصَّ <c>shipment_unconfirmed</c>.</summary>
+    [Fact]
+    public void The_deal_awaits_carrier_text_names_the_resume_button_and_the_stage_by_their_own_words()
+    {
+        Assert.Equal("deal_awaits_carrier", DealShipping.DealAwaitsCarrier);
+        var key = DealRefusalTexts.KeyFor(DealShipping.DealAwaitsCarrier);
+        Assert.Equal("deals.detail.err_deal_awaits_carrier", key);
+        var text = LocaleCatalog.Text(LocaleCatalog.Arabic, key!);
+
+        var resume = LocaleCatalog.Text(LocaleCatalog.Arabic, "deals.detail.ship_resume");
+        var button = resume[..resume.IndexOf(" — ", StringComparison.Ordinal)];
+        Assert.Equal("أَكمِل الشَّحن", button);
+        Assert.Contains($"«{button}»", text, StringComparison.Ordinal);
+        Assert.Contains($"«{DealsPolicy.LabelAr(DealStage.Shipping)}»", text, StringComparison.Ordinal);
+        Assert.Contains("عِندَ OTO", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("أَعِد المُحاوَلَة", text, StringComparison.Ordinal);
+        Assert.NotEqual(LocaleCatalog.Text(LocaleCatalog.Arabic, DealRefusalTexts.KeyFor(DealShipping.ShipmentUnconfirmed)!), text);
+    }
+
     /// <summary><b>السالِب</b>: رَمزٌ خارِجَ المَعجَم، أَو غِيابٌ، أَو فَراغ — لا مِفتاحَ،
     /// فَلا شَريطَ ولا مِفتاحَ خاماً عَلى الشاشَة.</summary>
     [Theory]
@@ -162,6 +187,7 @@ public class DealRefusalTextsTests
             "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs"));
         Assert.Equal(2, endpoints.Split("$\"?err={res.Violation!.Code}\"").Length - 1);
         // و`/advance` يَرتَدُّ بِرَمزِ نَتيجَتِه حينَ يوجَد (‏ADR-036): اليَومَ تَعارُضُ النُسخَةِ وَحدَه.
+        // (‏2026-10-12، مُراجَعَةُ تَيّارِ S7 الثانِيَة — ولا يُعادُ حَرفٌ فَوقَه: ومَعَه `deal_awaits_carrier`، والجِسمُ نَفسُه لَم يُمَسّ.)
         Assert.Equal(1, endpoints.Split("(res.Code is { } code ? $\"?err={code}\" : \"\")").Length - 1);
     }
 }

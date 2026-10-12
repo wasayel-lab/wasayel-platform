@@ -226,6 +226,62 @@ public class DealStudioAdvanceDoorTests(ITestOutputHelper output)
         Assert.True(disagree.Count == 0, line + " — " + string.Join("، ", disagree.Take(8).Select(Name)));
     }
 
+    /// <summary>
+    /// <para><b>وصَفقَةٌ طَلَبُها عِندَ OTO — الدالَّةُ والتَسَلسُلُ يَتَّفِقانِ حالَةً حالَة، ولا يَدخُلُ «شَحن» مِنها شَيء</b> (مُراجَعَةُ
+    /// تَيّارِ S7 الثانِيَة، ‏2026-10-12؛ ‏ADR-033 §٧‑ح): المَصفوفَةُ نَفسُها وكُلُّ صَفقَةٍ فيها بِـ<c>oto_order_id</c>. صارَت
+    /// <c>AdvanceAsync</c> تَرُدُّ بِـ<c>deal_awaits_carrier</c> دُخولَ «شَحن» بِلا جَوابِ OTO (<see cref="DealShipping.AwaitsCarrier"/>)،
+    /// و<see cref="DealsService.AdminPathCanMove"/> تَسأَلُها — وكانَت تُجيزُ «→ شَحن» فَيَمضي التَسَلسُلُ بِلا بوليصَة (تَوصيفُه
+    /// <c>e52ba8f</c>). يُقاسُ التَسَلسُلُ عارِياً (الدالَّةُ تُجيبُ بِما يَفعَل) ومَحروساً بِالدالَّة (لا زِرَّ يُرَدّ، ولا مَخفِيَّ يَتَحَرَّك، ولا
+    /// رَفضَ بَعدَ كِتابَة)؛ وما تاليه «شَحن» يُعَدُّ ويُشتَرَطُ أَن لا يَكونَ صِفراً (القاعِدَة ١٠).</para>
+    /// </summary>
+    [Fact]
+    public void For_deals_whose_order_is_at_OTO_the_predicate_answers_the_sequence_and_no_door_enters_Shipping()
+    {
+        var bare = new List<Case>();
+        var gated = new List<Case>();
+        var awaiting = 0;
+        foreach (var pattern in Patterns)
+        foreach (var pay in Pays)
+        foreach (var stage in DealsPolicy.StagesFor(pattern))
+        foreach (var (name, initiator, counterparty) in Parties)
+        foreach (var status in Statuses)
+        {
+            foreach (var (list, sequence) in new (List<Case>, Func<DealsService, Deal, DealAdvanceResult?>)[]
+                     {
+                         (bare, (deals, d) => EndpointSequence(deals, d.Id)),
+                         (gated, GatedEndpoint),
+                     })
+            {
+                var (deals, world, deal) = At(pattern, pay, stage, initiator, counterparty, status);
+                deal.Refs[DealShipping.OrderRef] = deal.Id.ToString("N");
+                var before = Copy(deal);
+                var draws = DealsService.AdminPathCanMove(before, AppOwner);
+                var saves = world.SaveCalls;
+                var res = sequence(deals, before);
+                list.Add(new Case(pattern, pay, stage, name, status, draws, res?.Ok ?? false, world.SaveCalls > saves, before));
+            }
+            if (status == DealStatus.Active && DealsPolicy.Next(pattern, stage, pay) == DealStage.Shipping) awaiting++;
+        }
+
+        var disagree = bare.Where(c => c.PageDraws != c.Moves).ToList();
+        var drawnButRefused = gated.Where(c => c.PageDraws && !c.Moves).ToList();
+        var hiddenButMoves = gated.Where(c => !c.PageDraws && c.Moves).ToList();
+        var refusedAfterWriting = gated.Where(c => !c.Moves && c.Wrote).ToList();
+        var enteredShipping = bare.Concat(gated)
+            .Where(c => c.Moves && DealsPolicy.Next(c.Pattern, c.Stage, c.Pay) == DealStage.Shipping).ToList();
+        var line = $"فُحِصَ {bare.Count} حالَة بِطَلَبٍ عِندَ OTO (مَرَّتَين): تُجيزُ الدالَّةُ {bare.Count(c => c.PageDraws)}؛ خِلافُها والتَسَلسُلِ " +
+                   $"{disagree.Count}؛ زِرٌّ يُرَدُّ {drawnButRefused.Count}، ومَخفِيٌّ يَتَحَرَّكُ {hiddenButMoves.Count}، ومَردودٌ بَعدَ كِتابَةٍ " +
+                   $"{refusedAfterWriting.Count}؛ فَعّالَةٌ تاليها «شَحن» {awaiting}، دَخَلَتها {enteredShipping.Count}.";
+        output.WriteLine(line);
+
+        Assert.True(bare.Count > 1000 && awaiting > 0 && bare.Count(c => c.PageDraws) > 0, line);
+        Assert.True(disagree.Count == 0, line + " — " + string.Join("، ", disagree.Take(8).Select(Name)));
+        Assert.True(drawnButRefused.Count == 0, line + " — " + string.Join("، ", drawnButRefused.Take(5).Select(Name)));
+        Assert.True(hiddenButMoves.Count == 0, line + " — " + string.Join("، ", hiddenButMoves.Take(5).Select(Name)));
+        Assert.True(refusedAfterWriting.Count == 0, line + " — " + string.Join("، ", refusedAfterWriting.Take(5).Select(Name)));
+        Assert.True(enteredShipping.Count == 0, line + " — " + string.Join("، ", enteredShipping.Take(5).Select(Name)));
+    }
+
     // ═══ ٢) مُوجِبٌ وسالِبٌ بِأَسمائِهِما ═════════════════════════════════════════════════
 
     /// <summary>

@@ -98,6 +98,10 @@ public static class DealApi
         // فَتَصنيفُها كانَ سَيَقولُ «فاعِلٌ غَيرُ مُخَوَّل» عَن فاعِلٍ مُخَوَّلٍ سَبَقَه غَيرُه.
         if (result.Code == DealsService.ChangedMeanwhile)
             return ApiOutcome.Error(ApiErrorCatalog.DealChangedMeanwhile, new { stage = result.Deal.Stage.ToString() });
+        // وطَلَبُها عِندَ الناقِل (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12؛ ‏ADR-033 §٧‑ح): رَمزُ الخِدمَةِ بِحَرفِه ‏409 — وتَصنيفُ الحالَةِ
+        // كانَ سَيَقولُ «فاعِلٌ غَيرُ مُخَوَّل» (‏403) عَن الطَرَفِ الَّذي يُخرِجُها، و`required_actor` فيه هُوَ نَفسُه.
+        if (result.Code == DealShipping.DealAwaitsCarrier)
+            return ApiOutcome.Error(ApiErrorCatalog.DealAwaitsCarrier, new { stage = result.Deal.Stage.ToString() });
 
         var code = AdvanceRejectionCode(result.Deal);
         return ApiOutcome.Error(code, new

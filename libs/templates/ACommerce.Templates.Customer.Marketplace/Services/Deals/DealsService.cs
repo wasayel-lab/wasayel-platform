@@ -36,6 +36,10 @@ public sealed class DealsService
     /// القامُوسَ بِالرَمز (<see cref="DealRefusalTexts"/>) لا هذا.</summary>
     private const string ChangedMeanwhileAr = "كَتَبَ غَيرُ هذا الطَلَبِ الصَفقَةَ بَعدَ أَن قَرَأَها — فَلَم يُكتَب شَيء.";
 
+    /// <summary>رِسالَةُ المُراجِعِ البَشَرِيِّ لِـ<see cref="DealShipping.DealAwaitsCarrier"/> — نَسَقُ <see cref="ChangedMeanwhileAr"/>:
+    /// الشاشَةُ تَقرَأُ القامُوسَ بِالرَمز، والـAPI مَعجَمَه.</summary>
+    private const string AwaitsCarrierAr = "طَلَبُ الصَفقَةِ عِندَ OTO وتاليها «شَحن» — لا تَدخُلُها بِلا جَوابٍ مِن OTO يُثبِتُ شُحنَتَها وبوليصَتَها.";
+
     /// <summary>
     /// <para><b>تَسجيلُ وَثيقَةِ الصَفقَةِ في Marten</b> — نِداءٌ واحِدٌ يُنادى مِن تَركيبِ القالِب
     /// (<c>ConfigureMarten</c> في <c>MarketplaceTemplateExtensions</c>) ومِن البُرهانِ الحَيّ، فَما يُقاسُ هُوَ ما يُشَغَّل
@@ -330,9 +334,18 @@ public sealed class DealsService
     /// <c>Delivered</c> إلى <c>Reviewed</c> بِاسمِه. فَمَرحَلَةٌ غَيرُ المَقروءَةِ تُرَدُّ بِـ<see cref="ChangedMeanwhile"/>
     /// قَبلَ أَيِّ كِتابَة — الرَمزُ نَفسُه لا رَمزٌ جَديد.</para>
     /// </param>
+    /// <param name="shipment">
+    /// <para><b>جَوابُ OTO عَن طَلَبِ الصَفقَة</b> — اختِيارِيٌّ، و<c>null</c> افتِراضاً (بَعدَ <paramref name="from"/> عَمداً: النِداءاتُ
+    /// القائِمَةُ لا تَتَحَرَّك؛ مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12؛ ‏ADR-033 §٧‑ح). صَفقَةٌ تَصدُقُ عَلَيها
+    /// <see cref="DealShipping.AwaitsCarrier"/> — تاليها «شَحن» وطَلَبُها عِندَ OTO — لا تَدخُلُ «شَحن» إلّا بِجَوابٍ يُثبِتُ شُحنَتَها
+    /// وبوليصَتَها (<see cref="DealShipping.ShipmentConfirmed"/>، تُعادُ هُنا عَلى الصَفقَةِ الَّتي سَتُكتَب)، وإلّا
+    /// <see cref="DealShipping.DealAwaitsCarrier"/> قَبلَ أَيِّ كِتابَة. ولا يَحمِلُه إلّا <c>DealShipping.ShipAsync</c> بَعدَ أَن سَأَلَ OTO؛
+    /// فَزِرُّ «تَأكيد: شَحن» والمَسارُ الإداريُّ والـAPI — وكانَت تُخرِجُها إلى «شَحن» بِلا بوليصَة (تَوصيفُه <c>e52ba8f</c>) — تُرَدّ.</para>
+    /// </param>
     public async Task<DealAdvanceResult> AdvanceAsync(
         string tenantSlug, Guid dealId, Guid actorId, string actorName,
-        string? note = null, CancellationToken ct = default, DealStage? from = null)
+        string? note = null, CancellationToken ct = default, DealStage? from = null,
+        ACommerce.Kit.Delivery.OtoOrderState? shipment = null)
     {
         await using var s = _store.LightweightSession(tenantSlug);
         var deal = await s.LoadAsync<Deal>(dealId, ct);
@@ -351,6 +364,11 @@ public sealed class DealsService
         var required = DealsPolicy.RequiredActorToLeave(deal)!;
         if (!IsActorAllowed(deal, actorId, required))
             return new(false, deal, $"يَتَطَلَّب فاعِلاً مِن نَوع: {required}");
+
+        // وطَلَبُ الصَفقَةِ عِندَ OTO وتاليها «شَحن»: لا تَدخُلُها إلّا بِجَوابِ OTO يُثبِتُ شُحنَتَها (مُراجَعَةُ تَيّارِ S7 الثانِيَة،
+        // ‏2026-10-12). بَعدَ الفاعِلِ لا قَبلَه — فَغَيرُ المُخَوَّلِ يُجابُ بِرَفضِ الفاعِلِ ولا يَعلَمُ أَنّ لِلصَفقَةِ طَلَباً هُناك.
+        if (DealShipping.AwaitsCarrier(deal) && !DealShipping.ShipmentConfirmed(deal, shipment))
+            return new(false, deal, AwaitsCarrierAr, DealShipping.DealAwaitsCarrier);
 
         // وحِفظُ الانتِقالِ يَشتَرِطُ النُسخَةَ الَّتي قُرِئَت (‏ADR-036): نَقرَتانِ مُتَداخِلَتانِ تَمضي أولاهُما وتُرَدُّ الأُخرى.
         try { return new(true, await MoveAsync(s, deal, next.Value, actorId, actorName, note, ct), null); }
@@ -595,13 +613,19 @@ public sealed class DealsService
     /// كَما تُحَرِّكُ النُقطَة، ثُمَّ بَوّابَةُ <see cref="AdvanceAsync"/> نَفسُها: صَفقَةٌ فَعّالَة، لَها تالٍ، وفاعِلُ المَرحَلَةِ
     /// المَدخولَةِ بِـ<c>IsActorAllowed</c> الواحِدَة. ومُطابَقَتُها لِلتَسَلسُلِ الحَقيقِيِّ مَقيسَةٌ حالَةً حالَةً في
     /// <c>DealStudioAdvanceDoorTests</c> — فَإن انجَرَفَ أَحَدُهُما أَحمَرَّ الصَفّ.</para>
+    ///
+    /// <para><b>وطَلَبٌ عِندَ OTO لا يُدخِلُه المَسارُ الإداريُّ «شَحن»</b> (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12؛ ‏ADR-033 §٧‑ح): صارَت
+    /// بَوّابَةُ الانتِقالِ تَرُدُّ بِـ<see cref="DealShipping.DealAwaitsCarrier"/> صَفقَةً تَصدُقُ عَلَيها <see cref="DealShipping.AwaitsCarrier"/>
+    /// والمَسارُ لا يَحمِلُ جَوابَ OTO — فَتَسأَلُها هذِه أَيضاً، وإلّا رَسَمَ الاستوديو «→ شَحن» يُرَدُّ بِلا كَلِمَة. وكانَ يُخرِجُها إلى «شَحن»
+    /// بِلا بوليصَة (تَوصيفُه <c>e52ba8f</c>).</para>
     /// </summary>
     public static bool AdminPathCanMove(Deal deal, Guid appOwnerId)
     {
         if (deal.Status != DealStatus.Active || DealsPolicy.RequiredActorToLeave(deal) is not { } required) return false;
         var counterparty = deal.CounterpartyId ?? (deal.InitiatorId == appOwnerId ? null : appOwnerId);
         return IsActorAllowed(new Deal { InitiatorId = deal.InitiatorId, CounterpartyId = counterparty },
-            deal.CounterpartyId ?? appOwnerId, required);
+            deal.CounterpartyId ?? appOwnerId, required)
+            && !DealShipping.AwaitsCarrier(deal);
     }
 
     /// <summary>
@@ -609,6 +633,10 @@ public sealed class DealsService
     /// كِتابَة: فَعّالَة، لَها تالٍ، و<see cref="IsActorAllowed"/> بِفاعِلِ المَرحَلَةِ المَدخولَة. تَقرَؤُها بَوّابَةُ الشَحنِ
     /// (‏<c>DealShipAuthorization</c>، ‏ADR-033 الخُطوَة 3) قَبلَ أَن تُنادى OTO — فَلا تُنشَأُ بوليصَةٌ لِصَفقَةٍ
     /// سَيَرُدُّ المُحَرِّكُ انتِقالَها، ولا يُلتَفُّ عَلى فاحِصِ الفاعِل: السِياسَةُ تُقَرِّر.</para>
+    ///
+    /// <para><b>ولا تَسأَلُ <see cref="DealShipping.AwaitsCarrier"/></b> (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12): هي البَوّابَةُ لِمُنادٍ
+    /// يَحمِلُ جَوابَ OTO إلى الانتِقال — مَسارُ الشَحن، يَسأَلُ OTO بَعدَها؛ ولَو سَأَلَتها لَرُدَّ استِئنافُ طَلَبٍ قائِمٍ قَبلَ أَن تُسأَلَ OTO.
+    /// والأَبوابُ العامَّةُ تَسأَلُها في الانتِقالِ نَفسِه (<see cref="DealShipping.DealAwaitsCarrier"/>).</para>
     /// </summary>
     public static bool CanMove(Deal deal, Guid actorId)
         => deal.Status == DealStatus.Active
@@ -626,5 +654,6 @@ public sealed class DealsService
 }
 
 /// <summary>نَتيجَةُ التَقَدُّم. <paramref name="Code"/> رَمزُ رَفضٍ مِن مَعجَمٍ حَيثُ يوجَد — اليَومَ
-/// <see cref="DealsService.ChangedMeanwhile"/> وَحدَه (‏ADR-036)؛ وسائِرُ الرَفضِ في <paramref name="Reason"/> نَصّاً كَما كان.</summary>
+/// <see cref="DealsService.ChangedMeanwhile"/> وَحدَه (‏ADR-036)؛ وسائِرُ الرَفضِ في <paramref name="Reason"/> نَصّاً كَما كان.
+/// (‏2026-10-12، مُراجَعَةُ تَيّارِ S7 الثانِيَة — ولا يُعادُ حَرفٌ فَوقَه: ومَعَه <see cref="DealShipping.DealAwaitsCarrier"/>.)</summary>
 public sealed record DealAdvanceResult(bool Ok, Deal? Deal, string? Reason, string? Code = null);

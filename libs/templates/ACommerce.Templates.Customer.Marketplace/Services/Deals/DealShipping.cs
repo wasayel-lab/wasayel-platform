@@ -181,6 +181,15 @@ public sealed class DealShipping
     /// </summary>
     public const string ShipmentUnconfirmed = "shipment_unconfirmed";
 
+    /// <summary>
+    /// <para><b>طَلَبُ الصَفقَةِ عِندَ OTO — فَلا يُدخِلُها «شَحن» بابٌ لا يَحمِلُ جَوابَ OTO</b> (مُراجَعَةُ تَيّارِ S7 الثانِيَة،
+    /// ‏2026-10-12؛ ‏ADR-033 §٧‑ح): رَمزُ <see cref="DealsService.AdvanceAsync"/> حينَ تَصدُقُ <see cref="AwaitsCarrier"/> عَلى
+    /// الصَفقَةِ الَّتي سَتُكتَب ولا يُثبِتُ ما مَعَ النِداءِ شُحنَتَها (<see cref="ShipmentConfirmed"/>). يَبلُغُه زِرُّ «تَأكيد: شَحن»
+    /// (<c>/advance</c> ← <c>?err=</c>)، والمَسارُ الإداريّ، ونُقطَةُ الـAPI (‏409 بِالرَمزِ نَفسِه)؛ ولا يَبلُغُه <see cref="ShipAsync"/>
+    /// — يَسأَلُ OTO قَبلَه ويَحمِلُ جَوابَها.</para>
+    /// </summary>
+    public const string DealAwaitsCarrier = "deal_awaits_carrier";
+
     private readonly DealsService _deals;
     private readonly OtoClient _oto;
     private readonly OtoOptions _opts;
@@ -217,6 +226,20 @@ public sealed class DealShipping
     /// ولا سُؤالِ مَدينَة. تَقرَؤُه الشاشَةُ والخِدمَة.</summary>
     public static bool IsPlaced(Deal deal)
         => deal.Refs.TryGetValue(OrderRef, out var id) && !string.IsNullOrWhiteSpace(id);
+
+    /// <summary>
+    /// <para><b>تاليها «شَحن» وطَلَبُها عِندَ OTO — فَلا تَدخُلُها إلّا بِجَوابِ OTO — دالَّةٌ نَقِيَّة</b> (مُراجَعَةُ تَيّارِ S7 الثانِيَة،
+    /// ‏2026-10-12؛ ‏ADR-033 §٧‑ح). تَسأَلُها <see cref="DealsService.AdvanceAsync"/> عَلى الصَفقَةِ الَّتي سَتُكتَب — فَيُرَدُّ بِـ
+    /// <see cref="DealAwaitsCarrier"/> كُلُّ بابٍ عامٍّ لا يَحمِلُ جَواباً يُثبِتُ الشُحنَة — وصَفحَةُ الصَفقَة (لا تَرسُمُ «تَأكيد: شَحن»)،
+    /// و<see cref="DealsService.AdminPathCanMove"/> (لا يَرسُمُ الاستوديو «→ شَحن»): ما يُرسَمُ هُوَ ما يُقبَل (القاعِدَة ١٢).</para>
+    ///
+    /// <para><b>لِماذا</b>: بَعدَ أَن تُجيبَ <see cref="ShipAsync"/> بِـ<see cref="ShipmentUnconfirmed"/> تَبقى الصَفقَةُ عِندَ خُطوَتِها
+    /// بِمَرجِعَي طَلَبِها، وكانَت الأَبوابُ العامَّةُ الثَلاثَةُ (زِرُّ الصَفحَة، والمَسارُ الإداريّ، والـAPI) تُخرِجُها إلى «شَحن» بِلا
+    /// سُؤالِ OTO ولا بوليصَة — العَطَبُ الَّذي وَصَفَه <c>843badc</c> بِبابٍ آخَر (تَوصيفُه <c>e52ba8f</c>). وصَفقَةٌ بِلا طَلَبٍ عِندَ OTO
+    /// تَبقى كَما كانَت: «تَأكيد: شَحن» شَحنٌ بِغَيرِ OTO، أَو بَعدَ أَن رَدَّت OTO الطَلَبَ فَلَم يُكتَب مَرجِعُه.</para>
+    /// </summary>
+    public static bool AwaitsCarrier(Deal deal)
+        => DealsPolicy.Next(deal) == DealStage.Shipping && IsPlaced(deal);
 
     public static string? AttributeOf(Deal deal, string key)
         => deal.Attributes.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : null;
@@ -277,6 +300,11 @@ public sealed class DealShipping
     /// المَفحوص؛ فَانتِقالٌ مَردودٌ لِأَنّ المُشتَري أَلغى يَترُكُ طَلَباً عِندَ OTO لِصَفقَةٍ مُلغاة —
     /// مَرجِعُه في الصَفقَة، ويُلغى مِن لَوحَةِ البائِعِ عِندَ OTO. <b>ولا يُسَجَّلُ إشعارُ <c>shipmentError</c></b> في هذِه
     /// المَوجَة: سَبَبُ شُحنَةٍ لَم تُنشَأ يُقرَأُ في لَوحَةِ البائِعِ عِندَ OTO، والصَفقَةُ لا تَتَحَرَّكُ بِدونِها.</para>
+    ///
+    /// <para>(<b>ولَم يَصدُق آخِرُ ما سَبَقَ حَتّى مُراجَعَةِ تَيّارِ S7 الثانِيَة ‏2026-10-12 — ولا يُعادُ حَرفٌ فَوقَه</b>: هذِه الدالَّةُ لا تُحَرِّكُها
+    /// بِدونِها، وزِرُّ «تَأكيد: شَحن» والمَسارُ الإداريُّ والـAPI كانَت تُحَرِّكُها — تَوصيفُه <c>e52ba8f</c>. وصارَ يَصدُق: <c>AdvanceAsync</c>
+    /// تَرُدُّ بِـ<see cref="DealAwaitsCarrier"/> صَفقَةً تَصدُقُ عَلَيها <see cref="AwaitsCarrier"/> ما لَم يَحمِل النِداءُ جَواباً يُثبِتُ
+    /// شُحنَتَها — ولا يَحمِلُه إلّا هذا المَسار، بَعدَ <see cref="ShipmentConfirmed"/>.)</para>
     /// </summary>
     public async Task<DealShipResult> ShipAsync(
         string tenantSlug, Guid dealId, DealShipper by, string? city, CancellationToken ct = default)
@@ -311,7 +339,9 @@ public sealed class DealShipping
 
         // كُلُّ رَدٍّ هُنا «تَغَيَّرَت في الأَثناء»: البَوّابَةُ مَرَّت عَلى ما قُرِئ، والانتِقالُ رَأى غَيرَه
         // (تَعارُضُ نُسخَة، أَو مَرحَلَةٌ غَيرُ `seen`، أَو صَفقَةٌ أُلغِيَت بَينَهُما).
-        var moved = await _deals.AdvanceAsync(tenantSlug, dealId, by.ActorId, by.ActorName, null, CancellationToken.None, seen);
+        // وجَوابُ OTO مَعَ النِداء — الانتِقالُ يُعيدُ `ShipmentConfirmed` عَلى الصَفقَةِ الَّتي سَيَكتُبُها، فَلا يَدخُلُ «شَحن» بابٌ بِغَيرِه
+        // (`AwaitsCarrier`؛ مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12).
+        var moved = await _deals.AdvanceAsync(tenantSlug, dealId, by.ActorId, by.ActorName, null, CancellationToken.None, seen, state);
         if (!moved.Ok) return DealShipResult.Refused(DealsService.ChangedMeanwhile, moved.Deal);
 
         return DealShipResult.Shipped(await AttachLinksAsync(tenantSlug, moved.Deal!, state!, CancellationToken.None));

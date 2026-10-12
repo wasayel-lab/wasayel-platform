@@ -25,6 +25,9 @@ namespace ACommerce.Platform.Tests;
 //      وأَنّ طَلَباً ضاعَ رَدُّه يُتَبَنّى مِن «Order Tracking» بِمُعَرِّفِنا وَحدَه.
 //   ٤) ولا «شَحنَ» حَتّى تُثبِتَ OTO الشُحنَةَ وبوليصَتَها (مُراجَعَةُ تَيّارِ S7، ‏2026-10-12): «Order Tracking» قَبلَ الانتِقال،
 //      وما لا يُثبِتُه يُرَدُّ بِـ`shipment_unconfirmed` والصَفقَةُ عِندَ خُطوَتِها بِمَرجِعَيها، والاستِئنافُ يَسأَلُ مِن جَديد.
+//   ٥) ولا بابَ عامٌّ يُدخِلُ «شَحن» صَفقَةً طَلَبُها عِندَ OTO (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12): `AdvanceAsync` تَرُدُّ
+//      بِـ`deal_awaits_carrier` ما لَم يَحمِل النِداءُ جَواباً يُثبِتُ الشُحنَة — ولا يَحمِلُه إلّا `/ship` — والصَفحَةُ والاستوديو
+//      لا يَرسُمانِ زِرّاً يُرَدّ، والـAPI ‏409 بِالرَمزِ نَفسِه.
 
 /// <summary>مُعالِجٌ يُجيبُ بِحَسَبِ المَسار — ويُنادي خُطّافاً قَبلَ الرَدِّ (إلغاءٌ أَو شَحنٌ يَدَوِيٌّ
 /// «أَثناءَ نِداءِ OTO» يَصيرُ تَرتيباً حَتمِيّاً لا حَظّاً).</summary>
@@ -824,6 +827,11 @@ public class DealShipTests
     // (`canAdvance` مِن `RequiredActorToLeave`). والثاني — ومَعَه المَسارُ الإداريُّ ونُقطَةُ الـAPI، وثَلاثَتُها `DealsService.AdvanceAsync`
     // بِلا شَرطٍ مِن OTO — يُخرِجُها إلى «شَحن» بِلا سُؤالِ OTO: الحالُ نَفسُها الَّتي وَصَفَها 843badc عَطَباً (لا بوليصَةَ ولا تَتَبُّع،
     // والطَلَبُ عِندَ OTO بِلا شُحنَة). تُثَبَّتُ الثَلاثَةُ هُنا قَبلَ قَلبِها (القاعِدَة ٣، عَلى سابِقَةِ 843badc/f7214a0).
+    //
+    // **وقُلِبَت بِأَسمائِها** (تَوصيفُها e52ba8f): `DealShipping.AwaitsCarrier` — تاليها «شَحن» وطَلَبُها عِندَ OTO — تَسأَلُها
+    // `AdvanceAsync` عَلى الصَفقَةِ الَّتي سَتُكتَب، فَتَرُدُّ بِـ`deal_awaits_carrier` قَبلَ أَيِّ كِتابَةٍ ما لَم يَحمِل النِداءُ جَواباً مِن OTO
+    // يُثبِتُ الشُحنَة (`ShipmentConfirmed` نَفسُها) — ولا يَحمِلُه إلّا `/ship`؛ والصَفحَةُ (`heldByCarrier`) و`AdminPathCanMove` تَقرَآنِها
+    // فَلا يُرسَمُ زِرٌّ يُرَدّ، والـAPI ‏409 بِالرَمزِ نَفسِه.
 
     /// <summary>صَفقَةُ نَقدٍ رَدَّت عَلَيها <c>/ship</c> بِـ<c>shipment_unconfirmed</c>: «Create Order» نَجَحَ و«Order Tracking» يُجيبُ
     /// <c>missingData</c> بِلا <c>printAWBURL</c> — فَهي فَعّالَةٌ عِندَ <c>Confirmed</c> بِمَرجِعَي طَلَبِها.</summary>
@@ -840,72 +848,251 @@ public class DealShipTests
     }
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم» — يُقلَبُ بِاسمِه في الكوميتِ التالي</b>: صَفحَةُ الصَفقَةِ تَرسُمُ لِلبائِعِ «أَكمِل الشَّحن» و«تَأكيد: شَحن»
-    /// مَعاً — شَرطا <c>canShip</c> و<c>canAdvance</c> كَما في المَصدَر — ونِداءُ <c>/advance</c> بِحَرفِه
-    /// (<c>AdvanceAsync(slug, id, userId, userName, note)</c>، والمُلاحَظَةُ الغائِبَةُ <c>""</c>) يُخرِجُها إلى «شَحن» <b>بِلا سُؤالِ OTO</b>:
-    /// لا بوليصَةَ ولا تَتَبُّع، ومَرجِعا الطَلَبِ قائِمان.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_after_shipment_unconfirmed_the_member_page_also_draws_the_generic_ship_button_and_it_moves_the_deal_without_a_label</c>
+    /// (‏<c>e52ba8f</c>): الصَفحَةُ تَرسُمُ لِلبائِعِ «أَكمِل الشَّحن» و«تَأكيد: شَحن» مَعاً، ونِداءُ <c>/advance</c> بِحَرفِه يُخرِجُها إلى «شَحن»
+    /// بِلا سُؤالِ OTO ولا بوليصَة. <b>والآن</b>: <c>heldByCarrier</c> (<see cref="DealShipping.AwaitsCarrier"/>) يَسبِقُ فَرعَ الزِرِّ العامِّ
+    /// في الصَفحَة فَلا يُرسَمُ لِلبائِعِ إلّا «أَكمِل الشَّحن»؛ ونِداءُ <c>/advance</c> بِحَرفِه — طَلَبٌ مَصنوعٌ أَو صَفحَةٌ قَديمَة — يُرَدُّ
+    /// بِـ<c>deal_awaits_carrier</c> قَبلَ أَيِّ كِتابَة، ولِلرَمزِ نَصٌّ في القامُوسِ يَبلُغُ الصَفحَةَ بِـ<c>?err=</c>.</para>
     /// </summary>
     [Fact]
-    public async Task Today_after_shipment_unconfirmed_the_member_page_also_draws_the_generic_ship_button_and_it_moves_the_deal_without_a_label()
+    public async Task After_shipment_unconfirmed_the_member_page_draws_only_the_resume_and_the_generic_advance_is_refused_with_deal_awaits_carrier()
     {
         var w = await ShipmentUnconfirmedDeal();
         var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
         var asked = w.Oto.CallsTo(OtoClient.OrderStatusPath);
+        var saves = w.Docs.SaveCalls;
 
-        // شَرطا الصَفحَة: الاستِمارَةُ بِبَوّابَةِ `/ship`، والزِرُّ العامُّ بِفاعِلِ التالي وَحدَه.
+        // شُروطُ الصَفحَة: الاستِمارَةُ بِبَوّابَةِ `/ship`، والفاعِلُ فاعِلُ التالي، والخُطوَةُ عِندَ OTO — فَرعُها قَبلَ الزِرِّ العامّ.
         Assert.True(DealShipAuthorization.IsAllowed(deal, Vendor, carrierReady: true));
         Assert.Equal("counterparty", DealsPolicy.RequiredActorToLeave(deal));
         Assert.Equal(Seller, deal.CounterpartyId);
+        Assert.True(DealShipping.AwaitsCarrier(deal));
         var page = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(DealPage()));
-        Assert.Contains("else if (canAdvance && nextStage is { } ns)", page, StringComparison.Ordinal);
+        Assert.Contains("heldByCarrier = DealShipping.AwaitsCarrier(deal);", page, StringComparison.Ordinal);
+        var accept  = page.IndexOf("@if (deal.Stage == DealStage.Offered && isListingOwner && !isInitiator)", StringComparison.Ordinal);
+        var held    = page.IndexOf("else if (canAdvance && heldByCarrier)", StringComparison.Ordinal);
+        var generic = page.IndexOf("else if (canAdvance && nextStage is { } ns)", StringComparison.Ordinal);
+        var waiting = page.IndexOf("else if (nextStage is { } waiting)", StringComparison.Ordinal);
+        Assert.True(accept > 0 && held > accept && generic > held && waiting > generic,
+            $"تَرتيبُ الفُروع: accept={accept} held={held} generic={generic} waiting={waiting}");
+        // وفَرعُ الخُطوَةِ المَحجوزَةِ لا يَرسُمُ شَيئاً — لا استِمارَةَ ولا شَريطَ انتِظار.
+        Assert.DoesNotContain("<", page[held..generic], StringComparison.Ordinal);
 
         var res = await w.Deals.AdvanceAsync(Slug, w.Id, Seller, "بائِع", "");
 
-        Assert.True(res.Ok);
-        Assert.Null(res.Code);
+        Assert.False(res.Ok);
+        Assert.Equal(DealShipping.DealAwaitsCarrier, res.Code);
+        Assert.Equal("deals.detail.err_deal_awaits_carrier", DealRefusalTexts.KeyFor(res.Code));
         var after = (await w.Deals.LoadAsync(Slug, w.Id))!;
-        Assert.Equal((DealStatus.Active, DealStage.Shipping), (after.Status, after.Stage));
+        Assert.Equal((DealStatus.Active, DealStage.Confirmed), (after.Status, after.Stage));
         Assert.True(DealShipping.IsPlaced(after));
         Assert.Null(DealShipping.LinksOf(after).Label);
-        Assert.Null(DealShipping.LinksOf(after).Tracking);
+        Assert.Equal(saves, w.Docs.SaveCalls);
         Assert.Equal(asked, w.Oto.CallsTo(OtoClient.OrderStatusPath));
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم» — يُقلَبُ بِاسمِه في الكوميتِ التالي</b>: <see cref="DealsService.AdminPathCanMove"/> تُجيزُ لِمالِكِ
-    /// التَطبيقِ «→ شَحن» عَلى صَفقَةٍ طَلَبُها عِندَ OTO، وتَسَلسُلُ نُقطَتِه (الطَرَفُ قائِمٌ فَلا تَعيين، ثُمَّ <c>AdvanceAsync</c> بِه وبِاسمِ
-    /// «مالِك التَّطبيق (إداريّ)») يُخرِجُها إلى «شَحن» بِلا سُؤالِ OTO ولا بوليصَة.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_the_studio_admin_path_draws_and_moves_a_deal_whose_order_is_at_OTO_into_Shipping_without_a_label</c>
+    /// (‏<c>e52ba8f</c>). <b>والآن</b>: <see cref="DealsService.AdminPathCanMove"/> تَرُدُّها — فَلا يَرسُمُ الاستوديو «→ شَحن» ولا تَكتُبُ
+    /// نُقطَتُه — وتَسَلسُلُها (لَو بَلَغَه طَلَبٌ مَصنوع) يُرَدُّ بِـ<c>deal_awaits_carrier</c> بِلا كِتابَة.</summary>
     [Fact]
-    public async Task Today_the_studio_admin_path_draws_and_moves_a_deal_whose_order_is_at_OTO_into_Shipping_without_a_label()
+    public async Task The_studio_admin_path_neither_draws_nor_moves_a_deal_whose_order_is_at_OTO_into_Shipping()
     {
         var w = await ShipmentUnconfirmedDeal();
         var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
         var asked = w.Oto.CallsTo(OtoClient.OrderStatusPath);
+        var saves = w.Docs.SaveCalls;
 
-        Assert.True(DealsService.AdminPathCanMove(deal, AppOwner));
+        Assert.False(DealsService.AdminPathCanMove(deal, AppOwner));
         var res = await w.Deals.AdvanceAsync(Slug, w.Id, deal.CounterpartyId ?? AppOwner, "مالِك التَّطبيق (إداريّ)", "");
 
-        Assert.True(res.Ok);
+        Assert.False(res.Ok);
+        Assert.Equal(DealShipping.DealAwaitsCarrier, res.Code);
         var after = (await w.Deals.LoadAsync(Slug, w.Id))!;
-        Assert.Equal((DealStatus.Active, DealStage.Shipping), (after.Status, after.Stage));
-        Assert.Null(DealShipping.LinksOf(after).Label);
+        Assert.Equal((DealStatus.Active, DealStage.Confirmed), (after.Status, after.Stage));
+        Assert.Equal(saves, w.Docs.SaveCalls);
         Assert.Equal(asked, w.Oto.CallsTo(OtoClient.OrderStatusPath));
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم» — يُقلَبُ بِاسمِه في الكوميتِ التالي</b>: <c>POST /api/v1/deals/{id}/advance</c> — <c>AdvanceAsync</c>
-    /// بِفاعِلِ المِفتاحِ ثُمَّ <see cref="DealApi.FromAdvance"/> — يُجيبُ ‏200 والصَفقَةُ «شَحن» بِلا بوليصَةٍ ولا سُؤالِ OTO.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_the_API_advance_moves_a_deal_whose_order_is_at_OTO_into_Shipping_and_answers_200</c>
+    /// (‏<c>e52ba8f</c>). <b>والآن</b>: <c>POST /api/v1/deals/{id}/advance</c> يُجيبُ ‏409 <c>deal_awaits_carrier</c> — الرَمزُ الثالِثَ عَشَرَ في
+    /// <c>ApiErrorCatalog</c>، رَمزُ الخِدمَةِ بِحَرفِه — والصَفقَةُ عِندَ <c>Confirmed</c> بِلا كِتابَة.</summary>
     [Fact]
-    public async Task Today_the_API_advance_moves_a_deal_whose_order_is_at_OTO_into_Shipping_and_answers_200()
+    public async Task The_API_advance_on_a_deal_whose_order_is_at_OTO_answers_409_deal_awaits_carrier_and_moves_nothing()
     {
         var w = await ShipmentUnconfirmedDeal();
         var asked = w.Oto.CallsTo(OtoClient.OrderStatusPath);
+        var saves = w.Docs.SaveCalls;
 
         var outcome = DealApi.FromAdvance(await w.Deals.AdvanceAsync(Slug, w.Id, Seller, "بائِع", null));
 
-        Assert.Equal(200, outcome.Status);
-        Assert.Equal("Shipping", Assert.IsType<DealDto>(outcome.Payload).stage);
+        Assert.Equal(409, outcome.Status);
+        Assert.Contains("\"deal_awaits_carrier\"", ApiJson.Serialize(outcome.Payload), StringComparison.Ordinal);
         var after = (await w.Deals.LoadAsync(Slug, w.Id))!;
-        Assert.Null(DealShipping.LinksOf(after).Label);
+        Assert.Equal((DealStatus.Active, DealStage.Confirmed), (after.Status, after.Stage));
+        Assert.Equal(saves, w.Docs.SaveCalls);
         Assert.Equal(asked, w.Oto.CallsTo(OtoClient.OrderStatusPath));
+    }
+
+    /// <summary><b>الدالَّةُ النَقِيَّة — مُوجِبٌ وسالِب</b>: تَصدُقُ عَلى صَفقَةٍ تاليها «شَحن» ولَها <c>oto_order_id</c> (عِندَ <c>Confirmed</c>
+    /// لِلنَقد، وعِندَ <c>Paid</c> لِصَفقَةٍ بَلَغَتها قَبلَ الإسقاط)، ولا تَصدُقُ بِلا طَلَب، ولا بِمَرجِعٍ فارِغٍ أَو بِرابِطِ بوليصَةٍ وَحدَه،
+    /// ولا حَيثُ التالي غَيرُ «شَحن» (عِندَ <c>Shipping</c> و<c>Booked</c>، وبِطاقَةٌ عِندَ <c>Confirmed</c> تاليها <c>Paid</c>).</summary>
+    [Fact]
+    public void Awaits_carrier_positive_and_negative()
+    {
+        const string Ours = "0f8fad5bd9cb469fa165705ed7eb6e2a";
+        Assert.True(DealShipping.AwaitsCarrier(With(d => d.Refs[DealShipping.OrderRef] = Ours)));
+        Assert.True(DealShipping.AwaitsCarrier(With(d => { d.Refs[DealShipping.OrderRef] = Ours; d.Stage = DealStage.Paid; })));
+
+        Assert.False(DealShipping.AwaitsCarrier(Ready()));
+        Assert.False(DealShipping.AwaitsCarrier(With(d => d.Refs[DealShipping.OrderRef] = " ")));
+        Assert.False(DealShipping.AwaitsCarrier(With(d => d.Refs[DealShipping.LabelRef] = "https://app.tryoto.com/print/awb?enc=y")));
+        Assert.False(DealShipping.AwaitsCarrier(With(d => { d.Refs[DealShipping.OrderRef] = Ours; d.Stage = DealStage.Shipping; })));
+        Assert.False(DealShipping.AwaitsCarrier(With(d => { d.Refs[DealShipping.OrderRef] = Ours; d.Stage = DealStage.Booked; })));
+        Assert.False(DealShipping.AwaitsCarrier(With(d =>
+        {
+            d.Refs[DealShipping.OrderRef] = Ours;
+            d.Attributes[CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.Card;
+        })));
+    }
+
+    /// <summary><b>رَمزُ <c>deal_awaits_carrier</c> — مُوجِبُه وسالِبُه في الانتِقالِ نَفسِه</b>: بِلا جَوابٍ، أَو بِجَوابٍ لا يُثبِتُ الشُحنَة
+    /// (<c>missingData</c> بِلا بوليصَة، أَو بوليصَةٌ لِطَلَبٍ آخَر)، يُرَدُّ ولا يُكتَبُ شَيء؛ وبِجَوابٍ يُثبِتُها لِطَلَبِنا تَدخُلُ «شَحن» — والدالَّةُ
+    /// نَفسُها <see cref="DealShipping.ShipmentConfirmed"/> عَلى الصَفقَةِ الَّتي سَتُكتَب.</summary>
+    [Fact]
+    public async Task The_transition_of_a_deal_awaiting_the_carrier_needs_an_OTO_answer_confirming_its_shipment()
+    {
+        const string Label = "https://app.tryoto.com/print/awb?enc=y";
+        var refused = new (string Name, Func<Guid, OtoOrderState?> State)[]
+        {
+            ("لا جَواب", _ => null),
+            ("missingData بِلا بوليصَة", id => new OtoOrderState(id.ToString("N"), "540789", "missingData", null, null)),
+            ("بوليصَةٌ لِطَلَبٍ آخَر", _ => new OtoOrderState("OID-23331-9749", "540789", "searchingDriver", Label, null)),
+        };
+        var checkedCases = 0;
+        foreach (var (name, state) in refused)
+        {
+            var w = await ShipmentUnconfirmedDeal();
+            var saves = w.Docs.SaveCalls;
+            var res = await w.Deals.AdvanceAsync(Slug, w.Id, Seller, "بائِع", null, default, DealStage.Confirmed, state(w.Id));
+            Assert.False(res.Ok, name);
+            Assert.Equal(DealShipping.DealAwaitsCarrier, res.Code);
+            Assert.Equal(saves, w.Docs.SaveCalls);
+            Assert.Equal(DealStage.Confirmed, (await w.Deals.LoadAsync(Slug, w.Id))!.Stage);
+            checkedCases++;
+        }
+        Assert.Equal(3, checkedCases);
+
+        var confirmed = await ShipmentUnconfirmedDeal();
+        var moved = await confirmed.Deals.AdvanceAsync(Slug, confirmed.Id, Seller, "بائِع", null, default, DealStage.Confirmed,
+            new OtoOrderState(confirmed.Id.ToString("N"), "540789", "searchingDriver", Label, null));
+        Assert.True(moved.Ok, moved.Code);
+        Assert.Equal(DealStage.Shipping, moved.Deal!.Stage);
+    }
+
+    /// <summary><b>الفاعِلُ قَبلَ الناقِل</b> (القاعِدَة ٦): المُشتَري عَلى صَفقَةٍ طَلَبُها عِندَ OTO يُجابُ بِرَفضِ الفاعِلِ بِلا رَمز — كَما
+    /// كانَ — لا بِـ<c>deal_awaits_carrier</c>؛ فَمَن لا يُحَرِّكُها لا يَعلَمُ أَنّ لَها طَلَباً هُناك.</summary>
+    [Fact]
+    public async Task The_actor_is_answered_before_the_carrier_so_a_non_actor_learns_nothing_of_the_order()
+    {
+        var w = await ShipmentUnconfirmedDeal();
+
+        var res = await w.Deals.AdvanceAsync(Slug, w.Id, Buyer, "مُشتَرٍ", "");
+
+        Assert.False(res.Ok);
+        Assert.Null(res.Code);
+        Assert.Equal("يَتَطَلَّب فاعِلاً مِن نَوع: counterparty", res.Reason);
+    }
+
+    /// <summary><b>وصَفقَةٌ بِلا طَلَبٍ عِندَ OTO تُشحَنُ بِاليَدِ كَما كانَت</b> — شَحنٌ بِغَيرِ OTO، أَو بَعدَ أَن رَدَّت OTO الطَلَبَ فَلَم يُكتَب
+    /// مَرجِعُه: لا تَصدُقُ <see cref="DealShipping.AwaitsCarrier"/>، فَـ«تَأكيد: شَحن» يُرسَمُ ويَمضي.</summary>
+    [Fact]
+    public async Task A_deal_without_an_order_at_OTO_is_still_shipped_by_hand()
+    {
+        var w = await ConfirmedCashDeal();
+        w.Oto.Routes[OtoClient.CreateOrderPath] = _ => OtoRouteHandler.Json(HttpStatusCode.BadRequest,
+            "{\"success\":false,\"otoErrorCode\":\"OTO1006\",\"otoErrorMessage\":\"Credit is not enough\"}");
+        w.Oto.Routes[OtoClient.OrderStatusPath] = _ => OtoRouteHandler.Json(HttpStatusCode.BadRequest,
+            "{\"success\":false,\"otoErrorCode\":\"OTO1002\",\"otoErrorMessage\":\"The order ID does not exist\"}");
+        Assert.Equal(OtoFailures.Refused, (await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh")).Code);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        Assert.False(DealShipping.AwaitsCarrier(deal));
+        Assert.True(DealsService.AdminPathCanMove(deal, AppOwner));
+
+        var res = await w.Deals.AdvanceAsync(Slug, w.Id, Seller, "بائِع", "");
+
+        Assert.True(res.Ok, res.Code);
+        Assert.Equal(DealStage.Shipping, res.Deal!.Stage);
+    }
+
+    /// <summary>
+    /// <para><b>جَوابُ OTO لا يَبلُغُ الانتِقالَ إلّا مِن مَسارِ الشَحن</b> (القاعِدَة ٢): كُلُّ نِداءٍ لِـ<c>AdvanceAsync</c> في <c>libs/</c>
+    /// و<c>apps/</c> يُعَدُّ ويُقسَمُ مُعامِلاتٍ عَلى المُستَوى الأَعلى (والنُصوصُ المُقتَبَسَةُ تُتَخَطّى — في نِداءِ الاستوديو قَوسانِ داخِلَ
+    /// نَصّ)، وما حَمَلَ ثامِناً أَو <c>shipment:</c> مُسَمّى واحِدٌ — في <c>DealShipping.cs</c>، بَعدَ <c>ShipmentConfirmed</c>. فَبابٌ عامٌّ
+    /// يُضافُ وهو يَحمِلُ جَواباً يَحمَرُّ هذا بِاسمِ مِلَفِّه.</para>
+    /// </summary>
+    [Fact]
+    public void Only_the_ship_path_hands_an_OTO_answer_to_the_transition()
+    {
+        var files = new[] { "libs", "apps" }
+            .SelectMany(d => Directory.EnumerateFiles(Path.Combine(RepoRoot, d), "*.*", SearchOption.AllDirectories))
+            .Where(f => f.EndsWith(".cs", StringComparison.Ordinal) || f.EndsWith(".razor", StringComparison.Ordinal))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                     && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .ToArray();
+        var calls = new List<(string File, int Args, bool Named)>();
+        foreach (var f in files)
+        {
+            var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(f)));
+            for (var i = code.IndexOf(".AdvanceAsync(", StringComparison.Ordinal); i >= 0;
+                 i = code.IndexOf(".AdvanceAsync(", i + 1, StringComparison.Ordinal))
+            {
+                var args = TopLevelArguments(code, i + ".AdvanceAsync".Length);
+                calls.Add((Path.GetFileName(f), args.Count, args.Any(a => a.TrimStart().StartsWith("shipment:", StringComparison.Ordinal))));
+            }
+        }
+        var line = $"فُحِصَ {files.Length} مِلَفّاً و{calls.Count} نِداءً لِـAdvanceAsync: " +
+                   string.Join("، ", calls.Select(c => $"{c.File}({c.Args})"));
+        Console.WriteLine("· " + line);
+        Assert.True(files.Length > 200, "أَداةٌ عَمياء — " + line);
+        // خَمسَةٌ اليَوم: `/advance` والمَسارُ الإداريُّ (5 لِكُلٍّ) — في MarketplaceTemplateExtensions — والـAPI (6)، و`ShipAsync` (8)
+        // ووارِدُ OTO (7) في DealShipping. بابٌ سادِسٌ يُحمِرُّ هذا فَيُسأَلُ عَنه في مُراجَعَة.
+        Assert.True(calls.Count == 5, line);
+        var carrying = calls.Where(c => c.Args >= 8 || c.Named).ToList();
+        Assert.True(carrying.Count == 1 && carrying[0].File == "DealShipping.cs", line);
+    }
+
+    /// <summary>مُعامِلاتُ النِداءِ عَلى المُستَوى الأَعلى مِن القَوسِ عِندَ <paramref name="open"/> — والنُصوصُ (<c>"…"</c> و<c>'…'</c>) تُتَخَطّى.</summary>
+    private static List<string> TopLevelArguments(string code, int open)
+    {
+        Assert.Equal('(', code[open]);
+        var args = new List<string>();
+        var depth = 0;
+        var start = open + 1;
+        for (var i = open; i < code.Length; i++)
+        {
+            var c = code[i];
+            if (c is '"' or '\'')
+            {
+                for (i++; i < code.Length && code[i] != c; i++) if (code[i] == '\\') i++;
+                continue;
+            }
+            if (c is '(' or '[' or '{') depth++;
+            else if (c is ')' or ']' or '}')
+            {
+                if (--depth == 0)
+                {
+                    if (code[start..i].Trim().Length > 0) args.Add(code[start..i]);
+                    return args;
+                }
+            }
+            else if (c == ',' && depth == 1)
+            {
+                args.Add(code[start..i]);
+                start = i + 1;
+            }
+        }
+        Assert.Fail("نِداءٌ بِلا قَوسٍ مُقابِل — الأَداةُ عَمياء.");
+        return args;
     }
 
     // ═══ ٥. المُحَرِّك — «مِن» المَقروءَةِ، و`CanMove` ═════════════════════════════
@@ -1204,5 +1391,47 @@ public class LiveDealShipProofTests(ITestOutputHelper output)
         Assert.DoesNotContain(final.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Shipping);
         Assert.Equal(1, oto.CallsTo(OtoClient.CreateOrderPath));
         Assert.Equal(0, oto.CallsTo(OtoClient.OrderStatusPath));
+    }
+
+    /// <summary><b>البابُ العامُّ عَلى صَفقَةٍ طَلَبُها عِندَ OTO — عَلى Postgres</b> (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12): مَرجِعُ الطَلَبِ
+    /// يُكتَبُ ويُقرَأُ مِن <c>jsonb</c> فَتَصدُقُ <see cref="DealShipping.AwaitsCarrier"/> عَلى الوَثيقَةِ المُحَمَّلَةِ في جَلسَةِ الكِتابَة: يُرَدُّ نِداءُ
+    /// <c>/advance</c> بِحَرفِه بِـ<c>deal_awaits_carrier</c> ولا يُكتَبُ شَيء — ونِداءٌ يَحمِلُ جَواباً يُثبِتُ الشُحنَةَ يَمضي إلى «شَحن».</summary>
+    [Fact]
+    public async Task A_generic_advance_of_a_deal_whose_order_is_at_OTO_is_refused_on_Postgres_and_OTOs_answer_lets_it_through()
+    {
+        if (!Enabled) return;
+
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = DealShipping.DemoStore + "-zz-" + Guid.NewGuid().ToString("N")[..8];
+        var seller = Guid.NewGuid();
+        try
+        {
+            var deals = new DealsService(store, new ForbiddenPaymentProvider());
+            var deal = await ConfirmedAsync(deals, slug, Guid.NewGuid(), seller);
+            await deals.AttachRefAsync(slug, deal.Id, DealShipping.OrderRef, deal.Id.ToString("N"));
+            var placed = (await deals.LoadAsync(slug, deal.Id))!;
+
+            var byHand = await deals.AdvanceAsync(slug, deal.Id, seller, "بائِع", "");
+            var held = (await deals.LoadAsync(slug, deal.Id))!;
+            var carried = await deals.AdvanceAsync(slug, deal.Id, seller, "بائِع", null, default, DealStage.Confirmed,
+                new OtoOrderState(deal.Id.ToString("N"), "540789", "searchingDriver", "https://app.tryoto.com/print/awb?enc=y", null));
+            var final = (await deals.LoadAsync(slug, deal.Id))!;
+            output.WriteLine($"المَحجوزَة: {DealShipping.AwaitsCarrier(placed)} · بِاليَد: {(byHand.Ok ? "ok" : byHand.Code)} · بَعدَها: " +
+                             $"{held.Status}/{held.Stage} · بِجَوابِ OTO: {(carried.Ok ? "ok" : carried.Code)} · النِهائِيَّة: {final.Status}/{final.Stage} · " +
+                             "سِجِلّ: " + string.Join(",", final.Timeline.Select(Line)));
+
+            Assert.True(DealShipping.AwaitsCarrier(placed));
+            Assert.Equal(DealShipping.DealAwaitsCarrier, byHand.Code);
+            Assert.Equal((DealStatus.Active, DealStage.Confirmed), (held.Status, held.Stage));
+            Assert.Equal(placed.Timeline.Count, held.Timeline.Count);
+            Assert.True(carried.Ok, carried.Code);
+            Assert.Equal(DealStage.Shipping, final.Stage);
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            foreach (var d in await s.Query<Deal>().ToListAsync()) s.Delete(d);
+            await s.SaveChangesAsync();
+        }
     }
 }

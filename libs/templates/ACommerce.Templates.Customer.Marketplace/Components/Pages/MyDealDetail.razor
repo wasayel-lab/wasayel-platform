@@ -276,7 +276,11 @@
                `DealShipAuthorization.IsAllowed` نَفسُها الَّتي تُطَبِّقُها `/ship` بِسِجِلِّ السُلطَةِ نَفسِه ورَمزِ ناقِلٍ يُحَلّ —
                فَبِلا رَمزٍ لا تُرسَمُ أَصلاً. ومَدينَةُ المُستَلِمِ يَكتُبُها البائِع (`city` إلزامِيٌّ عِندَ OTO والبابُ لا يَسأَلُ عَنها)،
                وطَلَبٌ أُنشِئَ في مُحاوَلَةٍ سابِقَةٍ يُستَأنَفُ بِلا مَدينَة (`DealShipping.IsPlaced`). وزِرُّ «تَأكيد: شَحن» أَدناه باقٍ
-               بِلا تَغيير — شَحنٌ بِغَيرِ OTO، أَو حينَ تَرُدُّ OTO الطَلَب. *@
+               بِلا تَغيير — شَحنٌ بِغَيرِ OTO، أَو حينَ تَرُدُّ OTO الطَلَب.
+               **ولا يُرسَمُ حَيثُ الطَلَبُ عِندَ OTO** (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12؛ ولا يُعادُ حَرفٌ فَوقَه): بَعدَ
+               `shipment_unconfirmed` كانَ يُرسَمُ بِجِوارِ «أَكمِل الشَّحن» فَيُخرِجُها إلى «شَحن» بِلا سُؤالِ OTO ولا بوليصَة
+               (تَوصيفُه `e52ba8f`). صارَت `AdvanceAsync` تَرُدُّه بِـ`deal_awaits_carrier` (`DealShipping.AwaitsCarrier`)، فَخُطوَةُ
+               البائِعِ هُنا بابُها «أَكمِل الشَّحن» وَحدَه (`heldByCarrier` أَدناه). *@
             @if (canShip)
             {
                 <form method="post" action="@($"/{Slug}/deals/{deal.Id}/ship")" style="margin-bottom:8px;">
@@ -300,6 +304,11 @@
                 <form method="post" action="@($"/{Slug}/deals/{deal.Id}/accept")">
                     <AcButton Type="submit" Variant="primary" Size="lg" Block="true" Text="@L["deals.detail.accept_offer"]" />
                 </form>
+            }
+            else if (canAdvance && heldByCarrier)
+            {
+                @* خُطوَتُه «شَحن» وطَلَبُها عِندَ OTO: بابُها «أَكمِل الشَّحن» أَعلاه — لا «تَأكيد: شَحن» تَرُدُّه `AdvanceAsync` بِـ
+                   `deal_awaits_carrier`، ولا «بانتِظار الطَّرَف الآخَر» عَن خُطوَتِه هُوَ (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12). *@
             }
             else if (canAdvance && nextStage is { } ns)
             {
@@ -404,6 +413,10 @@
     /// <c>/ship</c>، بِرَمزِ ناقِلٍ يُحَلُّ لِهذا المَتجَر (<see cref="DealShipping.CarrierReady"/>) — وبِلا رَمزٍ لا تُرسَم (القاعِدَة ١٢).
     /// و<c>shipResumes</c>: لِلصَفقَةِ طَلَبٌ عِندَ OTO مِن مُحاوَلَةٍ سابِقَة، فَالاستِمارَةُ بِلا مَدينَة.</summary>
     bool canShip, shipResumes;
+    /// <summary>تاليها «شَحن» وطَلَبُها عِندَ OTO — <see cref="DealShipping.AwaitsCarrier"/> نَفسُها الَّتي تَسأَلُها <c>AdvanceAsync</c>
+    /// فَتَرُدُّ «تَأكيد: شَحن» بِـ<c>deal_awaits_carrier</c>: فَلا يُرسَمُ لِمَن خُطوَتُه هذِه، وبابُها «أَكمِل الشَّحن» (مُراجَعَةُ تَيّارِ S7
+    /// الثانِيَة، ‏2026-10-12؛ القاعِدَة ١٢).</summary>
+    bool heldByCarrier;
     /// <summary>رابِطا البوليصَةِ والتَتَبُّعِ لِلطَرَفَين — <see cref="DealShipping.LinksOf"/>: <c>https</c> وَحدَه، و<c>null</c> لِما غاب.</summary>
     string? labelUrl, trackingUrl;
     DealStage? nextStage;
@@ -479,6 +492,8 @@
         (labelUrl, trackingUrl) = DealShipping.LinksOf(deal);
         canShip = DealShipAuthorization.IsAllowed(deal, new DealShipper(uid, Auth.UserName ?? ""), Shipping.CarrierReady(Slug));
         shipResumes = canShip && DealShipping.IsPlaced(deal);
+        // وخُطوَةٌ طَلَبُها عِندَ OTO لا يُرسَمُ لَها «تَأكيد: شَحن» — الدالَّةُ الَّتي يَرُدُّ بِها المُحَرِّك (مُراجَعَةُ تَيّارِ S7 الثانِيَة).
+        heldByCarrier = DealShipping.AwaitsCarrier(deal);
     }
 
     // ‏لَيسَت `static` بَعدَ اليَوم: قيَمُها صارَت مِن `L` وهو مَحقونٌ

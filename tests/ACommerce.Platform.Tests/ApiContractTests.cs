@@ -22,16 +22,20 @@ public class ApiContractTests
     /// <para><b>قُلِبَ بِاسمِه — صارَت اثنَي عَشَر</b> (‏ADR-036، ‏2026-10-12): كانَ
     /// <c>Exactly_eleven_error_codes_and_they_are_these</c>. والثانِيَ عَشَرَ <c>deal_changed_meanwhile</c> (‏409) مُنتِجُه
     /// حَيٌّ — <c>DealApi.FromAdvance</c>/<c>FromCancel</c> مِن رَمزِ الخِدمَة — واختِبارُ حالَتِه في الصَفِّ التالي وصَفّا
-    /// التَصنيفِ أَدناه.</para></summary>
+    /// التَصنيفِ أَدناه.</para>
+    /// <para><b>قُلِبَ بِاسمِه — صارَت ثَلاثَةَ عَشَر</b> (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12؛ ‏ADR-033 §٧‑ح): كانَ
+    /// <c>Exactly_twelve_error_codes_and_they_are_these</c>. والثالِثَ عَشَرَ <c>deal_awaits_carrier</c> (‏409) مُنتِجُه حَيٌّ —
+    /// <c>DealApi.FromAdvance</c> مِن رَمزِ الخِدمَةِ نَفسِه، حينَ تَرُدُّ <c>AdvanceAsync</c> صَفقَةً طَلَبُها عِندَ OTO — واختِبارُ حالَتِه في
+    /// الصَفِّ التالي وصَفّا التَصنيفِ أَدناه.</para></summary>
     [Fact]
-    public void Exactly_twelve_error_codes_and_they_are_these()
+    public void Exactly_thirteen_error_codes_and_they_are_these()
         => Assert.Equal(
             new[]
             {
                 "auth_missing", "auth_invalid",
                 "scope_missing", "entitlement_denied", "actor_not_allowed",
                 "not_found",
-                "deal_not_active", "deal_final_stage", "deal_changed_meanwhile", "idempotency_in_progress",
+                "deal_not_active", "deal_final_stage", "deal_changed_meanwhile", "deal_awaits_carrier", "idempotency_in_progress",
                 "idempotency_key_required", "validation_failed",
             },
             ApiErrorCatalog.Codes);
@@ -66,6 +70,7 @@ public class ApiContractTests
     [InlineData("deal_not_active", 409)]
     [InlineData("deal_final_stage", 409)]
     [InlineData("deal_changed_meanwhile", 409)]
+    [InlineData("deal_awaits_carrier", 409)]
     [InlineData("idempotency_in_progress", 409)]
     [InlineData("idempotency_key_required", 422)]
     [InlineData("validation_failed", 422)]
@@ -279,6 +284,26 @@ public class ApiContractTests
             new DealCancelViolation(DealsService.ChangedMeanwhile, "…"), DealAt(DealStage.Booked)));
         Assert.Equal(409, cancel.Status);
         Assert.Contains("\"deal_changed_meanwhile\"", ApiJson.Serialize(cancel.Payload), StringComparison.Ordinal);
+    }
+
+    /// <summary><b>طَلَبُ الصَفقَةِ عِندَ الناقِلِ ‏409 بِرَمزِه</b> (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12): رَمزُ الخِدمَةِ يُقرَأُ قَبلَ تَصنيفِ
+    /// الحالَة — وإلّا قيلَ «فاعِلٌ غَيرُ مُخَوَّل» (‏403) عَن الطَرَفِ الَّذي يُخرِجُها و<c>required_actor</c> هُوَ. <b>والسالِب</b>: رَفضُ فاعِلٍ
+    /// بِلا رَمزٍ عَلى الصَفقَةِ نَفسِها يَبقى ‏403 <c>actor_not_allowed</c>، وتَعارُضُ النُسخَةِ يَبقى رَمزَه.</summary>
+    [Fact]
+    public void A_deal_awaiting_the_carrier_answers_409_deal_awaits_carrier_and_other_refusals_keep_their_codes()
+    {
+        var deal = DealAt(DealStage.Confirmed);
+        var awaits = DealApi.FromAdvance(new DealAdvanceResult(false, deal, "…", DealShipping.DealAwaitsCarrier));
+        Assert.Equal(409, awaits.Status);
+        Assert.Contains("\"deal_awaits_carrier\"", ApiJson.Serialize(awaits.Payload), StringComparison.Ordinal);
+        Assert.DoesNotContain("actor_not_allowed", ApiJson.Serialize(awaits.Payload), StringComparison.Ordinal);
+
+        var actor = DealApi.FromAdvance(new DealAdvanceResult(false, deal, "يَتَطَلَّب فاعِلاً مِن نَوع: counterparty"));
+        Assert.Equal(403, actor.Status);
+        Assert.Contains("\"actor_not_allowed\"", ApiJson.Serialize(actor.Payload), StringComparison.Ordinal);
+
+        var raced = DealApi.FromAdvance(new DealAdvanceResult(false, deal, "…", DealsService.ChangedMeanwhile));
+        Assert.Contains("\"deal_changed_meanwhile\"", ApiJson.Serialize(raced.Payload), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -46,13 +46,19 @@ public static class ApiErrorCatalog
     /// <c>DealApi.FromAdvance</c>/<c>FromCancel</c> مِن رَمزِ الخِدمَةِ نَفسِه. وجَوابُه نِهائِيٌّ لِمِفتاحِ
     /// مَرَّةٍ-واحِدَةٍ كَكُلِّ جَواب: الإعادَةُ طَلَبٌ جَديدٌ بِمِفتاحٍ جَديد.</summary>
     public const string DealChangedMeanwhile   = "deal_changed_meanwhile";
+    /// <summary>طَلَبُ الصَفقَةِ عِندَ الناقِلِ (OTO) وتاليها «شَحن» — تَدخُلُها حينَ يُثبِتُ الناقِلُ شُحنَتَها عَبرَ نُقطَةِ الشَحن، لا بِهذا
+    /// الباب (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12؛ ‏ADR-033 §٧‑ح). مُنتِجُه <c>DealApi.FromAdvance</c> مِن رَمزِ الخِدمَةِ نَفسِه
+    /// (<c>DealShipping.DealAwaitsCarrier</c>)؛ ‏409 تَعارُضُ حالَةٍ كَأَخَواتِه — وتَصنيفُ الحالَةِ كانَ سَيَقولُ «فاعِلٌ غَيرُ مُخَوَّل» (‏403)
+    /// عَن الفاعِلِ المُخَوَّلِ نَفسِه.</summary>
+    public const string DealAwaitsCarrier      = "deal_awaits_carrier";
     public const string IdempotencyInProgress  = "idempotency_in_progress";
     public const string IdempotencyKeyRequired = "idempotency_key_required";
     public const string ValidationFailed       = "validation_failed";
 
     /// <summary>الأَحَدَ عَشَرَ رَمزاً — مُرَتَّبَةً بِحالَتِها ثُمَّ
     /// بِرَمزِها. <b>صارَت اثنَي عَشَر ‏2026-10-12</b> (‏ADR-036): <see cref="DealChangedMeanwhile"/>
-    /// بَعدَ أُختَيهِ في ‏409.</summary>
+    /// بَعدَ أُختَيهِ في ‏409. <b>ثُمَّ ثَلاثَةَ عَشَر</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S7 الثانِيَة؛ ‏ADR-033 §٧‑ح):
+    /// <see cref="DealAwaitsCarrier"/> بَعدَ أَخَواتِه الثَلاثِ في ‏409.</summary>
     public static readonly IReadOnlyList<ApiErrorCode> All = new[]
     {
         new ApiErrorCode(AuthMissing, StatusCodes.Status401Unauthorized,
@@ -73,6 +79,8 @@ public static class ApiErrorCatalog
             "الصَفقَة في آخِر مَرحَلَة — لا تالِيَ لَها."),
         new ApiErrorCode(DealChangedMeanwhile, StatusCodes.Status409Conflict,
             "تَغَيَّرَت الصَفقَةُ في الأَثناء — أَعِد المُحاوَلَة بِطَلَبٍ جَديد."),
+        new ApiErrorCode(DealAwaitsCarrier, StatusCodes.Status409Conflict,
+            "طَلَبُ شَحنِ هذِه الصَفقَةِ عِندَ الناقِل — تَدخُلُ «شَحن» حينَ يُثبِتُ الناقِلُ شُحنَتَها، لا بِهذا الباب."),
         new ApiErrorCode(IdempotencyInProgress, StatusCodes.Status409Conflict,
             "طَلَبٌ بِنَفس مِفتاح مَرَّة-واحِدَة ما زالَ قَيدَ التَنفيذ."),
         new ApiErrorCode(IdempotencyKeyRequired, StatusCodes.Status422UnprocessableEntity,
