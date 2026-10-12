@@ -203,9 +203,18 @@ public sealed record ResolvedProvider(
     public string? Explicit(string fieldCode) =>
         Values.TryGetValue(fieldCode, out var v) ? v.Plain : null;
 
-    /// <summary><b>أَيَقبِضُ هذا الرَبطُ فِعلاً؟</b> — دَفعٌ، وبِرابِطٍ
+    /// <summary>
+    /// <para><b>أَيَقبِضُ هذا الرَبطُ فِعلاً؟</b> — دَفعٌ، وبِرابِطٍ
     /// مَملوءٍ يَنقُرُه الزَبون. والسُؤالُ يُطرَح هُنا مَرَّةً واحِدَةً
-    /// لِأَنّ عَلَيه يَتَوَقَّف ظُهورُ الباقاتِ المَدفوعَة.</summary>
+    /// لِأَنّ عَلَيه يَتَوَقَّف ظُهورُ الباقاتِ المَدفوعَة.</para>
+    /// <para><b>والمِفتاحُ السِرِّيُّ المَختومُ لا يُعَدُّ هُنا بَعد — يُقالُ ولا يُبتلَع
+    /// (‏2026-10-12، ‏ADR-032 §٧‑ج)</b>: الخُطوَة 7 قالَت «رابِطٌ مَملوءٌ <b>أَو</b>
+    /// حَقلٌ سِرِّيٌّ مَختوم»، ولا عَميلَ يَطلُبُ بِالمِفتاحِ قَبلَ الخُطوَة 8 — فَعَدُّه
+    /// يَقلِبُ <c>PaymentProviderConfigured</c> بِلا قابِض: تَظهَرُ الباقاتُ المَدفوعَةُ
+    /// ويَبلُغُ زِرُّها <c>PlanPay</c> بِلا رابِطٍ يُصَيِّرُه (بابٌ يُجيبُ «غَيرُ مُتاح»).
+    /// يُضافُ مَعَ العَميلِ بِسَطرٍ هُنا، ويَنقَلِبُ مَعَه صَفُّ
+    /// <c>A_sealed_key_alone_collects_nothing_yet_so_no_card_and_no_paid_plan_opens</c>.</para>
+    /// </summary>
     public bool CollectsMoney =>
         Definition.Capability == ProviderCapabilities.Payments &&
         Definition.Credential.Fields

@@ -2,6 +2,7 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.TenantProviderService Providers
+@inject ProviderVault Vault
 @inject L L
 @using ACommerce.Kit.Tenants
 @using ACommerce.Platform.Providers
@@ -15,7 +16,9 @@
     نَفسِه — فَيَومَ يُضافُ مِلَفُّ تَعريفٍ لِقُدرَةٍ أُخرى تَظهَرُ
     بِلا لَمسِ سَطرٍ هُنا. **ومِن الكاتالوجِ عَبرَ `ProviderBindSurface.Offered`**
     (‏2026-10-12): مُزَوِّدٌ حَقلُه سِرٌّ تَختِمُه الخِزانَةُ لا يُرسَمُ ما دامَت
-    الخِزانَةُ لا تَبلُغُ هذا السَطح — فَلا تُرسَمُ بِطاقَةٌ تَرُدُّها النُقطَة.
+    الخِزانَةُ لا تَختِم (‏`Providers__Kek__v1` غائِبٌ أَو تالِف — ADR-032 الخُطوَة 11)
+    — فَلا تُرسَمُ بِطاقَةٌ تَرُدُّها النُقطَة. وحَقلُ السِرِّ `password`، والمَحفوظُ
+    يُرسَمُ ذَيلاً بَعدَ قِناعٍ لا يُفَكّ (الخُطوَة 7).
 
     ولا جَلسَةَ Marten هُنا: الصَفحَةُ تَحقِنُ خِدمَةً (الطَبَقَة ٨
     عِندَ صِفر، ولا تَرتَفِع).
@@ -46,9 +49,9 @@
                 <div class="st-chip st-chip-success" style="margin-bottom:14px;">@L.Markup(noticeKey)</div>
             }
 
-            @foreach (var capability in Services.Providers.ProviderBindSurface.OfferedCapabilities)
+            @foreach (var capability in Services.Providers.ProviderBindSurface.OfferedCapabilities(Vault))
             {
-                var offered = Services.Providers.ProviderBindSurface.Offered(capability);
+                var offered = Services.Providers.ProviderBindSurface.Offered(capability, Vault);
                 var current = Current(capability);
                 var currentDef = current is null ? null : ProviderCatalog.Find(current.ProviderSlug);
 
@@ -117,6 +120,8 @@
                             <label class="ac-chip-input-label" for="@($"{def.Slug}-{f.Code}")"
                                    style="display:block;margin-top:10px;">@ProviderText.Get(f.Label, L.Lang)</label>
                             <input class="ac-input" id="@($"{def.Slug}-{f.Code}")" name="@f.Code"
+                                   type="@Services.Providers.ProviderBindSurface.InputType(f)"
+                                   autocomplete="@Services.Providers.ProviderBindSurface.InputAutocomplete(f)"
                                    dir="ltr" required="@f.IsRequired" />
                         }
 
@@ -153,7 +158,7 @@
         if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) tenant = null;
         if (tenant is null) return;
 
-        foreach (var capability in Services.Providers.ProviderBindSurface.OfferedCapabilities)
+        foreach (var capability in Services.Providers.ProviderBindSurface.OfferedCapabilities(Vault))
         {
             var doc = await Providers.CurrentAsync(Slug, capability);
             if (doc is not null) bindings[capability] = doc;
@@ -182,6 +187,7 @@
         "provider_not_bindable"   => "studio.providers.err_provider_not_bindable",
         "capability_unknown"      => "studio.providers.err_capability_unknown",
         "binding_not_found"       => "studio.providers.err_binding_not_found",
+        Services.Providers.ProviderBindSurface.VaultUnavailable => "studio.providers.err_vault_unavailable",
         ProviderValueValidator.Required        => "studio.providers.err_field_required",
         ProviderValueValidator.NotHttps        => "studio.providers.err_not_https",
         ProviderValueValidator.HostNotAllowed  => "studio.providers.err_host_not_allowed",

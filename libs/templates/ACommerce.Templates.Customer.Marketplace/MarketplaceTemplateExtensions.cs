@@ -82,6 +82,13 @@ public static class MarketplaceTemplateExtensions
         // عُمرِ الخِدمَة.
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.TenantProviderService>();
 
+        // خِزانَةُ أَسرارِ المُستَأجِر (‏ADR-032 الخُطوَتانِ 4 و7) — Singleton: المِفتاحُ
+        // الرَئيسُ يُقرَأُ مَرَّةً مِن التَهيئَة (`Providers__Kek__v1`). وغِيابُه أَو
+        // تَلَفُه **خِزانَةٌ غَيرُ مُتاحَةٍ لا إقلاعٌ يَسقُط** (الخُطوَة 11): بِطاقَةُ
+        // المُزَوِّدِ الَّذي يَحتاجُها تُخفى، ورَبطُه يُرَدُّ بِـ`vault_unavailable`.
+        services.AddSingleton(sp => ACommerce.Platform.Providers.ProviderVault.FromKek(
+            sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()[ACommerce.Platform.Providers.ProviderVault.KekConfigKey]));
+
         // ─── الاستِحقاق ──────────────────────────────────────────────────
         // Scoped لا Singleton: بِلا كاش — الرَصيد حالَة تَتَغَيَّر بِكُلّ
         // عَمَلِيَّة، وكاشُها هو بِعَينِه ما يَجعَل الفَحص يَكذِب. والقِراءَة
@@ -3979,13 +3986,13 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/studio/apps/{slug}/providers/bind", async (
             string slug, HttpRequest req, IDocumentStore store,
             Services.Incubator.StudioAuth auth,
-            Services.TenantProviderService providers,
+            Services.TenantProviderService providers, ACommerce.Platform.Providers.ProviderVault vault,
             Services.Audit.AuditWriter audit) =>
         {
             if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
                 return Results.Redirect("/studio");
 
-            var read = Services.Providers.ProviderBindSurface.FromForm(req);
+            var read = Services.Providers.ProviderBindSurface.FromForm(req, slug, vault);
             if (read.NeedsPlatformAdmin &&
                 !(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
                 return Forbidden();

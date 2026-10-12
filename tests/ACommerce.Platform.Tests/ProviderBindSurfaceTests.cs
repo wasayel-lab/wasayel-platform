@@ -1,5 +1,8 @@
 using ACommerce.Platform.Providers;
+using ACommerce.Templates.Customer.Marketplace;
 using ACommerce.Templates.Customer.Marketplace.Services.Providers;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace ACommerce.Platform.Tests;
@@ -246,7 +249,7 @@ public class ProviderBindSurfaceTests
 
         Assert.Equal(new[] { "moyasar_hosted", "moyasar_api" }, catalog);
         Assert.Equal(new[] { "moyasar_hosted" }, offered);
-        Assert.Equal(new[] { ProviderCapabilities.Payments }, ProviderBindSurface.OfferedCapabilities.ToArray());
+        Assert.Equal(new[] { ProviderCapabilities.Payments }, ProviderBindSurface.OfferedCapabilities().ToArray());
 
         // والمُسنَدُ واحِد: ما لا يُرسَمُ هُوَ بِعَينِه ما تَرُدُّه النُقطَةُ بِرَمزِ الخِزانَة.
         var compared = 0;
@@ -262,18 +265,224 @@ public class ProviderBindSurfaceTests
 
     /// <summary>والشاشَةُ تَقرَأُ قائِمَةَ السَطحِ لا قائِمَةَ الكاتالوج — وإلّا رَسَمَت
     /// بِطاقَةً تَرُدُّها النُقطَة (القاعِدَة ١٢). مَقيسٌ نَصّاً لِأَنّ الصَفحَةَ لا تُصَيَّرُ
-    /// في وَحدَة.</summary>
+    /// في وَحدَة. **ومُنذُ الخُطوَة 7 (‏2026-10-12) تُمَرِّرُ الخِزانَةَ المُسَجَّلَة**،
+    /// فَصارَ الحَرفانِ المَفحوصانِ بِوَسيطِها.</summary>
     [Fact]
     public void The_studio_screen_reads_the_surface_list_not_the_catalog_list()
+    {
+        var razor = StudioProvidersRazor();
+
+        Assert.Contains("ProviderBindSurface.Offered(capability, Vault)", razor, StringComparison.Ordinal);
+        Assert.Contains("ProviderBindSurface.OfferedCapabilities(Vault)", razor, StringComparison.Ordinal);
+        Assert.Contains("@inject ProviderVault Vault", razor, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProviderCatalog.TenantBindable(", razor, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProviderCatalog.BindableCapabilities", razor, StringComparison.Ordinal);
+    }
+
+    private static string StudioProvidersRazor()
     {
         var path = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
             "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "StudioProviders.razor");
         var razor = File.ReadAllText(path);
         Assert.True(razor.Length > 1000, "أَداةٌ عَمياء: الصَفحَةُ لَم تُقرَأ.");
+        return razor;
+    }
 
-        Assert.Contains("ProviderBindSurface.Offered(capability)", razor, StringComparison.Ordinal);
-        Assert.Contains("ProviderBindSurface.OfferedCapabilities", razor, StringComparison.Ordinal);
-        Assert.DoesNotContain("ProviderCatalog.TenantBindable(", razor, StringComparison.Ordinal);
-        Assert.DoesNotContain("ProviderCatalog.BindableCapabilities", razor, StringComparison.Ordinal);
+    // ─── ٦. الخِزانَةُ تَبلُغُ السَطح (‏ADR-032 الخُطوَة 7) ─────────────────
+    //
+    // مِفتاحُ البَوّابَةِ يُختَمُ في النُقطَةِ بِسِياقِ مَتجَرِه ولا يُحمَلُ صَريحاً
+    // بَعدَ الحَلقَة؛ والبِطاقَةُ تُرسَمُ حينَ تَختِمُ الخِزانَةُ وتُخفى حينَ لا
+    // تَختِم (الخُطوَة 11)، والرَفضُ `vault_unavailable` رِسالَةُ نَموذَجٍ مِن القامُوس.
+
+    private const string SecretKey = "sk_test_9f3b7c2d41aa58e6";
+
+    private static ProviderVault AvailableVault() =>
+        ProviderVault.FromKek(Convert.ToBase64String(
+            System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)));
+
+    [Fact]
+    public void A_secret_key_binding_is_sealed_through_the_vault_and_never_held_in_clear()
+    {
+        var vault = AvailableVault();
+        var read = ProviderBindSurface.FromForm("moyasar_api",
+            code => code == "secret_key" ? $"  {SecretKey}  " : null, "theme-demo", vault);
+
+        Assert.Null(read.RefusalCode);
+        Assert.Equal(ProviderCapabilities.Payments, read.Capability);
+        Assert.Equal("moyasar_api", read.ProviderSlug);
+
+        var v = Assert.Contains("secret_key", read.Values);
+        Assert.True(v.IsSealed);
+        Assert.Null(v.Plain);
+        Assert.Equal(CredentialKinds.SecretKey, v.Kind);
+        Assert.Equal(ProviderVault.KekVersion, v.KekVersion);
+        Assert.Equal("theme-demo|payments|secret_key", v.Aad);
+        Assert.Equal(ProviderBindSurface.AadFor("theme-demo", ProviderCapabilities.Payments, "secret_key"), v.Aad);
+        Assert.Equal("58e6", v.Tail4);
+        Assert.Equal(ProviderSecrecy.Mask + "58e6", v.Censored);
+
+        // مَقصوصاً كَما يُفحَصُ النَمَط — ويُفَكُّ بِسِياقِ مَتجَرِه وَحدَه.
+        Assert.Equal(SecretKey, v.Unseal(vault,
+            ProviderBindSurface.AadFor("theme-demo", ProviderCapabilities.Payments, "secret_key")));
+        Assert.ThrowsAny<System.Security.Cryptography.CryptographicException>(() => v.Unseal(vault,
+            ProviderBindSurface.AadFor("ashare", ProviderCapabilities.Payments, "secret_key")));
+    }
+
+    [Fact]
+    public void vault_unavailable_is_a_form_refusal_when_the_vault_holds_no_key()
+    {
+        // الموجِب: خِزانَةٌ مُسَجَّلَةٌ بِلا مِفتاحٍ رَئيس — يُرَدُّ قَبلَ قِراءَةِ أَوَّلِ حَقل.
+        var reads = 0;
+        var read = ProviderBindSurface.FromForm("moyasar_api",
+            _ => { reads++; return SecretKey; }, "theme-demo", ProviderVault.FromKek(null));
+
+        Assert.Equal(ProviderBindSurface.VaultUnavailable, read.RefusalCode);
+        Assert.Equal(0, reads);
+        Assert.Empty(read.Values);
+
+        // والشاشَةُ تَقرَؤُه رِسالَةً مِن القامُوس لا رَمزاً خاماً.
+        var razor = StudioProvidersRazor();
+        Assert.Contains("ProviderBindSurface.VaultUnavailable => \"studio.providers.err_vault_unavailable\"",
+            razor, StringComparison.Ordinal);
+        var ar = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs", "core", "ACommerce.Platform.I18n", "Locales", "ar.json"));
+        Assert.Contains("\"studio.providers.err_vault_unavailable\": \"", ar, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void vault_unavailable_does_not_fire_when_the_vault_seals_or_when_nothing_needs_it()
+    {
+        // السالِب الأَوَّل: الخِزانَةُ تَختِم ⇒ لا رَفض.
+        Assert.Null(ProviderBindSurface.FromForm("moyasar_api", _ => SecretKey, "t", AvailableVault()).RefusalCode);
+
+        // والثاني: الرابِطُ لا يَحتاجُ خِزانَةً — يُربَطُ بِلا مِفتاحٍ رَئيسٍ كَما كان.
+        var link = ProviderBindSurface.FromForm("moyasar_hosted",
+            code => code == "invoice_url" ? "https://moyasar.com/i/inv_9" : null, "t", ProviderVault.FromKek(null));
+        Assert.Null(link.RefusalCode);
+        Assert.False(Assert.Contains("invoice_url", link.Values).IsSealed);
+    }
+
+    [Theory]
+    [InlineData("pk_live_9f3b7c2d41aa58e6")]   // المِفتاحُ المَنشورُ لا السِرِّيّ
+    [InlineData("sk_prod_9f3b7c2d41aa58e6")]
+    [InlineData("9f3b7c2d41aa58e6")]
+    public void A_value_outside_the_declared_key_pattern_is_refused_and_nothing_is_sealed(string pasted)
+    {
+        var read = ProviderBindSurface.FromForm("moyasar_api", _ => pasted, "t", AvailableVault());
+
+        Assert.Equal(ProviderValueValidator.PatternMismatch, read.RefusalCode);
+        Assert.Empty(read.Values);
+    }
+
+    [Fact]
+    public void The_screen_offers_the_secret_key_card_exactly_when_the_vault_can_seal()
+    {
+        string[] Slugs(ProviderVault? v) =>
+            ProviderBindSurface.Offered(ProviderCapabilities.Payments, v).Select(d => d.Slug).ToArray();
+
+        Assert.Equal(new[] { "moyasar_hosted", "moyasar_api" }, Slugs(AvailableVault()));
+        Assert.Equal(new[] { "moyasar_hosted" }, Slugs(ProviderVault.FromKek(null)));
+        Assert.Equal(new[] { "moyasar_hosted" }, Slugs(ProviderVault.FromKek("not base64 !!")));
+        Assert.Equal(new[] { "moyasar_hosted" }, Slugs(null));
+
+        // والقُدرَةُ تُرسَمُ في الحالَين — الرابِطُ مَعروضٌ دائِماً.
+        Assert.Equal(new[] { ProviderCapabilities.Payments },
+            ProviderBindSurface.OfferedCapabilities(ProviderVault.FromKek(null)).ToArray());
+    }
+
+    [Fact]
+    public void Only_a_field_the_vault_seals_renders_as_a_password_input()
+    {
+        var secret = ProviderCatalog.Find("moyasar_api")!.Credential.Fields.Single();
+        var link = ProviderCatalog.Find("moyasar_hosted")!.Credential.Fields.Single();
+
+        Assert.Equal("password", ProviderBindSurface.InputType(secret));
+        Assert.Equal("off", ProviderBindSurface.InputAutocomplete(secret));
+
+        // والرابِطُ بِلا سِمَةٍ أَصلاً — فَيُصَيَّرُ حَقلُه بايتاً بِبايتٍ كَما كان.
+        Assert.Null(ProviderBindSurface.InputType(link));
+        Assert.Null(ProviderBindSurface.InputAutocomplete(link));
+
+        var razor = StudioProvidersRazor();
+        Assert.Contains("type=\"@Services.Providers.ProviderBindSurface.InputType(f)\"", razor, StringComparison.Ordinal);
+        Assert.Contains("autocomplete=\"@Services.Providers.ProviderBindSurface.InputAutocomplete(f)\"", razor, StringComparison.Ordinal);
+        // والمَحفوظُ يُرسَمُ بِصورَتِه المُعَتَّمَة — ذَيلُ المَختومِ بَعدَ قِناع.
+        Assert.Contains("v.Censored", razor, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_bind_endpoint_reads_the_form_through_the_registered_vault()
+    {
+        var text = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs"));
+        var at = text.IndexOf("app.MapPost(\"/studio/apps/{slug}/providers/bind\"", StringComparison.Ordinal);
+        Assert.True(at > 0, "أَداةٌ عَمياء: نُقطَةُ الرَبطِ غَيرُ مَوجودَة.");
+        var body = text.Substring(at, text.IndexOf(".DisableAntiforgery();", at, StringComparison.Ordinal) - at);
+
+        Assert.Contains("ACommerce.Platform.Providers.ProviderVault vault", body, StringComparison.Ordinal);
+        Assert.Contains("ProviderBindSurface.FromForm(req, slug, vault)", body, StringComparison.Ordinal);
+
+        // والحارِسُ ما زالَ قَبلَ قِراءَةِ النَموذَج (القاعِدَة ٦).
+        Assert.True(body.IndexOf("TenantAdminGuard.CanAdministerAsync", StringComparison.Ordinal)
+                    < body.IndexOf("ProviderBindSurface.FromForm", StringComparison.Ordinal));
+
+        // والخِزانَةُ مُسَجَّلَةٌ مِن مِفتاحِ التَهيئَةِ المُسَمّى.
+        Assert.Contains("ProviderVault.FromKek(", text, StringComparison.Ordinal);
+        Assert.Contains("ProviderVault.KekConfigKey]", text, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>الخِزانَةُ تُسَجَّلُ مَرَّةً مِن مِفتاحِ التَهيئَةِ المُسَمّى</b> — بِقالِبٍ
+    /// حَقيقيٍّ لا بِتَسجيلٍ يُكتَبُ في الاختِبار: بِالمِفتاحِ تَختِم، وبِغِيابِه تُسَجَّلُ
+    /// غَيرَ مُتاحَةٍ ولا يَسقُطُ شَيء (‏ADR-032 الخُطوَة 11).</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void The_template_registers_one_vault_read_from_the_kek_configuration_key(bool withKek)
+    {
+        var pairs = new Dictionary<string, string?>(StringComparer.Ordinal);
+        if (withKek)
+            pairs[ProviderVault.KekConfigKey] = Convert.ToBase64String(
+                System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(
+            new ConfigurationBuilder().AddInMemoryCollection(pairs).Build());
+        services.AddCustomerMarketplaceTemplate();
+
+        using var sp = services.BuildServiceProvider();
+        var vault = sp.GetRequiredService<ProviderVault>();
+
+        Assert.Equal(withKek, vault.IsAvailable);
+        Assert.Same(vault, sp.GetRequiredService<ProviderVault>());
+        if (!withKek)
+            Assert.Equal(ProviderVault.Unavailable, Assert.Single(vault.Violations).Code);
+    }
+
+    [Fact]
+    public void The_audit_line_of_a_sealed_binding_shows_its_tail_and_nothing_more()
+    {
+        var vault = AvailableVault();
+        var read = ProviderBindSurface.FromForm("moyasar_api", _ => SecretKey, "t", vault);
+        var b = new TenantProviderBinding
+        {
+            Id = ProviderCapabilities.Payments,
+            Slug = ProviderCapabilities.Payments,
+            ProviderSlug = read.ProviderSlug,
+            Status = TenantProviderBinding.StatusActive,
+            Values = new Dictionary<string, StoredValue>(read.Values, StringComparer.Ordinal),
+        };
+
+        var line = ProviderBindSurface.AuditLine(b);
+        Assert.Equal($"provider=moyasar_api; status=active; secret_key={ProviderSecrecy.Mask}58e6", line);
+        // كُلُّ نافِذَةٍ مِن أَربَعَةِ مَحارِفَ إلّا الذَيلَ المُعلَن.
+        var checkedWindows = 0;
+        for (var i = 0; i + 4 <= SecretKey.Length; i++)
+        {
+            var w = SecretKey.Substring(i, 4);
+            if (w == SecretKey[^4..]) continue;
+            checkedWindows++;
+            Assert.DoesNotContain(w, line, StringComparison.Ordinal);
+        }
+        Assert.True(checkedWindows == 20, $"أَداةٌ عَمياء: {checkedWindows} نافِذَة.");
     }
 }

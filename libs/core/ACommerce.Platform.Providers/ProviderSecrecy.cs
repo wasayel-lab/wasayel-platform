@@ -89,4 +89,20 @@ public static class ProviderSecrecy
         return $"provider={providerSlug ?? "-"}; status={status}; " +
                string.Join("; ", parts);
     }
+
+    /// <summary><b>لَقطَةُ الرَبطِ مِن قيَمِه المُخَزَّنَة</b> (‏2026-10-12) — كُلُّ
+    /// قيمَةٍ بِصورَتِها هي (<c>StoredValue.Censored</c>): الصَريحَةُ بِـ<see cref="Censor"/>
+    /// حَرفاً كَما في الحِملِ أَعلاه، والمَختومَةُ بِذَيلِها المَحفوظِ — ولا نَصَّ
+    /// صَريحاً لَها يُمَرَّرُ أَصلاً. والشَكلُ والتَرتيبُ هُما شَكلُ الحِملِ أَعلاه.</summary>
+    public static string ForAudit(
+        string? providerSlug, string status,
+        IEnumerable<KeyValuePair<string, StoredValue>> values)
+    {
+        var parts = values
+            .OrderBy(p => p.Key, StringComparer.Ordinal)
+            .Select(p => $"{p.Key}={p.Value.Censored}");
+
+        return $"provider={providerSlug ?? "-"}; status={status}; " +
+               string.Join("; ", parts);
+    }
 }
