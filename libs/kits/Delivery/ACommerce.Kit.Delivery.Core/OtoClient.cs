@@ -239,9 +239,16 @@ public sealed class OtoClient
         if (sent.Value is not { } resp) return OtoResult<OtoAccessToken>.Fail(sent.Failure!);
         using (resp)
         {
-            // أَيُّ رَدٍّ غَيرُ ناجِحٍ هُنا رَمزٌ مَرفوض — ولا يُقرَأُ جِسمُه في لوغ.
+            // ‏5xx «لا جَواب» هُنا كَما في كُلِّ نِداء (مَعجَمُ `OtoFailures.Unreachable` و`PostAsync`) — عُطلُ خادِمٍ لا
+            // يَقولُ شَيئاً عَن الرَمز. (وكانَ هُنا — حَتّى مُراجَعَةِ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛ تَوصيفُه `1ee37ed` —: «أَيُّ
+            // رَدٍّ غَيرُ ناجِحٍ هُنا رَمزٌ مَرفوض»، فَيُقالُ لِلبائِعِ «رَفَضَت OTO رَمزَ حِسابِ الشَّحن» عَن رَمزٍ سَليم. ولا يُعادُ حَرفٌ فَوقَه.)
+            var status = (int)resp.StatusCode;
+            if (status >= 500)
+                return Fail<OtoAccessToken>(OtoFailures.Unreachable, "refreshToken", status, null);
+
+            // وما سِواه مِن رَدٍّ غَيرِ ناجِحٍ رَمزٌ مَرفوض — ولا يُقرَأُ جِسمُه في لوغ.
             if (!resp.IsSuccessStatusCode)
-                return Fail<OtoAccessToken>(OtoFailures.TokenRefused, "refreshToken", (int)resp.StatusCode, null);
+                return Fail<OtoAccessToken>(OtoFailures.TokenRefused, "refreshToken", status, null);
 
             var root = await ReadJsonAsync(resp, ct);
             if (root is not { } r || IsFalse(r, "success") || Text(r, "access_token") is not { } token)
@@ -442,10 +449,11 @@ public static class OtoFailures
     /// <summary>لا بيئَةَ مَفتوحَة أَو لا رَمزَ تَحديث — فَلا نِداءَ أَصلاً.</summary>
     public const string NotConfigured = "oto_not_configured";
 
-    /// <summary>رَفَضَت OTO رَمزَ التَحديث (أَو رَدَّت بِلا <c>access_token</c>).</summary>
+    /// <summary>رَفَضَت OTO رَمزَ التَحديث (أَو رَدَّت بِلا <c>access_token</c>) — ‏4xx مِن نُقطَةِ الرَمز؛ و‏5xx مِنها
+    /// <see cref="Unreachable"/> (‏2026-10-12، مُراجَعَةُ المَوجَة 3a).</summary>
     public const string TokenRefused = "oto_token_refused";
 
-    /// <summary>لا جَواب: انقِطاعٌ، أَو مُهلَةٌ، أَو ‏5xx.</summary>
+    /// <summary>لا جَواب: انقِطاعٌ، أَو مُهلَةٌ، أَو ‏5xx — مِن أَيِّ نُقطَة، ومِنها نُقطَةُ الرَمز.</summary>
     public const string Unreachable = "oto_unreachable";
 
     /// <summary>أَجابَت OTO بِالرَفض: ‏4xx أَو <c>"success": false</c>.</summary>

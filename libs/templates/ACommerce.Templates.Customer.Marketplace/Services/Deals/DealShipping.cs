@@ -356,6 +356,11 @@ public sealed class DealShipping
     ///
     /// <para><b>ولا سُؤالَ حَيثُ لَم يَبلُغ الطَلَبُ OTO</b>: <c>oto_not_configured</c> و<c>oto_token_refused</c>
     /// يَقَعانِ قَبلَ نُقطَةِ الطَلَب.</para>
+    ///
+    /// <para>(<b>يُلحَقُ ‏2026-10-12 — مُراجَعَةُ المَوجَة 3a، تَيّارُ S8؛ ولا يُعادُ حَرفٌ فَوقَه</b>: ‏5xx مِن نُقطَةِ الرَمزِ صارَ
+    /// <c>oto_unreachable</c> لا <c>oto_token_refused</c>، فَيَمُرُّ هُنا إلى سُؤالِ «Order Tracking» — وسُؤالُه يَطلُبُ رَمزاً أَوَّلاً فَيَرتَدُّ
+    /// بِالعُطلِ نَفسِه قَبلَ أَن يَبلُغَ نُقطَةَ الحال، ويَعودُ الفَشَلُ الأَصلِيُّ بِرَمزِه. كُلفَتُه نِداءُ رَمزٍ ثانٍ لا طَلَبٌ ولا سُؤال —
+    /// مَقيسٌ في <c>DealShipTests</c>.)</para>
     /// </summary>
     private async Task<OtoResult<OtoCreatedOrder>> PlaceAsync(string token, Deal deal, string city, CancellationToken ct)
     {

@@ -662,6 +662,25 @@ public class DealShipTests
         Assert.Equal(0, w.Oto.CallsTo(OtoClient.OrderStatusPath));
     }
 
+    /// <summary><b>وعُطلُ خادِمِ الرَمزِ «لا جَواب» لا «رَمزٌ مَرفوض»</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12): يَمُرُّ إلى سُؤالِ
+    /// التَبَنّي، وسُؤالُه يَرتَدُّ عِندَ الرَمزِ نَفسِه — فَلا «Create Order» ولا «Order Tracking» يَبلُغُ OTO، ولا يُكتَبُ شَيء،
+    /// والرَمزُ الَّذي يَصِلُ الصَفحَةَ «أَعِد المُحاوَلَة» لا «رَفَضَت OTO رَمزَ حِسابِ الشَّحن».</summary>
+    [Fact]
+    public async Task A_5xx_from_the_token_endpoint_answers_unreachable_and_neither_creates_nor_asks_order_tracking()
+    {
+        var w = await ConfirmedCashDeal();
+        w.Oto.Routes[OtoClient.RefreshTokenPath] = _ => OtoRouteHandler.Json(HttpStatusCode.ServiceUnavailable, "<html/>");
+        var saves = w.Docs.SaveCalls;
+
+        var res = await w.Shipping.ShipAsync(Slug, w.Id, Vendor, "Riyadh");
+
+        Assert.Equal(OtoFailures.Unreachable, res.Code);
+        Assert.Equal(0, w.Oto.CallsTo(OtoClient.CreateOrderPath));
+        Assert.Equal(0, w.Oto.CallsTo(OtoClient.OrderStatusPath));
+        Assert.Equal(saves, w.Docs.SaveCalls);
+        Assert.Equal(DealStage.Confirmed, (await w.Deals.LoadAsync(Slug, w.Id))!.Stage);
+    }
+
     /// <summary><b>الإعادَةُ تَستَأنِف</b>: مُحاوَلَةٌ سابِقَةٌ كَتَبَت مَرجِعَي الطَلَبِ ولَم يَقَع انتِقالُها (رُدَّ
     /// بِـ<c>deal_changed_meanwhile</c> ونَصُّه «أَعِد المُحاوَلَة») — فَالإعادَةُ تُخرِجُها إلى الشَحنِ بِلا «Create
     /// Order» ثانٍ ولا مَدينَة، وتَجلِبُ رابِطَيه بِالمُعَرِّفِ المَكتوب.</summary>
