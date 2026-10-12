@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ACommerce.Platform.I18n;
 using ACommerce.Templates.Customer.Marketplace.Api;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
 using Microsoft.AspNetCore.Http;
@@ -306,17 +307,23 @@ public class ApiContractTests
         Assert.Contains("\"deal_changed_meanwhile\"", ApiJson.Serialize(raced.Payload), StringComparison.Ordinal);
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم» — رِسالَةُ <c>deal_awaits_carrier</c> تَقولُ إنّ الناقِلَ يُدخِلُ الصَفقَةَ «شَحن» ولا تُسَمّي البابَ ولا
-    /// البوليصَة</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، البَندُ A0 (ix)، ‏2026-10-12): كُتِبَت قَبلَ أَن يُدخِلَها الوارِدُ «شَحن» (‏ADR-033 §٧‑ط)،
-    /// وما يُدخِلُها اليَومَ جَوابُ OTO يُثبِتُ شُحنَتَها <b>وبوليصَتَها</b> — بِـ«أَكمِل الشَّحن» عِندَ البائِعِ أَو بِإشعارٍ مِن OTO. يُثَبَّتُ قَبلَ قَلبِه (القاعِدَة ٣).</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_the_deal_awaits_carrier_message_says_the_carrier_moves_the_deal_and_names_neither_the_resume_nor_the_label</c>
+    /// (‏<c>5c456ba</c>): «تَدخُلُ «شَحن» حينَ يُثبِتُ الناقِلُ شُحنَتَها». <b>والآن</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، البَندُ A0 (ix)، ‏2026-10-12؛
+    /// ‏ADR-033 §٧‑ك): الرِسالَةُ تُسَمّي OTO، والشَرطَ كامِلاً (الشُحنَةُ <b>والبوليصَة</b>)، والبابَينِ اللَّذَينِ يُدخِلانِها «شَحن» — «أَكمِل الشَّحن»
+    /// بِحَرفِ زِرِّه في القامُوس (أَوَّلِ مَقطَعَي <c>deals.detail.ship_resume</c>) وإشعارَ OTO (§٧‑ط) — وأَنّ هذا البابَ لَيسَ مِنهُما.</summary>
     [Fact]
-    public void Today_the_deal_awaits_carrier_message_says_the_carrier_moves_the_deal_and_names_neither_the_resume_nor_the_label()
+    public void The_deal_awaits_carrier_message_names_OTO_the_label_and_both_doors_that_move_the_deal()
     {
         var message = ApiErrorCatalog.Require(ApiErrorCatalog.DealAwaitsCarrier).MessageAr;
-        Assert.Equal("طَلَبُ شَحنِ هذِه الصَفقَةِ عِندَ الناقِل — تَدخُلُ «شَحن» حينَ يُثبِتُ الناقِلُ شُحنَتَها، لا بِهذا الباب.", message);
-        Assert.DoesNotContain("أَكمِل الشَّحن", message, StringComparison.Ordinal);
-        Assert.DoesNotContain("بوليصَت", message, StringComparison.Ordinal);
-        Assert.DoesNotContain("OTO", message, StringComparison.Ordinal);
+        Assert.Equal("طَلَبُ شَحنِ هذِه الصَفقَةِ عِندَ OTO — لا تَدخُلُ «شَحن» بِهذا الباب؛ تَدخُلُها حينَ يُثبِتُ جَوابُ OTO شُحنَتَها وبوليصَتَها: بِـ«أَكمِل الشَّحن» عِندَ البائِع، أَو بِإشعارٍ مِن OTO.", message);
+
+        var resume = LocaleCatalog.Text(LocaleCatalog.Arabic, "deals.detail.ship_resume");
+        var button = resume[..resume.IndexOf(" — ", StringComparison.Ordinal)];
+        Assert.Contains($"«{button}»", message, StringComparison.Ordinal);
+        Assert.Contains("بِإشعارٍ مِن OTO", message, StringComparison.Ordinal);
+        Assert.Contains("شُحنَتَها وبوليصَتَها", message, StringComparison.Ordinal);
+        Assert.Contains("لا تَدخُلُ «شَحن» بِهذا الباب", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("الناقِل", message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -49,7 +49,10 @@ public static class ApiErrorCatalog
     /// <summary>طَلَبُ الصَفقَةِ عِندَ الناقِلِ (OTO) وتاليها «شَحن» — تَدخُلُها حينَ يُثبِتُ الناقِلُ شُحنَتَها عَبرَ نُقطَةِ الشَحن، لا بِهذا
     /// الباب (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12؛ ‏ADR-033 §٧‑ح). مُنتِجُه <c>DealApi.FromAdvance</c> مِن رَمزِ الخِدمَةِ نَفسِه
     /// (<c>DealShipping.DealAwaitsCarrier</c>)؛ ‏409 تَعارُضُ حالَةٍ كَأَخَواتِه — وتَصنيفُ الحالَةِ كانَ سَيَقولُ «فاعِلٌ غَيرُ مُخَوَّل» (‏403)
-    /// عَن الفاعِلِ المُخَوَّلِ نَفسِه.</summary>
+    /// عَن الفاعِلِ المُخَوَّلِ نَفسِه.
+    /// <para><b>ورِسالَتُه تُسَمّي البابَينِ والشَرط</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 §٧‑ك): كانَت «تَدخُلُ «شَحن» حينَ
+    /// يُثبِتُ الناقِلُ شُحنَتَها» — وَعدٌ بِنَقلٍ لا يُؤَدّيه كودٌ يَومَ كُتِبَت، ولا تُسَمّي البوليصَة. وما يُدخِلُها اليَومَ جَوابٌ مِن OTO يُثبِتُ
+    /// الشُحنَةَ والبوليصَةَ عِندَ «أَكمِل الشَّحن» (<c>ShipAsync</c>) أَو عِندَ إشعارٍ مِنها (<c>DeliverAsync</c>، §٧‑ط) — والرِسالَةُ تَقولُهُما.</para></summary>
     public const string DealAwaitsCarrier      = "deal_awaits_carrier";
     public const string IdempotencyInProgress  = "idempotency_in_progress";
     public const string IdempotencyKeyRequired = "idempotency_key_required";
@@ -80,7 +83,7 @@ public static class ApiErrorCatalog
         new ApiErrorCode(DealChangedMeanwhile, StatusCodes.Status409Conflict,
             "تَغَيَّرَت الصَفقَةُ في الأَثناء — أَعِد المُحاوَلَة بِطَلَبٍ جَديد."),
         new ApiErrorCode(DealAwaitsCarrier, StatusCodes.Status409Conflict,
-            "طَلَبُ شَحنِ هذِه الصَفقَةِ عِندَ الناقِل — تَدخُلُ «شَحن» حينَ يُثبِتُ الناقِلُ شُحنَتَها، لا بِهذا الباب."),
+            "طَلَبُ شَحنِ هذِه الصَفقَةِ عِندَ OTO — لا تَدخُلُ «شَحن» بِهذا الباب؛ تَدخُلُها حينَ يُثبِتُ جَوابُ OTO شُحنَتَها وبوليصَتَها: بِـ«أَكمِل الشَّحن» عِندَ البائِع، أَو بِإشعارٍ مِن OTO."),
         new ApiErrorCode(IdempotencyInProgress, StatusCodes.Status409Conflict,
             "طَلَبٌ بِنَفس مِفتاح مَرَّة-واحِدَة ما زالَ قَيدَ التَنفيذ."),
         new ApiErrorCode(IdempotencyKeyRequired, StatusCodes.Status422UnprocessableEntity,

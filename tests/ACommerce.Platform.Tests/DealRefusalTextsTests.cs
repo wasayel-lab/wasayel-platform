@@ -154,16 +154,17 @@ public class DealRefusalTextsTests
         Assert.NotEqual(LocaleCatalog.Text(LocaleCatalog.Arabic, DealRefusalTexts.KeyFor(DealShipping.ShipmentUnconfirmed)!), text);
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم» — نَصُّ <c>deal_awaits_carrier</c> يَقولُ إنّ «أَكمِل الشَّحن» وَحدَه يُخرِجُها إلى «شَحن»</b> (مُراجَعَةُ المَوجَة 3a،
-    /// تَيّارُ S8، البَندُ A0 (ix)، ‏2026-10-12): صَدَقَ حينَ كُتِب، وصارَ لِلخُروجِ بابٌ ثانٍ بِـ‏ADR-033 §٧‑ط — إشعارُ OTO حينَ يُثبِتُ جَوابُها
-    /// الشُحنَةَ والبوليصَة. يُثَبَّتُ قَبلَ قَلبِه (القاعِدَة ٣).</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_the_deal_awaits_carrier_text_says_only_the_resume_button_moves_the_deal</c> (‏<c>5c456ba</c>):
+    /// «إلّا بِزِرِّ «أَكمِل الشَّحن»». <b>والآن</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، البَندُ A0 (ix)، ‏2026-10-12؛ ‏ADR-033 §٧‑ك): الشَرطُ أَوَّلاً
+    /// (OTO تُثبِتُ الشُحنَةَ والبوليصَة)، ثُمَّ البابانِ — زِرُّ «أَكمِل الشَّحن» هُنا، وإشعارُ OTO (§٧‑ط). وأَخوهُ أَعلاه بِحَرفِه.</summary>
     [Fact]
-    public void Today_the_deal_awaits_carrier_text_says_only_the_resume_button_moves_the_deal()
+    public void The_deal_awaits_carrier_text_names_the_condition_then_both_doors_out()
     {
         var text = LocaleCatalog.Text(LocaleCatalog.Arabic, DealRefusalTexts.KeyFor(DealShipping.DealAwaitsCarrier)!);
-        Assert.Equal("طَلَبُ هذِه الصَّفقَة عِندَ OTO — فَلا تَخرُجُ إلى «شَحن» إلّا بِزِرِّ «أَكمِل الشَّحن» حينَ تُثبِتُ OTO شُحنَتَها وبوليصَتَها.", text);
-        Assert.Contains("إلّا بِزِرِّ «أَكمِل الشَّحن»", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("إشعار", text, StringComparison.Ordinal);
+        Assert.Equal("طَلَبُ هذِه الصَّفقَة عِندَ OTO — فَلا تَخرُجُ إلى «شَحن» إلّا حينَ تُثبِتُ OTO شُحنَتَها وبوليصَتَها: بِزِرِّ «أَكمِل الشَّحن» هُنا، أَو بِإشعارٍ مِنها.", text);
+        Assert.DoesNotContain("إلّا بِزِرِّ", text, StringComparison.Ordinal);
+        Assert.Contains("إلّا حينَ تُثبِتُ OTO شُحنَتَها وبوليصَتَها", text, StringComparison.Ordinal);
+        Assert.Contains("أَو بِإشعارٍ مِنها", text, StringComparison.Ordinal);
     }
 
     /// <summary><b>السالِب</b>: رَمزٌ خارِجَ المَعجَم، أَو غِيابٌ، أَو فَراغ — لا مِفتاحَ،
