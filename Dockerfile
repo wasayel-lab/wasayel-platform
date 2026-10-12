@@ -47,7 +47,17 @@
 # ══════════════════════════════════════════════════════════════════════
 
 # --- مَرحَلَة البِناء (.NET 10 SDK رَسميّ مِن Microsoft) ---------------------
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+#
+# ═══ وَسمٌ دَقيقٌ لا قَناة (‏2026-10-12، موجزُ الفجوات P3-3) ═════════════
+# كانَ `sdk:10.0` و`aspnet:10.0` أَدناه — وَسمانِ يَنتَقِلانِ مَعَ كُلِّ رُقعَةٍ
+# شَهرِيَّة، فَيُبنى الإيداعُ نَفسُه بِـSDK غَيرِ الَّذي قيسَ عَلَيه (‏DEPLOY.md §٥).
+# **والزَوجُ مَقيسٌ لا مُختار**: `dotnet --version` = ‏10.0.401 و`dotnet
+# --list-runtimes` = ‏Microsoft.AspNetCore.App 10.0.12 حَيثُ قيسَ كُلُّ شَيء،
+# وكِلاهُما في قائِمَةِ وُسومِ MCR يَومَ التَثبيت (`/v2/dotnet/sdk/tags/list`
+# و`/v2/dotnet/aspnet/tags/list` — وأَحدَثُ 10.0.N فيهِما يَومَها). و`ci.yml`
+# ‏`10.0.x` قَناتُهُما. **والتَرقِيَةُ تَمَسُّ الوَسمَينِ مَعاً** وصَفَّ §٥:
+# `DockerImagePinTests` يَحمَرُّ عَلى وَسمٍ مُتَحَرِّكٍ يَعود أَو §٥ لا يُسَمّيهِما.
+FROM mcr.microsoft.com/dotnet/sdk:10.0.401 AS build
 
 WORKDIR /src
 COPY . .
@@ -137,7 +147,8 @@ RUN set -eu; \
     echo "[build-identity] الثُنائِيُّ يَحمِل: $got"
 
 # --- مَرحَلَة التَّشغيل (ASP.NET Core 10 runtime رَسميّ) --------------------
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+# ‏وَقتُ التَشغيلِ الَّذي يَحمِلُه SDK ‏10.0.401 نَفسُه — رَأسُ المِلَفِّ أَعلاه.
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.12 AS runtime
 
 WORKDIR /app
 COPY --from=build /publish ./
