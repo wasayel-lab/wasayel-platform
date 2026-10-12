@@ -455,7 +455,7 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         // والطَريقُ بَعدَه: «أَكمِل الشَّحن» تَسأَلُ OTO فَتَجِدُ `delivered` بِبوليصَةٍ فَتُخرِجُها إلى «شَحن»، والتَسليمُ بِيَدِ البائِع.
         Assert.True((await w.Shipping.ShipAsync(Slug, w.Id, DealShipTests.Vendor, city: null)).Ok);
         Assert.Equal(DealStage.Shipping, Stored(w).Stage);
-        Assert.False(DealShipping.AwaitsCarrier(Stored(w)));
+        Assert.Equal(DealStage.Delivered, DealsPolicy.Next(Stored(w)));
         Assert.True((await w.Deals.AdvanceAsync(Slug, w.Id, Seller, "بائِع", "")).Ok);
         Assert.Equal(DealStage.Delivered, Stored(w).Stage);
         Assert.Single(Stored(w).Timeline, e => e.Action == DealEvent.CashOnDelivery);
