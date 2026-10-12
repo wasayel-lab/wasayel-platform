@@ -15,6 +15,9 @@ namespace ACommerce.Platform.Tests;
 // **والقِياسُ بِالخِدمَةِ الحَقيقِيَّةِ** في عالَمِ الوَثائِقِ (`EndpointDocWorld.cs`) ومُزَوِّدٍ يُسَجِّلُ ما نودِيَ بِه — بِتَرتيبِ النُقطَةِ
 // مُثَبَّتاً مِن مَصدَرِها، فَلا يَقيسُ الصَفُّ نَموذَجاً انجَرَف. صَفُّ «اليَوم» يُودَعُ وَحدَه (القاعِدَة ٣) ويُقلَبُ بِاسمِه في كوميتِ
 // التَرتيب.
+//
+// **ثُمَّ قُلِبَ بِاسمِه** (‏ADR-036 §٨، ‏2026-10-12 — ولا يُعادُ حَرفٌ فَوقَه): الحَجزُ ومَرجِعاه قَبلَ مَرجِعِ المالِكِ والرَبط، فَأَوَّلُ ما
+// يَستَطيعُه البائِعُ — إلغاءً أَو قَبولاً — يَجِدُ مَرجِعَ الدَفعِ عَلى الصَفقَة.
 
 public class DealCheckoutPaymentOrderTests
 {
@@ -89,49 +92,72 @@ public class DealCheckoutPaymentOrderTests
                 At("await deals.AttachRefAsync(slug, deal.Id, \"payment_status\", pr.Status.ToString());"));
     }
 
-    /// <summary>بَندُ سَلَّةٍ بِبِطاقَةٍ كَما تَمشيه النُقطَةُ <b>اليَوم</b> — بِتَرتيبِها المُثَبَّتِ مِن المَصدَر: الوِلادَة، ثُمَّ مَرجِعُ المالِك،
-    /// ثُمَّ الرَبط، ثُمَّ إذنُ الدَفعِ ومَرجِعاه. و<paramref name="vendorWhileAuthorizing"/> ما يَفعَلُه البائِعُ وقَد صارَت الصَفقَةُ في
-    /// قائِمَتِه، أَثناءَ نِداءِ المُزَوِّدِ وقَبلَ أَن يُلحَقَ مَرجِعُه.</summary>
-    private static Guid CardCheckoutToday(DealsService deals, IPaymentProvider payments, Action<Guid> vendorWhileAuthorizing)
+    /// <summary>بَندُ سَلَّةٍ بِبِطاقَةٍ كَما تَمشيه النُقطَة — بِتَرتيبِها المُثَبَّتِ مِن المَصدَر: الوِلادَة، ثُمَّ إذنُ الدَفعِ ومَرجِعاه،
+    /// ثُمَّ مَرجِعُ المالِكِ والرَبط. و<paramref name="vendorAfterBind"/> أَوَّلُ ما يَستَطيعُه البائِع: بَعدَ أَن صارَت الصَفقَةُ في قائِمَتِه.
+    /// (وكانَ اسمُه <c>CardCheckoutToday</c> بِالتَرتيبِ القَديم — الرَبطُ قَبلَ الحَجز، والبائِعُ يَعمَلُ أَثناءَ نِداءِ المُزَوِّد.)</summary>
+    private static Guid CardCheckout(DealsService deals, IPaymentProvider payments, Action<Guid> vendorAfterBind)
     {
         var deal = Now(deals.StartAsync(Slug, "marketplace", Buyer, "مُشتَرٍ", Guid.NewGuid(), "سِلعَة", 100m,
             new() { [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.Card }));
-        Now(deals.AttachRefAsync(Slug, deal.Id, DealsService.ListingOwnerRef, Seller.ToString()));
-        Now(deals.BindListingOwnerAsync(Slug, deal.Id, Seller.ToString()));
         var pr = Now(payments.AuthorizeAsync(new(100m, "سِلعَة", Buyer.ToString(), "",
             Metadata: new() { ["deal_id"] = deal.Id.ToString() }), $"deal_{deal.Id}"));
-        vendorWhileAuthorizing(deal.Id);
         Now(deals.AttachRefAsync(Slug, deal.Id, "payment_id", pr.PaymentId));
         Now(deals.AttachRefAsync(Slug, deal.Id, "payment_status", pr.Status.ToString()));
+        Now(deals.AttachRefAsync(Slug, deal.Id, DealsService.ListingOwnerRef, Seller.ToString()));
+        Now(deals.BindListingOwnerAsync(Slug, deal.Id, Seller.ToString()));
+        vendorAfterBind(deal.Id);
         return deal.Id;
     }
 
     /// <summary>
-    /// <para><b>اليَوم — يُقلَبُ بِاسمِه في كوميتِ التَرتيب</b>: البائِعُ المَربوطُ يُلغي الطَلَبَ أَثناءَ نِداءِ المُزَوِّد — والإلغاءُ مَقبولٌ
-    /// (طَرَفٌ عِندَ <c>Offered</c>) — فَلا يَجِدُ مَرجِعَ دَفعٍ ولا يُستَرجَعُ شَيء؛ ثُمَّ يُلحَقُ <c>payment_id</c> عَلى صَفقَةٍ مُلغاة. المُزَوِّدُ
-    /// نودِيَ مَرَّةً واحِدَةً لِلحَجزِ وصِفراً لِلاستِرجاع: إذنٌ مَحجوزٌ لا يُطلِقُه أَحَد.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏ADR-036 §٨، ‏2026-10-12): كانَ
+    /// <c>Today_a_bound_vendors_cancel_while_the_provider_authorizes_refunds_nothing_and_the_payment_lands_on_a_cancelled_deal</c>
+    /// (مُودَعٌ في <c>0257551</c>) — الرَبطُ قَبلَ الحَجز، فَإلغاءُ البائِعِ أَثناءَ نِداءِ المُزَوِّدِ مَقبولٌ بِلا استِرجاع، و<c>payment_id = pay_1</c>
+    /// عَلى صَفقَةٍ مُلغاة، والمُزَوِّدُ نودِيَ لِلحَجزِ وَحدَه. <b>وصارَ الحَجزُ ومَرجِعاه قَبلَ مَرجِعِ المالِكِ والرَبط</b>: أَوَّلُ لَحظَةٍ
+    /// يَستَطيعُ فيها البائِعُ الإلغاءَ يَجِدُ المَرجِعَ — فَيُستَرجَعُ الإذنُ (<c>refund pay_1</c>) ويُكتَبُ <c>refund_id</c> وسَطرُ <c>refunded</c>.</para>
     /// </summary>
     [Fact]
-    public void Today_a_bound_vendors_cancel_while_the_provider_authorizes_refunds_nothing_and_the_payment_lands_on_a_cancelled_deal()
+    public void The_payment_refs_land_before_the_vendor_is_bound_so_his_first_possible_cancel_refunds_the_authorization()
     {
         var (owner, bind, authorize, paymentId, paymentStatus) = Steps();
-        Assert.True(owner < bind && bind < authorize && authorize < paymentId && paymentId < paymentStatus,
-            $"تَرتيبُ النُقطَةِ تَغَيَّر: owner={owner} bind={bind} authorize={authorize} payment_id={paymentId} payment_status={paymentStatus}");
+        Assert.True(authorize < paymentId && paymentId < paymentStatus && paymentStatus < owner && owner < bind,
+            $"تَرتيبُ النُقطَة: authorize={authorize} payment_id={paymentId} payment_status={paymentStatus} owner={owner} bind={bind}");
 
         var world = new DocWorld();
         var pay = new RecordingPaymentProvider();
         var deals = new DealsService(world.Store, pay);
         DealCancelResult? cancel = null;
 
-        var id = CardCheckoutToday(deals, pay, dealId =>
+        var id = CardCheckout(deals, pay, dealId =>
             cancel = Now(deals.CancelAsync(Slug, dealId, new DealCanceller(Seller, "بائِع", IsStoreAdmin: false), "نَفِدَت الكَمِّيَّة")));
 
         Assert.True(cancel!.Ok, cancel.Violation?.Code);
         var deal = world.Read<Deal>(id.ToString())!;
         Assert.Equal(DealStatus.Cancelled, deal.Status);
         Assert.Equal("pay_1", deal.Refs["payment_id"]);
-        Assert.False(deal.Refs.ContainsKey("refund_id"));
-        Assert.DoesNotContain(deal.Timeline, e => e.Action is "refunded" or "refund_failed");
+        Assert.Equal("ref_pay_1", deal.Refs["refund_id"]);
+        Assert.Equal(nameof(PaymentStatus.Refunded), deal.Refs["refund_status"]);
+        Assert.Single(deal.Timeline, e => e.Action == "refunded");
+        Assert.Equal(new[] { $"authorize deal_{id}", "refund pay_1" }, pay.Calls);
+    }
+
+    /// <summary><b>والمُوجِبُ الآخَر</b>: بائِعٌ يَقبَلُ في أَوَّلِ لَحظَةٍ يَستَطيعُها يَجِدُ مَرجِعَ الدَفعِ عَلى الصَفقَة — فَما يَقبِضُه
+    /// المُشتَري عِندَ <c>Paid</c> مَربوطٌ بِإذنِه، ولا يَمَسُّ القَبولُ المُزَوِّد.</summary>
+    [Fact]
+    public void A_vendor_who_accepts_at_his_first_possible_moment_finds_the_payment_ref_already_on_the_deal()
+    {
+        var world = new DocWorld();
+        var pay = new RecordingPaymentProvider();
+        var deals = new DealsService(world.Store, pay);
+        DealAcceptResult? accept = null;
+
+        var id = CardCheckout(deals, pay, dealId => accept = Now(deals.AcceptAsync(Slug, dealId, new DealAcceptor(Seller, "بائِع"))));
+
+        Assert.True(accept!.Ok, accept.Violation?.Code);
+        var deal = world.Read<Deal>(id.ToString())!;
+        Assert.Equal((DealStatus.Active, DealStage.Booked), (deal.Status, deal.Stage));
+        Assert.Equal("pay_1", deal.Refs["payment_id"]);
+        Assert.Equal(nameof(PaymentStatus.Authorized), deal.Refs["payment_status"]);
         Assert.Equal(new[] { $"authorize deal_{id}" }, pay.Calls);
     }
 }

@@ -3011,17 +3011,11 @@ public static class MarketplaceTemplateExtensions
                         [Services.Deals.CheckoutPayMethods.AttributeKey] = payMethod
                     });
                 if (firstDealId == Guid.Empty) firstDealId = deal.Id;
-                if (listing.Attributes.TryGetValue("owner_id", out var oid))
-                {
-                    await deals.AttachRefAsync(slug, deal.Id, "listing_owner", oid);
-                    // **والبائِعُ طَرَفٌ مُقابِلٌ مِن الوِلادَة** (‏ADR-033 §٦،
-                    // ‏2026-10-11): صُفوفُ `counterparty` في الكاتالوج (Booked ·
-                    // Shipping · Delivered) تُسَمّيه مِن أَوَّلِ لَحظَة، و`/accept`
-                    // يَبقى فِعلَه هُوَ — بِهُوِيَّتِه لا بِاستِعارَةِ المُبادِر.
-                    await deals.BindListingOwnerAsync(slug, deal.Id, oid);
-                    born.Add(deal.Id);
-                }
-
+                // **والحَجزُ ومَراجِعُه قَبلَ الرَبط** (‏ADR-036 §٨، ‏2026-10-12؛ مُراجَعَةُ تَيّارِ S6a الأولى — ولا
+                // يُعادُ حَرفٌ فَوقَه): كانَت كُتلَةُ الدَفعِ بَعدَ رَبطِ البائِع، والصَفقَةُ بَعدَ الرَبطِ في قائِمَتِه وهو
+                // طَرَفٌ يُلغي عِندَ `Offered` — فَإلغاؤُه أَثناءَ نِداءِ المُزَوِّدِ لا يَجِدُ `payment_id` فَلا يُستَرجَعُ شَيء،
+                // ثُمَّ يُلحَقُ المَرجِعُ عَلى صَفقَةٍ مُلغاة (`DealCheckoutPaymentOrderTests`). فَيُحجَزُ المَبلَغُ ويُلحَقُ
+                // مَرجِعُه ما دامَت الصَفقَةُ لا يَراها غَيرُ المُشتَري ومالِكِ التَطبيق، ثُمَّ يُربَطُ البائِع.
                 // اِحجِز المَبلَغ عَبر مُزَوِّد الدَّفع (Authorize، لا
                 // capture بَعد — يَتِمّ الـ capture عِندَ تَأكيد البائِع).
                 // (و«عِندَ تَأكيدِ البائِع» لَم يَصدُق حَرفاً: القَبضُ عِندَ دُخولِ `Paid` في `MoveAsync`، وكانَ
@@ -3061,6 +3055,17 @@ public static class MarketplaceTemplateExtensions
                         // يَستَطيع رُؤيَتها يَدَويّاً.
                         await deals.AttachRefAsync(slug, deal.Id, "payment_error", ex.Message);
                     }
+                }
+
+                if (listing.Attributes.TryGetValue("owner_id", out var oid))
+                {
+                    await deals.AttachRefAsync(slug, deal.Id, "listing_owner", oid);
+                    // **والبائِعُ طَرَفٌ مُقابِلٌ مِن الوِلادَة** (‏ADR-033 §٦،
+                    // ‏2026-10-11): صُفوفُ `counterparty` في الكاتالوج (Booked ·
+                    // Shipping · Delivered) تُسَمّيه مِن أَوَّلِ لَحظَة، و`/accept`
+                    // يَبقى فِعلَه هُوَ — بِهُوِيَّتِه لا بِاستِعارَةِ المُبادِر.
+                    await deals.BindListingOwnerAsync(slug, deal.Id, oid);
+                    born.Add(deal.Id);
                 }
             }
 
