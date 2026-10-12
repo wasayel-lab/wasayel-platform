@@ -546,6 +546,26 @@ public sealed class DealsService
         return all.ToList();
     }
 
+    /// <summary>
+    /// <para><b>أَيُحَرِّكُ المَسارُ الإداريُّ هذِه الصَفقَة؟</b> (‏ADR-033 §٦‑ط مُلحَقاً، ‏2026-10-12) — دالَّةٌ <b>نَقِيَّة</b>
+    /// تَقرَؤُها صَفحَةُ الاستوديو لِتَرسُمَ زِرَّ «→ التالي»، ونُقطَتُه <c>POST /studio/apps/{slug}/deals/{id}/advance</c> قَبلَ أَيِّ
+    /// كِتابَة: فَلا يُرسَمُ زِرٌّ يَرُدُّه المُحَرِّكُ بِلا كَلِمَة (القاعِدَة ١٢)، ولا يُكتَبُ تَعيينٌ يَتلوه رَفض. كانَت الصَفحَةُ
+    /// تَرسُمُه لِكُلِّ صَفقَةٍ لَها تالٍ (‏72 زِرّاً مَردوداً في مَصفوفَةِ ‏2304 حالَة، و‏27 مِنها تَكتُبُ قَبلَ أَن تُرَدّ).</para>
+    ///
+    /// <para><b>وهي تَسَلسُلُ النُقطَةِ نَفسُه بِلا كِتابَة</b>: الطَرَفُ بَعدَ خُطوَةِ التَعيين — القائِمُ، أَو مالِكُ التَطبيقِ
+    /// ما لَم يَكُن المُبادِرَ (<see cref="AssignCounterpartyAsync"/> تَرُدُّه) — والفاعِلُ <c>CounterpartyId ?? appOwnerId</c>
+    /// كَما تُحَرِّكُ النُقطَة، ثُمَّ بَوّابَةُ <see cref="AdvanceAsync"/> نَفسُها: صَفقَةٌ فَعّالَة، لَها تالٍ، وفاعِلُ المَرحَلَةِ
+    /// المَدخولَةِ بِـ<c>IsActorAllowed</c> الواحِدَة. ومُطابَقَتُها لِلتَسَلسُلِ الحَقيقِيِّ مَقيسَةٌ حالَةً حالَةً في
+    /// <c>DealStudioAdvanceDoorTests</c> — فَإن انجَرَفَ أَحَدُهُما أَحمَرَّ الصَفّ.</para>
+    /// </summary>
+    public static bool AdminPathCanMove(Deal deal, Guid appOwnerId)
+    {
+        if (deal.Status != DealStatus.Active || DealsPolicy.RequiredActorToLeave(deal) is not { } required) return false;
+        var counterparty = deal.CounterpartyId ?? (deal.InitiatorId == appOwnerId ? null : appOwnerId);
+        return IsActorAllowed(new Deal { InitiatorId = deal.InitiatorId, CounterpartyId = counterparty },
+            deal.CounterpartyId ?? appOwnerId, required);
+    }
+
     static bool IsActorAllowed(Deal deal, Guid actorId, string required) => required switch
     {
         "initiator"    => deal.InitiatorId == actorId,

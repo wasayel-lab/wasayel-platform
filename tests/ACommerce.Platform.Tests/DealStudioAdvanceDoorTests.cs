@@ -168,34 +168,33 @@ public class DealStudioAdvanceDoorTests(ITestOutputHelper output)
 
     private static string Name(Case c) => $"{c.Pattern}/{c.Pay ?? "—"}/{c.Stage}/{c.Parties}/{c.Status}";
 
-    // ═══ اليَوم ═══════════════════════════════════════════════════════════════════
+    /// <summary>النُقطَةُ كَما صارَت: الدالَّةُ أَوَّلاً عَلى ما قُرِئ — فَإن رَدَّت عادَت بِلا كِتابَة — ثُمَّ التَسَلسُلُ نَفسُه.</summary>
+    private static DealAdvanceResult? GatedEndpoint(DealsService deals, Deal before)
+        => DealsService.AdminPathCanMove(before, AppOwner) ? EndpointSequence(deals, before.Id) : null;
+
+    // ═══ ١) الصَفحَةُ والنُقطَةُ تَقرَآنِ دالَّةً واحِدَة ═════════════════════════════════════
 
     /// <summary>
-    /// <para><b>اليَوم — يُقلَبُ بِاسمِه في كوميتِ الإصلاح</b>: الصَفحَةُ تَرسُمُ الاستِمارَةَ لِكُلِّ صَفقَةٍ فَعّالَةٍ لَها تالٍ
-    /// (شَرطُها <c>deal.Status == Active</c> ثُمَّ <c>DealsPolicy.Next(deal) is { } next</c> بِلا ثالِث — مُثَبَّتٌ مِن المَصدَر)،
-    /// والنُقطَةُ تَرُدُّ بَعضَها بِلا رِسالَة: صَفقَةَ البَذرَةِ عِندَ <c>Offered</c>، وخُطوَتَي المُشتَري في كُلِّ نَمَط. <b>وفي
-    /// بَعضِ ما تَرُدُّه تَكتُبُ قَبلَ أَن تَرُدّ</b>: صَفقَةٌ بِلا طَرَفٍ عِندَ خُطوَةِ المُشتَري يُعَيَّنُ مالِكُ التَطبيقِ طَرَفَها
-    /// (حِفظٌ)، ثُمَّ يُرَدُّ التَحريك. ولا عَكس: لا صَفقَةَ تُخفي الصَفحَةُ زِرَّها والنُقطَةُ تُحَرِّكُها.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (مُراجَعَةُ تَيّارِ S6a الأولى، ‏2026-10-12؛ ‏ADR-033 §٦‑ط مُلحَقاً): كانَ
+    /// <c>Today_the_studio_page_draws_the_advance_form_for_every_active_deal_with_a_next_stage_and_the_endpoint_silently_refuses_some</c>
+    /// (مُودَعٌ في <c>2194c88</c>) — الصَفحَةُ تَرسُمُ الاستِمارَةَ لِكُلِّ صَفقَةٍ فَعّالَةٍ لَها تالٍ، والنُقطَةُ تَرُدُّ بَعضَها بِلا
+    /// رِسالَة: «فُحِصَ ‏2304 حالَة: تَرسُمُ الصَفحَةُ ‏468، يَتَحَرَّكُ مِنها ‏396؛ زِرٌّ يُرَدُّ ‏72، ومَخفِيٌّ يَتَحَرَّكُ ‏0، ومَردودٌ بَعدَ
+    /// كِتابَةٍ ‏27». <b>وصارَت الصَفحَةُ تَرسُمُه والنُقطَةُ تَكتُبُ بِـ<see cref="DealsService.AdminPathCanMove"/> وَحدَها</b>:
+    /// صِفرُ زِرٍّ يُرَدّ، وصِفرُ مَخفِيٍّ يَتَحَرَّك، وصِفرُ رَفضٍ بَعدَ كِتابَة — والمَصفوفَةُ نَفسُها.</para>
     /// </summary>
     [Fact]
-    public void Today_the_studio_page_draws_the_advance_form_for_every_active_deal_with_a_next_stage_and_the_endpoint_silently_refuses_some()
+    public void The_studio_page_draws_the_advance_form_exactly_where_the_admin_path_moves_the_deal_and_a_refused_click_writes_nothing()
     {
-        // الشَرطُ كَما في المَصدَر: الحالَةُ ثُمَّ التالي — ولا شَرطَ ثالِثَ بَينَهُما وبَينَ الاستِمارَة.
+        // الشَرطُ كَما في المَصدَر: الحالَةُ ثُمَّ الدالَّةُ بِهُوِيَّةِ الناظِر (مالِكِ التَطبيق — `OnInitializedAsync` يَرُدُّ غَيرَه) ثُمَّ التالي.
         var page = StudioPage();
         var actions = Segment(page, "@if (deal.Status == DealStatus.Active)", "/advance\")");
-        Assert.Contains("@if (DealsPolicy.Next(deal) is { } next)", actions, StringComparison.Ordinal);
+        Assert.Contains("@if (DealsService.AdminPathCanMove(deal, Auth.UserId!.Value) && DealsPolicy.Next(deal) is { } next)", actions, StringComparison.Ordinal);
         Assert.Equal(2, actions.Split("@if", StringSplitOptions.None).Length - 1);
-
-        // والنُقطَةُ كَما هِيَ: حارِسُ المِلكِيَّةِ ثُمَّ التَحميلُ ثُمَّ التَعيينُ ثُمَّ التَحريك — بِلا سُؤالٍ قَبلَ الكِتابَة.
-        var endpoint = AdvanceEndpoint();
-        var load   = endpoint.IndexOf("var deal = await deals.LoadAsync(slug, id);", StringComparison.Ordinal);
-        var assign = endpoint.IndexOf("await deals.AssignCounterpartyAsync(slug, id,", StringComparison.Ordinal);
-        var move   = endpoint.IndexOf("var result = await deals.AdvanceAsync(slug, id, actorId,", StringComparison.Ordinal);
-        Assert.True(load > 0 && assign > load && move > assign, $"تَسَلسُلُ النُقطَةِ تَغَيَّر: load={load} assign={assign} move={move}");
+        Assert.Contains("if (t is null || t.OwnerUserId != Auth.UserId!.Value) return;", page, StringComparison.Ordinal);
 
         var cases = Measure(
-            d => d.Status == DealStatus.Active && DealsPolicy.Next(d) is not null,
-            (deals, d) => EndpointSequence(deals, d.Id));
+            d => d.Status == DealStatus.Active && DealsService.AdminPathCanMove(d, AppOwner) && DealsPolicy.Next(d) is not null,
+            GatedEndpoint);
 
         var drawnButRefused = cases.Where(c => c.PageDraws && !c.Moves).ToList();
         var hiddenButMoves  = cases.Where(c => !c.PageDraws && c.Moves).ToList();
@@ -205,15 +204,76 @@ public class DealStudioAdvanceDoorTests(ITestOutputHelper output)
         output.WriteLine(line);
 
         Assert.True(cases.Count > 1000, line);
-        Assert.True(drawnButRefused.Count > 0, line);
-        Assert.Empty(hiddenButMoves);
-        Assert.True(refusedAfterWriting.Count > 0, line);
+        Assert.True(cases.Count(c => c.PageDraws) > 0 && cases.Count(c => !c.PageDraws) > 0, line);
+        Assert.True(drawnButRefused.Count == 0, line + " — " + string.Join("، ", drawnButRefused.Take(5).Select(Name)));
+        Assert.True(hiddenButMoves.Count == 0, line + " — " + string.Join("، ", hiddenButMoves.Take(5).Select(Name)));
+        Assert.True(refusedAfterWriting.Count == 0, line + " — " + string.Join("، ", refusedAfterWriting.Take(5).Select(Name)));
+    }
 
-        // بِأَسمائِها — ما وَصَفَته المُراجَعَة:
-        Assert.Contains(drawnButRefused, c => Name(c) == "marketplace/—/Offered/studio_seed/Active");          // البَذرَةُ لا تَتَحَرَّك
-        Assert.Contains(drawnButRefused, c => Name(c) == "marketplace/card/Confirmed/cart_bound/Active");       // إلى Paid — المُشتَري يَدفَع
-        Assert.Contains(drawnButRefused, c => Name(c) == "rental/card/Delivered/cart_bound/Active");            // إلى Received — المُستَأجِرُ يَستَلِم
-        Assert.Contains(refusedAfterWriting, c => Name(c) == "marketplace/card/Confirmed/unbound_offer/Active"); // يُعَيَّنُ ثُمَّ يُرَدّ
-        Assert.DoesNotContain(drawnButRefused, c => Name(c) == "marketplace/cash/Confirmed/cart_bound/Active");  // إلى Shipping — يَمضي
+    /// <summary><b>الدالَّةُ تُجيبُ بِما يَفعَلُه التَسَلسُلُ — حالَةً حالَة</b>: لِكُلِّ حالَةٍ في المَصفوفَة، <c>AdminPathCanMove</c>
+    /// عَلى ما قُرِئَ تُساوي نَتيجَةَ تَسَلسُلِ النُقطَةِ (التَعيينُ ثُمَّ <c>AdvanceAsync</c>) عَلى خِدمَةٍ حَقيقِيَّة — فَإن غَيَّرَ أَحَدٌ
+    /// بَوّابَةَ الفاعِلِ أَو ثابِتَ التَعيينِ أَو التالي ولَم يُغَيِّر الدالَّة أَحمَرَّ هذا بِأَسماءِ الحالات. والمُوجِبُ والسالِبُ
+    /// كِلاهُما يُعَدّانِ ويُشتَرَطُ أَن لا يَكونَ أَيٌّ مِنهُما صِفراً.</summary>
+    [Fact]
+    public void The_predicate_answers_what_the_endpoint_sequence_does_in_every_case()
+    {
+        var cases = Measure(d => DealsService.AdminPathCanMove(d, AppOwner), (deals, d) => EndpointSequence(deals, d.Id));
+        var disagree = cases.Where(c => c.PageDraws != c.Moves).ToList();
+        var line = $"فُحِصَ {cases.Count} حالَة: تُجيزُ الدالَّةُ {cases.Count(c => c.PageDraws)} وتَرُدُّ {cases.Count(c => !c.PageDraws)}؛ " +
+                   $"خِلافُها والتَسَلسُلِ {disagree.Count}.";
+        output.WriteLine(line);
+        Assert.True(cases.Count > 1000 && cases.Count(c => c.PageDraws) > 0 && cases.Count(c => !c.PageDraws) > 0, line);
+        Assert.True(disagree.Count == 0, line + " — " + string.Join("، ", disagree.Take(8).Select(Name)));
+    }
+
+    // ═══ ٢) مُوجِبٌ وسالِبٌ بِأَسمائِهِما ═════════════════════════════════════════════════
+
+    /// <summary>
+    /// <para><b>المُوجِب</b>: يَقبَلُ عَن البائِعِ المَربوطِ عِندَ <c>Offered</c>، ويَمضي بِخُطُواتِ جانِبِ المَتجَرِ (إلى
+    /// <c>Shipping</c> لِلنَقد، وخَتمُ الإيجار)، ويُعَيِّنُ مالِكَ التَطبيقِ طَرَفاً لِعَرضٍ بِلا طَرَفٍ فَيَحجِز.
+    /// <b>والسالِب</b>: صَفقَةُ البَذرَةِ التَجريبِيَّة (لا يُعَيَّنُ المُبادِرُ طَرَفاً — <c>11a8d4d</c>)، ودُخولُ <c>Paid</c> و<c>Received</c>
+    /// (خُطوَتا المُشتَري — ‏ADR-033 §٦‑ط)، وآخِرُ مَرحَلَة، وصَفقَةٌ غَيرُ فَعّالَة.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("marketplace", "card", DealStage.Offered,   "cart_bound",     DealStatus.Active,    true)]
+    [InlineData("marketplace", "cash", DealStage.Confirmed, "cart_bound",     DealStatus.Active,    true)]
+    [InlineData("rental",      "card", DealStage.Received,  "cart_bound",     DealStatus.Active,    true)]
+    [InlineData("marketplace", null,   DealStage.Offered,   "unbound_offer",  DealStatus.Active,    true)]
+    [InlineData("marketplace", null,   DealStage.Booked,    "admin_assigned", DealStatus.Active,    true)]
+    [InlineData("marketplace", null,   DealStage.Offered,   "studio_seed",    DealStatus.Active,    false)]
+    [InlineData("marketplace", "card", DealStage.Confirmed, "cart_bound",     DealStatus.Active,    false)]
+    [InlineData("rental",      "card", DealStage.Delivered, "cart_bound",     DealStatus.Active,    false)]
+    [InlineData("classifieds", null,   DealStage.Confirmed, "cart_bound",     DealStatus.Active,    false)]
+    [InlineData("marketplace", "card", DealStage.Booked,    "cart_bound",     DealStatus.Cancelled, false)]
+    public void The_admin_path_moves_the_store_sides_steps_and_not_the_buyers_nor_the_demo_seed(
+        string pattern, string? pay, DealStage stage, string parties, DealStatus status, bool moves)
+    {
+        var (_, initiator, counterparty) = Parties.Single(p => p.Name == parties);
+        var (deals, world, deal) = At(pattern, pay, stage, initiator, counterparty, status);
+        Assert.Equal(moves, DealsService.AdminPathCanMove(Copy(deal), AppOwner));
+
+        // والنُقطَةُ بِالدالَّةِ أَوَّلاً: ما تَرُدُّه لا يَكتُبُ شَيئاً، وما تُجيزُه يَدخُلُ التالي.
+        var res = GatedEndpoint(deals, Copy(deal));
+        Assert.Equal(moves, res?.Ok ?? false);
+        Assert.Equal(moves ? (counterparty is null ? 2 : 1) : 0, world.SaveCalls);   // تَعيينٌ حَيثُ لا طَرَف، ثُمَّ التَحريك
+        Assert.Equal(moves ? DealsPolicy.Next(pattern, stage, pay) : stage, world.Read<Deal>(deal.Id.ToString())!.Stage);
+    }
+
+    /// <summary><b>النُقطَةُ تَسأَلُ الدالَّةَ بَعدَ حارِسِ المِلكِيَّةِ وقَبلَ أَوَّلِ كِتابَة</b> — بِالهُوِيَّةِ نَفسِها الَّتي يَسقُطُ
+    /// إلَيها الفاعِل (<c>auth.UserId!.Value</c>)، ورَدُّها عَودَةٌ إلى الصَفحَةِ بِلا كِتابَة. (ولَيسَت في <c>BodyGuards</c>
+    /// عَمداً: الدالَّةُ تَأخُذُ الهُوِيَّةَ وَسيطاً ولا تَتَحَقَّقُ مِنها — الحارِسُ <c>StudioOwnsAsync</c> قَبلَها.)</summary>
+    [Fact]
+    public void The_admin_endpoint_asks_the_predicate_after_the_ownership_guard_and_before_any_write()
+    {
+        var endpoint = AdvanceEndpoint();
+        var owns   = endpoint.IndexOf("if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect(\"/studio\");", StringComparison.Ordinal);
+        var load   = endpoint.IndexOf("var deal = await deals.LoadAsync(slug, id);", StringComparison.Ordinal);
+        var gate   = endpoint.IndexOf("if (!Services.Deals.DealsService.AdminPathCanMove(deal, auth.UserId!.Value)) return Results.Redirect($\"/studio/apps/{slug}/deals/{id}\");", StringComparison.Ordinal);
+        var assign = endpoint.IndexOf("await deals.AssignCounterpartyAsync(slug, id,", StringComparison.Ordinal);
+        var move   = endpoint.IndexOf("var result = await deals.AdvanceAsync(slug, id, actorId,", StringComparison.Ordinal);
+        Assert.True(owns > 0 && load > owns && gate > load && assign > gate && move > assign,
+            $"تَرتيبُ النُقطَة: owns={owns} load={load} gate={gate} assign={assign} move={move}");
+        Assert.Contains("var actorId = deal.CounterpartyId ?? auth.UserId!.Value;", endpoint, StringComparison.Ordinal);
+        Assert.Equal(1, endpoint.Split("AdminPathCanMove(", StringSplitOptions.None).Length - 1);
     }
 }

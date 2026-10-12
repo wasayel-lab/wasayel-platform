@@ -74,7 +74,10 @@
             {
                 <div class="st-section-title">@L.Markup("studio.deal.actions")</div>
                 <div class="st-card" style="display:flex;gap:10px;flex-wrap:wrap;">
-                    @if (DealsPolicy.Next(deal) is { } next)
+                    @* «→ التالي» حَيثُ يُحَرِّكُ المَسارُ الإداريُّ الصَفقَةَ وَحدَه — الدالَّةُ نَفسُها الَّتي تَسأَلُها النُقطَةُ قَبلَ أَيِّ
+                       كِتابَة (القاعِدَة ١٢؛ ‏ADR-033 §٦‑ط مُلحَقاً، ‏2026-10-12). كانَ يُرسَمُ لِكُلِّ صَفقَةٍ لَها تالٍ، فَيُرَدُّ بِلا
+                       كَلِمَةٍ عِندَ خُطوَتَي المُشتَري (دَفع، استِلام) وصَفقَةِ البَذرَةِ التَجريبِيَّة. *@
+                    @if (DealsService.AdminPathCanMove(deal, Auth.UserId!.Value) && DealsPolicy.Next(deal) is { } next)
                     {
                         <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/advance")"
                               style="display:flex;gap:8px;flex:1;min-width:200px;">

@@ -3404,6 +3404,10 @@ public static class MarketplaceTemplateExtensions
             var note = req.Form["note"].ToString().Trim();
             var deal = await deals.LoadAsync(slug, id);
             if (deal is null) return Results.Redirect($"/studio/apps/{slug}/deals");
+            // ولا يُكتَبُ شَيءٌ لِصَفقَةٍ لا يُحَرِّكُها هذا المَسار — بِالدالَّةِ نَفسِها الَّتي تَرسُمُ بِها الصَفحَةُ الزِرّ
+            // (القاعِدَة ١٢؛ ‏ADR-033 §٦‑ط مُلحَقاً، ‏2026-10-12): كانَ الزِرُّ يُرسَمُ لِكُلِّ صَفقَةٍ لَها تالٍ، والنَقرَةُ تُرَدُّ
+            // بِلا كَلِمَةٍ عِندَ خُطوَتَي المُشتَري وصَفقَةِ البَذرَة — وبَعدَ أَن يُكتَبَ التَعيينُ حَيثُ لا طَرَف.
+            if (!Services.Deals.DealsService.AdminPathCanMove(deal, auth.UserId!.Value)) return Results.Redirect($"/studio/apps/{slug}/deals/{id}");
 
             if (deal.CounterpartyId is null)
                 await deals.AssignCounterpartyAsync(slug, id,
