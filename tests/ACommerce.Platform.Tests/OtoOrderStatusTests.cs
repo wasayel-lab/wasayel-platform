@@ -680,13 +680,14 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
     // السِرُّ سِرُّ بائِعِ الصَفقَة (مَدخَلُه المَختوم)، فَيُعرَفُ بَعدَ أَن يُطابِقَ الإشعارُ صَفقَةً — وإشعارٌ لِطَلَبٍ لَيسَ مِن صَفَقاتِ
     // المَتجَرِ يُجابُ ‏200 «لا شَأنَ لَنا» كَما كان: حِسابُ البائِعِ عِندَ OTO قَد يَحمِلُ طَلَباتٍ مِن غَيرِ مَتجَرِنا.
 
-    /// <summary>خِدمَةٌ عَلى العالَمِ نَفسِه — مَداخِلُه وخِزانَتُه وساعَتُه — بِلوغٍ يُلتَقَط.</summary>
-    private static DealShipping Logged(DealShipTests.World w, ShipCapturingLogger log)
+    /// <summary>خِدمَةٌ عَلى العالَمِ نَفسِه — مَداخِلُه وخِزانَتُه وساعَتُه — بِلوغٍ يُلتَقَط.
+    /// و<paramref name="now"/> (‏2026-10-12، مُراجَعَةُ تَيّارِ S8): ساعَةٌ غَيرُ ساعَةِ العالَم — لِإشعارٍ يَصِلُ بَعدَ حَدَثِه؛ بِلا شَيءٍ هي هي.</summary>
+    private static DealShipping Logged(DealShipTests.World w, ShipCapturingLogger log, DateTimeOffset? now = null)
     {
         var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, RefreshToken = DealShipTests.ConfigToken });
         return new DealShipping(w.Deals,
             new OtoClient(new HttpClient(w.Oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance),
-            options, log, w.Providers, w.Vault, new FixedClock(DealShipTests.Now));
+            options, log, w.Providers, w.Vault, new FixedClock(now ?? DealShipTests.Now));
     }
 
     /// <summary>إشعارٌ لا يَتَحَقَّقُ — بِلا تَوقيع، أَو خارِجَ النافِذَة، أَو بِسِرٍّ آخَر — يُجابُ بِرَمزِه ‏401: لا تُسأَلُ OTO، ولا يُكتَبُ
@@ -723,6 +724,61 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         Assert.Contains(code, line, StringComparison.Ordinal);
         Assert.DoesNotContain(DealShipTests.WebhookSecret, line, StringComparison.Ordinal);
         Assert.Contains(kind == "stale" ? "drift 6000 ms" : "drift 0 ms", line, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم»</b> (مُراجَعَةُ تَيّارِ S8، ‏2026-10-12؛ يُقلَبُ بِاسمِه في الكوميتِ التالي): إشعارٌ <b>مُوَقَّعٌ صَحيحاً</b> بِسِرِّ بائِعِ
+    /// الصَفقَةِ يَصِلُ بَعدَ حَدَثِه بِسِتِّ ثَوانٍ أَو بِعَشرِ دَقائِقَ يُجابُ <c>signature_stale</c> ‏401 <b>قَبلَ أَن تُسأَلَ OTO</b> — لِأَنّ النافِذَةَ تَقيسُ
+    /// <c>|الآن − timestamp|</c>، و<c>timestamp</c> في قِسمِ «Webhook» مِن وَثيقَةِ OTO «‏Unix epoch timestamp (in milliseconds) indicating when the
+    /// event occurred» لا وَقتُ الإرسال، و<c>dcStatus</c> «‏status coming from the delivery company» — حالٌ يَمُرُّ مِن شَرِكَةِ التَوصيلِ إلى OTO
+    /// إلَينا. فَيَبقى التَسليمُ عِندَ «شَحن» ولا يَصِلُ فاحِصَ الحَقيقَة (‏Order Tracking) أَصلاً.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(6_000L)]
+    [InlineData(600_000L)]
+    public async Task Today_a_correctly_signed_notice_that_arrives_after_its_event_is_refused_stale_before_OTO_is_asked(long ageMs)
+    {
+        var w = await ShippedCashDeal();
+        OtoSays(w, "delivered");
+        var asked = w.Oto.CallsTo(OtoClient.OrderStatusPath);
+        var saves = w.Docs.SaveCalls;
+        var log = new ShipCapturingLogger();
+        var stamp = DealShipTests.Now.ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        // الحَدَثُ عِندَ ساعَةِ العالَم، والإشعارُ يَصِلُ بَعدَه بِـ`ageMs` — بِتَوقيعٍ صَحيحٍ عَلى خَتمِ الحَدَثِ نَفسِه.
+        var outcome = await Logged(w, log, DealShipTests.Now.AddMilliseconds(ageMs)).ReceiveAsync(Slug, Notice(w.Id, timestamp: stamp));
+
+        Assert.Equal(OtoOrderStatusGate.SignatureStale, outcome.Code);
+        Assert.Equal(401, OtoOrderStatusGate.StatusFor(outcome.Code));
+        Assert.Equal(asked, w.Oto.CallsTo(OtoClient.OrderStatusPath));
+        Assert.Equal(saves, w.Docs.SaveCalls);
+        Assert.Equal(DealStage.Shipping, Stored(w).Stage);
+        Assert.Contains($"drift {ageMs} ms", Assert.Single(log.Lines), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم»</b> (مُراجَعَةُ تَيّارِ S8، ‏2026-10-12؛ يُقلَبُ بِاسمِه في الكوميتِ التالي): إشعارٌ مُوَقَّعٌ أُجيبَ ‏503 (لَم تُجِب OTO عَن
+    /// حالِه) <b>تُعيدُه OTO بِخَتمِ الحَدَثِ نَفسِه</b> — فَالخَتمُ جُزءٌ مِن النَصِّ المُوَقَّع — فَإعادَتُه بَعدَ عَشرِ دَقائِقَ تُجابُ
+    /// <c>signature_stale</c> ولَو أَجابَت OTO الآن «delivered»: ما رَدَدناه ‏503 لِتُعيدَه لا يَمُرُّ إذا أَعادَتْه.</para>
+    /// </summary>
+    [Fact]
+    public async Task Today_OTO_resending_a_notice_it_was_answered_503_for_is_refused_stale_ten_minutes_later()
+    {
+        var w = await ShippedCashDeal();
+        var notice = Notice(w.Id);
+        w.Oto.Routes[OtoClient.OrderStatusPath] = _ => OtoRouteHandler.Json(HttpStatusCode.ServiceUnavailable, "{}");
+        var first = await Logged(w, new ShipCapturingLogger()).ReceiveAsync(Slug, notice);
+        Assert.Equal(OtoOrderStatusGate.StateUnconfirmed, first.Code);
+        Assert.Equal(503, OtoOrderStatusGate.StatusFor(first.Code));
+
+        OtoSays(w, "delivered");
+        var asked = w.Oto.CallsTo(OtoClient.OrderStatusPath);
+        var again = await Logged(w, new ShipCapturingLogger(), DealShipTests.Now.AddMinutes(10)).ReceiveAsync(Slug, notice);
+
+        Assert.Equal(OtoOrderStatusGate.SignatureStale, again.Code);
+        Assert.Equal(401, OtoOrderStatusGate.StatusFor(again.Code));
+        Assert.Equal(asked, w.Oto.CallsTo(OtoClient.OrderStatusPath));
+        Assert.Equal(DealStage.Shipping, Stored(w).Stage);
     }
 
     /// <summary><b>الاحتِياطُ بِلا سِرٍّ — فَشَلٌ مُغلَق</b>: بائِعٌ لا مَدخَلَ لَه في مَتجَرِ العَرضِ يَشحَنُ بِرَمزِ التَهيئَة، وإشعارُ صَفقَتِه — ولَو
