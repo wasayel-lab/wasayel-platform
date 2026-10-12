@@ -48,6 +48,10 @@ public sealed class OtoClient
     /// <summary>نَوعُ الوارِدِ الَّذي نُسَجِّلُه: «orderStatus sends order status changes» — بِحَرفِ حَقلِ <c>webhookType</c>.</summary>
     public const string OrderStatusWebhookType = "orderStatus";
 
+    /// <summary>تَسجيلُ بائِعٍ بِالاعتِمادِ السوقِيّ — قِسمُ «Marketplace › Register» («‏POST https://api.tryoto.com/rest/v2/register»)،
+    /// مُصَيَّراً ‏2026-10-12 (تَيّارُ S8، ‏ADR-033 الخُطوَة 8).</summary>
+    public const string RegisterPath           = "/rest/v2/register";
+
     /// <summary>قِيَمُ <c>payment_method</c> كَما تَقولُها الوَثيقَة: «‏Possible values:
     /// cod, paid».</summary>
     public const string CashOnDelivery = "cod";
@@ -270,6 +274,60 @@ public sealed class OtoClient
             : Unreadable<string>("webhook", "id");
     }
 
+    /// <summary>
+    /// <para><b>يُسَجِّلُ بائِعاً عِندَ OTO بِالاعتِمادِ السوقِيّ — العَمَلِيَّةُ الخامِسَة</b> (تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 الخُطوَة 8).
+    /// «‏It requires a special kind of token provided by OTO. Regular refresh tokens will not work here.» — فَيُمَرَّرُ
+    /// <paramref name="marketplaceToken"/> مَكانَ رَمزِ التَحديثِ في المَسارِ نَفسِه (رَمزُ وُصولٍ مِنه، ثُمَّ <c>Bearer</c>؛ والمِثالُ
+    /// «‏HEADER Authorization Bearer your_access_token»). <b>وأَنّه رَمزُ تَحديثٍ يُبادَلُ لا رَمزُ وُصولٍ يُرسَلُ كَما هُوَ — قِراءَةٌ لا
+    /// قِياس</b> (سِجِلُّ المالِكِ «ب»).</para>
+    ///
+    /// <para><b>الحُقولُ بِأَسماءِ جَدوَلِ الوَثيقَةِ حَرفاً</b>: <c>country · city · email · mobileNumber · firstName · lastName ·
+    /// isVatRegistered · billingAddress</c> دائِماً، و<b>حينَ <c>isVatRegistered</c> وَحدَه</b> <c>companyName · vatNumber · CRNumber ·
+    /// district · zipCode · buildingNo · streetName</c> («‏SA (Saudi Arabia): – If isVatRegistered is true: CRNumber (10 digits), vatNumber
+    /// (15 digits, starts with ‘3’), district, zipCode (5 digits), buildingNo (4 digits), streetName required»؛ و<c>companyName</c>
+    /// «‏Required if isVatRegistered is true»). <b>ومِثالُ الجِسمِ في الوَثيقَةِ يُرسِلُ <c>fullName</c></b> — والجَدوَلُ يَقولُ
+    /// <c>firstName</c>/<c>lastName</c>؛ نَتبَعُ الجَدوَل (‏ADR-033 §٣‑٦: «تُحسَمُ في بيئةِ الاختبارِ لا بالقراءة»).</para>
+    ///
+    /// <para>ورَدُّه «‏{"success": true, "activationLink": "https://login.tryoto.com/XYZ", "refreshToken": "_refreshToken_"}» — فَيُعادُ
+    /// الاثنان؛ وغِيابُ أَيِّهِما، أَو رابِطٌ لَيسَ <c>https</c> مُطلَقاً، <see cref="OtoFailures.Unreadable"/>: لا يُحفَظُ رَمزٌ لا يُعرَفُ
+    /// كَيفَ يُفَعِّلُه صاحِبُه. ولا يُكتَبُ جِسمٌ ولا رَدٌّ في لوغ — فيهِما بَياناتُ البائِعِ ورَمزُه.</para>
+    /// </summary>
+    public async Task<OtoResult<OtoRegisteredVendor>> RegisterVendorAsync(
+        string marketplaceToken, OtoVendorRegistration vendor, CancellationToken ct = default)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["country"]         = vendor.Country,
+            ["city"]            = vendor.City,
+            ["email"]           = vendor.Email,
+            ["mobileNumber"]    = vendor.MobileNumber,
+            ["firstName"]       = vendor.FirstName,
+            ["lastName"]        = vendor.LastName,
+            ["isVatRegistered"] = vendor.IsVatRegistered,
+            ["billingAddress"]  = vendor.BillingAddress,
+        };
+        if (vendor.IsVatRegistered)
+        {
+            body["companyName"] = vendor.CompanyName;
+            body["vatNumber"]   = vendor.VatNumber;
+            body["CRNumber"]    = vendor.CrNumber;
+            body["district"]    = vendor.District;
+            body["zipCode"]     = vendor.ZipCode;
+            body["buildingNo"]  = vendor.BuildingNo;
+            body["streetName"]  = vendor.StreetName;
+        }
+
+        var res = await PostAsync(marketplaceToken, RegisterPath, body, "register", ct);
+        if (!res.Ok) return OtoResult<OtoRegisteredVendor>.Fail(res.Failure!);
+
+        if (Text(res.Value, "refreshToken") is not { } token)
+            return Unreadable<OtoRegisteredVendor>("register", "refreshToken");
+        if (Text(res.Value, "activationLink") is not { } link
+            || !Uri.TryCreate(link, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            return Unreadable<OtoRegisteredVendor>("register", "activationLink");
+        return OtoResult<OtoRegisteredVendor>.Success(new OtoRegisteredVendor(token, link));
+    }
+
     // ═══ الرَمز ════════════════════════════════════════════════════════
 
     /// <summary>
@@ -486,6 +544,25 @@ public sealed record OtoOrderState(string OrderId, string? OtoId, string Status,
 
     /// <summary>الطَلَبُ عِندَ OTO في حالٍ لا يَعودُ مِنه — حالُه مِن <see cref="OtoClient.TerminalStatuses"/> (‏2026-10-12).</summary>
     public bool IsTerminal => OtoClient.TerminalStatuses.Contains(Status, StringComparer.Ordinal);
+}
+
+/// <summary>
+/// <para><b>بائِعٌ يُسَجَّلُ عِندَ OTO</b> (تَيّارُ S8، ‏2026-10-12) — حُقولُ «Marketplace › Register» بِأَسمائِها، وحُقولُ الضَريبَةِ لا تُرسَلُ
+/// إلّا مَعَ <see cref="IsVatRegistered"/>. يَملَؤُه البائِعُ عَن نَفسِه. <b>ولا يُطبَعُ</b>: <c>ToString</c> بِلا بَياناتٍ شَخصِيَّة.</para>
+/// </summary>
+public sealed record OtoVendorRegistration(
+    string Country, string City, string Email, string MobileNumber, string FirstName, string LastName,
+    bool IsVatRegistered, string BillingAddress,
+    string? CompanyName = null, string? VatNumber = null, string? CrNumber = null, string? District = null,
+    string? ZipCode = null, string? BuildingNo = null, string? StreetName = null)
+{
+    public override string ToString() => $"OtoVendorRegistration(country={Country}, vat={IsVatRegistered})";
+}
+
+/// <summary>ما يَعودُ مِن التَسجيل: رَمزُ تَحديثِ حِسابِ البائِعِ الدائِمُ ورابِطُ تَفعيلِه — سِرّانِ لا يُطبَعان.</summary>
+public sealed record OtoRegisteredVendor(string RefreshToken, string ActivationLink)
+{
+    public override string ToString() => "OtoRegisteredVendor(token=hidden, link=hidden)";
 }
 
 /// <summary>فَشَلٌ مُسَمّى — <c>Code</c> مِن <see cref="OtoFailures"/> لِلاختِبارِ واللوغِ

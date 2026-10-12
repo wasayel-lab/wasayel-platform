@@ -46,6 +46,33 @@ public static class VendorShippingEndpoints
         }).DisableAntiforgery()
           .RequireStoreWritable();
 
+        // ─── البائِعُ يَفتَحُ حِسابَ شَحنٍ عِندَ OTO بِالاعتِمادِ السوقِيّ (‏ADR-033 الخُطوَة 8، ‏2026-10-12) ─────────
+        //
+        // **والحارِسُ جَلسَةُ المَتجَرِ وهُوِيَّةُ البائِعِ وَحدَهُما** — البَوّابَةُ نَفسُها الَّتي تَحرُسُ اللَصق، قَبلَ قِراءَةِ حَقلٍ واحِدٍ مِن الاستِمارَة.
+        // **ولا `PlatformAdminGuard`** وإن صَرَفَت الخِدمَةُ اعتِماداً مِن نَوعِ `platform_key` (الرَمزَ السوقِيّ): بَياناتُ التَسجيلِ بَياناتُ
+        // البائِعِ الشَخصِيَّةُ تُرسَلُ إلى طَرَفٍ ثالِثٍ وتُنشِئُ حِساباً بِاسمِه — فَالفِعلُ فِعلُه لا فِعلُ مُديرٍ يَنوبُ عَنه (نَقضُ ‏ADR-012 §٢‑ب
+        // المُعلَنُ في تَرويسَةِ ‏ADR-033؛ مُثَبَّتٌ بِصَفٍّ مُسَمّى في `WriteEndpointGuardTests`). وسَطرُ الأَثَرِ قَبلَ أَوَّلِ نِداءٍ في الخِدمَة.
+        // والرَدُّ إلى «إعلاناتي» بِرَمزِه — نَسَقُ اللَصق.
+        app.MapPost("/{slug}/me/shipping/oto/register",
+            async (string slug, HttpRequest req, Services.Queries.AccountQueries accounts,
+                   Services.Shipping.VendorShippingService vendors) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null) return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, "login"));
+            var (userId, _, _) = parsed.Value;
+            var owned = (await accounts.MyListingsAsync(slug, userId)).Count;
+            var admitted = Services.Shipping.ListingVendorGate.Admit(userId, AuthSession.ResolveUserName(req, slug), owned);
+            if (admitted.Vendor is not { } vendor)
+                return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, $"me/listings?shipping_err={admitted.Violation!.Code}"));
+
+            var res = await vendors.RegisterAsync(slug, vendor, Services.Shipping.VendorRegistrationForm.Read(req.Form),
+                Services.Shipping.VendorShippingSurface.InboundUrl(Billing.PayPalOrderSurface.OriginFrom(req), slug),
+                req.HttpContext.Connection.RemoteIpAddress?.ToString());
+            return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug,
+                "me/listings" + (res.Ok ? "?shipping=registered" : $"?shipping_err={res.Code}")));
+        }).DisableAntiforgery()
+          .RequireStoreWritable();
+
         return app;
     }
 }

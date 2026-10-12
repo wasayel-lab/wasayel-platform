@@ -10,6 +10,7 @@ using ACommerce.Templates.Customer.Marketplace.Services.Deals;
 using ACommerce.Templates.Customer.Marketplace.Services.Providers;
 using ACommerce.Templates.Customer.Marketplace.Services.Shipping;
 using Marten;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -55,13 +56,19 @@ public class VendorShippingTests(ITestOutputHelper output)
         MarketplaceToken = marketplaceToken,
     };
 
-    /// <summary>خِدمَةُ السَطحِ عَلى عالَمِ الشَحنِ نَفسِه: مَداخِلُه وخِزانَتُه ومُعالِجُ OTO.</summary>
-    private static VendorShippingService Surface(DealShipTests.World w, OtoOptions? opts = null, ProviderVault? vault = null)
+    /// <summary>خِدمَةُ السَطحِ عَلى عالَمِ الشَحنِ نَفسِه: مَداخِلُه وخِزانَتُه ومُعالِجُ OTO — ومُنذُ الخُطوَة 8 (‏2026-10-12) كاتِبُ الأَثَرِ
+    /// عَلى مَخزَنِ العالَمِ ووِعاءُ عَرضٍ مَرَّةً في ذاكِرَةِ الاختِبار (يُمَرَّرُ لِيُقرَأَ مِنه رابِطُ التَفعيلِ بِخِدمَةٍ ثانِيَة).</summary>
+    private static VendorShippingService Surface(DealShipTests.World w, OtoOptions? opts = null, ProviderVault? vault = null,
+        ACommerce.Templates.Customer.Marketplace.Services.Api.ApiKeyRevealStore? reveal = null)
     {
         var options = Options.Create(opts ?? Opts());
         return new VendorShippingService(w.Providers, vault ?? w.Vault,
-            new OtoClient(new HttpClient(w.Oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options);
+            new OtoClient(new HttpClient(w.Oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options,
+            new ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditWriter(w.Docs.Store), reveal ?? NewReveal());
     }
+
+    private static ACommerce.Templates.Customer.Marketplace.Services.Api.ApiKeyRevealStore NewReveal()
+        => new(new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()));
 
     private static TenantProviderBinding? Entry(DealShipTests.World w, Guid? owner = null)
         => w.Docs.Read<TenantProviderBinding>(TenantProviderBinding.VendorEntryId(ProviderCapabilities.Delivery, owner ?? Seller));
@@ -193,13 +200,16 @@ public class VendorShippingTests(ITestOutputHelper output)
     public void The_identity_gate_asks_the_session_before_the_listings()
         => Assert.Equal(ListingVendorGate.SignedOut, ListingVendorGate.Admit(null, null, 0).Violation!.Code);
 
-    /// <summary>لِكُلِّ رَمزٍ يَصِلُ الصَفحَةَ نَصٌّ عَرَبِيٌّ حَيّ — مَعجَما البَوّابَةِ والخِدمَةِ بِلا تَداخُل.</summary>
+    /// <summary>لِكُلِّ رَمزٍ يَصِلُ الصَفحَةَ نَصٌّ عَرَبِيٌّ حَيّ — مَعجَما البَوّابَةِ والخِدمَةِ بِلا تَداخُل. <b>ومُنذُ الخُطوَة 8 (‏2026-10-12)</b>:
+    /// ومَعجَمُ مُدَقِّقِ استِمارَةِ التَسجيلِ (‏14) ومَعجَمُ فَشَلِ عَميلِ OTO (‏5، رَدُّ «Register») — والخِدمَةُ ‏3 ← 5 (`vendor_register_closed`،
+    /// `vendor_entry_unreadable`)؛ فَالعَدُّ ‏5 ← 26.</summary>
     [Fact]
     public void Every_refusal_code_of_the_vendor_surface_has_an_arabic_text()
     {
-        var codes = ListingVendorGate.All.Concat(VendorShippingService.Codes).ToArray();
+        var codes = ListingVendorGate.All.Concat(VendorShippingService.Codes)
+            .Concat(VendorRegistrationValidator.All).Concat(OtoFailures.All).ToArray();
         output.WriteLine($"رُموزُ سَطحِ البائِع: {codes.Length} — {string.Join(" · ", codes)}");
-        Assert.Equal(5, codes.Length);
+        Assert.Equal(26, codes.Length);
         Assert.Equal(codes.Length, codes.Distinct(StringComparer.Ordinal).Count());
         foreach (var code in codes)
         {
@@ -675,6 +685,405 @@ public class VendorShippingTests(ITestOutputHelper output)
         Assert.DoesNotContain("IDocumentSession", body, StringComparison.Ordinal);
         Assert.Contains(".DisableAntiforgery()", code[start..], StringComparison.Ordinal);
     }
+
+    // ═══ ٧. مَسارُ التَسجيلِ عِندَ OTO — خَلفَ الرَمزِ السوقِيّ (‏ADR-033 الخُطوَة 8، تَيّارُ S8، ‏2026-10-12) ═══════════════════
+
+    private const string Marketplace = "MKT-token";
+
+    /// <summary>استِمارَةٌ صالِحَةٌ لِبائِعٍ غَيرِ مُسَجَّلٍ في الضَريبَة — وكُلُّ صَفٍّ يُغَيِّرُ فيها شَيئاً واحِداً.</summary>
+    internal static VendorRegistrationForm Form(bool vat = false) => new(
+        FirstName: "سارَة", LastName: "البائِعَة", Email: "Vendor.Test@Example.com", Mobile: "+966 500000000",
+        City: "Riyadh", BillingAddress: "حَيُّ المِثال، شارِعُ الاختِبار", IsVatRegistered: vat,
+        CompanyName: vat ? "مَنشَأَةُ الاختِبار" : "", CrNumber: vat ? "1010101010" : "", VatNumber: vat ? "300000000000003" : "",
+        District: vat ? "العُلَيّا" : "", ZipCode: vat ? "12345" : "", BuildingNo: vat ? "1234" : "",
+        StreetName: vat ? "شارِعُ المِثال" : "", Consent: true);
+
+    private static string[] Codes(VendorRegistrationForm f) => VendorRegistrationValidator.Validate(f).Select(v => v.Code).ToArray();
+
+    /// <summary>الاستِمارَةُ الصالِحَةُ بِالشَكلَينِ لا تُنتِجُ رَمزاً — سالِبُ المَعجَمِ كُلِّه.</summary>
+    [Fact]
+    public void A_complete_form_with_or_without_the_vat_mark_is_valid()
+    {
+        Assert.Empty(Codes(Form()));
+        Assert.Empty(Codes(Form(vat: true)));
+        Assert.True(VendorRegistrationValidator.IsValid(Form()));
+        Assert.Equal(14, VendorRegistrationValidator.All.Count);
+        Assert.Equal(14, VendorRegistrationValidator.All.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    /// <summary>لِكُلِّ رَمزٍ مُوجَب: استِمارَةٌ تَخرِقُ قاعِدَتَه وَحدَها تُنتِجُه — وتُنتِجُه وَحدَه.</summary>
+    [Theory]
+    [InlineData(VendorRegistrationValidator.FirstNameInvalid)]
+    [InlineData(VendorRegistrationValidator.LastNameInvalid)]
+    [InlineData(VendorRegistrationValidator.EmailInvalid)]
+    [InlineData(VendorRegistrationValidator.MobileInvalid)]
+    [InlineData(VendorRegistrationValidator.CityMissing)]
+    [InlineData(VendorRegistrationValidator.BillingAddressMissing)]
+    [InlineData(VendorRegistrationValidator.CompanyNameMissing)]
+    [InlineData(VendorRegistrationValidator.CrNumberInvalid)]
+    [InlineData(VendorRegistrationValidator.VatNumberInvalid)]
+    [InlineData(VendorRegistrationValidator.DistrictMissing)]
+    [InlineData(VendorRegistrationValidator.ZipCodeInvalid)]
+    [InlineData(VendorRegistrationValidator.BuildingNoInvalid)]
+    [InlineData(VendorRegistrationValidator.StreetNameMissing)]
+    [InlineData(VendorRegistrationValidator.ConsentMissing)]
+    public void Every_registration_code_positive(string code)
+    {
+        var bad = code switch
+        {
+            VendorRegistrationValidator.FirstNameInvalid => Form() with { FirstName = new string('س', 31) },
+            VendorRegistrationValidator.LastNameInvalid => Form() with { LastName = "" },
+            VendorRegistrationValidator.EmailInvalid => Form() with { Email = "vendor-at-example.com" },
+            VendorRegistrationValidator.MobileInvalid => Form() with { Mobile = "05-000-0000" },
+            VendorRegistrationValidator.CityMissing => Form() with { City = "" },
+            VendorRegistrationValidator.BillingAddressMissing => Form() with { BillingAddress = "" },
+            VendorRegistrationValidator.CompanyNameMissing => Form(vat: true) with { CompanyName = "" },
+            VendorRegistrationValidator.CrNumberInvalid => Form(vat: true) with { CrNumber = "101010101" },
+            VendorRegistrationValidator.VatNumberInvalid => Form(vat: true) with { VatNumber = "200000000000003" },
+            VendorRegistrationValidator.DistrictMissing => Form(vat: true) with { District = "" },
+            VendorRegistrationValidator.ZipCodeInvalid => Form(vat: true) with { ZipCode = "1234a" },
+            VendorRegistrationValidator.BuildingNoInvalid => Form(vat: true) with { BuildingNo = "12345" },
+            VendorRegistrationValidator.StreetNameMissing => Form(vat: true) with { StreetName = "" },
+            VendorRegistrationValidator.ConsentMissing => Form() with { Consent = false },
+            _ => throw new ArgumentOutOfRangeException(nameof(code)),
+        };
+        Assert.Equal(new[] { code }, Codes(bad));
+        Assert.False(VendorRegistrationValidator.IsValid(bad));
+    }
+
+    /// <summary>
+    /// <para><b>ولِكُلِّ رَمزٍ سالِب</b> عِندَ حَدِّه: الاسمُ ثَلاثونَ مِحرَفاً بِالضَبط، والأَرقامُ بِطولِها بِالضَبطِ وبِأَرقامٍ عَرَبِيَّةٍ هِندِيَّةٍ تُقرَأُ
+    /// لاتينِيَّة، و«+» والمَسافاتُ في الجَوّالِ تَسقُط، والرَقَمُ الضَريبِيُّ أَوَّلُه ٣ — <b>وحُقولُ الضَريبَةِ الفارِغَةُ أَو الخاطِئَةُ لا تُسأَلُ بِلا عَلامَتِها</b>.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(VendorRegistrationValidator.FirstNameInvalid)]
+    [InlineData(VendorRegistrationValidator.LastNameInvalid)]
+    [InlineData(VendorRegistrationValidator.EmailInvalid)]
+    [InlineData(VendorRegistrationValidator.MobileInvalid)]
+    [InlineData(VendorRegistrationValidator.CityMissing)]
+    [InlineData(VendorRegistrationValidator.BillingAddressMissing)]
+    [InlineData(VendorRegistrationValidator.CompanyNameMissing)]
+    [InlineData(VendorRegistrationValidator.CrNumberInvalid)]
+    [InlineData(VendorRegistrationValidator.VatNumberInvalid)]
+    [InlineData(VendorRegistrationValidator.DistrictMissing)]
+    [InlineData(VendorRegistrationValidator.ZipCodeInvalid)]
+    [InlineData(VendorRegistrationValidator.BuildingNoInvalid)]
+    [InlineData(VendorRegistrationValidator.StreetNameMissing)]
+    [InlineData(VendorRegistrationValidator.ConsentMissing)]
+    public void Every_registration_code_negative_at_its_edge(string code)
+    {
+        var edge = code switch
+        {
+            VendorRegistrationValidator.FirstNameInvalid => Form() with { FirstName = new string('س', 30) },
+            VendorRegistrationValidator.LastNameInvalid => Form() with { LastName = new string('ع', 30) },
+            VendorRegistrationValidator.EmailInvalid => Form() with { Email = "a@b.sa" },
+            VendorRegistrationValidator.MobileInvalid => Form() with { Mobile = VendorRegistrationForm.LatinDigits("+٩٦٦ ٥٠٠٠٠٠٠٠٠") },
+            VendorRegistrationValidator.CityMissing => Form() with { City = "الرياض" },
+            VendorRegistrationValidator.BillingAddressMissing => Form() with { BillingAddress = "ص.ب ١" },
+            VendorRegistrationValidator.CompanyNameMissing => Form() with { CompanyName = "" },
+            VendorRegistrationValidator.CrNumberInvalid => Form(vat: true) with { CrNumber = VendorRegistrationForm.LatinDigits("١٠١٠١٠١٠١٠") },
+            VendorRegistrationValidator.VatNumberInvalid => Form(vat: true) with { VatNumber = "399999999999999" },
+            VendorRegistrationValidator.DistrictMissing => Form() with { District = "" },
+            VendorRegistrationValidator.ZipCodeInvalid => Form() with { ZipCode = "not-a-zip" },
+            VendorRegistrationValidator.BuildingNoInvalid => Form(vat: true) with { BuildingNo = VendorRegistrationForm.LatinDigits("۱۲۳۴") },
+            VendorRegistrationValidator.StreetNameMissing => Form() with { StreetName = "" },
+            VendorRegistrationValidator.ConsentMissing => Form(vat: true) with { Consent = true },
+            _ => throw new ArgumentOutOfRangeException(nameof(code)),
+        };
+        Assert.DoesNotContain(code, Codes(edge));
+        Assert.Empty(Codes(edge));
+    }
+
+    /// <summary>القارِئُ يَقرَأُ الحُقولَ بِأَسمائِها مُشَذَّبَة، والأَرقامَ العَرَبِيَّةَ لاتينِيَّة، والمُرَبَّعَينِ بِقيمَتِهِما المَكتوبَة لا بِحُضورِهِما.</summary>
+    [Fact]
+    public void The_form_is_read_by_its_field_names_trimmed_with_latin_digits_and_explicit_checkboxes()
+    {
+        var read = VendorRegistrationForm.Read(new FormCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+        {
+            [VendorRegistrationForm.FirstNameField] = "  سارَة ",
+            [VendorRegistrationForm.LastNameField] = "البائِعَة",
+            [VendorRegistrationForm.EmailField] = " v@example.com ",
+            [VendorRegistrationForm.MobileField] = "+٩٦٦٥٠٠٠٠٠٠٠٠",
+            [VendorRegistrationForm.CityField] = "Riyadh",
+            [VendorRegistrationForm.BillingAddressField] = "عُنوان",
+            [VendorRegistrationForm.IsVatField] = VendorRegistrationForm.Checked,
+            [VendorRegistrationForm.CrNumberField] = "١٠١٠١٠١٠١٠",
+            [VendorRegistrationForm.ConsentField] = "on",
+        }));
+        Assert.Equal(("سارَة", "v@example.com", "+966500000000", "966500000000"), (read.FirstName, read.Email, read.Mobile, read.MobileDigits));
+        Assert.True(read.IsVatRegistered);
+        Assert.Equal("1010101010", read.CrNumber);
+        Assert.False(read.Consent);   // «on» لَيسَت القيمَةَ المَكتوبَة — لا مُوافَقَةَ بِافتِراضِ المُتَصَفِّح
+        Assert.Equal("", read.StreetName);
+        Assert.DoesNotContain("سارَة", read.ToString(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <para><b>جِسمُ «Register» بِأَسماءِ جَدوَلِ الوَثيقَة</b>: الحُقولُ الثَمانِيَةُ لِغَيرِ المُسَجَّلِ في الضَريبَةِ وَحدَها — ولا حَقلَ ضَريبَةٍ ولَو مُلِئَ —
+    /// والسَبعَةُ مَعَها لِلمُسَجَّل؛ والبَلَدُ <c>SA</c>، والبَريدُ مُطَبَّعاً بِدالَّةِ المِنَصَّة، والجَوّالُ أَرقاماً. والرَمزُ السوقِيُّ يُبادَلُ بِرَمزِ وُصولٍ
+    /// ثُمَّ <c>Bearer</c>.</para>
+    /// </summary>
+    [Fact]
+    public async Task The_register_body_carries_the_documented_fields_and_the_vat_ones_only_with_the_vat_mark()
+    {
+        var handler = new OtoScriptedHandler()
+            .ThenToken("ACCESS-MKT")
+            .Then(HttpStatusCode.OK, OtoRouteHandler.RegisterAnswer)
+            .Then(HttpStatusCode.OK, OtoRouteHandler.RegisterAnswer);
+        var client = new OtoClient(new HttpClient(handler), Options.Create(Opts()), new OtoTokenCache(), NullLogger<OtoClient>.Instance);
+
+        var plain = await client.RegisterVendorAsync(Marketplace, (Form() with { CrNumber = "999" }).ToOto());
+        var vat = await client.RegisterVendorAsync(Marketplace, Form(vat: true).ToOto());
+
+        Assert.Equal(new OtoRegisteredVendor("_refreshToken_", "https://login.tryoto.com/XYZ"), plain.Value);
+        Assert.True(vat.Ok);
+        Assert.Contains(Marketplace, handler.Bodies[0]!, StringComparison.Ordinal);
+        Assert.Equal(OtoEnvironment.StagingBaseUrl + OtoClient.RegisterPath, handler.Requests[1].RequestUri!.ToString());
+        Assert.Equal(HttpMethod.Post, handler.Requests[1].Method);
+        Assert.Equal("Bearer ACCESS-MKT", handler.Requests[1].Headers.Authorization!.ToString());
+
+        var body = JsonDocument.Parse(handler.Bodies[1]!).RootElement;
+        Assert.Equal(new[] { "country", "city", "email", "mobileNumber", "firstName", "lastName", "isVatRegistered", "billingAddress" },
+            body.EnumerateObject().Select(p => p.Name).ToArray());
+        Assert.Equal(("SA", "vendor.test@example.com", "966500000000", false),
+            (body.GetProperty("country").GetString(), body.GetProperty("email").GetString(),
+             body.GetProperty("mobileNumber").GetString(), body.GetProperty("isVatRegistered").GetBoolean()));
+
+        var vatBody = JsonDocument.Parse(handler.Bodies[2]!).RootElement;
+        Assert.Equal(new[] { "country", "city", "email", "mobileNumber", "firstName", "lastName", "isVatRegistered", "billingAddress",
+                             "companyName", "vatNumber", "CRNumber", "district", "zipCode", "buildingNo", "streetName" },
+            vatBody.EnumerateObject().Select(p => p.Name).ToArray());
+        Assert.Equal("1010101010", vatBody.GetProperty("CRNumber").GetString());
+        Assert.Equal("RegisterVendorAsync", nameof(OtoClient.RegisterVendorAsync));
+        Assert.Equal("/rest/v2/register", OtoClient.RegisterPath);
+    }
+
+    /// <summary>رَدٌّ بِلا رَمزٍ أَو بِرابِطٍ لَيسَ <c>https</c> مُطلَقاً لا يُقرَأ — ورَفضٌ بِشَكلِ الوَثيقَة <c>oto_refused</c>، ولا شَيءَ بِلا بيئَة. ولا تَصِلُ
+    /// بَياناتُ البائِعِ ولا الرَمزُ السوقِيُّ سَطرَ لوغ.</summary>
+    [Fact]
+    public async Task A_register_answer_without_a_token_or_an_https_link_is_unreadable_and_nothing_personal_is_logged()
+    {
+        var log = new OtoCapturingLogger();
+        var handler = new OtoScriptedHandler()
+            .ThenToken()
+            .Then(HttpStatusCode.OK, "{\"success\": true, \"activationLink\": \"https://login.tryoto.com/XYZ\"}")
+            .Then(HttpStatusCode.OK, "{\"success\": true, \"activationLink\": \"http://login.tryoto.com/XYZ\", \"refreshToken\": \"RT-secret-77\"}")
+            .Then(HttpStatusCode.OK, "{\"success\": true, \"refreshToken\": \"RT-secret-77\"}")
+            .Then(HttpStatusCode.BadRequest, "{\"success\": false, \"otoErrorCode\": \"OTO1001\"}");
+        var client = new OtoClient(new HttpClient(handler), Options.Create(Opts()), new OtoTokenCache(), log);
+
+        for (var i = 0; i < 3; i++)
+            Assert.Equal(OtoFailures.Unreadable, (await client.RegisterVendorAsync(Marketplace, Form().ToOto())).Failure!.Code);
+        Assert.Equal(OtoFailures.Refused, (await client.RegisterVendorAsync(Marketplace, Form().ToOto())).Failure!.Code);
+        var closed = new OtoClient(new HttpClient(handler), Options.Create(Opts(environment: "")), new OtoTokenCache(), log);
+        Assert.Equal(OtoFailures.NotConfigured, (await closed.RegisterVendorAsync(Marketplace, Form().ToOto())).Failure!.Code);
+
+        Assert.True(log.Lines.Count >= 4, $"أَداةٌ عَمياء: {log.Lines.Count} سَطرَ لوغ.");
+        foreach (var line in log.Lines)
+            foreach (var secret in new[] { Marketplace, "سارَة", "vendor.test@example.com", "966500000000", "RT-secret-77", "login.tryoto.com" })
+                Assert.DoesNotContain(secret, line, StringComparison.Ordinal);
+        Assert.DoesNotContain("_refreshToken_", new OtoRegisteredVendor("_refreshToken_", "https://x").ToString(), StringComparison.Ordinal);
+    }
+
+    // ─── الخِدمَة: التَسجيلُ عَبرَ الخِزانَةِ الحَقيقِيَّةِ ومُعالِجٍ يُعيدُ رُدودَ الوَثيقَة ───────────────────────────
+
+    private static OtoOptions Registering() => Opts(marketplaceToken: Marketplace);
+
+    /// <summary>
+    /// <para><b>المُوجَب</b>: سَطرُ الأَثَرِ مَكتوبٌ <b>قَبلَ أَوَّلِ نِداءٍ إلى OTO</b> (يُقاسُ عِندَ النِداءِ نَفسِه)؛ و«Register» بِالرَمزِ السوقِيّ؛ ورَمزُ الحِسابِ
+    /// الجَديدُ مَختوماً في <c>delivery:{listing_owner}</c> بِسِياقِه؛ والوارِدُ مُسَجَّلاً بِرَمزِ البائِعِ الجَديدِ لا السوقِيّ؛ ورابِطُ التَفعيلِ
+    /// <b>مَرَّةً واحِدَة</b> لِلبائِعِ نَفسِه.</para>
+    /// </summary>
+    [Fact]
+    public async Task Registering_writes_the_audit_line_before_calling_OTO_seals_the_new_token_and_shows_the_link_once()
+    {
+        var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
+        int? auditsAtFirstCall = null;
+        w.Oto.Before = _ => auditsAtFirstCall ??= w.Docs.Wrote<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>();
+        var reveal = NewReveal();
+        var surface = Surface(w, Registering(), reveal: reveal);
+        Assert.Equal(VendorShippingInput.Register, surface.Input);
+
+        var res = await surface.RegisterAsync(Slug, Vendor(), Form(), Inbound, ip: "203.0.113.7");
+
+        Assert.True(res.Ok, res.Code);
+        Assert.Equal(1, auditsAtFirstCall);
+        var audit = Assert.Single(w.Docs.Stored.OfType<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>());
+        Assert.Equal((VendorShippingService.RegisterAuditAction, "register", Seller, "203.0.113.7"),
+            (audit.Action, audit.Note, audit.ActorId, audit.Ip));
+        Assert.DoesNotContain("vendor.test@example.com", audit.Note + audit.Before + audit.After, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Equal(new[] { OtoClient.RefreshTokenPath, OtoClient.RegisterPath, OtoClient.RefreshTokenPath, OtoClient.WebhookPath },
+            w.Oto.Calls.Select(c => c.Path).ToArray());
+        Assert.Contains(Marketplace, w.Oto.Calls[0].Body!, StringComparison.Ordinal);
+        Assert.Contains("_refreshToken_", w.Oto.Calls[2].Body!, StringComparison.Ordinal);
+
+        var entry = Entry(w)!;
+        Assert.Equal("_refreshToken_", entry.Values[VendorShippingSurface.RefreshField!].Unseal(w.Vault, RefreshAad()));
+        Assert.Equal(("59", (string?)null), (entry.WebhookId, entry.WebhookRefusal));
+        Assert.All(entry.Values.Values, v => Assert.Null(v.Plain));
+
+        Assert.Null(surface.TakeActivationLink(Slug, Stranger));
+        Assert.Equal("https://login.tryoto.com/XYZ", surface.TakeActivationLink(Slug, Seller));
+        Assert.Null(surface.TakeActivationLink(Slug, Seller));
+    }
+
+    /// <summary><b>والسالِبُ: فَشَلُ OTO لا يَحفَظُ شَيئاً</b> — رَمزُه يَعود، ولا مَدخَلَ ولا رابِطَ ولا نِداءَ وارِد؛ وسَطرُ الأَثَرِ قائِم: المُحاوَلَةُ
+    /// نَفسُها فِعلٌ يُسَجَّل.</summary>
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest, "{\"success\": false, \"otoErrorCode\": \"OTO1001\"}", OtoFailures.Refused)]
+    [InlineData(HttpStatusCode.ServiceUnavailable, "<html/>", OtoFailures.Unreachable)]
+    [InlineData(HttpStatusCode.OK, "{\"success\": true}", OtoFailures.Unreadable)]
+    public async Task A_register_OTO_does_not_accept_stores_nothing_and_answers_its_code(HttpStatusCode status, string answer, string code)
+    {
+        var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
+        w.Oto.Routes[OtoClient.RegisterPath] = _ => OtoRouteHandler.Json(status, answer);
+        var surface = Surface(w, Registering());
+
+        var res = await surface.RegisterAsync(Slug, Vendor(), Form(), Inbound);
+
+        Assert.Equal(code, res.Code);
+        Assert.Null(Entry(w));
+        Assert.Equal(0, w.Docs.Wrote<TenantProviderBinding>());
+        Assert.Equal(1, w.Docs.Wrote<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>());
+        Assert.Equal(0, w.Oto.CallsTo(OtoClient.WebhookPath));
+        Assert.Null(surface.TakeActivationLink(Slug, Seller));
+        Assert.False((await w.Shipping.CarrierForAsync(Slug, (await w.Deals.LoadAsync(Slug, w.Id))!))!.FromVendorEntry);
+    }
+
+    /// <summary>استِمارَةٌ لا تُدَقَّقُ تُرَدُّ بِرَمزِها <b>قَبلَ الأَثَرِ وقَبلَ OTO</b> — لا سَطرَ ولا نِداءَ ولا مَدخَل.</summary>
+    [Fact]
+    public async Task An_invalid_form_is_refused_by_its_code_before_the_audit_and_before_OTO()
+    {
+        var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
+        var stored = w.Docs.Stored.Count;
+        var res = await Surface(w, Registering()).RegisterAsync(Slug, Vendor(), Form(vat: true) with { CrNumber = "" }, Inbound);
+
+        Assert.Equal(VendorRegistrationValidator.CrNumberInvalid, res.Code);
+        Assert.Empty(w.Oto.Calls);
+        Assert.Equal(stored, w.Docs.Stored.Count);
+    }
+
+    /// <summary><b><c>vendor_register_closed</c> مُوجَباً وسالِباً</b>: بِلا رَمزٍ سوقِيٍّ (اللَصقُ هُوَ المَدخَل) أَو بِلا بيئَة — لا أَثَرَ ولا نِداءَ ولا حِفظ؛
+    /// وبِالرَمزِ السوقِيِّ يَمضي (الصُفوفُ أَعلاه). وبِلا خِزانَةٍ رَمزُها.</summary>
+    [Theory]
+    [InlineData(OtoEnvironment.Staging, "", true, VendorShippingService.RegisterClosed)]
+    [InlineData(OtoEnvironment.Production, Marketplace, true, VendorShippingService.RegisterClosed)]
+    [InlineData(OtoEnvironment.Staging, Marketplace, false, VendorShippingService.VaultUnavailable)]
+    public async Task Vendor_register_closed_and_vault_unavailable_positive(string environment, string marketplaceToken, bool vault, string code)
+    {
+        var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
+        var stored = w.Docs.Stored.Count;
+        var res = await Surface(w, Opts(environment, marketplaceToken), vault ? null : ProviderVault.FromKek(null))
+            .RegisterAsync(Slug, Vendor(), Form(), Inbound);
+
+        Assert.Equal(code, res.Code);
+        Assert.Empty(w.Oto.Calls);
+        Assert.Equal(stored, w.Docs.Stored.Count);
+    }
+
+    /// <summary>
+    /// <para><b>مَن لَه مَدخَلٌ لا يُسَجَّلُ لَه حِسابٌ ثانٍ</b>: النِداءُ نَفسُه يُعيدُ تَسجيلَ وارِدِه بِرَمزِه المَختوم — <c>PUT</c> بِمُعَرِّفِه —
+    /// بَعدَ سَطرِ أَثَرٍ <c>inbound</c>، ولا «Register» ولا استِمارَةٌ تُسأَل. ومَدخَلٌ لا يُفَكُّ يُرَدُّ <c>vendor_entry_unreadable</c> بِلا نِداء.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_vendor_with_an_entry_is_not_registered_twice_and_only_their_inbound_is_registered_again()
+    {
+        var w = await DealShipTests.ConfirmedCashDeal();
+        int? auditsAtFirstCall = null;
+        w.Oto.Before = _ => auditsAtFirstCall ??= w.Docs.Wrote<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>();
+        var surface = Surface(w, Registering());
+
+        var res = await surface.RegisterAsync(Slug, Vendor(), Form() with { Consent = false, Email = "" }, Inbound);
+
+        Assert.True(res.Ok, res.Code);
+        Assert.Equal(1, auditsAtFirstCall);
+        Assert.Equal("inbound", Assert.Single(w.Docs.Stored.OfType<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>()).Note);
+        Assert.Equal(0, w.Oto.CallsTo(OtoClient.RegisterPath));
+        var (method, body) = Assert.Single(WebhookCalls(w.Oto));
+        Assert.Equal(HttpMethod.Put, method);
+        Assert.Equal("59", body.GetProperty("id").GetString());
+        Assert.Contains(DealShipTests.VendorToken, w.Oto.Calls[0].Body!, StringComparison.Ordinal);
+        Assert.Equal(body.GetProperty("secretKey").GetString(),
+            Entry(w)!.Values[VendorShippingSurface.WebhookField!].Unseal(w.Vault, WebhookAad()));
+        Assert.Null(surface.TakeActivationLink(Slug, Seller));
+
+        // ومَدخَلٌ لا يُفَكّ — مَختومٌ بِمِفتاحٍ آخَر.
+        var other = await DealShipTests.ConfirmedCashDeal();
+        other.Docs.Put(DealShipTests.VendorEntry(DealShipTests.NewVault(), Slug, Seller));
+        var unreadable = await Surface(other, Registering()).RegisterAsync(Slug, Vendor(), Form(), Inbound);
+        Assert.Equal(VendorShippingService.EntryUnreadable, unreadable.Code);
+        Assert.Empty(other.Oto.Calls);
+    }
+
+    /// <summary><b>ولا استِهلاكَ لِحِصَّة</b>: لا الخِدمَةُ ولا نُقطَتاها تَمَسّانِ الاستِحقاقات — فاحِصٌ نَصِّيٌّ يَعُدُّ ما قَرَأ.</summary>
+    [Fact]
+    public void The_vendor_shipping_paths_consume_no_quota()
+    {
+        var files = new[]
+        {
+            Path.Combine(RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Shipping", "VendorShipping.cs"),
+            Path.Combine(RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Shipping", "VendorShippingEndpoints.cs"),
+        };
+        var read = 0;
+        foreach (var f in files)
+        {
+            var code = WriteEndpointGuardTests.StripComments(File.ReadAllText(f));
+            read += code.Length > 500 ? 1 : 0;
+            foreach (var quota in new[] { "ConsumeAsync", "IEntitlements", "RequireEntitlement", "EntitlementFilter", "QuotaConsumed" })
+                Assert.DoesNotContain(quota, code, StringComparison.Ordinal);
+        }
+        Assert.Equal(files.Length, read);
+    }
+
+    /// <summary>
+    /// <para><b>الاستِمارَةُ في فَرعِ التَسجيلِ بِأَسماءِ القارِئِ نَفسِه</b>: كُلُّ ثابِتِ حَقلٍ في <see cref="VendorRegistrationForm"/> اسمُ مُدخَلٍ في الصَفحَة،
+    /// ونَموذَجا الفَرعِ يُرسِلانِ إلى المَسارِ الحَرفِيّ؛ ومُرَبَّعُ المُوافَقَةِ <c>required</c>؛ ولا مُدخَلَ رَمزٍ في الفَرع — المَدخَلانِ لا يَلتَقِيان.</para>
+    /// </summary>
+    [Fact]
+    public void The_register_branch_carries_every_reader_field_by_name_and_posts_to_the_literal_route()
+    {
+        var page = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(Path.Combine(
+            RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "MyListings.razor"))));
+        const string Enum = "ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput.";
+        var at = page.IndexOf("else if (shippingInput == " + Enum + "Register)", StringComparison.Ordinal);
+        Assert.True(at > 0, "فَرعُ التَسجيلِ غائِب — الأَداةُ عَمياء.");
+        var branch = Block(page, at);
+
+        var fields = typeof(VendorRegistrationForm).GetFields()
+            .Where(f => f.IsLiteral && f.Name.EndsWith("Field", StringComparison.Ordinal)).Select(f => f.Name).ToArray();
+        output.WriteLine($"حُقولُ القارِئ: {fields.Length} — {string.Join(" · ", fields)}");
+        Assert.Equal(15, fields.Length);
+        Assert.All(fields, f => Assert.Contains($"name=\"@Vs.VendorRegistrationForm.{f}\"", branch, StringComparison.Ordinal));
+        Assert.Equal(2, Regex.Matches(branch, Regex.Escape("action=\"@($\"/{Slug}/me/shipping/oto/register\")\"")).Count);
+        Assert.Contains("name=\"@Vs.VendorRegistrationForm.ConsentField\" value=\"@Vs.VendorRegistrationForm.Checked\" required", branch, StringComparison.Ordinal);
+        Assert.DoesNotContain("refresh_token", branch, StringComparison.Ordinal);
+        Assert.Contains("activationLink = Vendors.TakeActivationLink(Slug, Auth.UserId!.Value);", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <para><b>نُقطَةُ التَسجيل</b>: الجَلسَةُ ثُمَّ <c>ListingVendorGate.Admit</c> قَبلَ قِراءَةِ الاستِمارَة؛ <c>RequireStoreWritable</c>؛ ونِداءٌ واحِدٌ
+    /// لِلخِدمَةِ بِعُنوانِ الطالِب — والأَثَرُ قَبلَ OTO في الخِدمَةِ لا في الجِسم؛ <b>ولا حارِسَ إدارَةِ مَنَصَّةٍ ولا مَتجَر</b>.</para>
+    /// </summary>
+    [Fact]
+    public void The_register_endpoint_admits_the_listing_owner_before_reading_the_form_and_declares_no_admin_guard()
+    {
+        var code = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "Shipping", "VendorShippingEndpoints.cs")));
+        var start = code.IndexOf("app.MapPost(\"/{slug}/me/shipping/oto/register\"", StringComparison.Ordinal);
+        Assert.True(start > 0, "النُقطَةُ لَيسَت بِمَسارِها الحَرفِيّ — الأَداةُ عَمياء.");
+        var body = code[start..code.IndexOf(".RequireStoreWritable();", start, StringComparison.Ordinal)];
+
+        var session = body.IndexOf("AuthSession.ResolveToken(", StringComparison.Ordinal);
+        var admit = body.IndexOf("Services.Shipping.ListingVendorGate.Admit(", StringComparison.Ordinal);
+        var form = body.IndexOf("VendorRegistrationForm.Read(req.Form)", StringComparison.Ordinal);
+        var call = body.IndexOf("vendors.RegisterAsync(", StringComparison.Ordinal);
+        output.WriteLine($"جَلسَة={session} · بَوّابَة={admit} · استِمارَة={form} · نِداء={call}");
+        Assert.True(session > 0 && admit > session && form > admit && call > admit, $"التَرتيبُ مَكسور: {session}/{admit}/{form}/{call}");
+        foreach (var guard in new[] { "PlatformAdminGuard", "TenantAdminGuard", "IDocumentSession", "audit.WriteAsync(" })
+            Assert.DoesNotContain(guard, body, StringComparison.Ordinal);
+        Assert.Contains("RemoteIpAddress", body, StringComparison.Ordinal);
+    }
 }
 
 // ═══ البُرهانُ الحَيّ — Postgres (‏WASAYEL_LIVE_PROOF=1 وConnectionStrings__Postgres) ═══════════════════════
@@ -718,7 +1127,10 @@ public class LiveVendorShippingProofTests(ITestOutputHelper output)
             var oto = new OtoRouteHandler();
             var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging });
             var surface = new VendorShippingService(providers, vault,
-                new OtoClient(new HttpClient(oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options);
+                new OtoClient(new HttpClient(oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options,
+                new ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditWriter(store),
+                new ACommerce.Templates.Customer.Marketplace.Services.Api.ApiKeyRevealStore(
+                    new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions())));
             var vendor = ListingVendorGate.Admit(seller, "بائِع", 1).Vendor!;
             Assert.True((await surface.SaveTokenAsync(withEntry, vendor, "RT-live-vendor-5e5e", "https://wasayel.example/x")).Ok);
 
@@ -760,6 +1172,60 @@ public class LiveVendorShippingProofTests(ITestOutputHelper output)
                 foreach (var b in await s.Query<TenantProviderBinding>().ToListAsync()) s.Delete(b);
                 await s.SaveChangesAsync();
             }
+        }
+    }
+
+    /// <summary>
+    /// <para><b>التَسجيلُ عَلى Postgres</b> (‏ADR-033 الخُطوَة 8، ‏2026-10-12): بائِعٌ يُسَجَّلُ (مُعالِجٌ يُعيدُ رَدَّ الوَثيقَة) فَيُكتَبُ مَدخَلُه
+    /// مَختوماً في مُستَأجِرِه وسَطرُ أَثَرِه في مَساحَتِه؛ وبائِعٌ تَرُدُّ OTO تَسجيلَه لا يُكتَبُ لَه مَدخَل — وسَطرُ مُحاوَلَتِه قائِم.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_registered_vendor_is_sealed_in_their_tenant_with_an_audit_line_and_a_refused_one_stores_nothing_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = "vs-zz-g-" + Guid.NewGuid().ToString("N")[..8];
+        var (accepted, refused) = (Guid.NewGuid(), Guid.NewGuid());
+        try
+        {
+            var providers = new TenantProviderService(store);
+            var vault = DealShipTests.NewVault();
+            var oto = new OtoRouteHandler();
+            var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, MarketplaceToken = "MKT-live" });
+            var surface = new VendorShippingService(providers, vault,
+                new OtoClient(new HttpClient(oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options,
+                new ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditWriter(store),
+                new ACommerce.Templates.Customer.Marketplace.Services.Api.ApiKeyRevealStore(
+                    new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions())));
+
+            var ok = await surface.RegisterAsync(slug, ListingVendorGate.Admit(accepted, "بائِع", 1).Vendor!,
+                VendorShippingTests.Form(), "https://wasayel.example/x");
+            oto.Routes[OtoClient.RegisterPath] = _ => OtoRouteHandler.Json(HttpStatusCode.BadRequest, "{\"success\": false}");
+            var no = await surface.RegisterAsync(slug, ListingVendorGate.Admit(refused, "بائِع", 1).Vendor!,
+                VendorShippingTests.Form(), "https://wasayel.example/x");
+
+            var entry = (await providers.VendorEntryAsync(slug, ProviderCapabilities.Delivery, accepted))!;
+            await using var q = store.QuerySession(slug);
+            var audits = await q.Query<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>().ToListAsync();
+            output.WriteLine($"المَقبول: {(ok.Ok ? "ok" : ok.Code)} · المَردود: {no.Code} · أَثَر: {audits.Count} · مَدخَلُ المَردود: " +
+                             $"{((await providers.VendorEntryAsync(slug, ProviderCapabilities.Delivery, refused)) is null ? "لا" : "نَعَم")}");
+
+            Assert.True(ok.Ok, ok.Code);
+            Assert.Equal("_refreshToken_", entry.Values[VendorShippingSurface.RefreshField!]
+                .Unseal(vault, VendorShippingSurface.AadFor(slug, VendorShippingSurface.RefreshField!, accepted)));
+            Assert.Equal(OtoFailures.Refused, no.Code);
+            Assert.Null(await providers.VendorEntryAsync(slug, ProviderCapabilities.Delivery, refused));
+            Assert.Equal(2, audits.Count(a => a.Action == VendorShippingService.RegisterAuditAction && a.Note == "register"));
+            Assert.Equal("https://login.tryoto.com/XYZ", surface.TakeActivationLink(slug, accepted));
+            Assert.Null(surface.TakeActivationLink(slug, refused));
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            foreach (var b in await s.Query<TenantProviderBinding>().ToListAsync()) s.Delete(b);
+            foreach (var a in await s.Query<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>().ToListAsync()) s.Delete(a);
+            await s.SaveChangesAsync();
         }
     }
 }

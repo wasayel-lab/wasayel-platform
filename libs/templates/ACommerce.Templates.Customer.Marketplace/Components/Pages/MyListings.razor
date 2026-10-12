@@ -2,6 +2,7 @@
 @page "/{slug}/r/{role}/me/listings"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingService Vendors
+@using Vs = ACommerce.Templates.Customer.Marketplace.Services.Shipping
 @inject AuthSession Auth
 @inject L L
 
@@ -37,9 +38,10 @@
     {
         <AcAlert Variant="danger" Message="@L[shippingErrKey]" />
     }
-    else if (Auth.IsAuthenticated && ShippingDone == "saved")
+    else if (Auth.IsAuthenticated && ShippingDone is "saved" or "registered")
     {
-        <AcAlert Variant="success" Message="@L["shipping.vendor.saved"]" />
+        @* «registered» رَدُّ مَسارِ التَسجيلِ (‏ADR-033 الخُطوَة 8، ‏2026-10-12) — ورابِطُ التَفعيلِ في قِسمِ الشَّحنِ أَدناه. *@
+        <AcAlert Variant="success" Message="@L[ShippingDone == "registered" ? "shipping.vendor.registered" : "shipping.vendor.saved"]" />
     }
 
     @if (!Auth.IsAuthenticated)
@@ -106,7 +108,90 @@
         }
         else if (shippingInput == ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput.Register)
         {
-            @* مَسارُ تَسجيلِ حِسابِ البائِعِ عِندَ OTO — حينَ يُضبَطُ الرَمزُ السوقِيّ (‏ADR-033 الخُطوَة 8). واللَصقُ أَعلاه مُطفَأٌ هُنا. *@
+            @* ─── مَسارُ التَسجيلِ عِندَ OTO (‏ADR-033 الخُطوَة 8، تَيّارُ S8، ‏2026-10-12) — حينَ يُضبَطُ الرَمزُ السوقِيّ، واللَصقُ أَعلاه مُطفَأ.
+               بائِعٌ بِلا مَدخَلٍ يَرى استِمارَةً يَملَؤُها عَن نَفسِه (حُقولُ «Marketplace › Register»، وحُقولُ الضَريبَةِ تَحتَ «مُسَجَّلٌ في
+               الضَريبَة؟» لا تُرسَلُ إلّا بِه)؛ ومَن لَه مَدخَلٌ يَرى حالَه وزِرَّ إعادَةِ تَسجيلِ الإشعاراتِ حينَ لَم تُسَجَّل؛ ورابِطُ التَفعيلِ
+               يُرسَمُ مَرَّةً بَعدَ التَسجيل (وِعاءُ العَرضِ مَرَّةً). *@
+            <section id="vendor-shipping" style="margin-top:16px;background:var(--ac-surface);border:1px solid var(--ac-border);border-radius:var(--ac-radius-lg);padding:14px;">
+                <strong style="display:block;font-size:15px;margin-bottom:8px;">@L.Markup("shipping.vendor.title")</strong>
+                @if (activationLink is { } link)
+                {
+                    <span style="display:block;font-size:13px;margin-bottom:8px;line-height:1.7;">@L.Markup("shipping.vendor.reg_activate")</span>
+                    <a class="ac-btn ac-btn-primary ac-btn-block" href="@link" target="_blank" rel="noopener noreferrer" style="margin-bottom:8px;">@L.Markup("shipping.vendor.reg_activate_link")</a>
+                }
+                @if (shippingView is { } registered)
+                {
+                    <span style="display:block;font-size:13px;margin-bottom:4px;">@L.Markup("shipping.vendor.reg_connected")</span>
+                    @if (registered.WebhookId is not null && registered.WebhookRefusal is null)
+                    {
+                        <span style="display:block;font-size:12px;color:var(--ac-text-muted);">@L.Markup("shipping.vendor.webhook_ok")</span>
+                    }
+                    else
+                    {
+                        <span style="display:block;font-size:12px;color:var(--ac-text-muted);margin-bottom:8px;">@L.Markup("shipping.vendor.reg_webhook_failed")</span>
+                        <form method="post" action="@($"/{Slug}/me/shipping/oto/register")">
+                            <AcButton Type="submit" Variant="secondary" Block="true" Text="@L["shipping.vendor.reg_retry"]" />
+                        </form>
+                    }
+                }
+                else
+                {
+                    <form method="post" action="@($"/{Slug}/me/shipping/oto/register")">
+                        <span style="display:block;font-size:13px;margin-bottom:8px;line-height:1.7;">@L.Markup("shipping.vendor.reg_intro")</span>
+                        <AcField Label="@L["shipping.vendor.reg_first_name"]" Required="true">
+                            <input name="@Vs.VendorRegistrationForm.FirstNameField" class="ac-input" required maxlength="30" autocomplete="given-name" />
+                        </AcField>
+                        <AcField Label="@L["shipping.vendor.reg_last_name"]" Required="true">
+                            <input name="@Vs.VendorRegistrationForm.LastNameField" class="ac-input" required maxlength="30" autocomplete="family-name" />
+                        </AcField>
+                        <AcField Label="@L["shipping.vendor.reg_email"]" Required="true">
+                            <input name="@Vs.VendorRegistrationForm.EmailField" type="email" class="ac-input" required autocomplete="email" dir="ltr" />
+                        </AcField>
+                        <AcField Label="@L["shipping.vendor.reg_mobile"]" Hint="@L["shipping.vendor.reg_mobile_hint"]" Required="true">
+                            <input name="@Vs.VendorRegistrationForm.MobileField" type="tel" inputmode="tel" class="ac-input" required autocomplete="tel" dir="ltr" />
+                        </AcField>
+                        <AcField Label="@L["shipping.vendor.reg_city"]" Required="true">
+                            <input name="@Vs.VendorRegistrationForm.CityField" class="ac-input" required autocomplete="address-level2" />
+                        </AcField>
+                        <AcField Label="@L["shipping.vendor.reg_billing_address"]" Required="true">
+                            <input name="@Vs.VendorRegistrationForm.BillingAddressField" class="ac-input" required autocomplete="street-address" />
+                        </AcField>
+                        <details style="margin-bottom:12px;">
+                            <summary style="cursor:pointer;font-size:13px;margin-bottom:8px;">@L.Markup("shipping.vendor.reg_vat_summary")</summary>
+                            <label style="display:flex;gap:8px;align-items:center;margin-bottom:8px;font-size:13px;">
+                                <input type="checkbox" name="@Vs.VendorRegistrationForm.IsVatField" value="@Vs.VendorRegistrationForm.Checked" />
+                                <span>@L.Markup("shipping.vendor.reg_is_vat")</span>
+                            </label>
+                            <AcField Label="@L["shipping.vendor.reg_company_name"]">
+                                <input name="@Vs.VendorRegistrationForm.CompanyNameField" class="ac-input" autocomplete="organization" />
+                            </AcField>
+                            <AcField Label="@L["shipping.vendor.reg_cr_number"]">
+                                <input name="@Vs.VendorRegistrationForm.CrNumberField" class="ac-input" inputmode="numeric" pattern="[0-9\u0660-\u0669\u06F0-\u06F9]{10}" dir="ltr" />
+                            </AcField>
+                            <AcField Label="@L["shipping.vendor.reg_vat_number"]">
+                                <input name="@Vs.VendorRegistrationForm.VatNumberField" class="ac-input" inputmode="numeric" pattern="[3\u0663\u06F3][0-9\u0660-\u0669\u06F0-\u06F9]{14}" dir="ltr" />
+                            </AcField>
+                            <AcField Label="@L["shipping.vendor.reg_district"]">
+                                <input name="@Vs.VendorRegistrationForm.DistrictField" class="ac-input" />
+                            </AcField>
+                            <AcField Label="@L["shipping.vendor.reg_zip_code"]">
+                                <input name="@Vs.VendorRegistrationForm.ZipCodeField" class="ac-input" inputmode="numeric" pattern="[0-9\u0660-\u0669\u06F0-\u06F9]{5}" autocomplete="postal-code" dir="ltr" />
+                            </AcField>
+                            <AcField Label="@L["shipping.vendor.reg_building_no"]">
+                                <input name="@Vs.VendorRegistrationForm.BuildingNoField" class="ac-input" inputmode="numeric" pattern="[0-9\u0660-\u0669\u06F0-\u06F9]{4}" dir="ltr" />
+                            </AcField>
+                            <AcField Label="@L["shipping.vendor.reg_street_name"]">
+                                <input name="@Vs.VendorRegistrationForm.StreetNameField" class="ac-input" />
+                            </AcField>
+                        </details>
+                        <label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;font-size:13px;line-height:1.7;">
+                            <input type="checkbox" name="@Vs.VendorRegistrationForm.ConsentField" value="@Vs.VendorRegistrationForm.Checked" required />
+                            <span>@L.Markup("shipping.vendor.reg_consent")</span>
+                        </label>
+                        <AcButton Type="submit" Variant="primary" Block="true" Text="@L["shipping.vendor.reg_submit"]" />
+                    </form>
+                }
+            </section>
         }
     }
 </div>
@@ -123,6 +208,8 @@
     /// و<c>None</c> لِغَيرِ البائِع: لا يُسأَلُ إلّا في فَرعِ «لَه إعلانات».</summary>
     ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput shippingInput;
     ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingView? shippingView;
+    /// <summary>رابِطُ تَفعيلِ حِسابِ الشَحنِ الَّذي فُتِحَ لِلتَوّ — مَرَّةً واحِدَة (‏ADR-033 الخُطوَة 8، ‏2026-10-12).</summary>
+    string? activationLink;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -135,16 +222,22 @@
         if (myListings.Count > 0)
         {
             shippingInput = Vendors.Input;
-            if (shippingInput == ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput.Paste)
+            // وحالُ المَدخَلِ في المَدخَلَينِ كِلَيهِما (‏2026-10-12، الخُطوَة 8) — ورابِطُ التَفعيلِ في مَسارِ التَسجيلِ وَحدَه.
+            if (shippingInput != Vs.VendorShippingInput.None)
                 shippingView = await Vendors.ViewAsync(Slug, Auth.UserId!.Value);
+            if (shippingInput == Vs.VendorShippingInput.Register)
+                activationLink = Vendors.TakeActivationLink(Slug, Auth.UserId!.Value);
         }
     }
 
-    /// <summary>مِفتاحُ نَصِّ رَفضِ حِسابِ الشَحن — لِرَمزٍ مِن مَعجَمَي البَوّابَةِ والخِدمَةِ وَحدَهُما، و<c>null</c> لِما سِواه.</summary>
+    /// <summary>مِفتاحُ نَصِّ رَفضِ حِسابِ الشَحن — لِرَمزٍ مِن مَعاجِمِ ما يَصِلُ الصَفحَةَ وَحدَها، و<c>null</c> لِما سِواه: البَوّابَةُ والخِدمَة،
+    /// ومُنذُ الخُطوَة 8 (‏2026-10-12) مُدَقِّقُ استِمارَةِ التَسجيلِ ومَعجَمُ فَشَلِ عَميلِ OTO (رَدُّ «Register»).</summary>
     static string? ShippingErrKey(string? code)
         => code is not null
            && (ACommerce.Templates.Customer.Marketplace.Services.Shipping.ListingVendorGate.All.Contains(code)
-               || ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingService.Codes.Contains(code))
+               || ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingService.Codes.Contains(code)
+               || Vs.VendorRegistrationValidator.All.Contains(code)
+               || ACommerce.Kit.Delivery.OtoFailures.All.Contains(code))
             ? "shipping.vendor.err_" + code
             : null;
 }

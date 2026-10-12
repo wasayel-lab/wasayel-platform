@@ -54,7 +54,13 @@ internal sealed class OtoRouteHandler : HttpMessageHandler
         Routes[OtoClient.WebhookPath] = body => body is not null && JsonDocument.Parse(body).RootElement.TryGetProperty("id", out _)
             ? Json(HttpStatusCode.OK, "{\"success\": true, \"message\": \"webhook has been updated\"}")
             : Json(HttpStatusCode.OK, "{\"success\": true, \"id\": \"59\", \"message\": \"webhook has been created\"}");
+        // تَسجيلُ البائِع (‏2026-10-12، الخُطوَة 8): رَدُّ «Marketplace › Register» بِمِثالِه حَرفاً.
+        Routes[OtoClient.RegisterPath] = _ => Json(HttpStatusCode.OK, RegisterAnswer);
     }
+
+    /// <summary>رَدُّ «Register» كَما في الوَثيقَة — <c>activationLink</c> و<c>refreshToken</c> بِمِثالِهِما.</summary>
+    public const string RegisterAnswer =
+        "{\"success\": true, \"activationLink\": \"https://login.tryoto.com/XYZ\", \"refreshToken\": \"_refreshToken_\"}";
 
     public static HttpResponseMessage Json(HttpStatusCode status, string body)
         => new(status) { Content = new StringContent(body) };

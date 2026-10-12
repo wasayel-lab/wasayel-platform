@@ -682,6 +682,53 @@ public class WriteEndpointGuardTests
             "سُلطَةٌ غَيرُ مُعلَنَةٍ في نُقطَةِ كِتابَة:\n  " + string.Join("\n  ", breaches));
     }
 
+    // ─── ‏ADR-033 الخُطوَة 8 (تَيّارُ S8، ‏2026-10-12): الاستِثناءُ المُسَمّى مِن «سُلطَتَين» ───────
+    //
+    // نُقطَةُ `register` تَصرِفُ اعتِماداً مِن نَوعِ `platform_key` (الرَمزَ السوقِيَّ في التَهيئَة) **ولا تُعلِنُ `PlatformAdminGuard`
+    // ولا `TenantAdminGuard`** — عَمداً: بَياناتُ التَسجيلِ بَياناتُ البائِعِ الشَخصِيَّةُ تُرسَلُ إلى طَرَفٍ ثالِثٍ وتُنشِئُ حِساباً بِاسمِه
+    // وتُخَزِّنُ سِرَّه الدائِم، فَالفِعلُ فِعلُه لا فِعلُ مُديرٍ يَنوبُ عَنه (‏ADR-033 الخُطوَة 8؛ نَقضٌ مُعلَنٌ في تَرويسَتِه لِقاعِدَةِ ‏ADR-012
+    // §٢‑ب «وتُعلِنُ نُقطَتُه PlatformAdminGuard»). **فَالاستِثناءُ صَفٌّ مُسَمّى بِسَبَبِه وحارِسِه** لا غِيابٌ صامِت: النُقطَةُ تُعلِنُ
+    // حارِسَ هُوِيَّةِ صاحِبِ البَياناتِ (البائِع)، ولا تُعلِنُ حارِسَ مُدير، ولا تَكونُ في قائِمَةِ السُلطَتَينِ مَعاً.
+
+    private sealed record PlatformKeySpentByItsDataOwner(string Route, string IdentityGuard, string WhyAr);
+
+    private static readonly PlatformKeySpentByItsDataOwner[] PlatformKeySpentByDataOwners =
+    {
+        new("/{slug}/me/shipping/oto/register", "Services.Shipping.ListingVendorGate.Admit(",
+            "‏ADR-033 الخُطوَة 8: تُنفِقُ الرَمزَ السوقِيَّ خَلفَ جَلسَةِ البائِعِ وهُوِيَّتِه وَحدَهُما — بَياناتُه الشَخصِيَّةُ تُرسَلُ إلى OTO " +
+            "وتُنشِئُ حِساباً بِاسمِه، فَلا يَنوبُ عَنه مُديرُ مَتجَرٍ ولا مَنَصَّة (‏PDPL؛ نَقضُ ‏ADR-012 §٢‑ب المُعلَنُ في تَرويسَةِ ‏ADR-033)."),
+    };
+
+    [Fact]
+    public void A_platform_key_spent_by_its_data_owner_is_a_named_exception_with_its_identity_guard_and_no_admin_guard()
+    {
+        var endpoints = MinimalApiWriteEndpoints()
+            .ToDictionary(e => e.Route, e => e.Body, StringComparer.Ordinal);
+        Assert.True(PlatformKeySpentByDataOwners.Length > 0, "أَداة عَمياء: لا صَفَّ استِثناء.");
+
+        var breaches = new List<string>();
+        foreach (var x in PlatformKeySpentByDataOwners)
+        {
+            if (!endpoints.TryGetValue(x.Route, out var body))
+            {
+                breaches.Add($"{x.Route}: لا وُجودَ لَها — تُرفَعُ أَو يُصَحَّحُ المَسار.");
+                continue;
+            }
+            if (!body.Contains(x.IdentityGuard, StringComparison.Ordinal))
+                breaches.Add($"{x.Route}: بِلا حارِسِ هُوِيَّةِ صاحِبِ البَيانات «{x.IdentityGuard}».");
+            foreach (var admin in new[] { "PlatformAdminGuard", "TenantAdminGuard" })
+                if (body.Contains(admin, StringComparison.Ordinal))
+                    breaches.Add($"{x.Route}: تُعلِنُ «{admin}» — المُديرُ لا يَنوبُ عَن صاحِبِ البَيانات.");
+            if (TwoTierWrites.Any(t => t.Route == x.Route))
+                breaches.Add($"{x.Route}: في قائِمَةِ السُلطَتَينِ والاستِثناءِ مَعاً.");
+            if (x.WhyAr.Length <= 30)
+                breaches.Add($"{x.Route}: سَبَبٌ أَقصَرُ مِن أَن يَكونَ سَبَباً.");
+        }
+
+        Assert.True(breaches.Count == 0,
+            "استِثناءُ «سُلطَتَين» غَيرُ مُثبَت:\n  " + string.Join("\n  ", breaches));
+    }
+
     /// <summary>كُلّ استِثناء يُعلِن سَبَبَه — فَالقائِمَة دَينٌ مَوصوف
     /// لا قائِمَةُ إسكات.</summary>
     [Fact]

@@ -386,10 +386,13 @@ public class ProviderCatalogTests
 
     /// <summary><b>غِيابُ الاعتِمادِ السوقِيِّ لا يُسقِطُ التَعريف</b> (‏ADR-033 الخُطوَة 6: «غيابُ الرمزِ السوقيِّ بالبيئةِ يُخفي
     /// مسارَ <c>register</c> ولا يُسقِطُ التعريف»): القارِئُ لا يَقرَأُ تَهيئَةً أَصلاً (لا <c>IConfiguration</c> في مَشروعِه)،
-    /// فَالتَعريفُ في الكاتالوجِ بِلا مُتَغَيِّرِ شَحنٍ واحِد. <b>ومَسارُ <c>register</c> لا وُجودَ لَه اليَوم</b> — صِفرُ نُقطَةٍ تُناديه
-    /// وصِفرُ مَسارٍ يَحمِلُه في نُقاطِ الشَحن — يُثَبَّتُ هُنا ويُقلَبُ بِاسمِه يَومَ يُبنى خَلفَ الاعتِمادِ السوقِيّ (الخُطوَة 8).</summary>
+    /// فَالتَعريفُ في الكاتالوجِ بِلا مُتَغَيِّرِ شَحنٍ واحِد.</summary>
+    /// <remarks><b>قُلِبَ بِاسمِه ‏2026-10-12 (‏ADR-033 الخُطوَة 8، تَيّارُ S8)</b> — كانَ
+    /// <c>The_vendor_shipping_definition_needs_no_configuration_and_no_register_path_exists_yet</c> (‏<c>2e3cdac</c>): «صِفرُ نُقطَةٍ تُناديه
+    /// وصِفرُ مَسارٍ يَحمِلُه في نُقاطِ الشَحن». <b>والآن</b>: العَميلُ يَعرِفُ «Register»، ونُقطَتُه في مِلَفِّ سَطحِ البائِعِ لا في نُقاطِ
+    /// الصَفقَةِ والوارِد، ولا يُرسَمُ مَدخَلُه إلّا بِالرَمزِ السوقِيّ — والقارِئُ بِلا تَهيئَةٍ كَما كان.</remarks>
     [Fact]
-    public void The_vendor_shipping_definition_needs_no_configuration_and_no_register_path_exists_yet()
+    public void The_vendor_shipping_definition_needs_no_configuration_and_the_register_path_lives_behind_the_marketplace_token()
     {
         var providersDir = Path.Combine(RepoRoot, "libs", "core", "ACommerce.Platform.Providers");
         var scanned = 0;
@@ -409,8 +412,19 @@ public class ProviderCatalogTests
         var client = File.ReadAllText(Path.Combine(RepoRoot, "libs", "kits", "Delivery",
             "ACommerce.Kit.Delivery.Core", "OtoClient.cs"));
         Assert.True(endpoints.Length > 1000 && client.Length > 1000, "أَداةٌ عَمياء: مِلَفّا الشَحنِ لَم يُقرَآ.");
-        Assert.DoesNotContain("/rest/v2/register", client, StringComparison.Ordinal);
+        Assert.Contains("RegisterPath           = \"/rest/v2/register\"", client, StringComparison.Ordinal);
         Assert.DoesNotContain("register", endpoints, StringComparison.OrdinalIgnoreCase);
+        var vendorEndpoints = File.ReadAllText(Path.Combine(RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "Shipping", "VendorShippingEndpoints.cs"));
+        Assert.Contains("app.MapPost(\"/{slug}/me/shipping/oto/register\"", vendorEndpoints, StringComparison.Ordinal);
+
+        var vault = ProviderVault.FromKek(Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)));
+        var open = new ACommerce.Kit.Delivery.OtoOptions { Environment = ACommerce.Kit.Delivery.OtoEnvironment.Staging };
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput.Paste,
+            ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingSurface.InputFor(open, vault));
+        open.MarketplaceToken = "MKT-token";
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput.Register,
+            ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingSurface.InputFor(open, vault));
     }
 
     [Fact]
