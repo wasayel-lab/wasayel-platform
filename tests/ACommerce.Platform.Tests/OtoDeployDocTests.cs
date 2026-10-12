@@ -78,4 +78,30 @@ public class OtoDeployDocTests
         Assert.Contains("builder.Services.AddOtoShipping(builder.Configuration);", program, StringComparison.Ordinal);
         Assert.Contains("`docs/DEPLOY.md` §٢·ط", program, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// <para><b>الرَمزُ السوقِيُّ في الدَليلِ بِاسمِه كَما يَقرَؤُه .NET، وأَثَرُ غِيابِه بِرَمزَي النُقطَتَين</b> (‏ADR-033 الخُطوَة 10، تَيّارُ S8،
+    /// ‏2026-10-12): المُتَغَيِّرُ <c>Shipping__Oto__MarketplaceToken</c> سِرّاً، ومَسارا المَدخَلَينِ حَرفاً، و«غِيابُه يُخفي التَسجيلَ ويُبقي
+    /// اللَصق» بِـ<c>vendor_register_closed</c> و<c>vendor_paste_closed</c> كَما تُعيدُهُما الخِدمَة، والنَموذَجُ — حِسابُ البائِعِ ومَحفَظَتُه
+    /// وعَقدُه — في فِقرَتِه. والقيَمُ مِن الكودِ لا مَنسوخَة: اسمٌ يَفتَرِقُ يَحمَرُّ هُنا.</para>
+    /// </summary>
+    [Fact]
+    public void The_deploy_section_names_the_marketplace_token_and_says_its_absence_hides_register_and_keeps_paste()
+    {
+        var section = Section();
+        Assert.Equal("Shipping__Oto__MarketplaceToken", OtoEnvironment.EnvVarName(OtoEnvironment.MarketplaceTokenKey));
+        Assert.Contains($"| `{OtoEnvironment.EnvVarName(OtoEnvironment.MarketplaceTokenKey)}` |", section, StringComparison.Ordinal);
+        Assert.Contains("| **Secret** |", section[section.IndexOf("Shipping__Oto__MarketplaceToken", StringComparison.Ordinal)..],
+            StringComparison.Ordinal);
+        Assert.Contains("`POST /{slug}/me/shipping/oto`", section, StringComparison.Ordinal);
+        Assert.Contains("`POST /{slug}/me/shipping/oto/register`", section, StringComparison.Ordinal);
+        Assert.Contains("غِيابُه يُخفي مَسارَ التَسجيلِ ويُبقي اللَصق", section, StringComparison.Ordinal);
+        Assert.Contains($"`{ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingService.RegisterClosed}`", section, StringComparison.Ordinal);
+        Assert.Contains($"`{ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingService.PasteClosed}`", section, StringComparison.Ordinal);
+        Assert.Contains("الشَحنُ حِسابُ البائِعِ نَفسِه عِندَ OTO", section, StringComparison.Ordinal);
+        foreach (var word in new[] { "مَحفَظَتِه", "عَقدُ النَقلِ", "لا تَمُرُّ بِمالِه" })
+            Assert.Contains(word, section, StringComparison.Ordinal);
+        Assert.Contains($"`{OtoOrderStatusGate.NoticeUnverifiable}`", section, StringComparison.Ordinal);
+        Assert.Contains("‏`401`", section, StringComparison.Ordinal);
+    }
 }
