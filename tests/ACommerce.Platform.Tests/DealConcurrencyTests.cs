@@ -226,6 +226,62 @@ public class LiveDealConcurrencyProofTests(ITestOutputHelper output)
             await s.SaveChangesAsync();
         }
     }
+
+    /// <summary><b>اليَوم — يُقلَبُ بِاسمِه في كوميتِ الإصلاح</b> (مُراجَعَةُ تَيّارِ S6a الأولى، ‏2026-10-12): إلحاقٌ — مَرجِعُ إذنِ دَفعٍ
+    /// كَما يُلحِقُه <c>/checkout/submit</c> <b>بَعدَ</b> رَبطِ البائِع — يَقرَأُ الصَفقَةَ ويَقِفُ قَبلَ الحِفظ، ثُمَّ يَتِمُّ قَبولُ البائِعِ
+    /// المَربوطِ ويُحفَظ، ثُمَّ يُستَأنَف: يَرُدُّه Marten، و<c>AttachRefAsync</c> تَعودُ بِالمَخزَّنِ <b>بِلا المَرجِع</b> ولا تَرمي، ولا
+    /// مُنادِيَ يَقرَأُ ما تُرجِعُه. فَالقَبولُ قائِمٌ والمَرجِعُ ضاع — إذنٌ مَحجوزٌ عِندَ المُزَوِّدِ لا يُقبَضُ عِندَ <c>Paid</c> ولا يُستَرجَعُ
+    /// عِندَ الإلغاء. وظَنُّ ‏ADR-036 §٢ («صَفقَةٌ وُلِدَت في الطَلَبِ نَفسِه لا يَعرِفُ مُعَرِّفَها غَيرُه») لا يَصدُقُ هُنا.</summary>
+    [Fact]
+    public async Task Today_an_attach_held_past_an_accept_returns_the_stored_deal_without_its_ref_and_the_ref_is_lost()
+    {
+        if (!Enabled || string.IsNullOrEmpty(ConnectionString)) return;
+
+        await using var store = BuildStore();
+        var slug = "zz-occ-" + Guid.NewGuid().ToString("N")[..8];
+        var buyer = Guid.NewGuid();
+        var seller = Guid.NewGuid();
+
+        try
+        {
+            var plain = new DealsService(store, new ForbiddenPaymentProvider());
+            var born = await plain.StartAsync(slug, "marketplace", buyer, "مُشتَرٍ", null, "سِلعَة", 150m,
+                new() { [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.CashOnDelivery });
+            await plain.AttachRefAsync(slug, born.Id, DealsService.ListingOwnerRef, seller.ToString());
+            await plain.BindListingOwnerAsync(slug, born.Id, seller.ToString());
+
+            var gate = new SaveGate.Gate();
+            var deals = new DealsService(SaveGate.Wrap(store, gate), new ForbiddenPaymentProvider());
+
+            var attaching = Task.Run(async () =>
+            {
+                gate.Marked.Value = true;
+                return await deals.AttachRefAsync(slug, born.Id, "payment_id", "auth_live");
+            });
+            await gate.Reached.Task.WaitAsync(TimeSpan.FromSeconds(60));
+
+            var accept = await deals.AcceptAsync(slug, born.Id, new DealAcceptor(seller, "بائِع"));
+            gate.Release.TrySetResult();
+            var attached = await attaching.WaitAsync(TimeSpan.FromSeconds(60));
+
+            var final = (await plain.LoadAsync(slug, born.Id))!;
+            output.WriteLine($"قَبول: ok={accept.Ok} · إلحاق: {attached?.Refs.GetValueOrDefault("payment_id") ?? "—"} · النِهائِيَّة: " +
+                             $"{final.Status}/{final.Stage} · سِجِلّ: {string.Join(",", final.Timeline.Select(e => e.Action))}");
+
+            Assert.True(accept.Ok, accept.Violation?.MessageAr);
+            Assert.NotNull(attached);
+            Assert.False(attached!.Refs.ContainsKey("payment_id"));
+            Assert.Equal((DealStatus.Active, DealStage.Booked), (final.Status, final.Stage));
+            Assert.False(final.Refs.ContainsKey("payment_id"));
+            Assert.DoesNotContain(final.Timeline, e => e.Action == "note" && e.Note == "attach payment_id=auth_live");
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            foreach (var d in await s.Query<Deal>().ToListAsync()) s.Delete(d);
+            await s.SaveChangesAsync();
+        }
+    }
 }
 
 // ─── بِلا قاعِدَة: كُلُّ بابِ كِتابَةٍ يُحَوِّلُ التَعارُضَ رَمزاً لا ‏500 (‏ADR-036) ─────────────────────────────
