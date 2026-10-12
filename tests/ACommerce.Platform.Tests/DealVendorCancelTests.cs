@@ -173,4 +173,64 @@ public class DealVendorCancelTests
         Assert.Equal(DealCancelAuthorization.ActorNotParty, res.Violation!.Code);
         Assert.Equal(DealStatus.Active, w.Docs.Read<Deal>(id.ToString())!.Status);
     }
+
+    // ─── الشاشَة: استِمارَةُ الإلغاءِ في صَفحَةِ الصَفقَة — لِمَن تُرسَم؟ (القاعِدَة ١٢) ─────────────────────
+    //
+    // مُراجَعَةُ تَيّارِ S6a الأولى (‏2026-10-12): صَفحَةُ الصَفقَةِ (`MyDealDetail.razor`) تُفتَحُ لِلمُبادِرِ ولِمالِكِ الإعلان
+    // (`isInitiator || isListingOwner`) وتَرسُمُ استِمارَةَ `/cancel` لِكُلِّ صَفقَةٍ فَعّالَةٍ بِلا شَرطٍ ثانٍ؛ والنُقطَةُ تَسأَلُ
+    // `DealCancelAuthorization.Validate` (طَرَفٌ أَو مُشرِف) — فَمالِكُ إعلانِ العَرضِ قَبلَ أَن يَقبَلَ يَرى استِمارَةً تُرَدُّ
+    // بِـ`actor_not_party`: بابٌ يَقولُ «لا». وصَفحَةُ التَقييمِ نَفسُها تَرسُمُ استِمارَتَها مِن بَوّابَتِها (`canReview`).
+
+    private static string MemberDealPage()
+    {
+        var path = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace",
+            "Components", "Pages", "MyDealDetail.razor");
+        Assert.True(File.Exists(path), $"مَصدَرٌ مَفقود: {path} — الأَداةُ عَمياء.");
+        var text = WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(path));
+        Assert.True(text.Length > 1000, "أَداةٌ عَمياء: `MyDealDetail.razor` لَم يُقرَأ.");
+        return text;
+    }
+
+    private const string CancelForm = "<form method=\"post\" action=\"@($\"/{Slug}/deals/{deal.Id}/cancel\")\"";
+
+    /// <summary>مَن يَفتَحُ الصَفحَةَ في كُلِّ صَفقَةٍ ومَوقِعُه — المُبادِر، والبائِعُ المَربوطُ في صَفقَةِ السَلَّة، ومالِكُ إعلانِ العَرضِ
+    /// قَبلَ القَبول — وحارِسُ الصَفحَةِ كَما في مَصدَرِها: مُبادِرٌ أَو مالِكُ الإعلانِ (بِالمَرجِعِ أَو الطَرَف).</summary>
+    private static IEnumerable<(string Name, Deal Deal, Guid Viewer)> Viewers()
+    {
+        var w = NewWorld();
+        var cart = w.Docs.Read<Deal>(CartDeal(w).ToString())!;
+        var offer = w.Docs.Read<Deal>(OfferDeal(w).ToString())!;
+        foreach (var (name, deal) in new[] { ("cart", cart), ("offer", offer) })
+        foreach (var viewer in new[] { Buyer, Seller })
+        {
+            var pageOpens = deal.InitiatorId == viewer || DealAcceptAuthorization.OwnerIdOf(deal) == viewer || deal.CounterpartyId == viewer;
+            Assert.True(pageOpens, $"{name}: الناظِرُ لا يَفتَحُ الصَفحَة — الأَداةُ تَقيسُ غَيرَ ما تُريد.");
+            yield return ($"{name}/{(viewer == Buyer ? "buyer" : "owner")}", deal, viewer);
+        }
+    }
+
+    /// <summary><b>اليَوم — يُقلَبُ بِاسمِه في كوميتِ الإصلاح</b>: الاستِمارَةُ تَلي سِلسِلَةَ الإجراءاتِ بِلا حارِسٍ خاصّ (لا شَيءَ بَينَ
+    /// قَوسِ آخِرِ <c>else if</c> وبَينَها)، فَتُرسَمُ لِكُلِّ ناظِرٍ لِصَفقَةٍ فَعّالَة — ومِنهُم مالِكُ إعلانِ العَرضِ الَّذي تَرُدُّه النُقطَةُ
+    /// بِـ<c>actor_not_party</c>: مِن أَربَعَةِ ناظِرينَ يُرَدُّ واحِدٌ وتُرسَمُ لَه.</summary>
+    [Fact]
+    public void Today_the_member_deal_page_draws_the_cancel_form_to_the_unbound_listing_owner_whom_the_endpoint_refuses()
+    {
+        var page = MemberDealPage();
+        var form = page.IndexOf(CancelForm, StringComparison.Ordinal);
+        Assert.True(form > 0, "استِمارَةُ الإلغاءِ غَيرُ مَوجودَة — الأَداةُ عَمياء.");
+        Assert.EndsWith("}", page[..form].TrimEnd(), StringComparison.Ordinal);
+        Assert.DoesNotContain("DealCancelAuthorization", page, StringComparison.Ordinal);
+
+        var drawnButRefused = new List<string>();
+        var checkedViewers = 0;
+        foreach (var (name, deal, viewer) in Viewers())
+        {
+            checkedViewers++;
+            var drawn = deal.Status == DealStatus.Active;
+            var refused = DealCancelAuthorization.Validate(deal, new DealCanceller(viewer, "ناظِر", IsStoreAdmin: false)) is not null;
+            if (drawn && refused) drawnButRefused.Add(name);
+        }
+        Assert.Equal(4, checkedViewers);
+        Assert.Equal(new[] { "offer/owner" }, drawnButRefused);
+    }
 }
