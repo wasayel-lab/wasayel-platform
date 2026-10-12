@@ -53,6 +53,27 @@ public static class ProviderSecrecy
         return Mask;
     }
 
+    /// <summary>
+    /// <para><b>الذَيلُ الَّذي يُحفَظُ عِندَ الخَتم</b> (‏<c>StoredValue.Tail4</c>) —
+    /// بِقاعِدَةِ <see cref="Censor"/> حَرفاً: نَوعٌ يُعرَضُ مِنه ذَيل، وسِرٌّ
+    /// أَطوَلُ مِن الذَيل. فَما تَعرِضُه القيمَةُ المَختومَةُ هُوَ ما كانَت
+    /// تَعرِضُه صَريحَةً، بِلا فَكّ.</para>
+    /// </summary>
+    public static string? TailOf(string kind, string? value)
+        => ShowsTail(kind) && value is not null && value.Length > TailLength
+            ? value[^TailLength..]
+            : null;
+
+    /// <summary><b>صورَةُ القيمَةِ المَختومَة</b> — لا نَصَّ صَريحاً هُنا أَصلاً:
+    /// الذَيلُ المَحفوظُ بَعدَ القِناع، أَو القِناعُ وَحدَه. و<c>none</c> لا شَيءَ
+    /// لَه.</summary>
+    public static string CensorSealed(string kind, string? tail)
+    {
+        if (kind == CredentialKinds.None) return "";
+        if (ShowsTail(kind) && tail is { Length: TailLength }) return Mask + tail;
+        return Mask;
+    }
+
     /// <summary><b>لَقطَةُ الرَبطِ كَما تُكتَب في التَدقيق</b> —
     /// مُعَتَّمَةً بِالبِناء لا بِالنِيَّة: الدالَّةُ لا تَقبَل نَصّاً
     /// صَريحاً إلّا مِن نَوعٍ يُعرَض.</summary>

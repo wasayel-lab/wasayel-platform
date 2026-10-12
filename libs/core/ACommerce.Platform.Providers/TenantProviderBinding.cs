@@ -4,14 +4,15 @@ using ACommerce.Platform.Flows;
 namespace ACommerce.Platform.Providers;
 
 /// <summary>
-/// <para><b>قيمَةٌ مُخَزَّنَةٌ لِحَقلٍ واحِد</b> — و<b>هذِه المَوجَةُ
-/// تَدعَم الأَنواعَ الصَريحَةَ وَحدَها</b>: لا خِزانَةَ ولا تَشفير.
-/// وأَعمِدَةُ الظَرف (<c>Nonce</c>, <c>Cipher</c>, <c>Tag</c>,
-/// <c>KekVersion</c>, <c>Aad</c>) <b>مُعلَنَةٌ وغَيرُ مُستَعمَلَة</b>،
-/// والسَبَبُ مَقيسٌ لا ذَوقيّ: إضافَتُها لاحِقاً <b>تَرحيلُ جَدوَلٍ
-/// حَيٍّ يَحمِل اعتِماداتِ عُمَلاء</b>. وهذا هُوَ المَوضِعُ الوَحيدُ
-/// المُجازُ فيه إعلانٌ سابِقٌ لِاستِعمالِه — والقاعِدَةُ ١ عَن
-/// <b>تَجريد</b> لا عَن شَكلِ حَقل.</para>
+/// <para><b>قيمَةٌ مُخَزَّنَةٌ لِحَقلٍ واحِد</b> — صَريحَةٌ لِنَوعٍ يُعرَض
+/// (<see cref="Explicit"/>)، أَو <b>مَختومَةٌ</b> لِسِرٍّ تَختِمُه الخِزانَة
+/// (<see cref="Sealed"/>، ‏<c>ProviderVault</c>). وأَعمِدَةُ الظَرف
+/// (<c>Nonce</c>, <c>Cipher</c>, <c>Tag</c>, <c>KekVersion</c>, <c>Aad</c>)
+/// <b>أُعلِنَت مِن اليَومِ الأَوَّلِ (‏ADR-012 §هـ) وتُملَأُ مُنذُ ‏2026-10-12</b>
+/// (‏ADR-032 §٢‑هـ الخُطوَة 4) — تَعبِئَةٌ لا إعادَةُ تَصميم: لا عَمودَ مِنها
+/// تَغَيَّرَ اسمُه ولا نَوعُه. والسَبَبُ الَّذي أَعلَنَها قَبلَ استِعمالِها
+/// مَقيسٌ لا ذَوقيّ: إضافَتُها لاحِقاً <b>تَرحيلُ جَدوَلٍ حَيٍّ يَحمِل
+/// اعتِماداتِ عُمَلاء</b>.</para>
 ///
 /// <para><b>و<c>KekVersion</c> يَحمِلُ الدَوَران مِن اليَوم</b>: نُسخَتانِ
 /// تَتَعايَشانِ في نَفسِ الوَثيقَة، فَالتَرحيلُ إعادَةُ تَغليفٍ في
@@ -19,21 +20,36 @@ namespace ACommerce.Platform.Providers;
 ///
 /// <para><b>والفَشَلُ مُغلَق</b>: <see cref="Explicit"/> <b>تَرمي</b>
 /// لِنَوعٍ يُشبِهُ السِرّ — فَلا سَبيلَ إلى كِتابَةِ سِرٍّ صَريحٍ في
-/// عَمودِ نَصّ، ولَو أَرادَ الكاتِب.</para>
+/// عَمودِ نَصّ، ولَو أَرادَ الكاتِب؛ والسِرُّ يَمُرُّ مِن الخِزانَةِ وَحدَها.</para>
 /// </summary>
 public sealed class StoredValue
 {
     public string Kind { get; set; } = CredentialKinds.None;
 
-    /// <summary>النَصُّ الصَريح — لِلأَنواعِ الَّتي تُعرَض وَحدَها.</summary>
+    /// <summary>النَصُّ الصَريح — لِلأَنواعِ الَّتي تُعرَض وَحدَها. و<c>null</c>
+    /// دائِماً لِقيمَةٍ مَختومَة.</summary>
     public string? Plain { get; set; }
 
-    // ─── أَعمِدَةُ الظَرف — مُعلَنَةٌ مِن اليَومِ الأَوَّل ────────────
+    // ─── أَعمِدَةُ الظَرف — مُعلَنَةٌ مِن اليَومِ الأَوَّل، وتَملَؤُها الخِزانَة ──
     public string? Nonce { get; set; }
     public string? Cipher { get; set; }
     public string? Tag { get; set; }
     public int KekVersion { get; set; }
     public string? Aad { get; set; }
+
+    /// <summary>
+    /// <para><b>آخِرُ أَربَعَةِ مَحارِفَ مِن سِرٍّ مَختوم — لِلعَرضِ وَحدَه</b>
+    /// (‏ADR-032 الخُطوَة 4 تُسَمّيه؛ و«يُعرَضُ مِنه آخِرُ أَربَعَةِ مَحارِف» في جَدوَلِ
+    /// ‏ADR-012 §٢‑ب لِـ<c>secret_key</c>). يُكتَبُ عِندَ الخَتمِ بِقاعِدَةِ
+    /// <c>ProviderSecrecy.TailOf</c> نَفسِها الَّتي تُقَنِّعُ الصَريح، فَلا يَحتاجُ
+    /// العَرضُ فَكّاً. و<c>null</c> لِسِرٍّ لا ذَيلَ لَه أَو لِنَوعٍ لا يُعرَضُ مِنه شَيء.
+    /// <b>عَمودٌ سادِسٌ مُضاف</b> بِجِوارِ الخَمسَة، لا بَدَلٌ مِن أَحَدِها.</para>
+    /// </summary>
+    public string? Tail4 { get; set; }
+
+    /// <summary>أَمَختومَةٌ هذِه القيمَة؟ — مُشتَقٌّ لا يُخَزَّن.</summary>
+    [JsonIgnore]
+    public bool IsSealed => Cipher is not null;
 
     /// <summary>قيمَةٌ صَريحَةٌ مِن نَوعٍ يُعرَض — والنَوعُ يُفحَص
     /// بِالمَعجَمِ المُلزِمِ أَوَّلاً.</summary>
@@ -43,15 +59,39 @@ public sealed class StoredValue
 
         if (CredentialKinds.IsSecretLike(kind))
             throw new InvalidOperationException(
-                $"النَوع «{kind}» سِرٌّ، ولا خِزانَةَ في هذِه المَوجَة — " +
-                "فَلا يُخَزَّن صَريحاً. (‏ADR-012)");
+                $"النَوع «{kind}» سِرٌّ — لا يُخَزَّنُ صَريحاً أَبَداً؛ يُختَمُ " +
+                "بِـStoredValue.Sealed في الخِزانَة أَو لا يُخَزَّن. (‏ADR-012، ADR-032)");
 
         return new StoredValue { Kind = kind, Plain = value, KekVersion = 0 };
     }
 
-    /// <summary>الصورَةُ الَّتي يَجوز أَن تُعرَض.</summary>
+    /// <summary>
+    /// <para><b>قيمَةٌ مَختومَةٌ بِالخِزانَة</b> — تَملَأُ أَعمِدَةَ الظَرفِ
+    /// و<see cref="Tail4"/>، و<see cref="Plain"/> فارِغٌ أَبَداً. <c>aad</c> سِياقُ
+    /// القيمَةِ يَبنيه المُنادي (<c>ProviderVault.AadOf</c>)، ولا تُفَكُّ إلّا
+    /// بِه.</para>
+    /// <para>يَرمي لِنَوعٍ لا تَختِمُه الخِزانَة، ولِخِزانَةٍ غَيرِ مُتاحَة
+    /// (‏<c>vault_unavailable</c>) — <b>لا خَتمَ بِلا مِفتاح</b>.</para>
+    /// </summary>
+    public static StoredValue Sealed(ProviderVault vault, string kind, string clear, string aad)
+        => vault.Seal(kind, clear, aad);
+
+    /// <summary><b>النَصُّ الصَريحُ لِمَن يَطلُبُ بِه فِعلاً</b> — بِسِياقِه هُوَ
+    /// لا بِعَمودِ <c>Aad</c> المُخَزَّن. يَرمي <c>CryptographicException</c>
+    /// لِمِفتاحٍ آخَرَ أَو سِياقٍ آخَرَ أَو عَمودٍ مُعبَثٍ بِه، ولا يُعيدُ
+    /// شَيئاً حينَها.</summary>
+    public string Unseal(ProviderVault vault, string aad) => vault.Open(this, aad);
+
+    /// <summary>الصورَةُ الَّتي يَجوز أَن تُعرَض — ولِلمَختومَةِ ذَيلُها
+    /// المَحفوظُ أَو القِناعُ وَحدَه: لا نَصَّ صَريحاً بَينَ يَدَيها أَصلاً.</summary>
     [JsonIgnore]
-    public string Censored => ProviderSecrecy.Censor(Kind, Plain);
+    public string Censored => IsSealed
+        ? ProviderSecrecy.CensorSealed(Kind, Tail4)
+        : ProviderSecrecy.Censor(Kind, Plain);
+
+    /// <summary><b>وَجهٌ مُعَتَّم</b>: النَوعُ والصورَةُ المَعروضَة — فَلا يُفشي
+    /// لوغٌ أَو رِسالَةُ خَطَإٍ تُنادي <c>ToString</c> سِرّاً.</summary>
+    public override string ToString() => $"{Kind}:{Censored}";
 }
 
 /// <summary>
