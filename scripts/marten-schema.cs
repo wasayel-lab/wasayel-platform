@@ -31,7 +31,7 @@
 //
 // ─── الاستِعمال — والإجراءُ كامِلاً بِتَرتيبِه في `docs/DEPLOY.md` §٤‑د ─────
 //   export ConnectionStrings__Postgres="…"                        # ولا تُطبَع أَبَداً
-//   dotnet run scripts/marten-schema.cs -- --snapshot <مِلَفّ>     # لَقطَةٌ (pg_dump) قَبلَ أَيِّ فِعل
+//   dotnet run scripts/marten-schema.cs -- --snapshot <مِلَفّ>     # لَقطَةٌ (pg_dump) قَبلَ أَيِّ فِعل — خارِجَ المُستَودَع
 //   dotnet run scripts/marten-schema.cs                           # عَرضُ الفَرقِ فَقَط
 //   dotnet run scripts/marten-schema.cs -- --apply --confirm <N>  # تَطبيقُ ما عَرَضَه العَرض
 //   dotnet run scripts/marten-schema.cs -- --assert               # القاعِدَةُ تُطابِقُ الإعداد؟
@@ -41,11 +41,15 @@
 //   --snapshot <f>  ‏`pg_dump --format=custom` لِلقاعِدَةِ كُلِّها بِحُقولِ السِلسِلَةِ نَفسِها (كَلِمَةُ المُرورِ في
 //                   البيئَةِ لا في سَطرِ الأَمر)، ولا يَكتُبُ فَوقَ مِلَفٍّ قائِم، ويَعُدُّ جَداوِلَ اللَقطَةِ ويَفشَلُ عَلى
 //                   الصِفر. ويَحتاجُ `pg_dump` بِنُسخَةٍ لا تَقِلُّ عَن نُسخَةِ الخادِم.
+//                   (‏2026-10-12، مُراجَعَةُ تَيّارِ S10 — الجَولَة ١: **ويَرفُضُ مَساراً داخِلَ شَجَرَةِ عَمَلِ git** قَبلَ أَيِّ أَداة —
+//                   اللَقطَةُ نُسخَةُ الإنتاجِ بِبَياناتِ مُستَخدِميه، و`git add .` واحِدٌ يَرفَعُها إلى تاريخِ GitHub. و`*.dump`
+//                   في `.gitignore` حاجِزٌ ثانٍ.)
 //
 // ─── رُموزُ الخُروج ────────────────────────────────────────────────────
 //   0 — القاعِدَةُ تُطابِقُ الإعداد، أَو طُبِّقَ الفَرقُ وأُعيدَ قِياسُه صِفراً، أَو كُتِبَت اللَقطَةُ وعُدَّت.
 //   1 — خَطَأ: اتِّصالٌ أَو استِعلام، أَو `--confirm` لا يُطابِق، أَو فَرقٌ يَقتَضي حَذفاً، أَو بَقِيَ فَرقٌ
-//       بَعدَ التَطبيق، أَو صِفرُ كائِنٍ مُهَيَّأٍ أَو صِفرُ جَدوَلٍ في اللَقطَة (أَداةٌ عَمياء).
+//       بَعدَ التَطبيق، أَو صِفرُ كائِنٍ مُهَيَّأٍ أَو صِفرُ جَدوَلٍ في اللَقطَة (أَداةٌ عَمياء)، أَو مَسارُ لَقطَةٍ قائِمٌ أَو
+//       داخِلَ شَجَرَةِ عَمَلِ git (‏2026-10-12).
 //   2 — فَرقٌ قائِم (عَرضٌ أَو تَوكيد) — ولَم يُكتَب شَيء.
 //   3 — تَهيئَةٌ ناقِصَةٌ عِندَ المُشَغِّل: `ConnectionStrings__Postgres` غائِبٌ أَو لا يُقرَأ، أَو `pg_dump` غائِبَة.
 //
@@ -218,6 +222,18 @@ static async Task<int> SnapshotAsync(string cs, string[] hide, string suffix, st
     Console.WriteLine($"القاعِدَة:  ***.{suffix}  (بَصمَةُ المُضيف sha256:{hostFp})");
     Console.WriteLine("الوَضع:    لَقطَة (--snapshot) — قِراءَةٌ لا كِتابَةَ في القاعِدَة");
 
+    // ‏(‏2026-10-12، مُراجَعَةُ تَيّارِ S10 — الجَولَة ١) **لا تُكتَبُ داخِلَ شَجَرَةِ عَمَلِ git**: اللَقطَةُ نُسخَةٌ كامِلَةٌ مِن
+    // الإنتاجِ — هَواتِفُ المُستَخدِمينَ وبَريدُهُم وعَناوينُهُم وصَفَقاتُهُم — و§٤‑د كانَ يَكتُبُها في المُجَلَّدِ الحالِيّ (جَذرِ
+    // المُستَودَعِ ضِمناً) و`*.dump` غَيرُ مُتَجاهَل: `git add .` واحِدٌ أَو «stage all» في واجِهَةٍ يَرفَعُها إلى تاريخِ GitHub
+    // حَيثُ مَحوُها مُكلِف. فَيُرفَضُ قَبلَ أَيِّ أَداةٍ وأَيِّ كِتابَة، ويُقالُ أَينَ تُكتَب.
+    var full = Path.GetFullPath(file);
+    if (EnclosingWorkTree(full) is { } root)
+    {
+        Console.Error.WriteLine($"تَوَقُّف: {full} داخِلَ شَجَرَةِ عَمَلِ git ({root}) — اللَقطَةُ بَياناتُ إنتاجٍ شَخصِيَّة، ولا تُكتَبُ حَيثُ يَرفَعُها git add.");
+        Console.Error.WriteLine("  اكتُبها خارِجَها: mkdir -p \"$HOME/wasayel-snapshots\" ثُمَّ --snapshot \"$HOME/wasayel-snapshots/<الاسم>.dump\" (DEPLOY.md §٤‑د).");
+        return 1;
+    }
+
     if (File.Exists(file))
     {
         Console.Error.WriteLine($"تَوَقُّف: {file} قائِم — اللَقطَةُ لا تُكتَبُ فَوقَ أُخرى.");
@@ -306,6 +322,19 @@ static async Task<(int Code, string Out, string Err)?> RunAsync(
     {
         return null;   // ‏الأَداةُ غائِبَة — تَهيئَةٌ عِندَ المُشَغِّل لا خَطَأٌ في القاعِدَة.
     }
+}
+
+/// <summary>أَقرَبُ مُجَلَّدٍ فَوقَ المَسارِ يَحمِلُ <c>.git</c> — مُجَلَّداً، أَو مِلَفّاً في شَجَرَةٍ مُلحَقَة (worktree) — وإلّا <c>null</c>.
+/// اكتِشافُ git نَفسُه بِلا git: الصُعودُ مِن مُجَلَّدِ المِلَفِّ إلى الجَذر. وهُوَ أَوسَعُ مِنه لا أَضيَق (لا سَقفَ
+/// <c>GIT_CEILING_DIRECTORIES</c> ولا حُدودَ نِظامِ مِلَفّات)، فَالخَطَأُ في جِهَةِ الرَفضِ لا الكَشف.</summary>
+static string? EnclosingWorkTree(string fullPath)
+{
+    for (var dir = Path.GetDirectoryName(fullPath); !string.IsNullOrEmpty(dir); dir = Path.GetDirectoryName(dir))
+    {
+        var dotGit = Path.Combine(dir, ".git");
+        if (Directory.Exists(dotGit) || File.Exists(dotGit)) return dir;
+    }
+    return null;
 }
 
 static string Redact(string line, string[] hide) =>

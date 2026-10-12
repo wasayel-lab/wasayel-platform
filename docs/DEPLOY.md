@@ -2005,10 +2005,11 @@ git push --force "https://<user>:<HF_TOKEN>@huggingface.co/spaces/<owner>/<space
 `Program.cs`) ولا يَكتُبُ مُخَطَّطاً مِن عِندِه: `scripts/marten-schema.cs`.
 
 ```bash
-# ٠) لَقطَةٌ مِن الإنتاجِ قَبلَ أَيِّ شَيء — تُكتَبُ عِندَك ولا تُكتَبُ فَوقَ أُخرى
+# ٠) لَقطَةٌ مِن الإنتاجِ قَبلَ أَيِّ شَيء — تُكتَبُ عِندَك **خارِجَ المُستَودَع** ولا تُكتَبُ فَوقَ أُخرى
 #    (تَحتاجُ pg_dump بِنُسخَةٍ لا تَقِلُّ عَن نُسخَةِ الخادِم؛ وكَلِمَةُ المُرورِ في بيئَةِ pg_dump لا في سَطرِ الأَمر)
 export ConnectionStrings__Postgres="$(tr -d '\r\n' < /path/to/production-connection.txt)"
-dotnet run scripts/marten-schema.cs -- --snapshot "pre-deploy-$(git rev-parse --short HEAD).dump"
+mkdir -p "$HOME/wasayel-snapshots"
+dotnet run scripts/marten-schema.cs -- --snapshot "$HOME/wasayel-snapshots/pre-deploy-$(git rev-parse --short HEAD).dump"
 
 # ١) فَرعُ Neon مَنسوخٌ مِن الإنتاجِ الآن (فِعلُ المالِكِ في لَوحَةِ Neon)، وعَلَيه بِالتَرتيب:
 export ConnectionStrings__Postgres="$(tr -d '\r\n' < /path/to/branch-connection.txt)"
@@ -2024,6 +2025,16 @@ dotnet run scripts/marten-schema.cs -- --apply --confirm N
 dotnet run scripts/marten-schema.cs -- --assert
 # ثُمَّ الدَمجُ إلى main، والنَشرُ يَتبَعُه (§٢-٥)
 ```
+
+**تَصحيحُ الخُطوَةِ ٠ — ‏2026-10-12 (مُراجَعَةُ تَيّارِ S10، الجَولَة ١)، ولا يُعادُ حَرفٌ فَوقَ ما سِواها**: كانَت
+`--snapshot "pre-deploy-$(git rev-parse --short HEAD).dump"` — **مَسارٌ نِسبِيٌّ يَكتُبُ اللَقطَةَ في المُجَلَّدِ الحالِيّ**، وهُوَ
+جَذرُ المُستَودَعِ في كُلِّ أَمرٍ هُنا؛ واللَقطَةُ نُسخَةٌ كامِلَةٌ مِن الإنتاجِ — هَواتِفُ المُستَخدِمينَ وبَريدُهُم وعَناوينُهُم
+وصَفَقاتُهُم — و`*.dump` لَم يَكُن مُتَجاهَلاً (مَقيس: `git check-ignore -v pre-deploy-abc1234.dump` ⇒ ‏1)، فَـ`git add .`
+واحِدٌ أَو «stage all» في واجِهَةٍ يَرفَعُها إلى تاريخِ GitHub حَيثُ مَحوُها مُكلِف. **فَصارَت ثَلاثَةَ حَواجِز**: الخُطوَةُ تَكتُبُ
+في `$HOME/wasayel-snapshots/`، و**الفِعلُ يَرفُضُ أَيَّ مَسارٍ داخِلَ شَجَرَةِ عَمَلِ git** (‏`1`، قَبلَ أَيِّ أَداة — يَصعَدُ مِن
+مُجَلَّدِ المِلَفِّ بَحثاً عَن `.git`)، و`*.dump` في `.gitignore`. وإن كانَ `$HOME` نَفسُه في مُستَودَع (مِلَفّاتُ إعدادٍ
+مُتَتَبَّعَة) رَفَضَه الفِعلُ بِاسمِ جَذرِه — فَاختَر مُجَلَّداً آخَر. و`MartenSchemaVerbTests` يَحمَرُّ إن عادَ مَسارٌ نِسبِيٌّ هُنا،
+أَو سَقَطَ الرَفضُ أَو تَأَخَّرَ عَن أَوَّلِ أَداة، أَو خَرَجَ `*.dump` مِن `.gitignore` بِقِياسِ `git check-ignore` نَفسِه.
 
 **ورُموزُه**: ‏`0` مُطابِقَةٌ أَو طُبِّقَ وأُعيدَ قِياسُه صِفراً أَو كُتِبَت اللَقطَةُ وعُدَّت · ‏`1` خَطَأٌ أَو `--confirm` لا
 يُطابِقُ أَو فَرقٌ يَقتَضي حَذفاً أَو صِفرُ كائِنٍ أَو صِفرُ جَدوَلٍ في اللَقطَة · ‏`2` فَرقٌ قائِمٌ بِلا كِتابَة · ‏`3`

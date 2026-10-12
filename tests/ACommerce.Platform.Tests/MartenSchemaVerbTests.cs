@@ -245,4 +245,97 @@ public class MartenSchemaVerbTests
                      || line.Contains("(«والإنتاجُ لا يُنشِئ مُخَطَّطاً»)", StringComparison.Ordinal),
                 $"الدَعوى المَنقوضَةُ باقِيَةٌ غَيرَ مَشطوبَة: {line.Trim()}");
     }
+
+    // ─── اللَقطَةُ خارِجَ شَجَرَةِ العَمَل (‏2026-10-12، مُراجَعَةُ تَيّارِ S10 — الجَولَة ١) ─────────────────────────────
+    //
+    // **المَقيسُ قَبل**: §٤‑د كَتَبَ اللَقطَةَ بِمَسارٍ نِسبِيٍّ (`"pre-deploy-$(git rev-parse --short HEAD).dump"`) — جَذرَ
+    // المُستَودَعِ في كُلِّ أَمرٍ هُناك — و`SnapshotAsync` لا تَرفُضُ إلّا مِلَفّاً قائِماً، و`git check-ignore -v
+    // pre-deploy-abc1234.dump` ⇒ ‏1 (غَيرُ مُتَجاهَل). واللَقطَةُ نُسخَةُ الإنتاجِ بِهَواتِفِ مُستَخدِميه وبَريدِهِم وصَفَقاتِهِم:
+    // `git add .` واحِدٌ يَرفَعُها إلى تاريخِ GitHub. فَثَلاثَةُ حَواجِزَ لِكُلٍّ صَفُّه: الفِعلُ يَرفُضُ قَبلَ أَيِّ أَداة، و`.gitignore`
+    // بِقِياسِ git نَفسِه، و§٤‑د يَكتُبُ في `$HOME/wasayel-snapshots/`.
+
+    private static string SnapshotFunction()
+    {
+        var code = VerbCode();
+        var start = code.IndexOf("static async Task<int> SnapshotAsync(", StringComparison.Ordinal);
+        Assert.True(start > 0, "SnapshotAsync غائِبَةٌ عَن الفِعل.");
+        var end = code.IndexOf("\nstatic ", start + 10, StringComparison.Ordinal);
+        Assert.True(end > start, "نِهايَةُ SnapshotAsync غائِبَة.");
+        return code[start..end];
+    }
+
+    /// <summary><b>الفِعلُ يَرفُضُ مَساراً داخِلَ شَجَرَةِ عَمَلِ git قَبلَ أَيِّ أَداةٍ وأَيِّ كِتابَة</b> — الرَفضُ أَوَّلُ ما في
+    /// <c>SnapshotAsync</c> بَعدَ سَطرَيِ الهُوِيَّة، قَبلَ «قائِم؟» وقَبلَ <c>pg_dump --version</c>، ويَخرُجُ 1؛ والصُعودُ يَعرِفُ
+    /// <c>.git</c> مُجَلَّداً ومِلَفّاً (شَجَرَةٌ مُلحَقَة).</summary>
+    [Fact]
+    public void TheSnapshot_RefusesAPathInsideAGitWorkTree_BeforeAnyToolOrWrite()
+    {
+        var snap = SnapshotFunction();
+        var full = snap.IndexOf("var full = Path.GetFullPath(file);", StringComparison.Ordinal);
+        var refuse = snap.IndexOf("if (EnclosingWorkTree(full) is { } root)", StringComparison.Ordinal);
+        var exists = snap.IndexOf("if (File.Exists(file))", StringComparison.Ordinal);
+        var tool = snap.IndexOf("RunAsync(\"pg_dump\"", StringComparison.Ordinal);
+        Assert.True(full > 0 && refuse > full && exists > refuse && tool > exists,
+            $"تَرتيبُ اللَقطَة: المَسار {full} · الرَفض {refuse} · «قائِم؟» {exists} · الأَداة {tool} — الرَفضُ قَبلَ أَيِّ أَداة.");
+        Assert.Contains("return 1;", snap[refuse..exists], StringComparison.Ordinal);
+        Assert.Contains("$HOME/wasayel-snapshots", snap[refuse..exists], StringComparison.Ordinal);
+
+        var code = VerbCode();
+        var walk = code[code.IndexOf("static string? EnclosingWorkTree(string fullPath)", StringComparison.Ordinal)..];
+        walk = walk[..walk.IndexOf("\n}", StringComparison.Ordinal)];
+        Assert.Contains("dir = Path.GetDirectoryName(dir)", walk, StringComparison.Ordinal);
+        Assert.Contains("Path.Combine(dir, \".git\")", walk, StringComparison.Ordinal);
+        Assert.Contains("Directory.Exists(dotGit) || File.Exists(dotGit)", walk, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>و<c>*.dump</c> مُتَجاهَلٌ بِقِياسِ git نَفسِه</b> — <c>git check-ignore</c> مُشَغَّلاً في جَذرِ المُستَودَع: اسمُ
+    /// §٤‑د القَديمُ وأَيُّ لَقطَةٍ في أَيِّ مُجَلَّدٍ ⇒ مُتَجاهَل (0)، واسمٌ آخَرُ ⇒ غَيرُ مُتَجاهَل (1) — فَالأَداةُ تُمَيِّز.</summary>
+    [Theory]
+    [InlineData("pre-deploy-abc1234.dump", 0)]
+    [InlineData("scripts/pre-deploy-abc1234.dump", 0)]
+    [InlineData("docs/any/depth/production.dump", 0)]
+    [InlineData("pre-deploy-abc1234.txt", 1)]
+    public void GitIgnore_KeepsSnapshotsOut_MeasuredByGitItself(string path, int expected)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo("git")
+        {
+            WorkingDirectory = RepoRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        foreach (var a in new[] { "check-ignore", "-q", "--no-index", "--", path }) psi.ArgumentList.Add(a);
+
+        System.Diagnostics.Process p;
+        try { p = System.Diagnostics.Process.Start(psi)!; }
+        catch (System.ComponentModel.Win32Exception) { Assert.Fail("أَداةٌ غائِبَة: git — لا يُقاسُ .gitignore بِدونِها."); return; }
+        using (p)
+        {
+            var err = p.StandardError.ReadToEnd();
+            Assert.True(p.WaitForExit(15_000), "git check-ignore لَم يَنتَهِ في خَمسَ عَشرَةَ ثانِيَة.");
+            Assert.True(p.ExitCode is 0 or 1, $"git check-ignore خَرَجَ {p.ExitCode}: {err.Trim()} — لَيسَ شَجَرَةَ عَمَلٍ أَو الأَداةُ مُعَطَّلَة.");
+            Assert.Equal(expected, p.ExitCode);
+        }
+    }
+
+    /// <summary><b>و§٤‑د يَكتُبُ اللَقطَةَ خارِجَ المُستَودَع</b>: كُلُّ <c>--snapshot</c> في كُتَلِ الأَوامِرِ بِمَسارٍ تَحتَ
+    /// <c>$HOME/wasayel-snapshots/</c>، ويَسبِقُه <c>mkdir -p</c> لَه — والمَسارُ النِسبِيُّ القَديمُ لا يَرِدُ إلّا مُقتَبَساً في التَصحيح.</summary>
+    [Fact]
+    public void DeployDoc_SnapshotStep_WritesOutsideTheWorkTree()
+    {
+        var doc = Read("docs", "DEPLOY.md");
+        var start = doc.IndexOf("#### المُخَطَّطُ قَبلَ النَشر", StringComparison.Ordinal);
+        var end = doc.IndexOf("## ٥.", start, StringComparison.Ordinal);
+        Assert.True(start > 0 && end > start, "§٤‑د بِلا فِقرَةِ المُخَطَّط.");
+        var blocks = Regex.Matches(doc[start..end], "```bash\n(?<body>.*?)```", RegexOptions.Singleline)
+            .Select(m => m.Groups["body"].Value).ToArray();
+        Assert.NotEmpty(blocks);
+        var code = string.Join('\n', blocks);
+
+        var snaps = Regex.Matches(code, @"--snapshot\s+""(?<path>[^""]+)""").Select(m => m.Groups["path"].Value).ToArray();
+        Assert.NotEmpty(snaps);
+        Assert.All(snaps, s => Assert.StartsWith("$HOME/wasayel-snapshots/", s, StringComparison.Ordinal));
+        var mkdir = code.IndexOf("mkdir -p \"$HOME/wasayel-snapshots\"", StringComparison.Ordinal);
+        Assert.True(mkdir >= 0 && mkdir < code.IndexOf("--snapshot", StringComparison.Ordinal), "mkdir -p لا يَسبِقُ أَوَّلَ --snapshot.");
+    }
 }
