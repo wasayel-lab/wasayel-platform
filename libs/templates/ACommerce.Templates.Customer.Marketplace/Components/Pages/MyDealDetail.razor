@@ -2,6 +2,7 @@
 @page "/{slug}/r/{role}/deals/{id:guid}"
 @inject AuthSession Auth
 @inject Services.Deals.DealsService Deals
+@inject Services.Deals.DealShipping Shipping
 @inject ACommerce.Kit.Reviews.ReviewsService Reviews
 @inject IHttpContextAccessor HttpCtx
 @inject L L
@@ -242,10 +243,57 @@
             </ChildContent>
         </AcCard>
 
+        @* ─── الشَحن — البوليصَةُ ورابِطُ التَتَبُّعِ لِلطَرَفَين (‏ADR-033 الخُطوَة 3) ───
+           العَينُ الَّتي تُخرِجُها نُقطَةُ الشَحن (القاعِدَة ١٧): بوليصَةٌ يَطبَعُها البائِعُ ويَتَتَبَّعُ بِها المُشتَري طَلَبَه.
+           والرابِطانِ مِن `DealShipping.LinksOf` — الدالَّةِ الَّتي يَقرَأُ بِها الشَحنُ والوارِدُ ما كَتَبا — `https` وَحدَه، ولا
+           تُرسَمُ الكُتلَةُ بِلا أَحَدِهِما؛ والصَفقَةُ مِن الخِدمَةِ لا مِن جَلسَة (الطَبَقَةُ ٨). *@
+        @if (labelUrl is not null || trackingUrl is not null)
+        {
+            <AcCard>
+                <ChildContent>
+                    <strong style="display:block;margin-bottom:6px;font-size:13px;">@L.Markup("deals.detail.shipping_title")</strong>
+                    @if (labelUrl is not null)
+                    {
+                        <a class="ac-btn ac-btn-ghost ac-btn-sm ac-btn-block" href="@labelUrl" target="_blank" rel="noopener noreferrer">
+                            <AcIcon Name="file" Size="14" /> @L.Markup("deals.detail.shipping_label")
+                        </a>
+                    }
+                    @if (trackingUrl is not null)
+                    {
+                        <a class="ac-btn ac-btn-ghost ac-btn-sm ac-btn-block" href="@trackingUrl" target="_blank" rel="noopener noreferrer" style="margin-top:6px;">
+                            <AcIcon Name="truck" Size="14" /> @L.Markup("deals.detail.shipping_tracking")
+                        </a>
+                    }
+                </ChildContent>
+            </AcCard>
+        }
+
         @* إجراءات بِوَعي الدَّور *@
         <div id="deal-action"></div>
         @if (deal.Status == DealStatus.Active)
         {
+            @* ─── إنشاءُ البوليصَة — لِمَن تَقبَلُه نُقطَةُ الشَحنِ وَحدَه (‏ADR-033 الخُطوَة 3؛ القاعِدَة ١٢) ───
+               `DealShipAuthorization.IsAllowed` نَفسُها الَّتي تُطَبِّقُها `/ship` بِسِجِلِّ السُلطَةِ نَفسِه ورَمزِ ناقِلٍ يُحَلّ —
+               فَبِلا رَمزٍ لا تُرسَمُ أَصلاً. ومَدينَةُ المُستَلِمِ يَكتُبُها البائِع (`city` إلزامِيٌّ عِندَ OTO والبابُ لا يَسأَلُ عَنها)،
+               وطَلَبٌ أُنشِئَ في مُحاوَلَةٍ سابِقَةٍ يُستَأنَفُ بِلا مَدينَة (`DealShipping.IsPlaced`). وزِرُّ «تَأكيد: شَحن» أَدناه باقٍ
+               بِلا تَغيير — شَحنٌ بِغَيرِ OTO، أَو حينَ تَرُدُّ OTO الطَلَب. *@
+            @if (canShip)
+            {
+                <form method="post" action="@($"/{Slug}/deals/{deal.Id}/ship")" style="margin-bottom:8px;">
+                    @if (!shipResumes)
+                    {
+                        <AcField Label="@L["deals.detail.ship_city"]">
+                            <input name="city" class="ac-input" required />
+                        </AcField>
+                    }
+                    <AcButton Type="submit" Variant="primary" Size="lg" Block="true"
+                              Text="@(shipResumes ? L["deals.detail.ship_resume"] : L["deals.detail.ship_submit"])" />
+                    <span style="display:block;margin-top:6px;font-size:12px;color:var(--ac-text-muted);line-height:1.7;">
+                        @L.Markup("deals.detail.ship_hint")
+                    </span>
+                </form>
+            }
+
             @* مالِك الإعلان يَقبَل العَرض (الصَّفقَة في Offered وأَنا المالِك ولَستُ المُبادِر) *@
             @if (deal.Stage == DealStage.Offered && isListingOwner && !isInitiator)
             {
@@ -352,6 +400,12 @@
     /// <summary>الناظِرُ يُلغي هذِه الصَفقَة — <see cref="DealCancelAuthorization.IsAllowed"/> نَفسُها الَّتي تُطَبِّقُها <c>/cancel</c>
     /// بِسِجِلِّ السُلطَةِ نَفسِه (<c>IsStoreAdmin: false</c>)، فَلا تُرسَمُ استِمارَةٌ تَرُدُّها النُقطَة (‏2026-10-12).</summary>
     bool canCancel;
+    /// <summary>الناظِرُ يُنشِئُ بوليصَةَ هذِه الصَفقَة — <see cref="DealShipAuthorization.IsAllowed"/> نَفسُها الَّتي تُطَبِّقُها
+    /// <c>/ship</c>، بِرَمزِ ناقِلٍ يُحَلُّ لِهذا المَتجَر (<see cref="DealShipping.CarrierReady"/>) — وبِلا رَمزٍ لا تُرسَم (القاعِدَة ١٢).
+    /// و<c>shipResumes</c>: لِلصَفقَةِ طَلَبٌ عِندَ OTO مِن مُحاوَلَةٍ سابِقَة، فَالاستِمارَةُ بِلا مَدينَة.</summary>
+    bool canShip, shipResumes;
+    /// <summary>رابِطا البوليصَةِ والتَتَبُّعِ لِلطَرَفَين — <see cref="DealShipping.LinksOf"/>: <c>https</c> وَحدَه، و<c>null</c> لِما غاب.</summary>
+    string? labelUrl, trackingUrl;
     DealStage? nextStage;
     /// <summary>بَياناتُ التَوصيلِ تُرسَمُ لِمَن يُسَلِّمُ وَحدَه — الطَرَفُ المُقابِلُ
     /// أَو مالِكُ الإعلانِ، ولَيسَ المُشتَري (P1-4) — <b>وبِحُضورِ عُنوانٍ أَو هاتِف</b>
@@ -420,6 +474,11 @@
         alreadyReviewed = await Reviews.HasReviewedAsync(Slug, uid, Id);
         canReview = DealReviewAuthorization.IsAllowed(deal, new DealReviewer(uid, Auth.UserName ?? ""));
         canCancel = DealCancelAuthorization.IsAllowed(deal, new DealCanceller(uid, Auth.UserName ?? "", IsStoreAdmin: false));
+        // البوليصَة (‏ADR-033 الخُطوَة 3): رابِطاها لِلطَرَفَين بِالدالَّةِ الَّتي يَقرَأُ بِها الشَحنُ والوارِد، واستِمارَتُها بِالبَوّابَةِ
+        // الَّتي تُطَبِّقُها النُقطَة — فَما يُرسَمُ هُوَ ما يُقبَل.
+        (labelUrl, trackingUrl) = DealShipping.LinksOf(deal);
+        canShip = DealShipAuthorization.IsAllowed(deal, new DealShipper(uid, Auth.UserName ?? ""), Shipping.CarrierReady(Slug));
+        shipResumes = canShip && DealShipping.IsPlaced(deal);
     }
 
     // ‏لَيسَت `static` بَعدَ اليَوم: قيَمُها صارَت مِن `L` وهو مَحقونٌ

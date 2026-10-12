@@ -579,6 +579,118 @@ public class DealShipTests
         Assert.True(DealsService.CanMove(With(d => d.Stage = DealStage.Booked), Buyer));          // `Confirmed` = أَيُّهُما
     }
 
+    // ═══ ٧. الصَفحَة — ما يُرسَمُ هُوَ ما يُقبَل، وبِلا ناقِلٍ لا استِمارَة (القاعِدَة ١٢) ═══════════════
+
+    private static string DealPage()
+    {
+        var path = Path.Combine(RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace",
+            "Components", "Pages", "MyDealDetail.razor");
+        var text = File.ReadAllText(path);
+        Assert.True(text.Length > 1000, "أَداةٌ عَمياء: `MyDealDetail.razor` لَم يُقرَأ.");
+        return text;
+    }
+
+    /// <summary>البَوّابَةُ بِلا ناقِلٍ لا تُجيزُ صَفقَةً واحِدَةً لِفاعِلٍ واحِد — عَلى شَبَكَةٍ تَعُدُّ ما فَحَصَت (القاعِدَة ١٠).
+    /// والصَفحَةُ تَرسُمُ الاستِمارَةَ بِالبَوّابَةِ نَفسِها، فَهذا هُوَ «لا رَمزَ ⇒ لا زِرّ».</summary>
+    [Fact]
+    public void Without_a_carrier_no_deal_and_no_actor_is_ever_offered_the_ship_form()
+    {
+        var checkedCases = 0;
+        var allowedWithCarrier = 0;
+        foreach (var stage in Enum.GetValues<DealStage>())
+        foreach (var status in Enum.GetValues<DealStatus>())
+        foreach (var pay in new[] { CheckoutPayMethods.CashOnDelivery, CheckoutPayMethods.Card, null })
+        foreach (var placed in new[] { false, true })
+        foreach (var actor in new[] { Seller, Buyer, Stranger })
+        {
+            var deal = With(d =>
+            {
+                d.Stage = stage;
+                d.Status = status;
+                if (pay is null) d.Attributes.Remove(CheckoutPayMethods.AttributeKey);
+                else d.Attributes[CheckoutPayMethods.AttributeKey] = pay;
+                if (placed) d.Refs[DealShipping.OrderRef] = d.Id.ToString("N");
+            });
+            var by = new DealShipper(actor, "");
+            Assert.False(DealShipAuthorization.IsAllowed(deal, by, carrierReady: false));
+            if (DealShipAuthorization.IsAllowed(deal, by, carrierReady: true)) allowedWithCarrier++;
+            checkedCases++;
+        }
+        Assert.True(checkedCases >= 500, $"أَداةٌ عَمياء: {checkedCases} حالَة (‏8 مَراحِلَ × 4 حالاتٍ × 3 طُرُقِ دَفعٍ × 2 × 3 فاعِلين = 576).");
+        // ومَعَ الناقِل: البائِعُ وَحدَه، لِصَفقَةِ نَقدٍ فَعّالَةٍ عِندَ Confirmed أَو Paid، بِطَلَبٍ وبِلا طَلَب = 4.
+        Assert.Equal(4, allowedWithCarrier);
+    }
+
+    [Fact]
+    public void The_deal_page_draws_the_ship_form_with_the_endpoints_own_gate_and_reads_no_session()
+    {
+        var page = DealPage();
+        var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(page));
+        Assert.Contains("@inject Services.Deals.DealShipping Shipping", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("IDocumentSession", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("IDocumentStore", code, StringComparison.Ordinal);
+        Assert.Contains(
+            "canShip = DealShipAuthorization.IsAllowed(deal, new DealShipper(uid, Auth.UserName ?? \"\"), Shipping.CarrierReady(Slug));",
+            code, StringComparison.Ordinal);
+        Assert.Contains("shipResumes = canShip && DealShipping.IsPlaced(deal);", code, StringComparison.Ordinal);
+
+        // الاستِمارَةُ داخِلَ `@if (canShip)` وَحدَها، وحَقلُ المَدينَةِ داخِلَ `@if (!shipResumes)`.
+        var gate = code.IndexOf("@if (canShip)", StringComparison.Ordinal);
+        var form = code.IndexOf("action=\"@($\"/{Slug}/deals/{deal.Id}/ship\")\"", StringComparison.Ordinal);
+        var city = code.IndexOf("<input name=\"city\"", StringComparison.Ordinal);
+        var cityGate = code.IndexOf("@if (!shipResumes)", StringComparison.Ordinal);
+        Assert.True(gate > 0 && form > gate && cityGate > form && city > cityGate,
+            $"تَرتيبُ الحارِس: canShip={gate} form={form} !shipResumes={cityGate} city={city}");
+        Assert.Equal(1, CountOf(code, "/deals/{deal.Id}/ship\""));
+    }
+
+    [Fact]
+    public void The_label_and_tracking_links_are_drawn_for_both_parties_from_the_shared_function_in_a_new_tab()
+    {
+        var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(DealPage()));
+        // بَعدَ سَطرِ الإلغاءِ غَيرِ المَشروطِ لا داخِلَ فَرعِ البائِع — فَلِلطَرَفَين.
+        var links = code.IndexOf("(labelUrl, trackingUrl) = DealShipping.LinksOf(deal);", StringComparison.Ordinal);
+        var cancel = code.IndexOf("canCancel = DealCancelAuthorization.IsAllowed(", StringComparison.Ordinal);
+        Assert.True(cancel > 0 && links > cancel, $"الرابِطانِ لا يُحسَبانِ لِلطَرَفَين: {cancel}/{links}");
+
+        var block = code.IndexOf("@if (labelUrl is not null || trackingUrl is not null)", StringComparison.Ordinal);
+        var action = code.IndexOf("<div id=\"deal-action\"></div>", StringComparison.Ordinal);
+        Assert.True(block > 0 && action > block, $"كُتلَةُ الرابِطَين: {block}/{action}");
+        Assert.Equal(2, CountOf(code, "target=\"_blank\" rel=\"noopener noreferrer\""));
+        Assert.Contains("href=\"@labelUrl\"", code, StringComparison.Ordinal);
+        Assert.Contains("href=\"@trackingUrl\"", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Every_new_page_text_is_a_dictionary_key_with_arabic_text()
+    {
+        var page = DealPage();
+        var ar = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepoRoot, "libs", "core", "ACommerce.Platform.I18n",
+            "Locales", "ar.json"))).RootElement;
+        var checkedKeys = 0;
+        foreach (var key in new[]
+                 {
+                     "deals.detail.shipping_title", "deals.detail.shipping_label", "deals.detail.shipping_tracking",
+                     "deals.detail.ship_city", "deals.detail.ship_submit", "deals.detail.ship_resume", "deals.detail.ship_hint",
+                 })
+        {
+            Assert.Contains($"\"{key}\"", page, StringComparison.Ordinal);
+            var text = ar.GetProperty(key).GetString()!;
+            Assert.Matches("[\u0600-\u06FF]", text);
+            Assert.DoesNotContain("<", text, StringComparison.Ordinal);
+            checkedKeys++;
+        }
+        Assert.Equal(7, checkedKeys);
+    }
+
+    private static int CountOf(string text, string needle)
+    {
+        var n = 0;
+        for (var i = text.IndexOf(needle, StringComparison.Ordinal); i >= 0; i = text.IndexOf(needle, i + needle.Length, StringComparison.Ordinal))
+            n++;
+        return n;
+    }
+
     // ═══ ٦. النُقطَة — مَسارٌ حَرفِيّ، والحارِسُ في التَوقيع ═══════════════════════════
 
     [Fact]
