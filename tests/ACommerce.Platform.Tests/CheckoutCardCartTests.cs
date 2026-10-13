@@ -23,7 +23,7 @@ namespace ACommerce.Platform.Tests;
 // **قُلِبَ** (‏2026-10-13، كوميتُ «fix(payments)» بَعدَ ‏a135d25): `CheckoutCardFacts.ForCart` تَحسُبُ مِن السَلَّةِ رَمزَ ما يَمنَعُها — `pay_card_cart_too_many`
 // أَو `pay_card_amount_unbillable` — لِطَريقِ البَوّابَةِ وَحدَه، و`ChargerCanCharge` تَسأَلُه فَتَرُدُّ `Decide` القائِمَةُ البِطاقَة؛ والطَرَفانِ
 // يُمَرِّرانِ السَلَّةَ إلى `CardFactsAsync` نَفسِها؛ والنُقطَةُ تَرُدُّ بِرَمزِ السَلَّة (`card.CartRefusal ?? payRefusal`). فَلا تُرسَمُ البِطاقَةُ ويُقالُ لِماذا،
-// ولا تولَدُ صَفقَةٌ لِإرسالٍ مَصنوع.
+// ولا تولَدُ صَفقَةٌ لِإرسالٍ مَصنوع. (‏2026-10-13، G5 (xvii-g): والقارِئانِ يَقرَآنِ `GatewayRefusal` — النَمَطُ ثُمَّ السَلَّة — فَتَحَرَّكَت حُروفُ صَفِّ البابَين.)
 
 public class CheckoutCardCartTests(ITestOutputHelper output)
 {
@@ -105,17 +105,17 @@ public class CheckoutCardCartTests(ITestOutputHelper output)
         string Code(params string[] parts) => WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(
             Path.Combine(new[] { ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace" }.Concat(parts).ToArray()))));
         var host = Code("MarketplaceTemplateExtensions.cs");
-        Assert.Contains("ACommerce.Kit.Payments.PaymentChargeSurface.CanCharge(payments), cart);", host, StringComparison.Ordinal);
-        Assert.Contains(".RefusalPath(card.CartRefusal ?? payRefusal, name, phone, addr)));", host, StringComparison.Ordinal);
+        Assert.Contains("ACommerce.Kit.Payments.PaymentChargeSurface.CanCharge(payments), cart, pattern);", host, StringComparison.Ordinal);
+        Assert.Contains(".RefusalPath(card.GatewayRefusal ?? payRefusal, name, phone, addr)));", host, StringComparison.Ordinal);
         var cartLoad = host.IndexOf("var cart = await s.LoadAsync<ACommerce.Kit.Cart.Cart>(userId);", StringComparison.Ordinal);
         var facts = host.IndexOf("var card = await gateway.CardFactsAsync(slug,", StringComparison.Ordinal);
         var birth = host.IndexOf("var deal = await deals.StartAsync(slug, pattern,", StringComparison.Ordinal);
         Assert.True(cartLoad > 0 && facts > cartLoad && birth > facts, $"cart={cartLoad} facts={facts} birth={birth}");
 
         var page = Code("Components", "Pages", "CheckoutPage.razor");
-        Assert.Contains("PaymentChargeSurface.CanCharge(Payments), cart);", page, StringComparison.Ordinal);
-        Assert.Contains("else if (CartRefusalText(Facts.CartRefusal) is { } why)", page, StringComparison.Ordinal);
-        Assert.Contains("CheckoutPayMethods.CardCartTooMany or CheckoutPayMethods.CardAmountUnbillable => CartRefusalText(Err),", page, StringComparison.Ordinal);
+        Assert.Contains("PaymentChargeSurface.CanCharge(Payments), cart,", page, StringComparison.Ordinal);
+        Assert.Contains("else if (GatewayRefusalText(Facts.GatewayRefusal) is { } why)", page, StringComparison.Ordinal);
+        Assert.Contains("CheckoutPayMethods.CardCartTooMany or CheckoutPayMethods.CardAmountUnbillable or CheckoutPayMethods.CardPatternUnpaid => GatewayRefusalText(Err),", page, StringComparison.Ordinal);
 
         var many = LocaleCatalog.Text(LocaleCatalog.Arabic, "checkout.payment.err_card_cart_too_many");
         var amount = LocaleCatalog.Text(LocaleCatalog.Arabic, "checkout.payment.err_card_amount_unbillable");

@@ -17,6 +17,9 @@ namespace ACommerce.Platform.Tests;
 // أَبَداً، فَتُسَلَّمُ وتُقَيَّمُ وفاتورَتُها لَم تُدفَع.
 //
 // **ما يُقلَبُ بِاسمِه في كوميتِ الإصلاح**: صَفُّ «Today_» أَدناه. وصَفُّ النَمَطِ مِن الدَورِ ثابِتٌ بِحَرفِه.
+//
+// **قُلِبَ** (‏2026-10-13، كوميتُ «fix(payments)» بَعدَ ‏0473a70): `CheckoutCardFacts.ForPattern` تَرُدُّ بِطاقَةَ البَوّابَةِ بِـ`pay_card_pattern_unpaid`
+// لِنَمَطٍ بِلا «دَفع»، والطَرَفانِ يُمَرِّرانِ `PatternFromTenant` إلى `CardFactsAsync` — فَلا تولَدُ صَفقَةُ بِطاقَةٍ عَلى فاتورَةٍ في مَتجَرِ «trip».
 
 public class GatewayPatternWithoutPaidTests(ITestOutputHelper output)
 {
@@ -36,32 +39,76 @@ public class GatewayPatternWithoutPaidTests(ITestOutputHelper output)
         output.WriteLine($"trip: {string.Join(" → ", DealPatternCatalog.For("trip").StageOrder)}");
     }
 
-    [Fact]
-    public async Task Today_a_gateway_card_deal_in_the_trip_pattern_is_delivered_and_reviewed_with_its_invoice_unpaid()
+    /// <summary><b>قُلِبَ</b> (‏2026-10-13) — كانَ <c>Today_a_gateway_card_deal_in_the_trip_pattern_is_delivered_and_reviewed_with_its_invoice_unpaid</c>
+    /// (‏<c>0473a70</c>): بِطاقَةُ البَوّابَةِ لا تُعرَضُ لِنَمَطٍ بِلا «دَفع»، وطَلَبُها يُرَدُّ نَقداً بِرَمزِه — قَبلَ أَن تولَدَ صَفقَة.</summary>
+    [Theory]
+    [InlineData("trip")]
+    [InlineData("classifieds")]
+    [InlineData("default")]
+    public void A_gateway_card_is_refused_for_a_pattern_without_a_Paid_stage(string pattern)
     {
-        Assert.True(Gateway.CardOffered);   // ← البِطاقَةُ لا تَسأَلُ النَمَط
+        var f = Gateway.ForPattern(pattern);
+        var decided = CheckoutPaymentPolicy.Decide("card", f.Collects, f.ChargerCanCharge);
+        output.WriteLine($"{pattern} ⇒ البِطاقَة: {f.CardOffered} · الرَمز: {f.GatewayRefusal} · Decide: {decided}");
+        Assert.False(f.CardOffered);
+        Assert.Equal(CheckoutPayMethods.CardPatternUnpaid, f.PatternRefusal);
+        Assert.Equal(CheckoutPayMethods.CardPatternUnpaid, f.GatewayRefusal);
+        Assert.Equal(CheckoutPayMethods.CashOnDelivery, decided.Method);
+        Assert.Equal((CheckoutPayMethods.CashOnDelivery, (string?)null), CheckoutPaymentPolicy.Decide("cash", f.Collects, f.ChargerCanCharge));
+    }
 
-        var w = await PaidCart(withSeller: true, invoice: true, bornForGateway: true);
-        var deal = await w.Deals.StartAsync(Slug, "trip", Buyer, "مُشتَرٍ", null, "رِحلَة", 100m,
-            GatewayPayments.MarkedAtBirth(new() { [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.Card }, viaGateway: true));
-        await w.Deals.AttachRefAsync(Slug, deal.Id, GatewayPaymentProof.InvoiceRef, InvoiceId);
-        await w.Deals.AttachRefAsync(Slug, deal.Id, DealsService.ListingOwnerRef, Seller.ToString());
-        await w.Deals.BindListingOwnerAsync(Slug, deal.Id, Seller.ToString());
-
-        var walked = new List<string>();
-        foreach (var (actor, name) in new[] { (Seller, "بائِع"), (Buyer, "مُشتَرٍ"), (Seller, "بائِع"), (Buyer, "مُشتَرٍ") })
+    /// <summary>المُوجِب: نَمَطٌ بِـ«دَفع» — والنَمَطُ يَغلِبُ السَلَّةَ في الرَمز (مَتجَرٌ بِلا «دَفع» يَرُدُّ كُلَّ سَلَّة)، ونَمَطٌ غائِبٌ لا يُسأَل، وبِلا بَوّابَةٍ لا يُسأَلُ النَمَط.</summary>
+    [Fact]
+    public void A_pattern_with_Paid_keeps_the_card_and_the_pattern_code_wins_over_the_cart()
+    {
+        foreach (var pattern in new[] { "marketplace", "rental", "service" })
         {
-            var stored = w.Docs.Read<Deal>(deal.Id.ToString())!;
-            var (from, awaits) = (stored.Stage, GatewayPayments.AwaitsPayment(stored));
-            var res = await w.Deals.AdvanceAsync(Slug, deal.Id, actor, name);
-            walked.Add($"{from}→{w.Docs.Read<Deal>(deal.Id.ToString())!.Stage} (AwaitsPayment={awaits}, ok={res.Ok})");
+            var f = Gateway.ForPattern(pattern);
+            Assert.True(f.CardOffered, pattern);
+            Assert.Null(f.GatewayRefusal);
         }
-        var end = w.Docs.Read<Deal>(deal.Id.ToString())!;
-        output.WriteLine(string.Join(" · ", walked) + $" · نِداءاتُ الدَفع: {w.Platform.Calls.Count} · payment_id: {end.Refs.ContainsKey("payment_id")}");
+        Assert.Equal(Gateway, Gateway.ForPattern(null));
 
-        Assert.Equal(DealStage.Reviewed, end.Stage);
-        Assert.False(end.Refs.ContainsKey("payment_id"));
-        Assert.Empty(w.Platform.Calls);
-        Assert.True(GatewayPayments.HasInvoice(end));
+        var many = new ACommerce.Kit.Cart.Cart();
+        for (var i = 0; i < 31; i++) many.Items.Add(new() { ListingId = Guid.NewGuid(), UnitPriceSar = 1m });
+        var both = Gateway.ForCart(many).ForPattern("trip");
+        Assert.Equal(CheckoutPayMethods.CardCartTooMany, both.CartRefusal);
+        Assert.Equal(CheckoutPayMethods.CardPatternUnpaid, both.GatewayRefusal);
+
+        var instance = new CheckoutCardFacts(StoreCollects: true, SealedKeyBound: false, VaultCanUnseal: true, GatewayClientRegistered: true, InstanceCanCharge: true)
+            .ForPattern("trip");
+        Assert.Null(instance.PatternRefusal);
+        Assert.True(instance.CardOffered);
+    }
+
+    /// <summary>الخِدمَةُ تَقرَأُ النَمَطَ الَّذي يُمَرِّرُه الطَرَفان — مَتجَرٌ بِسائِقٍ ⇒ الرَمز، وبِلا نَمَطٍ ⇒ كَما كانَت؛ والبابانِ يُمَرِّرانِ <c>PatternFromTenant</c>
+    /// قَبلَ القَرارِ والنَصُّ حَيّ.</summary>
+    [Fact]
+    public async Task The_service_and_both_readers_ask_the_stores_pattern_before_any_deal_is_born()
+    {
+        var w = await PaidCart();
+        var trip = await w.Gateway.CardFactsAsync(Slug, storeCollects: false, instanceCanCharge: false, null,
+            MarketplaceTemplateExtensions.PatternFromTenant(WithRoles("driver")));
+        var plain = await w.Gateway.CardFactsAsync(Slug, storeCollects: false, instanceCanCharge: false);
+        output.WriteLine($"سائِق: {trip.GatewayRefusal} · بِلا نَمَط: {plain.GatewayRefusal ?? "لا رَمز"}");
+        Assert.Equal(CheckoutPayMethods.CardPatternUnpaid, trip.GatewayRefusal);
+        Assert.Null(plain.GatewayRefusal);
+
+        string Code(params string[] parts) => WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(
+            Path.Combine(new[] { ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace" }.Concat(parts).ToArray()))));
+        var host = Code("MarketplaceTemplateExtensions.cs");
+        var pattern = host.IndexOf("var pattern = PatternFromTenant(tenant);", StringComparison.Ordinal);
+        var facts = host.IndexOf("var card = await gateway.CardFactsAsync(slug,", StringComparison.Ordinal);
+        var birth = host.IndexOf("var deal = await deals.StartAsync(slug, pattern,", StringComparison.Ordinal);
+        Assert.True(pattern > 0 && facts > pattern && birth > facts, $"pattern={pattern} facts={facts} birth={birth}");
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(host, System.Text.RegularExpressions.Regex.Escape("var pattern = PatternFromTenant(tenant);")));
+        Assert.Contains("cart, pattern);", host[facts..birth], StringComparison.Ordinal);
+
+        var page = Code("Components", "Pages", "CheckoutPage.razor");
+        Assert.Contains("MarketplaceTemplateExtensions.PatternFromTenant(tenant));", page, StringComparison.Ordinal);
+        Assert.Contains("CheckoutPayMethods.CardPatternUnpaid => L[\"checkout.payment.err_card_pattern_unpaid\"],", page, StringComparison.Ordinal);
+        var text = ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "checkout.payment.err_card_pattern_unpaid");
+        Assert.NotEqual("checkout.payment.err_card_pattern_unpaid", text);
+        Assert.False(ACommerce.Platform.I18n.LocaleCatalog.IsPlaceholder(text));
     }
 }

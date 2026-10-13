@@ -3012,18 +3012,18 @@ public static class MarketplaceTemplateExtensions
             // ما سَبَق): المُدخَلانِ أَعلاه كَما كانا، وتُحسَبُ مَعَهُما مَرَّةً — بِالدالَّةِ الَّتي تُناديها الشاشَةُ بِحَرفِها — ثَلاثَةُ البَوّابَة
             // (مِفتاحٌ مَختومٌ مَربوط، خِزانَةٌ تَفُكّ، عَميلٌ مُسَجَّل)؛ والقَرارُ نَقِيٌّ في `CheckoutCardFacts`. فَفي الإنتاجِ البِطاقَةُ بِالثَلاثَةِ
             // لا بِغَيرِها، ومَتجَرٌ بِمِفتاحٍ لا يَقبِضُ بِمُزَوِّدِ النُسخَةِ في أَيِّ بيئَة.
-            var card = await gateway.CardFactsAsync(slug, tenant?.PaymentProviderConfigured ?? false, ACommerce.Kit.Payments.PaymentChargeSurface.CanCharge(payments), cart);
+            var pattern = PatternFromTenant(tenant);
+            var card = await gateway.CardFactsAsync(slug, tenant?.PaymentProviderConfigured ?? false, ACommerce.Kit.Payments.PaymentChargeSurface.CanCharge(payments), cart, pattern);
             var (payMethod, payRefusal) = Services.Deals.CheckoutPaymentPolicy.Decide(pay, card.Collects, card.ChargerCanCharge);
             if (payRefusal is not null)
                 return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
-                    .RefusalPath(card.CartRefusal ?? payRefusal, name, phone, addr)));
+                    .RefusalPath(card.GatewayRefusal ?? payRefusal, name, phone, addr)));
 
             // ─── بَوّابَةُ المَتجَر (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12) ─────────────────────────────
             // البِطاقَةُ في مَتجَرٍ يَفُكُّ مِفتاحَ بَوّابَتِه تُدفَعُ عَلى صَفحَتِها المُستَضافَةِ بَعدَ أَن تولَدَ الصَفَقات: فاتورَةٌ واحِدَةٌ
             // لِلسَلَّةِ كُلِّها، ولا حَجزَ عِندَ الباب — فَنافِذَةُ ‏ADR-036 §٨‑٣ لا تَقَعُ لَها. ويُسأَلُ مَرَّةً قَبلَ الحَلقَة؛ وما سِواه كَما كان.
             // (‏2026-10-12، الخُطوَة 8: والسُؤالُ صارَ مُدخَلَ القَرارِ نَفسَه — `card.ThroughGateway` — لا فَكّاً ثانِياً لِلمِفتاح.)
             var viaGateway = Services.Deals.CheckoutPaymentPolicy.CallsProvider(payMethod) && card.ThroughGateway;
-            var pattern = PatternFromTenant(tenant);
             Guid firstDealId = Guid.Empty;
             // الصَفَقاتُ الَّتي لَها مالِكٌ — يُشعَرُ بَعدَ الحَفظِ لا داخِلَ الحَلقَة (P1-5).
             var born = new List<Guid>();

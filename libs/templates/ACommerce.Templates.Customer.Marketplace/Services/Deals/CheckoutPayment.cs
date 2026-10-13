@@ -83,6 +83,10 @@ public static class CheckoutPayMethods
     /// هَلَلَةً أَو بِكَسرِ هَلَلَة (<see cref="ACommerce.Kit.Payments.MoyasarClient.ToSmallestUnit"/>) — يُقرَّرُ قَبلَ أَن تولَدَ صَفقَة (‏2026-10-13، G5 (xvi-g)).</summary>
     public const string CardAmountUnbillable = "pay_card_amount_unbillable";
 
+    /// <summary>رَمزُ البِطاقَةِ عَلى طَريقِ بَوّابَةِ المَتجَرِ في مَتجَرٍ نَمَطُ صَفَقاتِه بِلا مَرحَلَةِ «دَفع» (‏«trip» مِن دَورٍ انجِذابُه إلَيه) — لا حارِسَ
+    /// يُمسِكُ صَفقَتَه حَتّى يَثبُتَ دَفعُ فاتورَتِها، فَلا تُعرَضُ (‏2026-10-13، G5 (xvii-g)؛ <see cref="CheckoutCardFacts.ForPattern"/>).</summary>
+    public const string CardPatternUnpaid = "pay_card_pattern_unpaid";
+
     public static bool Contains(string? value)
         => value is not null && All.Contains(value, StringComparer.Ordinal);
 }
@@ -114,12 +118,31 @@ public sealed record CheckoutCardFacts(
     /// و<c>null</c> حينَ تَصلُح — أَو حينَ لا يَمُرُّ الطَريقُ بِالبَوّابَة (حَجزُ مُزَوِّدِ النُسخَةِ لِكُلِّ صَفقَةٍ وَحدَها، فَلا حَدَّ فاتورَة). كانَت البِطاقَةُ
     /// تُرسَمُ لِسَلَّةٍ لا تُفَوتَرُ أَبَداً، فَيولَدُ كُلُّ بَندٍ صَفقَةً مَربوطَةً بِبائِعِها ثُمَّ يُلغيها فَتحُ الفاتورَة — والبائِعُ لا يُخبَر.</para>
     /// <para>تَسأَلُه <see cref="ChargerCanCharge"/> فَيَرُدُّ <see cref="CheckoutPaymentPolicy.Decide"/> القائِمَةُ البِطاقَةَ بِمُدخَلَيها كَما هِيَ، ويَقرَؤُه
-    /// الطَرَفانِ لِلنَصّ: مَسارُ الرَدِّ في النُقطَةِ (<c>card.CartRefusal ?? payRefusal</c>) وسَطرُ الشاشَةِ مَكانَ البِطاقَة.</para>
+    /// الطَرَفانِ لِلنَصّ: مَسارُ الرَدِّ في النُقطَةِ (<c>card.CartRefusal ?? payRefusal</c>) وسَطرُ الشاشَةِ مَكانَ البِطاقَة.
+    /// (‏2026-10-13، G5 (xvii-g): والقارِئانِ يَقرَآنِ <see cref="GatewayRefusal"/> — هذا والنَمَطُ مَعاً.)</para>
     /// </summary>
     public string? CartRefusal { get; init; }
 
     /// <summary>الحَقائِقُ نَفسُها ومَعَها <see cref="CartRefusal"/> لِسَلَّةِ المُشتَري — بِمُدخَلَي الفاتورَةِ نَفسَيهِما: عَدَدُ البُنودِ (صَفقَةٌ لِكُلِّ بَند)
     /// ومَجموعُها (<c>Cart.SubtotalSar</c> = مَجموعُ مَبالِغِ الصَفَقات). سَلَّةٌ غائِبَةٌ أَو فارِغَةٌ لا تُسأَل — لا شَيءَ يولَد.</summary>
+    /// <summary>
+    /// <para><b>نَمَطُ صَفَقاتِ المَتجَرِ بِلا «دَفع» يَرُدُّ بِطاقَةَ البَوّابَة</b> (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b الثانِيَة، G5 (xvii-g)؛ تَوصيفُ
+    /// «اليَوم» <c>0473a70</c>): <see cref="CheckoutPayMethods.CardPatternUnpaid"/> لِطَريقِ البَوّابَةِ وَحدَه حينَ لا يَحمِلُ النَمَطُ <c>Paid</c> — كانَت
+    /// صَفقَةُ «trip» تولَدُ عَلى فاتورَةٍ و<see cref="GatewayPayments.AwaitsPayment"/> (تاليها «دَفع») لا يَصدُقُ أَبَداً، فَتُسَلَّمُ وتُقَيَّمُ بِلا مال.</para>
+    /// </summary>
+    public string? PatternRefusal { get; init; }
+
+    /// <summary>ما يَمنَعُ بِطاقَةَ البَوّابَةِ في هذا الإتمام — النَمَطُ قَبلَ السَلَّة (مَتجَرٌ بِلا «دَفع» يَرُدُّ كُلَّ سَلَّة) — و<c>null</c> حينَ لا مانِع.
+    /// تَسأَلُه <see cref="ChargerCanCharge"/>، ويَقرَؤُه الطَرَفانِ لِلنَصّ.</summary>
+    public string? GatewayRefusal => PatternRefusal ?? CartRefusal;
+
+    /// <summary>الحَقائِقُ نَفسُها ومَعَها <see cref="PatternRefusal"/> لِنَمَطِ صَفَقاتِ المَتجَر (<c>PatternFromTenant</c>)، بِسُؤالِ الكاتالوجِ نَفسِه
+    /// (<see cref="DealPatternCatalog.For"/>). نَمَطٌ غائِبٌ لا يُسأَل.</summary>
+    public CheckoutCardFacts ForPattern(string? pattern)
+        => pattern is not null && ThroughGateway
+            ? this with { PatternRefusal = DealPatternCatalog.For(pattern).Includes(DealStage.Paid) ? null : CheckoutPayMethods.CardPatternUnpaid }
+            : this;
+
     public CheckoutCardFacts ForCart(ACommerce.Kit.Cart.Cart? cart)
         => cart is { Items.Count: > 0 } && ThroughGateway
             ? this with
@@ -140,7 +163,8 @@ public sealed record CheckoutCardFacts(
 
     /// <summary>«يَستَطيعُ القَبضَ مَن سَيُنادى» — بَوّابَةُ المَتجَرِ بِخِزانَةٍ تَفُكُّ وعَميلٍ مُسَجَّل، أَو مُزَوِّدُ النُسخَةِ لِمَتجَرٍ بِلا مِفتاح.</summary>
     /// <remarks>وبِالبَوّابَةِ سَلَّةٌ تَحمِلُها فاتورَةٌ واحِدَة (<see cref="CartRefusal"/>، ‏2026-10-13).</remarks>
-    public bool ChargerCanCharge => SealedKeyBound ? VaultCanUnseal && GatewayClientRegistered && CartRefusal is null : InstanceCanCharge;
+    /// <remarks>(‏2026-10-13، G5 (xvii-g) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: ونَمَطٌ بِـ«دَفع» — <see cref="GatewayRefusal"/> يَجمَعُ المانِعَين.)</remarks>
+    public bool ChargerCanCharge => SealedKeyBound ? VaultCanUnseal && GatewayClientRegistered && GatewayRefusal is null : InstanceCanCharge;
 
     /// <summary>القَرار — بِالدالَّةِ القائِمَةِ نَفسِها.</summary>
     public bool CardOffered => CheckoutPaymentPolicy.CardOffered(Collects, ChargerCanCharge);

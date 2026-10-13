@@ -162,19 +162,20 @@ public class CheckoutPaymentPolicyCharacterizationTests
     /// القَديمانِ باقِيانِ بِحَرفِهِما في النِداء، وجَدوَلا <c>Decide</c> أَعلاه بِخَلاياهُما — فَالدالَّةُ لَم تَتَغَيَّر، والقارِئانِ تَغَيَّرا.</para>
     /// <para><b>وتَحَرَّكَت حُروفُ النِداءَينِ ‏2026-10-13 (مُراجَعَةُ بَوّابَةِ المَوجَة 3b، G5 (xvi-g) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)</b>: الطَرَفانِ يُمَرِّرانِ
     /// السَلَّةَ مُدخَلاً سادِساً إلى <c>CardFactsAsync</c> نَفسِها (<c>CheckoutCardFacts.ForCart</c>)، والقَرارُ <c>Decide(…, Collects, ChargerCanCharge)</c>
-    /// بِحَرفِه (<c>CheckoutCardCartTests</c>). فَالاسمُ باقٍ لِأَنَّ مَعناه باقٍ: نِداءٌ واحِدٌ لِلحَقائِقِ في كُلِّ طَرَف، والقَرارُ بِها.</para></summary>
+    /// بِحَرفِه (<c>CheckoutCardCartTests</c>). فَالاسمُ باقٍ لِأَنَّ مَعناه باقٍ: نِداءٌ واحِدٌ لِلحَقائِقِ في كُلِّ طَرَف، والقَرارُ بِها.
+    /// (‏2026-10-13، G5 (xvii-g): ونَمَطُ صَفَقاتِ المَتجَرِ مُدخَلٌ سابِع — <c>PatternFromTenant</c> في الطَرَفَين — <c>GatewayPatternWithoutPaidTests</c>.)</para></summary>
     [Fact]
     public void Both_readers_pass_the_tenant_flag_and_the_providers_charge_capability_to_one_card_facts_call_and_decide_by_it()
     {
         var razor = CheckoutRazor();
-        Assert.Contains("Facts = await Gateway.CardFactsAsync(Slug, tenant?.PaymentProviderConfigured ?? false, PaymentChargeSurface.CanCharge(Payments), cart);",
+        Assert.Contains("Facts = await Gateway.CardFactsAsync(Slug, tenant?.PaymentProviderConfigured ?? false, PaymentChargeSurface.CanCharge(Payments), cart,",
             razor, StringComparison.Ordinal);
         Assert.Contains("bool CardOffered => Facts.CardOffered;", razor, StringComparison.Ordinal);
         Assert.Contains("CheckoutPaymentPolicy.Decide(Pay, Facts.Collects, Facts.ChargerCanCharge)", razor, StringComparison.Ordinal);
         Assert.DoesNotContain("CheckoutPaymentPolicy.CardOffered(", razor, StringComparison.Ordinal);
 
         var body = CheckoutSubmitBody();
-        Assert.Contains("var card = await gateway.CardFactsAsync(slug, tenant?.PaymentProviderConfigured ?? false, ACommerce.Kit.Payments.PaymentChargeSurface.CanCharge(payments), cart);",
+        Assert.Contains("var card = await gateway.CardFactsAsync(slug, tenant?.PaymentProviderConfigured ?? false, ACommerce.Kit.Payments.PaymentChargeSurface.CanCharge(payments), cart, pattern);",
             body, StringComparison.Ordinal);
         Assert.Contains("CheckoutPaymentPolicy.Decide(pay, card.Collects, card.ChargerCanCharge);", body, StringComparison.Ordinal);
         Assert.Equal(1, body.Split("CardFactsAsync(").Length - 1);

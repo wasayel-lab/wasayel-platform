@@ -343,13 +343,16 @@ public sealed class GatewayPayments
     /// </summary>
     /// <remarks><b>والسَلَّةُ مُدخَلٌ سادِسٌ يُقرَأُ هُنا مَرَّةً</b> (‏2026-10-13، G5 (xvi-g)): <paramref name="cart"/> يُمَرِّرُه الطَرَفانِ كَما حَمَّلاه، فَيَرُدُّ
     /// <see cref="CheckoutCardFacts.ForCart"/> بِطاقَةَ البَوّابَةِ لِسَلَّةٍ لا تَحمِلُها فاتورَةٌ واحِدَة <b>قَبلَ أَن تولَدَ صَفقَة</b>. و<c>null</c> لا يُغَيِّرُ شَيئاً.</remarks>
+    /// <remarks>(‏2026-10-13، G5 (xvii-g) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: و<paramref name="pattern"/> — نَمَطُ صَفَقاتِ المَتجَرِ كَما يَحسُبُه الطَرَفانِ
+    /// بِـ<c>PatternFromTenant</c> — مُدخَلٌ سابِع، فَيَرُدُّ <see cref="CheckoutCardFacts.ForPattern"/> بِطاقَةَ البَوّابَةِ لِنَمَطٍ بِلا «دَفع».)</remarks>
     public async Task<CheckoutCardFacts> CardFactsAsync(
-        string tenantSlug, bool storeCollects, bool instanceCanCharge, ACommerce.Kit.Cart.Cart? cart = null, CancellationToken ct = default)
+        string tenantSlug, bool storeCollects, bool instanceCanCharge, ACommerce.Kit.Cart.Cart? cart = null, string? pattern = null,
+        CancellationToken ct = default)
         => new CheckoutCardFacts(storeCollects,
                SealedKeyFieldOf(await PaymentsBindingAsync(_providers, tenantSlug, ct)) is not null,
                _vault.IsAvailable,
                _client is not null,
-               instanceCanCharge).ForCart(cart);
+               instanceCanCharge).ForCart(cart).ForPattern(pattern);
 
     /// <summary>
     /// <para><b>فاتورَةٌ واحِدَةٌ لِسَلَّةِ المُشتَري كُلِّها</b> (‏ADR-032 §٢‑هـ الخُطوَة 10): صَفَقاتُ <paramref name="dealIds"/> — وُلِدَت لِلتَّوّ

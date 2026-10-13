@@ -133,7 +133,7 @@
                                     </span>
                                 </label>
                             }
-                            else if (CartRefusalText(Facts.CartRefusal) is { } why)
+                            else if (GatewayRefusalText(Facts.GatewayRefusal) is { } why)
                             {
                                 @* بِطاقَةُ البَوّابَةِ لِسَلَّةٍ لا تَحمِلُها فاتورَةٌ واحِدَة (‏2026-10-13، G5 (xvi-g)): لا تُرسَمُ — ويُقالُ لِماذا حَيثُ كانَت، بِنَصِّ رَمزِها
                                    الَّذي تَرُدُّ بِه النُقطَةُ أَيضاً (`card.CartRefusal ?? payRefusal`)؛ فَلا يَختَفي خِيارٌ بِلا كَلِمَة. *@
@@ -253,14 +253,15 @@
     {
         CheckoutPayMethods.CardUnavailable => L["checkout.payment.err_card_unavailable"],
         CheckoutPayMethods.GatewayOpenFailed => L["checkout.payment.err_gateway_open_failed"],
-        CheckoutPayMethods.CardCartTooMany or CheckoutPayMethods.CardAmountUnbillable => CartRefusalText(Err),
+        CheckoutPayMethods.CardCartTooMany or CheckoutPayMethods.CardAmountUnbillable or CheckoutPayMethods.CardPatternUnpaid => GatewayRefusalText(Err),
         _ => null
     };
 
-    /// <summary>نَصُّ رَمزِ السَلَّةِ لِبِطاقَةِ البَوّابَة (<see cref="CheckoutCardFacts.CartRefusal"/>) — والحَدُّ مِن الثابِتِ لا مِن النَصّ
-    /// (<see cref="GatewayPaymentProof.MaxDealsPerInvoice"/>)؛ و<c>null</c> لِما سِواهُما.</summary>
-    string? CartRefusalText(string? code) => code switch
+    /// <summary>نَصُّ ما يَمنَعُ بِطاقَةَ البَوّابَة (<see cref="CheckoutCardFacts.GatewayRefusal"/>: السَلَّةُ، و‏2026-10-13 النَمَط) — والحَدُّ مِن الثابِتِ
+    /// لا مِن النَصّ (<see cref="GatewayPaymentProof.MaxDealsPerInvoice"/>)؛ و<c>null</c> لِما سِواها.</summary>
+    string? GatewayRefusalText(string? code) => code switch
     {
+        CheckoutPayMethods.CardPatternUnpaid => L["checkout.payment.err_card_pattern_unpaid"],
         CheckoutPayMethods.CardCartTooMany => L.Format("checkout.payment.err_card_cart_too_many", GatewayPaymentProof.MaxDealsPerInvoice),
         CheckoutPayMethods.CardAmountUnbillable => L["checkout.payment.err_card_amount_unbillable"],
         _ => null
@@ -273,7 +274,8 @@
         if (Step < 1 || Step > 3) Step = 1;
         cart = await Accounts.CartAsync(Slug, Auth.UserId!.Value);
         var tenant = await Tenants.FindAsync(Slug);
-        Facts = await Gateway.CardFactsAsync(Slug, tenant?.PaymentProviderConfigured ?? false, PaymentChargeSurface.CanCharge(Payments), cart);
+        Facts = await Gateway.CardFactsAsync(Slug, tenant?.PaymentProviderConfigured ?? false, PaymentChargeSurface.CanCharge(Payments), cart,
+            MarketplaceTemplateExtensions.PatternFromTenant(tenant));
         if (Auth.UserName is { } un && string.IsNullOrEmpty(Name)) Name = un;
     }
 }
