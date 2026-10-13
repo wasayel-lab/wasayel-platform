@@ -41,10 +41,11 @@ public class StudioHomeActivePlanTests
         return "";
     }
 
-    /// <summary><b>اليَوم: الباقَةُ السارِيَةُ لا تُرسَم</b> — اللافِتَةُ لِـ<c>Renewable</c> وَحدَه، و<c>Renewable</c> لا يَعُدُّ
-    /// <c>Active</c>، وصَفُّ المَتجَرِ لا يَقرَأُ الباقَة. (‏تَوصيفٌ يَنقَلِبُ شَطرُه الثالِثُ بِاسمِه في كوميتِ السَطر.)</summary>
+    /// <summary><b>اللافِتَةُ كَما كانَت، والسارِيَةُ سَطرٌ في صَفِّ مَتجَرِها</b> (‏2026-10-13 — انقَلَبَ بِقَرارٍ مَرئِيٍّ مِن
+    /// <c>Today_an_active_plan_renders_nowhere_on_the_studio_home</c>، شَطرُه الأَخيرُ وَحدَه): اللافِتَةُ لِـ<c>Renewable</c> و
+    /// <c>Renewable</c> لا يَعُدُّ <c>Active</c> — لَم يُمَسّ — وصَفُّ المَتجَرِ يَرسُمُ <c>ActivePlanLine</c> حَيثُ تُعيدُ سَطراً.</summary>
     [Fact]
-    public void Today_an_active_plan_renders_nowhere_on_the_studio_home()
+    public void The_banner_is_unchanged_and_an_active_plan_renders_one_line_in_its_store_row()
     {
         var home = Home();
         Assert.Equal(1, Regex.Matches(home, Regex.Escape("myApps.Where(a => Renewable(a.Slug))")).Count);
@@ -60,7 +61,40 @@ public class StudioHomeActivePlanTests
         Assert.Equal(TenantPlanState.Active, TenantPlanPolicy.Derive(active, now));
 
         var rows = AppRowsLoop();
-        Assert.DoesNotContain("PlanState(", rows, StringComparison.Ordinal);
-        Assert.DoesNotContain("ExpiresAt", rows, StringComparison.Ordinal);
+        Assert.Contains("@if (ActivePlanLine(t.Slug) is { } planLine)", rows, StringComparison.Ordinal);
+        Assert.Contains("@planLine", rows, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>السَطرُ مِن بَياناتٍ مُخَزَّنَةٍ لا مِن رَقَمٍ مُختَرَع، ولِلسارِيَةِ وَحدَها</b>: الاسمُ <c>LabelAr</c> باقَةِ الكاتالوج
+    /// (‏<c>manual</c> = «اشتِراك يَدَوِيّ» مِن مِلَفِّها)، والتاريخُ <c>ExpiresAt</c> الوَثيقَة، والقالِبُ مِفتاحٌ بِالعَرَبِيَّةِ بِوَسيطَين
+    /// وبِلا رَقَم؛ ولا سَطرَ لِغَيرِ <c>Active</c>.</summary>
+    [Fact]
+    public void The_line_is_built_from_the_stored_plan_and_the_catalog_and_only_for_an_active_plan()
+    {
+        var home = Home();
+        var fn = Regex.Match(home, @"string\? ActivePlanLine\(string slug\)\s*\{(?<body>.*?)\n    \}", RegexOptions.Singleline);
+        Assert.True(fn.Success, "لا `ActivePlanLine` — الأَداةُ عَمياء.");
+        var body = fn.Groups["body"].Value;
+        Assert.Contains("if (PlanState(slug) != ACommerce.Kit.Subscriptions.TenantPlanState.Active) return null;", body, StringComparison.Ordinal);
+        Assert.Contains("PlatformPlanCatalog.Find(p.PlanId)?.LabelAr", body, StringComparison.Ordinal);
+        Assert.Contains("p.ExpiresAt.ToString(\"yyyy-MM-dd\")", body, StringComparison.Ordinal);
+        Assert.Contains("L.Format(\"studio.plan.active_line\"", body, StringComparison.Ordinal);
+
+        var template = ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "studio.plan.active_line");
+        Assert.False(string.IsNullOrWhiteSpace(template));
+        Assert.Contains("{0}", template, StringComparison.Ordinal);
+        Assert.Contains("{1}", template, StringComparison.Ordinal);
+        Assert.DoesNotMatch("[0-9٠-٩](?![}])", template.Replace("{0}", "").Replace("{1}", ""));
+        Assert.Equal("الباقَة: اشتِراك يَدَوِيّ — سارِيَةٌ حَتّى 2026-11-11",
+            string.Format(template, PlatformPlanCatalog.Find("manual")!.LabelAr, new DateTime(2026, 11, 11).ToString("yyyy-MM-dd")));
+
+        var now = new DateTime(2026, 10, 13, 12, 0, 0, DateTimeKind.Utc);
+        foreach (var (plan, state) in new (TenantPlan? Plan, TenantPlanState State)[]
+                 {
+                     (null, TenantPlanState.None),
+                     (new TenantPlan { PlanId = "manual", StartsAt = now.AddDays(-40), ExpiresAt = now.AddDays(-3), GraceDays = 14 }, TenantPlanState.Grace),
+                     (new TenantPlan { PlanId = "manual", StartsAt = now.AddDays(-40), ExpiresAt = now.AddDays(-20), GraceDays = 14 }, TenantPlanState.Suspended),
+                 })
+            Assert.Equal(state, TenantPlanPolicy.Derive(plan, now));   // ‏الثَلاثُ الأُخرى لا تَعبُرُ شَرطَ السَطر
     }
 }

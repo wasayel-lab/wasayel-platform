@@ -2137,6 +2137,7 @@
   "admin.transfer.cancel": "إلغاء",
   "admin.transfer.saved": "حُفِظَت التَعليمات.",
   "studio.plan.state_active": "سارِيَة",
+  "studio.plan.active_line": "الباقَة: {0} — سارِيَةٌ حَتّى {1}",
   "studio.plan.state_grace": "انتَهَت باقَتُك — النَشرُ مُتَوَقِّف",
   "studio.plan.state_suspended": "المَتجَرُ مُعَلَّق",
   "studio.plan.hidden_at": "يُخفى المَتجَرُ في",

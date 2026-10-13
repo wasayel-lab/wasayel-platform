@@ -181,6 +181,14 @@
                             <div class="studio-list-body">
                                 <strong>@t.Name</strong>
                                 <span>/@t.Slug · @t.Categories.Count @L.Markup("studio.home.category_unit") · @t.Roles.Count @L.Markup("studio.home.role_unit")</span>
+                                @* سَطرُ الباقَةِ السارِيَة (موجَزُ الفَجَوات P2-4، ‏2026-10-13): لافِتَةُ الباقَةِ أَعلاه لِما خَرَجَ عَن
+                                   السَرَيانِ أَو لَه دَفعٌ مُعَلَّقٌ وَحدَه (`Renewable`)، فَالسارِيَةُ لَم تَكُن تُرى — و‏ADR-003 §٤ يَعِدُ بِها
+                                   بِحالَتِها وتاريخِ انتِهائِها. اسمُها مِن كاتالوجِ باقاتِ المَنَصَّةِ وتاريخُها مِن الوَثيقَة — لا رَقَمَ
+                                   يُختَرَع؛ وبِلا وَثيقَةِ باقَةٍ لا سَطرَ، فَالصَفُّ كَما كانَ بايتاً. *@
+                                @if (ActivePlanLine(t.Slug) is { } planLine)
+                                {
+                                    <span style="display:block;margin-top:4px;">@planLine</span>
+                                }
                             </div>
                             <span class="st-chip">@(t.Roles.Count == 0 ? L["studio.home.kind_store"] : L["studio.home.kind_multirole"])</span>
                             <span style="color:var(--st-faint);">←</span>
@@ -333,6 +341,16 @@
     /// وهُوَ العَطَبُ الَّذي فُتِحَ لَه هذا المَسار.</summary>
     ACommerce.Kit.Subscriptions.PaddleTransactionRecord? PendingPaddle(string slug)
         => myPaddle.TryGetValue(slug, out var t) ? t : null;
+
+    /// <summary>سَطرُ الباقَةِ السارِيَةِ لِصَفِّ المَتجَر — اسمُها مِن <c>PlatformPlanCatalog</c> وتاريخُ انتِهائِها مِن
+    /// <c>TenantPlan.ExpiresAt</c>. و<c>null</c> لِكُلِّ ما لَيسَ <c>Active</c> — فَلا سَطرَ بِلا وَثيقَة (التَكافُؤُ الصِفريّ).</summary>
+    string? ActivePlanLine(string slug)
+    {
+        if (PlanState(slug) != ACommerce.Kit.Subscriptions.TenantPlanState.Active) return null;
+        if (!myPlans.TryGetValue(slug, out var p)) return null;
+        var name = ACommerce.Kit.Subscriptions.PlatformPlanCatalog.Find(p.PlanId)?.LabelAr ?? p.PlanId;
+        return L.Format("studio.plan.active_line", name, p.ExpiresAt.ToString("yyyy-MM-dd"));
+    }
 
     string HiddenAtText(string slug)
     {
