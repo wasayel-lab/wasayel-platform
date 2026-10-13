@@ -203,16 +203,17 @@ public sealed class TenantProviderService
         }
     }
 
-    /// <summary>أَفي المَتجَرِ مَدخَلُ بائِعٍ فَعّالٌ لِهذِه القُدرَة؟ — يَسأَلُه وارِدُ الناقِلِ قَبلَ أَن يَقرَأَ جِسماً. والفَشَلُ «لا».</summary>
+    /// <summary>أَفي المَتجَرِ مَدخَلُ بائِعٍ فَعّالٌ لِهذِه القُدرَة؟ — يَسأَلُه وارِدُ الناقِلِ قَبلَ أَن يَقرَأَ جِسماً. والفَشَلُ «لا».
+    /// <para>(‏2026-10-13، G5 (v) — ولا يُعادُ حَرفٌ فَوقَه: والشَرطُ <see cref="TenantProviderBinding.ActiveVendorEntryOf"/> بِحَرفِه — يُقاسُ في CI
+    /// مُجَمَّعاً عَلى وَثائِقَ في الذاكِرَة، ويُتَرجِمُه Marten هُنا كَما كان.)</para></summary>
     public async Task<bool> HasVendorEntriesAsync(
         string tenantSlug, string capability, CancellationToken ct = default)
     {
-        var prefix = ProviderCapabilities.Require(capability) + TenantProviderBinding.VendorEntrySeparator;
+        var activeVendorEntry = TenantProviderBinding.ActiveVendorEntryOf(capability);
         try
         {
             await using var s = Store.QuerySession(tenantSlug);
-            return await s.Query<TenantProviderBinding>()
-                .AnyAsync(d => d.Id.StartsWith(prefix) && d.Status == TenantProviderBinding.StatusActive, ct);
+            return await s.Query<TenantProviderBinding>().AnyAsync(activeVendorEntry, ct);
         }
         catch (Exception ex)
         {

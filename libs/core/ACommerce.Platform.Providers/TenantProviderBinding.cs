@@ -226,6 +226,19 @@ public sealed class TenantProviderBinding : ITenantDefinitionDocument
         return true;
     }
 
+    /// <summary>
+    /// <para><b>مَدخَلُ بائِعٍ فَعّالٌ لِقُدرَة — شَرطٌ يُتَرجِمُه Marten ويُقاسُ في CI</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (v)): مُعَرِّفٌ يَبدَأُ
+    /// بِـ<c>{capability}:</c> وحالُه <see cref="StatusActive"/>. يَسأَلُه <c>TenantProviderService.HasVendorEntriesAsync</c> — فَيُقَرِّرُ أَيَقرَأُ وارِدُ مَتجَرٍ
+    /// بِلا رَمزِ تَهيئَةٍ جِسماً (<c>DealShipping.CarrierReadyForStoreAsync</c>) — وكانَ مَكتوباً داخِلَ الاستِعلامِ فَلا يُنَفِّذُه إلّا صَفٌّ حَيٌّ عَلى Postgres.</para>
+    /// <para><b>وأَوسَعُ مِن <see cref="IsVendorEntryId"/> عَمداً</b>: تَحليلُ اللاحِقَةِ مُعَرِّفاً لا يُتَرجَمُ إلى SQL، فَمُعَرِّفٌ بِالبادِئَةِ ولاحِقَةٍ لَيسَت مُعَرِّفاً
+    /// يُعَدّ — ولا كاتِبَ يَكتُبُه (<see cref="VendorEntryId"/> وَحدَه يَكتُبُ هذا الشَكل). والقُدرَةُ مِن المَعجَمِ وإلّا يُرمى.</para>
+    /// </summary>
+    public static System.Linq.Expressions.Expression<Func<TenantProviderBinding, bool>> ActiveVendorEntryOf(string capability)
+    {
+        var prefix = ProviderCapabilities.Require(capability) + VendorEntrySeparator;
+        return d => d.Id.StartsWith(prefix) && d.Status == StatusActive;
+    }
+
     /// <summary><b>تَسجيلُ الوارِدِ عِندَ المُزَوِّدِ لِمَدخَلِ البائِع</b> — مُعَرِّفُ التَسجيلِ كَما أَعادَه (‏<c>"id"</c> في رَدِّ
     /// «Webhook» عِندَ OTO)، و<c>null</c> حَيثُ لَم يُسَجَّل بَعد. يَقرَؤُه سَطحُ البائِعِ فَيَقولُ أَتَصِلُ الإشعارات.</summary>
     public string? WebhookId { get; set; }
