@@ -376,6 +376,10 @@ public sealed class DealsService
     /// وبوليصَتَها (<see cref="DealShipping.ShipmentConfirmed"/>، تُعادُ هُنا عَلى الصَفقَةِ الَّتي سَتُكتَب)، وإلّا
     /// <see cref="DealShipping.DealAwaitsCarrier"/> قَبلَ أَيِّ كِتابَة. ولا يَحمِلُه إلّا <c>DealShipping.ShipAsync</c> بَعدَ أَن سَأَلَ OTO؛
     /// فَزِرُّ «تَأكيد: شَحن» والمَسارُ الإداريُّ والـAPI — وكانَت تُخرِجُها إلى «شَحن» بِلا بوليصَة (تَوصيفُه <c>e52ba8f</c>) — تُرَدّ.</para>
+    /// <para><b>دِقَّةٌ مُلحَقَةٌ ‏2026-10-13 (G4 (xxxi)؛ ‏ADR-033 §٧‑ح‑٨) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق</b>: «تُعادُ هُنا» إعادَةُ <b>شَكلِ</b> الجَواب —
+    /// مُعَرِّفُ الطَلَبِ مُعَرِّفُ طَلَبِ الصَفقَة، والحالُ مِن مَعجَمِ الشُحنات، ورابِطُ بوليصَةٍ بِـhttps — لا مَصدَرِه: أَنّ الجَوابَ مِن OTO يَحرُسُه الفاحِصُ
+    /// <c>Only_the_OTO_paths_in_DealShipping_hand_an_OTO_answer_to_the_transition</c> (لا يَحمِلُه إلّا مَسارا OTO في <c>DealShipping</c> بَعدَ أَن سَأَلا
+    /// «Order Tracking»)، لا هذا الكاتِب.</para>
     /// </param>
     public async Task<DealAdvanceResult> AdvanceAsync(
         string tenantSlug, Guid dealId, Guid actorId, string actorName,
