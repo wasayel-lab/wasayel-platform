@@ -211,7 +211,8 @@ public class VendorShippingTests(ITestOutputHelper output)
             .Concat(VendorRegistrationValidator.All).Concat(OtoFailures.All).ToArray();
         output.WriteLine($"رُموزُ سَطحِ البائِع: {codes.Length} — {string.Join(" · ", codes)}");
         // (‏2026-10-13، G5 (ii)): والخِدمَةُ ‏6 ← 7 (`vendor_token_refused` — رَمزٌ مَلصوقٌ تَرُدُّه OTO لا يُحفَظ)؛ فَالعَدُّ ‏28 ← 29.
-        Assert.Equal(29, codes.Length);
+        // (‏2026-10-13، G5 (iii)): والخِدمَةُ ‏7 ← 8 (`vendor_entry_read_failed` — قِراءَةُ المَدخَلِ تَرمي فَلا تَسجيلَ ولا لَصق)؛ فَالعَدُّ ‏29 ← 30.
+        Assert.Equal(30, codes.Length);
         Assert.Equal(codes.Length, codes.Distinct(StringComparer.Ordinal).Count());
         foreach (var code in codes)
         {

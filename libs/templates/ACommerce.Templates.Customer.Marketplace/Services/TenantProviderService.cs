@@ -172,20 +172,34 @@ public sealed class TenantProviderService
     // تَتَجاوَزُها بِقاعِدَةٍ مُسَمّاة — فَلا يَمَسُّ مَدخَلُ بائِعٍ لَقطَةَ المَتجَرِ ولا كاشَها. والقِراءَةُ هُنا بِجَلسَةِ المُستَأجِرِ نَفسِها.
 
     /// <summary>مَدخَلُ بائِعٍ لِقُدرَة — فَعّالاً أَو مَسحوباً — أَو <c>null</c>. فَشَلُ القِراءَةِ يُكتَبُ ويُعادُ <c>null</c>: «لا مَدخَل»
-    /// فَشَلٌ مُغلَق (لا رَمزَ يُحَلّ).</summary>
+    /// فَشَلٌ مُغلَق (لا رَمزَ يُحَلّ).
+    /// <para>(‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (iii) — ولا يُعادُ حَرفٌ فَوقَه: <b>ولَم يَكُن مُغلَقاً عِندَ كُلِّ قارِئ</b>. «لا مَدخَل» عِندَ الناقِلِ
+    /// يَسقُطُ إلى رَمزِ التَهيئَةِ في مَتجَرِ العَرض، وعِندَ التَسجيلِ يَفتَحُ حِساباً ثانِياً، وعِندَ اللَصقِ يُنشِئُ وارِداً ثانِياً — تَوصيفُها
+    /// <c>bd48a66</c> و<c>6830eb9</c>. فَمَن يُقَرِّرُ أَو يَكتُبُ عَلى الجَوابِ يَقرَأُ بِـ<see cref="ReadVendorEntryAsync"/> الَّتي تُفَرِّقُ العُطلَ مِن الغِياب؛
+    /// وتَبقى هذِه لِلعَرضِ وَحدَه — <c>VendorShippingService.ViewAsync</c> — حَيثُ يَرسُمُ العُطلُ الاستِمارَةَ، والنَقرَةُ بَعدَها تَقرَأُ مِن جَديدٍ مُغلَقَة.)</para></summary>
     public async Task<TenantProviderBinding?> VendorEntryAsync(
+        string tenantSlug, string capability, Guid listingOwner, CancellationToken ct = default)
+        => (await ReadVendorEntryAsync(tenantSlug, capability, listingOwner, ct)).Entry;
+
+    /// <summary>
+    /// <para><b>قِراءَةُ مَدخَلِ البائِعِ تُفَرِّقُ «لا مَدخَل» مِن «تَعَذَّرَت القِراءَة»</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (iii)؛ ‏ADR-033 §٧‑ص‑٦):
+    /// <see cref="VendorEntryRead.Failed"/> صادِقَةٌ حينَ رَمَت القِراءَة — يُكتَبُ سَطرُها كَما كان — و<see cref="VendorEntryRead.Entry"/> حينَئِذٍ <c>null</c>
+    /// لا يُقرَأُ غِياباً. قُرّاؤُها: الناقِلُ (<c>DealShipping.CarrierReadyForAsync</c>/<c>CarrierForAsync</c> — «لا ناقِلَ» بِلا احتِياط)، والتَسجيلُ واللَصقُ
+    /// (<c>VendorShippingService</c> — رَمزٌ يُرَدُّ ولا نِداءَ ولا كِتابَة).</para>
+    /// </summary>
+    public async Task<VendorEntryRead> ReadVendorEntryAsync(
         string tenantSlug, string capability, Guid listingOwner, CancellationToken ct = default)
     {
         try
         {
             await using var s = Store.QuerySession(tenantSlug);
-            return await s.LoadAsync<TenantProviderBinding>(
-                TenantProviderBinding.VendorEntryId(capability, listingOwner), ct);
+            return new(await s.LoadAsync<TenantProviderBinding>(
+                TenantProviderBinding.VendorEntryId(capability, listingOwner), ct), false);
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine(ListFailureAr(tenantSlug, ex.Message));
-            return null;
+            return new(null, true);
         }
     }
 
@@ -256,3 +270,7 @@ public sealed class TenantProviderService
         }
     }
 }
+
+/// <summary>جَوابُ <see cref="TenantProviderService.ReadVendorEntryAsync"/>: المَدخَلُ أَو <c>null</c> لِغِيابِه — و<see cref="Failed"/> حينَ تَعَذَّرَت
+/// القِراءَةُ فَلا يُقرَأُ <c>null</c> غِياباً (‏2026-10-13، G5 (iii)).</summary>
+public readonly record struct VendorEntryRead(TenantProviderBinding? Entry, bool Failed);

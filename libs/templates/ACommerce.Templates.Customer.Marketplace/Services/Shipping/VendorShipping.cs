@@ -385,6 +385,8 @@ public sealed record VendorShippingResult(string? Code, TenantProviderBinding? B
 /// والخَتمُ وتَسجيلُ الوارِدِ بَعدَه بِالمَسارِ نَفسِه (<c>ConnectAsync</c>).</para>
 /// <para>(‏2026-10-13، G5 (ii) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: وفي اللَصقِ بَعدَ «رَمزٌ غَيرُ فارِغ» <b>يُبادَلُ الرَمزُ عِندَ OTO</b> — رَمزٌ تَرُدُّه
 /// يُجابُ <see cref="TokenRefused"/> ولا يُحفَظُ شَيء.)</para>
+/// <para>(‏2026-10-13، G5 (iii) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: <b>والمَدخَلُ القائِمُ يُقرَأُ قِراءَةً تُفَرِّقُ العُطلَ مِن الغِياب</b> في اللَصقِ والتَسجيل —
+/// قِراءَةٌ تَرمي تُجابُ <see cref="EntryReadFailed"/> بِلا نِداءٍ ولا كِتابَة؛ و<see cref="ViewAsync"/> لِلعَرضِ وَحدَه يَقرَؤُه غِياباً.)</para>
 /// </summary>
 public sealed class VendorShippingService
 {
@@ -414,7 +416,16 @@ public sealed class VendorShippingService
     /// </summary>
     public const string TokenRefused = "vendor_token_refused";
 
-    public static readonly IReadOnlyList<string> Codes = new[] { PasteClosed, TokenMissing, VaultUnavailable, RegisterClosed, EntryUnreadable, RegisterRateLimited, TokenRefused };
+    /// <summary>
+    /// <para><b>تَعَذَّرَت قِراءَةُ مَدخَلِ البائِعِ الآن</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (iii)؛ تَوصيفُ «اليَوم» <c>6830eb9</c>): رَمزُ
+    /// <see cref="RegisterAsync"/> و<see cref="SaveTokenAsync"/> حينَ تَرمي القِراءَة (<see cref="TenantProviderService.ReadVendorEntryAsync"/>) — <b>فَلا نِداءَ
+    /// إلى OTO بَعدَها ولا كِتابَة</b>. وكانَ العُطلُ يُقرَأُ «لا مَدخَل»: التَسجيلُ يَفتَحُ لِبائِعٍ لَه حِسابٌ يَعمَلُ حِساباً ثانِياً بِالرَمزِ السوقِيِّ ويَكتُبُ
+    /// رَمزَه فَوقَ الأَوَّل، واللَصقُ يُنشِئُ عِندَ OTO تَسجيلَ وارِدٍ ثانِياً بَدَلَ تَحديثِ القائِم. غَيرُ <see cref="EntryUnreadable"/>: ذاكَ مَدخَلٌ قُرِئَ
+    /// فَلَم يُفَكّ، وهذا ما لَم يُقرَأ.</para>
+    /// </summary>
+    public const string EntryReadFailed = "vendor_entry_read_failed";
+
+    public static readonly IReadOnlyList<string> Codes = new[] { PasteClosed, TokenMissing, VaultUnavailable, RegisterClosed, EntryUnreadable, RegisterRateLimited, TokenRefused, EntryReadFailed };
 
     /// <summary>
     /// <para><b>مِفتاحُ حَدِّ المُحاوَلاتِ في حِصَّةِ الإرسالِ القائِمَة</b> (<c>AuthHandlers.TryConsumeSendQuota</c>، «‏tenant|subject»): بائِعٌ في مَتجَر.
@@ -484,7 +495,16 @@ public sealed class VendorShippingService
             return new(TokenRefused, null, null);
         }
 
-        var before = await _providers.VendorEntryAsync(tenantSlug, ProviderCapabilities.Delivery, vendor.UserId, ct);
+        // (‏2026-10-13، G5 (iii)): قِراءَةٌ تَرمي لَيسَت «لا مَدخَل» — كانَت تُسقِطُ تَسجيلَ الوارِدِ القائِمَ فَيُنشَأُ عِندَ OTO ثانٍ. يُرَدُّ بِرَمزِه بِلا كِتابَة.
+        var read = await _providers.ReadVendorEntryAsync(tenantSlug, ProviderCapabilities.Delivery, vendor.UserId, ct);
+        if (read.Failed)
+        {
+            _log.LogWarning("[OTO] vendor {Slug}/{Owner} ← paste refused ({Code}) — nothing stored",
+                tenantSlug, vendor.UserId.ToString("D"), EntryReadFailed);
+            return new(EntryReadFailed, null, null);
+        }
+
+        var before = read.Entry;
         var saved = await ConnectAsync(tenantSlug, vendor.UserId, token, inboundUrl, before is { IsActive: true } ? before : null, ct);
 
         _log.LogInformation("[OTO] vendor {Slug}/{Owner} ← saved (webhook: {Webhook})",
@@ -514,7 +534,16 @@ public sealed class VendorShippingService
         var vendor = registrant.Vendor;
         var owner = vendor.UserId;
         var entryId = TenantProviderBinding.VendorEntryId(ProviderCapabilities.Delivery, owner);
-        var before = await _providers.VendorEntryAsync(tenantSlug, ProviderCapabilities.Delivery, owner, ct);
+        // (‏2026-10-13، G5 (iii)): قِراءَةٌ تَرمي لَيسَت «لا مَدخَل» — كانَت تَفتَحُ لِبائِعٍ لَه حِسابٌ يَعمَلُ حِساباً ثانِياً. يُرَدُّ قَبلَ الحِصَّةِ والأَثَرِ والنِداء.
+        var read = await _providers.ReadVendorEntryAsync(tenantSlug, ProviderCapabilities.Delivery, owner, ct);
+        if (read.Failed)
+        {
+            _log.LogWarning("[OTO] vendor {Slug}/{Owner} ← register refused ({Code}) — nothing sent, nothing stored",
+                tenantSlug, owner.ToString("D"), EntryReadFailed);
+            return new(EntryReadFailed, null, null);
+        }
+
+        var before = read.Entry;
         var kept = before is { IsActive: true } ? before : null;
 
         string token;

@@ -287,11 +287,14 @@ public sealed class DealShipping
     /// (<c>canShip</c>) والبَوّابَةُ في <see cref="ShipAsync"/> — فَما يُرسَمُ هُوَ ما يُقبَل. <b>ومَدخَلٌ قائِمٌ يَحكُمُ ولَو لَم يَكُن
     /// فَعّالاً</b>: الاحتِياطُ لِبائِعٍ <i>لا مَدخَلَ لَه</i> وَحدَه — فَمَدخَلٌ مَسحوبٌ أَو بِلا رَمزٍ مَختومٍ «لا ناقِل»، لا رَمزُ التَهيئَة.</para>
     /// </summary>
+    /// <remarks>(‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (iii)؛ ‏ADR-033 §٧‑ص‑٦): <b>وقِراءَةٌ تَرمي لَيسَت «لا مَدخَل»</b> — «لا ناقِل»، فَلا تُرسَمُ
+    /// «إنشاء بوليصَة» ولا يُسأَلُ الاحتِياط. كانَ العُطلُ يُجابُ <c>null</c> فَيَسقُطُ إلى رَمزِ التَهيئَة (تَوصيفُه <c>bd48a66</c>).</remarks>
     public async Task<bool> CarrierReadyForAsync(string tenantSlug, Deal? deal, CancellationToken ct = default)
     {
         if (deal is null || !OtoEnvironment.IsOpen(_opts.Environment)) return false;
-        var entry = await VendorEntryOfAsync(tenantSlug, deal, ct);
-        if (entry is not null)
+        var read = await VendorEntryOfAsync(tenantSlug, deal, ct);
+        if (read.Failed) return false;
+        if (read.Entry is { } entry)
             return entry.IsActive && _vault is { IsAvailable: true }
                    && VendorShippingSurface.RefreshField is { } f && entry.Values.TryGetValue(f, out var v) && v.IsSealed;
         return VendorTokenFor(_opts, tenantSlug) is not null;
@@ -302,11 +305,22 @@ public sealed class DealShipping
     /// الاحتِياطيُّ بِلا سِرٍّ لِبائِعٍ لا مَدخَلَ لَه في <see cref="DemoStore"/>. و<c>null</c> لِما سِواه — <b>ومَدخَلٌ قائِمٌ لا يُفَكُّ</b>
     /// (خِزانَةٌ غائِبَة، أَو سِياقٌ أَو عَمودٌ لا يُطابِق) <b>لا يَسقُطُ إلى الاحتِياط</b>: فَشَلٌ مُغلَق.</para>
     /// </summary>
+    /// <remarks>(‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (iii)؛ ‏ADR-033 §٧‑ص‑٦): <b>وقِراءَةُ المَدخَلِ تَرمي ⇒ <c>null</c> بِسَطرِ تَحذير</b> — لا احتِياط:
+    /// فَيُجابُ <see cref="ShipAsync"/> وَالوارِدُ «لا ناقِل» (<c>carrier_unavailable</c>). كانَ العُطلُ «لا مَدخَل» فَيُشحَنُ طَلَبُ البائِعِ بِحِسابِ مَتجَرِ
+    /// العَرض، ويُتَحَقَّقُ مِن وارِدِه بِلا سِرّ (تَوصيفُهُما <c>bd48a66</c> و<c>6830eb9</c>).</remarks>
     public async Task<VendorCarrier?> CarrierForAsync(string tenantSlug, Deal deal, CancellationToken ct = default)
     {
         if (!OtoEnvironment.IsOpen(_opts.Environment)) return null;
 
-        var entry = await VendorEntryOfAsync(tenantSlug, deal, ct);
+        var read = await VendorEntryOfAsync(tenantSlug, deal, ct);
+        if (read.Failed)
+        {
+            _log.LogWarning("[OTO] vendor entry {Slug}/{Owner} could not be read — no carrier, no fallback",
+                tenantSlug, DealAcceptAuthorization.OwnerIdOf(deal)?.ToString("D") ?? "—");
+            return null;
+        }
+
+        var entry = read.Entry;
         if (entry is null)
             return VendorTokenFor(_opts, tenantSlug) is { } fallback ? new VendorCarrier(fallback, null, false) : null;
 
@@ -345,11 +359,13 @@ public sealed class DealShipping
     }
 
     /// <summary>مَدخَلُ بائِعِ الصَفقَة — فَعّالاً أَو مَسحوباً — أَو <c>null</c> (لا خِدمَةَ مَداخِل، أَو لا مالِكَ إعلانٍ مَكتوب، أَو لا مَدخَل).
-    /// والحالُ يَقرَؤُه المُنادي: مَدخَلٌ قائِمٌ يَحكُمُ فَلا يُستَبدَلُ بِالاحتِياط.</summary>
-    private async Task<TenantProviderBinding?> VendorEntryOfAsync(string tenantSlug, Deal deal, CancellationToken ct)
+    /// والحالُ يَقرَؤُه المُنادي: مَدخَلٌ قائِمٌ يَحكُمُ فَلا يُستَبدَلُ بِالاحتِياط.
+    /// <para>(‏2026-10-13، G5 (iii) — ولا يُعادُ حَرفٌ فَوقَه: والجَوابُ <see cref="VendorEntryRead"/> — فَقِراءَةٌ رَمَت <c>Failed</c> لا «لا مَدخَل»؛
+    /// وما لا يُقرَأُ أَصلاً (لا خِدمَة، لا مالِك) غِيابٌ كَما كان.)</para></summary>
+    private async Task<VendorEntryRead> VendorEntryOfAsync(string tenantSlug, Deal deal, CancellationToken ct)
     {
-        if (_providers is null || DealAcceptAuthorization.OwnerIdOf(deal) is not { } owner) return null;
-        return await _providers.VendorEntryAsync(tenantSlug, ProviderCapabilities.Delivery, owner, ct);
+        if (_providers is null || DealAcceptAuthorization.OwnerIdOf(deal) is not { } owner) return default;
+        return await _providers.ReadVendorEntryAsync(tenantSlug, ProviderCapabilities.Delivery, owner, ct);
     }
 
     /// <summary>مُعَرِّفُ الطَلَبِ عِندَ OTO: مُعَرِّفُ الصَفقَةِ بِصيغَةِ <c>N</c> — فَإشعارُ الحالِ يَعودُ إلى

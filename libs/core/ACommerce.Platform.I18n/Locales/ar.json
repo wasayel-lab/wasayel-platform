@@ -1496,6 +1496,7 @@
   "shipping.vendor.err_vault_unavailable": "خِزانَةُ الأَسرارِ غَيرُ مُهَيَّأَةٍ في هذِه النُّسخَة — فَلا يُحفَظُ رَمز.",
   "shipping.vendor.err_vendor_contact_unverified": "نَفتَحُ حِسابَ الشَّحنِ عِندَ OTO بِبَريدٍ أَو جَوّالٍ تَحَقَّقنا أَنَّه لَكَ عِندَ دُخولِك — ولا شَيءَ مِنهُما في حِسابِكَ هُنا.",
   "shipping.vendor.err_vendor_entry_unreadable": "تَعَذَّرَ فَتحُ رَمزِ حِسابِكَ المَحفوظ — تَواصَل مَعَ مالِكِ المَتجَر.",
+  "shipping.vendor.err_vendor_entry_read_failed": "تَعَذَّرَت قِراءَةُ بَياناتِ الشَّحنِ الآن، فَلَم يُرسَل شَيءٌ ولَم يُحفَظ — أَعِدِ المُحاوَلَةَ بَعدَ قَليل.",
   "shipping.vendor.err_vendor_owns_no_listing": "حِسابُ الشَّحنِ لِلبائِعين — أَضِف إعلاناً في هذا المَتجَرِ أَوَّلاً.",
   "shipping.vendor.err_vendor_paste_closed": "لَصقُ رَمزِ الشَّحنِ غَيرُ مُتاحٍ في هذا المَتجَرِ الآن.",
   "shipping.vendor.err_vendor_register_closed": "التَّسجيلُ عِندَ OTO غَيرُ مُتاحٍ في هذا المَتجَرِ الآن.",
