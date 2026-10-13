@@ -1,5 +1,6 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
 @inject L L
+@inject AuthSession Auth
 
 @*
     صَفحَة دُخول المَتجَر مُتَعَدِّد التَّطبيقات الفَرعيَّة (مَتجَر بِأَدوار).
@@ -65,12 +66,17 @@
        عَلى `/{slug}` — فَالزائِرُ لا يَرى بِضاعَةً قَبلَ التَسجيل، والاستِكشافُ
        بِلا بَوّابَةِ دُخولٍ أَصلاً. فَرابِطٌ واحِدٌ يَكفي، يُبنى مِن **جَذرِ
        المُستَأجِر** كَبِطاقاتِ الأَدوارِ فَلا يَحمِلُ دَوراً لَم يُختَر، وبِصَنفِ
-       السَطرِ الَّذي تَحتَه فَلا قاعِدَةَ CSS جَديدَة. ولا مُحتَوى يُرسَمُ هُنا. *@
-    <div class="acm-role-landing-foot">
-        <a href="@AuthSession.LinkFor(Slug, null, "explore")">@L.Markup("roles.landing.browse")</a>
-    </div>
-
-    <div class="acm-role-landing-foot">
+       السَطرِ الَّذي تَحتَه فَلا قاعِدَةَ CSS جَديدَة. ولا مُحتَوى يُرسَمُ هُنا.
+       **ولِلزائِرِ وَحدَه** (‏2026-10-13، مُراجَعَةُ الموجَةِ الثانِيَة): البَوّابَةُ تُرسَمُ أَيضاً لِمُسَجَّلٍ بِلا دَورٍ فَعّال
+       (`TenantHome`: `!Auth.IsAuthenticated || activeRole is null`)، و«دونَ تَسجيل» كَذِبٌ عَلَيه — فَلا يُرسَمُ لَه.
+       والفَراغانِ مَكتوبانِ صَراحَةً لِأَنّ Razor يُسقِطُ الفَراغَ المُجاوِرَ لِكُتلَةِ `@if` — فَصَفحَةُ الزائِرِ تَبقى بايتاً كَما كانَت. *@
+    @if (!Auth.IsAuthenticated)
+    {
+        @((MarkupString)"\n\n    ")<div class="acm-role-landing-foot">
+            <a href="@AuthSession.LinkFor(Slug, null, "explore")">@L.Markup("roles.landing.browse")</a>
+        </div>
+    }
+    @((MarkupString)"\n\n    ")<div class="acm-role-landing-foot">
         <a href="@AuthSession.LinkFor(Slug, Role, $"login")">@L.Markup("roles.landing.have_account")</a>
     </div>
 </div>

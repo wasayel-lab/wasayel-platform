@@ -148,20 +148,32 @@ public class RoleLandingVisitorDoorCharacterizationTests
     // ─── (٣) لِمَن يُرسَمُ الرابِط — تَوصيفُ «اليَوم» (‏2026-10-13، مُراجَعَةُ الموجَةِ الثانِيَة (iii)) ───
 
     /// <summary>
-    /// <para><b>اليَوم: الرابِطُ يُرسَمُ لِلمُسَجَّلِ الَّذي لا دَورَ فَعّالاً لَه أَيضاً، ونَصُّه «دونَ تَسجيل»</b>. فَرعُ
-    /// <c>TenantHome</c> يُرسِلُ إلى البَوّابَةِ <c>!Auth.IsAuthenticated || activeRole is null</c> — فَالمُسَجَّلُ بِلا دَورٍ يَبلُغُها —
-    /// و<c>RoleLanding.razor</c> لا يَحقِنُ الجَلسَةَ ولا يَسأَلُ عَنها في أَيِّ سَطر، فَيَقرَأُ ذلكَ المُسَجَّلُ «تَصَفَّح المَتجَر دونَ
-    /// تَسجيل» وهو مُسَجَّل. يَنقَلِبُ بِاسمِه في كوميتِ الإصلاح.</para>
+    /// <para><b>الرابِطُ لِلزائِرِ وَحدَه</b> (‏2026-10-13 — انقَلَبَ بِقَرارٍ مَرئِيٍّ مِن
+    /// <c>Today_the_browse_link_is_drawn_for_a_signed_in_user_without_an_active_role_too</c>): فَرعُ <c>TenantHome</c> كَما كانَ
+    /// يُرسِلُ المُسَجَّلَ بِلا دَورٍ إلى البَوّابَة، و<c>RoleLanding.razor</c> يَحقِنُ الجَلسَةَ الآنَ ويَرسُمُ سَطرَ الاستِكشافِ داخِلَ
+    /// <c>@if (!Auth.IsAuthenticated)</c> وَحدَه — فَلا يَقرَأُ مُسَجَّلٌ «دونَ تَسجيل». والنَصُّ لَم يَتَبَدَّل، وسَطرُ «لَدَيكَ حِساب»
+    /// خارِجَ الشَرط.</para>
     /// </summary>
     [Fact]
-    public void Today_the_browse_link_is_drawn_for_a_signed_in_user_without_an_active_role_too()
+    public void The_browse_link_is_drawn_for_anonymous_visitors_only()
     {
         var home = Flat(Template("Components", "Pages", "TenantHome.razor"));
         Assert.Contains("(!Auth.IsAuthenticated || activeRole is null)", home, StringComparison.Ordinal);
 
         var razor = RoleLanding();
-        Assert.DoesNotContain("IsAuthenticated", razor, StringComparison.Ordinal);
-        Assert.DoesNotContain("@inject AuthSession", razor, StringComparison.Ordinal);
+        Assert.Contains("@inject AuthSession Auth", razor, StringComparison.Ordinal);
+        Assert.Equal(1, Count(razor, "@if (!Auth.IsAuthenticated)"));
+        Assert.Contains(
+            "@if (!Auth.IsAuthenticated) { @((MarkupString)\"\\n\\n \")<div class=\"acm-role-landing-foot\"> " +
+            "<a href=\"@AuthSession.LinkFor(Slug, null, \"explore\")\">@L.Markup(\"roles.landing.browse\")</a> </div> }",
+            Flat(razor), StringComparison.Ordinal);
+
+        var guarded = Flat(razor).IndexOf("@if (!Auth.IsAuthenticated)", StringComparison.Ordinal);
+        var haveAccount = Flat(razor).IndexOf("@L.Markup(\"roles.landing.have_account\")", StringComparison.Ordinal);
+        Assert.True(guarded > 0 && haveAccount > guarded);
+        Assert.Contains("} @((MarkupString)\"\\n\\n \")<div class=\"acm-role-landing-foot\"> <a href=\"@AuthSession.LinkFor(Slug, Role, $\"login\")\">",
+            Flat(razor), StringComparison.Ordinal);
+
         Assert.Contains("دونَ تَسجيل",
             ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "roles.landing.browse"),
             StringComparison.Ordinal);
