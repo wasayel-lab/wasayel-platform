@@ -295,10 +295,10 @@ public static class AuthHandlers
             session.Store(existing);
             await session.SaveChangesAsync();
         }
-        else if (email is not null && !existing.EmailVerified)
+        else if (RaiseVerified(existing, email, nationalId))
         {
             // مُستَخدِم قَديم بِبَريد غَير مُوَثَّق أَثبَتَ مِلكِيَّته الآن.
-            existing.EmailVerified = true;
+            // (‏2026-10-13، G5 M2 — ولا يُعادُ حَرفٌ فَوقَه: أَو بِجَوّالٍ غَيرِ مُوَثَّقٍ أَثبَتَه رَمزٌ إلَيه — `RaiseVerified`.)
             existing.UpdatedAt = DateTime.UtcNow;
             session.Store(existing);
             await session.SaveChangesAsync();
@@ -308,6 +308,26 @@ public static class AuthHandlers
         // بِطاقَة مُستَخدِم بَريديّ بِمُعَرِّف فارِغ في الواجِهَة والإشعارات.
         var display = string.IsNullOrEmpty(existing.Phone) ? existing.Email : existing.Phone;
         return new AuthResult(existing.Id, existing.FullName, display, token, existing.Role);
+    }
+
+    /// <summary>
+    /// <para><b>ما يَرفَعُه دُخولٌ نَجَحَ لِحِسابٍ قائِم</b> — دالَّةٌ تُعَدِّلُ الوَثيقَةَ المُمَرَّرَةَ وتُرجِعُ <c>true</c> إن تَغَيَّرَت فَتُحفَظ:
+    /// البَريدُ إن أَثبَتَه رَمزٌ إلى بَريدِه (كَما كان)، <b>والجَوّالُ إن أَثبَتَه رَمزٌ إلى جَوّالِه</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 M2).
+    /// كانَ <c>PhoneVerified</c> يُكتَبُ عِندَ الإنشاءِ وَحدَه، فَحِسابٌ كَتَبَه غَيرُ الدُخولِ (المُستَورِد، بَذرَةُ الاختِبار) يَبقى غَيرَ مُتَحَقَّقٍ
+    /// مِنه بَعدَ رَمزٍ ناجِحٍ إلى جَوّالِه — وبَوّابَةُ جِهَةِ التَواصُلِ (<c>VendorContactGate</c>) تَقرَؤُه. <b>ونَفاذٌ لا يَرفَعُ شَيئاً</b>: جَوّالُه
+    /// <c>NID-…</c> أَو جَوّالٌ لَم يُرسَل إلَيه رَمز.</para>
+    /// </summary>
+    public static bool RaiseVerified(User existing, string? email, string? nationalId)
+    {
+        if (email is not null)
+        {
+            if (existing.EmailVerified) return false;
+            existing.EmailVerified = true;
+            return true;
+        }
+        if (nationalId is not null || existing.PhoneVerified) return false;
+        existing.PhoneVerified = true;
+        return true;
     }
 
     /// <summary>

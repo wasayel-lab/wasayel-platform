@@ -33,15 +33,51 @@ public class PhoneVerifiedOnLoginTests(ITestOutputHelper output)
         return code[start..end];
     }
 
-    /// <summary><b>اليَوم</b>: الحِسابُ القائِمُ يُرفَعُ لَه <c>EmailVerified</c> وَحدَه — و<c>PhoneVerified</c> لا يُكتَبُ إلّا عِندَ الإنشاء.</summary>
+    /// <summary><b>قُلِبَ</b> (‏2026-10-13، G5 M2) — كانَ <c>Today_an_existing_account_gets_email_verified_raised_and_never_phone_verified</c> (‏<c>31f21c0</c>):
+    /// الحِسابُ القائِمُ يُرفَعُ لَه ما أَثبَتَه دُخولُه بِدالَّةٍ واحِدَة — <c>RaiseVerified</c> — والجِسمُ لا يَكتُبُ عَلَماً بِنَفسِه بَعدَ الإنشاء.</summary>
     [Fact]
-    public void Today_an_existing_account_gets_email_verified_raised_and_never_phone_verified()
+    public void An_existing_account_gets_the_channel_its_login_proved_raised_through_one_pure_function()
     {
         var body = GetOrCreateBody();
         output.WriteLine($"طولُ الجِسم: {body.Length} · ذِكرُ PhoneVerified: {body.Split("PhoneVerified").Length - 1}");
-        Assert.Contains("else if (email is not null && !existing.EmailVerified)", body, StringComparison.Ordinal);
+        Assert.Contains("else if (RaiseVerified(existing, email, nationalId))", body, StringComparison.Ordinal);
         Assert.DoesNotContain("existing.PhoneVerified", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("existing.EmailVerified", body, StringComparison.Ordinal);
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(body, @"\bPhoneVerified\b"));   // سَطرُ الإنشاءِ وَحدَه
+    }
+
+    private static User Account(bool phoneVerified = false, bool emailVerified = false) => new()
+    {
+        Id = Guid.NewGuid(), TenantSlug = "zz", Phone = "966500000001", Email = "seller@example.com",
+        PhoneVerified = phoneVerified, EmailVerified = emailVerified,
+    };
+
+    /// <summary><b>المُوجِب</b>: رَمزٌ إلى الجَوّالِ يَرفَعُ <c>PhoneVerified</c> لِحِسابٍ قائِمٍ بِدونِه — ولا يَمَسُّ البَريد؛ ورَمزٌ إلى البَريدِ يَرفَعُ
+    /// <c>EmailVerified</c> — ولا يَمَسُّ الجَوّال (كَما كان).</summary>
+    [Fact]
+    public void A_login_raises_only_the_channel_it_proved_on_an_existing_account()
+    {
+        var byPhone = Account();
+        Assert.True(AuthHandlers.RaiseVerified(byPhone, email: null, nationalId: null));
+        Assert.Equal((true, false), (byPhone.PhoneVerified, byPhone.EmailVerified));
+
+        var byEmail = Account();
+        Assert.True(AuthHandlers.RaiseVerified(byEmail, email: "seller@example.com", nationalId: null));
+        Assert.Equal((false, true), (byEmail.PhoneVerified, byEmail.EmailVerified));
+    }
+
+    /// <summary><b>السالِب</b>: ما رُفِعَ لا يُكتَبُ ثانِيَةً (لا حِفظ)، ونَفاذٌ لا يَرفَعُ شَيئاً — جَوّالُه لَم يُرسَل إلَيه رَمز.</summary>
+    [Fact]
+    public void A_login_raises_nothing_already_raised_and_nafath_raises_nothing()
+    {
+        var phoneDone = Account(phoneVerified: true);
+        Assert.False(AuthHandlers.RaiseVerified(phoneDone, email: null, nationalId: null));
+        var emailDone = Account(emailVerified: true);
+        Assert.False(AuthHandlers.RaiseVerified(emailDone, email: "seller@example.com", nationalId: null));
+
+        var nafath = Account();
+        Assert.False(AuthHandlers.RaiseVerified(nafath, email: null, nationalId: "1000000001"));
+        Assert.Equal((false, false), (nafath.PhoneVerified, nafath.EmailVerified));
     }
 }
 
@@ -89,9 +125,10 @@ public class LivePhoneVerifiedOnLoginProofTests(ITestOutputHelper output)
         await s.SaveChangesAsync();
     }
 
-    /// <summary><b>اليَوم</b>: الدُخولُ يَنجَحُ بِالحِسابِ القائِمِ نَفسِه — والعَلَمُ باقٍ <c>false</c> والبَوّابَةُ تَرُدُّ <c>vendor_contact_unverified</c>.</summary>
+    /// <summary><b>قُلِبَ</b> (‏2026-10-13، G5 M2) — كانَ <c>Today_an_importer_shaped_vendor_who_signs_in_by_phone_stays_unverified_and_the_contact_gate_refuses_on_Postgres</c>:
+    /// الدُخولُ بِالحِسابِ القائِمِ نَفسِه يَرفَعُ <c>PhoneVerified</c>، وبَوّابَةُ جِهَةِ التَواصُلِ تَقبَلُ البائِع.</summary>
     [Fact]
-    public async Task Today_an_importer_shaped_vendor_who_signs_in_by_phone_stays_unverified_and_the_contact_gate_refuses_on_Postgres()
+    public async Task An_importer_shaped_vendor_who_signs_in_by_phone_is_verified_and_the_contact_gate_admits_them_on_Postgres()
     {
         if (!Enabled) return;
 
@@ -102,7 +139,49 @@ public class LivePhoneVerifiedOnLoginProofTests(ITestOutputHelper output)
             var (imported, signedIn, verified, gate) = await ImporterShapedPhoneLoginAsync(store, slug, "966500000001");
             output.WriteLine($"الدُخول: {(signedIn == imported ? "الحِسابُ نَفسُه" : signedIn?.ToString() ?? "مَردود")} · PhoneVerified: {verified} · البَوّابَة: {gate ?? "تَقبَل"}");
             Assert.Equal(imported, signedIn);
-            Assert.False(verified);
+            Assert.True(verified);
+            Assert.Null(gate);
+        }
+        finally { await CleanAsync(store, slug); }
+    }
+
+    private sealed class ApprovingNafath : INafathChannel
+    {
+        public string ChannelName => "approving-nafath";
+        public Task<NafathStartResult> StartAsync(string nationalId, CancellationToken ct)
+            => Task.FromResult(new NafathStartResult(Guid.NewGuid().ToString("N"), "00", 0));
+        public Task<bool> IsApprovedAsync(string attemptId, CancellationToken ct) => Task.FromResult(true);
+    }
+
+    /// <summary><b>والسالِبُ حَيّاً</b>: حِسابٌ بِشَكلِ المُستَورِدِ لَه هُوِيَّةٌ وجَوّال، يَدخُلُ بِنَفاذ — الحِسابُ نَفسُه، ولا يُرفَعُ <c>PhoneVerified</c>
+    /// والبَوّابَةُ تَرُدّ: نَفاذٌ لا يُثبِتُ جَوّالاً.</summary>
+    [Fact]
+    public async Task An_importer_shaped_vendor_who_signs_in_by_nafath_stays_phone_unverified_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = "pv-zz-n-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            var imported = new User
+            {
+                Id = Guid.NewGuid(), TenantSlug = slug, FullName = "بائِعٌ مُستَورَد",
+                Phone = "966500000002", NationalId = "1000000001", CreatedAt = DateTime.UtcNow,
+            };
+            await using (var s = store.LightweightSession(slug)) { s.Store(imported); await s.SaveChangesAsync(); }
+
+            var nafath = new ApprovingNafath();
+            var tenant = new VendorRegisterBucketTests.ResolvedTenant(slug);
+            var pending = await AuthHandlers.RequestNafathHandler(new RequestNafath("1000000001"), tenant, nafath, CancellationToken.None);
+            var result = await AuthHandlers.VerifyNafathHandler(new VerifyNafath(pending.AttemptId, "1000000001"), tenant, nafath, store, CancellationToken.None);
+
+            await using var q = store.QuerySession(slug);
+            var after = (await q.LoadAsync<User>(imported.Id))!;
+            var gate = VendorContactGate.Admit(ListingVendorGate.Admit(imported.Id, imported.FullName, 1).Vendor!, after).Violation?.Code;
+            output.WriteLine($"الدُخول: {(result?.UserId == imported.Id ? "الحِسابُ نَفسُه" : result?.UserId.ToString() ?? "مَردود")} · PhoneVerified: {after.PhoneVerified} · البَوّابَة: {gate ?? "تَقبَل"}");
+            Assert.Equal(imported.Id, result?.UserId);
+            Assert.False(after.PhoneVerified);
             Assert.Equal(VendorContactGate.ContactUnverified, gate);
         }
         finally { await CleanAsync(store, slug); }
