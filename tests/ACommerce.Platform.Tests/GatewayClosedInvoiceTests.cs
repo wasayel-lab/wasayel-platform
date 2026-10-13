@@ -98,19 +98,41 @@ public class GatewayClosedInvoiceTests(ITestOutputHelper output)
 // مُشتَرٍ انتَهَت جَلسَتُه يَعودُ مِن البَوّابَةِ إلى `/{slug}/pay/return?deal={N}` فَيَرى «سَجِّل الدُّخولَ لِتَأكيدِ دَفعِ طَلَبِك» — وبابُه `login`
 // بِلا `returnUrl` (جيرانُه كُلُّهُم يُمَرِّرونَه: `CartPage` و`MyDeals` و`GatedPage`)، فَيَعودُ بَعدَ الدُخولِ إلى بِدايَةِ المَتجَرِ و`?deal=` ضاع.
 // **ما يُقلَبُ بِاسمِه في كوميتِ الإصلاح**: الصَفُّ أَدناه.
+// **قُلِبَ** (‏2026-10-13، كوميتُ «fix(payments)» بَعدَ ‏d066a26): البابُ `GatewayReturn.LoginPathFor(Slug, DealRef)` — الوِجهَةُ مُرَمَّزَةً بِالصَفقَةِ المَقروءَة.
 
 public class GatewayReturnLoginDoorTests(ITestOutputHelper output)
 {
     private static string Page() => WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(Path.Combine(
         ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "GatewayPayReturn.razor"))));
 
+    /// <summary><b>قُلِبَ</b> (‏2026-10-13) — كانَ <c>Today_the_return_pages_login_door_carries_no_return_url</c> (‏<c>d066a26</c>): البابُ يَحمِلُ وِجهَتَه.</summary>
     [Fact]
-    public void Today_the_return_pages_login_door_carries_no_return_url()
+    public void The_return_pages_login_door_carries_the_return_url_with_the_deal()
     {
         var page = Page();
         var door = page[page.IndexOf("@if (!Auth.IsAuthenticated)", StringComparison.Ordinal)..page.IndexOf("else if (refusalKey is not null)", StringComparison.Ordinal)];
         output.WriteLine(door.Trim());
-        Assert.Contains("ActionHref=\"@AuthSession.LinkFor(Slug, Role, \"login\")\"", door, StringComparison.Ordinal);
-        Assert.DoesNotContain("returnUrl", door, StringComparison.Ordinal);
+        Assert.Contains("ActionHref=\"@AuthSession.LinkFor(Slug, Role, GatewayReturn.LoginPathFor(Slug, DealRef))\"", door, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"login\")", door, StringComparison.Ordinal);
+    }
+
+    /// <summary>المُوجِبُ والسالِب: صَفقَةٌ مَقروءَةٌ ⇒ وِجهَتُها بِها، مُرَمَّزَةً، ومَحَلِّيَّةً بَعدَ فَكِّها؛ وقيمَةٌ لا تُقرَأُ صَفقَةً — فارِغَةٌ أَو مَصنوعَةٌ لِلتَحويلِ
+    /// خارِجاً — ⇒ صَفحَةُ العَودَةِ بِلا صَفقَة، لا أَكثَر.</summary>
+    [Theory]
+    [InlineData("11111111222243338444555555555555", "/zz/pay/return?deal=11111111222243338444555555555555")]
+    [InlineData("11111111222243338444555555555555?id=7&status=paid", "/zz/pay/return?deal=11111111222243338444555555555555")]
+    [InlineData(null, "/zz/pay/return")]
+    [InlineData("//evil.example/x", "/zz/pay/return")]
+    [InlineData("javascript:alert(1)", "/zz/pay/return")]
+    public void The_login_return_url_is_the_return_page_with_the_read_deal_only(string? dealRef, string expected)
+    {
+        var path = GatewayReturn.LoginPathFor("zz", dealRef);
+        Assert.StartsWith("login?returnUrl=", path, StringComparison.Ordinal);
+        var encoded = path["login?returnUrl=".Length..];
+        Assert.DoesNotContain("?", encoded, StringComparison.Ordinal);
+        Assert.DoesNotContain("&", encoded, StringComparison.Ordinal);
+        var decoded = Uri.UnescapeDataString(encoded);
+        Assert.Equal(expected, decoded);
+        Assert.True(ACommerce.Templates.Customer.Marketplace.Services.LocalRedirect.IsLocal(decoded));
     }
 }

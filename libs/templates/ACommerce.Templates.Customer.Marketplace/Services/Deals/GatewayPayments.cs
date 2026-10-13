@@ -122,6 +122,15 @@ public static class GatewayReturn
     }
 
     /// <summary>
+    /// <para><b>بابُ الدُخولِ مِن صَفحَةِ العَودَةِ بِوِجهَتِه</b> (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b الثانِيَة، G5 (xvii-g)؛ تَوصيفُ «اليَوم»
+    /// <c>d066a26</c>): <c>login?returnUrl=</c> ومَسارُ صَفحَةِ العَودَةِ المُطلَقُ بِالصَفقَةِ المَقروءَةِ — بِـ<see cref="DealIdOf"/> و<see cref="PathFor"/>
+    /// نَفسَيهِما، فَلا يَعبُرُ إلّا مُعَرِّفٌ بِصيغَةِ <c>N</c> — مُرَمَّزاً (نَسَقُ <c>GatedPage</c>). كانَ «login» حَرفاً فَيَضيعُ <c>?deal=</c> عَلى مُشتَرٍ
+    /// انتَهَت جَلسَتُه. والوِجهَةُ بَعدَ فَكِّ التَرميزِ مَحَلِّيَّةٌ دائِماً (<c>LocalRedirect.IsLocal</c>).</para>
+    /// </summary>
+    public static string LoginPathFor(string slug, string? dealRef)
+        => "login?returnUrl=" + Uri.EscapeDataString($"/{slug}/{PathFor(DealIdOf(dealRef), null)}");
+
+    /// <summary>
     /// <para><b>أَينَ يَعودُ الزِرّ</b>: دَفعٌ ثَبَتَ ← صَفحَةُ الصَفقَة؛ وما سِواه ← صَفحَةُ العَودَةِ بِرَمزِه، فَيُقرَأُ الرَفضُ ولا يُبتلَع.</para>
     /// </summary>
     public static string AfterVerify(GatewayVerifyResult r)

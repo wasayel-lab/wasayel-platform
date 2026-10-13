@@ -29,7 +29,7 @@
     @if (!Auth.IsAuthenticated)
     {
         <AcEmptyState IconName="package" Title="@L["pay.return.need_login"]"
-                      ActionLabel="@L["shell.nav.login"]" ActionHref="@AuthSession.LinkFor(Slug, Role, "login")" />
+                      ActionLabel="@L["shell.nav.login"]" ActionHref="@AuthSession.LinkFor(Slug, Role, GatewayReturn.LoginPathFor(Slug, DealRef))" />
     }
     else if (refusalKey is not null)
     {
