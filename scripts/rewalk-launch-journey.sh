@@ -246,7 +246,7 @@ check "$([ "$CODE" = 200 ] && echo 1 || echo 0)" "GET /$SLUG/explore (بِلا �
 
 # ═══ ٤) بائِعٌ يُسَجِّلُ ويُسَكِّنُ نَفسَه ويَنشُر ════════════════════
 STEP="٤ — البائِع"
-say "٤ · بائِعٌ: تَسجيل ← «تاجِر» ذاتِيّاً ← نَشر"
+say "٤ · بائِعٌ: تَسجيل ← دَورُ vendor ذاتِيّاً ← نَشر"
 store_login "$J_VEN" "$SLUG" "$P_VEN"
 get "$J_VEN" "/$SLUG/me/role" "$F"
 check "$([ "$CODE" = 200 ] && grep -q 'name="role" value="vendor"' "$F" && echo 1 || echo 0)" \
@@ -279,7 +279,7 @@ check "$([ "$CODE" = 302 ] && [[ "$LID" =~ ^[0-9a-f-]{36}$ ]] && echo 1 || echo 
 
 # ═══ ٥) مُشتَرٍ: سَلَّة ← دَفعٌ نَقدِيّ، والبِطاقَةُ لا تُعرَض ═══════════
 STEP="٥ — المُشتَري"
-say "٥ · مُشتَرٍ: تَسجيل ← «أَضِف لِلسَلَّة» ← نَقداً"
+say "٥ · مُشتَرٍ: تَسجيل ← «$(ar listings.detail.cta_cart)» ← نَقداً"
 store_login "$J_BUY" "$SLUG" "$P_BUY"
 post "$J_BUY" "/$SLUG/me/role/save" --data-urlencode role=customer
 check "$([ "$CODE" = 302 ] && echo 1 || echo 0)" "POST /$SLUG/me/role/save role=customer → $CODE $LOC"
@@ -373,11 +373,16 @@ check "$([ "$CODE" = 200 ] && has "$F" "$LINE" && echo 1 || echo 0)" "GET /studi
 STEP="٩ — أَوَّلُ مُشرِف"
 say "٩ · /studio/apps/$SLUG ← /$SLUG/login ← عَودَة ← «$(ar admin.tenant_users.grant)»"
 ACTS=0
+# نُصوصُ الرَوابِطِ مِن القامُوسِ كَسائِرِ الفُحوص — ‏(‏2026-10-13: كانَ السَطرُ يَطبَعُ «افتَح المَتجَر» و«المُستَخدِمون»
+# وَصفاً مِن الذاكِرَة، ولا نَصَّ بِهِما في الصَفحَة؛ والمَفحوصُ كانَ العُنوانَينِ وَحدَهُما.)
+PREVIEW="$(ar studio.app_nav.preview)"; USERS_LINK="$(ar studio.app.users_title)"; HAVE_ACCOUNT="$(ar roles.landing.have_account)"
 get "$J_ADM" "/studio/apps/$SLUG" "$F"
-check "$([ "$CODE" = 200 ] && grep -q "href=\"/$SLUG\"" "$F" && grep -q "href=\"/admin/tenants/$SLUG/users?from=studio\"" "$F" && echo 1 || echo 0)" \
-    "GET /studio/apps/$SLUG → $CODE · رابِطا «افتَح المَتجَر» و«المُستَخدِمون»"
+check "$([ "$CODE" = 200 ] && grep -q "href=\"/$SLUG\"" "$F" && grep -q "href=\"/admin/tenants/$SLUG/users?from=studio\"" "$F" \
+        && has "$F" "$PREVIEW" && has "$F" "$USERS_LINK" && echo 1 || echo 0)" \
+    "GET /studio/apps/$SLUG → $CODE · «$PREVIEW» إلى /$SLUG و«$USERS_LINK» إلى …/users?from=studio"
 get "$J_ADM" "/$SLUG" "$F"; ACTS=$((ACTS + 1))
-check "$([ "$CODE" = 200 ] && grep -q "href=\"/$SLUG/login\"" "$F" && echo 1 || echo 0)" "[فِعل $ACTS] GET /$SLUG → $CODE · رابِطُ /$SLUG/login"
+check "$([ "$CODE" = 200 ] && grep -q "href=\"/$SLUG/login\"" "$F" && has "$F" "$HAVE_ACCOUNT" && echo 1 || echo 0)" \
+    "[فِعل $ACTS] GET /$SLUG → $CODE · «$HAVE_ACCOUNT» ورابِطُ /$SLUG/login"
 get "$J_ADM" "/$SLUG/login" "$F"; ACTS=$((ACTS + 1))
 check "$([ "$CODE" = 200 ] && echo 1 || echo 0)" "[فِعل $ACTS] GET /$SLUG/login → $CODE"
 store_login "$J_ADM" "$SLUG" "$ADMIN_PHONE"; ACTS=$((ACTS + 2))
