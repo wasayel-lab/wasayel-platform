@@ -353,6 +353,21 @@
                 <AcButton Type="submit" Variant="ghost" Block="true" Text="@L["deals.detail.cancel_action"]" />
             </form>
             }
+            @* وصَفقَةٌ عَلى فاتورَةِ بَوّابَةٍ مَفتوحَةٍ تَدفَعُ لِأَخَواتٍ قائِمَة لا تُلغى وَحدَها — `GatewayInvoiceShare` نَفسُها الَّتي يَسأَلُها الإلغاء
+               (‏2026-10-13، G5 M4؛ القاعِدَة ١٢): مَن يُلغي صَفَقاتِ الفاتورَةِ كُلَّها يَرى «إلغاء الطَّلَب كامِلاً»، وغَيرُه سَطراً يَقولُ لِماذا. *@
+            else if (canCancelOrder)
+            {
+            <form method="post" action="@($"/{Slug}/deals/{deal.Id}/cancel")" style="margin-top:8px;">
+                <input type="hidden" name="scope" value="order" />
+                <p style="color:var(--ac-text-muted);font-size:12px;margin:0 0 6px;">@L.Markup("deals.detail.cancel_order_hint")</p>
+                <input name="reason" class="ac-input" placeholder="@L["deals.detail.cancel_reason_placeholder"]" style="margin-bottom:6px;" />
+                <AcButton Type="submit" Variant="ghost" Block="true" Text="@L["deals.detail.cancel_order_action"]" />
+            </form>
+            }
+            else if (cancelShared)
+            {
+            <p style="color:var(--ac-text-muted);font-size:12px;margin:8px 0 0;">@L.Markup("deals.detail.cancel_shared_hint")</p>
+            }
         }
         else if (deal.Status == DealStatus.Completed)
         {
@@ -430,6 +445,10 @@
     /// <summary>الناظِرُ يُلغي هذِه الصَفقَة — <see cref="DealCancelAuthorization.IsAllowed"/> نَفسُها الَّتي تُطَبِّقُها <c>/cancel</c>
     /// بِسِجِلِّ السُلطَةِ نَفسِه (<c>IsStoreAdmin: false</c>)، فَلا تُرسَمُ استِمارَةٌ تَرُدُّها النُقطَة (‏2026-10-12).</summary>
     bool canCancel;
+    /// <summary>الصَفقَةُ عَلى فاتورَةِ بَوّابَةٍ مَفتوحَةٍ تَدفَعُ لِأَخَواتٍ قائِمَة (<see cref="GatewayInvoiceShare.Validate"/>) فَلا تُلغى وَحدَها،
+    /// و<c>canCancelOrder</c>: الناظِرُ يُلغي صَفَقاتِ الفاتورَةِ كُلَّها — <see cref="DealCancelAuthorization.IsAllowed"/> لِكُلٍّ مِنها، كَما يَسأَلُها
+    /// <c>CancelWholeInvoiceAsync</c> قَبلَ أَيِّ كِتابَة (‏2026-10-13، G5 M4).</summary>
+    bool cancelShared, canCancelOrder;
     /// <summary>الناظِرُ يُنشِئُ بوليصَةَ هذِه الصَفقَة — <see cref="DealShipAuthorization.IsAllowed"/> نَفسُها الَّتي تُطَبِّقُها
     /// <c>/ship</c>، بِرَمزِ ناقِلٍ يُحَلُّ لِهذا المَتجَر (<see cref="DealShipping.CarrierReady"/>) — وبِلا رَمزٍ لا تُرسَم (القاعِدَة ١٢).
     /// و<c>shipResumes</c>: لِلصَفقَةِ طَلَبٌ عِندَ OTO مِن مُحاوَلَةٍ سابِقَة، فَالاستِمارَةُ بِلا مَدينَة.</summary>
@@ -515,6 +534,12 @@
         alreadyReviewed = await Reviews.HasReviewedAsync(Slug, uid, Id);
         canReview = DealReviewAuthorization.IsAllowed(deal, new DealReviewer(uid, Auth.UserName ?? ""));
         canCancel = DealCancelAuthorization.IsAllowed(deal, new DealCanceller(uid, Auth.UserName ?? "", IsStoreAdmin: false));
+        // ولا إلغاءَ وَحدَها لِصَفقَةٍ عَلى فاتورَةٍ مُشتَرَكَةٍ مَفتوحَة — الدالَّةُ الَّتي يَرُدُّ بِها الإلغاء (‏2026-10-13، G5 M4).
+        var siblings = await Deals.InvoiceSiblingsAsync(Slug, deal);
+        cancelShared = canCancel && !GatewayInvoiceShare.IsValid(deal, siblings);
+        canCancelOrder = cancelShared && GatewayInvoiceShare.OwedOnInvoice(deal, siblings)
+            .All(d => DealCancelAuthorization.IsAllowed(d, new DealCanceller(uid, Auth.UserName ?? "", IsStoreAdmin: false)));
+        canCancel = canCancel && !cancelShared;
         // البوليصَة (‏ADR-033 الخُطوَة 3): رابِطاها لِلطَرَفَين بِالدالَّةِ الَّتي يَقرَأُ بِها الشَحنُ والوارِد، واستِمارَتُها بِالبَوّابَةِ
         // الَّتي تُطَبِّقُها النُقطَة — فَما يُرسَمُ هُوَ ما يُقبَل.
         (labelUrl, trackingUrl) = DealShipping.LinksOf(deal);

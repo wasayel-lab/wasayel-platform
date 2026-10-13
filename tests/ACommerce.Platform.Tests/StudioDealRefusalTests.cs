@@ -228,7 +228,8 @@ public class StudioDealRefusalTests(ITestOutputHelper output)
             output.WriteLine($"{code} → {key}");
             checked_++;
         }
-        Assert.Equal(6, checked_);
+        // (‏2026-10-13، G5 M4): +`deal_invoice_shared` — إلغاءُ صَفقَةٍ واحِدَةٍ مِن فاتورَةِ بَوّابَةٍ مَفتوحَةٍ مُشتَرَكَةٍ يُرَدُّ بِه: 6 ← 7.
+        Assert.Equal(7, checked_);
         Assert.Equal(DealRefusalTexts.StudioCodes.Count, DealRefusalTexts.StudioCodes.Distinct(StringComparer.Ordinal).Count());
     }
 

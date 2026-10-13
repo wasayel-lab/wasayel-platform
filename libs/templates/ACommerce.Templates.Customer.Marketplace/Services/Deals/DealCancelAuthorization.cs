@@ -116,3 +116,9 @@ public sealed record DealCancelResult(bool Ok, Deal? Deal, DealCancelViolation? 
 
     public static DealCancelResult Cancelled(Deal deal) => new(true, deal, null);
 }
+
+/// <summary>
+/// <para>ناتِجُ إلغاءِ الطَلَبِ كُلِّه (<c>DealsService.CancelWholeInvoiceAsync</c>، ‏2026-10-13، G5 M4): نَتيجَةُ الصَفقَةِ المَطلوبَة — أَو أَوَّلُ رَدٍّ
+/// أَوقَفَ الإلغاء — و<see cref="Cancelled"/> كُلُّ صَفقَةٍ أُلغِيَت فِعلاً، لِيُخبَرَ طَرَفُ كُلٍّ مِنها.</para>
+/// </summary>
+public sealed record DealOrderCancelResult(DealCancelResult Result, IReadOnlyList<Deal> Cancelled);

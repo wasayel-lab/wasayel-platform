@@ -77,7 +77,9 @@ public class DealNoticeDoorsTests(ITestOutputHelper output)
         // وإلغاءُ الاستوديو الإداريُّ يُخبِرُ بَعدَ إلغاءٍ ناجِحٍ — بَعدَ سَطرِ التَدقيق.
         var studioCancel = Segment(endpoints, "\"/studio/apps/{slug}/deals/{id:guid}/cancel\"", ".DisableAntiforgery();");
         Assert.Contains("Services.Deals.DealNotices notices, L l", studioCancel, StringComparison.Ordinal);
-        Assert.Contains("if (res.Ok) await notices.NotifyCancelledByStoreAsync(slug, res.Deal!, auth.UserId!.Value, l);", studioCancel, StringComparison.Ordinal);
+        // (‏2026-10-13، G5 M4): حَلقَةٌ عَلى ما أُلغِيَ فِعلاً — الصَفقَةُ بَعدَ إلغاءٍ ناجِح، أَو كُلُّ صَفقَةٍ أَلغاها إلغاءُ الطَلَبِ كُلِّه.
+        Assert.Contains("foreach (var gone in order?.Cancelled ?? (res.Ok ? new[] { res.Deal! } : Array.Empty<Services.Deals.Deal>()))", studioCancel, StringComparison.Ordinal);
+        Assert.Contains("await notices.NotifyCancelledByStoreAsync(slug, gone, auth.UserId!.Value, l);", studioCancel, StringComparison.Ordinal);
         Assert.True(studioCancel.IndexOf("\"deal.cancel\"", StringComparison.Ordinal) < studioCancel.IndexOf("NotifyCancelledByStoreAsync(", StringComparison.Ordinal));
 
         // والـAPI: الإلغاءُ بِإلغاءِ العُضو، والتَقَدُّمُ الَّذي يَقبَلُ بِقَبولِه.

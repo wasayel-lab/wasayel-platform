@@ -527,6 +527,63 @@ public sealed class DealsService
     }
 
     /// <summary>
+    /// <para><b>إلغاءُ الطَلَبِ كُلِّه — كُلُّ صَفَقاتِ فاتورَةِ البَوّابَةِ المَفتوحَةِ الَّتي تَدفَعُ لَها</b> (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b،
+    /// G5 M4؛ ‏ADR-032 §٨‑ز مُلحَقاً): البابُ الَّذي يَبقى حينَ يُرَدُّ إلغاءُ صَفقَةٍ واحِدَةٍ بِـ<see cref="GatewayInvoiceShare.Shared"/>. <b>التَخويلُ
+    /// لِكُلِّها قَبلَ أَيِّ كِتابَة</b> (<see cref="DealCancelAuthorization.Validate"/> عَلى كُلِّ صَفقَة — فَالبائِعُ لا يُلغي صَفَقاتِ غَيرِه، والمُشتَري
+    /// وصاحِبُ المَتجَرِ يُلغيانِها)، ثُمَّ تُلغى واحِدَةً واحِدَةً بِالكاتِبِ نَفسِه — والمَطلوبَةُ آخِرَها — فَتُلغي الأَخيرَةُ الفاتورَةَ بِالمُلغي القائِم.</para>
+    /// <para><b>ولا ذَرِّيَّة</b>: تَعارُضٌ في وَسَطِها يُرجِعُ رَمزَه وما أُلغِيَ قَبلَه؛ والإعادَةُ تُلغي ما بَقِيَ قائِماً (ما أُلغِيَ لا يَدفَعُ لَها).
+    /// وصَفقَةٌ لا أَخَواتِ لَها تُلغى وَحدَها كَما يُلغيها <see cref="CancelAsync"/>.</para>
+    /// </summary>
+    public async Task<DealOrderCancelResult> CancelWholeInvoiceAsync(
+        string tenantSlug, Guid dealId, DealCanceller by, string reason, CancellationToken ct = default)
+    {
+        var deal = await LoadAsync(tenantSlug, dealId, ct);
+        if (DealCancelAuthorization.Validate(deal, by) is { } refused)
+            return new(DealCancelResult.Refused(refused, deal), Array.Empty<Deal>());
+
+        var targets = GatewayInvoiceShare.OwedOnInvoice(deal!, await InvoiceSiblingsAsync(tenantSlug, deal!, ct));
+        if (targets.Count == 0) targets = new[] { deal! };
+        foreach (var t in targets)
+            if (DealCancelAuthorization.Validate(t, by) is { } notTheirs)
+                return new(DealCancelResult.Refused(notTheirs, deal), Array.Empty<Deal>());
+
+        var cancelled = new List<Deal>();
+        DealCancelResult? requested = null;
+        CancellingWholeInvoice.Value = true;
+        try
+        {
+            foreach (var t in targets.OrderBy(t => t.Id == dealId))
+            {
+                var r = await CancelAsync(tenantSlug, t.Id, by, reason, ct);
+                if (!r.Ok) return new(r, cancelled);
+                cancelled.Add(r.Deal!);
+                if (t.Id == dealId) requested = r;
+            }
+        }
+        finally { CancellingWholeInvoice.Value = false; }
+        return new(requested ?? DealCancelResult.Cancelled(cancelled[^1]), cancelled);
+    }
+
+    /// <summary>أَخَواتُ الصَفقَةِ عَلى فاتورَتِها كَما سَمّاها <see cref="GatewayPayments.InvoiceDealsRef"/> — كُلٌّ بِجَلسَةِ قِراءَة، بِلا الصَفقَةِ نَفسِها،
+    /// ثَلاثونَ عَلى الأَكثَر (حَدُّ الفاتورَة). فارِغَةٌ حينَ لا مَرجِع. يَقرَؤُها الإلغاءُ وصَفحَتا الصَفقَة.</summary>
+    public async Task<IReadOnlyList<Deal>> InvoiceSiblingsAsync(string tenantSlug, Deal deal, CancellationToken ct = default)
+    {
+        var siblings = new List<Deal>();
+        if (GatewayInvoiceShare.DealsOn(deal) is not { } listed) return siblings;
+        foreach (var id in listed)
+            if (id != deal.Id && await LoadAsync(tenantSlug, id, ct) is { } d) siblings.Add(d);
+        return siblings;
+    }
+
+    /// <summary>
+    /// <para><b>إلغاءُ الطَلَبِ كُلِّه جارٍ في هذا التَدَفُّق</b> (‏2026-10-13، G5 M4): يَضبِطُه <see cref="CancelWholeInvoiceAsync"/> وَحدَه حَولَ نِداءاتِه
+    /// لِـ<see cref="CancelAsync"/> — فَلا يُرَدُّ إلغاءُ صَفقَةٍ مِن فاتورَتِه بِـ<see cref="GatewayInvoiceShare.Shared"/> وهي تُلغى مَعَ أَخَواتِها.
+    /// <c>AsyncLocal</c>: لا يَتَعَدّى تَدَفُّقَ ذلكَ النِداء (طَلَبٌ آخَرُ مُتَزامِنٌ لا يَراه)، ولا يَعودُ إلى المُنادي. وبَقِيَ تَوقيعُ
+    /// <see cref="CancelAsync"/> بِحَرفِه — فاحِصو الكاتِبِ يَقيسونَه بِه.</para>
+    /// </summary>
+    private static readonly AsyncLocal<bool> CancellingWholeInvoice = new();
+
+    /// <summary>
     /// <para><b>الحارِسُ في التَوقيع</b> (القاعِدَة ٦): الوَسيطُ
     /// <see cref="DealCanceller"/> إلزامِيٌّ ويَحمِل السُلطَة، ولا
     /// يوجَد حِملٌ زائِدٌ بِـ<c>Guid actorId</c> — فَلا يُمكِن نِداءُ
@@ -550,6 +607,12 @@ public sealed class DealsService
         if (violation is not null) return DealCancelResult.Refused(violation, loaded);
         // ‏`Validate` تَرُدّ `deal_not_found` عِندَ العَدَم، فَما بَعدَها غَيرُ عَدَم.
         var deal = loaded!;
+
+        // ولا تُلغى وَحدَها صَفقَةٌ عَلى فاتورَةِ بَوّابَةٍ مَفتوحَةٍ تَدفَعُ لِأُختٍ قائِمَة — قَبلَ أَيِّ كِتابَة (‏2026-10-13، G5 M4؛ ‏ADR-032 §٨‑ز مُلحَقاً):
+        // كانَت تُلغى فَتَبقى الفاتورَةُ قابِلَةً لِلدَّفعِ بِالمَبلَغِ كامِلاً (تَوصيفُه `411e120`). والطَلَبُ كُلُّه بِـ`CancelWholeInvoiceAsync`.
+        if (!CancellingWholeInvoice.Value
+            && GatewayInvoiceShare.Validate(deal, await InvoiceSiblingsAsync(tenantSlug, deal, ct)).FirstOrDefault() is { } shared)
+            return DealCancelResult.Refused(new DealCancelViolation(shared.Code, shared.MessageAr), deal);
 
         deal.Status = DealStatus.Cancelled;
         deal.CancelReason = reason;

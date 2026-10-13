@@ -105,7 +105,12 @@
                     <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/cancel")"
                           style="display:flex;gap:8px;flex:1;min-width:200px;">
                         <input class="st-input" name="reason" placeholder="@L["studio.deal.cancel_placeholder"]" />
-                        <button type="submit" class="st-btn st-btn-ghost" style="white-space:nowrap;">@((MarkupString)"\n                            ")@L.Markup("studio.deal.cancel")@((MarkupString)"\n                        ")
+                        @* وصَفقَةٌ عَلى فاتورَةِ بَوّابَةٍ مَفتوحَةٍ مُشتَرَكَة لا تُلغى وَحدَها — الإلغاءُ لِلطَلَبِ كُلِّه (‏2026-10-13، G5 M4). *@
+                        @if (cancelShared)
+                        {
+                            <input type="hidden" name="scope" value="order" />
+                        }
+                        <button type="submit" class="st-btn st-btn-ghost" style="white-space:nowrap;">@((MarkupString)"\n                            ")@L.Markup(cancelShared ? "studio.deal.cancel_order" : "studio.deal.cancel")@((MarkupString)"\n                        ")
                         </button>
                     </form>
                 </div>
@@ -194,6 +199,7 @@
     [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
     Deal? deal;
     List<DealStage> stages = new();
+    bool cancelShared;
 
     protected override async Task OnInitializedAsync()
     {
@@ -202,6 +208,8 @@
         var t = await Tenants.FindAsync(Slug);
         if (t is null || t.OwnerUserId != Auth.UserId!.Value) return;
         deal = await Deals.LoadAsync(Slug, Id);
+        // صَفقَةٌ عَلى فاتورَةِ بَوّابَةٍ مَفتوحَةٍ تَدفَعُ لِأَخَواتٍ قائِمَة — بابُها إلغاءُ الطَلَبِ كُلِّه (‏2026-10-13، G5 M4).
+        if (deal is not null) cancelShared = !GatewayInvoiceShare.IsValid(deal, await Deals.InvoiceSiblingsAsync(Slug, deal));
         // بِوَعيِ طَريقَةِ الدَفع (‏ADR-033 §٦): صَفقَةُ النَقدِ لا تَرسُمُ خُطوَةَ «دَفع».
         if (deal is not null) stages = DealsPolicy.StagesFor(deal).ToList();
     }

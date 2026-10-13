@@ -3369,9 +3369,16 @@ public static class MarketplaceTemplateExtensions
             // الحارِسُ في تَوقيعِ الخِدمَة، وهذا المَسارُ يُصَرِّح
             // بِأَنَّه **لَيسَ** مُشرِفَ مَتجَر. مُستَخدِمُ المَتجَر
             // يُلغي صَفقَتَه هُوَ لا صَفقَةَ غَيرِه.
-            var res = await deals.CancelAsync(slug, id, new Services.Deals.DealCanceller(userId, userName, IsStoreAdmin: false),
-                string.IsNullOrEmpty(reason) ? "إلغاء" : reason);
-            if (res.Ok) await notices.NotifyCancelledAsync(slug, res.Deal!, userId, userName, l);
+            // والطَلَبُ كُلُّه — كُلُّ صَفَقاتِ فاتورَةِ البَوّابَةِ المَفتوحَة — بِـ`scope=order` (‏2026-10-13، G5 M4؛ ‏ADR-032 §٨‑ز مُلحَقاً): إلغاءُ
+            // صَفقَةٍ واحِدَةٍ مِنها يُرَدُّ بِـ`deal_invoice_shared`، والصَفحَةُ تَرسُمُ هذا البابَ بَدَلَه لِمَن يُلغي صَفَقاتِ الفاتورَةِ كُلَّها.
+            var by = new Services.Deals.DealCanceller(userId, userName, IsStoreAdmin: false);
+            var why = string.IsNullOrEmpty(reason) ? "إلغاء" : reason;
+            var order = req.Form["scope"].ToString() == "order"
+                ? await deals.CancelWholeInvoiceAsync(slug, id, by, why)
+                : null;
+            var res = order?.Result ?? await deals.CancelAsync(slug, id, by, why);
+            foreach (var gone in order?.Cancelled ?? (res.Ok ? new[] { res.Deal! } : Array.Empty<Services.Deals.Deal>()))
+                await notices.NotifyCancelledAsync(slug, gone, userId, userName, l);
             return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}")));
         }).DisableAntiforgery()
           .RequireStoreWritable();
@@ -3497,14 +3504,19 @@ public static class MarketplaceTemplateExtensions
             if (string.IsNullOrEmpty(reason)) reason = "إلغاء إداريّ";
             // ‏`StudioOwnsAsync` أَعلاه أَثبَتَ مِلكِيَّةَ المَتجَر —
             // فَالسُلطَةُ تُقال هُنا صَراحَةً بَدَلَ أَن تُستَنتَج.
-            var res = await deals.CancelAsync(slug, id,
-                new Services.Deals.DealCanceller(auth.UserId!.Value, "مالِك التَّطبيق", IsStoreAdmin: true), reason);
-            if (res.Ok) await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
-                "deal.cancel", "deal", id.ToString(), note: reason,
-                ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
-            // والمُشتَري يُخبَرُ كَما يُخبَرُ مِن بابِ العُضو — بِنَصِّ «إدارَةِ المَتجَر» (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (iii)؛
-            // ‏ADR-036 §١٢‑٣): كانَ هذا الإلغاءُ صامِتاً (تَوصيفُه `DealNoticeDoorsTests`). و«مَن يُخبَر» والتَركيبُ في الخِدمَة.
-            if (res.Ok) await notices.NotifyCancelledByStoreAsync(slug, res.Deal!, auth.UserId!.Value, l);
+            // والطَلَبُ كُلُّه بِـ`scope=order` (‏2026-10-13، G5 M4): إلغاءُ صَفقَةٍ واحِدَةٍ مِن فاتورَةِ بَوّابَةٍ مَفتوحَةٍ مُشتَرَكَةٍ يُرَدُّ بِرَمزِه.
+            var by = new Services.Deals.DealCanceller(auth.UserId!.Value, "مالِك التَّطبيق", IsStoreAdmin: true);
+            var order = req.Form["scope"].ToString() == "order" ? await deals.CancelWholeInvoiceAsync(slug, id, by, reason) : null;
+            var res = order?.Result ?? await deals.CancelAsync(slug, id, by, reason);
+            foreach (var gone in order?.Cancelled ?? (res.Ok ? new[] { res.Deal! } : Array.Empty<Services.Deals.Deal>()))
+            {
+                await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
+                    "deal.cancel", "deal", gone.Id.ToString(), note: reason,
+                    ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
+                // والمُشتَري يُخبَرُ كَما يُخبَرُ مِن بابِ العُضو — بِنَصِّ «إدارَةِ المَتجَر» (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (iii)؛
+                // ‏ADR-036 §١٢‑٣): كانَ هذا الإلغاءُ صامِتاً (تَوصيفُه `DealNoticeDoorsTests`). و«مَن يُخبَر» والتَركيبُ في الخِدمَة.
+                await notices.NotifyCancelledByStoreAsync(slug, gone, auth.UserId!.Value, l);
+            }
             return Results.Redirect($"/studio/apps/{slug}/deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}"));
         }).DisableAntiforgery();
 

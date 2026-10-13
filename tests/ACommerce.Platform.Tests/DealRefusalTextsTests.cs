@@ -36,6 +36,7 @@ public class DealRefusalTextsTests
             .Append(DealShipping.ShipmentUnconfirmed)
             .Append(DealShipping.DealAwaitsCarrier)
             .Append(GatewayPayments.DealAwaitsPayment)
+            .Concat(GatewayInvoiceShare.All)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(c => c, StringComparer.Ordinal);
         Assert.Equal(expected, DealRefusalTexts.Codes.OrderBy(c => c, StringComparer.Ordinal));
@@ -44,7 +45,8 @@ public class DealRefusalTextsTests
         // وعَميلُ OTO 5 — فَـ9 + 7 + 5 = 21؛ ثُمَّ `shipment_unconfirmed` — 22؛ ثُمَّ `deal_awaits_carrier` — 23.
         // ثُمَّ `oto_order_closed` (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12) — عُضوٌ حادِيَ عَشَرَ في بَوّابَةِ الشَحن، يَدخُلُ بِها: 23 ← 24.
         // ثُمَّ `deal_awaits_payment` (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12) — رَمزُ «فاتورَتُها لَم تُدفَع» مِن `AdvanceAsync`: 24 ← 25.
-        Assert.Equal(25, DealRefusalTexts.Codes.Count);
+        // ثُمَّ `deal_invoice_shared` (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b، G5 M4) — رَدُّ إلغاءِ صَفقَةٍ واحِدَةٍ مِن فاتورَةٍ مُشتَرَكَةٍ مَفتوحَة: 25 ← 26.
+        Assert.Equal(26, DealRefusalTexts.Codes.Count);
         Assert.Equal(DealRefusalTexts.Codes.Count, DealRefusalTexts.Codes.Distinct(StringComparer.Ordinal).Count());
     }
 
@@ -59,7 +61,8 @@ public class DealRefusalTextsTests
                      .Concat(DealShipAuthorization.All).Concat(ACommerce.Kit.Delivery.OtoFailures.All)
                      .Append(DealShipping.ShipmentUnconfirmed)
                      .Append(DealShipping.DealAwaitsCarrier)
-                     .Append(GatewayPayments.DealAwaitsPayment))
+                     .Append(GatewayPayments.DealAwaitsPayment)
+                     .Concat(GatewayInvoiceShare.All))   // (‏2026-10-13، G5 M4)
         {
             var key = DealRefusalTexts.KeyFor(code);
             Assert.Equal(DealRefusalTexts.Prefix + code, key);
@@ -73,7 +76,7 @@ public class DealRefusalTextsTests
         // — + 1 (`shipment_unconfirmed`، مُراجَعَةُ تَيّارِ S7، ‏2026-10-12): 26 ← 27؛ + 1 (`deal_awaits_carrier`، المُراجَعَةُ الثانِيَة): 27 ← 28.
         // + 1 (`oto_order_closed`، مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12 — في بَوّابَةِ الشَحن): 28 ← 29.
         // + 1 (`deal_awaits_payment`، ‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12): 29 ← 30.
-        Assert.Equal(30, checked_);
+        Assert.Equal(31, checked_);   // (‏2026-10-13، G5 M4): +`deal_invoice_shared` — 30 ← 31.
     }
 
     /// <summary><b>نَصُّ «بِلا مالِكِ إعلان» يُسَمّي مَن يُحَرِّكُها حَقّاً</b> (‏2026-10-11، مُراجَعَةُ الموجَةِ الثانِيَةِ

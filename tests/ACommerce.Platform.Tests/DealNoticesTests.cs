@@ -322,8 +322,11 @@ public class DealNoticesTests
     {
         var endpoints = Source(Template, "MarketplaceTemplateExtensions.cs");
         var cancel = Segment(endpoints, "\"/{slug}/deals/{id:guid}/cancel\"", ".RequireStoreWritable();");
-        var call = cancel.IndexOf("var res = await deals.CancelAsync(slug, id,", StringComparison.Ordinal);
-        var tell = cancel.IndexOf("if (res.Ok) await notices.NotifyCancelledAsync(slug, res.Deal!, userId, userName, l);", StringComparison.Ordinal);
+        // (‏2026-10-13، G5 M4 — ولا يُعادُ حَرفٌ فَوقَه: والطَلَبُ كُلُّه بِـ`scope=order` يُلغي صَفَقاتِ فاتورَةِ البَوّابَةِ المُشتَرَكَة، فَصارَ الإخبارُ
+        // حَلقَةً عَلى ما أُلغِيَ فِعلاً — الصَفقَةُ وَحدَها بَعدَ إلغاءٍ ناجِح، أَو كُلُّ صَفقَةٍ أَلغاها إلغاءُ الطَلَب. والشَرطُ «بَعدَ النَجاحِ وَحدَه» بِحَرفِه.)
+        var call = cancel.IndexOf("var res = order?.Result ?? await deals.CancelAsync(slug, id, by, why);", StringComparison.Ordinal);
+        var tell = cancel.IndexOf("foreach (var gone in order?.Cancelled ?? (res.Ok ? new[] { res.Deal! } : Array.Empty<Services.Deals.Deal>()))\n" +
+            "                await notices.NotifyCancelledAsync(slug, gone, userId, userName, l);", StringComparison.Ordinal);
         var back = cancel.IndexOf("return Results.Redirect(Link(req, slug, $\"deals/{id}\"", StringComparison.Ordinal);
         Assert.True(call > 0 && tell > call && back > tell, $"إخبارُ المُشتَري لا يَتلو الإلغاء: call={call} tell={tell} back={back}");
         Assert.Equal(1, Count(cancel, "NotifyCancelledAsync("));

@@ -143,6 +143,7 @@ public static class DealApi
             DealsService.ChangedMeanwhile => ApiOutcome.Error(
                 ApiErrorCatalog.DealChangedMeanwhile,
                 new { status = result.Deal?.Status.ToString() }),
+            GatewayInvoiceShare.Shared => ApiOutcome.Error(ApiErrorCatalog.DealInvoiceShared),
             _ => ApiOutcome.Error(ApiErrorCatalog.ValidationFailed),
         };
     }

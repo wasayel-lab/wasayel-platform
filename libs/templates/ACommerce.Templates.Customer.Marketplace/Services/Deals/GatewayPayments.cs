@@ -197,6 +197,13 @@ public sealed class GatewayPayments
     public const string InvoiceUrlRef = "gateway_invoice_url";
 
     /// <summary>
+    /// <para><b>صَفَقاتُ الفاتورَةِ الواحِدَة عَلى كُلِّ صَفقَةٍ مِنها</b> (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b، G5 M4؛ ‏ADR-032 §٨‑ز مُلحَقاً):
+    /// مُعَرِّفاتُها مَفصولَةً بِفاصِلَة، يَكتُبُها <see cref="OpenInvoiceAsync"/> مَعَ مَرجِعِ الفاتورَة — فَيَعرِفُ الإلغاءُ وصَفحَتا الصَفقَةِ
+    /// أَخَواتِ الفاتورَةِ بِلا نِداءٍ إلى البَوّابَةِ ولا استِعلام (<see cref="GatewayInvoiceShare"/>). داخِلِيٌّ: لا يُرسَمُ لِلطَرَفَين.</para>
+    /// </summary>
+    public const string InvoiceDealsRef = "gateway_invoice_deals";
+
+    /// <summary>
     /// <para><b>عَلى الصَفقَةِ فاتورَةُ بَوّابَةٍ لَم يَثبُت دَفعُها، وتاليها «دَفع»</b> — رَمزُ <see cref="DealsService.AdvanceAsync"/> حينَ
     /// تَصدُقُ <see cref="AwaitsPayment"/>. يَبلُغُه زِرُّ «تَأكيد: دَفع» (<c>/advance</c> ← <c>?err=</c>) والـAPI (‏409)؛ والصَفحَةُ لا تَرسُمُ
     /// ذلكَ الزِرَّ لَها — بابُها «أَكمِل الدَّفع». نَسَقُ <see cref="DealShipping.DealAwaitsCarrier"/>.</para>
@@ -371,10 +378,13 @@ public sealed class GatewayPayments
             return new GatewayCheckout(null, code);
         }
 
+        var siblings = GatewayInvoiceShare.ValueFor(deals.Select(d => d.Id).ToArray());
         foreach (var d in deals)
         {
             await _deals.AttachRefAsync(tenantSlug, d.Id, GatewayPaymentProof.InvoiceRef, invoice.Id, ct);
             await _deals.AttachRefAsync(tenantSlug, d.Id, InvoiceUrlRef, invoice.Url!, ct);
+            // وأَخَواتُها عَلى الفاتورَة — فَلا تُلغى إحداها وَحدَها والفاتورَةُ مَفتوحَة (‏2026-10-13، G5 M4).
+            await _deals.AttachRefAsync(tenantSlug, d.Id, InvoiceDealsRef, siblings, ct);
         }
         _log.LogInformation("[gateway] open invoice {Slug} for {Count} deal(s) ← opened", tenantSlug, deals.Count);
         return new GatewayCheckout(invoice.Url, null);
@@ -458,6 +468,78 @@ public sealed class GatewayPayments
 // المَتجَرِ وتُحَمَّلُ الصَفَقاتُ الَّتي تُسَمّيها، وتُسأَلُ `GatewayInvoiceClosing` النَقِيَّة: **أَهذِه فاتورَتُها، وأَمَفتوحَةٌ هي، وأَلا قائِمَةَ
 // عَلَيها لَم تُدفَع؟** — فَإن صَدَقَت الثَلاثُ أُلغِيَت عِندَ البَوّابَة. وأُختٌ قائِمَةٌ تُبقيها: الفاتورَةُ تَدفَعُ لَها، وإلغاؤها وفَتحُ أُخرى
 // بِالباقي قَرارُ مُنتَجٍ لا يُتَّخَذُ هُنا («ب» S9·١٤). **وفَشَلُ أَيِّ خُطوَةٍ رَمزٌ في اللوغِ لا يَرُدُّ الإلغاء** — قَد حُفِظَ قَبلَها.
+
+// ═══ لا تُلغى صَفقَةٌ واحِدَةٌ مِن فاتورَةٍ مَفتوحَةٍ تَدفَعُ لِغَيرِها (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b، G5 M4؛ ‏ADR-032 §٨‑ز مُلحَقاً) ═══
+//
+// إتمامُ الشِراءِ يَضَعُ صَفَقاتِ السَلَّةِ كُلَّها عَلى فاتورَةِ Moyasar واحِدَة، والطَرَفُ المُقابِلُ يُلغي أَيَّ صَفقَةٍ قائِمَةٍ وَحدَها — فَتَبقى
+// الفاتورَةُ قابِلَةً لِلدَّفعِ بِالمَبلَغِ كامِلاً (`GatewayInvoiceCloser` لا يُلغيها ما دامَت أُختٌ قائِمَة، ووَثيقَةُ Moyasar لا تُغَيِّرُ المَبلَغ:
+// التَحديثُ يُغَيِّرُ البَيانات، والإلغاءُ يُلغي الفاتورَةَ كُلَّها). تَوصيفُه `GatewayInvoiceShareTests` (`411e120`). **القَرارُ تَحتَ التَفويض**
+// (التَوصِيَةُ بِحَرفِها): ما دامَت الفاتورَةُ مَفتوحَةً لَم تُدفَع، **إلغاءُ صَفقَةٍ مِنها وأُختٌ قائِمَةٌ عَلَيها يُرَدُّ** بِرَمزٍ مُسَمّى — فَتَبقى الفاتورَةُ
+// مُساوِيَةً لِصَفَقاتِها القائِمَة؛ **والطَلَبُ كُلُّه يُلغى** (كُلُّ صَفَقاتِ الفاتورَة — والأَخيرَةُ تُلغي الفاتورَةَ بِالمُلغي القائِم)؛ وبَعدَ الدَفعِ
+// يُلغى بَعضُها بِمَسارِ «استِرجاعُه مُستَحَقٌّ عِندَ البَوّابَة» القائِم.
+
+/// <summary>رَدُّ إلغاءِ صَفقَةٍ واحِدَةٍ مِن فاتورَةٍ مُشتَرَكَة — <c>Code</c> مِن <see cref="GatewayInvoiceShare.All"/>.</summary>
+public sealed record DealInvoiceShareViolation(string Code, string MessageAr);
+
+/// <summary>
+/// <para><b>أَتُشارِكُ الصَفقَةُ فاتورَتَها المَفتوحَةَ صَفَقاتٍ قائِمَةً أُخرى؟</b> — بَوّابَةٌ نَقِيَّةٌ بِرَمزٍ واحِدٍ لا ثانِيَ لَه (القاعِدَة ٤)، يَسأَلُها
+/// <see cref="DealsService.CancelAsync"/> قَبلَ أَيِّ كِتابَةٍ وصَفحَتا الصَفقَةِ قَبلَ رَسمِ بابِ الإلغاء (القاعِدَتانِ ٧ و١٢). تَقرَأُ الصَفقَةَ
+/// وأَخَواتِها كَما حَمَّلَها المُنادي مِمّا سَمّاه <see cref="GatewayPayments.InvoiceDealsRef"/> — بِلا شَبَكَةٍ ولا Marten.</para>
+/// <para><b>ولا تَرُدُّ ما لا تَعرِفُ أَخَواتِه</b>: صَفقَةٌ فُتِحَت فاتورَتُها قَبلَ هذا المَرجِعِ (أَو بِلا فاتورَة) تُلغى كَما كانَت — الباقي المُعلَنُ في
+/// ‏ADR-032 §٨‑ز مُلحَقاً.</para>
+/// </summary>
+public static class GatewayInvoiceShare
+{
+    /// <summary>عَلى فاتورَةِ الصَفقَةِ المَفتوحَةِ — الَّتي لَم يُكتَب دَفعُها — صَفقَةٌ قائِمَةٌ أُخرى لَم يُكتَب دَفعُها.</summary>
+    public const string Shared = "deal_invoice_shared";
+
+    /// <summary>المَعجَمُ المُغلَق — واحِدٌ لا ثانِيَ لَه.</summary>
+    public static readonly IReadOnlyList<string> All = new[] { Shared };
+
+    /// <summary>قيمَةُ <see cref="GatewayPayments.InvoiceDealsRef"/> — المُعَرِّفاتُ بِصيغَةِ <c>D</c> مَفصولَةً بِفاصِلَة.</summary>
+    public static string ValueFor(IReadOnlyList<Guid> dealIds) => string.Join(',', dealIds.Select(id => id.ToString("D")));
+
+    /// <summary>أَخَواتُ الفاتورَةِ كَما كَتَبَها فَتحُها — أَو <c>null</c> حينَ لا مَرجِعَ أَو لا يُقرَأُ أَو أَطوَلُ مِن فاتورَةٍ واحِدَة.</summary>
+    public static IReadOnlyList<Guid>? DealsOn(Deal deal)
+    {
+        if (!deal.Refs.TryGetValue(GatewayPayments.InvoiceDealsRef, out var raw) || string.IsNullOrWhiteSpace(raw)) return null;
+        var ids = new List<Guid>();
+        foreach (var part in raw.Split(','))
+        {
+            if (!Guid.TryParse(part, out var id)) return null;
+            ids.Add(id);
+        }
+        return GatewayPaymentProof.FitsOneInvoice(ids.Count) && ids.Distinct().Count() == ids.Count ? ids : null;
+    }
+
+    /// <summary>صَفَقاتُ الفاتورَةِ الَّتي تَدفَعُ لَها الآن — الصَفقَةُ إن كانَت تَدفَعُ لَها، وكُلُّ أُختٍ سَمّاها مَرجِعُها وعَلَيها الفاتورَةُ نَفسُها
+    /// وقائِمَةٌ لَم يُكتَب دَفعُها (<see cref="GatewayInvoiceClosing.Owed"/>).</summary>
+    public static IReadOnlyList<Deal> OwedOnInvoice(Deal deal, IReadOnlyList<Deal> siblings)
+    {
+        var owed = new List<Deal>();
+        if (!GatewayPayments.HasInvoice(deal)) return owed;
+        if (GatewayInvoiceClosing.Owed(deal)) owed.Add(deal);
+        if (DealsOn(deal) is not { } listed) return owed;
+        var invoice = deal.Refs[GatewayPaymentProof.InvoiceRef];
+        owed.AddRange(siblings.Where(s => s.Id != deal.Id && listed.Contains(s.Id)
+            && s.Refs.TryGetValue(GatewayPaymentProof.InvoiceRef, out var other)
+            && string.Equals(other, invoice, StringComparison.OrdinalIgnoreCase)
+            && GatewayInvoiceClosing.Owed(s)));
+        return owed;
+    }
+
+    /// <summary>فارِغَةٌ = تُلغى وَحدَها. والسَبَبُ حينَ الصَفقَةُ تَدفَعُ لِفاتورَتِها وأُختٌ أُخرى تَدفَعُ لَها.</summary>
+    public static IReadOnlyList<DealInvoiceShareViolation> Validate(Deal deal, IReadOnlyList<Deal> siblings)
+    {
+        var owed = OwedOnInvoice(deal, siblings);
+        return owed.Any(d => d.Id == deal.Id) && owed.Any(d => d.Id != deal.Id)
+            ? new[] { new DealInvoiceShareViolation(Shared,
+                "عَلى فاتورَةِ هذِه الصَفقَةِ المَفتوحَةِ صَفَقاتٌ قائِمَةٌ أُخرى — لا تُلغى وَحدَها: يُلغى الطَلَبُ كُلُّه، أَو تُلغى بَعدَ الدَفع.") }
+            : Array.Empty<DealInvoiceShareViolation>();
+    }
+
+    public static bool IsValid(Deal deal, IReadOnlyList<Deal> siblings) => Validate(deal, siblings).Count == 0;
+}
 
 /// <summary>سَبَبٌ لِإبقاءِ الفاتورَةِ مَفتوحَةً بَعدَ إلغاءِ صَفقَةٍ عَلَيها — <c>Code</c> مِن <see cref="GatewayInvoiceClosing.All"/>.</summary>
 public sealed record GatewayInvoiceCloseViolation(string Code, string MessageAr);

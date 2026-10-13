@@ -101,6 +101,8 @@ public class DealTimelineRefLabelsTests
         ["$\"review_{(targetIsCounterparty ? \"cp\" : \"init\")}\""] = new[] { "review_cp", "review_init" },
         ["GatewayPaymentProof.InvoiceRef"] = new[] { GatewayPaymentProof.InvoiceRef },
         ["InvoiceUrlRef"]        = new[] { GatewayPayments.InvoiceUrlRef },
+        // (‏2026-10-13، G5 M4): أَخَواتُ الفاتورَةِ الواحِدَةِ عَلى كُلِّ صَفقَةٍ مِنها — يَكتُبُه فَتحُ الفاتورَة، داخِلِيّ.
+        ["InvoiceDealsRef"]      = new[] { GatewayPayments.InvoiceDealsRef },
         ["OrderRef"]             = new[] { DealShipping.OrderRef },
         ["OtoIdRef"]             = new[] { DealShipping.OtoIdRef },
         ["ClosedRef"]            = new[] { DealShipping.ClosedRef },
@@ -230,12 +232,12 @@ public class DealTimelineRefLabelsTests
         foreach (var (file, arg) in sites) output.WriteLine($"{file}: {arg}");
         output.WriteLine($"مَواضِعُ الإلحاقِ: {sites.Count} · تَعابيرُ مُختَلِفَة: {sites.Select(s => s.Arg).Distinct().Count()} · مَفاتيح: {WrittenKeys.Values.SelectMany(k => k).Distinct().Count()}");
 
-        Assert.Equal(13, sites.Count);
+        Assert.Equal(14, sites.Count);   // (‏2026-10-13، G5 M4): +`InvoiceDealsRef` في `OpenInvoiceAsync` — 13 ← 14.
         foreach (var (file, arg) in sites)
             Assert.True(WrittenKeys.ContainsKey(arg), $"مَرجِعٌ يُلحَقُ بِلا تَصنيف في {file}: {arg}");
         foreach (var expr in WrittenKeys.Keys)
             Assert.Contains(sites, s => s.Arg == expr);
-        Assert.Equal(14, WrittenKeys.Values.SelectMany(k => k).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(15, WrittenKeys.Values.SelectMany(k => k).Distinct(StringComparer.Ordinal).Count());   // 14 ← 15 (G5 M4)
 
         // «key» حَلقَةٌ عَلى الرابِطَينِ وَحدَهُما — بِحَرفِها.
         var shipping = WriteEndpointGuardTests.StripComments(Source(Template, "Services", "Deals", "DealShipping.cs"));
@@ -279,6 +281,7 @@ public class DealTimelineRefLabelsTests
         [DealsService.ListingOwnerRef]        = "مُعَرِّفُ مُستَخدِم",
         [GatewayPayments.InvoiceUrlRef]       = "بابُ الدَفعِ يُرسَمُ زِرّاً",
         [DealShipping.OtoIdRef]               = "مُعَرِّفُ OTO يُرافِقُ oto_order_id",
+        [GatewayPayments.InvoiceDealsRef]     = "مُعَرِّفاتُ أَخَواتِ الفاتورَةِ الواحِدَة — يَقرَؤُها الإلغاء (‏2026-10-13، G5 M4)",
     };
 
     /// <summary>كُلُّ مِفتاحٍ يُكتَبُ اليَومَ إمّا مُسَمّىً وإمّا داخِلِيٌّ بِسَبَب — لا الاثنانِ ولا لا شَيء؛ ولا تَسمِيَةَ لِمِفتاحٍ لا يَكتُبُه أَحَد.</summary>
@@ -287,13 +290,13 @@ public class DealTimelineRefLabelsTests
     {
         var written = WrittenKeys.Values.SelectMany(k => k).ToHashSet(StringComparer.Ordinal);
         output.WriteLine($"مَكتوبَة: {written.Count} · مُسَمّاة: {DealRefLabels.Labels.Count} · داخِلِيَّة: {Internal.Count}");
-        Assert.Equal(14, written.Count);
+        Assert.Equal(15, written.Count);   // 14 ← 15 (G5 M4)
         foreach (var key in written)
             Assert.True(DealRefLabels.Labels.ContainsKey(key) ^ Internal.ContainsKey(key), $"‏{key}: يَجِبُ أَن يَكونَ مُسَمّىً أَو داخِلِيّاً، لا الاثنَين ولا لا شَيء.");
         foreach (var key in DealRefLabels.Labels.Keys.Concat(Internal.Keys))
             Assert.True(written.Contains(key), $"‏{key} مُصَنَّفٌ ولا يَكتُبُه أَحَد.");
         Assert.Equal(9, DealRefLabels.Labels.Count);
-        Assert.Equal(5, Internal.Count);
+        Assert.Equal(6, Internal.Count);   // 5 ← 6 (G5 M4)
     }
 
     public static IEnumerable<object[]> LabelledKeys() => DealRefLabels.Labels.Select(kv => new object[] { kv.Key, kv.Value });

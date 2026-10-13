@@ -31,9 +31,13 @@ public class ApiContractTests
     /// <para><b>قُلِبَ بِاسمِه — صارَت أَربَعَةَ عَشَر</b> (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12): كانَ
     /// <c>Exactly_thirteen_error_codes_and_they_are_these</c>. والرابِعَ عَشَرَ <c>deal_awaits_payment</c> (‏409) مُنتِجُه حَيٌّ —
     /// <c>DealApi.FromAdvance</c> مِن رَمزِ الخِدمَةِ نَفسِه، حينَ تَرُدُّ <c>AdvanceAsync</c> صَفقَةً عَلَيها فاتورَةُ بَوّابَةٍ لَم يَثبُت دَفعُها —
-    /// واختِبارُ حالَتِه في الصَفِّ التالي وصَفّا التَصنيفِ أَدناه.</para></summary>
+    /// واختِبارُ حالَتِه في الصَفِّ التالي وصَفّا التَصنيفِ أَدناه.</para>
+    /// <para><b>قُلِبَ بِاسمِه — صارَت خَمسَةَ عَشَر</b> (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b، G5 M4؛ ‏ADR-032 §٨‑ز مُلحَقاً): كانَ
+    /// <c>Exactly_fourteen_error_codes_and_they_are_these</c>. والخامِسَ عَشَرَ <c>deal_invoice_shared</c> (‏409) مُنتِجُه حَيٌّ —
+    /// <c>DealApi.FromCancel</c> مِن رَمزِ الخِدمَةِ نَفسِه، حينَ تَرُدُّ <c>CancelAsync</c> إلغاءَ صَفقَةٍ واحِدَةٍ مِن فاتورَةِ بَوّابَةٍ مَفتوحَةٍ
+    /// مُشتَرَكَة؛ وكانَ ذلكَ الرَمزُ يَخرُجُ <c>validation_failed</c> (‏422). واختِبارُ حالَتِه في الصَفِّ التالي.</para></summary>
     [Fact]
-    public void Exactly_fourteen_error_codes_and_they_are_these()
+    public void Exactly_fifteen_error_codes_and_they_are_these()
         => Assert.Equal(
             new[]
             {
@@ -41,6 +45,7 @@ public class ApiContractTests
                 "scope_missing", "entitlement_denied", "actor_not_allowed",
                 "not_found",
                 "deal_not_active", "deal_final_stage", "deal_changed_meanwhile", "deal_awaits_carrier", "deal_awaits_payment",
+                "deal_invoice_shared",
                 "idempotency_in_progress",
                 "idempotency_key_required", "validation_failed",
             },
@@ -78,6 +83,7 @@ public class ApiContractTests
     [InlineData("deal_changed_meanwhile", 409)]
     [InlineData("deal_awaits_carrier", 409)]
     [InlineData("deal_awaits_payment", 409)]
+    [InlineData("deal_invoice_shared", 409)]
     [InlineData("idempotency_in_progress", 409)]
     [InlineData("idempotency_key_required", 422)]
     [InlineData("validation_failed", 422)]
