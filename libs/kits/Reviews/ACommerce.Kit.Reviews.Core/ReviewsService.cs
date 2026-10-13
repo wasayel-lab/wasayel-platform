@@ -8,18 +8,26 @@ public sealed class ReviewsService
     private readonly IDocumentStore _store;
     public ReviewsService(IDocumentStore store) => _store = store;
 
+    /// <summary>
+    /// <para>يَكتُبُ تَقييماً <b>جَديداً</b>.</para>
+    /// <para><b>بِـ<c>Insert</c> لا <c>Store</c>، ومُعَرِّفٌ يَختارُه المُنادي اختِيارِيّاً</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (iv)؛
+    /// ‏ADR-036 §١٢‑٤): <paramref name="id"/> بَعدَ <paramref name="ct"/> عَمداً فَالنِداءاتُ القائِمَةُ لا تَتَحَرَّك، و<c>null</c> مُعَرِّفٌ عَشوائِيٌّ
+    /// كَما كان. ومُعَرِّفٌ مُعطًى كُتِبَ قَبلُ يُرمى عِندَ الحِفظِ (<c>DocumentAlreadyExistsException</c>) ولا يُدهَس — فَيَصيرُ «مَرَّةً واحِدَة»
+    /// قَيداً في القاعِدَةِ لِمَن يَختارُ مُعَرِّفاً حَتمِيّاً (<c>DealReviews</c>)، بِلا فِهرِسٍ ولا تَرحيل. ولِلمُعَرِّفِ العَشوائِيِّ <c>Insert</c>
+    /// و<c>Store</c> سَواء.</para>
+    /// </summary>
     public async Task<Review> SubmitAsync(
         string tenantSlug, Guid targetUserId, string targetName,
         Guid authorId, string authorName,
         int rating, string body,
         Guid? dealId = null, string dealPattern = "",
-        CancellationToken ct = default)
+        CancellationToken ct = default, Guid? id = null)
     {
         if (rating < 1) rating = 1;
         if (rating > 5) rating = 5;
         var r = new Review
         {
-            Id = Guid.NewGuid(), TenantSlug = tenantSlug,
+            Id = id ?? Guid.NewGuid(), TenantSlug = tenantSlug,
             TargetUserId = targetUserId, TargetUserName = targetName,
             AuthorId = authorId, AuthorName = authorName,
             Rating = rating, Body = body,
@@ -28,7 +36,7 @@ public sealed class ReviewsService
             At = DateTime.UtcNow
         };
         await using var s = _store.LightweightSession(tenantSlug);
-        s.Store(r);
+        s.Insert(r);
         await s.SaveChangesAsync(ct);
         return r;
     }
