@@ -187,11 +187,11 @@ POST /studio/apps/ashare/branding/save     →  302 → /studio
 | الفَحص | النَتيجَة |
 |---|---|
 | مَوضِع `ShipmentStatus` | `Delivery.Core/IDeliveryProvider.cs:51` — سَبع حالات |
-| مِلَفّات عُدَّة التَوصيل كامِلَةً | **٢ فَقَط**: `IDeliveryProvider.cs` + `MockDeliveryProvider.cs` |
+| مِلَفّات عُدَّة التَوصيل كامِلَةً | **٢ فَقَط**: `IDeliveryProvider.cs` + `MockDeliveryProvider.cs` **(‏2026-10-13، G4 (xxx) — ولا يُعادُ حَرفٌ فَوقَه: حُذِفَ `MockDeliveryProvider.cs` في `ec807a6` (‏ADR-033 الخُطوَة 3)؛ والعُدَّةُ اليَومَ أَربَعَة: `IDeliveryProvider.cs` و`OtoClient.cs` و`OtoOptions.cs` و`OtoWebhookSignature.cs`.)** |
 | وَثيقَة Marten لِلشَحنَة | **لا توجَد** (لا تَسجيل في `HostingExtensions.cs:75-117`) |
-| مَسار HTTP | **لا يوجَد** |
+| مَسار HTTP | **لا يوجَد** **(‏2026-10-13، G4 (xxx): صارَت أَربَعَةً لِعَميلِ OTO لا لِلواجِهَة — `POST /{slug}/deals/{id}/ship` والوارِدُ `POST /{slug}/shipping/oto/order-status` (`OtoShippingEndpoints.cs`)، ولَصقُ رَمزِ البائِعِ وتَسجيلُه `POST /{slug}/me/shipping/oto` و`…/register` (`VendorShippingEndpoints.cs`).)** |
 | مُستَهلِكو `IDeliveryProvider` خارِج عُدَّتِه | **صِفر** |
-| مُستَهلِكو `MockDeliveryProvider` | **صِفر** — مُسَجَّل في DI (`Program.cs:75`) ولا يُحقَن في مَوضِع |
+| مُستَهلِكو `MockDeliveryProvider` | **صِفر** — مُسَجَّل في DI (`Program.cs:75`) ولا يُحقَن في مَوضِع **(‏2026-10-13، G4 (xxx): لا تَسجيلَ يُشارُ إلَيه بَعدَ اليَوم — حُذِفَ هُوَ و`AddMockDelivery()` في `ec807a6`، وفي `Program.cs` تَعليقٌ مَكانَ السَطر؛ و`DeliveryInterfaceStaysTests` يَحمَرُّ يَومَ يُنَفِّذُ الواجِهَةَ شَيءٌ أَو يُسَجِّلُها أَو يَستَهلِكُها.)** |
 
 وجَرد التَدَفُّقات يَقولُه بِعِبارَتِه: «**لا نَملِك الانتِقال**» (`docs/FLOWS-INVENTORY.md:238`).
 
