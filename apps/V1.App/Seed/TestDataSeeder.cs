@@ -192,7 +192,13 @@ public static class TestDataSeeder
 
     /// <summary>صَفقَتان لِفَحص MyDeals/DealDetail مَملوءَتَين: واحِدَة نَشِطَة
     /// في مُنتَصَف التَّدَفُّق (Paid) وأُخرى مُكتَمِلَة (Reviewed) — العميل
-    /// (أَوَّل مُستَخدِم) هو المُبادِر لِتَظهَر في لَوحَتِه.</summary>
+    /// (أَوَّل مُستَخدِم) هو المُبادِر لِتَظهَر في لَوحَتِه.
+    /// <para><b>وكُلُّ ما فيهِما يُطيعُ كاتالوجَ الصَفَقات</b> (موجَزُ الفَجَوات P3-7، ‏2026-10-13): كانَت المُكتَمِلَةُ عِندَ
+    /// <c>Received</c> — ولَيسَت مِن مَراحِلِ <c>marketplace</c> — وسِجِلُّها يَقفِزُ <c>Paid → Delivered</c> مُتَجاوِزاً
+    /// <c>Shipping</c>، و«assigned» يُحَرِّكُ المَرحَلَةَ، وكُلُّ خُطوَةٍ بِاسمِ المُبادِر. صارَت كُلُّ خُطوَةٍ ما يَكتُبُه الكودُ نَفسُه:
+    /// «assigned» بِالطَرَفِ المُقابِلِ ومَرحَلَةٍ ثابِتَة (<c>AssignCounterpartyAsync</c>)، و«advanced» إلى
+    /// <c>DealsPolicy.Next</c> بِفاعِلِ المَرحَلَةِ الداخِلَة (<c>DealsPolicy.Actor</c>)، و<c>Completed</c> عِندَ آخِرِ مَراحِلِ
+    /// النَمَطِ وَحدَه (<c>MoveAsync</c>). يَحرُسُه <c>TestDataSeederDealsTests</c> مِن هذا المَصدَر.</para></summary>
     private static async Task EnsureSampleDealsAsync(
         IDocumentSession s, string slug, User initiator, User counterparty)
     {
@@ -201,8 +207,8 @@ public static class TestDataSeeder
         if (existing.Count > 0) return;
 
         var now = DateTime.UtcNow;
-        DealEvent Ev(DealStage from, DealStage to, string action, int hoursAgo) =>
-            new(from, to, action, initiator.Id, initiator.FullName, null, now.AddHours(-hoursAgo));
+        DealEvent Ev(DealStage from, DealStage to, string action, User actor, int hoursAgo) =>
+            new(from, to, action, actor.Id, actor.FullName, null, now.AddHours(-hoursAgo));
 
         // (أ) نَشِطَة — وَصَلَت مَرحَلَة الدَّفع.
         s.Store(new Deal
@@ -216,13 +222,14 @@ public static class TestDataSeeder
             CreatedAt = now.AddHours(-26), UpdatedAt = now.AddHours(-3),
             Timeline =
             {
-                Ev(DealStage.Offered,   DealStage.Booked,    "assigned",  26),
-                Ev(DealStage.Booked,    DealStage.Confirmed, "advanced",  20),
-                Ev(DealStage.Confirmed, DealStage.Paid,      "advanced",   3),
+                Ev(DealStage.Offered,   DealStage.Offered,   "assigned", counterparty, 26),
+                Ev(DealStage.Offered,   DealStage.Booked,    "advanced", counterparty, 25),
+                Ev(DealStage.Booked,    DealStage.Confirmed, "advanced", initiator,    20),
+                Ev(DealStage.Confirmed, DealStage.Paid,      "advanced", initiator,     3),
             }
         });
 
-        // (ب) مُكتَمِلَة — وَصَلَت Reviewed (تُظهِر نَموذَج التَّقييم).
+        // (ب) مُكتَمِلَة — وَصَلَت Reviewed، آخِرَ مَراحِلِ نَمَطِها (تُظهِر نَموذَج التَّقييم).
         s.Store(new Deal
         {
             Id = Guid.NewGuid(), TenantSlug = slug, Pattern = "marketplace",
@@ -230,15 +237,17 @@ public static class TestDataSeeder
             InitiatorId = initiator.Id, InitiatorName = initiator.FullName,
             CounterpartyId = counterparty.Id, CounterpartyName = counterparty.FullName,
             AmountSar = 250,
-            Stage = DealStage.Received, Status = DealStatus.Completed,
+            Stage = DealStage.Reviewed, Status = DealStatus.Completed,
             CreatedAt = now.AddDays(-6), UpdatedAt = now.AddDays(-1),
             Timeline =
             {
-                Ev(DealStage.Offered,   DealStage.Booked,    "assigned",  144),
-                Ev(DealStage.Booked,    DealStage.Confirmed, "advanced",  120),
-                Ev(DealStage.Confirmed, DealStage.Paid,      "advanced",   96),
-                Ev(DealStage.Paid,      DealStage.Delivered, "advanced",   48),
-                Ev(DealStage.Delivered, DealStage.Received,  "advanced",   24),
+                Ev(DealStage.Offered,   DealStage.Offered,   "assigned", counterparty, 144),
+                Ev(DealStage.Offered,   DealStage.Booked,    "advanced", counterparty, 143),
+                Ev(DealStage.Booked,    DealStage.Confirmed, "advanced", initiator,    120),
+                Ev(DealStage.Confirmed, DealStage.Paid,      "advanced", initiator,     96),
+                Ev(DealStage.Paid,      DealStage.Shipping,  "advanced", counterparty,  72),
+                Ev(DealStage.Shipping,  DealStage.Delivered, "advanced", counterparty,  48),
+                Ev(DealStage.Delivered, DealStage.Reviewed,  "advanced", initiator,     24),
             }
         });
     }
