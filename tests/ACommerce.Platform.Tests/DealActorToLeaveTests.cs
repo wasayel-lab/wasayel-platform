@@ -250,8 +250,11 @@ public class DealActorToLeaveTests
     /// <summary>سُؤالُ فاعِلِ مَرحَلَةِ صَفقَةٍ قائِمَة — بِأَيِّ اسمٍ ولِأَيِّ عُمقِ وُصول: <c>DealsPolicy.Actor(x.Stage)</c> و
     /// <c>Actor(x.Stage)</c> و<c>DealPatternCatalog.ActorFor(x.Y.Stage)</c>. ولا يُطابِقُ قِراءَةَ مَرحَلَةٍ بِعَينِها
     /// (<c>Actor(stage)</c>، <c>Actor(next)</c>، <c>Actor(DealStage.Paid)</c>) ولا <c>RequiredActorToLeave</c>.</summary>
+    /// <para><b>ووُسِّعَ ‏2026-10-13 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق</b> (مُراجَعَةُ المَوجَة 3a — G4 (xiii)): المُستَقبِلُ <c>[\w.]+</c> كانَ يَعمى عَن
+    /// إسقاطِ العَدَمِ وشَرطِيِّه (<c>deal!.Stage</c>، <c>res.Deal!.Stage</c>، <c>x?.Stage</c>) وعَن الوَسيطِ المُسَمّى (<c>Actor(stage: x.Stage)</c>)؛
+    /// صارَ <c>[\w.!?]+</c> ببادِئَةِ اسمٍ اختِيارِيَّة — والعَيِّناتُ المَحقونَةُ أَدناه تَقيسُه، وفاحِصُ الفاتورَةِ بِالحَرفِ نَفسِه (<c>DealCashPolicyTests</c>).</para>
     private static readonly System.Text.RegularExpressions.Regex CurrentStageActor = new(
-        @"\b(?:DealsPolicy\.)?Actor(?:For)?\(\s*[\w.]+\.Stage\s*\)",
+        @"\b(?:DealsPolicy\.)?Actor(?:For)?\(\s*(?:\w+\s*:\s*)?[\w.!?]+\.Stage\s*\)",
         System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>كُلُّ مُطابَقَةٍ في <paramref name="code"/>: سُقوطُ عَرضٍ مُسَمّىً (<c>RequiredActorToLeave(…) ?? …</c> في الجُملَةِ
@@ -287,6 +290,13 @@ public class DealActorToLeaveTests
     [InlineData("var k = DealsPolicy.RequiredActorToLeave(row) ?? DealsPolicy.Actor(row.Stage);", 0, 1)]
     [InlineData("var x = Foo(); var k = bar ?? DealsPolicy.Actor(row.Stage);", 1, 0)]
     [InlineData("var r = DealsPolicy.RequiredActorToLeave(row); var k = Foo() ?? DealsPolicy.Actor(row.Stage);", 1, 0)]
+    // (‏2026-10-13، G4 (xiii)): إسقاطُ العَدَمِ وشَرطِيُّه والوَسيطُ المُسَمّى — كانَ الفاحِصُ يَعمى عَنها؛ والقِراءَةُ الصَحيحَةُ بِاسمٍ لا تُطابَق.
+    [InlineData("var a = DealsPolicy.Actor(deal!.Stage);", 1, 0)]
+    [InlineData("var a = DealsPolicy.Actor(res.Deal!.Stage);", 1, 0)]
+    [InlineData("var a = DealPatternCatalog.ActorFor(row?.Stage);", 1, 0)]
+    [InlineData("var a = DealsPolicy.Actor(stage: deal.Stage);", 1, 0)]
+    [InlineData("var a = DealsPolicy.Actor(stage: next);", 0, 0)]
+    [InlineData("var k = DealsPolicy.RequiredActorToLeave(d!) ?? DealsPolicy.Actor(d!.Stage);", 0, 1)]
     public void The_current_stage_actor_scanner_catches_any_name_and_spares_the_right_readings(string line, int strays, int fallbacks)
     {
         var (found, fell) = CurrentStageActorReads(line);

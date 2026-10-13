@@ -383,10 +383,14 @@ public class DealCashPolicyTests
     /// <summary>الحِملُ الأَعمى عَن طَريقَةِ الدَفع — بِأَيِّ اسمِ مُتَغَيِّر: <c>Next(x.Pattern, x.Stage)</c>
     /// بِلا ثالِث، و<c>StagesFor(x.Pattern)</c> بِلا ثانٍ، و<c>DealTurnView.For(x.Pattern, x.Stage, side)</c>
     /// بِلا رابِع.</summary>
+    /// <remarks><b>ووُسِّعَ ‏2026-10-13 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق</b> (مُراجَعَةُ المَوجَة 3a — G4 (xiii)): المُستَقبِلُ <c>\w+</c> كانَ يَعمى عَن
+    /// المُستَقبِلِ المُتَعَدِّدِ المَقاطِع (<c>result.Deal.Pattern</c>) وإسقاطِ العَدَمِ وشَرطِيِّه (<c>deal!.Pattern</c>، <c>res.Deal!.Stage</c>) والوَسيطِ
+    /// المُسَمّى (<c>Next(pattern: x.Pattern, stage: x.Stage)</c>)؛ صارَ <c>[\w.!?]+</c> بِبادِئَةِ اسمٍ اختِيارِيَّة — بِحَرفِ فاحِصِ فاعِلِ المَرحَلَةِ
+    /// الحالِيَّةِ في <c>DealActorToLeaveTests</c> — والعَيِّناتُ المَحقونَةُ أَدناه تَقيسُه.</remarks>
     private static readonly Regex PayBlind = new(
-        @"\bNext\(\s*\w+\.Pattern\s*,\s*\w+\.Stage\s*\)" +
-        @"|\bStagesFor\(\s*\w+\.Pattern\s*\)" +
-        @"|\bDealTurnView\.For\(\s*\w+\.Pattern\s*,\s*\w+\.Stage\s*,\s*[^,()]+\)",
+        @"\bNext\(\s*(?:\w+\s*:\s*)?[\w.!?]+\.Pattern\s*,\s*(?:\w+\s*:\s*)?[\w.!?]+\.Stage\s*\)" +
+        @"|\bStagesFor\(\s*(?:\w+\s*:\s*)?[\w.!?]+\.Pattern\s*\)" +
+        @"|\bDealTurnView\.For\(\s*(?:\w+\s*:\s*)?[\w.!?]+\.Pattern\s*,\s*(?:\w+\s*:\s*)?[\w.!?]+\.Stage\s*,\s*[^,()]+\)",
         RegexOptions.CultureInvariant);
 
     /// <summary>بَيتا الحِملِ الأَعمى: تَعريفُه وتَنفيذُ الحِملِ المُبصِرِ فَوقَه — لا يُفحَصانِ بِه.</summary>
@@ -416,6 +420,17 @@ public class DealCashPolicyTests
     [InlineData("var all = DealsPolicy.StagesFor(deal);", false)]
     [InlineData("var t = DealTurnView.For(deal, side);", false)]
     [InlineData("var all = DealsPolicy.StagesFor(pattern);", false)]
+    // (‏2026-10-13، G4 (xiii)): مُستَقبِلٌ مُتَعَدِّدُ المَقاطِع، وإسقاطُ العَدَمِ وشَرطِيُّه، والوَسيطُ المُسَمّى — كانَ الفاحِصُ يَعمى عَنها؛
+    // والحِملُ المُبصِرُ بِالأَشكالِ نَفسِها لا يُطابَق.
+    [InlineData("var all = DealsPolicy.StagesFor(result.Deal.Pattern);", true)]
+    [InlineData("var all = DealsPolicy.StagesFor(deal!.Pattern).ToList();", true)]
+    [InlineData("var n = DealsPolicy.Next(deal!.Pattern, deal!.Stage);", true)]
+    [InlineData("var n = DealsPolicy.Next(res.Deal!.Pattern, res.Deal!.Stage);", true)]
+    [InlineData("var n = DealsPolicy.Next(pattern: x.Pattern, stage: x.Stage);", true)]
+    [InlineData("var t = DealTurnView.For(row?.Pattern, row?.Stage, side);", true)]
+    [InlineData("var n = DealsPolicy.Next(deal!.Pattern, deal!.Stage, DealsPolicy.PayMethodOf(deal!));", false)]
+    [InlineData("var all = DealsPolicy.StagesFor(result.Deal.Pattern, pay);", false)]
+    [InlineData("var n = DealsPolicy.Next(res.Deal!);", false)]
     public void The_pay_blind_scanner_catches_any_name_and_spares_the_pay_aware_overloads(string line, bool blind)
         => Assert.Equal(blind, PayBlind.IsMatch(line));
 
