@@ -115,9 +115,20 @@ public sealed class ProviderVault
     {
         var violations = Validate(kekBase64);
         return violations.Count == 0
-            ? new ProviderVault(Convert.FromBase64String(kekBase64!.Trim()), violations)
+            ? new ProviderVault(Convert.FromBase64String(kekBase64!.Trim(KekWhitespace)), violations)
             : new ProviderVault(null, violations);
     }
+
+    /// <summary>
+    /// <para><b>البَياضُ الَّذي يُقَصُّ مِن طَرَفَي المِفتاح — أَربَعَةُ مَحارِفَ ASCII لا بَياضُ يونيكود</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (xxiii)):
+    /// المِسافَةُ والجَدوَلَةُ و‏CR و‏LF — بِحَرفِ ما تَقُصُّه بَوّابَةُ الإقلاع (<c>tr -d ' \t\r\n'</c> في <c>scripts/verify-production-boot.sh</c>)،
+    /// وهي نَفسُها ما يَتَجاوَزُه <c>Convert.TryFromBase64String</c> داخِلَ النَصّ. كانَت <c>Trim()</c> و<c>IsNullOrWhiteSpace</c> بِبَياضِ يونيكود،
+    /// فَمِفتاحٌ بِذَيلِ <c>U+00A0</c> أَو <c>\v</c> تَفُكُّه الخِزانَةُ وتَقولُ عَنه البَوّابَةُ «لَيسَ base64»، وبَياضٌ غَيرُ ASCII وَحدَه «غائِبٌ» هُنا
+    /// و«لَيسَ base64» هُناك (تَوصيفُه <c>ab6db14</c>). فَالخِزانَةُ تُعَرِّفُ والبَوّابَةُ تَتبَع — مُثَبَّتٌ بِتَشغيلِ الكُتلَةِ في <c>ProviderVaultDeploymentTests</c>.</para>
+    /// </summary>
+    public const string KekWhitespaceChars = " \t\r\n";
+
+    private static readonly char[] KekWhitespace = KekWhitespaceChars.ToCharArray();
 
     /// <summary>
     /// <para><b>القَرار — جَدوَلٌ لا شَرطٌ مَنثور</b>، وكُلُّ مُدخَلٍ يُعطي
@@ -131,17 +142,20 @@ public sealed class ProviderVault
     /// </summary>
     public static IReadOnlyList<VaultViolation> Validate(string? kekBase64)
     {
-        if (string.IsNullOrWhiteSpace(kekBase64))
+        // الغِيابُ «فارِغٌ بَعدَ قَصِّ البَياضِ الأَربَعَة» لا `IsNullOrWhiteSpace` (‏2026-10-13، G4 (xxiii)) — بِحَرفِ البَوّابَة؛ وبَياضٌ غَيرُ ASCII
+        // يُقالُ عَنه «لَيسَ base64» هُنا وهُناك.
+        var trimmed = kekBase64?.Trim(KekWhitespace);
+        if (string.IsNullOrEmpty(trimmed))
             return One($"مِفتاحُ الخِزانَةِ {KekEnvironmentVariable} غائِب — فَلا خِزانَة: لا يُختَمُ سِرٌّ، " +
                        "ويُخفى كُلُّ مُزَوِّدٍ يَحتاجُها ويُرَدُّ رَبطُه.");
 
         // يُفَكُّ لِيُقاسَ طولُه ثُمَّ يُصَفَّر — لا يَبقى في الذاكِرَةِ مِن هُنا.
-        var buffer = new byte[kekBase64.Length];
+        var buffer = new byte[trimmed.Length];
         bool decoded;
         int length;
         try
         {
-            decoded = Convert.TryFromBase64String(kekBase64.Trim(), buffer, out length);
+            decoded = Convert.TryFromBase64String(trimmed, buffer, out length);
         }
         finally
         {

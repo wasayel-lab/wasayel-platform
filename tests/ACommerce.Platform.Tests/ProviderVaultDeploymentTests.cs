@@ -296,6 +296,13 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
     [InlineData("16-bytes")]
     [InlineData("unpadded-43")]
     [InlineData("url-safe")]
+    // (‏2026-10-13، G4 (xxiii)): خارِجَ التِسعَة — بَياضٌ غَيرُ ASCII، وحَشوٌ في الوَسَط، وبَياضٌ داخِلِيّ.
+    [InlineData("nbsp-trailing")]
+    [InlineData("nbsp-only")]
+    [InlineData("vtab-trailing")]
+    [InlineData("ff-leading")]
+    [InlineData("pad-in-middle")]
+    [InlineData("inner-space")]
     public void The_kek_block_run_by_bash_gives_the_vaults_verdict_exits_zero_and_never_prints_the_key(string shape)
     {
         if (OperatingSystem.IsWindows())
@@ -326,16 +333,16 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم»</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (xxiii)): خارِجَ الأَشكالِ التِسعَةِ تَفتَرِقُ البَوّابَةُ والخِزانَة — الكُتلَةُ
-    /// تَقُصُّ ‏ASCII وَحدَه (`tr -d ' \t\r\n'`) وتَتَّكِئُ عَلى `base64 -d` لِـGNU، والخِزانَةُ <c>IsNullOrWhiteSpace</c> و<c>Trim()</c> بِبَياضِ
-    /// يونيكود و<c>TryFromBase64String</c>. فَمِفتاحٌ صالِحٌ بِذَيلِ بَياضٍ غَيرِ ASCII تَفُكُّه الخِزانَةُ وتَقولُ عَنه البَوّابَةُ «لَيسَ base64»، وبَياضٌ
-    /// غَيرُ ASCII وَحدَه «غائِبٌ» هُنا و«لَيسَ base64» هُناك. يُقلَبُ بِاسمِه في كوميتِ الإصلاح.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (xxiii)): كانَ
+    /// <c>Today_the_kek_block_and_the_vault_disagree_on_non_ascii_whitespace_around_a_valid_key</c> (مُودَعٌ في <c>ab6db14</c>) — «الخِزانَة: مُتاحَة ·
+    /// البَوّابَة: تَنبيه». وصارَت الخِزانَةُ تَقُصُّ البَياضَ الأَربَعَةَ وَحدَها (<see cref="ProviderVault.KekWhitespaceChars"/>) والبَوّابَةُ تَشتَرِطُ أَبجَدِيَّةَ
+    /// base64 بَعدَ قَصِّها — فَيَتَّفِقانِ: «لَيسَ base64» هُنا وهُناك.</para>
     /// </summary>
     [Theory]
-    [InlineData("nbsp-trailing", true,  false)]
-    [InlineData("vtab-trailing", true,  false)]
-    [InlineData("ff-leading",    true,  false)]
-    public void Today_the_kek_block_and_the_vault_disagree_on_non_ascii_whitespace_around_a_valid_key(string shape, bool vaultAvailable, bool gateSet)
+    [InlineData("nbsp-trailing")]
+    [InlineData("vtab-trailing")]
+    [InlineData("ff-leading")]
+    public void The_kek_block_and_the_vault_agree_that_non_ascii_whitespace_around_a_key_is_not_base64(string shape)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -344,26 +351,45 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
         }
         var kek = KekOf(shape);
         var (status, text) = RunKekBlock(kek);
-        var available = ProviderVault.FromKek(kek).IsAvailable;
-        var set = text.Contains("مِفتاحُ الخِزانَة: مَضبوط", StringComparison.Ordinal);
-        output.WriteLine($"[{shape}] الخِزانَة: {(available ? "مُتاحَة" : "غَيرُ مُتاحَة")} · البَوّابَة: {(set ? "مَضبوط" : "تَنبيه")}");
+        var reason = Assert.Single(ProviderVault.Validate(kek)).MessageAr;
+        output.WriteLine($"[{shape}] الخِزانَة: {reason}");
         Assert.Equal(0, status);
-        Assert.Equal(vaultAvailable, available);
-        Assert.Equal(gateSet, set);
+        Assert.False(ProviderVault.FromKek(kek).IsAvailable);
+        Assert.Contains("لَيسَ base64", reason, StringComparison.Ordinal);
+        Assert.Contains("المَقيس: لَيسَ base64 صالِحاً)", text, StringComparison.Ordinal);
     }
 
-    /// <summary>ومُدخَلٌ بَياضُه غَيرُ ASCII وَحدَه: «غائِبٌ» في الخِزانَةِ و«لَيسَ base64» في البَوّابَة — كِلاهُما يُنَبِّهُ بِسَبَبٍ مُختَلِف.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-13، G4 (xxiii)): كانَ <c>Today_non_ascii_whitespace_alone_is_absent_in_the_vault_and_not_base64_in_the_gate</c>.
+    /// وصارَ بَياضٌ غَيرُ ASCII وَحدَه «لَيسَ base64» في الاثنَين — الغِيابُ «فارِغٌ بَعدَ قَصِّ البَياضِ الأَربَعَة» بِحَرفٍ واحِد.</summary>
     [Fact]
-    public void Today_non_ascii_whitespace_alone_is_absent_in_the_vault_and_not_base64_in_the_gate()
+    public void Non_ascii_whitespace_alone_is_not_base64_in_both_and_ascii_whitespace_alone_is_absent_in_both()
     {
         if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI."); return; }
         var kek = KekOf("nbsp-only");
         var (_, text) = RunKekBlock(kek);
         var reason = Assert.Single(ProviderVault.Validate(kek)).MessageAr;
         output.WriteLine($"الخِزانَة: {reason}");
-        output.WriteLine(text);
-        Assert.Contains("غائِب", reason, StringComparison.Ordinal);
+        Assert.Contains("لَيسَ base64", reason, StringComparison.Ordinal);
         Assert.Contains("المَقيس: لَيسَ base64 صالِحاً)", text, StringComparison.Ordinal);
+
+        // والسالِب: البَياضُ الأَربَعَةُ وَحدَها غِيابٌ هُنا وهُناك.
+        var (_, blank) = RunKekBlock(KekOf("blank"));
+        Assert.Contains("غائِب", Assert.Single(ProviderVault.Validate(KekOf("blank"))).MessageAr, StringComparison.Ordinal);
+        Assert.Contains("غائِب —", blank, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>والتَعريفُ واحِد</b>: مَحارِفُ القَصِّ في الخِزانَةِ هي مَحارِفُ <c>tr -d</c> في الكُتلَةِ بِحَرفِها، والكُتلَةُ تَشتَرِطُ أَبجَدِيَّةَ base64
+    /// قَبلَ <c>base64 -d</c> — فَإن تَغَيَّرَ أَحَدُهُما وَحدَه احمَرَّ هذا.</summary>
+    [Fact]
+    public void The_vault_defines_the_trimmed_whitespace_and_the_gate_strips_exactly_it_then_checks_the_alphabet()
+    {
+        Assert.Equal(" \t\r\n", ProviderVault.KekWhitespaceChars);
+        var block = KekBlock(Read("scripts", "verify-production-boot.sh"));
+        Assert.Equal(2, block.Split("tr -d ' \\t\\r\\n'", StringSplitOptions.None).Length - 1);
+        Assert.Contains("grep -Eq '^[A-Za-z0-9+/]+={0,2}$'", block, StringComparison.Ordinal);
+        Assert.True(block.IndexOf("grep -Eq '^[A-Za-z0-9+/]+={0,2}$'", StringComparison.Ordinal)
+                    < block.IndexOf("| base64 -d 2>/dev/null", StringComparison.Ordinal));
+        Assert.Contains("unset KEK_CLEAN", block, StringComparison.Ordinal);
     }
 
     // ─── ٦. وما تَقولُه سَبَبُ الخِزانَةِ نَفسُه — بَعدَ فَصلِ حالِ الفَكِّ عَن العَدّ (مُراجَعَةُ ‏2026-10-12) ───
@@ -383,6 +409,12 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
     [InlineData("16-bytes",      "يُفَكُّ إلى 16 بايتاً", "المَقيس: 16)")]
     [InlineData("unpadded-43",   "لَيسَ base64",          "المَقيس: لَيسَ base64 صالِحاً)")]
     [InlineData("url-safe",      "لَيسَ base64",          "المَقيس: لَيسَ base64 صالِحاً)")]
+    [InlineData("nbsp-trailing", "لَيسَ base64",          "المَقيس: لَيسَ base64 صالِحاً)")]
+    [InlineData("nbsp-only",     "لَيسَ base64",          "المَقيس: لَيسَ base64 صالِحاً)")]
+    [InlineData("vtab-trailing", "لَيسَ base64",          "المَقيس: لَيسَ base64 صالِحاً)")]
+    [InlineData("ff-leading",    "لَيسَ base64",          "المَقيس: لَيسَ base64 صالِحاً)")]
+    [InlineData("pad-in-middle", "لَيسَ base64",          "المَقيس: لَيسَ base64 صالِحاً)")]
+    [InlineData("inner-space",   null,                    "مَضبوط (يُفَكُّ إلى 32 بايتاً")]
     public void The_kek_block_says_the_vaults_own_reason_absent_not_base64_or_the_decoded_length(
         string shape, string? vaultReason, string blockSays)
     {
