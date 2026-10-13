@@ -150,8 +150,10 @@ public class DealNoticesTests
 
     /// <summary>والأُنبوبُ يَقرَأُ الدالَّةَ نَفسَها — بِالخِدمَةِ في عالَمِ الوَثائِق: صَفقَةٌ مالِكُها المُشتَري لا تُكتَبُ لَها
     /// وَثيقَةُ إشعارٍ ولا يُحفَظُ شَيء، وصَفقَةٌ مالِكُها غَيرُه تُكتَبُ لِمالِكِها مَرَّة.</summary>
+    /// <remarks>(‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (xiv)؛ ولا يُعادُ حَرفٌ فَوقَه: صارَ الصَفُّ <c>async</c> ويَنتَظِرُ بِـ<c>await</c> لا بِـ<c>.Result</c> —
+    /// كانَ يَرفَعُ تَحذيرَي <c>xUnit1031</c> الوَحيدَينِ في مَشروعِ الاختِبار. وفَحصُ «اكتَمَلَ في مَكانِه» قَبلَ الانتِظارِ بِحَرفِه.)</remarks>
     [Fact]
-    public void NotifyNewDealsAsync_skips_an_owner_who_is_the_buyer_and_tells_any_other_owner_once()
+    public async Task NotifyNewDealsAsync_skips_an_owner_who_is_the_buyer_and_tells_any_other_owner_once()
     {
         var world = new DocWorld();
         var services = new ServiceCollection();
@@ -171,13 +173,13 @@ public class DealNoticesTests
 
         var none = notices.NotifyNewDealsAsync("shop", new[] { own.Id }, l);
         Assert.True(none.IsCompleted);
-        Assert.Equal(0, none.Result);
+        Assert.Equal(0, await none);
         Assert.Equal(0, world.Wrote<Notification>());
         Assert.Equal(savesBefore, world.SaveCalls);
 
         var one = notices.NotifyNewDealsAsync("shop", new[] { own.Id, other.Id }, l);
         Assert.True(one.IsCompleted);
-        Assert.Equal(1, one.Result);
+        Assert.Equal(1, await one);
         var told = Assert.Single(world.Stored.OfType<Notification>());
         Assert.Equal(Seller, told.UserId);
         Assert.Equal($"/shop/deals/{other.Id}", told.RelatedUrl);
