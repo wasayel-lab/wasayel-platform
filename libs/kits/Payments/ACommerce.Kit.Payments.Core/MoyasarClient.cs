@@ -134,15 +134,20 @@ public sealed class MoyasarClient
             ["back_url"]    = draft.BackUrl,
         }, operation, ct);
         if (!created.Ok) return MoyasarResult<MoyasarInvoice>.Fail(created.Failure!);
-        if (Read(created.Value) is not { } invoice || invoice.Url is null) return Unreadable<MoyasarInvoice>(operation, "url");
+        // والرَدُّ يُقرَأُ بِشَرطِ أَخَواتِه (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b، G5 (xvi-g)؛ تَوصيفُ «اليَوم» `e4a3f14`): الرابِطُ مُطلَقٌ
+        // بِـhttp(s) — شَرطُ `GatewayReturn.PayUrlOf` لِلرابِطِ نَفسِه، فَلا يُحَوَّلُ المُشتَري إلى `javascript:` — والمُعَرِّفُ uuid قَبلَ أَن يَدخُلَ مَسارَ
+        // الوَسمِ، بِشَرطِ الجَلبِ والإلغاءِ حَرفاً — فَلا يَنقُلُ «/..» نِداءً بِمِفتاحِ المَتجَرِ إلى مَسارٍ آخَر. وما سِواهُما «لا يُقرَأ».
+        if (Read(created.Value) is not { } invoice || !IsAbsoluteWeb(invoice.Url)) return Unreadable<MoyasarInvoice>(operation, "url");
+        if (!Guid.TryParse(invoice.Id, out var id)) return Unreadable<MoyasarInvoice>(operation, "id");
 
-        var tagged = await SendAsync(secretKey, HttpMethod.Put, InvoicesPath + "/" + invoice.Id,
+        var tagged = await SendAsync(secretKey, HttpMethod.Put, InvoicesPath + "/" + id.ToString("D"),
             new Dictionary<string, object?> { ["metadata"] = draft.Metadata }, "update invoice metadata", ct);
         if (!tagged.Ok) return MoyasarResult<MoyasarInvoice>.Fail(tagged.Failure!);
 
         // ما عادَ مِن التَحديثِ هُوَ الفاتورَةُ كَما هِيَ عِندَ البَوّابَةِ الآن — وإن أَغفَلَ رابِطَها فَالرابِطُ مِن الإنشاء.
+        // (‏2026-10-13 — ولا يُعادُ حَرفٌ فَوقَه: «أَغفَلَه» صارَ «أَغفَلَه أَو عادَ بِغَيرِ http(s)» — والرابِطُ الَّذي يُعادُ مَفحوصٌ دائِماً.)
         return Read(tagged.Value) is { } updated
-            ? MoyasarResult<MoyasarInvoice>.Success(updated with { Url = updated.Url ?? invoice.Url })
+            ? MoyasarResult<MoyasarInvoice>.Success(updated with { Url = IsAbsoluteWeb(updated.Url) ? updated.Url : invoice.Url })
             : Unreadable<MoyasarInvoice>("update invoice metadata", "id");
     }
 
