@@ -1327,14 +1327,21 @@ public class VendorShippingTests(ITestOutputHelper output)
         return page[open..(page.IndexOf("/>", at, StringComparison.Ordinal) + 2)];
     }
 
-    /// <summary><b>ولا استِهلاكَ لِحِصَّة</b>: لا الخِدمَةُ ولا نُقطَتاها تَمَسّانِ الاستِحقاقات — فاحِصٌ نَصِّيٌّ يَعُدُّ ما قَرَأ.</summary>
+    /// <summary><b>ولا استِهلاكَ لِحِصَّة</b>: لا الخِدمَةُ ولا نُقطَتاها تَمَسّانِ الاستِحقاقات — فاحِصٌ نَصِّيٌّ يَعُدُّ ما قَرَأ.
+    /// <para>(‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (xi) — ولا يُعادُ حَرفٌ فَوقَه: <b>ومَساراتُ الشَحنِ الخَمسَة</b> — اللَصقُ والتَسجيلُ والبوليصَةُ والوارِدُ
+    /// والعَميل — كانَ يَقيسُها صَفٌّ مُكَرَّرٌ في <c>ProviderCatalogTests</c> (‏d99e393)، فَانتَقَلَت إلى هُنا وبَقِيَ هُناكَ قِراءَةُ الوَصف. <b>وهو قِياسٌ لِحالِ الكودِ
+    /// لا قَرار</b>: أَيُعَدُّ شَيءٌ مِن الشَحنِ عَلى باقَةِ المُستَأجِرِ لا تُقَرِّرُه وَثيقَة — سِجِلُّ المالِكِ «ب» S11b·٢٩؛ ويَومَ يُقَرَّرُ يَحمَرُّ هذا بِقَرارٍ مَرئِيّ.)</para></summary>
     [Fact]
     public void The_vendor_shipping_paths_consume_no_quota()
     {
+        string Template(params string[] parts) => Path.Combine(new[] { RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace" }.Concat(parts).ToArray());
         var files = new[]
         {
             Path.Combine(RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Shipping", "VendorShipping.cs"),
             Path.Combine(RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Shipping", "VendorShippingEndpoints.cs"),
+            Template("Services", "Deals", "DealShipping.cs"),
+            Template("Shipping", "OtoShippingEndpoints.cs"),
+            Path.Combine(RepoRoot, "libs", "kits", "Delivery", "ACommerce.Kit.Delivery.Core", "OtoClient.cs"),
         };
         var read = 0;
         foreach (var f in files)
@@ -1344,6 +1351,8 @@ public class VendorShippingTests(ITestOutputHelper output)
             foreach (var quota in new[] { "ConsumeAsync", "IEntitlements", "RequireEntitlement", "EntitlementFilter", "QuotaConsumed" })
                 Assert.DoesNotContain(quota, code, StringComparison.Ordinal);
         }
+        output.WriteLine($"مِلَفّاتٌ مَقروءَة: {read} مِن {files.Length}");
+        Assert.Equal(5, files.Length);
         Assert.Equal(files.Length, read);
     }
 

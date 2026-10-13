@@ -399,34 +399,20 @@ public class ProviderCatalogTests
     /// على وسايل — ويُقالُ ذلك في وصفِ تعريفِ OTO (الخطوة 6)»؛ مُراجَعَةُ تَيّارِ S8، الجَولَة 1، ‏2026-10-12): الصَفُّ عُلِّمَ «نُفِّذ» والوَصفُ لا يَقولُها.
     /// فَالوَصفُ يَقولُها الآن، <b>والكودُ يَصدُقُها</b>: لا مَسارَ شَحنٍ — اللَصقُ والتَسجيلُ والبوليصَةُ والوارِدُ والعَميل — يَمَسُّ الاستِحقاقات؛
     /// فاحِصٌ نَصِّيٌّ يَعُدُّ ما قَرَأَ ويَفشَلُ عَلى الصِفر (يَمُدُّ <c>VendorShippingTests.The_vendor_shipping_paths_consume_no_quota</c> مِن مِلَفَّينِ إلى خَمسَة).</para>
+    /// <para>(‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (xi) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: <b>كانَ اسمُه
+    /// <c>The_vendor_shipping_definition_says_its_spending_is_not_counted_against_wasayel_and_no_shipping_path_consumes_quota</c></b>. والوَصفُ رُدَّ
+    /// إلى كَلِماتِ الـADR: حُذِفَ «ولا يَستَهلِكُ لَصقٌ ولا تَسجيلٌ ولا بوليصَةٌ ولا إشعارٌ حِصَّةً مِن باقَةِ المُستَأجِر» — دَعوى عَلى باقَةِ المُستَأجِرِ لا تُقَرِّرُها
+    /// وَثيقَة (القاعِدَة ١٦؛ سِجِلُّ المالِكِ «ب» S11b·٢٩) — فَصارَ الصَفُّ يَقرَأُ جُملَةَ الـADR ويَحمَرُّ إن عادَت الدَعوى؛ والفاحِصُ النَصِّيُّ المُكَرَّرُ هُنا
+    /// انتَقَلَ بِمِلَفّاتِه الخَمسَةِ إلى صَفِّ <c>VendorShippingTests</c> نَفسِه — صَفٌّ واحِدٌ يَقيسُ الكود.)</para>
     /// </summary>
     [Fact]
-    public void The_vendor_shipping_definition_says_its_spending_is_not_counted_against_wasayel_and_no_shipping_path_consumes_quota()
+    public void The_vendor_shipping_definition_says_its_spending_is_not_counted_against_wasayel()
     {
         var d = Assert.Single(ProviderCatalog.ForCapability(ProviderCapabilities.Delivery));
         var ar = ProviderText.Get(d.Description, "ar");
         Assert.Contains("ولا حِصَّةَ عَلى الاعتِمادِ السّوقِيّ", ar, StringComparison.Ordinal);
         Assert.Contains("ما يُنفَقُ مِن مَحفَظَةِ البائِعِ عِندَ OTO لا يُعَدُّ عَلى وَسايِل", ar, StringComparison.Ordinal);
-        Assert.Contains("حِصَّةً مِن باقَةِ المُستَأجِر", ar, StringComparison.Ordinal);
-
-        string Template(params string[] parts) => Path.Combine(new[] { RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace" }.Concat(parts).ToArray());
-        var files = new[]
-        {
-            Template("Services", "Shipping", "VendorShipping.cs"),
-            Template("Shipping", "VendorShippingEndpoints.cs"),
-            Template("Services", "Deals", "DealShipping.cs"),
-            Template("Shipping", "OtoShippingEndpoints.cs"),
-            Path.Combine(RepoRoot, "libs", "kits", "Delivery", "ACommerce.Kit.Delivery.Core", "OtoClient.cs"),
-        };
-        var read = 0;
-        foreach (var f in files)
-        {
-            var code = WriteEndpointGuardTests.StripComments(File.ReadAllText(f));
-            read += code.Length > 500 ? 1 : 0;
-            foreach (var quota in new[] { "ConsumeAsync", "IEntitlements", "RequireEntitlement", "EntitlementFilter", "QuotaConsumed" })
-                Assert.DoesNotContain(quota, code, StringComparison.Ordinal);
-        }
-        Assert.Equal(files.Length, read);
+        Assert.DoesNotContain("باقَةِ المُستَأجِر", ar, StringComparison.Ordinal);
     }
 
     /// <summary><b>غِيابُ الاعتِمادِ السوقِيِّ لا يُسقِطُ التَعريف</b> (‏ADR-033 الخُطوَة 6: «غيابُ الرمزِ السوقيِّ بالبيئةِ يُخفي
