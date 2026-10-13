@@ -145,9 +145,15 @@ public sealed class TenantProviderService
 
     /// <summary>السَحبُ يُوقِفُ <b>الآن</b> — بِخَتمِ وَقتٍ لا بِحَذف،
     /// فَيَبقى الأَثَرُ لِلتَدقيق.</summary>
+    /// <remarks><b>والمُعَرِّفُ قُدرَةٌ مِن المَعجَمِ وإلّا فَلا شَيء</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (i)): مَدخَلُ البائِعِ
+    /// (<c>{capability}:{owner}</c>، <see cref="TenantProviderBinding.VendorEntryId"/>) في المَجموعَةِ نَفسِها، وبابُ السَحبِ في الاستوديو
+    /// يُمَرِّرُ ما في العُنوانِ — فَكانَ صاحِبُ المَتجَرِ يَسحَبُ مَدخَلَ بائِعٍ مَختوماً و‏ADR-033 §٢‑ج‑٣ يُبقيه خارِجَ الاستوديو.
+    /// والرَدُّ <c>null</c> قَبلَ أَيِّ جَلسَة — ما يُجيبُه البابُ لِرَبطٍ غَيرِ مَوجود (<c>binding_not_found</c>) — لا استِثناءٌ يُجابُ ‏500.</remarks>
     public async Task<TenantProviderBinding?> RevokeAsync(
         string tenantSlug, string capability, CancellationToken ct = default)
     {
+        if (!ProviderCapabilities.Contains(capability)) return null;
+
         await using var s = Store.LightweightSession(tenantSlug);
         var doc = await s.LoadAsync<TenantProviderBinding>(capability, ct);
         if (doc is null || doc.Status == TenantProviderBinding.StatusRevoked) return null;
@@ -231,9 +237,13 @@ public sealed class TenantProviderService
 
     /// <summary>الرَبطُ الحاليُّ لِقُدرَةٍ — فَعّالاً كانَ أَو
     /// مَسحوباً — لِتَرسُمَه الشاشَة.</summary>
+    /// <remarks>قُدرَةٌ مِن المَعجَمِ وإلّا <c>null</c> قَبلَ أَيِّ جَلسَة (‏2026-10-13، G5 (i)) — فَلا يَقرَأُ سَطرُ «قَبلُ» في أَثَرِ السَحبِ
+    /// مَدخَلَ بائِعٍ بِمُعَرِّفِه؛ ومَدخَلُ البائِعِ يُقرَأُ بِـ<see cref="VendorEntryAsync"/> وَحدَها.</remarks>
     public async Task<TenantProviderBinding?> CurrentAsync(
         string tenantSlug, string capability, CancellationToken ct = default)
     {
+        if (!ProviderCapabilities.Contains(capability)) return null;
+
         try
         {
             await using var s = Store.QuerySession(tenantSlug);
