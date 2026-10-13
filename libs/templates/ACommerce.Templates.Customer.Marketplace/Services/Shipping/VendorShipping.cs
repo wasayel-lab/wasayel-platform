@@ -548,6 +548,33 @@ public sealed class VendorShippingService
     public static string RevealKey(Guid listingOwner) => $"oto-activation:{listingOwner:D}";
 
     /// <summary>
+    /// <para><b>كَم مَرَّةً يُحاوَلُ حِفظُ الرَمزِ المَختوم</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 M3): الأولى وإعادَتان — عَدَدُ إعادَةِ الإلحاقِ
+    /// في <c>DealsService</c> (‏ADR-036 §٧)، لا رَقَمَ جَديد. رَمزُ التَحديثِ الَّذي يُعيدُه «Register» تُعطيه OTO <b>مَرَّةً واحِدَة</b>، فَحِفظٌ يَتَعَثَّرُ
+    /// ولا يُعاد كانَ يُضَيِّعُه ورابِطُ التَفعيلِ قائِم. وبَعدَ الثالِثَةِ يَصعَدُ الاستِثناءُ بِسَطرِ خَطَأٍ يُسَمّي البائِعَ لا الرَمز.</para>
+    /// </summary>
+    public const int SealAttempts = 3;
+
+    private async Task<TenantProviderBinding> SealWithRetryAsync(
+        Func<Task<TenantProviderBinding>> save, string tenantSlug, Guid owner, CancellationToken ct)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try { return await save(); }
+            catch (Exception ex) when (attempt < SealAttempts && !ct.IsCancellationRequested)
+            {
+                _log.LogWarning(ex, "[OTO] vendor {Slug}/{Owner} ← sealing the account token failed (attempt {Attempt}/{Max}) — retrying",
+                    tenantSlug, owner.ToString("D"), attempt, SealAttempts);
+            }
+            catch (Exception ex) when (attempt >= SealAttempts)
+            {
+                _log.LogError(ex, "[OTO] vendor {Slug}/{Owner} ← sealing the account token failed {Max} times — a token OTO issued once is not stored",
+                    tenantSlug, owner.ToString("D"), SealAttempts);
+                throw;
+            }
+        }
+    }
+
+    /// <summary>
     /// <para><b>المَسارُ الواحِدُ لِلخَتمِ وتَسجيلِ الوارِد</b> — يَسلُكُه اللَصقُ والتَسجيلُ مَعاً (كانَ جِسمَ <c>SaveTokenAsync</c> حَرفاً حَتّى
     /// الخُطوَة 8): ١) الرَمزُ مَختوماً والسِرُّ وتَسجيلُه القائِمانِ كَما هُما؛ ٢) الوارِدُ بِسِرٍّ جَديدٍ بِرَمزِ البائِعِ نَفسِه — يُحَدَّثُ تَسجيلُه القائِم،
     /// وتَسجيلٌ يَرُدُّه حِسابٌ آخَرُ يُنشَأُ مِن جَديد؛ ٣) السِرُّ يُستَبدَلُ حينَ تَقبَلُه OTO وَحدَه، وإلّا يُكتَبُ رَمزُ فَشَلِها ويَبقى القَديم.</para>
@@ -568,8 +595,9 @@ public sealed class VendorShippingService
         if (kept is not null && kept.Values.TryGetValue(webhookField.Code, out var oldSecret))
             values[webhookField.Code] = oldSecret;
         var by = owner.ToString("D");
-        var saved = await _providers.BindVendorAsync(tenantSlug, ProviderCapabilities.Delivery, owner, def.Slug,
-            values, kept?.WebhookId, kept?.WebhookRefusal, by, ct);
+        // (‏2026-10-13، G5 M3 — ولا يُعادُ حَرفٌ فَوقَه: والحِفظُ يُعادُ — `SealAttempts` — قَبلَ أَن يُجابَ الطَلَب: رَمزُ التَسجيلِ تُعطيه OTO مَرَّة.)
+        var saved = await SealWithRetryAsync(() => _providers.BindVendorAsync(tenantSlug, ProviderCapabilities.Delivery, owner, def.Slug,
+            values, kept?.WebhookId, kept?.WebhookRefusal, by, ct), tenantSlug, owner, ct);
 
         // ٢) الوارِدُ بِسِرٍّ جَديدٍ وبِرَمزِ البائِعِ نَفسِه: يُحَدَّثُ تَسجيلُه القائِم، وتَسجيلٌ يَرُدُّه حِسابٌ آخَرُ يُنشَأُ مِن جَديد.
         var secret = OtoWebhookSignature.NewSecret();
