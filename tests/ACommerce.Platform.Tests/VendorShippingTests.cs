@@ -1147,7 +1147,8 @@ public class VendorShippingTests(ITestOutputHelper output)
         var owner = Guid.NewGuid();
         var key = VendorShippingService.RegisterAttemptKey(Slug, owner);
         Assert.Equal($"{Slug}|oto-register:{owner:D}", key);
-        for (var i = 0; i < 10; i++) Assert.True(ACommerce.Kit.Auth.Server.AuthHandlers.TryConsumeSendQuota(key));
+        // (‏2026-10-13، G5 M1): المُحاوَلاتُ السابِقَةُ تُستَهلَكُ مِن عَدّادِ الأَفعال — عَدّادِ التَسجيلِ مُنذُ اليَوم؛ وكانَت مِن حِصَّةِ الإرسال.
+        for (var i = 0; i < 10; i++) Assert.True(ACommerce.Kit.Auth.Server.AuthHandlers.TryConsumeActionQuota(key));
 
         var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
         var surface = Surface(w, Registering());

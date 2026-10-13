@@ -39,6 +39,18 @@ public static class AuthHandlers
     public static bool TryConsumeSendQuota(string key)
         => TryConsume(_requestRl, key, MaxRequestPerHour, TimeSpan.FromHours(1));
 
+    private static readonly ConcurrentDictionary<string, RateBucket> _actionRl = new();
+
+    /// <summary>
+    /// <para><b>حِصَّةُ فِعلٍ يُكَلِّفُ نِداءً خارِجِيّاً ولا يُرسِلُ رَمزاً</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 M1): بِالنافِذَةِ والحَدِّ
+    /// نَفسَيهِما (عَشرٌ في السّاعَة — لا رَقَمَ جَديد) وبِالآلِيَّةِ نَفسِها، في عَدّادٍ <b>لا يَبلُغُه بابُ دُخول</b>. كانَ حَدُّ «Register» عِندَ OTO
+    /// يَستَهلِكُ <see cref="TryConsumeSendQuota"/> بِمِفتاحِ «‏tenant|oto-register:{vendor}»، وبابُ الدُخولِ بِالجَوّالِ — بِلا جَلسَة — يَستَهلِكُها
+    /// بِـ«‏tenant|{phone}» والجَوّالُ نَصٌّ حُرّ: فَعَشرُ طَلَباتٍ بِذلِكَ النَصِّ تُقفِلُ تَسجيلَ البائِعِ ساعَة. مُستَهلِكُه:
+    /// <c>VendorShippingService.RegisterAsync</c>.</para>
+    /// </summary>
+    public static bool TryConsumeActionQuota(string key)
+        => TryConsume(_actionRl, key, MaxRequestPerHour, TimeSpan.FromHours(1));
+
     /// <summary>حِصَّةُ التَحَقُّق — خَمسُ مُحاوَلاتٍ في الدَقيقَة.</summary>
     public static bool TryConsumeVerifyQuota(string key)
         => TryConsume(_verifyRl, key, MaxVerifyPerMinute, TimeSpan.FromMinutes(1));

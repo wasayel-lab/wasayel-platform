@@ -410,6 +410,9 @@ public sealed class VendorShippingService
     /// <para><b>مِفتاحُ حَدِّ المُحاوَلاتِ في حِصَّةِ الإرسالِ القائِمَة</b> (<c>AuthHandlers.TryConsumeSendQuota</c>، «‏tenant|subject»): بائِعٌ في مَتجَر.
     /// والحِصَّةُ أُنبوبُ المِنَصَّةِ لِما يُكَلِّفُ نِداءً خارِجِيّاً بِكُلِّ مُحاوَلَة — عَشرٌ في السّاعَة، يُناديها بابُ الاستوديو مِن خارِجِ مِلَفِّها كَهذا
     /// (القاعِدَة ٨) — فَلا رَقَمَ جَديد (القاعِدَة ١٦). <b>حَدُّ مُحاوَلاتٍ لا حِصَّةُ باقَة</b>: لا يُعَدُّ عَلى باقَةِ المُستَأجِرِ ولا يَمَسُّ الاستِحقاقات.</para>
+    /// <para>(‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 M1 — ولا يُعادُ حَرفٌ فَوقَه: <b>والعَدّادُ عَدّادُ الأَفعالِ لا عَدّادُ الإرسال</b> —
+    /// <c>AuthHandlers.TryConsumeActionQuota</c> بِالنافِذَةِ والحَدِّ نَفسَيهِما. كانَ المِفتاحُ في حِصَّةِ الإرسال، وبابُ الدُخولِ بِالجَوّالِ يَستَهلِكُها
+    /// بِنَصٍّ حُرٍّ بِلا جَلسَة: عَشرُ طَلَباتٍ نَصُّها «oto-register:{vendor}» كانَت تُقفِلُ تَسجيلَ البائِع. والمِفتاحُ بِشَكلِه.)</para>
     /// </summary>
     public static string RegisterAttemptKey(string tenantSlug, Guid listingOwner) => $"{tenantSlug}|oto-register:{listingOwner:D}";
 
@@ -500,7 +503,7 @@ public sealed class VendorShippingService
             if (VendorRegistrationValidator.Validate(sent).FirstOrDefault() is { } invalid)
                 return new(invalid.Code, before, null);
 
-            if (!global::ACommerce.Kit.Auth.Server.AuthHandlers.TryConsumeSendQuota(RegisterAttemptKey(tenantSlug, owner)))
+            if (!global::ACommerce.Kit.Auth.Server.AuthHandlers.TryConsumeActionQuota(RegisterAttemptKey(tenantSlug, owner)))
             {
                 _log.LogInformation("[OTO] vendor {Slug}/{Owner} ← register refused ({Code})",
                     tenantSlug, owner.ToString("D"), RegisterRateLimited);
