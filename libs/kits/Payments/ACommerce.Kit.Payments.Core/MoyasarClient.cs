@@ -83,6 +83,10 @@ public sealed class MoyasarClient
     /// (<c>"status": "initiated"</c>، مَقروءاً ‏2026-10-12). والوَثيقَةُ لا تَشرَحُ سائِرَ الحالات، فَلا يُلغى إلّا ما كانَ عَلَيها.</summary>
     public const string OpenStatus = "initiated";
 
+    /// <summary>حالُ الفاتورَةِ بَعدَ إلغائِها كَما يَقولُه مِثالُ رَدِّ «Cancel invoice» في الوَثيقَة (<c>"status": "canceled"</c>) — يَقرَؤُه
+    /// <c>GatewayInvoiceCloser</c> فَلا يَحسِبُ ‏200 بِحالٍ أُخرى «أُلغِيَت» (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b).</summary>
+    public const string CanceledStatus = "canceled";
+
     /// <summary>أَصغَرُ مَبلَغٍ تَقبَلُه الفاتورَة بِالهَلَلَة — «‏Possible values: &gt;= 100».</summary>
     public const long MinimumAmount = 100;
 

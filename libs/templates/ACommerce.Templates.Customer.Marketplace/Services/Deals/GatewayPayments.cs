@@ -612,6 +612,15 @@ public static class GatewayInvoiceClosing
 /// </summary>
 public sealed class GatewayInvoiceCloser
 {
+    /// <summary>عُطلٌ داخِلَ المُلغي — قاعِدَةٌ في تَحميلِ الأَخَواتِ أَو رَبطِ الدَفع، أَو استِثناءُ خِزانَةٍ لَيسَ <c>CryptographicException</c> — بَعدَ أَن حُفِظَ
+    /// الإلغاء: يُكتَبُ تَحذيراً ويُرجَعُ رَمزاً نَسَقَ فَرعِ الاستِرجاع، ولا يَصعَدُ مِن <see cref="DealsService.CancelAsync"/> (‏2026-10-13، مُراجَعَةُ
+    /// بَوّابَةِ المَوجَة 3b — كانَ يَصعَدُ فَتُجيبُ النُقطَةُ ‏500 عَن إلغاءٍ وَقَع).</summary>
+    public const string Faulted = "gateway_invoice_close_faulted";
+
+    /// <summary>‏PUT …/cancel أُجيبَ ‏200 وحالُ الفاتورَةِ غَيرُ <see cref="MoyasarClient.CanceledStatus"/> — مَثَلاً <c>paid</c> إن وَقَعَ دَفعٌ بَينَ الجَلبِ
+    /// والإلغاء: نَتيجَةٌ بِرَمزِها لا «أُلغِيَت» (‏2026-10-13).</summary>
+    public const string NotCancelled = "gateway_invoice_not_cancelled";
+
     private readonly TenantProviderService _providers;
     private readonly ProviderVault _vault;
     /// <summary>عَميلُ البَوّابَة — و<c>null</c> حينَ لا يُسَجِّلُه المُضيف، فَلا جَلبَ ولا إلغاء (<see cref="MoyasarFailures.NotConfigured"/>).</summary>
@@ -634,6 +643,18 @@ public sealed class GatewayInvoiceCloser
     /// </summary>
     public async Task<string?> CloseIfLastAsync(string tenantSlug, Deal cancelled, Func<Guid, Task<Deal?>> load)
     {
+        // (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b — ولا يُعادُ حَرفٌ فَوقَه: ومَلفوفٌ كَفَرعِ الاستِرجاع — عُطلٌ في داخِلِه رَمزُه `Faulted` تَحذيراً.)
+        try { return await CloseCoreAsync(tenantSlug, cancelled, load); }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogWarning(ex, "[gateway] close invoice {Slug} deal {Deal} ← {Outcome} — the cancel stands; the invoice may still be payable",
+                tenantSlug, cancelled.Id.ToString("D"), Faulted);
+            return Faulted;
+        }
+    }
+
+    private async Task<string?> CloseCoreAsync(string tenantSlug, Deal cancelled, Func<Guid, Task<Deal?>> load)
+    {
         if (!GatewayPayments.HasInvoice(cancelled))
             return Logged(tenantSlug, cancelled, DealPayAuthorization.InvoiceMissing);
 
@@ -654,14 +675,23 @@ public sealed class GatewayInvoiceCloser
             return Logged(tenantSlug, cancelled, kept[0].Code);
 
         var closed = await _client.CancelInvoiceAsync(key, invoice.Id);
-        return Logged(tenantSlug, cancelled, closed.Ok ? null : closed.Failure!.Code, closed.Value?.Status);
+        if (!closed.Ok) return Logged(tenantSlug, cancelled, closed.Failure!.Code);
+        // و‏200 بِحالٍ غَيرِ «canceled» نَتيجَةٌ بِرَمزِها لا «أُلغِيَت» (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b).
+        return string.Equals(closed.Value!.Status, MoyasarClient.CanceledStatus, StringComparison.Ordinal)
+            ? Logged(tenantSlug, cancelled, null, closed.Value.Status)
+            : Logged(tenantSlug, cancelled, NotCancelled, closed.Value.Status);
     }
 
-    /// <summary>سَطرُ اللوغ: المَتجَرُ والصَفقَةُ والنَتيجَة — لا مِفتاحٌ ولا رابِطُ فاتورَة.</summary>
+    /// <summary>سَطرُ اللوغ: المَتجَرُ والصَفقَةُ والنَتيجَة — لا مِفتاحٌ ولا رابِطُ فاتورَة. <b>وتَحذيرٌ لِكُلِّ نَتيجَةٍ تَتَرُكُ فاتورَةً قَد تُدفَعُ ثَمَناً
+    /// لِما أُلغِيَ</b> (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b): كُلُّ رَمزٍ إلّا <see cref="GatewayInvoiceClosing.StillOwed"/> — الفاتورَةُ تَدفَعُ لِأُختٍ قائِمَةٍ
+    /// بِقَصد — والإلغاءُ (<c>null</c>)؛ وكانَ الكُلُّ مَعلومَة.</summary>
     private string? Logged(string tenantSlug, Deal cancelled, string? code, string? status = null)
     {
-        _log.LogInformation("[gateway] close invoice {Slug} deal {Deal} ← {Outcome}",
-            tenantSlug, cancelled.Id.ToString("D"), code ?? $"cancelled at the gateway (status {status ?? "—"})");
+        var outcome = code is null ? $"cancelled at the gateway (status {status ?? "—"})"
+                    : status is null ? code
+                    : $"{code} (status {status})";
+        var level = code is null || code == GatewayInvoiceClosing.StillOwed ? LogLevel.Information : LogLevel.Warning;
+        _log.Log(level, "[gateway] close invoice {Slug} deal {Deal} ← {Outcome}", tenantSlug, cancelled.Id.ToString("D"), outcome);
         return code;
     }
 }

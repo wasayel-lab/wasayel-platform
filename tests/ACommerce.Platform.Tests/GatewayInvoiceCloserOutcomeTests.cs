@@ -47,12 +47,12 @@ public class GatewayInvoiceCloserOutcomeTests(ITestOutputHelper output)
         return (w, new DealsService(w.Docs.Store, w.Platform, closer), log);
     }
 
-    /// <summary><b>اليَوم</b>: تَحميلُ الأَخَواتِ في المُلغي يَرمي (عُطلُ قاعِدَةٍ مَصنوعٌ في ثاني تَحميلٍ بَعدَ الحِفظ — الأَوَّلُ رَبطُ الدَفع) — فَيَصعَدُ الاستِثناءُ
-    /// مِن <c>CancelAsync</c> والإلغاءُ مَحفوظ.</summary>
+    /// <summary><b>قُلِبَ</b> (‏2026-10-13) — كانَ <c>Today_a_fault_inside_the_closer_escapes_the_cancel_after_it_was_saved</c> (‏<c>2ce51fa</c>): عُطلُ تَحميلِ
+    /// الأَخَواتِ داخِلَ المُلغي لا يَصعَد — الإلغاءُ «ok» والصَفقَةُ مُلغاة، والرَمزُ <c>gateway_invoice_close_faulted</c> تَحذيراً بِالاستِثناءِ نَفسِه.</summary>
     [Fact]
-    public async Task Today_a_fault_inside_the_closer_escapes_the_cancel_after_it_was_saved()
+    public async Task A_fault_inside_the_closer_after_the_save_is_logged_as_a_warning_and_the_cancel_stands()
     {
-        var (w, deals, _) = await LastOnInvoice();
+        var (w, deals, log) = await LastOnInvoice();
         w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "initiated"));
         var (saved, loadsAfter) = (false, 0);
         w.Docs.BeforeMember = name =>
@@ -61,17 +61,55 @@ public class GatewayInvoiceCloserOutcomeTests(ITestOutputHelper output)
             else if (saved && name == "LoadAsync" && ++loadsAfter == 2) throw new InvalidOperationException("عُطلُ قاعِدَةٍ مَصنوع");
         };
 
-        var error = await Record.ExceptionAsync(() => deals.CancelAsync(Slug, w.Ids[0], Vendor, "نَفِدَت"));
+        var res = await deals.CancelAsync(Slug, w.Ids[0], Vendor, "نَفِدَت");
 
-        output.WriteLine($"الاستِثناء: {error?.GetType().Name ?? "لا"} · الحالَة: {Load(w, w.Ids[0]).Status}");
-        Assert.IsType<InvalidOperationException>(error);
+        output.WriteLine($"الإلغاء: {(res.Ok ? "ok" : res.Violation!.Code)} · الحالَة: {Load(w, w.Ids[0]).Status} · اللوغ: {log.Entries[^1].Level} {log.Entries[^1].Line}");
+        Assert.True(res.Ok, res.Violation?.Code);
+        Assert.Equal(DealStatus.Cancelled, res.Deal!.Status);
         Assert.Equal(DealStatus.Cancelled, Load(w, w.Ids[0]).Status);
+        var (level, line) = Assert.Single(log.Entries);
+        Assert.Equal(LogLevel.Warning, level);
+        Assert.Contains(GatewayInvoiceCloser.Faulted, line, StringComparison.Ordinal);
     }
 
-    /// <summary><b>اليَوم</b>: ‏PUT …/cancel يُجابُ ‏200 وحالُ الفاتورَةِ <c>paid</c> (دَفعٌ وَقَعَ بَينَ الجَلبِ والإلغاء) — فَيُكتَبُ «أُلغِيَت عِندَ البَوّابَة»
-    /// ويُرجَعُ <c>null</c> كَالإلغاء.</summary>
+    /// <summary><b>والعُطلُ في كُلِّ خُطوَةٍ بَعدَ الحِفظ</b>: ثالِثُ تَحميلٍ (الأُختُ الثانِيَة) — والخِزانَةُ تَرمي ما لَيسَ <c>CryptographicException</c> (رَبطُ دَفعٍ
+    /// مَختومٌ بِنُسخَةِ مِفتاحٍ غَيرِ المُحَمَّلَة: <c>InvalidOperationException</c> «لا تَدويرَ مَبنِيٌّ بَعد») — كُلٌّ رَمزُه تَحذيراً والإلغاءُ قائِم.</summary>
+    [Theory]
+    [InlineData("second_sibling_load")]
+    [InlineData("vault_kek_version")]
+    public async Task Every_fault_after_the_save_leaves_the_cancel_standing(string where)
+    {
+        var (w, deals, log) = await LastOnInvoice();
+        w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "initiated"));
+        if (where == "vault_kek_version")
+        {
+            var binding = w.Docs.Read<TenantProviderBinding>(ProviderCapabilities.Payments)!;
+            var sealedValues = binding.Values.Values.Where(v => v.IsSealed).ToList();
+            Assert.NotEmpty(sealedValues);
+            foreach (var v in sealedValues) v.KekVersion += 1;
+        }
+        else
+        {
+            var (saved, loadsAfter) = (false, 0);
+            w.Docs.BeforeMember = name =>
+            {
+                if (name == "SaveChangesAsync") saved = true;
+                else if (saved && name == "LoadAsync" && ++loadsAfter == 3) throw new InvalidOperationException("عُطلُ قاعِدَةٍ مَصنوع");
+            };
+        }
+
+        var res = await deals.CancelAsync(Slug, w.Ids[0], Vendor, "نَفِدَت");
+
+        output.WriteLine($"{where}: {(res.Ok ? "ok" : res.Violation!.Code)} · {string.Join(" | ", log.Entries.Select(e => $"{e.Level} {e.Line}"))}");
+        Assert.True(res.Ok, res.Violation?.Code);
+        Assert.Equal(DealStatus.Cancelled, Load(w, w.Ids[0]).Status);
+        Assert.Equal(LogLevel.Warning, log.Entries[^1].Level);
+    }
+
+    /// <summary><b>قُلِبَ</b> (‏2026-10-13) — كانَ <c>Today_a_cancel_answered_200_with_a_paid_status_is_counted_as_cancelled</c>: ‏200 بِحالِ <c>paid</c>
+    /// نَتيجَةٌ بِرَمزِها <c>gateway_invoice_not_cancelled</c> وحالِها، تَحذيراً — لا «أُلغِيَت».</summary>
     [Fact]
-    public async Task Today_a_cancel_answered_200_with_a_paid_status_is_counted_as_cancelled()
+    public async Task A_cancel_answered_200_with_a_paid_status_is_its_own_outcome_logged_as_a_warning()
     {
         var (w, deals, log) = await LastOnInvoice();
         w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "initiated")).Then(HttpStatusCode.OK, PaidInvoice(w, "paid"));
@@ -80,22 +118,51 @@ public class GatewayInvoiceCloserOutcomeTests(ITestOutputHelper output)
 
         output.WriteLine($"الإلغاء: {(res.Ok ? "ok" : res.Violation!.Code)} · اللوغ: {log.Entries[^1].Level} {log.Entries[^1].Line}");
         Assert.True(res.Ok);
-        Assert.Contains("cancelled at the gateway (status paid)", log.Entries[^1].Line, StringComparison.Ordinal);
+        Assert.Equal(LogLevel.Warning, log.Entries[^1].Level);
+        Assert.Contains($"{GatewayInvoiceCloser.NotCancelled} (status paid)", log.Entries[^1].Line, StringComparison.Ordinal);
+        Assert.DoesNotContain("cancelled at the gateway", log.Entries[^1].Line, StringComparison.Ordinal);
     }
 
-    /// <summary><b>اليَوم</b>: نَتيجَةٌ تَتَرُكُ فاتورَةً قابِلَةً لِلدَّفعِ — البَوّابَةُ تَرُدُّ الجَلب — تُكتَبُ بِمُستَوى المَعلومَة.</summary>
+    /// <summary><b>والسالِب</b>: ‏200 بِحالِ <c>canceled</c> «أُلغِيَت عِندَ البَوّابَة» مَعلومَةً كَما كان.</summary>
     [Fact]
-    public async Task Today_an_outcome_that_leaves_a_payable_invoice_is_logged_at_information()
+    public async Task A_cancel_answered_200_with_a_canceled_status_is_cancelled_at_information()
     {
         var (w, deals, log) = await LastOnInvoice();
-        w.Moyasar.Then(HttpStatusCode.NotFound, """{"type":"record_not_found","message":"The <object type> record you were looking for was not found.","errors":null}""");
+        w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "initiated")).Then(HttpStatusCode.OK, PaidInvoice(w, MoyasarClient.CanceledStatus));
 
-        var res = await deals.CancelAsync(Slug, w.Ids[0], Vendor, "نَفِدَت");
+        Assert.True((await deals.CancelAsync(Slug, w.Ids[0], Vendor, "نَفِدَت")).Ok);
+        Assert.Equal(LogLevel.Information, log.Entries[^1].Level);
+        Assert.Contains("cancelled at the gateway (status canceled)", log.Entries[^1].Line, StringComparison.Ordinal);
+    }
 
-        Assert.True(res.Ok);
+    /// <summary><b>قُلِبَ</b> (‏2026-10-13) — كانَ <c>Today_an_outcome_that_leaves_a_payable_invoice_is_logged_at_information</c>: كُلُّ نَتيجَةٍ تَتَرُكُ فاتورَةً قَد
+    /// تُدفَعُ ثَمَناً لِما أُلغِيَ تَحذير — رَدُّ البَوّابَة، وانقِطاعُها، ولا مِفتاح، وفاتورَةٌ لَيسَت «initiated» — و«أُختٌ قائِمَة» مَعلومَةٌ كَما كانَت.</summary>
+    [Theory]
+    [InlineData("refused", "gateway_refused", LogLevel.Warning)]
+    [InlineData("unreachable", "gateway_unreachable", LogLevel.Warning)]
+    [InlineData("not_open", GatewayInvoiceClosing.NotOpen, LogLevel.Warning)]
+    [InlineData("still_owed", GatewayInvoiceClosing.StillOwed, LogLevel.Information)]
+    public async Task Every_outcome_that_leaves_a_payable_invoice_is_a_warning_and_a_sibling_still_owed_is_not(string how, string code, LogLevel expected)
+    {
+        ProviderVault? sealedWith = null;
+        var w = await PaidCart(v => { sealedWith = v; return PaymentsBinding(v); }, withSeller: true, invoice: true);
+        var log = new LevelCapturingCloserLogger();
+        var deals = new DealsService(w.Docs.Store, w.Platform, new GatewayInvoiceCloser(new TenantProviderService(w.Docs.Store), sealedWith!,
+            new MoyasarClient(new HttpClient(w.Moyasar), NullLogger<MoyasarClient>.Instance), log));
+        if (how != "still_owed") await w.Deals.CancelAsync(Slug, w.Ids[1], Vendor, "نَفِدَت");
+        _ = how switch
+        {
+            "refused"     => w.Moyasar.Then(HttpStatusCode.NotFound, """{"type":"record_not_found","message":"The <object type> record you were looking for was not found.","errors":null}"""),
+            "unreachable" => w.Moyasar.Then(HttpStatusCode.ServiceUnavailable, ""),
+            "not_open"    => w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "paid")),
+            _             => w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "initiated")),
+        };
+
+        Assert.True((await deals.CancelAsync(Slug, w.Ids[0], Vendor, "نَفِدَت")).Ok);
+
         var (level, line) = Assert.Single(log.Entries);
-        output.WriteLine($"{level} {line}");
-        Assert.Equal(LogLevel.Information, level);
-        Assert.Contains(MoyasarFailures.Refused, line, StringComparison.Ordinal);
+        output.WriteLine($"{how}: {level} {line}");
+        Assert.Equal(expected, level);
+        Assert.Contains(code, line, StringComparison.Ordinal);
     }
 }
