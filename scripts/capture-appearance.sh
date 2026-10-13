@@ -292,6 +292,12 @@ GUARDED_PAGES=(
   "admin-tenant-theme:admin:/admin/tenants/theme-demo/theme"
   "admin-forbidden:studio:/admin"
   "studio-home:studio:/studio"
+  # ‏2026-10-13 — **ومَعَ مَتاجِرِه**. مِلَفُّ `studio` بِصِفرِ تَطبيقٍ عَمداً (أَسفَلَه)، فَشارَةُ نَوعِ المَتجَرِ في صَفِّ كُلِّ
+  # تَطبيقٍ (`studio.home.kind_store` / `kind_multirole`) لا تُرسَمُ في أَيِّ لَقطَة — وقَد بَدَّلَ `00d46af` نَصَّيها ولَم يُقَس
+  # فَرقُه بايتاً (‏ADR-032 §٦‑ج الصَفّ 3(ج)). مِلَفُّ `admin` يَملِكُ مَتاجِرَ بِـ`StudioOwnershipSeeder`، فَيَرسُمُ الصُفوفَ بِشاراتِها.
+  # **وبَياناتُها بيئَتُها**: ما يَملِكُه المِلَفُّ يَختَلِفُ بَينَ فَرعِ Neon والقاعِدَةِ المَحَلِّيَّة، فَلَقطَةُ أَساسِها تُلتَقَطُ
+  # حَيثُ تُقارَن (‏`docs/RELEASE-READINESS.md`).
+  "studio-home-with-apps:admin:/studio"
   "studio-billing:studio:/studio/billing"
   "studio-new:studio:/studio/new"
   "studio-consent:studio:/studio/consent"
