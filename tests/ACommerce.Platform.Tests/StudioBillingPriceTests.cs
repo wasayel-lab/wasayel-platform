@@ -136,16 +136,105 @@ public class StudioBillingPriceTests
     }
 
     /// <summary>شَرطُ بَيعٍ: يَسأَلُ <c>StudioTierPurchase.IsSelfGrantable</c> صَريحاً، أَو يَقرَأُ عُضواً مُعَرَّفاً في المِلَفِّ نَفسِه
-    /// (<c>X =&gt; …;</c>) يَسأَلُها — كَـ<c>Offer</c> في <c>UpgradePrompt.razor</c>.</summary>
-    private static bool IsSellCondition(string code, string condition)
+    /// (<c>X =&gt; …;</c>) يَسأَلُها — كَـ<c>Offer</c> في <c>UpgradePrompt.razor</c>.
+    ///
+    /// <para><b>بِقُطبِيَّتِه لا بِاحتِوائِه</b> (‏2026-10-13 — مُراجَعَةُ تَيّارِ S11، الجَولَة ٢: «يَحوي <c>IsSelfGrantable(</c>» كانَ يَقبَلُ
+    /// <c>!StudioTierPurchase.IsSelfGrantable(…)</c> و<c>… || true</c>، و«عُضوٌ يَحويها» كانَ يَقبَلُ <c>Offer is null</c> وتَبديلَ فَرعَي
+    /// الشَرطِ في تَعريفِه). فَيُقبَلُ شَكلانِ لا ثالِثَ لَهُما، ويُغلِقُ الفاحِصُ عِندَ الشَكّ:</para>
+    /// <list type="number">
+    ///   <item>طَرَفٌ في عَطفِ المُستَوى الأَعلى (<c>&amp;&amp;</c> خارِجَ الأَقواس) هُوَ بِحَرفِه
+    ///   <c>StudioTierPurchase.IsSelfGrantable(…)</c> — لا نَفيَ قَبلَه ولا مُقارَنَةَ بَعدَه؛</item>
+    ///   <item>أَو طَرَفٌ هُوَ بِحَرفِه <c>X is not null</c>، و<c>X</c> عُضوٌ تَعريفُه <c>شَرطُ بَيعٍ ? قيمَة : null</c> بِالشَكلِ الأَوَّل.</item>
+    /// </list>
+    /// <para>وشَرطٌ فيه <c>||</c> أَو <c>?</c> لَيسَ شَرطَ بَيعٍ أَيّاً كانَ ما فيه: كِلاهُما أَدنى أَسبَقِيَّةً مِن <c>&amp;&amp;</c>، فَيَجعَلانِ
+    /// طَرَفاً ظاهِرُه البَيعُ غَيرَ لازِم.</para></summary>
+    private static bool IsSellCondition(string code, string condition, bool viaMember = false)
     {
-        const string Sell = "StudioTierPurchase.IsSelfGrantable(";
-        if (condition.Contains(Sell, StringComparison.Ordinal)) return true;
-        foreach (Match id in Regex.Matches(condition, @"\b[A-Z]\w*\b"))
+        var c = Regex.Replace(condition, @"\s+", " ").Trim();
+        if (c.Contains("||", StringComparison.Ordinal) || c.Contains('?')) return false;
+        foreach (var term in TopLevelConjuncts(c))
         {
-            var def = Regex.Match(code, $@"\b{id.Value}\s*=>(?<expr>[^;]+);");
-            if (def.Success && def.Groups["expr"].Value.Contains(Sell, StringComparison.Ordinal)) return true;
+            if (Regex.IsMatch(term, @"^StudioTierPurchase\.IsSelfGrantable\([\w.]+\)$")) return true;
+            var member = Regex.Match(term, @"^(?<m>[A-Z]\w*) is not null$");
+            if (viaMember || !member.Success) continue;
+            var def = Regex.Match(code, $@"\b{member.Groups["m"].Value}\s*=>(?<expr>[^;]+);");
+            if (!def.Success) continue;
+            var ternary = Regex.Match(Regex.Replace(def.Groups["expr"].Value, @"\s+", " ").Trim(),
+                @"^(?<cond>[^?:]+) \? (?<then>\w+) : null$");
+            if (ternary.Success && ternary.Groups["then"].Value != "null"
+                && IsSellCondition(code, ternary.Groups["cond"].Value, viaMember: true)) return true;
         }
         return false;
+    }
+
+    /// <summary>أَطرافُ العَطفِ في المُستَوى الأَعلى — <c>&amp;&amp;</c> خارِجَ <c>( )</c> و<c>{ }</c>؛ فَطَرَفٌ داخِلَ
+    /// <c>!( … )</c> لا يَخرُجُ طَرَفاً.</summary>
+    private static IEnumerable<string> TopLevelConjuncts(string condition)
+    {
+        var depth = 0;
+        var start = 0;
+        for (var i = 0; i < condition.Length; i++)
+        {
+            if (condition[i] is '(' or '{') depth++;
+            else if (condition[i] is ')' or '}') depth--;
+            else if (depth == 0 && condition[i] == '&' && i + 1 < condition.Length && condition[i + 1] == '&')
+            {
+                yield return condition[start..i].Trim();
+                start = i + 2;
+                i++;
+            }
+        }
+        yield return condition[start..].Trim();
+    }
+
+    /// <summary><b>حَقنُ عَيب — فاحِصُ شَرطِ البَيعِ يُحمِرُّ فِعلاً</b> (‏2026-10-13، الجَولَة ٢؛ بِشَكلِ
+    /// <c>UpgradeLadderTests.The_ladder_checker_can_actually_go_red</c>): «كُلُّ سِعرٍ تَحتَ شَرطِ بَيع» مِن فاحِصٍ يَقبَلُ كُلَّ شَيءٍ
+    /// لا يُمَيَّزُ عَن فاحِصٍ يَقرَأ. فَتُحقَنُ الأَشكالُ الَّتي قُلِبَت بِها القُطبِيَّةُ ومَرَّت — عَلى الشَرطِ صَريحاً وعَلى تَعريفِ
+    /// <c>Offer</c> — ويُشتَرَطُ رَفضُها، ويُشتَرَطُ قَبولُ الشَكلَينِ الحَيَّين: النِداءُ صَريحاً (وَحدَه أَو طَرَفاً في عَطف)، والعُضو.</summary>
+    [Fact]
+    public void The_sell_condition_checker_can_actually_go_red()
+    {
+        const string Offer = "TierLimits? Offer => Next is { } n && StudioTierPurchase.IsSelfGrantable(n.Tier) ? n : null;";
+        string OfferWith(string from, string to)
+        {
+            Assert.Contains(from, Offer, StringComparison.Ordinal);
+            return Offer.Replace(from, to, StringComparison.Ordinal);
+        }
+        const string Sell = "StudioTierPurchase.IsSelfGrantable(n.Tier)";
+
+        var accepted = new (string Condition, string Code)[]
+        {
+            ("StudioTierPurchase.IsSelfGrantable(t.Tier)", ""),
+            ("!string.IsNullOrEmpty(Reason) && StudioTierPurchase.IsSelfGrantable(t.Tier)", ""),
+            ("Offer is not null", Offer),
+        };
+        var rejected = new (string Condition, string Code)[]
+        {
+            ("!StudioTierPurchase.IsSelfGrantable(t.Tier)", ""),
+            ("!(StudioTierPurchase.IsSelfGrantable(t.Tier))", ""),
+            ("StudioTierPurchase.IsSelfGrantable(t.Tier) || true", ""),
+            ("StudioTierPurchase.IsSelfGrantable(t.Tier) == false", ""),
+            ("StudioTierPurchase.IsSelfGrantable(t.Tier) is false", ""),
+            ("StudioTierPurchase.IsSelfGrantable(t.Tier) ^ true", ""),
+            ("!(Shown && StudioTierPurchase.IsSelfGrantable(t.Tier) && Ready)", ""),
+            ("StudioTierPurchase.IsSelfGrantable(t.Tier) && Ready ? false : true", ""),
+            ("Offer is null", Offer),
+            ("Offer is not null", OfferWith("&& " + Sell, "&& !" + Sell)),
+            ("Offer is not null", OfferWith(Sell, "!(" + Sell + ")")),
+            ("Offer is not null", OfferWith(Sell, "(" + Sell + " || true)")),
+            ("Offer is not null", OfferWith(Sell, Sell + " == false")),
+            ("Offer is not null", OfferWith(Sell, Sell + " is false")),
+            ("Offer is not null", OfferWith(Sell, "(" + Sell + " ^ true)")),
+            ("Offer is not null", OfferWith("? n : null", "? null : n")),
+            ("Offer is not null", "TierLimits? Offer => Next;"),
+        };
+
+        var wrong = accepted.Where(x => !IsSellCondition(x.Code, x.Condition)).Select(x => $"رُفِضَ حَيٌّ: [{x.Condition}] {x.Code}")
+            .Concat(rejected.Where(x => IsSellCondition(x.Code, x.Condition)).Select(x => $"قُبِلَ مَقلوبٌ: [{x.Condition}] {x.Code}"))
+            .ToList();
+        Assert.True(accepted.Length >= 3 && rejected.Length >= 17,
+            $"أَداةٌ عَمياء: حُقِنَ {rejected.Length} شَكلاً مَقلوباً و{accepted.Length} حَيّاً.");
+        Assert.True(wrong.Count == 0,
+            $"حُقِنَ {rejected.Length} شَكلاً مَقلوباً و{accepted.Length} حَيّاً، وأَخطَأَ الفاحِصُ في {wrong.Count}:\n  " + string.Join("\n  ", wrong));
     }
 }

@@ -1,6 +1,10 @@
 using System.Text.RegularExpressions;
 using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using UpgradePrompt = ACommerce.Templates.Customer.Marketplace.Components.UpgradePrompt;
 
 namespace ACommerce.Platform.Tests;
 
@@ -26,6 +30,13 @@ namespace ACommerce.Platform.Tests;
 //
 // **العِلاج** (‏2026-10-13): `Offer` = `Next` مَصفِيّاً بِـ`StudioTierPurchase.IsSelfGrantable`، والوَسمُ يَقرَؤُه وَحدَه — فَالأَوسَعُ الَّذي لا
 // يُباعُ يُرسَمُ كَما لا أَوسَع. الصَفُّ الأَوَّلُ انقَلَبَ بِاسمِه، والرابِعُ جَديد، والثاني والثالِثُ كَما أُودِعا.
+//
+// **والقُطبِيَّةُ تُثَبَّتُ لا الاحتِواء** (‏2026-10-13، مُراجَعَةُ تَيّارِ S11 — الجَولَة ٢): كانَ الصَفُّ الأَوَّلُ يَسأَلُ أَيَحوي تَعريفُ
+// `Offer` كَلِمَةَ `Next` ونِداءَ `IsSelfGrantable(`، وذلك يَصدُقُ عَلى نَفيِه: `!StudioTierPurchase.IsSelfGrantable(n.Tier)` يُعيدُ العَطَبَ
+// بِعَينِه وصُفوفُ هذا المِلَفِّ و`StudioBillingPriceTests` و`UpgradeLadderTests` (‏13) خَضراء — مَقيساً عَلى نُسخَةٍ مُؤَرشَفَةٍ مِن
+// `9cf3f68`، ومَعَه سِتَّةُ أَشكالٍ أُخرى: `!(…)`، `|| true`، `== false`، `is false`، `^ true`، وتَبديلُ فَرعَي `? n : null`. فَصارَ التَعريفُ
+// مُثَبَّتاً بِحَرفِه في الأَوَّل، ويَرسُمُ الرابِعُ اللافِتَةَ ويُقارِنُها بايتاً بِبايت، و`StudioBillingPriceTests.IsSellCondition` يَقرَأُ
+// القُطبِيَّة. والثاني والثالِثُ والأَدَواتُ كَما أُودِعَت.
 public class UpgradePromptPriceTests
 {
     /// <summary>نَصُّ مِلَفٍّ بِلا تَعليقاتٍ (‏<c>@* *@</c> و<c>&lt;!-- --&gt;</c> ثُمَّ تَعليقاتُ C#) — والفَهارِسُ مَحفوظَةٌ، لِأَنّ
@@ -78,7 +89,12 @@ public class UpgradePromptPriceTests
     /// <c>Today_the_banner_draws_the_next_tiers_price_and_sell_button_under_no_sell_condition</c>): قائِمَةُ <c>BenefitsFor</c> وكُتلَةُ
     /// <c>&lt;a … href="/studio/billing"&gt;</c> وقيمَةُ <c>MonthlyPriceSar</c> شَرطُها الداخِلِيُّ <c>Offer is not null</c>، و<c>Offer</c> هُوَ
     /// <c>Next</c> مَصفِيّاً بِـ<c>StudioTierPurchase.IsSelfGrantable</c> — الدالَّةُ الَّتي تَرسُمُ سِعرَ البِطاقَةِ وزِرَّها في
-    /// <c>/studio/billing</c>، لا شَرطٌ ثانٍ.</summary>
+    /// <c>/studio/billing</c>، لا شَرطٌ ثانٍ.
+    ///
+    /// <para><b>وتَعريفُ <c>Offer</c> يُثَبَّتُ بِحَرفِه لا بِاحتِوائِه</b> (‏2026-10-13 — مُراجَعَةُ تَيّارِ S11، الجَولَة ٢): «يَحوي
+    /// <c>Next</c> و<c>IsSelfGrantable(</c>» يَصدُقُ عَلى نَفيِه أَيضاً — <c>&amp;&amp; !StudioTierPurchase.IsSelfGrantable(n.Tier)</c>
+    /// يُعيدُ زِرَّ Spark بِسِعرِه لِمَن خُزِّنَ عَلى lite أَو growth والصُفوفُ خَضراء. فَالمُثَبَّتُ القُطبِيَّة: التَعريفُ بَعدَ طَيِّ
+    /// المَسافاتِ حَرفاً، كَما يُثَبِّتُ <c>StudioBillingPriceTests</c> شَرطَ البِطاقَةِ حَرفاً.</para></summary>
     [Fact]
     public void The_banner_draws_the_next_tiers_price_and_sell_button_only_for_a_tier_billing_sells()
     {
@@ -91,8 +107,8 @@ public class UpgradePromptPriceTests
 
         var offer = Regex.Match(razor, @"TierLimits\?\s+Offer\s*=>(?<expr>[^;]+);");
         Assert.True(offer.Success, "لا تَعريفَ لِـ`Offer` في اللافِتَة.");
-        Assert.Matches(@"\bNext\b", offer.Groups["expr"].Value);
-        Assert.Contains("StudioTierPurchase.IsSelfGrantable(", offer.Groups["expr"].Value, StringComparison.Ordinal);
+        Assert.Equal("Next is { } n && StudioTierPurchase.IsSelfGrantable(n.Tier) ? n : null",
+            Regex.Replace(offer.Groups["expr"].Value, @"\s+", " ").Trim());
     }
 
     /// <summary><b>والسُلَّمُ يَعرِضُ اليَومَ عَلى دَرَجَتَينِ مُخَزَّنَتَينِ — وعَلى المَجّانِيَّةِ يَومَ تَعودُ حُدودُها — دَرَجَةً بِسِعرٍ لا
@@ -148,9 +164,16 @@ public class UpgradePromptPriceTests
     /// <summary><b>ودَرَجَةٌ أَوسَعُ لا تُباعُ تُرسَمُ لافِتَتُها لافِتَةَ «لا أَوسَع» بِحَرفِها</b> (‏2026-10-13): الوَسمُ لا يَقرَأُ
     /// <c>Next</c> في أَيِّ مَوضِعٍ — يَقرَأُ <c>Offer</c> وَحدَه — فَحينَ يَكونُ <c>null</c> لِأَنّ الأَوسَعَ لا يُباعُ يَخرُجُ ما يَخرُجُ حينَ
     /// لا أَوسَع: العُنوانُ والرِسالَة. ومَعَ <c>SelfServiceCheckoutExists = false</c> لا دَرَجَةَ في الكاتالوجِ — مُخَزَّنَةً كانَت أَو
-    /// مَجّانِيَّةً بَعدَ العَودَة — يُعرَضُ عَلَيها شَيء.</summary>
+    /// مَجّانِيَّةً بَعدَ العَودَة — يُعرَضُ عَلَيها شَيء.
+    ///
+    /// <para><b>و«اللافِتَةُ نَفسُها» تُرسَمُ وتُقارَنُ لا تُستَنتَج</b> (‏2026-10-13 — مُراجَعَةُ تَيّارِ S11، الجَولَة ٢: نِصفُ الكاتالوجِ
+    /// أَعلاه لا يَقرَأُ الوَسم، وشَطرُ الوَسمِ يَقيسُ النَصَّ لا الناتِج): المُكَوِّنُ نَفسُه يُصَيَّرُ بِـ<c>HtmlRenderer</c> — في
+    /// <c>Microsoft.AspNetCore.Components.Web</c> المُرجَعَةِ أَصلاً، بِلا قاعِدَةٍ ولا خادِم، لِأَنّ أَداةَ اللَقطَةِ القائِمَةَ تُصَيِّرُ
+    /// مالِكَ استوديو عَلى spark وَحدَها فَلا تَبلُغُ هذِه الحالَ — لِكُلِّ سَبَبٍ في <c>StudioUpgradeReason.All</c> ولِكُلِّ دَرَجَةٍ
+    /// أَوسَعُها لا يُباع، وتُقارَنُ لافِتَتُها بايتاً بِبايتٍ بِلافِتَةِ دَرَجَةٍ لا أَوسَعَ لَها. فَنَفيُ الشَرطِ في <c>Offer</c> — أَو أَيُّ
+    /// وَسمٍ يَرسُمُ لِلأَوسَعِ الَّذي لا يُباعُ شَيئاً — يُحمِرُّه بِالناتِجِ لا بِالنَصّ.</para></summary>
     [Fact]
-    public void An_unsellable_wider_tier_draws_the_same_banner_as_no_wider_tier()
+    public async Task An_unsellable_wider_tier_draws_the_same_banner_as_no_wider_tier()
     {
         var razor = Prompt();
         var code = razor.IndexOf("@code", StringComparison.Ordinal);
@@ -171,5 +194,51 @@ public class UpgradePromptPriceTests
         Assert.True(nexts.Count >= 3, $"أَداةٌ عَمياء: فُحِصَت {nexts.Count} دَرَجَةً أَوسَع.");
         var sold = nexts.Where(n => StudioTierPurchase.IsSelfGrantable(n.Tier)).Select(n => n.Tier).ToList();
         Assert.True(sold.Count == 0, $"فُحِصَت {nexts.Count} دَرَجَةً أَوسَع، ويُعرَضُ بِسِعرٍ {sold.Count}: {string.Join(", ", sold)}");
+
+        // ‏(الجَولَة ٢) واللافِتَةُ مَرسومَةً: الدَرَجاتُ تُقرَأُ مِن الكاتالوجِ ولا تُكتَب — أَوسَعُها لا يُباعُ (اليَومَ lite وgrowth،
+        // وأَوسَعُهُما spark)، أَو لا أَوسَعَ لَها (spark ما دامَ الرَفعُ قائِماً، وscale).
+        var unsellable = TierCatalog.All.Values
+            .Where(t => TierCatalog.NextAbove(t.Tier) is { } n && !StudioTierPurchase.IsSelfGrantable(n.Tier))
+            .Select(t => t.Tier).OrderBy(t => t, StringComparer.Ordinal).ToList();
+        var noWider = TierCatalog.All.Values
+            .Where(t => TierCatalog.NextAbove(t.Tier) is null)
+            .Select(t => t.Tier).OrderBy(t => t, StringComparer.Ordinal).ToList();
+        Assert.True(unsellable.Count >= 2 && noWider.Count >= 1,
+            $"أَداةٌ عَمياء: {unsellable.Count} دَرَجَةً أَوسَعُها لا يُباع، و{noWider.Count} بِلا أَوسَع.");
+
+        await using var services = new ServiceCollection()
+            .AddSingleton(new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor()))
+            .BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(services, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+        Task<string> Render(string tier, string reason) => renderer.Dispatcher.InvokeAsync(async () =>
+            (await renderer.RenderComponentAsync<UpgradePrompt>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                [nameof(UpgradePrompt.Reason)] = reason,
+                [nameof(UpgradePrompt.CurrentTier)] = tier,
+            }))).ToHtmlString());
+
+        var compared = 0;
+        var differ = new List<string>();
+        foreach (var reason in StudioUpgradeReason.All)
+        {
+            var none = await Render(noWider[0], reason);
+            Assert.True(none.Length > 300 && none.Contains("<strong", StringComparison.Ordinal),
+                $"أَداةٌ عَمياء: لافِتَةُ «{noWider[0]}» لِـ«{reason}» {none.Length} حَرفاً بِلا عُنوان.");
+            Assert.DoesNotContain("<ul", none, StringComparison.Ordinal);
+            Assert.DoesNotContain("href=\"/studio/billing\"", none, StringComparison.Ordinal);
+            foreach (var tier in unsellable.Concat(noWider.Skip(1)))
+            {
+                var drawn = await Render(tier, reason);
+                compared++;
+                if (drawn == none) continue;
+                var at = 0;
+                while (at < drawn.Length && at < none.Length && drawn[at] == none[at]) at++;
+                differ.Add($"{tier}/{reason}: {drawn.Length} ≠ {none.Length} حَرفاً، أَوَّلُ فَرقٍ عِندَ {at}");
+            }
+        }
+        Assert.True(compared >= 3 * StudioUpgradeReason.All.Count,
+            $"أَداةٌ عَمياء: قورِنَت {compared} لافِتَةً بِلافِتَةِ «لا أَوسَع».");
+        Assert.True(differ.Count == 0,
+            $"قورِنَت {compared} لافِتَةً، وتَختَلِفُ عَن لافِتَةِ «لا أَوسَع» {differ.Count}:\n  " + string.Join("\n  ", differ));
     }
 }
