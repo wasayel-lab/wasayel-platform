@@ -45,6 +45,7 @@ public static class DealRefusalTexts
             // لَم يَثبُت دَفعُها وتاليها «دَفع»، فَيَبلُغُ الصَفحَةَ مِن `/advance` بِـ`?err=` — والصَفحَةُ تَرسُمُ «أَكمِل الدَّفع» مَكانَ ذلكَ الزِرّ.
             .Append(GatewayPayments.DealAwaitsPayment)
             .Concat(GatewayInvoiceShare.All)   // (‏2026-10-13، G5 M4): رَدُّ إلغاءِ صَفقَةٍ واحِدَةٍ مِن فاتورَةٍ مُشتَرَكَةٍ مَفتوحَة.
+            .Append(DealsService.PaymentMissing)   // (‏2026-10-13، G5 (xv-g)): صَفقَةُ بِطاقَةٍ بِلا مَرجِعِ دَفعٍ لا تَدخُلُ «دَفع».
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
@@ -72,6 +73,7 @@ public static class DealRefusalTexts
         DealShipping.DealAwaitsCarrier,
         GatewayPayments.DealAwaitsPayment,
         GatewayInvoiceShare.Shared,   // (‏2026-10-13، G5 M4)
+        DealsService.PaymentMissing,  // (‏2026-10-13، G5 (xv-g))
     };
 
     /// <summary>مِفتاحُ نَصِّ الاستوديو لِرَمزٍ مِن <see cref="StudioCodes"/>، و<c>null</c> لِما سِواه — فَلا يُرسَمُ شَريطٌ لِرَمزٍ لا نَصَّ لَه.</summary>

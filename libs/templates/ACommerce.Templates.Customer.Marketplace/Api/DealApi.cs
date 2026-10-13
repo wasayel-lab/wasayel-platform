@@ -106,6 +106,9 @@ public static class DealApi
         // أَعلاه؛ وتَصنيفُ الحالَةِ كانَ سَيَقولُ «فاعِلٌ غَيرُ مُخَوَّل» (‏403) عَن المُشتَري الَّذي يُدخِلُها «دَفع».
         if (result.Code == GatewayPayments.DealAwaitsPayment)
             return ApiOutcome.Error(ApiErrorCatalog.DealAwaitsPayment, new { stage = result.Deal.Stage.ToString() });
+        // وصَفقَةُ بِطاقَةٍ بِلا مَرجِعِ دَفع (‏2026-10-13، G5 (xv-g)): رَمزُ الخِدمَةِ بِحَرفِه ‏409 — نَسَقُ السَطرِ أَعلاه.
+        if (result.Code == DealsService.PaymentMissing)
+            return ApiOutcome.Error(ApiErrorCatalog.DealPaymentMissing, new { stage = result.Deal.Stage.ToString() });
 
         var code = AdvanceRejectionCode(result.Deal);
         return ApiOutcome.Error(code, new

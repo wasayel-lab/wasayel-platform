@@ -138,19 +138,29 @@ public class GatewayStrandedDealTests(ITestOutputHelper output)
 
     /// <summary><b>العُطلُ بَينَ الوِلادَةِ والإلحاق</b>: صَفقَةٌ وُلِدَت بِعَلامَتِها ولَم يَبلُغها فَتحٌ ولا إلغاء — لا تَدخُلُ «دَفع». والسالِبُ أُختُها
     /// بِلا عَلامَة: الطَريقُ الآخَرُ (حَجزُ مُزَوِّدِ النُسخَة) كَما كانَ بِحَرفِه — تَدخُلُها ويَقبِضُ القَبضُ ما حُجِز.</summary>
+    /// <remarks><b>قُلِبَ بِاسمِه</b> (‏2026-10-13، G5 (xv-g)؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) — كانَ
+    /// <c>A_deal_born_for_the_gateway_that_never_got_its_invoice_cannot_enter_Paid_and_an_unmarked_one_still_can</c>: أُختُها بِلا عَلامَةٍ لَم يَكُن عَلَيها
+    /// حَجز، فَكانَ الصَفُّ يُثبِتُ أَنّ صَفقَةَ بِطاقَةٍ بِلا مَرجِعِ دَفعٍ تَدخُلُ «دَفع» — وصارَت تُرَدُّ بِـ<c>deal_payment_missing</c>
+    /// (<c>DealCardWithoutPaymentTests</c>). فَالأُختُ الآنَ بِحَجزِها كَما يَكتُبُه إتمامُ الشِراءِ عَلى ذلكَ الطَريق، ويُقاسُ القَبضُ الَّذي وَصَفَه الرَأسُ ولَم يَقِسه.</remarks>
     [Fact]
-    public async Task A_deal_born_for_the_gateway_that_never_got_its_invoice_cannot_enter_Paid_and_an_unmarked_one_still_can()
+    public async Task A_deal_born_for_the_gateway_that_never_got_its_invoice_cannot_enter_Paid_and_an_unmarked_one_with_its_hold_still_can()
     {
         foreach (var marked in new[] { true, false })
         {
             var w = await PaidCart(withSeller: true, invoice: false, bornForGateway: marked);
             var id = w.Ids[0];
+            if (!marked)
+            {
+                await w.Deals.AttachRefAsync(Slug, id, "payment_id", "pay_held");
+                await w.Deals.AttachRefAsync(Slug, id, "payment_status", "Authorized");
+            }
             Assert.True((await w.Deals.AdvanceAsync(Slug, id, Seller, "بائِع")).Ok);    // ← «حَجز»
             Assert.True((await w.Deals.AdvanceAsync(Slug, id, Buyer, "مُشتَرٍ")).Ok);   // ← «تَأكيد»
             var paid = await w.Deals.AdvanceAsync(Slug, id, Buyer, "مُشتَرٍ");
-            output.WriteLine($"عَلامَة: {marked} ⇒ «دَفع»: {paid.Ok} {paid.Code}");
+            output.WriteLine($"عَلامَة: {marked} ⇒ «دَفع»: {paid.Ok} {paid.Code} · نِداءاتُ مُزَوِّدِ النُسخَة: {string.Join(", ", w.Platform.Calls)}");
             Assert.Equal(!marked, paid.Ok);
             Assert.Equal(marked ? GatewayPayments.DealAwaitsPayment : null, paid.Code);
+            Assert.Equal(marked ? Array.Empty<string>() : new[] { "capture pay_held" }, w.Platform.Calls);
         }
     }
 

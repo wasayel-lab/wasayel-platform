@@ -59,6 +59,9 @@ public static class ApiErrorCatalog
     /// <see cref="DealAwaitsCarrier"/> حَرفاً — وتَصنيفُ الحالَةِ كانَ سَيَقولُ «فاعِلٌ غَيرُ مُخَوَّل» (‏403) عَن المُشتَري نَفسِه، و<c>required_actor</c>
     /// فيه هُوَ (مَقيسٌ قَبلَ سَطرِه: ‏403). ورِسالَتُه تُسَمّي الزِرَّ الَّذي يُثبِتُ الدَفعَ بِحَرفِه في القامُوس.</summary>
     public const string DealAwaitsPayment      = "deal_awaits_payment";
+    /// <summary>صَفقَةُ بِطاقَةٍ بِلا مَرجِعِ دَفعٍ وتاليها «دَفع» (‏2026-10-13، G5 (xv-g)) — مُنتِجُه <c>DealApi.FromAdvance</c> مِن رَمزِ الخِدمَةِ نَفسِه
+    /// (<c>DealsService.PaymentMissing</c>)؛ ‏409 نَسَقَ <see cref="DealAwaitsPayment"/> — وتَصنيفُ الحالَةِ كانَ سَيَقولُ «فاعِلٌ غَيرُ مُخَوَّل» عَن المُشتَري نَفسِه.</summary>
+    public const string DealPaymentMissing     = "deal_payment_missing";
     /// <summary>عَلى فاتورَةِ بَوّابَةِ المَتجَرِ المَفتوحَةِ لِهذِه الصَفقَةِ صَفَقاتٌ قائِمَةٌ أُخرى، فَلا تُلغى وَحدَها (‏2026-10-13، مُراجَعَةُ بَوّابَةِ
     /// المَوجَة 3b، G5 M4؛ ‏ADR-032 §٨‑ز مُلحَقاً) — مُنتِجُه <c>DealApi.FromCancel</c> مِن رَمزِ الخِدمَةِ نَفسِه (<c>GatewayInvoiceShare.Shared</c>)؛
     /// ‏409 تَعارُضُ حالَةٍ نَسَقَ أَخَواتِه. وكانَ الرَمزُ المَجهولُ يَخرُجُ <see cref="ValidationFailed"/> (‏422) عَن طَلَبٍ صالِح.</summary>
@@ -72,7 +75,8 @@ public static class ApiErrorCatalog
     /// بَعدَ أُختَيهِ في ‏409. <b>ثُمَّ ثَلاثَةَ عَشَر</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S7 الثانِيَة؛ ‏ADR-033 §٧‑ح):
     /// <see cref="DealAwaitsCarrier"/> بَعدَ أَخَواتِه الثَلاثِ في ‏409. <b>ثُمَّ أَربَعَةَ عَشَر</b> (‏2026-10-12، ‏ADR-032 الخُطوَة 10، تَيّارُ S9):
     /// <see cref="DealAwaitsPayment"/> بَعدَ أَخَواتِه الأَربَعِ في ‏409. <b>ثُمَّ خَمسَةَ عَشَر</b> (‏2026-10-13، G5 M4): <see cref="DealInvoiceShared"/>
-    /// بَعدَ أَخَواتِه الخَمسِ في ‏409.</summary>
+    /// بَعدَ أَخَواتِه الخَمسِ في ‏409. <b>ثُمَّ سِتَّةَ عَشَر</b> (‏2026-10-13، G5 (xv-g)): <see cref="DealPaymentMissing"/> في ‏409 بَعدَ
+    /// <see cref="DealAwaitsPayment"/> أُختِه في المَعنى.</summary>
     public static readonly IReadOnlyList<ApiErrorCode> All = new[]
     {
         new ApiErrorCode(AuthMissing, StatusCodes.Status401Unauthorized,
@@ -97,6 +101,8 @@ public static class ApiErrorCatalog
             "طَلَبُ شَحنِ هذِه الصَفقَةِ عِندَ OTO — لا تَدخُلُ «شَحن» بِهذا الباب؛ تَدخُلُها حينَ يُثبِتُ جَوابُ OTO شُحنَتَها وبوليصَتَها: بِـ«أَكمِل الشَّحن» عِندَ البائِع، أَو بِإشعارٍ مِن OTO."),
         new ApiErrorCode(DealAwaitsPayment, StatusCodes.Status409Conflict,
             "عَلى هذِه الصَفقَةِ فاتورَةُ بَوّابَةِ المَتجَرِ ولَم يَثبُت دَفعُها — لا تَدخُلُ «دَفع» حَتّى يَتَحَقَّقَ الخادِمُ مِن دَفعِ فاتورَتِها لَدى البَوّابَة: بِـ«تَحَقَّق مِن الدَّفع» عَلى صَفحَةِ العَودَةِ بَعدَ الدَّفع؛ وبَعدَه يَقبَلُها هذا الباب."),
+        new ApiErrorCode(DealPaymentMissing, StatusCodes.Status409Conflict,
+            "هذِه صَفقَةٌ بِالبِطاقَةِ ولا مَرجِعَ دَفعٍ عَلَيها (تَعَذَّرَ حَجزُ مَبلَغِها عِندَ الطَّلَب) — لا تَدخُلُ «دَفع» بِلا مال؛ تُلغى أَو يُعادُ الشِّراء."),
         new ApiErrorCode(DealInvoiceShared, StatusCodes.Status409Conflict,
             "عَلى فاتورَةِ بَوّابَةِ المَتجَرِ المَفتوحَةِ لِهذِه الصَفقَةِ صَفَقاتٌ قائِمَةٌ أُخرى لَم تُدفَع — لا تُلغى وَحدَها: يُلغي المُشتَري طَلَبَه كُلَّه مِن صَفحَتِه، أَو تُلغى بَعدَ الدَفعِ ويُستَرجَعُ مَبلَغُها مِن لَوحَةِ بَوّابَةِ المَتجَر."),
         new ApiErrorCode(IdempotencyInProgress, StatusCodes.Status409Conflict,

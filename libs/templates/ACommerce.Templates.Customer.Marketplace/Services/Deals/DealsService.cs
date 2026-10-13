@@ -55,6 +55,27 @@ public sealed class DealsService
     private const string AwaitsPaymentAr = "عَلى الصَفقَةِ فاتورَةُ بَوّابَةِ المَتجَرِ وتاليها «دَفع» — لا تَدخُلُها حَتّى يَثبُتَ دَفعُ الفاتورَةِ مِن الخادِم.";
 
     /// <summary>
+    /// <para><b>صَفقَةُ بِطاقَةٍ بِلا مَرجِعِ دَفعٍ وتاليها «دَفع»</b> (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b، G5 (xv-g)؛ تَوصيفُ «اليَوم» <c>e1e74ab</c>):
+    /// رَمزُ <see cref="AdvanceAsync"/> و<see cref="AdminPathRefusal"/> حينَ تَصدُقُ <see cref="MissesPayment"/>. صَفقَةُ بِطاقَةٍ عَلى طَريقِ مُزَوِّدِ النُسخَةِ
+    /// رَمى حَجزُها عِندَ الوِلادَةِ (<c>payment_error</c> بِلا <c>payment_id</c>) كانَت تَدخُلُ «دَفع» والقَبضُ يَتَجاوَزُها — بِلا مال. ولا ‏ADR يُجيزُه.</para>
+    /// </summary>
+    public const string PaymentMissing = "deal_payment_missing";
+
+    /// <summary>رِسالَةُ المُراجِعِ البَشَرِيِّ لِـ<see cref="PaymentMissing"/> — نَسَقُ <see cref="AwaitsPaymentAr"/>.</summary>
+    private const string PaymentMissingAr = "صَفقَةُ بِطاقَةٍ بِلا مَرجِعِ دَفع — تَعَذَّرَ حَجزُ مَبلَغِها عِندَ الطَلَب — فَلا تَدخُلُ «دَفع» بِلا مال.";
+
+    /// <summary>
+    /// <para><b>أَصَفقَةُ بِطاقَةٍ تاليها «دَفع» ولا مَرجِعَ دَفعٍ عَلَيها؟</b> — دالَّةٌ نَقِيَّةٌ تَقرَؤُها <see cref="AdvanceAsync"/> بَعدَ حارِسِ البَوّابَة
+    /// (<see cref="GatewayPayments.AwaitsPayment"/> يَسبِقُها: صَفقَةُ البَوّابَةِ بِرَمزِها)، و<see cref="AdminPathRefusal"/>، وصَفحَةُ العُضوِ فَلا تَرسُمُ
+    /// «تَأكيد: دَفع» يُرَدّ. والمَرجِعُ <c>payment_id</c> — يَكتُبُه الحَجزُ وتَأكيدُ البَوّابَة؛ وصَفقَةٌ بِلا <c>pay_method</c> (عَرضٌ عَلى إعلان، بَذرَة)
+    /// والنَقدُ (لا «دَفع» في طَريقِه) خارِجُها بِحَرفِهِما.</para>
+    /// </summary>
+    public static bool MissesPayment(Deal deal)
+        => string.Equals(DealsPolicy.PayMethodOf(deal), CheckoutPayMethods.Card, StringComparison.Ordinal)
+           && DealsPolicy.Next(deal) == DealStage.Paid
+           && !(deal.Refs.TryGetValue("payment_id", out var pid) && !string.IsNullOrWhiteSpace(pid));
+
+    /// <summary>
     /// <para><b>تَسجيلُ وَثيقَةِ الصَفقَةِ في Marten</b> — نِداءٌ واحِدٌ يُنادى مِن تَركيبِ القالِب
     /// (<c>ConfigureMarten</c> في <c>MarketplaceTemplateExtensions</c>) ومِن البُرهانِ الحَيّ، فَما يُقاسُ هُوَ ما يُشَغَّل
     /// (القاعِدَة ٢). <c>UseOptimisticConcurrency</c>: كُلُّ حِفظٍ لِصَفقَةٍ مَوجودَةٍ يَشتَرِطُ أَنّ نُسخَتَها (<c>mt_version</c>)
@@ -389,6 +410,9 @@ public sealed class DealsService
         // صَفقَةً بِلا مَرجِعِ دَفع — وبِلا هذا السَطرِ كانَت صَفقَةُ بِطاقَةٍ لَم تُدفَع فاتورَتُها تَدخُلُ «دَفع» بِلا مال.
         if (GatewayPayments.AwaitsPayment(deal))
             return new(false, deal, AwaitsPaymentAr, GatewayPayments.DealAwaitsPayment);
+        // وصَفقَةُ بِطاقَةٍ بِلا مَرجِعِ دَفعٍ لا تَدخُلُ «دَفع» (‏2026-10-13، G5 (xv-g)) — بَعدَ حارِسِ البَوّابَةِ لا قَبلَه: تِلكَ بِرَمزِها.
+        if (MissesPayment(deal))
+            return new(false, deal, PaymentMissingAr, PaymentMissing);
 
         // وحِفظُ الانتِقالِ يَشتَرِطُ النُسخَةَ الَّتي قُرِئَت (‏ADR-036): نَقرَتانِ مُتَداخِلَتانِ تَمضي أولاهُما وتُرَدُّ الأُخرى.
         Deal moved;
@@ -886,6 +910,8 @@ public sealed class DealsService
     /// غَيرُ فَعّالَةٍ ⇒ <see cref="DealCancelAuthorization.DealNotActive"/>؛ لا تالٍ أَو فاعِلُ المَدخولَةِ غَيرُ جانِبِ المَتجَرِ ⇒
     /// <see cref="AdminPathCannotMove"/>؛ طَلَبُها عِندَ OTO ⇒ <see cref="DealShipping.DealAwaitsCarrier"/>؛ فاتورَتُها لَم تُدفَع ⇒
     /// <see cref="GatewayPayments.DealAwaitsPayment"/>. ونَصُّ كُلٍّ في القامُوسِ بِبادِئَةِ الاستوديو (<see cref="DealRefusalTexts.StudioKeyFor"/>).</para>
+    /// <para>(‏2026-10-13، G5 (xv-g) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: وصَفقَةُ بِطاقَةٍ بِلا مَرجِعِ دَفعٍ تاليها «دَفع» ⇒ <see cref="PaymentMissing"/>، بَعدَ
+    /// سَطرِ البَوّابَةِ بِتَرتيبِ <see cref="AdvanceAsync"/> نَفسِه. ولا يَبلُغُه المَسارُ الإداريُّ إلّا ومالِكُ التَطبيقِ مُبادِرُها: فاعِلُ «دَفع» المُبادِر.)</para>
     /// </summary>
     public static string? AdminPathRefusal(Deal deal, Guid appOwnerId)
     {
@@ -897,6 +923,7 @@ public sealed class DealsService
             return AdminPathCannotMove;
         if (DealShipping.AwaitsCarrier(deal)) return DealShipping.DealAwaitsCarrier;
         if (GatewayPayments.AwaitsPayment(deal)) return GatewayPayments.DealAwaitsPayment;
+        if (MissesPayment(deal)) return PaymentMissing;   // ‏2026-10-13، G5 (xv-g)
         return null;
     }
 
@@ -927,7 +954,8 @@ public sealed class DealsService
 
 /// <summary>نَتيجَةُ التَقَدُّم. <paramref name="Code"/> رَمزُ رَفضٍ مِن مَعجَمٍ حَيثُ يوجَد — اليَومَ
 /// <see cref="DealsService.ChangedMeanwhile"/> وَحدَه (‏ADR-036)؛ وسائِرُ الرَفضِ في <paramref name="Reason"/> نَصّاً كَما كان.
-/// (‏2026-10-12، مُراجَعَةُ تَيّارِ S7 الثانِيَة — ولا يُعادُ حَرفٌ فَوقَه: ومَعَه <see cref="DealShipping.DealAwaitsCarrier"/>.)</summary>
+/// (‏2026-10-12، مُراجَعَةُ تَيّارِ S7 الثانِيَة — ولا يُعادُ حَرفٌ فَوقَه: ومَعَه <see cref="DealShipping.DealAwaitsCarrier"/>.)
+/// (‏2026-10-13، G5 (xv-g) — ولا يُعادُ حَرفٌ فَوقَه: ومَعَهُما <see cref="GatewayPayments.DealAwaitsPayment"/> مُنذُ ‏ADR-032 الخُطوَة 10، و<see cref="DealsService.PaymentMissing"/>.)</summary>
 public sealed record DealAdvanceResult(bool Ok, Deal? Deal, string? Reason, string? Code = null);
 
 /// <summary>نَتيجَةُ فَتحِ النِزاع (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (ii)): <paramref name="Ok"/> «كُتِبَ النِزاع» وَحدَه — فَعَلَيه يُشتَرَطُ

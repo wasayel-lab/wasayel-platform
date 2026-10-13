@@ -1137,7 +1137,9 @@ public class DealShipTests(ITestOutputHelper output)
         Assert.Contains(
             "shipHeldKey = DealRefusalTexts.KeyFor(DealShipAuthorization.HeldRefusal(deal, new DealShipper(uid, Auth.UserName ?? \"\"), carrier));",
             page, StringComparison.Ordinal);
-        var card = page.IndexOf("@if (deal.Status == DealStatus.Active && shipHeldKey is null)", StringComparison.Ordinal);
+        // (‏2026-10-13، G5 (xv-g) — ولا يُعادُ حَرفٌ فَوقَه: صارَ لِلشَرطِ شَطرٌ ثالِث `&& !paymentMissing` — صَفقَةُ بِطاقَةٍ بِلا مَرجِعِ دَفعٍ لا بِطاقَةَ لَها
+        // أَيضاً، `DealCardWithoutPaymentTests`؛ وشَطرُ الخُطوَةِ المَحجوزَةِ بِحَرفِه، والتَرتيبُ المَقيسُ أَدناه كَما كان.)
+        var card = page.IndexOf("@if (deal.Status == DealStatus.Active && shipHeldKey is null && !paymentMissing)", StringComparison.Ordinal);
         var turn = page.IndexOf("var turn = Services.Ux.DealTurnView.For(deal, mySide);", StringComparison.Ordinal);
         var cta  = page.IndexOf("href=\"#deal-action\"", StringComparison.Ordinal);
         Assert.True(card > 0 && turn > card && cta > turn, $"البِطاقَة: {card}/{turn}/{cta}");

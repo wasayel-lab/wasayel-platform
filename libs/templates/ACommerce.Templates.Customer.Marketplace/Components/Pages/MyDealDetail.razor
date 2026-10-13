@@ -53,7 +53,10 @@
         @* ولا بِطاقَةَ لِخُطوَةٍ مَحجوزَةٍ لا بابَ لَها (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 §٧‑ل): طَلَبُها عِندَ OTO والناقِلُ
            غائِبٌ أَو الطَلَبُ مُغلَق — كانَت تَقولُ لِلبائِعِ «دَورُكَ الآن» بِزِرٍّ إلى مِنطَقَةِ إجراءٍ فارِغَة (تَوصيفُه `2a77321`). ونَصُّ رَمزِ
            البَوّابَةِ في مِنطَقَةِ الإجراءِ أَدناه (`shipHeldKey`). *@
-        @if (deal.Status == DealStatus.Active && shipHeldKey is null)
+        @* ولا لِصَفقَةِ بِطاقَةٍ بِلا مَرجِعِ دَفعٍ تاليها «دَفع» (‏2026-10-13، G5 (xv-g)؛ `DealsService.MissesPayment`): كانَت تَقولُ لِلمُشتَري
+           «دَورُكَ الآن: دَفع» والمُحَرِّكُ يَرُدُّه بِـ`deal_payment_missing`، ولِلبائِعِ «بِانتِظارِ المُشتَري» عَن خُطوَةٍ لا تَقَع — نَصُّ رَمزِه
+           في مِنطَقَةِ الإجراءِ أَدناه لِلطَرَفَين (`paymentMissing`). *@
+        @if (deal.Status == DealStatus.Active && shipHeldKey is null && !paymentMissing)
         {
             @* مِن الصَفقَةِ نَفسِها لا مِن (النَمَط، المَرحَلَة) وَحدَهُما: طَريقَةُ
                الدَفعِ تُسقِطُ «دَفع» عَن النَقد (‏ADR-033 §٦)، فَلا يُقالُ لِمُشتَري
@@ -334,6 +337,16 @@
                     <AcAlert Variant="warning" Message="@L["deals.detail.gateway_invoice_missing"]" />
                 }
             }
+            else if (paymentMissing)
+            {
+                @* صَفقَةُ بِطاقَةٍ بِلا مَرجِعِ دَفعٍ وتاليها «دَفع» (‏2026-10-13، G5 (xv-g)؛ `DealsService.MissesPayment`): لا «تَأكيد: دَفع» تَرُدُّه
+                   `AdvanceAsync` بِـ`deal_payment_missing` لِلمُشتَري، ولا «بِانتِظار الطَّرَف الآخَر» لِلبائِعِ عَن خُطوَةٍ لا تَقَع (القاعِدَة ١٢) — نَصُّ
+                   رَمزِه مِن الدالَّةِ لِلطَرَفَين، وبابُ الإلغاءِ أَدناه؛ ولا يُكَرَّرُ إن كانَ شَريطُ `?err=` أَعلاه يَقولُه. *@
+                @if (DealRefusalTexts.KeyFor(DealsService.PaymentMissing) is { } missingKey && missingKey != DealRefusalTexts.KeyFor(Err))
+                {
+                    <AcAlert Variant="warning" Message="@L[missingKey]" />
+                }
+            }
             else if (canAdvance && heldByCarrier)
             {
                 @* خُطوَتُه «شَحن» وطَلَبُها عِندَ OTO: بابُها «أَكمِل الشَّحن» أَعلاه — لا «تَأكيد: شَحن» تَرُدُّه `AdvanceAsync` بِـ
@@ -469,6 +482,10 @@
     /// <summary>تاليها «دَفع» وعَلَيها فاتورَةُ بَوّابَةٍ لَم يَثبُت دَفعُها — <see cref="GatewayPayments.AwaitsPayment"/> نَفسُها الَّتي تَسأَلُها
     /// <c>AdvanceAsync</c> فَتَرُدُّ «تَأكيد: دَفع» بِـ<c>deal_awaits_payment</c>: فَبابُ الناظِرِ هُنا «أَكمِل الدَّفع» (‏ADR-032 الخُطوَة 10).</summary>
     bool awaitsPayment;
+    /// <summary>صَفقَةُ بِطاقَةٍ بِلا مَرجِعِ دَفعٍ وتاليها «دَفع» — <see cref="DealsService.MissesPayment"/> الَّتي تَسأَلُها <c>AdvanceAsync</c> فَتَرُدُّ
+    /// «تَأكيد: دَفع» بِـ<c>deal_payment_missing</c> (‏2026-10-13، G5 (xv-g)): لا بِطاقَةَ «دَورُكَ الآن» ولا زِرَّ ولا «بِانتِظار» — نَصُّ رَمزِه لِلطَرَفَين.
+    /// وبَعدَ حارِسِ البَوّابَةِ لا مَعَه: صَفقَةُ البَوّابَةِ بابُها «أَكمِل الدَّفع» (<c>awaitsPayment</c>).</summary>
+    bool paymentMissing;
     /// <summary>مِفتاحُ نَصِّ الرَمزِ الَّذي تَرُدُّ بِه البَوّابَةُ «أَكمِل الشَّحن» لِمَن خُطوَتُه مَحجوزَةٌ عِندَ OTO —
     /// <see cref="DealShipAuthorization.HeldRefusal"/> — و<c>null</c> حَيثُ لا خُطوَةَ مَحجوزَةً لِلناظِرِ أَو بابُها مَفتوح: يُخفي بِطاقَةَ
     /// «دَورُكَ الآن» ويُرسَمُ في مِنطَقَةِ الإجراء (مُراجَعَةُ المَوجَة 3a، ‏2026-10-12).</summary>
@@ -561,6 +578,7 @@
         heldByCarrier = DealShipping.AwaitsCarrier(deal);
         // وخُطوَةٌ فاتورَتُها لَم تُدفَع لا يُرسَمُ لَها «تَأكيد: دَفع» — الدالَّةُ الَّتي يَرُدُّ بِها المُحَرِّك (‏ADR-032 الخُطوَة 10، ‏2026-10-12).
         awaitsPayment = GatewayPayments.AwaitsPayment(deal);
+        paymentMissing = !awaitsPayment && DealsService.MissesPayment(deal);
         // وخُطوَةٌ مَحجوزَةٌ لا بابَ لَها: رَمزُ البَوّابَةِ الَّذي يُفَسِّرُها، بِالفاعِلِ والناقِلِ أَنفُسِهِما (مُراجَعَةُ المَوجَة 3a، ‏2026-10-12).
         shipHeldKey = DealRefusalTexts.KeyFor(DealShipAuthorization.HeldRefusal(deal, new DealShipper(uid, Auth.UserName ?? ""), carrier));
     }

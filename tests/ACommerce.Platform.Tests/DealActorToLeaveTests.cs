@@ -40,7 +40,9 @@ public class DealActorToLeaveTests
     private const string Template = "libs/templates/ACommerce.Templates.Customer.Marketplace";
 
     /// <summary>مُزَوِّدٌ يَرمي عِندَ أَيِّ نِداء — لا مُعَرِّفَ دَفعٍ عَلى صَفَقاتِ هذا المِلَفّ، فَإن مَسَّ
-    /// المَشيُ المالَ أَحمَرَّ الصَفُّ بَدَلَ أَن يُحاكى.</summary>
+    /// المَشيُ المالَ أَحمَرَّ الصَفُّ بَدَلَ أَن يُحاكى.
+    /// (‏2026-10-13، G5 (xv-g) — ولا يُعادُ حَرفٌ فَوقَه: صارَ عَلى صَفَقاتِ البِطاقَةِ مَرجِعُ دَفعٍ مَقبوض — انظُر <see cref="At"/> — و«لا يَمَسُّ المَشيُ
+    /// المال» باقٍ بِحَرفِه: <c>IsCaptured</c> يَتَجاوَزُ القَبضَ فَلا يُنادى هذا المُزَوِّد.)</summary>
     private sealed class ForbiddenPaymentProvider : IPaymentProvider
     {
         private static InvalidOperationException Touched() => new("المَشيُ بِلا مُعَرِّفِ دَفعٍ لا يَمَسُّ المال — نودِيَ مُزَوِّدُ الدَفع.");
@@ -62,6 +64,10 @@ public class DealActorToLeaveTests
 
     /// <summary>صَفقَةٌ في <paramref name="stage"/> مُبادِرُها المُشتَري وطَرَفُها <paramref name="counterparty"/>،
     /// في عالَمِ وَثائِقَ جَديدٍ تَمشيه <c>DealsService</c> الحَقيقِيَّة.</summary>
+    /// <remarks><b>وصَفقَةُ البِطاقَةِ تَحمِلُ مَرجِعَ دَفعِها</b> (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b، G5 (xv-g)): صَفقَةُ بِطاقَةٍ تاليها «دَفع» بِلا
+    /// <c>payment_id</c> تَرُدُّها <c>AdvanceAsync</c> بِـ<c>deal_payment_missing</c> (<c>DealsService.MissesPayment</c>؛ <c>DealCardWithoutPaymentTests</c>) —
+    /// فَكانَت صُفوفُ «تَأكيد ← دَفع» الثَلاثَةُ هُنا تَقيسُ صَفقَةً لا يَكتُبُها إتمامُ الشِراء. فَالبِطاقَةُ هُنا بِمَرجِعٍ <b>مَقبوض</b>
+    /// (<c>payment_status = Captured</c> — شَكلُ ما تَكتُبُه بَوّابَةُ المَتجَر)، فَيَقيسُ الجَدوَلُ الفاعِلَ وَحدَه كَما كانَ، ولا يَمَسُّ المَشيُ المال.</remarks>
     private static (DealsService Deals, DocWorld World, Deal Deal) At(
         string pattern, string? payMethod, DealStage stage, Guid? counterparty)
     {
@@ -73,6 +79,11 @@ public class DealActorToLeaveTests
             InitiatorId = Buyer, InitiatorName = "مُشتَرٍ", CounterpartyId = counterparty,
         };
         if (payMethod is not null) deal.Attributes[CheckoutPayMethods.AttributeKey] = payMethod;
+        if (payMethod == CheckoutPayMethods.Card)
+        {
+            deal.Refs["payment_id"] = "pay_walk";
+            deal.Refs["payment_status"] = nameof(PaymentStatus.Captured);
+        }
         world.Put(deal);
         return (deals, world, deal);
     }
