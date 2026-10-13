@@ -27,6 +27,14 @@
 #  مُستَخدِمَ استوديو يَومَئِذٍ فَلا جَلسَة — والإقلاعُ الثاني يَبذُرُها (مَقيسٌ
 #  ‏2026-10-13، `docs/RELEASE-READINESS.md`).
 #
+#  **ونَقرَةُ السَلَّةِ لا تُمَيِّزُ FLGAP-04 إلّا عَلى فَرعٍ واحِدٍ مِن المَصنَع**:
+#  ‏ADR-034 غَيَّرَ فَرعَ `ecommerce` في `CategoriesForSector` وَحدَه (‏`products`/`deals`
+#  بِكِندِ `"commercial"` ← `""`). فَالخُطوَةُ ٢ تَقرَأُ فِئاتِ المَتجَرِ المَبنِيِّ وكِندَ كُلٍّ
+#  مِن مُحَرِّرِها وتَطبَعُ فَرعَه وحُكمَه — «يُمَيِّز» عَلى `ecommerce`، و«لا يُمَيِّز» عَلى
+#  غَيرِه — وفي المَسارِ الحَقيقيِّ تَفحَصُ أَنّه `ecommerce` (‏ADR-034 §١(أ))، فَجَولَةُ
+#  المالِكِ بِمِفتاحٍ تُبَرهِنُ الفَرعَ أَو تَحمَرّ. ومَتجَرُ جَلسَةِ العَيِّنَةِ (قِطاعُها
+#  `other`) مِن فَرعِ السُقوط `general` بِكِندٍ فارِغٍ قَبلَ القَرارِ وبَعدَه: لا يُمَيِّز.
+#
 #  **الاستِعمال**:
 #      ADMIN_PHONE=<PLATFORM_ADMIN_PHONE لِلخادِم> ./scripts/rewalk-launch-journey.sh
 #      BASE=http://localhost:5055 ADMIN_PHONE=… MARK=134501 ./scripts/rewalk-launch-journey.sh
@@ -56,6 +64,7 @@ ANALYZE_TRIES="${ANALYZE_TRIES:-15}"   # ‏15 × 2ث سَقفاً لِلتَح�
 AR="$ROOT/libs/core/ACommerce.Platform.I18n/Locales/ar.json"
 CATALOG="$ROOT/libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Deals/DealPatternCatalog.cs"
 SAMPLE_SEEDER="$ROOT/apps/V1.App/Seed/IncubatorSampleSeeder.cs"
+FACTORY="$ROOT/libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Incubator/TenantFromAnalysisFactory.cs"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -124,6 +133,15 @@ stage_label() {
     local v; v="$(awk '/DefaultLabelsAr/{f=1} f && /};/{exit} f' "$CATALOG" \
         | grep -o "\[DealStage\.$1\] *= \"[^\"]*\"" | sed 's/.*= "//; s/"$//')"
     [ -n "$v" ] || die "تَسمِيَةُ المَرحَلَة $1 غائِبَة في DealPatternCatalog.cs"
+    printf '%s' "$v"
+}
+# فِئاتُ فَرعِ `ecommerce` مِن مَصدَرِها (‏`TenantFromAnalysisFactory.CategoriesForSector`)، مِن كُتلَتِه وَحدَها
+# ومُرَتَّبَةً — الفَرعُ الوَحيدُ الَّذي غَيَّرَه ADR-034، لا قائِمَةٌ مِن ذاكِرَةِ السكربت.
+ecommerce_slugs() {
+    local v; v="$(awk '/"ecommerce" => new\[\]/{f=1} f && /^[[:space:]]*},/{exit} f' "$FACTORY" \
+        | grep -o 'C("[a-z_-]*"' | sed 's/^C("//; s/"$//' | sort | tr '\n' ' ')"
+    v="${v% }"
+    [ -n "$v" ] || die "فَرعُ ecommerce غائِبٌ في TenantFromAnalysisFactory.cs"
     printf '%s' "$v"
 }
 # دُخولُ عُضوٍ في مَتجَرٍ بِالهاتِف: إصدارٌ ثُمَّ استِهلاك — `phone_login` في
@@ -239,6 +257,34 @@ else
     check 1 "GET /studio/s/$SID → $CODE · مَبنِيٌّ مِنها سَلَفاً: /studio/apps/$SLUG — تَمشي الجَولَةُ عَلَيه"
 fi
 
+# ‏فِئاتُ المَتجَرِ المَبنِيِّ وفَرعُها مِن المَصنَع — مِن مُحَرِّرِ الفِئاتِ لِلمالِك (‏`StudioAppCategories.razor`: نَصٌّ
+# مَخفِيٌّ سَطرُه «slug | الاسم | أَيقونَة | تَجميع»). ‏(‏2026-10-13، مُراجَعَةُ S12: كانَت نَقرَةُ الخُطوَة ٥ تُسَمّى «FLGAP-04
+# بِحَرفِه» عَلى مَتجَرِ العَيِّنَة — فَرعُ السُقوط `general` بِكِندٍ فارِغٍ قَبلَ ADR-034 أَيضاً (`git show c4278c0^`)،
+# فَهي خَضراءُ عَلى الكاتِبِ القَديمِ والجَديدِ مَعاً — ولا يُطبَعُ الفَرع.)
+ECOM="$(ecommerce_slugs)"
+get "$OWNER_JAR" "/studio/apps/$SLUG/categories" "$F"
+CATS="$(dec "$F" | perl -0777 -ne 'if (m{<textarea name="categories"[^>]*>(.*?)</textarea>}s) { for (split /\n/, $1) {
+    my @p = map { s/^\s+|\s+$//gr } split /\|/, $_, -1; print "$p[0]:\x27$p[3]\x27\n" if @p >= 4 && length $p[0] } }')"
+NCATS="$(printf '%s' "$CATS" | grep -c .)"
+CATS_LINE="$(printf '%s' "$CATS" | tr '\n' ' ')"; CATS_LINE="${CATS_LINE% }"
+check "$([ "$CODE" = 200 ] && [ "$NCATS" -gt 0 ] && echo 1 || echo 0)" \
+    "GET /studio/apps/$SLUG/categories (المالِك) → $CODE · $NCATS فِئَة: ${CATS_LINE:-—}"
+SLUGS="$(printf '%s\n' "$CATS" | sed "s/:'.*//" | grep . | sort | tr '\n' ' ')"; SLUGS="${SLUGS% }"
+if [ -n "$SLUGS" ] && [ "$SLUGS" = "$ECOM" ]; then
+    BRANCH=ecommerce; FLGAP="يُمَيِّزُ FLGAP-04"
+    info "فَرعُ المَصنَع: ecommerce ($ECOM) — الوَحيدُ الَّذي غَيَّرَه ADR-034 (كانَ كِندُه \"commercial\" فَيُرسَمُ المَتجَرُ إيجاراً بِلا سَلَّة): نَقرَةُ الخُطوَة ٥ تُمَيِّزُ FLGAP-04"
+    NONEMPTY="$(printf '%s\n' "$CATS" | grep . | grep -vc ":''$")"
+    check "$([ "$NONEMPTY" = 0 ] && echo 1 || echo 0)" "فِئاتُ فَرعِ ecommerce بِكِندٍ فارِغ (‏ADR-034 §٢‑١) — غَيرُ الفارِغِ: $NONEMPTY"
+else
+    BRANCH="${SLUGS:-؟}"; FLGAP="لا يُمَيِّزُ FLGAP-04"
+    info "فَرعُ المَصنَع: لَيسَ ecommerce ($BRANCH) — لَم يَمَسَّه ADR-034 وكِندُه قَبلَه كَبَعدَه: نَقرَةُ الخُطوَة ٥ تَقيسُ القارِئَ والسَلَّةَ ولا تُمَيِّزُ FLGAP-04 (وفَرعُ ecommerce في LiveStudioStorePatternProofTests)"
+fi
+if [ "$ANALYSIS" = done ]; then
+    # ‏مَسارُ العَميلِ يَحفَظُ الوَصفَ وَحدَه: القِطاعُ `""` والنَمَطُ `""` ← `marketplace` ← `ecommerce` (‏ADR-034 §١(أ)).
+    check "$([ "$BRANCH" = ecommerce ] && echo 1 || echo 0)" \
+        "مَسارُ العَميلِ ← فَرعُ ecommerce (‏ADR-034 §١(أ)) — فَهذِه الجَولَةُ تُمَيِّزُ FLGAP-04"
+fi
+
 # ═══ ٣) الزائِرُ بِلا جَلسَة ══════════════════════════════════════════
 STEP="٣ — الزائِر"
 say "٣ · الزائِرُ عَلى /$SLUG"
@@ -300,11 +346,21 @@ say "٥ · مُشتَرٍ: تَسجيل ← «$(ar listings.detail.cta_cart)» �
 store_login "$J_BUY" "$SLUG" "$P_BUY"
 post "$J_BUY" "/$SLUG/me/role/save" --data-urlencode role=customer
 check "$([ "$CODE" = 302 ] && echo 1 || echo 0)" "POST /$SLUG/me/role/save role=customer → $CODE $LOC"
-CART="$(ar listings.detail.cta_cart)"
+CART="$(ar listings.detail.cta_cart)"; RENT_CTA="$(ar pattern.rental.cta)"; CART_TAB="$(ar shell.nav.cart)"
 get "$J_BUY" "/$SLUG/listings/$LID" "$F"
-# ‏FLGAP-04 بِحَرفِه (‏ADR-032 §٦‑ج الصَفّ 2): صَفحَةُ إعلانِ بائِعٍ في مَتجَرٍ بَناهُ المَصنَع، بِكوكي عُضو.
-check "$([ "$CODE" = 200 ] && [ "$(count "$F" "action=\"/$SLUG/listings/$LID/cart/add\"")" = 1 ] && has "$F" "$CART" && echo 1 || echo 0)" \
-    "GET /$SLUG/listings/$LID (عُضو) → $CODE · استِمارَةٌ إلى cart/add و«$CART» (FLGAP-04)"
+# ‏صَفحَةُ إعلانِ بائِعٍ في مَتجَرٍ بَناهُ المَصنَع، بِكوكي عُضو (‏ADR-032 §٦‑ج الصَفّ 2) — والقارِئانِ كِلاهُما
+# (‏ADR-034 §١(أ)٥): استِمارَةُ `cart/add` خَلفَ `PatternOf`، وتَبويبُ السَلَّةِ خَلفَ نُسخَتِه في `MainLayout.razor`.
+# والحُكمُ مِن فَرعِ الخُطوَة ٢ — «يُمَيِّز» عَلى `ecommerce` وَحدَه. ‏(‏2026-10-13: كانَ السَطرُ يَقولُ «FLGAP-04»
+# لِكُلِّ مَتجَرٍ ولا يَفحَصُ التَبويب؛ وعَلى الكاتِبِ القَديمِ يُرسَمُ نَصُّ `pattern.rental.cta` بَدَلَ الاستِمارَة، فَيُطبَعُ إن رُسِم.)
+NFORM="$(count "$F" "action=\"/$SLUG/listings/$LID/cart/add\"")"
+HASCART="$(has "$F" "$CART" && echo 1 || echo 0)"
+check "$([ "$CODE" = 200 ] && [ "$NFORM" = 1 ] && [ "$HASCART" = 1 ] && echo 1 || echo 0)" \
+    "GET /$SLUG/listings/$LID (عُضو) → $CODE · استِمارَةُ cart/add = $NFORM · «$CART» = $HASCART$(has "$F" "$RENT_CTA" && printf ' · «%s» مَرسوم' "$RENT_CTA") — $FLGAP"
+NTAB="$(dec "$F" | SL="$SLUG" LB="$CART_TAB" perl -0777 -ne '$n = 0;
+    while (m{<a href="/\Q$ENV{SL}\E/cart"[^>]*>(.*?)</a>}gs) { ($t = $1) =~ s/<[^>]*>//g; $t =~ s/^\s+|\s+$//g; $n++ if $t eq $ENV{LB} }
+    print $n')"
+check "$([ "${NTAB:-0}" -ge 1 ] && echo 1 || echo 0)" \
+    "… تَبويبُ «$CART_TAB» إلى /$SLUG/cart في الشَريط = ${NTAB:-0} (‏MainLayout — القارِئُ الثاني) — $FLGAP"
 post "$J_BUY" "/$SLUG/listings/$LID/cart/add" --data-urlencode qty=1
 check "$([ "$CODE" = 302 ] && [ "$LOC" = "/$SLUG/cart" ] && echo 1 || echo 0)" "POST /$SLUG/listings/$LID/cart/add → $CODE $LOC"
 Q="name=$(jq -rn --arg v "مُشتَري الجَولَة" '$v|@uri')&phone=$P_BUY&addr=$(jq -rn --arg v "$ADDR" '$v|@uri')"
@@ -439,6 +495,7 @@ check "$([ "$CODE" = 200 ] && grep -q "href=\"/$SLUG/listings/$LID\"" "$F" && ec
 # ═══ الخُلاصَة — العَدَدُ يُطبَع، والصِفرُ يُحمِر (القاعِدَة ١٠) ═════════
 say "الخُلاصَة"
 printf 'المَتجَر: %s/%s · الصَفقَة: %s · الإعلان: %s\n' "$BASE" "$SLUG" "$DID" "$LID"
+printf '%s — فِئاتُ المَتجَر: %s\n' "$FLGAP" "${CATS_LINE:-—}"
 printf 'فُحِصَ %s · فَشِلَ %s\n' "$CHECKED" "$FAILED"
 if [ "$CHECKED" -eq 0 ]; then echo "✗ فَحصٌ أَعمى: لَم يُفحَص شَيء." >&2; exit 1; fi
 [ "$FAILED" -eq 0 ] || exit 1
