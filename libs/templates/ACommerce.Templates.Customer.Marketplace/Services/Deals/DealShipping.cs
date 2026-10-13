@@ -322,7 +322,7 @@ public sealed class DealShipping
 
         var entry = read.Entry;
         if (entry is null)
-            return VendorTokenFor(_opts, tenantSlug) is { } fallback ? new VendorCarrier(fallback, null, false) : null;
+            return VendorTokenFor(_opts, tenantSlug) is { } fallback ? new VendorCarrier(fallback, null) : null;
 
         if (!entry.IsActive || _vault is not { IsAvailable: true } || DealAcceptAuthorization.OwnerIdOf(deal) is not { } owner
             || VendorShippingSurface.RefreshField is not { } refreshField
@@ -336,7 +336,7 @@ public sealed class DealShipping
                          && entry.Values.TryGetValue(webhookField, out var sealedSecret)
                 ? sealedSecret.Unseal(_vault, VendorShippingSurface.AadFor(tenantSlug, webhookField, owner))
                 : null;
-            return new VendorCarrier(token, secret, true);
+            return new VendorCarrier(token, secret);
         }
         catch (System.Security.Cryptography.CryptographicException)
         {
@@ -674,8 +674,10 @@ public sealed class DealShipping
 /// <summary>
 /// <para><b>ناقِلُ بائِعِ صَفقَةٍ مَفكوكاً</b> (تَيّارُ S8، ‏2026-10-12): رَمزُ تَحديثِ حِسابِه عِندَ OTO، وسِرُّ الوارِدِ الَّذي تُوَقِّعُ بِه
 /// إشعاراتِ طَلَباتِه — أَو <c>null</c> حَيثُ لا سِرّ (الاحتِياطُ مِن التَهيئَة) — ومَصدَرُهُما. لا يُطبَعُ ولا يُكتَبُ: <c>ToString</c> مُعَتَّم.</para>
+/// <para>(‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (iv) — ولا يُعادُ حَرفٌ فَوقَه: <b>و«مَصدَرُهُما» سَقَط</b> — كانَ حَقلُ <c>FromVendorEntry</c> لا يَقرَؤُه
+/// وَقتَ التَشغيلِ إلّا <c>ToString</c> هذا، وثَلاثَةُ صُفوفٍ تَقيسُه وتَقيسُ الرَمزَ نَفسَه (القاعِدَة ١). والمَصدَرُ يُقرَأُ مِن الرَمزِ حَيثُ يُحتاج.)</para>
 /// </summary>
-public sealed record VendorCarrier(string RefreshToken, string? WebhookSecret, bool FromVendorEntry)
+public sealed record VendorCarrier(string RefreshToken, string? WebhookSecret)
 {
-    public override string ToString() => $"VendorCarrier(entry={FromVendorEntry}, secret={(WebhookSecret is null ? "none" : "sealed")})";
+    public override string ToString() => $"VendorCarrier(secret={(WebhookSecret is null ? "none" : "sealed")})";
 }

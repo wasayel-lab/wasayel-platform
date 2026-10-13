@@ -162,7 +162,10 @@ public class VendorShippingTests(ITestOutputHelper output)
             RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "MyListings.razor"))));
         var hasListings = page.IndexOf("else if (myListings.Count == 0)", StringComparison.Ordinal);
         var section = page.IndexOf("<section id=\"vendor-shipping\"", StringComparison.Ordinal);
-        var asked = page.IndexOf("if (myListings.Count > 0)", StringComparison.Ordinal);
+        // (‏2026-10-13، G5 (iv)): والفَرعُ يُسأَلُ بِبَوّابَةِ النُقطَةِ بِاسمِها — كانَ «if (myListings.Count > 0)»، والبَوّابَةُ بِلا مُستَهلِكٍ وَقتَ التَشغيل؛
+        // ولا يَبقى الشَرطُ مَكتوباً بِعَدِّه (تَكافُؤُهُما `VendorSectionGateTests`).
+        var asked = page.IndexOf("if (Vs.ListingVendorGate.IsAllowed(Auth.UserId, myListings.Count))", StringComparison.Ordinal);
+        Assert.DoesNotContain("myListings.Count > 0", page, StringComparison.Ordinal);
         var input = page.IndexOf("shippingInput = Vendors.Input;", StringComparison.Ordinal);
         Assert.True(hasListings > 0 && section > hasListings, $"القِسمُ قَبلَ فَرعِ «لَه إعلانات»: {hasListings}/{section}");
         Assert.True(asked > 0 && input > asked, $"المَدخَلُ يُسأَلُ خارِجَ «لَه إعلانات»: {asked}/{input}");
@@ -585,8 +588,9 @@ public class VendorShippingTests(ITestOutputHelper output)
         Assert.DoesNotContain(DealShipTests.ConfigToken, refresh, StringComparison.Ordinal);
 
         var carrier = (await w.Shipping.CarrierForAsync(Slug, (await w.Deals.LoadAsync(Slug, w.Id))!))!;
-        Assert.Equal((DealShipTests.VendorToken, (string?)DealShipTests.WebhookSecret, true),
-            (carrier.RefreshToken, carrier.WebhookSecret, carrier.FromVendorEntry));
+        // (‏2026-10-13، G5 (iv)): سَقَطَ `FromVendorEntry` (لا قارِئَ وَقتَ التَشغيل) — والمَصدَرُ رَمزُ البائِعِ نَفسُه وسِرُّه.
+        Assert.Equal((DealShipTests.VendorToken, (string?)DealShipTests.WebhookSecret),
+            (carrier.RefreshToken, carrier.WebhookSecret));
         Assert.DoesNotContain(DealShipTests.VendorToken, carrier.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain(DealShipTests.WebhookSecret, carrier.ToString(), StringComparison.Ordinal);
     }
@@ -598,7 +602,8 @@ public class VendorShippingTests(ITestOutputHelper output)
         var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
         Assert.True(await w.Shipping.CarrierReadyForAsync(Slug, deal));
         var carrier = (await w.Shipping.CarrierForAsync(Slug, deal))!;
-        Assert.Equal((DealShipTests.ConfigToken, (string?)null, false), (carrier.RefreshToken, carrier.WebhookSecret, carrier.FromVendorEntry));
+        // (‏2026-10-13، G5 (iv)): بِلا `FromVendorEntry` — رَمزُ التَهيئَةِ بِلا سِرٍّ هُوَ الاحتِياط.
+        Assert.Equal((DealShipTests.ConfigToken, (string?)null), (carrier.RefreshToken, carrier.WebhookSecret));
 
         Assert.False(await w.Shipping.CarrierReadyForAsync("ashare", deal));
         Assert.Null(await w.Shipping.CarrierForAsync("ashare", deal));
@@ -1015,7 +1020,9 @@ public class VendorShippingTests(ITestOutputHelper output)
         Assert.Equal(1, w.Docs.Wrote<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>());
         Assert.Equal(0, w.Oto.CallsTo(OtoClient.WebhookPath));
         Assert.Null(surface.TakeActivationLink(Slug, Seller));
-        Assert.False((await w.Shipping.CarrierForAsync(Slug, (await w.Deals.LoadAsync(Slug, w.Id))!))!.FromVendorEntry);
+        // (‏2026-10-13، G5 (iv)): بِلا `FromVendorEntry` — الناقِلُ احتِياطُ التَهيئَة: رَمزُها ولا سِرّ.
+        var fallback = (await w.Shipping.CarrierForAsync(Slug, (await w.Deals.LoadAsync(Slug, w.Id))!))!;
+        Assert.Equal((DealShipTests.ConfigToken, (string?)null), (fallback.RefreshToken, fallback.WebhookSecret));
     }
 
     /// <summary>استِمارَةٌ لا تُدَقَّقُ تُرَدُّ بِرَمزِها <b>قَبلَ الأَثَرِ وقَبلَ OTO</b> — لا سَطرَ ولا نِداءَ ولا مَدخَل.</summary>

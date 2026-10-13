@@ -231,7 +231,9 @@
         // نَفس الخُطوَتَين ونَفس التَرتيب.
         myListings = (await Accounts.MyListingsAsync(Slug, Auth.UserId!.Value)).ToList();
         // وحِسابُ الشَحنِ لِلبائِعِ وَحدَه: مَن لَه إعلانٌ هُنا (هُوِيَّةُ `ListingVendorGate` نَفسُها).
-        if (myListings.Count > 0)
+        // (‏2026-10-13، G5 (iv) — ولا يُعادُ حَرفٌ فَوقَه: وصارَت تُسأَلُ بِاسمِها — كانَ الشَرطُ «العَدُّ > 0» مَكتوباً هُنا والبَوّابَةُ بِلا مُستَهلِك؛
+        // والعَدُّ عَدُّ النُقطَتَينِ نَفسُه. تَكافُؤُهُما عَلى نِطاقِ الصَفحَةِ `VendorSectionGateTests`.)
+        if (Vs.ListingVendorGate.IsAllowed(Auth.UserId, myListings.Count))
         {
             shippingInput = Vendors.Input;
             // وحالُ المَدخَلِ في المَدخَلَينِ كِلَيهِما (‏2026-10-12، الخُطوَة 8) — ورابِطُ التَفعيلِ في مَسارِ التَسجيلِ وَحدَه.
