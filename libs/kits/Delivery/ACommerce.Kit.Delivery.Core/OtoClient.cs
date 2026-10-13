@@ -294,6 +294,10 @@ public sealed class OtoClient
     /// (15 digits, starts with ‘3’), district, zipCode (5 digits), buildingNo (4 digits), streetName required»؛ و<c>companyName</c>
     /// «‏Required if isVatRegistered is true»). <b>ومِثالُ الجِسمِ في الوَثيقَةِ يُرسِلُ <c>fullName</c></b> — والجَدوَلُ يَقولُ
     /// <c>firstName</c>/<c>lastName</c>؛ نَتبَعُ الجَدوَل (‏ADR-033 §٣‑٦: «تُحسَمُ في بيئةِ الاختبارِ لا بالقراءة»).</para>
+    /// <para>(‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (vii) — ولا يُعادُ حَرفٌ فَوقَه: <b>والوَثيقَةُ تُناقِضُ نَفسَها في <c>zipCode</c>/<c>buildingNo</c></b> —
+    /// جَدوَلُ حُقولِها: «‏zipCode … Required for SA (5 digits) and other countries if VAT registered» و«‏buildingNo … Required for SA (4 digits)
+    /// and other countries if VAT registered»، وفِقرَةُ السُعودِيَّةِ المُقتَبَسَةُ أَعلاه تَشرِطُهُما بِـ<c>isVatRegistered</c>. نَتبَعُ الفِقرَة — فَإن كانَت OTO
+    /// تَعمَلُ بِالجَدوَلِ رُدَّ كُلُّ بائِعٍ غَيرِ مُسَجَّلٍ في الضَريبَة. لَم يُقَس؛ أَمرُ القِياسِ عَلى staging في سِجِلِّ المالِكِ «ب» S11b·٢٧، والسُؤالُ في «ج» S8·١٤ (١٢).)</para>
     ///
     /// <para>ورَدُّه «‏{"success": true, "activationLink": "https://login.tryoto.com/XYZ", "refreshToken": "_refreshToken_"}» — فَيُعادُ
     /// الاثنان؛ وغِيابُ أَيِّهِما، أَو رابِطٌ لَيسَ <c>https</c> مُطلَقاً، <see cref="OtoFailures.Unreadable"/>: لا يُحفَظُ رَمزٌ لا يُعرَفُ
