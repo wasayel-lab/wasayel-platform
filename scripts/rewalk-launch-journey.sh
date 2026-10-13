@@ -19,10 +19,14 @@
 #
 #  **والجِدارُ يُقال ولا يُلتَفُّ عَلَيه صامِتاً**: التَحليلُ يَحتاجُ مِفتاحَ
 #  وَكيلٍ (‏`docs/DEPLOY.md` §٤·ب). الخُطوَةُ ١ تَمشي المَسارَ الحَقيقيَّ حَتّى
-#  التَحليلِ وتَطبَعُ ما رَدَّه المُزَوِّدُ؛ فَإن اكتَمَلَ بُنِيَ المَتجَرُ مِنه،
-#  وإلّا بُنِيَ مِن **المَسارِ المُوَثَّقِ لِلتَطوير** — جَلسَةُ
+#  التَحليلِ وتَطبَعُ ما رَدَّه المُزَوِّدُ وبَعدَ كَم ثانِيَة؛ فَإن اكتَمَلَ بُنِيَ المَتجَرُ مِنه،
+#  وإن فَشِلَ بُنِيَ مِن **المَسارِ المُوَثَّقِ لِلتَطوير** — جَلسَةُ
 #  `IncubatorSampleSeeder` (‏`INCUBATOR_SAMPLE_SEED=1`) المَملوكَةُ لِصاحِبِ
-#  `PLATFORM_ADMIN_PHONE` — ويُقالُ أَيُّهُما في السَطر.
+#  `PLATFORM_ADMIN_PHONE` — ويُقالُ أَيُّهُما في السَطر، و«المِفتاحُ» لا يُسَمّى سَبَباً
+#  إلّا عَلى رَدِّ 401. وما زالَ «جارِياً» عِندَ آخِرِ النافِذَةِ (`ANALYZE_TRIES` أَدناه) أَو
+#  حالَةٌ لا تَقولُ أَيّاً مِن الثَلاثَةِ تُوقِفُ الرِحلَةَ بِنَصِّها. ‏(‏2026-10-13، المُراجَعَةُ الثانِيَة:
+#  كانَ «وإلّا» — فَتَحليلٌ أَبطَأُ مِن 30 ثانِيَةً يُقرَأُ «بِلا مِفتاح» ويَسقُطُ إلى مَسارِ التَطويرِ
+#  تَحتَ المُشرِف، وفَشَلٌ بِمُهلَةِ النِداءِ يُطبَعُ «مِفتاحُ وَكيلِ التَحليلِ غائِب».)
 #  ⚠ والبَذّارُ يَسبِقُ مَنحَ المُشرِفِ في `Program.cs`: عَلى قاعِدَةٍ بارِدَةٍ لا
 #  مُستَخدِمَ استوديو يَومَئِذٍ فَلا جَلسَة — والإقلاعُ الثاني يَبذُرُها (مَقيسٌ
 #  ‏2026-10-13، `docs/RELEASE-READINESS.md`).
@@ -39,7 +43,17 @@
 #      ADMIN_PHONE=<PLATFORM_ADMIN_PHONE لِلخادِم> ./scripts/rewalk-launch-journey.sh
 #      BASE=http://localhost:5055 ADMIN_PHONE=… MARK=134501 ./scripts/rewalk-launch-journey.sh
 #  ‏`MARK` (سِتَّةُ أَرقام) يَصنَعُ هَواتِفَ الجَولَةِ وسلاجَ مَتجَرِها، فَتُعادُ
-#  الجَولَةُ عَلى القاعِدَةِ نَفسِها بِلا تَصادُم. **ولا يُشَغَّلُ عَلى الإنتاج**:
+#  الجَولَةُ عَلى القاعِدَةِ نَفسِها بِلا تَصادُم.
+#  ‏`ANALYZE_TRIES` عَدَدُ مَرّاتِ سُؤالِ صَفحَةِ الدِراسَةِ في الخُطوَة ١، بَينَ كُلِّ اثنَتَينِ ثانِيَتان.
+#  **وافتِراضُه يُحسَبُ مِن سَقفِ الخادِمِ نَفسِه** لا يُكتَبُ رَقَماً: مُحاوَلاتُ الحَلقَةِ في `RunAnalysisAsync`
+#  (‏`attempt < N`) × أَطوَلُ `HttpClient.Timeout` في `AgentBackends.cs` — اليَومَ 2 × 60ث = 120 ثانِيَة — نِصفُه
+#  سُؤالاً وسُؤالانِ فَوقَه: الأَوَّلُ لِأَنّ السُؤالَ الأَوَّلَ في الثانِيَةِ صِفرٌ فَيَقَعُ ما بَعدَه عِندَ السَقفِ نَفسِه، والثاني
+#  لِكِتاباتِ القاعِدَةِ بَعدَ النِداءَين (اليَومَ 62، آخِرُها بَعدَ ≥ 122 ثانِيَة). فَالجَلسَةُ تَبلُغُ «اكتَمَلَ» أَو «فَشِلَ»
+#  داخِلَ النافِذَةِ ما لَم تَعلَق، ويُطبَعُ السَقفُ والنافِذَةُ قَبلَ الانتِظار وما انتُظِرَ فِعلاً بَعدَه.
+#  ‏(‏2026-10-13، المُراجَعَةُ الثانِيَة: كانَ 15 — ‏30 ثانِيَة — فَبَديلٌ يُجيبُ بَعدَ 40 ثانِيَةً قُرِئَ «لا اكتِمالَ
+#  ولا فَشَل» وسَقَطَت الجَولَةُ إلى مَسارِ التَطوير، فَوَقَفَت عِندَ الخُطوَة ٢ «بِلا مِفتاحٍ يَلزَمُ
+#  INCUBATOR_SAMPLE_SEED=1» — فُحِصَ 11 · فَشِلَ 2.)
+#  **ولا يُشَغَّلُ عَلى الإنتاج**:
 #  يَكتُبُ مُستَخدِمينَ ومَتجَراً وإعلاناً وصَفقَة، والدُخولُ فيه بِرَمزِ المُحاكي
 #  (‏Development وَحدَه).
 #
@@ -59,12 +73,14 @@ ADMIN_PHONE="${ADMIN_PHONE:-}"
 MARK="${MARK:-$(date +%H%M%S)}"
 DEV_CODE="${DEV_CODE:-123456}"     # ‏`MockSmsChannel.FixedCode` — Development وَحدَه
 T="${T:-25}"                       # مُهلَةُ كُلِّ نِداء (ثانِيَة)
-ANALYZE_TRIES="${ANALYZE_TRIES:-15}"   # ‏15 × 2ث سَقفاً لِلتَحليل
+ANALYZE_TRIES="${ANALYZE_TRIES:-}"     # فارِغٌ ← يُحسَبُ مِن سَقفِ الخادِمِ أَدناه (انظُر «الاستِعمال»)
 
 AR="$ROOT/libs/core/ACommerce.Platform.I18n/Locales/ar.json"
 CATALOG="$ROOT/libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Deals/DealPatternCatalog.cs"
 SAMPLE_SEEDER="$ROOT/apps/V1.App/Seed/IncubatorSampleSeeder.cs"
 FACTORY="$ROOT/libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Incubator/TenantFromAnalysisFactory.cs"
+ANALYSIS_SVC="$ROOT/libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Incubator/FeasibilityAnalysisService.cs"
+BACKENDS="$ROOT/libs/templates/ACommerce.Templates.Customer.Marketplace/Services/AgentBackends.cs"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -159,6 +175,19 @@ store_login() { # store_login <jar> <slug> <phone>
 [[ "$MARK" =~ ^[0-9]{6}$ ]] || { echo "✗ MARK سِتَّةُ أَرقامٍ لا «$MARK»." >&2; exit 2; }
 command -v jq >/dev/null || { echo "✗ jq غائِب — بِه يُقرَأُ القامُوس." >&2; exit 2; }
 
+# ‏سَقفُ الخادِمِ لِلتَحليلِ مِن مَصدَرِه لا مِن ذاكِرَةِ السكربت: مُحاوَلاتُ الحَلقَةِ في `RunAnalysisAsync` × أَطوَلُ
+# ‏`HttpClient.Timeout` في الخَلفِيّاتِ الثَلاث (‏`SendAsync`/`PostAsJsonAsync` تَقرَأُ الجِسمَ داخِلَ المُهلَة، و`CallAsync`
+# تَبتَلِعُ استِثناءَها خَطَأً فَتَمضي الحَلقَة). وبَعدَه كِتاباتُ القاعِدَةِ وَحدَها — والنافِذَةُ الافتِراضِيَّةُ نِصفُه سُؤالاً
+# وسُؤالانِ فَوقَه (لِماذا اثنانِ: «الاستِعمال» أَعلاه).
+CALLS="$(awk '/RunAnalysisAsync\(Guid/{f=1} f' "$ANALYSIS_SVC" | grep -m1 -o 'attempt < [0-9]*' | grep -o '[0-9]*$')"
+CALL_SECS="$(grep -o 'Timeout = TimeSpan.FromSeconds([0-9]*)' "$BACKENDS" | grep -o '[0-9][0-9]*' | sort -n | tail -1)"
+[ -n "$CALLS" ] && [ -n "$CALL_SECS" ] || {
+    echo "✗ سَقفُ التَحليلِ غائِب: «attempt < N» في FeasibilityAnalysisService.cs أَو «Timeout = TimeSpan.FromSeconds(N)» في AgentBackends.cs" >&2; exit 2; }
+SERVER_BOUND=$((CALLS * CALL_SECS))
+DEFAULT_TRIES=$((SERVER_BOUND / 2 + 2))
+ANALYZE_TRIES="${ANALYZE_TRIES:-$DEFAULT_TRIES}"
+[[ "$ANALYZE_TRIES" =~ ^[1-9][0-9]*$ ]] || { echo "✗ ANALYZE_TRIES عَدَدٌ مُوجَبٌ لا «$ANALYZE_TRIES»." >&2; exit 2; }
+
 SLUG="rewalk-$MARK"
 P_ENT="05${MARK}00"; P_VEN="05${MARK}01"; P_BUY="05${MARK}02"
 J_ENT="$WORK/ent"; J_ADM="$WORK/adm"; J_VEN="$WORK/ven"; J_BUY="$WORK/buy"
@@ -202,20 +231,40 @@ check "$([ "$CODE" = 200 ] && [ "$(count "$F" 'action="/studio/consent/accept"')
         && grep -q "location.replace('/studio')" "$F" && echo 1 || echo 0)" \
     "GET /studio/consent → $CODE · بِلا استِمارَة (HasConsentedAsync = true)"
 
-ANALYSIS=""
-for _ in $(seq 1 "$ANALYZE_TRIES"); do
-    get "$J_ENT" "/studio/s/$ENT_SID" "$F"
-    if has "$F" "$(ar studio.study.failed_title)"; then ANALYSIS=failed; break; fi
+# ‏الحالاتُ الثَلاثُ تُعرَفُ بِنُصوصِها لا بِغِيابِ غَيرِها: «جارٍ» يُعادُ سُؤالُه، و«فَشِلَ» و«استِمارَةُ البِناء» تُنهِيانِه،
+# وصَفحَةٌ لا تَقولُ أَيّاً مِنها حالَةٌ أُخرى تُقالُ فَوراً. والنافِذَةُ تُطبَعُ قَبلَ الانتِظار، وما انتُظِرَ يُقاسُ بِالساعَة
+# (‏`SECONDS`) لا يُحسَبُ مِن العَدَد. ‏(‏2026-10-13، المُراجَعَةُ الثانِيَة: كانَ ما لَيسَ «اكتَمَلَ» يَسقُطُ إلى مَسارِ التَطوير.)
+ANALYZING="$(ar admin.study.analyzing_title)"; FAILED_TITLE="$(ar studio.study.failed_title)"
+info "يُنتَظَرُ التَحليلُ $ANALYZE_TRIES سُؤال، بَينَ كُلِّ اثنَينِ ثانِيَتان (آخِرُها بَعدَ ≥ $(((ANALYZE_TRIES - 1) * 2)) ثانِيَة) — وسَقفُ نِداءاتِ الخادِم $SERVER_BOUND ثانِيَة: $CALLS مُحاوَلَة × ${CALL_SECS}ث (‏RunAnalysisAsync · AgentBackends.cs)"
+ANALYSIS=""; T0=$SECONDS; WAITED=0
+for i in $(seq 1 "$ANALYZE_TRIES"); do
+    get "$J_ENT" "/studio/s/$ENT_SID" "$F"; WAITED=$((SECONDS - T0))   # ‏لَحظَةُ آخِرِ ما رُئِي، لا ما بَعدَ نَومٍ لا يُرى فيه شَيء
+    if has "$F" "$FAILED_TITLE"; then ANALYSIS=failed; break; fi
     if grep -q "action=\"/studio/s/$ENT_SID/build\"" "$F"; then ANALYSIS=done; break; fi
-    sleep 2
+    if [ "$CODE" = 200 ] && has "$F" "$ANALYZING"; then ANALYSIS=analyzing; else ANALYSIS=other; break; fi
+    [ "$i" -lt "$ANALYZE_TRIES" ] && sleep 2
 done
 case "$ANALYSIS" in
-  done)   check 1 "GET /studio/s/$ENT_SID → التَحليلُ اكتَمَل، واستِمارَةُ البِناءِ مَرسومَة" ;;
-  failed) # الرِسالَةُ بِشَكلِ `AgentErrorText.Where`: «تَسميَة (عُنوان) رَمز: جِسم» — يُطبَعُ صَدرُها لا الجِسم.
-          WHERE="$(dec "$F" | grep -oE '[A-Za-z0-9_-]+ \(https?://[^)]*\) [0-9]{3}' | head -1)"
-          check 1 "GET /studio/s/$ENT_SID → «$(ar studio.study.failed_title)» — ${WHERE:-بِلا تَسميَة}"
-          block "الجِدارُ الأَوَّل: مِفتاحُ وَكيلِ التَحليلِ غائِب (‏DEPLOY.md §٤·ب) — يُبنى المَتجَرُ مِن المَسارِ المُوَثَّقِ لِلتَطوير" ;;
-  *)      check 0 "GET /studio/s/$ENT_SID → لا اكتِمالَ ولا فَشَلَ خِلالَ $((ANALYZE_TRIES * 2)) ثانِيَة" ;;
+  done)   check 1 "GET /studio/s/$ENT_SID → التَحليلُ اكتَمَلَ بَعدَ $WAITED ثانِيَة، واستِمارَةُ البِناءِ مَرسومَة" ;;
+  failed) # الرِسالَةُ بِشَكلِ `AgentErrorText`: «تَسميَة (عُنوان) رَمز: جِسم» أَو «تَسميَة (عُنوان) exception: رِسالَة» — يُطبَعُ
+          # صَدرُها: الرَمزُ وَحدَه، أَو رِسالَةُ الاستِثناءِ كامِلَةً (مُهلَةُ النِداءِ تَقولُ نَفسَها: «HttpClient.Timeout»).
+          WHERE="$(dec "$F" | grep -oE '[A-Za-z0-9_-]+ \(https?://[^)]*\) ([0-9]{3}|exception: [^<]*)' | head -1)"
+          check 1 "GET /studio/s/$ENT_SID → «$FAILED_TITLE» بَعدَ $WAITED ثانِيَة — ${WHERE:-بِلا تَسميَة}"
+          # ‏«المِفتاح» سَبَبٌ يُسَمّى عَلى رَدِّ 401 وَحدَه؛ وما سِواه — مُهلَةٌ، 5xx، رَدٌّ لا يُقرَأ — يُقالُ أَنّه غَيرُه.
+          if [[ "$WHERE" == *") 401" ]]; then
+              block "الجِدارُ الأَوَّل: المُزَوِّدُ رَدَّ 401 — مِفتاحُ وَكيلِ التَحليلِ غائِبٌ أَو مَرفوض (‏DEPLOY.md §٤·ب) — يُبنى المَتجَرُ مِن المَسارِ المُوَثَّقِ لِلتَطوير"
+          else
+              block "فَشِلَ التَحليلُ بِغَيرِ 401 فَلَيسَ جِدارَ المِفتاح — سَبَبُه في السَطرِ أَعلاه (ومُهلَةُ كُلِّ نِداءٍ ${CALL_SECS}ث) — يُبنى المَتجَرُ مِن المَسارِ المُوَثَّقِ لِلتَطوير، ولا يُبَرهَنُ مَسارُ العَميل"
+          fi ;;
+  analyzing)
+          check 0 "GET /studio/s/$ENT_SID → «$ANALYZING» ما زالَ مَرسوماً بَعدَ $WAITED ثانِيَة"
+          if [ "$WAITED" -lt "$SERVER_BOUND" ]; then
+              die "التَحليلُ ما زالَ جارِياً بَعدَ $WAITED ثانِيَة، دونَ سَقفِ نِداءاتِ الخادِم ($SERVER_BOUND ثانِيَة) — أَعِد بِـANALYZE_TRIES أَكبَر (افتِراضُه $DEFAULT_TRIES)"
+          else
+              die "التَحليلُ ما زالَ جارِياً بَعدَ $WAITED ثانِيَة، فَوقَ سَقفِ نِداءاتِ الخادِم ($SERVER_BOUND ثانِيَة) وما بَعدَه كِتاباتُ القاعِدَةِ وَحدَها — فَالجَلسَةُ عالِقَةٌ لا بَطيئَة: استِثناءٌ خارِجَ النِداءِ يَبتَلِعُه «catch { }» حَولَ RunAnalysisAsync فَيُبقيها «جارِيَة»"
+          fi ;;
+  *)      check 0 "GET /studio/s/$ENT_SID → $CODE · لا «$ANALYZING» ولا «$FAILED_TITLE» ولا استِمارَةُ بِناء"
+          die "حالَةُ جَلسَةِ التَحليلِ لا يَعرِفُها السكربت بَعدَ $WAITED ثانِيَة — ولا يُسقَطُ إلى مَسارِ التَطويرِ إلّا عَلى «$FAILED_TITLE»" ;;
 esac
 
 # ═══ ٢) بِناءُ المَتجَر ═══════════════════════════════════════════════
@@ -251,8 +300,9 @@ else
     # (`FindBySourceAnalysisAsync`) بَدَلَ الاستِمارَة. فَإعادَةُ الجَولَةِ تَمشي عَلى ذلكَ المَتجَرِ
     # ولا تَبني ثانِياً بِطَلَبٍ لا تَعرِضُه الشاشَة.
     BUILT="$(grep -o 'href="/studio/apps/[a-z0-9_-]*"' "$F" | head -1 | sed 's#.*/studio/apps/##; s/"$//')"
+    # ‏(‏2026-10-13، المُراجَعَةُ الثانِيَة: كانَ النَصُّ «بِلا مِفتاحٍ يَلزَمُ …» — وهُنا يُبلَغُ بِأَيِّ فَشَلٍ لا بِغِيابِ المِفتاحِ وَحدَه.)
     [ -n "$BUILT" ] \
-        || die "لا استِمارَةَ بِناءٍ ولا مَتجَرَ مَبنِيّاً في /studio/s/$SID ($CODE) — بِلا مِفتاحٍ يَلزَمُ INCUBATOR_SAMPLE_SEED=1 وإقلاعٌ ثانٍ (البَذّارُ يَسبِقُ مَنحَ المُشرِف)"
+        || die "لا استِمارَةَ بِناءٍ ولا مَتجَرَ مَبنِيّاً في /studio/s/$SID ($CODE) — مَسارُ التَطويرِ (التَحليلُ فَشِلَ في الخُطوَة ١ بِسَبَبِه المَطبوع) يَلزَمُه INCUBATOR_SAMPLE_SEED=1 وإقلاعٌ ثانٍ (البَذّارُ يَسبِقُ مَنحَ المُشرِف)"
     SLUG="$BUILT"
     check 1 "GET /studio/s/$SID → $CODE · مَبنِيٌّ مِنها سَلَفاً: /studio/apps/$SLUG — تَمشي الجَولَةُ عَلَيه"
 fi
