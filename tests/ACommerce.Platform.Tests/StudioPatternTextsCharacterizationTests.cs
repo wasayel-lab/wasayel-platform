@@ -18,29 +18,33 @@ namespace ACommerce.Platform.Tests;
 
 public class StudioPatternTextsCharacterizationTests
 {
-    /// <summary>السَطرُ بِحَرفِه كَما يَبلُغُ المُوَجِّه.</summary>
-    internal const string CapabilitiesContraLineToday =
+    /// <summary>السَطرُ القَديمُ بِحَرفِه كَما كانَ يَبلُغُ المُوَجِّه — قَبلَ صِياغَةِ ‏2026-10-13.</summary>
+    internal const string CapabilitiesContraLineOld =
         "- **متى لا يُستخدم (مضاد)**: منتج واحد بمورّد واحد (متجر بسيط يكفيه نمط أبسط)؛ خدمات تحتاج جدولة معقّدة.";
 
+    /// <summary>(‏2026-10-13، كوميتُ الصِياغَة — انقَلَبَ بِقَرارٍ مَرئِيّ: كانَ <c>Today_the_capabilities_reference_tells_the_analyst_…</c>
+    /// يُثبِتُ السَطرَ القَديمَ حاضِراً، وصارَ يُثبِتُه غائِباً؛ والنَصُّ الجَديدُ مُثَبَّتٌ في <c>StudioPatternTextsTests</c>.)</summary>
     [Fact]
-    public void Today_the_capabilities_reference_tells_the_analyst_a_one_vendor_store_needs_a_simpler_pattern_that_does_not_exist()
+    public void The_capabilities_reference_no_longer_tells_the_analyst_a_one_vendor_store_needs_a_simpler_pattern()
     {
         var caps = new SaudiDataProvider().CapabilitiesMarkdown;
         Assert.True(caps.Length > 500, $"أَداةٌ عَمياء: المَورِدُ المُضَمَّنُ طولُه {caps.Length} — لَم يُقرَأ.");
-        Assert.Contains(CapabilitiesContraLineToday, caps.Split('\n'));
+        Assert.DoesNotContain(CapabilitiesContraLineOld, caps.Split('\n'));
 
         // ‏«نَمَطٌ أَبسَط» لا وُجودَ لَه: المَعجَمُ أَربَعَة، ومَقصِدُ «مَتجَرٍ يَبيعُ مُنتَجات» فيه واحِدٌ هُوَ `marketplace`.
         Assert.Equal(new[] { "marketplace", "classifieds", "rental", "ondemand" }, TenantFromAnalysisFactory.KnownPatterns);
     }
 
-    /// <summary>فُروعُ المُطابِقِ السَبعَةُ (وفَرعُ «تَبيعُ مُنتَجات» بِثِقَتَيه) — النَمَطُ والتَسمِيَةُ والثِقَةُ والتَعليلُ بِحَرفِها.</summary>
+    /// <summary>فُروعُ المُطابِقِ السَبعَةُ (وفَرعُ «تَبيعُ مُنتَجات» بِثِقَتَيه) — النَمَطُ والتَسمِيَةُ والثِقَةُ والتَعليلُ بِحَرفِها.
+    /// (‏2026-10-13، كوميتُ الصِياغَة: صَفّا «تَبيعُ مُنتَجات» وَحدَهُما انقَلَبا إلى النَصِّ الجَديد — كانَ «… يناسب البيع المباشر أو
+    /// من بائعين متعددين.»؛ والصُفوفُ السِتَّةُ الأُخرى لَم يُمَسَّ مِنها حَرف.)</summary>
     [Theory]
     [InlineData("physical", "oneoff", "yes", "ondemand", "الطلبات حسب الموقع", "high", "اخترت خدمة فورية مرتبطة بموقع المزوّد — هذا نمط المطابقة الفورية (راكب⇄سائق، طلب⇄مندوب).")]
     [InlineData("rental", "oneoff", "no", "rental", "التأجير", "high", "فكرتك تأجير أصول لفترة محددة — نمط التأجير يدير حالة الأصل (متاح/محجوز/مُرجَع) والتحقق.")]
     [InlineData("twosided", "commission", "no", "marketplace", "المتجر متعدد البائعين", "high", "تربط بائعين ومشترين وتأخذ عمولة على المعاملة — نمط المتجر متعدد البائعين يحصّل الدفع ويوزّعه.")]
     [InlineData("twosided", "subscription", "no", "classifieds", "الإعلانات المبوّبة", "medium", "تربط طرفين دون تحصيل دفع مركزي — نمط الإعلانات المبوّبة، الإيراد من اشتراك المعلنين أو ترقية الإعلان.")]
-    [InlineData("physical", "oneoff", "no", "marketplace", "المتجر متعدد البائعين", "medium", "تبيع منتجات — نمط المتجر يناسب البيع المباشر أو من بائعين متعددين.")]
-    [InlineData("digital", "commission", "no", "marketplace", "المتجر متعدد البائعين", "high", "تبيع منتجات — نمط المتجر يناسب البيع المباشر أو من بائعين متعددين.")]
+    [InlineData("physical", "oneoff", "no", "marketplace", "المتجر متعدد البائعين", "medium", "تبيع منتجات — نمط المتجر نفسه يعمل ببائع واحد (أنت) أو ببائعين متعددين يسجّلون فيه، بلا تبديل نمط.")]
+    [InlineData("digital", "commission", "no", "marketplace", "المتجر متعدد البائعين", "high", "تبيع منتجات — نمط المتجر نفسه يعمل ببائع واحد (أنت) أو ببائعين متعددين يسجّلون فيه، بلا تبديل نمط.")]
     [InlineData("service", "oneoff", "no", "classifieds", "الإعلانات المبوّبة", "medium", "تقدّم خدمة غير فورية — يمكن البدء بإعلانات مبوّبة لمزوّدي الخدمة ثم التوسّع للحجز.")]
     [InlineData("", "", "", "custom", "تكوين مخصّص", "low", "فكرتك لا تطابق نمطاً جاهزاً بوضوح — سنبني تكويناً مخصّصاً فوق نفس المحرّك بعد التحليل.")]
     public void PatternMatcher_outcomes_are_pinned_byte_for_byte(

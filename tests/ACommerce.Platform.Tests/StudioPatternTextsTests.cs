@@ -42,4 +42,42 @@ public class StudioPatternTextsTests
         Assert.Contains("LocaleCatalog.Text(LocaleCatalog.Arabic, ProductsReasoningKey)", code, StringComparison.Ordinal);
         Assert.DoesNotContain(value!, code, StringComparison.Ordinal);
     }
+
+    // ═══ الصِياغَة (‏2026-10-13) — نَمَطٌ واحِدٌ يَخدُمُ بائِعاً واحِداً أَو بائِعينَ كُثُراً (‏ADR-032 §٦) ═══
+
+    /// <summary>النَصُّ الجَديدُ بِحَرفِه — ولا يَعِدُ بِمَسارِ ضَمٍّ أَو دَعوَةٍ لا وُجودَ لَه (‏ADR-032 §٦‑ح‑2): البائِعونَ «يُسَجِّلونَ
+    /// فيه» بِأَنفُسِهِم (‏<c>SelfGrantPolicy.SelfGrantable</c>)، والمالِكُ بائِعُه الواحِدُ إن شاء.</summary>
+    internal const string ProductsReasoning =
+        "تبيع منتجات — نمط المتجر نفسه يعمل ببائع واحد (أنت) أو ببائعين متعددين يسجّلون فيه، بلا تبديل نمط.";
+
+    /// <summary>سَطرُ مَرجِعِ القُدُراتِ الجَديدُ بِحَرفِه، والسَطرُ المُضادُّ بَعدَه بِلا شَطرِه المَحذوف.</summary>
+    internal const string CapabilitiesOneOrManyLine =
+        "- **بائع واحد أو بائعون متعددون**: النمط نفسه — متجر كل منتجاته لصاحبه هو هذا النمط ببائع واحد، ويبيع فيه غيره متى سجّلوا فيه، بلا تبديل نمط (لا نمط أبسط للبائع الواحد).";
+
+    internal const string CapabilitiesContraLine = "- **متى لا يُستخدم (مضاد)**: خدمات تحتاج جدولة معقّدة.";
+
+    [Fact]
+    public void The_products_reasoning_says_one_pattern_serves_one_or_many_vendors()
+    {
+        Assert.Equal(ProductsReasoning, LocaleCatalog.Find(LocaleCatalog.Arabic, PatternMatcher.ProductsReasoningKey));
+        Assert.Equal(ProductsReasoning,
+            PatternMatcher.Match(new Dictionary<string, string> { ["offer"] = "physical" }).ReasoningAr);
+        Assert.DoesNotContain("يناسب البيع المباشر", ProductsReasoning, StringComparison.Ordinal);
+        foreach (var promise in new[] { "دعوة", "تدعو", "تضيف", "يضم" })
+            Assert.DoesNotContain(promise, ProductsReasoning, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_capabilities_reference_says_the_same_pattern_serves_one_or_many_vendors()
+    {
+        var lines = new SaudiDataProvider().CapabilitiesMarkdown.Split('\n');
+        Assert.True(lines.Length > 20, $"أَداةٌ عَمياء: المَورِدُ المُضَمَّنُ {lines.Length} سَطراً.");
+
+        var at = Array.IndexOf(lines, CapabilitiesOneOrManyLine);
+        Assert.True(at > 0, "السَطرُ الجَديدُ غائِبٌ عَن المَورِدِ المُضَمَّن.");
+        Assert.Equal(CapabilitiesContraLine, lines[at + 1]);
+        Assert.Contains("### 1) نمط المتجر متعدد البائعين", lines[..at].Last(l => l.StartsWith("### ", StringComparison.Ordinal)),
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(lines, l => l.Contains("نمط أبسط", StringComparison.Ordinal) && !l.Contains("لا نمط أبسط", StringComparison.Ordinal));
+    }
 }
