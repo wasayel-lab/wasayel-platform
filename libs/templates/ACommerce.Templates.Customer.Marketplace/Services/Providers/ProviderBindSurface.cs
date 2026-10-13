@@ -73,6 +73,27 @@ public static class ProviderBindSurface
     public static IReadOnlyList<string> OfferedCapabilities(ProviderVault? vault = null)
         => ProviderCapabilities.All.Where(c => Offered(c, vault).Count > 0).ToArray();
 
+    /// <summary>
+    /// <para><b>القُدُراتُ الَّتي يُقرَأُ رَبطُها القائِم</b> — ما يَربِطُه مُستَأجِرٌ في الكاتالوج، بِلا سُؤالٍ عَن الخِزانَة (‏2026-10-13، مُراجَعَةُ المَوجَة 3a —
+    /// G4 (xxii)): رَبطٌ مَختومٌ قائِمٌ يُقرَأُ ولَو غابَ المِفتاحُ الرَئيس — يُرسَمُ ذَيلُه ويُسحَبُ ولا يُفَكّ.</para>
+    /// </summary>
+    public static IReadOnlyList<string> BindingCapabilities => ProviderCatalog.BindableCapabilities;
+
+    /// <summary>
+    /// <para><b>أَقسامُ الشاشَة</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (xxii)؛ تَوصيفُه <c>Today_the_studio_providers_page_draws_and_loads_…</c>):
+    /// قُدرَةٌ لَها بِطاقَةٌ مَعروضَةٌ (<see cref="Offered"/>) <b>أَو</b> رَبطٌ قائِم (<paramref name="hasBinding"/>) — بِتَرتيبِ المَعجَم. كانَت الأَقسامُ
+    /// <see cref="OfferedCapabilities"/> وَحدَها، فَقُدرَةٌ كُلُّ مُزَوِّديها يَحتاجونَ الخِزانَةَ تَختَفي بِرَبطِها المَختومِ وزِرِّ سَحبِه حينَ يُزالُ المِفتاحُ
+    /// الرَئيس. فَالخِزانَةُ تُخفي البِطاقاتِ وَحدَها (القاعِدَة ١٢: لا بِطاقَةَ تُرَدّ)، والرَبطُ القائِمُ يَبقى مَرئِيّاً مَسحوباً بِحَقِّه. وقُدرَةٌ بِلا هذا ولا ذاك
+    /// لا تُرسَمُ كَما كانَت — لا قِسمَ فارِغاً يَقولُ «قَريباً».</para>
+    /// </summary>
+    public static IReadOnlyList<string> SectionCapabilities(ProviderVault? vault, Func<string, bool> hasBinding)
+        => Sections(BindingCapabilities, c => Offered(c, vault).Count > 0, hasBinding);
+
+    /// <summary>القاعِدَةُ نَفسُها بِمُدخَلاتٍ صَريحَة — لِأَنّ كاتالوجَ اليَومِ لا يَحمِلُ قُدرَةً كُلُّ مُزَوِّديها مَختومون («مَدفوعات» يُبقيها الرابِطُ
+    /// بِلا خِزانَة)، فَشَطرُ «أَو رَبطٌ قائِم» لا يُقاسُ بِالكاتالوجِ وَحدَه؛ يُقاسُ هُنا بِقُدرَةٍ مَصنوعَةٍ في الصَفّ (القاعِدَة ٢).</summary>
+    public static IReadOnlyList<string> Sections(IEnumerable<string> capabilities, Func<string, bool> offered, Func<string, bool> bound)
+        => capabilities.Where(c => offered(c) || bound(c)).ToArray();
+
     /// <summary><b>نَوعُ حَقلِ الإدخال</b> — <c>password</c> لِما تَختِمُه الخِزانَة،
     /// فَلا يُرى السِرُّ عَلى الشاشَةِ وهُوَ يُلصَق (‏ADR-032 الخُطوَة 7)؛ و<c>null</c>
     /// لِما سِواه فَلا يُصَيَّرُ السِمَةُ أَصلاً — وصورَةُ حَقلِ الرابِطِ بايتاً

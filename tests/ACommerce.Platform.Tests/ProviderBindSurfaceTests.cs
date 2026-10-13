@@ -273,30 +273,50 @@ public class ProviderBindSurfaceTests
         var razor = StudioProvidersRazor();
 
         Assert.Contains("ProviderBindSurface.Offered(capability, Vault)", razor, StringComparison.Ordinal);
-        Assert.Contains("ProviderBindSurface.OfferedCapabilities(Vault)", razor, StringComparison.Ordinal);
+        // (‏2026-10-13، G4 (xxii)؛ ولا يُعادُ حَرفٌ فَوقَه: الأَقسامُ صارَت `SectionCapabilities(Vault, …)` — قائِمَةُ السَطحِ بِالخِزانَةِ نَفسِها،
+        // بِطاقَةٌ مَعروضَةٌ أَو رَبطٌ قائِم — لا `OfferedCapabilities(Vault)`؛ والشاشَةُ ما زالَت لا تَقرَأُ الكاتالوجَ مُباشَرَة.)
+        Assert.Contains("ProviderBindSurface.SectionCapabilities(Vault,", razor, StringComparison.Ordinal);
         Assert.Contains("@inject ProviderVault Vault", razor, StringComparison.Ordinal);
         Assert.DoesNotContain("ProviderCatalog.TenantBindable(", razor, StringComparison.Ordinal);
         Assert.DoesNotContain("ProviderCatalog.BindableCapabilities", razor, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم»</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (xxii)): الصَفحَةُ تَرسُمُ أَقسامَ القُدُراتِ وتُحَمِّلُ رَبطَها القائِمَ
-    /// لِلقُدُراتِ الَّتي لَها بِطاقَةٌ مَعروضَةٌ وَحدَها (<c>OfferedCapabilities(Vault)</c> في الحَلقَتَين) — فَقُدرَةٌ كُلُّ مُزَوِّديها يَحتاجونَ الخِزانَةَ
-    /// تَختَفي كُلُّها حينَ يُزالُ المِفتاحُ الرَئيس، ومَعَها رَبطُها المَختومُ وزِرُّ سَحبِه. <b>وكامِنٌ اليَوم — مَقيساً</b>: «مَدفوعات» تَبقى بِلا خِزانَةٍ
-    /// لِأَنّ الرابِطَ المُستَضافَ لا يَحتاجُها، فَرَبطُ «ميسر — مِفتاح سِرّيّ» يُرى فيها. يُقلَبُ بِاسمِه في كوميتِ الإصلاح.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (xxii)): كانَ
+    /// <c>Today_the_studio_providers_page_draws_and_loads_bindings_only_for_capabilities_with_an_offered_card</c> (مُودَعٌ في <c>5cdff1a</c>).
+    /// وصارَت الصَفحَةُ تُحَمِّلُ الرَبطَ القائِمَ لِكُلِّ قُدرَةٍ يَربِطُها مُستَأجِر (<see cref="ProviderBindSurface.BindingCapabilities"/>)، وتَرسُمُ
+    /// الأَقسامَ بِـ<see cref="ProviderBindSurface.SectionCapabilities"/> — بِطاقَةٌ مَعروضَةٌ أَو رَبطٌ قائِم — والبِطاقاتُ بِـ<c>Offered</c> وَحدَها.</para>
     /// </summary>
     [Fact]
-    public void Today_the_studio_providers_page_draws_and_loads_bindings_only_for_capabilities_with_an_offered_card()
+    public void The_studio_providers_page_loads_every_bindable_capabilitys_binding_and_gates_only_the_cards_on_the_vault()
     {
         var razor = StudioProvidersRazor();
-        Assert.Equal(2, razor.Split("Services.Providers.ProviderBindSurface.OfferedCapabilities(Vault)", StringSplitOptions.None).Length - 1);
-        Assert.Contains("@foreach (var capability in Services.Providers.ProviderBindSurface.OfferedCapabilities(Vault))", razor, StringComparison.Ordinal);
-        Assert.Contains("foreach (var capability in Services.Providers.ProviderBindSurface.OfferedCapabilities(Vault))\n        {\n            var doc = await Providers.CurrentAsync(Slug, capability);",
+        Assert.Contains("@foreach (var capability in Services.Providers.ProviderBindSurface.SectionCapabilities(Vault, bindings.ContainsKey))", razor, StringComparison.Ordinal);
+        Assert.Contains("foreach (var capability in Services.Providers.ProviderBindSurface.BindingCapabilities)\n        {\n            var doc = await Providers.CurrentAsync(Slug, capability);",
             razor.Replace("\r", ""), StringComparison.Ordinal);
+        Assert.Contains("var offered = Services.Providers.ProviderBindSurface.Offered(capability, Vault);", razor, StringComparison.Ordinal);
+        Assert.DoesNotContain("OfferedCapabilities(", razor, StringComparison.Ordinal);
 
-        // والكامِن: «مَدفوعات» مَعروضَةٌ بِلا خِزانَةٍ بِالرابِطِ وَحدَه.
-        Assert.Equal(new[] { ProviderCapabilities.Payments }, ProviderBindSurface.OfferedCapabilities(ProviderVault.FromKek(null)).ToArray());
-        Assert.Equal(new[] { "moyasar_hosted" }, ProviderBindSurface.Offered(ProviderCapabilities.Payments, ProviderVault.FromKek(null)).Select(d => d.Slug).ToArray());
+        // والكاتالوجُ اليَوم: «مَدفوعات» قِسمٌ بِخِزانَةٍ وبِدونِها، بِرَبطٍ وبِدونِه.
+        foreach (var vault in new[] { ProviderVault.FromKek(null), AvailableVault() })
+        foreach (var bound in new[] { false, true })
+            Assert.Equal(new[] { ProviderCapabilities.Payments },
+                ProviderBindSurface.SectionCapabilities(vault, _ => bound).ToArray());
+        Assert.Equal(ProviderCatalog.BindableCapabilities, ProviderBindSurface.BindingCapabilities);
+    }
+
+    [Fact]
+    public void A_capability_whose_providers_are_all_sealed_keeps_its_section_while_bound_and_drops_it_when_not()
+    {
+        // قُدرَةٌ مَصنوعَةٌ في الصَفّ: «x» كُلُّ مُزَوِّديها مَختومونَ فَلا بِطاقَةَ بِلا خِزانَة، و«y» لَها بِطاقَةٌ دائِماً.
+        var caps = new[] { "x", "y" };
+        Func<string, bool> offeredNoVault = c => c == "y";
+        Func<string, bool> offeredWithVault = _ => true;
+
+        Assert.Equal(new[] { "x", "y" }, ProviderBindSurface.Sections(caps, offeredNoVault, c => c == "x").ToArray());   // رَبطٌ مَختومٌ يَبقى
+        Assert.Equal(new[] { "y" }, ProviderBindSurface.Sections(caps, offeredNoVault, _ => false).ToArray());           // لا قِسمَ فارِغ
+        Assert.Equal(new[] { "x", "y" }, ProviderBindSurface.Sections(caps, offeredWithVault, _ => false).ToArray());    // بِخِزانَةٍ كَما كان
+        Assert.Empty(ProviderBindSurface.Sections(caps, _ => false, _ => false));
     }
 
     private static string StudioProvidersRazor()

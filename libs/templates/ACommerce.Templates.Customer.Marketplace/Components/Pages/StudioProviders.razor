@@ -49,7 +49,9 @@
                 <div class="st-chip st-chip-success" style="margin-bottom:14px;">@L.Markup(noticeKey)</div>
             }
 
-            @foreach (var capability in Services.Providers.ProviderBindSurface.OfferedCapabilities(Vault))
+            @* والأَقسامُ: ما لَه بِطاقَةٌ مَعروضَةٌ أَو رَبطٌ قائِم (‏2026-10-13، G4 (xxii)) — فَرَبطٌ مَختومٌ يَبقى مَرئِيّاً مَسحوباً بِلا مِفتاحٍ رَئيس،
+               والخِزانَةُ تُخفي البِطاقاتِ وَحدَها. *@
+            @foreach (var capability in Services.Providers.ProviderBindSurface.SectionCapabilities(Vault, bindings.ContainsKey))
             {
                 var offered = Services.Providers.ProviderBindSurface.Offered(capability, Vault);
                 var current = Current(capability);
@@ -158,7 +160,8 @@
         if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) tenant = null;
         if (tenant is null) return;
 
-        foreach (var capability in Services.Providers.ProviderBindSurface.OfferedCapabilities(Vault))
+        // الرَبطُ القائِمُ لِكُلِّ قُدرَةٍ يَربِطُها مُستَأجِرٌ — لا لِما لَه بِطاقَةٌ مَعروضَةٌ وَحدَه (‏2026-10-13، G4 (xxii)).
+        foreach (var capability in Services.Providers.ProviderBindSurface.BindingCapabilities)
         {
             var doc = await Providers.CurrentAsync(Slug, capability);
             if (doc is not null) bindings[capability] = doc;
