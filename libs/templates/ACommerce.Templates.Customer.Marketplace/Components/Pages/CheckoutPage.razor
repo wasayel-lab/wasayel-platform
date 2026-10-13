@@ -133,6 +133,12 @@
                                     </span>
                                 </label>
                             }
+                            else if (CartRefusalText(Facts.CartRefusal) is { } why)
+                            {
+                                @* بِطاقَةُ البَوّابَةِ لِسَلَّةٍ لا تَحمِلُها فاتورَةٌ واحِدَة (‏2026-10-13، G5 (xvi-g)): لا تُرسَمُ — ويُقالُ لِماذا حَيثُ كانَت، بِنَصِّ رَمزِها
+                                   الَّذي تَرُدُّ بِه النُقطَةُ أَيضاً (`card.CartRefusal ?? payRefusal`)؛ فَلا يَختَفي خِيارٌ بِلا كَلِمَة. *@
+                                <p class="ac-muted" style="margin:0 0 8px;font-size:13px;">@why</p>
+                            }
                             <label class="acm-radio-card">
                                 <input type="radio" name="pay" value="@CheckoutPayMethods.CashOnDelivery" required
                                        checked="@(EffectivePay == CheckoutPayMethods.CashOnDelivery)" />
@@ -247,6 +253,16 @@
     {
         CheckoutPayMethods.CardUnavailable => L["checkout.payment.err_card_unavailable"],
         CheckoutPayMethods.GatewayOpenFailed => L["checkout.payment.err_gateway_open_failed"],
+        CheckoutPayMethods.CardCartTooMany or CheckoutPayMethods.CardAmountUnbillable => CartRefusalText(Err),
+        _ => null
+    };
+
+    /// <summary>نَصُّ رَمزِ السَلَّةِ لِبِطاقَةِ البَوّابَة (<see cref="CheckoutCardFacts.CartRefusal"/>) — والحَدُّ مِن الثابِتِ لا مِن النَصّ
+    /// (<see cref="GatewayPaymentProof.MaxDealsPerInvoice"/>)؛ و<c>null</c> لِما سِواهُما.</summary>
+    string? CartRefusalText(string? code) => code switch
+    {
+        CheckoutPayMethods.CardCartTooMany => L.Format("checkout.payment.err_card_cart_too_many", GatewayPaymentProof.MaxDealsPerInvoice),
+        CheckoutPayMethods.CardAmountUnbillable => L["checkout.payment.err_card_amount_unbillable"],
         _ => null
     };
 
@@ -257,7 +273,7 @@
         if (Step < 1 || Step > 3) Step = 1;
         cart = await Accounts.CartAsync(Slug, Auth.UserId!.Value);
         var tenant = await Tenants.FindAsync(Slug);
-        Facts = await Gateway.CardFactsAsync(Slug, tenant?.PaymentProviderConfigured ?? false, PaymentChargeSurface.CanCharge(Payments));
+        Facts = await Gateway.CardFactsAsync(Slug, tenant?.PaymentProviderConfigured ?? false, PaymentChargeSurface.CanCharge(Payments), cart);
         if (Auth.UserName is { } un && string.IsNullOrEmpty(Name)) Name = un;
     }
 }

@@ -75,6 +75,14 @@ public static class CheckoutPayMethods
     /// البَوّابَةِ نَفسُه في اللوغِ لِلمُراجَعَة.</summary>
     public const string GatewayOpenFailed = "pay_gateway_open_failed";
 
+    /// <summary>رَمزُ البِطاقَةِ عَلى طَريقِ بَوّابَةِ المَتجَرِ لِسَلَّةٍ صَفَقاتُها أَكثَرُ مِمّا تَحمِلُه فاتورَةٌ واحِدَة
+    /// (<see cref="GatewayPaymentProof.MaxDealsPerInvoice"/>) — يُقرَّرُ قَبلَ أَن تولَدَ صَفقَة (‏2026-10-13، G5 (xvi-g)؛ <see cref="CheckoutCardFacts.ForCart"/>).</summary>
+    public const string CardCartTooMany = "pay_card_cart_too_many";
+
+    /// <summary>رَمزُ البِطاقَةِ عَلى طَريقِ بَوّابَةِ المَتجَرِ لِسَلَّةٍ مَجموعُها لا يَصيرُ مَبلَغَ فاتورَة — دونَ <see cref="ACommerce.Kit.Payments.MoyasarClient.MinimumAmount"/>
+    /// هَلَلَةً أَو بِكَسرِ هَلَلَة (<see cref="ACommerce.Kit.Payments.MoyasarClient.ToSmallestUnit"/>) — يُقرَّرُ قَبلَ أَن تولَدَ صَفقَة (‏2026-10-13، G5 (xvi-g)).</summary>
+    public const string CardAmountUnbillable = "pay_card_amount_unbillable";
+
     public static bool Contains(string? value)
         => value is not null && All.Contains(value, StringComparer.Ordinal);
 }
@@ -100,6 +108,28 @@ public static class CheckoutPayMethods
 public sealed record CheckoutCardFacts(
     bool StoreCollects, bool SealedKeyBound, bool VaultCanUnseal, bool GatewayClientRegistered, bool InstanceCanCharge)
 {
+    /// <summary>
+    /// <para><b>ما يَمنَعُ هذِه السَلَّةَ مِن فاتورَةٍ واحِدَة — يُقرَّرُ قَبلَ أَن تولَدَ صَفقَة</b> (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b، G5 (xvi-g)؛
+    /// تَوصيفُ «اليَوم» <c>a135d25</c>): <see cref="CheckoutPayMethods.CardCartTooMany"/> أَو <see cref="CheckoutPayMethods.CardAmountUnbillable"/>،
+    /// و<c>null</c> حينَ تَصلُح — أَو حينَ لا يَمُرُّ الطَريقُ بِالبَوّابَة (حَجزُ مُزَوِّدِ النُسخَةِ لِكُلِّ صَفقَةٍ وَحدَها، فَلا حَدَّ فاتورَة). كانَت البِطاقَةُ
+    /// تُرسَمُ لِسَلَّةٍ لا تُفَوتَرُ أَبَداً، فَيولَدُ كُلُّ بَندٍ صَفقَةً مَربوطَةً بِبائِعِها ثُمَّ يُلغيها فَتحُ الفاتورَة — والبائِعُ لا يُخبَر.</para>
+    /// <para>تَسأَلُه <see cref="ChargerCanCharge"/> فَيَرُدُّ <see cref="CheckoutPaymentPolicy.Decide"/> القائِمَةُ البِطاقَةَ بِمُدخَلَيها كَما هِيَ، ويَقرَؤُه
+    /// الطَرَفانِ لِلنَصّ: مَسارُ الرَدِّ في النُقطَةِ (<c>card.CartRefusal ?? payRefusal</c>) وسَطرُ الشاشَةِ مَكانَ البِطاقَة.</para>
+    /// </summary>
+    public string? CartRefusal { get; init; }
+
+    /// <summary>الحَقائِقُ نَفسُها ومَعَها <see cref="CartRefusal"/> لِسَلَّةِ المُشتَري — بِمُدخَلَي الفاتورَةِ نَفسَيهِما: عَدَدُ البُنودِ (صَفقَةٌ لِكُلِّ بَند)
+    /// ومَجموعُها (<c>Cart.SubtotalSar</c> = مَجموعُ مَبالِغِ الصَفَقات). سَلَّةٌ غائِبَةٌ أَو فارِغَةٌ لا تُسأَل — لا شَيءَ يولَد.</summary>
+    public CheckoutCardFacts ForCart(ACommerce.Kit.Cart.Cart? cart)
+        => cart is { Items.Count: > 0 } && ThroughGateway
+            ? this with
+            {
+                CartRefusal = !GatewayPaymentProof.FitsOneInvoice(cart.Items.Count) ? CheckoutPayMethods.CardCartTooMany
+                            : ACommerce.Kit.Payments.MoyasarClient.ToSmallestUnit(cart.SubtotalSar) is null ? CheckoutPayMethods.CardAmountUnbillable
+                            : null,
+            }
+            : this;
+
     /// <summary><b>البِطاقَةُ تَمُرُّ بِبَوّابَةِ المَتجَرِ بِمِفتاحِه</b> — كُلَّما رُبِطَ مِفتاحٌ مَختوم. تَقرَؤُه النُقطَةُ فَتَفتَحُ الفاتورَةَ ولا تَحجِزُ
     /// عِندَ مُزَوِّدِ النُسخَة، والشاشَةُ فَتَقولُ أَينَ يُدفَعُ ولا تَرسُمُ شارَةَ تَجرِبَةٍ لا تَعنيه.</summary>
     public bool ThroughGateway => SealedKeyBound;
@@ -109,7 +139,8 @@ public sealed record CheckoutCardFacts(
     public bool Collects => SealedKeyBound || StoreCollects;
 
     /// <summary>«يَستَطيعُ القَبضَ مَن سَيُنادى» — بَوّابَةُ المَتجَرِ بِخِزانَةٍ تَفُكُّ وعَميلٍ مُسَجَّل، أَو مُزَوِّدُ النُسخَةِ لِمَتجَرٍ بِلا مِفتاح.</summary>
-    public bool ChargerCanCharge => SealedKeyBound ? VaultCanUnseal && GatewayClientRegistered : InstanceCanCharge;
+    /// <remarks>وبِالبَوّابَةِ سَلَّةٌ تَحمِلُها فاتورَةٌ واحِدَة (<see cref="CartRefusal"/>، ‏2026-10-13).</remarks>
+    public bool ChargerCanCharge => SealedKeyBound ? VaultCanUnseal && GatewayClientRegistered && CartRefusal is null : InstanceCanCharge;
 
     /// <summary>القَرار — بِالدالَّةِ القائِمَةِ نَفسِها.</summary>
     public bool CardOffered => CheckoutPaymentPolicy.CardOffered(Collects, ChargerCanCharge);
