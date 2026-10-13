@@ -255,13 +255,15 @@ post "$J_VEN" "/$SLUG/me/role/save" --data-urlencode role=vendor
 check "$([ "$CODE" = 302 ] && [[ "$LOC" != *err=* ]] && echo 1 || echo 0)" "POST /$SLUG/me/role/save role=vendor → $CODE $LOC"
 if [[ "$LOC" == */me/role/onboarding ]]; then
     get "$J_VEN" "/$SLUG/me/role/onboarding" "$F"
-    # الحُقولُ المَطلوبَةُ تُقرَأُ مِن الاستِمارَةِ نَفسِها لا تُكتَبُ ثابِتَة.
-    ARGS=()
-    while read -r n; do ARGS+=(--data-urlencode "$n=بائِعُ الجَولَة $MARK"); done \
+    # الحُقولُ المَطلوبَةُ تُقرَأُ مِن الاستِمارَةِ نَفسِها لا تُكتَبُ ثابِتَة، ويُطبَعُ عَدَدُها وأَسماؤُها.
+    # ‏(‏2026-10-13: كانَ السَطرُ يَطبَعُ `${#ARGS[@]}` — عَدَدَ وَسائِطِ curl، اثنانِ لِكُلِّ حَقل — فَقالَ
+    # «2» لِحَقلٍ واحِد (`business_name` في `vendor.role.json`). العَدَدُ يُعَدُّ بِالأَسماءِ لا بِالوَسائِط.)
+    FIELDS=(); ARGS=()
+    while read -r n; do FIELDS+=("$n"); ARGS+=(--data-urlencode "$n=بائِعُ الجَولَة $MARK"); done \
         < <(grep -o '<input[^>]*name="role_vendor_attr_[a-z_]*"[^>]*required' "$F" | grep -o 'name="[^"]*"' | sed 's/name="//; s/"$//')
     post "$J_VEN" "/$SLUG/me/role/onboarding/save" "${ARGS[@]}"
     check "$([ "$CODE" = 302 ] && [[ "$LOC" != *err=* ]] && echo 1 || echo 0)" \
-        "POST /$SLUG/me/role/onboarding/save (${#ARGS[@]} حُقولٍ مَطلوبَة مِن الاستِمارَة) → $CODE $LOC"
+        "POST /$SLUG/me/role/onboarding/save (${#FIELDS[@]} مِن الاستِمارَة: ${FIELDS[*]:-—}) → $CODE $LOC"
 fi
 post "$J_VEN" "/$SLUG/terms/accept"
 check "$([ "$CODE" = 302 ] && echo 1 || echo 0)" "POST /$SLUG/terms/accept → $CODE $LOC"
