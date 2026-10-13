@@ -3117,6 +3117,10 @@ public static class MarketplaceTemplateExtensions
             // **الفاتورَةُ الواحِدَةُ قَبلَ حَذفِ السَلَّة** (‏ADR-032 الخُطوَة 10): بِمَجموعِ الصَفَقاتِ ومُعَرِّفاتِها، ورابِطُ العَودَةِ صَفحَةُ
             // `pay/return` بِالصَفقَةِ الأولى. وإن لَم تُفتَح أَلغَت الخِدمَةُ الصَفَقاتِ بِاسمِ المُشتَري ولَم يُخصَم شَيء — فَتَعودُ الاستِمارَةُ
             // بِرَمزِها والسَلَّةُ كَما هي. وإن فُتِحَت حُوِّلَ المُشتَري إلى صَفحَةِ الدَفعِ المُستَضافَة.
+            // **ولا يُشعَرُ بائِعٌ بِطَلَبٍ لَم تُفتَح فاتورَتُه — لا بِوِلادَتِه ولا بِإلغائِه** (‏2026-10-13، G5 (xv-g)؛ ‏ADR-032 §٨‑ح‑١٠؛ قَرارٌ لا تَرتيبُ
+            // أَسطُر): الرُجوعُ أَدناه قَبلَ إشعارِ الوِلادَة، فَيَسمَعُ البائِعُ بِالطَلَبِ حينَ يَقدِرُ المُشتَري عَلى دَفعِه؛ والإلغاءُ بِاسمِ المُشتَري
+            // لا يُخبِرُ أَحَداً (`DealNotices.TellsTheBuyer`، ولا إشعارَ إلغاءٍ لِبائِعٍ في الأُنبوبِ كُلِّه)، وسَبَبُه مَكتوبٌ عَلى الصَفقَةِ في قائِمَتِه.
+            // ومُثَبَّتٌ في `GatewayOpenFailureNoticesTests`.
             var opened = viaGateway && created.Count > 0 ? await gateway.OpenInvoiceAsync(slug, new Services.Deals.DealPayer(userId), created,
                 tenant?.Name ?? slug, Billing.PayPalOrderSurface.OriginFrom(req) + Link(req, slug, Services.Deals.GatewayReturn.PathFor(firstDealId, null)), l) : null;
             if (opened is { Ok: false }) return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
