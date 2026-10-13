@@ -308,6 +308,24 @@ public sealed class DealShipping
     /// <remarks>(‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (iii)؛ ‏ADR-033 §٧‑ص‑٦): <b>وقِراءَةُ المَدخَلِ تَرمي ⇒ <c>null</c> بِسَطرِ تَحذير</b> — لا احتِياط:
     /// فَيُجابُ <see cref="ShipAsync"/> وَالوارِدُ «لا ناقِل» (<c>carrier_unavailable</c>). كانَ العُطلُ «لا مَدخَل» فَيُشحَنُ طَلَبُ البائِعِ بِحِسابِ مَتجَرِ
     /// العَرض، ويُتَحَقَّقُ مِن وارِدِه بِلا سِرّ (تَوصيفُهُما <c>bd48a66</c> و<c>6830eb9</c>).</remarks>
+    /// <summary>
+    /// <para><b>جاهِزِيَّةُ الناقِلِ لِبابِ الناظِرِ في صَفحَةِ الصَفقَة</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (ix)؛ ‏ADR-033 §٧‑ص‑١٠):
+    /// <see cref="CarrierReadyForAsync"/> بِلا فَكٍّ لِكُلِّ ناظِر — ثُمَّ، لِلناظِرِ الَّذي تُجيزُه البَوّابَةُ لَو حَضَرَ الناقِل
+    /// (<see cref="DealShipAuthorization.Validate"/> بِـ<c>carrierReady: true</c>) وَحدَه، <b>يُفَكُّ الناقِلُ ويُرمى</b> (<see cref="CarrierForAsync"/>):
+    /// مَدخَلٌ لا يَنفَكُّ (مِفتاحٌ رَئيسٌ تَبَدَّل، سِياقٌ لا يُطابِق) «غَيرُ جاهِز» — فَلا تُرسَمُ «إنشاء بوليصَة» ولا «أَكمِل الشَّحن» لِبابٍ تَرُدُّه
+    /// <c>/ship</c> في كُلِّ نَقرَة (القاعِدَة ١٢؛ تَوصيفُه <c>762ff2a</c>)، و<see cref="DealShipAuthorization.HeldRefusal"/> تَقولُ <c>carrier_unavailable</c>
+    /// — رَمزَ النَقرَةِ نَفسَه.</para>
+    /// <para><b>ولا فَكَّ لِمَن لا تُجيزُه البَوّابَة</b> — المُشتَري والغَريبُ يَرَونَ الصَفحَةَ بِلا فَكِّ سِرِّ بائِعِها: المَبدَأُ الَّذي يُسأَلُ بِه
+    /// <see cref="ShipAsync"/> (الجاهِزِيَّةُ بِلا فَكٍّ لِلبَوّابَة، والفَكُّ بَعدَها). و<see cref="CarrierReadyForAsync"/> بِحالِها: بَوّابَةُ <c>/ship</c> تَسأَلُها
+    /// قَبلَ أَن تَعرِفَ الفاعِل.</para>
+    /// </summary>
+    public async Task<bool> CarrierReadyForViewerAsync(string tenantSlug, Deal? deal, DealShipper viewer, CancellationToken ct = default)
+    {
+        var ready = await CarrierReadyForAsync(tenantSlug, deal, ct);
+        if (!ready || DealShipAuthorization.Validate(deal, viewer, carrierReady: true) is not null) return ready;
+        return await CarrierForAsync(tenantSlug, deal!, ct) is not null;
+    }
+
     /// <remarks>(‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (viii)؛ ‏ADR-033 §٧‑ص‑٩ — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>وصارَت خُطوَتَين يُنادي الوارِدُ كُلّاً
     /// مِنهُما وَحدَها</b> — <see cref="ResolveCarrierAsync"/> (المَدخَلُ وشُروطُه بِلا فَكّ) ثُمَّ <see cref="TryOpenToken"/> و<see cref="TryOpenSecret"/>.
     /// وهذِه تَفُكُّهُما مَعاً كَما كانَت، بِالتَرتيبِ نَفسِه وسَطرِ التَحذيرِ نَفسِه — لِلشَحن.</remarks>

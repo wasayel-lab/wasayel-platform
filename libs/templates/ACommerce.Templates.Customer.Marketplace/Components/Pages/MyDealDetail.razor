@@ -571,7 +571,9 @@
         (labelUrl, trackingUrl) = DealShipping.LinksOf(deal);
         // والناقِلُ ناقِلُ بائِعِ الصَفقَة — مَدخَلُه في الخِزانَةِ أَو احتِياطُ التَهيئَة — بِالدالَّةِ الَّتي تَسأَلُها `/ship` (تَيّارُ S8، ‏2026-10-12؛
         // كانَ `Shipping.CarrierReady(Slug)`: رَمزُ التَهيئَةِ لِلمَتجَرِ كُلِّه).
-        var carrier = await Shipping.CarrierReadyForAsync(Slug, deal);
+        // (‏2026-10-13، G5 (ix) — ولا يُعادُ حَرفٌ فَوقَه: وجاهِزِيَّةُ الناقِلِ لِلبائِعِ الَّذي تُجيزُه البَوّابَةُ تَشمَلُ أَن يَنفَكَّ مَدخَلُه — كانَ مَدخَلٌ خُتِمَ
+        // بِمِفتاحٍ تَبَدَّلَ يَرسُمُ بابَ شَحنٍ تَرُدُّه `/ship` في كُلِّ نَقرَة؛ ولا فَكَّ لِناظِرٍ لا تُجيزُه البَوّابَة.)
+        var carrier = await Shipping.CarrierReadyForViewerAsync(Slug, deal, new DealShipper(uid, Auth.UserName ?? ""));
         canShip = DealShipAuthorization.IsAllowed(deal, new DealShipper(uid, Auth.UserName ?? ""), carrier);
         shipResumes = canShip && DealShipping.IsPlaced(deal);
         // وخُطوَةٌ طَلَبُها عِندَ OTO لا يُرسَمُ لَها «تَأكيد: شَحن» — الدالَّةُ الَّتي يَرُدُّ بِها المُحَرِّك (مُراجَعَةُ تَيّارِ S7 الثانِيَة).

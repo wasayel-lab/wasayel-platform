@@ -1133,7 +1133,10 @@ public class DealShipTests(ITestOutputHelper output)
         var page = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(DealPage()));
         // والناقِلُ ناقِلُ بائِعِ الصَفقَة (تَيّارُ S8، ‏2026-10-12): كانَ `Shipping.CarrierReady(Slug)`، وصارَ المُتَغَيِّرَ الواحِدَ الَّذي يَقرَؤُه
         // `canShip` و`shipHeldKey` مَعاً — فَالفاعِلُ والناقِلُ أَنفُسُهُما كَما كانا.
-        Assert.Contains("var carrier = await Shipping.CarrierReadyForAsync(Slug, deal);", page, StringComparison.Ordinal);
+        // (‏2026-10-13، G5 (ix) — ولا يُعادُ حَرفٌ فَوقَه: والمُتَغَيِّرُ الواحِدُ صارَ جاهِزِيَّةَ الناقِلِ لِلناظِر — تَفُكُّ مَدخَلَ البائِعِ لِمَن تُجيزُه البَوّابَةُ
+        // وَحدَه، فَمَدخَلٌ لا يَنفَكُّ لا بابَ لَه و`shipHeldKey` يَقولُ carrier_unavailable؛ `ShipDoorUnopenableEntryTests`.)
+        Assert.Contains("var carrier = await Shipping.CarrierReadyForViewerAsync(Slug, deal, new DealShipper(uid, Auth.UserName ?? \"\"));", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("Shipping.CarrierReadyForAsync(", page, StringComparison.Ordinal);
         Assert.Contains(
             "shipHeldKey = DealRefusalTexts.KeyFor(DealShipAuthorization.HeldRefusal(deal, new DealShipper(uid, Auth.UserName ?? \"\"), carrier));",
             page, StringComparison.Ordinal);
@@ -1524,7 +1527,8 @@ public class DealShipTests(ITestOutputHelper output)
         Assert.DoesNotContain("IDocumentSession", code, StringComparison.Ordinal);
         Assert.DoesNotContain("IDocumentStore", code, StringComparison.Ordinal);
         // والناقِلُ بِالدالَّةِ الَّتي تَسأَلُها `/ship` نَفسُها — ناقِلُ بائِعِ الصَفقَة (تَيّارُ S8، ‏2026-10-12؛ كانَ `Shipping.CarrierReady(Slug)`).
-        Assert.Contains("var carrier = await Shipping.CarrierReadyForAsync(Slug, deal);", code, StringComparison.Ordinal);
+        // (‏2026-10-13، G5 (ix) — ولا يُعادُ حَرفٌ فَوقَه: ثُمَّ يُفَكُّ لِلناظِرِ الَّذي تُجيزُه البَوّابَةُ وَحدَه — `CarrierReadyForViewerAsync` تَسأَلُ تِلكَ الدالَّةَ أَوَّلاً.)
+        Assert.Contains("var carrier = await Shipping.CarrierReadyForViewerAsync(Slug, deal, new DealShipper(uid, Auth.UserName ?? \"\"));", code, StringComparison.Ordinal);
         Assert.Contains(
             "canShip = DealShipAuthorization.IsAllowed(deal, new DealShipper(uid, Auth.UserName ?? \"\"), carrier);",
             code, StringComparison.Ordinal);
