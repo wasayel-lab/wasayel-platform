@@ -786,15 +786,40 @@ public sealed class DealsService
     /// الانتِقالِ تَرُدُّ بِـ<see cref="GatewayPayments.DealAwaitsPayment"/> صَفقَةً تَصدُقُ عَلَيها <see cref="GatewayPayments.AwaitsPayment"/> —
     /// فَتَسأَلُها هذِه أَيضاً، نَسَقُ سَطرِ OTO حَرفاً. مَقيسٌ قَبلَ سَطرِها في المَصفوفَةِ نَفسِها: ‏12 زِرّاً «→ دَفع» يُرسَمُ ويُرَدّ — حَيثُ
     /// مالِكُ التَطبيقِ هُوَ المُبادِرُ فَفاعِلُ «دَفع» هُوَ — وصِفرٌ بَعدَه.</para>
+    ///
+    /// <para><b>وصارَت «لا رَمزَ» مِن <see cref="AdminPathRefusal"/></b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (i)؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق):
+    /// الشُروطُ نَفسُها بِتَرتيبِها، مَنقولَةً إلى الدالَّةِ الَّتي تَقولُ أَيُّها رَدّ — فَالصَفحَةُ تَرسُمُ بِهذِه، والنُقطَةُ تَحمِلُ رَمزَ تِلكَ إلى
+    /// الصَفحَة، ولا مُسنَدانِ يَنجَرِفان.</para>
     /// </summary>
-    public static bool AdminPathCanMove(Deal deal, Guid appOwnerId)
+    public static bool AdminPathCanMove(Deal deal, Guid appOwnerId) => AdminPathRefusal(deal, appOwnerId) is null;
+
+    /// <summary>
+    /// <para><b>«لا يُحَرِّكُ المَسارُ الإداريُّ هذِه الخُطوَة»</b> — رَمزُ ما تَرُدُّه <see cref="AdminPathRefusal"/> حينَ لا مَرحَلَةَ تالِيَة،
+    /// أَو حينَ يُؤَدّي الخُطوَةَ غَيرُ جانِبِ المَتجَر: خُطوَةُ المُشتَري (دُخولُ «دَفع» و«استِلام»)، أَو صَفقَةٌ بادَرَ بِها مالِكُ التَطبيقِ
+    /// فَلا يُعَيَّنُ طَرَفَها الآخَر (صَفقَةُ البَذرَةِ التَجريبِيَّةِ عِندَ «→ حَجز» — سِجِلُّ «ب» S6a·١١ مَفتوحٌ لِلمالِكِ ولَم يُحسَم هُنا).
+    /// (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (i).)</para>
+    /// </summary>
+    public const string AdminPathCannotMove = "admin_path_cannot_move";
+
+    /// <summary>
+    /// <para><b>لِماذا لا يُحَرِّكُ المَسارُ الإداريُّ هذِه الصَفقَة — رَمزاً</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (i)): <see cref="AdminPathCanMove"/>
+    /// هي «لا رَمز»، فَالدالَّةُ واحِدَةٌ والنُقطَةُ تَحمِلُ رَمزَها إلى صَفحَةِ الاستوديو بِـ<c>?err=</c> — وكانَت تَعودُ إلَيها بِلا كَلِمَة
+    /// (‏ADR-033 §٦‑ط‑٨ «طَلَبٌ مَصنوعٌ يَعودُ بِلا كَلِمَة»؛ تَوصيفُه <c>StudioDealRefusalTests</c>). والشُروطُ بِتَرتيبِ المُسنَدِ القائِمِ حَرفاً:
+    /// غَيرُ فَعّالَةٍ ⇒ <see cref="DealCancelAuthorization.DealNotActive"/>؛ لا تالٍ أَو فاعِلُ المَدخولَةِ غَيرُ جانِبِ المَتجَرِ ⇒
+    /// <see cref="AdminPathCannotMove"/>؛ طَلَبُها عِندَ OTO ⇒ <see cref="DealShipping.DealAwaitsCarrier"/>؛ فاتورَتُها لَم تُدفَع ⇒
+    /// <see cref="GatewayPayments.DealAwaitsPayment"/>. ونَصُّ كُلٍّ في القامُوسِ بِبادِئَةِ الاستوديو (<see cref="DealRefusalTexts.StudioKeyFor"/>).</para>
+    /// </summary>
+    public static string? AdminPathRefusal(Deal deal, Guid appOwnerId)
     {
-        if (deal.Status != DealStatus.Active || DealsPolicy.RequiredActorToLeave(deal) is not { } required) return false;
+        if (deal.Status != DealStatus.Active) return DealCancelAuthorization.DealNotActive;
+        if (DealsPolicy.RequiredActorToLeave(deal) is not { } required) return AdminPathCannotMove;
         var counterparty = deal.CounterpartyId ?? (deal.InitiatorId == appOwnerId ? null : appOwnerId);
-        return IsActorAllowed(new Deal { InitiatorId = deal.InitiatorId, CounterpartyId = counterparty },
-            deal.CounterpartyId ?? appOwnerId, required)
-            && !DealShipping.AwaitsCarrier(deal)
-            && !GatewayPayments.AwaitsPayment(deal);
+        if (!IsActorAllowed(new Deal { InitiatorId = deal.InitiatorId, CounterpartyId = counterparty },
+                deal.CounterpartyId ?? appOwnerId, required))
+            return AdminPathCannotMove;
+        if (DealShipping.AwaitsCarrier(deal)) return DealShipping.DealAwaitsCarrier;
+        if (GatewayPayments.AwaitsPayment(deal)) return GatewayPayments.DealAwaitsPayment;
+        return null;
     }
 
     /// <summary>

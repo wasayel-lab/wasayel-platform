@@ -95,10 +95,17 @@ public class StudioDealRefusalTests(ITestOutputHelper output)
         return (world, deals, deal.Id);
     }
 
-    // ═══ ١) «اليَوم» — الرَفضُ قائِمٌ بِرَمزِه في الخِدمَة، والنُقطَةُ تُسقِطُه، والصَفحَةُ لا تَقرَأُ شَيئاً ═════════════
+    // ═══ ١) الرَفضُ قائِمٌ بِرَمزِه في الخِدمَة، والنُقطَةُ تَحمِلُه، والصَفحَةُ تَرسُمُه مِن القامُوس ═════════════
 
+    /// <summary>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (i)): كانَ
+    /// <c>Today_the_studio_deal_endpoints_drop_the_refusal_code_and_the_studio_deal_pages_read_none</c> (مُودَعٌ في <c>f2be846</c>) —
+    /// النِقاطُ تَعودُ بِلا <c>?err=</c> والصَفحَتانِ بِلا مُعامِل. وصارَ بابا <c>advance</c> و<c>cancel</c> يَحمِلانِ الرَمزَ، وصَفحَتا الاستوديو
+    /// تَرسُمانِه بِمَعجَمِهِما (<see cref="DealRefusalTexts.StudioKeyFor"/>). وبابُ <c>dispute</c> بِلا قَناةِ رَفضٍ بَعد — <c>DisputeAsync</c>
+    /// تُرجِعُ <c>Deal?</c> — فَصَفُّه يُبقيه كَما هُوَ هُنا، ويُقلَبُ في بَندِه (G4 (ii)).</para>
+    /// </summary>
     [Fact]
-    public void Today_the_studio_deal_endpoints_drop_the_refusal_code_and_the_studio_deal_pages_read_none()
+    public void The_studio_advance_and_cancel_endpoints_carry_the_refusal_code_and_both_studio_deal_pages_draw_it_from_the_dictionary()
     {
         // الخِدمَةُ تَرُدُّ بِرَمز: تَعارُضُ النُسخَةِ في التَقَدُّمِ والإلغاء.
         var (world, deals, id) = CartDeal();
@@ -112,26 +119,106 @@ public class StudioDealRefusalTests(ITestOutputHelper output)
         Assert.False(cancelled.Ok);
         Assert.Equal(DealsService.ChangedMeanwhile, cancelled.Violation!.Code);
 
-        // وصَفقَةُ البَذرَةِ التَجريبِيَّةِ — مُبادِرُها مالِكُ التَطبيق — لا يُحَرِّكُها المَسارُ الإداريّ.
+        // وصَفقَةُ البَذرَةِ التَجريبِيَّةِ — مُبادِرُها مالِكُ التَطبيق — يَرُدُّها المَسارُ الإداريُّ بِرَمزِه.
         var seed = Now(deals.StartAsync(Slug, "marketplace", AppOwner, "صاحِب الفِكرَة", null, "عَمَلِيَّة تَجريبيَّة — marketplace", 250m));
         Assert.False(DealsService.AdminPathCanMove(seed, AppOwner));
+        Assert.Equal(DealsService.AdminPathCannotMove, DealsService.AdminPathRefusal(seed, AppOwner));
 
-        // والنِقاطُ الثَلاثُ تَعودُ إلى الصَفحَةِ بِلا رَمز.
+        // والبابانِ يَحمِلانِ الرَمزَ إلى الصَفحَة — بِحَرفِ نَسَقِ بابِ العُضو.
         var advance = StudioEndpoint("advance");
         var cancel = StudioEndpoint("cancel");
-        var dispute = StudioEndpoint("dispute");
-        Assert.Contains("if (!Services.Deals.DealsService.AdminPathCanMove(deal, auth.UserId!.Value)) return Results.Redirect($\"/studio/apps/{slug}/deals/{id}\");",
+        Assert.Contains("if (deal is null) return Results.Redirect($\"/studio/apps/{slug}/deals?err={Services.Deals.DealCancelAuthorization.DealNotFound}\");",
             advance, StringComparison.Ordinal);
-        foreach (var (name, body) in new[] { ("advance", advance), ("cancel", cancel), ("dispute", dispute) })
-        {
-            Assert.DoesNotContain("?err=", body, StringComparison.Ordinal);
-            Assert.EndsWith("return Results.Redirect($\"/studio/apps/{slug}/deals/{id}\");\n        })",
-                body.TrimEnd().Replace("\r", ""), StringComparison.Ordinal);
-            output.WriteLine($"{name}: يَعودُ إلى الصَفحَةِ بِلا رَمز.");
-        }
+        Assert.Contains("if (Services.Deals.DealsService.AdminPathRefusal(deal, auth.UserId!.Value) is { } refused) return Results.Redirect($\"/studio/apps/{slug}/deals/{id}?err={refused}\");",
+            advance, StringComparison.Ordinal);
+        Assert.Contains("return Results.Redirect($\"/studio/apps/{slug}/deals/{id}\" + (result.Code is { } code ? $\"?err={code}\" : \"\"));",
+            advance, StringComparison.Ordinal);
+        Assert.Contains("return Results.Redirect($\"/studio/apps/{slug}/deals/{id}\" + (res.Ok ? \"\" : $\"?err={res.Violation!.Code}\"));",
+            cancel, StringComparison.Ordinal);
 
-        // والصَفحَتانِ لا تَقرَآنِ مُعامِلاً.
-        Assert.DoesNotContain("SupplyParameterFromQuery", Page("StudioAppDealDetail.razor"), StringComparison.Ordinal);
-        Assert.DoesNotContain("SupplyParameterFromQuery", Page("StudioAppDeals.razor"), StringComparison.Ordinal);
+        // والصَفحَتانِ تَقرَآنِ المُعامِلَ وتَرسُمانِه بِالدالَّةِ الواحِدَة.
+        foreach (var name in new[] { "StudioAppDealDetail.razor", "StudioAppDeals.razor" })
+        {
+            var page = Page(name);
+            Assert.Contains("[SupplyParameterFromQuery(Name = \"err\")] public string? Err { get; set; }", page, StringComparison.Ordinal);
+            Assert.Contains("@if (DealRefusalTexts.StudioKeyFor(Err) is { } errKey)", page, StringComparison.Ordinal);
+            Assert.Contains("<div class=\"st-chip st-chip-danger\" style=\"margin-bottom:14px;\">@L.Markup(errKey)</div>", page, StringComparison.Ordinal);
+            output.WriteLine($"{name}: يَقرَأُ ?err= ويَرسُمُه مِن القامُوس.");
+        }
+    }
+
+    // ═══ ٢) مَعجَمُ الاستوديو — مُغلَق، ولِكُلِّ رَمزٍ نَصٌّ حَيّ، وما سِواه لا يُرسَم ═══════════════════════════════════
+
+    [Fact]
+    public void Every_studio_refusal_code_has_a_live_arabic_text_under_the_studio_prefix()
+    {
+        var checked_ = 0;
+        foreach (var code in DealRefusalTexts.StudioCodes)
+        {
+            var key = DealRefusalTexts.StudioKeyFor(code);
+            Assert.Equal(DealRefusalTexts.StudioPrefix + code, key);
+            var text = ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, key!);
+            Assert.NotEqual(key, text);
+            Assert.False(ACommerce.Platform.I18n.LocaleCatalog.IsPlaceholder(text), $"‏{key} نائِب.");
+            Assert.True(text.Length > 10, $"‏{key} بِنَصٍّ أَقصَرَ مِن أَن يُفَسِّر.");
+            output.WriteLine($"{code} → {key}");
+            checked_++;
+        }
+        Assert.Equal(6, checked_);
+        Assert.Equal(DealRefusalTexts.StudioCodes.Count, DealRefusalTexts.StudioCodes.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("no-target")]                          // رَمزُ نُقطَةِ التَقييمِ الإدارِيَّة — يُرسَلُ ولا مِفتاحَ لَه
+    [InlineData("actor_not_party")]                    // رَمزُ صَفحَةِ العُضو لا يَبلُغُ الاستوديو
+    [InlineData("oto_refused")]
+    [InlineData("studio.deal.err_deal_not_active")]    // المِفتاحُ خاماً لا يُقبَلُ رَمزاً
+    public void A_code_outside_the_studio_lexicon_draws_nothing(string? code)
+        => Assert.Null(DealRefusalTexts.StudioKeyFor(code));
+
+    // ═══ ٣) «لِماذا» المَسارِ الإداريّ — رَمزٌ لِكُلِّ شَرط، و«لا رَمز» هِيَ «يُحَرِّك» ═════════════════════════════════
+
+    private static Deal At(string pattern, string? pay, DealStage stage, Guid initiator, Guid? counterparty,
+        DealStatus status = DealStatus.Active, Action<Deal>? more = null)
+    {
+        var deal = new Deal
+        {
+            Id = Guid.NewGuid(), TenantSlug = Slug, Pattern = pattern, Stage = stage, Status = status,
+            InitiatorId = initiator, InitiatorName = "مُبادِر", CounterpartyId = counterparty, AmountSar = 100m,
+        };
+        if (pay is not null) deal.Attributes[CheckoutPayMethods.AttributeKey] = pay;
+        more?.Invoke(deal);
+        return deal;
+    }
+
+    [Fact]
+    public void AdminPathRefusal_names_each_reason_and_its_absence_is_exactly_AdminPathCanMove()
+    {
+        // المُوجِب لِكُلِّ رَمز — وكُلٌّ بِصَفقَةٍ مُسَمّاة.
+        var cases = new (string Name, Deal Deal, string? Code)[]
+        {
+            ("cancelled",           At("marketplace", CheckoutPayMethods.CashOnDelivery, DealStage.Booked, Buyer, Seller, DealStatus.Cancelled), DealCancelAuthorization.DealNotActive),
+            ("studio_seed_offered", At("marketplace", null, DealStage.Offered, AppOwner, null), DealsService.AdminPathCannotMove),
+            ("buyer_pays",          At("marketplace", CheckoutPayMethods.Card, DealStage.Confirmed, Buyer, Seller), DealsService.AdminPathCannotMove),
+            ("last_stage",          At("classifieds", null, DealStage.Confirmed, Buyer, Seller), DealsService.AdminPathCannotMove),
+            ("order_at_oto",        At("marketplace", CheckoutPayMethods.CashOnDelivery, DealStage.Confirmed, Buyer, Seller,
+                                        more: d => d.Refs[DealShipping.OrderRef] = d.Id.ToString("N")), DealShipping.DealAwaitsCarrier),
+            ("unpaid_invoice_seed", At("marketplace", CheckoutPayMethods.Card, DealStage.Confirmed, AppOwner, null,
+                                        more: d => d.Refs[GatewayPaymentProof.InvoiceRef] = "inv_1"), GatewayPayments.DealAwaitsPayment),
+            // والسالِب: ما يُحَرِّكُه المَسارُ — «لا رَمز».
+            ("cart_bound_offered",  At("marketplace", CheckoutPayMethods.CashOnDelivery, DealStage.Offered, Buyer, Seller), null),
+            ("cash_ship",           At("marketplace", CheckoutPayMethods.CashOnDelivery, DealStage.Confirmed, Buyer, Seller), null),
+        };
+        foreach (var (name, deal, code) in cases)
+        {
+            var refusal = DealsService.AdminPathRefusal(deal, AppOwner);
+            output.WriteLine($"{name}: {refusal ?? "—"}");
+            Assert.True(refusal == code, $"«{name}»: الرَمز {refusal ?? "—"}، والمُتَوَقَّع {code ?? "—"}.");
+            Assert.Equal(code is null, DealsService.AdminPathCanMove(deal, AppOwner));
+            if (code is not null) Assert.NotNull(DealRefusalTexts.StudioKeyFor(code));
+        }
+        Assert.Equal(8, cases.Length);
     }
 }

@@ -50,4 +50,29 @@ public static class DealRefusalTexts
     /// <summary>مِفتاحُ النَصِّ لِرَمزٍ مَعروف، و<c>null</c> لِما سِواه (ومِنه الغِياب).</summary>
     public static string? KeyFor(string? code)
         => code is not null && Codes.Contains(code, StringComparer.Ordinal) ? Prefix + code : null;
+
+    // ─── صَفحَتا صَفَقاتِ الاستوديو (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (i)) ───────────────────────────
+    //
+    // نِقاطُ المَسارِ الإداريِّ (`/studio/apps/{slug}/deals/{id}/advance|cancel|dispute`) كانَت تَعودُ إلى الصَفحَةِ بِلا رَمز
+    // (تَوصيفُه `StudioDealRefusalTests`، ‏ADR-036 §٣‑٣). **ومَعجَمٌ ثانٍ لا الأَوَّلُ نَفسُه**: نُصوصُ `deals.detail.err_*` تُخاطِبُ
+    // طَرَفَ الصَفقَةِ عَلى صَفحَتِه وتُسَمّي أَزرارَها («بِزِرِّ «أَكمِل الشَّحن» هُنا») — والاستوديو لا يَرسُمُ تِلكَ الأَزرار. فَالرُموزُ
+    // الَّتي تَبلُغُ الاستوديو وَحدَها، بِبادِئَتِه، والكَلامُ لِمالِكِ المَتجَر.
+
+    public const string StudioPrefix = "studio.deal.err_";
+
+    /// <summary>كُلُّ رَمزٍ قَد يَصِلُ صَفحَتَي الاستوديو في <c>?err=</c> — مَعجَمٌ مُغلَق: الغِيابُ (القائِمَةُ لِصَفقَةٍ لا تُحَمَّل)، وغَيرُ الفَعّالَة،
+    /// وتَعارُضُ النُسخَة، وما يَرُدُّه <see cref="DealsService.AdminPathRefusal"/> — ولا رَمزَ لِأَزرارِ صَفحَةِ العُضو.</summary>
+    public static readonly IReadOnlyList<string> StudioCodes = new[]
+    {
+        DealCancelAuthorization.DealNotFound,
+        DealCancelAuthorization.DealNotActive,
+        DealsService.ChangedMeanwhile,
+        DealsService.AdminPathCannotMove,
+        DealShipping.DealAwaitsCarrier,
+        GatewayPayments.DealAwaitsPayment,
+    };
+
+    /// <summary>مِفتاحُ نَصِّ الاستوديو لِرَمزٍ مِن <see cref="StudioCodes"/>، و<c>null</c> لِما سِواه — فَلا يُرسَمُ شَريطٌ لِرَمزٍ لا نَصَّ لَه.</summary>
+    public static string? StudioKeyFor(string? code)
+        => code is not null && StudioCodes.Contains(code, StringComparer.Ordinal) ? StudioPrefix + code : null;
 }

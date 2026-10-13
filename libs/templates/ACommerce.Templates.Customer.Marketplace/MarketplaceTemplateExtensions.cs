@@ -3459,11 +3459,14 @@ public static class MarketplaceTemplateExtensions
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
             var note = req.Form["note"].ToString().Trim();
             var deal = await deals.LoadAsync(slug, id);
-            if (deal is null) return Results.Redirect($"/studio/apps/{slug}/deals");
+            // ورَدُّ كُلِّ بابٍ يَحمِلُ رَمزَه إلى صَفحَتِه، والنَصُّ مِن القامُوسِ بِبادِئَةِ الاستوديو (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (i)):
+            // كانَت النِقاطُ الثَلاثُ تَعودُ بِلا كَلِمَة (تَوصيفُه `StudioDealRefusalTests`).
+            if (deal is null) return Results.Redirect($"/studio/apps/{slug}/deals?err={Services.Deals.DealCancelAuthorization.DealNotFound}");
             // ولا يُكتَبُ شَيءٌ لِصَفقَةٍ لا يُحَرِّكُها هذا المَسار — بِالدالَّةِ نَفسِها الَّتي تَرسُمُ بِها الصَفحَةُ الزِرّ
             // (القاعِدَة ١٢؛ ‏ADR-033 §٦‑ط مُلحَقاً، ‏2026-10-12): كانَ الزِرُّ يُرسَمُ لِكُلِّ صَفقَةٍ لَها تالٍ، والنَقرَةُ تُرَدُّ
             // بِلا كَلِمَةٍ عِندَ خُطوَتَي المُشتَري وصَفقَةِ البَذرَة — وبَعدَ أَن يُكتَبَ التَعيينُ حَيثُ لا طَرَف.
-            if (!Services.Deals.DealsService.AdminPathCanMove(deal, auth.UserId!.Value)) return Results.Redirect($"/studio/apps/{slug}/deals/{id}");
+            // (‏2026-10-13: والرَدُّ بِرَمزِه — `AdminPathRefusal` هي «لِماذا» الدالَّةِ نَفسِها، و`AdminPathCanMove` «لا رَمز».)
+            if (Services.Deals.DealsService.AdminPathRefusal(deal, auth.UserId!.Value) is { } refused) return Results.Redirect($"/studio/apps/{slug}/deals/{id}?err={refused}");
 
             if (deal.CounterpartyId is null)
                 await deals.AssignCounterpartyAsync(slug, id,
@@ -3481,7 +3484,7 @@ public static class MarketplaceTemplateExtensions
                     "deal.advance", "deal", id.ToString(),
                     note: $"→ {result.Deal.Stage}" + (string.IsNullOrEmpty(note) ? "" : $" · {note}"),
                     ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
-            return Results.Redirect($"/studio/apps/{slug}/deals/{id}");
+            return Results.Redirect($"/studio/apps/{slug}/deals/{id}" + (result.Code is { } code ? $"?err={code}" : ""));
         }).DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/deals/{id:guid}/cancel",
@@ -3499,7 +3502,7 @@ public static class MarketplaceTemplateExtensions
             if (res.Ok) await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
                 "deal.cancel", "deal", id.ToString(), note: reason,
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
-            return Results.Redirect($"/studio/apps/{slug}/deals/{id}");
+            return Results.Redirect($"/studio/apps/{slug}/deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}"));
         }).DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/deals/{id:guid}/dispute",

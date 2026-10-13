@@ -380,12 +380,15 @@ public class DealStudioAdvanceDoorTests(ITestOutputHelper output)
         var endpoint = AdvanceEndpoint();
         var owns   = endpoint.IndexOf("if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect(\"/studio\");", StringComparison.Ordinal);
         var load   = endpoint.IndexOf("var deal = await deals.LoadAsync(slug, id);", StringComparison.Ordinal);
-        var gate   = endpoint.IndexOf("if (!Services.Deals.DealsService.AdminPathCanMove(deal, auth.UserId!.Value)) return Results.Redirect($\"/studio/apps/{slug}/deals/{id}\");", StringComparison.Ordinal);
+        // (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (i)؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: سَطرُ البَوّابَةِ صارَ يَسأَلُ `AdminPathRefusal` — «لِماذا»
+        // الدالَّةِ نَفسِها، و`AdminPathCanMove` «لا رَمز» — ويَعودُ بِـ`?err=`؛ فَتَبَدَّلَ حَرفُ السَطرِ المُثَبَّتِ وعَدُّ اسمِه، والتَرتيبُ بِحَرفِه.)
+        var gate   = endpoint.IndexOf("if (Services.Deals.DealsService.AdminPathRefusal(deal, auth.UserId!.Value) is { } refused) return Results.Redirect($\"/studio/apps/{slug}/deals/{id}?err={refused}\");", StringComparison.Ordinal);
         var assign = endpoint.IndexOf("await deals.AssignCounterpartyAsync(slug, id,", StringComparison.Ordinal);
         var move   = endpoint.IndexOf("var result = await deals.AdvanceAsync(slug, id, actorId,", StringComparison.Ordinal);
         Assert.True(owns > 0 && load > owns && gate > load && assign > gate && move > assign,
             $"تَرتيبُ النُقطَة: owns={owns} load={load} gate={gate} assign={assign} move={move}");
         Assert.Contains("var actorId = deal.CounterpartyId ?? auth.UserId!.Value;", endpoint, StringComparison.Ordinal);
-        Assert.Equal(1, endpoint.Split("AdminPathCanMove(", StringSplitOptions.None).Length - 1);
+        Assert.Equal(1, endpoint.Split("AdminPathRefusal(", StringSplitOptions.None).Length - 1);
+        Assert.Equal(0, endpoint.Split("AdminPathCanMove(", StringSplitOptions.None).Length - 1);
     }
 }

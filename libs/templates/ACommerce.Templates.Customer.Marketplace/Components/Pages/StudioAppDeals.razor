@@ -31,6 +31,13 @@
                 <p>@L.Markup("studio.app_deals.intro")</p>
             </div>
 
+            @* نُقطَةُ `advance` الإدارِيَّةُ تَرتَدُّ إلى القائِمَةِ لِصَفقَةٍ لا تُحَمَّل — بِرَمزِها، والنَصُّ مِن مَعجَمِ الاستوديو
+               (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (i)؛ نَسَقُ شَريطِ `StudioAppDealDetail`). *@
+            @if (DealRefusalTexts.StudioKeyFor(Err) is { } errKey)
+            {
+                <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@L.Markup(errKey)</div>
+            }
+
             <div class="studio-stats">
                 <div class="studio-stat"><div class="studio-stat-label">@L.Markup("studio.app_deals.stat_total")</div>
                     <div class="studio-stat-value">@deals.Count</div></div>
@@ -96,6 +103,8 @@
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    /// <summary>رَمزُ رَفضٍ مِن نُقطَةٍ إدارِيَّةٍ ارتَدَّت إلى القائِمَة — يُحَلُّ بِـ<see cref="DealRefusalTexts.StudioKeyFor"/>.</summary>
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
     Tenant? tenant;
     List<Deal> deals = new();
     string SelectedPattern => deals.FirstOrDefault()?.Pattern ?? "marketplace";

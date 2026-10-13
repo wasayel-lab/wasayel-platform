@@ -15,6 +15,14 @@
         <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/deals")">@L.Markup("studio.deal.back_list")</a>
     </TopBarActions>
     <ChildContent>
+        @* ─── رَفضُ المَسارِ الإداريِّ يُقرَأُ هُنا لا يُبتلَع (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (i)) ───
+           نِقاطُ `advance` و`cancel` و`dispute` تَرتَدُّ إلى هذِه الصَفحَةِ بِـ`?err=<code>` — وكانَت تَعودُ بِلا مُعامِلٍ يُقرَأ (تَوصيفُه
+           `StudioDealRefusalTests`). نَسَقُ شَريطِ `MyDealDetail` بِمَعجَمِ الاستوديو (`DealRefusalTexts.StudioKeyFor`): رَمزٌ لا نَصَّ لَه
+           لا يُرسَمُ لَه شَيء، والكَلامُ في القامُوس. *@
+        @if (DealRefusalTexts.StudioKeyFor(Err) is { } errKey)
+        {
+            <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@L.Markup(errKey)</div>
+        }
         @if (deal is null)
         {
             <div class="st-card">@L.Markup("studio.deal.not_found")</div>
@@ -182,6 +190,8 @@
 @code {
     [Parameter] public string Slug { get; set; } = "";
     [Parameter] public Guid Id { get; set; }
+    /// <summary>رَمزُ رَفضِ نُقطَةِ المَسارِ الإداريّ — يُحَلُّ نَصّاً بِـ<see cref="DealRefusalTexts.StudioKeyFor"/>، ولا يُرسَمُ لِرَمزٍ لا نَصَّ لَه.</summary>
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
     Deal? deal;
     List<DealStage> stages = new();
 
