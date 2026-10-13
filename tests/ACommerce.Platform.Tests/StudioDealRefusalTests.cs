@@ -147,6 +147,41 @@ public class StudioDealRefusalTests(ITestOutputHelper output)
         }
     }
 
+    // ═══ ١‑ب) نُقطَةُ النِزاع — سَطرُ التَدقيقِ يُكتَبُ ولَو لَم يُكتَب النِزاع (G4 (ii)؛ ‏ADR-036 §٧‑٣(ب) «قائِمٌ ويُقال») ═══════
+    //
+    // **المَقيسُ قَبلَ اللَمس**: `DisputeAsync` تُرجِعُ `Deal?` — المَخزونَ حينَ لا تَكتُب (صَفقَةٌ غَيرُ فَعّالَة، أَو تَعارُضُ نُسخَة) —
+    // فَلا يَعرِفُ مُناديها أَكَتَبَت أَم لا؛ ونُقطَةُ الاستوديو تُسقِطُ ما تُرجِعُه وتَكتُبُ سَطرَ `deal.dispute` بِلا شَرط: نِزاعٌ لَم يَقَع
+    // مُسَجَّلٌ في دَفتَرِ التَدقيقِ بِاسمِ مالِكِ التَطبيق. صَفُّ «اليَوم» يُودَعُ وَحدَه ويُقلَبُ بِاسمِه في كوميتِ الإصلاح.
+
+    [Fact]
+    public void Today_the_studio_dispute_endpoint_writes_its_audit_line_even_when_DisputeAsync_wrote_nothing()
+    {
+        // تَعارُضُ النُسخَة: لا حِفظ، ويُعادُ المَخزونُ — صَفقَةٌ فَعّالَةٌ لا «نِزاع».
+        var (world, deals, id) = CartDeal();
+        var saves = world.SaveCalls;
+        ConflictOnNextSave(world, id);
+        var conflicted = Now(deals.DisputeAsync(Slug, id, AppOwner, "مالِك التَّطبيق", "نِزاع"));
+        Assert.NotNull(conflicted);
+        Assert.Equal(saves, world.SaveCalls);
+
+        // وصَفقَةٌ غَيرُ فَعّالَة: لا حِفظ، ويُعادُ ما قُرِئ. (بِصَفقَةٍ ثانِيَة: العالَمُ يُعيدُ الكائِنَ نَفسَه، فَطَفرَةُ المُحاوَلَةِ المَردودَةِ
+        // أَعلاه باقِيَةٌ عَلَيه — فِقرَةُ `DealConcurrencyRefusalTests`.)
+        var (world2, deals2, id2) = CartDeal();
+        var cancelled = Now(deals2.CancelAsync(Slug, id2, new DealCanceller(AppOwner, "مالِك التَّطبيق", IsStoreAdmin: true), "إلغاء"));
+        Assert.True(cancelled.Ok);
+        saves = world2.SaveCalls;
+        var refused = Now(deals2.DisputeAsync(Slug, id2, AppOwner, "مالِك التَّطبيق", "نِزاع"));
+        Assert.Equal(DealStatus.Cancelled, refused!.Status);
+        Assert.Equal(saves, world2.SaveCalls);
+
+        // والنُقطَةُ تُسقِطُ ما تُرجِعُه ثُمَّ تَكتُبُ سَطرَ التَدقيقِ بِلا شَرط.
+        var dispute = StudioEndpoint("dispute");
+        Assert.Contains("await deals.DisputeAsync(slug, id, auth.UserId!.Value, \"مالِك التَّطبيق\", reason);\n            await audit.WriteAsync(slug, auth.UserId, \"مالِك التَّطبيق\",\n                \"deal.dispute\",",
+            dispute.Replace("\r", ""), StringComparison.Ordinal);
+        Assert.DoesNotContain("if (", dispute[dispute.IndexOf("await deals.DisputeAsync(", StringComparison.Ordinal)..], StringComparison.Ordinal);
+        Assert.Contains("public async Task<Deal?> DisputeAsync(", Source(Template, "Services", "Deals", "DealsService.cs"), StringComparison.Ordinal);
+    }
+
     // ═══ ٢) مَعجَمُ الاستوديو — مُغلَق، ولِكُلِّ رَمزٍ نَصٌّ حَيّ، وما سِواه لا يُرسَم ═══════════════════════════════════
 
     [Fact]
