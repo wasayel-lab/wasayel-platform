@@ -224,6 +224,8 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
     // ويُقارَنُ حُكمُها («مَضبوط» أَم تَنبيهٌ) بِحُكمِ `ProviderVault.FromKek` — الحَقيقَةِ الَّتي تُنَبِّهُ عَنها.
     // **وعَلى Windows لا bash مَعلومَ المَوضِع**: يُطبَعُ ذلكَ ويُرجَع، عَلى نَسَقِ الصُفوفِ الحَيَّةِ المُبَوَّبَة؛
     // وCI (‏ubuntu) يُشَغِّلُه دائِماً، وغِيابُ `/bin/bash` عَلى غَيرِ Windows يُفشِلُ بِاسمِ الأَداة (القاعِدَة ١٤).
+    // (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (xxv)؛ ولا يُعادُ حَرفٌ فَوقَه: صارَ Windows يُسأَلُ عَن Git Bash — `BashPath` — فَيُشَغِّلُ الكُتلَةَ بِه إن
+    // وُجِد، ويَطبَعُ «لَم يُقَس» بِالأَداةِ النّاقِصَةِ إن لَم يوجَد — `NotMeasuredHere` — فَلا يُقرَأُ «Passed» قِياساً. وكانَت الصُفوفُ تَعودُ عَلى Windows دائِماً.)
 
     private static readonly string ValidKek =
         Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(ProviderVault.KekBytes));
@@ -252,11 +254,42 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
         _ => throw new ArgumentOutOfRangeException(nameof(shape), shape, "شَكلٌ لا يَعرِفُه الصَفّ."),
     };
 
+    /// <summary>
+    /// <para><b>أَينَ bash؟</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (xxv)): خارِجَ Windows ‏<c>/bin/bash</c> — وغِيابُه يُفشِلُ بِاسمِ الأَداة (القاعِدَة ١٤)؛
+    /// وعَلى Windows ‏Git Bash في <c>%ProgramFiles%\Git\bin\bash.exe</c> (أَو <c>%ProgramW6432%</c>) — فَتُشَغَّلُ الكُتلَةُ هُناكَ أَيضاً. و<c>null</c> حَيثُ
+    /// لا يوجَد. دالَّةٌ نَقِيَّةٌ بِمُدخَلَيها (البيئَة، والمِلَفّاتُ المَوجودَة) فَتُقاسُ عَلى Linux.</para>
+    /// </summary>
+    internal static string? BashPath(bool isWindows, Func<string, string?> env, Func<string, bool> exists)
+    {
+        if (!isWindows) return exists("/bin/bash") ? "/bin/bash" : null;
+        foreach (var root in new[] { env("ProgramFiles"), env("ProgramW6432") })
+        {
+            if (string.IsNullOrEmpty(root)) continue;
+            var candidate = Path.Combine(root, "Git", "bin", "bash.exe");
+            if (exists(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// <para><b>«لَم يُقَس» لا «نَجَح»</b> (‏2026-10-13، G4 (xxv)): عَلى Windows بِلا Git Bash يَعودُ الصَفُّ — xUnit 2 لا يُعلِّمُ صَفّاً «مُتَخَطّى» في
+    /// وَقتِ التَشغيل — فَيُطبَعُ «لَم يُقَس» بِالأَداةِ النّاقِصَةِ تَحديداً كَي لا يُقرَأَ «Passed» قِياساً. وكانَت الصُفوفُ تَعودُ عَلى Windows دائِماً
+    /// بِسَطرِ «يُقاسُ في CI» ولو وُجِدَ Git Bash. و<c>false</c> خارِجَ ذلك: الصَفُّ يَمضي ويُشَغِّلُ الكُتلَة.</para>
+    /// </summary>
+    private bool NotMeasuredHere(string label)
+    {
+        if (BashPath(OperatingSystem.IsWindows(), Environment.GetEnvironmentVariable, File.Exists) is not null || !OperatingSystem.IsWindows())
+            return false;
+        output.WriteLine($"[{label}] لَم يُقَس — Windows بِلا Git Bash (‏%ProgramFiles%\\Git\\bin\\bash.exe غائِب)؛ «Passed» هُنا لَيسَ قِياساً، والقِياسُ في CI (‏ubuntu).");
+        return true;
+    }
+
     /// <summary>يُشَغِّلُ كُتلَةَ المِفتاحِ وَحدَها بِـbash بِمُتَغَيِّرٍ مَضبوطٍ أَو مَمحُوّ — ويُرجِعُ رَمزَ خُروجِها
     /// ومُخرَجَها (الخَطَأُ مَدموجٌ فيه).</summary>
     private static (int Status, string Text) RunKekBlock(string? kek)
     {
-        Assert.True(File.Exists("/bin/bash"), "أَداةٌ غائِبَة: /bin/bash — لا تُشَغَّلُ الكُتلَةُ بِدونِها.");
+        var bash = BashPath(OperatingSystem.IsWindows(), Environment.GetEnvironmentVariable, File.Exists);
+        Assert.True(bash is not null, "أَداةٌ غائِبَة: /bin/bash — لا تُشَغَّلُ الكُتلَةُ بِدونِها.");
         var block = KekBlock(Read("scripts", "verify-production-boot.sh"));
 
         var dir = Directory.CreateTempSubdirectory("wasayel-kek-block-");
@@ -266,7 +299,7 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
             File.WriteAllText(file, "set -uo pipefail\nexec 2>&1\nsay() { echo \"  $*\"; }\n" + block,
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
-            var psi = new ProcessStartInfo("/bin/bash", new[] { file })
+            var psi = new ProcessStartInfo(bash!, new[] { file.Replace('\\', '/') })
             {
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
@@ -305,11 +338,7 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
     [InlineData("inner-space")]
     public void The_kek_block_run_by_bash_gives_the_vaults_verdict_exits_zero_and_never_prints_the_key(string shape)
     {
-        if (OperatingSystem.IsWindows())
-        {
-            output.WriteLine($"[{shape}] Windows — لا bash مَعلومَ المَوضِع؛ يُقاسُ هذا الصَفُّ في CI (‏ubuntu).");
-            return;
-        }
+        if (NotMeasuredHere(shape)) return;
 
         var kek = KekOf(shape);
         var (status, text) = RunKekBlock(kek);
@@ -344,11 +373,7 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
     [InlineData("ff-leading")]
     public void The_kek_block_and_the_vault_agree_that_non_ascii_whitespace_around_a_key_is_not_base64(string shape)
     {
-        if (OperatingSystem.IsWindows())
-        {
-            output.WriteLine($"[{shape}] Windows — لا bash مَعلومَ المَوضِع؛ يُقاسُ هذا الصَفُّ في CI (‏ubuntu).");
-            return;
-        }
+        if (NotMeasuredHere(shape)) return;
         var kek = KekOf(shape);
         var (status, text) = RunKekBlock(kek);
         var reason = Assert.Single(ProviderVault.Validate(kek)).MessageAr;
@@ -364,7 +389,7 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
     [Fact]
     public void Non_ascii_whitespace_alone_is_not_base64_in_both_and_ascii_whitespace_alone_is_absent_in_both()
     {
-        if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI."); return; }
+        if (NotMeasuredHere("nbsp-only")) return;
         var kek = KekOf("nbsp-only");
         var (_, text) = RunKekBlock(kek);
         var reason = Assert.Single(ProviderVault.Validate(kek)).MessageAr;
@@ -418,11 +443,7 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
     public void The_kek_block_says_the_vaults_own_reason_absent_not_base64_or_the_decoded_length(
         string shape, string? vaultReason, string blockSays)
     {
-        if (OperatingSystem.IsWindows())
-        {
-            output.WriteLine($"[{shape}] Windows — لا bash مَعلومَ المَوضِع؛ يُقاسُ هذا الصَفُّ في CI (‏ubuntu).");
-            return;
-        }
+        if (NotMeasuredHere(shape)) return;
 
         var kek = KekOf(shape);
         var violations = ProviderVault.Validate(kek);
@@ -440,6 +461,48 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
         // ولا عَدَدٌ جُزئِيٌّ لِما لا يُفَكّ.
         if (vaultReason == "لَيسَ base64")
             Assert.DoesNotMatch(new Regex(@"المَقيس: \d"), text);
+    }
+
+    /// <summary><b>أَداةُ القِياسِ مَقيسَة</b> (‏2026-10-13، G4 (xxv)): المِسبارُ بِمُدخَلاتٍ مَصنوعَة — Linux بِـ<c>/bin/bash</c> وبِدونِه، وWindows بِـGit Bash
+    /// في <c>ProgramFiles</c> أَو <c>ProgramW6432</c> وبِدونِهِما.</summary>
+    [Fact]
+    public void BashPath_finds_bin_bash_off_windows_and_git_bash_on_windows_and_nothing_else()
+    {
+        Assert.Equal("/bin/bash", BashPath(false, _ => null, p => p == "/bin/bash"));
+        Assert.Null(BashPath(false, _ => null, _ => false));
+
+        var pf = Path.Combine("C:", "Program Files");
+        var git = Path.Combine(pf, "Git", "bin", "bash.exe");
+        Assert.Equal(git, BashPath(true, v => v == "ProgramFiles" ? pf : null, p => p == git));
+        Assert.Equal(git, BashPath(true, v => v == "ProgramW6432" ? pf : null, p => p == git));
+        Assert.Null(BashPath(true, v => v == "ProgramFiles" ? pf : null, _ => false));
+        Assert.Null(BashPath(true, _ => null, _ => true));
+        Assert.Null(BashPath(true, v => "", _ => true));
+    }
+
+    /// <summary>ولا صَفَّ في المِلَفِّ يَعودُ عَلى Windows إلّا عَبرَ المِسبار — لا سَطرَ «يُقاسُ في CI» يَقولُ «Passed» بِلا قِياس.</summary>
+    [Fact]
+    public void Every_bash_row_returns_on_windows_only_through_the_probe()
+    {
+        var self = Read("tests", "ACommerce.Platform.Tests", "ProviderVaultDeploymentTests.cs");
+        var code = WriteEndpointGuardTests.StripComments(self);
+
+        // المِلَفُّ يَمسَحُ نَفسَه — فَالإبَرُ تُبنى بِالوَصلِ كَي لا يَجِدَ الماسِحُ حُروفَه هُوَ فَيَعُدَّها.
+        var oldCiLine  = "يُقاسُ هذا الصَفُّ " + "في CI";
+        var oldWinLine = "Windows — " + "يُقاسُ في CI.";
+        var probeCall  = "if (" + "NotMeasuredHere(";
+        var runCall    = "RunKek" + "Block(";
+        var printed    = "لَم يُقَس — " + "Windows بِلا Git Bash";
+        static int Count(string text, string needle) => text.Split(needle, StringSplitOptions.None).Length - 1;
+
+        Assert.DoesNotContain(oldCiLine, code, StringComparison.Ordinal);
+        Assert.DoesNotContain(oldWinLine, code, StringComparison.Ordinal);
+        var uses = Count(code, probeCall);
+        var runs = Count(code, runCall) - 1;   // ناقِصاً التَعريف
+        output.WriteLine($"صُفوفٌ تَسأَلُ المِسبار: {uses} · نِداءاتُ تَشغيلِ الكُتلَة: {runs}");
+        Assert.Equal(5, uses);
+        Assert.True(runs >= uses, $"أَداةٌ عَمياء: نِداءاتُ التَشغيلِ {runs} أَقَلُّ مِن الصُفوفِ {uses}.");
+        Assert.Equal(1, Count(code, printed));
     }
 
     // ─── ٧. وما يُخفيه الغِيابُ اليَومَ — ثَلاثَةُ أَبوابٍ لا بِطاقَةٌ واحِدَة (‏2026-10-12، تَيّارُ S10، «ب» S8·١٥) ───
@@ -501,7 +564,7 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
         }
 
         // ومُشَغَّلَةً: الغِيابُ يَطبَعُ الأَبوابَ بِأَسمائِها (والتَلَفُ في صُفوفِ ٥ و٦ بِرَمزِه وسَبَبِه).
-        if (OperatingSystem.IsWindows()) return;
+        if (NotMeasuredHere("absent")) return;
         var (status, text) = RunKekBlock(null);
         Assert.Equal(0, status);
         Assert.Equal(card, text.Contains("إتمامِ الشِراءِ بِمِفتاحِ المَتجَر", StringComparison.Ordinal));
