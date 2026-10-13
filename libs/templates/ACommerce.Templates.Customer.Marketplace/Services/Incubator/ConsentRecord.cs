@@ -37,6 +37,9 @@ public static class ConsentPolicy
     /// <see cref="CurrentVersion"/>.</para>
     /// <para>تَعبيرٌ لا دالَّة: يُمَرَّرُ إلى <c>Where</c> فَيُتَرجِمُه Marten إلى SQL،
     /// ويُجَمَّعُ في الاختِبارِ فَيُقاسُ بِلا قاعِدَةِ بَيانات.</para>
+    /// <para><b>شَرطُ الاستِخراجِ</b> (القاعِدَة ١ — مُستَهلِكانِ لا ثَلاثَة، ‏2026-10-13): استُخرِجَ لِأَنّ قارِئَي
+    /// مُسنَدٍ واحِدٍ يَجِبُ أَن يَتَحَرَّكا مَعاً حينَ يُرفَعُ الإصدار، ولا ثالِثَ مُتَوَقَّع — فَإن بَقِيَ قارِئٌ واحِدٌ
+    /// أُعيدَ المُسنَدُ مُضَمَّناً فيه.</para>
     /// </summary>
     public static Expression<Func<ConsentRecord, bool>> AcceptedBy(Guid userId, int version)
         => c => c.UserId == userId && c.Version == version;

@@ -68,12 +68,17 @@
                         @foreach (var u in users)
                         {
                             var isAdmin = u.ActiveRole == "tenant_admin";
+                            // ‏المُعَرِّفُ الَّذي دَخَلَ بِه: الهاتِفُ حَيثُ وُجِد، وإلّا البَريد — قاعِدَةُ عَرضِ
+                            // `AuthHandlers.GetOrCreateUserAsync` بِعَينِها. كانَ الصَفُّ يَرسُمُ الهاتِفَ وَحدَه،
+                            // فَمُستَخدِمُ البَريدِ بِلا مُعَرِّفٍ ظاهِرٍ واسمُه «عُضو جَديد» الحَرفِيّ — وتَلميحُ
+                            // الحالَةِ الفارِغَةِ يَقولُ لِلمالِكِ «بِجِوارِ هاتِفِك أَو بَريدِك» (‏2026-10-13).
+                            var shownId = string.IsNullOrEmpty(u.Phone) ? u.Email : u.Phone;
                             <div class="acm-cat-row">
                                 <span style="font-size:24px;"><AcIcon Name="@(isAdmin ? "people" : "user")" Size="24" /></span>
                                 <div style="flex:1;min-width:0;">
                                     <strong>@u.FullName</strong>
                                     <span style="color:var(--ac-text-muted);font-size:12px;display:block;direction:ltr;">
-                                        @u.Phone
+                                        @shownId
                                     </span>
                                     @if (!string.IsNullOrEmpty(u.ActiveRole))
                                     {

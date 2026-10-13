@@ -116,6 +116,34 @@ public class TenantUsersEmptyStateTests
     }
 
     /// <summary>
+    /// <para><b>التَلميحُ يُسَمّي ما يَراه المالِكُ في صَفِّه — لا اسماً لا يَملِكُه</b> (‏2026-10-13، صِغارُ مُراجَعَةِ
+    /// الموجَةِ الأولى): المُستَخدِمُ المَولودُ بِأَوَّلِ دُخولٍ اسمُه حَرفِيٌّ في الكود («عُضو جَديد» لِلهاتِفِ والبَريد، واسمٌ
+    /// مُشتَقٌّ مِن رَقمِ الهُوِيَّةِ لِنَفاذ — <c>GetOrCreateUserAsync</c>)، فَـ«بِجِوارِ اسمِك» لا يَدُلُّه عَلى صَفِّه. صارَ
+    /// التَلميحُ يُسَمّي المُعَرِّفَ الَّذي دَخَلَ بِه، والصَفُّ يَرسُمُه بِقاعِدَةِ عَرضِ <c>AuthHandlers</c> نَفسِها: الهاتِفُ حَيثُ
+    /// وُجِد وإلّا البَريد (وهاتِفُ نَفاذ <c>NID-…</c> رَقمُ الهُوِيَّة).</para>
+    /// </summary>
+    [Fact]
+    public void The_hint_names_the_identifier_the_row_shows_not_the_generic_name()
+    {
+        var hint = Ar(HintKey);
+        Assert.DoesNotContain("اسمِك", hint, StringComparison.Ordinal);
+        Assert.Contains("بِجِوارِ هاتِفِك أَو بَريدِك", hint, StringComparison.Ordinal);
+        Assert.Contains("رَقمِ هُوِيَّتِك", hint, StringComparison.Ordinal);
+        Assert.DoesNotContain("عُضو جَديد", hint, StringComparison.Ordinal);   // حَرفِيٌّ في الكودِ لا يُقتَبَس
+
+        var page = UsersPage();
+        Assert.Contains("var shownId = string.IsNullOrEmpty(u.Phone) ? u.Email : u.Phone;", page, StringComparison.Ordinal);
+        Assert.Contains("@shownId", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("@u.Phone", page, StringComparison.Ordinal);
+
+        // ‏القاعِدَةُ هي قاعِدَةُ عَرضِ بابِ الدُخولِ بِعَينِها — لا قاعِدَةٌ ثانِيَةٌ تَنجَرِف.
+        var handlers = Source("libs", "kits", "Auth", "ACommerce.Kit.Auth.Server", "AuthHandlers.cs");
+        Assert.Contains("var display = string.IsNullOrEmpty(existing.Phone) ? existing.Email : existing.Phone;",
+            handlers, StringComparison.Ordinal);
+        Assert.Contains("phone: $\"NID-{cmd.NationalId}\"", handlers, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// <para><b>بابُ الدُخولِ الَّذي تُسَمّيه الرِسالَةُ مُسَجَّلٌ ويولِدُ المُستَخدِم</b>:
     /// <c>/{slug}/login</c> في جَدوَلِ المَساراتِ المَمسوحِ بِالماسِحِ الواحِد
     /// (القاعِدَة ٨)، و<c>GetOrCreateUserAsync</c> تُخَزِّنُ <c>new User</c> حينَ لا
