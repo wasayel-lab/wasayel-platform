@@ -220,9 +220,11 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
     /// <para>و<paramref name="withSeller"/> (‏2026-10-12، ‏ADR-032 الخُطوَة 10): بائِعٌ مالِكُ إعلانِ كُلِّ صَفقَةٍ مَربوطٌ طَرَفاً كَما يَربِطُه
     /// إتمامُ الشِراء — لِيُقبَلَ ويُؤَكَّدَ ويُشعَر؛ و<paramref name="invoice"/> <c>false</c> يُولِدُها بِلا فاتورَة (لِفَتحِها).</para>
     /// </summary>
+    /// <remarks>و<paramref name="bornForGateway"/> (‏2026-10-13، G5 (xvi-g)): تولَدُ الصَفَقاتُ بِعَلامَةِ طَريقِ البَوّابَةِ كَما يُولِدُها
+    /// <c>/checkout/submit</c> — بِـ<see cref="GatewayPayments.MarkedAtBirth"/> نَفسِها؛ والافتِراضُ بِلا عَلامَةٍ فَلا يَتَحَرَّكُ صَفٌّ قائِم.</remarks>
     internal static async Task<World> PaidCart(
         Func<ProviderVault, TenantProviderBinding?>? binding = null, ProviderVault? serviceVault = null,
-        bool withSeller = false, bool invoice = true)
+        bool withSeller = false, bool invoice = true, bool bornForGateway = false)
     {
         var docs = new DocWorld();
         var platform = new DealMoneyClaimFirstTests.RecordingPaymentProvider();
@@ -230,10 +232,10 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         var ids = new List<Guid>();
         foreach (var amount in new[] { 100m, 50m })
         {
-            var deal = await deals.StartAsync(Slug, "marketplace", Buyer, "مُشتَرٍ", null, "سِلعَة", amount, new()
+            var deal = await deals.StartAsync(Slug, "marketplace", Buyer, "مُشتَرٍ", null, "سِلعَة", amount, GatewayPayments.MarkedAtBirth(new()
             {
                 [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.Card,
-            });
+            }, bornForGateway));
             if (invoice) await deals.AttachRefAsync(Slug, deal.Id, GatewayPaymentProof.InvoiceRef, InvoiceId);
             if (withSeller)
             {

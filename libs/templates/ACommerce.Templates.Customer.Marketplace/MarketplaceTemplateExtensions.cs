@@ -3038,7 +3038,9 @@ public static class MarketplaceTemplateExtensions
                     initiatorId: userId, initiatorName: name,
                     listingId: item.ListingId, listingTitle: item.Title,
                     amountSar: amount,
-                    attributes: new()
+                    // وطَريقُ بَوّابَةِ المَتجَرِ يُعَلَّمُ في الوِلادَةِ نَفسِها — فَلا تَعلَقُ صَفقَتُه بِلا فاتورَةٍ وتَدخُلُ «دَفع» بِلا مال
+                    // (‏2026-10-13، G5 (xvi-g)؛ `GatewayPayments.MarkedAtBirth` و`AwaitsPayment`). وما سِواه بِحَرفِه.
+                    attributes: Services.Deals.GatewayPayments.MarkedAtBirth(new()
                     {
                         ["qty"] = item.Quantity.ToString(),
                         // بِالثابِتَينِ لا بِحَرفِيَّة: القارِئُ (تَفصيلُ الصَفقَةِ لِلبائِع)
@@ -3049,7 +3051,7 @@ public static class MarketplaceTemplateExtensions
                         // الصَفقَةِ بَعدَ سَنَةٍ قيمَةٌ مِن المَعجَم. وبِالثابِتِ الَّذي يَقرَأُ بِه
                         // `DealsPolicy` لا بِحَرفِيَّة — الكاتِبُ والقارِئُ حَرفٌ واحِد.
                         [Services.Deals.CheckoutPayMethods.AttributeKey] = payMethod
-                    });
+                    }, viaGateway));
                 if (firstDealId == Guid.Empty) firstDealId = deal.Id;
                 created.Add(deal.Id);
                 // **والحَجزُ ومَراجِعُه قَبلَ الرَبط** (‏ADR-036 §٨، ‏2026-10-12؛ مُراجَعَةُ تَيّارِ S6a الأولى — ولا

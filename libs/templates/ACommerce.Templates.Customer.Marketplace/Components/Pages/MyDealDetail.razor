@@ -322,8 +322,17 @@
                 @* خُطوَتُه «دَفع» وعَلى الصَفقَةِ فاتورَةُ بَوّابَةٍ لَم يَثبُت دَفعُها (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12): بابُها «أَكمِل الدَّفع»
                    إلى صَفحَةِ العَودَة — هُناكَ رابِطُ الفاتورَةِ وزِرُّ التَحَقُّق — لا «تَأكيد: دَفع» تَرُدُّه `AdvanceAsync` بِـ`deal_awaits_payment`.
                    وقَبلَ فَرعِ الخُطوَةِ المَحجوزَةِ عِندَ OTO لا بَعدَه: ذاكَ لا يَرسُمُ شَيئاً ويُقاسُ أَنَّه لا يَرسُم، ولا تَجتَمِعُ الحالَتان (تالٍ واحِد). *@
-                <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
-                   href="@AuthSession.LinkFor(Slug, Role, GatewayReturn.PathFor(deal.Id, null))">@L.Markup("deals.detail.complete_payment")</a>
+                @if (GatewayPayments.HasInvoice(deal))
+                {
+                    <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
+                       href="@AuthSession.LinkFor(Slug, Role, GatewayReturn.PathFor(deal.Id, null))">@L.Markup("deals.detail.complete_payment")</a>
+                }
+                else
+                {
+                    @* وُلِدَت لِلبَوّابَةِ ولَم تُفتَح فاتورَتُها (‏2026-10-13، G5 (xvi-g)؛ `GatewayPayments.BornForGateway`): لا «أَكمِلِ الدَّفع» إلى صَفحَةٍ
+                       تَرُدُّ «لا فاتورَة» ولا «تَأكيد: دَفع» يُرَدّ (القاعِدَة ١٢) — سَطرُ حالِها، وبابُ الإلغاءِ أَدناه لِمُشتَريها. *@
+                    <AcAlert Variant="warning" Message="@L["deals.detail.gateway_invoice_missing"]" />
+                }
             }
             else if (canAdvance && heldByCarrier)
             {

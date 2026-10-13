@@ -221,8 +221,34 @@ public sealed class GatewayPayments
     /// <para><b>ولِماذا لا يَكفي حارِسُ القَبض</b>: القَبضُ عِندَ «دَفع» يَتَجاوَزُ صَفقَةً بِلا <c>payment_id</c> ويَمضي الانتِقال — فَصَفقَةُ
     /// بِطاقَةٍ لَم تُدفَع فاتورَتُها كانَت تَدخُلُ «دَفع» ثُمَّ «شَحن» بِلا مال.</para>
     /// </summary>
+    /// <remarks><b>وعَلامَةُ الوِلادَةِ تَكفي — لا يَنتَظِرُ الحارِسُ الفاتورَة</b> (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b، G5 (xvi-g)؛
+    /// ‏ADR-032 §٨‑ج.8 مُلحَقاً): كانَ يَسأَلُ مَرجِعَ الفاتورَةِ وَحدَه، فَصَفقَةٌ وُلِدَت لِتُدفَعَ بِفاتورَةِ البَوّابَةِ ولَم يُلحَق بِها مَرجِعُها —
+    /// إلغاءٌ رُدَّ بِـ<c>deal_changed_meanwhile</c> بَعدَ فَشَلِ الفَتح، أَو عُطلٌ بَينَ الوِلادَةِ والإلحاق — دَخَلَت «دَفع» ثُمَّ «شَحن» بِلا مال
+    /// (تَوصيفُه <c>64b6e5c</c>). فَصارَ يَصدُقُ أَيضاً لِما يَحمِلُ <see cref="BornForGateway"/>.</remarks>
     public static bool AwaitsPayment(Deal deal)
-        => HasInvoice(deal) && DealsPolicy.Next(deal) == DealStage.Paid && !DealsService.IsCaptured(deal);
+        => (HasInvoice(deal) || BornForGateway(deal)) && DealsPolicy.Next(deal) == DealStage.Paid && !DealsService.IsCaptured(deal);
+
+    /// <summary>
+    /// <para><b>عَلامَةُ الوِلادَةِ عَلى طَريقِ بَوّابَةِ المَتجَر</b> (‏2026-10-13، G5 (xvi-g)): مِفتاحٌ في <c>Deal.Attributes</c> يَكتُبُه
+    /// <c>/checkout/submit</c> <b>في نِداءِ الوِلادَةِ نَفسِه</b> (<see cref="MarkedAtBirth"/>) لِكُلِّ صَفقَةٍ سَتُدفَعُ بِفاتورَةِ البَوّابَة — قَبلَ
+    /// أَيِّ نِداءٍ ولا إلحاق — فَلا تَخرُجُ مِن الوِلادَةِ صَفقَةٌ عَلى هذا الطَريقِ إلّا وحارِسُ «دَفع» يَعرِفُها. ولا تُرسَمُ لِلطَرَفَين.</para>
+    /// </summary>
+    public const string PayViaAttribute = "pay_via";
+
+    /// <summary>قيمَةُ <see cref="PayViaAttribute"/> الوَحيدَة: «بَوّابَةُ المَتجَرِ بِمِفتاحِه» — والغِيابُ كُلُّ طَريقٍ سِواه (الحَجزُ عِندَ مُزَوِّدِ النُسخَة، والنَقد).</summary>
+    public const string PayViaStoreGateway = "store_gateway";
+
+    /// <summary>أَوُلِدَت الصَفقَةُ لِتُدفَعَ بِفاتورَةِ بَوّابَةِ المَتجَر؟</summary>
+    public static bool BornForGateway(Deal deal)
+        => deal.Attributes.TryGetValue(PayViaAttribute, out var via) && string.Equals(via, PayViaStoreGateway, StringComparison.Ordinal);
+
+    /// <summary>سِماتُ الوِلادَةِ كَما بَناها المُنادي، ومَعَها <see cref="PayViaAttribute"/> حينَ <paramref name="viaGateway"/> — والقاموسُ نَفسُه
+    /// يُعادُ فَيُمَرَّرُ إلى <c>StartAsync</c> في السَطرِ نَفسِه. وبِلا البَوّابَةِ لا مِفتاحَ يُضاف: صَفَقاتُ الطُرُقِ الأُخرى كَما كانَت بِحَرفِها.</summary>
+    public static Dictionary<string, string> MarkedAtBirth(Dictionary<string, string> attributes, bool viaGateway)
+    {
+        if (viaGateway) attributes[PayViaAttribute] = PayViaStoreGateway;
+        return attributes;
+    }
 
     /// <summary>
     /// <para><b>أَقَبَضَت بَوّابَةُ المَتجَرِ ثَمَنَ هذِه الصَفقَة؟</b> — مَرجِعُ الدَفعِ هُوَ الفاتورَةُ المُسَجَّلَةُ عَلَيها (يَكتُبُهُما التَأكيد).
@@ -370,8 +396,11 @@ public sealed class GatewayPayments
 
         if (invoice is null)
         {
+            // ونَتيجَةُ كُلِّ إلغاءٍ تُقرَأ (‏2026-10-13، G5 (xvi-g)؛ تَوصيفُ «اليَوم» `64b6e5c`): كانَت تُهمَل، فَإلغاءٌ رَدَّه تَعارُضُ نُسخَةٍ
+            // — البائِعُ المَربوطُ عِندَ الوِلادَةِ قَبِلَ بَينَهُما — تَرَكَ صَفقَةً قائِمَةً بِلا فاتورَة. يُعادُ مَرَّةً عَلى ما كُتِب، وما بَقِيَ
+            // بَعدَها يُكتَبُ خَطَأً يُسَمّي الصَفقَة — وعَلامَةُ الوِلادَةِ تُمسِكُها عَن «دَفع» (`AwaitsPayment`) حَتّى تُلغى بِاليَد.
             foreach (var d in deals)
-                await _deals.CancelAsync(tenantSlug, d.Id, new DealCanceller(by.ActorId, d.InitiatorName, IsStoreAdmin: false),
+                await CancelUnopenedAsync(tenantSlug, d, new DealCanceller(by.ActorId, d.InitiatorName, IsStoreAdmin: false),
                     l["checkout.payment.cancel_gateway_open_failed"], ct);
             _log.LogWarning("[gateway] open invoice {Slug} for {Count} deal(s) ← {Code} — cancelled, nothing charged",
                 tenantSlug, deals.Count, code);
@@ -388,6 +417,29 @@ public sealed class GatewayPayments
         }
         _log.LogInformation("[gateway] open invoice {Slug} for {Count} deal(s) ← opened", tenantSlug, deals.Count);
         return new GatewayCheckout(invoice.Url, null);
+    }
+
+    /// <summary>
+    /// <para><b>إلغاءُ صَفقَةٍ لَم تُفتَح فاتورَتُها — ونَتيجَتُه تُقرَأ</b> (‏2026-10-13، G5 (xvi-g)): <see cref="DealsService.ChangedMeanwhile"/>
+    /// يُعادُ مَرَّةً بِجَلسَةٍ جَديدَةٍ تَقرَأُ ما كُتِب؛ و<see cref="DealCancelAuthorization.DealNotActive"/> نَجاحٌ (أَلغاها غَيرُه)؛ وكُلُّ رَدٍّ
+    /// سِواهُما — أَو استِثناءٌ — سَطرُ خَطَأٍ يُسَمّي الصَفقَةَ ورَمزَها، ويَمضي إلى أُختِها فَلا يُترَكُ الباقي بِلا إلغاء.</para>
+    /// </summary>
+    private async Task CancelUnopenedAsync(string tenantSlug, Deal d, DealCanceller by, string reason, CancellationToken ct)
+    {
+        try
+        {
+            var res = await _deals.CancelAsync(tenantSlug, d.Id, by, reason, ct);
+            if (!res.Ok && res.Violation?.Code == DealsService.ChangedMeanwhile)
+                res = await _deals.CancelAsync(tenantSlug, d.Id, by, reason, ct);
+            if (res.Ok || res.Violation?.Code == DealCancelAuthorization.DealNotActive) return;
+            _log.LogError("[gateway] open invoice {Slug}: deal {Deal} stays active without an invoice ← cancel {Code} — it cannot enter Paid; cancel it by hand",
+                tenantSlug, d.Id, res.Violation?.Code);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogError(ex, "[gateway] open invoice {Slug}: deal {Deal} stays active without an invoice ← cancel threw {Error} — it cannot enter Paid; cancel it by hand",
+                tenantSlug, d.Id, ex.GetType().Name);
+        }
     }
 
     /// <summary>
