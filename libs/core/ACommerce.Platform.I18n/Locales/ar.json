@@ -1502,6 +1502,7 @@
   "shipping.vendor.err_vendor_register_rate_limited": "كَثُرَت مُحاوَلاتُ التَّسجيلِ عِندَ OTO — أَعِدِ المُحاوَلَةَ بَعدَ ساعَة.",
   "shipping.vendor.err_vendor_signed_out": "سَجِّل دُخولَكَ أَوَّلاً.",
   "shipping.vendor.err_vendor_token_missing": "الصِقِ الرَّمزَ قَبلَ الحِفظ.",
+  "shipping.vendor.err_vendor_token_refused": "لَم تَقبَل OTO الرَّمزَ الَّذي لَصَقتَه، فَلَم يُحفَظ شَيء — انسَخه مِن حِسابِكَ عِندَ OTO مِن جَديدٍ والصِقه هُنا.",
   "shipping.vendor.err_zip_code_invalid": "الرَّمزُ البَريدِيُّ خَمسَةُ أَرقام.",
   "shipping.vendor.field": "رَمزُ التَّحديثِ مِن حِسابِكَ عِندَ OTO",
   "shipping.vendor.hint": "تَجِدُه في حِسابِكَ عِندَ OTO (Settings ثُمَّ Developers ثُمَّ API Integrations ثُمَّ Connect). يُختَمُ في خِزانَةِ وَسايِل ولا يُعرَضُ مِنه بَعدَ حِفظِه إلّا آخِرُ أَربَعَةِ مَحارِف؛ بِه تُنشَأُ بوليصاتُ طَلَباتِكَ مِن حِسابِك، ونُسَجِّلُ لَكَ عِندَ OTO عُنوانَ إشعاراتِ طَلَباتِكَ في هذا المَتجَرِ بِرَمزٍ نُصدِرُه لَك.",

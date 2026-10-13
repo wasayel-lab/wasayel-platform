@@ -210,7 +210,8 @@ public class VendorShippingTests(ITestOutputHelper output)
         var codes = ListingVendorGate.All.Concat(VendorShippingService.Codes).Concat(VendorContactGate.All)
             .Concat(VendorRegistrationValidator.All).Concat(OtoFailures.All).ToArray();
         output.WriteLine($"رُموزُ سَطحِ البائِع: {codes.Length} — {string.Join(" · ", codes)}");
-        Assert.Equal(28, codes.Length);
+        // (‏2026-10-13، G5 (ii)): والخِدمَةُ ‏6 ← 7 (`vendor_token_refused` — رَمزٌ مَلصوقٌ تَرُدُّه OTO لا يُحفَظ)؛ فَالعَدُّ ‏28 ← 29.
+        Assert.Equal(29, codes.Length);
         Assert.Equal(codes.Length, codes.Distinct(StringComparer.Ordinal).Count());
         foreach (var code in codes)
         {

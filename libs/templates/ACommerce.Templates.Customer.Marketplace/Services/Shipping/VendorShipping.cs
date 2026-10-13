@@ -383,6 +383,8 @@ public sealed record VendorShippingResult(string? Code, TenantProviderBinding? B
 /// إشعاراتُها بِـ<c>signature_mismatch</c> حَتّى يَحفَظَ البائِعُ رَمزَه مَرَّةً أُخرى — والرَدُّ مَطبوعٌ في اللوغِ بِرَمزِه.</para>
 /// <para><b>ومَسارُ التَسجيل</b> (<see cref="RegisterAsync"/>، ‏ADR-033 الخُطوَة 8، ‏2026-10-12): المَدخَلُ الآخَرُ حينَ يُضبَطُ الرَمزُ السوقِيّ —
 /// والخَتمُ وتَسجيلُ الوارِدِ بَعدَه بِالمَسارِ نَفسِه (<c>ConnectAsync</c>).</para>
+/// <para>(‏2026-10-13، G5 (ii) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: وفي اللَصقِ بَعدَ «رَمزٌ غَيرُ فارِغ» <b>يُبادَلُ الرَمزُ عِندَ OTO</b> — رَمزٌ تَرُدُّه
+/// يُجابُ <see cref="TokenRefused"/> ولا يُحفَظُ شَيء.)</para>
 /// </summary>
 public sealed class VendorShippingService
 {
@@ -404,7 +406,15 @@ public sealed class VendorShippingService
     /// <summary>بَلَغَ البائِعُ حَدَّ مُحاوَلاتِ «Register» في السّاعَة — حِصَّةُ الإرسالِ القائِمَةُ نَفسُها (مُراجَعَةُ تَيّارِ S8، الجولة 2، ‏2026-10-12).</summary>
     public const string RegisterRateLimited = "vendor_register_rate_limited";
 
-    public static readonly IReadOnlyList<string> Codes = new[] { PasteClosed, TokenMissing, VaultUnavailable, RegisterClosed, EntryUnreadable, RegisterRateLimited };
+    /// <summary>
+    /// <para><b>رَدَّت OTO الرَمزَ المَلصوقَ عِندَ مُبادَلَتِه</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (ii)؛ تَوصيفُ «اليَوم» <c>1ffbcfd</c>): رَمزُ
+    /// <see cref="SaveTokenAsync"/> حينَ تُجيبُ «Refresh Token» بِـ<see cref="OtoFailures.TokenRefused"/> — <b>ولا يُحفَظُ شَيء</b>، والمَدخَلُ القائِمُ
+    /// (إن وُجِد) بِحالِه. وكانَ الرَمزُ يُختَمُ ويُحفَظُ فَعّالاً ويُكتَبُ رَفضُه في <c>WebhookRefusal</c>، فَتَقولُ الصَفحَةُ «حُفِظ» وتَرسُمُ كُلُّ صَفقَةٍ
+    /// «إنشاء بوليصَة» لا تَنجَح (القاعِدَة ١٢). رَمزٌ لِلصَقِ لا لِلتَسجيل: <c>oto_token_refused</c> نَصُّه في هذا السَطحِ «اعتِمادُ المَتجَر» (رَدُّ «Register»).</para>
+    /// </summary>
+    public const string TokenRefused = "vendor_token_refused";
+
+    public static readonly IReadOnlyList<string> Codes = new[] { PasteClosed, TokenMissing, VaultUnavailable, RegisterClosed, EntryUnreadable, RegisterRateLimited, TokenRefused };
 
     /// <summary>
     /// <para><b>مِفتاحُ حَدِّ المُحاوَلاتِ في حِصَّةِ الإرسالِ القائِمَة</b> (<c>AuthHandlers.TryConsumeSendQuota</c>، «‏tenant|subject»): بائِعٌ في مَتجَر.
@@ -462,6 +472,17 @@ public sealed class VendorShippingService
 
         var token = (refreshToken ?? "").Trim();
         if (token.Length == 0) return new(TokenMissing, null, null);
+
+        // **والرَمزُ يُبادَلُ قَبلَ أَن يُختَم** (‏2026-10-13، G5 (ii)): رَمزٌ تَرُدُّه OTO عِندَ «Refresh Token» لا يُحفَظ — يُجابُ البائِعُ بِرَمزِه
+        // والمَدخَلُ القائِمُ بِحالِه. وما سِوى الرَدِّ (انقِطاعٌ، ‏5xx) لا يَقولُ شَيئاً عَن الرَمزِ فَيُحفَظُ كَما كان ويُكتَبُ فَشَلُ تَسجيلِ الوارِد. والمُبادَلَةُ
+        // مُخَزَّنَةٌ (`OtoTokenCache`) فَيَستَعمِلُها تَسجيلُ الوارِدِ بَعدَها بِلا نِداءٍ ثانٍ.
+        var exchanged = await _oto.AccessTokenAsync(token, ct);
+        if (exchanged.Failure?.Code == OtoFailures.TokenRefused)
+        {
+            _log.LogInformation("[OTO] vendor {Slug}/{Owner} ← paste refused ({Code}) — nothing stored",
+                tenantSlug, vendor.UserId.ToString("D"), TokenRefused);
+            return new(TokenRefused, null, null);
+        }
 
         var before = await _providers.VendorEntryAsync(tenantSlug, ProviderCapabilities.Delivery, vendor.UserId, ct);
         var saved = await ConnectAsync(tenantSlug, vendor.UserId, token, inboundUrl, before is { IsActive: true } ? before : null, ct);
