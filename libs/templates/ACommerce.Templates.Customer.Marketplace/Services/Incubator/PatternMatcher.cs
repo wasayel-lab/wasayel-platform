@@ -1,3 +1,5 @@
+using ACommerce.Platform.I18n;
+
 namespace ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 
 public sealed record PatternSuggestion(
@@ -12,6 +14,11 @@ public sealed record PatternSuggestion(
 /// </summary>
 public static class PatternMatcher
 {
+    /// <summary>مِفتاحُ تَعليلِ فَرعِ «تَبيعُ مُنتَجات» في <c>ar.json</c> — النَصُّ الوَحيدُ المُرَحَّلُ مِن هذا المِلَفّ
+    /// (‏ADR-032 §٦‑ج‑3(ب)). وما بَقِيَ فيه مِن تَسمِياتٍ وتَعليلاتٍ حَرفِيَّةٍ دَينٌ مُسَمّىً في سِجِلِّ المالِك
+    /// («أ» S11) لا يَبلُغُه عَدّادُ الطَبَقَة ٧ (‏`.razor` والمَصارِفُ المُعلَنَة وَحدَها).</summary>
+    public const string ProductsReasoningKey = "incubator.pattern.reason_products";
+
     public static PatternSuggestion Match(IReadOnlyDictionary<string, string> a)
     {
         string Get(string k) => a.TryGetValue(k, out var v) ? v : "";
@@ -45,10 +52,13 @@ public static class PatternMatcher
                 "تربط طرفين دون تحصيل دفع مركزي — نمط الإعلانات المبوّبة، الإيراد من اشتراك المعلنين أو ترقية الإعلان.");
 
         // 5) منتج مادي/رقمي يُباع → marketplace أو متجر
+        //    (‏التَعليلُ مِن القامُوس — ADR-032 §٦‑ج‑3(ب)، القاعِدَة ١١ — ويُقرَأُ بِالعَرَبِيَّةِ صَراحَةً لا بِـ`L`:
+        //    يُخَزَّنُ في `IncubatorSession.PatternReasoning` ويُحقَنُ في رِسالَةِ التَحليلِ العَرَبِيَّة، ولا طَلَبَ هُنا
+        //    تُقرَأُ لُغَتُه — عِلَّةُ `SmtpEmailChannel` نَفسُها في سِجِلِّ دَينِ النُصوص §٤.)
         if (offer is "physical" or "digital")
             return new("marketplace", "المتجر متعدد البائعين",
                 payment == "commission" ? "high" : "medium",
-                "تبيع منتجات — نمط المتجر يناسب البيع المباشر أو من بائعين متعددين.");
+                LocaleCatalog.Text(LocaleCatalog.Arabic, ProductsReasoningKey));
 
         // 6) خدمة غير فورية → classifieds (تجميع مزوّدين)
         if (offer == "service")

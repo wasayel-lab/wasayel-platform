@@ -368,6 +368,7 @@
   "incubator.status.completed": "اكتَمَلَ",
   "incubator.status.failed": "فَشِلَ",
   "incubator.status.abandoned": "مَهجور",
+  "incubator.pattern.reason_products": "تبيع منتجات — نمط المتجر يناسب البيع المباشر أو من بائعين متعددين.",
   "admin.fixtures.topbar": "Fixtures — اختِبارات الـ pipeline",
   "admin.fixtures.title": "٢٠ مَشروع اختِبار",
   "admin.fixtures.note": "كُلّ صَفّ: الفِكرَة، النَّمَط المُتَوَقَّع، النَّمَط الَّذي اقتَرَحه PatternMatcher، وَ النَّتيجَة.",
