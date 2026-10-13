@@ -56,6 +56,11 @@
         {
             <AcAlert Variant="danger" Message="@L[errKey]" />
         }
+        else if (GatewayReturn.KeyFor(closedCode) is { } closedKey)
+        {
+            @* فاتورَةٌ رَأى تَحَقُّقٌ سابِقٌ إغلاقَها (‏2026-10-13، G5 (xvii-g)): يُقالُ رَمزُها بِلا `?err=`، والرابِطُ لا يُرسَمُ لَها (`PayUrlOf`). *@
+            <AcAlert Variant="danger" Message="@L[closedKey]" />
+        }
 
         <AcCard>
             <ChildContent>
@@ -95,6 +100,9 @@
     string? payUrl;
     /// <summary>نَصُّ حالِ الصَفقَة — <see cref="GatewayReturn.StateKeyOf"/>: قائِمَةٌ أَو مُلغاة × ثَبَتَ دَفعُها أَو لا (‏2026-10-12).</summary>
     string stateKey = "";
+    /// <summary>رَمزُ الفاتورَةِ المُغلَقَةِ حينَ رَآها تَحَقُّقٌ سابِق (<see cref="GatewayReturn.IsClosed"/>، ‏2026-10-13) — يُقالُ بِلا <c>?err=</c>،
+    /// والرابِطُ لا يُرسَمُ لَها (<see cref="GatewayReturn.PayUrlOf"/>).</summary>
+    string? closedCode;
 
     protected override async Task OnInitializedAsync()
     {
@@ -107,5 +115,6 @@
         confirmed = GatewayReturn.IsConfirmed(deal);
         payUrl = GatewayReturn.PayUrlOf(deal);
         stateKey = GatewayReturn.StateKeyOf(deal);
+        closedCode = GatewayReturn.IsClosed(deal) ? GatewayPaymentProof.InvoiceClosed : null;
     }
 }

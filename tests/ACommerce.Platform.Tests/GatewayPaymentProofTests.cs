@@ -56,21 +56,35 @@ public class GatewayPaymentProofTests(ITestOutputHelper output)
 
     // ═══ ٢) كُلُّ رَمزٍ بِشَرطِه وَحدَه ═══════════════════════════════════════════════
 
-    /// <summary><c>gateway_invoice_unpaid</c> — كُلُّ حالٍ في مَعجَمِ الفاتورَةِ سِوى «paid» يُطلِقُه وَحدَه.</summary>
+    /// <summary><c>gateway_invoice_unpaid</c> — كُلُّ حالٍ في مَعجَمِ الفاتورَةِ سِوى «paid» يُطلِقُه وَحدَه.
+    /// <para><b>قُلِبَ بِاسمِه ‏2026-10-13</b> (G5 (xvii-g)؛ كانَ <c>InvoiceUnpaid_fires_alone_for_every_status_but_paid</c> بِسَبعِ حالاتٍ وحَرفٍ كَبير):
+    /// المُغلَقَةُ الأَربَع (<c>canceled</c> و<c>expired</c> و<c>voided</c> و<c>refunded</c>) صارَ لَها <c>gateway_invoice_closed</c> في الصَفِّ التالي، وهذا لِما يُدفَعُ
+    /// بَعدُ ولِما خارِجَ المَعجَمِ بِحَرفِه.</para></summary>
     [Theory]
     [InlineData("initiated")]
     [InlineData("failed")]
-    [InlineData("refunded")]
-    [InlineData("canceled")]
     [InlineData("on_hold")]
-    [InlineData("expired")]
-    [InlineData("voided")]
     [InlineData("PAID")]          // بِحَرفِ المَعجَم: حالَةُ الأَحرُفِ لا تُطَبَّع
-    public void InvoiceUnpaid_fires_alone_for_every_status_but_paid(string status)
+    [InlineData("Canceled")]      // ‏ولا لِلمُغلَقَة: بِحَرفِها
+    public void InvoiceUnpaid_fires_alone_for_every_status_neither_paid_nor_closed(string status)
     {
         var (invoice, deals) = Sound();
         Assert.Equal(new[] { GatewayPaymentProof.InvoiceUnpaid }, CodesOf(invoice with { Status = status }, deals));
         Assert.Equal(GatewayPaymentProof.InvoiceUnpaid, GatewayPaymentProof.Gate(invoice with { Status = status }, deals).Violation!.Code);
+        Assert.Null(GatewayPaymentProof.Gate(invoice with { Status = status }, deals).Payment);
+    }
+
+    /// <summary><c>gateway_invoice_closed</c> (‏2026-10-13، G5 (xvii-g)) — كُلُّ حالٍ مُغلَقَةٍ يُطلِقُه وَحدَه، و«غَيرُ مَدفوع» لا يُطلَقُ مَعَه.</summary>
+    [Theory]
+    [InlineData("canceled")]
+    [InlineData("expired")]
+    [InlineData("voided")]
+    [InlineData("refunded")]
+    public void InvoiceClosed_fires_alone_for_every_closed_status(string status)
+    {
+        var (invoice, deals) = Sound();
+        Assert.Equal(new[] { GatewayPaymentProof.InvoiceClosed }, CodesOf(invoice with { Status = status }, deals));
+        Assert.Equal(GatewayPaymentProof.InvoiceClosed, GatewayPaymentProof.Gate(invoice with { Status = status }, deals).Violation!.Code);
         Assert.Null(GatewayPaymentProof.Gate(invoice with { Status = status }, deals).Payment);
     }
 
@@ -147,7 +161,10 @@ public class GatewayPaymentProofTests(ITestOutputHelper output)
         deals[0].Refs.Remove(GatewayPaymentProof.InvoiceRef);
         var broken = invoice with { Status = "initiated", Currency = "USD", Amount = 1, Metadata = new Dictionary<string, string>() };
 
-        Assert.Equal(GatewayPaymentProof.Codes, CodesOf(broken, deals));
+        // (‏2026-10-13، G5 (xvii-g) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: «المُغلَقَة» و«غَيرُ المَدفوعَة» حالانِ لا يَجتَمِعان — فَالمَعجَمُ كُلُّه
+        // يُجمَعُ بِحالٍ مِن كُلٍّ: غَيرُ مَدفوعَةٍ بِلا رَمزِ الإغلاق، ومُغلَقَةٌ بِلا «غَيرُ مَدفوعَة» — والتَرتيبُ واحِد.)
+        Assert.Equal(GatewayPaymentProof.Codes.Where(c => c != GatewayPaymentProof.InvoiceClosed), CodesOf(broken, deals));
+        Assert.Equal(GatewayPaymentProof.Codes.Where(c => c != GatewayPaymentProof.InvoiceUnpaid), CodesOf(broken with { Status = "expired" }, deals));
         var admitted = GatewayPaymentProof.Gate(broken, deals);
         Assert.Equal(GatewayPaymentProof.InvoiceUnpaid, admitted.Violation!.Code);
         Assert.Null(admitted.Payment);
@@ -167,6 +184,7 @@ public class GatewayPaymentProofTests(ITestOutputHelper output)
             () => (invoice with { Amount = 1 }, deals),
             () => (invoice with { Metadata = new Dictionary<string, string>() }, deals),
             () => (invoice with { Id = Guid.NewGuid().ToString() }, deals),
+            () => (invoice with { Status = "expired" }, deals),   // ‏2026-10-13، G5 (xvii-g)
         };
         foreach (var b in breaches)
         {
@@ -179,7 +197,7 @@ public class GatewayPaymentProofTests(ITestOutputHelper output)
         }
 
         output.WriteLine($"رُموزٌ مُعلَنَة: {GatewayPaymentProof.Codes.Count} · مُنتَجَة: {produced.Count} · خُروق: {breaches.Length}");
-        Assert.Equal(5, GatewayPaymentProof.Codes.Count);
+        Assert.Equal(6, GatewayPaymentProof.Codes.Count);   // 5 ← 6 (‏2026-10-13، G5 (xvii-g): +gateway_invoice_closed)
         Assert.Equal(GatewayPaymentProof.Codes.OrderBy(c => c, StringComparer.Ordinal), produced.OrderBy(c => c, StringComparer.Ordinal));
         Assert.All(GatewayPaymentProof.Codes, c => Assert.True(GatewayPaymentProof.Contains(c)));
         Assert.False(GatewayPaymentProof.Contains("gateway_other"));

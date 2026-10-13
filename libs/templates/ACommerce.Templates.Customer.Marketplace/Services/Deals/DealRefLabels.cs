@@ -36,6 +36,7 @@ public static class DealRefLabels
         [DealShipping.LabelRef]          = "deals.detail.ref_oto_label_issued",
         [DealShipping.TrackingRef]       = "deals.detail.ref_oto_tracking_ready",
         [DealShipping.ClosedRef]         = "deals.detail.ref_oto_order_closed",
+        [GatewayPayments.InvoiceClosedRef] = "deals.detail.ref_gateway_invoice_closed",   // ‏2026-10-13، G5 (xvii-g)
     };
 
     /// <summary>مِفتاحُ المَرجِعِ مِن سَطرِ الإلحاق — ما بَينَ البادِئَةِ وأَوَّلِ «=» (والقيمَةُ قَد تَحمِلُ «=») — أَو <c>null</c>

@@ -155,7 +155,7 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         var expected = DealPayAuthorization.All.Concat(MoyasarFailures.All).Concat(GatewayPaymentProof.Codes)
             .OrderBy(c => c, StringComparer.Ordinal);
         Assert.Equal(expected, GatewayReturn.Codes.OrderBy(c => c, StringComparer.Ordinal));
-        Assert.Equal(13, GatewayReturn.Codes.Count);
+        Assert.Equal(14, GatewayReturn.Codes.Count);   // 13 ← 14 (‏2026-10-13، G5 (xvii-g): +gateway_invoice_closed)
         Assert.All(GatewayReturn.Codes, c => Assert.Equal(GatewayReturn.TextPrefix + c, GatewayReturn.KeyFor(c)));
         Assert.All(GatewayReturn.Codes, c => Assert.Equal(3, GatewayReturn.KeyFor(c)!.Split('.').Length));
         Assert.Null(GatewayReturn.KeyFor("not_a_code"));
@@ -179,8 +179,8 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
             Assert.True(text.Length > 8, $"‏{key} بِنَصٍّ أَقصَرَ مِن أَن يُفهَم.");
             checkedCount++;
         }
-        output.WriteLine($"· نُصوصُ صَفحَةِ العَودَة: {checkedCount} مِفتاحاً حَيّاً (‏13 رَمزاً + ‏4 نُصوص).");
-        Assert.Equal(17, checkedCount);
+        output.WriteLine($"· نُصوصُ صَفحَةِ العَودَة: {checkedCount} مِفتاحاً حَيّاً (‏14 رَمزاً + ‏4 نُصوص).");
+        Assert.Equal(18, checkedCount);   // 17 ← 18 (‏2026-10-13، G5 (xvii-g))
     }
 
     // ═══ ٣) الخِدمَة — السُلطَةُ قَبلَ المِفتاح، والمِفتاحُ قَبلَ البَوّابَة، وصِفرُ كِتابَة ═══════════════════════

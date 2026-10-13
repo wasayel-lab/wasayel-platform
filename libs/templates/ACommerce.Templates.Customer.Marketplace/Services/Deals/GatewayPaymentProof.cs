@@ -8,7 +8,7 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Deals;
 // لَيسَت بُرهاناً — يَعودُ مَن دَفَعَ ومَن لَم يَدفَع، ورابِطُ العَودَةِ يَملِكُه مَن يَملِكُه. البُرهانُ فاتورَةٌ تُجلَبُ بِمِفتاحِ المُستَأجِر
 // (`MoyasarClient.FetchInvoiceAsync`) فَتُعرَضُ عَلى هذِه الدالَّةِ مَعَ صَفَقاتِها؛ ولا يُكتَبُ عَلى صَفقَةٍ «مَدفوعَة» إلّا ما عَبَرَها.
 //
-// **ورُموزُها خَمسَةٌ لا سادِسَ لَها** (القاعِدَة ٤: `record XViolation(Code, MessageAr)` + `Validate` + `IsValid`، ولِكُلِّ رَمزٍ صَفٌّ
+// **ورُموزُها خَمسَةٌ لا سادِسَ لَها** — (‏2026-10-13، G5 (xvii-g): وسادِسٌ `gateway_invoice_closed` يَنقَسِمُ بِه الحالُ إلى مُنتَظِرَةٍ ومُغلَقَة) — (القاعِدَة ٤: `record XViolation(Code, MessageAr)` + `Validate` + `IsValid`، ولِكُلِّ رَمزٍ صَفٌّ
 // مُوجَبٌ وصَفٌّ سالِبٌ في `GatewayPaymentProofTests`):
 //   • الحالُ «paid» بِحَرفِ مَعجَمِ الفاتورَةِ عِندَ البَوّابَة؛
 //   • العُملَةُ الرِيال؛
@@ -55,8 +55,21 @@ public static class GatewayPaymentProof
 {
     // ─── الرُموز — مَعجَمٌ مُغلَق ──────────────────────────────────────────
 
-    /// <summary>حالُ الفاتورَةِ لَيسَ <see cref="MoyasarClient.PaidStatus"/> — عادَ المُشتَري ولَم يَدفَع، أَو فَشِلَ دَفعُه، أَو أُلغِيَت.</summary>
+    /// <summary>حالُ الفاتورَةِ لَيسَ <see cref="MoyasarClient.PaidStatus"/> — عادَ المُشتَري ولَم يَدفَع، أَو فَشِلَ دَفعُه، أَو أُلغِيَت.
+    /// (‏2026-10-13، G5 (xvii-g) — ولا يُعادُ حَرفٌ فَوقَه: «أَو أُلغِيَت» صارَ <see cref="InvoiceClosed"/>؛ وهذا لِما يُدفَعُ بَعدُ — <c>initiated</c>
+    /// و<c>failed</c> و<c>on_hold</c> وكُلُّ حالٍ خارِجَ <see cref="ClosedStatuses"/>.)</summary>
     public const string InvoiceUnpaid = "gateway_invoice_unpaid";
+
+    /// <summary>
+    /// <para><b>الفاتورَةُ أُغلِقَت عِندَ البَوّابَة</b> (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b الثانِيَة، G5 (xvii-g)؛ تَوصيفُ «اليَوم» <c>5c777d7</c>):
+    /// حالُها مِن <see cref="ClosedStatuses"/> — لا تُدفَعُ بَعدَ اليَوم. كانَ يُجابُ بِـ<see cref="InvoiceUnpaid"/> فَتَبقى صَفحَةُ العَودَةِ تَدعو إلى
+    /// صَفحَةِ دَفعٍ مَيِّتَة؛ وصارَ التَحَقُّقُ يَكتُبُه عَلى صَفَقاتِها (<see cref="GatewayPayments.InvoiceClosedRef"/>) فَلا يُرسَمُ الرابِطُ بَعدَه.</para>
+    /// </summary>
+    public const string InvoiceClosed = "gateway_invoice_closed";
+
+    /// <summary>أَحوالُ الفاتورَةِ المُغلَقَةِ مِن مَعجَمِ «Show Invoice» (رَأسُ <c>MoyasarClient</c>): أُلغِيَت، انتَهَت، أُبطِلَت، استُرجِعَت — بِحَرفِها.</summary>
+    public static readonly IReadOnlyList<string> ClosedStatuses =
+        new[] { MoyasarClient.CanceledStatus, "expired", "voided", "refunded" };
 
     /// <summary>عُملَةُ الفاتورَةِ لَيسَت <see cref="MoyasarClient.Currency"/>.</summary>
     public const string CurrencyMismatch = "gateway_currency_mismatch";
@@ -71,7 +84,7 @@ public static class GatewayPaymentProof
     public const string InvoiceMismatch = "gateway_invoice_mismatch";
 
     public static readonly IReadOnlyList<string> Codes =
-        new[] { InvoiceUnpaid, CurrencyMismatch, AmountMismatch, DealsMismatch, InvoiceMismatch };
+        new[] { InvoiceUnpaid, InvoiceClosed, CurrencyMismatch, AmountMismatch, DealsMismatch, InvoiceMismatch };   // ‏المُغلَقَةُ ثانِيَةً: يُطلِقُها الحالُ أَوَّلاً كَأُختِها
 
     public static bool Contains(string code) => Codes.Contains(code, StringComparer.Ordinal);
 
@@ -128,7 +141,9 @@ public static class GatewayPaymentProof
         var v = new List<GatewayPaymentViolation>();
 
         if (!invoice.IsPaid)
-            v.Add(new(InvoiceUnpaid, $"حالُ الفاتورَةِ «{invoice.Status}» لا «{MoyasarClient.PaidStatus}» — لَم يَثبُت الدَفع."));
+            v.Add(ClosedStatuses.Contains(invoice.Status, StringComparer.Ordinal)
+                ? new(InvoiceClosed, $"حالُ الفاتورَةِ «{invoice.Status}» — أُغلِقَت عِندَ البَوّابَةِ فَلا تُدفَعُ بَعدَ اليَوم.")
+                : new(InvoiceUnpaid, $"حالُ الفاتورَةِ «{invoice.Status}» لا «{MoyasarClient.PaidStatus}» — لَم يَثبُت الدَفع."));
 
         if (!string.Equals(invoice.Currency, MoyasarClient.Currency, StringComparison.Ordinal))
             v.Add(new(CurrencyMismatch, $"عُملَةُ الفاتورَةِ «{invoice.Currency}» لا «{MoyasarClient.Currency}»."));

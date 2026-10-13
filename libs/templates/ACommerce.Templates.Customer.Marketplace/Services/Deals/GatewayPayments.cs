@@ -145,8 +145,10 @@ public static class GatewayReturn
     /// — الفاتورَةُ تُلغى عِندَ البَوّابَةِ حينَ تُلغى آخِرُ صَفقَةٍ قائِمَةٍ تَدفَعُ لَها، <see cref="GatewayInvoiceCloser"/>؛ وأُختٌ قائِمَةٌ تُبقيها
     /// مَفتوحَة، فَالرابِطُ لِلقائِمَةِ وَحدَها كَما هُوَ.)</para>
     /// </summary>
+    /// <remarks>(‏2026-10-13، G5 (xvii-g) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: ولا لِصَفقَةٍ رَأى التَحَقُّقُ فاتورَتَها مُغلَقَة — <see cref="IsClosed"/>.)</remarks>
     public static string? PayUrlOf(Deal deal)
         => deal.Status == DealStatus.Active
+           && !IsClosed(deal)
            && deal.Refs.TryGetValue(GatewayPayments.InvoiceUrlRef, out var url)
            && Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp)
             ? url
@@ -167,11 +169,15 @@ public static class GatewayReturn
         (true,  true)  => "pay.return.cancelled_confirmed",
     };
 
+    /// <summary>أَرَأى تَحَقُّقٌ فاتورَةَ هذِه الصَفقَةِ مُغلَقَةً عِندَ البَوّابَة؟ (<see cref="GatewayPayments.InvoiceClosedRef"/>، ‏2026-10-13) — يَقرَؤُه
+    /// <see cref="PayUrlOf"/> فَلا يُرسَمُ الرابِط، وصَفحَةُ العَودَةِ فَتَقولُ رَمزَه بِلا <c>?err=</c>.</summary>
+    public static bool IsClosed(Deal deal) => deal.Refs.ContainsKey(GatewayPayments.InvoiceClosedRef);
+
     /// <summary>بادِئَةُ مَفاتيحِ الشَريطِ — اصطِلاحُ القامُوسِ ثَلاثَةُ مَقاطِع (<c>LocaleValidator.KeyPattern</c>)، فَالرَمزُ في الثالِث.</summary>
     public const string TextPrefix = "pay.return.err_";
 
     /// <summary>كُلُّ رَمزٍ قَد يَبلُغُ الصَفحَةَ — سُلطَةُ الدافِع، ثُمَّ مَعجَمُ فَشَلِ العَميلِ الخُماسيّ، ثُمَّ رُموزُ بَوّابَةِ البُرهانِ
-    /// الخَمسَة. ثَلاثَةَ عَشَرَ لا رابِعَ عَشَر.</summary>
+    /// الخَمسَة. ثَلاثَةَ عَشَرَ لا رابِعَ عَشَر. (‏2026-10-13، G5 (xvii-g) — ولا يُعادُ حَرفٌ فَوقَه: والبُرهانُ سِتَّة — أَربَعَةَ عَشَر.)</summary>
     public static readonly IReadOnlyList<string> Codes =
         DealPayAuthorization.All
             .Concat(MoyasarFailures.All)
@@ -202,6 +208,10 @@ public sealed class GatewayPayments
     /// أَخَواتِ الفاتورَةِ بِلا نِداءٍ إلى البَوّابَةِ ولا استِعلام (<see cref="GatewayInvoiceShare"/>). داخِلِيٌّ: لا يُرسَمُ لِلطَرَفَين.</para>
     /// </summary>
     public const string InvoiceDealsRef = "gateway_invoice_deals";
+
+    /// <summary><b>فاتورَةُ الصَفقَةِ أُغلِقَت عِندَ البَوّابَة</b> — حالُها كَما قالَتها (‏2026-10-13، G5 (xvii-g)): يَكتُبُه <see cref="VerifyAsync"/> مَرَّةً
+    /// عَلى صَفَقاتِ الفاتورَةِ حينَ يَرى <see cref="GatewayPaymentProof.InvoiceClosed"/>، ويَقرَؤُه <see cref="GatewayReturn.IsClosed"/> فَلا يُرسَمُ رابِطُها.</summary>
+    public const string InvoiceClosedRef = "gateway_invoice_closed";
 
     /// <summary>
     /// <para><b>عَلى الصَفقَةِ فاتورَةُ بَوّابَةٍ لَم يَثبُت دَفعُها، وتاليها «دَفع»</b> — رَمزُ <see cref="DealsService.AdvanceAsync"/> حينَ
@@ -314,9 +324,16 @@ public sealed class GatewayPayments
             return Logged(tenantSlug, new(deal.Id, null, fetched.Failure!.Code));
 
         var invoice = fetched.Value!;
-        var admitted = GatewayPaymentProof.Gate(invoice, await InvoiceDealsAsync(tenantSlug, deal, invoice, by, ct));
+        var invoiceDeals = await InvoiceDealsAsync(tenantSlug, deal, invoice, by, ct);
+        var admitted = GatewayPaymentProof.Gate(invoice, invoiceDeals);
         if (admitted.Payment is not { } proven)
+        {
+            // فاتورَةٌ أُغلِقَت عِندَ البَوّابَةِ تُكتَبُ عَلى صَفَقاتِها مَرَّة — فَلا تَدعو صَفحَةُ العَودَةِ إلَيها بَعدَ اليَوم (‏2026-10-13، G5 (xvii-g)).
+            if (admitted.Violation!.Code == GatewayPaymentProof.InvoiceClosed)
+                foreach (var d in invoiceDeals.Where(d => !GatewayReturn.IsClosed(d)))
+                    await _deals.AttachRefAsync(tenantSlug, d.Id, InvoiceClosedRef, invoice.Status, ct);
             return Logged(tenantSlug, new(deal.Id, null, admitted.Violation!.Code));
+        }
 
         // ─── الخُطوَة 10: الدَفعُ الثابِتُ يُكتَبُ، وما يَقِفُ قَبلَ «دَفع» يَدخُلُها بِفاعِلِها ─────────────────────────
         // الكاتِبُ يَطلُبُ ما أَخرَجَته البَوّابَةُ في تَوقيعِه، ولا يَكتُبُ عَلى ما كُتِب. ثُمَّ صَفقَةٌ تاليها «دَفع» وقَد قُبِضَت تَدخُلُها
