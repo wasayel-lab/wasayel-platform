@@ -221,6 +221,42 @@ public class StudioStorePatternTests
         Assert.Equal(AppPattern.Rental, PatternProfileResolver.PatternOf(stored));
         Assert.False(PatternProfileResolver.Of(stored).UsesCart);
     }
+
+    /// <summary>
+    /// <para><b>وكاتِبٌ ثالِثٌ لِلكِند — نُقطَةُ إنشاءِ المَتجَرِ مِن لَوحَةِ المَنَصَّة</b> (‏2026-10-13، مُراجَعَةُ الموجَةِ الثانِيَة (ii)):
+    /// <c>POST /admin/tenants/create</c> تُحَلِّلُ أَسطُرَ الفِئاتِ <b>في جِسمِها</b> لا عَبرَ <c>CategoriesSaveService.Parse</c>،
+    /// وتَكتُبُ أَيَّ كِندٍ بِحُروفٍ صَغيرَةٍ بِلا فَحص — فَمُصادِقُ ل‑١ إن بُنِيَ في <c>CategoriesSaveService</c> وَحدَه لا يَبلُغُها.</para>
+    /// <para><b>ولَم تُوَحَّد — لِأَنّ التَوحيدَ لَيسَ إعادَةَ هَيكَلَةٍ صِرفَة</b> (شَرطُ التَكليف): أَيقونَتُها الافتِراضِيَّةُ 🏠 وأَيقونَةُ
+    /// المُحَلِّلِ 🏷️، وعَمودُ أَيقونَةٍ فارِغٌ يُكتَبُ عِندَها فارِغاً وعِندَه افتِراضِيّاً، وسَطرٌ مِن مَسافاتٍ وَحدَها (ومِنه السَطرُ الفارِغُ في
+    /// نَموذَجٍ يُرسِلُ <c>CRLF</c>: <c>\r</c>) يُرَدُّ عِندَها <c>bad_categories</c> ويُتَخَطّى عِندَه، ورَمزا رَفضِها <c>bad_categories</c>/<c>no_categories</c> ورَمزاه
+    /// <c>bad_format</c>/<c>empty</c> (وصَفحَةُ <c>/admin/tenants/new</c> تَقرَأُ رَمزَيها). فَيُثَبَّتُ الكاتِبُ هُنا، ومَن يَبني المُصادِقَ
+    /// يُحمِرُّ هذا مَعَ أَخَوَيه بِقَصدٍ ويُقَرِّرُ فيه.</para>
+    /// </summary>
+    [Fact]
+    public void The_admin_create_endpoint_is_a_third_kind_writer_that_parses_inline_and_accepts_any_kind()
+    {
+        var ext = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs"));
+        var at = ext.IndexOf("app.MapPost(\"/admin/tenants/create\"", StringComparison.Ordinal);
+        Assert.True(at > 0, "لا نُقطَةَ /admin/tenants/create — الأَداةُ عَمياء.");
+        var end = ext.IndexOf("app.Map", at + 10, StringComparison.Ordinal);
+        Assert.True(end > at, "لا نُقطَةَ بَعدَها — الأَداةُ عَمياء.");
+        var body = ext[at..end];
+
+        // ‏الكاتِبُ نَفسُه: الكِندُ مِن العَمودِ الرابِعِ بِلا فَحص، ولا مُرورَ بِالمُحَلِّلِ المُشتَرَك.
+        Assert.Contains("Kind  = parts.Length > 3 ? parts[3].Trim().ToLowerInvariant() : \"\",", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("CategoriesSaveService", body, StringComparison.Ordinal);
+
+        // ‏ولِماذا لا يُستَبدَلُ بِالمُحَلِّلِ صِرفاً — الفُروقُ مَقيسَةً بِحَرفِها.
+        Assert.Contains("Icon  = parts.Length > 2 ? parts[2].Trim() : \"🏠\",", body, StringComparison.Ordinal);
+        Assert.Equal("🏷️", CategoriesSaveService.DefaultIcon);
+        Assert.Contains("Back(\"bad_categories\")", body, StringComparison.Ordinal);
+        Assert.Contains("Back(\"no_categories\")", body, StringComparison.Ordinal);
+        Assert.Equal(("bad_format", "empty"), (TenantConfigCodes.BadFormat, TenantConfigCodes.Empty));
+        var (blankLine, code) = CategoriesSaveService.Parse("a | أ\n \nb | ب");
+        Assert.Null(code);
+        Assert.Equal(2, blankLine!.Count);   // ‏المُحَلِّلُ يَتَخَطّى سَطرَ المَسافات — والنُقطَةُ تَرُدُّه bad_categories
+    }
 }
 
 // ═══ البُرهانُ عَلى Postgres — الكاتِبُ الحَقيقيُّ ثُمَّ القارِئُ عَلى ما قُرِئَ مِن القاعِدَة ═══
