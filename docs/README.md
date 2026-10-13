@@ -244,6 +244,7 @@ dotnet run scripts/verify-runtime.cs -- [--viewport 390x844] <url>
 | أَصناف CSS بِلا مُستَهلِك | `WSL_DUMP=unused ./scripts/verify-css.sh` |
 | تَنَوُّع الأَلوان/المَسافات/الأَحجام | `./scripts/verify-design-quality.sh` |
 | الاختِبارات | `dotnet test PlatformV1.slnx` |
+| مالِكو الإعلاناتِ المُمَيَّزونَ لِكُلِّ مَتجَر، ونَمَطُه المَرسومُ وسَلَّتُه — أَداةُ عَتَبَةِ الرُجوعِ في ADR-032 §٦‑ز (قِراءَةٌ فَقَط، عَلى فَرعِ Neon مَنسوخ) | `dotnet run scripts/count-listing-owners.cs` |
 
 ---
 
