@@ -393,10 +393,11 @@
                      Message="@($"{L["deals.detail.status_prefix"]} {deal.Status}" + (string.IsNullOrEmpty(deal.CancelReason) ? "" : $" — {deal.CancelReason}"))" />
         }
 
-        @* السِجِلّ *@
+        @* السِجِلّ — وسَطرُ المَرجِعِ تَسمِيَةٌ مِن القامُوسِ أَو لا يُرسَم (‏2026-10-13، G4 (xxvi)): كانَ يُرسَمُ «attach key=value» خاماً
+           لِلطَرَفَين، بِمُعَرِّفاتٍ وروابِطَ ونُصوصِ أَخطاء. المَعجَمُ والمُسنَدُ في `DealRefLabels`. *@
         <AcSectionHeader Title="@L["deals.detail.timeline_title"]" />
         <div class="acm-cat-list">
-            @foreach (var e in deal.Timeline.OrderByDescending(x => x.At))
+            @foreach (var e in deal.Timeline.Where(DealRefLabels.IsShown).OrderByDescending(x => x.At))
             {
                 <div class="acm-cat-row">
                     <div style="flex:1;">
@@ -544,7 +545,7 @@
         "advanced" => $"{DealsPolicy.LabelAr(e.StageBefore)} ← {DealsPolicy.LabelAr(e.StageAfter)}",
         "cancelled" => L["deals.detail.event_cancelled"],
         "disputed" => L["deals.detail.event_disputed"],
-        "note" => e.Note ?? L["deals.detail.event_note"],
+        DealEvent.RefNote => L[DealRefLabels.LabelKeyFor(e.Note) ?? "deals.detail.event_note"],
         _ => e.Action
     };
 }

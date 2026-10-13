@@ -116,4 +116,8 @@ public sealed record DealEvent(
     /// <summary>مالٌ قَبَضَته بَوّابَةُ المَتجَرِ عَن صَفقَةٍ أُلغِيَت — استِرجاعُه مُستَحَقٌّ عِندَ البَوّابَةِ نَفسِها، يَستَرجِعُه صاحِبُ المَتجَرِ
     /// مِن لَوحَتِها؛ ولا نِداءَ عِندَنا (مُزَوِّدُ النُسخَةِ لا يَعرِفُ المَرجِع). يَكتُبُه الإلغاءُ بَعدَ الدَفع، والتَأكيدُ بَعدَ الإلغاء.</summary>
     public const string GatewayRefundDue = "gateway_refund_due";
+
+    /// <summary>سَطرُ مَرجِعٍ أُلحِق — يَكتُبُه <c>DealsService.AttachRefAsync</c> وَحدَه بِنَصِّ <c>attach {key}={value}</c>، ويَقرَؤُه
+    /// <c>DealRefLabels</c> لِصَفحَةِ الطَرَفَين (‏2026-10-13، G4 (xxvi)). الثابِتُ هُنا لِأَنّ الكاتِبَ والقارِئَ يَقرَآنِ نَفسَ الحَرف.</summary>
+    public const string RefNote = "note";
 }

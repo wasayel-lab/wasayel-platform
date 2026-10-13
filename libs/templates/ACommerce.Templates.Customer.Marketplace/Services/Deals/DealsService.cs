@@ -661,6 +661,10 @@ public sealed class DealsService
     /// مُنادٍ — فَإذنُ دَفعٍ في <c>/checkout/submit</c> يَضيعُ إن قَبِلَ البائِعُ المَربوطُ أَو أَلغى بَينَ تَحميلِ الإلحاقِ وحِفظِه،
     /// فَلا يُقبَضُ ولا يُستَرجَع. وكُلُّ مُحاوَلَةٍ بِجَلسَةٍ جَديدَةٍ تَقرَأُ آخِرَ ما كُتِب؛ وبَعدَ <see cref="AttachAttempts"/>
     /// يَصعَدُ الاستِثناءُ إلى المُنادي بِصَوت.</para>
+    ///
+    /// <para><b>وسَطرُه لِلطَرَفَينِ تَسمِيَةٌ لا نَصّ</b> (‏2026-10-13، G4 (xxvi)): فِعلُه <see cref="DealEvent.RefNote"/> وبادِئَتُه
+    /// <see cref="DealRefLabels.AttachPrefix"/> ثابِتانِ يَقرَؤُهُما <see cref="DealRefLabels"/> — فَصَفحَةُ العُضوِ تَرسُمُ مِفتاحَ قامُوسٍ
+    /// لِلمَرجِعِ المَعروفِ ولا تَرسُمُ الباقي، والقيمَةُ لا تُرسَمُ لَهُما. والنَصُّ المَكتوبُ بِحَرفِه كَما كان.</para>
     /// </summary>
     public async Task<Deal?> AttachRefAsync(
         string tenantSlug, Guid dealId, string key, string value,
@@ -668,8 +672,8 @@ public sealed class DealsService
         => await RecordAsync(tenantSlug, dealId, deal =>
         {
             deal.Refs[key] = value;
-            deal.Timeline.Add(new(deal.Stage, deal.Stage, "note", null, null,
-                $"attach {key}={value}", DateTime.UtcNow));
+            deal.Timeline.Add(new(deal.Stage, deal.Stage, DealEvent.RefNote, null, null,
+                $"{DealRefLabels.AttachPrefix}{key}={value}", DateTime.UtcNow));
         }, ct);
 
     /// <summary>

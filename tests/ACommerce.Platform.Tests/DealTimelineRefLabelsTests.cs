@@ -242,22 +242,129 @@ public class DealTimelineRefLabelsTests
         Assert.Contains("foreach (var (key, url) in new[] { (LabelRef, state.LabelUrl), (TrackingRef, state.TrackingUrl) })", shipping, StringComparison.Ordinal);
     }
 
-    // ═══ ٣) «اليَوم»: الصَفحَةُ تَرسُمُ السَطرَ خاماً لِلطَرَفَين — يُقلَبُ بِاسمِه في كوميتِ الإصلاح ═══════════════
+    // ═══ ٣) قُلِبا بِاسمِهِما (‏2026-10-13، G4 (xxvi)): الصَفحَةُ تَرسُمُ تَسمِيَةَ القامُوسِ أَو لا تَرسُمُ السَطر ═══════════════
+    //
+    // كانا «اليَوم» في `86cc02f`: `Today_the_member_page_renders_an_attach_line_raw` (‏`"note" => e.Note ?? …`) و
+    // `Today_the_member_page_draws_every_timeline_line` (حَلقَةٌ بِلا تَرشيح). وصَفّا ١ و٢ ومُحَلِّلُه بِحَرفِها: بَصمَةُ مَقطَعِها واحِدَة.
 
-    /// <summary><b>اليَوم</b>: سَطرُ <c>note</c> يُرسَمُ بِنَصِّه — «attach oto_order_id=…» — لا بِتَسمِيَةٍ مِن القامُوس.</summary>
+    /// <summary><b>قُلِبَ</b>: سَطرُ المَرجِعِ يُرسَمُ بِمِفتاحِ قامُوسٍ مِن <see cref="DealRefLabels.LabelKeyFor"/> — ولا <c>e.Note</c>
+    /// يُرسَمُ في الصَفحَةِ بِأَيِّ صورَة.</summary>
     [Fact]
-    public void Today_the_member_page_renders_an_attach_line_raw()
+    public void The_member_page_renders_an_attach_line_as_its_dictionary_label_never_its_text()
     {
         var code = PageCode();
-        Assert.Contains("\"note\" => e.Note ?? L[\"deals.detail.event_note\"],", code, StringComparison.Ordinal);
+        Assert.Contains("DealEvent.RefNote => L[DealRefLabels.LabelKeyFor(e.Note) ?? \"deals.detail.event_note\"],", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"note\" =>", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("e.Note ??", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("@e.Note", code, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(code, @"\be\.Note\b"));   // وَسيطُ LabelKeyFor وَحدَه
     }
 
-    /// <summary><b>اليَوم</b>: حَلقَةُ السِجِلِّ لا تُرَشِّحُ سَطراً — كُلُّ ما في <c>Timeline</c> يُرسَمُ لِلطَرَفَين.</summary>
+    /// <summary><b>قُلِبَ</b>: حَلقَةُ السِجِلِّ تُرَشِّحُ بِـ<see cref="DealRefLabels.IsShown"/> — والحَلقَةُ واحِدَة.</summary>
     [Fact]
-    public void Today_the_member_page_draws_every_timeline_line()
+    public void The_member_page_draws_only_the_lines_the_predicate_shows()
     {
         var code = PageCode();
         Assert.Single(Regex.Matches(code, @"deal\.Timeline\b"));
-        Assert.Contains("@foreach (var e in deal.Timeline.OrderByDescending(x => x.At))", code, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var e in deal.Timeline.Where(DealRefLabels.IsShown).OrderByDescending(x => x.At))", code, StringComparison.Ordinal);
+    }
+
+    // ═══ ٤) المَعجَمُ المُغلَق — مُوجِبٌ وسالِبٌ لِكُلِّ مِفتاح ═══════════════
+
+    /// <summary>ما يُكتَبُ ولا يُرسَمُ لِلطَرَفَين — بِسَبَبِه. والجَردُ (صَفُّ ٢) يُقسَمُ بَينَه وبَينَ <see cref="DealRefLabels.Labels"/> بِلا بَقِيَّة.</summary>
+    private static readonly IReadOnlyDictionary<string, string> Internal = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["payment_status"]                    = "قيمَةُ تِعدادٍ بِالإنكليزِيَّة تُرافِقُ payment_id",
+        [SimulatedPaymentProvider.ModeRefKey] = "شارَةُ التَجرِبَةِ تُعلِنُه في الصَفحَة (ADR-025)",
+        [DealsService.ListingOwnerRef]        = "مُعَرِّفُ مُستَخدِم",
+        [GatewayPayments.InvoiceUrlRef]       = "بابُ الدَفعِ يُرسَمُ زِرّاً",
+        [DealShipping.OtoIdRef]               = "مُعَرِّفُ OTO يُرافِقُ oto_order_id",
+    };
+
+    /// <summary>كُلُّ مِفتاحٍ يُكتَبُ اليَومَ إمّا مُسَمّىً وإمّا داخِلِيٌّ بِسَبَب — لا الاثنانِ ولا لا شَيء؛ ولا تَسمِيَةَ لِمِفتاحٍ لا يَكتُبُه أَحَد.</summary>
+    [Fact]
+    public void The_inventory_splits_into_labelled_and_internal_keys_with_nothing_left_over()
+    {
+        var written = WrittenKeys.Values.SelectMany(k => k).ToHashSet(StringComparer.Ordinal);
+        output.WriteLine($"مَكتوبَة: {written.Count} · مُسَمّاة: {DealRefLabels.Labels.Count} · داخِلِيَّة: {Internal.Count}");
+        Assert.Equal(14, written.Count);
+        foreach (var key in written)
+            Assert.True(DealRefLabels.Labels.ContainsKey(key) ^ Internal.ContainsKey(key), $"‏{key}: يَجِبُ أَن يَكونَ مُسَمّىً أَو داخِلِيّاً، لا الاثنَين ولا لا شَيء.");
+        foreach (var key in DealRefLabels.Labels.Keys.Concat(Internal.Keys))
+            Assert.True(written.Contains(key), $"‏{key} مُصَنَّفٌ ولا يَكتُبُه أَحَد.");
+        Assert.Equal(9, DealRefLabels.Labels.Count);
+        Assert.Equal(5, Internal.Count);
+    }
+
+    public static IEnumerable<object[]> LabelledKeys() => DealRefLabels.Labels.Select(kv => new object[] { kv.Key, kv.Value });
+    public static IEnumerable<object[]> InternalKeys() => Internal.Keys.Select(k => new object[] { k });
+
+    /// <summary><b>المُوجِب لِكُلِّ مِفتاحٍ مُسَمّى</b>: سَطرُه يُرسَمُ بِمِفتاحِ قامُوسِه — ولو حَمَلَت قيمَتُه «=» — والنَصُّ عَرَبِيٌّ حَيٌّ
+    /// لَيسَ نائِباً، ولا يَحمِلُ القيمَةَ ولا اسمَ المِفتاح.</summary>
+    [Theory]
+    [MemberData(nameof(LabelledKeys))]
+    public void A_labelled_ref_line_is_shown_as_its_arabic_label_and_never_its_value(string refKey, string labelKey)
+    {
+        var value = "https://example.com/v?a=1&b=2";
+        var note = $"{DealRefLabels.AttachPrefix}{refKey}={value}";
+
+        Assert.Equal(refKey, DealRefLabels.RefKeyOf(note));
+        Assert.Equal(labelKey, DealRefLabels.LabelKeyFor(note));
+        Assert.True(DealRefLabels.IsShown(new DealEvent(DealStage.Offered, DealStage.Offered, DealEvent.RefNote, null, null, note, DateTime.UtcNow)));
+
+        var text = ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, labelKey);
+        Assert.NotEqual(labelKey, text);
+        Assert.False(ACommerce.Platform.I18n.LocaleCatalog.IsPlaceholder(text), $"‏{labelKey} نائِب.");
+        Assert.Matches(@"\p{IsArabic}", text);
+        Assert.DoesNotContain(value, text, StringComparison.Ordinal);
+        Assert.DoesNotContain(refKey, text, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>السالِب لِكُلِّ مِفتاحٍ داخِلِيّ</b>: سَطرُه لا يُرسَمُ لِلطَرَفَين.</summary>
+    [Theory]
+    [MemberData(nameof(InternalKeys))]
+    public void An_internal_ref_line_is_hidden_from_both_parties(string refKey)
+    {
+        var note = $"{DealRefLabels.AttachPrefix}{refKey}=x";
+        Assert.Equal(refKey, DealRefLabels.RefKeyOf(note));
+        Assert.Null(DealRefLabels.LabelKeyFor(note));
+        Assert.False(DealRefLabels.IsShown(new DealEvent(DealStage.Offered, DealStage.Offered, DealEvent.RefNote, null, null, note, DateTime.UtcNow)));
+    }
+
+    /// <summary><b>والمَجهولُ والمَشوَّهُ لا يُرسَمانِ</b>: مِفتاحٌ لا يَعرِفُه المَعجَم، وسَطرٌ بِلا «=»، وبِمِفتاحٍ فارِغ، وبِلا بادِئَة، وبِبادِئَةٍ
+    /// بِحالَةِ حُروفٍ أُخرى، و<c>null</c>.</summary>
+    [Theory]
+    [InlineData("attach buyer_note=اتَّصِل قَبلَ الوُصول")]
+    [InlineData("attach payment_id")]
+    [InlineData("attach =payment_id")]
+    [InlineData("payment_id=pay_1")]
+    [InlineData("Attach payment_id=pay_1")]
+    [InlineData("attach  payment_id=pay_1")]
+    [InlineData(null)]
+    public void An_unknown_or_malformed_note_is_hidden(string? note)
+    {
+        Assert.Null(DealRefLabels.LabelKeyFor(note));
+        Assert.False(DealRefLabels.IsShown(new DealEvent(DealStage.Offered, DealStage.Offered, DealEvent.RefNote, null, null, note, DateTime.UtcNow)));
+    }
+
+    /// <summary><b>وما سِوى سَطرِ المَرجِعِ كَما كان</b>: كُلُّ فِعلٍ آخَرَ يُرسَمُ أَيّاً كانَت مُلاحَظَتُه — المُسنَدُ لا يَمَسُّ إلّا <c>note</c>.</summary>
+    [Theory]
+    [InlineData("created")]
+    [InlineData("assigned")]
+    [InlineData(DealEvent.BoundAtBirth)]
+    [InlineData("advanced")]
+    [InlineData("captured")]
+    [InlineData("capture_failed")]
+    [InlineData(DealEvent.CashOnDelivery)]
+    [InlineData("cancelled")]
+    [InlineData("refunded")]
+    [InlineData("refund_failed")]
+    [InlineData("disputed")]
+    [InlineData(DealEvent.GatewayPaid)]
+    [InlineData(DealEvent.GatewayRefundDue)]
+    public void Every_other_action_is_shown_as_before_whatever_its_note(string action)
+    {
+        foreach (var note in new string?[] { null, "attach listing_owner=x", "حُرّ" })
+            Assert.True(DealRefLabels.IsShown(new DealEvent(DealStage.Offered, DealStage.Offered, action, null, null, note, DateTime.UtcNow)));
     }
 }
