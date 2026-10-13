@@ -57,14 +57,32 @@ public class CheckoutPerItemDisclosureTests
         Assert.DoesNotContain("GroupBy", body, StringComparison.Ordinal);   // ‏لا تَجميعَ بِالبائِع
     }
 
-    /// <summary><b>اليَوم: خُطوَةُ الدَفعِ بِلا إفصاحٍ عَن الطَلَباتِ المُستَقِلَّة</b>، ونَصُّ النَقدِ بِالمُفرَد.</summary>
+    /// <summary><b>خُطوَةُ الدَفعِ تُفصِحُ: طَلَبٌ لِكُلِّ مُنتَج، يُشحَنُ وَحدَه، ونَقدُه عِندَ تَسليمِه</b> (‏2026-10-13 — انقَلَبَ بِقَرارٍ
+    /// مَرئِيٍّ مِن <c>Today_the_payment_step_speaks_of_one_order_and_discloses_nothing_per_item</c>). المِفتاحُ بِالعَرَبِيَّةِ وَحدَها،
+    /// يَقولُ «كُلُّ مُنتَجٍ» لا «كُلُّ بائِع» — لِأَنّ الحَلقَةَ أَعلاه بِالبَند — ويُقرَأُ مَرَّةً في الخُطوَةِ ٢ بَعدَ بِطاقاتِ طُرُقِ الدَفعِ
+    /// وخارِجَ أَيِّ شَرط (فَيُرى مَعَ البِطاقَةِ والنَقدِ مَعاً)؛ ونَصُّ النَقدِ لَم يَتَبَدَّل.</summary>
     [Fact]
-    public void Today_the_payment_step_speaks_of_one_order_and_discloses_nothing_per_item()
+    public void The_payment_step_discloses_one_order_per_item_where_the_pay_method_is_chosen()
     {
+        const string Key = "checkout.payment.per_item_note";
+        var text = LocaleCatalog.Find(LocaleCatalog.Arabic, Key);
+        Assert.Equal("كُلُّ مُنتَجٍ في سَلَّتِكَ طَلَبٌ مُستَقِلٌّ مَعَ بائِعِه — يُشحَنُ وَحدَه، والدَفعُ عِندَ الاستِلامِ عِندَ تَسليمِ كُلٍّ مِنها.", text);
+        Assert.DoesNotContain("بائِعٍ واحِد", text, StringComparison.Ordinal);
+        Assert.DoesNotMatch("[0-9٠-٩]", text);
+        Assert.Null(LocaleCatalog.Find("en", Key));
+
         var step = PaymentStep();
+        Assert.Equal(1, Regex.Matches(step, Regex.Escape($"@L.Markup(\"{Key}\")")).Count);
+        var cards = step.IndexOf("acm-radio-cards", StringComparison.Ordinal);
+        var cardsEnd = step.IndexOf("</div>\n                        @*", cards, StringComparison.Ordinal);
+        var note = step.IndexOf(Key, StringComparison.Ordinal);
+        Assert.True(cards > 0 && cardsEnd > cards && note > cardsEnd, $"البِطاقات {cards}، نِهايَتُها {cardsEnd}، الإفصاح {note}.");
+
         Assert.Contains("@L.Markup(\"checkout.payment.cash_hint\")", step, StringComparison.Ordinal);
         Assert.Equal("اِدفَع عِندَما يَصِل طَلَبك", LocaleCatalog.Find(LocaleCatalog.Arabic, "checkout.payment.cash_hint"));
-        Assert.DoesNotContain("per_item", step, StringComparison.Ordinal);
-        Assert.Null(LocaleCatalog.Find(LocaleCatalog.Arabic, "checkout.payment.per_item_note"));
+
+        var page = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "CheckoutPage.razor"));
+        Assert.Equal(1, Regex.Matches(page, Regex.Escape(Key)).Count);   // ‏في الخُطوَةِ ٢ وَحدَها
     }
 }
