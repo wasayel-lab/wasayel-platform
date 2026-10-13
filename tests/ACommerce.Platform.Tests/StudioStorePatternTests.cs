@@ -175,8 +175,12 @@ public class StudioStorePatternTests
     /// <para>مُثَبَّتٌ بِجِوارِ المُحَرِّرِ لِأَنَّه قَرارُ ل‑١ المُؤَجَّلُ نَفسُه (مُصادِقُ قيَمِ الكِند):
     /// مَن يَبنيه يُحمِرُّ الفَحصَينِ مَعاً بِقَصدٍ ويَقلِبُهُما في كوميتِه (‏ADR-034 §٣‑٢ مُلحَق).</para>
     /// </summary>
+    /// <para><b>‏2026-10-13 (مُراجَعَةُ الموجَةِ الثانِيَة) — الكاتِبُ نَفسُه يُشَغَّل</b>: كانَ الفَحصُ يُثبِتُ سَطرَ المَصدَرِ ثُمَّ يَبني
+    /// مَتجَراً بِيَدِه بِكِندِ <c>commercial</c> — فَلا يَقيسُ أَنّ الوَكيلَ يَكتُبُه. صارَ <c>AgentToolExecutor.ExecuteAsync</c> بِحَرفِه
+    /// (‏<c>set_categories</c> بِهُوِيَّةِ المالِك) عَلى عالَمِ وَثائِقٍ فيه مَتجَرُ استوديو بِكِندٍ فارِغ: يُقرَأُ <c>Marketplace</c> قَبلُ،
+    /// ويُخَزَّنُ الكِندُ <c>commercial</c> بِحُروفٍ صَغيرَةٍ لِلفِئَتَين، ويُقرَأُ المُخَزَّنُ <c>Rental</c> بِلا سَلَّة.</para>
     [Fact]
-    public void The_studio_agent_offers_commercial_as_a_grouping_and_writes_any_kind_so_its_product_store_turns_Rental()
+    public async Task The_studio_agent_offers_commercial_as_a_grouping_and_writes_any_kind_so_its_product_store_turns_Rental()
     {
         var template = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
             "libs", "templates", "ACommerce.Templates.Customer.Marketplace");
@@ -196,18 +200,26 @@ public class StudioStorePatternTests
         var verdict = ACommerce.Templates.Customer.Marketplace.Services.AgentToolValidator.Validate("set_categories", payload);
         Assert.True(verdict.IsValid, string.Join(" | ", verdict.Errors));
 
-        var store = new Tenant
+        var owner = Guid.NewGuid();
+        var world = new DocWorld().Put(new Tenant
         {
             Id = Slug,
+            OwnerUserId = owner,
             Roles = TenantFromAnalysisFactory.RolesFor("").ToList(),
-            Categories = new()
-            {
-                new Category { Slug = "products", Label = "مُنتَجات", Kind = "commercial", SortOrder = 0 },
-                new Category { Slug = "deals",    Label = "عُروض",    Kind = "commercial", SortOrder = 1 },
-            },
-        };
-        Assert.Equal(AppPattern.Rental, PatternProfileResolver.PatternOf(store));
-        Assert.False(PatternProfileResolver.Of(store).UsesCart);
+            Categories = new() { new Category { Slug = "general", Label = "عام", Kind = "", SortOrder = 0 } },
+        });
+        Assert.Equal(AppPattern.Marketplace, PatternProfileResolver.PatternOf(world.Read<Tenant>(Slug)));
+
+        var executor = new ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor(
+            world.Store, new ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService(world.Store));
+        var (ok, message) = await executor.ExecuteAsync("set_categories", payload, owner);
+        Assert.True(ok, message);
+
+        var stored = Assert.Single(world.Stored.OfType<Tenant>());
+        Assert.Equal(1, world.SaveCalls);
+        Assert.Equal(new[] { "commercial", "commercial" }, stored.Categories.Select(c => c.Kind).ToArray());
+        Assert.Equal(AppPattern.Rental, PatternProfileResolver.PatternOf(stored));
+        Assert.False(PatternProfileResolver.Of(stored).UsesCart);
     }
 }
 
