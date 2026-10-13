@@ -1459,6 +1459,9 @@ public class DealShipTests(ITestOutputHelper output)
         Assert.Equal(DealStage.Shipping, right.Deal!.Stage);
     }
 
+    /// <remarks>(‏2026-10-13، G4 (xxviii) و(xxxi) — ولا يُعادُ حَرفٌ فَوقَه: الاسمُ باقٍ لِأَنَّه صادِقٌ عَلى شَطرِه — الحالِ والتالي والفاعِل — وهي بَوّابَةُ
+    /// مَسارِ الشَحنِ قَبلَ سُؤالِ OTO؛ ومُمسِكاتُ الانتِقالِ الثَلاثَةُ (OTO والفاتورَةُ ومَرجِعُ الدَفع) تَقَعُ في <c>AdvanceAsync</c> بَعدَها، والتَكافُؤُ كُلُّه
+    /// مَقيسٌ حالَةً حالَةً في <c>DealAdvanceGateGridTests</c>.)</remarks>
     [Fact]
     public void CanMove_is_the_advance_gate_without_writing()
     {

@@ -936,6 +936,13 @@ public sealed class DealsService
     /// <para><b>ولا تَسأَلُ <see cref="DealShipping.AwaitsCarrier"/></b> (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12): هي البَوّابَةُ لِمُنادٍ
     /// يَحمِلُ جَوابَ OTO إلى الانتِقال — مَسارُ الشَحن، يَسأَلُ OTO بَعدَها؛ ولَو سَأَلَتها لَرُدَّ استِئنافُ طَلَبٍ قائِمٍ قَبلَ أَن تُسأَلَ OTO.
     /// والأَبوابُ العامَّةُ تَسأَلُها في الانتِقالِ نَفسِه (<see cref="DealShipping.DealAwaitsCarrier"/>).</para>
+    ///
+    /// <para><b>دِقَّةٌ مُلحَقَةٌ ‏2026-10-13 (G4 (xxviii) و(xxxi)) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق</b>: «بَوّابَةُ <see cref="AdvanceAsync"/> نَفسُها» صادِقَةٌ
+    /// عَلى شَطرِها — الحالِ والتالي والفاعِل — و<see cref="AdvanceAsync"/> لا تُناديها: تُعيدُ الثَلاثَةَ بِسُطورِها (لِكُلِّ شَرطٍ رَدُّه النَصِّيُّ، وفاعِلُ
+    /// الرَفضِ يُسَمّي الفاعِلَ المَطلوب)، ثُمَّ تَرُدُّ ثَلاثَةَ مُمسِكاتٍ لا تَسأَلُها هذِه: <see cref="DealShipping.AwaitsCarrier"/> بِلا جَوابٍ يُثبِتُ الشُحنَة،
+    /// و<see cref="GatewayPayments.AwaitsPayment"/>، و<see cref="MissesPayment"/>. والتَكافُؤُ مَقيسٌ لا مَوصوف: <c>DealAdvanceGateGridTests</c> يَمشي
+    /// الشَبَكَةَ (‏20736 حالَة) ويَشتَرِطُ «تُحَرِّكُ ⇔ <c>CanMove ∧ ¬AwaitsCarrier ∧ ¬AwaitsPayment ∧ ¬MissesPayment</c>». ومُنادِياها بابُ الشَحنِ (<c>DealShipping</c>) والوارِدُ
+    /// مِن OTO (<c>OtoOrderStatus</c>) — وتاليهِما «شَحن» أَو «تَسليم» فَلا يَمَسُّهُما حارِسا «دَفع».</para>
     /// </summary>
     public static bool CanMove(Deal deal, Guid actorId)
         => deal.Status == DealStatus.Active
