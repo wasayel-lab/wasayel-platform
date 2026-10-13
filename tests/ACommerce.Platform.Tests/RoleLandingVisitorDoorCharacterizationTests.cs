@@ -144,4 +144,26 @@ public class RoleLandingVisitorDoorCharacterizationTests
         Assert.Equal(new[] { "customer", "vendor", "tenant_admin" }, roles.Select(r => r.CatalogSlug).ToArray());
         Assert.Equal("customer", Assert.Single(roles, r => r.IsDefault).CatalogSlug);
     }
+
+    // ─── (٣) لِمَن يُرسَمُ الرابِط — تَوصيفُ «اليَوم» (‏2026-10-13، مُراجَعَةُ الموجَةِ الثانِيَة (iii)) ───
+
+    /// <summary>
+    /// <para><b>اليَوم: الرابِطُ يُرسَمُ لِلمُسَجَّلِ الَّذي لا دَورَ فَعّالاً لَه أَيضاً، ونَصُّه «دونَ تَسجيل»</b>. فَرعُ
+    /// <c>TenantHome</c> يُرسِلُ إلى البَوّابَةِ <c>!Auth.IsAuthenticated || activeRole is null</c> — فَالمُسَجَّلُ بِلا دَورٍ يَبلُغُها —
+    /// و<c>RoleLanding.razor</c> لا يَحقِنُ الجَلسَةَ ولا يَسأَلُ عَنها في أَيِّ سَطر، فَيَقرَأُ ذلكَ المُسَجَّلُ «تَصَفَّح المَتجَر دونَ
+    /// تَسجيل» وهو مُسَجَّل. يَنقَلِبُ بِاسمِه في كوميتِ الإصلاح.</para>
+    /// </summary>
+    [Fact]
+    public void Today_the_browse_link_is_drawn_for_a_signed_in_user_without_an_active_role_too()
+    {
+        var home = Flat(Template("Components", "Pages", "TenantHome.razor"));
+        Assert.Contains("(!Auth.IsAuthenticated || activeRole is null)", home, StringComparison.Ordinal);
+
+        var razor = RoleLanding();
+        Assert.DoesNotContain("IsAuthenticated", razor, StringComparison.Ordinal);
+        Assert.DoesNotContain("@inject AuthSession", razor, StringComparison.Ordinal);
+        Assert.Contains("دونَ تَسجيل",
+            ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "roles.landing.browse"),
+            StringComparison.Ordinal);
+    }
 }
