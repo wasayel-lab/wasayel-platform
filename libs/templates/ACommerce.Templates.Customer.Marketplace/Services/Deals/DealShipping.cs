@@ -308,7 +308,26 @@ public sealed class DealShipping
     /// <remarks>(‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (iii)؛ ‏ADR-033 §٧‑ص‑٦): <b>وقِراءَةُ المَدخَلِ تَرمي ⇒ <c>null</c> بِسَطرِ تَحذير</b> — لا احتِياط:
     /// فَيُجابُ <see cref="ShipAsync"/> وَالوارِدُ «لا ناقِل» (<c>carrier_unavailable</c>). كانَ العُطلُ «لا مَدخَل» فَيُشحَنُ طَلَبُ البائِعِ بِحِسابِ مَتجَرِ
     /// العَرض، ويُتَحَقَّقُ مِن وارِدِه بِلا سِرّ (تَوصيفُهُما <c>bd48a66</c> و<c>6830eb9</c>).</remarks>
+    /// <remarks>(‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (viii)؛ ‏ADR-033 §٧‑ص‑٩ — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>وصارَت خُطوَتَين يُنادي الوارِدُ كُلّاً
+    /// مِنهُما وَحدَها</b> — <see cref="ResolveCarrierAsync"/> (المَدخَلُ وشُروطُه بِلا فَكّ) ثُمَّ <see cref="TryOpenToken"/> و<see cref="TryOpenSecret"/>.
+    /// وهذِه تَفُكُّهُما مَعاً كَما كانَت، بِالتَرتيبِ نَفسِه وسَطرِ التَحذيرِ نَفسِه — لِلشَحن.</remarks>
     public async Task<VendorCarrier?> CarrierForAsync(string tenantSlug, Deal deal, CancellationToken ct = default)
+        => await ResolveCarrierAsync(tenantSlug, deal, ct) is { } carrier
+           && TryOpenToken(tenantSlug, carrier, out var token) && TryOpenSecret(tenantSlug, carrier, out var secret)
+            ? new VendorCarrier(token, secret)
+            : null;
+
+    /// <summary>
+    /// <para><b>ناقِلٌ مَحلولٌ لَم يُفَكّ</b> (‏2026-10-13، G5 (viii)): رَمزُ الاحتِياطِ صَريحاً (<see cref="Fallback"/>) لِبائِعٍ لا مَدخَلَ لَه في
+    /// <see cref="DemoStore"/>، أَو مَدخَلٌ فَعّالٌ (<see cref="Entry"/>) بِرَمزٍ مَختومٍ (<see cref="Token"/>) ومالِكِ إعلانٍ مَكتوب — وخِزانَةٌ تَفُكّ.</para>
+    /// </summary>
+    private sealed record SealedCarrier(string? Fallback, TenantProviderBinding? Entry, Guid Owner, StoredValue? Token);
+
+    /// <summary>
+    /// <para><b>الخُطوَةُ الأولى — المَدخَلُ وشُروطُه بِلا فَكّ</b> (‏2026-10-13، G5 (viii)): جِسمُ <see cref="CarrierForAsync"/> قَبلَ الفَكِّ بِحَرفِه —
+    /// بيئَةٌ مَفتوحَة، وقِراءَةٌ لَم تَرمِ (‏G5 (iii))، ثُمَّ الاحتِياطُ لِمَن لا مَدخَلَ لَه، أَو مَدخَلٌ فَعّالٌ بِرَمزٍ مَختومٍ وخِزانَةٍ ومالِك؛ و<c>null</c> لِما سِواه.</para>
+    /// </summary>
+    private async Task<SealedCarrier?> ResolveCarrierAsync(string tenantSlug, Deal deal, CancellationToken ct)
     {
         if (!OtoEnvironment.IsOpen(_opts.Environment)) return null;
 
@@ -322,26 +341,50 @@ public sealed class DealShipping
 
         var entry = read.Entry;
         if (entry is null)
-            return VendorTokenFor(_opts, tenantSlug) is { } fallback ? new VendorCarrier(fallback, null) : null;
+            return VendorTokenFor(_opts, tenantSlug) is { } fallback ? new SealedCarrier(fallback, null, Guid.Empty, null) : null;
 
         if (!entry.IsActive || _vault is not { IsAvailable: true } || DealAcceptAuthorization.OwnerIdOf(deal) is not { } owner
             || VendorShippingSurface.RefreshField is not { } refreshField
             || !entry.Values.TryGetValue(refreshField, out var sealedToken) || !sealedToken.IsSealed)
             return null;
 
+        return new SealedCarrier(null, entry, owner, sealedToken);
+    }
+
+    /// <summary><b>فَكُّ رَمزِ التَحديث</b> — رَمزُ الاحتِياطِ كَما هُوَ؛ ومَدخَلٌ لا يَنفَكُّ رَمزُه <c>false</c> بِسَطرِ التَحذيرِ القائِم.</summary>
+    private bool TryOpenToken(string tenantSlug, SealedCarrier carrier, out string token)
+    {
+        token = carrier.Fallback ?? "";
+        if (carrier.Fallback is not null) return true;
         try
         {
-            var token = sealedToken.Unseal(_vault, VendorShippingSurface.AadFor(tenantSlug, refreshField, owner));
-            var secret = VendorShippingSurface.WebhookField is { } webhookField
-                         && entry.Values.TryGetValue(webhookField, out var sealedSecret)
-                ? sealedSecret.Unseal(_vault, VendorShippingSurface.AadFor(tenantSlug, webhookField, owner))
-                : null;
-            return new VendorCarrier(token, secret);
+            token = carrier.Token!.Unseal(_vault!, VendorShippingSurface.AadFor(tenantSlug, VendorShippingSurface.RefreshField!, carrier.Owner));
+            return true;
         }
         catch (System.Security.Cryptography.CryptographicException)
         {
-            _log.LogWarning("[OTO] vendor entry {Slug}/{Owner} does not open — no carrier", tenantSlug, owner.ToString("D"));
-            return null;
+            _log.LogWarning("[OTO] vendor entry {Slug}/{Owner} does not open — no carrier", tenantSlug, carrier.Owner.ToString("D"));
+            return false;
+        }
+    }
+
+    /// <summary><b>فَكُّ سِرِّ الوارِد</b> — الاحتِياطُ ومَدخَلٌ بِلا سِرٍّ بَعدُ (تَسجيلٌ لَم يَنجَح) <c>null</c> بِلا فَشَل (فَيَرُدُّ التَحَقُّقُ «لا سِرّ»)؛
+    /// وسِرٌّ لا يَنفَكُّ <c>false</c> بِسَطرِ التَحذيرِ القائِم.</summary>
+    private bool TryOpenSecret(string tenantSlug, SealedCarrier carrier, out string? secret)
+    {
+        secret = null;
+        if (carrier.Entry is null || VendorShippingSurface.WebhookField is not { } webhookField
+            || !carrier.Entry.Values.TryGetValue(webhookField, out var sealedSecret))
+            return true;
+        try
+        {
+            secret = sealedSecret.Unseal(_vault!, VendorShippingSurface.AadFor(tenantSlug, webhookField, carrier.Owner));
+            return true;
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            _log.LogWarning("[OTO] vendor entry {Slug}/{Owner} does not open — no carrier", tenantSlug, carrier.Owner.ToString("D"));
+            return false;
         }
     }
 
@@ -587,11 +630,13 @@ public sealed class DealShipping
 
         // ناقِلُ بائِعِ الصَفقَة — رَمزُه وسِرُّ وارِدِه — ثُمَّ التَوقيعُ بِذلك السِرّ **قَبلَ سُؤالِ OTO وقَبلَ أَيِّ كِتابَة**
         // (تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 الخُطوَة 7 و§٧‑م). والمُطابَقَةُ قَبلَه لِأَنّ السِرَّ سِرُّ البائِع — قِراءَةٌ لا كِتابَة.
-        if (await CarrierForAsync(tenantSlug, deal!, ct) is not { } carrier)
+        // (‏2026-10-13، G5 (viii)؛ ‏ADR-033 §٧‑ص‑٩ — ولا يُعادُ حَرفٌ فَوقَه: **والسِرُّ وَحدَه يُفَكُّ قَبلَ التَحَقُّق** — كانَ `CarrierForAsync` يَفُكُّ رَمزَ التَحديثِ
+        // الدائِمَ مَعَه، فَإشعارٌ مُزَوَّرٌ بِلا مُصادَقَةٍ يُطلِقُ فَكَّين (تَوصيفُه 9dbc6f9). والرَمزُ يُفَكُّ بَعدَ أَن يَمُرَّ التَوقيع، قُبَيلَ سُؤالِ OTO.)
+        if (await ResolveCarrierAsync(tenantSlug, deal!, ct) is not { } carrier || !TryOpenSecret(tenantSlug, carrier, out var secret))
             return new(OtoOrderStatusGate.CarrierUnavailable, deal);
         var at = _clock.GetUtcNow();
         var age = OtoWebhookSignature.AgeMilliseconds(notice.Timestamp, at)?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "—";
-        if (OtoOrderStatusGate.Verify(notice, carrier.WebhookSecret, at) is { } unverified)
+        if (OtoOrderStatusGate.Verify(notice, secret, at) is { } unverified)
         {
             _log.LogInformation("[OTO] orderStatus {Slug}/{Deal} ← {Code} (age {Age} ms)", tenantSlug, notice.OrderId, unverified.Code, age);
             return new(unverified.Code, deal);
@@ -600,8 +645,10 @@ public sealed class DealShipping
         // فَبِهذا السَطرِ يُقاسُ عَلى staging كَم تَتَأَخَّرُ OTO بَينَ الحَدَثِ والإرسال («ب» S8·١٠ (١)) — ولا سِرَّ فيه ولا رَمز.
         _log.LogInformation("[OTO] orderStatus {Slug}/{Deal} ← verified (age {Age} ms)", tenantSlug, notice.OrderId, age);
 
-        // الإشعارُ إشارَةٌ لا بُرهان: حالُ الطَلَبِ مِن OTO نَفسِها قَبلَ أَيِّ كِتابَة.
-        var fetched = await _oto.GetOrderStatusAsync(carrier.RefreshToken, notice.OrderId, ct);
+        // الإشعارُ إشارَةٌ لا بُرهان: حالُ الطَلَبِ مِن OTO نَفسِها قَبلَ أَيِّ كِتابَة — بِرَمزٍ يُفَكُّ الآنَ لا قَبلَ التَوقيع (G5 (viii)).
+        if (!TryOpenToken(tenantSlug, carrier, out var token))
+            return new(OtoOrderStatusGate.CarrierUnavailable, deal);
+        var fetched = await _oto.GetOrderStatusAsync(token, notice.OrderId, ct);
         if (fetched.Value is not { } state)
             return new(OtoOrderStatusGate.StateUnconfirmed, deal, fetched.Failure!.Code);
 

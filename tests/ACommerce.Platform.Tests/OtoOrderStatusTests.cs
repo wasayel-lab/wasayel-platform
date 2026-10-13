@@ -1055,12 +1055,17 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         var receive = code[from..to];
 
         var match = receive.IndexOf("OtoOrderStatusGate.Match(", StringComparison.Ordinal);
-        var carrier = receive.IndexOf("CarrierForAsync(", StringComparison.Ordinal);
+        // (‏2026-10-13، G5 (viii) — ولا يُعادُ حَرفٌ فَوقَه: والناقِلُ خُطوَتان — يُحَلُّ بِلا فَكٍّ ويُفَكُّ سِرُّه قَبلَ التَوقيع، ورَمزُ تَحديثِه بَعدَه قُبَيلَ
+        // السُؤال؛ كانَ `CarrierForAsync(` يَفُكُّهُما مَعاً قَبلَ التَوقيع. ولا يَعودُ إلى هذا الجِسم.)
+        var carrier = receive.IndexOf("ResolveCarrierAsync(", StringComparison.Ordinal);
+        var secret = receive.IndexOf("TryOpenSecret(", StringComparison.Ordinal);
         var verify = receive.IndexOf("OtoOrderStatusGate.Verify(", StringComparison.Ordinal);
+        var token = receive.IndexOf("TryOpenToken(", StringComparison.Ordinal);
         var ask = receive.IndexOf("_oto.GetOrderStatusAsync(", StringComparison.Ordinal);
-        output.WriteLine($"ReceiveAsync: مُطابَقَة={match} · ناقِل={carrier} · تَوقيع={verify} · سُؤال={ask}");
-        Assert.True(match > 0 && carrier > match && verify > carrier && ask > verify,
-            $"التَرتيبُ مَكسور: مُطابَقَة={match} ناقِل={carrier} تَوقيع={verify} سُؤال={ask}");
+        output.WriteLine($"ReceiveAsync: مُطابَقَة={match} · ناقِل={carrier} · سِرّ={secret} · تَوقيع={verify} · رَمز={token} · سُؤال={ask}");
+        Assert.True(match > 0 && carrier > match && secret > carrier && verify > secret && token > verify && ask > token,
+            $"التَرتيبُ مَكسور: مُطابَقَة={match} ناقِل={carrier} سِرّ={secret} تَوقيع={verify} رَمز={token} سُؤال={ask}");
+        Assert.DoesNotContain("CarrierForAsync(", receive, StringComparison.Ordinal);
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(receive, @"_oto\.GetOrderStatusAsync\("));
     }
 

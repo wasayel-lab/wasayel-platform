@@ -19,6 +19,8 @@ namespace ACommerce.Platform.Tests;
 // `CarrierForAsync` سَطرَ «does not open» — وسِرُّ الوارِدِ مَختومٌ بِمِفتاحِ العالَمِ فَيَنفَكّ. فَعَدَدُ ذلك السَطرِ = عَدَدُ مُحاوَلاتِ فَكِّ الرَمز.
 //
 // **ما يُقلَبُ بِاسمِه في كوميتِ الإصلاح**: صَفُّ «Today_» وَحدَه؛ وصَفُّ الإشعارِ الصادِقِ يَبقى بِحَرفِه (الرَمزُ يُفَكُّ بَعدَ التَحَقُّقِ في الحالَين).
+// **قُلِبَ** (‏2026-10-13، كوميتُ «fix(shipping)» بَعدَ ‏9dbc6f9؛ ‏ADR-033 §٧‑ص‑٩): الوارِدُ يُحِلُّ الناقِلَ بِلا فَكٍّ (`ResolveCarrierAsync`)، ويَفُكُّ السِرَّ
+// وَحدَه لِلتَحَقُّق (`TryOpenSecret`)، ورَمزَ التَحديثِ بَعدَ أَن يَمُرَّ التَوقيع (`TryOpenToken`) — فَالمُزَوَّرُ لا يُطلِقُ فَكَّ الرَمزِ أَبَداً.
 
 public class InboundUnsealOrderTests(ITestOutputHelper output)
 {
@@ -49,9 +51,11 @@ public class InboundUnsealOrderTests(ITestOutputHelper output)
 
     private static int TokenOpens(ShipCapturingLogger log) => log.Lines.Count(l => l.Contains(DoesNotOpen, StringComparison.Ordinal));
 
-    /// <summary>اليَوم: إشعارٌ مُزَوَّرٌ (مُوَقَّعٌ بِسِرٍّ غَيرِ سِرِّ البائِع) يُطلِقُ فَكَّ الرَمزِ قَبلَ التَحَقُّق — فَيُجابُ «لا ناقِل» (‏404) لا «التَوقيعُ لا يُطابِق».</summary>
+    /// <summary><b>قُلِبَ</b> (‏2026-10-13) — كانَ <c>Today_a_forged_notice_opens_the_refresh_token_before_the_signature_is_checked</c> (‏<c>9dbc6f9</c>):
+    /// «الإشعارُ المُزَوَّر: carrier_unavailable (404) · فَكُّ الرَمز: 1 · نِداءاتُ OTO: 0». والآن يُرَدُّ المُزَوَّرُ عَلى تَوقيعِه (‏401) ولا مُحاوَلَةَ لِفَكِّ الرَمز —
+    /// وفي العَدّادِ أَيضاً: لا سَطرَ «does not open» مِن السِرِّ ولا مِن الرَمز. وصَفُّ الإشعارِ الصادِقِ أَدناه بِحَرفِه يُثبِتُ أَنّ الرَمزَ يُفَكُّ بَعدَ التَحَقُّق.</summary>
     [Fact]
-    public async Task Today_a_forged_notice_opens_the_refresh_token_before_the_signature_is_checked()
+    public async Task A_forged_notice_is_answered_on_its_signature_and_never_opens_the_refresh_token()
     {
         var (w, shipping, log) = await TripwiredAsync();
         var calls = w.Oto.Calls.Count;
@@ -60,8 +64,9 @@ public class InboundUnsealOrderTests(ITestOutputHelper output)
         output.WriteLine($"الإشعارُ المُزَوَّر: {outcome.Code} ({OtoOrderStatusGate.StatusFor(outcome.Code)}) · فَكُّ الرَمز: {TokenOpens(log)} · " +
                          $"نِداءاتُ OTO: {w.Oto.Calls.Count - calls}");
 
-        Assert.Equal(OtoOrderStatusGate.CarrierUnavailable, outcome.Code);
-        Assert.Equal(1, TokenOpens(log));
+        Assert.Equal(OtoOrderStatusGate.SignatureMismatch, outcome.Code);
+        Assert.Equal(401, OtoOrderStatusGate.StatusFor(outcome.Code));
+        Assert.Equal(0, TokenOpens(log));
         Assert.Equal(calls, w.Oto.Calls.Count);
     }
 
