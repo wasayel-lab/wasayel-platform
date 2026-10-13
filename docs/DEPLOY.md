@@ -14,11 +14,11 @@
  دَفعٌ إلى main
       │
       ▼
- ‏.github/workflows/ci.yml        «CI» — بِناء + 927 اختِباراً + الطَبَقات الساكِنَة
+ ‏.github/workflows/ci.yml        «CI» — بِناء + 3845 اختِباراً (‏2026-10-13) + الطَبَقات الساكِنَة
       │  (نَجَحَت؟)
       ▼
  ‏.github/workflows/deploy-hf.yml  «Deploy to Hugging Face Space»
-      │  scripts/deploy-manifest.sh --stage  ← 437 مِلَفّاً مِن 763
+      │  scripts/deploy-manifest.sh --stage  ← 602 مِلَفّاً مِن 1094 (‏2026-10-13)
       │  git init + إيداعٌ واحِد + push --force
       ▼
  huggingface.co/spaces/<owner>/<space>   (مُستودَع git مُستَقِلّ)
@@ -80,6 +80,10 @@ HF بِإيداعٍ أَوَّلِيّ خاصٍّ بِه، ولَيسَ سَلَ
 | ‏— تَحتَ `libs/` | ‏419 |
 | ‏— تَحتَ `apps/` | ‏13 |
 | ‏— في الجَذر | ‏5 |
+
+**(‏2026-10-13 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)**: المَقيسُ بِالأَمرِ نَفسِه اليَوم: ‏**58** مَشروعاً في الإغلاقِ مِن 61
+في المُستودَع، و‏**602** مِلَفٍّ تُدفَعُ مِن 1094 مُتَتَبَّعاً (‏582 تَحتَ `libs/`، و‏15 تَحتَ `apps/`، ومِلَفّاتُ الجَذرِ
+الخَمسَةُ نَفسُها)، وصِفرٌ تَحتَ `docs/` و`scripts/` و`tests/` و`.github/` و`CLAUDE.md` و`docker-compose.yml`.
 
 ومِلَفّات الجَذر الخَمسَة هي: `Directory.Build.props` و
 `Directory.Packages.props` (‏يَقرَؤُهُما MSBuild تَصاعُدِيّاً؛ وبِلا
@@ -213,6 +217,27 @@ variables → ‏Actions:
 **ولا تُوضَع سِلسِلَةُ الاتِّصال في GitHub**: الوَظيفَةُ تَدفَع كوداً
 ولا تَحتاجُها، ووَضعُها هُناك يُوَسِّع سَطحَ التَسَرُّب بِلا مُقابِل.
 
+### ٤·ب) مِفتاحُ وَكيلِ التَحليل — **لا يُسقِطُ غِيابُه الإقلاع، ويُغلِقُ بِناءَ كُلِّ مَتجَرٍ مِن الاستوديو**
+(‏2026-10-13 — نُقِلَ إلى هُنا مِن «مُتَغَيِّرات اختِيارِيَّة» في §٦، حَيثُ كانَ صَفّاً واحِداً: `Agent__Provider` / `Agent__Model` /
+`Agent__ApiKey` ← «مُزَوِّد وَكيل الاستوديو».)
+
+**المَقيس**: `POST /studio/s/{id}/build` يَرُدُّ إلى صَفحَةِ الدِراسَةِ ما لَم تَكُن جَلسَةُ التَحليلِ `Completed`
+(‏`if (session.Status != …IncubatorStatus.Completed) return Results.Redirect(…)` في `MarketplaceTemplateExtensions.cs`)،
+والكاتِبُ الوَحيدُ لِـ`Completed` في الإنتاجِ `FeasibilityAnalysisService` بَعدَ نِداءٍ ناجِحٍ لِوَكيلِ `Analysis` — والثاني
+`IncubatorSampleSeeder` خَلفَ `INCUBATOR_SAMPLE_SEED` الَّذي لا يوضَعُ في الإنتاجِ أَبَداً. وبِلا مِفتاحٍ يَفشَلُ النِداءُ فَتَصيرُ
+الجَلسَةُ `Failed`: **فَلا يَبني رائِدُ أَعمالٍ مَتجَراً واحِداً**، والإقلاعُ والمَتاجِرُ القائِمَةُ سَليمَة.
+
+| المُتَغَيِّر | لازِم؟ | المَوضِع |
+|---|---|---|
+| `Agent__ApiKey` — أَو مُتَغَيِّرُ بيئَةِ المُزَوِّد (`ANTHROPIC_API_KEY` لِـ`anthropic`، وأَخَواتُه لِـ`gemini` و`openai`) | **نَعَم** — بِه وَحدَه `IsConfigured` (إلّا خَلفِيَّةَ `openai` بِعُنوانِ Ollama مَحَلِّيّ، ولا تَنطَبِقُ عَلى الـSpace) | `AgentProfileResolver.Resolve` في `Services/AgentProfiles.cs` |
+| `Agent__BaseUrl` | **نَعَم مَعَ `openai`** لِأَيِّ مُتَوافِقٍ غَيرِ OpenAI — وإلّا ذَهَبَ المِفتاحُ إلى `api.openai.com` فَرُدَّ ‏401 | نَفسُه · `OpenAIBackend` في `Services/AgentBackends.cs` |
+| `Agent__Provider` | لا — الافتِراضُ `anthropic` | `AgentProfileResolver.Resolve` |
+| `Agent__Model` | لا — الافتِراضُ `DefaultModel` لِلمُزَوِّد | `Services/AgentBackends.cs` |
+
+والمُسَمّى يَسبِقُ المُشتَرَك: `Agents__Analysis__*` (وَكيلُ الدِراسَة — **هُوَ اللازِمُ لِلبِناء**) و`Agents__Studio__*` (وَكيلُ
+`/studio/agent` — اختِيارِيّ، والصَفحَةُ تَقولُ إنّه غَيرُ مُهَيَّإٍ بِدونِه) يُقرَآنِ قَبلَ `Agent__*`. والجَدوَلُ كامِلاً بِقاعِدَةِ
+السُقوطِ وفَخِّ ‏401 وفَحصِ المِفتاحِ قَبلَ إلصاقِه في [`AGENT-KEYS.md`](AGENT-KEYS.md) §٢.
+
 ### ٥) الاندِماج
 الوَظيفَة **لا تَعمَل قَبلَ أَن تَصير في `main`** — ‏`workflow_run`
 يُشَغَّل مِن نُسخَةِ الفَرع الافتِراضيّ حَصراً. فَأَوَّلُ نَشرٍ يَقَع
@@ -228,10 +253,12 @@ variables → ‏Actions:
 | `ACOMMERCE_AUTH_SECRET` | **إلزاميٌّ خارِجَ Development** — سِرُّ تَوقيعِ كوكي الجَلسَة (‏HMAC-SHA256) لِكُلِّ المَتاجِرِ ولِلاستوديو مَعاً. غِيابُه يُسقِطُ الإقلاعَ بِـ`auth_secret_default` (الارتِدادُ إلى حَرفِيَّةِ الكود)، وفَراغُه بِـ`auth_secret_missing`، وأَقَلُّ مِن ‏32 مِحرَفاً بِـ`auth_secret_short`. §٢·ب | `AuthTokenSecretPolicy.cs` · `Program.cs` |
 | `Auth__Email__Provider=brevo` + `Auth__Email__{ApiKey,From,FromName}` | بَريدٌ فِعليّ عَبر HTTPS — **المُوصى بِه في الـSpace**، §٢·ب | `Program.cs` |
 | `Auth__Email__Provider=smtp` + `Auth__Email__{Host,Port,Username,Password,From,FromName}` | بَريدٌ فِعليّ عَبر SMTP — **مَنافِذُه مَحجوبَةٌ في الـSpace**، §٢·ب | `Program.cs` |
-| `Agent__Provider` / `Agent__Model` / `Agent__ApiKey` | مُزَوِّد وَكيل الاستوديو | `Services/AgentProfiles.cs` |
 | `Payments__Provider=simulation` | **وَضعُ تَجرِبَةِ الدَفع** — مُزَوِّدٌ يُعلِنُ أَنَّه تَجرِبَة: يَنجَح، ولا يُحَرِّكُ مالاً، ولا يُصدِرُ فاتورَة، ومَراجِعُه `pay_sim_…`، وشارَةُ «تَجرِبَة» تَظهَرُ في إتمامِ الشِراء. **والغِيابُ لا يُنتِجُه أَبَداً** — وحارِسُ إقلاعٍ مَعكوسٌ يَرمي لَو سُجِّلَ بِلا هذِه القيمَة. ‏ADR-025 | `Program.cs` |
 | `Files__S3__*` (الخَمسَة) | **مَخزَنُ صُوَرِ المُستَأجِرين** — بِدونِها لا تُرفَع صورَةٌ في الإنتاج. §٢·ز | `Program.cs` |
 | `Providers__Kek__v1` | **مِفتاحُ خِزانَةِ أَسرارِ المُستَأجِرين** (‏base64 لِـ32 بايتاً، ‏AES-256-GCM) — بِه يُختَمُ مِفتاحُ البَوّابَةِ الَّذي يَلصَقُه صاحِبُ مَتجَر. **غِيابُه أَو تَلَفُه لا يُسقِطُ الإقلاع**: تُخفى بِطاقَةُ كُلِّ مُزَوِّدٍ يَحتاجُه ويُرَدُّ رَبطُه بِـ`vault_unavailable`. **ويُضبَطُ مَعَ عَميلِ البَوّابَة — وقَد بُنِيَ** (‏ADR-032 الخُطوات 8–10، ‏2026-10-12؛ كانَ «لا يُضبَطُ في الإنتاجِ قَبلَه»)، ولا يُبَدَّلُ بَعدَ ضَبطِه — §٢·ح | `ProviderVault.cs` · `MarketplaceTemplateExtensions.cs` |
+
+(‏2026-10-13: صَفُّ `Agent__Provider` / `Agent__Model` / `Agent__ApiKey` خَرَجَ مِن هذا الجَدوَلِ إلى ٤·ب أَعلاه — مِفتاحُه
+لازِمٌ لِبِناءِ أَيِّ مَتجَرٍ مِن الاستوديو، فَلَيسَ اختِيارِيّاً.)
 
 **وثَلاثَةٌ لا تُوضَع في الإنتاج أَبَداً** — بَذّاراتُ عَيِّناتٍ تَكتُب
 في القاعِدَة: `TEST_DATA_SEED`، `INCUBATOR_SAMPLE_SEED`،
