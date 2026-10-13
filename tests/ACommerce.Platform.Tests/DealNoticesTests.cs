@@ -243,7 +243,9 @@ public class DealNoticesTests
             ("public async Task NotifyAcceptedAsync(", "public async Task<bool> NotifyCancelledAsync("),
             // والثالِثَةُ (‏2026-10-11) بِالتَرتيبِ نَفسِه — وكانَت الثانِيَةُ تَمتَدُّ إلى آخِرِ الصِنف.
             // والرابِعَةُ (‏2026-10-12، ‏ADR-032 الخُطوَة 10) بِالتَرتيبِ نَفسِه؛ والثالِثَةُ صارَت تَنتَهي عِندَها لا عِندَ آخِرِ الصِنف.
-            ("public async Task<bool> NotifyCancelledAsync(", "public async Task<int> NotifyPaidAsync("),
+            // والخامِسَةُ (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (iii)) بِالتَرتيبِ نَفسِه: إلغاءُ الاستوديو؛ والثالِثَةُ صارَت تَنتَهي عِندَها.
+            ("public async Task<bool> NotifyCancelledAsync(", "public async Task<bool> NotifyCancelledByStoreAsync("),
+            ("public async Task<bool> NotifyCancelledByStoreAsync(", "public async Task<int> NotifyPaidAsync("),
             ("public async Task<int> NotifyPaidAsync(", "\n}"),
         })
         {
@@ -260,7 +262,8 @@ public class DealNoticesTests
         Assert.Contains("internal static async Task NudgeAsync(", endpoints, StringComparison.Ordinal);
         // ثَلاثَةٌ لا اثنان (‏2026-10-11): لِكُلِّ دالَّةِ أُنبوبٍ جَرَسٌ واحِد، بِالدالَّةِ نَفسِها.
         // وأَربَعَةٌ مُنذُ ‏2026-10-12 (‏ADR-032 الخُطوَة 10): `NotifyPaidAsync` رابِعَةُ دَوالِّ الأُنبوب — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
-        Assert.Equal(4, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
+        // وخَمسَةٌ مُنذُ ‏2026-10-13 (مُراجَعَةُ المَوجَة 3a — G4 (iii)): `NotifyCancelledByStoreAsync` خامِسَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
+        Assert.Equal(5, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
     }
 
     /// <summary><c>/checkout/submit</c>: الصَفَقاتُ ذَواتُ المالِكِ تُجمَعُ في الحَلقَةِ،

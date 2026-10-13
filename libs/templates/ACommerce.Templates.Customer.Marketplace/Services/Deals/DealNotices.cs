@@ -118,6 +118,34 @@ public sealed class DealNotices
     public static string CancelledPushBody(Deal deal, string cancellerName, L l)
         => l.Format("notifications.deal_cancelled.push_body", cancellerName, deal.ListingTitle);
 
+    /// <summary>
+    /// <para><b>إشعارُ المُشتَري بِأَنّ إدارَةَ المَتجَرِ أَلغَت طَلَبَه — مِن الاستوديو</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (iii)؛
+    /// ‏ADR-036 §١٢‑٣). نَوعُه نَوعُ الإلغاءِ وأَيقونَتُه، ونَصُّه غَيرُ نَصِّ <see cref="CancelledFor"/>: ذاكَ «أَلغى البائِعُ طَلَبَكَ» بِاسمِ المُلغي،
+    /// ومالِكُ المَتجَرِ في الاستوديو لَيسَ بائِعَ الطَلَبِ في مَتجَرٍ مُتَعَدِّدِ البائِعين — ولا يُكتَبُ اسمُه الشَخصِيُّ في إشعارِ مُشتَرٍ لا يَعرِفُه.</para>
+    /// </summary>
+    public static Notification CancelledByStoreFor(string slug, Deal deal, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = deal.InitiatorId,
+        Type = CancelledType,
+        Title = l["notifications.deal_cancelled_by_store.title"],
+        Body = l.Format("notifications.deal_cancelled_by_store.body", deal.ListingTitle),
+        RelatedUrl = $"/{slug}/deals/{deal.Id}",
+        At = at,
+    };
+
+    public static string CancelledByStorePushBody(Deal deal, L l)
+        => l.Format("notifications.deal_cancelled_by_store.push_body", deal.ListingTitle);
+
+    /// <summary>
+    /// <para><b>أَقَبِلَ هذا التَقَدُّمُ الطَلَب؟</b> — نَجَحَ، وآخِرُ سَطرٍ في سِجِلِّ الصَفقَةِ الَّتي أَعادَها انتِقالٌ مِن <c>Offered</c> (‏2026-10-13،
+    /// مُراجَعَةُ المَوجَة 3a — G4 (iii)). بابُ التَقَدُّمِ العامُّ يُخرِجُ <c>Offered</c> إلى <c>Booked</c> بِفاعِلِها — الطَرَفِ المُقابِل — فَهو قَبولٌ
+    /// بِغَيرِ <c>/accept</c> (‏ADR-033 §٦‑ط‑٤: «يُعادِلُ القَبولَ بِلا إشعارِ المُشتَري»)؛ ومُستَهلِكُه نُقطَةُ التَقَدُّمِ في الـAPI. دالَّةٌ نَقِيَّة.</para>
+    /// </summary>
+    public static bool IsAcceptance(DealAdvanceResult res)
+        => res.Ok && res.Deal is { Timeline.Count: > 0 } d
+           && d.Timeline[^1] is { Action: "advanced", StageBefore: DealStage.Offered };
+
     /// <summary>إشعارُ مالِكِ الإعلانِ بِأَنّ ثَمَنَ الطَلَبِ دُفِعَ عِندَ بَوّابَةِ المَتجَر — عُنوانُ الإعلانِ والمَبلَغُ في المَتن.
     /// والمُستَلِمُ مَن يُستَلِمُ الطَلَبَ الجَديدَ نَفسُه (<see cref="NewDealRecipient"/>).</summary>
     public static Notification PaidFor(string slug, Deal deal, Guid ownerId, L l, DateTime at) => new()
@@ -209,6 +237,25 @@ public sealed class DealNotices
         }
         await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
         await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, CancelledPushBody(deal, cancellerName, l),
+            url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
+        return true;
+    }
+
+    /// <summary>بَعدَ إلغاءٍ ناجِحٍ مِن الاستوديو (<c>/studio/apps/{slug}/deals/{id}/cancel</c>): إشعارٌ لِلمُشتَري بِنَصِّ «إدارَةِ المَتجَر»
+    /// (<see cref="CancelledByStoreFor"/>) إن لَم يَكُن مالِكُ المَتجَرِ هُوَ المُشتَري (<see cref="TellsTheBuyer"/>) — وكانَ هذا الإلغاءُ صامِتاً
+    /// (تَوصيفُه <c>DealNoticeDoorsTests</c>). بِتَرتيبِ الأُنبوبِ نَفسِه. تُرجِعُ هَل أُشعِر. (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (iii).)</summary>
+    public async Task<bool> NotifyCancelledByStoreAsync(
+        string slug, Deal deal, Guid ownerId, L l, CancellationToken ct = default)
+    {
+        if (!TellsTheBuyer(deal, ownerId)) return false;
+        var n = CancelledByStoreFor(slug, deal, l, DateTime.UtcNow);
+        await using (var s = _store.LightweightSession(slug))
+        {
+            s.Store(n);
+            await s.SaveChangesAsync(ct);
+        }
+        await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
+        await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, CancelledByStorePushBody(deal, l),
             url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         return true;
     }

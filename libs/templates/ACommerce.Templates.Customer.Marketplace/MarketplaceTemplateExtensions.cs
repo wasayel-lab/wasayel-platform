@@ -3490,7 +3490,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/studio/apps/{slug}/deals/{id:guid}/cancel",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
                    Services.Incubator.StudioAuth auth, Services.Deals.DealsService deals,
-                   Services.Audit.AuditWriter audit) =>
+                   Services.Audit.AuditWriter audit, Services.Deals.DealNotices notices, L l) =>
         {
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
             var reason = req.Form["reason"].ToString().Trim();
@@ -3502,6 +3502,9 @@ public static class MarketplaceTemplateExtensions
             if (res.Ok) await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
                 "deal.cancel", "deal", id.ToString(), note: reason,
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
+            // والمُشتَري يُخبَرُ كَما يُخبَرُ مِن بابِ العُضو — بِنَصِّ «إدارَةِ المَتجَر» (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (iii)؛
+            // ‏ADR-036 §١٢‑٣): كانَ هذا الإلغاءُ صامِتاً (تَوصيفُه `DealNoticeDoorsTests`). و«مَن يُخبَر» والتَركيبُ في الخِدمَة.
+            if (res.Ok) await notices.NotifyCancelledByStoreAsync(slug, res.Deal!, auth.UserId!.Value, l);
             return Results.Redirect($"/studio/apps/{slug}/deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}"));
         }).DisableAntiforgery();
 

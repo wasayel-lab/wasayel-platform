@@ -307,7 +307,10 @@ public class EndpointBodyBleedTests
         // و**‏2667 بِلا تَحَرُّكٍ** يَوم ‏2026-10-12 (‏ADR-032 الخُطوَة 8 — شَطرُ `CardOffered`): سَطرا القَرارِ في `/checkout/submit` صارا
         // `GatewayPayments.CardFactsAsync` ثُمَّ `Decide` بِمُدخَلَيها، وسَطرُ الطَريقِ يَقرَأُ `card.ThroughGateway` بَدَلَ `ReadyAsync` الَّتي حُذِفَت؛
         // ومُدخَلُ نُقطَةِ الاشتِراكِ `PlansPayable` بِسَطرِه — فَالأَسطُرُ تَبَدَّلَت والعَدُّ كَما كان، والقَرارُ في `CheckoutCardFacts` النَقِيَّة.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2667),
+        // ‏2667 ← **2668** يَوم ‏2026-10-13 (مُراجَعَةُ المَوجَة 3a — G4 (iii)؛ ‏ADR-036 §١٢‑٣): سَطرٌ واحِدٌ في إلغاءِ الاستوديو الإداريّ —
+        // `DealNotices.NotifyCancelledByStoreAsync` بَعدَ إلغاءٍ ناجِح؛ و«مَن يُخبَر» والتَركيبُ في الخِدمَة. كانَ هذا الإلغاءُ صامِتاً والعُضوُ
+        // يُخبِر. طَبَعَ العَدّادُ «‏2667 → 2668» و**‏1 = 1**؛ والنِقاطُ ‏135.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2668),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -321,7 +324,12 @@ public class EndpointBodyBleedTests
         //
         // وسَقفُه ‏40 لا ‏0 لِأَنّ العَدّادَ يُثَبِّتُ الواقِع لا
         // الأُمنِيَة؛ ونُزولُه يُقال بِصَوتٍ ويَمُرّ.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Api/ApiV1Endpoints.cs", 40),
+        //
+        // ‏40 ← **45** يَوم ‏2026-10-13 (مُراجَعَةُ المَوجَة 3a — G4 (iii)؛ ‏ADR-036 §١٢‑٣): خَمسَةُ أَسطُرٍ **كُلُّها حَقنٌ أَو أَثَر، وصِفرُ سَطرِ قَرار** —
+        // سَطرا وَسيطِ الحَقنِ (`DealNotices notices, L l`) في النُقطَتَين، وسَطرُ الإشعارِ في كُلٍّ، وسَطرُ `return` الإلغاءِ بَعدَ أَن صارَ
+        // نَتيجَتُه مُتَغَيِّراً يُقرَأ. والقَرارُ — أَقَبولٌ هُوَ؟ مَن يُخبَر؟ — في `DealNotices.IsAcceptance`/`TellsTheBuyer` النَقِيَّتَين. كانَ الـAPI
+        // لا يُخبِرُ أَحَداً. طَبَعَ العَدّادُ «‏40 → 45» و«‏2993 → 2999» مَعَ سَطرِ مِلَفِّ النِقاط، و**‏5 + 1 = 6**؛ والنِقاطُ ‏135.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Api/ApiV1Endpoints.cs", 45),
 
         // ─── مِلَفٌّ ثالِثٌ — فَوتَرَةُ PayPal (‏ADR-004) ─────────────
         //
@@ -953,7 +961,10 @@ public class EndpointBodyBleedTests
     /// <remarks><b>‏2991 ← 2993 يَوم ‏2026-10-12</b> (موجزُ الفجوات P3-4): مِلَفُّ نِقاطٍ جَديد — <c>libs/core/ACommerce.Platform.Hosting/Readiness.cs</c>
     /// — بِنُقطَةِ الجاهِزِيَّةِ <c>/health/ready</c> في سَطرَينِ بِلا سَطرِ قَرار. طَبَعَ العَدّادُ «‏2991 → 2993» و«‏134 → 135»، و<b>‏2 = 2</b> —
     /// كُلُّ الزِيادَةِ في المِلَفِّ الجَديد، و<c>BuildIdentity.cs</c> (‏6) لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 2993;
+    /// <remarks><b>‏2993 ← 2999 يَوم ‏2026-10-13</b> (مُراجَعَةُ المَوجَة 3a — G4 (iii)): إلغاءُ الاستوديو ونُقطَتا الـAPI يَمُرُّونَ بِـ<c>DealNotices</c> —
+    /// سَطرٌ في مِلَفِّ النِقاطِ وخَمسَةٌ في <c>Api/ApiV1Endpoints.cs</c>، بِلا سَطرِ قَرار. طَبَعَ العَدّادُ «‏2993 → 2999»، و<b>‏1 + 5 = 6</b>؛ وعَدَدُ
+    /// النِقاطِ ‏135 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 2999;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

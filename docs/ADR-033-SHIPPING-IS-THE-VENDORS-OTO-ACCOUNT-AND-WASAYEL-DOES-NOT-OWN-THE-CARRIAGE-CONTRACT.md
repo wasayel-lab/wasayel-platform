@@ -328,6 +328,8 @@
 
 9. **إلحاقُ ‏2026-10-13 (تيّارُ S11b، بواقي الموجة 3a — G4 (i)) — «ما لا يُغلِقُه» الأوّلُ في البندِ 8 أُغلِق؛ ولا يُعادُ حرفٌ فوقَه.** (فقرةٌ مستقلّةٌ كالبندِ 8.) صفحةُ الاستوديو ترسمُ شريطَ الرفضِ برمزِه من معجمِها (`DealRefusalTexts.StudioKeyFor`)، والنقطةُ تسألُ `DealsService.AdminPathRefusal` — «لماذا» الدالّةِ نفسِها، و`AdminPathCanMove` «لا رمز» منها — وتعودُ بـ`?err=`. التفصيلُ والمقيسُ في `ADR-036` §١٢‑١. وسؤالُ «ب» S6a·١١ (مصيرُ صفقةِ البذرة) لم يُحسَم.
 
+10. **إلحاقُ ‏2026-10-13 (تيّارُ S11b، G4 (iii)) — «وتقدّمُ البائعِ المربوطِ من `Offered` بالـAPI بلا إشعار» (البند 6) أُغلِق؛ ولا يُعادُ حرفٌ فوقَه.** تقدّمُ الـAPI الذي يُخرِجُ `Offered` يُخبِرُ المشتريَ كقبولِ العضو (`DealNotices.IsAcceptance` ثمّ `NotifyAcceptedAsync`)، وإلغاؤه كإلغاءِ العضو. التفصيلُ في `ADR-036` §١٢‑٣.
+
 **مصادرُ هذا الإلحاق**: تيّارُ S6a (فرضيّةُ المنسّقِ مقيسةً قبلَ العمل)؛ §٢‑ج‑أ و§٦‑ج («ب» S4·٤) أعلاه؛ `META-MODEL.md` §4.3 و§8؛ `FLOWS-INVENTORY.md` §٢؛ `CLAUDE.md` القواعدُ ٢ و٣ و٤ و٦ و١٠ و١٢؛ **الكود**: `Services/Deals/DealsPolicy.cs` (`RequiredActorToLeave`) · `DealsService.cs` (`AdvanceAsync`، `AcceptAsync`) · `DealPatternCatalog.cs` · `DealPatternFlowBridge.cs` · `DealPatternValidator.cs` · `Services/Ux/DealTurnView.cs` · `Components/Pages/MyDealDetail.razor` · `Components/FlowExplainer.razor` · `Api/DealApi.cs` · `MarketplaceTemplateExtensions.cs` (المسارُ الإداريّ، وتعليقُ القبضِ في `/checkout/submit`)؛ **الفاحصون**: `DealActorToLeaveTests` · `DealTurnViewTests` · `DealPatternFlowBridgeTests` · `DealPatternValidatorTests` · `DealCounterpartyCharacterizationTests` · `DealCashPathCharacterizationTests` · `DealCashPolicyTests` · `DealOwnListingCharacterizationTests` · `DealPaidStageCharacterizationTests` · `EndpointBodyBleedTests`.
 
 ---
