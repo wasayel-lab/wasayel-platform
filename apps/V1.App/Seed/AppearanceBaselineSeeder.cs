@@ -218,8 +218,9 @@ public static class AppearanceBaselineSeeder
                 // ‏فِئَتانِ بِـ`Kind` واحِد (فارِغ) — فَيُصَيَّر فَرعُ
                 // الشَبَكَة المُسَطَّحَة لا فَرعُ الشَجَرَة، ويُعطي
                 // ‏`PatternProfileResolver.PatternOf` نَمَطَ
-                // ‏`Marketplace` (سَلَّة + هيرو «اطلُب مِن مَقاهيكَ
-                // المُفَضَّلَة») كَما في اللَقطَة.
+                // ‏`Marketplace` (سَلَّة + هيرو «تَصَفَّح المُنتَجات واطلُب
+                // ما تُحِبّ» — كانَ «اطلُب مِن مَقاهيكَ المُفَضَّلَة» حَتّى
+                // ‏2026-10-13) كَما في اللَقطَة.
                 Categories = new()
                 {
                     new Category { Slug = "general",  Label = "عام",      Icon = "🏠", Kind = "", SortOrder = 0 },

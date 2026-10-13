@@ -46,12 +46,15 @@ public class PatternProfileTextsCharacterizationTests
         Assert.Equal(expected, actual);
     }
 
-    /// <summary><b>اليَوم: بَطَلُ المَتجَرِ يُسَمّي المَقاهي</b> — وهو بَطَلُ كُلِّ مَتجَرٍ يولَدُ مِن الاستوديو مُنذُ ‏ADR-034
-    /// (‏<c>PatternOf</c> ← <c>Marketplace</c>)، لا مَقهىً فيه بِالضَرورَة. صَفٌّ مَفصولٌ لِيَنقَلِبَ بِاسمِه وَحدَه.</summary>
+    /// <summary><b>بَطَلُ المَتجَرِ يَصدُقُ عَلى أَيِّ مَتجَرٍ يَبيعُ مُنتَجات</b> (‏2026-10-13 — انقَلَبَ بِقَرارٍ مَرئِيٍّ مِن
+    /// <c>Today_the_marketplace_hero_names_cafes</c>: كانَ «اطلُب مِن مَقاهيكَ المُفَضَّلَة»، وهو بَطَلُ كُلِّ مَتجَرٍ يولَدُ مِن الاستوديو
+    /// مُنذُ ‏ADR-034 — لا مَقهىً فيه بِالضَرورَة، وقَد يَكونُ بائِعُه واحِداً (‏ADR-032 §٦)). والصُفوفُ الأَحَدَ عَشَرَ أَعلاه لَم تُمَسّ.</summary>
     [Fact]
-    public void Today_the_marketplace_hero_names_cafes()
+    public void The_marketplace_hero_is_true_for_any_store_that_sells_products()
     {
-        Assert.Equal("اطلُب مِن مَقاهيكَ المُفَضَّلَة", PatternProfileResolver.Profile(AppPattern.Marketplace).HomeHeroTitlePattern);
+        var hero = PatternProfileResolver.Profile(AppPattern.Marketplace).HomeHeroTitlePattern;
+        Assert.Equal("تَصَفَّح المُنتَجات واطلُب ما تُحِبّ", hero);
+        Assert.DoesNotContain("مَقاهي", hero, StringComparison.Ordinal);
     }
 
     /// <summary>ثَلاثَةُ أَنماطٍ بِلا تَحذيرِ احتِيال — <c>null</c> لا نَصٌّ فارِغ، فَالتَفاصيلُ لا تَرسُمُ تَنبيهاً (‏<c>IsNullOrEmpty</c>).</summary>
