@@ -40,9 +40,9 @@ public class ScriptExecutableBitTests
         Assert.Equal("verify-production-boot.sh",
             DotSlashScript.Match("./scripts/verify-production-boot.sh --keep-log").Groups["name"].Value);
         Assert.Equal("verify-static.sh", DotSlashScript.Match("        run: ./scripts/verify-static.sh").Groups["name"].Value);
-        Assert.False(DotSlashScript.IsMatch("bash scripts/verify-architecture.sh"));
-        Assert.False(DotSlashScript.IsMatch("../scripts/verify-css.sh"));
-        Assert.False(DotSlashScript.IsMatch("apps/./scripts/x.sh"));
+        Assert.DoesNotMatch(DotSlashScript, "bash scripts/verify-architecture.sh");
+        Assert.DoesNotMatch(DotSlashScript, "../scripts/verify-css.sh");
+        Assert.DoesNotMatch(DotSlashScript, "apps/./scripts/x.sh");
     }
 
     /// <summary><b>كُلُّ سكربتٍ تُشَغِّلُه وَثيقَةٌ حَيَّةٌ بِـ<c>./scripts/…</c> مَوجودٌ وبِتُّ تَنفيذِه مَضبوط</b> — والعَدّادانِ
@@ -67,10 +67,10 @@ public class ScriptExecutableBitTests
 
         if (OperatingSystem.IsWindows()) return;   // ‏لا بِتَّ تَنفيذٍ يُقرَأُ هُناك.
 
-        var notExecutable = named.Keys
-            .Where(n => (File.GetUnixFileMode(Path.Combine(RepoRoot, "scripts", n)) & UnixFileMode.UserExecute) == 0)
-            .OrderBy(n => n, StringComparer.Ordinal)
-            .ToList();
+        // حَلقَةٌ لا تَعبيرُ LINQ (‏2026-10-13): الحارِسُ `IsWindows` أَعلاه لا يَعبُرُ إلى داخِلِ تَعبيرِ lambda فَيُحَذِّرُ CA1416 — والحَلقَةُ يَراها.
+        var notExecutable = new List<string>();
+        foreach (var n in named.Keys.OrderBy(n => n, StringComparer.Ordinal))
+            if ((File.GetUnixFileMode(Path.Combine(RepoRoot, "scripts", n)) & UnixFileMode.UserExecute) == 0) notExecutable.Add(n);
         Assert.True(notExecutable.Count == 0,
             $"سكربتٌ تُشَغِّلُه وَثيقَتُه بِـ./ وهُوَ بِلا بِتِّ تَنفيذ ({named.Count} مُسَمّىً، {documents.Count} وَثيقَة) — "
           + "يُرَدُّ Permission denied (126) قَبلَ سَطرِه الأَوَّل؛ git update-index --chmod=+x scripts/<name>: "

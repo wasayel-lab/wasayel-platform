@@ -99,7 +99,7 @@ public class UpgradePromptPriceTests
     public void The_banner_draws_the_next_tiers_price_and_sell_button_only_for_a_tier_billing_sells()
     {
         var razor = Prompt();
-        Assert.Equal(1, Regex.Matches(razor, "MonthlyPriceSar").Count);
+        Assert.Single(Regex.Matches(razor, "MonthlyPriceSar"));
 
         var expected = new[] { "!string.IsNullOrEmpty(Reason)", "Offer is not null" };
         foreach (var marker in new[] { "BenefitsFor(", "href=\"/studio/billing\"", "MonthlyPriceSar" })

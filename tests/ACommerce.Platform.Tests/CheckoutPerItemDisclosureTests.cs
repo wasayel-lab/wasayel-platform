@@ -52,7 +52,7 @@ public class CheckoutPerItemDisclosureTests
         var loop = body.IndexOf("foreach (var item in cart.Items)", StringComparison.Ordinal);
         var start = body.IndexOf("await deals.StartAsync(", StringComparison.Ordinal);
         Assert.True(loop > 0 && start > loop, $"الحَلقَةُ {loop}، البَدءُ {start}.");
-        Assert.Equal(1, Regex.Matches(body, Regex.Escape("deals.StartAsync(")).Count);
+        Assert.Single(Regex.Matches(body, Regex.Escape("deals.StartAsync(")));
         Assert.Contains("listingId: item.ListingId", body, StringComparison.Ordinal);
         Assert.DoesNotContain("GroupBy", body, StringComparison.Ordinal);   // ‏لا تَجميعَ بِالبائِع
     }
@@ -72,7 +72,7 @@ public class CheckoutPerItemDisclosureTests
         Assert.Null(LocaleCatalog.Find("en", Key));
 
         var step = PaymentStep();
-        Assert.Equal(1, Regex.Matches(step, Regex.Escape($"@L.Markup(\"{Key}\")")).Count);
+        Assert.Single(Regex.Matches(step, Regex.Escape($"@L.Markup(\"{Key}\")")));
         var cards = step.IndexOf("acm-radio-cards", StringComparison.Ordinal);
         var cardsEnd = step.IndexOf("</div>\n                        @*", cards, StringComparison.Ordinal);
         var note = step.IndexOf(Key, StringComparison.Ordinal);
@@ -83,6 +83,6 @@ public class CheckoutPerItemDisclosureTests
 
         var page = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
             "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "CheckoutPage.razor"));
-        Assert.Equal(1, Regex.Matches(page, Regex.Escape(Key)).Count);   // ‏في الخُطوَةِ ٢ وَحدَها
+        Assert.Single(Regex.Matches(page, Regex.Escape(Key)));   // ‏في الخُطوَةِ ٢ وَحدَها
     }
 }

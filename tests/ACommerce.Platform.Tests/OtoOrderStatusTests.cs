@@ -1061,7 +1061,7 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         output.WriteLine($"ReceiveAsync: مُطابَقَة={match} · ناقِل={carrier} · تَوقيع={verify} · سُؤال={ask}");
         Assert.True(match > 0 && carrier > match && verify > carrier && ask > verify,
             $"التَرتيبُ مَكسور: مُطابَقَة={match} ناقِل={carrier} تَوقيع={verify} سُؤال={ask}");
-        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(receive, @"_oto\.GetOrderStatusAsync\(").Count);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(receive, @"_oto\.GetOrderStatusAsync\("));
     }
 
     [Fact]

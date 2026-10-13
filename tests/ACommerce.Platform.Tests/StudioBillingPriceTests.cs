@@ -63,7 +63,7 @@ public class StudioBillingPriceTests
     {
         var block = PriceBlock();
         var razor = Billing();
-        Assert.Equal(1, Regex.Matches(razor, Regex.Escape("@t.MonthlyPriceSar")).Count);
+        Assert.Single(Regex.Matches(razor, Regex.Escape("@t.MonthlyPriceSar")));
 
         var guarded = Regex.Match(block,
             @"@if \(StudioTierPurchase\.IsSelfGrantable\(t\.Tier\)\)\s*\{(?<sold>[^{}]*)\}\s*else\s*\{(?<limits>[^{}]*)\}");

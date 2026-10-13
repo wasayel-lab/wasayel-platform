@@ -48,7 +48,7 @@ public class StudioHomeActivePlanTests
     public void The_banner_is_unchanged_and_an_active_plan_renders_one_line_in_its_store_row()
     {
         var home = Home();
-        Assert.Equal(1, Regex.Matches(home, Regex.Escape("myApps.Where(a => Renewable(a.Slug))")).Count);
+        Assert.Single(Regex.Matches(home, Regex.Escape("myApps.Where(a => Renewable(a.Slug))")));
 
         var renewable = Regex.Match(home, @"bool Renewable\(string slug\)\s*=>(?<body>[^;]*);");
         Assert.True(renewable.Success, "لا `Renewable` — الأَداةُ عَمياء.");

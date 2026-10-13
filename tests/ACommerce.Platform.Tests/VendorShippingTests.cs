@@ -246,7 +246,7 @@ public class VendorShippingTests(ITestOutputHelper output)
     public void Is_vendor_entry_id_positive_and_negative(string? id, bool vendor)
     {
         Assert.Equal(vendor, TenantProviderBinding.IsVendorEntryId(id, out var capability, out var owner));
-        Assert.Equal(vendor ? id![..id.IndexOf(':')] : "", capability);
+        Assert.Equal(vendor ? id![..id!.IndexOf(':')] : "", capability);
         Assert.Equal(vendor ? Seller : Guid.Empty, owner);
     }
 
