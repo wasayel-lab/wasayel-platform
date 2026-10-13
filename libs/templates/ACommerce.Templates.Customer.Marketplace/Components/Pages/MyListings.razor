@@ -99,7 +99,7 @@
                 }
                 <form method="post" action="@($"/{Slug}/me/shipping/oto")">
                     <AcField Label="@L["shipping.vendor.field"]">
-                        <input name="refresh_token" type="password" autocomplete="off" class="ac-input" required />
+                        <input name="refresh_token" type="password" autocomplete="new-password" class="ac-input" required />
                     </AcField>
                     <AcButton Type="submit" Variant="primary" Block="true" Text="@L["shipping.vendor.save"]" />
                     <span style="display:block;margin-top:6px;font-size:12px;color:var(--ac-text-muted);line-height:1.7;">@L.Markup("shipping.vendor.hint")</span>

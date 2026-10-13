@@ -397,7 +397,9 @@ public class ProviderBindSurfaceTests
         var link = ProviderCatalog.Find("moyasar_hosted")!.Credential.Fields.Single();
 
         Assert.Equal("password", ProviderBindSurface.InputType(secret));
-        Assert.Equal("off", ProviderBindSurface.InputAutocomplete(secret));
+        // (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (xviii)؛ ولا يُعادُ حَرفٌ فَوقَه: «off» صارَ «new-password» — المُتَصَفِّحُ يَتَجاهَلُ «off» في حَقلِ
+        // كَلِمَةِ مُرور، فَيَملَؤُه بِالمَحفوظِ ويَعرِضُ حِفظَ مِفتاحِ التاجِر. والرابِطُ أَدناه بايتاً بِبايتٍ كَما كان.)
+        Assert.Equal("new-password", ProviderBindSurface.InputAutocomplete(secret));
 
         // والرابِطُ بِلا سِمَةٍ أَصلاً — فَيُصَيَّرُ حَقلُه بايتاً بِبايتٍ كَما كان.
         Assert.Null(ProviderBindSurface.InputType(link));
@@ -408,6 +410,36 @@ public class ProviderBindSurfaceTests
         Assert.Contains("autocomplete=\"@Services.Providers.ProviderBindSurface.InputAutocomplete(f)\"", razor, StringComparison.Ordinal);
         // والمَحفوظُ يُرسَمُ بِصورَتِه المُعَتَّمَة — ذَيلُ المَختومِ بَعدَ قِناع.
         Assert.Contains("v.Censored", razor, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>ولا حَقلَ كَلِمَةِ مُرورٍ في أَيِّ صَفحَةٍ بِـ<c>autocomplete="off"</c></b> (‏2026-10-13، G4 (xviii)): حُقولُ ما تَختِمُه الخِزانَةُ
+    /// كُلُّها — مِفتاحُ مَتجَرٍ في الاستوديو، ورَمزُ حِسابِ شَحنِ البائِعِ في «إعلاناتي» — <c>new-password</c> أَو بِدالَّةِ السَطح. فاحِصٌ يَعُدُّ ما فَحَص.</summary>
+    [Fact]
+    public void No_password_input_in_any_page_asks_the_browser_with_autocomplete_off()
+    {
+        var pages = 0;
+        var passwordInputs = 0;
+        var offenders = new List<string>();
+        foreach (var root in new[] { "libs", "apps" })
+        foreach (var f in Directory.EnumerateFiles(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, root), "*.razor", SearchOption.AllDirectories))
+        {
+            if (f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
+                f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)) continue;
+            pages++;
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(f), @"<input\b[^>]*>"))
+            {
+                var tag = m.Value;
+                if (!tag.Contains("type=\"password\"", StringComparison.Ordinal) && !tag.Contains("ProviderBindSurface.InputType(f)", StringComparison.Ordinal)) continue;
+                passwordInputs++;
+                if (tag.Contains("autocomplete=\"off\"", StringComparison.Ordinal)) offenders.Add($"{Path.GetFileName(f)}: {tag}");
+            }
+        }
+        Assert.True(pages > 100, $"أَداةٌ عَمياء: فُحِصَت {pages} صَفحَة.");
+        Assert.True(passwordInputs >= 2, $"أَداةٌ عَمياء: حُقولُ كَلِمَةِ المُرورِ المَفحوصَة {passwordInputs} — المُتَوَقَّعُ اثنانِ عَلى الأَقَلّ (الاستوديو و«إعلاناتي»).");
+        Assert.True(offenders.Count == 0, "حَقلُ سِرٍّ بِـautocomplete=\"off\": " + string.Join("؛ ", offenders));
+        Assert.Contains("<input name=\"refresh_token\" type=\"password\" autocomplete=\"new-password\"",
+            File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace",
+                "Components", "Pages", "MyListings.razor")), StringComparison.Ordinal);
     }
 
     [Fact]
