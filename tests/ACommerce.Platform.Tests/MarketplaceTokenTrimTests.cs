@@ -14,6 +14,8 @@ namespace ACommerce.Platform.Tests;
 // تُرسِلُها كَما هي إلى «Refresh Token» — فَتَرُدُّها OTO (`oto_token_refused`) عِندَ كُلِّ تَسجيل. يُقاسُ هُنا ما يُرسَلُ في جِسمِ المُبادَلَة.
 //
 // **ما يُقلَبُ بِاسمِه في كوميتِ الإصلاح**: صَفُّ «Today_» وَحدَه؛ وصَفُّ القيمَةِ البَيضاءِ يَبقى بِحَرفِه.
+// **قُلِبَ** (‏2026-10-13، كوميتُ «fix(shipping)» بَعدَ ‏d853837؛ ‏ADR-033 §٧‑ص‑١١): `VendorShippingSurface.MarketplaceTokenOf` تَقُصُّه مَرَّةً حَيثُ يُقرَأ —
+// يَقرَؤُها «أَمَضبوط؟» والتَسجيلُ مَعاً.
 
 public class MarketplaceTokenTrimTests(ITestOutputHelper output)
 {
@@ -37,19 +39,33 @@ public class MarketplaceTokenTrimTests(ITestOutputHelper output)
     internal static string FirstExchangeBody(DealShipTests.World w)
         => w.Oto.Calls.First(c => c.Path == OtoClient.RefreshTokenPath).Body ?? "";
 
-    [Fact]
-    public async Task Today_a_marketplace_token_with_a_trailing_newline_counts_as_configured_and_is_sent_with_it()
+    /// <summary><b>قُلِبَ</b> (‏2026-10-13) — كانَ <c>Today_a_marketplace_token_with_a_trailing_newline_counts_as_configured_and_is_sent_with_it</c>
+    /// (‏<c>d853837</c>): «المَدخَل: Register · جِسمُ المُبادَلَة: {"refresh_token":"MKT-token\n"}». والآن يُرسَلُ مَقصوصاً — والمَدخَلُ تَسجيلٌ كَما كان.</summary>
+    [Theory]
+    [InlineData("MKT-token\n")]
+    [InlineData("MKT-token\r\n")]
+    [InlineData("  MKT-token\t")]
+    public async Task A_marketplace_token_with_surrounding_whitespace_is_trimmed_once_where_read_and_sent_without_it(string configured)
     {
         var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
-        var surface = Surface(w, "MKT-token\n");
+        var surface = Surface(w, configured);
 
         var input = surface.Input;
         var res = await surface.RegisterAsync(Slug, VendorShippingTests.Registrant(Guid.NewGuid()), VendorShippingTests.Form(), Inbound);
         var body = FirstExchangeBody(w);
-        output.WriteLine($"المَدخَل: {input} · التَسجيل: {res.Code ?? "ok"} · جِسمُ المُبادَلَة: {body.Replace("\n", "⏎", StringComparison.Ordinal)}");
+        output.WriteLine($"المَدخَل: {input} · التَسجيل: {res.Code ?? "ok"} · جِسمُ المُبادَلَة: {body}");
 
         Assert.Equal(VendorShippingInput.Register, input);
-        Assert.Contains("\"MKT-token\\n\"", body, StringComparison.Ordinal);
+        Assert.Contains("{\"refresh_token\":\"MKT-token\"}", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>والقَصُّ لِلطَرَفَينِ وَحدَهُما: ما في وَسَطِ الرَمزِ يُرسَلُ كَما هُوَ.</summary>
+    [Fact]
+    public void Only_the_edges_are_trimmed()
+    {
+        Assert.Equal("MKT tok", VendorShippingSurface.MarketplaceTokenOf(new OtoOptions { MarketplaceToken = " MKT tok \n" }));
+        Assert.Null(VendorShippingSurface.MarketplaceTokenOf(new OtoOptions { MarketplaceToken = " \n" }));
+        Assert.Null(VendorShippingSurface.MarketplaceTokenOf(null));
     }
 
     /// <summary>وقيمَةٌ بَيضاءُ كُلُّها لَيسَت رَمزاً — المَدخَلُ لَصق. يَبقى بِحَرفِه بَعدَ الإصلاح.</summary>

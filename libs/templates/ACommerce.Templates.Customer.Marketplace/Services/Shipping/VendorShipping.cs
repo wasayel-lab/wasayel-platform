@@ -57,9 +57,19 @@ public static class VendorShippingSurface
     public static string AadFor(string tenantSlug, string fieldCode, Guid listingOwner)
         => ProviderVault.AadOf(tenantSlug, ProviderCapabilities.Delivery, fieldCode, listingOwner.ToString("D"));
 
-    /// <summary>أَضُبِطَ الرَمزُ السوقِيُّ بِالبيئَة؟</summary>
+    /// <summary>أَضُبِطَ الرَمزُ السوقِيُّ بِالبيئَة؟
+    /// <para>(‏2026-10-13، G5 (xiii) — ولا يُعادُ حَرفٌ فَوقَه: بِـ<see cref="MarketplaceTokenOf"/> — الجَوابُ نَفسُه، والقِراءَةُ الواحِدَةُ نَفسُها الَّتي يُرسِلُها التَسجيل.)</para></summary>
     public static bool MarketplaceTokenConfigured(OtoOptions? options)
-        => !string.IsNullOrWhiteSpace(options?.MarketplaceToken);
+        => MarketplaceTokenOf(options) is not null;
+
+    /// <summary>
+    /// <para><b>الرَمزُ السوقِيُّ كَما يُرسَل — مَقصوصاً مَرَّةً حَيثُ يُقرَأ</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (xiii)؛ ‏ADR-033 §٧‑ص‑١١): أَو <c>null</c>
+    /// لِلغائِبِ والأَبيَضِ كُلِّه. كَما يُقَصُّ رَمزُ التَهيئَةِ في <c>DealShipping.VendorTokenFor</c> — فَقيمَةٌ بِسَطرٍ جَديدٍ في آخِرِها (تُلصَقُ في أَداةِ
+    /// أَسرارٍ كَثيراً) كانَت «مَضبوطَةً» وتُرسَلُ بِسَطرِها فَتَرُدُّها OTO عِندَ كُلِّ تَسجيل (تَوصيفُه <c>d853837</c>). يَقرَؤُه
+    /// <see cref="MarketplaceTokenConfigured"/> و<see cref="VendorShippingService.RegisterAsync"/> وَحدَهُما.</para>
+    /// </summary>
+    public static string? MarketplaceTokenOf(OtoOptions? options)
+        => string.IsNullOrWhiteSpace(options?.MarketplaceToken) ? null : options.MarketplaceToken.Trim();
 
     /// <summary>
     /// <para><b>أَيُّ المَدخَلَين — دالَّةٌ نَقِيَّةٌ واحِدَةٌ تَقرَؤُها الشاشَةُ والنُقطَة</b> (‏ADR-033 §٢‑أ: «القرارُ "أيُّ المدخلَينِ يُرسَم"
@@ -562,7 +572,8 @@ public sealed class VendorShippingService
 
             await _audit.WriteAsync(tenantSlug, owner, vendor.Name, RegisterAuditAction, "provider", entryId,
                 note: "register", ip: ip, ct: ct);
-            var registered = await _oto.RegisterVendorAsync(_opts.MarketplaceToken, sent.ToOto(), ct);
+            // (‏2026-10-13، G5 (xiii)): الرَمزُ مَقصوصاً — القِراءَةُ نَفسُها الَّتي فَتَحَت هذا المَسار (`Input == Register`)، فَلا يَكونُ null هُنا.
+            var registered = await _oto.RegisterVendorAsync(VendorShippingSurface.MarketplaceTokenOf(_opts)!, sent.ToOto(), ct);
             if (registered.Value is not { } account)
             {
                 _log.LogInformation("[OTO] vendor {Slug}/{Owner} ← register refused ({Code})",
