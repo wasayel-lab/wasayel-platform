@@ -279,6 +279,26 @@ public class ProviderBindSurfaceTests
         Assert.DoesNotContain("ProviderCatalog.BindableCapabilities", razor, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم»</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (xxii)): الصَفحَةُ تَرسُمُ أَقسامَ القُدُراتِ وتُحَمِّلُ رَبطَها القائِمَ
+    /// لِلقُدُراتِ الَّتي لَها بِطاقَةٌ مَعروضَةٌ وَحدَها (<c>OfferedCapabilities(Vault)</c> في الحَلقَتَين) — فَقُدرَةٌ كُلُّ مُزَوِّديها يَحتاجونَ الخِزانَةَ
+    /// تَختَفي كُلُّها حينَ يُزالُ المِفتاحُ الرَئيس، ومَعَها رَبطُها المَختومُ وزِرُّ سَحبِه. <b>وكامِنٌ اليَوم — مَقيساً</b>: «مَدفوعات» تَبقى بِلا خِزانَةٍ
+    /// لِأَنّ الرابِطَ المُستَضافَ لا يَحتاجُها، فَرَبطُ «ميسر — مِفتاح سِرّيّ» يُرى فيها. يُقلَبُ بِاسمِه في كوميتِ الإصلاح.</para>
+    /// </summary>
+    [Fact]
+    public void Today_the_studio_providers_page_draws_and_loads_bindings_only_for_capabilities_with_an_offered_card()
+    {
+        var razor = StudioProvidersRazor();
+        Assert.Equal(2, razor.Split("Services.Providers.ProviderBindSurface.OfferedCapabilities(Vault)", StringSplitOptions.None).Length - 1);
+        Assert.Contains("@foreach (var capability in Services.Providers.ProviderBindSurface.OfferedCapabilities(Vault))", razor, StringComparison.Ordinal);
+        Assert.Contains("foreach (var capability in Services.Providers.ProviderBindSurface.OfferedCapabilities(Vault))\n        {\n            var doc = await Providers.CurrentAsync(Slug, capability);",
+            razor.Replace("\r", ""), StringComparison.Ordinal);
+
+        // والكامِن: «مَدفوعات» مَعروضَةٌ بِلا خِزانَةٍ بِالرابِطِ وَحدَه.
+        Assert.Equal(new[] { ProviderCapabilities.Payments }, ProviderBindSurface.OfferedCapabilities(ProviderVault.FromKek(null)).ToArray());
+        Assert.Equal(new[] { "moyasar_hosted" }, ProviderBindSurface.Offered(ProviderCapabilities.Payments, ProviderVault.FromKek(null)).Select(d => d.Slug).ToArray());
+    }
+
     private static string StudioProvidersRazor()
     {
         var path = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
