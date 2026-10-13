@@ -92,3 +92,25 @@ public class GatewayClosedInvoiceTests(ITestOutputHelper output)
             ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "deals.detail.ref_gateway_invoice_closed"));
     }
 }
+
+// ═══ بابُ «سَجِّل الدُّخول» في صَفحَةِ العَودَةِ يُضَيِّعُ الصَفقَةَ — تَوصيفُ «اليَوم» (‏2026-10-13، G5 (xvii-g)) ═══════════════════════
+//
+// مُشتَرٍ انتَهَت جَلسَتُه يَعودُ مِن البَوّابَةِ إلى `/{slug}/pay/return?deal={N}` فَيَرى «سَجِّل الدُّخولَ لِتَأكيدِ دَفعِ طَلَبِك» — وبابُه `login`
+// بِلا `returnUrl` (جيرانُه كُلُّهُم يُمَرِّرونَه: `CartPage` و`MyDeals` و`GatedPage`)، فَيَعودُ بَعدَ الدُخولِ إلى بِدايَةِ المَتجَرِ و`?deal=` ضاع.
+// **ما يُقلَبُ بِاسمِه في كوميتِ الإصلاح**: الصَفُّ أَدناه.
+
+public class GatewayReturnLoginDoorTests(ITestOutputHelper output)
+{
+    private static string Page() => WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(Path.Combine(
+        ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "GatewayPayReturn.razor"))));
+
+    [Fact]
+    public void Today_the_return_pages_login_door_carries_no_return_url()
+    {
+        var page = Page();
+        var door = page[page.IndexOf("@if (!Auth.IsAuthenticated)", StringComparison.Ordinal)..page.IndexOf("else if (refusalKey is not null)", StringComparison.Ordinal)];
+        output.WriteLine(door.Trim());
+        Assert.Contains("ActionHref=\"@AuthSession.LinkFor(Slug, Role, \"login\")\"", door, StringComparison.Ordinal);
+        Assert.DoesNotContain("returnUrl", door, StringComparison.Ordinal);
+    }
+}
