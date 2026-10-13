@@ -203,10 +203,15 @@ esac
 # ═══ ٢) بِناءُ المَتجَر ═══════════════════════════════════════════════
 STEP="٢ — بِناءُ المَتجَر"
 say "٢ · بِناءُ المَتجَرِ مِن الاستوديو"
+# ‏صاحِبُ المَتجَرِ مَن بَنى: رائِدُ الأَعمالِ في المَسارِ الحَقيقيّ، ومُشرِفُ المَنَصَّةِ في مَسارِ
+# التَطوير — وجَلسَتُه وهاتِفُه يَمشِيانِ الخُطوَتَينِ ٨ و٩. ‏(‏2026-10-13: كانَ المُشرِفُ مَكتوباً
+# مالِكاً في الخُطوَتَين؛ فَالمَسارُ الحَقيقيُّ لَم يُمشَ قَطّ — مَقيسٌ بِبَديلٍ مَحَلِّيٍّ لِلمُزَوِّد.)
 if [ "$ANALYSIS" = done ]; then
-    BUILD_JAR="$J_ENT"; SID="$ENT_SID"; info "المَصدَر: جَلسَةُ الخُطوَة ١ نَفسُها (تَحليلٌ حَقيقيّ)"
+    OWNER_JAR="$J_ENT"; OWNER_PHONE="$P_ENT"; SID="$ENT_SID"
+    # ‏السكربتُ لا يَرى المُزَوِّدَ خَلفَ الخادِم: سَطرُ `[agent] Analysis:` في سِجِلِّ الإقلاعِ يُسَمّيه.
+    info "المَصدَر: جَلسَةُ الخُطوَة ١ نَفسُها — اكتَمَلَ تَحليلُها عِندَ المُزَوِّدِ المَضبوطِ في الخادِم (سَطرُ «[agent] Analysis:» في سِجِلِّ الإقلاعِ يُسَمّيه)"
 else
-    BUILD_JAR="$J_ADM"
+    OWNER_JAR="$J_ADM"; OWNER_PHONE="$ADMIN_PHONE"
     SID="$(grep -o 'Guid.Parse("[0-9a-f-]*")' "$SAMPLE_SEEDER" | head -1 | sed 's/.*("//; s/")//')"
     info "المَصدَر: المَسارُ المُوَثَّقُ لِلتَطوير — جَلسَةُ IncubatorSampleSeeder ($SID) لِحِسابِ $ADMIN_PHONE"
     post "$J_ADM" /studio/auth/login --data-urlencode "phone=$ADMIN_PHONE"
@@ -214,10 +219,10 @@ else
     post "$J_ADM" /studio/auth/verify --data-urlencode method=phone --data-urlencode "phone=$ADMIN_PHONE" --data-urlencode "code=$DEV_CODE"
     check "$([ "$CODE" = 302 ] && [[ "$LOC" != *err=* ]] && echo 1 || echo 0)" "POST /studio/auth/verify (المُشرِف) → $CODE $LOC"
 fi
-get "$BUILD_JAR" "/studio/s/$SID" "$F"
+get "$OWNER_JAR" "/studio/s/$SID" "$F"
 if grep -q "action=\"/studio/s/$SID/build\"" "$F"; then
     check 1 "GET /studio/s/$SID → $CODE · استِمارَةُ البِناءِ مَرسومَة"
-    post "$BUILD_JAR" "/studio/s/$SID/build" --data-urlencode "slug=$SLUG" \
+    post "$OWNER_JAR" "/studio/s/$SID/build" --data-urlencode "slug=$SLUG" \
         --data-urlencode "name=سوقُ الجَولَة $MARK" --data-urlencode "color=#2563eb" \
         --data-urlencode "tagline=مَتجَرٌ يَجمَعُ بائِعين" --data-urlencode "city=الرِياض"
     check "$([ "$CODE" = 302 ] && [ "$LOC" = "/studio/apps/$SLUG?built=1" ] && echo 1 || echo 0)" \
@@ -269,6 +274,18 @@ post "$J_VEN" "/$SLUG/terms/accept"
 check "$([ "$CODE" = 302 ] && echo 1 || echo 0)" "POST /$SLUG/terms/accept → $CODE $LOC"
 get "$J_VEN" "/$SLUG/create-listing" "$F"
 CAT="$(grep -o '<input type="hidden" name="category" value="[^"]*"' "$F" | head -1 | sed 's/.*value="//; s/"$//')"
+if [ -z "$CAT" ]; then
+    # ‏فِئَةٌ واحِدَةٌ تُختارُ وَحدَها (حَقلٌ مَخفِيّ)، وأَكثَرُ مِنها شَبَكَةُ رَوابِطَ `create-listing?category=…`
+    # (‏`CreateListing.razor`) — يُنقَرُ أَوَّلُها كَما يَنقُرُ البائِع. ‏(‏2026-10-13: كانَ الحَقلُ المَخفِيُّ وَحدَه
+    # يُقرَأ — شَكلُ مَتجَرِ العَيِّنَةِ بِفِئَتِه الواحِدَة — فَمَتجَرُ فَرعِ `ecommerce` بِفِئَتَيه يُوقِفُ الرِحلَةَ «الفِئَة «»».)
+    NPICK="$(count "$F" 'create-listing?category=')"
+    PICK="$(grep -o 'href="[^"]*create-listing?category=[^"]*"' "$F" | head -1 | sed 's/^href="//; s/"$//')"
+    check "$([ "$CODE" = 200 ] && [ -n "$PICK" ] && echo 1 || echo 0)" \
+        "GET /$SLUG/create-listing → $CODE · شَبَكَةُ $NPICK فِئَة — يُنقَرُ أَوَّلُها: $PICK"
+    [ -n "$PICK" ] || die "لا حَقلَ فِئَةٍ ولا شَبَكَةَ فِئاتٍ في /$SLUG/create-listing"
+    get "$J_VEN" "$PICK" "$F"
+    CAT="$(grep -o '<input type="hidden" name="category" value="[^"]*"' "$F" | head -1 | sed 's/.*value="//; s/"$//')"
+fi
 check "$([ "$CODE" = 200 ] && [ -n "$CAT" ] && echo 1 || echo 0)" "GET /$SLUG/create-listing → $CODE · الفِئَة «$CAT»"
 post "$J_VEN" "/$SLUG/listings/create" -F "title=تَمرُ سُكَّري — إعلانُ فَحصٍ $MARK" \
     -F "description=إعلانُ فَحصٍ آليّ في جَولَةِ الجاهِزِيَّة" -F "category=$CAT" -F price=100 \
@@ -366,7 +383,7 @@ post "$J_ADM" "/admin/tenants/$SLUG/plan/save" --data-urlencode plan=manual --da
     --data-urlencode "expires=$EXPIRES" --data-urlencode grace=14 --data-urlencode price=0
 check "$([ "$CODE" = 302 ] && [[ "$LOC" == *saved=1* ]] && echo 1 || echo 0)" "POST /admin/tenants/$SLUG/plan/save → $CODE $LOC"
 LINE="$(ar studio.plan.active_line)"; LINE="${LINE/\{0\}/$PLAN_LABEL}"; LINE="${LINE/\{1\}/$EXPIRES}"
-get "$J_ADM" /studio "$F"
+get "$OWNER_JAR" /studio "$F"
 check "$([ "$CODE" = 200 ] && has "$F" "$LINE" && echo 1 || echo 0)" "GET /studio (المالِك) → $CODE · «$LINE»"
 
 # ═══ ٩) المالِكُ يَمنَحُ نَفسَه إدارَةَ مَتجَرِه — عَدَدُ الأَفعال ════════
@@ -376,35 +393,35 @@ ACTS=0
 # نُصوصُ الرَوابِطِ مِن القامُوسِ كَسائِرِ الفُحوص — ‏(‏2026-10-13: كانَ السَطرُ يَطبَعُ «افتَح المَتجَر» و«المُستَخدِمون»
 # وَصفاً مِن الذاكِرَة، ولا نَصَّ بِهِما في الصَفحَة؛ والمَفحوصُ كانَ العُنوانَينِ وَحدَهُما.)
 PREVIEW="$(ar studio.app_nav.preview)"; USERS_LINK="$(ar studio.app.users_title)"; HAVE_ACCOUNT="$(ar roles.landing.have_account)"
-get "$J_ADM" "/studio/apps/$SLUG" "$F"
+get "$OWNER_JAR" "/studio/apps/$SLUG" "$F"
 check "$([ "$CODE" = 200 ] && grep -q "href=\"/$SLUG\"" "$F" && grep -q "href=\"/admin/tenants/$SLUG/users?from=studio\"" "$F" \
         && has "$F" "$PREVIEW" && has "$F" "$USERS_LINK" && echo 1 || echo 0)" \
     "GET /studio/apps/$SLUG → $CODE · «$PREVIEW» إلى /$SLUG و«$USERS_LINK» إلى …/users?from=studio"
-get "$J_ADM" "/$SLUG" "$F"; ACTS=$((ACTS + 1))
+get "$OWNER_JAR" "/$SLUG" "$F"; ACTS=$((ACTS + 1))
 check "$([ "$CODE" = 200 ] && grep -q "href=\"/$SLUG/login\"" "$F" && has "$F" "$HAVE_ACCOUNT" && echo 1 || echo 0)" \
     "[فِعل $ACTS] GET /$SLUG → $CODE · «$HAVE_ACCOUNT» ورابِطُ /$SLUG/login"
-get "$J_ADM" "/$SLUG/login" "$F"; ACTS=$((ACTS + 1))
+get "$OWNER_JAR" "/$SLUG/login" "$F"; ACTS=$((ACTS + 1))
 check "$([ "$CODE" = 200 ] && echo 1 || echo 0)" "[فِعل $ACTS] GET /$SLUG/login → $CODE"
-store_login "$J_ADM" "$SLUG" "$ADMIN_PHONE"; ACTS=$((ACTS + 2))
+store_login "$OWNER_JAR" "$SLUG" "$OWNER_PHONE"; ACTS=$((ACTS + 2))
 info "[فِعل $((ACTS - 1))–$ACTS] الهاتِفُ ثُمَّ الرَمز → $LOC"
-STUDIO_LINKS="$(get "$J_ADM" "$LOC" "$F"; count "$F" 'href="/studio')"
+STUDIO_LINKS="$(get "$OWNER_JAR" "$LOC" "$F"; count "$F" 'href="/studio')"
 info "رابِطُ عَودَةٍ إلى الاستوديو مِن $LOC: $STUDIO_LINKS — فَالعَودَةُ بِزِرِّ المُتَصَفِّحِ أَو بِكِتابَةِ العُنوان، لا بِنَقرَة"
-get "$J_ADM" "/admin/tenants/$SLUG/users?from=studio" "$F"; ACTS=$((ACTS + 1))
+get "$OWNER_JAR" "/admin/tenants/$SLUG/users?from=studio" "$F"; ACTS=$((ACTS + 1))
 # الصَفُّ الَّذي يَحمِلُ هاتِفَ المالِكِ واستِمارَتَه — كُتلَةً كُتلَة، لا أَوَّلُ استِمارَةٍ في الصَفحَة.
-OWN_ROW="$(dec "$F" | PH="$ADMIN_PHONE" perl -0777 -ne \
+OWN_ROW="$(dec "$F" | PH="$OWNER_PHONE" perl -0777 -ne \
     'for my $b (split /class="acm-cat-row"/) { if (index($b, $ENV{PH}) >= 0 && $b =~ m{users/([0-9a-f-]{36})/(grant|revoke)-admin}) { print "$1 $2"; last } }')"
 OWN_ID="${OWN_ROW%% *}"; OWN_ACT="${OWN_ROW##* }"
 check "$([ "$CODE" = 200 ] && [ -n "$OWN_ROW" ] && echo 1 || echo 0)" \
-    "[فِعل $ACTS] GET /admin/tenants/$SLUG/users?from=studio → $CODE · صَفُّ $ADMIN_PHONE (${OWN_ACT:-غائِب})"
+    "[فِعل $ACTS] GET /admin/tenants/$SLUG/users?from=studio → $CODE · صَفُّ $OWNER_PHONE (${OWN_ACT:-غائِب})"
 [ -n "$OWN_ROW" ] || die "صَفُّ المالِكِ غائِبٌ في شاشَةِ المُستَخدِمين"
 if [ "$OWN_ACT" = grant ]; then
-    post "$J_ADM" "/admin/tenants/$SLUG/users/$OWN_ID/grant-admin"; ACTS=$((ACTS + 1))
+    post "$OWNER_JAR" "/admin/tenants/$SLUG/users/$OWN_ID/grant-admin"; ACTS=$((ACTS + 1))
     check "$([ "$CODE" = 302 ] && [[ "$LOC" == *saved=1* ]] && echo 1 || echo 0)" \
         "[فِعل $ACTS] POST …/users/$OWN_ID/grant-admin «$(ar admin.tenant_users.grant)» → $CODE $LOC"
 else
     info "المالِكُ مُشرِفُ مَتجَرِه مِن جَولَةٍ سابِقَة (‏revoke-admin في صَفِّه) — لا مَنحَ ثانِياً، والعَدُّ لِلجَولَةِ الأولى"
 fi
-get "$J_ADM" "/$SLUG/manage" "$F"
+get "$OWNER_JAR" "/$SLUG/manage" "$F"
 check "$([ "$CODE" = 200 ] && has "$F" "$(ar tenant.manage.subtitle)" && echo 1 || echo 0)" \
     "GET /$SLUG/manage (جَلسَةُ المالِكِ في مَتجَرِه) → $CODE · «$(ar tenant.manage.subtitle)»"
 info "أَوَّلُ مُشرِفٍ لِمَتجَرٍ مَبنِيّ: $ACTS أَفعالٍ داخِلَ المُنتَج + عَودَةٌ واحِدَةٌ خارِجَه (بِلا رابِط)"
