@@ -304,6 +304,7 @@ public class DealMoneyClaimFirstTests
 // بِتَسجيلِ الصَفقَةِ الَّذي يُناديه القالِب)، ومُستَأجِرٌ مُؤَقَّتٌ يُمسَحُ بَعدَه — لا `ashare`. الكاتِبُ الآخَرُ إلحاقُ مَرجِعٍ يُحفَظُ
 // بَينَ قِراءَةِ الكاتِبِ المُعَلَّمِ وحِفظِه؛ ثُمَّ تُعادُ المُحاوَلَةُ بِالخِدمَةِ نَفسِها كَما يُعيدُها صاحِبُ النَقرَة.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveDealMoneyClaimFirstProofTests(ITestOutputHelper output)
 {
     private static bool Enabled

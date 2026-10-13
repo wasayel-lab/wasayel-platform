@@ -1377,6 +1377,7 @@ internal class TenantAlias : DispatchProxy
 // لا شَبَكَة) ويُقَرِّرُ ويَقِفُ قَبلَ حِفظِ الانتِقال؛ ثُمَّ تُكتَبُ كِتابَةٌ أُخرى وتُحفَظ؛ ثُمَّ يُستَأنَف — فَيَرُدُّه Marten نَفسُه.
 // مُبَوَّبٌ بِـWASAYEL_LIVE_PROOF=1 وConnectionStrings__Postgres، ومُستَأجِرٌ مُؤَقَّتٌ يُمسَحُ بَعدَه.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveOtoOrderStatusProofTests(ITestOutputHelper output)
 {
     private sealed class ForbiddenPaymentProvider : IPaymentProvider

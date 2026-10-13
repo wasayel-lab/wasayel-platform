@@ -371,6 +371,7 @@ public class DealNoticesTests
 // اشتِراكاتَ لِلمُستَخدِمِ فَلا يُرسَلُ شَيء — المَقيسُ هُنا **الوَثيقَةُ**: لِمَن كُتِبَت
 // وبِأَيِّ نَوع، وأَنّ صَفقَةً بِلا مالِكٍ أَو غَيرَ مَوجودَةٍ لا تُشعِرُ أَحَداً.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveDealNoticesProofTests(ITestOutputHelper output)
 {
     private static bool Enabled =>

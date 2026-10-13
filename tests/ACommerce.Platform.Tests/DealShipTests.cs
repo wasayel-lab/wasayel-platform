@@ -1621,6 +1621,7 @@ public class DealShipTests(ITestOutputHelper output)
 // وتَقِفُ قَبلَ الحِفظ؛ ثُمَّ تُكتَبُ كِتابَةٌ أُخرى وتُحفَظ؛ ثُمَّ تُستَأنَف — فَيَرُدُّها Marten نَفسُه، ويُعادُ الإلحاق.
 // مُبَوَّبٌ بِـWASAYEL_LIVE_PROOF=1 وConnectionStrings__Postgres، ومُستَأجِرٌ مُؤَقَّتٌ يُمسَحُ بَعدَه.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveDealShipProofTests(ITestOutputHelper output)
 {
     private sealed class ForbiddenPaymentProvider : IPaymentProvider

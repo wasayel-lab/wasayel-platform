@@ -809,6 +809,7 @@ public class OtoClientTests
 // («‏"weight":"3","originCity":"Riyadh","destinationCity":"Jeddah"») ما لَم يُضبَط غَيرُها. ولا
 // يُنشِئُ طَلَباً: البوليصَةُ الواحِدَةُ تُبرهَنُ مِن تَطبيقِ `theme-demo` نَفسِه.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveOtoStagingProofTests(ITestOutputHelper output)
 {
     private static bool Enabled => Environment.GetEnvironmentVariable("WASAYEL_LIVE_PROOF") == "1";

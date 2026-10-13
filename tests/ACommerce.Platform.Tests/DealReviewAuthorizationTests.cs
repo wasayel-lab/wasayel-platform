@@ -246,6 +246,7 @@ public class DealReviewAuthorizationTests
 // مُلَخَّصِ البائِع، ويُقَيِّمُ البائِعُ المُشتَري؛ وأَنّ مُشتَرِيَ إعلانِه لا يُربَطُ طَرَفاً (`3a92617`)،
 // وأَنّ صَفقَةً قَديمَةً طَرَفاها واحِدٌ تُرَدُّ بِـ`self_review`. مُستَأجِرٌ عَشوائِيٌّ يُنَظَّفُ بَعدَه.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveDealReviewProofTests(ITestOutputHelper output)
 {
     private static bool Enabled =>

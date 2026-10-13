@@ -527,6 +527,7 @@ public class DealCounterpartyCharacterizationTests
 // وأَنّ القَبولَ الثاني يُرَدُّ — ومُزَوِّدُ الدَفعِ يَرمي عِندَ أَيِّ نِداء، فَإن
 // مَسَّ القَبولُ المالَ أَحمَرّ. **شُغِّلَ عَلى Postgres المَحَلِّيِّ قَبلَ القَلبِ وبَعدَه.**
 
+[Collection(LiveProofCollection.Name)]
 public class LiveDealAcceptSequenceProofTests(ITestOutputHelper output)
 {
     private static bool Enabled =>

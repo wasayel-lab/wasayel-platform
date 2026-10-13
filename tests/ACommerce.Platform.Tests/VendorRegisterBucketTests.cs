@@ -147,6 +147,7 @@ public class VendorRegisterBucketTests(ITestOutputHelper output)
 // المُعالِجُ نَفسُه الَّذي تُناديه نُقطَةُ الدُخولِ عَشرَ مَرّاتٍ بِنَصِّ التَسجيل، ثُمَّ خِدمَةُ السَطحِ عَلى Postgres: البائِعُ يُسَجَّلُ ويُختَمُ مَدخَلُه
 // ويُكتَبُ سَطرُ أَثَرِه في مُستَأجِرِه. مُستَأجِرٌ مُؤَقَّتٌ يُمسَحُ بَعدَه.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveVendorRegisterBucketProofTests(ITestOutputHelper output)
 {
     private static bool Enabled

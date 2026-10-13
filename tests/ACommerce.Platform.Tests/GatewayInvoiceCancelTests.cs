@@ -469,6 +469,7 @@ public class GatewayInvoiceCancelTests(ITestOutputHelper output)
 // فاتورَةٍ واحِدَةٍ في قاعِدَةٍ حَقيقِيَّة، ورَبطُ دَفعٍ مَختومٌ في وَثيقَتِه، ومُعالِجٌ يُعيدُ رُدودَ الوَثيقَة: إلغاءُ الأولى يَسأَلُ ويُبقي، وإلغاءُ
 // الأَخيرَةِ يَسأَلُ ويُلغي — والمُحَمِّلُ قِراءَةُ Marten نَفسُها بَعدَ حِفظِ الإلغاء.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveGatewayInvoiceCancelProofTests(ITestOutputHelper output)
 {
     private static bool Enabled

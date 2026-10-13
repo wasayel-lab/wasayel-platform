@@ -22,6 +22,7 @@ namespace ACommerce.Platform.Tests;
 // أَبطَلَ كاشَه وأَعادَ البَثّ بِلا إعادَة تَشغيل. الكِتابَة عَبر HTTP
 // هي بِعَينِها ما يَجعَل «نَفس الـPID» دَعوىً قابِلَة لِلفَحص.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveThemeProofTests
 {
     private const string TenantSlug = "adwar-demo";

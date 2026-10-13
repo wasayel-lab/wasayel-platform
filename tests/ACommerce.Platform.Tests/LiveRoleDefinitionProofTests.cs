@@ -27,6 +27,7 @@ namespace ACommerce.Platform.Tests;
 // بَشَريّ يَمُرّ مِن نُقطَة الموافَقَة خَلف بَوّابَة مُشرِف المَنصَّة، وهو
 // ما يَجعَل «قَبل/بَعد» عَلى نَفس الخادِم بُرهاناً لا تَرتيباً.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveRoleDefinitionProofTests
 {
     private const string TenantSlug = "adwar-demo";

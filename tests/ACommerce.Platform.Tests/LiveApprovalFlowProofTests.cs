@@ -28,6 +28,7 @@ namespace ACommerce.Platform.Tests;
 // التَدَفُّق بِعَينِه**: لا انتِقال مِن `pending` إلى `applied`
 // يَملِكُه مُقَرِّر.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveApprovalFlowProofTests
 {
     /// <summary>مُستَأجِر تَجرِبَة — لا يُلمَس <c>ashare</c> (عَرض

@@ -37,6 +37,7 @@ namespace ACommerce.Platform.Tests;
 // **ولا يَكتُب حَرفاً**: يُنادي `CollectAsync` لا `ProduceAsync`
 // (‏الأَخيرَةُ تَكتُبُ قَيدَ تَدقيق)، و`AutoCreateSchemaObjects = None`
 // فَلا مُخَطَّطَ يُنشَأ ولا يُعَدَّل.
+[Collection(LiveProofCollection.Name)]
 public class LiveTenantExportProofTests(ITestOutputHelper output)
 {
     private static bool Enabled =>

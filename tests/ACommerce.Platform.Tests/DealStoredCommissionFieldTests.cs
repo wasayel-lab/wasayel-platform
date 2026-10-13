@@ -107,6 +107,7 @@ public class DealStoredCommissionFieldTests
     }
 }
 
+[Collection(LiveProofCollection.Name)]
 public class LiveDealStoredCommissionFieldProofTests(ITestOutputHelper output)
 {
     /// <summary><b>صَفقَةٌ مَخزونَةٌ بِالحَقلِ الساقِطِ تُحَمَّلُ وتُستَعلَمُ وتُكتَبُ بِلا خَطَأ، ويَزولُ الحَقلُ عِندَ أَوَّلِ

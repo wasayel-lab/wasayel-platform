@@ -21,6 +21,7 @@ namespace ACommerce.Platform.Tests;
 // تَحجُزُ قَبلَ أَن تُطلِق فَمَقيسٌ بُنيَوِيّاً في
 // LanguageModelQuotaGateTests — وهُوَ سُؤالٌ آخَر.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveAnalysisClaimRaceProofTests
 {
     private static bool Enabled =>

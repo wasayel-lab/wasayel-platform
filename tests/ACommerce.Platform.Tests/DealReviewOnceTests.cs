@@ -18,6 +18,7 @@ namespace ACommerce.Platform.Tests;
 //
 // **التَوصيفُ قَبلَ التَبديل** (القاعِدَة ٣): صَفُّ «اليَوم» يُودَعُ وَحدَه ويُقلَبُ بِاسمِه في كوميتِ الإصلاح.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveDealReviewOnceProofTests(ITestOutputHelper output)
 {
     private static bool Enabled => LiveDealConcurrencyProofTests.Enabled;

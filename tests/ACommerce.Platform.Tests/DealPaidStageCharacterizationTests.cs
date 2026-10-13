@@ -286,6 +286,7 @@ public class DealPaidStageCharacterizationTests
 // `CommissionSar == 2.50m` الثَلاثُ وَحدَها — حُذِفَت مَعَ الحَقل. والقَبضُ
 // وعَدُّه وسَطرُ `captured` كَما كُتِبَت أَوَّلَ مَرَّة.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveDealPaidStageProofTests(ITestOutputHelper output)
 {
     private static bool Enabled =>

@@ -86,6 +86,7 @@ public class PhoneVerifiedOnLoginTests(ITestOutputHelper output)
 // المُعالِجُ نَفسُه الَّذي تُناديه نُقطَةُ `/{slug}/auth/phone/verify`، عَلى حِسابٍ بِشَكلِ ما يَكتُبُه المُستَورِد (مُعَرِّفٌ واسمٌ وجَوّالٌ بِلا عَلَمِ
 // تَحَقُّق) في مُستَأجِرٍ مُؤَقَّتٍ يُمسَحُ بَعدَه — ثُمَّ بَوّابَةُ جِهَةِ التَواصُلِ بِوَثيقَتِه كَما تُقرَأُ بَعدَ الدُخول.
 
+[Collection(LiveProofCollection.Name)]
 public class LivePhoneVerifiedOnLoginProofTests(ITestOutputHelper output)
 {
     private static bool Enabled

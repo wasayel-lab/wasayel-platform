@@ -268,6 +268,7 @@ public class StudioStorePatternTests
 // وما لا يُبَرهِنُه — ويُقال: النَقرَةُ عَلى زِرِّ «أَضِف لِلسَلَّة» في مُتَصَفِّحٍ عَلى
 // خادِمٍ حَيّ (‏FLGAP-04 بِحَرفِه) — ذاكَ يَحتاجُ التَطبيقَ كُلَّه، وأَمرُه في سِجِلِّ المالِك «ب».
 
+[Collection(LiveProofCollection.Name)]
 public class LiveStudioStorePatternProofTests(ITestOutputHelper output)
 {
     private static bool Enabled =>

@@ -74,6 +74,7 @@ internal class SaveGate : DispatchProxy
     }
 }
 
+[Collection(LiveProofCollection.Name)]
 public class LiveDealConcurrencyProofTests(ITestOutputHelper output)
 {
     // ‏`internal` لا `private` (‏2026-10-12، ‏ADR-036 الخُطوَة 3): صَفّا وارِدِ OTO الحَيّانِ (`LiveOtoOrderStatusProofTests`)

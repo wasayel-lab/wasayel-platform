@@ -293,6 +293,7 @@ public class GatewayInvoiceShareTests(ITestOutputHelper output)
 
 // ═══ البُرهانُ الحَيّ — Postgres (‏WASAYEL_LIVE_PROOF=1 وConnectionStrings__Postgres) ═══════════════════════
 
+[Collection(LiveProofCollection.Name)]
 public class LiveGatewayInvoiceShareProofTests(ITestOutputHelper output)
 {
     private static bool Enabled

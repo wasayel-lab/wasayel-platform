@@ -464,6 +464,7 @@ public class GatewayPaymentConfirmTests(ITestOutputHelper output)
 // حَقيقِيَّةٍ في وَثيقَتِه، وصَفقَتانِ — إحداهُما عِندَ «تأكيد» — وفاتورَةٌ تُعيدُها البَوّابَةُ مَدفوعَة؛ ثُمَّ تَحَقُّقٌ ثانٍ. ويَقيسُ بِنُسخَةِ
 // Marten نَفسِها (‏`mt_version`) أَنّ الثانِيَ لا يَكتُب — لا بِعَدِّ سُطورٍ وَحدَه.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveGatewayPaymentProofTests(ITestOutputHelper output)
 {
     private static bool Enabled

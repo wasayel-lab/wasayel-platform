@@ -1412,6 +1412,7 @@ public class VendorShippingTests(ITestOutputHelper output)
 // المَتجَرِ المَقروءَةُ مِن Postgres تَتَجاوَزُه، و«أَلِلمَتجَرِ ناقِل؟» — سُؤالُ الوارِدِ قَبلَ قِراءَةِ الجِسم — نَعَم حَيثُ مَدخَلٌ فَعّال
 // ولا حَيثُ لا مَدخَل أَو رَبطُ مَتجَرٍ وَحدَه أَو مَدخَلٌ مَسحوب. مُستَأجِراتٌ مُؤَقَّتَةٌ تُمسَحُ بَعدَه.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveVendorShippingProofTests(ITestOutputHelper output)
 {
     private static bool Enabled
