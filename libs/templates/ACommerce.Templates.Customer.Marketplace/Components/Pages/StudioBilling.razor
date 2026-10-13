@@ -70,8 +70,18 @@
                     <div style="font-size:28px;font-weight:800;margin:4px 0 14px;">
                         @* الوَحدَة مِن `Money.Unit()` لا مِن قيمَة المِفتاح
                            (‏docs/I18N.md §٢-ب). والمِفتاح «{0} / شَهر»
-                           فَيَبقى المُخرَج «ر.س / شَهر» حَرفاً بِحَرف. *@
-                        @t.MonthlyPriceSar <span style="font-size:13px;color:var(--st-muted);font-weight:400;">@((MarkupString)L.Format("studio.billing.per_month", Money.Unit()))</span>
+                           فَيَبقى المُخرَج «ر.س / شَهر» حَرفاً بِحَرف.
+                           **والسِعرُ لِما يُباعُ وَحدَه** (موجَزُ الفَجَوات P2-3، ‏2026-10-13): دَرَجَةٌ لا تُشتَرى مِن
+                           هُنا (‏`IsSelfGrantable` — الدالَّةُ نَفسُها الَّتي تُرسِمُ الزِرّ) لا يُرسَمُ لَها سِعرٌ لا يُدفَع؛ تُرسَمُ
+                           حُدودُها وَحدَها. والأَرقامُ في `StudioTier.cs` لَم تُمَسّ — رَقمُ الاشتِراكِ يَنتَظِرُ المالِك (ق‑٥). *@
+                        @if (StudioTierPurchase.IsSelfGrantable(t.Tier))
+                        {
+                            @t.MonthlyPriceSar <span style="font-size:13px;color:var(--st-muted);font-weight:400;">@((MarkupString)L.Format("studio.billing.per_month", Money.Unit()))</span>
+                        }
+                        else
+                        {
+                            <span style="font-size:13px;color:var(--st-muted);font-weight:400;">@L.Markup("studio.billing.limits_only")</span>
+                        }
                     </div>
                     <ul style="margin:0 0 16px;padding-inline-start:18px;font-size:14px;line-height:1.9;color:var(--st-ink-700);">
                         <li>@t.AnalysesPerMonth @L.Markup("studio.billing.per_analyses")</li>

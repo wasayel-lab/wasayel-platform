@@ -54,14 +54,41 @@ public class StudioBillingPriceTests
         }
     }
 
-    /// <summary><b>اليَوم: البِطاقَةُ تَرسُمُ سِعرَها بِلا شَرط</b> — قيمَةُ <c>MonthlyPriceSar</c> و«{0} / شَهر» في كُتلَةِ السِعرِ
-    /// بِلا <c>@if</c>، فَتُرسَمُ لِدَرَجَةٍ لا تُباع. (‏تَوصيفٌ يَنقَلِبُ بِقَرارٍ مَرئِيٍّ في كوميتِ الإخفاء.)</summary>
+    /// <summary><b>البِطاقَةُ تَرسُمُ سِعرَها حَيثُ تُشتَرى الدَرَجَةُ وَحدَه</b> (‏2026-10-13 — انقَلَبَ بِقَرارٍ مَرئِيٍّ مِن
+    /// <c>Today_the_tier_card_renders_its_price_unconditionally</c>): قيمَةُ <c>MonthlyPriceSar</c> و«{0} / شَهر» في فَرعِ
+    /// <c>@if (StudioTierPurchase.IsSelfGrantable(t.Tier))</c> وَحدَه — الدالَّةُ نَفسُها الَّتي تُرسِمُ زِرَّ «اختِيار» — وما سِواه
+    /// حُدودُ الدَرَجَةِ بِنَصٍّ مِن القامُوس.</summary>
     [Fact]
-    public void Today_the_tier_card_renders_its_price_unconditionally()
+    public void The_tier_card_renders_a_price_only_where_the_tier_can_be_bought()
     {
         var block = PriceBlock();
-        Assert.Contains("@t.MonthlyPriceSar", block, StringComparison.Ordinal);
-        Assert.Contains("studio.billing.per_month", block, StringComparison.Ordinal);
-        Assert.DoesNotContain("@if", block, StringComparison.Ordinal);
+        var razor = Billing();
+        Assert.Equal(1, Regex.Matches(razor, Regex.Escape("@t.MonthlyPriceSar")).Count);
+
+        var guarded = Regex.Match(block,
+            @"@if \(StudioTierPurchase\.IsSelfGrantable\(t\.Tier\)\)\s*\{(?<sold>[^{}]*)\}\s*else\s*\{(?<limits>[^{}]*)\}");
+        Assert.True(guarded.Success, "السِعرُ لَيسَ تَحتَ شَرطِ البَيعِ في كُتلَتِه:\n" + block);
+        Assert.Contains("@t.MonthlyPriceSar", guarded.Groups["sold"].Value, StringComparison.Ordinal);
+        Assert.Contains("studio.billing.per_month", guarded.Groups["sold"].Value, StringComparison.Ordinal);
+        Assert.DoesNotContain("MonthlyPriceSar", guarded.Groups["limits"].Value, StringComparison.Ordinal);
+        Assert.Contains("@L.Markup(\"studio.billing.limits_only\")", guarded.Groups["limits"].Value, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>ولا سِعرَ يُرسَمُ عَلى أَيِّ بِطاقَةٍ ما دامَ لا مَسارَ دَفعٍ ذاتِيّ</b>: مَعَ <c>SelfServiceCheckoutExists = false</c>
+    /// لا دَرَجَةَ بِسِعرٍ تَعبُرُ شَرطَ الفَرع — فَإن رُسِمَ السِعرُ خارِجَه (الصَفُّ أَعلاه) أَو عَبَرَته دَرَجَةٌ بِسِعرٍ هُنا حَمِرَ.
+    /// والنَصُّ البَديلُ في المَعجَمِ بِالعَرَبِيَّةِ وَحدَها، بِلا رَقَمٍ ولا عُملَة.</summary>
+    [Fact]
+    public void No_price_renders_on_any_card_while_self_service_checkout_does_not_exist()
+    {
+        Assert.False(StudioTierPurchase.SelfServiceCheckoutExists);
+        var priced = TierCatalog.All.Values.Where(t => t.MonthlyPriceSar > 0).ToList();
+        Assert.True(priced.Count >= 4, $"أَداةٌ عَمياء: {priced.Count} دَرَجَةً بِسِعر.");
+        var shownPrice = priced.Where(t => StudioTierPurchase.IsSelfGrantable(t.Tier)).Select(t => t.Tier).ToList();
+        Assert.True(shownPrice.Count == 0, $"فُحِصَت {priced.Count} دَرَجَةً بِسِعر، ويُرسَمُ سِعرُ {shownPrice.Count}: {string.Join(", ", shownPrice)}");
+
+        var text = ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "studio.billing.limits_only");
+        Assert.False(string.IsNullOrWhiteSpace(text));
+        Assert.DoesNotMatch("[0-9٠-٩]", text);
+        Assert.DoesNotContain("ر.س", text, StringComparison.Ordinal);
     }
 }

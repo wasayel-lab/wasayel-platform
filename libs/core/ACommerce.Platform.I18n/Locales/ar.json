@@ -579,6 +579,7 @@
   "studio.new.example_home": "مَنصَّة خَدَمات منزليَّة حَسَب الطَّلَب",
   "studio.new.submit": "حَلِّل فِكرَتي",
   "studio.billing.per_month": "{0} / شَهر",
+  "studio.billing.limits_only": "حُدودُ هذِه الباقَة",
   "upgrade.cta.per_month": "{0} / شَهر",
 
   "admin.guard.checking": "جارٍ التَّحَقُّق…",
