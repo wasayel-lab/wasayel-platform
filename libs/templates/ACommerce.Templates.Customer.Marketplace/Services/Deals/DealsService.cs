@@ -618,22 +618,33 @@ public sealed class DealsService
         return DealCancelResult.Cancelled(deal);
     }
 
-    public async Task<Deal?> DisputeAsync(
+    /// <summary>
+    /// <para><b>فَتحُ نِزاعٍ عَلى صَفقَةٍ فَعّالَة.</b> ومُناديه الوَحيدُ نُقطَةُ الاستوديو الإدارِيَّة.</para>
+    ///
+    /// <para><b>ولِماذا <see cref="DealDisputeResult"/> لا <c>Deal?</c> كَما كانَ</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (ii)؛ ‏ADR-036 §١٢‑٢):
+    /// كانَت تُعيدُ المَخزونَ حينَ لا تَكتُب — غائِبَةً، أَو غَيرَ فَعّالَة، أَو بَعدَ تَعارُضِ نُسخَة — فَلا يُفَرِّقُ المُنادي «كُتِبَ» مِن «لَم
+    /// يُكتَب»، فَكانَت النُقطَةُ تَكتُبُ سَطرَ التَدقيقِ لِنِزاعٍ لَم يَقَع (تَوصيفُه <c>1b73c48</c>). نَفسُ حُجَّةِ <see cref="DealCancelResult"/>
+    /// حَرفاً؛ والرُموزُ مِن المَعاجِمِ القائِمَة: <see cref="DealCancelAuthorization.DealNotFound"/>،
+    /// <see cref="DealCancelAuthorization.DealNotActive"/>، <see cref="ChangedMeanwhile"/>.</para>
+    /// </summary>
+    public async Task<DealDisputeResult> DisputeAsync(
         string tenantSlug, Guid dealId, Guid actorId, string actorName,
         string reason, CancellationToken ct = default)
     {
         await using var s = _store.LightweightSession(tenantSlug);
         var deal = await s.LoadAsync<Deal>(dealId, ct);
-        if (deal is null || deal.Status != DealStatus.Active) return deal;
+        if (deal is null) return new(false, null, DealCancelAuthorization.DealNotFound);
+        if (deal.Status != DealStatus.Active) return new(false, deal, DealCancelAuthorization.DealNotActive);
         deal.Status = DealStatus.Disputed;
         deal.UpdatedAt = DateTime.UtcNow;
         deal.Timeline.Add(new(deal.Stage, deal.Stage, "disputed",
             actorId, actorName, reason, DateTime.UtcNow));
         s.Store(deal);
         // تَعارُضُ النُسخَة (‏ADR-036): لَم يُكتَب النِزاع — يُعادُ ما في المَخزَنِ الآن (المُنادي الإداريُّ يَعودُ إلى الصَفقَة).
+        // (‏2026-10-13 — ولا يُعادُ حَرفٌ فَوقَه: ومَعَه رَمزُه، فَلا يُكتَبُ تَدقيقٌ ويُرسَمُ الشَريط.)
         try { await s.SaveChangesAsync(ct); }
-        catch (JasperFx.ConcurrencyException) { return await LoadAsync(tenantSlug, dealId, ct); }
-        return deal;
+        catch (JasperFx.ConcurrencyException) { return new(false, await LoadAsync(tenantSlug, dealId, ct), ChangedMeanwhile); }
+        return new(true, deal, null);
     }
 
     /// <summary>كَم مَرَّةً يُحاوَلُ الإلحاقُ حينَ تُعارِضُه نُسخَة (‏ADR-036 §٧): الأولى، وإعادَتانِ عَلى ما كُتِبَ بَعدَها.
@@ -851,3 +862,8 @@ public sealed class DealsService
 /// <see cref="DealsService.ChangedMeanwhile"/> وَحدَه (‏ADR-036)؛ وسائِرُ الرَفضِ في <paramref name="Reason"/> نَصّاً كَما كان.
 /// (‏2026-10-12، مُراجَعَةُ تَيّارِ S7 الثانِيَة — ولا يُعادُ حَرفٌ فَوقَه: ومَعَه <see cref="DealShipping.DealAwaitsCarrier"/>.)</summary>
 public sealed record DealAdvanceResult(bool Ok, Deal? Deal, string? Reason, string? Code = null);
+
+/// <summary>نَتيجَةُ فَتحِ النِزاع (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (ii)): <paramref name="Ok"/> «كُتِبَ النِزاع» وَحدَه — فَعَلَيه يُشتَرَطُ
+/// سَطرُ التَدقيق؛ و<paramref name="Code"/> رَمزُ الرَفضِ حَيثُ لَم يُكتَب، تَحمِلُه النُقطَةُ إلى صَفحَتِها (<see cref="DealRefusalTexts.StudioKeyFor"/>).
+/// نَفسُ شَكلِ <see cref="DealAdvanceResult"/>.</summary>
+public sealed record DealDisputeResult(bool Ok, Deal? Deal, string? Code);

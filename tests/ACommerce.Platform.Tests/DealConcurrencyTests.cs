@@ -547,8 +547,10 @@ public class DealConcurrencyRefusalTests
             ("AssignCounterpartyAsync", "public async Task<Deal?> AssignCounterpartyAsync(", "public async Task<Deal?> BindListingOwnerAsync("),
             ("AcceptAsync",             "public async Task<DealAcceptResult> AcceptAsync(",  "public async Task<DealAdvanceResult> AdvanceAsync("),
             ("AdvanceAsync",            "public async Task<DealAdvanceResult> AdvanceAsync(", "private async Task<Deal> MoveAsync("),
-            ("CancelAsync",             "public async Task<DealCancelResult> CancelAsync(",  "public async Task<Deal?> DisputeAsync("),
-            ("DisputeAsync",            "public async Task<Deal?> DisputeAsync(",            "public async Task<Deal?> AttachRefAsync("),
+            // (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (ii)؛ ولا يُعادُ حَرفٌ فَوقَه: `DisputeAsync` صارَت تُرجِعُ `DealDisputeResult` لا `Deal?`،
+            // فَتَبَدَّلَ حَرفُ عَلامَتَي المَقطَعِ وَحدَه — والمَقطَعانِ والعَدّانِ بِحَرفِهِما.)
+            ("CancelAsync",             "public async Task<DealCancelResult> CancelAsync(",  "public async Task<DealDisputeResult> DisputeAsync("),
+            ("DisputeAsync",            "public async Task<DealDisputeResult> DisputeAsync(", "public async Task<Deal?> AttachRefAsync("),
             ("AttachRefAsync",          "public async Task<Deal?> AttachRefAsync(",          "public async Task<Deal?> LoadAsync("),
             // ‏ADR-032 الخُطوَة 10 (تَيّارُ S9، ‏2026-10-12): بابٌ سابِعٌ يَكتُبُ بِحَلقَةِ الإلحاقِ نَفسِها (`RecordAsync` — تَقرَأُ ثُمَّ تُعيدُ عِندَ
             // التَعارُض)، فَالتِقاطُه التِقاطُها ومَقطَعُه يَبلُغُها؛ ولا حِفظَ لَه ولا التِقاطَ خاصَّين.

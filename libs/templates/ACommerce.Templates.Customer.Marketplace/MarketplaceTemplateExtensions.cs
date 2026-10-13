@@ -3513,11 +3513,13 @@ public static class MarketplaceTemplateExtensions
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
             var reason = req.Form["reason"].ToString().Trim();
             if (string.IsNullOrEmpty(reason)) reason = "نِزاع";
-            await deals.DisputeAsync(slug, id, auth.UserId!.Value, "مالِك التَّطبيق", reason);
-            await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
+            // ولا تَدقيقَ لِنِزاعٍ لَم يُكتَب، ورَدُّه بِرَمزِه إلى الصَفحَة (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (ii)؛ ‏ADR-036 §١٢‑٢): كانَ
+            // السَطرُ يُكتَبُ بِلا شَرطٍ والنَتيجَةُ تُسقَط — تَعارُضُ نُسخَةٍ أَو صَفقَةٌ غَيرُ فَعّالَة تُسَجَّلُ «نِزاعاً» (تَوصيفُه `1b73c48`).
+            var res = await deals.DisputeAsync(slug, id, auth.UserId!.Value, "مالِك التَّطبيق", reason);
+            if (res.Ok) await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
                 "deal.dispute", "deal", id.ToString(), note: reason,
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
-            return Results.Redirect($"/studio/apps/{slug}/deals/{id}");
+            return Results.Redirect($"/studio/apps/{slug}/deals/{id}" + (res.Ok ? "" : $"?err={res.Code}"));
         }).DisableAntiforgery();
 
         // ─── Studio per-app config saves (داخِل studio، redirect مَحَلّيّ) ─
