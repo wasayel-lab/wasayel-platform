@@ -23,6 +23,9 @@ namespace ACommerce.Platform.Tests;
 // «تَرقِيَة إلى Lite (199 ر.س / شَهر)» — وهو بِحَرفِه ما في `i18n-baseline/studio-upgrade-*.html` المُودَعَةِ مِن قَبلِ الرَفع.
 //
 // يُثَبَّتُ هُنا قَبلَ العِلاجِ (القاعِدَة ٣): الصَفُّ الأَوَّلُ يَنقَلِبُ بِاسمِه في كوميتِ العِلاج، والآخَرانِ يَبقَيانِ أَخضَرَينِ بِلا تَعديلِ حَرف.
+//
+// **العِلاج** (‏2026-10-13): `Offer` = `Next` مَصفِيّاً بِـ`StudioTierPurchase.IsSelfGrantable`، والوَسمُ يَقرَؤُه وَحدَه — فَالأَوسَعُ الَّذي لا
+// يُباعُ يُرسَمُ كَما لا أَوسَع. الصَفُّ الأَوَّلُ انقَلَبَ بِاسمِه، والرابِعُ جَديد، والثاني والثالِثُ كَما أُودِعا.
 public class UpgradePromptPriceTests
 {
     /// <summary>نَصُّ مِلَفٍّ بِلا تَعليقاتٍ (‏<c>@* *@</c> و<c>&lt;!-- --&gt;</c> ثُمَّ تَعليقاتُ C#) — والفَهارِسُ مَحفوظَةٌ، لِأَنّ
@@ -71,20 +74,25 @@ public class UpgradePromptPriceTests
         return -1;
     }
 
-    /// <summary><b>اليَوم: حُدودُ الأَوسَعِ وزِرُّه وسِعرُه تَحتَ «توجَدُ دَرَجَةٌ أَوسَع» وَحدَه</b> — قائِمَةُ <c>BenefitsFor</c> وكُتلَةُ
-    /// <c>&lt;a … href="/studio/billing"&gt;</c> وقيمَةُ <c>MonthlyPriceSar</c> شَرطُها الداخِلِيُّ <c>Next is not null</c>، ولا يَرِدُ
-    /// <c>IsSelfGrantable</c> في المِلَفِّ كُلِّه. (‏تَوصيفٌ يَنقَلِبُ بِقَرارٍ مَرئِيٍّ في كوميتِ العِلاج.)</summary>
+    /// <summary><b>حُدودُ الأَوسَعِ وزِرُّه وسِعرُه لِما يُباعُ وَحدَه</b> (‏2026-10-13 — انقَلَبَ بِقَرارٍ مَرئِيٍّ مِن
+    /// <c>Today_the_banner_draws_the_next_tiers_price_and_sell_button_under_no_sell_condition</c>): قائِمَةُ <c>BenefitsFor</c> وكُتلَةُ
+    /// <c>&lt;a … href="/studio/billing"&gt;</c> وقيمَةُ <c>MonthlyPriceSar</c> شَرطُها الداخِلِيُّ <c>Offer is not null</c>، و<c>Offer</c> هُوَ
+    /// <c>Next</c> مَصفِيّاً بِـ<c>StudioTierPurchase.IsSelfGrantable</c> — الدالَّةُ الَّتي تَرسُمُ سِعرَ البِطاقَةِ وزِرَّها في
+    /// <c>/studio/billing</c>، لا شَرطٌ ثانٍ.</summary>
     [Fact]
-    public void Today_the_banner_draws_the_next_tiers_price_and_sell_button_under_no_sell_condition()
+    public void The_banner_draws_the_next_tiers_price_and_sell_button_only_for_a_tier_billing_sells()
     {
         var razor = Prompt();
         Assert.Equal(1, Regex.Matches(razor, "MonthlyPriceSar").Count);
 
-        var expected = new[] { "!string.IsNullOrEmpty(Reason)", "Next is not null" };
+        var expected = new[] { "!string.IsNullOrEmpty(Reason)", "Offer is not null" };
         foreach (var marker in new[] { "BenefitsFor(", "href=\"/studio/billing\"", "MonthlyPriceSar" })
             Assert.Equal(expected, EnclosingIfConditions(razor, razor.IndexOf(marker, StringComparison.Ordinal)));
 
-        Assert.DoesNotContain("IsSelfGrantable", razor, StringComparison.Ordinal);
+        var offer = Regex.Match(razor, @"TierLimits\?\s+Offer\s*=>(?<expr>[^;]+);");
+        Assert.True(offer.Success, "لا تَعريفَ لِـ`Offer` في اللافِتَة.");
+        Assert.Matches(@"\bNext\b", offer.Groups["expr"].Value);
+        Assert.Contains("StudioTierPurchase.IsSelfGrantable(", offer.Groups["expr"].Value, StringComparison.Ordinal);
     }
 
     /// <summary><b>والسُلَّمُ يَعرِضُ اليَومَ عَلى دَرَجَتَينِ مُخَزَّنَتَينِ — وعَلى المَجّانِيَّةِ يَومَ تَعودُ حُدودُها — دَرَجَةً بِسِعرٍ لا
@@ -135,5 +143,33 @@ public class UpgradePromptPriceTests
             Assert.True(at > 0, $"«{marker}» غَيرُ مَرسومٍ في اللافِتَة.");
             Assert.Equal(new[] { "!string.IsNullOrEmpty(Reason)" }, EnclosingIfConditions(razor, at));
         }
+    }
+
+    /// <summary><b>ودَرَجَةٌ أَوسَعُ لا تُباعُ تُرسَمُ لافِتَتُها لافِتَةَ «لا أَوسَع» بِحَرفِها</b> (‏2026-10-13): الوَسمُ لا يَقرَأُ
+    /// <c>Next</c> في أَيِّ مَوضِعٍ — يَقرَأُ <c>Offer</c> وَحدَه — فَحينَ يَكونُ <c>null</c> لِأَنّ الأَوسَعَ لا يُباعُ يَخرُجُ ما يَخرُجُ حينَ
+    /// لا أَوسَع: العُنوانُ والرِسالَة. ومَعَ <c>SelfServiceCheckoutExists = false</c> لا دَرَجَةَ في الكاتالوجِ — مُخَزَّنَةً كانَت أَو
+    /// مَجّانِيَّةً بَعدَ العَودَة — يُعرَضُ عَلَيها شَيء.</summary>
+    [Fact]
+    public void An_unsellable_wider_tier_draws_the_same_banner_as_no_wider_tier()
+    {
+        var razor = Prompt();
+        var code = razor.IndexOf("@code", StringComparison.Ordinal);
+        Assert.True(code > 300, "لا كُتلَةَ `@code` في اللافِتَة — الأَداةُ عَمياء.");
+        var markup = razor[..code];
+        Assert.DoesNotMatch(@"\bNext\b", markup);
+        Assert.Equal(2, Regex.Matches(markup, @"@if \(Offer is not null\)").Count);
+
+        Assert.False(StudioTierPurchase.SelfServiceCheckoutExists);
+        var before = TierCatalog.FreeTierBeforeRaise;
+        var reverted = TierCatalog.All.Values
+            .Where(t => !string.Equals(t.Tier, before.Tier, StringComparison.Ordinal))
+            .Where(t => TierCatalog.Exceeds(t, before))
+            .OrderBy(t => t.MonthlyPriceSar)
+            .FirstOrDefault();
+        var nexts = TierCatalog.All.Values.Select(t => TierCatalog.NextAbove(t.Tier)).Append(reverted)
+            .Where(n => n is not null).Select(n => n!).ToList();
+        Assert.True(nexts.Count >= 3, $"أَداةٌ عَمياء: فُحِصَت {nexts.Count} دَرَجَةً أَوسَع.");
+        var sold = nexts.Where(n => StudioTierPurchase.IsSelfGrantable(n.Tier)).Select(n => n.Tier).ToList();
+        Assert.True(sold.Count == 0, $"فُحِصَت {nexts.Count} دَرَجَةً أَوسَع، ويُعرَضُ بِسِعرٍ {sold.Count}: {string.Join(", ", sold)}");
     }
 }

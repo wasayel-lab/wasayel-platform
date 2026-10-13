@@ -3,7 +3,8 @@
 
 @*
     عُنصُر إشعار «تَجاوُز حَدّ الباقَة» — يَظهَر في أَعلى صَفحات studio
-    عِندَ ?upgrade=analyze|refine|build. يَعرِض الباقَة التالِيَة + الفائِدَة.
+    عِندَ ?upgrade=analyze|refine|build. يَعرِض الباقَة التالِيَة + الفائِدَة
+    — إن كانَت تُباع (`Offer` أَدناه)؛ وإلّا العُنوانَ والرِسالَةَ وَحدَهُما.
 *@
 
 @if (!string.IsNullOrEmpty(Reason))
@@ -16,20 +17,20 @@
                 <p style="margin:4px 0 0;font-size:13px;color:var(--st-muted);line-height:1.7;">
                     @MessageFor(Reason)
                 </p>
-                @if (Next is not null)
+                @if (Offer is not null)
                 {
                     <ul style="margin:8px 0 0;padding-inline-start:18px;font-size:13px;color:var(--st-ink-700);line-height:1.8;">
-                        @foreach (var b in BenefitsFor(Next))
+                        @foreach (var b in BenefitsFor(Offer))
                         {
                             <li>@b</li>
                         }
                     </ul>
                 }
             </div>
-            @if (Next is not null)
+            @if (Offer is not null)
             {
                 <a class="st-btn st-btn-primary" href="/studio/billing">
-                    @((MarkupString)"\n                    ")@L.Markup("upgrade.cta.to") @Next.LabelAr (@((MarkupString)L.Format("upgrade.cta.per_month", Money.Format(Next.MonthlyPriceSar))))
+                    @((MarkupString)"\n                    ")@L.Markup("upgrade.cta.to") @Offer.LabelAr (@((MarkupString)L.Format("upgrade.cta.per_month", Money.Format(Offer.MonthlyPriceSar))))
                 </a>
             }
         </div>
@@ -46,6 +47,17 @@
        تَنازُلاً بِثَمَن يَومَ تُرفَعُ المَجّانِيَّة. الحُجَّةُ كامِلَةً
        على `TierCatalog.NextAbove`. *@
     TierLimits? Next => TierCatalog.NextAbove(CurrentTier);
+
+    @* **ولا يُعرَضُ إلّا ما يُباع** (موجَزُ الفَجَوات P2-3 — مُراجَعَةُ تَيّارِ
+       S11، الجَولَة ١، ‏2026-10-13): الأَوسَعُ الَّذي لا يُمنَحُ ذاتِيّاً لا
+       تُرسَمُ لَه حُدودٌ ولا زِرٌّ بِسِعر. فَصَفحَةُ الباقاتِ لا تَرسُمُه
+       (`Shown`) ولا تَبيعُه، وزِرٌّ إلَيها بِسِعرِه بابٌ لا يُفتَح (القاعِدَة
+       ١٢). والسُؤالُ هُوَ `StudioTierPurchase.IsSelfGrantable` — الدالَّةُ
+       نَفسُها الَّتي تَرسُمُ سِعرَ البِطاقَةِ وزِرَّها هُناك — لا شَرطٌ ثانٍ.
+       فَتَصيرُ اللافِتَةُ لافِتَةَ «لا أَوسَع» بِحَرفِها: «بَلَغتَ حَدَّك»
+       بِلا زِرِّ بَيع. ويَومَ يوجَدُ مَسارُ الدَفعِ الذاتِيّ
+       (`SelfServiceCheckoutExists`) يَعودُ العَرضُ بِلا سَطرٍ آخَر. *@
+    TierLimits? Offer => Next is { } n && StudioTierPurchase.IsSelfGrantable(n.Tier) ? n : null;
 
     @* الرَمزُ مِن `StudioUpgradeReason` لا نَصٌّ حَرفيّ: المَعجَمُ
        المُغلَقُ لَه تَعريفٌ واحِد، فَخَطَأُ إملاءٍ يَصير خَطَأَ

@@ -76,7 +76,14 @@ public class StudioBillingPriceTests
 
     /// <summary><b>ولا سِعرَ يُرسَمُ عَلى أَيِّ بِطاقَةٍ ما دامَ لا مَسارَ دَفعٍ ذاتِيّ</b>: مَعَ <c>SelfServiceCheckoutExists = false</c>
     /// لا دَرَجَةَ بِسِعرٍ تَعبُرُ شَرطَ الفَرع — فَإن رُسِمَ السِعرُ خارِجَه (الصَفُّ أَعلاه) أَو عَبَرَته دَرَجَةٌ بِسِعرٍ هُنا حَمِرَ.
-    /// والنَصُّ البَديلُ في المَعجَمِ بِالعَرَبِيَّةِ وَحدَها، بِلا رَقَمٍ ولا عُملَة.</summary>
+    /// والنَصُّ البَديلُ في المَعجَمِ بِالعَرَبِيَّةِ وَحدَها، بِلا رَقَمٍ ولا عُملَة.
+    ///
+    /// <para><b>و«أَيُّ بِطاقَةٍ» تُعَدُّ لا تُفتَرَض</b> (‏2026-10-13 — وُسِّعَ بَعدَ أَن وَجَدَت مُراجَعَةُ تَيّارِ S11، الجَولَة ١، الشَقيقَةَ
+    /// <c>UpgradePrompt.razor</c> تَرسُمُ السِعرَ بِزِرٍّ إلى صَفحَةٍ لا تَبيعُه، وهذا الفَحصُ لا يَقرَأُ إلّا <c>StudioBilling.razor</c>): كُلُّ
+    /// <c>.razor</c> في <c>libs</c> و<c>apps</c> يَقرَأُ <c>MonthlyPriceSar</c> خارِجَ التَعليقاتِ يُعَدّ، ومَجموعَتُها مُثَبَّتَةٌ — فَراسِمٌ
+    /// رابِعٌ يُحمِرُّ حَتّى يُقَرَّرَ بِاسمِه — وكُلُّ مَوضِعٍ فيه تَحتَ شَرطِ بَيعٍ: <c>StudioTierPurchase.IsSelfGrantable</c> صَريحاً، أَو
+    /// عُضوٌ مُعَرَّفٌ بِه في المِلَفِّ نَفسِه. إلّا الاستِثناءَ المُسَمّى: <c>Admin/QualityMonitor.razor</c> — تَوزيعُ الدَرَجاتِ لِمُشرِفِ
+    /// المَنَصَّةِ داخِلَ <c>&lt;RequirePlatformAdmin&gt;</c>، بَيانٌ لا عَرضُ بَيعٍ ولا بابَ فيه.</para></summary>
     [Fact]
     public void No_price_renders_on_any_card_while_self_service_checkout_does_not_exist()
     {
@@ -86,9 +93,59 @@ public class StudioBillingPriceTests
         var shownPrice = priced.Where(t => StudioTierPurchase.IsSelfGrantable(t.Tier)).Select(t => t.Tier).ToList();
         Assert.True(shownPrice.Count == 0, $"فُحِصَت {priced.Count} دَرَجَةً بِسِعر، ويُرسَمُ سِعرُ {shownPrice.Count}: {string.Join(", ", shownPrice)}");
 
+        const string Templates = "libs/templates/ACommerce.Templates.Customer.Marketplace/Components/";
+        const string AdminOnly = Templates + "Pages/Admin/QualityMonitor.razor";
+        var root = ThemeZeroEquivalenceTests.RepoRoot;
+        var renderers = new[] { "libs", "apps" }
+            .SelectMany(d => Directory.EnumerateFiles(Path.Combine(root, d), "*.razor", SearchOption.AllDirectories))
+            .Select(p => (Rel: Path.GetRelativePath(root, p).Replace('\\', '/'), Path: p))
+            .Where(f => !f.Rel.Contains("/bin/", StringComparison.Ordinal) && !f.Rel.Contains("/obj/", StringComparison.Ordinal))
+            .Select(f => (f.Rel, Code: WriteEndpointGuardTests.StripComments(
+                WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(f.Path)))))
+            .Where(f => f.Code.Contains("MonthlyPriceSar", StringComparison.Ordinal))
+            .OrderBy(f => f.Rel, StringComparer.Ordinal)
+            .ToList();
+        Assert.Equal(
+            new[] { AdminOnly, Templates + "Pages/StudioBilling.razor", Templates + "UpgradePrompt.razor" },
+            renderers.Select(f => f.Rel).ToArray());
+
+        var sites = 0;
+        foreach (var (rel, code) in renderers)
+        {
+            foreach (Match m in Regex.Matches(code, "MonthlyPriceSar"))
+            {
+                sites++;
+                if (rel == AdminOnly)
+                {
+                    var gate = code.IndexOf("<RequirePlatformAdmin>", StringComparison.Ordinal);
+                    var gateEnd = code.IndexOf("</RequirePlatformAdmin>", StringComparison.Ordinal);
+                    Assert.True(gate >= 0 && gate < m.Index && m.Index < gateEnd, $"{rel}: السِعرُ خارِجَ <RequirePlatformAdmin>.");
+                    continue;
+                }
+                var around = UpgradePromptPriceTests.EnclosingIfConditions(code, m.Index);
+                Assert.True(around.Any(c => IsSellCondition(code, c)),
+                    $"{rel}: سِعرٌ يُرسَمُ تَحتَ [{string.Join(" ∧ ", around)}] — ولا شَرطَ بَيعٍ بَينَها.");
+            }
+        }
+        Assert.True(sites >= 3, $"أَداةٌ عَمياء: فُحِصَ {sites} مَوضِعَ سِعرٍ في {renderers.Count} مِلَفّ.");
+
         var text = ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "studio.billing.limits_only");
         Assert.False(string.IsNullOrWhiteSpace(text));
         Assert.DoesNotMatch("[0-9٠-٩]", text);
         Assert.DoesNotContain("ر.س", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>شَرطُ بَيعٍ: يَسأَلُ <c>StudioTierPurchase.IsSelfGrantable</c> صَريحاً، أَو يَقرَأُ عُضواً مُعَرَّفاً في المِلَفِّ نَفسِه
+    /// (<c>X =&gt; …;</c>) يَسأَلُها — كَـ<c>Offer</c> في <c>UpgradePrompt.razor</c>.</summary>
+    private static bool IsSellCondition(string code, string condition)
+    {
+        const string Sell = "StudioTierPurchase.IsSelfGrantable(";
+        if (condition.Contains(Sell, StringComparison.Ordinal)) return true;
+        foreach (Match id in Regex.Matches(condition, @"\b[A-Z]\w*\b"))
+        {
+            var def = Regex.Match(code, $@"\b{id.Value}\s*=>(?<expr>[^;]+);");
+            if (def.Success && def.Groups["expr"].Value.Contains(Sell, StringComparison.Ordinal)) return true;
+        }
+        return false;
     }
 }
