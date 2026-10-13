@@ -28,7 +28,9 @@ public sealed class OtoOrderStatusNotice
     }
 
     /// <summary>خَتمُ وَقتِ الحَدَثِ كَما في الإشعار — مِلّي ثانِيَةٍ مُنذُ عَهدِ يونِكس نَصّاً («‏timestamp : Unix epoch timestamp (in
-    /// milliseconds)»). جُزءٌ مِن النَصِّ المُوَقَّع، ويُقاسُ بِه انحِرافُ الإشعار (تَيّارُ S8، ‏2026-10-12).</summary>
+    /// milliseconds)»). جُزءٌ مِن النَصِّ المُوَقَّع، ويُقاسُ بِه انحِرافُ الإشعار (تَيّارُ S8، ‏2026-10-12).
+    /// <para>(‏2026-10-13، G5 (x) — ولا يُعادُ حَرفٌ فَوقَه: ويُقاسُ بِه <b>عُمرُه</b> لا «انحِرافُه» مُنذُ <c>524f2ef</c> — <c>OtoWebhookSignature.AgeMilliseconds</c>
+    /// بِإشارَتِه، يُطبَعُ في اللوغِ ولا يُرَدُّ عَلَيه إلّا خَتمٌ يَسبِقُ ساعَتَنا (<c>OtoWebhookSignature.IsAhead</c>)؛ ‏ADR-033 §٧‑ع.)</para></summary>
     public string? Timestamp { get; }
 
     /// <summary>تَوقيعُ OTO كَما في جِسمِ الإشعار (‏Base64 لِبَصمَةِ ‏HMAC-SHA256 عَلى <c>orderId:status:timestamp</c>).</summary>
