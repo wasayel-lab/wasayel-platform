@@ -513,6 +513,16 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         if (remedy < 0) return "no_remedy";
         var condition = section.IndexOf(RerunCondition, remedy, StringComparison.Ordinal);
         if (condition < 0) return "remedy_unconditioned";
+        // ‏(‏2026-10-24 — تَيّارُ S16، مُراجَعَةُ S13 الجَولَة ٣) **وكُلُّ وُرودٍ لِلعِلاجِ يَتبَعُه الشَرطُ قَبلَ الوُرودِ التالي** — لا أَوَّلُه وَحدَه:
+        // مُلحَقٌ لاحِقٌ يُعيدُ العِلاجَ بِلا شَرطٍ، أَو جُملَةٌ بَعدَ الشَرطِ تَنقُضُه بِذِكرِ العِلاجِ، كانا يَمُرّانِ بِالمُطابَقَةِ الأولى (نَسَقُ
+        // ‏<c>FindIndex</c> الَّذي أُغلِقَ في فاحِصِ قُرّاءِ العَلَم).
+        var remedies = Regex.Matches(section, Regex.Escape(RerunRemedy)).Select(m => m.Index).ToList();
+        for (var i = 0; i < remedies.Count; i++)
+        {
+            var next = i + 1 < remedies.Count ? remedies[i + 1] : section.Length;
+            var c = section.IndexOf(RerunCondition, remedies[i], StringComparison.Ordinal);
+            if (c < 0 || c > next) return "remedy_unconditioned";
+        }
         if (section.IndexOf(TipCommand, condition, StringComparison.Ordinal) < 0) return "no_tip_command";
         if (section.IndexOf(NewerTipRefused, condition, StringComparison.Ordinal) < 0) return "newer_tip_not_refused";
         return section.IndexOf(GuardAbsence, condition, StringComparison.Ordinal) < 0 ? "guard_absence_unsaid" : null;
@@ -548,7 +558,19 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
             (Section, Deploy.Replace("git push --force", "git push", StringComparison.Ordinal), "premise_changed"),
             (Section, Deploy.Replace("|| github.event.workflow_run.head_sha", "|| 'main'", StringComparison.Ordinal), "premise_changed"),
             (Section, "# ‏تَعليقٌ وَحدَه\n\n", "deploy_unread"),
+            // ‏(‏2026-10-24 — S16) مُلحَقٌ لاحِقٌ يُعيدُ العِلاجَ بِلا شَرط، وجُملَةٌ بَعدَ الشَرطِ تَنقُضُه بِذِكرِه — كانَت المُطابَقَةُ الأولى تَقبَلُهُما:
+            (Section + "(مُلحَقٌ لاحِق) - والعِلاجُ " + RerunRemedy + " (‏Re-run all jobs).\n", Deploy, "remedy_unconditioned"),
+            (Section + "(مُلحَقٌ لاحِق) والشَرطُ أَعلاه لا يَلزَمُ بَعدَ اليَوم: " + RerunRemedy + " تَكفي أَيّاً كانَ الرَأس.\n", Deploy, "remedy_unconditioned"),
         };
+        // ‏والمُطابَقَةُ الأولى وَحدَها (فاحِصُ ما قَبلَ S16) — تُعَدُّ لِيُرى ما سَدَّه «كُلُّ وُرود».
+        static bool FirstMatchOnly(string s)
+        {
+            var r = s.IndexOf(RerunRemedy, StringComparison.Ordinal);
+            return r >= 0 && s.IndexOf(RerunCondition, r, StringComparison.Ordinal) >= 0;
+        }
+        var firstMatchAccepted = rejected.Count(r => r.Code == "remedy_unconditioned" && FirstMatchOnly(r.Section));
+        output.WriteLine($"مِن المَرفوضاتِ بِـremedy_unconditioned تَقبَلُ المُطابَقَةُ الأولى وَحدَها: {firstMatchAccepted}");
+        Assert.Equal(2, firstMatchAccepted);
         var wrong = accepted.Where(a => RerunConditionRefusal(a.Section, a.Deploy, out _, out _) is not null)
             .Select(a => $"رُفِضَ حَيٌّ ({RerunConditionRefusal(a.Section, a.Deploy, out _, out _)})")
             .Concat(rejected.Where(r => RerunConditionRefusal(r.Section, r.Deploy, out _, out _) != r.Code)
@@ -557,7 +579,7 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         foreach (var r in rejected) output.WriteLine($"مَرفوضٌ ({RerunConditionRefusal(r.Section, r.Deploy, out _, out _)})");
         var codes = rejected.Select(r => r.Code).Distinct().Count();
         output.WriteLine($"حُقِنَ {accepted.Length} مَقبولاً و{rejected.Length} مَرفوضاً بِـ{codes} رَمزاً.");
-        Assert.True(accepted.Length >= 2 && rejected.Length >= 12 && codes >= 8, "أَداةٌ عَمياء: العَيِّنَةُ أَصغَرُ مِمّا كُتِب.");
+        Assert.True(accepted.Length >= 2 && rejected.Length >= 14 && codes >= 8, "أَداةٌ عَمياء: العَيِّنَةُ أَصغَرُ مِمّا كُتِب.");
         Assert.True(wrong.Count == 0, $"أَخطَأَ الفاحِصُ في {wrong.Count}:\n  " + string.Join("\n  ", wrong));
     }
 
