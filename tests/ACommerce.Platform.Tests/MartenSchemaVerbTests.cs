@@ -332,10 +332,61 @@ public class MartenSchemaVerbTests
         Assert.NotEmpty(blocks);
         var code = string.Join('\n', blocks);
 
-        var snaps = Regex.Matches(code, @"--snapshot\s+""(?<path>[^""]+)""").Select(m => m.Groups["path"].Value).ToArray();
+        var snaps = SnapshotPaths(code);
         Assert.NotEmpty(snaps);
+        Assert.Equal(Regex.Matches(code, "--snapshot").Count, snaps.Count);   // ‏(‏2026-10-24) كُلُّ --snapshot يُقرَأُ مَسارُه، بِعَلامَتَي تَنصيصٍ أَو بِدونِهِما
         Assert.All(snaps, s => Assert.StartsWith("$HOME/wasayel-snapshots/", s, StringComparison.Ordinal));
         var mkdir = code.IndexOf("mkdir -p \"$HOME/wasayel-snapshots\"", StringComparison.Ordinal);
         Assert.True(mkdir >= 0 && mkdir < code.IndexOf("--snapshot", StringComparison.Ordinal), "mkdir -p لا يَسبِقُ أَوَّلَ --snapshot.");
+    }
+
+    /// <summary>مَسارُ كُلِّ <c>--snapshot</c> في نَصِّ أَوامِر — بَينَ عَلامَتَي تَنصيصٍ أَو بِدونِهِما (‏2026-10-24 — مُراجَعَةُ الموجَة ٤،
+    /// بَندُ H: كانَ الصَفُّ أَعلاه يَقرَأُ المُقتَبَسَ وَحدَه، فَـ<c>--snapshot pre-deploy.dump</c> — جَذرَ المُستَودَعِ مَرَّةً أُخرى — لا يُعَدُّ
+    /// ويَمُرُّ ما دامَ في الكُتلَةِ مَسارٌ مُقتَبَسٌ واحِدٌ صَحيح).</summary>
+    internal static IReadOnlyList<string> SnapshotPaths(string code)
+        => Regex.Matches(code, @"--snapshot[ \t]+(?:""(?<q>[^""]+)""|(?<u>[^\s""]\S*))")
+            .Select(m => m.Groups["q"].Success ? m.Groups["q"].Value : m.Groups["u"].Value)
+            .ToList();
+
+    /// <summary><b>حَقنُ عَيب — قارِئُ مَسارِ اللَقطَةِ يُحمِرُّ فِعلاً</b> (‏2026-10-24): خُطوَةُ §٤‑د الحَيَّةُ تُضافُ إلَيها سُطورٌ بِمَسارٍ
+    /// غَيرِ مُقتَبَسٍ داخِلَ المُستَودَع، أَو مُقتَبَسٍ بِعَلامَةٍ مُفرَدَة، أَو بِلا مَسار — فَيُشتَرَطُ أَن يُرى كُلٌّ مِنها خَرقاً؛ والحَيُّ
+    /// ومَسارٌ غَيرُ مُقتَبَسٍ تَحتَ <c>$HOME/wasayel-snapshots/</c> يُقبَلان.</summary>
+    [Fact]
+    public void TheSnapshotPathReader_CanActuallyGoRed()
+    {
+        const string Live = "mkdir -p \"$HOME/wasayel-snapshots\"\n"
+            + "dotnet run scripts/marten-schema.cs -- --snapshot \"$HOME/wasayel-snapshots/pre-deploy-$(git rev-parse --short HEAD).dump\"\n";
+        static bool Outside(string code)
+        {
+            var paths = SnapshotPaths(code);
+            return paths.Count > 0 && paths.Count == Regex.Matches(code, "--snapshot").Count
+                && paths.All(p => p.StartsWith("$HOME/wasayel-snapshots/", StringComparison.Ordinal));
+        }
+        var accepted = new[]
+        {
+            Live,
+            Live + "dotnet run scripts/marten-schema.cs -- --snapshot $HOME/wasayel-snapshots/second.dump\n",
+        };
+        var rejected = new[]
+        {
+            Live + "dotnet run scripts/marten-schema.cs -- --snapshot pre-deploy-$(git rev-parse --short HEAD).dump\n",
+            Live + "dotnet run scripts/marten-schema.cs -- --snapshot ./backups/x.dump   # تَعليق\n",
+            Live + "dotnet run scripts/marten-schema.cs -- --snapshot '$HOME/wasayel-snapshots/x.dump'\n",
+            Live + "dotnet run scripts/marten-schema.cs -- --snapshot\n",
+            "dotnet run scripts/marten-schema.cs -- --snapshot pre-deploy.dump\n",
+        };
+        Assert.Equal(new[] { "$HOME/wasayel-snapshots/pre-deploy-$(git rev-parse --short HEAD).dump", "pre-deploy.dump" },
+            SnapshotPaths(Live + "x --snapshot pre-deploy.dump").ToArray());
+        var wrong = accepted.Where(c => !Outside(c)).Select(c => "رُفِضَ حَيّ: " + c)
+            .Concat(rejected.Where(Outside).Select(c => "قُبِلَ: " + c)).ToList();
+        Assert.True(wrong.Count == 0,
+            $"حُقِنَ {rejected.Length} سَطراً و{accepted.Length} حَيّاً، وأَخطَأَ القارِئُ في {wrong.Count}:\n  " + string.Join("\n  ", wrong));
+        // ‏والقارِئُ القَديمُ (المُقتَبَسُ وَحدَه) كانَ يَقبَلُ مِنها:
+        var oldAccepts = rejected.Count(c =>
+        {
+            var q = Regex.Matches(c, @"--snapshot\s+""(?<path>[^""]+)""").Select(m => m.Groups["path"].Value).ToArray();
+            return q.Length > 0 && q.All(p => p.StartsWith("$HOME/wasayel-snapshots/", StringComparison.Ordinal));
+        });
+        Assert.Equal(4, oldAccepts);
     }
 }
