@@ -14,7 +14,7 @@
  دَفعٌ إلى main
       │
       ▼
- ‏.github/workflows/ci.yml        «CI» — بِناء + 3845 اختِباراً (‏2026-10-13) + الطَبَقات الساكِنَة
+ ‏.github/workflows/ci.yml        «CI» — بِناء + 3845 اختِباراً (‏2026-10-13) · 4350 (‏2026-10-24) + الطَبَقات الساكِنَة
       │  (نَجَحَت؟)
       ▼
  ‏.github/workflows/deploy-hf.yml  «Deploy to Hugging Face Space»
