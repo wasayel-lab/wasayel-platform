@@ -43,6 +43,25 @@ public class StudioPatternTextsTests
         Assert.DoesNotContain(value!, code, StringComparison.Ordinal);
     }
 
+    /// <summary>(‏2026-10-24) <b>وتَعليلُ فَرعِ «تربط طرفين + عمولة» مِن القامُوسِ كَذلِك</b> — رُحِّلَ بِحَرفِه قَبلَ صِياغَتِه
+    /// («ب» S11·٥ البَند 5)، و<c>CapabilitiesPromptMoneyCharacterizationTests</c> وجَدوَلُ الفُروعِ أَخضَرانِ بِلا تَعديلِ حَرف.</summary>
+    [Fact]
+    public void The_commission_reasoning_is_read_from_the_dictionary_not_written_in_the_matcher()
+    {
+        var key = PatternMatcher.CommissionReasoningKey;
+        Assert.Contains(key, LocaleCatalog.Lexicon);
+        var value = LocaleCatalog.Find(LocaleCatalog.Arabic, key);
+        Assert.False(string.IsNullOrWhiteSpace(value));
+
+        var s = PatternMatcher.Match(new Dictionary<string, string> { ["offer"] = "twosided", ["payment"] = "commission", ["realtime"] = "no" });
+        Assert.Equal("marketplace", s.Pattern);
+        Assert.Equal(value, s.ReasoningAr);
+
+        var code = MatcherCode();
+        Assert.Contains("LocaleCatalog.Text(LocaleCatalog.Arabic, CommissionReasoningKey)", code, StringComparison.Ordinal);
+        Assert.DoesNotContain(value!, code, StringComparison.Ordinal);
+    }
+
     // ═══ الصِياغَة (‏2026-10-13) — نَمَطٌ واحِدٌ يَخدُمُ بائِعاً واحِداً أَو بائِعينَ كُثُراً (‏ADR-032 §٦) ═══
 
     /// <summary>النَصُّ الجَديدُ بِحَرفِه — ولا يَعِدُ بِمَسارِ ضَمٍّ أَو دَعوَةٍ لا وُجودَ لَه (‏ADR-032 §٦‑ح‑2): البائِعونَ «يُسَجِّلونَ

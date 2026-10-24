@@ -16,8 +16,13 @@ public static class PatternMatcher
 {
     /// <summary>مِفتاحُ تَعليلِ فَرعِ «تَبيعُ مُنتَجات» في <c>ar.json</c> — النَصُّ الوَحيدُ المُرَحَّلُ مِن هذا المِلَفّ
     /// (‏ADR-032 §٦‑ج‑3(ب)). وما بَقِيَ فيه مِن تَسمِياتٍ وتَعليلاتٍ حَرفِيَّةٍ دَينٌ مُسَمّىً في سِجِلِّ المالِك
-    /// («أ» S11) لا يَبلُغُه عَدّادُ الطَبَقَة ٧ (‏`.razor` والمَصارِفُ المُعلَنَة وَحدَها).</summary>
+    /// («أ» S11) لا يَبلُغُه عَدّادُ الطَبَقَة ٧ (‏`.razor` والمَصارِفُ المُعلَنَة وَحدَها).
+    /// (‏2026-10-24: «الوَحيدُ» صارَ أَوَّلَ اثنَين — <see cref="CommissionReasoningKey"/>.)</summary>
     public const string ProductsReasoningKey = "incubator.pattern.reason_products";
+
+    /// <summary>مِفتاحُ تَعليلِ فَرعِ «منصة تربط طرفين + عمولة» — رُحِّلَ بِحَرفِه (‏2026-10-24، «ب» S11·٥ البَند 5) قَبلَ
+    /// صِياغَتِه، فَالنَصُّ الثاني المُرَحَّلُ مِن هذا المِلَفّ؛ وما سِواهُما حَرفِيٌّ كَما في الوَثيقَةِ أَعلاه.</summary>
+    public const string CommissionReasoningKey = "incubator.pattern.reason_twosided_commission";
 
     public static PatternSuggestion Match(IReadOnlyDictionary<string, string> a)
     {
@@ -40,10 +45,11 @@ public static class PatternMatcher
                 "فكرتك تأجير أصول لفترة محددة — نمط التأجير يدير حالة الأصل (متاح/محجوز/مُرجَع) والتحقق.");
 
         // 3) منصة طرفين بعمولة → marketplace
+        //    (‏التَعليلُ مِن القامُوسِ بِالعَرَبِيَّةِ صَراحَةً — عِلَّةُ الفَرعِ 5 نَفسُها أَدناه.)
         if (offer == "twosided" && payment == "commission")
             return new("marketplace", "المتجر متعدد البائعين",
                 "high",
-                "تربط بائعين ومشترين وتأخذ عمولة على المعاملة — نمط المتجر متعدد البائعين يحصّل الدفع ويوزّعه.");
+                LocaleCatalog.Text(LocaleCatalog.Arabic, CommissionReasoningKey));
 
         // 4) منصة طرفين باشتراك/بلا تحصيل → classifieds
         if (offer == "twosided")
