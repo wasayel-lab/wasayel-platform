@@ -216,7 +216,52 @@ public class ListingOwnerCountScriptTests(Xunit.Abstractions.ITestOutputHelper o
         }
         foreach (Match m in Regex.Matches(folded, @"\.(?:Phone|Email|NationalId|FullName)\b"))
             v.Add(folded.Substring(Math.Max(0, m.Index - 40), Math.Min(folded.Length, m.Index + 40) - Math.Max(0, m.Index - 40)).Trim());
+        // ‏(‏2026-10-24 — تَيّارُ S16، مُراجَعَةُ S13 الجَولَة ١) **والحُقولُ الشَخصِيَّةُ الأُخرى، والكائِنُ كُلُّه**: الأَسماءُ الأَربَعَةُ وَحدَها
+        // لا تَرى تَسلسُلَ `User`/`StudioUser` كامِلاً، ولا إقحامَه في نَصٍّ أَو وَصلَه، ولا `AttributesJson`/`RoleAttributesJson`/`AvatarUrl`/
+        // `PushSubscriptions` — والسكربتُ يُشَغَّلُ عَلى نُسخَةٍ تَحمِلُها. فَيُرَدُّ كُلُّ `JsonSerializer`، وكُلُّ قِراءَةٍ لِتِلكَ الحُقول، وكُلُّ
+        // اسمٍ يَحمِلُ مُستَخدِماً (`PersonBearing`) يَرِدُ قيمَةً كامِلَةً: ثُقبَ إقحامٍ، أَو طَرَفَ وَصل، أَو وَسيطاً لِطِباعَة، أَو `ToString()`.
+        foreach (Match m in Regex.Matches(folded, @"\.(?:AttributesJson|RoleAttributesJson|AvatarUrl|PushSubscriptions)\b|\bJsonSerializer\b"))
+            v.Add("personal_member: " + Around(folded, m.Index));
+        foreach (var name in PersonBearing(folded))
+        {
+            var n = Regex.Escape(name);
+            foreach (var shape in new[]
+            {
+                $@"\{{\s*{n}\s*(?:[}},:]|\.\s*(?:First|Single|Last|ElementAt|ToString)\w*\s*\()",   // ‏{u} و{live.First()}
+                $@"\{{\s*{n}\s*\[",                                                                // ‏{live[0]}
+                $@"\+\s*{n}\b(?!\s*[.\[(])",                                                         // ‏"…" + u
+                $@"\b{n}\b(?!\s*[.\[(])\s*\+(?!\+)",                                                // ‏u + "…"
+                $@"\b(?:Console\.(?:Error\.)?Write(?:Line)?|string\.(?:Join|Concat|Format)|Append(?:Line)?)\([^;]*?\b{n}\b(?!\s*[.\[(])",
+                $@"\b{n}\s*\.\s*ToString\s*\(",
+            })
+                foreach (Match m in Regex.Matches(folded, shape))
+                    v.Add($"person_value[{name}]: " + Around(folded, m.Index));
+        }
         return v;
+    }
+
+    private static string Around(string folded, int at)
+        => folded.Substring(Math.Max(0, at - 40), Math.Min(folded.Length, at + 40) - Math.Max(0, at - 40)).Trim();
+
+    /// <summary>الأَسماءُ الَّتي تَحمِلُ مُستَخدِماً أَو مَجموعَةَ مُستَخدِمين في الكودِ المَطوِيّ: ما يُعلَنُ بِنَوعِ <c>User</c>/<c>StudioUser</c>
+    /// (وَسيطاً أَو مُتَغَيِّراً)، وكُلُّ <c>var</c> يُسنَدُ إلَيه تَعبيرٌ فيه <c>&lt;User&gt;</c>/<c>&lt;StudioUser&gt;</c>، ومُعامِلُ كُلِّ <c>=&gt;</c> عَلى
+    /// مُستَقبِلٍ مِنها أَو عَلى <c>Query&lt;User&gt;()</c> — ثُمَّ ما يُشتَقُّ مِنها بِـ<c>var x = y.…</c> ما لَم يَكُن اختِزالاً إلى عَدَدٍ أَو صِدق.</summary>
+    internal static IReadOnlyCollection<string> PersonBearing(string folded)
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Match m in Regex.Matches(folded, @"\b(?:User|StudioUser)\s+(\w+)\s*[,)=;]")) set.Add(m.Groups[1].Value);
+        foreach (Match m in Regex.Matches(folded, @"\bList<(?:User|StudioUser)>\s+(\w+)")) set.Add(m.Groups[1].Value);
+        foreach (Match m in Regex.Matches(folded, @"\bvar\s+(\w+)\s*=[^;]*<(?:User|StudioUser)>[^;]*;")) set.Add(m.Groups[1].Value);
+        foreach (Match m in Regex.Matches(folded, @"<(?:User|StudioUser)>\(\)\s*\.\s*\w+\(\s*(\w+)\s*=>")) set.Add(m.Groups[1].Value);
+        for (var grew = true; grew;)
+        {
+            grew = false;
+            foreach (Match m in Regex.Matches(folded, @"\b(\w+)\s*\.\s*\w+\(\s*(\w+)\s*=>"))
+                if (set.Contains(m.Groups[1].Value) && set.Add(m.Groups[2].Value)) grew = true;
+            foreach (Match m in Regex.Matches(folded, @"\bvar\s+(\w+)\s*=\s*(?:await\s+)?(\w+)\s*\.\s*(?!(?:Count|LongCount|Any|All|Sum|Max|Min|Contains)\b)\w+"))
+                if (set.Contains(m.Groups[2].Value) && set.Add(m.Groups[1].Value)) grew = true;
+        }
+        return set;
     }
 
     /// <summary><b>ولا يَقرَأُ حَقلاً شَخصِيّاً خارِجَ المُرَشِّحَين</b> — في أَيِّ سَطر، لا في أَسطُرِ الطِباعَةِ وَحدَها.</summary>
@@ -255,6 +300,17 @@ public class ListingOwnerCountScriptTests(Xunit.Abstractions.ITestOutputHelper o
             ("هُوِيَّةٌ وَطَنِيَّة", With("var nid = live.First().NationalId;")),
             ("مُرَشِّحٌ ثالِث", With("front.AddRange(await tq.Query<User>().Where(u => u.Phone == t.Id).ToListAsync());")),
             ("نُسخَةٌ ثانِيَةٌ مِن مُرَشِّحٍ مُسَمّى", With(NamedPreFilters[0])),
+            // ‏(‏2026-10-24 — S16) الكائِنُ كُلُّه، والحُقولُ الشَخصِيَّةُ الأُخرى:
+            ("تَسلسُلُ الكائِنِ كامِلاً", With("Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(live));")),
+            ("إقحامُ مُستَخدِمِ الاستوديو", With("Console.WriteLine($\"  مالِك: {studioUser}\");")),
+            ("إقحامُ أَوَّلِ مُستَخدِم", With("storeOwnerLine = $\"{live.First()}\";")),
+            ("إقحامُ مُعامِلِ لامدا", With("var dump = string.Join(\",\", live.Select(u => $\"{u}\"));")),
+            ("وَصلُ الكائِن", With("storeOwnerLine = \"مالِك: \" + studioUser;")),
+            ("طِباعَةُ المَجموعَة", With("Console.WriteLine(string.Join(\", \", active));")),
+            ("سِماتُ المِلَفّ", With("var attrs = live.First().AttributesJson;")),
+            ("سِماتُ الدَور", With("var ra = studioUser is null ? null : live[0].RoleAttributesJson;")),
+            ("الصورَة", With("var pic = live.First().AvatarUrl;")),
+            ("اشتِراكاتُ الإشعار", With("var subs = live.SelectMany(u => u.PushSubscriptions).Count();")),
         };
 
         var wrong = accepted.Where(x => PersonalFieldReads(x.Code).Count != 0)
@@ -266,6 +322,13 @@ public class ListingOwnerCountScriptTests(Xunit.Abstractions.ITestOutputHelper o
         var printOnly = rejected.Count(x => !x.Code.Split('\n')
             .Any(l => l.Contains("Console.", StringComparison.Ordinal) && personal.Any(p => l.Contains(p, StringComparison.Ordinal))));
         output.WriteLine($"حُقِنَ {rejected.Length} شَكلاً و{accepted.Length} حَيّاً · يَقبَلُ فاحِصُ أَسطُرِ الطِباعَةِ وَحدَه {printOnly} مِن المَرفوضات");
+        // ‏(‏2026-10-24 — S16) وفاحِصُ الأَسماءِ الأَربَعَةِ وَحدَه (ما قَبلَ S16) يَقبَلُ مِنها:
+        var fourOnly = rejected.Count(x => !Regex.IsMatch(Regex.Replace(WriteEndpointGuardTests.StripComments(x.Code), @"\s+", " ")
+            .Replace(NamedPreFilters[0], " ", StringComparison.Ordinal).Replace(NamedPreFilters[1], " ", StringComparison.Ordinal),
+            @"\.(?:Phone|Email|NationalId|FullName)\b") && !x.Name.StartsWith("نُسخَةٌ ثانِيَة", StringComparison.Ordinal));
+        output.WriteLine($"يَقبَلُ فاحِصُ الأَسماءِ الأَربَعَةِ وَحدَه {fourOnly} مِن المَرفوضات · الأَسماءُ الحامِلَةُ لِمُستَخدِمٍ في الحَيّ: "
+            + string.Join(", ", PersonBearing(Regex.Replace(WriteEndpointGuardTests.StripComments(code), @"\s+", " ")).OrderBy(n => n, StringComparer.Ordinal)));
+        Assert.True(fourOnly >= 10, $"العَيِّنَةُ لا تَقيسُ ما سَدَّه S16: {fourOnly}.");
         Assert.True(printOnly >= 4, $"العَيِّنَةُ لا تَقيسُ ما سَدَّه الفاحِصُ الجَديد: {printOnly}.");
         Assert.True(wrong.Count == 0,
             $"حُقِنَ {rejected.Length} شَكلاً و{accepted.Length} حَيّاً، وأَخطَأَ الفاحِصُ في {wrong.Count}:\n  " + string.Join("\n  ", wrong));
