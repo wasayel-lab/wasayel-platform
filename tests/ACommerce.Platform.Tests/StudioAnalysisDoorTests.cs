@@ -447,25 +447,88 @@ public class StudioAnalysisDoorTests(ITestOutputHelper output)
 
     private const string NewIdeaRoute = "\"/studio/new\"";
 
+    // ‏(‏2026-10-24، تَيّارُ S16 — C(29)، مُراجَعَةُ تَيّارِ S15 الجَولَة 3؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **الماسِحُ كانَ يَعُدُّ تَهجِئَةً واحِدَة** —
+    // ‏`"/studio/new"` بِعَلامَةِ تَنصيصٍ تُغلِقُه — فَرابِطٌ غَداً بِـ`?from=home` أَو `#x`، أَو `NavigateTo($"/studio/new?…")`، أَو `'/studio/new'` في
+    // ‏`.js`، أَو `Results.Redirect("/studio/new?…")` خارِجَ بابٍ لا يُعَدّ، والصَفُّ أَخضَر. فَصارَ المَسارُ رَمزاً: عَلامَةُ تَنصيصٍ (مُزدَوِجَةٌ أَو
+    // مُفرَدَة) ثُمَّ `/studio/new` ثُمَّ تَنصيصٌ أَو `?` أَو `#` أَو `/` (`NewIdeaToken`)، وتَوجيهُ `@page` مُستَثنىً كَما كان؛ و`.js` تَحتَ `libs`/`apps`
+    // يُقرَأُ مَعَ `SourceFiles` (لا كُتلَةَ بابٍ فيه، فَكُلُّ ذِكرٍ فيه خارِجَ باب). وصَفٌّ يَحقِنُ كُلَّ تَهجِئَة.
+    private static readonly System.Text.RegularExpressions.Regex NewIdeaToken =
+        new(@"[""']/studio/new(?=[""'?#/])", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>مَصادِرُ الماسِح: <see cref="EntitlementContractTests.SourceFiles"/> (‏<c>.cs</c> و<c>.razor</c>) ومَعَها <c>.js</c> تَحتَ <c>libs</c>/<c>apps</c>.</summary>
+    private static IEnumerable<(string File, string Text)> NewIdeaSources()
+    {
+        foreach (var f in EntitlementContractTests.SourceFiles()) yield return f;
+        foreach (var root in new[] { "libs", "apps" })
+        {
+            var dir = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, root);
+            if (!Directory.Exists(dir)) continue;
+            foreach (var f in Directory.EnumerateFiles(dir, "*.js", SearchOption.AllDirectories))
+            {
+                var norm = f.Replace('\\', '/');
+                if (norm.Contains("/obj/", StringComparison.Ordinal) || norm.Contains("/bin/", StringComparison.Ordinal)
+                    || norm.Contains("/node_modules/", StringComparison.Ordinal)) continue;
+                yield return (f, File.ReadAllText(f));
+            }
+        }
+    }
+
     /// <summary>كُلُّ ذِكرٍ لِصَفحَةِ الفِكرَةِ في المَصادِر، بِمِلَفِّه وهَل هُوَ داخِلَ كُتلَةِ بابٍ مَفتوح. في <c>.razor</c> تُبَيَّضُ تَعليقاتُ
-    /// Razor و‏HTML (بِطولِها، فَتَبقى الفَهارِس)؛ وفي <c>.cs</c> تَعليقاتُ C#، ولا كُتلَةَ بابٍ هُناك — فَتَحويلٌ إلَيها مِن كودٍ خارِجَ بابٍ دائِماً.</summary>
-    private static List<(string File, bool InsideDoor)> NewIdeaLinks()
+    /// Razor و‏HTML (بِطولِها، فَتَبقى الفَهارِس)؛ وفي <c>.cs</c> و<c>.js</c> تَعليقاتُ C# (والصيغَةُ واحِدَة)، ولا كُتلَةَ بابٍ هُناك — فَتَحويلٌ إلَيها
+    /// مِن كودٍ خارِجَ بابٍ دائِماً.</summary>
+    private static List<(string File, bool InsideDoor)> NewIdeaLinks() => NewIdeaLinksIn(NewIdeaSources());
+
+    private static List<(string File, bool InsideDoor)> NewIdeaLinksIn(IEnumerable<(string File, string Text)> sources)
     {
         var links = new List<(string, bool)>();
-        foreach (var (file, text) in EntitlementContractTests.SourceFiles())
+        foreach (var (file, text) in sources)
         {
-            var rel = Path.GetRelativePath(ThemeZeroEquivalenceTests.RepoRoot, file).Replace('\\', '/');
+            var rel = Path.IsPathRooted(file) ? Path.GetRelativePath(ThemeZeroEquivalenceTests.RepoRoot, file).Replace('\\', '/') : file;
             var razor = rel.EndsWith(".razor", StringComparison.OrdinalIgnoreCase);
             var code = razor ? WriteEndpointGuardTests.StripMarkupComments(text) : WriteEndpointGuardTests.StripComments(text);
-            if (!code.Contains(NewIdeaRoute, StringComparison.Ordinal)) continue;
+            if (!code.Contains("/studio/new", StringComparison.Ordinal)) continue;
             var blocks = razor ? DoorBlocks(code) : new List<(int Open, int Close)>();
-            for (var i = code.IndexOf(NewIdeaRoute, StringComparison.Ordinal); i >= 0; i = code.IndexOf(NewIdeaRoute, i + 1, StringComparison.Ordinal))
+            foreach (System.Text.RegularExpressions.Match m in NewIdeaToken.Matches(code))
             {
+                var i = m.Index;
                 if (i >= 6 && string.CompareOrdinal(code, i - 6, "@page ", 0, 6) == 0) continue;
                 links.Add((rel, blocks.Any(b => b.Open < i && i < b.Close)));
             }
         }
         return links;
+    }
+
+    /// <summary><b>والماسِحُ يَعُدُّ كُلَّ تَهجِئَة</b> (‏2026-10-24، تَيّارُ S16 — C(29)): صَفحَةٌ مَحقونَةٌ فيها رابِطٌ بِـ<c>?from=home</c> داخِلَ باب، ورابِطٌ
+    /// بِـ<c>?query</c> وآخَرُ بِـ<c>#fragment</c> خارِجَه؛ و<c>.cs</c> يُحَوِّلُ بِـ<c>?…</c>؛ و<c>.js</c> بِتَنصيصٍ مُفرَد — كُلُّها خارِجَ بابٍ إلّا الأَوَّل.
+    /// وتَوجيهُ <c>@page</c> والتَعليقُ و<c>/studio/newsletter</c> لا تُعَدّ. ويُطبَعُ ما كانَ يَعُدُّه الحَرفُ القَديمُ مِنها.</summary>
+    [Fact]
+    public void The_link_scanner_counts_a_query_and_a_fragment_link_outside_the_door()
+    {
+        const string door = "@if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))";
+        var sources = new[]
+        {
+            ("x/Injected.razor",
+                "@page \"/studio/new\"\n"
+              + door + "\n{\n    <a href=\"/studio/new?from=home\">a</a>\n}\n"
+              + "<a href=\"/studio/new?from=empty\">b</a>\n"
+              + "<a href=\"/studio/new#x\">c</a>\n"
+              + "@* <a href=\"/studio/new\">d</a> *@\n"
+              + "<a href=\"/studio/newsletter\">e</a>\n"),
+            ("x/Injected.cs", "class X { object M(string q) => Results.Redirect($\"/studio/new?from={q}\"); // \"/studio/new\"\n}"),
+            ("x/injected.js", "location.href = '/studio/new';\n"),
+        };
+        var links = NewIdeaLinksIn(sources);
+        var outside = links.Where(l => !l.InsideDoor).Select(l => l.File).ToList();
+        var oldLiteral = sources.Sum(src => System.Text.RegularExpressions.Regex.Matches(
+            src.Item1.EndsWith(".razor", StringComparison.Ordinal) ? WriteEndpointGuardTests.StripMarkupComments(src.Item2) : WriteEndpointGuardTests.StripComments(src.Item2),
+            System.Text.RegularExpressions.Regex.Escape(NewIdeaRoute)).Count);
+        output.WriteLine($"مَحقونَة: مَعدودَة {links.Count} · داخِلَ بابٍ {links.Count - outside.Count} · خارِجَه {outside.Count} ({string.Join(" · ", outside)}) · "
+            + $"والحَرفُ القَديمُ {NewIdeaRoute} يَرى مِنها {oldLiteral} (‏@page وَحدَه)");
+
+        Assert.Equal(5, links.Count);
+        Assert.Equal(1, links.Count(l => l.InsideDoor));
+        Assert.Equal(new[] { "x/Injected.razor", "x/Injected.razor", "x/Injected.cs", "x/injected.js" }, outside);
+        Assert.Equal(1, oldLiteral);
     }
 
     /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 2)</b> — كانَ
