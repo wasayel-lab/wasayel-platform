@@ -15,8 +15,13 @@ namespace ACommerce.Platform.Tests;
 // ورُؤوسِ السكربتاتِ مَوجودٌ وقابِلٌ لِلتَنفيذ. ويُقرَأُ البِتُّ مِن نِظامِ المِلَفّات: `actions/checkout` عَلى لينكس يَضبِطُه
 // مِن نَمَطِ الفِهرِس، فَهُوَ نَمَطُ الإيداعِ بِعَينِه هُناك. وعَلى وِندوز لا بِتَّ يُقرَأُ فَيُتَخَطّى. (‏`docs/heritage/`
 // مَنقولٌ مِن المُستَودَعِ القَديمِ ويَصِفُ سكربتاتِه هُوَ، فَلا يُعَدّ.)
+//
+// **والبِتُّ مِن الفِهرِسِ لا مِن نِظامِ المِلَفّات** (‏2026-10-24 — مُراجَعَةُ الموجَة ٤، ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): الصَفُّ كانَ
+// يَرجِعُ عَلى وِندوز قَبلَ أَن يَقيسَ ولا يَطبَعُ شَيئاً — وهُناكَ بِعَينِه يُودَعُ السكربتُ ‏`100644` — ويَقرَأُ نَمَطَ شَجَرَةِ العَمَلِ
+// لا ما أُودِع: `chmod +x` بِلا `git update-index --chmod=+x` يَخضَرُّ مَحَلِّيّاً ويُرَدُّ 126 بَعدَ أَوَّلِ `checkout`. فَيُقرَأُ الآنَ
+// `git ls-files -s -- scripts/*.sh` عَلى كُلِّ نِظام — ‏`100755` أَو لا — ويُطبَعُ ما فُحِصَ ويَفشَلُ عَلى الصِفر.
 
-public class ScriptExecutableBitTests
+public class ScriptExecutableBitTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;
 
@@ -65,15 +70,87 @@ public class ScriptExecutableBitTests
             "وَثيقَةٌ تُشَغِّلُ سكربتاً لا وُجودَ لَه: "
           + string.Join("; ", missing.Select(m => $"{m} ← {string.Join(", ", named[m])}")));
 
-        if (OperatingSystem.IsWindows()) return;   // ‏لا بِتَّ تَنفيذٍ يُقرَأُ هُناك.
+        // ‏(‏2026-10-24) نَمَطُ الإيداعِ مِن الفِهرِسِ عَلى كُلِّ نِظام — لا رُجوعَ عَلى وِندوز، ولا قِراءَةَ لِشَجَرَةِ العَمَل.
+        var (modes, malformed) = ParseIndexModes(GitLsFilesScripts());
+        output.WriteLine($"وَثائِقُ مَقروءَة: {documents.Count} · سكربتاتٌ مُسَمّاةٌ بِـ./: {named.Count} · أَسطُرُ الفِهرِس: {modes.Count} (مُشَوَّهَة {malformed.Count})");
+        Assert.True(modes.Count > 5, $"أَداةٌ عَمياء: {modes.Count} سَطراً مِن git ls-files -s -- scripts/*.sh.");
+        Assert.True(malformed.Count == 0, "سَطرُ فِهرِسٍ لا يُقرَأ: " + string.Join("; ", malformed));
 
-        // حَلقَةٌ لا تَعبيرُ LINQ (‏2026-10-13): الحارِسُ `IsWindows` أَعلاه لا يَعبُرُ إلى داخِلِ تَعبيرِ lambda فَيُحَذِّرُ CA1416 — والحَلقَةُ يَراها.
-        var notExecutable = new List<string>();
+        var notExecutable = NotExecutableInIndex(named.Keys, modes);
         foreach (var n in named.Keys.OrderBy(n => n, StringComparer.Ordinal))
-            if ((File.GetUnixFileMode(Path.Combine(RepoRoot, "scripts", n)) & UnixFileMode.UserExecute) == 0) notExecutable.Add(n);
+            output.WriteLine($"  {(modes.TryGetValue("scripts/" + n, out var m) ? m : "غَيرُ مُتَتَبَّع")}  scripts/{n}");
+        output.WriteLine($"فُحِصَ {named.Count} سكربتاً في الفِهرِس، ومِنها بِلا 100755: {notExecutable.Count}");
         Assert.True(notExecutable.Count == 0,
-            $"سكربتٌ تُشَغِّلُه وَثيقَتُه بِـ./ وهُوَ بِلا بِتِّ تَنفيذ ({named.Count} مُسَمّىً، {documents.Count} وَثيقَة) — "
+            $"سكربتٌ تُشَغِّلُه وَثيقَتُه بِـ./ وهُوَ في الفِهرِسِ بِلا 100755 ({named.Count} مُسَمّىً، {documents.Count} وَثيقَة) — "
           + "يُرَدُّ Permission denied (126) قَبلَ سَطرِه الأَوَّل؛ git update-index --chmod=+x scripts/<name>: "
           + string.Join("; ", notExecutable.Select(n => $"{n} ← {string.Join(", ", named[n])}")));
+    }
+
+    /// <summary>مُخرَجُ <c>git ls-files -s -- scripts/*.sh</c> مُشَغَّلاً في جَذرِ المُستَودَع — نَمَطُ ما أُودِع، لا ما في القُرص.</summary>
+    private static string GitLsFilesScripts()
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo("git")
+        {
+            WorkingDirectory = RepoRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        foreach (var a in new[] { "ls-files", "-s", "--", "scripts/*.sh" }) psi.ArgumentList.Add(a);
+        System.Diagnostics.Process p;
+        try { p = System.Diagnostics.Process.Start(psi)!; }
+        catch (System.ComponentModel.Win32Exception) { Assert.Fail("أَداةٌ غائِبَة: git — لا يُقرَأُ نَمَطُ الإيداعِ بِدونِها."); return ""; }
+        using (p)
+        {
+            var stdout = p.StandardOutput.ReadToEndAsync();
+            var err = p.StandardError.ReadToEnd();
+            Assert.True(p.WaitForExit(15_000), "git ls-files لَم يَنتَهِ في خَمسَ عَشرَةَ ثانِيَة.");
+            Assert.True(p.ExitCode == 0, $"git ls-files خَرَجَ {p.ExitCode}: {err.Trim()} — لَيسَ شَجَرَةَ عَمَلٍ أَو الأَداةُ مُعَطَّلَة.");
+            return stdout.GetAwaiter().GetResult();
+        }
+    }
+
+    /// <summary>سُطورُ <c>git ls-files -s</c> (‏<c>&lt;نَمَط&gt; &lt;بَصمَة&gt; &lt;مَرحَلَة&gt;\t&lt;مَسار&gt;</c>) خَريطَةَ مَسارٍ ← نَمَط؛ وما لا يُطابِقُ
+    /// الشَكلَ يُعادُ مُشَوَّهاً لا يُبتلَع.</summary>
+    internal static (IReadOnlyDictionary<string, string> Modes, IReadOnlyList<string> Malformed) ParseIndexModes(string lsFiles)
+    {
+        var modes = new Dictionary<string, string>(StringComparer.Ordinal);
+        var malformed = new List<string>();
+        foreach (var raw in lsFiles.Split('\n'))
+        {
+            var line = raw.TrimEnd('\r');
+            if (line.Length == 0) continue;
+            var m = Regex.Match(line, @"^(?<mode>[0-7]{6}) [0-9a-f]{40,64} [0-3]\t(?<path>.+)$");
+            if (m.Success) modes[m.Groups["path"].Value] = m.Groups["mode"].Value;
+            else malformed.Add(line);
+        }
+        return (modes, malformed);
+    }
+
+    /// <summary>ما لَيسَ <c>100755</c> في الفِهرِسِ مِن السكربتاتِ المُسَمّاة — وغَيرُ المُتَتَبَّعِ مِنها مَعَها: لا نَمَطَ يُودَعُ لَه.</summary>
+    internal static IReadOnlyList<string> NotExecutableInIndex(IEnumerable<string> named, IReadOnlyDictionary<string, string> modes)
+        => named.Where(n => !modes.TryGetValue("scripts/" + n, out var mode) || mode != "100755")
+            .OrderBy(n => n, StringComparer.Ordinal).ToList();
+
+    /// <summary><b>حَقنُ عَيب — قارِئُ الفِهرِسِ يُحمِرُّ فِعلاً</b> (‏2026-10-24): عَيِّنَةٌ مِن ثَلاثَةِ أَسطُرٍ بِشَكلِ <c>git ls-files -s</c>
+    /// — سكربتٌ ‏<c>100755</c> وسكربتٌ ‏<c>100644</c> (ما يُودِعُه وِندوز) — وسكربتٌ مُسَمّىً غَيرُ مُتَتَبَّع، وسَطرٌ مُشَوَّه.</summary>
+    [Fact]
+    public void The_index_mode_reader_can_actually_go_red()
+    {
+        const string sample =
+            "100755 f25300f53aa94ac0f7c0d7b38c972ef840f9c31b 0\tscripts/verify-production-boot.sh\n"
+          + "100644 e5d91c7040b37503b796dc03f0808379acf46c8b 0\tscripts/walk-after-the-key.sh\r\n"
+          + "not a line of git ls-files\n";
+        var (modes, malformed) = ParseIndexModes(sample);
+        Assert.Equal(2, modes.Count);
+        Assert.Equal("100755", modes["scripts/verify-production-boot.sh"]);
+        Assert.Equal("100644", modes["scripts/walk-after-the-key.sh"]);
+        Assert.Equal(new[] { "not a line of git ls-files" }, malformed);
+
+        var named = new[] { "verify-production-boot.sh", "walk-after-the-key.sh", "never-added.sh" };
+        var red = NotExecutableInIndex(named, modes);
+        output.WriteLine($"حُقِنَ {named.Length} سكربتاً، ويُرَدُّ {red.Count}: {string.Join(", ", red)}");
+        Assert.Equal(new[] { "never-added.sh", "walk-after-the-key.sh" }, red);
+        Assert.Empty(NotExecutableInIndex(new[] { "verify-production-boot.sh" }, modes));
     }
 }
