@@ -137,7 +137,10 @@ public class VendorShippingTests(ITestOutputHelper output)
             $"مَدخَلُ تَسجيلٍ خارِجَ فَرعِه عِندَ {i}"));
 
         Assert.Contains("shippingInput = Vendors.Input;", page, StringComparison.Ordinal);
-        Assert.Single(Regex.Matches(page, @"shippingInput = "));
+        // (‏2026-10-24، تَيّارُ S15 البَند J — ولا يُعادُ حَرفٌ فَوقَه): وإسنادٌ ثانٍ وَحيدٌ يُغلِقُ ولا يَفتَح — `None` حينَ تَعَذَّرَت قِراءَةُ مَدخَلِ
+        // البائِع، فَلا يُرسَمُ أَيُّ المَدخَلَين. كانَ الصَفُّ يَطلُبُ إسناداً واحِداً؛ وصارَ يَطلُبُ هذَينِ بِحَرفِهِما لا غَير.
+        Assert.Equal(new[] { "shippingInput = Vendors.Input;", "shippingInput = Vs.VendorShippingInput.None;" },
+            Regex.Matches(page, @"shippingInput = [^;]*;").Select(m => m.Value).ToArray());
     }
 
     /// <summary>الكُتلَةُ مِن أَوَّلِ <c>{</c> بَعدَ <paramref name="from"/> إلى قَوسِها المُقابِل.</summary>

@@ -43,6 +43,11 @@
         @* «registered» رَدُّ مَسارِ التَسجيلِ (‏ADR-033 الخُطوَة 8، ‏2026-10-12) — ورابِطُ التَفعيلِ في قِسمِ الشَّحنِ أَدناه. *@
         <AcAlert Variant="success" Message="@L[ShippingDone == "registered" ? "shipping.vendor.registered" : "shipping.vendor.saved"]" />
     }
+    else if (Auth.IsAuthenticated && shippingReadFailed)
+    {
+        @* (‏2026-10-24، تَيّارُ S15 البَند J): تَعَذَّرَت قِراءَةُ مَدخَلِ البائِعِ — قِسمُ الشَّحنِ لا يُرسَمُ (لا لَصقَ ولا تَسجيلَ لِمَن لَه حِساب)، والسَطرُ يَقولُ لِماذا. *@
+        <AcAlert Variant="warning" Message="@L["shipping.vendor.read_failed"]" />
+    }
 
     @if (!Auth.IsAuthenticated)
     {
@@ -217,6 +222,8 @@
     /// و<c>None</c> لِغَيرِ البائِع: لا يُسأَلُ إلّا في فَرعِ «لَه إعلانات».</summary>
     ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput shippingInput;
     ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingView? shippingView;
+    /// <summary>تَعَذَّرَت قِراءَةُ مَدخَلِ البائِع (<c>VendorShippingView.ReadFailed</c>) — فَلا قِسمَ شَحنٍ ويُقالُ السَبَب (تَيّارُ S15 البَند J).</summary>
+    bool shippingReadFailed;
     /// <summary>رابِطُ تَفعيلِ حِسابِ الشَحنِ الَّذي فُتِحَ لِلتَوّ — مَرَّةً واحِدَة (‏ADR-033 الخُطوَة 8، ‏2026-10-12).</summary>
     string? activationLink;
     /// <summary>بائِعٌ تُجيزُه بَوّابَةُ جِهَةِ التَواصُلِ — بَوّابَةُ نُقطَةِ التَسجيلِ نَفسُها بِوَثيقَةِ صاحِبِ الجَلسَة — أَو <c>null</c> فَلا استِمارَةَ ولا زِرّ
@@ -239,6 +246,13 @@
             // وحالُ المَدخَلِ في المَدخَلَينِ كِلَيهِما (‏2026-10-12، الخُطوَة 8) — ورابِطُ التَفعيلِ في مَسارِ التَسجيلِ وَحدَه.
             if (shippingInput != Vs.VendorShippingInput.None)
                 shippingView = await Vendors.ViewAsync(Slug, Auth.UserId!.Value);
+            // (‏2026-10-24، تَيّارُ S15 البَند J): قِراءَةٌ رَمَت لا تُرسَمُ «لا مَدخَل» — لا استِمارَةَ لَصقٍ أَو تَسجيل، ولا يُستَهلَكُ رابِطُ التَفعيل.
+            if (shippingView is { ReadFailed: true })
+            {
+                shippingReadFailed = true;
+                shippingView = null;
+                shippingInput = Vs.VendorShippingInput.None;
+            }
             if (shippingInput == Vs.VendorShippingInput.Register)
             {
                 activationLink = Vendors.TakeActivationLink(Slug, Auth.UserId!.Value);

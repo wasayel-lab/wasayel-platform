@@ -177,6 +177,9 @@ public sealed class TenantProviderService
     /// يَسقُطُ إلى رَمزِ التَهيئَةِ في مَتجَرِ العَرض، وعِندَ التَسجيلِ يَفتَحُ حِساباً ثانِياً، وعِندَ اللَصقِ يُنشِئُ وارِداً ثانِياً — تَوصيفُها
     /// <c>bd48a66</c> و<c>6830eb9</c>. فَمَن يُقَرِّرُ أَو يَكتُبُ عَلى الجَوابِ يَقرَأُ بِـ<see cref="ReadVendorEntryAsync"/> الَّتي تُفَرِّقُ العُطلَ مِن الغِياب؛
     /// وتَبقى هذِه لِلعَرضِ وَحدَه — <c>VendorShippingService.ViewAsync</c> — حَيثُ يَرسُمُ العُطلُ الاستِمارَةَ، والنَقرَةُ بَعدَها تَقرَأُ مِن جَديدٍ مُغلَقَة.)</para></summary>
+    /// <remarks>(‏2026-10-24، تَيّارُ S15 البَند J — ولا يُعادُ حَرفٌ فَوقَه): <b>ولَم يَعُد العَرضُ يَقرَؤُها</b> — <c>VendorShippingService.ViewAsync</c>
+    /// صارَ يَقرَأُ بِـ<see cref="ReadVendorEntryAsync"/> فَيَقولُ العُطلَ حالاً ثالِثَة. فَلا مُستَهلِكَ لِهذِه في وَقتِ التَشغيل؛ قُرّاؤُها اختِباراتٌ
+    /// تَقرَأُ المَدخَلَ المَكتوبَ — وحَذفُها مَعَ تَعديلِها بَندٌ قائِمٌ في «أ» S15·٩.</remarks>
     public async Task<TenantProviderBinding?> VendorEntryAsync(
         string tenantSlug, string capability, Guid listingOwner, CancellationToken ct = default)
         => (await ReadVendorEntryAsync(tenantSlug, capability, listingOwner, ct)).Entry;

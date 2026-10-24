@@ -375,8 +375,9 @@ public static class VendorRegistrationValidator
         => s.Length > 0 && (length is null || s.Length == length) && s.All(c => c is >= '0' and <= '9');
 }
 
-/// <summary>ما يَراه البائِعُ مِن مَدخَلِه — ذَيلُ الرَمزِ وحالُ تَسجيلِ الوارِد، لا سِرَّ.</summary>
-public sealed record VendorShippingView(string? TokenTail, string? WebhookId, string? WebhookRefusal);
+/// <summary>ما يَراه البائِعُ مِن مَدخَلِه — ذَيلُ الرَمزِ وحالُ تَسجيلِ الوارِد، لا سِرَّ. و<paramref name="ReadFailed"/> (‏2026-10-24، تَيّارُ S15
+/// البَند J): تَعَذَّرَت القِراءَةُ الآن — حالٌ ثالِثَةٌ لا «لا مَدخَل»، فَلا تُرسَمُ استِمارَةُ لَصقٍ ولا تَسجيل.</summary>
+public sealed record VendorShippingView(string? TokenTail, string? WebhookId, string? WebhookRefusal, bool ReadFailed = false);
 
 /// <summary>نَتيجَةُ الحِفظ: رَمزُ رَفضٍ أَو المَدخَلُ قَبلُ وبَعدُ (لِسَطرِ التَدقيقِ المُعَتَّم).</summary>
 public sealed record VendorShippingResult(string? Code, TenantProviderBinding? Before, TenantProviderBinding? After)
@@ -477,9 +478,14 @@ public sealed class VendorShippingService
     public VendorShippingInput Input => VendorShippingSurface.InputFor(_opts, _vault);
 
     /// <summary>مَدخَلُ البائِعِ لِلعَرض — ذَيلُ رَمزِه المَحفوظُ عِندَ الخَتم (بِلا فَكّ) وحالُ وارِدِه، أَو <c>null</c>.</summary>
+    /// <remarks>(‏2026-10-24، تَيّارُ S15 البَند J — ولا يُعادُ حَرفٌ فَوقَه): <b>وقِراءَةٌ تَرمي لَيسَت «لا مَدخَل»</b> — تُجابُ
+    /// <see cref="VendorShippingView.ReadFailed"/> بِلا ذَيلٍ ولا حال، فَلا تَرسُمُ «إعلاناتي» استِمارَةَ لَصقٍ أَو تَسجيلٍ لِبائِعٍ لَه حِساب. كانَ العَرضُ
+    /// وَحدَه يَقرَأُ بِـ<c>VendorEntryAsync</c> (العُطلُ <c>null</c>) بَعدَ أَن صارَ التَسجيلُ واللَصقُ يُفَرِّقانِه (G5 (iii))؛ تَوصيفُه <c>059c397</c>.</remarks>
     public async Task<VendorShippingView?> ViewAsync(string tenantSlug, Guid listingOwner, CancellationToken ct = default)
     {
-        var entry = await _providers.VendorEntryAsync(tenantSlug, ProviderCapabilities.Delivery, listingOwner, ct);
+        var read = await _providers.ReadVendorEntryAsync(tenantSlug, ProviderCapabilities.Delivery, listingOwner, ct);
+        if (read.Failed) return new(null, null, null, ReadFailed: true);
+        var entry = read.Entry;
         if (entry is not { IsActive: true }) return null;
         var tail = VendorShippingSurface.RefreshField is { } f && entry.Values.TryGetValue(f, out var v) ? v.Tail4 : null;
         return new(tail, entry.WebhookId, entry.WebhookRefusal);
