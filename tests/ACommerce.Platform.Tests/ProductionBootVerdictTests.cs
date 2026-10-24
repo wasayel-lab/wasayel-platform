@@ -326,6 +326,33 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         Assert.Contains("| Secrets | Repository secret (اختِياريّ، ‏2026-10-12) | `BOOT_GATE_CONNECTION_STRING` |", deploy, StringComparison.Ordinal);
     }
 
+    /// <summary><b>وتَشغيلٌ واحِدٌ عَلى فَرعِ البَوّابَةِ في كُلِّ لَحظَة</b> (‏2026-10-24 — مُراجَعَةُ الموجَة ٤، بَندُ N): الوَظيفَةُ تُقلِعُ Production
+    /// (‏CreateOrUpdate وبَذر) عَلى الفَرعِ الواحِدِ في كُلِّ دَفعَةٍ وطَلَبِ دَمج، وتَشغيلانِ مُتَزامِنانِ يَتَسابَقانِ عَلى نَوعِ وَثيقَةٍ جَديدٍ (‏23505 ⇒ 1).
+    /// فَمَجموعَةُ تَزامُنٍ في الوَظيفَةِ نَفسِها بِلا إلغاءٍ لِلجاري، ولا مَجموعَةَ عَلى مُستَوى سَيرِ العَمَلِ تُلغيها؛ و§٢·و يُسَمّي الفَرعَ حالَةً مُشتَرَكَة.</summary>
+    [Fact]
+    public void Ci_runs_one_boot_gate_at_a_time_on_the_shared_branch_and_never_cancels_a_running_one()
+    {
+        var ci = File.ReadAllText(Path.Combine(RepoRoot, ".github", "workflows", "ci.yml")).Replace("\r\n", "\n", StringComparison.Ordinal);
+        var jobs = Regex.Matches(ci, @"^  (?<name>[\w-]+):\s*$", RegexOptions.Multiline).ToList();
+        var names = jobs.Select(m => m.Groups["name"].Value).ToArray();
+        output.WriteLine($"وَظائِفُ ci.yml: {string.Join(", ", names)}");
+        Assert.Contains("production-boot", names);
+        var at = jobs.FindIndex(m => m.Groups["name"].Value == "production-boot");
+        var body = ci[jobs[at].Index..(at + 1 < jobs.Count ? jobs[at + 1].Index : ci.Length)];
+
+        Assert.Contains("\n    concurrency:\n      group: production-boot\n      cancel-in-progress: false\n", body, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(ci, @"^\s*concurrency:", RegexOptions.Multiline));                 // ‏لا مَجموعَةَ ثانِيَةٌ تُغَطّيها
+        Assert.DoesNotMatch(new Regex(@"cancel-in-progress:\s*true"), ci);
+
+        var deploy = File.ReadAllText(Path.Combine(RepoRoot, "docs", "DEPLOY.md"));
+        var start = deploy.IndexOf("## ٢·و.", StringComparison.Ordinal);
+        var end = deploy.IndexOf("\n## ", start + 5, StringComparison.Ordinal);
+        Assert.True(start > 0 && end > start, "§٢·و غائِب.");
+        var section = deploy[start..end];
+        Assert.Contains("### فَرعُ البَوّابَةِ في CI حالَةٌ مُشتَرَكَة", section, StringComparison.Ordinal);
+        Assert.Contains("`concurrency: { group: production-boot, cancel-in-progress: false }`", section, StringComparison.Ordinal);
+    }
+
     // ─── ٧. تَوصيفُ «اليَوم» ثُمَّ قَلبُه — الحُكمُ مِن الاستِثناءِ القاتِلِ ومِن قِياسِ البَوّابَةِ لا مِن أَوَّلِ سَطرٍ في السِجِلّ ─────
     //    (مُراجَعَةُ تَيّارِ S10، الجَولَة ١)
     //
