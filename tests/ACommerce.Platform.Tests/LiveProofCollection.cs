@@ -26,6 +26,7 @@ namespace ACommerce.Platform.Tests;
 // **والحَدُّ مَقيسٌ آلِيّاً لا مَوعود** (القاعِدَة ٢): `LiveProofCollectionTests` أَدناه يَحمَرُّ عَلى صِنفٍ حَيٍّ جَديدٍ خارِجَ
 // المَجموعَة. **وحَدُّه يُقال**: العَقدُ اسمُ الصِنف (`Live…ProofTests` — سَبعَةٌ وعِشرونَ مِن سَبعَةٍ وعِشرين اليَوم)، فَصِنفٌ حَيٌّ بِاسمٍ
 // آخَرَ لا يَراه.
+// (‏2026-10-24، تَيّارُ S14 البَند C: صِنفٌ حَيٌّ جَديدٌ في المَجموعَة — `LiveAgentStoreLimitRefusalProofTests`؛ والعَدُّ اليَومَ 30 مِن 30.)
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class LiveProofCollection
 {
