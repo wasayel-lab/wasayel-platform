@@ -361,10 +361,72 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
     // يَسكُنُ فَضاءَه، أَو يُسَمّيه بِاسمٍ مُستَعار) وتَكتُبُ `new Cart { … }` و`LoadAsync<Cart>` — وهذا شَكلُ `CartHandlers.cs` في العُدَّة — لا هِيَ وِلادَةٌ
     // ولا تَعديل، فَلا تَراها القائِمَةُ الثُنائِيَّة. فَبَدَلَ مُطارَدَةِ الاسمِ المُختَصَرِ في كُلِّ جِسمٍ يُمنَعُ مَنبَعُه: لا مِلَفَّ يَحمِلُ نُقطَةً (minimal API أَو
     // ‏Wolverine) يُسَمّي فَضاءَ السَلَّةِ قَصيراً. وفاحِصُ الوِلادَةِ يَبقى بِحَرفِه.
+    //
+    // ‏(‏2026-10-24، تَيّارُ S16 — C(28)، مُراجَعَةُ تَيّارِ S15 الجَولَة 3؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وفاتَته خَمسُ صُوَر** — المَقيسُ في
+    // المُستَودَعِ اليَومَ صِفرٌ مِن كُلِّها، فَلا نُقطَةَ تَعبُرُ مِنها، لكِنَّ الصَفَّ يَقولُ «كُلَّ طَريق»: (١) `global using ACommerce.Kit.Cart;`
+    // (التَعبيرُ كانَ يَشتَرِطُ أَن يَبدَأَ السَطرُ بِـ`using`)؛ (٢) `global using` في مِلَفٍّ غَيرِ مِلَفِّ نِقاطٍ مِن المَشروعِ نَفسِه (`GlobalUsings.cs`)، أَو
+    // ‏`<Using Include="ACommerce.Kit.Cart" />` في `csproj`/`Directory.Build.*` — يَسري عَلى المَشروعِ كُلِّه ولا يُقرَأُ إلّا هُناك؛ (٣) `using ACommerce.Kit;`
+    // ثُمَّ `new Cart.Cart()` — وأَوسَعُ مِنه **بِلا استيرادٍ أَصلاً**: مِلَفٌّ في فَضاءٍ تَحتَ `ACommerce.Kit` يَرى `Cart.Cart`، وتَحتَ `ACommerce` يَرى
+    // ‏`Kit.Cart.Cart` (بَحثُ C# في الفَضاءاتِ الأُمّ)؛ (٤) `using C = global::ACommerce.Kit.Cart.Cart;`. فَالتَعبيرُ الآنَ يَمسِكُ استيرادَ أَيِّ بادِئَةٍ مِن
+    // ‏`ACommerce.Kit.Cart.Cart` أَو اسمَها المُستَعار (بِـ`global`/`static`/`global::` اختِيارِيَّة)، والفَضاءَ، و**الاسمَ المُؤَهَّلَ جُزئِيّاً** في الكود
+    // (`Cart.Cart` أَو `Kit.Cart.Cart` لا تَسبِقُهُما نُقطَةٌ ولا مُعَرِّف)؛ ومَمَرٌّ ثانٍ يَقرَأُ كُلَّ `.cs` في كُلِّ مَشروعٍ يَحمِلُ نِقاطاً بَحثاً عَن
+    // ‏`global using`، ومِلَفّاتِ `MSBuild` فَوقَه بَحثاً عَن `<Using Include=…>`.
+
+    /// <summary>كُلُّ بادِئَةٍ يَصيرُ بِها اسمُ السَلَّةِ قَصيراً — مِن <c>ACommerce</c> إلى <c>ACommerce.Kit.Cart.Cart</c>.</summary>
+    private const string CartPrefix = @"(?:global::)?ACommerce(?:\.Kit(?:\.Cart(?:\.Cart)?)?)?";
 
     private static readonly System.Text.RegularExpressions.Regex CartShortName = new(
-        @"^\s*(?:using\s+ACommerce\.Kit\.Cart\s*;|using\s+\w+\s*=\s*ACommerce\.Kit\.Cart(?:\.Cart)?\s*;|namespace\s+ACommerce\.Kit\.Cart\b)",
+        @"^\s*(?:global\s+)?using\s+(?:static\s+)?(?:\w+\s*=\s*)?" + CartPrefix + @"\s*;"
+      + @"|^\s*namespace\s+ACommerce\.Kit\.Cart\b"
+      + @"|(?<![\w.:])(?:Kit\.)?Cart\.Cart\b",
         System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>ما يَسري عَلى المَشروعِ كُلِّه مِن مِلَفٍّ واحِد: <c>global using</c> لِبادِئَةٍ مِن السَلَّة.</summary>
+    private static readonly System.Text.RegularExpressions.Regex GlobalCartUsing = new(
+        @"^\s*global\s+using\s+(?:static\s+)?(?:\w+\s*=\s*)?" + CartPrefix + @"\s*;",
+        System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>ومِن مِلَفِّ <c>MSBuild</c>: <c>&lt;Using Include="…"&gt;</c> يولِّدُ <c>global using</c> في كُلِّ مِلَفٍّ مِن المَشروع.</summary>
+    private static readonly System.Text.RegularExpressions.Regex MsBuildCartUsing = new(
+        @"<Using\s+Include\s*=\s*""" + CartPrefix + @"""",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static string StripXmlComments(string xml) =>
+        System.Text.RegularExpressions.Regex.Replace(xml, "<!--.*?-->", "", System.Text.RegularExpressions.RegexOptions.Singleline);
+
+    /// <summary>ما يُسَمّي السَلَّةَ قَصيراً عَلى مُستَوى المَشروع: <c>global using</c> في أَيِّ <c>.cs</c> مِنه، و<c>&lt;Using&gt;</c> في مِلَفّاتِ <c>MSBuild</c> فَوقَه.</summary>
+    private static List<string> ProjectWideShortCartNames(IEnumerable<(string Path, string Text)> csFiles, IEnumerable<(string Path, string Text)> msBuildFiles) =>
+        csFiles.Where(f => GlobalCartUsing.IsMatch(StripComments(f.Text))).Select(f => f.Path)
+            .Concat(msBuildFiles.Where(f => MsBuildCartUsing.IsMatch(StripXmlComments(f.Text))).Select(f => f.Path))
+            .ToList();
+
+    /// <summary>مَشروعاتُ مِلَفّاتِ النِقاط: أَقرَبُ <c>csproj</c> فَوقَ كُلِّ مِلَف، وكُلُّ <c>.cs</c> تَحتَه (بِلا <c>bin</c>/<c>obj</c>)، ومِلَفّاتُ <c>MSBuild</c>
+    /// الَّتي يَقرَؤُها — <c>csproj</c> نَفسُه و<c>Directory.*.props</c>/<c>Directory.*.targets</c> (ومِنها <c>Directory.Packages.props</c>) في مَجلِدِه وكُلِّ
+    /// أُمٍّ حَتّى جَذرِ المُستَودَع.</summary>
+    private static (List<string> Projects, List<(string Path, string Text)> Cs, List<(string Path, string Text)> MsBuild) EndpointProjects(IEnumerable<string> endpointFiles)
+    {
+        var root = Path.GetFullPath(ThemeZeroEquivalenceTests.RepoRoot);
+        var projects = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var f in endpointFiles)
+        {
+            var dir = Path.GetDirectoryName(Path.Combine(root, f.Replace('/', Path.DirectorySeparatorChar)));
+            while (dir is not null && dir.Length >= root.Length && Directory.GetFiles(dir, "*.csproj").Length == 0) dir = Path.GetDirectoryName(dir);
+            Assert.True(dir is not null && dir.Length >= root.Length, $"مِلَفُّ نِقاطٍ بِلا مَشروع: {f}");
+            projects.Add(dir!);
+        }
+        static bool Built(string p) => p.Split(Path.DirectorySeparatorChar).Any(seg => seg is "bin" or "obj");
+        var cs = projects.SelectMany(d => Directory.EnumerateFiles(d, "*.cs", SearchOption.AllDirectories))
+            .Where(p => !Built(p)).Distinct(StringComparer.Ordinal).Select(p => (Rel(p), File.ReadAllText(p))).ToList();
+        var msBuild = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var d in projects)
+        {
+            foreach (var proj in Directory.GetFiles(d, "*.csproj")) msBuild.Add(proj);
+            for (var up = d; up is not null && up.Length >= root.Length; up = Path.GetDirectoryName(up))
+                foreach (var pattern in new[] { "Directory.*.props", "Directory.*.targets" })
+                    foreach (var f in Directory.GetFiles(up, pattern)) msBuild.Add(f);
+        }
+        return (projects.Select(Rel).ToList(), cs, msBuild.Select(p => (Rel(p), File.ReadAllText(p))).ToList());
+    }
 
     /// <summary>أَيُسَمّي هذا المَصدَرُ فَضاءَ السَلَّةِ بِاسمٍ قَصيرٍ لا يَراه <see cref="CartWriters"/>؟ — بَعدَ تَبييضِ التَعليقات.</summary>
     private static bool NamesTheCartShort(string source) => CartShortName.IsMatch(StripComments(source));
@@ -384,6 +446,24 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
         Assert.Empty(shortNamed);
     }
 
+    /// <summary><b>ولا مَشروعَ نِقاطٍ يُسَمّي السَلَّةَ قَصيراً لِكُلِّ مِلَفّاتِه</b> (‏2026-10-24، تَيّارُ S16 — C(28)): <c>global using</c> في أَيِّ <c>.cs</c>
+    /// مِن مَشروعٍ يَحمِلُ نِقاطاً، أَو <c>&lt;Using Include&gt;</c> في <c>csproj</c>/<c>Directory.Build.*</c> فَوقَه، يَصِلُ إلى مِلَفِّ النِقاطِ بِلا سَطرٍ فيه.
+    /// ويَطبَعُ عَدَدَ المَشروعاتِ والمِلَفّات، والصِفرُ يُحمِر (القاعِدَة ١٠).</summary>
+    [Fact]
+    public void No_endpoint_project_names_the_cart_short_for_all_its_files()
+    {
+        var files = AllMinimalApiEndpoints().Concat(WolverineWriteEndpoints()).Select(e => e.File).Distinct(StringComparer.Ordinal).ToList();
+        var (projects, cs, msBuild) = EndpointProjects(files);
+        var found = ProjectWideShortCartNames(cs, msBuild);
+        output.WriteLine($"مَشروعاتُ نِقاط: {projects.Count} ({string.Join(" · ", projects)}) · ‏.cs مَقروءَة: {cs.Count} · مِلَفّاتُ MSBuild: {msBuild.Count} "
+            + $"({string.Join(" · ", msBuild.Select(m => m.Path))}) · تُسَمّي السَلَّةَ قَصيراً: {found.Count} ({string.Join(" · ", found)})");
+
+        Assert.True(projects.Count > 1, $"أَداةٌ عَمياء: {projects.Count} مَشروعاً.");
+        Assert.True(cs.Count > files.Count, $"أَداةٌ عَمياء: {cs.Count} مِلَفَّ .cs لِـ{files.Count} مِلَفَّ نِقاط.");
+        Assert.True(msBuild.Count >= projects.Count, $"أَداةٌ عَمياء: {msBuild.Count} مِلَفَّ MSBuild لِـ{projects.Count} مَشروعاً.");
+        Assert.Empty(found);
+    }
+
     /// <summary><b>والفاحِصُ يَحمَرّ</b>: الاستيرادُ والاسمُ المُستَعارُ والفَضاءُ وما تَحتَه (<c>Cart.Server</c> يَرى <c>Cart</c> قَصيراً) يُمسَكون، والاسمُ الكامِلُ والتَعليقُ وفَضاءٌ يُشبِهُه اسماً لا.</summary>
     [Fact]
     public void The_short_cart_name_check_catches_an_import_an_alias_and_the_namespace_and_passes_the_full_name()
@@ -394,6 +474,62 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
         Assert.False(NamesTheCartShort("class X { void M() { var c = new ACommerce.Kit.Cart.Cart(); } }"));
         Assert.False(NamesTheCartShort("// using ACommerce.Kit.Cart;\nclass X { }"));
         Assert.False(NamesTheCartShort("using ACommerce.Kit.CartExtras;\nclass X { }"));
+
+        // ‏(‏2026-10-24، تَيّارُ S16 — C(28)) الصُوَرُ الَّتي فاتَته، وما يُشبِهُها ولَيسَ مِنها.
+        var caught = new[]
+        {
+            "global using ACommerce.Kit.Cart;\nclass X { }",                                     // (١)
+            "  global   using global::ACommerce.Kit.Cart;\nclass X { }",
+            "using ACommerce.Kit;\nclass X { object M() => new Cart.Cart(); }",                  // (٣) بِالاستيراد
+            "using ACommerce;\nclass X { object M() => new Kit.Cart.Cart(); }",
+            "using K = ACommerce.Kit;\nclass X { }",
+            "namespace ACommerce.Kit.Tenants.Server;\nclass X { object M() => new Cart.Cart(); }", // (٣) بِلا استيراد: الفَضاءُ الأُمّ
+            "namespace ACommerce.Templates.X;\nclass X { Task M(IQuerySession s) => s.LoadAsync<Kit.Cart.Cart>(1); }",
+            "using C = global::ACommerce.Kit.Cart.Cart;\nclass X { }",                           // (٤)
+            "using static ACommerce.Kit.Cart.Cart;\nclass X { }",
+        };
+        var passed = new[]
+        {
+            "global using ACommerce.Kit.CartExtras;\nclass X { }",
+            "using ACommerce.Kitchen;\nclass X { }",
+            "using ACommerce.Kit.Tenants;\nclass X { }",
+            "using C = global::ACommerce.Kit.Cart.CartHandlers;\nclass X { }",
+            "class X { object M() => new global::ACommerce.Kit.Cart.Cart(); }",
+            "class X { object M() => new ACommerce.Kit.Cart.CartLine(); }",
+            "class X { object M() => cart.CartLines; }",
+            "// global using ACommerce.Kit.Cart;\nclass X { /* new Cart.Cart() */ }",
+        };
+        var missed = caught.Where(c => !NamesTheCartShort(c)).ToList();
+        var falseHits = passed.Where(NamesTheCartShort).ToList();
+        output.WriteLine($"يُمسَك: {caught.Length - missed.Count}/{caught.Length} · يَمُرّ: {passed.Length - falseHits.Count}/{passed.Length}");
+        Assert.Empty(missed);
+        Assert.Empty(falseHits);
+    }
+
+    /// <summary><b>والمَمَرُّ عَلى مُستَوى المَشروعِ يَحمَرّ</b> (‏2026-10-24، تَيّارُ S16 — C(28)، الصورَة ٢): <c>global using</c> في مِلَفٍّ لَيسَ مِلَفَّ نِقاط،
+    /// و<c>&lt;Using Include&gt;</c> في <c>csproj</c> وفي <c>Directory.Build.props</c> يُمسَكون؛ و<c>using</c> غَيرُ عامٍّ في مِلَفٍّ آخَر (لا يَسري عَلى
+    /// مِلَفِّ النِقاط)، وفَضاءٌ يُشبِهُه اسماً، والتَعليقُ لا.</summary>
+    [Fact]
+    public void The_project_wide_check_catches_a_global_using_in_another_file_and_an_msbuild_using()
+    {
+        var cs = new[]
+        {
+            ("p/GlobalUsings.cs", "global using ACommerce.Kit.Cart;\n"),
+            ("p/Aliases.cs", "global using C = global::ACommerce.Kit.Cart.Cart;\n"),
+            ("p/Other.cs", "using ACommerce.Kit.Cart;\nclass Other { }"),
+            ("p/Extras.cs", "global using ACommerce.Kit.CartExtras;\n"),
+            ("p/Commented.cs", "// global using ACommerce.Kit.Cart;\n"),
+        };
+        var msBuild = new[]
+        {
+            ("p/P.csproj", "<Project><ItemGroup><Using Include=\"ACommerce.Kit.Cart\" /></ItemGroup></Project>"),
+            ("Directory.Build.props", "<Project><ItemGroup><Using Include=\"ACommerce.Kit\" Alias=\"K\" /></ItemGroup></Project>"),
+            ("q/Q.csproj", "<Project><ItemGroup><Using Include=\"ACommerce.Kit.Tenants\" /></ItemGroup></Project>"),
+            ("q/Directory.Build.targets", "<Project><!-- <Using Include=\"ACommerce.Kit.Cart\" /> --></Project>"),
+        };
+        var found = ProjectWideShortCartNames(cs, msBuild);
+        output.WriteLine($"مَحقونَة: ‏{cs.Length} .cs و{msBuild.Length} MSBuild · مُمسَكَة: {found.Count} ({string.Join(" · ", found)})");
+        Assert.Equal(new[] { "p/GlobalUsings.cs", "p/Aliases.cs", "p/P.csproj", "Directory.Build.props" }, found);
     }
 
     /// <summary>أَوَّل ما يُعَدّ كِتابَةً — لِفَحص «الحارِس يَسبِق».</summary>
