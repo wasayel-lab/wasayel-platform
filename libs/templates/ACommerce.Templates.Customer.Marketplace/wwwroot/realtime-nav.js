@@ -40,14 +40,13 @@
     } catch { /* صامِت — إشعارُ قِراءَةٍ فاشِل لا يَكسِر صَفحَة */ }
   }
 
-  // ═══ ٢) الهُبّ — يَبقى مَشروطاً بِمَكتَبَة CDN وبِتوكِن ═══
-  const token = window.acRealtimeToken;
-  if (token && typeof signalR !== 'undefined') {
-    // accessTokenFactory يُمَرِّر الـ token كَ Bearer header لِـ negotiate
-    // ويُعيد استِخدامَه لِـ WebSocket. بَديل عَن وَضعِه في query string
-    // (يَتَسَرَّب في access logs).
+  // ═══ ٢) الهُبّ — يَبقى مَشروطاً بِمَكتَبَة CDN (وهذا المِلَفُّ لا يُحَمَّلُ إلّا لِجَلسَة) ═══
+  // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-4) كانَ `accessTokenFactory` يُرسِلُ رَمزَ الجَلسَةِ Bearer في negotiate
+  // و`?access_token=` في مُصافَحَةِ WebSocket — أَي في سِلسِلَةِ استِعلامٍ يَكتُبُها السِجِلّ، والرَمزُ مَطبوعٌ في الصَفحَة.
+  // صارَ الكوكي HttpOnly يَحمِلُ الجَلسَةَ (الأَصلُ واحِدٌ فَيُرسِلُه المُتَصَفِّح)، والرابِطُ المَتجَرَ وَحدَه.
+  if (typeof signalR !== 'undefined') {
     const conn = new signalR.HubConnectionBuilder()
-      .withUrl('/realtime', { accessTokenFactory: () => token })
+      .withUrl('/realtime?slug=' + encodeURIComponent(slug))
       .withAutomaticReconnect()
       .build();
 

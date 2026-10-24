@@ -26,6 +26,12 @@ namespace ACommerce.Platform.Tests;
 // **يُثَبَّتُ قَبلَ العِلاجِ** (القاعِدَة ٣): صُفوفُ `Today_…` الأَربَعَةُ تَنقَلِبُ بِأَسمائِها في كوميتِ العِلاج، وصَفُّ «المَجهولُ يُقطَعُ ولا
 // يَنضَمُّ إلى مَجموعَة» يَبقى بِلا تَعديلِ حَرفٍ في جِسمِه. والهُبُّ يُشَغَّلُ بِسِياقِ اتِّصالٍ مُصطَنَعٍ يَحمِلُ `HttpContext` الطَلَب — نَفسُ
 // ما تَقرَؤُه `GetHttpContext()` في الإنتاج — بِلا خادِمٍ ولا SignalR حَيّ.
+//
+// **العِلاج** (‏2026-10-24): الهُبُّ يَقرَأُ كوكي الجَلسَةِ بِـ`AuthSession.ResolveToken` (مُفَوَّضاً — `RealtimeHub.SessionCookieReader`، لِأَنّ
+// الكيتَ لا يُرجِعُ إلى القالِب) ومَتجَرَه مِن `?slug=`، ولا يَقرَأُ رَمزاً مِن رابِطٍ ولا رَأس؛ والصَفحَةُ لا تَطبَعُ الرَمز، والعَميلانِ يُرسِلانِ
+// المَتجَرَ وَحدَه؛ و`Microsoft.AspNetCore.Hosting` عِندَ `Warning` (`HostingExtensions.PlatformLogLevels`). الصُفوفُ الأَربَعَةُ انقَلَبَت
+// بِأَسمائِها، وصَفُّ المَجهولِ كَما أُودِعَ بِجِسمِه — وصانِعُ الهُبِّ (`NewHub`) وَحدَه يُمَرِّرُ القارِئَ الَّذي يُسَجِّلُه القالِب. وفاحِصٌ جَديدٌ
+// يَقرَأُ كُلَّ صَفحَةٍ وكُلَّ سِكربتٍ في `wwwroot`، ويَحمَرُّ عَلى سَطرِ اليَومِ حَرفاً.
 public class RealtimeSessionTokenTests
 {
     private const string Slug = "theme-demo";
@@ -83,7 +89,7 @@ public class RealtimeSessionTokenTests
         return http;
     }
 
-    internal static RealtimeHub NewHub() => new();
+    internal static RealtimeHub NewHub() => new(AuthSession.ResolveToken);
 
     internal static async Task<(bool Aborted, List<string> Joined)> ConnectAsync(HttpContext http)
     {
@@ -117,10 +123,12 @@ public class RealtimeSessionTokenTests
         }
     }
 
-    // ─── ٢. «اليَوم» — الهُبُّ يُصَدِّقُ الرَمزَ في الاستِعلامِ وفي Bearer ─────────────────────────────
+    // ─── ٢. والرَمزُ في الاستِعلامِ أَو في Bearer لا يُصَدَّق ─────────────────────────────────────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_the_hub_joins_a_connection_that_carries_the_token_in_the_query_or_a_bearer_header`.
 
     [Fact]
-    public async Task Today_the_hub_joins_a_connection_that_carries_the_token_in_the_query_or_a_bearer_header()
+    public async Task The_hub_refuses_a_token_in_the_query_or_a_bearer_header()
     {
         var user = Guid.NewGuid();
         var token = AuthHandlers.MakeToken(user, Slug);
@@ -129,53 +137,180 @@ public class RealtimeSessionTokenTests
                      Request($"?token={Uri.EscapeDataString(token)}"),
                      Request($"?access_token={Uri.EscapeDataString(token)}"),
                      Request(bearer: token),
+                     Request($"?slug={Slug}&token={Uri.EscapeDataString(token)}"),
+                     Request($"?slug={Slug}&access_token={Uri.EscapeDataString(token)}"),
+                     Request($"?slug={Slug}", bearer: token),
                  })
         {
             var (aborted, joined) = await ConnectAsync(http);
-            Assert.False(aborted);
-            Assert.Equal(new[] { RealtimeHub.GroupName(Slug, user) }, joined);
+            Assert.True(aborted, $"رَمزٌ خارِجَ الكوكي فُتِحَ لَه: {http.Request.QueryString}");
+            Assert.Empty(joined);
         }
     }
 
-    // ─── ٣. «اليَوم» — والكوكي وَحدَه لا يَكفي ─────────────────────────────────────────────────────
+    // ─── ٣. والكوكي يَكفي — بِالقَرارِ الَّذي يَقرَأُ بِه كُلُّ بابٍ آخَر ──────────────────────────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_the_hub_aborts_a_connection_that_carries_the_session_only_in_its_cookie`.
 
     [Fact]
-    public async Task Today_the_hub_aborts_a_connection_that_carries_the_session_only_in_its_cookie()
+    public async Task The_hub_reads_the_session_from_the_cookie_of_the_store_named_in_the_url()
     {
-        var token = AuthHandlers.MakeToken(Guid.NewGuid(), Slug);
-        var (aborted, joined) = await ConnectAsync(
-            Request($"?slug={Slug}", cookie: $"{AuthSession.CookieName(Slug)}={token}"));
-        Assert.True(aborted);
-        Assert.Empty(joined);
+        var user = Guid.NewGuid();
+        var token = AuthHandlers.MakeToken(user, Slug);
+
+        // الكوكي العامّ، وكوكي الدَورِ وَحدَه (المَسارُ `/realtime` بِلا `/r/{role}/` فَيُقبَلُ أَيُّ دَورٍ لِلمَتجَرِ نَفسِه — `ResolveCookieBase`).
+        foreach (var cookie in new[] { AuthSession.CookieName(Slug), AuthSession.CookieName(Slug, "vendor") })
+        {
+            var (aborted, joined) = await ConnectAsync(Request($"?slug={Slug}", cookie: $"{cookie}={token}"));
+            Assert.False(aborted, $"كوكي «{cookie}» لَم يَفتَح.");
+            Assert.Equal(new[] { RealtimeHub.GroupName(Slug, user) }, joined);
+        }
+
+        // ومَتجَرٌ آخَرُ في الرابِطِ لا يَقرَأُ كوكي هذا — ولا رابِطٌ بِلا مَتجَر.
+        var other = await ConnectAsync(Request("?slug=ashare", cookie: $"{AuthSession.CookieName(Slug)}={token}"));
+        Assert.True(other.Aborted);
+        Assert.Empty(other.Joined);
+        var bare = await ConnectAsync(Request(cookie: $"{AuthSession.CookieName(Slug)}={token}"));
+        Assert.True(bare.Aborted);
+        Assert.Empty(bare.Joined);
+
+        // والمِفتاحُ الَّذي يَقرَؤُه الهُبُّ هُوَ الَّذي يَكتُبُه العَميلان.
+        Assert.Equal("slug", RealtimeHub.SlugQueryKey);
     }
 
-    // ─── ٤. «اليَوم» — الصَفحَةُ تَطبَعُ الرَمزَ، والرابِطانِ يَحمِلانِه ───────────────────────────────
+    // ─── ٤. الصَفحَةُ لا تَطبَعُ الرَمز، والرابِطانِ يَحمِلانِ المَتجَرَ وَحدَه ─────────────────────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_the_store_shell_prints_the_session_token_and_both_clients_send_it_in_a_url`.
 
     [Fact]
-    public void Today_the_store_shell_prints_the_session_token_and_both_clients_send_it_in_a_url()
+    public void The_store_shell_prints_no_session_token_and_both_clients_send_only_the_store_in_the_url()
     {
         var shell = Shell();
-        Assert.Contains("window.acRealtimeToken = '@Auth.Token';", shell, StringComparison.Ordinal);
-        Assert.Contains(".withUrl('/realtime?token=' + encodeURIComponent(window.acRealtimeToken))", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("acRealtimeToken", shell, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"\bAuth\.Token\b", shell);
+        Assert.Contains(".withUrl('/realtime?slug=' + encodeURIComponent(window.acRealtimeSlug))", shell, StringComparison.Ordinal);
+        Assert.Contains("window.acRealtimeSlug  = '@Tenant.Slug';", shell, StringComparison.Ordinal);
 
         var nav = NavScript();
-        Assert.Contains("const token = window.acRealtimeToken;", nav, StringComparison.Ordinal);
-        Assert.Contains("accessTokenFactory: () => token", nav, StringComparison.Ordinal);
+        Assert.DoesNotContain("acRealtimeToken", nav, StringComparison.Ordinal);
+        Assert.DoesNotContain("accessTokenFactory", nav, StringComparison.Ordinal);
+        Assert.Contains(".withUrl('/realtime?slug=' + encodeURIComponent(slug))", nav, StringComparison.Ordinal);
 
         var hub = Hub();
-        Assert.Matches(@"Query\[""access_token""\]", hub);
-        Assert.Matches(@"Query\[""token""\]", hub);
-        Assert.DoesNotMatch(@"Cookies", hub);
+        Assert.DoesNotMatch(@"Query\[""(?:access_)?token""\]", hub);
+        Assert.DoesNotContain("Authorization", hub, StringComparison.Ordinal);
+        Assert.Contains("readSession(httpCtx.Request, slug)", hub, StringComparison.Ordinal);
     }
 
-    // ─── ٥. «اليَوم» — السِجِلُّ يَكتُبُ كُلَّ طَلَبٍ بِسِلسِلَتِه عِندَ Information ─────────────────────
+    // ─── ٥. والسِجِلّ: سَطرا الإطارِ بِالاستِعلامِ يَسقُطان، وخُلاصَةُ الطَلَبِ بِمَسارِها تَبقى ──────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_the_host_log_writes_framework_request_lines_at_information_with_no_override` — والسِجِلُّ
+    // مَبنِيٌّ بِالدالَّةِ الَّتي يَبني بِها `AddPlatformHost` سِجِلَّه، لا بِقِراءَةِ نَصِّها.
+
+    private sealed class Collect : Serilog.Core.ILogEventSink
+    {
+        public List<Serilog.Events.LogEvent> Events { get; } = new();
+        public void Emit(Serilog.Events.LogEvent logEvent) => Events.Add(logEvent);
+    }
 
     [Fact]
-    public void Today_the_host_log_writes_framework_request_lines_at_information_with_no_override()
+    public void The_host_log_drops_framework_request_lines_and_keeps_the_request_summary()
     {
         var hosting = Hosting();
-        Assert.Single(Regex.Matches(hosting, @"\.MinimumLevel\.Information\(\)"));
-        Assert.DoesNotMatch(@"MinimumLevel\.Override\(", hosting);
+        Assert.Contains("builder.Host.UseSerilog((ctx, lc) => PlatformLogLevels(lc)", hosting, StringComparison.Ordinal);
         Assert.Contains("app.UseSerilogRequestLogging();", hosting, StringComparison.Ordinal);
+
+        var sink = new Collect();
+        using var log = ACommerce.Platform.Hosting.HostingExtensions
+            .PlatformLogLevels(new Serilog.LoggerConfiguration()).WriteTo.Sink(sink).CreateLogger();
+        Serilog.ILogger From(string category) => log.ForContext(Serilog.Core.Constants.SourceContextPropertyName, category);
+
+        From("Microsoft.AspNetCore.Hosting.Diagnostics").Information("Request starting {Line}", "HTTP/1.1 POST http://x/realtime/negotiate?probe=1");
+        From("Microsoft.AspNetCore.Hosting.Diagnostics").Information("Request finished {Line}", "HTTP/1.1 POST http://x/realtime/negotiate?probe=1 - 200");
+        From("Serilog.AspNetCore.RequestLoggingMiddleware").Information(
+            "HTTP {RequestMethod} {RequestPath} responded {StatusCode}", "POST", "/realtime/negotiate", 200);
+        From("Microsoft.AspNetCore.Hosting.Diagnostics").Warning("probe warning");
+        From("ACommerce.Templates.Customer.Marketplace").Information("probe app");
+        From("ACommerce.Templates.Customer.Marketplace").Debug("probe debug");
+
+        var kept = sink.Events.Select(e => e.MessageTemplate.Text).ToList();
+        Assert.Equal(new[] { "HTTP {RequestMethod} {RequestPath} responded {StatusCode}", "probe warning", "probe app" }, kept);
+        Assert.DoesNotContain(sink.Events, e => e.RenderMessage().Contains("?probe=", StringComparison.Ordinal));
+    }
+
+    // ─── ٦. الفاحِص — لا صَفحَةَ تَطبَعُ رَمزَ الجَلسَة، ولا سِكربتَ يُرسِلُه في رابِط (‏2026-10-24) ─────
+
+    /// <summary>خُروقُ مِلَفِّ razor: كُلُّ <c>{اسم}.Token</c> لِاسمٍ حُقِنَ بِه <c>AuthSession</c>. والعَدُّ الثاني عَدَدُ ما حُقِن.</summary>
+    internal static (int Injected, List<string> Prints) TokenPrints(string razor)
+    {
+        var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(razor));
+        var names = Regex.Matches(code, @"@inject\s+(?:[\w.]+\.)?AuthSession\s+(?<n>\w+)").Select(m => m.Groups["n"].Value).ToList();
+        var prints = names.SelectMany(n => Regex.Matches(code, $@"(?<![\w.]){Regex.Escape(n)}\.Token\b").Select(m => m.Value)).ToList();
+        return (names.Count, prints);
+    }
+
+    /// <summary>خُروقُ سِكربت: رَمزٌ يُرسَلُ في رابِطٍ أَو رَأسٍ يَصنَعُه العَميل.</summary>
+    internal static List<string> TokenSends(string js) =>
+        Regex.Matches(WriteEndpointGuardTests.StripComments(js), @"accessTokenFactory|[?&](?:access_)?token=|acRealtimeToken")
+            .Select(m => m.Value).ToList();
+
+    [Fact]
+    public void No_razor_page_prints_the_session_token_and_no_script_sends_one_in_a_url()
+    {
+        static IEnumerable<string> Under(string ext) => new[] { "libs", "apps" }
+            .SelectMany(d => Directory.EnumerateFiles(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, d), ext, SearchOption.AllDirectories))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
+                     && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+            .OrderBy(f => f, StringComparer.Ordinal);
+        static string Rel(string f) => Path.GetRelativePath(ThemeZeroEquivalenceTests.RepoRoot, f).Replace('\\', '/');
+
+        var razor = Under("*.razor").ToList();
+        var scripts = Under("*.js").Where(f => f.Contains($"{Path.DirectorySeparatorChar}wwwroot{Path.DirectorySeparatorChar}")).ToList();
+        var injected = 0;
+        var bad = new List<string>();
+        foreach (var f in razor)
+        {
+            var text = File.ReadAllText(f);
+            var (n, prints) = TokenPrints(text);
+            injected += n;
+            bad.AddRange(prints.Select(p => $"{Rel(f)}: {p}"));
+            // السِكربتُ المُضَمَّنُ في الصَفحَةِ يُقرَأُ كَما يُقرَأُ مِلَفُّ js.
+            bad.AddRange(TokenSends(WriteEndpointGuardTests.StripMarkupComments(text)).Select(p => $"{Rel(f)}: {p}"));
+        }
+        foreach (var f in scripts)
+            bad.AddRange(TokenSends(File.ReadAllText(f)).Select(p => $"{Rel(f)}: {p}"));
+
+        // القاعِدَة ١٠: يُطبَعُ ما فُحِص، والصِفرُ عَمى.
+        var counted = $"فُحِصَ {razor.Count} مِلَفَّ razor (حُقِنَ فيها AuthSession {injected} مَرَّة) و{scripts.Count} سِكربتاً في wwwroot";
+        Assert.True(razor.Count > 100 && injected >= 10 && scripts.Count >= 3, "أَداةٌ عَمياء — " + counted);
+        Assert.True(bad.Count == 0, counted + $"\nوفيها رَمزُ جَلسَةٍ مَطبوعٌ أَو مُرسَلٌ في رابِط {bad.Count}:\n  " + string.Join("\n  ", bad));
+    }
+
+    /// <summary><b>والفاحِصُ يَحمَرُّ عَلى ما كَتَبَه</b> (القاعِدَة ١٠): سَطرا <c>App.razor</c> وسَطرُ <c>realtime-nav.js</c> كَما كانَت قَبلَ
+    /// العِلاجِ حَرفاً، وحَقنٌ بِاسمٍ آخَر؛ والشَكلُ الجَديدُ لا يُعَدّ.</summary>
+    [Fact]
+    public void The_token_scanner_goes_red_on_the_lines_it_was_written_for()
+    {
+        const string shell = """
+            @inject AuthSession Auth
+            <script>
+                window.acRealtimeToken = '@Auth.Token';
+                var conn = new signalR.HubConnectionBuilder()
+                    .withUrl('/realtime?token=' + encodeURIComponent(window.acRealtimeToken))
+            </script>
+            """;
+        Assert.Equal((1, 1), (TokenPrints(shell).Injected, TokenPrints(shell).Prints.Count));
+        Assert.True(TokenSends(shell).Count >= 3, string.Join(", ", TokenSends(shell)));
+
+        Assert.Single(TokenSends("""const conn = new signalR.HubConnectionBuilder().withUrl('/realtime', { accessTokenFactory: () => token })"""));
+        Assert.Single(TokenPrints("@inject ACommerce.Templates.Customer.Marketplace.AuthSession Session\n<p>@Session.Token</p>").Prints);
+
+        const string now = """
+            @inject AuthSession Auth
+            @if (Auth.IsAuthenticated) { <script>window.acRealtimeSlug = '@Tenant.Slug';</script> }
+            <script>.withUrl('/realtime?slug=' + encodeURIComponent(window.acRealtimeSlug))</script>
+            """;
+        Assert.Equal((1, 0), (TokenPrints(now).Injected, TokenPrints(now).Prints.Count));
+        Assert.Empty(TokenSends(now));
     }
 }

@@ -43,6 +43,20 @@ public sealed class PlatformHostBuilder
 public static class HostingExtensions
 {
     /// <summary>
+    /// <para><b>مُستَوَياتُ السِجِلّ</b> — <c>Information</c> كَما كانَ، و<b><c>Microsoft.AspNetCore.Hosting</c> عِندَ <c>Warning</c></b>
+    /// (‏2026-10-24، تَدقيقُ الإطلاق lens-security-4، حاجِبَة). كانَ السِجِلُّ يَكتُبُ لِكُلِّ طَلَبٍ سَطرَيِ الإطارِ
+    /// <c>Request starting HTTP/1.1 POST …?{الاستِعلام}</c> و<c>Request finished …</c> بِسِلسِلَةِ الاستِعلامِ كامِلَة — فَوَقَعَ فيه رَمزُ
+    /// الجَلسَةِ مِن <c>/realtime?token=</c> (رَمزٌ لِثَلاثينَ يَوماً بِلا إبطال، د28)، وتَقَعُ فيه أَرقامُ الجَوّالِ والهُوِيَّةِ مِن تَحويلاتِ الدُخول.
+    /// وسَطرُ <c>UseSerilogRequestLogging</c> (‏<c>HTTP {Method} {Path} responded {Status}</c>) يَبقى عِندَ <c>Information</c> بِالمَسارِ وَحدَه —
+    /// فَلا يَضيعُ أَثَرُ طَلَب، وتَسقُطُ سِلسِلَتُه.</para>
+    ///
+    /// <para><b>يُنقَض</b> بِحَذفِ سَطرِ <c>Override</c>. مَحروسٌ في <c>RealtimeSessionTokenTests</c> بِسِجِلٍّ مَبنِيٍّ مِن هذِه الدالَّةِ نَفسِها.</para>
+    /// </summary>
+    public static LoggerConfiguration PlatformLogLevels(LoggerConfiguration lc) => lc
+        .MinimumLevel.Information()
+        .MinimumLevel.Override("Microsoft.AspNetCore.Hosting", Serilog.Events.LogEventLevel.Warning);
+
+    /// <summary>
     /// يُهَيِّئ التَطبيق بـ Marten + Wolverine + Serilog + MultiTenancy.
     /// </summary>
     public static PlatformHostBuilder AddPlatformHost(
@@ -53,8 +67,7 @@ public static class HostingExtensions
         configure?.Invoke(pb);
 
         // Serilog إلى console
-        builder.Host.UseSerilog((ctx, lc) => lc
-            .MinimumLevel.Information()
+        builder.Host.UseSerilog((ctx, lc) => PlatformLogLevels(lc)
             .WriteTo.Console());
 
         var connStr = builder.Configuration.GetConnectionString("Postgres")

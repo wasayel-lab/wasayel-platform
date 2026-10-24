@@ -34,6 +34,8 @@ public static class MarketplaceTemplateExtensions
         services.AddScoped<AuthSession>();
         services.AddScoped<L>();
         services.AddScoped<ACommerce.Kit.Realtime.Client.RealtimeClient>();
+        // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-4) الهُبُّ يَقرَأُ الجَلسَةَ مِن كوكي الطَلَبِ بِالقَرارِ الواحِد — لا رَمزَ في رابِط.
+        services.AddSingleton<ACommerce.Kit.Realtime.Server.RealtimeHub.SessionCookieReader>(AuthSession.ResolveToken);
         services.AddScoped<ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService>();
         // قِراءَةُ إعلانٍ واحِد — يَسأَلُها **مُستَهلِكان**: شاشَةُ
         // التَحرير (فَلا تَفتَح جَلسَةً بِيَدِها، والطَبَقَة الثامِنَة

@@ -584,6 +584,17 @@ Services، Amazon SES، Google Workspace…) **حَيثُ لا تُحجَب مَ
   `libs/` و`apps/` ويَطبَعُ عَدَدَ ما فَحَص، ويَحمَرُّ عَلى السَطرِ القَديمِ حَرفاً (`The_razor_scanner_goes_red_on_the_line_it_was_written_for`).
   **وما لَم يُفعَل**: لا سِياسَةَ `Content-Security-Policy` في المُستَودَع (البَحثُ صِفر) — السِكربتاتُ المُضَمَّنَةُ في `App.razor` وحدَها
   تَمنَعُ `script-src 'self'` بِلا بَصَماتٍ أَو `nonce`؛ مُهِمَّةٌ مُستَقِلَّة.
+- **رَمزُ الجَلسَةِ لا يُطبَعُ في الصَفحَةِ ولا يُرسَلُ في رابِطٍ ولا يُكتَبُ في السِجِلّ** (lens-security-4، حاجِبَة). كانَ `App.razor` يَطبَعُ
+  `window.acRealtimeToken = '@Auth.Token'` لِكُلِّ صَفحَةِ مَتجَرٍ مُوَثَّقَة — الرَمزُ الَّذي يَحمِلُه كوكي `HttpOnly` لِيَمنَعَ ذلك — ويَتَّصِلُ بِـ
+  `/realtime?token=`، و`realtime-nav.js` يُرسِلُه Bearer و`?access_token=`؛ وSerilog عِندَ `Information` يَكتُبُ سَطرَ
+  `Request starting …?token=…`. رَمزٌ لِثَلاثينَ يَوماً بِلا إبطال (د28). **الآن**: `RealtimeHub` يَقرَأُ كوكي الجَلسَةِ بِـ`AuthSession.ResolveToken`
+  (مُفَوَّضاً بِـ`RealtimeHub.SessionCookieReader` يُسَجِّلُه القالِب) ومَتجَرَه مِن `?slug=`، ولا يَقرَأُ رَمزاً مِن رابِطٍ ولا رَأس؛ والعَميلانِ
+  يُرسِلانِ المَتجَرَ وَحدَه؛ و`Microsoft.AspNetCore.Hosting` عِندَ `Warning` (`HostingExtensions.PlatformLogLevels`) — فَيَسقُطُ سَطرا الإطارِ
+  بِسِلسِلَةِ الاستِعلام، ويَبقى سَطرُ `UseSerilogRequestLogging` بِالمَسارِ وَحدَه. **ولَك**: سِجِلُّ الـSpace الحاليُّ قَد يَحمِلُ رُموزاً مِن
+  قَبلِ النَشر — والرافِعَةُ الوَحيدَةُ اليَومَ تَدويرُ `ACOMMERCE_AUTH_SECRET` (يُخرِجُ الجَميع؛ «ج» W8-2). **والحارِس**:
+  `RealtimeSessionTokenTests.No_razor_page_prints_the_session_token_and_no_script_sends_one_in_a_url` (كُلُّ `.razor` وكُلُّ سِكربتٍ في
+  `wwwroot`، يَحمَرُّ عَلى السَطرِ القَديمِ حَرفاً). **وما بَقِيَ**: `ACommerce.Kit.Realtime.Client.RealtimeClient` يَبني `?token=` ولا مُنادِيَ
+  لِـ`ConnectAsync` (تَسجيلٌ بِلا مُستَهلِك — القاعِدَة ١)؛ لا يَتَّصِلُ اليَومَ، وحَذفُه مُهِمَّةٌ مُستَقِلَّة.
 
 ---
 
