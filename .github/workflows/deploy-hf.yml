@@ -62,6 +62,13 @@ on:
         description: "رَقم الإيداع أو الفَرع المُراد نَشرُه (افتِراضيّاً main)"
         required: false
         default: main
+      # ‏(‏2026-10-24 — تَيّارُ S16) **والتَراجُعُ قَرارٌ يُكتَبُ في النَقرَة**: خُطوَةُ «Refuse a push that is not forward…» أَدناه تَرفُضُ
+      # إيداعاً لَيسَ بَعدَ ما يَخدِمُه الحَيّ — وهذا المُدخَلُ وَحدَه يُجيزُه، ولا يوجَدُ في `workflow_run` أَصلاً (DEPLOY.md §٤‑أ و§٢·و).
+      allow_rollback:
+        description: "تَراجُعٌ مَقصود: اِسمَح بِنَشرِ إيداعٍ لَيسَ بَعدَ ما يَخدِمُه الحَيّ (أَقدَم، أَو بِلا نَسَب)"
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   # دَفعَتان بِـ--force مُتَداخِلَتان تَجعَلانِ الفائِزَ مَسأَلَةَ تَوقيت.
@@ -266,7 +273,89 @@ jobs:
           echo "base_state=${base_state}"     >> "$GITHUB_ENV"
           echo "خَطُّ الأَساس [${base_state}]: commit=${base_commit:-<لا شَيء>} startedAt∈{${base_starts:-<لا شَيء>}} · أَرضِيَّةُ الزَمَن=${deploy_floor}"
 
+      # ═══ لا يُدفَعُ ما لَيسَ بَعدَ ما يَخدِم — والحُكمُ مِمّا تَملِكُه الوَظيفَةُ أَصلاً ═══
+      # (‏2026-10-24 — تَيّارُ S16، مُراجَعَةُ S13 الجَولَة ٣؛ DEPLOY.md §٢·و و§٤‑أ)
+      #
+      # **الثَغرَةُ، بِسيناريو**: يُلغى تَشغيلُ CI لِلإيداعِ N ثُمَّ يُنشَرُ N+1، فَتُعادُ N خَضراء — أَو يَكتَمِلُ تَشغيلُ N بَعدَ
+      # تَشغيلِ N+1 (تَرتيبُ الاكتِمالِ لَيسَ تَرتيبَ الدَفع). فَيُستَنسَخُ `head_sha` ويُدفَعُ بِـ`--force` بِلا سُؤال: **الشَجَرَةُ
+      # الأَقدَمُ فَوقَ الإنتاج**، وما بَينَهُما قَد يَكونُ إصلاحاً أَمنِيّاً. وكانَ العِلاجُ في §٢·و فَحصاً بِاليَد (`git ls-remote`).
+      #
+      # **والحُكمُ بِلا سِرٍّ ولا خِدمَة**: `base_commit` مِن `/health` الحَيِّ (الخُطوَةُ أَعلاه، مُصادَقاً 40 مِحرَفاً) هُوَ **ما يَخدِم**،
+      # والتاريخُ كامِلٌ (`fetch-depth: 0`) — فَيَسأَلُ git:
+      #   · المُرَشَّحُ هُوَ ما يَخدِم ⇒ لا دَفعَ ولا بِناء (يُطبَعُ ويُخرَجُ بِصِفر).
+      #   · ما يَخدِمُ سَلَفٌ لِلمُرَشَّح ⇒ يُدفَع.
+      #   · المُرَشَّحُ سَلَفٌ لِما يَخدِم، أَو لا نَسَبَ بَينَهُما، أَو ما يَخدِمُ لَيسَ في تاريخِنا، أَو تَعَذَّرَ السُؤال ⇒ **يُرفَضُ بِاسمِه
+      #     (1)** — إلّا `workflow_dispatch` بِـ`allow_rollback`: التَراجُعُ المَقصودُ قَرارٌ يُكتَبُ في النَقرَة، لا أَثَرٌ يَقَعُ بِإعادَة.
+      #   · ما يَخدِمُ غَيرُ مَعروف (أَوَّلُ نَشر، `/health` لا يُجيب، لا مُضيف) ⇒ يُدفَعُ كَما قَبلَ الحارِس، ويُقالُ إنّه لَم يَقِس.
+      # **و«ما يَخدِم» غَيرُ «ما دُفِع»**: `.source-revision` في مُستَودَعِ الـSpace يَقولُ ما دُفِعَ إلَيه (ويَحتاجُ الرَمزَ لِيُقرَأ)، و`base_commit`
+      # ما يَخدِمُه الحَيّ — ويَفتَرِقانِ بَعدَ بِناءٍ فاشِل. والحارِسُ يَحرُسُ الإنتاجَ فَيَقرَأُ الثاني.
+      # والدالَّةُ بَينَ عَلامَتَين تُقطَعُ في `DeployDirectionTests` وتُشَغَّلُ عَلى مُستَودَعٍ مَصنوعٍ بِحالاتِها كُلِّها.
+      - name: Refuse a push that is not forward of what the live serves
+        env:
+          ALLOW_ROLLBACK: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_rollback == true }}
+        run: |
+          set -uo pipefail
+          # ─── بِدايَةُ deploy_direction ───
+          # $1 المُرَشَّح · $2 ما يَخدِمُه الحَيّ (قَد يَكونُ فارِغاً) · $3 حالَةُ خَطِّ الأَساس · $4 السَماحُ بِالتَراجُع (true|false).
+          # تَطبَعُ «decision=push|skip|refuse» ثُمَّ سَطرَ السَبَب، وتَرجِعُ 0 لِلدَفعِ والتَخَطّي و1 لِلرَفض.
+          deploy_direction() {
+            local candidate="$1" live="$2" state="$3" allow="$4" rel="" rc=0
+            if [ "${state}" != "measured" ] || [ -z "${live}" ]; then
+              echo "decision=push"
+              echo "الحارِسُ لَم يَقِس: ما يَخدِمُه الحَيُّ غَيرُ مَعروف (خَطُّ الأَساس [${state}]، commit=${live:-<لا شَيء>}) — يُدفَعُ كَما قَبلَ الحارِس."
+              return 0
+            fi
+            if [ "${candidate}" = "${live}" ]; then
+              echo "decision=skip"
+              echo "الحَيُّ يَخدِمُ ${live} نَفسَه — لا دَفعَ ولا بِناء (وإعادَةُ بِنائِه مِن واجِهَةِ HF: Factory rebuild، DEPLOY.md §٤‑ج)."
+              return 0
+            fi
+            if ! git cat-file -e "${live}^{commit}" 2>/dev/null; then
+              rel="ما يَخدِمُه الحَيُّ ${live} لَيسَ في تاريخِ هذا المُستَودَع"
+            else
+              git merge-base --is-ancestor "${live}" "${candidate}"; rc=$?
+              if [ "${rc}" -eq 0 ]; then
+                echo "decision=push"
+                echo "تَقَدُّم: ما يَخدِمُه الحَيُّ ${live} سَلَفٌ لِلمُرَشَّحِ ${candidate}."
+                return 0
+              fi
+              if [ "${rc}" -ne 1 ]; then
+                rel="تَعَذَّرَ سُؤالُ git عَن النَسَب (رَمزُه ${rc})"
+              elif git merge-base --is-ancestor "${candidate}" "${live}"; then
+                rel="المُرَشَّحُ ${candidate} سَلَفٌ لِما يَخدِمُه الحَيُّ ${live} — تَراجُع"
+              else
+                rel="لا نَسَبَ بَينَ المُرَشَّحِ ${candidate} وما يَخدِمُه الحَيُّ ${live}"
+              fi
+            fi
+            if [ "${allow}" = "true" ]; then
+              echo "decision=push"
+              echo "::warning::تَراجُعٌ مَقصود (allow_rollback=true): ${rel}."
+              return 0
+            fi
+            echo "decision=refuse"
+            echo "::error::لا يُدفَعُ ما لَيسَ بَعدَ ما يَخدِم: ${rel}. والتَراجُعُ المَقصودُ workflow_dispatch بِـallow_rollback=true (DEPLOY.md §٤‑أ)."
+            return 1
+          }
+          # ─── نِهايَةُ deploy_direction ───
+
+          candidate="$(git rev-parse HEAD)"
+          code=0
+          out="$(deploy_direction "${candidate}" "${base_commit:-}" "${base_state:-failed}" "${ALLOW_ROLLBACK:-false}")" || code=$?
+          printf '%s\n' "${out}"
+          decision="$(printf '%s\n' "${out}" | sed -n 's/^decision=//p' | head -1)"
+          case "${decision}" in push|skip) : ;; *) decision="refuse" ;; esac
+          [ "${code}" -eq 0 ] || decision="refuse"
+          echo "deploy_decision=${decision}" >> "$GITHUB_ENV"
+          {
+            echo "### اتِّجاهُ النَشر"
+            echo ""
+            echo "\`${decision}\` — $(printf '%s\n' "${out}" | sed -n '2p')"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "${decision}" != "refuse" ] || exit 1
+
       - name: Push the filtered tree to the Space
+        if: env.deploy_decision == 'push'
         env:
           HF_SPACE: ${{ vars.HF_SPACE }}
           HF_USER: ${{ vars.HF_USER }}
@@ -288,6 +377,8 @@ jobs:
           # والبُرهانُ الوَحيدُ الباقي هو تَقَدُّمُ `startedAt`. يُقالُ
           # صَراحَةً في السِجِلِّ والمُلَخَّصِ لِئَلّا يُقرَأَ الأَخضَرُ
           # أَكثَرَ مِمّا يَقول.
+          # ‏(‏2026-10-24 — تَيّارُ S16) **ولا يُبلَغُ هذا الفَرعُ ما دامَت خُطوَةُ الاتِّجاهِ قَبلَه**: المُرَشَّحُ = ما يَخدِم ⇒ «لا دَفع»
+          # فَلا تَجري هذِه الخُطوَةُ أَصلاً. يَبقى حارِساً ثانِياً بِحَرفِه إن سَقَطَت تِلكَ الخُطوَةُ يَوماً — لا يُحذَفُ بِحَذفِها.
           if [ "${base_state:-}" = "measured" ] && [ "${base_commit:-}" = "${sha}" ]; then
             echo "::warning::الحَيُّ كانَ يَحمِلُ ${sha} قَبلَ الدَفع — مُطابَقَةُ البَصمَةِ وَحدَها لا تُثبِتُ وُصولَ بِناءٍ جَديد؛ البُرهانُ تَقَدُّمُ startedAt."
             echo "base_same=1" >> "$GITHUB_ENV"
@@ -328,6 +419,8 @@ jobs:
           # والتَراجُع لا يُكَلِّف شَيئاً: يُعاد التَشغيل بِـ
           # `workflow_dispatch` عَلى الإيداع السابِق فَتُبنى شَجَرَتُه
           # المُفلتَرَة مِن جَديد.
+          # ‏(‏2026-10-24 — تَيّارُ S16) **وبِـ`allow_rollback=true`**: خُطوَةُ الاتِّجاهِ أَعلاه تَرفُضُ إيداعاً
+          # أَقدَمَ مِمّا يَخدِم بِدونِه — فَلا يَقَعُ التَراجُعُ إلّا مَقصوداً.
           cd "${RUNNER_TEMP}/hf-space"
           git init -q -b main
           git config user.name  "github-actions[bot]"
@@ -354,6 +447,7 @@ jobs:
 
       # ═══ الكاتِبُ الَّذي لا يُعيد القِراءَة يُبَلِّغ بِنِيَّتِه لا بِفِعلِه ═══
       - name: Read the Space back and assert it carries this commit
+        if: env.deploy_decision == 'push'
         env:
           HF_SPACE: ${{ vars.HF_SPACE }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -413,6 +507,7 @@ jobs:
       # ‏`git push --force`، فَحُمرَتُها **لا تَتَراجَع ولا توقِفُ HF ولا
       # تَمنَعُ النَشرَ التالي**. وحينَ تَحمَرُّ فَالفِعلُ البَشَرِيُّ
       # واحِد: ‏`workflow_dispatch` على آخِرِ إيداعٍ أَخضَرَ مَعروف.
+      # ‏(‏2026-10-24 — تَيّارُ S16) **ومَعَه `allow_rollback=true`** إن كانَ أَقدَمَ مِمّا يَخدِم — وإلّا رَفَضَته خُطوَةُ الاتِّجاه.
       # و`scripts/deploy-manifest.sh` بِخِلافِها **بَوّابَةٌ حَقيقِيَّة**
       # تَسبِقُ الدَفعَ وتُجهِضُه — والاسمُ الواحِدُ لِلاثنَينِ يَجعَلُ
       # القارِئَ يَحسِبُ أَنّ حُمرَةَ `/health` تَمنَعُ نَشراً، وهي لا تَمنَع.
@@ -425,6 +520,7 @@ jobs:
       # ويَرُدُّ ‏200. فَبَوّابَةٌ تَفحَصُ الرَمزَ وَحدَه **كانَت
       # سَتَخضَرُّ قَبلَ أَن يُكتَبَ حَرف** (القاعِدَة ١٠ — حَقنُ العَيب).
       - name: Assert the live Space serves this commit
+        if: env.deploy_decision == 'push'
         env:
           HF_SPACE:     ${{ vars.HF_SPACE }}
           WAIT:         ${{ vars.HF_HEALTH_WAIT_SECONDS }}
@@ -624,7 +720,7 @@ jobs:
           # رِسالَةٍ واحِدَةٍ يَجعَلُ القارِئَ يُخَمِّن.
           if [ -n "${commit}" ] && [ "${commit}" != "${sha}" ] && [ "${#commit}" -eq 40 ]; then
             verdict="عَدَمُ مُطابَقَة: الحَيُّ يَخدِمُ \`${commit}\` والمَدفوعُ \`${sha}\`"
-            echo "::error::${verdict} — تَراجَعْ بِـworkflow_dispatch على آخِرِ إيداعٍ أَخضَرَ مَعروف."
+            echo "::error::${verdict} — تَراجَعْ بِـworkflow_dispatch على آخِرِ إيداعٍ أَخضَرَ مَعروف (ومَعَه allow_rollback=true إن كانَ أَقدَمَ مِمّا يَخدِم)."
           elif [ "${commit}" = "${sha}" ]; then
             # **حُمرَةٌ ثالِثَةٌ كانَت مُبتَلَعَةً في الثانِيَة**: البَصمَةُ
             # مُطابِقَةٌ وسَقَطَ شَرطٌ آخَرُ حَتّى نَفادِ الميزانِيَّة —

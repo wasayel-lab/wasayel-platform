@@ -465,7 +465,9 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
     /// <summary><b>وتَشغيلُ <c>main</c> المُلغى لا يُعادُ إلّا وهُوَ رَأسُ <c>main</c> — لِأَنّ <c>deploy-hf.yml</c> يَدفَعُ أَيَّ رَقمٍ يُعطاه</b> (‏2026-10-24 —
     /// الجَولَةُ ٢ لِمُراجَعَةِ تَيّارِ S13، عَلى <c>c69cdb8</c>): عِلاجُ «أَعِد تَشغيلَ CI لِذلكَ الكوميت» في مُلحَقِ §٢·و كانَ بِلا شَرط، والنَشرُ يَستَنسِخُ
     /// <c>workflow_run.head_sha</c> ويَدفَعُه بِـ<c>--force</c> بِلا سُؤالٍ عَن الرَأس — فَإعادَةُ كوميتٍ أَقدَمَ بَعدَ نَشرِ أَحدَثَ تَراجُعٌ صامِت. فَيُقرَأُ هُنا
-    /// الطَرَفانِ بِـ<see cref="RerunConditionRefusal"/>: الشَرطُ بَعدَ العِلاجِ في §٢·و بِأَمرِه، و<c>deploy-hf.yml</c> عَلى الحالِ الَّذي يَصِفُه الشَرط.</summary>
+    /// الطَرَفانِ بِـ<see cref="RerunConditionRefusal"/>: الشَرطُ بَعدَ العِلاجِ في §٢·و بِأَمرِه، و<c>deploy-hf.yml</c> عَلى الحالِ الَّذي يَصِفُه الشَرط.
+    /// <b>(‏2026-10-24 — تَيّارُ S16، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b> والاسمُ يَصِفُ ما كانَ: <c>deploy-hf.yml</c> صارَ يَرفُضُ ما لَيسَ بَعدَ ما يَخدِمُ
+    /// (<c>deploy_direction</c>، و<c>DeployDirectionTests</c> يُشَغِّلُها) — والصَفُّ نَفسُه يَطلُبُ أَن يُسَمّيَه §٢·و وأَن يَشمَلَ الشَرطُ <c>workflow_dispatch</c>.</summary>
     [Fact]
     public void A_cancelled_main_run_is_re_run_only_while_it_is_still_mains_tip_because_deploy_hf_pushes_any_sha_it_is_given()
     {
@@ -488,6 +490,13 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
     private const string TipCommand = "`git ls-remote origin refs/heads/main`";
     private const string NewerTipRefused = "**فَلا يُعادُ أَبَداً**";
     private const string GuardAbsence = "**ولا يُغلِقُهُما إلّا حارِسٌ في `deploy-hf.yml`**";
+    // ‏(‏2026-10-24 — تَيّارُ S16) **والحارِسُ صارَ في الوَظيفَة**: §٢·و يُسَمّيه بِاسمِ دالَّتِه، والدالَّةُ بَينَ عَلامَتَيها في `deploy-hf.yml`
+    // (`DeployDirectionTests` يُشَغِّلُها)؛ ومُفرَدَةُ حارِسٍ خارِجَها حارِسٌ لا يُسَمّى. وشَرطُ الرَأسِ يَشمَلُ `workflow_dispatch` في العِلاجِ نَفسِه.
+    private const string GuardPresent = "**وصارَ الحارِسُ في `deploy-hf.yml` نَفسِه — `deploy_direction`**";
+    private const string DispatchCondition = "**وشَرطُ الرَأسِ نَفسُه عَلى `workflow_dispatch` في هذا العِلاج**";
+    private const string GuardFunction = "deploy_direction() {";
+    private const string GuardStart = "# ─── بِدايَةُ deploy_direction ───";
+    private const string GuardEnd = "# ─── نِهايَةُ deploy_direction ───";
 
     /// <summary>مُفرَداتُ ما يَحتاجُه حارِسُ «أَهُوَ رَأسُ <c>main</c>؟» أَو «أَهُوَ سَلَفُ ما يَعمَل؟» في git أَو في API ‏GitHub — مَعجَمٌ مُغلَق. وحارِسٌ يُكتَبُ
     /// بِغَيرِها لا يُرى، ويُقالُ ذلكَ هُنا لا يُخفى: الصَفُّ سِلكُ تَعَثُّرٍ بَينَ الوَثيقَةِ والكود، لا بُرهانُ غِياب.</summary>
@@ -497,7 +506,10 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
     /// <summary><b>أَيَشتَرِطُ §٢·و رَأسَ <c>main</c> لِإعادَةِ تَشغيلٍ مُلغىً، ولا يُكَذِّبُه <c>deploy-hf.yml</c>؟</b> — <c>null</c> إن نَعَم، وإلّا رَمزُ الرَفض.
     /// مِن <c>deploy-hf.yml</c> تُقرَأُ الأَسطُرُ غَيرُ المُعَلَّقَةِ وَحدَها: الفَرضِيَّتانِ (الاستِنساخُ مِن <c>workflow_run.head_sha</c>، والدَفعُ بِـ<c>--force</c>)
     /// بِحَرفِهِما، وصِفرُ مُفرَدَةٍ مِن <see cref="GuardTokens"/> — فَإن وُجِدَ حارِسٌ صارَ الشَرطُ وَصفاً لِما لَيسَ قائِماً، ويُلحَقُ بِقَرار. ومِن القِسم: العِلاجُ،
-    /// ثُمَّ بَعدَه الشَرطُ، ثُمَّ بَعدَ الشَرطِ أَمرُ الرَأسِ و«لا يُعادُ أَبَداً» وتَسمِيَةُ الحارِسِ الغائِب — بِحَرفِها وتَشكيلِها نَسَقَ الصُفوفِ المُجاوِرَة.</summary>
+    /// ثُمَّ بَعدَه الشَرطُ، ثُمَّ بَعدَ الشَرطِ أَمرُ الرَأسِ و«لا يُعادُ أَبَداً» وتَسمِيَةُ الحارِسِ الغائِب — بِحَرفِها وتَشكيلِها نَسَقَ الصُفوفِ المُجاوِرَة.
+    /// <b>(‏2026-10-24 — تَيّارُ S16)</b> وصارَ الحارِسُ قائِماً: مُفرَداتُه مَقبولَةٌ داخِلَ <c>deploy_direction</c> بَينَ عَلامَتَيها وَحدَها، وحينَها يُطلَبُ
+    /// <see cref="GuardPresent"/> بَعدَ الشَرطِ بَدَلَ <see cref="GuardAbsence"/>، ووَثيقَةٌ تُسَمّي حارِساً لا دالَّةَ لَه تُرَدّ؛ و<see cref="DispatchCondition"/>
+    /// بَعدَ الشَرطِ في الحالَين.</summary>
     internal static string? RerunConditionRefusal(string section, string deployWorkflow, out int codeLines, out List<string> tokens)
     {
         var code = deployWorkflow.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n')
@@ -507,7 +519,20 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         if (codeLines == 0) return "deploy_unread";
         if (!code.Any(l => l.Contains("|| github.event.workflow_run.head_sha", StringComparison.Ordinal))
             || !code.Any(l => l.Contains("git push --force", StringComparison.Ordinal))) return "premise_changed";
-        if (tokens.Count > 0) return "deploy_guard_unacknowledged";
+        // ‏الأَسطُرُ غَيرُ المُعَلَّقَةِ خارِجَ الدالَّةِ المُسَمّاة — مُفرَدَةُ حارِسٍ فيها حارِسٌ لا يُسَمّيه §٢·و.
+        var outside = new List<string>();
+        var inside = false;
+        foreach (var raw in deployWorkflow.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+        {
+            if (raw.Contains(GuardStart, StringComparison.Ordinal)) { inside = true; continue; }
+            if (raw.Contains(GuardEnd, StringComparison.Ordinal)) { inside = false; continue; }
+            if (!inside && raw.Trim().Length > 0 && !raw.TrimStart().StartsWith('#')) outside.Add(raw);
+        }
+        var guarded = code.Any(l => l.Contains(GuardFunction, StringComparison.Ordinal));
+        var named = section.Contains(GuardPresent, StringComparison.Ordinal);
+        if (GuardTokens.Any(t => outside.Any(l => l.Contains(t, StringComparison.Ordinal)))) return "deploy_guard_unacknowledged";
+        if (tokens.Count > 0 && !named) return "deploy_guard_unacknowledged";
+        if (named && !guarded) return "guard_claimed_not_in_code";
 
         var remedy = section.IndexOf(RerunRemedy, StringComparison.Ordinal);
         if (remedy < 0) return "no_remedy";
@@ -525,7 +550,9 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         }
         if (section.IndexOf(TipCommand, condition, StringComparison.Ordinal) < 0) return "no_tip_command";
         if (section.IndexOf(NewerTipRefused, condition, StringComparison.Ordinal) < 0) return "newer_tip_not_refused";
-        return section.IndexOf(GuardAbsence, condition, StringComparison.Ordinal) < 0 ? "guard_absence_unsaid" : null;
+        if (guarded ? section.IndexOf(GuardPresent, condition, StringComparison.Ordinal) < 0
+                    : section.IndexOf(GuardAbsence, condition, StringComparison.Ordinal) < 0) return guarded ? "guard_presence_unsaid" : "guard_absence_unsaid";
+        return section.IndexOf(DispatchCondition, condition, StringComparison.Ordinal) < 0 ? "dispatch_unconditioned" : null;
     }
 
     /// <summary><b>حَقنُ عَيب — فاحِصُ شَرطِ الإعادَةِ يُحمِرُّ فِعلاً</b> (‏2026-10-24): قِسمٌ وسَيرُ نَشرٍ بِشَكلِ اليَومِ يُقبَلان، وكُلُّ سُقوطٍ يُرَدُّ بِرَمزِه —
@@ -534,15 +561,20 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
     public void The_rerun_condition_checker_can_actually_go_red()
     {
         const string Remedy = "- والعِلاجُ " + RerunRemedy + " (‏Re-run all jobs).\n";
-        const string Rest = " · " + TipCommand + " · " + NewerTipRefused + " · " + GuardAbsence + "\n";
+        const string Rest = " · " + TipCommand + " · " + NewerTipRefused + " · " + GuardAbsence + " · " + DispatchCondition + "\n";
         const string Section = "### قِسم\n" + Remedy + "(مُلحَق) **و«…» أَعلاه " + RerunCondition + "**:" + Rest;
         const string Deploy = "on:\n  workflow_run:\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: >-\n"
             + "            ${{ github.event_name == 'workflow_dispatch'\n                && inputs.ref\n                || github.event.workflow_run.head_sha }}\n"
             + "      - run: |\n          timeout 300 git push --force \\\n            \"https://x@huggingface.co/spaces/a/b.git\" \"HEAD:refs/heads/main\"\n";
+        // ‏(‏2026-10-24 — S16) والوَظيفَةُ بِحارِسِها المُسَمّى: مُفرَداتُه داخِلَ الدالَّةِ بَينَ عَلامَتَيها.
+        const string Guarded = Deploy + "      - run: |\n          " + GuardStart + "\n          " + GuardFunction + "\n"
+            + "            git merge-base --is-ancestor \"$2\" \"$1\"\n          }\n          " + GuardEnd + "\n";
+        const string Named = Section + "(مُلحَقُ S16) " + GuardPresent + "\n";
         var accepted = new (string Section, string Deploy)[]
         {
             (Section, Deploy),
             (Section, "# ‏لا merge-base ولا ls-remote هُنا — تَعليقٌ لا حارِس\n" + Deploy),
+            (Named, Guarded),
         };
         var rejected = new (string Section, string Deploy, string Code)[]
         {
@@ -561,6 +593,12 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
             // ‏(‏2026-10-24 — S16) مُلحَقٌ لاحِقٌ يُعيدُ العِلاجَ بِلا شَرط، وجُملَةٌ بَعدَ الشَرطِ تَنقُضُه بِذِكرِه — كانَت المُطابَقَةُ الأولى تَقبَلُهُما:
             (Section + "(مُلحَقٌ لاحِق) - والعِلاجُ " + RerunRemedy + " (‏Re-run all jobs).\n", Deploy, "remedy_unconditioned"),
             (Section + "(مُلحَقٌ لاحِق) والشَرطُ أَعلاه لا يَلزَمُ بَعدَ اليَوم: " + RerunRemedy + " تَكفي أَيّاً كانَ الرَأس.\n", Deploy, "remedy_unconditioned"),
+            // ‏(‏2026-10-24 — S16) قِسمُ ما قَبلَ S16 بِشَكلِه: شَرطُ الرَأسِ لا يَشمَلُ `workflow_dispatch` في العِلاج — والحارِسُ:
+            (Section.Replace(" · " + DispatchCondition, "", StringComparison.Ordinal), Deploy, "dispatch_unconditioned"),
+            (Section, Guarded, "deploy_guard_unacknowledged"),
+            (Named, Deploy, "guard_claimed_not_in_code"),
+            (Named, Guarded + "      - run: git ls-remote origin refs/heads/main\n", "deploy_guard_unacknowledged"),
+            ("(قَبلَ الشَرط) " + GuardPresent + "\n" + Section, Guarded, "guard_presence_unsaid"),
         };
         // ‏والمُطابَقَةُ الأولى وَحدَها (فاحِصُ ما قَبلَ S16) — تُعَدُّ لِيُرى ما سَدَّه «كُلُّ وُرود».
         static bool FirstMatchOnly(string s)
@@ -579,7 +617,7 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         foreach (var r in rejected) output.WriteLine($"مَرفوضٌ ({RerunConditionRefusal(r.Section, r.Deploy, out _, out _)})");
         var codes = rejected.Select(r => r.Code).Distinct().Count();
         output.WriteLine($"حُقِنَ {accepted.Length} مَقبولاً و{rejected.Length} مَرفوضاً بِـ{codes} رَمزاً.");
-        Assert.True(accepted.Length >= 2 && rejected.Length >= 14 && codes >= 8, "أَداةٌ عَمياء: العَيِّنَةُ أَصغَرُ مِمّا كُتِب.");
+        Assert.True(accepted.Length >= 3 && rejected.Length >= 19 && codes >= 11, "أَداةٌ عَمياء: العَيِّنَةُ أَصغَرُ مِمّا كُتِب.");
         Assert.True(wrong.Count == 0, $"أَخطَأَ الفاحِصُ في {wrong.Count}:\n  " + string.Join("\n  ", wrong));
     }
 
