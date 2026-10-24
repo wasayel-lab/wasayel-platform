@@ -315,13 +315,28 @@ public sealed class DealShipping
     /// ويُرمى في كُلِّ عَرضٍ لِلصَفحَة (تَوصيفُه <c>8f92f94</c>)، والسُؤالُ «أَيَنفَكُّ المَدخَل؟» تُجيبُه قيمَةٌ واحِدَة. <b>وما لا يُغلِقُه</b>: سِرُّ وارِدٍ لا يَنفَكُّ
     /// ورَمزٌ يَنفَكّ — يُرسَمُ البابُ وتَرُدُّ <c>/ship</c> النَقرَةَ بِـ<c>carrier_unavailable</c> لِأَنَّها تَفُكُّ الاثنَين؛ ولا يَقَعُ إلّا بِقيمَتَينِ خُتِمَتا
     /// بِمِفتاحَينِ رَئيسَينِ مُختَلِفَين (‏«أ» S15·٨).</para>
+    /// <para>(‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1؛ ‏ADR-033 §٧‑ص‑١٠ مُلحَقاً — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>والقيمَةُ الواحِدَةُ سِرُّ الوارِدِ لا رَمزُ
+    /// التَحديث</b> (<see cref="OpensForView"/>) — فَلا يُفَكُّ الرَمزُ الدائِمُ لِحِسابِ البائِعِ عِندَ OTO في عَرضِ صَفحَة. كانَ الرَمزُ (تَوصيفُه <c>02aa986</c>:
+    /// فَخٌّ عَلى الرَمزِ ⇒ «فَكُّ الرَمز=1» في كُلِّ عَرض). <b>والنِصفُ الَّذي «لا يُغلِقُه» أَعلاه انقَلَب</b>: سِرٌّ أَقدَمُ مِن رَمزِه يَقَعُ بِالكود — لَصقٌ بَعدَ
+    /// تَبديلِ المِفتاحِ الرَئيسِ تَرُدُّ OTO تَسجيلَه (<c>ConnectAsync</c> تَختِمُ الرَمزَ وتُبقي السِرّ) — فَصارَ يُخفي البابَ كَما تَرُدُّه النَقرَة؛ والباقي رَمزٌ
+    /// أَقدَمُ مِن سِرِّه، ولا كاتِبَ يَختِمُه (كُلُّ حِفظٍ يَختِمُ الرَمزَ أَوَّلاً).</para>
     /// </summary>
     public async Task<bool> CarrierReadyForViewerAsync(string tenantSlug, Deal? deal, DealShipper viewer, CancellationToken ct = default)
     {
         var ready = await CarrierReadyForAsync(tenantSlug, deal, ct);
         if (!ready || DealShipAuthorization.Validate(deal, viewer, carrierReady: true) is not null) return ready;
-        return await ResolveCarrierAsync(tenantSlug, deal!, ct) is { } carrier && TryOpenToken(tenantSlug, carrier, out _);
+        return await ResolveCarrierAsync(tenantSlug, deal!, ct) is { } carrier && OpensForView(tenantSlug, carrier);
     }
+
+    /// <summary>
+    /// <para><b>القيمَةُ الواحِدَةُ الَّتي يَفُكُّها العَرض</b> (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1): <b>سِرُّ الوارِدِ إن كانَ في المَدخَل</b> — أَدنى القيمَتَينِ
+    /// قَدراً (يَتَحَقَّقُ بِه الوارِدُ مِن إشعارٍ، ولا يَفتَحُ حِساباً)، وأَقدَمُهُما خَتماً أَو مِثلُه — ثُمَّ <b>رَمزُ التَحديثِ حينَ لا سِرَّ</b> (تَسجيلٌ لَم يَنجَح قَطّ):
+    /// لا قيمَةَ غَيرُه تُفَكّ، والاحتِياطُ لا فَكَّ لَه أَصلاً (<see cref="TryOpenToken"/>). وشَرطُ الحُضورِ شَرطُ <see cref="TryOpenSecret"/> نَفسُه.</para>
+    /// </summary>
+    private bool OpensForView(string tenantSlug, SealedCarrier carrier)
+        => carrier.Entry is not null && VendorShippingSurface.WebhookField is { } webhookField && carrier.Entry.Values.ContainsKey(webhookField)
+            ? TryOpenSecret(tenantSlug, carrier, out _)
+            : TryOpenToken(tenantSlug, carrier, out _);
 
     /// <summary>
     /// <para><b>ناقِلُ بائِعِ الصَفقَة — مَفكوكاً لِمَن يَطلُبُ بِه فِعلاً</b>: رَمزُ تَحديثِه وسِرُّ وارِدِه مِن مَدخَلِه، أَو رَمزُ التَهيئَةِ
