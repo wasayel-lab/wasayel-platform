@@ -510,6 +510,28 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         }
     }
 
+    /// <summary><b>تَوصيفُ «اليَوم» (‏2026-10-24، S15 C) — يُقلَبُ بِاسمِه في كوميتِ الإصلاح</b>: مُشتَرٍ بِجَلسَتِه وجِسمٍ JSON لا استِمارَة
+    /// يَعبُرُ الحارِسَ ثُمَّ يَرمي <c>req.Form</c> («Incorrect Content-Type») ⇒ ‏500، بِلا نِداءٍ لِلبَوّابَة — صِنفُ RELEASE-READINESS §١ البَند ٧.</summary>
+    [Fact]
+    public async Task Today_a_buyer_session_with_a_json_body_throws_on_the_form_read()
+    {
+        var w = await PaidCart();
+        var (app, client) = await HostAsync(w);
+        try
+        {
+            var json = await client.SendAsync(Verify(
+                new StringContent("{\"deal\":\"x\"}", Encoding.UTF8, "application/json"), sessionUser: Buyer));
+            Assert.Equal(HttpStatusCode.InternalServerError, json.StatusCode);
+            Assert.Empty(w.Moyasar.Requests);
+        }
+        finally
+        {
+            client.Dispose();
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
     /// <summary><b>ونَصُّ النُقطَةِ يُطابِقُ ما قيسَ سُلوكاً</b>: المَسارُ حَرفِيّ، والجَلسَةُ ثُمَّ سِجِلُّ السُلطَةِ ثُمَّ الحَقل، والرَدُّ مِن
     /// <c>GatewayReturn.AfterVerify</c>، ولا <c>RequestAborted</c> ولا <c>RequireStoreWritable</c> (مُثَبَّتَةٌ بِسَبَبِها). والتَسجيلُ
     /// والرَبطُ في القالِبِ سَطرانِ مُسَمَّيان.</summary>
