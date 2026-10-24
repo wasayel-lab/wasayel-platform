@@ -521,12 +521,16 @@ public static class MarketplaceTemplateExtensions
         // في تَوثيقِه («لا يُثبِت أَنّ الحارِس يَرُدّ»). والحارِسُ
         // الحَقيقيّ هُنا على **المَفعول بِه**: إعلانٌ غَير مَوجود أَو
         // مَحذوف يُرَدّ ‏404 قَبلَ أَيّ كِتابَة.
+        //
+        // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-5) **والحَدُّ هُنا الآن، لا الحارِس**: كانَ كُلُّ طَلَبٍ يُلحِقُ حَدَثاً بِلا حَدّ، وكانَ
+        // `ResolveToken` في الجِسمِ يَجعَلُ الفاحِصَ يَعُدُّها مَحروسَة. صارَت النِسبَةُ في `ListingViews.ViewerOf`، والنُقطَةُ مُثَبَّتَةً عامَّةً
+        // بِسَبَبِها في `WriteEndpointGuardTests.PinnedPublic`، ومُشاهَدَةٌ واحِدَةٌ لِكُلِّ زائِرٍ في الإعلانِ في السّاعَةِ تُعَدُّ قَبلَ أَيِّ قِراءَة.
         app.MapPost("/{slug}/listings/{id:guid}/view",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
         {
-            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
-            var viewerId = parsed is { } p && p.TenantSlug == slug
-                ? p.UserId : (Guid?)null;
+            var viewerId = Services.ListingViews.ViewerOf(req, slug);
+            if (!Services.ListingViews.Counts(slug, id, viewerId, req.HttpContext.Connection.RemoteIpAddress?.ToString()))
+                return Results.NoContent();
 
             await using var s = store.LightweightSession(slug);
             var listing = await s.Events.AggregateStreamAsync<Listing>(id);

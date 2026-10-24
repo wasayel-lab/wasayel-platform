@@ -55,6 +55,30 @@ public static class AuthHandlers
     public static bool TryConsumeVerifyQuota(string key)
         => TryConsume(_verifyRl, key, MaxVerifyPerMinute, TimeSpan.FromMinutes(1));
 
+    private static readonly ConcurrentDictionary<string, RateBucket> _viewRl = new();
+
+    /// <summary>
+    /// <para><b>مُشاهَدَةٌ واحِدَةٌ تُعَدُّ لِكُلِّ مِفتاحٍ في السّاعَة</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-security-5): نُقطَةُ
+    /// <c>/{slug}/listings/{id}/view</c> عامَّةٌ بِالتَصميمِ (مُشاهَدَةُ الزائِرِ أَغلَبُ المُشاهَدات) وكانَت تُلحِقُ حَدَثاً بِكُلِّ طَلَبٍ بِلا حَدّ —
+    /// وكُلُّ حَدَثٍ يُبطِّئُ كُلَّ عَرضٍ لاحِقٍ يُعيدُ بِناءَ الإعلانِ مِن أَحداثِه. **الحَدُّ «واحِدَة» والنافِذَةُ ساعَةُ حِصَّةِ الإرسالِ نَفسُها** — لا
+    /// رَقَمَ جَديد؛ وطولُها رَقَمُ المالِك يُبَدِّلُه هُنا («ب» W8-2). والمِفتاحُ يَبنيه القالِب (<c>ListingViews.QuotaKey</c>): الزائِرُ المُوَثَّقُ
+    /// بِهُوِيَّتِه، والمَجهولُ بِعُنوانِه.</para>
+    /// </summary>
+    public static bool TryConsumeViewQuota(string key)
+        => TryConsume(_viewRl, key, 1, TimeSpan.FromHours(1));
+
+    // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-5) عَدّادٌ انقَضَت نافِذَتُه يُطرَد — مَرَّةً في النافِذَةِ لِكُلِّ قاموس. كانَ كُلُّ مِفتاحٍ يَبقى
+    // إلى إعادَةِ التَشغيل، ومِفتاحُ المُشاهَدَةِ لِكُلِّ (زائِرٍ، إعلان). والدَلالَةُ لا تَتَغَيَّر: المُنقَضي يُعامَلُ عَدّاداً جَديداً في الحالَين.
+    private static readonly ConcurrentDictionary<object, DateTime> _sweptAt = new();
+
+    private static void SweepExpired(ConcurrentDictionary<string, RateBucket> rl, DateTime now, TimeSpan window)
+    {
+        var last = _sweptAt.GetOrAdd(rl, now);
+        if (now - last < window || !_sweptAt.TryUpdate(rl, now, last)) return;
+        foreach (var (key, bucket) in rl)
+            if (bucket.ResetAt < now) rl.TryRemove(new KeyValuePair<string, RateBucket>(key, bucket));
+    }
+
     // ─── سَقفُ المَنَصَّة — رَقَمُ المالِك، ومُطفَأٌ حَتّى يُضبَط (‏2026-10-24، تَدقيقُ الإطلاق lens-security-3) ──
     //
     // الحِصَّةُ أَعلاه تَحُدُّ **الرَقَمَ الواحِد**؛ ومَن يُدَوِّرُ الأَرقامَ لا يَحُدُّه شَيء — والرَسائِلُ عَلى حِسابِ المَنَصَّة. فَهذا سَقفٌ
@@ -110,6 +134,7 @@ public static class AuthHandlers
         string key, int max, TimeSpan window)
     {
         var now = DateTime.UtcNow;
+        SweepExpired(rl, now, window);
         while (true)
         {
             var current = rl.GetOrAdd(key, _ => new RateBucket(0, now.Add(window)));

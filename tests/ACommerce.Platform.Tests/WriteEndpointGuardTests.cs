@@ -71,6 +71,10 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
         new("/studio/auth/email/login",   "نَظيرُ سابِقَتِها بِالبَريد — نَفسُ القَرار: الدُخول نَفسُه، ولا جَلسَةَ قَبلَه."),
         new("/studio/auth/verify",        "تَحَقُّق رَمز الـ studio — يُنشِئ الجَلسَة، فَلا جَلسَةَ قَبلَه."),
 
+        // ─── عامَّةٌ بِالتَصميمِ ومَحدودَة (‏2026-10-24، تَدقيقُ الإطلاق lens-security-5) ──────────
+        new("/{slug}/listings/{id:guid}/view",
+            "عَدّادُ مُشاهَدَة — مُشاهَدَةُ الزائِرِ المَجهولِ أَغلَبُ المُشاهَدات فَلا جَلسَةَ تُشتَرَط؛ وحَدُّها مُشاهَدَةٌ واحِدَةٌ لِكُلِّ زائِرٍ في الإعلانِ في السّاعَةِ (`ListingViews.Counts`) قَبلَ أَيِّ قِراءَةٍ أَو كِتابَة، مَفروضٌ في `The_view_door_is_pinned_public_and_bounded_before_it_reads_or_appends`."),
+
         // ─── لا تَمَسّ قاعِدَة البَيانات ──────────────────────────────
         new("/{slug}/auth/logout", "يَمسَح الـ cookie فَقَط. الخُروج بِلا جَلسَة لا مَعنى لِمَنعِه."),
         new("/studio/logout",      "يَمسَح الـ cookie فَقَط — لا كِتابَةَ في قاعِدَة البَيانات."),
@@ -552,9 +556,11 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
     {
         var endpoints = MinimalApiWriteEndpoints().ToList();
 
-        // عَدّاد: أَداةٌ تَفحَص صِفراً أَداةٌ عَمياء (القاعِدَة ١٠).
-        Assert.True(endpoints.Count >= 88,
-            $"أَداة عَمياء: وُجِدَت {endpoints.Count} نُقطَة كِتابَة — والمَقيس ٨٨.");
+        // عَدّاد: أَداةٌ تَفحَص صِفراً أَداةٌ عَمياء (القاعِدَة ١٠). ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-5) والأَرضِيَّةُ ‏88 ← ‏119 —
+        // المَقيسُ اليَوم — وتُطبَعُ: أَرضِيَّةٌ تَحتَ الواقِعِ بِثَلاثينَ نُقطَةً لا تَرى نُقطَةً تَختَفي.
+        output.WriteLine($"نِقاطُ الكِتابَة: {endpoints.Count} · المُثَبَّتَةُ عامَّة: {PinnedPublic.Length}");
+        Assert.True(endpoints.Count >= 119,
+            $"أَداة عَمياء: وُجِدَت {endpoints.Count} نُقطَة كِتابَة — والمَقيس ‏119.");
 
         var pinned = PinnedPublic.Select(p => p.Route).ToHashSet(StringComparer.Ordinal);
         var breaches = endpoints
@@ -574,6 +580,8 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
     // (`viewerId = null` بِلا رُجوع)، ورَمزُ القِراءَةِ ذاك في `BodyGuards` — فَيَعُدُّها الفاحِصُ مَحروسَةً ولا تُثَبَّتُ عامَّة. ثُمَّ
     // `Events.Append(ListingViewed)` لِكُلِّ طَلَبٍ بِلا حَدّ، وكُلُّ حَدَثٍ يُبطِّئُ كُلَّ عَرضٍ لاحِق (`AggregateStreamAsync<Listing>`). والأَرضِيَّةُ
     // ‏88 والمَقيسُ ‏119 ولا يُطبَعُ العَدَد. يُثَبَّتُ قَبلَ العِلاج (القاعِدَة ٣) ويَنقَلِبُ بِاسمِه.
+    // **العِلاج** (‏2026-10-24): النِسبَةُ في `ListingViews.ViewerOf`، والنُقطَةُ في `PinnedPublic` بِسَبَبِها، و`ListingViews.Counts` (مُشاهَدَةٌ
+    // واحِدَةٌ لِكُلِّ زائِرٍ في الإعلانِ في السّاعَة) قَبلَ القِراءَةِ والكِتابَة؛ والأَرضِيَّةُ ‏119 مَطبوعَة. الصَفُّ انقَلَبَ بِاسمِه.
 
     private const string ViewRoute = "/{slug}/listings/{id:guid}/view";
 
@@ -584,20 +592,26 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
         return views[0].Body;
     }
 
+    /// <summary><b>انقَلَبَ بِاسمِه</b> (‏2026-10-24) مِن <c>Today_the_view_door_is_counted_guarded_by_a_token_read_and_appends_an_event_on_every_post</c>:
+    /// لا رَمزَ حارِسٍ في الجِسم (النِسبَةُ في <c>ListingViews.ViewerOf</c>) فَهِيَ مُثَبَّتَةٌ عامَّةً بِسَبَبِها، و<c>ListingViews.Counts</c> يَسبِقُ
+    /// القِراءَةَ والكِتابَة، ورَدُّه المُبكِّرُ بَينَهُما.</summary>
     [Fact]
-    public void Today_the_view_door_is_counted_guarded_by_a_token_read_and_appends_an_event_on_every_post()
+    public void The_view_door_is_pinned_public_and_bounded_before_it_reads_or_appends()
     {
         var body = ViewBody();
         var writes = MinimalApiWriteEndpoints().Count();
         output.WriteLine($"نِقاطُ الكِتابَة: {writes} · المُشاهَدَةُ مَحروسَةٌ في عَينِ الفاحِص: {HasGuard(body)} · مُثَبَّتَةٌ عامَّة: {PinnedPublic.Any(p => p.Route == ViewRoute)}");
-        Assert.True(HasGuard(body));
-        Assert.Contains("AuthSession.ResolveToken", body, StringComparison.Ordinal);
-        Assert.DoesNotContain(PinnedPublic, p => p.Route == ViewRoute);
+        Assert.False(HasGuard(body));
+        Assert.DoesNotContain("AuthSession.ResolveToken", body, StringComparison.Ordinal);
+        Assert.Contains(PinnedPublic, p => p.Route == ViewRoute);
 
+        var bound = body.IndexOf("Services.ListingViews.Counts(", StringComparison.Ordinal);
+        var early = body.IndexOf("return Results.NoContent();", bound + 1, StringComparison.Ordinal);
+        var read = body.IndexOf("AggregateStreamAsync<Listing>(", StringComparison.Ordinal);
         var append = body.IndexOf("Events.Append(", StringComparison.Ordinal);
-        Assert.True(append > 0, "لا كِتابَةَ في نُقطَةِ المُشاهَدَة — الأَداةُ عَمياء.");
-        Assert.DoesNotMatch(@"TryConsume|ListingViews\.", body[..append]);
-        Assert.Contains("viewerId", body[..append], StringComparison.Ordinal);
+        Assert.True(bound > 0 && early > bound && read > early && append > read,
+            $"الحَدّ@{bound} الرُجوع@{early} القِراءَة@{read} الكِتابَة@{append}");
+        Assert.Single(Regex.Matches(body, @"Events\.Append\("));
     }
 
     // ─── ‏ADR-003: الكِتابَةُ في مَتجَرٍ تَسأَل عَن باقَتِه ────────────
