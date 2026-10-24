@@ -3056,30 +3056,43 @@ public static class MarketplaceTemplateExtensions
             // الصَفَقاتُ الَّتي لَها مالِكٌ — يُشعَرُ بَعدَ الحَفظِ لا داخِلَ الحَلقَة (P1-5).
             var born = new List<Guid>();
             var created = new List<Guid>();
+            // **والسَلَّةُ يُطالَبُ بِها بِوِلادَةِ صَفقَةِ بَندِها الأَوَّل** (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-1؛ ‏ADR-036 §١٤): مُعَرِّفُ كُلِّ صَفقَةٍ مِن
+            // نُسخَةِ السَلَّةِ الَّتي قُرِئَت (`CheckoutClaim.DealIdFor`)، فَإرسالٌ ثانٍ قَرَأَ النُسخَةَ نَفسَها يُرَدُّ حِفظُ بَندِه الأَوَّلِ قَبلَ أَيِّ حَجزٍ أَو فاتورَةٍ
+            // أَو إشعار، ويَعودُ إلى «صَفقاتي» حَيثُ صَفَقاتُ الأَوَّل. كانَ يَلِدُ مَجموعَةً ثانِيَة (تَوصيفُه `94a7ef0`).
+            var line = 0;
             foreach (var item in cart.Items)
             {
                 var listing = await s.LoadAsync<Listing>(item.ListingId);
-                if (listing is null) continue;
+                if (listing is null) { line++; continue; }
 
                 var amount = item.UnitPriceSar * item.Quantity;
-                var deal = await deals.StartAsync(slug, pattern,
-                    initiatorId: userId, initiatorName: name,
-                    listingId: item.ListingId, listingTitle: item.Title,
-                    amountSar: amount,
-                    // وطَريقُ بَوّابَةِ المَتجَرِ يُعَلَّمُ في الوِلادَةِ نَفسِها — فَلا تَعلَقُ صَفقَتُه بِلا فاتورَةٍ وتَدخُلُ «دَفع» بِلا مال
-                    // (‏2026-10-13، G5 (xvi-g)؛ `GatewayPayments.MarkedAtBirth` و`AwaitsPayment`). وما سِواه بِحَرفِه.
-                    attributes: Services.Deals.GatewayPayments.MarkedAtBirth(new()
-                    {
-                        ["qty"] = item.Quantity.ToString(),
-                        // بِالثابِتَينِ لا بِحَرفِيَّة: القارِئُ (تَفصيلُ الصَفقَةِ لِلبائِع)
-                        // يَقرَأُ نَفسَ الحَرف (P1-4).
-                        [Services.Deals.Deal.DeliveryAddressAttribute] = addr,
-                        [Services.Deals.Deal.DeliveryPhoneAttribute] = phone,
-                        // المُطَبَّعَةُ لا الخام — فَما يُقرَأُ مِن
-                        // الصَفقَةِ بَعدَ سَنَةٍ قيمَةٌ مِن المَعجَم. وبِالثابِتِ الَّذي يَقرَأُ بِه
-                        // `DealsPolicy` لا بِحَرفِيَّة — الكاتِبُ والقارِئُ حَرفٌ واحِد.
-                        [Services.Deals.CheckoutPayMethods.AttributeKey] = payMethod
-                    }, viaGateway));
+                Services.Deals.Deal deal;
+                try
+                {
+                    deal = await deals.StartAsync(slug, pattern,
+                        initiatorId: userId, initiatorName: name,
+                        listingId: item.ListingId, listingTitle: item.Title,
+                        amountSar: amount,
+                        id: Services.Deals.CheckoutClaim.DealIdFor(slug, userId, cart.UpdatedAt, line++, item.ListingId),
+                        // وطَريقُ بَوّابَةِ المَتجَرِ يُعَلَّمُ في الوِلادَةِ نَفسِها — فَلا تَعلَقُ صَفقَتُه بِلا فاتورَةٍ وتَدخُلُ «دَفع» بِلا مال
+                        // (‏2026-10-13، G5 (xvi-g)؛ `GatewayPayments.MarkedAtBirth` و`AwaitsPayment`). وما سِواه بِحَرفِه.
+                        attributes: Services.Deals.GatewayPayments.MarkedAtBirth(new()
+                        {
+                            ["qty"] = item.Quantity.ToString(),
+                            // بِالثابِتَينِ لا بِحَرفِيَّة: القارِئُ (تَفصيلُ الصَفقَةِ لِلبائِع)
+                            // يَقرَأُ نَفسَ الحَرف (P1-4).
+                            [Services.Deals.Deal.DeliveryAddressAttribute] = addr,
+                            [Services.Deals.Deal.DeliveryPhoneAttribute] = phone,
+                            // المُطَبَّعَةُ لا الخام — فَما يُقرَأُ مِن
+                            // الصَفقَةِ بَعدَ سَنَةٍ قيمَةٌ مِن المَعجَم. وبِالثابِتِ الَّذي يَقرَأُ بِه
+                            // `DealsPolicy` لا بِحَرفِيَّة — الكاتِبُ والقارِئُ حَرفٌ واحِد.
+                            [Services.Deals.CheckoutPayMethods.AttributeKey] = payMethod
+                        }, viaGateway));
+                }
+                catch (JasperFx.ConcurrencyException) when (created.Count == 0)
+                {
+                    return Results.Redirect(Link(req, slug, "deals"));
+                }
                 if (firstDealId == Guid.Empty) firstDealId = deal.Id;
                 created.Add(deal.Id);
                 // **والحَجزُ ومَراجِعُه قَبلَ الرَبط** (‏ADR-036 §٨، ‏2026-10-12؛ مُراجَعَةُ تَيّارِ S6a الأولى — ولا
@@ -3097,6 +3110,8 @@ public static class MarketplaceTemplateExtensions
                 // في الجِسم.
                 // idempotency-key بِـ dealId يَمنَع تَكرار الـ authorize
                 // لَو أَعادَ المُستَخدِم submit بِنَفس النَّموذَج.
+                // (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-1 — ولا يُعادُ حَرفٌ فَوقَه: لَم يَصدُق قَبلَ اليَوم — المُعَرِّفُ كانَ جَديداً في كُلِّ إرسال
+                // فَالمِفتاحُ لا يَمنَعُ شَيئاً (تَوصيفُه `94a7ef0`). وصَدَقَ بِالمُطالَبَةِ أَعلاه: المُعَرِّفُ مِن نُسخَةِ السَلَّة، والإرسالُ الثاني يُرَدُّ قَبلَ هذا السَطر.)
                 if (Services.Deals.CheckoutPaymentPolicy.CallsProvider(payMethod))
                 {
                     // وبِبَوّابَةِ المَتجَرِ لا حَجزَ هُنا — الفاتورَةُ بَعدَ الحَلقَة (‏ADR-032 الخُطوَة 10).
@@ -3151,6 +3166,8 @@ public static class MarketplaceTemplateExtensions
             // ومُثَبَّتٌ في `GatewayOpenFailureNoticesTests`.
             var opened = viaGateway && created.Count > 0 ? await gateway.OpenInvoiceAsync(slug, new Services.Deals.DealPayer(userId), created,
                 tenant?.Name ?? slug, Billing.PayPalOrderSurface.OriginFrom(req) + Link(req, slug, Services.Deals.GatewayReturn.PathFor(firstDealId, null)), l) : null;
+            // والسَلَّةُ تَبقى — بِنُسخَةٍ جَديدَة (‏2026-10-24، ‏ADR-036 §١٤): صَفَقاتُ هذِه المُحاوَلَةِ أُلغِيَت بِمُعَرِّفاتِ نُسخَتِها، فَإعادَةُ المُشتَري تَلِدُ بِغَيرِها.
+            if (opened is { Ok: false }) { cart.UpdatedAt = DateTime.UtcNow; s.Store(cart); await s.SaveChangesAsync(); }
             if (opened is { Ok: false }) return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
                 .RefusalPath(Services.Deals.CheckoutPayMethods.GatewayOpenFailed, name, phone, addr)));
 

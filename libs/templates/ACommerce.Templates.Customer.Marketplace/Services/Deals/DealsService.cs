@@ -152,16 +152,20 @@ public sealed class DealsService
             .ToList();
     }
 
+    /// <summary>وِلادَةُ صَفقَةٍ عِندَ <c>Offered</c>.
+    /// <para>(‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-1؛ ‏ADR-036 §١٤): و<paramref name="id"/> اختِيارِيٌّ — بَعدَ <paramref name="ct"/> عَمداً فَالنِداءاتُ
+    /// القائِمَةُ لا تَتَحَرَّك، وغِيابُه مُعَرِّفٌ جَديدٌ كَما كان. يُمَرِّرُه <c>/checkout/submit</c> مِن <see cref="CheckoutClaim.DealIdFor"/>: صَفقَةٌ بِمُعَرِّفٍ قائِمٍ
+    /// لا تُكتَبُ فَوقَه — يَرمي الحِفظُ <c>JasperFx.ConcurrencyException</c> (التَزامُنُ التَفاؤُلِيُّ نَفسُه، مَقيس) فَيُرَدُّ الإرسالُ الثاني لِلسَلَّةِ نَفسِها.</para></summary>
     public async Task<Deal> StartAsync(
         string tenantSlug, string pattern,
         Guid initiatorId, string initiatorName,
         Guid? listingId, string listingTitle, decimal amountSar,
         Dictionary<string, string>? attributes = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default, Guid? id = null)
     {
         var deal = new Deal
         {
-            Id = Guid.NewGuid(),
+            Id = id ?? Guid.NewGuid(),
             TenantSlug = tenantSlug,
             Pattern = pattern,
             ListingId = listingId,
