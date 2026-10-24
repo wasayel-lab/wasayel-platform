@@ -12,6 +12,9 @@ namespace ACommerce.Platform.Tests;
 // ثُمَّ الحالَة) — والنُقطَةُ فَوقَها لَم تَتبَعه.
 //
 // **التَوصيفُ قَبلَ التَبديل** (القاعِدَة ٣): صَفُّ «اليَوم» يُودَعُ وَحدَه، ويُقلَبُ بِاسمِه في كوميتِ التَرتيب.
+//
+// **ثُمَّ قُلِبَ بِاسمِه** (‏2026-10-24 — ولا يُعادُ حَرفٌ فَوقَه؛ التَوصيفُ `da36bc4`): التَحميلُ و`IsParty` و‏404 أَوَّلاً، ثُمَّ السَبَبُ و‏400 —
+// بِالمَقاييسِ نَفسِها (`Steps`) بِلا تَعديلِ حَرف.
 
 public class ApiDealCancelGuardOrderTests(ITestOutputHelper output)
 {
@@ -50,16 +53,18 @@ public class ApiDealCancelGuardOrderTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// <para><b>«اليَوم»</b>: سَبَبُ الإلغاءِ يُطَبَّعُ ويُرَدُّ ‏400 قَبلَ أَن يُسأَلَ <c>IsParty</c> ويُرَدَّ ‏404 — والصَفقَةُ تُحَمَّلُ بَعدَ رَدِّ الحَقل.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-24، القاعِدَة ٦): كانَ <c>Today_the_api_cancel_validates_the_reason_before_it_asks_whether_the_caller_is_a_party</c>
+    /// (<c>da36bc4</c>) — السَبَبُ و‏400 قَبلَ التَحميلِ و<c>IsParty</c> و‏404. <b>وصارَ</b>: غَيرُ الطَرَفِ يُجابُ ‏404 قَبلَ أَن يُقرَأَ حَقلٌ مِن جِسمِه،
+    /// والطَرَفُ وَحدَه يَسمَعُ ‏400 عَن سَبَبٍ ناقِص.</para>
     /// </summary>
     [Fact]
-    public void Today_the_api_cancel_validates_the_reason_before_it_asks_whether_the_caller_is_a_party()
+    public void The_api_cancel_asks_whether_the_caller_is_a_party_before_it_validates_the_reason()
     {
         var cancel = ApiCancel();
         var (reason, reasonRefusal, party, partyRefusal) = Steps(cancel);
         var load = cancel.IndexOf("await deals.LoadAsync(p.TenantSlug, id, http.RequestAborted)", StringComparison.Ordinal);
-        Assert.True(reason < reasonRefusal && reasonRefusal < load && load < party && party < partyRefusal,
-            $"reason={reason} 400={reasonRefusal} load={load} party={party} 404={partyRefusal}");
-        output.WriteLine($"الإلغاء: السَبَب@{reason} → ‏400@{reasonRefusal} → التَحميل@{load} → IsParty@{party} → ‏404@{partyRefusal}");
+        Assert.True(load > 0 && load < party && party < partyRefusal && partyRefusal < reason && reason < reasonRefusal,
+            $"load={load} party={party} 404={partyRefusal} reason={reason} 400={reasonRefusal}");
+        output.WriteLine($"الإلغاء: التَحميل@{load} → IsParty@{party} → ‏404@{partyRefusal} → السَبَب@{reason} → ‏400@{reasonRefusal}");
     }
 }

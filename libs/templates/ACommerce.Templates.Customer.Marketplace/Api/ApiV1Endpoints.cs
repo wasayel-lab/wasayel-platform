@@ -110,13 +110,15 @@ public static class ApiV1Endpoints
             await ApiWrite.OnceAsync(http, idem, "deals.cancel", async p =>
             {
                 var body = await ApiBody.ReadAsync<CancelDealRequest>(http);
-                var reason = DealApi.NormalizeCancelReason(body?.reason);
-                if (reason is null)
-                    return ApiOutcome.Error(ApiErrorCatalog.ValidationFailed, new { field = "reason" });
-
+                // التَخويلُ يَسبِقُ تَحَقُّقَ الحُقول (القاعِدَة ٦؛ ‏2026-10-24، تَدقيقُ الإطلاق lens-security-10): كانَ السَبَبُ يُرَدُّ ‏400 قَبلَ `IsParty`
+                // فَيَسمَعُ غَيرُ الطَرَفِ «حَقلٌ ناقِص» عَن صَفقَةِ غَيرِه قَبلَ «لا شَيءَ هُنا» (تَوصيفُه `da36bc4`).
                 var found = await deals.LoadAsync(p.TenantSlug, id, http.RequestAborted);
                 if (found is null || !DealApi.IsParty(found, p.ActorUserId))
                     return ApiOutcome.Error(ApiErrorCatalog.NotFound);
+
+                var reason = DealApi.NormalizeCancelReason(body?.reason);
+                if (reason is null)
+                    return ApiOutcome.Error(ApiErrorCatalog.ValidationFailed, new { field = "reason" });
 
                 var res = await deals.CancelAsync(p.TenantSlug, id,
                     new DealCanceller(p.ActorUserId, p.ActorName, IsStoreAdmin: false), reason, http.RequestAborted);
