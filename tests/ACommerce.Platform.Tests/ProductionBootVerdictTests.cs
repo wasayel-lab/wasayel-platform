@@ -462,6 +462,105 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         Assert.True(wrong.Count == 0, $"أَخطَأَ الفاحِصُ في {wrong.Count}:\n  " + string.Join("\n  ", wrong));
     }
 
+    /// <summary><b>وتَشغيلُ <c>main</c> المُلغى لا يُعادُ إلّا وهُوَ رَأسُ <c>main</c> — لِأَنّ <c>deploy-hf.yml</c> يَدفَعُ أَيَّ رَقمٍ يُعطاه</b> (‏2026-10-24 —
+    /// الجَولَةُ ٢ لِمُراجَعَةِ تَيّارِ S13، عَلى <c>c69cdb8</c>): عِلاجُ «أَعِد تَشغيلَ CI لِذلكَ الكوميت» في مُلحَقِ §٢·و كانَ بِلا شَرط، والنَشرُ يَستَنسِخُ
+    /// <c>workflow_run.head_sha</c> ويَدفَعُه بِـ<c>--force</c> بِلا سُؤالٍ عَن الرَأس — فَإعادَةُ كوميتٍ أَقدَمَ بَعدَ نَشرِ أَحدَثَ تَراجُعٌ صامِت. فَيُقرَأُ هُنا
+    /// الطَرَفانِ بِـ<see cref="RerunConditionRefusal"/>: الشَرطُ بَعدَ العِلاجِ في §٢·و بِأَمرِه، و<c>deploy-hf.yml</c> عَلى الحالِ الَّذي يَصِفُه الشَرط.</summary>
+    [Fact]
+    public void A_cancelled_main_run_is_re_run_only_while_it_is_still_mains_tip_because_deploy_hf_pushes_any_sha_it_is_given()
+    {
+        var doc = File.ReadAllText(Path.Combine(RepoRoot, "docs", "DEPLOY.md")).Replace("\r\n", "\n", StringComparison.Ordinal);
+        var start = doc.IndexOf("### فَرعُ البَوّابَةِ في CI حالَةٌ مُشتَرَكَة", StringComparison.Ordinal);
+        var end = start < 0 ? -1 : doc.IndexOf("\n## ", start, StringComparison.Ordinal);
+        Assert.True(start > 0 && end > start, "قِسمُ «فَرعُ البَوّابَةِ في CI حالَةٌ مُشتَرَكَة» غائِب.");
+        var deploy = File.ReadAllText(Path.Combine(RepoRoot, ".github", "workflows", "deploy-hf.yml"));
+
+        var refusal = RerunConditionRefusal(doc[start..end], deploy, out var codeLines, out var tokens);
+        output.WriteLine($"deploy-hf.yml: {codeLines} سَطراً غَيرَ مُعَلَّقٍ مَقروءاً · مُفرَداتُ الحارِسِ المَفحوصَة {GuardTokens.Length}: {string.Join(" ", GuardTokens)}"
+            + $" · وُجِدَ مِنها {tokens.Count}{(tokens.Count > 0 ? ": " + string.Join(", ", tokens) : "")}");
+        output.WriteLine($"قِسمُ §٢·و: {end - start} مِحرَفاً · الحُكم: {refusal ?? "مَقبول"}");
+        Assert.True(codeLines > 0, "أَداةٌ عَمياء: صِفرُ سَطرٍ مِن deploy-hf.yml.");
+        Assert.True(refusal is null, $"عِلاجُ «أَعِد تَشغيلَ CI» في §٢·و لا يَشتَرِطُ رَأسَ main، أَو deploy-hf.yml تَغَيَّرَ عَمّا يَصِفُه الشَرط ({refusal}).");
+    }
+
+    private const string RerunRemedy = "**إعادَةُ تَشغيلِ CI لِذلكَ الكوميت**";
+    private const string RerunCondition = "لا تَكونُ إلّا ورَأسُ `main` هُوَ ذلكَ الكوميتُ نَفسُه";
+    private const string TipCommand = "`git ls-remote origin refs/heads/main`";
+    private const string NewerTipRefused = "**فَلا يُعادُ أَبَداً**";
+    private const string GuardAbsence = "**ولا يُغلِقُهُما إلّا حارِسٌ في `deploy-hf.yml`**";
+
+    /// <summary>مُفرَداتُ ما يَحتاجُه حارِسُ «أَهُوَ رَأسُ <c>main</c>؟» أَو «أَهُوَ سَلَفُ ما يَعمَل؟» في git أَو في API ‏GitHub — مَعجَمٌ مُغلَق. وحارِسٌ يُكتَبُ
+    /// بِغَيرِها لا يُرى، ويُقالُ ذلكَ هُنا لا يُخفى: الصَفُّ سِلكُ تَعَثُّرٍ بَينَ الوَثيقَةِ والكود، لا بُرهانُ غِياب.</summary>
+    private static readonly string[] GuardTokens =
+        ["merge-base", "is-ancestor", "ls-remote", "origin/main", "rev-list", "refs/remotes/", "FETCH_HEAD", "branches/main", "/commits/main", "git fetch"];
+
+    /// <summary><b>أَيَشتَرِطُ §٢·و رَأسَ <c>main</c> لِإعادَةِ تَشغيلٍ مُلغىً، ولا يُكَذِّبُه <c>deploy-hf.yml</c>؟</b> — <c>null</c> إن نَعَم، وإلّا رَمزُ الرَفض.
+    /// مِن <c>deploy-hf.yml</c> تُقرَأُ الأَسطُرُ غَيرُ المُعَلَّقَةِ وَحدَها: الفَرضِيَّتانِ (الاستِنساخُ مِن <c>workflow_run.head_sha</c>، والدَفعُ بِـ<c>--force</c>)
+    /// بِحَرفِهِما، وصِفرُ مُفرَدَةٍ مِن <see cref="GuardTokens"/> — فَإن وُجِدَ حارِسٌ صارَ الشَرطُ وَصفاً لِما لَيسَ قائِماً، ويُلحَقُ بِقَرار. ومِن القِسم: العِلاجُ،
+    /// ثُمَّ بَعدَه الشَرطُ، ثُمَّ بَعدَ الشَرطِ أَمرُ الرَأسِ و«لا يُعادُ أَبَداً» وتَسمِيَةُ الحارِسِ الغائِب — بِحَرفِها وتَشكيلِها نَسَقَ الصُفوفِ المُجاوِرَة.</summary>
+    internal static string? RerunConditionRefusal(string section, string deployWorkflow, out int codeLines, out List<string> tokens)
+    {
+        var code = deployWorkflow.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n')
+            .Where(l => l.Trim().Length > 0 && !l.TrimStart().StartsWith('#')).ToList();
+        codeLines = code.Count;
+        tokens = GuardTokens.Where(t => code.Any(l => l.Contains(t, StringComparison.Ordinal))).ToList();
+        if (codeLines == 0) return "deploy_unread";
+        if (!code.Any(l => l.Contains("|| github.event.workflow_run.head_sha", StringComparison.Ordinal))
+            || !code.Any(l => l.Contains("git push --force", StringComparison.Ordinal))) return "premise_changed";
+        if (tokens.Count > 0) return "deploy_guard_unacknowledged";
+
+        var remedy = section.IndexOf(RerunRemedy, StringComparison.Ordinal);
+        if (remedy < 0) return "no_remedy";
+        var condition = section.IndexOf(RerunCondition, remedy, StringComparison.Ordinal);
+        if (condition < 0) return "remedy_unconditioned";
+        if (section.IndexOf(TipCommand, condition, StringComparison.Ordinal) < 0) return "no_tip_command";
+        if (section.IndexOf(NewerTipRefused, condition, StringComparison.Ordinal) < 0) return "newer_tip_not_refused";
+        return section.IndexOf(GuardAbsence, condition, StringComparison.Ordinal) < 0 ? "guard_absence_unsaid" : null;
+    }
+
+    /// <summary><b>حَقنُ عَيب — فاحِصُ شَرطِ الإعادَةِ يُحمِرُّ فِعلاً</b> (‏2026-10-24): قِسمٌ وسَيرُ نَشرٍ بِشَكلِ اليَومِ يُقبَلان، وكُلُّ سُقوطٍ يُرَدُّ بِرَمزِه —
+    /// ومِنها مُلحَقُ <c>c69cdb8</c> بِشَكلِه (العِلاجُ بِلا شَرط) الَّذي مَرَّ صَفَّه.</summary>
+    [Fact]
+    public void The_rerun_condition_checker_can_actually_go_red()
+    {
+        const string Remedy = "- والعِلاجُ " + RerunRemedy + " (‏Re-run all jobs).\n";
+        const string Rest = " · " + TipCommand + " · " + NewerTipRefused + " · " + GuardAbsence + "\n";
+        const string Section = "### قِسم\n" + Remedy + "(مُلحَق) **و«…» أَعلاه " + RerunCondition + "**:" + Rest;
+        const string Deploy = "on:\n  workflow_run:\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: >-\n"
+            + "            ${{ github.event_name == 'workflow_dispatch'\n                && inputs.ref\n                || github.event.workflow_run.head_sha }}\n"
+            + "      - run: |\n          timeout 300 git push --force \\\n            \"https://x@huggingface.co/spaces/a/b.git\" \"HEAD:refs/heads/main\"\n";
+        var accepted = new (string Section, string Deploy)[]
+        {
+            (Section, Deploy),
+            (Section, "# ‏لا merge-base ولا ls-remote هُنا — تَعليقٌ لا حارِس\n" + Deploy),
+        };
+        var rejected = new (string Section, string Deploy, string Code)[]
+        {
+            ("### قِسم\n" + Remedy, Deploy, "remedy_unconditioned"),                                                     // ‏c69cdb8
+            ("### قِسم\n(قَبلَ العِلاج) " + RerunCondition + Rest + Remedy, Deploy, "remedy_unconditioned"),
+            ("### قِسم\n- لا عِلاج.\n", Deploy, "no_remedy"),
+            ("### قِسم\n" + Remedy + RerunCondition + " · " + NewerTipRefused + " · " + GuardAbsence + "\n", Deploy, "no_tip_command"),
+            ("### قِسم\n" + TipCommand + "\n" + Remedy + RerunCondition + " · " + NewerTipRefused + " · " + GuardAbsence + "\n", Deploy, "no_tip_command"),
+            ("### قِسم\n" + Remedy + RerunCondition + " · " + TipCommand + " · " + GuardAbsence + "\n", Deploy, "newer_tip_not_refused"),
+            ("### قِسم\n" + Remedy + RerunCondition + " · " + TipCommand + " · " + NewerTipRefused + "\n", Deploy, "guard_absence_unsaid"),
+            (Section, Deploy + "      - run: git merge-base --is-ancestor \"$sha\" \"$live\" || exit 0\n", "deploy_guard_unacknowledged"),
+            (Section, Deploy + "      - run: '[ \"$(git ls-remote origin main | cut -f1)\" = \"$sha\" ]'\n", "deploy_guard_unacknowledged"),
+            (Section, Deploy.Replace("git push --force", "git push", StringComparison.Ordinal), "premise_changed"),
+            (Section, Deploy.Replace("|| github.event.workflow_run.head_sha", "|| 'main'", StringComparison.Ordinal), "premise_changed"),
+            (Section, "# ‏تَعليقٌ وَحدَه\n\n", "deploy_unread"),
+        };
+        var wrong = accepted.Where(a => RerunConditionRefusal(a.Section, a.Deploy, out _, out _) is not null)
+            .Select(a => $"رُفِضَ حَيٌّ ({RerunConditionRefusal(a.Section, a.Deploy, out _, out _)})")
+            .Concat(rejected.Where(r => RerunConditionRefusal(r.Section, r.Deploy, out _, out _) != r.Code)
+                .Select(r => $"رَمزُه {RerunConditionRefusal(r.Section, r.Deploy, out _, out _) ?? "قُبِل"} لا {r.Code}"))
+            .ToList();
+        foreach (var r in rejected) output.WriteLine($"مَرفوضٌ ({RerunConditionRefusal(r.Section, r.Deploy, out _, out _)})");
+        var codes = rejected.Select(r => r.Code).Distinct().Count();
+        output.WriteLine($"حُقِنَ {accepted.Length} مَقبولاً و{rejected.Length} مَرفوضاً بِـ{codes} رَمزاً.");
+        Assert.True(accepted.Length >= 2 && rejected.Length >= 12 && codes >= 8, "أَداةٌ عَمياء: العَيِّنَةُ أَصغَرُ مِمّا كُتِب.");
+        Assert.True(wrong.Count == 0, $"أَخطَأَ الفاحِصُ في {wrong.Count}:\n  " + string.Join("\n  ", wrong));
+    }
+
     // ─── ٧. تَوصيفُ «اليَوم» ثُمَّ قَلبُه — الحُكمُ مِن الاستِثناءِ القاتِلِ ومِن قِياسِ البَوّابَةِ لا مِن أَوَّلِ سَطرٍ في السِجِلّ ─────
     //    (مُراجَعَةُ تَيّارِ S10، الجَولَة ١)
     //
