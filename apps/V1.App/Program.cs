@@ -425,6 +425,15 @@ try
             agentBackends.ModelFor(agentName),
             string.IsNullOrWhiteSpace(profile.ApiKey) ? "غَير مَضبوط" : "مَضبوط");
     }
+
+    // ‏**وبابُ التَحليلِ في الاستوديو بِرَمزِه** (‏2026-10-24، S15 A): القَرارُ نَفسُه الَّذي تَسأَلُه صَفحَتا الفِكرَةِ و`/studio/begin`
+    // (`StudioAnalysisDoor.Opens` عَلى خَلفِيَّةِ وَكيلِ Analysis — كَما يَبنيها `FeasibilityAnalysisService`)، لا «المِفتاح=» أَعلاه:
+    // ذاكَ يَقولُ أَمِفتاحٌ مَحلول، وOllama المَحَلِّيُّ مَضبوطٌ بِلا مِفتاح. ورَمزُ السَطرِ تَقرَؤُه بَوّابَةُ الإقلاعِ الإنتاجيّ
+    // (الكُتلَة `analysis_door` في `scripts/verify-production-boot.sh`) فَتُنَبِّهُ بِاسمِ المُتَغَيِّراتِ — DEPLOY.md §٤·ب.
+    app.Logger.LogInformation(
+        ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAnalysisDoor.BootLogPrefix + "{Door}",
+        ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAnalysisDoor.BootLogValue(
+            agentBackends.For(ACommerce.Templates.Customer.Marketplace.Services.AgentNames.Analysis).IsConfigured));
 }
 catch (Exception ex)
 {

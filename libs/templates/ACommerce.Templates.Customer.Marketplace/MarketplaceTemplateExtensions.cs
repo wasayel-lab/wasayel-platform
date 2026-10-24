@@ -2599,6 +2599,11 @@ public static class MarketplaceTemplateExtensions
             Services.Incubator.FeasibilityAnalysisService incubator,
             Services.Incubator.StudioAuth auth) =>
         {
+            // ‏**بابُ التَحليلِ قَبلَ الكَعكَةِ والدُخولِ والشُروط** (‏2026-10-24، S15 A): بِلا مُزَوِّدِ تَحليلٍ مَضبوطٍ
+            // كانَ رائِدُ الأَعمالِ يَدخُلُ ويَقبَلُ ثُمَّ يُنفِقُ تَحليلاً ويُنادى المُزَوِّدُ بِلا مِفتاحٍ فَيُرَدُّ 401. والصَفحَةُ
+            // لا تَرسُمُ الاستِمارَةَ بِالقَرارِ نَفسِه، فَهذا الفَرعُ لِطَلَبٍ مَصنوعٍ أَو صَفحَةٍ قَديمَة — يَعودُ إلى `/`
+            // وهي تَقولُ الحالَ بِنَصِّ القامُوس.
+            if (!Services.Incubator.StudioAnalysisDoor.Opens(incubator.IsConfigured)) return Results.Redirect("/");
             var prompt = req.Form["prompt"].ToString().Trim();
             if (!string.IsNullOrEmpty(prompt))
                 res.Cookies.Append(StudioPromptCookie, Uri.EscapeDataString(prompt),
@@ -3886,6 +3891,10 @@ public static class MarketplaceTemplateExtensions
             if (session is null || session.OwnerUserId != auth.UserId!.Value)
                 return Results.Redirect("/studio");
 
+            // ‏بابُ التَحليلِ بَعدَ المِلكِيَّةِ وقَبلَ الحِصَّةِ والحَجز (‏2026-10-24، S15 A): بِلا مُزَوِّدٍ مَضبوطٍ لا يُنفَقُ
+            // تَحليلٌ ولا يُنادى أَحَد — وصَفحَةُ الدِراسَةِ لا تَرسُمُ زِرَّ الإعادَةِ بِالقَرارِ نَفسِه.
+            if (!Services.Incubator.StudioAnalysisDoor.Opens(svc.IsConfigured)) return Results.Redirect($"/studio/s/{id}");
+
             var gate = await tier.CheckAnalyzeAsync(auth.UserId!.Value);
             if (!gate.Allowed)
                 return Results.Redirect($"/studio/s/{id}?upgrade={gate.BreachCode}");
@@ -4215,6 +4224,11 @@ public static class MarketplaceTemplateExtensions
             raw = Uri.UnescapeDataString(promptCookie);
         }
         if (string.IsNullOrEmpty(raw)) return null;
+
+        // ‏**بابُ التَحليلِ قَبلَ الشُروطِ والحِصَّةِ والجَلسَة** (‏2026-10-24، S15 A): مُطالَبَةٌ كُتِبَت والبابُ مَفتوحٌ ثُمَّ أُغلِق
+        // (أُزيلَ المِفتاح) لا تُنفِقُ تَحليلاً عَلى نِداءٍ بِلا مِفتاح. «لا شَيءَ يُستَأنَف» فَيُكمِلُ المُنادي بِوِجهَتِه،
+        // والكَعكَةُ تَبقى حَتّى تَنقَضيَ ساعَتاها — فَإن ضُبِطَ المِفتاحُ قَبلَها استُؤنِفَت الفِكرَةُ بِحَرفِها.
+        if (!Services.Incubator.StudioAnalysisDoor.Opens(incubator.IsConfigured)) return null;
 
         if (checkConsent)
         {

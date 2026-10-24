@@ -207,6 +207,17 @@ check "$([ "$CODE" = 200 ] && grep -q '"ready":true' "$F" && echo 1 || echo 0)" 
 STEP="١ — /studio/begin حَتّى التَحليل"
 say "١ · رائِدُ أَعمالٍ جَديد: فِكرَة ← دُخول ← شُروط ← تَحليل"
 post "$J_ENT" /studio/begin --data-urlencode "prompt=مَتجَرٌ يَجمَعُ بائِعي التُمورِ والعَسَلِ في مَوقِعٍ واحِد — جَولَةُ $MARK"
+# ‏(‏2026-10-24، تَيّارُ S15 البَند A — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: **بابُ التَحليلِ يُسأَلُ قَبلَ الدُخول** — `StudioAnalysisDoor`.
+# بِلا مُزَوِّدٍ مَضبوطٍ يَرُدُّ `/studio/begin` إلى `/` قَبلَ الكَعكَةِ والدُخولِ والشُروط، و`/` لا تَرسُمُ الاستِمارَةَ وتَقولُ
+# `studio.analysis.unavailable`. فَذلكَ هو الجِدارُ الأَوَّلُ بِلا مِفتاح — كانَ «فَشِلَ التَّحليل» و401 بَعدَ الدُخولِ والشُروط —
+# ويُسقَطُ إلى مَسارِ التَطويرِ مِنه؛ والمَسارُ الحَقيقيُّ أَدناه لِلبابِ المَفتوحِ وَحدَه، ولَم يُعَد تَنسيقُه.)
+if [ "$CODE" = 302 ] && [ "$LOC" = / ]; then
+    get - / "$F"
+    check "$([ "$CODE" = 200 ] && [ "$(count "$F" 'action="/studio/begin"')" = 0 ] && has "$F" "$(ar studio.analysis.unavailable)" && echo 1 || echo 0)" \
+        "POST /studio/begin → 302 / · GET / → $CODE · صِفرُ استِمارَةٍ و«$(ar studio.analysis.unavailable)» (‏StudioAnalysisDoor)"
+    block "الجِدارُ الأَوَّل: بابُ التَحليلِ مُغلَقٌ قَبلَ الدُخول — لا مُزَوِّدَ تَحليلٍ مَضبوطٌ في الخادِم (analysis_unavailable، ‏DEPLOY.md §٤·ب) — يُبنى المَتجَرُ مِن المَسارِ المُوَثَّقِ لِلتَطوير"
+    ANALYSIS=closed
+else
 check "$([ "$CODE" = 302 ] && [ "$LOC" = /studio/auth ] && echo 1 || echo 0)" "POST /studio/begin → $CODE $LOC"
 post "$J_ENT" /studio/auth/login --data-urlencode "phone=$P_ENT"
 check "$([ "$CODE" = 302 ] && [[ "$LOC" == *stage=verify* ]] && echo 1 || echo 0)" "POST /studio/auth/login → $CODE $LOC"
@@ -266,6 +277,7 @@ case "$ANALYSIS" in
   *)      check 0 "GET /studio/s/$ENT_SID → $CODE · لا «$ANALYZING» ولا «$FAILED_TITLE» ولا استِمارَةُ بِناء"
           die "حالَةُ جَلسَةِ التَحليلِ لا يَعرِفُها السكربت بَعدَ $WAITED ثانِيَة — ولا يُسقَطُ إلى مَسارِ التَطويرِ إلّا عَلى «$FAILED_TITLE»" ;;
 esac
+fi   # ← بابُ التَحليلِ مَفتوح (‏2026-10-24، S15 A)
 
 # ═══ ٢) بِناءُ المَتجَر ═══════════════════════════════════════════════
 STEP="٢ — بِناءُ المَتجَر"

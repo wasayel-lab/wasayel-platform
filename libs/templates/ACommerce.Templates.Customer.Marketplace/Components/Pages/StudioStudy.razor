@@ -55,9 +55,18 @@
             <div class="st-card">
                 <div class="st-chip st-chip-danger" style="margin-bottom:12px;">@L.Markup("studio.study.failed_title")</div>
                 <p style="margin:0 0 16px;color:var(--st-ink-700);">@session.AnalysisError</p>
-                <form method="post" action="@($"/studio/s/{session.Id}/analyze")">
+                @* زِرُّ الإعادَةِ لا يُرسَمُ بِلا مُزَوِّدِ تَحليل — `StudioAnalysisDoor.Opens` نَفسُه الَّذي تَسأَلُه
+                   `/studio/s/{id}/analyze` (‏2026-10-24، S15 A؛ القاعِدَة ١٢). *@
+                @if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))
+                {
+                @((MarkupString)"\n                ")<form method="post" action="@($"/studio/s/{session.Id}/analyze")">
                     <button type="submit" class="st-btn st-btn-primary">@L.Markup("admin.study.retry")</button>
                 </form>
+                }
+                else
+                {
+                    <p style="margin:0;">@L.Markup(StudioAnalysisDoor.ClosedMessageKey)</p>
+                }
             </div>
         }
         else if (root is null)
