@@ -88,8 +88,10 @@
                        كَلِمَةٍ عِندَ خُطوَتَي المُشتَري (دَفع، استِلام) وصَفقَةِ البَذرَةِ التَجريبِيَّة. *@
                     @if (DealsService.AdminPathCanMove(deal, Auth.UserId!.Value) && DealsPolicy.Next(deal) is { } next)
                     {
+                        @* والمَرحَلَةُ الَّتي رُسِمَ عَلَيها الزِرّ — نُقطَتُه تُمَرِّرُها `from:` (‏2026-10-24، تَدقيقُ الإطلاق brief-P0-6؛ ‏ADR-036 §١٣). *@
                         <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/advance")"
                               style="display:flex;gap:8px;flex:1;min-width:200px;">
+                            <input type="hidden" name="from" value="@deal.Stage" />
                             <input class="st-input" name="note" placeholder="@L["studio.deal.note_placeholder"]" />
                             <button type="submit" class="st-btn st-btn-primary" style="white-space:nowrap;">
                                 → @DealsPolicy.LabelAr(next)

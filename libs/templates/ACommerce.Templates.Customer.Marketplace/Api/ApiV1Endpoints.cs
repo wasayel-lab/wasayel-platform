@@ -88,8 +88,10 @@ public static class ApiV1Endpoints
             await ApiWrite.OnceAsync(http, idem, "deals.advance", async p =>
             {
                 var body = await ApiBody.ReadAsync<AdvanceDealRequest>(http);
+                // و`expected_stage` اختِيارِيٌّ: المَرحَلَةُ الَّتي قَرَأَها العَميلُ فَقَرَّرَ عَلَيها — غَيرُها ‏409 `deal_changed_meanwhile` (‏2026-10-24، تَدقيقُ الإطلاق
+                // brief-P0-6؛ ‏ADR-036 §١٣)؛ وغِيابُه كَما كان. نَسَقُ حَقلِ استِمارَتَي العُضوِ والاستوديو.
                 var res = await deals.AdvanceAsync(
-                    p.TenantSlug, id, p.ActorUserId, p.ActorName, body?.note, http.RequestAborted);
+                    p.TenantSlug, id, p.ActorUserId, p.ActorName, body?.note, http.RequestAborted, from: DealsService.ExpectedStage(body?.expected_stage));
                 if (DealNotices.IsAcceptance(res)) await notices.NotifyAcceptedAsync(p.TenantSlug, res.Deal!, p.ActorName, l, http.RequestAborted);
                 return DealApi.FromAdvance(res);
             })

@@ -372,7 +372,9 @@ public class DealCounterpartyCharacterizationTests
         Assert.Contains("var actorId = deal.CounterpartyId ?? auth.UserId!.Value;", admin, StringComparison.Ordinal);
         Assert.DoesNotContain("deal.InitiatorId", admin, StringComparison.Ordinal);
         Assert.DoesNotContain("DealStage.Offered", admin, StringComparison.Ordinal);
-        Assert.Contains("deals.AdvanceAsync(slug, id, actorId, \"مالِك التَّطبيق (إداريّ)\", note)", admin, StringComparison.Ordinal);
+        // (‏2026-10-24، تَدقيقُ الإطلاق brief-P0-6؛ ‏ADR-036 §١٣ — ولا يُعادُ حَرفٌ فَوقَه: صارَ بَعدَ `note` وَسيطُ `from:` — المَرحَلَةُ الَّتي رُسِمَ عَلَيها الزِرّ —
+        // فَسَقَطَ القَوسُ مِن الحَرفِ المَفحوص؛ والمَقيسُ هُنا هُوِيَّةُ الفاعِلِ كَما كان، و`from:` يَقيسُه `DealAdvanceExpectedStageTests`.)
+        Assert.Contains("deals.AdvanceAsync(slug, id, actorId, \"مالِك التَّطبيق (إداريّ)\", note", admin, StringComparison.Ordinal);
 
         Assert.DoesNotContain("listing_owner", admin, StringComparison.Ordinal);
         Assert.DoesNotContain("ListingOwnerRef", admin, StringComparison.Ordinal);

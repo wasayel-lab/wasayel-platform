@@ -577,7 +577,9 @@ public class DealConcurrencyRefusalTests
     {
         var endpoints = Code(Template, "MarketplaceTemplateExtensions.cs");
         var advance = Segment(endpoints, "\"/{slug}/deals/{id:guid}/advance\"", ".RequireStoreWritable();");
-        Assert.Contains("var res = await deals.AdvanceAsync(slug, id, userId, userName, note);", advance, StringComparison.Ordinal);
+        // (‏2026-10-24، تَدقيقُ الإطلاق brief-P0-6؛ ‏ADR-036 §١٣ — ولا يُعادُ حَرفٌ فَوقَه: صارَ النِداءُ يَحمِلُ `from:` — المَرحَلَةَ الَّتي رُسِمَت عَلَيها
+        // الاستِمارَة — فَتَبَدَّلَ حَرفُ السَطرِ المَفحوص؛ والمَقيسُ هُنا حَملُ الرَمزِ إلى الصَفحَةِ كَما كان، و`from:` يَقيسُه `DealAdvanceExpectedStageTests`.)
+        Assert.Contains("var res = await deals.AdvanceAsync(slug, id, userId, userName, note, from: Services.Deals.DealsService.ExpectedStage(req.Form[\"from\"].ToString()));", advance, StringComparison.Ordinal);
         Assert.Contains("return Results.Redirect(Link(req, slug, $\"deals/{id}\" + (res.Code is { } code ? $\"?err={code}\" : \"\")));",
             advance, StringComparison.Ordinal);
     }

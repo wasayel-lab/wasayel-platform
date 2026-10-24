@@ -355,7 +355,10 @@
             }
             else if (canAdvance && nextStage is { } ns)
             {
+                @* والاستِمارَةُ تَحمِلُ المَرحَلَةَ الَّتي رُسِمَت عَلَيها (‏2026-10-24، تَدقيقُ الإطلاق brief-P0-6؛ ‏ADR-036 §١٣): النُقطَةُ تُمَرِّرُها `from:`
+                   فَنَقرَةٌ ثانِيَةٌ أَو لِسانٌ قَديمٌ يُرَدُّ بِـ`deal_changed_meanwhile` ولا يُحَرِّكُ الصَفقَةَ مَرحَلَةً ثانِيَة. *@
                 <form method="post" action="@($"/{Slug}/deals/{deal.Id}/advance")">
+                    <input type="hidden" name="from" value="@deal.Stage" />
                     <AcButton Type="submit" Variant="primary" Size="lg" Block="true"
                               Text="@($"{L["deals.detail.confirm_prefix"]} {DealsPolicy.LabelAr(ns)}")" />
                 </form>

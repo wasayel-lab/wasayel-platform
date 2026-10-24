@@ -3381,7 +3381,9 @@ public static class MarketplaceTemplateExtensions
             var (userId, _, _) = parsed.Value;
             var userName = AuthSession.ResolveUserName(req, slug) ?? "مُستَخدِم";
             var note = req.Form["note"].ToString().Trim();
-            var res = await deals.AdvanceAsync(slug, id, userId, userName, note);
+            // والمَرحَلَةُ الَّتي رُسِمَت عَلَيها الاستِمارَةُ تُمَرَّرُ `from:` (‏2026-10-24، تَدقيقُ الإطلاق brief-P0-6؛ ‏ADR-036 §١٣): كانَت نَقرَتانِ مُتَتالِيَتانِ
+            // تَمضِيانِ مَرحَلَتَين — صَفقَةُ نَقدٍ مِن «حَجز» إلى «شَحن» بِلا بوليصَة (تَوصيفُه `23c362a`). وما سِوى اسمِ مَرحَلَةٍ لا يُسأَلُ عَنه كَما كان.
+            var res = await deals.AdvanceAsync(slug, id, userId, userName, note, from: Services.Deals.DealsService.ExpectedStage(req.Form["from"].ToString()));
             return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Code is { } code ? $"?err={code}" : "")));
         }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
@@ -3519,7 +3521,8 @@ public static class MarketplaceTemplateExtensions
             // المَدخولَة (`Booked` = الطَرَف) — فَيَمضي بِما يَمضي بِه جانِبُ المَتجَرِ ويَقِفُ عِندَ خُطوَةِ
             // المُشتَري (يَدفَع، يَستَلِم) كَما وَقَفَ عِندَها قَبلُ بِمَرحَلَةٍ أَبعَد.
             var actorId = deal.CounterpartyId ?? auth.UserId!.Value;
-            var result = await deals.AdvanceAsync(slug, id, actorId, "مالِك التَّطبيق (إداريّ)", note);
+            // والمَرحَلَةُ الَّتي رُسِمَ عَلَيها «→ التالي» تُمَرَّرُ `from:` (‏2026-10-24، تَدقيقُ الإطلاق brief-P0-6؛ ‏ADR-036 §١٣) — نَسَقُ بابِ العُضو.
+            var result = await deals.AdvanceAsync(slug, id, actorId, "مالِك التَّطبيق (إداريّ)", note, from: Services.Deals.DealsService.ExpectedStage(req.Form["from"].ToString()));
             if (result.Ok && result.Deal is not null)
                 await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
                     "deal.advance", "deal", id.ToString(),

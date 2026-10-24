@@ -16,6 +16,10 @@ namespace ACommerce.Platform.Tests;
 // إلى «تَسليم» بِسَطرِ «استُلِمَ النَقد» ثُمَّ إلى «تَقييم» مُكتَمِلَة.
 //
 // **التَوصيفُ قَبلَ التَبديل** (القاعِدَة ٣): صَفّا «اليَوم» أَدناه يُودَعانِ وَحدَهُما، ويُقلَبانِ بِاسمَيهِما في كوميتِ الحَقلِ المَخفِيّ.
+//
+// **وقُلِبا بِاسمَيهِما** (‏2026-10-24؛ تَوصيفُهُما `23c362a`؛ ‏ADR-036 §١٣): صارَت الاستِمارَتانِ تَحمِلانِ `from` = المَرحَلَةَ الَّتي رُسِمَتا عَلَيها،
+// والأَبوابُ الثَلاثَةُ تُمَرِّرُها `from:` بِـ`DealsService.ExpectedStage` — فَالنَقرَةُ الثانِيَةُ تُرَدُّ بِـ`deal_changed_meanwhile` والصَفقَةُ مُتَقَدِّمَةٌ مَرحَلَةً
+// واحِدَة. ولِكُلِّ بابٍ صَفٌّ سالِبٌ بِتَسَلسُلِ نُقطَتِه، وفاحِصُ المَصدَرِ يُقاسُ بِعَيِّنَةٍ مَحقونَةٍ تُحمِرُه (القاعِدَة ١٠).
 
 public class DealAdvanceExpectedStageTests(ITestOutputHelper output)
 {
@@ -84,59 +88,214 @@ public class DealAdvanceExpectedStageTests(ITestOutputHelper output)
         return (deals, world, deal);
     }
 
-    // ═══ ١) الأَثَرُ عَلى الخِدمَةِ الحَقيقِيَّة — كَما تُناديها الأَبوابُ اليَوم ═══════════════════════════════════════════════
+    /// <summary>ما يُرسِلُه البابُ مِن استِمارَةٍ رُسِمَت عَلى <paramref name="rendered"/> — حَقلُها المَخفِيُّ بِحَرفِ <c>@deal.Stage</c>.</summary>
+    private static DealStage? FormFrom(DealStage rendered) => DealsService.ExpectedStage(rendered.ToString());
+
+    // ═══ ١) الأَثَرُ عَلى الخِدمَةِ الحَقيقِيَّة — بابُ العُضو ═══════════════════════════════════════════════════════════
 
     /// <summary>
-    /// <para><b>«اليَوم»</b>: البائِعُ يَرى «تَأكيد: تَأكيد» عَلى صَفقَةِ نَقدٍ عِندَ «حَجز» ويَنقُرُه مَرَّتَين — والبابُ يُنادي
-    /// <c>AdvanceAsync</c> كَما يُناديه (بِلا <c>from:</c>) — فَتَمضي الأولى إلى «تَأكيد» والثانِيَةُ إلى «شَحن». ومِن «شَحن» نَقرَتانِ عَلى
-    /// «تَأكيد: تَسليم» تَكتُبانِ «تَسليم» وسَطرَ «استُلِمَ النَقد» ثُمَّ «تَقييم» مُكتَمِلَة.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-24؛ كانَ <c>Today_two_posts_of_one_rendered_advance_form_move_a_cash_deal_two_stages</c>، مُودَعٌ في
+    /// <c>23c362a</c>): البائِعُ يَنقُرُ «تَأكيد: تَأكيد» مَرَّتَين عَلى استِمارَةٍ رُسِمَت عِندَ «حَجز» — والبابُ يُمَرِّرُ ما فيها <c>from:</c> — فَتَمضي
+    /// الأولى إلى «تَأكيد» وتُرَدُّ الثانِيَةُ بِـ<c>deal_changed_meanwhile</c> ولا يُكتَبُ شَيء؛ ومِن «شَحن» تَقِفُ عِندَ «تَسليم» بِسَطرِ نَقدٍ واحِدٍ والصَفقَةُ
+    /// فَعّالَة. والإعادَةُ مِن صَفحَةٍ رُسِمَت بَعدَها تَمضي خُطوَةً واحِدَة.</para>
     /// </summary>
     [Fact]
-    public void Today_two_posts_of_one_rendered_advance_form_move_a_cash_deal_two_stages()
+    public void Two_posts_of_one_rendered_advance_form_move_a_cash_deal_one_stage_and_the_second_is_refused()
     {
         var (deals, world, deal) = CashAt(DealStage.Booked);
-        var r1 = Now(deals.AdvanceAsync(Slug, deal.Id, Seller, "بائِع", ""));
-        var r2 = Now(deals.AdvanceAsync(Slug, deal.Id, Seller, "بائِع", ""));
+        var form = FormFrom(deal.Stage);
+        var r1 = Now(deals.AdvanceAsync(Slug, deal.Id, Seller, "بائِع", "", from: form));
+        var saves = world.SaveCalls;
+        var r2 = Now(deals.AdvanceAsync(Slug, deal.Id, Seller, "بائِع", "", from: form));
         Assert.True(r1.Ok);
-        Assert.True(r2.Ok);
+        Assert.False(r2.Ok);
+        Assert.Equal(DealsService.ChangedMeanwhile, r2.Code);
+        Assert.Equal(saves, world.SaveCalls);
         var stored = world.Read<Deal>(deal.Id.ToString())!;
-        Assert.Equal(DealStage.Shipping, stored.Stage);
-        output.WriteLine($"نَقدٌ عِندَ «حَجز»، نَقرَتانِ لِلبائِع: r1.Ok={r1.Ok} r2.Ok={r2.Ok} stage={stored.Stage}");
+        Assert.Equal(DealStage.Confirmed, stored.Stage);
+        Assert.Equal(1, stored.Timeline.Count(e => e.Action == "advanced"));
+        output.WriteLine($"نَقدٌ عِندَ «حَجز»، نَقرَتانِ لِلبائِع: r1.Ok={r1.Ok} r2.Ok={r2.Ok} code={r2.Code} stage={stored.Stage}");
+
+        // والإعادَةُ مِن صَفحَةٍ رُسِمَت بَعدَ الرَدّ — حَقلُها «تَأكيد» — تَمضي خُطوَةً واحِدَة.
+        var retry = Now(deals.AdvanceAsync(Slug, deal.Id, Seller, "بائِع", "", from: FormFrom(stored.Stage)));
+        Assert.True(retry.Ok);
+        Assert.Equal(DealStage.Shipping, world.Read<Deal>(deal.Id.ToString())!.Stage);
 
         var (deals2, world2, shipping) = CashAt(DealStage.Shipping);
-        var s1 = Now(deals2.AdvanceAsync(Slug, shipping.Id, Seller, "بائِع", ""));
-        var s2 = Now(deals2.AdvanceAsync(Slug, shipping.Id, Seller, "بائِع", ""));
+        var sForm = FormFrom(shipping.Stage);
+        var s1 = Now(deals2.AdvanceAsync(Slug, shipping.Id, Seller, "بائِع", "", from: sForm));
+        var s2 = Now(deals2.AdvanceAsync(Slug, shipping.Id, Seller, "بائِع", "", from: sForm));
         var done = world2.Read<Deal>(shipping.Id.ToString())!;
         Assert.True(s1.Ok);
-        Assert.True(s2.Ok);
-        Assert.Equal(DealStage.Reviewed, done.Stage);
-        Assert.Equal(DealStatus.Completed, done.Status);
+        Assert.False(s2.Ok);
+        Assert.Equal(DealsService.ChangedMeanwhile, s2.Code);
+        Assert.Equal(DealStage.Delivered, done.Stage);
+        Assert.Equal(DealStatus.Active, done.Status);
         Assert.Equal(1, done.Timeline.Count(e => e.Action == DealEvent.CashOnDelivery));
-        output.WriteLine($"نَقدٌ عِندَ «شَحن»، نَقرَتانِ لِلبائِع: stage={done.Stage} status={done.Status} cash_line=1");
+        output.WriteLine($"نَقدٌ عِندَ «شَحن»، نَقرَتانِ لِلبائِع: stage={done.Stage} status={done.Status} cash_line=1 code={s2.Code}");
     }
 
-    // ═══ ٢) الأَبوابُ الثَلاثَة — لا يَحمِلُ أَيٌّ مِنها المَرحَلَةَ الَّتي قُرِئَت ═══════════════════════════════════════════
+    // ═══ ٢) بابُ الاستوديو — بِتَسَلسُلِ نُقطَتِه ═══════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// <para><b>«اليَوم»</b>: استِمارَتا «تَأكيد: …» و«→ التالي» بِلا حَقلِ مَرحَلَة، والنُقطَتانِ تُنادِيانِ <c>AdvanceAsync</c> بِلا <c>from:</c>،
-    /// وجِسمُ طَلَبِ الـAPI بِلا حَقلِ مَرحَلَة — فَلا يَرى الحارِسُ القائِمُ في الخِدمَةِ ما رآه الناقِر.</para>
+    /// <para><b>المَسارُ الإداريُّ بِتَسَلسُلِ نُقطَتِه</b>: <see cref="DealsService.AdminPathRefusal"/> عَلى المَقروء، ثُمَّ الفاعِلُ
+    /// <c>CounterpartyId ?? appOwner</c>، ثُمَّ <see cref="DealsService.AdvanceAsync"/> بِـ<c>from:</c> الاستِمارَة. نَقرَتانِ عَلى «→ تَأكيد» رُسِمَ عِندَ
+    /// «حَجز»: الأولى تَمضي، والثانِيَةُ يُجيزُها المُسنَدُ عَلى «تَأكيد» (تاليها «شَحن» لِلطَرَف) ثُمَّ يَرُدُّها الحارِسُ — والصَفقَةُ مُتَقَدِّمَةٌ مَرحَلَةً واحِدَة.</para>
     /// </summary>
     [Fact]
-    public void Today_no_advance_door_carries_the_stage_its_clicker_read()
+    public void Two_posts_of_one_studio_advance_form_move_the_deal_one_stage_and_the_second_is_refused()
     {
-        var member = Segment(Page("MyDealDetail.razor"), "action=\"@($\"/{Slug}/deals/{deal.Id}/advance\")\"", "</form>");
-        Assert.DoesNotContain("name=\"from\"", member, StringComparison.Ordinal);
-        var studio = Segment(Page("StudioAppDealDetail.razor"), "action=\"@($\"/studio/apps/{Slug}/deals/{deal.Id}/advance\")\"", "</form>");
-        Assert.DoesNotContain("name=\"from\"", studio, StringComparison.Ordinal);
+        var appOwner = Guid.Parse("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+        var (deals, world, deal) = CashAt(DealStage.Booked);
+        var form = FormFrom(deal.Stage);
+        DealAdvanceResult Post()
+        {
+            var read = Now(deals.LoadAsync(Slug, deal.Id))!;
+            Assert.Null(DealsService.AdminPathRefusal(read, appOwner));
+            return Now(deals.AdvanceAsync(Slug, deal.Id, read.CounterpartyId ?? appOwner, "مالِك التَّطبيق (إداريّ)", "", from: form));
+        }
+        var r1 = Post();
+        var r2 = Post();
+        Assert.True(r1.Ok);
+        Assert.False(r2.Ok);
+        Assert.Equal(DealsService.ChangedMeanwhile, r2.Code);
+        Assert.NotNull(ACommerce.Templates.Customer.Marketplace.Services.Deals.DealRefusalTexts.StudioKeyFor(r2.Code));
+        Assert.Equal(DealStage.Confirmed, world.Read<Deal>(deal.Id.ToString())!.Stage);
+        output.WriteLine($"الاستوديو، نَقرَتانِ عَلى «→ تَأكيد»: r2.code={r2.Code} stage={world.Read<Deal>(deal.Id.ToString())!.Stage}");
+    }
 
-        var endpoints = Endpoints();
-        var memberDoor = Segment(endpoints, "\"/{slug}/deals/{id:guid}/advance\"", ".RequireStoreWritable();");
-        Assert.Contains("var res = await deals.AdvanceAsync(slug, id, userId, userName, note);", memberDoor, StringComparison.Ordinal);
-        var studioDoor = Segment(endpoints, "\"/studio/apps/{slug}/deals/{id:guid}/advance\"", ".DisableAntiforgery();");
-        Assert.Contains("var result = await deals.AdvanceAsync(slug, id, actorId, \"مالِك التَّطبيق (إداريّ)\", note);", studioDoor, StringComparison.Ordinal);
-        var apiDoor = Segment(Api(), "\"/api/v1/deals/{id:guid}/advance\"", ".RequireApiKey(ApiScopeCatalog.DealsWrite);");
-        Assert.DoesNotContain("from:", apiDoor, StringComparison.Ordinal);
-        Assert.Contains("public sealed record AdvanceDealRequest(string? note);", Source(Template, "Api", "DealApi.cs"), StringComparison.Ordinal);
-        output.WriteLine("العُضو والاستوديو والـAPI: صِفرُ بابٍ يَحمِلُ المَرحَلَةَ المَقروءَة");
+    // ═══ ٣) بابُ الـAPI — جِسمُ الطَلَبِ وجَوابُه ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// <para><b>الـAPI</b>: <c>expected_stage</c> يُقرَأُ مِن الجِسمِ بِخِياراتِ <c>ApiJson</c> نَفسِها، ويُمَرَّرُ <c>from:</c>؛ فَطَلَبانِ بِمِفتاحَي مَرَّةٍ‑واحِدَةٍ
+    /// مُختَلِفَينِ وبِالمَرحَلَةِ نَفسِها يَمضي أَوَّلُهُما ويُجابُ الثاني ‏409 <c>deal_changed_meanwhile</c> بِمَرحَلَةِ المَخزَن. وغِيابُ الحَقلِ لا يُسأَلُ عَنه كَما كان.</para>
+    /// </summary>
+    [Fact]
+    public void Two_api_advances_with_one_expected_stage_move_the_deal_one_stage_and_the_second_is_a_409()
+    {
+        var body = System.Text.Json.JsonSerializer.Deserialize<ACommerce.Templates.Customer.Marketplace.Api.AdvanceDealRequest>(
+            "{\"note\":\"x\",\"expected_stage\":\"Shipping\"}", ACommerce.Templates.Customer.Marketplace.Api.ApiJson.Options)!;
+        Assert.Equal("Shipping", body.expected_stage);
+        var bare = System.Text.Json.JsonSerializer.Deserialize<ACommerce.Templates.Customer.Marketplace.Api.AdvanceDealRequest>(
+            "{\"note\":\"x\"}", ACommerce.Templates.Customer.Marketplace.Api.ApiJson.Options)!;
+        Assert.Null(bare.expected_stage);
+        Assert.Null(DealsService.ExpectedStage(bare.expected_stage));
+
+        var (deals, world, deal) = CashAt(DealStage.Shipping);
+        var a1 = Now(deals.AdvanceAsync(Slug, deal.Id, Seller, "بائِع", body.note, CancellationToken.None, from: DealsService.ExpectedStage(body.expected_stage)));
+        var a2 = Now(deals.AdvanceAsync(Slug, deal.Id, Seller, "بائِع", body.note, CancellationToken.None, from: DealsService.ExpectedStage(body.expected_stage)));
+        var o1 = ACommerce.Templates.Customer.Marketplace.Api.DealApi.FromAdvance(a1);
+        var o2 = ACommerce.Templates.Customer.Marketplace.Api.DealApi.FromAdvance(a2);
+        Assert.Equal(200, o1.Status);
+        Assert.Equal(409, o2.Status);
+        var json = ACommerce.Templates.Customer.Marketplace.Api.ApiJson.Serialize(o2.Payload);
+        Assert.Contains("\"code\":\"deal_changed_meanwhile\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"stage\":\"Delivered\"", json, StringComparison.Ordinal);
+        Assert.Equal(DealStage.Delivered, world.Read<Deal>(deal.Id.ToString())!.Stage);
+        output.WriteLine($"الـAPI، طَلَبانِ بِـexpected_stage=Shipping: {o1.Status} ثُمَّ {o2.Status} · stage=Delivered");
+    }
+
+    // ═══ ٤) الدالَّةُ النَقِيَّة ═════════════════════════════════════════════════════════════════════════════
+
+    public static IEnumerable<object[]> EveryStage() => Enum.GetValues<DealStage>().Select(s => new object[] { s });
+
+    /// <summary>مُوجِب: اسمُ كُلِّ مَرحَلَةٍ بِحَرفِ <c>ToString()</c> — ما تَرسُمُه <c>@deal.Stage</c> — يُعيدُها.</summary>
+    [Theory]
+    [MemberData(nameof(EveryStage))]
+    public void ExpectedStage_reads_the_exact_name_the_form_renders(DealStage stage)
+        => Assert.Equal(stage, DealsService.ExpectedStage(stage.ToString()));
+
+    /// <summary>سالِب: الغِيابُ والفَراغُ وما لَيسَ اسمَ مَرحَلَةٍ بِحَرفِه — حالَةُ حَرفٍ أُخرى، رَقَم، مَسافَة، رايَتانِ مَضمومَتان، اسمٌ مَجهول — <c>null</c>،
+    /// فَلا يُسأَلُ عَن مَرحَلَةٍ كَما كانَ قَبلَه.</summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("booked")]
+    [InlineData("1")]
+    [InlineData(" Booked")]
+    [InlineData("Booked ")]
+    [InlineData("Offered,Booked")]
+    [InlineData("Nope")]
+    [InlineData("99")]
+    public void ExpectedStage_is_null_for_anything_but_an_exact_stage_name(string? raw)
+        => Assert.Null(DealsService.ExpectedStage(raw));
+
+    // ═══ ٥) الأَبوابُ الثَلاثَة — كُلٌّ يَحمِلُ المَرحَلَةَ الَّتي قُرِئَت ═══════════════════════════════════════════
+
+    private const string MemberCall = "var res = await deals.AdvanceAsync(slug, id, userId, userName, note, from: Services.Deals.DealsService.ExpectedStage(req.Form[\"from\"].ToString()));";
+    private const string StudioCall = "var result = await deals.AdvanceAsync(slug, id, actorId, \"مالِك التَّطبيق (إداريّ)\", note, from: Services.Deals.DealsService.ExpectedStage(req.Form[\"from\"].ToString()));";
+    private const string ApiCall = "from: DealsService.ExpectedStage(body?.expected_stage));";
+    private const string HiddenField = "<input type=\"hidden\" name=\"from\" value=\"@deal.Stage\" />";
+
+    /// <summary>
+    /// <para><b>الفاحِص</b>: لِكُلِّ بابٍ — استِمارَتُه (إن كانَت لَه) تَحمِلُ الحَقلَ المَخفِيَّ بِحَرفِه، ونُقطَتُه تُمَرِّرُ <c>from:</c> بِالدالَّةِ الواحِدَة،
+    /// ونِداءُ <c>AdvanceAsync</c> فيها واحِدٌ لا ثانٍ بِلاه. يُعيدُ ما خالَفَ؛ والفارِغُ «لا مُخالَفَة».</para>
+    /// </summary>
+    private static List<string> DoorsWithoutTheReadStage(IEnumerable<(string Door, string? Form, string Endpoint, string Call)> doors)
+    {
+        var violations = new List<string>();
+        foreach (var (door, form, endpoint, call) in doors)
+        {
+            if (form is not null && !form.Contains(HiddenField, StringComparison.Ordinal))
+                violations.Add($"{door}: الاستِمارَةُ بِلا حَقلِ المَرحَلَة");
+            if (!endpoint.Contains(call, StringComparison.Ordinal))
+                violations.Add($"{door}: النُقطَةُ لا تُمَرِّرُ from:");
+            if (endpoint.Split("deals.AdvanceAsync(").Length - 1 != 1)
+                violations.Add($"{door}: نِداءُ AdvanceAsync لَيسَ واحِداً");
+        }
+        return violations;
+    }
+
+    private static List<(string Door, string? Form, string Endpoint, string Call)> Doors() => new()
+    {
+        ("العُضو",
+            Segment(Page("MyDealDetail.razor"), "action=\"@($\"/{Slug}/deals/{deal.Id}/advance\")\"", "</form>"),
+            Segment(Endpoints(), "\"/{slug}/deals/{id:guid}/advance\"", ".RequireStoreWritable();"),
+            MemberCall),
+        ("الاستوديو",
+            Segment(Page("StudioAppDealDetail.razor"), "action=\"@($\"/studio/apps/{Slug}/deals/{deal.Id}/advance\")\"", "</form>"),
+            Segment(Endpoints(), "\"/studio/apps/{slug}/deals/{id:guid}/advance\"", ".DisableAntiforgery();"),
+            StudioCall),
+        ("الـAPI",
+            null,
+            Segment(Api(), "\"/api/v1/deals/{id:guid}/advance\"", ".RequireApiKey(ApiScopeCatalog.DealsWrite);"),
+            ApiCall),
+    };
+
+    /// <summary>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-24؛ كانَ <c>Today_no_advance_door_carries_the_stage_its_clicker_read</c>، مُودَعٌ في <c>23c362a</c>): استِمارَتا
+    /// «تَأكيد: …» و«→ التالي» تَحمِلانِ <c>from</c>، والنُقاطُ الثَلاثُ تُمَرِّرُها <c>from:</c> بِـ<see cref="DealsService.ExpectedStage"/>، وجِسمُ الـAPI يَحمِلُ
+    /// <c>expected_stage</c>. ويُطبَعُ ما فُحِص، والصِفرُ يُحمِر (القاعِدَة ١٠).</para>
+    /// </summary>
+    [Fact]
+    public void Every_advance_door_carries_the_stage_its_clicker_read()
+    {
+        var doors = Doors();
+        Assert.Equal(3, doors.Count);
+        var violations = DoorsWithoutTheReadStage(doors);
+        Assert.True(violations.Count == 0, string.Join(" · ", violations));
+        Assert.Contains("public sealed record AdvanceDealRequest(string? note, string? expected_stage = null);",
+            Source(Template, "Api", "DealApi.cs"), StringComparison.Ordinal);
+        output.WriteLine($"فُحِصَ {doors.Count} أَبواب (استِمارَتان {doors.Count(d => d.Form is not null)}) · مُخالَفات: {violations.Count}");
+    }
+
+    /// <summary><b>والفاحِصُ يُحمِرُ</b> (القاعِدَة ١٠): عَيِّنَةٌ بِحَرفِ ما كانَ عِندَ <c>dace7cd</c> — استِمارَةٌ بِلا حَقلٍ ونِداءٌ بِلا <c>from:</c> — وعَيِّنَةٌ
+    /// تُضيفُ نِداءً ثانِياً بِلاه بِجِوارِ الصَحيح، كُلٌّ بِرَمزِ مُخالَفَتِه.</summary>
+    [Fact]
+    public void The_door_checker_goes_red_on_the_shape_the_doors_had_before()
+    {
+        var before = DoorsWithoutTheReadStage(new[]
+        {
+            ("عَيِّنَة", (string?)"<form method=\"post\"><AcButton Type=\"submit\" />",
+                "var res = await deals.AdvanceAsync(slug, id, userId, userName, note);", MemberCall),
+        });
+        Assert.Equal(new[] { "عَيِّنَة: الاستِمارَةُ بِلا حَقلِ المَرحَلَة", "عَيِّنَة: النُقطَةُ لا تُمَرِّرُ from:" }, before);
+
+        var twice = DoorsWithoutTheReadStage(new[]
+        {
+            ("عَيِّنَة", (string?)null, MemberCall + "\nvar again = await deals.AdvanceAsync(slug, id, userId, userName, note);", MemberCall),
+        });
+        Assert.Equal(new[] { "عَيِّنَة: نِداءُ AdvanceAsync لَيسَ واحِداً" }, twice);
+        output.WriteLine($"عَيِّنَةُ ما قَبلُ: {before.Count} مُخالَفَتان · عَيِّنَةُ النِداءِ الثاني: {twice.Count}");
     }
 }

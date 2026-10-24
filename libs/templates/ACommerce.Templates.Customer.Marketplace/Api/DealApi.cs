@@ -168,8 +168,10 @@ public static class DealApi
 /// <c>req.Form[</c>.</summary>
 public sealed record CancelDealRequest(string? reason);
 
-/// <summary>جِسمُ طَلَبِ التَقَدُّم — المُلاحَظَة اختِيارِيَّة.</summary>
-public sealed record AdvanceDealRequest(string? note);
+/// <summary>جِسمُ طَلَبِ التَقَدُّم — المُلاحَظَة اختِيارِيَّة.
+/// (‏2026-10-24، تَدقيقُ الإطلاق brief-P0-6؛ ‏ADR-036 §١٣ — ولا يُعادُ حَرفٌ فَوقَه: و<c>expected_stage</c> اختِيارِيٌّ — اسمُ المَرحَلَةِ الَّتي قَرَأَها العَميلُ
+/// بِحَرفِ <c>stage</c> في <see cref="DealDto"/>؛ غَيرُها ‏409 <c>deal_changed_meanwhile</c>، وغِيابُه لا يُسأَلُ عَنه كَما كان.)</summary>
+public sealed record AdvanceDealRequest(string? note, string? expected_stage = null);
 
 /// <summary>قائِمَةٌ مُغَلَّفَة — <c>{ "deals": [...], "count": n }</c>.
 /// والتَغليفُ لِيَبقى مُمكِناً إضافَةُ تَصفُّحٍ لاحِقاً بِلا كَسرِ
