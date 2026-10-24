@@ -650,11 +650,18 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
         var unstruck = Regex.Replace(section, "~~.*?~~", string.Empty, RegexOptions.Singleline);
 
         // «لا عائِق» باقِيَةٌ تاريخاً — مَشطوبَةً لا غَير.
+        // ‏(‏2026-10-24) والجُملَةُ تُقارَنُ بِلا تَشكيلٍ ولا فَرقِ مَسافاتٍ عَلى الطَرَفَين — «ولا عائق في» بِلا حَرَكاتٍ أَو مَقسومَةً عَلى سَطرَين هي هي.
         const string noObstacle = "ولا عائِقَ في";
-        var all = Regex.Matches(section, Regex.Escape(noObstacle)).Count;
-        output.WriteLine($"«{noObstacle}» في §٢·ح: {all} · بِلا شَطب: {Regex.Matches(unstruck, Regex.Escape(noObstacle)).Count}");
+        var all = NoObstacleCount(section, noObstacle);
+        output.WriteLine($"«{noObstacle}» في §٢·ح (بِلا تَشكيل): {all} · بِلا شَطب: {NoObstacleCount(unstruck, noObstacle)}");
         Assert.True(all > 0, "أَداةٌ عَمياء: الجُملَةُ المَشطوبَةُ نَفسُها غائِبَة — والوَثائِقُ تُلحَقُ ولا تُمحى.");
-        Assert.DoesNotContain(noObstacle, unstruck, StringComparison.Ordinal);
+        Assert.Equal(0, NoObstacleCount(unstruck, noObstacle));
+
+        // ‏(‏2026-10-24) و«1–N» الَّتي يُحيلُ بِها §٢·ح إلى بَواقي §٨‑ز تُساوي ما يُعَدُّ مِنها — بَندٌ ثامِنٌ يُلحَقُ بِـADR-032 لا يَبقى خارِجَ الإحالَة.
+        var ranges = ResidualRanges(unstruck);
+        output.WriteLine($"«1–N» في §٢·ح: [{string.Join(", ", ranges)}] · المَعدودُ في ‏ADR-032 §٨‑ز: {residuals.Length}");
+        Assert.True(ranges.Count > 0, "أَداةٌ عَمياء: §٢·ح لا يُحيلُ إلى «وما لا يُغلِقُه» 1–N.");
+        Assert.All(ranges, n => Assert.Equal(residuals.Length, n));
 
         if (card)
             foreach (var cite in new[] { "ADR-032 §٨‑ز", "«ب» S9·١٤", "«ب» S9·١٦", "«ج» S9·١٠" })
@@ -664,5 +671,52 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
             foreach (var cite in new[] { "ADR-033 §٧‑ف", "«ب» S8·٢١", "«ج» S8·١١", "Shipping__Oto__Environment" })
                 Assert.True(unstruck.Contains(cite, StringComparison.Ordinal),
                     $"مَدخَلُ البائِعِ يَطلُبُ الخِزانَةَ و§٢·ح لا يُسَمّي {cite}.");
+    }
+
+    /// <summary>النَصُّ بِلا تَشكيلٍ (‏U+064B–U+0652) وبِمَسافاتٍ مَطوِيَّة — يُطَبَّقُ عَلى الطَرَفَينِ قَبلَ المُقارَنَة.</summary>
+    internal static string Bare(string text) => Regex.Replace(Regex.Replace(text, "[\u064B-\u0652]", ""), @"\s+", " ");
+
+    /// <summary>كَم مَرَّةً تَرِدُ <paramref name="phrase"/> في <paramref name="text"/> بَعدَ <see cref="Bare"/> عَلى الطَرَفَين.</summary>
+    internal static int NoObstacleCount(string text, string phrase) => Regex.Matches(Bare(text), Regex.Escape(Bare(phrase))).Count;
+
+    /// <summary>كُلُّ N في «‏ADR-032 §٨‑ز «وما لا يُغلِقُه» 1–N» — بِشَرطَةٍ قَصيرَةٍ أَو عادِيَّة، وبَعدَ <see cref="Bare"/>.</summary>
+    internal static IReadOnlyList<int> ResidualRanges(string text)
+        => Regex.Matches(Bare(text), Bare("ADR-032 §٨‑ز «وما لا يُغلِقُه» ") + @"1[–-](?<n>\d+)")
+            .Select(m => int.Parse(m.Groups["n"].Value, System.Globalization.CultureInfo.InvariantCulture))
+            .ToList();
+
+    /// <summary><b>حَقنُ عَيب — فاحِصا §٨ يُحمِرّانِ فِعلاً</b> (‏2026-10-24 — مُراجَعَةُ الموجَة ٤، بَندُ I): «لا عائِق» بِلا تَشكيلٍ أَو مَقسومَةً
+    /// عَلى سَطرَينِ تُعَدّ (وكانَت المُقارَنَةُ الحَرفِيَّةُ تَعمى عَنها)، ومَشطوبَتُها لا تُعَدّ؛ و«1–N» تُقرَأُ بِشَرطَتَيها، وعَدٌّ لا يُساوي
+    /// البَواقي يُرى.</summary>
+    [Fact]
+    public void The_section_eight_checkers_can_actually_go_red()
+    {
+        const string Phrase = "ولا عائِقَ في";
+        var counted = new (string Text, int Expected, bool OldSaw)[]
+        {
+            ("~~**ولا عائِقَ في\nالكودِ بَعدُ**~~", 0, false),
+            ("**ولا عائِقَ في الكودِ بَعدُ**", 1, true),
+            ("ولا عائق في الكود بعد", 1, false),
+            ("ولا عائِقَ\nفي الكودِ بَعدُ", 1, false),
+            ("ولا عَائِقَ فِي الكُودِ", 1, false),
+        };
+        var wrong = new List<string>();
+        foreach (var (text, expected, oldSaw) in counted)
+        {
+            var unstruck = Regex.Replace(text, "~~.*?~~", string.Empty, RegexOptions.Singleline);
+            if (NoObstacleCount(unstruck, Phrase) != expected) wrong.Add($"«{text}»: {NoObstacleCount(unstruck, Phrase)} لا {expected}");
+            if (unstruck.Contains(Phrase, StringComparison.Ordinal) != oldSaw) wrong.Add($"«{text}»: قِياسُ المُقارَنَةِ الحَرفِيَّةِ تَغَيَّر");
+        }
+        var blindOld = counted.Count(c => c.Expected > 0 && !c.OldSaw);
+        output.WriteLine($"«لا عائِق»: حُقِنَ {counted.Length} — والمُقارَنَةُ الحَرفِيَّةُ تَعمى عَن {blindOld}");
+        Assert.Equal(3, blindOld);
+
+        Assert.Equal(new[] { 7 }, ResidualRanges("**\u200fADR-032 §٨‑ز «وما لا يُغلِقُه» 1–7** (وفيها …)"));
+        Assert.Equal(new[] { 6 }, ResidualRanges("ADR-032 §٨‑ز «وما لا يُغلِقُه» 1-6"));
+        Assert.Equal(new[] { 8 }, ResidualRanges("ADR-032 §٨‑ز «وما لا يغلقه» 1–8"));
+        Assert.Empty(ResidualRanges("ADR-032 §٨‑ز «وما لا يُغلِقُه» كُلُّها"));
+        Assert.Empty(ResidualRanges("ADR-032 §٨‑هـ «وما لا يُغلِقُه» 1–7"));
+
+        Assert.True(wrong.Count == 0, $"حُقِنَ {counted.Length} نَصّاً، وأَخطَأَ العَدُّ في {wrong.Count}:\n  " + string.Join("\n  ", wrong));
     }
 }
