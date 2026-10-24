@@ -15,6 +15,10 @@ namespace ACommerce.Platform.Tests;
 //      الإدراج؛ فَبَعدَ «أَعِد الإرسال» قَد يُقارَنُ الرَمزُ الجَديدُ بِتَجزِئَةِ القَديم.
 //
 // **يُثَبَّتُ قَبلَ العِلاجِ** (القاعِدَة ٣): الصُفوفُ الثَلاثَةُ `Today_…` تَنقَلِبُ بِأَسمائِها، وصَفُّ «الصَحيحُ يَفتَحُ مَرَّةً بَعدَ خَطَإٍ واحِد» يَبقى.
+//
+// **العِلاج** (‏2026-10-24): `RandomNumberGenerator.GetInt32(100000, 1000000)`؛ والخاطِئُ يُعَدُّ عَلى المُحاوَلَةِ وتُمحى عِندَ
+// `MaxWrongGuessesPerCode` (خَمسَة — حَدُّ الدَقيقَةِ نَفسُه، لا رَقَمٌ جَديد)؛ والرَمزُ الجَديدُ يَحِلُّ مَحَلَّ سابِقِه لِلمَوضوعِ نَفسِه.
+// الصُفوفُ الثَلاثَةُ انقَلَبَت بِأَسمائِها، والأَوَّلُ كَما أُودِع.
 public class OtpCodeGuessTests(ITestOutputHelper output)
 {
     private static string Subject() => $"guess-{Guid.NewGuid():N}";
@@ -35,43 +39,66 @@ public class OtpCodeGuessTests(ITestOutputHelper output)
         Assert.False(AuthHandlers.ConsumeAttempt(Tenant, s, "424242", AuthHandlers.AuthKind.PhoneOtp));
     }
 
-    // ─── ٢. «اليَوم» — عَشرَةُ تَخميناتٍ خاطِئَةٍ لا تُبطِلُ الرَمز ─────────────────────────────────────
+    // ─── ٢. خَمسَةُ أَخطاءٍ تَمحو الرَمز — والصَحيحُ بَعدَها لا يَفتَح ────────────────────────────────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_a_correct_code_still_opens_after_ten_wrong_guesses`.
 
     [Fact]
-    public void Today_a_correct_code_still_opens_after_ten_wrong_guesses()
+    public void Five_wrong_guesses_burn_the_code_so_the_correct_one_no_longer_opens()
+    {
+        Assert.Equal(5, AuthHandlers.MaxWrongGuessesPerCode);
+        var s = Subject();
+        AuthHandlers.IssueAttempt(Tenant, s, "424242", AuthHandlers.AuthKind.PhoneOtp);
+        for (var i = 0; i < AuthHandlers.MaxWrongGuessesPerCode; i++)
+            Assert.False(AuthHandlers.ConsumeAttempt(Tenant, s, (100000 + i).ToString(), AuthHandlers.AuthKind.PhoneOtp));
+        Assert.Equal(0, LiveFor(s));
+        Assert.False(AuthHandlers.ConsumeAttempt(Tenant, s, "424242", AuthHandlers.AuthKind.PhoneOtp));
+    }
+
+    /// <summary>والحَدُّ لا يَسبِقُ وَقتَه: أَربَعَةُ أَخطاءٍ ثُمَّ الصَحيحُ يَفتَح — ما قاسَه المِجَسُّ «correct code after 4 wrong: True» يَبقى صَحيحاً.</summary>
+    [Fact]
+    public void Four_wrong_guesses_leave_the_correct_code_able_to_open()
     {
         var s = Subject();
         AuthHandlers.IssueAttempt(Tenant, s, "424242", AuthHandlers.AuthKind.PhoneOtp);
-        for (var i = 0; i < 10; i++)
+        for (var i = 0; i < AuthHandlers.MaxWrongGuessesPerCode - 1; i++)
             Assert.False(AuthHandlers.ConsumeAttempt(Tenant, s, (100000 + i).ToString(), AuthHandlers.AuthKind.PhoneOtp));
         Assert.True(AuthHandlers.ConsumeAttempt(Tenant, s, "424242", AuthHandlers.AuthKind.PhoneOtp));
     }
 
-    // ─── ٣. «اليَوم» — المُوَلِّدُ غَيرُ تَشفيرِيٍّ وحَدُّه الأَعلى لا يُسحَب ──────────────────────────────
+    // ─── ٣. المُوَلِّدُ تَشفيرِيٌّ والمَدى السُداسيُّ كُلُّه ─────────────────────────────────────────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_the_code_comes_from_a_non_cryptographic_generator_whose_top_value_is_never_drawn`.
 
     [Fact]
-    public void Today_the_code_comes_from_a_non_cryptographic_generator_whose_top_value_is_never_drawn()
+    public void The_code_comes_from_the_system_cryptographic_generator_over_the_whole_six_digit_range()
     {
         var source = WriteEndpointGuardTests.StripComments(StudioConsentCharacterizationTests.Source(
             "libs", "kits", "Auth", "ACommerce.Kit.Auth.Server", "AuthHandlers.cs"));
-        Assert.Single(Regex.Matches(source, @"Random\.Shared\.Next\(100000, 999999\)"));
-        Assert.DoesNotContain("RandomNumberGenerator", source, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(source, @"RandomNumberGenerator\.GetInt32\(100000, 1000000\)"));
+        Assert.DoesNotContain("Random.Shared", source, StringComparison.Ordinal);
 
-        var drawn = Enumerable.Range(0, 2000).Select(_ => int.Parse(AuthHandlers.NewCode(null))).ToList();
+        var drawn = Enumerable.Range(0, 2000).Select(_ => AuthHandlers.NewCode(null)).ToList();
         output.WriteLine($"سُحِبَ {drawn.Count} رَمزاً: أَصغَرُها {drawn.Min()} وأَكبَرُها {drawn.Max()}");
-        Assert.All(drawn, c => Assert.InRange(c, 100000, 999998));
+        Assert.All(drawn, c => { Assert.Equal(6, c.Length); Assert.InRange(int.Parse(c), 100000, 999999); });
+        Assert.True(drawn.Distinct().Count() > 1900, $"أَداةٌ عَمياء أَو مُوَلِّدٌ ثابِت: {drawn.Distinct().Count()} قيمَةً مُختَلِفَة.");
     }
 
-    // ─── ٤. «اليَوم» — إعادَةُ الطَلَبِ تُبقي الرَمزَين حَيَّين ─────────────────────────────────────────
+    // ─── ٤. الرَمزُ الجَديدُ يَحِلُّ مَحَلَّ سابِقِه ──────────────────────────────────────────────────
 
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_a_resent_code_leaves_two_live_attempts_for_one_subject`.
     [Fact]
-    public void Today_a_resent_code_leaves_two_live_attempts_for_one_subject()
+    public void A_resent_code_replaces_the_earlier_one_for_its_subject_only()
     {
         var s = Subject();
+        var other = Subject();
+        AuthHandlers.IssueAttempt(Tenant, other, "333333", AuthHandlers.AuthKind.EmailOtp);
         AuthHandlers.IssueAttempt(Tenant, s, "111111", AuthHandlers.AuthKind.EmailOtp);
         AuthHandlers.IssueAttempt(Tenant, s, "222222", AuthHandlers.AuthKind.EmailOtp);
-        Assert.Equal(2, LiveFor(s));
-        foreach (var id in AuthHandlers.Attempts.Where(a => a.Value.Subject == s).Select(a => a.Key).ToList())
-            AuthHandlers.Attempts.TryRemove(id, out _);
+        Assert.Equal(1, LiveFor(s));
+        Assert.Equal(1, LiveFor(other));
+        Assert.False(AuthHandlers.ConsumeAttempt(Tenant, s, "111111", AuthHandlers.AuthKind.EmailOtp));
+        Assert.True(AuthHandlers.ConsumeAttempt(Tenant, s, "222222", AuthHandlers.AuthKind.EmailOtp));
+        Assert.True(AuthHandlers.ConsumeAttempt(Tenant, other, "333333", AuthHandlers.AuthKind.EmailOtp));
     }
 }

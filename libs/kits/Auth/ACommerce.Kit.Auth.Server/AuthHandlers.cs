@@ -17,9 +17,17 @@ public static class AuthHandlers
 {
     public static readonly ConcurrentDictionary<string, AuthAttempt> Attempts = new();
 
+    /// <summary>مُحاوَلَةُ دُخول. و<paramref name="WrongGuesses"/> (‏2026-10-24، تَدقيقُ الإطلاق lens-security-8) عَدَدُ الرُموزِ الخاطِئَةِ عَلَيها —
+    /// تُمحى حينَ يَبلُغُ <see cref="MaxWrongGuessesPerCode"/>.</summary>
     public sealed record AuthAttempt(
         string Id, string TenantSlug, string Subject, string CodeHash,
-        DateTime ExpiresAt, AuthKind Kind);
+        DateTime ExpiresAt, AuthKind Kind, int WrongGuesses = 0);
+
+    /// <summary><b>الرَمزُ يَحتَمِلُ خَمسَةَ أَخطاءٍ ثُمَّ يُمحى</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-security-8): كانَ الخاطِئُ يُرَدُّ والمُحاوَلَةُ
+    /// باقِيَة، فَلا حَدَّ عَلى الرَمزِ نَفسِه إلّا حِصَّةُ التَحَقُّقِ (خَمسٌ في الدَقيقَة) طَوالَ عُمرِه — نَحوُ خَمسينَ تَخميناً. **والعَدَدُ هُوَ حَدُّ
+    /// الدَقيقَةِ نَفسُه** (<see cref="MaxVerifyPerMinute"/>) لا رَقَمٌ جَديد: الرَمزُ الواحِدُ يَحتَمِلُ ما تَحتَمِلُه الدَقيقَة. ويُبَدِّلُه المالِكُ هُنا
+    /// («أ» W8-2).</summary>
+    public const int MaxWrongGuessesPerCode = MaxVerifyPerMinute;
 
     public enum AuthKind { PhoneOtp, Nafath, EmailOtp }
 
@@ -170,8 +178,11 @@ public static class AuthHandlers
     /// سُداسيّ. و`DevHintCode` لا يَكونُ غَيرَ `null` إلّا لِقَناةٍ
     /// مُحاكيَة، وتِلكَ لا تُسَجَّل خارِجَ التَطوير (‏<c>AuthChannelSelection</c>
     /// وحارِسُ الإقلاع). فَالثابِتُ لا سَبيلَ لَه إلى الإنتاج.</summary>
+    /// <remarks>‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-8) <b>مِن مُوَلِّدٍ تَشفيرِيّ</b>: كانَ <c>Random.Shared.Next(100000, 999999)</c> — غَيرَ
+    /// تَشفيرِيٍّ، وحَدُّه الأَعلى حَصرِيٌّ فَـ<c>999999</c> لا يُسحَبُ أَبَداً. صارَ <c>RandomNumberGenerator.GetInt32(100000, 1000000)</c>: المَدى
+    /// السُداسيُّ كُلُّه ([100000، 999999]) بِمُوَلِّدِ النِظام.</remarks>
     public static string NewCode(string? devHintCode)
-        => devHintCode ?? Random.Shared.Next(100000, 999999).ToString();
+        => devHintCode ?? RandomNumberGenerator.GetInt32(100000, 1000000).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>يُسَجِّل مُحاوَلَةً بِرَمزٍ **مُجَزَّأ** ومُهلَة. يُعيد
     /// مُعَرِّفَ المُحاوَلَة.</summary>
@@ -180,6 +191,11 @@ public static class AuthHandlers
         TimeSpan? lifetime = null)
     {
         EvictExpiredAttempts();
+        // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-8) **الرَمزُ الجَديدُ يَحِلُّ مَحَلَّ سابِقِه** لِلمَوضوعِ نَفسِه: كانَت «أَعِد الإرسال» تُبقي
+        // مُحاوَلَتَينِ حَيَّتَين، و`ConsumeAttempt` يَأخُذُ أَوَّلَ ما يَجِدُ بِتَرتيبٍ لا يَحفَظُ الإدراج — فَيُقارَنُ الجَديدُ بِتَجزِئَةِ القَديم.
+        foreach (var (id, previous) in Attempts)
+            if (previous.TenantSlug == tenantSlug && previous.Subject == subject && previous.Kind == kind)
+                Attempts.TryRemove(id, out _);
         var attemptId = Guid.NewGuid().ToString("N");
         Attempts[attemptId] = new AuthAttempt(
             attemptId, tenantSlug, subject, Hash(code),
@@ -208,7 +224,14 @@ public static class AuthHandlers
                               && a.Subject == subject
                               && a.Kind == kind);
         if (attempt is null || attempt.ExpiresAt < DateTime.UtcNow) return false;
-        if (Hash(code) != attempt.CodeHash) return false;
+        if (Hash(code) != attempt.CodeHash)
+        {
+            // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-8) الخاطِئُ يُعَدّ، وبُلوغُ الحَدِّ يَمحو الرَمز — فَالتالي يَحتاجُ رَمزاً جَديداً (وحِصَّةَ إرسال).
+            var counted = attempt with { WrongGuesses = attempt.WrongGuesses + 1 };
+            if (counted.WrongGuesses >= MaxWrongGuessesPerCode) Attempts.TryRemove(attempt.Id, out _);
+            else Attempts.TryUpdate(attempt.Id, counted, attempt);
+            return false;
+        }
         Attempts.TryRemove(attempt.Id, out _);
         return true;
     }
