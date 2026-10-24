@@ -673,8 +673,13 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
                     $"مَدخَلُ البائِعِ يَطلُبُ الخِزانَةَ و§٢·ح لا يُسَمّي {cite}.");
     }
 
-    /// <summary>النَصُّ بِلا تَشكيلٍ (‏U+064B–U+0652) وبِمَسافاتٍ مَطوِيَّة — يُطَبَّقُ عَلى الطَرَفَينِ قَبلَ المُقارَنَة.</summary>
-    internal static string Bare(string text) => Regex.Replace(Regex.Replace(text, "[\u064B-\u0652]", ""), @"\s+", " ");
+    /// <summary>النَصُّ بِلا تَشكيلٍ (‏U+064B–U+0652) وبِمَسافاتٍ مَطوِيَّة — يُطَبَّقُ عَلى الطَرَفَينِ قَبلَ المُقارَنَة.
+    /// <b>(‏2026-10-24 — تَيّارُ S16، مُراجَعَةُ S13 الجَولَة ١)</b> وبِلا التَطويلِ (U+0640) والأَلِفِ الخَنجَرِيَّةِ (U+0670) وعَلاماتِ الاتِّجاه
+    /// (U+200E، U+200F الَّتي في DEPLOY.md كُلِّه، U+061C) — فَـ«ولا‏ عائِقَ» أَو «ولا عائـِق» لا تَفلِتُ مِن العَدّ.</summary>
+    internal static string Bare(string text) => Regex.Replace(Regex.Replace(text, "[\u064B-\u0652\u0640\u0670\u200E\u200F\u061C]", ""), @"\s+", " ");
+
+    /// <summary>‏<see cref="Bare"/> كَما كانَ قَبلَ S16 — لِيُعَدَّ ما يَسُدُّه الطَيُّ الأَوسَعُ في صَفِّ حَقنِ العَيب.</summary>
+    private static string BareBeforeS16(string text) => Regex.Replace(Regex.Replace(text, "[\u064B-\u0652]", ""), @"\s+", " ");
 
     /// <summary>كَم مَرَّةً تَرِدُ <paramref name="phrase"/> في <paramref name="text"/> بَعدَ <see cref="Bare"/> عَلى الطَرَفَين.</summary>
     internal static int NoObstacleCount(string text, string phrase) => Regex.Matches(Bare(text), Regex.Escape(Bare(phrase))).Count;
@@ -699,6 +704,9 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
             ("ولا عائق في الكود بعد", 1, false),
             ("ولا عائِقَ\nفي الكودِ بَعدُ", 1, false),
             ("ولا عَائِقَ فِي الكُودِ", 1, false),
+            // ‏(‏2026-10-24 — S16) عَلامَةُ اتِّجاهٍ (U+200F) وتَطويلٌ (U+0640) — كانَ الطَيُّ الأَضيَقُ يَعمى عَنهُما:
+            ("ولا\u200F عائِقَ في الكودِ بَعدُ", 1, false),
+            ("ولا عائـِقَ في الكودِ بَعدُ", 1, false),
         };
         var wrong = new List<string>();
         foreach (var (text, expected, oldSaw) in counted)
@@ -708,8 +716,11 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
             if (unstruck.Contains(Phrase, StringComparison.Ordinal) != oldSaw) wrong.Add($"«{text}»: قِياسُ المُقارَنَةِ الحَرفِيَّةِ تَغَيَّر");
         }
         var blindOld = counted.Count(c => c.Expected > 0 && !c.OldSaw);
-        output.WriteLine($"«لا عائِق»: حُقِنَ {counted.Length} — والمُقارَنَةُ الحَرفِيَّةُ تَعمى عَن {blindOld}");
-        Assert.Equal(3, blindOld);
+        var blindBare = counted.Count(c => c.Expected > 0
+            && Regex.Matches(BareBeforeS16(Regex.Replace(c.Text, "~~.*?~~", string.Empty, RegexOptions.Singleline)), Regex.Escape(BareBeforeS16(Phrase))).Count == 0);
+        output.WriteLine($"«لا عائِق»: حُقِنَ {counted.Length} — والمُقارَنَةُ الحَرفِيَّةُ تَعمى عَن {blindOld}، والطَيُّ قَبلَ S16 عَن {blindBare}");
+        Assert.Equal(5, blindOld);
+        Assert.Equal(2, blindBare);
 
         Assert.Equal(new[] { 7 }, ResidualRanges("**\u200fADR-032 §٨‑ز «وما لا يُغلِقُه» 1–7** (وفيها …)"));
         Assert.Equal(new[] { 6 }, ResidualRanges("ADR-032 §٨‑ز «وما لا يُغلِقُه» 1-6"));
