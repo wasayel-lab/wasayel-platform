@@ -35,6 +35,20 @@ public class TestDataSeederSkipTests
         Assert.Contains("تُخُطِّيَ الغائِب: {string.Join(\", \", skipped)}", code, StringComparison.Ordinal);
     }
 
+    // ─── ‏2026-10-24 (تَيّارُ S16، مُراجَعَةُ S15 الجَولَة ١): الخُلاصَةُ «✅» ولَو لَم يُبذَر شَيء — تَوصيفُ «اليَوم» ───────────────
+    //
+    // **المَقروء** (`1c72873`): سَطرُ الخُلاصَةِ يَبدَأُ بِـ«✅ test data seeded» بِلا شَرط، والعَدُّ بَعدَه — فَقاعِدَةٌ لا مُستَأجِرَ فيها مِن الأَربَعَة
+    // تَطبَعُ «✅ test data seeded — 0 مِن 4 مُستَأجِرين؛ تُخُطِّيَ الغائِب: …»: نَجاحٌ في رَأسِ سَطرٍ لَم يَكتُب حَرفاً (روحُ القاعِدَة ١٠).
+
+    /// <summary><b>اليَوم: «✅» بِلا شَرطٍ في رَأسِ الخُلاصَة</b>، ولا «⚠» في المِلَفِّ كُلِّه.</summary>
+    [Fact]
+    public void Today_the_summary_reads_success_even_when_nothing_was_seeded()
+    {
+        var code = Seeder();
+        Assert.Contains("Console.WriteLine($\"[TestSeed] ✅ test data seeded — {Plan.Length - skipped.Count} مِن {Plan.Length} مُستَأجِرين\"", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("⚠", code, StringComparison.Ordinal);
+    }
+
     /// <summary><b>ويَبقى بِحَرفِه</b>: لا بَذّارَ يُنشِئُ <c>injez</c> — فَالتَخَطّي واقِعٌ عَلى كُلِّ قاعِدَةٍ مَحَلِّيَّةٍ مَبذورَة.</summary>
     [Fact]
     public void No_seeder_creates_the_injez_tenant()
