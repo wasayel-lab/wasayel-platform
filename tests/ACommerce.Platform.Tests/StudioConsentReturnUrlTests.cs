@@ -32,6 +32,10 @@ namespace ACommerce.Platform.Tests;
 // **والصَفحَةُ مَرسومَةٌ لا مَقروءَة**: بِـ`HtmlRenderer` (نَمَطُ `UpgradePromptPriceTests`) بِلا قاعِدَةٍ ولا خادِم — كوكي استوديو
 // مُوَقَّعٌ بِـ`AuthHandlers.MakeToken` يَجعَلُ `StudioAuth.Load()` يَرى مُستَخدِماً، وصِنفٌ مُشتَقٌّ يُبَدِّلُ `OnInitializedAsync` وَحدَه
 // فَيَضَعُ «قَبِلَ/لَم يَقبَل» بَدَلَ سُؤالِ `StudioQueries` القاعِدَة. وما يُرسَمُ بَعدَها هُوَ وَسمُ الصَفحَةِ نَفسُه حَرفاً.
+//
+// **العِلاج** (‏2026-10-24): المَوضِعانِ يَطبَعانِ `Destination` = `LocalRedirect.Resolve(ReturnUrl, "/studio")` — القَرارُ الواحِدُ الَّذي
+// تَسأَلُه نُقطَةُ القَبولِ أَصلاً، والسُقوطُ `/studio` كَما كانَ لِلغِياب. الصَفُّ الثالِثُ انقَلَبَ بِاسمِه، والأَوَّلانِ كَما أُودِعا
+// وبَصَماتُهُما المَطبوعَةُ لَم تَتَغَيَّر. و`LocalRedirectTests` صارَ يَقرَأُ كُلَّ صَفحَةٍ تَربِطُ `return`/`returnUrl` بِالاستِعلام.
 public class StudioConsentReturnUrlTests(ITestOutputHelper output)
 {
     /// <summary>الصَفحَةُ نَفسُها بِلا سُؤالِ القاعِدَة: «قَبِلَ سَلَفاً» يُكتَبُ في الحَقلِ الخاصِّ بِالصَفحَة، و<c>ReturnUrl</c> يُضبَطُ كَما
@@ -130,22 +134,27 @@ public class StudioConsentReturnUrlTests(ITestOutputHelper output)
         Assert.Equal("/studio", HiddenTarget(pending));
     }
 
-    // ─── ٣. «اليَوم» — الوِجهَةُ الخارِجِيَّةُ تَبلُغُ السِكربتَ والحَقلَ كَما جاءَت ───────────────────
+    // ─── ٣. الوِجهَةُ الخارِجِيَّةُ تَسقُطُ إلى `/studio` في المَوضِعَين ─────────────────────────────────
     //
-    // يَنقَلِبُ بِاسمِه في كوميتِ العِلاج. والفارِغُ مَعَها: `?returnUrl=` يُعطي `location.replace('')` — إعادَةُ تَحميلِ الصَفحَةِ
-    // نَفسِها، أَي دَورَةٌ لا تَنتَهي لِمَن قَبِلَ سَلَفاً.
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_a_foreign_return_url_reaches_the_redirect_script_and_the_hidden_field`. والفارِغُ مَعَها:
+    // كانَ `?returnUrl=` يُعطي `location.replace('')` — إعادَةُ تَحميلِ الصَفحَةِ نَفسِها، دَورَةٌ لا تَنتَهي لِمَن قَبِلَ سَلَفاً.
 
     [Theory]
     [InlineData("javascript:alert(document.domain)")]
     [InlineData("https://evil.example/x")]
     [InlineData("//evil.example")]
     [InlineData("")]
-    public async Task Today_a_foreign_return_url_reaches_the_redirect_script_and_the_hidden_field(string foreign)
+    public async Task A_foreign_return_url_falls_to_studio_in_both_renders(string foreign)
     {
         var consented = await RenderAsync(consented: true, foreign);
         var pending = await RenderAsync(consented: false, foreign);
 
-        Assert.Equal(System.Net.WebUtility.HtmlEncode(foreign), ScriptTarget(consented));
-        Assert.Equal(System.Net.WebUtility.HtmlEncode(foreign), HiddenTarget(pending));
+        Assert.Equal("/studio", ScriptTarget(consented));
+        Assert.Equal("/studio", HiddenTarget(pending));
+        if (foreign.Length > 0)
+        {
+            Assert.DoesNotContain(System.Net.WebUtility.HtmlEncode(foreign), consented, StringComparison.Ordinal);
+            Assert.DoesNotContain(System.Net.WebUtility.HtmlEncode(foreign), pending, StringComparison.Ordinal);
+        }
     }
 }

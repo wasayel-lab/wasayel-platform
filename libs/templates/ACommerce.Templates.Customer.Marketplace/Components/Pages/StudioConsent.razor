@@ -17,7 +17,7 @@
     }
     else if (alreadyConsented)
     {
-        <script>location.replace('@(ReturnUrl ?? "/studio")');</script>
+        <script>location.replace('@Destination');</script>
     }
     else
     {
@@ -38,7 +38,7 @@
                 </div>
 
                 <form method="post" action="/studio/consent/accept">
-                    <input type="hidden" name="returnUrl" value="@(ReturnUrl ?? "/studio")" />
+                    <input type="hidden" name="returnUrl" value="@Destination" />
                     <label style="display:flex;align-items:flex-start;gap:8px;margin:18px 0 14px;font-size:14px;">
                         <input type="checkbox" required style="margin-top:3px;flex-shrink:0;" />
                         <span>@L.Markup("studio.consent.checkbox")</span>
@@ -61,6 +61,12 @@
 @code {
     [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
     bool alreadyConsented;
+
+    // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-1) الوِجهَةُ تَأتي مِن الاستِعلامِ فَتَمُرُّ بِـ`LocalRedirect` قَبلَ أَن تُطبَعَ في
+    // السِكربتِ أَو الحَقلِ المَخفِيّ — كانَت تُطبَعُ كَما جاءَت، فَـ`?returnUrl=javascript:…` يُنَفِّذُ في أَصلِنا بِكوكي مُشرِفِ المَنَصَّة،
+    // و`https://…` يَقذِفُ إلى مُضيفٍ آخَر. والسُقوطُ `/studio` كَما كانَ لِلغِياب، ونُقطَةُ القَبولِ تَسأَلُ القَرارَ نَفسَه.
+    // مَحروسٌ في `LocalRedirectTests.Every_query_bound_return_url_in_a_razor_page_passes_through_LocalRedirect`.
+    string Destination => Services.LocalRedirect.Resolve(ReturnUrl, "/studio");
 
     protected override async Task OnInitializedAsync()
     {
