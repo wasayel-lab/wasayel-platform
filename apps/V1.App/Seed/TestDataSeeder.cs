@@ -116,7 +116,9 @@ public static class TestDataSeeder
             await tenantSession.SaveChangesAsync();
         }
         await globalSession.SaveChangesAsync();
-        Console.WriteLine($"[TestSeed] ✅ test data seeded — {Plan.Length - skipped.Count} مِن {Plan.Length} مُستَأجِرين"
+        // ‏(‏2026-10-24 — تَيّارُ S16، مُراجَعَةُ S15 الجَولَة ١) **والعَلامَةُ تَسأَلُ العَدّ**: كانَت «✅» بِلا شَرطٍ فَقاعِدَةٌ لا مُستَأجِرَ فيها
+        // مِن الأَربَعَةِ تُقرَأُ نَجاحاً «0 مِن 4». صِفرٌ مَبذورٌ ⇒ «⚠ test data NOT seeded»، وما سِواه «✅» كَما كان.
+        Console.WriteLine($"[TestSeed] {(Plan.Length - skipped.Count == 0 ? "⚠ test data NOT seeded" : "✅ test data seeded")} — {Plan.Length - skipped.Count} مِن {Plan.Length} مُستَأجِرين"
             + (skipped.Count == 0 ? "." : $"؛ تُخُطِّيَ الغائِب: {string.Join(", ", skipped)}."));
     }
 
