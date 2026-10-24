@@ -27,14 +27,26 @@ public class NewMemberNameTests(ITestOutputHelper output)
 
     private static string Hex(string s) => Convert.ToHexString(System.Text.Encoding.UTF8.GetBytes(s)).ToLowerInvariant();
 
-    /// <summary><b>تَوصيفُ «اليَوم» — يُقلَبُ بِاسمِه في كوميتِ التَرحيل</b>: الاسمُ حَرفِيٌّ في مَوضِعَينِ مِن العُدَّة.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، S15 D)</b>: لا حَرفِيَّةَ في العُدَّة — المَوضِعانِ يَقرَآنِ القامُوسَ بِالعَرَبِيَّةِ صَراحَةً.</summary>
     [Fact]
-    public void Today_the_new_member_name_is_a_literal_twice_in_the_auth_handlers()
+    public void The_new_member_name_is_read_from_the_arabic_dictionary_in_both_places()
     {
         var code = Read(AuthHandlersPath);
-        var literal = "\"عُضو جَديد\"";
-        Assert.Equal(2, code.Split(literal).Length - 1);
-        Assert.DoesNotContain("LocaleCatalog", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"عُضو جَديد\"", code, StringComparison.Ordinal);
+        Assert.Equal(2, code.Split("? NewMemberName()").Length - 1);
+        Assert.Contains("LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, NewMemberNameKey)", code, StringComparison.Ordinal);
+        Assert.Equal("me.profile.new_member", ACommerce.Kit.Auth.Server.AuthHandlers.NewMemberNameKey);
+    }
+
+    /// <summary>والمُخَزَّنُ بَعدَ التَرحيلِ بايتاتُ ما قَبلَه (موجِب)، ولا يَتبَعُ لُغَةً أُخرى (سالِب: الإنجليزِيَّةُ لا تُسأَل).</summary>
+    [Fact]
+    public void The_stored_name_after_the_migration_is_the_same_bytes_and_arabic_only()
+    {
+        var name = (string)typeof(ACommerce.Kit.Auth.Server.AuthHandlers)
+            .GetMethod("NewMemberName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .Invoke(null, null)!;
+        Assert.Equal(StoredNameUtf8Hex, Hex(name));
+        Assert.DoesNotContain("LocaleCatalog.Text(", Read(AuthHandlersPath), StringComparison.Ordinal);
     }
 
     /// <summary><b>ويَبقى بِحَرفِه</b>: مِفتاحُ القامُوسِ يَحمِلُ البايتاتِ المُخَزَّنَةَ نَفسَها — فَالتَرحيلُ لا يُغَيِّرُ ما يُكتَبُ في الوَثيقَة.</summary>

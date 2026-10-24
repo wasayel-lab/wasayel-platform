@@ -261,6 +261,22 @@ public static class AuthHandlers
             phone: $"NID-{cmd.NationalId}", nationalId: cmd.NationalId);
     }
 
+    /// <summary>مِفتاحُ اسمِ الحِسابِ الجَديد في القامُوس — يَقرَؤُه <c>Me.razor</c> سُقوطاً لِاسمٍ غائِب أَيضاً.</summary>
+    public const string NewMemberNameKey = "me.profile.new_member";
+
+    /// <summary>
+    /// <para><b>اسمُ الحِسابِ الجَديدِ بِالهاتِفِ أَو البَريد — مِن القامُوسِ بِالعَرَبِيَّةِ وَحدَها</b> (‏2026-10-24، تَيّارُ S15 البَند D؛
+    /// القاعِدَة ١١). كانَ حَرفِيّاً هُنا مَرَّتَين؛ والقيمَةُ <b>تُخَزَّنُ في وَثيقَةِ المُستَخدِم</b>، فَلا تَتبَعُ لُغَةَ القارِئ: العَرَبِيَّةُ
+    /// صَراحَةً (‏<see cref="ACommerce.Platform.I18n.LocaleCatalog.Arabic"/>) لا لُغَةُ الطَلَب — وبايتاتُها هي ما كانَ يُكتَب (مُثَبَّتَةً في
+    /// <c>NewMemberNameTests</c>).</para>
+    ///
+    /// <para><b>ومِفتاحٌ غائِبٌ يَرمي</b> لا يُخَزِّنُ اسمَ المِفتاحِ اسماً لِإنسان — والمُصادِقُ (`LocaleValidator`) يَمنَعُ غِيابَه في بِناءٍ
+    /// سَليم. وما يَراه المُشتَري اسماً لِلبائِعِ قَرارُ مالِك («ب» S12·٤(١)) — هذا تَرحيلٌ بِلا تَغييرِ قيمَة.</para>
+    /// </summary>
+    internal static string NewMemberName()
+        => ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, NewMemberNameKey)
+           ?? throw new InvalidOperationException($"مِفتاحُ القامُوس «{NewMemberNameKey}» غائِبٌ في ar.json — لا يُخَزَّنُ اسمٌ لِلحِسابِ الجَديد.");
+
     private static async Task<AuthResult> GetOrCreateUserAsync(
         IDocumentStore store, string tenantSlug, string phone, string? nationalId,
         string? email = null)
@@ -288,8 +304,8 @@ public static class AuthHandlers
                 // رَقم هُوِيَّتِه بَدَل «مُستَخدِم نَفاذ» لِلجَميع — وإلّا
                 // بَدَت كُلّ شاشَة فيها أَكثَر مِن طَرَف مُكَرَّرَةً.
                 // التَّغيير عَلى الإنشاء وَحدَه: مُستَخدِم قائِم لا يُمَسّ.
-                FullName = email is not null ? "عُضو جَديد"
-                    : nationalId is null ? "عُضو جَديد"
+                FullName = email is not null ? NewMemberName()
+                    : nationalId is null ? NewMemberName()
                     : ACommerce.Kit.Auth.NafathNames.For(nationalId)
             };
             session.Store(existing);
