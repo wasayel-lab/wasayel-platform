@@ -1,5 +1,6 @@
 @page "/admin/tenants/{slug}/plan"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.PlatformBillingQueries Billing
 @inject L L
 @inject ACommerce.Kit.Payments.Providers.PayPal.PayPalGateway PayPal
@@ -170,7 +171,7 @@
                     {
                         <p style="margin:0 0 10px;font-size:13px;">
                             @L.Markup("admin.tenant_plan.paypal_renewal_stopped")
-                            @cancelled.ToString("yyyy-MM-dd")
+                            @Culture.InZone(cancelled).ToString("yyyy-MM-dd")
                         </p>
                     }
 
@@ -269,7 +270,7 @@
                                     @o.Amount @o.Currency · @o.Days @L.Markup("admin.tenant_plan.paypal_order_days_unit")
                                 </p>
                                 <p style="margin:0 0 4px;font-size:12px;color:var(--ac-text-muted);word-break:break-all;">
-                                    @o.Id · @o.CreatedAt.ToString("yyyy-MM-dd")
+                                    @o.Id · @Culture.InZone(o.CreatedAt).ToString("yyyy-MM-dd")
                                 </p>
                                 @if (!string.IsNullOrWhiteSpace(o.ApproveUrl))
                                 {
@@ -388,7 +389,7 @@
                                     @L.Markup("admin.tenant_plan.paddle_minor_note") @t.AmountMinor @t.Currency
                                 </p>
                                 <p style="margin:0 0 4px;font-size:12px;color:var(--ac-text-muted);word-break:break-all;">
-                                    @t.Id · @t.CreatedAt.ToString("yyyy-MM-dd")
+                                    @t.Id · @Culture.InZone(t.CreatedAt).ToString("yyyy-MM-dd")
                                 </p>
                                 @if (!string.IsNullOrWhiteSpace(t.CheckoutUrl))
                                 {

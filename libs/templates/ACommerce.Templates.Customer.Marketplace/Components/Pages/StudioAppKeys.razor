@@ -1,5 +1,6 @@
 @page "/studio/apps/{slug}/keys"
 @inject Services.Incubator.StudioAuth Auth
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.Queries.TenantAdminQueries TenantAdmin
 @inject Services.Api.ApiKeyService Keys
@@ -103,9 +104,9 @@
                             <div class="studio-list-body">
                                 <strong>@k.Name</strong>
                                 <span style="direction:ltr;text-align:start;">@k.Id · @string.Join(" · ", k.Scopes)</span>
-                                <span>@L.Markup("studio.keys.col_created") @k.CreatedAt.ToString("yyyy-MM-dd") ·
+                                <span>@L.Markup("studio.keys.col_created") @Culture.InZone(k.CreatedAt).ToString("yyyy-MM-dd") ·
                                       @L.Markup("studio.keys.col_expires")
-                                      @(k.ExpiresAt is null ? L["studio.keys.never_expires"] : k.ExpiresAt.Value.ToString("yyyy-MM-dd"))</span>
+                                      @(k.ExpiresAt is null ? L["studio.keys.never_expires"] : Culture.InZone(k.ExpiresAt.Value).ToString("yyyy-MM-dd"))</span>
                             </div>
                             <span class="@StateChipClass(k)">@L.Markup(StateLabelKey(k))</span>
                             @if (IsActive(k))

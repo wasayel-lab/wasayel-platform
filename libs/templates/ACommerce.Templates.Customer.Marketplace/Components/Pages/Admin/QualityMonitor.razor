@@ -1,5 +1,6 @@
 @page "/admin/monitor"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.StudioQueries Studio
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
@@ -147,7 +148,7 @@
                                 <span class="studio-list-icon" style="background:#fee2e2;color:#b91c1c;"><AcIcon Name="alert-circle" Size="16" /></span>
                                 <div class="studio-list-body">
                                     <strong>@(string.IsNullOrEmpty(s.ProjectDescription) ? L["admin.monitor.no_desc"] : Truncate(s.ProjectDescription, 70))</strong>
-                                    <span>@s.UpdatedAt.ToString("yyyy-MM-dd HH:mm") · @Truncate(s.AnalysisError ?? "", 80)</span>
+                                    <span>@Culture.InZone(s.UpdatedAt).ToString("yyyy-MM-dd HH:mm") · @Truncate(s.AnalysisError ?? "", 80)</span>
                                 </div>
                             </div>
                         }
@@ -162,7 +163,7 @@
                             <span class="studio-list-icon" style="background:#dcfce7;color:#15803d;"><AcIcon Name="check" Size="16" /></span>
                             <div class="studio-list-body">
                                 <strong>@(string.IsNullOrEmpty(s.ProjectDescription) ? L["admin.monitor.no_desc"] : Truncate(s.ProjectDescription, 70))</strong>
-                                <span>@s.UpdatedAt.ToString("yyyy-MM-dd HH:mm") · @s.SuggestedPattern</span>
+                                <span>@Culture.InZone(s.UpdatedAt).ToString("yyyy-MM-dd HH:mm") · @s.SuggestedPattern</span>
                             </div>
                             <span class="st-chip @QualityChip(s.AnalysisQualityScore)">@s.AnalysisQualityScore%</span>
                         </div>

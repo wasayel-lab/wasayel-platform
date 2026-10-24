@@ -1,6 +1,7 @@
 @page "/{slug}/deals/{id:guid}"
 @page "/{slug}/r/{role}/deals/{id:guid}"
 @inject AuthSession Auth
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject Services.Deals.DealsService Deals
 @inject Services.Deals.DealShipping Shipping
 @inject ACommerce.Kit.Reviews.ReviewsService Reviews
@@ -440,7 +441,7 @@
                     <div style="flex:1;">
                         <strong style="font-size:13px;">@FormatEvent(e)</strong>
                         <span style="color:var(--ac-text-muted);font-size:11px;display:block;">
-                            @(e.ActorName ?? "—") · @e.At.ToString("MM-dd HH:mm")
+                            @(e.ActorName ?? "—") · @Culture.InZone(e.At).ToString("MM-dd HH:mm")
                         </span>
                     </div>
                 </div>

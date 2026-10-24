@@ -1,5 +1,6 @@
 @page "/studio/apps/{slug}/export"
 @inject Services.Incubator.StudioAuth Auth
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.Queries.AuditLogQueries Audit
 @inject Services.Export.TenantExportService Export
@@ -59,7 +60,7 @@
                     else
                     {
                         @L.Markup("studio.export.last_at",
-                                  lastExport.At.ToString("yyyy-MM-dd HH:mm"),
+                                  Culture.InZone(lastExport.At).ToString("yyyy-MM-dd HH:mm"),
                                   string.IsNullOrWhiteSpace(lastExport.ActorName) ? "—" : lastExport.ActorName)
                     }
                 </p>

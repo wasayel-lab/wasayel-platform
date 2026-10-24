@@ -1,5 +1,6 @@
 @page "/studio/apps/{slug}/console"
 @inject Services.Incubator.StudioAuth Auth
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.Queries.TenantAdminQueries TenantAdmin
 @inject L L
@@ -79,7 +80,7 @@
                             <span class="studio-list-icon" style="background:#fef3c7;color:#854d0e;"><AcIcon Name="ticket" Size="16" /></span>
                             <div class="studio-list-body">
                                 <strong>@(string.IsNullOrEmpty(t.Subject) ? L["studio.app_console.ticket_untitled"] : t.Subject)</strong>
-                                <span>@t.AuthorName · @t.CreatedAt.ToString("yyyy-MM-dd HH:mm")</span>
+                                <span>@t.AuthorName · @Culture.InZone(t.CreatedAt).ToString("yyyy-MM-dd HH:mm")</span>
                             </div>
                             <span class="st-chip">@t.Status</span>
                         </a>
@@ -124,7 +125,7 @@
                             <span class="studio-list-icon" style="background:#fae8ff;color:#a21caf;"><AcIcon Name="bell" Size="16" /></span>
                             <div class="studio-list-body">
                                 <strong>@n.Title</strong>
-                                <span>@n.Type · @n.At.ToString("yyyy-MM-dd HH:mm")</span>
+                                <span>@n.Type · @Culture.InZone(n.At).ToString("yyyy-MM-dd HH:mm")</span>
                             </div>
                         </div>
                     }

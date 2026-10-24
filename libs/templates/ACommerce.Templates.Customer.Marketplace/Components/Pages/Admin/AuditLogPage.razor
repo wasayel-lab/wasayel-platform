@@ -1,6 +1,7 @@
 @page "/admin/audit"
 @page "/admin/audit/{scope}"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AuditLogQueries AuditLog
 @inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Audit
@@ -81,7 +82,7 @@
                                 <div class="studio-list-body">
                                     <strong>@e.Action</strong>
                                     <span>
-                                        @(e.ActorName) · @e.At.ToString("yyyy-MM-dd HH:mm:ss")
+                                        @(e.ActorName) · @Culture.InZone(e.At).ToString("yyyy-MM-dd HH:mm:ss")
                                         @if (!string.IsNullOrEmpty(e.Note)) { <text> · @e.Note</text> }
                                     </span>
                                 </div>

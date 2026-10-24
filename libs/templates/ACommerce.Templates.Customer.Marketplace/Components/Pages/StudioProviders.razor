@@ -1,5 +1,6 @@
 @page "/studio/apps/{slug}/providers"
 @inject Services.Incubator.StudioAuth Auth
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.TenantProviderService Providers
 @inject ProviderVault Vault
@@ -67,7 +68,7 @@
                             <span class="@(current.IsActive ? "st-chip st-chip-success" : "st-chip st-chip-danger")">
                                 @L.Markup(current.IsActive ? "studio.providers.state_active" : "studio.providers.state_revoked")
                             </span>
-                            <span>@L.Markup("studio.providers.bound_at") @current.BoundAt.ToString("yyyy-MM-dd")</span>
+                            <span>@L.Markup("studio.providers.bound_at") @Culture.InZone(current.BoundAt).ToString("yyyy-MM-dd")</span>
                         </div>
 
                         @* القيمَةُ المَعروضَةُ هي الصورَةُ المُعَتَّمَة —

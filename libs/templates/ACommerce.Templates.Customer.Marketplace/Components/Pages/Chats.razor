@@ -1,6 +1,7 @@
 @page "/{slug}/chats"
 @page "/{slug}/r/{role}/chats"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject AuthSession Auth
 @inject L L
 
@@ -98,8 +99,8 @@ else
     /// </summary>
     string FormatWhen(DateTime at)
     {
-        var localAt = at.Kind == DateTimeKind.Utc ? at.ToLocalTime() : at;
-        var nowDate = DateTime.Now.Date;
+        var localAt = Culture.InZone(at);
+        var nowDate = Culture.NowInZone.Date;
         var atDate  = localAt.Date;
         if (atDate == nowDate)                  return localAt.ToString("HH:mm");
         if (atDate == nowDate.AddDays(-1))      return L["chats.time.yesterday"];

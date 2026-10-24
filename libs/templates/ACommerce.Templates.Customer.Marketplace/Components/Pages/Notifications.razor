@@ -6,6 +6,7 @@
     تَسجيل، خِلاف ذلِك المُحتَوى.
 *@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Account
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
 @inject L L
@@ -57,7 +58,7 @@
             {
                 <AcListRow Title="@n.Title"
                            Preview="@n.Body"
-                           Time="@n.At.ToString("HH:mm")"
+                           Time="@Culture.InZone(n.At).ToString("HH:mm")"
                            IconName="@NotifIcon(n.Type)"
                            Href="@(string.IsNullOrEmpty(n.RelatedUrl) ? null : n.RelatedUrl)"
                            Unread="@(!n.IsRead)" />

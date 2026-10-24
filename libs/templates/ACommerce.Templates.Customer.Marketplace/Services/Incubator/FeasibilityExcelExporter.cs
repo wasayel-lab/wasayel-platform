@@ -69,7 +69,7 @@ public sealed class FeasibilityExcelExporter
             ("ثِقَة الاقتِراح:",      s.PatternConfidence),
             ("الحالَة:",              s.Status.ToString()),
             ("جَودَة التَّحليل:",     $"{s.AnalysisQualityScore}%"),
-            ("آخِر تَحديث:",          s.UpdatedAt.ToString("yyyy-MM-dd HH:mm")),
+            ("آخِر تَحديث:",          ACommerce.Kit.Culture.CultureTime.InZone(s.UpdatedAt).ToString("yyyy-MM-dd HH:mm")),
             ("إصدار الـ prompt:",    s.PromptVersion),
         };
         var row = 6;

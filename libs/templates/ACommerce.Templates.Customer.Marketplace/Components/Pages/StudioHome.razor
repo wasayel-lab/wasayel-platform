@@ -1,6 +1,7 @@
 @page "/studio"
 @page "/studio/ideas"
 @inject Services.Incubator.StudioAuth Auth
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject Services.Incubator.FeasibilityAnalysisService Incubator
 @inject Services.Queries.TenantDirectory Tenants
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
@@ -210,7 +211,7 @@
                             <strong>
                                 @(string.IsNullOrEmpty(d.ListingTitle) ? d.Pattern : d.ListingTitle)
                             </strong>
-                            <span>/@slug · @d.Pattern · @d.UpdatedAt.ToString("HH:mm")</span>
+                            <span>/@slug · @d.Pattern · @Culture.InZone(d.UpdatedAt).ToString("HH:mm")</span>
                         </div>
                         <span class="st-chip">@Services.Deals.DealsPolicy.LabelAr(d.Stage)</span>
                     </a>
@@ -242,7 +243,7 @@
                         <div class="studio-list-body">
                             <strong>@(string.IsNullOrEmpty(s.ProjectDescription)
                                 ? L["studio.home.no_desc"] : Truncate(s.ProjectDescription, 70))</strong>
-                            <span>@StatusLabel(s.Status) · @s.UpdatedAt.ToString("yyyy-MM-dd HH:mm")</span>
+                            <span>@StatusLabel(s.Status) · @Culture.InZone(s.UpdatedAt).ToString("yyyy-MM-dd HH:mm")</span>
                         </div>
                         @if (s.Status == IncubatorStatus.Completed)
                         { <span class="st-chip st-chip-success">@L.Markup("admin.incubator.quality") @s.AnalysisQualityScore%</span> }

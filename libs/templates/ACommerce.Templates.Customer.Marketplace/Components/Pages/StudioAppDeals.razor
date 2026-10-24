@@ -1,5 +1,6 @@
 @page "/studio/apps/{slug}/deals"
 @inject Services.Incubator.StudioAuth Auth
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.Deals.DealsService Deals
 @inject L L
@@ -84,7 +85,7 @@
                                 <span>
                                     @d.Pattern · @d.InitiatorName
                                     @if (d.CounterpartyName is not null) { <text> ⇄ @d.CounterpartyName</text> }
-                                    · @d.UpdatedAt.ToString("HH:mm")
+                                    · @Culture.InZone(d.UpdatedAt).ToString("HH:mm")
                                 </span>
                             </div>
                             <span class="st-chip">@DealsPolicy.LabelAr(d.Stage)</span>

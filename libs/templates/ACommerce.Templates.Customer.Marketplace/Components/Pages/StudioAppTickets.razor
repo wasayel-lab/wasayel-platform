@@ -1,5 +1,6 @@
 @page "/studio/apps/{slug}/tickets"
 @inject Services.Incubator.StudioAuth Auth
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.Queries.TenantAdminQueries TenantAdmin
 @inject L L
@@ -56,7 +57,7 @@
                             <div class="studio-list-body">
                                 <strong>@t.Subject</strong>
                                 <span>
-                                    @t.AuthorName · @t.CreatedAt.ToString("yyyy-MM-dd HH:mm")
+                                    @t.AuthorName · @Culture.InZone(t.CreatedAt).ToString("yyyy-MM-dd HH:mm")
                                     @if (t.Replies.Count > 0) { <text> · @t.Replies.Count @L.Markup("studio.app_tickets.reply_unit")</text> }
                                 </span>
                             </div>
