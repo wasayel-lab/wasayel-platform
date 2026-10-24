@@ -150,11 +150,33 @@ public class PaymentFlagReadersTests(ITestOutputHelper output)
 
         var args = TopLevelSplit(inner, ',').Select(Fold).ToList();
         if (args.Count <= Math.Max(pos.Flag, pos.Charge)) return "call_arity";
-        var flagArg = args.FindIndex(a => a.Contains("PaymentProviderConfigured", StringComparison.Ordinal));
-        if (flagArg != pos.Flag) return "call_flag_position";
+        // ‏(‏2026-10-24 — تَيّارُ S16، مُراجَعَةُ S13 الجَولَة ٢) **الوَسيطُ الَّذي يَحوي هذا المَوضِعَ لا أَوَّلُ وَسيطٍ يَذكُرُ العَلَم**: كانَ
+        // `FindIndex` يُعيدُ أَوَّلَ وَسيطٍ فيه العَلَم — فَقِراءَةٌ ثانِيَةٌ لَه في وَسيطٍ آخَرَ مِن نِداءٍ مَقبولٍ (`… , tenant.PaymentProviderConfigured
+        // ? cart : null)`) تُقبَلُ وهي لَيسَت الوَسيطَ المُباشِر. فَيُعيَّنُ الوَسيطُ بِمَداه، وما لَيسَ الوَسيطَ المُسَمّى يُرَدّ: `call_flag_twice` إن
+        // كانَ المُسَمّى يَحمِلُ العَلَمَ أَيضاً، وإلّا `call_flag_position`.
+        var rel = at - (open + 1);
+        var spans = TopLevelSpans(inner, ',').ToList();
+        var flagArg = spans.FindIndex(sp => rel >= sp.Start && rel < sp.End);
+        if (flagArg != pos.Flag)
+            return args[pos.Flag].Contains("PaymentProviderConfigured", StringComparison.Ordinal) ? "call_flag_twice" : "call_flag_position";
         if (!Regex.IsMatch(args[pos.Flag], $@"^(?:{Flag}|{Flag} \?\? false|\({Flag} \?\? false\))$")) return "call_flag_not_direct";
         if (!Regex.IsMatch(args[pos.Charge], $"^{Charge}$")) return "call_charge_not_beside";
         return null;
+    }
+
+    /// <summary>مَدى كُلِّ قِطعَةٍ مِن <see cref="TopLevelSplit"/> بِمَواضِعِها في <paramref name="s"/> — <c>[Start, End)</c>.</summary>
+    private static IEnumerable<(int Start, int End)> TopLevelSpans(string s, char sep)
+    {
+        var depth = 0;
+        var start = 0;
+        for (var i = 0; i < s.Length; i++)
+        {
+            var c = s[i];
+            if (c is '(' or '{' or '[') depth++;
+            else if (c is ')' or '}' or ']') depth--;
+            else if (depth == 0 && c == sep) { yield return (start, i); start = i + 1; }
+        }
+        yield return (start, s.Length);
     }
 
     /// <summary>تَقسيمٌ عِندَ <paramref name="sep"/> خارِجَ <c>( )</c> و<c>{ }</c> و<c>[ ]</c>.</summary>
@@ -218,6 +240,34 @@ public class PaymentFlagReadersTests(ITestOutputHelper output)
         };
         string? Verdict(string sample) => FlagReaderRefusal(sample,
             Regex.Match(sample, @"\bPaymentProviderConfigured\b").Index);
+
+        // ‏(‏2026-10-24 — S16) قِراءَةٌ ثانِيَةٌ لِلعَلَمِ في وَسيطٍ آخَرَ مِن نِداءٍ مَقبول — يُحكَمُ عِندَ كُلِّ مَوضِع: الأَوَّلُ (المُباشِرُ) مَقبول،
+        // والثاني مَرفوضٌ بِرَمزِه؛ والفاحِصُ قَبلَ S16 (أَوَّلُ وَسيطٍ يَذكُرُ العَلَم) كانَ يَقبَلُ الثاني.
+        const string Twice = "var card = await gateway.CardFactsAsync(slug, tenant?.PaymentProviderConfigured ?? false, PaymentChargeSurface.CanCharge(payments), tenant.PaymentProviderConfigured ? cart : null);";
+        const string TwiceBefore = "var card = await gateway.CardFactsAsync(tenant.PaymentProviderConfigured ? slug : \"x\", tenant.PaymentProviderConfigured, PaymentChargeSurface.CanCharge(payments), cart);";
+        var occurrences = new (string Sample, string?[] Expected)[]
+        {
+            (Twice, [null, "call_flag_twice"]),
+            (TwiceBefore, ["call_flag_twice", null]),
+        };
+        var wrongAt = new List<string>();
+        foreach (var (sample, expected) in occurrences)
+        {
+            var at = Regex.Matches(sample, @"\bPaymentProviderConfigured\b").Select(m => m.Index).ToArray();
+            Assert.Equal(expected.Length, at.Length);
+            for (var k = 0; k < at.Length; k++)
+            {
+                var got = FlagReaderRefusal(sample, at[k]);
+                output.WriteLine($"المَوضِعُ {k + 1}/{at.Length} ({got ?? "مَقبول"}): {sample}");
+                if (got != expected[k]) wrongAt.Add($"المَوضِعُ {k + 1}: {got ?? "قُبِل"} لا {expected[k] ?? "قَبول"} — {sample}");
+            }
+        }
+        // ‏والفاحِصُ قَبلَ S16 عِندَ المَوضِعِ الثاني مِن Twice: أَوَّلُ وَسيطٍ يَذكُرُ العَلَمِ هُوَ المُسَمّى — فَيَمضي إلى «مُباشِرٌ؟» ويُقبَل.
+        var twiceArgs = TopLevelSplit(Twice[(Twice.IndexOf("CardFactsAsync(", StringComparison.Ordinal) + "CardFactsAsync(".Length)..Twice.LastIndexOf(')')], ',').ToList();
+        var oldIndex = twiceArgs.FindIndex(a => a.Contains("PaymentProviderConfigured", StringComparison.Ordinal));
+        output.WriteLine($"أَوَّلُ وَسيطٍ يَذكُرُ العَلَمَ في Twice (فاحِصُ ما قَبلَ S16): {oldIndex} — والمُسَمّى 1، فَكانَ يُقبَل");
+        Assert.Equal(1, oldIndex);
+        Assert.True(wrongAt.Count == 0, string.Join("\n", wrongAt));
 
         var wrong = accepted.Where(x => Verdict(x) is not null).Select(x => $"رُفِضَ حَيٌّ ({Verdict(x)}): {x}")
             .Concat(rejected.Where(x => Verdict(x.Sample) != x.Code).Select(x => $"رَمزُه {Verdict(x.Sample) ?? "قُبِل"} لا {x.Code}: {x.Sample}"))
