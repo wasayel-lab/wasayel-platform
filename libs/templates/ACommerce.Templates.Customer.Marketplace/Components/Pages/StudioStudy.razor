@@ -17,7 +17,7 @@
 {
     <HeadContent><meta http-equiv="refresh" content="4" /></HeadContent>
 }
-@if (!string.IsNullOrEmpty(Refining) && session?.Status == IncubatorStatus.Completed)
+@if (!string.IsNullOrEmpty(Refining) && session?.Status == IncubatorStatus.Completed && StudioAnalysisDoor.Opens(Incubator.IsConfigured))
 {
     @* Refine يَجري في الخَلفِيَّة — حَدِّث الصَفحَة كُلّ ٤ث حَتَّى تَتَحَدَّث Updated. *@
     <HeadContent><meta http-equiv="refresh" content="4" /></HeadContent>
@@ -82,7 +82,7 @@
                 <p>@(string.IsNullOrEmpty(session.ProjectDescription) ? "" : Truncate(session.ProjectDescription, 120))</p>
             </div>
 
-            @if (!string.IsNullOrEmpty(Refining))
+            @if (!string.IsNullOrEmpty(Refining) && StudioAnalysisDoor.Opens(Incubator.IsConfigured))
             {
                 <div class="st-card" style="background:#fff7ed;border:1px solid var(--st-warning);
                                             display:flex;align-items:center;gap:10px;">
@@ -317,6 +317,10 @@
             </div>
 
             @* تَحسين الدِراسَة — أَعِد توليد قِسم بِناءً عَلى مُلاحَظَة. *@
+            @* ولا تُرسَمُ استِمارَتُه بِلا مُزَوِّدِ تَحليل — `StudioAnalysisDoor.Opens` نَفسُه الَّذي تَسأَلُه `/studio/s/{id}/refine`، ولا
+               شَريطُ «جارٍ التَحسين» ولا تَحديثُه (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1؛ القاعِدَة ١٢). *@
+            @if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))
+            {
             <div class="st-section-title"><AcIcon Name="message" Size="18" /> @L.Markup("studio.study.refine_title")</div>
             <details class="st-card" style="padding:0;">
                 <summary style="cursor:pointer;padding:16px 22px;font-weight:600;list-style:none;
@@ -350,6 +354,11 @@
                     </button>
                 </form>
             </details>
+            }
+            else
+            {
+                <div class="st-card" style="margin-top:16px;"><p style="margin:0;">@L.Markup(StudioAnalysisDoor.ClosedMessageKey)</p></div>
+            }
 
             <div class="st-card" style="margin-top:16px;background:var(--st-line-soft);border:0;font-size:13px;color:var(--st-muted);">
                 @Disclaimer

@@ -2882,6 +2882,10 @@ public static class MarketplaceTemplateExtensions
         {
             auth.Load();
             if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
+            // ‏بابُ التَحليلِ بَعدَ الهُوِيَّةِ وقَبلَ الحُقولِ والحِصَّةِ والإطلاق (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1؛ تَوصيفُه 2cbd3aa):
+            // التَحسينُ يُنفِقُ مِفتاحَ وَكيلِ `Analysis` كَالتَحليل، وكانَ بِلا مِفتاحٍ يَعُدُّ وَحدَةً ثُمَّ يُنادي فَيُرَدُّ 401 ويُبتلَع —
+            // وصَفحَةُ الدِراسَةِ لا تَرسُمُ استِمارَتَه بِالقَرارِ نَفسِه.
+            if (!Services.Incubator.StudioAnalysisDoor.Opens(svc.IsConfigured)) return Results.Redirect($"/studio/s/{id}");
             var section = req.Form["section"].ToString().Trim();
             var feedback = req.Form["feedback"].ToString().Trim();
             if (string.IsNullOrEmpty(section) || string.IsNullOrEmpty(feedback))
@@ -2899,7 +2903,8 @@ public static class MarketplaceTemplateExtensions
                 var bg = scope.ServiceProvider
                     .GetRequiredService<Services.Incubator.FeasibilityAnalysisService>();
                 try { await bg.RefineSectionAsync(id, section, feedback); }
-                catch { /* تُعرَض الدِراسَة كَما هي عَلى الفَشَل */ }
+                // تُعرَضُ الدِراسَةُ كَما هي عَلى الفَشَل، والسَطرُ يَقولُ لِماذا (‏2026-10-24، مُراجَعَةُ S15 الجَولَة 1 — كَأَخَواتِه الثَلاثِ في K).
+                catch (Exception ex) { Services.Incubator.FeasibilityAnalysisService.LogBackgroundFailure(scope.ServiceProvider, id, "studio.refine", ex); }
             });
             return Results.Redirect($"/studio/s/{id}?refining={section}");
         }).RequireFormBody().DisableAntiforgery();

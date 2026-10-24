@@ -118,15 +118,17 @@ public class AnalysisCallBoundTests(ITestOutputHelper output)
         Assert.Equal(new[] { "admin.analyze", "studio.analyze", "studio.resume" }, doors.OrderBy(d => d, StringComparer.Ordinal));
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b> (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1): التَشغيلَةُ الرابِعَةُ في الخَلفِيَّة — التَحسين — تَنتَهي بِـ<c>catch { }</c>،
-    /// وقَد نَقَلَها البَندُ K إلى مُهلَةِ الخَلفِيَّةِ (‏420 ثانِيَة) نَفسِها. يُقلَبُ بِاسمِه في كوميتِ إصلاحِ بابِ التَحسين.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1)</b> — كانَ <c>Today_the_background_refine_run_swallows_its_exception</c>
+    /// (‏<c>2cbd3aa</c>): «catch فارِغ: True». والآن التَشغيلَةُ الرابِعَةُ — التَحسين، بِمُهلَةِ الخَلفِيَّةِ (‏420 ثانِيَة) نَفسِها — تَكتُبُ استِمارَتَها بِسَطرٍ
+    /// يُسَمّي بابَها <c>studio.refine</c> كَأَخَواتِها الثَلاث.</summary>
     [Fact]
-    public void Today_the_background_refine_run_swallows_its_exception()
+    public void The_background_refine_run_logs_its_exception()
     {
         var run = Assert.Single(BackgroundRuns(Endpoints(), "bg.RefineSectionAsync("));
         output.WriteLine($"تَشغيلَةُ التَحسين: {run.Length} مِحرَفاً · catch فارِغ: {Regex.IsMatch(run, @"catch\s*\{\s*\}")}");
-        Assert.Matches(@"catch\s*\{\s*\}", run);
-        Assert.DoesNotContain("LogBackgroundFailure", run, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"catch\s*\{\s*\}", run);
+        Assert.Matches(
+            @"catch \(Exception ex\) \{ Services\.Incubator\.FeasibilityAnalysisService\.LogBackgroundFailure\(scope\.ServiceProvider, id, ""studio\.refine"", ex\); \}", run);
     }
 
     /// <summary><b>ويَبقى بِحَرفِه</b>: ما يَطلُبُه كُلُّ نِداء — التَحليلُ مُحاوَلَتانِ بِـ8000، والتَحسينُ 3000، والمُحادَثَةُ 2048.</summary>

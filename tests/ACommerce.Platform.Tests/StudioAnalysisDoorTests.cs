@@ -337,19 +337,44 @@ public class StudioAnalysisDoorTests(ITestOutputHelper output)
         return (customer, owner);
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b>: ثَلاثَةُ مَداخِلِ عَميلٍ تُنفِقُ مِفتاحَ التَحليل، ومَدخَلٌ بِسُلطَةِ المالِك — ومِن الثَلاثَةِ واحِدٌ لا يَسأَلُ البابَ:
-    /// <c>/studio/s/{id:guid}/refine</c>.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1)</b> — كانَ
+    /// <c>Today_one_customer_entry_that_spends_the_analysis_key_asks_no_door</c> (‏<c>2cbd3aa</c>): «بِلا باب: 1 (/studio/s/{id:guid}/refine)». والآن كُلُّ
+    /// مَدخَلِ عَميلٍ يُنفِقُ مِفتاحَ التَحليلِ يَسأَلُ البابَ <b>قَبلَ</b> بَوّابَةِ حِصَّتِه وعَدِّها ونِدائِه — بِالجَردِ القائِمِ لا بِقائِمَة، فَمَدخَلٌ يُضافُ
+    /// غَداً يُحمِرُّ هُنا بِاسمِه. ويَطبَعُ ما عَدَّه ويَفشَلُ عَلى الصِفر (القاعِدَة ١٠).</summary>
     [Fact]
-    public void Today_one_customer_entry_that_spends_the_analysis_key_asks_no_door()
+    public void Every_customer_entry_that_spends_the_analysis_key_asks_the_door_before_its_quota_and_its_call()
     {
         var (customer, owner) = AnalysisEntries();
         var closed = customer.Where(e => !e.Body.Contains("StudioAnalysisDoor.Opens(", StringComparison.Ordinal)).Select(e => e.Where).ToArray();
         output.WriteLine($"مَداخِلُ عَميلٍ تُنفِقُ مِفتاحَ التَحليل: {customer.Count} ({string.Join(" · ", customer.Select(c => c.Where))})"
             + $" · بِسُلطَةِ المالِك: {owner.Count} ({string.Join(" · ", owner)}) · بِلا باب: {closed.Length} ({string.Join(" · ", closed)})");
 
-        Assert.Equal(3, customer.Count);
+        Assert.True(customer.Count >= 3, $"أَداةٌ عَمياء: {customer.Count} مَدخَلاً — والمَقيسُ 3.");
         Assert.Equal(new[] { "/admin/incubator/{id:guid}/analyze" }, owner);
-        Assert.Equal(new[] { "/studio/s/{id:guid}/refine" }, closed);
+        Assert.Empty(closed);
+        foreach (var (where, body) in customer)
+        {
+            var door = body.IndexOf("StudioAnalysisDoor.Opens(", StringComparison.Ordinal);
+            foreach (var later in new[] { "CheckAnalyzeAsync", "CheckRefineAsync", "RecordAnalysisAsync", "RecordRefineAsync" }.Concat(AnalysisSpends))
+            {
+                var at = body.IndexOf(later, StringComparison.Ordinal);
+                Assert.True(at < 0 || door < at, $"{where}: البابُ بَعدَ {later}.");
+            }
+        }
+    }
+
+    /// <summary><c>/studio/s/{id}/refine</c>: الهُوِيَّةُ أَوَّلاً (القاعِدَة ٦)، ثُمَّ البابُ قَبلَ قِراءَةِ الحُقولِ والحِصَّةِ وعَدِّها والإطلاق، ورَدُّه إلى
+    /// صَفحَةِ الدِراسَةِ بِلا <c>?refining=</c>.</summary>
+    [Fact]
+    public void Refine_asks_the_door_after_identity_and_before_the_form_the_quota_and_the_run()
+    {
+        var body = MapBody("/studio/s/{id:guid}/refine");
+        var door = At(body, "StudioAnalysisDoor.Opens(svc.IsConfigured)) return Results.Redirect($\"/studio/s/{id}\")");
+        Assert.True(At(body, "auth.IsAuthenticated") < door);
+        Assert.True(door < At(body, "req.Form[\"section\"]"));
+        Assert.True(door < At(body, "CheckRefineAsync"));
+        Assert.True(door < At(body, "RecordRefineAsync"));
+        Assert.True(door < At(body, "RefineSectionAsync"));
     }
 
     /// <summary>كُتَلُ <c>@if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))</c> في صَفحَة — مِن قَوسِها المَفتوحِ إلى ما يُقابِلُه.</summary>
@@ -374,9 +399,11 @@ public class StudioAnalysisDoorTests(ITestOutputHelper output)
         return blocks;
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b>: صَفحَةُ الدِراسَةِ تَسأَلُ البابَ لِزِرِّ الإعادَةِ وَحدَه — واستِمارَةُ التَحسينِ خارِجَ كُلِّ كُتلَةِ بابٍ مَفتوح.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1)</b> — كانَ
+    /// <c>Today_the_study_page_draws_the_refine_form_outside_every_open_door</c> (‏<c>2cbd3aa</c>): «كُتَلُ البابِ: 1 · داخِلَ كُتلَة: 0». والآن استِمارَةُ
+    /// التَحسينِ داخِلَ كُتلَةِ بابٍ مَفتوح، و<c>else</c>ـها يَرسُمُ نَصَّ القامُوسِ بِلا استِمارَة؛ وشَريطُ «جارٍ التَحسين» وتَحديثُه يَسأَلانِ البابَ نَفسَه.</summary>
     [Fact]
-    public void Today_the_study_page_draws_the_refine_form_outside_every_open_door()
+    public void The_study_page_draws_the_refine_form_only_inside_an_open_door_and_the_closed_text_otherwise()
     {
         var text = Page("StudioStudy.razor");
         var formAt = At(text, "/studio/s/{session.Id}/refine");
@@ -385,7 +412,16 @@ public class StudioAnalysisDoorTests(ITestOutputHelper output)
         output.WriteLine($"كُتَلُ البابِ في StudioStudy: {blocks.Count} · استِمارَةُ التَحسينِ عِندَ {formAt} · داخِلَ كُتلَة: "
             + blocks.Count(b => b.Open < formAt && formAt < b.Close));
 
-        Assert.Single(blocks);
-        Assert.DoesNotContain(blocks, b => b.Open < formAt && formAt < b.Close);
+        Assert.Equal(2, blocks.Count);
+        var (_, close) = Assert.Single(blocks, b => b.Open < formAt && formAt < b.Close);
+        var after = text[(close + 1)..].TrimStart();
+        Assert.StartsWith("else", after, StringComparison.Ordinal);
+        var key = after.IndexOf("StudioAnalysisDoor.ClosedMessageKey", StringComparison.Ordinal);
+        Assert.True(key > 0 && key < 200, "فَرعُ البابِ المُغلَقِ لا يَرسُمُ نَصَّ القامُوس.");
+        Assert.DoesNotContain("<form", after[..key], StringComparison.Ordinal);
+
+        Assert.Contains("@if (!string.IsNullOrEmpty(Refining) && session?.Status == IncubatorStatus.Completed && StudioAnalysisDoor.Opens(Incubator.IsConfigured))",
+            text, StringComparison.Ordinal);
+        Assert.Contains("@if (!string.IsNullOrEmpty(Refining) && StudioAnalysisDoor.Opens(Incubator.IsConfigured))", text, StringComparison.Ordinal);
     }
 }
