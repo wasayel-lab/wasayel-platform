@@ -202,6 +202,12 @@ else
            مالِكَه: كانَ مَسارُ العَرضِ يَرتَدُّ بِه إلى هُنا والصَفحَةُ لا تَقرَؤُه (‏ADR-033 §٦‑ب‑١ مُلحَقاً). *@
         <AcAlert Variant="danger" Message="@L["listings.detail.err_self"]" />
     }
+    else if (Err == ACommerce.Templates.Customer.Marketplace.Services.Patterns.CartDoor.ClosedCode)
+    {
+        @* `cart_closed` — رَمزُ `cart/add` عَلى مَتجَرٍ لا يَستَعمِلُ نَمَطُه السَلَّة (`CartDoor`، تَيّارُ S15 البَند L): الصَفحَةُ لا تَرسُمُ
+           الاستِمارَةَ هُنا، فَلا يَبلُغُه إلّا طَلَبٌ مَصنوع — ويُقالُ ولا يُبتلَع. *@
+        <AcAlert Variant="danger" Message="@L["listings.detail.err_cart_closed"]" />
+    }
 
     @if (Trip == "completed") { <AcAlert Variant="success" Message="@L["listings.detail.trip_completed"]" /> }
     @if (Trip == "aborted")   { <AcAlert Variant="warning" Message="@L["listings.detail.trip_aborted"]" /> }
@@ -444,7 +450,7 @@ else
                 @* السَّلَّة فَقَط لِلأَنماط الَّتي تَدعَمُها (مَتجَر/خَدَمات).
                    إيجار/سَكَن مُشتَرَك/مَشاوير لا تَملِك سَلَّة — CTA يَتَحَوَّل
                    لِلعَرض أَو التَّواصُل المُباشَر. *@
-                @if (profile?.UsesCart == true)
+                @if (ACommerce.Templates.Customer.Marketplace.Services.Patterns.CartDoor.Opens(profile))
                 {
                     <form method="post" action="@($"/{Slug}/listings/{Id}/cart/add")" style="margin:0 0 10px;">
                         <input type="hidden" name="qty" value="1" />

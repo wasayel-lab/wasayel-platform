@@ -36,17 +36,48 @@ public class CartDoorTests(ITestOutputHelper output)
     private static string ListingPage()
         => WriteEndpointGuardTests.StripMarkupComments(Source($"{Template}/Components/Pages/TenantListingDetail.razor"));
 
-    /// <summary><b>توصيفُ اليَوم</b>: الصَفحَةُ تَسأَلُ <c>UsesCart</c>، والنُقطَةُ لا تَسأَلُ النَمَطَ ولا المُستَأجِر — تَقرَأُ السَلَّةَ وتَكتُبُها.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، S15 L)</b> — كانَ <c>Today_cart_add_writes_a_cart_without_asking_whether_the_store_uses_one</c>
+    /// (‏<c>bfda98a</c>). والآن النُقطَةُ تَسأَلُ بابَ الصَفحَةِ نَفسَه (<see cref="CartDoor.Opens"/> بِشَخصِيَّةِ المُستَأجِر) بَعدَ الهُوِيَّةِ وقَبلَ قِراءَةِ
+    /// الإعلانِ والسَلَّةِ وأَيِّ كِتابَة، وتَرتَدُّ بِرَمزِه؛ والصَفحَةُ تَسأَلُ الدالَّةَ نَفسَها لا <c>UsesCart</c> مُباشَرَة، وتَقولُ الرَمزَ مِن القامُوس.</summary>
     [Fact]
-    public void Today_cart_add_writes_a_cart_without_asking_whether_the_store_uses_one()
+    public void Cart_add_asks_the_page_s_door_before_any_cart_read_or_write()
     {
         var body = CartAdd();
         output.WriteLine($"جِسمُ cart/add: {body.Length} مِحرَفاً");
-        Assert.Contains("s.Store(cart);", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("UsesCart", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("PatternProfileResolver", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("tenants.FindAsync", body, StringComparison.Ordinal);
-        Assert.Contains("@if (profile?.UsesCart == true)", ListingPage(), StringComparison.Ordinal);
+        var who = body.IndexOf("var (userId, _, _) = parsed.Value;", StringComparison.Ordinal);
+        var door = body.IndexOf("if (!Services.Patterns.CartDoor.Opens(Services.Patterns.PatternProfileResolver.Of(await tenants.FindAsync(slug))))", StringComparison.Ordinal);
+        var back = body.IndexOf("return Results.Redirect(Link(req, slug, $\"listings/{id}?err={Services.Patterns.CartDoor.ClosedCode}\"));", StringComparison.Ordinal);
+        var listing = body.IndexOf("await s.LoadAsync<Listing>(id);", StringComparison.Ordinal);
+        var cart = body.IndexOf("LoadAsync<ACommerce.Kit.Cart.Cart>", StringComparison.Ordinal);
+        var write = body.IndexOf("s.Store(cart);", StringComparison.Ordinal);
+        Assert.True(who > 0 && door > who && back > door && listing > back && cart > listing && write > cart,
+            $"البابُ لا يَقَعُ بَعدَ الهُوِيَّةِ وقَبلَ القِراءَةِ والكِتابَة: who={who} door={door} back={back} listing={listing} cart={cart} write={write}");
+        Assert.Equal(1, body.Split("CartDoor.Opens(").Length - 1);
+
+        var page = ListingPage();
+        Assert.Contains("@if (ACommerce.Templates.Customer.Marketplace.Services.Patterns.CartDoor.Opens(profile))", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("UsesCart", page, StringComparison.Ordinal);
+        Assert.Contains("else if (Err == ACommerce.Templates.Customer.Marketplace.Services.Patterns.CartDoor.ClosedCode)", page, StringComparison.Ordinal);
+        Assert.Contains("<AcAlert Variant=\"danger\" Message=\"@L[\"listings.detail.err_cart_closed\"]\" />", page, StringComparison.Ordinal);
+        var text = ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "listings.detail.err_cart_closed");
+        Assert.NotEqual("listings.detail.err_cart_closed", text);
+        Assert.False(ACommerce.Platform.I18n.LocaleCatalog.IsPlaceholder(text));
+        Assert.Equal("cart_closed", CartDoor.ClosedCode);
+    }
+
+    /// <summary>المُوجَبُ والسالِبُ لِلدالَّة: تُفتَحُ لِشَخصِيَّةِ <see cref="AppPattern.Marketplace"/> وَحدَها، وتُغلَقُ لِكُلِّ نَمَطٍ آخَرَ ولِشَخصِيَّةٍ لَم تُحسَب —
+    /// ومُستَأجِرٌ غائِبٌ يُحسَبُ <c>Marketplace</c> (‏<c>PatternOf(null)</c>) فَتُفتَح، كَما تَرسُمُها الصَفحَةُ لَه.</summary>
+    [Theory]
+    [InlineData(AppPattern.Marketplace, true)]
+    [InlineData(AppPattern.Rental, false)]
+    [InlineData(AppPattern.Roommate, false)]
+    [InlineData(AppPattern.Trip, false)]
+    [InlineData(AppPattern.Service, false)]
+    public void The_door_opens_for_the_marketplace_profile_only(AppPattern pattern, bool opens)
+    {
+        Assert.Equal(opens, CartDoor.Opens(PatternProfileResolver.Profile(pattern)));
+        Assert.False(CartDoor.Opens(null));
+        Assert.True(CartDoor.Opens(PatternProfileResolver.Of(null)));
     }
 
     /// <summary><b>ويَبقى بِحَرفِه</b>: نَمَطٌ واحِدٌ مِن خَمسَةٍ يَستَعمِلُ السَلَّة — فَالمَتاجِرُ الَّتي لا تَرسُمُ الاستِمارَةَ مَوجودَةٌ لا افتِراضِيَّة.</summary>

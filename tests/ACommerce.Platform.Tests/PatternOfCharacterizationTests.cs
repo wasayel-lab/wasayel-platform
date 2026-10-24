@@ -183,7 +183,9 @@ public class PatternOfCharacterizationTests
 
         Assert.Equal(1, Regex.Matches(detail, Regex.Escape("/cart/add")).Count);
 
-        var gate = detail.IndexOf("@if (profile?.UsesCart == true)", StringComparison.Ordinal);
+        // (‏2026-10-24، تَيّارُ S15 البَند L — ولا يُعادُ حَرفٌ فَوقَه): البَوّابَةُ صارَت دالَّةً تَسأَلُها النُقطَةُ أَيضاً — `CartDoor.Opens(profile)`،
+        // وهي `profile?.UsesCart == true` بِحَرفِها (`CartDoorTests`)؛ فَتَبَدَّلَ هِجاءُ عَلامَةِ المَقطَعِ وَحدَه، والمَقطَعُ والعَدّانِ بِحَرفِهِم.
+        var gate = detail.IndexOf("@if (ACommerce.Templates.Customer.Marketplace.Services.Patterns.CartDoor.Opens(profile))", StringComparison.Ordinal);
         var form = detail.IndexOf("/cart/add", StringComparison.Ordinal);
         Assert.True(gate >= 0, "بَوّابَةُ UsesCart غائِبَةٌ عَن صَفحَةِ التَفصيل.");
         Assert.True(form > gate, "استِمارَةُ cart/add لَيسَت بَعدَ بَوّابَةِ UsesCart.");

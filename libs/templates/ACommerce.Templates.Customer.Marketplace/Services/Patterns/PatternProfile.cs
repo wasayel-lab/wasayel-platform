@@ -159,3 +159,23 @@ public static class PatternProfileResolver
     /// <summary>اختِصار: مُستَأجِر → شَخصِيَّتُه.</summary>
     public static PatternProfile Of(Tenant? t) => Profile(PatternOf(t));
 }
+
+/// <summary>
+/// <para><b>بابُ السَلَّة — دالَّةٌ نَقِيَّةٌ تَسأَلُها صَفحَةُ الإعلانِ ونُقطَةُ <c>cart/add</c> مَعاً</b> (‏2026-10-24، تَيّارُ S15 البَند L؛ عَلى سابِقَةِ
+/// <c>StudioAnalysisDoor</c> و<c>CheckoutPaymentPolicy.CardOffered</c>).</para>
+///
+/// <para><b>العِلَّةُ المَقيسَة</b> (تَوصيفُها <c>CartDoorTests</c>): الصَفحَةُ لا تَرسُمُ استِمارَةَ <c>cart/add</c> إلّا لِنَمَطٍ يَستَعمِلُ السَلَّة
+/// (<see cref="PatternProfile.UsesCart"/>)، والنُقطَةُ لا تَسأَلُ — فَطَلَبٌ مَصنوعٌ عَلى مَتجَرِ إيجارٍ أَو سَكَنٍ أَو مَشاويرَ يَكتُبُ سَلَّةً لا تَعرِضُها
+/// الواجِهَة، ثُمَّ <c>checkout/submit</c> يُحَوِّلُها صَفَقات. فَصارَ البابُ <b>واحِداً</b>: ما يُرسَمُ هُوَ ما يُقبَل (القاعِدَة ١٢).</para>
+///
+/// <para><b>ولا يَقرَأُ حالَةً مُخَزَّنَة</b> (القاعِدَة ٧): مُدخَلُه شَخصِيَّةُ النَمَطِ المَحسوبَةُ مِن المُستَأجِر — والقِراءَةُ عِندَ المُنادي.</para>
+/// </summary>
+public static class CartDoor
+{
+    /// <summary>رَمزُ الرَدّ — يَرتَدُّ بِه <c>cart/add</c> إلى صَفحَةِ الإعلانِ (<c>?err=cart_closed</c>)، ونَصُّه
+    /// <c>listings.detail.err_cart_closed</c> في القامُوس.</summary>
+    public const string ClosedCode = "cart_closed";
+
+    /// <summary>أَيُفتَحُ بابُ السَلَّة؟ — نَعَم لِنَمَطٍ يَستَعمِلُها، ولا لِغَيرِه ولا لِشَخصِيَّةٍ لَم تُحسَب.</summary>
+    public static bool Opens(PatternProfile? profile) => profile?.UsesCart == true;
+}

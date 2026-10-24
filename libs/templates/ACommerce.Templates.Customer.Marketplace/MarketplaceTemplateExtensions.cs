@@ -2907,11 +2907,15 @@ public static class MarketplaceTemplateExtensions
         // ═══ Cart + Checkout (نَمَط Order.V2) ══════════════════════════════
         // POST /{slug}/listings/{id}/cart/add — أَضِف إلى السَّلَّة.
         app.MapPost("/{slug}/listings/{id:guid}/cart/add",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.TenantDirectory tenants) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/listings/{id}"));
             var (userId, _, _) = parsed.Value;
+            // **وبابُ السَلَّةِ بابُ الصَفحَةِ نَفسُه** (‏2026-10-24، تَيّارُ S15 البَند L): مَتجَرٌ لا يَستَعمِلُ نَمَطُه السَلَّة لا تُرسَمُ فيه
+            // استِمارَتُها، ويُرَدُّ هُنا قَبلَ أَيِّ قِراءَةٍ لِلسَلَّةِ أَو كِتابَة — كانَ طَلَبٌ مَصنوعٌ يَكتُبُ سَلَّةً لا تَعرِضُها الواجِهَة.
+            if (!Services.Patterns.CartDoor.Opens(Services.Patterns.PatternProfileResolver.Of(await tenants.FindAsync(slug))))
+                return Results.Redirect(Link(req, slug, $"listings/{id}?err={Services.Patterns.CartDoor.ClosedCode}"));
             await using var s = store.LightweightSession(slug);
             var listing = await s.LoadAsync<Listing>(id);
             if (listing is null) return Results.Redirect(Link(req, slug, "explore"));
