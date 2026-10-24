@@ -253,6 +253,7 @@
     {
         CheckoutPayMethods.CardUnavailable => L["checkout.payment.err_card_unavailable"],
         CheckoutPayMethods.GatewayOpenFailed => L["checkout.payment.err_gateway_open_failed"],
+        CheckoutCart.Changed => L["checkout.payment.err_cart_changed"],   // ‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-3
         CheckoutPayMethods.CardCartTooMany or CheckoutPayMethods.CardAmountUnbillable or CheckoutPayMethods.CardPatternUnpaid => GatewayRefusalText(Err),
         _ => null
     };

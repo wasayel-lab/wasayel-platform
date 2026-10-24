@@ -2937,7 +2937,8 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(Link(req, slug, $"listings/{id}?err={Services.Patterns.CartDoor.ClosedCode}"));
             await using var s = store.LightweightSession(slug);
             var listing = await s.LoadAsync<Listing>(id);
-            if (listing is null) return Results.Redirect(Link(req, slug, "explore"));
+            // ولا يوضَعُ في السَلَّةِ إعلانٌ حُذِفَ أَو أَخفاه المُشرِف (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-3): الحَذفُ ناعِمٌ فَكانَ `listing is null` لا يُمسِكُه.
+            if (!Services.Deals.CheckoutCart.Buyable(listing)) return Results.Redirect(Link(req, slug, "explore"));
             // **ولا يَشتَري المَرءُ إعلانَه** (‏ADR-033 §٦‑ب‑١ مُلحَقاً، ‏2026-10-11): كانَ هذا البابُ يَأخُذُ أَيَّ
             // إعلانٍ — والشاشَةُ وَحدَها تُخفي زِرَّ السَلَّةِ عَن مالِكِه، و`curl` لا يَرى الشاشَة — فَتولَدُ صَفقَةٌ
             // يَطلُبُ فيها المالِكُ مِن نَفسِه. يُرَدُّ قَبلَ أَيِّ كِتابَةٍ بِرَمزِ مَسارِ العَرضِ نَفسِه (`?err=self`)
@@ -3020,6 +3021,9 @@ public static class MarketplaceTemplateExtensions
             await using var s = store.LightweightSession(slug);
             var cart = await s.LoadAsync<ACommerce.Kit.Cart.Cart>(userId);
             if (cart is null || cart.Items.Count == 0) return Results.Redirect(Link(req, slug, "cart"));
+            // مُراجَعَةُ السَلَّة (‏2026-10-24؛ ADR-032 §٨‑ح‑١).
+            if (await Services.Deals.CheckoutCart.RefreshAsync(s, cart)) return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
+                .RefusalPath(Services.Deals.CheckoutCart.Changed, name, phone, addr)));
 
             var tenant = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
 
@@ -3063,7 +3067,8 @@ public static class MarketplaceTemplateExtensions
             foreach (var item in cart.Items)
             {
                 var listing = await s.LoadAsync<Listing>(item.ListingId);
-                if (listing is null) { line++; continue; }
+                // ودِفاعٌ أَخيرٌ بِالدالَّةِ نَفسِها: إعلانٌ حُذِفَ بَينَ المُراجَعَةِ والحَلقَةِ يُتَخَطّى (‏2026-10-24).
+                if (!Services.Deals.CheckoutCart.Buyable(listing)) { line++; continue; }
 
                 var amount = item.UnitPriceSar * item.Quantity;
                 Services.Deals.Deal deal;
