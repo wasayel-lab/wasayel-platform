@@ -1,5 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using ACommerce.Platform.I18n;
+using ACommerce.Templates.Customer.Marketplace.Services;
 using Xunit;
 
 namespace ACommerce.Platform.Tests;
@@ -40,15 +42,22 @@ public class AgentStoreLimitRefusalTests
         return code[start..end];
     }
 
+    /// <summary>(‏2026-10-24، كوميتُ التَرحيل — انقَلَبَ بِقَرارٍ مَرئِيّ: كانَ <c>Today_the_store_limit_refusal_is_written_in_the_agent_code_and_yields_these_bytes</c>
+    /// يَقرَأُ الحَرفِيَّ مِن جِسمِ <c>CreateTenantAsync</c> ويُقارِنُ ما يُنتِجُه بِـ<see cref="ExpectedFor"/>؛ وصارَ يَقرَأُ القيمَةَ مِن القامُوسِ
+    /// ويُقارِنُ ما تُنتِجُه بِالوَسيطَينِ نَفسَيهِما بِالثابِتِ نَفسِه — بايتاً — والجِسمُ بِلا الحَرفِيّ. و<see cref="ExpectedFor"/> لَم يُمَسّ.)</summary>
     [Fact]
-    public void Today_the_store_limit_refusal_is_written_in_the_agent_code_and_yields_these_bytes()
+    public void The_store_limit_refusal_is_read_from_the_dictionary_and_yields_the_same_bytes()
     {
-        var m = Regex.Match(CreateTenantBody(), "\\$\"(?<a>بَلَغتَ[^\"]*)\"\\s*\\+\\s*\"(?<b>[^\"]*)\"\\)");
-        Assert.True(m.Success, "الحَرفِيُّ غائِبٌ مِن جِسمِ CreateTenantAsync.");
-        var produced = (m.Groups["a"].Value + m.Groups["b"].Value)
-            .Replace("{gate.Used}", "3", StringComparison.Ordinal)
-            .Replace("{gate.Limit}", "3", StringComparison.Ordinal);
-        Assert.Equal(Encoding.UTF8.GetBytes(ExpectedFor(3, 3)), Encoding.UTF8.GetBytes(produced));
+        var key = AgentToolExecutor.StoreLimitRefusalKey;
+        Assert.Contains(key, LocaleCatalog.Lexicon);
+        var template = LocaleCatalog.Find(LocaleCatalog.Arabic, key);
+        Assert.False(string.IsNullOrWhiteSpace(template));
+        Assert.Equal(Encoding.UTF8.GetBytes(ExpectedFor(3, 3)), Encoding.UTF8.GetBytes(string.Format(template!, 3, 3)));
+
+        var body = CreateTenantBody();
+        Assert.Contains("LocaleCatalog.Text(LocaleCatalog.Arabic, StoreLimitRefusalKey), gate.Used, gate.Limit)", body, StringComparison.Ordinal);
+        foreach (var literal in new[] { "بَلَغتَ حَدَّ التَطبيقاتِ", "اِرفَع باقَتَك" })
+            Assert.DoesNotContain(literal, AgentCode(), StringComparison.Ordinal);
     }
 
     [Fact]

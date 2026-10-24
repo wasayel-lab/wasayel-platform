@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using ACommerce.Kit.Roles;
 using ACommerce.Kit.Tenants;
+using ACommerce.Platform.I18n;
 using ACommerce.Platform.Shared;
 using Marten;
 
@@ -826,6 +827,9 @@ public sealed class AgentToolExecutor
         }
     }
 
+    /// <summary>مِفتاحُ رَدِّ <c>create_tenant</c> عِندَ حَدِّ المَتاجِر — «{0} مِن {1}» = <c>Used</c> و<c>Limit</c> مِن <c>CheckBuildAsync</c>.</summary>
+    public const string StoreLimitRefusalKey = "studio.agent.err_store_limit";
+
     private async Task<(bool, string)> CreateTenantAsync(JsonElement root, Guid? ownerUserId, CancellationToken ct)
     {
         var slug    = Str(root, "slug").ToLowerInvariant();
@@ -865,10 +869,11 @@ public sealed class AgentToolExecutor
         if (ownerUserId is Guid quotaOwner)
         {
             var gate = await tierService.CheckBuildAsync(quotaOwner, ct);
+            // ‏نَصُّ الرَدِّ مِن القامُوسِ بِالعَرَبِيَّةِ صَراحَةً (‏2026-10-24، القاعِدَة ١١ — رُحِّلَ بِحَرفِه، وصِياغَتُه قَرارُ المالِكِ
+            // في «ب» S11·١٨ و·٢١): يَبلُغُ الوَكيلَ والمُستَخدِمَ نَتيجَةَ أَداة، ولا طَلَبَ هُنا تُقرَأُ لُغَتُه.
             if (!gate.Allowed)
-                return (false,
-                    $"بَلَغتَ حَدَّ التَطبيقاتِ في باقَتِك ({gate.Used} مِن {gate.Limit}). "
-                  + "اِحذِف تَطبيقاً أَو اِرفَع باقَتَك مِن /studio/billing.");
+                return (false, string.Format(
+                    LocaleCatalog.Text(LocaleCatalog.Arabic, StoreLimitRefusalKey), gate.Used, gate.Limit));
         }
 
         await using var s = _store.LightweightSession();
