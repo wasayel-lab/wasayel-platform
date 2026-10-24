@@ -274,6 +274,28 @@ static async Task<int> SnapshotAsync(string cs, string[] hide, string suffix, st
         ["PGCHANNELBINDING"] = b.ChannelBinding.ToString().ToLowerInvariant()
     };
 
+    // ‏(‏2026-10-24 — تَيّارُ S16، مُراجَعَةُ S13 الجَولَة ١) **و600 مُنذُ أَوَّلِ بايتٍ لا بَعدَ آخِرِه**: التَضييقُ أَدناه يَقَعُ بَعدَ خُروجِ
+    // pg_dump — وطَوالَ الكِتابَةِ (دَقائِقُ عَلى الإنتاج) كانَ المِلَفُّ بِقِناعِ المُشَغِّل: مَقيساً بِـpg_dump يَنامُ بَعدَ الكِتابَة،
+    // ‏«mid-dump mode: 644» ثُمَّ 600 — ومُقاطَعَةٌ في الأَثناءِ تُخَلِّفُ 644. فَيُنشَأُ المِلَفُّ هُنا فارِغاً بِـ600 و`CreateNew` (فَيُغلَقُ
+    // أَيضاً سِباقُ «قائِم؟» أَعلاه)، وpg_dump يَفتَحُه لِلكِتابَةِ فَيَقطَعُه ويُبقي نَمَطَه. والتَضييقُ بَعدَه يَبقى حارِساً ثانِياً.
+    if (!OperatingSystem.IsWindows())
+    {
+        try
+        {
+            using var created = new FileStream(file, new FileStreamOptions
+            {
+                Mode = FileMode.CreateNew,
+                Access = FileAccess.Write,
+                UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+            });
+        }
+        catch (IOException) when (File.Exists(file))
+        {
+            Console.Error.WriteLine($"تَوَقُّف: {file} قائِم — اللَقطَةُ لا تُكتَبُ فَوقَ أُخرى.");
+            return 1;
+        }
+    }
+
     var dump = await RunAsync("pg_dump", ["--format=custom", "--no-owner", "--no-privileges", $"--file={file}"], env);
     if (dump is null || dump.Value.Code != 0)
     {

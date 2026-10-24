@@ -466,6 +466,105 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Contains("**وتُحذَفُ حينَ يُتَحَقَّقُ النَشر**", section, StringComparison.Ordinal);
     }
 
+    // ─── ‏2026-10-24 (تَيّارُ S16، مُراجَعَةُ S13 الجَولَة ١): 600 مُنذُ أَوَّلِ بايتٍ لا بَعدَ آخِرِه ─────────────────────────────
+    //
+    // **المَقيسُ قَبل** (`1c72873`، Postgres مَحَلِّيّ، بِـumask ‏0022، وpg_dump مُغَلَّفٌ يَنامُ ‏6ث بَعدَ الكِتابَة): «mid-dump mode: 644
+    // size=151979» ثُمَّ «الصَلاحِيَّة 600» — التَضييقُ بَعدَ خُروجِ الأَداة، وطَوالَ الكِتابَةِ يَقرَؤُها كُلُّ حِساب. **وبَعدُ**: «mid-dump mode: 600».
+
+    /// <summary>ما يُخالِفُ «يُنشَأُ المِلَفُّ ‏600 قَبلَ pg_dump» في جِسمِ <c>SnapshotAsync</c> — فارِغَةٌ إن كانَ كَما اليَوم: <c>new FileStream</c>
+    /// واحِدٌ بِـ<c>FileMode.CreateNew</c> و<c>UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite</c> بِحَرفِه، داخِلَ
+    /// <c>if (!OperatingSystem.IsWindows())</c>، بَعدَ «قائِم؟» و<c>pg_dump --version</c> وقَبلَ نِداءِ الكِتابَة؛ و«قائِم» يُرَدُّ بِـ1 لا يُبتَلَع.</summary>
+    internal static IReadOnlyList<string> CreatedOwnerOnlyViolations(string snap)
+    {
+        var v = new List<string>();
+        var streams = Regex.Matches(snap, @"new FileStream\(file, new FileStreamOptions\s*\{(?<o>[^}]*)\}\)");
+        if (streams.Count != 1) { v.Add($"create_count: {streams.Count}"); return v; }
+        var opts = Regex.Replace(streams[0].Groups["o"].Value, @"\s+", " ");
+        if (!opts.Contains("Mode = FileMode.CreateNew,", StringComparison.Ordinal)) v.Add("not_create_new");
+        if (!opts.Contains("UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,", StringComparison.Ordinal)
+            || Regex.IsMatch(opts, @"Group|Other")) v.Add("mode_not_owner_only");
+        var at = streams[0].Index;
+        var exists = snap.IndexOf("if (File.Exists(file))", StringComparison.Ordinal);
+        var version = snap.IndexOf("RunAsync(\"pg_dump\", [\"--version\"]", StringComparison.Ordinal);
+        var write = snap.IndexOf("RunAsync(\"pg_dump\", [\"--format=custom\"", StringComparison.Ordinal);
+        if (!(exists > 0 && version > exists && at > version && write > at)) v.Add($"order: قائِم {exists} · الأَداة {version} · الإنشاء {at} · الكِتابَة {write}");
+        var guard = snap.LastIndexOf("if (!OperatingSystem.IsWindows())", at, StringComparison.Ordinal);
+        if (guard < 0 || snap[guard..at].Contains('}')) v.Add("not_in_windows_guard");
+        var tail = snap[at..(write > at ? write : snap.Length)];
+        if (!tail.Contains("catch (IOException) when (File.Exists(file))", StringComparison.Ordinal) || !tail.Contains("return 1;", StringComparison.Ordinal))
+            v.Add("exists_race_swallowed");
+        return v;
+    }
+
+    /// <summary><b>المِلَفُّ يُنشَأُ ‏600 قَبلَ أَن يَكتُبَ pg_dump حَرفاً</b> — بِالشَكلِ أَعلاه، ونَمَطُ الإنشاءِ يُقاسُ هُنا بِالخِيارِ نَفسِه عَلى
+    /// مِلَفٍّ مُؤَقَّتٍ تَحتَ قِناعِ العَمَلِيَّة (عَلى غَيرِ وِندوز): ‏600، و<c>CreateNew</c> عَلى مِلَفٍّ قائِمٍ يَرمي ولا يَقطَعُه.</summary>
+    [Fact]
+    public void TheSnapshot_IsCreatedOwnerOnly_BeforePgDumpWritesAByte()
+    {
+        var snap = SnapshotFunction();
+        var violations = CreatedOwnerOnlyViolations(snap);
+        output.WriteLine($"مُخالَفاتُ «يُنشَأُ 600 قَبلَ pg_dump»: {violations.Count}{(violations.Count > 0 ? " — " + string.Join("؛ ", violations) : "")}");
+        Assert.True(violations.Count == 0, string.Join("\n", violations));
+        if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — لا نَمَطَ يونِكسِيّ؛ يُقاسُ النَمَطُ في CI (‏ubuntu)."); return; }
+
+        var dir = Directory.CreateTempSubdirectory("wasayel-snapshot-mode-");
+        try
+        {
+            var file = Path.Combine(dir.FullName, "x.dump");
+            using (new FileStream(file, new FileStreamOptions
+                   { Mode = FileMode.CreateNew, Access = FileAccess.Write, UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite }))
+            { }
+            var mode = File.GetUnixFileMode(file);
+            output.WriteLine($"نَمَطُ المِلَفِّ عِندَ إنشائِه: {Convert.ToString((int)mode, 8)}");
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, mode);
+            File.WriteAllText(file, "قائِم");
+            Assert.Throws<IOException>(() => new FileStream(file, new FileStreamOptions
+                { Mode = FileMode.CreateNew, Access = FileAccess.Write, UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite }));
+            Assert.Equal("قائِم", File.ReadAllText(file));
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    /// <summary><b>حَقنُ عَيب — فاحِصُ «يُنشَأُ 600 قَبلَ pg_dump» يُحمِرُّ فِعلاً</b>: الإنشاءُ بَعدَ الكِتابَة، أَو بِقِراءَةِ المَجموعَة، أَو
+    /// بِـ<c>Create</c> الَّذي يَقطَعُ القائِم، أَو بِلا حارِسِ وِندوز، أَو «قائِم» مُبتَلَعاً، أَو مَحذوفاً — كُلٌّ يُرى؛ والحَيُّ يُقبَل.</summary>
+    [Fact]
+    public void TheCreatedOwnerOnlyChecker_CanActuallyGoRed()
+    {
+        var snap = SnapshotFunction();
+        const string Opts = "UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,";
+        string With(string from, string to)
+        {
+            Assert.Single(Regex.Matches(snap, Regex.Escape(from)));
+            return snap.Replace(from, to, StringComparison.Ordinal);
+        }
+        var block = Regex.Match(snap, @"    if \(!OperatingSystem\.IsWindows\(\)\)\n    \{\n        try\n        \{\n            using var created = new FileStream\(file,[\s\S]*?\n    \}\n");
+        Assert.True(block.Success, "كُتلَةُ الإنشاءِ الحَيَّةُ لَم تُقرَأ — الأَداةُ عَمياء.");
+        var dumpLine = "    var dump = await RunAsync(\"pg_dump\", [\"--format=custom\"";
+        var rejected = new (string Name, string Code)[]
+        {
+            ("بَعدَ الكِتابَة", With(block.Value, "").Replace("    if (dump is null || dump.Value.Code != 0)", block.Value + "    if (dump is null || dump.Value.Code != 0)", StringComparison.Ordinal)),
+            ("قِراءَةُ المَجموعَة", With(Opts, "UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead,")),
+            ("Create يَقطَعُ القائِم", With("Mode = FileMode.CreateNew,", "Mode = FileMode.Create,")),
+            ("بِلا حارِسِ وِندوز", With(block.Value, block.Value.Replace("if (!OperatingSystem.IsWindows())", "if (true)", StringComparison.Ordinal))),
+            ("«قائِم» مُبتَلَع", With("catch (IOException) when (File.Exists(file))", "catch (IOException)")),
+            ("بِلا إنشاء", With(block.Value, "")),
+        };
+        Assert.Contains(dumpLine, snap, StringComparison.Ordinal);
+        var wrong = new List<string>();
+        if (CreatedOwnerOnlyViolations(snap).Count != 0) wrong.Add("رُفِضَ الحَيّ: " + string.Join("؛ ", CreatedOwnerOnlyViolations(snap)));
+        foreach (var (name, code) in rejected)
+        {
+            var v = CreatedOwnerOnlyViolations(code);
+            output.WriteLine($"«{name}» → {(v.Count == 0 ? "قُبِل" : string.Join("؛ ", v))}");
+            if (v.Count == 0) wrong.Add($"قُبِلَ «{name}»");
+        }
+        output.WriteLine($"حُقِنَ {rejected.Length} عَيباً؛ أَخطَأَ الفاحِصُ في {wrong.Count}");
+        Assert.True(wrong.Count == 0, string.Join("\n", wrong));
+    }
+
     /// <summary>مَسارُ كُلِّ <c>--snapshot</c> في نَصِّ أَوامِر — بَينَ عَلامَتَي تَنصيصٍ أَو بِدونِهِما (‏2026-10-24 — مُراجَعَةُ الموجَة ٤،
     /// بَندُ H: كانَ الصَفُّ أَعلاه يَقرَأُ المُقتَبَسَ وَحدَه، فَـ<c>--snapshot pre-deploy.dump</c> — جَذرَ المُستَودَعِ مَرَّةً أُخرى — لا يُعَدُّ
     /// ويَمُرُّ ما دامَ في الكُتلَةِ مَسارٌ مُقتَبَسٌ واحِدٌ صَحيح).</summary>
