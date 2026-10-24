@@ -48,11 +48,14 @@
                     </button>
                 </form>
 
-                <p style="text-align:center;margin-top:14px;">
-                    <a href="/studio/logout" style="color:var(--st-muted);font-size:13px;text-decoration:none;">
+                @* ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-dead-doors-2) «رَفض» كانَ رابِطَ GET إلى `/studio/logout` — والمَسارُ `POST` وَحدَه
+                   (‏405)، فَيَبقى المُستَخدِمُ مُسَجَّلاً والاستِمارَةُ مَرسومَة. صارَ استِمارَةً كَبابِ الخُروجِ في `StudioShell.razor`.
+                   مَحروسٌ في `RouteResolutionTests`. *@
+                <form method="post" action="/studio/logout" style="text-align:center;margin-top:14px;">
+                    <button type="submit" style="background:none;border:0;padding:0;cursor:pointer;font:inherit;color:var(--st-muted);font-size:13px;">
                         @((MarkupString)"\n                        ")@L.Markup("studio.consent.reject")@((MarkupString)"\n                    ")
-                    </a>
-                </p>
+                    </button>
+                </form>
             </div>
         </div>
     }

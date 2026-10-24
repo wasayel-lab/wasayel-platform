@@ -595,6 +595,12 @@ Services، Amazon SES، Google Workspace…) **حَيثُ لا تُحجَب مَ
   `RealtimeSessionTokenTests.No_razor_page_prints_the_session_token_and_no_script_sends_one_in_a_url` (كُلُّ `.razor` وكُلُّ سِكربتٍ في
   `wwwroot`، يَحمَرُّ عَلى السَطرِ القَديمِ حَرفاً). **وما بَقِيَ**: `ACommerce.Kit.Realtime.Client.RealtimeClient` يَبني `?token=` ولا مُنادِيَ
   لِـ`ConnectAsync` (تَسجيلٌ بِلا مُستَهلِك — القاعِدَة ١)؛ لا يَتَّصِلُ اليَومَ، وحَذفُه مُهِمَّةٌ مُستَقِلَّة.
+- **«رَفضٌ وخُروج» يُخرِجُ فِعلاً** (lens-dead-doors-2). كانَ في شُروطِ المَتجَرِ رابِطَ GET إلى `…/logout` (‏404) وفي مُوافَقَةِ الاستوديو إلى
+  `/studio/logout` (‏405) — والمَسارانِ `POST` وَحدَه، فَيَبقى المُستَخدِمُ مُسَجَّلاً. صارَ الأَوَّلُ زِرّاً بِـ`formaction` إلى
+  `POST /{slug}/auth/logout` (بِلا شَرطِ مُربَّعِ القَبول) والثاني استِمارَةً إلى `POST /studio/logout`. **والحارِس**:
+  `RouteResolutionTests.Every_literal_link_reaches_a_declared_get_and_every_post_form_a_declared_post` — كُلُّ `href` و`action`/`formaction`
+  في كُلِّ صَفحَةٍ بِجَدوَلِ `@page`/`MapGet`/`MapPost`/`[Wolverine…]`، ويَطبَعُ ما فَحَصَ وما تَرَكَ لِمُتَغَيِّر (‏308 رابِطاً و‏116 استِمارَة
+  و‏53 تَعبيراً لا يُقرَأ، ‏2026-10-24).
 
 ---
 

@@ -274,20 +274,16 @@ public class RouteResolutionTests(ITestOutputHelper output)
 
     private const string Pages = "libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/";
 
-    // ─── ١. «اليَوم» — بابا «رَفضٌ وخُروج» وَحدَهُما لا يَحُلّان ───────────────────────────────────────
+    // ─── ١. لا بابَ إلّا ويَحُلُّ بِفِعلِه ───────────────────────────────────────────────────────────
     //
-    // يَنقَلِبُ بِاسمِه في كوميتِ العِلاج إلى «لا بابَ إلّا ويَحُلّ».
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_the_two_reject_doors_are_get_links_to_post_only_logout_routes_and_nothing_else_is_dead`:
+    // «رَفضٌ وخُروج» في الشُروطِ زِرٌّ بِـ`formaction` إلى `POST /{slug}/auth/logout`، وفي المُوافَقَةِ استِمارَةٌ إلى `POST /studio/logout`.
 
     [Fact]
-    public void Today_the_two_reject_doors_are_get_links_to_post_only_logout_routes_and_nothing_else_is_dead()
+    public void Every_literal_link_reaches_a_declared_get_and_every_post_form_a_declared_post()
     {
         var (dead, counted) = Scan();
-        Assert.True(dead.SequenceEqual(new[]
-        {
-            Pages + "StudioConsent.razor: GET /studio/logout",
-            Pages + "Terms.razor: GET /{x}/logout",
-            Pages + "Terms.razor: GET /{x}/r/{x}/logout",
-        }), counted + $"\nولا يَحُلُّ {dead.Count}:\n  " + string.Join("\n  ", dead));
+        Assert.True(dead.Count == 0, counted + $"\nولا يَحُلُّ {dead.Count}:\n  " + string.Join("\n  ", dead));
     }
 
     // ─── ٢. والفاحِصُ يَحمَرُّ عَلى ما كُتِبَ لَه — لا يَتَغَيَّرُ بِالعِلاج ─────────────────────────────

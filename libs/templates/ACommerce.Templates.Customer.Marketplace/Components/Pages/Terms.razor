@@ -63,8 +63,11 @@ else
                         <span>@L.Markup("terms.accept.checkbox")</span>
                     </label>
                     <div style="display:flex;gap:8px;margin-top:16px;">
-                        <a class="ac-btn ac-btn-ghost"
-                           href="@AuthSession.LinkFor(Slug, Role, "logout")">@L.Markup("terms.accept.reject")</a>
+                        @* ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-dead-doors-2) «رَفضٌ وخُروج» كانَ رابِطَ GET إلى `…/logout` — ولا مَسارَ GET
+                           لَه (‏404)، فَيَبقى المُستَخدِمُ مُسَجَّلاً. صارَ زِرّاً يُرسِلُ الاستِمارَةَ نَفسَها إلى `POST /{slug}/auth/logout`
+                           (نَمَطُ `Me.razor`) بِلا شَرطِ مُربَّعِ القَبول. مَحروسٌ في `RouteResolutionTests`. *@
+                        <button type="submit" class="ac-btn ac-btn-ghost"
+                                formaction="@($"/{Slug}/auth/logout")" formnovalidate>@L.Markup("terms.accept.reject")</button>
                         <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
                             <AcIcon Name="check" Size="18" /> @L.Markup("terms.accept.submit")@((MarkupString)"\n                        ")
                         </button>
