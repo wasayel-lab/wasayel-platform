@@ -368,3 +368,16 @@ Git Bash **يَنهارُ بِـSIGABRT** فَاتَّهَمَ رَأساً حا
 | غَيرُ المُتَصَفِّحِ يَأخُذُ ما كانَ يَأخُذ، والرَدُّ ذو الجِسمِ لا يُمَسّ، وDevelopment يَحتَفِظُ بِصَفحَةِ المُطَوِّر — **حُقِنَ العَيبانِ (التَركيبُ في Development، وتَجاهُلُ `Accept`) فَحَمِرَت ثَمانِ حالات** | `A_client_that_does_not_read_html_gets_the_bare_status_as_before` · `Development_keeps_the_developer_exception_page` |
 | التَركيبُ في `Program.cs` بِتَرتيبِه — **حُذِفَ السَطرانِ فَحَمِرَ الاختِباران** | `Program_installs_the_error_pages_around_the_whole_pipeline` · `Program_maps_readiness_next_to_the_build_identity` |
 | الأُنبوبُ الكامِل | `scripts/verify-production-boot.sh` — ‏15 مَساراً |
+
+### الكوميتُ ونَقضُه — يُلحَقُ ‏2026-10-24 (مُراجَعَةُ الموجَة ٤)، ولا يُعادُ حَرفٌ فَوقَ ما سَبَق
+
+§١١ يَقولُ «نُفِّذ» ولا يُسَمّي كوميتَه: **`8b11cac`** — «feat(hosting): المُتَصَفِّحُ يَرى صَفحَةً بَيضاءَ بِـ0 بايت … و/health/ready يَسأَلُ القاعِدَةَ
+select 1 ويَرُدُّ 503 مَعَ Retry-After، و/health بِلا تَغيير» (‏13 مِلَفّاً: `Readiness.cs` و`ErrorPages.cs` جَديدان، و`ar.json` ‏8 مَفاتيح، والبَوّابَةُ صَفّان،
+والسُقوف).
+
+**والنَقضُ**: `git revert 8b11cac` — مَقيساً عِندَ `e2170c6` في نُسخَةٍ مُستَنسَخَةٍ لا في المُستَودَع: **تَعارُضٌ في مِلَفٍّ واحِد**،
+`tests/ACommerce.Platform.Tests/EndpointBodyBleedTests.cs` عِندَ `PinnedTotal` — تُبقى مُلاحَظاتُ ما بَعدَه ويُنقَصُ ما زادَه (سَطرانِ ونُقطَة). **ولا يَكفي
+وَحدَه**: `/health/ready` يَقرَؤُه مَن جاءَ بَعدَه — بَوّابَةُ الإقلاعِ (‏`route_verdict` و`readiness_answer`، `1187f83`؛ ‏16 مَوضِعاً في
+`scripts/verify-production-boot.sh`)، و`scripts/rewalk-launch-journey.sh` (‏3)، و`ProductionBootVerdictTests` (‏5) — فَنَقضُه دونَهُم يُحمِرُّ البَوّابَة؛
+ونَقضُ `1187f83` نَفسِه يَتَعارَضُ اليَومَ في مِلَفَّيه (البَوّابَةُ واختِباراتُها). والتَسَلسُلُ العَكسِيُّ الآليُّ بِالإغلاقِ عَلى المِلَفّاتِ ‏85 كوميتاً مِن ‏130
+بَعدَه، يَنطَبِقُ بِلا تَعارُضٍ ويُعيدُ مِلَفّاتِ `8b11cac` إلى ما قَبلَه حَرفاً — أَي أَنّ النَقضَ اليَومَ **قَرارٌ بِحَجمِه لا سَطر**.
