@@ -13,7 +13,7 @@ namespace ACommerce.Platform.Tests;
 // أَو نُسخَةٌ ثانِيَةٌ مِن اشتِقاقِ النَمَطِ تُكتَبُ فيه بَدَلَ دالَّةِ الواجِهَة — يَحمَرُّ هُنا. والبُرهانُ الحَيُّ (قاعِدَةٌ مَبذورَة،
 // وعَدّادُ كِتاباتِ Postgres قَبلُ وبَعدُ، وطَفرَةٌ مَحقونَةٌ تُحمِرُّ المُقارَنَةَ بِالعَدّادِ القائِم) في رِسالَةِ كوميتِه.
 
-public class ListingOwnerCountScriptTests
+public class ListingOwnerCountScriptTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;
 
@@ -114,5 +114,88 @@ public class ListingOwnerCountScriptTests
         var leaks = printLines.Where(l => personal.Any(p => l.Contains(p, StringComparison.Ordinal))).ToList();
         Assert.True(leaks.Count == 0,
             $"فُحِصَ {printLines.Count} سَطرَ طِباعَة، ومِنها {leaks.Count} يَطبَعُ حَقلاً شَخصِيّاً: {string.Join(" | ", leaks)}");
+    }
+
+    // ─── الحَقلُ الشَخصِيُّ لا يُقرَأُ إلّا في المُرَشِّحَينِ المُسَمَّيَين (‏2026-10-24 — مُراجَعَةُ الموجَة ٤، بَندُ F) ─────────────
+    //
+    // **المَقيسُ قَبل**: الصَفُّ أَعلاه لا يَقرَأُ إلّا الأَسطُرَ الَّتي فيها `Console.` — فَحَقلٌ يُسنَدُ إلى مُتَغَيِّرٍ ثُمَّ يُطبَعُ
+    // المُتَغَيِّرُ في سَطرٍ آخَر (`var who = studioUser.Phone;` ثُمَّ `Console.WriteLine($"… {who}")`) يَمُرّ، وكَذا سَطرٌ يَحمِلُ الحَقلَ
+    // في إسنادٍ إلى `storeOwnerLine` الَّذي يُطبَعُ بَعدَه. والسكربتُ يُشَغَّلُ عَلى نُسخَةٍ تَحمِلُ هَواتِفَ المُستَخدِمينَ وبَريدَهُم.
+
+    /// <summary>المُرَشِّحانِ المُسَمَّيانِ بِحَرفِهِما بَعدَ طَيِّ المَسافات — يُقارِنانِ هاتِفَ مالِكِ الاستوديو أَو بَريدَه داخِلَ
+    /// الاستِعلامِ ولا يُخرِجانِه (رَأسُ السكربت، «ما لا يَفعَلُه» ٢). ولا مَوضِعَ ثالِثَ يَقرَأُ حَقلاً شَخصِيّاً.</summary>
+    internal static readonly string[] NamedPreFilters =
+    {
+        "if (!string.IsNullOrWhiteSpace(studioUser.Phone)) front.AddRange(await tq.Query<User>().Where(u => u.Phone == studioUser.Phone).ToListAsync());",
+        "if (!string.IsNullOrWhiteSpace(studioUser.Email)) front.AddRange(await tq.Query<User>().Where(u => u.Email == studioUser.Email).ToListAsync());",
+    };
+
+    /// <summary>ما يَقرَأُ <c>.Phone</c> أَو <c>.Email</c> أَو <c>.NationalId</c> أَو <c>.FullName</c> في الكودِ بِلا تَعليقاتِه خارِجَ
+    /// المُرَشِّحَينِ المُسَمَّيَين — وكُلُّ مُرَشِّحٍ يَرِدُ مَرَّةً بِحَرفِه وإلّا عُدَّ خَرقاً (فَنَسخُه أَو تَغييرُه لا يَمُرّ).</summary>
+    internal static IReadOnlyList<string> PersonalFieldReads(string code)
+    {
+        var folded = Regex.Replace(WriteEndpointGuardTests.StripComments(code), @"\s+", " ");
+        var v = new List<string>();
+        foreach (var filter in NamedPreFilters)
+        {
+            var n = Regex.Matches(folded, Regex.Escape(filter)).Count;
+            if (n != 1) v.Add($"المُرَشِّحُ المُسَمّى يَرِدُ {n} مَرَّة: {filter}");
+            folded = folded.Replace(filter, " ", StringComparison.Ordinal);
+        }
+        foreach (Match m in Regex.Matches(folded, @"\.(?:Phone|Email|NationalId|FullName)\b"))
+            v.Add(folded.Substring(Math.Max(0, m.Index - 40), Math.Min(folded.Length, m.Index + 40) - Math.Max(0, m.Index - 40)).Trim());
+        return v;
+    }
+
+    /// <summary><b>ولا يَقرَأُ حَقلاً شَخصِيّاً خارِجَ المُرَشِّحَين</b> — في أَيِّ سَطر، لا في أَسطُرِ الطِباعَةِ وَحدَها.</summary>
+    [Fact]
+    public void TheScript_ReadsNoPersonalFieldOutsideTheTwoNamedPreFilters()
+    {
+        var code = Code();
+        var reads = PersonalFieldReads(code);
+        var mentions = Regex.Matches(WriteEndpointGuardTests.StripComments(code), @"\.(?:Phone|Email|NationalId|FullName)\b").Count;
+        output.WriteLine($"مَواضِعُ الحَقلِ الشَخصِيِّ في الكود: {mentions} · مُرَشِّحانِ مُسَمَّيانِ: {NamedPreFilters.Length} (ثَلاثَةُ مَواضِعَ في كُلٍّ) · خارِجَهُما: {reads.Count}");
+        Assert.True(mentions >= 6, $"أَداةٌ عَمياء: {mentions} مَوضِعاً — في المُرَشِّحَينِ وَحدَهُما سِتَّة.");
+        Assert.True(reads.Count == 0, $"حَقلٌ شَخصِيٌّ خارِجَ المُرَشِّحَينِ المُسَمَّيَين ({reads.Count}):\n  " + string.Join("\n  ", reads));
+    }
+
+    /// <summary><b>حَقنُ عَيب — فاحِصُ الحَقلِ الشَخصِيِّ يُحمِرُّ فِعلاً</b> (‏2026-10-24): الكودُ الحَيُّ تُحقَنُ فيه قِراءاتٌ لا يَراها
+    /// فاحِصُ أَسطُرِ الطِباعَة — إسنادٌ ثُمَّ طِباعَة، وإسنادٌ إلى سَطرٍ يُطبَعُ لاحِقاً، ومُرَشِّحٌ ثالِث، ونُسخَةٌ ثانِيَةٌ مِن مُرَشِّحٍ مُسَمّى —
+    /// ويُشتَرَطُ رَفضُها؛ والحَيُّ وتَعليقٌ يَذكُرُ الحَقلَ يُقبَلان.</summary>
+    [Fact]
+    public void ThePersonalFieldChecker_CanActuallyGoRed()
+    {
+        var code = Code();
+        const string Anchor = "storeOwnerSells = live.Any(";
+        Assert.Single(Regex.Matches(code, Regex.Escape(Anchor)));
+        string With(string line) => code.Replace(Anchor, line + "\n            " + Anchor, StringComparison.Ordinal);
+
+        var accepted = new (string Name, string Code)[]
+        {
+            ("الحَيّ", code),
+            ("تَعليقٌ يَذكُرُ الحَقل", With("// ‏يُقارَنُ u.Phone داخِلَ الاستِعلامِ وَحدَه")),
+        };
+        var rejected = new (string Name, string Code)[]
+        {
+            ("إسنادٌ ثُمَّ طِباعَة", With("var who = studioUser.Phone; Console.WriteLine($\"  مالِك: {who}\");")),
+            ("إسنادٌ إلى سَطرٍ يُطبَع", With("storeOwnerLine = studioUser.FullName;")),
+            ("بَريدٌ في سَطرِ خَطَأ", With("Console.Error.WriteLine(studioUser.Email);")),
+            ("هُوِيَّةٌ وَطَنِيَّة", With("var nid = live.First().NationalId;")),
+            ("مُرَشِّحٌ ثالِث", With("front.AddRange(await tq.Query<User>().Where(u => u.Phone == t.Id).ToListAsync());")),
+            ("نُسخَةٌ ثانِيَةٌ مِن مُرَشِّحٍ مُسَمّى", With(NamedPreFilters[0])),
+        };
+
+        var wrong = accepted.Where(x => PersonalFieldReads(x.Code).Count != 0)
+                .Select(x => $"رُفِضَ حَيٌّ «{x.Name}»: {string.Join("؛ ", PersonalFieldReads(x.Code))}")
+            .Concat(rejected.Where(x => PersonalFieldReads(x.Code).Count == 0).Select(x => $"قُبِلَ «{x.Name}»"))
+            .ToList();
+        // ‏وفاحِصُ أَسطُرِ الطِباعَةِ وَحدَه (الصَفُّ أَعلاه) يَقبَلُ مِنها:
+        var personal = new[] { ".Phone", ".Email", ".NationalId", "OwnerUserId}", "u.Id}", ".FullName" };
+        var printOnly = rejected.Count(x => !x.Code.Split('\n')
+            .Any(l => l.Contains("Console.", StringComparison.Ordinal) && personal.Any(p => l.Contains(p, StringComparison.Ordinal))));
+        output.WriteLine($"حُقِنَ {rejected.Length} شَكلاً و{accepted.Length} حَيّاً · يَقبَلُ فاحِصُ أَسطُرِ الطِباعَةِ وَحدَه {printOnly} مِن المَرفوضات");
+        Assert.True(printOnly >= 4, $"العَيِّنَةُ لا تَقيسُ ما سَدَّه الفاحِصُ الجَديد: {printOnly}.");
+        Assert.True(wrong.Count == 0,
+            $"حُقِنَ {rejected.Length} شَكلاً و{accepted.Length} حَيّاً، وأَخطَأَ الفاحِصُ في {wrong.Count}:\n  " + string.Join("\n  ", wrong));
     }
 }
