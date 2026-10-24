@@ -46,18 +46,42 @@ public class ShipViewSingleUnsealTests(ITestOutputHelper output)
     private static int SecretOpens(ShipCapturingLogger log)
         => log.Lines.Count(l => l.Contains("does not open", StringComparison.Ordinal));
 
-    /// <summary><b>توصيفُ اليَوم</b>: عَرضُ البائِعِ يُحاوِلُ فَكَّ السِرِّ (سَطرٌ واحِد)، فَمَدخَلٌ رَمزُه يَنفَكُّ «غَيرُ جاهِز».</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، S15 I(2))</b> — كانَ <c>Today_the_vendor_view_opens_the_token_and_the_secret</c>
+    /// (‏<c>8f92f94</c>): «جاهِز=False · فَكُّ السِرّ=1». والآن العَرضُ يَفُكُّ رَمزَ التَحديثِ وَحدَه: الفَخُّ لا يُلمَس (صِفرُ سَطر) والمَدخَلُ «جاهِز».
+    /// <b>وما لا يُغلِقُه — مَقيساً لا مَوعوداً</b>: النَقرَةُ تَفُكُّ الاثنَينِ كَما كانَت، فَتَلمَسُ الفَخَّ (سَطرٌ واحِد) وتُجابُ <c>carrier_unavailable</c>.</summary>
     [Fact]
-    public async Task Today_the_vendor_view_opens_the_token_and_the_secret()
+    public async Task The_vendor_view_opens_the_token_alone_and_leaves_the_secret_to_the_click()
     {
         var (w, shipping, log) = await WorldAsync(trapSecret: true);
         var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
 
         var ready = await shipping.CarrierReadyForViewerAsync(Slug, deal, DealShipTests.Vendor);
-        output.WriteLine($"العَرض: جاهِز={ready} · فَكُّ السِرّ={SecretOpens(log)}");
+        var viewOpens = SecretOpens(log);
+        var click = await shipping.ShipAsync(Slug, w.Id, DealShipTests.Vendor, "Riyadh");
+        output.WriteLine($"العَرض: جاهِز={ready} · فَكُّ السِرّ={viewOpens} — النَقرَة: {click.Code ?? "ok"} · فَكُّ السِرّ={SecretOpens(log) - viewOpens}");
 
-        Assert.False(ready);
-        Assert.Equal(1, SecretOpens(log));
+        Assert.True(ready);
+        Assert.Equal(0, viewOpens);
+        Assert.Equal(DealShipAuthorization.CarrierUnavailable, click.Code);
+        Assert.Equal(1, SecretOpens(log) - viewOpens);
+        Assert.Empty(w.Oto.Calls);
+    }
+
+    /// <summary><b>والعَرضُ مَصدَرُه قيمَةٌ واحِدَة</b> — نَصُّ الدالَّة: المَدخَلُ المَحلولُ بِلا فَكٍّ ثُمَّ فَكُّ الرَمزِ وَحدَه، ولا <c>CarrierForAsync</c>
+    /// ولا <c>TryOpenSecret</c>؛ وتِلكَ باقِيَةٌ لِلنَقرَةِ والوارِد.</summary>
+    [Fact]
+    public void The_view_body_resolves_then_opens_the_token_only()
+    {
+        var code = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Deals/DealShipping.cs")));
+        var a = code.IndexOf("public async Task<bool> CarrierReadyForViewerAsync(", StringComparison.Ordinal);
+        var b = code.IndexOf("public async Task<VendorCarrier?> CarrierForAsync(", StringComparison.Ordinal);
+        Assert.True(a > 0 && b > a, "الدالَّتانِ بِتَرتيبِهِما بَعدَ I(1).");
+        var body = code[a..b];
+        Assert.Contains("ResolveCarrierAsync(tenantSlug, deal!, ct) is { } carrier && TryOpenToken(tenantSlug, carrier, out _)", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("CarrierForAsync(", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryOpenSecret(", body, StringComparison.Ordinal);
+        Assert.Contains("if (await CarrierForAsync(tenantSlug, deal!, ct) is not { } carrier)", code, StringComparison.Ordinal);
     }
 
     /// <summary><b>ويَبقى بِحَرفِه</b>: مَدخَلٌ سَليمٌ كُلُّه — العَرضُ «جاهِز» بِلا سَطر، والنَقرَةُ تَشحَنُ بِرَمزِ البائِع.</summary>

@@ -310,12 +310,17 @@ public sealed class DealShipping
     /// <para><b>ولا فَكَّ لِمَن لا تُجيزُه البَوّابَة</b> — المُشتَري والغَريبُ يَرَونَ الصَفحَةَ بِلا فَكِّ سِرِّ بائِعِها: المَبدَأُ الَّذي يُسأَلُ بِه
     /// <see cref="ShipAsync"/> (الجاهِزِيَّةُ بِلا فَكٍّ لِلبَوّابَة، والفَكُّ بَعدَها). و<see cref="CarrierReadyForAsync"/> بِحالِها: بَوّابَةُ <c>/ship</c> تَسأَلُها
     /// قَبلَ أَن تَعرِفَ الفاعِل.</para>
+    /// <para>(‏2026-10-24، تَيّارُ S15 البَند I(2)؛ ‏ADR-033 §٧‑ص‑١٠ مُلحَقاً — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>والفَكُّ قيمَةٌ واحِدَة</b> — رَمزُ
+    /// التَحديث (<see cref="TryOpenToken"/> عَلى <see cref="ResolveCarrierAsync"/>) لا الرَمزُ وسِرُّ الوارِدِ مَعاً. كانَ <see cref="CarrierForAsync"/> يُفَكُّ
+    /// ويُرمى في كُلِّ عَرضٍ لِلصَفحَة (تَوصيفُه <c>8f92f94</c>)، والسُؤالُ «أَيَنفَكُّ المَدخَل؟» تُجيبُه قيمَةٌ واحِدَة. <b>وما لا يُغلِقُه</b>: سِرُّ وارِدٍ لا يَنفَكُّ
+    /// ورَمزٌ يَنفَكّ — يُرسَمُ البابُ وتَرُدُّ <c>/ship</c> النَقرَةَ بِـ<c>carrier_unavailable</c> لِأَنَّها تَفُكُّ الاثنَين؛ ولا يَقَعُ إلّا بِقيمَتَينِ خُتِمَتا
+    /// بِمِفتاحَينِ رَئيسَينِ مُختَلِفَين (‏«أ» S15·٨).</para>
     /// </summary>
     public async Task<bool> CarrierReadyForViewerAsync(string tenantSlug, Deal? deal, DealShipper viewer, CancellationToken ct = default)
     {
         var ready = await CarrierReadyForAsync(tenantSlug, deal, ct);
         if (!ready || DealShipAuthorization.Validate(deal, viewer, carrierReady: true) is not null) return ready;
-        return await CarrierForAsync(tenantSlug, deal!, ct) is not null;
+        return await ResolveCarrierAsync(tenantSlug, deal!, ct) is { } carrier && TryOpenToken(tenantSlug, carrier, out _);
     }
 
     /// <summary>
