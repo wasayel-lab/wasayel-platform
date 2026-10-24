@@ -246,8 +246,10 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(Link(req, slug,
                     $"login?err=phone_required" +
                     (string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}")));
-            await AuthHandlers.RequestPhoneOtpHandler(new RequestPhoneOtp(phone), tenant, channel, default);
             var asParam = string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}";
+            // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-9) رَدُّ الحِصَّةِ أَو عُطلُ القَناةِ رِسالَةٌ لا صَفحَةُ ‏500 — كَبابَي البَريدِ والاستوديو.
+            try { await AuthHandlers.RequestPhoneOtpHandler(new RequestPhoneOtp(phone), tenant, channel, default); }
+            catch (Exception) { return Results.Redirect(Link(req, slug, $"login?err=send_failed{asParam}")); }
             return Results.Redirect(Link(req, slug, $"login?stage=verify&phone={Uri.EscapeDataString(phone)}{asParam}"));
         }).RequireFormBody().DisableAntiforgery();
 

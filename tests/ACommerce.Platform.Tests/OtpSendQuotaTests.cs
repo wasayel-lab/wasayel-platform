@@ -213,22 +213,24 @@ public class OtpSendQuotaTests(ITestOutputHelper output)
             ACommerce.Platform.I18n.LocaleCatalog.Arabic, "auth.login.err_send_failed")));
     }
 
-    /// <summary><b>«اليَوم»</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-security-9، صُغرى — يُثَبَّتُ قَبلَ العِلاجِ ويَنقَلِبُ بِاسمِه): بابُ الجَوّالِ يُنادي
-    /// <c>RequestPhoneOtpHandler</c> بِلا <c>try</c> — فَرَدُّ الحِصَّةِ في الحادِيَ عَشَرَ (<c>rate_limited</c>) أَو عُطلُ القَناةِ يَخرُجُ صَفحَةَ ‏500،
-    /// بَينَما بابُ البَريدِ وبابُ الاستوديو يَلتَقِطانِ ويَعودانِ بِـ<c>send_failed</c>.</summary>
+    /// <summary><b>انقَلَبَ بِاسمِه</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-security-9) مِن <c>Today_the_phone_door_lets_a_refused_or_failed_send_escape_as_a_server_error</c>:
+    /// بابُ الجَوّالِ يَلتَقِطُ كُلَّ ما يَرميه الإرسالُ (رَدُّ الحِصَّةِ وعُطلُ القَناةِ ومُهلَتُها) فَيَعودُ بِـ<c>send_failed</c> والدَورِ — النَصُّ القائِمُ في
+    /// القامُوس — ولا يَحمِلُ الرَقَمَ في رابِطِ الخَطَإ؛ والجاران كَما كانا.</summary>
     [Fact]
-    public void Today_the_phone_door_lets_a_refused_or_failed_send_escape_as_a_server_error()
+    public void The_phone_door_turns_a_refused_or_failed_send_into_send_failed_not_a_server_error()
     {
         var ext = WriteEndpointGuardTests.StripComments(StudioConsentCharacterizationTests.Endpoints());
         var at = ext.IndexOf("app.MapPost(\"/{slug}/auth/phone/login\"", StringComparison.Ordinal);
         Assert.True(at > 0, "لا بابَ جَوّال — الأَداةُ عَمياء.");
         var body = ext[at..ext.IndexOf("app.MapPost(", at + 10, StringComparison.Ordinal)];
         var call = body.IndexOf("AuthHandlers.RequestPhoneOtpHandler(", StringComparison.Ordinal);
-        Assert.True(call > 0, "لا نِداءَ إرسالٍ في بابِ الجَوّال — الأَداةُ عَمياء.");
-        Assert.DoesNotContain("try", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("send_failed", body, StringComparison.Ordinal);
+        var tryAt = body.LastIndexOf("try {", call, StringComparison.Ordinal);
+        var catchAt = body.IndexOf("catch (Exception) { return Results.Redirect(Link(req, slug, $\"login?err=send_failed{asParam}\")); }", call, StringComparison.Ordinal);
+        var verify = body.IndexOf("login?stage=verify", StringComparison.Ordinal);
+        Assert.True(call > 0 && tryAt > 0 && catchAt > call && verify > catchAt,
+            $"النِداءُ@{call} المُحاوَلَةُ@{tryAt} الالتِقاطُ@{catchAt} التَحَقُّق@{verify}");
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(body, @"RequestPhoneOtpHandler\("));
 
-        // والجاران يَلتَقِطان — بابُ البَريدِ وبابُ الاستوديو.
         var email = ext[ext.IndexOf("app.MapPost(\"/{slug}/auth/email/login\"", StringComparison.Ordinal)..];
         Assert.Contains("err=send_failed", email[..email.IndexOf("app.MapPost(", 10, StringComparison.Ordinal)], StringComparison.Ordinal);
         var studio = ext[ext.IndexOf("app.MapPost(\"/studio/auth/login\"", StringComparison.Ordinal)..];
