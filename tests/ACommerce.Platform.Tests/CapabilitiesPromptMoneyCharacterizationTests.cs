@@ -81,28 +81,33 @@ public class CapabilitiesPromptMoneyCharacterizationTests
         Assert.Equal(RestOfReferenceFingerprint, MaskedFingerprint(caps));
     }
 
+    /// <summary>(‏2026-10-24، كوميتُ الصِياغَة — انقَلَبَ بِقَرارٍ مَرئِيّ: كانَ <c>Today_the_marketplace_line_offers_the_analyst_a_commission_revenue_model</c>
+    /// يُثبِتُ السَطرَ القَديمَ في المُوَجِّه، وصارَ يُثبِتُه غائِباً؛ والجَديدُ مُثَبَّتٌ في <c>CapabilitiesPromptMoneyTests</c>.)</summary>
     [Fact]
-    public void Today_the_marketplace_line_offers_the_analyst_a_commission_revenue_model()
-        => Assert.Contains(MarketplaceWhenLineOld, PromptLines());
+    public void The_marketplace_line_no_longer_offers_the_analyst_a_commission_revenue_model()
+        => Assert.DoesNotContain(MarketplaceWhenLineOld, PromptLines());
 
+    /// <summary>(‏2026-10-24، كوميتُ الصِياغَة — انقَلَبَ: كانَ <c>Today_the_payments_line_names_gateways_the_code_does_not_integrate</c>.)</summary>
     [Fact]
-    public void Today_the_payments_line_names_gateways_the_code_does_not_integrate()
-        => Assert.Contains(PaymentsLineOld, PromptLines());
+    public void The_payments_line_no_longer_names_gateways_the_code_does_not_integrate()
+        => Assert.DoesNotContain(PaymentsLineOld, PromptLines());
 
+    /// <summary>(‏2026-10-24، كوميتُ الصِياغَة — انقَلَبَ: كانَ <c>Today_the_commission_branch_reasoning_promises_to_collect_and_distribute_the_payment</c>
+    /// يُثبِتُ التَعليلَ القَديمَ في المُطابِقِ وفي رِسالَةِ التَحليل، وصارَ يُثبِتُه غائِباً عَنهُما؛ والنَمَطُ والثِقَةُ كَما كانا.)</summary>
     [Fact]
-    public void Today_the_commission_branch_reasoning_promises_to_collect_and_distribute_the_payment()
+    public void The_commission_branch_reasoning_no_longer_promises_to_collect_and_distribute_the_payment()
     {
         var s = PatternMatcher.Match(new Dictionary<string, string>
             { ["offer"] = "twosided", ["payment"] = "commission", ["realtime"] = "no" });
         Assert.Equal("marketplace", s.Pattern);
-        Assert.Equal(CommissionReasoningOld, s.ReasoningAr);
+        Assert.NotEqual(CommissionReasoningOld, s.ReasoningAr);
 
-        // ‏عِندَ مَوضِعِ الحَقن: التَعليلُ المُخَزَّنُ يَبلُغُ رِسالَةَ التَحليلِ بِحَرفِه.
+        // ‏عِندَ مَوضِعِ الحَقن: التَعليلُ المُخَزَّنُ لا يَبلُغُ رِسالَةَ التَحليلِ بِحَرفِه القَديم.
         var session = new IncubatorSession
         {
             SuggestedPattern = s.Pattern, PatternConfidence = s.Confidence, PatternReasoning = s.ReasoningAr,
         };
-        Assert.Contains($"## النمط المقترح أولياً: marketplace (high) — {CommissionReasoningOld}",
+        Assert.DoesNotContain($"## النمط المقترح أولياً: marketplace (high) — {CommissionReasoningOld}",
             FeasibilityPromptBuilder.BuildUserMessage(session).Replace("\r\n", "\n").Split('\n'));
     }
 }
