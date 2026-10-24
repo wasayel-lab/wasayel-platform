@@ -128,6 +128,8 @@ public class UpgradePromptPriceTests
             var next = TierCatalog.NextAbove(current.Tier);
             if (next is null) continue;
             offered++;
+            // ‏(‏2026-10-24) هذِه النُسخَةُ مِن `Shown` مَربوطَةٌ بِحَرفِه: `StudioBillingPriceTests.ShownExpected` يُثَبِّتُ التَعريفَ في الصَفحَةِ
+            // بَعدَ طَيِّ المَسافات، فَإن تَغَيَّرَ هُناكَ حَمِرَ ذاك قَبلَ أَن تَكذِبَ هذِه.
             var shownOnBilling = StudioTierPurchase.IsSelfGrantable(next.Tier) || next.Tier == current.Tier;
             if (next.MonthlyPriceSar > 0 && !shownOnBilling) dead.Add($"{current.Tier}→{next.Tier}");
         }

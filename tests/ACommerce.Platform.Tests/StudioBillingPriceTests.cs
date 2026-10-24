@@ -237,4 +237,172 @@ public class StudioBillingPriceTests
         Assert.True(wrong.Count == 0,
             $"حُقِنَ {rejected.Length} شَكلاً مَقلوباً و{accepted.Length} حَيّاً، وأَخطَأَ الفاحِصُ في {wrong.Count}:\n  " + string.Join("\n  ", wrong));
     }
+
+    // ═══ اتِّجاهُ `Shown`: أَيُّ دَرَجَةٍ تُرسَمُ لَها بِطاقَةٌ وزِرُّ «اختِيار» (‏2026-10-24 — مُراجَعَةُ الموجَة ٤، M5 المَحمولَة) ═══
+    //
+    // **المَقيس قَبلُ**: لا صَفَّ يَقرَأُ اتِّجاهَ `Shown` — ما يُثَبِّتُه نُسخَةٌ مِنه داخِلَ الاختِبارات (`UpgradePromptPriceTests`
+    // يَحسُبُ `IsSelfGrantable(next.Tier) || next.Tier == current.Tier` بِنَفسِه)، و`PaymentLeakTests` يَسأَلُ `Contains("StudioTierPurchase")`
+    // عَلى نَصٍّ يُحَقِّقُه تَعليقُ الرَأسِ وَحدَه. فَطَفرَةُ `bool Shown(TierLimits t) => true;` — كُلُّ دَرَجَةٍ بِسِعرٍ تُرسَمُ لَها
+    // بِطاقَةٌ وزِرُّ «اختِيار» إلى نُقطَةٍ تَرُدُّه — مَرَّت بِالمَجموعَةِ كامِلَةً: مَقيساً عَلى نُسخَةٍ مُؤَرشَفَةٍ مِن `077e802` تَحتَها
+    // DLL الاختِبارِ المَبنِيّ، ‏4162/4162 خَضراء (ومُرَشِّحُ الأَصنافِ الأَربَعَةِ ‏24/24).
+
+    /// <summary>تَعريفُ <c>Shown</c> بِحَرفِه بَعدَ طَيِّ المَسافات — تُرسَمُ الدَرَجَةُ إن مُنِحَت ذاتِيّاً أَو كانَت دَرَجَةَ المُستَخدِمِ
+    /// الحالِيَّة (بَيانُ حالٍ لا عَرضُ بَيع؛ رَأسُ <c>StudioBilling.razor</c>).</summary>
+    internal const string ShownExpected = "StudioTierPurchase.IsSelfGrantable(t.Tier) || t.Tier == currentTier";
+
+    /// <summary>مَصدَرُ الشَبَكَة بِحَرفِه — الحَلقَةُ الوَحيدَةُ الَّتي تَقرَأُ الكاتالوج.</summary>
+    internal const string GridExpected = "TierCatalog.All.Values.Where(Shown)";
+
+    /// <summary>ما يُخالِفُ اتِّجاهَ الشَبَكَةِ في نَصِّ <c>StudioBilling.razor</c> بِلا تَعليقات — فارِغَةٌ إن كانَ كُلُّه كَما يُرسَم اليَوم.
+    /// يُغلِقُ عِندَ الشَكّ: تَعريفٌ لـ<c>Shown</c> غَيرُ واحِدٍ أَو بِغَيرِ شَكلِ التَعبير، أَو حَلقَةٌ تَقرَأُ <c>TierCatalog.All</c> غَيرُ واحِدَة،
+    /// أَو مَصدَرُها بِغَيرِ حَرفِه، أَو نَموذَجُ «اختِيار» غَيرُ واحِدٍ أَو خارِجَ الحَلقَة، أَو خارِجَ فَرعِ <c>else</c> لِـ<c>@if (isCurrent)</c>،
+    /// أَو <c>isCurrent</c> بِغَيرِ <c>t.Tier == currentTier</c>.</summary>
+    internal static IReadOnlyList<string> BillingGridViolations(string code)
+    {
+        static string Fold(string s) => Regex.Replace(s, @"\s+", " ").Trim();
+        var v = new List<string>();
+
+        var mentions = Regex.Matches(code, @"\bbool\s+Shown\s*\(").Count;
+        var defs = Regex.Matches(code, @"\bbool\s+Shown\s*\(\s*TierLimits\s+t\s*\)\s*=>(?<expr>[^;]+);");
+        if (mentions != 1 || defs.Count != 1)
+            v.Add($"shown_definition: {mentions} تَعريفاً و{defs.Count} بِشَكلِ التَعبير");
+        else if (Fold(defs[0].Groups["expr"].Value) is var shown && shown != ShownExpected)
+            v.Add($"shown_expr: «{shown}»");
+
+        var loops = new List<(string Source, int BodyStart, int BodyEnd)>();
+        foreach (Match m in Regex.Matches(code, @"@foreach\s*\("))
+        {
+            var open = m.Index + m.Length - 1;
+            var close = Matching(code, open, '(', ')');
+            var head = Fold(code[(open + 1)..close]);
+            if (!head.Contains("TierCatalog.All", StringComparison.Ordinal)) continue;
+            var brace = code.IndexOf('{', close);
+            if (brace < 0) { v.Add("grid_body: الحَلقَةُ بِلا كُتلَة"); continue; }
+            loops.Add((head, brace, Matching(code, brace, '{', '}')));
+        }
+        if (loops.Count != 1) v.Add($"grid_loops: {loops.Count} حَلقَةً تَقرَأُ TierCatalog.All");
+        else if (loops[0].Source != "var t in " + GridExpected) v.Add($"grid_source: «{loops[0].Source}»");
+
+        var forms = Regex.Matches(code, Regex.Escape("action=\"@($\"/studio/billing/select?tier={t.Tier}\")\"")).Cast<Match>().ToList();
+        if (forms.Count != 1) v.Add($"buy_forms: {forms.Count} نَموذَجَ «اختِيار»");
+        else if (loops.Count == 1)
+        {
+            var (bodyStart, bodyEnd) = (loops[0].BodyStart, loops[0].BodyEnd);
+            var at = forms[0].Index;
+            if (at < bodyStart || at > bodyEnd) v.Add("buy_form_outside_grid");
+            // فَرعُ ‎@if (isCurrent)‎ بِاسمِه في جِسمِ الحَلقَة — أَوَّلُ ‎@if‎ فيها شَرطُ السِعرِ لا هذا.
+            var cur = Regex.Matches(code[bodyStart..bodyEnd], @"@if\s*\(\s*isCurrent\s*\)\s*\{");
+            var (elseStart, elseEnd) = (-1, -1);
+            if (cur.Count == 1)
+            {
+                var thenEnd = Matching(code, bodyStart + cur[0].Index + cur[0].Length - 1, '{', '}');
+                var elseOpen = Regex.Match(code[(thenEnd + 1)..], @"^\s*else\s*\{");
+                if (elseOpen.Success)
+                {
+                    elseStart = thenEnd + elseOpen.Length;
+                    elseEnd = Matching(code, elseStart, '{', '}');
+                }
+            }
+            if (cur.Count != 1 || elseStart < 0 || at < elseStart || at > elseEnd)
+                v.Add($"buy_form_not_in_else_of_isCurrent: {cur.Count} فَرعاً");
+            var isCurrent = Regex.Matches(code, @"\bvar\s+isCurrent\s*=(?<e>[^;]+);");
+            if (isCurrent.Count != 1 || Fold(isCurrent[0].Groups["e"].Value) != "t.Tier == currentTier")
+                v.Add($"is_current: {isCurrent.Count} تَعريفاً" + (isCurrent.Count == 1 ? $" «{Fold(isCurrent[0].Groups["e"].Value)}»" : ""));
+        }
+        return v;
+    }
+
+    private static int Matching(string code, int open, char o, char c)
+    {
+        var depth = 0;
+        for (var i = open; i < code.Length; i++)
+        {
+            if (code[i] == o) depth++;
+            else if (code[i] == c && --depth == 0) return i;
+        }
+        Assert.Fail($"«{o}» بِلا مُقابِلٍ عِندَ {open} — الأَداةُ عَمياء.");
+        return -1;
+    }
+
+    private static string BillingCode() => UpgradePromptPriceTests.Code(
+        "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "StudioBilling.razor");
+
+    /// <summary><b>الشَبَكَةُ تَرسُمُ بِطاقَةً لِما يُمنَحُ ذاتِيّاً ولِلدَرَجَةِ الحالِيَّةِ وَحدَهُما، و«اختِيار» لِغَيرِ الحالِيَّة</b>
+    /// (‏2026-10-24): <c>Shown</c> بِحَرفِه، والحَلقَةُ تَقرَؤُه بِحَرفِها، والنَموذَجُ في فَرعِ <c>else</c> لِـ<c>@if (isCurrent)</c>. ولِأَنّ
+    /// التَعبيرَ مُثَبَّتٌ يُحسَبُ هُنا بِحَرفِه عَلى الكاتالوجِ — والأَرقامُ تُقرَأُ ولا تُكتَب (القاعِدَة ١٦): ما دامَ
+    /// <c>SelfServiceCheckoutExists = false</c> تَرى كُلُّ دَرَجَةٍ حالِيَّةٍ بِطاقَتَها وَحدَها، وزِرُّها مُعَطَّل، فَصِفرُ نَموذَجِ «اختِيار».</summary>
+    [Fact]
+    public void The_billing_grid_draws_a_card_only_for_a_self_grantable_or_the_current_tier_and_a_buy_form_only_off_the_current()
+    {
+        var code = BillingCode();
+        var violations = BillingGridViolations(code);
+        Assert.True(violations.Count == 0, "اتِّجاهُ الشَبَكَةِ انقَلَب:\n  " + string.Join("\n  ", violations));
+
+        Assert.False(StudioTierPurchase.SelfServiceCheckoutExists);
+        Func<TierLimits, string?, bool> shown = (t, currentTier) =>
+            StudioTierPurchase.IsSelfGrantable(t.Tier) || t.Tier == currentTier;
+        var tiers = TierCatalog.All.Values.ToList();
+        Assert.True(tiers.Count >= 4, $"أَداةٌ عَمياء: {tiers.Count} دَرَجَة.");
+        var cards = 0;
+        var buyForms = 0;
+        foreach (var current in tiers)
+        {
+            var drawn = TierCatalog.All.Values.Where(t => shown(t, current.Tier)).Select(t => t.Tier).ToArray();
+            Assert.Equal(new[] { current.Tier }, drawn);
+            cards += drawn.Length;
+            buyForms += drawn.Count(t => t != current.Tier);
+        }
+        Assert.Equal(tiers.Count, cards);
+        Assert.Equal(0, buyForms);
+    }
+
+    /// <summary><b>حَقنُ عَيب — فاحِصُ اتِّجاهِ الشَبَكَةِ يُحمِرُّ فِعلاً</b> (‏2026-10-24؛ بِشَكلِ
+    /// <c>The_sell_condition_checker_can_actually_go_red</c>): النَصُّ الحَيُّ نَفسُه تُحقَنُ فيه الطَفرَةُ الَّتي مَرَّت
+    /// (<c>bool Shown(TierLimits t) =&gt; true;</c>) وأَخَواتُها — عَلى التَعريفِ، وعَلى مَصدَرِ الحَلقَة، وعَلى فَرعِ النَموذَج — ويُشتَرَطُ
+    /// رَفضُها، ويُشتَرَطُ قَبولُ الحَيِّ وتَعريفِه مَطوِيّاً عَلى ثَلاثَةِ أَسطُر.</summary>
+    [Fact]
+    public void The_billing_grid_checker_can_actually_go_red()
+    {
+        var code = BillingCode();
+        const string Def = "=> StudioTierPurchase.IsSelfGrantable(t.Tier) || t.Tier == currentTier;";
+        string With(string from, string to)
+        {
+            Assert.Contains(from, code, StringComparison.Ordinal);
+            Assert.Single(Regex.Matches(code, Regex.Escape(from)));
+            return code.Replace(from, to, StringComparison.Ordinal);
+        }
+        var defLine = Regex.Match(code, @"bool\s+Shown\s*\(\s*TierLimits\s+t\s*\)\s*" + Regex.Escape(Def));
+        Assert.True(defLine.Success, "تَعريفُ `Shown` الحَيُّ لَم يُقرَأ — الأَداةُ عَمياء.");
+
+        var accepted = new (string Name, string Code)[]
+        {
+            ("الحَيّ", code),
+            ("مَطوِيّاً", With(defLine.Value,
+                "bool Shown(TierLimits t)\n        => StudioTierPurchase.IsSelfGrantable(t.Tier)\n        || t.Tier == currentTier;")),
+        };
+        var rejected = new (string Name, string Code)[]
+        {
+            ("=> true (طَفرَةُ المُراجِع)", With(defLine.Value, "bool Shown(TierLimits t) => true;")),
+            ("!IsSelfGrantable", With(Def, "=> !StudioTierPurchase.IsSelfGrantable(t.Tier) || t.Tier == currentTier;")),
+            ("|| true", With(Def, "=> StudioTierPurchase.IsSelfGrantable(t.Tier) || t.Tier == currentTier || true;")),
+            ("!= currentTier", With(Def, "=> StudioTierPurchase.IsSelfGrantable(t.Tier) || t.Tier != currentTier;")),
+            ("&& بَدَلَ ||", With(Def, "=> StudioTierPurchase.IsSelfGrantable(t.Tier) && t.Tier == currentTier;")),
+            ("كُتلَةٌ بَدَلَ تَعبير", With(defLine.Value, "bool Shown(TierLimits t) { return true; }")),
+            ("بِلا مُرَشِّح", With("TierCatalog.All.Values.Where(Shown)", "TierCatalog.All.Values")),
+            ("مُرَشِّحٌ مَنفِيّ", With("TierCatalog.All.Values.Where(Shown)", "TierCatalog.All.Values.Where(x => !Shown(x))")),
+            ("مُرَشِّحٌ صادِقٌ دائِماً", With("TierCatalog.All.Values.Where(Shown)", "TierCatalog.All.Values.Where(_ => true)")),
+            ("حَلقَةٌ ثانِيَة", With("<p style=\"margin-top:18px;", "@foreach (var x in TierCatalog.All.Values) { <i>@x.Tier</i> }\n<p style=\"margin-top:18px;")),
+            ("isCurrent كاذِبٌ دائِماً", With("var isCurrent = t.Tier == currentTier;", "var isCurrent = false;")),
+            ("فَرعٌ مَنفِيّ", With("@if (isCurrent)", "@if (!isCurrent)")),
+        };
+
+        var wrong = accepted.Where(x => BillingGridViolations(x.Code).Count != 0)
+                .Select(x => $"رُفِضَ حَيٌّ «{x.Name}»: {string.Join("؛ ", BillingGridViolations(x.Code))}")
+            .Concat(rejected.Where(x => BillingGridViolations(x.Code).Count == 0).Select(x => $"قُبِلَت طَفرَةٌ «{x.Name}»"))
+            .ToList();
+        Assert.True(accepted.Length >= 2 && rejected.Length >= 12,
+            $"أَداةٌ عَمياء: حُقِنَت {rejected.Length} طَفرَةً و{accepted.Length} حَيّاً.");
+        Assert.True(wrong.Count == 0,
+            $"حُقِنَت {rejected.Length} طَفرَةً و{accepted.Length} حَيّاً، وأَخطَأَ الفاحِصُ في {wrong.Count}:\n  " + string.Join("\n  ", wrong));
+    }
 }
