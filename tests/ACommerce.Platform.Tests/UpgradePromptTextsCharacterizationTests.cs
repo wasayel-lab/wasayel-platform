@@ -82,16 +82,21 @@ public class UpgradePromptTextsCharacterizationTests(ITestOutputHelper output)
         Assert.Equal(BannersWithMessageMaskedFingerprint, MaskedFingerprint(all));
     }
 
+    /// <summary>(‏2026-10-24، كوميتُ الصِياغَة — انقَلَبَ بِقَرارٍ مَرئِيّ: كانَ <c>Today_the_quota_message_directs_to_a_plan_upgrade_nothing_sells</c>
+    /// يُثبِتُ الرَسائِلَ الثَلاثَ القَديمَة — «احصُل على تَحاليل أَكثَر بِترقِيَة الباقَة.» و«احصُل على تَحسينات أَكثَر بِترقِيَة الباقَة.»
+    /// و«احصُل على إنشاء تَطبيقات إضافيَّة بِترقِيَة الباقَة.» — وصارَ يُثبِتُ ما يَقولُ الحَدَّ ولا يَدُلُّ عَلى تَرقِيَة. وتَعودُ القَديمَةُ
+    /// بِحَرفِها يَومَ تُباعُ دَرَجَة (أ‑٤، و<c>SelfServiceCheckoutExists = true</c>).)</summary>
     [Theory]
-    [InlineData(StudioUpgradeReason.Analyses, "احصُل على تَحاليل أَكثَر بِترقِيَة الباقَة.")]
-    [InlineData(StudioUpgradeReason.Refines,  "احصُل على تَحسينات أَكثَر بِترقِيَة الباقَة.")]
-    [InlineData(StudioUpgradeReason.Stores,   "احصُل على إنشاء تَطبيقات إضافيَّة بِترقِيَة الباقَة.")]
-    public async Task Today_the_quota_message_directs_to_a_plan_upgrade_nothing_sells(string reason, string message)
+    [InlineData(StudioUpgradeReason.Analyses, "عَدَدُ التَحاليلِ في باقَتِكَ مَحدودٌ لِكُلِّ شَهر.")]
+    [InlineData(StudioUpgradeReason.Refines,  "عَدَدُ التَحسيناتِ في باقَتِكَ مَحدودٌ لِكُلِّ شَهر.")]
+    [InlineData(StudioUpgradeReason.Stores,   "عَدَدُ التَطبيقاتِ في باقَتِكَ مَحدود.")]
+    public async Task The_quota_message_states_the_limit_and_directs_to_no_upgrade(string reason, string message)
     {
         Assert.False(StudioTierPurchase.SelfServiceCheckoutExists);
         var drawn = (await RenderAll()).Where(b => b.Reason == reason).ToList();
         Assert.True(drawn.Count >= 4, $"أَداةٌ عَمياء: {drawn.Count} لافِتَةً لِـ«{reason}».");
         Assert.All(drawn, b => Assert.Equal(message, MessageOf(b.Html)));
+        Assert.All(drawn, b => Assert.DoesNotContain("تَرقِيَة", MessageOf(b.Html).Replace("ترقِيَة", "تَرقِيَة"), StringComparison.Ordinal));
     }
 
     [Fact]
