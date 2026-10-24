@@ -230,7 +230,7 @@ static async Task<int> SnapshotAsync(string cs, string[] hide, string suffix, st
     if (EnclosingWorkTree(full) is { } root)
     {
         Console.Error.WriteLine($"تَوَقُّف: {full} داخِلَ شَجَرَةِ عَمَلِ git ({root}) — اللَقطَةُ بَياناتُ إنتاجٍ شَخصِيَّة، ولا تُكتَبُ حَيثُ يَرفَعُها git add.");
-        Console.Error.WriteLine("  اكتُبها خارِجَها: mkdir -p \"$HOME/wasayel-snapshots\" ثُمَّ --snapshot \"$HOME/wasayel-snapshots/<الاسم>.dump\" (DEPLOY.md §٤‑د).");
+        Console.Error.WriteLine("  اكتُبها خارِجَها: mkdir -m 700 -p \"$HOME/wasayel-snapshots\" ثُمَّ --snapshot \"$HOME/wasayel-snapshots/<الاسم>.dump\" (DEPLOY.md §٤‑د).");
         return 1;
     }
 
@@ -273,6 +273,12 @@ static async Task<int> SnapshotAsync(string cs, string[] hide, string suffix, st
         return 1;
     }
 
+    // ‏(‏2026-10-24 — مُراجَعَةُ الموجَة ٤، بَندُ L) **واللَقطَةُ لِصاحِبِها وَحدَه**: pg_dump يَكتُبُها بِقِناعِ المُشَغِّل — مَقيساً
+    // بِـumask 0022: ‏644، يَقرَؤُها كُلُّ حِسابٍ عَلى الجِهاز — وهي بَياناتُ الإنتاجِ الشَخصِيَّة. فَتُضَيَّقُ إلى قِراءَةِ صاحِبِها وكِتابَتِه
+    // قَبلَ أَيِّ سَطرٍ يَقرَؤُها، ومُجَلَّدُها ‏700 في §٤‑د. وعَلى وِندوز لا نَمَطَ يونِكسِيّ: صَلاحِيّاتُ المِلَفِّ مِن مُجَلَّدِ البَيت.
+    if (!OperatingSystem.IsWindows())
+        File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+
     var list = await RunAsync("pg_restore", ["--list", file], null);
     if (list is null || list.Value.Code != 0)
     {
@@ -291,7 +297,8 @@ static async Task<int> SnapshotAsync(string cs, string[] hide, string suffix, st
         File.Delete(file);
         return 1;
     }
-    Console.WriteLine($"✓ اللَقطَة: {file} · {bytes} بايتاً · {tables} جَدوَلاً ({data} بِبَياناتِه)");
+    var mode = OperatingSystem.IsWindows() ? "" : " · الصَلاحِيَّة " + Convert.ToString((int)File.GetUnixFileMode(file), 8);
+    Console.WriteLine($"✓ اللَقطَة: {file} · {bytes} بايتاً · {tables} جَدوَلاً ({data} بِبَياناتِه){mode}");
     Console.WriteLine($"  وتُستَرجَعُ إلى قاعِدَةٍ جَديدَة: pg_restore --no-owner --dbname=<القاعِدَةُ الجَديدَة> {file}");
     return 0;
 }

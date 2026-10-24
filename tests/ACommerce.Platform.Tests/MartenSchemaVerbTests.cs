@@ -336,8 +336,35 @@ public class MartenSchemaVerbTests
         Assert.NotEmpty(snaps);
         Assert.Equal(Regex.Matches(code, "--snapshot").Count, snaps.Count);   // ‏(‏2026-10-24) كُلُّ --snapshot يُقرَأُ مَسارُه، بِعَلامَتَي تَنصيصٍ أَو بِدونِهِما
         Assert.All(snaps, s => Assert.StartsWith("$HOME/wasayel-snapshots/", s, StringComparison.Ordinal));
-        var mkdir = code.IndexOf("mkdir -p \"$HOME/wasayel-snapshots\"", StringComparison.Ordinal);
-        Assert.True(mkdir >= 0 && mkdir < code.IndexOf("--snapshot", StringComparison.Ordinal), "mkdir -p لا يَسبِقُ أَوَّلَ --snapshot.");
+        // ‏(‏2026-10-24، بَندُ L) والمُجَلَّدُ لِصاحِبِه وَحدَه: `-m 700` وَ`chmod 700` لِمُجَلَّدٍ قائِم.
+        var mkdir = code.IndexOf("mkdir -m 700 -p \"$HOME/wasayel-snapshots\" && chmod 700 \"$HOME/wasayel-snapshots\"", StringComparison.Ordinal);
+        Assert.True(mkdir >= 0 && mkdir < code.IndexOf("--snapshot", StringComparison.Ordinal), "mkdir -m 700 -p لا يَسبِقُ أَوَّلَ --snapshot.");
+    }
+
+    /// <summary><b>واللَقطَةُ لِصاحِبِها وَحدَه</b> (‏2026-10-24 — مُراجَعَةُ الموجَة ٤، بَندُ L؛ مَقيساً قَبلُ بِـumask ‏0022: المُجَلَّدُ ‏755
+    /// والمِلَفُّ ‏644): الفِعلُ يُضَيِّقُ المِلَفَّ إلى <c>UserRead | UserWrite</c> عَلى غَيرِ وِندوز بَعدَ نَجاحِ <c>pg_dump</c> وقَبلَ أَوَّلِ
+    /// قارِئٍ لَه (<c>pg_restore --list</c>)، ويَطبَعُ صَلاحِيَّتَه؛ و§٤‑د يَقولُ مَتى تُحذَفُ بِأَمرِها، وتَلميحُ الرَفضِ يَقولُ <c>-m 700</c>.</summary>
+    [Fact]
+    public void TheSnapshot_IsOwnerOnly_OnTheFileAndInTheStep_AndIsDeletedOnceTheDeployIsVerified()
+    {
+        var snap = SnapshotFunction();
+        var dumpFailed = snap.IndexOf("if (dump is null || dump.Value.Code != 0)", StringComparison.Ordinal);
+        const string Narrow = "if (!OperatingSystem.IsWindows())\n        File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite);";
+        var narrow = snap.IndexOf(Narrow, StringComparison.Ordinal);
+        var firstReader = snap.IndexOf("RunAsync(\"pg_restore\"", StringComparison.Ordinal);
+        Assert.True(dumpFailed > 0 && narrow > dumpFailed && firstReader > narrow,
+            $"تَرتيبُ اللَقطَة: فَشَلُ pg_dump {dumpFailed} · التَضييق {narrow} · أَوَّلُ قارِئ {firstReader} — يُضَيَّقُ بَعدَ الكِتابَةِ وقَبلَ أَيِّ قِراءَة.");
+        Assert.Single(Regex.Matches(snap, Regex.Escape("File.SetUnixFileMode(")));
+        Assert.Contains("\" · الصَلاحِيَّة \" + Convert.ToString((int)File.GetUnixFileMode(file), 8)", snap, StringComparison.Ordinal);
+        Assert.Contains("mkdir -m 700 -p \\\"$HOME/wasayel-snapshots\\\"", snap, StringComparison.Ordinal);
+        Assert.DoesNotContain("mkdir -p \\\"$HOME", snap, StringComparison.Ordinal);
+
+        var doc = Read("docs", "DEPLOY.md");
+        var start = doc.IndexOf("#### المُخَطَّطُ قَبلَ النَشر", StringComparison.Ordinal);
+        var end = doc.IndexOf("## ٥.", start, StringComparison.Ordinal);
+        var section = doc[start..end];
+        Assert.Contains("`rm \"$HOME/wasayel-snapshots/pre-deploy-<sha>.dump\"`", section, StringComparison.Ordinal);
+        Assert.Contains("**وتُحذَفُ حينَ يُتَحَقَّقُ النَشر**", section, StringComparison.Ordinal);
     }
 
     /// <summary>مَسارُ كُلِّ <c>--snapshot</c> في نَصِّ أَوامِر — بَينَ عَلامَتَي تَنصيصٍ أَو بِدونِهِما (‏2026-10-24 — مُراجَعَةُ الموجَة ٤،
