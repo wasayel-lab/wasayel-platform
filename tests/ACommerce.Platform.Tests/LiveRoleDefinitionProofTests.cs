@@ -26,11 +26,18 @@ namespace ACommerce.Platform.Tests;
 // وما **لا** يَفعَلُه عَمداً: لا يَعتَمِد ولا يَرفُض. الاعتِماد قَرار
 // بَشَريّ يَمُرّ مِن نُقطَة الموافَقَة خَلف بَوّابَة مُشرِف المَنصَّة، وهو
 // ما يَجعَل «قَبل/بَعد» عَلى نَفس الخادِم بُرهاناً لا تَرتيباً.
+//
+// ‏**(‏2026-10-24، تَيّارُ S15 البَند G — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) ويُنشِئُ ما يَقرَؤُه**: كانَ يَطلُبُ المُستَأجِرَ `adwar-demo` وهو في
+// Neon وَحدَه — فَعَلى كُلِّ قاعِدَةٍ مَحَلِّيَّةٍ مَبذورَةٍ يَحمَرُّ بِـ«المَتجَر «adwar-demo» غَير مَوجود.» (مَقيس، RELEASE-READINESS §٤)، وعَلى
+// Neon بَعدَ أَن يَعتَمِدَ المُشرِفُ «khayyat» عَبرَ HTTP يَحمَرُّ في الجَولَةِ التالِيَة (`ProposeAsync` يَرُدُّ المُعتَمَد) ويَجِدُ «المُؤَلَّفَ» غَيرَ فارِغ.
+// فَصارَ مُستَأجِرُه **لِكُلِّ جَولَةٍ** (`live-roles-<8>`) يُنشِئُه قَبلَ النِداءِ — كَأَخَواتِه الَّتي تَكتُبُ ما تَقرَأ — ويُطبَعُ سلاجُه في الأَدِلَّة
+// ويَبقى بَعدَها، فَاعتِمادُ «khayyat» عَبرَ `/admin/tenants/{slug}/roles` بِجَلسَةِ المُشرِفِ مُمكِنٌ كَما كان. ويَبقى في المَجموعَةِ التَسلسُلِيَّة
+// (`72aa8c2`) بِاسمِه.
 
 [Collection(LiveProofCollection.Name)]
 public class LiveRoleDefinitionProofTests
 {
-    private const string TenantSlug = "adwar-demo";
+    private const string TenantPrefix = "live-roles-";
     private const string RoleSlug   = "khayyat";
     private const string BadSlug    = "sabbagh";
 
@@ -66,6 +73,15 @@ public class LiveRoleDefinitionProofTests
 
         var roles = new TenantRoleService(store);
         var exec  = new AgentToolExecutor(store, roles);
+
+        // ─── ٠. ما يَقرَؤُه يُنشِئُه: مُستَأجِرٌ لِهذِه الجَولَةِ وَحدَها ─────────────
+        var TenantSlug = TenantPrefix + Guid.NewGuid().ToString("N")[..8];
+        await using (var w = store.LightweightSession())
+        {
+            w.Insert(new ACommerce.Kit.Tenants.Tenant { Id = TenantSlug, Name = TenantSlug });
+            await w.SaveChangesAsync();
+        }
+        Log($"[tenant] أُنشِئَ مُستَأجِرُ الجَولَة «{TenantSlug}» — يَبقى لِاعتِمادِ «{RoleSlug}» عَبرَ /admin/tenants/{TenantSlug}/roles");
 
         // ─── ١. المُوجَب: نِداء أَداة مُصطَنَع بِنَفس شَكل ما يُنتِجُه النَموذَج
         var payload = $$"""
