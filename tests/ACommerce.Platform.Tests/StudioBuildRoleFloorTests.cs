@@ -325,17 +325,100 @@ public class StudioBuildRoleFloorTests(ITestOutputHelper output)
     /// <summary>صُفوفُ <c>TestDataSeeder.Plan</c> كَما في المَصدَر — المَشروعُ لا يُرَجِّعُ <c>apps/V1.App</c>،
     /// فَتُقرَأُ الصُفوفُ مِن مِلَفِّها بِحَرفِها، والبَذرَةُ تُسَكِّنُ أَدوارَ كُلِّ صَفٍّ مِن <see cref="RoleCatalog"/>
     /// بِـ<see cref="RoleCatalog.InstantiateRole"/> — فَهِيَ هُنا بِعَينِها.</summary>
+    /// <remarks><b>وكُلُّ صَفٍّ في الكُتلَةِ يُقرَأُ أَو يَحمَرّ</b> (‏2026-10-24 — مُراجَعَةُ الموجَة ٤، بَندُ E): المُحَلِّلُ لا يَعرِفُ إلّا
+    /// <c>("slug", new[] { … })</c>، فَصَفٌّ يُكتَبُ تَعبيرَ مَجموعَةٍ (<c>("x", ["vendor"])</c>) أَو <c>new string[]</c> أَو بِأَسماءِ عَناصِر كانَ
+    /// يُتَخَطّى بِصَمتٍ ويَخضَرُّ العَدُّ بِدونِه؛ وصَفٌّ مُعَلَّقٌ بِـ<c>//</c> كانَ يُعَدّ. فَتُنزَعُ التَعليقاتُ أَوَّلاً، وتُعَدُّ مَداخِلُ
+    /// الكُتلَةِ عَدّاً مُستَقِلّاً (فَواصِلُ المُستَوى الأَعلى خارِجَ <c>( ) { } [ ]</c>)، ويُشتَرَطُ أَن يُساوِيَ المَقروءُ المَعدود.</remarks>
     private static IReadOnlyList<(string Slug, string[] Roles)> SeederPlanRows()
     {
         var source = File.ReadAllText(Path.Combine(
             ThemeZeroEquivalenceTests.RepoRoot, "apps", "V1.App", "Seed", "TestDataSeeder.cs"));
-        var plan = Regex.Match(source, @"Plan\s*=\s*\{(?<rows>.*?)\};", RegexOptions.Singleline);
+        var (rows, entries) = ParsePlan(source);
+        Assert.True(entries == rows.Count,
+            $"كُتلَةُ `Plan` فيها {entries} مَدخَلاً ويُقرَأُ مِنها {rows.Count} صَفّاً — صَفٌّ بِشَكلٍ لا يَعرِفُه المُحَلِّلُ لا يُتَخَطّى.");
+        return rows;
+    }
+
+    /// <summary>صُفوفُ كُتلَةِ <c>Plan</c> المَقروءَةُ بِشَكلِ <c>("slug", new[] { … })</c>، وعَدَدُ مَداخِلِها مَعدوداً بِمَعزِلٍ عَن الشَكل —
+    /// بَعدَ نَزعِ التَعليقات.</summary>
+    internal static (IReadOnlyList<(string Slug, string[] Roles)> Rows, int Entries) ParsePlan(string source)
+    {
+        var code = WriteEndpointGuardTests.StripComments(source);
+        var plan = Regex.Match(code, @"\bPlan\s*=\s*\{(?<rows>.*?)\};", RegexOptions.Singleline);
         Assert.True(plan.Success, "لا كُتلَةَ `Plan` في TestDataSeeder.cs — الأَداةُ عَمياء.");
-        return Regex.Matches(plan.Groups["rows"].Value,
+        var block = plan.Groups["rows"].Value;
+        var rows = Regex.Matches(block,
                 @"\(""(?<slug>[^""]+)"",\s*new\[\]\s*\{(?<roles>[^}]*)\}\)")
             .Select(m => (m.Groups["slug"].Value,
                 Regex.Matches(m.Groups["roles"].Value, @"""(?<r>[^""]+)""").Select(r => r.Groups["r"].Value).ToArray()))
             .ToList();
+
+        var entries = 0;
+        var depth = 0;
+        var current = new System.Text.StringBuilder();
+        foreach (var c in block + ",")
+        {
+            if (c is '(' or '{' or '[') depth++;
+            else if (c is ')' or '}' or ']') depth--;
+            if (depth == 0 && c == ',')
+            {
+                if (current.ToString().Trim().Length > 0) entries++;
+                current.Clear();
+            }
+            else current.Append(c);
+        }
+        return (rows, entries);
+    }
+
+    /// <summary><b>حَقنُ عَيب — عَدُّ صُفوفِ البَذرَةِ يُحمِرُّ فِعلاً</b> (‏2026-10-24): كُتلَةٌ بِشَكلِ <c>TestDataSeeder.Plan</c> تُحقَنُ فيها
+    /// صُفوفٌ بِأَشكالٍ لا يَقرَؤُها المُحَلِّل — تَعبيرُ مَجموعَة، و<c>new string[]</c>، وأَسماءُ عَناصِر — فَيَختَلِفُ المَعدودُ عَن المَقروء؛
+    /// وصَفٌّ مُعَلَّقٌ لا يُعَدُّ ولا يُقرَأ، والفاصِلَةُ الأَخيرَةُ لا تَصنَعُ مَدخَلاً.</summary>
+    [Fact]
+    public void The_seeder_row_count_can_actually_go_red()
+    {
+        const string Live = """
+            public static readonly (string slug, string[] roles)[] Plan =
+            {
+                ("ashare", new[] { "customer", "host", "vendor" }),
+                ("ejar",   new[] { "customer", "host", "vendor" }),
+                ("order",  new[] { "customer", "vendor", "driver" }),
+                ("injez",  new[] { "rider", "driver" }),
+            };
+            """;
+        string With(string extra)
+        {
+            Assert.EndsWith("\n};", Live, StringComparison.Ordinal);
+            return Live[..^2] + "    " + extra + "\n};";
+        }
+
+        var accepted = new (string Name, string Source, int Rows)[]
+        {
+            ("الحَيّ", Live, 4),
+            ("صَفٌّ مُعَلَّق", With("// (\"ghost\", new[] { \"customer\" }),"), 4),
+            ("صَفٌّ خامِسٌ بِالشَكلِ نَفسِه", With("(\"fifth\", new[] { \"customer\", \"vendor\" }),"), 5),
+        };
+        var rejected = new (string Name, string Source)[]
+        {
+            ("تَعبيرُ مَجموعَة", With("(\"fifth\", [\"customer\", \"vendor\"]),")),
+            ("new string[]", With("(\"fifth\", new string[] { \"customer\", \"vendor\" }),")),
+            ("أَسماءُ عَناصِر", With("(slug: \"fifth\", roles: new[] { \"customer\" }),")),
+            ("ثابِتٌ بِاسمِه", With("(FifthSlug, new[] { \"customer\" }),")),
+        };
+
+        var wrong = new List<string>();
+        foreach (var (name, source, expected) in accepted)
+        {
+            var (rows, entries) = ParsePlan(source);
+            if (rows.Count != expected || entries != rows.Count) wrong.Add($"رُفِضَ حَيٌّ «{name}»: {entries} مَدخَلاً، {rows.Count} صَفّاً");
+        }
+        foreach (var (name, source) in rejected)
+        {
+            var (rows, entries) = ParsePlan(source);
+            output.WriteLine($"«{name}»: {entries} مَدخَلاً، {rows.Count} صَفّاً");
+            if (entries == rows.Count) wrong.Add($"قُبِلَ «{name}»: {entries} = {rows.Count}");
+        }
+        Assert.True(wrong.Count == 0,
+            $"حُقِنَ {rejected.Length} شَكلاً و{accepted.Length} حَيّاً، وأَخطَأَ العَدُّ في {wrong.Count}:\n  " + string.Join("\n  ", wrong));
     }
 
     /// <summary>
@@ -377,7 +460,7 @@ public class StudioBuildRoleFloorTests(ITestOutputHelper output)
         foreach (var (name, roles) in subjects)
             output.WriteLine($"{name}: " + string.Join(", ", SelfGrantPolicy.SelfGrantable(roles)
                 .Where(r => r.Permissions.Contains(SellerPermission)).Select(r => r.Slug)));
-        output.WriteLine($"فُحِصَ {subjects.Count} — مُستَثنًى بِاسمِه: {ExcludedByName}");
+        output.WriteLine($"فُحِصَ {subjects.Count} — مُستَثنًى بِاسمِه: {ExcludedByName} — صُفوفُ البَذرَة: {rows.Count} (= مَداخِلِ كُتلَةِ Plan)");
 
         Assert.True(bare.Count == 0,
             $"فُحِصَ {subjects.Count} (‏{TenantFromAnalysisFactory.KnownPatterns.Count} نَمَطاً و{rows.Count} صَفَّ بَذر؛ "
