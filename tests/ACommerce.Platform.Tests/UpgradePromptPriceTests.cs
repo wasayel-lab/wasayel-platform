@@ -130,6 +130,8 @@ public class UpgradePromptPriceTests
             offered++;
             // ‏(‏2026-10-24) هذِه النُسخَةُ مِن `Shown` مَربوطَةٌ بِحَرفِه: `StudioBillingPriceTests.ShownExpected` يُثَبِّتُ التَعريفَ في الصَفحَةِ
             // بَعدَ طَيِّ المَسافات، فَإن تَغَيَّرَ هُناكَ حَمِرَ ذاك قَبلَ أَن تَكذِبَ هذِه.
+            // ‏(‏2026-10-24 — تَيّارُ S16، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والرَبطُ كانَ دَعوى: تَغييرُ الصَفحَةِ و`ShownExpected` مَعاً يُبقي هذِه عَلى
+            // القَديم. صارَ `StudioBillingPriceTests.The_two_test_copies_of_Shown_are_ShownExpected_letter_for_letter` يُقارِنُها بِحَرفِه.
             var shownOnBilling = StudioTierPurchase.IsSelfGrantable(next.Tier) || next.Tier == current.Tier;
             if (next.MonthlyPriceSar > 0 && !shownOnBilling) dead.Add($"{current.Tier}→{next.Tier}");
         }

@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace ACommerce.Platform.Tests;
 
@@ -13,7 +14,7 @@ namespace ACommerce.Platform.Tests;
 // `<div style="font-size:28px;…">99 <span …>ر.س / شَهر</span></div>`. ورَقمُ الاشتِراكِ ودَورِيَّتُه غَيرُ مَوجودَينِ في أَيِّ مِلَفّ
 // (ق‑٥ «كِلا الحَدَّينِ بِلا رَقم»؛ القاعِدَة ١٦) — فَالأَرقامُ لا تُمَسّ، ويُخفى عَرضُها حَيثُ لا بَيع.
 
-public class StudioBillingPriceTests
+public class StudioBillingPriceTests(ITestOutputHelper output)
 {
     private static string Billing()
     {
@@ -336,6 +337,9 @@ public class StudioBillingPriceTests
     {
         var code = BillingCode();
         var violations = BillingGridViolations(code);
+        // ‏(‏2026-10-24 — تَيّارُ S16، مُراجَعَةُ S13 الجَولَة ١) ويُطبَعُ ما فُحِص (القاعِدَة ١٠).
+        output.WriteLine($"حَلَقاتٌ تَقرَأُ TierCatalog.All: {Regex.Matches(code, @"@foreach\s*\([^)]*TierCatalog\.All").Count} · نَماذِجُ «اختِيار»: "
+            + $"{Regex.Matches(code, Regex.Escape("action=\"@($\"/studio/billing/select?tier={t.Tier}\")\"")).Count} · مُخالَفات: {violations.Count}");
         Assert.True(violations.Count == 0, "اتِّجاهُ الشَبَكَةِ انقَلَب:\n  " + string.Join("\n  ", violations));
 
         Assert.False(StudioTierPurchase.SelfServiceCheckoutExists);
@@ -352,8 +356,90 @@ public class StudioBillingPriceTests
             cards += drawn.Length;
             buyForms += drawn.Count(t => t != current.Tier);
         }
+        output.WriteLine($"دَرَجات: {tiers.Count} ({string.Join(", ", tiers.Select(t => t.Tier))}) · بِطاقاتٌ مَرسومَة: {cards} · نَماذِجُ «اختِيار»: {buyForms}");
         Assert.Equal(tiers.Count, cards);
         Assert.Equal(0, buyForms);
+    }
+
+    // ─── ‏2026-10-24 (تَيّارُ S16، مُراجَعَةُ S13 الجَولَة ١): نُسخَتا `Shown` في الاختِباراتِ مَربوطَتانِ بِحَرفِه فِعلاً ─────────
+    //
+    // **المَقيسُ قَبل**: الصَفُّ أَعلاه يَحسُبُ الشَبَكَةَ بِلامدا مَنسوخَةٍ مِن `Shown`، و`UpgradePromptPriceTests` بِـ`shownOnBilling` — وتَعليقُ تِلكَ
+    // يَقولُ «مَربوطَةٌ بِحَرفِه» ولا شَيءَ يَربِطُهُما: تَغييرُ الصَفحَةِ و`ShownExpected` مَعاً يُبقي النُسخَتَينِ عَلى القَديمِ خَضراوَين.
+
+    /// <summary>ما يُخالِفُ «النُسخَتانِ هُما <see cref="ShownExpected"/>» في مَصدَرَي الاختِبارَين — تُقرَأُ لامدا <c>shown</c> هُنا و<c>shownOnBilling</c>
+    /// هُناك، وتُطوى مَسافاتُهُما، ويُبَدَّلُ في الثانِيَةِ <c>next.Tier</c> بِـ<c>t.Tier</c> و<c>current.Tier</c> بِـ<c>currentTier</c> — ثُمَّ تُقارَنانِ بِحَرفِه.</summary>
+    internal static IReadOnlyList<string> ShownCopyViolations(string billingTests, string upgradeTests)
+    {
+        static string Fold(string s) => Regex.Replace(s, @"\s+", " ").Trim();
+        var v = new List<string>();
+        var here = Regex.Matches(billingTests, @"\bshown = \(t, currentTier\) =>(?<e>[^;]+);");
+        if (here.Count != 1) v.Add($"billing_copy: {here.Count} نُسخَة");
+        else if (Fold(here[0].Groups["e"].Value) is var a && a != ShownExpected) v.Add($"billing_copy_drift: «{a}»");
+        var there = Regex.Matches(upgradeTests, @"\bvar shownOnBilling = (?<e>[^;]+);");
+        if (there.Count != 1) v.Add($"upgrade_copy: {there.Count} نُسخَة");
+        else
+        {
+            var b = Fold(there[0].Groups["e"].Value).Replace("next.Tier", "t.Tier", StringComparison.Ordinal)
+                .Replace("current.Tier", "currentTier", StringComparison.Ordinal);
+            if (b != ShownExpected) v.Add($"upgrade_copy_drift: «{b}»");
+        }
+        return v;
+    }
+
+    private static string TestSource(string name)
+    {
+        var path = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "tests", "ACommerce.Platform.Tests", name);
+        var text = File.ReadAllText(path);
+        Assert.True(text.Length > 1000, $"أَداةٌ عَمياء: {name} لَم يُقرَأ.");
+        return text;
+    }
+
+    /// <summary><b>نُسخَتا <c>Shown</c> في الاختِباراتِ هُما <see cref="ShownExpected"/> بِحَرفِه</b> — فَتَغييرُ الصَفحَةِ و<see cref="ShownExpected"/> مَعاً
+    /// يُحمِرُّ هُنا حَتّى تَتبَعَهُما النُسختان.</summary>
+    [Fact]
+    public void The_two_test_copies_of_Shown_are_ShownExpected_letter_for_letter()
+    {
+        var v = ShownCopyViolations(TestSource("StudioBillingPriceTests.cs"), TestSource("UpgradePromptPriceTests.cs"));
+        output.WriteLine($"نُسختا Shown المَفحوصَتان: 2 (StudioBillingPriceTests.shown، UpgradePromptPriceTests.shownOnBilling) · مُخالَفات: {v.Count}"
+            + (v.Count > 0 ? " — " + string.Join("؛ ", v) : ""));
+        Assert.True(v.Count == 0, string.Join("\n", v));
+    }
+
+    /// <summary><b>حَقنُ عَيب — رابِطُ النُسختَينِ يُحمِرُّ فِعلاً</b>: نُسخَةٌ بِـ<c>&amp;&amp;</c>، أَو بِـ<c>!=</c>، أَو مَحذوفَة، أَو مُكَرَّرَة — في كُلٍّ مِن المِلَفَّين.</summary>
+    [Fact]
+    public void The_shown_copy_binder_can_actually_go_red()
+    {
+        var billing = TestSource("StudioBillingPriceTests.cs");
+        var upgrade = TestSource("UpgradePromptPriceTests.cs");
+        const string Here = "StudioTierPurchase.IsSelfGrantable(t.Tier) || t.Tier == currentTier;";
+        const string There = "var shownOnBilling = StudioTierPurchase.IsSelfGrantable(next.Tier) || next.Tier == current.Tier;";
+        string With(string text, string from, string to)
+        {
+            var at = text.IndexOf(from, StringComparison.Ordinal);
+            Assert.True(at >= 0, $"المِرساةُ غائِبَة: {from}");
+            return text[..at] + to + text[(at + from.Length)..];
+        }
+        var lambda = Regex.Match(billing, @"\bshown = \(t, currentTier\) =>\s*" + Regex.Escape(Here));
+        Assert.True(lambda.Success, "لامدا shown الحَيَّةُ لَم تُقرَأ — الأَداةُ عَمياء.");
+        var rejected = new (string Name, string Billing, string Upgrade)[]
+        {
+            ("&& هُنا", With(billing, lambda.Value, lambda.Value.Replace("||", "&&", StringComparison.Ordinal)), upgrade),
+            ("!= هُنا", With(billing, lambda.Value, lambda.Value.Replace("==", "!=", StringComparison.Ordinal)), upgrade),
+            ("بِلا نُسخَةٍ هُنا", With(billing, lambda.Value, "shownGone = (t, currentTier) => true;"), upgrade),
+            ("&& هُناك", billing, With(upgrade, There, There.Replace("||", "&&", StringComparison.Ordinal))),
+            ("دَرَجَةٌ أُخرى هُناك", billing, With(upgrade, There, There.Replace("next.Tier == current.Tier", "next.Tier == next.Tier", StringComparison.Ordinal))),
+            ("نُسخَتانِ هُناك", billing, With(upgrade, There, There + " " + There.Replace("var ", "", StringComparison.Ordinal).Replace("shownOnBilling = ", "var shownOnBilling = ", StringComparison.Ordinal))),
+        };
+        var wrong = new List<string>();
+        if (ShownCopyViolations(billing, upgrade).Count != 0) wrong.Add("رُفِضَ الحَيّ");
+        foreach (var (name, b, u) in rejected)
+        {
+            var v = ShownCopyViolations(b, u);
+            output.WriteLine($"«{name}» → {(v.Count == 0 ? "قُبِل" : string.Join("؛ ", v))}");
+            if (v.Count == 0) wrong.Add($"قُبِلَ «{name}»");
+        }
+        output.WriteLine($"حُقِنَ {rejected.Length} عَيباً؛ أَخطَأَ الرابِطُ في {wrong.Count}");
+        Assert.True(wrong.Count == 0, string.Join("\n", wrong));
     }
 
     /// <summary><b>حَقنُ عَيب — فاحِصُ اتِّجاهِ الشَبَكَةِ يُحمِرُّ فِعلاً</b> (‏2026-10-24؛ بِشَكلِ
