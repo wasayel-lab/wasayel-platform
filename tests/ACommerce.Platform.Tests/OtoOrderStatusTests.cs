@@ -549,12 +549,12 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// <para><b>«اليَوم»</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4): صَفقَةٌ أُلغِيَت وطَلَبُها عِندَ OTO حَيّ — ثُمَّ تُسَلِّمُ OTO الشُحنَةَ وتُرسِلُ
-    /// «delivered» — فَيُجابُ ‏200 <c>deal_not_active</c> ولا يُكتَبُ شَيء: لا تُعيدُه OTO، ولا يَعلَمُ صاحِبُ المَتجَرِ مِن سِجِلِّ الصَفقَةِ أَنّ ما أُلغِيَ سُلِّم.
-    /// يُقلَبُ بِاسمِه في كوميتِ حَدِّ المَرحَلَة.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4؛ كانَ <c>Today_a_delivered_notice_on_a_cancelled_deal_is_answered_200_and_writes_nothing</c>،
+    /// مُودَعٌ في <c>818ae9e</c>): صَفقَةٌ أُلغِيَت وطَلَبُها عِندَ OTO حَيّ ثُمَّ «delivered» — يُكتَبُ سَطرُ <c>oto_delivered_after_cancel</c> مَرَّةً بِأُنبوبِ الإلحاق
+    /// (تَسمِيَتُه لِلطَرَفَينِ مِن القامُوس)، والجَوابُ ‏200 <c>deal_not_active</c> كَما كان فَلا تُعيدُه OTO؛ وإعادَتُه لا تَكتُبُ ثانِيَة، والصَفقَةُ مُلغاةٌ لا تَتَحَرَّك.</para>
     /// </summary>
     [Fact]
-    public async Task Today_a_delivered_notice_on_a_cancelled_deal_is_answered_200_and_writes_nothing()
+    public async Task A_delivered_notice_on_a_cancelled_deal_is_written_once_as_a_timeline_line_and_answered_200()
     {
         var w = await ShippedCashDeal();
         OtoSays(w, "delivered");
@@ -566,9 +566,36 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
 
         Assert.Equal(OtoOrderStatusGate.DealNotActive, outcome.Code);
         Assert.Equal(200, OtoOrderStatusGate.StatusFor(outcome.Code));
-        Assert.Equal(saves, w.Docs.SaveCalls);
-        Assert.Equal(lines, Stored(w).Timeline.Count);
-        output.WriteLine($"cancelled + delivered: {outcome.Code} → {OtoOrderStatusGate.StatusFor(outcome.Code)} · saves +{w.Docs.SaveCalls - saves} · lines +{Stored(w).Timeline.Count - lines}");
+        Assert.Equal(saves + 1, w.Docs.SaveCalls);
+        Assert.Equal(lines + 1, Stored(w).Timeline.Count);
+        var line = Stored(w).Timeline.Last();
+        Assert.Equal(DealEvent.RefNote, line.Action);
+        Assert.Equal("deals.detail.ref_oto_delivered_after_cancel", DealRefLabels.LabelKeyFor(line.Note));
+        Assert.Equal("delivered", Stored(w).Refs[DealShipping.DeliveredAfterCancelRef]);
+        Assert.Equal(DealStatus.Cancelled, Stored(w).Status);
+        Assert.Equal(DealStage.Shipping, Stored(w).Stage);
+
+        var again = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id));
+        Assert.Equal(OtoOrderStatusGate.DealNotActive, again.Code);
+        Assert.Equal(saves + 1, w.Docs.SaveCalls);
+        output.WriteLine($"cancelled + delivered: {outcome.Code} → {OtoOrderStatusGate.StatusFor(outcome.Code)} · saves +1 · lines +1 · again +0");
+    }
+
+    /// <summary>الدالَّةُ النَقِيَّة — مُوجِبٌ وسالِب: مُلغاةٌ بِلا السَطرِ قَبلَه ورَدُّ <c>deal_not_active</c> ⇐ نَعَم؛ والنِزاعُ، والسَطرُ المَكتوبُ قَبلُ،
+    /// ورَمزٌ آخَرُ ⇐ لا.</summary>
+    [Fact]
+    public void DeliveredAfterCancel_positive_and_negative()
+    {
+        var notActive = new OtoNoticeViolation(OtoOrderStatusGate.DealNotActive, "x");
+        Assert.True(OtoOrderStatusGate.DeliveredAfterCancel(With(d => d.Status = DealStatus.Cancelled), notActive));
+        Assert.False(OtoOrderStatusGate.DeliveredAfterCancel(With(d => d.Status = DealStatus.Disputed), notActive));
+        Assert.False(OtoOrderStatusGate.DeliveredAfterCancel(With(d =>
+        {
+            d.Status = DealStatus.Cancelled;
+            d.Refs[DealShipping.DeliveredAfterCancelRef] = "delivered";
+        }), notActive));
+        Assert.False(OtoOrderStatusGate.DeliveredAfterCancel(With(d => d.Status = DealStatus.Cancelled),
+            new OtoNoticeViolation(OtoOrderStatusGate.AlreadyDelivered, "x")));
     }
 
     /// <summary>صَفقَةٌ لَها طَلَبٌ ولَم تَخرُج إلى الشَحن (رُدَّ انتِقالُها) — التَسليمُ لا يَقفِزُ فَوقَ الشَحن.

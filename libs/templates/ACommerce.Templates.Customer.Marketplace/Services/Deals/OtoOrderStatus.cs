@@ -246,6 +246,17 @@ public static class OtoOrderStatusGate
     }
 
     /// <summary>
+    /// <para><b>أَيُكتَبُ «سُلِّمَ» عَلى صَفقَةٍ مُلغاةٍ سَطراً في سِجِلِّها؟ — دالَّةٌ نَقِيَّة</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4؛
+    /// ‏ADR-033 §٦‑ج مُلحَقاً): نَعَم حينَ رَدَّ <see cref="Decide"/> بِـ<see cref="DealNotActive"/> — فَالمُعَرِّفانِ لِطَلَبِها وOTO تَقولُ «سُلِّم» ولَم
+    /// تَبلُغ «تَسليم» — والصَفقَةُ <c>Cancelled</c> بِلا السَطرِ قَبلَه؛ فَإعادَةُ OTO لِلإشعارِ لا تَكتُبُ ثانِيَة. والنِزاعُ خارِجُها: صَفقَةٌ مُعَلَّقَةٌ
+    /// يَحكُمُها مَسارُ النِزاع (سِجِلُّ «ب» W8-1·٥).</para>
+    /// </summary>
+    public static bool DeliveredAfterCancel(Deal deal, OtoNoticeViolation refusal)
+        => refusal.Code == DealNotActive
+           && deal.Status == DealStatus.Cancelled
+           && !deal.Refs.ContainsKey(DealShipping.DeliveredAfterCancelRef);
+
+    /// <summary>
     /// <para><b>أَيُدخِلُ هذا الجَوابُ الصَفقَةَ «شَحن» قَبلَ سُؤالِ التَسليم؟ — دالَّةٌ نَقِيَّة</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛
     /// ‏ADR-033 §٧‑ط). نَعَم حينَ يَصدُقُ كُلُّ ما يَصدُقُ عِندَ «أَكمِل الشَّحن» بِالجَوابِ نَفسِه: المُعَرِّفانِ لِطَلَبِ الصَفقَة، وهي فَعّالَة،
     /// وتاليها «شَحن» وطَلَبُها عِندَ OTO (<see cref="DealShipping.AwaitsCarrier"/>)، وOTO تُثبِتُ شُحنَتَها وبوليصَتَها

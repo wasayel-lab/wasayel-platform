@@ -37,10 +37,12 @@ public class DealCancelAuthorizationTests
 
     // ─── المَعجَم ──────────────────────────────────────────────────────
 
+    /// <summary>(‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4 — ولا يُعادُ حَرفٌ فَوقَه: كانَ <c>Exactly_three_violation_codes_and_they_are_these</c>؛
+    /// ورابِعُها <c>deal_past_cancel_stage</c> — مُوجِبُه وسالِبُه في <c>DealCancelStageTests</c>.)</summary>
     [Fact]
-    public void Exactly_three_violation_codes_and_they_are_these()
+    public void Exactly_four_violation_codes_and_they_are_these()
         => Assert.Equal(
-            new[] { "deal_not_found", "actor_not_party", "deal_not_active" },
+            new[] { "deal_not_found", "actor_not_party", "deal_not_active", "deal_past_cancel_stage" },
             DealCancelAuthorization.All);
 
     [Fact]
@@ -52,7 +54,7 @@ public class DealCancelAuthorizationTests
     {
         foreach (var c in DealCancelAuthorization.All)
             Assert.Equal(c, DealCancelAuthorization.Require(c));
-        Assert.Equal(3, DealCancelAuthorization.All.Count);
+        Assert.Equal(4, DealCancelAuthorization.All.Count);   // 3 ← 4 (‏2026-10-24، lens-money-integrity-4: deal_past_cancel_stage)
     }
 
     // ─── مُوجِب — مَن يَملِك الإلغاء ────────────────────────────────────

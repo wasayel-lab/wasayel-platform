@@ -147,6 +147,11 @@ public static class DealApi
                 ApiErrorCatalog.DealChangedMeanwhile,
                 new { status = result.Deal?.Status.ToString() }),
             GatewayInvoiceShare.Shared => ApiOutcome.Error(ApiErrorCatalog.DealInvoiceShared),
+            // (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4): مَرحَلَةٌ لا يُلغيها طَرَف — ‏409 بِرَمزِ الحالَةِ القائِم («لَيسَت في حالَةٍ تَقبَل
+            // هذا الإجراء»)، ومَعَه المَرحَلَة؛ لا رَمزَ سابِعَ عَشَرَ في المَعجَم، وكانَ الرَمزُ المَجهولُ سَيَخرُجُ ‏422 عَن طَلَبٍ صالِح.
+            DealCancelAuthorization.DealPastCancelStage => ApiOutcome.Error(
+                ApiErrorCatalog.DealNotActive,
+                new { status = result.Deal?.Status.ToString(), stage = result.Deal?.Stage.ToString() }),
             _ => ApiOutcome.Error(ApiErrorCatalog.ValidationFailed),
         };
     }

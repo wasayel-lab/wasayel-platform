@@ -48,7 +48,8 @@ public class DealRefusalTextsTests
         // ثُمَّ `deal_awaits_payment` (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12) — رَمزُ «فاتورَتُها لَم تُدفَع» مِن `AdvanceAsync`: 24 ← 25.
         // ثُمَّ `deal_invoice_shared` (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b، G5 M4) — رَدُّ إلغاءِ صَفقَةٍ واحِدَةٍ مِن فاتورَةٍ مُشتَرَكَةٍ مَفتوحَة: 25 ← 26.
         // ثُمَّ `deal_payment_missing` (‏2026-10-13، G5 (xv-g)) — صَفقَةُ بِطاقَةٍ بِلا مَرجِعِ دَفعٍ لا تَدخُلُ «دَفع»، مِن `AdvanceAsync`: 26 ← 27.
-        Assert.Equal(27, DealRefusalTexts.Codes.Count);
+        // ثُمَّ `deal_past_cancel_stage` (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4) — رابِعُ بَوّابَةِ الإلغاء، يَدخُلُ بِها: 27 ← 28.
+        Assert.Equal(28, DealRefusalTexts.Codes.Count);
         Assert.Equal(DealRefusalTexts.Codes.Count, DealRefusalTexts.Codes.Distinct(StringComparer.Ordinal).Count());
     }
 
@@ -79,7 +80,7 @@ public class DealRefusalTextsTests
         // — + 1 (`shipment_unconfirmed`، مُراجَعَةُ تَيّارِ S7، ‏2026-10-12): 26 ← 27؛ + 1 (`deal_awaits_carrier`، المُراجَعَةُ الثانِيَة): 27 ← 28.
         // + 1 (`oto_order_closed`، مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12 — في بَوّابَةِ الشَحن): 28 ← 29.
         // + 1 (`deal_awaits_payment`، ‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12): 29 ← 30.
-        Assert.Equal(32, checked_);   // (‏2026-10-13، G5 M4): +`deal_invoice_shared` — 30 ← 31؛ (G5 (xv-g)): +`deal_payment_missing` — 31 ← 32.
+        Assert.Equal(33, checked_);   // (‏2026-10-13، G5 M4): +`deal_invoice_shared` — 30 ← 31؛ (G5 (xv-g)): +`deal_payment_missing` — 31 ← 32؛ (‏2026-10-24): +`deal_past_cancel_stage` — 32 ← 33.
     }
 
     /// <summary><b>نَصُّ «بِلا مالِكِ إعلان» يُسَمّي مَن يُحَرِّكُها حَقّاً</b> (‏2026-10-11، مُراجَعَةُ الموجَةِ الثانِيَةِ

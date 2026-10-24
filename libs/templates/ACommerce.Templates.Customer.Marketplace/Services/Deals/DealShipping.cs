@@ -210,6 +210,13 @@ public sealed class DealShipping
     /// </summary>
     public const string ClosedRef = "oto_closed_status";
 
+    /// <summary>
+    /// <para><b>«سُلِّمَ» مِن OTO عَلى صَفقَةٍ مُلغاة</b> — كَلِمَةُ الحالِ كَما أَجابَت بِها «Order Tracking» (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4؛
+    /// ‏ADR-033 §٦‑ج مُلحَقاً). كانَ الوارِدُ يُجابُ ‏200 <c>deal_not_active</c> ولا يُكتَبُ شَيء (تَوصيفُه <c>818ae9e</c>)؛ فَصارَ يُلحَقُ مَرَّةً بِأُنبوبِ الإلحاقِ
+    /// القائِم — سَطرٌ في سِجِلِّ الصَفقَةِ يَراه الطَرَفانِ تَسمِيَةً وصاحِبُ المَتجَرِ نَصّاً — والجَوابُ ‏200 كَما كان، فَلا تُعيدُه OTO.</para>
+    /// </summary>
+    public const string DeliveredAfterCancelRef = "oto_delivered_after_cancel";
+
     /// <summary>المَتجَرُ الوَحيدُ الَّذي يُحَلُّ لَه رَمزٌ في هذِه المَوجَة — مَتجَرُ لَقطَةِ المَظهَر
     /// (‏ADR-033 §٢‑هـ القاعِدَة ٩: «بمتجرِ <c>theme-demo</c> … و<c>ashare</c> لا يُمسّ»).</summary>
     public const string DemoStore = "theme-demo";
@@ -720,7 +727,12 @@ public sealed class DealShipping
             }
 
             if (OtoOrderStatusGate.Decide(current, state) is { } refusal)
+            {
+                // و«سُلِّمَ» عَلى صَفقَةٍ مُلغاةٍ يُكتَبُ سَطراً في سِجِلِّها مَرَّةً ولا يُبتلَع (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4) — والرَمزُ هو هو.
+                if (OtoOrderStatusGate.DeliveredAfterCancel(current, refusal))
+                    current = await _deals.AttachRefAsync(tenantSlug, current.Id, DeliveredAfterCancelRef, state.Status, CancellationToken.None) ?? current;
                 return new(shipped && refusal.Code == OtoOrderStatusGate.NotDelivered ? OtoOrderStatusGate.Shipped : refusal.Code, current);
+            }
             if (attempt > NoticeAttempts) return new(DealsService.ChangedMeanwhile, current);
 
             var moved = await _deals.AdvanceAsync(tenantSlug, current.Id, current.CounterpartyId!.Value,

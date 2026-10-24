@@ -60,9 +60,27 @@ public static class DealCancelAuthorization
     /// يُلغى.</summary>
     public const string DealNotActive = "deal_not_active";
 
-    /// <summary>المَعجَمُ المُغلَق — ثَلاثَةٌ لا رابِعَ لَها.</summary>
+    /// <summary>
+    /// <para><b>الصَفقَةُ بَلَغَت مَرحَلَةً لا يُلغيها فيها طَرَف</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4؛ ‏ADR-033 §٦‑ج مُلحَقاً):
+    /// مَرحَلَتُها خارِجَ <see cref="PartyCancelStages"/> — «شَحن» فَما بَعدَه — والفاعِلُ طَرَفٌ لا مُشرِفُ المَتجَر. كانَ طَرَفٌ يُلغي صَفقَةً
+    /// شُحِنَت أَو سُلِّمَت: بَيعُ نَقدٍ قُبِضَ ثَمَنُه يَصيرُ «مُلغاة»، وشُحنَةُ OTO حَيَّة، و«استِرجاعُه مُستَحَقّ» عَلى بِضاعَةٍ سُلِّمَت
+    /// (تَوصيفُه <c>818ae9e</c>). <b>افتِراضٌ قابِلٌ لِلقَلبِ</b> حَتّى يُقَرِّرَ المالِكُ المَراحِل (سِجِلُّ «ب» W8-1·٢).</para>
+    /// </summary>
+    public const string DealPastCancelStage = "deal_past_cancel_stage";
+
+    /// <summary>
+    /// <para><b>المَراحِلُ الَّتي يُلغي فيها طَرَفٌ صَفقَتَه — افتِراضُ ‏2026-10-24 لا قَرارُ مُنتَج</b> (سِجِلُّ «ب» W8-1·٢): ما قَبلَ أَن
+    /// تَخرُجَ البِضاعَةُ أَو الخِدمَةُ مِن يَدِ البائِع — عَرض، حَجز، تَأكيد، دَفع. وما بَعدَها («شَحن»، «تَسليم»، «استِلام»، «تَقييم») يُلغيه
+    /// صاحِبُ المَتجَرِ وَحدَه مِن الاستوديو (<see cref="DealCanceller.IsStoreAdmin"/>) — المَخرَجُ اليَدَوِيُّ لِلمُرتَجَعِ والنِزاع.</para>
+    /// <para><b>ويُقلَبُ بِسَطر</b>: إضافَةُ مَرحَلَةٍ هُنا أَو حَذفُها؛ والصَفحَةُ تَتبَعُه بِلا لَمس (تَرسُمُ بِـ<see cref="IsAllowed"/>).</para>
+    /// </summary>
+    public static readonly IReadOnlySet<DealStage> PartyCancelStages =
+        new HashSet<DealStage> { DealStage.Offered, DealStage.Booked, DealStage.Confirmed, DealStage.Paid };
+
+    /// <summary>المَعجَمُ المُغلَق — ثَلاثَةٌ لا رابِعَ لَها.
+    /// (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4 — ولا يُعادُ حَرفٌ فَوقَه: ورابِعُها <see cref="DealPastCancelStage"/>.)</summary>
     public static readonly IReadOnlyList<string> All =
-        new[] { DealNotFound, ActorNotParty, DealNotActive };
+        new[] { DealNotFound, ActorNotParty, DealNotActive, DealPastCancelStage };
 
     public static bool Contains(string code) => All.Contains(code, StringComparer.Ordinal);
 
@@ -79,7 +97,9 @@ public static class DealCancelAuthorization
     }
 
     /// <summary><c>null</c> يَعني مُخَوَّل. والتَرتيبُ مَقصود:
-    /// الغِياب، ثُمَّ التَخويل، ثُمَّ الحالَة.</summary>
+    /// الغِياب، ثُمَّ التَخويل، ثُمَّ الحالَة.
+    /// (‏2026-10-24 — ولا يُعادُ حَرفٌ فَوقَه: ثُمَّ المَرحَلَةُ لِلطَرَف — <see cref="DealPastCancelStage"/> — بَعدَ الحالَة، فَلا تَتَسَرَّبُ مَرحَلَةٌ
+    /// لِغَيرِ الطَرَف.)</summary>
     public static DealCancelViolation? Validate(Deal? deal, DealCanceller by)
     {
         if (deal is null)
@@ -95,6 +115,10 @@ public static class DealCancelAuthorization
         if (deal.Status != DealStatus.Active)
             return new(DealNotActive,
                 $"الصَفقَةُ في حالَة {deal.Status} — لا شَيءَ يُلغى.");
+
+        if (!by.IsStoreAdmin && !PartyCancelStages.Contains(deal.Stage))
+            return new(DealPastCancelStage,
+                $"الصَفقَةُ عِندَ «{deal.Stage}» — بَعدَ الشَحنِ أَو التَسليمِ لا يُلغيها طَرَف؛ يُلغيها صاحِبُ المَتجَرِ مِن الاستوديو.");
 
         return null;
     }

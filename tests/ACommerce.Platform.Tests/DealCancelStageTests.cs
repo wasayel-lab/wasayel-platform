@@ -13,6 +13,10 @@ namespace ACommerce.Platform.Tests;
 // بِالدالَّةِ نَفسِها (`IsAllowed`) في كُلِّ مَرحَلَةٍ فَعّالَة. ولا مَدخَلَ «ب» يُحَدِّدُ مَراحِلَ الإلغاء.
 //
 // **التَوصيفُ قَبلَ التَبديل** (القاعِدَة ٣): صَفّا «اليَوم» أَدناه يُودَعانِ وَحدَهُما، ويُقلَبانِ بِاسمَيهِما في كوميتِ حَدِّ المَرحَلَة.
+//
+// **وقُلِبا بِاسمَيهِما** (‏2026-10-24؛ تَوصيفُهُما `818ae9e`؛ ‏ADR-033 §٦‑ج مُلحَقاً): صارَت `Validate` تَسأَلُ بَعدَ الحالَةِ مَرحَلَةَ الطَرَف —
+// `DealCancelAuthorization.PartyCancelStages` (عَرض، حَجز، تَأكيد، دَفع) افتِراضاً قابِلاً لِلقَلبِ حَتّى يُقَرِّرَ المالِك («ب» W8-1·٢) — وما بَعدَها
+// `deal_past_cancel_stage` لِلطَرَف، ومُشرِفُ المَتجَرِ يُلغي كَما كان. والصَفحَةُ لا تَرسُمُ الاستِمارَةَ بِالدالَّةِ نَفسِها.
 
 public class DealCancelStageTests(ITestOutputHelper output)
 {
@@ -52,9 +56,12 @@ public class DealCancelStageTests(ITestOutputHelper output)
 
     private static DealCanceller Party(Guid id) => new(id, "طَرَف", IsStoreAdmin: false);
 
+    private static DealCanceller StoreAdmin() => new(Guid.Parse("cccccccc-cccc-4ccc-8ccc-cccccccccccc"), "مالِك التَّطبيق", IsStoreAdmin: true);
+
     /// <summary>
-    /// <para><b>«اليَوم»</b>: لِكُلِّ مَرحَلَةٍ فَعّالَةٍ في كُلِّ نَمَطٍ يَرِدُ فيه «شَحن» أَو «تَسليم» أَو «استِلام»، المُشتَري والبائِعُ مُخَوَّلانِ
-    /// بِالإلغاء — والصَفحَةُ تَرسُمُ الاستِمارَةَ بِالدالَّةِ نَفسِها.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-24؛ كانَ <c>Today_either_party_may_cancel_after_shipping_or_delivery</c>، مُودَعٌ في <c>818ae9e</c>): لِكُلِّ
+    /// مَرحَلَةٍ فَعّالَةٍ بَعدَ الدَفعِ في كُلِّ نَمَطٍ يَرِدُ فيه «شَحن» أَو «تَسليم» أَو «استِلام» — المُشتَري والبائِعُ مَردودانِ بِـ<c>deal_past_cancel_stage</c>،
+    /// والصَفحَةُ لا تَرسُمُ الاستِمارَة (<c>IsAllowed</c> نَفسُها)، وصاحِبُ المَتجَرِ يُلغي كَما كان (سالِبُ الرَمز).</para>
     /// </summary>
     [Theory]
     [InlineData("marketplace", DealStage.Shipping)]
@@ -62,35 +69,87 @@ public class DealCancelStageTests(ITestOutputHelper output)
     [InlineData("rental",      DealStage.Delivered)]
     [InlineData("rental",      DealStage.Received)]
     [InlineData("trip",        DealStage.Delivered)]
-    public void Today_either_party_may_cancel_after_shipping_or_delivery(string pattern, DealStage stage)
+    public void No_party_cancels_after_shipping_or_delivery_and_the_page_hides_the_door(string pattern, DealStage stage)
     {
         var deal = CashAt(stage, pattern);
+        Assert.Equal(DealCancelAuthorization.DealPastCancelStage, DealCancelAuthorization.Validate(deal, Party(Buyer))!.Code);
+        Assert.Equal(DealCancelAuthorization.DealPastCancelStage, DealCancelAuthorization.Validate(deal, Party(Seller))!.Code);
+        Assert.False(DealCancelAuthorization.IsAllowed(deal, Party(Buyer)));
+        Assert.False(DealCancelAuthorization.IsAllowed(deal, Party(Seller)));
+        Assert.Null(DealCancelAuthorization.Validate(deal, StoreAdmin()));
+        output.WriteLine($"{pattern}/{stage}: الطَرَفانِ مَردودانِ بِـdeal_past_cancel_stage، وصاحِبُ المَتجَرِ يُلغي");
+    }
+
+    /// <summary>مُوجِبٌ لِلحَدّ: في كُلِّ مَرحَلَةٍ مِن <see cref="DealCancelAuthorization.PartyCancelStages"/> يُلغي الطَرَفانِ كَما كانا — والمَجموعَةُ
+    /// أَربَعٌ بِحَرفِها، فَمَرحَلَةٌ تُضافُ أَو تُحذَفُ تُحمِرُ هذا الصَفَّ باسمِها.</summary>
+    [Theory]
+    [InlineData(DealStage.Offered)]
+    [InlineData(DealStage.Booked)]
+    [InlineData(DealStage.Confirmed)]
+    [InlineData(DealStage.Paid)]
+    public void Either_party_still_cancels_before_the_goods_leave_the_vendor(DealStage stage)
+    {
+        var deal = CashAt(stage);
         Assert.Null(DealCancelAuthorization.Validate(deal, Party(Buyer)));
         Assert.Null(DealCancelAuthorization.Validate(deal, Party(Seller)));
-        Assert.True(DealCancelAuthorization.IsAllowed(deal, Party(Buyer)));
-        output.WriteLine($"{pattern}/{stage}: المُشتَري والبائِعُ مُخَوَّلانِ بِالإلغاء");
+        Assert.Equal(new[] { DealStage.Offered, DealStage.Booked, DealStage.Confirmed, DealStage.Paid },
+            DealCancelAuthorization.PartyCancelStages.OrderBy(s => s));
+    }
+
+    /// <summary>والتَرتيبُ (القاعِدَة ٦): الغِيابُ ثُمَّ التَخويلُ ثُمَّ الحالَةُ ثُمَّ المَرحَلَة — غَريبٌ عِندَ «شَحن» يُقالُ لَه «لَستَ طَرَفاً» لا مَرحَلَتُها،
+    /// وصَفقَةٌ مُكتَمِلَةٌ عِندَ «تَقييم» «لَم تَعُد نَشِطَة».</summary>
+    [Fact]
+    public void The_stage_is_asked_after_authorization_and_state()
+    {
+        var stranger = Guid.Parse("dddddddd-dddd-4ddd-8ddd-dddddddddddd");
+        Assert.Equal(DealCancelAuthorization.ActorNotParty, DealCancelAuthorization.Validate(CashAt(DealStage.Shipping), Party(stranger))!.Code);
+        var done = CashAt(DealStage.Reviewed);
+        done.Status = DealStatus.Completed;
+        Assert.Equal(DealCancelAuthorization.DealNotActive, DealCancelAuthorization.Validate(done, Party(Buyer))!.Code);
     }
 
     /// <summary>
-    /// <para><b>«اليَوم» عَلى الخِدمَةِ الحَقيقِيَّة</b>: بَيعُ نَقدٍ عِندَ «تَسليم» بِسَطرِ «استُلِمَ النَقد» — المُشتَري يُلغيه فَيَصيرُ «مُلغاة» وسَطرُ
-    /// النَقدِ باقٍ، والإشعارُ لا يُخبِرُ أَحَداً (المُلغي هُوَ المُشتَري، ولا إشعارَ إلغاءٍ لِبائِعٍ في الأُنبوب).</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-24؛ كانَ <c>Today_the_buyer_cancels_a_cash_collected_sale_and_nobody_is_told</c>، مُودَعٌ في <c>818ae9e</c>):
+    /// بَيعُ نَقدٍ عِندَ «تَسليم» بِسَطرِ «استُلِمَ النَقد» — المُشتَري يُرَدُّ بِرَمزِه ولا يُكتَبُ شَيء، والصَفقَةُ فَعّالَة. والطَلَبُ كُلُّه
+    /// (<c>CancelWholeInvoiceAsync</c>) يُرَدُّ بِالرَمزِ نَفسِه، والـAPI ‏409 بِرَمزِ الحالَةِ القائِمِ ومَعَه المَرحَلَة.</para>
     /// </summary>
     [Fact]
-    public void Today_the_buyer_cancels_a_cash_collected_sale_and_nobody_is_told()
+    public void The_buyer_cannot_cancel_a_cash_collected_sale_and_nothing_is_written()
     {
         var world = new DocWorld();
         var deals = new DealsService(world.Store, new ForbiddenPaymentProvider());
         var deal = CashAt(DealStage.Delivered);
         deal.Timeline.Add(new(DealStage.Delivered, DealStage.Delivered, DealEvent.CashOnDelivery, Seller, "بائِع", null, DateTime.UtcNow));
         world.Put(deal);
+        var saves = world.SaveCalls;
 
         var res = Now(deals.CancelAsync(Slug, deal.Id, Party(Buyer), "إلغاء"));
+        var order = Now(deals.CancelWholeInvoiceAsync(Slug, deal.Id, Party(Buyer), "إلغاء"));
 
-        Assert.True(res.Ok);
+        Assert.False(res.Ok);
+        Assert.Equal(DealCancelAuthorization.DealPastCancelStage, res.Violation!.Code);
+        Assert.Equal(DealCancelAuthorization.DealPastCancelStage, order.Result.Violation!.Code);
+        Assert.Empty(order.Cancelled);
+        Assert.Equal(saves, world.SaveCalls);
         var stored = world.Read<Deal>(deal.Id.ToString())!;
-        Assert.Equal(DealStatus.Cancelled, stored.Status);
+        Assert.Equal(DealStatus.Active, stored.Status);
         Assert.Equal(1, stored.Timeline.Count(e => e.Action == DealEvent.CashOnDelivery));
-        Assert.False(DealNotices.TellsTheBuyer(stored, Buyer));
-        output.WriteLine($"buyer cancel at Delivered: ok={res.Ok} status={stored.Status} cod_line=1 notified=False");
+
+        var api = ACommerce.Templates.Customer.Marketplace.Api.DealApi.FromCancel(res);
+        Assert.Equal(409, api.Status);
+        var json = ACommerce.Templates.Customer.Marketplace.Api.ApiJson.Serialize(api.Payload);
+        Assert.Contains("\"code\":\"deal_not_active\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"stage\":\"Delivered\"", json, StringComparison.Ordinal);
+        output.WriteLine($"buyer cancel at Delivered: ok={res.Ok} code={res.Violation.Code} status={stored.Status} saves +{world.SaveCalls - saves} · api {api.Status}");
+    }
+
+    /// <summary>ونَصُّ الرَمزِ لِلصَفحَةِ مِن القامُوسِ بِحَرفِه (القاعِدَة ١١) — يَبلُغُها طَلَبٌ لَم تَرسُمه أَو لِسانٌ قَديم.</summary>
+    [Fact]
+    public void The_past_cancel_stage_code_reads_its_dictionary_text_verbatim()
+    {
+        var key = DealRefusalTexts.KeyFor(DealCancelAuthorization.DealPastCancelStage);
+        Assert.Equal("deals.detail.err_deal_past_cancel_stage", key);
+        Assert.Equal("شُحِنَت هذِه الصَّفقَة أَو سُلِّمَت — فَلا يُلغيها طَرَفٌ مِن صَفحَتِها؛ يُلغيها صاحِبُ المَتجَر وَحدَه.",
+            ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, key!));
     }
 }
