@@ -21,7 +21,7 @@ namespace ACommerce.Platform.Tests;
 // فَإن ظَهَرَ مَوضِعُ إعدادٍ ثالِثٌ لا يَمُرُّ بِهِما عَرَضَ الفِعلُ مُخَطَّطاً غَيرَ الَّذي يُشَغَّل — فَيَحمَرُّ هُنا قَبلَ ذلك.
 // والبُرهانُ الحَيُّ لِلفِعلِ نَفسِه (عَرضٌ وتَطبيقٌ وتَوكيدٌ ولَقطَةٌ عَلى Postgres) في رِسالَةِ الكوميتِ و§٤‑د.
 
-public class MartenSchemaVerbTests
+public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;
 
@@ -286,6 +286,105 @@ public class MartenSchemaVerbTests
         Assert.Contains("dir = Path.GetDirectoryName(dir)", walk, StringComparison.Ordinal);
         Assert.Contains("Path.Combine(dir, \".git\")", walk, StringComparison.Ordinal);
         Assert.Contains("Directory.Exists(dotGit) || File.Exists(dotGit)", walk, StringComparison.Ordinal);
+    }
+
+    // ─── وgit نَفسُه يُسأَلُ حينَ يوجَد (‏2026-10-24 — مُراجَعَةُ الموجَة ٤، بَندُ M) ───────────────────────────────────────────
+    //
+    // **المَقيسُ قَبل** (`077e802`، Postgres مَحَلِّيّ): مُستَودَعٌ عارٍ يَتَتَبَّعُ «البَيت» بِـ`GIT_DIR`/`GIT_WORK_TREE` — إعدادُ dotfiles الشائِع —
+    // و`--snapshot <البَيت>/wasayel-snapshots/x.dump` ⇒ ‏0 «✓ اللَقطَة …» والمِلَفُّ في الشَجَرَة: الصُعودُ لا يَجِدُ `.git` فَوقَ المَسار.
+
+    /// <summary><b>بَعدَ الصُعودِ يُسأَلُ git، ويُرفَضُ عَلى أَيِّ شَكّ</b> — قَبلَ «قائِم؟» وقَبلَ أَيِّ أَداةِ قاعِدَة: <c>git -C &lt;مُجَلَّد&gt; rev-parse
+    /// --show-toplevel</c> بِلُغَةِ C والبيئَةِ الموروثَة؛ لا يُقبَلُ إلّا ‏128 «not a git repository» أَو غِيابُ git، وما سِواهُما ‏1.</summary>
+    [Fact]
+    public void TheSnapshot_AsksGitItselfAfterTheWalk_AndRefusesOnAnyDoubt()
+    {
+        var snap = SnapshotFunction();
+        var walk = snap.IndexOf("if (EnclosingWorkTree(full) is { } root)", StringComparison.Ordinal);
+        var asked = snap.IndexOf("if (await GitWorkTreeDoubtAsync(full) is { } doubt)", StringComparison.Ordinal);
+        var exists = snap.IndexOf("if (File.Exists(file))", StringComparison.Ordinal);
+        var tool = snap.IndexOf("RunAsync(\"pg_dump\"", StringComparison.Ordinal);
+        Assert.True(walk > 0 && asked > walk && exists > asked && tool > exists,
+            $"تَرتيبُ اللَقطَة: الصُعود {walk} · git {asked} · «قائِم؟» {exists} · الأَداة {tool}.");
+        Assert.Contains("return 1;", snap[asked..exists], StringComparison.Ordinal);
+
+        var code = VerbCode();
+        var fn = code[code.IndexOf("static async Task<string?> GitWorkTreeDoubtAsync(string fullPath)", StringComparison.Ordinal)..];
+        fn = fn[..fn.IndexOf("\n}", StringComparison.Ordinal)];
+        foreach (var piece in new[]
+        {
+            "while (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) dir = Path.GetDirectoryName(dir);",
+            "RunAsync(\"git\", [\"-C\", dir, \"rev-parse\", \"--show-toplevel\"],",
+            "[\"LC_ALL\"] = \"C\"",
+            "if (git is null) return null;",
+            "if (code == 128 && stderr.Contains(\"not a git repository\", StringComparison.OrdinalIgnoreCase)) return null;",
+        })
+            Assert.Contains(piece, fn, StringComparison.Ordinal);
+        // ‏ولا «return null» ثالِث: كُلُّ جَوابٍ آخَرَ شَكٌّ يُرفَضُ بِه.
+        Assert.Equal(2, Regex.Matches(fn, @"return null;").Count);
+    }
+
+    /// <summary><b>والإعدادُ الَّذي فاتَ الصُعودَ يَراه git نَفسُه</b> — بِقِياسِه لا بِوَصفِه: مُستَودَعٌ عارٍ في مُجَلَّدٍ مُؤَقَّت، و«بَيتٌ» بِلا
+    /// <c>.git</c> فَوقَه، و<c>git -C &lt;البَيت&gt;/wasayel-snapshots rev-parse --show-toplevel</c>: بِـ<c>GIT_DIR</c>/<c>GIT_WORK_TREE</c> ⇒ ‏0 وجَذرُه
+    /// البَيت؛ وبِـ<c>GIT_DIR</c> وَحدَه ⇒ ‏128 «must be run in a work tree» (شَكٌّ)؛ وبِدونِهِما ⇒ ‏128 «not a git repository» — فَالأَداةُ تُمَيِّز.</summary>
+    [Fact]
+    public void A_bare_dotfiles_repository_over_home_is_seen_by_git_and_not_by_the_walk()
+    {
+        var root = Directory.CreateTempSubdirectory("wasayel-dotfiles-");
+        try
+        {
+            var home = Directory.CreateDirectory(Path.Combine(root.FullName, "home", "wasayel-snapshots")).Parent!.FullName;
+            var bare = Path.Combine(root.FullName, "dotfiles.git");
+            Assert.Equal(0, Git(root.FullName, null, "init", "-q", "--bare", bare).Code);
+
+            for (var dir = Path.Combine(home, "wasayel-snapshots"); !string.IsNullOrEmpty(dir); dir = Path.GetDirectoryName(dir))
+                Assert.False(Directory.Exists(Path.Combine(dir, ".git")) || File.Exists(Path.Combine(dir, ".git")),
+                    $"{dir} يَحمِلُ .git — المُجَلَّدُ المُؤَقَّتُ داخِلَ شَجَرَة، فَالصَفُّ لا يَقيسُ ما يَدَّعي.");
+
+            var snaps = Path.Combine(home, "wasayel-snapshots");
+            var both = Git(snaps, new() { ["GIT_DIR"] = bare, ["GIT_WORK_TREE"] = home }, "rev-parse", "--show-toplevel");
+            var bareOnly = Git(snaps, new() { ["GIT_DIR"] = bare }, "rev-parse", "--show-toplevel");
+            var none = Git(snaps, new(), "rev-parse", "--show-toplevel");
+            output.WriteLine($"GIT_DIR+GIT_WORK_TREE → {both.Code} · GIT_DIR → {bareOnly.Code} {bareOnly.Err.Trim()} · لا شَيء → {none.Code} {none.Err.Trim()}");
+
+            Assert.Equal(0, both.Code);
+            Assert.Equal(Path.GetFullPath(home).TrimEnd(Path.DirectorySeparatorChar),
+                Path.GetFullPath(both.Out.Trim()).TrimEnd(Path.DirectorySeparatorChar));
+            Assert.Equal(128, bareOnly.Code);
+            Assert.DoesNotContain("not a git repository", bareOnly.Err, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(128, none.Code);
+            Assert.Contains("not a git repository", none.Err, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    private static (int Code, string Out, string Err) Git(string dir, Dictionary<string, string>? env, params string[] args)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo("git")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        foreach (var a in new[] { "-C", dir }.Concat(args)) psi.ArgumentList.Add(a);
+        psi.Environment.Remove("GIT_DIR");
+        psi.Environment.Remove("GIT_WORK_TREE");
+        psi.Environment["LC_ALL"] = "C";
+        psi.Environment["LANGUAGE"] = "C";
+        foreach (var (k, v) in env ?? new()) psi.Environment[k] = v;
+
+        System.Diagnostics.Process p;
+        try { p = System.Diagnostics.Process.Start(psi)!; }
+        catch (System.ComponentModel.Win32Exception) { Assert.Fail("أَداةٌ غائِبَة: git — لا يُقاسُ اكتِشافُه بِدونِه."); return default; }
+        using (p)
+        {
+            var stdout = p.StandardOutput.ReadToEndAsync();
+            var stderr = p.StandardError.ReadToEndAsync();
+            Assert.True(p.WaitForExit(15_000), "git لَم يَنتَهِ في خَمسَ عَشرَةَ ثانِيَة.");
+            return (p.ExitCode, stdout.GetAwaiter().GetResult(), stderr.GetAwaiter().GetResult());
+        }
     }
 
     /// <summary><b>و<c>*.dump</c> مُتَجاهَلٌ بِقِياسِ git نَفسِه</b> — <c>git check-ignore</c> مُشَغَّلاً في جَذرِ المُستَودَع: اسمُ

@@ -233,6 +233,15 @@ static async Task<int> SnapshotAsync(string cs, string[] hide, string suffix, st
         Console.Error.WriteLine("  اكتُبها خارِجَها: mkdir -m 700 -p \"$HOME/wasayel-snapshots\" ثُمَّ --snapshot \"$HOME/wasayel-snapshots/<الاسم>.dump\" (DEPLOY.md §٤‑د).");
         return 1;
     }
+    // ‏(‏2026-10-24 — مُراجَعَةُ الموجَة ٤، بَندُ M) **وgit نَفسُه يُسأَلُ حينَ يوجَد**: الصُعودُ أَعلاه لا يَرى مُستَودَعاً عارِياً يَتَتَبَّعُ
+    // `$HOME` بِـ`GIT_DIR`/`GIT_WORK_TREE` (إعدادُ «dotfiles» الشائِع) — لا `.git` فَوقَ المَسار، و`git add` هُناكَ يَرفَعُها. فَيُسأَلُ
+    // `git -C <أَقرَبُ مُجَلَّدٍ قائِم> rev-parse --show-toplevel` بِالبيئَةِ نَفسِها، ويُرفَضُ عَلى أَيِّ جَوابٍ غَيرِ «not a git repository».
+    if (await GitWorkTreeDoubtAsync(full) is { } doubt)
+    {
+        Console.Error.WriteLine($"تَوَقُّف: git لا يَقولُ بِيَقينٍ إنّ {full} خارِجَ كُلِّ شَجَرَةِ عَمَل ({doubt}) — اللَقطَةُ بَياناتُ إنتاجٍ شَخصِيَّة.");
+        Console.Error.WriteLine("  اختَر مُجَلَّداً لا يَتَتَبَّعُه مُستَودَع — ولا GIT_DIR/GIT_WORK_TREE في بيئَتِك تَشمَلُه (DEPLOY.md §٤‑د).");
+        return 1;
+    }
 
     if (File.Exists(file))
     {
@@ -333,7 +342,10 @@ static async Task<(int Code, string Out, string Err)?> RunAsync(
 
 /// <summary>أَقرَبُ مُجَلَّدٍ فَوقَ المَسارِ يَحمِلُ <c>.git</c> — مُجَلَّداً، أَو مِلَفّاً في شَجَرَةٍ مُلحَقَة (worktree) — وإلّا <c>null</c>.
 /// اكتِشافُ git نَفسُه بِلا git: الصُعودُ مِن مُجَلَّدِ المِلَفِّ إلى الجَذر. وهُوَ أَوسَعُ مِنه لا أَضيَق (لا سَقفَ
-/// <c>GIT_CEILING_DIRECTORIES</c> ولا حُدودَ نِظامِ مِلَفّات)، فَالخَطَأُ في جِهَةِ الرَفضِ لا الكَشف.</summary>
+/// <c>GIT_CEILING_DIRECTORIES</c> ولا حُدودَ نِظامِ مِلَفّات)، فَالخَطَأُ في جِهَةِ الرَفضِ لا الكَشف.
+/// (‏2026-10-24 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه: «اكتِشافُ git نَفسُه» أَوسَعُ مِمّا يَفعَلُه الصُعود — هُوَ اكتِشافُ <c>.git</c> فَوقَ المَسارِ وَحدَه،
+/// ولا يَرى <c>GIT_DIR</c>/<c>GIT_WORK_TREE</c> في البيئَةِ ولا <c>core.worktree</c> لِمُستَودَعٍ خارِجَ المَسار؛ فَيَتبَعُه
+/// <see cref="GitWorkTreeDoubtAsync"/> بِسُؤالِ git نَفسِه حينَ يوجَد.)</summary>
 static string? EnclosingWorkTree(string fullPath)
 {
     for (var dir = Path.GetDirectoryName(fullPath); !string.IsNullOrEmpty(dir); dir = Path.GetDirectoryName(dir))
@@ -342,6 +354,26 @@ static string? EnclosingWorkTree(string fullPath)
         if (Directory.Exists(dotGit) || File.Exists(dotGit)) return dir;
     }
     return null;
+}
+
+/// <summary><b>git نَفسُه يُسأَلُ عَن المَسار</b> (‏2026-10-24، بَندُ M): <c>git -C &lt;أَقرَبُ مُجَلَّدٍ قائِمٍ فَوقَه&gt; rev-parse --show-toplevel</c>
+/// بِالبيئَةِ الموروثَةِ كَما هي (فَـ<c>GIT_DIR</c>/<c>GIT_WORK_TREE</c> تُقرَأ) وبِلُغَةِ <c>C</c> (فَرِسالَةُ الخَطَإِ لا تُتَرجَم). <c>null</c>
+/// حينَ لا git عَلى الجِهاز (لا مُستَودَعَ يَرفَعُها، والصُعودُ قالَ كَلِمَتَه) أَو حينَ يُجيبُ ‏128 «not a git repository» — وكُلُّ ما سِواهُما
+/// شَكٌّ يُرفَضُ بِه: جَذرٌ مَطبوع، أَو مُستَودَعٌ عارٍ بِلا شَجَرَة، أَو مِلكِيَّةٌ مُريبَة، أَو رَمزٌ آخَر. <b>وما لا يَراه</b>: مُستَودَعٌ يُبلَغُ
+/// بِاسمٍ مُستَعارٍ وَحدَه (‏<c>alias config='git --git-dir=… --work-tree=$HOME'</c>) بِلا مُتَغَيِّرٍ في البيئَة — git لا يَعرِفُه مِن هُنا.</summary>
+static async Task<string?> GitWorkTreeDoubtAsync(string fullPath)
+{
+    var dir = Path.GetDirectoryName(fullPath);
+    while (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) dir = Path.GetDirectoryName(dir);
+    if (string.IsNullOrEmpty(dir)) return "لا مُجَلَّدَ قائِمٌ فَوقَ المَسار";
+
+    var git = await RunAsync("git", ["-C", dir, "rev-parse", "--show-toplevel"],
+        new Dictionary<string, string?> { ["LC_ALL"] = "C", ["LANGUAGE"] = "C" });
+    if (git is null) return null;
+    var (code, stdout, stderr) = git.Value;
+    if (code == 128 && stderr.Contains("not a git repository", StringComparison.OrdinalIgnoreCase)) return null;
+    if (code == 0) return stdout.Trim().Length > 0 ? $"git يَرى جَذرَ شَجَرَةٍ: {stdout.Trim()}" : "git خَرَجَ 0 بِلا جَذر";
+    return $"git خَرَجَ {code}: {stderr.Split('\n')[0].Trim()}";
 }
 
 static string Redact(string line, string[] hide) =>
