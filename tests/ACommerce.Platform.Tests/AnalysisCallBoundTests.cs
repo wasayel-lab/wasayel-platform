@@ -118,6 +118,17 @@ public class AnalysisCallBoundTests(ITestOutputHelper output)
         Assert.Equal(new[] { "admin.analyze", "studio.analyze", "studio.resume" }, doors.OrderBy(d => d, StringComparer.Ordinal));
     }
 
+    /// <summary><b>تَوصيفُ «اليَوم»</b> (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1): التَشغيلَةُ الرابِعَةُ في الخَلفِيَّة — التَحسين — تَنتَهي بِـ<c>catch { }</c>،
+    /// وقَد نَقَلَها البَندُ K إلى مُهلَةِ الخَلفِيَّةِ (‏420 ثانِيَة) نَفسِها. يُقلَبُ بِاسمِه في كوميتِ إصلاحِ بابِ التَحسين.</summary>
+    [Fact]
+    public void Today_the_background_refine_run_swallows_its_exception()
+    {
+        var run = Assert.Single(BackgroundRuns(Endpoints(), "bg.RefineSectionAsync("));
+        output.WriteLine($"تَشغيلَةُ التَحسين: {run.Length} مِحرَفاً · catch فارِغ: {Regex.IsMatch(run, @"catch\s*\{\s*\}")}");
+        Assert.Matches(@"catch\s*\{\s*\}", run);
+        Assert.DoesNotContain("LogBackgroundFailure", run, StringComparison.Ordinal);
+    }
+
     /// <summary><b>ويَبقى بِحَرفِه</b>: ما يَطلُبُه كُلُّ نِداء — التَحليلُ مُحاوَلَتانِ بِـ8000، والتَحسينُ 3000، والمُحادَثَةُ 2048.</summary>
     [Fact]
     public void The_analysis_tries_twice_for_8000_tokens_the_refine_asks_3000_and_the_chat_2048()

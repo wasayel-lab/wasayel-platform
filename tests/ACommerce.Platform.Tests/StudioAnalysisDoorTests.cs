@@ -301,4 +301,91 @@ public class StudioAnalysisDoorTests(ITestOutputHelper output)
         Assert.Contains("Incubator.IsConfigured", Page("Admin/IncubatorWizard.razor"), StringComparison.Ordinal);
         Assert.Contains("Incubator.IsConfigured", Page("Admin/IncubatorHome.razor"), StringComparison.Ordinal);
     }
+
+    // ═══ والمَدخَلُ السادِس — «تَحسينُ الدِراسَة» — تَوصيفُ «اليَوم» (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1) ═══════════════
+    //
+    // `Every_studio_entry_asks_the_one_analysis_door` يَعُدُّ خَمسَةَ مَداخِلَ بِقائِمَةٍ كُتِبَت بِاليَد، فَلَم يَرَ سادِساً يُنفِقُ مِفتاحَ وَكيلِ
+    // `Analysis`: `/studio/s/{id}/refine` (`RefineSectionAsync`). بِلا مُزَوِّدٍ مَضبوطٍ تُرسَمُ استِمارَةُ التَحسينِ تَحتَ دِراسَةٍ مُكتَمِلَة (المِفتاحُ
+    // أُزيلَ بَعدَ الدِراسَة، أَو عَيِّنَةُ `INCUBATOR_SAMPLE_SEED`)، والنُقطَةُ تَعُدُّ وَحدَةَ تَحسينٍ مِن الحِصَّةِ ثُمَّ تُنادي المُزَوِّدَ فَيُرَدُّ 401
+    // ويُبتلَعُ (`if (resp.Error is not null) return;`) — والصَفحَةُ عَلى `?refining=` تُحَدِّثُ نَفسَها كُلَّ ٤ ثَوانٍ.
+    //
+    // **والفاحِصُ هُنا لا قائِمَة**: جَردُ مَداخِلِ نَموذَجِ اللُغَةِ القائِمُ (`LanguageModelQuotaGateTests.LlmEntries` — القاعِدَة ٨: لا ماسِحَ ثانٍ)
+    // مُصَفّىً إلى ما يَبلُغُ دالَّتَي وَكيلِ التَحليلِ بِلا سُلطَةِ المالِك. فَمَدخَلٌ سابِعٌ يُضافُ غَداً يُعَدُّ بِلا سَطرٍ هُنا.
+    //
+    // **وصَفّا «Today_» يُقلَبانِ بِاسمَيهِما** في كوميتِ الإصلاح.
+
+    /// <summary>ما يَبلُغُ مِفتاحَ وَكيلِ التَحليلِ مِن دالَّاتِ <see cref="LanguageModelQuotaGateTests.LlmReachingMethods"/>.</summary>
+    private static readonly string[] AnalysisSpends = { "RunAnalysisAsync(", "RefineSectionAsync(" };
+
+    /// <summary>مَداخِلُ العَميلِ الَّتي تُنفِقُ مِفتاحَ التَحليل — وما بِسُلطَةِ المالِكِ مَعدودٌ مُستَثنىً بِاسمِه (مِفتاحُه وفاتورَتُه، وصَفحَتاه تَسأَلانِ
+    /// <c>IsConfigured</c>).</summary>
+    private static (List<(string Where, string Body)> Customer, List<string> Owner) AnalysisEntries()
+    {
+        var customer = new List<(string, string)>();
+        var owner = new List<string>();
+        foreach (var e in LanguageModelQuotaGateTests.LlmEntries())
+        {
+            if (!AnalysisSpends.Any(sp => e.Body.Contains(sp, StringComparison.Ordinal))) continue;
+            if (e.Body.Contains("PlatformAdminGuard.EvaluateAsync", StringComparison.Ordinal)
+                || e.Body.Contains("RequirePlatformAdmin", StringComparison.Ordinal))
+            {
+                owner.Add(e.Where);
+                continue;
+            }
+            customer.Add((e.Where, e.Body));
+        }
+        return (customer, owner);
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم»</b>: ثَلاثَةُ مَداخِلِ عَميلٍ تُنفِقُ مِفتاحَ التَحليل، ومَدخَلٌ بِسُلطَةِ المالِك — ومِن الثَلاثَةِ واحِدٌ لا يَسأَلُ البابَ:
+    /// <c>/studio/s/{id:guid}/refine</c>.</summary>
+    [Fact]
+    public void Today_one_customer_entry_that_spends_the_analysis_key_asks_no_door()
+    {
+        var (customer, owner) = AnalysisEntries();
+        var closed = customer.Where(e => !e.Body.Contains("StudioAnalysisDoor.Opens(", StringComparison.Ordinal)).Select(e => e.Where).ToArray();
+        output.WriteLine($"مَداخِلُ عَميلٍ تُنفِقُ مِفتاحَ التَحليل: {customer.Count} ({string.Join(" · ", customer.Select(c => c.Where))})"
+            + $" · بِسُلطَةِ المالِك: {owner.Count} ({string.Join(" · ", owner)}) · بِلا باب: {closed.Length} ({string.Join(" · ", closed)})");
+
+        Assert.Equal(3, customer.Count);
+        Assert.Equal(new[] { "/admin/incubator/{id:guid}/analyze" }, owner);
+        Assert.Equal(new[] { "/studio/s/{id:guid}/refine" }, closed);
+    }
+
+    /// <summary>كُتَلُ <c>@if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))</c> في صَفحَة — مِن قَوسِها المَفتوحِ إلى ما يُقابِلُه.</summary>
+    private static List<(int Open, int Close)> DoorBlocks(string text)
+    {
+        const string door = "@if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))";
+        var blocks = new List<(int, int)>();
+        for (var i = text.IndexOf(door, StringComparison.Ordinal); i >= 0; i = text.IndexOf(door, i + door.Length, StringComparison.Ordinal))
+        {
+            var open = text.IndexOf('{', i + door.Length);
+            Assert.True(open > 0, "بابٌ بِلا كُتلَة.");
+            var depth = 0;
+            var close = -1;
+            for (var k = open; k < text.Length; k++)
+            {
+                if (text[k] == '{') depth++;
+                else if (text[k] == '}' && --depth == 0) { close = k; break; }
+            }
+            Assert.True(close > open, "كُتلَةُ بابٍ لا تُغلَق — القَصُّ فاشِل.");
+            blocks.Add((open, close));
+        }
+        return blocks;
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم»</b>: صَفحَةُ الدِراسَةِ تَسأَلُ البابَ لِزِرِّ الإعادَةِ وَحدَه — واستِمارَةُ التَحسينِ خارِجَ كُلِّ كُتلَةِ بابٍ مَفتوح.</summary>
+    [Fact]
+    public void Today_the_study_page_draws_the_refine_form_outside_every_open_door()
+    {
+        var text = Page("StudioStudy.razor");
+        var formAt = At(text, "/studio/s/{session.Id}/refine");
+        Assert.Equal(formAt, text.LastIndexOf("/studio/s/{session.Id}/refine", StringComparison.Ordinal));
+        var blocks = DoorBlocks(text);
+        output.WriteLine($"كُتَلُ البابِ في StudioStudy: {blocks.Count} · استِمارَةُ التَحسينِ عِندَ {formAt} · داخِلَ كُتلَة: "
+            + blocks.Count(b => b.Open < formAt && formAt < b.Close));
+
+        Assert.Single(blocks);
+        Assert.DoesNotContain(blocks, b => b.Open < formAt && formAt < b.Close);
+    }
 }
