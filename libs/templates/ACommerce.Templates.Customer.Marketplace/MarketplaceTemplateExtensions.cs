@@ -3519,7 +3519,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/studio/apps/{slug}/deals/{id:guid}/advance",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
                    Services.Incubator.StudioAuth auth, Services.Deals.DealsService deals,
-                   Services.Audit.AuditWriter audit) =>
+                   Services.Audit.AuditWriter audit, Services.Deals.DealNotices notices, L l) =>
         {
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
             var note = req.Form["note"].ToString().Trim();
@@ -3550,6 +3550,8 @@ public static class MarketplaceTemplateExtensions
                     "deal.advance", "deal", id.ToString(),
                     note: $"→ {result.Deal.Stage}" + (string.IsNullOrEmpty(note) ? "" : $" · {note}"),
                     ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
+            // والمُشتَري يَعلَمُ أَنّ إدارَةَ المَتجَرِ قَبِلَت طَلَبَه (‏2026-10-24، تَدقيقُ الإطلاق brief-P1a-1) — نَسَقُ `/accept` والـAPI؛ كانَ صامِتاً (`727bc9f`).
+            if (Services.Deals.DealNotices.IsAcceptance(result)) await notices.NotifyAcceptedByStoreAsync(slug, result.Deal!, auth.UserId!.Value, l);
             return Results.Redirect($"/studio/apps/{slug}/deals/{id}" + (result.Code is { } code ? $"?err={code}" : ""));
         }).RequireFormBody().DisableAntiforgery();
 

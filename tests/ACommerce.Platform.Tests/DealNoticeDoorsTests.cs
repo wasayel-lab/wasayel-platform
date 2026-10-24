@@ -97,18 +97,26 @@ public class DealNoticeDoorsTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// <para><b>«اليَوم»</b> (‏2026-10-24، تَدقيقُ الإطلاق brief-P1a-1): المَسارُ الإداريُّ في الاستوديو (<c>/studio/apps/{slug}/deals/{id}/advance</c>) يُخرِجُ
-    /// <c>Offered</c> إلى <c>Booked</c> بِهُوِيَّةِ البائِعِ المَربوط — قَبولٌ بِمِعيارِ <see cref="DealNotices.IsAcceptance"/> نَفسِه — ومَقطَعُه بِلا <c>notices.</c>
-    /// واحِدَة، فَلا يُخبَرُ المُشتَري؛ وسَطرُ خَرجِ الصَفِّ أَعلاه «العُضو والاستوديو والـAPI: كُلُّ إلغاءٍ وقَبولٍ ناجِحٍ يَمُرُّ بِـDealNotices» لا يَصدُقُ عَلى
-    /// قَبولِ الاستوديو. يُقلَبُ بِاسمِه في كوميتِ الإشعار.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-24، تَدقيقُ الإطلاق brief-P1a-1؛ ‏ADR-036 §١٦): كانَ
+    /// <c>Today_the_studio_admin_path_accepts_a_cart_order_and_tells_the_buyer_nothing</c> (مُودَعٌ في <c>727bc9f</c>) — المَسارُ الإداريُّ في الاستوديو يُخرِجُ
+    /// <c>Offered</c> إلى <c>Booked</c> بِهُوِيَّةِ البائِعِ المَربوطِ ومَقطَعُه بِلا <c>notices.</c> واحِدَة. وصارَ قَبولُه يُخبِرُ المُشتَري بِنَصِّ «إدارَةِ المَتجَر»
+    /// (<see cref="DealNotices.NotifyAcceptedByStoreAsync"/> حينَ <see cref="DealNotices.IsAcceptance"/>) بَعدَ سَطرِ التَدقيق — فَيَصدُقُ سَطرُ خَرجِ الصَفِّ أَعلاه
+    /// عَلى الاستوديو كُلِّه.</para>
     /// </summary>
     [Fact]
-    public void Today_the_studio_admin_path_accepts_a_cart_order_and_tells_the_buyer_nothing()
+    public void The_studio_admin_path_accepting_a_cart_order_tells_the_buyer_through_DealNotices()
     {
         var studioAdvance = Segment(Endpoints(), "\"/studio/apps/{slug}/deals/{id:guid}/advance\"", ".DisableAntiforgery();");
-        Assert.Equal(0, studioAdvance.Split("notices.").Length - 1);
-        Assert.DoesNotContain("DealNotices", studioAdvance, StringComparison.Ordinal);
+        Assert.Contains("Services.Deals.DealNotices notices, L l", studioAdvance, StringComparison.Ordinal);
+        Assert.Contains("if (Services.Deals.DealNotices.IsAcceptance(result)) await notices.NotifyAcceptedByStoreAsync(slug, result.Deal!, auth.UserId!.Value, l);",
+            studioAdvance, StringComparison.Ordinal);
+        Assert.Equal(1, studioAdvance.Split("notices.").Length - 1);
+        var auditAt = studioAdvance.IndexOf("\"deal.advance\"", StringComparison.Ordinal);
+        var noticeAt = studioAdvance.IndexOf("NotifyAcceptedByStoreAsync(", StringComparison.Ordinal);
+        var redirectAt = studioAdvance.IndexOf("return Results.Redirect($\"/studio/apps/{slug}/deals/{id}\" + (result.Code", StringComparison.Ordinal);
+        Assert.True(auditAt > 0 && noticeAt > auditAt && redirectAt > noticeAt, $"تَرتيبُ التَدقيقِ ثُمَّ الإشعارِ ثُمَّ الرَدّ: audit={auditAt} notice={noticeAt} redirect={redirectAt}");
 
+        var l = new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor());
         var world = new DocWorld();
         var deals = new DealsService(world.Store, new NoPayments());
         var deal = CartDeal();
@@ -116,8 +124,13 @@ public class DealNoticeDoorsTests(ITestOutputHelper output)
         Assert.Null(DealsService.AdminPathRefusal(deal, AppOwner));
         var moved = deals.AdvanceAsync("shop", deal.Id, deal.CounterpartyId ?? AppOwner, "مالِك التَّطبيق (إداريّ)", "").GetAwaiter().GetResult();
         Assert.True(DealNotices.IsAcceptance(moved));
-        Assert.Equal(0, world.Wrote<ACommerce.Kit.Notifications.Notification>());
-        output.WriteLine($"الاستوديو: Offered → {moved.Deal!.Stage} · IsAcceptance={DealNotices.IsAcceptance(moved)} · notices. في المَقطَع: 0");
+        if (DealNotices.IsAcceptance(moved))
+            Assert.True(Notices(world).NotifyAcceptedByStoreAsync("shop", moved.Deal!, AppOwner, l).GetAwaiter().GetResult());
+        var told = Assert.Single(world.Stored.OfType<ACommerce.Kit.Notifications.Notification>());
+        Assert.Equal(Buyer, told.UserId);
+        Assert.Equal(DealNotices.AcceptedType, told.Type);
+        Assert.Equal(l["notifications.deal_accepted_by_store.title"], told.Title);
+        output.WriteLine($"الاستوديو: Offered → {moved.Deal!.Stage} · IsAcceptance={DealNotices.IsAcceptance(moved)} · notices. في المَقطَع: 1 · إشعاراتُ المُشتَري: 1");
     }
 
     /// <summary>مُزَوِّدٌ يَرمي — صَفقَةُ السَلَّةِ هُنا بِلا مُعَرِّفِ دَفع.</summary>
@@ -176,6 +189,28 @@ public class DealNoticeDoorsTests(ITestOutputHelper output)
         Assert.Equal(l.Format("notifications.deal_cancelled_by_store.push_body", deal.ListingTitle), DealNotices.CancelledByStorePushBody(deal, l));
     }
 
+    /// <summary>قَبولُ إدارَةِ المَتجَرِ (‏2026-10-24، brief-P1a-1): نَسَقُ <see cref="DealNotices.CancelledByStoreFor"/> — المُشتَري، نَوعُ القَبول، ونَصٌّ مِن
+    /// القامُوسِ بِلا اسمٍ شَخصِيّ.</summary>
+    [Fact]
+    public void AcceptedByStoreFor_tells_the_buyer_from_the_dictionary_without_a_personal_name()
+    {
+        var l = new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor());
+        var deal = CartDeal();
+        var at = new DateTime(2026, 10, 24, 9, 0, 0, DateTimeKind.Utc);
+        var n = DealNotices.AcceptedByStoreFor("shop", deal, l, at);
+        Assert.Equal(Buyer, n.UserId);
+        Assert.Equal(DealNotices.AcceptedType, n.Type);
+        Assert.Equal(l["notifications.deal_accepted_by_store.title"], n.Title);
+        Assert.Equal(l.Format("notifications.deal_accepted_by_store.body", deal.ListingTitle), n.Body);
+        Assert.Contains("«سِلعَة»", n.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("بائِع", n.Body, StringComparison.Ordinal);
+        Assert.Equal($"/shop/deals/{deal.Id}", n.RelatedUrl);
+        Assert.Equal(at, n.At);
+        foreach (var key in new[] { "notifications.deal_accepted_by_store.title", "notifications.deal_accepted_by_store.body", "notifications.deal_accepted_by_store.push_body" })
+            Assert.NotEqual(key, ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, key));
+        Assert.Equal(l.Format("notifications.deal_accepted_by_store.push_body", deal.ListingTitle), DealNotices.AcceptedByStorePushBody(deal, l));
+    }
+
     // ═══ ٣) الأُنبوبُ في عالَمِ الوَثائِق — المُشتَري يُخبَرُ مَرَّة، ومالِكٌ هُوَ المُشتَري لا يُخبَرُ بِما فَعَل ═════════════
 
     private static DealNotices Notices(DocWorld world)
@@ -208,6 +243,30 @@ public class DealNoticeDoorsTests(ITestOutputHelper output)
         seedWorld.Put(seed);
         var saves = seedWorld.SaveCalls;
         Assert.False(await Notices(seedWorld).NotifyCancelledByStoreAsync("shop", seed, AppOwner, l));
+        Assert.Equal(0, seedWorld.Wrote<ACommerce.Kit.Notifications.Notification>());
+        Assert.Equal(saves, seedWorld.SaveCalls);
+    }
+
+    /// <summary>قَبولُ إدارَةِ المَتجَرِ في الأُنبوب (‏2026-10-24، brief-P1a-1): المُشتَري يُخبَرُ مَرَّة، ومالِكُ تَطبيقٍ هُوَ المُبادِرُ لا يُخبَرُ ولا يُكتَبُ شَيء.</summary>
+    [Fact]
+    public async Task NotifyAcceptedByStoreAsync_tells_the_buyer_once_and_an_owner_who_is_the_buyer_never()
+    {
+        var l = new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor());
+
+        var world = new DocWorld();
+        var deal = CartDeal();
+        world.Put(deal);
+        Assert.True(await Notices(world).NotifyAcceptedByStoreAsync("shop", deal, AppOwner, l));
+        var told = Assert.Single(world.Stored.OfType<ACommerce.Kit.Notifications.Notification>());
+        Assert.Equal(Buyer, told.UserId);
+        Assert.Equal(DealNotices.AcceptedType, told.Type);
+
+        var seedWorld = new DocWorld();
+        var seed = CartDeal();
+        seed.InitiatorId = AppOwner;
+        seedWorld.Put(seed);
+        var saves = seedWorld.SaveCalls;
+        Assert.False(await Notices(seedWorld).NotifyAcceptedByStoreAsync("shop", seed, AppOwner, l));
         Assert.Equal(0, seedWorld.Wrote<ACommerce.Kit.Notifications.Notification>());
         Assert.Equal(saves, seedWorld.SaveCalls);
     }

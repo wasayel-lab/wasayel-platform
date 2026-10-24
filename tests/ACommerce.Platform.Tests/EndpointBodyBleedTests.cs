@@ -339,7 +339,10 @@ public class EndpointBodyBleedTests
         // ‏2699 ← **2701** يَوم ‏2026-10-24 (تَدقيقُ الإطلاق lens-money-integrity-3، تَيّارُ W8-1؛ ‏ADR-032 §٨‑ح‑١ مُلحَقاً): نِداءُ مُراجَعَةِ السَلَّةِ في
         // `/checkout/submit` ورُجوعُه (سَطرانِ لِعِبارَةٍ واحِدَة)، وشَرطا الحَلقَةِ و`cart/add` تَبَدَّلَ حَرفُهُما إلى `CheckoutCart.Buyable` بِلا سَطر؛ والقِراءَةُ
         // والقَرارُ والكِتابَةُ في `CheckoutCart.RefreshAsync` تَأخُذُ الجَلسَةَ وَسيطاً. طَبَعَ العَدّادُ «‏2699 → 2701» و«‏3030 → 3032»، و**‏2 = 2**؛ والنِقاطُ ‏135.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2701),
+        // ‏2701 ← **2702** يَوم ‏2026-10-24 (تَدقيقُ الإطلاق brief-P1a-1، تَيّارُ W8-1؛ ‏ADR-036 §١٦): سَطرٌ واحِدٌ في `/studio/apps/{slug}/deals/{id}/advance` —
+        // إشعارُ المُشتَري حينَ يَكونُ الانتِقالُ قَبولاً (`DealNotices.IsAcceptance` ثُمَّ `NotifyAcceptedByStoreAsync`)؛ والحَقنُ في سَطرِ التَوقيعِ القائِمِ بِلا سَطر،
+        // والقَرارُ والأُنبوبُ في `DealNotices`. كانَ القَبولُ الإداريُّ صامِتاً. طَبَعَ العَدّادُ «‏2701 → 2702» و«‏3032 → 3033»، و**‏1 = 1**؛ والنِقاطُ ‏135.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2702),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -1012,7 +1015,9 @@ public class EndpointBodyBleedTests
     /// وعَدَدُ النِقاطِ ‏135 لَم يَتَحَرَّك.</remarks>
     /// <remarks><b>‏3030 ← 3032 يَوم ‏2026-10-24</b> (تَدقيقُ الإطلاق lens-money-integrity-3): مُراجَعَةُ السَلَّةِ في <c>/checkout/submit</c> — سَطرانِ، والقَرارُ في
     /// <c>CheckoutCart</c>. طَبَعَ العَدّادُ «‏3030 → 3032»، و<b>‏2 = 2</b>؛ وعَدَدُ النِقاطِ ‏135 لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 3032;
+    /// <remarks><b>‏3032 ← 3033 يَوم ‏2026-10-24</b> (تَدقيقُ الإطلاق brief-P1a-1): قَبولُ الاستوديو يُخبِرُ المُشتَري — سَطرٌ واحِد، والأُنبوبُ في
+    /// <c>DealNotices</c>. طَبَعَ العَدّادُ «‏3032 → 3033»، و<b>‏1 = 1</b>؛ وعَدَدُ النِقاطِ ‏135 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 3033;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

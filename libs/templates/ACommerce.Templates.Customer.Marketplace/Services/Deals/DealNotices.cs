@@ -138,6 +138,25 @@ public sealed class DealNotices
         => l.Format("notifications.deal_cancelled_by_store.push_body", deal.ListingTitle);
 
     /// <summary>
+    /// <para><b>إشعارُ المُشتَري بِأَنّ إدارَةَ المَتجَرِ قَبِلَت طَلَبَه</b> (‏2026-10-24، تَدقيقُ الإطلاق brief-P1a-1): المَسارُ الإداريُّ في الاستوديو يُخرِجُ
+    /// <c>Offered</c> إلى <c>Booked</c> بِهُوِيَّةِ الطَرَف — قَبولٌ بِمِعيارِ <see cref="IsAcceptance"/> — وكانَ صامِتاً (تَوصيفُه <c>727bc9f</c>). نَوعُه نَوعُ القَبولِ
+    /// وأَيقونَتُه، ونَصُّه نَسَقُ <see cref="CancelledByStoreFor"/>: «إدارَةُ المَتجَر» لا اسمٌ شَخصِيٌّ لِمالِكٍ لا يَعرِفُه المُشتَري.</para>
+    /// </summary>
+    public static Notification AcceptedByStoreFor(string slug, Deal deal, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = deal.InitiatorId,
+        Type = AcceptedType,
+        Title = l["notifications.deal_accepted_by_store.title"],
+        Body = l.Format("notifications.deal_accepted_by_store.body", deal.ListingTitle),
+        RelatedUrl = $"/{slug}/deals/{deal.Id}",
+        At = at,
+    };
+
+    public static string AcceptedByStorePushBody(Deal deal, L l)
+        => l.Format("notifications.deal_accepted_by_store.push_body", deal.ListingTitle);
+
+    /// <summary>
     /// <para><b>أَقَبِلَ هذا التَقَدُّمُ الطَلَب؟</b> — نَجَحَ، وآخِرُ سَطرٍ في سِجِلِّ الصَفقَةِ الَّتي أَعادَها انتِقالٌ مِن <c>Offered</c> (‏2026-10-13،
     /// مُراجَعَةُ المَوجَة 3a — G4 (iii)). بابُ التَقَدُّمِ العامُّ يُخرِجُ <c>Offered</c> إلى <c>Booked</c> بِفاعِلِها — الطَرَفِ المُقابِل — فَهو قَبولٌ
     /// بِغَيرِ <c>/accept</c> (‏ADR-033 §٦‑ط‑٤: «يُعادِلُ القَبولَ بِلا إشعارِ المُشتَري»)؛ ومُستَهلِكُه نُقطَةُ التَقَدُّمِ في الـAPI. دالَّةٌ نَقِيَّة.</para>
@@ -256,6 +275,25 @@ public sealed class DealNotices
         }
         await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
         await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, CancelledByStorePushBody(deal, l),
+            url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
+        return true;
+    }
+
+    /// <summary>بَعدَ قَبولٍ مِن المَسارِ الإداريِّ في الاستوديو (<c>/studio/apps/{slug}/deals/{id}/advance</c> حينَ <see cref="IsAcceptance"/>): إشعارٌ لِلمُشتَري
+    /// بِنَصِّ «إدارَةِ المَتجَر» (<see cref="AcceptedByStoreFor"/>) إن لَم يَكُن مالِكُ المَتجَرِ هُوَ المُشتَري (<see cref="TellsTheBuyer"/>) — بِتَرتيبِ الأُنبوبِ
+    /// نَفسِه. تُرجِعُ هَل أُشعِر. (‏2026-10-24، تَدقيقُ الإطلاق brief-P1a-1؛ نَسَقُ <see cref="NotifyCancelledByStoreAsync"/>.)</summary>
+    public async Task<bool> NotifyAcceptedByStoreAsync(
+        string slug, Deal deal, Guid ownerId, L l, CancellationToken ct = default)
+    {
+        if (!TellsTheBuyer(deal, ownerId)) return false;
+        var n = AcceptedByStoreFor(slug, deal, l, DateTime.UtcNow);
+        await using (var s = _store.LightweightSession(slug))
+        {
+            s.Store(n);
+            await s.SaveChangesAsync(ct);
+        }
+        await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
+        await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, AcceptedByStorePushBody(deal, l),
             url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         return true;
     }
