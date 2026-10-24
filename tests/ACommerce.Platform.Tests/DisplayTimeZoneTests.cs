@@ -163,13 +163,57 @@ public class DisplayTimeZoneTests(ITestOutputHelper output)
             "تاريخُ الباقَةِ التَقويميّ نَفسُه في سَطرِ الاستوديو — يُطابِقُ ما في صَفحَةِ الإدارَة."),
         ("Components/Pages/StudioHome.razor", "TenantPlanPolicy.HiddenAt(p)?.ToString(\"yyyy-MM-dd\")",
             "مُشتَقٌّ مِن السابِق — يَتبَعُه."),
+        // ‏(‏2026-10-24 — تَيّارُ S16، مُراجَعَةُ S15 الجَولَة ١) ما يَراه الماسِحُ بَعدَ أَن صارَ يَقرَأُ صيَغَ الإقحامِ والصيَغَ ذاتَ الحَرفِ الواحِد:
+        ("Services/Export/TenantExportService.cs", "{content.GeneratedAtUtc:yyyyMMdd-HHmm}.zip",
+            "اسمُ مِلَفِّ التَصديرِ بِلَحظَتِه UTC لا عَرض — والمُتَغَيِّرُ يُسَمّيها Utc بِحَرفِه."),
+        ("Services/Export/TenantExportPackage.cs", "{content.GeneratedAtUtc:yyyy-MM-dd HH:mm} بِتَوقيتِ UTC",
+            "مَوسومٌ «بِتَوقيتِ UTC» بِحَرفِه في وَثيقَةِ التَصدير."),
+        ("Services/Export/TenantExportPackage.cs", "[\"generatedAtUtc\"] = content.GeneratedAtUtc.ToString(\"O\")",
+            "حَقلٌ آلِيٌّ في بَيانِ التَصديرِ بِصيغَةِ ISO-8601 لِلذَهابِ والإياب (بِـZ) — تَقرَؤُه آلَة، ومِفتاحُه يُسَمّيه UTC."),
+        ("Billing/PayPalOrderSurface.cs", "حَتّى {Expires:yyyy-MM-dd}: {Reason}\"",
+            "قالَبُ سَطرِ سِجِلٍّ لِلمُشَغِّل لا عَرض، بِتاريخِ الباقَةِ التَقويميّ."),
+        ("Billing/PayPalOrderSurface.cs", "expiresAt={d.NewExpiresAt:yyyy-MM-dd}; order=",
+            "سَطرُ تَدقيقٍ مُخَزَّن (after:) بِتاريخِ الباقَةِ التَقويميّ — كَحَقلِها في TenantPlanAdmin."),
+        ("Billing/PayPalSurface.cs", "حَتّى {Expires:yyyy-MM-dd}: {Reason}\"",
+            "قالَبُ سِجِلٍّ لِلمُشَغِّل — نَفسُ السَبَب."),
+        ("Billing/PayPalSurface.cs", "expiresAt={d.NewExpiresAt:yyyy-MM-dd}; event=",
+            "سَطرُ تَدقيقٍ — نَفسُ السَبَب."),
+        ("Billing/PaddleSurface.cs", "حَتّى {Expires:yyyy-MM-dd}: {Reason}\"",
+            "قالَبُ سِجِلٍّ لِلمُشَغِّل — نَفسُ السَبَب."),
+        ("Billing/PaddleSurface.cs", "expiresAt={d.NewExpiresAt:yyyy-MM-dd}; tx=",
+            "سَطرُ تَدقيقٍ — نَفسُ السَبَب."),
     };
+
+    /// <summary><b>أَراسِمُ وَقتٍ هذا السَطر؟</b> (‏2026-10-24 — تَيّارُ S16، مُراجَعَةُ S15 الجَولَة ١: كانَ الماسِحُ يَعرِفُ أَربَعَ صيَغٍ لِـ<c>ToString("…")</c>
+    /// و<c>ToLocalTime()</c> وَحدَها، فَـ<c>$"{at:HH:mm}"</c> و<c>@at.ToString("t")</c> و<c>ToString("d MMM")</c> تُرسَمُ بِـUTC وتَمُرّ). يَقرَأُ الآن:
+    /// تِلكَ الصيَغ، و<c>hh</c>/<c>yy</c>/<c>MMM</c>، وكُلَّ ثُقبِ إقحامٍ بِمُحَدِّدِ تاريخٍ أَو ساعَة، والصيَغَ القِياسِيَّةَ ذاتَ الحَرفِ الواحِدِ عَلى مُستَقبِلٍ
+    /// اسمُه وَقت (<c>…At</c>/<c>…Utc</c>/<c>…Date</c>/<c>…Time</c>/<c>Expires…</c>/<c>Starts…</c> — فَـ<c>userId.ToString("D")</c> لِـGuid لا يُعَدّ)،
+    /// و<c>To(Short|Long)(Date|Time)String()</c>. وسَطرُ التَعليقِ لا يُرسَم.</summary>
+    internal static readonly Regex TimeRenderer = new(
+        @"ToString\(""(HH:mm|hh:mm|yyyy|yy-|MM-dd|dd/MM|d MMM|dd MMM|MMM)|ToLocalTime\(\)"
+        + @"|\{[^{}""]*:(?:HH|hh|yyyy|yy|MM|dd|d MMM|MMM)[^{}""]*\}"
+        + @"|\b\w*(?:At|Utc|Date|Time|Expires|Starts)\w*\)?\??\.ToString\(""[dDfFgGtTMmYyOoRrsu]""\)"
+        + @"|\bTo(?:Short|Long)(?:Date|Time)String\(\)");
+
+    /// <summary>حُكمُ سَطرٍ واحِد: <c>null</c> لَيسَ راسِماً، و«zoned»/«derived»/«pinned:N» مَقبول، و«bad» مُخالِف.</summary>
+    internal static string? TimeRendererVerdict(string rel, string line)
+    {
+        var t = line.TrimStart();
+        if (t.StartsWith("//", StringComparison.Ordinal) || t.StartsWith("*", StringComparison.Ordinal) || t.StartsWith("@*", StringComparison.Ordinal)) return null;
+        if (!TimeRenderer.IsMatch(line)) return null;
+        if (line.Contains("ToLocalTime()", StringComparison.Ordinal)) return "bad";
+        if (line.Contains("InZone(", StringComparison.Ordinal)) return "zoned";
+        // مُتَغَيِّرٌ حُوِّلَ قَبلَه في الدالَّةِ نَفسِها (`localAt`/`local` في المُحادَثات).
+        if (Regex.IsMatch(line, @"\blocal(At)?\.ToString\(")) return "derived";
+        var hit = Array.FindIndex(PinnedUnzoned, p => p.File == rel && line.Contains(p.Snippet, StringComparison.Ordinal));
+        return hit >= 0 ? $"pinned:{hit}" : "bad";
+    }
 
     [Fact]
     public void Every_time_renderer_passes_through_the_culture_zone_or_is_pinned()
     {
         var root = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace");
-        var rx = new Regex(@"ToString\(""(HH:mm|yyyy|MM-dd|dd/MM)|ToLocalTime\(\)");
+        // ‏(‏2026-10-24 — تَيّارُ S16) الحُكمُ في `TimeRendererVerdict` — الصيَغُ القَديمَةُ بِحَرفِها ومَعَها ما فاتَها؛ والعَدُّ والقائِمَةُ الثُنائِيَّةُ كَما كانا.
         var files = Directory.GetFiles(root, "*.*", SearchOption.AllDirectories)
             .Where(f => (f.EndsWith(".razor") || f.EndsWith(".cs"))
                      && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
@@ -185,14 +229,14 @@ public class DisplayTimeZoneTests(ITestOutputHelper output)
             for (var i = 0; i < lines.Length; i++)
             {
                 var line = lines[i];
-                if (!rx.IsMatch(line)) continue;
-                if (line.Contains("ToLocalTime()", StringComparison.Ordinal)) { bad.Add($"{rel}:{i + 1} ToLocalTime"); continue; }
-                if (line.Contains("InZone(", StringComparison.Ordinal)) { zoned++; continue; }
-                // مُتَغَيِّرٌ حُوِّلَ قَبلَه في الدالَّةِ نَفسِها (`localAt`/`local` في المُحادَثات).
-                if (Regex.IsMatch(line, @"\blocal(At)?\.ToString\(")) { derived++; continue; }
-                var hit = Array.FindIndex(PinnedUnzoned, p => p.File == rel && line.Contains(p.Snippet, StringComparison.Ordinal));
-                if (hit >= 0) { pinned++; used.Add(hit); continue; }
-                bad.Add($"{rel}:{i + 1} {line.Trim()}");
+                switch (TimeRendererVerdict(rel, line))
+                {
+                    case null: continue;
+                    case "zoned": zoned++; continue;
+                    case "derived": derived++; continue;
+                    case var v when v.StartsWith("pinned:", StringComparison.Ordinal): pinned++; used.Add(int.Parse(v[7..])); continue;
+                    default: bad.Add($"{rel}:{i + 1} {line.Trim()}"); continue;
+                }
             }
         }
         output.WriteLine($"مَفحوص: {files.Count} مِلَفّاً · بِـInZone: {zoned} · مُشتَقٌّ مِن مُحَوَّل: {derived} · مُثَبَّت: {pinned} · مُخالِف: {bad.Count}");
@@ -200,5 +244,38 @@ public class DisplayTimeZoneTests(ITestOutputHelper output)
         Assert.True(bad.Count == 0, "راسِمُ وَقتٍ بِلا مِنطَقَةِ الثَقافَة ولا تَثبيت:\n" + string.Join("\n", bad));
         var stale = PinnedUnzoned.Where((_, i) => !used.Contains(i)).Select(p => $"{p.File} «{p.Snippet}»").ToList();
         Assert.True(stale.Count == 0, "تَثبيتٌ لا يُطابِقُ شَيئاً — يُرفَعُ مِن القائِمَة:\n" + string.Join("\n", stale));
+    }
+
+    /// <summary><b>حَقنُ عَيب — ماسِحُ راسِمي الوَقتِ يَرى الصيَغَ الَّتي فاتَتهُ</b> (‏2026-10-24، S16): كُلُّ شَكلٍ مِنها في صَفحَةٍ بِلا <c>InZone</c> «bad»،
+    /// وكانَ الماسِحُ قَبلَه لا يَراه؛ والشَكلُ نَفسُه داخِلَ <c>InZone</c> مَقبول، وGuid بِـ<c>"D"</c> وسَطرُ تَعليقٍ لَيسا راسِمَين.</summary>
+    [Fact]
+    public void The_time_renderer_scanner_sees_interpolation_and_single_letter_formats()
+    {
+        const string Page = "Components/Pages/Injected.razor";
+        var old = new Regex(@"ToString\(""(HH:mm|yyyy|MM-dd|dd/MM)|ToLocalTime\(\)");
+        var bad = new[]
+        {
+            "<span>@($\"{n.At:HH:mm}\")</span>",
+            "<span>@n.At.ToString(\"t\")</span>",
+            "<span>@n.CreatedAt.ToString(\"d MMM\")</span>",
+            "<span>@n.At.ToShortDateString()</span>",
+            "var label = $\"آخِرُ دُخول {user.LastLoginAt:dd/MM HH:mm}\";",
+            "<td>@(plan?.ExpiresAt.ToString(\"D\"))</td>",
+        };
+        var accepted = new (string Line, string? Verdict)[]
+        {
+            ("<span>@($\"{Culture.InZone(n.At):HH:mm}\")</span>", "zoned"),
+            ("<span>@Culture.InZone(n.At).ToString(\"t\")</span>", "zoned"),
+            ("_log.LogInformation(\"{Owner}\", owner.ToString(\"D\"));", null),
+            ("// ‏مِثالٌ في تَعليق: $\"{at:HH:mm}\"", null),
+        };
+        var wrong = bad.Where(l => TimeRendererVerdict(Page, l) != "bad").Select(l => $"لَم يُرَ: {l} ⇒ {TimeRendererVerdict(Page, l) ?? "لَيسَ راسِماً"}")
+            .Concat(accepted.Where(a => TimeRendererVerdict(Page, a.Line) != a.Verdict)
+                .Select(a => $"حُكمُه {TimeRendererVerdict(Page, a.Line) ?? "null"} لا {a.Verdict ?? "null"}: {a.Line}"))
+            .ToList();
+        var oldBlind = bad.Count(l => !old.IsMatch(l));
+        output.WriteLine($"حُقِنَ {bad.Length} راسِماً بِلا مِنطَقَة و{accepted.Length} مَقبولاً · كانَ الماسِحُ قَبلَ S16 لا يَرى {oldBlind} مِنها");
+        Assert.Equal(6, oldBlind);
+        Assert.True(wrong.Count == 0, string.Join("\n", wrong));
     }
 }
