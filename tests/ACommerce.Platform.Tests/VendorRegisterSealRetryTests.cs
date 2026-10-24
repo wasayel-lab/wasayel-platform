@@ -180,7 +180,7 @@ public class LiveVendorRegisterSealRetryProofTests(ITestOutputHelper output)
 
         var error = await Record.ExceptionAsync(() =>
             surface.RegisterAsync(slug, VendorShippingTests.Registrant(owner), VendorShippingTests.Form(), "https://wasayel.example/x"));
-        var entry = await new TenantProviderService(store).VendorEntryAsync(slug, ProviderCapabilities.Delivery, owner);
+        var entry = (await new TenantProviderService(store).ReadVendorEntryAsync(slug, ProviderCapabilities.Delivery, owner)).Entry;
         var sealedToken = entry is not null && entry.Values.TryGetValue(VendorShippingSurface.RefreshField!, out var v)
             && v.Unseal(vault, VendorShippingSurface.AadFor(slug, VendorShippingSurface.RefreshField!, owner)) == "_refreshToken_";
         return (error, sealedToken, counter.Attempts, surface.TakeActivationLink(slug, owner) is not null, oto.CallsTo(OtoClient.WebhookPath));

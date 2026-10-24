@@ -177,7 +177,7 @@ public class LiveVendorRegisterBucketProofTests(ITestOutputHelper output)
                     new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions())));
 
             var result = await surface.RegisterAsync(slug, VendorShippingTests.Registrant(owner), VendorShippingTests.Form(), "https://wasayel.example/x");
-            var entry = await providers.VendorEntryAsync(slug, ACommerce.Platform.Providers.ProviderCapabilities.Delivery, owner);
+            var entry = (await providers.ReadVendorEntryAsync(slug, ACommerce.Platform.Providers.ProviderCapabilities.Delivery, owner)).Entry;
             await using var q = store.QuerySession(slug);
             var audits = await q.Query<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>().ToListAsync();
 

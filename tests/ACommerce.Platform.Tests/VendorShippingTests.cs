@@ -1458,11 +1458,11 @@ public class LiveVendorShippingProofTests(ITestOutputHelper output)
             var vendor = ListingVendorGate.Admit(seller, "بائِع", 1).Vendor!;
             Assert.True((await surface.SaveTokenAsync(withEntry, vendor, "RT-live-vendor-5e5e", "https://wasayel.example/x")).Ok);
 
-            var read = (await providers.VendorEntryAsync(withEntry, ProviderCapabilities.Delivery, seller))!;
+            var read = ((await providers.ReadVendorEntryAsync(withEntry, ProviderCapabilities.Delivery, seller)).Entry)!;
             Assert.Equal(TenantProviderBinding.VendorEntryId(ProviderCapabilities.Delivery, seller), read.Id);
             Assert.Equal("RT-live-vendor-5e5e", read.Values[VendorShippingSurface.RefreshField!]
                 .Unseal(vault, VendorShippingSurface.AadFor(withEntry, VendorShippingSurface.RefreshField!, seller)));
-            Assert.Null(await providers.VendorEntryAsync(empty, ProviderCapabilities.Delivery, seller));   // في مُستَأجِرِه وَحدَه
+            Assert.Null((await providers.ReadVendorEntryAsync(empty, ProviderCapabilities.Delivery, seller)).Entry);   // في مُستَأجِرِه وَحدَه
 
             await providers.BindProviderAsync(storeOnly, ProviderCapabilities.Payments,
                 ProviderCatalog.ForCapability(ProviderCapabilities.Payments).First(d => d.Credential.Fields.Any(f => CredentialKinds.IsLink(f.Kind))).Slug,
@@ -1571,17 +1571,17 @@ public class LiveVendorShippingProofTests(ITestOutputHelper output)
             var no = await surface.RegisterAsync(slug, VendorShippingTests.Registrant(refused),
                 VendorShippingTests.Form(), "https://wasayel.example/x");
 
-            var entry = (await providers.VendorEntryAsync(slug, ProviderCapabilities.Delivery, accepted))!;
+            var entry = ((await providers.ReadVendorEntryAsync(slug, ProviderCapabilities.Delivery, accepted)).Entry)!;
             await using var q = store.QuerySession(slug);
             var audits = await q.Query<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>().ToListAsync();
             output.WriteLine($"المَقبول: {(ok.Ok ? "ok" : ok.Code)} · المَردود: {no.Code} · أَثَر: {audits.Count} · مَدخَلُ المَردود: " +
-                             $"{((await providers.VendorEntryAsync(slug, ProviderCapabilities.Delivery, refused)) is null ? "لا" : "نَعَم")}");
+                             $"{(((await providers.ReadVendorEntryAsync(slug, ProviderCapabilities.Delivery, refused)).Entry) is null ? "لا" : "نَعَم")}");
 
             Assert.True(ok.Ok, ok.Code);
             Assert.Equal("_refreshToken_", entry.Values[VendorShippingSurface.RefreshField!]
                 .Unseal(vault, VendorShippingSurface.AadFor(slug, VendorShippingSurface.RefreshField!, accepted)));
             Assert.Equal(OtoFailures.Refused, no.Code);
-            Assert.Null(await providers.VendorEntryAsync(slug, ProviderCapabilities.Delivery, refused));
+            Assert.Null((await providers.ReadVendorEntryAsync(slug, ProviderCapabilities.Delivery, refused)).Entry);
             Assert.Equal(2, audits.Count(a => a.Action == VendorShippingService.RegisterAuditAction && a.Note == "register"));
             Assert.Equal("https://login.tryoto.com/XYZ", surface.TakeActivationLink(slug, accepted));
             Assert.Null(surface.TakeActivationLink(slug, refused));
