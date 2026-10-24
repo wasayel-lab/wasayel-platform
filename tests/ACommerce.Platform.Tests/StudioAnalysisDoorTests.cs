@@ -424,4 +424,57 @@ public class StudioAnalysisDoorTests(ITestOutputHelper output)
             text, StringComparison.Ordinal);
         Assert.Contains("@if (!string.IsNullOrEmpty(Refining) && StudioAnalysisDoor.Opens(Incubator.IsConfigured))", text, StringComparison.Ordinal);
     }
+
+    // ═══ والطَريقُ إلى صَفحَةِ الفِكرَة — روابِطُ تُرسَمُ بِلا باب — تَوصيفُ «اليَوم» (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 2) ══════
+    //
+    // **المَقيسُ حَيّاً** (قاعِدَتانِ مَحَلِّيَّتانِ جَديدَتان، الرَأسُ `389c689`: `wasayel_s15r2c` بِلا مُزَوِّدِ تَحليل، و`wasayel_s15r2d` بِبَديلٍ
+    // مَحَلِّيٍّ مَضبوطٍ لا يُنادى): بِلا مُزَوِّدٍ تَرسُمُ `/studio` لِمُستَخدِمٍ جَديدٍ بِلا فِكرَةٍ ولا مَتجَرٍ **سِتَّةَ** روابِطَ إلى `/studio/new` —
+    // زِرَّ الشَريطِ العُلوِيّ، وبِطاقَةَ «حَلِّل فِكرَة»، و«+ فِكرَة جَديدَة»، وزِرَّي الحالَتَينِ الفارِغَتَين، ومَدخَلَ القائِمَةِ الجانِبِيَّة؛ و`/studio/ideas`
+    // ثَلاثَة، وكُلُّ صَفحَةِ استوديو واحِداً (القائِمَة) — ولِصاحِبِ دِراسَةٍ بِلا مَتجَرٍ أَربَعَةً عَلى `/studio`. وكُلُّ نَقرَةٍ تَبلُغُ صَفحَةً لا تَرسُمُ
+    // إلّا `studio.analysis.unavailable`: بابٌ يُرسَمُ ولا يُفتَح (القاعِدَة ١٢) — البَندُ A أَغلَقَ الاستِمارَةَ وتَرَكَ الطَريقَ إلَيها. والصَفَحاتُ
+    // بايتاً واحِدَةٌ بِالمِفتاحِ وبِدونِه (`/studio` ‏40581 = 40581 لِلجَديد، و42318 = 42318 لِصاحِبِ الدِراسَة): لا تَسأَلُ البابَ أَصلاً.
+    //
+    // **والفاحِصُ لا قائِمَة**: كُلُّ `"/studio/new"` في مَصادِرِ `libs` و`apps` (‏`EntitlementContractTests.SourceFiles` — القاعِدَة ٨) خارِجَ
+    // تَوجيهِ `@page` نَفسِه وخارِجَ التَعليقات، ومَوضِعُه مِن كُتَلِ `DoorBlocks` أَعلاه. فَرابِطٌ سابِعٌ يُضافُ غَداً يُعَدُّ بِلا سَطرٍ هُنا.
+    // والصَفُّ يُقلَبُ بِاسمِه في كوميتِ الإصلاح.
+
+    private const string NewIdeaRoute = "\"/studio/new\"";
+
+    /// <summary>كُلُّ ذِكرٍ لِصَفحَةِ الفِكرَةِ في المَصادِر، بِمِلَفِّه وهَل هُوَ داخِلَ كُتلَةِ بابٍ مَفتوح. في <c>.razor</c> تُبَيَّضُ تَعليقاتُ
+    /// Razor و‏HTML (بِطولِها، فَتَبقى الفَهارِس)؛ وفي <c>.cs</c> تَعليقاتُ C#، ولا كُتلَةَ بابٍ هُناك — فَتَحويلٌ إلَيها مِن كودٍ خارِجَ بابٍ دائِماً.</summary>
+    private static List<(string File, bool InsideDoor)> NewIdeaLinks()
+    {
+        var links = new List<(string, bool)>();
+        foreach (var (file, text) in EntitlementContractTests.SourceFiles())
+        {
+            var rel = Path.GetRelativePath(ThemeZeroEquivalenceTests.RepoRoot, file).Replace('\\', '/');
+            var razor = rel.EndsWith(".razor", StringComparison.OrdinalIgnoreCase);
+            var code = razor ? WriteEndpointGuardTests.StripMarkupComments(text) : WriteEndpointGuardTests.StripComments(text);
+            if (!code.Contains(NewIdeaRoute, StringComparison.Ordinal)) continue;
+            var blocks = razor ? DoorBlocks(code) : new List<(int Open, int Close)>();
+            for (var i = code.IndexOf(NewIdeaRoute, StringComparison.Ordinal); i >= 0; i = code.IndexOf(NewIdeaRoute, i + 1, StringComparison.Ordinal))
+            {
+                if (i >= 6 && string.CompareOrdinal(code, i - 6, "@page ", 0, 6) == 0) continue;
+                links.Add((rel, blocks.Any(b => b.Open < i && i < b.Close)));
+            }
+        }
+        return links;
+    }
+
+    /// <summary><b>«اليَوم»</b>: سِتَّةُ روابِطَ إلى صَفحَةِ الفِكرَة — خَمسَةٌ في <c>StudioHome</c> وواحِدٌ في <c>StudioShell</c> — ولا واحِدَ داخِلَ
+    /// بابٍ مَفتوح؛ والقِشرَةُ لا تَحقِنُ خِدمَةَ التَحليلِ أَصلاً. ويَطبَعُ ما عَدَّه ويَفشَلُ عَلى ما دونَ المَقيس (القاعِدَة ١٠).</summary>
+    [Fact]
+    public void Today_six_links_to_the_idea_page_are_drawn_without_asking_its_door()
+    {
+        var links = NewIdeaLinks();
+        var outside = links.Where(l => !l.InsideDoor).ToList();
+        output.WriteLine($"روابِطُ /studio/new: {links.Count} · داخِلَ بابٍ: {links.Count - outside.Count} · خارِجَه: {outside.Count} ("
+            + string.Join(" · ", outside.GroupBy(l => l.File).Select(g => $"{g.Key}: {g.Count()}")) + ")");
+
+        Assert.True(links.Count >= 6, $"أَداةٌ عَمياء: {links.Count} رابِطاً — والمَقيسُ 6.");
+        Assert.Equal(6, outside.Count);
+        Assert.Equal(5, outside.Count(l => l.File.EndsWith("/Components/Pages/StudioHome.razor", StringComparison.Ordinal)));
+        Assert.Equal(1, outside.Count(l => l.File.EndsWith("/Components/StudioShell.razor", StringComparison.Ordinal)));
+        Assert.DoesNotContain("FeasibilityAnalysisService", Read($"{TemplateRoot}/Components/StudioShell.razor"), StringComparison.Ordinal);
+    }
 }
