@@ -53,7 +53,8 @@ public class PaymentFlagReadersTests(ITestOutputHelper output)
     /// (<c>SyncPaymentProviderFlagAsync</c>) لَيسا قارِئَين. يَطبَعُ ما عَدَّه ويَفشَلُ عَلى الصِفر.</para>
     /// <para><b>و«مَعَه» بِكَيفِ الجَمعِ لا بِالجِوار</b> (‏2026-10-24 — مُراجَعَةُ الموجَة ٤، M6 المَحمولَة): «<c>CanCharge(</c> في السَطرِ
     /// نَفسِه» كانَ يَقبَلُ <c>flag || CanCharge(…)</c> وسَطراً يَقرَأُ العَلَمَ ويَسأَلُ <c>CanCharge</c> في جُملَةٍ أُخرى لا تَجمَعُهُما. فَيُقرَأُ
-    /// الآنَ بِـ<see cref="FlagReaderRefusal"/> — يُغلِقُ عِندَ الشَكّ، ولا يَقبَلُ إلّا شَكلَينِ مُسَمَّيَين.</para>
+    /// الآنَ بِـ<see cref="FlagReaderRefusal"/> — يُغلِقُ عِندَ الشَكّ، ولا يَقبَلُ إلّا شَكلَينِ مُسَمَّيَين. (‏2026-10-24، الجَولَةُ ١ — يُلحَقُ
+    /// ولا يُعادُ حَرفٌ فَوقَه: صارَ شَكلاً واحِداً، وَسيطاً مُباشِراً لِلقَرار؛ شَرطُ <c>if</c> سَقَط — لا يُرى مِنه أَيُّ فَرعٍ يَرسُمُ البِطاقَة.)</para>
     /// </summary>
     [Fact]
     public void Every_reader_of_the_pasted_link_flag_also_asks_whether_the_provider_can_charge()
@@ -99,18 +100,20 @@ public class PaymentFlagReadersTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// <para><b>أَيُقبَلُ قارِئُ العَلَمِ عِندَ <paramref name="at"/>؟</b> — <c>null</c> إن قُبِل، وإلّا رَمزُ الرَفض. شَكلانِ لا ثالِثَ لَهُما،
-    /// والفاحِصُ يُغلِقُ عِندَ الشَكّ (‏2026-10-24؛ بِنَمَطِ <c>StudioBillingPriceTests.IsSellCondition</c>):</para>
-    /// <list type="number">
-    ///   <item><b>وَسيطٌ مُباشِرٌ لِلقَرار</b>: أَصغَرُ قَوسٍ يَحوي العَلَمَ قائِمَةُ وَسائِطِ <c>CardFactsAsync(</c> (العَلَمُ ثانِيها و<c>CanCharge</c>
-    ///   ثالِثُها) أَو <c>new CheckoutCardFacts(</c> (أَوَّلُها وخامِسُها) — بِتَرتيبِ التَوقيعَين — والوَسيطُ هو العَلَمُ بِحَرفِه
-    ///   (<c>x.PaymentProviderConfigured</c> أَو <c>x?.PaymentProviderConfigured ?? false</c>)، وجارُه <c>PaymentChargeSurface.CanCharge(x)</c>
-    ///   بِحَرفِه؛</item>
-    ///   <item><b>أَو شَرطُ <c>if</c> عَطفٌ</b>: أَصغَرُ قَوسٍ يَحويه شَرطُ <c>if (</c> أَو <c>@if (</c>، لا <c>||</c> فيه ولا <c>?</c> في مُستَواه
-    ///   الأَعلى (فَـ<c>flag ?? false &amp;&amp; …</c> يُرَدُّ: يُقرَأُ <c>flag ?? (false &amp;&amp; …)</c>)، وطَرَفانِ مِن أَطرافِ عَطفِه العُليا هُما
-    ///   العَلَمُ بِحَرفِه و<c>CanCharge</c> بِحَرفِه — لا نَفيَ قَبلَهُما ولا مُقارَنَةَ بَعدَهُما.</item>
-    /// </list>
-    /// <para>وما سِواهُما يُرَدّ — ولَو صَحَّ مَنطِقاً (إسنادٌ إلى مُتَغَيِّرٍ ثُمَّ شَرط): قارِئٌ جَديدٌ يُقَرَّرُ شَكلُه بِاسمِه، لا يُستَنتَج.</para>
+    /// <para><b>أَيُقبَلُ قارِئُ العَلَمِ عِندَ <paramref name="at"/>؟</b> — <c>null</c> إن قُبِل، وإلّا رَمزُ الرَفض. شَكلٌ واحِدٌ لا ثانِيَ لَه،
+    /// والفاحِصُ يُغلِقُ عِندَ الشَكّ (‏2026-10-24؛ بِنَمَطِ <c>StudioBillingPriceTests.IsSellCondition</c>):
+    /// <b>وَسيطٌ مُباشِرٌ لِلقَرار</b> — أَصغَرُ قَوسٍ يَحوي العَلَمَ قائِمَةُ وَسائِطِ <c>CardFactsAsync(</c> (العَلَمُ ثانِيها و<c>CanCharge</c>
+    /// ثالِثُها) أَو <c>new CheckoutCardFacts(</c> (أَوَّلُها وخامِسُها) — بِتَرتيبِ التَوقيعَين — والوَسيطُ هو العَلَمُ بِحَرفِه
+    /// (<c>x.PaymentProviderConfigured</c> أَو <c>x?.PaymentProviderConfigured ?? false</c>)، وجارُه <c>PaymentChargeSurface.CanCharge(x)</c>
+    /// بِحَرفِه. فَالقَرارُ يُحسَبُ في الدالَّةِ الَّتي تَرى الوَسيطَين مَعاً، لا في نَصٍّ يُقرَأُ هُنا.</para>
+    /// <para>وما سِواهُ يُرَدّ — ولَو صَحَّ مَنطِقاً (إسنادٌ إلى مُتَغَيِّرٍ ثُمَّ شَرط): قارِئٌ جَديدٌ يُقَرَّرُ شَكلُه بِاسمِه، لا يُستَنتَج.</para>
+    /// <para><b>‏2026-10-24 (الجَولَةُ ١ لِمُراجَعَةِ هذا الفاحِص) — سَقَطَ شَكلٌ ثانٍ كانَ يُقبَل: «شَرطُ <c>if</c>/<c>@if</c> عَطفٌ»</b>
+    /// (العَلَمُ و<c>CanCharge</c> طَرَفانِ في عَطفٍ بِلا <c>||</c> ولا <c>?</c> ولا نَفي). كانَ يَقرَأُ الشَرطَ ولا يَرى أَيَّ فَرعٍ يَرسُمُ
+    /// البِطاقَة: <c>@if (flag &amp;&amp; CanCharge(p)) { } else { &lt;b&gt;card&lt;/b&gt; }</c> — النَفيُ نَفسُه في الفَرع — مُحقَناً في
+    /// <c>CheckoutPage.razor</c> يَمُرُّ ‏4/4 بِـDLL ‏<c>905c230</c>، وكَذا <c>if (flag &amp;&amp; CanCharge(p)) return;</c> ثُمَّ البِطاقَة. ولا قارِئَ
+    /// حَيَّ بِه (قارِئا اليَومِ كِلاهُما وَسيطٌ لِـ<c>CardFactsAsync</c>) — فَالشَكلُ بِلا مُستَهلِك (القاعِدَة ١) وفاحِصُه بِلا قُدرَةٍ عَلى
+    /// الحُكم (القاعِدَة ٢): لا يُقرَأُ أَيُّ فَرعٍ يُرسَمُ بِنَمَطٍ نَصِّيّ. فَيُرَدُّ كُلُّ <c>if</c> بِـ<c>not_a_named_shape</c>؛ ومَن احتاجَه
+    /// يَوماً يُخرِجُ القَرارَ إلى دالَّةٍ تَأخُذُ الوَسيطَين ويُضيفُ اسمَها إلى الشَكلِ هُنا بِقَرارٍ مَرئِيّ.</para>
     /// </summary>
     internal static string? FlagReaderRefusal(string code, int at)
     {
@@ -143,50 +146,36 @@ public class PaymentFlagReadersTests(ITestOutputHelper output)
             Regex.IsMatch(before, @"\.CardFactsAsync$") ? (1, 2)
             : Regex.IsMatch(before, @"\bnew\s+CheckoutCardFacts$") ? (0, 4)
             : null;
-        if (call is { } pos)
-        {
-            var args = TopLevelSplit(inner, ',').Select(Fold).ToList();
-            if (args.Count <= Math.Max(pos.Flag, pos.Charge)) return "call_arity";
-            var flagArg = args.FindIndex(a => a.Contains("PaymentProviderConfigured", StringComparison.Ordinal));
-            if (flagArg != pos.Flag) return "call_flag_position";
-            if (!Regex.IsMatch(args[pos.Flag], $@"^(?:{Flag}|{Flag} \?\? false|\({Flag} \?\? false\))$")) return "call_flag_not_direct";
-            if (!Regex.IsMatch(args[pos.Charge], $"^{Charge}$")) return "call_charge_not_beside";
-            return null;
-        }
+        if (call is not { } pos) return "not_a_named_shape";
 
-        if (!Regex.IsMatch(before, @"(?<![\w.])@?if$")) return "not_a_named_shape";
-        var condition = Fold(inner);
-        if (condition.Contains("||", StringComparison.Ordinal)) return "or_in_condition";
-        var top = string.Concat(TopLevelSplit(condition, '\0', keepParenContent: false));
-        if (top.Replace("?.", "", StringComparison.Ordinal).Contains('?')) return "conditional_in_condition";
-        var terms = TopLevelSplit(condition, '&').Select(t => t.Trim('&', ' ')).Where(t => t.Length > 0).ToList();
-        var flagTerm = terms.Any(t => Regex.IsMatch(t, $@"^(?:{Flag}|\({Flag} \?\? false\))$"));
-        var chargeTerm = terms.Any(t => Regex.IsMatch(t, $"^{Charge}$"));
-        return flagTerm && chargeTerm ? null : "condition_terms";
+        var args = TopLevelSplit(inner, ',').Select(Fold).ToList();
+        if (args.Count <= Math.Max(pos.Flag, pos.Charge)) return "call_arity";
+        var flagArg = args.FindIndex(a => a.Contains("PaymentProviderConfigured", StringComparison.Ordinal));
+        if (flagArg != pos.Flag) return "call_flag_position";
+        if (!Regex.IsMatch(args[pos.Flag], $@"^(?:{Flag}|{Flag} \?\? false|\({Flag} \?\? false\))$")) return "call_flag_not_direct";
+        if (!Regex.IsMatch(args[pos.Charge], $"^{Charge}$")) return "call_charge_not_beside";
+        return null;
     }
 
-    /// <summary>تَقسيمٌ عِندَ <paramref name="sep"/> خارِجَ <c>( )</c> و<c>{ }</c> و<c>[ ]</c>. ولِـ<c>&amp;</c> يُقسَمُ عِندَ كُلِّ <c>&amp;</c>
-    /// فَتَبقى الأَطرافُ؛ و<paramref name="keepParenContent"/> = <c>false</c> يُعيدُ النَصَّ بِلا ما بَينَ الأَقواس (لِفَحصِ المُستَوى الأَعلى).</summary>
-    private static IEnumerable<string> TopLevelSplit(string s, char sep, bool keepParenContent = true)
+    /// <summary>تَقسيمٌ عِندَ <paramref name="sep"/> خارِجَ <c>( )</c> و<c>{ }</c> و<c>[ ]</c>.</summary>
+    private static IEnumerable<string> TopLevelSplit(string s, char sep)
     {
         var depth = 0;
         var start = 0;
-        var outside = new System.Text.StringBuilder();
         for (var i = 0; i < s.Length; i++)
         {
             var c = s[i];
             if (c is '(' or '{' or '[') depth++;
             else if (c is ')' or '}' or ']') depth--;
-            else if (depth == 0 && c == sep) { yield return s[start..i]; start = i + 1; continue; }
-            if (!keepParenContent && depth == 0 && c is not (')' or '}' or ']')) outside.Append(c);
+            else if (depth == 0 && c == sep) { yield return s[start..i]; start = i + 1; }
         }
-        if (keepParenContent) yield return s[start..];
-        else yield return outside.ToString();
+        yield return s[start..];
     }
 
-    /// <summary><b>حَقنُ عَيب — فاحِصُ قُرّاءِ العَلَمِ يُحمِرُّ فِعلاً</b> (‏2026-10-24): شَكلا اليَومِ (قارِئا البِطاقَةِ بِحَرفِهِما)
-    /// والشَكلُ الثاني (عَطفٌ في <c>if</c>) يُقبَلون، و<c>flag || CanCharge(…)</c> — في الوَسيطِ وفي الشَرط — وأَخَواتُه تُرَدّ؛ ومِنها سَطرٌ
-    /// يَقرَأُ العَلَمَ ويَسأَلُ <c>CanCharge</c> في جُملَتَين، وكانَ يَقبَلُه «في السَطرِ نَفسِه».</summary>
+    /// <summary><b>حَقنُ عَيب — فاحِصُ قُرّاءِ العَلَمِ يُحمِرُّ فِعلاً</b> (‏2026-10-24): شَكلُ اليَومِ (قارِئا البِطاقَةِ بِحَرفِهِما و<c>new CheckoutCardFacts</c>)
+    /// يُقبَل، و<c>flag || CanCharge(…)</c> وأَخَواتُه تُرَدّ — ومِنها سَطرٌ يَقرَأُ العَلَمَ ويَسأَلُ <c>CanCharge</c> في جُملَتَين، وكانَ يَقبَلُه
+    /// «في السَطرِ نَفسِه». <b>ولِكُلِّ مَرفوضٍ رَمزُه المُتَوَقَّع</b> (الجَولَةُ ١): فَرَفضٌ بِسَبَبٍ غَيرِ سَبَبِه يَحمَرُّ — والـ<c>if</c> بِأَشكالِه
+    /// (العَطفُ الَّذي كانَ يُقبَل، والـ<c>else</c>، والرُجوعُ المُبَكِّر) <c>not_a_named_shape</c>.</summary>
     [Fact]
     public void The_flag_reader_checker_can_actually_go_red()
     {
@@ -195,46 +184,89 @@ public class PaymentFlagReadersTests(ITestOutputHelper output)
             "Facts = await Gateway.CardFactsAsync(Slug, tenant?.PaymentProviderConfigured ?? false, PaymentChargeSurface.CanCharge(Payments), cart,\n            MarketplaceTemplateExtensions.PatternFromTenant(tenant));",
             "var card = await gateway.CardFactsAsync(slug, tenant?.PaymentProviderConfigured ?? false, ACommerce.Kit.Payments.PaymentChargeSurface.CanCharge(payments), cart, pattern);",
             "var f = new CheckoutCardFacts(tenant.PaymentProviderConfigured, sealedKey, vault, client, PaymentChargeSurface.CanCharge(payments));",
-            "if (tenant.PaymentProviderConfigured && PaymentChargeSurface.CanCharge(payments)) { Show(); }",
-            "@if ((tenant?.PaymentProviderConfigured ?? false) && PaymentChargeSurface.CanCharge(Payments)) { <b>x</b> }",
-            "if (ready && tenant.PaymentProviderConfigured && PaymentChargeSurface.CanCharge(payments)) { Show(); }",
+            "var card = await gateway.CardFactsAsync(slug, (tenant?.PaymentProviderConfigured ?? false), PaymentChargeSurface.CanCharge(payments), cart);",
         };
-        var rejected = new[]
+        var rejected = new (string Sample, string Code)[]
         {
-            "var card = await gateway.CardFactsAsync(slug, tenant?.PaymentProviderConfigured ?? false || PaymentChargeSurface.CanCharge(payments), PaymentChargeSurface.CanCharge(payments), cart);",
-            "var card = await gateway.CardFactsAsync(slug, (tenant.PaymentProviderConfigured || PaymentChargeSurface.CanCharge(payments)), PaymentChargeSurface.CanCharge(payments));",
-            "if (tenant.PaymentProviderConfigured || PaymentChargeSurface.CanCharge(payments)) { Show(); }",
-            "if (tenant.PaymentProviderConfigured && PaymentChargeSurface.CanCharge(payments) || true) { Show(); }",
-            "if (!tenant.PaymentProviderConfigured && PaymentChargeSurface.CanCharge(payments)) { Show(); }",
-            "if (tenant.PaymentProviderConfigured && !PaymentChargeSurface.CanCharge(payments)) { Show(); }",
-            "if (tenant.PaymentProviderConfigured == false && PaymentChargeSurface.CanCharge(payments)) { Show(); }",
-            "if (tenant?.PaymentProviderConfigured ?? false && PaymentChargeSurface.CanCharge(payments)) { Show(); }",
-            "if (!(tenant.PaymentProviderConfigured && PaymentChargeSurface.CanCharge(payments))) { Show(); }",
-            "if (tenant.PaymentProviderConfigured && PaymentChargeSurface.CanCharge(payments) ? false : true) { Show(); }",
-            "var card = await gateway.CardFactsAsync(slug, PaymentChargeSurface.CanCharge(payments), tenant.PaymentProviderConfigured);",
-            "var card = await gateway.CardFactsAsync(slug, tenant.PaymentProviderConfigured, true, cart);",
-            "var card = await gateway.CardFactsAsync(slug, tenant.PaymentProviderConfigured, !PaymentChargeSurface.CanCharge(payments));",
-            "var f = new CheckoutCardFacts(tenant.PaymentProviderConfigured || PaymentChargeSurface.CanCharge(payments), a, b, c, PaymentChargeSurface.CanCharge(payments));",
-            "var ok = Decide(tenant.PaymentProviderConfigured, PaymentChargeSurface.CanCharge(payments));",
-            "var on = tenant.PaymentProviderConfigured; var can = PaymentChargeSurface.CanCharge(payments);",
-            "var on = tenant.PaymentProviderConfigured || PaymentChargeSurface.CanCharge(payments);",
+            ("var card = await gateway.CardFactsAsync(slug, tenant?.PaymentProviderConfigured ?? false || PaymentChargeSurface.CanCharge(payments), PaymentChargeSurface.CanCharge(payments), cart);", "call_flag_not_direct"),
+            ("var card = await gateway.CardFactsAsync(slug, (tenant.PaymentProviderConfigured || PaymentChargeSurface.CanCharge(payments)), PaymentChargeSurface.CanCharge(payments));", "not_a_named_shape"),
+            ("var card = await gateway.CardFactsAsync(slug, tenant.PaymentProviderConfigured);", "call_arity"),
+            ("var card = await gateway.CardFactsAsync(slug, PaymentChargeSurface.CanCharge(payments), tenant.PaymentProviderConfigured);", "call_flag_position"),
+            ("var card = await gateway.CardFactsAsync(slug, PaymentChargeSurface.CanCharge(payments), tenant.PaymentProviderConfigured, cart);", "call_flag_position"),
+            ("var card = await gateway.CardFactsAsync(slug, tenant.PaymentProviderConfigured, true, cart);", "call_charge_not_beside"),
+            ("var card = await gateway.CardFactsAsync(slug, tenant.PaymentProviderConfigured", "unbalanced"),
+            ("var card = await gateway.CardFactsAsync(slug, tenant.PaymentProviderConfigured, !PaymentChargeSurface.CanCharge(payments));", "call_charge_not_beside"),
+            ("var f = new CheckoutCardFacts(tenant.PaymentProviderConfigured || PaymentChargeSurface.CanCharge(payments), a, b, c, PaymentChargeSurface.CanCharge(payments));", "call_flag_not_direct"),
+            ("var ok = Decide(tenant.PaymentProviderConfigured, PaymentChargeSurface.CanCharge(payments));", "not_a_named_shape"),
+            ("var on = tenant.PaymentProviderConfigured; var can = PaymentChargeSurface.CanCharge(payments);", "not_in_parens"),
+            ("var on = tenant.PaymentProviderConfigured || PaymentChargeSurface.CanCharge(payments);", "not_in_parens"),
+            ("if (tenant.PaymentProviderConfigured || PaymentChargeSurface.CanCharge(payments)) { Show(); }", "not_a_named_shape"),
+            ("if (tenant.PaymentProviderConfigured && PaymentChargeSurface.CanCharge(payments) || true) { Show(); }", "not_a_named_shape"),
+            ("if (!tenant.PaymentProviderConfigured && PaymentChargeSurface.CanCharge(payments)) { Show(); }", "not_a_named_shape"),
+            ("if (tenant.PaymentProviderConfigured && !PaymentChargeSurface.CanCharge(payments)) { Show(); }", "not_a_named_shape"),
+            ("if (tenant.PaymentProviderConfigured == false && PaymentChargeSurface.CanCharge(payments)) { Show(); }", "not_a_named_shape"),
+            ("if (tenant?.PaymentProviderConfigured ?? false && PaymentChargeSurface.CanCharge(payments)) { Show(); }", "not_a_named_shape"),
+            ("if (!(tenant.PaymentProviderConfigured && PaymentChargeSurface.CanCharge(payments))) { Show(); }", "not_a_named_shape"),
+            ("if (tenant.PaymentProviderConfigured && PaymentChargeSurface.CanCharge(payments) ? false : true) { Show(); }", "not_a_named_shape"),
+            // ‏ما كانَ الشَكلُ الثاني يَقبَلُه — العَطفُ في الشَرطِ أَيّاً كانَ فَرعُه — يُرَدُّ الآن:
+            ("if (tenant.PaymentProviderConfigured && PaymentChargeSurface.CanCharge(payments)) { Show(); }", "not_a_named_shape"),
+            ("@if ((tenant?.PaymentProviderConfigured ?? false) && PaymentChargeSurface.CanCharge(Payments)) { <b>x</b> }", "not_a_named_shape"),
+            ("if (ready && tenant.PaymentProviderConfigured && PaymentChargeSurface.CanCharge(payments)) { Show(); }", "not_a_named_shape"),
+            ("@if ((Tenant?.PaymentProviderConfigured ?? false) && PaymentChargeSurface.CanCharge(Payments)) { } else { <b>card</b> }", "not_a_named_shape"),
+            ("if (tenant.PaymentProviderConfigured && PaymentChargeSurface.CanCharge(payments)) return;\n<b>card</b>", "not_a_named_shape"),
+            ("foreach (var v in vendors) { if (v.Tenant.PaymentProviderConfigured && PaymentChargeSurface.CanCharge(payments)) continue; Card(v); }", "not_a_named_shape"),
         };
         string? Verdict(string sample) => FlagReaderRefusal(sample,
             Regex.Match(sample, @"\bPaymentProviderConfigured\b").Index);
 
         var wrong = accepted.Where(x => Verdict(x) is not null).Select(x => $"رُفِضَ حَيٌّ ({Verdict(x)}): {x}")
-            .Concat(rejected.Where(x => Verdict(x) is null).Select(x => $"قُبِلَ مَقلوبٌ: {x}"))
+            .Concat(rejected.Where(x => Verdict(x.Sample) != x.Code).Select(x => $"رَمزُه {Verdict(x.Sample) ?? "قُبِل"} لا {x.Code}: {x.Sample}"))
             .ToList();
-        foreach (var x in rejected) output.WriteLine($"مَرفوضٌ ({Verdict(x)}): {x}");
-        Assert.True(accepted.Length >= 6 && rejected.Length >= 17,
-            $"أَداةٌ عَمياء: حُقِنَ {rejected.Length} شَكلاً مَرفوضاً و{accepted.Length} مَقبولاً.");
+        foreach (var x in rejected) output.WriteLine($"مَرفوضٌ ({Verdict(x.Sample)}): {x.Sample}");
+        var codes = rejected.Select(x => x.Code).Distinct().ToArray();
+        output.WriteLine($"رُموزُ الرَفضِ المَقيسَة: {codes.Length} — {string.Join(", ", codes)}");
+        Assert.True(accepted.Length >= 4 && rejected.Length >= 26 && codes.Length >= 7,
+            $"أَداةٌ عَمياء: حُقِنَ {rejected.Length} شَكلاً مَرفوضاً بِـ{codes.Length} رَمزاً و{accepted.Length} مَقبولاً.");
         Assert.True(wrong.Count == 0,
             $"حُقِنَ {rejected.Length} شَكلاً مَرفوضاً و{accepted.Length} مَقبولاً، وأَخطَأَ الفاحِصُ في {wrong.Count}:\n  " + string.Join("\n  ", wrong));
 
         // ‏والقاعِدَةُ القَديمَةُ («CanCharge( في السَطرِ نَفسِه») كانَت تَقبَلُ مِن المَرفوضاتِ هذِه — تُعَدُّ لِيُرى ما سَدَّه التَشديد.
-        var oldRuleAccepted = rejected.Count(x => x.Contains("PaymentChargeSurface.CanCharge(", StringComparison.Ordinal));
+        var oldRuleAccepted = rejected.Count(x => x.Sample.Contains("PaymentChargeSurface.CanCharge(", StringComparison.Ordinal));
         output.WriteLine($"مَقبولٌ بِالقاعِدَةِ القَديمَةِ مِن المَرفوضات: {oldRuleAccepted}/{rejected.Length}");
-        Assert.True(oldRuleAccepted >= 16, $"العَيِّنَةُ لا تَقيسُ ما سَدَّه التَشديد: {oldRuleAccepted}.");
+        Assert.True(oldRuleAccepted >= 23, $"العَيِّنَةُ لا تَقيسُ ما سَدَّه التَشديد: {oldRuleAccepted}.");
+    }
+
+    /// <summary><b>قارِئٌ بِشَكلِ <c>if</c> يُرَدُّ أَيّاً كانَ الفَرعُ الَّذي يَرسُمُ البِطاقَة — مَحقوناً في مِلَفٍّ حَقيقيّ</b> (‏2026-10-24، الجَولَةُ ١):
+    /// الصَفُّ الأَوَّلُ يَقرَأُ المِلَفّاتِ بِـ<see cref="Code"/> ثُمَّ <see cref="FlagReaderRefusal"/>؛ فَتُقرَأُ هُنا نُسخَةٌ مِن
+    /// <c>CheckoutPage.razor</c> بِالطَريقِ نَفسِه وقَد حُقِنَ فيها قَبلَ <c>@code {</c> قارِئٌ يَرسُمُ البِطاقَةَ في <c>else</c> — الطَفرَةُ الَّتي
+    /// مَرَّت ‏4/4 بِـDLL ‏<c>905c230</c> — وفي ‏<c>@code</c> رُجوعٌ مُبَكِّر. ويُقرَأُ قارِئُ اليَومِ في المِلَفِّ نَفسِه مَقبولاً، فَلا يُحمَرُّ لِأَنّ
+    /// المِلَفَّ صارَ يُرفَضُ كُلُّه. ويُعَدُّ المَحقونُ فَوقَ قُرّاءِ المِلَفِّ الحَيَّةِ لا رَقماً ثابِتاً.</summary>
+    [Fact]
+    public void An_if_shaped_reader_is_refused_whichever_branch_draws_the_card()
+    {
+        var page = Read(Template, "Components", "Pages", "CheckoutPage.razor");
+        var at = page.IndexOf("@code {", StringComparison.Ordinal);
+        Assert.True(at > 0, "لا @code في CheckoutPage.razor — الأَداةُ عَمياء.");
+        const string ElseReader = "@if ((Tenant?.PaymentProviderConfigured ?? false) && PaymentChargeSurface.CanCharge(Payments)) { } else { <b>card</b> }\n\n";
+        const string ReturnReader = "\n    void Early() { if (Tenant!.PaymentProviderConfigured && PaymentChargeSurface.CanCharge(Payments)) return; Card(); }\n";
+        var brace = page.IndexOf('{', at);
+        var mutated = page[..at] + ElseReader + page[at..(brace + 1)] + ReturnReader + page[(brace + 1)..];
+        var code = Code(mutated);
+
+        var verdicts = Regex.Matches(code, @"\bPaymentProviderConfigured\b").Select(m =>
+        {
+            var line = code[..m.Index].Count(c => c == '\n') + 1;
+            return (Line: line, Text: code.Split('\n')[line - 1].Trim(), Why: FlagReaderRefusal(code, m.Index));
+        }).ToList();
+        foreach (var v in verdicts) output.WriteLine($"CheckoutPage.razor(مَحقونَة):{v.Line} — {v.Why ?? "مَقبول"} — {v.Text}");
+
+        var live = Regex.Matches(Code(page), @"\bPaymentProviderConfigured\b").Count;
+        Assert.True(live > 0, "صِفرُ قارِئٍ في CheckoutPage.razor — الأَداةُ عَمياء.");
+        Assert.Equal(live + 2, verdicts.Count);
+        Assert.Equal("not_a_named_shape", verdicts.Single(v => v.Text.StartsWith("@if", StringComparison.Ordinal)).Why);
+        Assert.Equal("not_a_named_shape", verdicts.Single(v => v.Text.StartsWith("void Early", StringComparison.Ordinal)).Why);
+        Assert.All(verdicts.Where(v => !v.Text.StartsWith("@if", StringComparison.Ordinal) && !v.Text.StartsWith("void Early", StringComparison.Ordinal)),
+            v => Assert.Null(v.Why));
     }
 
     /// <summary>
