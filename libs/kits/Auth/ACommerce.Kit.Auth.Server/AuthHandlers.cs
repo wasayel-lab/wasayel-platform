@@ -55,6 +55,56 @@ public static class AuthHandlers
     public static bool TryConsumeVerifyQuota(string key)
         => TryConsume(_verifyRl, key, MaxVerifyPerMinute, TimeSpan.FromMinutes(1));
 
+    // ─── سَقفُ المَنَصَّة — رَقَمُ المالِك، ومُطفَأٌ حَتّى يُضبَط (‏2026-10-24، تَدقيقُ الإطلاق lens-security-3) ──
+    //
+    // الحِصَّةُ أَعلاه تَحُدُّ **الرَقَمَ الواحِد**؛ ومَن يُدَوِّرُ الأَرقامَ لا يَحُدُّه شَيء — والرَسائِلُ عَلى حِسابِ المَنَصَّة. فَهذا سَقفٌ
+    // واحِدٌ لِكُلِّ إرسالٍ (جَوّالٌ وبَريدٌ وبَدءُ نَفاذٍ، في كُلِّ مَتجَرٍ وفي الاستوديو) في السّاعَة، بِالآلِيَّةِ نَفسِها. **ورَقَمُه لا
+    // يُخترَع** (القاعِدَة ١٦): بِلا `ACOMMERCE_OTP_SENDS_PER_HOUR` — وهو الحالُ اليَوم — لا سَقف، كَما كان. ويُنقَضُ بِحَذفِ المُتَغَيِّر.
+    // وحَدٌّ لِكُلِّ IP لَم يُبنَ: مَصدَرُ العُنوانِ خَلفَ الـSpace غَيرُ مَقيس («ب» W8-2).
+
+    /// <summary>اسمُ المُتَغَيِّرِ الَّذي يَضبِطُ سَقفَ المَنَصَّة — عَدَدٌ صَحيحٌ مُوجَب.</summary>
+    public const string GlobalSendsPerHourVar = "ACOMMERCE_OTP_SENDS_PER_HOUR";
+
+    /// <summary>السَقفُ كَما يُقرَأُ عِندَ الإقلاع — <c>null</c> = لا سَقف.</summary>
+    public static int? GlobalSendsPerHour { get; } = ParseLimit(Environment.GetEnvironmentVariable(GlobalSendsPerHourVar));
+
+    /// <summary>عَدَدٌ صَحيحٌ مُوجَبٌ وإلّا <c>null</c> — الفارِغُ والصِفرُ والسالِبُ والنَصُّ لا يَصيرُ سَقفاً يُغلِقُ كُلَّ دُخول.</summary>
+    public static int? ParseLimit(string? raw)
+        => int.TryParse(raw?.Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n)
+           && n > 0 ? n : null;
+
+    private static readonly ConcurrentDictionary<string, RateBucket> _globalRl = new();
+
+    /// <summary>يَستَهلِكُ مِن سَقفِ المَنَصَّة إن ضُبِط؛ و<c>null</c> يَمُرُّ دائِماً.</summary>
+    public static bool TryConsumeGlobalSendQuota(int? perHour)
+        => perHour is not int max || TryConsume(_globalRl, "*", max, TimeSpan.FromHours(1));
+
+    /// <summary>
+    /// <para><b>وِجهَةُ الرَمزِ ومِفتاحُ حِصَّتِه لِلجَوّال</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-security-3): رَقَمٌ سُعودِيٌّ (‏<c>05…</c> أَو
+    /// <c>5…</c> أَو <c>966…</c> أَو <c>00966…</c> أَو <c>+966…</c>، بِمَسافاتٍ أَو شَرطاتٍ أَو بِدونِها) يَصيرُ <c>+9665XXXXXXXX</c>؛ وما سِواه
+    /// يَبقى كَما كُتِب (رَقَمٌ خارِجَ السُعودِيَّة، أَو نَصٌّ لَيسَ رَقَماً). كانَت الحِصَّةُ تَعُدُّ <b>الكِتابَةَ</b> لا الرَقَم — ثَلاثُ كِتاباتٍ
+    /// ثَلاثونَ رِسالَة — والرَمزُ يُرسَلُ إلى النَصِّ كَما كُتِب، و<c>TwilioSmsChannel</c> يُلحِقُ <c>+</c> فَـ<c>0551234567</c> ⇒ <c>+0551234567</c>.</para>
+    ///
+    /// <para><b>ولا تَمَسُّ الهُوِيَّة</b>: مَوضوعُ المُحاوَلَةِ ورَقَمُ المُستَخدِمِ المُخَزَّنُ يَبقَيانِ النَصَّ كَما كُتِب — حِساباتٌ قائِمَةٌ مُخَزَّنَةٌ
+    /// بِـ<c>05…</c> لا تَنقَسِمُ إلى حِسابَين، و<c>StudioAuth.NormalizeSubject</c> يَبقى قَصّاً (مُطابِقاً لِمَنحِ المُشرِف). تَوحيدُ الهُوِيَّةِ
+    /// تَرحيلُ بَياناتٍ («ب» W8-2).</para>
+    /// </summary>
+    public static string PhoneDestination(string? typed)
+    {
+        var raw = (typed ?? "").Trim();
+        var compact = new System.Text.StringBuilder(raw.Length);
+        foreach (var c in raw)
+            if (c is not (' ' or '-' or '(' or ')')) compact.Append(c);
+        var s = compact.ToString();
+        var plus = s.StartsWith('+');
+        var digits = plus ? s[1..] : s;
+        if (digits.Length == 0 || !digits.All(char.IsAsciiDigit)) return raw;
+        if (!plus && digits.StartsWith("00", StringComparison.Ordinal)) digits = digits[2..];
+        else if (!plus && digits.Length == 10 && digits.StartsWith("05", StringComparison.Ordinal)) digits = "966" + digits[1..];
+        else if (!plus && digits.Length == 9 && digits[0] == '5') digits = "966" + digits;
+        return digits.Length == 12 && digits.StartsWith("9665", StringComparison.Ordinal) ? "+" + digits : raw;
+    }
+
     /// <summary>هَل تُسمَح المُحاوَلَة؟ يُحَدِّث العَدّاد ذَرّيّاً.</summary>
     private static bool TryConsume(ConcurrentDictionary<string, RateBucket> rl,
         string key, int max, TimeSpan window)
@@ -104,11 +154,22 @@ public static class AuthHandlers
         string tenantSlug, string subject, string code, AuthKind kind,
         TimeSpan? lifetime = null)
     {
+        EvictExpiredAttempts();
         var attemptId = Guid.NewGuid().ToString("N");
         Attempts[attemptId] = new AuthAttempt(
             attemptId, tenantSlug, subject, Hash(code),
             DateTime.UtcNow.Add(lifetime ?? OtpLifetime), kind);
         return attemptId;
+    }
+
+    /// <summary><b>المُنتَهِيَةُ تُطرَد</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-security-3): كانَ <see cref="Attempts"/> لا يُطرَدُ مِنه إلّا ما
+    /// استُهلِك، فَكُلُّ رَمزٍ طُلِبَ ولَم يُستَعمَل يَبقى في الذاكِرَةِ إلى إعادَةِ التَشغيل — ومَن يُدَوِّرُ الأَرقامَ يَملَؤُها. يُنادى قَبلَ كُلِّ
+    /// إصدار (رَمزٌ أَو بَدءُ نَفاذ)، فَالحَجمُ مَحدودٌ بِما يُصدَرُ في مُهلَةٍ واحِدَة.</summary>
+    public static void EvictExpiredAttempts()
+    {
+        var now = DateTime.UtcNow;
+        foreach (var (id, attempt) in Attempts)
+            if (attempt.ExpiresAt < now) Attempts.TryRemove(id, out _);
     }
 
     /// <summary>يَستَهلِك المُحاوَلَة: مُطابَقَةُ التَجزئَة داخِلَ المُهلَة
@@ -152,16 +213,17 @@ public static class AuthHandlers
         IOtpChannel channel, CancellationToken ct)
     {
         if (!tenantCtx.IsResolved) throw new InvalidOperationException("tenant_required");
-        // حِماية مِن سپام الإرسال (تَكلِفَة SMS فِعلِيَّة).
-        var rlKey = $"{tenantCtx.Slug}|{cmd.Phone}";
-        if (!TryConsumeSendQuota(rlKey))
+        // حِماية مِن سپام الإرسال (تَكلِفَة SMS فِعلِيَّة). المِفتاحُ الرَقَمُ لا الكِتابَة (`PhoneDestination`)، ثُمَّ سَقفُ المَنَصَّة.
+        var to = PhoneDestination(cmd.Phone);
+        var rlKey = $"{tenantCtx.Slug}|{to}";
+        if (!TryConsumeSendQuota(rlKey) || !TryConsumeGlobalSendQuota(GlobalSendsPerHour))
             throw new InvalidOperationException("rate_limited: try again in an hour");
 
         var code = NewCode(channel.DevHintCode);
         var attemptId = IssueAttempt(tenantCtx.Slug, cmd.Phone, code, AuthKind.PhoneOtp);
         // الحارِسُ في الأُنبوبِ لا في كُلِّ مُزَوِّد — راجِع `OtpSendGuard`.
         await OtpSendGuard.SendWithinAsync(
-            token => channel.SendOtpAsync(cmd.Phone, code, token), ct);
+            token => channel.SendOtpAsync(to, code, token), ct);
         return new OtpRequestResult(
             AttemptId: attemptId,
             DisplayCode: channel.DevHintCode ?? "",
@@ -196,9 +258,9 @@ public static class AuthHandlers
         var email = EmailAddress.Normalize(cmd.Email);
         if (!EmailAddress.IsValid(email))
             throw new InvalidOperationException("email_invalid");
-        // حِماية مِن سپام الإرسال (سُمعَة نِطاق الإرسال تَحتَرِق بِالسپام).
+        // حِماية مِن سپام الإرسال (سُمعَة نِطاق الإرسال تَحتَرِق بِالسپام)، ثُمَّ سَقفُ المَنَصَّة.
         var rlKey = $"{tenantCtx.Slug}|{email}";
-        if (!TryConsumeSendQuota(rlKey))
+        if (!TryConsumeSendQuota(rlKey) || !TryConsumeGlobalSendQuota(GlobalSendsPerHour))
             throw new InvalidOperationException("rate_limited: try again in an hour");
 
         var code = NewCode(channel.DevHintCode);
@@ -236,7 +298,13 @@ public static class AuthHandlers
         INafathChannel channel, CancellationToken ct)
     {
         if (!tenantCtx.IsResolved) throw new InvalidOperationException("tenant_required");
+        // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-3) كُلُّ بَدءٍ نِداءٌ إلى نَفاذ — كانَ بِلا حِصَّة. الحِصَّةُ نَفسُها (عَشرٌ في السّاعَةِ لِكُلِّ
+        // هُوِيَّةٍ في مَتجَر — لا رَقَمَ جَديد) في العَدّادِ نَفسِه بِمِفتاحٍ لا يُصادِفُ جَوّالاً، ثُمَّ سَقفُ المَنَصَّة. وبابُ الاستِمارَةِ يَلتَقِطُ الرَدّ.
+        if (!TryConsumeSendQuota($"{tenantCtx.Slug}|nafath:{cmd.NationalId?.Trim()}")
+            || !TryConsumeGlobalSendQuota(GlobalSendsPerHour))
+            throw new InvalidOperationException("rate_limited: try again in an hour");
         var result = await channel.StartAsync(cmd.NationalId, ct);
+        EvictExpiredAttempts();
         Attempts[result.AttemptId] = new AuthAttempt(
             result.AttemptId, tenantCtx.Slug, cmd.NationalId, "",
             DateTime.UtcNow.AddMinutes(2), AuthKind.Nafath);

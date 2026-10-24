@@ -64,7 +64,7 @@ public sealed class StudioAuth
     public static async Task<string?> SendPhoneCodeAsync(
         IOtpChannel channel, string phone, CancellationToken ct = default)
         => await SendAsync(StudioAuthMethod.Phone, phone, channel.DevHintCode,
-            (code, token) => channel.SendOtpAsync(phone, code, token), ct);
+            (code, token) => channel.SendOtpAsync(AuthHandlers.PhoneDestination(phone), code, token), ct);
 
     /// <summary>نَظيرُه لِلبَريد — نَفسُ الجِسمِ بِقَناةٍ أُخرى.</summary>
     public static async Task<string?> SendEmailCodeAsync(
@@ -81,7 +81,11 @@ public sealed class StudioAuth
         StudioAuthMethod method, string subject, string? devHint,
         Func<string, CancellationToken, Task> send, CancellationToken ct)
     {
-        if (!AuthHandlers.TryConsumeSendQuota($"{Tenant}|{subject}"))
+        // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-3) الجَوّالُ يُعَدُّ بِرَقَمِه لا بِكِتابَتِه (`PhoneDestination`)، ثُمَّ سَقفُ المَنَصَّة —
+        // والمَوضوعُ (المُحاوَلَةُ والمُستَخدِم) يَبقى كَما كُتِب.
+        var counted = method == StudioAuthMethod.Phone ? AuthHandlers.PhoneDestination(subject) : subject;
+        if (!AuthHandlers.TryConsumeSendQuota($"{Tenant}|{counted}")
+            || !AuthHandlers.TryConsumeGlobalSendQuota(AuthHandlers.GlobalSendsPerHour))
             throw new InvalidOperationException("rate_limited");
         var code = AuthHandlers.NewCode(devHint);
         AuthHandlers.IssueAttempt(Tenant, subject, code, StudioAuthDoor.Kind(method));

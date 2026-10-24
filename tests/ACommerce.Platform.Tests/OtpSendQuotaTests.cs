@@ -19,6 +19,11 @@ namespace ACommerce.Platform.Tests;
 // **يُثَبَّتُ قَبلَ العِلاجِ** (القاعِدَة ٣): صُفوفُ `Today_…` الأَربَعَةُ تَنقَلِبُ بِأَسمائِها، والصَفّانِ الآخَرانِ (الحادِيَ عَشَرَ لِلنَصِّ
 // الواحِدِ يُرَدّ، ورَقَمٌ خارِجَ السُعودِيَّةِ أَو نَصٌّ لَيسَ رَقَماً يَبلُغُ القَناةَ كَما كُتِب) يَبقَيانِ بِلا تَعديلِ حَرف. **وما لا يُثَبَّتُ
 // هُنا لِأَنّه رَقَمُ المالِك**: حَدٌّ لِكُلِّ IP أَو لِلمَنَصَّةِ كُلِّها (القاعِدَة ١٦).
+//
+// **العِلاج** (‏2026-10-24): `AuthHandlers.PhoneDestination` — رَقَمٌ سُعودِيٌّ بِأَيِّ كِتابَةٍ ⇒ `+9665XXXXXXXX`، وما سِواه كَما كُتِب — مِفتاحُ
+// الحِصَّةِ ووِجهَةُ الرَمزِ في البابَين، والمَوضوعُ (المُحاوَلَةُ والمُستَخدِم) كَما كُتِب؛ وبَدءُ نَفاذٍ يَستَهلِكُ الحِصَّةَ نَفسَها بِمِفتاحِ
+// `{tenant}|nafath:{nid}` وبابُه يَرُدُّ `send_failed`؛ و`EvictExpiredAttempts` قَبلَ كُلِّ إصدار؛ وسَقفُ المَنَصَّةِ `ACOMMERCE_OTP_SENDS_PER_HOUR`
+// مُطفَأٌ حَتّى يَضبِطَه المالِك. الصُفوفُ الأَربَعَةُ انقَلَبَت بِأَسمائِها، والصَفّانِ الآخَرانِ كَما أُودِعا.
 public class OtpSendQuotaTests(ITestOutputHelper output)
 {
     /// <summary>قَناةُ رَسائِلَ تُسَجِّلُ إلى أَينَ أُرسِلَ ولا تُرسِل.</summary>
@@ -103,10 +108,12 @@ public class OtpSendQuotaTests(ITestOutputHelper output)
         Assert.Equal(new[] { typed }, sms.To);
     }
 
-    // ─── ٣. «اليَوم» — ثَلاثُ كِتاباتٍ لِرَقَمٍ واحِدٍ ثَلاثَةُ مَفاتيح ─────────────────────────────────
+    // ─── ٣. ثَلاثُ كِتاباتٍ لِرَقَمٍ واحِدٍ حِصَّةٌ واحِدَة، في البابَين ──────────────────────────────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_three_spellings_of_one_saudi_number_are_three_quota_keys_at_both_doors`.
 
     [Fact]
-    public async Task Today_three_spellings_of_one_saudi_number_are_three_quota_keys_at_both_doors()
+    public async Task Three_spellings_of_one_saudi_number_share_one_quota_at_both_doors()
     {
         var (slug, nine) = Fresh();
         var sms = new RecordingSms();
@@ -115,8 +122,8 @@ public class OtpSendQuotaTests(ITestOutputHelper output)
             for (var i = 0; i < 10; i++)
                 if (!await PhoneSendAsync(slug, spelling, sms)) refused++;
         output.WriteLine($"بابُ المَتجَر: أُرسِلَت {sms.To.Count} رِسالَةً لِرَقَمٍ واحِد، ورُدَّ {refused}");
-        Assert.Equal(0, refused);
-        Assert.Equal(30, sms.To.Count);
+        Assert.Equal(20, refused);
+        Assert.Equal(10, sms.To.Count);
 
         var studio = new RecordingSms();
         var studioRefused = 0;
@@ -126,46 +133,129 @@ public class OtpSendQuotaTests(ITestOutputHelper output)
                 try { await StudioAuth.SendPhoneCodeAsync(studio, spelling); }
                 catch (InvalidOperationException) { studioRefused++; }
         output.WriteLine($"بابُ الاستوديو: أُرسِلَت {studio.To.Count} رِسالَةً لِرَقَمٍ واحِد، ورُدَّ {studioRefused}");
-        Assert.Equal(0, studioRefused);
-        Assert.Equal(20, studio.To.Count);
+        Assert.Equal(10, studioRefused);
+        Assert.Equal(10, studio.To.Count);
+        Assert.All(studio.To, to => Assert.Equal("+966" + other, to));
     }
 
-    // ─── ٤. «اليَوم» — الرَمزُ يُرسَلُ إلى النَصِّ كَما كُتِب ──────────────────────────────────────────
+    // ─── ٤. والرَمزُ يُرسَلُ إلى الرَقَمِ بِصيغَةِ E.164 ─────────────────────────────────────────────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_the_code_goes_to_a_saudi_number_as_typed`.
 
     [Fact]
-    public async Task Today_the_code_goes_to_a_saudi_number_as_typed()
+    public async Task The_code_goes_to_a_saudi_number_in_e164_whatever_the_spelling()
     {
         var (slug, nine) = Fresh();
         var sms = new RecordingSms();
         foreach (var spelling in new[] { "0" + nine, "966" + nine, "00966" + nine, nine, "+966" + nine, " 0" + nine + " " })
             Assert.True(await PhoneSendAsync(slug, spelling.Trim(), sms));
-        Assert.Equal(new[] { "0" + nine, "966" + nine, "00966" + nine, nine, "+966" + nine, "0" + nine }, sms.To);
+        Assert.Equal(Enumerable.Repeat("+966" + nine, 6), sms.To);
     }
 
-    // ─── ٥. «اليَوم» — بَدءُ نَفاذٍ بِلا حِصَّة ────────────────────────────────────────────────────────
+    /// <summary><b>الدالَّةُ بِحُدودِها</b>: كُلُّ كِتابَةٍ سُعودِيَّةٍ لِلجَوّالِ تَصيرُ E.164 (مُوجَب)، وما لَيسَ جَوّالاً سُعودِيّاً يَبقى حَرفاً (سالِب) —
+    /// فَلا يَصيرُ نَصّانِ مُختَلِفانِ مِفتاحاً واحِداً إلّا وهُما رَقَمٌ واحِد.</summary>
+    [Theory]
+    [InlineData("0551234567", "+966551234567")]
+    [InlineData("551234567", "+966551234567")]
+    [InlineData("966551234567", "+966551234567")]
+    [InlineData("00966551234567", "+966551234567")]
+    [InlineData("+966551234567", "+966551234567")]
+    [InlineData("+966 55 123 4567", "+966551234567")]
+    [InlineData("055-123-4567", "+966551234567")]
+    [InlineData("(055) 123 4567", "+966551234567")]
+    [InlineData("  0551234567  ", "+966551234567")]
+    // ما لَيسَ جَوّالاً سُعودِيّاً — كَما كُتِب (بَعدَ القَصّ)
+    [InlineData("+201001234567", "+201001234567")]
+    [InlineData("00201001234567", "00201001234567")]
+    [InlineData("0112345678", "0112345678")]
+    [InlineData("05512345678", "05512345678")]
+    [InlineData("+9665512345678", "+9665512345678")]
+    [InlineData("oto-register:abc", "oto-register:abc")]
+    [InlineData("055x1234567", "055x1234567")]
+    [InlineData("", "")]
+    [InlineData(null, "")]
+    public void A_saudi_mobile_in_any_spelling_becomes_e164_and_anything_else_stays_as_typed(string? typed, string expected)
+        => Assert.Equal(expected, AuthHandlers.PhoneDestination(typed));
 
+    // ─── ٥. بَدءُ نَفاذٍ يَستَهلِكُ حِصَّةَ هُوِيَّتِه ─────────────────────────────────────────────────
+
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_nafath_start_calls_the_channel_on_every_request_with_no_quota`.
     [Fact]
-    public async Task Today_nafath_start_calls_the_channel_on_every_request_with_no_quota()
+    public async Task Nafath_start_spends_the_send_quota_of_its_national_id()
     {
         var (slug, _) = Fresh();
         var nafath = new CountingNafath();
         var refused = 0;
         for (var i = 0; i < 12; i++)
             if (!await NafathStartAsync(slug, "1012345678", nafath)) refused++;
-        Assert.Equal(0, refused);
-        Assert.Equal(12, nafath.Started);
+        Assert.Equal(2, refused);
+        Assert.Equal(10, nafath.Started);
+
+        // والمِفتاحُ لا يُصادِفُ جَوّالاً بِالأَرقامِ نَفسِها في المَتجَرِ نَفسِه.
+        Assert.True(await PhoneSendAsync(slug, "1012345678", new RecordingSms()));
+        Assert.True(await NafathStartAsync(slug, "1012345679", nafath));
     }
 
-    // ─── ٦. «اليَوم» — المُحاوَلَةُ المُنتَهِيَةُ تَبقى في الذاكِرَة ────────────────────────────────────
-
+    /// <summary>وبابُ الاستِمارَةِ يَلتَقِطُ الرَدَّ فَيُعيدُ رِسالَةً — <c>send_failed</c>، النَصُّ القائِمُ في القامُوس — لا صَفحَةَ ‏500 (كَبابِ الاستوديو).</summary>
     [Fact]
-    public void Today_an_expired_attempt_stays_in_memory_after_new_codes_are_issued()
+    public void The_nafath_door_turns_a_refused_start_into_send_failed_not_a_server_error()
+    {
+        var ext = WriteEndpointGuardTests.StripComments(StudioConsentCharacterizationTests.Endpoints());
+        var at = ext.IndexOf("app.MapPost(\"/{slug}/auth/nafath/login\"", StringComparison.Ordinal);
+        Assert.True(at > 0, "لا بابَ نَفاذ — الأَداةُ عَمياء.");
+        var body = ext[at..ext.IndexOf("app.MapPost(", at + 10, StringComparison.Ordinal)];
+        var call = body.IndexOf("AuthHandlers.RequestNafathHandler(", StringComparison.Ordinal);
+        var tryAt = body.LastIndexOf("try {", call, StringComparison.Ordinal);
+        var catchAt = body.IndexOf("catch (Exception) { return Results.Redirect(Link(req, slug, \"login?err=send_failed\")); }", call, StringComparison.Ordinal);
+        Assert.True(call > 0 && tryAt > 0 && catchAt > call, $"النِداءُ@{call} المُحاوَلَةُ@{tryAt} الالتِقاطُ@{catchAt}");
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(body, @"RequestNafathHandler\(").Count);
+        Assert.False(string.IsNullOrWhiteSpace(ACommerce.Platform.I18n.LocaleCatalog.Find(
+            ACommerce.Platform.I18n.LocaleCatalog.Arabic, "auth.login.err_send_failed")));
+    }
+
+    // ─── ٦. المُحاوَلَةُ المُنتَهِيَةُ تُطرَدُ حينَ يُصدَرُ ما بَعدَها ───────────────────────────────────
+
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_an_expired_attempt_stays_in_memory_after_new_codes_are_issued`.
+    [Fact]
+    public void An_expired_attempt_is_evicted_when_the_next_code_is_issued()
     {
         var (slug, nine) = Fresh();
         var expired = AuthHandlers.IssueAttempt(slug, "0" + nine, "111111", AuthHandlers.AuthKind.PhoneOtp,
             lifetime: TimeSpan.FromSeconds(-1));
-        AuthHandlers.IssueAttempt(slug, "0" + nine + "1", "222222", AuthHandlers.AuthKind.PhoneOtp);
-        Assert.True(AuthHandlers.Attempts.ContainsKey(expired));
-        AuthHandlers.Attempts.TryRemove(expired, out _);
+        var live = AuthHandlers.IssueAttempt(slug, "0" + nine + "1", "222222", AuthHandlers.AuthKind.PhoneOtp);
+        Assert.False(AuthHandlers.Attempts.ContainsKey(expired));
+        Assert.True(AuthHandlers.Attempts.ContainsKey(live));
+        AuthHandlers.Attempts.TryRemove(live, out _);
+    }
+
+    // ─── ٧. سَقفُ المَنَصَّة — مُطفَأٌ حَتّى يَضبِطَه المالِك، ويَرُدُّ ما فَوقَه حينَ يُضبَط ──────────────
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("0")]
+    [InlineData("-5")]
+    [InlineData("ten")]
+    [InlineData("1.5")]
+    [InlineData(" +7")]
+    public void A_platform_cap_that_is_not_a_positive_whole_number_is_no_cap(string? raw)
+    {
+        Assert.Null(AuthHandlers.ParseLimit(raw));
+        Assert.True(AuthHandlers.TryConsumeGlobalSendQuota(AuthHandlers.ParseLimit(raw)));
+    }
+
+    [Fact]
+    public void The_platform_cap_is_off_today_and_refuses_beyond_the_number_once_set()
+    {
+        Assert.Equal("ACOMMERCE_OTP_SENDS_PER_HOUR", AuthHandlers.GlobalSendsPerHourVar);
+        Assert.Null(Environment.GetEnvironmentVariable(AuthHandlers.GlobalSendsPerHourVar));
+        Assert.Null(AuthHandlers.GlobalSendsPerHour);
+        Assert.Equal(3, AuthHandlers.ParseLimit(" 3 "));
+
+        // العَدّادُ لِلمَنَصَّةِ كُلِّها — وهذا الصَفُّ وَحدَه يَستَهلِكُه بِرَقَم؛ الأَبوابُ تُمَرِّرُ `GlobalSendsPerHour` (‏null هُنا) فَلا تَمَسُّه.
+        var passed = 0;
+        for (var i = 0; i < 5; i++) if (AuthHandlers.TryConsumeGlobalSendQuota(3)) passed++;
+        Assert.Equal(3, passed);
+        Assert.True(AuthHandlers.TryConsumeGlobalSendQuota(null));
     }
 }

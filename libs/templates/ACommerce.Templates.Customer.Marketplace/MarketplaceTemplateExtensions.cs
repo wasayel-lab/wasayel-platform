@@ -396,7 +396,10 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(Link(req, slug, $"login?err=nafath_unavailable"));
             if (string.IsNullOrEmpty(nid) || nid.Length != 10)
                 return Results.Redirect(Link(req, slug, $"login?err=nid_required"));
-            var pending = await AuthHandlers.RequestNafathHandler(new RequestNafath(nid), tenant, channel, default);
+            // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-3) لِلبَدءِ حِصَّةٌ الآن — والرَدُّ (أَو عُطلُ القَناة) رِسالَةٌ لا صَفحَةُ ‏500، كَبابِ الاستوديو.
+            NafathPending pending;
+            try { pending = await AuthHandlers.RequestNafathHandler(new RequestNafath(nid), tenant, channel, default); }
+            catch (Exception) { return Results.Redirect(Link(req, slug, "login?err=send_failed")); }
             return Results.Redirect(Link(req, slug,
                 $"login?stage=verify&nid={Uri.EscapeDataString(nid)}" +
                 $"&attempt={pending.AttemptId}&code={pending.DisplayCode}"));
