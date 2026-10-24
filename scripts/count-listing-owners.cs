@@ -37,6 +37,11 @@
 //      فَلا يَمَسُّ المُخَطَّط (‏Marten 9 يُعيدُ كِتابَةَ مُخَطَّطِ Marten 8 بِمُجَرَّدِ
 //      الإقلاع — ‏CLAUDE.md). واختِبارُ `ListingOwnerCountScriptTests` يَحمَرُّ إن
 //      ظَهَرَ فيه بابُ كِتابَة.
+//      (‏2026-10-24 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه: **والقاعِدَةُ تَرفُضُ الكِتابَةَ أَيضاً**
+//      — كانَ «لا يَكتُبُ» بِنَوعِ الجَلسَةِ وَحدَه. صارَ الاتِّصالُ يُفتَحُ بِـ
+//      `Options=-c default_transaction_read_only=on`، فَكُلُّ مُعامَلَةٍ عَلَيه لِلقِراءَةِ عِندَ
+//      Postgres نَفسِه، ويُقرَأُ الإعدادُ مِن الخادِمِ قَبلَ أَوَّلِ عَدٍّ ويُطبَعُ، ويَخرُجُ بِـ1 إن
+//      لَم يَكُن `on` — فَوَسيطٌ يُسقِطُ الخِيارَ لا يُشَغِّلُه بِلا حاجِز.)
 //   ٢. **لا يَطبَعُ هاتِفاً ولا بَريداً ولا مُعَرِّفَ مُستَخدِم**: مُطابَقَةُ مالِكِ
 //      الاستوديو بِمُستَخدِمِ واجِهَتِه تَقرَأُ هاتِفَه أَو بَريدَه المَحفوظَ وتُقارِنُه
 //      حَرفاً بِحَرف (‏`Phone`/`Email` كَما يَكتُبُهُما بابا الدُخول)، ويُطبَعُ «نَعَم/لا»
@@ -61,6 +66,12 @@
 //   1 — خَطَأ: سِلسِلَةٌ غائِبَة، أَو اتِّصالٌ أَو استِعلام، أَو **صِفرُ مُستَأجِرٍ
 //       مَفحوص** (أَداةٌ عَمياء — القاعِدَة ١٠)، أَو عَدُّ إعلاناتٍ لا يُطابِقُ
 //       عَدّادَ `PlatformStatsQueries`.
+//       (‏2026-10-24 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه: «اتِّصالٌ أَو استِعلام» لَم يَكُن يَخرُجُ
+//       بِـ1 — Marten يَلُفُّ خَطَأَ Npgsql في `MartenCommandException`، فَكانَ فَرعا الالتِقاطِ
+//       لا يَلتَقِطانِ شَيئاً ويَخرُجُ السكربتُ بِـ134 وتَتَبُّعِ مُكَدَّس: مَقيساً عَلى Postgres مَحَلِّيٍّ
+//       بِقاعِدَةٍ غائِبَةٍ (3D000) وبِمُخَطَّطٍ فارِغٍ (42P01). صارَ كُلُّ خَطَأِ قاعِدَةٍ يُصَنَّفُ بِـ
+//       `DatabaseFailure` — الغِلافُ وما في داخِلِه ورَمزُ SqlState، لا نَصُّ الرِسالَة — ويَخرُجُ بِـ1.
+//       وإعدادُ القِراءَةِ إن لَم يَكُن `on` يَخرُجُ بِـ1 أَيضاً.)
 // ═══════════════════════════════════════════════════════════════════════
 
 using System.Security.Cryptography;
@@ -71,10 +82,12 @@ using ACommerce.Kit.Roles;
 using ACommerce.Kit.Tenants;
 using ACommerce.Templates.Customer.Marketplace.Gates;
 using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
+using ACommerce.Templates.Customer.Marketplace.Services.Listings;
 using ACommerce.Templates.Customer.Marketplace.Services.Patterns;
 using ACommerce.Templates.Customer.Marketplace.Services.Queries;
 using JasperFx;
 using Marten;
+using Marten.Exceptions;
 using Npgsql;
 
 var cs = Environment.GetEnvironmentVariable("ConnectionStrings__Postgres");
@@ -89,9 +102,45 @@ if (string.IsNullOrWhiteSpace(cs))
 var fingerprint = Convert.ToHexString(
     SHA256.HashData(Encoding.UTF8.GetBytes(cs))).ToLowerInvariant()[..12];
 
+// ‏القِراءَةُ فَقَط عِندَ Postgres نَفسِه (‏2026-10-24): كُلُّ اتِّصالٍ مِن هذِه السِلسِلَةِ يَبدَأُ بِـ
+// `default_transaction_read_only=on`، فَأَيُّ كِتابَةٍ تُرَدُّ 25006 ولَو ظَهَرَ في الكودِ بابُها.
+const string ReadOnlyOption = "-c default_transaction_read_only=on";
+string readOnlyCs;
+try
+{
+    var csb = new NpgsqlConnectionStringBuilder(cs);
+    csb.Options = string.IsNullOrWhiteSpace(csb.Options) ? ReadOnlyOption : $"{csb.Options} {ReadOnlyOption}";
+    readOnlyCs = csb.ConnectionString;
+}
+catch (ArgumentException)
+{
+    Console.Error.WriteLine("خَطَأ: ‏ConnectionStrings__Postgres لا يُقرَأ سِلسِلَةَ اتِّصال.");
+    return 1;
+}
+
+// ‏والإعدادُ يُقرَأُ مِن الخادِمِ لا يُفتَرَض — وَسيطٌ (مُجَمِّعُ اتِّصالاتٍ) يُسقِطُ الخِيارَ يُرى هُنا.
+string readOnly;
+try
+{
+    await using var probe = new NpgsqlConnection(readOnlyCs);
+    await probe.OpenAsync();
+    await using var show = new NpgsqlCommand("SHOW default_transaction_read_only", probe);
+    readOnly = (await show.ExecuteScalarAsync())?.ToString() ?? "";
+}
+catch (Exception ex) when (DatabaseFailure(ex) is { } why)
+{
+    Console.Error.WriteLine($"خَطَأ: تَعَذَّرَ الاتِّصالُ بِالقاعِدَة ({why}).");
+    return 1;
+}
+if (readOnly != "on")
+{
+    Console.Error.WriteLine($"✗ default_transaction_read_only={readOnly} لا on — الخادِمُ لَم يَأخُذ خِيارَ القِراءَة، فَلا يُشَغَّلُ بِلا حاجِزِه.");
+    return 1;
+}
+
 using var store = DocumentStore.For(o =>
 {
-    o.Connection(cs);
+    o.Connection(readOnlyCs);
     o.DatabaseSchemaName = "platform";
     o.AutoCreateSchemaObjects = AutoCreate.None;   // ← لا يُمَسُّ المُخَطَّط
     o.Policies.AllDocumentsAreMultiTenanted();
@@ -104,14 +153,14 @@ try
     await using var qs = store.QuerySession();
     tenants = (await qs.Query<Tenant>().ToListAsync()).OrderBy(t => t.Id, StringComparer.Ordinal).ToList();
 }
-catch (Exception ex) when (ex is NpgsqlException or InvalidOperationException)
+catch (Exception ex) when (DatabaseFailure(ex) is { } why)
 {
-    Console.Error.WriteLine($"خَطَأ: تَعَذَّرَت قِراءَةُ المَتاجِر ({ex.GetType().Name}).");
+    Console.Error.WriteLine($"خَطَأ: تَعَذَّرَت قِراءَةُ المَتاجِر ({why}).");
     return 1;
 }
 
 Console.WriteLine($"القاعِدَة: بَصمَة {fingerprint} · المَتاجِر: {tenants.Count}");
-Console.WriteLine("الوَضع:   قِراءَةٌ فَقَط — IQuerySession و AutoCreate.None");
+Console.WriteLine($"الوَضع:   قِراءَةٌ فَقَط — IQuerySession و AutoCreate.None و default_transaction_read_only={readOnly} (مِن الخادِم)");
 Console.WriteLine(new string('-', 78));
 
 // ‏حارِسُ العَمى (القاعِدَة ١٠): «صِفرُ مَتجَرٍ بِمالِكٍ واحِد» عَلى صِفرِ مَتجَرٍ
@@ -131,118 +180,133 @@ int totalListings = 0, singleOwner = 0, singleOwnerIsStoreOwner = 0, multiOwner 
 int studioBorn = 0, studioRentalNoCart = 0, studioRentalNoCartAnalysisMarketplace = 0;
 var studioRentalNoCartSlugs = new List<string>();
 
-foreach (var t in tenants)
+// ‏(‏2026-10-24) وكُلُّ خَطَأِ قاعِدَةٍ داخِلَ الحَلقَةِ يُصَنَّفُ ويَخرُجُ بِـ1 كَما يَعِدُ الرَأس — لا 134 بِتَتَبُّعِ مُكَدَّس.
+try
 {
-    await using var tq = store.QuerySession(t.Id);
-
-    // ─── الإعلاناتُ غَيرُ المَحذوفَةِ ومالِكوها — `Attributes["owner_id"]` بِحَرفِه ───
-    List<Listing> listings;
-    try
+    foreach (var t in tenants)
     {
-        listings = (await tq.Query<Listing>().Where(l => !l.IsDeleted).ToListAsync()).ToList();
-    }
-    catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UndefinedTable)
-    {
-        // ‏لا جَدوَلَ إعلاناتٍ في القاعِدَةِ كُلِّها — صِفرٌ مَقيسٌ لا مُفتَرَض (والعَدّادُ القائِمُ يَتَخَطّى).
-        listings = new();
-    }
+        await using var tq = store.QuerySession(t.Id);
 
-    existingCounter.TryGetValue(t.Id, out var counted);
-    if (counted != listings.Count)
-        mismatches.Add($"{t.Id}: قُرِئَ {listings.Count} والعَدّادُ القائِمُ {counted}");
-    totalListings += listings.Count;
+        // ─── الإعلاناتُ غَيرُ المَحذوفَةِ ومالِكوها — `Attributes["owner_id"]` بِحَرفِه ───
+        // (‏2026-10-24: والمِفتاحُ يُقرَأُ بِـ`ListingEditService.OwnerAttribute` — الثابِتُ الَّذي يَكتُبُه الإنشاءُ
+        // وتُفَلتِرُ بِه «إعلاناتي» — لا بِحَرفٍ ثانٍ يَنجَرِف.)
+        List<Listing> listings;
+        try
+        {
+            listings = (await tq.Query<Listing>().Where(l => !l.IsDeleted).ToListAsync()).ToList();
+        }
+        catch (MartenCommandException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UndefinedTable })
+        {
+            // ‏لا جَدوَلَ إعلاناتٍ في القاعِدَةِ كُلِّها — صِفرٌ مَقيسٌ لا مُفتَرَض (والعَدّادُ القائِمُ يَتَخَطّى).
+            // (‏2026-10-24 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه: «مَقيسٌ» لَم يَصدُق حَتّى اليَوم — كانَ الفَرعُ يَلتَقِطُ
+            // `PostgresException` وMarten يَرمي `MartenCommandException` يَلُفُّها، فَلَم يُبلَغ قَطّ: نُسخَةٌ مَحَلِّيَّةٌ
+            // بِلا `mt_doc_listing` خَرَجَت بِـ134 عِندَ هذا الاستِعلام. صارَ يَلتَقِطُ الغِلافَ ويَسأَلُ ما في داخِلِه،
+            // وقيسَ عَلى النُسخَةِ نَفسِها: صِفرُ إعلانٍ لِكُلِّ مَتجَرٍ و«تَخَطّاه» عِندَ العَدّادِ القائِم، والخُروجُ 0.)
+            listings = new();
+        }
 
-    var ownerIds = listings
-        .Select(l => l.Attributes.TryGetValue("owner_id", out var o) ? o : null)
-        .Where(o => !string.IsNullOrWhiteSpace(o))
-        .Select(o => o!.Trim())
-        .Distinct(StringComparer.OrdinalIgnoreCase)
-        .ToList();
-    var withoutOwner = listings.Count(l => !l.Attributes.TryGetValue("owner_id", out var o) || string.IsNullOrWhiteSpace(o));
+        existingCounter.TryGetValue(t.Id, out var counted);
+        if (counted != listings.Count)
+            mismatches.Add($"{t.Id}: قُرِئَ {listings.Count} والعَدّادُ القائِمُ {counted}");
+        totalListings += listings.Count;
 
-    // ‏مالِكٌ «قائِمٌ بِدَورٍ فَعّال»: مُستَخدِمٌ في هذا المَتجَرِ بِمُعَرِّفِه، غَيرُ مَحذوف، ودَورُه
-    // الفَعّالُ دَورٌ مِن أَدوارِ المَتجَر — والمَتجَرُ بِصِفرِ أَدوارٍ «وَضعٌ مَوروث» لا دَورَ فيه يُسأَل.
-    var ownerGuids = ownerIds.Select(o => Guid.TryParse(o, out var g) ? g : Guid.Empty)
-                             .Where(g => g != Guid.Empty).ToList();
-    var ownerUsers = ownerGuids.Count == 0
-        ? new List<User>()
-        : (await tq.Query<User>().Where(u => ownerGuids.Contains(u.Id)).ToListAsync()).ToList();
-    var activeOwners = ownerUsers.Count(u => u.DeletedAt is null && HasActiveRole(t, u));
+        var ownerIds = listings
+            .Select(l => l.Attributes.TryGetValue(ListingEditService.OwnerAttribute, out var o) ? o : null)
+            .Where(o => !string.IsNullOrWhiteSpace(o))
+            .Select(o => o!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var withoutOwner = listings.Count(l => !l.Attributes.TryGetValue(ListingEditService.OwnerAttribute, out var o) || string.IsNullOrWhiteSpace(o));
 
-    // ─── مالِكُ المَتجَر: أَلَهُ مُستَخدِمٌ بِدَورٍ فَعّالٍ في واجِهَتِه؟ ──────────────
-    string storeOwnerLine;
-    var storeOwnerSells = false;
-    if (t.OwnerUserId == Guid.Empty)
-        storeOwnerLine = "— (بِلا مالِكِ استوديو)";
-    else
-    {
-        await using var sq = store.QuerySession(StudioAuth.Tenant);
-        var studioUser = await sq.LoadAsync<StudioUser>(t.OwnerUserId);
-        if (studioUser is null)
-            storeOwnerLine = "— (مالِكُ الاستوديو غَيرُ مَوجود)";
+        // ‏مالِكٌ «قائِمٌ بِدَورٍ فَعّال»: مُستَخدِمٌ في هذا المَتجَرِ بِمُعَرِّفِه، غَيرُ مَحذوف، ودَورُه
+        // الفَعّالُ دَورٌ مِن أَدوارِ المَتجَر — والمَتجَرُ بِصِفرِ أَدوارٍ «وَضعٌ مَوروث» لا دَورَ فيه يُسأَل.
+        var ownerGuids = ownerIds.Select(o => Guid.TryParse(o, out var g) ? g : Guid.Empty)
+                                 .Where(g => g != Guid.Empty).ToList();
+        var ownerUsers = ownerGuids.Count == 0
+            ? new List<User>()
+            : (await tq.Query<User>().Where(u => ownerGuids.Contains(u.Id)).ToListAsync()).ToList();
+        var activeOwners = ownerUsers.Count(u => u.DeletedAt is null && HasActiveRole(t, u));
+
+        // ─── مالِكُ المَتجَر: أَلَهُ مُستَخدِمٌ بِدَورٍ فَعّالٍ في واجِهَتِه؟ ──────────────
+        string storeOwnerLine;
+        var storeOwnerSells = false;
+        if (t.OwnerUserId == Guid.Empty)
+            storeOwnerLine = "— (بِلا مالِكِ استوديو)";
         else
         {
-            var front = new List<User>();
-            if (!string.IsNullOrWhiteSpace(studioUser.Phone))
-                front.AddRange(await tq.Query<User>().Where(u => u.Phone == studioUser.Phone).ToListAsync());
-            if (!string.IsNullOrWhiteSpace(studioUser.Email))
-                front.AddRange(await tq.Query<User>().Where(u => u.Email == studioUser.Email).ToListAsync());
-            var live = front.Where(u => u.DeletedAt is null).DistinctBy(u => u.Id).ToList();
-            var active = live.Where(u => HasActiveRole(t, u)).ToList();
-            storeOwnerSells = live.Any(u => ownerIds.Contains(u.Id.ToString(), StringComparer.OrdinalIgnoreCase));
-            storeOwnerLine = live.Count == 0
-                ? "لا — لا مُستَخدِمَ لَه في واجِهَةِ مَتجَرِه"
-                : active.Count > 0 ? "نَعَم" : "لَه مُستَخدِمٌ بِلا دَورٍ فَعّال";
+            await using var sq = store.QuerySession(StudioAuth.Tenant);
+            var studioUser = await sq.LoadAsync<StudioUser>(t.OwnerUserId);
+            if (studioUser is null)
+                storeOwnerLine = "— (مالِكُ الاستوديو غَيرُ مَوجود)";
+            else
+            {
+                var front = new List<User>();
+                if (!string.IsNullOrWhiteSpace(studioUser.Phone))
+                    front.AddRange(await tq.Query<User>().Where(u => u.Phone == studioUser.Phone).ToListAsync());
+                if (!string.IsNullOrWhiteSpace(studioUser.Email))
+                    front.AddRange(await tq.Query<User>().Where(u => u.Email == studioUser.Email).ToListAsync());
+                var live = front.Where(u => u.DeletedAt is null).DistinctBy(u => u.Id).ToList();
+                var active = live.Where(u => HasActiveRole(t, u)).ToList();
+                storeOwnerSells = live.Any(u => ownerIds.Contains(u.Id.ToString(), StringComparer.OrdinalIgnoreCase));
+                storeOwnerLine = live.Count == 0
+                    ? "لا — لا مُستَخدِمَ لَه في واجِهَةِ مَتجَرِه"
+                    : active.Count > 0 ? "نَعَم" : "لَه مُستَخدِمٌ بِلا دَورٍ فَعّال";
+            }
         }
-    }
 
-    // ─── الأَدوار ────────────────────────────────────────────────────────
-    var hasVendor = t.Roles.Any(r => r.CatalogSlug == "vendor" || r.Slug == "vendor");
-    var sellers = SelfGrantPolicy.SelfGrantable(t.Roles)
-        .Where(r => r.Permissions.Contains("listing.create"))
-        .Select(r => r.Slug).ToList();
+        // ─── الأَدوار ────────────────────────────────────────────────────────
+        var hasVendor = t.Roles.Any(r => r.CatalogSlug == "vendor" || r.Slug == "vendor");
+        var sellers = SelfGrantPolicy.SelfGrantable(t.Roles)
+            .Where(r => r.Permissions.Contains("listing.create"))
+            .Select(r => r.Slug).ToList();
 
-    // ─── الكِندُ والنَمَطُ — بِدالَّةِ الواجِهَة ──────────────────────────────
-    var kinds = t.Categories.Select(c => c.Kind ?? "").Distinct(StringComparer.OrdinalIgnoreCase)
-                 .OrderBy(k => k, StringComparer.Ordinal).ToList();
-    var pattern = PatternProfileResolver.PatternOf(t);
-    var usesCart = PatternProfileResolver.Profile(pattern).UsesCart;
+        // ─── الكِندُ والنَمَطُ — بِدالَّةِ الواجِهَة ──────────────────────────────
+        var kinds = t.Categories.Select(c => c.Kind ?? "").Distinct(StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(k => k, StringComparer.Ordinal).ToList();
+        var pattern = PatternProfileResolver.PatternOf(t);
+        var usesCart = PatternProfileResolver.Profile(pattern).UsesCart;
 
-    var studio = t.SourceAnalysisId is not null;
-    string analysisPattern = "";
-    if (studio)
-    {
-        studioBorn++;
-        await using var iq = store.QuerySession(FeasibilityAnalysisService.IncubatorTenant);
-        var session = await iq.LoadAsync<IncubatorSession>(t.SourceAnalysisId!.Value);
-        analysisPattern = TenantFromAnalysisFactory.NormalizePattern(session?.SuggestedPattern);
-        if (pattern == AppPattern.Rental && !usesCart)
+        var studio = t.SourceAnalysisId is not null;
+        string analysisPattern = "";
+        if (studio)
         {
-            studioRentalNoCart++;
-            studioRentalNoCartSlugs.Add(t.Id);
-            if (analysisPattern == TenantFromAnalysisFactory.FallbackPattern)
-                studioRentalNoCartAnalysisMarketplace++;
+            studioBorn++;
+            await using var iq = store.QuerySession(FeasibilityAnalysisService.IncubatorTenant);
+            var session = await iq.LoadAsync<IncubatorSession>(t.SourceAnalysisId!.Value);
+            analysisPattern = TenantFromAnalysisFactory.NormalizePattern(session?.SuggestedPattern);
+            if (pattern == AppPattern.Rental && !usesCart)
+            {
+                studioRentalNoCart++;
+                studioRentalNoCartSlugs.Add(t.Id);
+                if (analysisPattern == TenantFromAnalysisFactory.FallbackPattern)
+                    studioRentalNoCartAnalysisMarketplace++;
+            }
         }
-    }
 
-    switch (ownerIds.Count)
-    {
-        case 0: zeroOwner++; break;
-        case 1:
-            singleOwner++;
-            if (storeOwnerSells) singleOwnerIsStoreOwner++;
-            break;
-        default: multiOwner++; break;
-    }
+        switch (ownerIds.Count)
+        {
+            case 0: zeroOwner++; break;
+            case 1:
+                singleOwner++;
+                if (storeOwnerSells) singleOwnerIsStoreOwner++;
+                break;
+            default: multiOwner++; break;
+        }
 
-    Console.WriteLine($"  # {t.Id}");
-    Console.WriteLine($"      إعلاناتٌ غَيرُ مَحذوفَة         : {listings.Count}   (PlatformStatsQueries: {(existingCounter.ContainsKey(t.Id) ? counted.ToString() : "تَخَطّاه")})");
-    Console.WriteLine($"      مالِكونَ مُمَيَّزونَ (owner_id)  : {ownerIds.Count}   (بِمُستَخدِمٍ قائِمٍ بِدَورٍ فَعّال: {activeOwners} · إعلاناتٌ بِلا owner_id: {withoutOwner})");
-    Console.WriteLine($"      vendor في الأَدوار               : {(hasVendor ? "نَعَم" : "لا")}   (أَدوارٌ ذاتِيَّةُ المَنحِ تَحمِلُ listing.create: {(sellers.Count == 0 ? (t.Roles.Count == 0 ? "— وَضعٌ مَوروث" : "لا شَيء") : string.Join(", ", sellers))})");
-    Console.WriteLine($"      مالِكُ المَتجَرِ في واجِهَتِه     : {storeOwnerLine}{(storeOwnerSells ? " · وهُوَ بَينَ مالِكي الإعلانات" : "")}");
-    Console.WriteLine($"      كِندُ الفِئات                    : {(kinds.Count == 0 ? "(لا فِئات)" : string.Join(", ", kinds.Select(k => k.Length == 0 ? "(فارِغ)" : k)))}");
-    Console.WriteLine($"      النَمَطُ المَرسوم (PatternOf)    : {pattern}   سَلَّة: {(usesCart ? "نَعَم" : "لا")}");
-    Console.WriteLine($"      مِن الاستوديو                    : {(studio ? $"نَعَم — نَمَطُ تَحليلِه بَعدَ NormalizePattern: {analysisPattern}" : "لا")}");
+        Console.WriteLine($"  # {t.Id}");
+        Console.WriteLine($"      إعلاناتٌ غَيرُ مَحذوفَة         : {listings.Count}   (PlatformStatsQueries: {(existingCounter.ContainsKey(t.Id) ? counted.ToString() : "تَخَطّاه")})");
+        Console.WriteLine($"      مالِكونَ مُمَيَّزونَ (owner_id)  : {ownerIds.Count}   (بِمُستَخدِمٍ قائِمٍ بِدَورٍ فَعّال: {activeOwners} · إعلاناتٌ بِلا owner_id: {withoutOwner})");
+        Console.WriteLine($"      vendor في الأَدوار               : {(hasVendor ? "نَعَم" : "لا")}   (أَدوارٌ ذاتِيَّةُ المَنحِ تَحمِلُ listing.create: {(sellers.Count == 0 ? (t.Roles.Count == 0 ? "— وَضعٌ مَوروث" : "لا شَيء") : string.Join(", ", sellers))})");
+        Console.WriteLine($"      مالِكُ المَتجَرِ في واجِهَتِه     : {storeOwnerLine}{(storeOwnerSells ? " · وهُوَ بَينَ مالِكي الإعلانات" : "")}");
+        Console.WriteLine($"      كِندُ الفِئات                    : {(kinds.Count == 0 ? "(لا فِئات)" : string.Join(", ", kinds.Select(k => k.Length == 0 ? "(فارِغ)" : k)))}");
+        Console.WriteLine($"      النَمَطُ المَرسوم (PatternOf)    : {pattern}   سَلَّة: {(usesCart ? "نَعَم" : "لا")}");
+        Console.WriteLine($"      مِن الاستوديو                    : {(studio ? $"نَعَم — نَمَطُ تَحليلِه بَعدَ NormalizePattern: {analysisPattern}" : "لا")}");
+    }
+}
+catch (Exception ex) when (DatabaseFailure(ex) is { } why)
+{
+    Console.Error.WriteLine($"خَطَأ: تَعَذَّرَت قِراءَةُ مَتجَر ({why}).");
+    return 1;
 }
 
 Console.WriteLine(new string('-', 78));
@@ -259,6 +323,19 @@ if (mismatches.Count > 0)
 return 0;
 
 // ─── أَدَواتٌ صَغيرَة ───────────────────────────────────────────────────
+
+// ‏خَطَأُ قاعِدَةٍ مُصَنَّفاً — أَو `null` لِما لَيسَ مِنها فَيَمضي كَما هو. Marten يَلُفُّ خَطَأَ Npgsql في
+// `MartenCommandException` (مَقيسٌ: 3D000 و42P01 يَصِلانِ مَلفوفَين)، والاتِّصالُ المُباشِرُ (فَحصُ الإعدادِ أَعلاه)
+// يَرمي Npgsql بِلا غِلاف — فَالشَكلانِ يُقرَآن. ويُطبَعُ النَوعُ ورَمزُ SqlState وَحدَهُما: نَصُّ الرِسالَةِ قَد يَحمِلُ
+// اسمَ مُضيفٍ أَو مُستَخدِمِ قاعِدَة.
+static string? DatabaseFailure(Exception ex) => ex switch
+{
+    MartenCommandException { InnerException: PostgresException pg } => $"MartenCommandException ← PostgresException {pg.SqlState}",
+    MartenCommandException { InnerException: NpgsqlException np } => $"MartenCommandException ← {np.GetType().Name}",
+    PostgresException pg => $"PostgresException {pg.SqlState}",
+    NpgsqlException np => np.GetType().Name,
+    _ => null,
+};
 
 // ‏دَورٌ فَعّال: `ActiveRole` غَيرُ فارِغٍ وهُوَ سلاجُ دَورٍ مِن أَدوارِ المَتجَر — بِحَرفِ
 // `RolePermissions.Has` الَّتي تَقرَأُ `r.Slug == activeRole`. والوَضعُ المَوروثُ (صِفرُ أَدوار)

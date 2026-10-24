@@ -87,7 +87,10 @@ public class ListingOwnerCountScriptTests(Xunit.Abstractions.ITestOutputHelper o
         Assert.Contains("PatternProfileResolver.PatternOf(t)", code, StringComparison.Ordinal);
         Assert.Contains("TenantFromAnalysisFactory.NormalizePattern(", code, StringComparison.Ordinal);
         Assert.Contains("SelfGrantPolicy.SelfGrantable(t.Roles)", code, StringComparison.Ordinal);
-        Assert.Contains("Attributes.TryGetValue(\"owner_id\"", code, StringComparison.Ordinal);
+        // ‏(‏2026-10-24) مِفتاحُ المالِكِ بِالثابِتِ الَّذي يَكتُبُه الإنشاءُ وتُفَلتِرُ بِه «إعلاناتي» — لا بِحَرفٍ ثانٍ.
+        Assert.Equal(2, Regex.Matches(code, Regex.Escape("Attributes.TryGetValue(ListingEditService.OwnerAttribute,")).Count);
+        Assert.DoesNotContain("\"owner_id\"", code, StringComparison.Ordinal);
+        Assert.Equal("owner_id", ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingEditService.OwnerAttribute);
 
         foreach (var copy in new[] { "\"commercial\"", "\"residential\"", "\"roommate\"", "AppPattern.Trip", "\"rider\"" })
             Assert.DoesNotContain(copy, code, StringComparison.Ordinal);
@@ -114,6 +117,75 @@ public class ListingOwnerCountScriptTests(Xunit.Abstractions.ITestOutputHelper o
         var leaks = printLines.Where(l => personal.Any(p => l.Contains(p, StringComparison.Ordinal))).ToList();
         Assert.True(leaks.Count == 0,
             $"فُحِصَ {printLines.Count} سَطرَ طِباعَة، ومِنها {leaks.Count} يَطبَعُ حَقلاً شَخصِيّاً: {string.Join(" | ", leaks)}");
+    }
+
+    // ─── القِراءَةُ فَقَط عِندَ الخادِم، وكُلُّ خَطَأِ قاعِدَةٍ يَخرُجُ بِـ1 (‏2026-10-24 — مُراجَعَةُ الموجَة ٤، بَندُ G) ─────────────
+    //
+    // **المَقيسُ قَبل** (Postgres مَحَلِّيّ): فَرعا الالتِقاطِ (`NpgsqlException or InvalidOperationException` و`PostgresException` 42P01)
+    // لا يَلتَقِطانِ شَيئاً — Marten يَلُفُّ خَطَأَ Npgsql في `MartenCommandException` — فَقاعِدَةٌ غائِبَةٌ (3D000) ومُخَطَّطٌ فارِغٌ (42P01)
+    // ونُسخَةٌ بِلا `mt_doc_listing` تَخرُجُ كُلُّها بِـ134 وتَتَبُّعِ مُكَدَّسٍ لا بِـ1 كَما يَعِدُ الرَأس، و«صِفرٌ مَقيسٌ» لِلجَدوَلِ الغائِبِ
+    // لَم يُبلَغ قَطّ. و«لا يَكتُبُ حَرفاً» كانَ بِنَوعِ الجَلسَةِ وَحدَه.
+
+    /// <summary><b>الاتِّصالُ لِلقِراءَةِ عِندَ Postgres نَفسِه</b>: السِلسِلَةُ تُفتَحُ بِـ<c>-c default_transaction_read_only=on</c> (مُضافاً إلى
+    /// <c>Options</c> قائِمٍ لا مُستَبدِلاً لَه)، والمَخزَنُ لا يَرى غَيرَها، والإعدادُ يُقرَأُ مِن الخادِمِ قَبلَ أَوَّلِ عَدٍّ ويَخرُجُ بِـ1 إن لَم يَكُن
+    /// <c>on</c>، ويُطبَعُ في سَطرِ الوَضع.</summary>
+    [Fact]
+    public void TheScript_OpensItsConnectionReadOnlyAtTheServer_AndRefusesToRunWithoutIt()
+    {
+        var code = Code();
+        Assert.Contains("const string ReadOnlyOption = \"-c default_transaction_read_only=on\";", code, StringComparison.Ordinal);
+        Assert.Contains("csb.Options = string.IsNullOrWhiteSpace(csb.Options) ? ReadOnlyOption : $\"{csb.Options} {ReadOnlyOption}\";", code, StringComparison.Ordinal);
+        var connections = Regex.Matches(code, @"o\.Connection\((?<arg>[^)]*)\)").Select(m => m.Groups["arg"].Value).ToList();
+        Assert.Equal(new[] { "readOnlyCs" }, connections);
+        Assert.Equal(new[] { "readOnlyCs" }, Regex.Matches(code, @"new NpgsqlConnection\((?<arg>[^)]*)\)").Select(m => m.Groups["arg"].Value).ToArray());
+
+        var show = code.IndexOf("\"SHOW default_transaction_read_only\"", StringComparison.Ordinal);
+        var refuse = Regex.Match(code, @"if \(readOnly != ""on""\)\s*\{(?<body>(?:[^{}]|\{[^{}]*\})*)\}");
+        var firstCount = code.IndexOf("qs.Query<Tenant>()", StringComparison.Ordinal);
+        Assert.True(show > 0 && refuse.Success && refuse.Index > show && firstCount > refuse.Index,
+            $"تَرتيبُ الحاجِز: SHOW {show} · الرَفض {(refuse.Success ? refuse.Index : -1)} · أَوَّلُ عَدّ {firstCount} — الإعدادُ يُقرَأُ ويُحكَمُ قَبلَ أَوَّلِ عَدّ.");
+        Assert.Contains("return 1;", refuse.Groups["body"].Value, StringComparison.Ordinal);
+        Assert.Contains("default_transaction_read_only={readOnly} (مِن الخادِم)", code, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>كُلُّ فَرعِ التِقاطٍ في السكربتِ واحِدٌ مِن ثَلاثَةٍ مُسَمّاة</b> — سِلسِلَةٌ لا تُقرَأ (<c>ArgumentException</c>)، وخَطَأُ قاعِدَةٍ
+    /// تُصَنِّفُه <c>DatabaseFailure</c> فَيُطبَعُ ويَخرُجُ بِـ1 (ثَلاثَةُ مَواضِع: فَحصُ الإعداد، وقِراءَةُ المَتاجِر، والحَلقَة)، والجَدوَلُ الغائِبُ
+    /// مَلفوفاً (<c>MartenCommandException</c> ← <c>PostgresException</c> ‏42P01) صِفراً؛ و<c>DatabaseFailure</c> تَقرَأُ الغِلافَ وما في داخِلِه.
+    /// والشَكلانِ المَيِّتانِ (<c>catch (PostgresException</c> و<c>ex is NpgsqlException</c>) لا يَعودان.</summary>
+    [Fact]
+    public void TheScript_CatchesWhatMartenActuallyThrows_AndExitsOneOnEveryDatabaseFailure()
+    {
+        var code = Code();
+        const string Classified = "catch (Exception ex) when (DatabaseFailure(ex) is { } why)";
+        const string MissingTable = "catch (MartenCommandException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UndefinedTable })";
+        var catches = Regex.Matches(code, @"catch\s*\([^\n]*").Select(m => m.Value.Trim()).ToList();
+        output.WriteLine($"فُروعُ الالتِقاط: {catches.Count}");
+        foreach (var c in catches) output.WriteLine($"  {c}");
+        Assert.Equal(5, catches.Count);
+        Assert.Equal(3, catches.Count(c => c == Classified));
+        Assert.Equal(1, catches.Count(c => c == MissingTable));
+        Assert.Equal(1, catches.Count(c => c == "catch (ArgumentException)"));
+
+        foreach (Match m in Regex.Matches(code, Regex.Escape(Classified) + @"\s*\{(?<body>(?:[^{}]|\{[^{}]*\})*)\}"))
+            Assert.Contains("return 1;", m.Groups["body"].Value, StringComparison.Ordinal);
+        Assert.Equal(3, Regex.Matches(code, Regex.Escape(Classified) + @"\s*\{(?:[^{}]|\{[^{}]*\})*?return 1;(?:[^{}]|\{[^{}]*\})*\}").Count);
+
+        var classifier = Regex.Match(code, @"static string\? DatabaseFailure\(Exception ex\) => ex switch\s*\{(?<arms>[^}]*(?:\}[^}]*)*?)\};");
+        Assert.True(classifier.Success, "DatabaseFailure غائِبَة.");
+        foreach (var arm in new[]
+        {
+            "MartenCommandException { InnerException: PostgresException pg }",
+            "MartenCommandException { InnerException: NpgsqlException np }",
+            "PostgresException pg =>",
+            "NpgsqlException np =>",
+            "_ => null,",
+        })
+            Assert.Contains(arm, classifier.Groups["arms"].Value, StringComparison.Ordinal);
+        Assert.DoesNotContain("MessageText", classifier.Groups["arms"].Value, StringComparison.Ordinal);   // ‏النَوعُ والرَمزُ وَحدَهُما
+        Assert.DoesNotContain(".Message", classifier.Groups["arms"].Value, StringComparison.Ordinal);
+
+        foreach (var dead in new[] { "catch (PostgresException", "catch (NpgsqlException", "ex is NpgsqlException", "InvalidOperationException" })
+            Assert.DoesNotContain(dead, code, StringComparison.Ordinal);
     }
 
     // ─── الحَقلُ الشَخصِيُّ لا يُقرَأُ إلّا في المُرَشِّحَينِ المُسَمَّيَين (‏2026-10-24 — مُراجَعَةُ الموجَة ٤، بَندُ F) ─────────────
