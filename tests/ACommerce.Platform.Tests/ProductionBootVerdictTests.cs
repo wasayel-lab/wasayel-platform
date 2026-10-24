@@ -391,6 +391,73 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         Assert.Contains("**إعادَةُ تَشغيلِ CI لِذلكَ الكوميت**", section, StringComparison.Ordinal);
     }
 
+    // ─── ‏2026-10-24 (تَيّارُ S16، مُراجَعَةُ S13 الجَولَة ٢): وَظيفَةٌ واحِدَةٌ تُقلِعُ عَلى فَرعِ البَوّابَة — لا تُقرَأُ production-boot وَحدَها ───
+    //
+    // **المَقيسُ قَبل**: صَفّا المَجموعَةِ أَعلاه يَقرَآنِ الوَظيفَةَ المُسَمّاةَ production-boot وَحدَها. فَوَظيفَةٌ ثانِيَةٌ — في ci.yml أَو
+    // سَيرِ عَمَلٍ آخَر — تَأخُذُ `BOOT_GATE_CONNECTION_STRING` أَو تُشَغِّلُ `verify-production-boot.sh` خارِجَ المَجموعَةِ تُعيدُ سِباقَ ‏23505
+    // عَلى الفَرعِ الواحِد، ولا يَحمَرُّ شَيء.
+
+    private static readonly string[] BootGateMarks = ["BOOT_GATE_CONNECTION_STRING", "verify-production-boot.sh"];
+
+    /// <summary>كُلُّ وَظيفَةٍ في سُيَرِ العَمَلِ المُعطاةِ تَذكُرُ عَلامَةً مِن <see cref="BootGateMarks"/> في سَطرٍ غَيرِ مُعَلَّق — «مِلَفّ/وَظيفَة».</summary>
+    internal static IReadOnlyList<string> BootGateJobs(IEnumerable<(string File, string Text)> workflows)
+    {
+        var found = new List<string>();
+        foreach (var (file, text) in workflows)
+        {
+            var wf = text.Replace("\r\n", "\n", StringComparison.Ordinal);
+            var jobs = Regex.Matches(wf, @"^  (?<name>[\w-]+):\s*$", RegexOptions.Multiline).ToList();
+            var start = Regex.Match(wf, @"^jobs:\s*$", RegexOptions.Multiline);
+            foreach (var (m, i) in jobs.Select((m, i) => (m, i)))
+            {
+                if (!start.Success || m.Index < start.Index) continue;   // ‏`on:` و`push:` وما قَبلَ `jobs:` لَيسَت وَظائِف
+                var body = wf[m.Index..(i + 1 < jobs.Count ? jobs[i + 1].Index : wf.Length)];
+                var code = body.Split('\n').Where(l => !l.TrimStart().StartsWith('#'));
+                if (code.Any(l => BootGateMarks.Any(k => l.Contains(k, StringComparison.Ordinal)))) found.Add($"{file}/{m.Groups["name"].Value}");
+            }
+        }
+        return found;
+    }
+
+    /// <summary><b>وَظيفَةٌ واحِدَةٌ في كُلِّ سُيَرِ العَمَلِ تُقلِعُ عَلى فَرعِ البَوّابَة، وهي production-boot</b> — وتُطبَعُ الوَظائِفُ المَعدودَة.</summary>
+    [Fact]
+    public void Exactly_one_job_in_every_workflow_boots_production_on_the_gate_branch_and_it_is_the_grouped_one()
+    {
+        var dir = Path.Combine(RepoRoot, ".github", "workflows");
+        var workflows = Directory.EnumerateFiles(dir, "*.yml").Concat(Directory.EnumerateFiles(dir, "*.yaml"))
+            .OrderBy(f => f, StringComparer.Ordinal)
+            .Select(f => (File: Path.GetFileName(f), Text: File.ReadAllText(f))).ToList();
+        var jobs = BootGateJobs(workflows);
+        output.WriteLine($"سُيَرُ عَمَلٍ مَقروءَة: {workflows.Count} ({string.Join(", ", workflows.Select(w => w.File))}) · وَظائِفُ تَذكُرُ {string.Join(" أَو ", BootGateMarks)}: {jobs.Count} — {string.Join(", ", jobs)}");
+        Assert.True(workflows.Count >= 2, $"أَداةٌ عَمياء: {workflows.Count} سَيرَ عَمَل.");
+        Assert.Equal(new[] { "ci.yml/production-boot" }, jobs.ToArray());
+    }
+
+    /// <summary><b>حَقنُ عَيب — عَدّادُ وَظائِفِ البَوّابَةِ يُحمِرُّ فِعلاً</b>: وَظيفَةٌ ثانِيَةٌ بِالسِرِّ، أَو تُشَغِّلُ السكربت، أَو في سَيرِ عَمَلٍ آخَر، تُعَدّ؛
+    /// وتَعليقٌ يَذكُرُ السكربتَ في وَظيفَةٍ أُخرى لا يُعَدّ (تَعليقُ build-and-test اليَومَ بِعَينِه).</summary>
+    [Fact]
+    public void The_boot_gate_job_counter_can_actually_go_red()
+    {
+        var ci = File.ReadAllText(Path.Combine(RepoRoot, ".github", "workflows", "ci.yml")).Replace("\r\n", "\n", StringComparison.Ordinal);
+        var live = new[] { ("ci.yml", ci) };
+        Assert.Equal(new[] { "ci.yml/production-boot" }, BootGateJobs(live).ToArray());
+        const string Second = "  smoke-boot:\n    runs-on: ubuntu-latest\n    env:\n      CS: ${{ secrets.BOOT_GATE_CONNECTION_STRING }}\n    steps:\n      - run: true\n";
+        const string Script = "  smoke-boot:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ./scripts/verify-production-boot.sh\n";
+        const string Commented = "  smoke-boot:\n    runs-on: ubuntu-latest\n    steps:\n      # ‏لا يُشَغِّلُ verify-production-boot.sh\n      - run: true\n";
+        var cases = new (string Name, (string, string)[] Workflows, int Expected)[]
+        {
+            ("وَظيفَةٌ ثانِيَةٌ بِالسِرّ", [("ci.yml", ci + Second)], 2),
+            ("وَظيفَةٌ ثانِيَةٌ تُشَغِّلُ السكربت", [("ci.yml", ci + Script)], 2),
+            ("سَيرُ عَمَلٍ آخَر", [("ci.yml", ci), ("nightly.yml", "on: push\njobs:\n" + Script)], 2),
+            ("تَعليقٌ وَحدَه", [("ci.yml", ci + Commented)], 1),
+        };
+        var wrong = cases.Where(c => BootGateJobs(c.Workflows).Count != c.Expected)
+            .Select(c => $"«{c.Name}»: {BootGateJobs(c.Workflows).Count} لا {c.Expected}").ToList();
+        foreach (var c in cases) output.WriteLine($"«{c.Name}» → {string.Join(", ", BootGateJobs(c.Workflows))}");
+        output.WriteLine($"حُقِنَ {cases.Length} شَكلاً؛ أَخطَأَ العَدّادُ في {wrong.Count}");
+        Assert.True(wrong.Count == 0, string.Join("\n", wrong));
+    }
+
     /// <summary>جِسمُ الوَظيفَةِ <paramref name="name"/> في سَيرِ عَمَلٍ — مِن سَطرِها إلى سَطرِ الوَظيفَةِ التالِيَةِ أَو آخِرِ المِلَفّ.</summary>
     private static string JobBody(string workflow, string name)
     {
