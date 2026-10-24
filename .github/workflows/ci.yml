@@ -98,6 +98,9 @@ jobs:
   # وكُلُّ وافِدٍ أَحدَثَ يُلغيه ويَحُلُّ مَحَلَّه. والوَظيفَةُ تَعمَلُ لِلدَفعِ وطَلَبِ الدَمجِ مَعاً، فَدَفعَةُ `main` المُنتَظِرَةُ يُلغيها أَيُّ طَلَبِ دَمجٍ بَعدَها
   # ⇒ تَشغيلُ CI ‏«مُلغىً» ⇒ `deploy-hf.yml` لا يَنشُر (يَشتَرِطُ `conclusion == 'success'`) — حَجبٌ صامِتٌ بِلا عَيب، وهو ما وُضِعَت المَجموعَةُ لِمَنعِه.
   # و`max` يُبقي حَتّى ‏100 مُنتَظِرٍ بِتَرتيبِ وُصولِهِم (وَثائِقُ GitHub، `jobs.<job_id>.concurrency`) — فَالكُلفَةُ انتِظارٌ لا فَقد. (DEPLOY.md §٢·و)
+  # ‏(‏2026-10-24 — تَيّارُ S16، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) و«بِتَرتيبِ وُصولِهِم» أَدَقُّه بِنَصِّ GitHub: FIFO «according to the time each one started
+  # waiting on the concurrency group»، و«ordering is not guaranteed». و«When the queue is full, any additional jobs or workflow runs are canceled» —
+  # فَالمُلغى تَحتَ `max` (لِأَيِّ حَدَث) طابورٌ مُمتَلِئٌ أَسقَطَ الوافِدَ أَو إلغاءٌ بِاليَد، لا «سَبَقَه أَحدَث». (DEPLOY.md §٢·و)
   production-boot:
     runs-on: ubuntu-latest
     concurrency:
