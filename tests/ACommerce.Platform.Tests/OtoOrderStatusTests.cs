@@ -548,6 +548,29 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         Assert.DoesNotContain(Stored(w).Timeline, e => e.StageAfter == DealStage.Delivered);
     }
 
+    /// <summary>
+    /// <para><b>«اليَوم»</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4): صَفقَةٌ أُلغِيَت وطَلَبُها عِندَ OTO حَيّ — ثُمَّ تُسَلِّمُ OTO الشُحنَةَ وتُرسِلُ
+    /// «delivered» — فَيُجابُ ‏200 <c>deal_not_active</c> ولا يُكتَبُ شَيء: لا تُعيدُه OTO، ولا يَعلَمُ صاحِبُ المَتجَرِ مِن سِجِلِّ الصَفقَةِ أَنّ ما أُلغِيَ سُلِّم.
+    /// يُقلَبُ بِاسمِه في كوميتِ حَدِّ المَرحَلَة.</para>
+    /// </summary>
+    [Fact]
+    public async Task Today_a_delivered_notice_on_a_cancelled_deal_is_answered_200_and_writes_nothing()
+    {
+        var w = await ShippedCashDeal();
+        OtoSays(w, "delivered");
+        Stored(w).Status = DealStatus.Cancelled;
+        var saves = w.Docs.SaveCalls;
+        var lines = Stored(w).Timeline.Count;
+
+        var outcome = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id));
+
+        Assert.Equal(OtoOrderStatusGate.DealNotActive, outcome.Code);
+        Assert.Equal(200, OtoOrderStatusGate.StatusFor(outcome.Code));
+        Assert.Equal(saves, w.Docs.SaveCalls);
+        Assert.Equal(lines, Stored(w).Timeline.Count);
+        output.WriteLine($"cancelled + delivered: {outcome.Code} → {OtoOrderStatusGate.StatusFor(outcome.Code)} · saves +{w.Docs.SaveCalls - saves} · lines +{Stored(w).Timeline.Count - lines}");
+    }
+
     /// <summary>صَفقَةٌ لَها طَلَبٌ ولَم تَخرُج إلى الشَحن (رُدَّ انتِقالُها) — التَسليمُ لا يَقفِزُ فَوقَ الشَحن.
     /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>A_delivery_for_a_deal_still_at_Confirmed_does_not_jump_over_Shipping</c> (‏<c>e96c482</c>): «delivered» بِبوليصَةٍ
     /// عَلى صَفقَةٍ عِندَ «تأكيد» بِطَلَبِها يُجابُ <c>deal_not_shipping</c> فَلا تُعيدُه OTO ويَضيعُ التَسليمُ الآلِيّ. <b>والآن</b> (مُراجَعَةُ المَوجَة 3a،
