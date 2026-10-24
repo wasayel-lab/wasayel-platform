@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace ACommerce.Platform.Tests;
 
@@ -39,7 +40,9 @@ namespace ACommerce.Platform.Tests;
 ///   حِراسَتِها.</item>
 /// </list>
 /// </summary>
-public class WriteEndpointGuardTests
+// (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1): ويَأخُذُ `ITestOutputHelper` لِيَطبَعَ صَفُّ بابِ السَلَّةِ ما عَدَّه (القاعِدَة ١٠)؛ ولا نُسخَةَ مِن
+// الصِنفِ تُنشَأُ خارِجَ xUnit — قُرّاؤه مِن الخارِجِ دالّاتُه الساكِنَة.
+public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     /// <summary>نُقطَة كِتابَة بِلا حارِس، مُثَبَّتَة بِسَبَبِها.</summary>
     private sealed record Unguarded(string Route, string WhyAr);
@@ -256,6 +259,99 @@ public class WriteEndpointGuardTests
             $"نُقطَةٌ تَقرَأُ الاستِمارَةَ بِلا .RequireFormBody() ({form.Count} مَفحوصَة) — جِسمٌ لَيسَ استِمارَةً يَرمي فَيُرَدُّ 500:\n"
           + string.Join("\n", missing));
         Assert.DoesNotContain(".RequireFormBody(", ChainGuards);
+    }
+
+    // ─── ‏2026-10-24 (مُراجَعَةُ تَيّارِ S15 الجَولَة 1): بابُ السَلَّة — مُسَجَّلٌ هُنا ولَيسَ حارِسَ تَخويل ─────────────────────────────
+    // ‏`CartDoor.Opens` (البَند L، ‏ADR-034 §٣ البَند ٦) تَسأَلُ نَمَطَ المَتجَرِ لا صاحِبَ الطَلَب، فَلا تُضافُ إلى `BodyGuards` ولا `ChainGuards`:
+    // رَمزٌ هُناكَ يَجعَلُ نُقطَةً بِلا حارِسٍ غَيرِه «مَحروسَة». وكانَت سَطراً في جِسمِ `cart/add` لا يَراه ماسِحُ الحُرّاس، وصَفُّها في `CartDoorTests`
+    // وَحدَه بِمَسارٍ مَكتوب — فَنُقطَةٌ ثانِيَةٌ تَلِدُ سَلَّةً غَداً كانَت تَمُرُّ بِلا سُؤال. **فَالفَحصُ بِالفِعلِ لا بِالمَسار**: كُلُّ نُقطَةِ كِتابَةٍ تَلِدُ سَلَّةً
+    // (`new ACommerce.Kit.Cart.Cart`) تَسأَلُ البابَ بَعدَ الهُوِيَّةِ وقَبلَ أَوَّلِ قِراءَةٍ أَو كِتابَة؛ وما يُعَدِّلُ سَلَّةً قائِمَةً مُثَبَّتٌ بِسَبَبِه (قَرارُ
+    // «أ» S15·١٠(٣))، والقائِمَةُ ثُنائِيَّةُ الاتِّجاه. و`CartHandlers.Handle(AddToCart …)` في العُدَّةِ يَلِدُ سَلَّةً أَيضاً بِلا مَسارِ HTTP وبِصِفرِ مُرسِل
+    // (`grep AddToCart` = التَعريفُ والمُعالِجُ وَحدَهُما) — فَلَيسَ باباً هُنا.
+
+    private const string CartDocument = "ACommerce.Kit.Cart.Cart";
+    private const string CartBirth = "new ACommerce.Kit.Cart.Cart";
+    private const string CartDoorCall = "CartDoor.Opens(";
+
+    /// <summary>ما يَقرَأُ أَو يَكتُبُ قَبلَه البابُ في نُقطَةٍ تَلِدُ سَلَّة.</summary>
+    private static readonly string[] CartBirthTouches = { "LoadAsync<", "req.Form[", "SaveChangesAsync", ".Store(", "Events.Append", "Events.StartStream" };
+
+    /// <summary>نُقطَةٌ تُعَدِّلُ سَلَّةً قائِمَةً بِلا بابِ السَلَّة — مُثَبَّتَةٌ بِسَبَبِها.</summary>
+    private sealed record CartEdit(string Route, string WhyAr);
+
+    private static readonly CartEdit[] PinnedCartEdits =
+    {
+        new("/{slug}/cart/{listingId:guid}/qty",
+            "تُعَدِّلُ كَمِّيَّةَ سَلَّةٍ قائِمَة؛ وسَلَّةٌ كُتِبَت في مَتجَرٍ لا يَبيعُ بِها قَبلَ البابِ تَبقى قابِلَةً لِلتَعديل — قَرارُ مُنتَجٍ في «أ» S15·١٠(٣)."),
+        new("/{slug}/cart/clear",
+            "تَحذِفُ السَلَّة — إغلاقُها في مَتجَرٍ لا يَبيعُ بِها يُبقي ما لا تَعرِضُه الواجِهَةُ بِلا مَخرَج."),
+        new("/{slug}/checkout/submit",
+            "تُحَوِّلُ سَلَّةً قائِمَةً إلى صَفَقاتٍ ثُمَّ تَحذِفُها — قَرارُ مُنتَجٍ في «أ» S15·١٠(٣): أَيُحتَرَمُ ما في سَلَّةِ العَميلِ أَم يُسقَط؟"),
+    };
+
+    /// <summary>كُلُّ نُقطَةٍ تَكتُبُ سَلَّة: الَّتي تَلِدُها وما تُخالِفُ مِنها، والَّتي تُعَدِّلُ قائِمَة.</summary>
+    private static (List<string> Births, List<string> Edits, List<string> Violations) CartWriters(IEnumerable<Endpoint> endpoints)
+    {
+        var births = new List<string>();
+        var edits = new List<string>();
+        var violations = new List<string>();
+        foreach (var e in endpoints)
+        {
+            if (!e.Body.Contains(CartDocument, StringComparison.Ordinal)) continue;
+            if (!ContainsAny(e.Body, WriteCalls) && !e.Body.Contains($".Delete<{CartDocument}>", StringComparison.Ordinal)) continue;
+            if (!e.Body.Contains(CartBirth, StringComparison.Ordinal)) { edits.Add(e.Route); continue; }
+
+            births.Add(e.Route);
+            var door = e.Body.IndexOf(CartDoorCall, StringComparison.Ordinal);
+            var identity = FirstIndexOfAny(e.Body, BodyGuards);
+            var touch = FirstIndexOfAny(e.Body, CartBirthTouches);
+            if (door < 0) violations.Add($"{e.Route}: تَلِدُ سَلَّةً بِلا {CartDoorCall}");
+            else if (identity < 0 || identity > door) violations.Add($"{e.Route}: البابُ قَبلَ الهُوِيَّة");
+            else if (touch >= 0 && touch < door) violations.Add($"{e.Route}: قِراءَةٌ أَو كِتابَةٌ قَبلَ الباب");
+        }
+        return (births, edits, violations);
+    }
+
+    /// <summary><b>كُلُّ نُقطَةٍ تَلِدُ سَلَّةً تَسأَلُ بابَ السَلَّةِ بَعدَ الهُوِيَّةِ وقَبلَ أَيِّ قِراءَةٍ أَو كِتابَة</b> — والدالَّةُ نَفسُها الَّتي تَرسُمُ بِها صَفحَةُ
+    /// الإعلانِ الاستِمارَة. وما يُعَدِّلُ سَلَّةً قائِمَةً هُوَ المُثَبَّتُ بِحَرفِه لا أَكثَرَ ولا أَقَلّ. ويُطبَعُ العَدّ، والصِفرُ يُحمِر (القاعِدَة ١٠).</summary>
+    [Fact]
+    public void Every_endpoint_that_births_a_cart_asks_the_cart_door_before_it_reads_or_writes()
+    {
+        var (births, edits, violations) = CartWriters(MinimalApiWriteEndpoints());
+        output.WriteLine($"نِقاطٌ تَلِدُ سَلَّة: {births.Count} ({string.Join(" · ", births)}) · تُعَدِّلُ قائِمَة: {edits.Count} ({string.Join(" · ", edits)}) · مُخالَفات: {violations.Count}");
+
+        Assert.True(births.Count > 0, "أَداةٌ عَمياء: صِفرُ نُقطَةٍ تَلِدُ سَلَّة.");
+        Assert.True(violations.Count == 0, "بابُ السَلَّةِ غائِبٌ أَو مُتَأَخِّر:\n  " + string.Join("\n  ", violations));
+        Assert.Equal(PinnedCartEdits.Select(p => p.Route).OrderBy(r => r, StringComparer.Ordinal),
+            edits.OrderBy(r => r, StringComparer.Ordinal));
+        Assert.All(PinnedCartEdits, p => Assert.False(string.IsNullOrWhiteSpace(p.WhyAr)));
+        Assert.DoesNotContain(BodyGuards, g => g.Contains("CartDoor", StringComparison.Ordinal));
+        Assert.DoesNotContain(ChainGuards, g => g.Contains("CartDoor", StringComparison.Ordinal));
+    }
+
+    /// <summary><b>والفاحِصُ يَحمَرّ</b> (القاعِدَة ١٠): أَربَعُ نِقاطٍ مَحقونَةٍ تَلِدُ سَلَّة — بِلا باب، وبِبابٍ بَعدَ الحِفظ، وبِبابٍ قَبلَ الهُوِيَّة،
+    /// وسَليمَة — والثَلاثُ الأولى وَحدَها مُخالَفات؛ ونُقطَةٌ تُعَدِّلُ قائِمَةً تُعَدُّ تَعديلاً لا وِلادَة.</summary>
+    [Fact]
+    public void The_cart_door_scanner_catches_an_injected_birth_without_the_door_late_or_before_identity()
+    {
+        const string id = "var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug)); ";
+        const string door = "if (!Services.Patterns.CartDoor.Opens(profile)) return Results.Redirect(\"x\"); ";
+        const string birth = "var cart = await s.LoadAsync<ACommerce.Kit.Cart.Cart>(userId) ?? new ACommerce.Kit.Cart.Cart { Id = userId }; s.Store(cart); await s.SaveChangesAsync(); ";
+        var injected = new[]
+        {
+            new Endpoint("/x/no-door", id + birth, "injected.cs"),
+            new Endpoint("/x/late", id + birth + door, "injected.cs"),
+            new Endpoint("/x/before-identity", door + id + birth, "injected.cs"),
+            new Endpoint("/x/sound", id + door + birth, "injected.cs"),
+            new Endpoint("/x/edit", id + "var cart = await s.LoadAsync<ACommerce.Kit.Cart.Cart>(userId); s.Store(cart); await s.SaveChangesAsync();", "injected.cs"),
+        };
+        var (births, edits, violations) = CartWriters(injected);
+        output.WriteLine($"مَحقونَة: وِلادات {births.Count} · تَعديلات {edits.Count} · مُخالَفات {violations.Count}:\n  " + string.Join("\n  ", violations));
+
+        Assert.Equal(new[] { "/x/no-door", "/x/late", "/x/before-identity", "/x/sound" }, births);
+        Assert.Equal(new[] { "/x/edit" }, edits);
+        Assert.Equal(3, violations.Count);
+        Assert.DoesNotContain(violations, v => v.StartsWith("/x/sound", StringComparison.Ordinal));
     }
 
     /// <summary>أَوَّل ما يُعَدّ كِتابَةً — لِفَحص «الحارِس يَسبِق».</summary>
