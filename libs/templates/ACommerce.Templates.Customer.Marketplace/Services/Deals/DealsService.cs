@@ -577,18 +577,13 @@ public sealed class DealsService
 
         var cancelled = new List<Deal>();
         DealCancelResult? requested = null;
-        CancellingWholeInvoice.Value = true;
-        try
+        foreach (var t in targets.OrderBy(t => t.Id == dealId))
         {
-            foreach (var t in targets.OrderBy(t => t.Id == dealId))
-            {
-                var r = await CancelAsync(tenantSlug, t.Id, by, reason, ct);
-                if (!r.Ok) return new(r, cancelled);
-                cancelled.Add(r.Deal!);
-                if (t.Id == dealId) requested = r;
-            }
+            var r = await CancelCoreAsync(tenantSlug, t.Id, by, reason, wholeInvoice: true, ct);
+            if (!r.Ok) return new(r, cancelled);
+            cancelled.Add(r.Deal!);
+            if (t.Id == dealId) requested = r;
         }
-        finally { CancellingWholeInvoice.Value = false; }
         return new(requested ?? DealCancelResult.Cancelled(cancelled[^1]), cancelled);
     }
 
@@ -602,14 +597,6 @@ public sealed class DealsService
             if (id != deal.Id && await LoadAsync(tenantSlug, id, ct) is { } d) siblings.Add(d);
         return siblings;
     }
-
-    /// <summary>
-    /// <para><b>إلغاءُ الطَلَبِ كُلِّه جارٍ في هذا التَدَفُّق</b> (‏2026-10-13، G5 M4): يَضبِطُه <see cref="CancelWholeInvoiceAsync"/> وَحدَه حَولَ نِداءاتِه
-    /// لِـ<see cref="CancelAsync"/> — فَلا يُرَدُّ إلغاءُ صَفقَةٍ مِن فاتورَتِه بِـ<see cref="GatewayInvoiceShare.Shared"/> وهي تُلغى مَعَ أَخَواتِها.
-    /// <c>AsyncLocal</c>: لا يَتَعَدّى تَدَفُّقَ ذلكَ النِداء (طَلَبٌ آخَرُ مُتَزامِنٌ لا يَراه)، ولا يَعودُ إلى المُنادي. وبَقِيَ تَوقيعُ
-    /// <see cref="CancelAsync"/> بِحَرفِه — فاحِصو الكاتِبِ يَقيسونَه بِه.</para>
-    /// </summary>
-    private static readonly AsyncLocal<bool> CancellingWholeInvoice = new();
 
     /// <summary>
     /// <para><b>الحارِسُ في التَوقيع</b> (القاعِدَة ٦): الوَسيطُ
@@ -626,6 +613,19 @@ public sealed class DealsService
     public async Task<DealCancelResult> CancelAsync(
         string tenantSlug, Guid dealId, DealCanceller by,
         string reason, CancellationToken ct = default)
+        => await CancelCoreAsync(tenantSlug, dealId, by, reason, wholeInvoice: false, ct);
+
+    /// <summary>
+    /// <para><b>جِسمُ الإلغاءِ الواحِد</b> — <see cref="CancelAsync"/> بِـ<paramref name="wholeInvoice"/> <c>false</c>، و<see cref="CancelWholeInvoiceAsync"/>
+    /// لِكُلِّ صَفقَةٍ مِن فاتورَتِها بِـ<c>true</c>: فَلا يُرَدُّ إلغاءُ صَفقَةٍ مِن فاتورَتِه بِـ<see cref="GatewayInvoiceShare.Shared"/> وهي تُلغى مَعَ أَخَواتِها.</para>
+    /// <para>(‏2026-10-24، تَيّارُ S15 البَند I(3) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: <b>وَسيطٌ لا <c>AsyncLocal</c></b>. كانَ «إلغاءُ الطَلَبِ كُلِّه جارٍ»
+    /// عَلَماً في <c>AsyncLocal&lt;bool&gt;</c> ساكِنٍ يَضبِطُه <see cref="CancelWholeInvoiceAsync"/> حَولَ نِداءاتِه لِـ<see cref="CancelAsync"/> ويُنزِلُه في
+    /// <c>finally</c> (‏G5 M4) — حالَةٌ خَفِيَّةٌ عابِرَةٌ لِلنِداء: لا تُرى في التَوقيع، وتَرِثُها كُلُّ مُهِمَّةٍ تَبدَأُ داخِلَ ذلكَ التَدَفُّق. صارَ قَرارُ
+    /// المُنادي وَسيطاً في التَوقيع (القاعِدَة ٦)، وبَقِيَ تَوقيعُ <see cref="CancelAsync"/> بِحَرفِه — فاحِصو الكاتِبِ يَقيسونَه بِه.)</para>
+    /// </summary>
+    private async Task<DealCancelResult> CancelCoreAsync(
+        string tenantSlug, Guid dealId, DealCanceller by,
+        string reason, bool wholeInvoice, CancellationToken ct)
     {
         var (actorId, actorName) = (by.ActorId, by.ActorName);
         await using var s = _store.LightweightSession(tenantSlug);
@@ -638,7 +638,7 @@ public sealed class DealsService
 
         // ولا تُلغى وَحدَها صَفقَةٌ عَلى فاتورَةِ بَوّابَةٍ مَفتوحَةٍ تَدفَعُ لِأُختٍ قائِمَة — قَبلَ أَيِّ كِتابَة (‏2026-10-13، G5 M4؛ ‏ADR-032 §٨‑ز مُلحَقاً):
         // كانَت تُلغى فَتَبقى الفاتورَةُ قابِلَةً لِلدَّفعِ بِالمَبلَغِ كامِلاً (تَوصيفُه `411e120`). والطَلَبُ كُلُّه بِـ`CancelWholeInvoiceAsync`.
-        if (!CancellingWholeInvoice.Value
+        if (!wholeInvoice
             && GatewayInvoiceShare.Validate(deal, await InvoiceSiblingsAsync(tenantSlug, deal, ct)).FirstOrDefault() is { } shared)
             return DealCancelResult.Refused(new DealCancelViolation(shared.Code, shared.MessageAr), deal);
 
