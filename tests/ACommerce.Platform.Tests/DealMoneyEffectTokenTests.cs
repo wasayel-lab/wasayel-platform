@@ -19,6 +19,10 @@ namespace ACommerce.Platform.Tests;
 // بِـ`OperationCanceledException` كَما يَرميه Marten/Npgsql — وصَفُّه يُثبِتُ أَنّه يَرمي ويَمُرّ؛ والصَفّانِ الحَيّانِ عَلى Postgres يَقيسانِ ما يَدَّعيه.
 //
 // **التَوصيفُ قَبلَ التَبديل** (القاعِدَة ٣): صُفوفُ «اليَوم» تُودَعُ وَحدَها، وتُقلَبُ بِأَسمائِها في كوميتِ الإصلاح.
+//
+// **ثُمَّ قُلِبَت الأَربَعَةُ بِأَسمائِها** (‏2026-10-24، ‏ADR-036 §١٧ — ولا يُعادُ حَرفٌ فَوقَه؛ التَوصيفُ `c385ae3`): ما يَلي المُطالَبَةَ في `DealsService` —
+// `CaptureClaimedAsync` مِن `AdvanceAsync`، والاستِرجاعُ وسَطرُ «استِرجاعُه مُستَحَقّ» وكِتابَتاهُما في `CancelCoreAsync` — يَجري بِـ`CancellationToken.None`،
+// فَعَميلٌ يَنصَرِفُ بَعدَ الحِفظِ المَفحوصِ لا يُسقِطُ نَتيجَةَ أَثَرٍ وَقَع. وصَفُّ الأَداةِ وصَفُّ الضَبطِ بِلا تَعديلِ حَرف.
 
 public class DealMoneyEffectTokenTests(ITestOutputHelper output)
 {
@@ -162,46 +166,50 @@ public class DealMoneyEffectTokenTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// <para><b>«اليَوم» — القَبض</b>: دُخولُ «دَفع» بِرَمزِ العَميل؛ يُحفَظُ الانتِقال (المُطالَبَة)، ويَقبِضُ المُزَوِّد، ثُمَّ يَنصَرِفُ العَميل — فَتُرَدُّ قِراءَةُ
-    /// <c>RecordAsync</c> بِالرَمزِ المُلغى ويَصعَدُ <see cref="OperationCanceledException"/>: الصَفقَةُ «دَفع» و<c>payment_status</c> ما زالَ
-    /// <c>Authorized</c> ولا سَطرَ <c>captured</c> — والمالُ مَقبوض.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-24، ‏ADR-036 §١٧): كانَ <c>Today_a_client_that_leaves_while_the_capture_answers_leaves_Paid_captured_and_unrecorded</c>
+    /// (<c>c385ae3</c>) — <see cref="OperationCanceledException"/> والصَفقَةُ «دَفع» بِـ<c>payment_status=Authorized</c> بِلا سَطرِ <c>captured</c>. <b>وصارَ</b>:
+    /// يَنصَرِفُ العَميلُ والمُزَوِّدُ يُجيب، فَيُكتَبُ القَبضُ كَما يُكتَبُ لِعَميلٍ باقٍ — <c>Captured</c> وسَطرُ <c>captured</c> — وصِفرُ نِداءٍ مَردود.</para>
     /// </summary>
     [Fact]
-    public void Today_a_client_that_leaves_while_the_capture_answers_leaves_Paid_captured_and_unrecorded()
+    public void A_client_that_leaves_while_the_capture_answers_still_has_the_capture_recorded()
     {
         var (world, deals, pay, client, refused, id) = World(DealStage.Confirmed, nameof(PaymentStatus.Authorized));
 
         var thrown = Thrown(deals.AdvanceAsync(Slug, id, Buyer, "مُشتَرٍ", null, client.Token));
 
-        Assert.IsAssignableFrom<OperationCanceledException>(thrown);
+        Assert.Null(thrown);
+        Assert.True(client.IsCancellationRequested);
         Assert.Equal(new[] { "capture pay_1" }, pay.Calls);
         var stored = world.Read<Deal>(id.ToString())!;
         Assert.Equal(DealStage.Paid, stored.Stage);
-        Assert.Equal(nameof(PaymentStatus.Authorized), stored.Refs["payment_status"]);
-        Assert.DoesNotContain(stored.Timeline, e => e.Action is "captured" or "capture_failed");
-        Assert.True(refused[0] >= 1);
-        output.WriteLine($"القَبض: {thrown!.GetType().Name} · {stored.Stage} payment_status={stored.Refs["payment_status"]} · {Lines(stored)} · المُزَوِّد: [{string.Join(", ", pay.Calls)}] · رُدَّ {refused[0]}");
+        Assert.Equal(nameof(PaymentStatus.Captured), stored.Refs["payment_status"]);
+        Assert.Single(stored.Timeline, e => e.Action == "captured");
+        Assert.Equal(0, refused[0]);
+        output.WriteLine($"القَبض: {thrown?.GetType().Name ?? "لا استِثناء"} · {stored.Stage} payment_status={stored.Refs["payment_status"]} · {Lines(stored)} · المُزَوِّد: [{string.Join(", ", pay.Calls)}] · رُدَّ {refused[0]}");
     }
 
     /// <summary>
-    /// <para><b>«اليَوم» — الاستِرجاع</b>: إلغاءُ المُشتَري عِندَ «دَفع» بِرَمزِ العَميل؛ يُحفَظُ الإلغاء (المُطالَبَة)، ويَستَرجِعُ المُزَوِّد، ثُمَّ يَنصَرِفُ العَميل —
-    /// فَالصَفقَةُ مُلغاةٌ بِلا <c>refund_id</c> ولا سَطرِ <c>refunded</c>، والمالُ مُستَرجَع؛ ولا بابَ يُعيدُ الإلغاءَ لِيُكتَبَ ما وَقَع.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-24، ‏ADR-036 §١٧): كانَ <c>Today_a_client_that_leaves_while_the_refund_answers_leaves_Cancelled_refunded_and_unrecorded</c>
+    /// (<c>c385ae3</c>) — مُلغاةٌ مُستَرجَعَةٌ بِلا <c>refund_id</c> ولا سَطرِ <c>refunded</c>. <b>وصارَ</b>: يُكتَبُ الاستِرجاعُ (<c>ref_pay_1</c>، <c>Refunded</c>،
+    /// وسَطرُ <c>refunded</c> بَعدَ <c>cancelled</c>) ولَو انصَرَفَ العَميل، وصِفرُ نِداءٍ مَردود.</para>
     /// </summary>
     [Fact]
-    public void Today_a_client_that_leaves_while_the_refund_answers_leaves_Cancelled_refunded_and_unrecorded()
+    public void A_client_that_leaves_while_the_refund_answers_still_has_the_refund_recorded()
     {
         var (world, deals, pay, client, refused, id) = World(DealStage.Paid, nameof(PaymentStatus.Captured));
 
         var thrown = Thrown(deals.CancelAsync(Slug, id, new DealCanceller(Buyer, "مُشتَرٍ", IsStoreAdmin: false), "عَدَلتُ", client.Token));
 
-        Assert.IsAssignableFrom<OperationCanceledException>(thrown);
+        Assert.Null(thrown);
+        Assert.True(client.IsCancellationRequested);
         Assert.Equal(new[] { "refund pay_1" }, pay.Calls);
         var stored = world.Read<Deal>(id.ToString())!;
         Assert.Equal(DealStatus.Cancelled, stored.Status);
-        Assert.False(stored.Refs.ContainsKey("refund_id"));
-        Assert.DoesNotContain(stored.Timeline, e => e.Action is "refunded" or "refund_failed");
-        Assert.True(refused[0] >= 1);
-        output.WriteLine($"الاستِرجاع: {thrown!.GetType().Name} · {stored.Status}/{stored.Stage} refund_id={(stored.Refs.ContainsKey("refund_id") ? stored.Refs["refund_id"] : "—")} · {Lines(stored)} · المُزَوِّد: [{string.Join(", ", pay.Calls)}] · رُدَّ {refused[0]}");
+        Assert.Equal("ref_pay_1", stored.Refs["refund_id"]);
+        Assert.Equal(nameof(PaymentStatus.Refunded), stored.Refs["refund_status"]);
+        Assert.Equal(new[] { "cancelled", "refunded" }, stored.Timeline.Select(e => e.Action).Where(a => a is "cancelled" or "refunded"));
+        Assert.Equal(0, refused[0]);
+        output.WriteLine($"الاستِرجاع: {thrown?.GetType().Name ?? "لا استِثناء"} · {stored.Status}/{stored.Stage} refund_id={(stored.Refs.ContainsKey("refund_id") ? stored.Refs["refund_id"] : "—")} · {Lines(stored)} · المُزَوِّد: [{string.Join(", ", pay.Calls)}] · رُدَّ {refused[0]}");
     }
 }
 
@@ -232,9 +240,10 @@ public class LiveDealMoneyEffectTokenProofTests(ITestOutputHelper output)
         return (await q.LoadAsync<Deal>(id))!;
     }
 
-    /// <summary><b>«اليَوم» حَيّاً — القَبض</b>: بِحَرفِ صَفِّ عالَمِ الوَثائِق.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-24، ‏ADR-036 §١٧): كانَ <c>Today_live_a_client_that_leaves_while_the_capture_answers_leaves_Paid_captured_and_unrecorded</c>
+    /// (<c>c385ae3</c>). بِحَرفِ صَفِّ عالَمِ الوَثائِقِ المَقلوب.</summary>
     [Fact]
-    public async Task Today_live_a_client_that_leaves_while_the_capture_answers_leaves_Paid_captured_and_unrecorded()
+    public async Task Live_a_client_that_leaves_while_the_capture_answers_still_has_the_capture_recorded()
     {
         if (!LiveDealConcurrencyProofTests.Enabled || string.IsNullOrEmpty(LiveDealConcurrencyProofTests.ConnectionString)) return;
         var (store, slug, id) = await SeedAsync(DealStage.Confirmed, nameof(PaymentStatus.Authorized));
@@ -249,16 +258,17 @@ public class LiveDealMoneyEffectTokenProofTests(ITestOutputHelper output)
 
         var stored = await ReadAsync(store, slug, id);
         output.WriteLine($"حَيّاً — القَبض: {thrown?.GetType().Name ?? "لا استِثناء"} · {stored.Stage} payment_status={stored.Refs["payment_status"]} · {string.Join(",", stored.Timeline.Select(e => e.Action))} · المُزَوِّد: [{string.Join(", ", pay.Calls)}]");
-        Assert.IsAssignableFrom<OperationCanceledException>(thrown);
+        Assert.Null(thrown);
         Assert.Equal(new[] { "capture pay_1" }, pay.Calls);
         Assert.Equal(DealStage.Paid, stored.Stage);
-        Assert.Equal(nameof(PaymentStatus.Authorized), stored.Refs["payment_status"]);
-        Assert.DoesNotContain(stored.Timeline, e => e.Action is "captured" or "capture_failed");
+        Assert.Equal(nameof(PaymentStatus.Captured), stored.Refs["payment_status"]);
+        Assert.Single(stored.Timeline, e => e.Action == "captured");
     }
 
-    /// <summary><b>«اليَوم» حَيّاً — الاستِرجاع</b>: بِحَرفِ صَفِّ عالَمِ الوَثائِق.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-24، ‏ADR-036 §١٧): كانَ <c>Today_live_a_client_that_leaves_while_the_refund_answers_leaves_Cancelled_refunded_and_unrecorded</c>
+    /// (<c>c385ae3</c>). بِحَرفِ صَفِّ عالَمِ الوَثائِقِ المَقلوب.</summary>
     [Fact]
-    public async Task Today_live_a_client_that_leaves_while_the_refund_answers_leaves_Cancelled_refunded_and_unrecorded()
+    public async Task Live_a_client_that_leaves_while_the_refund_answers_still_has_the_refund_recorded()
     {
         if (!LiveDealConcurrencyProofTests.Enabled || string.IsNullOrEmpty(LiveDealConcurrencyProofTests.ConnectionString)) return;
         var (store, slug, id) = await SeedAsync(DealStage.Paid, nameof(PaymentStatus.Captured));
@@ -273,10 +283,10 @@ public class LiveDealMoneyEffectTokenProofTests(ITestOutputHelper output)
 
         var stored = await ReadAsync(store, slug, id);
         output.WriteLine($"حَيّاً — الاستِرجاع: {thrown?.GetType().Name ?? "لا استِثناء"} · {stored.Status}/{stored.Stage} refund_id={(stored.Refs.ContainsKey("refund_id") ? stored.Refs["refund_id"] : "—")} · {string.Join(",", stored.Timeline.Select(e => e.Action))} · المُزَوِّد: [{string.Join(", ", pay.Calls)}]");
-        Assert.IsAssignableFrom<OperationCanceledException>(thrown);
+        Assert.Null(thrown);
         Assert.Equal(new[] { "refund pay_1" }, pay.Calls);
         Assert.Equal(DealStatus.Cancelled, stored.Status);
-        Assert.False(stored.Refs.ContainsKey("refund_id"));
-        Assert.DoesNotContain(stored.Timeline, e => e.Action is "refunded" or "refund_failed");
+        Assert.Equal("ref_pay_1", stored.Refs["refund_id"]);
+        Assert.Single(stored.Timeline, e => e.Action == "refunded");
     }
 }

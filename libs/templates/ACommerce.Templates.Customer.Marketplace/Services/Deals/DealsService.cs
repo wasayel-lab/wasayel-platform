@@ -451,7 +451,10 @@ public sealed class DealsService
         // داخِلَ `MoveAsync` قَبلَ حِفظِها، فَانتِقالٌ يُرَدُّ هُنا بِـ`deal_changed_meanwhile` يَكونُ قَد قَبَضَ ولَم يُسَجِّل، و«أَعِد
         // المُحاوَلَة» تَقبِضُ ثانِيَةً (`DealMoneyClaimFirstTests`). ونَتيجَتُه بَعدَ هذا السَطرِ كِتابَةٌ ثانِيَةٌ تُعادُ عَلى ما كُتِب؛
         // فَإن غَلَبَها التَعارُضُ ثَلاثاً صَعِدَ إلى المُنادي بِصَوت (‏500) — لا يُقالُ «لَم يُكتَب» عَن انتِقالٍ كُتِبَ وقَبضٍ وَقَع.
-        return new(true, await CaptureClaimedAsync(tenantSlug, moved, next.Value, actorId, actorName, ct), null);
+        // **وبَعدَ المُطالَبَةِ لا إلغاء** (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-7؛ ‏ADR-036 §١٧ — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): كانَ `ct`
+        // هُنا — ونُقطَةُ الـAPI تُمَرِّرُ `http.RequestAborted` — فَعَميلٌ يَنصَرِفُ والمُزَوِّدُ يُجيبُ يَترُكُ «دَفع» مَقبوضَةً بِلا سَطرِ `captured`
+        // (تَوصيفُه `c385ae3`). وقاعِدَةُ `/ship` بِحَرفِها (`DealShipping.ShipAsync`): ما يَلي حِفظاً مَفحوصاً يَقَعُ يَجري بِـ`CancellationToken.None`.
+        return new(true, await CaptureClaimedAsync(tenantSlug, moved, next.Value, actorId, actorName, CancellationToken.None), null);
     }
 
     /// <summary>
@@ -693,15 +696,19 @@ public sealed class DealsService
         // مَرجِعُه فاتورَةٌ في حِسابِ المَتجَرِ عِندَ بَوّابَتِه — مُزَوِّدُ النُسخَةِ لا يَعرِفُها: في الإنتاجِ يَرُدُّها، وفي التَجرِبَةِ يَكتُبُ
         // «استُرجِع» عَن مالٍ لَم يَلمِسه. فَيُكتَبُ سَطرُ «استِرجاعُه مُستَحَقٌّ عِندَ بَوّابَةِ المَتجَر» بِحَلقَةِ التَسجيلِ نَفسِها، ويَستَرجِعُه
         // صاحِبُ المَتجَرِ مِن لَوحَةِ بَوّابَتِه — ولا نِداءَ هُنا.)
+        //
+        // (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-7؛ ‏ADR-036 §١٧ — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: **وبَعدَ المُطالَبَةِ لا إلغاء**. كانَ `ct` يَبلُغُ
+        // الاستِرجاعَ وكِتابَتَه — ونُقطَةُ الـAPI تُمَرِّرُ `http.RequestAborted` — فَعَميلٌ يَنصَرِفُ والمُزَوِّدُ يُجيبُ يَترُكُ مُلغاةً مُستَرجَعَةً بِلا
+        // `refund_id` (تَوصيفُه `c385ae3`). فَالأَسطُرُ الثَلاثَةُ أَدناه بِـ`CancellationToken.None` — قاعِدَةُ `/ship` بِحَرفِها.)
         if (GatewayPayments.CollectedByGateway(deal))
             deal = await RecordAsync(tenantSlug, dealId, stored => stored.Timeline.Add(new(stored.Stage, stored.Stage,
-                DealEvent.GatewayRefundDue, actorId, actorName, stored.Refs.GetValueOrDefault("payment_id"), DateTime.UtcNow)), ct) ?? deal;
+                DealEvent.GatewayRefundDue, actorId, actorName, stored.Refs.GetValueOrDefault("payment_id"), DateTime.UtcNow)), CancellationToken.None) ?? deal;
         else if (deal.Refs.TryGetValue("payment_id", out var pid) && !string.IsNullOrEmpty(pid))
         {
             Action<Deal> outcome;
             try
             {
-                var rr = await _payments.RefundAsync(pid, deal.AmountSar, reason, ct);
+                var rr = await _payments.RefundAsync(pid, deal.AmountSar, reason, CancellationToken.None);
                 outcome = stored =>
                 {
                     stored.Refs["refund_id"]     = rr.PaymentId;
@@ -720,7 +727,7 @@ public sealed class DealsService
                         actorId, actorName, ex.Message, DateTime.UtcNow));
                 };
             }
-            deal = await RecordAsync(tenantSlug, dealId, outcome, ct) ?? deal;
+            deal = await RecordAsync(tenantSlug, dealId, outcome, CancellationToken.None) ?? deal;
         }
         // (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الثانِيَة؛ ‏ADR-032 §٨‑ز — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: **وفاتورَةُ بَوّابَةٍ لَم يُقبَض بِها تُلغى عِندَ
         // البَوّابَةِ إن كانَت هذِه آخِرَ صَفقَةٍ قائِمَةٍ تَدفَعُ لَها**. كانَت تَبقى قابِلَةً لِلدَّفعِ فَيَدفَعُ المُشتَري ثَمَنَ طَلَبٍ مُلغًى مِن الصَفحَةِ
