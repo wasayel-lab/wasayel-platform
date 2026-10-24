@@ -27,14 +27,14 @@ public class BootSeederOrderTests(ITestOutputHelper output)
         return i;
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم» — يُقلَبُ بِاسمِه في كوميتِ إعادَةِ التَرتيب</b>: البَذّارانِ قَبلَ مَنحِ المُشرِف.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، S15 E)</b>: البَذّارانِ بَعدَ مَنحِ المُشرِف — فَإقلاعٌ بارِدٌ واحِدٌ يُتِمُّهُما.</summary>
     [Fact]
-    public void Today_the_two_dev_seeders_run_before_the_platform_admin_grant()
+    public void The_two_dev_seeders_run_after_the_platform_admin_grant()
     {
         var p = Program();
         var admin = At(p, "await PlatformAdminSeeder.RunAsync(docStore, app.Environment)");
-        Assert.True(At(p, "await IncubatorSampleSeeder.RunAsync(scope.ServiceProvider)") < admin);
-        Assert.True(At(p, "await AppearanceBaselineSeeder.RunAsync(scope.ServiceProvider, app.Environment)") < admin);
+        Assert.True(At(p, "await IncubatorSampleSeeder.RunAsync(scope.ServiceProvider)") > admin);
+        Assert.True(At(p, "await AppearanceBaselineSeeder.RunAsync(scope.ServiceProvider, app.Environment)") > admin);
     }
 
     /// <summary><b>ويَبقى بِحَرفِه</b>: بَذرُ الإنتاجِ (ما لا مُتَغَيِّرَ يَحرُسُه) بِتَرتيبِه — المَنَصَّة، ثُمَّ رَبطُ المِلكِيَّة، ثُمَّ مَنحُ المُشرِف —

@@ -328,27 +328,12 @@ await using (var scope = app.Services.CreateAsyncScope())
     if (Environment.GetEnvironmentVariable("TEST_DATA_SEED") == "1")
         await TestDataSeeder.RunAsync(scope.ServiceProvider);
 
-    // جَلسَةُ حاضِنَة **عَيِّنَةَ بِنيَة** — تَفتَح شاشات الدِراسَة الثَلاث
-    // بِلا مُزَوِّد LLM ولا مِفتاح API. نَفسُ اصطِلاح البَذرَة أَعلاه:
-    // ‏ENV INCUBATOR_SAMPLE_SEED=1، وإلّا لا تَعمَل. التَفصيلُ وسَبَبُ
-    // كَونِ القيَم مُعَلَّمَةً في `IncubatorSampleSeeder`.
-    if (Environment.GetEnvironmentVariable("INCUBATOR_SAMPLE_SEED") == "1")
-        await IncubatorSampleSeeder.RunAsync(scope.ServiceProvider);
-
     // سَلَّةُ **عَيِّنَةِ بِنيَة** — تَفتَح جِسمَ مُعالِج الشِراء الثُلاثيّ
     // الَّذي لا يُصَيَّر بِلا سَلَّة، وكانَ في القاعِدَة صِفرُ سَلَّة.
     // نَفسُ الاصطِلاح: ‏ENV CART_SAMPLE_SEED=1، وإلّا صِفرُ قِراءَةٍ
     // وصِفرُ كِتابَة. التَفصيلُ في `CartSampleSeeder`.
     if (Environment.GetEnvironmentVariable("CART_SAMPLE_SEED") == "1")
         await CartSampleSeeder.RunAsync(scope.ServiceProvider);
-
-    // مُستَأجِرا **لَقطَة المَظهَر** — `theme-demo` و`owner-test`. ‏32
-    // صَفحَةً في `i18n-baseline` تَفتَرِضُهُما، ولا وُجودَ لَهُما في
-    // الإنتاج، فَكانَت البَوّابَةُ تَحمَرّ بِالبَيانات لا بِالكود.
-    // ‏ENV APPEARANCE_BASELINE_SEED=1، و**تَرفُض خارِجَ التَطوير**
-    // صَراحَةً لا صامِتَةً. التَفصيلُ في `AppearanceBaselineSeeder`.
-    if (Environment.GetEnvironmentVariable(AppearanceBaselineSeeder.EnvVar) == "1")
-        await AppearanceBaselineSeeder.RunAsync(scope.ServiceProvider, app.Environment);
 
     // مَنح صَلاحِيَّة مُشرِف المَنصَّة صَراحَةً — ENV PLATFORM_ADMIN_PHONE
     // و/أَو PLATFORM_ADMIN_EMAIL، وخارِج التَطوير يَلزَم
@@ -369,6 +354,26 @@ await using (var scope = app.Services.CreateAsyncScope())
         app.Logger.LogWarning(
             "[platform-admin] {Var} صيغَتُه غَير صالِحَة — لا مَنحَ بِالبَريد",
             PlatformAdminSeeder.EmailVar);
+
+    // ‏**بَذّارا التَطويرِ بَعدَ مَنحِ المُشرِف** (‏2026-10-24، تَيّارُ S15 البَند E؛ RELEASE-READINESS §١ البَند ٨): كِلاهُما يَحتاجُ مُستَخدِمَ
+    // استوديو — المُشرِفَ نَفسَه — وكانا قَبلَ مَنحِه، فَعَلى قاعِدَةٍ بارِدَةٍ يَطبَعانِ «لا مُستَخدِمَ استوديو» ويُتِمُّ الإقلاعُ الثاني ما فاتَ.
+    // نُقِلا وَحدَهُما بِحُرّاسِهِما وتَعليقَيهِما حَرفاً؛ وبِلا مُتَغَيِّرَيهِما (الإنتاج) لا يَعمَلانِ في أَيِّ مَوضِع، فَبَذرُ الإنتاجِ بِتَرتيبِه —
+    // مَقيسٌ بِمُقارَنَةِ سِجِلِّ إقلاعَينِ بارِدَينِ عَلى قاعِدَتَينِ جَديدَتَين (`BootSeederOrderTests`).
+
+    // جَلسَةُ حاضِنَة **عَيِّنَةَ بِنيَة** — تَفتَح شاشات الدِراسَة الثَلاث
+    // بِلا مُزَوِّد LLM ولا مِفتاح API. نَفسُ اصطِلاح البَذرَة أَعلاه:
+    // ‏ENV INCUBATOR_SAMPLE_SEED=1، وإلّا لا تَعمَل. التَفصيلُ وسَبَبُ
+    // كَونِ القيَم مُعَلَّمَةً في `IncubatorSampleSeeder`.
+    if (Environment.GetEnvironmentVariable("INCUBATOR_SAMPLE_SEED") == "1")
+        await IncubatorSampleSeeder.RunAsync(scope.ServiceProvider);
+
+    // مُستَأجِرا **لَقطَة المَظهَر** — `theme-demo` و`owner-test`. ‏32
+    // صَفحَةً في `i18n-baseline` تَفتَرِضُهُما، ولا وُجودَ لَهُما في
+    // الإنتاج، فَكانَت البَوّابَةُ تَحمَرّ بِالبَيانات لا بِالكود.
+    // ‏ENV APPEARANCE_BASELINE_SEED=1، و**تَرفُض خارِجَ التَطوير**
+    // صَراحَةً لا صامِتَةً. التَفصيلُ في `AppearanceBaselineSeeder`.
+    if (Environment.GetEnvironmentVariable(AppearanceBaselineSeeder.EnvVar) == "1")
+        await AppearanceBaselineSeeder.RunAsync(scope.ServiceProvider, app.Environment);
 }
 
 // يَجِب أَن يُطَبَّق ForwardedHeaders قَبل أَيّ middleware يَقرَأ
