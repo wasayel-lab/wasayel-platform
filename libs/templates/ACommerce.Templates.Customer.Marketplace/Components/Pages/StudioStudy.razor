@@ -19,8 +19,12 @@
 }
 @if (!string.IsNullOrEmpty(Refining) && session?.Status == IncubatorStatus.Completed && StudioAnalysisDoor.Opens(Incubator.IsConfigured))
 {
-    @* Refine يَجري في الخَلفِيَّة — حَدِّث الصَفحَة كُلّ ٤ث حَتَّى تَتَحَدَّث Updated. *@
-    <HeadContent><meta http-equiv="refresh" content="4" /></HeadContent>
+    @* Refine يَجري في الخَلفِيَّة — حَدِّث الصَفحَة كُلّ ٤ث حَتَّى تَتَحَدَّث Updated.
+       ‏(‏2026-10-24، تَيّارُ S16) وما دامَ جارِياً وَحدَه — `StudioRefineWait.Pending`: لَم تُكتَب الدِراسَةُ بَعدَ الطَلَبِ ولَم تَنقَضِ مُهلَتُه. *@
+    @if (RefinePending)
+    {
+        <HeadContent><meta http-equiv="refresh" content="4" /></HeadContent>
+    }
 }
 
 <StudioShell Title="@L["admin.study.heading"]" Active="ideas">
@@ -84,13 +88,16 @@
 
             @if (!string.IsNullOrEmpty(Refining) && StudioAnalysisDoor.Opens(Incubator.IsConfigured))
             {
-                <div class="st-card" style="background:#fff7ed;border:1px solid var(--st-warning);
-                                            display:flex;align-items:center;gap:10px;">
-                    <span style="font-size:20px;"><AcIcon Name="clock" Size="20" /></span>
-                    <div style="flex:1;">@((MarkupString)"\n                        ")@L.Markup("studio.study.refining_prefix")<strong>@SectionLabel(Refining)</strong>»…
-                        @L.Markup("studio.study.refining_hint")@((MarkupString)"\n                    ")
+                @if (RefinePending)
+                {
+                    <div class="st-card" style="background:#fff7ed;border:1px solid var(--st-warning);
+                                                display:flex;align-items:center;gap:10px;">
+                        <span style="font-size:20px;"><AcIcon Name="clock" Size="20" /></span>
+                        <div style="flex:1;">@((MarkupString)"\n                        ")@L.Markup("studio.study.refining_prefix")<strong>@SectionLabel(Refining)</strong>»…
+                            @L.Markup("studio.study.refining_hint")@((MarkupString)"\n                    ")
+                        </div>
                     </div>
-                </div>
+                }
             }
 
             @if (r.TryGetProperty("summary", out var sum))
@@ -371,6 +378,9 @@
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery(Name = "build_err")] public string? BuildErr { get; set; }
     [SupplyParameterFromQuery(Name = "refining")]  public string? Refining { get; set; }
+    // ‏(‏2026-10-24، تَيّارُ S16) لَحظَةُ طَلَبِ التَحسينِ مِن الرابِط — والانتِظارُ مِن الدالَّةِ النَقِيَّةِ وَحدَها.
+    [SupplyParameterFromQuery(Name = "since")]     public long? Since { get; set; }
+    bool RefinePending => session is not null && StudioRefineWait.Pending(Refining, Since, session.UpdatedAt, DateTime.UtcNow);
     [SupplyParameterFromQuery]                     public string? Upgrade  { get; set; }
     [Microsoft.AspNetCore.Components.Inject] Services.Incubator.StudioTierService TierSvc { get; set; } = default!;
     string? currentTier;

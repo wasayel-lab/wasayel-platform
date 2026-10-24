@@ -2907,6 +2907,9 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect($"/studio/s/{id}?upgrade={gate.BreachCode}");
             await tier.RecordRefineAsync(auth.UserId!.Value);
 
+            // ‏لَحظَةُ الطَلَبِ قَبلَ الإطلاق (‏2026-10-24، تَيّارُ S16): الصَفحَةُ تَنتَظِرُ ما لَم تُكتَب الدِراسَةُ بَعدَها ولَم تَنقَضِ مُهلَةُ النِداء
+            // (`StudioRefineWait.Pending`) — كانَ الرابِطُ `?refining=` وَحدَه فَتُحَدِّثُ نَفسَها إلى الأَبَد؛ تَوصيفُه 3375ff1.
+            var since = DateTime.UtcNow.Ticks;
             // شَغِّل في الخَلفِيَّة، لا نُعَلِّق الـ POST عَلى الـ LLM.
             _ = Task.Run(async () =>
             {
@@ -2917,7 +2920,7 @@ public static class MarketplaceTemplateExtensions
                 // تُعرَضُ الدِراسَةُ كَما هي عَلى الفَشَل، والسَطرُ يَقولُ لِماذا (‏2026-10-24، مُراجَعَةُ S15 الجَولَة 1 — كَأَخَواتِه الثَلاثِ في K).
                 catch (Exception ex) { Services.Incubator.FeasibilityAnalysisService.LogBackgroundFailure(scope.ServiceProvider, id, "studio.refine", ex); }
             });
-            return Results.Redirect($"/studio/s/{id}?refining={section}");
+            return Results.Redirect($"/studio/s/{id}?refining={section}&since={since}");
         }).RequireFormBody().DisableAntiforgery();
 
         // ═══ Cart + Checkout (نَمَط Order.V2) ══════════════════════════════
