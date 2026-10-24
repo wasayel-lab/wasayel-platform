@@ -50,24 +50,25 @@ public class PatternProfileShapeCharacterizationTests
         return (files.Count, mentions);
     }
 
+    /// <summary>(‏2026-10-24، كوميتُ الحَذف — انقَلَبَ بِقَرارٍ مَرئِيّ: كانَ <c>Today_the_profile_record_carries_card_chip_keys_that_no_runtime_code_reads</c>
+    /// يُثبِتُ العُضوَ حاضِراً بِقِيَمِه الخَمسِ (‏Roommate:gender_pref,occupation_pref,rent_split · Rental:bedrooms,area_m2,furnished ·
+    /// Marketplace:size,ingredients_count · Trip:from,to,when · Service:duration,location_type) وبِلا قارِئ، والمُنشِئَ 12 وَسيطاً؛ وصارَ
+    /// يُثبِتُه غائِباً، والاسمُ لا يَرِدُ في كودٍ — سَطرُ التَعليقِ المُؤَرَّخِ في مِلَفِّ التَعريفِ وَحدَه. والجَدوَلُ أَعلاه لَم يُمَسّ.)</summary>
     [Fact]
-    public void Today_the_profile_record_carries_card_chip_keys_that_no_runtime_code_reads()
+    public void The_profile_record_no_longer_carries_card_chip_keys_and_no_code_names_them()
     {
-        var member = typeof(PatternProfile).GetProperty("CardChipKeys");
-        Assert.NotNull(member);
-        Assert.Equal(12, typeof(PatternProfile).GetConstructors().Single().GetParameters().Length);
-
-        var chips = Enum.GetValues<AppPattern>()
-            .Select(p => $"{p}:{string.Join(",", (string[])member!.GetValue(PatternProfileResolver.Profile(p))!)}");
-        Assert.Equal(new[]
-        {
-            "Roommate:gender_pref,occupation_pref,rent_split", "Rental:bedrooms,area_m2,furnished",
-            "Marketplace:size,ingredients_count", "Trip:from,to,when", "Service:duration,location_type",
-        }, chips);
+        Assert.Null(typeof(PatternProfile).GetProperty("CardChipKeys"));
+        Assert.Equal(11, typeof(PatternProfile).GetConstructors().Single().GetParameters().Length);
 
         var (scanned, mentions) = SourcesNaming("CardChipKeys");
         _out.WriteLine($"مِلَفّاتٌ مَفحوصَة: {scanned} · تَذكُرُ CardChipKeys: {mentions.Count} ← {string.Join(", ", mentions)}");
         Assert.True(scanned > 300, $"أَداةٌ عَمياء: {scanned} مِلَفّاً فَقَط.");
-        Assert.Equal(new[] { "libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Patterns/PatternProfile.cs" }, mentions);
+        const string definition = "libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Patterns/PatternProfile.cs";
+        Assert.Equal(new[] { definition }, mentions);
+        var codeLines = File.ReadAllLines(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, definition))
+            .Where(l => l.Contains("CardChipKeys", StringComparison.Ordinal))
+            .Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal))
+            .ToList();
+        Assert.Empty(codeLines);
     }
 }

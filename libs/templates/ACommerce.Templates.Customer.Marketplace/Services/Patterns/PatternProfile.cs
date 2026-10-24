@@ -48,9 +48,9 @@ public sealed record PatternProfile(
     bool ShowLatestCarousel,
     /// <summary>هَل نَعرِض شَجَرَة الفِئات في الرَئيسيَّة؟</summary>
     bool ShowCategoryTree,
-    // ─── السِمات (تَظهَر تَحتَ السِعر في البِطاقَة + شَبَكَة التَفاصيل) ─
-    /// <summary>سِمات تَظهَر في البِطاقَة (≤ ٣) — مَفاتيح <c>Attributes</c>.</summary>
-    string[] CardChipKeys,
+    // ─── السِمات (شَبَكَة التَفاصيل) ─
+    // (‏2026-10-24: حُذِفَ `CardChipKeys` — «سِمات تَظهَر في البِطاقَة (≤ ٣)» — صِفرُ قارِئٍ لَه في وَقتِ التَشغيل (القاعِدَة ١؛
+    //  «أ» S11·١٢(ب) و`ADR-034` §٣‑٤). يَعودُ يَومَ تَرسُمُ بِطاقَةُ الإعلانِ سِماتِها مِنه، في الكوميتِ نَفسِه مَعَ قارِئِه.)
     /// <summary>سِمات تَظهَر في شَبَكَة تَفاصيل الإعلان (مُرَتَّبَة).</summary>
     string[] DetailGridKeys,
     // ─── تَحذيرات أَو شارات خاصَّة بِالنَّمَط ─────────────────────────
@@ -96,7 +96,6 @@ public static class PatternProfileResolver
             ShowFeaturedCarousel: true,
             ShowLatestCarousel:   true,
             ShowCategoryTree:     true,
-            CardChipKeys:         new[] { "gender_pref", "occupation_pref", "rent_split" },
             DetailGridKeys:       new[] { "gender_pref", "occupation_pref", "smoking", "rent_split", "deposit", "available_from", "min_stay" },
             FraudWarning:         Text("pattern.roommate.fraud_warning"),
             ShowDetailMap:        true),
@@ -109,7 +108,6 @@ public static class PatternProfileResolver
             ShowFeaturedCarousel: true,
             ShowLatestCarousel:   true,
             ShowCategoryTree:     true,
-            CardChipKeys:         new[] { "bedrooms", "area_m2", "furnished" },
             DetailGridKeys:       new[] { "bedrooms", "bathrooms", "area_m2", "furnished", "lease_term", "deposit", "payment_schedule", "utilities" },
             FraudWarning:         Text("pattern.rental.fraud_warning"),
             ShowDetailMap:        true),
@@ -122,7 +120,6 @@ public static class PatternProfileResolver
             ShowFeaturedCarousel: true,
             ShowLatestCarousel:   true,
             ShowCategoryTree:     true,
-            CardChipKeys:         new[] { "size", "ingredients_count" },
             DetailGridKeys:       new[] { "size", "ingredients", "calories", "prep_time" },
             FraudWarning:         null,
             ShowDetailMap:        false),
@@ -135,7 +132,6 @@ public static class PatternProfileResolver
             ShowFeaturedCarousel: false,
             ShowLatestCarousel:   true,
             ShowCategoryTree:     false,
-            CardChipKeys:         new[] { "from", "to", "when" },
             DetailGridKeys:       new[] { "from", "to", "when", "weight", "notes" },
             FraudWarning:         null,
             ShowDetailMap:        true),
@@ -148,7 +144,6 @@ public static class PatternProfileResolver
             ShowFeaturedCarousel: true,
             ShowLatestCarousel:   true,
             ShowCategoryTree:     true,
-            CardChipKeys:         new[] { "duration", "location_type" },
             DetailGridKeys:       new[] { "duration", "location_type", "team_size", "warranty" },
             FraudWarning:         null,
             ShowDetailMap:        false),
