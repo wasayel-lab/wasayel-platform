@@ -98,15 +98,21 @@ say()   { printf '\n\033[1m%s\033[0m\n' "$*"; }
 info()  { printf '   · %s\n' "$*"; }
 block() { printf '   \033[33m⊘ %s\033[0m\n' "$*"; }
 # check <1|0> <ما فُحِص> — يُعَدُّ فَحصاً في الحالَين، والفَشَلُ يُعَدُّ في عَدّادِه أَيضاً فَلا يُبتلَع.
+LAST_FAILED=0   # رَقمُ الفَحصِ الفاشِلِ الأَخير — يَقرَؤُه `die` فَلا يُعَدُّ التَوَقُّفُ مَرَّتَين
 check() {
     CHECKED=$((CHECKED + 1))
     if [ "$1" = 1 ]; then printf '   \033[32m✓\033[0m %s\n' "$2"
-    else FAILED=$((FAILED + 1)); printf '   \033[31m✗\033[0m %s\n' "$2"; fi
+    else FAILED=$((FAILED + 1)); LAST_FAILED=$CHECKED; printf '   \033[31m✗\033[0m %s\n' "$2"; fi
 }
 # خُطوَةٌ تَتوقَّفُ عَلَيها ما بَعدَها — يُقالُ أَينَ تَوَقَّفَت الرِحلَة.
+# ‏(‏2026-10-24، تَيّارُ S15 البَند H(7) — **التَوَقُّفُ يُعَدُّ مَرَّةً**: كانَ يُضافُ واحِدٌ إلى «فَشِلَ» عِندَ كُلِّ تَوَقُّف، والتَوَقُّفُ
+# كَثيراً ما يَكونُ الفَحصَ الفاشِلَ الَّذي قَبلَه نَفسَه — فَجَلسَةٌ «جارِيَةٌ» واحِدَةٌ طُبِعَت «فَشِلَ 2». صارَ: إن كانَ آخِرُ فَحصٍ هُوَ
+# الفاشِلَ فَالتَوَقُّفُ هُوَ، ولا يُعَدُّ ثانِيَة؛ وتَوَقُّفٌ بِلا فَحصٍ فاشِلٍ قَبلَه يُعَدُّ واحِداً كَما كان.)
 die() {
+    local failed=$((FAILED + 1))
+    [ "$LAST_FAILED" -gt 0 ] && [ "$LAST_FAILED" = "$CHECKED" ] && failed=$FAILED
     printf '\n\033[31m✗ تَوَقَّفَت الرِحلَةُ عِندَ «%s»: %s\033[0m\n' "$STEP" "$*" >&2
-    printf 'فُحِصَ %s · فَشِلَ %s\n' "$CHECKED" "$((FAILED + 1))" >&2
+    printf 'فُحِصَ %s · فَشِلَ %s\n' "$CHECKED" "$failed" >&2
     exit 1
 }
 
@@ -185,7 +191,41 @@ command -v jq >/dev/null || { echo "✗ jq غائِب — بِه يُقرَأُ 
 # وسُؤالانِ فَوقَه (لِماذا اثنانِ: «الاستِعمال» أَعلاه).
 CALLS="$(awk '/RunAnalysisAsync\(Guid/{f=1} f' "$ANALYSIS_SVC" | grep -m1 -o 'attempt < [0-9]*' | grep -o '[0-9]*$')"
 # ‏(‏2026-10-24، S15 K): مُهلَةُ نِداءِ التَحليلِ `AgentCallBound.Background` لا `HttpClient.Timeout` — العَميلُ بِلا حَدّ.
-CALL_SECS="$(grep -o 'Background = TimeSpan.FromSeconds([0-9]*)' "$BACKENDS" | grep -o '[0-9][0-9]*' | sort -n | tail -1)"
+# ‏(‏2026-10-24، S15 H(4)(5) — ولا يُعادُ حَرفٌ فَوقَه: **والقِراءَةُ مُغلَقَةٌ عِندَ الشَكّ**. كانَت تَأخُذُ أَكبَرَ رَقَمٍ يُطابِقُ هِجاءً واحِداً —
+# فَإسنادُ «Timeout =» بِهِجاءٍ آخَرَ عَلى عَميلٍ (مُهلَةٌ تَقطَعُ النِداءَ قَبلَ الطَلَب) لا يُرى، والنافِذَةُ تُحسَبُ مِن رَقَمٍ لا يَحكُم.
+# صارَ يُعَدُّ كُلُّ إسناد، ويُخرَجُ بِـ2 ما لَم يَكُن كُلُّه «بِلا حَدّ» وسَطرُ الخَلفِيَّةِ واحِداً. و`StaleAfter` يُقرَأُ مِن مَصدَرِه
+# لِلحُكمِ عَلى «جارٍ» فَوقَ السَقف. والكُتلَةُ يُشَغِّلُها `RewalkAnalysisBoundParseTests` عَلى المُستَودَعِ وعَلى نُسَخٍ مَحقونَة.)
+# ─── بِدايَةُ analysis_bounds ───
+# analysis_call_bound <AgentBackends.cs> ← «ثَوانٍ عَدَدُ-الإسنادات»، أَو 2 بِسَطرِ سَبَب.
+analysis_call_bound() {
+    local f="$1" all open bg n
+    all="$(grep -c 'Timeout[[:space:]]*=' "$f")"
+    open="$(grep -c 'Timeout = System\.Threading\.Timeout\.InfiniteTimeSpan' "$f")"
+    if [ "$all" -eq 0 ] || [ "$all" != "$open" ]; then
+        echo "✗ مُهلَةُ العَميلِ لا تُقرَأ: $all إسنادَ «Timeout =» في AgentBackends.cs، مِنها $open «بِلا حَدّ» (System.Threading.Timeout.InfiniteTimeSpan) — إسنادٌ بِغَيرِه يَقطَعُ النِداءَ قَبلَ مُهلَةِ الطَلَبِ ولا يَحسُبُه السكربت" >&2
+        return 2
+    fi
+    bg="$(grep -o 'Background = TimeSpan\.FromSeconds([0-9][0-9]*)' "$f")"; n="$(printf '%s' "$bg" | grep -c .)"
+    if [ "$n" != 1 ]; then
+        echo "✗ «Background = TimeSpan.FromSeconds(N)» في AgentBackends.cs: $n سَطر — المُتَوَقَّعُ واحِد (‏AgentCallBound)" >&2
+        return 2
+    fi
+    bg="${bg#*(}"; echo "${bg%)} $all"
+}
+# stale_after_secs <FeasibilityAnalysisService.cs> ← ثَوانٍ، أَو 2 بِسَطرِ سَبَب.
+stale_after_secs() {
+    local m n
+    m="$(grep -o 'StaleAfter = TimeSpan\.FromMinutes([0-9][0-9]*)' "$1")"; n="$(printf '%s' "$m" | grep -c .)"
+    if [ "$n" != 1 ]; then
+        echo "✗ «StaleAfter = TimeSpan.FromMinutes(N)» في FeasibilityAnalysisService.cs: $n سَطر — المُتَوَقَّعُ واحِد" >&2
+        return 2
+    fi
+    m="${m#*(}"; m="${m%)}"; echo $((m * 60))
+}
+# ─── نِهايَةُ analysis_bounds ───
+BOUND_OUT="$(analysis_call_bound "$BACKENDS")" || exit 2
+CALL_SECS="${BOUND_OUT% *}"; CLIENT_TIMEOUTS="${BOUND_OUT#* }"
+STALE_SECS="$(stale_after_secs "$ANALYSIS_SVC")" || exit 2
 [ -n "$CALLS" ] && [ -n "$CALL_SECS" ] || {
     echo "✗ سَقفُ التَحليلِ غائِب: «attempt < N» في FeasibilityAnalysisService.cs أَو «Background = TimeSpan.FromSeconds(N)» في AgentBackends.cs" >&2; exit 2; }
 SERVER_BOUND=$((CALLS * CALL_SECS))
@@ -199,7 +239,8 @@ J_ENT="$WORK/ent"; J_ADM="$WORK/adm"; J_VEN="$WORK/ven"; J_BUY="$WORK/buy"
 ADDR="الرِياض — حَيُّ الفَحصِ $MARK"
 F="$WORK/page.html"
 
-printf 'الخادِم: %s · المَتجَر: %s · التاريخ: %s\n' "$BASE" "$SLUG" "$(date -u +%FT%TZ)"
+# ‏(‏2026-10-24، S15 H(1)): المَتجَرُ لا يُطبَعُ هُنا — قَد يَصيرُ مَتجَراً مَبنِيّاً سَلَفاً في الخُطوَة ٢، فَيُطبَعُ سَطرُه بَعدَها.
+printf 'الخادِم: %s · العَلامَة: %s · التاريخ: %s\n' "$BASE" "$MARK" "$(date -u +%FT%TZ)"
 
 # ═══ ٠) الخادِمُ يُجيبُ والقاعِدَةُ مَعَه ═══════════════════════════════
 STEP="٠ — الجاهِزِيَّة"
@@ -251,7 +292,7 @@ check "$([ "$CODE" = 200 ] && [ "$(count "$F" 'action="/studio/consent/accept"')
 # وصَفحَةٌ لا تَقولُ أَيّاً مِنها حالَةٌ أُخرى تُقالُ فَوراً. والنافِذَةُ تُطبَعُ قَبلَ الانتِظار، وما انتُظِرَ يُقاسُ بِالساعَة
 # (‏`SECONDS`) لا يُحسَبُ مِن العَدَد. ‏(‏2026-10-13، المُراجَعَةُ الثانِيَة: كانَ ما لَيسَ «اكتَمَلَ» يَسقُطُ إلى مَسارِ التَطوير.)
 ANALYZING="$(ar admin.study.analyzing_title)"; FAILED_TITLE="$(ar studio.study.failed_title)"
-info "يُنتَظَرُ التَحليلُ $ANALYZE_TRIES سُؤال، بَينَ كُلِّ اثنَينِ ثانِيَتان (آخِرُها بَعدَ ≥ $(((ANALYZE_TRIES - 1) * 2)) ثانِيَة) — وسَقفُ نِداءاتِ الخادِم $SERVER_BOUND ثانِيَة: $CALLS مُحاوَلَة × ${CALL_SECS}ث (‏RunAnalysisAsync · AgentBackends.cs)"
+info "يُنتَظَرُ التَحليلُ $ANALYZE_TRIES سُؤال، بَينَ كُلِّ اثنَينِ ثانِيَتان (آخِرُها بَعدَ ≥ $(((ANALYZE_TRIES - 1) * 2)) ثانِيَة) — وسَقفُ نِداءاتِ الخادِم $SERVER_BOUND ثانِيَة: $CALLS مُحاوَلَة × ${CALL_SECS}ث (‏RunAnalysisAsync · AgentCallBound.Background؛ وإسناداتُ «Timeout =» عَلى العَميلِ $CLIENT_TIMEOUTS، كُلُّها بِلا حَدّ) — وتَتَقادَمُ الجَلسَةُ بَعدَ ${STALE_SECS}ث (StaleAfter)"
 ANALYSIS=""; T0=$SECONDS; WAITED=0
 for i in $(seq 1 "$ANALYZE_TRIES"); do
     get "$J_ENT" "/studio/s/$ENT_SID" "$F"; WAITED=$((SECONDS - T0))   # ‏لَحظَةُ آخِرِ ما رُئِي، لا ما بَعدَ نَومٍ لا يُرى فيه شَيء
@@ -265,20 +306,25 @@ case "$ANALYSIS" in
   failed) # الرِسالَةُ بِشَكلِ `AgentErrorText`: «تَسميَة (عُنوان) رَمز: جِسم» أَو «تَسميَة (عُنوان) exception: رِسالَة» — يُطبَعُ
           # صَدرُها: الرَمزُ وَحدَه، أَو رِسالَةُ الاستِثناءِ كامِلَةً (مُهلَةُ النِداءِ تَقولُ نَفسَها: «HttpClient.Timeout»).
           # ‏(‏2026-10-24، S15 K): ومُهلَةُ النِداءِ صارَت «timeout: … (AgentCallBound.Background, AgentBackends.cs)».
-          WHERE="$(dec "$F" | grep -oE '[A-Za-z0-9_-]+ \(https?://[^)]*\) ([0-9]{3}|exception: [^<]*|timeout: [^<]*)' | head -1)"
+          # ‏(‏2026-10-24، S15 H(6)): ورَدٌّ بِرَمزٍ يُطبَعُ صَدرُ جِسمِه (‏120 مِحرَفاً) لا الرَمزُ وَحدَه — جِسمُ الخادِمِ هُوَ السَبَب.
+          WHERE="$(dec "$F" | grep -oE '[A-Za-z0-9_-]+ \(https?://[^)]*\) ([0-9]{3}(: [^<]{0,120})?|exception: [^<]*|timeout: [^<]*)' | head -1)"
           check 1 "GET /studio/s/$ENT_SID → «$FAILED_TITLE» بَعدَ $WAITED ثانِيَة — ${WHERE:-بِلا تَسميَة}"
           # ‏«المِفتاح» سَبَبٌ يُسَمّى عَلى رَدِّ 401 وَحدَه؛ وما سِواه — مُهلَةٌ، 5xx، رَدٌّ لا يُقرَأ — يُقالُ أَنّه غَيرُه.
-          if [[ "$WHERE" == *") 401" ]]; then
+          if [[ "$WHERE" =~ \)\ 401(:|$) ]]; then
               block "الجِدارُ الأَوَّل: المُزَوِّدُ رَدَّ 401 — مِفتاحُ وَكيلِ التَحليلِ غائِبٌ أَو مَرفوض (‏DEPLOY.md §٤·ب) — يُبنى المَتجَرُ مِن المَسارِ المُوَثَّقِ لِلتَطوير"
           else
-              block "فَشِلَ التَحليلُ بِغَيرِ 401 فَلَيسَ جِدارَ المِفتاح — سَبَبُه في السَطرِ أَعلاه (ومُهلَةُ كُلِّ نِداءٍ ${CALL_SECS}ث) — يُبنى المَتجَرُ مِن المَسارِ المُوَثَّقِ لِلتَطوير، ولا يُبَرهَنُ مَسارُ العَميل"
+              # ‏(‏2026-10-24، S15 H(6)): كانَ «سَبَبُه في السَطرِ أَعلاه» — والسَطرُ كانَ الرَمزَ بِلا جِسم.
+              block "لَيسَ 401 فَلَيسَ جِدارَ المِفتاح — اقرَأ الجِسمَ في السَطرِ أَعلاه (و«timeout:» فيه مُهلَةُ النِداءِ ${CALL_SECS}ث) — يُبنى المَتجَرُ مِن المَسارِ المُوَثَّقِ لِلتَطوير، ولا يُبَرهَنُ مَسارُ العَميل"
           fi ;;
   analyzing)
           check 0 "GET /studio/s/$ENT_SID → «$ANALYZING» ما زالَ مَرسوماً بَعدَ $WAITED ثانِيَة"
+          # ‏(‏2026-10-24، S15 H(5) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: **ثَلاثُ نَوافِذَ لا اثنَتان**، والحَدُّ الثاني `StaleAfter` مِن مَصدَرِه.)
           if [ "$WAITED" -lt "$SERVER_BOUND" ]; then
               die "التَحليلُ ما زالَ جارِياً بَعدَ $WAITED ثانِيَة، دونَ سَقفِ نِداءاتِ الخادِم ($SERVER_BOUND ثانِيَة) — أَعِد بِـANALYZE_TRIES أَكبَر (افتِراضُه $DEFAULT_TRIES)"
+          elif [ "$WAITED" -lt "$STALE_SECS" ]; then
+              die "التَحليلُ ما زالَ جارِياً بَعدَ $WAITED ثانِيَة: فَوقَ سَقفِ نِداءاتِ الخادِم ($SERVER_BOUND ثانِيَة) ولَم تَتَقادَم الجَلسَةُ بَعد (StaleAfter ${STALE_SECS}ث) — عالِقَةٌ لا بَطيئَة، وزِرُّ «إعادَة» لا يَحجِزُها قَبلَ ${STALE_SECS}ث"
           else
-              die "التَحليلُ ما زالَ جارِياً بَعدَ $WAITED ثانِيَة، فَوقَ سَقفِ نِداءاتِ الخادِم ($SERVER_BOUND ثانِيَة) وما بَعدَه كِتاباتُ القاعِدَةِ وَحدَها — فَالجَلسَةُ عالِقَةٌ لا بَطيئَة: استِثناءٌ خارِجَ النِداءِ حَولَ RunAnalysisAsync يُبقيها «جارِيَة» — وسَطرُه في سِجِلِّ الخادِم «[studio] analysis_run_failed»"
+              die "التَحليلُ ما زالَ جارِياً بَعدَ $WAITED ثانِيَة، فَوقَ StaleAfter (${STALE_SECS}ث) — وسَبَبانِ يُبقِيانِها «جارِيَة»: استِثناءٌ خارِجَ النِداءِ حَولَ RunAnalysisAsync (سَطرُه في سِجِلِّ الخادِم «[studio] analysis_run_failed»)، أَو عَمَلِيَّةٌ ماتَت في مُنتَصَفِه (إعادَةُ إقلاع — بِلا سَطر)؛ وزِرُّ «إعادَة» يَحجِزُها الآن"
           fi ;;
   *)      check 0 "GET /studio/s/$ENT_SID → $CODE · لا «$ANALYZING» ولا «$FAILED_TITLE» ولا استِمارَةُ بِناء"
           die "حالَةُ جَلسَةِ التَحليلِ لا يَعرِفُها السكربت بَعدَ $WAITED ثانِيَة — ولا يُسقَطُ إلى مَسارِ التَطويرِ إلّا عَلى «$FAILED_TITLE»" ;;
@@ -329,6 +375,7 @@ fi
 # مَخفِيٌّ سَطرُه «slug | الاسم | أَيقونَة | تَجميع»). ‏(‏2026-10-13، مُراجَعَةُ S12: كانَت نَقرَةُ الخُطوَة ٥ تُسَمّى «FLGAP-04
 # بِحَرفِه» عَلى مَتجَرِ العَيِّنَة — فَرعُ السُقوط `general` بِكِندٍ فارِغٍ قَبلَ ADR-034 أَيضاً (`git show c4278c0^`)،
 # فَهي خَضراءُ عَلى الكاتِبِ القَديمِ والجَديدِ مَعاً — ولا يُطبَعُ الفَرع.)
+printf '\nالمَتجَر: %s/%s%s\n' "$BASE" "$SLUG" "$([ "$SLUG" = "rewalk-$MARK" ] || printf ' — مَبنِيٌّ سَلَفاً، لا rewalk-%s' "$MARK")"
 ECOM="$(ecommerce_slugs)"
 get "$OWNER_JAR" "/studio/apps/$SLUG/categories" "$F"
 CATS="$(dec "$F" | perl -0777 -ne 'if (m{<textarea name="categories"[^>]*>(.*?)</textarea>}s) { for (split /\n/, $1) {
@@ -484,6 +531,11 @@ check "$REACHED" "الصَفقَةُ عِندَ «$(stage_label Delivered)» (ا
 post - "/$SLUG/shipping/oto/order-status" -H 'Content-Type: application/json' -d '{}'
 check "$([ "$CODE" = 404 ] && echo 1 || echo 0)" \
     "POST /$SLUG/shipping/oto/order-status (مَتجَرٌ بِلا ناقِل) → $CODE (‏DEPLOY.md §٢·ط: 404 بِلا قِراءَة)"
+# ‏(‏2026-10-24، S15 H(2)): **ضابِطٌ مُوجَب** — ‏404 يُجيبُ بِه أَيضاً مَسارٌ لا وُجودَ لَه (خَطَأٌ في الهِجاء)، فَوَحدَه لا يُثبِتُ أَنّ النُقطَةَ
+# رَفَضَت. و‏GET عَلى المَسارِ نَفسِه ‏405: مَربوطٌ لِـPOST وَحدَه — فَالـ404 أَعلاه مِن النُقطَة (مَقيس: والمَسارُ المُخطوءُ ‏404 لِلفِعلَين).
+get - "/$SLUG/shipping/oto/order-status" "$F"
+check "$([ "$CODE" = 405 ] && echo 1 || echo 0)" \
+    "GET /$SLUG/shipping/oto/order-status → $CODE (ضابِطٌ مُوجَب: المَسارُ مَربوطٌ لِـPOST — فَالـ404 أَعلاه رَفضُ النُقطَةِ لا غِيابُ المَسار)"
 block "الجِدارُ الثاني: رَمزُ OTO غائِب — زِرُّ البوليصَةِ مَخفِيّ والشَحنُ يَدَوِيّ (‏DEPLOY.md §٢·ط)"
 block "الجِدارُ الثالِث: مِفتاحُ البَوّابَةِ ومِفتاحُ الخِزانَةِ غائِبان — البِطاقَةُ لا تُعرَض (‏DEPLOY.md §٢·ح)"
 
@@ -518,6 +570,7 @@ ACTS=0
 # وَصفاً مِن الذاكِرَة، ولا نَصَّ بِهِما في الصَفحَة؛ والمَفحوصُ كانَ العُنوانَينِ وَحدَهُما.)
 PREVIEW="$(ar studio.app_nav.preview)"; USERS_LINK="$(ar studio.app.users_title)"; HAVE_ACCOUNT="$(ar roles.landing.have_account)"
 get "$OWNER_JAR" "/studio/apps/$SLUG" "$F"
+PREVIEW_TABS="$(count "$F" "href=\"/$SLUG\" target=\"_blank\"")"
 check "$([ "$CODE" = 200 ] && grep -q "href=\"/$SLUG\"" "$F" && grep -q "href=\"/admin/tenants/$SLUG/users?from=studio\"" "$F" \
         && has "$F" "$PREVIEW" && has "$F" "$USERS_LINK" && echo 1 || echo 0)" \
     "GET /studio/apps/$SLUG → $CODE · «$PREVIEW» إلى /$SLUG و«$USERS_LINK» إلى …/users?from=studio"
@@ -529,7 +582,9 @@ check "$([ "$CODE" = 200 ] && echo 1 || echo 0)" "[فِعل $ACTS] GET /$SLUG/lo
 store_login "$OWNER_JAR" "$SLUG" "$OWNER_PHONE"; ACTS=$((ACTS + 2))
 info "[فِعل $((ACTS - 1))–$ACTS] الهاتِفُ ثُمَّ الرَمز → $LOC"
 STUDIO_LINKS="$(get "$OWNER_JAR" "$LOC" "$F"; count "$F" 'href="/studio')"
-info "رابِطُ عَودَةٍ إلى الاستوديو مِن $LOC: $STUDIO_LINKS — فَالعَودَةُ بِزِرِّ المُتَصَفِّحِ أَو بِكِتابَةِ العُنوان، لا بِنَقرَة"
+# ‏(‏2026-10-24، S15 H(3) — ولا يُعادُ حَرفٌ فَوقَه): «$PREVIEW» يَفتَحُ لِساناً جَديداً (`target="_blank"` في `StudioApp.razor`)، فَالاستوديو
+# باقٍ في لِسانِه: العَودَةُ تَبديلُ لِسانٍ لا زِرُّ رُجوع — والسَطرُ يَقولُها مِن الصَفحَةِ نَفسِها لا مِن الذاكِرَة.
+info "رابِطُ عَودَةٍ إلى الاستوديو مِن $LOC: $STUDIO_LINKS — و«$PREVIEW» إلى /$SLUG يَفتَحُ لِساناً جَديداً (target=\"_blank\" = $PREVIEW_TABS)، فَالعَودَةُ تَبديلُ لِسانٍ إلى الاستوديو، لا نَقرَةٌ ولا زِرُّ رُجوع"
 get "$OWNER_JAR" "/admin/tenants/$SLUG/users?from=studio" "$F"; ACTS=$((ACTS + 1))
 # الصَفُّ الَّذي يَحمِلُ هاتِفَ المالِكِ واستِمارَتَه — كُتلَةً كُتلَة، لا أَوَّلُ استِمارَةٍ في الصَفحَة.
 OWN_ROW="$(dec "$F" | PH="$OWNER_PHONE" perl -0777 -ne \
@@ -543,12 +598,17 @@ if [ "$OWN_ACT" = grant ]; then
     check "$([ "$CODE" = 302 ] && [[ "$LOC" == *saved=1* ]] && echo 1 || echo 0)" \
         "[فِعل $ACTS] POST …/users/$OWN_ID/grant-admin «$(ar admin.tenant_users.grant)» → $CODE $LOC"
 else
-    info "المالِكُ مُشرِفُ مَتجَرِه مِن جَولَةٍ سابِقَة (‏revoke-admin في صَفِّه) — لا مَنحَ ثانِياً، والعَدُّ لِلجَولَةِ الأولى"
+    info "المالِكُ مُشرِفُ مَتجَرِه مِن جَولَةٍ سابِقَة (‏revoke-admin في صَفِّه) — لا مَنحَ ثانِياً"
 fi
 get "$OWNER_JAR" "/$SLUG/manage" "$F"
 check "$([ "$CODE" = 200 ] && has "$F" "$(ar tenant.manage.subtitle)" && echo 1 || echo 0)" \
     "GET /$SLUG/manage (جَلسَةُ المالِكِ في مَتجَرِه) → $CODE · «$(ar tenant.manage.subtitle)»"
-info "أَوَّلُ مُشرِفٍ لِمَتجَرٍ مَبنِيّ: $ACTS أَفعالٍ داخِلَ المُنتَج + عَودَةٌ واحِدَةٌ خارِجَه (بِلا رابِط)"
+# ‏(‏2026-10-24، S15 H(1)): وفي فَرعِ «مُشرِفٌ سَلَفاً» لا عَدّ — كانَ يُطبَعُ العَدُّ وما مُنِحَ شَيء.
+if [ "$OWN_ACT" = grant ]; then
+    info "أَوَّلُ مُشرِفٍ لِمَتجَرٍ مَبنِيّ: $ACTS أَفعالٍ داخِلَ المُنتَج + عَودَةٌ واحِدَةٌ خارِجَه (تَبديلُ لِسان)"
+else
+    info "لا عَدّ — المالِكُ مُشرِفٌ سَلَفاً (عَدُّ الأَفعالِ في الجَولَةِ الأولى عَلى هذا المَتجَر)"
+fi
 
 # ═══ ١٠) الزائِرُ مَرَّةً ثانِيَة ════════════════════════════════════════
 STEP="١٠ — الزائِرُ أَخيراً"
