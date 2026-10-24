@@ -283,7 +283,9 @@ public sealed class FeasibilityAnalysisService
     public async Task RefineSectionAsync(
         Guid id, string sectionKey, string feedback, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(sectionKey)) return;
+        // ‏المَعجَمُ قَبلَ المُطالَبَةِ والنِداءِ والدَمج (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 2): كانَ فَحصَ فَراغٍ، و`MergeSection` تُضيفُ
+        // ما لَم يَكُن — فَمِفتاحٌ مُختَلَقٌ صارَ مِفتاحاً في الدِراسَة. والنُقطَةُ تَسأَلُه قَبلَ الحِصَّة؛ وهُنا لِكُلِّ مُنادٍ.
+        if (!StudioRefineSection.IsKnown(sectionKey)) return;
         var s = await LoadAsync(id, ct);
         if (s is null || s.Status != IncubatorStatus.Completed || s.AnalysisJson is null) return;
 

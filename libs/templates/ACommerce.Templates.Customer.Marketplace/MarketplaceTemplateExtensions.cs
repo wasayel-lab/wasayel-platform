@@ -2882,13 +2882,24 @@ public static class MarketplaceTemplateExtensions
         {
             auth.Load();
             if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
+            // ‏المِلكِيَّةُ بَعدَ الهُوِيَّةِ وقَبلَ البابِ والحُقولِ والحِصَّة (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 2؛ تَوصيفُه 65d0b6a) —
+            // قَرارُ أَخَواتِها الأَربَعِ عَلى `/studio/s/{id}/…` بِحَرفِه. كانَت الهُوِيَّةُ وَحدَها، فَمُستَخدِمٌ آخَرُ يَعرِفُ المُعَرِّفَ يُعيدُ
+            // كِتابَةَ قِسمٍ في دِراسَةِ غَيرِه بِحِصَّتِه، ونِداءُ المُزَوِّدِ يُحسَبُ عَلى صاحِبِ الدِراسَة (مَقيسٌ: بَصمَتُها تَغَيَّرَت، 13 → 14 مِفتاحاً).
+            var session = await svc.LoadAsync(id);
+            if (session is null || session.OwnerUserId != auth.UserId!.Value)
+                return Results.Redirect("/studio");
             // ‏بابُ التَحليلِ بَعدَ الهُوِيَّةِ وقَبلَ الحُقولِ والحِصَّةِ والإطلاق (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1؛ تَوصيفُه 2cbd3aa):
             // التَحسينُ يُنفِقُ مِفتاحَ وَكيلِ `Analysis` كَالتَحليل، وكانَ بِلا مِفتاحٍ يَعُدُّ وَحدَةً ثُمَّ يُنادي فَيُرَدُّ 401 ويُبتلَع —
             // وصَفحَةُ الدِراسَةِ لا تَرسُمُ استِمارَتَه بِالقَرارِ نَفسِه.
             if (!Services.Incubator.StudioAnalysisDoor.Opens(svc.IsConfigured)) return Results.Redirect($"/studio/s/{id}");
+            // ‏وما تَرُدُّه الخِدمَةُ صامِتَةً في الخَلفِيَّةِ يُرَدُّ هُنا قَبلَ أَن تُعَدَّ وَحدَة (الجَولَة 2): دِراسَةٌ غَيرُ مُكتَمِلَةٍ كانَت تُنفِقُ
+            // وَحدَةً بِلا نِداء — شَرطُ `RefineSectionAsync` نَفسُه، كَما يَسأَلُ `/build` الحالَ قَبلَ حِصَّتِه.
+            if (session.Status != Services.Incubator.IncubatorStatus.Completed || session.AnalysisJson is null)
+                return Results.Redirect($"/studio/s/{id}");
             var section = req.Form["section"].ToString().Trim();
             var feedback = req.Form["feedback"].ToString().Trim();
-            if (string.IsNullOrEmpty(section) || string.IsNullOrEmpty(feedback))
+            // ‏والقِسمُ مِن المَعجَمِ المُغلَقِ لا مِن الاستِمارَة (الجَولَة 2؛ القاعِدَة ٤): كانَ يُفحَصُ بِالفَراغِ وَحدَه فَزَرَعَ مِفتاحاً لَيسَ في المُخَطَّط.
+            if (!Services.Incubator.StudioRefineSection.IsKnown(section) || string.IsNullOrEmpty(feedback))
                 return Results.Redirect($"/studio/s/{id}");
 
             var gate = await tier.CheckRefineAsync(auth.UserId!.Value);
