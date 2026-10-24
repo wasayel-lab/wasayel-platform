@@ -1779,24 +1779,16 @@ public static class MarketplaceTemplateExtensions
             if (parsed is null) return Results.Unauthorized();
             var (userId, _, _) = parsed.Value;
 
-            using var doc = await System.Text.Json.JsonDocument.ParseAsync(req.Body);
-            var root = doc.RootElement;
-            var endpoint = root.GetProperty("endpoint").GetString() ?? "";
-            var keys = root.GetProperty("keys");
-            var p256dh = keys.GetProperty("p256dh").GetString() ?? "";
-            var auth   = keys.GetProperty("auth").GetString() ?? "";
-            if (string.IsNullOrEmpty(endpoint)) return Results.BadRequest();
+            // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-12) كانَ الشَرطُ «عُنوانٌ غَيرُ فارِغ» وَحدَه — فَأَيُّ عُنوانٍ يُحفَظُ ويَطرُقُه الخادِمُ
+            // بِـPOST، والقائِمَةُ بِلا حَدّ. ما يُقبَلُ قَرارُ `PushSubscriptionDoor` (‏https عَلى مُضيفي خِدماتِ الإشعار، ومَفتاحا المُتَصَفِّح)، وحَقلٌ
+            // ناقِصٌ ‏400 لا ‏500؛ و`Keep` يَحِلُّ مَحَلَّ صَفِّ الجِهازِ نَفسِه ويُبقي الأَحدَث.
+            var sub = await Services.PushSubscriptionDoor.ReadAsync(req.Body, DateTime.UtcNow);
+            if (sub is null) return Results.BadRequest();
 
             await using var s = store.LightweightSession(slug);
             var user = await s.LoadAsync<User>(userId);
             if (user is null) return Results.NotFound();
-            // اِستَبدِل subscription بِنَفس الـ endpoint (نَفس الجِهاز/المُتَصَفِّح)
-            user.PushSubscriptions.RemoveAll(p => p.Endpoint == endpoint);
-            user.PushSubscriptions.Add(new ACommerce.Kit.Auth.PushSubscription
-            {
-                Endpoint = endpoint, P256dh = p256dh, Auth = auth,
-                CreatedAt = DateTime.UtcNow
-            });
+            Services.PushSubscriptionDoor.Keep(user.PushSubscriptions, sub);
             s.Store(user);
             await s.SaveChangesAsync();
             return Results.Ok();

@@ -1,6 +1,8 @@
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using ACommerce.Kit.Auth;
+using ACommerce.Kit.Auth.Server;
 using ACommerce.Templates.Customer.Marketplace.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -20,6 +22,10 @@ namespace ACommerce.Platform.Tests;
 //      كَما هو (الصَفُّ الدائِمُ أَدناه). فَمُستَخدِمٌ مُوَثَّقٌ واحِدٌ يَجعَلُ الخادِمَ يَطرُقُ ما شاءَ مِن داخِلِ شَبَكَتِه عِندَ كُلِّ إشعار.
 //
 // **يُثَبَّتُ قَبلَ العِلاجِ** (القاعِدَة ٣): الصُفوفُ الثَلاثَةُ `Today_…` تَنقَلِبُ بِأَسمائِها، والصَفُّ الدائِمُ يَبقى حَرفاً.
+//
+// **العِلاج** (‏2026-10-24): `Services.PushSubscriptionDoor` قَرارٌ واحِدٌ بِمُستَهلِكَين — البابُ يَقرَأُ بِه الجِسمَ (‏https بِمَنفَذِه الافتِراضِيِّ عَلى
+// مُضيفي خِدماتِ الإشعار، ومَفتاحا المُتَصَفِّحِ بِطولَيهِما؛ وما سِواه وحَقلٌ ناقِصٌ ‏400) قَبلَ أَن يَقرَأَ الوَثيقَة، و`Keep` يُبقي أَحدَثَ
+// ‏`MaxPerUser`؛ والمُرسِلُ لا يَطرُقُ صَفّاً لا يَقبَلُه ويَمحوه كَالمُنتَهي. الصُفوفُ الثَلاثَةُ انقَلَبَت بِأَسمائِها، والدائِمُ كَما أُودِع.
 public class PushSubscriptionDoorTests(ITestOutputHelper output)
 {
     private const string Route = "/api/{slug}/push/subscribe";
@@ -68,47 +74,155 @@ public class PushSubscriptionDoorTests(ITestOutputHelper output)
         output.WriteLine($"بَنَت المَكتَبَةُ POST إلى {endpoints.Length} عَناوينَ لَيسَت خِدمَةَ إشعارٍ — بِلا سُؤال.");
     }
 
-    // ─── ١. البابُ لا يَرُدُّ إلّا الفارِغ ──────────────────────────────────────────────────────────────
+    // ─── ١. البابُ يَقبَلُ https عَلى مُضيفي خِدماتِ الإشعارِ بِمَفتاحَي المُتَصَفِّح، ويُقَرِّرُ قَبلَ أَن يَقرَأ ─────────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_the_subscribe_door_refuses_only_an_empty_endpoint`.
+
+    public static TheoryData<string> PushServiceEndpoints => new()
+    {
+        "https://fcm.googleapis.com/fcm/send/dQw4w9WgXcQ:APA91bH",
+        "https://fcm.googleapis.com/wp/dQw4w9WgXcQ",
+        "https://updates.push.services.mozilla.com/wpush/v2/gAAAAABk",
+        "https://web.push.apple.com/QGxhbGxvd29ybGQ",
+        "https://wns2-par02p.notify.windows.com/w/?token=BQYAAAB",
+        "https://FCM.googleapis.com:443/fcm/send/x",
+    };
+
+    public static TheoryData<string?> RefusedEndpoints => new()
+    {
+        null, "", "   ", "/relative/path", "javascript:alert(1)",
+        "http://fcm.googleapis.com/fcm/send/x",
+        "https://fcm.googleapis.com:8443/fcm/send/x",
+        "https://user:pw@fcm.googleapis.com/fcm/send/x",
+        "https://169.254.169.254/latest/meta-data",
+        "https://10.0.0.7/hook",
+        "https://[::1]/x",
+        "https://localhost/x",
+        "https://internal.example.invalid/hook",
+        "https://fcm.googleapis.com.evil.example/x",
+        "https://evilpush.apple.com/x",
+        "https://push.apple.com/x",
+    };
+
+    [Theory]
+    [MemberData(nameof(PushServiceEndpoints))]
+    public void A_push_service_endpoint_is_admitted(string endpoint)
+        => Assert.True(PushSubscriptionDoor.IsPushServiceEndpoint(endpoint), endpoint);
+
+    [Theory]
+    [MemberData(nameof(RefusedEndpoints))]
+    public void An_endpoint_no_push_service_serves_is_refused(string? endpoint)
+        => Assert.False(PushSubscriptionDoor.IsPushServiceEndpoint(endpoint), endpoint);
+
+    private static MemoryStream Json(string s) => new(System.Text.Encoding.UTF8.GetBytes(s));
 
     [Fact]
-    public void Today_the_subscribe_door_refuses_only_an_empty_endpoint()
+    public async Task The_subscribe_door_admits_only_a_push_service_endpoint_with_browser_keys()
     {
+        var (p256dh, auth) = BrowserKeys();
+        var now = new DateTime(2026, 10, 24, 12, 0, 0, DateTimeKind.Utc);
+        string Body(string endpoint, string? p = null, string? a = null) => System.Text.Json.JsonSerializer.Serialize(
+            new { endpoint, expirationTime = (object?)null, keys = new { p256dh = p ?? p256dh, auth = a ?? auth } });
+
+        var ok = await PushSubscriptionDoor.ReadAsync(Json(Body("https://fcm.googleapis.com/fcm/send/abc")), now);
+        Assert.NotNull(ok);
+        Assert.Equal(("https://fcm.googleapis.com/fcm/send/abc", p256dh, auth, now), (ok!.Endpoint, ok.P256dh, ok.Auth, ok.CreatedAt));
+
+        string[] refused =
+        [
+            Body("http://169.254.169.254/latest/meta-data"),
+            Body("https://internal.example.invalid/hook"),
+            Body("https://fcm.googleapis.com/fcm/send/abc", p: auth),
+            Body("https://fcm.googleapis.com/fcm/send/abc", a: p256dh),
+            Body("https://fcm.googleapis.com/fcm/send/abc", p: B64Url([0x05, .. new byte[64]])),
+            Body("https://fcm.googleapis.com/fcm/send/abc", p: "not base64!"),
+            "{\"endpoint\":\"https://fcm.googleapis.com/fcm/send/abc\"}",
+            "{\"keys\":{}}",
+            "{\"endpoint\":7,\"keys\":{\"p256dh\":1,\"auth\":2}}",
+            "[]", "null", "not json",
+        ];
+        foreach (var json in refused)
+            Assert.Null(await PushSubscriptionDoor.ReadAsync(Json(json), now));
+        output.WriteLine($"قُبِلَ 1 · رُدَّ {refused.Length} جِسماً (وكانَ ثَلاثَةٌ مِنها ‏500، والباقي يُحفَظ)");
+
+        // والنُقطَة: الرَمزُ، ثُمَّ القَرار، ثُمَّ الرَدّ، ثُمَّ قِراءَةُ الوَثيقَة، ثُمَّ الوَضع — ولا قِراءَةَ لِحَقلٍ في الجِسم.
         var body = SubscribeBody();
+        Assert.True(DecidesBeforeItLoads(body), body);
+        Assert.DoesNotContain("GetProperty(", body, StringComparison.Ordinal);
         Assert.Single(Regex.Matches(body, @"Results\.BadRequest\("));
-        Assert.Contains("if (string.IsNullOrEmpty(endpoint)) return Results.BadRequest();", body, StringComparison.Ordinal);
-        Assert.Contains("root.GetProperty(\"endpoint\")", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("https", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("Uri", body, StringComparison.Ordinal);
+        // عَيِّنَةٌ مَحقونَة (القاعِدَة ١٠): الفاحِصُ يَحمَرُّ عَلى سَطرِ اليَومِ حَرفاً.
+        Assert.False(DecidesBeforeItLoads(TodayBodySample));
     }
 
-    // ─── ٢. القائِمَةُ بِلا حَدّ ─────────────────────────────────────────────────────────────────────────
-
-    [Fact]
-    public void Today_the_subscribe_door_adds_a_row_with_no_bound_on_the_users_list()
+    private static bool DecidesBeforeItLoads(string body)
     {
-        var body = SubscribeBody();
-        Assert.Contains("user.PushSubscriptions.RemoveAll(p => p.Endpoint == endpoint);", body, StringComparison.Ordinal);
-        Assert.Contains("user.PushSubscriptions.Add(", body, StringComparison.Ordinal);
-        Assert.DoesNotContain(".Count", body, StringComparison.Ordinal);
+        var token = body.IndexOf("AuthSession.ResolveToken(", StringComparison.Ordinal);
+        var door = body.IndexOf("Services.PushSubscriptionDoor.ReadAsync(req.Body", StringComparison.Ordinal);
+        var refuse = body.IndexOf("if (sub is null) return Results.BadRequest();", StringComparison.Ordinal);
+        var load = body.IndexOf("LoadAsync<User>(", StringComparison.Ordinal);
+        var keep = body.IndexOf("Services.PushSubscriptionDoor.Keep(user.PushSubscriptions, sub);", StringComparison.Ordinal);
+        return token >= 0 && door > token && refuse > door && load > refuse && keep > load;
     }
 
-    // ─── ٣. المُرسِلُ يَمُرُّ بِكُلِّ صَفٍّ مَحفوظ ─────────────────────────────────────────────────────────
+    private const string TodayBodySample = """
+        var token = AuthSession.ResolveToken(req, slug);
+        var endpoint = root.GetProperty("endpoint").GetString() ?? "";
+        if (string.IsNullOrEmpty(endpoint)) return Results.BadRequest();
+        var user = await s.LoadAsync<User>(userId);
+        user.PushSubscriptions.Add(new ACommerce.Kit.Auth.PushSubscription
+        """;
+
+    // ─── ٢. القائِمَةُ بِحَدّ: أَحدَثُ عَشرَة، والجِهازُ نَفسُه يَحِلُّ مَحَلَّ صَفِّه ──────────────────────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_the_subscribe_door_adds_a_row_with_no_bound_on_the_users_list`.
 
     [Fact]
-    public async Task Today_the_sender_keeps_a_stored_endpoint_that_no_push_service_serves()
+    public void The_users_list_keeps_the_newest_ten_and_a_resubscribe_replaces_its_own_row()
+    {
+        // العَدَدُ حِصَّةُ السّاعَةِ في عُدَّةِ الدُخولِ نَفسُها — لا رَقَمٌ جَديد («ب» W8-2).
+        var hourly = (int)typeof(AuthHandlers).GetField("MaxRequestPerHour", BindingFlags.NonPublic | BindingFlags.Static)!.GetRawConstantValue()!;
+        Assert.Equal(hourly, PushSubscriptionDoor.MaxPerUser);
+
+        static ACommerce.Kit.Auth.PushSubscription Row(int i, int minute) =>
+            new() { Endpoint = $"https://fcm.googleapis.com/fcm/send/{i}", CreatedAt = DateTime.UnixEpoch.AddMinutes(minute) };
+        var list = new List<ACommerce.Kit.Auth.PushSubscription>();
+        for (var i = 0; i < 25; i++) PushSubscriptionDoor.Keep(list, Row(i, i));
+        Assert.Equal(Enumerable.Range(15, 10).Select(i => $"https://fcm.googleapis.com/fcm/send/{i}"), list.Select(p => p.Endpoint));
+
+        // الجِهازُ نَفسُه: يَحِلُّ مَحَلَّ صَفِّه ويَصيرُ الأَحدَث، ولا يُسقِطُ غَيرَه.
+        PushSubscriptionDoor.Keep(list, Row(15, 99));
+        Assert.Equal(PushSubscriptionDoor.MaxPerUser, list.Count);
+        Assert.Equal("https://fcm.googleapis.com/fcm/send/16", list[0].Endpoint);
+        Assert.Equal("https://fcm.googleapis.com/fcm/send/15", list[^1].Endpoint);
+        Assert.Single(list, p => p.Endpoint.EndsWith("/15", StringComparison.Ordinal));
+
+        // والنُقطَةُ تَضَعُ بِه — ولا مَوضِعَ في المَكتَباتِ يُلحِقُ بِالقائِمَةِ مُباشَرَة.
+        Assert.Contains("Services.PushSubscriptionDoor.Keep(user.PushSubscriptions, sub);", SubscribeBody(), StringComparison.Ordinal);
+        Assert.Equal(0, ActorNameSourceTests.Matches(@"PushSubscriptions\.Add\("));
+        Assert.Matches(@"PushSubscriptions\.Add\(", "user.PushSubscriptions.Add(new ACommerce.Kit.Auth.PushSubscription");
+    }
+
+    // ─── ٣. المُرسِلُ لا يَطرُقُ صَفّاً لا يَقبَلُه البابُ ويَمحوه ─────────────────────────────────────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_the_sender_keeps_a_stored_endpoint_that_no_push_service_serves`.
+
+    [Fact]
+    public async Task The_sender_drops_a_stored_endpoint_the_door_would_refuse_without_posting_to_it()
     {
         var sender = SenderSource();
-        Assert.Matches(@"foreach \(var sub in user\.PushSubscriptions\)\s*\{\s*try\s*\{\s*var ps = new WebPush\.PushSubscription", sender);
+        Assert.Matches(@"foreach \(var sub in user\.PushSubscriptions\)\s*\{\s*if \(!PushSubscriptionDoor\.Admits\(sub\)\) \{ stale\.Add\(sub\); continue; \}\s*try\s*\{\s*var ps = new WebPush\.PushSubscription", sender);
 
-        // مَفتاحانِ غَيرُ صالِحَينِ عَمداً: التَشفيرُ يَرمي قَبلَ أَيِّ طَلَبٍ فَلا يَخرُجُ مِن الاختِبارِ شَيء — والمُرسِلُ يَبتَلِعُ ويُبقي الصَفّ.
+        // صَفٌّ بِمَفتاحَينِ غَيرِ صالِحَين، وصَفٌّ بِمَفتاحَي مُتَصَفِّحٍ صالِحَينِ إلى مُضيفٍ داخِلِيّ — كِلاهُما يُمحى قَبلَ أَيِّ طَلَب.
+        var (p256dh, auth) = BrowserKeys();
         var world = new DocWorld();
         var user = new User { Id = Guid.NewGuid(), TenantSlug = "theme-demo" };
         user.PushSubscriptions.Add(new ACommerce.Kit.Auth.PushSubscription { Endpoint = "http://169.254.169.254/latest/meta-data", P256dh = "x", Auth = "y" });
+        user.PushSubscriptions.Add(new ACommerce.Kit.Auth.PushSubscription { Endpoint = "https://internal.example.invalid/hook", P256dh = p256dh, Auth = auth });
         world.Put(user);
 
         await NewSender().SendAsync(world.Store, "theme-demo", user.Id, "t", "b");
 
-        Assert.Single(world.Read<User>(user.Id.ToString())!.PushSubscriptions);
-        Assert.Equal(0, world.SaveCalls);
+        Assert.Empty(world.Read<User>(user.Id.ToString())!.PushSubscriptions);
+        Assert.Equal(1, world.SaveCalls);
     }
 }

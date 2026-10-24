@@ -73,6 +73,8 @@ public sealed class WebPushService
         var stale = new List<ACommerce.Kit.Auth.PushSubscription>();
         foreach (var sub in user.PushSubscriptions)
         {
+            // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-12) صَفٌّ حُفِظَ قَبلَ البابِ ولا يَقبَلُه اليَومَ لا يُطرَق — يُمحى كَالمُنتَهي.
+            if (!PushSubscriptionDoor.Admits(sub)) { stale.Add(sub); continue; }
             try
             {
                 var ps = new WebPush.PushSubscription(sub.Endpoint, sub.P256dh, sub.Auth);
