@@ -96,6 +96,43 @@ public class DealNoticeDoorsTests(ITestOutputHelper output)
         output.WriteLine("العُضو والاستوديو والـAPI: كُلُّ إلغاءٍ وقَبولٍ ناجِحٍ يَمُرُّ بِـDealNotices");
     }
 
+    /// <summary>
+    /// <para><b>«اليَوم»</b> (‏2026-10-24، تَدقيقُ الإطلاق brief-P1a-1): المَسارُ الإداريُّ في الاستوديو (<c>/studio/apps/{slug}/deals/{id}/advance</c>) يُخرِجُ
+    /// <c>Offered</c> إلى <c>Booked</c> بِهُوِيَّةِ البائِعِ المَربوط — قَبولٌ بِمِعيارِ <see cref="DealNotices.IsAcceptance"/> نَفسِه — ومَقطَعُه بِلا <c>notices.</c>
+    /// واحِدَة، فَلا يُخبَرُ المُشتَري؛ وسَطرُ خَرجِ الصَفِّ أَعلاه «العُضو والاستوديو والـAPI: كُلُّ إلغاءٍ وقَبولٍ ناجِحٍ يَمُرُّ بِـDealNotices» لا يَصدُقُ عَلى
+    /// قَبولِ الاستوديو. يُقلَبُ بِاسمِه في كوميتِ الإشعار.</para>
+    /// </summary>
+    [Fact]
+    public void Today_the_studio_admin_path_accepts_a_cart_order_and_tells_the_buyer_nothing()
+    {
+        var studioAdvance = Segment(Endpoints(), "\"/studio/apps/{slug}/deals/{id:guid}/advance\"", ".DisableAntiforgery();");
+        Assert.Equal(0, studioAdvance.Split("notices.").Length - 1);
+        Assert.DoesNotContain("DealNotices", studioAdvance, StringComparison.Ordinal);
+
+        var world = new DocWorld();
+        var deals = new DealsService(world.Store, new NoPayments());
+        var deal = CartDeal();
+        world.Put(deal);
+        Assert.Null(DealsService.AdminPathRefusal(deal, AppOwner));
+        var moved = deals.AdvanceAsync("shop", deal.Id, deal.CounterpartyId ?? AppOwner, "مالِك التَّطبيق (إداريّ)", "").GetAwaiter().GetResult();
+        Assert.True(DealNotices.IsAcceptance(moved));
+        Assert.Equal(0, world.Wrote<ACommerce.Kit.Notifications.Notification>());
+        output.WriteLine($"الاستوديو: Offered → {moved.Deal!.Stage} · IsAcceptance={DealNotices.IsAcceptance(moved)} · notices. في المَقطَع: 0");
+    }
+
+    /// <summary>مُزَوِّدٌ يَرمي — صَفقَةُ السَلَّةِ هُنا بِلا مُعَرِّفِ دَفع.</summary>
+    private sealed class NoPayments : ACommerce.Kit.Payments.IPaymentProvider
+    {
+        private static InvalidOperationException Touched() => new("لا مالَ في هذا الصَفّ — نودِيَ مُزَوِّدُ الدَفع.");
+        public string ProviderName => "forbidden";
+        public Task<ACommerce.Kit.Payments.PaymentResult> AuthorizeAsync(ACommerce.Kit.Payments.PaymentRequest req, string idempotencyKey, CancellationToken ct = default) => throw Touched();
+        public Task<ACommerce.Kit.Payments.PaymentResult> CaptureAsync(string paymentId, decimal? amount = null, CancellationToken ct = default) => throw Touched();
+        public Task<ACommerce.Kit.Payments.PaymentResult> RefundAsync(string paymentId, decimal amount, string reason, CancellationToken ct = default) => throw Touched();
+        public Task<ACommerce.Kit.Payments.SubscriptionResult> CreateSubscriptionAsync(ACommerce.Kit.Payments.SubscriptionRequest req, string idempotencyKey, CancellationToken ct = default) => throw Touched();
+        public Task<bool> CancelSubscriptionAsync(string subscriptionId, CancellationToken ct = default) => throw Touched();
+        public Task<ACommerce.Kit.Payments.Invoice?> GetInvoiceAsync(string paymentId, CancellationToken ct = default) => throw Touched();
+    }
+
     // ═══ ٢) الدَوالُّ النَقِيَّة ═════════════════════════════════════════════════════════════════════════
 
     private static Deal Moved(DealStage before, DealStage after)
