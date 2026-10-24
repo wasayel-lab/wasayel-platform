@@ -1,6 +1,7 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Incubator.StudioTierService Tier
 @inject Services.PlatformAdminGuard PlatformGuard
+@inject Services.Incubator.FeasibilityAnalysisService Incubator
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 @inject L L
 
@@ -35,10 +36,16 @@
                         <AcIcon Name="building" Size="18" /> @L.Markup("studio.nav.apps")@((MarkupString)"\n                    ")
                     </a>
 
-                    <div class="studio-nav-section">@L.Markup("studio.nav.create")</div>
+                    @* قِسمُ «إنشاء» ومَدخَلُه الوَحيدُ إلى صَفحَةِ الفِكرَة — لا يُرسَمانِ بِلا مُزَوِّدِ تَحليل، بِالبابِ الَّذي تَسأَلُه الصَفحَةُ نَفسُها
+                       (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 2؛ القاعِدَة ١٢): قِسمٌ بِلا مَدخَلٍ عُنوانٌ لا يُفضي إلى شَيء.
+                       و`@((MarkupString)"…")` المُلاصِقُ هُوَ الفَراغُ الَّذي كانَ قَبلَ القِسمِ بِحَرفِه — Razor يُسقِطُه عَلى حَدِّ الكُتلَة. *@
+                    @if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))
+                    {
+                    @((MarkupString)"\n\n                    ")<div class="studio-nav-section">@L.Markup("studio.nav.create")</div>
                     <a class="studio-nav-item @(Active == "new" ? "active" : "")" href="/studio/new">
                         <AcIcon Name="plus" Size="18" /> @L.Markup("studio.nav.new_idea")@((MarkupString)"\n                    ")
                     </a>
+                    }
 
                     @* مَدخَلُ إدارَةِ المَنَصَّة — لِمُشرِفِها وَحدَه.
                        كانَ **لا وُجودَ لَه**: الصَلاحِيَّةُ تُمنَح

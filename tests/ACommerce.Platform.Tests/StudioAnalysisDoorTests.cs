@@ -437,6 +437,9 @@ public class StudioAnalysisDoorTests(ITestOutputHelper output)
     // **والفاحِصُ لا قائِمَة**: كُلُّ `"/studio/new"` في مَصادِرِ `libs` و`apps` (‏`EntitlementContractTests.SourceFiles` — القاعِدَة ٨) خارِجَ
     // تَوجيهِ `@page` نَفسِه وخارِجَ التَعليقات، ومَوضِعُه مِن كُتَلِ `DoorBlocks` أَعلاه. فَرابِطٌ سابِعٌ يُضافُ غَداً يُعَدُّ بِلا سَطرٍ هُنا.
     // والصَفُّ يُقلَبُ بِاسمِه في كوميتِ الإصلاح.
+    //
+    // ‏(‏2026-10-24، كوميتُ الإصلاح — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): قُلِبَ بِاسمِه — الروابِطُ السِتَّةُ داخِلَ كُتَلِ البابِ (والقِشرَةُ تَحقِنُ
+    // `FeasibilityAnalysisService`)، والحالَتانِ الفارِغَتانِ تَرسُمانِ النَصَّ المُغلَقَ مَكانَ الزِرّ؛ وصَفّانِ جَديدانِ لِذلك.
 
     private const string NewIdeaRoute = "\"/studio/new\"";
 
@@ -461,20 +464,39 @@ public class StudioAnalysisDoorTests(ITestOutputHelper output)
         return links;
     }
 
-    /// <summary><b>«اليَوم»</b>: سِتَّةُ روابِطَ إلى صَفحَةِ الفِكرَة — خَمسَةٌ في <c>StudioHome</c> وواحِدٌ في <c>StudioShell</c> — ولا واحِدَ داخِلَ
-    /// بابٍ مَفتوح؛ والقِشرَةُ لا تَحقِنُ خِدمَةَ التَحليلِ أَصلاً. ويَطبَعُ ما عَدَّه ويَفشَلُ عَلى ما دونَ المَقيس (القاعِدَة ١٠).</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 2)</b> — كانَ
+    /// <c>Today_six_links_to_the_idea_page_are_drawn_without_asking_its_door</c> (‏<c>e38c08f</c>): «روابِطُ /studio/new: 6 · داخِلَ بابٍ: 0».
+    /// والآن كُلُّ رابِطٍ إلى صَفحَةِ الفِكرَةِ داخِلَ كُتلَةِ <c>@if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))</c> — بِالماسِحِ لا بِقائِمَة،
+    /// فَرابِطٌ يُضافُ غَداً خارِجَ البابِ يُحمِرُّ هُنا بِمِلَفِّه. ويَطبَعُ ما عَدَّه ويَفشَلُ عَلى ما دونَ المَقيس (القاعِدَة ١٠).</summary>
     [Fact]
-    public void Today_six_links_to_the_idea_page_are_drawn_without_asking_its_door()
+    public void Every_link_to_the_idea_page_sits_inside_an_open_analysis_door()
     {
         var links = NewIdeaLinks();
         var outside = links.Where(l => !l.InsideDoor).ToList();
         output.WriteLine($"روابِطُ /studio/new: {links.Count} · داخِلَ بابٍ: {links.Count - outside.Count} · خارِجَه: {outside.Count} ("
-            + string.Join(" · ", outside.GroupBy(l => l.File).Select(g => $"{g.Key}: {g.Count()}")) + ")");
+            + string.Join(" · ", links.GroupBy(l => l.File).Select(g => $"{g.Key}: {g.Count()}")) + ")");
 
         Assert.True(links.Count >= 6, $"أَداةٌ عَمياء: {links.Count} رابِطاً — والمَقيسُ 6.");
-        Assert.Equal(6, outside.Count);
-        Assert.Equal(5, outside.Count(l => l.File.EndsWith("/Components/Pages/StudioHome.razor", StringComparison.Ordinal)));
-        Assert.Equal(1, outside.Count(l => l.File.EndsWith("/Components/StudioShell.razor", StringComparison.Ordinal)));
-        Assert.DoesNotContain("FeasibilityAnalysisService", Read($"{TemplateRoot}/Components/StudioShell.razor"), StringComparison.Ordinal);
+        Assert.Empty(outside);
+        Assert.Contains("@inject Services.Incubator.FeasibilityAnalysisService Incubator",
+            Read($"{TemplateRoot}/Components/StudioShell.razor"), StringComparison.Ordinal);
+    }
+
+    /// <summary>الحالَتانِ الفارِغَتانِ في <c>StudioHome</c> («لا تَطبيقات بَعد» و«لا أَفكار بَعد») نَصُّهُما يَدعو إلى تَحليلِ فِكرَة — فَبِلا بابٍ
+    /// يَرسُمُ <c>else</c>ـهُما مِفتاحَ القامُوسِ المُغلَقَ مَكانَ الزِرِّ لا رابِطاً، والكُتَلُ الثَلاثُ الأُخرى تَختَفي بِلا بَديل.</summary>
+    [Theory]
+    [InlineData("studio.home.start_idea")]
+    [InlineData("studio.home.describe_idea")]
+    public void The_home_empty_state_draws_the_closed_text_where_its_link_was(string buttonKey)
+    {
+        var text = WriteEndpointGuardTests.StripMarkupComments(Page("StudioHome.razor"));
+        var button = At(text, $"@L.Markup(\"{buttonKey}\")");
+        Assert.Equal(button, text.LastIndexOf($"@L.Markup(\"{buttonKey}\")", StringComparison.Ordinal));
+        var (_, close) = Assert.Single(DoorBlocks(text), b => b.Open < button && button < b.Close);
+        var after = text[(close + 1)..].TrimStart();
+        Assert.StartsWith("else", after, StringComparison.Ordinal);
+        var key = after.IndexOf("StudioAnalysisDoor.ClosedMessageKey", StringComparison.Ordinal);
+        Assert.True(key > 0 && key < 200, $"{buttonKey}: فَرعُ البابِ المُغلَقِ لا يَرسُمُ نَصَّ القامُوس.");
+        Assert.DoesNotContain("href=", after[..key], StringComparison.Ordinal);
     }
 }
