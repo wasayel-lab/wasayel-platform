@@ -28,6 +28,8 @@
 >
 > **ورِحلاتُ ما قَبلَ التَحَوُّلِ الثَمانُ** (‏2026-08-17، عَلى مُستَأجِري الخِدمات) مَحفوظَةٌ بِنَصِّها في آخِرِ
 > الوَثيقَة: «ما قيس قبل التحوّل — ‏2026-08-17».
+>
+> **ودِقَّةٌ ‏2026-10-24 (تَيّارُ S14 البَند J(s7)) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق**: «ثُمَّ البَراهينُ الحَيَّةُ كُلُّها» أَعلاه لَم تَكُن كُلَّها — مُرَشِّحُ §٤ يَتَخَطّى صَفّاً حَيّاً صِنفُه لا يَبدَأُ بِـ`Live` (`ReadinessEndpointTests.Live_database_answers_200_ready`)، و`LiveThemeProofTests` أَخضَرُ بِلا تَوكيدٍ واحِد. التَفصيلُ والقِياسُ بِالمُرَشِّحِ المُوَسَّعِ في آخِرِ §٤.
 
 ---
 
@@ -400,6 +402,27 @@ WASAYEL_LIVE_PROOF=1 ConnectionStrings__Postgres="Host=localhost;Database=wasaye
 الأَصنافُ السَبعَةُ والعِشرونَ مَجموعَةً واحِدَةً `[CollectionDefinition(DisableParallelization = true)]`، وحارِسانِ
 يَحمَرّانِ عَلى صِنفٍ `Live…ProofTests` خارِجَها أَو عَلى مَجموعَةٍ تَعودُ مُتَوازِيَة. ‏وثَمَنُه مَقيس: التَشغيلُ
 المُتَسَلسِلُ ‏22–24 ثانِيَة.
+
+**‏2026-10-24 (تَيّارُ S14 البَند J(s7) و(r2)) — «كُلُّها» و«47 أَخضَر» أَوسَعُ مِمّا قيس، ويُقالُ بِأَسمائِه؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق**:
+(١) **صَفٌّ حَيٌّ خارِجَ المُرَشِّحِ وخارِجَ عَقدِ الأَسماء**: `ReadinessEndpointTests.Live_database_answers_200_ready` مُبَوَّبٌ بِـ`LiveDealConcurrencyProofTests.Enabled`
+وصِنفُه لا يَبدَأُ بِـ`Live` — فَلا يَبلُغُه `FullyQualifiedName~ACommerce.Platform.Tests.Live`، ولا يَعُدُّه حارِسُ `LiveProofCollectionTests` (عَقدُه اسمُ الصِنف). مَقيسٌ
+بِمَسحِ مَصادِرِ الاختِبار: كُلُّ حارِسٍ حَيٍّ (`WASAYEL_LIVE_PROOF` أَو `…ProofTests.Enabled`) في صِنفٍ `Live…` إلّا هذا وَحدَه.
+(٢) **`LiveThemeProofTests` أَخضَرُ بِلا تَوكيد**: صِفرُ `Assert` في الصِنف — يَقرَأُ وَثائِقَ `adwar-demo` ويَطبَعُها ويَعودُ، فَـ«1/0» في الجَدوَلِ أَعلاه لا يَقيسُ شَيئاً
+(وعَلى قاعِدَةٍ مَحَلِّيَّةٍ لا تَحمِلُ المُستَأجِرَ «وثائِقُ `adwar-demo` = 0»)؛ وأَخضَرُه لا يُعَدُّ بُرهاناً حَتّى يَحمِلَ تَوكيداً.
+(٣) **والأَمرُ بِالمُرَشِّحِ المُوَسَّع** — عَلى `wasayel_dev` المَحَلِّيَّة، والشيفرَةُ عِندَ `e7e5fe2`:
+
+```bash
+WASAYEL_LIVE_PROOF=1 ConnectionStrings__Postgres="Host=localhost;Database=wasayel_dev;Username=postgres;Password=<المَحَلِّيَّة>" \
+  dotnet test tests/ACommerce.Platform.Tests -c Release --no-build \
+  --filter "FullyQualifiedName~ACommerce.Platform.Tests.Live|FullyQualifiedName~ReadinessEndpointTests.Live_database_answers_200_ready" \
+  --logger "console;verbosity=normal"
+```
+
+← **‏52 اختِباراً في 32 صِنفاً · 51 أَخضَر · 1 أَحمَر**: `ReadinessEndpointTests.Live_database_answers_200_ready` أَخضَر (1 ث)؛ والأَحمَرُ
+`LiveTenantExportProofTests` «صِفرُ مَتجَرٍ لَه مالِك — لا شَيءَ يُقاس.» — بيئَةٌ لا كود: `wasayel_dev` بِلا مَتجَرٍ مَملوك، وعَلى قاعِدَةٍ مَبذورَةٍ يَخضَرّ (الجَدوَلُ أَعلاه).
+والأَصنافُ الـ32 = ثَلاثونَ `Live…ProofTests` + `LiveProofCollectionTests` + `ReadinessEndpointTests`.
+(٤) **والصَفُّ خارِجَ المَجموعَةِ التَسلسُلِيَّةِ يُقالُ ولا يُنقَل**: لا يُنشِئُ مُخَطَّطاً — `Readiness.PingAsync` يَفتَحُ اتِّصالاً مِن المَخزَنِ ويَسأَلُ `select 1` وَحدَه —
+فَلا يَدخُلُ سِباقَ المُخَطَّطِ الَّذي كَتَبَ المَجموعَة؛ ورَأسُ `LiveProofCollection.cs` يُسَمّيه بِسَبَبِه (سِجِلُّ المالِك «أ» S14·٨).
 
 ---
 

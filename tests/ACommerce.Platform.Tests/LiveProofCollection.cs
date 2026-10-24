@@ -27,6 +27,11 @@ namespace ACommerce.Platform.Tests;
 // المَجموعَة. **وحَدُّه يُقال**: العَقدُ اسمُ الصِنف (`Live…ProofTests` — سَبعَةٌ وعِشرونَ مِن سَبعَةٍ وعِشرين اليَوم)، فَصِنفٌ حَيٌّ بِاسمٍ
 // آخَرَ لا يَراه.
 // (‏2026-10-24، تَيّارُ S14 البَند C: صِنفٌ حَيٌّ جَديدٌ في المَجموعَة — `LiveAgentStoreLimitRefusalProofTests`؛ والعَدُّ اليَومَ 30 مِن 30.)
+// (‏2026-10-24، تَيّارُ S14 البَند J — ولا يُعادُ حَرفٌ فَوقَه): **وصَفٌّ حَيٌّ واحِدٌ خارِجَ هذا العَقدِ يُسَمّى**:
+// `ReadinessEndpointTests.Live_database_answers_200_ready` — مُبَوَّبٌ بِـ`LiveDealConcurrencyProofTests.Enabled` وصِنفُه لا يَبدَأُ بِـ`Live`، فَلا يَعُدُّه
+// الحارِسُ أَدناه ولا يَبلُغُه مُرَشِّحُ `…Tests.Live` في `docs/RELEASE-READINESS.md` §٤. ويَبقى خارِجَ المَجموعَةِ عَمداً: لا يُنشِئُ مُخَطَّطاً
+// (`Readiness.PingAsync` = `select 1` عَلى اتِّصالٍ مِن المَخزَن)، فَلا يَدخُلُ السِباقَ الَّذي كَتَبَها. مَقيسٌ بِمَسحِ المَصادِر: كُلُّ حارِسٍ حَيٍّ
+// آخَرَ (`WASAYEL_LIVE_PROOF` أَو `…ProofTests.Enabled`) في صِنفِ `Live…ProofTests`.
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class LiveProofCollection
 {
