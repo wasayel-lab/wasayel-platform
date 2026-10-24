@@ -13,6 +13,10 @@ namespace ACommerce.Platform.Tests;
 // خَضراءُ لِكوميتٍ أَقدَمَ بَعدَ نَشرِ أَحدَثَ مِنه تَراجُعٌ صامِتٌ فَوقَ الإنتاج، وعِلاجُه في DEPLOY §٢·و فَحصٌ بِاليَد. والحُكمُ صارَ دالَّةً
 // بَينَ عَلامَتَينِ في خُطوَةٍ قَبلَ الدَفع — **تُقطَعُ هُنا كَما هِيَ وتُشَغَّلُ بِـbash** في مُستَودَعِ git مَصنوعٍ بِسَلَفٍ وخَلَفٍ وفَرعٍ يَتيم
 // (نَسَقُ `ProductionBootVerdictTests` و`ProviderVaultDeploymentTests`). **وعَلى Windows لا bash مَعلومَ المَوضِع** فَيُطبَعُ ذلكَ ويُرجَع.
+//
+// ‏(‏2026-10-24 — تَيّارُ S16، الجَولَةُ ١ لِلمُراجَعَة) **وقُلِبَ «غَيرُ المَعروفِ يُدفَع»**: في `4e58708` كانَت كُلُّ حالَةِ خَطِّ أَساسٍ غَيرِ `measured`
+// — و`measured` بِلا رَقم — تَطبَعُ «push» وتَخرُجُ بِصِفر؛ مَقيساً عَلى الدالَّةِ مَقطوعَةً: ‏4 حالاتٍ مِن 4 بِلا النَقرَة «push» بِرَمز 0، وبَعدَ القَلبِ ‏4 مِن 4
+// «refuse» بِرَمز 1 و«push» بِـ`::warning::` مَعَ `allow_rollback`. فَقُلِبَت صُفوفُها بِأَسمائِها هُنا، ومَعجَمُ الحالاتِ يُقرَأُ مِن خُطوَتِه في الصَفِّ ٤.
 
 public class DeployDirectionTests(ITestOutputHelper output)
 {
@@ -135,7 +139,7 @@ public class DeployDirectionTests(ITestOutputHelper output)
                 ("ما يَخدِمُ سَلَفٌ لِلمُرَشَّح",          h.C, h.A, "measured", "false", 0, "push",   "تَقَدُّم"),
                 ("المُرَشَّحُ سَلَفٌ لِما يَخدِم",         h.A, h.C, "measured", "false", 1, "refuse", "تَراجُع"),
                 ("لا نَسَبَ بَينَهُما",                   h.C, h.X, "measured", "false", 1, "refuse", "لا نَسَبَ"),
-                ("ما يَخدِمُ غَيرُ مَعروف — فَشِلَ القِياس", h.C, "",  "failed",   "false", 0, "push",   "لَم يَقِس"),
+                ("ما يَخدِمُ غَيرُ مَعروف — فَشِلَ القِياسُ فَيُرفَض", h.C, "",  "failed",   "false", 1, "refuse", "لَم يَقِس"),
             };
             var wrong = new List<string>();
             foreach (var c in cases)
@@ -158,7 +162,9 @@ public class DeployDirectionTests(ITestOutputHelper output)
 
     /// <summary><b>التَراجُعُ المَقصودُ يُدفَعُ بِتَحذيرٍ يُسَمّيه</b>، و<b>ما يَخدِمُه الحَيُّ ولَيسَ في تاريخِنا يُرفَضُ</b> (لا يُستَنتَجُ أَنّه أَقدَم)،
     /// والسَماحُ لا يُغَيِّرُ «لا دَفعَ» ولا «تَقَدُّم»، وكُلُّ حالَةِ خَطِّ أَساسٍ غَيرِ <c>measured</c> — ومَعَها <c>measured</c> بِلا رَقم — تُدفَعُ
-    /// كَما قَبلَ الحارِس. وسِلسِلَةٌ لَيسَت <c>true</c> بِحَرفِها لا تَسمَح.</summary>
+    /// كَما قَبلَ الحارِس. وسِلسِلَةٌ لَيسَت <c>true</c> بِحَرفِها لا تَسمَح.
+    /// <b>(‏2026-10-24 — تَيّارُ S16، الجَولَةُ ١ لِلمُراجَعَة)</b> وقُلِبَ «تُدفَعُ كَما قَبلَ الحارِس»: ما لَم يُقَس <b>يُرفَضُ</b> بِلا السَماح، ويُدفَعُ بِتَحذيرٍ
+    /// يُسَمّيه مَعَه — صُفوفُه الأَربَعَةُ قُلِبَت بِأَسمائِها، وأُضيفَ ثَلاثٌ بِالسَماحِ وواحِدٌ بِسَماحٍ لَيسَ <c>true</c> بِحَرفِه.</summary>
     [Fact]
     public void A_deliberate_rollback_pushes_with_a_named_warning_and_a_live_commit_outside_the_history_is_refused()
     {
@@ -177,10 +183,14 @@ public class DeployDirectionTests(ITestOutputHelper output)
                 ("ما يَخدِمُ لَيسَ في التاريخ، بِسَماح",     h.C, Missing, "measured", "true",  0, "push",   "لَيسَ في تاريخِ"),
                 ("المُرَشَّحُ هُوَ ما يَخدِم، بِسَماح",       h.B, h.B, "measured", "true",  0, "skip",   "نَفسَه"),
                 ("تَقَدُّمٌ بِسَماح",                        h.C, h.B, "measured", "true",  0, "push",   "تَقَدُّم"),
-                ("أَجابَ ولا نُقطَة (أَوَّلُ نَشر)",          h.A, "",  "absent",   "false", 0, "push",   "لَم يَقِس"),
-                ("لا مُضيف",                               h.A, "",  "nohost",   "false", 0, "push",   "لَم يَقِس"),
-                ("قيسَ ولا رَقم",                          h.A, "",  "measured", "false", 0, "push",   "لَم يَقِس"),
-                ("رَقمٌ وحالٌ غَيرُ measured",               h.A, h.C, "failed",   "false", 0, "push",   "لَم يَقِس"),
+                ("أَجابَ ولا نُقطَة (أَوَّلُ نَشر) فَيُرفَض",   h.A, "",  "absent",   "false", 1, "refuse", "لَم يَقِس"),
+                ("لا مُضيفَ فَيُرفَض",                       h.A, "",  "nohost",   "false", 1, "refuse", "لَم يَقِس"),
+                ("قيسَ ولا رَقمَ فَيُرفَض",                  h.A, "",  "measured", "false", 1, "refuse", "لَم يَقِس"),
+                ("رَقمٌ وحالٌ غَيرُ measured فَيُرفَض",       h.A, h.C, "failed",   "false", 1, "refuse", "لَم يَقِس"),
+                ("فَشِلَ القِياسُ، بِسَماح",                   h.C, "",  "failed",   "true",  0, "push",   "::warning::تَراجُعٌ مَقصود (allow_rollback=true): الحارِسُ لَم يَقِس"),
+                ("أَوَّلُ نَشرٍ، بِسَماح",                     h.A, "",  "absent",   "true",  0, "push",   "::warning::تَراجُعٌ مَقصود (allow_rollback=true): الحارِسُ لَم يَقِس"),
+                ("لا مُضيفَ، بِسَماح",                        h.A, "",  "nohost",   "true",  0, "push",   "::warning::تَراجُعٌ مَقصود (allow_rollback=true): الحارِسُ لَم يَقِس"),
+                ("فَشِلَ القِياسُ بِسَماحٍ لَيسَ true بِحَرفِه", h.C, "",  "failed",   "True",  1, "refuse", "::error::لا يُدفَعُ ما لَيسَ بَعدَ ما يَخدِم: الحارِسُ لَم يَقِس"),
             };
             var wrong = new List<string>();
             foreach (var c in cases)
@@ -190,7 +200,7 @@ public class DeployDirectionTests(ITestOutputHelper output)
                     wrong.Add($"«{c.Name}»: {code}/{decision} «{reason}» لا {c.Code}/{c.Decision} «…{c.Says}…»");
             }
             output.WriteLine($"فُحِصَت {cases.Length} حالَةً؛ أَخطَأَ الحُكمُ في {wrong.Count}");
-            Assert.True(cases.Length >= 12, "أَداةٌ عَمياء: الحالاتُ أَقَلُّ مِمّا كُتِب.");
+            Assert.True(cases.Length >= 16, "أَداةٌ عَمياء: الحالاتُ أَقَلُّ مِمّا كُتِب.");
             Assert.True(wrong.Count == 0, string.Join("\n", wrong));
         }
         finally
@@ -246,7 +256,9 @@ public class DeployDirectionTests(ITestOutputHelper output)
     /// <summary><b>حَقنُ عَيب — الصُفوفُ أَعلاه تَحمَرُّ عَلى دالَّةٍ تُخطِئ</b>: تُشَغَّلُ الدالَّةُ نَفسُها وقَد حُقِنَ فيها عَيبٌ واحِد — «سَلَفٌ لِلمُرَشَّحِ»
     /// يُقلَبُ فَيُدفَعُ الأَقدَم، والمُساواةُ تُدفَع، وما لَيسَ في التاريخِ لا يُسَمّى، وما يَخدِمُ غَيرُ مَعروفٍ يُرفَض، والسَماحُ بِأَيِّ قيمَة — ويُشتَرَطُ
     /// أَن يَختَلِفَ حُكمُ حالَةٍ واحِدَةٍ في الأَقَلِّ أَو سَبَبُها عَن الحَيّ. (مَقيساً: حَذفُ فَرعِ «لَيسَ في التاريخ» لا يُغَيِّرُ الحُكم — <c>merge-base</c>
-    /// يَخرُجُ 128 فَيُرفَضُ بِـ«تَعَذَّرَ السُؤال» — ويُغَيِّرُ السَبَب، فَالمُقارَنَةُ بِالسَطرَينِ لا بِالحُكمِ وَحدَه.)</summary>
+    /// يَخرُجُ 128 فَيُرفَضُ بِـ«تَعَذَّرَ السُؤال» — ويُغَيِّرُ السَبَب، فَالمُقارَنَةُ بِالسَطرَينِ لا بِالحُكمِ وَحدَه.)
+    /// <b>(‏2026-10-24 — تَيّارُ S16، الجَولَةُ ١ لِلمُراجَعَة)</b> وقُلِبَ «غَيرُ المَعروفِ يُرفَض» بِاسمِه إلى «غَيرُ المَعروفِ يُدفَع»: الرَفضُ صارَ الحَيّ،
+    /// والعَيبُ المَحقونُ هُوَ فَرعُ <c>4e58708</c> بِحَرفِه — فَالحالاتُ تَرى العَيبَ الَّذي كانَ قائِماً، لا عَيباً مُتَخَيَّلاً.</summary>
     [Fact]
     public void The_direction_rows_can_actually_go_red_on_an_injected_fault()
     {
@@ -257,7 +269,9 @@ public class DeployDirectionTests(ITestOutputHelper output)
             ("السَلَفُ مَقلوب", "git merge-base --is-ancestor \"${live}\" \"${candidate}\"; rc=$?", "git merge-base --is-ancestor \"${candidate}\" \"${live}\"; rc=$?"),
             ("المُساواةُ تُدفَع", "echo \"decision=skip\"", "echo \"decision=push\""),
             ("ما لَيسَ في التاريخِ لا يُسَمّى", "if ! git cat-file -e \"${live}^{commit}\" 2>/dev/null; then", "if false; then"),
-            ("غَيرُ المَعروفِ يُرفَض", "if [ \"${state}\" != \"measured\" ] || [ -z \"${live}\" ]; then\n              echo \"decision=push\"", "if [ \"${state}\" != \"measured\" ] || [ -z \"${live}\" ]; then\n              echo \"decision=refuse\""),
+            ("غَيرُ المَعروفِ يُدفَع (فَرعُ 4e58708 بِحَرفِه)",
+                "              rel=\"الحارِسُ لَم يَقِس ما يَخدِمُه الحَيّ",
+                "              echo \"decision=push\"\n              echo \"الحارِسُ لَم يَقِس: ما يَخدِمُه الحَيُّ غَيرُ مَعروف (خَطُّ الأَساس [${state}]، commit=${live:-<لا شَيء>}) — يُدفَعُ كَما قَبلَ الحارِس.\"\n              return 0\n              rel=\"الحارِسُ لَم يَقِس ما يَخدِمُه الحَيّ"),
             ("السَماحُ بِأَيِّ قيمَة", "if [ \"${allow}\" = \"true\" ]; then", "if [ -n \"${allow}\" ]; then"),
         };
         var h = Scratch();
@@ -294,6 +308,59 @@ public class DeployDirectionTests(ITestOutputHelper output)
             }
             output.WriteLine($"حُقِنَ {faults.Length} عَيباً عَلى {probes.Length} حالات؛ لَم يُرَ مِنها {blind.Count}");
             Assert.True(blind.Count == 0, "عَيبٌ لا تَراه الحالات: " + string.Join("، ", blind));
+        }
+        finally
+        {
+            h.Dir.Delete(recursive: true);
+        }
+    }
+
+    // ─── ٤. (‏2026-10-24 — تَيّارُ S16، الجَولَةُ ١ لِلمُراجَعَة) ما يَكتُبُه خَطُّ الأَساسِ غَيرَ «measured» لا يُدفَعُ بِلا النَقرَة ─────────
+
+    /// <summary><b>مَعجَمُ حالاتِ خَطِّ الأَساسِ يُقرَأُ مِن خُطوَتِه لا مِن قائِمَةٍ هُنا</b>: كُلُّ <c>base_state="…"</c> في «Measure the live baseline before
+    /// pushing» — واليَومَ أَربَع: <c>measured</c> و<c>absent</c> و<c>failed</c> و<c>nohost</c> — تُشَغَّلُ بِها الدالَّةُ ورَقمُ الحَيِّ فارِغ (وهو ما تَكتُبُه
+    /// الخُطوَةُ ما لَم تَرَ <c>startedAt</c> صالِحاً): بِلا <c>allow_rollback</c> <b>تُرفَضُ</b> بِـ«الحارِسُ لَم يَقِس»، ومَعَه تُدفَعُ بِـ<c>::warning::</c> يُسَمّيه،
+    /// وبِسَماحٍ لَيسَ <c>true</c> بِحَرفِه تُرفَض. فَحالَةٌ خامِسَةٌ تُضافُ إلى الخُطوَةِ تُقاسُ هُنا قَبلَ أَن تَبلُغَ دَفعاً. وكانَ هذا كُلُّه «push» بِرَمز 0 في
+    /// <c>4e58708</c> — الثَغرَةُ الَّتي كُتِبَ الحارِسُ لَها: <c>/health</c> يَرُدُّ 5xx وN+1 يُبنى، فَيُدفَعُ N فَوقَه أَخضَر.</summary>
+    [Fact]
+    public void Every_baseline_state_the_measuring_step_writes_refuses_an_unmeasured_push_without_the_tick()
+    {
+        if (NoBash()) return;
+        var wf = Workflow();
+        const string Name = "      - name: Measure the live baseline before pushing\n";
+        var a = wf.IndexOf(Name, StringComparison.Ordinal);
+        Assert.True(a > 0, "خُطوَةُ خَطِّ الأَساسِ غائِبَة.");
+        var b = wf.IndexOf("\n      - name: ", a + Name.Length, StringComparison.Ordinal);
+        Assert.True(b > a, "لا خُطوَةَ بَعدَ خَطِّ الأَساس.");
+        var states = Regex.Matches(wf[a..b], @"base_state=""(?<s>[a-z]+)""").Select(m => m.Groups["s"].Value)
+            .Distinct().OrderBy(s => s, StringComparer.Ordinal).ToList();
+        output.WriteLine($"حالاتُ خَطِّ الأَساسِ في خُطوَتِه: {states.Count} — {string.Join(" · ", states)}");
+        Assert.True(states.Count >= 4, $"أَداةٌ عَمياء: {states.Count} حالَة.");
+        Assert.Contains("measured", states);
+
+        var h = Scratch();
+        try
+        {
+            var wrong = new List<string>();
+            var ran = 0;
+            foreach (var state in states)
+            {
+                foreach (var (allow, code, decision, says) in new[]
+                         {
+                             ("false", 1, "refuse", "::error::لا يُدفَعُ ما لَيسَ بَعدَ ما يَخدِم: الحارِسُ لَم يَقِس"),
+                             ("true",  0, "push",   "::warning::تَراجُعٌ مَقصود (allow_rollback=true): الحارِسُ لَم يَقِس"),
+                             ("True",  1, "refuse", "::error::لا يُدفَعُ ما لَيسَ بَعدَ ما يَخدِم: الحارِسُ لَم يَقِس"),
+                         })
+                {
+                    ran++;
+                    var (c, d, r) = Direction(h, h.C, "", state, allow);
+                    if (c != code || d != decision || !r.Contains(says, StringComparison.Ordinal) || !r.Contains($"[{state}]", StringComparison.Ordinal))
+                        wrong.Add($"«{state} · allow={allow}»: {c}/{d} «{r}» لا {code}/{decision} «…{says}…[{state}]…»");
+                }
+            }
+            output.WriteLine($"شُغِّلَت {ran} حالَةً ({states.Count} × 3 سَماحات) بِرَقمِ حَيٍّ فارِغ؛ أَخطَأَ الحُكمُ في {wrong.Count}");
+            Assert.True(ran == states.Count * 3 && ran >= 12, "أَداةٌ عَمياء: الحالاتُ أَقَلُّ مِمّا كُتِب.");
+            Assert.True(wrong.Count == 0, string.Join("\n", wrong));
         }
         finally
         {
