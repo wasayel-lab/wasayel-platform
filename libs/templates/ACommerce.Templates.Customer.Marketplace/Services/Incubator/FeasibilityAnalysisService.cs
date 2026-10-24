@@ -324,11 +324,14 @@ public sealed class FeasibilityAnalysisService
         if (newJson is null) return;
 
         // ادمُج: استَبدِل المِفتاح فَقَط، احفَظ الباقي كَما هو.
-        var merged = MergeSection(s.AnalysisJson, newJson, sectionKey);
-        if (merged is null) return;
-
+        // ‏(‏2026-10-24 — تَيّارُ S16 البَند B) **في الدِراسَةِ المُعادَةِ بَعدَ النِداء، لا في لَقطَةِ ما قَبلَه**: كانَ الدَمجُ في `s`
+        // (المَقروءَةِ قَبلَ نِداءٍ يَبلُغُ 420 ثانِيَة) ثُمَّ يُكتَبُ فَوقَ `fresh` — فَتَحسينٌ آخَرُ لِقِسمٍ آخَرَ حُفِظَ في الأَثناءِ يَعودُ قَديماً
+        // (تَوصيفُه `StudioRefineInterleaveTests`). والنافِذَةُ الباقِيَةُ بَينَ إعادَةِ القِراءَةِ والحِفظِ رِحلَةُ قاعِدَةٍ واحِدَة لا مُدَّةُ نِداء؛
+        // وإغلاقُها كُلِّيّاً حَجزٌ أَو تَزامُنٌ تَفاؤُلِيٌّ (‏ADR-036) عَلى الدِراسَة — لَم يُكتَب (سِجِلُّ المالِكِ «أ» S16·٤).
         await using var session = _store.LightweightSession(IncubatorTenant);
         var fresh = await session.LoadAsync<IncubatorSession>(id, ct) ?? s;
+        var merged = MergeSection(fresh.AnalysisJson ?? s.AnalysisJson, newJson, sectionKey);
+        if (merged is null) return;
         fresh.AnalysisJson = merged;
         fresh.AnalysisQualityScore = ScoreQuality(merged, sector);
         fresh.UpdatedAt = DateTime.UtcNow;

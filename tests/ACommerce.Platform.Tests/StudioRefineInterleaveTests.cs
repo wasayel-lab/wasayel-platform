@@ -20,6 +20,9 @@ namespace ACommerce.Platform.Tests;
 // هذا المِلَفُّ يُوَصِّفُ «اليَوم» (القاعِدَة ٣) قَبلَ التَبديل: صَفٌّ نَصِّيٌّ يَجري في CI، وبُرهانٌ حَيٌّ (‏Postgres مَحَلِّيّ، مُبَوَّبٌ
 // بِـWASAYEL_LIVE_PROOF=1) يُشَغِّلُ الخِدمَةَ نَفسَها مَرَّتَينِ مُتَداخِلَتَينِ بِخَلفِيَّةٍ مُبَوَّبَةٍ تَحبِسُ كُلَّ نِداءٍ حَتّى يُطلَق.
 // وصَفّا «Today_» يُقلَبانِ بِأَسمائِهِما في كوميتِ الإصلاح.
+//
+// ‏(‏2026-10-24، كوميتُ الإصلاح — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): قُلِبَ الصَفّانِ بِأَسمائِهِما — الدَمجُ صارَ في الدِراسَةِ المُعادَةِ بَعدَ
+// النِداء (`fresh.AnalysisJson`)، والبُرهانُ الحَيُّ يَرى القِسمَينِ جَديدَين. والنافِذَةُ الباقِيَةُ رِحلَةُ قاعِدَةٍ بَينَ القِراءَةِ والحِفظ.
 
 public class StudioRefineInterleaveTests(ITestOutputHelper output)
 {
@@ -35,19 +38,23 @@ public class StudioRefineInterleaveTests(ITestOutputHelper output)
         return svc[start..end];
     }
 
-    /// <summary><b>اليَوم: الدَمجُ عَلى اللَقطَةِ الأولى قَبلَ إعادَةِ القِراءَة</b> — <c>MergeSection(s.AnalysisJson, …)</c> يَسبِقُ
-    /// <c>LoadAsync&lt;IncubatorSession&gt;</c> الثانِيَة، والمَكتوبُ عَلى <c>fresh</c> هُوَ ذلكَ المَدموج.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، تَيّارُ S16 البَند B)</b> — كانَ
+    /// <c>Today_refine_merges_into_the_snapshot_read_before_the_provider_call_and_writes_it_over_the_reloaded_study</c> (‏<c>fc0fc70</c>:
+    /// «النِداء 1889 · الدَمجُ عَلى s 2533 · إعادَةُ القِراءَة 2707 · الكِتابَةُ عَلى fresh 2783»). والآن: النِداءُ ← إعادَةُ القِراءَة ← الدَمجُ في
+    /// <c>fresh.AnalysisJson</c> ← الكِتابَةُ عَلَيها؛ ولا دَمجَ في <c>s</c> أَصلاً، ونِداءُ دَمجٍ واحِد.</summary>
     [Fact]
-    public void Today_refine_merges_into_the_snapshot_read_before_the_provider_call_and_writes_it_over_the_reloaded_study()
+    public void Refine_merges_into_the_study_reloaded_after_the_provider_call()
     {
         var body = RefineService();
         var call = body.IndexOf("await _backend.CallAsync(req, ct)", StringComparison.Ordinal);
-        var merge = body.IndexOf("MergeSection(s.AnalysisJson, newJson, sectionKey)", StringComparison.Ordinal);
         var reload = body.IndexOf("var fresh = await session.LoadAsync<IncubatorSession>(id, ct)", StringComparison.Ordinal);
+        var merge = body.IndexOf("MergeSection(fresh.AnalysisJson ?? s.AnalysisJson, newJson, sectionKey)", StringComparison.Ordinal);
         var write = body.IndexOf("fresh.AnalysisJson = merged;", StringComparison.Ordinal);
-        output.WriteLine($"النِداء {call} · الدَمجُ عَلى s {merge} · إعادَةُ القِراءَة {reload} · الكِتابَةُ عَلى fresh {write}");
-        Assert.True(call > 0 && merge > call && reload > merge && write > reload,
-            "تَرتيبُ اليَومِ لَيسَ: النِداءُ ← الدَمجُ عَلى s ← إعادَةُ القِراءَة ← الكِتابَةُ عَلى fresh.");
+        output.WriteLine($"النِداء {call} · إعادَةُ القِراءَة {reload} · الدَمجُ في fresh {merge} · الكِتابَةُ عَلى fresh {write}");
+        Assert.True(call > 0 && reload > call && merge > reload && write > merge,
+            "التَرتيبُ لَيسَ: النِداءُ ← إعادَةُ القِراءَة ← الدَمجُ في fresh ← الكِتابَة.");
+        Assert.DoesNotContain("MergeSection(s.AnalysisJson", body, StringComparison.Ordinal);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(body, @"\bMergeSection\("));
     }
 }
 
@@ -130,17 +137,18 @@ public class LiveRefineInterleaveProofTests
         }
     }
 
-    /// <summary><b>اليَوم: الثاني يُعيدُ قِسمَ الأَوَّلِ إلى قَديمِه</b> — <c>risks</c> جَديد، و<c>marketSizing</c> المَحفوظُ قَبلَه عادَ
-    /// <see cref="OldMarket"/>؛ ونِداءانِ لِلمُزَوِّدِ وَقَعا.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، تَيّارُ S16 البَند B)</b> — كانَ
+    /// <c>Today_two_interleaved_refines_of_different_sections_end_with_the_first_saved_section_restored</c> (‏<c>fc0fc70</c>، مَقيساً:
+    /// «risks=new-risks marketSizing=old-marketSizing نِداءاتُ المُزَوِّد=2»). والآن القِسمانِ جَديدان بِالنِداءَينِ نَفسَيهِما.</summary>
     [Fact]
-    public async Task Today_two_interleaved_refines_of_different_sections_end_with_the_first_saved_section_restored()
+    public async Task Two_interleaved_refines_of_different_sections_keep_both_new_sections()
     {
         if (!Enabled || string.IsNullOrEmpty(ConnectionString)) return;
         var evidence = new StringBuilder();
         var (risks, market, calls) = await InterleaveAsync(l => { evidence.AppendLine(l); Console.WriteLine(l); });
         Assert.Equal(2, calls);
         Assert.Equal("new-risks", risks);
-        Assert.Equal(OldMarket, market);
+        Assert.Equal("new-marketSizing", market);
     }
 
     internal sealed class GatedProvider(GatedBackend backend) : IAgentBackendProvider
