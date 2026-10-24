@@ -14,7 +14,7 @@ namespace ACommerce.Platform.Tests;
 // مَقيسَةٌ في المُستَودَع: `AllowCustomPattern` تُعرَض في بِطاقَةِ
 // الأَسعارِ **وصِفرُ مَوضِعٍ يَفحَصُها** (القاعِدَة ١٢). فَالفَحصُ هُنا
 // عَلى الدالَّةِ النَقِيَّةِ نَفسِها الَّتي تُناديها النُقطَة.
-public class ProviderBindSurfaceTests
+public class ProviderBindSurfaceTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     private static ProviderFieldDefinition Link(params string[] hosts) => new()
     {
@@ -474,6 +474,9 @@ public class ProviderBindSurfaceTests
                 if (tag.Contains("autocomplete=\"off\"", StringComparison.Ordinal)) offenders.Add($"{Path.GetFileName(f)}: {tag}");
             }
         }
+        // ‏(‏2026-10-24 — مُراجَعَةُ الموجَة ٤، بَندُ P؛ القاعِدَة ١٠) يُطبَعُ ما عُدَّ في كُلِّ تَشغيلٍ لا عِندَ الفَشَلِ وَحدَه.
+        output.WriteLine($"صَفَحاتٌ مَفحوصَة: {pages} · حُقولُ كَلِمَةِ مُرور: {passwordInputs} · بِـautocomplete=\"off\": {offenders.Count}");
+        foreach (var o in offenders) output.WriteLine($"  مُخالِف: {o}");
         Assert.True(pages > 100, $"أَداةٌ عَمياء: فُحِصَت {pages} صَفحَة.");
         Assert.True(passwordInputs >= 2, $"أَداةٌ عَمياء: حُقولُ كَلِمَةِ المُرورِ المَفحوصَة {passwordInputs} — المُتَوَقَّعُ اثنانِ عَلى الأَقَلّ (الاستوديو و«إعلاناتي»).");
         Assert.True(offenders.Count == 0, "حَقلُ سِرٍّ بِـautocomplete=\"off\": " + string.Join("؛ ", offenders));
