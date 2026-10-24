@@ -549,4 +549,24 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
             $"تَرتيبُ أَسبابِ السُقوطِ: الرَمز {status} · الجِسم {body} · الرَأس {header} — الرَمزُ يُسأَلُ أَوَّلاً.");
         Assert.Contains("(المُتَوَقَّع %s)", gate[status..body], StringComparison.Ordinal);
     }
+
+    /// <summary><b>ولا فَرعَ في طابِعِ السُقوطِ يَجعَلُه حارِسُه غَيرَ مَبلوغ</b> (‏2026-10-24 — مُراجَعَةُ الموجَة ٤، بَندُ K): كُتلَةُ
+    /// السُقوطِ لا تُدخَلُ إلّا والرَمزُ أَو الجِسمُ أَو الرَأسُ خاطِئ، والثَلاثَةُ مَسؤولَةٌ بِالتَرتيب — فَكانَ <c>else</c> رابِعٌ يُكَرِّرُ
+    /// «(المُتَوَقَّع %s)» لا يُبلَغ. يُقرَأُ حارِسُ الكُتلَةِ بِحَرفِه، وسِلسِلَتُها ثَلاثَةُ فُروعٍ لا رابِعَ لَها، و«(المُتَوَقَّع %s)» مَرَّةً واحِدَة.</summary>
+    [Fact]
+    public void The_route_failure_printer_has_no_branch_its_guard_makes_unreachable()
+    {
+        var gate = Gate();
+        var guard = gate.IndexOf("    if [ \"$actual\" = \"$expected\" ] && [ \"$body_ok\" = \"1\" ] && [ \"$hdr_ok\" = \"1\" ]; then", StringComparison.Ordinal);
+        var failure = gate.IndexOf("\n    else\n", guard, StringComparison.Ordinal);
+        var status = gate.IndexOf("        if [ \"$actual\" != \"$expected\" ]; then", failure, StringComparison.Ordinal);
+        var snippet = gate.IndexOf("        echo \"      ─── مَقطَعٌ مِن الجِسم ───\"", status, StringComparison.Ordinal);
+        Assert.True(guard > 0 && failure > guard && status > failure && snippet > status,
+            $"كُتلَةُ السُقوط: الحارِس {guard} · else {failure} · الرَمز {status} · المَقطَع {snippet} — الأَداةُ عَمياء.");
+        var chain = gate[status..snippet];
+        var branches = Regex.Matches(chain, @"^        (if|elif|else|fi)\b", RegexOptions.Multiline).Select(m => m.Groups[1].Value).ToArray();
+        output.WriteLine($"فُروعُ طابِعِ السُقوط: {string.Join(" ", branches)}");
+        Assert.Equal(new[] { "if", "elif", "elif", "fi" }, branches);
+        Assert.Single(Regex.Matches(chain, Regex.Escape("(المُتَوَقَّع %s)")));
+    }
 }
