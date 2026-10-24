@@ -353,6 +353,115 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         Assert.Contains("`concurrency: { group: production-boot, cancel-in-progress: false }`", section, StringComparison.Ordinal);
     }
 
+    /// <summary><b>ومُنتَظِرُ <c>main</c> لا يُلغيه وافِدٌ أَحدَث — لِأَنّ تَشغيلَ <c>main</c> المُلغى لا يُنشَرُ أَبَداً</b> (‏2026-10-24 — الجَولَةُ ١
+    /// لِمُراجَعَةِ تَيّارِ S13، عَلى <c>e2170c6</c>): بِالافتِراضِ (<c>queue: single</c>) يَنتَظِرُ في المَجموعَةِ واحِد، وكُلُّ وافِدٍ أَحدَثَ يُلغيه؛
+    /// والوَظيفَةُ تَعمَلُ لِلدَفعِ ولِطَلَبِ الدَمجِ في المَجموعَةِ نَفسِها، فَأَوَّلُ طَلَبِ دَمجٍ بَعدَ دَفعَةٍ تَنتَظِرُ يُلغيها — و<c>deploy-hf.yml</c>
+    /// لا يَنشُرُ إلّا عَلى <c>conclusion == 'success'</c>. فَيُقرَأُ هُنا الطَرَفانِ مَعاً: المَجموعَةُ مِن جِسمِ الوَظيفَةِ بِـ<see cref="BootQueueRefusal"/>،
+    /// وشَرطُ النَشرِ مِن <c>deploy-hf.yml</c> — فَإن سَقَطَ أَحَدُهُما سَقَطَ سَبَبُ الآخَر، ويُقالُ ذلكَ هُنا لا يُستَنتَج.</summary>
+    [Fact]
+    public void A_waiting_main_boot_run_is_never_replaced_by_a_newer_one_because_a_cancelled_main_run_never_deploys()
+    {
+        var ci = File.ReadAllText(Path.Combine(RepoRoot, ".github", "workflows", "ci.yml")).Replace("\r\n", "\n", StringComparison.Ordinal);
+        var body = JobBody(ci, "production-boot");
+        var refusal = BootQueueRefusal(body, out var keys);
+        output.WriteLine($"concurrency في production-boot: {string.Join(" · ", keys.Select(k => $"{k.Key}={k.Value}"))}");
+        Assert.True(keys.Count > 0 || refusal is "no_concurrency" or "concurrency_not_a_block", "أَداةٌ عَمياء: صِفرُ مِفتاحٍ في كُتلَةِ concurrency.");
+        Assert.True(refusal is null, $"مَجموعَةُ production-boot تُلغي جارِياً أَو مُنتَظِراً ({refusal}) — وتَشغيلُ main المُلغى لا يُنشَر.");
+
+        // ‏ولِماذا يَلزَمُ «لا يُلغى المُنتَظِر»: الوَظيفَةُ تَعمَلُ لِلحَدَثَين في المَجموعَةِ نَفسِها، والنَشرُ يَتبَعُ نَجاحَ دَفعَةٍ وَحدَه.
+        Assert.Contains("\non:\n  push:\n    branches: [main]\n  pull_request:\n    branches: [main]\n", ci, StringComparison.Ordinal);
+        Assert.DoesNotContain("if:", body.Split("\n    steps:")[0], StringComparison.Ordinal);   // ‏لا شَرطَ عَلى الوَظيفَةِ يُخرِجُ طَلَبَ الدَمج
+        var deploy = File.ReadAllText(Path.Combine(RepoRoot, ".github", "workflows", "deploy-hf.yml")).Replace("\r\n", "\n", StringComparison.Ordinal);
+        var mirror = JobBody(deploy, "mirror");
+        var gate = Regex.Match(mirror, @"^    if: >-\n(?<cond>(?:      .*\n)+)", RegexOptions.Multiline);
+        Assert.True(gate.Success, "شَرطُ وَظيفَةِ mirror في deploy-hf.yml غائِب.");
+        var cond = Regex.Replace(gate.Groups["cond"].Value, @"\s+", " ").Trim();
+        output.WriteLine($"شَرطُ النَشر: {cond}");
+        Assert.Equal("github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')", cond);
+        Assert.Contains("workflows: [\"CI\"]\n    types: [completed]\n    branches: [main]", deploy, StringComparison.Ordinal);
+
+        // ‏و§٢·و يَقولُه بِمُلحَقٍ مُؤَرَّخ: المَجموعَةُ، وما لا يُنشَر، والعِلاج.
+        var doc = File.ReadAllText(Path.Combine(RepoRoot, "docs", "DEPLOY.md"));
+        var start = doc.IndexOf("### فَرعُ البَوّابَةِ في CI حالَةٌ مُشتَرَكَة", StringComparison.Ordinal);
+        var end = doc.IndexOf("\n## ", start, StringComparison.Ordinal);
+        Assert.True(start > 0 && end > start, "قِسمُ «فَرعُ البَوّابَةِ في CI حالَةٌ مُشتَرَكَة» غائِب.");
+        var section = doc[start..end];
+        Assert.Contains("**فَالمَجموعَةُ صارَت `queue: max`**", section, StringComparison.Ordinal);
+        Assert.Contains("`conclusion == 'success'`", section, StringComparison.Ordinal);
+        Assert.Contains("**إعادَةُ تَشغيلِ CI لِذلكَ الكوميت**", section, StringComparison.Ordinal);
+    }
+
+    /// <summary>جِسمُ الوَظيفَةِ <paramref name="name"/> في سَيرِ عَمَلٍ — مِن سَطرِها إلى سَطرِ الوَظيفَةِ التالِيَةِ أَو آخِرِ المِلَفّ.</summary>
+    private static string JobBody(string workflow, string name)
+    {
+        var jobs = Regex.Matches(workflow, @"^  (?<name>[\w-]+):\s*$", RegexOptions.Multiline).ToList();
+        var at = jobs.FindIndex(m => m.Groups["name"].Value == name);
+        Assert.True(at >= 0, $"الوَظيفَةُ {name} غائِبَة — وَظائِفُ المِلَفّ: {string.Join(", ", jobs.Select(m => m.Groups["name"].Value))}.");
+        return workflow[jobs[at].Index..(at + 1 < jobs.Count ? jobs[at + 1].Index : workflow.Length)];
+    }
+
+    /// <summary><b>أَتُبقي مَجموعَةُ <c>production-boot</c> الجاريَ والمُنتَظِرَ مَعاً؟</b> — <c>null</c> إن أَبقَتهُما، وإلّا رَمزُ الرَفض. تُقرَأُ كُتلَةُ
+    /// <c>concurrency:</c> الَّتي تَلي الوَظيفَةَ مُباشَرَةً (أَربَعُ مَسافات) سَطراً سَطراً بِلا تَعليقاتِها: <c>group</c> بِحَرفِه، و<c>cancel-in-progress</c>
+    /// ‏<c>false</c> بِحَرفِه (لا تَعبيرَ يُقلَبُ في فَرعٍ ما، ولا غِيابٌ يُترَكُ لِلافتِراض)، و<c>queue</c> ‏<c>max</c> — وغِيابُه هُوَ الافتِراضُ <c>single</c> الَّذي يُلغي المُنتَظِر.
+    /// ومِفتاحٌ لا يَعرِفُه المَعجَمُ يُرَدّ: لا يُستَنتَجُ ما يَفعَلُه.</summary>
+    internal static string? BootQueueRefusal(string jobBody, out Dictionary<string, string> keys)
+    {
+        keys = new Dictionary<string, string>(StringComparer.Ordinal);
+        var lines = jobBody.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var at = Array.FindIndex(lines, l => Regex.IsMatch(l, @"^    concurrency:\s*(#.*)?$"));
+        if (at < 0) return lines.Any(l => Regex.IsMatch(l, @"^    concurrency:")) ? "concurrency_not_a_block" : "no_concurrency";
+        for (var i = at + 1; i < lines.Length; i++)
+        {
+            var line = Regex.Replace(lines[i], @"\s+#.*$", "");
+            if (line.Trim().Length == 0 || line.TrimStart().StartsWith('#')) continue;
+            var m = Regex.Match(line, @"^      (?<k>[\w-]+):\s*(?<v>\S.*?)\s*$");
+            if (!m.Success) { if (line.StartsWith("      ", StringComparison.Ordinal)) return "unreadable_line"; break; }
+            if (!keys.TryAdd(m.Groups["k"].Value, m.Groups["v"].Value)) return "duplicate_key";
+        }
+        if (keys.Keys.FirstOrDefault(k => k is not ("group" or "cancel-in-progress" or "queue")) is { } unknown) return $"unknown_key:{unknown}";
+        if (keys.GetValueOrDefault("group") != "production-boot") return "group";
+        if (!keys.TryGetValue("cancel-in-progress", out var cancel)) return "cancel_unstated";
+        if (cancel != "false") return "cancels_running";
+        return keys.GetValueOrDefault("queue") == "max" ? null : "replaces_waiting";
+    }
+
+    /// <summary><b>حَقنُ عَيب — فاحِصُ طابورِ البَوّابَةِ يُحمِرُّ فِعلاً</b> (‏2026-10-24): كُتلَةُ اليَومِ تُقبَل، وكُلُّ شَكلٍ يُلغي جارِياً أَو مُنتَظِراً
+    /// يُرَدُّ بِرَمزِه — ومِنها كُتلَةُ <c>e2170c6</c> بِحَرفِها (بِلا <c>queue</c>) الَّتي مَرَّت صَفَّها.</summary>
+    [Fact]
+    public void The_boot_queue_checker_can_actually_go_red()
+    {
+        const string Head = "  production-boot:\n    runs-on: ubuntu-latest\n";
+        const string Tail = "    env:\n      X: y\n    steps:\n      - run: true\n";
+        var accepted = new[]
+        {
+            Head + "    concurrency:\n      group: production-boot\n      cancel-in-progress: false\n      queue: max\n" + Tail,
+            Head + "    concurrency:\n      queue: max   # ‏تَعليق\n      group: production-boot\n      cancel-in-progress: false\n" + Tail,
+        };
+        var rejected = new (string Body, string Code)[]
+        {
+            (Head + "    concurrency:\n      group: production-boot\n      cancel-in-progress: false\n" + Tail, "replaces_waiting"),   // ‏e2170c6
+            (Head + "    concurrency:\n      group: production-boot\n      cancel-in-progress: false\n      queue: single\n" + Tail, "replaces_waiting"),
+            (Head + "    concurrency:\n      group: production-boot\n      cancel-in-progress: true\n      queue: max\n" + Tail, "cancels_running"),
+            (Head + "    concurrency:\n      group: production-boot\n      cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n      queue: max\n" + Tail, "cancels_running"),
+            (Head + "    concurrency:\n      group: production-boot\n      queue: max\n" + Tail, "cancel_unstated"),
+            (Head + "    concurrency:\n      group: production-boot\n      cancel-in-progress: false\n      - queue: max\n" + Tail, "unreadable_line"),
+            (Head + "    concurrency:\n      group: production-boot-${{ github.event_name }}\n      cancel-in-progress: false\n      queue: max\n" + Tail, "group"),
+            (Head + "    concurrency:\n      group: production-boot\n      cancel-in-progress: false\n      queue: max\n      qeueu: max\n" + Tail, "unknown_key:qeueu"),
+            (Head + "    concurrency:\n      group: production-boot\n      queue: single\n      cancel-in-progress: false\n      queue: max\n" + Tail, "duplicate_key"),
+            (Head + "    concurrency: production-boot\n" + Tail, "concurrency_not_a_block"),
+            (Head + Tail, "no_concurrency"),
+        };
+        var wrong = accepted.Where(b => BootQueueRefusal(b, out _) is not null).Select(b => $"رُفِضَ حَيٌّ ({BootQueueRefusal(b, out _)}): {b}")
+            .Concat(rejected.Where(r => BootQueueRefusal(r.Body, out _) != r.Code)
+                .Select(r => $"رَمزُه {BootQueueRefusal(r.Body, out _) ?? "قُبِل"} لا {r.Code}"))
+            .ToList();
+        foreach (var r in rejected) output.WriteLine($"مَرفوضٌ ({BootQueueRefusal(r.Body, out _)})");
+        var codes = rejected.Select(r => r.Code).Distinct().Count();
+        output.WriteLine($"حُقِنَ {accepted.Length} مَقبولاً و{rejected.Length} مَرفوضاً بِـ{codes} رَمزاً.");
+        Assert.True(accepted.Length >= 2 && rejected.Length >= 11 && codes >= 9, "أَداةٌ عَمياء: العَيِّنَةُ أَصغَرُ مِمّا كُتِب.");
+        Assert.True(wrong.Count == 0, $"أَخطَأَ الفاحِصُ في {wrong.Count}:\n  " + string.Join("\n  ", wrong));
+    }
+
     // ─── ٧. تَوصيفُ «اليَوم» ثُمَّ قَلبُه — الحُكمُ مِن الاستِثناءِ القاتِلِ ومِن قِياسِ البَوّابَةِ لا مِن أَوَّلِ سَطرٍ في السِجِلّ ─────
     //    (مُراجَعَةُ تَيّارِ S10، الجَولَة ١)
     //
