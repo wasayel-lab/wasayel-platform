@@ -151,7 +151,10 @@ public class StudioRefineOwnershipTests(ITestOutputHelper output)
         var guard = svc.IndexOf("if (!StudioRefineSection.IsKnown(sectionKey)) return;", StringComparison.Ordinal);
         Assert.True(guard > 0, "الخِدمَةُ لا تَسأَلُ المَعجَم.");
         Assert.DoesNotContain("string.IsNullOrWhiteSpace(sectionKey)", svc, StringComparison.Ordinal);
-        foreach (var later in new[] { "LoadAsync(id, ct)", "var systemPrompt", "_backend.CallAsync(req, ct)", "MergeSection(s.AnalysisJson, newJson, sectionKey)" })
+        // ‏(‏2026-10-24 — تَيّارُ S16 البَند B، يُلحَقُ قَبلَ التَبديلِ في كوميتٍ مُستَقِلّ) مِرساةُ الدَمجِ نِداؤُه لا وَسيطُه: الإصلاحُ يَدمُجُ في
+        // الدِراسَةِ المُعادَةِ بَعدَ النِداءِ لا في `s`، والصَفُّ يَسأَلُ «أَالمَعجَمُ قَبلَ الدَمج؟» لا «عَلامَ يُدمَج» (ذاكَ `StudioRefineInterleaveTests`).
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(svc, @"\bMergeSection\("));
+        foreach (var later in new[] { "LoadAsync(id, ct)", "var systemPrompt", "_backend.CallAsync(req, ct)", "MergeSection(" })
             Assert.True(guard < svc.IndexOf(later, StringComparison.Ordinal), $"المَعجَمُ بَعدَ {later}.");
     }
 
