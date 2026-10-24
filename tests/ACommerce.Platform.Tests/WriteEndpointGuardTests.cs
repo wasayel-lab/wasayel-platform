@@ -568,6 +568,38 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
             "\nإمّا أَن تُحرَس بِقَرار نَظيرَتِها، أَو تُثَبَّت بِسَبَبِها في نَفس الكوميت.");
     }
 
+    // ─── تَدقيقُ الإطلاق lens-security-5 — نُقطَةُ المُشاهَدَةِ عامَّةٌ ويُعَدُّ لَها حارِس (‏2026-10-24) ─────
+    //
+    // **المَقيس** (عِندَ `bb79574`): `POST /{slug}/listings/{id}/view` تَقرَأُ `AuthSession.ResolveToken` **لِنِسبَةِ المُشاهَدَةِ لا لِمَنعِها**
+    // (`viewerId = null` بِلا رُجوع)، ورَمزُ القِراءَةِ ذاك في `BodyGuards` — فَيَعُدُّها الفاحِصُ مَحروسَةً ولا تُثَبَّتُ عامَّة. ثُمَّ
+    // `Events.Append(ListingViewed)` لِكُلِّ طَلَبٍ بِلا حَدّ، وكُلُّ حَدَثٍ يُبطِّئُ كُلَّ عَرضٍ لاحِق (`AggregateStreamAsync<Listing>`). والأَرضِيَّةُ
+    // ‏88 والمَقيسُ ‏119 ولا يُطبَعُ العَدَد. يُثَبَّتُ قَبلَ العِلاج (القاعِدَة ٣) ويَنقَلِبُ بِاسمِه.
+
+    private const string ViewRoute = "/{slug}/listings/{id:guid}/view";
+
+    private static string ViewBody()
+    {
+        var views = MinimalApiWriteEndpoints().Where(e => e.Route == ViewRoute).ToList();
+        Assert.True(views.Count == 1, $"نُقاطُ المُشاهَدَة: {views.Count} — الأَداةُ عَمياء.");
+        return views[0].Body;
+    }
+
+    [Fact]
+    public void Today_the_view_door_is_counted_guarded_by_a_token_read_and_appends_an_event_on_every_post()
+    {
+        var body = ViewBody();
+        var writes = MinimalApiWriteEndpoints().Count();
+        output.WriteLine($"نِقاطُ الكِتابَة: {writes} · المُشاهَدَةُ مَحروسَةٌ في عَينِ الفاحِص: {HasGuard(body)} · مُثَبَّتَةٌ عامَّة: {PinnedPublic.Any(p => p.Route == ViewRoute)}");
+        Assert.True(HasGuard(body));
+        Assert.Contains("AuthSession.ResolveToken", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(PinnedPublic, p => p.Route == ViewRoute);
+
+        var append = body.IndexOf("Events.Append(", StringComparison.Ordinal);
+        Assert.True(append > 0, "لا كِتابَةَ في نُقطَةِ المُشاهَدَة — الأَداةُ عَمياء.");
+        Assert.DoesNotMatch(@"TryConsume|ListingViews\.", body[..append]);
+        Assert.Contains("viewerId", body[..append], StringComparison.Ordinal);
+    }
+
     // ─── ‏ADR-003: الكِتابَةُ في مَتجَرٍ تَسأَل عَن باقَتِه ────────────
 
     /// <summary>
