@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
+using ACommerce.Templates.Customer.Marketplace.Gates;
 
 namespace ACommerce.Templates.Customer.Marketplace.Billing;
 
@@ -148,7 +149,7 @@ public static class PaddleEndpoints
                 Services.Subscriptions.PaddleBillingService.TransactionAuditAction,
                 "TenantPlan", slug, note: $"{reference} · {result.TransactionId}");
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── إعدادُ صَفحَةِ الدَفعِ الساكِنَة ────────────────────────
         //

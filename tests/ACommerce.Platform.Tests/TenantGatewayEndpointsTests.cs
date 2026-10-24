@@ -478,13 +478,15 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         var (app, client) = await HostAsync(w);
         try
         {
-            var anonymous = await client.SendAsync(Verify(
-                new StringContent("{\"deal\":\"x\"}", Encoding.UTF8, "application/json"), sessionUser: null));
+            // ‏(‏2026-10-24، S15 C — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: المِجَسُّ كانَ جِسماً JSON بِلا جَلسَة، وصارَ يُجيبُه ‏415
+            // `.RequireFormBody()` قَبلَ الجِسم — فَالحارِسُ يُقاسُ بِاستِمارَةٍ بِلا جَلسَة: حَقلُها مَقروءٌ قَبلَ الحارِسِ لَكانَ أَعطى
+            // صَفقَةً ونِداءً لِلبَوّابَة، والمَقيسُ ‏302 إلى الدُخولِ بِلا نِداء. وJSON ‏415 في الصَفِّ أَعلاه.)
+            var form = (Guid id) => new FormUrlEncodedContent(new Dictionary<string, string> { [GatewayReturn.DealKey] = id.ToString("N") });
+
+            var anonymous = await client.SendAsync(Verify(form(w.Ids[0]), sessionUser: null));
             Assert.Equal(HttpStatusCode.Redirect, anonymous.StatusCode);
             Assert.Equal($"/{Slug}/login", anonymous.Headers.Location!.OriginalString);
             Assert.Empty(w.Moyasar.Requests);
-
-            var form = (Guid id) => new FormUrlEncodedContent(new Dictionary<string, string> { [GatewayReturn.DealKey] = id.ToString("N") });
 
             var foreign = await client.SendAsync(Verify(form(w.Ids[0]), Other));
             Assert.Equal(HttpStatusCode.Redirect, foreign.StatusCode);
@@ -510,18 +512,21 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         }
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم» (‏2026-10-24، S15 C) — يُقلَبُ بِاسمِه في كوميتِ الإصلاح</b>: مُشتَرٍ بِجَلسَتِه وجِسمٍ JSON لا استِمارَة
-    /// يَعبُرُ الحارِسَ ثُمَّ يَرمي <c>req.Form</c> («Incorrect Content-Type») ⇒ ‏500، بِلا نِداءٍ لِلبَوّابَة — صِنفُ RELEASE-READINESS §١ البَند ٧.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، S15 C)</b>: جِسمٌ JSON — بِجَلسَةِ المُشتَري وبِلا جَلسَة — يُرَدُّ ‏415 مِن
+    /// <c>.RequireFormBody()</c> قَبلَ أَيِّ قِراءَة، بِلا نِداءٍ لِلبَوّابَة. (كانَ بِالجَلسَةِ ‏500.)</summary>
     [Fact]
-    public async Task Today_a_buyer_session_with_a_json_body_throws_on_the_form_read()
+    public async Task A_json_body_is_refused_415_before_the_form_read_with_or_without_a_session()
     {
         var w = await PaidCart();
         var (app, client) = await HostAsync(w);
         try
         {
-            var json = await client.SendAsync(Verify(
-                new StringContent("{\"deal\":\"x\"}", Encoding.UTF8, "application/json"), sessionUser: Buyer));
-            Assert.Equal(HttpStatusCode.InternalServerError, json.StatusCode);
+            foreach (var who in new Guid?[] { Buyer, null })
+            {
+                var json = await client.SendAsync(Verify(
+                    new StringContent("{\"deal\":\"x\"}", Encoding.UTF8, "application/json"), sessionUser: who));
+                Assert.Equal(HttpStatusCode.UnsupportedMediaType, json.StatusCode);
+            }
             Assert.Empty(w.Moyasar.Requests);
         }
         finally

@@ -24,6 +24,15 @@ public static class GateExtensions
         return b;
     }
 
+    /// <summary>جِسمٌ هُوَ استِمارَة — وإلّا ‏415 قَبلَ أَيِّ قِراءَة (‏<see cref="FormBodyGate"/>؛ ‏2026-10-24، S15 C). يُضافُ أَوَّلَ
+    /// السِلسِلَةِ عَلى كُلِّ نُقطَةٍ تَقرَأُ <c>req.Form</c>؛ لَيسَ حارِسَ تَخويل.</summary>
+    public static TBuilder RequireFormBody<TBuilder>(this TBuilder b)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        b.AddEndpointFilter(new FormBodyFilter());
+        return b;
+    }
+
     /// <summary>تَوثيق مَطلوب — على فَشَل: 401 (لِـ JSON APIs).</summary>
     public static TBuilder RequireAuthApi<TBuilder>(this TBuilder b)
         where TBuilder : IEndpointConventionBuilder

@@ -45,7 +45,7 @@ public static class OtoShippingEndpoints
             var shipper = new Services.Deals.DealShipper(userId, AuthSession.ResolveUserName(req, slug) ?? "");
             var res = await shipping.ShipAsync(slug, id, shipper, req.Form["city"].ToString());
             return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, $"deals/{id}" + (res.Ok ? "" : $"?err={res.Code}")));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── وارِدُ حالِ الطَلَبِ مِن OTO ─────────────────────────────────

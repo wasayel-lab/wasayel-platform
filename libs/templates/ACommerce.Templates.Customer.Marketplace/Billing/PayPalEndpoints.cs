@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
+using ACommerce.Templates.Customer.Marketplace.Gates;
 
 namespace ACommerce.Templates.Customer.Marketplace.Billing;
 
@@ -210,7 +211,7 @@ public static class PayPalEndpoints
                 Services.Subscriptions.PayPalBillingService.CatalogPlanAuditAction,
                 "PlatformPlan", draft.PlanSlug, note: created.PlanId);
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── رابِطُ دَفعٍ مَرِن: المَبلَغُ والمُدَّةُ لَحظَةَ الطَلَب ──
         //
@@ -276,7 +277,7 @@ public static class PayPalEndpoints
                 Services.Subscriptions.PayPalBillingService.OrderAuditAction,
                 "TenantPlan", slug, note: $"{reference} · {result.OrderId}");
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── «التَقِط الآن» — المَخرَجُ اليَدَويُّ الَّذي يُبلَغ
         //     بِالنَقر (القاعِدَة ١٢) ──────────────────────────────────
@@ -329,7 +330,7 @@ public static class PayPalEndpoints
                 Services.Subscriptions.PayPalBillingService.CaptureAuditAction,
                 "TenantPlan", slug, note: $"{order.Id} · {result.CaptureId}");
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         return app;
     }

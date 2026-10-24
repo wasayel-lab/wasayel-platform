@@ -237,6 +237,27 @@ public class WriteEndpointGuardTests
         "Services.Deals.DealPayer(",
     };
 
+    // ─── ‏2026-10-24 (تَيّارُ S15 البَند C): بَوّابَةُ نَوعِ الجِسم — مُسَجَّلَةٌ هُنا ولَيسَت حارِسَ تَخويل ─────────────────────
+    // ‏`.RequireFormBody()` تَرُدُّ ‏415 لِما لَيسَ استِمارَةً قَبلَ أَيِّ `req.Form[…]` (كانَ ‏500). **ولا تُضافُ إلى `ChainGuards`**:
+    // رَمزٌ في تِلكَ القائِمَةِ يَجعَلُ نُقطَةً بِلا حارِسٍ غَيرِه «مَحروسَة» — وهي تَسأَلُ نَوعَ الجِسمِ لا صاحِبَه. فَتُفحَصُ بِصَفٍّ مُستَقِلٍّ
+    // بِالماسِحِ نَفسِه، والتَصنيفُ («تَقرَأُ الاستِمارَة» و«تَقبَلُ JSON أَيضاً») مِن `FormBodyGateTests` لا نُسخَةٌ ثانِيَة.
+
+    /// <summary><b>كُلُّ نُقطَةِ كِتابَةٍ تَقرَأُ الاستِمارَةَ تُعلِنُ بَوّابَةَ نَوعِ الجِسم</b> — إلّا ما يَقبَلُ JSON بِقَصدٍ ويَسأَلُ
+    /// <c>HasFormContentType</c> قَبلَ القِراءَة. ويُطبَعُ العَدّ، والصِفرُ يُحمِر (القاعِدَة ١٠).</summary>
+    [Fact]
+    public void Every_form_reading_write_endpoint_declares_the_form_body_gate()
+    {
+        var form = MinimalApiWriteEndpoints().Where(e => FormBodyGateTests.ReadsForm(e.Body)).ToList();
+        Assert.True(form.Count > 50, $"أَداةٌ عَمياء: {form.Count} نُقطَةً تَقرَأُ الاستِمارَة.");
+        var missing = form
+            .Where(e => !FormBodyGateTests.AcceptsJsonToo(e.Body) && !e.Body.Contains(".RequireFormBody(", StringComparison.Ordinal))
+            .Select(e => $"{e.File}: {e.Route}").ToList();
+        Assert.True(missing.Count == 0,
+            $"نُقطَةٌ تَقرَأُ الاستِمارَةَ بِلا .RequireFormBody() ({form.Count} مَفحوصَة) — جِسمٌ لَيسَ استِمارَةً يَرمي فَيُرَدُّ 500:\n"
+          + string.Join("\n", missing));
+        Assert.DoesNotContain(".RequireFormBody(", ChainGuards);
+    }
+
     /// <summary>أَوَّل ما يُعَدّ كِتابَةً — لِفَحص «الحارِس يَسبِق».</summary>
     private static readonly string[] WriteCalls =
     {

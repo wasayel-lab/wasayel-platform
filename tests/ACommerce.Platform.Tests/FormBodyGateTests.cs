@@ -38,14 +38,67 @@ public class FormBodyGateTests(ITestOutputHelper output)
         return form;
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم» — يُقلَبُ بِاسمِه في كوميتِ الإصلاح</b>: لا نُقطَةَ تَقرَأُ الاستِمارَةَ تُعلِنُ بَوّابَةَ نَوعِها.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، S15 C)</b>: كُلُّ نُقطَةٍ تَقرَأُ الاستِمارَةَ — إلّا اللَّتَينِ تَقبَلانِ JSON بِقَصد —
+    /// تُعلِنُ <c>.RequireFormBody()</c> <b>أَوَّلَ مُرَشِّحٍ في سِلسِلَتِها</b> (قَبلَ كُلِّ حارِسٍ مُعلَن)، فَلا يَقرَأُ جِسمَها مُرَشِّحٌ
+    /// ولا جِسمٌ قَبلَه.</summary>
     [Fact]
-    public void Today_no_form_reading_write_endpoint_declares_a_content_gate()
+    public void Every_form_reading_write_endpoint_declares_the_content_gate_first_in_its_chain()
     {
         var form = FormWriteEndpoints();
-        var gated = form.Count(e => e.Body.Contains(".RequireFormBody(", StringComparison.Ordinal));
-        output.WriteLine($"تُعلِنُ بَوّابَةَ النَوع: {gated}");
-        Assert.Equal(0, gated);
+        var single = form.Where(e => !AcceptsJsonToo(e.Body)).ToList();
+        var gated = single.Count(e => e.Body.Contains(".RequireFormBody(", StringComparison.Ordinal));
+        // أَوَّلُ مُرَشِّح: قَبلَ `DisableAntiforgery` (وَسمٌ لا مُرَشِّح) في النِقاطِ العارِيَة، وبَعدَه مُباشَرَةً حَيثُ تَتبَعُه حُرّاس.
+        var first = single.Count(e => e.Body.Contains("}).RequireFormBody().DisableAntiforgery();", StringComparison.Ordinal)
+                                   || e.Body.Contains("}).DisableAntiforgery().RequireFormBody()", StringComparison.Ordinal));
+        output.WriteLine($"تُعلِنُ بَوّابَةَ النَوع: {gated} مِن {single.Count} · أَوَّلَ السِلسِلَة: {first}");
+        Assert.Equal(single.Count, gated);
+        Assert.Equal(single.Count, first);
+        Assert.Equal(76, single.Count);
+        Assert.DoesNotContain(form.Where(e => AcceptsJsonToo(e.Body)), e => e.Body.Contains(".RequireFormBody(", StringComparison.Ordinal));
+    }
+
+    // ─── البَوّابَةُ النَقِيَّة — موجِبٌ وسالِب ─────────────────────────────────────────────────────────
+
+    private static Microsoft.AspNetCore.Http.HttpRequest Request(string? contentType)
+    {
+        var ctx = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        if (contentType is not null) ctx.Request.ContentType = contentType;
+        return ctx.Request;
+    }
+
+    [Theory]
+    [InlineData("application/x-www-form-urlencoded")]
+    [InlineData("application/x-www-form-urlencoded; charset=utf-8")]
+    [InlineData("multipart/form-data; boundary=----x")]
+    public void A_form_body_is_admitted(string contentType)
+        => Assert.True(ACommerce.Templates.Customer.Marketplace.Gates.FormBodyGate.Admits(Request(contentType)));
+
+    [Theory]
+    [InlineData("application/json")]
+    [InlineData("text/plain")]
+    [InlineData(null)]
+    public void A_body_that_is_not_a_form_is_refused(string? contentType)
+        => Assert.False(ACommerce.Templates.Customer.Marketplace.Gates.FormBodyGate.Admits(Request(contentType)));
+
+    /// <summary>والمُرَشِّحُ يَرُدُّ ‏415 بِلا أَن يُنادي النُقطَة — ويُناديها لِلاستِمارَة.</summary>
+    [Fact]
+    public async Task The_filter_answers_415_without_calling_the_endpoint_and_passes_a_form()
+    {
+        var filter = new ACommerce.Templates.Customer.Marketplace.Gates.FormBodyFilter();
+        var calls = 0;
+        Microsoft.AspNetCore.Http.EndpointFilterDelegate next = _ => { calls++; return ValueTask.FromResult<object?>("ok"); };
+
+        var json = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        json.Request.ContentType = "application/json";
+        var refused = await filter.InvokeAsync(new Microsoft.AspNetCore.Http.DefaultEndpointFilterInvocationContext(json), next);
+        var status = Assert.IsAssignableFrom<Microsoft.AspNetCore.Http.IStatusCodeHttpResult>(refused);
+        Assert.Equal(415, status.StatusCode);
+        Assert.Equal(0, calls);
+
+        var form = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        form.Request.ContentType = "application/x-www-form-urlencoded";
+        Assert.Equal("ok", await filter.InvokeAsync(new Microsoft.AspNetCore.Http.DefaultEndpointFilterInvocationContext(form), next));
+        Assert.Equal(1, calls);
     }
 
     /// <summary><b>ويَبقى بِحَرفِه</b>: النُقطَتانِ اللَّتانِ تَقبَلانِ JSON بِقَصدٍ (تَأكيدُ رَمزِ الهاتِفِ والبَريدِ في المَتجَر) تَسأَلانِ

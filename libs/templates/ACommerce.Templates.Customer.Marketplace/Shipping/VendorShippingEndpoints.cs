@@ -43,7 +43,7 @@ public static class VendorShippingEndpoints
                     after: Services.Providers.ProviderBindSurface.AuditLine(res.After));
             return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug,
                 "me/listings" + (res.Ok ? "?shipping=saved" : $"?shipping_err={res.Code}")));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── البائِعُ يَفتَحُ حِسابَ شَحنٍ عِندَ OTO بِالاعتِمادِ السوقِيّ (‏ADR-033 الخُطوَة 8، ‏2026-10-12) ─────────
@@ -76,7 +76,7 @@ public static class VendorShippingEndpoints
                 req.HttpContext.Connection.RemoteIpAddress?.ToString());
             return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug,
                 "me/listings" + (res.Ok ? "?shipping=registered" : $"?shipping_err={res.Code}")));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         return app;

@@ -247,7 +247,7 @@ public static class MarketplaceTemplateExtensions
             await AuthHandlers.RequestPhoneOtpHandler(new RequestPhoneOtp(phone), tenant, channel, default);
             var asParam = string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}";
             return Results.Redirect(Link(req, slug, $"login?stage=verify&phone={Uri.EscapeDataString(phone)}{asParam}"));
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/{slug}/auth/phone/verify",
             async (string slug, HttpRequest req, HttpResponse res, IDocumentStore store, ITenantContext tenant) =>
@@ -332,7 +332,7 @@ public static class MarketplaceTemplateExtensions
             }
             return Results.Redirect(Link(req, slug,
                 $"login?stage=verify&email={Uri.EscapeDataString(email)}{asParam}"));
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/{slug}/auth/email/verify",
             async (string slug, HttpRequest req, HttpResponse res, IDocumentStore store, ITenantContext tenant) =>
@@ -398,7 +398,7 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect(Link(req, slug,
                 $"login?stage=verify&nid={Uri.EscapeDataString(nid)}" +
                 $"&attempt={pending.AttemptId}&code={pending.DisplayCode}"));
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/{slug}/auth/nafath/verify",
             async (string slug, HttpRequest req, HttpResponse res,
@@ -422,7 +422,7 @@ public static class MarketplaceTemplateExtensions
             if (!string.IsNullOrEmpty(asRole))
                 await AssignRoleAsync(slug, result.UserId, asRole, store);
             return Results.Redirect(await PostLoginRouteAsync(slug, result.UserId, asRole, store));
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Language toggle ─────────────────────────────────────────────
         app.MapPost("/lang/{lang}", (string lang, HttpRequest req, HttpResponse res) =>
@@ -437,7 +437,7 @@ public static class MarketplaceTemplateExtensions
             // لا بِشَرط مَحَلِّيّ. كانَت تُمَرَّر كَما هي: تَحويل مَفتوح.
             return Results.Redirect(
                 Services.LocalRedirect.Resolve(req.Form["return"].ToString(), "/"));
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Logout ─────────────────────────────────────────────────────
         app.MapPost("/{slug}/auth/logout",
@@ -499,7 +499,7 @@ public static class MarketplaceTemplateExtensions
             await s.SaveChangesAsync();
             return Results.Redirect(Services.LocalRedirect.Resolve(
                 req.Form["return"].ToString(), $"/{slug}/listings/{id}"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── عَدّادُ المُشاهَدَة — أَثَرٌ جانِبيّ خارِجَ مَسار العَرض ────
@@ -619,7 +619,7 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(Link(req, slug, $"me/role/onboarding"));
             return Results.Redirect(string.IsNullOrEmpty(picked.HomeRoute)
                 ? $"/{slug}" : $"/{slug}{picked.HomeRoute}");
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         app.MapPost("/{slug}/me/role/onboarding/save",
@@ -769,7 +769,7 @@ public static class MarketplaceTemplateExtensions
             // كانَ الشَرط StartsWith("/") وَحدَه — يُمَرِّر //evil.com.
             return Results.Redirect(Services.LocalRedirect.Resolve(
                 req.Form["returnUrl"].ToString(), Link(req, slug, $"me")));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── حَذفُ الحِسابِ داخِلَ التَطبيق ──────────────────────────────
@@ -835,7 +835,7 @@ public static class MarketplaceTemplateExtensions
                 tenant?.Roles.Select(r => r.Slug) ?? Array.Empty<string>());
 
             return Results.Redirect($"/{slug}?deleted=1");
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── Plans subscribe ────────────────────────────────────────────
@@ -894,7 +894,7 @@ public static class MarketplaceTemplateExtensions
             s.Events.StartStream<ACommerce.Kit.Support.Ticket>(ev.Id, ev);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"support"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── Report listing — يَفتَح طَلَب دَعم مُسبَق التَعبِئَة ─────────
@@ -925,7 +925,7 @@ public static class MarketplaceTemplateExtensions
                 $"{userName} بَلَّغَ عَن إعلان",
                 $"/admin/tenants/{slug}/tickets");
             return Results.Redirect(Link(req, slug, $"listings/{id}?reported=1"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── Create listing — gates: auth + terms + permission ──────────
@@ -1125,7 +1125,7 @@ public static class MarketplaceTemplateExtensions
                 title,
                 $"/{slug}/listings/{id}", hub);
             return Results.Redirect(Link(req, slug, $"listings/{id}"));
-        }).DisableAntiforgery().RequireAuth().RequireTerms()
+        }).DisableAntiforgery().RequireFormBody().RequireAuth().RequireTerms()
           .RequirePermission("listing.create")
           // الحارِس مُعلَن في التَوقيع لا في الجِسم (القاعِدَة ٦): يَرُدّ
           // قَبل رَفع الصُوَر، والحَسم الذَرِّيّ في ConsumeAsync داخِل
@@ -1169,7 +1169,7 @@ public static class MarketplaceTemplateExtensions
 
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"listings/{id}?saved=1"));
-        }).DisableAntiforgery().RequireAuth().RequireListingOwner()
+        }).DisableAntiforgery().RequireFormBody().RequireAuth().RequireListingOwner()
           .RequireStoreWritable();
 
         // ─── Delete listing — نَفسُ الحارِسَين ونَفسُ الخِدمَة ──────────
@@ -1229,7 +1229,7 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect(Link(req, slug, $"me/searches?saved=1"));
 
             static string? NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         app.MapPost("/{slug}/searches/{id:guid}/delete",
@@ -1343,7 +1343,7 @@ public static class MarketplaceTemplateExtensions
             s.Events.StartStream<ACommerce.Kit.Offers.Offer>(oid, ev);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"listings/{id}?offer=submitted"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── Accept an offer (listing owner) ────────────────────────────
@@ -1541,7 +1541,7 @@ public static class MarketplaceTemplateExtensions
                     tag: $"arrived-{listingId}");
             }
             return Results.Redirect(Link(req, slug, $"listings/{listingId}?trip=arrived"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── Trip lifecycle — complete / abort ──────────────────────────
@@ -1626,7 +1626,7 @@ public static class MarketplaceTemplateExtensions
             }
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"listings/{listingId}?trip=aborted"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         app.MapPost("/{slug}/offers/{id:guid}/withdraw",
@@ -1872,7 +1872,7 @@ public static class MarketplaceTemplateExtensions
             s.Store(user);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"me/area?saved=1"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── Start direct chat with another user ────────────────────────
@@ -1922,7 +1922,7 @@ public static class MarketplaceTemplateExtensions
             s.Store(conv);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"chats/{conv.Id}"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── تَعليمُ مُحادَثَةٍ مَقروءَة — أَمرٌ صَريح لا أَثَرٌ في عَرض ──
@@ -2042,7 +2042,7 @@ public static class MarketplaceTemplateExtensions
                     url: $"/{slug}/chats/{conversationId}",
                     tag: $"chat-{conversationId}");
             return Results.Redirect(Link(req, slug, $"chats/{conversationId}"));
-        }).DisableAntiforgery().RequireAuth().RequireTerms()
+        }).DisableAntiforgery().RequireFormBody().RequireAuth().RequireTerms()
           .RequireStoreWritable();
 
         // ─── Admin: create tenant ───────────────────────────────────────
@@ -2212,7 +2212,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/admin/tenants/{slug}/roles", $"/admin/tenants/{slug}/roles", "/admin");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: decide a tenant-authored role definition ────────────
         // القَرار البَشَريّ الَّذي يُحيي تَعريفاً أَلَّفَه الوَكيل. مُعَلَّق
@@ -2244,7 +2244,7 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect(ok
                 ? $"/admin/tenants/{slug}/roles?saved=1"
                 : $"/admin/tenants/{slug}/roles?err={Uri.EscapeDataString(msg)}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: باقَةُ المُستَأجِر في وَسايِل ───────────────────────
         // **الحارِسُ حارِسُ مُشرِفِ المَنَصَّة** — بِخِلاف نُقطَةِ
@@ -2280,7 +2280,7 @@ public static class MarketplaceTemplateExtensions
                     $"?err={Uri.EscapeDataString(violations[0].Code)}");
             await s.SaveChangesAsync();
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/admin/tenants/{slug}/plan/status",
             async (string slug, HttpRequest req, IDocumentStore store,
@@ -2303,7 +2303,7 @@ public static class MarketplaceTemplateExtensions
             if (!ok) return Results.Redirect($"/admin/tenants/{slug}/plan?err=tenant_plan_missing");
             await s.SaveChangesAsync();
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // وتَعليماتُ التَحويلِ إلى وَسايِل — نَصٌّ واحِدٌ لِلمَنَصَّة
         // كُلِّها، يَراه رائِدُ الأَعمال في الاستوديو. حَرفِيَّةٌ في
@@ -2327,7 +2327,7 @@ public static class MarketplaceTemplateExtensions
                 s, settings, req.Form["instructions"].ToString(), by, DateTime.UtcNow);
             await s.SaveChangesAsync();
             return Results.Redirect("/admin/transfer?saved=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: propose / decide a tenant theme ─────────────────────
         // نَفس عَقد تَعريفات الأَدوار حَرفاً: اقتِراح يَكتُب **مُعَلَّقاً**،
@@ -2356,7 +2356,7 @@ public static class MarketplaceTemplateExtensions
             var (ok, msg) = await themes.ProposeAsync(slug, themeSlug, json, by);
             await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.theme_propose");
             return ok ? Results.Ok(msg) : Results.BadRequest(msg);
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/admin/tenants/{slug}/theme/{themeSlug}/decide",
             async (string slug, string themeSlug, HttpRequest req, IDocumentStore store,
@@ -2376,7 +2376,7 @@ public static class MarketplaceTemplateExtensions
 
             await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.theme_decide");
             return ok ? Results.Ok(msg) : Results.BadRequest(msg);
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: apply a curated preset (the live switcher) ──────────
         // نُقطَة الزِرّ الواحِد في /admin/tenants/{slug}/theme. لا تُضيف
@@ -2406,7 +2406,7 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect(ok
                 ? $"/admin/tenants/{slug}/theme?saved={Uri.EscapeDataString(msg)}"
                 : $"/admin/tenants/{slug}/theme?err={Uri.EscapeDataString(msg)}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: save categories ─────────────────────────────────────
         // إعادَة كِتابَة قائِمَة الفِئات بِالكامِل (overwrite). الإعلانات
@@ -2427,7 +2427,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/admin/tenants/{slug}", $"/admin/tenants/{slug}/categories", "/admin");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: save branding ───────────────────────────────────────
         // المَنطِق في BrandingSaveService — تَعريفٌ واحِد يُنادِيه هذا
@@ -2448,7 +2448,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/admin/tenants/{slug}", $"/admin/tenants/{slug}/branding", "/admin");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: save PWA per-role (name + custom icon) ──────────────
         // مُتَعَدِّد الـ parts (file upload). لِكُلّ دَور: name_{slug} +
@@ -2470,7 +2470,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/admin/tenants/{slug}/pwa", $"/admin/tenants/{slug}/pwa", "/admin");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: save regions ────────────────────────────────────────
         // اِحذِف كُلّ DiscoveryRegions الحالِيَّة لِلتَّينَنت ثُمّ أَعِد البِناء.
@@ -2492,7 +2492,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/admin/tenants/{slug}/regions", $"/admin/tenants/{slug}/regions", "/admin");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: save attribute definitions for a scope ──────────────
         // الـ scope إمّا CategoryId (لِإعلانات تِلك الفِئَة) أَو
@@ -2520,7 +2520,7 @@ public static class MarketplaceTemplateExtensions
             var page = $"/admin/tenants/{slug}/attributes" +
                        (request.Scope is { } id ? $"?scope={id}" : "");
             return TenantConfigSurface.Outcome(result, page, page, "/admin");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: Agent — ask ─────────────────────────────────────────
         app.MapPost("/admin/agent/ask",
@@ -2535,7 +2535,7 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect("/admin/agent?err=empty#composer");
             await agent.AskAsync(msg);
             return Results.Redirect("/admin/agent#latest");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: Agent — apply a pending tool call ───────────────────
         app.MapPost("/admin/agent/tool/{toolId}/apply",
@@ -2624,7 +2624,7 @@ public static class MarketplaceTemplateExtensions
                        ?? Results.Redirect("/studio");
 
             return Results.Redirect("/studio/auth");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── بابُ الاستوديو — عَبر القَناة المُسَجَّلَة، والغِيابُ إغلاق ──
         // ‏`IOtpChannel?` **اختِياريَّةٌ في التَوقيع** — نَفسُ شَكل نِقاط
@@ -2641,7 +2641,7 @@ public static class MarketplaceTemplateExtensions
             catch (Exception) { return Results.Redirect("/studio/auth?err=send_failed"); }
             return Results.Redirect(
                 $"/studio/auth?stage=verify&method=phone&phone={Uri.EscapeDataString(phone)}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // نَظيرُه لِلبَريد — وهُوَ ما لَم يَكُن مَوجوداً إطلاقاً: المَمنوحُ
         // بِـ`PLATFORM_ADMIN_EMAIL` كانَ مُهَيَّأً بِلا بابٍ يَبلُغُه.
@@ -2657,7 +2657,7 @@ public static class MarketplaceTemplateExtensions
             catch (Exception) { return Results.Redirect("/studio/auth?err=send_failed"); }
             return Results.Redirect(
                 $"/studio/auth?stage=verify&method=email&email={Uri.EscapeDataString(email)}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/auth/verify", async (
             HttpRequest req, HttpResponse res, IDocumentStore store,
@@ -2686,7 +2686,7 @@ public static class MarketplaceTemplateExtensions
                        req, res, user.Id, user.FullName,
                        store, scopeFactory, incubator, checkConsent: true)
                    ?? Results.Redirect("/studio");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/logout", (HttpResponse res) =>
         {
@@ -2732,7 +2732,7 @@ public static class MarketplaceTemplateExtensions
                        req, res, auth.UserId!.Value, auth.UserName ?? "",
                        store, scopeFactory, incubator, checkConsent: false)
                    ?? Results.Redirect(returnUrl);
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // تَقييم قِسم في دِراسَة (👍/👎) — لِتَحسين الـ prompt لاحِقاً.
         app.MapPost("/studio/s/{id:guid}/feedback", async (
@@ -2755,7 +2755,7 @@ public static class MarketplaceTemplateExtensions
             s.Store(session);
             await s.SaveChangesAsync();
             return Results.Redirect($"/studio/s/{id}#section-{section}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── اختِيارُ دَرَجَة — والمَدفوعَةُ لا تُمنَح ذاتِيّاً ──────
         //
@@ -2902,7 +2902,7 @@ public static class MarketplaceTemplateExtensions
                 catch { /* تُعرَض الدِراسَة كَما هي عَلى الفَشَل */ }
             });
             return Results.Redirect($"/studio/s/{id}?refining={section}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ═══ Cart + Checkout (نَمَط Order.V2) ══════════════════════════════
         // POST /{slug}/listings/{id}/cart/add — أَضِف إلى السَّلَّة.
@@ -2935,7 +2935,7 @@ public static class MarketplaceTemplateExtensions
             s.Store(cart);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, "cart"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // POST /{slug}/cart/{listingId}/qty — تَعديل كَمِّيَّة.
@@ -2956,7 +2956,7 @@ public static class MarketplaceTemplateExtensions
             s.Store(cart);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, "cart"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         app.MapPost("/{slug}/cart/clear", async (string slug, HttpRequest req, IDocumentStore store) =>
@@ -3139,7 +3139,7 @@ public static class MarketplaceTemplateExtensions
             await notices.NotifyNewDealsAsync(slug, born, l);
 
             return Results.Redirect(opened?.Url ?? Link(req, slug, firstDealId == Guid.Empty ? "deals" : $"deals/{firstDealId}"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // POST /{slug}/vendor/{vendorId}/chat — اِبدَأ مُحادَثَة مَع بائِع.
@@ -3207,7 +3207,7 @@ public static class MarketplaceTemplateExtensions
                 rating, body, dealId: id, dealPattern: deal.Pattern);
             await deals.AttachRefAsync(slug, id, $"review_{(targetIsCounterparty ? "cp" : "init")}", r.Id.ToString("N"));
             return Results.Redirect($"/studio/apps/{slug}/deals/{id}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Studio Listings moderation (إخفاء/إظهار/حَذف إشرافيّ) ───────
         app.MapPost("/studio/apps/{slug}/listings/{id:guid}/moderate",
@@ -3240,7 +3240,7 @@ public static class MarketplaceTemplateExtensions
                 $"listing.{action}", "listing", id.ToString(), note: reason,
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
             return Results.Redirect($"/studio/apps/{slug}/listings");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Studio Tickets (دَعم فَنّيّ — رَدّ + إغلاق) ──────────────────
         app.MapPost("/studio/apps/{slug}/tickets/{id:guid}/reply",
@@ -3264,7 +3264,7 @@ public static class MarketplaceTemplateExtensions
                 note: body.Length > 80 ? body[..80] + "…" : body,
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
             return Results.Redirect($"/studio/apps/{slug}/tickets/{id}?replied=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/tickets/{id:guid}/close",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
@@ -3319,7 +3319,7 @@ public static class MarketplaceTemplateExtensions
             await notices.NotifyNewDealsAsync(slug, new[] { deal.Id }, l);
 
             return Results.Redirect(Link(req, slug, $"deals/{deal.Id}"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // مالِك الإعلان يَقبَل عَرضاً → Booked + يُصبِح الطَّرَف الثاني.
@@ -3360,7 +3360,7 @@ public static class MarketplaceTemplateExtensions
             var note = req.Form["note"].ToString().Trim();
             var res = await deals.AdvanceAsync(slug, id, userId, userName, note);
             return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Code is { } code ? $"?err={code}" : "")));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // **والبائِعُ المَربوطُ يُلغي عِندَ `Offered` — رَفضُه لِلطَلَب — والمُشتَري يُخبَر** (‏ADR-033 §٦‑ج
@@ -3391,7 +3391,7 @@ public static class MarketplaceTemplateExtensions
             foreach (var gone in order?.Cancelled ?? (res.Ok ? new[] { res.Deal! } : Array.Empty<Services.Deals.Deal>()))
                 await notices.NotifyCancelledAsync(slug, gone, userId, userName, l);
             return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}")));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // تَقييم الطَّرَف الآخَر بَعد اكتِمال الصَّفقَة.
@@ -3417,7 +3417,7 @@ public static class MarketplaceTemplateExtensions
 
             var res = await reviews.SubmitAsync(slug, id, new Services.Deals.DealReviewer(userId, userName), rating, body);
             return Results.Redirect(Link(req, slug, res.Deal is null ? "deals" : $"deals/{id}"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── Admin: تَعليق/تَفعيل مُستَأجِر (إجراء مَنصَّة) ───────────────
@@ -3449,7 +3449,7 @@ public static class MarketplaceTemplateExtensions
                 "tenant", slug, note: reason,
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
             return Results.Redirect("/admin");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Studio Deals (تَدَفُّق العَمَلِيّات: المالِك يَتَدَخَّل أَو يُنفِّذ) ─
         // كُلّ الإجراءات تَفحَص مِلكِيَّة المُستَأجِر قَبل العَمَل.
@@ -3467,7 +3467,7 @@ public static class MarketplaceTemplateExtensions
                 listingId: null, listingTitle: $"عَمَلِيَّة تَجريبيَّة — {pattern}",
                 amountSar: 250m);
             return Results.Redirect($"/studio/apps/{slug}/deals");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/deals/{id:guid}/advance",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
@@ -3503,7 +3503,7 @@ public static class MarketplaceTemplateExtensions
                     note: $"→ {result.Deal.Stage}" + (string.IsNullOrEmpty(note) ? "" : $" · {note}"),
                     ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
             return Results.Redirect($"/studio/apps/{slug}/deals/{id}" + (result.Code is { } code ? $"?err={code}" : ""));
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/deals/{id:guid}/cancel",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
@@ -3529,7 +3529,7 @@ public static class MarketplaceTemplateExtensions
                 await notices.NotifyCancelledByStoreAsync(slug, gone, auth.UserId!.Value, l);
             }
             return Results.Redirect($"/studio/apps/{slug}/deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}"));
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/deals/{id:guid}/dispute",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
@@ -3546,7 +3546,7 @@ public static class MarketplaceTemplateExtensions
                 "deal.dispute", "deal", id.ToString(), note: reason,
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
             return Results.Redirect($"/studio/apps/{slug}/deals/{id}" + (res.Ok ? "" : $"?err={res.Code}"));
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Studio per-app config saves (داخِل studio، redirect مَحَلّيّ) ─
         // مُحَقِّق المِلكِيَّة: المُستَخدِم يَجِب أَن يَكون مالِك الـ tenant.
@@ -3645,7 +3645,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/studio/apps/{slug}/branding", $"/studio/apps/{slug}/branding", "/studio");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Studio: تَأليفُ باقَةٍ لِمُستَخدِمي المَتجَر ───────────────
         // **أَوَّلُ كاتِبٍ لِـ`TenantPlanDefinition` في المُستَودَع**:
@@ -3678,7 +3678,7 @@ public static class MarketplaceTemplateExtensions
 
             var (ok, msg) = await plans.AuthorAsync(slug, definition, $"studio · {auth.UserId}");
             return Results.Redirect(ok ? $"{page}?saved=1" : $"{page}?err={Uri.EscapeDataString(msg)}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Studio: اقتِراحُ حُزمَةِ مَظهَر ────────────────────────────
         // **الناقِصُ كانَ الاقتِراحَ لا القَرار**: دَورَةُ اعتِمادِ
@@ -3703,7 +3703,7 @@ public static class MarketplaceTemplateExtensions
 
             return Results.Redirect($"/studio/apps/{slug}/theme?" +
                 (ok ? "saved=1" : $"err={Uri.EscapeDataString(msg)}"));
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/categories/save", async (
             string slug, HttpRequest req, IDocumentStore store,
@@ -3719,7 +3719,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/studio/apps/{slug}/categories", $"/studio/apps/{slug}/categories", "/studio");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/roles/save", async (
             string slug, HttpRequest req, IDocumentStore store,
@@ -3735,7 +3735,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/studio/apps/{slug}/roles", $"/studio/apps/{slug}/roles", "/studio");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/regions/save", async (
             string slug, HttpRequest req, IDocumentStore store,
@@ -3751,7 +3751,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/studio/apps/{slug}/regions", $"/studio/apps/{slug}/regions", "/studio");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Studio: save PWA apps (per-role name + icon) ───────────────
         // نَفس مَنطِق /admin/tenants/{slug}/pwa/save لَكِن داخِل واجِهَة الـ
@@ -3770,7 +3770,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/studio/apps/{slug}/pwa", $"/studio/apps/{slug}/pwa", "/studio");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Studio: save attribute definitions for a scope ─────────────
         // نَفس مَنطِق /admin/tenants/{slug}/attributes/save لَكِن داخِل واجِهَة
@@ -3791,7 +3791,7 @@ public static class MarketplaceTemplateExtensions
             var page = $"/studio/apps/{slug}/attributes" +
                        (request.Scope is { } id ? $"?scope={id}" : "");
             return TenantConfigSurface.Outcome(result, page, page, "/studio");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // بِناء Tenant فِعليّ مِن جَلسَة تَحليل (الجِسر بَين الفِكرَة والتَّطبيق).
         app.MapPost("/studio/s/{id:guid}/build", async (
@@ -3845,7 +3845,7 @@ public static class MarketplaceTemplateExtensions
                 session.SuggestedPattern, sector, channel, ownerId, id);
             await tier.RecordStoreBuiltAsync(ownerId);
             return Results.Redirect($"/studio/apps/{slug}?built=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // إعادَة تَحليل مِن داخِل لوحَة العميل (تُبقيه في مَساحَة /studio).
         //
@@ -3946,7 +3946,7 @@ public static class MarketplaceTemplateExtensions
             if (!string.IsNullOrEmpty(qid))
                 await svc.SaveAnswerAsync(id, qid, answer);
             return Results.Redirect($"/admin/incubator/{id}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/admin/incubator/{id:guid}/analyze",
             async (Guid id, IServiceScopeFactory scopeFactory, IDocumentStore store,
@@ -4026,7 +4026,7 @@ public static class MarketplaceTemplateExtensions
                 "apikey.issue", "apikey", issued.Key.Id, note: issued.Key.Name,
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
             return Results.Redirect($"/studio/apps/{slug}/keys?issued={issued.Key.Id}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/keys/{keyId}/revoke", async (
             string slug, string keyId, HttpRequest req, IDocumentStore store,
@@ -4092,7 +4092,7 @@ public static class MarketplaceTemplateExtensions
                 after: Services.Providers.ProviderBindSurface.AuditLine(bound));
 
             return Results.Redirect($"/studio/apps/{slug}/providers?bound={read.Capability}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // السَحبُ يُوقِفُ **الآن** — ولِذلك لا يَمُرّ بِدَورَةِ اعتِماد.
         app.MapPost("/studio/apps/{slug}/providers/{capability}/revoke", async (

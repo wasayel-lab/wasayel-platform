@@ -3,6 +3,7 @@ using ACommerce.Platform.I18n;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using ACommerce.Templates.Customer.Marketplace.Gates;
 
 namespace ACommerce.Templates.Customer.Marketplace.Billing;
 
@@ -45,7 +46,7 @@ public static class TenantGatewayEndpoints
             var res = await gateway.VerifyAsync(slug, payer, req.Form[Services.Deals.GatewayReturn.DealKey].ToString());
             await notices.NotifyPaidAsync(slug, res.Confirmed, l);
             return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, Services.Deals.GatewayReturn.AfterVerify(res)));
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         return app;
     }
