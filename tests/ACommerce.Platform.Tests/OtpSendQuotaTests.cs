@@ -213,6 +213,29 @@ public class OtpSendQuotaTests(ITestOutputHelper output)
             ACommerce.Platform.I18n.LocaleCatalog.Arabic, "auth.login.err_send_failed")));
     }
 
+    /// <summary><b>«اليَوم»</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-security-9، صُغرى — يُثَبَّتُ قَبلَ العِلاجِ ويَنقَلِبُ بِاسمِه): بابُ الجَوّالِ يُنادي
+    /// <c>RequestPhoneOtpHandler</c> بِلا <c>try</c> — فَرَدُّ الحِصَّةِ في الحادِيَ عَشَرَ (<c>rate_limited</c>) أَو عُطلُ القَناةِ يَخرُجُ صَفحَةَ ‏500،
+    /// بَينَما بابُ البَريدِ وبابُ الاستوديو يَلتَقِطانِ ويَعودانِ بِـ<c>send_failed</c>.</summary>
+    [Fact]
+    public void Today_the_phone_door_lets_a_refused_or_failed_send_escape_as_a_server_error()
+    {
+        var ext = WriteEndpointGuardTests.StripComments(StudioConsentCharacterizationTests.Endpoints());
+        var at = ext.IndexOf("app.MapPost(\"/{slug}/auth/phone/login\"", StringComparison.Ordinal);
+        Assert.True(at > 0, "لا بابَ جَوّال — الأَداةُ عَمياء.");
+        var body = ext[at..ext.IndexOf("app.MapPost(", at + 10, StringComparison.Ordinal)];
+        var call = body.IndexOf("AuthHandlers.RequestPhoneOtpHandler(", StringComparison.Ordinal);
+        Assert.True(call > 0, "لا نِداءَ إرسالٍ في بابِ الجَوّال — الأَداةُ عَمياء.");
+        Assert.DoesNotContain("try", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("send_failed", body, StringComparison.Ordinal);
+
+        // والجاران يَلتَقِطان — بابُ البَريدِ وبابُ الاستوديو.
+        var email = ext[ext.IndexOf("app.MapPost(\"/{slug}/auth/email/login\"", StringComparison.Ordinal)..];
+        Assert.Contains("err=send_failed", email[..email.IndexOf("app.MapPost(", 10, StringComparison.Ordinal)], StringComparison.Ordinal);
+        var studio = ext[ext.IndexOf("app.MapPost(\"/studio/auth/login\"", StringComparison.Ordinal)..];
+        Assert.Contains("catch (Exception) { return Results.Redirect(\"/studio/auth?err=send_failed\"); }",
+            studio[..studio.IndexOf("app.MapPost(", 10, StringComparison.Ordinal)], StringComparison.Ordinal);
+    }
+
     // ─── ٦. المُحاوَلَةُ المُنتَهِيَةُ تُطرَدُ حينَ يُصدَرُ ما بَعدَها ───────────────────────────────────
 
     // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_an_expired_attempt_stays_in_memory_after_new_codes_are_issued`.
