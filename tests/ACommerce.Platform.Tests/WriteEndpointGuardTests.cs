@@ -354,6 +354,46 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
         Assert.DoesNotContain(violations, v => v.StartsWith("/x/sound", StringComparison.Ordinal));
     }
 
+    // ─── ‏2026-10-24 (مُراجَعَةُ تَيّارِ S15 الجَولَة 2، minor عَلى 428fc59): والماسِحُ يَرى السَلَّةَ بِاسمِها الكامِلِ وَحدَه ───────────────
+    // ‏`CartWriters` يَعُدُّ نُقطَةً تَكتُبُ سَلَّةً إن حَمَلَ جِسمُها `ACommerce.Kit.Cart.Cart`، فَنُقطَةٌ في مِلَفٍّ يَستَورِدُ `using ACommerce.Kit.Cart;` (أَو
+    // يَسكُنُ فَضاءَه، أَو يُسَمّيه بِاسمٍ مُستَعار) وتَكتُبُ `new Cart { … }` و`LoadAsync<Cart>` — وهذا شَكلُ `CartHandlers.cs` في العُدَّة — لا هِيَ وِلادَةٌ
+    // ولا تَعديل، فَلا تَراها القائِمَةُ الثُنائِيَّة. فَبَدَلَ مُطارَدَةِ الاسمِ المُختَصَرِ في كُلِّ جِسمٍ يُمنَعُ مَنبَعُه: لا مِلَفَّ يَحمِلُ نُقطَةً (minimal API أَو
+    // ‏Wolverine) يُسَمّي فَضاءَ السَلَّةِ قَصيراً. وفاحِصُ الوِلادَةِ يَبقى بِحَرفِه.
+
+    private static readonly System.Text.RegularExpressions.Regex CartShortName = new(
+        @"^\s*(?:using\s+ACommerce\.Kit\.Cart\s*;|using\s+\w+\s*=\s*ACommerce\.Kit\.Cart(?:\.Cart)?\s*;|namespace\s+ACommerce\.Kit\.Cart\b)",
+        System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>أَيُسَمّي هذا المَصدَرُ فَضاءَ السَلَّةِ بِاسمٍ قَصيرٍ لا يَراه <see cref="CartWriters"/>؟ — بَعدَ تَبييضِ التَعليقات.</summary>
+    private static bool NamesTheCartShort(string source) => CartShortName.IsMatch(StripComments(source));
+
+    /// <summary><b>لا مِلَفَّ نِقاطٍ يُسَمّي السَلَّةَ قَصيراً</b> — فَكُلُّ قِراءَةٍ أَو كِتابَةٍ لِسَلَّةٍ في جِسمِ نُقطَةٍ تَحمِلُ الاسمَ الكامِلَ الَّذي يَعُدُّه
+    /// ماسِحُ بابِ السَلَّة. ويَطبَعُ عَدَدَ المِلَفّاتِ المَفحوصَة، والصِفرُ يُحمِر (القاعِدَة ١٠).</summary>
+    [Fact]
+    public void No_endpoint_file_names_the_cart_by_a_short_name_the_cart_door_scanner_cannot_see()
+    {
+        var files = AllMinimalApiEndpoints().Concat(WolverineWriteEndpoints()).Select(e => e.File)
+            .Distinct(StringComparer.Ordinal).OrderBy(f => f, StringComparer.Ordinal).ToList();
+        var shortNamed = files.Where(f => NamesTheCartShort(
+            File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, f.Replace('/', Path.DirectorySeparatorChar))))).ToList();
+        output.WriteLine($"مِلَفّاتُ نِقاطٍ مَفحوصَة: {files.Count} · تُسَمّي السَلَّةَ قَصيراً: {shortNamed.Count} ({string.Join(" · ", shortNamed)})");
+
+        Assert.True(files.Count > 5, $"أَداةٌ عَمياء: {files.Count} مِلَفّاً.");
+        Assert.Empty(shortNamed);
+    }
+
+    /// <summary><b>والفاحِصُ يَحمَرّ</b>: الاستيرادُ والاسمُ المُستَعارُ والفَضاءُ وما تَحتَه (<c>Cart.Server</c> يَرى <c>Cart</c> قَصيراً) يُمسَكون، والاسمُ الكامِلُ والتَعليقُ وفَضاءٌ يُشبِهُه اسماً لا.</summary>
+    [Fact]
+    public void The_short_cart_name_check_catches_an_import_an_alias_and_the_namespace_and_passes_the_full_name()
+    {
+        Assert.True(NamesTheCartShort("using System;\nusing ACommerce.Kit.Cart;\nclass X { }"));
+        Assert.True(NamesTheCartShort("using C = ACommerce.Kit.Cart.Cart;\nclass X { }"));
+        Assert.True(NamesTheCartShort("namespace ACommerce.Kit.Cart.Server;\nclass X { }"));
+        Assert.False(NamesTheCartShort("class X { void M() { var c = new ACommerce.Kit.Cart.Cart(); } }"));
+        Assert.False(NamesTheCartShort("// using ACommerce.Kit.Cart;\nclass X { }"));
+        Assert.False(NamesTheCartShort("using ACommerce.Kit.CartExtras;\nclass X { }"));
+    }
+
     /// <summary>أَوَّل ما يُعَدّ كِتابَةً — لِفَحص «الحارِس يَسبِق».</summary>
     private static readonly string[] WriteCalls =
     {
