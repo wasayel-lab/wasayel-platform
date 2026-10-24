@@ -1,3 +1,4 @@
+using System.Net;
 using ACommerce.Kit.Delivery;
 using ACommerce.Platform.Providers;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
@@ -98,5 +99,123 @@ public class ShipViewSingleUnsealTests(ITestOutputHelper output)
         Assert.True(ready);
         Assert.True(click.Ok);
         Assert.Equal(0, SecretOpens(log));
+    }
+
+    // ═══ والفَكُّ الباقي رَمزُ التَحديث — تَوصيفُ «اليَوم» (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1؛ ‏ADR-033 §٧‑ص‑١٠) ═══════════════════
+    //
+    // البَندُ I(2) طَلَبَ «فَكَّ قيمَةٍ واحِدَةٍ فَلا يُظهِرُ عَرضُ الصَفحَةِ رَمزَ التَحديث»، والإصلاحُ (`c1d7bb6`) أَبقى الرَمزَ وأَسقَطَ السِرّ — فَالرَمزُ الدائِمُ
+    // لِحِسابِ البائِعِ عِندَ OTO يُفَكُّ في كُلِّ عَرض. **والعَدّادُ هُنا عَلى الرَمز**: رَمزٌ مَختومٌ بِخِزانَةٍ أُخرى، فَأَيُّ مُحاوَلَةٍ لِفَكِّه تَكتُبُ سَطرَ
+    // «does not open» القائِم، والسِرُّ يَنفَكّ. والخِزانَةُ بِلا لوغٍ عَمداً (`ProviderVault.cs`: «لا لوغَ في هذا المِلَفِّ أَصلاً») فَالفَكُّ النّاجِحُ صامِت —
+    // **فَالفَخُّ هُوَ العَدّادُ الوَحيدُ بِلا خَيطٍ في الكودِ المُنتِج**، والمَدخَلُ يُعادُ سَليماً بَعدَ العَرضِ فَتَشحَنُ النَقرَة.
+    //
+    // **وصَفّا «Today_» يُقلَبانِ بِاسمَيهِما** في كوميتِ الإصلاح، وصَفُّ «لا سِرَّ مَختوم» يَبقى بِحَرفِه.
+
+    private static int TokenOpens(ShipCapturingLogger log) => SecretOpens(log);
+
+    /// <summary>مَدخَلُ البائِعِ بِسِرٍّ يَنفَكُّ بِخِزانَةِ العالَمِ ورَمزٍ — إن <paramref name="trapToken"/> — مَختومٍ بِخِزانَةٍ أُخرى.</summary>
+    private static TenantProviderBinding EntryWith(DealShipTests.World w, bool trapToken, bool secret = true)
+    {
+        var entry = DealShipTests.VendorEntry(w.Vault, Slug, DealShipTests.Seller, secret: secret ? DealShipTests.WebhookSecret : null);
+        if (trapToken)
+        {
+            var refresh = VendorShippingSurface.RefreshField!;
+            entry.Values[refresh] = StoredValue.Sealed(DealShipTests.NewVault(), CredentialKinds.SecretKey,
+                DealShipTests.VendorToken, VendorShippingSurface.AadFor(Slug, refresh, DealShipTests.Seller));
+        }
+        return entry;
+    }
+
+    private static DealShipping ShippingOn(DealShipTests.World w, ProviderVault vault, ShipCapturingLogger log)
+    {
+        var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, RefreshToken = DealShipTests.ConfigToken });
+        return new DealShipping(w.Deals,
+            new OtoClient(new HttpClient(w.Oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance),
+            options, log, w.Providers, vault, new FixedClock(DealShipTests.Now));
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم»</b>: مَدخَلٌ سِرُّه يَنفَكّ — والرَمزُ فَخٌّ مُدَّةَ العَرضِ وَحدَها. العَرضُ يُحاوِلُ فَكَّ الرَمزِ (سَطرٌ واحِد) فَيُقرَأُ «غَيرَ جاهِز»؛
+    /// ثُمَّ يُعادُ الرَمزُ سَليماً فَتَشحَنُ النَقرَة. أَي: رَمزُ التَحديثِ الدائِمُ يُفَكُّ في كُلِّ عَرضٍ لِلصَفحَةِ لِبائِعِها.</summary>
+    [Fact]
+    public async Task Today_the_vendor_view_opens_the_refresh_token_on_an_entry_whose_secret_opens()
+    {
+        var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
+        var log = new ShipCapturingLogger();
+        var shipping = ShippingOn(w, w.Vault, log);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+
+        w.Docs.Put(EntryWith(w, trapToken: true));
+        var ready = await shipping.CarrierReadyForViewerAsync(Slug, deal, DealShipTests.Vendor);
+        var viewOpens = TokenOpens(log);
+        w.Docs.Put(EntryWith(w, trapToken: false));
+        var click = await shipping.ShipAsync(Slug, w.Id, DealShipTests.Vendor, "Riyadh");
+        output.WriteLine($"العَرض: جاهِز={ready} · فَكُّ الرَمز={viewOpens} — النَقرَة (الرَمزُ سَليم): {click.Code ?? "ok"} · أَسطُر={TokenOpens(log) - viewOpens}");
+
+        Assert.False(ready);
+        Assert.Equal(1, viewOpens);
+        Assert.True(click.Ok, click.Code);
+        Assert.Equal(0, TokenOpens(log) - viewOpens);
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم» — والنِصفُ الَّذي يَقَعُ بِالكود</b>: لَصقٌ يُسَجِّلُ وارِدَه بِالمِفتاحِ الرَئيسِ الأَوَّل، ثُمَّ يَتَبَدَّلُ المِفتاحُ ويَلصِقُ البائِعُ
+    /// رَمزَه مِن جَديدٍ وتَرُدُّ OTO تَسجيلَ الوارِد — فَيُختَمُ الرَمزُ بِالجَديدِ ويَبقى السِرُّ بِالقَديم (<c>ConnectAsync</c>: «السِرُّ يُستَبدَلُ حينَ تَقبَلُه OTO
+    /// وَحدَه»). العَرضُ يَفُكُّ الرَمزَ فَيَرسُمُ البابَ «جاهِزاً»، والنَقرَةُ تَفُكُّ الاثنَينِ فَتُجابُ <c>carrier_unavailable</c> — في كُلِّ نَقرَة (القاعِدَة ١٢).</summary>
+    [Fact]
+    public async Task Today_a_repaste_after_a_master_key_change_whose_registration_fails_draws_a_ship_door_every_click_refuses()
+    {
+        var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
+        Assert.True((await Surface(w, w.Vault).SaveTokenAsync(Slug, Vendor, "RT-first-key-1a1a", Inbound)).Ok);
+        var changed = DealShipTests.NewVault();
+        w.Oto.Routes[OtoClient.WebhookPath] = _ => OtoRouteHandler.Json(HttpStatusCode.ServiceUnavailable, "<html/>");
+        Assert.True((await Surface(w, changed).SaveTokenAsync(Slug, Vendor, "RT-second-key-2b2b", Inbound)).Ok);
+        w.Oto.Calls.Clear();
+
+        var log = new ShipCapturingLogger();
+        var shipping = ShippingOn(w, changed, log);
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+        var ready = await shipping.CarrierReadyForViewerAsync(Slug, deal, DealShipTests.Vendor);
+        var viewOpens = SecretOpens(log);
+        var click = await shipping.ShipAsync(Slug, w.Id, DealShipTests.Vendor, "Riyadh");
+        output.WriteLine($"العَرض: جاهِز={ready} · أَسطُر={viewOpens} — النَقرَة: {click.Code ?? "ok"} · أَسطُر={SecretOpens(log) - viewOpens} · نِداءاتُ OTO: {w.Oto.Calls.Count}");
+
+        Assert.True(ready);
+        Assert.Equal(0, viewOpens);
+        Assert.Equal(DealShipAuthorization.CarrierUnavailable, click.Code);
+        Assert.Equal(1, SecretOpens(log) - viewOpens);
+        Assert.Empty(w.Oto.Calls);
+    }
+
+    /// <summary><b>ويَبقى بِحَرفِه</b>: مَدخَلٌ بِلا سِرٍّ مَختومٍ (تَسجيلٌ لَم يَنجَح قَطّ) لَيسَ لَه ما يُفَكُّ غَيرُ الرَمز — فَالعَرضُ يَفُكُّه: فَخٌّ ⇒ سَطرٌ واحِدٌ
+    /// و«غَيرُ جاهِز»، وسَليمٌ ⇒ «جاهِز» بِلا سَطر.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Without_a_sealed_secret_the_token_is_the_one_value_the_view_opens(bool trapToken)
+    {
+        var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
+        var log = new ShipCapturingLogger();
+        var shipping = ShippingOn(w, w.Vault, log);
+        w.Docs.Put(EntryWith(w, trapToken, secret: false));
+        var deal = (await w.Deals.LoadAsync(Slug, w.Id))!;
+
+        var ready = await shipping.CarrierReadyForViewerAsync(Slug, deal, DealShipTests.Vendor);
+        output.WriteLine($"[فَخّ={trapToken}] العَرض: جاهِز={ready} · فَكُّ الرَمز={TokenOpens(log)}");
+
+        Assert.Equal(!trapToken, ready);
+        Assert.Equal(trapToken ? 1 : 0, TokenOpens(log));
+    }
+
+    private const string Inbound = "https://wasayel.example/theme-demo/shipping/oto/order-status";
+
+    private static ListingVendor Vendor => ListingVendorGate.Admit(DealShipTests.Seller, "بائِع", 1).Vendor!;
+
+    /// <summary>سَطحُ البائِعِ عَلى العالَمِ بِخِزانَةٍ بِعَينِها — كَما تَبنيه <c>VendorShippingTests.Surface</c>.</summary>
+    private static VendorShippingService Surface(DealShipTests.World w, ProviderVault vault)
+    {
+        var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, RefreshToken = DealShipTests.ConfigToken });
+        return new VendorShippingService(w.Providers, vault,
+            new OtoClient(new HttpClient(w.Oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options,
+            new ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditWriter(w.Docs.Store),
+            new ACommerce.Templates.Customer.Marketplace.Services.Api.ApiKeyRevealStore(
+                new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions())));
     }
 }
