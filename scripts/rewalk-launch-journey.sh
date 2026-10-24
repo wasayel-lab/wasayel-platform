@@ -51,6 +51,9 @@
 #  سُؤالاً وسُؤالانِ فَوقَه: الأَوَّلُ لِأَنّ السُؤالَ الأَوَّلَ في الثانِيَةِ صِفرٌ فَيَقَعُ ما بَعدَه عِندَ السَقفِ نَفسِه، والثاني
 #  لِكِتاباتِ القاعِدَةِ بَعدَ النِداءَين (اليَومَ 62، آخِرُها بَعدَ ≥ 122 ثانِيَة). فَالجَلسَةُ تَبلُغُ «اكتَمَلَ» أَو «فَشِلَ»
 #  داخِلَ النافِذَةِ ما لَم تَعلَق، ويُطبَعُ السَقفُ والنافِذَةُ قَبلَ الانتِظار وما انتُظِرَ فِعلاً بَعدَه.
+#  ‏(‏2026-10-24، تَيّارُ S15 البَند K — ولا يُعادُ حَرفٌ فَوقَه: المُهلَةُ صارَت مِن الطَلَبِ لا مِن العَميل — `HttpClient.Timeout`
+#  بِلا حَدّ، ونِداءُ التَحليلِ تَحتَ `AgentCallBound.Background` ‏420ث، فَالسَقفُ 2 × 420ث = 840 ثانِيَة والنافِذَةُ 422 سُؤالاً.
+#  ويُقرَأُ سَطرُ `Background = TimeSpan.FromSeconds(N)` بِحَرفِه.)
 #  ‏(‏2026-10-13، المُراجَعَةُ الثانِيَة: كانَ 15 — ‏30 ثانِيَة — فَبَديلٌ يُجيبُ بَعدَ 40 ثانِيَةً قُرِئَ «لا اكتِمالَ
 #  ولا فَشَل» وسَقَطَت الجَولَةُ إلى مَسارِ التَطوير، فَوَقَفَت عِندَ الخُطوَة ٢ «بِلا مِفتاحٍ يَلزَمُ
 #  INCUBATOR_SAMPLE_SEED=1» — فُحِصَ 11 · فَشِلَ 2.)
@@ -181,9 +184,10 @@ command -v jq >/dev/null || { echo "✗ jq غائِب — بِه يُقرَأُ 
 # تَبتَلِعُ استِثناءَها خَطَأً فَتَمضي الحَلقَة). وبَعدَه كِتاباتُ القاعِدَةِ وَحدَها — والنافِذَةُ الافتِراضِيَّةُ نِصفُه سُؤالاً
 # وسُؤالانِ فَوقَه (لِماذا اثنانِ: «الاستِعمال» أَعلاه).
 CALLS="$(awk '/RunAnalysisAsync\(Guid/{f=1} f' "$ANALYSIS_SVC" | grep -m1 -o 'attempt < [0-9]*' | grep -o '[0-9]*$')"
-CALL_SECS="$(grep -o 'Timeout = TimeSpan.FromSeconds([0-9]*)' "$BACKENDS" | grep -o '[0-9][0-9]*' | sort -n | tail -1)"
+# ‏(‏2026-10-24، S15 K): مُهلَةُ نِداءِ التَحليلِ `AgentCallBound.Background` لا `HttpClient.Timeout` — العَميلُ بِلا حَدّ.
+CALL_SECS="$(grep -o 'Background = TimeSpan.FromSeconds([0-9]*)' "$BACKENDS" | grep -o '[0-9][0-9]*' | sort -n | tail -1)"
 [ -n "$CALLS" ] && [ -n "$CALL_SECS" ] || {
-    echo "✗ سَقفُ التَحليلِ غائِب: «attempt < N» في FeasibilityAnalysisService.cs أَو «Timeout = TimeSpan.FromSeconds(N)» في AgentBackends.cs" >&2; exit 2; }
+    echo "✗ سَقفُ التَحليلِ غائِب: «attempt < N» في FeasibilityAnalysisService.cs أَو «Background = TimeSpan.FromSeconds(N)» في AgentBackends.cs" >&2; exit 2; }
 SERVER_BOUND=$((CALLS * CALL_SECS))
 DEFAULT_TRIES=$((SERVER_BOUND / 2 + 2))
 ANALYZE_TRIES="${ANALYZE_TRIES:-$DEFAULT_TRIES}"
@@ -260,7 +264,8 @@ case "$ANALYSIS" in
   done)   check 1 "GET /studio/s/$ENT_SID → التَحليلُ اكتَمَلَ بَعدَ $WAITED ثانِيَة، واستِمارَةُ البِناءِ مَرسومَة" ;;
   failed) # الرِسالَةُ بِشَكلِ `AgentErrorText`: «تَسميَة (عُنوان) رَمز: جِسم» أَو «تَسميَة (عُنوان) exception: رِسالَة» — يُطبَعُ
           # صَدرُها: الرَمزُ وَحدَه، أَو رِسالَةُ الاستِثناءِ كامِلَةً (مُهلَةُ النِداءِ تَقولُ نَفسَها: «HttpClient.Timeout»).
-          WHERE="$(dec "$F" | grep -oE '[A-Za-z0-9_-]+ \(https?://[^)]*\) ([0-9]{3}|exception: [^<]*)' | head -1)"
+          # ‏(‏2026-10-24، S15 K): ومُهلَةُ النِداءِ صارَت «timeout: … (AgentCallBound.Background, AgentBackends.cs)».
+          WHERE="$(dec "$F" | grep -oE '[A-Za-z0-9_-]+ \(https?://[^)]*\) ([0-9]{3}|exception: [^<]*|timeout: [^<]*)' | head -1)"
           check 1 "GET /studio/s/$ENT_SID → «$FAILED_TITLE» بَعدَ $WAITED ثانِيَة — ${WHERE:-بِلا تَسميَة}"
           # ‏«المِفتاح» سَبَبٌ يُسَمّى عَلى رَدِّ 401 وَحدَه؛ وما سِواه — مُهلَةٌ، 5xx، رَدٌّ لا يُقرَأ — يُقالُ أَنّه غَيرُه.
           if [[ "$WHERE" == *") 401" ]]; then
@@ -273,7 +278,7 @@ case "$ANALYSIS" in
           if [ "$WAITED" -lt "$SERVER_BOUND" ]; then
               die "التَحليلُ ما زالَ جارِياً بَعدَ $WAITED ثانِيَة، دونَ سَقفِ نِداءاتِ الخادِم ($SERVER_BOUND ثانِيَة) — أَعِد بِـANALYZE_TRIES أَكبَر (افتِراضُه $DEFAULT_TRIES)"
           else
-              die "التَحليلُ ما زالَ جارِياً بَعدَ $WAITED ثانِيَة، فَوقَ سَقفِ نِداءاتِ الخادِم ($SERVER_BOUND ثانِيَة) وما بَعدَه كِتاباتُ القاعِدَةِ وَحدَها — فَالجَلسَةُ عالِقَةٌ لا بَطيئَة: استِثناءٌ خارِجَ النِداءِ يَبتَلِعُه «catch { }» حَولَ RunAnalysisAsync فَيُبقيها «جارِيَة»"
+              die "التَحليلُ ما زالَ جارِياً بَعدَ $WAITED ثانِيَة، فَوقَ سَقفِ نِداءاتِ الخادِم ($SERVER_BOUND ثانِيَة) وما بَعدَه كِتاباتُ القاعِدَةِ وَحدَها — فَالجَلسَةُ عالِقَةٌ لا بَطيئَة: استِثناءٌ خارِجَ النِداءِ حَولَ RunAnalysisAsync يُبقيها «جارِيَة» — وسَطرُه في سِجِلِّ الخادِم «[studio] analysis_run_failed»"
           fi ;;
   *)      check 0 "GET /studio/s/$ENT_SID → $CODE · لا «$ANALYZING» ولا «$FAILED_TITLE» ولا استِمارَةُ بِناء"
           die "حالَةُ جَلسَةِ التَحليلِ لا يَعرِفُها السكربت بَعدَ $WAITED ثانِيَة — ولا يُسقَطُ إلى مَسارِ التَطويرِ إلّا عَلى «$FAILED_TITLE»" ;;

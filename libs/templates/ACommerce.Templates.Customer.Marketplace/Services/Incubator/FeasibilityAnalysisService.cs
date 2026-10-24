@@ -178,11 +178,17 @@ public sealed class FeasibilityAnalysisService
     /// <summary>
     /// <para><b>مَتى تُعتَبَرُ تَشغيلَةٌ «قَيدَ التَحليل» مَهجورَة</b> —
     /// و<b>الرَقَمُ مَحسوبٌ مِنَ الكودِ لا مُختَرَعاً</b> (القاعِدَة
-    /// ١٦): مُهلَةُ عَميلِ HTTP في الخَلفِيّاتِ الثَلاثِ جَميعاً
-    /// <c>60</c> ثانِيَة (‏<c>AgentBackends.cs</c>)، و
+    /// ١٦): مُهلَةُ كُلِّ نِداءٍ في الخَلفِيَّةِ
+    /// <see cref="AgentCallBound.Background"/> ‏420 ثانِيَة (‏<c>AgentBackends.cs</c>)، و
     /// <see cref="RunAnalysisAsync"/> يُحاوِلُ <b>مَرَّتَين</b> —
-    /// فَأَقصى عُمرٍ مُمكِنٍ لِتَشغيلَةٍ حَيَّةٍ دَقيقَتان. والضِعفُ
-    /// هامِشُ أَمانٍ لِلشَبَكَةِ وقاعِدَةِ البَيانات.</para>
+    /// فَأَقصى عُمرٍ مُمكِنٍ لِتَشغيلَةٍ حَيَّةٍ 14 دَقيقَة. والضِعفُ
+    /// هامِشُ أَمانٍ لِلشَبَكَةِ وقاعِدَةِ البَيانات ← 28.</para>
+    ///
+    /// <para><b>وكانَ 4 دَقائِقَ إلى ‏2026-10-24</b> (تَيّارُ S15 البَند K): يَومَ كانَت المُهلَةُ <c>HttpClient.Timeout</c> ‏60 ثانِيَة
+    /// لِكُلِّ نِداء. فَطالَت مُهلَةُ نِداءِ الخَلفِيَّةِ فَطالَ هذا مَعَها <b>بِالقاعِدَةِ نَفسِها</b> — وإلّا عُدَّت تَشغيلَةٌ حَيَّةٌ في
+    /// مُحاوَلَتِها الثانِيَةِ مَهجورَةً وأُطلِقَت ثانِيَةٌ فَوقَها (إنفاقٌ مُضاعَف). وكُلفَتُه مَقروءَة: جَلسَةٌ ماتَت عَمَلِيَّتُها
+    /// (إعادَةُ نَشرٍ في مُنتَصَفِ التَحليل) تَبقى «جارِيَة» 28 دَقيقَةً لا 4 — «أ» S15·٧. والعَلاقَةُ يَقيسُها
+    /// <c>AnalysisCallBoundTests</c>.</para>
     ///
     /// <para><b>ولِماذا يوجَدُ هذا أَصلاً</b>: بِلا مُهلَةِ تَقادُمٍ،
     /// عَمَلِيَّةٌ تَموتُ في مُنتَصَفِ التَحليلِ تَترُكُ الدِراسَةَ
@@ -196,10 +202,34 @@ public sealed class FeasibilityAnalysisService
     /// يَقرَؤونَ نَفسَ رَقمِ التَشغيلَةِ ويَتَصادَمونَ عَلى نَفسِ
     /// المِفتاح.</para>
     /// </summary>
-    public static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(4);
+    public static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(28);
 
     internal static bool IsStale(IncubatorSession s, DateTime nowUtc)
         => nowUtc - s.UpdatedAt >= StaleAfter;
+
+    /// <summary>بادِئَةُ سَطرِ فَشَلِ التَشغيلِ في الخَلفِيَّة — يُبحَثُ عَنها في سِجِلِّ الخادِم.</summary>
+    public const string BackgroundFailurePrefix = "[studio] analysis_run_failed";
+
+    /// <summary>
+    /// <para><b>سَطرُ استِثناءِ تَشغيلَةٍ في الخَلفِيَّة</b> (‏2026-10-24، تَيّارُ S15 البَند K). كانَت التَشغيلاتُ الثَلاثُ
+    /// (<c>/studio/s/{id}/analyze</c> و<c>/admin/incubator/{id}/analyze</c> و<c>ResumeStudioPromptAsync</c>) تَنتَهي
+    /// بِـ<c>catch { }</c>: استِثناءٌ خارِجَ النِداءِ (القاعِدَةُ عِندَ الحِفظ، جَلسَةٌ مَحذوفَة) يُبقي الدِراسَةَ «جارِيَة» إلى
+    /// <see cref="StaleAfter"/> ولا يَقولُ سِجِلُّ الخادِمِ لِماذا. ونِداءُ المُزَوِّدِ نَفسُه لا يَرمي — خَطَؤُه نَصٌّ في
+    /// <see cref="IncubatorSession.AnalysisError"/>.</para>
+    ///
+    /// <para><b>ولا سِرَّ فيه</b>: البابُ ومُعَرِّفُ الجَلسَةِ ونَوعُ الاستِثناءِ ورِسالَتُه — لا المِفتاحُ ولا جِسمُ الطَلَب
+    /// (والمِفتاحُ لا يَبلُغُ استِثناءً يَخرُجُ مِن هُنا: أَخطاءُ النِداءِ تُلتَقَطُ في الخَلفِيّات).</para>
+    /// </summary>
+    public static void LogBackgroundFailure(IServiceProvider services, Guid sessionId, string door, Exception ex)
+    {
+        var factory = services.GetService(typeof(Microsoft.Extensions.Logging.ILoggerFactory))
+            as Microsoft.Extensions.Logging.ILoggerFactory;
+        var log = factory?.CreateLogger("ACommerce.Studio.Analysis");
+        if (log is null) return;
+        Microsoft.Extensions.Logging.LoggerExtensions.LogError(log,
+            BackgroundFailurePrefix + " door={Door} session={Session} {ExceptionType}: {ExceptionMessage}",
+            door, sessionId, ex.GetType().FullName, ex.Message);
+    }
 
     /// <summary>
     /// <para><b>أَخَرقُ فَرادَةٍ هذا؟</b> — ويُفحَصُ بِشَكلَينِ لا
@@ -277,7 +307,7 @@ public sealed class FeasibilityAnalysisService
             new("user", userMsg, null, null)
         };
         var req = new AgentRequest(systemPrompt, messages,
-            Array.Empty<AgentToolDef>(), _model, MaxTokens: 3000);
+            Array.Empty<AgentToolDef>(), _model, MaxTokens: 3000, Wait: AgentCallWait.Background);
         var resp = await _backend.CallAsync(req, ct);
 
         // القياسُ **قَبلَ** فَرعِ الخَطَأ: تَحسينٌ فَشِلَ أَنفَقَ
@@ -378,7 +408,7 @@ public sealed class FeasibilityAnalysisService
                     null, null)
             };
             var req = new AgentRequest(systemPrompt, messages,
-                Array.Empty<AgentToolDef>(), _model, MaxTokens: 8000);
+                Array.Empty<AgentToolDef>(), _model, MaxTokens: 8000, Wait: AgentCallWait.Background);
             var resp = await _backend.CallAsync(req, ct);
 
             // ─── سَطرُ قياسٍ **لِكُلِّ مُحاوَلَة**، الفاشِلَةِ قَبلَ

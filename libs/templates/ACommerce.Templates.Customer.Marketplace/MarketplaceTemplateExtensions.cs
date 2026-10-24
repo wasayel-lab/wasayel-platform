@@ -3913,7 +3913,7 @@ public static class MarketplaceTemplateExtensions
                 using var scope = scopeFactory.CreateScope();
                 var bg = scope.ServiceProvider
                     .GetRequiredService<Services.Incubator.FeasibilityAnalysisService>();
-                try { await bg.RunAnalysisAsync(id); } catch { }
+                try { await bg.RunAnalysisAsync(id); } catch (Exception ex) { Services.Incubator.FeasibilityAnalysisService.LogBackgroundFailure(scope.ServiceProvider, id, "studio.analyze", ex); }
             });
             return Results.Redirect($"/studio/s/{id}");
         }).DisableAntiforgery();
@@ -3975,7 +3975,8 @@ public static class MarketplaceTemplateExtensions
                     var bg = scope.ServiceProvider
                         .GetRequiredService<Services.Incubator.FeasibilityAnalysisService>();
                     try { await bg.RunAnalysisAsync(id); }
-                    catch { /* الحالة تبقى Analyzing؛ تظهر مهلة في الواجهة */ }
+                    // الحالة تبقى Analyzing حتّى StaleAfter؛ والسطر يقول لماذا.
+                    catch (Exception ex) { Services.Incubator.FeasibilityAnalysisService.LogBackgroundFailure(scope.ServiceProvider, id, "admin.analyze", ex); }
                 });
             }
             return Results.Redirect($"/admin/incubator/{id}/study");
@@ -4266,7 +4267,8 @@ public static class MarketplaceTemplateExtensions
             using var scope = scopeFactory.CreateScope();
             var bg = scope.ServiceProvider
                 .GetRequiredService<Services.Incubator.FeasibilityAnalysisService>();
-            try { await bg.RunAnalysisAsync(s.Id); } catch { }
+            try { await bg.RunAnalysisAsync(s.Id); }
+            catch (Exception ex) { Services.Incubator.FeasibilityAnalysisService.LogBackgroundFailure(scope.ServiceProvider, s.Id, "studio.resume", ex); }
         });
         return Results.Redirect($"/studio/s/{s.Id}");
     }

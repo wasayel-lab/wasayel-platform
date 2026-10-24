@@ -13,7 +13,10 @@ public sealed record AgentRequest(
     IReadOnlyList<AgentMessage> Messages,
     IReadOnlyList<AgentToolDef> Tools,
     string Model,
-    int MaxTokens);
+    int MaxTokens,
+    // مَن يَنتَظِرُ هذا النِداء — ومِنه وَحدَه مُهلَتُه (<see cref="AgentCallBound"/>). الافتِراضُ
+    // المُتَصَفِّح: مُنادٍ جَديدٌ لا يُعلِنُ شَيئاً يَبقى تَحتَ أَقصَرِ المُهلَتَين.
+    AgentCallWait Wait = AgentCallWait.Browser);
 
 public sealed record AgentMessage(
     string Role,                    // "user" | "assistant"
@@ -114,6 +117,79 @@ public static class AgentErrorText
     /// <summary>رَدٌّ ناجِحٌ بِشَكلٍ لا يُقرَأ.</summary>
     public static string Malformed(string providerName, string endpoint, string what)
         => $"{Where(providerName, endpoint)}: {what}";
+
+    /// <summary>انقَضَت مُهلَةُ النِداءِ قَبلَ الجَواب — ويُسَمّي المُهلَةَ ورَقمَها ومَوضِعَها، فَيُقرَأُ «النَموذَجُ أَبطَأُ مِن
+    /// مُهلَتِه» لا «المِفتاحُ مَرفوض» (‏2026-10-24، S15 K). <b>ولا كَلِمَةَ فيه مِن كَلِماتِ الحِصَّةِ</b> الَّتي يَقرَؤُها
+    /// <c>FeasibilityAnalysisService.FormatError</c> (‏<c>429</c>، <c>quota</c>، <c>rate</c>) — وإلّا قُرِئَت المُهلَةُ حِصَّةً نافِدَة.</summary>
+    public static string Timeout(string providerName, string endpoint, AgentCallWait wait)
+        => $"{Where(providerName, endpoint)} timeout: no answer within {(int)AgentCallBound.For(wait).TotalSeconds} seconds "
+         + $"(AgentCallBound.{wait}, AgentBackends.cs)";
+}
+
+// ─── مُهلَةُ النِداء — مِن الطَلَبِ لا مِن العَميل (‏2026-10-24، تَيّارُ S15 البَند K) ────────────
+//
+// **العِلَّةُ المَقيسَة** (RELEASE-READINESS §٣.١، وتَوصيفُها `AnalysisCallBoundTests`): كانَت المُهلَةُ `HttpClient.Timeout`
+// ‏60 ثانِيَة في الخَلفِيّاتِ الثَلاث، واحِدَةً لِكُلِّ نِداء — فَجَوابُ التَحليلِ (‏`MaxTokens: 8000`) يُقطَعُ بِرَقَمِ مُحادَثَةِ الاستوديو
+// (‏2048) الَّتي يَنتَظِرُها مُتَصَفِّح. وبَديلٌ يُجيبُ بَعدَ 65 ثانِيَة ← «فَشِلَ التَّحليل» بِنَصِّ المُهلَةِ بَعدَ 120 ثانِيَة.
+//
+// **ولِماذا في الطَلَبِ لا في العَميل**: الوَكيلانِ بِإعداداتٍ مُتَطابِقَةٍ يَتَقاسَمانِ خَلفِيَّةً واحِدَة (`AgentBackendProvider`،
+// `IdenticalProfiles_ShareOneBackendInstance`)، وعَميلا Anthropic وGemini ساكِنانِ مُشتَرَكان — فَمُهلَةٌ عَلى العَميلِ إمّا تُطيلُ
+// المُحادَثَة أَو تُقصِرُ التَحليل. فَالعَميلُ بِلا مُهلَة (`InfiniteTimeSpan`)، وكُلُّ نِداءٍ يَبدَأُ مُهلَتَه مِن `AgentRequest.Wait`.
+
+/// <summary>مَن يَنتَظِرُ النِداء — مُعجَمٌ مُغلَق (القاعِدَة ٤)، والمُهلَةُ مِنه لا مِن رَقَمٍ يُمَرِّرُه المُنادي.</summary>
+public enum AgentCallWait
+{
+    /// <summary>مُتَصَفِّحٌ يَنتَظِرُ في الطَلَبِ نَفسِه — مُحادَثَةُ وَكيلِ الاستوديو والمُشرِف (<c>AgentService</c>).</summary>
+    Browser = 0,
+
+    /// <summary>لا طَلَبَ يَنتَظِر: يُطلَقُ بِـ<c>Task.Run</c> ويُرَدُّ الطَلَبُ فَوراً — تَحليلُ الجَدوى وإعادَةُ تَوليدِ قِسم.</summary>
+    Background = 1,
+}
+
+/// <summary>
+/// <para><b>مُهلَتا النِداء</b>. <see cref="Browser"/> رَقَمُ اليَومِ بِحَرفِه — لا يَطولُ طَلَبٌ يَنتَظِرُه مُتَصَفِّح.</para>
+///
+/// <para><b>و<see cref="Background"/> مُشتَقٌّ لا مَقيس</b> (القاعِدَة ١٦): جَوابٌ كامِلٌ بِـ<c>MaxTokens: 8000</c> في
+/// <c>RunAnalysisAsync</c> عَلى مُعَدَّلِ تَوليدٍ <b>مَفروضٍ مُتَحَفِّظاً</b> <see cref="AssumedTokensPerSecond"/> تَوكِناً في الثانِيَة
+/// ← ‏400 ثانِيَة، وفَوقَها <see cref="FirstTokenAllowanceSeconds"/> لِقِراءَةِ المُدخَلِ وأَوَّلِ تَوكِنٍ والشَبَكَة ← ‏420. والمُعَدَّلُ
+/// فَرضٌ لا رَقَمَ مَقيساً في المُستَودَع؛ وأَوَّلُ جَولَةٍ بِمِفتاحٍ تَقيسُه (تَوكِناتُ الخَرجِ في <c>ModelCallRecord</c> عَلى زَمَنِ
+/// السَطرِ «اكتَمَلَ بَعدَ N ثانِيَة») — «ج» S12·٥.</para>
+///
+/// <para><b>ومَن يَقرَأُ <see cref="Background"/> غَيرَ النِداء</b>: <c>FeasibilityAnalysisService.StaleAfter</c> (مُحاوَلَتانِ × هذا ×
+/// ضِعف)، و<c>scripts/rewalk-launch-journey.sh</c> الَّذي يَقرَأُ سَطرَه بِحَرفِه لِيَحسُبَ نافِذَةَ الانتِظار.</para>
+/// </summary>
+public static class AgentCallBound
+{
+    /// <summary>مُتَصَفِّحٌ يَنتَظِر — رَقَمُ <c>HttpClient.Timeout</c> قَبلَ هذا البَند.</summary>
+    public static readonly TimeSpan Browser = TimeSpan.FromSeconds(60);
+
+    /// <summary>في الخَلفِيَّة — <c>8000 / AssumedTokensPerSecond + FirstTokenAllowanceSeconds</c>.</summary>
+    public static readonly TimeSpan Background = TimeSpan.FromSeconds(420);
+
+    /// <summary>مُعَدَّلُ التَوليدِ المَفروضُ مُتَحَفِّظاً — فَرضٌ لا قياس.</summary>
+    public const int AssumedTokensPerSecond = 20;
+
+    /// <summary>هامِشُ قِراءَةِ المُدخَلِ وأَوَّلِ تَوكِنٍ والشَبَكَة — فَرضٌ لا قياس.</summary>
+    public const int FirstTokenAllowanceSeconds = 20;
+
+    /// <summary>مُهلَةُ نِداءٍ مِن مُنتَظِرِه. ما لا يُعرَفُ مِن المُعجَمِ يَأخُذُ أَقصَرَهُما.</summary>
+    public static TimeSpan For(AgentCallWait wait) => wait == AgentCallWait.Background ? Background : Browser;
+
+    /// <summary>يَبدَأُ مُهلَةَ نِداءٍ مَربوطَةً بِإلغاءِ المُنادي.</summary>
+    public static CancellationTokenSource Start(AgentCallWait wait, CancellationToken caller)
+        => Start(For(wait), caller);
+
+    /// <inheritdoc cref="Start(AgentCallWait, CancellationToken)"/>
+    public static CancellationTokenSource Start(TimeSpan bound, CancellationToken caller)
+    {
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(caller);
+        cts.CancelAfter(bound);
+        return cts;
+    }
+
+    /// <summary>أَهذا الاستِثناءُ انقِضاءُ المُهلَة؟ — نَعَم إن أُلغِيَ النِداءُ والمُهلَةُ هي الَّتي أَلغَتهُ لا المُنادي.</summary>
+    public static bool Expired(Exception ex, CancellationTokenSource bound, CancellationToken caller)
+        => ex is OperationCanceledException && bound.IsCancellationRequested && !caller.IsCancellationRequested;
 }
 // ─── Factory ─────────────────────────────────────────────────────────
 // الخَلفيّات خيارات-صِرفَة: تَأخُذ <see cref="AgentProfile"/> مَحلولاً ولا
@@ -136,7 +212,7 @@ public sealed class AnthropicBackend : IAgentBackend
     private static readonly HttpClient Http = new()
     {
         BaseAddress = new Uri("https://api.anthropic.com/"),
-        Timeout = TimeSpan.FromSeconds(60)
+        Timeout = System.Threading.Timeout.InfiniteTimeSpan   // المُهلَةُ مِن الطَلَب: AgentCallBound
     };
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -197,10 +273,11 @@ public sealed class AnthropicBackend : IAgentBackend
         http.Headers.Add("x-api-key", _apiKey);
         http.Headers.Add("anthropic-version", "2023-06-01");
 
+        using var bound = AgentCallBound.Start(req.Wait, ct);
         try
         {
-            using var resp = await Http.SendAsync(http, ct);
-            var json = await resp.Content.ReadAsStringAsync(ct);
+            using var resp = await Http.SendAsync(http, bound.Token);
+            var json = await resp.Content.ReadAsStringAsync(bound.Token);
             if (!resp.IsSuccessStatusCode)
                 return new AgentBackendResponse(null, null,
                     AgentErrorText.Http(ProviderName, Endpoint, (int)resp.StatusCode, Truncate(json, 500)));
@@ -220,6 +297,11 @@ public sealed class AnthropicBackend : IAgentBackend
                         block.GetProperty("input").GetRawText());
             }
             return new AgentBackendResponse(text, tool, null, ReadUsage(doc.RootElement));
+        }
+        catch (Exception ex) when (AgentCallBound.Expired(ex, bound, ct))
+        {
+            return new AgentBackendResponse(null, null,
+                AgentErrorText.Timeout(ProviderName, Endpoint, req.Wait));
         }
         catch (Exception ex)
         {
@@ -305,7 +387,7 @@ public sealed class GeminiBackend : IAgentBackend
     private static readonly HttpClient Http = new()
     {
         BaseAddress = new Uri("https://generativelanguage.googleapis.com/"),
-        Timeout = TimeSpan.FromSeconds(60)
+        Timeout = System.Threading.Timeout.InfiniteTimeSpan   // المُهلَةُ مِن الطَلَب: AgentCallBound
     };
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -346,10 +428,11 @@ public sealed class GeminiBackend : IAgentBackend
 
         var url = $"v1beta/models/{req.Model}:generateContent?key={Uri.EscapeDataString(_apiKey)}";
 
+        using var bound = AgentCallBound.Start(req.Wait, ct);
         try
         {
-            using var resp = await Http.PostAsJsonAsync(url, body, JsonOpts, ct);
-            var json = await resp.Content.ReadAsStringAsync(ct);
+            using var resp = await Http.PostAsJsonAsync(url, body, JsonOpts, bound.Token);
+            var json = await resp.Content.ReadAsStringAsync(bound.Token);
             if (!resp.IsSuccessStatusCode)
                 return new AgentBackendResponse(null, null,
                     AgentErrorText.Http(ProviderName, Endpoint, (int)resp.StatusCode, Truncate(json, 500)));
@@ -379,6 +462,11 @@ public sealed class GeminiBackend : IAgentBackend
                 }
             }
             return new AgentBackendResponse(text, tool, null, ReadUsage(doc.RootElement));
+        }
+        catch (Exception ex) when (AgentCallBound.Expired(ex, bound, ct))
+        {
+            return new AgentBackendResponse(null, null,
+                AgentErrorText.Timeout(ProviderName, Endpoint, req.Wait));
         }
         catch (Exception ex)
         {
@@ -487,7 +575,7 @@ public sealed class OpenAIBackend : IAgentBackend
         _http = new HttpClient
         {
             BaseAddress = new Uri(baseUrl),
-            Timeout = TimeSpan.FromSeconds(60)
+            Timeout = System.Threading.Timeout.InfiniteTimeSpan   // المُهلَةُ مِن الطَلَب: AgentCallBound
         };
         _providerName = (profile.ProviderLabel ?? InferProvider(baseUrl)).ToLowerInvariant();
     }
@@ -543,10 +631,11 @@ public sealed class OpenAIBackend : IAgentBackend
         };
         http.Headers.Add("Authorization", "Bearer " + _apiKey);
 
+        using var bound = AgentCallBound.Start(req.Wait, ct);
         try
         {
-            using var resp = await _http.SendAsync(http, ct);
-            var json = await resp.Content.ReadAsStringAsync(ct);
+            using var resp = await _http.SendAsync(http, bound.Token);
+            var json = await resp.Content.ReadAsStringAsync(bound.Token);
             if (!resp.IsSuccessStatusCode)
                 return new AgentBackendResponse(null, null,
                     AgentErrorText.Http(ProviderName, Endpoint, (int)resp.StatusCode, Truncate(json, 500)));
@@ -572,6 +661,11 @@ public sealed class OpenAIBackend : IAgentBackend
                     fn.GetProperty("arguments").GetString() ?? "{}");
             }
             return new AgentBackendResponse(text, tool, null, ReadUsage(doc.RootElement));
+        }
+        catch (Exception ex) when (AgentCallBound.Expired(ex, bound, ct))
+        {
+            return new AgentBackendResponse(null, null,
+                AgentErrorText.Timeout(ProviderName, Endpoint, req.Wait));
         }
         catch (Exception ex)
         {
