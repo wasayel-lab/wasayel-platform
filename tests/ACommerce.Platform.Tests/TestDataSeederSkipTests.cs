@@ -18,13 +18,21 @@ public class TestDataSeederSkipTests
         return File.ReadAllText(path);
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم» — يُقلَبُ بِاسمِه في كوميتِ الإصلاح</b>: التَخَطّي بِلا سَطر، والخُلاصَةُ بِلا عَدّ.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، S15 F)</b>: الغائِبُ يُقالُ بِسَطرٍ يُسَمّيه وسَبَبِه قَبلَ التَخَطّي، والخُلاصَةُ تَعُدُّ
+    /// ما بُذِرَ مِن <c>Plan</c> وتُسَمّي ما تُخُطِّي.</summary>
     [Fact]
-    public void Today_an_absent_tenant_is_skipped_silently_and_the_summary_counts_nothing()
+    public void An_absent_tenant_is_named_with_its_reason_and_the_summary_counts_it()
     {
         var code = Seeder();
-        Assert.Contains("if (tenant is null) continue;", code, StringComparison.Ordinal);
-        Assert.Contains("Console.WriteLine(\"[TestSeed] ✅ test data seeded.\");", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("if (tenant is null) continue;", code, StringComparison.Ordinal);
+        var branch = code.IndexOf("if (tenant is null)", StringComparison.Ordinal);
+        var cont = code.IndexOf("continue;", branch, StringComparison.Ordinal);
+        Assert.True(branch > 0 && cont > branch);
+        var body = code[branch..cont];
+        Assert.Contains("skipped.Add(slug);", body, StringComparison.Ordinal);
+        Assert.Contains("Console.WriteLine($\"[TestSeed] tenant '{slug}' غائِبٌ في هذِه القاعِدَة", body, StringComparison.Ordinal);
+        Assert.Contains("{Plan.Length - skipped.Count} مِن {Plan.Length} مُستَأجِرين", code, StringComparison.Ordinal);
+        Assert.Contains("تُخُطِّيَ الغائِب: {string.Join(\", \", skipped)}", code, StringComparison.Ordinal);
     }
 
     /// <summary><b>ويَبقى بِحَرفِه</b>: لا بَذّارَ يُنشِئُ <c>injez</c> — فَالتَخَطّي واقِعٌ عَلى كُلِّ قاعِدَةٍ مَحَلِّيَّةٍ مَبذورَة.</summary>

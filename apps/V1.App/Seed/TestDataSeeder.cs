@@ -36,12 +36,20 @@ public static class TestDataSeeder
     {
         var store = services.GetRequiredService<IDocumentStore>();
         await using var globalSession = store.LightweightSession();
+        var skipped = new List<string>();
 
         for (int ti = 0; ti < Plan.Length; ti++)
         {
             var (slug, roles) = Plan[ti];
             var tenant = await globalSession.LoadAsync<Tenant>(slug);
-            if (tenant is null) continue;   // tenant غَير مَوجود → تَخَطّي
+            // ‏**ما يُتَخَطّى يُقالُ بِسَبَبِه** (‏2026-10-24، تَيّارُ S15 البَند F؛ القاعِدَة ١٠): البَذّارُ يَكتُبُ في المُستَأجِرينَ القائِمينَ ولا
+            // يُنشِئُهُم، و`injez` لا يَبذُرُه `PlatformSeed` — فَعَلى كُلِّ قاعِدَةٍ مَحَلِّيَّةٍ كانَ يُتَخَطّى صامِتاً والخُلاصَةُ «✅» كَأَنَّ الأَربَعَةَ بُذِروا.
+            if (tenant is null)
+            {
+                skipped.Add(slug);
+                Console.WriteLine($"[TestSeed] tenant '{slug}' غائِبٌ في هذِه القاعِدَة — تُخُطِّي: البَذّارُ يَكتُبُ في مُستَأجِرٍ قائِمٍ ولا يُنشِئُه.");
+                continue;
+            }
 
             // (١) أَضِف الأَدوار النّاقِصَة فَقَط — احتَرِم تَخصيص الـ admin.
             bool tenantTouched = false;
@@ -108,7 +116,8 @@ public static class TestDataSeeder
             await tenantSession.SaveChangesAsync();
         }
         await globalSession.SaveChangesAsync();
-        Console.WriteLine("[TestSeed] ✅ test data seeded.");
+        Console.WriteLine($"[TestSeed] ✅ test data seeded — {Plan.Length - skipped.Count} مِن {Plan.Length} مُستَأجِرين"
+            + (skipped.Count == 0 ? "." : $"؛ تُخُطِّيَ الغائِب: {string.Join(", ", skipped)}."));
     }
 
     private static async Task EnsureSampleListingAsync(
