@@ -17,6 +17,10 @@ namespace ACommerce.Platform.Tests;
 // اسمٍ مُزَوَّرٌ بِجِوارِها = تَقييمٌ «موثَّقٌ» بِاسمِ غَيرِ صاحِبِه.
 //
 // **يُثَبَّتُ قَبلَ العِلاجِ** (القاعِدَة ٣): الصُفوفُ الثَلاثَةُ `Today_…` تَنقَلِبُ بِأَسمائِها.
+//
+// **العِلاج** (‏2026-10-24): الاسمُ مِن الوَثيقَةِ وَقتَ الكِتابَة — `AccountQueries.ActorNameAsync` (`User.FullName` في مَتجَرِه) و
+// `StudioQueries.ActorNameAsync` (`StudioUser.FullName`)، والقاعِدَةُ بَينَهُما `ActorName.Of`؛ و`ResolveUserName` حُذِفَ بِصِفرِ مُنادٍ.
+// والكوكي باقٍ لِلعَرضِ عَلى صاحِبِه وَحدَه. الصُفوفُ الثَلاثَةُ انقَلَبَت بِأَسمائِها.
 public class ActorNameSourceTests(ITestOutputHelper output)
 {
     private const string Slug = "theme-demo";
@@ -32,35 +36,64 @@ public class ActorNameSourceTests(ITestOutputHelper output)
         return total;
     }
 
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_a_forged_name_cookie_beside_a_valid_session_is_the_name_store_endpoints_write`.
     [Fact]
-    public void Today_a_forged_name_cookie_beside_a_valid_session_is_the_name_store_endpoints_write()
+    public async Task The_store_actor_name_is_the_users_document_name_and_no_cookie_reader_remains()
     {
-        var http = new DefaultHttpContext();
-        http.Request.Path = $"/{Slug}/deals/x/review";
-        var cookie = AuthSession.CookieName(Slug);
-        http.Request.Headers.Cookie = $"{cookie}={AuthHandlers.MakeToken(Guid.NewGuid(), Slug)}; {cookie}.name={Uri.EscapeDataString("اسمٌ مُزَوَّر")}";
-        Assert.Equal("اسمٌ مُزَوَّر", AuthSession.ResolveUserName(http.Request, Slug));
+        Assert.Null(typeof(AuthSession).GetMethod("ResolveUserName"));
+
+        var world = new DocWorld();
+        var named = new ACommerce.Kit.Auth.User { Id = Guid.NewGuid(), TenantSlug = Slug, FullName = "  سارَة  " };
+        var blank = new ACommerce.Kit.Auth.User { Id = Guid.NewGuid(), TenantSlug = Slug, FullName = "  " };
+        world.Put(named).Put(blank);
+        var accounts = new ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries(world.Store);
+
+        Assert.Equal("سارَة", await accounts.ActorNameAsync(Slug, named.Id));
+        Assert.Null(await accounts.ActorNameAsync(Slug, blank.Id));
+        Assert.Null(await accounts.ActorNameAsync(Slug, Guid.NewGuid()));
     }
 
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_a_forged_studio_name_cookie_is_the_name_the_studio_writes`.
     [Fact]
-    public void Today_a_forged_studio_name_cookie_is_the_name_the_studio_writes()
+    public async Task The_studio_actor_name_is_the_studio_users_document_name_whatever_the_cookie_says()
     {
+        var world = new DocWorld();
+        var admin = new StudioUser { Id = Guid.NewGuid(), Phone = "0500000000", FullName = "مُشرِفٌ حَقيقيّ" };
+        world.Put(admin);
+        var studio = new ACommerce.Templates.Customer.Marketplace.Services.Queries.StudioQueries(world.Store);
+
         var http = new DefaultHttpContext();
         http.Request.Headers.Cookie =
-            $"{StudioAuth.CookieName}={AuthHandlers.MakeToken(Guid.NewGuid(), StudioAuth.Tenant)}; {StudioAuth.CookieName}.name={Uri.EscapeDataString("مُشرِفٌ مُزَوَّر")}";
+            $"{StudioAuth.CookieName}={AuthHandlers.MakeToken(admin.Id, StudioAuth.Tenant)}; {StudioAuth.CookieName}.name={Uri.EscapeDataString("مُشرِفٌ مُزَوَّر")}";
         var auth = new StudioAuth(new HttpContextAccessor { HttpContext = http });
         auth.Load();
-        Assert.True(auth.IsAuthenticated);
+
+        // الكوكي لِلعَرضِ عَلى صاحِبِه — والمَكتوبُ مِن الوَثيقَة.
         Assert.Equal("مُشرِفٌ مُزَوَّر", auth.UserName);
+        Assert.Equal("مُشرِفٌ حَقيقيّ", await studio.ActorNameAsync(auth.UserId));
+        Assert.Null(await studio.ActorNameAsync(null));
+        Assert.Null(await studio.ActorNameAsync(Guid.NewGuid()));
     }
 
+    private const string StoreCookieRead = @"AuthSession\.ResolveUserName\(";
+    private const string StudioCookieRead = @"\b(?:auth|studioAuth)\.UserName\b";
+
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_fourteen_store_sites_and_six_studio_sites_take_the_actor_name_from_the_cookie`.
     [Fact]
-    public void Today_fourteen_store_sites_and_six_studio_sites_take_the_actor_name_from_the_cookie()
+    public void No_endpoint_takes_an_actor_name_from_a_cookie_and_twenty_read_it_from_the_document()
     {
-        var store = Matches(@"AuthSession\.ResolveUserName\(");
-        var studio = Matches(@"\b(?:auth|studioAuth)\.UserName\b", f => f.EndsWith("MarketplaceTemplateExtensions.cs", StringComparison.Ordinal));
-        output.WriteLine($"مَواضِعُ المَتجَر: {store} · مَواضِعُ الاستوديو: {studio}");
-        Assert.Equal(14, store);
-        Assert.Equal(6, studio);
+        var store = Matches(StoreCookieRead);
+        var studio = Matches(StudioCookieRead, f => f.EndsWith("MarketplaceTemplateExtensions.cs", StringComparison.Ordinal));
+        var fromDocs = Matches(@"\.ActorNameAsync\(", f => !f.Contains($"{Path.DirectorySeparatorChar}Queries{Path.DirectorySeparatorChar}"));
+        output.WriteLine($"مَواضِعُ المَتجَر: {store} · مَواضِعُ الاستوديو: {studio} · مِن الوَثيقَة: {fromDocs}");
+        Assert.Equal(0, store);
+        Assert.Equal(0, studio);
+        Assert.Equal(20, fromDocs);
+
+        // والنَمَطانِ يَحمَرّانِ عَلى سَطرِ اليَومِ حَرفاً — والمُعَلَّقُ لا يُعَدّ.
+        Assert.Matches(StoreCookieRead, "var userName = AuthSession.ResolveUserName(req, slug) ?? \"عميل\";");
+        Assert.Matches(StudioCookieRead, "await audit.WriteAsync(slug, auth.UserId, auth.UserName ?? \"admin\",");
+        Assert.Matches(StudioCookieRead, "return (studioAuth.UserId, studioAuth.UserName ?? \"studio\");");
+        Assert.DoesNotMatch(StudioCookieRead, WriteEndpointGuardTests.StripComments("// auth.UserName"));
     }
 }

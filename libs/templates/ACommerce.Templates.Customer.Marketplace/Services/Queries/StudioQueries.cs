@@ -37,6 +37,15 @@ public sealed class StudioQueries
 
     public StudioQueries(IDocumentStore store) => _store = store;
 
+    /// <summary>اسمُ مُستَخدِمِ الاستوديو مِن وَثيقَتِه وَقتَ الكِتابَة (‏2026-10-24، تَدقيقُ الإطلاق lens-security-11) — لا مِن كوكي
+    /// <c>.acommerce.studio.name</c>؛ و<c>null</c> لِغائِبِ الجَلسَة. القاعِدَةُ في <see cref="ActorName.Of"/>.</summary>
+    public async Task<string?> ActorNameAsync(Guid? userId, CancellationToken ct = default)
+    {
+        if (userId is not Guid id) return null;
+        await using var s = _store.QuerySession(StudioAuth.Tenant);
+        return ActorName.Of((await s.LoadAsync<StudioUser>(id, ct))?.FullName);
+    }
+
     /// <summary>هَل وَقَّعَ صاحِبُ الاستوديو على هذِه النُسخَة مِن
     /// الشُروط؟ — <c>ConsentRecord</c> في مُستَأجِر الاستوديو.</summary>
     public async Task<bool> HasConsentedAsync(

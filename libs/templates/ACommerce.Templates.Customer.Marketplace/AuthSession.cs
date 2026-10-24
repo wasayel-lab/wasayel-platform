@@ -114,12 +114,8 @@ public sealed class AuthSession
         return name is null ? null : req.Cookies[name];
     }
 
-    /// <summary>اسم صاحِب الجَلسَة المَحلولَة — مِن نَفس عائِلَة الـ token.</summary>
-    public static string? ResolveUserName(HttpRequest req, string tenantSlug)
-    {
-        var name = ResolveCookieBase(req, tenantSlug);
-        return name is null ? null : req.Cookies[name + ".name"];
-    }
+    // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-11) كانَ هُنا `ResolveUserName` — يَقرَأُ `{cookie}.name` خارِجَ رَمزِ HMAC فَتَكتُبُه
+    // أَربَعَ عَشرَةَ نُقطَةً اسماً لِلفاعِل. صارَ الاسمُ مِن الوَثيقَة (`AccountQueries.ActorNameAsync`) فَحُذِفَت بِصِفرِ مُنادٍ.
 
     private static bool IsValidFor(string? token, string tenantSlug)
     {

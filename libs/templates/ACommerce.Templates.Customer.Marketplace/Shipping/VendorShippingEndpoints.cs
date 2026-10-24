@@ -30,7 +30,7 @@ public static class VendorShippingEndpoints
             if (parsed is null) return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
             var owned = (await accounts.MyListingsAsync(slug, userId)).Count;
-            var admitted = Services.Shipping.ListingVendorGate.Admit(userId, AuthSession.ResolveUserName(req, slug), owned);
+            var admitted = Services.Shipping.ListingVendorGate.Admit(userId, await accounts.ActorNameAsync(slug, userId), owned);
             if (admitted.Vendor is not { } vendor)
                 return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, $"me/listings?shipping_err={admitted.Violation!.Code}"));
 
@@ -64,7 +64,7 @@ public static class VendorShippingEndpoints
             if (parsed is null) return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
             var owned = (await accounts.MyListingsAsync(slug, userId)).Count;
-            var admitted = Services.Shipping.ListingVendorGate.Admit(userId, AuthSession.ResolveUserName(req, slug), owned);
+            var admitted = Services.Shipping.ListingVendorGate.Admit(userId, await accounts.ActorNameAsync(slug, userId), owned);
             if (admitted.Vendor is not { } vendor)
                 return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, $"me/listings?shipping_err={admitted.Violation!.Code}"));
             var contact = Services.Shipping.VendorContactGate.Admit(vendor, await accounts.ProfileAsync(slug, userId));

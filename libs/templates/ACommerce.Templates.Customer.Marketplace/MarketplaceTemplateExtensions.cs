@@ -545,14 +545,14 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Start chat from listing ────────────────────────────────────
         app.MapPost("/{slug}/listings/{id:guid}/chat",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/listings/{id}"));
             var (userId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "أنا";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "أنا";
 
             await using var s = store.LightweightSession(slug);
             var listing = await s.Events.AggregateStreamAsync<Listing>(id);
@@ -888,13 +888,13 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Support open ticket ────────────────────────────────────────
         app.MapPost("/{slug}/support/open",
-            async (string slug, HttpRequest req, IDocumentStore store) =>
+            async (string slug, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "—";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "—";
             var subject = req.Form["subject"].ToString().Trim();
             var body    = req.Form["body"].ToString().Trim();
             if (subject.Length == 0 || body.Length == 0) return Results.Redirect(Link(req, slug, $"support"));
@@ -910,14 +910,14 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Report listing — يَفتَح طَلَب دَعم مُسبَق التَعبِئَة ─────────
         app.MapPost("/{slug}/listings/{id:guid}/report",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/listings/{id}"));
             var (userId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "—";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "—";
 
             var reason = req.Form["reason"].ToString().Trim();
             var note   = req.Form["note"].ToString().Trim();
@@ -1282,7 +1282,7 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Submit offer on a listing ──────────────────────────────────
         app.MapPost("/{slug}/listings/{id:guid}/offers",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
@@ -1292,7 +1292,7 @@ public static class MarketplaceTemplateExtensions
 
             if (!await HasPermissionAsync(req.HttpContext, slug, userId, "offer.submit", store))
                 return Results.Redirect(Link(req, slug, $"listings/{id}?err=forbidden"));
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "—";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "—";
 
             var priceStr = req.Form["price"].ToString().Trim();
             var message  = req.Form["message"].ToString().Trim();
@@ -1359,7 +1359,7 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Accept an offer (listing owner) ────────────────────────────
         app.MapPost("/{slug}/offers/{id:guid}/accept",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store, L l,
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, L l, Services.Queries.AccountQueries actorNames,
                    Microsoft.AspNetCore.SignalR.IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> hub,
                    ACommerce.Templates.Customer.Marketplace.Services.WebPushService push) =>
         {
@@ -1411,7 +1411,7 @@ public static class MarketplaceTemplateExtensions
 
             // افتَح مُحادَثَة مُؤَقَّتَة لِلتَنسيق — تَنتَهي بَعد 24 ساعَة.
             // الـ Owner هُنا = المُتَّصِل (مالِك الإعلان)، Partner = مُقَدِّم العَرض.
-            var acceptorName = AuthSession.ResolveUserName(req, slug) ?? "أنا";
+            var acceptorName = await actorNames.ActorNameAsync(slug, acceptorId) ?? "أنا";
             var conv = new Conversation
             {
                 Id = Guid.NewGuid(),
@@ -1895,7 +1895,7 @@ public static class MarketplaceTemplateExtensions
         // (بِـ`LocalRedirect.Resolve` القائِمَة — القاعِدَة ٨ — وإلّا مَسقَطُ الرَأس)
         // ويَعودُ إلَيه عِندَ الطَرَفِ المَحذوفِ بِرَمزِه (`ChatStartReturn.Failure`).
         app.MapPost("/{slug}/users/{userId:guid}/chat",
-            async (string slug, Guid userId, HttpRequest req, IDocumentStore store, L l) =>
+            async (string slug, Guid userId, HttpRequest req, IDocumentStore store, L l, Services.Queries.AccountQueries actorNames) =>
         {
             var origin = Services.LocalRedirect.Resolve(req.Form["returnUrl"].ToString(), Link(req, slug, $"drivers"));
             var token = AuthSession.ResolveToken(req, slug);
@@ -1904,7 +1904,7 @@ public static class MarketplaceTemplateExtensions
             var (meId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
             if (meId == userId) return Results.Redirect(origin);
-            var meName = AuthSession.ResolveUserName(req, slug) ?? "أنا";
+            var meName = await actorNames.ActorNameAsync(slug, meId) ?? "أنا";
 
             await using var s = store.LightweightSession(slug);
             var partner = await s.LoadAsync<User>(userId);
@@ -2150,7 +2150,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/admin/tenants/{slug}/users/{userId:guid}/grant-admin",
             async (string slug, Guid userId, HttpRequest req, IDocumentStore store,
                    Services.Incubator.StudioAuth auth,
-                   Services.Audit.AuditWriter audit) =>
+                   Services.Audit.AuditWriter audit, Services.Queries.StudioQueries studioNames) =>
         {
             if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
                 return Forbidden();
@@ -2168,7 +2168,7 @@ public static class MarketplaceTemplateExtensions
             s.Store(user);
             await s.SaveChangesAsync();
             // تَصعيد صَلاحِيّات — يُسَجَّل دائِماً (نَفس scope الـ tenant).
-            await audit.WriteAsync(slug, auth.UserId, auth.UserName ?? "admin",
+            await audit.WriteAsync(slug, auth.UserId, await studioNames.ActorNameAsync(auth.UserId) ?? "admin",
                 "user.grant_admin", "User", userId.ToString(),
                 note: user.FullName, ip: req.HttpContext.Connection.RemoteIpAddress?.ToString(),
                 before: before, after: "tenant_admin");
@@ -2178,7 +2178,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/admin/tenants/{slug}/users/{userId:guid}/revoke-admin",
             async (string slug, Guid userId, HttpRequest req, IDocumentStore store,
                    Services.Incubator.StudioAuth auth,
-                   Services.Audit.AuditWriter audit) =>
+                   Services.Audit.AuditWriter audit, Services.Queries.StudioQueries studioNames) =>
         {
             if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
                 return Forbidden();
@@ -2195,7 +2195,7 @@ public static class MarketplaceTemplateExtensions
             user.UpdatedAt = DateTime.UtcNow;
             s.Store(user);
             await s.SaveChangesAsync();
-            await audit.WriteAsync(slug, auth.UserId, auth.UserName ?? "admin",
+            await audit.WriteAsync(slug, auth.UserId, await studioNames.ActorNameAsync(auth.UserId) ?? "admin",
                 "user.revoke_admin", "User", userId.ToString(),
                 note: user.FullName, ip: req.HttpContext.Connection.RemoteIpAddress?.ToString(),
                 before: before, after: user.ActiveRole);
@@ -2608,7 +2608,7 @@ public static class MarketplaceTemplateExtensions
             HttpRequest req, HttpResponse res, IDocumentStore store,
             IServiceScopeFactory scopeFactory,
             Services.Incubator.FeasibilityAnalysisService incubator,
-            Services.Incubator.StudioAuth auth) =>
+            Services.Incubator.StudioAuth auth, Services.Queries.StudioQueries studioNames) =>
         {
             // ‏**بابُ التَحليلِ قَبلَ الكَعكَةِ والدُخولِ والشُروط** (‏2026-10-24، S15 A): بِلا مُزَوِّدِ تَحليلٍ مَضبوطٍ
             // كانَ رائِدُ الأَعمالِ يَدخُلُ ويَقبَلُ ثُمَّ يُنفِقُ تَحليلاً ويُنادى المُزَوِّدُ بِلا مِفتاحٍ فَيُرَدُّ 401. والصَفحَةُ
@@ -2628,7 +2628,7 @@ public static class MarketplaceTemplateExtensions
                 // `Request.Cookies`** — فَقِراءَةُ الطَلَبِ وَحدَها
                 // تَرُدُّ `null` ويَسكُتُ العَطَبُ كَما كان.
                 return await ResumeStudioPromptAsync(
-                           req, res, auth.UserId!.Value, auth.UserName ?? "",
+                           req, res, auth.UserId!.Value, await studioNames.ActorNameAsync(auth.UserId) ?? "",
                            store, scopeFactory, incubator,
                            checkConsent: true,
                            promptOverride: string.IsNullOrEmpty(prompt) ? null : prompt)
@@ -2718,7 +2718,7 @@ public static class MarketplaceTemplateExtensions
             HttpRequest req, HttpResponse res, IDocumentStore store,
             IServiceScopeFactory scopeFactory,
             Services.Incubator.FeasibilityAnalysisService incubator,
-            Services.Incubator.StudioAuth auth) =>
+            Services.Incubator.StudioAuth auth, Services.Queries.StudioQueries studioNames) =>
         {
             auth.Load();
             if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
@@ -2740,7 +2740,7 @@ public static class MarketplaceTemplateExtensions
             // الشُروطُ قُبِلَت الآن، فَلا يُعادُ فَحصُها
             // (`checkConsent: false`) — وإلّا دارَت الصَفحَةُ على نَفسِها.
             return await ResumeStudioPromptAsync(
-                       req, res, auth.UserId!.Value, auth.UserName ?? "",
+                       req, res, auth.UserId!.Value, await studioNames.ActorNameAsync(auth.UserId) ?? "",
                        store, scopeFactory, incubator, checkConsent: false)
                    ?? Results.Redirect(returnUrl);
         }).RequireFormBody().DisableAntiforgery();
@@ -2868,14 +2868,14 @@ public static class MarketplaceTemplateExtensions
             string slug, HttpRequest req,
             Services.Incubator.StudioAuth auth,
             Services.Queries.TenantDirectory tenants,
-            Services.Export.TenantExportService export,
+            Services.Export.TenantExportService export, Services.Queries.StudioQueries studioNames,
             CancellationToken ct) =>
         {
             auth.Load();
             if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
 
             var result = await export.ProduceAsync(
-                slug, await tenants.FindAsync(slug, ct), auth.UserId, auth.UserName,
+                slug, await tenants.FindAsync(slug, ct), auth.UserId, await studioNames.ActorNameAsync(auth.UserId, ct),
                 req.HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
 
             return result.Refusal != Services.Export.TenantExportRefusal.None
@@ -3340,14 +3340,14 @@ public static class MarketplaceTemplateExtensions
         // ═══ النَّمَط العامّ: عُروض → صَفقات بَين عِدَّة أَدوار (عميل) ═══
         // عميل يُقَدِّم عَرضاً على إعلان → يُنشِئ Deal(Offered).
         app.MapPost("/{slug}/listings/{id:guid}/deal",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store,
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames,
                    Services.Deals.DealsService deals, Services.Deals.DealNotices notices, L l) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/listings/{id}"));
             var (userId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "عميل";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "عميل";
 
             decimal.TryParse(req.Form["amount"].ToString(), out var amount);
             var note = req.Form["note"].ToString().Trim();
@@ -3390,13 +3390,13 @@ public static class MarketplaceTemplateExtensions
         // النَقِيَّة، وهذا المَسارُ يُصَرِّحُ بِهُوِيَّةِ القابِلِ فَقَط؛
         // والرَفضُ يَعودُ إلى الصَفحَةِ بِرَمزِه — نَسَقُ `/cancel` نَفسُه.
         app.MapPost("/{slug}/deals/{id:guid}/accept",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store,
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames,
                    Services.Deals.DealsService deals, Services.Deals.DealNotices notices, L l) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "المالِك";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "المالِك";
             var res = await deals.AcceptAsync(slug, id, new Services.Deals.DealAcceptor(userId, userName));
             // والمُشتَري يَعلَمُ أَنّ طَلَبَه قُبِل — عَلى نَسَقِ `offer_accepted` (P1-5).
             if (res.Ok) await notices.NotifyAcceptedAsync(slug, res.Deal!, userName, l);
@@ -3406,13 +3406,13 @@ public static class MarketplaceTemplateExtensions
 
         // أَيّ طَرَف يُحَرِّك المَرحَلَة التالِيَة بِحَسَب دَورِه.
         app.MapPost("/{slug}/deals/{id:guid}/advance",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store,
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames,
                    Services.Deals.DealsService deals) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "مُستَخدِم";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "مُستَخدِم";
             var note = req.Form["note"].ToString().Trim();
             // والمَرحَلَةُ الَّتي رُسِمَت عَلَيها الاستِمارَةُ تُمَرَّرُ `from:` (‏2026-10-24، تَدقيقُ الإطلاق brief-P0-6؛ ‏ADR-036 §١٣): كانَت نَقرَتانِ مُتَتالِيَتانِ
             // تَمضِيانِ مَرحَلَتَين — صَفقَةُ نَقدٍ مِن «حَجز» إلى «شَحن» بِلا بوليصَة (تَوصيفُه `23c362a`). وما سِوى اسمِ مَرحَلَةٍ لا يُسأَلُ عَنه كَما كان.
@@ -3426,13 +3426,13 @@ public static class MarketplaceTemplateExtensions
         // (`DealCancelAuthorization`)، فَأُبقِيَ وثُبِّتَ — وكانَ الإلغاءُ صامِتاً. القَرارُ «مَن يُشعَر»
         // والتَركيبُ في `DealNotices`؛ ومَن يُلغي طَلَبَه هُوَ لا يُشعَر.
         app.MapPost("/{slug}/deals/{id:guid}/cancel",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store,
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames,
                    Services.Deals.DealsService deals, Services.Deals.DealNotices notices, L l) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "مُستَخدِم";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "مُستَخدِم";
             var reason = req.Form["reason"].ToString().Trim();
             // ‏§١١٫٦ أُغلِقَت: الجَلسَةُ الصالِحَةُ لَم تَعُد كافِيَةً —
             // الحارِسُ في تَوقيعِ الخِدمَة، وهذا المَسارُ يُصَرِّح
@@ -3463,13 +3463,13 @@ public static class MarketplaceTemplateExtensions
         // الاستِمارَةَ مِن البَوّابَةِ نَفسِها، فَلا يَبلُغُه إلّا طَلَبٌ لَم تَرسُمه — ويَعودُ إلى حَيثُ
         // كانَ يَعود (لا صَفقَة ← «صَفقاتي»، وإلّا صَفحَتُها).
         app.MapPost("/{slug}/deals/{id:guid}/review",
-            async (string slug, Guid id, HttpRequest req,
+            async (string slug, Guid id, HttpRequest req, Services.Queries.AccountQueries actorNames,
                    Services.Deals.DealReviews reviews) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "مُستَخدِم";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "مُستَخدِم";
             if (!int.TryParse(req.Form["rating"].ToString(), out var rating)) rating = 5;
             var body = req.Form["body"].ToString().Trim();
 
@@ -3679,7 +3679,10 @@ public static class MarketplaceTemplateExtensions
         {
             studioAuth.Load();
             if (studioAuth.IsAuthenticated)
-                return (studioAuth.UserId, studioAuth.UserName ?? "studio");
+                // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-11) الاسمُ مِن وَثيقَتِه لا مِن الكوكي؛ و22 مُنادِياً لِهذا الدالَّةِ لا يُمَرِّرونَ خِدمَةً،
+                // فَتُطلَبُ مِن خِدماتِ الطَلَبِ نَفسِه (نَسَقُ `TenantAuthChannelDoor.OfferedIn(http.RequestServices)`).
+                return (studioAuth.UserId, await req.HttpContext.RequestServices
+                    .GetRequiredService<Services.Queries.StudioQueries>().ActorNameAsync(studioAuth.UserId) ?? "studio");
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is not null) return (parsed.Value.UserId, "tenant_admin");
             return (null, "anonymous");

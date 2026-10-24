@@ -151,6 +151,12 @@ public sealed class AccountQueries
         return await s.LoadAsync<User>(userId, ct);
     }
 
+    /// <summary>اسمُ الفاعِلِ مِن وَثيقَتِه وَقتَ الكِتابَة (‏2026-10-24، تَدقيقُ الإطلاق lens-security-11) — لا مِن كوكي <c>.name</c>.
+    /// القاعِدَةُ في <see cref="ActorName.Of"/>.</summary>
+    public async Task<string?> ActorNameAsync(
+        string tenantSlug, Guid userId, CancellationToken ct = default)
+        => ActorName.Of((await ProfileAsync(tenantSlug, userId, ct))?.FullName);
+
     /// <summary>سَلَّةُ المُستَخدِم — مُعَرِّفُها هُوَ مُعَرِّفُه.</summary>
     public async Task<Cart?> CartAsync(
         string tenantSlug, Guid userId, CancellationToken ct = default)

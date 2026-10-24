@@ -37,12 +37,12 @@ public static class OtoShippingEndpoints
         // **ولا يُمَرَّرُ إلغاءُ الطَلَب** (`RequestAborted`): مُتَصَفِّحٌ يُغلَقُ بَعدَ أَن أُنشِئَ الطَلَبُ عِندَ OTO لا
         // يَقطَعُ كِتابَةَ مَرجِعِه — مُهلَةُ العَميلِ تَحُدُّ النِداء.
         app.MapPost("/{slug}/deals/{id:guid}/ship",
-            async (string slug, Guid id, HttpRequest req, Services.Deals.DealShipping shipping) =>
+            async (string slug, Guid id, HttpRequest req, Services.Deals.DealShipping shipping, Services.Queries.AccountQueries actorNames) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
-            var shipper = new Services.Deals.DealShipper(userId, AuthSession.ResolveUserName(req, slug) ?? "");
+            var shipper = new Services.Deals.DealShipper(userId, await actorNames.ActorNameAsync(slug, userId) ?? "");
             var res = await shipping.ShipAsync(slug, id, shipper, req.Form["city"].ToString());
             return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, $"deals/{id}" + (res.Ok ? "" : $"?err={res.Code}")));
         }).DisableAntiforgery().RequireFormBody()
