@@ -432,9 +432,12 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
         var code = string.Join('\n', blocks);
 
         var snaps = SnapshotPaths(code);
+        // ‏(‏2026-10-24 — تَيّارُ S16، مُراجَعَةُ S13 الجَولَة ١) ويُطبَعُ ما عُدَّ وما قُرِئ (القاعِدَة ١٠)، ومَسارٌ يَخرُجُ بِـ`..` يُرَدّ.
+        output.WriteLine($"--snapshot في كُتَلِ §٤‑د: {Regex.Matches(code, "--snapshot").Count} · مَساراتٌ مَقروءَة: {snaps.Count} — {string.Join(" · ", snaps)}");
         Assert.NotEmpty(snaps);
         Assert.Equal(Regex.Matches(code, "--snapshot").Count, snaps.Count);   // ‏(‏2026-10-24) كُلُّ --snapshot يُقرَأُ مَسارُه، بِعَلامَتَي تَنصيصٍ أَو بِدونِهِما
         Assert.All(snaps, s => Assert.StartsWith("$HOME/wasayel-snapshots/", s, StringComparison.Ordinal));
+        Assert.All(snaps, s => Assert.Null(SnapshotPathRefusal(s)));
         // ‏(‏2026-10-24، بَندُ L) والمُجَلَّدُ لِصاحِبِه وَحدَه: `-m 700` وَ`chmod 700` لِمُجَلَّدٍ قائِم.
         var mkdir = code.IndexOf("mkdir -m 700 -p \"$HOME/wasayel-snapshots\" && chmod 700 \"$HOME/wasayel-snapshots\"", StringComparison.Ordinal);
         Assert.True(mkdir >= 0 && mkdir < code.IndexOf("--snapshot", StringComparison.Ordinal), "mkdir -m 700 -p لا يَسبِقُ أَوَّلَ --snapshot.");
@@ -568,6 +571,14 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
     /// <summary>مَسارُ كُلِّ <c>--snapshot</c> في نَصِّ أَوامِر — بَينَ عَلامَتَي تَنصيصٍ أَو بِدونِهِما (‏2026-10-24 — مُراجَعَةُ الموجَة ٤،
     /// بَندُ H: كانَ الصَفُّ أَعلاه يَقرَأُ المُقتَبَسَ وَحدَه، فَـ<c>--snapshot pre-deploy.dump</c> — جَذرَ المُستَودَعِ مَرَّةً أُخرى — لا يُعَدُّ
     /// ويَمُرُّ ما دامَ في الكُتلَةِ مَسارٌ مُقتَبَسٌ واحِدٌ صَحيح).</summary>
+    /// <summary>‏(‏2026-10-24 — تَيّارُ S16) <c>null</c> إن كانَ المَسارُ تَحتَ <c>$HOME/wasayel-snapshots/</c> ولا مَقطَعَ <c>..</c> فيه، وإلّا السَبَب —
+    /// فَـ<c>$HOME/wasayel-snapshots/../wasayel-platform/x.dump</c> يَبدَأُ بِالبادِئَةِ ويَخرُجُ مِنها، ولا يَراه إلّا مَشيُ الفِعلِ وَقتَ التَشغيل.</summary>
+    internal static string? SnapshotPathRefusal(string path)
+    {
+        if (!path.StartsWith("$HOME/wasayel-snapshots/", StringComparison.Ordinal)) return "outside_snapshot_dir";
+        return path.Split('/', '\\').Any(seg => seg == "..") ? "dot_dot_segment" : null;
+    }
+
     internal static IReadOnlyList<string> SnapshotPaths(string code)
         => Regex.Matches(code, @"--snapshot[ \t]+(?:""(?<q>[^""]+)""|(?<u>[^\s""]\S*))")
             .Select(m => m.Groups["q"].Success ? m.Groups["q"].Value : m.Groups["u"].Value)
@@ -585,7 +596,7 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
         {
             var paths = SnapshotPaths(code);
             return paths.Count > 0 && paths.Count == Regex.Matches(code, "--snapshot").Count
-                && paths.All(p => p.StartsWith("$HOME/wasayel-snapshots/", StringComparison.Ordinal));
+                && paths.All(p => SnapshotPathRefusal(p) is null);
         }
         var accepted = new[]
         {
@@ -599,6 +610,9 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
             Live + "dotnet run scripts/marten-schema.cs -- --snapshot '$HOME/wasayel-snapshots/x.dump'\n",
             Live + "dotnet run scripts/marten-schema.cs -- --snapshot\n",
             "dotnet run scripts/marten-schema.cs -- --snapshot pre-deploy.dump\n",
+            // ‏(‏2026-10-24 — S16) يَبدَأُ بِالبادِئَةِ ويَخرُجُ مِنها إلى شَجَرَةِ العَمَل:
+            Live + "dotnet run scripts/marten-schema.cs -- --snapshot \"$HOME/wasayel-snapshots/../wasayel-platform/x.dump\"\n",
+            Live + "dotnet run scripts/marten-schema.cs -- --snapshot $HOME/wasayel-snapshots/a/../../x.dump\n",
         };
         Assert.Equal(new[] { "$HOME/wasayel-snapshots/pre-deploy-$(git rev-parse --short HEAD).dump", "pre-deploy.dump" },
             SnapshotPaths(Live + "x --snapshot pre-deploy.dump").ToArray());
@@ -612,6 +626,16 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
             var q = Regex.Matches(c, @"--snapshot\s+""(?<path>[^""]+)""").Select(m => m.Groups["path"].Value).ToArray();
             return q.Length > 0 && q.All(p => p.StartsWith("$HOME/wasayel-snapshots/", StringComparison.Ordinal));
         });
-        Assert.Equal(4, oldAccepts);
+        // ‏(‏2026-10-24 — S16) والقارِئُ المُقتَبَسُ يَقبَلُ أَيضاً العَيِّنَتَينِ بِـ`..` (المُقتَبَسَةَ بِبادِئَتِها، وغَيرَ المُقتَبَسَةِ لِأَنّه لا يَقرَؤُها)؛
+        // والبادِئَةُ وَحدَها (ما قَبلَ S16) تَقبَلُ العَيِّنَتَين:
+        Assert.Equal(6, oldAccepts);
+        var prefixOnly = rejected.Count(c =>
+        {
+            var paths = SnapshotPaths(c);
+            return paths.Count == Regex.Matches(c, "--snapshot").Count && paths.All(p => p.StartsWith("$HOME/wasayel-snapshots/", StringComparison.Ordinal));
+        });
+        output.WriteLine($"حُقِنَ {rejected.Length} سَطراً و{accepted.Length} حَيّاً · تَقبَلُ البادِئَةُ وَحدَها {prefixOnly} مِنها · "
+            + $"الرَفضُ بِـ..: {SnapshotPathRefusal("$HOME/wasayel-snapshots/../wasayel-platform/x.dump")}");
+        Assert.Equal(2, prefixOnly);
     }
 }
