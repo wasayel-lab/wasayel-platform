@@ -133,22 +133,28 @@ public sealed class StudioAuth
         return user;
     }
 
+    /// <summary><b>الكوكيّانِ بِصِفاتِ كوكي المَتجَرِ نَفسِها</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-security-6، كُبرى): كانَ كوكي الجَلسَةِ
+    /// — وهُوَ وَحدَه يُنتِجُ جَلسَةَ مُشرِفِ المَنَصَّة — بِلا <c>Secure</c>، وكوكي الاسمِ بِلا <c>HttpOnly</c> ولا <c>Secure</c> ولا <c>SameSite</c>.
+    /// صارا <c>HttpOnly</c>/<c>Lax</c>/<c>Secure</c> بِقَرارِ <c>AuthSession.SecureFor</c> لِطَلَبِ هذا الرَدّ (HTTP المَحَلِّيُّ بِلا Secure كَما
+    /// كان). والاسمُ لا يَقرَؤُه سِكربت: الخادِمُ وَحدَه (<see cref="Load"/>). مَحروسٌ في <c>AuthCookieFlagsTests</c>.</summary>
     public static void WriteCookie(HttpResponse res, StudioUser user)
     {
         var token = AuthHandlers.MakeToken(user.Id, Tenant);
         var opts = new CookieOptions
         {
             HttpOnly = true, IsEssential = true, SameSite = SameSiteMode.Lax,
+            Secure = AuthSession.SecureFor(res.HttpContext.Request),
             Path = "/", Expires = DateTimeOffset.UtcNow.AddDays(30)
         };
         res.Cookies.Append(CookieName, token, opts);
-        res.Cookies.Append(CookieName + ".name", user.FullName,
-            new CookieOptions { IsEssential = true, Path = "/", Expires = opts.Expires });
+        res.Cookies.Append(CookieName + ".name", user.FullName, opts);
     }
 
     public static void DeleteCookie(HttpResponse res)
     {
-        res.Cookies.Delete(CookieName);
-        res.Cookies.Delete(CookieName + ".name");
+        // المَحوُ بِصِفَةِ الكِتابَةِ نَفسِها — نَسَقُ `AuthSession.ClearCookie`.
+        var opts = new CookieOptions { Path = "/", Secure = AuthSession.SecureFor(res.HttpContext.Request) };
+        res.Cookies.Delete(CookieName, opts);
+        res.Cookies.Delete(CookieName + ".name", opts);
     }
 }

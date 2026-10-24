@@ -18,6 +18,10 @@ namespace ACommerce.Platform.Tests;
 //
 // **يُثَبَّتُ قَبلَ العِلاجِ** (القاعِدَة ٣): صَفُّ الاستوديو (`Today_…`) يَنقَلِبُ بِاسمِه، وصُفوفُ المَتجَرِ وHTTP والعَدّادِ تَبقى بِلا تَعديلِ حَرف.
 // والصِفاتُ تُقرَأُ مِن رُؤوسِ `Set-Cookie` الَّتي يَكتُبُها الكاتِبُ نَفسُه عَلى `DefaultHttpContext` بِمُخَطَّطِ `https` — لا مِن نَصِّ المَصدَر.
+//
+// **العِلاج** (‏2026-10-24): `AuthSession.SecureFor(HttpRequest?)` — القاعِدَةُ الواحِدَةُ لِطَلَبٍ بِعَينِه (و`ShouldUseSecure` يُناديها بِالطَلَبِ
+// الحاليّ كَما كان) — يَسأَلُها كاتِبُ الاستوديو بِطَلَبِ رَدِّه، والكوكيّانِ بِالصِفاتِ نَفسِها؛ والمَحوُ بِـ`Secure` الكِتابَة. صَفُّ الاستوديو
+// انقَلَبَ بِاسمِه، وصَفٌّ لِلمَحو جَديد، والباقي كَما أُودِع.
 public class AuthCookieFlagsTests(ITestOutputHelper output)
 {
     private static HttpContext Request(bool https)
@@ -94,25 +98,51 @@ public class AuthCookieFlagsTests(ITestOutputHelper output)
             Assert.DoesNotContain("secure", attrs);
     }
 
-    // ─── ٣. «اليَوم» — كوكي الاستوديو عَلى HTTPS بِلا Secure، واسمُه بِلا HttpOnly ───────────────────
+    // ─── ٣. كوكي الاستوديو عَلى HTTPS: HttpOnly وLax وSecure، واسمُه مِثلُه ──────────────────────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_the_studio_session_cookie_is_issued_without_secure_on_https_and_its_name_cookie_is_bare`.
 
     [Fact]
-    public void Today_the_studio_session_cookie_is_issued_without_secure_on_https_and_its_name_cookie_is_bare()
+    public void The_studio_session_and_name_cookies_are_httponly_lax_and_secure_on_https()
     {
         var http = Request(https: true);
         StudioAuth.WriteCookie(http.Response, Studio());
         var written = Written(http.Response);
         output.WriteLine(string.Join(" | ", written.Select(w => $"{w.Key}: {string.Join(",", w.Value.Where(a => !a.StartsWith("expires") && !a.StartsWith("path")))}")));
 
-        var session = written[StudioAuth.CookieName];
-        Assert.Contains("httponly", session);
-        Assert.Contains("samesite=lax", session);
-        Assert.DoesNotContain("secure", session);
+        Assert.Equal(new[] { StudioAuth.CookieName, StudioAuth.CookieName + ".name" }, written.Keys.OrderBy(k => k, StringComparer.Ordinal));
+        foreach (var (_, attrs) in written)
+        {
+            Assert.Contains("httponly", attrs);
+            Assert.Contains("samesite=lax", attrs);
+            Assert.Contains("secure", attrs);
+        }
+    }
 
-        var name = written[StudioAuth.CookieName + ".name"];
-        Assert.DoesNotContain("httponly", name);
-        Assert.DoesNotContain("secure", name);
-        Assert.DoesNotContain(name, a => a.StartsWith("samesite", StringComparison.Ordinal));
+    /// <summary>والمَحوُ بِصِفَةِ الكِتابَة: عَلى HTTPS يَحمِلُ <c>Secure</c> (يَستَبدِلُ الكوكيَّ الآمِنَ ولا يُرَدّ)، وعَلى HTTP لا.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void The_studio_logout_clears_both_cookies_with_the_secure_flag_they_were_written_with(bool https)
+    {
+        var http = Request(https);
+        StudioAuth.DeleteCookie(http.Response);
+        var written = Written(http.Response);
+        Assert.Equal(new[] { StudioAuth.CookieName, StudioAuth.CookieName + ".name" }, written.Keys.OrderBy(k => k, StringComparer.Ordinal));
+        foreach (var (_, attrs) in written)
+        {
+            Assert.Contains(attrs, a => a.StartsWith("expires=thu, 01 jan 1970", StringComparison.Ordinal));
+            Assert.Equal(https, attrs.Contains("secure"));
+        }
+    }
+
+    /// <summary>والقاعِدَةُ واحِدَة: <c>SecureFor</c> لِطَلَبِ HTTPS نَعَم، ولِـHTTP ولِلغِيابِ لا.</summary>
+    [Fact]
+    public void One_secure_decision_serves_both_writers()
+    {
+        Assert.True(AuthSession.SecureFor(Request(https: true).Request));
+        Assert.False(AuthSession.SecureFor(Request(https: false).Request));
+        Assert.False(AuthSession.SecureFor(null));
     }
 
     // ─── ٤. كُلُّ كاتِبِ كوكي مَعروف — والعَدَدُ يُطبَعُ ويَحمَرُّ عَلى الجَديد (القاعِدَة ١٠) ─────────────

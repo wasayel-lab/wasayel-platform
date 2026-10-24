@@ -154,14 +154,16 @@ public sealed class AuthSession
     /// كانَ الافتِراضيّ Secure=true دائِماً، فَكَسَرَ تَسجيل الدُّخول على
     /// HTTP المَحَلّيّ صامِتاً (المُتَصَفِّح يَرفُض cookie آمِناً على http).
     /// مِفتاح <c>ACOMMERCE_FORCE_INSECURE_COOKIES=1</c> يُجبِر الإطفاء.</summary>
-    private static bool ShouldUseSecure
+    private static bool ShouldUseSecure => SecureFor(HttpAccessor?.HttpContext?.Request);
+
+    /// <summary><b>القَرارُ نَفسُه لِطَلَبٍ بِعَينِه</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-security-6): كوكي الاستوديو — هُوِيَّةُ مُشرِفِ المَنَصَّة —
+    /// كانَ يُصدَرُ بِلا <c>Secure</c> لِأَنّ كاتِبَه لا يَسأَلُ هذا القَرار. صارَ يَسأَلُه بِطَلَبِ رَدِّه (<c>StudioAuth.WriteCookie</c>)، وكوكي
+    /// المَتجَرِ بِالطَلَبِ الحاليّ كَما كان. مَوضِعٌ واحِدٌ لِلقاعِدَة: HTTPS فِعلاً، إلّا بِـ<c>ACOMMERCE_FORCE_INSECURE_COOKIES=1</c>.</summary>
+    public static bool SecureFor(HttpRequest? request)
     {
-        get
-        {
-            if (Environment.GetEnvironmentVariable("ACOMMERCE_FORCE_INSECURE_COOKIES") == "1")
-                return false;
-            return HttpAccessor?.HttpContext?.Request.IsHttps ?? false;
-        }
+        if (Environment.GetEnvironmentVariable("ACOMMERCE_FORCE_INSECURE_COOKIES") == "1")
+            return false;
+        return request?.IsHttps ?? false;
     }
 
     private static CookieOptions BuildOpts() => new()
