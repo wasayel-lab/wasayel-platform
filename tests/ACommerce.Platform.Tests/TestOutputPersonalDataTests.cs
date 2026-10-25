@@ -16,6 +16,9 @@ namespace ACommerce.Platform.Tests;
 // **الماسِح**: كُلُّ `.cs` تَحتَ `tests/` (بِلا تَعليقات): نِداءُ `WriteLine`/`Write` — ومِن ثَمَّ كُلُّ دالَّةٍ مَحَلِّيَّةٍ في المِلَفِّ يَكتُبُ جِسمُها
 // إلى `Console` أَو `.WriteLine(` (كَـ`Log` هُناك) — تَحمِلُ وُسَطاؤُه `.Phone` أَو `.Email` أَو `.FullName` أَو `.NationalId`. ويَطبَعُ ما فَحَصَه
 // ويَفشَلُ إن كانَ صِفراً (القاعِدَة ١٠). وهذا المِلَفُّ نَفسُه خارِجَ المَسحِ لِأَنّ عَيِّناتِه نُصوص — وتُقاسُ بِالدالَّةِ نَفسِها أَدناه.
+// (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2 الجَولَة ١ — ولا يُعادُ حَرفٌ فَوقَه: وكُلُّ مَحَلِّيٍّ يُنسَخُ إلَيه الحَقلُ قيمَةً — سِلسِلَةُ أَعضاءٍ تَنتَهي بِه، أَو `$"…"`،
+// أَو `"…" + …` — يُعَدُّ كَالحَقلِ نَفسِه في وُسَطاءِ الكاتِب (`PersonalAliases`)، وسَطرا `LiveProofRedaction.Of` لا يُعَدّان؛ وحُدودُه في مُلَخَّصِها: الاسمُ في
+// المِلَفِّ كُلِّه، وخُطوَةٌ واحِدَة، ولا دالَّةٌ تُعيدُ الحَقل.)
 //
 // **العِلاج** (‏2026-10-25): `LiveProofRedaction` — الحَقلُ يُحجَبُ في سَطرٍ قَبلَ نِداءِ الكاتِب، والبُرهانُ يَقيسُ غِيابَ كُلِّ قيمَةٍ حَيَّةٍ عَن
 // خَرجِه بِرِسالَةٍ لا تُعيدُها؛ وبُرهانُ الثيمِ يَقيسُ حالاتِ وَثائِقِه وثيمَه الفَعّال. الصَفّانِ انقَلَبا بِاسمَيهِما، وصَفُّ العَيِّناتِ كَما أُودِع.
@@ -148,15 +151,44 @@ public class TestOutputPersonalDataTests(ITestOutputHelper output)
         return names;
     }
 
-    /// <summary>كُلُّ نِداءٍ لِكاتِبٍ تَحمِلُ وُسَطاؤُه حَقلاً شَخصِيّاً — والتَصريحُ بِالدالَّةِ نَفسِها لا يُعَدّ.</summary>
+    /// <summary>
+    /// <para><b>المَحَلِّيُّ الَّذي يَحمِلُ حَقلاً شَخصِيّاً</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2 الجَولَة ١، صُغرى؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): كانَ
+    /// الماسِحُ يَقرَأُ وُسَطاءَ الكاتِبِ وَحدَها، فَـ<c>var p = a.Phone; Log($"…{p}")</c> يَمُرّ — وهو شَكلُ سَطرَي الحَجبِ نَفسُه
+    /// (<c>var phone = LiveProofRedaction.Of(a.Phone); Log(…phone…)</c>)، فَلا يُفَرِّقُ بَينَ مَحجوبٍ وغَيرِه. صارَ كُلُّ <c>var</c>/<c>string</c> مَحَلِّيٍّ
+    /// يَحمِلُ طَرَفُه الأَيمَنُ حَقلاً شَخصِيّاً اسماً مُستَعاراً — ما لَم يَمُرَّ بِـ<c>LiveProofRedaction.Of(</c>، أَو يَكُن سُؤالاً لا قيمَة (عَلَمٌ أَو عَدَدٌ أَو
+    /// مُقارَنَة) — وكاتِبٌ يُسَمّيه كَشف. <b>وحَدُّه مُعلَن</b>: بِالاسمِ في المِلَفِّ كُلِّه لا في دالَّتِه (اسمٌ مُكَرَّرٌ في دالَّةٍ أُخرى يُحمِرُّ — أَحمَرُ
+    /// كاذِبٌ يُصلَحُ بِسَطر)، وبِخُطوَةٍ واحِدَة (مُستَعارٌ مِن مُستَعارٍ لا يُتبَع)، ولا يَرى الحَقلَ يَمُرُّ في وَسيطِ دالَّةٍ تُعيدُه.</para>
+    /// </summary>
+    /// <summary>أَشكالُ الطَرَفِ الأَيمَنِ الَّتي <b>هي</b> القيمَةُ لا سُؤالٌ عَنها: سِلسِلَةُ أَعضاءٍ تَنتَهي بِالحَقلِ (بِـ<c>?.</c> و<c>.Trim()</c> و<c>?? …</c>)،
+    /// أَو سِلسِلَةٌ مُستَوفاةٌ <c>$"…"</c>، أَو نَصٌّ يُوصَلُ بِها <c>"…" + …</c>. وما سِواها — نِداءٌ يَأخُذُ الحَقلَ وَسيطاً (<c>Path.Combine(dir.FullName, …)</c>،
+    /// <c>LiveProofRedaction.Of(a.Phone)</c>، <c>IsNullOrEmpty(…)</c>)، أَو مُقارَنَة، أَو طول — لا يُعَدّ.</summary>
+    private const string ValueShapes =
+        @"^(?:[A-Za-z_]\w*(?:\??\.\w+)*\??\.(?:Phone|Email|FullName|NationalId|CreatedBy|DecidedBy)(?:\.Trim\(\))?(?:\s*\?\?\s*[^=;]+)?" +
+        @"|\$@?"".*|@?\$"".*|""[^""]*""\s*\+.*)$";
+
+    internal static IReadOnlySet<string> PersonalAliases(string code)
+    {
+        var aliases = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Match m in Regex.Matches(code, @"\b(?:var|string\??)\s+(?<name>\w+)\s*=\s*(?<rhs>[^;]+);"))
+        {
+            var rhs = m.Groups["rhs"].Value.Trim();
+            if (!Regex.IsMatch(rhs, PersonalField)) continue;
+            if (Regex.IsMatch(rhs, ValueShapes)) aliases.Add(m.Groups["name"].Value);
+        }
+        return aliases;
+    }
+
+    /// <summary>كُلُّ نِداءٍ لِكاتِبٍ تَحمِلُ وُسَطاؤُه حَقلاً شَخصِيّاً أَو مَحَلِّيّاً يَحمِلُه (<see cref="PersonalAliases"/>) — والتَصريحُ بِالدالَّةِ نَفسِها لا يُعَدّ.</summary>
     internal static IReadOnlyList<string> Leaks(string code)
     {
         var leaks = new List<string>();
+        var aliases = PersonalAliases(code);
+        var aliasPattern = aliases.Count == 0 ? null : $@"\b(?:{string.Join("|", aliases.Select(Regex.Escape))})\b";
         foreach (var name in Writers(code))
             foreach (Match m in Regex.Matches(code, $@"(?<!\b(?:void|Task)\s+)\b{Regex.Escape(name)}\s*\("))
             {
                 var args = Balanced(code, code.IndexOf('(', m.Index), '(', ')');
-                if (Regex.IsMatch(args, PersonalField))
+                if (Regex.IsMatch(args, PersonalField) || (aliasPattern is not null && Regex.IsMatch(args, aliasPattern)))
                     leaks.Add($"{name}{(args.Length > 90 ? args[..90] + "…" : args)}");
             }
         return leaks;
@@ -215,6 +247,24 @@ public class TestOutputPersonalDataTests(ITestOutputHelper output)
         Assert.Single(Leaks(BlankPlainStrings("Log($\"{a}\"); output.WriteLine(u.Phone); x = \"y\";")));
         Assert.Single(Leaks(BlankPlainStrings("output.WriteLine($\"{(ok ? \"x\" : \"y\")} {u.Phone}\");")));
         Assert.Empty(Leaks(BlankPlainStrings("const string s = \"\"\"\n  output.WriteLine(u.Phone);\n  \"\"\";")));
+    }
+
+    /// <summary><b>والمُستَعارُ يُرى</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2 الجَولَة ١ — القاعِدَة ١٠): حَقلٌ يُنسَخُ إلى مَحَلِّيٍّ ثُمَّ يُكتَب كَشف، بِأَشكالِه؛
+    /// وسَطرا الحَجبِ (<c>LiveProofRedaction.Of</c>) لا يُعَدّان، ولا عَلَمٌ أَو عَدَدٌ مُشتَقّ — وكانَ الأَوَّلُ يَمُرُّ قَبلَ <see cref="PersonalAliases"/>.</summary>
+    [Fact]
+    public void The_scanner_sees_a_personal_field_copied_into_a_local_and_not_its_redacted_copy()
+    {
+        Assert.Single(Leaks("var p = a.Phone;\nLog($\"[admin] {p}\");\nvoid Log(string s) => Console.WriteLine(s);"));
+        Assert.Single(Leaks("string? who = doc?.CreatedBy;\noutput.WriteLine(who);"));
+        Assert.Single(Leaks("var line = $\"{u.FullName} · {u.Email}\";\noutput.WriteLine(line);"));
+        Assert.Single(Leaks("var nid = user.NationalId ?? \"-\";\noutput.WriteLine(\"nid \" + nid);"));
+
+        Assert.Empty(Leaks("var phone = LiveProofRedaction.Of(a.Phone);\nLog($\"[admin] {phone}\");\nvoid Log(string s) => Console.WriteLine(s);"));
+        Assert.Empty(Leaks("var hasEmail = !string.IsNullOrEmpty(u.Email);\noutput.WriteLine($\"{hasEmail}\");"));
+        Assert.Empty(Leaks("var n = u.Phone.Length;\noutput.WriteLine($\"{n}\");"));
+        Assert.Empty(Leaks("var same = a.Email == b.Email;\noutput.WriteLine($\"{same}\");"));
+        Assert.Empty(Leaks("var p = a.Phone;\nAssert.Equal(\"x\", p);"));
+        Assert.Equal(new[] { "p", "who" }, PersonalAliases("var p = a.Phone; string? who = d.CreatedBy; var q = LiveProofRedaction.Of(a.Phone);").OrderBy(x => x));
     }
 
     // ─── ١. لا اختِبارَ يَكتُبُ حَقلاً شَخصِيّاً إلى خَرجِه ─────────────────────────────────────────────────
