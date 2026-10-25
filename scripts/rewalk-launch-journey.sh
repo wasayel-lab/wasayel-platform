@@ -64,6 +64,15 @@
 #  **القاعِدَة ١٠**: كُلُّ فَحصٍ يُعَدّ، ويُطبَعُ العَدَدُ في آخِرِه، والصِفرُ
 #  يُحمِر — «لا فَشَل» مِن سكربتٍ لَم يَفحَص شَيئاً لا يُمَيَّزُ عَن العَمى.
 #
+#  **«مِن صَفحَةٍ أولى» يُقاسُ لا يُدَّعى** (‏2026-10-25، تَدقيقُ الإطلاق brief-P1b-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): كانَ
+#  ‏`POST /studio/begin` يُرسَلُ بِلا `GET /` قَبلَه، و`create-listing` و`checkout?step=2` مَبنِيَّينِ مِن عَناوينَ في السكربت،
+#  و`grace=14 price=0` حَرفَينِ فيه. صارَت الخُطُواتُ تَأخُذُ التالِيَ مِن الصَفحَةِ الَّتي قَبلَها: الاستِمارَةُ وحَقلُها مِن `/`،
+#  ورابِطُ «إعلان جَديد» مِن الصَفحَةِ الَّتي تُعيدُ إلَيها الشُروط، وحَقلا الفِئَةِ والدَورِ المَخفِيّانِ مِن استِمارَةِ النَشر،
+#  ورابِطُ الدَفعِ مِن السَلَّة، والخُطُواتُ ١ ← ٢ ← ٣ ← الإرسالُ مِن استِماراتِها (`form_dump`)، والمُهلَةُ والسِعرُ قيمَتا
+#  استِمارَةِ الباقَة. **وما يَبقى مَكتوباً — عَمداً ويُقالُ في سَطرِه**: ما يَكتُبُه الإنسانُ في حَقل (الفِكرَة، الهاتِف، العُنوان،
+#  الاسم، السِعر، تاريخُ الانتِهاء، خِيارُ «اشتِراك يَدَوِيّ»)، ومِجَسّا الرَفضِ (`pay=card` و`/studio/begin` عَلى بابٍ مُغلَق —
+#  طَلَبانِ لا تَرسُمُهُما الصَفحَةُ لِيُثبَتَ أَنّ النُقطَةَ تَرُدُّهُما)، والمَراحِلُ الَّتي تُعادُ بِأَزرارِها (`/advance`، `/accept`).
+#
 #  **شَرطُ الاستِخراج** (القاعِدَة ١): `post`/`get`/`dec` هُنا أَخَواتُ
 #  دَوالِّ `walk-after-the-key.sh` لا نُسخَتُها بِحَرفِها (هُنا تُرسِلُ
 #  الاستِمارَةُ نَوعَ مُحتَواها دائِماً كَالمُتَصَفِّح). مُستَهلِكانِ لا ثَلاثَة؛
@@ -146,6 +155,36 @@ dec() { perl -CSD -pe 's/&#x([0-9A-Fa-f]+);/chr(hex($1))/ge; s/&#(\d+);/chr($1)/
 # فَيَفشَلُ الأُنبوبُ والنَصُّ مَوجود — أَحمَرُ كاذِبٌ مَقيسٌ في أَوَّلِ تَشغيل (‏2026-10-13).
 has() { dec "$1" | grep -F -- "$2" >/dev/null; }      # has <file> <نَصّ>
 count() { grep -oF -- "$2" "$1" | wc -l | tr -d ' '; } # count <file> <نَصّ خام>
+# ─── بِدايَةُ form_dump ─── (‏`RewalkFormDumpTests` يُشَغِّلُ ما بَينَ العَلامَتَينِ بِـbash عَلى عَيِّنَةٍ مَعلومَةِ الجَوابِ وعَلى نُسَخٍ مَحقونَة)
+# ‏(‏2026-10-25، brief-P1b-2) form_dump <file> <نَصٌّ في الاستِمارَة> — أَوَّلُ <form> يَحمِلُ النَصَّ (فاتِحَتُه أَو جِسمُه):
+#   ‏«ACTION <action> <method>» ثُمَّ لِكُلِّ حَقل: «HIDDEN n=v» (مَخفِيّ)، «RADIO n=v» (خِيار)، «FIELD n» (مَرئِيٌّ مَطلوب)، و«VALUE n=v»
+#   ‏(مَرئِيٌّ بِقيمَةٍ مَكتوبَة). بِلا استِمارَةٍ لا يَطبَعُ شَيئاً — والمُنادي يُحمِرُّ عَلى الفَراغ.
+form_dump() {
+    dec "$1" | MUST="$2" perl -0777 -ne '
+        while (m{(<form\b[^>]*>)(.*?)</form>}gs) {
+            my ($open, $body) = ($1, $2);
+            next if index($open . $body, $ENV{MUST}) < 0;
+            my ($act) = $open =~ /\baction="([^"]*)"/; my ($m) = $open =~ /\bmethod="([^"]*)"/;
+            print "ACTION ", ($act // ""), " ", lc($m // "get"), "\n";
+            while ($body =~ m{<(?:input|textarea|select)\b([^>]*)>}g) {
+                my $a = $1;
+                my ($n) = $a =~ /\bname="([^"]*)"/; next unless defined $n;
+                my ($t) = $a =~ /\btype="([^"]*)"/; $t //= "";
+                my ($v) = $a =~ /\bvalue="([^"]*)"/;
+                if    ($t eq "hidden") { print "HIDDEN $n=", ($v // ""), "\n" }
+                elsif ($t eq "radio")  { print "RADIO $n=", ($v // ""), "\n" }
+                else {
+                    print "FIELD $n\n" if $a =~ /\brequired\b/;
+                    print "VALUE $n=$v\n" if defined $v && length $v;
+                }
+            }
+            last;
+        }'
+}
+fd_action() { printf '%s\n' "$1" | sed -n 's/^ACTION \([^ ]*\) .*/\1/p' | head -1; }               # fd_action "$DUMP"
+fd_kind()   { printf '%s\n' "$1" | sed -n "s/^$2 \(.*\)/\1/p"; }                                 # fd_kind "$DUMP" HIDDEN|RADIO|FIELD|VALUE
+fd_get()    { printf '%s\n' "$1" | sed -n "s/^$2 $3=//p" | head -1; }                               # fd_get "$DUMP" HIDDEN step
+# ─── نِهايَةُ form_dump ───
 # النَصُّ مِن القامُوسِ بِمِفتاحِه — ومِفتاحٌ غائِبٌ يُوقِفُ الرِحلَة لا يُطابِقُ الفَراغ.
 ar() {
     local v; v="$(jq -r --arg k "$1" '.[$k] // empty' "$AR")"
@@ -252,12 +291,20 @@ check "$([ "$CODE" = 200 ] && grep -q '"ready":true' "$F" && echo 1 || echo 0)" 
 # ═══ ١) رائِدُ أَعمالٍ جَديد — المَسارُ الحَقيقيُّ حَتّى التَحليل ═════════
 STEP="١ — /studio/begin حَتّى التَحليل"
 say "١ · رائِدُ أَعمالٍ جَديد: فِكرَة ← دُخول ← شُروط ← تَحليل"
-post "$J_ENT" /studio/begin --data-urlencode "prompt=مَتجَرٌ يَجمَعُ بائِعي التُمورِ والعَسَلِ في مَوقِعٍ واحِد — جَولَةُ $MARK"
+# ‏(‏2026-10-25، brief-P1b-2): الصَفحَةُ الأولى قَبلَ أَيِّ POST — الاستِمارَةُ وحَقلُها مِنها. وبِلا استِمارَةٍ يُرسَلُ الطَلَبُ نَفسُه
+# مِجَسّاً (لا تَرسُمُه الصَفحَة) لِيُثبَتَ أَنّ النُقطَةَ تَرُدُّه — والفَرعُ أَدناه كَما كان.
+get "$J_ENT" / "$F"
+NBEGIN="$(count "$F" 'action="/studio/begin"')"
+BEGIN_DUMP="$(form_dump "$F" 'action="/studio/begin"')"
+BEGIN_ACTION="$(fd_action "$BEGIN_DUMP")"; PROMPT_FIELD="$(fd_kind "$BEGIN_DUMP" FIELD | head -1)"
+check "$([ "$CODE" = 200 ] && { [ "$NBEGIN" = 0 ] || { [ "$NBEGIN" = 1 ] && [ -n "$PROMPT_FIELD" ]; }; } && echo 1 || echo 0)" \
+    "GET / → $CODE · استِمارَةُ /studio/begin = $NBEGIN${PROMPT_FIELD:+ · حَقلُها المَطلوب «$PROMPT_FIELD»}"
+post "$J_ENT" "${BEGIN_ACTION:-/studio/begin}" --data-urlencode "${PROMPT_FIELD:-prompt}=مَتجَرٌ يَجمَعُ بائِعي التُمورِ والعَسَلِ في مَوقِعٍ واحِد — جَولَةُ $MARK"
 # ‏(‏2026-10-24، تَيّارُ S15 البَند A — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: **بابُ التَحليلِ يُسأَلُ قَبلَ الدُخول** — `StudioAnalysisDoor`.
 # بِلا مُزَوِّدٍ مَضبوطٍ يَرُدُّ `/studio/begin` إلى `/` قَبلَ الكَعكَةِ والدُخولِ والشُروط، و`/` لا تَرسُمُ الاستِمارَةَ وتَقولُ
 # `studio.analysis.unavailable`. فَذلكَ هو الجِدارُ الأَوَّلُ بِلا مِفتاح — كانَ «فَشِلَ التَّحليل» و401 بَعدَ الدُخولِ والشُروط —
 # ويُسقَطُ إلى مَسارِ التَطويرِ مِنه؛ والمَسارُ الحَقيقيُّ أَدناه لِلبابِ المَفتوحِ وَحدَه، ولَم يُعَد تَنسيقُه.)
-if [ "$CODE" = 302 ] && [ "$LOC" = / ]; then
+if [ "$NBEGIN" = 0 ] && [ "$CODE" = 302 ] && [ "$LOC" = / ]; then
     get - / "$F"
     check "$([ "$CODE" = 200 ] && [ "$(count "$F" 'action="/studio/begin"')" = 0 ] && has "$F" "$(ar studio.analysis.unavailable)" && echo 1 || echo 0)" \
         "POST /studio/begin → 302 / · GET / → $CODE · صِفرُ استِمارَةٍ و«$(ar studio.analysis.unavailable)» (‏StudioAnalysisDoor)"
@@ -433,7 +480,14 @@ if [[ "$LOC" == */me/role/onboarding ]]; then
 fi
 post "$J_VEN" "/$SLUG/terms/accept"
 check "$([ "$CODE" = 302 ] && echo 1 || echo 0)" "POST /$SLUG/terms/accept → $CODE $LOC"
-get "$J_VEN" "/$SLUG/create-listing" "$F"
+# ‏(‏2026-10-25، brief-P1b-2): «إعلان جَديد» يُنقَرُ مِن الصَفحَةِ الَّتي أَعادَت إلَيها الشُروط — لا عُنوانٌ يَبنيه السكربت.
+TERMS_TO="$LOC"
+get "$J_VEN" "$TERMS_TO" "$F"
+NEW_HREF="$(grep -o "href=\"/$SLUG/[^\"]*create-listing\"" "$F" | head -1 | sed 's/^href="//; s/"$//')"
+check "$([ "$CODE" = 200 ] && [ -n "$NEW_HREF" ] && echo 1 || echo 0)" \
+    "GET $TERMS_TO (البائِع، حَيثُ أَعادَته الشُروط) → $CODE · رابِطُ النَشر: ${NEW_HREF:-غائِب}"
+[ -n "$NEW_HREF" ] || die "لا رابِطَ إلى create-listing في $TERMS_TO"
+get "$J_VEN" "$NEW_HREF" "$F"
 CAT="$(grep -o '<input type="hidden" name="category" value="[^"]*"' "$F" | head -1 | sed 's/.*value="//; s/"$//')"
 if [ -z "$CAT" ]; then
     # ‏فِئَةٌ واحِدَةٌ تُختارُ وَحدَها (حَقلٌ مَخفِيّ)، وأَكثَرُ مِنها شَبَكَةُ رَوابِطَ `create-listing?category=…`
@@ -448,9 +502,17 @@ if [ -z "$CAT" ]; then
     CAT="$(grep -o '<input type="hidden" name="category" value="[^"]*"' "$F" | head -1 | sed 's/.*value="//; s/"$//')"
 fi
 check "$([ "$CODE" = 200 ] && [ -n "$CAT" ] && echo 1 || echo 0)" "GET /$SLUG/create-listing → $CODE · الفِئَة «$CAT»"
-post "$J_VEN" "/$SLUG/listings/create" -F "title=تَمرُ سُكَّري — إعلانُ فَحصٍ $MARK" \
+# ‏(‏2026-10-25، brief-P1b-2): البابُ والحَقلانِ المَخفِيّانِ (الفِئَةُ والدَور) مِن الاستِمارَة، وكُلُّ حَقلٍ مَطلوبٍ فيها يُملَأُ أَو تَقِفُ الرِحلَة
+# — لا `as=` فارِغاً مِن السكربت. والقِيَمُ المَكتوبَةُ (العُنوانُ والوَصفُ والسِعرُ والحَيّ) ما يَكتُبُه البائِع.
+LISTING_DUMP="$(form_dump "$F" 'listings/create"')"
+LISTING_ACTION="$(fd_action "$LISTING_DUMP")"; LISTING_AS="$(fd_get "$LISTING_DUMP" HIDDEN as)"
+UNKNOWN_REQ="$(fd_kind "$LISTING_DUMP" FIELD | grep -vxE 'title|description|price|district' | tr '\n' ' ')"
+check "$([ -n "$LISTING_ACTION" ] && [ "$(fd_get "$LISTING_DUMP" HIDDEN category)" = "$CAT" ] && [ -z "$UNKNOWN_REQ" ] && echo 1 || echo 0)" \
+    "استِمارَةُ النَشر: ${LISTING_ACTION:-غائِبَة} · مَخفِيّان category=«$CAT» as=«$LISTING_AS» · مَطلوبٌ لا يَعرِفُه السكربت: ${UNKNOWN_REQ:-لا شَيء}"
+[ -n "$LISTING_ACTION" ] || die "لا استِمارَةَ نَشرٍ في $NEW_HREF"
+post "$J_VEN" "$LISTING_ACTION" -F "title=تَمرُ سُكَّري — إعلانُ فَحصٍ $MARK" \
     -F "description=إعلانُ فَحصٍ آليّ في جَولَةِ الجاهِزِيَّة" -F "category=$CAT" -F price=100 \
-    -F "city=الرِياض" -F "district=العُلَيّا" -F as=
+    -F "city=الرِياض" -F "district=العُلَيّا" -F "as=$LISTING_AS"
 LID="${LOC##*/listings/}"
 check "$([ "$CODE" = 302 ] && [[ "$LID" =~ ^[0-9a-f-]{36}$ ]] && echo 1 || echo 0)" "POST /$SLUG/listings/create → $CODE $LOC"
 [[ "$LID" =~ ^[0-9a-f-]{36}$ ]] || die "لَم يُنشَر الإعلان"
@@ -478,20 +540,58 @@ check "$([ "${NTAB:-0}" -ge 1 ] && echo 1 || echo 0)" \
     "… تَبويبُ «$CART_TAB» إلى /$SLUG/cart في الشَريط = ${NTAB:-0} (‏MainLayout — القارِئُ الثاني) — $FLGAP"
 post "$J_BUY" "/$SLUG/listings/$LID/cart/add" --data-urlencode qty=1
 check "$([ "$CODE" = 302 ] && [ "$LOC" = "/$SLUG/cart" ] && echo 1 || echo 0)" "POST /$SLUG/listings/$LID/cart/add → $CODE $LOC"
-Q="name=$(jq -rn --arg v "مُشتَري الجَولَة" '$v|@uri')&phone=$P_BUY&addr=$(jq -rn --arg v "$ADDR" '$v|@uri')"
-get "$J_BUY" "/$SLUG/checkout?step=2&$Q" "$F"
+# ‏(‏2026-10-25، brief-P1b-2): رابِطُ الدَفعِ مِن السَلَّة، والخُطوَةُ ٢ مِن استِمارَةِ الخُطوَةِ ١ (بابُها وحَقلُها المَخفِيّ وحُقولُها المَطلوبَة)
+# — كانَ `checkout?step=2&name=…` عُنواناً يَبنيه السكربت. والقِيَمُ ما يَكتُبُه المُشتَري؛ وحَقلٌ مَطلوبٌ لا يَعرِفُه يُوقِفُ الرِحلَة.
+uri() { jq -rn --arg v "$1" '$v|@uri'; }
+get "$J_BUY" "$LOC" "$F"
+PAY_HREF="$(grep -o "href=\"/$SLUG/[^\"]*checkout\"" "$F" | head -1 | sed 's/^href="//; s/"$//')"
+check "$([ "$CODE" = 200 ] && [ -n "$PAY_HREF" ] && echo 1 || echo 0)" "GET /$SLUG/cart → $CODE · رابِطُ الدَفع: ${PAY_HREF:-غائِب}"
+[ -n "$PAY_HREF" ] || die "لا رابِطَ دَفعٍ في السَلَّة"
+get "$J_BUY" "$PAY_HREF" "$F"
+STEP1_DUMP="$(form_dump "$F" 'name="step" value="2"')"
+STEP1_ACTION="$(fd_action "$STEP1_DUMP")"; STEP1_REQ="$(fd_kind "$STEP1_DUMP" FIELD | tr '\n' ' ')"; STEP1_REQ="${STEP1_REQ% }"
+Q="step=$(fd_get "$STEP1_DUMP" HIDDEN step)"; UNKNOWN_REQ=""
+for n in $STEP1_REQ; do
+    case "$n" in
+        name)  Q="$Q&name=$(uri "مُشتَري الجَولَة")" ;;
+        phone) Q="$Q&phone=$P_BUY" ;;
+        addr)  Q="$Q&addr=$(uri "$ADDR")" ;;
+        *)     UNKNOWN_REQ="$UNKNOWN_REQ $n" ;;
+    esac
+done
+check "$([ "$CODE" = 200 ] && [ -n "$STEP1_ACTION" ] && [ "$Q" != "step=" ] && [ -n "$STEP1_REQ" ] && [ -z "$UNKNOWN_REQ" ] && echo 1 || echo 0)" \
+    "GET $PAY_HREF → $CODE · استِمارَةُ الخُطوَة ١ إلى ${STEP1_ACTION:-غائِبَة} (${Q%%&*}) · مَطلوبُها: ${STEP1_REQ:-—}${UNKNOWN_REQ:+ · لا يَعرِفُه السكربت:$UNKNOWN_REQ}"
+[ -n "$STEP1_ACTION" ] && [ -z "$UNKNOWN_REQ" ] || die "استِمارَةُ الخُطوَة ١ لا تُملَأ"
+get "$J_BUY" "$STEP1_ACTION?$Q" "$F"
 check "$([ "$CODE" = 200 ] && [ "$(count "$F" 'name="pay" value="cash"')" = 1 ] && has "$F" "$(ar checkout.payment.cash)" && echo 1 || echo 0)" \
     "GET /$SLUG/checkout?step=2 → $CODE · «$(ar checkout.payment.cash)» مَعروض"
 check "$([ "$(count "$F" 'name="pay" value="card"')" = 0 ] && echo 1 || echo 0)" \
     "GET /$SLUG/checkout?step=2 → البِطاقَةُ غَيرُ مَعروضَة (name=\"pay\" value=\"card\" = $(count "$F" 'name="pay" value="card"'))"
-post "$J_BUY" "/$SLUG/checkout/submit" --data-urlencode "name=مُشتَري الجَولَة" --data-urlencode "phone=$P_BUY" \
+# ‏(‏2026-10-25، brief-P1b-2): الخُطوَةُ ٣ مِن استِمارَةِ الخُطوَةِ ٢ بِخِيارِ «نَقد» المَرسومِ فيها، والإرسالُ مِن استِمارَةِ الخُطوَةِ ٣
+# بِحُقولِها المَخفِيَّة — والمُشتَري لا يَكتُبُ بَعدَ الخُطوَةِ ١ شَيئاً.
+STEP2_DUMP="$(form_dump "$F" 'name="step" value="3"')"
+STEP2_ACTION="$(fd_action "$STEP2_DUMP")"; Q3=""
+while IFS= read -r kv; do [ -n "$kv" ] && Q3="$Q3&${kv%%=*}=$(uri "${kv#*=}")"; done < <(fd_kind "$STEP2_DUMP" HIDDEN)
+CASH_RADIO="$(fd_kind "$STEP2_DUMP" RADIO | grep -cx 'pay=cash')"
+check "$([ -n "$STEP2_ACTION" ] && [ "$CASH_RADIO" = 1 ] && [[ "$Q3" == *"&step=3"* ]] && echo 1 || echo 0)" \
+    "استِمارَةُ الخُطوَة ٢ إلى ${STEP2_ACTION:-غائِبَة} · خِيارُ pay=cash = $CASH_RADIO · مَخفِيُّها:$(fd_kind "$STEP2_DUMP" HIDDEN | sed 's/=.*//' | tr '\n' ' ')"
+[ -n "$STEP2_ACTION" ] && [ "$CASH_RADIO" = 1 ] || die "لا خِيارَ نَقدٍ في استِمارَةِ الخُطوَة ٢"
+get "$J_BUY" "$STEP2_ACTION?${Q3#&}&pay=cash" "$F"
+SUBMIT_DUMP="$(form_dump "$F" 'checkout/submit"')"
+SUBMIT_ACTION="$(fd_action "$SUBMIT_DUMP")"; SUBMIT_ARGS=()
+while IFS= read -r kv; do [ -n "$kv" ] && SUBMIT_ARGS+=(--data-urlencode "$kv"); done < <(fd_kind "$SUBMIT_DUMP" HIDDEN)
+check "$([ "$CODE" = 200 ] && [ -n "$SUBMIT_ACTION" ] && [ "$(fd_get "$SUBMIT_DUMP" HIDDEN pay)" = cash ] \
+        && [ "$(fd_get "$SUBMIT_DUMP" HIDDEN phone)" = "$P_BUY" ] && echo 1 || echo 0)" \
+    "GET $STEP2_ACTION?…step=3&pay=cash → $CODE · استِمارَةُ الإرسالِ إلى ${SUBMIT_ACTION:-غائِبَة} بِـ$(( ${#SUBMIT_ARGS[@]} / 2 )) حَقلاً مَخفِيّاً (pay=$(fd_get "$SUBMIT_DUMP" HIDDEN pay))"
+[ -n "$SUBMIT_ACTION" ] || die "لا استِمارَةَ إرسالٍ في الخُطوَة ٣"
+# ‏مِجَسُّ الرَفض — طَلَبٌ لا تَرسُمُه الصَفحَةُ عَمداً: الحُقولُ نَفسُها وpay=card.
+post "$J_BUY" "$SUBMIT_ACTION" --data-urlencode "name=مُشتَري الجَولَة" --data-urlencode "phone=$P_BUY" \
     --data-urlencode "addr=$ADDR" --data-urlencode pay=card
 check "$([ "$CODE" = 302 ] && [[ "$LOC" == *err=pay_card_unavailable* ]] && echo 1 || echo 0)" \
     "POST /$SLUG/checkout/submit pay=card → $CODE · err=pay_card_unavailable (النُقطَةُ تَرفُضُ ما لا تَعرِضُه الشاشَة)"
-post "$J_BUY" "/$SLUG/checkout/submit" --data-urlencode "name=مُشتَري الجَولَة" --data-urlencode "phone=$P_BUY" \
-    --data-urlencode "addr=$ADDR" --data-urlencode pay=cash
+post "$J_BUY" "$SUBMIT_ACTION" "${SUBMIT_ARGS[@]}"
 DID="${LOC##*/deals/}"
-check "$([ "$CODE" = 302 ] && [[ "$DID" =~ ^[0-9a-f-]{36}$ ]] && echo 1 || echo 0)" "POST /$SLUG/checkout/submit pay=cash → $CODE $LOC"
+check "$([ "$CODE" = 302 ] && [[ "$DID" =~ ^[0-9a-f-]{36}$ ]] && echo 1 || echo 0)" "POST $SUBMIT_ACTION (حُقولُ الاستِمارَة، pay=cash) → $CODE $LOC"
 [[ "$DID" =~ ^[0-9a-f-]{36}$ ]] || die "لَم تُنشَأ صَفقَة"
 
 # ═══ ٦) البائِعُ يُشعَرُ ويَقبَلُ ويَرى العُنوان ═════════════════════════
@@ -555,8 +655,17 @@ PLAN_LABEL="$(dec "$F" | grep -o '<option value="manual"[^>]*>[^<]*' | head -1 |
 STARTS="$(date -u +%F)"; EXPIRES="$(date -u -d '+30 days' +%F)"
 check "$([ "$CODE" = 200 ] && [ -n "$PLAN_LABEL" ] && echo 1 || echo 0)" "GET /admin/tenants/$SLUG/plan → $CODE · «$PLAN_LABEL»"
 # السِعرُ قيمَةُ الاستِمارَةِ الافتِراضِيَّةُ (0) لا رَقَمٌ يُختَرَع (القاعِدَة ١٦)، والمُدَّةُ ‏30 يَوماً لِلفَحصِ وَحدَه.
-post "$J_ADM" "/admin/tenants/$SLUG/plan/save" --data-urlencode plan=manual --data-urlencode "starts=$STARTS" \
-    --data-urlencode "expires=$EXPIRES" --data-urlencode grace=14 --data-urlencode price=0
+# ‏(‏2026-10-25، brief-P1b-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): و«قيمَةُ الاستِمارَة» صارَت تُقرَأُ مِنها — المُهلَةُ والسِعرُ وتاريخُ البَدءِ
+# قيَمُ حُقولِها كَما رُسِمَت (كانَت `grace=14 price=0` حَرفَينِ هُنا)، والبابُ بابُها؛ والمُشرِفُ يَختارُ «manual» ويَكتُبُ الانتِهاء.
+PLAN_DUMP="$(form_dump "$F" 'plan/save"')"
+PLAN_ACTION="$(fd_action "$PLAN_DUMP")"
+GRACE="$(fd_get "$PLAN_DUMP" VALUE grace)"; PRICE="$(fd_get "$PLAN_DUMP" VALUE price)"; FORM_STARTS="$(fd_get "$PLAN_DUMP" VALUE starts)"
+STARTS="${FORM_STARTS:-$STARTS}"
+check "$([ -n "$PLAN_ACTION" ] && [ -n "$GRACE" ] && [ -n "$PRICE" ] && [ -n "$FORM_STARTS" ] && echo 1 || echo 0)" \
+    "استِمارَةُ الباقَة إلى ${PLAN_ACTION:-غائِبَة} · قيَمُها: grace=${GRACE:-؟} price=${PRICE:-؟} starts=${FORM_STARTS:-؟} — والمَكتوبُ: plan=manual expires=$EXPIRES"
+[ -n "$PLAN_ACTION" ] && [ -n "$GRACE" ] && [ -n "$PRICE" ] || die "استِمارَةُ الباقَةِ لا تُقرَأ"
+post "$J_ADM" "$PLAN_ACTION" --data-urlencode plan=manual --data-urlencode "starts=$STARTS" \
+    --data-urlencode "expires=$EXPIRES" --data-urlencode "grace=$GRACE" --data-urlencode "price=$PRICE"
 check "$([ "$CODE" = 302 ] && [[ "$LOC" == *saved=1* ]] && echo 1 || echo 0)" "POST /admin/tenants/$SLUG/plan/save → $CODE $LOC"
 LINE="$(ar studio.plan.active_line)"; LINE="${LINE/\{0\}/$PLAN_LABEL}"; LINE="${LINE/\{1\}/$EXPIRES}"
 get "$OWNER_JAR" /studio "$F"
