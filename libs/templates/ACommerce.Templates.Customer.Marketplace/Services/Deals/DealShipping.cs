@@ -729,8 +729,11 @@ public sealed class DealShipping
             if (OtoOrderStatusGate.Decide(current, state) is { } refusal)
             {
                 // و«سُلِّمَ» عَلى صَفقَةٍ مُلغاةٍ يُكتَبُ سَطراً في سِجِلِّها مَرَّةً ولا يُبتلَع (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4) — والرَمزُ هو هو.
+                // (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-1؛ تَوصيفُه `4520dad` — ولا يُعادُ حَرفٌ فَوقَه: و«مَرَّةً» تُسأَلُ ثانِيَةً عَلى المَخزونِ داخِلَ الكِتابَة —
+                // كانَ القَرارُ عَلى `current` وَحدَه فَإشعارانِ مُتَداخِلانِ يَمُرّانِ بِه ويَكتُبانِ سَطرَين.)
                 if (OtoOrderStatusGate.DeliveredAfterCancel(current, refusal))
-                    current = await _deals.AttachRefAsync(tenantSlug, current.Id, DeliveredAfterCancelRef, state.Status, CancellationToken.None) ?? current;
+                    current = await _deals.AttachRefAsync(tenantSlug, current.Id, DeliveredAfterCancelRef, state.Status,
+                        stored => OtoOrderStatusGate.DeliveredAfterCancel(stored, refusal), CancellationToken.None) ?? current;
                 return new(shipped && refusal.Code == OtoOrderStatusGate.NotDelivered ? OtoOrderStatusGate.Shipped : refusal.Code, current);
             }
             if (attempt > NoticeAttempts) return new(DealsService.ChangedMeanwhile, current);

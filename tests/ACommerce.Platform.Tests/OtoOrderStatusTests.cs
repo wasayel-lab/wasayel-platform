@@ -599,14 +599,14 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم»</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-1 الجَولَتانِ ١ و٢، صُغرى؛ القاعِدَة ٣ — يُقلَبُ بِاسمِه في كوميتِ الإصلاح):
-    /// «مَرَّةً» في سَطرِ <c>oto_delivered_after_cancel</c> قَرارٌ عَلى النُسخَةِ المَقروءَة ثُمَّ كِتابَة — <c>DeliveredAfterCancel</c> تَسأَلُ
-    /// <c>!deal.Refs.ContainsKey(…)</c> عَلى ما قَرَأَه <c>DeliverAsync</c>، و<c>AttachRefAsync</c> تُعيدُ الإلحاقَ بِلا شَرطٍ عَلى ما كُتِبَ بَعدَ
-    /// تَعارُضِ النُسخَة. فَإشعارانِ «delivered» مُتَداخِلانِ لِصَفقَةٍ مُلغاةٍ يَمُرّانِ بِالسُؤالِ مَعاً: يَحفَظُ الآخَرُ سَطرَه بَينَ قَرارِ الأَوَّلِ وحِفظِه،
-    /// فَيُرَدُّ حِفظُ الأَوَّلِ ويُعادُ عَلى ما كُتِب — <b>سَطرانِ</b> في السِجِلّ.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-1 الجَولَتانِ ١ و٢، صُغرى؛ كانَ
+    /// <c>Today_two_delivered_notices_racing_on_a_cancelled_deal_write_two_timeline_lines</c>، مُودَعٌ في <c>4520dad</c>): «مَرَّةً» في سَطرِ
+    /// <c>oto_delivered_after_cancel</c> كانَت قَراراً عَلى النُسخَةِ المَقروءَةِ ثُمَّ إلحاقاً يُعادُ بِلا شَرطٍ بَعدَ تَعارُضِ النُسخَة — فَإشعارانِ
+    /// مُتَداخِلانِ لِصَفقَةٍ مُلغاةٍ كَتَبا سَطرَين. <b>والآن</b>: <c>DeliveredAfterCancel</c> يُعادُ عَلى المَخزونِ داخِلَ الكِتابَة
+    /// (<c>AttachRefAsync(…, stillDue, …)</c>)، فَيَحفَظُ الآخَرُ سَطرَه، ويُرَدُّ حِفظُ الأَوَّلِ فَيُعيدُ السُؤالَ عَلى ما كُتِبَ فَلا يَكتُب — سَطرٌ واحِد.</para>
     /// </summary>
     [Fact]
-    public async Task Today_two_delivered_notices_racing_on_a_cancelled_deal_write_two_timeline_lines()
+    public async Task Two_delivered_notices_racing_on_a_cancelled_deal_write_one_timeline_line()
     {
         var w = await ShippedCashDeal();
         OtoSays(w, "delivered");
@@ -619,9 +619,32 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         Assert.Equal(OtoOrderStatusGate.DealNotActive, outcome.Code);
         var lines = Stored(w).Timeline.Count(e => e.Action == DealEvent.RefNote
             && DealRefLabels.LabelKeyFor(e.Note) == "deals.detail.ref_oto_delivered_after_cancel");
-        Assert.Equal(2, lines);
+        Assert.Equal(1, lines);
         Assert.Equal(DealStatus.Cancelled, Stored(w).Status);
         output.WriteLine($"إشعارانِ مُتَداخِلانِ عَلى صَفقَةٍ مُلغاة: تَعارُض {other()} · أَسطُرُ «سُلِّمَ بَعدَ الإلغاء» {lines}");
+    }
+
+    /// <summary><b>والشَرطُ يُسأَلُ عَلى المَخزونِ لا عَلى المُنادي</b> (‏2026-10-25): <c>stillDue</c> الَّذي يُجيبُ «لا» عَلى ما قُرِئَ لا يَحفَظُ
+    /// ولا يَكتُبُ سَطراً ويُعيدُ الصَفقَةَ كَما هي؛ والَّذي يُجيبُ «نَعَم» يَكتُبُ ما يَكتُبُه الحِملُ بِلا شَرطٍ بِحَرفِه — مُوجِبٌ وسالِب.</summary>
+    [Fact]
+    public async Task The_conditional_attach_asks_the_stored_deal_and_writes_nothing_when_it_answers_no()
+    {
+        var w = await ShippedCashDeal();
+        var saves = w.Docs.SaveCalls;
+        var lines = Stored(w).Timeline.Count;
+        Deal? asked = null;
+
+        var kept = await w.Deals.AttachRefAsync(Slug, w.Id, "probe_note", "1", d => { asked = d; return false; });
+
+        Assert.Same(Stored(w), asked);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+        Assert.Equal(lines, Stored(w).Timeline.Count);
+        Assert.False(kept!.Refs.ContainsKey("probe_note"));
+
+        var wrote = await w.Deals.AttachRefAsync(Slug, w.Id, "probe_note", "1", _ => true);
+        Assert.Equal(saves + 1, w.Docs.SaveCalls);
+        Assert.Equal("1", wrote!.Refs["probe_note"]);
+        Assert.Equal($"{DealRefLabels.AttachPrefix}probe_note=1", Stored(w).Timeline.Last().Note);
     }
 
     /// <summary>صَفقَةٌ لَها طَلَبٌ ولَم تَخرُج إلى الشَحن (رُدَّ انتِقالُها) — التَسليمُ لا يَقفِزُ فَوقَ الشَحن.

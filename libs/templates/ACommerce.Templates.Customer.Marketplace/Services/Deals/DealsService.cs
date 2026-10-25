@@ -789,12 +789,33 @@ public sealed class DealsService
     public async Task<Deal?> AttachRefAsync(
         string tenantSlug, Guid dealId, string key, string value,
         CancellationToken ct = default)
-        => await RecordAsync(tenantSlug, dealId, deal =>
+        => await RecordAsync(tenantSlug, dealId, deal => WriteRef(deal, key, value), ct);
+
+    /// <summary>
+    /// <para><b>الإلحاقُ نَفسُه بِشَرطٍ يُعادُ عَلى المَخزونِ داخِلَ الكِتابَة</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-1 الجَولَتانِ ١ و٢؛ تَوصيفُه
+    /// <c>4520dad</c>): <paramref name="stillDue"/> يُسأَلُ عَلى الصَفقَةِ الَّتي قَرَأَتها كُلُّ مُحاوَلَةٍ في <see cref="RecordAsync(string, Guid, Func{Deal, bool}, CancellationToken)"/>
+    /// — لا عَلى ما قَرَأَه المُنادي قَبلَها — و<c>false</c> لا حِفظَ ولا سَطر. كانَ «مَرَّةً» في سَطرِ <c>oto_delivered_after_cancel</c> قَراراً عَلى النُسخَةِ
+    /// المَقروءَةِ ثُمَّ إلحاقاً يُعادُ بِلا شَرطٍ بَعدَ التَعارُض، فَإشعارانِ مُتَداخِلانِ يَكتُبانِ سَطرَين. والحِملانِ يَكتُبانِ بِـ<see cref="WriteRef"/>
+    /// الواحِدَة — فَما كَتَبَه الحِملُ بِلا شَرطٍ أَعلاه يَكتُبُه بِحَرفِه، وحِفظُ الإلحاقِ واحِدٌ في <c>RecordAsync</c> كَما كان.</para>
+    /// </summary>
+    public Task<Deal?> AttachRefAsync(
+        string tenantSlug, Guid dealId, string key, string value, Func<Deal, bool> stillDue,
+        CancellationToken ct = default)
+        => RecordAsync(tenantSlug, dealId, deal =>
         {
-            deal.Refs[key] = value;
-            deal.Timeline.Add(new(deal.Stage, deal.Stage, DealEvent.RefNote, null, null,
-                $"{DealRefLabels.AttachPrefix}{key}={value}", DateTime.UtcNow));
+            if (!stillDue(deal)) return false;
+            WriteRef(deal, key, value);
+            return true;
         }, ct);
+
+    /// <summary>ما يَكتُبُه الإلحاق: المَرجِعُ وسَطرُه في السِجِلّ — بِحَرفِ ما كانَ في جِسمِ <see cref="AttachRefAsync(string, Guid, string, string, CancellationToken)"/>
+    /// قَبلَ ‏2026-10-25، أُخرِجَ لِيَكتُبَ بِه الحِملانِ لا نُسخَتان.</summary>
+    private static void WriteRef(Deal deal, string key, string value)
+    {
+        deal.Refs[key] = value;
+        deal.Timeline.Add(new(deal.Stage, deal.Stage, DealEvent.RefNote, null, null,
+            $"{DealRefLabels.AttachPrefix}{key}={value}", DateTime.UtcNow));
+    }
 
     /// <summary>
     /// <para><b>دَفعٌ أَثبَتَته بَوّابَةُ المَتجَرِ يُكتَبُ عَلى صَفَقاتِه</b> (‏ADR-032 §٢‑هـ الخُطوَة 10، تَيّارُ S9، ‏2026-10-12): لِكُلِّ صَفقَةٍ في
