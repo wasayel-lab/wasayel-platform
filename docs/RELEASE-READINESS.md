@@ -719,6 +719,215 @@ Now listening on: http://localhost:5055
 
 ---
 
+## الحالةُ عندَ نهايةِ الموجةِ ٨ — ‏2026-10-25
+
+> **ما هذا القِسم**: قِياسُ الجاهِزِيَّةِ الخِتامِيُّ بَعدَ المَوجاتِ ١–٨ وتَيّارِ W9-1، والشيفرَةُ عِندَ `39a23ae` (رَأسُ الفَرعِ قَبلَ كوميتاتِ هذا
+> القِسم، وهي وَثائِقُ لا تَمَسُّ التَطبيق). **يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق**: الأَقسامُ أَعلاه بايتاً كَما كانَت، ووُضِعَ هذا قَبلَ «ما قيس قبل التحوّل»
+> لِيَبقى رَأسُ الوَثيقَةِ صادِقاً في قَولِه إنّ رِحلاتِ ‏2026-08-17 «في آخِرِ الوَثيقَة».
+>
+> **الطَريقَة**: البَوّاباتُ الثَلاثُ بِـRelease؛ ثُمَّ إقلاعٌ بارِدٌ عَلى قاعِدَةٍ مَحَلِّيَّةٍ أُنشِئَت في الجَولَةِ نَفسِها ومَشيُ `./scripts/rewalk-launch-journey.sh`
+> عَلَيها، ثُمَّ جَولَةُ البابِ المَفتوحِ بِبَديلِ «أ» S12‑readiness · ٧ عَلى قاعِدَةٍ ثانِيَةٍ جَديدَة؛ ثُمَّ الحَقيبَةُ الحَيَّةُ كُلُّها عَلى القاعِدَةِ الأولى مَبذورَةً؛
+> ثُمَّ بَوّابَةُ الإقلاعِ الإنتاجيِّ عَلى قاعِدَةٍ ثالِثَةٍ جَديدَةٍ بِقيَمٍ مُوَلَّدَةٍ لِلجَولَة. ثُمَّ أُعيدَ كُلُّ بَندٍ مِن بُنودِ الموجَزِ الثَلاثينَ إلى الكود
+> عِندَ الرَأس — مِن حالِه في تَدقيقِ الإطلاقِ (عِندَ `dace7cd`، ‏2026-10-24) — والبُنودُ الثَمانِيَةُ الَّتي كانَت مَفتوحَةً أَو جُزئِيَّةً بِقِراءَةِ سُطورِها.
+>
+> **وما لا يُدَّعى**: لا Neon، ولا مُتَصَفِّح، ولا مِفتاحَ تَحليلٍ حَقيقيّ، ولا رَمزَ OTO، ولا مِفتاحَ خِزانَةٍ ولا حِسابَ بَوّابَة — فَما يَحتاجُها
+> «لَم يُقَس» بِاسمِه أَدناه. ولَم يُفتَح `ashare` بِمُتَصَفِّحٍ ولَم تُمَسَّ بَياناتُه: المَبذورُ مِنه مَحَلِّيّاً نُسخَةُ البَذّار.
+
+### (أ) بُنودُ الموجَزِ الثَلاثون عِندَ الرَأس
+
+«ما يَحمَرُّ» صِنفُ الاختِبارِ الَّذي يُسَمّي البَند — كُلُّها خَضراءُ عِندَ الرَأس (‏4954 · صِفرُ فَشَل، (ب) أَدناه). و«حَقنُ عَيبٍ اليَوم» قيسَ في
+هذِه الجَولَةِ عَلى الشَجَرَةِ نَفسِها ثُمَّ رُدَّ بِبَصمَتِه (`sha256sum -c` ‏OK، `git status` نَظيف)؛ وما سِواه مَقيسٌ في التَدقيقِ بِطَفرَتِه المُسَمّاة.
+والمَداخِلُ بِأَسمائِها في سِجِلِّ المالِك.
+
+| البَند | الحالَة عِندَ `39a23ae` | ما أَغلَقَه · وما يَحمَرُّ إن عاد | ما بَقِيَ · ومَدخَلُ المالِك |
+|---|---|---|---|
+| P0-1 | مُغلَق | `3d6c255` تَوصيفٌ ← `48d6c2a` · `CheckoutPaymentTests` (طَفرَةُ M5 في التَدقيق: 32 أَحمَر) | البِطاقَةُ تُعرَضُ يَومَ يَقبِضُ مُزَوِّدٌ لِلمَتجَر: «ج» S6‑vault‑lexicon · ٧ و«ج» S9‑gateway‑client · ١٠ |
+| P0-2 | مُغلَقٌ في الكود | `df378ad` ← `cb147f2` ← `0532192` · `AuthTokenSecretPolicyTests`، وبَوّابَةُ الإقلاعِ تَخرُجُ 3 بِلا سِرّ | ضَبطُ `ACOMMERCE_AUTH_SECRET` في الـSpace وخُروجُ كُلِّ الجَلَساتِ يَومَئِذ: «ج» S2‑auth‑ops · ٤ |
+| P0-3 | مُغلَق | `2d8cf5f` و`db64c7b` · `DealAcceptAuthorizationTests` وصَفُّ `DealAcceptor(` في `WriteEndpointGuardTests` | — |
+| P0-4 | مُغلَق | `ad828fa` · `DealPaidStageCharacterizationTests` و`DealStoredCommissionFieldTests`، و`LiveDealStoredCommissionFieldProofTests` أَخضَرُ اليَوم | إعادَةُ التِقاطِ لَقَطاتِ Neon: «ج» S1‑deals‑checkout · ٦ و«ج» S12‑readiness · ٦ |
+| P0-5 | مُغلَق | `dece46f` ← `31888f3`، ثُمَّ `236982d` ← `2ad660c` (البِطاقَةُ يَرُدُّها المَتجَرُ مِن بَوّابَتِه) · `ReturnsPolicyTextTests` | مَسارُ `/deals/{id}/return` (م‑٣): «ب» S1‑deals‑checkout · ٥ |
+| P0-6 | مُغلَق | السِباقُ: البائِعُ طَرَفٌ مِن وِلادَةِ الصَفقَة (`5554975` ← `8769fa4`)؛ والنَقرَةُ المُزدَوِجَة: `23c362a` ← `d664279` · `DealAdvanceExpectedStageTests` و`DealCounterpartyCharacterizationTests` | — |
+| P0-7 | **جُزئِيّ — القَرارُ مَفتوح** | الشارَة `e589612` ← `00d46af`؛ وسَطرُ الجَمعِ في `count-listing-owners.cs` وتَنبيهُ `roles.save.empty_warning` قَبلَ زِرِّ الحِفظ `c8f9437` ← `94426f5` · `StudioHomeKindBadgeTests` و`RolesLegacyModeMeasureTests` | **الكودُ كَما كانَ عِندَ التَدقيق** (مَقروءٌ اليَوم): `RolesSaveService.SaveAsync` يَحفَظُ الاختِيارَ الفارِغ، و`RoleCatalog.cs:133` ‏`if (tenantRoles.Count == 0) return true;` — رَفضُ الفارِغِ بِرَمزِ خَرقٍ أَو قَلبُ :133 بِـADR: «ب» W8-3‑agent‑roles‑admin · ٢؛ والعَدُّ عَلى فَرعِ Neon قَبلَه: «ج» W8-3‑agent‑roles‑admin · ٢ |
+| P0-8 | مُغلَق | `3d3e2ac`، ثُمَّ `6b4715c` ← `0b96ff1` و`2215638` ← `012b27a` · `TenantUsersFirstAdminHintTests` | — |
+| P1-1 | مُغلَقٌ في الكود | `1d238a7` ← `c4278c0` (‏ADR-034) · `StudioStorePatternTests` و`LiveStudioStorePatternProofTests` (أَخضَرُ اليَوم)؛ والمُمَيِّزُ مَمشِيٌّ اليَوم: «يُمَيِّزُ FLGAP-04 — فِئاتُ المَتجَر: products:'' deals:''» (‏72 · 0، (ب)) | النَقرَةُ بِمُتَصَفِّحٍ والتَحليلُ بِنَموذَج: «ج» S12‑readiness · ٥؛ المَتاجِرُ المولودَةُ قَبلَ `c4278c0` ومُصادِقُ `Kind`: «ب» S5‑storefront‑doors · ٢ و«ب» S11‑measurements‑texts · ١٣ |
+| P1-2 | مُغلَق | `fdbe220` ← `bce68ed` (‏ADR-035) · `RoleLandingBrowseLinkTests`، والرِحلَةُ اليَومَ في خُطوَتَيها ٣ و١٠ | الخِياران الأَوسَعُ لِلزائِر: «ب» S5‑storefront‑doors · ٤ |
+| P1-3 | مُغلَق | `5554975` ← `8769fa4` · `DealCashPathCharacterizationTests` و`DealCashPolicyTests` | البائِعُ يُكمِلُ صَفقَةَ النَقدِ وَحدَه ويُقَيِّمُ المُشتَري: «ب» S6a‑deals‑actor · ١٣ |
+| P1-4 | مُغلَق | `8bbf237` · `DealDetailDeliveryDisclosureTests`، والرِحلَةُ اليَوم «عُنوانُ المُشتَري ظاهِر» | نَصُّ الإفصاحِ مِن كِتابَةِ الوَكيل: «أ» S4‑deals‑cash · ٥ (د23 في الموجَز) |
+| P1-5 | مُغلَق | `ef4a02b` و`2362595`، ثُمَّ `727bc9f` ← `7bf8faa` (قَبولُ الاستوديو) · `DealNoticesTests` و`DealNoticeDoorsTests`، و`LiveDealNoticesProofTests` ‏3/0 اليَوم | إشعارُ البائِعِ حينَ يُلغي المُشتَري: «أ» S11b‑deal‑shipping · ٢٣ (د8 في الموجَز) |
+| P1-6 | **جُزئِيّ — الكودُ مُنجَز، والبُرهانُ الحَيُّ لا** | العَميلُ وحَذفُ المُحاكي `ec807a6`، و`/ship` والوارِدُ حَتّى `e96c482` · `OtoClientTests` و`DealShipTests` و`OtoOrderStatusTests`، و`LiveDealShipProofTests` ‏3/0 و`LiveOtoOrderStatusProofTests` ‏4/0 اليَوم | `LiveOtoStagingProofTests` رَجَعَ اليَومَ مِن حارِسِه («لا رَمزَ staging لِـOTO») — بوليصَةٌ واحِدَةٌ عَلى staging: «ج» S7‑oto‑skeleton · ٨ و· ١٥ و«ج» S8‑vendor‑shipping · ١١، بِتَصحيحِهِما «ج→تصحيح» (لا staging في الـSpace؛ نَفَقٌ إلى فَرعِ Neon) |
+| P1-7 | مُغلَقٌ في الكود | `b0b4b85` ← `1199036` · `ProviderVaultTests` و`ProviderVaultDeploymentTests` | المِفتاحُ في الـSpace: «ج» S6‑vault‑lexicon · ٧ — والبَوّابَةُ نَبَّهَت اليَومَ ⚠ `vault_unavailable` ((ب)) |
+| P1-8 | مُغلَقٌ في الكود | `fb0ebeb`، ثُمَّ `2e3cdac` (تَعريفُ OTO) و`93fd300` (سَطحُ البائِع) و`165f091` (التَسجيل) · `ProviderDefinitionValidatorTests` و`VendorShippingTests`، و`LiveVendorShippingProofTests` ‏3/0 اليَوم | الرَمزُ السوقِيُّ ورِسالَةُ OTO: «ج» S8‑vendor‑shipping · ١٤ و«ج→تكملة» S8‑vendor‑shipping · ١٤ |
+| P1-9 | **جُزئِيّ — مَحَلِّيّاً مُغلَق** | `d541a22`، ثُمَّ `c1c6684` و`340981f` · `RewalkFormDumpTests` و`RewalkAnalysisBoundParseTests`؛ ومَمشِيٌّ اليَومَ مِن إقلاعٍ بارِد: ‏63 · 0 ثُمَّ 61 · 0، وبِالبَديلِ 72 · 0 ((ب)) | التَحليلُ بِمِفتاحٍ حَقيقيٍّ عَلى فَرعِ Neon (زَمَنُه أَوَّلُ قِياسٍ لِمُهلَةِ 420 ثانِيَة): «ج» S12‑readiness · ٥؛ والنَقرَةُ بِمُتَصَفِّح؛ و«وسايل تَقبِض» هي P2-2 |
+| P2-1 | **مُغلَقٌ في الكود** (كانَ جُزئِيّاً) | `24b3ffe` ← `52eaaa2` (الإصدارُ 2)، ثُمَّ `92cdeae` ← `eecbb5e` (السِعرُ المُسَجَّلُ يُعرَضُ في لافِتَةِ التَجديدِ قَبلَ أَيِّ زِرِّ دَفعٍ وفي سَطرِ السارِيَة) و`e679f1f` ← `8c22f7d` · `StudioPlanPriceTests` (حَقنُ عَيبٍ اليَوم: `@if (false && PriceLine(…))` في اللافِتَة ← 1 أَحمَر) | الصِياغَةُ القانونِيَّةُ لِلبَند ٤: «ب» S3‑studio‑texts · ٤ و«ب» W8-4‑privacy‑legal‑texts · ٣ |
+| P2-2 | **مَفتوح — فِعلُ مالِك** | لا كود: قَنَواتُ التَحصيلِ الثَلاثُ مَبنِيَّةٌ ومُختَبَرَةٌ بِمُعالِجٍ وَهمِيّ؛ والبَديلُ (حَوالَةٌ وتَمديدٌ مِن `/admin`) مَمشِيٌّ اليَومَ في الخُطوَة ٨ بِلا مال | تَحصيلٌ حَقيقيٌّ واحِدٌ بِالبِطاقَة، والوَثائِقُ الخَمسُ قَبلَ طَلَبِ اعتِمادِ Paddle: «ج» W8-8‑owner‑register · ٢ و«ج» W8-4‑privacy‑legal‑texts · ٢ |
+| P2-3 | مُغلَق | `29eb670` ← `2db0bfb` · `StudioBillingPriceTests` | رَقمُ الاشتِراكِ ودَورِيَّتُه وأَسعارُ البَذرَة: «ب» S11‑measurements‑texts · ٨ |
+| P2-4 | مُغلَق | `b618b83` ← `3109ef7`، ثُمَّ `a214307` ← `7a0f4fe` · `StudioHomeActivePlanTests` | تَعليماتُ التَحويلِ قَبلَ أَوَّلِ سَماح: «ج» S11‑measurements‑texts · ١١ |
+| P3-1 | مُغلَقٌ في الكود | `d4bb810`، ثُمَّ `b215abc` و`22b5fe6` ← `b2fde50` · `MartenSchemaVerbTests` | الإجراءُ عَلى فَرعِ Neon ثُمَّ الإنتاج: «ج» S10‑ops‑hardening · ٣ بِتَصحيحَيه |
+| P3-2 | مُغلَقٌ في الكود | `7b2fb20` · `ProductionBootVerdictTests`، والبَوّابَةُ عَبَرَت اليَومَ عَلى Production مَحَلِّيّاً ((ب)) | فَرعُ Neon وسِرُّ CI: «ج» S10‑ops‑hardening · ٨ و«ج» S13‑test‑guards‑ops · ٦ و· ٨ |
+| P3-3 | **مُغلَق** (كانَ جُزئِيّاً) | `6da4a04`، ثُمَّ `a4198de` (‏`sdk:10.0.402`/`aspnet:10.0.13`، وPkcs وSignalR، وNU1903/NU1904 خَطَآن) و`dc6c2b3` (CI يَبني بِـSDK الصورَةِ مِن `global.json` تَكتُبُه `ci-sdk.sh`) · `DockerImagePinTests` (حَقنُ عَيبٍ اليَوم: `sdk:10.0` ← 5 أَحمَر) و`NuGetAuditGateTests`، والبِناءُ اليَومَ بِلا NU1903 | رَفعُ الوَسمَينِ مَعَ كُلِّ رُقعَةٍ أَمنِيَّةٍ فِعلٌ يَدَوِيّ (`DEPLOY.md` §٥؛ «أ» W8-5‑supply‑chain‑ci · ١) |
+| P3-4 | **جُزئِيّ** | صَفحَةُ الخَطَأِ و`/health/ready` (`8b11cac`) · `PlatformErrorPagesTests` و`ReadinessEndpointTests` (والصَفُّ الحَيُّ أَخضَرُ اليَوم) | مَقروءٌ اليَوم: صِفرُ `AddRateLimiter` وصِفرُ `OpenTelemetry` في `libs`/`apps`، والحِصَصُ في ذاكِرَةِ العَمَلِيَّة، والكوكي 30 يَوماً بِلا إبطال — «أ» S10‑ops‑hardening · ١٣ و«ب» S10‑ops‑hardening · ١٢ (د28)؛ وأَرقامُ حَدِّ الإرسال: «ب» W8-2‑auth · ٤ |
+| P3-5 | **مَفتوح** | لا بابَ تَصدير (صِفرُ `me/export` في المَصدَر)، و`UserDataExportLaunchConditionTests` يَقرِنُ البابَ بِصَفِّ §١ ‏١٢ «شَرطُ إطلاقٍ مَفتوح»؛ ونُصوصُ الحَذفِ صادِقَةٌ عَلى الكود (`b52ea8d` ← `ce026d5` ثُمَّ `e262f90` ← `e7cb90d`) | م‑٨ وبابُ التَصدير: «ب» W8-4‑privacy‑legal‑texts · ٢؛ حُدودُ الحَذف: «ب» W8-4‑privacy‑legal‑texts · ١؛ بَريدُ `/privacy` §٧: «ج» W8-4‑privacy‑legal‑texts · ٢ |
+| P3-6 | مُغلَقٌ في الكود | `76019a3` و`9c49e16`، ثُمَّ `51b784b` · `StudioBuildRoleFloorTests` و`ListingOwnerCountScriptTests` | العَدُّ عَلى فَرعِ Neon وعَتَبَةُ الرُجوع: «ج» S11‑measurements‑texts · ٣ |
+| P3-7 | مُغلَق | `83ec5b7` · `TestDataSeederDealsTests` | مَتجَرُ `order` بِدَورِ سائِق: «ب» S11‑measurements‑texts · ٢ |
+| P3-8 | مُغلَق | `27dd4e9` و`2996b0e`، ثُمَّ كوميتاتُ W8-6 (`5afa6d7` وأَخَواتُه) · `DeployDocClaimsTests` و`OtoDeployDocTests` | — |
+| P3-9 | مُغلَق | `03aa681` ← `735d4ba`، ثُمَّ `7f5ce5c` ← `1e2cecf` · `CheckoutPerItemDisclosureTests` | — |
+
+**فَالعَدُّ عِندَ الرَأس**: ‏24 مُغلَقاً (مِنها ثَمانِيَةٌ «في الكود» يَتبَعُها فِعلُ مالِك)، وأَربَعَةٌ جُزئِيَّة (P0-7 وP1-6 وP1-9 وP3-4)، واثنانِ مَفتوحان
+(P2-2 وP3-5)، وواحِدٌ (P1-6) كودُه مُنجَزٌ وبُرهانُه الحَيُّ يَنتَظِر — مَعدودٌ في الأَربَعَة. **وما تَغَيَّرَ عَن التَدقيق**: P2-1 وP3-3 صارا مُغلَقَين
+(‏`eecbb5e`، `a4198de`/`dc6c2b3` — والحَقنانِ أَعلاه يُحمِرّانِ صَفَّيهِما)؛ وP0-7 مِن «مَفتوح» إلى «جُزئِيّ»: القِياسُ والتَنبيهُ بُنِيا، والقَرارُ لَم يُتَّخَذ
+فَالبابُ نَفسُه كَما كان؛ وP2-2 صارَ لَه مَدخَلُ «ج» بَعدَ أَن لَم يَكُن. وP1-6 وP1-9 وP3-4 وP3-5 كَما كانَت.
+
+### (ب) ما قيسَ اليَوم
+
+**(١) البَوّاباتُ بِـRelease عِندَ `39a23ae`**:
+
+```text
+dotnet build PlatformV1.slnx -c Release              →  4 Warning(s) · 0 Error(s)   (تَزايُدِيّ: الأَربَعُ NU1510، لا NU1903)
+dotnet build PlatformV1.slnx -c Release --no-incremental
+                                                     →  45 Warning(s) · 0 Error(s)  (ASPDEPR005 · CA1416 · CS0162 · CS8602 · CS8604 · RZ10012 · NU1510 — لا NU1903/NU1904)
+dotnet test tests/ACommerce.Platform.Tests/ACommerce.Platform.Tests.csproj -c Release --no-build
+                                                     →  Passed!  - Failed: 0, Passed: 4954, Skipped: 0, Total: 4954, Duration: 31 s
+./scripts/verify-static.sh                           →  All nine static layers green.   (رَمزُ الخُروج 0)
+```
+
+وأَسطُرُ الطَبَقاتِ بِعَدِّها: ١ ‏111 مِلَفَّ صَفحَة، 24 مُخالَفَةً كُلُّها في الدَينِ المُثَبَّت (10 مَداخِل، جَديدٌ 0)؛ ٢ ‏167 مِلَفَّ razor و10 مِلَفّاتِ CSS؛
+٣ ‏338 حَجمَ خَطٍّ و356 مَسافَة؛ ٤ الأَلوانُ 132 والمَسافاتُ 29 والأَحجامُ 39 والأَيقوناتُ 16 عِندَ سُقوفِها؛ ٥ ‏40 عَقداً؛ ٧ ‏167 razor و302 ‏.cs، ‏17 نَصّاً
+حَرفِيّاً في 3 مِلَفّاتٍ مُثَبَّتَة، والتَغطِيَةُ 99.3 %؛ ٨ ‏167 razor، صِفرُ جَلسَةٍ وصِفرُ `SaveChangesAsync`، و٨ب ‏9 تَعريفاتٍ في الفِهرِس؛ ٩ ‏4 نِقاطٍ تَحتَ
+`/api/v1` بِأَربَعَةِ حُرّاس؛ ١٠ ‏4 مِلَفّاتٍ و472 سَطراً و12 مَوضِعَ خَطَأ. **والاختِباراتُ لَم تَنقُص**: 4926 عِندَ `6167b9f` (أَساسُ W9-1) ← 4954.
+
+**(٢) الإقلاعُ البارِدُ والرِحلَة** — قاعِدَةٌ جَديدَةٌ أُنشِئَت في الجَولَة `wasayel_final_20261025`، Development، ‏`PLATFORM_ADMIN_PHONE` (هاتِفٌ
+مُصطَنَعٌ لِلجَولَة)، و`TEST_DATA_SEED=1 INCUBATOR_SAMPLE_SEED=1 APPEARANCE_BASELINE_SEED=1` كَما في «أَمرُ الجَولَةِ كامِلاً» في §٧، بِلا مِفتاحِ
+تَحليل؛ والثُنائِيُّ ثُنائِيُّ Release الَّذي عَبَرَ البَوّابات (`dotnet run -c Release --no-build` — لا `dotnet run` بِـDebug، فَلا تَرجَمَةَ في الإقلاع):
+«Now listening» بَعدَ نَحوِ 5 ثَوانٍ (19:49:35 ← 19:49:40)، وإقلاعٌ واحِدٌ بَذَرَ كُلَّ شَيء — «[platform-admin] مُنِحَ …» ثُمَّ «[IncubatorSample] ✅ بُذِرَت
+جَلسَةُ عَيِّنَة …» و«[AppearanceSeed] ✅ مُستَأجِرا اللَقطَة جاهِزان»، و«[TestSeed] ✅ test data seeded — 3 مِن 4 مُستَأجِرين؛ تُخُطِّيَ الغائِب: injez.»،
+و`[studio] analysis_door=analysis_unavailable` و`[shipping] oto_environment=closed`.
+
+| الجَولَة | القاعِدَة | السَطرُ الخِتامِيّ | مُقابِلُها في §٧ |
+|---|---|---|---|
+| بابٌ مُغلَق، مَتجَرٌ يُبنى في الجَولَة (`rewalk-251901`) | `wasayel_final_20261025` | «لا يُمَيِّزُ FLGAP-04 — فِئاتُ المَتجَر: general:''» · **فُحِصَ 63 · فَشِلَ 0** | ‏63 · 0 (`rewalk-251004`) |
+| بابٌ مُغلَق، إعادَةٌ عَلى المَتجَرِ نَفسِه (`MARK=251902`) | نَفسُها | «— مَبنِيٌّ سَلَفاً، لا rewalk-251902» و«لا عَدّ — المالِكُ مُشرِفٌ سَلَفاً» · **فُحِصَ 61 · فَشِلَ 0** | ‏61 · 0 (`rewalk-251002`) |
+| بابٌ مَفتوحٌ بِالبَديلِ يُؤَخِّرُ رَدَّه 40 ثانِيَة (`rewalk-251903`) | `wasayel_final_20261025b` (جَديدَة) | «التَحليلُ اكتَمَلَ بَعدَ 40 ثانِيَة» · «يُمَيِّزُ FLGAP-04 — فِئاتُ المَتجَر: products:'' deals:''» · **فُحِصَ 72 · فَشِلَ 0** | ‏72 · 0 (`rewalk-251005`)، و«بَعدَ 41 ثانِيَة» في §٣.١ |
+
+والجُدرانُ الثَلاثَةُ مَطبوعَةٌ في مَواضِعِها في الجَولاتِ الثَلاث: «⊘ الجِدارُ الأَوَّل: بابُ التَحليلِ مُغلَقٌ قَبلَ الدُخول» (في المُغلَقَتَين)، و«⊘ الجِدارُ
+الثاني: رَمزُ OTO غائِب»، و«⊘ الجِدارُ الثالِث: مِفتاحُ البَوّابَةِ ومِفتاحُ الخِزانَةِ غائِبان». وأَوَّلُ مُشرِفٍ لِمَتجَرٍ مَبنِيّ: «6 أَفعالٍ داخِلَ المُنتَج + عَودَةٌ
+واحِدَةٌ خارِجَه (تَبديلُ لِسان)» كَما في §٢·١. **والبَديلُ كَما يَصِفُه §٧** (‏`analysis-stand-in-delayed.py` بِجِوارِ سِجِلِّ المالِك — لَم يُودَع، ولا
+يُودَع): ‏`POST /v1/chat/completions` واحِدٌ في سِجِلِّه، رَدُّه بَعدَ 40.0 ثانِيَة، ونَصُّه `AnalysisJson` جَلسَةِ العَيِّنَةِ بايتاً مِن القاعِدَةِ الأولى؛
+و«[agent] Analysis: المُزَوِّد=openai · التَسميَة=stand-in · …» في سِجِلِّ الإقلاع، وسَطرٌ واحِدٌ لِـ`analyze` في `mt_doc_modelcallrecord` — فَـ«40»
+زَمَنُ نِداءٍ واحِدٍ لا اثنَين (بِدِقَّةِ ثانِيَتَين، §٣.١ H).
+
+**(٣) الحَقيبَةُ الحَيَّةُ كُلُّها** عَلى `wasayel_final_20261025` بَعدَ الجَولَتَينِ أَعلاه (مَبذورَةٌ بِالإقلاعِ والرِحلَة)، بِمُرَشِّحِ §٤ (٣) المُوَسَّع —
+وقيسَ أَنّه يَبلُغُ كُلَّ صَفٍّ حَيّ: مَسحُ مَصادِرِ الاختِبارِ عَن كُلِّ قِراءَةٍ لِـ`WASAYEL_LIVE_PROOF` ولِكُلِّ `if (!….Enabled …)` لا يَجِدُ صِنفاً
+خارِجَ `Live…` إلّا `ReadinessEndpointTests` (والأَصنافُ المُساعِدَةُ مِثلُ `ForbiddenPaymentProvider` مُتَداخِلَةٌ داخِلَ أَصنافِ `Live…`):
+
+```bash
+WASAYEL_LIVE_PROOF=1 ConnectionStrings__Postgres="Host=localhost;Database=wasayel_final_20261025;Username=postgres;Password=<المَحَلِّيَّة>" \
+  dotnet test tests/ACommerce.Platform.Tests -c Release --no-build \
+  --filter "FullyQualifiedName~ACommerce.Platform.Tests.Live|FullyQualifiedName~ReadinessEndpointTests.Live_database_answers_200_ready" \
+  --logger "console;verbosity=normal" --logger "trx;LogFileName=live.trx"
+```
+
+← **‏78 اختِباراً في 37 صِنفاً · 78 أَخضَر · صِفرُ أَحمَر** (‏17 ثانِيَة)، و`./scripts/live-proof-floor.sh live.trx 55` عَلى الـtrx نَفسِه:
+«البَراهينُ الحَيَّة: نَجَحَ 58 · رَجَعَ مِن حارِسٍ فَرعِيٍّ 1 · بَلَغَ القاعِدَة 57 (الأَرضِيَّة 55) · فَشِلَ 0» (والـ20 الباقِيَةُ صُفوفُ `LiveProofJobTests`، خارِجَ العَدّ).
+
+| الصِنف | نَجَح/فَشِل | | الصِنف | نَجَح/فَشِل |
+|---|---|---|---|---|
+| `LiveAdminAgentStoreOwnerProofTests` | 1/0 | | `LiveGatewayPaymentProofTests` | 1/0 |
+| `LiveAgentStoreLimitRefusalProofTests` | 1/0 | | `LiveModelUsageMeteringProofTests` | 1/0 |
+| `LiveAnalysisClaimRaceProofTests` | 1/0 | | `LiveOtoOrderStatusProofTests` | 4/0 |
+| `LiveApprovalFlowProofTests` | 1/0 | | `LiveOtoStagingProofTests` | 1/0 — **رَجَعَ مِن حارِسِه** في 2 ms: «[live:returned-early] لا رَمزَ staging لِـOTO» |
+| `LiveCheckoutClaimProofTests` | 1/0 | | `LiveOutboxTenantProofTests` | 3/0 |
+| `LiveDealAcceptSequenceProofTests` | 1/0 | | `LivePhoneVerifiedOnLoginProofTests` | 2/0 |
+| `LiveDealConcurrencyProofTests` | 3/0 | | `LivePlansShelfProofTests` | 2/0 |
+| `LiveDealMoneyClaimFirstProofTests` | 4/0 | | `LiveProofCollectionTests` (الحارِسان) | 2/0 |
+| `LiveDealMoneyEffectTokenProofTests` | 2/0 | | `LiveProofJobTests` | 20/0 — بِلا `CI_LIVE_PROOF_REQUIRED` |
+| `LiveDealNoticesProofTests` | 3/0 | | `LiveQuotaRaceProofTests` | 1/0 |
+| `LiveDealPaidStageProofTests` | 1/0 | | `LiveRefineInterleaveProofTests` | 1/0 |
+| `LiveDealReviewOnceProofTests` | 2/0 | | `LiveRoleDefinitionProofTests` | 1/0 — مُستَأجِرُ الجَولَة `live-roles-<8>` |
+| `LiveDealReviewProofTests` | 1/0 | | `LiveStudioStorePatternProofTests` | 1/0 |
+| `LiveDealShipProofTests` | 3/0 | | `LiveTenantExportProofTests` | 1/0 — 6 مُستَأجِرينَ في السِجِلّ و3 مَملوكَة، وفي كُلٍّ «2 تَعَذَّرَت قِراءَتُه» (`Report` و`ConsentRecord`: جَدوَلانِ لَم يُنشَآ في هذِه القاعِدَة، والبُرهانُ يَقرَأُ بِـ`AutoCreate.None` عَمداً — رَأسُه :38) |
+| `LiveDealStoredCommissionFieldProofTests` | 1/0 | | `LiveThemeProofTests` | 1/0 — عَلى مَجموعاتٍ فارِغَة (لا `adwar-demo` مَحَلِّيّاً، §٤ (٢)) |
+| `LiveDisplayTimeKindProofTests` | 1/0 | | `LiveVendorRegisterBucketProofTests` | 1/0 |
+| `LiveGatewayInvoiceCancelProofTests` | 1/0 | | `LiveVendorRegisterSealRetryProofTests` | 2/0 |
+| `LiveGatewayInvoiceShareProofTests` | 1/0 | | `LiveVendorShippingProofTests` | 3/0 |
+| `ReadinessEndpointTests.Live_database_answers_200_ready` | 1/0 | | | |
+
+فَالأَصنافُ 37 = ‏34 صِنفَ بُرهانٍ `Live…ProofTests` + `LiveProofCollectionTests` + `LiveProofJobTests` + `ReadinessEndpointTests` — كانَت 32 في §٤ (٣)
+(‏2026-10-24، عِندَ `e7e5fe2`)، وزادَت أَربَعَةُ أَصنافِ بُرهان — `LiveAdminAgentStoreOwnerProofTests` و`LiveCheckoutClaimProofTests` و`LiveDealMoneyEffectTokenProofTests`
+و`LivePlansShelfProofTests` — و`LiveProofJobTests`؛ وما نَقَصَ صِنف: أَصنافُ `Live…ProofTests` الثَلاثونَ عِندَ `e7e5fe2` كُلُّها هُنا (مَقيسٌ بِـ`git grep` عَلى الشَجَرَتَين: 30 ← 34، فَرقُ إضافَةٍ خالِص).
+**وما لا يَقيسُه الأَخضَرُ هُنا**: OTO staging (بِلا رَمز)، ووَثائِقُ `adwar-demo` (عَلى Neon) — «ج» S12‑readiness · ٦.
+
+**(٤) بَوّابَةُ الإقلاعِ الإنتاجيّ** عَلى قاعِدَةٍ مَحَلِّيَّةٍ جَديدَة `wasayel_final_20261025_gate` بِـ`ASPNETCORE_ENVIRONMENT=Production`، والإلزامِيّانِ
+مِن البيئَةِ وَحدَها (لا `scripts/.prod-gate.env`): سِلسِلَةُ القاعِدَةِ المَحَلِّيَّة، و`ACOMMERCE_AUTH_SECRET="$(openssl rand -hex 32)"` — سِرٌّ لِلجَولَةِ لا يُحفَظ،
+لا سِرُّ إنتاج — والمُقتَطَفُ مُختَصَر (أَسطُرُ الخَرجِ بِحَرفِها، و«…» ما حُذِفَ مِنها):
+
+```text
+  لا مِلَفَّ scripts/.prod-gate.env — تُقرَأُ المُتَغَيِّراتُ مِن البيئَة
+  سِرُّ تَوقيعِ الجَلسَة: مَضبوط (طولُه 64 مِحرَفاً — لا يُطبَع)
+  ⚠ مِفتاحُ الخِزانَةِ Providers__Kek__v1 غائِب — vault_unavailable: …
+  ‏١/٤ نَشرٌ بِوَضع Release … ✓ 57 تَجميعَة ACommerce* في المُخرَج
+  ‏٣/٤ إقلاعٌ بِـASPNETCORE_ENVIRONMENT=Production… ✓ أَجابَ بَعدَ 4ث
+  ‏٤/٤ … 15 مَساراً بِرُموزِها (/ · /terms · /pricing · /privacy · /ashare · … · /health/ready 200 "ready":true · …/export.zip 302)
+  ⚠ مِفتاحُ وَكيلِ التَحليلِ غائِب — analysis_unavailable: …
+  ⚠ مَفاتيحُ VAPID غائِبَة — ephemeral: …
+  الشَحنُ عَبرَ OTO: مُغلَق — OtoEnvironment.IsOpen كاذِبَةٌ في التَطبيق …
+✅ عَبَرَت — 15 مَساراً، كُلٌّ بِرَمزِه المُتَوَقَّع (‏ومِنها 2 مَفحوصُ الجِسم و6 مَفحوصُ الرَأس)، مِن إقلاعٍ فِعليٍّ بِوَضع Production.
+```
+
+رَمزُ الخُروج **0** (‏44 ثانِيَة بِالنَشر). **وأَوراقُ المالِكِ الغائِبَةُ بِأَسمائِها — ما نَبَّهَت عَلَيه البَوّابَة، وما سَكَتَت عَنه**:
+
+| الاعتِماد | ما طَبَعَته البَوّابَة | وما يَعنيه |
+|---|---|---|
+| `Providers__Kek__v1` (الخِزانَة) | ⚠ `vault_unavailable` | لا بِطاقَةَ مِفتاحٍ سِرِّيٍّ في «التَكامُلات»، ولا بِطاقَةَ في إتمامِ الشِراءِ بِمِفتاحِ المَتجَر، ولا مَدخَلَ شَحنٍ لِلبائِعِ عِندَ OTO — «ج» S6‑vault‑lexicon · ٧ |
+| `Agents__Analysis__ApiKey` (أَو `Agent__ApiKey`) | ⚠ `analysis_unavailable` | لا يُبنى مَتجَرٌ مِن الاستوديو — البَند ١ في §١ — «ج» S12‑readiness · ٥ |
+| `WebPush__PublicKey` و`WebPush__PrivateKey` و`WebPush__Subject` | ⚠ `ephemeral` | كُلُّ إعادَةِ تَشغيلٍ تَقطَعُ إشعاراتِ المُتَصَفِّح — «ج» W8-6‑deploy‑docs‑adr · ١ |
+| رَمزا OTO (`Shipping__Oto__RefreshToken`، و`Shipping__Oto__MarketplaceToken`) | **لا سَطرَ ⚠** — سَطرُ حالٍ واحِد: «الشَحنُ عَبرَ OTO: مُغلَق» مِن قَرارِ التَطبيقِ (`[shipping] oto_environment=closed`)؛ الكُتلَةُ لا تَسأَلُ عَن الرَمزَين | زِرُّ البوليصَةِ مَخفِيٌّ والشَحنُ يَدَوِيّ (§٣.٢) — «ج» S7‑oto‑skeleton · ٨ و«ج» S8‑vendor‑shipping · ١٤ |
+| حِسابا تَحصيلِ الاشتِراك (PayPal وPaddle) | **لا سَطر** — `GET /api/billing/paddle` ‏405 يُثبِتُ تَسجيلَ المَسارِ لا الحِساب | لا تَحصيلَ بِالبِطاقَة؛ البَديلُ حَوالَةٌ وتَمديدٌ يَدَوِيّ — «ج» W8-8‑owner‑register · ٢ |
+| مِفتاحُ بَوّابَةِ المَتجَر (ميسّر) | يُغَطّيه سَطرُ الخِزانَةِ وَحدَه (المِفتاحُ يُلصِقُه صاحِبُ المَتجَرِ ويُختَمُ بِها) | البِطاقَةُ صِفرٌ في الدَفع، و`pay=card` يُرَدّ — «ج» S9‑gateway‑client · ١٠ |
+
+والسُكوتانِ مُسَجَّلانِ قَراراً لا عَطَباً في سِجِلِّ المالِك «أ» W9-2‑final‑readiness · ١ — لَم تُعَدَّل البَوّابَةُ في هذا التَيّار.
+
+### (ج) ما بَقِيَ عَلى المالِكِ قَبلَ الإطلاق — بِتَرتيبِه
+
+كُلُّ سَطرٍ فِعلٌ لا يُكتَبُ كوداً، ومَدخَلُه في سِجِلِّ المالِك يَحمِلُ خُطُواتِه كامِلَةً؛ والأَمرُ المُبَرهِنُ هُنا مَنقولٌ مِن ذلكَ المَدخَلِ أَو مِن `DEPLOY.md`
+بِحَرفِه.
+
+| # | الفِعل | المَدخَل | الأَمرُ الَّذي يُبَرهِنُه |
+|---|---|---|---|
+| ١ | ضَبطُ `ACOMMERCE_AUTH_SECRET` في الـSpace (‏32+ مِحرَفاً) **قَبلَ الدَمج** — ويُخرِجُ الجَلَساتِ كُلَّها، ويُسقِطُ مَعَها رُموزاً رُبَّما بَقِيَت في سِجِلِّ الـSpace | «ج» S2‑auth‑ops · ٤ و«ج» W8-2‑auth · ٣ | `./scripts/verify-production-boot.sh` يَطبَعُ «سِرُّ تَوقيعِ الجَلسَة: مَضبوط» ويَعبُر؛ وبِلا السِرِّ يَخرُجُ 3 |
+| ٢ | حِمايَةُ `main` بِالفَحصَينِ `build-and-test` و`static-verification` بِلا تَجاوُز | «ج» W8-5‑supply‑chain‑ci · ٦ | `gh api repos/wasayel-lab/wasayel-platform/branches/main/protection` ← 200 وفيه الاسمان |
+| ٣ | إجراءُ المُخَطَّطِ عَلى فَرعِ Neon مَنسوخٍ ثُمَّ الإنتاج — لَقطَةٌ خارِجَ المُستَودَعِ أَوَّلاً | «ج» S10‑ops‑hardening · ٣ و«ج→تصحيح» S10‑ops‑hardening · ٣ | `dotnet run scripts/marten-schema.cs -- --assert` ‏0 عَلى الفَرعِ ثُمَّ الإنتاج، وبَصمَةُ المُضيفِ في البَوّابَةِ = بَصمَتُه في `marten-schema.cs` |
+| ٤ | فَرعُ Neon لِبَوّابَةِ CI وسِرُّها `BOOT_GATE_CONNECTION_STRING` | «ج» S10‑ops‑hardening · ٨ و«ج» S13‑test‑guards‑ops · ٦ و· ٨ | وَظيفَةُ `production-boot` في CI خَضراءُ لا «3 تَحذير» |
+| ٥ | أَوَّلُ نَشرٍ بَعدَ الدَمج | «ج» S16‑review‑leftovers · ٢ و«ج» W8-5‑supply‑chain‑ci · المنسّق | مُلَخَّصُ وَظيفَةِ النَشرِ يَطبَعُ «رَأسُ main الآن» واتِّجاهَ النَشر، و`/health` يَحمِلُ `commit` الرَأس |
+| ٦ | **مِفتاحُ وَكيلِ التَحليلِ في الـSpace، ثُمَّ الرِحلَةُ بِتَحليلٍ حَقيقيٍّ عَلى فَرعِ Neon** — الجِدارُ الوَحيدُ الَّذي يَقطَعُ الرِحلَة | «ج» S12‑readiness · ٥ (ومُلحَقاه) | `ADMIN_PHONE=<PLATFORM_ADMIN_PHONE> BASE=http://localhost:5050 ./scripts/rewalk-launch-journey.sh` ← «التَحليلُ اكتَمَلَ بَعدَ N ثانِيَة» و«يُمَيِّزُ FLGAP-04» و«فُحِصَ N · فَشِلَ 0» |
+| ٧ | قَرارُ م‑٨ (حُدودُ الحَذف) وبابُ تَصديرِ بَياناتِ المُستَخدِم — **شَرطُ إطلاقٍ مَفتوح** | «ب» W8-4‑privacy‑legal‑texts · ٢ و«ب» W8-4‑privacy‑legal‑texts · ١ | كوميتُ البابِ يَقلِبُ صَفَّ §١ ‏١٢، و`UserDataExportLaunchConditionTests` يَمُرُّ بِلا تَعديل |
+| ٨ | مَفاتيحُ هُوِيَّةِ المَنَصَّةِ الخَمسَة — البَريدُ اليَوم، والكِيانُ بَعدَ صِفَةِ التَسجيل | «ج» W8-4‑privacy‑legal‑texts · ٢ | `dotnet test tests/ACommerce.Platform.Tests/ACommerce.Platform.Tests.csproj -c Release --filter "FullyQualifiedName~PlatformDocFieldsTests\|FullyQualifiedName~PlatformContactDoorTests"`، ولافِتَةُ «الحقول النائبة» في `/admin` تَكُفّ |
+| ٩ | زَوجُ VAPID مَرَّةً واحِدَةً في الـSpace | «ج» W8-6‑deploy‑docs‑adr · ١ | البَوّابَةُ تَطبَعُ «مَفاتيحُ VAPID: مَضبوطَة» بِلا ⚠، وسِجِلُّ الـSpace `[webpush] vapid_keys=configured` |
+| ١٠ | تَعليماتُ التَحويلِ في `/admin` قَبلَ أَوَّلِ مَتجَرٍ يَبلُغُ السَماح | «ج» S11‑measurements‑texts · ١١ | `/admin/transfer` يُعيدُ النَصَّ في حَقلِه، ولافِتَةُ `/studio` لِمالِكِ `owner-test` تَرسُمُه عَلى فَرعٍ مَنسوخ |
+| ١١ | تَحصيلٌ حَقيقيٌّ واحِدٌ لِاشتِراكِ مَتجَر (‏Paddle `sandbox` أَو PayPal) بَعدَ البَند ٨ | «ج» W8-8‑owner‑register · ٢ | سَطرُ الخادِم `[Paddle] Extend — <slug> حَتّى <تاريخ>` وقَيدُ التَدقيق `platform.tenant_plan_paddle_extend` (أَو نَظيراهُما لِـPayPal) |
+| ١٢ | مِفتاحُ الخِزانَةِ ثُمَّ بُرهانُ ميسّر التَجريبيّ عَلى `theme-demo` أَو `owner-test` | «ج» S6‑vault‑lexicon · ٧ ثُمَّ «ج» S9‑gateway‑client · ١٠ (و«ج→تكملة») | البَوّابَةُ «مِفتاحُ الخِزانَة: مَضبوط (يُفَكُّ إلى 32 بايتاً — لا يُطبَع)»، ثُمَّ `[gateway] open invoice theme-demo for N deal(s) ← opened` |
+| ١٣ | قَرارُ الوَضعِ المَوروث بَعدَ قِراءَةِ سَطرِ «بِلا أَدوار» عَلى فَرعِ Neon | «ج» W8-3‑agent‑roles‑admin · ٢ ثُمَّ «ب» W8-3‑agent‑roles‑admin · ٢ | `dotnet run scripts/count-listing-owners.cs` ← سَطرُ الخُلاصَةِ الرابِع «بِلا أَدوار (وَضعٌ مَوروث …): N …» |
+| ١٤ | OTO: بوليصَةٌ واحِدَةٌ عَلى staging عَبرَ نَفَقٍ إلى فَرعِ Neon (لا في الـSpace)، ثُمَّ رِسالَةُ OTO والرَمزُ السوقِيّ | «ج→تصحيح» S7‑oto‑skeleton · ٨ (و«ج» S7‑oto‑skeleton · ٨ و· ١٥ و«ج» S8‑vendor‑shipping · ١١) ثُمَّ «ج» S8‑vendor‑shipping · ١٤ | `LiveOtoStagingProofTests` يَبلُغُ OTO (لا «[live:returned-early]») ويُسَعِّرُ مَساراً، والبوليصَةُ في `Deal.Refs` |
+| ١٥ | ما لا يُقاسُ إلّا عَلى Neon: البَراهينُ الحَيَّةُ وإعادَةُ اللَقَطاتِ العَتيقَةِ وعَدّادُ المالِكين | «ج» S12‑readiness · ٦ و«ج» W8-2‑auth · ١٤ و«ج» S11‑measurements‑texts · ٣ | أَمرُ §٤ (٣) عَلى الفَرعِ المَنسوخ، و`OUT=$(mktemp -d); bash scripts/capture-appearance.sh "$OUT" http://localhost:5050` بِمِلَفّاتِه (`WSL_CAPTURE_*`) |
+
+### (د) المَخاطِرُ الباقِيَةُ المَعروفَة — سَطرٌ لِكُلٍّ ومَوضِعُ تَسجيلِه
+
+- **مَوقِفُ CSRF**: كوكي الجَلسَة `SameSite=Lax` هُوَ الحارِسُ الوَحيد، و`DisableAntiforgery()` عَلى نِقاطِ القالَب (مَوجودٌ في 7 مِلَفّاتٍ اليَوم)، و`/auth/*/verify` العامَّةُ تَسمَحُ بِـlogin-CSRF — «ب» S11b‑deal‑shipping · ٢٦(٣) (وتَدقيقُ الإطلاق §٣).
+- **سُقوفُ المُحاوَلاتِ في الذاكِرَة**: حِصَصُ الرَمزِ (`MaxVerifyPerMinute`، `MaxRequestPerHour`) ومُحاوَلاتُ «Register» عِندَ OTO (عَشرٌ في السّاعَةِ لِكُلِّ بائِع) تَبدَأُ مِن الصِفرِ بَعدَ كُلِّ إعادَةِ تَشغيلٍ ولا تَشتَرِكُ بَينَ نُسخَتَين، وصِفرُ `AddRateLimiter` — «ب» S11b‑deal‑shipping · ٢٦(٢) و«أ» S10‑ops‑hardening · ١٣ و«ب» W8-2‑auth · ٤.
+- **الجَلسَةُ 30 يَوماً بِلا إبطال**: الرافِعَةُ الوَحيدَةُ تَدويرُ `ACOMMERCE_AUTH_SECRET` (يُخرِجُ الجَميع) — «أ» S10‑ops‑hardening · ١٣ (د28) و«ج» W8-2‑auth · ٣.
+- **مُهلَةُ التَحليلِ مُشتَقَّةٌ لا مَقيسَة**: `AgentCallBound.Background` ‏420 ثانِيَة = 8000 تَوكِن ÷ 20 في الثانِيَةِ مَفروضَةً + 20 — وأَوَّلُ قِياسٍ لِزَمَنِ نَموذَجٍ حَقيقِيٍّ جَولَةُ المِفتاح — §٣.١ (البَند K) و«ج» S12‑readiness · ٥.
+- **بَقايا مَسارِ البِطاقَة**: المُشتَري وَحدَه يُحَقِّقُ الدَفع، ولا webhook، ولا انتِهاءَ لِلفاتورَة؛ والاستِرجاعُ بَعدَ القَبضِ يَدَوِيّ؛ والفاتورَةُ المُشتَرَكَةُ لا يُلغي البائِعُ بَندَه مِنها — «ب» S11b‑deal‑shipping · ١٩ و«ب» S14‑texts‑docs‑appearance · ٧ و«ب» S9‑gateway‑client · ٧ و· ٨ و· ١٤ و· ١٦، و`DEPLOY.md` §٢·ح.
+- **OTO staging**: `Shipping__Oto__Environment=staging` يَفتَحُ قِسمَ الشَحنِ التَجريبيِّ لِكُلِّ بائِعٍ في كُلِّ مَتجَر، والبَوّابَةُ تُنَبِّهُ عَلَيه ولا تَمنَعُه — «ب» W8-6‑deploy‑docs‑adr · ٦ و«ج→تصحيح» S7‑oto‑skeleton · ٨.
+- **الوَضعُ المَوروثُ لِمَتجَرٍ بِلا أَدوار**: كُلُّ مُسَجَّلٍ يَحمِلُ `tenant.manage` ويَرى هَواتِفَ المُستَخدِمينَ وبَريدَهم — «ب» W8-3‑agent‑roles‑admin · ٢ (البَند P0-7 أَعلاه).
+- **«نِزاع» بِلا مَخرَج**، و**«تَقييمٌ نِيابَةً» في الاستوديو** حَيٌّ حَتّى الجَواب — «ب» W8-1‑deals · ٥ و«ب» W8-1‑deals · ٦ (و«ب→تكملة»).
+- **حَذفُ الحِسابِ إخفاءُ هُوِيَّةٍ لا مَحو**: الاسمُ والهاتِفُ والعُنوانُ تَبقى عَلى الصَفَقات (النُصوصُ تَقولُها اليَوم) — «ب» W8-4‑privacy‑legal‑texts · ١؛ والتَصديرُ غائِب — P3-5.
+- **حَدُّ رَسائِلِ وَكيلِ التَطبيقات**: `/studio/agent` مَقصورٌ عَلى مُشرِفِ المَنَصَّةِ إلى أَن يوجَدَ رَقَم — «ب» W8-3‑agent‑roles‑admin · ١.
+- **وَسما الصورَةِ يُرفَعانِ بِاليَد** مَعَ كُلِّ رُقعَةٍ أَمنِيَّة، والحارِسُ يَحرُسُ الدِقَّةَ لا الحَداثَة — «أ» W8-5‑supply‑chain‑ci · ١ و`DEPLOY.md` §٥.
+- **أَنواعُ وَثائِقَ غَيرُ مُسَجَّلَةٍ تُنشِئُ جَداوِلَها عِندَ أَوَّلِ استِعمال**، فَلا يَراها العَرضُ قَبلَ النَشر (ومِنها `Report` و`ConsentRecord` اللَذانِ قَرَأَهُما بُرهانُ التَصديرِ اليَومَ «تَعَذَّرَت») — «أ» W8-6‑deploy‑docs‑adr · ١٣ و«أ→تصحيح» W8-6‑deploy‑docs‑adr · ١٣.
+- **بَوّابَةُ الإقلاعِ لا تُسَمّي رَمزَي OTO ولا حِسابَي التَحصيل** (المَقيسُ في (ب)(٤)) — «أ» W9-2‑final‑readiness · ١.
+- **ما لَم يُقَس قَطّ في هذا الفَرع**: النَقرَةُ بِمُتَصَفِّحٍ والمَسحُ البَصَريّ، وكُلُّ ما عَلى Neon، والدُخولُ بِالبَريدِ ونَفاذ في الرِحلَة — §٦ و«ج» S12‑readiness · ٦.
+
+---
+
 ## ما قيس قبل التحوّل — ‏2026-08-17
 
 > **نَصُّ الوَثيقَةِ كَما كانَ حَتّى ‏2026-10-13** (`git show 8508795:docs/RELEASE-READINESS.md`)، **لَم يُغَيَّر مِنه
