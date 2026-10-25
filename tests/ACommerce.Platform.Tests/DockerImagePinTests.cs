@@ -331,4 +331,31 @@ public class DockerImagePinTests(ITestOutputHelper output)
             Assert.Equal(expected, p.ExitCode);
         }
     }
+
+    /// <summary>صورَةُ خِدمَةٍ في وَظائِفِ CI مُثَبَّتَةٌ عَلى إصدارٍ صَغيرٍ بِعَينِه (<c>postgres:16.13</c>) لا قَناةٍ تَتَحَرَّك (<c>postgres:16</c>).</summary>
+    internal static bool IsPinnedServiceImage(string image) => Regex.IsMatch(image, @"^[a-z0-9][a-z0-9._/-]*:\d+\.\d+(?:\.\d+)?$");
+
+    /// <summary><b>وقاعِدَةُ وَظيفَةِ البَراهينِ الحَيَّةِ لا تَتَحَرَّكُ بِلا كوميت</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-5 الجَولَة ١، مَعلومَة): البَراهينُ قيسَت عَلى
+    /// 16.13، وكانَت الخِدمَةُ <c>postgres:16</c> — قَناةً يُغَيِّرُ رَفعُها الصَغيرُ ما يَقيسُه CI بِلا سَطرٍ في المُستَودَع؛ وهو المَبدَأُ نَفسُه الَّذي ثَبَّتَ
+    /// وَسمَيِ الـDockerfile. كُلُّ <c>image:</c> في <c>.github/workflows/*.yml</c> مُثَبَّت، ويُطبَعُ ما عُدّ.</summary>
+    [Fact]
+    public void Every_ci_service_image_is_pinned_to_a_minor_not_a_moving_channel()
+    {
+        var images = Directory.EnumerateFiles(Path.Combine(RepoRoot, ".github", "workflows"), "*.yml")
+            .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"(?m)^\s+image:\s*(?<i>\S+)\s*$").Select(m => (File: Path.GetFileName(f), Image: m.Groups["i"].Value)))
+            .ToList();
+        output.WriteLine($"صُوَرُ خِدماتِ CI: {images.Count} — {string.Join(" · ", images.Select(i => $"{i.File}: {i.Image}"))}");
+        Assert.True(images.Count >= 1, "أَداةٌ عَمياء: لا صورَةَ خِدمَةٍ في الوَظائِف.");
+        Assert.All(images, i => Assert.True(IsPinnedServiceImage(i.Image), $"{i.File}: «{i.Image}» قَناةٌ لا إصدار."));
+    }
+
+    [Theory]
+    [InlineData("postgres:16.13", true)]
+    [InlineData("postgres:16.13.1", true)]
+    [InlineData("postgres:16", false)]
+    [InlineData("postgres:latest", false)]
+    [InlineData("postgres", false)]
+    [InlineData("postgres:16-alpine", false)]
+    public void The_service_image_pin_sees_what_it_counts(string image, bool pinned)
+        => Assert.Equal(pinned, IsPinnedServiceImage(image));
 }
