@@ -202,7 +202,12 @@ public class DisplayTimeZoneTests(ITestOutputHelper output)
         // مُستَقبِلٍ اسمُه وَقت (`{x.At:t}`)، والساعَةُ بِحَرفٍ واحِدٍ `H:mm`/`h:mm` (في ToString وفي الإقحام)، و`ToString(fmt, provider)`.
         + @"|\{[^{}""]*\b\w*(?:At|Utc|Date|Time|Expires|Starts)\w*\)?\??:[dDtTgGfFMmYy]\}"
         + @"|ToString\(""[Hh]:mm|\{[^{}""]*:[Hh]:mm[^{}""]*\}"
-        + @"|\b\w*(?:At|Utc|Date|Time|Expires|Starts)\w*\)?\??\.ToString\(""[dDfFgGtTMmYyOoRrsu]""\s*,[^)]*\)");
+        + @"|\b\w*(?:At|Utc|Date|Time|Expires|Starts)\w*\)?\??\.ToString\(""[dDfFgGtTMmYyOoRrsu]""\s*,[^)]*\)"
+        // ‏(‏2026-10-25، مُراجَعَةُ تَيّارِ W8-9 الجَولَة ١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) وشَكلانِ فاتاه: صَنفُ الحَرفِ في الإقحامِ بِلا O/o/R/r/s/u الَّتي
+        // يَعُدُّها فَرعُ ToString (`{x.At:O}`، `{x.At:u}`)، و`.Value` بَعدَ مُستَقبِلٍ اسمُه وَقتٌ في الفُروعِ الثَلاثَة (`{x.CreatedAt.Value:d}`،
+        // `x.ExpiresAt.Value.ToString("d")` وبِمُزَوِّدٍ) — لَحَظاتٌ قابِلَةٌ لِلفَراغِ تُرسَمُ بِـUTC.
+        + @"|\{[^{}""]*\b\w*(?:At|Utc|Date|Time|Expires|Starts)\w*\)?\??(?:\.Value)?:[dDtTgGfFMmYyOoRrsu]\}"
+        + @"|\b\w*(?:At|Utc|Date|Time|Expires|Starts)\w*\)?\??\.Value\.ToString\(""[dDfFgGtTMmYyOoRrsu]""(?:\s*,[^)]*)?\)");
 
     /// <summary>حُكمُ سَطرٍ واحِد: <c>null</c> لَيسَ راسِماً، و«zoned»/«derived»/«pinned:N» مَقبول، و«bad» مُخالِف.</summary>
     internal static string? TimeRendererVerdict(string rel, string line)
@@ -279,6 +284,12 @@ public class DisplayTimeZoneTests(ITestOutputHelper output)
             "<span>@n.At.ToString(\"H:mm\")</span>",
             "var t = $\"{n.At:h:mm tt}\";",
             "<span>@n.At.ToString(\"t\", CultureInfo.InvariantCulture)</span>",
+            // ‏(‏2026-10-25، مُراجَعَةُ W8-9 الجَولَة ١) عَيِّنَةٌ لِكُلِّ شَكلٍ فاتَ ماسِحَ S16 الجَولَة ٢:
+            "<span>@($\"{x.At:O}\")</span>",
+            "<span>@($\"{x.At:u}\")</span>",
+            "<span>@($\"{x.CreatedAt.Value:d}\")</span>",
+            "<span>@x.ExpiresAt.Value.ToString(\"d\")</span>",
+            "<span>@x.ExpiresAt.Value.ToString(\"d\", CultureInfo.InvariantCulture)</span>",
         };
         var accepted = new (string Line, string? Verdict)[]
         {
@@ -291,6 +302,11 @@ public class DisplayTimeZoneTests(ITestOutputHelper output)
             ("<span>@Culture.InZone(n.At).ToString(\"H:mm\")</span>", "zoned"),
             ("var s = $\"{count:d}\";", null),
             ("var id = userId.ToString(\"D\", CultureInfo.InvariantCulture);", null),
+            // ‏(‏2026-10-25، W8-9 الجَولَة ١) والأَشكالُ الجَديدَةُ داخِلَ InZone مَقبولَة، و`.Value` عَلى مُستَقبِلٍ لَيسَ وَقتاً لا يُعَدّ:
+            ("<span>@($\"{Culture.InZone(x.At):O}\")</span>", "zoned"),
+            ("<span>@Culture.FormatTime(x.ExpiresAt.Value, \"d\")</span>", "zoned"),
+            ("var s = $\"{count.Value:d}\";", null),
+            ("var id = order.Value.ToString(\"D\");", null),
         };
         var wrong = bad.Where(l => TimeRendererVerdict(Page, l) != "bad").Select(l => $"لَم يُرَ: {l} ⇒ {TimeRendererVerdict(Page, l) ?? "لَيسَ راسِماً"}")
             .Concat(accepted.Where(a => TimeRendererVerdict(Page, a.Line) != a.Verdict)
@@ -304,11 +320,19 @@ public class DisplayTimeZoneTests(ITestOutputHelper output)
             + @"|\b\w*(?:At|Utc|Date|Time|Expires|Starts)\w*\)?\??\.ToString\(""[dDfFgGtTMmYyOoRrsu]""\)"
             + @"|\bTo(?:Short|Long)(?:Date|Time)String\(\)");
         var s16Blind = bad.Count(l => !s16.IsMatch(l));
+        // ‏(‏2026-10-25، W8-9 الجَولَة ١) وماسِحُ S16 الجَولَة ٢ بِحَرفِه (قَبلَ الشَكلَينِ الأَخيرَين) — لا يَرى العَيِّناتِ الخَمسَ الجَديدَة:
+        var s16r2 = new Regex(s16.ToString()
+            + @"|\{[^{}""]*\b\w*(?:At|Utc|Date|Time|Expires|Starts)\w*\)?\??:[dDtTgGfFMmYy]\}"
+            + @"|ToString\(""[Hh]:mm|\{[^{}""]*:[Hh]:mm[^{}""]*\}"
+            + @"|\b\w*(?:At|Utc|Date|Time|Expires|Starts)\w*\)?\??\.ToString\(""[dDfFgGtTMmYyOoRrsu]""\s*,[^)]*\)");
+        var s16r2Blind = bad.Count(l => !s16r2.IsMatch(l));
         output.WriteLine($"حُقِنَ {bad.Length} راسِماً بِلا مِنطَقَة و{accepted.Length} مَقبولاً · كانَ الماسِحُ قَبلَ S16 لا يَرى {oldBlind} مِنها"
-            + $"، وماسِحُ S16 لا يَرى {s16Blind}");
+            + $"، وماسِحُ S16 لا يَرى {s16Blind}، وماسِحُ S16 الجَولَة ٢ لا يَرى {s16r2Blind}");
         // ‏(‏2026-10-25) سِتٌّ كانَت، وسِتٌّ جَديدَةٌ لا يَراها القَديمُ أَيضاً:
-        Assert.Equal(12, oldBlind);
-        Assert.Equal(6, s16Blind);
+        // ‏(‏2026-10-25، W8-9 الجَولَة ١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) وخَمسٌ أُخرى: القَديمُ 17، وS16 ‏11، وS16 الجَولَة ٢ ‏5.
+        Assert.Equal(17, oldBlind);
+        Assert.Equal(11, s16Blind);
+        Assert.Equal(5, s16r2Blind);
         Assert.True(wrong.Count == 0, string.Join("\n", wrong));
     }
 }
