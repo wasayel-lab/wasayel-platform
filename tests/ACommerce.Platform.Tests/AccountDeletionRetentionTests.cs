@@ -170,21 +170,63 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     private static string En(string key) => LocaleCatalog.Find("en", key)
         ?? throw new Xunit.Sdk.XunitException($"لا مِفتاحَ «{key}» في en.json.");
 
+    /// <summary>القيَمُ قَبلَ كوميتِ الصِياغَةِ بِحَرفِها (‏<c>b52ea8d</c> وما قَبلَه) — لِيُقاسَ أَنّ الفَرقَ مَحصورٌ في الجُملَةِ الكاذِبَة.</summary>
+    internal static readonly IReadOnlyDictionary<string, string> Before = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [StorePrivacyKey] = "لِحَذف حِسابك بِالكامِل: صَفحَة «حِسابي» ثُمَّ «حَذفُ الحِساب». يَقَع الحَذف فَور تَأكيدك، ويَبقى سِجِلّ الصَّفَقات والفَواتير بِلا اسم لِالتِزام نِظاميّ ومُحاسَبيّ.",
+        [PlatformRetentionKey] = "نَحتَفِظُ بِبَياناتِكَ ما دامَ حِسابُكَ قائِماً وما تَقتَضيهِ المُتَطَلَّباتُ النِظامِيَّةُ والمُحاسَبِيَّة. ويُمكِنُكَ حَذفُ حِسابِكَ وبَياناتِكَ الشَخصِيَّةَ مِن داخِلِ التَطبيقِ نَفسِه: صَفحَةُ «حِسابي» ثُمَّ «حَذفُ الحِساب»، ويَقَعُ الحَذفُ فَورَ تَأكيدِك. ويَبقى سِجِلُّ الصَفَقاتِ والفَواتيرِ بِلا اسمٍ ولا وَسيلَةِ اتِّصالٍ ما اقتَضاهُ التِزامٌ نِظامِيٌّ ومُحاسَبِيّ.",
+        [RetainedNoteKey] = "يَبقى سِجِلُّ الصَفَقاتِ والفَواتيرِ مَنسوباً إلى حِسابٍ بِلا اسمٍ ولا وَسيلَةِ اتِّصال. والاحتِفاظُ بِه التِزامٌ نِظامِيٌّ ومُحاسَبِيّ: المادَّةُ الخامِسَةُ تُجيزُه صَراحَةً «دونَ إخلالٍ بِما يَقضي بِه نِظامٌ آخَر».",
+    };
+
+    /// <summary>صَدرُ كُلِّ قيمَةٍ قَبلَ أَوَّلِ تَبديلٍ مَقصود — يَبقى بِحَرفِه: في الخُصوصِيَّتَينِ إلى «والفَواتير»/«حِسابِكَ» (ثُمَّ «في المَتجَرِ»)،
+    /// وفي شاشَةِ الحَذفِ إلى «والفَواتير» (ثُمَّ الكَسرَةُ الَّتي كانَت تَصِلُها بِـ«مَنسوباً»).</summary>
+    internal static readonly IReadOnlyDictionary<string, string> Unchanged = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [StorePrivacyKey] = "لِحَذف حِسابك بِالكامِل: صَفحَة «حِسابي» ثُمَّ «حَذفُ الحِساب». يَقَع الحَذف فَور تَأكيدك، ويَبقى سِجِلّ الصَّفَقات والفَواتير ",
+        [PlatformRetentionKey] = "نَحتَفِظُ بِبَياناتِكَ ما دامَ حِسابُكَ قائِماً وما تَقتَضيهِ المُتَطَلَّباتُ النِظامِيَّةُ والمُحاسَبِيَّة. ويُمكِنُكَ حَذفُ حِسابِكَ ",
+        [RetainedNoteKey] = "يَبقى سِجِلُّ الصَفَقاتِ والفَواتير",
+    };
+
+    /// <summary>النَصُّ بِلا حَرَكات — فَالفاحِصُ يَقرَأُ الكَلِمَةَ لا تَشكيلَها (‏<c>LegalHub</c> بِتَشكيلٍ أَخَفَّ مِن صَفحَةِ المَنَصَّة).</summary>
+    internal static string Bare(string s) => Regex.Replace(s, "[\u064B-\u0652\u0670]", "");
+
+    /// <summary>ما يَقولُه كُلُّ نَصٍّ عَمّا يَبقى ومَن يَراه — بِالكَلِماتِ الَّتي تُقابِلُ وَقائِعَ الصُفوفِ ١–٣ (بِلا حَرَكات).</summary>
+    internal static readonly string[] RetainedFacts =
+        { "الاسم الذي كان لك وقتها", "عنوان التوصيل", "الهاتف", "بائع الصفقة", "صاحب المتجر الاسم", "شركة الشحن" };
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الصِياغَة — الخِيارُ (ب) مِن brief-P3-5a)</b> — كانَ
+    /// <c>Today_three_deletion_texts_promise_deal_records_without_a_name_or_contact_and_the_policy_promises_every_account_an_in_app_deletion</c>
+    /// (‏<c>b52ea8d</c>): ثَلاثَةُ نُصوصٍ تَقولُ «بِلا اسم»، وs6/s7 لا تُمَيِّزانِ حِسابَ الاستوديو. <b>والآن</b> يَقولُ كُلٌّ مِنها ما تَبقيه الصَفقَةُ
+    /// ومَن يَراه — وهو بِعَينِه ما تَقيسُه الصُفوفُ ١–٣ مِن الكود (فَإن وَقَعَ الخِيارُ (أ) أَحمَرَت تِلكَ وكُتِبَ النَصُّ مَعَها) — والفَرقُ
+    /// مَحصورٌ: صَدرُ كُلِّ قيمَةٍ إلى الجُملَةِ الكاذِبَةِ بِحَرفِه. والصِياغَةُ مِن كِتابَتي حَتّى يَكتُبَها المالِكُ («ب» W8-4 · ١ في سِجِلِّه).</summary>
     [Fact]
-    public void Today_three_deletion_texts_promise_deal_records_without_a_name_or_contact_and_the_policy_promises_every_account_an_in_app_deletion()
+    public void Deletion_texts_say_what_each_deal_keeps_and_who_sees_it_and_tell_the_studio_account_apart()
     {
         var keys = new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey };
-        foreach (var k in keys) output.WriteLine($"{k}: {Ar(k)}");
-        output.WriteLine($"en {PlatformRetentionKey}: {En(PlatformRetentionKey)}");
+        foreach (var k in keys)
+        {
+            var now = Ar(k);
+            var was = Before[k];
+            var shared = 0;
+            while (shared < now.Length && shared < was.Length && now[shared] == was[shared]) shared++;
+            output.WriteLine($"{k}: قَبلُ {was.Length} حَرفاً · بَعدُ {now.Length} · الصَدرُ المُشتَرَك {shared} :: {now}");
 
-        Assert.Contains("بِلا اسم لِالتِزام", Ar(StorePrivacyKey), StringComparison.Ordinal);
-        Assert.Contains("بِلا اسمٍ ولا وَسيلَةِ اتِّصال", Ar(PlatformRetentionKey), StringComparison.Ordinal);
-        Assert.Contains("بِلا اسمٍ ولا وَسيلَةِ اتِّصال", Ar(RetainedNoteKey), StringComparison.Ordinal);
-        Assert.Contains("without a name or contact details", En(PlatformRetentionKey), StringComparison.Ordinal);
+            Assert.DoesNotContain("بلا اسم", Bare(now), StringComparison.Ordinal);
+            Assert.DoesNotContain("وسيلة اتصال", Bare(now), StringComparison.Ordinal);
+            foreach (var fact in RetainedFacts)
+                Assert.True(Bare(now).Contains(fact, StringComparison.Ordinal), $"{k} لا يَقولُ «{fact}»: {now}");
+            // الفَرقُ مَحصور: صَدرُ القيمَةِ القَديمَةِ إلى أَوَّلِ تَبديلٍ مَقصودٍ بِحَرفِه في الجَديدَة.
+            Assert.StartsWith(Unchanged[k], was, StringComparison.Ordinal);
+            Assert.StartsWith(Unchanged[k], now, StringComparison.Ordinal);
+            Assert.True(shared >= Unchanged[k].Length, $"{k}: الفَرقُ يَبدَأُ عِندَ {shared} قَبلَ الصَدرِ المُعلَن ({Unchanged[k].Length}).");
+        }
+        Assert.DoesNotContain("without a name", En(PlatformRetentionKey), StringComparison.Ordinal);
+        Assert.Contains("the deal's seller sees them, the store owner sees the name", En(PlatformRetentionKey), StringComparison.Ordinal);
 
-        // والسِياسَةُ لا تُمَيِّزُ حِسابَ المَتجَرِ مِن حِسابِ الاستوديو.
-        Assert.DoesNotContain("الاستوديو", Ar(PlatformRetentionKey), StringComparison.Ordinal);
-        Assert.Contains("وحَذفُ الحِسابِ يَقَعُ مِن داخِلِ التَطبيق", Ar(PlatformRightsKey), StringComparison.Ordinal);
-        Assert.Contains("Account deletion happens inside the app", En(PlatformRightsKey), StringComparison.Ordinal);
+        // وحِسابُ الاستوديو يُقالُ بِاسمِه: لا بابَ لِحَذفِه — وهو ما يَقيسُه الصَفُّ ٤.
+        Assert.Contains("أَمّا حِسابُ الاستوديو (لِأَصحابِ المَتاجِر) فَلا بابَ لِحَذفِه داخِلَ التَطبيقِ اليَوم.", Ar(PlatformRetentionKey), StringComparison.Ordinal);
+        Assert.Contains("A studio account (for store owners) has no deletion door inside the app today.", En(PlatformRetentionKey), StringComparison.Ordinal);
+        Assert.Contains("وحَذفُ حِسابِ المَتجَرِ يَقَعُ مِن داخِلِ التَطبيق", Ar(PlatformRightsKey), StringComparison.Ordinal);
+        Assert.Contains("Store account deletion happens inside the app", En(PlatformRightsKey), StringComparison.Ordinal);
     }
 }
