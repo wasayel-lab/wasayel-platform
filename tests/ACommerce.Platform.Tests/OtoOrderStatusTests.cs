@@ -598,6 +598,32 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
             new OtoNoticeViolation(OtoOrderStatusGate.AlreadyDelivered, "x")));
     }
 
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم»</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-1 الجَولَتانِ ١ و٢، صُغرى؛ القاعِدَة ٣ — يُقلَبُ بِاسمِه في كوميتِ الإصلاح):
+    /// «مَرَّةً» في سَطرِ <c>oto_delivered_after_cancel</c> قَرارٌ عَلى النُسخَةِ المَقروءَة ثُمَّ كِتابَة — <c>DeliveredAfterCancel</c> تَسأَلُ
+    /// <c>!deal.Refs.ContainsKey(…)</c> عَلى ما قَرَأَه <c>DeliverAsync</c>، و<c>AttachRefAsync</c> تُعيدُ الإلحاقَ بِلا شَرطٍ عَلى ما كُتِبَ بَعدَ
+    /// تَعارُضِ النُسخَة. فَإشعارانِ «delivered» مُتَداخِلانِ لِصَفقَةٍ مُلغاةٍ يَمُرّانِ بِالسُؤالِ مَعاً: يَحفَظُ الآخَرُ سَطرَه بَينَ قَرارِ الأَوَّلِ وحِفظِه،
+    /// فَيُرَدُّ حِفظُ الأَوَّلِ ويُعادُ عَلى ما كُتِب — <b>سَطرانِ</b> في السِجِلّ.</para>
+    /// </summary>
+    [Fact]
+    public async Task Today_two_delivered_notices_racing_on_a_cancelled_deal_write_two_timeline_lines()
+    {
+        var w = await ShippedCashDeal();
+        OtoSays(w, "delivered");
+        Stored(w).Status = DealStatus.Cancelled;
+        var other = OthersWinTheSave(w, () => w.Shipping.ReceiveAsync(Slug, Notice(w.Id)));
+
+        var outcome = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id));
+
+        Assert.Equal(1, other());
+        Assert.Equal(OtoOrderStatusGate.DealNotActive, outcome.Code);
+        var lines = Stored(w).Timeline.Count(e => e.Action == DealEvent.RefNote
+            && DealRefLabels.LabelKeyFor(e.Note) == "deals.detail.ref_oto_delivered_after_cancel");
+        Assert.Equal(2, lines);
+        Assert.Equal(DealStatus.Cancelled, Stored(w).Status);
+        output.WriteLine($"إشعارانِ مُتَداخِلانِ عَلى صَفقَةٍ مُلغاة: تَعارُض {other()} · أَسطُرُ «سُلِّمَ بَعدَ الإلغاء» {lines}");
+    }
+
     /// <summary>صَفقَةٌ لَها طَلَبٌ ولَم تَخرُج إلى الشَحن (رُدَّ انتِقالُها) — التَسليمُ لا يَقفِزُ فَوقَ الشَحن.
     /// <para><b>قُلِبَ بِاسمِه</b> — كانَ <c>A_delivery_for_a_deal_still_at_Confirmed_does_not_jump_over_Shipping</c> (‏<c>e96c482</c>): «delivered» بِبوليصَةٍ
     /// عَلى صَفقَةٍ عِندَ «تأكيد» بِطَلَبِها يُجابُ <c>deal_not_shipping</c> فَلا تُعيدُه OTO ويَضيعُ التَسليمُ الآلِيّ. <b>والآن</b> (مُراجَعَةُ المَوجَة 3a،
