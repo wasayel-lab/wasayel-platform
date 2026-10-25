@@ -101,4 +101,57 @@ public class OtpCodeGuessTests(ITestOutputHelper output)
         Assert.True(AuthHandlers.ConsumeAttempt(Tenant, s, "222222", AuthHandlers.AuthKind.EmailOtp));
         Assert.True(AuthHandlers.ConsumeAttempt(Tenant, other, "333333", AuthHandlers.AuthKind.EmailOtp));
     }
+    // ─── ٥. التَزامُن — أَخطاءٌ مُتَزامِنَةٌ عَلى رَمزٍ واحِد، ورَمزٌ صَحيحٌ مُتَزامِنٌ مَرَّتَين (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2 الجَولَة ١، صُغرى) ──
+    //
+    // **تَوصيفُ «اليَوم»** (القاعِدَة ٣ — يُقلَبُ الصَفّانِ بِاسمَيهِما في كوميتِ الإصلاح): `ConsumeAttempt` يَقرَأُ المُحاوَلَةَ ثُمَّ يَكتُبُ
+    // `TryUpdate(id, counted, attempt)` ويُهمِلُ جَوابَه بِلا حَلقَة — بِخِلافِ `TryConsume` فَوقَه — فَتَخمينٌ ثانٍ مُتَزامِنٌ مُقارِنُه قَديمٌ ويَضيعُ عَدُّه؛
+    // ويَمحو الرَمزَ الصَحيحَ بِـ`TryRemove(id)` ويُعيدُ `true` أَيّاً كانَ جَوابُه — فَنِداءانِ صَحيحانِ مُتَزامِنانِ يَفتَحانِ مَعاً. والأَداةُ خُيوطٌ حَقيقِيَّةٌ
+    // يُطلِقُها `Barrier` مَعاً عَلى الدالَّةِ نَفسِها، وتَطبَعُ ما عَدَّت.
+
+    private const int Rounds = 200;
+
+    /// <summary>جَولَةٌ: مُحاوَلَةٌ جَديدَةٌ، و<paramref name="threads"/> خُيوطٌ تُنادي <see cref="AuthHandlers.ConsumeAttempt"/> بِـ<paramref name="codeOf"/>
+    /// في لَحظَةٍ واحِدَة. تُعيدُ مُعَرِّفَ المُحاوَلَةِ وعَدَدَ مَن فُتِحَ لَه.</summary>
+    private static (string Id, int Opened) RaceOnce(int threads, Func<int, string> codeOf)
+    {
+        var s = Subject();
+        var id = AuthHandlers.IssueAttempt(Tenant, s, "424242", AuthHandlers.AuthKind.PhoneOtp);
+        using var start = new Barrier(threads);
+        var opened = 0;
+        var workers = Enumerable.Range(0, threads).Select(i => new Thread(() =>
+        {
+            start.SignalAndWait();
+            if (AuthHandlers.ConsumeAttempt(Tenant, s, codeOf(i), AuthHandlers.AuthKind.PhoneOtp)) Interlocked.Increment(ref opened);
+        })).ToList();
+        workers.ForEach(t => t.Start());
+        workers.ForEach(t => t.Join());
+        return (id, opened);
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم»</b>: أَربَعَةُ أَخطاءٍ مُتَزامِنَةٍ عَلى رَمزٍ واحِدٍ لا تُعَدُّ أَربَعاً — في جَولاتٍ مِنها يَضيعُ عَدّ؛ فَـ«خَمسَةُ أَخطاءٍ تَمحو
+    /// الرَمز» لا تَصدُقُ عَلى أَخطاءٍ مُتَزامِنَة.</summary>
+    [Fact]
+    public void Today_concurrent_wrong_guesses_on_one_code_lose_counts()
+    {
+        var lost = 0;
+        for (var r = 0; r < Rounds; r++)
+        {
+            var (id, _) = RaceOnce(4, i => (111110 + i).ToString());
+            if (AuthHandlers.Attempts.TryGetValue(id, out var a) && a.WrongGuesses < 4) lost++;
+        }
+        output.WriteLine($"جَولات {Rounds} · أَربَعَةُ أَخطاءٍ مُتَزامِنَة · جَولاتٌ ضاعَ فيها عَدّ {lost}");
+        Assert.True(lost > 0, $"لَم يَضِع عَدٌّ في {Rounds} جَولَة — التَوصيفُ لا يَقيسُ ما يَصِف.");
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم»</b>: الرَمزُ الصَحيحُ يُرسَلُ مَرَّتَينِ في لَحظَةٍ واحِدَة — فَيَفتَحُ لِلاثنَينِ في جَولاتٍ مِنها؛ فَـ«مَرَّةً واحِدَة» لا تَصدُقُ
+    /// عَلى نِداءَينِ مُتَزامِنَين.</summary>
+    [Fact]
+    public void Today_one_correct_code_sent_twice_at_once_can_open_twice()
+    {
+        var twice = 0;
+        for (var r = 0; r < Rounds; r++)
+            if (RaceOnce(2, _ => "424242").Opened > 1) twice++;
+        output.WriteLine($"جَولات {Rounds} · نِداءانِ صَحيحانِ مُتَزامِنان · جَولاتٌ فَتَحَ فيها الاثنان {twice}");
+        Assert.True(twice > 0, $"لَم يَفتَح الاثنانِ في {Rounds} جَولَة — التَوصيفُ لا يَقيسُ ما يَصِف.");
+    }
 }
