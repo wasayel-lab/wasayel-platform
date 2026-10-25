@@ -1575,13 +1575,20 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
 
     /// <summary><b>والطَفرَةُ الَّتي عَبَرَت، عَلى الصَفحَةِ الحَقيقِيَّةِ بِكاتِباتِ الشَجَرَةِ الحَقيقِيَّة</b> (‏2026-10-25، مُراجَعَةُ W8-5 الجَولَة 1):
     /// <c>MyDealDetail.razor</c> كَما هِيَ لا تُنادي كاتِبَة، وبِسَطرِ <c>Deals.CancelAsync</c> بَعدَ <c>LoadAsync</c> تُمسَكُ بِـ<c>DealsService.CancelAsync</c> —
-    /// فَلا يُقالُ إنّ الفاحِصَ يَرى الصَفحَةَ وهو يَرى عَيِّنَتَها وَحدَها. وإن تَغَيَّرَ سَطرُ المِرساةِ حَمَرَ الصَفُّ لِيُنقَلَ مَعَه.</summary>
-    [Fact]
-    public void The_real_deal_page_goes_red_when_it_cancels_while_rendering()
+    /// فَلا يُقالُ إنّ الفاحِصَ يَرى الصَفحَةَ وهو يَرى عَيِّنَتَها وَحدَها. وإن تَغَيَّرَ سَطرُ المِرساةِ حَمَرَ الصَفُّ لِيُنقَلَ مَعَه.
+    /// <para><b>‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة ٢، صُغرى)</b>: المِرساةُ تَنتَهي بِـ<c>\n</c> وكانَت تُطابَقُ عَلى <c>File.ReadAllText</c> خاماً، و<c>.razor</c>
+    /// بِلا سِمَةِ <c>-text</c> — فَنُسخَةُ Windows بِـ<c>autocrlf</c> (بيئَةُ التَطويرِ في CLAUDE.md) تَحمِلُ CRLF فَيُحمِرُّ الصَفُّ كاذِباً. يُطَبَّعُ النَصُّ أَوَّلاً
+    /// (نَسَقُ <c>DeployDirectionTests</c>)، ويَجري الصَفُّ عَلى نُسخَةِ CRLF مِن الصَفحَةِ أَيضاً.</para></summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void The_real_deal_page_goes_red_when_it_cancels_while_rendering(bool windowsCheckout)
     {
         var sources = EntitlementContractTests.SourceFiles().ToList();
         var writers = ServiceWriters(sources);
-        var (file, text) = sources.Single(f => f.File.Replace('\\', '/').EndsWith("/Components/Pages/MyDealDetail.razor", StringComparison.Ordinal));
+        var (file, raw) = sources.Single(f => f.File.Replace('\\', '/').EndsWith("/Components/Pages/MyDealDetail.razor", StringComparison.Ordinal));
+        if (windowsCheckout) raw = raw.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
+        var text = raw.Replace("\r\n", "\n", StringComparison.Ordinal);
         const string Anchor = "        deal = await Deals.LoadAsync(Slug, Id);\n";
         Assert.True(text.Split(Anchor).Length == 2, $"سَطرُ المِرساةِ «{Anchor.Trim()}» لَيسَ في {Rel(file)} مَرَّةً واحِدَة — اِنقُل الصَفَّ مَعَه.");
         var mutated = text.Replace(Anchor, Anchor + "        if (deal is not null) await Deals.CancelAsync(Slug, deal.Id, uid);\n");
