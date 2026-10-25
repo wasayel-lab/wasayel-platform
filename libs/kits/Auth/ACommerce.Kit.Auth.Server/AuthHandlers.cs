@@ -219,21 +219,29 @@ public static class AuthHandlers
     public static bool ConsumeAttempt(
         string tenantSlug, string subject, string code, AuthKind kind)
     {
-        var attempt = Attempts.Values
-            .FirstOrDefault(a => a.TenantSlug == tenantSlug
-                              && a.Subject == subject
-                              && a.Kind == kind);
-        if (attempt is null || attempt.ExpiresAt < DateTime.UtcNow) return false;
-        if (Hash(code) != attempt.CodeHash)
+        // ‏(‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2 الجَولَة ١؛ تَوصيفُه `07d8be6` — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) **كُلُّ كِتابَةٍ تُقارِنُ ما قَرَأَته
+        // وتُعيدُ القِراءَةَ إن سَبَقَها غَيرُها** — نَسَقُ `TryConsume` أَعلاه: كانَ العَدُّ `TryUpdate` يُهمَلُ جَوابُه فَيَضيعُ تَخمينٌ مُتَزامِن،
+        // والمَحوُ `TryRemove(id)` يُعيدُ `true` أَيّاً كانَ جَوابُه فَيَفتَحُ رَمزٌ واحِدٌ لِنِداءَينِ مُتَزامِنَين. والمَحوُ الآنَ بِالزَوجِ المَقروء،
+        // فَمَن مُحِيَت مُحاوَلَتُه بَعدَ قِراءَتِه يَقرَأُ ثانِيَةً فَلا يَجِدُها.
+        while (true)
         {
-            // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-8) الخاطِئُ يُعَدّ، وبُلوغُ الحَدِّ يَمحو الرَمز — فَالتالي يَحتاجُ رَمزاً جَديداً (وحِصَّةَ إرسال).
-            var counted = attempt with { WrongGuesses = attempt.WrongGuesses + 1 };
-            if (counted.WrongGuesses >= MaxWrongGuessesPerCode) Attempts.TryRemove(attempt.Id, out _);
-            else Attempts.TryUpdate(attempt.Id, counted, attempt);
-            return false;
+            var attempt = Attempts.Values
+                .FirstOrDefault(a => a.TenantSlug == tenantSlug
+                                  && a.Subject == subject
+                                  && a.Kind == kind);
+            if (attempt is null || attempt.ExpiresAt < DateTime.UtcNow) return false;
+            if (Hash(code) != attempt.CodeHash)
+            {
+                // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-8) الخاطِئُ يُعَدّ، وبُلوغُ الحَدِّ يَمحو الرَمز — فَالتالي يَحتاجُ رَمزاً جَديداً (وحِصَّةَ إرسال).
+                var counted = attempt with { WrongGuesses = attempt.WrongGuesses + 1 };
+                var written = counted.WrongGuesses >= MaxWrongGuessesPerCode
+                    ? Attempts.TryRemove(KeyValuePair.Create(attempt.Id, attempt))
+                    : Attempts.TryUpdate(attempt.Id, counted, attempt);
+                if (written) return false;
+                continue;
+            }
+            if (Attempts.TryRemove(KeyValuePair.Create(attempt.Id, attempt))) return true;
         }
-        Attempts.TryRemove(attempt.Id, out _);
-        return true;
     }
 
     // ─── المُحاوَلَةُ تُسَمّى بِمُعَرِّفِها لا بِمَوضوعِها (‏2026-10-24، تَدقيقُ الإطلاق lens-security-13) ──

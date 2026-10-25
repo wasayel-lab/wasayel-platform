@@ -128,30 +128,41 @@ public class OtpCodeGuessTests(ITestOutputHelper output)
         return (id, opened);
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b>: أَربَعَةُ أَخطاءٍ مُتَزامِنَةٍ عَلى رَمزٍ واحِدٍ لا تُعَدُّ أَربَعاً — في جَولاتٍ مِنها يَضيعُ عَدّ؛ فَـ«خَمسَةُ أَخطاءٍ تَمحو
-    /// الرَمز» لا تَصدُقُ عَلى أَخطاءٍ مُتَزامِنَة.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-25؛ كانَ <c>Today_concurrent_wrong_guesses_on_one_code_lose_counts</c>، مُودَعٌ في <c>07d8be6</c> — «ضاعَ عَدٌّ في
+    /// 180 مِن 200»): أَربَعَةُ أَخطاءٍ مُتَزامِنَةٍ تُعَدُّ أَربَعاً في كُلِّ جَولَة، والرَمزُ حَيٌّ بَعدَها؛ لِأَنّ العَدَّ يُقارِنُ ما قَرَأَه ويُعيدُ القِراءَةَ إن سُبِق.</summary>
     [Fact]
-    public void Today_concurrent_wrong_guesses_on_one_code_lose_counts()
+    public void Concurrent_wrong_guesses_on_one_code_are_all_counted()
     {
-        var lost = 0;
+        var counts = new List<int>();
         for (var r = 0; r < Rounds; r++)
         {
             var (id, _) = RaceOnce(4, i => (111110 + i).ToString());
-            if (AuthHandlers.Attempts.TryGetValue(id, out var a) && a.WrongGuesses < 4) lost++;
+            Assert.True(AuthHandlers.Attempts.TryGetValue(id, out var a), "مُحاوَلَةٌ مُحِيَت بِأَربَعَةِ أَخطاءٍ والحَدُّ خَمسَة.");
+            counts.Add(a!.WrongGuesses);
         }
-        output.WriteLine($"جَولات {Rounds} · أَربَعَةُ أَخطاءٍ مُتَزامِنَة · جَولاتٌ ضاعَ فيها عَدّ {lost}");
-        Assert.True(lost > 0, $"لَم يَضِع عَدٌّ في {Rounds} جَولَة — التَوصيفُ لا يَقيسُ ما يَصِف.");
+        output.WriteLine($"جَولات {Rounds} · أَربَعَةُ أَخطاءٍ مُتَزامِنَة · عُدَّت أَربَعاً في {counts.Count(c => c == 4)}");
+        Assert.All(counts, c => Assert.Equal(4, c));
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b>: الرَمزُ الصَحيحُ يُرسَلُ مَرَّتَينِ في لَحظَةٍ واحِدَة — فَيَفتَحُ لِلاثنَينِ في جَولاتٍ مِنها؛ فَـ«مَرَّةً واحِدَة» لا تَصدُقُ
-    /// عَلى نِداءَينِ مُتَزامِنَين.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-25؛ كانَ <c>Today_one_correct_code_sent_twice_at_once_can_open_twice</c>، مُودَعٌ في <c>07d8be6</c> — «فَتَحَ الاثنانِ في
+    /// 145 مِن 200»): الرَمزُ الصَحيحُ يُرسَلُ مَرَّتَينِ في لَحظَةٍ واحِدَةٍ فَيَفتَحُ لِواحِدٍ في كُلِّ جَولَة؛ لِأَنّ المَحوَ بِالزَوجِ المَقروءِ يَنجَحُ لِأَحَدِهِما وَحدَه.</summary>
     [Fact]
-    public void Today_one_correct_code_sent_twice_at_once_can_open_twice()
+    public void One_correct_code_sent_twice_at_once_opens_exactly_once()
     {
-        var twice = 0;
+        var opened = Enumerable.Range(0, Rounds).Select(_ => RaceOnce(2, _ => "424242").Opened).ToList();
+        output.WriteLine($"جَولات {Rounds} · نِداءانِ صَحيحانِ مُتَزامِنان · فَتَحَ واحِدٌ في {opened.Count(o => o == 1)}");
+        Assert.All(opened, o => Assert.Equal(1, o));
+    }
+
+    /// <summary>والحَدُّ يَصدُقُ مُتَزامِناً (‏2026-10-25): خَمسَةُ أَخطاءٍ في لَحظَةٍ واحِدَةٍ تَمحو الرَمزَ في كُلِّ جَولَة — وصَحيحٌ بَعدَها لا يَفتَح.</summary>
+    [Fact]
+    public void Five_concurrent_wrong_guesses_burn_the_code_every_time()
+    {
         for (var r = 0; r < Rounds; r++)
-            if (RaceOnce(2, _ => "424242").Opened > 1) twice++;
-        output.WriteLine($"جَولات {Rounds} · نِداءانِ صَحيحانِ مُتَزامِنان · جَولاتٌ فَتَحَ فيها الاثنان {twice}");
-        Assert.True(twice > 0, $"لَم يَفتَح الاثنانِ في {Rounds} جَولَة — التَوصيفُ لا يَقيسُ ما يَصِف.");
+        {
+            var (id, opened) = RaceOnce(5, i => (111110 + i).ToString());
+            Assert.Equal(0, opened);
+            Assert.False(AuthHandlers.Attempts.ContainsKey(id), $"الجَولَة {r}: خَمسَةُ أَخطاءٍ مُتَزامِنَةٍ لَم تَمحُ الرَمز.");
+        }
     }
 }
