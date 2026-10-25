@@ -476,7 +476,9 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
 
     /// <summary>ما يُخالِفُ «يُنشَأُ المِلَفُّ ‏600 قَبلَ pg_dump» في جِسمِ <c>SnapshotAsync</c> — فارِغَةٌ إن كانَ كَما اليَوم: <c>new FileStream</c>
     /// واحِدٌ بِـ<c>FileMode.CreateNew</c> و<c>UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite</c> بِحَرفِه، داخِلَ
-    /// <c>if (!OperatingSystem.IsWindows())</c>، بَعدَ «قائِم؟» و<c>pg_dump --version</c> وقَبلَ نِداءِ الكِتابَة؛ و«قائِم» يُرَدُّ بِـ1 لا يُبتَلَع.</summary>
+    /// <c>if (!OperatingSystem.IsWindows())</c>، بَعدَ «قائِم؟» و<c>pg_dump --version</c> وقَبلَ نِداءِ الكِتابَة؛ و«قائِم» يُرَدُّ بِـ1 لا يُبتَلَع.
+    /// (‏2026-10-25، مُراجَعَةُ S16 الجَولَة ٢) وكُلُّ إخفاقٍ آخَرَ في الإنشاءِ (<c>IOException</c> أَو <c>UnauthorizedAccessException</c>) سَطرٌ مُسَمّى بِـ1،
+    /// و«قائِم» قَبلَه: <c>open_failure_escapes</c> و<c>exists_after_broad</c>.</summary>
     internal static IReadOnlyList<string> CreatedOwnerOnlyViolations(string snap)
     {
         var v = new List<string>();
@@ -496,6 +498,13 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
         var tail = snap[at..(write > at ? write : snap.Length)];
         if (!tail.Contains("catch (IOException) when (File.Exists(file))", StringComparison.Ordinal) || !tail.Contains("return 1;", StringComparison.Ordinal))
             v.Add("exists_race_swallowed");
+        // ‏(‏2026-10-25، مُراجَعَةُ S16 الجَولَة ٢) وكُلُّ إخفاقٍ آخَرَ في الإنشاءِ — مُجَلَّدٌ غائِبٌ أَو لا يُكتَبُ فيه — سَطرٌ مُسَمّى بِرَمزِ 1 لا استِثناءٌ يَهرُب،
+        // و«قائِم» قَبلَه (فَلا يَبتَلِعُه الواسِع).
+        const string Broad = "catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)";
+        var broad = tail.IndexOf(Broad, StringComparison.Ordinal);
+        var named = broad < 0 ? -1 : tail.IndexOf("✗ تَعَذَّرَ إنشاءُ اللَقطَة: {ex.GetType().Name}: {file}", broad, StringComparison.Ordinal);
+        if (broad < 0 || named < 0 || tail.IndexOf("return 1;", named, StringComparison.Ordinal) < 0) v.Add("open_failure_escapes");
+        else if (tail.IndexOf("catch (IOException) when (File.Exists(file))", StringComparison.Ordinal) > broad) v.Add("exists_after_broad");
         return v;
     }
 
@@ -546,6 +555,22 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
         var block = Regex.Match(snap, @"    if \(!OperatingSystem\.IsWindows\(\)\)\n    \{\n        try\n        \{\n            using var created = new FileStream\(file,[\s\S]*?\n    \}\n");
         Assert.True(block.Success, "كُتلَةُ الإنشاءِ الحَيَّةُ لَم تُقرَأ — الأَداةُ عَمياء.");
         var dumpLine = "    var dump = await RunAsync(\"pg_dump\", [\"--format=custom\"";
+        // كُتلَتا الإمساكِ بِحَرفِهِما مِن الجِسمِ الحَيّ: «قائِم» ثُمَّ الواسِع — مِن `catch` إلى أَوَّلِ `}` في عَمودِه.
+        string Catch(string head)
+        {
+            var m = Regex.Match(snap, @"        " + Regex.Escape(head) + @"\n        \{\n[\s\S]*?\n        \}\n");
+            Assert.True(m.Success, $"كُتلَةُ «{head}» لَم تُقرَأ — الأَداةُ عَمياء.");
+            return m.Value;
+        }
+        string ExistsCatch() => Catch("catch (IOException) when (File.Exists(file))");
+        string BroadCatch()
+        {
+            var c = Catch("catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)");
+            // ‏وسُطورُ التَعليقِ الَّتي تَسبِقُه مَعَه، فَيُنقَلُ أَو يُحذَفُ كُتلَةً واحِدَة.
+            var at = snap.IndexOf(c, StringComparison.Ordinal);
+            var lead = Regex.Match(snap[..at], @"(?:        //[^\n]*\n)+$");
+            return lead.Value + c;
+        }
         var rejected = new (string Name, string Code)[]
         {
             ("بَعدَ الكِتابَة", With(block.Value, "").Replace("    if (dump is null || dump.Value.Code != 0)", block.Value + "    if (dump is null || dump.Value.Code != 0)", StringComparison.Ordinal)),
@@ -554,6 +579,10 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
             ("بِلا حارِسِ وِندوز", With(block.Value, block.Value.Replace("if (!OperatingSystem.IsWindows())", "if (true)", StringComparison.Ordinal))),
             ("«قائِم» مُبتَلَع", With("catch (IOException) when (File.Exists(file))", "catch (IOException)")),
             ("بِلا إنشاء", With(block.Value, "")),
+            // ‏(‏2026-10-25، مُراجَعَةُ S16 الجَولَة ٢) الإخفاقُ الآخَرُ يَهرُب، أَو بِلا سَطرِه، أَو الواسِعُ قَبلَ «قائِم»:
+            ("الإخفاقُ الآخَرُ يَهرُب", With(BroadCatch(), "")),
+            ("الواسِعُ بِلا سَطرِه", With("✗ تَعَذَّرَ إنشاءُ اللَقطَة: {ex.GetType().Name}: {file}", "✗ {file}")),
+            ("الواسِعُ قَبلَ «قائِم»", With(ExistsCatch() + BroadCatch(), BroadCatch() + ExistsCatch())),
         };
         Assert.Contains(dumpLine, snap, StringComparison.Ordinal);
         var wrong = new List<string>();
