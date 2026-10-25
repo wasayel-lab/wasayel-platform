@@ -6,6 +6,7 @@
 @inject L L
 @inject NavigationManager Nav
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
 
 @*
@@ -340,11 +341,13 @@
                 // وهذا قَرارُ تَوجيهٍ لا استِعلام، فَمَوضِعُه الصَفحَة.
                 var effectiveRoleSlug = !string.IsNullOrEmpty(Role) ? Role : home.StoredActiveRole;
                 if (!string.IsNullOrEmpty(effectiveRoleSlug))
-                {
                     activeRole = loaded.Roles.FirstOrDefault(r => r.Slug == effectiveRoleSlug);
-                    canCreateListing = ACommerce.Kit.Roles.RolePermissions.Has(
-                        loaded.Roles, effectiveRoleSlug, "listing.create");
-                }
+                // (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١): البابُ يَقرَأُ ما يَقرَؤُه حارِسُ هَدَفِه — صَفحَةُ النَشرِ (`GatedPage`) و`PermissionFilter`
+                // يَقرَآنِ `Tenant.Roles` المُخَزَّنَة، لا `loaded.Roles` المُجَسَّدَةَ بِالأَدوارِ المُؤَلَّفَة. وكانَ هُنا `RolePermissions.Has(loaded.Roles, …)`:
+                // دَورٌ مُؤَلَّفٌ يَحمِلُ `listing.create` يَرى «أَضِف إعلانك» فَتَرُدُّه صَفحَتُه. والدَورُ المُخَزَّنُ `home.StoredActiveRole` — قِراءَةُ
+                // `AccountQueries.ActiveRoleAsync` نَفسُها (`User.ActiveRole` في جَلسَةِ المُستَأجِر) — و`activeRole` لِلتَركيبِ يَبقى مِن المُجَسَّدَة.
+                var storedRoles = (await Tenants.FindAsync(Slug))?.Roles ?? new List<ACommerce.Kit.Roles.Role>();
+                canCreateListing = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(storedRoles, Role, home.StoredActiveRole, "listing.create");
             }
         }
     }

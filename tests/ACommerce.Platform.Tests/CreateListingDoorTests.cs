@@ -312,33 +312,47 @@ public class CreateListingDoorTests(ITestOutputHelper output)
             },
         }).Materialize(Store);
 
-    /// <summary><b>«اليَوم» (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١ — صُغرى)</b>: رابِطا الرَئيسِيَّةِ يَسأَلانِ <c>listing.create</c> بِـ
-    /// <c>RolePermissions.Has</c> عَلى الأَدوارِ <b>المُجَسَّدَة</b> (<c>TenantRoleService.LoadAsync</c>: المُخَزَّنَةُ ثُمَّ المُؤَلَّفَةُ المُعتَمَدَة)، وصَفحَةُ
-    /// النَشرِ (<c>GatedPage</c>) وحارِسُ نُقطَتِها (<c>PermissionFilter</c>) يَقرَآنِ <c>Tenant.Roles</c> <b>المُخَزَّنَة</b>. فَمَن دَورُه مُؤَلَّفٌ يَحمِلُ
-    /// الصَلاحِيَّةَ يَرى «أَضِف إعلانك» ويَنقُرُه فَيَرى الرَفض — مَقيسٌ هُنا بِتَعريفِ «خَيّاط» نَفسِه، لا مُدَّعىً. والرَئيسِيَّةُ لَيسَت مِن مُستَهلِكي
-    /// <c>PermissionDoor</c> الثَلاثَة. يُقلَبُ بِاسمِه في كوميتِ التَبديل.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ التَبديل؛ مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١ — صُغرى)</b> — كانَ
+    /// <c>Today_the_home_page_asks_listing_create_on_the_materialized_roles_so_an_authored_role_sees_a_link_its_page_refuses</c> (‏<c>57af82e</c>):
+    /// <c>RolePermissions.Has(loaded.Roles, …)</c> عَلى الأَدوارِ المُجَسَّدَة، فَرَسَمَت الرَئيسِيَّةُ لِـ«خَيّاط» المُؤَلَّفِ بابًا تَرُدُّه صَفحَتُه. والآن
+    /// تَسأَلُ <c>PermissionDoor.Opens</c> بِقِراءَتَي حارِسِ الهَدَف: <c>Tenant.Roles</c> المُخَزَّنَة (<c>TenantDirectory.FindAsync</c> — قِراءَةُ
+    /// <c>GatedPage</c> بِحَرفِها) والدَورُ المُخَزَّن (<c>home.StoredActiveRole</c> — <c>User.ActiveRole</c> في جَلسَةِ المُستَأجِرِ كَما يَقرَؤُه
+    /// <c>AccountQueries.ActiveRoleAsync</c>، و«""» عِندَ <c>EffectiveRole.Resolve</c> كَـ<c>null</c>). فَالرابِطُ والصَفحَةُ جَوابٌ واحِدٌ، والرَئيسِيَّةُ
+    /// المُستَهلِكُ الرابِعُ لِلباب.</summary>
     [Fact]
-    public void Today_the_home_page_asks_listing_create_on_the_materialized_roles_so_an_authored_role_sees_a_link_its_page_refuses()
+    public void The_home_page_asks_the_door_with_its_target_gates_stored_reads_so_an_authored_role_sees_no_link_its_page_refuses()
     {
         var home = WriteEndpointGuardTests.StripMarkupComments(Read(HomeFile)).Replace("\r\n", "\n", StringComparison.Ordinal);
-        var flat = Regex.Replace(home, @"\s+", " ");
+        var code = WriteEndpointGuardTests.StripComments(home);
+        var gate = WriteEndpointGuardTests.StripMarkupComments(Read(TemplateRoot + "/Components/GatedPage.razor"));
+        var storefront = WriteEndpointGuardTests.StripComments(Read(TemplateRoot + "/Services/Queries/StorefrontQueries.cs"));
+        var accounts = WriteEndpointGuardTests.StripComments(Read(TemplateRoot + "/Services/Queries/AccountQueries.cs"));
         var materialized = MaterializedWithAuthoredMaker();
-        var homeDraws = RolePermissions.Has(materialized, "khayyat", Permission);          // ‏تَعبيرُ الرَئيسِيَّةِ بِحَرفِه، والدَورُ المُخَزَّنُ khayyat
+        var homeDraws = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(Store, null, "khayyat", Permission); // ‏تَعبيرُ الرَئيسِيَّةِ الآن
         var pageOpens = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(Store, null, "khayyat", Permission); // ‏قَرارُ GatedPage
         var consumers = PermissionDoorConsumers();
         output.WriteLine($"أَدوارٌ مُجَسَّدَة: {materialized.Count} ({string.Join(", ", materialized.Select(r => r.Slug))}) · مُخَزَّنَة: {Store.Count} · "
             + $"الرَئيسِيَّةُ تَرسُمُ لِخَيّاط: {homeDraws} · صَفحَةُ النَشرِ تَفتَحُ لَه: {pageOpens} · مُستَهلِكو PermissionDoor: {string.Join(", ", consumers)}");
 
-        Assert.Contains("var withRoles = await Roles.LoadAsync(Slug);", home, StringComparison.Ordinal);
-        Assert.Contains("canCreateListing = ACommerce.Kit.Roles.RolePermissions.Has( loaded.Roles, effectiveRoleSlug, \"listing.create\");", flat, StringComparison.Ordinal);
-        Assert.DoesNotContain("PermissionDoor.", WriteEndpointGuardTests.StripComments(home), StringComparison.Ordinal);
+        Assert.Contains("@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants", home, StringComparison.Ordinal);
+        Assert.Contains("var storedRoles = (await Tenants.FindAsync(Slug))?.Roles ?? new List<ACommerce.Kit.Roles.Role>();", code, StringComparison.Ordinal);
+        Assert.Contains("canCreateListing = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(storedRoles, Role, home.StoredActiveRole, \"listing.create\");",
+            code, StringComparison.Ordinal);
+        Assert.DoesNotContain("RolePermissions.Has(", code, StringComparison.Ordinal);
+        // ‏القِراءَتانِ هُما قِراءَتا حارِسِ الهَدَفِ بِحَرفِهِما.
+        Assert.Contains("var tenant = await Tenants.FindAsync(Slug);", gate, StringComparison.Ordinal);
+        Assert.Contains("(await s.LoadAsync<ACommerce.Kit.Auth.User>(uid, ct))?.ActiveRole ?? \"\"", storefront, StringComparison.Ordinal);
+        Assert.Contains("return (await s.LoadAsync<User>(userId, ct))?.ActiveRole;", accounts, StringComparison.Ordinal);
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(Store, null, null, Permission),
+            ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(Store, null, "", Permission));
 
         Assert.Equal(Store.Count + 1, materialized.Count);
-        Assert.True(homeDraws, "الرَئيسِيَّةُ تَرسُمُ الرابِطَ لِدَورٍ مُؤَلَّفٍ يَحمِلُ الصَلاحِيَّة.");
-        Assert.False(pageOpens, "وصَفحَةُ النَشرِ تَرُدُّه — لا تَعرِفُ إلّا الأَدوارَ المُخَزَّنَة.");
+        Assert.False(homeDraws, "الرَئيسِيَّةُ لا تَرسُمُ بابًا لا تَفتَحُه صَفحَتُه.");
+        Assert.Equal(pageOpens, homeDraws);
 
         // ‏(‏2026-10-25، W8-7 — كوميتُ إصلاحِ lens-dead-doors-7): المُستَهلِكُ الثالِثُ استِمارَةُ العَرض — مُسَمّىً في رَأسِ PermissionDoor.cs.
-        Assert.Equal(new[] { "GatedPage.razor", "MyListings.razor", "TenantListingDetail.razor" }, consumers);
+        // ‏(‏2026-10-25، كوميتُ التَبديل): والرابِعُ الرَئيسِيَّة — هذا الصَفُّ يُسَمّيها.
+        Assert.Equal(new[] { "GatedPage.razor", "MyListings.razor", "TenantHome.razor", "TenantListingDetail.razor" }, consumers);
     }
 
     /// <summary><b>أَبوابُ الدَورِ صادِقَةٌ لِلكاتالوج</b>: كُلُّ دَورٍ في <c>RoleCatalog.Definitions</c> يَختارُ <c>sellerHome</c> أَو <c>riderHome</c>
