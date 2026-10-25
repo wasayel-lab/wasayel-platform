@@ -17,7 +17,8 @@
     }
     else
     {
-        var backHref = From == "tenant" ? $"/{Slug}/r/admin/manage" : $"/admin/tenants/{Slug}";
+        // ‏(‏2026-10-25، تَدقيقُ الإطلاق W8-3 — `lens-dead-doors-6`) كانَ `/{Slug}/r/admin/manage`: لا دَورَ «admin» في كاتالوج، والمَسارُ بِدَورٍ يَقرَأُ كوكي ذلِكَ الدَورِ وَحدَه — فَيَرى المُديرَ مَجهولاً. والمَسارُ بِلا دَورٍ يَقرَأُ أَيَّ جَلسَةٍ لِلمَتجَر (`AuthSession.ResolveCookieBase`).
+        var backHref = From == "tenant" ? AuthSession.LinkFor(Slug, null, "manage") : $"/admin/tenants/{Slug}";
         <div class="acm-admin-head">
             <div style="display:flex;align-items:center;gap:8px;">
                 <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@backHref">

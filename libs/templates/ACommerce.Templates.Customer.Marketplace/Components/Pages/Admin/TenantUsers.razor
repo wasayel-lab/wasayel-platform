@@ -26,7 +26,8 @@
            لَوحَةِ المَنَصَّة. *@
         string backHref = From switch
         {
-            "tenant" => $"/{Slug}/r/admin/manage",
+            // ‏(‏2026-10-25، تَدقيقُ الإطلاق W8-3 — `lens-dead-doors-6`) كانَ `/{Slug}/r/admin/manage`: لا دَورَ «admin» في كاتالوج، والمَسارُ بِدَورٍ يَقرَأُ كوكي ذلِكَ الدَورِ وَحدَه — فَيَرى المُديرَ مَجهولاً. والمَسارُ بِلا دَورٍ يَقرَأُ أَيَّ جَلسَةٍ لِلمَتجَر (`AuthSession.ResolveCookieBase`).
+            "tenant" => AuthSession.LinkFor(Slug, null, "manage"),
             "studio" => $"/studio/apps/{Slug}",
             _        => $"/admin/tenants/{Slug}"
         };

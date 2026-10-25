@@ -40,25 +40,51 @@ public class AdminBackArrowRouteTests(ITestOutputHelper output)
         return Regex.Matches(panel, @"/admin/tenants/\{Slug\}/(?<p>[a-z]+)\?from=tenant").Select(m => m.Groups["p"].Value).ToList();
     }
 
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الإصلاح)</b> — كانَ <c>Today_six_admin_tools_send_the_store_admin_back_to_a_role_no_store_has</c>
+    /// (‏<c>3331ceb</c>): «رَوابِطُ اللَوحَة 6 · سِهامٌ إلى /r/admin/manage 6 · الدَورُ المُستَخرَج admin · في الكاتالوج False». والآن كُلُّ أَداةٍ تَربِطُها
+    /// اللَوحَةُ بِـ<c>?from=tenant</c> تَبني سَهمَها بِـ<c>AuthSession.LinkFor(Slug, null, "manage")</c> — الباني الواحِدُ الَّذي تَبني بِه الصَفَحاتُ رَوابِطَها —
+    /// ولا مَسارَ <c>/r/admin/</c> في المَصادِرِ كُلِّها (الماسِحُ يَعُدُّ ويَفشَلُ عَلى الصِفر).</summary>
     [Fact]
-    public void Today_six_admin_tools_send_the_store_admin_back_to_a_role_no_store_has()
+    public void Every_admin_tool_the_panel_links_sends_its_back_arrow_through_the_role_free_link_builder()
     {
         var linked = LinkedFromPanel();
-        var dead = new List<string>();
-        foreach (var page in Directory.EnumerateFiles(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, AdminPages.Replace('/', Path.DirectorySeparatorChar)), "*.razor"))
+        var built = new List<string>();
+        foreach (var tool in PanelTools)
         {
-            var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(page)));
-            if (code.Contains("$\"/{Slug}/r/admin/manage\"", StringComparison.Ordinal)) dead.Add(Path.GetFileNameWithoutExtension(page));
+            var code = Read($"{AdminPages}/{tool}.razor");
+            if (code.Contains("From == \"tenant\" ? AuthSession.LinkFor(Slug, null, \"manage\")", StringComparison.Ordinal)
+                || code.Contains("\"tenant\" => AuthSession.LinkFor(Slug, null, \"manage\"),", StringComparison.Ordinal))
+                built.Add(tool);
         }
-        dead.Sort(StringComparer.Ordinal);
-        var role = AuthSession.ExtractRoleFromPath(new PathString("/owner-test/r/admin/manage"));
-        output.WriteLine($"رَوابِطُ اللَوحَة: {linked.Count} ({string.Join(", ", linked)}) · سِهامٌ إلى /r/admin/manage: {dead.Count} ({string.Join(", ", dead)})" +
-                         $" · الدَورُ المُستَخرَج: {role} · في الكاتالوج: {RoleCatalog.Find("admin") is not null}");
+        var scanned = 0;
+        var deadRole = new List<string>();
+        foreach (var (file, text) in EntitlementContractTests.SourceFiles())
+        {
+            scanned++;
+            var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(text));
+            if (code.Contains("/r/admin/", StringComparison.Ordinal)) deadRole.Add(Path.GetFileName(file));
+        }
+        output.WriteLine($"رَوابِطُ اللَوحَة: {linked.Count} · سِهامٌ بِالباني: {built.Count} ({string.Join(", ", built)}) · مَصادِرُ مَمسوحَة: {scanned}" +
+                         $" · /r/admin/ فيها: {deadRole.Count} ({string.Join(", ", deadRole)})");
 
         Assert.Equal(6, linked.Count);
-        Assert.Equal(PanelTools, dead);
-        Assert.Equal("admin", role);
-        Assert.Null(RoleCatalog.Find("admin"));
-        Assert.NotEqual(AuthSession.CookieName("owner-test"), AuthSession.CookieName("owner-test", role));
+        Assert.Equal(PanelTools, built);
+        Assert.True(scanned >= 100, $"أَداةٌ عَمياء: {scanned} مَصدَراً مَمسوحاً.");
+        Assert.Empty(deadRole);
+    }
+
+    /// <summary><b>وصَفُّ حَلِّ المَسار</b> — ما يَبنيه السَهمُ مَسارٌ مُسَجَّلٌ بِلا دَور: صَفحَةُ اللَوحَةِ تُعلِنُه، وجَدوَلُ المَساراتِ المَمسوحُ يَعرِفُه،
+    /// و<c>ExtractRoleFromPath</c> لا يَستَخرِجُ مِنه دَوراً — فَـ<c>ResolveCookieBase</c> يَقرَأُ الكوكي العامَّ ثُمَّ أَيَّ كوكي دَورٍ لِلمَتجَرِ نَفسِه.</summary>
+    [Fact]
+    public void The_back_arrow_resolves_to_the_registered_role_free_panel_route()
+    {
+        var href = AuthSession.LinkFor("owner-test", null, "manage");
+        var panel = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace",
+            "Components", "Pages", "TenantManage.razor"));
+
+        Assert.Equal("/owner-test/manage", href);
+        Assert.Null(AuthSession.ExtractRoleFromPath(new PathString(href)));
+        Assert.Contains("@page \"/{slug}/manage\"", panel, StringComparison.Ordinal);
+        Assert.Contains("/{slug}/manage", ComplianceInspectorTests.RepoRoutes);
     }
 }
