@@ -493,6 +493,11 @@ WASAYEL_LIVE_PROOF=1 ConnectionStrings__Postgres="Host=localhost;Database=wasaye
 | `ashare-*` (11) · `ejar-*` (11) · `theme-demo-*` (4) · `landing` · `order-drivers` · `admin-{audit,home,incubator,incubator-wizard,monitor}` · `user-manage` | لَم يُحكَم — بَياناتُ القاعِدَةِ المَحَلِّيَّةِ لا بَياناتُ Neon (عَدّادات، تَرتيبُ مُستَأجِرين، لَونُ هُوِيَّة) تَختَلِطُ بِأَيِّ فَرقِ كود؛ تُقارَنُ عَلى Neon («ج» S12·٦) |
 | صَفَحاتُ `member-*` و`member2-*` و`owner-app-*` (33) | لَم تُلتَقَط — مِلَفّاتُها (`WSL_CAPTURE_MEMBER_PHONE` و`…MEMBER2…` و`…OWNER…`) لَم تُهَيَّأ مَحَلِّيّاً |
 
+**‏2026-10-25 (مُراجَعَةُ تَيّارِ S14 الجَولَة ١ — تَيّارُ W8-9؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ الجَدوَل)**: «لافِتاتُ الحَدِّ الأَربَع» في الصَفِّ الثاني ثَلاثٌ بِحَقٍّ —
+`studio-upgrade-stores` طَلَبَ `?upgrade=stores` وقيمَةُ `StudioUpgradeReason.Stores` هِيَ `"build"`، فَالتَقَطَ الافتِراضِيَّ العامَّ كَـ`feature` بايتاً، وبَقِيَ نَصّا
+لافِتَةِ `build` ورِسالَةُ `export` (‏`29f15b0`) بِلا سِجِلّ. **صارَ** الصَفُّ `studio-upgrade-build` (`?upgrade=build`) وأُضيفَ `studio-upgrade-export`، بِالفَرقِ المَقيسِ
+وَحدَه عَلى المُودَع (سَطرانِ ثُمَّ سَطرٌ في كُتلَةِ `UpgradePrompt`)، والتَفصيلُ بِأَرقامِه في `tests/characterization/appearance/README.md` (القِسمُ بِتاريخِه).
+
 ---
 
 ## ٦. ما لَم يُقَس — يُقالُ ولا يُدَّعى

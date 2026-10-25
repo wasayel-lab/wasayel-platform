@@ -303,7 +303,11 @@ GUARDED_PAGES=(
   "studio-consent:studio:/studio/consent"
   "studio-upgrade-analyze:studio:/studio?upgrade=analyze"
   "studio-upgrade-refine:studio:/studio?upgrade=refine"
-  "studio-upgrade-stores:studio:/studio?upgrade=stores"
+  # ‏2026-10-25 — **«stores» لَم يَكُن سَبَباً**: `StudioUpgradeReason.Stores` قيمَتُه `"build"`، فَكانَ هذا الصَفُّ (`?upgrade=stores`) يَلتَقِطُ
+  # الافتِراضِيَّ العامَّ بِعَينِه كَـ`feature` (عُنوانُ «تَتَطَلَّب هذه الميزَة تَرقيَة» ورِسالَةٌ فارِغَة)، ونَصّا `upgrade.msg.build`/`upgrade.title.build`
+  # ورِسالَةُ `export` بِلا لَقطَة. صارَ الصَفُّ `?upgrade=build` بِاسمِه، وأُضيفَ `?upgrade=export`؛ و`feature` يَبقى سِجِلَّ الافتِراضِيّ.
+  "studio-upgrade-build:studio:/studio?upgrade=build"
+  "studio-upgrade-export:studio:/studio?upgrade=export"
   "studio-upgrade-feature:studio:/studio?upgrade=feature"
   "user-searches:user:/{tenant}/me/searches"
   "user-notifications:user:/{tenant}/notifications"
