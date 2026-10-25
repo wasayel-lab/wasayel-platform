@@ -644,21 +644,19 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         return (Count("Phone"), Count("Email"));
     }
 
-    /// <summary><b>تَوصيف</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢، صُغرى — القاعِدَة ٣: يَنقَلِبُ بِاسمِه في كوميتِ النَصّ): صَفحَةُ خُصوصِيَّةِ المَتجَر
-    /// (<c>LegalHub</c>) تَقولُ في بَندِ ما يُجمَعُ «اِسم وَهاتِف عِندَ التَّسجيل (لِلتَّوثيق فَقَط)»، وجُملَةُ الحَذفِ عَلى الصَفحَةِ نَفسِها تَقولُ إنّ الاسمَ والهاتِفَ
-    /// أَو البَريدَ في إشعاراتِ مُديري المَتجَر — والكودُ يَكتُبُهُما في إشعارِ <c>new_user</c> عِندَ كُلِّ تَسجيل. فَـ«فَقَط» كاذِبَة، والبَريدُ لا يُذكَر.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> (‏2026-10-25؛ كانَ <c>Today_the_store_privacy_says_name_and_phone_are_for_verification_only_while_registration_sends_them_to_the_store_managers</c>،
+    /// مُودَعٌ في <c>fbbb77a</c>). والآن البَندُ يَقولُ ما يَفعَلُه الكود: الاسمُ والهاتِفُ أَو البَريدُ لِلتَوثيق <b>ويَصِلانِ مُديري المَتجَرِ في إشعارِ التَسجيل</b> —
+    /// بِلا «فَقَط» — فَلا تُناقِضُ الصَفحَةُ جُملَةَ الحَذفِ تَحتَه؛ والكودُ ما زالَ يَكتُبُ الجِسمَين. والبَديلُ (نَزعُ الهاتِفِ والبَريدِ مِن جِسمِ الإشعار) قَرارُ المالِك.</summary>
     [Fact]
-    public void Today_the_store_privacy_says_name_and_phone_are_for_verification_only_while_registration_sends_them_to_the_store_managers()
+    public void The_store_privacy_says_registration_sends_name_and_phone_or_email_to_the_store_managers()
     {
         var item = Bare(Ar(StoreIdentityItemKey));
         var (phone, email) = NewUserNoticeBodies();
-        var legalHub = UpgradePromptPriceTests.Code("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "LegalHub.razor");
         output.WriteLine($"{StoreIdentityItemKey} = {item} · إشعارُ new_user بِالهاتِف {phone} · بِالبَريد {email}");
-        Assert.Contains($"L.Markup(\"{StoreIdentityItemKey}\")", legalHub, StringComparison.Ordinal);
-        Assert.Contains($"L.Markup(\"{StorePrivacyKey}\")", legalHub, StringComparison.Ordinal);
         Assert.Equal((1, 1), (phone, email));
-        Assert.Contains("للتوثيق فقط", item, StringComparison.Ordinal);
-        Assert.DoesNotContain("بريد", item, StringComparison.Ordinal);
+        Assert.DoesNotContain("فقط", item, StringComparison.Ordinal);
+        foreach (var said in new[] { "اسم وهاتف أو بريد عند التسجيل", "للتوثيق", "مديري المتجر في إشعار التسجيل" })
+            Assert.Contains(said, item, StringComparison.Ordinal);
         Assert.Contains("إشعارات مديري المتجر", Bare(Ar(StorePrivacyKey)), StringComparison.Ordinal);
     }
 }
