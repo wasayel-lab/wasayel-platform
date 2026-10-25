@@ -65,6 +65,7 @@ public class ProductionBootEnvFileTests(ITestOutputHelper output)
             };
             psi.Environment.Remove("ConnectionStrings__Postgres");
             psi.Environment.Remove("ACOMMERCE_AUTH_SECRET");
+            psi.Environment.Remove("BOOT_TIMEOUT");
             foreach (var (k, v) in env) psi.Environment[k] = v;
             using var p = Process.Start(psi)!;
             var text = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
@@ -238,6 +239,39 @@ public class ProductionBootEnvFileTests(ITestOutputHelper output)
         Assert.Equal("env-secret-0000000000000000000000000000000", secret);
         Assert.Equal("مِن المِلَفّ", SourceOf(text, "ACOMMERCE_AUTH_SECRET"));
         Assert.False(SaysBothFromTheEnvironment(text));
+    }
+
+    // ─── توصيفُ «اليَوم» — مُراجَعَةُ تَيّارِ W8-6 (الجَولَة ٢، الصُغرى ١) (‏2026-10-25، عِندَ `903408c`) ───
+    //
+    // ‏`env_file` تَعُدُّ «البيئَةَ» كُلَّ مُتَغَيِّرِ صَدَفَةٍ غَيرِ فارِغ — ومِنه افتِراضاتُ السكربتِ المُسنَدَةُ قَبلَها. فَـ`BOOT_TIMEOUT="${BOOT_TIMEOUT:-90}"`
+    // يَسبِقُ الكُتلَة، وسَطرُ `BOOT_TIMEOUT=…` في `scripts/.prod-gate.env` — وكانَ يَسري قَبلَ `48874b6` — يُحفَظُ عَلَيه الافتِراضُ ويُتجاهَلُ بِلا رِسالَة.
+
+    /// <summary>سَطرُ الافتِراضِ بِحَرفِه في البَوّابَة، ومَوضِعُه قَبلَ كُتلَةِ «١) التَهيئَة».</summary>
+    internal static string BootTimeoutDefault()
+    {
+        const string line = "BOOT_TIMEOUT=\"${BOOT_TIMEOUT:-90}\"\n";
+        var gate = Gate();
+        var at = gate.IndexOf("\n" + line, StringComparison.Ordinal);
+        Assert.True(at > 0, "سَطرُ افتِراضِ BOOT_TIMEOUT غائِبٌ عَن البَوّابَة.");
+        Assert.True(at < gate.IndexOf(BlockStart, StringComparison.Ordinal), "افتِراضُ BOOT_TIMEOUT لا يَسبِقُ «١) التَهيئَة».");
+        return line;
+    }
+
+    /// <summary>يُشَغِّلُ الافتِراضَ ثُمَّ الكُتلَة — كَما في البَوّابَة — ويُرجِعُ ما صارَ إلَيه <c>BOOT_TIMEOUT</c>.</summary>
+    private string BootTimeoutAfter(string block, IDictionary<string, string> env, string file)
+    {
+        var (_, _, text) = Run(BootTimeoutDefault() + block + "\nprintf 'boot_timeout=%s\\n' \"$BOOT_TIMEOUT\"\n", env, file);
+        return text.Split('\n').Single(l => l.StartsWith("boot_timeout=", StringComparison.Ordinal))["boot_timeout=".Length..];
+    }
+
+    /// <summary>توصيفُ «اليَوم»: المِلَفُّ يُسنِدُ <c>BOOT_TIMEOUT=7</c> والبيئَةُ لا تُصَدِّرُه — فَيَبقى افتِراضُ السكربتِ ‏90 ولا يُقالُ شَيء.</summary>
+    [Fact]
+    public void Today_a_file_line_for_a_script_default_is_kept_out_by_the_default()
+    {
+        if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI (‏ubuntu)."); return; }
+        var after = BootTimeoutAfter(ConfigBlock(),
+            new Dictionary<string, string> { ["ConnectionStrings__Postgres"] = "Host=from-env-branch;Database=x" }, FileBody + "BOOT_TIMEOUT=7\n");
+        Assert.Equal("90", after);
     }
 
     /// <summary>ودَليلُ النَشرِ يَقولُ القاعِدَةَ في «التَهيئَة» وفي الخُطوَةِ ١ مِن §٤‑د، والخُطوَةُ تُصَدِّرُ السِرَّ الَّذي تَشتَرِطُه البَوّابَة.</summary>
