@@ -190,4 +190,65 @@ public class DeployDocClaimsTests(ITestOutputHelper output)
         Assert.Contains(HfSpaceUrlClaims[1], missing);
         Assert.Contains("`nohost`", missing);
     }
+
+    // ─── lens-docs-vs-code-9 — كُلُّ مُتَغَيِّرٍ يَقرَؤُه الكودُ بِاسمِه في دَليلِ النَشر ─────────────────────────────────────────
+
+    private static readonly Regex EnvRead = new(@"GetEnvironmentVariable\(""(?<n>[A-Za-z_][A-Za-z0-9_]*)""\)", RegexOptions.Compiled);
+    private static readonly Regex EnvConst = new(@"""(?<n>(?:ACOMMERCE|PLATFORM)_[A-Z0-9_]+)""", RegexOptions.Compiled);
+
+    /// <summary>أَسماءُ مُتَغَيِّراتِ البيئَةِ الَّتي يَقرَؤُها مَصدَرٌ بِحَرفِها — <c>GetEnvironmentVariable("…")</c> وكُلُّ حَرفِيَّةٍ <c>ACOMMERCE_*</c>/<c>PLATFORM_*</c> —
+    /// بِلا أَسطُرِ التَعليق (<c>//</c> و<c>///</c>).</summary>
+    internal static IEnumerable<string> EnvironmentNamesIn(string source)
+    {
+        foreach (var raw in source.Split('\n'))
+        {
+            var line = raw.TrimStart();
+            if (line.StartsWith("//", StringComparison.Ordinal) || line.StartsWith("*", StringComparison.Ordinal)) continue;
+            foreach (Match m in EnvRead.Matches(line)) yield return m.Groups["n"].Value;
+            foreach (Match m in EnvConst.Matches(line)) yield return m.Groups["n"].Value;
+        }
+    }
+
+    /// <summary>كُلُّ مِلَفِّ <c>.cs</c> تَحتَ <c>libs/</c> و<c>apps/</c> (بِلا <c>bin/</c> و<c>obj/</c>) — الكودُ الَّذي يُشحَن.</summary>
+    private static IEnumerable<string> ShippedSources()
+        => new[] { "libs", "apps" }
+            .SelectMany(d => Directory.EnumerateFiles(Path.Combine(RepoRoot, d), "*.cs", SearchOption.AllDirectories))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                        && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
+
+    /// <summary>ما يَغيبُ عَن الدَليلِ مِن تِلكَ الأَسماء — بِحَرفِها بَينَ عَلامَتَي <c>`</c> أَو في أَوَّلِ <c>`NAME=</c>.</summary>
+    internal static IReadOnlyList<string> UndocumentedEnvironmentNames(IEnumerable<string> names, string deploy)
+        => names.Distinct().Order(StringComparer.Ordinal)
+            .Where(n => !deploy.Contains($"`{n}`", StringComparison.Ordinal) && !deploy.Contains($"`{n}=", StringComparison.Ordinal))
+            .ToList();
+
+    [Fact]
+    public void Every_environment_variable_the_code_reads_by_name_is_named_in_the_deploy_guide()
+    {
+        var names = ShippedSources().SelectMany(f => EnvironmentNamesIn(File.ReadAllText(f))).Distinct().Order(StringComparer.Ordinal).ToList();
+        output.WriteLine($"مُتَغَيِّراتٌ يَقرَؤُها الكودُ بِاسمِها: {names.Count} — {string.Join(" · ", names)}");
+        Assert.True(names.Count >= 10, $"أَداةٌ عَمياء: {names.Count} اسماً.");
+        foreach (var known in new[] { "ACOMMERCE_AUTH_SECRET", "ACOMMERCE_BASE_DOMAIN", "ACOMMERCE_FORCE_INSECURE_COOKIES", "PLATFORM_ADMIN_BOOTSTRAP", "CART_SAMPLE_PHONE" })
+            Assert.Contains(known, names);
+        var missing = UndocumentedEnvironmentNames(names, Deploy());
+        Assert.True(missing.Count == 0, "يَقرَؤُها الكودُ ولا يُسَمّيها DEPLOY.md: " + string.Join("، ", missing));
+        // ‏والمُضعِفُ لِلكوكي في قائِمَةِ ما لا يوضَعُ في الإنتاج.
+        var never = Deploy()[Deploy().IndexOf("**ويُضَمُّ إلى «لا تُوضَع في الإنتاج أَبَداً» أَعلاه**", StringComparison.Ordinal)..];
+        Assert.Contains("`ACOMMERCE_FORCE_INSECURE_COOKIES`", never[..400], StringComparison.Ordinal);
+    }
+
+    /// <summary><b>حَقنُ عَيب</b>: مَصدَرٌ مَصنوعٌ يَقرَأُ مُتَغَيِّرَينِ جَديدَين — بِـ<c>GetEnvironmentVariable</c> وبِثابِت — يُجمَعانِ ويُعَدّانِ غائِبَين، وسَطرُ التَعليقِ
+    /// لا يُعَدّ؛ ودَليلٌ يُسَمّي أَحَدَهُما يُنقِصُ الغائِبَ واحِداً.</summary>
+    [Fact]
+    public void The_environment_name_scanner_goes_red_on_an_injected_undocumented_read()
+    {
+        const string source =
+            "var a = Environment.GetEnvironmentVariable(\"WASAYEL_INJECTED_FLAG\");\n" +
+            "public const string Var = \"ACOMMERCE_INJECTED_LIMIT\";\n" +
+            "// Environment.GetEnvironmentVariable(\"ACOMMERCE_ONLY_IN_A_COMMENT\")\n";
+        var names = EnvironmentNamesIn(source).ToList();
+        Assert.Equal(new[] { "WASAYEL_INJECTED_FLAG", "ACOMMERCE_INJECTED_LIMIT" }, names);
+        Assert.Equal(2, UndocumentedEnvironmentNames(names, "لا شَيء").Count);
+        Assert.Equal(new[] { "WASAYEL_INJECTED_FLAG" }, UndocumentedEnvironmentNames(names, "| `ACOMMERCE_INJECTED_LIMIT` |"));
+    }
 }
