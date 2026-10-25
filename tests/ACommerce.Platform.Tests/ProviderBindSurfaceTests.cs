@@ -122,7 +122,7 @@ public class ProviderBindSurfaceTests(Xunit.Abstractions.ITestOutputHelper outpu
     [Fact]
     public void An_unknown_provider_slug_is_refused_before_any_field_is_read()
     {
-        var read = ProviderBindSurface.FromForm("provider_from_the_future", _ => "anything");
+        var read = ProviderBindSurface.FromForm("provider_from_the_future", _ => "anything", tenantSlug: "", vault: null);
 
         Assert.Equal(ProviderBindSurface.ProviderUnknown, read.RefusalCode);
         Assert.Null(read.Definition);
@@ -133,7 +133,7 @@ public class ProviderBindSurfaceTests(Xunit.Abstractions.ITestOutputHelper outpu
     [Fact]
     public void A_platform_key_provider_declares_that_it_needs_the_platform_guard()
     {
-        var read = ProviderBindSurface.FromForm("paypal_subscriptions", _ => "");
+        var read = ProviderBindSurface.FromForm("paypal_subscriptions", _ => "", tenantSlug: "", vault: null);
 
         // النَوعُ يُعلَنُ **قَبلَ** الرَفض — فَالنُقطَةُ تَسأَلُ حارِسَ
         // المَنَصَّةِ ثُمَّ تَرُدّ، ولا يُعرَفُ بِالرَدِّ أَنَّ التَعريفَ
@@ -146,7 +146,7 @@ public class ProviderBindSurfaceTests(Xunit.Abstractions.ITestOutputHelper outpu
     [Fact]
     public void A_none_kind_provider_is_not_bindable_either()
     {
-        var read = ProviderBindSurface.FromForm("mock_payments", _ => "");
+        var read = ProviderBindSurface.FromForm("mock_payments", _ => "", tenantSlug: "", vault: null);
         Assert.False(read.NeedsPlatformAdmin);
         Assert.Equal(ProviderBindSurface.ProviderNotBindable, read.RefusalCode);
     }
@@ -156,7 +156,7 @@ public class ProviderBindSurfaceTests(Xunit.Abstractions.ITestOutputHelper outpu
     {
         const string link = "https://moyasar.com/i/inv_9";
         var read = ProviderBindSurface.FromForm("moyasar_hosted",
-            code => code == "invoice_url" ? link : null);
+            code => code == "invoice_url" ? link : null, tenantSlug: "", vault: null);
 
         Assert.Null(read.RefusalCode);
         Assert.Equal(ProviderCapabilities.Payments, read.Capability);
@@ -172,7 +172,7 @@ public class ProviderBindSurfaceTests(Xunit.Abstractions.ITestOutputHelper outpu
     public void A_link_outside_the_declared_fence_never_reaches_storage()
     {
         var read = ProviderBindSurface.FromForm("moyasar_hosted",
-            _ => "https://evilmoyasar.com/i/1");
+            _ => "https://evilmoyasar.com/i/1", tenantSlug: "", vault: null);
 
         Assert.Equal(ProviderValueValidator.HostNotAllowed, read.RefusalCode);
         Assert.Empty(read.Values);
@@ -228,7 +228,7 @@ public class ProviderBindSurfaceTests(Xunit.Abstractions.ITestOutputHelper outpu
         {
             reads++;
             return "sk_live_9f3b7c2d41aa58e6";
-        });
+        }, tenantSlug: "", vault: null);
 
         Assert.Equal(ProviderBindSurface.VaultUnavailable, read.RefusalCode);
         Assert.Equal("vault_unavailable", read.RefusalCode);
@@ -257,7 +257,7 @@ public class ProviderBindSurfaceTests(Xunit.Abstractions.ITestOutputHelper outpu
         foreach (var d in ProviderCatalog.TenantBindable(ProviderCapabilities.Payments))
         {
             compared++;
-            var refusedForVault = ProviderBindSurface.FromForm(d.Slug, _ => "").RefusalCode
+            var refusedForVault = ProviderBindSurface.FromForm(d.Slug, _ => "", tenantSlug: "", vault: null).RefusalCode
                                   == ProviderBindSurface.VaultUnavailable;
             Assert.Equal(!offered.Contains(d.Slug), refusedForVault);
         }
