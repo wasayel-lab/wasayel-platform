@@ -141,6 +141,292 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         Assert.Empty(touched);
     }
 
+    // ─── ٣ب. الجَردُ بِالمَسحِ لا بِاليَد ─────────────────────────────────────────────────────────────────────
+    //
+    // مُراجَعَةُ تَيّارِ W8-4 (‏2026-10-25، كُبرى، عَلى b52ea8d/ce026d5): `NameCopies` أَعلاه كُتِبَت بِاليَدِ ووُصِفَت «مَجرودَة»، وحارِسُها
+    // `NameCopies.Length >= 5` صادِقٌ دائِماً لِمَصفوفَةٍ ثابِتَة — فَلا يَعمى ولا يَرى نُسخَةً جَديدَة (القاعِدَة ١٠). وفاتَها مِن الكودِ نَفسِه:
+    // `Deal.CounterpartyName` (اسمُ البائِعِ عَلى كُلِّ صَفقَة)، و`ListingMatch.OffererName` وحَدَثُ `OfferSubmitted` في مَجرى الأَحداث،
+    // وتَذاكِرُ الدَعمِ وأَحداثُها (والبَلاغُ عَن إعلانٍ تَذكِرَة)، و`AuditEntry.ActorName` و`ApiKeyDocument.ActorName` — وإشعاراتٌ مُخَزَّنَةٌ في
+    // صَناديقِ غَيرِه تَحمِلُ اسمَه، وإشعارُ تَسجيلِه لِمُديري المَتجَرِ يَحمِلُ اسمَه **وهاتِفَه أَو بَريدَه**.
+    //
+    // فَالجَردُ هُنا يُشتَقُّ مِن الكود: (١) ما يُخَزَّن — كُلُّ نَوعٍ يُسَمّيه `Schema.For<…>`/`Query<…>`/`LoadAsync<…>`/`AggregateStreamAsync<…>`/
+    // `StartStream<…>`/`Store(new …)`/`Events.Append(… new …)`، وأَحداثُ ما يُجَمِّعُ نَفسَه بِـ`Apply`، وكُلُّ ما تَبلُغُه خَصائِصُها؛ ثُمَّ كُلُّ
+    // خاصِّيَّةِ نَصٍّ اسمُها يَنتَهي بِـ`Name` فيها. (٢) ومَن يَكتُبُ `Notification` — كُلُّ مُهَيِّئٍ فيه `RelatedUrl =` وكُلُّ نِداءٍ لِـ`NotifyAdminsAsync` —
+    // وما في عُنوانِه ومَتنِه مِن اسمٍ أَو هاتِفٍ أَو بَريد. وكُلُّ ما يَجِدُه المَسحُ مُصَنَّفٌ بِسَبَبِه، والتَصنيفُ ثُنائِيُّ الاتِّجاه: جَديدٌ بِلا
+    // تَصنيفٍ يُحمِرّ، وتَصنيفٌ لا يَجِدُه المَسحُ يُحمِرّ. والصَفُّ أَعلاه يَبقى بِحَرفِه (القاعِدَة ٣) — صادِقٌ عَن سَبعٍ، وهُنا يُفحَصُ أَنّه بَعضُ ما
+    // يَجِدُه المَسح.
+
+    /// <summary>ما هي خاصِّيَّةُ الاسمِ لِلحَذف — مَعجَمٌ مُغلَق.</summary>
+    internal enum NameKind
+    {
+        /// <summary>نُسخَةٌ مِن اسمِ شَخصٍ تُكتَبُ وَقتَ الفِعلِ ولا يَمَسُّها الحَذف.</summary>
+        Copy,
+        /// <summary>الاسمُ في الوَثيقَةِ الَّتي يَمحوها <c>AccountDeletion.Erase</c> نَفسُها.</summary>
+        Erased,
+        /// <summary>حِسابُ الاستوديو — لا بابَ لِحَذفِه، ويَقولُ النَصُّ ذلِكَ بِاسمِه (الصَفّ ٤).</summary>
+        StudioAccount,
+        /// <summary>يُخَزَّنُ إن كُتِب، ولا كاتِبَ لَه اليَوم — يُفحَصُ الغِياب.</summary>
+        Unwritten,
+        /// <summary>اسمُ شَيءٍ لا شَخص.</summary>
+        NotAPerson,
+    }
+
+    /// <summary>العِبارَةُ الَّتي تَقولُ النُسخَةَ في نَصِّ الحَذف — مَعجَمٌ مُغلَق، ولِكُلٍّ عِباراتُه في <see cref="DisclosurePhrases"/>.</summary>
+    internal enum Disclosure { None, Deal, Records, Notifications, AdminNotices, StoreRecords }
+
+    internal sealed record NameField(NameKind Kind, Disclosure Said, string WhyAr);
+
+    /// <summary>كُلُّ خاصِّيَّةِ اسمٍ يَجِدُها <see cref="StoredNameFields"/> — بِتَصنيفِها وسَبَبِه. يُعَدَّلُ في الكوميتِ الَّذي يُغَيِّرُ ما يُخَزَّن.</summary>
+    internal static readonly IReadOnlyDictionary<string, NameField> PersonNameFields = new Dictionary<string, NameField>(StringComparer.Ordinal)
+    {
+        ["Deal.InitiatorName"]           = new(NameKind.Copy, Disclosure.Deal, "اسمُ المُشتَري كَما كُتِبَ في الطَلَب (مِن الاستِمارَةِ في السَلَّة، ومِن الحِسابِ في العَرض)."),
+        ["Deal.CounterpartyName"]        = new(NameKind.Copy, Disclosure.Deal, "اسمُ البائِعِ يَومَ رُبِطَ أَو قَبِلَ — `DealsService` عِندَ التَعيين."),
+        ["DealEvent.ActorName"]          = new(NameKind.Copy, Disclosure.Deal, "سَطرُ الخَطِّ الزَمَنيِّ لِكُلِّ فِعلٍ عَلى الصَفقَةِ بِاسمِ فاعِلِه."),
+        ["Conversation.OwnerName"]       = new(NameKind.Copy, Disclosure.Records, "طَرَفا المُحادَثَةِ بِاسمَيهِما عِندَ بَدئِها."),
+        ["Conversation.PartnerName"]     = new(NameKind.Copy, Disclosure.Records, "طَرَفا المُحادَثَةِ بِاسمَيهِما عِندَ بَدئِها."),
+        ["Review.AuthorName"]            = new(NameKind.Copy, Disclosure.Records, "كاتِبُ التَقييم."),
+        ["Review.TargetUserName"]        = new(NameKind.Copy, Disclosure.Records, "مَن قُيِّمَ — اسمُه عَلى تَقييمِ غَيرِه لَه."),
+        ["Offer.OffererName"]            = new(NameKind.Copy, Disclosure.Records, "مُقَدِّمُ العَرض — مُسقَطٌ مِن حَدَثِه."),
+        ["OfferSubmitted.OffererName"]   = new(NameKind.Copy, Disclosure.Records, "حَدَثُ تَقديمِ العَرضِ في مَجرى الأَحداث — لا يُحذَفُ بِحَذفِ الوَثيقَة."),
+        ["ListingMatch.OffererName"]     = new(NameKind.Copy, Disclosure.Records, "صاحِبُ العَرضِ المَقبولِ عَلى مُطابَقَةِ الإعلان (ويُرسَلُ في إشعارِ «وَصَلَ السائِق»)."),
+        ["Ticket.AuthorName"]            = new(NameKind.Copy, Disclosure.Records, "كاتِبُ تَذكِرَةِ الدَعم — والبَلاغُ عَن إعلانٍ تَذكِرَةٌ بِاسمِه."),
+        ["TicketCreated.AuthorName"]     = new(NameKind.Copy, Disclosure.Records, "حَدَثُ فَتحِ التَذكِرَةِ في مَجرى الأَحداث."),
+        ["Reply.AuthorName"]             = new(NameKind.Copy, Disclosure.Records, "كاتِبُ الرَدّ — كاتِبُه الوَحيدُ اليَومَ رَدُّ الاستوديو بِـ«دَعم التَّطبيق»، ويُعَدُّ نُسخَةً لِأَنّ الحَقلَ لِلاسم."),
+        ["TicketReplied.AuthorName"]     = new(NameKind.Copy, Disclosure.Records, "حَدَثُ الرَدِّ في مَجرى الأَحداث — كَسابِقِه."),
+        ["AuditEntry.ActorName"]         = new(NameKind.Copy, Disclosure.StoreRecords, "سِجِلُّ تَدقيقِ المَتجَر: البائِعُ عِندَ رَبطِ الشَحن، وفَريقُ الإدارَةِ عِندَ تَغييرِ الإعدادات."),
+        ["ApiKeyDocument.ActorName"]     = new(NameKind.Copy, Disclosure.StoreRecords, "الفاعِلُ الَّذي يُصدِرُ لَه صاحِبُ المَتجَرِ مِفتاحَ رَبط."),
+        ["User.FullName"]                = new(NameKind.Erased, Disclosure.None, "الوَثيقَةُ الَّتي يَمحوها `Erase` (الصَفّ ١)."),
+        ["StudioUser.FullName"]          = new(NameKind.StudioAccount, Disclosure.None, "حِسابُ الاستوديو — لا بابَ لِحَذفِه (الصَفّ ٤)."),
+        ["IncubatorSession.OwnerName"]   = new(NameKind.StudioAccount, Disclosure.None, "جَلسَةُ تَحليلِ الاستوديو لِصاحِبِها."),
+        ["Report.ReporterName"]          = new(NameKind.Unwritten, Disclosure.None, "`ReportHandlers` يَكتُبُه مِن `SubmitReport`، ولا مُصدِرَ لِـ`SubmitReport` — والبَلاغُ الحَيُّ تَذكِرَة."),
+        ["Tenant.Name"]                  = new(NameKind.NotAPerson, Disclosure.None, "اسمُ المَتجَر."),
+        ["Plan.Name"]                    = new(NameKind.NotAPerson, Disclosure.None, "اسمُ باقَة."),
+        ["PlatformPlanPayPal.Name"]      = new(NameKind.NotAPerson, Disclosure.None, "اسمُ خُطَّةِ PayPal."),
+        ["Role.PwaName"]                 = new(NameKind.NotAPerson, Disclosure.None, "اسمُ تَطبيقِ الدَور."),
+        ["AgentToolCall.Name"]           = new(NameKind.NotAPerson, Disclosure.None, "اسمُ أَداةِ الوَكيل."),
+        ["ApiKeyDocument.Name"]          = new(NameKind.NotAPerson, Disclosure.None, "تَسمِيَةُ المِفتاحِ يَكتُبُها المالِك."),
+    };
+
+    /// <summary>كُلُّ نَوعٍ مُحَمَّلٍ مِن تَجميعاتِ <c>ACommerce</c> بِجِوارِ الاختِبار — نَمَطُ <c>AppliedEventEmitterTests</c>.</summary>
+    private static IReadOnlyList<Type> ACommerceTypes()
+    {
+        var types = new List<Type>();
+        foreach (var dll in Directory.EnumerateFiles(AppContext.BaseDirectory, "ACommerce*.dll"))
+        {
+            try { types.AddRange(Assembly.LoadFrom(dll).GetTypes()); }
+            catch (ReflectionTypeLoadException ex) { types.AddRange(ex.Types.OfType<Type>()); }
+            catch (BadImageFormatException) { }
+        }
+        return types.Where(t => !t.IsGenericTypeDefinition && !t.IsEnum && !t.Name.Contains('<') && (t.IsClass || t.IsValueType)).ToList();
+    }
+
+    private static readonly Regex StoredGeneric = new(
+        @"\b(?:Schema\.For|Query|LoadAsync|LoadManyAsync|AggregateStreamAsync|FetchForWriting|FetchForExclusiveWriting|FetchLatest|StartStream|Delete|DeleteWhere|HardDelete)\s*<\s*(?<t>[A-Za-z_][\w.]*)\s*>",
+        RegexOptions.Compiled);
+    private static readonly Regex StoredNew = new(@"\.(?:Store|Insert|Update)\s*\(\s*new\s+(?<t>[A-Za-z_][\w.]*)\s*[({]", RegexOptions.Compiled);
+    private static readonly Regex AppendStatement = new(@"\.Events\.(?:Append|StartStream)\b[^;]*", RegexOptions.Compiled);
+    private static readonly Regex NewCall = new(@"new\s+(?<t>[A-Za-z_][\w.]*)\s*\(", RegexOptions.Compiled);
+
+    /// <summary>أَسماءُ الأَنواعِ الَّتي يُخَزِّنُها سَطرٌ مِن الكود (بِلا تَعليقات) — كَما كُتِبَت، مُؤَهَّلَةً أَو لا.</summary>
+    internal static IEnumerable<string> StoredTypeNames(string code)
+    {
+        foreach (Match m in StoredGeneric.Matches(code)) yield return m.Groups["t"].Value;
+        foreach (Match m in StoredNew.Matches(code)) yield return m.Groups["t"].Value;
+        foreach (Match m in AppendStatement.Matches(code))
+            foreach (Match n in NewCall.Matches(m.Value)) yield return n.Groups["t"].Value;
+    }
+
+    /// <summary>(١) ما يُخَزَّنُ ويَبلُغُه — والجَذرُ مِن الكود، ثُمَّ أَحداثُ <c>Apply</c> وأَنواعُ الخَصائِصِ حَتّى لا جَديد.</summary>
+    internal static (IReadOnlyList<Type> Roots, IReadOnlyList<Type> Closure, IReadOnlyList<(string Key, Type Type)> Names) StoredNameFields()
+    {
+        var byName = ACommerceTypes().GroupBy(t => t.Name).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+        var roots = new HashSet<Type>();
+        foreach (var (_, text) in EntitlementContractTests.SourceFiles())
+            foreach (var raw in StoredTypeNames(WriteEndpointGuardTests.StripComments(text)))
+                if (byName.TryGetValue(raw.Split('.')[^1], out var hits))
+                    foreach (var h in raw.Contains('.') ? hits.Where(h => (h.FullName ?? "").EndsWith(raw, StringComparison.Ordinal)) : hits)
+                        roots.Add(h);
+
+        var closure = new HashSet<Type>(roots);
+        var queue = new Queue<Type>(roots);
+        void Reach(Type t)
+        {
+            if (t.IsArray) { Reach(t.GetElementType()!); return; }
+            if (t.IsGenericType) foreach (var a in t.GetGenericArguments()) Reach(a);
+            if (t.IsEnum || t.IsPrimitive || t == typeof(string) || t.IsGenericType) return;
+            if (!(t.Assembly.GetName().Name ?? "").StartsWith("ACommerce", StringComparison.Ordinal)) return;
+            if (closure.Add(t)) queue.Enqueue(t);
+        }
+        while (queue.Count > 0)
+        {
+            var t = queue.Dequeue();
+            foreach (var m in t.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+                if (m.Name == "Apply" && m.GetParameters() is { Length: 1 } ps) Reach(ps[0].ParameterType);
+            foreach (var p in t.GetProperties(BindingFlags.Public | BindingFlags.Instance)) Reach(p.PropertyType);
+        }
+
+        var names = closure
+            .SelectMany(t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.PropertyType == typeof(string) && p.Name.EndsWith("Name", StringComparison.Ordinal))
+                .Select(p => ($"{t.Name}.{p.Name}", t)))
+            .OrderBy(x => x.Item1, StringComparer.Ordinal).ToList();
+        return (roots.OrderBy(t => t.FullName, StringComparer.Ordinal).ToList(),
+                closure.OrderBy(t => t.FullName, StringComparer.Ordinal).ToList(), names);
+    }
+
+    [Fact]
+    public void Every_person_name_field_on_a_stored_type_is_classified_and_the_eraser_takes_no_copy()
+    {
+        var (roots, closure, names) = StoredNameFields();
+        var found = names.Select(n => n.Key).ToList();
+        var unclassified = found.Where(k => !PersonNameFields.ContainsKey(k)).ToList();
+        var stale = PersonNameFields.Keys.Where(k => !found.Contains(k)).ToList();
+        var copies = found.Where(k => PersonNameFields.TryGetValue(k, out var f) && f.Kind == NameKind.Copy).ToList();
+        output.WriteLine($"جُذورٌ مُخَزَّنَة: {roots.Count} · ما تَبلُغُه: {closure.Count} نَوعاً · خَصائِصُ اسم: {found.Count} · نُسَخٌ لا يَمَسُّها الحَذف: {copies.Count}");
+        foreach (var (key, _) in names)
+            output.WriteLine($"  {key} — {(PersonNameFields.TryGetValue(key, out var f) ? $"{f.Kind}/{f.Said}" : "غَيرُ مُصَنَّف")}");
+
+        Assert.True(roots.Count >= 30 && closure.Count >= roots.Count, $"أَداةٌ عَمياء: {roots.Count} جَذراً، {closure.Count} نَوعاً.");
+        Assert.True(unclassified.Count == 0, $"خَصائِصُ اسمٍ بِلا تَصنيف: {string.Join(", ", unclassified)}");
+        Assert.True(stale.Count == 0, $"تَصنيفٌ لا يَجِدُه المَسح: {string.Join(", ", stale)}");
+        Assert.Equal(16, copies.Count);
+        Assert.Equal(found.Count, found.Distinct(StringComparer.Ordinal).Count());
+
+        // القائِمَةُ اليَدَوِيَّةُ (الصَفّ ٣) بَعضُ ما يَجِدُه المَسح — حَدٌّ أَدنى لا جَرد.
+        Assert.All(NameCopies, c => Assert.Contains($"{c.Doc.Name}.{c.Field}", copies));
+
+        // ولا يَمَسُّ الحَذفُ نَوعاً واحِداً يَحمِلُ نُسخَة.
+        var body = DeleteEndpointBody();
+        var copyTypes = names.Where(n => copies.Contains(n.Key)).Select(n => n.Type.Name).Distinct().ToList();
+        Assert.Empty(copyTypes.Where(t => Regex.IsMatch(body, $@"\b{t}\b")));
+
+        // و«لا كاتِبَ لَه» مَقيسٌ لا مَظنون: لا `new SubmitReport(` خارِجَ مِلَفِّ تَعريفِه.
+        var reportEmitters = EntitlementContractTests.SourceFiles()
+            .Where(f => !f.File.EndsWith("Report.cs", StringComparison.Ordinal))
+            .Count(f => Regex.IsMatch(WriteEndpointGuardTests.StripComments(f.Text), @"new\s+(?:[\w.]+\.)?SubmitReport\s*\("));
+        Assert.Equal(0, reportEmitters);
+    }
+
+    [Theory]
+    [InlineData("var d = await s.LoadAsync<Deal>(id, ct);", "Deal")]
+    [InlineData("var c = await s.Query<ACommerce.Kit.Chat.Conversation>().ToListAsync();", "ACommerce.Kit.Chat.Conversation")]
+    [InlineData("s.Store(new ACommerce.Kit.Notifications.Notification\n{", "ACommerce.Kit.Notifications.Notification")]
+    [InlineData("s.Events.Append(id, new TicketReplied(id, Guid.NewGuid(), n, true, b, at));", "TicketReplied")]
+    [InlineData("opts.Schema.For<ACommerce.Kit.Auth.User>().Identity(x => x.Id);", "ACommerce.Kit.Auth.User")]
+    [InlineData("s.Events.StartStream<ACommerce.Kit.Support.Ticket>(ev.Id, ev);", "ACommerce.Kit.Support.Ticket")]
+    public void The_stored_type_patterns_see_what_they_count(string line, string expected)
+        => Assert.Contains(expected, StoredTypeNames(line));
+
+    // ─── ٣ج. مَن يَكتُبُ `Notification` وما يَحمِلُه ─────────────────────────────────────────────────────────
+
+    internal sealed record NoticeWriter(string File, int Line, string Label, IReadOnlyList<string> Personal)
+    {
+        public string Key => $"{Label}|{string.Join(",", Personal)}";
+    }
+
+    private static readonly Regex PersonalToken = new(
+        @"(?<![\w""])(?:[A-Za-z_]\w*\.)*(?<id>(?:[A-Za-z_]\w*)?(?:Name|Phone|Email|name|phone|email))\b", RegexOptions.Compiled);
+
+    internal static IReadOnlyList<string> PersonalTokens(string expr)
+        => PersonalToken.Matches(expr).Select(m => m.Groups["id"].Value).ToList();
+
+    /// <summary>مِن <paramref name="open"/> (قَوسٌ فاتِح) إلى مُقابِلِه، بِمُوازَنَةِ ‏() و{} و[].</summary>
+    private static int Closing(string code, int open)
+    {
+        var depth = 0;
+        for (var i = open; i < code.Length; i++)
+        {
+            if (code[i] is '(' or '{' or '[') depth++;
+            else if (code[i] is ')' or '}' or ']' && --depth == 0) return i;
+        }
+        return -1;
+    }
+
+    /// <summary>وَسائِطُ النِداءِ عَلى المُستَوى الأَعلى — الفاصِلَةُ داخِلَ قَوسٍ لا تَفصِل.</summary>
+    private static List<string> TopLevelArgs(string inner)
+    {
+        var args = new List<string>();
+        var depth = 0; var start = 0;
+        for (var i = 0; i < inner.Length; i++)
+        {
+            if (inner[i] is '(' or '{' or '[') depth++;
+            else if (inner[i] is ')' or '}' or ']') depth--;
+            else if (inner[i] == ',' && depth == 0) { args.Add(inner[start..i].Trim()); start = i + 1; }
+        }
+        args.Add(inner[start..].Trim());
+        return args;
+    }
+
+    /// <summary>(٢) كُتّابُ <c>Notification</c> في نَصٍّ واحِد: كُلُّ مُهَيِّئٍ سَطرُه <c>RelatedUrl =</c> (عُنوانُه ومَتنُه)، وكُلُّ نِداءٍ لِـ
+    /// <c>NotifyAdminsAsync</c> (وَسيطاه الرابِعُ والخامِس) — والتَسمِيَةُ قيمَةُ <c>Type</c>.</summary>
+    internal static IEnumerable<NoticeWriter> NoticeWriters(string file, string code)
+    {
+        int LineOf(int at) => code.Take(at).Count(c => c == '\n') + 1;
+        foreach (Match m in Regex.Matches(code, @"(?m)^[ \t]*RelatedUrl\s*=(?!=)"))
+        {
+            var depth = 0; var open = -1;
+            for (var i = m.Index; i >= 0 && open < 0; i--)
+            {
+                if (code[i] == '}') depth++;
+                else if (code[i] == '{' && depth-- == 0) open = i;
+            }
+            if (open < 0) continue;
+            var close = Closing(code, open);
+            var block = close > open ? code[open..close] : code[open..];
+            string Field(string f) => Regex.Match(block, $@"(?m)^\s*{f}\s*=\s*(?<e>.+?),?\s*$") is { Success: true } x ? x.Groups["e"].Value : "";
+            yield return new NoticeWriter(file, LineOf(m.Index), Field("Type"), PersonalTokens(Field("Title") + " " + Field("Body")));
+        }
+        foreach (Match m in Regex.Matches(code, @"(?<!Task\s)\bNotifyAdminsAsync\s*\("))
+        {
+            var open = m.Index + m.Length - 1;
+            var close = Closing(code, open);
+            if (close < 0) continue;
+            var args = TopLevelArgs(code[(open + 1)..close]);
+            if (args.Count < 5) continue;
+            yield return new NoticeWriter(file, LineOf(m.Index), args[2], PersonalTokens(args[3] + " " + args[4]));
+        }
+    }
+
+    /// <summary>الكُتّابُ الَّذينَ يَضَعونَ اسماً أَو هاتِفاً أَو بَريداً في إشعارٍ مُخَزَّنٍ في صُندوقِ غَيرِ صاحِبِه — وما يَقولُه نَصُّ الحَذفِ عَنهُم.</summary>
+    internal static readonly IReadOnlyDictionary<string, Disclosure> PersonalNoticeWriters = new Dictionary<string, Disclosure>(StringComparer.Ordinal)
+    {
+        ["AcceptedType|acceptorName"]    = Disclosure.Notifications,   // ‏DealNotices.AcceptedFor — لِلمُشتَري: قَبِلَ فُلان
+        ["CancelledType|cancellerName"]  = Disclosure.Notifications,   // ‏DealNotices.CancelledFor — لِلمُشتَري: أَلغى فُلان
+        ["\"offer_accepted\"|acceptorName"] = Disclosure.Notifications, // ‏لِلسائِق: قَبِلَ فُلانٌ عَرضَك
+        ["\"driver_arrived\"|OffererName"]  = Disclosure.Notifications, // ‏لِلراكِب: وَصَلَ فُلان
+        ["\"chat_message\"|senderName"]     = Disclosure.Notifications, // ‏لِلطَرَفِ الآخَر: رِسالَةٌ مِن فُلان
+        ["\"new_user\"|FullName,Phone"]     = Disclosure.AdminNotices,  // ‏لِمُديري المَتجَر: سَجَّلَ فُلانٌ · هاتِفُه
+        ["\"new_user\"|FullName,Email"]     = Disclosure.AdminNotices,  // ‏لِمُديري المَتجَر: سَجَّلَ فُلانٌ · بَريدُه
+        ["\"report\"|userName"]             = Disclosure.AdminNotices,  // ‏لِمُديري المَتجَر: فُلانٌ بَلَّغَ عَن إعلان
+    };
+
+    internal static IReadOnlyList<NoticeWriter> AllNoticeWriters()
+        => EntitlementContractTests.SourceFiles()
+            .SelectMany(f => NoticeWriters(Path.GetFileName(f.File), WriteEndpointGuardTests.StripComments(f.Text)))
+            .ToList();
+
+    [Fact]
+    public void Every_stored_notification_that_carries_a_name_a_phone_or_an_email_is_pinned()
+    {
+        var writers = AllNoticeWriters();
+        var personal = writers.Where(w => w.Personal.Count > 0).ToList();
+        output.WriteLine($"كُتّابُ Notification: {writers.Count} · يَحمِلُ اسماً أَو هاتِفاً أَو بَريداً: {personal.Count}");
+        foreach (var w in writers) output.WriteLine($"  {w.File}:{w.Line} {w.Label} [{string.Join(", ", w.Personal)}]");
+
+        Assert.True(writers.Count >= 10, $"أَداةٌ عَمياء: {writers.Count} كاتِباً لِلإشعار.");
+        Assert.Equal(PersonalNoticeWriters.Keys.OrderBy(k => k, StringComparer.Ordinal),
+                     personal.Select(w => w.Key).OrderBy(k => k, StringComparer.Ordinal));
+        Assert.Equal(2, personal.Count(w => w.Personal.Any(p => p.EndsWith("Phone", StringComparison.Ordinal) || p.EndsWith("Email", StringComparison.Ordinal))));
+    }
+
+    [Theory]
+    [InlineData("new Notification\n{\n    Type = \"chat_message\",\n    Title = l.Format(\"notifications.chat_message.title\", senderName),\n    Body = conv.LastMessage ?? \"—\",\n    RelatedUrl = u,\n}", "\"chat_message\"|senderName")]
+    [InlineData("await NotifyAdminsAsync(store, slug, \"new_user\",\n    \"t\",\n    $\"{user.FullName} · {user.Phone}\",\n    \"/u\");", "\"new_user\"|FullName,Phone")]
+    [InlineData("await NotifyAdminsAsync(store, slug, \"x\", \"t\", $\"{name} · {phone}\", \"/u\");", "\"x\"|name,phone")]
+    [InlineData("new()\n{\n    Type = NewDealType,\n    Title = l[\"notifications.deal_new.title\"],\n    Body = l.Format(\"notifications.deal_new.body\", deal.ListingTitle, deal.AmountSar),\n    RelatedUrl = u,\n};", "NewDealType|")]
+    public void The_notice_writer_pattern_sees_what_it_counts(string code, string expected)
+        => Assert.Equal(expected, Assert.Single(NoticeWriters("probe.cs", code)).Key);
+
     // ─── ٤. حِسابُ الاستوديو بِلا بابِ حَذف ───────────────────────────────────────────────────────────────
 
     [Fact]
@@ -228,5 +514,44 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         Assert.Contains("A studio account (for store owners) has no deletion door inside the app today.", En(PlatformRetentionKey), StringComparison.Ordinal);
         Assert.Contains("وحَذفُ حِسابِ المَتجَرِ يَقَعُ مِن داخِلِ التَطبيق", Ar(PlatformRightsKey), StringComparison.Ordinal);
         Assert.Contains("Store account deletion happens inside the app", En(PlatformRightsKey), StringComparison.Ordinal);
+    }
+    // ─── ٥ب. «اليَوم»: ما يَجِدُه المَسحانِ ولا تَقولُه النُصوص — يَنقَلِبُ بِاسمِه في كوميتِ الصِياغَة ──────────
+
+    /// <summary>عِباراتُ كُلِّ إفصاحٍ بِلا حَرَكات — يَقولُها كُلٌّ مِن نُصوصِ الحَذفِ الثَلاثَة.</summary>
+    internal static readonly IReadOnlyDictionary<Disclosure, string[]> DisclosurePhrases = new Dictionary<Disclosure, string[]>
+    {
+        [Disclosure.Deal]          = new[] { "وفي كل صفقة" },
+        [Disclosure.Records]       = new[] { "محادثاتك وتقييماتك وعروضك وتذاكر دعمك وبلاغاتك" },
+        [Disclosure.Notifications] = new[] { "إشعارات من تعاملت معهم" },
+        [Disclosure.AdminNotices]  = new[] { "إشعارات مديري المتجر", "هاتفك أو بريدك" },
+        [Disclosure.StoreRecords]  = new[] { "سجل التدقيق ومفاتيح الربط" },
+    };
+
+    /// <summary>كُلُّ إفصاحٍ يَحتاجُه ما يَجِدُه المَسحان — مِن خَصائِصِ الاسمِ ومِن كُتّابِ الإشعار.</summary>
+    internal static IReadOnlyList<Disclosure> NeededDisclosures()
+        => PersonNameFields.Values.Where(f => f.Kind == NameKind.Copy).Select(f => f.Said)
+            .Concat(PersonalNoticeWriters.Values).Distinct().OrderBy(d => d).ToList();
+
+    internal static IReadOnlyList<Disclosure> Unsaid(string text)
+        => NeededDisclosures().Where(d => !DisclosurePhrases[d].All(p => Bare(text).Contains(p, StringComparison.Ordinal))).ToList();
+
+    /// <summary><b>تَوصيفُ «اليَوم»</b> (القاعِدَة ٣): المَسحانِ يَحتاجانِ خَمسَةَ إفصاحات، والنُصوصُ الثَلاثَةُ تَقولُ الصَفقَةَ وَحدَها — لا تَذاكِرَ
+    /// الدَعمِ ولا البَلاغات، ولا إشعاراتِ مَن تَعامَلَ مَعَه، ولا إشعارَ تَسجيلِه لِمُديري المَتجَرِ بِهاتِفِه أَو بَريدِه، ولا سِجِلّاتِ إدارَتِه؛
+    /// ونَصُّ المَتجَرِ يُسقِطُ حَتّى جُملَةَ المُحادَثاتِ والتَقييماتِ والعُروضِ الَّتي في نَصَّيِ المَنَصَّةِ والشاشَة. يُقلَبُ بِاسمِه في كوميتِ الصِياغَة.</summary>
+    [Fact]
+    public void Today_the_deletion_texts_leave_unsaid_tickets_notifications_and_store_records_and_the_store_privacy_omits_conversations()
+    {
+        var needed = NeededDisclosures();
+        output.WriteLine($"إفصاحاتٌ يَحتاجُها المَسحان: {string.Join(", ", needed)}");
+        Assert.Equal(new[] { Disclosure.Deal, Disclosure.Records, Disclosure.Notifications, Disclosure.AdminNotices, Disclosure.StoreRecords }, needed);
+        foreach (var k in new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey })
+        {
+            var unsaid = Unsaid(Ar(k));
+            output.WriteLine($"{k}: لا يَقولُ {string.Join(", ", unsaid)}");
+            Assert.Equal(new[] { Disclosure.Records, Disclosure.Notifications, Disclosure.AdminNotices, Disclosure.StoreRecords }, unsaid);
+        }
+        Assert.DoesNotContain("محادثاتك وتقييماتك وعروضك", Bare(Ar(StorePrivacyKey)), StringComparison.Ordinal);
+        Assert.Contains("محادثاتك وتقييماتك وعروضك", Bare(Ar(PlatformRetentionKey)), StringComparison.Ordinal);
+        Assert.Contains("محادثاتك وتقييماتك وعروضك", Bare(Ar(RetainedNoteKey)), StringComparison.Ordinal);
     }
 }
