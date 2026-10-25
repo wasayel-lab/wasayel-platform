@@ -581,4 +581,33 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         Assert.Null(LocaleCatalog.Find("en", StorePrivacyKey));
         Assert.Null(LocaleCatalog.Find("en", RetainedNoteKey));
     }
+
+    /// <summary>القاعِدَة ١٠ — قارِئُ الإفصاحِ (<see cref="Unsaid"/>) يُقاسُ داخِلَ الشَجَرَة (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢، صُغرى): قِياسُه
+    /// السالِبُ الوَحيدُ كانَ صَفَّ «Today_» (‏<c>e262f90</c>) وقُلِبَ إلى <c>Assert.Empty</c>، فَقارِئٌ مَقلوبٌ أَو واسِعٌ (يُسقِطُ <c>.All</c>، أَو <c>Bare</c>
+    /// يَنزِعُ أَكثَرَ مِن الحَرَكات) كانَ سَيُبقي الصَفَّ أَخضَر. هُنا لِكُلِّ نَصّ: حَذفُ عِبارَةٍ واحِدَةٍ مِن نَصِّ اليَومِ يَجعَلُ القارِئَ يُسَمّي إفصاحَها
+    /// وَحدَه؛ والنَصُّ قَبلَ الصِياغَةِ (<see cref="Before"/>) والنَصُّ الفارِغُ لا يَقولانِ شَيئاً مِن المَطلوب؛ و<c>Bare</c> لا يَمَسُّ إلّا الحَرَكات.</summary>
+    [Theory]
+    [InlineData(StorePrivacyKey)]
+    [InlineData(PlatformRetentionKey)]
+    [InlineData(RetainedNoteKey)]
+    public void The_disclosure_reader_names_exactly_the_phrase_that_is_missing(string key)
+    {
+        var needed = NeededDisclosures();
+        var today = Bare(Ar(key));
+        Assert.Empty(Unsaid(today));
+        var removals = 0;
+        foreach (var d in needed)
+            foreach (var phrase in DisclosurePhrases[d])
+            {
+                Assert.Contains(phrase, today, StringComparison.Ordinal);
+                Assert.Equal(new[] { d }, Unsaid(today.Replace(phrase, "", StringComparison.Ordinal)));
+                removals++;
+            }
+        output.WriteLine($"{key}: حَذفُ عِبارَةٍ واحِدَةٍ {removals} مَرَّة — كُلٌّ سَمّى إفصاحَه وَحدَه · قَبلَ الصِياغَة: {Unsaid(Before[key]).Count}/{needed.Count} · الفارِغ: {Unsaid("").Count}/{needed.Count}");
+        Assert.True(removals >= needed.Count, $"أَداةٌ عَمياء: {removals} عِبارَة.");
+        Assert.Equal(needed, Unsaid(Before[key]));
+        Assert.Equal(needed, Unsaid(""));
+        Assert.Equal("أو كتبته في الطلب", Bare("أَو كَتَبتَه في الطَلَب"));
+        Assert.Equal(Ar(key).Length - Regex.Matches(Ar(key), "[\u064B-\u0652\u0670]").Count, today.Length);
+    }
 }
