@@ -90,6 +90,7 @@
   "platform.privacy.share_otp": "The SMS or email provider — to deliver the sign-in code to you alone.",
   "platform.privacy.share_nafath": "The Nafath digital identity service — only for those who choose it as a sign-in channel.",
   "platform.privacy.share_payment": "The payment provider — to carry out the subscription transaction and return its result.",
+  "platform.privacy.share_carrier": "The shipping company OTO — when the seller ships your order through their account there: your name, phone number, delivery address and city, to deliver the order only; and when the seller opens that account from the store: the seller's name, email, mobile number, city and billing address.",
   "platform.privacy.share_fonts": "The web font service and the web file delivery network — your browser requests the font and the live-connection library from them, so your network address is visible to them.",
   "platform.privacy.share_maps": "OpenStreetMap — map tiles are requested from it when a screen containing a map is opened.",
   "platform.privacy.share_legal": "Competent authorities — on a binding legal request.",

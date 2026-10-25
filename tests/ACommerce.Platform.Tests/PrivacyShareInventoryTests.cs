@@ -27,12 +27,13 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
         // ‏بَوّابَةُ المَتجَر: فاتورَةٌ بِمَبلَغٍ ووَصفٍ ومُعَرِّفاتِ صَفَقاتٍ لا بَيانٍ شَخصِيّ — والمُشتَري يَكتُبُ بِطاقَتَه عِندَها. ونَصُّ
         // `share_payment` يُسَمّي «الاشتِراكَ» وَحدَه — صِياغَتُه لِلمالِك («ب» W8-4 · ٥).
         ["MoyasarClient"]         = "platform.privacy.share_payment",
+        // ‏(2026-10-25، كوميتُ المِفتاح — نُقِلَ مِن `PinnedUnlisted`): المُستَلِمُ في `DraftFor` والبائِعُ في `RegisterVendorAsync`.
+        ["OtoClient"]             = "platform.privacy.share_carrier",
     };
 
     /// <summary>عَميلٌ صادِرٌ لا يُسَمّيه نَصُّ السِياسَةِ اليَوم — بِسَبَبِه، وصِياغَتُه قَرارُ المالِك («ب» W8-4 · ٥).</summary>
     internal static readonly IReadOnlyDictionary<string, string> PinnedUnlisted = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["OtoClient"]       = "اسمُ المُشتَري وهاتِفُه وعُنوانُه ومَدينَتُه (DraftFor)، وبَياناتُ البائِعِ عِندَ فَتحِ حِسابِه (RegisterVendorAsync)",
         ["AnthropicBackend"] = "نَصُّ الفِكرَةِ ومُحادَثَةُ الوَكيلِ إلى مُزَوِّدِ نَموذَجِ اللُغَة",
         ["GeminiBackend"]    = "نَصُّ الفِكرَةِ ومُحادَثَةُ الوَكيلِ إلى مُزَوِّدِ نَموذَجِ اللُغَة",
         ["OpenAIBackend"]    = "نَصُّ الفِكرَةِ ومُحادَثَةُ الوَكيلِ إلى مُزَوِّدِ نَموذَجِ اللُغَة",
@@ -103,19 +104,31 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
     public void The_client_pattern_sees_what_it_counts(string code, bool holds)
         => Assert.Equal(holds, HoldsClient.IsMatch(code));
 
-    /// <summary>«اليَوم»: سِتَّةُ مَفاتيحِ <c>share_*</c> تُرسَمُ في <c>/privacy</c>، ولَيسَ فيها الناقِل.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ المِفتاح)</b> — كانَ <c>Today_the_privacy_share_list_renders_six_keys_and_none_names_the_carrier</c>
+    /// (‏<c>5ad4e05</c>). <b>والآن سَبعَة</b>: <c>share_carrier</c> بَعدَ مُزَوِّدِ الدَفع، والسِتُّ بِتَرتيبِها؛ ونَصُّه يُسَمّي ما يُرسِلُه الكودُ حَرفاً —
+    /// حُقولَ <c>OtoCustomer</c> الأَربَعَ الشَخصِيَّةَ وحُقولَ تَسجيلِ البائِع — وOTO خارِجَ القائِمَةِ المُثَبَّتَة (أَربَعَةٌ لا خَمسَة).</summary>
     [Fact]
-    public void Today_the_privacy_share_list_renders_six_keys_and_none_names_the_carrier()
+    public void The_privacy_share_list_renders_seven_keys_and_names_the_carrier_with_what_the_code_sends_it()
     {
         var page = PrivacyPage();
         var keys = Regex.Matches(page, @"@doc\.Markup\(""(?<k>platform\.privacy\.share_\w+)""\)").Select(m => m.Groups["k"].Value).ToList();
-        output.WriteLine($"مَفاتيحُ share_* في /privacy: {keys.Count} ({string.Join(", ", keys)})");
+        output.WriteLine($"مَفاتيحُ share_* في /privacy: {keys.Count} ({string.Join(", ", keys)}) · مُثَبَّتونَ غَيرَ مُسَمَّين: {PinnedUnlisted.Count}");
         Assert.Equal(new[]
         {
-            "platform.privacy.share_otp", "platform.privacy.share_nafath", "platform.privacy.share_payment",
+            "platform.privacy.share_otp", "platform.privacy.share_nafath", "platform.privacy.share_payment", "platform.privacy.share_carrier",
             "platform.privacy.share_fonts", "platform.privacy.share_maps", "platform.privacy.share_legal",
         }, keys);
-        Assert.Null(LocaleCatalog.Find(LocaleCatalog.Arabic, "platform.privacy.share_carrier"));
-        Assert.Contains("OtoClient", PinnedUnlisted.Keys);
+        Assert.DoesNotContain("OtoClient", PinnedUnlisted.Keys);
+        Assert.Equal(4, PinnedUnlisted.Count);
+
+        var ar = AccountDeletionRetentionTests.Bare(LocaleCatalog.Find(LocaleCatalog.Arabic, "platform.privacy.share_carrier")!);
+        foreach (var said in new[] { "OTO", "اسمك", "هاتفك", "عنوان التوصيل", "مدينته", "بريده", "جواله", "عنوان فوترته" })
+            Assert.True(ar.Contains(said, StringComparison.Ordinal), $"share_carrier لا يَقولُ «{said}»: {ar}");
+        // وما يَقولُه هُوَ ما يُرسَل: الحُقولُ الشَخصِيَّةُ في الجِسمَينِ بِأَسمائِها.
+        var oto = UpgradePromptPriceTests.Code("libs", "kits", "Delivery", "ACommerce.Kit.Delivery.Core", "OtoClient.cs");
+        foreach (var field in new[] { "[\"name\"]    = draft.Customer.Name", "[\"mobile\"]  = draft.Customer.Mobile", "[\"address\"] = draft.Customer.Address",
+                                      "[\"email\"]           = vendor.Email", "[\"mobileNumber\"]    = vendor.MobileNumber", "[\"billingAddress\"]  = vendor.BillingAddress" })
+            Assert.Contains(field, oto, StringComparison.Ordinal);
+        Assert.Contains("OTO", LocaleCatalog.Find("en", "platform.privacy.share_carrier")!, StringComparison.Ordinal);
     }
 }
