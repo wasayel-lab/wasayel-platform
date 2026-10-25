@@ -222,19 +222,137 @@ public class DeployDocClaimsTests(ITestOutputHelper output)
             .Where(n => !deploy.Contains($"`{n}`", StringComparison.Ordinal) && !deploy.Contains($"`{n}=", StringComparison.Ordinal))
             .ToList();
 
+    // ─── مُراجَعَةُ تَيّارِ W8-6 الكُبرى ٢ (‏2026-10-25) — القِراءَةُ عَبرَ ثابِت ─────────────────────────────────────────
+    //
+    // ‏الاسمُ يَقولُ «كُلُّ مُتَغَيِّرٍ يَقرَؤُه الكودُ بِاسمِه»، والماسِحُ أَعلاه لا يَرى إلّا `GetEnvironmentVariable("حَرفِيَّة")` وحَرفِيّاتِ
+    // `ACOMMERCE_*`/`PLATFORM_*` — فَقِراءَةٌ عَبرَ ثابِتٍ بِبادِئَةٍ أُخرى خَفِيَّة. وواحِدَةٌ قائِمَةٌ ولا يُسَمّيها الدَليل:
+    // `Environment.GetEnvironmentVariable(AppearanceBaselineSeeder.EnvVar)` في `Program.cs` و`EnvVar = "APPEARANCE_BASELINE_SEED"` — بَذّارٌ رابِعٌ
+    // يَكتُبُ في القاعِدَة، وخارِجَ Development يَرمي `InvalidOperationException` عِندَ الإقلاع. و`Providers__Kek__v1` يُسَمّيه
+    // `ProviderVault.KekEnvironmentVariable` ويُقرَأُ عَبرَ `IConfiguration` — يَمُرُّ لِأَنّه مُسَمّىً في مَوضِعٍ آخَرَ لا لِأَنّ الماسِحَ رَآه.
+    // فَصارَ الوَسيطُ يُحَلُّ: كُلُّ `const string X = "…"` (أَو `= Y.Z` يُتبَعُ) في `libs/` و`apps/`، و`GetEnvironmentVariable(X)` و`(T.X)` تُرَدُّ إلى
+    // قيمَتِها — وما لا يُحَلُّ يُعَدُّ ويُحمِرّ؛ وثابِتٌ يُسَمّي نَفسَه مُتَغَيِّرَ بيئَةٍ (`…EnvironmentVariable`/`…EnvVar`/`…EnvVarName`) يُعَدُّ قِراءَة.
+
+    private static readonly Regex ConstDecl = new(
+        @"\bconst\s+string\s+(?<n>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?<v>""[^""\\]*""|[A-Za-z_][A-Za-z0-9_.]*)\s*;", RegexOptions.Compiled);
+    private static readonly Regex TypeDecl = new(@"\b(?:class|record|struct|interface)\s+(?<t>[A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Compiled);
+    private static readonly Regex EnvReadThrough = new(@"GetEnvironmentVariable\(\s*(?<e>[A-Za-z_][A-Za-z0-9_.]*)\s*\)", RegexOptions.Compiled);
+    private static readonly Regex SelfNamedEnvConst = new(@"(?:EnvironmentVariable|EnvVar|EnvVarName)$", RegexOptions.Compiled);
+
+    /// <summary>ثابِتٌ نَصِّيٌّ بِمِلَفِّه وأَنواعِ مِلَفِّه — قيمَتُه حَرفِيَّةٌ أَو إحالَةٌ إلى ثابِتٍ آخَر.</summary>
+    internal sealed record StringConstant(string File, IReadOnlySet<string> FileTypes, string Name, string Value);
+
+    /// <summary>ما يَخرُجُ بِه ماسِحُ الثَوابِت: الأَسماءُ المَحلولَة، وكُلُّ قِراءَةٍ بِمَوضِعِها وما حُلَّت إلَيه، وما لَم يُحَلّ.</summary>
+    internal sealed record ConstantEnvScan(IReadOnlyList<string> Names, IReadOnlyList<string> Reads, IReadOnlyList<string> SelfNamed, IReadOnlyList<string> Unresolved);
+
+    private static IEnumerable<(int No, string Line)> CodeLines(string source)
+        => source.Split('\n').Select((l, i) => (i + 1, l.TrimStart()))
+            .Where(x => !x.Item2.StartsWith("//", StringComparison.Ordinal) && !x.Item2.StartsWith("*", StringComparison.Ordinal));
+
+    /// <summary>يَحُلُّ قِراءاتِ <c>GetEnvironmentVariable(X)</c> و<c>(T.X)</c> عَبرَ ثَوابِتِ المَصادِرِ كُلِّها، ويَعُدُّ الثَوابِتَ الَّتي تُسَمّي نَفسَها مُتَغَيِّرَ بيئَة.</summary>
+    internal static ConstantEnvScan ConstantEnvironmentReads(IReadOnlyList<(string File, string Text)> sources)
+    {
+        var constants = new List<StringConstant>();
+        foreach (var (file, text) in sources)
+        {
+            var types = CodeLines(text).SelectMany(x => TypeDecl.Matches(x.Line)).Select(m => m.Groups["t"].Value).ToHashSet(StringComparer.Ordinal);
+            foreach (var (_, line) in CodeLines(text))
+                foreach (Match m in ConstDecl.Matches(line))
+                    constants.Add(new StringConstant(file, types, m.Groups["n"].Value, m.Groups["v"].Value));
+        }
+
+        string? Resolve(string expr, string file, int depth)
+        {
+            if (expr.StartsWith('"')) return expr.Trim('"');
+            if (depth > 6) return null;
+            var parts = expr.Split('.');
+            var name = parts[^1];
+            var type = parts.Length > 1 ? parts[^2] : null;
+            var hits = type is not null
+                ? constants.Where(c => c.Name == name && c.FileTypes.Contains(type)).ToList()
+                : constants.Where(c => c.Name == name && c.File == file).ToList();
+            if (hits.Count == 0 && type is null) hits = constants.Where(c => c.Name == name).ToList();
+            var values = hits.Select(c => Resolve(c.Value, c.File, depth + 1)).Distinct().ToList();
+            return values.Count == 1 ? values[0] : null;
+        }
+
+        var names = new List<string>();
+        var reads = new List<string>();
+        var unresolved = new List<string>();
+        foreach (var (file, text) in sources)
+            foreach (var (no, line) in CodeLines(text))
+                foreach (Match m in EnvReadThrough.Matches(line))
+                {
+                    var expr = m.Groups["e"].Value;
+                    var value = Resolve(expr, file, 0);
+                    if (value is null) { unresolved.Add($"{file}:{no} {expr}"); continue; }
+                    names.Add(value);
+                    reads.Add($"{expr}→{value}");
+                }
+        var selfNamed = new List<string>();
+        foreach (var c in constants.Where(c => SelfNamedEnvConst.IsMatch(c.Name)))
+        {
+            var value = Resolve(c.Value, c.File, 0);
+            if (value is null) { unresolved.Add($"{c.File} const {c.Name}"); continue; }
+            names.Add(value);
+            selfNamed.Add($"{c.Name}→{value}");
+        }
+        return new ConstantEnvScan(names.Distinct().Order(StringComparer.Ordinal).ToList(), reads.Distinct().Order(StringComparer.Ordinal).ToList(),
+            selfNamed.Distinct().Order(StringComparer.Ordinal).ToList(), unresolved);
+    }
+
     [Fact]
     public void Every_environment_variable_the_code_reads_by_name_is_named_in_the_deploy_guide()
     {
-        var names = ShippedSources().SelectMany(f => EnvironmentNamesIn(File.ReadAllText(f))).Distinct().Order(StringComparer.Ordinal).ToList();
+        var sources = ShippedSources().Select(f => (Path.GetRelativePath(RepoRoot, f), File.ReadAllText(f))).ToList();
+        var literal = sources.SelectMany(x => EnvironmentNamesIn(x.Item2)).Distinct().Order(StringComparer.Ordinal).ToList();
+        var scan = ConstantEnvironmentReads(sources);
+        var names = literal.Concat(scan.Names).Distinct().Order(StringComparer.Ordinal).ToList();
         output.WriteLine($"مُتَغَيِّراتٌ يَقرَؤُها الكودُ بِاسمِها: {names.Count} — {string.Join(" · ", names)}");
-        Assert.True(names.Count >= 10, $"أَداةٌ عَمياء: {names.Count} اسماً.");
-        foreach (var known in new[] { "ACOMMERCE_AUTH_SECRET", "ACOMMERCE_BASE_DOMAIN", "ACOMMERCE_FORCE_INSECURE_COOKIES", "PLATFORM_ADMIN_BOOTSTRAP", "CART_SAMPLE_PHONE" })
+        output.WriteLine($"  مِنها بِحَرفِيَّة: {literal.Count}؛ وقِراءاتٌ عَبرَ ثابِت: {scan.Reads.Count} — {string.Join(" · ", scan.Reads)}");
+        output.WriteLine($"  وثَوابِتُ تُسَمّي نَفسَها مُتَغَيِّرَ بيئَة: {scan.SelfNamed.Count} — {string.Join(" · ", scan.SelfNamed)}");
+        // ‏(‏2026-10-25، مُراجَعَةُ تَيّارِ W8-6 الكُبرى ٢): الأَرضِيَّةُ المَقيسَةُ يَومَها — 18 اسماً (13 بِحَرفِيَّة)، و9 قِراءاتٍ عَبرَ ثابِت،
+        // و8 ثَوابِتَ تُسَمّي نَفسَها؛ وكانَت 10 لِلحَرفِيّاتِ وَحدَها.
+        Assert.True(names.Count >= 18, $"أَداةٌ عَمياء: {names.Count} اسماً (المَقيسُ 18 يَومَ الإلحاق).");
+        Assert.True(scan.Reads.Count >= 9, $"أَداةٌ عَمياء: {scan.Reads.Count} قِراءَةً عَبرَ ثابِت (المَقيسُ 9 يَومَ الإلحاق).");
+        Assert.True(scan.SelfNamed.Count >= 8, $"أَداةٌ عَمياء: {scan.SelfNamed.Count} ثابِتاً يُسَمّي نَفسَه (المَقيسُ 8 يَومَ الإلحاق).");
+        Assert.True(scan.Unresolved.Count == 0, "قِراءَةُ بيئَةٍ بِوَسيطٍ لا يُحَلُّ إلى ثابِت: " + string.Join("، ", scan.Unresolved));
+        foreach (var known in new[] { "ACOMMERCE_AUTH_SECRET", "ACOMMERCE_BASE_DOMAIN", "ACOMMERCE_FORCE_INSECURE_COOKIES", "PLATFORM_ADMIN_BOOTSTRAP", "CART_SAMPLE_PHONE",
+                                      "APPEARANCE_BASELINE_SEED", "Providers__Kek__v1", "ACOMMERCE_OTP_SENDS_PER_HOUR" })
             Assert.Contains(known, names);
         var missing = UndocumentedEnvironmentNames(names, Deploy());
         Assert.True(missing.Count == 0, "يَقرَؤُها الكودُ ولا يُسَمّيها DEPLOY.md: " + string.Join("، ", missing));
         // ‏والمُضعِفُ لِلكوكي في قائِمَةِ ما لا يوضَعُ في الإنتاج.
         var never = Deploy()[Deploy().IndexOf("**ويُضَمُّ إلى «لا تُوضَع في الإنتاج أَبَداً» أَعلاه**", StringComparison.Ordinal)..];
         Assert.Contains("`ACOMMERCE_FORCE_INSECURE_COOKIES`", never[..400], StringComparison.Ordinal);
+        // ‏وبَذّارُ اللَقطَةِ رابِعُ «لا تُوضَع في الإنتاج أَبَداً»، والسَطرُ يَقولُ إنّه يَرمي عِندَ الإقلاعِ خارِجَ Development.
+        var fourth = Deploy().IndexOf("ورابِعُ بَذّارٍ يُضَمُّ إلى «لا تُوضَع في الإنتاج أَبَداً»**", StringComparison.Ordinal);
+        Assert.True(fourth > 0, "سَطرُ APPEARANCE_BASELINE_SEED تَحتَ «لا تُوضَع في الإنتاج أَبَداً» غائِب.");
+        var row = Deploy()[fourth..(fourth + 700)];
+        Assert.Contains("`APPEARANCE_BASELINE_SEED`", row, StringComparison.Ordinal);
+        Assert.Contains("`InvalidOperationException`", row, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>حَقنُ عَيب</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-6 الكُبرى ٢): ثابِتٌ بِلا بادِئَةٍ يُقرَأُ عَبرَ إحالَتَين في مِلَفٍّ ثالِث —
+    /// الماسِحُ الحَرفِيُّ أَعلاه أَعمى عَنه، وماسِحُ الثَوابِتِ يَحُلُّه ويَعُدُّه غائِباً؛ ووَسيطٌ لا يُحَلُّ يُعَدُّ ولا يُبتلَع.</summary>
+    [Fact]
+    public void The_constant_scanner_resolves_an_unprefixed_read_through_indirection()
+    {
+        var sources = new List<(string, string)>
+        {
+            ("Seed/SampleSwitch.cs", "public static class SampleSwitch\n{\n    public const string Flag = \"WASAYEL_INJECTED_SEED\";\n}\n"),
+            ("Seed/Alias.cs", "public static class Alias\n{\n    public const string Var = SampleSwitch.Flag;\n}\n"),
+            ("Program.cs", "if (Environment.GetEnvironmentVariable(Alias.Var) == \"1\") { }\n" +
+                           "var x = Environment.GetEnvironmentVariable(localName);\n" +
+                           "// Environment.GetEnvironmentVariable(Alias.InAComment)\n"),
+            ("Vault.cs", "public static class Vault\n{\n    public const string KeyEnvironmentVariable = \"Wasayel__Injected__Key\";\n}\n"),
+        };
+        Assert.Empty(sources.SelectMany(x => EnvironmentNamesIn(x.Item2)));
+        var scan = ConstantEnvironmentReads(sources);
+        Assert.Equal(new[] { "Alias.Var→WASAYEL_INJECTED_SEED" }, scan.Reads);
+        Assert.Equal(new[] { "KeyEnvironmentVariable→Wasayel__Injected__Key" }, scan.SelfNamed);
+        Assert.Equal(new[] { "Program.cs:2 localName" }, scan.Unresolved);
+        Assert.Equal(new[] { "WASAYEL_INJECTED_SEED", "Wasayel__Injected__Key" }, UndocumentedEnvironmentNames(scan.Names, "لا شَيء"));
+        Assert.Equal(new[] { "Wasayel__Injected__Key" }, UndocumentedEnvironmentNames(scan.Names, "`WASAYEL_INJECTED_SEED=1`"));
     }
 
     /// <summary><b>حَقنُ عَيب</b>: مَصدَرٌ مَصنوعٌ يَقرَأُ مُتَغَيِّرَينِ جَديدَين — بِـ<c>GetEnvironmentVariable</c> وبِثابِت — يُجمَعانِ ويُعَدّانِ غائِبَين، وسَطرُ التَعليقِ
