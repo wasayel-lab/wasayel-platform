@@ -331,8 +331,9 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         public string Key => $"{Label}|{string.Join(",", Personal)}";
     }
 
+    // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢): و`Mobile` — `OtoCustomer.Mobile` و`vendor.MobileNumber` أَسماءُ هاتِفٍ لا تَنتَهي بِـPhone.
     private static readonly Regex PersonalToken = new(
-        @"(?<![\w""])(?:[A-Za-z_]\w*\.)*(?<id>(?:[A-Za-z_]\w*)?(?:Name|Phone|Email|name|phone|email))\b", RegexOptions.Compiled);
+        @"(?<![\w""])(?:[A-Za-z_]\w*\.)*(?<id>(?:[A-Za-z_]\w*)?(?:Name|Phone|Email|Mobile|name|phone|email|mobile)(?:Number)?)\b", RegexOptions.Compiled);
 
     internal static IReadOnlyList<string> PersonalTokens(string expr)
         => PersonalToken.Matches(expr).Select(m => m.Groups["id"].Value).ToList();
@@ -347,6 +348,29 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
             else if (code[i] is ')' or '}' or ']' && --depth == 0) return i;
         }
         return -1;
+    }
+
+    private static readonly Regex NewNotification = new(
+        @"\bnew\s+(?:ACommerce\.Kit\.Notifications\.)?Notification\s*(?:\(\s*\))?\s*(?=\{)", RegexOptions.Compiled);
+    private static readonly Regex NotificationFactory = new(
+        @"\b(?:ACommerce\.Kit\.Notifications\.)?Notification\s+\w+\s*\([^)]*\)\s*=>\s*new\s*\(\s*\)\s*(?=\{)", RegexOptions.Compiled);
+
+    /// <summary>أَعضاءُ مُهَيِّئِ كائِنٍ عَلى المُستَوى الأَعلى — الفاصِلَةُ داخِلَ قَوسٍ أَو نَصٍّ لا تَفصِل.</summary>
+    private static List<string> InitializerMembers(string inner)
+    {
+        var members = new List<string>();
+        var depth = 0; var start = 0; var inString = false;
+        for (var i = 0; i < inner.Length; i++)
+        {
+            var c = inner[i];
+            if (inString) { if (c == '\\') i++; else if (c == '"') inString = false; continue; }
+            if (c == '"') inString = true;
+            else if (c is '(' or '{' or '[') depth++;
+            else if (c is ')' or '}' or ']') depth--;
+            else if (c == ',' && depth == 0) { members.Add(inner[start..i]); start = i + 1; }
+        }
+        members.Add(inner[start..]);
+        return members.Where(m => m.Trim().Length > 0).ToList();
     }
 
     /// <summary>وَسائِطُ النِداءِ عَلى المُستَوى الأَعلى — الفاصِلَةُ داخِلَ قَوسٍ لا تَفصِل.</summary>
@@ -365,10 +389,18 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     }
 
     /// <summary>(٢) كُتّابُ <c>Notification</c> في نَصٍّ واحِد: كُلُّ مُهَيِّئٍ سَطرُه <c>RelatedUrl =</c> (عُنوانُه ومَتنُه)، وكُلُّ نِداءٍ لِـ
-    /// <c>NotifyAdminsAsync</c> (وَسيطاه الرابِعُ والخامِس) — والتَسمِيَةُ قيمَةُ <c>Type</c>.</summary>
+    /// <c>NotifyAdminsAsync</c> (وَسيطاه الرابِعُ والخامِس) — والتَسمِيَةُ قيمَةُ <c>Type</c>.
+    /// <para><b>‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢، صُغرى)</b>: كانَ يَجِدُ الكاتِبَ بِسَطرِ <c>RelatedUrl =</c> وَحدَه ويَقرَأُ العُنوانَ والمَتنَ سَطراً
+    /// واحِداً — أَعمى عَن مُهَيِّئٍ بِلا <c>RelatedUrl</c>، وعَن تَعبيرٍ يَمتَدُّ أَسطُراً، وعَن مُهَيِّئٍ في سَطرٍ واحِد. <b>صارَ يُرسي عَلى الإنشاءِ نَفسِه</b>:
+    /// <c>new (ACommerce.Kit.Notifications.)Notification {</c>، و<c>Notification X(…) => new() {</c> (مَصانِعُ <c>DealNotices</c>)، ويَبقى سَطرُ
+    /// <c>RelatedUrl =</c> مِرساةً ثالِثَة؛ والمُهَيِّئُ يُقسَمُ أَعضاءً بِالفَواصِلِ العُليا (النُصوصُ والأَقواسُ مُتَوازِنَة) فَالتَعبيرُ كامِلٌ لا سَطرُه الأَوَّل.
+    /// <b>وما لا يَراه — يُقال</b>: <c>return new() {</c> في دالَّةٍ جِسمُها كُتلَة، وإنشاءٌ بِوُسَطاءِ مُنشِئ.</para></summary>
     internal static IEnumerable<NoticeWriter> NoticeWriters(string file, string code)
     {
         int LineOf(int at) => code.Take(at).Count(c => c == '\n') + 1;
+        var opens = new SortedSet<int>();
+        foreach (Match m in NewNotification.Matches(code)) opens.Add(m.Index + m.Length);
+        foreach (Match m in NotificationFactory.Matches(code)) opens.Add(m.Index + m.Length);
         foreach (Match m in Regex.Matches(code, @"(?m)^[ \t]*RelatedUrl\s*=(?!=)"))
         {
             var depth = 0; var open = -1;
@@ -377,11 +409,14 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
                 if (code[i] == '}') depth++;
                 else if (code[i] == '{' && depth-- == 0) open = i;
             }
-            if (open < 0) continue;
+            if (open >= 0) opens.Add(open);
+        }
+        foreach (var open in opens)
+        {
             var close = Closing(code, open);
-            var block = close > open ? code[open..close] : code[open..];
-            string Field(string f) => Regex.Match(block, $@"(?m)^\s*{f}\s*=\s*(?<e>.+?),?\s*$") is { Success: true } x ? x.Groups["e"].Value : "";
-            yield return new NoticeWriter(file, LineOf(m.Index), Field("Type"), PersonalTokens(Field("Title") + " " + Field("Body")));
+            var members = InitializerMembers(close > open ? code[(open + 1)..close] : code[(open + 1)..]);
+            string Field(string f) => members.Select(x => Regex.Match(x, $@"^\s*{f}\s*=\s*(?<e>[\s\S]*?)\s*$")).FirstOrDefault(x => x.Success)?.Groups["e"].Value ?? "";
+            yield return new NoticeWriter(file, LineOf(open), Field("Type"), PersonalTokens(Field("Title") + " " + Field("Body")));
         }
         foreach (Match m in Regex.Matches(code, @"(?<!Task\s)\bNotifyAdminsAsync\s*\("))
         {
@@ -433,6 +468,24 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     [InlineData("new()\n{\n    Type = NewDealType,\n    Title = l[\"notifications.deal_new.title\"],\n    Body = l.Format(\"notifications.deal_new.body\", deal.ListingTitle, deal.AmountSar),\n    RelatedUrl = u,\n};", "NewDealType|")]
     public void The_notice_writer_pattern_sees_what_it_counts(string code, string expected)
         => Assert.Equal(expected, Assert.Single(NoticeWriters("probe.cs", code)).Key);
+
+    /// <summary>القاعِدَة ١٠ — الأَشكالُ الَّتي كانَ الماسِحُ أَعمى عَنها (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢): مُهَيِّئٌ بِلا <c>RelatedUrl</c>، وعُنوانٌ يَمتَدُّ
+    /// سَطرَين، ومُهَيِّئٌ في سَطرٍ واحِد، و<c>Mobile</c>، ومَصنَعٌ <c>=> new()</c> بِلا <c>RelatedUrl</c>، وفاصِلَةٌ داخِلَ نَصّ — وما لَيسَ إشعاراً لا يُعَدّ.</summary>
+    [Theory]
+    [InlineData("s.Store(new Notification\n{\n    Type = \"x\",\n    Title = t,\n    Body = $\"{user.FullName}\",\n});", "\"x\"|FullName")]
+    [InlineData("s.Store(new ACommerce.Kit.Notifications.Notification\n{\n    Type = \"y\",\n    Title = l.Format(\"k\",\n        buyer.Name),\n    RelatedUrl = u,\n});", "\"y\"|Name")]
+    [InlineData("var n = new Notification { Type = \"z\", Title = \"t\", Body = vendor.Mobile, RelatedUrl = u };", "\"z\"|Mobile")]
+    [InlineData("public static Notification For(Deal d, string sellerName) => new()\n{\n    Type = T,\n    Title = sellerName,\n    Body = b,\n};", "T|sellerName")]
+    [InlineData("s.Store(new Notification\n{\n    Type = \"w\",\n    Body = \"a, b\" + who.Name,\n});", "\"w\"|Name")]
+    [InlineData("var o = new NotificationOptions { Type = \"q\", Title = user.Name };", "")]
+    [InlineData("public static NotificationRow For(Deal d) => new()\n{\n    Type = T,\n    Title = d.BuyerName,\n};", "")]
+    public void The_notice_writer_pattern_sees_every_construction_and_the_whole_expression(string code, string expected)
+    {
+        var found = NoticeWriters("probe.cs", code).ToList();
+        output.WriteLine($"مَحقونَة: {found.Count} — {string.Join(" · ", found.Select(w => w.Key))}");
+        if (expected.Length == 0) Assert.Empty(found);
+        else Assert.Equal(expected, Assert.Single(found).Key);
+    }
 
     // ─── ٤. حِسابُ الاستوديو بِلا بابِ حَذف ───────────────────────────────────────────────────────────────
 
