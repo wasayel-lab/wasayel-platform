@@ -76,11 +76,25 @@
 # StatusHelpers.cs — ‏11 تَسمِيَة، و**صِفرُ مُستَهلِك** (مَقيس).
 #   لَيسَت دَيناً بَل كودٌ مَيِّت — القاعِدَة ١: يُحذَف لا يُرَحَّل.
 #
-# ═══ المَجموع: ‏17 في razor (‏13+4)، وصِفرُ مَصرِف ═══════════
+# ── ٦. مَصرِفٌ مُعلَنٌ مِلَفّاً: PatternMatcher.cs (‏12 · ‏10 مُتَمايِزَة) ──
+#
+# (‏2026-10-25، تَدقيقُ الإطلاق brief-P3-6.) تَسمِياتُ الأَنماطِ وتَعليلاتُها
+#   في `PatternSuggestion` — تُرسَمُ في IncubatorWizard وIncubatorFixturesPage
+#   وتُحقَنُ في رِسالَةِ التَحليل، ولا razor بَينَها وبَينَ المُستَخدِم.
+#   التَسمِياتُ الخَمس: «الطلبات حسب الموقع» «التأجير» «المتجر متعدد البائعين»×2
+#     «الإعلانات المبوّبة»×2 «تكوين مخصّص»
+#   والتَعليلاتُ الخَمسَة (بِأَوَّلِ كَلِماتِها): «اخترت خدمة فورية…» «فكرتك تأجير أصول…»
+#     «تربط طرفين دون تحصيل…» «تقدّم خدمة غير فورية…» «فكرتك لا تطابق نمطاً…»
+#   السَبَب: دَينُ القاعِدَة ١١ لا استِثناء — ورُحِّلَ مِنه اثنانِ قَبلُ
+#   (`incubator.pattern.reason_products` و`reason_twosided_commission`)؛
+#   والباقي يُرَحَّلُ بِحَرفِه بِالعَرَبِيَّةِ صَراحَةً (`LocaleCatalog.Text`).
+#
+# ═══ المَجموع: ‏17 في razor (‏13+4)، و‏12 في مَصرِفٍ مُعلَن (§٦) ═══
 # ــــــــــــــــــــــــــــــــــــــــــــــــــ
 TOTAL|17
 DISTINCT|17
-SINK_TOTAL|0
+SINK_TOTAL|12
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/App.razor|4
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudy.razor|8
 libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/TenantListingDetail.razor|5
+sink:libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Incubator/PatternMatcher.cs|12
