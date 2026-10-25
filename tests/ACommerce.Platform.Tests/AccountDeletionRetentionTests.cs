@@ -535,11 +535,13 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     internal static IReadOnlyList<Disclosure> Unsaid(string text)
         => NeededDisclosures().Where(d => !DisclosurePhrases[d].All(p => Bare(text).Contains(p, StringComparison.Ordinal))).ToList();
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b> (القاعِدَة ٣): المَسحانِ يَحتاجانِ خَمسَةَ إفصاحات، والنُصوصُ الثَلاثَةُ تَقولُ الصَفقَةَ وَحدَها — لا تَذاكِرَ
-    /// الدَعمِ ولا البَلاغات، ولا إشعاراتِ مَن تَعامَلَ مَعَه، ولا إشعارَ تَسجيلِه لِمُديري المَتجَرِ بِهاتِفِه أَو بَريدِه، ولا سِجِلّاتِ إدارَتِه؛
-    /// ونَصُّ المَتجَرِ يُسقِطُ حَتّى جُملَةَ المُحادَثاتِ والتَقييماتِ والعُروضِ الَّتي في نَصَّيِ المَنَصَّةِ والشاشَة. يُقلَبُ بِاسمِه في كوميتِ الصِياغَة.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الصِياغَة — مُراجَعَةُ تَيّارِ W8-4)</b> — كانَ
+    /// <c>Today_the_deletion_texts_leave_unsaid_tickets_notifications_and_store_records_and_the_store_privacy_omits_conversations</c> (‏<c>e262f90</c>):
+    /// النُصوصُ الثَلاثَةُ تَقولُ الصَفقَةَ وَحدَها مِن خَمسَةِ إفصاحاتٍ يَحتاجُها المَسحان. <b>والآن</b> يَقولُ كُلٌّ مِنها الخَمسَة — وإفصاحٌ سادِسٌ
+    /// يَحتاجُه تَصنيفٌ جَديدٌ في <see cref="PersonNameFields"/> أَو <see cref="PersonalNoticeWriters"/> يُحمِرُّ هذا الصَفَّ حَتّى يُكتَبَ في النُصوص.
+    /// والصِياغَةُ مِن كِتابَتي حَتّى يَكتُبَها المالِكُ أَو مُحاميه («ب» W8-4 · ١).</summary>
     [Fact]
-    public void Today_the_deletion_texts_leave_unsaid_tickets_notifications_and_store_records_and_the_store_privacy_omits_conversations()
+    public void Every_copy_the_scans_find_is_said_by_each_deletion_text()
     {
         var needed = NeededDisclosures();
         output.WriteLine($"إفصاحاتٌ يَحتاجُها المَسحان: {string.Join(", ", needed)}");
@@ -547,11 +549,15 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         foreach (var k in new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey })
         {
             var unsaid = Unsaid(Ar(k));
-            output.WriteLine($"{k}: لا يَقولُ {string.Join(", ", unsaid)}");
-            Assert.Equal(new[] { Disclosure.Records, Disclosure.Notifications, Disclosure.AdminNotices, Disclosure.StoreRecords }, unsaid);
+            output.WriteLine($"{k}: لا يَقولُ {unsaid.Count} :: {Ar(k)}");
+            Assert.Empty(unsaid);
         }
-        Assert.DoesNotContain("محادثاتك وتقييماتك وعروضك", Bare(Ar(StorePrivacyKey)), StringComparison.Ordinal);
-        Assert.Contains("محادثاتك وتقييماتك وعروضك", Bare(Ar(PlatformRetentionKey)), StringComparison.Ordinal);
-        Assert.Contains("محادثاتك وتقييماتك وعروضك", Bare(Ar(RetainedNoteKey)), StringComparison.Ordinal);
+        // والإنجليزيُّ لِـs6 يَقولُ ما يَقولُه العَرَبِيّ (en.json لِصَفَحاتِ المَنَصَّةِ وَحدَها — لا مُقابِلَ لِنَصَّيِ المَتجَر).
+        foreach (var phrase in new[] { "each deal keeps", "conversations, reviews, offers, support tickets and reports",
+                                       "the notifications of the people you dealt with", "the store managers' notifications",
+                                       "phone number or email", "the audit log and the integration keys" })
+            Assert.Contains(phrase, En(PlatformRetentionKey), StringComparison.Ordinal);
+        Assert.Null(LocaleCatalog.Find("en", StorePrivacyKey));
+        Assert.Null(LocaleCatalog.Find("en", RetainedNoteKey));
     }
 }
