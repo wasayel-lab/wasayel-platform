@@ -23,6 +23,13 @@ namespace ACommerce.Templates.Customer.Marketplace.Gates;
 /// <para><b>والمُستَهلِكُ الثالِث (‏2026-10-25، W8-7 — <c>lens-dead-doors-7</c>؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)</b>: استِمارَةُ العَرضِ في
 /// <c>TenantListingDetail</c> تَسأَلُ <c>Opens(…, "offer.submit")</c> — وحارِسُ نُقطَتِها <c>HasPermissionAsync</c> يَقرَأُ الأَدوارَ <b>المُجَسَّدَة</b>
 /// (<c>LoadTenantWithRolesAsync</c>)، فَتَقرَؤُها الصَفحَةُ مُجَسَّدَةً (<c>TenantRoleService.LoadAsync</c>). القاعِدَةُ واحِدَة: البابُ يَقرَأُ ما يَقرَؤُه حارِسُ هَدَفِه.</para>
+///
+/// <para><b>وعَدُّ المُستَهلِكينَ بِصِدق (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: «مُستَوفىً قَبلَها» أَعلاه
+/// يَعُدُّ <b>نُسَخَ القَرار</b> لا مُستَهلِكي الدالَّة — والاستِخراجُ (<c>9ca4e06</c>) نَزَلَ بِمُستَهلِكَينِ في وَقتِ التَشغيلِ وَحدَهُما (<c>GatedPage</c>
+/// و<c>MyListings</c>)، والنُسَخُ الثَلاثُ الأُخرى بَقِيَت بِجِوارِه. فَالقاعِدَةُ ١ (ثَلاثَةُ مُستَهلِكينَ قَبلَ الاستِخراج) لَم تُستَوفَ يَومَ الاستِخراجِ
+/// بَل بَعدَه بِكوميت: الثالِثُ <c>TenantListingDetail</c> في <c>3f21e19</c>، والرابِعُ <c>TenantHome</c> في <c>f5f5703</c> (تَوصيفُه <c>57af82e</c>).
+/// وما زالَ <c>Me</c> و<c>TenantManage</c> نُسخَتَينِ بِيَدِهِما، وقائِمَةُ المُستَهلِكينَ يُثَبِّتُها
+/// <c>CreateListingDoorTests.The_home_page_asks_the_door_with_its_target_gates_stored_reads_so_an_authored_role_sees_no_link_its_page_refuses</c>.</para>
 /// </summary>
 public static class PermissionDoor
 {
