@@ -666,6 +666,12 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
         output.WriteLine($"حُقِنَ {rejected.Length} سَطراً و{accepted.Length} حَيّاً · تَقبَلُ البادِئَةُ وَحدَها {prefixOnly} مِنها · "
             + $"الرَفضُ بِـ..: {SnapshotPathRefusal("$HOME/wasayel-snapshots/../wasayel-platform/x.dump")}");
         Assert.Equal(2, prefixOnly);
+        // ‏(‏2026-10-25، مُراجَعَةُ تَيّارِ S16 الجَولَة ٢) والرَمزانِ بِاسمَيهِما — تَبديلُهُما أَو دَمجُهُما كانَ يَبقى أَخضَرَ عَلى «قُبِلَ/رُفِضَ» وحدَهُما:
+        Assert.Equal("dot_dot_segment", SnapshotPathRefusal("$HOME/wasayel-snapshots/../wasayel-platform/x.dump"));
+        Assert.Equal("dot_dot_segment", SnapshotPathRefusal("$HOME/wasayel-snapshots/a/../../x.dump"));
+        Assert.Equal("outside_snapshot_dir", SnapshotPathRefusal("pre-deploy.dump"));
+        Assert.Equal("outside_snapshot_dir", SnapshotPathRefusal("'$HOME/wasayel-snapshots/x.dump'"));
+        Assert.Null(SnapshotPathRefusal("$HOME/wasayel-snapshots/second.dump"));
     }
 
     // ─── أَنواعُ الوَثائِقِ غَيرُ المُسَجَّلَةِ — مَعدودَةً مِن الكودِ لا مَذكورَةً بِاثنَين (‏2026-10-25، تَدقيقُ الإطلاق brief-P3-1) ───
