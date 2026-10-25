@@ -137,15 +137,21 @@ public class LanguageModelQuotaGateTests
     /// <c>CheckAgentMessageAsync</c> إلى <see cref="StudioTierService"/>،
     /// وتُرفَعُ هذِه الإدخالَة — <b>ويُحمِرُّ هذا الفاحِصُ مِن
     /// نَفسِه</b> إن لَم تُرفَع.</para>
+    ///
+    /// <para><b>‏2026-10-25 — رُفِعَت الإدخالَةُ الوَحيدَة، والقائِمَةُ
+    /// فارِغَة (تَدقيقُ الإطلاق، تَيّارُ W8-3 — lens-security-2؛ يُلحَقُ
+    /// ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)</b>: لَم يَأتِ الرَقَمُ بَعد، فَلَم
+    /// تَدخُل <c>CheckAgentMessageAsync</c>. صارَت الصَفحَةُ لِمُشرِفِ
+    /// المَنَصَّةِ وَحدَه (<c>StudioAgentDoor.Opens</c> عَلى
+    /// <c>PlatformAdminGuard.EvaluateAsync</c>) — سُلطَةُ المالِكِ عَلى
+    /// مِفتاحِه، صِنفُ <c>/admin/agent</c> — فَحَمَّرَ
+    /// <see cref="No_pinned_ungated_spender_outlives_its_reason"/> الإدخالَةَ
+    /// كَما وَعَدَ أَعلاه. ويَومَ يَقولُ المالِكُ حَدَّ الرَسائِلِ («ب» W8-3 · ١
+    /// في سِجِلِّه) تُفتَحُ لِكُلِّ صاحِبِ جَلسَةٍ خَلفَ البَوّابَةِ الجَديدَة،
+    /// وحُكمُها في الجَردِ يَصيرُ <c>CheckAgentMessageAsync</c> — والقائِمَةُ
+    /// تَبقى فارِغَة.</para>
     /// </summary>
-    private static readonly UngatedSpender[] PinnedUngated =
-    {
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAgent.razor",
-            "مُحادَثَةُ وَكيلِ التَطبيقات — تُنفِقُ نِداءً لِكُلِّ رِسالَة عَلى مِفتاحِ المالِك، " +
-            "ولا عَدّادَ لَها في TierLimits. إغلاقُها يَلزَمُه رَقَمٌ مِنَ المالِك (القاعِدَة ١٦)، " +
-            "وعَدُّ رِسالَةِ وَكيلٍ تَحليلاً يَجعَلُ لافِتَةَ التَرقِيَةِ تَكذِب. " +
-            "تَسقُط يَومَ يوجَد حَدُّ رَسائِلِ الوَكيلِ في الدَرَجات."),
-    };
+    private static readonly UngatedSpender[] PinnedUngated = { };
 
     // ─── ٤. الفَحص ────────────────────────────────────────────────────
 
@@ -434,9 +440,9 @@ public class LanguageModelQuotaGateTests
         new("ResumeStudioPromptAsync()",   "CheckAnalyzeAsync"),
         new("/studio/s/{id:guid}/analyze", "CheckAnalyzeAsync"),
 
-        // ─── مَفتوحٌ ومُعلَن — انظُر PinnedUngated ────────────────────
+        // ─── ‏2026-10-25 (W8-3): كانَ «مَفتوحٌ ومُعلَن» — صارَ سُلطَةَ المالِك حَتّى رَقَمِ الرَسائِل ──
         new("libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAgent.razor",
-            "(مَفتوح)"),
+            "PlatformAdminGuard"),
     };
 
     /// <summary><b>الجَردُ يُطابِقُ الواقِعَ حَرفاً</b> — لا مَدخَلَ

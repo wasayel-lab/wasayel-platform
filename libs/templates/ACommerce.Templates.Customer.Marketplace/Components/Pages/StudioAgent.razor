@@ -3,6 +3,8 @@
 @using Microsoft.JSInterop
 @using Microsoft.AspNetCore.Components.Web
 @inject Services.Incubator.StudioAuth StudioAuth
+@inject Marten.IDocumentStore Store
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 @inject ACommerce.Templates.Customer.Marketplace.Services.AgentService Agent
 @inject ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor Executor
 @inject IHttpContextAccessor HttpCtx
@@ -22,6 +24,12 @@
 
     InteractiveServer: HttpContext مُتاح أَوَّل render فَقَط. نَلتَقِط
     _userId مَرَّة واحِدَة هُناك ثُمَّ نَستَخدِمه في كُلّ نِداء.
+
+    ‏2026-10-25 (تَدقيقُ الإطلاق، تَيّارُ W8-3 — lens-security-2؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): «كُلّ رائِد أَعمال» أَعلاه
+    كانَ يُنفِقُ مِفتاحَ المالِكِ بِلا عَدّادٍ ولا حَدّ — كُلُّ رِسالَةٍ و«طَبِّق»/«ارفُض» نِداءٌ بِتاريخِ المُحادَثَةِ كامِلاً. صارَت المُحادَثَةُ
+    والمُحَرِّرُ داخِلَ StudioAgentDoor.Opens — لِمُشرِفِ المَنَصَّةِ وَحدَه، بِقَرارِ PlatformAdminGuard نَفسِه، يُقرَأُ مَعَ _userId —
+    ومَكانَهُما لِغَيرِه نَصُّ القامُوسِ المُغلَق، والمُعالِجاتُ الأَربَعَةُ تَسأَلُ البابَ قَبلَ أَيِّ نِداء. حَتّى يَقولَ المالِكُ حَدَّ الرَسائِلِ
+    لِكُلِّ دَرَجَة («ب» W8-3 · ١ في سِجِلِّه)؛ والتَبديلُ في البابِ لا هُنا.
 *@
 
 <StudioShell Title="@L["studio.agent.title"]" Active="home">
@@ -40,7 +48,7 @@
                 <a class="st-btn st-btn-primary" href="/studio/auth">@L.Markup("studio.agent.login")</a>
             </div>
         }
-        else
+        else if (StudioAgentDoor.Opens(_platformAdmin))
         {
             <div class="studio-page-head">
                 <h1><AcIcon Name="message" Size="22" /> @L.Markup("studio.agent.title")</h1>
@@ -145,12 +153,20 @@
                 </div>
             </div>
         }
+        else
+        {
+            <div class="st-card">
+                <p>@L.Markup(StudioAgentDoor.ClosedMessageKey)</p>
+            </div>
+        }
     </ChildContent>
 </StudioShell>
 
 @code {
     Guid _userId = Guid.Empty;
     bool _authChecked;
+    // قَرارُ PlatformAdminGuard لِصاحِبِ الجَلسَة — مُدخَلُ StudioAgentDoor.Opens، يُقرَأُ حَيثُ يُقرَأُ _userId وبِالشَرطِ نَفسِه.
+    bool _platformAdmin;
     string _scopeId = "";
     ACommerce.Templates.Customer.Marketplace.Services.AgentSession session = new();
     string newMessage = "";
@@ -171,11 +187,12 @@
                 {
                     _userId = StudioAuth.UserId!.Value;
                     _scopeId = "studio-" + _userId.ToString("N");
+                    _platformAdmin = (await Services.PlatformAdminGuard.EvaluateAsync(Store, StudioAuth)).Allowed;
                 }
             }
             _authChecked = true;
         }
-        if (_userId != Guid.Empty)
+        if (_userId != Guid.Empty && StudioAgentDoor.Opens(_platformAdmin))
             session = await Agent.LoadSessionAsync(_scopeId);
     }
 
@@ -191,7 +208,7 @@
     async Task SendAsync()
     {
         var msg = newMessage?.Trim() ?? "";
-        if (string.IsNullOrEmpty(msg) || isWorking || _userId == Guid.Empty) return;
+        if (string.IsNullOrEmpty(msg) || isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(_platformAdmin)) return;
         newMessage = "";
         isWorking = true;
         StateHasChanged();
@@ -209,7 +226,7 @@
 
     async Task ApplyAsync(string toolId)
     {
-        if (isWorking || _userId == Guid.Empty) return;
+        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(_platformAdmin)) return;
         isWorking = true;
         StateHasChanged();
         var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
@@ -228,7 +245,7 @@
 
     async Task RejectAsync(string toolId)
     {
-        if (isWorking || _userId == Guid.Empty) return;
+        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(_platformAdmin)) return;
         isWorking = true;
         StateHasChanged();
         await Agent.UpdateToolStatusAsync(toolId, "rejected", null, _scopeId);
@@ -240,7 +257,7 @@
 
     async Task ResetAsync()
     {
-        if (isWorking || _userId == Guid.Empty) return;
+        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(_platformAdmin)) return;
         await Agent.ResetAsync(_scopeId);
         session = await Agent.LoadSessionAsync(_scopeId);
         newMessage = "";

@@ -22,9 +22,15 @@
 
 <StudioShell Title="@Title" Active="@(IsIdeas ? "ideas" : "home")">
     <TopBarActions>
+        @* رابِطا `/studio/agent` (هُنا وبِطاقَتُه أَسفَلَ) لا يُرسَمانِ لِمَن لا يَفتَحُ لَه بابُ الوَكيل — `StudioAgentDoor.Opens` نَفسُه الَّذي
+           تَسأَلُه الصَفحَة (‏2026-10-25، تَدقيقُ الإطلاق — تَيّارُ W8-3، lens-security-2؛ القاعِدَة ١٢). وأَوَّلُ الشَريطِ بِلا فَراغٍ قَبلَه أَصلاً
+           (Razor يَقُصُّه)، والبِطاقَةُ بِحيلَةِ الفَراغِ أَدناه — فَلِلمُشرِفِ الصَفحَةُ بايتاً كَما كانَت (مَقيس). *@
+        @if (StudioAgentDoor.Opens(isPlatformAdmin))
+        {
         <a class="st-btn st-btn-ghost" href="/studio/agent">
             <AcIcon Name="message" Size="14" /> @L.Markup("studio.home.agent_cta")@((MarkupString)"\n        ")
         </a>
+        }
         @* روابِطُ صَفحَةِ الفِكرَةِ السِتَّةُ (هُنا خَمسَة، وفي `StudioShell` السادِس) لا تُرسَمُ بِلا مُزَوِّدِ تَحليل — `StudioAnalysisDoor.Opens`
            نَفسُه الَّذي تَرسُمُ بِه `/studio/new` استِمارَتَها؛ وكانَت تُرسَمُ فَتَبلُغُ كُلُّ نَقرَةٍ «غَيرُ مُتاح» (‏2026-10-24، مُراجَعَةُ تَيّارِ S15
            الجَولَة 2؛ تَوصيفُه e38c08f؛ القاعِدَة ١٢). والحالَتانِ الفارِغَتانِ تَقولانِ النَصَّ المُغلَقَ مَكانَ الزِرّ.
@@ -63,6 +69,8 @@
                     <span style="color:var(--st-faint);">←</span>
                 </a>
                 }
+                @if (StudioAgentDoor.Opens(isPlatformAdmin))
+                {
                 @((MarkupString)"\n                ")<a class="studio-list-row" href="/studio/agent" style="align-items:flex-start;">
                     <span class="studio-list-icon ac-chip-info">
                         <AcIcon Name="message" Size="18" />
@@ -73,6 +81,7 @@
                     </div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
+                }
             </div>
 
             <div class="studio-stats">
@@ -292,6 +301,9 @@
     List<Tenant>? myApps;
     List<(string Slug, Services.Deals.Deal Deal)> recentDeals = new();
     string? currentTier;
+    /// <summary>مُدخَلُ <see cref="StudioAgentDoor.Opens"/> — قَرارُ <see cref="Services.PlatformAdminGuard.Decide"/> عَلى صاحِبِ الجَلسَةِ
+    /// الَّذي تُحَمِّلُه الصَفحَةُ أَصلاً (لا قِراءَةَ ثانِيَة، ولا تَعريفَ ثانٍ لِـ«مُشرِف مَنَصَّة»).</summary>
+    bool isPlatformAdmin;
 
     /// <summary>باقاتُ تَطبيقاتي في وَسايِل، ونَصُّ تَعليمات التَحويل.
     /// وبِلا وَثيقَةِ باقَةٍ لا يُصَيَّر شَيء — التَكافُؤُ الصِفريّ.</summary>
@@ -404,6 +416,7 @@
         myApps = (await Tenants.ListOwnedByAsync(uid)).ToList();
         var u = await TierSvc.GetUserAsync(uid);
         currentTier = u?.Tier ?? "spark";
+        isPlatformAdmin = Services.PlatformAdminGuard.Decide(u) == Services.PlatformAdminOutcome.Allowed;
 
         myPlans = await Billing.AllPlansAsync();
         myOrders = await Billing.PendingOrdersAsync();

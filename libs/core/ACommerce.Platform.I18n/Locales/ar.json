@@ -1843,6 +1843,7 @@
   "studio.agent.need_login": "يَجِب تَسجيل الدُخول.",
   "studio.agent.placeholder": "اُكتُب طَلَبَك… مَثَلاً: عَدِّل لَون مَتجَري إلى أَزرَق",
   "studio.agent.title": "وَكيل التَّطبيقات",
+  "studio.agent.unavailable": "وَكيلُ التَّطبيقاتِ غَيرُ مُتاحٍ في هذِه النُّسخَة.",
 
   "drivers.age.day_unit": "يَوم",
   "drivers.age.month_unit": "شَهر",

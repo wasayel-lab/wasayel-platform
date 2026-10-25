@@ -175,6 +175,9 @@ public sealed class AgentService
         //
         // ونَفسُ إيجارِ الجَلسَة (`_admin`) ومُستَخدِمُها المُشتَقُّ
         // مِن مُعَرِّفِها — لا مَصدَرَ ثانٍ.
+        //
+        // ‏2026-10-25 (تَدقيقُ الإطلاق، W8-3؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): أُغلِقَ البابُ بِلا رَقَم — `/studio/agent` لِمُشرِفِ
+        // المَنَصَّةِ وَحدَه (`StudioAgentDoor.Opens`)، و`PinnedUngated` فارِغَة. والسَطرُ يَقيسُ كَما كان.
         await new Services.Incubator.StudioTierService(_store).RecordModelCallAsync(
             Services.Metering.ModelCallRecord.For(
                 AdminTenant, UserIdFromSessionId(session.Id),
