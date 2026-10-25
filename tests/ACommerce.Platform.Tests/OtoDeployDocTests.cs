@@ -359,9 +359,77 @@ public class OtoDeployDocTests
         Assert.True(precision > q, "دِقَّةُ مَصدَرِ الجُملَةِ تَحتَ §٧‑ق غائِبَة.");
         foreach (var phrase in new[] { "`SH-05`", "`OtoClient.cs`", "`ec807a6`", "ليسا في `24-SHIPPING.md` بحرفِهما", "«ب» W9-1 · ٣" })
             Assert.Contains(phrase, adr[precision..], StringComparison.Ordinal);
+        // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W9-1 الجَولَة ١): «ولا يَتَّكِئُ كودٌ عَلَيها» في هذِه الدِقَّةِ مَقلوب — فَلا تَبقى بِلا الدِقَّةِ الَّتي تُصَحِّحُه.
+        Assert.True(adr.IndexOf(SecondPrecision, precision, StringComparison.Ordinal) > precision,
+            "دِقَّةُ «‏/ship يَتَّكِئُ عَلى الجُملَة» لا تَتلو الدِقَّةَ الَّتي قالَت إنَّ كوداً لا يَتَّكِئُ عَلَيها.");
         var client = Read("libs/kits/Delivery/ACommerce.Kit.Delivery.Core/OtoClient.cs");
         var flat = System.Text.RegularExpressions.Regex.Replace(client.Replace("///", " "), @"\s+", " ");
         Assert.Contains("If deliveryOptionId is not sent on the request, the assignment is made to the delivery company that complies with your feasibility rule",
             flat, StringComparison.Ordinal);
     }
+
+    private const string SecondPrecision =
+        "**دقّةٌ ثانيةٌ ‏2026-10-25 (مراجعةُ تيّارِ W9-1، الجولة ١ — يُلحَقُ ولا يُعادُ حرفٌ فوقَ الدقّةِ أعلاه)**";
+
+    /// <summary>
+    /// <para><b>‏<c>/ship</c> يَتَّكِئُ عَلى جُملَةِ الإسنادِ اليَوم، وأَسماءُ قارِئِ الأُجرَةِ تُسَمّى بِمَصدَرِها</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W9-1 الجَولَة ١):
+    /// الدِقَّةُ الأولى تَحتَ ‏ADR-033 §٧‑ق قالَت «لا يَتَّكِئُ كودٌ عَلَيها»، و<c>/ship</c> يُغفِلُ <c>deliveryOptionId</c> اتِّكاءً عَلَيها. فَالدِقَّةُ
+    /// الثانِيَةُ تُشتَرَطُ ويُقابَلُ ما تَقولُه بِالكود: <c>ShipAsync</c> يَبلُغُ <c>CreateOrderAsync</c> عَبرَ <c>PlaceAsync</c>، وتَعليقُ
+    /// <c>CreateOrderAsync</c> يُحيلُ إلى الجُملَة، والأَسماءُ الَّتي يَقرَؤُها جِسمُ <c>CheckOtoDeliveryFeeAsync</c> هِيَ الخَمسَةُ الَّتي تُسَمّيها
+    /// الفِقرَة — فَاسمٌ سادِسٌ يَقرَؤُه القارِئُ ولا تُسَمّيهِ يَحمَرّ. والعَدّادُ يُقاسُ بِعَيِّنَةٍ مَحقونَةٍ تَقرَأُ اسماً سادِساً.</para>
+    /// </summary>
+    [Fact]
+    public void Adr033_7q_says_ship_relies_on_the_sentence_and_names_the_fee_reader_fields_by_their_source()
+    {
+        var adr = Read(Path.Combine("docs", Path.GetFileName(Directory.GetFiles(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "docs"), "ADR-033-*.md").Single())));
+        var q = adr.IndexOf("### ق. إلحاقُ ‏2026-10-25 (تدقيقُ الإطلاق brief-P1b-5)", StringComparison.Ordinal);
+        Assert.True(q > 0, "‏ADR-033 §٧‑ق غائِب.");
+        var second = adr.IndexOf(SecondPrecision, q, StringComparison.Ordinal);
+        Assert.True(second > q, "الدِقَّةُ الثانِيَةُ تَحتَ §٧‑ق غائِبَة.");
+        var text = adr[second..];
+        foreach (var phrase in new[]
+                 {
+                     "**`/ship` يتّكئُ على هذه الجملةِ اليوم**", "«ج» S7·٨ الخطوة 4", "«Shipping Prices › Check OTO Delivery Fee»", "«ب→تكملة» W9-1 · ٣",
+                     "If you do not have a feasibility rule setting, the order will be automatically assigned to the first delivery company added.",
+                     "`OtoClientTests.Create_order_sends_createShipment_true_with_the_cod_amount_and_returns_both_ids`",
+                 })
+            Assert.Contains(phrase, text, StringComparison.Ordinal);
+
+        // المَسارُ الَّذي تُسَمّيه الفِقرَة: ShipAsync ← PlaceAsync ← CreateOrderAsync، والاختِبارُ الَّذي تُسَمّيه قائِم.
+        var shipping = Read("libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Deals/DealShipping.cs");
+        Assert.Contains("await PlaceAsync(", MethodBody(shipping, "public async Task<DealShipResult> ShipAsync("), StringComparison.Ordinal);
+        Assert.Contains("_oto.CreateOrderAsync(", MethodBody(shipping, "private async Task<OtoResult<OtoCreatedOrder>> PlaceAsync("), StringComparison.Ordinal);
+        Assert.Contains("public async Task Create_order_sends_createShipment_true_with_the_cod_amount_and_returns_both_ids()",
+            Read("tests/ACommerce.Platform.Tests/OtoClientTests.cs"), StringComparison.Ordinal);
+
+        var client = Read("libs/kits/Delivery/ACommerce.Kit.Delivery.Core/OtoClient.cs");
+        var flat = System.Text.RegularExpressions.Regex.Replace(client.Replace("///", " "), @"\s+", " ");
+        Assert.Contains("لا <c>deliveryOptionId</c> (التَعيينُ لِقاعِدَةِ حِسابِ البائِعِ عِندَ OTO — أَعلاه)", flat, StringComparison.Ordinal);
+
+        var fields = FeeReaderFields(MethodBody(client, "public async Task<OtoResult<IReadOnlyList<OtoDeliveryOption>>> CheckOtoDeliveryFeeAsync("));
+        Assert.True(fields.Count > 0, "أَداةٌ عَمياء: صِفرُ اسمٍ في جِسمِ قارِئِ الأُجرَة.");
+        Assert.Equal(new[] { "currency", "deliveryCompany", "deliveryOptionId", "deliveryOptionName", "price" }, fields);
+        foreach (var f in fields)
+            Assert.True(text.Contains($"`{f}`", StringComparison.Ordinal), $"قارِئُ الأُجرَةِ يَقرَأُ `{f}` والدِقَّةُ لا تُسَمّيه ({fields.Count} اسماً مَقروءاً).");
+
+        // العَيِّنَة: اسمٌ سادِسٌ يُعَدّ، وما يُرسَلُ في الطَلَبِ وسَبَبُ «لا يُقرَأ» لا يُعَدّان.
+        Assert.Equal(new[] { "codCharge", "deliveryCompany", "deliveryOptionId" },
+            FeeReaderFields("[\"originCity\"] = q.OriginCity,\nif (!root.TryGetProperty(\"deliveryCompany\", out var list)) return Unreadable<X>(\"checkOTODeliveryFee\", \"deliveryCompany\");\n" +
+                            "if (Text(o, \"deliveryOptionId\") is not { } id) continue;\nvar fee = Number(o, \"codCharge\");\n"));
+    }
+
+    /// <summary>جِسمُ عُضوٍ مِن تَوقيعِه إلى قَوسِه الخِتامِيِّ عَلى مَسافَةِ الأَعضاء (أَربَع) — والتَوقيعُ الغائِبُ يَحمَرّ لا يُعيدُ فَراغاً.</summary>
+    private static string MethodBody(string source, string signature)
+    {
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"التَوقيعُ غائِب: {signature}");
+        var end = source.IndexOf("\n    }\n", start, StringComparison.Ordinal);
+        Assert.True(end > start, $"لا قَوسَ خِتامِيّاً بَعدَ: {signature}");
+        return source[start..end];
+    }
+
+    /// <summary>الأَسماءُ الَّتي يَقرَؤُها جِسمٌ مِن رَدِّ OTO — <c>TryGetProperty("…")</c> و<c>Text(o, "…")</c> و<c>Number(o, "…")</c> — مُرَتَّبَةً بِلا تَكرار.</summary>
+    internal static IReadOnlyList<string> FeeReaderFields(string body)
+        => System.Text.RegularExpressions.Regex.Matches(body, @"\b(?:TryGetProperty|Text|Number)\(\s*(?:[A-Za-z_][A-Za-z0-9_]*\s*,\s*)?""(?<n>[A-Za-z_][A-Za-z0-9_]*)""")
+            .Select(m => m.Groups["n"].Value).Distinct().Order(StringComparer.Ordinal).ToList();
 }
