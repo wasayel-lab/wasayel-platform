@@ -306,4 +306,29 @@ public class DockerImagePinTests(ITestOutputHelper output)
             dir.Delete(recursive: true);
         }
     }
+
+    /// <summary><b>و<c>global.json</c> الَّذي يَكتُبُه <c>ci-sdk.sh write</c> في الجَذرِ مُتَجاهَلٌ بِقِياسِ git نَفسِه</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-5 الجَولَة ١،
+    /// صُغرى): «لا يُودَعُ عَمداً» («أ» W8-5·١) كانَ وَعداً بِلا حاجِز — تَشغيلُه مَحَلِّيّاً كَما يَصِفُ DEPLOY §٥ يَترُكُ <c>global.json</c> غَيرَ مُتَجاهَل،
+    /// و<c>git add</c> واحِدٌ يُودِعُ <c>rollForward: disable</c> فَيَكسِرُ كُلَّ جِهازٍ بِلا ذلكَ الـSDK بِعَينِه. الجَذرُ وَحدَه (المَسارُ الافتِراضِيُّ لِلنَصّ)،
+    /// ومِلَفٌّ بِالاسمِ نَفسِه في مُجَلَّدٍ آخَرَ لا يُتَجاهَل.</summary>
+    [Theory]
+    [InlineData("global.json", 0)]
+    [InlineData("scripts/global.json", 1)]
+    [InlineData("global.json.example", 1)]
+    public void GitIgnore_KeepsTheCiGlobalJsonOut_MeasuredByGitItself(string path, int expected)
+    {
+        Assert.Contains("out=\"${3:-global.json}\"", Read("scripts", "ci-sdk.sh"), StringComparison.Ordinal);
+        var psi = new ProcessStartInfo("git") { WorkingDirectory = RepoRoot, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        foreach (var a in new[] { "check-ignore", "-q", "--no-index", "--", path }) psi.ArgumentList.Add(a);
+        Process p;
+        try { p = Process.Start(psi)!; }
+        catch (System.ComponentModel.Win32Exception) { Assert.Fail("أَداةٌ غائِبَة: git — لا يُقاسُ .gitignore بِدونِها."); return; }
+        using (p)
+        {
+            var err = p.StandardError.ReadToEnd();
+            Assert.True(p.WaitForExit(15_000), "git check-ignore لَم يَنتَهِ في خَمسَ عَشرَةَ ثانِيَة.");
+            Assert.True(p.ExitCode is 0 or 1, $"git check-ignore خَرَجَ {p.ExitCode}: {err.Trim()}");
+            Assert.Equal(expected, p.ExitCode);
+        }
+    }
 }
