@@ -65,4 +65,48 @@ public class DeployDocClaimsTests(ITestOutputHelper output)
         // ‏و§١·ب نَفسُه يَقولُ إنّ الـSpace يَبقى عامّاً.
         Assert.Contains("الـSpace **عامّ**، ويَجِب أَن يَبقى عامّاً", deploy, StringComparison.Ordinal);
     }
+
+    // ─── lens-docs-vs-code-3 — §٢·و «التَهيئَة»: مُتَغَيِّرانِ إلزامِيّانِ لا واحِد ──────────────────────────────────────
+
+    /// <summary>أَسماءُ ما تَشتَرِطُه البَوّابَةُ قَبلَ البِناء — كُلُّ سَطرِ <c>|| MISSING_VARS="$MISSING_VARS X"</c> في السكربت.</summary>
+    internal static string[] GateMandatoryVariables(string gate)
+        => Regex.Matches(gate, @"\|\| MISSING_VARS=""\$MISSING_VARS (?<v>[A-Za-z_][A-Za-z0-9_]*)""")
+            .Select(m => m.Groups["v"].Value).Distinct().ToArray();
+
+    /// <summary>ما يَنقُصُ قِسمَ «التَهيئَة» مِن تِلكَ الأَسماء: في مِثالِ المِلَفِّ سَطرَ إسنادٍ لِكُلٍّ، و«الوَحيد» لا يَبقى إلّا مَشطوباً.</summary>
+    internal static IReadOnlyList<string> MissingFromGateConfig(string section, IEnumerable<string> mandatory)
+    {
+        var missing = new List<string>();
+        var fence = section.IndexOf("```bash\n# scripts/.prod-gate.env\n", StringComparison.Ordinal);
+        var example = fence < 0 ? "" : section[fence..section.IndexOf("\n```", fence + 8, StringComparison.Ordinal)];
+        foreach (var v in mandatory)
+            if (!Regex.IsMatch(example, $@"^{Regex.Escape(v)}=", RegexOptions.Multiline)) missing.Add(v);
+        if (Unstruck(section).Contains("المُتَغَيِّرُ الإلزامِيُّ الوَحيد", StringComparison.Ordinal)) missing.Add("«الوَحيد» بِلا شَطب");
+        return missing;
+    }
+
+    [Fact]
+    public void The_gate_configuration_section_names_every_variable_the_gate_requires_in_its_example()
+    {
+        var mandatory = GateMandatoryVariables(Read("scripts", "verify-production-boot.sh"));
+        output.WriteLine($"ما تَشتَرِطُه البَوّابَة: {string.Join(" · ", mandatory)}");
+        Assert.True(mandatory.Length >= 2, $"أَداةٌ عَمياء: {mandatory.Length} مُتَغَيِّراً إلزامِيّاً مَقروءاً مِن السكربت.");
+        var section = Section(Deploy(), "### التَهيئَة\n", "### ");
+        var missing = MissingFromGateConfig(section, mandatory);
+        Assert.True(missing.Count == 0, "«التَهيئَة» في §٢·و يَنقُصُها: " + string.Join("، ", missing));
+        Assert.Contains("lens-docs-vs-code-3", section, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>حَقنُ عَيب</b>: القِسمُ كَما كانَ قَبلَ الإلحاقِ (سَطرٌ واحِدٌ في المِثالِ و«الوَحيد» بِلا شَطب) يُحمِرُّ المُتَحَقِّقَ بِالسِرِّ الغائِبِ وبِالكَلِمَة.</summary>
+    [Fact]
+    public void The_gate_configuration_checker_goes_red_on_the_section_as_it_was()
+    {
+        const string before =
+            "### التَهيئَة\nالمُتَغَيِّرُ الإلزامِيُّ الوَحيد `ConnectionStrings__Postgres` — نَفسُ\n…\n\n```bash\n# scripts/.prod-gate.env\n" +
+            "ConnectionStrings__Postgres=\"$(tr -d '\\r\\n' < /d/Testor/neon-connection.txt)\"\n```\n";
+        var missing = MissingFromGateConfig(before, GateMandatoryVariables(Read("scripts", "verify-production-boot.sh")));
+        Assert.Contains("ACOMMERCE_AUTH_SECRET", missing);
+        Assert.Contains("«الوَحيد» بِلا شَطب", missing);
+        Assert.DoesNotContain("ConnectionStrings__Postgres", missing);
+    }
 }
