@@ -66,7 +66,7 @@ public sealed class User
     public DateTime? AcceptedTermsAt { get; set; }
 
     /// <summary>إصدار الشُروط الَّتي قَبِلَها — لَو تَحَدَّثَت الشُروط نَرفَع
-    /// <see cref="TermsPolicy.CurrentVersion"/> وَنُجبِر القَبول مَرَّة أُخرى.</summary>
+    /// <c>TermsPolicy.CurrentVersion</c> (في القالِب — فَوقَ هذِه الطَبَقَة) وَنُجبِر القَبول مَرَّة أُخرى.</summary>
     public int AcceptedTermsVersion { get; set; }
 
     /// <summary>

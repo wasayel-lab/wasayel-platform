@@ -21,6 +21,10 @@ namespace ACommerce.Platform.Tests;
 // وكُلٌّ يَطبَعُ ما عَدَّ ويَفشَلُ عَلى الصِفر، ولِكُلٍّ عَيِّناتٌ مَحقونَةٌ تُثبِتُ أَنّه يَحمَرّ (القاعِدَة ١٠).
 // **وما لَم يُمَسّ ويُقال**: حَقنٌ لا يُقرَأُ لِغَيرِ المَخزَن — مَقيسٌ عِندَ `b2fde50` ‏10 (‏`NavigationManager Nav` في ثَمانِ صَفَحات، و`Billing` في
 // ‏`PayPalReturn.razor`، و`Auth` في `StudioNewIdea.razor`) — لا مَدخَلَ فيه إلى القاعِدَة، فَلَيسَ مِن هذا البَند («أ» W8-9 · ١).
+// (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-9 الجَولَة ١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **و«المُتَرجِمُ لا يَفحَصُ cref» لَم يَكُن صادِقاً** — يَفحَصُه
+// حينَ يُطلَبُ مِلَفُّ التَوثيق (‏`GenerateDocumentationFile`)، وفي `@code` razor أَيضاً، وبِالتَوقيع. وكانَت ‏11 مَرجِعاً مَكسوراً في `.cs` لا يَراها
+// الفاحِصُ (٢) أَدناه. فَصارَ `Directory.Build.props` يُوَلِّدُ المِلَفَّ ويَجعَلُ CS1574/CS1580 خَطَأَين، وحارِسُه `CrefCompilerGateTests`؛ والفاحِصُ (٢)
+// باقٍ بِحالِه — طَبَقَةٌ ثانِيَةٌ لِلصَفَحاتِ لا بَديلٌ عَن المُتَرجِم.
 public class RazorPageEntryPointsTests(ITestOutputHelper output)
 {
     private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;
@@ -185,7 +189,7 @@ public class RazorPageEntryPointsTests(ITestOutputHelper output)
         Assert.True(assemblies >= 10 && types.Count >= 1000, $"أَداةٌ عَمياء: {assemblies} تَجميعاً و{types.Count} نَوعاً.");
         Assert.True(crefs >= 30, $"أَداةٌ عَمياء: {crefs} مَرجِعاً فَقَط — والمَقيسُ ‏34.");
         Assert.True(broken.Count == 0,
-            "مَرجِعُ cref في صَفحَةٍ يُسَمّي ما لا وُجودَ لَه — والمُتَرجِمُ لا يَفحَصُه (لا GenerateDocumentationFile):\n  " + string.Join("\n  ", broken));
+            "مَرجِعُ cref في صَفحَةٍ يُسَمّي ما لا وُجودَ لَه (والمُتَرجِمُ يَفحَصُه أَيضاً مُنذُ ‏2026-10-25 — CrefCompilerGateTests):\n  " + string.Join("\n  ", broken));
     }
 
     /// <summary><b>حَقنُ عَيب</b>: المَرجِعُ الَّذي كانَ في <c>MyDealDetail.razor</c> لا يُحَلّ، وبَديلُه يُحَلّ؛ ونَوعٌ وَحدَه، وبِمَجالٍ جُزئِيّ، وبِتَوقيع،

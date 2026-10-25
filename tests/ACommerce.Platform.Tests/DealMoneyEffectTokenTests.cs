@@ -66,7 +66,7 @@ public class DealMoneyEffectTokenTests(ITestOutputHelper output)
     /// <summary>
     /// <para><b>عالَمُ الوَثائِقِ بِرَمزِ إلغاءٍ يُحتَرَم</b>: <c>MartenProxy</c> يَتَجاهَلُ الرَمز، وMarten لا يَتَجاهَلُه — فَهذا الغِلافُ يَرمي
     /// <see cref="OperationCanceledException"/> لِكُلِّ نِداءٍ عَلى المَخزَنِ أَو جَلسَتِه يَحمِلُ رَمزاً مُلغىً، ويُحيلُ ما سِواه إلى العالَمِ بِحَرفِه.
-    /// <see cref="Refused"/> يَعُدُّ ما رَدّ — فَـ«رُدَّ نِداء» تُقاس.</para>
+    /// <see cref="_refused"/> يَعُدُّ ما رَدّ — فَـ«رُدَّ نِداء» تُقاس.</para>
     /// </summary>
     internal class TokenHonouringStore : DispatchProxy
     {

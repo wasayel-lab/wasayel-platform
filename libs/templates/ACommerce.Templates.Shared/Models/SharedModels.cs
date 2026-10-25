@@ -12,7 +12,7 @@ namespace ACommerce.Templates.Shared.Models;
 // This is the data-side twin of the visual flex slots on the templates.
 
 /// <summary>
-/// Single conversation row for <see cref="AcMessagesListPage"/>.
+/// Single conversation row for <c>AcMessagesListPage</c>.
 /// </summary>
 public sealed record ConversationRowDto
 {
@@ -29,7 +29,7 @@ public sealed record ConversationRowDto
 }
 
 /// <summary>
-/// Single chat message for <see cref="AcChatPage"/>.
+/// Single chat message for <c>AcChatPage</c>.
 /// </summary>
 public sealed record ChatMessageDto
 {
@@ -43,7 +43,7 @@ public sealed record ChatMessageDto
 }
 
 /// <summary>
-/// Notification row for <see cref="AcNotificationsPage"/>.
+/// Notification row for <c>AcNotificationsPage</c>.
 /// </summary>
 public sealed record NotificationRowDto
 {
@@ -58,7 +58,7 @@ public sealed record NotificationRowDto
 }
 
 /// <summary>
-/// User card for <see cref="AcProfilePage"/>.
+/// User card for <c>AcProfilePage</c>.
 /// </summary>
 public sealed record ProfileUserDto
 {
@@ -77,7 +77,7 @@ public sealed record ProfileUserDto
 public sealed record ProfileStatDto(string Label, string Value);
 
 /// <summary>
-/// A menu section inside <see cref="AcProfilePage"/> or <see cref="AcSettingsPage"/>.
+/// A menu section inside <c>AcProfilePage</c> or <c>AcSettingsPage</c>.
 /// </summary>
 public sealed record MenuSectionDto
 {
@@ -120,7 +120,7 @@ public sealed record BottomNavItemDto
 }
 
 /// <summary>
-/// Theme and language preferences passed to <see cref="AcSettingsPage"/>.
+/// Theme and language preferences passed to <c>AcSettingsPage</c>.
 /// </summary>
 public sealed record SettingsSnapshot
 {

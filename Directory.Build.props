@@ -9,6 +9,27 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
 
+  <!-- ═══ مَرجِعُ cref يُسَمّي ما لا وُجودَ لَه = بِناءٌ أَحمَر (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-9 الجَولَة ١) ═══
+       **المَقيسُ قَبلَ**: ‏`RazorPageEntryPointsTests` كَتَبَ «المُتَرجِمُ لا يَفحَصُ cref» وبَنى مُحَلِّلاً بِالانعِكاسِ لِصَفَحاتِ razor وَحدَها
+       يَتَجاهَلُ التَوقيع. والمُتَرجِمُ يَفحَصُه — **حينَ يُطلَبُ مِنه مِلَفُّ التَوثيق**: بِـ`GenerateDocumentationFile` ‏11 مَرجِعاً لا يُحَلُّ
+       (‏CS1574 — عَشَرَةٌ في `libs/` وواحِدٌ في الاختِبارات)، ويَفحَصُ `@code` في razor أَيضاً (حَقنُ عَيبٍ مُؤَقَّتٍ في `CheckoutPage.razor` ⇒ CS1574
+       بِسَطرِه)، والتَوقيعَ (CS1580). **وصارَ**: المِلَفُّ يُوَلَّد، وCS1591 (عُضوٌ عامٌّ بِلا تَعليق) صامِتٌ كَما كان، وCS1574/CS1580 خَطَآن —
+       الأَداةُ القائِمَةُ لا أُنبوبٌ رابِع (القاعِدَتانِ ٨ و١٤). **ولا يُنشَرُ المِلَفّ**: ‏`PublishDocumentationFile(s)` و`PublishReferencesDocumentationFiles`
+       كاذِبَة — فَمُخرَجُ `dotnet publish` (والحاوِيَة) بِحَرفِه كَما كان (‏377 مِلَفّاً، صِفرُ ‎.xml). **والحارِسُ**: `CrefCompilerGateTests` — يَحمَرُّ إن
+       أُطفِئَ التَوليدُ أَو سَقَطَ أَحَدُ الرَمزَين، ويُشَغِّلُ مُتَرجِمَ الـSDK نَفسَه بِالرَمزَينِ مِن هُنا عَلى عَيِّنَةٍ مَحقونَة.
+       **وتَحذيراتُ التَوثيقِ الأُخرى صامِتَةٌ كَما كانَت قَبلَ التَوليد** — مَقيسَةً يَومَها بِمَواضِعِها الفَريدَة: CS1573 ‏35 (وَسيطٌ بِلا param)،
+       CS1570 ‏13 (XML مَكسور)، CS1587 ‏10، CS0419 ‏10 (cref مُلتَبِسٌ يُحَلُّ إلى أَحَدِ الأَحمال)، CS1572 ‏6، CS1734 ‏1 — لِئَلّا يَصيرَ كُلُّ بِناءٍ
+       75 تَحذيراً جَديداً لا يَقرَؤُه أَحَد. **وما لا يُغلِقُه — يُقال**: تَعليقٌ بِـXML مَكسورٍ (CS1570) لا تُفحَصُ crefs فيه.
+       **ومَوضِعُه قَبلَ كُتلَةِ NuGetAudit بِقَصد**: `NuGetAuditGateTests` يَقرَأُ آخِرَ `WarningsAsErrors` في المِلَف، وكِلاهُما يُراكِمُ `$(WarningsAsErrors)`. -->
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1574;CS1580</WarningsAsErrors>
+    <NoWarn>$(NoWarn);CS1573;CS1570;CS1587;CS0419;CS1572;CS1734</NoWarn>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
+    <PublishDocumentationFiles>false</PublishDocumentationFiles>
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+  </PropertyGroup>
+
   <!-- ═══ ثَغرَةٌ عالِيَةٌ أَو حَرِجَةٌ في حُزمَةٍ تُبنى = بِناءٌ أَحمَر (‏2026-10-25، تَدقيقُ الإطلاق lens-checkers-ci-1) ═══
        **المَقيسُ قَبلَ**: البِناءُ يَطبَعُ `NU1903` لِـ`System.Security.Cryptography.Pkcs` ‏10.0.0 (‏GHSA-846f-f764-76mx) ولِـ
        `Microsoft.AspNetCore.SignalR.Common` ‏10.0.10 (‏GHSA-334f-vvp4-7g6p) — ثُمَّ «0 Error(s)». فَتَحذيرُ NuGet يُطبَعُ في
