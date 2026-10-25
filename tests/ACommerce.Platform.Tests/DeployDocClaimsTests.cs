@@ -517,4 +517,59 @@ public class DeployDocClaimsTests(ITestOutputHelper output)
         Assert.True(SaysTheDocumentsStillHoldPlaceholders(item +
             "   (brief-P2-2) نَوائِبَ `[[ … يَملَؤُه المالِك ]]` — `PlatformDocFields.EntityKeys` — §٢ الخُطوَة ٧\n"));
     }
+
+    // ─── W8-8 الجَولَة ١ — §٢·هـ البَند ٧: «الوَثائِقُ الخَمسُ تُرسَمُ بِنَوائِبِها» أَربَعٌ مِنها ────────────────────────────────
+
+    /// <summary>صَفَحاتُ الوَثائِقِ الخَمسِ بِمَساراتِها — كَما يُعَدِّدُها البَندُ ٧ (الشُروط، الخُصوصِيَّة، الاستِرداد، الأَسعار، التَواصُل).</summary>
+    internal static readonly (string Route, string File)[] PlatformDocPages =
+    {
+        ("/terms", "PlatformTerms.razor"), ("/privacy", "PlatformPrivacy.razor"), ("/refunds", "PlatformRefunds.razor"),
+        ("/pricing", "PlatformPricing.razor"), ("/contact", "PlatformContact.razor"),
+    };
+
+    /// <summary>أَيَرسُمُ المَصدَرُ مِفتاحاً مِن <paramref name="entityKeys"/> — بِـ<c>.Markup("…")</c> أَو بِالمُفَهرِسِ <c>["…"]</c>؛ والسُؤالُ
+    /// <c>IsPlaceholder("…")</c> وَحدَه لا يَرسُمُ شَيئاً.</summary>
+    internal static bool DrawsEntityKey(string razor, IEnumerable<string> entityKeys)
+        => entityKeys.Any(k => Regex.IsMatch(razor, @"(?:\.Markup\(\s*|\[\s*)""" + Regex.Escape(k) + @"""", RegexOptions.CultureInvariant));
+
+    /// <summary>
+    /// <para><b>«الخَمسُ تُرسَمُ بِنَوائِبِها» أَربَعٌ مِنها</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-8 الجَولَة ١): الشُروطُ والخُصوصِيَّةُ والاستِردادُ
+    /// والتَواصُلُ تَرسُمُ مِفتاحَ كِيانٍ، و<c>/pricing</c> يَسأَلُ <c>IsPlaceholder</c> لِيُخفيَ بابَ التَواصُل ولا يَرسُمُ مِفتاحاً. والبَندُ ٧ يَحمِلُ
+    /// الدِقَّةَ ما دامَ العَدُّ كَذلِك — ويَحمَرُّ يَومَ يَرسُمُ <c>/pricing</c> نائِباً أَو تَكُفُّ صَفحَةٌ عَن رَسمِه، فَيُعادُ القِياس.</para>
+    /// </summary>
+    [Fact]
+    public void Four_of_the_five_documents_draw_entity_placeholders_and_pricing_hides_its_contact_door_instead()
+    {
+        var keys = ACommerce.Templates.Customer.Marketplace.Services.PlatformDocFields.EntityKeys;
+        var drawn = new List<string>();
+        foreach (var (route, file) in PlatformDocPages)
+        {
+            var razor = Read("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "Platform", file);
+            Assert.Contains($"@page \"{route}\"", razor, StringComparison.Ordinal);
+            if (DrawsEntityKey(razor, keys)) drawn.Add(route);
+        }
+        output.WriteLine($"صَفَحاتُ الوَثائِق: {PlatformDocPages.Length} · تَرسُمُ مِفتاحَ كِيان: {drawn.Count} ({string.Join("، ", drawn)})");
+        Assert.True(keys.Count >= 5, $"أَداةٌ عَمياء: {keys.Count} مِفتاحَ كِيان.");
+        Assert.Equal(new[] { "/terms", "/privacy", "/refunds", "/contact" }, drawn);
+
+        var pricing = Read("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "Platform", "PlatformPricing.razor");
+        Assert.Contains("L.IsPlaceholder(\"platform.doc.contact_email\")", pricing, StringComparison.Ordinal);
+
+        var item = PaddleLiveApprovalItem(Deploy());
+        Assert.Contains("مُراجَعَةُ تَيّارِ W8-8 الجَولَة ١", item, StringComparison.Ordinal);
+        Assert.Contains("**أَربَعٌ مِن الخَمسِ** (الشُروط، الخُصوصِيَّة، الاستِرداد، التَواصُل)", item, StringComparison.Ordinal);
+        Assert.Contains("`/pricing` لا\n   يَرسُمُ نائِباً بَل يُخفي بابَ التَواصُل", item, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>حَقنُ عَيب</b>: <c>/pricing</c> يَرسُمُ البَريدَ بِـ<c>Markup</c> أَو بِالمُفَهرِس ⇒ يُعَدّ؛ والسُؤالُ وَحدَه ومِفتاحٌ لَيسَ مِن الكِيان ⇒ لا.</summary>
+    [Fact]
+    public void The_entity_key_drawer_reader_sees_markup_and_indexer_and_not_a_bare_placeholder_question()
+    {
+        var keys = ACommerce.Templates.Customer.Marketplace.Services.PlatformDocFields.EntityKeys;
+        Assert.True(DrawsEntityKey("<p>@L.Markup(\"platform.doc.contact_email\")</p>", keys));
+        Assert.True(DrawsEntityKey("<a href=\"@($\"mailto:{L[\"platform.doc.contact_email\"]}\")\">x</a>", keys));
+        Assert.True(DrawsEntityKey("<span>@doc.Markup(\"platform.doc.entity_country\")</span>", keys));
+        Assert.False(DrawsEntityKey("@if (!L.IsPlaceholder(\"platform.doc.contact_email\")) { <a href=\"/contact\">x</a> }", keys));
+        Assert.False(DrawsEntityKey("<p>@L.Markup(\"platform.doc.placeholder_note\")</p>", keys));
+    }
 }
