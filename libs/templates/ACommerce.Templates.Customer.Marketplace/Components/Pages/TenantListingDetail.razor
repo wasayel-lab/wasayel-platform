@@ -307,7 +307,7 @@ else
                         @if (hasArrived)
                         {
                             <p style="margin:8px 0 0;font-size:12px;color:var(--ac-text-muted);">
-                                <AcIcon Name="check" Size="14" /> @L.Markup("listings.detail.driver_arrived") @Culture.InZone(listingMatch.ArrivedAt!.Value).ToString("HH:mm")
+                                <AcIcon Name="check" Size="14" /> @L.Markup("listings.detail.driver_arrived") @Culture.FormatTime(listingMatch.ArrivedAt!.Value, "HH:mm")
                             </p>
                         }
 
@@ -432,7 +432,7 @@ else
                                         }
                                     </div>
                                 }
-                                <span style="font-size:11px;color:var(--ac-text-muted);">@((MarkupString)"\n                                    ")@L.Markup("listings.detail.valid_until") @Culture.InZone(o.ExpiresAt).ToString("HH:mm")
+                                <span style="font-size:11px;color:var(--ac-text-muted);">@((MarkupString)"\n                                    ")@L.Markup("listings.detail.valid_until") @Culture.FormatTime(o.ExpiresAt, "HH:mm")
                                 </span>
                                 @* أَزرار القَبول/الرَفض لِصاحِب الإعلان فَقَط. *@
                                 @if (isOwner)
@@ -571,7 +571,7 @@ else
         </div>
     </details>
 
-    <p class="ac-muted" style="font-size:12px;margin-top:16px;text-align:center;">@((MarkupString)"\n        ")@L.Markup("listings.detail.published") @Culture.InZone(listing.CreatedAt).ToString("yyyy-MM-dd")
+    <p class="ac-muted" style="font-size:12px;margin-top:16px;text-align:center;">@((MarkupString)"\n        ")@L.Markup("listings.detail.published") @Culture.FormatTime(listing.CreatedAt, "yyyy-MM-dd")
     </p>
 
     @* ── عَدّادُ المُشاهَدَة — أَثَرٌ جانِبيّ بَعدَ التَصيير ─────────────

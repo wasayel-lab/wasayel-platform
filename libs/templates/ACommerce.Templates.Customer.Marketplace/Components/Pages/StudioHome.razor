@@ -254,7 +254,7 @@
                             <strong>
                                 @(string.IsNullOrEmpty(d.ListingTitle) ? d.Pattern : d.ListingTitle)
                             </strong>
-                            <span>/@slug · @d.Pattern · @Culture.InZone(d.UpdatedAt).ToString("HH:mm")</span>
+                            <span>/@slug · @d.Pattern · @Culture.FormatTime(d.UpdatedAt, "HH:mm")</span>
                         </div>
                         <span class="st-chip">@Services.Deals.DealsPolicy.LabelAr(d.Stage)</span>
                     </a>
@@ -293,7 +293,7 @@
                         <div class="studio-list-body">
                             <strong>@(string.IsNullOrEmpty(s.ProjectDescription)
                                 ? L["studio.home.no_desc"] : Truncate(s.ProjectDescription, 70))</strong>
-                            <span>@StatusLabel(s.Status) · @Culture.InZone(s.UpdatedAt).ToString("yyyy-MM-dd HH:mm")</span>
+                            <span>@StatusLabel(s.Status) · @Culture.FormatTime(s.UpdatedAt, "yyyy-MM-dd HH:mm")</span>
                         </div>
                         @if (s.Status == IncubatorStatus.Completed)
                         { <span class="st-chip st-chip-success">@L.Markup("admin.incubator.quality") @s.AnalysisQualityScore%</span> }

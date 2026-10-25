@@ -92,7 +92,7 @@
             <strong>@(string.IsNullOrEmpty(d.ListingTitle) ? d.Pattern : d.ListingTitle)</strong>
             <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
                 @DealsPolicy.LabelAr(d.Stage) · @StatusLabel(d.Status) ·
-                @((MarkupString)ACommerce.Kit.Culture.Money.Format(d.AmountSar)) · @Culture.InZone(d.UpdatedAt).ToString("MM-dd HH:mm")
+                @((MarkupString)ACommerce.Kit.Culture.Money.Format(d.AmountSar)) · @Culture.FormatTime(d.UpdatedAt, "MM-dd HH:mm")
             </span>
         </div>
         <AcIcon Name="chevron-left" Size="16" />

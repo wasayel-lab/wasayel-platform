@@ -53,7 +53,7 @@ else
                         </div>
                         <p class="ac-muted" style="margin:6px 0;font-size:13px;">@t.Body</p>
                         <p class="ac-muted" style="font-size:11px;">
-                            @Culture.InZone(t.CreatedAt).ToString("yyyy-MM-dd HH:mm") — @(t.Replies.Count) @L.Markup("common.unit.reply")@((MarkupString)"\n                        ")
+                            @Culture.FormatTime(t.CreatedAt, "yyyy-MM-dd HH:mm") — @(t.Replies.Count) @L.Markup("common.unit.reply")@((MarkupString)"\n                        ")
                         </p>
                     </ChildContent>
                 </AcCard>

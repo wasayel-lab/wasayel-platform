@@ -64,7 +64,7 @@ else
     {
         <p style="display:flex;align-items:center;justify-content:center;gap:6px;
                   font-size:12px;color:var(--ac-text-muted);margin:8px 0;">
-            <AcIcon Name="clock" Size="14" /> @L.Markup("chats.room.temp_until") @Culture.InZone(conv.ExpiresAt.Value).ToString("yyyy-MM-dd HH:mm")
+            <AcIcon Name="clock" Size="14" /> @L.Markup("chats.room.temp_until") @Culture.FormatTime(conv.ExpiresAt.Value, "yyyy-MM-dd HH:mm")
         </p>
     }
 

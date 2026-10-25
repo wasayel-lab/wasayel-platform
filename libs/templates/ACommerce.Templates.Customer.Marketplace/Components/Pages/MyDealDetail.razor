@@ -444,7 +444,7 @@
                     <div style="flex:1;">
                         <strong style="font-size:13px;">@FormatEvent(e)</strong>
                         <span style="color:var(--ac-text-muted);font-size:11px;display:block;">
-                            @(e.ActorName ?? "—") · @Culture.InZone(e.At).ToString("MM-dd HH:mm")
+                            @(e.ActorName ?? "—") · @Culture.FormatTime(e.At, "MM-dd HH:mm")
                         </span>
                     </div>
                 </div>

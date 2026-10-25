@@ -48,10 +48,10 @@
                     {
                         <p style="margin:6px 0 0;font-size:13px;color:var(--ac-text-muted);">@o.Message</p>
                     }
-                    <p style="margin:6px 0 0;font-size:11px;color:var(--ac-text-muted);">@((MarkupString)"\n                        ")@L.Markup("offers.mine.submitted_at") @Culture.InZone(o.SubmittedAt).ToString("yyyy-MM-dd HH:mm")
+                    <p style="margin:6px 0 0;font-size:11px;color:var(--ac-text-muted);">@((MarkupString)"\n                        ")@L.Markup("offers.mine.submitted_at") @Culture.FormatTime(o.SubmittedAt, "yyyy-MM-dd HH:mm")
                         @if (o.Status == ACommerce.Kit.Offers.OfferStatus.Pending)
                         {
-                            <span> · @L.Markup("offers.mine.valid_until") @Culture.InZone(o.ExpiresAt).ToString("HH:mm")</span>
+                            <span> · @L.Markup("offers.mine.valid_until") @Culture.FormatTime(o.ExpiresAt, "HH:mm")</span>
                         }
                         @if (dist.HasValue)
                         {

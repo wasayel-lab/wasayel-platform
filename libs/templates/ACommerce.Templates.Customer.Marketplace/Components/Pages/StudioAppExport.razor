@@ -60,7 +60,7 @@
                     else
                     {
                         @L.Markup("studio.export.last_at",
-                                  Culture.InZone(lastExport.At).ToString("yyyy-MM-dd HH:mm"),
+                                  Culture.FormatTime(lastExport.At, "yyyy-MM-dd HH:mm"),
                                   string.IsNullOrWhiteSpace(lastExport.ActorName) ? "—" : lastExport.ActorName)
                     }
                 </p>

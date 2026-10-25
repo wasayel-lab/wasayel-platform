@@ -21,6 +21,10 @@ public interface ICultureContext
     /// <summary>لَحظَةٌ مُخَزَّنَةٌ بِـUTC بِساعَةِ مِنطَقَةِ هذا الطَلَب — <see cref="CultureTime.InZone"/> بِـ<see cref="TimeZone"/>.
     /// كُلُّ وَقتٍ يَراه المُستَخدِمُ يَمُرُّ مِن هُنا (‏2026-10-24، تَيّارُ S15 البَند B).</summary>
     DateTime InZone(DateTime storedUtc);
+
+    /// <summary>اللَحظَةُ المَعروضَةُ نَصّاً بِصيغَتِها — <see cref="CultureTime.FormatTime"/> بِـ<see cref="TimeZone"/>: لَحظَةٌ لَم تُضبَط
+    /// (<c>DateTime.MinValue</c>) لا تُرسَمُ شَيئاً. كُلُّ مَوضِعِ عَرضٍ يُنَسِّقُ مِن هُنا لا مِن نَتيجَةِ <see cref="InZone"/> (‏2026-10-25، W8-7).</summary>
+    string FormatTime(DateTime storedUtc, string format);
 }
 
 /// <summary>
@@ -56,6 +60,19 @@ public static class CultureTime
         return TimeZoneInfo.ConvertTimeFromUtc(utc, Zone(timeZoneId));
     }
 
+    /// <summary>
+    /// <para><b>اللَحظَةُ المَعروضَةُ نَصّاً — ولَحظَةٌ لَم تُضبَط غائِبَة</b> (‏2026-10-25، تَيّارُ W8-7 — بَندُ المُنَسِّق؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق).</para>
+    ///
+    /// <para><b>العِلَّةُ المَقيسَة</b> (تَوصيفُها <c>DisplayTimeAbsentTests</c>): وَثيقَةٌ وَقتُها لَم يُكتَب (<c>DateTime.MinValue</c> — قيمَةُ
+    /// <c>default</c>) كانَت تَمُرُّ بِـ<see cref="InZone"/> فَتَخرُجُ ساعَةَ الرياضِ في السَنَةِ الأولى («0001-01-01 03:06»، إزاحَتُها الشَمسِيَّةُ
+    /// ‏+03:06:52 في tzdata)، وكُلُّ مَوضِعِ عَرضٍ (‏36 في ‏24 مِلَفّاً) يُنَسِّقُ ما أَعادَتهُ بِنَفسِه فَلا يَسأَلُ أَحَدٌ أَضُبِطَت.</para>
+    ///
+    /// <para><b>والغائِبُ نَصٌّ فارِغ</b> لا شَرطَةُ قامُوس: العُدَّةُ لا تَعرِفُ القامُوس، والمَوضِعُ الَّذي يَحتاجُ كَلِمَةً مَكانَها يَسأَلُ عَن النَصِّ الفارِغِ
+    /// ويَكتُبُها مِن قامُوسِه. وما سِوى ذلك <b>بايتاً ما كانَ</b>: <c>InZone(stored, tz).ToString(format)</c> بِثَقافَةِ الخَيطِ نَفسِها.</para>
+    /// </summary>
+    public static string FormatTime(DateTime stored, string format, string? timeZoneId = null)
+        => stored == DateTime.MinValue ? "" : InZone(stored, timeZoneId).ToString(format);
+
     /// <summary>المِنطَقَةُ بِمُعَرِّفِها، وإلّا الافتِراضِيَّة، وإلّا UTC — لا يَرمي.</summary>
     public static TimeZoneInfo Zone(string? timeZoneId)
     {
@@ -78,6 +95,7 @@ public sealed class MutableCultureContext : ICultureContext
     public string Numerals { get; set; } = "arabic";
     public DateTime NowInZone => CultureTime.InZone(DateTime.UtcNow, TimeZone);
     public DateTime InZone(DateTime storedUtc) => CultureTime.InZone(storedUtc, TimeZone);
+    public string FormatTime(DateTime storedUtc, string format) => CultureTime.FormatTime(storedUtc, format, TimeZone);
     /// <summary>تُفَوِّض إلى <see cref="Money.Format"/>. وكانَت قَبلَ
     /// ذلك <c>N2</c> ورَمزاً لاحِقاً — أَي **تُخالِف كُلّ شاشَة** تَعرِض
     /// <c>N0</c>، ولَم يُكتَشَف لِأَنَّها بِصِفر مُستَهلِك. مُنَسِّقٌ

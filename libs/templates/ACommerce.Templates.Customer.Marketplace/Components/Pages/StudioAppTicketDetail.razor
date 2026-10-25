@@ -25,7 +25,7 @@
         {
             <div class="studio-page-head">
                 <h1>@ticket.Subject</h1>
-                <p>@L.Markup("studio.app_ticket.from") @ticket.AuthorName · @Culture.InZone(ticket.CreatedAt).ToString("yyyy-MM-dd HH:mm") @L.Markup("studio.app_ticket.status_label")
+                <p>@L.Markup("studio.app_ticket.from") @ticket.AuthorName · @Culture.FormatTime(ticket.CreatedAt, "yyyy-MM-dd HH:mm") @L.Markup("studio.app_ticket.status_label")
                     <span class="st-chip @StatusChip(ticket.Status)">@StatusLabel(ticket.Status)</span>
                 </p>
             </div>
@@ -43,7 +43,7 @@
                     <div>
                         <strong>@ticket.AuthorName</strong>
                         <span style="display:block;font-size:12px;color:var(--st-muted);">
-                            @Culture.InZone(ticket.CreatedAt).ToString("yyyy-MM-dd HH:mm")
+                            @Culture.FormatTime(ticket.CreatedAt, "yyyy-MM-dd HH:mm")
                         </span>
                     </div>
                 </div>
@@ -69,7 +69,7 @@
                                 @if (staff) { <span class="st-chip" style="margin-inline-start:6px;">@L.Markup("studio.app_ticket.staff_badge")</span> }
                             </strong>
                             <span style="display:block;font-size:12px;color:var(--st-muted);">
-                                @Culture.InZone(r.At).ToString("yyyy-MM-dd HH:mm")
+                                @Culture.FormatTime(r.At, "yyyy-MM-dd HH:mm")
                             </span>
                         </div>
                     </div>

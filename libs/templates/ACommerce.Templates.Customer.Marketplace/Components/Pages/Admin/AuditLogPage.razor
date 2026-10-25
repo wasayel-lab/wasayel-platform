@@ -82,7 +82,7 @@
                                 <div class="studio-list-body">
                                     <strong>@e.Action</strong>
                                     <span>
-                                        @(e.ActorName) · @Culture.InZone(e.At).ToString("yyyy-MM-dd HH:mm:ss")
+                                        @(e.ActorName) · @Culture.FormatTime(e.At, "yyyy-MM-dd HH:mm:ss")
                                         @if (!string.IsNullOrEmpty(e.Note)) { <text> · @e.Note</text> }
                                     </span>
                                 </div>

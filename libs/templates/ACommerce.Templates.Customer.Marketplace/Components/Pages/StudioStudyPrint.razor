@@ -61,7 +61,7 @@ else
         <div class="print-mark">A</div>
         <div>
             <h1>@L.Markup("studio.print.heading")</h1>
-            <div class="print-meta">@((MarkupString)"\n                ")@L.Markup("studio.print.generated_at") @Culture.InZone(session.UpdatedAt).ToString("yyyy-MM-dd HH:mm") ·
+            <div class="print-meta">@((MarkupString)"\n                ")@L.Markup("studio.print.generated_at") @Culture.FormatTime(session.UpdatedAt, "yyyy-MM-dd HH:mm") ·
                 @L.Markup("study.label.quality") @session.AnalysisQualityScore% · ACommerce
             </div>
         </div>

@@ -32,7 +32,7 @@
         {
             <div class="studio-page-head">
                 <h1>@(string.IsNullOrEmpty(deal.ListingTitle) ? $"{L["studio.deal.title_prefix"]} {Id.ToString()[..8]}" : deal.ListingTitle)</h1>
-                <p>@L.Markup("studio.deal.pattern_label") @deal.Pattern · @L.Markup("studio.deal.created_label") @Culture.InZone(deal.CreatedAt).ToString("yyyy-MM-dd HH:mm")</p>
+                <p>@L.Markup("studio.deal.pattern_label") @deal.Pattern · @L.Markup("studio.deal.created_label") @Culture.FormatTime(deal.CreatedAt, "yyyy-MM-dd HH:mm")</p>
             </div>
 
             @* شَريط مَراحِل (Stepper) *@
@@ -131,7 +131,7 @@
                         <div class="studio-list-body">
                             <strong>@FormatEvent(e)</strong>
                             <span>
-                                @(e.ActorName ?? "—") · @Culture.InZone(e.At).ToString("yyyy-MM-dd HH:mm:ss")
+                                @(e.ActorName ?? "—") · @Culture.FormatTime(e.At, "yyyy-MM-dd HH:mm:ss")
                                 @if (!string.IsNullOrEmpty(e.Note)) { <text> · @e.Note</text> }
                             </span>
                         </div>

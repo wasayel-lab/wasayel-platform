@@ -68,29 +68,81 @@ public class DisplayTimeAbsentTests(ITestOutputHelper output)
 
     // ─── «اليَوم» ───────────────────────────────────────────────────────────────────────────
 
-    /// <summary><b>«اليَوم»</b>: لَحظَةٌ لَم تُضبَط تَخرُجُ مِن دالَّةِ العَرضِ ساعَةً في السَنَةِ الأولى — والسِياقُ يُعطي ما تُعطيه الدالَّة.</summary>
-    [Fact]
-    public void Today_an_unset_instant_is_drawn_as_a_clock_in_year_one()
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الإصلاح)</b> — كانَ <c>Today_an_unset_instant_is_drawn_as_a_clock_in_year_one</c>
+    /// (‏<c>865acb3</c>): «0001-01-01 03:06». والآن دالَّةُ العَرضِ المُنَسِّقَةُ (<c>CultureTime.FormatTime</c> والسِياقُ) لا تَرسُمُ لِلَحظَةٍ لَم تُضبَط
+    /// شَيئاً بِأَيِّ صيغَةٍ ومِنطَقَة — و<c>InZone</c> نَفسُها لَم تَتَبَدَّل (تُعطي الساعَةَ نَفسَها لِمَن يُقارِنُ بِها التاريخ).</summary>
+    [Theory]
+    [InlineData("yyyy-MM-dd HH:mm")]
+    [InlineData("HH:mm")]
+    [InlineData("MM-dd HH:mm")]
+    [InlineData("yyyy-MM-dd")]
+    public void An_unset_instant_is_drawn_as_nothing(string format)
     {
-        var drawn = CultureTime.InZone(DateTime.MinValue).ToString("yyyy-MM-dd HH:mm");
-        var viaContext = new MutableCultureContext().InZone(DateTime.MinValue).ToString("yyyy-MM-dd HH:mm");
-        output.WriteLine($"DateTime.MinValue بِساعَةِ {CultureTime.DefaultTimeZone}: «{drawn}» · بِالسِياق: «{viaContext}» · default(DateTime) == MinValue: {default(DateTime) == DateTime.MinValue}");
+        var unspecified = DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Unspecified);
+        var utc = DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc);
+        output.WriteLine($"«{format}»: FormatTime(MinValue) = «{CultureTime.FormatTime(DateTime.MinValue, format)}» · وكانَت «{CultureTime.InZone(DateTime.MinValue).ToString(format)}»");
 
-        Assert.StartsWith("0001-01-01 ", drawn, StringComparison.Ordinal);
-        Assert.Equal(drawn, viaContext);
-        Assert.Equal(DateTime.MinValue, default(DateTime));
+        Assert.Equal("", CultureTime.FormatTime(DateTime.MinValue, format));
+        Assert.Equal("", CultureTime.FormatTime(default, format, "UTC"));
+        Assert.Equal("", CultureTime.FormatTime(unspecified, format));
+        Assert.Equal("", CultureTime.FormatTime(utc, format, "Mars/Olympus_Mons"));
+        Assert.Equal("", new MutableCultureContext().FormatTime(DateTime.MinValue, format));
+        Assert.StartsWith("0001-01-01", CultureTime.InZone(DateTime.MinValue).ToString("yyyy-MM-dd"), StringComparison.Ordinal);
     }
 
-    /// <summary><b>«اليَوم»</b>: كُلُّ مَوضِعِ عَرضٍ يُنَسِّقُ نَتيجَةَ <c>InZone</c> بِنَفسِه — ‏36 مَوضِعاً في ‏24 مِلَفّاً — فَلا واحِدَ مِنها يَسأَلُ أَضُبِطَت اللَحظَة.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الإصلاح)</b> — كانَ <c>Today_every_display_site_formats_the_InZone_result_itself</c>
+    /// (‏<c>865acb3</c>): ‏36 مَوضِعاً في ‏24 مِلَفّاً. والآن <b>صِفرٌ</b> — المَواضِعُ نَفسُها تُنادي <c>FormatTime</c> (‏36)، بِالماسِحِ لا بِقائِمَة،
+    /// فَمَوضِعٌ يُضافُ غَداً يُنَسِّقُ نَتيجَةَ <c>InZone</c> بِيَدِه يُحمِرُّ هُنا بِمِلَفِّه وسَطرِه.</summary>
     [Fact]
-    public void Today_every_display_site_formats_the_InZone_result_itself()
+    public void No_display_site_formats_the_InZone_result_itself_every_one_asks_FormatTime()
     {
         var sites = FormattedInZoneSites();
-        output.WriteLine($"مَواضِعُ تُنَسِّقُ نَتيجَةَ InZone: {sites.Count} في {sites.Select(s => s.File).Distinct().Count()} مِلَفّاً · "
-            + string.Join(" · ", sites.GroupBy(s => Path.GetFileName(s.File)).Select(g => $"{g.Key}: {g.Count()}")));
+        var callers = EntitlementContractTests.SourceFiles()
+            .Where(f => !f.File.Replace('\\', '/').EndsWith("/CultureContext.cs", StringComparison.Ordinal))
+            .Select(f => (f.File, Code: f.File.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)
+                ? WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(f.Text)) : WriteEndpointGuardTests.StripComments(f.Text)))
+            .Select(f => (f.File, N: Regex.Matches(f.Code, @"(?<![\w])FormatTime\(").Count))
+            .Where(f => f.N > 0).ToList();
+        output.WriteLine($"مَواضِعُ تُنَسِّقُ نَتيجَةَ InZone: {sites.Count} · نِداءاتُ FormatTime: {callers.Sum(c => c.N)} في {callers.Count} مِلَفّاً");
 
-        Assert.True(sites.Count >= 36, $"أَداةٌ عَمياء: {sites.Count} مَوضِعاً — والمَقيسُ 36.");
-        Assert.Equal(36, sites.Count);
+        Assert.True(sites.Count == 0, "مَوضِعُ عَرضٍ يُنَسِّقُ نَتيجَةَ InZone بِيَدِه — فَلَحظَةٌ لَم تُضبَط تُرسَمُ «0001-01-01»:\n  "
+            + string.Join("\n  ", sites.Select(s => $"{s.File}:{s.Line} {s.Text}")) + "\nاِستَعمِل Culture.FormatTime(x, \"…\").");
+        Assert.True(callers.Sum(c => c.N) >= 36, $"أَداةٌ عَمياء: {callers.Sum(c => c.N)} نِداءً لِـFormatTime — والمَقيسُ 36.");
+        Assert.Equal(24, callers.Count);
+    }
+
+    /// <summary><b>والمَضبوطُ بايتاً ما كانَ</b>: لِكُلِّ صيغَةٍ في الجَدوَلِ أَدناه وكُلِّ لَحظَةٍ فيه — بِأَنواعِ <c>Kind</c> الثَلاثَةِ ويَومٍ بَعدَ MinValue —
+    /// <c>FormatTime(x, f)</c> هِيَ <c>InZone(x).ToString(f)</c> حَرفاً، بِالدالَّةِ والسِياق.</summary>
+    [Theory]
+    [InlineData("HH:mm")]
+    [InlineData("yyyy-MM-dd")]
+    [InlineData("MM-dd HH:mm")]
+    [InlineData("yyyy-MM-dd HH:mm:ss")]
+    public void A_set_instant_is_formatted_exactly_as_InZone_then_ToString(string format)
+    {
+        var instants = new[]
+        {
+            FixedUtc, DateTime.SpecifyKind(FixedUtc, DateTimeKind.Unspecified), FixedUtc.ToLocalTime(),
+            DateTime.MinValue.AddDays(1), new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+        foreach (var x in instants)
+        {
+            Assert.Equal(CultureTime.InZone(x).ToString(format), CultureTime.FormatTime(x, format));
+            Assert.Equal(CultureTime.InZone(x, "UTC").ToString(format), CultureTime.FormatTime(x, format, "UTC"));
+            Assert.Equal(new MutableCultureContext().InZone(x).ToString(format), new MutableCultureContext().FormatTime(x, format));
+        }
+    }
+
+    /// <summary><b>وماسِحُ راسِمي الوَقتِ يَعُدُّ FormatTime مِنطَقِيّاً</b> (القاعِدَة ١٠ — <c>DisplayTimeZoneTests.TimeRendererVerdict</c> مُلحَقاً):
+    /// سَطرٌ يُنادي <c>FormatTime</c> «zoned»، وسَطرُ تَعليقٍ يَذكُرُها لَيسَ راسِماً.</summary>
+    [Fact]
+    public void The_time_renderer_verdict_counts_FormatTime_as_zoned()
+    {
+        const string Page = "Components/Pages/Injected.razor";
+        Assert.Equal("zoned", DisplayTimeZoneTests.TimeRendererVerdict(Page, "<span>@Culture.FormatTime(n.At, \"HH:mm\")</span>"));
+        Assert.Equal("zoned", DisplayTimeZoneTests.TimeRendererVerdict(Page, "(\"x\", ACommerce.Kit.Culture.CultureTime.FormatTime(s.UpdatedAt, \"yyyy-MM-dd HH:mm\")),"));
+        Assert.Null(DisplayTimeZoneTests.TimeRendererVerdict(Page, "// ‏مِثالٌ: Culture.FormatTime(n.At, \"HH:mm\")"));
+        Assert.Equal("bad", DisplayTimeZoneTests.TimeRendererVerdict(Page, "<span>@n.At.ToString(\"HH:mm\")</span>"));
     }
 
     // ─── ما لا يَتَبَدَّل ───────────────────────────────────────────────────────────────────

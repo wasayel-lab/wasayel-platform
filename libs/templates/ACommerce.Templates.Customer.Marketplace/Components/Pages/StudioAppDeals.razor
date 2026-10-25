@@ -85,7 +85,7 @@
                                 <span>
                                     @d.Pattern · @d.InitiatorName
                                     @if (d.CounterpartyName is not null) { <text> ⇄ @d.CounterpartyName</text> }
-                                    · @Culture.InZone(d.UpdatedAt).ToString("HH:mm")
+                                    · @Culture.FormatTime(d.UpdatedAt, "HH:mm")
                                 </span>
                             </div>
                             <span class="st-chip">@DealsPolicy.LabelAr(d.Stage)</span>

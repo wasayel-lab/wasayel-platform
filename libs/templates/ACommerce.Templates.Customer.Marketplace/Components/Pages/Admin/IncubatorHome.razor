@@ -73,7 +73,7 @@
                             ? L["admin.incubator.no_desc"]
                             : Truncate(s.ProjectDescription, 60))</strong>
                         <span style="color:var(--ac-text-muted);font-size:12px;display:block;">
-                            @StatusLabel(s.Status) · @Culture.InZone(s.UpdatedAt).ToString("yyyy-MM-dd HH:mm")
+                            @StatusLabel(s.Status) · @Culture.FormatTime(s.UpdatedAt, "yyyy-MM-dd HH:mm")
                             @if (s.Status == IncubatorStatus.Completed)
                             {
                                 <span> · @L.Markup("admin.incubator.quality") @s.AnalysisQualityScore%</span>

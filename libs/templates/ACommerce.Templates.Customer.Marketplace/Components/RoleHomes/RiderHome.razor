@@ -47,7 +47,7 @@
                     <div style="flex:1;min-width:0;">
                         <strong>@l.Title</strong>
                         <span class="ac-muted" style="font-size:12px;display:block;">
-                            @l.City — @l.District · @Culture.InZone(l.CreatedAt).ToString("HH:mm")
+                            @l.City — @l.District · @Culture.FormatTime(l.CreatedAt, "HH:mm")
                         </span>
                     </div>
                     @if (matched)

@@ -58,7 +58,7 @@
             {
                 <AcListRow Title="@n.Title"
                            Preview="@n.Body"
-                           Time="@Culture.InZone(n.At).ToString("HH:mm")"
+                           Time="@Culture.FormatTime(n.At, "HH:mm")"
                            IconName="@NotifIcon(n.Type)"
                            Href="@(string.IsNullOrEmpty(n.RelatedUrl) ? null : n.RelatedUrl)"
                            Unread="@(!n.IsRead)" />

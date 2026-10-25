@@ -68,7 +68,7 @@
                             <span class="@(current.IsActive ? "st-chip st-chip-success" : "st-chip st-chip-danger")">
                                 @L.Markup(current.IsActive ? "studio.providers.state_active" : "studio.providers.state_revoked")
                             </span>
-                            <span>@L.Markup("studio.providers.bound_at") @Culture.InZone(current.BoundAt).ToString("yyyy-MM-dd")</span>
+                            <span>@L.Markup("studio.providers.bound_at") @Culture.FormatTime(current.BoundAt, "yyyy-MM-dd")</span>
                         </div>
 
                         @* القيمَةُ المَعروضَةُ هي الصورَةُ المُعَتَّمَة —

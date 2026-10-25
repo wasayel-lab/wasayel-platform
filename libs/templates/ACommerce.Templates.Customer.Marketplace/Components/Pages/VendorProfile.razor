@@ -106,7 +106,7 @@
                             {
                                 <p style="margin:6px 0 0;font-size:14px;">@r.Body</p>
                             }
-                            <span style="color:var(--ac-text-muted);font-size:11px;">@Culture.InZone(r.At).ToString("yyyy-MM-dd")</span>
+                            <span style="color:var(--ac-text-muted);font-size:11px;">@Culture.FormatTime(r.At, "yyyy-MM-dd")</span>
                         </ChildContent>
                     </AcCard>
                 }

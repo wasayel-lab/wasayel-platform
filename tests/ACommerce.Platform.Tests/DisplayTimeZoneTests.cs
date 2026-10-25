@@ -34,7 +34,9 @@ public class DisplayTimeZoneTests(ITestOutputHelper output)
     public void Notifications_render_the_clock_in_the_culture_zone()
     {
         var razor = Read($"{Pages}/Notifications.razor");
-        Assert.Contains("Time=\"@Culture.InZone(n.At).ToString(\"HH:mm\")\"", razor, StringComparison.Ordinal);
+        // ‏(‏2026-10-25، W8-7 — بَندُ المُنَسِّق؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): كانَ هُنا `Time="@Culture.InZone(n.At).ToString("HH:mm")"` —
+        // والتَنسيقُ صارَ في `FormatTime` لِتَغيبَ لَحظَةٌ لَم تُضبَط؛ والمِنطَقَةُ نَفسُها (`DisplayTimeAbsentTests`).
+        Assert.Contains("Time=\"@Culture.FormatTime(n.At, \"HH:mm\")\"", razor, StringComparison.Ordinal);
         Assert.Equal("00:30", ACommerce.Kit.Culture.CultureTime.InZone(FixedUtc).ToString("HH:mm"));
     }
 
@@ -191,6 +193,8 @@ public class DisplayTimeZoneTests(ITestOutputHelper output)
     /// و<c>To(Short|Long)(Date|Time)String()</c>. وسَطرُ التَعليقِ لا يُرسَم.</summary>
     internal static readonly Regex TimeRenderer = new(
         @"ToString\(""(HH:mm|hh:mm|yyyy|yy-|MM-dd|dd/MM|d MMM|dd MMM|MMM)|ToLocalTime\(\)"
+        // ‏(‏2026-10-25، W8-7 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): ودالَّةُ العَرضِ المُنَسِّقَةُ نَفسُها راسِمٌ — وحُكمُها «zoned» أَدناه.
+        + @"|\bFormatTime\("
         + @"|\{[^{}""]*:(?:HH|hh|yyyy|yy|MM|dd|d MMM|MMM)[^{}""]*\}"
         + @"|\b\w*(?:At|Utc|Date|Time|Expires|Starts)\w*\)?\??\.ToString\(""[dDfFgGtTMmYyOoRrsu]""\)"
         + @"|\bTo(?:Short|Long)(?:Date|Time)String\(\)");
@@ -203,6 +207,8 @@ public class DisplayTimeZoneTests(ITestOutputHelper output)
         if (!TimeRenderer.IsMatch(line)) return null;
         if (line.Contains("ToLocalTime()", StringComparison.Ordinal)) return "bad";
         if (line.Contains("InZone(", StringComparison.Ordinal)) return "zoned";
+        // ‏(‏2026-10-25، W8-7): `FormatTime` تُحَوِّلُ بِـInZone ثُمَّ تُنَسِّق — ولا يُعَدُّ تَنسيقُ نَتيجَةِ InZone بِاليَدِ بَعدَها (`DisplayTimeAbsentTests`).
+        if (line.Contains("FormatTime(", StringComparison.Ordinal)) return "zoned";
         // مُتَغَيِّرٌ حُوِّلَ قَبلَه في الدالَّةِ نَفسِها (`localAt`/`local` في المُحادَثات).
         if (Regex.IsMatch(line, @"\blocal(At)?\.ToString\(")) return "derived";
         var hit = Array.FindIndex(PinnedUnzoned, p => p.File == rel && line.Contains(p.Snippet, StringComparison.Ordinal));

@@ -366,6 +366,8 @@ public static class AppearanceBaselineSeeder
             // ‏`CreatedAt` = `default` قَصداً: اللَقطَةُ تَطبَع
             // ‏«‏0001-01-01 00:00». وَثيقَةٌ تُخَزَّن مُباشَرَةً بِلا
             // مَجرى — راجِع <see cref="OwnerTestTicketId"/>.
+            // ‏(‏2026-10-25، W8-7 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): ومُنذُ `CultureTime.FormatTime` لا تُطبَعُ لَحظَةٌ لَم تُضبَطُ شَيئاً — فَالتَذكِرَةُ
+            // هذِه هِيَ عَيِّنَةُ «الغائِب» في الصَفَحاتِ الحَيَّة (`DisplayTimeAbsentTests`)، لا «0001-01-01».
             s.Store(new Ticket
             {
                 Id         = OwnerTestTicketId,
