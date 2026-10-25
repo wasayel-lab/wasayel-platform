@@ -632,4 +632,33 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         }
         Assert.Contains("your name stays on it and its buyer sees it", En(PlatformRetentionKey), StringComparison.Ordinal);
     }
+
+    internal const string StoreIdentityItemKey = "legal.privacy.item_identity";
+
+    /// <summary>جِسما إشعارِ <c>new_user</c> لِمُديري المَتجَرِ في <c>MarketplaceTemplateExtensions.cs</c> — بِالهاتِفِ (دُخولُ الجَوّال) وبِالبَريد (دُخولُ البَريد).</summary>
+    internal static (int Phone, int Email) NewUserNoticeBodies()
+    {
+        var mte = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs")));
+        int Count(string field) => Regex.Matches(mte, @"NotifyAdminsAsync\(store, slug, ""new_user"",\s*""[^""]*"",\s*\$""\{user\.FullName\} · \{user\." + field + @"\}""").Count;
+        return (Count("Phone"), Count("Email"));
+    }
+
+    /// <summary><b>تَوصيف</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢، صُغرى — القاعِدَة ٣: يَنقَلِبُ بِاسمِه في كوميتِ النَصّ): صَفحَةُ خُصوصِيَّةِ المَتجَر
+    /// (<c>LegalHub</c>) تَقولُ في بَندِ ما يُجمَعُ «اِسم وَهاتِف عِندَ التَّسجيل (لِلتَّوثيق فَقَط)»، وجُملَةُ الحَذفِ عَلى الصَفحَةِ نَفسِها تَقولُ إنّ الاسمَ والهاتِفَ
+    /// أَو البَريدَ في إشعاراتِ مُديري المَتجَر — والكودُ يَكتُبُهُما في إشعارِ <c>new_user</c> عِندَ كُلِّ تَسجيل. فَـ«فَقَط» كاذِبَة، والبَريدُ لا يُذكَر.</summary>
+    [Fact]
+    public void Today_the_store_privacy_says_name_and_phone_are_for_verification_only_while_registration_sends_them_to_the_store_managers()
+    {
+        var item = Bare(Ar(StoreIdentityItemKey));
+        var (phone, email) = NewUserNoticeBodies();
+        var legalHub = UpgradePromptPriceTests.Code("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "LegalHub.razor");
+        output.WriteLine($"{StoreIdentityItemKey} = {item} · إشعارُ new_user بِالهاتِف {phone} · بِالبَريد {email}");
+        Assert.Contains($"L.Markup(\"{StoreIdentityItemKey}\")", legalHub, StringComparison.Ordinal);
+        Assert.Contains($"L.Markup(\"{StorePrivacyKey}\")", legalHub, StringComparison.Ordinal);
+        Assert.Equal((1, 1), (phone, email));
+        Assert.Contains("للتوثيق فقط", item, StringComparison.Ordinal);
+        Assert.DoesNotContain("بريد", item, StringComparison.Ordinal);
+        Assert.Contains("إشعارات مديري المتجر", Bare(Ar(StorePrivacyKey)), StringComparison.Ordinal);
+    }
 }
