@@ -1,5 +1,7 @@
 using System.Text.RegularExpressions;
 using ACommerce.Kit.Auth.Server;
+using ACommerce.Templates.Customer.Marketplace;
+using LoginStageQuery = ACommerce.Templates.Customer.Marketplace.Services.LoginStageQuery;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -17,6 +19,10 @@ namespace ACommerce.Platform.Tests;
 // هذِه المُلاحَظَة، فَهِيَ مُثَبَّتَةٌ بِاسمِها أَدناه ولا تَنمو.
 //
 // **يُثَبَّتُ قَبلَ العِلاجِ** (القاعِدَة ٣): الصَفّانِ `Today_…` يَنقَلِبانِ بِأَسمائِهِما، وصَفُّ العَيِّنَةِ المَحقونَةِ يَبقى حَرفاً.
+//
+// **العِلاج** (‏2026-10-24): `AuthHandlers.SubjectOf`/`LiveAttemptOf` — المُحاوَلَةُ تُسَمّى بِمُعَرِّفِها؛ و`Services.LoginStageQuery` يَبني
+// مَرحَلَةَ الرَمزِ بِه (`Verify`) ويُعيدُها بَعدَ الخَطَإِ ما بَقِيَت (`Retry`)، وصَفحَتا الرَمزِ تَقرَآنِ المَوضوعَ مِنه (`SubjectFor`). والعُنوانُ لا
+// يُعادُ في رابِطِ خَطَإ، ونَفاذٌ بِلا هُوِيَّةٍ في الرابِط. الصَفّانِ انقَلَبا بِأَسمائِهِما، والدائِمُ كَما أُودِع.
 public class LoginRedirectSubjectTests(ITestOutputHelper output)
 {
     /// <summary>تَحويلٌ يَحمِلُ مَوضوعَ الدُخولِ بِاسمِه — والحَقلُ المُتَغَيِّرُ (<c>{field}</c>) في بابِ الاستوديو مِنه.</summary>
@@ -62,24 +68,75 @@ public class LoginRedirectSubjectTests(ITestOutputHelper output)
         Assert.DoesNotMatch(SubjectInQuery, WriteEndpointGuardTests.StripComments("// login?stage=verify&phone={Uri.EscapeDataString(phone)}"));
     }
 
-    // ─── ١. أَحَدَ عَشَرَ تَحويلَ دُخولٍ بِالمَوضوع ─────────────────────────────────────────────────────
+    // ─── ١. لا تَحويلَ دُخولٍ بِالمَوضوع — والمُحاوَلَةُ تُسَمّيه ─────────────────────────────────────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_eleven_login_redirects_carry_a_phone_email_or_national_id_in_the_query`.
 
     [Fact]
-    public void Today_eleven_login_redirects_carry_a_phone_email_or_national_id_in_the_query()
+    public void No_login_redirect_carries_a_phone_email_or_national_id_and_the_attempt_names_the_stage()
     {
         var sites = SitesByFile();
         output.WriteLine("مَواضِعُ المَوضوعِ في الاستِعلام: " + string.Join(" · ", sites.Select(kv => $"{kv.Key}={kv.Value}")));
-        Assert.Equal(11, sites.GetValueOrDefault("MarketplaceTemplateExtensions.cs"));
+        Assert.Equal(0, sites.GetValueOrDefault("MarketplaceTemplateExtensions.cs"));
         foreach (var (file, n) in PinnedOutsideLogin) Assert.Equal(n, sites.GetValueOrDefault(file));
-        Assert.Equal(11 + PinnedOutsideLogin.Values.Sum(), sites.Values.Sum());
+        Assert.Equal(PinnedOutsideLogin.Values.Sum(), sites.Values.Sum());
+
+        // والمَراحِلُ بِالمُحاوَلَة: أَربَعٌ في المَتجَرِ بِالمُعَرِّفِ الَّذي أَعادَه الإصدار (الجَوّالُ والبَريدُ ونَفاذٌ ورَدُّه)، واثنَتانِ في الاستوديو
+        // بِالمُحاوَلَةِ الحَيَّة (إصدارُه لا يُعيدُ المُعَرِّف)، وثَلاثٌ بَعدَ الرَمزِ الخاطِئ.
+        var mte = WriteEndpointGuardTests.StripComments(StudioConsentCharacterizationTests.Endpoints());
+        Assert.Equal(4, Regex.Matches(mte, @"login\?stage=verify&attempt=\{Uri\.EscapeDataString\((?:attemptId|pending\.AttemptId|attempt)\)\}").Count);
+        Assert.Equal(2, Regex.Matches(mte, @"Services\.LoginStageQuery\.Verify\(").Count);
+        Assert.Equal(3, Regex.Matches(mte, @"Services\.LoginStageQuery\.Retry\(").Count);
+
+        // وصَفحَتا الرَمزِ تَقرَآنِ المَوضوعَ مِن المُحاوَلَةِ لِكُلِّ قَناة.
+        var login = WriteEndpointGuardTests.StripMarkupComments(StudioConsentCharacterizationTests.Source(
+            "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "Login.razor"));
+        foreach (var call in new[] { "SubjectFor(AuthKind.PhoneOtp, PhoneValue)", "SubjectFor(AuthKind.EmailOtp, EmailValue)", "SubjectFor(AuthKind.Nafath, NationalIdValue)" })
+            Assert.Contains(call, login, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"=""@(?:PhoneValue|EmailValue|NationalIdValue)""", login);
+        var studio = WriteEndpointGuardTests.StripMarkupComments(StudioConsentCharacterizationTests.Source(
+            "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "StudioAuth.razor"));
+        Assert.Contains("Services.LoginStageQuery.SubjectFor(Services.Incubator.StudioAuth.Tenant, Attempt,", studio, StringComparison.Ordinal);
     }
 
-    // ─── ٢. لا سَبيلَ إلى المَوضوعِ مِن مُعَرِّفِ المُحاوَلَة ─────────────────────────────────────────────
+    // ─── ٢. المُحاوَلَةُ الحَيَّةُ تُسَمّي مَوضوعَها في مَتجَرِها ونَوعِها وَحدَهُما ─────────────────────────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_no_attempt_id_names_its_subject`.
 
     [Fact]
-    public void Today_no_attempt_id_names_its_subject()
+    public void A_live_attempt_names_its_subject_only_in_its_own_store_and_kind()
     {
-        Assert.Null(typeof(AuthHandlers).GetMethod("SubjectOf"));
-        Assert.Null(typeof(AuthHandlers).GetMethod("LiveAttemptOf"));
+        const string tenant = "login-subject";
+        var phone = $"05{Random.Shared.Next(10000000, 99999999)}";
+        Assert.Null(AuthHandlers.LiveAttemptOf(tenant, phone, AuthHandlers.AuthKind.PhoneOtp));
+        Assert.Equal("err=code_invalid", LoginStageQuery.Retry(tenant, phone, AuthHandlers.AuthKind.PhoneOtp, "code_invalid"));
+
+        var id = AuthHandlers.IssueAttempt(tenant, phone, "424242", AuthHandlers.AuthKind.PhoneOtp);
+        Assert.Equal(id, AuthHandlers.LiveAttemptOf(tenant, phone, AuthHandlers.AuthKind.PhoneOtp));
+        Assert.Equal(phone, AuthHandlers.SubjectOf(tenant, id, AuthHandlers.AuthKind.PhoneOtp));
+        Assert.Null(AuthHandlers.SubjectOf("another-store", id, AuthHandlers.AuthKind.PhoneOtp));
+        Assert.Null(AuthHandlers.SubjectOf(tenant, id, AuthHandlers.AuthKind.EmailOtp));
+        Assert.Null(AuthHandlers.SubjectOf(tenant, Guid.NewGuid().ToString("N"), AuthHandlers.AuthKind.PhoneOtp));
+        Assert.Null(AuthHandlers.SubjectOf(tenant, null, AuthHandlers.AuthKind.PhoneOtp));
+
+        // الرابِطُ يَحمِلُ المُعَرِّفَ لا الرَقَم، والصَفحَةُ تَقرَأُ الرَقَمَ مِنه قَبلَ ما كَتَبَه الزائِر.
+        var stage = LoginStageQuery.Verify(tenant, phone, AuthHandlers.AuthKind.PhoneOtp);
+        Assert.Equal($"stage=verify&attempt={id}", stage);
+        Assert.DoesNotContain(phone, stage!, StringComparison.Ordinal);
+        Assert.Equal(phone, LoginStageQuery.SubjectFor(tenant, id, AuthHandlers.AuthKind.PhoneOtp, "0599999999"));
+        Assert.Equal("0599999999", LoginStageQuery.SubjectFor(tenant, null, AuthHandlers.AuthKind.PhoneOtp, "0599999999"));
+
+        // خَطَأٌ يُبقي المُحاوَلَةَ فَتُعادُ مَرحَلَتُها بِخَطَئِها؛ وحينَ تُحرِقُها الأَخطاءُ تَعودُ الخُطوَةُ الأُولى.
+        Assert.False(AuthHandlers.ConsumeAttempt(tenant, phone, "000000", AuthHandlers.AuthKind.PhoneOtp));
+        Assert.Equal($"stage=verify&attempt={id}&err=code_invalid", LoginStageQuery.Retry(tenant, phone, AuthHandlers.AuthKind.PhoneOtp, "code_invalid"));
+        for (var i = 1; i < AuthHandlers.MaxWrongGuessesPerCode; i++)
+            Assert.False(AuthHandlers.ConsumeAttempt(tenant, phone, "000000", AuthHandlers.AuthKind.PhoneOtp));
+        Assert.Null(AuthHandlers.SubjectOf(tenant, id, AuthHandlers.AuthKind.PhoneOtp));
+        Assert.Equal("err=code_invalid", LoginStageQuery.Retry(tenant, phone, AuthHandlers.AuthKind.PhoneOtp, "code_invalid"));
+
+        // والمُنتَهِيَةُ لا تُسَمّي شَيئاً.
+        var expired = AuthHandlers.IssueAttempt(tenant, phone + "9", "424242", AuthHandlers.AuthKind.EmailOtp, TimeSpan.FromSeconds(-1));
+        Assert.Null(AuthHandlers.SubjectOf(tenant, expired, AuthHandlers.AuthKind.EmailOtp));
+        Assert.Null(AuthHandlers.LiveAttemptOf(tenant, phone + "9", AuthHandlers.AuthKind.EmailOtp));
     }
 }

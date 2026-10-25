@@ -248,9 +248,11 @@ public static class MarketplaceTemplateExtensions
                     (string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}")));
             var asParam = string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}";
             // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-9) رَدُّ الحِصَّةِ أَو عُطلُ القَناةِ رِسالَةٌ لا صَفحَةُ ‏500 — كَبابَي البَريدِ والاستوديو.
-            try { await AuthHandlers.RequestPhoneOtpHandler(new RequestPhoneOtp(phone), tenant, channel, default); }
+            string attemptId;
+            try { attemptId = (await AuthHandlers.RequestPhoneOtpHandler(new RequestPhoneOtp(phone), tenant, channel, default)).AttemptId; }
             catch (Exception) { return Results.Redirect(Link(req, slug, $"login?err=send_failed{asParam}")); }
-            return Results.Redirect(Link(req, slug, $"login?stage=verify&phone={Uri.EscapeDataString(phone)}{asParam}"));
+            // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-13) الرابِطُ يَحمِلُ مُعَرِّفَ المُحاوَلَةِ لا الرَقَم — والصَفحَةُ تَقرَأُ الرَقَمَ مِنه.
+            return Results.Redirect(Link(req, slug, $"login?stage=verify&attempt={Uri.EscapeDataString(attemptId)}{asParam}"));
         }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/{slug}/auth/phone/verify",
@@ -281,7 +283,7 @@ public static class MarketplaceTemplateExtensions
             var result = await AuthHandlers.VerifyPhoneOtpHandler(new VerifyPhoneOtp(phone, code), tenant, store);
             if (result is null)
                 return Results.Redirect(Link(req, slug,
-                    $"login?stage=verify&phone={Uri.EscapeDataString(phone)}&err=code_invalid"));
+                    $"login?{Services.LoginStageQuery.Retry(tenant.Slug, phone, AuthHandlers.AuthKind.PhoneOtp, "code_invalid")}"));
             var asRole = (asRoleEarly ?? "").ToLowerInvariant();
             // كَتابَة cookie باسم يَتَضَمَّن الدَور — يَسمَح بِجَلَسات مُتَوازِيَة
             // (راكِب في تَبويب، سائِق في آخَر) في نَفس المُتَصَفِّح.
@@ -321,21 +323,20 @@ public static class MarketplaceTemplateExtensions
             if (string.IsNullOrEmpty(email))
                 return Results.Redirect(Link(req, slug, $"login?err=email_required{asParam}"));
             if (!EmailAddress.IsValid(email))
-                return Results.Redirect(Link(req, slug,
-                    $"login?err=email_invalid&email={Uri.EscapeDataString(email)}{asParam}"));
+                return Results.Redirect(Link(req, slug, $"login?err=email_invalid{asParam}"));
+            string attemptId;
             try
             {
-                await AuthHandlers.RequestEmailOtpHandler(new RequestEmailOtp(email), tenant, channel, default);
+                attemptId = (await AuthHandlers.RequestEmailOtpHandler(new RequestEmailOtp(email), tenant, channel, default)).AttemptId;
             }
             catch (InvalidOperationException)
             {
                 // فَشَل الإرسال أَو تَجاوُز حَدّ المُعَدَّل — لا نَدفَع
                 // المُستَخدِم إلى شاشَة كود لَن يَصِلَه أَبَداً.
-                return Results.Redirect(Link(req, slug,
-                    $"login?err=send_failed&email={Uri.EscapeDataString(email)}{asParam}"));
+                return Results.Redirect(Link(req, slug, $"login?err=send_failed{asParam}"));
             }
-            return Results.Redirect(Link(req, slug,
-                $"login?stage=verify&email={Uri.EscapeDataString(email)}{asParam}"));
+            // ‏(‏2026-10-24، lens-security-13) المُحاوَلَةُ لا العُنوان — والعُنوانُ لا يُعادُ في رابِطِ خَطَإٍ أَيضاً (كانَ يَملَأُ الحَقل).
+            return Results.Redirect(Link(req, slug, $"login?stage=verify&attempt={Uri.EscapeDataString(attemptId)}{asParam}"));
         }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/{slug}/auth/email/verify",
@@ -367,7 +368,7 @@ public static class MarketplaceTemplateExtensions
             var result = await AuthHandlers.VerifyEmailOtpHandler(new VerifyEmailOtp(email, code), tenant, store);
             if (result is null)
                 return Results.Redirect(Link(req, slug,
-                    $"login?stage=verify&email={Uri.EscapeDataString(email)}&err=code_invalid"));
+                    $"login?{Services.LoginStageQuery.Retry(tenant.Slug, email, AuthHandlers.AuthKind.EmailOtp, "code_invalid")}"));
             var asRole = (asRoleEarly ?? "").ToLowerInvariant();
             AuthSession.WriteCookie(res, slug, result,
                 role: string.IsNullOrEmpty(asRole) ? null : asRole);
@@ -402,9 +403,9 @@ public static class MarketplaceTemplateExtensions
             NafathPending pending;
             try { pending = await AuthHandlers.RequestNafathHandler(new RequestNafath(nid), tenant, channel, default); }
             catch (Exception) { return Results.Redirect(Link(req, slug, "login?err=send_failed")); }
+            // ‏(‏2026-10-24، lens-security-13) المُحاوَلَةُ تَكفي — الصَفحَةُ تَقرَأُ الهُوِيَّةَ مِنها، ولا هُوِيَّةَ في الرابِط.
             return Results.Redirect(Link(req, slug,
-                $"login?stage=verify&nid={Uri.EscapeDataString(nid)}" +
-                $"&attempt={pending.AttemptId}&code={pending.DisplayCode}"));
+                $"login?stage=verify&attempt={Uri.EscapeDataString(pending.AttemptId)}&code={pending.DisplayCode}"));
         }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/{slug}/auth/nafath/verify",
@@ -421,8 +422,7 @@ public static class MarketplaceTemplateExtensions
                 new VerifyNafath(attempt, nid), tenant, channel, store, default);
             if (result is null)
                 return Results.Redirect(Link(req, slug,
-                    $"login?stage=verify&nid={Uri.EscapeDataString(nid)}" +
-                    $"&attempt={attempt}&code=00&err=not_approved"));
+                    $"login?stage=verify&attempt={Uri.EscapeDataString(attempt)}&code=00&err=not_approved"));
             var asRole = req.Form["as"].ToString().Trim().ToLowerInvariant();
             AuthSession.WriteCookie(res, slug, result,
                 role: string.IsNullOrEmpty(asRole) ? null : asRole);
@@ -2642,8 +2642,9 @@ public static class MarketplaceTemplateExtensions
             if (string.IsNullOrEmpty(phone)) return Results.Redirect("/studio/auth?err=phone");
             try { await Services.Incubator.StudioAuth.SendPhoneCodeAsync(channel, phone, ct); }
             catch (Exception) { return Results.Redirect("/studio/auth?err=send_failed"); }
-            return Results.Redirect(
-                $"/studio/auth?stage=verify&method=phone&phone={Uri.EscapeDataString(phone)}");
+            // ‏(‏2026-10-24، lens-security-13) مُعَرِّفُ المُحاوَلَةِ لا رَقَمُ مُشرِفِ المَنَصَّة.
+            return Results.Redirect("/studio/auth?method=phone&" + (Services.LoginStageQuery.Verify(
+                Services.Incubator.StudioAuth.Tenant, phone, Services.Incubator.StudioAuthDoor.Kind(Services.Incubator.StudioAuthMethod.Phone)) ?? "err=send_failed"));
         }).RequireFormBody().DisableAntiforgery();
 
         // نَظيرُه لِلبَريد — وهُوَ ما لَم يَكُن مَوجوداً إطلاقاً: المَمنوحُ
@@ -2658,8 +2659,8 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect("/studio/auth?err=email_invalid");
             try { await Services.Incubator.StudioAuth.SendEmailCodeAsync(channel, email, ct); }
             catch (Exception) { return Results.Redirect("/studio/auth?err=send_failed"); }
-            return Results.Redirect(
-                $"/studio/auth?stage=verify&method=email&email={Uri.EscapeDataString(email)}");
+            return Results.Redirect("/studio/auth?method=email&" + (Services.LoginStageQuery.Verify(
+                Services.Incubator.StudioAuth.Tenant, email, Services.Incubator.StudioAuthDoor.Kind(Services.Incubator.StudioAuthMethod.Email)) ?? "err=send_failed"));
         }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/auth/verify", async (
@@ -2673,11 +2674,11 @@ public static class MarketplaceTemplateExtensions
             var subject = Services.Incubator.StudioAuth.NormalizeSubject(
                 method, req.Form[field].ToString());
             var code  = req.Form["code"].ToString().Trim();
-            var back  = $"/studio/auth?stage=verify&method={field}" +
-                        $"&{field}={Uri.EscapeDataString(subject)}";
             var user = await Services.Incubator.StudioAuth.VerifyAsync(
                 store, res, method, subject, code);
-            if (user is null) return Results.Redirect($"{back}&err=code");
+            if (user is null)
+                return Results.Redirect($"/studio/auth?method={field}&" + Services.LoginStageQuery.Retry(
+                    Services.Incubator.StudioAuth.Tenant, subject, Services.Incubator.StudioAuthDoor.Kind(method), "code"));
 
             // اِربِط المَتاجِر اليَتيمَة بِأَوَّل مُستَخدِم (لَو هذا أَوَّل تَسجيل).
             await Services.Incubator.StudioOwnershipSeeder.RunAsync(store);

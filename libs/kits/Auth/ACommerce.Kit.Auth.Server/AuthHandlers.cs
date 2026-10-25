@@ -236,6 +236,24 @@ public static class AuthHandlers
         return true;
     }
 
+    // ─── المُحاوَلَةُ تُسَمّى بِمُعَرِّفِها لا بِمَوضوعِها (‏2026-10-24، تَدقيقُ الإطلاق lens-security-13) ──
+    //
+    // كانَت تَحويلاتُ الدُخولِ تَحمِلُ الجَوّالَ والبَريدَ والهُوِيَّةَ في الاستِعلامِ لِأَنّ صَفحَةَ الرَمزِ لا تَعرِفُ مَوضوعَها إلّا مِنه. فَالرابِطُ
+    // يَحمِلُ مُعَرِّفَ المُحاوَلَةِ (‏<see cref="Guid"/> عَشوائِيٌّ، يَموتُ بِمَوتِها) والصَفحَةُ تَسأَلُ عَنه هُنا.
+
+    /// <summary>مَوضوعُ مُحاوَلَةٍ <b>حَيَّةٍ</b> بِمُعَرِّفِها في هذا المَتجَرِ ولِهذا النَوع — وإلّا <c>null</c> (مُعَرِّفٌ غائِبٌ أَو مَجهولٌ أَو مُنتَهٍ
+    /// أَو مِن مَتجَرٍ آخَرَ أَو نَوعٍ آخَر).</summary>
+    public static string? SubjectOf(string tenantSlug, string? attemptId, AuthKind kind)
+        => attemptId is not null && Attempts.TryGetValue(attemptId, out var a)
+           && a.TenantSlug == tenantSlug && a.Kind == kind && a.ExpiresAt > DateTime.UtcNow
+            ? a.Subject : null;
+
+    /// <summary>مُعَرِّفُ المُحاوَلَةِ الحَيَّةِ لِلمَوضوعِ في هذا المَتجَرِ ولِهذا النَوع — واحِدَةٌ عَلى الأَكثَر، لِأَنّ <see cref="IssueAttempt"/> يَمحو
+    /// سابِقَتَها — وإلّا <c>null</c> (لَم تُصدَر، أَو استُهلِكَت، أَو أَحرَقَتها الأَخطاء، أَو انتَهَت).</summary>
+    public static string? LiveAttemptOf(string tenantSlug, string subject, AuthKind kind)
+        => Attempts.Values.FirstOrDefault(a => a.TenantSlug == tenantSlug && a.Subject == subject && a.Kind == kind
+                                               && a.ExpiresAt > DateTime.UtcNow)?.Id;
+
     /// <summary>سِرّ تَوقيع الـ token — يُحَمَّل مِن ENV عِندَ بَدء التَّطبيق.
     /// لَو غابَ نَستَخدِم سِرّ التَطويرِ الافتِراضيّ؛ **وخارِجَ Development
     /// يَرمي حارِسُ الإقلاعِ** (<c>AuthTokenSecretPolicy.AssertSafeOutsideDevelopment</c>

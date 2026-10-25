@@ -6,6 +6,7 @@
 @inject IHttpContextAccessor HttpCtx
 @inject IServiceProvider Sp
 @inject L L
+@using AuthKind = ACommerce.Kit.Auth.Server.AuthHandlers.AuthKind
 
 @*
     صَفحَة دُخول SSR. لا Blazor interactivity — كلّ شَيء forms POST عاديّة
@@ -67,19 +68,19 @@ else
             else if (Tenant.AuthChannel == "nafath")
             {
                 <NafathLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
-                                 NationalId="@NationalIdValue" AttemptId="@AttemptId" DisplayCode="@DisplayCode"
+                                 NationalId="@SubjectFor(AuthKind.Nafath, NationalIdValue)" AttemptId="@AttemptId" DisplayCode="@DisplayCode"
                                  AsRole="@effectiveRole" DevAuto="@NafathDevAuto" />
             }
             else if (Tenant.AuthChannel == "email")
             {
                 <EmailLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
-                                Email="@EmailValue" AsRole="@effectiveRole"
+                                Email="@SubjectFor(AuthKind.EmailOtp, EmailValue)" AsRole="@effectiveRole"
                                 DevHint="@EmailDevHint" />
             }
             else
             {
                 <PhoneLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
-                                Phone="@PhoneValue" AsRole="@effectiveRole"
+                                Phone="@SubjectFor(AuthKind.PhoneOtp, PhoneValue)" AsRole="@effectiveRole"
                                 DevHint="@PhoneDevHint" />
             }
 
@@ -104,6 +105,11 @@ else
     /// <summary>دَور مَختار مُسبَقاً (مِن صَفحَة /{slug}/r/landing).
     /// يُمَرَّر كَ hidden إلى الـ POST لِيُسَكِّن ActiveRole بَعد التَّوثيق.</summary>
     [SupplyParameterFromQuery(Name = "as")]       public string? AsRole { get; set; }
+
+    /// <summary>مَوضوعُ مَرحَلَةِ الرَمزِ مِن المُحاوَلَةِ الَّتي يُسَمّيها الرابِط (‏2026-10-24، تَدقيقُ الإطلاق lens-security-13) — كانَت التَحويلاتُ
+    /// تَحمِلُ الرَقَمَ والعُنوانَ والهُوِيَّةَ نَفسَها. وما في الرابِطِ يَبقى سُقوطاً لِنَصِّ الزائِرِ نَفسِه (<c>LoginStageQuery.SubjectFor</c>).</summary>
+    string? SubjectFor(AuthKind kind, string? typed)
+        => Services.LoginStageQuery.SubjectFor(Tenant.Slug, AttemptId, kind, typed);
 
     string ChannelIcon => Tenant.AuthChannel switch
     {

@@ -24,7 +24,10 @@
         var offered = StudioAuthDoor.Offered(PhoneChannel is not null, EmailChannel is not null);
         var active = StudioAuthDoor.Active(Method, offered);
         var isEmail = active == StudioAuthMethod.Email;
-        var subject = isEmail ? Email : Phone;
+        // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-13) المَوضوعُ مِن المُحاوَلَةِ الَّتي يُسَمّيها الرابِط — كانَ الرابِطُ يَحمِلُ رَقَمَ المُشرِفِ نَفسَه.
+        var subject = active is { } shown
+            ? Services.LoginStageQuery.SubjectFor(Services.Incubator.StudioAuth.Tenant, Attempt, StudioAuthDoor.Kind(shown), isEmail ? Email : Phone)
+            : isEmail ? Email : Phone;
     }
     @if (redirect)
     {
@@ -165,6 +168,7 @@
     [SupplyParameterFromQuery] public string? Method { get; set; }
     [SupplyParameterFromQuery] public string? Phone { get; set; }
     [SupplyParameterFromQuery] public string? Email { get; set; }
+    [SupplyParameterFromQuery] public string? Attempt { get; set; }
     [SupplyParameterFromQuery] public string? Err { get; set; }
 
     /// <summary>القَناةُ المُسَجَّلَةُ فِعلاً — و<c>null</c> يَعني «لَم
