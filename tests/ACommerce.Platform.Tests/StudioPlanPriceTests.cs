@@ -41,14 +41,89 @@ public class StudioPlanPriceTests(ITestOutputHelper output)
         Assert.Equal(2, ConsentPolicy.CurrentVersion);
     }
 
+    /// <summary>كُتلَةُ النَصِّ مِن <paramref name="marker"/> إلى إغلاقِ الكُتلَةِ الَّتي تَليه — بِمُوازَنَةِ الأَقواس.</summary>
+    private static string BlockAfter(string code, string marker)
+    {
+        var at = code.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(at > 0, $"لا «{marker}» — الأَداةُ عَمياء.");
+        var open = code.IndexOf('{', at + marker.Length);
+        var depth = 0;
+        for (var i = open; i < code.Length; i++)
+        {
+            if (code[i] == '{') depth++;
+            else if (code[i] == '}' && --depth == 0) return code[open..(i + 1)];
+        }
+        Assert.Fail($"«{marker}» بِلا قَوسٍ مُقابِل.");
+        return "";
+    }
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ العِلاج — الافتِراضُ الآمِنُ مِن brief-P2-1)</b> — كانَ
+    /// <c>Today_the_agreed_store_price_is_read_only_by_the_admin_plan_page_and_never_by_the_studio_home</c> (‏<c>92cdeae</c>): قارِئُ
+    /// <c>.Price</c> صَفحَةُ المُشرِفِ وَحدَها و<c>StudioHome.razor</c> ‏0. <b>والآن</b> يَقرَؤُه <c>StudioHome</c> مَرَّةً واحِدَةً عَبرَ
+    /// <c>TenantPlanPolicy.ShownPrice</c> في <c>PriceLine</c>، ويُرسَمُ <c>PriceLine</c> في المَوضِعَينِ اللَّذَينِ يَقولُهُما البَند: لافِتَةِ
+    /// التَجديدِ قَبلَ أَزرارِ الدَفع، وسَطرِ السارِيَة — ومَقيسٌ حَيّاً: بِسِعرِ 0 الصَفحَةُ بايتاً كَما كانَت، وبِسِعرِ 150 عُنصُرٌ واحِدٌ زائِد.</summary>
     [Fact]
-    public void Today_the_agreed_store_price_is_read_only_by_the_admin_plan_page_and_never_by_the_studio_home()
+    public void The_agreed_store_price_is_read_by_the_studio_banner_before_payment_and_by_the_active_row_through_one_policy()
     {
         var readers = PlanPriceReaders();
         output.WriteLine($"صَفَحاتٌ تَعرِفُ TenantPlan: {readers.Count} · {string.Join(" · ", readers.Select(r => $"{r.Key}={r.Value}"))}");
-
         Assert.True(readers.Count >= 3, $"أَداةٌ عَمياء: {readers.Count} صَفحَة.");
-        Assert.Equal(0, readers["StudioHome.razor"]);
         Assert.Equal(new[] { "Admin/TenantPlanAdmin.razor" }, readers.Where(r => r.Value > 0).Select(r => r.Key).ToArray());
+        Assert.Equal(0, readers["StudioHome.razor"]);   // ‏لا قِراءَةَ مُباشِرَة: السِعرُ يَمُرُّ بِالسِياسَةِ وَحدَها
+
+        var home = UpgradePromptPriceTests.Code("libs", "templates", "ACommerce.Templates.Customer.Marketplace",
+            "Components", "Pages", "StudioHome.razor");
+        var fn = Regex.Match(home, @"string\? PriceLine\(string slug\)\s*\{(?<body>.*?)\n    \}", RegexOptions.Singleline);
+        Assert.True(fn.Success, "لا `PriceLine` — الأَداةُ عَمياء.");
+        Assert.Contains("TenantPlanPolicy.ShownPrice(p) is { } price", fn.Groups["body"].Value, StringComparison.Ordinal);
+        Assert.Contains("L.Format(\"studio.plan.price_line\", ACommerce.Kit.Culture.Money.Format(price))", fn.Groups["body"].Value, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(home, @"ShownPrice\("));
+
+        // المَوضِعُ الأَوَّل: اللافِتَة — بَعدَ تاريخِ الإخفاءِ وقَبلَ التَعليماتِ وأَيِّ زِرِّ دَفع.
+        var banner = BlockAfter(home, "@foreach (var t in myApps.Where(a => Renewable(a.Slug)))");
+        var price = banner.IndexOf("@if (PriceLine(t.Slug) is { } priceLine)", StringComparison.Ordinal);
+        var firstPay = new[] { "studio.plan.transfer_missing", "studio.plan.paddle_pay", "studio.plan.paypal_order", "studio.plan.paypal_pay" }
+            .Select(k => banner.IndexOf(k, StringComparison.Ordinal)).Where(i => i >= 0).ToList();
+        Assert.True(price > 0 && firstPay.Count == 4 && firstPay.All(i => i > price),
+            $"السِعرُ في اللافِتَةِ عِندَ {price}، وأَوَّلُ مَوضِعِ دَفعٍ {(firstPay.Count == 0 ? -1 : firstPay.Min())}.");
+
+        // والثاني: سَطرُ السارِيَةِ في صَفِّ المَتجَر.
+        var row = BlockAfter(home, "@if (ActivePlanLine(t.Slug) is { } planLine)");
+        Assert.Contains("@if (PriceLine(t.Slug) is { } rowPrice)", row, StringComparison.Ordinal);
+        Assert.Equal(2, Regex.Matches(home, Regex.Escape("PriceLine(t.Slug)")).Count);
+
+        // والوَعدُ لَم يُمَسّ — وصارَ صادِقاً لِما سَجَّلَه المُشرِف.
+        Assert.Contains(ShownBeforePayment, LocaleCatalog.Find(LocaleCatalog.Arabic, ConsentItem4Key), StringComparison.Ordinal);
+    }
+
+    // ─── السِياسَة — موجِبٌ وسالِب ───────────────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(150.0, 150.0)]
+    [InlineData(0.01, 0.01)]
+    public void A_recorded_price_above_zero_is_shown(double stored, double shown)
+        => Assert.Equal((decimal)shown, ACommerce.Kit.Subscriptions.TenantPlanPolicy.ShownPrice(
+            new ACommerce.Kit.Subscriptions.TenantPlan { PlanId = "manual", Price = (decimal)stored }));
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-5.0)]
+    public void An_unrecorded_or_invalid_price_is_not_shown(double stored)
+        => Assert.Null(ACommerce.Kit.Subscriptions.TenantPlanPolicy.ShownPrice(
+            new ACommerce.Kit.Subscriptions.TenantPlan { PlanId = "manual", Price = (decimal)stored }));
+
+    [Fact]
+    public void No_plan_shows_no_price()
+        => Assert.Null(ACommerce.Kit.Subscriptions.TenantPlanPolicy.ShownPrice(null));
+
+    /// <summary>القالِبُ بِالعَرَبِيَّةِ بِوَسيطٍ واحِدٍ وبِلا رَقَم — وتَسمِيَتُه تَسمِيَةُ حَقلِ المُشرِفِ نَفسِها («السِعرُ المُتَّفَقُ عَلَيه»)، فَلا
+    /// صِياغَةَ جَديدَة؛ والمَبلَغُ مِن <c>Money.Format</c> لا مِن القامُوس.</summary>
+    [Fact]
+    public void The_price_line_names_the_admin_field_and_carries_no_number()
+    {
+        var template = LocaleCatalog.Find(LocaleCatalog.Arabic, "studio.plan.price_line");
+        Assert.Equal(LocaleCatalog.Find(LocaleCatalog.Arabic, "admin.tenant_plan.field_price") + ": {0}", template);
+        Assert.DoesNotMatch("[0-9٠-٩](?![}])", template!.Replace("{0}", ""));
+        Assert.Equal("السِعرُ المُتَّفَقُ عَلَيه: 150 ر.س", string.Format(template, ACommerce.Kit.Culture.Money.Format(150m)));
     }
 }

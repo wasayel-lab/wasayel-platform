@@ -147,7 +147,14 @@
                         <p style="margin:6px 0 0;font-size:13px;color:var(--st-muted);">
                             @L.Markup("studio.plan.hidden_at") @HiddenAtText(t.Slug)
                         </p>
-                        <p style="margin:8px 0 0;font-size:13px;white-space:pre-wrap;">
+                        @* السِعرُ المُتَّفَقُ عَلَيه قَبلَ التَعليماتِ وأَزرارِ الدَفع — البَندُ ٤ مِن المُوافَقَةِ يَقولُ «يُعرَضُ لَكَ في الاستوديو قَبلَ أَيِّ
+                           دَفع» (‏2026-10-25، تَدقيقُ الإطلاق brief-P2-1). وبِلا سِعرٍ مُسَجَّلٍ لا سَطر، و`@((MarkupString)…)` بَعدَ الكُتلَةِ هُوَ الفَراغُ
+                           الَّذي كانَ بَينَ الفِقرَتَينِ بِحَرفِه (Razor يُسقِطُ الفَراغَ عَلى حَدِّ الكُتلَة) — فَالصَفحَةُ بِلا سِعرٍ بايتاً كَما كانَت. *@
+                        @if (PriceLine(t.Slug) is { } priceLine)
+                        {
+                            <p style="margin:6px 0 0;font-size:13px;color:var(--st-muted);">@priceLine</p>
+                        }
+                        @((MarkupString)"\n                        ")<p style="margin:8px 0 0;font-size:13px;white-space:pre-wrap;">
                             @(string.IsNullOrWhiteSpace(transferInstructions)
                                 ? L["studio.plan.transfer_missing"]
                                 : transferInstructions)
@@ -220,6 +227,11 @@
                                 @if (ActivePlanLine(t.Slug) is { } planLine)
                                 {
                                     <span style="display:block;margin-top:4px;">@planLine</span>
+                                    @* والسِعرُ المُتَّفَقُ عَلَيه تَحتَه إن سُجِّل — القَرارُ نَفسُه الَّذي تَقرَؤُه اللافِتَةُ أَعلاه (brief-P2-1). *@
+                                    @if (PriceLine(t.Slug) is { } rowPrice)
+                                    {
+                                        <span style="display:block;margin-top:4px;">@rowPrice</span>
+                                    }
                                 }
                             </div>
                             <span class="st-chip">@(t.Roles.Count == 0 ? L["studio.home.kind_store"] : L["studio.home.kind_multirole"])</span>
@@ -392,6 +404,17 @@
         if (!myPlans.TryGetValue(slug, out var p)) return null;
         var name = ACommerce.Kit.Subscriptions.PlatformPlanCatalog.Find(p.PlanId)?.LabelAr ?? p.PlanId;
         return L.Format("studio.plan.active_line", name, p.ExpiresAt.ToString("yyyy-MM-dd"));
+    }
+
+    /// <summary>سَطرُ السِعرِ المُتَّفَقِ عَلَيه لِمَتجَرٍ — <c>TenantPlanPolicy.ShownPrice</c> مُنَسَّقاً بِـ<c>Money.Format</c> في قالِبِ
+    /// <c>studio.plan.price_line</c>، و<c>null</c> بِلا سِعرٍ مُسَجَّلٍ فَلا سَطر (‏2026-10-25، تَدقيقُ الإطلاق brief-P2-1). يَقرَؤُه
+    /// مَوضِعان: اللافِتَةُ قَبلَ الدَفع، وصَفُّ السارِيَة.</summary>
+    string? PriceLine(string slug)
+    {
+        myPlans.TryGetValue(slug, out var p);
+        return ACommerce.Kit.Subscriptions.TenantPlanPolicy.ShownPrice(p) is { } price
+            ? L.Format("studio.plan.price_line", ACommerce.Kit.Culture.Money.Format(price))
+            : null;
     }
 
     string HiddenAtText(string slug)
