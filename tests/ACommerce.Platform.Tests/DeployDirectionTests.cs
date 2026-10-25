@@ -591,4 +591,48 @@ public class DeployDirectionTests(ITestOutputHelper output)
             h.Dir.Delete(recursive: true);
         }
     }
+
+    // ─── ٧. (‏2026-10-25، مُراجَعَةُ تَيّارِ S16 الجَولَة ٢) سَطرُ المُلَخَّصِ بِلا بادِئَةِ أَمرِ سَيرِ العَمَل ─────────────────────────────────────
+
+    /// <summary><b>المُلَخَّصُ يَقرَأُ السَبَبَ بِلا <c>::error::</c>/<c>::warning::</c>، والمُخرَجُ يُبقيها فَيَنطَلِقُ التَنبيه</b> — سَطرُ المُلَخَّصِ في خُطوَةِ
+    /// الحُكمِ مَقطوعاً بِحَرفِه ومُشَغَّلاً بِـbash عَلى ثَلاثَةِ أَجوِبَةٍ مِن الدالَّة (رَفضٌ، وتَراجُعٌ مَقصود، وتَقَدُّم). <b>المَقيسُ قَبل</b>: السَطرُ نَفسُه بِلا
+    /// النَزعِ يَطبَعُ «<c>`refuse` — ::error::لا يُدفَعُ …</c>» — وهو حَقنُ العَيبِ أَدناه.</summary>
+    [Fact]
+    public void The_summary_line_drops_the_workflow_command_prefix_and_the_step_output_keeps_it()
+    {
+        if (NoBash()) return;
+        var wf = Workflow();
+        var a = wf.IndexOf("      - name: Refuse a push that is not forward of what the live serves\n", StringComparison.Ordinal);
+        var b = wf.IndexOf("      - name: Push the filtered tree to the Space\n", StringComparison.Ordinal);
+        Assert.True(a > 0 && b > a, "خُطوَةُ الحُكمِ لَم تُقرَأ — الأَداةُ عَمياء.");
+        var body = wf[a..b];
+        var lines = Regex.Matches(body, @"^ *echo ""\\`\$\{decision\}\\` — .*$", RegexOptions.Multiline).Select(m => m.Value.Trim()).ToList();
+        Assert.Single(lines);
+        var summary = lines[0];
+        // ‏والمُخرَجُ يَطبَعُ جَوابَ الدالَّةِ كُلَّه بِبادِئَتِه — قَبلَ المُلَخَّص.
+        var stdout = body.IndexOf("printf '%s\\n' \"${out}\"\n", StringComparison.Ordinal);
+        Assert.True(stdout > 0 && stdout < body.IndexOf(summary, StringComparison.Ordinal), "المُخرَجُ لا يَطبَعُ الجَوابَ قَبلَ المُلَخَّص.");
+
+        var cases = new (string Decision, string Out, string Expected)[]
+        {
+            ("refuse", "decision=refuse\n::error::لا يُدفَعُ ما لَيسَ بَعدَ ما يَخدِم: س.", "`refuse` — لا يُدفَعُ ما لَيسَ بَعدَ ما يَخدِم: س."),
+            ("push", "decision=push\n::warning::تَراجُعٌ مَقصود (allow_rollback=true): ص.", "`push` — تَراجُعٌ مَقصود (allow_rollback=true): ص."),
+            ("push", "decision=push\nتَقَدُّم: ما يَخدِمُه الحَيُّ سَلَفٌ لِلمُرَشَّح.", "`push` — تَقَدُّم: ما يَخدِمُه الحَيُّ سَلَفٌ لِلمُرَشَّح."),
+        };
+        string RunLine(string line, string decision, string outText)
+        {
+            var (code, text) = Run("/bin/bash", Path.GetTempPath(), "-c", "decision=\"$1\"; out=\"$2\"; " + line, "_", decision, outText);
+            Assert.Equal(0, code);
+            return text;
+        }
+        var wrong = cases.Where(c => RunLine(summary, c.Decision, c.Out) != c.Expected)
+            .Select(c => $"«{c.Decision}» ⇒ {RunLine(summary, c.Decision, c.Out)}").ToList();
+        // ‏حَقنُ عَيب: سَطرُ S16 بِحَرفِه (بِلا النَزع) يَحمِلُ البادِئَةَ إلى المُلَخَّص في الحالَتَينِ الأُولَيَين.
+        var unstripped = summary.Replace(" | sed -E 's/^::(error|warning):://'", "", StringComparison.Ordinal);
+        Assert.NotEqual(summary, unstripped);
+        var leaked = cases.Count(c => RunLine(unstripped, c.Decision, c.Out).Contains("::", StringComparison.Ordinal));
+        output.WriteLine($"حالات: {cases.Length} · أَخطَأَ المُلَخَّصُ في {wrong.Count} · وسَطرُ ما قَبلَ النَزعِ يُسَرِّبُ البادِئَةَ في {leaked}");
+        Assert.True(wrong.Count == 0, string.Join("\n", wrong));
+        Assert.Equal(2, leaked);
+    }
 }

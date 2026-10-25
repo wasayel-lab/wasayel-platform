@@ -382,10 +382,12 @@ jobs:
           case "${decision}" in push|skip) : ;; *) decision="refuse" ;; esac
           [ "${code}" -eq 0 ] || decision="refuse"
           echo "deploy_decision=${decision}" >> "$GITHUB_ENV"
+          # ‏(‏2026-10-25، مُراجَعَةُ تَيّارِ S16 الجَولَة ٢ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) بادِئَةُ أَمرِ سَيرِ العَمَل (`::error::`/`::warning::`) لِلمُخرَجِ
+          # وَحدَه — فيه تُطلِقُ التَنبيه — وتُنزَعُ مِن المُلَخَّص، وإلّا قُرِئَ السَطرُ «`refuse` — ::error::لا يُدفَعُ …».
           {
             echo "### اتِّجاهُ النَشر"
             echo ""
-            echo "\`${decision}\` — $(printf '%s\n' "${out}" | sed -n '2p')"
+            echo "\`${decision}\` — $(printf '%s\n' "${out}" | sed -n '2p' | sed -E 's/^::(error|warning):://')"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
           [ "${decision}" != "refuse" ] || exit 1
