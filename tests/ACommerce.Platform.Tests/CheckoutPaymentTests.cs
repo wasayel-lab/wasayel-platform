@@ -274,6 +274,20 @@ public class CheckoutPaymentTests
         Assert.True(PaymentChargeSurface.CanCharge(new SimulatedPaymentProvider()));
     }
 
+    /// <summary>
+    /// <para>مَقطَعُ نُقطَةِ إتمامِ الشِراءِ مِن اسمِها إلى خاتِمَتِها <c>.RequireStoreWritable();</c> — لا نافِذَةَ بِعَدَدِ مَحارِف.
+    /// (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-1 الجَولَة ٢، مَعلومَة؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: كانَ المَقطَعُ أَوَّلَ ‏4000 مِحرَفٍ بَعدَ الاسم،
+    /// والسَطرُ المَطلوبُ انتَقَلَ مِن ‏3596 إلى ‏3900 في التَيّار — فَتَعليقٌ بِنَحوِ مِئَةِ مِحرَفٍ فَوقَه يُحمِرُّ الصَفَّ لِسَبَبٍ لا يَخُصُّه.)</para>
+    /// </summary>
+    internal static string SubmitSegment(string text)
+    {
+        var start = text.IndexOf("/{slug}/checkout/submit", StringComparison.Ordinal);
+        Assert.True(start > 0, "نُقطَةُ إتمامِ الشِراءِ غَير مَوجودَة — الأَداةُ عَمياء.");
+        var end = text.IndexOf(".RequireStoreWritable();", start, StringComparison.Ordinal);
+        Assert.True(end > start, "خاتِمَةُ نُقطَةِ إتمامِ الشِراءِ غَيرُ مَوجودَة — الأَداةُ عَمياء.");
+        return text.Substring(start, end - start);
+    }
+
     /// <summary>والشاشَةُ والنُقطَةُ تَسأَلانِ المُسنَدَ نَفسَه — فَلا تَعرِضُ
     /// الشاشَةُ خِياراً سَتَرُدُّه النُقطَة.</summary>
     [Fact]
@@ -281,11 +295,24 @@ public class CheckoutPaymentTests
     {
         Assert.Contains("PaymentChargeSurface.CanCharge(Payments)", CheckoutRazor(), StringComparison.Ordinal);
 
-        var text = Endpoints();
-        var start = text.IndexOf("/{slug}/checkout/submit", StringComparison.Ordinal);
-        Assert.True(start > 0, "نُقطَةُ إتمامِ الشِراءِ غَير مَوجودَة — الأَداةُ عَمياء.");
-        var body = text.Substring(start, Math.Min(4000, text.Length - start));
+        var body = SubmitSegment(Endpoints());
+        Assert.True(body.Length > 4000, $"أَداةٌ عَمياء: مَقطَعُ النُقطَةِ {body.Length} مِحرَفاً — أَقَلُّ مِن النافِذَةِ الَّتي حَلَّ مَحَلَّها.");
         Assert.Contains("PaymentChargeSurface.CanCharge(payments)", body, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>والمَقطَعُ يُقاسُ قَبلَ أَن يُوثَقَ بِه</b> (القاعِدَة ١٠؛ ‏2026-10-25): سَطرُ المُسنَدِ بَعدَ تَعليقٍ يَتَجاوَزُ ‏4000 مِحرَفٍ يُرى، وما
+    /// بَعدَ الخاتِمَةِ — في النُقطَةِ التالِيَة — لا يُرى، وغِيابُ الخاتِمَةِ يُحمِرّ.</summary>
+    [Fact]
+    public void The_submit_segment_ends_at_the_endpoint_not_at_a_character_window()
+    {
+        const string Ask = "PaymentChargeSurface.CanCharge(payments)";
+        var longComment = "app.MapPost(\"/{slug}/checkout/submit\", async () => {\n// " + new string('x', 4200) + "\nvar ok = " + Ask + ";\n})\n.RequireStoreWritable();";
+        Assert.Contains(Ask, SubmitSegment(longComment), StringComparison.Ordinal);
+
+        var after = "app.MapPost(\"/{slug}/checkout/submit\", async () => { })\n.RequireStoreWritable();\napp.MapPost(\"/{slug}/other\", () => " + Ask + ");";
+        Assert.DoesNotContain(Ask, SubmitSegment(after), StringComparison.Ordinal);
+
+        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => SubmitSegment("app.MapPost(\"/{slug}/checkout/submit\", async () => { });"));
     }
 
     [Fact]
