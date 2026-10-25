@@ -83,6 +83,30 @@ public class PlatformContactDoorTests(ITestOutputHelper output)
             Assert.DoesNotContain(LocaleCatalog.Find(LocaleCatalog.Arabic, ContactEmailKey)!, contact, StringComparison.Ordinal);
     }
 
+    /// <summary>جِسمُ قِسمِ البَريدِ في <c>/contact</c>: ما بَينَ عُنوانِه وخاتِمَتِه — يُرسَمُ حينَ يُملَأُ البَريدُ وَحدَه.</summary>
+    internal static string EmailSection()
+    {
+        var code = UpgradePromptPriceTests.Code("libs", "templates", "ACommerce.Templates.Customer.Marketplace",
+            "Components", "Pages", "Platform", "PlatformContact.razor");
+        var at = code.IndexOf("platform.contact.email_label", StringComparison.Ordinal);
+        Assert.True(at > 0, "لا قِسمَ بَريدٍ في /contact — الأَداةُ عَمياء.");
+        return code[at..code.IndexOf("</section>", at, StringComparison.Ordinal)];
+    }
+
+    /// <summary><b>تَوصيف</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ١، صُغرى — القاعِدَة ٣: يَنقَلِبُ بِاسمِه في كوميتِ الإصلاح): قِسمُ البَريدِ
+    /// لا يُرسَمُ إلّا حينَ يُملَأُ البَريد — <b>وحينَها</b> يَرسُمُ البَريدَ المَملوءَ داخِلَ <c>span.wsl-placeholder</c> (صُندوقُ «يَملَؤُه المالِك»
+    /// الأَحمَرُ المُتَقَطِّع) بِلا <c>mailto</c>: أَوَّلُ يَومٍ يُملَأُ فيه البَريدُ يُرى نائِباً لا طَريقاً.</summary>
+    [Fact]
+    public void Today_the_filled_contact_email_is_drawn_inside_the_placeholder_box_with_no_mailto()
+    {
+        var section = EmailSection();
+        var boxed = section.Contains("<span class=\"wsl-placeholder\">@L.Markup(\"platform.doc.contact_email\")</span>", StringComparison.Ordinal);
+        var mailto = Regex.Matches(section, "mailto:").Count;
+        output.WriteLine($"قِسمُ البَريد ({section.Length} مِحرَفاً): البَريدُ في صُندوقِ النائِب: {boxed} · mailto: {mailto}");
+        Assert.True(boxed);
+        Assert.Equal(0, mailto);
+    }
+
     /// <summary><b>ودَليلُ النَشرِ يُسَمّي الخَمسَةَ قَبلَ الإطلاق</b> (`docs/DEPLOY.md` §٢ الخُطوَة ٧، ‏2026-10-25): كانَ لا يَذكُرُ مِنها
     /// شَيئاً. والقائِمَةُ مِن <see cref="PlatformDocFields.EntityKeys"/> لا مَكتوبَةً هُنا — فَمِفتاحٌ يُضافُ غَداً يُحمِّرُ هذا الصَفَّ حَتّى
     /// يُكتَبَ صَفُّه في الجَدوَل.</summary>
