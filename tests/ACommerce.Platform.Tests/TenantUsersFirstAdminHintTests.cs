@@ -42,14 +42,16 @@ public class TenantUsersFirstAdminHintTests(ITestOutputHelper output)
     /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الإصلاح)</b> — كانَ <c>Today_the_first_admin_hint_is_drawn_only_when_the_store_has_zero_users</c>
     /// (‏<c>6b4715c</c>): «مَواضِعُ التَلميح 1 (داخِلَ فَرعِ الفَراغ) · HasTenantManage في الصَفحَة 0». والآن مَوضِعٌ ثانٍ داخِلَ <c>else</c> قَبلَ بِطاقَةِ
     /// الجَدوَل، تَحتَ <c>@if (!anyManager)</c> — والشَرطُ يَكتُبُه سَطرٌ واحِدٌ مِن دالَّةِ الحارِسِ نَفسِها، فَلا تَعريفٌ ثانٍ لِـ«مَن يُديرُ المَتجَر»
-    /// يَنجَرِفُ عَن البابِ الَّذي يَفتَحُ لَوحَتَه (القاعِدَة ٢).</summary>
+    /// يَنجَرِفُ عَن البابِ الَّذي يَفتَحُ لَوحَتَه (القاعِدَة ٢).
+    /// <para><b>وقُلِبَ بِاسمِه ثانِيَةً ‏2026-10-25</b> (مُراجَعَةُ تَيّارِ W8-3 الجَولَتانِ ١ و٢؛ كانَ <c>The_first_admin_hint_is_drawn_above_the_table_while_no_listed_user_holds_tenant_manage</c>،
+    /// والتَوصيفُ <c>2215638</c>): الشَرطُ <c>@if (hasAdminRole &amp;&amp; !anyManager)</c> — يَسأَلُ ما يَسأَلُه زِرُّ «مَنح إدارَة» الَّذي يُسَمّيه النَصّ.</para></summary>
     [Fact]
-    public void The_first_admin_hint_is_drawn_above_the_table_while_no_listed_user_holds_tenant_manage()
+    public void The_first_admin_hint_is_drawn_above_the_table_while_the_admin_role_exists_and_no_listed_user_holds_tenant_manage()
     {
         var page = Page();
         var (empty, elseAt, table) = Anchors(page);
         var hits = Regex.Matches(page, Regex.Escape(HintKey)).Select(m => m.Index).ToList();
-        var guardAt = page.IndexOf("@if (!anyManager)", elseAt, StringComparison.Ordinal);
+        var guardAt = page.IndexOf("@if (hasAdminRole && !anyManager)", elseAt, StringComparison.Ordinal);
         var writers = Regex.Matches(page, @"\banyManager\s*=(?!=)").Count;
         output.WriteLine($"مَواضِعُ التَلميح: {hits.Count} ({string.Join(", ", hits)}) · فَرعُ الفَراغ [{empty}..{elseAt}) · الشَرطُ عِندَ {guardAt}" +
                          $" · الجَدوَلُ عِندَ {table} · كُتّابُ anyManager: {writers}");
@@ -57,7 +59,7 @@ public class TenantUsersFirstAdminHintTests(ITestOutputHelper output)
         Assert.Equal(2, hits.Count);
         Assert.InRange(hits[0], empty, elseAt);
         Assert.InRange(hits[1], elseAt, table);
-        Assert.True(guardAt > elseAt && guardAt < hits[1], "التَلميحُ فَوقَ الجَدوَلِ لا يَسأَلُ «أَلا يَحمِلُ أَحَدٌ tenant.manage؟».");
+        Assert.True(guardAt > elseAt && guardAt < hits[1], "التَلميحُ فَوقَ الجَدوَلِ لا يَسأَلُ «أَفيهِ دَورُ tenant_admin ولا يَحمِلُ أَحَدٌ tenant.manage؟».");
         Assert.Contains("<AcAlert Variant=\"info\" Message=\"@(L.Format(\"admin.tenant_users.empty_hint\", Slug))\" />",
             page[elseAt..table], StringComparison.Ordinal);
 
@@ -87,26 +89,28 @@ public class TenantUsersFirstAdminHintTests(ITestOutputHelper output)
     private static string Baseline() => File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
         "tests", "characterization", "appearance", "i18n-baseline", "admin-tenant-users.html"));
 
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-25؛ كانَ <c>Today_the_hint_above_the_table_names_a_grant_button_a_store_without_the_admin_role_never_draws</c>، مُودَعٌ في
+    /// <c>2215638</c>): شَرطُ التَلميحِ فَوقَ الجَدوَلِ يَسأَلُ <c>hasAdminRole</c> — الشَرطَ نَفسَه الَّذي يَرسُمُ زِرَّ «مَنح إدارَة» — فَلا يُرسَمُ في مَتجَرٍ بِلا
+    /// دَورِ tenant_admin؛ ولَقطَةُ <c>admin-tenant-users</c> (‏owner-test) عادَت بِلا التَلميح — عَكسُ الإدراجِ المَقيسِ في <c>0b96ff1</c> بايتاً (‏33526 ← 31980)،
+    /// وتَحذيرُ no_admin_role فيها كَما هو.</summary>
     [Fact]
-    public void Today_the_hint_above_the_table_names_a_grant_button_a_store_without_the_admin_role_never_draws()
+    public void The_hint_above_the_table_asks_the_same_admin_role_as_the_grant_button_it_names()
     {
         var page = Page();
         var (_, elseAt, table) = Anchors(page);
-        var hintGuard = page.IndexOf("@if (!anyManager)", elseAt, StringComparison.Ordinal);
-        Assert.True(hintGuard > elseAt && hintGuard < table, "لا شَرطَ لِلتَلميحِ فَوقَ الجَدوَل — الأَداةُ عَمياء.");
-        Assert.DoesNotContain("hasAdminRole", page[hintGuard..table], StringComparison.Ordinal);
+        var hintGuard = page.IndexOf("@if (hasAdminRole && !anyManager)", elseAt, StringComparison.Ordinal);
+        Assert.True(hintGuard > elseAt && hintGuard < table, "التَلميحُ فَوقَ الجَدوَلِ لا يَسأَلُ hasAdminRole.");
+        Assert.DoesNotContain("@if (!anyManager)", page, StringComparison.Ordinal);
 
         var buttonGuard = page.IndexOf("@if (hasAdminRole)", table, StringComparison.Ordinal);
         var grant = page.IndexOf("/grant-admin", table, StringComparison.Ordinal);
         Assert.True(buttonGuard > table && grant > buttonGuard, $"زِرُّ المَنحِ خارِجَ @if (hasAdminRole): الشَرط {buttonGuard} · الزِرّ {grant}.");
-
-        Assert.Contains("«مَنح إدارَة»", ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "admin.tenant_users.empty_hint"),
-            StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(page, @"\bhasAdminRole\s*=(?!=)"));
 
         var snap = Baseline();
         Assert.Contains("ac-alert ac-alert-warning", snap, StringComparison.Ordinal);   // no_admin_role
-        Assert.Contains("ac-alert ac-alert-info", snap, StringComparison.Ordinal);      // التَلميح
+        Assert.DoesNotContain("ac-alert ac-alert-info", snap, StringComparison.Ordinal);
         Assert.DoesNotContain("grant-admin", snap, StringComparison.Ordinal);
-        output.WriteLine($"شَرطُ التَلميحِ يَسأَلُ hasAdminRole: لا · زِرُّ المَنحِ تَحتَ hasAdminRole: نَعَم · اللَقطَة: تَلميحٌ 1 · زِرُّ مَنحٍ 0");
+        output.WriteLine($"شَرطُ التَلميحِ يَسأَلُ hasAdminRole: نَعَم · اللَقطَة ({snap.Length} مِحرَفاً): تَلميحٌ 0 · تَحذيرٌ 1 · زِرُّ مَنحٍ 0");
     }
 }
