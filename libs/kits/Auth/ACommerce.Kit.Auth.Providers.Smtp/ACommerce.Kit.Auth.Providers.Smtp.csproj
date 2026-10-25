@@ -3,6 +3,8 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="MailKit" />
     <PackageReference Include="MimeKit" />
+    <!-- تَثبيتٌ أَمنيٌّ لِتَبَعِيَّةِ MimeKit المُتَعَدِّيَة (10.0.0 ← 10.0.13) — السَبَبُ وشَرطُ الإسقاطِ في `Directory.Packages.props`. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <ProjectReference Include="..\ACommerce.Kit.Auth.Core\ACommerce.Kit.Auth.Core.csproj" />
   </ItemGroup>
   <ItemGroup>

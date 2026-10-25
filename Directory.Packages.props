@@ -10,7 +10,10 @@
 
     <!-- ASP.NET runtime bits -->
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
+    <!-- ‏(‏2026-10-25 — تَدقيقُ الإطلاق lens-checkers-ci-1) ‏10.0.10 كانَ يَجُرُّ `Microsoft.AspNetCore.SignalR.Common`
+         ‏10.0.10، وثَغرَتُه العالِيَةُ GHSA-334f-vvp4-7g6p في النِطاقِ [10.0.0، 10.0.12] بِقاعِدَةِ ثَغَراتِ NuGet. و‏10.0.13
+         إصدارُ ‏2026-10-13 الأَمنيّ — وهو رُقعَةُ وَقتِ التَشغيلِ في الـ`Dockerfile` نَفسِها. -->
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.13" />
 
     <!-- Web Push (PWA notifications) -->
     <PackageVersion Include="WebPush" Version="1.0.13" />
@@ -34,6 +37,11 @@
     <!-- SMTP (قَناة OTP بَريديَّة — Auth.Providers.Smtp) -->
     <PackageVersion Include="MailKit" Version="4.17.0" />
     <PackageVersion Include="MimeKit" Version="4.17.0" />
+    <!-- ‏(‏2026-10-25 — تَدقيقُ الإطلاق lens-checkers-ci-1) تَثبيتٌ أَمنيٌّ لا مُستَهلَكٌ مُباشِر: ‏MimeKit 4.17.0 يَطلُبُ
+         `System.Security.Cryptography.Pkcs` ‏10.0.0، وفيه GHSA-846f-f764-76mx (عالِيَة) وGHSA-2fmv-rv2c-59x7 (مُتَوَسِّطَة) في
+         النِطاقِ [10.0.0، 10.0.12]. ويُرجَعُ إلَيه في `ACommerce.Kit.Auth.Providers.Smtp.csproj` وَحدَه — مُستَهلِكِ MimeKit.
+         **وشَرطُ إسقاطِه**: يَومَ يَطلُبُ MimeKit نَفسُه ‏10.0.13 أَو أَعلى؛ وحَذفُه قَبلَها يُحمِرُّ البِناءَ (NU1903 خَطَأٌ — `Directory.Build.props`). -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
 
     <!-- Tests -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />

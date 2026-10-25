@@ -57,7 +57,14 @@
 # و`/v2/dotnet/aspnet/tags/list` — وأَحدَثُ 10.0.N فيهِما يَومَها). و`ci.yml`
 # ‏`10.0.x` قَناتُهُما. **والتَرقِيَةُ تَمَسُّ الوَسمَينِ مَعاً** وصَفَّ §٥:
 # `DockerImagePinTests` يَحمَرُّ عَلى وَسمٍ مُتَحَرِّكٍ يَعود أَو §٥ لا يُسَمّيهِما.
-FROM mcr.microsoft.com/dotnet/sdk:10.0.401 AS build
+#
+# ‏(‏2026-10-25 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه؛ تَدقيقُ الإطلاق lens-checkers-ci-1، حاجِبَة) **رُفِعَ الزَوجُ إلى 10.0.402/10.0.13**:
+# إصدارُ ‏2026-10-13 أَمنيٌّ (`security: true` في `release-metadata/10.0/releases.json`)، وقاعِدَةُ ثَغَراتِ NuGet تَضَعُ
+# `microsoft.aspnetcore.app.runtime.linux-x64` [10.0.0، 10.0.12] تَحتَ إعلانَينِ حَرِجَين (GHSA-fpq8-4vhr-rcxx وGHSA-rv87-ccxw-8ggf)
+# وعالِياتٍ — فَصورَةُ 10.0.12 كانَت تُشَغِّلُ ما أَصلَحَته الرُقعَةُ التالِيَة. والزَوجُ مِن الإصدارِ نَفسِه (`sdk` ‏10.0.402 يَحمِلُ
+# `aspnetcore-runtime` ‏10.0.13)، وكِلا الوَسمَينِ في قائِمَتَي MCR اليَوم. **و`ci.yml` يَبني بِهذا الـSDK نَفسِه بِرَقمِه** لا بِقَناتِه
+# (`DockerImagePinTests` يَحمَرُّ إن افتَرَقا). ولَم تُبنَ الصورَةُ هُنا (لا Docker)؛ بُنِيَ الحَلُّ واختُبِرَ بِـSDK ‏10.0.402 نَفسِه.
+FROM mcr.microsoft.com/dotnet/sdk:10.0.402 AS build
 
 WORKDIR /src
 COPY . .
@@ -148,7 +155,8 @@ RUN set -eu; \
 
 # --- مَرحَلَة التَّشغيل (ASP.NET Core 10 runtime رَسميّ) --------------------
 # ‏وَقتُ التَشغيلِ الَّذي يَحمِلُه SDK ‏10.0.401 نَفسُه — رَأسُ المِلَفِّ أَعلاه.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.12 AS runtime
+# ‏(‏2026-10-25) وصارَ وَقتَ التَشغيلِ الَّذي يَحمِلُه SDK ‏10.0.402 — الإلحاقُ المُؤَرَّخُ فَوقَ `FROM … AS build`.
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.13 AS runtime
 
 WORKDIR /app
 COPY --from=build /publish ./

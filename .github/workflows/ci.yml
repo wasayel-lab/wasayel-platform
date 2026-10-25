@@ -13,9 +13,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ═══ الـSDK هُوَ SDK الصورَة، بِرَقمِه (‏2026-10-25، تَدقيقُ الإطلاق brief-P3-3 وlens-checkers-ci-11) ═══
+      # كانَ `dotnet-version: 10.0.x` — قَناةٌ تَتَقَدَّمُ مَعَ كُلِّ رُقعَةٍ والـ`Dockerfile` بِرَقمٍ دَقيق، فَالأَخضَرُ هُنا لَم يَكُن قِياساً
+      # لِلسِلسِلَةِ المَشحونَة. والرَقمُ في `setup-dotnet` وَحدَه لا يَكفي: صورَةُ ubuntu تَحمِلُ مُسبَقاً عِدَّةَ SDK و`dotnet` يَختارُ
+      # أَحدَثَها بِلا `global.json`. فَيُكتَبُ `global.json` لِهذا التَشغيلِ مِن وَسمِ الـ`Dockerfile` (‏rollForward: disable)، ثُمَّ يُسأَلُ
+      # `dotnet --version` عَنه. ورَفعُ الوَسمِ يَرفَعُ CI مَعَه بِلا سَطرٍ ثانٍ — `scripts/ci-sdk.sh` و`DockerImagePinTests`.
+      - name: The image's SDK, as global.json for this run (Dockerfile)
+        run: ./scripts/ci-sdk.sh write
+
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
+
+      - name: The SDK in use is the image's SDK
+        run: ./scripts/ci-sdk.sh verify
 
       - name: Build solution
         run: dotnet build PlatformV1.slnx -c Release
@@ -119,10 +130,19 @@ jobs:
       - uses: actions/checkout@v4
         if: env.BOOT_GATE_CONNECTION_STRING != ''
 
+      # ‏(‏2026-10-25) والبَوّابَةُ تَنشُرُ الثُنائِيَّ وتُقلِعُه — فَبِـSDK الصورَةِ نَفسِه، كَوَظيفَةِ البِناءِ أَعلاه.
+      - name: The image's SDK, as global.json for this run (Dockerfile)
+        if: env.BOOT_GATE_CONNECTION_STRING != ''
+        run: ./scripts/ci-sdk.sh write
+
       - uses: actions/setup-dotnet@v4
         if: env.BOOT_GATE_CONNECTION_STRING != ''
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
+
+      - name: The SDK in use is the image's SDK
+        if: env.BOOT_GATE_CONNECTION_STRING != ''
+        run: ./scripts/ci-sdk.sh verify
 
       - name: Production boot gate on the Neon branch
         if: env.BOOT_GATE_CONNECTION_STRING != ''

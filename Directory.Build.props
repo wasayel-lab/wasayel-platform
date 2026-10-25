@@ -8,4 +8,21 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
+
+  <!-- ═══ ثَغرَةٌ عالِيَةٌ أَو حَرِجَةٌ في حُزمَةٍ تُبنى = بِناءٌ أَحمَر (‏2026-10-25، تَدقيقُ الإطلاق lens-checkers-ci-1) ═══
+       **المَقيسُ قَبلَ**: البِناءُ يَطبَعُ `NU1903` لِـ`System.Security.Cryptography.Pkcs` ‏10.0.0 (‏GHSA-846f-f764-76mx) ولِـ
+       `Microsoft.AspNetCore.SignalR.Common` ‏10.0.10 (‏GHSA-334f-vvp4-7g6p) — ثُمَّ «0 Error(s)». فَتَحذيرُ NuGet يُطبَعُ في
+       كُلِّ بِناءٍ ولا يَقرَؤُه أَحَد: لا CI يَحمَرّ، ولا ذِكرَ في docs ولا في السِجِلّ.
+       **وصارَ**: ‏NU1903 (عالِيَة) وNU1904 (حَرِجَة) خَطَآنِ — في CI وفي `dotnet restore` داخِلَ الـ`Dockerfile` (المِلَفُّ مِمّا
+       يُنسَخُ إلى الـSpace). والوَضعُ والمُستَوى مَكتوبانِ لا مَوروثانِ مِن افتِراضِ الـSDK: الفَحصُ يَشمَلُ التَبَعِيّاتِ المُتَعَدِّيَة
+       (‏Pkcs تَأتي مِن MimeKit لا مِن مَشروعِنا)، ويُبَلِّغُ مِن «مُنخَفِضَة» صُعوداً؛ والمُنخَفِضَةُ والمُتَوَسِّطَةُ تَبقَيانِ تَحذيراً.
+       **والحارِسُ**: `NuGetAuditGateTests` — يَحمَرُّ إن سَقَطَ أَحَدُ الرَمزَينِ أَو أُطفِئَ الفَحصُ أَو ضُيِّقَ هُنا أَو في أَيِّ csproj.
+       **والعِلاجُ حينَ يَحمَرُّ بِلا تَغييرٍ في الكود** (إعلانُ ثَغرَةٍ جَديدَة): رَفعُ الحُزمَة — أَو، إن لَم يوجَد إصلاح،
+       `<NuGetAuditSuppress Include="رابِطُ الإعلان" />` بِسَطرٍ يَقولُ السَبَبَ والتاريخ؛ لا حَذفُ الرَمزِ مِن هُنا. (DEPLOY.md §٥) -->
+  <PropertyGroup>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1903;NU1904</WarningsAsErrors>
+  </PropertyGroup>
 </Project>
