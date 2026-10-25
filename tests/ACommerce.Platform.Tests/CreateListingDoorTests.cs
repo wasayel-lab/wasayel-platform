@@ -1,0 +1,256 @@
+using System.Text.RegularExpressions;
+using ACommerce.Kit.Roles;
+using Xunit;
+using Xunit.Abstractions;
+
+namespace ACommerce.Platform.Tests;
+
+// ═══ «إعلان جَديد» بابٌ يُرسَمُ لِدَورٍ لا يَنشُر — والنَموذَجُ يُملَأُ كامِلاً ثُمَّ ‏403 بِلا رِسالَة ═══
+//
+// **تَدقيقُ الإطلاقِ عِندَ `dace7cd`، تَيّارُ W8-7**: ‏`lens-dead-doors-3` (كُبرى). أُعيدَ قِياسُه عِندَ الرَأسِ `7b8de7f` (‏2026-10-25):
+// - ‏`customer.role.json` لا يَحمِلُ `listing.create`، وهُوَ الدَورُ الافتِراضِيُّ لِكُلِّ مَتجَرٍ يَبنيه الاستوديو (‏`TenantFromAnalysisFactory.RolesFor`:
+//   ‏`customer` بِـ`isDefault: true` في ثَلاثَةِ أَنماطٍ مِن أَربَعَة).
+// - ‏`TenantHome.razor` يَحرُسُ رابِطَيه بِـ`canCreateListing` (‏`RolePermissions.Has(…, "listing.create")`)، و`MyListings.razor` يَرسُمُ رابِطَيه
+//   (زِرُّ الرَأسِ وزِرُّ الحالَةِ الفارِغَة) لِكُلِّ صاحِبِ جَلسَة.
+// - ‏`CreateListing.razor` يَرسُمُ النَموذَجَ كامِلاً (الفِئَة، الحُقول، الصُوَر، المَوقِع) بِلا سُؤالِ الصَلاحِيَّة، ونُقطَتُه
+//   ‏`.RequirePermission("listing.create")` تَرُدُّ ‏403 عارِياً (‏`PermissionFilter.cs:48-49`) فَيَرى المُشتَري صَفحَةَ الخَطَأِ العامَّة.
+// - وفَرعُ `Err == "forbidden"` في الصَفحَةِ لا كاتِبَ لَه: صِفرُ `create-listing?err=forbidden` في `.cs`.
+//
+// هذا المِلَفُّ يُوَصِّفُ «اليَوم» (القاعِدَة ٣) قَبلَ أَيِّ تَبديل؛ صُفوفُ `Today_` تُقلَبُ بِأَسمائِها في كوميتِ الإصلاح، والباقي يَبقى بِلا تَعديلِ حَرف.
+public class CreateListingDoorTests(ITestOutputHelper output)
+{
+    private const string TemplateRoot = "libs/templates/ACommerce.Templates.Customer.Marketplace";
+    private const string Permission = "listing.create";
+
+    // ─── الماسِح ────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>ذِكرٌ لِصَفحَةِ النَشرِ في رَابِطٍ أَو استِمارَة: <c>create-listing</c> يَسبِقُه تَنصيصٌ أَو <c>/</c> ولا يَليه حَرفٌ أَو شَرطَة —
+    /// فَـ<c>acs-create-listing</c> (صِنفُ CSS) لا يُعَدّ، و<c>create-listing?category=…</c> يُعَدّ.</summary>
+    private static readonly Regex CreateListingToken = new(@"(?<=[""'/])create-listing(?![\w-])", RegexOptions.Compiled);
+
+    /// <summary>حُكمُ رابِطٍ واحِد: <c>Predicate</c> داخِلَ <c>if</c> أَحَدُ شُقوقِ <c>&amp;&amp;</c> العُليا في شَرطِه مُتَغَيِّرٌ أَو نِداءٌ يَسأَلُ
+    /// <c>listing.create</c>؛ و<c>Page</c> داخِلَ <c>&lt;GatedPage … Permission="listing.create"&gt;</c> في صَفحَةِ النَشرِ نَفسِها؛ و<c>RoleHome</c>
+    /// في مِلَفٍّ مُسَمّىً بِسَبَبِه (<see cref="RoleHomeFiles"/>)؛ و<c>Outside</c> ما سِواه.</summary>
+    internal enum Door { Predicate, Page, RoleHome, Outside }
+
+    internal sealed record Link(string File, int Line, Door Door);
+
+    /// <summary><para><b>مَلَفّاتُ أَبوابِ الدَور، مُسَمّاةً بِسَبَبِها</b> — رابِطٌ فيها لا يَسأَلُ الصَلاحِيَّةَ بِحَرفِها بَل يُرسَمُ لِأَنّ تَركيبَ الدَور
+    /// اختارَه، و<see cref="Role_home_doors_to_create_listing_are_drawn_only_for_catalog_roles_that_carry_listing_create"/> يُثبِتُ أَنّ كُلَّ دَورٍ
+    /// في الكاتالوجِ يَختارُها يَحمِلُ <c>listing.create</c>. والقائِمَةُ تَتَقَلَّصُ ولا تَنمو إلّا بِقَرارٍ مَرئِيّ.</para></summary>
+    internal static readonly IReadOnlyDictionary<string, string> RoleHomeFiles = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [TemplateRoot + "/Components/RoleHomes/SellerHome.razor"] = "تَركيبُ home = sellerHome",
+        [TemplateRoot + "/Components/RoleHomes/RiderHome.razor"]  = "تَركيبُ home = riderHome",
+        [TemplateRoot + "/Components/RoleHomeHero.razor"]         = "فَرعا rider وvendor/host في switch عَلى CatalogSlug",
+        [TemplateRoot + "/Components/Pages/TenantManage.razor"]   = "خَلفَ canManage (‏tenant.manage)",
+    };
+
+    private const string PageFile = TemplateRoot + "/Components/Pages/CreateListing.razor";
+
+    /// <summary>كُلُّ رابِطٍ إلى صَفحَةِ النَشرِ في مَصادِرِ <c>.razor</c> تَحتَ <c>libs</c>/<c>apps</c> (‏<see cref="EntitlementContractTests.SourceFiles"/>)،
+    /// خارِجَ تَوجيهِ <c>@page</c> وخارِجَ تَعليقاتِ Razor/HTML. وتَحويلاتُ النُقطَةِ (<c>create-listing?err=…</c>) في <c>.cs</c> خارِجَ الماسِح:
+    /// تَقَعُ بَعدَ <c>.RequirePermission("listing.create")</c> فَلا يَبلُغُها إلّا مَن عَبَرَ الحارِس.</summary>
+    internal static List<Link> CreateListingLinksIn(IEnumerable<(string File, string Text)> sources)
+    {
+        var links = new List<Link>();
+        foreach (var (file, text) in sources)
+        {
+            var rel = Path.IsPathRooted(file) ? Path.GetRelativePath(ThemeZeroEquivalenceTests.RepoRoot, file).Replace('\\', '/') : file;
+            if (!rel.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)) continue;
+            var code = WriteEndpointGuardTests.StripMarkupComments(text);
+            if (!CreateListingToken.IsMatch(code)) continue;
+
+            var doorVars = DoorVariables(code);
+            var gated = rel == PageFile ? GatedSpans(code) : new List<(int, int)>();
+            foreach (Match m in CreateListingToken.Matches(code))
+            {
+                var lineStart = code.LastIndexOf('\n', Math.Max(0, m.Index - 1)) + 1;
+                if (code.AsSpan(lineStart).TrimStart().StartsWith("@page", StringComparison.Ordinal)) continue;
+                var line = code[..m.Index].Count(c => c == '\n') + 1;
+
+                Door door;
+                if (gated.Any(g => g.Item1 < m.Index && m.Index < g.Item2)) door = Door.Page;
+                else if (UpgradePromptPriceTests.EnclosingIfConditions(code, m.Index).Any(c => AsksPermission(c, doorVars))) door = Door.Predicate;
+                else if (RoleHomeFiles.ContainsKey(rel)) door = Door.RoleHome;
+                else door = Door.Outside;
+                links.Add(new Link(rel, line, door));
+            }
+        }
+        return links;
+    }
+
+    internal static List<Link> CreateListingLinks() => CreateListingLinksIn(EntitlementContractTests.SourceFiles());
+
+    /// <summary>نِداءٌ يَسأَلُ الصَلاحِيَّةَ بِحَرفِها — <c>RolePermissions.Has(…, "listing.create")</c> أَو <c>PermissionDoor.Opens(…, "listing.create")</c>.</summary>
+    private static readonly Regex PermissionCall = new(
+        @"(?:[\w.]*\.)?(?:RolePermissions\.Has|PermissionDoor\.Opens)\s*\([^;]*?""listing\.create""\s*\)", RegexOptions.Compiled | RegexOptions.Singleline);
+
+    /// <summary>مُتَغَيِّراتُ البابِ في المِلَفّ: كُلُّ <c>x = …(… "listing.create")</c> بِأَحَدِ النِداءَين.</summary>
+    private static HashSet<string> DoorVariables(string code)
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Match m in Regex.Matches(code, @"(?<var>[A-Za-z_]\w*)\s*=\s*(?<call>(?:[\w.]*\.)?(?:RolePermissions\.Has|PermissionDoor\.Opens)\s*\([^;]*?""listing\.create""\s*\))",
+                     RegexOptions.Singleline))
+            set.Add(m.Groups["var"].Value);
+        return set;
+    }
+
+    /// <summary>أَحَدُ شُقوقِ <c>&amp;&amp;</c> العُليا في الشَرطِ مُتَغَيِّرُ بابٍ بِحَرفِه أَو نِداءٌ يَسأَلُ الصَلاحِيَّة — لا نَفيُه ولا شِقٌّ في <c>||</c>.</summary>
+    private static bool AsksPermission(string condition, HashSet<string> doorVars)
+    {
+        var parts = new List<string>();
+        var depth = 0;
+        var last = 0;
+        for (var k = 0; k < condition.Length; k++)
+        {
+            var c = condition[k];
+            if (c is '(' or '[' or '{') depth++;
+            else if (c is ')' or ']' or '}') depth--;
+            else if (depth == 0 && c == '|' && k + 1 < condition.Length && condition[k + 1] == '|') return false;
+            else if (depth == 0 && c == '?') return false;
+            else if (depth == 0 && c == '&' && k + 1 < condition.Length && condition[k + 1] == '&')
+            {
+                parts.Add(condition[last..k]);
+                last = k + 2;
+                k++;
+            }
+        }
+        parts.Add(condition[last..]);
+        return parts.Select(p => p.Trim()).Any(p => doorVars.Contains(p) || PermissionCall.Match(p) is { Success: true } m && m.Length == p.Length);
+    }
+
+    /// <summary>كُتَلُ <c>&lt;GatedPage … Permission="listing.create" …&gt;</c> حَتّى <c>&lt;/GatedPage&gt;</c> المُقابِل.</summary>
+    private static List<(int, int)> GatedSpans(string code)
+    {
+        var spans = new List<(int, int)>();
+        foreach (Match m in Regex.Matches(code, @"<GatedPage\b[^>]*\bPermission=""listing\.create""[^>]*>"))
+        {
+            var close = code.IndexOf("</GatedPage>", m.Index, StringComparison.Ordinal);
+            Assert.True(close > m.Index, "GatedPage بِلا إغلاق — القَصُّ فاشِل.");
+            spans.Add((m.Index + m.Length, close));
+        }
+        return spans;
+    }
+
+    private static string Read(string relative)
+    {
+        var path = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, relative.Replace('/', Path.DirectorySeparatorChar));
+        Assert.True(File.Exists(path), $"مَصدَرٌ مَفقود: {relative} — الأَداةُ عَمياءُ بِلا طَرَفٍ مَقروء.");
+        return File.ReadAllText(path);
+    }
+
+    private static string Summary(IEnumerable<Link> links)
+        => string.Join(" · ", links.GroupBy(l => l.Door).OrderBy(g => g.Key).Select(g => $"{g.Key}: {g.Count()}"));
+
+    // ─── «اليَوم» ───────────────────────────────────────────────────────────────────────────
+
+    /// <summary><b>«اليَوم»</b>: ‏13 رابِطاً إلى صَفحَةِ النَشرِ في ‏7 مِلَفّات — اثنانِ في <c>TenantHome</c> خَلفَ الصَلاحِيَّة، وخَمسَةٌ في مِلَفّاتِ أَبوابِ
+    /// الدَور، و<b>سِتَّةٌ خارِجَ كُلِّ باب</b>: زِرّا <c>MyListings</c> (الرَأسُ والحالَةُ الفارِغَة) وأَربَعَةٌ في صَفحَةِ النَشرِ نَفسِها (رابِطا الفِئَة،
+    /// و«تَغيير الفِئَة»، ورابِطُ الدُخولِ بِـ<c>returnUrl</c>) لِأَنّ الصَفحَةَ لا تَسأَلُ الصَلاحِيَّةَ أَصلاً.</summary>
+    [Fact]
+    public void Today_my_listings_and_the_page_itself_draw_six_create_listing_links_outside_the_listing_create_predicate()
+    {
+        var links = CreateListingLinks();
+        var outside = links.Where(l => l.Door == Door.Outside).ToList();
+        output.WriteLine($"روابِطُ create-listing: {links.Count} في {links.Select(l => l.File).Distinct().Count()} مِلَفّات · {Summary(links)} · خارِجَ بابٍ: "
+            + string.Join(" · ", outside.Select(l => $"{Path.GetFileName(l.File)}:{l.Line}")));
+
+        Assert.True(links.Count >= 13, $"أَداةٌ عَمياء: {links.Count} رابِطاً — والمَقيسُ 13.");
+        Assert.Equal(new[] { "CreateListing.razor", "CreateListing.razor", "CreateListing.razor", "CreateListing.razor", "MyListings.razor", "MyListings.razor" },
+            outside.Select(l => Path.GetFileName(l.File)).OrderBy(f => f, StringComparer.Ordinal).ToArray());
+    }
+
+    /// <summary><b>«اليَوم»</b>: صَفحَةُ النَشرِ لا تَسأَلُ <c>listing.create</c> — لا <c>&lt;GatedPage</c> ولا نِداءَ صَلاحِيَّة — وفَرعُ
+    /// <c>Err == "forbidden"</c> فيها لا كاتِبَ لَه في <c>.cs</c>: النُقطَةُ تَرُدُّ ‏403 مِن <c>PermissionFilter</c> ولا تُحَوِّلُ إلى الصَفحَة.</summary>
+    [Fact]
+    public void Today_the_create_listing_page_draws_its_form_without_asking_listing_create_and_its_forbidden_branch_has_no_writer()
+    {
+        var page = WriteEndpointGuardTests.StripMarkupComments(Read(PageFile));
+        var writers = EntitlementContractTests.SourceFiles()
+            .Where(f => f.File.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            .Count(f => WriteEndpointGuardTests.StripComments(f.Text).Contains("create-listing?err=forbidden", StringComparison.Ordinal));
+        var filter = WriteEndpointGuardTests.StripComments(Read(TemplateRoot + "/Gates/PermissionFilter.cs"));
+        output.WriteLine($"<GatedPage في صَفحَةِ النَشر: {Regex.Matches(page, "<GatedPage").Count} · نِداءُ صَلاحِيَّة: {PermissionCall.Matches(page).Count} · "
+            + $"فَرعُ forbidden: {page.Contains("Err == \"forbidden\"", StringComparison.Ordinal)} · كُتّابُ create-listing?err=forbidden: {writers}");
+
+        Assert.DoesNotContain("<GatedPage", page, StringComparison.Ordinal);
+        Assert.Empty(PermissionCall.Matches(page));
+        Assert.Contains("Err == \"forbidden\"", page, StringComparison.Ordinal);
+        Assert.Equal(0, writers);
+        Assert.Contains("return Results.StatusCode(StatusCodes.Status403Forbidden);", filter, StringComparison.Ordinal);
+    }
+
+    // ─── ما لا يَتَبَدَّل ───────────────────────────────────────────────────────────────────
+
+    /// <summary>الرَئيسِيَّةُ تَرسُمُ رابِطَيها (البِطاقَةُ والحالَةُ الفارِغَة) خَلفَ <c>canCreateListing</c> وَحدَه، وهُوَ نِداءُ الصَلاحِيَّةِ بِحَرفِها.</summary>
+    [Fact]
+    public void The_home_page_draws_both_its_create_listing_links_only_behind_the_listing_create_predicate()
+    {
+        var home = CreateListingLinks().Where(l => l.File.EndsWith("/Components/Pages/TenantHome.razor", StringComparison.Ordinal)).ToList();
+        output.WriteLine($"روابِطُ TenantHome: {home.Count} · {Summary(home)}");
+        Assert.Equal(2, home.Count);
+        Assert.All(home, l => Assert.Equal(Door.Predicate, l.Door));
+        Assert.Contains(@"canCreateListing = ACommerce.Kit.Roles.RolePermissions.Has(", Read(TemplateRoot + "/Components/Pages/TenantHome.razor"), StringComparison.Ordinal);
+    }
+
+    /// <summary><b>أَبوابُ الدَورِ صادِقَةٌ لِلكاتالوج</b>: كُلُّ دَورٍ في <c>RoleCatalog.Definitions</c> يَختارُ <c>sellerHome</c> أَو <c>riderHome</c>
+    /// (ومَعَهُما تَبويبا <c>vendorNav</c>/<c>riderNav</c> اللَّذانِ يَبني مِنهُما الـmanifest مُختَصَرَ «إعلان جَديد»)، وفَرعا <c>RoleHomeHero</c>
+    /// (‏rider وvendor وhost)، وكُلُّ دَورٍ يَحمِلُ <c>tenant.manage</c> — يَحمِلُ <c>listing.create</c>. ويُطبَعُ ما عُدَّ ويَفشَلُ عَلى الصِفر.
+    /// <para><b>وما لا يَقولُه</b>: دَورٌ مُؤَلَّفٌ (وَثيقَةُ <c>TenantRoleDefinition</c>) يَختارُ <c>sellerHome</c> بِلا الصَلاحِيَّةِ لا يَمنَعُه مُصادِق —
+    /// مُدَوَّنٌ في سِجِلِّ المالِكِ «أ» W8-7.</para></summary>
+    [Fact]
+    public void Role_home_doors_to_create_listing_are_drawn_only_for_catalog_roles_that_carry_listing_create()
+    {
+        var byHome = RoleCatalog.Definitions
+            .Where(d => d.Composition.Home is RoleComponents.SellerHome or RoleComponents.RiderHome
+                     || d.Composition.Nav is RoleComponents.VendorNav or RoleComponents.RiderNav
+                     || d.Slug is "rider" or "vendor" or "host"
+                     || d.Permissions.Contains("tenant.manage"))
+            .ToList();
+        var lacking = byHome.Where(d => !d.Permissions.Contains(Permission)).Select(d => d.Slug).ToList();
+        var files = CreateListingLinks().Where(l => l.Door == Door.RoleHome).GroupBy(l => l.File).ToList();
+        output.WriteLine($"أَدوارُ كاتالوجٍ تَختارُ بابَ دَور: {byHome.Count} ({string.Join(", ", byHome.Select(d => d.Slug))}) · بِلا listing.create: {lacking.Count} · "
+            + $"مِلَفّاتُ أَبوابِ الدَور: {string.Join(" · ", files.Select(g => $"{Path.GetFileName(g.Key)}: {g.Count()}"))}");
+
+        Assert.True(byHome.Count >= 6, $"أَداةٌ عَمياء: {byHome.Count} دَوراً — والمَقيسُ 6.");
+        Assert.Empty(lacking);
+        // كُلُّ مِلَفٍّ مُسَمّىً فيه رابِطٌ يُبَرِّرُ اسمَه — والمِلَفُّ الَّذي فَقَدَ رابِطَه يُحذَفُ مِن القائِمَة.
+        Assert.Equal(RoleHomeFiles.Keys.OrderBy(k => k, StringComparer.Ordinal), files.Select(g => g.Key).OrderBy(k => k, StringComparer.Ordinal));
+        Assert.Contains("canManage = ACommerce.Kit.Roles.RolePermissions.Has(", Read(TemplateRoot + "/Components/Pages/TenantManage.razor"), StringComparison.Ordinal);
+    }
+
+    /// <summary><b>الماسِحُ يُقاسُ قَبلَ أَن يُوثَقَ بِه</b> (القاعِدَة ١٠): صَفحَةٌ مَحقونَةٌ فيها رابِطٌ خَلفَ مُتَغَيِّرِ بابٍ، ورابِطٌ خَلفَ نِداءٍ مُباشِر،
+    /// ورابِطٌ خَلفَ صَلاحِيَّةٍ أُخرى، ورابِطٌ خَلفَ نَفيِ البابِ، ورابِطٌ خَلفَ <c>|| true</c>، ورابِطٌ بِلا شَرط — الأَوَّلانِ خَلفَ الباب والأَربَعَةُ خارِجَه؛
+    /// وتَوجيهُ <c>@page</c> والتَعليقُ وصِنفُ <c>acs-create-listing</c> لا تُعَدّ؛ وصَفحَةُ النَشرِ المَحقونَةُ داخِلَ <c>GatedPage</c> بابٌ، وخارِجَه لا.</summary>
+    [Fact]
+    public void The_create_listing_link_scanner_counts_a_negated_an_or_and_another_permission_as_outside()
+    {
+        const string L = "@AuthSession.LinkFor(Slug, Role, $\"create-listing\")";
+        var sources = new[]
+        {
+            ("x/Injected.razor",
+                "@page \"/{slug}/create-listing\"\n"
+              + "<div class=\"acs-create-listing\"></div>\n"
+              + "@if (canPost)\n{\n    <a href=\"" + L + "\">a</a>\n}\n"
+              + "@if (Auth.IsAuthenticated && ACommerce.Kit.Roles.RolePermissions.Has(roles, role, \"listing.create\"))\n{\n    <a href=\"" + L + "\">b</a>\n}\n"
+              + "@if (canOffer)\n{\n    <a href=\"" + L + "\">c</a>\n}\n"
+              + "@if (!canPost)\n{\n    <a href=\"" + L + "\">d</a>\n}\n"
+              + "@if (canPost || true)\n{\n    <a href=\"" + L + "\">e</a>\n}\n"
+              + "<a href=\"" + L + "\">f</a>\n"
+              + "@* <a href=\"" + L + "\">g</a> *@\n"
+              + "@code {\n    bool canPost; bool canOffer;\n    void M() { canPost = RolePermissions.Has(roles, role, \"listing.create\"); canOffer = RolePermissions.Has(roles, role, \"offer.submit\"); }\n}\n"),
+            (PageFile,
+                "<GatedPage Slug=\"@Slug\" Role=\"@Role\" Permission=\"listing.create\">\n    <a href=\"" + L + "\">h</a>\n</GatedPage>\n"
+              + "<a href=\"" + L + "\">i</a>\n"),
+        };
+        var links = CreateListingLinksIn(sources);
+        output.WriteLine($"مَحقونَة: مَعدودَة {links.Count} · {Summary(links)} · خارِجَ بابٍ: "
+            + string.Join(" · ", links.Where(l => l.Door == Door.Outside).Select(l => $"{Path.GetFileName(l.File)}:{l.Line}")));
+
+        Assert.Equal(8, links.Count);
+        Assert.Equal(new[] { Door.Predicate, Door.Predicate, Door.Outside, Door.Outside, Door.Outside, Door.Outside },
+            links.Where(l => l.File == "x/Injected.razor").Select(l => l.Door).ToArray());
+        Assert.Equal(new[] { Door.Page, Door.Outside }, links.Where(l => l.File == PageFile).Select(l => l.Door).ToArray());
+    }
+}
