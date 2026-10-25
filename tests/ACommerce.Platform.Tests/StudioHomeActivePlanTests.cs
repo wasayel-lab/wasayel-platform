@@ -85,7 +85,8 @@ public class StudioHomeActivePlanTests
         Assert.Contains("{0}", template, StringComparison.Ordinal);
         Assert.Contains("{1}", template, StringComparison.Ordinal);
         Assert.DoesNotMatch("[0-9٠-٩](?![}])", template.Replace("{0}", "").Replace("{1}", ""));
-        Assert.Equal("الباقَة: اشتِراك يَدَوِيّ — سارِيَةٌ حَتّى 2026-11-11",
+        // ‏(2026-10-25، تَدقيقُ الإطلاق brief-P2-4 — قَلبٌ مُعلَنٌ في a214307): «سارِيَةٌ حَتّى» صارَت «تَنتَهي في» تَسمِيَةَ المُشرِف.
+        Assert.Equal("الباقَة: اشتِراك يَدَوِيّ — تَنتَهي في 2026-11-11",
             string.Format(template, PlatformPlanCatalog.Find("manual")!.LabelAr, new DateTime(2026, 11, 11).ToString("yyyy-MM-dd")));
 
         var now = new DateTime(2026, 10, 13, 12, 0, 0, DateTimeKind.Utc);
@@ -121,10 +122,17 @@ public class StudioHomeActivePlanTests
         Assert.Equal("2026-11-30", plan.ExpiresAt.ToString("yyyy-MM-dd"));   // ‏ما يَطبَعُه السَطر
     }
 
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الصِياغَة)</b> — كانَ
+    /// <c>Today_the_active_line_says_valid_until_the_day_on_which_writes_are_already_refused</c> (‏<c>a214307</c>): «سارِيَةٌ حَتّى {1}». <b>والآن</b>
+    /// «تَنتَهي في {1}» — تَسمِيَةُ صَفحَةِ المُشرِفِ (<c>admin.tenant_plan.expires_at</c>) بِحَرفِها، فَاليَومُ المَطبوعُ يَومُ الانتِهاءِ لا آخِرُ يَومٍ سارٍ،
+    /// والتاريخُ نَفسُه (<c>ExpiresAt</c>) كَما كان؛ والفَرقُ في القالِبِ بَعدَ «الباقَة: {0} — » وَحدَه.</summary>
     [Fact]
-    public void Today_the_active_line_says_valid_until_the_day_on_which_writes_are_already_refused()
+    public void The_active_line_says_the_plan_ends_on_its_expiry_day_with_the_admin_label()
     {
         var template = ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "studio.plan.active_line")!;
-        Assert.Equal("الباقَة: {0} — سارِيَةٌ حَتّى {1}", template);
+        var label = ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "admin.tenant_plan.expires_at")!;
+        Assert.Equal($"الباقَة: {{0}} — {label} {{1}}", template);
+        Assert.DoesNotContain("حَتّى", template, StringComparison.Ordinal);
+        Assert.StartsWith("الباقَة: {0} — ", template, StringComparison.Ordinal);   // ‏الصَدرُ كَما كانَ في a214307
     }
 }
