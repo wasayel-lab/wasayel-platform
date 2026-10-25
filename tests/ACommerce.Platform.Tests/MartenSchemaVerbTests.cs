@@ -597,9 +597,6 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.True(wrong.Count == 0, string.Join("\n", wrong));
     }
 
-    /// <summary>مَسارُ كُلِّ <c>--snapshot</c> في نَصِّ أَوامِر — بَينَ عَلامَتَي تَنصيصٍ أَو بِدونِهِما (‏2026-10-24 — مُراجَعَةُ الموجَة ٤،
-    /// بَندُ H: كانَ الصَفُّ أَعلاه يَقرَأُ المُقتَبَسَ وَحدَه، فَـ<c>--snapshot pre-deploy.dump</c> — جَذرَ المُستَودَعِ مَرَّةً أُخرى — لا يُعَدُّ
-    /// ويَمُرُّ ما دامَ في الكُتلَةِ مَسارٌ مُقتَبَسٌ واحِدٌ صَحيح).</summary>
     /// <summary>‏(‏2026-10-24 — تَيّارُ S16) <c>null</c> إن كانَ المَسارُ تَحتَ <c>$HOME/wasayel-snapshots/</c> ولا مَقطَعَ <c>..</c> فيه، وإلّا السَبَب —
     /// فَـ<c>$HOME/wasayel-snapshots/../wasayel-platform/x.dump</c> يَبدَأُ بِالبادِئَةِ ويَخرُجُ مِنها، ولا يَراه إلّا مَشيُ الفِعلِ وَقتَ التَشغيل.</summary>
     internal static string? SnapshotPathRefusal(string path)
@@ -608,6 +605,9 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
         return path.Split('/', '\\').Any(seg => seg == "..") ? "dot_dot_segment" : null;
     }
 
+    /// <summary>مَسارُ كُلِّ <c>--snapshot</c> في نَصِّ أَوامِر — بَينَ عَلامَتَي تَنصيصٍ أَو بِدونِهِما (‏2026-10-24 — مُراجَعَةُ الموجَة ٤،
+    /// بَندُ H: كانَ الصَفُّ أَعلاه يَقرَأُ المُقتَبَسَ وَحدَه، فَـ<c>--snapshot pre-deploy.dump</c> — جَذرَ المُستَودَعِ مَرَّةً أُخرى — لا يُعَدُّ
+    /// ويَمُرُّ ما دامَ في الكُتلَةِ مَسارٌ مُقتَبَسٌ واحِدٌ صَحيح).</summary>
     internal static IReadOnlyList<string> SnapshotPaths(string code)
         => Regex.Matches(code, @"--snapshot[ \t]+(?:""(?<q>[^""]+)""|(?<u>[^\s""]\S*))")
             .Select(m => m.Groups["q"].Success ? m.Groups["q"].Value : m.Groups["u"].Value)
