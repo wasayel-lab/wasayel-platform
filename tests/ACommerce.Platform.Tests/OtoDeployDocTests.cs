@@ -343,4 +343,25 @@ public class OtoDeployDocTests
         foreach (var phrase in new[] { "لا منادِيَ له في `libs/` ولا `apps/`", "If deliveryOptionId is not sent on the request", "أمرُ البرهانِ الحيِّ" })
             Assert.Contains(phrase, adr[q..], StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// <para><b>مَصدَرُ الجُملَةِ المُقتَبَسَةِ في ‏ADR-033 §٧‑ق البَند ٣ يُقالُ بِحَرفِه</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-6 الجَولَة ٢): لَيسَت في
+    /// <c>24-SHIPPING.md</c> — مَصدَرُها في المُستَودَعِ تَعليقُ <c>OtoClient.CheckOtoDeliveryFeeAsync</c>، والصَفحَةُ <c>SH-05</c>. فَالدِقَّةُ في الـADR
+    /// تُسَمّي الاثنَين، والتَعليقُ يَحمِلُ الجُملَة — فَإن سَقَطَ بَقِيَت الإحالَةُ إلى ما لا وُجودَ لَه، وهذا يَحمَرّ.</para>
+    /// </summary>
+    [Fact]
+    public void Adr033_7q_names_SH05_and_the_client_comment_as_the_source_of_the_quoted_sentence()
+    {
+        var adr = Read(Path.Combine("docs", Path.GetFileName(Directory.GetFiles(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "docs"), "ADR-033-*.md").Single())));
+        var q = adr.IndexOf("### ق. إلحاقُ ‏2026-10-25 (تدقيقُ الإطلاق brief-P1b-5)", StringComparison.Ordinal);
+        Assert.True(q > 0, "‏ADR-033 §٧‑ق غائِب.");
+        var precision = adr.IndexOf("**دقّةٌ ‏2026-10-25 (مراجعةُ تيّارِ W8-6، الجولة ٢ — يُلحَقُ ولا يُعادُ حرفٌ فوقَ البند ٣)**", q, StringComparison.Ordinal);
+        Assert.True(precision > q, "دِقَّةُ مَصدَرِ الجُملَةِ تَحتَ §٧‑ق غائِبَة.");
+        foreach (var phrase in new[] { "`SH-05`", "`OtoClient.cs`", "`ec807a6`", "ليسا في `24-SHIPPING.md` بحرفِهما", "«ب» W9-1 · ٣" })
+            Assert.Contains(phrase, adr[precision..], StringComparison.Ordinal);
+        var client = Read("libs/kits/Delivery/ACommerce.Kit.Delivery.Core/OtoClient.cs");
+        var flat = System.Text.RegularExpressions.Regex.Replace(client.Replace("///", " "), @"\s+", " ");
+        Assert.Contains("If deliveryOptionId is not sent on the request, the assignment is made to the delivery company that complies with your feasibility rule",
+            flat, StringComparison.Ordinal);
+    }
 }
