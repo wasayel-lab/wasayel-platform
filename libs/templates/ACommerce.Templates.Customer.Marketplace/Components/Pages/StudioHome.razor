@@ -408,12 +408,13 @@
 
     /// <summary>سَطرُ السِعرِ المُتَّفَقِ عَلَيه لِمَتجَرٍ — <c>TenantPlanPolicy.ShownPrice</c> مُنَسَّقاً بِـ<c>Money.Format</c> في قالِبِ
     /// <c>studio.plan.price_line</c>، و<c>null</c> بِلا سِعرٍ مُسَجَّلٍ فَلا سَطر (‏2026-10-25، تَدقيقُ الإطلاق brief-P2-1). يَقرَؤُه
-    /// مَوضِعان: اللافِتَةُ قَبلَ الدَفع، وصَفُّ السارِيَة.</summary>
+    /// مَوضِعان: اللافِتَةُ قَبلَ الدَفع، وصَفُّ السارِيَة. <b>والمَبلَغُ بِـ<c>Money.FormatExact</c> لا <c>Money.Format</c></b> (‏2026-10-25،
+    /// مُراجَعَةُ تَيّارِ W8-4): حَقلُ المُشرِفِ يَقبَلُ الهَلَلات، و<c>N0</c> كانَ يَطبَعُ ‏149.99 «‏150 ر.س» و‏0.01 «‏0 ر.س».</summary>
     string? PriceLine(string slug)
     {
         myPlans.TryGetValue(slug, out var p);
         return ACommerce.Kit.Subscriptions.TenantPlanPolicy.ShownPrice(p) is { } price
-            ? L.Format("studio.plan.price_line", ACommerce.Kit.Culture.Money.Format(price))
+            ? L.Format("studio.plan.price_line", ACommerce.Kit.Culture.Money.FormatExact(price))
             : null;
     }
 

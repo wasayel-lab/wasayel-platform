@@ -76,7 +76,7 @@ public class StudioPlanPriceTests(ITestOutputHelper output)
         var fn = Regex.Match(home, @"string\? PriceLine\(string slug\)\s*\{(?<body>.*?)\n    \}", RegexOptions.Singleline);
         Assert.True(fn.Success, "لا `PriceLine` — الأَداةُ عَمياء.");
         Assert.Contains("TenantPlanPolicy.ShownPrice(p) is { } price", fn.Groups["body"].Value, StringComparison.Ordinal);
-        Assert.Contains("L.Format(\"studio.plan.price_line\", ACommerce.Kit.Culture.Money.Format(price))", fn.Groups["body"].Value, StringComparison.Ordinal);
+        Assert.Contains("L.Format(\"studio.plan.price_line\", ACommerce.Kit.Culture.Money.FormatExact(price))", fn.Groups["body"].Value, StringComparison.Ordinal);
         Assert.Single(Regex.Matches(home, @"ShownPrice\("));
 
         // المَوضِعُ الأَوَّل: اللافِتَة — بَعدَ تاريخِ الإخفاءِ وقَبلَ التَعليماتِ وأَيِّ زِرِّ دَفع.
@@ -155,16 +155,71 @@ public class StudioPlanPriceTests(ITestOutputHelper output)
         return string.Format(LocaleCatalog.Find(LocaleCatalog.Arabic, "studio.plan.price_line")!, amount);
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b> (القاعِدَة ٣): سِعرٌ مُسَجَّلٌ بِهَلَلاتٍ يُطبَعُ مُقَرَّباً إلى ريالٍ صَحيح — 149.99 «‏150 ر.س» و0.01
-    /// «‏0 ر.س»، وهو ما تَقولُ <c>ShownPrice</c> إنّه لا يُطبَع. يُقلَبُ بِاسمِه في كوميتِ العِلاج، ومَعَه سَطرُ <c>Money.Format(price)</c> في
-    /// <c>The_agreed_store_price_is_read_by_the_studio_banner_…</c> (مُعلَنٌ هُنا سَلَفاً).</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ العِلاج — مُراجَعَةُ تَيّارِ W8-4)</b> — كانَ
+    /// <c>Today_a_recorded_price_with_halalas_is_printed_rounded_to_a_whole_riyal</c> (‏<c>e679f1f</c>): 149.99 «‏150 ر.س» و0.01 «‏0 ر.س».
+    /// <b>والآن</b> <c>PriceLine</c> تُسَمّي <c>Money.FormatExact</c>، فَالسَطرُ المَرسومُ يَقولُ المُسَجَّلَ بِخاناتِه — والفاصِلَةُ العَشرِيَّةُ
+    /// فاصِلَةُ الثَقافَةِ الجارِيَةِ كَما يَكتُبُ <c>N0</c> فاصِلَ آلافِها، فَلا يَفتَرِضُ الصَفُّ ثَقافَة.</summary>
     [Theory]
-    [InlineData("149.99", "150")]
-    [InlineData("0.01", "0")]
-    public void Today_a_recorded_price_with_halalas_is_printed_rounded_to_a_whole_riyal(string stored, string printed)
+    [InlineData("149.99", "149|99", "150")]
+    [InlineData("0.01", "0|01", "0")]
+    public void A_recorded_price_with_halalas_is_printed_as_recorded(string stored, string printed, string rounded)
     {
         var line = RenderedPriceLine(decimal.Parse(stored, System.Globalization.CultureInfo.InvariantCulture));
         output.WriteLine($"المُسَجَّل {stored} ⟵ «{line}»");
-        Assert.Equal($"السِعرُ المُتَّفَقُ عَلَيه: {printed} ر.س", line);
+        Assert.Equal($"السِعرُ المُتَّفَقُ عَلَيه: {printed.Replace("|", Sep)} ر.س", line);
+        Assert.DoesNotContain($": {rounded} ر.س", line, StringComparison.Ordinal);
+    }
+
+    // ─── Money.FormatExact — الصَحيحُ بايتاً كَـFormat، وذو الكَسرِ بِخاناتِه ─────────────────────────────────
+
+    private static string Sep => System.Globalization.NumberFormatInfo.CurrentInfo.NumberDecimalSeparator;
+
+    /// <summary>موجِب: الصَحيحُ يَمُرُّ بِـ<c>Format</c> حَرفاً — فَسَطرُ «‏150 ر.س» المَرسومُ قَبلَ العِلاجِ لا يَتَبَدَّلُ بايتاً.</summary>
+    [Theory]
+    [InlineData("150")]
+    [InlineData("150.00")]
+    [InlineData("0")]
+    [InlineData("12500")]
+    public void A_whole_amount_is_written_exactly_as_the_market_format(string amount)
+    {
+        var value = decimal.Parse(amount, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(ACommerce.Kit.Culture.Money.Format(value), ACommerce.Kit.Culture.Money.FormatExact(value));
+    }
+
+    /// <summary>سالِبُ <c>N0</c>: ذو الكَسرِ بِخاناتِه كُلِّها ولا أَقَلَّ مِن اثنَتَين، والأَصفارُ اللاحِقَةُ لا تُطبَع.</summary>
+    [Theory]
+    [InlineData("149.99", "149|99")]
+    [InlineData("0.4", "0|40")]
+    [InlineData("99.5", "99|50")]
+    [InlineData("149.995", "149|995")]
+    [InlineData("149.990", "149|99")]
+    public void An_amount_with_a_fraction_keeps_every_digit_it_was_recorded_with(string amount, string printed)
+    {
+        var value = decimal.Parse(amount, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal($"{printed.Replace("|", Sep)} ر.س", ACommerce.Kit.Culture.Money.FormatExact(value));
+        Assert.NotEqual(ACommerce.Kit.Culture.Money.Format(value), ACommerce.Kit.Culture.Money.FormatExact(value));
+    }
+
+    /// <summary>كَنسٌ: كُلُّ مَبلَغٍ مِن 0.01 إلى 1000.00 بِخُطوَةِ حَقلِ المُشرِفِ (‏0.01) يُقرَأُ رُجوعاً مِن مَطبوعِه إلى نَفسِه — والعَدَدُ
+    /// يُطبَعُ ويُثَبَّت (القاعِدَة ١٠).</summary>
+    [Fact]
+    public void Every_amount_the_admin_field_accepts_reads_back_to_itself()
+    {
+        var unit = " " + ACommerce.Kit.Culture.Money.Unit();
+        var checkedCount = 0;
+        var breaches = new List<string>();
+        for (var minor = 1; minor <= 100_000; minor++)
+        {
+            var value = minor / 100m;
+            var text = ACommerce.Kit.Culture.Money.FormatExact(value);
+            Assert.EndsWith(unit, text, StringComparison.Ordinal);
+            var back = decimal.Parse(text[..^unit.Length], System.Globalization.NumberStyles.Number,
+                System.Globalization.NumberFormatInfo.CurrentInfo);
+            if (back != value) breaches.Add($"{value} ⟵ «{text}»");
+            checkedCount++;
+        }
+        output.WriteLine($"FormatExact: {checkedCount} مَبلَغاً، {breaches.Count} لا يُقرَأُ رُجوعاً.");
+        Assert.Equal(100_000, checkedCount);
+        Assert.Empty(breaches);
     }
 }
