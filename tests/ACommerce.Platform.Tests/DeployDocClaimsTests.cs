@@ -343,4 +343,60 @@ public class DeployDocClaimsTests(ITestOutputHelper output)
         Assert.False(StudioDrawsPayPalOnlyWhenRenewable(changed));
         Assert.True(StudioDrawsPayPalOnlyWhenRenewable(changed.Replace("|| PayPalUrl(slug) is not null", "", StringComparison.Ordinal)));
     }
+
+    // ─── brief-P2-2 — §٢·هـ البَند ٧: «وهي قائِمَةٌ» والوَثائِقُ الخَمسُ نَوائِب ─────────────────────────────────────────────
+
+    /// <summary>البَندُ ٧ مِن «ما لَم يُبرهَن» في §٢·هـ (‏Paddle) — مِن رَأسِه إلى رَأسِ البَندِ ٨.</summary>
+    internal static string PaddleLiveApprovalItem(string deploy)
+    {
+        var section = Section(deploy, "## ٢·هـ. Paddle", "## ");
+        var a = section.IndexOf("7. **اعتِمادُ الوَضعِ المُباشِر**", StringComparison.Ordinal);
+        Assert.True(a > 0, "البَندُ ٧ مِن §٢·هـ غائِب — الأَداةُ عَمياء.");
+        var b = section.IndexOf("\n8. ", a, StringComparison.Ordinal);
+        Assert.True(b > a, "البَندُ ٨ مِن §٢·هـ غائِب — الأَداةُ عَمياء.");
+        return section[a..b];
+    }
+
+    /// <summary>أَيَقولُ البَندُ إنّ الوَثائِقَ الخَمسَ ما زالَت نَوائِبَ، ويُحيلُ إلى خُطوَةِ مَلئِها ومَفاتيحِها؟</summary>
+    internal static bool SaysTheDocumentsStillHoldPlaceholders(string item)
+        => item.Contains("brief-P2-2", StringComparison.Ordinal)
+           && item.Contains("`[[ … يَملَؤُه المالِك ]]`", StringComparison.Ordinal)
+           && item.Contains("`PlatformDocFields.EntityKeys`", StringComparison.Ordinal)
+           && item.Contains("§٢ الخُطوَة ٧", StringComparison.Ordinal);
+
+    /// <summary>
+    /// <para><b>«وهي قائِمَةٌ» في §٢·هـ البَند ٧ لا تَمُرُّ وَحدَها ما دامَ مِفتاحُ كِيانٍ نائِباً</b> (‏2026-10-25، تَدقيقُ الإطلاق brief-P2-2): البَندُ
+    /// يَعُدُّ الوَثائِقَ الخَمسَ شَرطَ اعتِمادِ Paddle المُباشِرِ ويَقولُها «قائِمَة»، وقيَمُها في القاموسِ نَوائِب. والعَدُّ مِن
+    /// <c>PlatformDocFields.UnfilledCount</c> — ما يَعُدُّه <c>/admin</c> — لا مَكتوبٌ هُنا؛ فَيَومَ تُملَأُ الخَمسَةُ يَصيرُ السَطرُ سِجِلّاً
+    /// مُؤَرَّخاً ولا يَحمَرُّ شَيء، وما دامَ نائِبٌ واحِدٌ فَغِيابُ السَطرِ أَحمَر. والنَصُّ الأَوَّلُ باقٍ بِحَرفِه (إلحاقٌ لا إعادَةُ كِتابَة).</para>
+    /// </summary>
+    [Fact]
+    public void The_paddle_live_approval_item_says_the_five_documents_still_hold_placeholders_while_any_does()
+    {
+        var unfilled = ACommerce.Templates.Customer.Marketplace.Services.PlatformDocFields.UnfilledCount(ACommerce.Platform.I18n.LocaleCatalog.Arabic);
+        var keys = ACommerce.Templates.Customer.Marketplace.Services.PlatformDocFields.EntityKeys.Count;
+        var item = PaddleLiveApprovalItem(Deploy());
+        var says = SaysTheDocumentsStillHoldPlaceholders(item);
+        output.WriteLine($"مَفاتيحُ الكِيان: {keys} · نائِبٌ مِنها: {unfilled} · البَندُ ٧ ({item.Length} مِحرَفاً) يَقولُ النَوائِب: {says}");
+        Assert.True(keys >= 5, $"أَداةٌ عَمياء: {keys} مِفتاحَ كِيان.");
+        Assert.Contains("وهي قائِمَةٌ ويَبلُغُها الزائِرُ مِن التَذييل", item, StringComparison.Ordinal);
+        if (unfilled > 0)
+            Assert.True(says, $"{unfilled} مِن مَفاتيحِ الكِيانِ نائِبٌ، والبَندُ ٧ في §٢·هـ يَقولُ «وهي قائِمَة» بِلا سَطرِ brief-P2-2.");
+    }
+
+    /// <summary><b>حَقنُ عَيب</b>: البَندُ ٧ بِحَرفِه عِندَ <c>dace7cd</c> (قَبلَ السَطرِ المُؤَرَّخ) — القارِئُ يَجِدُه ويَقولُ «لا»، فَالصَفُّ أَعلاه
+    /// يَحمَرُّ عَلَيه ما دامَ نائِبٌ، ولا يَمُرُّ أَعمى.</summary>
+    [Fact]
+    public void The_placeholder_reader_goes_red_on_the_approval_item_as_it_was()
+    {
+        const string asItWas =
+            "7. **اعتِمادُ الوَضعِ المُباشِر** — نِطاقاً ومُنتَجاً — قَرارُ Paddle\n   لا قَرارُنا. والوَثائِقُ الخَمسُ شَرطٌ مُعلَنٌ في مَركَزِ\n" +
+            "   مُساعَدَتِها، وهي قائِمَةٌ ويَبلُغُها الزائِرُ مِن التَذييل — **ولا\n   يُدَّعى أَنّ ذلك يَكفي**.\n";
+        var deploy = "## ٢·هـ. Paddle — عَيِّنَة\n\n" + asItWas + "8. **تالٍ**\n\n## ٢·و. تالٍ\n";
+        var item = PaddleLiveApprovalItem(deploy);
+        Assert.Contains("وهي قائِمَةٌ ويَبلُغُها الزائِرُ مِن التَذييل", item, StringComparison.Ordinal);
+        Assert.False(SaysTheDocumentsStillHoldPlaceholders(item));
+        Assert.True(SaysTheDocumentsStillHoldPlaceholders(item +
+            "   (brief-P2-2) نَوائِبَ `[[ … يَملَؤُه المالِك ]]` — `PlatformDocFields.EntityKeys` — §٢ الخُطوَة ٧\n"));
+    }
 }
