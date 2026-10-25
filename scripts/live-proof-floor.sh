@@ -31,7 +31,25 @@ results() { { grep -o '<UnitTestResult [^>]*>' "$trx" || true; } | { grep -v 'te
 count() { { grep -o "$1" "$trx" || true; } | wc -l | tr -d ' '; }
 passed=$(results | { grep -c 'outcome="Passed"' || true; })
 failed=$(count '<UnitTestResult [^>]*outcome="Failed"')
-early=$(count '\[live:returned-early\]')
+# ‏(‏2026-10-25، مُراجَعَةُ تَيّارِ W8-10 الجَولَة ٢ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): العَلامَةُ تُعَدُّ **مَرَّةً لِكُلِّ نَتيجَةٍ ناجِحَةٍ تَحمِلُها في
+# مُخرَجِها**. كانَ `count '\[live:returned-early\]'` (`grep -o … | wc -l`) يَعُدُّ كُلَّ ظُهور — فَبُرهانٌ يَكتُبُها مَرَّتَينِ يُنقِصُ «بَلَغَ القاعِدَة»
+# واحِداً لَم يَرجِع، وظُهورُها في نَتيجَةٍ فاشِلَةٍ أَو في صَفِّ الفاحِصِ أَو في مُخرَجِ التَشغيلِ كُلِّه يُعَدّ. فَيُقطَعُ الـtrx عِندَ `<UnitTestResult `،
+# والسِجِلُّ يَنتَهي عِندَ `</UnitTestResult>` (أَو وَسمِه إن أُغلِقَ بِـ`/>` فَلا مُخرَجَ لَه)، ويُعَدُّ إن كانَ وَسمُه `outcome="Passed"` لِغَيرِ
+# `LiveProofJobTests` وفي جِسمِه العَلامَة. والسِجِلُّ بِلا وَسمِ إغلاقٍ يُعَدُّ إلى آخِرِ المِلَفّ — الخَطَأُ فيه يُنقِصُ «بَلَغَ» لا يَزيدُه.
+early_results() {
+  awk 'BEGIN { RS = "<UnitTestResult "; n = 0 }
+       NR > 1 {
+         head = substr($0, 1, index($0, ">"))
+         if (head ~ /\/>$/) next
+         if (head !~ /outcome="Passed"/) next
+         if (head ~ /testName="ACommerce\.Platform\.Tests\.LiveProofJobTests\./) next
+         end = index($0, "</UnitTestResult>")
+         body = (end > 0) ? substr($0, 1, end) : $0
+         if (index(body, "[live:returned-early]") > 0) n++
+       }
+       END { print n }' "$trx"
+}
+early=$(early_results)
 reached=$((passed - early))
 echo "البَراهينُ الحَيَّة: نَجَحَ $passed · رَجَعَ مِن حارِسٍ فَرعِيٍّ $early · بَلَغَ القاعِدَة $reached (الأَرضِيَّة $floor) · فَشِلَ $failed"
 

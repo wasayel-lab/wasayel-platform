@@ -171,10 +171,10 @@ public class LiveProofJobTests(ITestOutputHelper output)
 
     // ─── أَرضِيَّةُ ما بَلَغَ القاعِدَة: scripts/live-proof-floor.sh ───────────────────────────────
 
-    private static (int Code, string Out) Floor(string trx, string floor)
+    private static (int Code, string Out) Floor(string trx, string floor, string? script = null)
     {
         var psi = new System.Diagnostics.ProcessStartInfo("bash") { WorkingDirectory = RepoRoot, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        foreach (var a in new[] { Path.Combine(RepoRoot, "scripts", "live-proof-floor.sh"), trx, floor }) psi.ArgumentList.Add(a);
+        foreach (var a in new[] { script ?? Path.Combine(RepoRoot, "scripts", "live-proof-floor.sh"), trx, floor }) psi.ArgumentList.Add(a);
         using var p = System.Diagnostics.Process.Start(psi)!;
         var text = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
         Assert.True(p.WaitForExit(20_000), "live-proof-floor.sh لَم يَنتَهِ في عِشرينَ ثانِيَة.");
@@ -218,6 +218,53 @@ public class LiveProofJobTests(ITestOutputHelper output)
         finally { dir.Delete(recursive: true); }
     }
 
+    /// <summary>trx بِعَلامَةٍ مُكَرَّرَةٍ وعَلاماتٍ خارِجَ نَتيجَةٍ ناجِحَة: <c>T0</c> يَكتُبُها مَرَّتَين، و<c>T1</c> مَرَّة، و<c>T2..T4</c> بَلَغَت؛ والعَلامَةُ أَيضاً
+    /// في نَتيجَةٍ فاشِلَة، وفي صَفٍّ لِلفاحِصِ نَفسِه، وفي مُخرَجِ التَشغيلِ كُلِّه (<c>ResultSummary</c>) — والأَسطُرُ مُتَعَدِّدَةٌ كَما يَكتُبُها <c>dotnet test</c>.</summary>
+    internal static string TrxWithDuplicateMarker() =>
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<TestRun><Results>\n" +
+        $"<UnitTestResult testName=\"ACommerce.Platform.Tests.LiveX.T0\" outcome=\"Passed\">\n<Output>\n<StdOut>{EarlyReturnMarker} أَوَّلاً\n{EarlyReturnMarker} ثانِياً</StdOut>\n</Output>\n</UnitTestResult>\n" +
+        $"<UnitTestResult testName=\"ACommerce.Platform.Tests.LiveX.T1\" outcome=\"Passed\">\n<Output>\n<StdOut>{EarlyReturnMarker} سَبَب</StdOut>\n</Output>\n</UnitTestResult>\n" +
+        string.Concat(Enumerable.Range(2, 3).Select(i => $"<UnitTestResult testName=\"ACommerce.Platform.Tests.LiveX.T{i}\" outcome=\"Passed\">\n<Output><StdOut>بَلَغَ</StdOut></Output>\n</UnitTestResult>\n")) +
+        $"<UnitTestResult testName=\"ACommerce.Platform.Tests.LiveX.F0\" outcome=\"Failed\">\n<Output><StdOut>{EarlyReturnMarker} ثُمَّ فَشِل</StdOut></Output>\n</UnitTestResult>\n" +
+        $"<UnitTestResult testName=\"ACommerce.Platform.Tests.LiveProofJobTests.C0\" outcome=\"Passed\">\n<Output><StdOut>{EarlyReturnMarker} عَيِّنَة</StdOut></Output>\n</UnitTestResult>\n" +
+        "<UnitTestResult testName=\"ACommerce.Platform.Tests.LiveX.N0\" outcome=\"NotExecuted\" />\n" +
+        $"</Results>\n<ResultSummary outcome=\"Failed\"><Output><StdOut>{EarlyReturnMarker} في مُخرَجِ التَشغيل</StdOut></Output></ResultSummary>\n</TestRun>\n";
+
+    /// <summary>
+    /// <para><b>العَلامَةُ مَرَّةً لِكُلِّ نَتيجَةٍ ناجِحَة</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-10 الجَولَة ٢): بُرهانٌ يَكتُبُ العَلامَةَ مَرَّتَينِ يُعَدُّ راجِعاً
+    /// واحِداً، وعَلامَةٌ في نَتيجَةٍ فاشِلَةٍ أَو في صَفِّ الفاحِصِ أَو في مُخرَجِ التَشغيلِ لا تُعَدّ — نَجَحَ 5 · رَجَعَ 2 · بَلَغَ 3 ⇒ 0 بِأَرضِيَّةِ 3.
+    /// <b>والسَطرُ القَديمُ بِحَرفِه</b> (<c>early=$(count '\[live:returned-early\]')</c>) عَيِّنَةٌ مَحقونَة: عَلى الـtrx نَفسِه يَعُدُّ 6 ظُهوراتٍ فَيُنزِلُ
+    /// «بَلَغَ» إلى ‏-1 ويَخرُجُ 1 (القاعِدَة ١٠).</para>
+    /// </summary>
+    [Fact]
+    public void A_marker_written_twice_by_one_proof_counts_once_and_a_marker_outside_a_passed_proof_does_not_count()
+    {
+        if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI (‏ubuntu)."); return; }
+        var dir = Directory.CreateTempSubdirectory("live-floor-dup-");
+        try
+        {
+            var trx = Path.Combine(dir.FullName, "live.trx");
+            File.WriteAllText(trx, TrxWithDuplicateMarker());
+            var (got, text) = Floor(trx, "3");
+            output.WriteLine($"اليَوم ⇒ {got} :: {text}");
+            Assert.Equal(0, got);
+            Assert.Contains("نَجَحَ 5 · رَجَعَ مِن حارِسٍ فَرعِيٍّ 2 · بَلَغَ القاعِدَة 3", text, StringComparison.Ordinal);
+            Assert.Contains("فَشِلَ 1", text, StringComparison.Ordinal);
+
+            const string oldLine = "early=$(count '\\[live:returned-early\\]')";
+            const string newLine = "early=$(early_results)";
+            var script = File.ReadAllText(Path.Combine(RepoRoot, "scripts", "live-proof-floor.sh"));
+            Assert.Equal(1, Regex.Matches(script, Regex.Escape(newLine)).Count);
+            var injected = Path.Combine(dir.FullName, "live-proof-floor.before.sh");
+            File.WriteAllText(injected, script.Replace(newLine, oldLine, StringComparison.Ordinal));
+            var (oldGot, oldText) = Floor(trx, "3", injected);
+            output.WriteLine($"السَطرُ القَديمُ مَحقوناً ⇒ {oldGot} :: {oldText}");
+            Assert.Equal(1, oldGot);
+            Assert.Contains("رَجَعَ مِن حارِسٍ فَرعِيٍّ 6", oldText, StringComparison.Ordinal);
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
     [Fact]
     public void The_live_floor_refuses_a_missing_trx()
     {
@@ -229,7 +276,12 @@ public class LiveProofJobTests(ITestOutputHelper output)
 
     /// <summary>رُجوعاتُ البَراهينِ الحَيَّةِ مِن حارِسٍ فَرعِيّ: كُلُّ <c>return;</c> شَرطُه <c>if (…)</c> فيه غَيرُ حارِسِ العَلَمِ والسِلسِلَة
     /// (<c>Enabled</c> و<c>IsNullOrEmpty/IsNullOrWhiteSpace(…ConnectionString)</c>) — ومَعَه هل يَكتُبُ العَلامَةَ قَبلَ الرُجوع. حارِسٌ فَرعِيٌّ
-    /// مَدموجٌ في حارِسِ العَلَمِ (<c>if (!Enabled || x) return;</c>) يُعَدُّ فَرعِيّاً بِشَرطِه.</summary>
+    /// مَدموجٌ في حارِسِ العَلَمِ (<c>if (!Enabled || x) return;</c>) يُعَدُّ فَرعِيّاً بِشَرطِه.
+    /// <para>(‏2026-10-25، مُراجَعَةُ تَيّارِ W8-10 الجَولَة ٢ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وحُدودُه — تُقال</b>: يَرى <c>return;</c> وَحدَها تَحتَ
+    /// أَقرَبِ <c>if (</c> قَبلَها نَصّاً، في صِنفٍ يُعلَنُ <c>public [sealed] class Live…</c>. فَلا يَرى: <c>return x;</c> ولا <c>return await …</c> ولا
+    /// <c>yield break</c>؛ ولا رُجوعاً تَحتَ <c>else</c> أَو <c>switch</c> أَو حَلقَة؛ ولا حارِساً في دالَّةٍ مُساعِدَةٍ خارِجَ الصِنف أَو في صِنفٍ
+    /// <c>internal</c>/<c>partial</c>/<c>static</c> أَو بِلا بادِئَةِ <c>Live</c>. و«مُعَلَّم» نَصُّ <c>EarlyReturnMarker</c> بَينَ قَوسِ الشَرطِ والرُجوع —
+    /// فَعَلامَةٌ تُكتَبُ في مُساعِدٍ قَبلَه تُعَدُّ «بِلا عَلامَة» (يَحمَرُّ، لا يَمُرّ). وما لا يَراه يَبقى بَلَغَ القاعِدَةَ في عَدِّ الأَرضِيَّة.</para></summary>
     internal static IReadOnlyList<(string Where, bool Marked)> SubGuardReturns(string code)
     {
         var found = new List<(string, bool)>();
