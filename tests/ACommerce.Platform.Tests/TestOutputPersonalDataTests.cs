@@ -151,6 +151,13 @@ public class TestOutputPersonalDataTests(ITestOutputHelper output)
         return names;
     }
 
+    /// <summary>أَشكالُ الطَرَفِ الأَيمَنِ الَّتي <b>هي</b> القيمَةُ لا سُؤالٌ عَنها: سِلسِلَةُ أَعضاءٍ تَنتَهي بِالحَقلِ (بِـ<c>?.</c> و<c>.Trim()</c> و<c>?? …</c>)،
+    /// أَو سِلسِلَةٌ مُستَوفاةٌ <c>$"…"</c>، أَو نَصٌّ يُوصَلُ بِها <c>"…" + …</c>. وما سِواها — نِداءٌ يَأخُذُ الحَقلَ وَسيطاً (<c>Path.Combine(dir.FullName, …)</c>،
+    /// <c>LiveProofRedaction.Of(a.Phone)</c>، <c>IsNullOrEmpty(…)</c>)، أَو مُقارَنَة، أَو طول — لا يُعَدّ.</summary>
+    private const string ValueShapes =
+        @"^(?:[A-Za-z_]\w*(?:\??\.\w+)*\??\.(?:Phone|Email|FullName|NationalId|CreatedBy|DecidedBy)(?:\.Trim\(\))?(?:\s*\?\?\s*[^=;]+)?" +
+        @"|\$@?"".*|@?\$"".*|""[^""]*""\s*\+.*)$";
+
     /// <summary>
     /// <para><b>المَحَلِّيُّ الَّذي يَحمِلُ حَقلاً شَخصِيّاً</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2 الجَولَة ١، صُغرى؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): كانَ
     /// الماسِحُ يَقرَأُ وُسَطاءَ الكاتِبِ وَحدَها، فَـ<c>var p = a.Phone; Log($"…{p}")</c> يَمُرّ — وهو شَكلُ سَطرَي الحَجبِ نَفسُه
@@ -159,13 +166,6 @@ public class TestOutputPersonalDataTests(ITestOutputHelper output)
     /// مُقارَنَة) — وكاتِبٌ يُسَمّيه كَشف. <b>وحَدُّه مُعلَن</b>: بِالاسمِ في المِلَفِّ كُلِّه لا في دالَّتِه (اسمٌ مُكَرَّرٌ في دالَّةٍ أُخرى يُحمِرُّ — أَحمَرُ
     /// كاذِبٌ يُصلَحُ بِسَطر)، وبِخُطوَةٍ واحِدَة (مُستَعارٌ مِن مُستَعارٍ لا يُتبَع)، ولا يَرى الحَقلَ يَمُرُّ في وَسيطِ دالَّةٍ تُعيدُه.</para>
     /// </summary>
-    /// <summary>أَشكالُ الطَرَفِ الأَيمَنِ الَّتي <b>هي</b> القيمَةُ لا سُؤالٌ عَنها: سِلسِلَةُ أَعضاءٍ تَنتَهي بِالحَقلِ (بِـ<c>?.</c> و<c>.Trim()</c> و<c>?? …</c>)،
-    /// أَو سِلسِلَةٌ مُستَوفاةٌ <c>$"…"</c>، أَو نَصٌّ يُوصَلُ بِها <c>"…" + …</c>. وما سِواها — نِداءٌ يَأخُذُ الحَقلَ وَسيطاً (<c>Path.Combine(dir.FullName, …)</c>،
-    /// <c>LiveProofRedaction.Of(a.Phone)</c>، <c>IsNullOrEmpty(…)</c>)، أَو مُقارَنَة، أَو طول — لا يُعَدّ.</summary>
-    private const string ValueShapes =
-        @"^(?:[A-Za-z_]\w*(?:\??\.\w+)*\??\.(?:Phone|Email|FullName|NationalId|CreatedBy|DecidedBy)(?:\.Trim\(\))?(?:\s*\?\?\s*[^=;]+)?" +
-        @"|\$@?"".*|@?\$"".*|""[^""]*""\s*\+.*)$";
-
     internal static IReadOnlySet<string> PersonalAliases(string code)
     {
         var aliases = new HashSet<string>(StringComparer.Ordinal);
