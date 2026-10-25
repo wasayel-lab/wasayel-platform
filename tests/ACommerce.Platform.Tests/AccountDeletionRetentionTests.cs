@@ -478,13 +478,14 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
 
     /// <summary>ما يَقولُه كُلُّ نَصٍّ عَمّا يَبقى ومَن يَراه — بِالكَلِماتِ الَّتي تُقابِلُ وَقائِعَ الصُفوفِ ١–٣ (بِلا حَرَكات).</summary>
     internal static readonly string[] RetainedFacts =
-        { "الاسم الذي كان لك وقتها", "عنوان التوصيل", "الهاتف", "بائع الصفقة", "صاحب المتجر الاسم", "شركة الشحن" };
+        { "الاسم الذي كان لك وقتها", "أو كتبته في الطلب", "عنوان التوصيل", "الهاتف", "بائع الصفقة", "صاحب المتجر الاسم", "شركة الشحن" };
+    // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-4 الجَولَة ١): «أو كتبته في الطلب» — صَفقَةُ إتمامِ الشِراءِ تُبقي الاسمَ المَكتوبَ في الاستِمارَة.
 
-    /// <summary><b>تَوصيف</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ١، صُغرى — القاعِدَة ٣: يَنقَلِبُ بِاسمِه في كوميتِ النَصّ): النُصوصُ الثَلاثَةُ
-    /// تَقولُ إنّ الصَفقَةَ تُبقي «الاسمَ الَّذي كانَ لَكَ وَقتَها»، وصَفقَةُ إتمامِ الشِراءِ تَكتُبُ في <c>InitiatorName</c> الاسمَ الَّذي كَتَبَه المُشتَري
-    /// في استِمارَةِ الطَلَبِ (<c>req.Form["name"]</c>) لا اسمَ حِسابِه — والعُنوانُ والهاتِفُ مِن الاستِمارَةِ نَفسِها يُقالُ فيهِما «كَتَبتَهُما في الطَلَب».</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> (‏2026-10-25؛ كانَ <c>Today_the_deletion_texts_call_the_deal_name_the_one_you_had_while_checkout_keeps_the_name_typed_in_the_order</c>،
+    /// مُودَعٌ في <c>6a16439</c>). والآن كُلٌّ مِن النُصوصِ الثَلاثَةِ يَقولُ «الاسمُ الَّذي كانَ لَكَ وَقتَها <b>أَو كَتَبتَه في الطَلَب</b>» — طَريقا العَرضِ
+    /// (الحِساب) وإتمامِ الشِراءِ (الاستِمارَة) كِلاهُما — والكودُ ما زالَ يَكتُبُ الاسمَ المَكتوبَ في الاستِمارَة؛ والإنجليزيُّ مِثلُه.</summary>
     [Fact]
-    public void Today_the_deletion_texts_call_the_deal_name_the_one_you_had_while_checkout_keeps_the_name_typed_in_the_order()
+    public void The_deletion_texts_say_the_deal_keeps_the_name_you_had_or_typed_in_the_order()
     {
         var mte = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
             "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs")));
@@ -493,14 +494,11 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         var kept = mte.IndexOf("initiatorId: userId, initiatorName: name,", submit, StringComparison.Ordinal);
         var texts = new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey }.ToDictionary(k => k, k => Bare(Ar(k)));
         output.WriteLine($"إتمامُ الشِراء: الاسمُ مِن الاستِمارَة {typed > submit} · يُكتَبُ InitiatorName {kept > typed} · " +
-                         string.Join(" · ", texts.Select(t => $"{t.Key}: «كان لك وقتها» {t.Value.Contains("الاسم الذي كان لك وقتها", StringComparison.Ordinal)}، «كتبته في الطلب» {t.Value.Contains("كتبته في الطلب", StringComparison.Ordinal)}")));
+                         string.Join(" · ", texts.Select(t => $"{t.Key}: «أو كتبته في الطلب» {t.Value.Contains("الاسم الذي كان لك وقتها أو كتبته في الطلب", StringComparison.Ordinal)}")));
         Assert.True(submit > 0 && typed > submit && kept > typed);
-        foreach (var (k, t) in texts)
-        {
-            Assert.Contains("الاسم الذي كان لك وقتها", t, StringComparison.Ordinal);
-            Assert.DoesNotContain("كتبته في الطلب", t, StringComparison.Ordinal);
-        }
-        Assert.DoesNotContain("or entered in the order", En(PlatformRetentionKey), StringComparison.Ordinal);
+        foreach (var (_, t) in texts)
+            Assert.Contains("الاسم الذي كان لك وقتها أو كتبته في الطلب", t, StringComparison.Ordinal);
+        Assert.Contains("the name you had at the time or entered in the order", En(PlatformRetentionKey), StringComparison.Ordinal);
     }
 
     /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الصِياغَة — الخِيارُ (ب) مِن brief-P3-5a)</b> — كانَ
