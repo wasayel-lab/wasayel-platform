@@ -62,6 +62,16 @@
         }
         else
         {
+            @* ‏(‏2026-10-25، تَدقيقُ الإطلاق W8-3 — `brief-P0-8`) والتَلميحُ نَفسُه فَوقَ الجَدوَلِ
+               ما دامَ لا يَحمِلُ أَحَدٌ مِن المَسرودينَ `tenant.manage`: كانَ لا يُرسَمُ إلّا
+               في المَتجَرِ الخالي، فَمَن سَبَقَه إلى مَتجَرِه بائِعٌ أَو مُشتَرٍ رَأى صُفوفَهم
+               بِلا سَطرٍ يَقولُ كَيفَ يَصيرُ لَه صَفّ (‏RELEASE-READINESS §٢·١، التَعَثُّرُ ب).
+               والقَرارُ دالَّةُ الحارِسِ نَفسُها (`TenantAdminGuard.HasTenantManage`) لا تَعريفٌ
+               ثانٍ — فَالمَتجَرُ بِلا أَدوارٍ (الوَضعُ المَوروث) لا يُرسَمُ لَه. نَصٌّ لا زِرّ. *@
+            @if (!anyManager)
+            {
+                <AcAlert Variant="info" Message="@(L.Format("admin.tenant_users.empty_hint", Slug))" />
+            }
             <AcCard>
                 <ChildContent>
                     <div class="acm-cat-list">
@@ -126,6 +136,7 @@
     Tenant? tenant;
     List<User> users = new();
     bool hasAdminRole;
+    bool anyManager;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -138,6 +149,7 @@
         if (tenant is null) return;
         hasAdminRole = tenant.Roles.Any(r => r.CatalogSlug == "tenant_admin");
         users = (await TenantAdmin.UsersAsync(Slug)).ToList();
+        anyManager = users.Any(u => Services.TenantAdminGuard.HasTenantManage(tenant, u));
     }
 
     string RoleLabel(string slug)

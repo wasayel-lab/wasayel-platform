@@ -39,17 +39,42 @@ public class TenantUsersFirstAdminHintTests(ITestOutputHelper output)
         return (empty, elseAt, table);
     }
 
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الإصلاح)</b> — كانَ <c>Today_the_first_admin_hint_is_drawn_only_when_the_store_has_zero_users</c>
+    /// (‏<c>6b4715c</c>): «مَواضِعُ التَلميح 1 (داخِلَ فَرعِ الفَراغ) · HasTenantManage في الصَفحَة 0». والآن مَوضِعٌ ثانٍ داخِلَ <c>else</c> قَبلَ بِطاقَةِ
+    /// الجَدوَل، تَحتَ <c>@if (!anyManager)</c> — والشَرطُ يَكتُبُه سَطرٌ واحِدٌ مِن دالَّةِ الحارِسِ نَفسِها، فَلا تَعريفٌ ثانٍ لِـ«مَن يُديرُ المَتجَر»
+    /// يَنجَرِفُ عَن البابِ الَّذي يَفتَحُ لَوحَتَه (القاعِدَة ٢).</summary>
     [Fact]
-    public void Today_the_first_admin_hint_is_drawn_only_when_the_store_has_zero_users()
+    public void The_first_admin_hint_is_drawn_above_the_table_while_no_listed_user_holds_tenant_manage()
     {
         var page = Page();
         var (empty, elseAt, table) = Anchors(page);
         var hits = Regex.Matches(page, Regex.Escape(HintKey)).Select(m => m.Index).ToList();
-        output.WriteLine($"مَواضِعُ التَلميح: {hits.Count} ({string.Join(", ", hits)}) · فَرعُ الفَراغ [{empty}..{elseAt}) · الجَدوَلُ عِندَ {table}" +
-                         $" · HasTenantManage في الصَفحَة: {Regex.Matches(page, "HasTenantManage").Count}");
+        var guardAt = page.IndexOf("@if (!anyManager)", elseAt, StringComparison.Ordinal);
+        var writers = Regex.Matches(page, @"\banyManager\s*=(?!=)").Count;
+        output.WriteLine($"مَواضِعُ التَلميح: {hits.Count} ({string.Join(", ", hits)}) · فَرعُ الفَراغ [{empty}..{elseAt}) · الشَرطُ عِندَ {guardAt}" +
+                         $" · الجَدوَلُ عِندَ {table} · كُتّابُ anyManager: {writers}");
 
-        Assert.Single(hits);
+        Assert.Equal(2, hits.Count);
         Assert.InRange(hits[0], empty, elseAt);
-        Assert.DoesNotContain("HasTenantManage", page, StringComparison.Ordinal);
+        Assert.InRange(hits[1], elseAt, table);
+        Assert.True(guardAt > elseAt && guardAt < hits[1], "التَلميحُ فَوقَ الجَدوَلِ لا يَسأَلُ «أَلا يَحمِلُ أَحَدٌ tenant.manage؟».");
+        Assert.Contains("<AcAlert Variant=\"info\" Message=\"@(L.Format(\"admin.tenant_users.empty_hint\", Slug))\" />",
+            page[elseAt..table], StringComparison.Ordinal);
+
+        Assert.Equal(1, writers);
+        Assert.Contains("anyManager = users.Any(u => Services.TenantAdminGuard.HasTenantManage(tenant, u));", page, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>ولا زِرَّ فَوقَ الجَدوَل</b> — نَسَقُ <c>TenantUsersEmptyStateTests.No_button_was_added_before_the_click_count_was_measured</c>
+    /// لِلفَرعِ الثاني: ‏ADR-032 §٦‑د «يُبنى فَقَط إن أَثبَتَ قِياسُ §٦‑هـ مُستَهلِكَه»، والزِرُّ الوَحيدُ «مَنح إدارَة» في صَفِّ صاحِبِه.</summary>
+    [Fact]
+    public void The_hint_above_the_table_adds_no_button()
+    {
+        var page = Page();
+        var (_, elseAt, table) = Anchors(page);
+        var above = page[elseAt..table];
+        Assert.True(above.Length > 40, $"أَداةٌ عَمياء: {above.Length} مِحرَفاً بَينَ else والجَدوَل.");
+        foreach (var door in new[] { "ActionHref", "ActionLabel", "<form", "<a ", "<button" })
+            Assert.DoesNotContain(door, above, StringComparison.Ordinal);
     }
 }
