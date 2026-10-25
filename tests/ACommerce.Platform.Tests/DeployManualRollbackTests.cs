@@ -195,4 +195,159 @@ public class DeployManualRollbackTests(ITestOutputHelper output)
         Assert.Contains("git commit -q -m \"deploy: $sha\"", block, StringComparison.Ordinal);
         Assert.Contains("lens-docs-vs-code-4", Deploy(), StringComparison.Ordinal);
     }
+
+    // ─── والرَمزُ لا يُكتَبُ في سَطرِ أَمر (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-6 الجَولَة ٢، الصُغرى ٤) ───
+    //
+    // ‏الكُتلَةُ أَعلاه تَضَعُ رَمزَ الكِتابَةِ في عُنوانِ الدَفعِ — يَظهَرُ في argv (‏`ps`) ما دامَ `git push` يَعمَل، ويَبقى في سِجِلِّ الصَدَفَة. والكُتلَةُ
+    // الثالِثَةُ في §٤‑ب تَقرَؤُه بِـ`read -rs` وتُمَرِّرُه رَأسَ `Authorization` في بيئَةِ git (`GIT_CONFIG_*`) إلى عُنوانٍ بِلا رَمز. وهُنا تُشَغَّلُ الاثنَتانِ
+    // بِحَرفِهِما وغِلافٌ لِـ`git` في أَوَّلِ PATH يُسَجِّلُ argv كُلِّ نِداءٍ ورَأسَ الدَفع، ويُحَوِّلُ عُنوانَ HF إلى مُستَودَعِ Space عارٍ مَحَلِّيّ.
+
+    private const string TokenFreeBlockStart = "```bash\n# ‏(‏2026-10-25، مُراجَعَةُ W8-6 الجَولَة ٢) الخُطُواتُ نَفسُها";
+    private const string FakeToken = "hf_FAKEtokenForTheRollbackTest0123456789";
+
+    /// <summary>الكُتلَةُ الثالِثَةُ بِحَرفِها مِن الدَليل — بِلا سِياجِها.</summary>
+    private static string TokenFreeBlock()
+    {
+        var deploy = Deploy();
+        var a = deploy.IndexOf(TokenFreeBlockStart, StringComparison.Ordinal);
+        Assert.True(a > 0, "كُتلَةُ التَراجُعِ بِلا رَمزٍ في سَطرِ الأَمرِ غائِبَةٌ عَن §٤‑ب — الأَداةُ عَمياء.");
+        Assert.Equal(a, deploy.LastIndexOf(TokenFreeBlockStart, StringComparison.Ordinal));
+        var body = deploy[(a + "```bash\n".Length)..];
+        return body[..(body.IndexOf("\n```", StringComparison.Ordinal) + 1)];
+    }
+
+    private sealed record Shimmed(Pushed Pushed, string[] Argv, string[] PushHeaders);
+
+    /// <summary>يُشَغِّلُ <paramref name="block"/> بِحَرفِه — <c>&lt;الإيداع السابق&gt;</c> و<c>&lt;user&gt;</c> و<c>&lt;HF_TOKEN&gt;</c> وَحدَها تُستَبدَل — والرَمزُ في
+    /// مَدخَلِه، وغِلافُ <c>git</c> يُسَجِّلُ argv كُلِّ نِداءٍ (و<c>GIT_CONFIG_VALUE_0</c> عِندَ الدَفع) ويُحَوِّلُ عُنوانَ HF إلى <paramref name="space"/>.</summary>
+    private Shimmed RunShimmed(string block, DirectoryInfo repo, string space)
+    {
+        var (_, sha, _) = DeployManifestGateTests.Run("git", repo.FullName, "rev-parse", "HEAD");
+        var (_, realGit, _) = DeployManifestGateTests.Run("/bin/bash", repo.FullName, "-c", "command -v git");
+        Assert.False(string.IsNullOrWhiteSpace(realGit), "أَداةٌ غائِبَة: git.");
+        var body = block
+            .Replace("git clone https://github.com/wasayel-lab/wasayel-platform.git w && cd w\n", "", StringComparison.Ordinal)
+            .Replace("<الإيداع السابق>", sha, StringComparison.Ordinal)
+            .Replace("<HF_TOKEN>", FakeToken, StringComparison.Ordinal)
+            .Replace("<user>", "tester", StringComparison.Ordinal);
+        var work = Path.Combine(repo.FullName, "..", repo.Name + "-shim");
+        Directory.CreateDirectory(work);
+        var argvLog = Path.Combine(work, "argv.log");
+        var headerLog = Path.Combine(work, "headers.log");
+        File.WriteAllText(Path.Combine(work, "git"),
+            "#!/bin/bash\n" +
+            "printf '%s\\n' \"$*\" >> \"$SHIM_ARGV\"\n" +
+            "if [ \"${1:-}\" = push ]; then\n" +
+            "  printf '%s\\n' \"${GIT_CONFIG_VALUE_0:-}\" >> \"$SHIM_HEADERS\"\n" +
+            "  args=(); for a in \"$@\"; do case \"$a\" in https://*huggingface.co/*) args+=(\"$SHIM_SPACE\") ;; *) args+=(\"$a\") ;; esac; done\n" +
+            "  exec \"$SHIM_REAL_GIT\" \"${args[@]}\"\n" +
+            "fi\n" +
+            "exec \"$SHIM_REAL_GIT\" \"$@\"\n", new UTF8Encoding(false));
+        DeployManifestGateTests.Run("chmod", work, "+x", Path.Combine(work, "git"));
+        var script = Path.Combine(work, "rollback.sh");
+        File.WriteAllText(script, "set -euo pipefail\n" + body + "if [ -n \"${stage:-}\" ]; then cd / && rm -rf \"$(dirname \"$stage\")\"; fi\n",
+            new UTF8Encoding(false));
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo("/bin/bash", new[] { script })
+            {
+                WorkingDirectory = repo.FullName, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+                UseShellExecute = false, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8,
+            };
+            psi.Environment.Remove("GIT_DIR");
+            psi.Environment.Remove("GIT_WORK_TREE");
+            psi.Environment["GIT_CONFIG_NOSYSTEM"] = "1";
+            psi.Environment["GIT_AUTHOR_NAME"] = psi.Environment["GIT_COMMITTER_NAME"] = "t";
+            psi.Environment["GIT_AUTHOR_EMAIL"] = psi.Environment["GIT_COMMITTER_EMAIL"] = "t@example.invalid";
+            psi.Environment["PATH"] = work + ":" + psi.Environment["PATH"];
+            psi.Environment["SHIM_ARGV"] = argvLog;
+            psi.Environment["SHIM_HEADERS"] = headerLog;
+            psi.Environment["SHIM_SPACE"] = space;
+            psi.Environment["SHIM_REAL_GIT"] = realGit.Trim();
+            using var p = System.Diagnostics.Process.Start(psi)!;
+            p.StandardInput.Write(FakeToken + "\n");
+            p.StandardInput.Close();
+            var outText = p.StandardOutput.ReadToEndAsync();
+            var err = p.StandardError.ReadToEndAsync();
+            Assert.True(p.WaitForExit(60_000), "الكُتلَةُ لَم تَنتَهِ في دَقيقَة.");
+            output.WriteLine($"→ {p.ExitCode} · {err.Result.Split('\n').FirstOrDefault()}");
+            string[] Lines(string f) => File.Exists(f) ? File.ReadAllLines(f) : [];
+            if (p.ExitCode != 0) return new Shimmed(new Pushed(p.ExitCode, err.Result + outText.Result, 0, [], null, ""), Lines(argvLog), Lines(headerLog));
+            var (_, count, _) = DeployManifestGateTests.Run("git", space, "rev-list", "--count", "main");
+            var (_, files, _) = DeployManifestGateTests.Run("git", space, "ls-tree", "-r", "--name-only", "main");
+            var (revCode, rev, _) = DeployManifestGateTests.Run("git", space, "show", "main:.source-revision");
+            var (_, message, _) = DeployManifestGateTests.Run("git", space, "log", "-1", "--format=%s", "main");
+            return new Shimmed(new Pushed(0, err.Result, int.Parse(count), files.Split('\n', StringSplitOptions.RemoveEmptyEntries),
+                revCode == 0 ? rev.Trim() : null, message), Lines(argvLog), Lines(headerLog));
+        }
+        finally { Directory.Delete(work, recursive: true); }
+    }
+
+    /// <summary>هَل يَحمِلُ argv نِداءٍ ما الرَمزَ أَو تَرميزَه — حُكمُ الصَفِّ أَدناه، يُطَبَّقُ عَلى الكُتلَتَين.</summary>
+    internal static bool TokenInArgv(IEnumerable<string> argv)
+    {
+        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes("tester:" + FakeToken));
+        return argv.Any(l => l.Contains(FakeToken, StringComparison.Ordinal) || l.Contains(basic, StringComparison.Ordinal));
+    }
+
+    /// <summary><b>الكُتلَةُ الثالِثَةُ بِحَرفِها</b>: الرَمزُ مِن مَدخَلِها صِفرُ مَوضِعٍ في argv كُلِّ نِداءٍ لِـgit، ورَأسُ الدَفعِ يَحمِلُه (‏<c>Basic tester:token</c>)،
+    /// وعُنوانُ الدَفعِ بِلا رَمز — والدَفعُ نَفسُه إيداعٌ واحِدٌ بِبَصمَتِه وبِلا مَحظور، وحارِسُ الـ<c>Dockerfile</c> يَمُرُّ عَلى ما دُفِع.</summary>
+    [Fact]
+    public void The_token_free_manual_rollback_keeps_the_token_out_of_every_argv_and_pushes_the_same_flat_commit()
+    {
+        if (NoBash()) return;
+        var block = TokenFreeBlock();
+        Assert.DoesNotContain("<HF_TOKEN>", block, StringComparison.Ordinal);
+        Assert.Contains("IFS= read -rs", block, StringComparison.Ordinal);
+        var repo = DeployManifestGateTests.Scratch(extraReference: null);
+        var space = BareSpace(repo);
+        try
+        {
+            var (_, sha, _) = DeployManifestGateTests.Run("git", repo.FullName, "rev-parse", "HEAD");
+            var run = RunShimmed(block, repo, space);
+            Assert.True(run.Pushed.Code == 0, $"رَمزُ {run.Pushed.Code}: {run.Pushed.Err}");
+            output.WriteLine($"نِداءاتُ git: {run.Argv.Length} · دَفعات: {run.PushHeaders.Length} · إيداعات: {run.Pushed.Commits} · مِلَفّات: {run.Pushed.Files.Length}");
+            Assert.True(run.Argv.Length >= 4, $"أَداةٌ عَمياء: {run.Argv.Length} نِداءً لِـgit.");
+            Assert.False(TokenInArgv(run.Argv), "الرَمزُ في argv نِداءٍ لِـgit: " + string.Join(" | ", run.Argv));
+            var header = Assert.Single(run.PushHeaders);
+            Assert.Equal("Authorization: Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes("tester:" + FakeToken)), header);
+            Assert.Contains(run.Argv, l => l.StartsWith("push --force https://huggingface.co/spaces/<owner>/<space>.git ", StringComparison.Ordinal));
+            Assert.Equal(1, run.Pushed.Commits);
+            Assert.Equal($"deploy: {sha}", run.Pushed.Message);
+            Assert.Equal(sha, run.Pushed.Revision);
+            Assert.DoesNotContain(run.Pushed.Files, f => Forbidden.Any(p => f.StartsWith(p, StringComparison.Ordinal)));
+            var checkout = Path.Combine(repo.FullName, "..", repo.Name + "-pushed");
+            var (cc, co, ce) = DeployManifestGateTests.Run("git", Path.GetDirectoryName(repo.FullName)!, "clone", "-q", space, checkout);
+            Assert.True(cc == 0, $"git clone: {co} {ce}");
+            try
+            {
+                var (gc, ge) = DockerfileGuard(checkout);
+                Assert.True(gc == 0, $"حارِسُ الـDockerfile خَرَجَ {gc} عَلى ما دُفِع: {ge}");
+            }
+            finally { Directory.Delete(checkout, recursive: true); }
+        }
+        finally { Clean(repo, space); }
+    }
+
+    /// <summary><b>والكُتلَةُ الثانِيَةُ بِحَرفِها — العَيِّنَةُ المَحقونَة</b>: تَدفَعُ ما تَدفَعُه الثالِثَة، لكِنّ الرَمزَ في argv الدَفع — فَحُكمُ الصَفِّ أَعلاه يَحمَرُّ
+    /// عَلَيها، فَهُوَ لَيسَ أَعمى. وهي باقِيَةٌ في الدَليلِ تَحتَ سَطرِ ⚠ مُؤَرَّخ.</summary>
+    [Fact]
+    public void The_token_check_goes_red_on_the_block_that_puts_the_token_in_the_push_url()
+    {
+        if (NoBash()) return;
+        var deploy = Deploy();
+        var at = deploy.IndexOf(NewBlockStart, StringComparison.Ordinal);
+        Assert.Contains("**الرَمزُ في عُنوانِ الدَفعِ أَدناه يَبقى في سَطرِ الأَمر**", deploy[(at - 500)..at], StringComparison.Ordinal);
+        var repo = DeployManifestGateTests.Scratch(extraReference: null);
+        var space = BareSpace(repo);
+        try
+        {
+            var run = RunShimmed(NewBlock(), repo, space);
+            Assert.True(run.Pushed.Code == 0, $"رَمزُ {run.Pushed.Code}: {run.Pushed.Err}");
+            Assert.Equal(1, run.Pushed.Commits);
+            Assert.True(TokenInArgv(run.Argv), "العَيِّنَةُ لا تُحمِرُّ المُتَحَقِّق: " + string.Join(" | ", run.Argv));
+            Assert.Contains(run.Argv, l => l.StartsWith("push --force https://tester:" + FakeToken + "@huggingface.co/", StringComparison.Ordinal));
+        }
+        finally { Clean(repo, space); }
+    }
 }
