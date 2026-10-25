@@ -842,8 +842,11 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
 
     // ─── المَوجَة ٧: مَسارُ العَرض لا يُبَدِّل حالَة ────────────────────
 
-    /// <summary>مَوضِعُ عَرضٍ يَكتُب، مُثَبَّتٌ بِاسمِه وسَبَبِه.</summary>
-    private sealed record DisplayWriter(string Where, string WhyAr);
+    /// <summary>مَوضِعُ عَرضٍ يَكتُب، مُثَبَّتٌ بِاسمِه وسَبَبِه. و(‏2026-10-25، مُراجَعَةُ W8-5 الجَولَة 1) <c>InHandlers</c> يُضَيِّقُ التَثبيتَ إلى
+    /// مُعالِجاتٍ مُسَمّاةٍ في صَفحَةٍ تَفاعُلِيَّة: لا يُعفى إلّا جِسمُها، وكُلُّ كاتِبٍ خارِجَها — ورُموزُ Marten المُباشِرَةُ في الصَفحَةِ كُلِّها — يُسأَلُ
+    /// كَما يُسأَلُ في غَيرِها؛ و<see cref="Every_pinned_display_handler_is_an_event_binding_that_writes"/> يَشتَرِطُ أَنّ كُلَّ مُعالِجٍ مَربوطٌ بِحَدَثٍ
+    /// ويَكتُبُ ولا يُنادى مِن غَيرِه.</summary>
+    private sealed record DisplayWriter(string Where, string WhyAr, string[]? InHandlers = null);
 
     /// <summary>
     /// <para><b>فارِغَةٌ عَمداً، وهذا هُوَ الخَبَر.</b> كانَت ثَلاثَةً
@@ -854,9 +857,29 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
     ///
     /// <para><b>وكُلُّ إضافَةٍ هُنا قَرارٌ يُتَّخَذ بِاليَد</b> في نَفس
     /// الكوميت الَّذي يَخرِقُ القاعِدَة — لا نَتيجَةُ نِسيان.</para>
+    ///
+    /// <para>(‏2026-10-25، مُراجَعَةُ W8-5 الجَولَة 1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>ولا مَوضِعَ عَرضٍ فيها بَعدُ</b>: الإدخالَتانِ أَدناه
+    /// لَيستا تَصييراً يَكتُب، بَل صَفحَتا الوَكيلِ التَفاعُلِيَّتانِ تَكتُبانِ في مُعالِجاتِ نَقرٍ عَبرَ دارَةِ SignalR — كَشَفَهُما أَوَّلُ تَشغيلٍ لِلفاحِصِ عَلى
+    /// صَفَحاتِ razor كُلِّها (‏167 صَفحَة، خَرقانِ اثنانِ لا غَير)، فَثُبِّتَتا بِمُعالِجاتِهِما المُسَمّاةِ لا بِالصَفحَة.</para>
     /// </summary>
     private static readonly DisplayWriter[] PinnedDisplayWriters =
-        Array.Empty<DisplayWriter>();
+    {
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAgent.razor",
+            "صَفحَةٌ تَفاعُلِيَّةٌ (`@rendermode RenderMode.InteractiveServer`): كاتِباتُها الخَمسُ (`AgentService.AskAsync`/`UpdateToolStatusAsync`/" +
+            "`ContinueAfterToolAsync`/`ResetAsync` و`AgentToolExecutor.ExecuteAsync`) في مُعالِجاتِ النَقرِ الأَربَعَةِ وَحدَها، تُنادى عَبرَ دارَةِ SignalR " +
+            "بَعدَ التَصيير لا في طَلَبِ `GET`؛ وتَصييرُها (`OnInitializedAsync`) يُنادي `LoadSessionAsync` وهي قِراءَة. والحارِسُ " +
+            "(`StudioAgentDoor.Opens`) سَطرٌ في جِسمِ كُلِّ مُعالِجٍ لا في تَوقيعِه — دَينُ القاعِدَة ٦ مَقولٌ هُنا لا مُبتَلَع.",
+            ["SendAsync", "ApplyAsync", "RejectAsync", "ResetAsync"]),
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Admin/AgentChatPanel.razor",
+            "جَزيرَةٌ تَفاعُلِيَّةٌ تَرسُمُها `AgentChat.razor` بِـ`@rendermode=\"RenderMode.InteractiveServer\"` داخِلَ `RequirePlatformAdmin`: كاتِباتُها " +
+            "(`AgentService.AskAsync`/`UpdateToolStatusAsync`/`ContinueAfterToolAsync`/`ResetAsync` و`AgentToolExecutor.ExecuteAsPlatformAdminAsync`) " +
+            "في مُعالِجاتِ النَقرِ الأَربَعَةِ وَحدَها عَبرَ دارَةِ SignalR، وتَصييرُها يُنادي `LoadSessionAsync` وهي قِراءَة.",
+            ["SendAsync", "ApplyAsync", "RejectAsync", "ResetAsync"]),
+    };
+
+    /// <summary>مَواضِعُ التَثبيتِ الكامِل (بِلا <c>InHandlers</c>) — وَحدَها تُعفي مَوضِعَها كُلَّه.</summary>
+    private static HashSet<string> FullyPinnedDisplayWriters() =>
+        PinnedDisplayWriters.Where(p => p.InHandlers is null).Select(p => p.Where).ToHashSet(StringComparer.Ordinal);
 
     /// <summary>
     /// <para><b>لا صَفحَةَ <c>.razor</c> تُبَدِّل حالَةً مُخَزَّنَة.</b>
@@ -888,7 +911,8 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
         Assert.True(pages.Count >= 140,
             $"أَداة عَمياء: وُجِدَ {pages.Count} مِلَفّ .razor — والمَقيس ‏147.");
 
-        var pinned = PinnedDisplayWriters.Select(p => p.Where).ToHashSet(StringComparer.Ordinal);
+        // ‏تَثبيتُ المُعالِجاتِ (`InHandlers`) لا يُعفي الصَفحَةَ مِن رُموزِ Marten المُباشِرَة — الإعفاءُ لِلتَثبيتِ الكامِلِ وَحدَه.
+        var pinned = FullyPinnedDisplayWriters();
 
         var breaches = new List<string>();
         foreach (var (file, text) in pages)
@@ -931,7 +955,7 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
         Assert.True(gets.Count >= 10,
             $"أَداة عَمياء: وُجِدَت {gets.Count} نُقطَة MapGet — والمَقيس ‏11.");
 
-        var pinned = PinnedDisplayWriters.Select(p => p.Where).ToHashSet(StringComparer.Ordinal);
+        var pinned = FullyPinnedDisplayWriters();
 
         var breaches = gets
             .Where(e => ContainsAny(e.Body, WriteCalls))
@@ -972,6 +996,15 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
         foreach (var e in MinimalApiGetEndpoints())
             if (ContainsAny(e.Body, WriteCalls))
                 writing.Add(e.Route);
+
+        // ‏(‏2026-10-25، مُراجَعَةُ W8-5 الجَولَة 1) ومَن يَكتُبُ عَبرَ خِدمَةٍ في أَيِّ سَطحِ عَرض — وإلّا حَمَّرَ هذا الصَفُّ تَثبيتاً صَحيحاً لِصَفحَةٍ
+        // أَو `[WolverineGet]` يُناديانِ كاتِبَةً بِأَنَّه «لَم يَعُد يَكتُب»، فَيَستَحيلُ التَثبيتُ الَّذي يَدعو إلَيه الفاحِصُ نَفسُه.
+        var sources = EntitlementContractTests.SourceFiles().ToList();
+        var writers = ServiceWriters(sources);
+        var typesByFile = TypesByFile(sources);
+        foreach (var s in DisplaySurfaces(sources))
+            if (SurfaceWrites(s, writers, typesByFile.GetValueOrDefault(s.File, [])).Count > 0)
+                writing.Add(s.Where);
 
         var settled = PinnedDisplayWriters
             .Where(p => !writing.Contains(p.Where)).Select(p => p.Where).ToArray();
@@ -1094,31 +1127,45 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
         if (route.Success)
         {
             var open = route.Groups["open"].Index;
-            var list = body[(open + 1)..Closing(body, open, '(', ')')];
-            var (depth, from) = (0, 0);
-            var parts = new List<string>();
-            for (var i = 0; i <= list.Length; i++)
-            {
-                if (i == list.Length || (list[i] == ',' && depth == 0)) { parts.Add(list[from..i]); from = i + 1; continue; }
-                if (list[i] is '<' or '(' or '[') depth++;
-                else if (list[i] is '>' or ')' or ']') depth--;
-            }
-            foreach (var p in parts)
-            {
-                var clean = Regex.Replace(p, @"\[[^\]]*\]", " ").Trim();
-                var m = Regex.Match(clean, @"(?<type>[\w.]+)(?:<[^>]*>)?\??\s+(?<name>\w+)\s*(?:=.*)?$");
-                if (m.Success) map[m.Groups["name"].Value] = m.Groups["type"].Value.Split('.')[^1];
-            }
+            foreach (var (name, type) in ParameterTypes(body[(open + 1)..Closing(body, open, '(', ')')])) map[name] = type;
         }
         foreach (Match r in ResolvedService.Matches(body)) map[r.Groups["name"].Value] = r.Groups["type"].Value.Split('.')[^1];
         return map;
     }
 
-    /// <summary><b>ما تُناديه النُقطَةُ مِن الكاتِبات</b> — «نَوع.طَريقَة» لِكُلِّ نِداءٍ عَلى وَسيطٍ أَو خِدمَةٍ مَحلولَةٍ أَو نَوعٍ ساكِن، أَو نِداءٍ بِلا
-    /// مُستَقبِلٍ لِكاتِبَةٍ مِن نَوعٍ في <paramref name="fileTypes"/> (مِلَفِّ النُقطَة).</summary>
-    internal static IReadOnlyList<string> WritersCalled(string body, IReadOnlyDictionary<string, HashSet<string>> writers, IReadOnlyCollection<string> fileTypes)
+    /// <summary>قائِمَةُ وُسَطاءَ بَينَ قَوسَين (بِلا القَوسَين): الاسمُ ← اسمُ النَوعِ القَصير — لِلامدَةِ <c>Map…</c> ولِطَريقَةِ
+    /// <c>[WolverineGet]</c> مَعاً، فَيُقرَأُ الشَكلانِ بِمُحَلِّلٍ واحِد. (‏2026-10-25، مُراجَعَةُ W8-5 الجَولَة 1: استُخرِجَت مِن
+    /// <see cref="HandlerParameters"/> بِلا تَغييرِ حَرفٍ مِن مَنطِقِها.)</summary>
+    private static Dictionary<string, string> ParameterTypes(string list)
     {
-        var parameters = HandlerParameters(body);
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var (depth, from) = (0, 0);
+        var parts = new List<string>();
+        for (var i = 0; i <= list.Length; i++)
+        {
+            if (i == list.Length || (list[i] == ',' && depth == 0)) { parts.Add(list[from..i]); from = i + 1; continue; }
+            if (list[i] is '<' or '(' or '[') depth++;
+            else if (list[i] is '>' or ')' or ']') depth--;
+        }
+        foreach (var p in parts)
+        {
+            var clean = Regex.Replace(p, @"\[[^\]]*\]", " ").Trim();
+            var m = Regex.Match(clean, @"(?<type>[\w.]+)(?:<[^>]*>)?\??\s+(?<name>\w+)\s*(?:=.*)?$");
+            if (m.Success) map[m.Groups["name"].Value] = m.Groups["type"].Value.Split('.')[^1];
+        }
+        return map;
+    }
+
+    /// <summary><b>ما تُناديه النُقطَةُ مِن الكاتِبات</b> — «نَوع.طَريقَة» لِكُلِّ نِداءٍ عَلى وَسيطٍ أَو خِدمَةٍ مَحلولَةٍ أَو نَوعٍ ساكِن، أَو نِداءٍ بِلا
+    /// مُستَقبِلٍ لِكاتِبَةٍ مِن نَوعٍ في <paramref name="fileTypes"/> (مِلَفِّ النُقطَة). و<paramref name="receivers"/> مُستَقبِلاتٌ مُعلَنَةُ النَوعِ
+    /// خارِجَ اللامدَة — <c>@inject</c> صَفحَةِ razor ووُسَطاءُ طَريقَةِ <c>[WolverineGet]</c> (‏2026-10-25، مُراجَعَةُ W8-5 الجَولَة 1)؛ وما في اللامدَةِ
+    /// والجِسمِ يَغلِبُها.</summary>
+    internal static IReadOnlyList<string> WritersCalled(string body, IReadOnlyDictionary<string, HashSet<string>> writers, IReadOnlyCollection<string> fileTypes,
+        IReadOnlyDictionary<string, string>? receivers = null)
+    {
+        var parameters = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (name, type) in receivers ?? new Dictionary<string, string>()) parameters[name] = type;
+        foreach (var (name, type) in HandlerParameters(body)) parameters[name] = type;
         var found = new List<string>();
         foreach (Match c in MemberCall.Matches(body))
         {
@@ -1132,38 +1179,217 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
         return found.Distinct(StringComparer.Ordinal).ToList();
     }
 
-    /// <summary><b>ولا نُقطَةَ عَرضٍ تَكتُبُ عَبرَ خِدمَة</b>: كُلُّ <c>MapGet</c>/<c>MapMethods</c> وكُلُّ نُقطَةٍ بِنِطاقِ قِراءَةٍ في الـAPI لا تُنادي
-    /// طَريقَةً كاتِبَة — والعَدّادانِ (الطَرائِقُ الكاتِبَةُ والنِقاطُ المَسؤولَة) يُطبَعانِ ويَفشَلانِ عَلى الصِفر. الاستِثناءُ <see cref="PinnedDisplayWriters"/> نَفسُه.</summary>
+    // ─── ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة 1، كُبرى): صَفحَةُ razor و`[WolverineGet]` تَكتُبانِ عَبرَ خِدمَة ───────────────
+    //
+    // **المَقيسُ قَبل** (`4acc669`): الفاحِصُ أَدناه يَسأَلُ `MapGet`/`MapMethods` ونِطاقَ القِراءَةِ وَحدَهُما — وصَفحَةُ `.razor` تُرسَمُ بِـ`GET`
+    // (وهي ما يُسَمّيه هذا المِلَفُّ «مَسارَ العَرض») لا تُسأَلُ إلّا عَن رُموزِ Marten المُباشِرَة (`No_razor_page_writes_state`)، و`[WolverineGet]`
+    // لا يُسأَلُ عَن شَيء. فَسَطرٌ واحِدٌ في `MyDealDetail.razor` بَعدَ `deal = await Deals.LoadAsync(Slug, Id);` —
+    // `if (deal is not null) await Deals.CancelAsync(Slug, deal.Id, uid);` — يَتَرُكُ `WriteEndpointGuardTests` ‏24/24 (مَقيسٌ عَلى الشَجَرَةِ
+    // الحَقيقِيَّةِ بِنُسخَةٍ احتِياطِيَّةٍ أُعيدَت بِبَصمَتِها)، وجَدوَلُ «قَواعِدُ رُفِعَت» في CLAUDE.md يَستَنِدُ إلى هذا المِلَفِّ بِعَينِه.
+    // **وصارَ**: الفاحِصُ نَفسُه (الكاتِباتُ نَفسُها، وقائِمَةُ التَثبيتِ نَفسُها — القاعِدَة ٨) يَسأَلُ كُلَّ صَفحَةِ `.razor` بِنَصِّها كُلِّه —
+    // مُستَقبِلاتُها كُلُّ `@inject T N` و`[Inject] T N {` وكُلُّ تَصريحٍ مُعلَنِ النَوعِ فيها — وكُلَّ `[WolverineGet]` بِوُسَطاءِ طَريقَتِه وجِسمِها،
+    // وهذا الأَخيرُ عَن رُموزِ Marten المُباشِرَةِ أَيضاً (لا صَفَّ غَيرُه يَسأَلُه). **ويَفحَصُ المَوضِعَ لا التَوقيت**، كَـ`No_razor_page_writes_state`:
+    // كاتِبٌ في مُعالِجِ نَقرٍ لِصَفحَةٍ تَفاعُلِيَّةٍ يُسأَلُ، ويُثَبَّتُ بِمُعالِجِه المُسَمّى (`InHandlers`) لا بِصَفحَتِه — وأَوَّلُ تَشغيلٍ أَمسَكَ
+    // اثنَتَينِ بِالضَبط: `StudioAgent.razor` و`AgentChatPanel.razor`، كاتِباتُهُما في `SendAsync`/`ApplyAsync`/`RejectAsync`/`ResetAsync`. **وحَدُّه**: نِداءٌ عَلى نَتيجَةِ
+    // `GetRequiredService<T>()` مُباشَرَةً بِلا مُتَغَيِّر، أَو عَلى `[Parameter]` بِنَوعِ خِدمَة، أَو في مِلَفِّ `.razor.cs` (صِفرٌ مِنها اليَوم)، لا يُرى.
+
+    /// <summary>سَطحُ عَرضٍ يُسأَلُ عَن الكاتِبات: نَوعُه، ومَوضِعُه (المَسارُ، أَو المِلَفُّ لِصَفحَةِ razor — مِفتاحُ <see cref="PinnedDisplayWriters"/>)،
+    /// ومِلَفُّه، ونَصُّه بِلا تَعليقات، ومُستَقبِلاتُه المُعلَنَةُ النَوعِ خارِجَ اللامدَة؛ و<c>AskDirect</c> حينَ لا يَسأَلُ صَفٌّ آخَرُ نَصَّه عَن
+    /// <see cref="WriteCalls"/> المُباشِرَة.</summary>
+    internal sealed record DisplaySurface(string Kind, string Where, string File, string Body, IReadOnlyDictionary<string, string> Receivers, bool AskDirect);
+
+    private const string SurfaceGet = "MapGet", SurfaceReadScoped = "ReadScope", SurfaceWolverineGet = "WolverineGet", SurfaceRazor = "razor";
+
+    private static readonly IReadOnlyDictionary<string, string> NoReceivers = new Dictionary<string, string>();
+
+    /// <summary>البادِئَةُ المُؤَهَّلَةُ اختِيارِيَّةٌ كَما في <see cref="WolverineWrite"/> — وبِالعِلَّةِ نَفسِها.</summary>
+    private static readonly Regex WolverineRead =
+        new(@"\[(?:[A-Za-z_][A-Za-z0-9_]*\s*\.\s*)*WolverineGet\s*\(\s*""(?<route>[^""]+)""", RegexOptions.Compiled);
+
+    /// <summary><c>@inject T N</c> في سَطرِه، و<c>[Inject] T N {</c> في <c>@code</c> — الشَكلانِ اللَّذانِ تَحقِنُ بِهِما صَفحَةُ razor خِدمَة.</summary>
+    private static readonly Regex RazorInject = new(
+        @"^[ \t]*@inject[ \t]+(?<type>[\w.]+)(?:<[^>\r\n]*>)?\??[ \t]+(?<name>\w+)[ \t]*\r?$" +
+        @"|\[Inject\]\s*(?:(?:public|private|protected|internal|required)\s+)*(?<type>[\w.]+)(?:<[^<>{};]*>)?\??\s+(?<name>\w+)\s*\{",
+        RegexOptions.Multiline | RegexOptions.Compiled);
+
+    /// <summary>مُستَقبِلاتُ صَفحَةِ razor: الاسمُ ← اسمُ النَوعِ القَصير — كُلُّ تَصريحٍ مُعلَنِ النَوعِ (<see cref="FieldDecl"/>، حَذَرٌ لا تَساهُل)، ثُمَّ
+    /// كُلُّ حَقنٍ (<see cref="RazorInject"/>) يَغلِبُه.</summary>
+    internal static IReadOnlyDictionary<string, string> RazorReceivers(string page)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (Match d in FieldDecl.Matches(page)) map.TryAdd(d.Groups["name"].Value, d.Groups["type"].Value.Split('.')[^1]);
+        foreach (Match i in RazorInject.Matches(page)) map[i.Groups["name"].Value] = i.Groups["type"].Value.Split('.')[^1];
+        return map;
+    }
+
+    /// <summary>كُلُّ صَفحَةِ <c>.razor</c> سَطحُ عَرض: نَصُّها كُلُّه بَعدَ تَبييضِ تَعليقاتِ الصِنفَين، ومَوضِعُها مِلَفُّها.</summary>
+    private static IEnumerable<DisplaySurface> RazorPages(IEnumerable<(string File, string Text)> sources)
+    {
+        foreach (var (file, text) in sources)
+        {
+            if (!file.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)) continue;
+            var code = StripComments(StripMarkupComments(text));
+            yield return new(SurfaceRazor, Rel(file), Rel(file), code, RazorReceivers(code), AskDirect: false);
+        }
+    }
+
+    /// <summary>كُلُّ <c>[WolverineGet]</c> سَطحُ عَرض: مِن السِمَةِ حَتّى آخِرِ جِسمِ طَريقَتِه، ومُستَقبِلاتُه وُسَطاؤها. وطَريقَةٌ لا يَقرَؤها الماسِحُ
+    /// (لا تَتلو السِمَةَ إلّا سِماتٌ، أَو بِلا جِسم) تُعادُ بِنَصٍّ فارِغ — فَيُحمِرُّها الفاحِصُ بِاسمِها لا يُسقِطُها (القاعِدَة ١٠).</summary>
+    private static IEnumerable<DisplaySurface> WolverineGetHandlers(IEnumerable<(string File, string Text)> sources)
+    {
+        foreach (var (file, text) in sources)
+        {
+            if (!file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)) continue;
+            var code = StripComments(text);
+            foreach (Match m in WolverineRead.Matches(code))
+            {
+                var route = m.Groups["route"].Value;
+                var attrEnd = Closing(code, m.Index, '[', ']') + 1;
+                var d = MethodDecl.Match(code, attrEnd);
+                var adjacent = d.Success && Regex.IsMatch(code[attrEnd..d.Index], @"^\s*(?:\[[^\]]*\]\s*)*$");
+                var paren = adjacent ? d.Index + d.Length - 1 : -1;
+                var close = paren < 0 ? -1 : Closing(code, paren, '(', ')');
+                var head = close < 0 ? Match.Empty : Regex.Match(code[(close + 1)..Math.Min(code.Length, close + 401)], @"^\s*(?:where[^{=;]*)?(?<kind>\{|=>)");
+                if (!head.Success) { yield return new(SurfaceWolverineGet, route, Rel(file), "", NoReceivers, AskDirect: true); continue; }
+                var at = close + 1 + head.Groups["kind"].Index;
+                var end = head.Groups["kind"].Value == "{" ? Closing(code, at, '{', '}') + 1 : at + StatementFrom(code, at).Length;
+                yield return new(SurfaceWolverineGet, route, Rel(file), code[m.Index..end], ParameterTypes(code[(paren + 1)..close]), AskDirect: true);
+            }
+        }
+    }
+
+    /// <summary>سُطوحُ العَرضِ الأَربَعَة: <c>MapGet</c>/<c>MapMethods</c>، ونِطاقُ القِراءَةِ في الـAPI أَيّاً كانَ فِعلُه، و<c>[WolverineGet]</c>، وصَفَحاتُ
+    /// <c>.razor</c>.</summary>
+    private static List<DisplaySurface> DisplaySurfaces(IReadOnlyList<(string File, string Text)> sources) =>
+        MinimalApiGetEndpoints().Select(e => new DisplaySurface(SurfaceGet, e.Route, e.File, e.Body, NoReceivers, AskDirect: false))
+            .Concat(AllMinimalApiEndpoints().Where(e => ReadScope.IsMatch(e.Body))
+                .Select(e => new DisplaySurface(SurfaceReadScoped, e.Route, e.File, e.Body, NoReceivers, AskDirect: false)))
+            .Concat(WolverineGetHandlers(sources))
+            .Concat(RazorPages(sources))
+            .ToList();
+
+    /// <summary>الأَنواعُ المُعلَنَةُ في كُلِّ مِلَفٍّ (المِفتاحُ مَسارُه النِسبِيّ) — لِنِداءِ كاتِبَةٍ بِلا مُستَقبِل.</summary>
+    private static Dictionary<string, IReadOnlyCollection<string>> TypesByFile(IEnumerable<(string File, string Text)> sources) =>
+        sources.ToDictionary(f => Rel(f.File),
+            f => (IReadOnlyCollection<string>)TypeDecl.Matches(StripComments(f.Text)).Select(m => m.Groups["name"].Value).ToHashSet(StringComparer.Ordinal),
+            StringComparer.Ordinal);
+
+    /// <summary>ما يَكتُبُه السَطح: رُموزُ <see cref="WriteCalls"/> في نَصِّه حينَ <c>AskDirect</c>، ثُمَّ ما يُناديه مِن الكاتِبات (<see cref="WritersCalled"/>).</summary>
+    internal static IReadOnlyList<string> SurfaceWrites(DisplaySurface s, IReadOnlyDictionary<string, HashSet<string>> writers, IReadOnlyCollection<string> fileTypes) =>
+        (s.AskDirect ? WriteCalls.Where(w => s.Body.Contains(w, StringComparison.Ordinal)) : [])
+            .Concat(WritersCalled(s.Body, writers, fileTypes, s.Receivers))
+            .ToList();
+
+    /// <summary>تَعريفُ مُعالِجٍ مُسَمّىً في <c>@code</c> صَفحَةِ razor — بِلا مُعَدِّلِ وُصولٍ عادَةً (<c>async Task SendAsync()</c>)، فَلا يُقرَأُ بِـ<see cref="MethodDecl"/>.</summary>
+    private static Regex HandlerDecl(string name) =>
+        new(@"(?:(?:private|protected|public|internal)\s+)?(?:async\s+)?(?:Task|ValueTask|void)\s+" + Regex.Escape(name) + @"\s*\(");
+
+    /// <summary>رَبطُ حَدَثٍ في التَرميز — <c>@onclick="…"</c> و<c>@onkeydown:preventDefault="…"</c> — بِقيمَتِه.</summary>
+    private static readonly Regex EventBinding = new(@"@on\w+(?::\w+)?\s*=\s*""[^""]*""", RegexOptions.Compiled);
+
+    /// <summary>مَدى كُلِّ تَعريفٍ لِلمُعالِجِ <paramref name="name"/> في الصَفحَة: مِن رَأسِه حَتّى آخِرِ جِسمِه.</summary>
+    private static List<(int Start, int End)> HandlerSpans(string page, string name)
+    {
+        var spans = new List<(int, int)>();
+        foreach (Match d in HandlerDecl(name).Matches(page))
+        {
+            var paren = d.Index + d.Length - 1;
+            var close = Closing(page, paren, '(', ')');
+            var head = Regex.Match(page[(close + 1)..Math.Min(page.Length, close + 401)], @"^\s*(?<kind>\{|=>)");
+            if (!head.Success) continue;
+            var at = close + 1 + head.Groups["kind"].Index;
+            spans.Add((d.Index, head.Groups["kind"].Value == "{" ? Closing(page, at, '{', '}') + 1 : at + StatementFrom(page, at).Length));
+        }
+        return spans;
+    }
+
+    /// <summary>النَصُّ بِمَداه مُبَيَّضاً — ويُبقي الطولَ والأَسطُر.</summary>
+    private static string Blank(string text, IEnumerable<(int Start, int End)> spans)
+    {
+        var b = text.ToCharArray();
+        foreach (var (start, end) in spans)
+            for (var i = start; i < end && i < b.Length; i++)
+                if (b[i] is not ('\n' or '\r')) b[i] = ' ';
+        return new string(b);
+    }
+
+    /// <summary>السَطحُ بَعدَ تَبييضِ تَعريفاتِ <paramref name="handlers"/> فيه — وما سِواها يُسأَلُ كَما هُوَ.</summary>
+    internal static DisplaySurface WithoutHandlers(DisplaySurface s, IReadOnlyCollection<string>? handlers) =>
+        handlers is null ? s : s with { Body = Blank(s.Body, handlers.SelectMany(h => HandlerSpans(s.Body, h))) };
+
+    /// <summary>السَطحُ بَعدَ تَثبيتِ مُعالِجاتِه: جِسمُ كُلِّ مُعالِجٍ مُسَمّىً في <c>InHandlers</c> لِمَوضِعِه مُبَيَّض.</summary>
+    private static DisplaySurface WithoutPinnedHandlers(DisplaySurface s) =>
+        WithoutHandlers(s, PinnedDisplayWriters.FirstOrDefault(p => p.InHandlers is not null && p.Where == s.Where)?.InHandlers);
+
+    /// <summary><b>خُروقُ تَثبيتِ مُعالِجٍ في صَفحَة</b> — بِرُموزٍ ثابِتَة: <c>handler_absent</c> (لا تَعريفَ لَه)، <c>handler_unbound</c> (لا رَبطَ حَدَثٍ
+    /// يُسَمّيه)، <c>handler_silent</c> (لا يُنادي كاتِبَةً — فَالتَثبيتُ عاشَ سَبَبَه)، <c>handler_called_outside</c> (يُذكَرُ خارِجَ تَعريفِه ورَبطِ حَدَثٍ
+    /// — فَقَد يُنادى في التَصيير). الصَفحَةُ نَصُّها بَعدَ تَبييضِ التَعليقات.</summary>
+    internal static IReadOnlyList<string> HandlerPinBreaches(string page, IReadOnlyCollection<string> handlers,
+        IReadOnlyDictionary<string, HashSet<string>> writers, IReadOnlyCollection<string> fileTypes)
+    {
+        var breaches = new List<string>();
+        var receivers = RazorReceivers(page);
+        var bindings = EventBinding.Matches(page).Select(m => (m.Index, m.Index + m.Length)).ToList();
+        var allSpans = handlers.SelectMany(h => HandlerSpans(page, h)).ToList();
+        var rest = Blank(page, allSpans.Concat(bindings));
+        foreach (var h in handlers)
+        {
+            var spans = HandlerSpans(page, h);
+            if (spans.Count == 0) { breaches.Add($"handler_absent:{h}"); continue; }
+            var word = new Regex(@"\b" + Regex.Escape(h) + @"\b");
+            if (!bindings.Any(b => word.IsMatch(page[b.Item1..b.Item2]))) breaches.Add($"handler_unbound:{h}");
+            if (spans.All(sp => WritersCalled(page[sp.Start..sp.End], writers, fileTypes, receivers).Count == 0)) breaches.Add($"handler_silent:{h}");
+            if (word.IsMatch(rest)) breaches.Add($"handler_called_outside:{h}");
+        }
+        return breaches;
+    }
+
+    /// <summary><b>ولا سَطحَ عَرضٍ يَكتُبُ عَبرَ خِدمَة</b>: كُلُّ <c>MapGet</c>/<c>MapMethods</c>، وكُلُّ نُقطَةٍ بِنِطاقِ قِراءَةٍ في الـAPI، و(‏2026-10-25،
+    /// مُراجَعَةُ W8-5 الجَولَة 1) كُلُّ <c>[WolverineGet]</c> وكُلُّ صَفحَةِ <c>.razor</c> — لا تُنادي طَريقَةً كاتِبَة. والعَدّاداتُ (الطَرائِقُ الكاتِبَة،
+    /// والسُطوحُ المَسؤولَةُ بِأَنواعِها، والصَفَحاتُ الَّتي تَحقِنُ نَوعاً كاتِباً) تُطبَعُ وتَفشَلُ تَحتَ أَرضِيَّتِها. الاستِثناءُ <see cref="PinnedDisplayWriters"/> نَفسُه.</summary>
     [Fact]
     public void No_get_or_read_scoped_endpoint_writes_through_a_service()
     {
         var sources = EntitlementContractTests.SourceFiles().ToList();
         var writers = ServiceWriters(sources);
         var methodCount = writers.Sum(kv => kv.Value.Count);
-        var gets = MinimalApiGetEndpoints().ToList();
-        var readScoped = AllMinimalApiEndpoints().Where(e => ReadScope.IsMatch(e.Body)).ToList();
-        var asked = gets.Concat(readScoped).DistinctBy(e => (e.Route, e.File, e.Body)).ToList();
-        output.WriteLine($"أَنواعٌ بِطَرائِقَ كاتِبَة: {writers.Count} · طَرائِقُ كاتِبَة: {methodCount} · نِقاطُ عَرض: {gets.Count} · بِنِطاقِ قِراءَة: {readScoped.Count}");
+        var surfaces = DisplaySurfaces(sources);
+        int Of(string kind) => surfaces.Count(s => s.Kind == kind);
+        var razor = surfaces.Where(s => s.Kind == SurfaceRazor).ToList();
+        var injectingWriters = razor.Where(s => s.Receivers.Values.Any(writers.ContainsKey)).Select(s => s.Where).ToList();
+        output.WriteLine($"أَنواعٌ بِطَرائِقَ كاتِبَة: {writers.Count} · طَرائِقُ كاتِبَة: {methodCount} · نِقاطُ عَرض: {Of(SurfaceGet)} · بِنِطاقِ قِراءَة: {Of(SurfaceReadScoped)}" +
+                         $" · [WolverineGet]: {Of(SurfaceWolverineGet)} · صَفَحاتُ razor: {razor.Count} (مِنها {injectingWriters.Count} تَحقِنُ نَوعاً كاتِباً)");
         Assert.True(methodCount >= 100, $"أَداةٌ عَمياء: {methodCount} طَريقَةً كاتِبَة — والمَقيسُ ‏147 (‏2026-10-25).");
         Assert.True(writers.TryGetValue("DealsService", out var deals) && deals.Contains("CancelAsync") && deals.Contains("AdvanceAsync"),
             "أَداةٌ عَمياء: DealsService.CancelAsync/AdvanceAsync لا يُعَدّانِ كاتِبَين.");
         // ‏ومِرساةُ ‏ADR-020 §٥ بِعَينِها: التَصديرُ يَكتُبُ قَيدَ تَدقيقٍ عَبرَ حَقلِه `_audit` (نَوعٌ ثالِث) — فَهُوَ كاتِبٌ هُنا.
         Assert.True(writers.TryGetValue("TenantExportService", out var export) && export.Contains("ProduceAsync"),
             "أَداةٌ عَمياء: TenantExportService.ProduceAsync (قَيدُ التَدقيقِ عَبرَ AuditWriter) لا يُعَدُّ كاتِباً.");
-        Assert.True(gets.Count >= 10 && readScoped.Count >= 2, $"أَداةٌ عَمياء: {gets.Count} نُقطَةَ عَرض و{readScoped.Count} بِنِطاقِ قِراءَة.");
+        Assert.True(Of(SurfaceGet) >= 10 && Of(SurfaceReadScoped) >= 2,
+            $"أَداةٌ عَمياء: {Of(SurfaceGet)} نُقطَةَ عَرض و{Of(SurfaceReadScoped)} بِنِطاقِ قِراءَة.");
+        Assert.True(razor.Count >= 140, $"أَداةٌ عَمياء: {razor.Count} صَفحَةَ razor — والمَقيسُ ‏167 (‏2026-10-25).");
+        Assert.True(Of(SurfaceWolverineGet) >= 2, $"أَداةٌ عَمياء: {Of(SurfaceWolverineGet)} نُقطَةَ [WolverineGet] — والمَقيسُ ‏2 (SeoHandlers).");
+        var unread = surfaces.Where(s => s.Kind == SurfaceWolverineGet && s.Body.Length == 0).Select(s => $"{s.Where} ({s.File})").ToArray();
+        Assert.True(unread.Length == 0, "‏[WolverineGet] لَم يَقرَأ الماسِحُ طَريقَتَه — فَلا يُسأَلُ عَن شَيء:\n  " + string.Join("\n  ", unread));
+        // ‏ومِرساةُ هذِه الجَولَة: الصَفحَةُ الَّتي حُقِنَ فيها العَيبُ تُقرَأُ مُستَقبِلاً بِنَوعِه — وإلّا فَالعَدُّ أَعلاه عَدُّ مِلَفّاتٍ لا قِراءَتُها.
+        Assert.True(injectingWriters.Count >= 45 && injectingWriters.Any(w => w.EndsWith("/MyDealDetail.razor", StringComparison.Ordinal)),
+            $"أَداةٌ عَمياء: {injectingWriters.Count} صَفحَةً تَحقِنُ نَوعاً كاتِباً — والمَقيسُ ‏49 (‏2026-10-25)، ومِنها MyDealDetail.razor (‏Deals ← DealsService).");
 
-        var typesByFile = sources.Where(f => f.File.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(f => Rel(f.File), f => (IReadOnlyCollection<string>)TypeDecl.Matches(StripComments(f.Text)).Select(m => m.Groups["name"].Value).ToHashSet(StringComparer.Ordinal));
-        var pinned = PinnedDisplayWriters.Select(p => p.Where).ToHashSet(StringComparer.Ordinal);
-        var breaches = asked
-            .Where(e => !pinned.Contains(e.Route))
-            .Select(e => (e, Called: WritersCalled(e.Body, writers, typesByFile.GetValueOrDefault(e.File, []))))
+        var typesByFile = TypesByFile(sources);
+        var pinned = FullyPinnedDisplayWriters();
+        var breaches = surfaces
+            .Where(s => !pinned.Contains(s.Where))
+            .Select(WithoutPinnedHandlers)
+            .Select(s => (s, Called: SurfaceWrites(s, writers, typesByFile.GetValueOrDefault(s.File, []))))
             .Where(x => x.Called.Count > 0)
-            .Select(x => $"{x.e.Route} ({x.e.File}) ← {string.Join(", ", x.Called)}")
+            .Select(x => $"{x.s.Where} ({x.s.File}) ← {string.Join(", ", x.Called)}")
+            .Distinct(StringComparer.Ordinal)
             .ToArray();
         Assert.True(breaches.Length == 0,
-            "نُقطَةُ عَرضٍ أَو نِطاقِ قِراءَةٍ تَكتُبُ عَبرَ خِدمَة — الفِعلُ المُعلَنُ قِراءَةٌ والواقِعُ كِتابَة:\n  " + string.Join("\n  ", breaches) +
-            "\nإمّا أَن تَصيرَ `POST` صَريحاً بِنِطاقِ كِتابَة، أَو تُثَبَّتَ في PinnedDisplayWriters بِسَبَبِها في نَفسِ الكوميت.");
+            "سَطحُ عَرضٍ (`GET`، أَو صَفحَةُ razor، أَو `[WolverineGet]`) أَو نِطاقُ قِراءَةٍ يَكتُبُ عَبرَ خِدمَة — الفِعلُ المُعلَنُ قِراءَةٌ والواقِعُ كِتابَة:\n  " +
+            string.Join("\n  ", breaches) +
+            "\nإمّا أَن تَصيرَ `POST` صَريحاً بِنِطاقِ كِتابَة (ولِلصَفحَة: أَمرٌ صَريحٌ يُنادى بَعدَ التَصيير كَـ`POST …/view`)، " +
+            "أَو تُثَبَّتَ في PinnedDisplayWriters بِسَبَبِها في نَفسِ الكوميت.");
     }
 
     /// <summary><b>حَقنُ عَيب — الفاحِصُ أَعلاه يُحمِرُّ فِعلاً</b>: الطَفرَةُ M2c بِعَينِها، وكاتِبٌ مُتَعَدٍّ (طَريقَةٌ تُنادي كاتِبَةً مِن نَوعِها)،
@@ -1224,6 +1450,146 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
         output.WriteLine($"حُقِنَ {cases.Length} جِسماً؛ أَخطَأَ الفاحِصُ في {wrong.Count}");
         Assert.True(wrong.Count == 0, string.Join("\n", wrong));
         Assert.Matches(ReadScope, Head + Tail);
+    }
+
+    /// <summary><b>وتَثبيتُ المُعالِجِ يُقاسُ لا يُصَدَّق</b> (‏2026-10-25، مُراجَعَةُ W8-5 الجَولَة 1): كُلُّ مُعالِجٍ في <c>InHandlers</c> مُعَرَّفٌ في صَفحَتِه،
+    /// ومَربوطٌ بِحَدَثٍ في تَرميزِها، ويُنادي كاتِبَةً، ولا يُذكَرُ خارِجَ تَعريفِه ورَبطِه — وإلّا فَإمّا أَنّ التَثبيتَ عاشَ سَبَبَه (فَيُرفَع)، أَو أَنّ
+    /// الكِتابَةَ صارَت تُنادى مِن التَصيير (فَالتَثبيتُ يَستُرُ ما كُتِبَ لِيَكشِفَه).</summary>
+    [Fact]
+    public void Every_pinned_display_handler_is_an_event_binding_that_writes()
+    {
+        var sources = EntitlementContractTests.SourceFiles().ToList();
+        var writers = ServiceWriters(sources);
+        var typesByFile = TypesByFile(sources);
+        var pages = RazorPages(sources).ToDictionary(s => s.Where, StringComparer.Ordinal);
+        var pins = PinnedDisplayWriters.Where(p => p.InHandlers is not null).ToList();
+        output.WriteLine($"تَثبيتاتُ مُعالِجات: {pins.Count} · مُعالِجاتٌ مُسَمّاة: {pins.Sum(p => p.InHandlers!.Length)} · صَفَحاتٌ مَقروءَة: {pages.Count}");
+        Assert.True(pages.Count >= 140, $"أَداةٌ عَمياء: {pages.Count} صَفحَةَ razor — والمَقيسُ ‏167 (‏2026-10-25).");
+
+        var wrong = new List<string>();
+        foreach (var p in pins)
+        {
+            Assert.True(p.InHandlers!.Length > 0, $"«{p.Where}»: تَثبيتُ مُعالِجاتٍ بِلا مُعالِج — يَصيرُ تَثبيتاً لِلصَفحَةِ كُلِّها خِلسَة.");
+            if (!pages.TryGetValue(p.Where, out var page)) { wrong.Add($"{p.Where}: لا صَفحَةَ بِهذا المَسار"); continue; }
+            foreach (var b in HandlerPinBreaches(page.Body, p.InHandlers, writers, typesByFile.GetValueOrDefault(page.File, [])))
+                wrong.Add($"{p.Where}: {b}");
+        }
+        Assert.True(wrong.Count == 0,
+            "تَثبيتُ مُعالِجٍ لا يَصدُق — `handler_absent`/`handler_unbound`/`handler_silent` تَعني أَنّه عاشَ سَبَبَه فَيُرفَع، " +
+            "و`handler_called_outside` أَنّ الكِتابَةَ قَد تُنادى في التَصيير:\n  " + string.Join("\n  ", wrong));
+    }
+
+    /// <summary><b>حَقنُ عَيب — صَفَحاتُ razor و<c>[WolverineGet]</c> وتَثبيتُ المُعالِجِ تُحمِرُّ فِعلاً</b> (‏2026-10-25، مُراجَعَةُ W8-5 الجَولَة 1):
+    /// الطَفرَةُ الَّتي عَبَرَت (إلغاءٌ في <c>OnInitializedAsync</c> بَعدَ <c>LoadAsync</c>)، وكاتِبٌ في تَعبيرِ تَرميز، و<c>[Inject]</c>، وخِدمَةٌ مِن الحاوي —
+    /// تُمسَك؛ وقِراءَةٌ خالِصَة، وكاتِبٌ في تَعليقِ razor، ووَسيطٌ بِالاسمِ نَفسِه مِن نَوعٍ آخَر — لا تُمسَك. و<c>[WolverineGet]</c> بِوَسيطِه، وبِسِمَةٍ
+    /// مُؤَهَّلَةٍ وجِسمٍ بِسَهم، وبِرَمزِ Marten مُباشِر — تُمسَك؛ وقِراءَتُه الخالِصَةُ لا تُمسَك، وسِمَتُه عَلى غَيرِ طَريقَةٍ تُعادُ فارِغَةً لِيُحمِرَّها الفاحِص.
+    /// ولِكُلِّ رَمزِ خَرقٍ في <see cref="HandlerPinBreaches"/> عَيِّنَةٌ تُحمِرُّه وَحدَه، والتَبييضُ لا يَستُرُ كاتِباً في التَصيير.</summary>
+    [Fact]
+    public void The_razor_page_and_wolverine_get_scan_can_actually_go_red()
+    {
+        const string Service = """
+            public sealed class FakeDealsService(IDocumentSession s)
+            {
+                public Task<Deal?> LoadAsync(Guid id) => s.LoadAsync<Deal>(id);
+                public async Task CancelAsync(Guid id) { s.Store(new { id }); await s.SaveChangesAsync(); }
+                public Task ArchiveAsync(Guid id) => CancelAsync(id);
+            }
+            """;
+        var writers = ServiceWriters([("x/FakeDealsService.cs", Service)]);
+        Assert.Equal(new[] { "ArchiveAsync", "CancelAsync" }, writers["FakeDealsService"].Order(StringComparer.Ordinal).ToArray());
+        static string At(string rel) => Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, rel);
+        const string Inject = "@page \"/x/{id:guid}\"\n@inject Services.Deals.FakeDealsService Deals\n";
+        var wrong = new List<string>();
+        void Check(string name, DisplaySurface s, string[] expected)
+        {
+            var got = SurfaceWrites(s, writers, TypeDecl.Matches(s.Body).Select(m => m.Groups["name"].Value).ToHashSet(StringComparer.Ordinal));
+            output.WriteLine($"«{name}» → {(got.Count == 0 ? "لا شَيء" : string.Join(", ", got))}");
+            if (!got.SequenceEqual(expected)) wrong.Add($"«{name}»: [{string.Join(", ", got)}] لا [{string.Join(", ", expected)}]");
+        }
+
+        var pages = new (string Name, string Text, string[] Expected)[]
+        {
+            ("إلغاءٌ في OnInitializedAsync بَعدَ LoadAsync (طَفرَةُ MyDealDetail)",
+                Inject + "<h1>@deal?.Id</h1>\n@code {\n    Deal? deal;\n    protected override async Task OnInitializedAsync()\n    {\n        deal = await Deals.LoadAsync(Id);\n" +
+                "        if (deal is not null) await Deals.CancelAsync(deal.Id);\n    }\n}\n", ["FakeDealsService.CancelAsync"]),
+            ("كاتِبٌ في تَعبيرِ تَرميز", Inject + "<p>@(Deals.ArchiveAsync(Id).IsCompleted)</p>\n", ["FakeDealsService.ArchiveAsync"]),
+            ("[Inject] في @code", "@page \"/x\"\n@code {\n    [Inject] public Services.Deals.FakeDealsService Svc { get; set; } = default!;\n" +
+                "    protected override Task OnInitializedAsync() => Svc.CancelAsync(Id);\n}\n", ["FakeDealsService.CancelAsync"]),
+            ("خِدمَةٌ مِن الحاوي", "@page \"/x\"\n@inject IServiceProvider Sp\n@code {\n    protected override async Task OnInitializedAsync()\n    {\n" +
+                "        var svc = Sp.GetRequiredService<FakeDealsService>();\n        await svc.CancelAsync(Id);\n    }\n}\n", ["FakeDealsService.CancelAsync"]),
+            ("قِراءَةٌ خالِصَة", Inject + "@code {\n    protected override async Task OnInitializedAsync() => deal = await Deals.LoadAsync(Id);\n}\n", []),
+            ("كاتِبٌ في تَعليقِ razor", Inject + "@* await Deals.CancelAsync(Id); *@\n<p>@deal</p>\n", []),
+            ("وَسيطٌ بِالاسمِ نَفسِه مِن نَوعٍ آخَر", "@page \"/x\"\n@inject OtherService Deals\n@code {\n    protected override Task OnInitializedAsync() => Deals.CancelAsync(Id);\n}\n", []),
+        };
+        var n = 0;
+        foreach (var (name, text, expected) in pages)
+            Check(name, RazorPages([(At($"x/P{n++}.razor"), text)]).Single(), expected);
+
+        var handlers = new (string Name, string Text, string[] Expected)[]
+        {
+            ("[WolverineGet] يُلغي عَبرَ وَسيطِه", "public static class H\n{\n    [WolverineGet(\"/x/{id}\")]\n" +
+                "    public static async Task Get(Guid id, FakeDealsService deals) { await deals.CancelAsync(id); }\n}\n", ["FakeDealsService.CancelAsync"]),
+            ("سِمَةٌ مُؤَهَّلَةٌ بَعدَ سِمَةٍ وجِسمٌ بِسَهم", "public static class H\n{\n    [NotTenanted]\n    [Wolverine.Http.WolverineGet(\"/y\")]\n" +
+                "    public static Task Y(FakeDealsService d, Guid id) => d.ArchiveAsync(id);\n}\n", ["FakeDealsService.ArchiveAsync"]),
+            ("رَمزُ Marten مُباشِرٌ — لا صَفَّ غَيرُه يَسأَلُه", "public static class H\n{\n    [WolverineGet(\"/z\")]\n" +
+                "    public static async Task Z(IDocumentSession session) { session.Store(new { }); await session.SaveChangesAsync(); }\n}\n", ["SaveChangesAsync", ".Store("]),
+            ("قِراءَةٌ خالِصَة", "public static class H\n{\n    [WolverineGet(\"/r\")]\n    public static Task<Deal?> R(Guid id, FakeDealsService deals) => deals.LoadAsync(id);\n}\n", []),
+        };
+        foreach (var (name, text, expected) in handlers)
+            Check(name, WolverineGetHandlers([(At("x/H.cs"), text)]).Single(), expected);
+        var unread = WolverineGetHandlers([(At("x/U.cs"), "public static class U\n{\n    [WolverineGet(\"/u\")]\n    public static Func<Task> Field = () => Task.CompletedTask;\n}\n")]).Single();
+        output.WriteLine($"«سِمَةٌ عَلى غَيرِ طَريقَة» → نَصٌّ بِطولِ {unread.Body.Length}");
+        if (unread.Body.Length != 0) wrong.Add("«سِمَةٌ عَلى غَيرِ طَريقَة»: قُرِئَت طَريقَةً — فَالفاحِصُ لا يُحمِرُّ ما لا يَقرَؤه");
+
+        // ‏تَثبيتُ المُعالِج: صَفحَةٌ تَفاعُلِيَّةٌ نَظيفَة، ثُمَّ عَيِّنَةٌ لِكُلِّ رَمزِ خَرق.
+        const string Interactive = "@inject Services.Deals.FakeDealsService Deals\n<button @onclick=\"SendAsync\">x</button>\n" +
+            "<button @onclick=\"() => DropAsync(Id)\">y</button>\n@code {\n    protected override async Task OnInitializedAsync() => deal = await Deals.LoadAsync(Id);\n" +
+            "    async Task SendAsync() { await Deals.CancelAsync(Id); }\n    async Task DropAsync(Guid id) { await Deals.ArchiveAsync(id); }\n}\n";
+        var pinCases = new (string Name, string Text, string[] Handlers, string[] Expected)[]
+        {
+            ("مُعالِجانِ مَربوطانِ يَكتُبان", Interactive, ["SendAsync", "DropAsync"], []),
+            ("مُعالِجٌ مُسَمّىً لا تَعريفَ لَه", Interactive, ["SendAsync", "GoneAsync"], ["handler_absent:GoneAsync"]),
+            ("مُعالِجٌ بِلا رَبطِ حَدَث", Interactive.Replace("@onclick=\"SendAsync\"", "title=\"x\""), ["SendAsync"], ["handler_unbound:SendAsync"]),
+            ("مُعالِجٌ لا يَكتُب", Interactive.Replace("await Deals.CancelAsync(Id);", "await Deals.LoadAsync(Id);"), ["SendAsync"], ["handler_silent:SendAsync"]),
+            ("مُعالِجٌ يُنادى في التَصيير", Interactive.Replace("deal = await Deals.LoadAsync(Id);", "await SendAsync();"), ["SendAsync"], ["handler_called_outside:SendAsync"]),
+        };
+        foreach (var (name, text, names, expected) in pinCases)
+        {
+            var page = RazorPages([(At("x/I.razor"), text)]).Single();
+            var got = HandlerPinBreaches(page.Body, names, writers, []);
+            output.WriteLine($"«{name}» → {(got.Count == 0 ? "لا خَرق" : string.Join(", ", got))}");
+            if (!got.SequenceEqual(expected)) wrong.Add($"«{name}»: [{string.Join(", ", got)}] لا [{string.Join(", ", expected)}]");
+        }
+        // ‏والتَبييضُ يُعفي المُعالِجَينِ المُسَمَّيَينِ وَحدَهُما: الصَفحَةُ النَظيفَةُ لا شَيء، وكاتِبٌ يُضافُ إلى التَصييرِ يُمسَكُ رَغمَ التَثبيت.
+        var clean = WithoutHandlers(RazorPages([(At("x/I.razor"), Interactive)]).Single(), ["SendAsync", "DropAsync"]);
+        Check("صَفحَةٌ تَفاعُلِيَّةٌ بَعدَ تَبييضِ مُعالِجَيها", clean, []);
+        var leak = WithoutHandlers(RazorPages([(At("x/I.razor"), Interactive.Replace("deal = await Deals.LoadAsync(Id);", "await Deals.ArchiveAsync(Id);"))]).Single(),
+            ["SendAsync", "DropAsync"]);
+        Check("كاتِبٌ في التَصييرِ لا يَستُرُه تَثبيتُ المُعالِجات", leak, ["FakeDealsService.ArchiveAsync"]);
+
+        output.WriteLine($"حُقِنَ {pages.Length} صَفحَةً و{handlers.Length + 1} [WolverineGet] و{pinCases.Length + 2} تَثبيتاً؛ أَخطَأَ الفاحِصُ في {wrong.Count}");
+        Assert.True(wrong.Count == 0, string.Join("\n", wrong));
+    }
+
+    /// <summary><b>والطَفرَةُ الَّتي عَبَرَت، عَلى الصَفحَةِ الحَقيقِيَّةِ بِكاتِباتِ الشَجَرَةِ الحَقيقِيَّة</b> (‏2026-10-25، مُراجَعَةُ W8-5 الجَولَة 1):
+    /// <c>MyDealDetail.razor</c> كَما هِيَ لا تُنادي كاتِبَة، وبِسَطرِ <c>Deals.CancelAsync</c> بَعدَ <c>LoadAsync</c> تُمسَكُ بِـ<c>DealsService.CancelAsync</c> —
+    /// فَلا يُقالُ إنّ الفاحِصَ يَرى الصَفحَةَ وهو يَرى عَيِّنَتَها وَحدَها. وإن تَغَيَّرَ سَطرُ المِرساةِ حَمَرَ الصَفُّ لِيُنقَلَ مَعَه.</summary>
+    [Fact]
+    public void The_real_deal_page_goes_red_when_it_cancels_while_rendering()
+    {
+        var sources = EntitlementContractTests.SourceFiles().ToList();
+        var writers = ServiceWriters(sources);
+        var (file, text) = sources.Single(f => f.File.Replace('\\', '/').EndsWith("/Components/Pages/MyDealDetail.razor", StringComparison.Ordinal));
+        const string Anchor = "        deal = await Deals.LoadAsync(Slug, Id);\n";
+        Assert.True(text.Split(Anchor).Length == 2, $"سَطرُ المِرساةِ «{Anchor.Trim()}» لَيسَ في {Rel(file)} مَرَّةً واحِدَة — اِنقُل الصَفَّ مَعَه.");
+        var mutated = text.Replace(Anchor, Anchor + "        if (deal is not null) await Deals.CancelAsync(Slug, deal.Id, uid);\n");
+        var types = TypesByFile([(file, text)])[Rel(file)];
+
+        var before = SurfaceWrites(RazorPages([(file, text)]).Single(), writers, types);
+        var after = SurfaceWrites(RazorPages([(file, mutated)]).Single(), writers, types);
+        output.WriteLine($"{Rel(file)}: قَبلَ الحَقن → {(before.Count == 0 ? "لا شَيء" : string.Join(", ", before))} · بَعدَه → {string.Join(", ", after)}");
+        Assert.Empty(before);
+        Assert.Equal(new[] { "DealsService.CancelAsync" }, after);
     }
 
     // ─── تَوسِعَةُ ‏2026-08-30 (‏ADR-012): سُلطَةٌ فَوقَ سُلطَة ───────
