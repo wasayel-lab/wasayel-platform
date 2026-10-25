@@ -132,15 +132,34 @@ public class CheckoutCardInvoiceDisclosureTests(ITestOutputHelper output)
         Assert.False(CashOnly.CardOffered);
     }
 
+    internal const string CardNoteKey = "checkout.payment.per_item_card_note";
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الجُملَة)</b> — كانَ <c>Today_the_card_through_the_store_gateway_carries_only_the_cash_per_item_note</c>
+    /// (‏<c>7f5ce5c</c>، 4621 حَرفاً). <b>والآن</b> تَحتَ بِطاقَةِ البَوّابَةِ جُملَةُ <c>checkout.payment.per_item_card_note</c> بَعدَ الإفصاحِ النَقدِيِّ مُباشَرَةً،
+    /// وشَرطُها <c>CardOffered &amp;&amp; Facts.ThroughGateway</c> بِحَرفِه — والفَرقُ مَحصورٌ فيها: الصَفحَةُ بِدونِ عُنصُرِها هي صَفحَةُ «اليَوم»
+    /// (يُقارَنُ بِبَصمَتِها، 4621 حَرفاً sha256=445BCC8DE5E35237). وصَفُّ «بِلا بَوّابَة» أَعلاه بِلا تَعديلِ حَرفٍ وبَصمَتُه كَما هي.</summary>
     [Fact]
-    public async Task Today_the_card_through_the_store_gateway_carries_only_the_cash_per_item_note()
+    public async Task The_card_through_the_store_gateway_says_one_invoice_pays_every_order_and_none_is_cancelled_alone_before_payment()
     {
         var html = await RenderPayStepAsync(ThroughGateway);
         Print("عَبرَ البَوّابَة", html);
-        Assert.Contains("name=\"pay\" value=\"card\"", html, StringComparison.Ordinal);
-        Assert.Contains(LocaleCatalog.Find(LocaleCatalog.Arabic, "checkout.payment.card_hint_gateway")!, System.Net.WebUtility.HtmlDecode(html), StringComparison.Ordinal);
-        Assert.Single(Regex.Matches(html, Regex.Escape(PerItemNote)));
-        Assert.Null(LocaleCatalog.Find(LocaleCatalog.Arabic, "checkout.payment.per_item_card_note"));
-        Assert.DoesNotContain("فاتورَة", System.Net.WebUtility.HtmlDecode(html), StringComparison.Ordinal);
+        var note = LocaleCatalog.Find(LocaleCatalog.Arabic, CardNoteKey)!;
+        var element = $"<p class=\"ac-muted\" style=\"margin:4px 0 0;font-size:13px;\">{note}</p>";
+        Assert.Single(Regex.Matches(html, Regex.Escape(element)));
+        Assert.True(html.IndexOf(PerItemNote, StringComparison.Ordinal) < html.IndexOf(element, StringComparison.Ordinal), "الجُملَةُ قَبلَ الإفصاحِ النَقدِيّ.");
+
+        var before = html.Replace(element, "", StringComparison.Ordinal);
+        Assert.Equal(4621, before.Length);
+        Assert.Equal("445BCC8DE5E35237", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(before)))[..16]);
+
+        var bare = AccountDeletionRetentionTests.Bare(note);
+        foreach (var said in new[] { "بالبطاقة", "فاتورة واحدة", "بوابة المتجر", "لا يلغى طلب منها وحده قبل دفعها" })
+            Assert.True(bare.Contains(said, StringComparison.Ordinal), $"الجُملَةُ لا تَقولُ «{said}»: {note}");
+        Assert.DoesNotMatch("[0-9٠-٩]", note);
+
+        var page = UpgradePromptPriceTests.Code("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "CheckoutPage.razor");
+        Assert.Equal("CardOffered && Facts.ThroughGateway",
+            UpgradePromptPriceTests.EnclosingIfConditions(page, page.IndexOf(CardNoteKey, StringComparison.Ordinal)).Last());
+        Assert.Single(Regex.Matches(page, Regex.Escape(CardNoteKey)));
     }
 }

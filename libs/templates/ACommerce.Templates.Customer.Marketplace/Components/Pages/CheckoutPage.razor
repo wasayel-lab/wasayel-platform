@@ -151,6 +151,14 @@
                         @* إفصاحُ الطَلَباتِ المُستَقِلَّةِ حَيثُ يُختارُ الدَفع (موجَزُ الفَجَوات P3-9؛ ‏ADR-033 §٣‑٩): الإرسالُ يَبدَأُ صَفقَةً
                            لِكُلِّ بَندٍ لا لِكُلِّ بائِع — فَكُلُّ بَندٍ يُشحَنُ بِبوليصَتِه ويُدفَعُ نَقدُه عِندَ تَسليمِه. *@
                         <p class="ac-muted" style="margin:12px 0 0;font-size:13px;">@L.Markup("checkout.payment.per_item_note")</p>
+                        @* وبِبِطاقَةِ بَوّابَةِ المَتجَرِ لا يَصدُقُ «يُدفَعُ عِندَ تَسليمِ كُلٍّ مِنها» وَحدَه (‏2026-10-25، تَدقيقُ الإطلاق lens-money-integrity-8):
+                           `GatewayPayments.OpenInvoiceAsync` يَفتَحُ فاتورَةً واحِدَةً لِصَفَقاتِ السَلَّةِ كُلِّها، وبَندُها لا يُلغى وَحدَه ما دامَت غَيرَ مَدفوعَة
+                           (`deal_invoice_shared`). فَتُقالُ الجُملَةُ حَيثُ تُعرَضُ تِلكَ البِطاقَةُ وَحدَها — `CardOffered` و`ThroughGateway` الَّتي تَرسُمُ بِها
+                           الخُطوَةُ تَلميحَ البَوّابَة — وبِدونِها الصَفحَةُ بايتاً كَما كانَت. *@
+                        @if (CardOffered && Facts.ThroughGateway)
+                        {
+                            <p class="ac-muted" style="margin:4px 0 0;font-size:13px;">@L.Markup("checkout.payment.per_item_card_note")</p>
+                        }
                     </ChildContent>
                 </AcCard>
                 <div style="display:flex;gap:8px;">
