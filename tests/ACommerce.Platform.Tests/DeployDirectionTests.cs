@@ -367,4 +367,71 @@ public class DeployDirectionTests(ITestOutputHelper output)
             h.Dir.Delete(recursive: true);
         }
     }
+
+    // ─── ٥. (‏2026-10-25 — تَيّارُ W8-5، بَندُ المُنَسِّق) رَأسُ main وَسيطاً خامِساً — تَوصيفُ «اليَوم» قَبلَ أَن يُقرَأ ──────────────────────
+    //
+    // **المَقيسُ اليَوم**: حينَ لا يُقاسُ ما يَخدِمُه الحَيّ (خَطُّ الأَساس غَيرُ `measured`، أَو بِلا رَقم) تَرفُضُ الدالَّةُ كُلَّ مُرَشَّحٍ ما لَم يُعَلَّم
+    // `allow_rollback` — فَنَشرُ إصلاحٍ **إلى الأَمام** والإنتاجُ ساقِطٌ يَحتاجُ مُدخَلاً اسمُه «تَراجُع». والتَبديلُ الآتي يُعطيها رَأسَ `main` الآنَ
+    // وَسيطاً خامِساً ويُدفَعُ بِه المُرَشَّحُ الَّذي **هُوَ** الرَأس (الرَأسُ لا يَكونُ تَراجُعاً عَن `main` أَحدَثَ مِنه). **وهذا الصَفُّ يُثَبِّتُ ما لا
+    // يَتَغَيَّرُ بِه**: كُلُّ حالَةٍ مَقيسَةٍ بِحُكمِها والرَأسُ مُعطى، وكُلُّ مُرَشَّحٍ لَيسَ الرَأسَ والحَيُّ لَم يُقَس، والرَأسُ غائِبٌ (جَلبٌ فَشِل) —
+    // يَخضَرُّ عَلى الدالَّةِ اليَومَ (تَتَجاهَلُ الخامِس) ويَبقى بِلا تَعديلِ حَرفٍ بَعدَ التَبديل (القاعِدَة ٣).
+
+    /// <summary>يُشَغِّلُ <c>deploy_direction</c> بِخَمسَةِ وُسَطاء — الخامِسُ رَأسُ <c>main</c> كَما تَجلِبُه الخُطوَة (قَد يَكونُ فارِغاً).</summary>
+    private (int Code, string Decision, string Reason) DirectionWithTip(History h, string candidate, string live, string state, string allow, string tip)
+    {
+        var script = Path.Combine(h.Dir.FullName, "..", Path.GetFileName(h.Dir.FullName) + "-t.sh");
+        File.WriteAllText(script, "set -uo pipefail\n" + DirectionFunction() + "\ndeploy_direction \"$1\" \"$2\" \"$3\" \"$4\" \"$5\"\n", new UTF8Encoding(false));
+        try
+        {
+            var (code, text) = Run("/bin/bash", h.Dir.FullName, script, candidate, live, state, allow, tip);
+            var lines = text.Split('\n');
+            var decision = lines.FirstOrDefault(l => l.StartsWith("decision=", StringComparison.Ordinal))?["decision=".Length..] ?? "";
+            var reason = lines.Length > 1 ? lines[1] : "";
+            output.WriteLine($"[{state} · allow={allow} · tip={(tip.Length == 0 ? "—" : tip[..7])}] → {code} · {decision} · {reason}");
+            return (code, decision, reason);
+        }
+        finally
+        {
+            File.Delete(script);
+        }
+    }
+
+    [Fact]
+    public void With_mains_tip_given_every_case_but_an_unmeasured_push_of_the_tip_itself_decides_as_before()
+    {
+        if (NoBash()) return;
+        var h = Scratch();
+        try
+        {
+            var cases = new (string Name, string Candidate, string Live, string State, string Allow, string Tip, int Code, string Decision, string Says)[]
+            {
+                ("المُرَشَّحُ هُوَ ما يَخدِم، والرَأسُ مُعطى",         h.C, h.C, "measured", "false", h.C, 0, "skip",   "نَفسَه"),
+                ("تَقَدُّم، والرَأسُ مُعطى",                         h.C, h.A, "measured", "false", h.C, 0, "push",   "تَقَدُّم"),
+                ("تَراجُعٌ مَقيس — المُرَشَّحُ لَيسَ الرَأس",          h.A, h.C, "measured", "false", h.C, 1, "refuse", "تَراجُع"),
+                ("تَراجُعٌ مَقيس — ولو كانَ المُرَشَّحُ الرَأس",        h.A, h.C, "measured", "false", h.A, 1, "refuse", "تَراجُع"),
+                ("لا نَسَب، والرَأسُ مُعطى",                         h.C, h.X, "measured", "false", h.C, 1, "refuse", "لا نَسَبَ"),
+                ("لَم يُقَس، والمُرَشَّحُ أَقدَمُ مِن الرَأس",          h.A, "",  "failed",   "false", h.C, 1, "refuse", "لَم يَقِس"),
+                ("لَم يُقَس، والمُرَشَّحُ بِلا نَسَبٍ إلى الرَأس",       h.X, "",  "failed",   "false", h.C, 1, "refuse", "لَم يَقِس"),
+                ("أَوَّلُ نَشر، والمُرَشَّحُ لَيسَ الرَأس",              h.B, "",  "absent",   "false", h.C, 1, "refuse", "لَم يَقِس"),
+                ("لا مُضيف، والمُرَشَّحُ لَيسَ الرَأس",                 h.B, "",  "nohost",   "false", h.C, 1, "refuse", "لَم يَقِس"),
+                ("لَم يُقَس، والرَأسُ لَم يُجلَب",                     h.C, "",  "failed",   "false", "",  1, "refuse", "لَم يَقِس"),
+                ("لَم يُقَس والمُرَشَّحُ لَيسَ الرَأس، بِسَماح",         h.A, "",  "failed",   "true",  h.C, 0, "push",   "::warning::تَراجُعٌ مَقصود (allow_rollback=true): الحارِسُ لَم يَقِس"),
+                ("لَم يُقَس والرَأسُ لَم يُجلَب، بِسَماح",              h.C, "",  "failed",   "true",  "",  0, "push",   "::warning::تَراجُعٌ مَقصود (allow_rollback=true): الحارِسُ لَم يَقِس"),
+            };
+            var wrong = new List<string>();
+            foreach (var c in cases)
+            {
+                var (code, decision, reason) = DirectionWithTip(h, c.Candidate, c.Live, c.State, c.Allow, c.Tip);
+                if (code != c.Code || decision != c.Decision || !reason.Contains(c.Says, StringComparison.Ordinal))
+                    wrong.Add($"«{c.Name}»: {code}/{decision} «{reason}» لا {c.Code}/{c.Decision} «…{c.Says}…»");
+            }
+            output.WriteLine($"فُحِصَت {cases.Length} حالَةً والرَأسُ وَسيطٌ خامِس؛ أَخطَأَ الحُكمُ في {wrong.Count}");
+            Assert.True(cases.Length == 12, "أَداةٌ عَمياء: الحالاتُ أَقَلُّ مِمّا كُتِب.");
+            Assert.True(wrong.Count == 0, string.Join("\n", wrong));
+        }
+        finally
+        {
+            h.Dir.Delete(recursive: true);
+        }
+    }
 }
