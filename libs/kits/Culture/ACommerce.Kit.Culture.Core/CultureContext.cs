@@ -73,6 +73,13 @@ public static class CultureTime
     public static string FormatTime(DateTime stored, string format, string? timeZoneId = null)
         => stored == DateTime.MinValue ? "" : InZone(stored, timeZoneId).ToString(format);
 
+    /// <summary><b>والصيغَةُ بِثَقافَةٍ مُسَمّاة</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١؛ <c>ADR-039</c> مُلحَقاً): اسمُ اليَومِ بِالعَرَبِيَّةِ في المُحادَثات
+    /// (<c>"dddd"</c> بِـ<c>CultureInfo("ar")</c>) كانَ يُنَسَّقُ مِن مُتَغَيِّرٍ مُشتَقٍّ مِن <see cref="InZone"/> لِأَنَّ <see cref="FormatTime(DateTime, string, string?)"/>
+    /// لا تَأخُذُ ثَقافَة — فَلا يَسأَلُ أَحَدٌ أَضُبِطَت اللَحظَة. الحُكمُ نَفسُه: لَحظَةٌ لَم تُضبَط نَصٌّ فارِغ، وما سِواها <c>InZone(stored, tz).ToString(format, provider)</c>
+    /// بايتاً. مُنفَصِلَةٌ لا مُعامِلاً اختِيارِيّاً رابِعاً: تَوقيعُ الأولى يُثَبِّتُه <c>AdrDisplayTimeTests</c> بِحَرفِه.</summary>
+    public static string FormatTime(DateTime stored, string format, string? timeZoneId, IFormatProvider provider)
+        => stored == DateTime.MinValue ? "" : InZone(stored, timeZoneId).ToString(format, provider);
+
     /// <summary>المِنطَقَةُ بِمُعَرِّفِها، وإلّا الافتِراضِيَّة، وإلّا UTC — لا يَرمي.</summary>
     public static TimeZoneInfo Zone(string? timeZoneId)
     {

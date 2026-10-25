@@ -97,16 +97,17 @@ else
     /// لِليَوم نَفسه، "أَمس" لِلأَمس، اسم اليَوم في الأُسبوع الحالي،
     /// التَّاريخ القَصير ما عَدا ذلك.
     /// </summary>
+    // (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١): كُلُّ فَرعٍ يُنَسِّقُ بِـ`FormatTime` مِن اللَحظَةِ المُخَزَّنَة — فَلَحظَةٌ لَم تُضبَط نَصٌّ فارِغٌ
+    // لا «0001/01/01» — والتاريخُ المَحَلِّيُّ لِلمُقارَنَةِ وَحدَها؛ وكُلُّ مَضبوطٍ بايتاً ما كانَ (`DisplayTimeAbsentTests`).
     string FormatWhen(DateTime at)
     {
-        var localAt = Culture.InZone(at);
+        var atDate  = Culture.InZone(at).Date;
         var nowDate = Culture.NowInZone.Date;
-        var atDate  = localAt.Date;
-        if (atDate == nowDate)                  return localAt.ToString("HH:mm");
+        if (atDate == nowDate)                  return Culture.FormatTime(at, "HH:mm");
         if (atDate == nowDate.AddDays(-1))      return L["chats.time.yesterday"];
-        if ((nowDate - atDate).TotalDays < 7)   return localAt.ToString("dddd", new System.Globalization.CultureInfo("ar"));
-        if (localAt.Year == nowDate.Year)       return localAt.ToString("dd/MM");
-        return localAt.ToString("yyyy/MM/dd");
+        if ((nowDate - atDate).TotalDays < 7)   return ACommerce.Kit.Culture.CultureTime.FormatTime(at, "dddd", Culture.TimeZone, new System.Globalization.CultureInfo("ar"));
+        if (atDate.Year == nowDate.Year)        return Culture.FormatTime(at, "dd/MM");
+        return Culture.FormatTime(at, "yyyy/MM/dd");
     }
 
     Dictionary<Guid, string?> avatars = new();

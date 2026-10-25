@@ -172,33 +172,54 @@ public class DisplayTimeAbsentTests(ITestOutputHelper output)
             .Select(f => (f.File, N: Regex.Matches(f.Code, @"(?<![\w])FormatTime\(").Count))
             .Where(f => f.N > 0).ToList();
 
-    /// <summary><b>«اليَوم» (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١ — صُغرى)</b>: «كُلُّ مَوضِعِ عَرض» في كوميتِ <c>2d20144</c> كانَ المَواضِعَ
-    /// الَّتي تُنَسِّقُ نَتيجَةَ <c>InZone</c> في سَطرِها — والمُحادَثاتُ تَحفَظُها في مُتَغَيِّرٍ ثُمَّ تُنَسِّقُه: وَقتُ الفُقاعَةِ وعُنوانُ اليَومِ في
-    /// <c>ChatRoom</c>، و«متى» في قائِمَةِ <c>Chats</c>. سَبعَةُ مَواضِعَ بِحَرفِها، ولَحظَةٌ لَم تُضبَط تَصِلُ آخِرَ فَرعٍ فيها فَتُرسَمُ «0001/01/01».
-    /// والكُتّابُ اليَومَ يَضبِطونَها كُلُّهُم (<c>Conversation.LastAt</c> في مَواضِعِ الإنشاءِ الأَربَعَةِ والبَذر، و<c>Message.SentAt</c> بِقيمَةٍ افتِراضِيَّة)
-    /// — فَالقَولُ «أَيُّ سِجِلّ» لا «سِجِلٌّ يَقَعُ اليَوم». يُقلَبُ بِاسمِه في كوميتِ التَبديل.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ التَبديل؛ مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١ — صُغرى)</b> — كانَ
+    /// <c>Today_seven_chat_sites_format_a_local_derived_from_InZone_so_an_unset_instant_would_draw_year_one</c> (‏<c>07e5af1</c>): سَبعَةُ مَواضِعَ في
+    /// <c>ChatRoom</c> و<c>Chats</c> تُنَسِّقُ مُتَغَيِّراً مُشتَقّاً مِن <c>InZone</c>. والآن صِفرٌ في الشَجَرَة: الفُقاعَةُ وعُنوانُ اليَومِ و«متى» تُنَسِّقُ
+    /// بِـ<c>FormatTime</c> مِن اللَحظَةِ المُخَزَّنَة (واسمُ اليَومِ بِـ<c>CultureTime.FormatTime(…, Culture.TimeZone, ar)</c>)، والتاريخُ المَحَلِّيُّ لِلمُقارَنَةِ
+    /// وَحدَها. و<c>Chats.razor</c> صارَ مِن مِلَفّاتِ <c>FormatTime</c> — ‏25.</summary>
     [Fact]
-    public void Today_seven_chat_sites_format_a_local_derived_from_InZone_so_an_unset_instant_would_draw_year_one()
+    public void No_chat_site_formats_a_local_derived_from_InZone_every_branch_asks_FormatTime()
     {
         var sites = DerivedInZoneFormats();
         var callers = FormatTimeCallers();
-        output.WriteLine($"مَواضِعُ تُنَسِّقُ مُشتَقّاً مِن InZone: {sites.Count} · مِلَفّاتُ FormatTime: {callers.Count}\n  "
-            + string.Join("\n  ", sites.Select(x => $"{Path.GetFileName(x.File)}:{x.Line} {x.Text}")));
+        var room = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/ChatRoom.razor".Replace('/', Path.DirectorySeparatorChar)))));
+        var list = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/Chats.razor".Replace('/', Path.DirectorySeparatorChar)))));
+        output.WriteLine($"مَواضِعُ تُنَسِّقُ مُشتَقّاً مِن InZone: {sites.Count} · مِلَفّاتُ FormatTime: {callers.Count}"
+            + (sites.Count == 0 ? "" : "\n  " + string.Join("\n  ", sites.Select(x => $"{Path.GetFileName(x.File)}:{x.Line} {x.Text}"))));
 
-        Assert.Equal(new[]
+        Assert.True(sites.Count == 0, "مَوضِعُ عَرضٍ يُنَسِّقُ مُتَغَيِّراً مُشتَقّاً مِن InZone — فَلَحظَةٌ لَم تُضبَط تُرسَمُ سَنَةً أولى:\n  "
+            + string.Join("\n  ", sites.Select(x => $"{x.File}:{x.Line} {x.Text}")) + "\nنَسِّق بِـCulture.FormatTime مِن اللَحظَةِ المُخَزَّنَة.");
+        Assert.Contains("Time=\"@Culture.FormatTime(m.SentAt, \"HH:mm\")\"", room, StringComparison.Ordinal);
+        Assert.Contains("@FormatDay(m.SentAt)", room, StringComparison.Ordinal);
+        Assert.Contains("return Culture.FormatTime(sentUtc, \"yyyy/MM/dd\");", room, StringComparison.Ordinal);
+        Assert.Contains("return Culture.FormatTime(at, \"yyyy/MM/dd\");", list, StringComparison.Ordinal);
+        Assert.Contains("CultureTime.FormatTime(at, \"dddd\", Culture.TimeZone, new System.Globalization.CultureInfo(\"ar\"))", list, StringComparison.Ordinal);
+        Assert.Equal(25, callers.Count);
+        Assert.Contains(callers, c => c.File.EndsWith("Chats.razor", StringComparison.Ordinal));
+    }
+
+    /// <summary><b>وكُلُّ لَحظَةٍ مَضبوطَةٍ في المُحادَثاتِ بايتاً ما كانَت</b>: لِكُلِّ صيغَةٍ تُنَسِّقُها الفُقاعَةُ وعُنوانُ اليَومِ و«متى» — ومَعَها اسمُ اليَومِ بِثَقافَةِ
+    /// <c>ar</c> — <c>CultureTime.FormatTime(x, f, tz, provider)</c> هِيَ <c>InZone(x, tz).ToString(f, provider)</c> حَرفاً، وبِثَقافَةِ الخَيطِ هِيَ ذاتُ الثَلاثَة؛
+    /// ولَحظَةٌ لَم تُضبَط نَصٌّ فارِغ — لا «0001/01/01».</summary>
+    [Theory]
+    [InlineData("HH:mm", false)]
+    [InlineData("dd/MM", false)]
+    [InlineData("yyyy/MM/dd", false)]
+    [InlineData("dddd", true)]
+    public void A_set_chat_instant_is_formatted_exactly_as_before_and_an_unset_one_is_empty(string format, bool arabic)
+    {
+        var ar = new System.Globalization.CultureInfo("ar");
+        var zone = new MutableCultureContext().TimeZone;
+        string After(DateTime x) => arabic ? CultureTime.FormatTime(x, format, zone, ar) : new MutableCultureContext().FormatTime(x, format);
+        foreach (var x in new[] { FixedUtc, DateTime.SpecifyKind(FixedUtc, DateTimeKind.Unspecified), FixedUtc.AddDays(-3), DateTime.MinValue.AddDays(1) })
         {
-            ("ChatRoom.razor", "<AcChatBubble Body=\"@m.Body\" Time=\"@local.ToString(\"HH:mm\")\" Mine=\"@mine\" />"),
-            ("ChatRoom.razor", "if ((today - localAt.Date).TotalDays < 7) return localAt.ToString(\"dddd\", new System.Globalization.CultureInfo(\"ar\"));"),
-            ("ChatRoom.razor", "return localAt.ToString(\"yyyy/MM/dd\");"),
-            ("Chats.razor", "if (atDate == nowDate)                  return localAt.ToString(\"HH:mm\");"),
-            ("Chats.razor", "if ((nowDate - atDate).TotalDays < 7)   return localAt.ToString(\"dddd\", new System.Globalization.CultureInfo(\"ar\"));"),
-            ("Chats.razor", "if (localAt.Year == nowDate.Year)       return localAt.ToString(\"dd/MM\");"),
-            ("Chats.razor", "return localAt.ToString(\"yyyy/MM/dd\");"),
-        }, sites.Select(x => (Path.GetFileName(x.File), x.Text)).ToArray());
-        // ‏آخِرُ فَرعٍ فيهِما لِلَحظَةٍ لَم تُضبَط: سَنَةٌ أولى لا «أَمس» ولا اسمُ يَوم.
-        Assert.Equal("0001/01/01", CultureTime.InZone(DateTime.MinValue).ToString("yyyy/MM/dd"));
-        Assert.Equal(24, callers.Count);
-        Assert.DoesNotContain(callers, c => c.File.EndsWith("Chats.razor", StringComparison.Ordinal));
+            var before = arabic ? CultureTime.InZone(x, zone).ToString(format, ar) : CultureTime.InZone(x, zone).ToString(format);
+            Assert.Equal(before, After(x));
+        }
+        Assert.Equal("", After(DateTime.MinValue));
+        Assert.Equal(CultureTime.FormatTime(FixedUtc, format, zone), CultureTime.FormatTime(FixedUtc, format, zone, System.Globalization.CultureInfo.CurrentCulture));
     }
 
     /// <summary><b>ماسِحُ المُشتَقِّ يُقاسُ قَبلَ أَن يُوثَقَ بِه</b> (القاعِدَة ١٠): مُتَغَيِّرٌ مِن <c>InZone</c> مُنَسَّق، ومُشتَقٌّ مِنه بِـ<c>.Date</c> مُنَسَّق، ومُعامِلُ

@@ -50,12 +50,12 @@ else
                     <div style="text-align:center;margin:12px 0 8px;">
                         <span style="background:var(--ac-bg-alt);color:var(--ac-text-muted);
                                      padding:3px 12px;border-radius:999px;font-size:11px;">
-                            @FormatDay(local)
+                            @FormatDay(m.SentAt)
                         </span>
                     </div>
                 }
                 var mine = m.SenderId == Auth.UserId;
-                <AcChatBubble Body="@m.Body" Time="@local.ToString("HH:mm")" Mine="@mine" />
+                <AcChatBubble Body="@m.Body" Time="@Culture.FormatTime(m.SentAt, "HH:mm")" Mine="@mine" />
             }
         }
     </div>
@@ -100,13 +100,16 @@ else
     List<Message> messages = new();
 
     // غَير ساكِنَة: القيَم صارَت في المَعجَم، والساكِنَة لا تَبلُغ `L`.
-    string FormatDay(DateTime localAt)
+    // (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١): تَأخُذُ اللَحظَةَ المُخَزَّنَةَ لا ساعَتَها المَحَلِّيَّة، وتُنَسِّقُ بِـ`FormatTime` — فَلَحظَةٌ لَم تُضبَط
+    // نَصٌّ فارِغٌ لا «0001/01/01». والتاريخُ المَحَلِّيُّ لِلمُقارَنَةِ وَحدَها، وكُلُّ مَضبوطٍ بايتاً ما كانَ (`DisplayTimeAbsentTests`).
+    string FormatDay(DateTime sentUtc)
     {
+        var day   = Culture.InZone(sentUtc).Date;
         var today = Culture.NowInZone.Date;
-        if (localAt.Date == today)               return L["chats.room.day_today"];
-        if (localAt.Date == today.AddDays(-1))   return L["chats.room.day_yesterday"];
-        if ((today - localAt.Date).TotalDays < 7) return localAt.ToString("dddd", new System.Globalization.CultureInfo("ar"));
-        return localAt.ToString("yyyy/MM/dd");
+        if (day == today)               return L["chats.room.day_today"];
+        if (day == today.AddDays(-1))   return L["chats.room.day_yesterday"];
+        if ((today - day).TotalDays < 7) return ACommerce.Kit.Culture.CultureTime.FormatTime(sentUtc, "dddd", Culture.TimeZone, new System.Globalization.CultureInfo("ar"));
+        return Culture.FormatTime(sentUtc, "yyyy/MM/dd");
     }
 
 
