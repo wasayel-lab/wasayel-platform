@@ -298,4 +298,38 @@ public class DealAdvanceExpectedStageTests(ITestOutputHelper output)
         Assert.Equal(new[] { "عَيِّنَة: نِداءُ AdvanceAsync لَيسَ واحِداً" }, twice);
         output.WriteLine($"عَيِّنَةُ ما قَبلُ: {before.Count} مُخالَفَتان · عَيِّنَةُ النِداءِ الثاني: {twice.Count}");
     }
+
+    // ═══ ٦) غَيرُ الطَرَف — أَيَسمَعُ مَرحَلَةَ صَفقَةِ غَيرِه مِن رَدِّ `from`؟ (مُراجَعَةُ تَيّارِ W8-1 الجَولَة ٢، صُغرى؛ القاعِدَة ٦) ═══════════
+
+    private static readonly Guid Stranger = Guid.Parse("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+
+    /// <summary>ما يَبلُغُ صَفحَةَ الصَفقَةِ مِن بابِ العُضو — <c>?err={code}</c> إن كانَ لِلنَتيجَةِ رَمز، ولا شَيءَ إن لَم يَكُن — بِحَرفِ سَطرِ التَحويلِ في النُقطَة
+    /// (يُثَبِّتُه <c>DealConcurrencyTests.The_member_advance_endpoint_carries_the_result_code_to_the_deal_page</c>).</summary>
+    private static string MemberRedirectSuffix(DealAdvanceResult res) => res.Code is { } code ? $"?err={code}" : "";
+
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم»</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-1 الجَولَة ٢، صُغرى؛ القاعِدَة ٣ — يُقلَبُ بِاسمِه في كوميتِ الإصلاح): مُقارَنَةُ
+    /// <c>from</c> في <c>AdvanceAsync</c> تَسبِقُ سُؤالَ الفاعِل، وصارَت تُبلَغُ مِن الأَبوابِ الثَلاثَة. فَغَيرُ الطَرَفِ يَعرِفُ مُعَرِّفَ صَفقَةٍ ويُرسِلُ
+    /// مَرحَلَةً: الخاطِئَةُ تُجابُ <c>deal_changed_meanwhile</c> (بابُ العُضوِ <c>?err=deal_changed_meanwhile</c>)، والصَحيحَةُ تَمضي إلى رَفضِ الفاعِلِ
+    /// بِلا رَمز (التَحويلُ بِلا <c>err</c>) — <b>عَرّافٌ لِمَرحَلَةِ صَفقَةِ غَيرِه</b>؛ وخَطَأُ التَحَقُّقِ قِناعٌ لِلثَغرَةِ بِحَرفِ القاعِدَة ٦. ولا يُكتَبُ شَيءٌ في الحالَين.</para>
+    /// </summary>
+    [Fact]
+    public void Today_a_non_party_tells_the_stage_of_someone_elses_deal_from_the_answer_to_its_from()
+    {
+        var (deals, world, deal) = CashAt(DealStage.Shipping);
+        var saves = world.SaveCalls;
+
+        var stale = Now(deals.AdvanceAsync(Slug, deal.Id, Stranger, "غَريب", "", from: DealStage.Booked));
+        var right = Now(deals.AdvanceAsync(Slug, deal.Id, Stranger, "غَريب", "", from: DealStage.Shipping));
+
+        Assert.False(stale.Ok);
+        Assert.False(right.Ok);
+        Assert.Equal(DealsService.ChangedMeanwhile, stale.Code);
+        Assert.Null(right.Code);
+        Assert.Equal("?err=deal_changed_meanwhile", MemberRedirectSuffix(stale));
+        Assert.Equal("", MemberRedirectSuffix(right));
+        Assert.Equal(saves, world.SaveCalls);
+        Assert.Equal(DealStage.Shipping, world.Read<Deal>(deal.Id.ToString())!.Stage);
+        output.WriteLine($"غَيرُ الطَرَف، from=Booked: «{MemberRedirectSuffix(stale)}» · from=Shipping: «{MemberRedirectSuffix(right)}» — الجَوابانِ يَختَلِفان");
+    }
 }
