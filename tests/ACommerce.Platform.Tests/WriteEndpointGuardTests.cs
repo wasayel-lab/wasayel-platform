@@ -1117,7 +1117,9 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
 
     private static readonly Regex ReadScope = new(@"\.RequireApiKey\s*\(\s*ApiScopeCatalog\.\w+Read\s*\)", RegexOptions.Compiled);
     private static readonly Regex ResolvedService = new(@"\bvar\s+(?<name>\w+)\s*=\s*[\w.]*GetRequiredService\s*<\s*(?<type>[\w.]+)\s*>", RegexOptions.Compiled);
-    private static readonly Regex MemberCall = new(@"(?<![\w.])(?<recv>\w+)\s*\.\s*(?<m>\w+)\s*(?:<[^<>()]*>)?\s*\(", RegexOptions.Compiled);
+    // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة ٢، صُغرى): و`?.`/`!.` — `Deals?.CancelAsync(`/`Deals!.CancelAsync(` كانا خَفِيَّينِ عَلى كُلِّ سَطحِ عَرض
+    // (razor وMapGet ونِطاقُ القِراءَةِ و[WolverineGet]) وعَلى الكاتِبِ المُتَعَدّي في ServiceWriters — النَمَطُ واحِدٌ لِلمَوضِعَين.
+    private static readonly Regex MemberCall = new(@"(?<![\w.])(?<recv>\w+)\s*[?!]?\s*\.\s*(?<m>\w+)\s*(?:<[^<>()]*>)?\s*\(", RegexOptions.Compiled);
     private static readonly Regex BareCall = new(@"(?<![\w.])(?<m>\w+)\s*(?:<[^<>()]*>)?\s*\(", RegexOptions.Compiled);
 
     /// <summary>وُسَطاءُ لامدَةِ النُقطَة: الاسمُ ← اسمُ النَوعِ القَصير (بِلا فَضاءٍ ولا <c>?</c> ولا وُسَطاءِ نَوعٍ ولا سِماتٍ)، ومَعَها
@@ -1419,8 +1421,16 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
                 private static void Touch(IDocumentSession s) => s.Events.Append(Guid.Empty, new object());
                 public static void Stamp(IDocumentSession s) { Touch(s); }
             }
+            public sealed class FakeMaybe
+            {
+                private readonly FakeAudit? _audit;
+                public async Task MaybeAsync() => await _audit!.WriteAsync("x");
+                public Task SafeAsync() => _audit?.WriteAsync("y") ?? Task.CompletedTask;
+            }
             """;
         var writers = ServiceWriters([("x/FakeDealsService.cs", Service)]);
+        // ‏2026-10-25: الكاتِبُ المُتَعَدّي عَبرَ `!.` و`?.` عَلى حَقلٍ مِن نَوعٍ كاتِب.
+        Assert.Equal(new[] { "MaybeAsync", "SafeAsync" }, writers["FakeMaybe"].Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(new[] { "ArchiveAsync", "CancelAsync", "Stamp", "Touch" }, writers["FakeDealsService"].Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(new[] { "ProduceAsync" }, writers["FakeExport"].ToArray());                 // ‏عَبرَ حَقلٍ مِن نَوعٍ كاتِب — و«Peek» قِراءَة
         Assert.Equal(new[] { "WriteAsync" }, writers["FakeAudit"].ToArray());
@@ -1439,6 +1449,9 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
             ("GET يُصَدِّرُ عَبرَ خِدمَةٍ تَكتُبُ عَبرَ حَقلِها", ".MapGet(\"/x/export\", async (FakeExport export) => { await export.ProduceAsync(); });", ["FakeExport.ProduceAsync"]),
             ("GET يَقرَأُ عَبرَ الخِدمَةِ نَفسِها", ".MapGet(\"/x/peek\", async (FakeExport export) => await export.PeekAsync());", []),
             ("وَسيطٌ بِاسمٍ آخَر لا يُخلَط", ".MapGet(\"/x\", async (Guid id, OtherService deals) => await deals.CancelAsync(id));", []),
+            ("مُستَقبِلٌ بِـ?.", Head + "await deals?.CancelAsync(id);" + Tail, ["FakeDealsService.CancelAsync"]),
+            ("مُستَقبِلٌ بِـ!.", Head + "await deals!.CancelAsync(id);" + Tail, ["FakeDealsService.CancelAsync"]),
+            ("مُستَقبِلٌ بِـ? . مُتَباعِدَين", Head + "await deals ? . ArchiveAsync(id);" + Tail, ["FakeDealsService.ArchiveAsync"]),
         };
         var wrong = new List<string>();
         foreach (var c in cases)
@@ -1521,6 +1534,8 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
                 "        var svc = Sp.GetRequiredService<FakeDealsService>();\n        await svc.CancelAsync(Id);\n    }\n}\n", ["FakeDealsService.CancelAsync"]),
             ("قِراءَةٌ خالِصَة", Inject + "@code {\n    protected override async Task OnInitializedAsync() => deal = await Deals.LoadAsync(Id);\n}\n", []),
             ("كاتِبٌ في تَعليقِ razor", Inject + "@* await Deals.CancelAsync(Id); *@\n<p>@deal</p>\n", []),
+            ("إلغاءٌ بِـ?. في OnInitializedAsync", Inject + "@code {\n    protected override async Task OnInitializedAsync() { await Deals?.CancelAsync(Id)!; }\n}\n", ["FakeDealsService.CancelAsync"]),
+            ("أَرشَفَةٌ بِـ!. في تَعبيرِ تَرميز", Inject + "<p>@(Deals!.ArchiveAsync(Id).IsCompleted)</p>\n", ["FakeDealsService.ArchiveAsync"]),
             ("وَسيطٌ بِالاسمِ نَفسِه مِن نَوعٍ آخَر", "@page \"/x\"\n@inject OtherService Deals\n@code {\n    protected override Task OnInitializedAsync() => Deals.CancelAsync(Id);\n}\n", []),
         };
         var n = 0;
