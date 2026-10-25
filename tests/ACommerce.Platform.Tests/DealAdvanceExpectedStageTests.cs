@@ -308,28 +308,50 @@ public class DealAdvanceExpectedStageTests(ITestOutputHelper output)
     private static string MemberRedirectSuffix(DealAdvanceResult res) => res.Code is { } code ? $"?err={code}" : "";
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم»</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-1 الجَولَة ٢، صُغرى؛ القاعِدَة ٣ — يُقلَبُ بِاسمِه في كوميتِ الإصلاح): مُقارَنَةُ
-    /// <c>from</c> في <c>AdvanceAsync</c> تَسبِقُ سُؤالَ الفاعِل، وصارَت تُبلَغُ مِن الأَبوابِ الثَلاثَة. فَغَيرُ الطَرَفِ يَعرِفُ مُعَرِّفَ صَفقَةٍ ويُرسِلُ
-    /// مَرحَلَةً: الخاطِئَةُ تُجابُ <c>deal_changed_meanwhile</c> (بابُ العُضوِ <c>?err=deal_changed_meanwhile</c>)، والصَحيحَةُ تَمضي إلى رَفضِ الفاعِلِ
-    /// بِلا رَمز (التَحويلُ بِلا <c>err</c>) — <b>عَرّافٌ لِمَرحَلَةِ صَفقَةِ غَيرِه</b>؛ وخَطَأُ التَحَقُّقِ قِناعٌ لِلثَغرَةِ بِحَرفِ القاعِدَة ٦. ولا يُكتَبُ شَيءٌ في الحالَين.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-1 الجَولَة ٢، صُغرى؛ كانَ
+    /// <c>Today_a_non_party_tells_the_stage_of_someone_elses_deal_from_the_answer_to_its_from</c>، مُودَعٌ في <c>2cde10f</c>): مُقارَنَةُ <c>from</c> كانَت
+    /// تَسبِقُ سُؤالَ الفاعِلِ لِكُلِّ سائِل، فَغَيرُ الطَرَفِ يَسمَعُ <c>?err=deal_changed_meanwhile</c> لِلخاطِئَةِ ولا شَيءَ لِلصَحيحَة. <b>والآن</b>: يُسأَلُ
+    /// «أَطَرَفٌ أَنت؟» قَبلَ المُقارَنَة، وغَيرُ الطَرَفِ يُجابُ ما يُجابُ بِه بِلا <c>from</c> — رَفضُ الفاعِلِ بِلا رَمزٍ ونَصُّه واحِدٌ في الحالَين — فَلا
+    /// يَبلُغُه مِن مَرحَلَةِ الصَفقَةِ شَيء؛ ولا يُكتَبُ شَيء.</para>
     /// </summary>
     [Fact]
-    public void Today_a_non_party_tells_the_stage_of_someone_elses_deal_from_the_answer_to_its_from()
+    public void A_non_party_hears_the_same_answer_whether_its_from_is_stale_or_right()
     {
         var (deals, world, deal) = CashAt(DealStage.Shipping);
         var saves = world.SaveCalls;
 
         var stale = Now(deals.AdvanceAsync(Slug, deal.Id, Stranger, "غَريب", "", from: DealStage.Booked));
         var right = Now(deals.AdvanceAsync(Slug, deal.Id, Stranger, "غَريب", "", from: DealStage.Shipping));
+        var bare  = Now(deals.AdvanceAsync(Slug, deal.Id, Stranger, "غَريب", ""));
 
         Assert.False(stale.Ok);
         Assert.False(right.Ok);
-        Assert.Equal(DealsService.ChangedMeanwhile, stale.Code);
+        Assert.Null(stale.Code);
         Assert.Null(right.Code);
-        Assert.Equal("?err=deal_changed_meanwhile", MemberRedirectSuffix(stale));
-        Assert.Equal("", MemberRedirectSuffix(right));
+        Assert.Equal(right.Reason, stale.Reason);
+        Assert.Equal(bare.Reason, stale.Reason);
+        Assert.Equal("", MemberRedirectSuffix(stale));
+        Assert.Equal(MemberRedirectSuffix(right), MemberRedirectSuffix(stale));
         Assert.Equal(saves, world.SaveCalls);
         Assert.Equal(DealStage.Shipping, world.Read<Deal>(deal.Id.ToString())!.Stage);
-        output.WriteLine($"غَيرُ الطَرَف، from=Booked: «{MemberRedirectSuffix(stale)}» · from=Shipping: «{MemberRedirectSuffix(right)}» — الجَوابانِ يَختَلِفان");
+        output.WriteLine($"غَيرُ الطَرَف، from=Booked: «{MemberRedirectSuffix(stale)}» · from=Shipping: «{MemberRedirectSuffix(right)}» — جَوابٌ واحِد");
+    }
+
+    /// <summary><b>والطَرَفُ يُجابُ عَن التَقادُمِ كَما كان</b> (‏2026-10-25): البائِعُ والمُشتَري بِمَرحَلَةٍ مُتَقادِمَة — ولَو لَم يَكُن دَورَه — يُرَدّانِ
+    /// بِـ<c>deal_changed_meanwhile</c> قَبلَ سُؤالِ الفاعِل، فَنَصُّ «تَغَيَّرَت الصَفقَةُ» يَبقى صادِقاً لِمَن يَراها؛ ولا يُكتَبُ شَيء.</summary>
+    [Fact]
+    public void A_party_with_a_stale_from_still_hears_deal_changed_meanwhile_before_the_actor_check()
+    {
+        var (deals, world, deal) = CashAt(DealStage.Shipping);
+        var saves = world.SaveCalls;
+
+        var seller = Now(deals.AdvanceAsync(Slug, deal.Id, Seller, "بائِع", "", from: DealStage.Booked));
+        var buyer  = Now(deals.AdvanceAsync(Slug, deal.Id, Buyer,  "مُشتَرٍ", "", from: DealStage.Booked));
+
+        Assert.Equal(DealsService.ChangedMeanwhile, seller.Code);
+        Assert.Equal(DealsService.ChangedMeanwhile, buyer.Code);   // المُشتَري لَيسَ فاعِلَ «تَسليم» — ويَسمَعُ التَقادُمَ لا رَفضَ الفاعِل
+        Assert.Equal("?err=deal_changed_meanwhile", MemberRedirectSuffix(buyer));
+        Assert.Equal(saves, world.SaveCalls);
+        Assert.Equal(DealStage.Shipping, world.Read<Deal>(deal.Id.ToString())!.Stage);
     }
 }

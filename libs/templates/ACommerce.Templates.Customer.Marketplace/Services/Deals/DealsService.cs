@@ -413,7 +413,11 @@ public sealed class DealsService
         if (deal is null) return new(false, null, "deal not found");
         if (deal.Status != DealStatus.Active)
             return new(false, deal, $"الصَّفقَة في حالَة {deal.Status} — لا يُمكِن المُتابَعَة.");
-        if (from is { } expected && deal.Stage != expected)
+        // والطَرَفُ وَحدَه يُجابُ عَن تَقادُمِ `from` قَبلَ سُؤالِ الفاعِل (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-1 الجَولَة ٢؛ تَوصيفُه `2cde10f`؛ القاعِدَة ٦):
+        // كانَت المُقارَنَةُ أَوَّلاً لِكُلِّ سائِل، فَغَيرُ الطَرَفِ يَعرِفُ مَرحَلَةَ صَفقَةِ غَيرِه مِن الرَدّ — الخاطِئَةُ `deal_changed_meanwhile`
+        // والصَحيحَةُ رَفضُ الفاعِلِ بِلا رَمز. فَصارَ يُجابُ ما يُجابُ بِه بِلا `from`، ويُسأَلُ التَقادُمُ بَعدَ الفاعِلِ لِمَن خُوِّلَ وحدَه.
+        var stale = from is { } expected && deal.Stage != expected;
+        if (stale && (deal.InitiatorId == actorId || deal.CounterpartyId == actorId))
             return new(false, deal, ChangedMeanwhileAr, ChangedMeanwhile);
 
         var next = DealsPolicy.Next(deal);
@@ -425,6 +429,9 @@ public sealed class DealsService
         var required = DealsPolicy.RequiredActorToLeave(deal)!;
         if (!IsActorAllowed(deal, actorId, required))
             return new(false, deal, $"يَتَطَلَّب فاعِلاً مِن نَوع: {required}");
+        // ومُخَوَّلٌ غَيرُ طَرَفٍ (فاعِلُ `platform` وَحدَه) بِمَرحَلَةٍ مُتَقادِمَةٍ يُرَدُّ هُنا — فَلا يَمضي انتِقالٌ عَلى ما لَم يَقرَأه.
+        if (stale)
+            return new(false, deal, ChangedMeanwhileAr, ChangedMeanwhile);
 
         // وطَلَبُ الصَفقَةِ عِندَ OTO وتاليها «شَحن»: لا تَدخُلُها إلّا بِجَوابِ OTO يُثبِتُ شُحنَتَها (مُراجَعَةُ تَيّارِ S7 الثانِيَة،
         // ‏2026-10-12). بَعدَ الفاعِلِ لا قَبلَه — فَغَيرُ المُخَوَّلِ يُجابُ بِرَفضِ الفاعِلِ ولا يَعلَمُ أَنّ لِلصَفقَةِ طَلَباً هُناك.
