@@ -169,21 +169,18 @@ public class OtoDeployDocTests
     private const string OtoGateStart = "# ─── بِدايَةُ oto_environment ───";
     private const string OtoGateEnd = "# ─── نِهايَةُ oto_environment ───";
 
-    private static string RunOtoGateBlock(string? value)
+    /// <summary>يُشَغِّلُ دالَّةَ bash بِسِجِلٍّ وبِقيمَةِ مُتَغَيِّرٍ في بيئَتِها، ويُرجِعُ ما طَبَعَته.</summary>
+    private static string RunBash(string fn, string call, string? log, string? value)
     {
-        var gate = Read("scripts/verify-production-boot.sh");
-        var a = gate.IndexOf(OtoGateStart, StringComparison.Ordinal);
-        Assert.True(a > 0, "كُتلَةُ oto_environment غائِبَة.");
-        Assert.Equal(a, gate.LastIndexOf(OtoGateStart, StringComparison.Ordinal));
-        var b = gate.IndexOf(OtoGateEnd, a, StringComparison.Ordinal);
-        Assert.True(b > a);
         Assert.True(File.Exists("/bin/bash"), "أَداةٌ غائِبَة: /bin/bash.");
         var dir = Directory.CreateTempSubdirectory("wasayel-oto-gate-");
         try
         {
+            var logPath = Path.Combine(dir.FullName, "app.log");
+            File.WriteAllText(logPath, log ?? "", new System.Text.UTF8Encoding(false));
             var script = Path.Combine(dir.FullName, "run.sh");
-            File.WriteAllText(script, "set -uo pipefail\n" + gate[a..(b + OtoGateEnd.Length)] + "\noto_environment\n", new System.Text.UTF8Encoding(false));
-            var psi = new System.Diagnostics.ProcessStartInfo("/bin/bash", new[] { script })
+            File.WriteAllText(script, "set -uo pipefail\n" + fn + "\n" + call + "\n", new System.Text.UTF8Encoding(false));
+            var psi = new System.Diagnostics.ProcessStartInfo("/bin/bash", new[] { script, logPath })
             {
                 RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false,
                 StandardOutputEncoding = System.Text.Encoding.UTF8,
@@ -199,9 +196,32 @@ public class OtoDeployDocTests
         finally { dir.Delete(recursive: true); }
     }
 
+    /// <summary>الكُتلَةُ بِحَرفِها مِن البَوّابَة.</summary>
+    private static string OtoGateFunction()
+    {
+        var gate = Read("scripts/verify-production-boot.sh");
+        var a = gate.IndexOf(OtoGateStart, StringComparison.Ordinal);
+        Assert.True(a > 0, "كُتلَةُ oto_environment غائِبَة.");
+        Assert.Equal(a, gate.LastIndexOf(OtoGateStart, StringComparison.Ordinal));
+        var b = gate.IndexOf(OtoGateEnd, a, StringComparison.Ordinal);
+        Assert.True(b > a);
+        return gate[a..(b + OtoGateEnd.Length)];
+    }
+
+    /// <summary>سَطرُ الإقلاعِ كَما يَكتُبُه التَطبيقُ لِقيمَةِ المُتَغَيِّر — مِن <see cref="OtoEnvironment.BootLogValue"/> نَفسِها، لا مَنسوخاً.</summary>
+    private static string AppLine(string? value)
+        => "info: Program[0]\n      " + OtoEnvironment.BootLogPrefix + OtoEnvironment.BootLogValue(value) + "\n";
+
+    /// <summary>الكُتلَةُ عَلى سِجِلٍّ فيه سَطرُ التَطبيقِ لِهذِه القيمَة — والقيمَةُ في البيئَةِ أَيضاً، والكُتلَةُ لا تَقرَؤُها.</summary>
+    private static string RunOtoGateBlock(string? value)
+        => RunBash(OtoGateFunction(), "oto_environment \"$1\"", "[06:48:20 INF] Now listening on: http://127.0.0.1:5171\n" + AppLine(value), value);
+
     /// <summary>
     /// <para><b>بَوّابَةُ الإقلاعِ تُنَبِّهُ عَلى <c>staging</c> في إقلاعِها الإنتاجيِّ ولا تُغَيِّرُ رَمزَها</b> — وحُكمُ الكُتلَةِ (⚠ أَم لا) يُساوي
     /// <see cref="OtoEnvironment.IsOpen"/> شَكلاً شَكلاً: بِقَصٍّ وأَحرُفٍ كَبيرَة، والإنتاجُ، والفَراغ. والكُتلَةُ تُنادى مَرَّةً قَبلَ النَشر.</para>
+    /// <para>(‏2026-10-25، مُراجَعَةُ تَيّارِ W8-6 الجَولَة ٢ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): <b>وتُنادى بَعدَ الإقلاعِ عَلى سِجِلِّه</b> — تَقرَأُ سَطرَ
+    /// <see cref="OtoEnvironment.BootLogPrefix"/> الَّذي يَكتُبُه <c>Program.cs</c> بِـ<see cref="OtoEnvironment.BootLogValue"/>، فَالتَساوي بِالبِناءِ لا بِتَطبيعٍ
+    /// ثانٍ؛ والصُفوفُ الثَلاثَةُ الأَخيرَةُ أَشكالُ توصيفِ <c>c1f2e29</c>.</para>
     /// </summary>
     [Theory]
     [InlineData("staging")]
@@ -210,6 +230,9 @@ public class OtoDeployDocTests
     [InlineData("production")]
     [InlineData("")]
     [InlineData(null)]
+    [InlineData("\vstaging")]
+    [InlineData(" staging ")]
+    [InlineData("sta ging")]
     public void The_boot_gate_warns_on_staging_exactly_where_the_code_opens_it(string? value)
     {
         if (OperatingSystem.IsWindows()) return;
@@ -221,26 +244,69 @@ public class OtoDeployDocTests
             Assert.Contains("لِكُلِّ مالِكِ إعلانٍ في كُلِّ مَتجَر", text, StringComparison.Ordinal);
             Assert.Contains("DEPLOY.md §٢·ط", text, StringComparison.Ordinal);
         }
+        else
+            Assert.StartsWith("الشَحنُ عَبرَ OTO: مُغلَق", text, StringComparison.Ordinal);
         var gate = Read("scripts/verify-production-boot.sh");
-        Assert.Equal(1, gate.Split("\noto_environment\n").Length - 1);
-        Assert.True(gate.IndexOf("\noto_environment\n", StringComparison.Ordinal) < gate.IndexOf("if ! dotnet publish \"$PROJECT\"", StringComparison.Ordinal));
+        Assert.Equal(1, gate.Split("\noto_environment \"$APP_LOG\"\n").Length - 1);
+        Assert.Equal(0, gate.Split("\noto_environment\n").Length - 1);
+        Assert.True(gate.IndexOf("\noto_environment \"$APP_LOG\"\n", StringComparison.Ordinal)
+                    < gate.IndexOf("if [ \"$ROUTE_FAILED\" -ne 0 ]; then", StringComparison.Ordinal),
+            "الكُتلَةُ تُنادى بَعدَ الحُكم — لا تُطبَعُ حينَ يَسقُطُ مَسار.");
+    }
+
+    /// <summary>وسَطرُ الإقلاعِ مِن الكود: <c>Program.cs</c> يَكتُبُه بِالقَرارِ عَلى <c>OtoOptions.Environment</c> كَما يَقرَؤُه العَميل، والكُتلَةُ لا تَقرَأُ المُتَغَيِّر.</summary>
+    [Fact]
+    public void The_app_writes_the_oto_decision_on_boot_and_the_gate_block_does_not_read_the_variable()
+    {
+        var program = Read("apps/V1.App/Program.cs").Replace("\r\n", "\n");
+        Assert.Contains("OtoEnvironment.BootLogPrefix + \"{Oto}\"", program, StringComparison.Ordinal);
+        Assert.Contains("OtoEnvironment.BootLogValue(\n        app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<OtoOptions>>().Value.Environment)",
+            program, StringComparison.Ordinal);
+        Assert.True(program.IndexOf("OtoEnvironment.BootLogPrefix", StringComparison.Ordinal) > program.IndexOf("var app = builder.Build();", StringComparison.Ordinal));
+        Assert.DoesNotContain("Shipping__Oto__Environment:-", OtoGateFunction(), StringComparison.Ordinal);
+        foreach (var shape in new[] { "staging", " Staging ", "\vstaging", " staging ", "production", "", "sta ging" })
+            Assert.Equal(OtoEnvironment.IsOpen(shape) ? OtoEnvironment.OpenBootValue : OtoEnvironment.ClosedBootValue, OtoEnvironment.BootLogValue(shape));
+    }
+
+    /// <summary>وبِلا سَطرٍ في السِجِلِّ تَقولُ «لَم تُقَس» — ولا «مُغلَق» ولا ⚠ staging — ولَو كانَ المُتَغَيِّرُ staging في بيئَتِها.</summary>
+    [Fact]
+    public void The_gate_block_says_unmeasured_when_the_app_wrote_no_line()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var text = RunBash(OtoGateFunction(), "oto_environment \"$1\"", "[06:48:20 INF] Now listening on: http://127.0.0.1:5171\n", "staging");
+        Assert.StartsWith("⚠ بيئَةُ OTO: لَم تُقَس", text, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// <para><b>توصيفُ «اليَوم»</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-6 الجَولَة ٢، الصُغرى ٢ — عِندَ <c>12993e9</c>): الكُتلَةُ تُعيدُ كِتابَةَ التَطبيعِ بِـ<c>tr</c>
-    /// — تَمحو بَياضَ ASCII في كُلِّ مَوضِعٍ ولا تَقُصُّ بَياضَ يونيكود — و<c>OtoEnvironment.Normalize</c> هُوَ <c>Trim().ToLowerInvariant()</c>. فَعِندَ
-    /// <c>\vstaging</c> و<c>NBSP·staging·NBSP</c> يَفتَحُ الكودُ staging ويُقلِعُ التَطبيقُ، والكُتلَةُ تَقولُ «خارِجَ المَعجَم — يَرمي بِها الإقلاع» بِلا ⚠:
-    /// التَنبيهُ يَفشَلُ مَفتوحاً حَيثُ يُهِمّ. وعِندَ <c>sta ging</c> لا يَفتَحُ الكود (والإقلاعُ يَرمي)، والكُتلَةُ تُنَبِّهُ بِـstaging.</para>
+    /// <para>انقَلَبَ بِاسمِه (كانَ <c>Today_the_gate_block_renormalizes_the_value_and_parts_from_the_code</c>، <c>c1f2e29</c>): الكُتلَةُ كَما كانَت عِندَ
+    /// <c>c1f2e29</c> بِحَرفِها — تَقرَأُ المُتَغَيِّرَ وتُطَبِّعُه بِـ<c>tr</c> — <b>عَيِّنَةٌ مَحقونَة</b>: حُكمُ الصَفِّ أَعلاه (⚠ حَيثُ يَفتَحُ الكودُ وَحدَه) يَحمَرُّ
+    /// عَلَيها في الأَشكالِ الثَلاثَة، فَهُوَ لَيسَ أَعمى.</para>
     /// </summary>
     [Theory]
-    [InlineData("\vstaging", "الشَحنُ عَبرَ OTO: قيمَةٌ خارِجَ المَعجَم")]
-    [InlineData("\u00A0staging\u00A0", "الشَحنُ عَبرَ OTO: قيمَةٌ خارِجَ المَعجَم")]
-    [InlineData("sta ging", "⚠ Shipping__Oto__Environment=staging")]
-    public void Today_the_gate_block_renormalizes_the_value_and_parts_from_the_code(string value, string blockSays)
+    [InlineData("\vstaging")]
+    [InlineData(" staging ")]
+    [InlineData("sta ging")]
+    public void The_staging_parity_check_goes_red_on_the_block_that_renormalized(string value)
     {
         if (OperatingSystem.IsWindows()) return;
-        var text = RunOtoGateBlock(value);
-        Assert.StartsWith(blockSays, text, StringComparison.Ordinal);
+        const string before = """
+            oto_environment() {
+                local env
+                env="$(printf '%s' "${Shipping__Oto__Environment:-}" | tr -d ' \t\r\n' | tr 'A-Z' 'a-z')"
+                case "$env" in
+                    staging)
+                        echo "  ⚠ Shipping__Oto__Environment=staging في إقلاعٍ إنتاجيّ — بيئَةُ OTO التَجريبِيَّة: مَعَ الخِزانَةِ يُرسَمُ «حِسابُ الشَّحن عِندَ OTO» لِكُلِّ مالِكِ إعلانٍ في كُلِّ مَتجَر، وتُنشَأُ بوليصاتُ مَن يَلصِقُ رَمزَه عَلى staging — لا تُضبَطُ في الـSpace؛ البُرهانُ الحَيُّ عَلى نَفَقٍ إلى فَرعِ Neon مَنسوخ (DEPLOY.md §٢·ط)." ;;
+                    production)
+                        echo "  الشَحنُ عَبرَ OTO: production مُغلَقٌ في الكود (OtoEnvironment.IsOpen) — يُساوي الغِياب" ;;
+                    "")
+                        echo "  الشَحنُ عَبرَ OTO: مُغلَق (لا Shipping__Oto__Environment)" ;;
+                    *)
+                        echo "  الشَحنُ عَبرَ OTO: قيمَةٌ خارِجَ المَعجَم — يَرمي بِها الإقلاعُ بِاسمِ المُتَغَيِّر (boot_verdict ⇒ 3)" ;;
+                esac
+                return 0
+            }
+            """;
+        var text = RunBash(before, "oto_environment", AppLine(value), value);
         var warns = text.StartsWith("⚠ Shipping__Oto__Environment=staging", StringComparison.Ordinal);
         Assert.NotEqual(OtoEnvironment.IsOpen(value), warns);
     }

@@ -450,6 +450,13 @@ catch (Exception ex)
         "[agent] تَعَذَّرَ حَلُّ مِلَفّاتِ الوُكَلاء عِندَ الإقلاع: {Reason}", ex.Message);
 }
 
+// ‏**وبيئَةُ OTO بِقَرارِ الكودِ نَفسِه** (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-6 الجَولَة ٢): `OtoEnvironment.IsOpen` عَلى `OtoOptions.Environment` كَما
+// يَقرَؤُه العَميلُ والسَطحُ — لا تَطبيعٌ ثانٍ في bash. ورَمزُ السَطرِ تَقرَؤُه بَوّابَةُ الإقلاعِ (الكُتلَة `oto_environment`) فَتُنَبِّهُ عَلى staging.
+app.Logger.LogInformation(
+    OtoEnvironment.BootLogPrefix + "{Oto}",
+    OtoEnvironment.BootLogValue(
+        app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<OtoOptions>>().Value.Environment));
+
 app.UsePlatformHost();
 
 // تَفعيل خِدمَة المَلَفّات المَحَلِّيَّة (Local provider فَقَط — تُتَجاهَل

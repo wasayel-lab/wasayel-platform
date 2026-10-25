@@ -493,24 +493,28 @@ fi
 # طَلَباتٍ حَقيقِيَّةٍ عَلى بيئَةِ الاختِبار. **ويُقالُ ولا يُفشِل**: البَوّابَةُ تُقلِعُ Production عَلى فَرعٍ لِلبُرهانِ أَيضاً (DEPLOY.md §٢·ط)، والقِياسُ
 # بيئَتُها لا بيئَةُ الـSpace — كَمِفتاحِ الخِزانَةِ أَعلاه. والتَطبيعُ تَطبيعُ `OtoEnvironment.Normalize` (قَصٌّ وأَحرُفٌ صَغيرَة)، وصَفُّه في
 # `OtoDeployDocTests` يُقارِنُ حُكمَ الكُتلَةِ بِـ`OtoEnvironment.IsOpen` شَكلاً شَكلاً.
+# (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-6 الجَولَة ٢ الصُغرى ٢ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **و«التَطبيعُ تَطبيعُ Normalize» لَم يَكُن** — كانَت
+# الكُتلَةُ `tr -d ' \t\r\n' | tr 'A-Z' 'a-z'`: تَمحو بَياضَ ASCII في كُلِّ مَوضِعٍ ولا تَقُصُّ بَياضَ يونيكود، و`Normalize` هُوَ `Trim().ToLowerInvariant()`.
+# فَعِندَ `\vstaging` أَو NBSP حَولَها يَفتَحُ الكودُ staging والكُتلَةُ تَقولُ «خارِجَ المَعجَم» بِلا ⚠، وعِندَ `sta ging` تُنَبِّهُ بِـstaging والإقلاعُ يَرمي
+# (توصيفُه `c1f2e29`). **فَصارَت تَقرَأُ قَرارَ الكودِ نَفسِه** (القاعِدَة ٨، نَسَقُ `analysis_door` و`webpush_keys`): `Program.cs` يَكتُبُ
+# `OtoEnvironment.BootLogPrefix` بِـ`OtoEnvironment.BootLogValue` عَلى `OtoOptions.Environment` — `open` أَو `closed` — وهذِه تَقرَؤُه بَعدَ الإقلاع،
+# ولا تَقرَأُ المُتَغَيِّرَ أَصلاً. وقيمَةٌ خارِجَ المَعجَمِ لا تَكتُبُ سَطراً: `AddOtoShipping` يَرمي بِاسمِ المُتَغَيِّرِ و`boot_verdict` يُسَمّيه (‏3).
+# **وما تَخسَرُه — يُقال**: كانَت تُنادى قَبلَ النَشر، فَصارَ سَطرُها بَعدَ الإقلاعِ وَحدَه — إقلاعٌ يَموتُ لِسَبَبٍ آخَرَ لا يَطبَعُ ⚠ staging (ورَمزُ خُروجِه غَيرُ 0).
 # ─── بِدايَةُ oto_environment ───
 oto_environment() {
-    local env
-    env="$(printf '%s' "${Shipping__Oto__Environment:-}" | tr -d ' \t\r\n' | tr 'A-Z' 'a-z')"
-    case "$env" in
-        staging)
+    local log="$1" line
+    line="$(grep -F '[shipping] oto_environment=' "$log" 2>/dev/null | tail -n 1 || true)"
+    case "$line" in
+        *'oto_environment=open'*)
             echo "  ⚠ Shipping__Oto__Environment=staging في إقلاعٍ إنتاجيّ — بيئَةُ OTO التَجريبِيَّة: مَعَ الخِزانَةِ يُرسَمُ «حِسابُ الشَّحن عِندَ OTO» لِكُلِّ مالِكِ إعلانٍ في كُلِّ مَتجَر، وتُنشَأُ بوليصاتُ مَن يَلصِقُ رَمزَه عَلى staging — لا تُضبَطُ في الـSpace؛ البُرهانُ الحَيُّ عَلى نَفَقٍ إلى فَرعِ Neon مَنسوخ (DEPLOY.md §٢·ط)." ;;
-        production)
-            echo "  الشَحنُ عَبرَ OTO: production مُغلَقٌ في الكود (OtoEnvironment.IsOpen) — يُساوي الغِياب" ;;
-        "")
-            echo "  الشَحنُ عَبرَ OTO: مُغلَق (لا Shipping__Oto__Environment)" ;;
+        *'oto_environment=closed'*)
+            echo "  الشَحنُ عَبرَ OTO: مُغلَق — OtoEnvironment.IsOpen كاذِبَةٌ في التَطبيق (لا Shipping__Oto__Environment، أَو production المُغلَقُ في الكود)" ;;
         *)
-            echo "  الشَحنُ عَبرَ OTO: قيمَةٌ خارِجَ المَعجَم — يَرمي بِها الإقلاعُ بِاسمِ المُتَغَيِّر (boot_verdict ⇒ 3)" ;;
+            echo "  ⚠ بيئَةُ OTO: لَم تُقَس — سَطرُ «[shipping] oto_environment=» غائِبٌ عَن سِجِلِّ التَطبيق" ;;
     esac
     return 0
 }
 # ─── نِهايَةُ oto_environment ───
-oto_environment
 
 # ═══ ٢) البِناء — نَفسُ أَمرِ الـDockerfile حَرفاً، بِبَصمَةٍ ═════════
 #
@@ -890,6 +894,8 @@ fi
 analysis_door "$APP_LOG"
 # ‏ومَفاتيحُ VAPID — سَطرٌ يُنَبِّهُ ولا يَحكُم (الكُتلَة `webpush_keys` أَعلاه؛ ‏2026-10-25).
 webpush_keys "$APP_LOG"
+# ‏وبيئَةُ OTO — سَطرٌ يُنَبِّهُ ولا يَحكُم، مِن سَطرِ التَطبيقِ لا مِن البيئَة (الكُتلَة `oto_environment` أَعلاه؛ ‏2026-10-25، مُراجَعَةُ W8-6 الجَولَة ٢).
+oto_environment "$APP_LOG"
 
 hr
 if [ "$ROUTE_FAILED" -ne 0 ]; then

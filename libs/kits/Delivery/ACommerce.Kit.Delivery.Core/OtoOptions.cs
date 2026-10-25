@@ -122,6 +122,21 @@ public static class OtoEnvironment
     public static bool IsMisconfiguredEnvironment(string? environment)
         => !string.IsNullOrWhiteSpace(environment) && BaseUrlFor(environment) is null;
 
+    /// <summary>
+    /// <para><b>سَطرُ الإقلاعِ الَّذي تَقرَؤُه بَوّابَةُ الإقلاع</b> (الكُتلَة <c>oto_environment</c> في <c>scripts/verify-production-boot.sh</c>) — بِقَرارِ
+    /// <see cref="IsOpen"/> نَفسِه (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-6 الجَولَة ٢، الصُغرى ٢؛ نَسَقُ <c>StudioAnalysisDoor.BootLogPrefix</c> و<c>WebPushService.BootLogPrefix</c>).
+    /// كانَت الكُتلَةُ تُعيدُ كِتابَةَ <c>Normalize</c> بِـ<c>tr</c> — تَمحو بَياضَ ASCII في كُلِّ مَوضِعٍ ولا تَقُصُّ بَياضَ يونيكود — فَتَقولُ «خارِجَ المَعجَم»
+    /// حَيثُ يَفتَحُ هذا الكودُ staging (القاعِدَة ٨: لا نُسخَةَ ثانِيَةً مِن قِراءَةِ التَهيئَة). والرَمزُ لا نَصٌّ عَرَبيٌّ يَنجَرِف.</para>
+    /// </summary>
+    public const string BootLogPrefix = "[shipping] oto_environment=";
+
+    /// <summary>قيمَتا سَطرِ الإقلاع: <see cref="IsOpen"/> صادِقَةٌ أَم لا — والقيمَةُ خارِجَ المَعجَمِ لا تَبلُغُه (<c>AddOtoShipping</c> يَرمي قَبلَه).</summary>
+    public const string OpenBootValue = "open";
+    public const string ClosedBootValue = "closed";
+
+    /// <summary>قيمَةُ سَطرِ الإقلاعِ لِبيئَةٍ — <see cref="OpenBootValue"/> حَيثُ <see cref="IsOpen"/>، وإلّا <see cref="ClosedBootValue"/>.</summary>
+    public static string BootLogValue(string? environment) => IsOpen(environment) ? OpenBootValue : ClosedBootValue;
+
     /// <summary>مُهلَةٌ بِثَوانٍ، والصِفرُ أَو السالِبُ يَرتَدُّ إلى الافتِراض.</summary>
     public static TimeSpan Timeout(int seconds)
         => TimeSpan.FromSeconds(seconds > 0 ? seconds : DefaultTimeoutSeconds);
