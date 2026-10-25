@@ -1207,8 +1207,10 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
     private static readonly IReadOnlyDictionary<string, string> NoReceivers = new Dictionary<string, string>();
 
     /// <summary>البادِئَةُ المُؤَهَّلَةُ اختِيارِيَّةٌ كَما في <see cref="WolverineWrite"/> — وبِالعِلَّةِ نَفسِها.</summary>
+    // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة ٢، صُغرى): بَعدَ «[» أَو «,» — `[NotTenanted, WolverineGet("/x")]` سِمَةٌ صَحيحَةٌ كانَت لا تُقرَأ،
+    // وحارِسُها الوَحيدُ أَرضِيَّةُ «2 عَلى الأَقَلّ» الَّتي يَبلُغُها SeoHandlers وَحدَه. وجِسمُها يُقرَأُ مِن «[» القائِمَةِ لا مِن الفاصِلَة.
     private static readonly Regex WolverineRead =
-        new(@"\[(?:[A-Za-z_][A-Za-z0-9_]*\s*\.\s*)*WolverineGet\s*\(\s*""(?<route>[^""]+)""", RegexOptions.Compiled);
+        new(@"[\[,]\s*(?:[A-Za-z_][A-Za-z0-9_]*\s*\.\s*)*WolverineGet\s*\(\s*""(?<route>[^""]+)""", RegexOptions.Compiled);
 
     /// <summary><c>@inject T N</c> في سَطرِه، و<c>[Inject] T N {</c> في <c>@code</c> — الشَكلانِ اللَّذانِ تَحقِنُ بِهِما صَفحَةُ razor خِدمَة.</summary>
     private static readonly Regex RazorInject = new(
@@ -1248,7 +1250,8 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
             foreach (Match m in WolverineRead.Matches(code))
             {
                 var route = m.Groups["route"].Value;
-                var attrEnd = Closing(code, m.Index, '[', ']') + 1;
+                var listStart = code[m.Index] == '[' ? m.Index : code.LastIndexOf('[', m.Index);
+                var attrEnd = Closing(code, listStart, '[', ']') + 1;
                 var d = MethodDecl.Match(code, attrEnd);
                 var adjacent = d.Success && Regex.IsMatch(code[attrEnd..d.Index], @"^\s*(?:\[[^\]]*\]\s*)*$");
                 var paren = adjacent ? d.Index + d.Length - 1 : -1;
@@ -1257,7 +1260,7 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
                 if (!head.Success) { yield return new(SurfaceWolverineGet, route, Rel(file), "", NoReceivers, AskDirect: true); continue; }
                 var at = close + 1 + head.Groups["kind"].Index;
                 var end = head.Groups["kind"].Value == "{" ? Closing(code, at, '{', '}') + 1 : at + StatementFrom(code, at).Length;
-                yield return new(SurfaceWolverineGet, route, Rel(file), code[m.Index..end], ParameterTypes(code[(paren + 1)..close]), AskDirect: true);
+                yield return new(SurfaceWolverineGet, route, Rel(file), code[listStart..end], ParameterTypes(code[(paren + 1)..close]), AskDirect: true);
             }
         }
     }
@@ -1551,6 +1554,8 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
             ("رَمزُ Marten مُباشِرٌ — لا صَفَّ غَيرُه يَسأَلُه", "public static class H\n{\n    [WolverineGet(\"/z\")]\n" +
                 "    public static async Task Z(IDocumentSession session) { session.Store(new { }); await session.SaveChangesAsync(); }\n}\n", ["SaveChangesAsync", ".Store("]),
             ("قِراءَةٌ خالِصَة", "public static class H\n{\n    [WolverineGet(\"/r\")]\n    public static Task<Deal?> R(Guid id, FakeDealsService deals) => deals.LoadAsync(id);\n}\n", []),
+            ("قائِمَةُ سِماتٍ مُرَكَّبَة", "public static class H\n{\n    [NotTenanted, WolverineGet(\"/c\")]\n" +
+                "    public static async Task C(Guid id, FakeDealsService deals) { await deals.CancelAsync(id); }\n}\n", ["FakeDealsService.CancelAsync"]),
         };
         foreach (var (name, text, expected) in handlers)
             Check(name, WolverineGetHandlers([(At("x/H.cs"), text)]).Single(), expected);
@@ -1788,9 +1793,26 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
     /// <summary>البادِئَة المُؤَهَّلَة اختِيارِيَّة عَمداً: حَقنُ عَيبٍ
     /// مُصطَنَع بِـ <c>[Wolverine.Http.WolverinePost(…)]</c> عَبَرَ
     /// النُسخَة الأُولى مِن هذا النَمَط بِلا أَن تَحمَرّ. (القاعِدَة ١٠.)</summary>
+    // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة ٢): وبَعدَ «,» في قائِمَةِ سِماتٍ مُرَكَّبَة — كَـ<see cref="WolverineRead"/>.
     private static readonly Regex WolverineWrite =
-        new(@"\[(?:[A-Za-z_][A-Za-z0-9_]*\s*\.\s*)*Wolverine(?:Post|Put|Delete|Patch)\s*\(\s*""(?<route>[^""]+)""",
+        new(@"[\[,]\s*(?:[A-Za-z_][A-Za-z0-9_]*\s*\.\s*)*Wolverine(?:Post|Put|Delete|Patch)\s*\(\s*""(?<route>[^""]+)""",
             RegexOptions.Compiled);
+
+    /// <summary>القاعِدَة ١٠ — نَمَطا سِماتِ Wolverine يَقرَآنِ القائِمَةَ المُرَكَّبَةَ والمُؤَهَّلَة، ولا يَقرَآنِ الاسمَ خارِجَ قائِمَةِ سِمات.</summary>
+    [Theory]
+    [InlineData("[WolverinePost(\"/a\")]", false, true)]
+    [InlineData("[Wolverine.Http.WolverinePost(\"/a\")]", false, true)]
+    [InlineData("[NotTenanted, WolverinePost(\"/a\")]", false, true)]
+    [InlineData("[NotTenanted,Wolverine.Http.WolverineDelete(\"/a\")]", false, true)]
+    [InlineData("[WolverineGet(\"/g\")]", true, false)]
+    [InlineData("[NotTenanted, WolverineGet(\"/g\")]", true, false)]
+    [InlineData("[AllowAnonymous , Wolverine.Http.WolverineGet(\"/g\")]", true, false)]
+    [InlineData("var x = Build(WolverinePost(\"/a\"));", false, false)]
+    public void The_wolverine_attribute_patterns_read_combined_and_qualified_lists(string code, bool read, bool write)
+    {
+        Assert.Equal(read, WolverineRead.IsMatch(code));
+        Assert.Equal(write, WolverineWrite.IsMatch(code));
+    }
 
     /// <summary>نِقاط الـ minimal API الكاتِبَة — مَع جِسمِها الكامِل
     /// مِن <c>Map…(</c> حَتّى فاصِلَة السَطر المُنهِيَة، فَتَدخُل
