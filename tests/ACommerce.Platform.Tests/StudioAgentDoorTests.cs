@@ -81,7 +81,12 @@ public class StudioAgentDoorTests(ITestOutputHelper output)
     /// فَإن كانَ في الشَرطِ <c>?</c> في مُستَواه الأَعلى رُفِض (الشَرطِيُّ أَدنى مِن <c>||</c> فَيَبتَلِعُ الشِقّ). وكُلُّ ما سِواه — حارِسٌ بَعدَ النِداء،
     /// أَو في فَرع، أَو بِـ<c>&amp;&amp;</c>، أَو بِلا <c>return</c>، أَو بِمُدخَلاتٍ أُخرى، أَو جِسمٌ تَعبيرِيّ، أَو تَرميز — <b>بِلا باب</b>.</para>
     /// <para>والبِنيَةُ (الأَقواسُ و<c>;</c> و<c>if</c>) تُقرَأُ عَلى نُسخَةٍ بُيِّضَت فيها السَلاسِلُ النَصّيَّةُ داخِلَ <c>@code</c>
-    /// (<see cref="WriteEndpointGuardTests.SkipLiteral"/>)، فَـ<c>"{"</c> أَو حارِسٌ مَكتوبٌ في سِلسِلَةٍ لا يُغَيِّرُ الحُكم.</para></summary>
+    /// (<see cref="WriteEndpointGuardTests.SkipLiteral"/>)، فَـ<c>"{"</c> أَو حارِسٌ مَكتوبٌ في سِلسِلَةٍ لا يُغَيِّرُ الحُكم.</para>
+    /// <para><b>دِقَّةٌ ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-3 الجَولَة ٢، مَعلومَة) — ولا يُعادُ حَرفٌ فَوقَها</b>: «وفي أَوَّلِ عِبارَة» أَعلاه أَضيَقُ مِمّا يَقبَلُه
+    /// <see cref="HeadGuardBefore"/>: يَقبَلُ الحارِسَ <b>في بِدايَةِ عِبارَةٍ عُليا قَبلَ النِداء</b> — أَيَّ عِبارَةٍ في المُستَوى الأَوَّلِ تَبدَأُ بَعدَ <c>{</c> أَو
+    /// <c>;</c> أَو <c>}</c> وتَنتَهي قَبلَه، لا الأُولى وَحدَها — فَـ<c>var x = 1; if (… || !Opens(…)) return;</c> مَقبول. والحُكمُ سَليمٌ بِهذا: كُلُّ نِداءٍ يُحكَمُ
+    /// بِما سَبَقَه في رَأسِ دالَّتِه، ولا يَمُرُّ نِداءٌ قَبلَ حارِسِه (صَفُّ «حارِسٌ بَعدَ النِداء» يُحمِرّ). و‏ADR-016 §٧-أ يَقولُه «في المُستَوى الأَوَّلِ
+    /// مِن جِسمِها قَبلَه» فَلا يُمَسّ.</para></summary>
     private static List<SpendCall> SpendCallsIn(string code)
     {
         var structure = code.ToCharArray();
@@ -324,6 +329,11 @@ public class StudioAgentDoorTests(ITestOutputHelper output)
         // ─── ما يُرفَض ───
         ["a_fourth_handler_without_the_door"] = InjectedPage(GuardedSend
           + "    async Task RetryAsync() { if (isWorking || _userId == Guid.Empty) return; session = await Agent.AskAsync(\"retry\", _scopeId); }\n"),
+        // (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-3 الجَولَة ٢ — ولا يُعادُ حَرفٌ فَوقَه: الحارِسُ في بِدايَةِ عِبارَةٍ عُليا بَعدَ أُخرى ما زالَ قَبلَ النِداء — مَقبول؛
+        // وبِه يُقاسُ ما تَقولُه دِقَّةُ مُلَخَّصِ SpendCallsIn.)
+        ["head_guard_after_a_first_statement"] = InjectedPage(
+            "    async Task SendAsync()\n    {\n        var started = DateTime.UtcNow;\n        if (isWorking || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\n"
+          + "        session = await Agent.AskAsync(\"m\", _scopeId);\n    }\n"),
         ["door_after_the_spend"] = InjectedPage(
             "    async Task SendAsync()\n    {\n        session = await Agent.AskAsync(\"m\", _scopeId);\n"
           + "        if (!StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\n    }\n"),
@@ -379,6 +389,7 @@ public class StudioAgentDoorTests(ITestOutputHelper output)
     [InlineData("two_spends_behind_one_head_guard", 2, 2)]
     [InlineData("a_brace_in_a_string_does_not_shift_the_members", 2, 1)]
     [InlineData("a_fourth_handler_without_the_door", 2, 1)]
+    [InlineData("head_guard_after_a_first_statement", 1, 1)]
     [InlineData("door_after_the_spend", 1, 0)]
     [InlineData("door_inside_a_branch", 1, 0)]
     [InlineData("door_under_an_unbraced_if", 1, 0)]
