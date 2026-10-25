@@ -476,7 +476,7 @@
     /// <c>CancelWholeInvoiceAsync</c> قَبلَ أَيِّ كِتابَة (‏2026-10-13، G5 M4).</summary>
     bool cancelShared, canCancelOrder;
     /// <summary>الناظِرُ يُنشِئُ بوليصَةَ هذِه الصَفقَة — <see cref="DealShipAuthorization.IsAllowed"/> نَفسُها الَّتي تُطَبِّقُها
-    /// <c>/ship</c>، بِرَمزِ ناقِلٍ يُحَلُّ لِهذا المَتجَر (<see cref="DealShipping.CarrierReady"/>) — وبِلا رَمزٍ لا تُرسَم (القاعِدَة ١٢).
+    /// <c>/ship</c>، بِرَمزِ ناقِلٍ يُحَلُّ لِهذا المَتجَر (<see cref="DealShipping.CarrierReadyForViewerAsync"/> — وكانَ المَرجِعُ <c>CarrierReady</c> المَحذوفَة، صُحِّحَ ‏2026-10-25) — وبِلا رَمزٍ لا تُرسَم (القاعِدَة ١٢).
     /// و<c>shipResumes</c>: لِلصَفقَةِ طَلَبٌ عِندَ OTO مِن مُحاوَلَةٍ سابِقَة، فَالاستِمارَةُ بِلا مَدينَة.</summary>
     bool canShip, shipResumes;
     /// <summary>تاليها «شَحن» وطَلَبُها عِندَ OTO — <see cref="DealShipping.AwaitsCarrier"/> نَفسُها الَّتي تَسأَلُها <c>AdvanceAsync</c>
