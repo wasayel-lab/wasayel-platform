@@ -305,4 +305,42 @@ public class DeployDocClaimsTests(ITestOutputHelper output)
         Assert.Equal(2, rows.Length);
         Assert.Contains(rows, r => r.Contains("**إلزاميٌّ خارِجَ Development**", StringComparison.Ordinal));
     }
+
+    // ─── brief-P2-3 — §٢·ج «ويَراهُ صاحِبُه في الاستوديو أَيضاً» ─────────────────────────────────────────────────────────
+
+    /// <summary>أَيُرسَمُ زِرُّ PayPal في الاستوديو لِلسارِيَةِ أَيضاً؟ — يُقرَأُ مِن <c>StudioHome.razor</c>: الفَرعُ <c>PayPalUrl(…)</c> داخِلَ حَلقَةِ
+    /// <c>Renewable</c>، و<c>Renewable</c> لا يَسأَلُ الرابِط ⇒ لا.</summary>
+    internal static bool StudioDrawsPayPalOnlyWhenRenewable(string razor)
+    {
+        var loop = razor.IndexOf("@foreach (var t in myApps.Where(a => Renewable(a.Slug)))", StringComparison.Ordinal);
+        var list = razor.IndexOf("<div class=\"studio-list\">", loop < 0 ? 0 : loop, StringComparison.Ordinal);
+        var button = razor.IndexOf("PayPalUrl(t.Slug) is { } payUrl", StringComparison.Ordinal);
+        var renewable = razor.IndexOf("bool Renewable(string slug)", StringComparison.Ordinal);
+        var body = renewable < 0 ? "" : razor[renewable..razor.IndexOf(';', renewable)];
+        return loop >= 0 && list > loop && button > loop && button < list && !body.Contains("PayPalUrl", StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_paypal_section_says_the_studio_draws_the_link_only_once_the_plan_leaves_active()
+    {
+        var razor = Read("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "StudioHome.razor");
+        Assert.True(StudioDrawsPayPalOnlyWhenRenewable(razor), "زِرُّ PayPal في الاستوديو لَم يَعُد مَشروطاً بِـRenewable — صَحِّح سَطرَ §٢·ج.");
+        var section = Section(Deploy(), "## ٢·ج. PayPal", "## ");
+        var claim = section.IndexOf("(ويَراهُ صاحِبُه في الاستوديو أَيضاً)", StringComparison.Ordinal);
+        Assert.True(claim > 0, "سَطرُ «ويَراهُ صاحِبُه في الاستوديو» غائِب.");
+        var after = section[claim..];
+        Assert.Contains("brief-P2-3", after, StringComparison.Ordinal);
+        Assert.Contains("فَما دامَت الباقَةُ سارِيَةً لا يَرى صاحِبُ المَتجَرِ الرابِطَ", after, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>حَقنُ عَيب</b>: صَفحَةٌ مَصنوعَةٌ يَسأَلُ فيها <c>Renewable</c> الرابِطَ — المُتَحَقِّقُ يَقولُ «لا» فَيَحمَرُّ الصَفُّ أَعلاه حينَ يَتَبَدَّلُ السُلوك.</summary>
+    [Fact]
+    public void The_paypal_studio_reader_goes_red_when_renewable_asks_the_link()
+    {
+        const string changed =
+            "@foreach (var t in myApps.Where(a => Renewable(a.Slug)))\n{ else if (PayPalUrl(t.Slug) is { } payUrl) { } }\n<div class=\"studio-list\">\n" +
+            "bool Renewable(string slug) => PlanState(slug) is Grace || PayPalUrl(slug) is not null;\n";
+        Assert.False(StudioDrawsPayPalOnlyWhenRenewable(changed));
+        Assert.True(StudioDrawsPayPalOnlyWhenRenewable(changed.Replace("|| PayPalUrl(slug) is not null", "", StringComparison.Ordinal)));
+    }
 }
