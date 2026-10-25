@@ -85,6 +85,23 @@ public class AppliedEventEmitterTests
         // يُتماً بَل غِيابَ سَطحِ المالِك.
     };
 
+    /// <summary>حَدَثٌ لا يَبنيه إلّا بَذّارٌ تَحتَ <c>/Seed/</c> — ومَن يَبنيه، ولِماذا يَبقى.</summary>
+    private sealed record SeederOnly(string Event, string Seeder, string WhyAr);
+
+    /// <summary>
+    /// <para><b>أَحداثٌ يَبنيها بَذّارٌ وَحدَه</b> (‏2026-10-25، تَدقيقُ الإطلاق lens-checkers-ci-8 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق).
+    /// كانَ الفاحِصُ يَعُدُّ مِلَفّاتِ <c>apps/V1.App/Seed/</c> مُصدِرين، فَحَدَثٌ لا يَبنيه إلّا بَذّارُ البَياناتِ التَجريبِيَّةِ «لَه مُصدِر» —
+    /// والطَفرَةُ M13 (حَذفُ <c>Append(ListingViewed)</c> مِن نُقطَةِ المُشاهَدَة) كانَت تَخضَرُّ لِأَنّ <c>AppearanceBaselineSeeder</c> يَبنيه.
+    /// والبَذّارُ لَيسَ مُستَهلِكَ وَقتِ تَشغيلٍ لِلقاعِدَة ١: يَكتُبُ عَيِّنَةً لا يَصِلُها مُستَخدِم. فَصارَت <c>/Seed/</c> خارِجَ البَحث،
+    /// وكُلُّ حَدَثٍ لا يَبقى لَه إلّا بَذّارُه يُثَبَّتُ هُنا بِاسمِه — ثُنائِيَّ الاتِّجاهِ كَاليَتامى.</para>
+    /// </summary>
+    private static readonly SeederOnly[] PinnedSeederOnly =
+    {
+        new("ListingFlagsSet", "apps/V1.App/Seed/PlatformSeed.cs",
+            "رايَتا «مُمَيَّز» و«مُوَثَّق» لِإعلاناتِ العَرضِ التَجريبيّ: لا شاشَةَ ولا نُقطَةَ تَضبِطُهُما لِإعلانٍ حَقيقيّ اليَوم، " +
+            "والواجِهَةُ تَقرَأُهُما (فِلتَرُ «مُوَثَّق» وشارَتُه) — فَهُما لِلعَيِّنَةِ وَحدَها حَتّى يولَدَ لَهُما سَطحٌ مَحروس."),
+    };
+
     // ─── الفَحص ───────────────────────────────────────────────────────
 
     [Fact]
@@ -103,7 +120,8 @@ public class AppliedEventEmitterTests
             .OrderBy(e => e, StringComparer.Ordinal)
             .ToArray();
 
-        var pinned = PinnedOrphans.Select(o => o.Event)
+        // ‏(‏2026-10-25) والمُثَبَّتُ بَذّاراً وَحدَه يُقرَأُ مَعَ اليَتامى — فَالدالَّةُ تَرى البَذّارَ خارِجَ البَحثِ أَيضاً.
+        var pinned = PinnedOrphans.Select(o => o.Event).Concat(PinnedSeederOnly.Select(o => o.Event))
             .OrderBy(e => e, StringComparer.Ordinal).ToArray();
 
         // ١. يَتيم جَديد غَير مُثَبَّت ⇒ يَحمَرّ.
@@ -254,7 +272,7 @@ public class AppliedEventEmitterTests
         EmitterSites(eventName, SourceText());
 
     private static IEnumerable<string> EmitterSites(
-        string eventName, IReadOnlyList<(string File, string Text)> sources)
+        string eventName, IReadOnlyList<(string File, string Text)> sources, bool includeSeeders = false)
     {
         var ctor = new Regex($@"\bnew\s+(?:[A-Za-z0-9_.]+\.)?{Regex.Escape(eventName)}\s*[\(\{{]",
             RegexOptions.Compiled);
@@ -263,8 +281,44 @@ public class AppliedEventEmitterTests
         {
             // مِلَفّ التَعريف لَيسَ مَوضِع إصدار.
             if (DefinesType(text, eventName)) continue;
+            // ‏(‏2026-10-25، lens-checkers-ci-8) ولا البَذّار: يَكتُبُ عَيِّنَةً لا يَصِلُها مُستَخدِم — `PinnedSeederOnly` أَعلاه.
+            if (!includeSeeders && IsSeeder(file)) continue;
             if (ctor.IsMatch(StripComments(text))) yield return file.Replace('\\', '/');
         }
+    }
+
+    private static bool IsSeeder(string file) => file.Replace('\\', '/').Contains("/Seed/", StringComparison.Ordinal);
+
+    /// <summary><b>المُثَبَّتُ بَذّاراً وَحدَه صادِق</b>: لا مُصدِرَ لَه خارِجَ <c>/Seed/</c>، والبَذّارُ المُسَمّى يَبنيه فِعلاً (وإلّا فَهُوَ يَتيمٌ
+    /// لا بَذّارِيّ)، وسَبَبُه مَكتوب. وإن وُلِدَ لَه مُصدِرٌ حَقيقيٌّ حَمِرَ الصَفُّ الأَوَّلُ بِالاتِّجاهِ المَقلوبِ حَتّى يُرفَع.</summary>
+    [Fact]
+    public void Every_seeder_only_event_is_built_by_its_named_seeder_and_nowhere_else()
+    {
+        var sources = SourceText();
+        Assert.True(sources.Count(f => IsSeeder(f.File)) >= 5, "أَداةٌ عَمياء: أَقَلُّ مِن خَمسَةِ مِلَفّاتٍ تَحتَ /Seed/.");
+        foreach (var o in PinnedSeederOnly)
+        {
+            Assert.False(HasEmitter(o.Event, sources), $"«{o.Event}» لَه مُصدِرٌ خارِجَ /Seed/ — اِرفَعه مِن PinnedSeederOnly.");
+            var seeded = EmitterSites(o.Event, sources, includeSeeders: true).ToArray();
+            Assert.Contains(seeded, f => f.EndsWith(o.Seeder, StringComparison.Ordinal));
+            Assert.True(o.WhyAr.Length > 40, $"سَبَب «{o.Event}» أَقصَرُ مِن أَن يَكونَ سَبَباً.");
+        }
+        Assert.Empty(PinnedSeederOnly.Select(o => o.Event).Intersect(PinnedOrphans.Select(o => o.Event), StringComparer.Ordinal));
+    }
+
+    /// <summary><b>حَقنُ عَيب — البَذّارُ لا يُعَدُّ مُصدِراً</b>: الطَفرَةُ M13 بِشَكلِها (الحَدَثُ يَبنيه بَذّارٌ وَحدَه) تُعطي «بِلا مُصدِر»، والمَوضِعُ
+    /// نَفسُه في خِدمَةٍ يُعطي «لَه مُصدِر»، وذِكرُه في تَعليقٍ لا يُعَدّ.</summary>
+    [Fact]
+    public void A_seeder_alone_is_not_an_emitter()
+    {
+        const string Record = "public sealed record ListingViewed(Guid Id, Guid? ViewerId, DateTime At);";
+        const string Build = "events.Add(new ListingViewed(id, null, DateTime.UtcNow));";
+        var def = ("libs/kits/Listings/ListingEvents.cs", Record);
+        Assert.False(HasEmitter("ListingViewed", [def, ("apps/V1.App/Seed/AppearanceBaselineSeeder.cs", Build)]));
+        Assert.False(HasEmitter("ListingViewed", [def, ("apps\\V1.App\\Seed\\AppearanceBaselineSeeder.cs", Build)]));
+        Assert.True(HasEmitter("ListingViewed", [def, ("libs/templates/T/MarketplaceTemplateExtensions.cs", "s.Events.Append(id, new ListingViewed(id, viewerId, DateTime.UtcNow));")]));
+        Assert.False(HasEmitter("ListingViewed", [def, ("libs/templates/T/X.cs", "// s.Events.Append(id, new ListingViewed(id, viewerId, now));")]));
+        Assert.Single(EmitterSites("ListingViewed", [def, ("apps/V1.App/Seed/AppearanceBaselineSeeder.cs", Build)], includeSeeders: true));
     }
 
     private static bool DefinesType(string text, string name) =>
