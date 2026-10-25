@@ -673,6 +673,71 @@ public class ProviderVaultDeploymentTests(ITestOutputHelper output)
                     $"مَدخَلُ البائِعِ يَطلُبُ الخِزانَةَ و§٢·ح لا يُسَمّي {cite}.");
     }
 
+    // ─── ٨‑ب. وبَواقي ‏ADR-032 §٨‑ح‑٣ — طَريقُ البِطاقَةِ نَفسُه (‏2026-10-25، تَدقيقُ الإطلاق lens-money-integrity-6) ───
+    //
+    // **المَقيسُ قَبل**: §٨‑ح أُلحِقَ بِـADR-032 بَعدَ قِسمِ «قَبلَ «مَتى»» (‏2026-10-13، `3541a46`)، والصَفُّ أَعلاه يَعُدُّ بَواقِيَ §٨‑ز وَحدَها — فَالبَحثُ
+    // في DEPLOY.md عَن `٨‑ح` و`S11b` و`S14` و`expired_at` صِفر، وثَلاثُ فَجَواتٍ في طَريقِ البِطاقَةِ (المُشتَري وَحدَه يَتَحَقَّق، ولا webhook، ولا انتِهاءَ
+    // لِلفاتورَة) تَغيبُ عَن قائِمَةِ ما يُقبَلُ قَبلَ ضَبطِ المِفتاح. **وصارَ** §٢·ح يُسَمّيها بِحُروفِها، والحُروفُ تُعَدُّ مِن ‏ADR-032 نَفسِه (وصِفرُها أَداةٌ
+    // عَمياء)، والمُتَحَقِّقُ دالَّةٌ نَقِيَّةٌ تُقاسُ عَلى نَصِّ القِسمِ بِلا الإلحاقِ (العَيِّنَةُ المَحقونَة — القاعِدَة ١٠).
+
+    /// <summary>حُروفُ البَندِ ٣ مِن ‏ADR-032 §٨‑ح («ما لا يُغلَقُ في طريقِ البطاقةِ اليوم») — <c>**(أ)</c> و<c>**(ب)</c>… بِتَرتيبِها.</summary>
+    internal static string[] Adr032SectionHItemThreeLetters()
+    {
+        var file = Directory.GetFiles(Path.Combine(RepoRoot, "docs"), "ADR-032-*.md");
+        Assert.Single(file);
+        var adr = Read("docs", Path.GetFileName(file[0]));
+        var h = adr.IndexOf("### ح. إلحاقُ ‏2026-10-13", StringComparison.Ordinal);
+        Assert.True(h > 0, "‏ADR-032 §٨‑ح غائِبٌ أَو تَغَيَّرَ عُنوانُه.");
+        var three = adr.IndexOf("\n3. **ما لا يُغلَقُ في طريقِ البطاقةِ اليوم", h, StringComparison.Ordinal);
+        Assert.True(three > h, "البَندُ ٣ مِن ‏ADR-032 §٨‑ح غائِب.");
+        var end = adr.IndexOf("\n4. ", three + 1, StringComparison.Ordinal);
+        var item = adr[three..(end > three ? end : adr.Length)];
+        return Regex.Matches(item, @"\*\*\((?<l>[\u0621-\u064A])\)").Select(m => m.Groups["l"].Value).ToArray();
+    }
+
+    /// <summary>ما يَنقُصُ §٢·ح (بِلا المَشطوب) مِن بَواقي §٨‑ح‑٣: الإحالَةُ نَفسُها، وكُلُّ حَرفٍ بِقَوسَيه بَعدَها، والقَراران، وكَلِمَتا الفَجوَتَين.</summary>
+    internal static IReadOnlyList<string> MissingSectionHThreeResiduals(string unstruckVaultSection, IReadOnlyList<string> letters)
+    {
+        var missing = new List<string>();
+        var at = unstruckVaultSection.IndexOf("ADR-032 §٨‑ح‑٣", StringComparison.Ordinal);
+        if (at < 0) { missing.Add("ADR-032 §٨‑ح‑٣"); return missing; }
+        var tail = unstruckVaultSection[at..];
+        foreach (var l in letters)
+            if (!tail.Contains($"**({l})", StringComparison.Ordinal)) missing.Add($"({l})");
+        foreach (var cite in new[] { "«ب» S11b·١٩", "«ب» S14·٧", "webhook", "`expired_at`", "`actor_not_payer`" })
+            if (!tail.Contains(cite, StringComparison.Ordinal)) missing.Add(cite);
+        return missing;
+    }
+
+    [Fact]
+    public void DeployDoc_vault_section_names_the_card_paths_own_residuals_from_adr032_section_h_three()
+    {
+        var letters = Adr032SectionHItemThreeLetters();
+        output.WriteLine($"حُروفُ ‏ADR-032 §٨‑ح‑٣: {letters.Length} — {string.Join(" ", letters)}");
+        Assert.True(letters.Length >= 3, $"أَداةٌ عَمياء: {letters.Length} حَرفاً في ‏ADR-032 §٨‑ح‑٣.");
+        var section = VaultSection(Read("docs", "DEPLOY.md"));
+        var unstruck = Regex.Replace(section, "~~.*?~~", string.Empty, RegexOptions.Singleline);
+        if (!CheckoutCardNeedsTheVault()) { output.WriteLine("البِطاقَةُ لا تَطلُبُ الخِزانَة — لا شَرط."); return; }
+        var missing = MissingSectionHThreeResiduals(unstruck, letters);
+        Assert.True(missing.Count == 0, "§٢·ح لا يُسَمّي مِن بَواقي ‏ADR-032 §٨‑ح‑٣: " + string.Join("، ", missing));
+    }
+
+    /// <summary><b>حَقنُ عَيب</b>: القِسمُ نَفسُه مَقطوعاً قَبلَ إلحاقِ §٨‑ح‑٣ يُحمِرُّ المُتَحَقِّق — بِالإحالَةِ الغائِبَةِ وَحدَها — ونَصٌّ فيه الإحالَةُ بِلا
+    /// حَرفٍ أَو بِلا قَرارٍ يُسَمّي ما نَقَص. فَالدالَّةُ لا تُوافِقُ دائِماً.</summary>
+    [Fact]
+    public void The_section_h_three_checker_goes_red_on_the_section_before_the_append()
+    {
+        var letters = Adr032SectionHItemThreeLetters();
+        var section = VaultSection(Read("docs", "DEPLOY.md"));
+        var append = section.IndexOf("**وثَلاثٌ في طَريقِ البِطاقَةِ نَفسِه", StringComparison.Ordinal);
+        Assert.True(append > 0, "إلحاقُ §٨‑ح‑٣ غائِبٌ عَن §٢·ح.");
+        var before = Regex.Replace(section[..append], "~~.*?~~", string.Empty, RegexOptions.Singleline);
+        Assert.Equal(new[] { "ADR-032 §٨‑ح‑٣" }, MissingSectionHThreeResiduals(before, letters));
+        var partial = MissingSectionHThreeResiduals("ADR-032 §٨‑ح‑٣ **(أ)** **(ب)** webhook `expired_at` `actor_not_payer` «ب» S14·٧", letters);
+        Assert.Contains("(ج)", partial);
+        Assert.Contains("«ب» S11b·١٩", partial);
+    }
+
     /// <summary>النَصُّ بِلا تَشكيلٍ (‏U+064B–U+0652) وبِمَسافاتٍ مَطوِيَّة — يُطَبَّقُ عَلى الطَرَفَينِ قَبلَ المُقارَنَة.
     /// <b>(‏2026-10-24 — تَيّارُ S16، مُراجَعَةُ S13 الجَولَة ١)</b> وبِلا التَطويلِ (U+0640) والأَلِفِ الخَنجَرِيَّةِ (U+0670) وعَلاماتِ الاتِّجاه
     /// (U+200E، U+200F الَّتي في DEPLOY.md كُلِّه، U+061C) — فَـ«ولا‏ عائِقَ» أَو «ولا عائـِق» لا تَفلِتُ مِن العَدّ.</summary>
