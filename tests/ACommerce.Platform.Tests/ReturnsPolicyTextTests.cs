@@ -209,12 +209,28 @@ public class ReturnsPolicyTextTests
         Assert.Contains("DealEvent.GatewayRefundDue => L[\"deals.detail.event_gateway_refund_due\"]", page, StringComparison.Ordinal);
     }
 
+    /// <summary>صَدرُ النَصِّ قَبلَ الجُملَةِ الَّتي تَبَدَّلَت، وعَجُزُه بَعدَها — بِحَرفِهِما (‏<c>236982d</c> وما قَبلَه).</summary>
+    internal const string HowLead = "لِطَلَب الاستِرجاع افتَح الصَّفقَة مِن «صَفقاتي» واضغَط «تَواصَل مَع البائِع»؛ البائِعُ هُوَ مَن يَقبَل الاستِرجاع";
+    internal const string HowTail = "، والمَنصَّةُ وَسيطٌ لا تَقبِض ثَمَنَ الصَّفقَة ولا تَرُدّه.";
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الصِياغَة)</b> — كانَ
+    /// <c>Today_the_returns_text_says_the_vendor_refunds_by_the_method_paid_even_for_card_orders_the_store_gateway_collected</c> (‏<c>236982d</c>).
+    /// <b>والآن</b> النَقدُ يَرُدُّه البائِعُ الَّذي قَبَضَه، والبِطاقَةُ يَرُدُّها صاحِبُ المَتجَرِ مِن لَوحَةِ البَوّابَةِ الَّتي قَبَضَتها — وهي العِبارَةُ
+    /// نَفسُها الَّتي تَقولُها صَفحَةُ الصَفقَةِ لِسَطرِ <c>GatewayRefundDue</c> (الصَفُّ أَعلاه)؛ والفَرقُ مَحصورٌ بَينَ الصَدرِ والعَجُزِ بِحَرفِهِما.</summary>
     [Fact]
-    public void Today_the_returns_text_says_the_vendor_refunds_by_the_method_paid_even_for_card_orders_the_store_gateway_collected()
+    public void The_returns_text_says_cash_is_refunded_by_the_vendor_and_card_by_the_store_owner_from_its_gateway()
     {
         var how = LocaleCatalog.Find(LocaleCatalog.Arabic, "legal.returns.how")!;
-        Assert.Contains("البائِعُ هُوَ مَن يَقبَل الاستِرجاع ويَرُدّ المَبلَغ بِالطَّريقَة الَّتي دُفِع بِها", how, StringComparison.Ordinal);
-        Assert.DoesNotContain("بَوّابَة", how, StringComparison.Ordinal);
-        Assert.DoesNotContain("صاحِب المَتجَر", how, StringComparison.Ordinal);
+        Assert.StartsWith(HowLead, how, StringComparison.Ordinal);
+        Assert.EndsWith(HowTail, how, StringComparison.Ordinal);
+        var middle = how[HowLead.Length..^HowTail.Length];
+        Assert.Equal("، وما دُفِع نَقداً عِندَ التَّسليم يَرُدّه البائِع، وما دُفِع بِالبِطاقَة يَرُدّه صاحِبُ المَتجَر مِن لَوحَة بَوّابَة الدَّفع الَّتي قَبَضَته", middle);
+        Assert.DoesNotContain("بِالطَّريقَة الَّتي دُفِع بِها", how, StringComparison.Ordinal);
+
+        // وصَفحَةُ الصَفقَةِ والنَصُّ يَقولانِ الشَيءَ نَفسَه: لَوحَةُ بَوّابَةِ المَتجَر — بِلا حَرَكات.
+        var due = AccountDeletionRetentionTests.Bare(LocaleCatalog.Find(LocaleCatalog.Arabic, "deals.detail.event_gateway_refund_due")!);
+        Assert.Contains("لوحة بوابة المتجر", due, StringComparison.Ordinal);
+        Assert.Contains("لوحة بوابة الدفع", AccountDeletionRetentionTests.Bare(how), StringComparison.Ordinal);
+        Assert.Contains("صاحب المتجر", AccountDeletionRetentionTests.Bare(how), StringComparison.Ordinal);
     }
 }
