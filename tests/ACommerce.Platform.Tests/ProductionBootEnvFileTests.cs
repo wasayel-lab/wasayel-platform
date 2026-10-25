@@ -149,10 +149,12 @@ public class ProductionBootEnvFileTests(ITestOutputHelper output)
         Assert.Equal("Host=from-file-branch;Database=x", conn);
     }
 
-    // ─── توصيفُ «اليَوم» — مُراجَعَةُ تَيّارِ W8-6، الكُبرى ١ (‏2026-10-25، عِندَ `6167b9f`) ───
+    // ─── مُراجَعَةُ تَيّارِ W8-6، الكُبرى ١ (‏2026-10-25) — انقَلَبَ بِاسمِه (كانَ `Today_an_exported_variable_the_file_does_not_assign_is_said_to_come_from_the_file`، `828defd`) ───
     //
-    // ‏`kept` لا يَحفَظُ إلّا اسماً يُسنِدُه المِلَفّ، فَمُتَغَيِّرٌ صُدِّرَ والمِلَفُّ لا يُسَمّيه يَسقُطُ في فَرعِ «مِن المِلَفّ». والإعدادُ الأَرجَح:
+    // ‏`kept` كانَ لا يَحفَظُ إلّا اسماً يُسنِدُه المِلَفّ، فَمُتَغَيِّرٌ صُدِّرَ والمِلَفُّ لا يُسَمّيه يَسقُطُ في فَرعِ «مِن المِلَفّ». والإعدادُ الأَرجَح:
     // مِلَفٌّ بِسَطرِ السِلسِلَةِ وَحدَه (مِثالُ §٢·و قَبلَ `d29e1d9`) والخُطوَةُ ١ مِن §٤‑د تُصَدِّرُ الاثنَين — فَتَنسِبُ البَوّابَةُ السِرَّ إلى مِلَفٍّ لا يَحمِلُه.
+    // **العِلاج**: الإلزامِيّانِ يُحفَظانِ مِن البيئَةِ ولَو لَم يُسَمِّهِما المِلَفّ، و`assigns` يُسَجِّلُ ما يُسنِدُه (مِن خَرجِ `sed` نَفسِه). والكُتلَةُ
+    // كَما كانَت عِندَ `6167b9f` بِحَرفِها عَيِّنَةٌ مَحقونَةٌ يَحمَرُّ عَلَيها الصَفّ.
 
     /// <summary>مِلَفٌّ بِسَطرِ السِلسِلَةِ وَحدَه — مِثالُ §٢·و قَبلَ <c>d29e1d9</c>.</summary>
     private const string ConnOnlyFileBody = "ConnectionStrings__Postgres=\"Host=from-file-branch;Database=x\"\n";
@@ -169,9 +171,14 @@ public class ProductionBootEnvFileTests(ITestOutputHelper output)
             .Where(l => l.StartsWith(name + ": ", StringComparison.Ordinal))
             .Select(l => l[(name.Length + 2)..]).SingleOrDefault();
 
-    /// <summary>توصيفُ «اليَوم»: السِرُّ صُدِّرَ والمِلَفُّ لا يُسنِدُه، فَقيمَتُه قيمَةُ البيئَة — والبَوّابَةُ تَقولُ «مِن المِلَفّ».</summary>
+    /// <summary>هَل يَقولُ الخَرجُ «مِن البيئَة» لِلاسمَينِ مَعاً ولا «مِن المِلَفّ» لِأَحَدِهِما — حُكمُ الصَفِّ أَدناه، يُطَبَّقُ عَلى الكُتلَةِ وعَلى العَيِّنَة.</summary>
+    internal static bool SaysBothFromTheEnvironment(string text)
+        => new[] { "ConnectionStrings__Postgres", "ACOMMERCE_AUTH_SECRET" }
+            .All(n => SourceOf(text, n) is { } said && said.StartsWith("مِن البيئَة", StringComparison.Ordinal));
+
+    /// <summary>السِرُّ صُدِّرَ والمِلَفُّ لا يُسنِدُه — فَقيمَتُه قيمَةُ البيئَة، والبَوّابَةُ تَقولُ «مِن البيئَة» لِلاسمَينِ مَعاً.</summary>
     [Fact]
-    public void Today_an_exported_variable_the_file_does_not_assign_is_said_to_come_from_the_file()
+    public void An_exported_variable_the_file_does_not_assign_is_said_to_come_from_the_environment()
     {
         if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI (‏ubuntu)."); return; }
         var (conn, secret, text) = Run(ConfigBlock(), BothExported, ConnOnlyFileBody);
@@ -179,7 +186,58 @@ public class ProductionBootEnvFileTests(ITestOutputHelper output)
         Assert.Equal("env-secret-0000000000000000000000000000000", secret);
         Assert.DoesNotContain("ACOMMERCE_AUTH_SECRET", ConnOnlyFileBody, StringComparison.Ordinal);
         Assert.Equal("مِن البيئَة (المِلَفُّ لا يَغلِبُها)", SourceOf(text, "ConnectionStrings__Postgres"));
+        Assert.Equal("مِن البيئَة", SourceOf(text, "ACOMMERCE_AUTH_SECRET"));
+        Assert.True(SaysBothFromTheEnvironment(text));
+    }
+
+    /// <summary>وما خَلَت مِنه البيئَةُ ومَلَأَه المِلَفُّ يَبقى «مِن المِلَفّ» — الفَرعُ الثالِثُ لا يُبتلَع.</summary>
+    [Fact]
+    public void A_variable_the_environment_left_unset_and_the_file_filled_is_said_to_come_from_the_file()
+    {
+        if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI (‏ubuntu)."); return; }
+        var (_, secret, text) = Run(ConfigBlock(),
+            new Dictionary<string, string> { ["ConnectionStrings__Postgres"] = "Host=from-env-branch;Database=x" }, FileBody);
+        Assert.Equal("file-secret-00000000000000000000000000000000", secret);
         Assert.Equal("مِن المِلَفّ", SourceOf(text, "ACOMMERCE_AUTH_SECRET"));
+        Assert.False(SaysBothFromTheEnvironment(text));
+    }
+
+    /// <summary>الكُتلَةُ كَما كانَت عِندَ <c>6167b9f</c> بِحَرفِها — عَيِّنَةٌ مَحقونَة: الحُكمُ نَفسُه يَراها تَنسِبُ السِرَّ المُصَدَّرَ إلى المِلَفّ، فَهُوَ لَيسَ أَعمى.</summary>
+    [Fact]
+    public void The_source_label_check_goes_red_on_the_block_it_was_written_for()
+    {
+        if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI (‏ubuntu)."); return; }
+        const string before = """
+            env_file() {
+                local file="$1" name
+                local -A kept=()
+                while IFS= read -r name; do
+                    [ -n "${!name:-}" ] && kept["$name"]="${!name}"
+                done < <(sed -nE 's/^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=.*/\2/p' "$file" | sort -u)
+                set -a
+                # shellcheck disable=SC1090
+                source "$file"
+                set +a
+                for name in "${!kept[@]}"; do
+                    printf -v "$name" '%s' "${kept[$name]}"
+                    export "${name?}"
+                done
+                for name in ConnectionStrings__Postgres ACOMMERCE_AUTH_SECRET; do
+                    if [ -n "${kept[$name]+x}" ]; then
+                        say "    $name: مِن البيئَة (المِلَفُّ لا يَغلِبُها)"
+                    elif [ -n "${!name:-}" ]; then
+                        say "    $name: مِن المِلَفّ"
+                    fi
+                done
+            }
+            env_file "$ENV_FILE"
+
+            """;
+        Assert.DoesNotContain("    local -A kept=()\n", ConfigBlock(), StringComparison.Ordinal);
+        var (_, secret, text) = Run(before, BothExported, ConnOnlyFileBody);
+        Assert.Equal("env-secret-0000000000000000000000000000000", secret);
+        Assert.Equal("مِن المِلَفّ", SourceOf(text, "ACOMMERCE_AUTH_SECRET"));
+        Assert.False(SaysBothFromTheEnvironment(text));
     }
 
     /// <summary>ودَليلُ النَشرِ يَقولُ القاعِدَةَ في «التَهيئَة» وفي الخُطوَةِ ١ مِن §٤‑د، والخُطوَةُ تُصَدِّرُ السِرَّ الَّذي تَشتَرِطُه البَوّابَة.</summary>
