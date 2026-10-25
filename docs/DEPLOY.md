@@ -296,6 +296,26 @@ variables → ‏Actions:
 في القاعِدَة: `TEST_DATA_SEED`، `INCUBATOR_SAMPLE_SEED`،
 `CART_SAMPLE_SEED`. غِيابُها هو الافتِراضيّ، فَلا تُضَف.
 
+### ٧) مَفاتيحُ هُوِيَّةِ المَنَصَّةِ الخَمسَة — تُملَأُ قَبلَ الإطلاق (‏2026-10-25، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)
+
+تَدقيقُ الإطلاق lens-dead-doors-4 وbrief-P3-5b: لا خُطوَةَ في هذا الدَليلِ كانَت تَقولُ إنّ وَثائِقَ المَنَصَّةِ تُنشَرُ بِنَوائِبَ
+`[[ … ]]`، وكانَ `/admin` وَحدَه يُنَبِّهُ المُشرِف. **ولا تُخترَعُ ولا تُستَنتَج** (القاعِدَة ١٦) — يَكتُبُها المالِكُ في
+`libs/core/ACommerce.Platform.I18n/Locales/ar.json` (ومُقابِلِها في `en.json`) مَكانَ النائِبِ كامِلاً، بِلا `[[` و`]]`:
+
+| المِفتاح | ما يُكتَب | مَتى |
+|---|---|---|
+| `platform.doc.contact_email` | بَريدُ التَواصُل | **اليَوم** — مُستَقِلٌّ عَن صِفَةِ التَسجيل |
+| `platform.doc.entity_name` | اسمُ الكِيانِ النِظاميّ | بَعدَ صِفَةِ التَسجيل |
+| `platform.doc.entity_registration` | رَقمُ السِجِلِّ التِجاريّ | بَعدَ صِفَةِ التَسجيل |
+| `platform.doc.entity_address` | العُنوانُ الوَطَنيّ | بَعدَ صِفَةِ التَسجيل |
+| `platform.doc.entity_country` | الدَولَةُ والقانونُ الحاكِم | مَعَ الثَلاثَة |
+
+**وما يَتَغَيَّرُ بِمَلءِ البَريد**: يَعودُ «تَواصَل مَعَنا لِلسِعر» في `/pricing` وقِسمُ البَريدِ في `/contact` — كِلاهُما مَخفِيٌّ ما دامَ
+`L.IsPlaceholder("platform.doc.contact_email")` (القاعِدَة ١٢: بابٌ إلى صَفحَةٍ بِلا طَريقٍ لَيسَ باباً). **والبُرهانُ بَعدَه**:
+`dotnet test tests/ACommerce.Platform.Tests/ACommerce.Platform.Tests.csproj -c Release --filter "FullyQualifiedName~PlatformDocFieldsTests|FullyQualifiedName~PlatformContactDoorTests"`،
+ولافِتَةُ «الحُقولُ النائِبَة» في `/admin` تَكُفُّ عِندَ الخَمسَة. وقائِمَةُ الخَمسَةِ نَفسُها `PlatformDocFields.EntityKeys` — وصَفُّ هذا
+الجَدوَلِ يَحرُسُه `PlatformContactDoorTests`.
+
 ---
 
 ## ٢·ب. قَنَواتُ الدُخول في الإنتاج — **بِلا واحِدَةٍ مِنها لا يَدخُل أَحَد**

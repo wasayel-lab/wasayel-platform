@@ -16,13 +16,18 @@
 
     <p class="wsl-placeholder wsl-doc-note">@L.Markup("platform.doc.placeholder_note")</p>
 
+    @* قِسمُ البَريدِ حينَ يُملَأُ البَريدُ لا قَبلَه (‏2026-10-25، تَدقيقُ الإطلاق lens-dead-doors-4): نائِبٌ `[[ … ]]` بِلا `mailto` لَيسَ
+       طَريقَ تَواصُل. والكِيانُ النِظاميُّ أَدناه يَبقى بِنائِبِه — وَثيقَةٌ تُقَدَّمُ لِلمُراجَعَةِ ومَعَها `placeholder_note`. و`@((MarkupString)…)`
+       بَعدَ الكُتلَةِ هُوَ الفَراغُ الَّذي كانَ قَبلَ قِسمِ الكِيانِ بِحَرفِه (Razor يُسقِطُه عَلى حَدِّ الكُتلَة). *@
+    @if (!L.IsPlaceholder("platform.doc.contact_email"))
+    {
     <section class="wsl-doc-section">
         <h2>@L.Markup("platform.contact.email_label")</h2>
         <p><span class="wsl-placeholder">@L.Markup("platform.doc.contact_email")</span></p>
         <p>@L.Markup("platform.contact.support_note")</p>
     </section>
-
-    <section class="wsl-doc-section">
+    }
+    @((MarkupString)"\n\n    ")<section class="wsl-doc-section">
         <h2>@L.Markup("platform.contact.entity_label")</h2>
         <ul class="wsl-doc-facts">
             <li><span class="wsl-placeholder">@L.Markup("platform.doc.entity_name")</span></li>
