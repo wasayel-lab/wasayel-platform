@@ -259,8 +259,39 @@ public class StudioAgentDoorTests(ITestOutputHelper output)
         Assert.True(userAt > 0 && adminAt > userAt, "قَرارُ المُشرِفِ لا يُقرَأُ مَعَ المُستَخدِم.");
         Assert.True(loadAt > adminAt && loadAt < init.IndexOf("Agent.LoadSessionAsync(", StringComparison.Ordinal),
             "المُحادَثَةُ تُحَمَّلُ قَبلَ سُؤالِ الباب.");
-        Assert.Equal(1, Regex.Matches(code, "_platformAdmin = ").Count);
+        // (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-3 الجَولَة ٢ — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: كانَ `Assert.Equal(1, Regex.Matches(code, "_platformAdmin = ").Count)` —
+        // حَرفٌ يَفوتُه `_platformAdmin|=` و`_platformAdmin=` والتَفكيكُ؛ صارَ كُلُّ كاتِبٍ يُعَدّ بِـDoorInputWriters، وعَيِّناتُه تُحمِرُّه.)
+        Assert.Single(DoorInputWriters(code, "_platformAdmin"));
     }
+
+    /// <summary>
+    /// <para><b>كُلُّ كاتِبٍ لِمُدخَلِ البابِ في صَفحَة</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-3 الجَولَتانِ ١ و٢، صُغرى): إسنادٌ (<c>=</c>، ومُرَكَّبٌ
+    /// <c>|= &amp;= ^= ??=</c>) بِمَسافَةٍ أَو بِلاها، وتَفكيكٌ (<c>(…, name) = …</c>)، و<c>out name</c> — لا المُقارَنَةُ (<c>==</c> <c>!=</c>) ولا القِراءَة.
+    /// والتَصريحُ بِلا قيمَةٍ (<c>bool name;</c>) لا يُعَدّ، وبِقيمَةٍ يُعَدّ. فَكاتِبٌ ثانٍ — وكانَ سَيَرسُمُ رابِطَي الوَكيلِ لِكُلِّ مُستَخدِمِ استوديو —
+    /// يُحمِرُّ صَفَّ صَفحَتِه.</para>
+    /// </summary>
+    internal static IReadOnlyList<string> DoorInputWriters(string code, string field)
+        => Regex.Matches(code, $@"\b{Regex.Escape(field)}\s*(?:(?:[|&^]|\?\?)?=(?!=)|\)\s*=(?!=))|\bout\s+(?:var\s+)?{Regex.Escape(field)}\b")
+                .Select(m => m.Value).ToList();
+
+    /// <summary><b>والعَدّادُ يُقاسُ</b> (القاعِدَة ١٠): كُلُّ شَكلِ كِتابَةٍ يُعَدُّ مَرَّة، والقِراءَةُ والمُقارَنَةُ والتَصريحُ بِلا قيمَةٍ صِفر.</summary>
+    [Theory]
+    [InlineData("_platformAdmin = x;", 1)]
+    [InlineData("_platformAdmin=x;", 1)]
+    [InlineData("_platformAdmin |= x;", 1)]
+    [InlineData("_platformAdmin&=x;", 1)]
+    [InlineData("_platformAdmin ??= x;", 1)]
+    [InlineData("(_userId, _platformAdmin) = (a, b);", 1)]
+    [InlineData("Try(out _platformAdmin);", 1)]
+    [InlineData("bool _platformAdmin = true;", 1)]
+    [InlineData("_platformAdmin = a; _platformAdmin = b;", 2)]
+    [InlineData("bool _platformAdmin;", 0)]
+    [InlineData("if (_platformAdmin == x) return;", 0)]
+    [InlineData("if (_platformAdmin != x) return;", 0)]
+    [InlineData("Opens(Agent.IsConfigured, _platformAdmin)", 0)]
+    [InlineData("_platformAdminX = y;", 0)]
+    public void The_door_input_writer_counter_counts_every_write_and_no_read(string sample, int writers)
+        => Assert.Equal(writers, DoorInputWriters(sample, "_platformAdmin").Count);
 
     /// <summary>صَفحَةٌ مَحقونَةٌ بِأَعضاءِ <c>@code</c> وتَرميزٍ اختِيارِيّ — مَصدَرُ صُفوفِ الماسِح.</summary>
     private static string InjectedPage(string members, string markup = "")
@@ -514,6 +545,9 @@ public class StudioAgentDoorTests(ITestOutputHelper output)
         Assert.Equal(1, feeds);
         Assert.Equal(2, asks);
         Assert.Equal(0, ownDefinition);
+        // (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-3 الجَولَتانِ ١ و٢ — ولا يُعادُ حَرفٌ فَوقَه: والسَطرُ المُغَذّي هُوَ الكاتِبُ الوَحيدُ لِـisPlatformAdmin —
+        // كاتِبٌ ثانٍ كانَ يَمُرّ والصَفُّ يَعُدُّ حَرفَ الأَوَّلِ وَحدَه.)
+        Assert.Single(DoorInputWriters(code, "isPlatformAdmin"));
     }
 
     // ─── البابُ نَفسُه: دالَّةٌ نَقِيَّة ───────────────────────────────────────────────────────────
