@@ -411,6 +411,8 @@ GUARDED_PAGES=(
   # ‏(‏2026-10-25، W8-7 — lens-dead-doors-3): كانَ هُنا "member-create-listing-forbidden:member:/{member}/create-listing?err=forbidden" —
   # فَرعٌ لا كاتِبَ لَه حُذِفَ مِن الصَفحَة، فَاللَقطَةُ صارَت نُسخَةً مِن "member-create-listing" بِاسمٍ يَدَّعي غَيرَه. ورَفضُ الصَلاحِيَّةِ
   # يُرسَمُ اليَومَ مِن `GatedPage` لِعُضوٍ بِلا `listing.create` لا بِمُعامِل — ولا مِلَفَّ لَقطَةٍ بِهذا الدَورِ بَعد.
+  # ‏(‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١): ومِلَفُّها `i18n-baseline/member-create-listing-forbidden.html` حُذِفَ — بَقِيَ يَتيماً لا
+  # يُنتِجُه مَدخَلٌ ولا يُقارِنُه شَيء. و`AppearanceBaselineCaptureEntryTests` يَحمَرُّ لِكُلِّ لَقطَةٍ مُودَعَةٍ بِلا مَدخَلٍ حَيٍّ هُنا.
 
   # ‏**`TenantManage` (‏24)** — ثَلاثَةُ فُروع: الإداريّ (‏`user` في
   # `theme-demo` يَملِك `tenant.manage`)، وغَيرُ الإداريّ (‏`member`)،
