@@ -53,9 +53,12 @@ public class DocsTableCellCountTests(ITestOutputHelper output)
         var tables = 0;
         var excess = new List<string>();
         var pinnedSeen = new HashSet<int>();
+        var unvisited = new List<string>();
         foreach (var file in files)
         {
             var lines = File.ReadAllLines(file);
+            var relFile = Path.GetRelativePath(ThemeZeroEquivalenceTests.RepoRoot, file).Replace('\\', '/');
+            unvisited.AddRange(TablesWithoutLeadingPipe(lines).Select(n => $"{relFile}:{n}"));
             for (var i = 0; i < lines.Length - 1; i++)
             {
                 if (!lines[i].TrimStart().StartsWith('|') || !Delimiter.IsMatch(lines[i + 1])) continue;
@@ -78,10 +81,42 @@ public class DocsTableCellCountTests(ITestOutputHelper output)
 
         var stale = Enumerable.Range(0, PinnedPreExisting.Length).Where(i => !pinnedSeen.Contains(i))
             .Select(i => $"{PinnedPreExisting[i].File} {PinnedPreExisting[i].Fragment}").ToList();
-        output.WriteLine($"مِلَفّات: {files.Count} · جَداوِل: {tables} · صُفوف: {rows} · زائِدَةٌ جَديدَة: {excess.Count} · مُثَبَّتَةٌ قائِمَة: {pinnedSeen.Count}/{PinnedPreExisting.Length}");
+        // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-3 الجَولَة ٢، مَعلومَة؛ تَيّارُ W8-10): العَدّادُ يَزورُ الجَداوِلَ بِخَطٍّ بادِئٍ وَحدَها — وكانَ سَطرُه يُسَمّيها
+        // «جَداوِل» بِلا قَيد. صارَ يُسَمّي نِطاقَه، ويَعُدُّ ما لا يَزورُه (جَدوَلُ GFM بِلا خَطٍّ بادِئ) ويَفشَلُ إن وُجِد — فَالعَمى يُحمِرُّ لا يُبتلَع.
+        output.WriteLine($"مِلَفّات: {files.Count} · جَداوِلُ بِخَطٍّ بادِئ: {tables} · صُفوفُها: {rows} · زائِدَةٌ جَديدَة: {excess.Count} · مُثَبَّتَةٌ قائِمَة: {pinnedSeen.Count}/{PinnedPreExisting.Length} · جَداوِلُ بِلا خَطٍّ بادِئ (لا يَزورُها): {unvisited.Count}");
         Assert.True(rows >= 1000, $"أَداةٌ عَمياء: {rows} صَفّاً في {files.Count} مِلَفّاً — والمَقيسُ ‏1932.");
         Assert.True(excess.Count == 0, "صُفوفٌ تَزيدُ خَلاياها عَلى رَأسِها — والزائِدُ لا يُرسَم:\n" + string.Join("\n", excess));
         Assert.True(stale.Count == 0, "مُثَبَّتٌ لَم يَعُد زائِداً — احذِفه مِن PinnedPreExisting (القائِمَةُ تَتَقَلَّص):\n" + string.Join("\n", stale));
+        Assert.True(unvisited.Count == 0, "جَدوَلٌ بِلا خَطٍّ عَمودِيٍّ بادِئ لا يَعُدُّه هذا الفاحِص — ابدَأ صُفوفَه بِـ«|»:\n" + string.Join("\n", unvisited));
+    }
+
+    /// <summary>سَطرُ فاصِلِ GFM فيه خَطٌّ عَمودِيٌّ واحِدٌ عَلى الأَقَلّ — فَلا يَلتَبِسُ بِـ<c>---</c> وَحدَه (عُنوانُ setext أَو فاصِلٌ أُفُقِيّ).</summary>
+    private static readonly Regex DelimiterWithPipe = new(@"^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)+\|?\s*$", RegexOptions.Compiled);
+
+    /// <summary>أَرقامُ أَسطُرِ رُؤوسِ الجَداوِلِ الَّتي لا يَزورُها العَدّاد: سَطرٌ فيه <c>|</c> ولا يَبدَأُ بِه، يَتلوه فاصِلُ GFM بِخَطّ.</summary>
+    internal static List<int> TablesWithoutLeadingPipe(IReadOnlyList<string> lines)
+    {
+        var at = new List<int>();
+        for (var i = 0; i < lines.Count - 1; i++)
+            if (!lines[i].TrimStart().StartsWith('|') && lines[i].Contains('|') && DelimiterWithPipe.IsMatch(lines[i + 1]))
+                at.Add(i + 1);
+        return at;
+    }
+
+    /// <summary>القاعِدَة ١٠ — عَدّادُ ما لا يُزارُ يُحمِرُّ بِعَيِّنَةٍ مَحقونَة، ولا يَعُدُّ جَدوَلاً بِخَطٍّ بادِئٍ ولا عُنوانَ setext.</summary>
+    [Theory]
+    [InlineData("a | b\n--- | ---\nc | d", 1)]
+    [InlineData("  a | b\n  :-- | --:", 1)]
+    [InlineData("intro\n\nx | y | z\n-|-|-\n1 | 2 | 3", 1)]
+    [InlineData("| a | b |\n|---|---|\n| c | d |", 0)]
+    [InlineData("Title\n---", 0)]
+    [InlineData("a | b\n---", 0)]
+    [InlineData("text with | a pipe\nplain text", 0)]
+    public void The_unvisited_table_counter_sees_a_table_without_a_leading_pipe(string doc, int expected)
+    {
+        var at = TablesWithoutLeadingPipe(doc.Split('\n'));
+        output.WriteLine($"مَحقونَة: {at.Count} (المُتَوَقَّع {expected}) — أَسطُر {string.Join(",", at)}");
+        Assert.Equal(expected, at.Count);
     }
 
     /// <summary>الفاحِصُ يَعُدُّ كَما يَعُدُّ GFM — يُقاسُ قَبلَ أَن يوثَقَ بِه (القاعِدَة ١٠).</summary>
