@@ -141,4 +141,88 @@ public class OtoDeployDocTests
         Assert.Contains("مَرسوماً في النَموذَجِ مُقفَلاً", section, StringComparison.Ordinal);
         Assert.Contains("عَشرٌ في السّاعَةِ", section, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// <para><b>والدَليلُ يَقولُ إنّ الـSpace هُوَ الإنتاجُ وإنّ <c>staging</c> فيه يَفتَحُ قِسمَ الشَحنِ لِكُلِّ مَتجَر</b> (‏2026-10-25، تَدقيقُ الإطلاق brief-P1b-1):
+    /// الحُجَّةُ مِن الكودِ لا مِن الوَثيقَة — <c>VendorShippingSurface.InputFor</c> بِلا مُعامِلِ مَتجَر، فَإن صارَ لَه يَوماً (قَصرُ <c>staging</c> عَلى
+    /// <c>theme-demo</c>) يَحمَرُّ هذا الصَفُّ حَتّى تُصَحَّحَ الفِقرَة؛ ورَمزُ التَهيئَةِ الاحتِياطيُّ وَحدَه مَقصورٌ عَلى <see cref="DealShipping.DemoStore"/>.</para>
+    /// </summary>
+    [Fact]
+    public void The_deploy_section_says_staging_on_the_space_opens_every_store_and_the_proof_goes_through_a_tunnel()
+    {
+        var input = typeof(ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingSurface).GetMethod("InputFor");
+        Assert.NotNull(input);
+        Assert.DoesNotContain(input!.GetParameters(), p => p.ParameterType == typeof(string));
+        var staging = new OtoOptions { Environment = OtoEnvironment.Staging, RefreshToken = "t" };
+        Assert.Equal("t", DealShipping.VendorTokenFor(staging, DealShipping.DemoStore));
+        Assert.Null(DealShipping.VendorTokenFor(staging, "any-other-store"));
+
+        var section = Section();
+        var at = section.IndexOf("brief-P1b-1", StringComparison.Ordinal);
+        Assert.True(at > 0, "تَصحيحُ brief-P1b-1 غائِبٌ عَن §٢·ط.");
+        var fix = section[at..];
+        foreach (var phrase in new[] { "الـSpace هُوَ الإنتاج", "لِكُلِّ بائِعٍ في كُلِّ مَتجَر", "بِلا مُعامِلِ مَتجَر", "نَفَقٍ", "فَرعِ Neon مَنسوخ",
+                     "ولا يُضبَطُ `staging` في\nالـSpace", "«ج» S8·١١", "«ب» W8-6 · ٦", "`oto_environment`" })
+            Assert.Contains(phrase, fix, StringComparison.Ordinal);
+    }
+
+    private const string OtoGateStart = "# ─── بِدايَةُ oto_environment ───";
+    private const string OtoGateEnd = "# ─── نِهايَةُ oto_environment ───";
+
+    private static string RunOtoGateBlock(string? value)
+    {
+        var gate = Read("scripts/verify-production-boot.sh");
+        var a = gate.IndexOf(OtoGateStart, StringComparison.Ordinal);
+        Assert.True(a > 0, "كُتلَةُ oto_environment غائِبَة.");
+        Assert.Equal(a, gate.LastIndexOf(OtoGateStart, StringComparison.Ordinal));
+        var b = gate.IndexOf(OtoGateEnd, a, StringComparison.Ordinal);
+        Assert.True(b > a);
+        Assert.True(File.Exists("/bin/bash"), "أَداةٌ غائِبَة: /bin/bash.");
+        var dir = Directory.CreateTempSubdirectory("wasayel-oto-gate-");
+        try
+        {
+            var script = Path.Combine(dir.FullName, "run.sh");
+            File.WriteAllText(script, "set -uo pipefail\n" + gate[a..(b + OtoGateEnd.Length)] + "\noto_environment\n", new System.Text.UTF8Encoding(false));
+            var psi = new System.Diagnostics.ProcessStartInfo("/bin/bash", new[] { script })
+            {
+                RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false,
+                StandardOutputEncoding = System.Text.Encoding.UTF8,
+            };
+            psi.Environment.Remove("Shipping__Oto__Environment");
+            if (value is not null) psi.Environment["Shipping__Oto__Environment"] = value;
+            using var p = System.Diagnostics.Process.Start(psi)!;
+            var text = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
+            Assert.True(p.WaitForExit(10_000));
+            Assert.Equal(0, p.ExitCode);
+            return text.Trim();
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    /// <summary>
+    /// <para><b>بَوّابَةُ الإقلاعِ تُنَبِّهُ عَلى <c>staging</c> في إقلاعِها الإنتاجيِّ ولا تُغَيِّرُ رَمزَها</b> — وحُكمُ الكُتلَةِ (⚠ أَم لا) يُساوي
+    /// <see cref="OtoEnvironment.IsOpen"/> شَكلاً شَكلاً: بِقَصٍّ وأَحرُفٍ كَبيرَة، والإنتاجُ، والفَراغ. والكُتلَةُ تُنادى مَرَّةً قَبلَ النَشر.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("staging")]
+    [InlineData(" Staging ")]
+    [InlineData("STAGING")]
+    [InlineData("production")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void The_boot_gate_warns_on_staging_exactly_where_the_code_opens_it(string? value)
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var text = RunOtoGateBlock(value);
+        var warns = text.StartsWith("⚠ Shipping__Oto__Environment=staging", StringComparison.Ordinal);
+        Assert.Equal(OtoEnvironment.IsOpen(value), warns);
+        if (warns)
+        {
+            Assert.Contains("لِكُلِّ مالِكِ إعلانٍ في كُلِّ مَتجَر", text, StringComparison.Ordinal);
+            Assert.Contains("DEPLOY.md §٢·ط", text, StringComparison.Ordinal);
+        }
+        var gate = Read("scripts/verify-production-boot.sh");
+        Assert.Equal(1, gate.Split("\noto_environment\n").Length - 1);
+        Assert.True(gate.IndexOf("\noto_environment\n", StringComparison.Ordinal) < gate.IndexOf("if ! dotnet publish \"$PROJECT\"", StringComparison.Ordinal));
+    }
 }
