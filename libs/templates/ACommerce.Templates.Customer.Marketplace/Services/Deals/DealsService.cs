@@ -416,8 +416,10 @@ public sealed class DealsService
         // والطَرَفُ وَحدَه يُجابُ عَن تَقادُمِ `from` قَبلَ سُؤالِ الفاعِل (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-1 الجَولَة ٢؛ تَوصيفُه `2cde10f`؛ القاعِدَة ٦):
         // كانَت المُقارَنَةُ أَوَّلاً لِكُلِّ سائِل، فَغَيرُ الطَرَفِ يَعرِفُ مَرحَلَةَ صَفقَةِ غَيرِه مِن الرَدّ — الخاطِئَةُ `deal_changed_meanwhile`
         // والصَحيحَةُ رَفضُ الفاعِلِ بِلا رَمز. فَصارَ يُجابُ ما يُجابُ بِه بِلا `from`، ويُسأَلُ التَقادُمُ بَعدَ الفاعِلِ لِمَن خُوِّلَ وحدَه.
+        // (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-10 الجَولَة ٢ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): و«الطَرَفُ» بِالدالَّةِ القائِمَةِ لا بِتَهجِئَةٍ رابِعَة —
+        // `IsActorAllowed(…, "either")` هِيَ `InitiatorId == actorId || CounterpartyId == actorId` بِحَرفِها، و`DealApi.IsParty` فَوقَها (القاعِدَة ٨).
         var stale = from is { } expected && deal.Stage != expected;
-        if (stale && (deal.InitiatorId == actorId || deal.CounterpartyId == actorId))
+        if (stale && IsActorAllowed(deal, actorId, "either"))
             return new(false, deal, ChangedMeanwhileAr, ChangedMeanwhile);
 
         var next = DealsPolicy.Next(deal);
