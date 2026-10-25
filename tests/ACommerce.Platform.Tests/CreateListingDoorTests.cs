@@ -272,8 +272,9 @@ public class CreateListingDoorTests(ITestOutputHelper output)
 
         Assert.Equal(2, switches.Count);
         Assert.Equal(switches.Count, behind);
-        // ‏(‏2026-10-25، W8-7 — كوميتُ إصلاحِ lens-dead-doors-7؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): المُستَهلِكُ الثالِثُ استِمارَةُ العَرض — مُسَمّىً في رَأسِ PermissionDoor.cs.
-        Assert.Equal(new[] { "GatedPage.razor", "MyListings.razor", "TenantListingDetail.razor" }, consumers);
+        // ‏(‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١): قائِمَةُ المُستَهلِكينَ انتَقَلَت إلى صَفِّ «اليَوم» لِلرَئيسِيَّة (<see cref="PermissionDoorConsumers"/>) —
+        // فَهِيَ ما يَتَبَدَّلُ بِتَبديلِ الرَئيسِيَّة، فَيُقلَبُ صَفُّ «اليَوم» بِاسمِه ولا يُمَسُّ هذا الصَفّ.
+        Assert.NotEmpty(consumers);
     }
 
     // ─── ما لا يَتَبَدَّل ───────────────────────────────────────────────────────────────────
@@ -286,7 +287,58 @@ public class CreateListingDoorTests(ITestOutputHelper output)
         output.WriteLine($"روابِطُ TenantHome: {home.Count} · {Summary(home)}");
         Assert.Equal(2, home.Count);
         Assert.All(home, l => Assert.Equal(Door.Predicate, l.Door));
-        Assert.Contains(@"canCreateListing = ACommerce.Kit.Roles.RolePermissions.Has(", Read(TemplateRoot + "/Components/Pages/TenantHome.razor"), StringComparison.Ordinal);
+        // ‏(‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١): بَصمَةُ نِداءِ الصَلاحِيَّةِ انتَقَلَت إلى صَفِّ «اليَوم» أَدناه — هِيَ ما يَتَبَدَّل.
+    }
+
+    private const string HomeFile = TemplateRoot + "/Components/Pages/TenantHome.razor";
+
+    /// <summary>مُستَهلِكو <c>PermissionDoor</c> في المَصادِر — كُلُّ مِلَفٍّ غَيرِ <c>PermissionDoor.cs</c> يَذكُرُ <c>PermissionDoor.</c> خارِجَ التَعليقات.</summary>
+    private static string[] PermissionDoorConsumers()
+        => EntitlementContractTests.SourceFiles()
+            .Where(f => !f.File.Replace('\\', '/').EndsWith("/Gates/PermissionDoor.cs", StringComparison.Ordinal))
+            .Where(f => WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(f.Text)).Contains("PermissionDoor.", StringComparison.Ordinal))
+            .Select(f => Path.GetFileName(f.File)).OrderBy(f => f, StringComparer.Ordinal).ToArray();
+
+    /// <summary>دَورٌ مُؤَلَّفٌ مُعتَمَدٌ يَحمِلُ <c>listing.create</c> — تَعريفُ «خَيّاط» نَفسُه (<see cref="TenantRoleDefinitionToolTests.KhayyatJson"/>) —
+    /// مُجَسَّداً فَوقَ أَدوارِ <see cref="Store"/> المُخَزَّنَةِ كَما يُجَسِّدُه <c>TenantRoleService.LoadAsync</c>.</summary>
+    private static IReadOnlyList<Role> MaterializedWithAuthoredMaker()
+        => TenantRoleSet.FromDocuments("adwar-demo", new[]
+        {
+            new TenantRoleDefinition
+            {
+                Id = "khayyat", Slug = "khayyat", DefinitionJson = TenantRoleDefinitionToolTests.KhayyatJson,
+                Status = TenantRoleStatuses.Approved, CreatedBy = "agent:define_role",
+                CreatedAt = new DateTime(2026, 8, 10, 0, 0, 0, DateTimeKind.Utc),
+            },
+        }).Materialize(Store);
+
+    /// <summary><b>«اليَوم» (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١ — صُغرى)</b>: رابِطا الرَئيسِيَّةِ يَسأَلانِ <c>listing.create</c> بِـ
+    /// <c>RolePermissions.Has</c> عَلى الأَدوارِ <b>المُجَسَّدَة</b> (<c>TenantRoleService.LoadAsync</c>: المُخَزَّنَةُ ثُمَّ المُؤَلَّفَةُ المُعتَمَدَة)، وصَفحَةُ
+    /// النَشرِ (<c>GatedPage</c>) وحارِسُ نُقطَتِها (<c>PermissionFilter</c>) يَقرَآنِ <c>Tenant.Roles</c> <b>المُخَزَّنَة</b>. فَمَن دَورُه مُؤَلَّفٌ يَحمِلُ
+    /// الصَلاحِيَّةَ يَرى «أَضِف إعلانك» ويَنقُرُه فَيَرى الرَفض — مَقيسٌ هُنا بِتَعريفِ «خَيّاط» نَفسِه، لا مُدَّعىً. والرَئيسِيَّةُ لَيسَت مِن مُستَهلِكي
+    /// <c>PermissionDoor</c> الثَلاثَة. يُقلَبُ بِاسمِه في كوميتِ التَبديل.</summary>
+    [Fact]
+    public void Today_the_home_page_asks_listing_create_on_the_materialized_roles_so_an_authored_role_sees_a_link_its_page_refuses()
+    {
+        var home = WriteEndpointGuardTests.StripMarkupComments(Read(HomeFile)).Replace("\r\n", "\n", StringComparison.Ordinal);
+        var flat = Regex.Replace(home, @"\s+", " ");
+        var materialized = MaterializedWithAuthoredMaker();
+        var homeDraws = RolePermissions.Has(materialized, "khayyat", Permission);          // ‏تَعبيرُ الرَئيسِيَّةِ بِحَرفِه، والدَورُ المُخَزَّنُ khayyat
+        var pageOpens = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(Store, null, "khayyat", Permission); // ‏قَرارُ GatedPage
+        var consumers = PermissionDoorConsumers();
+        output.WriteLine($"أَدوارٌ مُجَسَّدَة: {materialized.Count} ({string.Join(", ", materialized.Select(r => r.Slug))}) · مُخَزَّنَة: {Store.Count} · "
+            + $"الرَئيسِيَّةُ تَرسُمُ لِخَيّاط: {homeDraws} · صَفحَةُ النَشرِ تَفتَحُ لَه: {pageOpens} · مُستَهلِكو PermissionDoor: {string.Join(", ", consumers)}");
+
+        Assert.Contains("var withRoles = await Roles.LoadAsync(Slug);", home, StringComparison.Ordinal);
+        Assert.Contains("canCreateListing = ACommerce.Kit.Roles.RolePermissions.Has( loaded.Roles, effectiveRoleSlug, \"listing.create\");", flat, StringComparison.Ordinal);
+        Assert.DoesNotContain("PermissionDoor.", WriteEndpointGuardTests.StripComments(home), StringComparison.Ordinal);
+
+        Assert.Equal(Store.Count + 1, materialized.Count);
+        Assert.True(homeDraws, "الرَئيسِيَّةُ تَرسُمُ الرابِطَ لِدَورٍ مُؤَلَّفٍ يَحمِلُ الصَلاحِيَّة.");
+        Assert.False(pageOpens, "وصَفحَةُ النَشرِ تَرُدُّه — لا تَعرِفُ إلّا الأَدوارَ المُخَزَّنَة.");
+
+        // ‏(‏2026-10-25، W8-7 — كوميتُ إصلاحِ lens-dead-doors-7): المُستَهلِكُ الثالِثُ استِمارَةُ العَرض — مُسَمّىً في رَأسِ PermissionDoor.cs.
+        Assert.Equal(new[] { "GatedPage.razor", "MyListings.razor", "TenantListingDetail.razor" }, consumers);
     }
 
     /// <summary><b>أَبوابُ الدَورِ صادِقَةٌ لِلكاتالوج</b>: كُلُّ دَورٍ في <c>RoleCatalog.Definitions</c> يَختارُ <c>sellerHome</c> أَو <c>riderHome</c>
