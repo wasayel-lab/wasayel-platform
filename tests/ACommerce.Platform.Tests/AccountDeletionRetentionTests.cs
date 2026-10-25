@@ -480,6 +480,29 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     internal static readonly string[] RetainedFacts =
         { "الاسم الذي كان لك وقتها", "عنوان التوصيل", "الهاتف", "بائع الصفقة", "صاحب المتجر الاسم", "شركة الشحن" };
 
+    /// <summary><b>تَوصيف</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ١، صُغرى — القاعِدَة ٣: يَنقَلِبُ بِاسمِه في كوميتِ النَصّ): النُصوصُ الثَلاثَةُ
+    /// تَقولُ إنّ الصَفقَةَ تُبقي «الاسمَ الَّذي كانَ لَكَ وَقتَها»، وصَفقَةُ إتمامِ الشِراءِ تَكتُبُ في <c>InitiatorName</c> الاسمَ الَّذي كَتَبَه المُشتَري
+    /// في استِمارَةِ الطَلَبِ (<c>req.Form["name"]</c>) لا اسمَ حِسابِه — والعُنوانُ والهاتِفُ مِن الاستِمارَةِ نَفسِها يُقالُ فيهِما «كَتَبتَهُما في الطَلَب».</summary>
+    [Fact]
+    public void Today_the_deletion_texts_call_the_deal_name_the_one_you_had_while_checkout_keeps_the_name_typed_in_the_order()
+    {
+        var mte = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs")));
+        var submit = mte.IndexOf("\"/{slug}/checkout/submit\"", StringComparison.Ordinal);
+        var typed = mte.IndexOf("var name  = req.Form[\"name\"].ToString().Trim();", submit, StringComparison.Ordinal);
+        var kept = mte.IndexOf("initiatorId: userId, initiatorName: name,", submit, StringComparison.Ordinal);
+        var texts = new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey }.ToDictionary(k => k, k => Bare(Ar(k)));
+        output.WriteLine($"إتمامُ الشِراء: الاسمُ مِن الاستِمارَة {typed > submit} · يُكتَبُ InitiatorName {kept > typed} · " +
+                         string.Join(" · ", texts.Select(t => $"{t.Key}: «كان لك وقتها» {t.Value.Contains("الاسم الذي كان لك وقتها", StringComparison.Ordinal)}، «كتبته في الطلب» {t.Value.Contains("كتبته في الطلب", StringComparison.Ordinal)}")));
+        Assert.True(submit > 0 && typed > submit && kept > typed);
+        foreach (var (k, t) in texts)
+        {
+            Assert.Contains("الاسم الذي كان لك وقتها", t, StringComparison.Ordinal);
+            Assert.DoesNotContain("كتبته في الطلب", t, StringComparison.Ordinal);
+        }
+        Assert.DoesNotContain("or entered in the order", En(PlatformRetentionKey), StringComparison.Ordinal);
+    }
+
     /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الصِياغَة — الخِيارُ (ب) مِن brief-P3-5a)</b> — كانَ
     /// <c>Today_three_deletion_texts_promise_deal_records_without_a_name_or_contact_and_the_policy_promises_every_account_an_in_app_deletion</c>
     /// (‏<c>b52ea8d</c>): ثَلاثَةُ نُصوصٍ تَقولُ «بِلا اسم»، وs6/s7 لا تُمَيِّزانِ حِسابَ الاستوديو. <b>والآن</b> يَقولُ كُلٌّ مِنها ما تَبقيه الصَفقَةُ
