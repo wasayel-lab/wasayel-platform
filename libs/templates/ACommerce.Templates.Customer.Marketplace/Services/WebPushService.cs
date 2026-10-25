@@ -15,9 +15,30 @@ namespace ACommerce.Templates.Customer.Marketplace.Services;
 /// التَّعطيل الصامِت (الإشعارات تَعمَل في dev بِدون إعداد) وَأَفضَل مِن
 /// التَّوليد كُلّ تَشغيل (الاشتِراكات المَوجودَة تُصبِح غَير قابِلَة لِلإرسال
 /// لِأَنّ المُتَصَفِّح حَفِظَ الـ public key السابِق).
+/// <para>(‏2026-10-25، تَدقيقُ الإطلاق lens-docs-vs-code-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): «مَرَّة واحِدَة عِندَ التَّشغيل» هي
+/// <b>كُلُّ</b> تَشغيل — الخِدمَةُ <c>AddSingleton</c> — و<c>appsettings.Local.json</c> لا يَقرَؤُه المُضيف (لا <c>AddJsonFile</c>
+/// في <c>Program.cs</c>)، والسَطرُ لا يَطبَعُ المِفتاحَ الخاصَّ فَلا يُحفَظُ الزَوجُ مِنه أَصلاً. فَصارَ سَطرُ الإقلاعِ يُسَمّي مُتَغَيِّراتِ
+/// البيئَةِ الثَلاثَةَ بِحَرفِها (<see cref="SubjectEnvVar"/> و<see cref="PublicKeyEnvVar"/> و<see cref="PrivateKeyEnvVar"/>) ودَليلَ
+/// النَشر (<c>docs/DEPLOY.md</c> §٢ الخُطوَة ٦ — الزَوجُ يُوَلَّدُ مَرَّةً عِندَ المالِكِ ويُحفَظُ سِرّاً)، ويَكتُبُ بِرَمزِه
+/// <see cref="BootLogPrefix"/> <c>configured</c> أَو <c>ephemeral</c> — تَقرَؤُه بَوّابَةُ الإقلاعِ (الكُتلَة <c>webpush_keys</c> في
+/// <c>scripts/verify-production-boot.sh</c>) فَتُنَبِّهُ ولا تُفشِل. والتَوليدُ عِندَ الغِيابِ باقٍ كَما كان: الإشعاراتُ تَعمَلُ في
+/// التَطويرِ بِلا إعداد، والتَطبيقُ لا يَكتُبُ مِفتاحاً عَلى قُرصٍ ولا في القاعِدَة.</para>
 /// </summary>
 public sealed class WebPushService
 {
+    /// <summary>مُتَغَيِّراتُ البيئَةِ بِحَرفِها كَما يُتَرجِمُها .NET إلى <c>WebPush:Subject/PublicKey/PrivateKey</c> — يُسَمّيها سَطرُ
+    /// الإقلاعِ وجَدوَلُ دَليلِ النَشر (<c>WebPushVapidKeysTests</c> يَحمَرُّ إن افتَرَقا).</summary>
+    public const string SubjectEnvVar = "WebPush__Subject";
+    public const string PublicKeyEnvVar = "WebPush__PublicKey";
+    public const string PrivateKeyEnvVar = "WebPush__PrivateKey";
+
+    /// <summary>سَطرُ الإقلاعِ الَّذي تَقرَؤُه بَوّابَةُ الإقلاع — بِالرَمزِ لا بِنَصٍّ يَنجَرِف (نَسَقُ
+    /// <c>StudioAnalysisDoor.BootLogPrefix</c>). والخِدمَةُ تُنشَأُ عِندَ أَوَّلِ طَلَبٍ يَحتاجُها — والبَوّابَةُ تَطلُبُ
+    /// <c>/api/push/vapid-key</c> في جَدوَلِ مَساراتِها.</summary>
+    public const string BootLogPrefix = "[webpush] vapid_keys=";
+    public const string ConfiguredValue = "configured";
+    public const string EphemeralValue = "ephemeral";
+
     private readonly WebPushClient _client = new();
     private readonly VapidDetails _vapid;
     private readonly ILogger<WebPushService> _log;
@@ -38,13 +59,19 @@ public sealed class WebPushService
             pub  = keys.PublicKey;
             priv = keys.PrivateKey;
             _log.LogWarning(
-                "VAPID keys missing — generated ephemeral pair. Save these in " +
-                "appsettings.Local.json under \"WebPush\": {{ \"Subject\": \"{Subject}\", " +
-                "\"PublicKey\": \"{Public}\", \"PrivateKey\": \"<keep secret>\" }}",
-                subject, pub);
+                BootLogPrefix + EphemeralValue + " — VAPID keys missing: generated a pair for this process only. " +
+                "Every restart generates another, and the subscriptions browsers saved with the previous public key " +
+                "stop receiving pushes (a row is dropped only on 404/410). Generate one pair once and set " +
+                SubjectEnvVar + ", " + PublicKeyEnvVar + " and " + PrivateKeyEnvVar + " as environment variables " +
+                "(Space secrets) — docs/DEPLOY.md §2 step 6. Public key of this process: {Public}",
+                pub);
             IsConfigured = false;
         }
-        else IsConfigured = true;
+        else
+        {
+            _log.LogInformation(BootLogPrefix + ConfiguredValue);
+            IsConfigured = true;
+        }
 
         _vapid = new VapidDetails(subject, pub, priv);
     }
