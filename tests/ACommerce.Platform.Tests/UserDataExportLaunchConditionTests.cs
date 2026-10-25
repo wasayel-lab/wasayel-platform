@@ -43,10 +43,28 @@ public class UserDataExportLaunchConditionTests(ITestOutputHelper output)
 
         Assert.True(me.Count >= 10, $"أَداةٌ عَمياء: {me.Count} مَساراً تَحتَ /me.");
         Assert.Empty(unexplained);
-        Assert.Empty(userExports);
-        Assert.True(row is not null, $"لا صَفَّ «{LaunchRowMarker}» في RELEASE-READINESS §١ — وبابُ التَصديرِ غائِب.");
-        Assert.Contains(OpenMarker, row!, StringComparison.Ordinal);
+        // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-4 الجَولَة ١، مَعلومَة): الاقتِرانُ دالَّةٌ لا `Assert.Empty(userExports)` غَيرُ مَشروط — كانَ الصَفُّ يُحمِرُّ
+        // يَومَ يولَدُ البابُ أَيّاً كانَ صَفُّ §١، فَكوميتُ البابِ يُعَدِّلُ هذا الاختِبارَ حَتماً. والآن: بِلا بابٍ يَبقى الصَفُّ «مَفتوحاً»، وبِبابٍ
+        // يُقلَبُ — فَيَمُرُّ الاختِبارُ بِلا تَعديلٍ يَومَ يَنزِلُ البابُ وقَلبُ الصَفِّ مَعاً، ويُحمِرُّ إن نَزَلَ أَحَدُهُما وَحدَه.
+        Assert.True(row is not null, $"لا صَفَّ «{LaunchRowMarker}» في RELEASE-READINESS §١.");
+        Assert.True(LaunchRowAgrees(userExports.Count, row),
+            userExports.Count > 0 ? $"بابُ تَصديرٍ وُلِد ({string.Join(", ", userExports)}) وصَفُّ §١ ما زالَ «{OpenMarker}» — اقلِبه في الكوميتِ نَفسِه."
+                                  : $"لا بابَ تَصدير وصَفُّ §١ لا يَقولُ «{OpenMarker}».");
     }
+
+    /// <summary>صَفُّ §١ يُوافِقُ الكود: بِلا بابِ تَصديرٍ يَقولُ «مَفتوح»، وبِبابٍ لا يَقولُه. صَفٌّ غائِبٌ لا يُوافِقُ شَيئاً.</summary>
+    internal static bool LaunchRowAgrees(int userExports, string? row)
+        => row is not null && (userExports > 0) != row.Contains(OpenMarker, StringComparison.Ordinal);
+
+    /// <summary>القاعِدَة ١٠ — الاقتِرانُ يُحمِرُّ في الحالَينِ المُتَنافِرَين: بابٌ وُلِدَ وصَفٌّ مَفتوح، وصَفٌّ قُلِبَ ولا باب.</summary>
+    [Theory]
+    [InlineData(0, "| ١٢ | تَصديرُ بَياناتِ المُستَخدِمِ (PDPL) غائِب | شَرطُ إطلاقٍ مَفتوح |", true)]
+    [InlineData(1, "| ١٢ | تَصديرُ بَياناتِ المُستَخدِمِ (PDPL) غائِب | نُفِّذ |", true)]
+    [InlineData(1, "| ١٢ | تَصديرُ بَياناتِ المُستَخدِمِ (PDPL) غائِب | شَرطُ إطلاقٍ مَفتوح |", false)]
+    [InlineData(0, "| ١٢ | تَصديرُ بَياناتِ المُستَخدِمِ (PDPL) غائِب | نُفِّذ |", false)]
+    [InlineData(0, null, false)]
+    public void The_launch_row_agrees_with_the_door_in_both_directions(int userExports, string? row, bool agrees)
+        => Assert.Equal(agrees, LaunchRowAgrees(userExports, row));
 
     /// <summary>الفاحِصُ يَرى ما يَعُدّ (القاعِدَة ١٠): أَشكالٌ مَحقونَةٌ يَلتَقِطُها، ونَظائِرُها المُشروعَةُ يَترُكُها.</summary>
     [Theory]
