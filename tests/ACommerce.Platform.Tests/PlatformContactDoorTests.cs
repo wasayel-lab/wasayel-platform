@@ -93,18 +93,18 @@ public class PlatformContactDoorTests(ITestOutputHelper output)
         return code[at..code.IndexOf("</section>", at, StringComparison.Ordinal)];
     }
 
-    /// <summary><b>تَوصيف</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ١، صُغرى — القاعِدَة ٣: يَنقَلِبُ بِاسمِه في كوميتِ الإصلاح): قِسمُ البَريدِ
-    /// لا يُرسَمُ إلّا حينَ يُملَأُ البَريد — <b>وحينَها</b> يَرسُمُ البَريدَ المَملوءَ داخِلَ <c>span.wsl-placeholder</c> (صُندوقُ «يَملَؤُه المالِك»
-    /// الأَحمَرُ المُتَقَطِّع) بِلا <c>mailto</c>: أَوَّلُ يَومٍ يُملَأُ فيه البَريدُ يُرى نائِباً لا طَريقاً.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> (‏2026-10-25؛ كانَ <c>Today_the_filled_contact_email_is_drawn_inside_the_placeholder_box_with_no_mailto</c>،
+    /// مُودَعٌ في <c>14aaf78</c>: «في صُندوقِ النائِب: True · mailto: 0»). والآن البَريدُ المَملوءُ رابِطُ <c>mailto</c> واحِدٌ مَبنِيٌّ مِن المِفتاحِ
+    /// نَفسِه، ولا <c>wsl-placeholder</c> في القِسم — وشَرطُ القِسمِ (<c>!L.IsPlaceholder</c>) كَما هُوَ، فَاليَومَ لا يُرسَمُ شَيءٌ جَديد.</summary>
     [Fact]
-    public void Today_the_filled_contact_email_is_drawn_inside_the_placeholder_box_with_no_mailto()
+    public void The_filled_contact_email_is_drawn_as_one_mailto_link_outside_the_placeholder_box()
     {
         var section = EmailSection();
-        var boxed = section.Contains("<span class=\"wsl-placeholder\">@L.Markup(\"platform.doc.contact_email\")</span>", StringComparison.Ordinal);
         var mailto = Regex.Matches(section, "mailto:").Count;
-        output.WriteLine($"قِسمُ البَريد ({section.Length} مِحرَفاً): البَريدُ في صُندوقِ النائِب: {boxed} · mailto: {mailto}");
-        Assert.True(boxed);
-        Assert.Equal(0, mailto);
+        output.WriteLine($"قِسمُ البَريد ({section.Length} مِحرَفاً): wsl-placeholder: {section.Contains("wsl-placeholder", StringComparison.Ordinal)} · mailto: {mailto}");
+        Assert.DoesNotContain("wsl-placeholder", section, StringComparison.Ordinal);
+        Assert.Equal(1, mailto);
+        Assert.Contains("<a href=\"@($\"mailto:{L[\"platform.doc.contact_email\"]}\")\">@L.Markup(\"platform.doc.contact_email\")</a>", section, StringComparison.Ordinal);
     }
 
     /// <summary><b>ودَليلُ النَشرِ يُسَمّي الخَمسَةَ قَبلَ الإطلاق</b> (`docs/DEPLOY.md` §٢ الخُطوَة ٧، ‏2026-10-25): كانَ لا يَذكُرُ مِنها

@@ -23,7 +23,9 @@
     {
     <section class="wsl-doc-section">
         <h2>@L.Markup("platform.contact.email_label")</h2>
-        <p><span class="wsl-placeholder">@L.Markup("platform.doc.contact_email")</span></p>
+        @* ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-4 الجَولَة ١؛ تَوصيفُه `14aaf78`): القِسمُ لا يُرسَمُ إلّا والبَريدُ مَملوء — فَهُوَ طَريقٌ يُنقَرُ
+           (`mailto`) لا صُندوقُ «يَملَؤُه المالِك». *@
+        <p><a href="@($"mailto:{L["platform.doc.contact_email"]}")">@L.Markup("platform.doc.contact_email")</a></p>
         <p>@L.Markup("platform.contact.support_note")</p>
     </section>
     }
