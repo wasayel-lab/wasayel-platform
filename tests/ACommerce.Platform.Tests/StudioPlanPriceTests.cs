@@ -126,4 +126,45 @@ public class StudioPlanPriceTests(ITestOutputHelper output)
         Assert.DoesNotMatch("[0-9٠-٩](?![}])", template!.Replace("{0}", ""));
         Assert.Equal("السِعرُ المُتَّفَقُ عَلَيه: 150 ر.س", string.Format(template, ACommerce.Kit.Culture.Money.Format(150m)));
     }
+
+    // ─── السَطرُ المَرسومُ لِسِعرٍ بِهَلَلات ────────────────────────────────────────────────────────────────
+    //
+    // مُراجَعَةُ تَيّارِ W8-4 (‏2026-10-25، كُبرى، عَلى `eecbb5e`): حَقلُ «السِعرُ المُتَّفَقُ عَلَيه» في `Admin/TenantPlanAdmin.razor` يَقبَلُ
+    // الهَلَلات (`step="0.01"`، و`ReadSetting` يَقرَأُ أَيَّ `decimal`)، و`Money.Format` يَكتُبُ `N0` — فَالسَطرُ يَطبَعُ رَقَماً غَيرَ المُسَجَّل.
+    // **ومَقيسٌ حَيّاً** (`wasayel_w84`، `POST /admin/tenants/owner-test/plan/save` ثُمَّ `/studio`): سارِيَةٌ بِـ149.99 بايتاً كَسارِيَةٍ بِـ150
+    // (‏39701)، وبِـ0.01 «‏0 ر.س» (‏39699)، والسَماحُ بِـ149.99 بايتاً كَالسَماحِ بِـ150 (‏40362).
+
+    /// <summary>السَطرُ كَما يَبنيه <c>PriceLine</c>: قالِبُ القامُوسِ بِـ<b>المُنَسِّقِ الَّذي يُسَمّيه جِسمُها</b> — يُقرَأُ اسمُه مِن الكودِ ويُستَدعى
+    /// بِالانعِكاس، فَلا يَختارُ الاختِبارُ مُنَسِّقاً غَيرَ الَّذي تَرسُمُه الصَفحَة.</summary>
+    internal static string RenderedPriceLine(decimal stored)
+    {
+        var home = UpgradePromptPriceTests.Code("libs", "templates", "ACommerce.Templates.Customer.Marketplace",
+            "Components", "Pages", "StudioHome.razor");
+        var body = Regex.Match(home, @"string\? PriceLine\(string slug\)\s*\{(?<body>.*?)\n    \}", RegexOptions.Singleline);
+        Assert.True(body.Success, "لا `PriceLine` — الأَداةُ عَمياء.");
+        var formatter = Regex.Match(body.Groups["body"].Value, @"ACommerce\.Kit\.Culture\.Money\.(?<name>\w+)\(price\)");
+        Assert.True(formatter.Success, "`PriceLine` لا تُسَمّي مُنَسِّقاً مِن `Money` — الأَداةُ عَمياء.");
+        var method = typeof(ACommerce.Kit.Culture.Money).GetMethod(formatter.Groups["name"].Value,
+            new[] { typeof(decimal), typeof(string), typeof(string), typeof(ACommerce.Kit.Culture.MoneyUnitStyle) });
+        Assert.NotNull(method);
+
+        var shown = ACommerce.Kit.Subscriptions.TenantPlanPolicy.ShownPrice(
+            new ACommerce.Kit.Subscriptions.TenantPlan { PlanId = "manual", Price = stored });
+        Assert.NotNull(shown);
+        var amount = (string)method!.Invoke(null, new object?[] { shown!.Value, null, null, ACommerce.Kit.Culture.MoneyUnitStyle.Symbol })!;
+        return string.Format(LocaleCatalog.Find(LocaleCatalog.Arabic, "studio.plan.price_line")!, amount);
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم»</b> (القاعِدَة ٣): سِعرٌ مُسَجَّلٌ بِهَلَلاتٍ يُطبَعُ مُقَرَّباً إلى ريالٍ صَحيح — 149.99 «‏150 ر.س» و0.01
+    /// «‏0 ر.س»، وهو ما تَقولُ <c>ShownPrice</c> إنّه لا يُطبَع. يُقلَبُ بِاسمِه في كوميتِ العِلاج، ومَعَه سَطرُ <c>Money.Format(price)</c> في
+    /// <c>The_agreed_store_price_is_read_by_the_studio_banner_…</c> (مُعلَنٌ هُنا سَلَفاً).</summary>
+    [Theory]
+    [InlineData("149.99", "150")]
+    [InlineData("0.01", "0")]
+    public void Today_a_recorded_price_with_halalas_is_printed_rounded_to_a_whole_riyal(string stored, string printed)
+    {
+        var line = RenderedPriceLine(decimal.Parse(stored, System.Globalization.CultureInfo.InvariantCulture));
+        output.WriteLine($"المُسَجَّل {stored} ⟵ «{line}»");
+        Assert.Equal($"السِعرُ المُتَّفَقُ عَلَيه: {printed} ر.س", line);
+    }
 }
