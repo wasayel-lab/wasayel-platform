@@ -911,7 +911,7 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
 
         // عَدّاد: أَداةٌ تَفحَص صِفراً أَداةٌ عَمياء (القاعِدَة ١٠).
         Assert.True(pages.Count >= 140,
-            $"أَداة عَمياء: وُجِدَ {pages.Count} مِلَفّ .razor — والمَقيس ‏147.");
+            $"أَداة عَمياء: وُجِدَ {pages.Count} مِلَفّ .razor — والمَقيس ‏147 (‏167 في ‏2026-10-25).");
 
         // ‏تَثبيتُ المُعالِجاتِ (`InHandlers`) لا يُعفي الصَفحَةَ مِن رُموزِ Marten المُباشِرَة — الإعفاءُ لِلتَثبيتِ الكامِلِ وَحدَه.
         var pinned = FullyPinnedDisplayWriters();
