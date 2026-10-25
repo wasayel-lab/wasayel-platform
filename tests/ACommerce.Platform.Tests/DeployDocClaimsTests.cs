@@ -109,4 +109,41 @@ public class DeployDocClaimsTests(ITestOutputHelper output)
         Assert.Contains("«الوَحيد» بِلا شَطب", missing);
         Assert.DoesNotContain("ConnectionStrings__Postgres", missing);
     }
+
+    // ─── lens-docs-vs-code-6 — §٣ الطَبَقَةُ الثانِيَة: sha الـAPI مُسَطَّحٌ لا يُطابِقُ main ─────────────────────────────────
+
+    private const string LayerTwoClaim = "git rev-parse main        # يَجِب أَن يُطابِق sha";
+
+    /// <summary>أَيَصدُقُ قِسمُ الطَبَقَةِ الثانِيَة؟ — المُقارَنَةُ بِـ<c>sha</c> الـAPI غائِبَةٌ، أَو يَليها تَصحيحٌ يُسَمّي المُسَطَّحَ ويُقارِنُ <c>/health</c> <c>.commit</c>.</summary>
+    internal static bool LayerTwoIsTruthful(string section)
+    {
+        var at = section.IndexOf(LayerTwoClaim, StringComparison.Ordinal);
+        if (at < 0) return true;
+        var after = section[at..];
+        return after.Contains("lens-docs-vs-code-6", StringComparison.Ordinal)
+               && after.Contains("الإيداعُ المُسَطَّح", StringComparison.Ordinal)
+               && after.Contains("/health | jq -r .commit", StringComparison.Ordinal);
+    }
+
+    /// <summary>الوَظيفَةُ تَدفَعُ إيداعاً مُسَطَّحاً وتُقارِنُ <c>sha</c> الـAPI بِه (<c>space_sha</c>) لا بِالمَصدَر — فَالدَليلُ يَقولُ ذلكَ في الطَبَقَةِ الثانِيَة.</summary>
+    [Fact]
+    public void Layer_two_compares_the_flattened_space_commit_and_points_at_health_for_main()
+    {
+        var yml = Read(".github", "workflows", "deploy-hf.yml");
+        Assert.Contains("git commit -q -m \"deploy: ${sha}\"", yml, StringComparison.Ordinal);
+        Assert.Contains("if [ \"${remote_sha}\" != \"${space_sha}\" ]; then", yml, StringComparison.Ordinal);
+        var section = Section(Deploy(), "### الطَبَقَة الثانِيَة — بِاليَد", "### ");
+        Assert.Contains(LayerTwoClaim, section, StringComparison.Ordinal);
+        Assert.True(LayerTwoIsTruthful(section), "الطَبَقَةُ الثانِيَةُ تُقارِنُ sha الـAPI بِـmain بِلا تَصحيح.");
+    }
+
+    /// <summary><b>حَقنُ عَيب</b>: القِسمُ كَما كانَ — المُقارَنَةُ بِلا تَصحيح — يُحمِرُّ المُتَحَقِّق؛ وبِلا السَطرِ أَصلاً يَمُرّ.</summary>
+    [Fact]
+    public void The_layer_two_checker_goes_red_on_the_section_as_it_was()
+    {
+        var section = Section(Deploy(), "### الطَبَقَة الثانِيَة — بِاليَد", "### ");
+        var before = section[..section.IndexOf("**تَصحيحٌ ‏2026-10-25 (تَدقيقُ الإطلاق lens-docs-vs-code-6)", StringComparison.Ordinal)];
+        Assert.False(LayerTwoIsTruthful(before));
+        Assert.True(LayerTwoIsTruthful("### الطَبَقَة الثانِيَة — بِاليَد\nلا مُقارَنَة\n"));
+    }
 }
