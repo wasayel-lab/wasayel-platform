@@ -77,4 +77,36 @@ public class TenantUsersFirstAdminHintTests(ITestOutputHelper output)
         foreach (var door in new[] { "ActionHref", "ActionLabel", "<form", "<a ", "<button" })
             Assert.DoesNotContain(door, above, StringComparison.Ordinal);
     }
+    // ─── التَلميحُ يُسَمّي زِرّاً لا يُرسَمُ في مَتجَرٍ بِلا دَورِ tenant_admin (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-3 الجَولَتانِ ١ و٢، صُغرى) ──────────
+    //
+    // **تَوصيفُ «اليَوم»** (القاعِدَة ٣ — يُقلَبُ بِاسمِه في كوميتِ الإصلاح): التَلميحُ فَوقَ الجَدوَلِ تَحتَ `@if (!anyManager)` وَحدَه، ونَصُّه يَقولُ
+    // «واضغَط «مَنح إدارَة» بِجِوارِ هاتِفِك» — وزِرُّ «مَنح إدارَة» داخِلَ `@if (hasAdminRole)`. فَفي مَتجَرٍ بِلا دَورِ `tenant_admin` يَدُلُّ التَلميحُ
+    // عَلى زِرٍّ لا يُرسَمُ أَبَداً؛ ولَقطَةُ `admin-tenant-users` (‏owner-test: أَربَعَةُ أَدوارٍ بِلا tenant_admin) تَحمِلُه تَحتَ تَحذيرِ no_admin_role
+    // وبِصِفرِ زِرِّ مَنح.
+
+    private static string Baseline() => File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+        "tests", "characterization", "appearance", "i18n-baseline", "admin-tenant-users.html"));
+
+    [Fact]
+    public void Today_the_hint_above_the_table_names_a_grant_button_a_store_without_the_admin_role_never_draws()
+    {
+        var page = Page();
+        var (_, elseAt, table) = Anchors(page);
+        var hintGuard = page.IndexOf("@if (!anyManager)", elseAt, StringComparison.Ordinal);
+        Assert.True(hintGuard > elseAt && hintGuard < table, "لا شَرطَ لِلتَلميحِ فَوقَ الجَدوَل — الأَداةُ عَمياء.");
+        Assert.DoesNotContain("hasAdminRole", page[hintGuard..table], StringComparison.Ordinal);
+
+        var buttonGuard = page.IndexOf("@if (hasAdminRole)", table, StringComparison.Ordinal);
+        var grant = page.IndexOf("/grant-admin", table, StringComparison.Ordinal);
+        Assert.True(buttonGuard > table && grant > buttonGuard, $"زِرُّ المَنحِ خارِجَ @if (hasAdminRole): الشَرط {buttonGuard} · الزِرّ {grant}.");
+
+        Assert.Contains("«مَنح إدارَة»", ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "admin.tenant_users.empty_hint"),
+            StringComparison.Ordinal);
+
+        var snap = Baseline();
+        Assert.Contains("ac-alert ac-alert-warning", snap, StringComparison.Ordinal);   // no_admin_role
+        Assert.Contains("ac-alert ac-alert-info", snap, StringComparison.Ordinal);      // التَلميح
+        Assert.DoesNotContain("grant-admin", snap, StringComparison.Ordinal);
+        output.WriteLine($"شَرطُ التَلميحِ يَسأَلُ hasAdminRole: لا · زِرُّ المَنحِ تَحتَ hasAdminRole: نَعَم · اللَقطَة: تَلميحٌ 1 · زِرُّ مَنحٍ 0");
+    }
 }
