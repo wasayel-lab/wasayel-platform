@@ -1229,7 +1229,7 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
     /// <summary>يَتَخَطّى سِلسِلَةً نَصّيَّة (عاديَّة أَو حَرفِيَّة
     /// <c>@""</c> أَو مُدرَجَة <c>$""</c>) ويُعيد فِهرِس آخِر مِحرَف
     /// فيها.</summary>
-    private static int SkipLiteral(string code, int i)
+    internal static int SkipLiteral(string code, int i)
     {
         var quote = code[i];
         var verbatim = i > 0 && code[i - 1] == '@';

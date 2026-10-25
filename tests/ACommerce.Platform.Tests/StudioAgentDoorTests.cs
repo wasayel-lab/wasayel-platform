@@ -52,45 +52,204 @@ public class StudioAgentDoorTests(ITestOutputHelper output)
         return "";
     }
 
-    /// <summary>مُعالِجاتُ الصَفحَةِ الَّتي تَبلُغُ نَموذَجَ اللُغَة، والنِداءُ الَّذي تَبلُغُه — نَفسُ
-    /// <see cref="LanguageModelQuotaGateTests.LlmReachingMethods"/> لا قائِمَةٌ ثانِيَة.</summary>
-    private static readonly (string Signature, string Spend)[] SpendingHandlers =
+    // ‏2026-10-25 (W8-3 — مُراجَعَةُ الجَولَةِ الأولى؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): كانَت هُنا `SpendingHandlers` — ثَلاثَةُ تَواقيعَ
+    // مُسَمّاة (SendAsync, ApplyAsync, RejectAsync) ووَصفُها «نَفسُ LlmReachingMethods لا قائِمَةٌ ثانِيَة»، وهي قائِمَةٌ ثانِيَة: دالَّةٌ رابِعَةٌ
+    // تُنادي Agent.AskAsync بِلا بابٍ مَرَّت بِكُلِّ صَفّ (مَقيس — والجَردُ في LanguageModelQuotaGateTests يَحكُمُ عَلى الصَفحَةِ جِسماً واحِداً
+    // فَيَراها «PlatformAdminGuard» لِأَنّ EvaluateAsync فيها). صارَت النِداءاتُ تُشتَقُّ مِن الكودِ بِـSpendCallsIn أَدناه (القاعِدَة ٢).
+
+    /// <summary>نِداءُ إنفاقٍ واحِدٌ في صَفحَة: الدالَّةُ الَّتي تَحويه — أَو <c>(markup)</c> خارِجَ كُتَلِ <c>@code</c>/<c>@functions</c> —
+    /// واسمُه، وهَل يَسبِقُه في رَأسِ جِسمِ دالَّتِه حارِسُ البابِ المُغلَق.</summary>
+    private sealed record SpendCall(string Member, string Spend, bool Gated);
+
+    /// <summary>حارِسُ البابِ المُغلَقِ بِحَرفِ مُدخَلَيه — شِقٌّ مِن شُقوقِ <c>||</c> في <c>if (…) return;</c>.</summary>
+    private const string ClosedDoor = "!StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)";
+
+    /// <summary>ما يَبلُغُ النَموذَجَ — أَسماءُ <see cref="LanguageModelQuotaGateTests.LlmReachingMethods"/> نَفسُها لا قائِمَةٌ ثانِيَة،
+    /// <b>ذِكراً لا نِداءً فَقَط</b>: مَجموعَةُ دالَّةٍ تُمَرَّرُ مُفَوَّضاً (<c>=> Agent.AskAsync;</c>) تُنفِقُ أَيضاً، وبِأَيِّ مُستَقبِلٍ كانَت.</summary>
+    private static readonly Regex SpendToken = new(
+        @"(?<![\w])(?<spend>" + string.Join("|", LanguageModelQuotaGateTests.LlmReachingMethods.Select(Regex.Escape)) + @")(?![\w])",
+        RegexOptions.Compiled);
+
+    /// <summary><para><b>كُلُّ نِداءِ إنفاقٍ في صَفحَةٍ مُشتَقّاً مِن كودِها</b> (بِلا تَعليقات): يَجِدُ كُلَّ ذِكرٍ لِما يَبلُغُ النَموذَج —
+    /// في دالَّةٍ أَو دالَّةِ دَورَةِ حَياةٍ أَو حَقلٍ أَو تَرميز — ويَحكُمُ لِكُلٍّ بِحارِسِ رَأسِ دالَّتِه.</para>
+    /// <para><b>الحارِسُ المَقبولُ واحِدٌ</b> (القاعِدَة ٦: الحِراسَةُ في الرَأسِ لا في الجِسم): عِبارَةُ <c>if (…) return;</c> (أَو
+    /// <c>{ return; }</c>) <b>في المُستَوى الأَوَّلِ مِن جِسمِ الدالَّةِ</b> وفي أَوَّلِ عِبارَة — بَعدَ <c>{</c> أَو <c>;</c> أَو <c>}</c> لا بَعدَ
+    /// <c>else</c> ولا <c>if (x)</c> بِلا قَوسَين — تَنتَهي قَبلَ النِداء، وأَحَدُ شُقوقِ <c>||</c> العُليا في شَرطِها <see cref="ClosedDoor"/> بِحَرفِه.
+    /// فَإن كانَ في الشَرطِ <c>?</c> في مُستَواه الأَعلى رُفِض (الشَرطِيُّ أَدنى مِن <c>||</c> فَيَبتَلِعُ الشِقّ). وكُلُّ ما سِواه — حارِسٌ بَعدَ النِداء،
+    /// أَو في فَرع، أَو بِـ<c>&amp;&amp;</c>، أَو بِلا <c>return</c>، أَو بِمُدخَلاتٍ أُخرى، أَو جِسمٌ تَعبيرِيّ، أَو تَرميز — <b>بِلا باب</b>.</para>
+    /// <para>والبِنيَةُ (الأَقواسُ و<c>;</c> و<c>if</c>) تُقرَأُ عَلى نُسخَةٍ بُيِّضَت فيها السَلاسِلُ النَصّيَّةُ داخِلَ <c>@code</c>
+    /// (<see cref="WriteEndpointGuardTests.SkipLiteral"/>)، فَـ<c>"{"</c> أَو حارِسٌ مَكتوبٌ في سِلسِلَةٍ لا يُغَيِّرُ الحُكم.</para></summary>
+    private static List<SpendCall> SpendCallsIn(string code)
     {
-        ("async Task SendAsync()", "Agent.AskAsync("),
-        ("async Task ApplyAsync(string toolId)", "Agent.ContinueAfterToolAsync("),
-        ("async Task RejectAsync(string toolId)", "Agent.ContinueAfterToolAsync("),
-    };
+        var structure = code.ToCharArray();
+        var blocks = new List<(int Open, int Close)>();
+        foreach (Match b in Regex.Matches(code, @"@(?:code|functions)\s*\{"))
+        {
+            var open = b.Index + b.Length - 1;
+            var close = -1;
+            var depth = 0;
+            for (var k = open; k < code.Length; k++)
+            {
+                if (structure[k] is '"' or '\'')
+                {
+                    var end = WriteEndpointGuardTests.SkipLiteral(code, k);
+                    for (var j = k + 1; j < end; j++) if (structure[j] is not ('\n' or '\r')) structure[j] = ' ';
+                    k = end;
+                    continue;
+                }
+                if (structure[k] == '{') depth++;
+                else if (structure[k] == '}' && --depth == 0) { close = k; break; }
+            }
+            Assert.True(close > open, "كُتلَةُ @code لا تُغلَق — القَصُّ فاشِل.");
+            blocks.Add((open, close));
+        }
+        var s = new string(structure);
+
+        var calls = new List<SpendCall>();
+        foreach (Match m in SpendToken.Matches(code))
+        {
+            var at = m.Index;
+            var spend = m.Groups["spend"].Value;
+            var block = blocks.FindIndex(b => b.Open < at && at < b.Close);
+            if (block < 0) { calls.Add(new("(markup)", spend, false)); continue; }
+            var (start, end) = MemberAround(s, blocks[block], at);
+            calls.Add(new(MemberName(s, start, end), spend, HeadGuardBefore(code, s, start, at)));
+        }
+        return calls;
+    }
+
+    /// <summary>العُضوُ الَّذي يَحوي الفِهرِس في كُتلَةِ <c>@code</c>: يَنتَهي عُضوٌ بِـ<c>;</c> أَو <c>}</c> يَعودانِ بِالعُمقِ إلى صِفر.</summary>
+    private static (int Start, int End) MemberAround(string s, (int Open, int Close) block, int at)
+    {
+        var start = block.Open + 1;
+        var depth = 0;
+        for (var k = block.Open + 1; k < block.Close; k++)
+        {
+            var c = s[k];
+            if (c == '{') depth++;
+            else if ((c == '}' && --depth == 0) || (c == ';' && depth == 0))
+            {
+                if (at < k) return (start, k + 1);
+                start = k + 1;
+            }
+        }
+        return (start, block.Close);
+    }
+
+    /// <summary>اسمُ العُضوِ لِلطِباعَة: أَوَّلُ مُعَرِّفٍ يَليه <c>(</c> أَو <c>=</c> (لا <c>=&gt;</c>) في رَأسِه، وإلّا آخِرُ مُعَرِّفٍ قَبلَ <c>=&gt;</c>
+    /// (خاصِّيَّةٌ تَعبيرِيَّة).</summary>
+    private static string MemberName(string s, int start, int end)
+    {
+        var header = s[start..end];
+        var cut = header.IndexOf('{');
+        var arrow = header.IndexOf("=>", StringComparison.Ordinal);
+        if (arrow >= 0 && (cut < 0 || arrow < cut)) cut = arrow;
+        var head = cut < 0 ? header : header[..cut];
+        var m = Regex.Match(head, @"(?<name>[A-Za-z_]\w*)\s*(?:\(|=(?![>=]))");
+        if (m.Success) return m.Groups["name"].Value;
+        var words = Regex.Matches(head, @"[A-Za-z_]\w*");
+        return words.Count > 0 ? words[^1].Value : header.Trim();
+    }
+
+    /// <summary>هَل في المُستَوى الأَوَّلِ مِن جِسمِ العُضوِ — قَبلَ الفِهرِس — حارِسُ <see cref="ClosedDoor"/>؟ (القَواعِدُ في <see cref="SpendCallsIn"/>.)</summary>
+    private static bool HeadGuardBefore(string code, string s, int start, int at)
+    {
+        var bodyOpen = s.IndexOf('{', start, at - start);
+        if (bodyOpen < 0) return false;
+        var depth = 0;
+        var paren = 0;
+        var guarded = false;
+        for (var k = bodyOpen; k < at; k++)
+        {
+            var c = s[k];
+            if (c == '{') { depth++; continue; }
+            if (c == '}') { depth--; continue; }
+            if (c is '(' or '[') { paren++; continue; }
+            if (c is ')' or ']') { paren--; continue; }
+            if (guarded || depth != 1 || paren != 0 || !IsWord(s, k, "if")) continue;
+            var prev = k - 1;
+            while (prev > bodyOpen && char.IsWhiteSpace(s[prev])) prev--;
+            if (s[prev] is not ('{' or ';' or '}')) continue;
+            var condOpen = k + 2;
+            while (condOpen < at && char.IsWhiteSpace(s[condOpen])) condOpen++;
+            if (condOpen >= at || s[condOpen] != '(') continue;
+            var condClose = Closing(s, condOpen);
+            if (condClose < 0) continue;
+            var tail = Regex.Match(s[(condClose + 1)..], @"\A\s*(?:return\s*;|\{\s*return\s*;\s*\})");
+            if (!tail.Success || condClose + 1 + tail.Length > at) continue;
+            guarded = TopLevelDisjuncts(code, s, condOpen + 1, condClose)
+                .Any(d => Regex.Replace(d, @"\s+", "") == Regex.Replace(ClosedDoor, @"\s+", ""));
+        }
+        return guarded && depth >= 1;
+    }
+
+    private static bool IsWord(string s, int k, string word)
+        => string.CompareOrdinal(s, k, word, 0, word.Length) == 0
+           && (k == 0 || !(char.IsLetterOrDigit(s[k - 1]) || s[k - 1] is '_' or '@' or '.'))
+           && (k + word.Length >= s.Length || !(char.IsLetterOrDigit(s[k + word.Length]) || s[k + word.Length] == '_'));
+
+    private static int Closing(string s, int open)
+    {
+        var depth = 0;
+        for (var k = open; k < s.Length; k++)
+        {
+            if (s[k] == '(') depth++;
+            else if (s[k] == ')' && --depth == 0) return k;
+        }
+        return -1;
+    }
+
+    /// <summary>شُقوقُ <c>||</c> في المُستَوى الأَعلى مِن شَرط — ولا شَيءَ إن كانَ فيه <c>?</c> في مُستَواه الأَعلى.</summary>
+    private static List<string> TopLevelDisjuncts(string code, string s, int from, int to)
+    {
+        var parts = new List<string>();
+        var depth = 0;
+        var last = from;
+        for (var k = from; k < to; k++)
+        {
+            var c = s[k];
+            if (c is '(' or '[' or '{') depth++;
+            else if (c is ')' or ']' or '}') depth--;
+            else if (depth == 0 && c == '?') return new List<string>();
+            else if (depth == 0 && c == '|' && k + 1 < to && s[k + 1] == '|')
+            {
+                parts.Add(code[last..k]);
+                last = k + 2;
+                k++;
+            }
+        }
+        parts.Add(code[last..to]);
+        return parts;
+    }
 
     // ─── الصَفحَة: مَن يُنفِقُ مِنها ──────────────────────────────────────────────────────────────
 
     /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ إصلاحِ <c>lens-security-2</c>)</b> — كانَ
     /// <c>Today_every_agent_page_handler_that_spends_asks_only_for_a_signed_in_studio_user</c> (‏<c>92bd370</c>): «مُعالِجاتٌ تُنفِق: 3 · حارِسُ
     /// المُشرِف: 0 · باب: 0». والآن كُلُّ مُعالِجٍ يُنفِقُ (ومَعَها «مَسح» الَّذي يَكتُبُ الجَلسَة) يَسأَلُ <c>StudioAgentDoor.Opens</c> قَبلَ نِدائِه،
-    /// ومُدخَلُ البابِ قَرارُ <c>PlatformAdminGuard.EvaluateAsync</c> يُقرَأُ حَيثُ يُقرَأُ المُستَخدِم، وتَحميلُ المُحادَثَةِ خَلفَه.</summary>
+    /// ومُدخَلُ البابِ قَرارُ <c>PlatformAdminGuard.EvaluateAsync</c> يُقرَأُ حَيثُ يُقرَأُ المُستَخدِم، وتَحميلُ المُحادَثَةِ خَلفَه.
+    /// <para><b>‏2026-10-25 (W8-3 — مُراجَعَةُ الجَولَةِ الأولى؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: «كُلُّ مُعالِجٍ يُنفِقُ» كانَ ثَلاثَةَ تَواقيعَ
+    /// مُسَمّاة، فَدالَّةٌ رابِعَةٌ تُنادي <c>Agent.AskAsync</c> بِلا بابٍ كانَت تَمُرّ. صارَ يَشتَقُّ كُلَّ نِداءٍ مِن الكود (<see cref="SpendCallsIn"/>:
+    /// الدالَّاتُ ودَورَةُ الحَياةِ والحُقولُ والتَرميز) ويَشتَرِطُ لِكُلٍّ حارِسَ رَأسِ دالَّتِه، ويَطبَعُ ما عَدَّه ويَفشَلُ دونَ المَقيس (3)؛
+    /// والماسِحُ يُقاسُ بِصُفوفِ <see cref="The_spend_scanner_finds_every_model_call_and_accepts_only_a_head_guard"/> المَحقونَة.</para></summary>
     [Fact]
     public void Every_agent_page_handler_that_spends_asks_the_open_agent_door_before_its_call()
     {
         // ‏(‏2026-10-25، lens-dead-doors-1) البابُ صارَ يَسأَلُ مِفتاحَ وَكيلِ Studio مَعَ قَرارِ المُشرِف — الحَرفُ بِمُدخَلَيه.
-        const string door = "!StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)";
+        const string door = ClosedDoor;
         var code = Code(AgentPage);
-        var spending = 0;
-        var gated = 0;
-        foreach (var (signature, spend) in SpendingHandlers)
-        {
-            var body = Body(code, signature);
-            var spendAt = body.IndexOf(spend, StringComparison.Ordinal);
-            Assert.True(spendAt > 0, $"{signature}: لا يَبلُغُ {spend} — الأَداةُ لا تَرى ما تَقيس.");
-            spending++;
-            var doorAt = body.IndexOf(door, StringComparison.Ordinal);
-            if (doorAt > 0 && doorAt < spendAt) gated++;
-        }
+        var calls = SpendCallsIn(code);
+        var ungated = calls.Where(c => !c.Gated).Select(c => $"{c.Member} ← {c.Spend}").ToList();
         var reset = Body(code, "async Task ResetAsync()");
         var resetGated = reset.IndexOf(door, StringComparison.Ordinal) is var r && r > 0
                          && r < reset.IndexOf("Agent.ResetAsync(", StringComparison.Ordinal);
-        output.WriteLine($"مُعالِجاتٌ تُنفِق: {spending} · تَسأَلُ البابَ قَبلَ نِدائِها: {gated} · «مَسح» يَسأَلُه: {resetGated}");
+        output.WriteLine($"نِداءاتُ إنفاقٍ مُشتَقَّةٌ مِن الكود: {calls.Count} · خَلفَ البابِ في رَأسِ دالَّتِها: {calls.Count - ungated.Count} ("
+            + string.Join(" · ", calls.Select(c => $"{c.Member} ← {c.Spend}" + (c.Gated ? "" : " [بِلا باب]"))) + $") · «مَسح» يَسأَلُه: {resetGated}");
 
-        Assert.Equal(3, spending);
-        Assert.Equal(spending, gated);
+        Assert.True(calls.Count >= 3, $"أَداةٌ عَمياء: {calls.Count} نِداءَ إنفاقٍ في الصَفحَة — والمَقيسُ 3.");
+        Assert.True(ungated.Count == 0,
+            "نِداءُ نَموذَجٍ في صَفحَةِ الوَكيلِ بِلا حارِسِ البابِ في رَأسِ دالَّتِه:\n  " + string.Join("\n  ", ungated)
+            + $"\nأَوَّلُ عِبارَةٍ في جِسمِها: if (… || {door}) return;");
         Assert.True(resetGated, "ResetAsync يَكتُبُ الجَلسَةَ قَبلَ سُؤالِ الباب.");
 
         var init = Body(code, "protected override async Task OnInitializedAsync()");
@@ -101,6 +260,137 @@ public class StudioAgentDoorTests(ITestOutputHelper output)
         Assert.True(loadAt > adminAt && loadAt < init.IndexOf("Agent.LoadSessionAsync(", StringComparison.Ordinal),
             "المُحادَثَةُ تُحَمَّلُ قَبلَ سُؤالِ الباب.");
         Assert.Equal(1, Regex.Matches(code, "_platformAdmin = ").Count);
+    }
+
+    /// <summary>صَفحَةٌ مَحقونَةٌ بِأَعضاءِ <c>@code</c> وتَرميزٍ اختِيارِيّ — مَصدَرُ صُفوفِ الماسِح.</summary>
+    private static string InjectedPage(string members, string markup = "")
+        => "@page \"/x\"\n@inject AgentService Agent\n@inject FeasibilityAnalysisService Feasibility\n" + markup + "\n@code {\n"
+         + "    bool isWorking;\n    bool _platformAdmin;\n    Guid _userId = Guid.Empty;\n    string _scopeId = \"s\";\n    AgentSession session = new();\n"
+         + members + "\n}\n";
+
+    private const string GuardedSend =
+        "    async Task SendAsync()\n    {\n        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\n"
+      + "        session = await Agent.AskAsync(\"m\", _scopeId);\n    }\n";
+
+    /// <summary>أَشكالُ الإنفاقِ والحِراسَةِ المَحقونَة — بِاسمِ الصَفّ، وما يَجِبُ أَن يَعُدَّه الماسِحُ نِداءً ومَحروساً.</summary>
+    private static readonly Dictionary<string, string> InjectedSpenders = new()
+    {
+        // ─── ما يُقبَل ───
+        ["head_guard"] = InjectedPage(GuardedSend),
+        ["head_guard_with_a_braced_return"] = InjectedPage(
+            "    async Task RejectAsync(string id)\n    {\n        if (!StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) { return; }\n"
+          + "        session = await Agent.ContinueAfterToolAsync(_scopeId);\n    }\n"),
+        ["two_spends_behind_one_head_guard"] = InjectedPage(
+            "    async Task ApplyAsync(string id)\n    {\n        if (isWorking || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\n"
+          + "        session = await Agent.AskAsync(\"a\", _scopeId);\n        session = await Agent.ContinueAfterToolAsync(_scopeId);\n    }\n"),
+        ["a_brace_in_a_string_does_not_shift_the_members"] = InjectedPage(
+            "    string Open() => \"{\";\n    char Semicolon = ';';\n"
+          + "    async Task RetryAsync() { session = await Agent.AskAsync(\"m\", _scopeId); }\n" + GuardedSend),
+
+        // ─── ما يُرفَض ───
+        ["a_fourth_handler_without_the_door"] = InjectedPage(GuardedSend
+          + "    async Task RetryAsync() { if (isWorking || _userId == Guid.Empty) return; session = await Agent.AskAsync(\"retry\", _scopeId); }\n"),
+        ["door_after_the_spend"] = InjectedPage(
+            "    async Task SendAsync()\n    {\n        session = await Agent.AskAsync(\"m\", _scopeId);\n"
+          + "        if (!StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\n    }\n"),
+        ["door_inside_a_branch"] = InjectedPage(
+            "    async Task SendAsync()\n    {\n        if (isWorking) { if (!StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return; }\n"
+          + "        session = await Agent.AskAsync(\"m\", _scopeId);\n    }\n"),
+        ["door_under_an_unbraced_if"] = InjectedPage(
+            "    async Task SendAsync()\n    {\n        if (isWorking)\n            if (!StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\n"
+          + "        session = await Agent.AskAsync(\"m\", _scopeId);\n    }\n"),
+        ["door_in_an_else"] = InjectedPage(
+            "    async Task SendAsync()\n    {\n        if (isWorking) isWorking = false;\n        else if (!StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\n"
+          + "        session = await Agent.AskAsync(\"m\", _scopeId);\n    }\n"),
+        ["door_anded"] = InjectedPage(
+            "    async Task SendAsync()\n    {\n        if (isWorking && !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\n"
+          + "        session = await Agent.AskAsync(\"m\", _scopeId);\n    }\n"),
+        ["door_swallowed_by_a_conditional"] = InjectedPage(
+            "    async Task SendAsync()\n    {\n        if (isWorking ? false : isWorking || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\n"
+          + "        session = await Agent.AskAsync(\"m\", _scopeId);\n    }\n"),
+        ["door_that_does_not_return"] = InjectedPage(
+            "    async Task SendAsync()\n    {\n        if (!StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) isWorking = true;\n"
+          + "        session = await Agent.AskAsync(\"m\", _scopeId);\n    }\n"),
+        ["door_with_other_inputs"] = InjectedPage(
+            "    async Task SendAsync()\n    {\n        if (!StudioAgentDoor.Opens(true, true)) return;\n"
+          + "        session = await Agent.AskAsync(\"m\", _scopeId);\n    }\n"),
+        ["door_in_a_comment"] = InjectedPage(
+            "    async Task SendAsync()\n    {\n        // if (!StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\n"
+          + "        session = await Agent.AskAsync(\"m\", _scopeId);\n    }\n"),
+        ["door_in_a_string"] = InjectedPage(
+            "    async Task SendAsync()\n    {\n        var s = \"x; if (!StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\";\n"
+          + "        session = await Agent.AskAsync(\"m\", _scopeId);\n    }\n"),
+        ["a_lifecycle_method"] = InjectedPage(
+            "    protected override async Task OnAfterRenderAsync(bool firstRender)\n    {\n"
+          + "        if (firstRender) session = await Agent.ContinueAfterToolAsync(_scopeId);\n    }\n"),
+        ["an_expression_bodied_spender"] = InjectedPage(
+            "    Task<AgentSession> RetryAsync() => Agent.AskAsync(\"m\", _scopeId);\n"),
+        ["a_method_group_handed_on"] = InjectedPage(
+            "    Func<string, string, Task<AgentSession>> Ask => Agent.AskAsync;\n"),
+        ["a_spend_in_the_markup"] = InjectedPage("",
+            "<button @onclick=\"@(async () => session = await Agent.AskAsync(\"m\", _scopeId))\">x</button>\n"),
+        ["another_receiver_and_the_analysis_spends"] = InjectedPage(
+            "    async Task AnalyzeAsync() { await Feasibility.RunAnalysisAsync(_scopeId); }\n"
+          + "    async Task RefineAsync()\n    {\n        if (!StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\n"
+          + "        await Feasibility.RefineSectionAsync(_scopeId);\n    }\n"),
+    };
+
+    /// <summary><b>والماسِحُ يُقاسُ قَبلَ أَن يُوثَقَ بِه</b> (القاعِدَة ١٠): كُلُّ شَكلٍ مَحقونٍ بِعَدَدِ نِداءاتِه والمَحروسِ مِنها — الحارِسُ في
+    /// رَأسِ الجِسمِ يُقبَل، وكُلُّ ما يُشبِهُه ولا يَحرُسُ يُرفَض: بَعدَ النِداء، في فَرع، تَحتَ <c>if</c> بِلا قَوسَين، في <c>else</c>، بِـ<c>&amp;&amp;</c>،
+    /// يَبتَلِعُه شَرطِيّ، بِلا <c>return</c>، بِمُدخَلاتٍ أُخرى، في تَعليقٍ أَو سِلسِلَة؛ ودَورَةُ الحَياة، والجِسمُ التَعبيرِيّ، ومَجموعَةُ الدالَّة،
+    /// والتَرميز، ومُستَقبِلٌ آخَرُ بِنِداءَي التَحليل — كُلُّها تُعَدّ.</summary>
+    [Theory]
+    [InlineData("head_guard", 1, 1)]
+    [InlineData("head_guard_with_a_braced_return", 1, 1)]
+    [InlineData("two_spends_behind_one_head_guard", 2, 2)]
+    [InlineData("a_brace_in_a_string_does_not_shift_the_members", 2, 1)]
+    [InlineData("a_fourth_handler_without_the_door", 2, 1)]
+    [InlineData("door_after_the_spend", 1, 0)]
+    [InlineData("door_inside_a_branch", 1, 0)]
+    [InlineData("door_under_an_unbraced_if", 1, 0)]
+    [InlineData("door_in_an_else", 1, 0)]
+    [InlineData("door_anded", 1, 0)]
+    [InlineData("door_swallowed_by_a_conditional", 1, 0)]
+    [InlineData("door_that_does_not_return", 1, 0)]
+    [InlineData("door_with_other_inputs", 1, 0)]
+    [InlineData("door_in_a_comment", 1, 0)]
+    [InlineData("door_in_a_string", 1, 0)]
+    [InlineData("a_lifecycle_method", 1, 0)]
+    [InlineData("an_expression_bodied_spender", 1, 0)]
+    [InlineData("a_method_group_handed_on", 1, 0)]
+    [InlineData("a_spend_in_the_markup", 1, 0)]
+    [InlineData("another_receiver_and_the_analysis_spends", 2, 1)]
+    public void The_spend_scanner_finds_every_model_call_and_accepts_only_a_head_guard(string sample, int spends, int gated)
+    {
+        var page = InjectedSpenders[sample];
+        var calls = SpendCallsIn(WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(page)));
+        output.WriteLine($"{sample}: نِداءات {calls.Count} · مَحروسَة {calls.Count(c => c.Gated)} ("
+            + string.Join(" · ", calls.Select(c => $"{c.Member} ← {c.Spend}" + (c.Gated ? "" : " [بِلا باب]"))) + ")");
+
+        Assert.Equal(spends, calls.Count);
+        Assert.Equal(gated, calls.Count(c => c.Gated));
+    }
+
+    /// <summary><b>والطَفرَةُ الَّتي مَرَّت عَلى الصَفحَةِ الحَقيقِيَّةِ تُحمِرُّ الآن</b>: الصَفحَةُ نَفسُها وفيها مُعالِجٌ رابِعٌ يُنادي <c>Agent.AskAsync</c>
+    /// بِحِراسَةِ «أَلَه جَلسَة؟» وَحدَها — بِحَرفِ الطَفرَةِ الَّتي مَرَّت بِكُلِّ صَفٍّ قَبلَ الماسِح — فَيَعُدُّها الماسِحُ نِداءً رابِعاً بِلا باب، بِاسمِه،
+    /// والثَلاثَةُ القائِمَةُ مَحروسَةٌ كَما هي.</summary>
+    [Fact]
+    public void The_spend_scanner_turns_red_on_the_real_agent_page_with_a_fourth_unguarded_handler()
+    {
+        var code = Code(AgentPage);
+        const string anchor = "    async Task ScrollToBottom()";
+        Assert.Single(Regex.Matches(code, Regex.Escape(anchor)));
+        var mutated = code.Replace(anchor,
+            "    async Task RetryAsync() { if (isWorking || _userId == Guid.Empty) return; session = await Agent.AskAsync(\"retry\", _scopeId); }\n\n" + anchor);
+
+        var before = SpendCallsIn(code);
+        var after = SpendCallsIn(mutated);
+        output.WriteLine($"الصَفحَة: {before.Count} نِداءً، مَحروسَة {before.Count(c => c.Gated)} · بِالطَفرَة: {after.Count}، بِلا باب: "
+            + string.Join(" · ", after.Where(c => !c.Gated).Select(c => $"{c.Member} ← {c.Spend}")));
+
+        Assert.True(before.Count >= 3 && before.All(c => c.Gated), "الصَفحَةُ نَفسُها لَيسَت خَضراءَ قَبلَ الطَفرَة.");
+        Assert.Equal(before.Count + 1, after.Count);
+        Assert.Equal(new[] { "RetryAsync" }, after.Where(c => !c.Gated).Select(c => c.Member).ToArray());
     }
 
     // ─── الطَريقُ إلى الصَفحَة ──────────────────────────────────────────────────────────────────
