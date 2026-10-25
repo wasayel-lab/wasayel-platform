@@ -366,7 +366,11 @@ public static class AuthHandlers
     }
 
     // ── Nafath ────────────────────────────────────────────────────────
-    [WolverinePost("/{slug}/auth/nafath/request")]
+    // لا [WolverinePost] — (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2 الجَولَة ١؛ تَوصيفُه `4618eec`؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) كانَ هُنا
+    // `[WolverinePost("/{slug}/auth/nafath/request")]` فَجِسمُ النُقطَةِ هذِه الدالَّةُ الَّتي تَرمي. ومَقيسٌ حَيّاً عَلى قاعِدَةٍ مَحَلِّيَّة: أَحَدَ عَشَرَ
+    // طَلَبَ JSON لِـ`theme-demo` كُلُّها ‏500 بِـ`tenant_required` — النُقطَةُ لا تَرى المُستَأجِرَ أَصلاً، فَلَم تَعمَل لِأَحَدٍ قَطّ، ولا مُنادِيَ لَها في
+    // المُستَودَع (لا razor ولا js ولا سكربت إلّا مِجَسُّ المَسارات). وبابُ الاستِمارَةِ `/{slug}/auth/nafath/login` يُنادي الدالَّةَ ويَلتَقِطُ رَدَّها —
+    // نَسَقُ `RequestPhoneOtpHandler` أَعلاه. فَبابٌ لا يُفتَحُ لِأَحَدٍ يُخفى (القاعِدَتانِ ١ و١٢) لا يُرَمَّم.
     public static async Task<NafathPending> RequestNafathHandler(
         RequestNafath cmd, ITenantContext tenantCtx,
         INafathChannel channel, CancellationToken ct)

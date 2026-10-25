@@ -197,18 +197,23 @@ public class OtpSendQuotaTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم»</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2 الجَولَة ١، صُغرى؛ القاعِدَة ٣ — يُقلَبُ بِاسمِه في كوميتِ الإصلاح): وَسمُ
-    /// <c>[WolverinePost("/{slug}/auth/nafath/request")]</c> عَلى <c>RequestNafathHandler</c> نَفسِه — فَجِسمُ نُقطَةِ الـHTTP هُوَ الدالَّةُ الَّتي تَرمي.
-    /// والحادِيَ عَشَرَ في السّاعَةِ لِهُوِيَّةٍ واحِدَةٍ يَرمي <c>InvalidOperationException("rate_limited…")</c>، ومُستَأجِرٌ لَم يُحَلَّ يَرمي <c>tenant_required</c>،
-    /// ولا التِقاطَ بَينَهُما وبَينَ Wolverine — وبابُ الاستِمارَةِ وَحدَه يَلتَقِطُ (الصَفُّ أَدناه). وجَوابُ الاستِثناءِ غَيرِ المُلتَقَطِ ‏500 بِحَسَبِ المُراجَعَة —
-    /// لَم يُقَس حَيّاً هُنا؛ المَقيسُ أَنّه يَصعَدُ مِن جِسمِ النُقطَة.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2 الجَولَة ١، صُغرى؛ كانَ <c>Today_the_nafath_http_door_is_the_throwing_handler_so_a_refused_start_escapes_it</c>،
+    /// مُودَعٌ في <c>4618eec</c>): كانَ وَسمُ <c>[WolverinePost("/{slug}/auth/nafath/request")]</c> عَلى <c>RequestNafathHandler</c> فَيَصعَدُ رَدُّه مِن جِسمِ
+    /// النُقطَة — ومَقيسٌ حَيّاً: كُلُّ طَلَبٍ ‏500 بِـ<c>tenant_required</c>، فَالنُقطَةُ لَم تَعمَل لِأَحَدٍ ولا مُنادِيَ لَها. <b>والآن</b>: لا وَسمَ عَلى الدالَّة، وبابُها
+    /// الوَحيدُ الاستِمارَةُ (يَلتَقِطُ ما تَرميه — الصَفُّ أَدناه)؛ والدالَّةُ تَرمي كَما كانَت — فَما يُرَدُّ يُرَدُّ في البابِ الَّذي يَلتَقِطُه.</para>
     /// </summary>
     [Fact]
-    public async Task Today_the_nafath_http_door_is_the_throwing_handler_so_a_refused_start_escapes_it()
+    public async Task The_nafath_start_has_no_http_door_of_its_own_and_the_form_door_is_its_only_caller()
     {
         var auth = WriteEndpointGuardTests.StripComments(StudioConsentCharacterizationTests.Source(
             "libs", "kits", "Auth", "ACommerce.Kit.Auth.Server", "AuthHandlers.cs"));
-        Assert.Matches(@"\[WolverinePost\(""/\{slug\}/auth/nafath/request""\)\]\s*public static async Task<NafathPending> RequestNafathHandler\(", auth);
+        Assert.DoesNotContain("nafath/request", auth, StringComparison.Ordinal);
+        Assert.Matches(@"\}\s*public static async Task<NafathPending> RequestNafathHandler\(", auth);
+
+        var callers = 0;
+        foreach (var (_, text) in EntitlementContractTests.SourceFiles())
+            callers += System.Text.RegularExpressions.Regex.Matches(WriteEndpointGuardTests.StripComments(text), @"\bRequestNafathHandler\(").Count;
+        Assert.Equal(2, callers);   // التَعريفُ ونِداءُ بابِ الاستِمارَة
 
         var (slug, _) = Fresh();
         var nafath = new CountingNafath();
@@ -220,7 +225,7 @@ public class OtpSendQuotaTests(ITestOutputHelper output)
         var unresolved = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             AuthHandlers.RequestNafathHandler(new RequestNafath("1098765432"), new UnresolvedTenant(), nafath, CancellationToken.None));
         Assert.Equal("tenant_required", unresolved.Message);
-        output.WriteLine($"بابُ الـHTTP: عَشرَةُ بُدوءٍ ثُمَّ «{refused.Message}» يَصعَد، ومُستَأجِرٌ لَم يُحَلَّ «{unresolved.Message}» يَصعَد");
+        output.WriteLine($"لا بابَ HTTP لِلبَدء · مَواضِعُ RequestNafathHandler( {callers} · الحادِيَ عَشَرَ «{refused.Message}» يَبلُغُ بابَ الاستِمارَة");
     }
 
     /// <summary>مُستَأجِرٌ لَم يُحَلّ — ما يَراه الطَلَبُ بِسلاجٍ لا مَتجَرَ لَه.</summary>

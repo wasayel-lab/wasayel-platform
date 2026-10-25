@@ -65,7 +65,9 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
         new("/{slug}/auth/email/verify",  "تَحَقُّق بَريديّ — يُنشِئ الجَلسَة."),
         new("/{slug}/auth/nafath/login",  "بَدء دُخول بِنَفاذ — يُنشِئ الجَلسَة، فَلا جَلسَةَ قَبلَه."),
         new("/{slug}/auth/nafath/verify", "تَأكيد نَفاذ — يُنشِئ الجَلسَة، فَلا جَلسَةَ قَبلَه."),
-        new("/{slug}/auth/nafath/request:w", "‏[WolverinePost] بَدء نَفاذ — يُنشِئ الجَلسَة، ولا جَلسَةَ قَبلَه."),
+        // (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: كانَ هُنا صَفُّ "/{slug}/auth/nafath/request:w" — ونُزِعَ وَسمُ
+        // [WolverinePost] عَن RequestNafathHandler لِأَنّ النُقطَةَ مَقيسَةٌ مَيتَةً (كُلُّ طَلَبٍ ‏500 tenant_required) وبِلا مُنادٍ؛ فَصَفٌّ بِلا نُقطَةٍ يُحمِرُّ
+        // No_pinned_exception_outlives_its_reason.)
         new("/{slug}/auth/nafath/verify:w",  "‏[WolverinePost] تَأكيد نَفاذ — يُنشِئ الجَلسَة، ولا جَلسَةَ قَبلَه."),
         new("/studio/auth/login",         "طَلَب رَمز دُخول الـ studio — هذا هُوَ الدُخول نَفسُه."),
         new("/studio/auth/email/login",   "نَظيرُ سابِقَتِها بِالبَريد — نَفسُ القَرار: الدُخول نَفسُه، ولا جَلسَةَ قَبلَه."),
