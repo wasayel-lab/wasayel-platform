@@ -241,10 +241,11 @@ public class ProductionBootEnvFileTests(ITestOutputHelper output)
         Assert.False(SaysBothFromTheEnvironment(text));
     }
 
-    // ─── توصيفُ «اليَوم» — مُراجَعَةُ تَيّارِ W8-6 (الجَولَة ٢، الصُغرى ١) (‏2026-10-25، عِندَ `903408c`) ───
+    // ─── مُراجَعَةُ تَيّارِ W8-6 (الجَولَة ٢، الصُغرى ١) (‏2026-10-25) — انقَلَبَ بِاسمِه (كانَ `Today_a_file_line_for_a_script_default_is_kept_out_by_the_default`، `be5109b`) ───
     //
-    // ‏`env_file` تَعُدُّ «البيئَةَ» كُلَّ مُتَغَيِّرِ صَدَفَةٍ غَيرِ فارِغ — ومِنه افتِراضاتُ السكربتِ المُسنَدَةُ قَبلَها. فَـ`BOOT_TIMEOUT="${BOOT_TIMEOUT:-90}"`
+    // ‏`env_file` كانَت تَعُدُّ «البيئَةَ» كُلَّ مُتَغَيِّرِ صَدَفَةٍ غَيرِ فارِغ — ومِنه افتِراضاتُ السكربتِ المُسنَدَةُ قَبلَها. فَـ`BOOT_TIMEOUT="${BOOT_TIMEOUT:-90}"`
     // يَسبِقُ الكُتلَة، وسَطرُ `BOOT_TIMEOUT=…` في `scripts/.prod-gate.env` — وكانَ يَسري قَبلَ `48874b6` — يُحفَظُ عَلَيه الافتِراضُ ويُتجاهَلُ بِلا رِسالَة.
+    // **العِلاج**: قائِمَةُ المُصَدَّرِ مِن `compgen -e` قَبلَ الإصدار، ولا يُحفَظُ إلّا ما فيها. والكُتلَةُ عِندَ `903408c` عَيِّنَةٌ مَحقونَةٌ يَحمَرُّ عَلَيها الصَفّ.
 
     /// <summary>سَطرُ الافتِراضِ بِحَرفِه في البَوّابَة، ومَوضِعُه قَبلَ كُتلَةِ «١) التَهيئَة».</summary>
     internal static string BootTimeoutDefault()
@@ -264,12 +265,40 @@ public class ProductionBootEnvFileTests(ITestOutputHelper output)
         return text.Split('\n').Single(l => l.StartsWith("boot_timeout=", StringComparison.Ordinal))["boot_timeout=".Length..];
     }
 
-    /// <summary>توصيفُ «اليَوم»: المِلَفُّ يُسنِدُ <c>BOOT_TIMEOUT=7</c> والبيئَةُ لا تُصَدِّرُه — فَيَبقى افتِراضُ السكربتِ ‏90 ولا يُقالُ شَيء.</summary>
+    /// <summary>المِلَفُّ يُسنِدُ <c>BOOT_TIMEOUT=7</c> والبيئَةُ لا تُصَدِّرُه — فَيَسري سَطرُ المِلَفِّ عَلى افتِراضِ السكربت، كَما كانَ قَبلَ <c>48874b6</c>.</summary>
     [Fact]
-    public void Today_a_file_line_for_a_script_default_is_kept_out_by_the_default()
+    public void A_file_line_for_a_script_default_takes_effect_when_the_environment_did_not_export_it()
     {
         if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI (‏ubuntu)."); return; }
         var after = BootTimeoutAfter(ConfigBlock(),
+            new Dictionary<string, string> { ["ConnectionStrings__Postgres"] = "Host=from-env-branch;Database=x" }, FileBody + "BOOT_TIMEOUT=7\n");
+        Assert.Equal("7", after);
+    }
+
+    /// <summary>وما صَدَّرَه المُشَغِّلُ يَغلِبُ المِلَفَّ هُنا أَيضاً — <c>BOOT_TIMEOUT=120 ./scripts/verify-production-boot.sh</c>.</summary>
+    [Fact]
+    public void An_exported_script_default_still_wins_over_the_file()
+    {
+        if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI (‏ubuntu)."); return; }
+        var after = BootTimeoutAfter(ConfigBlock(),
+            new Dictionary<string, string> { ["ConnectionStrings__Postgres"] = "Host=from-env-branch;Database=x", ["BOOT_TIMEOUT"] = "120" },
+            FileBody + "BOOT_TIMEOUT=7\n");
+        Assert.Equal("120", after);
+    }
+
+    /// <summary>الكُتلَةُ عِندَ <c>903408c</c> — «البيئَةُ» كُلُّ مُتَغَيِّرِ صَدَفَةٍ غَيرِ فارِغ — عَيِّنَةٌ مَحقونَةٌ تُشتَقُّ مِن الحالِيَّةِ بِرَدِّ سَطرَي الفَحص:
+    /// الصَفُّ نَفسُه يَراها تُبقي ‏90، فَهُوَ لَيسَ أَعمى.</summary>
+    [Fact]
+    public void The_script_default_check_goes_red_on_the_block_it_was_written_for()
+    {
+        if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI (‏ubuntu)."); return; }
+        const string exportedCheck = "[ -n \"${exported[$name]+x}\" ] && [ -n \"${!name:-}\" ] && kept[\"$name\"]=\"${!name}\"";
+        const string shellCheck = "[ -n \"${!name:-}\" ] && kept[\"$name\"]=\"${!name}\"";
+        var block = ConfigBlock();
+        Assert.Equal(2, block.Split(exportedCheck).Length - 1);
+        Assert.Contains("done < <(compgen -e)", block, StringComparison.Ordinal);
+        var before = block.Replace(exportedCheck, shellCheck, StringComparison.Ordinal);
+        var after = BootTimeoutAfter(before,
             new Dictionary<string, string> { ["ConnectionStrings__Postgres"] = "Host=from-env-branch;Database=x" }, FileBody + "BOOT_TIMEOUT=7\n");
         Assert.Equal("90", after);
     }
