@@ -404,7 +404,9 @@ GUARDED_PAGES=(
   "member-create-listing:member:/{member}/create-listing"
   "member-create-listing-cat:member:/{member}/create-listing?category=apartment"
   "member-create-listing-invalid:member:/{member}/create-listing?err=invalid"
-  "member-create-listing-forbidden:member:/{member}/create-listing?err=forbidden"
+  # ‏(‏2026-10-25، W8-7 — lens-dead-doors-3): كانَ هُنا "member-create-listing-forbidden:member:/{member}/create-listing?err=forbidden" —
+  # فَرعٌ لا كاتِبَ لَه حُذِفَ مِن الصَفحَة، فَاللَقطَةُ صارَت نُسخَةً مِن "member-create-listing" بِاسمٍ يَدَّعي غَيرَه. ورَفضُ الصَلاحِيَّةِ
+  # يُرسَمُ اليَومَ مِن `GatedPage` لِعُضوٍ بِلا `listing.create` لا بِمُعامِل — ولا مِلَفَّ لَقطَةٍ بِهذا الدَورِ بَعد.
 
   # ‏**`TenantManage` (‏24)** — ثَلاثَةُ فُروع: الإداريّ (‏`user` في
   # `theme-demo` يَملِك `tenant.manage`)، وغَيرُ الإداريّ (‏`member`)،

@@ -1,6 +1,7 @@
 @page "/{slug}/me/listings"
 @page "/{slug}/r/{role}/me/listings"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingService Vendors
 @using Vs = ACommerce.Templates.Customer.Marketplace.Services.Shipping
 @inject AuthSession Auth
@@ -15,11 +16,23 @@
 <div class="acs-page">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("listings.mine.title")</h1>
+        @* «إعلان جَديد» خَلفَ بابِ صَفحَةِ النَشرِ نَفسِه (‏2026-10-25، W8-7 — lens-dead-doors-3): كانَ يُرسَمُ لِكُلِّ صاحِبِ جَلسَة، فَالمُشتَري
+           بِدَورِه الافتِراضِيِّ يَملَأُ النَموذَجَ ثُمَّ يُرَدُّ ‏403. ومَن لا يَنشُرُ دَورُه يُعرَضُ عَلَيه «اِختَر دَوراً يَنشُر» حينَ تَعرِضُ صَفحَةُ
+           الأَدوارِ دَوراً كَذلِك — وإلّا فَلا زِرّ. *@
         @if (Auth.IsAuthenticated)
         {
+            @if (canCreateListing)
+            {
             <a class="ac-btn ac-btn-primary ac-btn-sm" href="@AuthSession.LinkFor(Slug, Role, $"create-listing")">
                 <AcIcon Name="plus" Size="14" /> @L.Markup("listings.mine.new")@((MarkupString)"\n            ")
             </a>
+            }
+            else if (canSwitchToCreate)
+            {
+            <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@AuthSession.LinkFor(Slug, Role, "me/role")">
+                <AcIcon Name="settings" Size="14" /> @L.Markup("listings.mine.switch_role")
+            </a>
+            }
         }
     </div>
 
@@ -61,10 +74,20 @@
     }
     else if (myListings.Count == 0)
     {
+        @if (canCreateListing)
+        {
         <AcEmptyState IconName="package" Title="@L["listings.mine.empty_title"]"
                       Message="@L["listings.mine.empty_hint"]"
                       ActionLabel="@L["listings.mine.new"]"
                       ActionHref="@AuthSession.LinkFor(Slug, Role, $"create-listing")" />
+        }
+        else
+        {
+        <AcEmptyState IconName="package" Title="@L["listings.mine.empty_title"]"
+                      Message="@L["listings.mine.empty_hint_no_create"]"
+                      ActionLabel="@(canSwitchToCreate ? L["listings.mine.switch_role"] : null)"
+                      ActionHref="@(canSwitchToCreate ? AuthSession.LinkFor(Slug, Role, "me/role") : null)" />
+        }
     }
     else
     {
@@ -218,6 +241,11 @@
     [SupplyParameterFromQuery(Name = "shipping_err")] public string? ShippingErr { get; set; }
     [SupplyParameterFromQuery(Name = "shipping")] public string? ShippingDone { get; set; }
     List<Listing>? myListings;
+    /// <summary>بابُ صَفحَةِ النَشرِ بِحَرفِه (‏<c>PermissionDoor.Opens</c> بِما يَقرَؤُه <c>GatedPage</c> فيها: <c>Tenant.Roles</c> المُخَزَّنَة والدَورُ
+    /// المُخَزَّن) — ‏2026-10-25، W8-7. ومَتجَرٌ بِلا أَدوارٍ مَفتوحٌ كَما يَفتَحُه الحارِس.</summary>
+    bool canCreateListing;
+    /// <summary>صَفحَةُ «اِختَر دَورَك» تَعرِضُ دَوراً يَنشُر (‏<c>PermissionDoor.SwitchOpens</c>) — شَرطُ رابِطِ <c>me/role</c> مَكانَ «إعلان جَديد».</summary>
+    bool canSwitchToCreate;
     /// <summary>أَيُّ مَدخَلٍ لِحِسابِ الشَحنِ يُرسَم (تَيّارُ S8، ‏2026-10-12) — <c>VendorShippingSurface.InputFor</c> بِتَهيئَةِ النُسخَةِ وخِزانَتِها،
     /// و<c>None</c> لِغَيرِ البائِع: لا يُسأَلُ إلّا في فَرعِ «لَه إعلانات».</summary>
     ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput shippingInput;
@@ -233,6 +261,12 @@
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
+        // البابُ أَوَّلاً وبِقِراءَتَي GatedPage نَفسَيهِما (المُستَأجِرُ المُخَزَّن والدَورُ المُخَزَّن) — فَلا يَختَلِفُ الرابِطُ والصَفحَة.
+        var roles = (await Tenants.FindAsync(Slug))?.Roles ?? new List<ACommerce.Kit.Roles.Role>();
+        var storedRole = await Accounts.ActiveRoleAsync(Slug, Auth.UserId!.Value);
+        canCreateListing = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(roles, Role, storedRole, "listing.create");
+        canSwitchToCreate = !canCreateListing
+            && ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.SwitchOpens(roles, Role, "listing.create");
         // الفَلتَرَة في الذاكِرَة (‏Marten لا يُفَلتِر Attributes في LINQ)
         // انتَقَلَت مَع الاستِعلام إلى AccountQueries.MyListingsAsync —
         // نَفس الخُطوَتَين ونَفس التَرتيب.

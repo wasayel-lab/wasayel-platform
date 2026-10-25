@@ -13,6 +13,12 @@
       - غَيره  → النَموذَج الكامِل ذو الخَطوَتَين (فِئَة → تَفاصيل)
 *@
 
+@* البابُ قَبلَ النَموذَج (‏2026-10-25، تَدقيقُ الإطلاق W8-7 — lens-dead-doors-3): كانَت الصَفحَةُ تَرسُمُ الفِئَةَ والحُقولَ والصُوَرَ والمَوقِعَ لِكُلِّ
+   صاحِبِ جَلسَة، ونُقطَتُها `.RequirePermission("listing.create")` تَرُدُّ مَن لا يَحمِلُها بِـ‏403 عارٍ بَعدَ أَن يَملَأَ كُلَّ شَيء. صارَ `GatedPage`
+   يَسأَلُ `PermissionDoor.Opens` — الدالَّةَ الَّتي يَسأَلُها كُلُّ رابِطٍ إلى هُنا — ويَرسُمُ لِلمَرفوضِ نَصَّ `listings.create.err_forbidden` ومَخرَجَ
+   «اِختَر دَوراً آخَر» حينَ يوجَد. وصاحِبُ الصَلاحِيَّةِ يَرى ما كانَ يَراه بايتاً: المُكَوِّنُ لا يُضيفُ عُنصُراً حَولَ مُحتَواه. ومَن لا جَلسَةَ لَه يَمُرُّ
+   إلى فَرعِ الدُخولِ أَدناه كَما كان (المُكَوِّنُ لا يَسأَلُ الصَلاحِيَّةَ بِلا مُستَخدِم). *@
+<GatedPage Slug="@Slug" Role="@Role" Permission="listing.create" ForbiddenMessageKey="listings.create.err_forbidden">
 @if (RoleCreateForm() is { } roleCreateForm)
 {
     @roleCreateForm
@@ -44,14 +50,11 @@ else
             <span class="@(!string.IsNullOrEmpty(Category)? "active" : "")">@L.Markup("listings.create.step_location")</span>
         </div>
 
+        @* ‏(‏2026-10-25، W8-7): كانَ هُنا فَرعُ `Err == "forbidden"` بِنَصِّ `listings.create.err_forbidden` — بِلا كاتِب: النُقطَةُ تَرُدُّ ‏403
+           ولا تُحَوِّلُ إلى هُنا (صِفرُ `create-listing?err=forbidden` في الكود). والنَصُّ صارَ نَصَّ رَفضِ `GatedPage` أَعلاه، يُقرَأُ قَبلَ النَموذَجِ لا بَعدَه. *@
         @if (Err == "invalid")
         {
             <AcAlert Variant="danger" Message="@L["listings.create.err_invalid"]" />
-        }
-        else if (Err == "forbidden")
-        {
-            <AcAlert Variant="danger"
-                     Message="@L["listings.create.err_forbidden"]" />
         }
         @* نَفاد الحِصَّة: رِسالَة تَقول ما وَقَعَ وما يُفعَل، ومَعَها
            مَخرَج. نُصوصُها مِن قامُوس المَفاتيح لا حَرفِيَّةً في
@@ -237,6 +240,7 @@ else
 </div>
 
 }
+</GatedPage>
 
 @code {
     [Parameter] public string Slug { get; set; } = "";

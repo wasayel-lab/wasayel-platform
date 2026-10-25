@@ -48,9 +48,13 @@
         break;
 
     case GateState.Forbidden:
+        @* (‏2026-10-25، W8-7 — lens-dead-doors-3): ومَخرَجُ «اِختَر دَوراً آخَر» حينَ تَعرِضُ صَفحَةُ الأَدوارِ دَوراً يَحمِلُ الصَلاحِيَّة
+           (‏`PermissionDoor.SwitchOpens`) — وإلّا فَلا رابِط: بابٌ لا يُفتَحُ لا يُرسَم (القاعِدَة ١٢). *@
         <AcEmptyState IconName="alert-circle"
                       Title="@(L["gate.forbidden.title"])"
-                      Message="@_forbiddenMsg" />
+                      Message="@_forbiddenMsg"
+                      ActionLabel="@(_switchUrl is null ? null : L["gate.forbidden.switch_role"])"
+                      ActionHref="@_switchUrl" />
         break;
 }
 
@@ -67,6 +71,10 @@
     /// <summary>صَلاحِيَّة دَور مَطلوبَة (مَثَلاً "listing.create"). فارِغ = لا فَحص.</summary>
     [Parameter] public string? Permission { get; set; }
 
+    /// <summary>مِفتاحُ نَصِّ الرَفضِ في القامُوس — لِصَفحَةٍ تَقولُ ما لا يَفعَلُه الدَورُ بِلُغَتِها لا بِرَمزِ الصَلاحِيَّة. فارِغ = النَصُّ العامّ
+    /// (‏<c>gate.forbidden.prefix</c> + الرَمز + <c>gate.forbidden.suffix</c>) كَما كان (‏2026-10-25، W8-7).</summary>
+    [Parameter] public string? ForbiddenMessageKey { get; set; }
+
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     enum GateState { Allowed, NeedAuth, NeedTerms, Forbidden }
@@ -74,6 +82,7 @@
     string _loginUrl = "";
     string _termsUrl = "";
     string _forbiddenMsg = "";
+    string? _switchUrl;
 
     protected override async Task OnInitializedAsync()
     {
@@ -112,11 +121,17 @@
                 // كانَ الدَورُ في المَسار، وذاكَ تَحسينُ عَدَدِ استِعلامات
                 // لا نَقلُ مَوضِع. التَحسينُ لَه مَوجَتُه.
                 var storedRole = await Accounts.ActiveRoleAsync(Slug, uid2);
-                var activeRole = Role ?? storedRole ?? "";
-                if (!RolePermissions.Has(tenant.Roles, activeRole, Permission))
+                // (‏2026-10-25، W8-7 — lens-dead-doors-3): القَرارُ صارَ `PermissionDoor.Opens` — الدالَّةُ الَّتي يَسأَلُها كُلُّ رابِطٍ إلى صَفحَةٍ
+                // مَحروسَةٍ بِهذا المُكَوِّن، فَلا يَنفَتِحُ رابِطٌ عَلى رَفض. وكانَ هُنا `Role ?? storedRole ?? ""` ثُمَّ `RolePermissions.Has`: الجَوابُ
+                // نَفسُه لِكُلِّ مُدخَل (دَورُ مَسارٍ فارِغٌ لا يولَدُ مِن التَوجيه)، مَقيسٌ بِجَدوَلِ `CreateListingDoorTests`.
+                if (!PermissionDoor.Opens(tenant.Roles, Role, storedRole, Permission))
                 {
                     _state = GateState.Forbidden;
-                    _forbiddenMsg = $"{L["gate.forbidden.prefix"]}{Permission}» — {L["gate.forbidden.suffix"]}";
+                    _forbiddenMsg = string.IsNullOrEmpty(ForbiddenMessageKey)
+                        ? $"{L["gate.forbidden.prefix"]}{Permission}» — {L["gate.forbidden.suffix"]}"
+                        : L[ForbiddenMessageKey];
+                    if (PermissionDoor.SwitchOpens(tenant.Roles, Role, Permission))
+                        _switchUrl = AuthSession.LinkFor(Slug, Role, "me/role");
                     return;
                 }
             }
