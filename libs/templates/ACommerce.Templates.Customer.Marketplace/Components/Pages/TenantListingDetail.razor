@@ -6,6 +6,8 @@
 @inject AuthSession Auth
 @inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
 @inject ACommerce.Kit.Reviews.ReviewsService Reviews
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject L L
 
 @*
@@ -196,6 +198,12 @@ else
     {
         <AcAlert Variant="danger" Message="@L["listings.detail.err_self_offer"]" />
     }
+    else if (Err == "forbidden")
+    {
+        @* `forbidden` — رَدُّ نُقطَةِ العَرضِ حينَ لا يَحمِلُ الدَورُ `offer.submit` (‏2026-10-25، W8-7 — lens-dead-doors-7): كانَت تُحَوِّلُ إلى هُنا
+           والصَفحَةُ لا تَقرَؤُه. والاستِمارَةُ صارَت لا تُرسَمُ لِذلكَ الدَور، فَلا يَبلُغُه إلّا طَلَبٌ مَصنوعٌ أَو دَورٌ تَبَدَّلَ بَينَ الفَتحِ والإرسال. *@
+        <AcAlert Variant="danger" Message="@L["listings.detail.err_forbidden"]" />
+    }
     else if (Err == "self")
     {
         @* `self` — رَمزُ بابَي الطَلَبِ عَلى الإعلانِ (العَرضُ والإضافَةُ إلى السَلَّة) حينَ يَكونُ الطالِبُ
@@ -340,7 +348,10 @@ else
             {
                 @* صاحِب الإعلان: يُرى عُروض الآخَرين مَع أَزرار قَبول/رَفض.
                    غَير صاحِب الإعلان: يَرى نَموذَج تَقديم عَرض. *@
-                @if (Auth.IsAuthenticated && !isOwner)
+                @* (‏2026-10-25، W8-7 — lens-dead-doors-7): الاستِمارَةُ لِدَورٍ يَحمِلُ `offer.submit` وَحدَه — بابُ النُقطَةِ نَفسُه (`PermissionDoor.Opens`
+                   عَلى الأَدوارِ المُجَسَّدَةِ الَّتي تَقرَؤُها `HasPermissionAsync`)؛ ولِسِواه سَطرٌ يَقولُ لِماذا، ورابِطُ `me/role` حينَ تَعرِضُ صَفحَةُ الأَدوارِ
+                   دَوراً يُقَدِّم. كانَت تُرسَمُ لِكُلِّ صاحِبِ جَلسَةٍ فَيُرَدُّ المُضيفُ والبائِعُ والراكِبُ بِلا كَلِمَة. *@
+                @if (Auth.IsAuthenticated && !isOwner && canOffer)
                 {
                     @* نَموذَج مُبَسَّط: السِعر فَقَط ظاهِراً. الـ ttl ثابِت
                        ١٥ دَقيقَة. المَوقِع يُلتَقَط تِلقائيّاً عَبر
@@ -374,6 +385,16 @@ else
                         <p style="text-align:center;font-size:11px;color:var(--ac-text-muted);margin:0;">@((MarkupString)"\n                            ")@L.Markup("listings.detail.geo_note")@((MarkupString)"\n                        ")
                         </p>
                     </form>
+                }
+                else if (Auth.IsAuthenticated && !isOwner)
+                {
+                    <div class="acm-role-empty" style="margin:0 0 16px;">
+                        <p>@L.Markup("listings.detail.err_forbidden")</p>
+                        @if (canSwitchToOffer)
+                        {
+                            <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@AuthSession.LinkFor(Slug, Role, "me/role")">@L.Markup("listings.detail.offer_switch_role")</a>
+                        }
+                    </div>
                 }
                 else if (!Auth.IsAuthenticated)
                 {
@@ -636,6 +657,11 @@ else
     bool showOffers;
     bool isOwner;
     bool isOfferBased;   // accepts_offers=true → نَموذَج تَفاوُض، لا دَردَشَة مُباشَرَة
+    /// <summary>بابُ نُقطَةِ العَرضِ بِحَرفِه — <c>PermissionDoor.Opens(…, "offer.submit")</c> عَلى الأَدوارِ المُجَسَّدَةِ والدَورِ المُخَزَّنِ اللَّذَينِ
+    /// تَقرَؤُهُما <c>HasPermissionAsync</c> (‏2026-10-25، W8-7). مَتجَرٌ بِلا أَدوارٍ مَفتوح.</summary>
+    bool canOffer;
+    /// <summary>صَفحَةُ «اِختَر دَورَك» تَعرِضُ دَوراً يُقَدِّمُ عُروضاً (‏<c>PermissionDoor.SwitchOpens</c>) — شَرطُ رابِطِ <c>me/role</c> مَكانَ الاستِمارَة.</summary>
+    bool canSwitchToOffer;
     double? pickupLat, pickupLng, dropoffLat, dropoffLng;
     /// <summary>نَمَط تَدَفُّق الصَّفقَة لِهذا المُستَأجِر — نَفس الدالَّة
     /// الَّتي يَستَخدِمُها endpoint بَدء الصَّفقَة، لا اشتِقاق مُوازٍ.</summary>
@@ -686,6 +712,16 @@ else
         listing.Attributes.TryGetValue("accepts_offers", out var acceptsOffers);
         isOfferBased = string.Equals(acceptsOffers, "true", StringComparison.OrdinalIgnoreCase);
         showOffers   = isOfferBased || listingMatch is not null;
+
+        // بابُ الاستِمارَةِ بِقِراءَتَي النُقطَةِ نَفسَيهِما — ولا يُقرَأُ إلّا حَيثُ تُرسَمُ: قِسمُ العُروضِ لِصاحِبِ جَلسَة.
+        if (showOffers && Auth.IsAuthenticated && Auth.UserId.HasValue)
+        {
+            var roles = (await Roles.LoadAsync(Slug)).Tenant?.Roles ?? new List<ACommerce.Kit.Roles.Role>();
+            var storedRole = await Accounts.ActiveRoleAsync(Slug, Auth.UserId.Value);
+            canOffer = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(roles, Role, storedRole, "offer.submit");
+            canSwitchToOffer = !canOffer
+                && ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.SwitchOpens(roles, Role, "offer.submit");
+        }
 
         // مالِك الإعلان — يُقرَأ دائِماً (لا فَقَط لِلمُسَجَّلين) لِأَنّ
         // سُمعَتَه مُؤَشِّر ثِقَة يَراه الزائِر أَيضاً.

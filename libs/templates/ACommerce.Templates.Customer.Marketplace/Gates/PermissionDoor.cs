@@ -19,6 +19,10 @@ namespace ACommerce.Templates.Customer.Marketplace.Gates;
 /// <para><b>والدَورُ هُوَ ما تَحسِمُه <see cref="EffectiveRole.Resolve"/> بِلا <c>as</c></b> — نَفسُ تَرتيبِ نُقطَةِ الكِتابَة (‏<see cref="PermissionFilter"/>)
 /// ناقِصاً الحَقلَ الصَريحَ الَّذي لا تَعرِفُه الصَفحَةُ قَبلَ الإرسال. والأَدوارُ ما يَقرَؤُه حارِسُ الصَفحَةِ الهَدَف: <c>GatedPage</c> و
 /// <c>PermissionFilter</c> يَقرَآنِ <c>Tenant.Roles</c> المُخَزَّنَة (لا المُجَسَّدَةَ بِالأَدوارِ المُؤَلَّفَة)، فَيَقرَؤُها البابُ إلَيهِما كَذلِك.</para>
+///
+/// <para><b>والمُستَهلِكُ الثالِث (‏2026-10-25، W8-7 — <c>lens-dead-doors-7</c>؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)</b>: استِمارَةُ العَرضِ في
+/// <c>TenantListingDetail</c> تَسأَلُ <c>Opens(…, "offer.submit")</c> — وحارِسُ نُقطَتِها <c>HasPermissionAsync</c> يَقرَأُ الأَدوارَ <b>المُجَسَّدَة</b>
+/// (<c>LoadTenantWithRolesAsync</c>)، فَتَقرَؤُها الصَفحَةُ مُجَسَّدَةً (<c>TenantRoleService.LoadAsync</c>). القاعِدَةُ واحِدَة: البابُ يَقرَأُ ما يَقرَؤُه حارِسُ هَدَفِه.</para>
 /// </summary>
 public static class PermissionDoor
 {

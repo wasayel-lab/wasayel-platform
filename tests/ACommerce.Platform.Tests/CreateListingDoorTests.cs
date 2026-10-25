@@ -272,7 +272,8 @@ public class CreateListingDoorTests(ITestOutputHelper output)
 
         Assert.Equal(2, switches.Count);
         Assert.Equal(switches.Count, behind);
-        Assert.Equal(new[] { "GatedPage.razor", "MyListings.razor" }, consumers);
+        // ‏(‏2026-10-25، W8-7 — كوميتُ إصلاحِ lens-dead-doors-7؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): المُستَهلِكُ الثالِثُ استِمارَةُ العَرض — مُسَمّىً في رَأسِ PermissionDoor.cs.
+        Assert.Equal(new[] { "GatedPage.razor", "MyListings.razor", "TenantListingDetail.razor" }, consumers);
     }
 
     // ─── ما لا يَتَبَدَّل ───────────────────────────────────────────────────────────────────

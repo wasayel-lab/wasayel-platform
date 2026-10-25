@@ -44,33 +44,64 @@ public class OfferFormDoorTests(ITestOutputHelper output)
 
     // ─── «اليَوم» ───────────────────────────────────────────────────────────────────────────
 
-    /// <summary><b>«اليَوم»</b>: شُروطُ استِمارَةِ العَرضِ <c>showOffers</c> ثُمَّ <c>Auth.IsAuthenticated &amp;&amp; !isOwner</c> — لا شِقَّ فيها يَسأَلُ
-    /// <c>offer.submit</c>، والصَفحَةُ لا تَذكُرُ الصَلاحِيَّةَ أَصلاً.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ إصلاحِ <c>lens-dead-doors-7</c>)</b> — كانَ
+    /// <c>Today_the_offer_form_is_drawn_for_every_signed_in_non_owner_whatever_the_role</c> (‏<c>4b74e0b</c>): شُروطُها <c>showOffers</c> ثُمَّ
+    /// <c>Auth.IsAuthenticated &amp;&amp; !isOwner</c>. والآن شِقٌّ ثالِثٌ <c>canOffer</c> — <c>PermissionDoor.Opens(…, "offer.submit")</c> بِقِراءَتَي
+    /// <c>HasPermissionAsync</c> (الأَدوارُ المُجَسَّدَةُ والدَورُ المُخَزَّن) — والفَرعُ الَّذي يَليها لِصاحِبِ الجَلسَةِ نَفسِه سَطرُ القامُوسِ ورابِطُ
+    /// <c>me/role</c> خَلفَ <c>canSwitchToOffer</c>، بِلا استِمارَة.</summary>
     [Fact]
-    public void Today_the_offer_form_is_drawn_for_every_signed_in_non_owner_whatever_the_role()
+    public void The_offer_form_is_drawn_only_for_a_role_carrying_offer_submit_and_a_switch_hint_otherwise()
     {
         var page = Page();
         var form = page.IndexOf("id=\"offerForm\"", StringComparison.Ordinal);
         var conditions = UpgradePromptPriceTests.EnclosingIfConditions(page, form);
-        output.WriteLine($"استِمارَةُ العَرضِ عِندَ {form} · شُروطُها: {string.Join(" | ", conditions)} · ذِكرُ offer.submit في الصَفحَة: "
-            + Regex.Matches(page, Regex.Escape("\"offer.submit\"")).Count);
+        var hint = page.IndexOf("@L.Markup(\"listings.detail.err_forbidden\")", StringComparison.Ordinal);
+        var hintConditions = UpgradePromptPriceTests.EnclosingIfConditions(page, hint);
+        var switchLink = page.IndexOf("listings.detail.offer_switch_role", StringComparison.Ordinal);
+        output.WriteLine($"استِمارَةُ العَرض: {string.Join(" | ", conditions)} · السَطرُ: {string.Join(" | ", hintConditions)} · الرابِط: "
+            + string.Join(" | ", UpgradePromptPriceTests.EnclosingIfConditions(page, switchLink)));
 
-        Assert.True(form > 0, "استِمارَةُ العَرضِ غَيرُ مَوجودَة — الأَداةُ عَمياء.");
-        Assert.Equal(new[] { "showOffers", "Auth.IsAuthenticated && !isOwner" }, conditions);
-        Assert.DoesNotContain("\"offer.submit\"", page, StringComparison.Ordinal);
+        Assert.Equal(new[] { "showOffers", "Auth.IsAuthenticated && !isOwner && canOffer" }, conditions);
+        Assert.Equal(new[] { "showOffers", "Auth.IsAuthenticated && !isOwner" }, hintConditions);
+        Assert.Equal(new[] { "showOffers", "Auth.IsAuthenticated && !isOwner", "canSwitchToOffer" }, UpgradePromptPriceTests.EnclosingIfConditions(page, switchLink));
+        Assert.True(hint > form, "سَطرُ الرَفضِ لا يَلي الاستِمارَة.");
+        Assert.StartsWith("else if (Auth.IsAuthenticated && !isOwner)",
+            page[(page.LastIndexOf("</form>", hint, StringComparison.Ordinal) + "</form>".Length)..].TrimStart().TrimStart('}').TrimStart(), StringComparison.Ordinal);
+        Assert.DoesNotContain("<form", page[hint..switchLink], StringComparison.Ordinal);
+
+        Assert.Contains("var roles = (await Roles.LoadAsync(Slug)).Tenant?.Roles", page, StringComparison.Ordinal);
+        Assert.Contains("var storedRole = await Accounts.ActiveRoleAsync(Slug, Auth.UserId.Value);", page, StringComparison.Ordinal);
+        Assert.Contains("canOffer = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(roles, Role, storedRole, \"offer.submit\");", page, StringComparison.Ordinal);
+        Assert.Contains("PermissionDoor.SwitchOpens(roles, Role, \"offer.submit\")", page, StringComparison.Ordinal);
+        // ‏وحارِسُ النُقطَةِ يَقرَأُ الأَدوارَ المُجَسَّدَةَ ثُمَّ دَورَها الفَعّال — فَالبابُ يَقرَأُ ما يَقرَؤُه.
+        var mte = WriteEndpointGuardTests.StripComments(Read(TemplateRoot + "/MarketplaceTemplateExtensions.cs"));
+        var guardAt = mte.IndexOf("private static async Task<bool> HasPermissionAsync(", StringComparison.Ordinal);
+        Assert.True(guardAt > 0, "HasPermissionAsync غَيرُ مَوجودَة — الأَداةُ عَمياء.");
+        var guard = mte[guardAt..mte.IndexOf("tenant.Roles, effectiveRole, permission);", guardAt, StringComparison.Ordinal)];
+        Assert.Contains("var tenant = await LoadTenantWithRolesAsync(store, slug);", guard, StringComparison.Ordinal);
+        Assert.Contains("Gates.EffectiveRole.ResolveAsync(", guard, StringComparison.Ordinal);
     }
 
-    /// <summary><b>«اليَوم»</b>: النُقطَةُ تَكتُبُ <c>listings/{id}?err=forbidden</c> والصَفحَةُ لا تَذكُرُ <c>"forbidden"</c> — رَدٌّ لا يُقرَأ.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ إصلاحِ <c>lens-dead-doors-7</c>)</b> — كانَ
+    /// <c>Today_the_endpoints_forbidden_redirect_lands_on_a_page_that_reads_no_forbidden_code</c> (‏<c>4b74e0b</c>). والآن فَرعُ
+    /// <c>Err == "forbidden"</c> في سِلسِلَةِ رُموزِ النُقطَةِ يَرسُمُ <c>listings.detail.err_forbidden</c> مِن القامُوس — والنُقطَةُ كاتِبُه الوَحيد.</summary>
     [Fact]
-    public void Today_the_endpoints_forbidden_redirect_lands_on_a_page_that_reads_no_forbidden_code()
+    public void The_endpoints_forbidden_redirect_draws_its_dictionary_text_on_the_page()
     {
         var head = OfferEndpointHead();
         var page = Page();
+        var branch = page.IndexOf("else if (Err == \"forbidden\")", StringComparison.Ordinal);
+        var text = ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "listings.detail.err_forbidden");
         output.WriteLine($"كُتّابُ ?err=forbidden في نُقطَةِ العَرض: {Regex.Matches(head, Regex.Escape("?err=forbidden")).Count} · "
-            + $"ذِكرُ \"forbidden\" في الصَفحَة: {Regex.Matches(page, Regex.Escape("\"forbidden\"")).Count}");
+            + $"فَرعُ الصَفحَة: {branch} · النَصّ: «{text}»");
 
         Assert.Single(Regex.Matches(head, Regex.Escape("listings/{id}?err=forbidden")));
-        Assert.DoesNotContain("\"forbidden\"", page, StringComparison.Ordinal);
+        Assert.True(branch > 0, "لا فَرعَ forbidden في الصَفحَة.");
+        Assert.Single(Regex.Matches(page, Regex.Escape("Err == \"forbidden\"")));
+        var block = page[branch..page.IndexOf('}', branch)];
+        Assert.Contains("<AcAlert Variant=\"danger\" Message=\"@L[\"listings.detail.err_forbidden\"]\" />", block, StringComparison.Ordinal);
+        Assert.False(string.IsNullOrWhiteSpace(text));
+        Assert.False(ACommerce.Platform.I18n.LocaleCatalog.IsPlaceholderKey(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "listings.detail.err_forbidden"));
     }
 
     // ─── ما لا يَتَبَدَّل ───────────────────────────────────────────────────────────────────
