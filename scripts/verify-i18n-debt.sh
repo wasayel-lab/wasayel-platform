@@ -93,12 +93,24 @@ use open ':std', ':encoding(UTF-8)';
 #
 # `i18n-migrate.pl` carries the same routine, deliberately duplicated: the two
 # tools MUST agree on run indices or a spec file addresses the wrong string.
+#
+# (2026-10-25 — launch audit lens-checkers-ci-7; appended, nothing above is
+# rewritten.)  The quote rule above has a blind spot that WAS measured: a URL
+# in razor MARKUP is outside any quote — `<p>زُر https://example.com لِلمَزيد</p>`
+# — so its `//` was read as a comment and the Arabic after it vanished from the
+# count (mutation M3c: EXIT=0; the same text without `https:` EXIT=1).  A `//`
+# preceded by `:` is a URL scheme, not a comment opener, so it is skipped too.
+# The cost is one shape no longer read as a comment — `a ? b ://x` — which
+# occurs zero times in the repo's .razor files (measured with this rule:
+# TOTAL/DISTINCT/per-file ledger byte-identical before and after).
+# And the counter is now measured on every run before it is trusted (below).
 sub strip_line_comments {
     my ($text) = @_;
     my @out;
     for my $line (split /\n/, $text, -1) {
         my $off = 0;
         while ((my $j = index($line, '//', $off)) >= 0) {
+            if ($j > 0 && substr($line, $j - 1, 1) eq ':') { $off = $j + 2; next; }
             my $pre = substr($line, 0, $j);
             my $dq = ($pre =~ tr/"//);
             my $sq = ($pre =~ tr/'//);
@@ -135,6 +147,24 @@ print "DISTINCT " . scalar(keys %runs) . "\n";
 print "DEBT_FILES " . scalar(keys %files) . "\n";
 print "FILE $files{$_} $_\n" for sort keys %files;
 PERL
+
+# ── The counter is measured before it is trusted (rule 10) ───────────────
+# Injected samples with known answers run through the SAME count.pl on every
+# invocation; a wrong answer fails the layer before a single real file is
+# counted.  Row 1 is the M3c shape (Arabic after a URL in markup); rows 2–3
+# keep the two comment rules it must not break.
+mkdir -p "$TMP/selftest"
+printf '%s\n' '<p>زُر https://example.com لِلمَزيد</p>'           > "$TMP/selftest/url-in-markup.razor"
+printf '%s\n' '@code { var n = 1; // تَعليقٌ ذَيليّ }'              > "$TMP/selftest/trailing-comment.razor"
+printf '%s\n' '<a href="https://example.com">رابِط</a> @* // *@'  > "$TMP/selftest/url-in-quotes.razor"
+SELF_EXPECT="url-in-markup.razor|2 url-in-quotes.razor|1"
+SELF_GOT="$(perl "$TMP/count.pl" "$TMP"/selftest/*.razor | awk '$1=="FILE"{n=split($3,a,"/"); printf "%s%s|%s", (c++?" ":""), a[n], $2}')"
+if [ "$SELF_GOT" != "$SELF_EXPECT" ]; then
+    echo "  ✗ SELF-TEST: the counter read its injected samples wrong — expected «$SELF_EXPECT», got «$SELF_GOT»." >&2
+    echo "    A counter that miscounts a known sample is not trusted with the repo." >&2
+    exit 1
+fi
+[ "$EMIT" -eq 0 ] && echo "  counter self-test: 3 injected samples, all read as expected"
 
 # ── The SINK counter — user-facing text OUTSIDE .razor ──────────────────
 # Layer 7 counts .razor and nothing else, and §8-د says so plainly: "100 %

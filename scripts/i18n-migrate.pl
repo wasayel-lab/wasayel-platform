@@ -118,6 +118,8 @@ $mask =~ s{(///[^\n]*)}{$blank->($1)}ge;
     for my $line (split /\n/, $mask, -1) {
         my $off = 0;
         while ((my $j = index($line, '//', $off)) >= 0) {
+            # (‏2026-10-25) `//` بَعدَ `:` مُخَطَّطُ رابِطٍ لا تَعليق — نَفسُ سَطرِ `verify-i18n-debt.sh` (lens-checkers-ci-7).
+            if ($j > 0 && substr($line, $j - 1, 1) eq ':') { $off = $j + 2; next; }
             my $pre = substr($line, 0, $j);
             my $dq = ($pre =~ tr/"//);
             my $sq = ($pre =~ tr/'//);
