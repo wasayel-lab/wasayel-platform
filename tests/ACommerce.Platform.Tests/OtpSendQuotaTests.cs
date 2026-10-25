@@ -196,6 +196,46 @@ public class OtpSendQuotaTests(ITestOutputHelper output)
         Assert.True(await NafathStartAsync(slug, "1012345679", nafath));
     }
 
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم»</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2 الجَولَة ١، صُغرى؛ القاعِدَة ٣ — يُقلَبُ بِاسمِه في كوميتِ الإصلاح): وَسمُ
+    /// <c>[WolverinePost("/{slug}/auth/nafath/request")]</c> عَلى <c>RequestNafathHandler</c> نَفسِه — فَجِسمُ نُقطَةِ الـHTTP هُوَ الدالَّةُ الَّتي تَرمي.
+    /// والحادِيَ عَشَرَ في السّاعَةِ لِهُوِيَّةٍ واحِدَةٍ يَرمي <c>InvalidOperationException("rate_limited…")</c>، ومُستَأجِرٌ لَم يُحَلَّ يَرمي <c>tenant_required</c>،
+    /// ولا التِقاطَ بَينَهُما وبَينَ Wolverine — وبابُ الاستِمارَةِ وَحدَه يَلتَقِطُ (الصَفُّ أَدناه). وجَوابُ الاستِثناءِ غَيرِ المُلتَقَطِ ‏500 بِحَسَبِ المُراجَعَة —
+    /// لَم يُقَس حَيّاً هُنا؛ المَقيسُ أَنّه يَصعَدُ مِن جِسمِ النُقطَة.</para>
+    /// </summary>
+    [Fact]
+    public async Task Today_the_nafath_http_door_is_the_throwing_handler_so_a_refused_start_escapes_it()
+    {
+        var auth = WriteEndpointGuardTests.StripComments(StudioConsentCharacterizationTests.Source(
+            "libs", "kits", "Auth", "ACommerce.Kit.Auth.Server", "AuthHandlers.cs"));
+        Assert.Matches(@"\[WolverinePost\(""/\{slug\}/auth/nafath/request""\)\]\s*public static async Task<NafathPending> RequestNafathHandler\(", auth);
+
+        var (slug, _) = Fresh();
+        var nafath = new CountingNafath();
+        for (var i = 0; i < 10; i++)
+            await AuthHandlers.RequestNafathHandler(new RequestNafath("1098765432"), new VendorRegisterBucketTests.ResolvedTenant(slug), nafath, CancellationToken.None);
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            AuthHandlers.RequestNafathHandler(new RequestNafath("1098765432"), new VendorRegisterBucketTests.ResolvedTenant(slug), nafath, CancellationToken.None));
+        Assert.StartsWith("rate_limited", refused.Message, StringComparison.Ordinal);
+        var unresolved = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            AuthHandlers.RequestNafathHandler(new RequestNafath("1098765432"), new UnresolvedTenant(), nafath, CancellationToken.None));
+        Assert.Equal("tenant_required", unresolved.Message);
+        output.WriteLine($"بابُ الـHTTP: عَشرَةُ بُدوءٍ ثُمَّ «{refused.Message}» يَصعَد، ومُستَأجِرٌ لَم يُحَلَّ «{unresolved.Message}» يَصعَد");
+    }
+
+    /// <summary>مُستَأجِرٌ لَم يُحَلّ — ما يَراه الطَلَبُ بِسلاجٍ لا مَتجَرَ لَه.</summary>
+    internal sealed class UnresolvedTenant : ACommerce.Platform.Shared.ITenantContext
+    {
+        public string Slug => "";
+        public string Name => "";
+        public string BrandColor => "";
+        public string AuthChannel => "";
+        public string TagLine => "";
+        public string City => "";
+        public bool IsResolved => false;
+        public bool HasRoles => false;
+    }
+
     /// <summary>وبابُ الاستِمارَةِ يَلتَقِطُ الرَدَّ فَيُعيدُ رِسالَةً — <c>send_failed</c>، النَصُّ القائِمُ في القامُوس — لا صَفحَةَ ‏500 (كَبابِ الاستوديو).</summary>
     [Fact]
     public void The_nafath_door_turns_a_refused_start_into_send_failed_not_a_server_error()
