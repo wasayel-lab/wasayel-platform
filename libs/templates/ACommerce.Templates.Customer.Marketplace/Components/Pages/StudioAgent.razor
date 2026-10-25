@@ -30,6 +30,10 @@
     والمُحَرِّرُ داخِلَ StudioAgentDoor.Opens — لِمُشرِفِ المَنَصَّةِ وَحدَه، بِقَرارِ PlatformAdminGuard نَفسِه، يُقرَأُ مَعَ _userId —
     ومَكانَهُما لِغَيرِه نَصُّ القامُوسِ المُغلَق، والمُعالِجاتُ الأَربَعَةُ تَسأَلُ البابَ قَبلَ أَيِّ نِداء. حَتّى يَقولَ المالِكُ حَدَّ الرَسائِلِ
     لِكُلِّ دَرَجَة («ب» W8-3 · ١ في سِجِلِّه)؛ والتَبديلُ في البابِ لا هُنا.
+
+    ‏2026-10-25 (W8-3 — lens-dead-doors-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): والبابُ يَسأَلُ مِفتاحَ وَكيلِ Studio أَيضاً — كانَ يُفتَحُ بِلاه عَلى مُحَرِّرٍ
+    مُعَطَّلٍ ونَصِّ مُشَغِّلٍ («أَضِف Agent:ApiKey في الإعدادات» واسمِ المُزَوِّد)؛ صارَ نَصُّ القامُوسِ المُغلَقُ نَفسُه، وسَطرُ التَنبيهِ وشَرطا
+    التَعطيلِ زالَت لِأَنّ الفَرعَ المَفتوحَ لا يُبلَغُ بِلا مِفتاح.
 *@
 
 <StudioShell Title="@L["studio.agent.title"]" Active="home">
@@ -48,7 +52,7 @@
                 <a class="st-btn st-btn-primary" href="/studio/auth">@L.Markup("studio.agent.login")</a>
             </div>
         }
-        else if (StudioAgentDoor.Opens(_platformAdmin))
+        else if (StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin))
         {
             <div class="studio-page-head">
                 <h1><AcIcon Name="message" Size="22" /> @L.Markup("studio.agent.title")</h1>
@@ -57,12 +61,6 @@
                     @Agent.ProviderName / @Agent.ModelName
                 </span>
             </div>
-
-            @if (!Agent.IsConfigured)
-            {
-                <div class="st-chip st-chip-warning" style="margin-bottom:14px;">@((MarkupString)"\n                    ")@L.Markup("agent.key.missing_prefix") @Agent.ProviderName @L.Markup("agent.key.missing_mid") Agent:ApiKey @L.Markup("studio.agent.key_suffix")@((MarkupString)"\n                ")
-                </div>
-            }
 
             <div class="acm-agent-thread">
                 @if (session.Turns.Count == 0)
@@ -138,12 +136,12 @@
             <div class="acm-agent-composer">
                 <textarea @bind="newMessage" @bind:event="oninput" rows="3"
                           class="st-input"
-                          disabled="@(isWorking || !Agent.IsConfigured)"
+                          disabled="@isWorking"
                           placeholder="@L["studio.agent.placeholder"]"></textarea>
                 <div style="display:flex;flex-direction:column;gap:6px;">
                     <button type="button" class="st-btn st-btn-primary"
                             @onclick="SendAsync"
-                            disabled="@(isWorking || !Agent.IsConfigured || string.IsNullOrWhiteSpace(newMessage))">
+                            disabled="@(isWorking || string.IsNullOrWhiteSpace(newMessage))">
                         <AcIcon Name="send" Size="16" /> @L.Markup("agent.chat.send")@((MarkupString)"\n                    ")
                     </button>
                     <button type="button" class="st-btn st-btn-ghost"
@@ -192,7 +190,7 @@
             }
             _authChecked = true;
         }
-        if (_userId != Guid.Empty && StudioAgentDoor.Opens(_platformAdmin))
+        if (_userId != Guid.Empty && StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin))
             session = await Agent.LoadSessionAsync(_scopeId);
     }
 
@@ -208,7 +206,7 @@
     async Task SendAsync()
     {
         var msg = newMessage?.Trim() ?? "";
-        if (string.IsNullOrEmpty(msg) || isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(_platformAdmin)) return;
+        if (string.IsNullOrEmpty(msg) || isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
         newMessage = "";
         isWorking = true;
         StateHasChanged();
@@ -226,7 +224,7 @@
 
     async Task ApplyAsync(string toolId)
     {
-        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(_platformAdmin)) return;
+        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
         isWorking = true;
         StateHasChanged();
         var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
@@ -245,7 +243,7 @@
 
     async Task RejectAsync(string toolId)
     {
-        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(_platformAdmin)) return;
+        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
         isWorking = true;
         StateHasChanged();
         await Agent.UpdateToolStatusAsync(toolId, "rejected", null, _scopeId);
@@ -257,7 +255,7 @@
 
     async Task ResetAsync()
     {
-        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(_platformAdmin)) return;
+        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
         await Agent.ResetAsync(_scopeId);
         session = await Agent.LoadSessionAsync(_scopeId);
         newMessage = "";

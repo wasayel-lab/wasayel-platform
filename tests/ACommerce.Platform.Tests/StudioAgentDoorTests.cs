@@ -70,7 +70,8 @@ public class StudioAgentDoorTests(ITestOutputHelper output)
     [Fact]
     public void Every_agent_page_handler_that_spends_asks_the_open_agent_door_before_its_call()
     {
-        const string door = "!StudioAgentDoor.Opens(_platformAdmin)";
+        // ‏(‏2026-10-25، lens-dead-doors-1) البابُ صارَ يَسأَلُ مِفتاحَ وَكيلِ Studio مَعَ قَرارِ المُشرِف — الحَرفُ بِمُدخَلَيه.
+        const string door = "!StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)";
         var code = Code(AgentPage);
         var spending = 0;
         var gated = 0;
@@ -95,7 +96,7 @@ public class StudioAgentDoorTests(ITestOutputHelper output)
         var init = Body(code, "protected override async Task OnInitializedAsync()");
         var userAt = init.IndexOf("_userId = StudioAuth.UserId!.Value;", StringComparison.Ordinal);
         var adminAt = init.IndexOf("_platformAdmin = (await Services.PlatformAdminGuard.EvaluateAsync(Store, StudioAuth)).Allowed;", StringComparison.Ordinal);
-        var loadAt = init.IndexOf("if (_userId != Guid.Empty && StudioAgentDoor.Opens(_platformAdmin))", StringComparison.Ordinal);
+        var loadAt = init.IndexOf("if (_userId != Guid.Empty && StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin))", StringComparison.Ordinal);
         Assert.True(userAt > 0 && adminAt > userAt, "قَرارُ المُشرِفِ لا يُقرَأُ مَعَ المُستَخدِم.");
         Assert.True(loadAt > adminAt && loadAt < init.IndexOf("Agent.LoadSessionAsync(", StringComparison.Ordinal),
             "المُحادَثَةُ تُحَمَّلُ قَبلَ سُؤالِ الباب.");
@@ -216,7 +217,7 @@ public class StudioAgentDoorTests(ITestOutputHelper output)
     {
         var code = Code(HomePage);
         var feeds = Regex.Matches(code, Regex.Escape("isPlatformAdmin = Services.PlatformAdminGuard.Decide(u) == Services.PlatformAdminOutcome.Allowed;")).Count;
-        var asks = Regex.Matches(code, Regex.Escape("@if (StudioAgentDoor.Opens(isPlatformAdmin))")).Count;
+        var asks = Regex.Matches(code, Regex.Escape("@if (StudioAgentDoor.Opens(Agent.IsConfigured, isPlatformAdmin))")).Count;
         var ownDefinition = Regex.Matches(code, Regex.Escape("IsPlatformAdmin")).Count;
         output.WriteLine($"StudioHome: يُغَذّي البابَ مِن Decide: {feeds} · كُتَلُ البابِ: {asks} · قِراءَةُ IsPlatformAdmin مُباشَرَةً: {ownDefinition}");
 
@@ -227,13 +228,41 @@ public class StudioAgentDoorTests(ITestOutputHelper output)
 
     // ─── البابُ نَفسُه: دالَّةٌ نَقِيَّة ───────────────────────────────────────────────────────────
 
+    /// <summary>‏(‏2026-10-25، <c>lens-dead-doors-1</c>) البابُ بِمُدخَلَين: مِفتاحُ وَكيلِ <c>Studio</c> وقَرارُ المُشرِف — يُفتَحُ بِهِما مَعاً وَحدَهُما.</summary>
     [Fact]
     public void The_agent_door_opens_for_the_platform_admin()
-        => Assert.True(ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentDoor.Opens(platformAdmin: true));
+        => Assert.True(ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentDoor.Opens(agentBackendConfigured: true, platformAdmin: true));
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    public void The_agent_door_stays_closed_for_every_other_studio_user(bool configured, bool admin)
+        => Assert.False(ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentDoor.Opens(configured, admin));
+
+    /// <summary>وبِلا مِفتاحِ وَكيلِ <c>Studio</c> يُغلَقُ ولَو لِلمُشرِف — كانَ يُفتَحُ عَلى مُحَرِّرٍ مُعَطَّل (القاعِدَة ١٢).</summary>
     [Fact]
-    public void The_agent_door_stays_closed_for_every_other_studio_user()
-        => Assert.False(ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentDoor.Opens(platformAdmin: false));
+    public void The_agent_door_stays_closed_without_a_configured_studio_backend_even_for_the_admin()
+        => Assert.False(ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentDoor.Opens(agentBackendConfigured: false, platformAdmin: true));
+
+    /// <summary>كُلُّ مَن يَسأَلُ البابَ يُعطيه مُدخَلَيه بِحَرفِهِما — مِفتاحَ الخَلفِيَّةِ مِن <c>AgentService.IsConfigured</c> وقَرارَ المُشرِفِ القائِم —
+    /// لا ثابِتاً ولا مُدخَلاً واحِداً؛ ويَعُدُّ ويَفشَلُ عَلى ما دونَ المَقيس (القاعِدَة ١٠).</summary>
+    [Fact]
+    public void Every_agent_door_asker_feeds_it_the_backend_configuration_and_the_admin_decision()
+    {
+        var calls = new List<(string File, string Args)>();
+        foreach (var (file, text) in AgentSources())
+        {
+            var rel = Path.GetRelativePath(ThemeZeroEquivalenceTests.RepoRoot, file).Replace('\\', '/');
+            if (rel.EndsWith("/StudioAgentDoor.cs", StringComparison.Ordinal)) continue;
+            var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(text));
+            foreach (Match m in Regex.Matches(code, @"StudioAgentDoor\.Opens\((?<args>[^()]*)\)"))
+                calls.Add((rel, m.Groups["args"].Value.Trim()));
+        }
+        output.WriteLine($"نِداءاتُ StudioAgentDoor.Opens: {calls.Count} — " + string.Join(" · ", calls.GroupBy(c => (Path.GetFileName(c.File), c.Args)).Select(g => $"{g.Key.Item1}({g.Key.Args})×{g.Count()}")));
+
+        Assert.True(calls.Count >= 8, $"أَداةٌ عَمياء: {calls.Count} نِداءً — والمَقيسُ 8 (صَفحَةُ الوَكيلِ 6، ولَوحَتي 2).");
+        Assert.All(calls, c => Assert.Contains(c.Args, new[] { "Agent.IsConfigured, _platformAdmin", "Agent.IsConfigured, isPlatformAdmin" }));
+    }
 
     /// <summary>المُحادَثَةُ والمُحَرِّرُ داخِلَ فَرعِ <c>else if (StudioAgentDoor.Opens(…))</c>، و<c>else</c>ـه يَرسُمُ مِفتاحَ القامُوسِ بِلا مُحَرِّرٍ ولا زِرّ.</summary>
     [Fact]
@@ -274,21 +303,28 @@ public class StudioAgentDoorTests(ITestOutputHelper output)
 
     // ─── ما تَرسُمُه الصَفحَةُ بِلا مِفتاح ────────────────────────────────────────────────────────
 
-    /// <summary><b>«اليَوم»</b>: الصَفحَةُ تَطبَعُ اسمَ المُزَوِّدِ والنَموذَجِ لِكُلِّ داخِل، وبِلا مِفتاحٍ نَصَّ مُشَغِّلٍ يُسَمّي إعداداً
-    /// (‏<c>Agent:ApiKey</c>) بَينَ مَفاتيحِ القامُوس، ثُمَّ مُحَرِّراً مُعَطَّلاً. يُقلَبُ بِاسمِه في كوميتِ إصلاحِ <c>lens-dead-doors-1</c>.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ إصلاحِ <c>lens-dead-doors-1</c>)</b> — كانَ
+    /// <c>Today_the_agent_page_prints_its_provider_model_and_an_operator_setting</c> (‏<c>92bd370</c>): «سَطرُ المُزَوِّد/النَموذَج 1 · Agent:ApiKey 1 ·
+    /// agent.key.missing_prefix 1 · !Agent.IsConfigured 3». والآن لا يُسَمّي الصَفحَةُ إعداداً ولا تَسأَلُ المِفتاحَ إلّا في البابِ نَفسِه، واسمُ المُزَوِّدِ
+    /// والنَموذَجِ داخِلَ الفَرعِ المَفتوحِ وَحدَه — لِمُشرِفِ المَنَصَّةِ بِمِفتاحٍ، أَي لِمُشَغِّلِه — والمُغلَقُ نَصُّ القامُوسِ بِلا اسمٍ ولا مِفتاح.</summary>
     [Fact]
-    public void Today_the_agent_page_prints_its_provider_model_and_an_operator_setting()
+    public void The_agent_page_names_no_setting_and_shows_its_provider_and_model_only_inside_the_open_door()
     {
         var code = Code(AgentPage);
         var providerModel = Regex.Matches(code, Regex.Escape("@Agent.ProviderName / @Agent.ModelName")).Count;
         var setting = Regex.Matches(code, Regex.Escape("Agent:ApiKey")).Count;
         var missing = Regex.Matches(code, Regex.Escape("agent.key.missing_prefix")).Count;
-        var disabled = Regex.Matches(code, Regex.Escape("!Agent.IsConfigured")).Count;
-        output.WriteLine($"سَطرُ المُزَوِّدِ/النَموذَج: {providerModel} · «Agent:ApiKey»: {setting} · agent.key.missing_prefix: {missing} · !Agent.IsConfigured: {disabled}");
+        var notConfigured = Regex.Matches(code, Regex.Escape("!Agent.IsConfigured")).Count;
+        output.WriteLine($"سَطرُ المُزَوِّدِ/النَموذَج: {providerModel} · «Agent:ApiKey»: {setting} · agent.key.missing_prefix: {missing} · !Agent.IsConfigured: {notConfigured}");
 
         Assert.Equal(1, providerModel);
-        Assert.Equal(1, setting);
-        Assert.Equal(1, missing);
-        Assert.Equal(3, disabled);
+        Assert.Equal(0, setting);
+        Assert.Equal(0, missing);
+        Assert.Equal(0, notConfigured);
+        const string open = "else if (StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin))";
+        var openAt = code.IndexOf(open, StringComparison.Ordinal);
+        Assert.True(openAt > 0, "الفَرعُ المَفتوحُ لا يَسأَلُ المِفتاح.");
+        var block = Body(code[openAt..], open);
+        Assert.Contains("@Agent.ProviderName / @Agent.ModelName", block, StringComparison.Ordinal);
     }
 }

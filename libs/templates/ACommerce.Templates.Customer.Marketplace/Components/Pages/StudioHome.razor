@@ -3,6 +3,7 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject Services.Incubator.FeasibilityAnalysisService Incubator
+@inject ACommerce.Templates.Customer.Marketplace.Services.AgentService Agent
 @inject Services.Queries.TenantDirectory Tenants
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 @inject L L
@@ -25,7 +26,7 @@
         @* رابِطا `/studio/agent` (هُنا وبِطاقَتُه أَسفَلَ) لا يُرسَمانِ لِمَن لا يَفتَحُ لَه بابُ الوَكيل — `StudioAgentDoor.Opens` نَفسُه الَّذي
            تَسأَلُه الصَفحَة (‏2026-10-25، تَدقيقُ الإطلاق — تَيّارُ W8-3، lens-security-2؛ القاعِدَة ١٢). وأَوَّلُ الشَريطِ بِلا فَراغٍ قَبلَه أَصلاً
            (Razor يَقُصُّه)، والبِطاقَةُ بِحيلَةِ الفَراغِ أَدناه — فَلِلمُشرِفِ الصَفحَةُ بايتاً كَما كانَت (مَقيس). *@
-        @if (StudioAgentDoor.Opens(isPlatformAdmin))
+        @if (StudioAgentDoor.Opens(Agent.IsConfigured, isPlatformAdmin))
         {
         <a class="st-btn st-btn-ghost" href="/studio/agent">
             <AcIcon Name="message" Size="14" /> @L.Markup("studio.home.agent_cta")@((MarkupString)"\n        ")
@@ -69,7 +70,7 @@
                     <span style="color:var(--st-faint);">←</span>
                 </a>
                 }
-                @if (StudioAgentDoor.Opens(isPlatformAdmin))
+                @if (StudioAgentDoor.Opens(Agent.IsConfigured, isPlatformAdmin))
                 {
                 @((MarkupString)"\n                ")<a class="studio-list-row" href="/studio/agent" style="align-items:flex-start;">
                     <span class="studio-list-icon ac-chip-info">

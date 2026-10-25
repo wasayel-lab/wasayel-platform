@@ -30,6 +30,12 @@ public static class StudioAgentDoor
     /// («ب» W8-3 · ١ في سِجِلِّه).</summary>
     public const string ClosedMessageKey = "studio.agent.unavailable";
 
-    /// <summary>أَيُفتَحُ البابُ؟ — نَعَم لِمُشرِفِ المَنَصَّة (<see cref="PlatformAdminGuard"/>: <see cref="PlatformAdminOutcome.Allowed"/>).</summary>
-    public static bool Opens(bool platformAdmin) => platformAdmin;
+    /// <summary>أَيُفتَحُ البابُ؟ — نَعَم حينَ تَكونُ خَلفِيَّةُ وَكيلِ <c>Studio</c> مَضبوطَةً (<see cref="AgentService.IsConfigured"/>:
+    /// مِفتاحٌ مَحلولٌ بِقاعِدَةِ السُقوط، أَو Ollama مَحَلِّيّ) <b>و</b>صاحِبُ الجَلسَةِ مُشرِفُ المَنَصَّة
+    /// (<see cref="PlatformAdminGuard"/>: <see cref="PlatformAdminOutcome.Allowed"/>).
+    ///
+    /// <para><b>‏2026-10-25 (W8-3 — <c>lens-dead-doors-1</c>؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)</b>: كانَ مُدخَلُه الإشرافَ وَحدَه — فَبِلا
+    /// مِفتاحِ وَكيلِ <c>Studio</c> (و<c>Agents__Analysis__ApiKey</c> وَحدَه، كَما في «ج» S12·٥، يَفتَحُ التَحليلَ ولا يَفتَحُه) كانَ الرابِطانِ يُرسَمانِ
+    /// ويَفتَحانِ عَلى مُحَرِّرٍ مُعَطَّلٍ ونَصِّ مُشَغِّل. صارَ الغِيابُ يُخفي المَدخَلَ (القاعِدَة ١٢) ويَرسُمُ <see cref="ClosedMessageKey"/> نَفسَه.</para></summary>
+    public static bool Opens(bool agentBackendConfigured, bool platformAdmin) => agentBackendConfigured && platformAdmin;
 }
