@@ -82,6 +82,69 @@ public class OfferFormDoorTests(ITestOutputHelper output)
         Assert.Contains("Gates.EffectiveRole.ResolveAsync(", guard, StringComparison.Ordinal);
     }
 
+    /// <summary>دَورٌ مُؤَلَّفٌ مُعتَمَدٌ يَحمِلُ <c>offer.submit</c> — أَقَلُّ تَعريفٍ يَجتازُ المُصادِق (شَكلُ <c>AppearanceBaselineSeeder.AuthoredRoleJson</c>)
+    /// مُجَسَّداً فَوقَ أَدوارٍ مُخَزَّنَةٍ كَما يُجَسِّدُه <c>TenantRoleService.LoadAsync</c> و<c>LoadTenantWithRolesAsync</c>.</summary>
+    private static (IReadOnlyList<Role> Stored, IReadOnlyList<Role> Materialized) StoreWithAuthoredBroker()
+    {
+        static Role R(string slug, params string[] permissions) => new() { Slug = slug, CatalogSlug = slug, Permissions = permissions.ToList() };
+        var stored = new List<Role> { R("customer", "listing.browse", "offer.submit"), R("vendor", "listing.create", "listing.edit") };
+        const string json = """
+            {
+              "slug": "dallal",
+              "icon": "🧾",
+              "homeRoute": "",
+              "label": { "ar": "دَلّال", "en": null },
+              "description": { "ar": "دَورٌ مُؤَلَّفٌ — عَيِّنَةُ بِنيَة.", "en": null },
+              "permissions": [ "listing.browse", "offer.submit" ],
+              "fields": [],
+              "composition": {
+                "home": "defaultHome",
+                "createListing": "defaultCreateForm",
+                "nav": "defaultNav",
+                "explore": "defaultExplore",
+                "publicProfile": null,
+                "extras": []
+              },
+              "dealPatternAffinity": null
+            }
+            """;
+        var set = TenantRoleSet.FromDocuments("adwar-demo", new[]
+        {
+            new TenantRoleDefinition
+            {
+                Id = "dallal", Slug = "dallal", DefinitionJson = json, Status = TenantRoleStatuses.Approved,
+                CreatedBy = "agent:define_role", CreatedAt = new DateTime(2026, 8, 10, 0, 0, 0, DateTimeKind.Utc),
+            },
+        });
+        return (stored, set.Materialize(stored));
+    }
+
+    /// <summary><b>بابُ العَرضِ سُلوكاً لا بَصمَة</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١ — مَعلومَة): الصُفوفُ أَعلاه تُثَبِّتُ نَصَّ النِداء، وصُفوفُ
+    /// <c>PermissionDoor</c> في <c>CreateListingDoorTests</c> تَقيسُ <c>listing.create</c> عَلى أَدوارٍ مُخَزَّنَةٍ وَحدَها. وهُنا <c>offer.submit</c> عَلى
+    /// الأَدوارِ <b>المُجَسَّدَة</b> — ما يَقرَؤُه حارِسُ النُقطَةِ (<c>HasPermissionAsync</c>: <c>LoadTenantWithRolesAsync</c> ثُمَّ <c>RolePermissions.Has</c>):
+    /// دَورٌ مُؤَلَّفٌ يَحمِلُها مَفتوح، والبائِعُ بِلاها مُغلَق، ودَورُ المَسارِ يَتَفَوَّق — وكُلُّ صَفٍّ يُساوي قَرارَ الحارِس. والمُخَزَّنَةُ وَحدَها تُغلِقُ عَلى
+    /// المُؤَلَّف: سَبَبُ قِراءَةِ الصَفحَةِ المُجَسَّدَة.</summary>
+    [Theory]
+    [InlineData(null, "dallal", true)]     // ‏مُؤَلَّفٌ يَحمِلُ offer.submit — مَفتوح
+    [InlineData(null, "vendor", false)]    // ‏البائِعُ بِلاها — مُغلَق
+    [InlineData(null, "customer", true)]
+    [InlineData("dallal", "vendor", true)] // ‏دَورُ المَسارِ يَتَفَوَّق
+    [InlineData("vendor", "dallal", false)]
+    [InlineData(null, null, false)]
+    public void The_offer_door_opens_for_an_authored_role_carrying_offer_submit_and_stays_closed_for_a_vendor(string? urlRole, string? stored, bool opens)
+    {
+        var (storedRoles, materialized) = StoreWithAuthoredBroker();
+        var door = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(materialized, urlRole, stored, "offer.submit");
+        var guard = RolePermissions.Has(materialized, ACommerce.Templates.Customer.Marketplace.Gates.EffectiveRole.Resolve(null, false, urlRole, stored), "offer.submit");
+        output.WriteLine($"مَسار={urlRole ?? "—"} مُخَزَّن={stored ?? "—"} · مُجَسَّدَة {materialized.Count} · البابُ {door} · الحارِسُ {guard}");
+
+        Assert.Equal(storedRoles.Count + 1, materialized.Count);
+        Assert.Equal(opens, door);
+        Assert.Equal(guard, door);
+        Assert.False(ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(storedRoles, null, "dallal", "offer.submit"),
+            "بِالمُخَزَّنَةِ وَحدَها يُغلَقُ عَلى المُؤَلَّف — فَالصَفحَةُ تَقرَأُ المُجَسَّدَةَ كَحارِسِ نُقطَتِها.");
+    }
+
     /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ إصلاحِ <c>lens-dead-doors-7</c>)</b> — كانَ
     /// <c>Today_the_endpoints_forbidden_redirect_lands_on_a_page_that_reads_no_forbidden_code</c> (‏<c>4b74e0b</c>). والآن فَرعُ
     /// <c>Err == "forbidden"</c> في سِلسِلَةِ رُموزِ النُقطَةِ يَرسُمُ <c>listings.detail.err_forbidden</c> مِن القامُوس — والنُقطَةُ كاتِبُه الوَحيد.</summary>
