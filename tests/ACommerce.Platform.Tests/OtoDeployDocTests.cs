@@ -226,6 +226,25 @@ public class OtoDeployDocTests
         Assert.True(gate.IndexOf("\noto_environment\n", StringComparison.Ordinal) < gate.IndexOf("if ! dotnet publish \"$PROJECT\"", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// <para><b>توصيفُ «اليَوم»</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-6 الجَولَة ٢، الصُغرى ٢ — عِندَ <c>12993e9</c>): الكُتلَةُ تُعيدُ كِتابَةَ التَطبيعِ بِـ<c>tr</c>
+    /// — تَمحو بَياضَ ASCII في كُلِّ مَوضِعٍ ولا تَقُصُّ بَياضَ يونيكود — و<c>OtoEnvironment.Normalize</c> هُوَ <c>Trim().ToLowerInvariant()</c>. فَعِندَ
+    /// <c>\vstaging</c> و<c>NBSP·staging·NBSP</c> يَفتَحُ الكودُ staging ويُقلِعُ التَطبيقُ، والكُتلَةُ تَقولُ «خارِجَ المَعجَم — يَرمي بِها الإقلاع» بِلا ⚠:
+    /// التَنبيهُ يَفشَلُ مَفتوحاً حَيثُ يُهِمّ. وعِندَ <c>sta ging</c> لا يَفتَحُ الكود (والإقلاعُ يَرمي)، والكُتلَةُ تُنَبِّهُ بِـstaging.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("\vstaging", "الشَحنُ عَبرَ OTO: قيمَةٌ خارِجَ المَعجَم")]
+    [InlineData("\u00A0staging\u00A0", "الشَحنُ عَبرَ OTO: قيمَةٌ خارِجَ المَعجَم")]
+    [InlineData("sta ging", "⚠ Shipping__Oto__Environment=staging")]
+    public void Today_the_gate_block_renormalizes_the_value_and_parts_from_the_code(string value, string blockSays)
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var text = RunOtoGateBlock(value);
+        Assert.StartsWith(blockSays, text, StringComparison.Ordinal);
+        var warns = text.StartsWith("⚠ Shipping__Oto__Environment=staging", StringComparison.Ordinal);
+        Assert.NotEqual(OtoEnvironment.IsOpen(value), warns);
+    }
+
     /// <summary>مَواضِعُ نِداءِ <c>CheckOtoDeliveryFeeAsync(</c> في نَصٍّ — بِلا سَطرِ تَعريفِه وبِلا أَسطُرِ التَعليق.</summary>
     internal static int FeeCallers(string source)
         => source.Split('\n').Count(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)
