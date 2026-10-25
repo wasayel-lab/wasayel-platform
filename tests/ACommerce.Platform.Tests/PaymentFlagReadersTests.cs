@@ -328,7 +328,13 @@ public class PaymentFlagReadersTests(ITestOutputHelper output)
     public void The_plan_door_reads_the_link_it_renders_and_never_the_instance_provider()
     {
         var plans = Code(Read(Template, "Components", "Pages", "Plans.razor"));
-        Assert.Contains("PlanPurchasePolicy.Visible(all, (await Providers.ForAsync(Slug)).PlansPayable)", plans, StringComparison.Ordinal);
+        // ‏(‏2026-10-25، W8-7 — lens-dead-doors-5؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): كانَ هُنا
+        // `Assert.Contains("PlanPurchasePolicy.Visible(all, (await Providers.ForAsync(Slug)).PlansPayable)", plans, …)` — والقِراءَتانِ انتَقَلَتا
+        // بِحَرفِهِما إلى `Services/PlanShelf.cs` لِتَسأَلَها بِطاقَةُ «حِسابي» ومَخرَجُ نَفادِ الحِصَّة. فَالمُثَبَّتُ اثنان: الصَفحَةُ تَسأَلُ الرَفّ، والرَفُّ يَقرَأُ الرابِط.
+        Assert.Contains("plans = await ACommerce.Templates.Customer.Marketplace.Services.PlanShelf.ShownAsync(PlanSvc, Providers, Slug);", plans, StringComparison.Ordinal);
+        Assert.DoesNotContain("PaymentProviderConfigured", plans, StringComparison.Ordinal);
+        Assert.Contains("PlanPurchasePolicy.Visible(await plans.VisiblePlansAsync(slug, ct), (await providers.ForAsync(slug, ct)).PlansPayable)",
+            Code(Read(Template, "Services", "PlanShelf.cs")), StringComparison.Ordinal);
 
         var endpoints = Code(Read(Template, "MarketplaceTemplateExtensions.cs"));
         var subscribe = endpoints.IndexOf("app.MapPost(\"/{slug}/plans/{planId}/subscribe\"", StringComparison.Ordinal);

@@ -238,7 +238,12 @@ public class ProviderSealedKeyDoorsTests
         Assert.False(linkCard.ThroughGateway);
 
         // ── والقُرّاءُ في الكود — بابُ الباقاتِ الثَلاثَةُ تَقرَأُ `PlansPayable`، و`PlanPay` تُصَيِّرُ الرابِطَ وَحدَه ───────
-        Assert.Contains("plans = PlanPurchasePolicy.Visible(all, (await Providers.ForAsync(Slug)).PlansPayable);", Page("Plans.razor"), StringComparison.Ordinal);
+        // ‏(‏2026-10-25، W8-7 — lens-dead-doors-5؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): كانَ هُنا
+        // `Assert.Contains("plans = PlanPurchasePolicy.Visible(all, (await Providers.ForAsync(Slug)).PlansPayable);", Page("Plans.razor"), …)` —
+        // والقِراءَتانِ انتَقَلَتا بِحَرفِهِما إلى `Services/PlanShelf.cs`، فَالصَفحَةُ تَسأَلُ الرَفَّ والرَفُّ يَقرَأُ `PlansPayable`.
+        Assert.Contains("plans = await ACommerce.Templates.Customer.Marketplace.Services.PlanShelf.ShownAsync(PlanSvc, Providers, Slug);", Page("Plans.razor"), StringComparison.Ordinal);
+        Assert.Contains("(await providers.ForAsync(slug, ct)).PlansPayable",
+            Source("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "PlanShelf.cs"), StringComparison.Ordinal);
         Assert.Contains("plansPayable = (await Providers.ForAsync(Slug)).PlansPayable;", Page("StudioAppPlans.razor"), StringComparison.Ordinal);
         var endpoints = Source("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs");
         var subscribe = Segment(endpoints, "app.MapPost(\"/{slug}/plans/{planId}/subscribe\"", ".RequireStoreWritable();");

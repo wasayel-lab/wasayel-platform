@@ -96,10 +96,11 @@ else
     // المَرجِع — أَي هذه الصَفحَة بِعَينِها قَبل المَوجَة.
     protected override async Task OnParametersSetAsync()
     {
-        var all = await PlanSvc.VisiblePlansAsync(Slug);
         // **والبابُ رابِطٌ تُصَيِّرُه `PlanPay` لا «يَقبِض»** (‏ADR-032 الخُطوَة 8، ‏2026-10-12 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): كانَ
         // `Tenant.PaymentProviderConfigured`، وصارَ يَصدُقُ لِمِفتاحٍ مَختومٍ بِلا رابِط — فَتَظهَرُ باقَةٌ بِسِعرٍ يُحيلُ زِرُّها إلى صَفحَةٍ
         // بِلا رابِط. `PlansPayable` هُوَ ما تَقرَؤُه الصَفحَةُ ونُقطَةُ الاشتِراكِ ومُلاحَظَةُ الاستوديو.
-        plans = PlanPurchasePolicy.Visible(all, (await Providers.ForAsync(Slug)).PlansPayable);
+        // ‏(‏2026-10-25، W8-7 — lens-dead-doors-5؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): القِراءَتانِ وتَرتيبُهُما انتَقَلا إلى `PlanShelf.ShownAsync` بِحَرفِهِما،
+        // لِأَنّ بِطاقَةَ «حِسابي» ومَخرَجَ نَفادِ الحِصَّةِ يَسأَلانِ ما تَعرِضُه هذِه الصَفحَةُ بِعَينِه — فَلا يَنفَتِحُ بابٌ عَلى «لا توجَد باقات بَعد».
+        plans = await ACommerce.Templates.Customer.Marketplace.Services.PlanShelf.ShownAsync(PlanSvc, Providers, Slug);
     }
 }

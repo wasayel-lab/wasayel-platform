@@ -121,35 +121,46 @@ public class PlansDoorTests(ITestOutputHelper output)
 
     // ─── «اليَوم» ───────────────────────────────────────────────────────────────────────────
 
-    /// <summary><b>«اليَوم»</b>: بِطاقَةُ «الباقات» في «حِسابي» لا شَرطَ فَوقَها إلّا فَرعُ صاحِبِ الجَلسَة، والصَفحَةُ لا تَسأَلُ رَفَّ الباقاتِ أَصلاً.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ إصلاحِ <c>lens-dead-doors-5</c>)</b> — كانَ
+    /// <c>Today_the_account_page_draws_the_plans_card_without_asking_what_the_plans_page_shows</c> (‏<c>1c89a64</c>): لا شَرطَ فَوقَ البِطاقَة. والآن
+    /// شَرطُها الوَحيدُ <c>plansShown</c>، وهُوَ <c>(await PlanShelf.ShownAsync(PlanSvc, Providers, Slug)).Count &gt; 0</c> — ما تَرسُمُه الصَفحَةُ بِعَينِه.</summary>
     [Fact]
-    public void Today_the_account_page_draws_the_plans_card_without_asking_what_the_plans_page_shows()
+    public void The_account_page_draws_the_plans_card_only_when_the_plans_shelf_shows_a_plan()
     {
         var me = WriteEndpointGuardTests.StripMarkupComments(Read(MePage));
         var card = me.IndexOf("L[\"me.action.plans\"]", StringComparison.Ordinal);
         var conditions = UpgradePromptPriceTests.EnclosingIfConditions(me, card);
-        output.WriteLine($"بِطاقَةُ الباقات عِندَ {card} · شُروطُها: {(conditions.Count == 0 ? "لا شَيء" : string.Join(" | ", conditions))} · "
-            + $"PlanShelf في Me: {me.Contains("PlanShelf", StringComparison.Ordinal)} · PlanPurchasePolicy: {me.Contains("PlanPurchasePolicy", StringComparison.Ordinal)}");
+        output.WriteLine($"بِطاقَةُ الباقات عِندَ {card} · شُروطُها: {(conditions.Count == 0 ? "لا شَيء" : string.Join(" | ", conditions))}");
 
         Assert.True(card > 0, "بِطاقَةُ الباقات غَيرُ مَوجودَة — الأَداةُ عَمياء.");
-        Assert.Empty(conditions);
-        Assert.DoesNotContain("PlanShelf", me, StringComparison.Ordinal);
-        Assert.DoesNotContain("PlanPurchasePolicy", me, StringComparison.Ordinal);
+        Assert.Equal(new[] { "plansShown" }, conditions);
+        Assert.Contains("plansShown = (await ACommerce.Templates.Customer.Marketplace.Services.PlanShelf.ShownAsync(PlanSvc, Providers, Slug)).Count > 0;",
+            me, StringComparison.Ordinal);
     }
 
-    /// <summary><b>«اليَوم»</b>: ‏7 روابِطَ إلى صَفحَةِ الباقاتِ في ‏4 مِلَفّات — رابِطُ الدُخولِ في الصَفحَةِ نَفسِها، وأَربَعَةٌ في <c>PlanPay</c> المُسَمّاة،
-    /// و<b>اثنانِ خارِجَ كُلِّ باب</b>: بِطاقَةُ «حِسابي» ومَخرَجُ نَفادِ الحِصَّةِ في صَفحَةِ النَشر.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ إصلاحِ <c>lens-dead-doors-5</c>)</b> — كانَ
+    /// <c>Today_two_store_links_to_the_plans_page_are_drawn_outside_its_shelf</c> (‏<c>1c89a64</c>): ‏7 روابِطَ، اثنانِ خارِجَ كُلِّ باب. والآن بِطاقَةُ
+    /// «حِسابي» ومَخرَجُ نَفادِ الحِصَّةِ خَلفَ الرَفّ — <b>صِفرٌ خارِجَ باب</b>، بِالماسِحِ لا بِقائِمَة؛ والرَفُّ لا يُسأَلُ إلّا مِن مُستَهلِكيه الثَلاثَةِ المُسَمَّين
+    /// في رَأسِه (شَرطُ الاستِخراج، القاعِدَة ١).</summary>
     [Fact]
-    public void Today_two_store_links_to_the_plans_page_are_drawn_outside_its_shelf()
+    public void Every_store_link_to_the_plans_page_sits_behind_its_shelf_or_inside_it()
     {
         var links = PlansLinks();
         var outside = links.Where(l => l.Door == Door.Outside).ToList();
+        var consumers = EntitlementContractTests.SourceFiles()
+            .Where(f => !f.File.Replace('\\', '/').EndsWith("/Services/PlanShelf.cs", StringComparison.Ordinal))
+            .Where(f => WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(f.Text)).Contains("PlanShelf.ShownAsync(", StringComparison.Ordinal))
+            .Select(f => Path.GetFileName(f.File)).OrderBy(f => f, StringComparer.Ordinal).ToArray();
         output.WriteLine($"روابِطُ plans: {links.Count} في {links.Select(l => l.File).Distinct().Count()} مِلَفّات · {Summary(links)} · خارِجَ بابٍ: "
-            + string.Join(" · ", outside.Select(l => $"{Path.GetFileName(l.File)}:{l.Line}")));
+            + (outside.Count == 0 ? "لا شَيء" : string.Join(" · ", outside.Select(l => $"{Path.GetFileName(l.File)}:{l.Line}")))
+            + $" · مُستَهلِكو PlanShelf: {string.Join(", ", consumers)}");
 
         Assert.True(links.Count >= 7, $"أَداةٌ عَمياء: {links.Count} رابِطاً — والمَقيسُ 7.");
+        Assert.True(outside.Count == 0, "رابِطٌ إلى صَفحَةِ الباقاتِ خارِجَ رَفِّها:\n  " + string.Join("\n  ", outside.Select(l => $"{l.File}:{l.Line}"))
+            + "\nضَعه داخِلَ @if (x) و x = (await PlanShelf.ShownAsync(…)).Count > 0.");
         Assert.Equal(new[] { "CreateListing.razor", "Me.razor" },
-            outside.Select(l => Path.GetFileName(l.File)).OrderBy(f => f, StringComparer.Ordinal).ToArray());
+            links.Where(l => l.Door == Door.Shelf).Select(l => Path.GetFileName(l.File)).OrderBy(f => f, StringComparer.Ordinal).ToArray());
+        Assert.Equal(new[] { "CreateListing.razor", "Me.razor", "Plans.razor" }, consumers);
     }
 
     // ─── ما لا يَتَبَدَّل ───────────────────────────────────────────────────────────────────
@@ -251,6 +262,54 @@ public class LivePlansShelfProofTests(ITestOutputHelper output)
         {
             await using var ws = store.LightweightSession(slug);
             ws.Delete<Plan>("w87-free");
+            await ws.SaveChangesAsync();
+            await using var gs = store.LightweightSession();
+            gs.Delete<Tenant>(slug);
+            await gs.SaveChangesAsync();
+        }
+    }
+
+    /// <summary><b>والرَفُّ هُوَ ما كانَت الصَفحَةُ تَقرَؤُه قَبلَ أَن يَنتَقِل</b> (‏2026-10-25، كوميتُ إصلاحِ <c>lens-dead-doors-5</c>): عَلى المَتجَرِ
+    /// نَفسِه في حالَتَيه — بِلا باقَةٍ ثُمَّ بِباقَةٍ مَجّانِيَّة — <c>PlanShelf.ShownAsync</c> يُعيدُ ما يُعيدُه التَعبيرُ القَديمُ بِحَرفِه في الصَفِّ أَعلاه.</summary>
+    [Fact]
+    public async Task The_shelf_returns_what_the_plans_page_read_before_it_moved()
+    {
+        if (!Enabled || string.IsNullOrEmpty(ConnectionString)) return;
+
+        await using var store = BuildStore();
+        var slug = $"w87shelf-{Guid.NewGuid():N}"[..20];
+        await new TenantFromAnalysisFactory(store).CreateAsync(slug, "بُرهانُ تَكافُؤِ الرَفّ", "#2563eb", tagLine: "", city: "",
+            pattern: "", sector: "", authChannel: "phone", ownerId: Guid.NewGuid(), sourceAnalysisId: Guid.NewGuid());
+        try
+        {
+            async Task<(string Old, string Shelf)> BothAsync()
+            {
+                var old = PlanPurchasePolicy.Visible(
+                    await new TenantPlanService(store).VisiblePlansAsync(slug), (await new TenantProviderService(store).ForAsync(slug)).PlansPayable);
+                var shelf = await PlanShelf.ShownAsync(new TenantPlanService(store), new TenantProviderService(store), slug);
+                return (string.Join(",", old.Select(p => p.Id)), string.Join(",", shelf.Select(p => p.Id)));
+            }
+
+            var born = await BothAsync();
+            await using (var ws = store.LightweightSession(slug))
+            {
+                ws.Store(new Plan { Id = "w87-free", Name = "مَجّانِيّ", Price = 0, ListingsQuota = 1, DaysPeriod = 30 });
+                ws.Store(new Plan { Id = "w87-paid", Name = "مَدفوع", Price = 49, ListingsQuota = 10, DaysPeriod = 30 });
+                await ws.SaveChangesAsync();
+            }
+            var stocked = await BothAsync();
+            output.WriteLine($"[live] slug={slug} · بِلا باقَة: «{born.Old}» = «{born.Shelf}» · بِمَجّانِيَّةٍ ومَدفوعَة: «{stocked.Old}» = «{stocked.Shelf}»");
+
+            Assert.Equal(born.Old, born.Shelf);
+            Assert.Equal("", born.Shelf);
+            Assert.Equal(stocked.Old, stocked.Shelf);
+            Assert.Equal("w87-free", stocked.Shelf); // ‏بِلا رابِطِ دَفعٍ لا تُعرَضُ المَدفوعَة (PlanPurchasePolicy.Visible)
+        }
+        finally
+        {
+            await using var ws = store.LightweightSession(slug);
+            ws.Delete<Plan>("w87-free");
+            ws.Delete<Plan>("w87-paid");
             await ws.SaveChangesAsync();
             await using var gs = store.LightweightSession();
             gs.Delete<Tenant>(slug);

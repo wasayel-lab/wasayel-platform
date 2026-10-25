@@ -2,6 +2,8 @@
 @page "/{slug}/r/{role}/me"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantPlanService PlanSvc
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantProviderService Providers
 @inject ITenantContext Tenant
 @inject AuthSession Auth
 @inject NavigationManager Nav
@@ -104,8 +106,14 @@
                المُعلَن** لِلزائِد عَن خَمسَة تَبويبات
                (‏`MainLayout` §الشَريط السُفليّ). *@
             <AcActionCard Label="@(L["me.action.my_listings"])" IconName="package"      Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"me/listings")" />
-            <AcActionCard Label="@(L["me.action.plans"])"      IconName="package"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"plans")" />
-            <AcActionCard Label="@(L["me.action.favorites"])" IconName="heart"         Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"favorites")" />
+            @* «الباقات» حينَ يَعرِضُ رَفُّها شَيئاً (‏2026-10-25، W8-7 — lens-dead-doors-5): كانَت تُرسَمُ في كُلِّ مَتجَر، ومَتجَرُ الاستوديو
+               يولَدُ بِلا باقَةٍ فَتَفتَحُ عَلى «لا توجَد باقات بَعد». الشَرطُ `PlanShelf.ShownAsync` — ما تَرسُمُه الصَفحَةُ بِعَينِه. والفَراغانِ
+               المُصَرَّحُ بِهِما يُعيدانِ ما كانَ بَينَ البِطاقاتِ بايتاً (حُدودُ كُتلَةِ `@if` تُسقِطُ فَراغَ النَصِّ حَولَها). *@
+            @if (plansShown)
+            {
+            @((MarkupString)"\n            ")<AcActionCard Label="@(L["me.action.plans"])"      IconName="package"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"plans")" />
+            }
+            @((MarkupString)"\n            ")<AcActionCard Label="@(L["me.action.favorites"])" IconName="heart"         Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"favorites")" />
             <AcActionCard Label="@(L["me.action.chats"])"   IconName="message"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"chats")" />
             <AcActionCard Label="@(L["me.action.notifications"])"     IconName="bell"          Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"notifications")" />
             <AcActionCard Label="@(L["me.action.deals"])"        IconName="receipt"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"deals")" />
@@ -152,6 +160,8 @@
     ACommerce.Kit.Roles.Role? activeRole;
     List<ACommerce.Kit.Roles.Role> tenantRoles = new();
     bool canManage;
+    /// <summary>صَفحَةُ الباقاتِ تَعرِضُ باقَةً واحِدَةً عَلى الأَقَلّ (‏<c>PlanShelf.ShownAsync</c>) — شَرطُ بِطاقَتِها (‏2026-10-25، W8-7).</summary>
+    bool plansShown;
 
 
     protected override async Task OnParametersSetAsync()
@@ -168,6 +178,7 @@
         favoritesCount       = summary.Favorites;
         conversationsCount   = summary.Conversations;
         notificationsCount   = summary.UnreadNotifications;
+        plansShown = (await ACommerce.Templates.Customer.Marketplace.Services.PlanShelf.ShownAsync(PlanSvc, Providers, Slug)).Count > 0;
 
         if (tenantRoles.Count > 0)
         {
