@@ -90,6 +90,31 @@ if (urls.Count == 0)
     });
 }
 
+// ═══ صَفحَةٌ فُحِصَت صِفراً عَمياءُ لا سَليمَة (‏2026-10-25، تَدقيقُ الإطلاق lens-checkers-ci-9 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ═══
+// الأَداةُ تَطبَعُ لِكُلِّ صَفحَةٍ عَدَدَ عَناصِرِها وتَأكيداتِها، ولَم يَكُن فَرعٌ يُفشِلُها عَلى الصِفر: `exitCode` كانَ يُضبَطُ عَلى
+// المُخالَفاتِ وَحدَها، فَصَفحَةٌ بِصِفرِ تَأكيدٍ أَو صِفرِ عُنصُرٍ تَخرُجُ ٠ «لا مُخالَفَة» — وهو بِعَينِه «صِفرٌ مِن صِفر» الَّذي
+// تُحَذِّرُ مِنه `docs/VERIFICATION-RUNTIME.md`. ومِثلُها صَفحَةٌ لَم تَستَقِرَّ أَو رَمى سِكرِبتُها: تُعَدُّ مُخالَفَةً، فَيَحجُبُها
+// `--report-only` ويَخرُجُ ٠. **فَالصَفحَةُ العَمياءُ رَمزُ ٢** (عَطَبٌ تَشغيلِيّ: الأَداةُ لَم تَقِس)، **ولا يَحجُبُه `--report-only`** —
+// يَحجُبُ حُكمَ المُخالَفاتِ لا غِيابَ القِياس. والدالَّةُ `BlindPages` تُقاسُ قَبلَ كُلِّ تَشغيلٍ بِعَيِّناتٍ مَعلومَةِ الجَواب
+// (القاعِدَة ١٠: الأَداةُ تُقاسُ قَبلَ أَن يُوثَقَ بِها)، و`VerifyRuntimeBlindPageTests` يَحرُسُ مَوضِعَيها.
+{
+    var probe = BlindPages(
+        new[]
+        {
+            new PageReport("probe:measured",    217, 37, new()),
+            new PageReport("probe:no-checks",   217,  0, new()),
+            new PageReport("probe:no-elements",   0, 37, new()),
+        },
+        new[] { "probe:unsettled" });
+    var want = new[] { "probe:no-checks", "probe:no-elements", "probe:unsettled" };
+    if (!probe.SequenceEqual(want))
+    {
+        Console.Error.WriteLine($"✗ الاختِبارُ الذاتيُّ لِلصَفحَةِ العَمياء: المُنتَظَرُ «{string.Join(", ", want)}» والمَقروءُ «{string.Join(", ", probe)}» — الأَداةُ لا يوثَقُ بِها.");
+        return 2;
+    }
+    Console.WriteLine($"  [الطَبَقَة ٦] اختِبارٌ ذاتيّ: {want.Length} صَفَحاتٍ عَمياءَ مَحقونَة مِن 4 أُمسِكَت، والمَقيسَةُ مَرَّت.");
+}
+
 if (!File.Exists(contractsPath))
 {
     Console.Error.WriteLine($"✗ مِلَفّ العُقود غَير مَوجود: {contractsPath}");
@@ -165,6 +190,7 @@ try
     string js = BuildScript(contractsJson);
 
     var allReports = new List<PageReport>();
+    var unmeasured = new List<string>(); // ‏(‏2026-10-25) صَفحَةٌ لَم تَبلُغِ القِياس — `BlindPages` أَعلاه.
     int total = 0;
 
     Console.WriteLine();
@@ -240,6 +266,7 @@ try
             Console.WriteLine($"\n  ✗ {url} — لَم تَستَقِرّ الصَفحَة خِلال 12 ثانِيَة ({lastWhy}).");
             Console.WriteLine("      صَفحَةٌ تُقاس قَبلَ أَن تَستَقِرّ تُعطي مُخالَفاتٍ كاذِبَة أَو تَستُر حَقيقِيَّة.");
             total++;
+            unmeasured.Add(url);
             continue;
         }
 
@@ -263,6 +290,7 @@ try
         {
             Console.WriteLine($"\n  ✗ {url} — عَطَب في السِكرِبت: {ex}");
             total++;
+            unmeasured.Add(url);
             continue;
         }
 
@@ -296,11 +324,19 @@ try
         }
     }
 
+    // ‏(‏2026-10-25، lens-checkers-ci-9) صَفحَةٌ لَم تُقَس لا تُحسَبُ «لا مُخالَفَة» — الرَأسُ أَعلى المِلَفّ.
+    var blind = BlindPages(allReports, unmeasured);
+
     Console.WriteLine();
     Console.WriteLine("══════════════════════════════════════════════════════════");
-    Console.WriteLine(total == 0
+    Console.WriteLine(total == 0 && blind.Count == 0
         ? $"  ✓ لا مُخالَفَة — {allReports.Sum(r => r.Checks)} تَأكيداً على {allReports.Count} صَفحَة"
         : $"  ✗ {total} مُخالَفَة على {allReports.Count} صَفحَة");
+    if (blind.Count > 0)
+    {
+        Console.WriteLine($"  ✗ {blind.Count} صَفحَة لَم تُقَس (صِفرُ تَأكيدٍ أَو صِفرُ عُنصُرٍ أَو لَم تَبلُغِ القِياس) — رَمزُ ٢، ولا يَحجُبُه --report-only:");
+        foreach (var u in blind) Console.WriteLine($"     • {u}");
+    }
     Console.WriteLine("══════════════════════════════════════════════════════════");
     Console.WriteLine();
 
@@ -333,7 +369,7 @@ try
         Console.WriteLine($"  التَقرير: {jsonOut}");
     }
 
-    exitCode = (total > 0 && !reportOnly) ? 1 : 0;
+    exitCode = blind.Count > 0 ? 2 : (total > 0 && !reportOnly) ? 1 : 0;
 }
 catch (Exception e)
 {
@@ -405,6 +441,11 @@ static async Task<string> WaitForDebugger(int port)
 }
 
 static string BuildScript(string contractsJson) => "(function(C){\n" + Scripts.Body + "\n})(" + contractsJson + ")";
+
+// ‏(‏2026-10-25، lens-checkers-ci-9) الصَفَحاتُ الَّتي لَم تُقَس: قيسَت بِصِفرِ تَأكيدٍ أَو صِفرِ عُنصُر، أَو لَم تَبلُغِ القِياسَ أَصلاً.
+// دالَّةٌ خالِصَةٌ واحِدَة يَسأَلُها الاختِبارُ الذاتيُّ قَبلَ التَشغيلِ والحُكمُ بَعدَه — فَما يُقاسُ هُوَ ما يَحكُم.
+static List<string> BlindPages(IEnumerable<PageReport> measured, IEnumerable<string> unmeasured) =>
+    measured.Where(r => r.Checks == 0 || r.Elements == 0).Select(r => r.Url).Concat(unmeasured).ToList();
 
 // ─── جِسر CDP ───────────────────────────────────────────────────────
 sealed class Cdp(ClientWebSocket ws)
