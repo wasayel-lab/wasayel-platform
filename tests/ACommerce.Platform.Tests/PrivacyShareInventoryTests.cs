@@ -24,9 +24,8 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
         ["NafathChannel"]         = "platform.privacy.share_nafath",
         ["PayPalPaymentProvider"] = "platform.privacy.share_payment",
         ["PaddlePaymentProvider"] = "platform.privacy.share_payment",
-        // ‏بَوّابَةُ المَتجَر: فاتورَةٌ بِمَبلَغٍ ووَصفٍ ومُعَرِّفاتِ صَفَقاتٍ لا بَيانٍ شَخصِيّ — والمُشتَري يَكتُبُ بِطاقَتَه عِندَها. ونَصُّ
-        // `share_payment` يُسَمّي «الاشتِراكَ» وَحدَه — صِياغَتُه لِلمالِك («ب» W8-4 · ٥).
-        ["MoyasarClient"]         = "platform.privacy.share_payment",
+        // ‏(2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ١ — نُقِلَ إلى `PinnedUnlisted`): `MoyasarClient` كانَ هُنا تَحتَ `share_payment`، ونَصُّه
+        // يُسَمّي «عَمَلِيَّةَ الاشتِراكِ» وَحدَها — فَالجَردُ كانَ يَعُدُّ مُسَمّىً ما لا يُسَمّيه النَصّ.
         // ‏(2026-10-25، كوميتُ المِفتاح — نُقِلَ مِن `PinnedUnlisted`): المُستَلِمُ في `DraftFor` والبائِعُ في `RegisterVendorAsync`.
         ["OtoClient"]             = "platform.privacy.share_carrier",
     };
@@ -38,6 +37,9 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
         ["GeminiBackend"]    = "نَصُّ الفِكرَةِ ومُحادَثَةُ الوَكيلِ إلى مُزَوِّدِ نَموذَجِ اللُغَة",
         ["OpenAIBackend"]    = "نَصُّ الفِكرَةِ ومُحادَثَةُ الوَكيلِ إلى مُزَوِّدِ نَموذَجِ اللُغَة",
         ["WebPushService"]   = "عُنوانُ اشتِراكِ الجِهازِ وحُمولَةٌ مُشَفَّرَةٌ إلى خِدمَةِ إشعاراتِ المُتَصَفِّح",
+        // ‏(2026-10-25، مِن `Listed`): بَوّابَةُ المَتجَر — فاتورَةٌ بِمَبلَغٍ ووَصفٍ ومُعَرِّفاتِ صَفَقاتٍ لا بَيانٍ شَخصِيّ، والمُشتَري يَكتُبُ بِطاقَتَه
+        // عِندَها. و`share_payment` يُسَمّي «الاشتِراكَ» وَحدَه؛ يَعودُ إلى `Listed` يَومَ يُسَمّي نَصُّه دَفعَ الطَلَبات («ب» W8-4 · ٥ البَند ٤).
+        ["MoyasarClient"]    = "فاتورَةُ دَفعِ الطَلَبِ (مَبلَغٌ ووَصفٌ ومُعَرِّفاتُ صَفَقات) إلى بَوّابَةِ دَفعِ المَتجَر",
     };
 
     private static readonly Regex HoldsClient = new(@"(?<!\w)(HttpClient|WebPushClient)\s+[_A-Za-z]\w*\s*[;=,)]", RegexOptions.Compiled);
@@ -119,7 +121,8 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
             "platform.privacy.share_fonts", "platform.privacy.share_maps", "platform.privacy.share_legal",
         }, keys);
         Assert.DoesNotContain("OtoClient", PinnedUnlisted.Keys);
-        Assert.Equal(4, PinnedUnlisted.Count);
+        // ‏(2026-10-25) خَمسَةٌ لا أَربَعَة: `MoyasarClient` نُقِلَ إلى المُثَبَّتَة — `share_payment` لا يُسَمّي دَفعَ الطَلَبات.
+        Assert.Equal(5, PinnedUnlisted.Count);
 
         var ar = AccountDeletionRetentionTests.Bare(LocaleCatalog.Find(LocaleCatalog.Arabic, "platform.privacy.share_carrier")!);
         foreach (var said in new[] { "OTO", "اسمك", "هاتفك", "عنوان التوصيل", "مدينته", "بريده", "جواله", "عنوان فوترته" })
