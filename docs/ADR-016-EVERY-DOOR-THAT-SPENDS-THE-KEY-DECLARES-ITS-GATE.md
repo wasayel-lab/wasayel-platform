@@ -182,7 +182,7 @@ Postgres» (‏`HostingExtensions.cs`). لا آلِيَّةَ جَديدَةَ �
 | `POST /studio/s/{id}/refine` | `RefineSectionAsync` | `CheckRefineAsync` + `RecordRefineAsync` |
 | `ResumeStudioPromptAsync()` | `RunAnalysisAsync` | `CheckAnalyzeAsync` + `RecordAnalysisAsync` |
 | `POST /studio/s/{id}/analyze` | `RunAnalysisAsync` | **كانَ مَفتوحاً** ← `CheckAnalyzeAsync` + حَجزٌ ذَرِّيّ |
-| `StudioAgent.razor` (`/studio/agent`) | `AskAsync`, `ContinueAfterToolAsync` | **مَفتوحٌ ومُعلَن — §٧** |
+| `StudioAgent.razor` (`/studio/agent`) | `AskAsync`, `ContinueAfterToolAsync` | **مَفتوحٌ ومُعلَن — §٧** — ‏2026-10-25: `PlatformAdminGuard` (`cb5f69b`، §٧-أ) |
 
 **وسُلطَةُ المالِكِ لَيسَت استِثناءً مَسكوتاً عَنه بَل تَصنيفٌ آخَر**:
 الحِصَّةُ تَحرُسُ مالَ المالِكِ **مِن عُمَلائِه**، ولا مَعنى لِأَن
