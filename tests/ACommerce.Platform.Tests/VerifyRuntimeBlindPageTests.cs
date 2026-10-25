@@ -73,6 +73,9 @@ public class VerifyRuntimeBlindPageTests(ITestOutputHelper output)
         var recorded = code.Split("unmeasured.Add(url);").Length - 1;
         output.WriteLine($"verify-runtime.cs: {code.Length} حَرفاً مَقروءاً · فَرعا عَدَمِ القِياسِ المُسَجِّلان {recorded} · خُروق {breaches.Count}");
         Assert.True(breaches.Count == 0, string.Join(", ", breaches));
+        // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة ١، صُغرى): عَدَدُ العَيِّناتِ في سَطرِ الاختِبارِ الذاتيِّ يُشتَقُّ مِن مَصفوفَتَيها لا يُكتَب.
+        Assert.Contains("var probe = BlindPages(probeMeasured, probeUnmeasured);", code, StringComparison.Ordinal);
+        Assert.Contains("مِن {probeMeasured.Length + probeUnmeasured.Length} أُمسِكَت", code, StringComparison.Ordinal);
     }
 
     /// <summary><b>حَقنُ عَيب — الفاحِصُ أَعلاه يُحمِرُّ فِعلاً</b>: كُلُّ طَفرَةٍ تُعيدُ شَكلاً مِن «قَبلَ» بِرَمزِها، وحدَها.</summary>

@@ -98,21 +98,22 @@ if (urls.Count == 0)
 // يَحجُبُ حُكمَ المُخالَفاتِ لا غِيابَ القِياس. والدالَّةُ `BlindPages` تُقاسُ قَبلَ كُلِّ تَشغيلٍ بِعَيِّناتٍ مَعلومَةِ الجَواب
 // (القاعِدَة ١٠: الأَداةُ تُقاسُ قَبلَ أَن يُوثَقَ بِها)، و`VerifyRuntimeBlindPageTests` يَحرُسُ مَوضِعَيها.
 {
-    var probe = BlindPages(
-        new[]
-        {
-            new PageReport("probe:measured",    217, 37, new()),
-            new PageReport("probe:no-checks",   217,  0, new()),
-            new PageReport("probe:no-elements",   0, 37, new()),
-        },
-        new[] { "probe:unsettled" });
+    // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة ١): العَيِّناتُ مُسَمّاة — فَعَدَدُها في سَطرِ الاختِبارِ الذاتيِّ مِنها لا رَقمٌ مَكتوب.
+    var probeMeasured = new[]
+    {
+        new PageReport("probe:measured",    217, 37, new()),
+        new PageReport("probe:no-checks",   217,  0, new()),
+        new PageReport("probe:no-elements",   0, 37, new()),
+    };
+    var probeUnmeasured = new[] { "probe:unsettled" };
+    var probe = BlindPages(probeMeasured, probeUnmeasured);
     var want = new[] { "probe:no-checks", "probe:no-elements", "probe:unsettled" };
     if (!probe.SequenceEqual(want))
     {
         Console.Error.WriteLine($"✗ الاختِبارُ الذاتيُّ لِلصَفحَةِ العَمياء: المُنتَظَرُ «{string.Join(", ", want)}» والمَقروءُ «{string.Join(", ", probe)}» — الأَداةُ لا يوثَقُ بِها.");
         return 2;
     }
-    Console.WriteLine($"  [الطَبَقَة ٦] اختِبارٌ ذاتيّ: {want.Length} صَفَحاتٍ عَمياءَ مَحقونَة مِن 4 أُمسِكَت، والمَقيسَةُ مَرَّت.");
+    Console.WriteLine($"  [الطَبَقَة ٦] اختِبارٌ ذاتيّ: {want.Length} صَفَحاتٍ عَمياءَ مَحقونَة مِن {probeMeasured.Length + probeUnmeasured.Length} أُمسِكَت، والمَقيسَةُ مَرَّت.");
 }
 
 if (!File.Exists(contractsPath))
