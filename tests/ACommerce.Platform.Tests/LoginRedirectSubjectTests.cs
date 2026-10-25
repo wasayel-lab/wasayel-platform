@@ -139,4 +139,38 @@ public class LoginRedirectSubjectTests(ITestOutputHelper output)
         Assert.Null(AuthHandlers.SubjectOf(tenant, expired, AuthHandlers.AuthKind.EmailOtp));
         Assert.Null(AuthHandlers.LiveAttemptOf(tenant, phone + "9", AuthHandlers.AuthKind.EmailOtp));
     }
+    // ─── ٣. الرَمزُ الخاطِئُ لِمَوضوعٍ كَتَبَه غَيرُه (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2 الجَولَة ١، صُغرى) ─────────────────────────────
+    //
+    // **تَوصيفُ «اليَوم»** (القاعِدَة ٣ — يُقلَبُ بِاسمِه في كوميتِ الإصلاح): نِقاطُ الرَمزِ الثَلاثُ تُعيدُ مَرحَلَتَه بَعدَ الخَطَإِ بِـ`Retry` عَلى
+    // **المَوضوعِ المَكتوبِ في الاستِمارَة** — والكاتِبُ يَختارُه. فَمَن يُرسِلُ رَمزاً خاطِئاً لِجَوّالِ غَيرِه يَعرِفُ أَيَدخُلُ صاحِبُه الآن (تَحويلٌ
+    // بِـ`stage=verify&attempt=…` مُقابِلَ `err=…` وَحدَه) ويَأخُذُ مُعَرِّفَ مُحاوَلَتِه في الرابِط؛ وكانَ التَحويلُ قَبلَ `f99f79a` واحِداً في الحالَين.
+
+    /// <summary>ما تُمَرِّرُه النِقاطُ الثَلاثُ إلى <c>Retry</c> — المَوضوعُ مِن الاستِمارَةِ لا المُحاوَلَةُ الَّتي فَتَحَت الصَفحَة.</summary>
+    private static readonly string[] RetryOnTypedSubject =
+    {
+        "Services.LoginStageQuery.Retry(tenant.Slug, phone, AuthHandlers.AuthKind.PhoneOtp, \"code_invalid\")",
+        "Services.LoginStageQuery.Retry(tenant.Slug, email, AuthHandlers.AuthKind.EmailOtp, \"code_invalid\")",
+        "Services.LoginStageQuery.Retry(\n                    Services.Incubator.StudioAuth.Tenant, subject, Services.Incubator.StudioAuthDoor.Kind(method), \"code\")",
+    };
+
+    [Fact]
+    public void Today_a_wrong_code_for_someone_elses_live_subject_tells_it_is_live_and_hands_out_its_attempt()
+    {
+        var mte = StudioConsentCharacterizationTests.Endpoints().Replace("\r\n", "\n", StringComparison.Ordinal);
+        foreach (var call in RetryOnTypedSubject) Assert.Contains(call, mte, StringComparison.Ordinal);
+
+        const string tenant = "login-retry-oracle";
+        var victim = $"05{Random.Shared.Next(10000000, 99999999)}";
+        var idle   = $"05{Random.Shared.Next(10000000, 99999999)}";
+        var id = AuthHandlers.IssueAttempt(tenant, victim, "424242", AuthHandlers.AuthKind.PhoneOtp);
+
+        // الغَريبُ يُرسِلُ رَمزاً خاطِئاً بِجَوّالِ غَيرِه — لا مُحاوَلَةَ مَعَه — فَتُعيدُه النُقطَةُ بِما تُعيدُه `Retry` عَلى ما كَتَبَه.
+        Assert.False(AuthHandlers.ConsumeAttempt(tenant, victim, "000000", AuthHandlers.AuthKind.PhoneOtp));
+        var live = LoginStageQuery.Retry(tenant, victim, AuthHandlers.AuthKind.PhoneOtp, "code_invalid");
+        var none = LoginStageQuery.Retry(tenant, idle, AuthHandlers.AuthKind.PhoneOtp, "code_invalid");
+
+        Assert.Equal($"stage=verify&attempt={id}&err=code_invalid", live);
+        Assert.Equal("err=code_invalid", none);
+        output.WriteLine($"جَوّالٌ يَدخُلُ صاحِبُه الآن: «{live.Replace(id, "<مُعَرِّفُه>")}» · جَوّالٌ لا: «{none}» — الجَوابانِ يَختَلِفان والمُعَرِّفُ في الأَوَّل");
+    }
 }
