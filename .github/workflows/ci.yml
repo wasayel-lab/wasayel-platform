@@ -112,12 +112,16 @@ jobs:
   # `scripts/verify-i18n-debt-ledger.txt` فَلا يُفشِل البَوّابَة —
   # يُفشِلُها خَرقٌ **جَديد** أَو إدخالٌ مُثَبَّت لَم يَعُد يَقَع
   # (فَالسِجِلّ لا يَنتَفِخ ولا يَعفَن).
+  #
+  # ‏(‏2026-10-25 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه؛ تَدقيقُ الإطلاق lens-checkers-ci-10) و«١–٥ و٧» أَعلاه صارَت ناقِصَة: السكربتُ يُشَغِّلُ
+  # ‏١–٥ و٧–١٠ (والثامِنَةُ تَحمِلُ ٨ب — كاتالوجُ المُزَوِّدينَ بَيانات — في `verify-architecture.sh`)، ويَختِمُ «All nine static layers green».
+  # فَاسمُ الخُطوَةِ يَقولُ ما يُشَغَّل، و`StaticLayerLabelTests` يَشتَقُّه مِن مَصفوفَةِ `LAYERS` في `verify-static.sh` فَلا يَنجَرِفُ ثانِيَةً.
   static-verification:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Static verification layers 1-5, 7
+      - name: Static verification layers 1-5, 7-10
         run: ./scripts/verify-static.sh
 
   # ═══ بَوّابَةُ الإقلاعِ الإنتاجيِّ عَلى فَرعِ Neon — حينَ يوجَدُ سِرُّه (‏2026-10-12، P3-2) ═══════════
