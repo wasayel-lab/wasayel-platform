@@ -2348,11 +2348,39 @@ GET https://<HF_SPACE_URL>/health/ready        (و HEAD)
 مُلحَقُ الجَولَة ١). فَـ`ref` و`allow_rollback` ✓ كَما أَعلاه؛ وعُطلٌ عابِرٌ يُقاسُ بِإعادَةِ تَشغيلِ النَشرِ قَبلَ النَقرَة.
 
 ### ب. بِاليَد إن كانَ GitHub نَفسُه مُعَطَّلاً
+> ⚠ (‏2026-10-25 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) **لا تُنَفَّذُ الكُتلَةُ التالِيَة** — لا تُبنى، وتَنشُرُ غُرفَةَ العَمَلِ عَلى الـSpace العامّ.
+> بَديلُها «تَصحيحُ §٤‑ب» تَحتَها مُباشَرَةً.
 ```bash
 git clone https://github.com/wasayel-lab/wasayel-platform.git w && cd w
 git checkout <الإيداع السابق>
 git push --force "https://<user>:<HF_TOKEN>@huggingface.co/spaces/<owner>/<space>.git" HEAD:refs/heads/main
 ```
+
+**تَصحيحُ §٤‑ب — ‏2026-10-25 (تَدقيقُ الإطلاق lens-docs-vs-code-4)، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق.** الكُتلَةُ أَعلاه تَدفَعُ الشَجَرَةَ
+كامِلَةً بِتاريخِها، وهذا يَكسِرُ أَمرَين قالَهُما §١·ب: (١) **لا تُبنى** — `.source-revision` غَيرُ مُتَتَبَّع (تَكتُبُه وَظيفَةُ النَشرِ وَحدَها
+بَعدَ التَجهيز)، وحارِسُ الـ`Dockerfile` يَخرُجُ بِـ1 بِدونِه («لا بِناءَ بِلا بَصمَة»)، فَتَبقى الحاوِيَةُ السابِقَةُ — المَعطوبَةُ — تَخدِم؛
+(٢) **وتَنشُرُ غُرفَةَ العَمَل** — يَومَ قيسَت (‏`dace7cd`): ‏531 مِلَفّاً تَحتَ `docs/` و`tests/` و`scripts/` و`CLAUDE.md`، و‏425 إيداعاً مِن التاريخ،
+عَلى Space عامٍّ يَقرَأُ صَفحَةَ «Files» فيه أَيُّ أَحَد. **فَالتَراجُعُ بِاليَدِ خُطُواتُ الوَظيفَةِ نَفسِها** (`deploy-hf.yml`: «Stage only what the
+Dockerfile builds» ثُمَّ «Push the filtered tree to the Space») بِتَرتيبِها:
+
+```bash
+# ‏(‏2026-10-25) خُطُواتُ وَظيفَةِ النَشرِ نَفسُها بِاليَد — مِن جَذرِ نُسخَةٍ مِن المُستَودَع
+# (نُسخَتُك المَحَلِّيَّة، أَو: git clone https://github.com/wasayel-lab/wasayel-platform.git w && cd w)
+git checkout "<الإيداع السابق>"
+sha="$(git rev-parse HEAD)"
+stage="$(mktemp -d)/hf-space"
+bash scripts/deploy-manifest.sh --stage "$stage"       # ما يَبنيه الـDockerfile وَحدَه، ويَخرُجُ 1 إن تَسَرَّبَ مَحظور
+printf '%s\n' "$sha" > "$stage/.source-revision"     # بَعدَ --stage (يَمحو مُجَلَّدَه أَوَّلاً) — وبِدونِه يَخرُجُ الـDockerfile بِـ1
+cd "$stage" && git init -q -b main && git add -A && git commit -q -m "deploy: $sha"
+git push --force "https://<user>:<HF_TOKEN>@huggingface.co/spaces/<owner>/<space>.git" HEAD:refs/heads/main
+```
+
+إيداعٌ واحِدٌ مُسَطَّحٌ رِسالَتُه `deploy: <sha>` (§١·ب «التاريخُ مُسَطَّح»)، ولا مِلَفَّ تَحتَ `docs/` أَو `tests/` أَو `scripts/` أَو `.github/` ولا `CLAUDE.md`.
+و`git commit` يَحتاجُ هُوِيَّةَ git عِندَك (`user.name`/`user.email`)، والرَمزُ في عُنوانِ الدَفعِ يَبقى في سِجِلِّ صَدَفَتِك — امحُه بَعدَه. **وما لا
+تَفعَلُه الكُتلَة — يُقال**: لا تَسأَلُ `deploy_direction` (§٢·و) ولا تَقيسُ الحَيَّ بَعدَها — تَراجُعٌ بِاليَدِ مَقصودٌ بِتَعريفِه؛ والقِياسُ بَعدَه
+§٣ الطَبَقَةُ الثالِثَة (`/health` و`.commit` = `<sha>`). **والأَمرُ مَقيسٌ لا مَنسوخ**: `DeployManualRollbackTests` يُشَغِّلُ هذِه الكُتلَةَ بِحَرفِها
+عَلى مُستَودَعٍ مَصنوعٍ ومُستَودَعِ Space عارٍ — إيداعٌ واحِد، وصِفرُ مَحظور، و`.source-revision` بِـ`<sha>`، وحارِسُ الـ`Dockerfile` بِحَرفِه
+يَمُرُّ عَلى الشَجَرَةِ المَدفوعَة — ويُشَغِّلُ الكُتلَةَ القَديمَةَ عَيِّنَةً فَيَرى الحارِسَ يَخرُجُ 1 والمَحظورَ مَدفوعاً.
 
 ### ج. مِن واجِهَة HF
 ‏Settings → ‏**Factory rebuild** (‏إعادَة بِناءٍ نَظيفَة لِنَفس

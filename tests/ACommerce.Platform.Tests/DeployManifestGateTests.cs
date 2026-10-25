@@ -25,7 +25,7 @@ public class DeployManifestGateTests(ITestOutputHelper output)
         return true;
     }
 
-    private static (int Code, string Out, string Err) Run(string exe, string workDir, params string[] args)
+    internal static (int Code, string Out, string Err) Run(string exe, string workDir, params string[] args)
     {
         var psi = new ProcessStartInfo(exe, args)
         {
@@ -50,7 +50,7 @@ public class DeployManifestGateTests(ITestOutputHelper output)
 
     /// <summary>مُستَودَعٌ مَصنوع: مَشروعُ التَطبيقِ يُحيلُ إلى مَكتَبَة، ومِلَفّاتُ الجَذرِ الخَمسَة، و<c>docs/</c> و<c>tests/</c> مُتَتَبَّعان —
     /// والسكربتُ الحَقيقيُّ بِحَرفِه في <c>scripts/</c>. و<paramref name="extraReference"/> إحالَةٌ ثانِيَةٌ مِن مَشروعِ التَطبيق.</summary>
-    private static DirectoryInfo Scratch(string? extraReference)
+    internal static DirectoryInfo Scratch(string? extraReference)
     {
         var dir = Directory.CreateTempSubdirectory("wasayel-deploy-manifest-");
         void Write(string rel, string text)
