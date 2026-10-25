@@ -24,6 +24,13 @@ public class LiveProofJobTests(ITestOutputHelper output)
 {
     private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;
 
+    /// <summary>‏(2026-10-25، مُراجَعَةُ تَيّارِ W8-5 الجَولَة ١) عَلامَةُ بُرهانٍ حَيٍّ رَجَعَ مِن حارِسٍ فَرعِيٍّ قَبلَ أَن يَبلُغَ القاعِدَة — يَكتُبُها
+    /// بِمُخرَجِه (<c>ITestOutputHelper</c>، فَتَصِلُ trx)، ويَعُدُّها <c>scripts/live-proof-floor.sh</c> فَيَطرَحُها مِن النَجاحاتِ قَبلَ الأَرضِيَّة.</summary>
+    internal const string EarlyReturnMarker = "[live:returned-early]";
+
+    /// <summary>الاسمُ الكامِلُ لِلحارِسِ الَّذي يَقيسُ أَنّ الخُطوَةَ تَرى قاعِدَتَها — مُرَشِّحٌ يَستَثنيه يُعمي الخُطوَةَ بِصَمت.</summary>
+    internal const string SentinelName = "ACommerce.Platform.Tests.LiveProofJobTests.The_live_step_reaches_its_database";
+
     /// <summary><c>null</c> إن كانَت البيئَةُ بيئَةَ بُرهانٍ حَيٍّ مُبصِر، أَو لَيسَت مُطالَبَةً بِذلك؛ وإلّا رَمزُ العَمى:
     /// <c>flag_off</c> (المُطالَبَةُ مَضبوطَةٌ والعَلَمُ لا) · <c>no_connection</c> (لا سِلسِلَة).</summary>
     internal static string? Blindness(Func<string, string?> env) =>
@@ -74,7 +81,10 @@ public class LiveProofJobTests(ITestOutputHelper output)
 
     /// <summary>خُروقُ «البَراهينُ الحَيَّةُ في CI» — الأَسطُرُ المُعَلَّقَةُ لا تُعَدّ. الرُموز: <c>no_live_step</c> · <c>no_sentinel</c>
     /// (الخُطوَةُ بِلا <c>CI_LIVE_PROOF_REQUIRED</c>) · <c>connection_not_local</c> · <c>filter_misses_live</c> · <c>no_postgres_service</c>
-    /// (وَظيفَتُها بِلا خِدمَةِ postgres).</summary>
+    /// (وَظيفَتُها بِلا خِدمَةِ postgres).
+    /// <para>‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة ١، صُغرى): و<c>sentinel_excluded</c> (المُرَشِّحُ يَستَثني الحارِسَ بِـ<c>!~</c>) ·
+    /// <c>no_trx</c> (الخُطوَةُ لا تَكتُبُ <c>live.trx</c>) · <c>no_floor</c> (لا خُطوَةَ بَعدَها تُنادي <c>live-proof-floor.sh</c> بِأَرضِيَّةٍ مُوجَبَة) —
+    /// فَالخُطوَةُ لا تَعُدُّ «بَلَغَت القاعِدَةَ» ما رَجَعَ مِن حارِسٍ فَرعِيٍّ أَخضَر.</para></summary>
     internal static IReadOnlyList<string> LiveStepBreaches(string workflow)
     {
         var lines = workflow.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n')
@@ -95,6 +105,12 @@ public class LiveProofJobTests(ITestOutputHelper output)
         if (!step.Any(l => Regex.IsMatch(l, @"^\s+CI_LIVE_PROOF_REQUIRED:\s*""?1""?\s*$"))) breaches.Add("no_sentinel");
         if (!step.Any(l => Regex.IsMatch(l, @"^\s+ConnectionStrings__Postgres:.*Host=localhost;"))) breaches.Add("connection_not_local");
         if (!step.Any(l => l.Contains("FullyQualifiedName~ACommerce.Platform.Tests.Live", StringComparison.Ordinal))) breaches.Add("filter_misses_live");
+        var excluded = step.SelectMany(l => Regex.Matches(l, @"FullyQualifiedName!~(?<x>[\w.]+)").Select(m => m.Groups["x"].Value));
+        if (excluded.Any(x => SentinelName.Contains(x, StringComparison.Ordinal))) breaches.Add("sentinel_excluded");
+        var trx = step.Any(l => l.Contains("--logger \"trx;LogFileName=live.trx\"", StringComparison.Ordinal));
+        if (!trx) breaches.Add("no_trx");
+        var floor = lines.FirstOrDefault(l => l.I > flag.I && l.I < jobTo && Regex.IsMatch(l.Text, @"\./scripts/live-proof-floor\.sh\s+\S*live\.trx\s+(?<n>[1-9]\d*)\s*$"));
+        if (floor.Text is null) breaches.Add("no_floor");
         // ‏كُتلَةُ `services:` في الوَظيفَة: أَسطُرُها بَعدَها ما دامَت أَعمَقَ مِن مِفتاحِها.
         var services = job.FindIndex(l => Regex.IsMatch(l, @"^    services:\s*$"));
         var block = services < 0 ? [] : job.Skip(services + 1).TakeWhile(l => l.Trim().Length == 0 || l.StartsWith("      ", StringComparison.Ordinal)).ToList();
@@ -137,6 +153,10 @@ public class LiveProofJobTests(ITestOutputHelper output)
             ("قاعِدَةٌ بَعيدَة", Once(ci, "Host=localhost;Port=5432;", "Host=ep-x.neon.tech;"), "connection_not_local"),
             ("مُرَشِّحٌ لا يَبلُغُ الحَيّ", Once(ci, "FullyQualifiedName~ACommerce.Platform.Tests.Live&", "FullyQualifiedName~ACommerce.Platform.Tests.Unit&"), "filter_misses_live"),
             ("بِلا خِدمَة", Once(ci, "image: postgres:", "image: redis:"), "no_postgres_service"),
+            ("مُرَشِّحٌ يَستَثني الحارِس", Once(ci, "&FullyQualifiedName!~LiveTenantExportProofTests)", "&FullyQualifiedName!~LiveTenantExportProofTests&FullyQualifiedName!~LiveProofJobTests)"), "sentinel_excluded"),
+            ("بِلا trx", Once(ci, "--logger \"trx;LogFileName=live.trx\"", "--logger \"console;verbosity=minimal\""), "no_trx"),
+            ("بِلا أَرضِيَّة", Once(ci, "./scripts/live-proof-floor.sh", "echo ./scripts/no-floor.sh"), "no_floor"),
+            ("أَرضِيَّةٌ صِفر", Regex.Replace(ci, @"(live-proof-floor\.sh\s+\S*live\.trx\s+)\d+", "${1}0"), "no_floor"),
         };
         var missed = new List<string>();
         foreach (var c in cases)
@@ -147,5 +167,123 @@ public class LiveProofJobTests(ITestOutputHelper output)
         }
         output.WriteLine($"حُقِنَ {cases.Length} شَكلاً؛ فاتَ الفاحِصَ {missed.Count}");
         Assert.True(missed.Count == 0, string.Join("\n", missed));
+    }
+
+    // ─── أَرضِيَّةُ ما بَلَغَ القاعِدَة: scripts/live-proof-floor.sh ───────────────────────────────
+
+    private static (int Code, string Out) Floor(string trx, string floor)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo("bash") { WorkingDirectory = RepoRoot, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        foreach (var a in new[] { Path.Combine(RepoRoot, "scripts", "live-proof-floor.sh"), trx, floor }) psi.ArgumentList.Add(a);
+        using var p = System.Diagnostics.Process.Start(psi)!;
+        var text = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
+        Assert.True(p.WaitForExit(20_000), "live-proof-floor.sh لَم يَنتَهِ في عِشرينَ ثانِيَة.");
+        return (p.ExitCode, text.Trim());
+    }
+
+    private static string Trx(int passed, int failed, int early, int checker = 0)
+    {
+        var sb = new System.Text.StringBuilder("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<TestRun><Results>\n");
+        for (var i = 0; i < passed; i++)
+            sb.Append($"<UnitTestResult testName=\"ACommerce.Platform.Tests.LiveX.T{i}\" outcome=\"Passed\"><Output><StdOut>{(i < early ? EarlyReturnMarker + " سَبَب" : "بَلَغَ")}</StdOut></Output></UnitTestResult>\n");
+        for (var i = 0; i < checker; i++)
+            sb.Append($"<UnitTestResult testName=\"ACommerce.Platform.Tests.LiveProofJobTests.C{i}\" outcome=\"Passed\" />\n");
+        for (var i = 0; i < failed; i++) sb.Append($"<UnitTestResult testName=\"ACommerce.Platform.Tests.LiveX.F{i}\" outcome=\"Failed\" />\n");
+        return sb.Append("</Results></TestRun>\n").ToString();
+    }
+
+    /// <summary><b>الأَرضِيَّةُ تُقاسُ بِعَيِّنات</b> (القاعِدَة ١٠): ما بَلَغَ القاعِدَةَ = النَجاحاتُ ناقِصَ العَلاماتِ — فَوقَ الأَرضِيَّةِ ⇒ 0، ودونَها ⇒ 1،
+    /// ولا trx أَو trx بِلا نَتيجَة ⇒ 2، وأَرضِيَّةٌ لَيسَت عَدَداً مُوجَباً ⇒ 2؛ ويَطبَعُ ما عَدّ.</summary>
+    [Theory]
+    [InlineData(5, 0, 1, "4", 0)]
+    [InlineData(5, 0, 2, "4", 1)]
+    [InlineData(5, 0, 0, "6", 1)]
+    [InlineData(0, 0, 0, "1", 2)]
+    [InlineData(5, 0, 0, "0", 2)]
+    [InlineData(5, 0, 0, "x", 2)]
+    [InlineData(3, 0, 0, "4", 1, 5)]      // ‏صُفوفُ الفاحِصِ لا تُعَدُّ مِمّا بَلَغَ القاعِدَة
+    public void The_live_floor_counts_what_reached_the_database_and_refuses_below_it(int passed, int failed, int early, string floor, int code, int checker = 0)
+    {
+        if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI (‏ubuntu)."); return; }
+        var dir = Directory.CreateTempSubdirectory("live-floor-");
+        try
+        {
+            var path = Path.Combine(dir.FullName, "live.trx");
+            File.WriteAllText(path, Trx(passed, failed, early, checker));
+            var (got, text) = Floor(path, floor);
+            output.WriteLine($"نَجَحَ {passed} · رَجَعَ {early} · الأَرضِيَّة {floor} ⇒ {got} :: {text}");
+            Assert.Equal(code, got);
+            if (code != 2) Assert.Contains($"بَلَغَ القاعِدَة {passed - early}", text, StringComparison.Ordinal);
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void The_live_floor_refuses_a_missing_trx()
+    {
+        if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI (‏ubuntu)."); return; }
+        var (got, text) = Floor(Path.Combine(Path.GetTempPath(), "no-such-live.trx"), "1");
+        output.WriteLine($"لا trx ⇒ {got} :: {text}");
+        Assert.Equal(2, got);
+    }
+
+    /// <summary>رُجوعاتُ البَراهينِ الحَيَّةِ مِن حارِسٍ فَرعِيّ: كُلُّ <c>return;</c> شَرطُه <c>if (…)</c> فيه غَيرُ حارِسِ العَلَمِ والسِلسِلَة
+    /// (<c>Enabled</c> و<c>IsNullOrEmpty/IsNullOrWhiteSpace(…ConnectionString)</c>) — ومَعَه هل يَكتُبُ العَلامَةَ قَبلَ الرُجوع. حارِسٌ فَرعِيٌّ
+    /// مَدموجٌ في حارِسِ العَلَمِ (<c>if (!Enabled || x) return;</c>) يُعَدُّ فَرعِيّاً بِشَرطِه.</summary>
+    internal static IReadOnlyList<(string Where, bool Marked)> SubGuardReturns(string code)
+    {
+        var found = new List<(string, bool)>();
+        foreach (Match m in Regex.Matches(code, @"public (?:sealed )?class (?<c>Live\w+)\b"))
+        {
+            if (m.Groups["c"].Value == nameof(LiveProofJobTests)) continue;      // ‏الحارِسُ نَفسُه — رُجوعُه خارِجَ الخُطوَةِ الحَيَّةِ مَقصود
+            var next = Regex.Match(code[(m.Index + m.Length)..], @"\n(?:public|internal) (?:sealed |static )?class ");
+            var body = code[m.Index..(next.Success ? m.Index + m.Length + next.Index : code.Length)];
+            foreach (Match r in Regex.Matches(body, @"\breturn;"))
+            {
+                var ifAt = body.LastIndexOf("if (", r.Index, StringComparison.Ordinal);
+                if (ifAt < 0) continue;
+                var depth = 0; var close = -1;
+                for (var i = ifAt + 3; i < r.Index && close < 0; i++)
+                {
+                    if (body[i] == '(') depth++;
+                    else if (body[i] == ')' && --depth == 0) close = i;
+                }
+                if (close < 0) continue;
+                var between = body[(close + 1)..r.Index];
+                if (Regex.IsMatch(between, @"[;}]") && !between.TrimStart().StartsWith('{')) continue;   // ‏رُجوعٌ لا يَتبَعُ هذا الشَرط
+                var condition = body[(ifAt + 4)..close];
+                var rest = Regex.Replace(condition, @"!?\s*[\w.]*\bEnabled\b|string\.IsNullOrEmpty\([\w.]*ConnectionString\)|string\.IsNullOrWhiteSpace\([\w.]*ConnectionString\)|\|\||[\s()]", "");
+                if (rest.Length == 0) continue;
+                found.Add(($"{m.Groups["c"].Value}: if ({Regex.Replace(condition, @"\s+", " ").Trim()})", between.Contains("EarlyReturnMarker", StringComparison.Ordinal)));
+            }
+        }
+        return found;
+    }
+
+    /// <summary>وكُلُّ بُرهانٍ حَيٍّ يَرجِعُ مِن حارِسٍ فَرعِيٍّ يَكتُبُ العَلامَةَ — فَلا يُعَدُّ «بَلَغَ القاعِدَةَ» صامِتاً. المَقيس: اثنانِ اليَوم
+    /// (‏OTO بِلا رَمزِ staging، ومَسارُ الاعتِمادِ بِلا وَثيقَة).</summary>
+    [Fact]
+    public void Every_live_proof_that_returns_from_a_sub_guard_writes_the_marker()
+    {
+        var found = Directory.EnumerateFiles(Path.Combine(RepoRoot, "tests", "ACommerce.Platform.Tests"), "*.cs")
+            .Where(f => Path.GetFileName(f) != "LiveProofJobTests.cs")              // ‏عَيِّناتُ الفاحِصِ في هذا المِلَفِّ نُصوصٌ لا أَصناف
+            .SelectMany(f => SubGuardReturns(WriteEndpointGuardTests.StripComments(File.ReadAllText(f)))).ToList();
+        output.WriteLine($"رُجوعٌ مِن حارِسٍ فَرعِيّ: {found.Count} — {string.Join(" · ", found.Select(f => $"{f.Where} [{(f.Marked ? "مُعَلَّم" : "بِلا عَلامَة")}]"))}");
+        Assert.True(found.Count >= 2, $"أَداةٌ عَمياء: {found.Count} رُجوعاً — والمَقيسُ اثنان.");
+        Assert.True(found.All(f => f.Marked), "رُجوعٌ بِلا عَلامَة:\n" + string.Join("\n", found.Where(f => !f.Marked).Select(f => f.Where)));
+    }
+
+    [Theory]
+    [InlineData("public class LiveX { void T() { if (!Enabled || string.IsNullOrEmpty(ConnectionString)) return; } }", 0, 0)]
+    [InlineData("public class LiveX { void T() { if (!Live.Enabled || string.IsNullOrEmpty(Live.ConnectionString))\n return; } }", 0, 0)]
+    [InlineData("public class LiveX { void T() { if (!Enabled || string.IsNullOrWhiteSpace(Token)) return; } }", 1, 0)]
+    [InlineData("public class LiveX { void T() { if (doc is null) { Log(\"x\"); return; } } }", 1, 0)]
+    [InlineData("public class LiveX { void T() { if (doc is null) { output.WriteLine($\"{LiveProofJobTests.EarlyReturnMarker} x\"); return; } } }", 1, 1)]
+    [InlineData("public class NotLive { void T() { if (doc is null) return; } }", 0, 0)]
+    public void The_sub_guard_return_scanner_sees_what_it_counts(string code, int returns, int marked)
+    {
+        var found = SubGuardReturns(code);
+        Assert.Equal(returns, found.Count);
+        Assert.Equal(marked, found.Count(f => f.Marked));
     }
 }

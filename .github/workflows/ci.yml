@@ -65,6 +65,14 @@ jobs:
           dotnet test tests/ACommerce.Platform.Tests/ACommerce.Platform.Tests.csproj -c Release --no-build
           --filter "(FullyQualifiedName~ACommerce.Platform.Tests.Live&FullyQualifiedName!~LiveTenantExportProofTests)|FullyQualifiedName~ReadinessEndpointTests.Live_database_answers_200_ready"
           --logger "console;verbosity=normal"
+          --logger "trx;LogFileName=live.trx" --results-directory live-results
+
+      # ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة ١): الحارِسُ أَعلاه يَقيسُ أَنّ القاعِدَةَ تُجيب، لا كَم بُرهاناً بَلَغَها — وبُرهانٌ
+      # يَرجِعُ مِن حارِسٍ فَرعِيٍّ يُكتَبُ «Passed». فَالأَرضِيَّةُ تَعُدُّ النَجاحاتِ ناقِصَ عَلامَةِ الرُجوعِ المُبكِرِ في trx، وتَفشَلُ دونَها.
+      # والرَقمُ مَقيسٌ عَلى قاعِدَةٍ فارِغَةٍ بِالمُرَشِّحِ نَفسِه: 57 نَجَحَت خارِجَ صُفوفِ الفاحِص، رَجَعَ اثنانِ بِالعَلامَة، بَلَغَ 55.
+      # يُرفَعُ مَعَ كُلِّ بُرهانٍ حَيٍّ يُضاف؛ والحارِسُ LiveProofJobTests.
+      - name: Live proofs reached their database (floor)
+        run: ./scripts/live-proof-floor.sh live-results/live.trx 55
 
       # ═══ آلِيَّةُ حَقنِ البَصمَةِ تُشَغَّلُ مَرَّةً، وإلّا فَالإنتاجُ
       #     هُوَ أَوَّلُ مَن يَختَبِرُها (‏ADR-019) ═══════════════════════

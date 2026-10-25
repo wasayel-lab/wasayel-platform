@@ -5,6 +5,7 @@ using ACommerce.Templates.Customer.Marketplace.Services;
 using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using Marten;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace ACommerce.Platform.Tests;
 
@@ -29,7 +30,7 @@ namespace ACommerce.Platform.Tests;
 // يَملِكُه مُقَرِّر.
 
 [Collection(LiveProofCollection.Name)]
-public class LiveApprovalFlowProofTests
+public class LiveApprovalFlowProofTests(ITestOutputHelper output)
 {
     /// <summary>مُستَأجِر تَجرِبَة — لا يُلمَس <c>ashare</c> (عَرض
     /// مُستَثمِرين) ولا مُستَأجِر إنتاج.</summary>
@@ -83,7 +84,8 @@ public class LiveApprovalFlowProofTests
         await using (var s = store.QuerySession(TenantSlug))
         {
             var doc = await s.LoadAsync<TenantRoleDefinition>(RoleSlug);
-            if (doc is null) { Log("[seed] لا وَثيقَة — البُرهان يَتَوَقَّف."); return; }
+            // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة ١): بِالعَلامَة — فَأَرضِيَّةُ CI لا تَعُدُّ هذا الرُجوعَ «بَلَغَ القاعِدَة».
+            if (doc is null) { Log("[seed] لا وَثيقَة — البُرهان يَتَوَقَّف."); output.WriteLine($"{LiveProofJobTests.EarlyReturnMarker} [seed] لا وَثيقَةَ دَور"); return; }
             Log($"[doc/before] slug={doc.Slug} status={doc.Status}");
         }
 

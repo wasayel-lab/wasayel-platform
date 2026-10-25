@@ -820,7 +820,9 @@ public class LiveOtoStagingProofTests(ITestOutputHelper output)
     [Fact]
     public async Task The_staging_token_refreshes_and_prices_a_route_at_oto_rates()
     {
-        if (!Enabled || string.IsNullOrWhiteSpace(Token)) return;
+        if (!Enabled) return;
+        // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة ١): الرُجوعُ بِلا رَمزِ staging يُكتَبُ بِالعَلامَة — فَأَرضِيَّةُ CI لا تَعُدُّه «بَلَغَ».
+        if (string.IsNullOrWhiteSpace(Token)) { output.WriteLine($"{LiveProofJobTests.EarlyReturnMarker} لا رَمزَ staging لِـOTO — البُرهانُ لا يَبلُغُ OTO."); return; }
 
         var origin = Environment.GetEnvironmentVariable("OTO_PROOF_ORIGIN") ?? "Riyadh";
         var destination = Environment.GetEnvironmentVariable("OTO_PROOF_DESTINATION") ?? "Jeddah";
