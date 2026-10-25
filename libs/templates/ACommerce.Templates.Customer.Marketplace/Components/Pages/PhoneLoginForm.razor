@@ -22,6 +22,11 @@ else
 {
     <form method="post" action="@($"/{Slug}/auth/phone/verify")">
         <input type="hidden" name="phone" value="@Phone" />
+        @* ومُعَرِّفُ المُحاوَلَةِ الَّتي فَتَحَت الصَفحَة — بِه تُعادُ مَرحَلَةُ الرَمزِ بَعدَ الخَطَإ، لا بِالمَوضوعِ المَكتوب (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2). *@
+        @if (!string.IsNullOrEmpty(AttemptId))
+        {
+            <input type="hidden" name="attempt" value="@AttemptId" />
+        }
         @if (!string.IsNullOrEmpty(AsRole))
         {
             <input type="hidden" name="as" value="@AsRole" />
@@ -68,6 +73,8 @@ else
     [Parameter] public string? Phone { get; set; }
     [Parameter] public string? ErrorMessage { get; set; }
     [Parameter] public string? AsRole { get; set; }
+    /// <summary>مُعَرِّفُ المُحاوَلَةِ مِن رابِطِ الصَفحَة (<c>attempt=</c>) — يُرسَلُ مَعَ الرَمزِ فَتُعادُ بِه المَرحَلَةُ بَعدَ الخَطَإ.</summary>
+    [Parameter] public string? AttemptId { get; set; }
     /// <summary>كود المُزَوِّد الوَهميّ حينَ يَكون فَعّالاً؛ <c>null</c> مَع
     /// مُزَوِّد فِعليّ (Twilio) فَلا نَعرِض شَيئاً.</summary>
     [Parameter] public string? DevHint { get; set; }

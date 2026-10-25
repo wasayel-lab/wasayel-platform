@@ -283,7 +283,7 @@ public static class MarketplaceTemplateExtensions
             var result = await AuthHandlers.VerifyPhoneOtpHandler(new VerifyPhoneOtp(phone, code), tenant, store);
             if (result is null)
                 return Results.Redirect(Link(req, slug,
-                    $"login?{Services.LoginStageQuery.Retry(tenant.Slug, phone, AuthHandlers.AuthKind.PhoneOtp, "code_invalid")}"));
+                    $"login?{Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form["attempt"].ToString() : null, phone, AuthHandlers.AuthKind.PhoneOtp, "code_invalid")}"));
             var asRole = (asRoleEarly ?? "").ToLowerInvariant();
             // كَتابَة cookie باسم يَتَضَمَّن الدَور — يَسمَح بِجَلَسات مُتَوازِيَة
             // (راكِب في تَبويب، سائِق في آخَر) في نَفس المُتَصَفِّح.
@@ -368,7 +368,7 @@ public static class MarketplaceTemplateExtensions
             var result = await AuthHandlers.VerifyEmailOtpHandler(new VerifyEmailOtp(email, code), tenant, store);
             if (result is null)
                 return Results.Redirect(Link(req, slug,
-                    $"login?{Services.LoginStageQuery.Retry(tenant.Slug, email, AuthHandlers.AuthKind.EmailOtp, "code_invalid")}"));
+                    $"login?{Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form["attempt"].ToString() : null, email, AuthHandlers.AuthKind.EmailOtp, "code_invalid")}"));
             var asRole = (asRoleEarly ?? "").ToLowerInvariant();
             AuthSession.WriteCookie(res, slug, result,
                 role: string.IsNullOrEmpty(asRole) ? null : asRole);
@@ -2680,7 +2680,7 @@ public static class MarketplaceTemplateExtensions
                 store, res, method, subject, code);
             if (user is null)
                 return Results.Redirect($"/studio/auth?method={field}&" + Services.LoginStageQuery.Retry(
-                    Services.Incubator.StudioAuth.Tenant, subject, Services.Incubator.StudioAuthDoor.Kind(method), "code"));
+                    Services.Incubator.StudioAuth.Tenant, req.Form["attempt"].ToString(), subject, Services.Incubator.StudioAuthDoor.Kind(method), "code"));
 
             // ‏(‏2026-10-25، تَدقيقُ الإطلاق W8-3 — lens-security-14؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ هُنا رَبطُ المَتاجِرِ اليَتيمَةِ بِأَقدَمِ
             // مُستَخدِمٍ عِندَ كُلِّ دُخول — فَأَوَّلُ مَن سَجَّلَ نَفسَه عَلى قاعِدَةٍ بِلا مُشرِفٍ مَلَكَ ashare وejar وorder عِندَ أَوَّلِ دُخولِه (مَقيس).

@@ -145,32 +145,67 @@ public class LoginRedirectSubjectTests(ITestOutputHelper output)
     // **المَوضوعِ المَكتوبِ في الاستِمارَة** — والكاتِبُ يَختارُه. فَمَن يُرسِلُ رَمزاً خاطِئاً لِجَوّالِ غَيرِه يَعرِفُ أَيَدخُلُ صاحِبُه الآن (تَحويلٌ
     // بِـ`stage=verify&attempt=…` مُقابِلَ `err=…` وَحدَه) ويَأخُذُ مُعَرِّفَ مُحاوَلَتِه في الرابِط؛ وكانَ التَحويلُ قَبلَ `f99f79a` واحِداً في الحالَين.
 
-    /// <summary>ما تُمَرِّرُه النِقاطُ الثَلاثُ إلى <c>Retry</c> — المَوضوعُ مِن الاستِمارَةِ لا المُحاوَلَةُ الَّتي فَتَحَت الصَفحَة.</summary>
-    private static readonly string[] RetryOnTypedSubject =
+    /// <summary>ما تُمَرِّرُه النِقاطُ الثَلاثُ إلى <c>Retry</c> — مُعَرِّفُ المُحاوَلَةِ مِن الاستِمارَةِ والمَوضوعُ المَكتوب، لا المَوضوعُ وَحدَه.
+    /// (‏2026-10-25 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: كانَ «المَوضوعُ مِن الاستِمارَةِ لا المُحاوَلَةُ الَّتي فَتَحَت الصَفحَة»، وحَرفُ النِداءاتِ
+    /// يَومَها في <c>2590bd2</c>.)</summary>
+    private static readonly string[] RetryOnPostedAttempt =
     {
-        "Services.LoginStageQuery.Retry(tenant.Slug, phone, AuthHandlers.AuthKind.PhoneOtp, \"code_invalid\")",
-        "Services.LoginStageQuery.Retry(tenant.Slug, email, AuthHandlers.AuthKind.EmailOtp, \"code_invalid\")",
-        "Services.LoginStageQuery.Retry(\n                    Services.Incubator.StudioAuth.Tenant, subject, Services.Incubator.StudioAuthDoor.Kind(method), \"code\")",
+        "Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form[\"attempt\"].ToString() : null, phone, AuthHandlers.AuthKind.PhoneOtp, \"code_invalid\")",
+        "Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form[\"attempt\"].ToString() : null, email, AuthHandlers.AuthKind.EmailOtp, \"code_invalid\")",
+        "Services.LoginStageQuery.Retry(\n                    Services.Incubator.StudioAuth.Tenant, req.Form[\"attempt\"].ToString(), subject, Services.Incubator.StudioAuthDoor.Kind(method), \"code\")",
     };
 
+    /// <summary>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-25؛ كانَ <c>Today_a_wrong_code_for_someone_elses_live_subject_tells_it_is_live_and_hands_out_its_attempt</c>، مُودَعٌ في
+    /// <c>2590bd2</c>): النِقاطُ الثَلاثُ تُعيدُ مَرحَلَةَ الرَمزِ بِالمُحاوَلَةِ الَّتي فَتَحَت الصَفحَةِ — حَقلُ <c>attempt</c> المَخفِيّ — لا بِالمَوضوعِ
+    /// المَكتوب. فَالغَريبُ بِجَوّالِ غَيرِه يُجابُ <c>err=code_invalid</c> وَحدَه دَخَلَ صاحِبُه أَم لَم يَدخُل، ولو حَمَلَ مُعَرِّفَ مُحاوَلَةٍ لِمَوضوعٍ آخَر؛
+    /// وصاحِبُ المُحاوَلَةِ تُعادُ لَه مَرحَلَتُه بِخَطَئِها كَما كانَت.</para>
+    /// </summary>
     [Fact]
-    public void Today_a_wrong_code_for_someone_elses_live_subject_tells_it_is_live_and_hands_out_its_attempt()
+    public void A_wrong_code_reshows_the_code_stage_only_to_the_attempt_that_opened_it()
     {
         var mte = StudioConsentCharacterizationTests.Endpoints().Replace("\r\n", "\n", StringComparison.Ordinal);
-        foreach (var call in RetryOnTypedSubject) Assert.Contains(call, mte, StringComparison.Ordinal);
+        foreach (var call in RetryOnPostedAttempt) Assert.Contains(call, mte, StringComparison.Ordinal);
+        Assert.DoesNotContain("Services.LoginStageQuery.Retry(tenant.Slug, phone,", mte, StringComparison.Ordinal);
+        Assert.DoesNotContain("Services.LoginStageQuery.Retry(tenant.Slug, email,", mte, StringComparison.Ordinal);
 
         const string tenant = "login-retry-oracle";
         var victim = $"05{Random.Shared.Next(10000000, 99999999)}";
         var idle   = $"05{Random.Shared.Next(10000000, 99999999)}";
+        var mine   = $"05{Random.Shared.Next(10000000, 99999999)}";
         var id = AuthHandlers.IssueAttempt(tenant, victim, "424242", AuthHandlers.AuthKind.PhoneOtp);
+        var other = AuthHandlers.IssueAttempt(tenant, mine, "515151", AuthHandlers.AuthKind.PhoneOtp);
 
-        // الغَريبُ يُرسِلُ رَمزاً خاطِئاً بِجَوّالِ غَيرِه — لا مُحاوَلَةَ مَعَه — فَتُعيدُه النُقطَةُ بِما تُعيدُه `Retry` عَلى ما كَتَبَه.
         Assert.False(AuthHandlers.ConsumeAttempt(tenant, victim, "000000", AuthHandlers.AuthKind.PhoneOtp));
-        var live = LoginStageQuery.Retry(tenant, victim, AuthHandlers.AuthKind.PhoneOtp, "code_invalid");
-        var none = LoginStageQuery.Retry(tenant, idle, AuthHandlers.AuthKind.PhoneOtp, "code_invalid");
+        var live    = LoginStageQuery.Retry(tenant, null, victim, AuthHandlers.AuthKind.PhoneOtp, "code_invalid");
+        var none    = LoginStageQuery.Retry(tenant, null, idle, AuthHandlers.AuthKind.PhoneOtp, "code_invalid");
+        var foreign = LoginStageQuery.Retry(tenant, other, victim, AuthHandlers.AuthKind.PhoneOtp, "code_invalid");
+        var owner   = LoginStageQuery.Retry(tenant, id, victim, AuthHandlers.AuthKind.PhoneOtp, "code_invalid");
 
-        Assert.Equal($"stage=verify&attempt={id}&err=code_invalid", live);
-        Assert.Equal("err=code_invalid", none);
-        output.WriteLine($"جَوّالٌ يَدخُلُ صاحِبُه الآن: «{live.Replace(id, "<مُعَرِّفُه>")}» · جَوّالٌ لا: «{none}» — الجَوابانِ يَختَلِفان والمُعَرِّفُ في الأَوَّل");
+        Assert.Equal("err=code_invalid", live);
+        Assert.Equal(none, live);
+        Assert.Equal(none, foreign);
+        Assert.Equal($"stage=verify&attempt={id}&err=code_invalid", owner);
+        output.WriteLine($"غَريبٌ بِجَوّالٍ يَدخُلُ صاحِبُه: «{live}» · بِجَوّالٍ لا: «{none}» · بِمُحاوَلَةِ غَيرِه: «{foreign}» · صاحِبُ المُحاوَلَة: «{owner.Replace(id, "<مُعَرِّفُه>")}»");
+    }
+
+    /// <summary>واستِمارَاتُ الرَمزِ الثَلاثُ تُرسِلُ المُحاوَلَةَ الَّتي فَتَحَتها (‏2026-10-25): <c>PhoneLoginForm</c> و<c>EmailLoginForm</c> بِمُعامِلِهِما
+    /// مِن <c>Login.razor</c>، وبابُ الاستوديو — كُلٌّ حينَ في الرابِطِ مُحاوَلَة؛ ولا حَقلَ بِلاها، فَلَقَطاتُ المَرحَلَةِ (بِرَقَمِ عَيِّنَةٍ بِلا مُحاوَلَة) كَما هي.</summary>
+    [Fact]
+    public void The_code_forms_post_the_attempt_that_opened_them()
+    {
+        static string Page(string name) => WriteEndpointGuardTests.StripMarkupComments(StudioConsentCharacterizationTests.Source(
+            "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", name));
+        foreach (var form in new[] { "PhoneLoginForm.razor", "EmailLoginForm.razor" })
+        {
+            var code = Page(form);
+            Assert.Contains("@if (!string.IsNullOrEmpty(AttemptId))", code, StringComparison.Ordinal);
+            Assert.Contains("<input type=\"hidden\" name=\"attempt\" value=\"@AttemptId\" />", code, StringComparison.Ordinal);
+            Assert.Contains("[Parameter] public string? AttemptId { get; set; }", code, StringComparison.Ordinal);
+        }
+        Assert.Equal(3, Regex.Matches(Page("Login.razor"), @"AttemptId=""@AttemptId""").Count);   // نَفاذٌ والجَوّالُ والبَريد
+        var studio = Page("StudioAuth.razor");
+        Assert.Contains("@if (!string.IsNullOrEmpty(Attempt))", studio, StringComparison.Ordinal);
+        Assert.Contains("<input type=\"hidden\" name=\"attempt\" value=\"@Attempt\" />", studio, StringComparison.Ordinal);
     }
 }

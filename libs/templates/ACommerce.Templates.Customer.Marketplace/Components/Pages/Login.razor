@@ -74,13 +74,13 @@ else
             else if (Tenant.AuthChannel == "email")
             {
                 <EmailLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
-                                Email="@SubjectFor(AuthKind.EmailOtp, EmailValue)" AsRole="@effectiveRole"
+                                Email="@SubjectFor(AuthKind.EmailOtp, EmailValue)" AsRole="@effectiveRole" AttemptId="@AttemptId"
                                 DevHint="@EmailDevHint" />
             }
             else
             {
                 <PhoneLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
-                                Phone="@SubjectFor(AuthKind.PhoneOtp, PhoneValue)" AsRole="@effectiveRole"
+                                Phone="@SubjectFor(AuthKind.PhoneOtp, PhoneValue)" AsRole="@effectiveRole" AttemptId="@AttemptId"
                                 DevHint="@PhoneDevHint" />
             }
 

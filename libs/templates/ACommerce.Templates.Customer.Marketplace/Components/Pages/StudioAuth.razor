@@ -77,6 +77,11 @@
                     <form method="post" action="/studio/auth/verify">
                         <input type="hidden" name="method" value="@StudioAuthDoor.Slug(active.Value)" />
                         <input type="hidden" name="@StudioAuthDoor.Slug(active.Value)" value="@subject" />
+                        @* ومُعَرِّفُ المُحاوَلَة — بِه تُعادُ مَرحَلَةُ الرَمزِ بَعدَ الخَطَإ، لا بِالمَوضوعِ المَكتوب (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2). *@
+                        @if (!string.IsNullOrEmpty(Attempt))
+                        {
+                            <input type="hidden" name="attempt" value="@Attempt" />
+                        }
                         <div class="st-field">
                             <input name="code" inputmode="numeric" maxlength="6" required
                                    class="st-input auth-otp-input" placeholder="······"
