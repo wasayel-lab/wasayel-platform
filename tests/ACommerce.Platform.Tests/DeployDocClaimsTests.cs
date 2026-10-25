@@ -251,4 +251,58 @@ public class DeployDocClaimsTests(ITestOutputHelper output)
         Assert.Equal(2, UndocumentedEnvironmentNames(names, "لا شَيء").Count);
         Assert.Equal(new[] { "WASAYEL_INJECTED_FLAG" }, UndocumentedEnvironmentNames(names, "| `ACOMMERCE_INJECTED_LIMIT` |"));
     }
+
+    // ─── brief-P3-8 / lens-docs-vs-code-8 — §٦ بِأَرقامٍ مُؤَرَّخَةٍ ووَسمَينِ مُثَبَّتَين، وجَدوَلُ «الاختِيارِيَّة» بِلا سِرٍّ إلزامِيّ ─────────────
+
+    /// <summary>وَسما <c>FROM</c> في الـ<c>Dockerfile</c> بِحَرفِهِما — <c>sdk:X</c> و<c>aspnet:Y</c>.</summary>
+    internal static string[] DockerfileTags()
+        => Regex.Matches(Read("Dockerfile"), @"^FROM mcr\.microsoft\.com/dotnet/(?<t>(?:sdk|aspnet):[0-9.]+)", RegexOptions.Multiline)
+            .Select(m => m.Groups["t"].Value).ToArray();
+
+    /// <summary>صُفوفُ جَدوَلِ §٢ الخُطوَة ٦ «مُتَغَيِّرات اختِيارِيَّة» — مِن عُنوانِها إلى أَوَّلِ سَطرٍ لَيسَ صَفّاً بَعدَ الجَدوَل.</summary>
+    internal static string[] OptionalTableRows(string deploy)
+    {
+        var section = Section(deploy, "### ٦) مُتَغَيِّرات اختِيارِيَّة في الـSpace", "### ");
+        var lines = section.Split('\n');
+        var start = Array.FindIndex(lines, l => l.StartsWith("| المُتَغَيِّر |", StringComparison.Ordinal));
+        Assert.True(start > 0, "جَدوَلُ «مُتَغَيِّرات اختِيارِيَّة» غائِب.");
+        return lines.Skip(start + 2).TakeWhile(l => l.StartsWith('|')).ToArray();
+    }
+
+    [Fact]
+    public void Section_six_dates_its_figures_and_names_the_pinned_tags_and_the_optional_table_holds_no_mandatory_secret()
+    {
+        var tags = DockerfileTags();
+        output.WriteLine($"وَسما الـDockerfile: {string.Join(" · ", tags)}");
+        Assert.Equal(2, tags.Length);
+        var deploy = Deploy();
+        var six = Section(deploy, "## ٦. حُدودُ ما تُحُقِّقَ مِنه", "## ");
+        var fix = six[six.IndexOf("brief-P3-8", StringComparison.Ordinal)..];
+        foreach (var t in tags) Assert.Contains($"`mcr.microsoft.com/dotnet/{t}`", fix, StringComparison.Ordinal);
+        var runBlocks = Regex.Matches(Read(".github", "workflows", "deploy-hf.yml"), @"^\s*run: \|\s*$", RegexOptions.Multiline).Count;
+        output.WriteLine($"كُتَلُ run: | في deploy-hf.yml: {runBlocks}");
+        Assert.True(runBlocks > 0, "أَداةٌ عَمياء: صِفرُ كُتلَة run.");
+        Assert.Contains(runBlocks switch { 7 => "سَبعٌ", _ => $"{runBlocks}" }, fix, StringComparison.Ordinal);
+        Assert.Contains("‏2026-08-22", fix, StringComparison.Ordinal);
+
+        var rows = OptionalTableRows(deploy);
+        output.WriteLine($"صُفوفُ «الاختِيارِيَّة»: {rows.Length}");
+        Assert.True(rows.Length >= 5, $"أَداةٌ عَمياء: {rows.Length} صَفّاً.");
+        Assert.DoesNotContain(rows, r => r.Contains("**إلزاميٌّ خارِجَ Development**", StringComparison.Ordinal));
+        Assert.DoesNotContain(rows, r => r.StartsWith("| `ACOMMERCE_AUTH_SECRET` |", StringComparison.Ordinal));
+        // ‏وصَفُّه في الخُطوَةِ ٤ قائِمٌ — الإحالَةُ لا تُشيرُ إلى فَراغ.
+        Assert.Contains("| `ACOMMERCE_AUTH_SECRET` | سِرُّ تَوقيعِ كوكي الجَلسَة", Section(deploy, "### ٤) سِرّا الإنتاجِ الإلزامِيّان", "### "), StringComparison.Ordinal);
+    }
+
+    /// <summary><b>حَقنُ عَيب</b>: جَدوَلٌ مَصنوعٌ بِالصَفِّ القَديمِ تَحتَ العُنوانِ نَفسِه — قارِئُ الصُفوفِ يَجِدُه بِعَلامَتِه، فَالصَفُّ أَعلاه لا يَمُرُّ أَعمى.</summary>
+    [Fact]
+    public void The_optional_table_reader_finds_the_old_mandatory_secret_row()
+    {
+        const string sample =
+            "### ٦) مُتَغَيِّرات اختِيارِيَّة في الـSpace\nمَقيسَة:\n\n| المُتَغَيِّر | الأَثَر | المَوضِع |\n|---|---|---|\n" +
+            "| `PLATFORM_ADMIN_PHONE` | يَمنَح | x |\n| `ACOMMERCE_AUTH_SECRET` | **إلزاميٌّ خارِجَ Development** — سِرّ | y |\n\nبَعدَه\n### ٧) تالٍ\n";
+        var rows = OptionalTableRows(sample);
+        Assert.Equal(2, rows.Length);
+        Assert.Contains(rows, r => r.Contains("**إلزاميٌّ خارِجَ Development**", StringComparison.Ordinal));
+    }
 }
