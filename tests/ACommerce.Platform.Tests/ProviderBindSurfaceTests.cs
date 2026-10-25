@@ -249,7 +249,8 @@ public class ProviderBindSurfaceTests(Xunit.Abstractions.ITestOutputHelper outpu
 
         Assert.Equal(new[] { "moyasar_hosted", "moyasar_api" }, catalog);
         Assert.Equal(new[] { "moyasar_hosted" }, offered);
-        Assert.Equal(new[] { ProviderCapabilities.Payments }, ProviderBindSurface.OfferedCapabilities().ToArray());
+        // ‏(‏2026-10-25، lens-identity-rules-1؛ ولا يُعادُ حَرفٌ فَوقَه: كانَ `OfferedCapabilities()` وحُذِف — والقِسمُ بِلا رَبطٍ هُوَ جَوابُه بِالبِناء.)
+        Assert.Equal(new[] { ProviderCapabilities.Payments }, ProviderBindSurface.SectionCapabilities(null, _ => false).ToArray());
 
         // والمُسنَدُ واحِد: ما لا يُرسَمُ هُوَ بِعَينِه ما تَرُدُّه النُقطَةُ بِرَمزِ الخِزانَة.
         var compared = 0;
@@ -426,8 +427,9 @@ public class ProviderBindSurfaceTests(Xunit.Abstractions.ITestOutputHelper outpu
         Assert.Equal(new[] { "moyasar_hosted" }, Slugs(null));
 
         // والقُدرَةُ تُرسَمُ في الحالَين — الرابِطُ مَعروضٌ دائِماً.
+        // ‏(‏2026-10-25، lens-identity-rules-1؛ ولا يُعادُ حَرفٌ فَوقَه: كانَ `OfferedCapabilities(vault)` وحُذِف.)
         Assert.Equal(new[] { ProviderCapabilities.Payments },
-            ProviderBindSurface.OfferedCapabilities(ProviderVault.FromKek(null)).ToArray());
+            ProviderBindSurface.SectionCapabilities(ProviderVault.FromKek(null), _ => false).ToArray());
     }
 
     [Fact]
