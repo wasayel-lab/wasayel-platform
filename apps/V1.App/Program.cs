@@ -319,6 +319,7 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     await PlatformSeed.RunAsync(scope.ServiceProvider);
     // اِربِط المَتاجِر القَديمَة بِأَوَّل مُستَخدِم studio (إن وُجِد).
+    // ‏(‏2026-10-25، W8-3 — lens-security-14) بِأَقدَمِ مُشرِفِ مَنَصَّةٍ — لا أَيِّ مُستَخدِم — وهُنا وَحدَه لا عِندَ كُلِّ دُخول.
     var docStore = scope.ServiceProvider.GetRequiredService<Marten.IDocumentStore>();
     await ACommerce.Templates.Customer.Marketplace.Services.Incubator
         .StudioOwnershipSeeder.RunAsync(docStore);

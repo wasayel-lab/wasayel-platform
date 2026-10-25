@@ -82,6 +82,7 @@ public static class PlatformSeed
         // مَتجَر «أوردر» — عُروض المَقاهي (نَمَط marketplace: سَلَّة → دَفع →
         // تَجهيز → تَوصيل). يُملَك تِلقائيّاً لِأَوَّل مُستَخدِم studio عَبر
         // StudioOwnershipSeeder كَبَقِيَّة المَتاجِر.
+        // ‏(‏2026-10-25، W8-3 — lens-security-14؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) لِأَقدَمِ مُشرِفِ مَنَصَّةٍ عِندَ الإقلاع — لا لِأَوَّلِ مُستَخدِم.
         await SeedTenantIfMissingAsync(globalSession, store,
             slug: "order",
             name: "أوردر",

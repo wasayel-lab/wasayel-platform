@@ -773,8 +773,25 @@ public sealed class AgentToolExecutor
     /// <c>tenant.OwnerUserId == ownerUserId</c>؛ وَ <c>create_tenant</c>
     /// يَكتُب OwnerUserId مُباشَرَةً عَلى الـ tenant الجَديد. هذا يَمنَع
     /// رائِد أَعمال مِن تَعديل تَطبيق رائِد أَعمال آخَر عَبر الوَكيل.</summary>
-    public async Task<(bool Ok, string Message)> ExecuteAsync(
+    public Task<(bool Ok, string Message)> ExecuteAsync(
         string toolName, string inputJson, Guid? ownerUserId, CancellationToken ct = default)
+        => ExecuteCoreAsync(toolName, inputJson, ownerUserId, createdBy: null, ct);
+
+    /// <summary>
+    /// <para><b>بابُ وَكيلِ الإدارَة — سُلطَةُ مُشرِفِ المَنَصَّةِ ومَعَها اسمُه</b> (‏2026-10-25، تَدقيقُ الإطلاق — تَيّارُ W8-3،
+    /// <c>lens-security-14</c>). كَـ<c>ownerUserId = null</c> حَرفاً: لا فَحصَ مِلكِيَّةٍ ولا حِصَّة؛ <b>إلّا</b> أَنّ <c>create_tenant</c> يَكتُبُ
+    /// المُشرِفَ مالِكاً لِلمَتجَرِ الَّذي يَلِدُه — قَرارُ <c>/admin/tenants/create</c> بِحَرفِه («المُنشِئ هُوَ المالِك»).</para>
+    ///
+    /// <para><b>العِلَّةُ المَقيسَة</b> (‏<c>OrphanStoreOwnershipTests</c>، تَوصيفُه <c>44b77d3</c>): بابا الوَكيلِ (<c>AgentChatPanel</c>
+    /// و<c>/admin/agent/tool/{id}/apply</c>) كانا يُنادِيانِ المُنَفِّذَ بِلا أَحَد، فَيولَدُ المَتجَرُ <c>Guid.Empty</c> ويَتَبَنّاه
+    /// <c>StudioOwnershipSeeder</c> لِأَقدَمِ مُستَخدِمِ استوديو — أَيّاً كانَ.</para>
+    /// </summary>
+    public Task<(bool Ok, string Message)> ExecuteAsPlatformAdminAsync(
+        string toolName, string inputJson, Guid adminUserId, CancellationToken ct = default)
+        => ExecuteCoreAsync(toolName, inputJson, ownerUserId: null, createdBy: adminUserId, ct);
+
+    private async Task<(bool Ok, string Message)> ExecuteCoreAsync(
+        string toolName, string inputJson, Guid? ownerUserId, Guid? createdBy, CancellationToken ct)
     {
         // لَقطَة أَدوار المَتجَر المَقصود قَبل المُصادَقَة — لِأَنّ
         // مُخَطَّط set_roles نَفسُه يَتَّسِع بِأَدوار المُستَأجِر
@@ -813,7 +830,7 @@ public sealed class AgentToolExecutor
 
             return toolName switch
             {
-                "create_tenant"  => await CreateTenantAsync(root, ownerUserId, ct),
+                "create_tenant"  => await CreateTenantAsync(root, ownerUserId, createdBy, ct),
                 "set_categories" => await SetCategoriesAsync(root, ct),
                 "set_branding"   => await SetBrandingAsync(root, ct),
                 "set_regions"    => await SetRegionsAsync(root, ct),
@@ -833,7 +850,7 @@ public sealed class AgentToolExecutor
     /// <summary>مِفتاحُ رَدِّ <c>create_tenant</c> عِندَ حَدِّ المَتاجِر — «{0} مِن {1}» = <c>Used</c> و<c>Limit</c> مِن <c>CheckBuildAsync</c>.</summary>
     public const string StoreLimitRefusalKey = "studio.agent.err_store_limit";
 
-    private async Task<(bool, string)> CreateTenantAsync(JsonElement root, Guid? ownerUserId, CancellationToken ct)
+    private async Task<(bool, string)> CreateTenantAsync(JsonElement root, Guid? ownerUserId, Guid? createdBy, CancellationToken ct)
     {
         var slug    = Str(root, "slug").ToLowerInvariant();
         var name    = Str(root, "name");
@@ -890,7 +907,9 @@ public sealed class AgentToolExecutor
             // عِندَ إنشاء عَبر وَكيل ستوديو، اِكتُب المالِك مُباشَرَةً —
             // وإلّا أَيّ رائِد أَعمال يَستَطيع لاحِقاً «تَبَنّي» مَتجَر بِلا مالِك.
             // Guid.Empty = بِلا مالِك (سُلوك ادمن المَنصَّة الافتراضيّ).
-            OwnerUserId = ownerUserId ?? Guid.Empty,
+            // ‏(‏2026-10-25، W8-3 — lens-security-14؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ومُشرِفُ المَنَصَّةِ بِاسمِه (`ExecuteAsPlatformAdminAsync`)
+            // مالِكُ ما يَلِدُه — كَـ`/admin/tenants/create`؛ و`Guid.Empty` لِمُنادٍ لا يُسَمّي أَحَداً وَحدَه.
+            OwnerUserId = ownerUserId ?? createdBy ?? Guid.Empty,
             CreatedAt = DateTime.UtcNow
         });
         await s.SaveChangesAsync(ct);

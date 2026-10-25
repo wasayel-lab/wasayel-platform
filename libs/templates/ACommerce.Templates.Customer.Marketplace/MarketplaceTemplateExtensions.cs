@@ -2547,14 +2547,16 @@ public static class MarketplaceTemplateExtensions
                    ACommerce.Templates.Customer.Marketplace.Services.AgentService agent,
                    ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor exec) =>
         {
-            if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
+            var admin = await Services.PlatformAdminGuard.EvaluateAsync(store, auth);
+            if (!admin.Allowed)
                 return Forbidden();
             var session = await agent.LoadSessionAsync();
             var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
             if (turn?.Tool is null)
                 return Results.Redirect("/admin/agent?err=tool_missing#latest");
 
-            var (ok, msg) = await exec.ExecuteAsync(turn.Tool.Name, turn.Tool.InputJson);
+            // ‏(‏2026-10-25، W8-3 — lens-security-14) بِاسمِ المُشرِف: ما يَلِدُه create_tenant مِلكُه — كَـ`/admin/tenants/create`.
+            var (ok, msg) = await exec.ExecuteAsPlatformAdminAsync(turn.Tool.Name, turn.Tool.InputJson, admin.User!.Id);
             await agent.UpdateToolStatusAsync(toolId, ok ? "applied" : "error", msg);
             await agent.ContinueAfterToolAsync();
             return Results.Redirect("/admin/agent#latest");
@@ -2680,8 +2682,9 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect($"/studio/auth?method={field}&" + Services.LoginStageQuery.Retry(
                     Services.Incubator.StudioAuth.Tenant, subject, Services.Incubator.StudioAuthDoor.Kind(method), "code"));
 
-            // اِربِط المَتاجِر اليَتيمَة بِأَوَّل مُستَخدِم (لَو هذا أَوَّل تَسجيل).
-            await Services.Incubator.StudioOwnershipSeeder.RunAsync(store);
+            // ‏(‏2026-10-25، تَدقيقُ الإطلاق W8-3 — lens-security-14؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ هُنا رَبطُ المَتاجِرِ اليَتيمَةِ بِأَقدَمِ
+            // مُستَخدِمٍ عِندَ كُلِّ دُخول — فَأَوَّلُ مَن سَجَّلَ نَفسَه عَلى قاعِدَةٍ بِلا مُشرِفٍ مَلَكَ ashare وejar وorder عِندَ أَوَّلِ دُخولِه (مَقيس).
+            // صارَ البَذّارُ عِندَ الإقلاعِ وَحدَه، ولِمُشرِفِ المَنَصَّةِ وَحدَه (`StudioOwnershipSeeder`).
 
             // مُطالَبَة مُعَلَّقَة؟ أَنشِئ جَلسَة وشَغِّل التَّحليل في الخَلفِيَّة.
             // الجِسمُ في `ResumeStudioPromptAsync` — ويُنادى مِن نُقطَةِ

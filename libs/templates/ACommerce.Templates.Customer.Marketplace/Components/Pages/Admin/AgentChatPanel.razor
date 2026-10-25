@@ -147,6 +147,9 @@
 </div>
 
 @code {
+    /// <summary>مُشرِفُ المَنَصَّةِ الَّذي فَتَحَ الصَفحَة — يُمَرِّرُه المُضيفُ الثابِت (<c>AgentChat.razor</c>) بَعدَ <c>RequirePlatformAdmin</c>.</summary>
+    [Parameter] public Guid? AdminUserId { get; set; }
+
     ACommerce.Templates.Customer.Marketplace.Services.AgentSession session = new();
     string newMessage = "";
     bool isWorking;
@@ -196,7 +199,8 @@
         var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
         if (turn?.Tool is not null)
         {
-            var (ok, msg) = await Executor.ExecuteAsync(turn.Tool.Name, turn.Tool.InputJson);
+            // ‏(‏2026-10-25، W8-3 — lens-security-14) بِاسمِ المُشرِفِ الَّذي حَمَلَه المُضيف: ما يَلِدُه create_tenant مِلكُه.
+            var (ok, msg) = await Executor.ExecuteAsPlatformAdminAsync(turn.Tool.Name, turn.Tool.InputJson, AdminUserId ?? Guid.Empty);
             await Agent.UpdateToolStatusAsync(toolId, ok ? "applied" : "error", msg);
             session = await Agent.ContinueAfterToolAsync();
         }

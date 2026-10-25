@@ -1,5 +1,6 @@
 @page "/admin/agent"
 @using Microsoft.AspNetCore.Components.Web
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth StudioAuth
 
 @*
     مُضيف صَفحَة الوَكيل الإداريّ — تَصيير ثابِت (SSR) عَمداً، بِلا
@@ -14,8 +15,22 @@
 
     الآن: RequirePlatformAdmin يَحكُم هُنا حَيثُ الـ cookie مَقروء،
     وَالجَزيرَة التَّفاعُلِيَّة لا تُبَثّ إلّا بَعدَ القَبول.
+
+    ‏2026-10-25 (تَدقيقُ الإطلاق، W8-3 — lens-security-14؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): وتَحمِلُ الجَزيرَةُ مُعَرِّفَ المُشرِفِ مِن هُنا — حَيثُ
+    الـ cookie مَقروء — فَيولَدُ ما يُنشِئُه create_tenant مِلكَه لا يَتيماً يَتَبَنّاه أَقدَمُ مُستَخدِم. والوَسيطُ في واصِفِ المُكَوِّنِ المَحمِيِّ بِـData
+    Protection، فَلا يُبَدِّلُه عَميل.
 *@
 
 <RequirePlatformAdmin>
-    <AgentChatPanel @rendermode="RenderMode.InteractiveServer" />
+    <AgentChatPanel @rendermode="RenderMode.InteractiveServer" AdminUserId="@_adminUserId" />
 </RequirePlatformAdmin>
+
+@code {
+    Guid? _adminUserId;
+
+    protected override void OnInitialized()
+    {
+        StudioAuth.Load();
+        _adminUserId = StudioAuth.IsAuthenticated ? StudioAuth.UserId : null;
+    }
+}
