@@ -79,17 +79,93 @@ public class OrphanStoreOwnershipTests(ITestOutputHelper output)
         Assert.True(guardAt > 0 && execAt > guardAt, "نُقطَةُ apply لا تُنادي بِاسمِ المُشرِفِ بَعدَ حارِسِها.");
         Assert.Contains("OwnerUserId = ownerUserId ?? createdBy ?? Guid.Empty,", create, StringComparison.Ordinal);
 
-        var anonymous = new List<string>();
-        var named = 0;
-        foreach (var (file, text) in EntitlementContractTests.SourceFiles())
-        {
-            var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(text));
-            anonymous.AddRange(Regex.Matches(code, @"\.ExecuteAsync\(turn\.Tool\.Name, turn\.Tool\.InputJson\)").Select(_ => Path.GetFileName(file)));
-            named += Regex.Matches(code, @"\.ExecuteAs(?:PlatformAdmin)?Async\(turn\.Tool\.Name|\.ExecuteAsync\(turn\.Tool\.Name, turn\.Tool\.InputJson, _userId\)").Count;
-        }
+        // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-3 الجَولَة ١، تَيّارُ W8-10): الماسِحُ صارَ ExecutorCallsIn — دالَّةً تُحقَنُ بِعَيِّناتٍ
+        // (The_executor_call_scanner_tells_a_named_call_from_an_anonymous_one_in_every_spelling)؛ وكانَ يَقبَلُ تَهجِئَةً واحِدَةً حَرفاً
+        // (turn.Tool.Name, turn.Tool.InputJson) فَنِداءٌ بِلا أَحَدٍ بِأَسماءِ مُتَغَيِّراتٍ أُخرى أَو بِـnull صَريحٍ يَمُرُّ بِلا عَدّ.
+        var (anonymous, named) = ExecutorCallsIn(EntitlementContractTests.SourceFiles());
         output.WriteLine($"نِداءاتُ أَداةِ الجَلسَةِ بِاسمِ أَحَد: {named} · بِلا أَحَد: {anonymous.Count} ({string.Join(", ", anonymous)})");
         Assert.True(named >= 3, $"أَداةٌ عَمياء: {named} نِداءً — والمَقيسُ 3 (لَوحَةُ الإدارَة، ونُقطَةُ apply، وصَفحَةُ الاستوديو).");
         Assert.Empty(anonymous);
+    }
+
+    /// <summary>نِداءاتُ مُنَفِّذِ أَدَواتِ الوَكيل (<c>ExecuteAsync</c> و<c>ExecuteAsPlatformAdminAsync</c>) عَلى مُستَقبِلٍ في اسمِه «exec»
+    /// (<c>Executor</c>، <c>exec</c>، <c>_executor</c>…) — فَلا يَعُدُّ <c>pipeline.ExecuteAsync</c> ولا <c>Results.…ExecuteAsync(ctx)</c>.
+    /// والوُسَطاءُ تُقسَمُ بِالفَواصِلِ العُليا (الأَقواسُ والنُصوصُ مُتَوازِنَة)، فَالنِداءُ <b>بِلا أَحَد</b>: وَسيطانِ، أَو ثالِثٌ مِن
+    /// <c>null</c> · <c>null!</c> · <c>default</c> · <c>default(…)</c> · <c>Guid.Empty</c> (بِاسمِه <c>ownerUserId:</c>/<c>adminUserId:</c> أَو بِلا)، أَو ثالِثٌ
+    /// هُوَ رَمزُ إلغاءٍ (<c>ct</c>، <c>cancellationToken</c>، <c>token</c>، <c>CancellationToken.None</c>، <c>….RequestAborted</c>، <c>ct:</c>) — فَهذا
+    /// حِملُ <c>ExecuteAsync(name, json, ct)</c> بِلا مالِك. وما سِواه <b>بِاسمِ أَحَد</b>. <b>وما لا يَراه — يُقال</b>: مُستَقبِلٌ بِلا «exec» في اسمِه
+    /// (<c>GetRequiredService&lt;AgentToolExecutor&gt;().ExecuteAsync(…)</c>)، ومُتَغَيِّرٌ اسمُه يُشبِهُ المالِكَ وقيمَتُه <c>null</c>.</summary>
+    internal static (List<string> Anonymous, int Named) ExecutorCallsIn(IEnumerable<(string File, string Text)> sources)
+    {
+        var anonymous = new List<string>();
+        var named = 0;
+        foreach (var (file, text) in sources)
+        {
+            var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(text));
+            foreach (Match m in Regex.Matches(code, @"(?<recv>[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*(?<verb>ExecuteAsPlatformAdminAsync|ExecuteAsync)\s*\("))
+            {
+                if (m.Groups["recv"].Value.IndexOf("exec", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                var args = TopLevelArguments(code, m.Index + m.Length);
+                var third = args.Count >= 3 ? Regex.Replace(args[2], @"^\s*(?:ownerUserId|adminUserId)\s*:\s*", "").Trim() : null;
+                var nobody = third is null
+                    || Regex.IsMatch(third, @"^(?:null!?|default(?:\s*\([^)]*\))?|Guid\.Empty)$")
+                    || Regex.IsMatch(third, @"^(?:ct|cancellationToken|token|CancellationToken\.None|[\w.]*\.RequestAborted|ct\s*:.*)$");
+                if (nobody) anonymous.Add(Path.GetFileName(file)); else named++;
+            }
+        }
+        return (anonymous, named);
+    }
+
+    /// <summary>وُسَطاءُ النِداءِ مِن بَعدِ قَوسِه الفاتِحِ حَتّى قَوسِه الغالِق: فَواصِلُ العُمقِ الأَعلى وَحدَها، والنَصُّ بَينَ علامَتَي تَنصيصٍ لا يُقسَم.</summary>
+    private static List<string> TopLevelArguments(string code, int start)
+    {
+        var args = new List<string>();
+        var depth = 0;
+        var from = start;
+        for (var i = start; i < code.Length; i++)
+        {
+            var c = code[i];
+            if (c == '"')
+            {
+                for (i++; i < code.Length && code[i] != '"'; i++) if (code[i] == '\\') i++;
+                continue;
+            }
+            if (c is '(' or '[' or '{') depth++;
+            else if (c is ')' or ']' or '}')
+            {
+                if (depth == 0) { args.Add(code[from..i]); break; }
+                depth--;
+            }
+            else if (c == ',' && depth == 0) { args.Add(code[from..i]); from = i + 1; }
+        }
+        return args.Where(a => a.Trim().Length > 0).ToList();
+    }
+
+    /// <summary>القاعِدَة ١٠ — الماسِحُ يُحمِرُّ بِعَيِّنَةٍ مَحقونَة: نِداءٌ بِلا أَحَدٍ يُعَدُّ في كُلِّ تَهجِئَة، ونِداءٌ بِاسمِ أَحَدٍ لا يُحسَبُ عَلَيه، وما لَيسَ مُنَفِّذاً لا يُعَدّ.</summary>
+    [Theory]
+    [InlineData("var r = await Executor.ExecuteAsync(turn.Tool.Name, turn.Tool.InputJson);", 1, 0)]
+    [InlineData("var r = await exec.ExecuteAsync(t.Name, t.Json);", 1, 0)]
+    [InlineData("var r = await _executor.ExecuteAsync(name, json, null);", 1, 0)]
+    [InlineData("var r = await Executor.ExecuteAsync(name, json, ownerUserId: null);", 1, 0)]
+    [InlineData("var r = await Executor.ExecuteAsync(name, json, default);", 1, 0)]
+    [InlineData("var r = await Executor.ExecuteAsync(name, json, Guid.Empty);", 1, 0)]
+    [InlineData("var r = await Executor.ExecuteAsync(name, json, ct);", 1, 0)]
+    [InlineData("var r = await Executor.ExecuteAsync(name, json, ctx.RequestAborted);", 1, 0)]
+    [InlineData("var r = await Executor\n    .ExecuteAsync(\n        name,\n        json);", 1, 0)]
+    [InlineData("var r = await Executor.ExecuteAsync(Pick(a, b), Json(c, \"x,y\"));", 1, 0)]
+    [InlineData("var r = await exec.ExecuteAsPlatformAdminAsync(name, json, Guid.Empty);", 1, 0)]
+    [InlineData("var r = await Executor.ExecuteAsync(name, json, _userId);", 0, 1)]
+    [InlineData("var r = await exec.ExecuteAsPlatformAdminAsync(name, json, admin.User!.Id);", 0, 1)]
+    [InlineData("var r = await Executor.ExecuteAsPlatformAdminAsync(name, json, AdminUserId ?? Guid.Empty);", 0, 1)]
+    [InlineData("// var r = await Executor.ExecuteAsync(name, json);", 0, 0)]
+    [InlineData("await pipeline.ExecuteAsync(cmd, () => handler.HandleAsync(cmd));", 0, 0)]
+    [InlineData("await Results.Json(new { ready = true }).ExecuteAsync(ctx);", 0, 0)]
+    public void The_executor_call_scanner_tells_a_named_call_from_an_anonymous_one_in_every_spelling(string sample, int anonymous, int named)
+    {
+        var (a, n) = ExecutorCallsIn(new[] { ("x/Injected.cs", sample) });
+        output.WriteLine($"مَحقونَة: بِلا أَحَد {a.Count} (المُتَوَقَّع {anonymous}) · بِاسمِ أَحَد {n} (المُتَوَقَّع {named})");
+        Assert.Equal(anonymous, a.Count);
+        Assert.Equal(named, n);
     }
 
     /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الإصلاح)</b> — كانَ <c>Today_every_studio_login_hands_every_ownerless_store_to_the_oldest_studio_user</c>

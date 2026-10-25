@@ -91,17 +91,48 @@ public class RolesLegacyModeMeasureTests(ITestOutputHelper output)
         Assert.Contains("هَواتِفِ", text, StringComparison.Ordinal);
     }
 
-    /// <summary>ولا ثالِثَةَ: كُلُّ استِمارَةٍ في المَصادِرِ تُرسِلُ إلى <c>…/roles/save</c> واحِدَةٌ مِن الاثنَتَين (القاعِدَة ١٠: يَعُدُّ ويَفشَلُ عَلى الصِفر).</summary>
+    /// <summary>ولا ثالِثَةَ: كُلُّ استِمارَةٍ في المَصادِرِ تُرسِلُ إلى <c>…/roles/save</c> واحِدَةٌ مِن الاثنَتَين (القاعِدَة ١٠: يَعُدُّ ويَفشَلُ عَلى الصِفر).
+    /// <para><b>‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-3 الجَولَة ١، تَيّارُ W8-10)</b>: الماسِحُ صارَ <see cref="RolesSaveFormsIn"/> — دالَّةً تُحقَنُ
+    /// بِعَيِّناتٍ في <see cref="The_roles_save_form_scanner_counts_every_spelling_of_the_action"/>؛ وكانَ يَقبَلُ تَهجِئَةً واحِدَةً
+    /// (<c>action="@($"…/roles/save")"</c>) فَاستِمارَةٌ ثالِثَةٌ بِمَسارٍ حَرفِيٍّ تَمُرُّ بِلا عَدّ.</para></summary>
     [Fact]
     public void Exactly_two_forms_post_to_a_roles_save_door()
     {
-        var found = EntitlementContractTests.SourceFiles()
-            .Where(f => f.File.EndsWith(".razor", StringComparison.OrdinalIgnoreCase))
-            .SelectMany(f => Regex.Matches(WriteEndpointGuardTests.StripMarkupComments(f.Text), @"action=""@\(\$""(?<a>[^""]*/roles/save)""\)""")
-                .Select(m => (File: Path.GetFileName(f.File), Action: m.Groups["a"].Value)))
-            .ToList();
+        var found = RolesSaveFormsIn(EntitlementContractTests.SourceFiles()
+            .Where(f => f.File.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)));
         output.WriteLine($"استِمارَاتُ roles/save: {found.Count} — {string.Join(" · ", found.Select(f => $"{f.File}: {f.Action}"))}");
         Assert.Equal(2, found.Count);
+    }
+
+    /// <summary>كُلُّ <c>action</c> أَو <c>formaction</c> يُرسِلُ إلى <c>…/roles/save</c> — بِمَسارٍ حَرفِيٍّ بِعَلامَتَي تَنصيصٍ مُزدَوِجَتَين أَو
+    /// مُفرَدَتَين، أَو بِـ<c>@($"…")</c>، وبِمَسافاتٍ حَولَ <c>=</c> أَو بِلا. ولا يَعُدُّ ما في تَعليقِ <c>@* … *@</c>، ولا بابَ <c>roles/saved</c>
+    /// أَو <c>roles/delete</c>. <b>وما لا يَراه — يُقال</b>: مَسارٌ في مُتَغَيِّرٍ (<c>action="@SaveUrl"</c>) — قيمَةُ الوَسمِ لا تَحمِلُ المَسار.</summary>
+    internal static List<(string File, string Action)> RolesSaveFormsIn(IEnumerable<(string File, string Text)> sources) =>
+        sources.SelectMany(f => Regex.Matches(WriteEndpointGuardTests.StripMarkupComments(f.Text),
+                    @"(?<![\w-])(?:form)?action\s*=\s*(?:""(?<a>@\(\$?""[^""]*""\))""|""(?<a>[^""]*)""|'(?<a>[^']*)')")
+                .Where(m => Regex.IsMatch(m.Groups["a"].Value, @"/roles/save(?![\w-])"))
+                .Select(m => (File: Path.GetFileName(f.File), Action: m.Groups["a"].Value)))
+            .ToList();
+
+    /// <summary>القاعِدَة ١٠ — الماسِحُ يُحمِرُّ بِعَيِّنَةٍ مَحقونَة: كُلُّ تَهجِئَةٍ تُعَدُّ، وما لَيسَ استِمارَةَ حِفظٍ لا يُعَدّ.</summary>
+    [Theory]
+    [InlineData("<form method=\"post\" action=\"@($\"/studio/apps/{Slug}/roles/save\")\">", 1)]
+    [InlineData("<form method=\"post\" action=\"/admin/tenants/x/roles/save\">", 1)]
+    [InlineData("<form method='post' action='/admin/tenants/x/roles/save'>", 1)]
+    [InlineData("<form method=\"post\" action = \"/admin/tenants/x/roles/save?back=1\">", 1)]
+    [InlineData("<form method=\"post\" action=\"@(\"/x/roles/save\")\">", 1)]
+    [InlineData("<button type=\"submit\" formaction=\"/x/roles/save\">", 1)]
+    [InlineData("<form action=\"/a/roles/save\"></form><form action=\"@($\"/b/{Id}/roles/save\")\"></form>", 2)]
+    [InlineData("@* <form method=\"post\" action=\"/x/roles/save\"> *@", 0)]
+    [InlineData("<form method=\"post\" action=\"/x/roles/saved\">", 0)]
+    [InlineData("<form method=\"post\" action=\"/x/roles/delete\">", 0)]
+    [InlineData("<form method=\"post\" data-action=\"/x/roles/save\">", 0)]
+    [InlineData("<form method=\"post\" action=\"@SaveUrl\">", 0)]
+    public void The_roles_save_form_scanner_counts_every_spelling_of_the_action(string sample, int expected)
+    {
+        var found = RolesSaveFormsIn(new[] { ("x/Injected.razor", sample) });
+        output.WriteLine($"مَحقونَة: {found.Count} (المُتَوَقَّع {expected}) — {string.Join(" · ", found.Select(f => f.Action))}");
+        Assert.Equal(expected, found.Count);
     }
 
     // ─── سكربتُ القياس ─────────────────────────────────────────────────────────────────────────
