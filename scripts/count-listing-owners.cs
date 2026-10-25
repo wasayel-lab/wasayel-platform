@@ -31,6 +31,14 @@
 //  قَرَأَه هذا المِلَفّ — فَإن اختَلَفا لِمَتجَرٍ واحِدٍ خَرَجَ بِـ1: أَداةٌ لا تُطابِقُ
 //  عَدّادَ الواجِهَةِ لا يوثَقُ بِعَدِّها لِلمالِكين (القاعِدَة ١٠).
 //
+//  **‏2026-10-25 — والوَضعُ المَوروثُ يُجمَعُ (تَدقيقُ الإطلاق، تَيّارُ W8-3 — brief-P0-7؛ ‏ADR-032 §٦‑د؛ يُلحَقُ ولا
+//  يُعادُ حَرفٌ فَوقَ ما سَبَق)**: مَتجَرٌ بِلا أَدوارٍ يُعطي كُلَّ مُسَجَّلٍ كُلَّ صَلاحِيَّة — ومِنها `tenant.manage` الَّتي تَفتَحُ صَفحَةَ
+//  مُستَخدِميه بِهَواتِفِهِم — و§٦‑د يَقولُ «يُقاسُ أَوَّلاً كَم مُستَأجِراً بَلَغَ ذلك». فَيُسأَلُ لِكُلِّ مَتجَرٍ **دالَّةُ الصَلاحِيَّةِ نَفسُها**
+//  (‏`RolePermissions.Has(t.Roles, activeRole: null, "tenant.manage")` — لا `Roles.Count == 0` مَنسوخاً: يَومَ يُقلَبُ `RoleCatalog.cs:133`
+//  يَعُدُّ هذا السَطرُ صِفراً بِلا تَعديل)، ويُعَدُّ مُستَخدِموه القائِمونَ (عَدَداً لا أَسماء) — فَكُلُّهُم يَحمِلُها؛ وفي الخُلاصَةِ سَطرٌ يَجمَعُه:
+//  مِنها مِن الاستوديو، وبِمالِكِ استوديو، ومُستَخدِموها. **ولا يَعرِفُ كَيفَ بَلَغَها**: بَذرٌ (`PlatformSeed` يَلِدُ بِلا أَدوار) أَم حِفظٌ مِن
+//  `roles/save` — قيدُ التَدقيقِ `tenant.roles_save` يَحمِلُ الجَوابَ ولا يُقرَأُ هُنا (الأَمرُ في «ج» W8-3 · ٢ مِن سِجِلِّ المالِك).
+//
 // ─── ما لا يَفعَلُه — وذلك مَقصودٌ ومُعلَن ──────────────────────────────
 //   ١. **لا يَكتُبُ حَرفاً**، بِالبِنيَةِ لا بِالانضِباط: لا يَفتَحُ إلّا
 //      `IQuerySession` — نَوعٌ لا يَملِكُ `Store` ولا `SaveChanges` — و`AutoCreate.None`
@@ -179,6 +187,8 @@ var mismatches = new List<string>();
 int totalListings = 0, singleOwner = 0, singleOwnerIsStoreOwner = 0, multiOwner = 0, zeroOwner = 0;
 int studioBorn = 0, studioRentalNoCart = 0, studioRentalNoCartAnalysisMarketplace = 0;
 var studioRentalNoCartSlugs = new List<string>();
+int legacy = 0, legacyStudio = 0, legacyOwned = 0, legacyMembers = 0;
+var legacySlugs = new List<string>();
 
 // ‏(‏2026-10-24) وكُلُّ خَطَأِ قاعِدَةٍ داخِلَ الحَلقَةِ يُصَنَّفُ ويَخرُجُ بِـ1 كَما يَعِدُ الرَأس — لا 134 بِتَتَبُّعِ مُكَدَّس.
 try
@@ -283,6 +293,19 @@ try
             }
         }
 
+        // ─── الوَضعُ المَوروث — بِدالَّةِ الصَلاحِيَّةِ نَفسِها، ومُستَخدِموه عَدَداً (‏2026-10-25، ‏ADR-032 §٦‑د) ──────────
+        var legacyMode = RolePermissions.Has(t.Roles, activeRole: null, "tenant.manage");
+        int members = 0;
+        if (legacyMode)
+        {
+            legacy++;
+            legacySlugs.Add(t.Id);
+            if (studio) legacyStudio++;
+            if (t.OwnerUserId != Guid.Empty) legacyOwned++;
+            members = await tq.Query<User>().Where(u => u.DeletedAt == null).CountAsync();
+            legacyMembers += members;
+        }
+
         switch (ownerIds.Count)
         {
             case 0: zeroOwner++; break;
@@ -301,6 +324,7 @@ try
         Console.WriteLine($"      كِندُ الفِئات                    : {(kinds.Count == 0 ? "(لا فِئات)" : string.Join(", ", kinds.Select(k => k.Length == 0 ? "(فارِغ)" : k)))}");
         Console.WriteLine($"      النَمَطُ المَرسوم (PatternOf)    : {pattern}   سَلَّة: {(usesCart ? "نَعَم" : "لا")}");
         Console.WriteLine($"      مِن الاستوديو                    : {(studio ? $"نَعَم — نَمَطُ تَحليلِه بَعدَ NormalizePattern: {analysisPattern}" : "لا")}");
+        Console.WriteLine($"      وَضعٌ مَوروث (بِلا أَدوار)        : {(legacyMode ? $"نَعَم — مُستَخدِمونَ قائِمونَ يَحمِلُ كُلٌّ مِنهُم tenant.manage: {members}" : "لا")}");
     }
 }
 catch (Exception ex) when (DatabaseFailure(ex) is { } why)
@@ -313,6 +337,7 @@ Console.WriteLine(new string('-', 78));
 Console.WriteLine($"فُحِصَ: {tenants.Count} مَتجَراً · {totalListings} إعلاناً غَيرَ مَحذوف");
 Console.WriteLine($"بِمالِكِ إعلانٍ واحِد: {singleOwner} (مِنها مالِكُ المَتجَرِ هُوَ ذلكَ البائِع: {singleOwnerIsStoreOwner}) · بِأَكثَرَ مِن مالِك: {multiOwner} · بِلا مالِكٍ مَقروء: {zeroOwner}");
 Console.WriteLine($"مِن الاستوديو: {studioBorn} · مِنها مَرسومٌ Rental بِلا سَلَّة: {studioRentalNoCart} (ونَمَطُ تَحليلِه marketplace — وُلِدَ قَبلَ ADR-034: {studioRentalNoCartAnalysisMarketplace}){(studioRentalNoCartSlugs.Count == 0 ? "" : " ← " + string.Join(", ", studioRentalNoCartSlugs))}");
+Console.WriteLine($"بِلا أَدوار (وَضعٌ مَوروث — كُلُّ مُسَجَّلٍ يَحمِلُ tenant.manage): {legacy} · مِنها مِن الاستوديو: {legacyStudio} · بِمالِكِ استوديو: {legacyOwned} · مُستَخدِمونَ قائِمونَ فيها: {legacyMembers}{(legacySlugs.Count == 0 ? "" : " ← " + string.Join(", ", legacySlugs))}");
 
 if (mismatches.Count > 0)
 {

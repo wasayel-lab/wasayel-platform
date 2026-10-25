@@ -54,20 +54,41 @@ public class RolesLegacyModeMeasureTests(ITestOutputHelper output)
     private static List<string> Keys(string form)
         => Regex.Matches(form, @"L(?:\.Markup\(|\[)""(?<k>[a-z0-9_.]+)""").Select(m => m.Groups["k"].Value).ToList();
 
-    /// <summary><b>«اليَوم»</b>: الاستِمارَتانِ تَحفَظانِ أَيَّ اختِيارٍ — والفارِغَ — ومَفاتيحُهُما هذِه بِعَينِها، لا سَطرَ بَينَها يَقولُ إنّ صِفرَ
-    /// الأَدوارِ يُعطي كُلَّ مُسَجَّلٍ كُلَّ صَلاحِيَّة. يُقلَبُ بِاسمِه في كوميتِ التَبديل.</summary>
+    /// <summary>مِفتاحُ السَطرِ الَّذي يَقولُ ما يَفعَلُه الحِفظُ الفارِغ — واحِدٌ لِلصَفحَتَين.</summary>
+    private const string EmptyWarningKey = "roles.save.empty_warning";
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_the_roles_form_draws_no_line_saying_what_an_empty_save_grants</c> (‏<c>c8f9437</c>): مَفاتيحُ الاستِمارَتَينِ 2 و5 بِلا سَطرٍ عَن الفارِغ.
+    /// والآن كُلُّ استِمارَةٍ تَرسُمُ <c>roles.save.empty_warning</c> مَرَّةً قَبلَ زِرِّ الحِفظِ مُباشَرَةً (القاعِدَة ١٧: عَلى الفِعلِ لا في صَفحَةٍ تَشرَح)،
+    /// وبَقِيَّةُ مَفاتيحِها بِعَينِها وبِتَرتيبِها.</summary>
     [Theory]
     [MemberData(nameof(RolesPages))]
-    public void Today_the_roles_form_draws_no_line_saying_what_an_empty_save_grants(string page, string action)
+    public void The_roles_form_says_what_an_empty_save_grants_just_before_its_submit(string page, string action)
     {
-        var keys = Keys(Form(page, action));
+        var form = Form(page, action);
+        var keys = Keys(form);
         output.WriteLine($"{Path.GetFileName(page)}: {keys.Count} مِفتاحاً — {string.Join(" · ", keys)}");
 
         var expected = page.EndsWith("StudioAppRoles.razor", StringComparison.Ordinal)
-            ? new[] { "studio.app_roles.default", "studio.app_roles.save" }
+            ? new[] { "studio.app_roles.default", EmptyWarningKey, "studio.app_roles.save" }
             : new[] { "admin.tenant_roles.signup_fields", "admin.tenant_roles.field_sep", "admin.tenant_roles.default",
-                      "admin.tenant_roles.cancel", "admin.tenant_roles.save" };
+                      EmptyWarningKey, "admin.tenant_roles.cancel", "admin.tenant_roles.save" };
         Assert.Equal(expected, keys);
+        var warnAt = form.IndexOf(EmptyWarningKey, StringComparison.Ordinal);
+        Assert.True(warnAt > form.LastIndexOf("RoleCatalog.All", StringComparison.Ordinal) && warnAt < form.IndexOf("type=\"submit\"", StringComparison.Ordinal),
+            $"{page}: السَطرُ لَيسَ بَينَ قائِمَةِ الأَدوارِ وزِرِّ الحِفظ.");
+    }
+
+    /// <summary>نَصُّ السَطرِ في القامُوسِ العَرَبيّ (القاعِدَة ١١)، ويُسَمّي ما يُعطيه الفارِغ: الإدارَةَ وبَياناتِ المُستَخدِمين.</summary>
+    [Fact]
+    public void The_empty_save_warning_lives_in_the_arabic_dictionary()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(Read("libs/core/ACommerce.Platform.I18n/Locales/ar.json"));
+        Assert.True(doc.RootElement.TryGetProperty(EmptyWarningKey, out var v), $"مِفتاحٌ غائِبٌ عَن ar.json: {EmptyWarningKey}");
+        var text = v.GetString() ?? "";
+        output.WriteLine($"{EmptyWarningKey} = {text}");
+        Assert.Contains("إدارَتُه", text, StringComparison.Ordinal);
+        Assert.Contains("هَواتِفِ", text, StringComparison.Ordinal);
     }
 
     /// <summary>ولا ثالِثَةَ: كُلُّ استِمارَةٍ في المَصادِرِ تُرسِلُ إلى <c>…/roles/save</c> واحِدَةٌ مِن الاثنَتَين (القاعِدَة ١٠: يَعُدُّ ويَفشَلُ عَلى الصِفر).</summary>
@@ -92,19 +113,25 @@ public class RolesLegacyModeMeasureTests(ITestOutputHelper output)
         return WriteEndpointGuardTests.StripComments(File.ReadAllText(path));
     }
 
-    /// <summary><b>«اليَوم»</b>: السكربتُ يَطبَعُ «— وَضعٌ مَوروث» في سَطرِ كُلِّ مَتجَرٍ (مَقيسٌ: ثَلاثَةٌ مِن خَمسَةٍ عَلى القاعِدَةِ المَحَلِّيَّة) ولا
-    /// يَجمَعُه، ولا يَسأَلُ دالَّةَ الصَلاحِيَّةِ نَفسَها، ولا يَعُدُّ مُستَخدِمي مَتجَرٍ بِلا أَدوار. يُقلَبُ بِاسمِه في كوميتِ التَبديل.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_the_owner_count_script_prints_no_aggregate_of_the_legacy_role_mode</c> (‏<c>c8f9437</c>): «أَسطُرُ الخُلاصَة: 3 · RolePermissions.Has: 0».
+    /// والآن يَسأَلُ لِكُلِّ مَتجَرٍ دالَّةَ الصَلاحِيَّةِ نَفسَها (لا <c>Roles.Count == 0</c> مَنسوخاً — فَقَلبُ <c>RoleCatalog.cs:133</c> يُصَفِّرُه بِلا تَعديل)،
+    /// ويَعُدُّ مُستَخدِمي المَتجَرِ المَوروثِ عَدَداً، ويَجمَعُه في سَطرِ خُلاصَةٍ رابِعٍ بِالاستوديو والمالِكِ والمُستَخدِمين.</summary>
     [Fact]
-    public void Today_the_owner_count_script_prints_no_aggregate_of_the_legacy_role_mode()
+    public void The_owner_count_script_aggregates_the_legacy_role_mode_with_the_products_own_permission_function()
     {
         var code = ScriptCode();
         var summary = code[code.IndexOf("فُحِصَ: {tenants.Count} مَتجَراً", StringComparison.Ordinal)..];
         var summaryLines = Regex.Matches(summary[..summary.IndexOf("if (mismatches.Count > 0)", StringComparison.Ordinal)], @"Console\.WriteLine\(").Count + 1;
-        var asksPermission = Regex.Matches(code, @"RolePermissions\.Has\(").Count;
-        output.WriteLine($"أَسطُرُ الخُلاصَة: {summaryLines} · RolePermissions.Has: {asksPermission} · «وَضعٌ مَوروث» في الخُلاصَة: {summary.Contains("وَضعٌ مَوروث", StringComparison.Ordinal)}");
+        var asksPermission = Regex.Matches(code, Regex.Escape("RolePermissions.Has(t.Roles, activeRole: null, \"tenant.manage\")")).Count;
+        output.WriteLine($"أَسطُرُ الخُلاصَة: {summaryLines} · RolePermissions.Has(t.Roles, null, tenant.manage): {asksPermission} · «وَضعٌ مَوروث» في الخُلاصَة: {summary.Contains("وَضعٌ مَوروث", StringComparison.Ordinal)}");
 
-        Assert.Equal(3, summaryLines);
-        Assert.Equal(0, asksPermission);
-        Assert.DoesNotContain("وَضعٌ مَوروث", summary, StringComparison.Ordinal);
+        Assert.Equal(4, summaryLines);
+        Assert.Equal(1, asksPermission);
+        Assert.DoesNotContain("Roles.Count == 0", code[..code.IndexOf("static bool HasActiveRole", StringComparison.Ordinal)]
+            .Replace("t.Roles.Count == 0 ? \"— وَضعٌ مَوروث\"", "", StringComparison.Ordinal), StringComparison.Ordinal);
+        foreach (var piece in new[] { "{legacy}", "{legacyStudio}", "{legacyOwned}", "{legacyMembers}" })
+            Assert.Contains(piece, summary, StringComparison.Ordinal);
+        Assert.Contains("members = await tq.Query<User>().Where(u => u.DeletedAt == null).CountAsync();", code, StringComparison.Ordinal);
     }
 }

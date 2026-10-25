@@ -81,6 +81,9 @@
                         }
                     </div>
 
+                    @* ‏2026-10-25 (تَدقيقُ الإطلاق، تَيّارُ W8-3 — brief-P0-7؛ ‏ADR-032 §٦‑د): نَفسُ سَطرِ صَفحَةِ الاستوديو — الحِفظُ الفارِغُ وَضعٌ مَوروث. *@
+                    <AcAlert Variant="warning" Message="@L["roles.save.empty_warning"]" />
+
                     <div style="display:flex;gap:8px;margin-top:16px;">
                         <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">@L.Markup("admin.tenant_roles.cancel")</a>
                         <button type="submit" class="ac-btn ac-btn-primary ac-btn-block">
