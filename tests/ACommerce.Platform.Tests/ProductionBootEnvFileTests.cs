@@ -14,6 +14,10 @@ namespace ACommerce.Platform.Tests;
 //   ٢. وبِلا مِلَفٍّ لا تَحمِلُ الخُطوَةُ `ACOMMERCE_AUTH_SECRET` — والبَوّابَةُ تَشتَرِطُه — فَتَخرُجُ ‏3 (الصَفُّ الدائِمُ أَدناه).
 //
 // **يُثَبَّتُ قَبلَ العِلاجِ** (القاعِدَة ٣): الصَفُّ `Today_…` يَنقَلِبُ بِاسمِه، والدائِمانِ يَبقَيانِ حَرفاً.
+//
+// **العِلاج** (‏2026-10-25): الكُتلَةُ `env_file` — تُحفَظُ قيمَةُ البيئَةِ غَيرُ الفارِغَةِ لِكُلِّ اسمٍ يُسنِدُه المِلَفّ، ويُصدَرُ المِلَفّ، ثُمَّ تُعادُ؛
+// ويُقالُ مَصدَرُ المُتَغَيِّرَينِ الإلزامِيَّينِ بِاسمِهِما. انقَلَبَ الصَفُّ إلى `The_environment_wins_over_the_env_file_…`، والكُتلَةُ القَديمَةُ
+// بِحَرفِها عَيِّنَةٌ مَحقونَةٌ يَحمَرُّ عَلَيها المُتَحَقِّق (القاعِدَة ١٠)، والدائِمانِ كَما أُودِعا.
 public class ProductionBootEnvFileTests(ITestOutputHelper output)
 {
     private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;
@@ -98,13 +102,63 @@ public class ProductionBootEnvFileTests(ITestOutputHelper output)
         Assert.Equal("file-secret-00000000000000000000000000000000", secret);
     }
 
-    /// <summary>«اليَوم»: سِلسِلَةٌ صُدِّرَت لِلفَرعِ المُرَحَّلِ يَغلِبُها مِلَفٌّ يُسَمّي فَرعاً آخَر — فَتُقلِعُ البَوّابَةُ عَلى غَيرِ ما رُحِّل.</summary>
+    // ─── انقَلَبَ بِاسمِه (كانَ `Today_the_env_file_overrides_an_exported_connection_string`) ───
+
+    /// <summary>سِلسِلَةٌ صُدِّرَت لِلفَرعِ المُرَحَّلِ تَبقى ولَو سَمّى المِلَفُّ فَرعاً آخَر — والسِرُّ الغائِبُ عَن البيئَةِ مِن المِلَفّ، والبَوّابَةُ
+    /// تَقولُ مَصدَرَ كُلٍّ بِاسمِه ولا تَطبَعُ قيمَة.</summary>
     [Fact]
-    public void Today_the_env_file_overrides_an_exported_connection_string()
+    public void The_environment_wins_over_the_env_file_and_the_gate_says_where_each_came_from()
+    {
+        if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI (‏ubuntu)."); return; }
+        var (conn, secret, text) = Run(ConfigBlock(),
+            new Dictionary<string, string> { ["ConnectionStrings__Postgres"] = "Host=from-env-branch;Database=x" }, FileBody);
+        Assert.Equal("Host=from-env-branch;Database=x", conn);
+        Assert.Equal("file-secret-00000000000000000000000000000000", secret);
+        Assert.Contains("ConnectionStrings__Postgres: مِن البيئَة (المِلَفُّ لا يَغلِبُها)", text, StringComparison.Ordinal);
+        Assert.Contains("ACOMMERCE_AUTH_SECRET: مِن المِلَفّ", text, StringComparison.Ordinal);
+        var printed = text[..text.IndexOf("conn=", StringComparison.Ordinal)];
+        Assert.DoesNotContain("from-env-branch", printed, StringComparison.Ordinal);
+        Assert.DoesNotContain("from-file-branch", printed, StringComparison.Ordinal);
+        Assert.DoesNotContain("file-secret", printed, StringComparison.Ordinal);
+    }
+
+    /// <summary>وقيمَةٌ صُدِّرَت فارِغَةً غائِبَةٌ — كَما يَعُدُّها فَحصُ الغائِبِ بَعدَ الكُتلَة (<c>-n</c>) — فَيَملَؤُها المِلَفّ.</summary>
+    [Fact]
+    public void An_empty_exported_value_is_absent_and_the_file_fills_it()
     {
         if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI (‏ubuntu)."); return; }
         var (conn, _, _) = Run(ConfigBlock(),
+            new Dictionary<string, string> { ["ConnectionStrings__Postgres"] = "" }, FileBody);
+        Assert.Equal("Host=from-file-branch;Database=x", conn);
+        Assert.Contains("[ -n \"${ConnectionStrings__Postgres:-}\" ] || MISSING_VARS=", Gate(), StringComparison.Ordinal);
+    }
+
+    /// <summary>والكُتلَةُ كَما كانَت قَبلَ العِلاجِ بِحَرفِها — عَيِّنَةٌ مَحقونَةٌ: المُتَحَقِّقُ نَفسُه يَرى المِلَفَّ غالِباً عَلَيها، فَهُوَ لَيسَ أَعمى.</summary>
+    [Fact]
+    public void The_precedence_check_goes_red_on_the_block_it_was_written_for()
+    {
+        if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI (‏ubuntu)."); return; }
+        const string before =
+            "if [ -f \"$ENV_FILE\" ]; then\n" +
+            "    say \"تَهيئَةٌ مَحَلِّيَّة: scripts/.prod-gate.env — تُقرَأ (ولا تُطبَع)\"\n" +
+            "    set -a\n    # shellcheck disable=SC1090\n    source \"$ENV_FILE\"\n    set +a\n" +
+            "else\n    say \"لا مِلَفَّ scripts/.prod-gate.env — تُقرَأُ المُتَغَيِّراتُ مِن البيئَة\"\nfi\n";
+        Assert.DoesNotContain(before, ConfigBlock(), StringComparison.Ordinal);
+        var (conn, _, _) = Run(before,
             new Dictionary<string, string> { ["ConnectionStrings__Postgres"] = "Host=from-env-branch;Database=x" }, FileBody);
         Assert.Equal("Host=from-file-branch;Database=x", conn);
+    }
+
+    /// <summary>ودَليلُ النَشرِ يَقولُ القاعِدَةَ في «التَهيئَة» وفي الخُطوَةِ ١ مِن §٤‑د، والخُطوَةُ تُصَدِّرُ السِرَّ الَّذي تَشتَرِطُه البَوّابَة.</summary>
+    [Fact]
+    public void The_deploy_guide_says_the_environment_wins_and_step_one_exports_both_mandatory_variables()
+    {
+        var deploy = File.ReadAllText(Path.Combine(RepoRoot, "docs", "DEPLOY.md"));
+        Assert.Contains("lens-docs-vs-code-2", deploy, StringComparison.Ordinal);
+        Assert.Contains("البيئَةُ تَغلِبُ المِلَفّ", deploy, StringComparison.Ordinal);
+        var step = deploy[deploy.IndexOf("# ١) فَرعُ Neon مَنسوخٌ مِن الإنتاجِ الآن", StringComparison.Ordinal)..];
+        step = step[..step.IndexOf("./scripts/verify-production-boot.sh", StringComparison.Ordinal)];
+        Assert.Contains("export ConnectionStrings__Postgres=", step, StringComparison.Ordinal);
+        Assert.Contains("export ACOMMERCE_AUTH_SECRET=\"$(openssl rand -hex 32)\"", step, StringComparison.Ordinal);
     }
 }
