@@ -572,4 +572,66 @@ public class DeployDocClaimsTests(ITestOutputHelper output)
         Assert.False(DrawsEntityKey("@if (!L.IsPlaceholder(\"platform.doc.contact_email\")) { <a href=\"/contact\">x</a> }", keys));
         Assert.False(DrawsEntityKey("<p>@L.Markup(\"platform.doc.placeholder_note\")</p>", keys));
     }
+
+    // ─── W8-8 الجَولَة ١ — لافِتَةُ «الحُقولُ النائِبَة» تُسَمّى بِمِفتاحِها وعُنوانِها المَرسوم ───────────────────────────────
+
+    internal const string DocFieldsBannerKey = "admin.home.doc_fields_title";
+
+    /// <summary>كَم فِقرَةً يَقتَبِسُ فيها الدَليلُ <paramref name="title"/> بَينَ «» بِجِوارِ اسمِ مِفتاحِه — السَطرُ الَّذي يُسَمّي اللافِتَةَ بِما يُرسَم.</summary>
+    internal static int QuotesBannerByKeyAndTitle(string deploy, string key, string title)
+        => deploy.Split("\n\n").Count(p => Names(p, key, title));
+
+    private static bool Names(string paragraph, string key, string title)
+        => paragraph.Contains($"`{key}`", StringComparison.Ordinal) && paragraph.Contains($"«{title}»", StringComparison.Ordinal);
+
+    /// <summary>فِقَراتُ الدَليلِ الَّتي تُسَمّي اللافِتَةَ بِاسمِها «الحُقولُ النائِبَة» ولا تُسَمّيها بِمِفتاحِها وعُنوانِها، ولا في الفِقرَتَينِ التالِيَتَين
+    /// سَطرٌ يُسَمّيها — ما يَبحَثُ عَنه مالِكٌ في <c>/admin</c> فَلا يَجِدُه.</summary>
+    internal static IReadOnlyList<int> NamedWithoutTitle(string deploy, string key, string title)
+    {
+        var ps = deploy.Split("\n\n");
+        var bare = new List<int>();
+        for (var i = 0; i < ps.Length; i++)
+            if (ps[i].Contains("«الحُقولُ النائِبَة»", StringComparison.Ordinal) && !Names(ps[i], key, title)
+                && !ps.Skip(i + 1).Take(2).Any(p => Names(p, key, title)))
+                bare.Add(i);
+        return bare;
+    }
+
+    /// <summary>
+    /// <para><b>«الحُقولُ النائِبَة» اسمٌ لا نَصّ</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-8 الجَولَة ١): مالِكٌ يَبحَثُ في <c>/admin</c> عَن المُقتَبَسِ لا يَجِدُه —
+    /// عُنوانُ اللافِتَةِ قيمَةُ <see cref="DocFieldsBannerKey"/>. فَمَوضِعا الاسمِ في الدَليل (§٢ الخُطوَة ٧ و§٢·هـ البَند ٧) يَحمِلُ كُلٌّ مِنهُما سَطراً
+    /// يُسَمّيها بِمِفتاحِها وعُنوانِها بِحَرفِه مِن <c>ar.json</c> — فَيَحمَرُّ يَومَ يَتَغَيَّرُ العُنوانُ ولا يَتبَعُه الدَليل.</para>
+    /// </summary>
+    [Fact]
+    public void The_doc_fields_banner_is_named_in_the_guide_by_its_key_and_its_drawn_title()
+    {
+        var title = ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, DocFieldsBannerKey);
+        Assert.True(title.Length > 10, $"أَداةٌ عَمياء: عُنوانُ اللافِتَةِ «{title}».");
+        var admin = Read("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "Admin", "AdminHome.razor");
+        Assert.Contains($"Title=\"@(L[\"{DocFieldsBannerKey}\"])\"", admin, StringComparison.Ordinal);
+
+        var deploy = Deploy();
+        var named = Regex.Matches(deploy, "«الحُقولُ النائِبَة»").Count;
+        var quoted = QuotesBannerByKeyAndTitle(deploy, DocFieldsBannerKey, title);
+        var bare = NamedWithoutTitle(deploy, DocFieldsBannerKey, title);
+        output.WriteLine($"«الحُقولُ النائِبَة» في الدَليل: {named} · فِقراتٌ تُسَمّيها بِمِفتاحِها وعُنوانِها: {quoted} · اسمٌ بِلا عُنوانٍ قَريب: {bare.Count} · العُنوان: «{title}»");
+        Assert.True(named >= 2 && quoted >= 2, $"أَداةٌ عَمياء: {named} مَوضِعاً لِلاسمِ و{quoted} فِقرَةً بِالعُنوان.");
+        Assert.True(bare.Count == 0, $"فِقَرٌ تُسَمّي اللافِتَةَ «الحُقولُ النائِبَة» بِلا عُنوانِها المَرسومِ قَريباً: {string.Join("، ", bare)}");
+        Assert.True(QuotesBannerByKeyAndTitle(PaddleLiveApprovalItem(deploy), DocFieldsBannerKey, title) >= 1, "البَندُ ٧ مِن §٢·هـ بِلا سَطرِ العُنوان.");
+    }
+
+    /// <summary><b>حَقنُ عَيب</b>: فِقرَةٌ تَقتَبِسُ عُنواناً قَديماً، أَو تُسَمّي المِفتاحَ بِلا العُنوان، أَو العُنوانَ بِلا المِفتاح ⇒ لا تُعَدّ.</summary>
+    [Fact]
+    public void The_banner_title_reader_goes_red_on_a_stale_title_or_a_missing_key()
+    {
+        const string title = "عُنوانٌ مَرسوم";
+        Assert.Equal(1, QuotesBannerByKeyAndTitle($"أ\n\nمِفتاحُ `{DocFieldsBannerKey}`: «{title}»\n\nب", DocFieldsBannerKey, title));
+        Assert.Equal(0, QuotesBannerByKeyAndTitle($"مِفتاحُ `{DocFieldsBannerKey}`: «عُنوانٌ قَديم»", DocFieldsBannerKey, title));
+        Assert.Equal(0, QuotesBannerByKeyAndTitle($"اللافِتَةُ «{title}»", DocFieldsBannerKey, title));
+        Assert.Equal(0, QuotesBannerByKeyAndTitle($"`{DocFieldsBannerKey}`\n\n«{title}»", DocFieldsBannerKey, title));
+        // ‏والفِقرَةُ عِندَ 6167b9f بِحَرفِ اسمِها وَحدَه — بِلا سَطرِ العُنوانِ بَعدَها ⇒ حَمراء؛ وبِه ⇒ لا.
+        const string asItWas = "ولافِتَةُ «الحُقولُ النائِبَة» في `/admin` تَكُفُّ عِندَ الخَمسَة.";
+        Assert.Equal(new[] { 1 }, NamedWithoutTitle($"أ\n\n{asItWas}\n\nب\n\nج\n\nمِفتاحُ `{DocFieldsBannerKey}`: «{title}»", DocFieldsBannerKey, title));
+        Assert.Empty(NamedWithoutTitle($"أ\n\n{asItWas}\n\nمِفتاحُ `{DocFieldsBannerKey}`: «{title}»", DocFieldsBannerKey, title));
+    }
 }
