@@ -172,7 +172,8 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     }
 
     /// <summary>العِبارَةُ الَّتي تَقولُ النُسخَةَ في نَصِّ الحَذف — مَعجَمٌ مُغلَق، ولِكُلٍّ عِباراتُه في <see cref="DisclosurePhrases"/>.</summary>
-    internal enum Disclosure { None, Deal, Records, Notifications, AdminNotices, StoreRecords }
+    // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢): `DealSeller` — اسمُ البائِعِ عَلى الصَفقَةِ يُقالُ لِلبائِعِ بِجُملَتِه، لا بِجُملَةِ المُشتَري.
+    internal enum Disclosure { None, Deal, DealSeller, Records, Notifications, AdminNotices, StoreRecords }
 
     internal sealed record NameField(NameKind Kind, Disclosure Said, string WhyAr);
 
@@ -180,7 +181,7 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     internal static readonly IReadOnlyDictionary<string, NameField> PersonNameFields = new Dictionary<string, NameField>(StringComparer.Ordinal)
     {
         ["Deal.InitiatorName"]           = new(NameKind.Copy, Disclosure.Deal, "اسمُ المُشتَري كَما كُتِبَ في الطَلَب (مِن الاستِمارَةِ في السَلَّة، ومِن الحِسابِ في العَرض)."),
-        ["Deal.CounterpartyName"]        = new(NameKind.Copy, Disclosure.Deal, "اسمُ البائِعِ يَومَ رُبِطَ أَو قَبِلَ — `DealsService` عِندَ التَعيين."),
+        ["Deal.CounterpartyName"]        = new(NameKind.Copy, Disclosure.DealSeller, "اسمُ البائِعِ يَومَ رُبِطَ أَو قَبِلَ — `DealsService` عِندَ التَعيين."),
         ["DealEvent.ActorName"]          = new(NameKind.Copy, Disclosure.Deal, "سَطرُ الخَطِّ الزَمَنيِّ لِكُلِّ فِعلٍ عَلى الصَفقَةِ بِاسمِ فاعِلِه."),
         ["Conversation.OwnerName"]       = new(NameKind.Copy, Disclosure.Records, "طَرَفا المُحادَثَةِ بِاسمَيهِما عِندَ بَدئِها."),
         ["Conversation.PartnerName"]     = new(NameKind.Copy, Disclosure.Records, "طَرَفا المُحادَثَةِ بِاسمَيهِما عِندَ بَدئِها."),
@@ -542,6 +543,7 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     internal static readonly IReadOnlyDictionary<Disclosure, string[]> DisclosurePhrases = new Dictionary<Disclosure, string[]>
     {
         [Disclosure.Deal]          = new[] { "وفي كل صفقة" },
+        [Disclosure.DealSeller]    = new[] { "وإن كنت بائع صفقة بقي اسمك عليها يراه مشتريها" },
         [Disclosure.Records]       = new[] { "محادثاتك وتقييماتك وعروضك وتذاكر دعمك وبلاغاتك" },
         [Disclosure.Notifications] = new[] { "إشعارات من تعاملت معهم" },
         [Disclosure.AdminNotices]  = new[] { "إشعارات مديري المتجر", "هاتفك أو بريدك" },
@@ -566,7 +568,8 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     {
         var needed = NeededDisclosures();
         output.WriteLine($"إفصاحاتٌ يَحتاجُها المَسحان: {string.Join(", ", needed)}");
-        Assert.Equal(new[] { Disclosure.Deal, Disclosure.Records, Disclosure.Notifications, Disclosure.AdminNotices, Disclosure.StoreRecords }, needed);
+        // ‏2026-10-25: سِتَّةٌ لا خَمسَة — `DealSeller` لِاسمِ البائِعِ عَلى الصَفقَة (مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢؛ تَوصيفُه `b7f9d8f`).
+        Assert.Equal(new[] { Disclosure.Deal, Disclosure.DealSeller, Disclosure.Records, Disclosure.Notifications, Disclosure.AdminNotices, Disclosure.StoreRecords }, needed);
         foreach (var k in new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey })
         {
             var unsaid = Unsaid(Ar(k));
@@ -574,7 +577,8 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
             Assert.Empty(unsaid);
         }
         // والإنجليزيُّ لِـs6 يَقولُ ما يَقولُه العَرَبِيّ (en.json لِصَفَحاتِ المَنَصَّةِ وَحدَها — لا مُقابِلَ لِنَصَّيِ المَتجَر).
-        foreach (var phrase in new[] { "each deal keeps", "conversations, reviews, offers, support tickets and reports",
+        foreach (var phrase in new[] { "each deal keeps", "If you were a deal's seller, your name stays on it and its buyer sees it",
+                                       "conversations, reviews, offers, support tickets and reports",
                                        "the notifications of the people you dealt with", "the store managers' notifications",
                                        "phone number or email", "the audit log and the integration keys" })
             Assert.Contains(phrase, En(PlatformRetentionKey), StringComparison.Ordinal);
@@ -611,22 +615,21 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         Assert.Equal(Ar(key).Length - Regex.Matches(Ar(key), "[\u064B-\u0652\u0670]").Count, today.Length);
     }
 
-    /// <summary><b>تَوصيف</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢، صُغرى — القاعِدَة ٣: يَنقَلِبُ بِاسمِه في كوميتِ النَصّ): <c>Deal.CounterpartyName</c>
-    /// اسمُ البائِعِ عَلى كُلِّ صَفقَةٍ يَراه المُشتَري، ويُفصَحُ عَنه بِعِبارَةِ <see cref="Disclosure.Deal"/> وَحدَها — وجُملَتُها مَكتوبَةٌ مِن جِهَةِ المُشتَري
-    /// («يَراها بائِعُ الصَفقَة»). فَبائِعٌ يَحذِفُ حِسابَه لا يُقالُ لَه إنّ اسمَه يَبقى عَلى كُلِّ صَفقَةٍ يَراه مُشتَريها.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> (‏2026-10-25؛ كانَ <c>Today_a_seller_who_deletes_is_not_told_their_name_stays_on_each_deal_its_buyer_sees</c>،
+    /// مُودَعٌ في <c>b7f9d8f</c>). والآن لِـ<c>Deal.CounterpartyName</c> إفصاحُه (<see cref="Disclosure.DealSeller"/>) بِجُملَةٍ تُسَمّي البائِعَ والمُشتَري —
+    /// «وإن كُنتَ بائِعَ صَفقَةٍ بَقِيَ اسمُكَ عَلَيها يَراه مُشتَريها» — في النُصوصِ الثَلاثَةِ والإنجليزيِّ لِـs6؛ وجُملَةُ المُشتَري باقِيَةٌ كَما هي.</summary>
     [Fact]
-    public void Today_a_seller_who_deletes_is_not_told_their_name_stays_on_each_deal_its_buyer_sees()
+    public void A_seller_who_deletes_is_told_their_name_stays_on_each_deal_its_buyer_sees()
     {
         var said = PersonNameFields["Deal.CounterpartyName"].Said;
         var texts = new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey }.ToDictionary(k => k, k => Bare(Ar(k)));
         output.WriteLine($"Deal.CounterpartyName ← {said} · " + string.Join(" · ", texts.Select(t => $"{t.Key}: «مشتريها» {t.Value.Contains("مشتريها", StringComparison.Ordinal)}")));
-        Assert.Equal(Disclosure.Deal, said);
+        Assert.Equal(Disclosure.DealSeller, said);
         foreach (var (_, t) in texts)
         {
             Assert.Contains("يراها بائع الصفقة", t, StringComparison.Ordinal);
-            Assert.DoesNotContain("مشتريها", t, StringComparison.Ordinal);
-            Assert.DoesNotContain("إن كنت بائع", t, StringComparison.Ordinal);
+            Assert.Contains("وإن كنت بائع صفقة بقي اسمك عليها يراه مشتريها", t, StringComparison.Ordinal);
         }
-        Assert.DoesNotContain("its buyer", En(PlatformRetentionKey), StringComparison.Ordinal);
+        Assert.Contains("your name stays on it and its buyer sees it", En(PlatformRetentionKey), StringComparison.Ordinal);
     }
 }
