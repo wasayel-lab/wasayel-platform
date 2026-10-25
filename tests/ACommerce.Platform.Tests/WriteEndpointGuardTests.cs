@@ -981,6 +981,251 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
             string.Join("\n  ", settled));
     }
 
+    // ─── ‏2026-10-25 (تَدقيقُ الإطلاق lens-checkers-ci-4، كُبرى): `GET` يَكتُبُ عَبرَ خِدمَة ───────────────────────────────────────
+    //
+    // **المَقيسُ قَبل** (`f5c292a`): الصَفّانِ أَعلاه يَسأَلانِ جِسمَ النُقطَةِ عَن رُموزِ Marten المُباشِرَة (`WriteCalls`) — ونُقطَةُ `GET`
+    // تُنادي `deals.CancelAsync(…)` (الطَفرَةُ M2c عَلى `GET /api/v1/deals/{id}`، بِنِطاقِ القِراءَة `DealsRead`، بِعَدَدِ الأَسطُرِ نَفسِه) لا تَحمِلُ
+    // رَمزاً مِنها، فَتَمُرُّ الحَقيبَةُ والطَبَقَةُ ٩ («none touches storage») — و‏ADR-020 §٥ يَقولُ إنّ الفاحِصَ يَفرِضُ الفَرق. **وصارَ**: كُلُّ طَريقَةٍ
+    // في كُلِّ نَوعٍ في `libs/`/`apps/` يَحمِلُ جِسمُها رَمزَ كِتابَة — أَو يُنادي طَريقَةً كاتِبَةً مِن نَوعِه — **كاتِبَة**؛ وكُلُّ نُقطَةِ `MapGet`/`MapMethods`
+    // وكُلُّ نُقطَةٍ بِـ`RequireApiKey(ApiScopeCatalog.*Read)` أَيّاً كانَ فِعلُها تُسأَلُ: أَتُنادي كاتِبَةً عَلى وَسيطٍ مُعلَنِ النَوعِ في لامدَتِها، أَو عَلى
+    // خِدمَةٍ مِن `GetRequiredService<T>`، أَو عَلى النَوعِ نَفسِه ساكِناً، أَو طَريقَةً كاتِبَةً مِن نَوعٍ في مِلَفِّها؟ **وحَدُّه يُقال**: النَصُّ لا الدَلالَة —
+    // كاتِبٌ يُستَدعى عَبرَ واجِهَةٍ أَو مُفَوَّضٍ أَو نَوعٍ ثالِثٍ (خِدمَةٌ تُنادي خِدمَة) لا يُرى؛ والأَسماءُ تُدمَجُ بِاسمِ النَوعِ لا بِفَضائِه (حَذَرٌ لا تَساهُل).
+
+    private static readonly Regex TypeDecl = new(@"\b(?:class|record|struct)\s+(?<name>\w+)", RegexOptions.Compiled);
+
+    private static readonly Regex MethodDecl = new(
+        @"(?:public|internal|private|protected)\s+(?:(?:static|async|virtual|override|sealed|new|readonly|partial)\s+)*[\w<>\[\]?,.() ]+?\s+(?<name>\w+)\s*(?:<[^<>()]*>)?\s*\(",
+        RegexOptions.Compiled);
+
+    /// <summary>فِهرِسُ القَوسِ المُغلِقِ لِلقَوسِ المَفتوحِ عِندَ <paramref name="open"/> — بِتَخَطّي السَلاسِل.</summary>
+    private static int Closing(string code, int open, char o, char c)
+    {
+        var depth = 0;
+        for (var i = open; i < code.Length; i++)
+        {
+            if (code[i] is '"' or '\'') { i = SkipLiteral(code, i); continue; }
+            if (code[i] == o) depth++;
+            else if (code[i] == c && --depth == 0) return i;
+        }
+        return code.Length - 1;
+    }
+
+    /// <summary>حُقولُ النَوعِ ووُسَطاءُ مُنشِئِه الأَوَّليِّ: الاسمُ ← اسمُ النَوعِ القَصير. يَقرَأُ جِسمَ النَوعِ كُلَّه، فَمُتَغَيِّرٌ مَحَلِّيٌّ بِنَوعٍ
+    /// مُعلَنٍ يُعَدُّ حَقلاً — حَذَرٌ لا تَساهُل: يَزيدُ الكاتِباتِ ولا يُنقِصُها.</summary>
+    private static readonly Regex FieldDecl = new(
+        @"(?<![\w.<])(?<type>[A-Z][\w.]*)(?:<[^<>;=()]*>)?\??\s+(?<name>_?[a-z]\w*)\s*(?:[;=)]|,\s*[A-Z])", RegexOptions.Compiled);
+
+    /// <summary><b>الطَرائِقُ الكاتِبَةُ لِكُلِّ نَوع</b>: اسمُ النَوعِ ← أَسماءُ طَرائِقِه الَّتي يَحمِلُ جِسمُها رَمزاً مِن <see cref="WriteCalls"/>، أَو
+    /// يُنادي طَريقَةً كاتِبَة — مِن نَوعِه (بِلا مُستَقبِلٍ أَو بِـ<c>this.</c>)، أَو مِن نَوعِ حَقلٍ أَو وَسيطِ مُنشِئٍ أَوَّليٍّ لَه (<c>_audit.WriteAsync(</c>
+    /// و<c>Audit.AuditWriter _audit</c>) — حَتّى الثَبات عَبرَ الأَنواعِ كُلِّها. والأَنواعُ الجُزئِيَّةُ تُدمَجُ بِاسمِها.</summary>
+    internal static IReadOnlyDictionary<string, HashSet<string>> ServiceWriters(IEnumerable<(string File, string Text)> sources)
+    {
+        var bodies = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+        var fields = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
+        foreach (var (file, text) in sources)
+        {
+            if (!file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)) continue;
+            var code = StripComments(text);
+            foreach (Match t in TypeDecl.Matches(code))
+            {
+                var name = t.Groups["name"].Value;
+                var open = code.IndexOf('{', t.Index + t.Length);
+                var semi = code.IndexOf(';', t.Index + t.Length);
+                if (open < 0 || (semi >= 0 && semi < open)) continue;          // ‏`record X(…);` بِلا جِسم
+                var body = code[(open + 1)..Closing(code, open, '{', '}')];
+                var methods = bodies.TryGetValue(name, out var m) ? m : bodies[name] = new(StringComparer.Ordinal);
+                var known = fields.TryGetValue(name, out var f) ? f : fields[name] = new(StringComparer.Ordinal);
+                foreach (Match fd in FieldDecl.Matches(code[(t.Index + t.Length)..(open + 1 + body.Length)]))
+                    known.TryAdd(fd.Groups["name"].Value, fd.Groups["type"].Value.Split('.')[^1]);
+                foreach (Match d in MethodDecl.Matches(body))
+                {
+                    var paren = d.Index + d.Length - 1;
+                    var after = Closing(body, paren, '(', ')') + 1;
+                    var head = Regex.Match(body[after..Math.Min(body.Length, after + 400)], @"^\s*(?:where[^{=;]*)?(?<kind>\{|=>)");
+                    if (!head.Success) continue;
+                    var at = after + head.Groups["kind"].Index;
+                    var text2 = head.Groups["kind"].Value == "{" ? body[at..(Closing(body, at, '{', '}') + 1)] : StatementFrom(body, at);
+                    (methods.TryGetValue(d.Groups["name"].Value, out var list) ? list : methods[d.Groups["name"].Value] = []).Add(text2);
+                }
+            }
+        }
+
+        var writers = bodies.ToDictionary(
+            kv => kv.Key,
+            kv => kv.Value.Where(mv => mv.Value.Any(b => ContainsAny(b, WriteCalls))).Select(mv => mv.Key).ToHashSet(StringComparer.Ordinal),
+            StringComparer.Ordinal);
+        bool Writes(string type, string body)
+        {
+            foreach (Match c in BareCall.Matches(body))
+                if (writers[type].Contains(c.Groups["m"].Value)) return true;
+            foreach (Match c in MemberCall.Matches(body))
+            {
+                var recv = c.Groups["recv"].Value;
+                var target = recv == "this" ? type : fields[type].TryGetValue(recv, out var ft) ? ft : null;
+                if (target is not null && writers.TryGetValue(target, out var w) && w.Contains(c.Groups["m"].Value)) return true;
+            }
+            return false;
+        }
+        for (var grew = true; grew;)
+        {
+            grew = false;
+            foreach (var (type, methods) in bodies)
+                foreach (var (method, list) in methods)
+                    if (!writers[type].Contains(method) && list.Any(b => Writes(type, b)))
+                    {
+                        writers[type].Add(method);
+                        grew = true;
+                    }
+        }
+        return writers.Where(kv => kv.Value.Count > 0).ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
+    }
+
+    private static readonly Regex ReadScope = new(@"\.RequireApiKey\s*\(\s*ApiScopeCatalog\.\w+Read\s*\)", RegexOptions.Compiled);
+    private static readonly Regex ResolvedService = new(@"\bvar\s+(?<name>\w+)\s*=\s*[\w.]*GetRequiredService\s*<\s*(?<type>[\w.]+)\s*>", RegexOptions.Compiled);
+    private static readonly Regex MemberCall = new(@"(?<![\w.])(?<recv>\w+)\s*\.\s*(?<m>\w+)\s*(?:<[^<>()]*>)?\s*\(", RegexOptions.Compiled);
+    private static readonly Regex BareCall = new(@"(?<![\w.])(?<m>\w+)\s*(?:<[^<>()]*>)?\s*\(", RegexOptions.Compiled);
+
+    /// <summary>وُسَطاءُ لامدَةِ النُقطَة: الاسمُ ← اسمُ النَوعِ القَصير (بِلا فَضاءٍ ولا <c>?</c> ولا وُسَطاءِ نَوعٍ ولا سِماتٍ)، ومَعَها
+    /// <c>var x = …GetRequiredService&lt;T&gt;()</c> في الجِسم.</summary>
+    internal static IReadOnlyDictionary<string, string> HandlerParameters(string body)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var route = Regex.Match(body, @"^\.Map\w*\s*\(\s*""[^""]*""\s*,\s*(?:async\s*)?(?<open>\()");
+        if (route.Success)
+        {
+            var open = route.Groups["open"].Index;
+            var list = body[(open + 1)..Closing(body, open, '(', ')')];
+            var (depth, from) = (0, 0);
+            var parts = new List<string>();
+            for (var i = 0; i <= list.Length; i++)
+            {
+                if (i == list.Length || (list[i] == ',' && depth == 0)) { parts.Add(list[from..i]); from = i + 1; continue; }
+                if (list[i] is '<' or '(' or '[') depth++;
+                else if (list[i] is '>' or ')' or ']') depth--;
+            }
+            foreach (var p in parts)
+            {
+                var clean = Regex.Replace(p, @"\[[^\]]*\]", " ").Trim();
+                var m = Regex.Match(clean, @"(?<type>[\w.]+)(?:<[^>]*>)?\??\s+(?<name>\w+)\s*(?:=.*)?$");
+                if (m.Success) map[m.Groups["name"].Value] = m.Groups["type"].Value.Split('.')[^1];
+            }
+        }
+        foreach (Match r in ResolvedService.Matches(body)) map[r.Groups["name"].Value] = r.Groups["type"].Value.Split('.')[^1];
+        return map;
+    }
+
+    /// <summary><b>ما تُناديه النُقطَةُ مِن الكاتِبات</b> — «نَوع.طَريقَة» لِكُلِّ نِداءٍ عَلى وَسيطٍ أَو خِدمَةٍ مَحلولَةٍ أَو نَوعٍ ساكِن، أَو نِداءٍ بِلا
+    /// مُستَقبِلٍ لِكاتِبَةٍ مِن نَوعٍ في <paramref name="fileTypes"/> (مِلَفِّ النُقطَة).</summary>
+    internal static IReadOnlyList<string> WritersCalled(string body, IReadOnlyDictionary<string, HashSet<string>> writers, IReadOnlyCollection<string> fileTypes)
+    {
+        var parameters = HandlerParameters(body);
+        var found = new List<string>();
+        foreach (Match c in MemberCall.Matches(body))
+        {
+            var recv = c.Groups["recv"].Value;
+            var type = parameters.TryGetValue(recv, out var t) ? t : writers.ContainsKey(recv) ? recv : null;
+            if (type is not null && writers.TryGetValue(type, out var w) && w.Contains(c.Groups["m"].Value)) found.Add($"{type}.{c.Groups["m"].Value}");
+        }
+        foreach (Match c in BareCall.Matches(body))
+            foreach (var type in fileTypes)
+                if (writers.TryGetValue(type, out var w) && w.Contains(c.Groups["m"].Value)) found.Add($"{type}.{c.Groups["m"].Value}");
+        return found.Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary><b>ولا نُقطَةَ عَرضٍ تَكتُبُ عَبرَ خِدمَة</b>: كُلُّ <c>MapGet</c>/<c>MapMethods</c> وكُلُّ نُقطَةٍ بِنِطاقِ قِراءَةٍ في الـAPI لا تُنادي
+    /// طَريقَةً كاتِبَة — والعَدّادانِ (الطَرائِقُ الكاتِبَةُ والنِقاطُ المَسؤولَة) يُطبَعانِ ويَفشَلانِ عَلى الصِفر. الاستِثناءُ <see cref="PinnedDisplayWriters"/> نَفسُه.</summary>
+    [Fact]
+    public void No_get_or_read_scoped_endpoint_writes_through_a_service()
+    {
+        var sources = EntitlementContractTests.SourceFiles().ToList();
+        var writers = ServiceWriters(sources);
+        var methodCount = writers.Sum(kv => kv.Value.Count);
+        var gets = MinimalApiGetEndpoints().ToList();
+        var readScoped = AllMinimalApiEndpoints().Where(e => ReadScope.IsMatch(e.Body)).ToList();
+        var asked = gets.Concat(readScoped).DistinctBy(e => (e.Route, e.File, e.Body)).ToList();
+        output.WriteLine($"أَنواعٌ بِطَرائِقَ كاتِبَة: {writers.Count} · طَرائِقُ كاتِبَة: {methodCount} · نِقاطُ عَرض: {gets.Count} · بِنِطاقِ قِراءَة: {readScoped.Count}");
+        Assert.True(methodCount >= 100, $"أَداةٌ عَمياء: {methodCount} طَريقَةً كاتِبَة — والمَقيسُ ‏147 (‏2026-10-25).");
+        Assert.True(writers.TryGetValue("DealsService", out var deals) && deals.Contains("CancelAsync") && deals.Contains("AdvanceAsync"),
+            "أَداةٌ عَمياء: DealsService.CancelAsync/AdvanceAsync لا يُعَدّانِ كاتِبَين.");
+        // ‏ومِرساةُ ‏ADR-020 §٥ بِعَينِها: التَصديرُ يَكتُبُ قَيدَ تَدقيقٍ عَبرَ حَقلِه `_audit` (نَوعٌ ثالِث) — فَهُوَ كاتِبٌ هُنا.
+        Assert.True(writers.TryGetValue("TenantExportService", out var export) && export.Contains("ProduceAsync"),
+            "أَداةٌ عَمياء: TenantExportService.ProduceAsync (قَيدُ التَدقيقِ عَبرَ AuditWriter) لا يُعَدُّ كاتِباً.");
+        Assert.True(gets.Count >= 10 && readScoped.Count >= 2, $"أَداةٌ عَمياء: {gets.Count} نُقطَةَ عَرض و{readScoped.Count} بِنِطاقِ قِراءَة.");
+
+        var typesByFile = sources.Where(f => f.File.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(f => Rel(f.File), f => (IReadOnlyCollection<string>)TypeDecl.Matches(StripComments(f.Text)).Select(m => m.Groups["name"].Value).ToHashSet(StringComparer.Ordinal));
+        var pinned = PinnedDisplayWriters.Select(p => p.Where).ToHashSet(StringComparer.Ordinal);
+        var breaches = asked
+            .Where(e => !pinned.Contains(e.Route))
+            .Select(e => (e, Called: WritersCalled(e.Body, writers, typesByFile.GetValueOrDefault(e.File, []))))
+            .Where(x => x.Called.Count > 0)
+            .Select(x => $"{x.e.Route} ({x.e.File}) ← {string.Join(", ", x.Called)}")
+            .ToArray();
+        Assert.True(breaches.Length == 0,
+            "نُقطَةُ عَرضٍ أَو نِطاقِ قِراءَةٍ تَكتُبُ عَبرَ خِدمَة — الفِعلُ المُعلَنُ قِراءَةٌ والواقِعُ كِتابَة:\n  " + string.Join("\n  ", breaches) +
+            "\nإمّا أَن تَصيرَ `POST` صَريحاً بِنِطاقِ كِتابَة، أَو تُثَبَّتَ في PinnedDisplayWriters بِسَبَبِها في نَفسِ الكوميت.");
+    }
+
+    /// <summary><b>حَقنُ عَيب — الفاحِصُ أَعلاه يُحمِرُّ فِعلاً</b>: الطَفرَةُ M2c بِعَينِها، وكاتِبٌ مُتَعَدٍّ (طَريقَةٌ تُنادي كاتِبَةً مِن نَوعِها)،
+    /// وخِدمَةٌ مَحلولَةٌ مِن الحاوي، ونِداءٌ ساكِن، وكاتِبٌ مِن نَوعِ المِلَفِّ بِلا مُستَقبِل — كُلٌّ يُمسَك؛ وقِراءَةٌ خالِصَةٌ وكاتِبٌ مُسَمّىً في تَعليقٍ لا يُمسَكان.</summary>
+    [Fact]
+    public void The_service_writer_scan_can_actually_go_red()
+    {
+        const string Service = """
+            public sealed class FakeAudit(IDocumentSession s)
+            {
+                public async Task WriteAsync(string what) { s.Store(new { what }); await s.SaveChangesAsync(); }
+                public Task<int> CountAsync() => Task.FromResult(0);
+            }
+            public sealed class FakeExport
+            {
+                private readonly FakeAudit _audit;
+                public async Task ProduceAsync() => await _audit.WriteAsync("export");
+                public async Task<int> PeekAsync() => await _audit.CountAsync();
+            }
+            public sealed class FakeDealsService
+            {
+                public async Task<Deal?> LoadAsync(Guid id) => await _q.LoadAsync<Deal>(id);
+                public async Task CancelAsync(Guid id) { var d = await LoadAsync(id); _s.Store(d); await _s.SaveChangesAsync(); }
+                public Task ArchiveAsync(Guid id) => CancelAsync(id);
+                private static void Touch(IDocumentSession s) => s.Events.Append(Guid.Empty, new object());
+                public static void Stamp(IDocumentSession s) { Touch(s); }
+            }
+            """;
+        var writers = ServiceWriters([("x/FakeDealsService.cs", Service)]);
+        Assert.Equal(new[] { "ArchiveAsync", "CancelAsync", "Stamp", "Touch" }, writers["FakeDealsService"].Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(new[] { "ProduceAsync" }, writers["FakeExport"].ToArray());                 // ‏عَبرَ حَقلٍ مِن نَوعٍ كاتِب — و«Peek» قِراءَة
+        Assert.Equal(new[] { "WriteAsync" }, writers["FakeAudit"].ToArray());
+
+        const string Head = ".MapGet(\"/api/v1/deals/{id:guid}\", async (Guid id, HttpContext http, FakeDealsService deals) =>\n{\n";
+        const string Tail = "\n}).RequireApiKey(ApiScopeCatalog.DealsRead);";
+        var file = new[] { "Routes", "FakeDealsService" };
+        var cases = new (string Name, string Body, string[] Expected)[]
+        {
+            ("M2c: GET يُنادي CancelAsync", Head + "var deal = await deals.LoadAsync(id); await deals.CancelAsync(id);" + Tail, ["FakeDealsService.CancelAsync"]),
+            ("كاتِبٌ مُتَعَدٍّ", Head + "await deals.ArchiveAsync(id);" + Tail, ["FakeDealsService.ArchiveAsync"]),
+            ("خِدمَةٌ مِن الحاوي", ".MapGet(\"/x\", async (HttpContext http) =>\n{ var svc = http.RequestServices.GetRequiredService<FakeDealsService>(); await svc.CancelAsync(Guid.Empty); });", ["FakeDealsService.CancelAsync"]),
+            ("نِداءٌ ساكِن", ".MapGet(\"/x\", (IDocumentSession s) => { FakeDealsService.Stamp(s); return Results.Ok(); });", ["FakeDealsService.Stamp"]),
+            ("بِلا مُستَقبِلٍ مِن نَوعِ المِلَفّ", ".MapGet(\"/x\", (IDocumentSession s) => { Stamp(s); return Results.Ok(); });", ["FakeDealsService.Stamp"]),
+            ("قِراءَةٌ خالِصَة", Head + "var deal = await deals.LoadAsync(id); return Results.Ok(deal);" + Tail, []),
+            ("GET يُصَدِّرُ عَبرَ خِدمَةٍ تَكتُبُ عَبرَ حَقلِها", ".MapGet(\"/x/export\", async (FakeExport export) => { await export.ProduceAsync(); });", ["FakeExport.ProduceAsync"]),
+            ("GET يَقرَأُ عَبرَ الخِدمَةِ نَفسِها", ".MapGet(\"/x/peek\", async (FakeExport export) => await export.PeekAsync());", []),
+            ("وَسيطٌ بِاسمٍ آخَر لا يُخلَط", ".MapGet(\"/x\", async (Guid id, OtherService deals) => await deals.CancelAsync(id));", []),
+        };
+        var wrong = new List<string>();
+        foreach (var c in cases)
+        {
+            var got = WritersCalled(StripComments(c.Body), writers, file);
+            output.WriteLine($"«{c.Name}» → {(got.Count == 0 ? "لا شَيء" : string.Join(", ", got))}");
+            if (!got.SequenceEqual(c.Expected)) wrong.Add($"«{c.Name}»: [{string.Join(", ", got)}] لا [{string.Join(", ", c.Expected)}]");
+        }
+        // ‏وكاتِبٌ مُسَمّىً في تَعليقٍ لا يُعَدُّ نِداءً — الجِسمُ يُقرَأُ بَعدَ `StripComments` كَما في الفاحِص.
+        Assert.Empty(WritersCalled(StripComments(Head + "// await deals.CancelAsync(id);\nreturn Results.Ok();" + Tail), writers, file));
+        output.WriteLine($"حُقِنَ {cases.Length} جِسماً؛ أَخطَأَ الفاحِصُ في {wrong.Count}");
+        Assert.True(wrong.Count == 0, string.Join("\n", wrong));
+        Assert.Matches(ReadScope, Head + Tail);
+    }
+
     // ─── تَوسِعَةُ ‏2026-08-30 (‏ADR-012): سُلطَةٌ فَوقَ سُلطَة ───────
     //
     // **ولِماذا تَوسِعَةٌ لا مِلَفٌّ جَديد** (القاعِدَة ٨): السُؤالُ هُوَ
