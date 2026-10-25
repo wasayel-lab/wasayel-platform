@@ -73,6 +73,7 @@ public class LiveRoleDefinitionProofTests
 
         var roles = new TenantRoleService(store);
         var exec  = new AgentToolExecutor(store, roles);
+        var proposers = new List<string?>();
 
         // ─── ٠. ما يَقرَؤُه يُنشِئُه: مُستَأجِرٌ لِهذِه الجَولَةِ وَحدَها ─────────────
         var TenantSlug = TenantPrefix + Guid.NewGuid().ToString("N")[..8];
@@ -97,7 +98,10 @@ public class LiveRoleDefinitionProofTests
             var doc = await s.LoadAsync<TenantRoleDefinition>(RoleSlug);
             Assert.NotNull(doc);
             Assert.Equal(TenantRoleStatuses.Pending, doc!.Status);
-            Log($"[doc] slug={doc.Slug} status={doc.Status} by={doc.CreatedBy} at={doc.CreatedAt:O}");
+            // ‏(‏2026-10-25، بَندُ المُنَسِّقِ في W8-2) المُقتَرِحُ يُحجَبُ قَبلَ النِداء — والخَرجُ يُقاسُ في آخِرِ البُرهان.
+            proposers.Add(doc.CreatedBy);
+            var proposer = LiveProofRedaction.Of(doc.CreatedBy);
+            Log($"[doc] slug={doc.Slug} status={doc.Status} by={proposer} at={doc.CreatedAt:O}");
         }
 
         // اللَقطَة المَقروءَة الآن لا تَحوي الدَور — لِأَنّ المُعَلَّق لا يُقرَأ.
@@ -126,14 +130,24 @@ public class LiveRoleDefinitionProofTests
         }
 
         // ─── ٣. هاتِف مُشرِف المَنصَّة لِإكمال الاعتِماد عَبر HTTP ───────
+        // ‏(‏2026-10-25، بَندُ المُنَسِّقِ في W8-2) كانَ يَكتُبُ جَوّالَ كُلِّ مُشرِفٍ واسمَه — والجَوّالُ هُوَ ما ضَبَطَه المُشَغِّلُ في `PLATFORM_ADMIN_PHONE`
+        // بِنَفسِه. يُعَدُّ ويُعَرَّفُ بِالمُعَرِّف، والخَرجُ يُقاس.
+        List<StudioUser> admins;
         await using (var s = store.QuerySession(StudioAuth.Tenant))
         {
             var users = await s.Query<StudioUser>().ToListAsync();
-            foreach (var a in users.Where(u => u.IsPlatformAdmin))
-                Log($"[platform-admin] phone={a.Phone} name={a.FullName}");
-            if (!users.Any(u => u.IsPlatformAdmin))
-                Log($"[platform-admin] (لا مُشرِف مَنصَّة — {users.Count} مُستَخدِم studio)");
+            admins = users.Where(u => u.IsPlatformAdmin).ToList();
+            Log($"[platform-admin] العَدَد={admins.Count} مِن {users.Count} مُستَخدِم studio");
+            foreach (var a in admins)
+            {
+                var phone = LiveProofRedaction.Of(a.Phone);
+                var name = LiveProofRedaction.Of(a.FullName);
+                Log($"[platform-admin] id={a.Id:N} phone={phone} name={name}");
+            }
         }
+        var measured = LiveProofRedaction.AssertAbsent(evidence.ToString(),
+            admins.SelectMany(a => new[] { a.Phone, a.Email, a.FullName }).Concat(proposers));
+        Log($"[redaction] قيمَةٌ حَيَّةٌ مَقيسَةٌ غائِبَة عَن الخَرج: {measured}");
 
         var path = Environment.GetEnvironmentVariable("WASAYEL_PROOF_OUT");
         if (!string.IsNullOrEmpty(path))

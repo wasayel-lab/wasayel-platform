@@ -68,6 +68,7 @@ public class LiveApprovalFlowProofTests
 
         var roles = new TenantRoleService(store);
         var exec  = new AgentToolExecutor(store, roles);
+        var deciders = new List<string?>();
 
         Log($"[flow] states={string.Join(",", ApprovalFlow.All)} " +
             $"decisionActor={ApprovalFlow.DecisionActor}");
@@ -102,7 +103,10 @@ public class LiveApprovalFlowProofTests
             var doc = await s.LoadAsync<TenantRoleDefinition>(RoleSlug);
             Assert.NotNull(doc);
             Assert.NotEqual("applied", doc!.Status);
-            Log($"[doc/after-rejected-verdict] status={doc.Status} decidedBy={doc.DecidedBy ?? "-"}");
+            // ‏(‏2026-10-25، بَندُ المُنَسِّقِ في W8-2) مُعتَمِدُ جَولَةٍ سابِقَةٍ قَد يَكونُ مُشرِفاً عَبرَ HTTP — وبابُه يَكتُبُ «{FullName} · {Phone}». يُحجَب.
+            deciders.Add(doc.DecidedBy);
+            var earlierDecider = LiveProofRedaction.Of(doc.DecidedBy);
+            Log($"[doc/after-rejected-verdict] status={doc.Status} decidedBy={earlierDecider}");
         }
 
         // ─── ٢. المُوجَب: القَرار الَّذي يُجيزُه التَعريف يَمُرّ ─────────
@@ -118,7 +122,9 @@ public class LiveApprovalFlowProofTests
             var doc = await s.LoadAsync<TenantRoleDefinition>(RoleSlug);
             Assert.NotNull(doc);
             Assert.Equal(TenantRoleStatuses.Approved, doc!.Status);
-            Log($"[doc/after-approval] status={doc.Status} decidedBy={doc.DecidedBy} at={doc.DecidedAt:O}");
+            // والقَرارُ قَرارُ البُرهانِ نَفسِه — يُقاسُ ولا يُطبَعُ مِن الوَثيقَة.
+            Assert.Equal("live-proof", doc.DecidedBy);
+            Log($"[doc/after-approval] status={doc.Status} decidedBy=live-proof at={doc.DecidedAt:O}");
         }
 
         // ─── ٣. والدَور صارَ حَيّاً — أَثَر الاعتِماد لا إعلانُه ─────────
@@ -131,6 +137,11 @@ public class LiveApprovalFlowProofTests
         var (back, backMsg) = await roles.DecideAsync(
             TenantSlug, RoleSlug, TenantRoleStatuses.Rejected, "live-proof-cleanup");
         Log($"[cleanup/rejected] ok={back} :: {backMsg}");
+
+        // و«live-proof…» عَلامَةُ البُرهانِ نَفسِه (القَرارُ والتَنظيف) لا إنسان — لا تُقاس.
+        var measured = LiveProofRedaction.AssertAbsent(evidence.ToString(),
+            deciders.Where(d => d is not null && !d.StartsWith("live-proof", StringComparison.Ordinal)));
+        Log($"[redaction] قيمَةٌ حَيَّةٌ مَقيسَةٌ غائِبَة عَن الخَرج: {measured}");
 
         var path = Path.Combine(Path.GetTempPath(), "wasayel-approval-flow-proof.log");
         File.WriteAllText(path, evidence.ToString());

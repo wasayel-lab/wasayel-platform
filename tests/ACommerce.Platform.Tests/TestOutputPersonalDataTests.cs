@@ -17,6 +17,9 @@ namespace ACommerce.Platform.Tests;
 // إلى `Console` أَو `.WriteLine(` (كَـ`Log` هُناك) — تَحمِلُ وُسَطاؤُه `.Phone` أَو `.Email` أَو `.FullName` أَو `.NationalId`. ويَطبَعُ ما فَحَصَه
 // ويَفشَلُ إن كانَ صِفراً (القاعِدَة ١٠). وهذا المِلَفُّ نَفسُه خارِجَ المَسحِ لِأَنّ عَيِّناتِه نُصوص — وتُقاسُ بِالدالَّةِ نَفسِها أَدناه.
 //
+// **العِلاج** (‏2026-10-25): `LiveProofRedaction` — الحَقلُ يُحجَبُ في سَطرٍ قَبلَ نِداءِ الكاتِب، والبُرهانُ يَقيسُ غِيابَ كُلِّ قيمَةٍ حَيَّةٍ عَن
+// خَرجِه بِرِسالَةٍ لا تُعيدُها؛ وبُرهانُ الثيمِ يَقيسُ حالاتِ وَثائِقِه وثيمَه الفَعّال. الصَفّانِ انقَلَبا بِاسمَيهِما، وصَفُّ العَيِّناتِ كَما أُودِع.
+//
 // **يُثَبَّتُ قَبلَ العِلاجِ** (القاعِدَة ٣): الصَفّانِ `Today_…` يَنقَلِبانِ بِاسمَيهِما، وصَفُّ العَيِّناتِ المَحقونَةِ يَبقى حَرفاً. وأَوَّلُ مَسحٍ وَجَدَ
 // أَربَعَةَ مِلَفّاتٍ بِالحُقولِ الأَربَعَة: اثنانِ مِنها كاذِبان — `GetType().FullName` اسمُ نَوع، وعَيِّنَةُ `ListingOwnerCountScriptTests` سِلسِلَةٌ لِماسِحِه — فَصارَ
 // النَمَطُ يَستَثني اسمَ النَوعِ والماسِحُ يُفَرِّغُ السِلسِلَةَ العادِيَّة، وكِلاهُما بِصَفٍّ هُنا.
@@ -214,29 +217,49 @@ public class TestOutputPersonalDataTests(ITestOutputHelper output)
         Assert.Empty(Leaks(BlankPlainStrings("const string s = \"\"\"\n  output.WriteLine(u.Phone);\n  \"\"\";")));
     }
 
-    // ─── ١. ثَلاثَةُ بَراهينَ حَيَّةٍ تَكتُبُ جَوّالَ المُشرِفِ واسمَه ومُقتَرِحَ الوَثيقَةِ أَو مُعتَمِدَها ─────────────────
+    // ─── ١. لا اختِبارَ يَكتُبُ حَقلاً شَخصِيّاً إلى خَرجِه ─────────────────────────────────────────────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-25) مِن `Today_three_live_proofs_write_admin_phones_names_proposers_or_deciders_to_their_output`.
 
     [Fact]
-    public void Today_three_live_proofs_write_admin_phones_names_proposers_or_deciders_to_their_output()
+    public void No_test_writes_a_personal_field_to_its_output()
     {
         var (files, leaks) = Scan();
-        output.WriteLine($"مِلَفّاتٌ مَفحوصَة: {files} · مَواضِعُ الكَشف: " + string.Join(" · ", leaks.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key}={kv.Value.Count}")));
+        output.WriteLine($"مِلَفّاتٌ مَفحوصَة: {files} · مَواضِعُ الكَشف: {leaks.Values.Sum(l => l.Count)}");
         Assert.True(files > 100, $"أَداةٌ عَمياء: {files} مِلَفّاً.");
-        Assert.Equal(["LiveApprovalFlowProofTests.cs", "LiveRoleDefinitionProofTests.cs", "LiveThemeProofTests.cs"],
-            leaks.Keys.Order(StringComparer.Ordinal).ToArray());
-        Assert.All(leaks.Values, l => Assert.Equal(2, l.Count));
+        Assert.True(leaks.Count == 0, "اختِبارٌ يَكتُبُ حَقلاً شَخصِيّاً إلى خَرجِه — احجُبه قَبلَ النِداءِ بِـLiveProofRedaction.Of:\n  " +
+            string.Join("\n  ", leaks.SelectMany(kv => kv.Value.Select(l => $"{kv.Key}: {l}"))));
     }
 
-    // ─── ٢. بُرهانُ الثيمِ الحَيُّ بِلا Assert ──────────────────────────────────────────────────────────
+    // ─── ٢. بُرهانُ الثيمِ الحَيُّ يَقيسُ ما قَرَأ — والثَلاثَةُ تَقيسُ خَرجَها ──────────────────────────────
 
     internal static string ThemeProof() => WriteEndpointGuardTests.StripComments(
         StudioConsentCharacterizationTests.Source("tests", "ACommerce.Platform.Tests", "LiveThemeProofTests.cs"));
 
+    // انقَلَبَ بِاسمِه (‏2026-10-25) مِن `Today_the_theme_live_proof_asserts_nothing_so_it_is_green_whatever_it_reads`.
     [Fact]
-    public void Today_the_theme_live_proof_asserts_nothing_so_it_is_green_whatever_it_reads()
+    public void The_theme_live_proof_measures_statuses_the_effective_theme_and_its_own_output()
     {
-        var asserts = Regex.Matches(ThemeProof(), @"\bAssert\.\w+\(").Count;
+        var proof = ThemeProof();
+        var asserts = Regex.Matches(proof, @"\bAssert\.\w+\(").Count;
         output.WriteLine($"Assert في LiveThemeProofTests: {asserts}");
-        Assert.Equal(0, asserts);
+        Assert.True(asserts >= 4, $"{asserts} Assert");
+        Assert.Contains("TenantThemeStatuses.Contains(d.Status)", proof, StringComparison.Ordinal);
+        Assert.Contains("TenantThemeSet.Platform.Theme.Slug", proof, StringComparison.Ordinal);
+        foreach (var file in new[] { "LiveThemeProofTests.cs", "LiveRoleDefinitionProofTests.cs", "LiveApprovalFlowProofTests.cs" })
+            Assert.Contains("LiveProofRedaction.AssertAbsent(evidence.ToString(),", WriteEndpointGuardTests.StripComments(
+                StudioConsentCharacterizationTests.Source("tests", "ACommerce.Platform.Tests", file)), StringComparison.Ordinal);
+    }
+
+    // والقِياسُ نَفسُه يَحمَرّ: قيمَةٌ حَيَّةٌ في الخَرجِ تُفشِلُه، ورِسالَتُه لا تُعيدُها؛ وما دونَ ثَلاثَةِ أَحرُفٍ لا يُقاس.
+    [Fact]
+    public void The_redaction_check_goes_red_on_a_live_value_without_repeating_it()
+    {
+        Assert.Equal(LiveProofRedaction.Mask, LiveProofRedaction.Of("0500000000"));
+        Assert.Equal("-", LiveProofRedaction.Of("  "));
+        Assert.Equal(1, LiveProofRedaction.AssertAbsent("[platform-admin] phone=‹مَحجوب›", ["0500000000", "ab", null]));
+        var red = Assert.ThrowsAny<Xunit.Sdk.XunitException>(() =>
+            LiveProofRedaction.AssertAbsent("[platform-admin] phone=0500000000", ["0500000000"]));
+        Assert.DoesNotContain("0500000000", red.Message, StringComparison.Ordinal);
     }
 }
