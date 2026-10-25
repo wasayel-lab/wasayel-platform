@@ -295,21 +295,45 @@ jobs:
       # **و«ما يَخدِم» غَيرُ «ما دُفِع»**: `.source-revision` في مُستَودَعِ الـSpace يَقولُ ما دُفِعَ إلَيه (ويَحتاجُ الرَمزَ لِيُقرَأ)، و`base_commit`
       # ما يَخدِمُه الحَيّ — ويَفتَرِقانِ بَعدَ بِناءٍ فاشِل. والحارِسُ يَحرُسُ الإنتاجَ فَيَقرَأُ الثاني.
       # والدالَّةُ بَينَ عَلامَتَين تُقطَعُ في `DeployDirectionTests` وتُشَغَّلُ عَلى مُستَودَعٍ مَصنوعٍ بِحالاتِها كُلِّها.
+      # ‏(‏2026-10-25 — تَيّارُ W8-5، بَندُ المُنَسِّق — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وما لَم يُقَس يُدفَعُ إن كانَ المُرَشَّحُ رَأسَ `main` الآن**: كانَ
+      # إصلاحٌ إلى الأَمامِ والإنتاجُ ساقِطٌ (`/health` لا يُجيب ⇒ `failed`) يُرفَضُ إلّا بِمُدخَلٍ اسمُه `allow_rollback`. فَصارَت الخُطوَةُ تَجلِبُ رَأسَ `main`
+      # مِن الأَصلِ لَحظَةَ الحُكمِ (`deploy_main_tip`، بَينَ العَلامَتَينِ نَفسِهِما) وتُمَرِّرُه خامِساً: المُرَشَّحُ الَّذي **هُوَ** الرَأسُ يُدفَع — الرَأسُ لا يَكونُ
+      # تَراجُعاً عَن `main` أَحدَثَ مِنه — وكُلُّ مُرَشَّحٍ سِواه يُرفَضُ بِاسمِه كَما كان، ورَأسٌ لَم يُجلَب يُرفَض، و`allow_rollback` يُجيزُ كَما كان (DEPLOY.md §٢·و).
       - name: Refuse a push that is not forward of what the live serves
         env:
           ALLOW_ROLLBACK: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_rollback == true }}
         run: |
           set -uo pipefail
           # ─── بِدايَةُ deploy_direction ───
+          # ‏(‏2026-10-25 — تَيّارُ W8-5) رَأسُ `main` في الأَصلِ الآنَ — لا لَحظَةَ الاستِنساخ: `main` قَد تَقَدَّمَ في دَقائِقِ الوَظيفَة. يَطبَعُه 40 مِحرَفاً
+          # سِتّينِيّاً، أَو لا شَيءَ إن تَعَذَّرَ الجَلبُ أَو جاءَ بِغَيرِ ذلك (فَيُرفَضُ ما لَم يُقَس كَما كان — مُغلَقٌ عِندَ الشَكّ).
+          deploy_main_tip() {
+            local tip=""
+            if git fetch --no-tags --quiet origin "+refs/heads/main:refs/remotes/origin/main" 2>/dev/null; then
+              tip="$(git rev-parse --verify -q 'refs/remotes/origin/main^{commit}' 2>/dev/null || true)"
+            fi
+            case "${tip}" in *[!0-9a-f]*) tip="" ;; esac
+            [ "${#tip}" -eq 40 ] || tip=""
+            printf '%s' "${tip}"
+          }
           # $1 المُرَشَّح · $2 ما يَخدِمُه الحَيّ (قَد يَكونُ فارِغاً) · $3 حالَةُ خَطِّ الأَساس · $4 السَماحُ بِالتَراجُع (true|false).
+          # ‏(‏2026-10-25) · $5 رَأسُ `main` الآنَ (`deploy_main_tip`؛ قَد يَكونُ فارِغاً) — لا يُقرَأُ إلّا حينَ لا يُقاسُ الحَيّ.
           # تَطبَعُ «decision=push|skip|refuse» ثُمَّ سَطرَ السَبَب، وتَرجِعُ 0 لِلدَفعِ والتَخَطّي و1 لِلرَفض.
           deploy_direction() {
-            local candidate="$1" live="$2" state="$3" allow="$4" rel="" rc=0
+            local candidate="$1" live="$2" state="$3" allow="$4" tip="${5:-}" rel="" rc=0
             # ‏(‏2026-10-24 — تَيّارُ S16، الجَولَةُ ١ لِلمُراجَعَة) **وما لَم يُقَس لا يُدفَعُ إلّا بِالنَقرَة**: كانَ هذا الفَرعُ يَطبَعُ «push»
             # ويَخرُجُ بِصِفر — فَتَشغيلٌ يَصِلُ و`/health` يَرُدُّ 5xx (حاوِيَةٌ تُبنى أَو تَتَعَثَّر) يَدفَعُ N فَوقَها أَخضَر، وهو التَراجُعُ الصامِتُ بِعَينِه.
             # فَصارَ «غَيرُ مَعروفٍ» سَبَباً يَمُرُّ بِذَيلِ الحُكمِ الواحِد كالأَقدَم: يُرفَضُ بِاسمِه، ويُجيزُه `allow_rollback` وَحدَه (DEPLOY.md §٢·و و§٤‑أ).
             if [ "${state}" != "measured" ] || [ -z "${live}" ]; then
+              # ‏(‏2026-10-25 — تَيّارُ W8-5) **والرَأسُ يُدفَع**: مُرَشَّحٌ هُوَ رَأسُ `main` الآنَ لا يَكونُ تَراجُعاً عَن `main` أَحدَث — فَإصلاحٌ إلى الأَمامِ
+              # والحَيُّ لا يُجيبُ لا يَحتاجُ مُدخَلَ «تَراجُع». وكُلُّ مُرَشَّحٍ سِواه يُرفَضُ كَما كان، والسَبَبُ يُسَمّي الرَأسَ أَو غِيابَه.
+              if [ -n "${tip}" ] && [ "${candidate}" = "${tip}" ]; then
+                echo "decision=push"
+                echo "الحارِسُ لَم يَقِس ما يَخدِمُه الحَيّ (خَطُّ الأَساس [${state}]، commit=${live:-<لا شَيء>})، والمُرَشَّحُ ${candidate} رَأسُ main الآن — والرَأسُ لا يَكونُ تَراجُعاً عَن main أَحدَثَ مِنه."
+                return 0
+              fi
               rel="الحارِسُ لَم يَقِس ما يَخدِمُه الحَيّ (خَطُّ الأَساس [${state}]، commit=${live:-<لا شَيء>})، فَلا يُعرَفُ أَأَحدَثُ هُوَ مِن المُرَشَّحِ ${candidate} أَم أَقدَم"
+              if [ -n "${tip}" ]; then rel="${rel}، والمُرَشَّحُ لَيسَ رَأسَ main الآن (${tip})"; else rel="${rel}، ورَأسُ main لَم يُجلَب"; fi
             elif [ "${candidate}" = "${live}" ]; then
               echo "decision=skip"
               echo "الحَيُّ يَخدِمُ ${live} نَفسَه — لا دَفعَ ولا بِناء (وإعادَةُ بِنائِه مِن واجِهَةِ HF: Factory rebuild، DEPLOY.md §٤‑ج)."
@@ -343,8 +367,11 @@ jobs:
           # ─── نِهايَةُ deploy_direction ───
 
           candidate="$(git rev-parse HEAD)"
+          # ‏(‏2026-10-25 — تَيّارُ W8-5) رَأسُ main لَحظَةَ الحُكم — يَقرَؤُه فَرعُ «لَم يُقَس» وَحدَه (DEPLOY.md §٢·و).
+          main_tip="$(deploy_main_tip)"
+          echo "رَأسُ main الآن: ${main_tip:-<لَم يُجلَب>}"
           code=0
-          out="$(deploy_direction "${candidate}" "${base_commit:-}" "${base_state:-failed}" "${ALLOW_ROLLBACK:-false}")" || code=$?
+          out="$(deploy_direction "${candidate}" "${base_commit:-}" "${base_state:-failed}" "${ALLOW_ROLLBACK:-false}" "${main_tip}")" || code=$?
           printf '%s\n' "${out}"
           decision="$(printf '%s\n' "${out}" | sed -n 's/^decision=//p' | head -1)"
           case "${decision}" in push|skip) : ;; *) decision="refuse" ;; esac

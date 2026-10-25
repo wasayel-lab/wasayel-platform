@@ -434,4 +434,161 @@ public class DeployDirectionTests(ITestOutputHelper output)
             h.Dir.Delete(recursive: true);
         }
     }
+
+    // ─── ٦. (‏2026-10-25 — تَيّارُ W8-5، بَندُ المُنَسِّق) ما لَم يُقَس يُدفَعُ إن كانَ المُرَشَّحُ رَأسَ main الآن، ويُرفَضُ ما سِواه ─────────────
+    //
+    // **المَقيسُ قَبل** (`994a576`، صَفُّ القِسمِ ٥ بِحالاتِه الاثنَتَي عَشرَة يَخضَرُّ عَلى الدالَّةِ وهي تَتَجاهَلُ الخامِس): حَيٌّ لا يُقاسُ ⇒ كُلُّ
+    // مُرَشَّحٍ يُرفَضُ إلّا بِـ`allow_rollback` — فَإصلاحٌ إلى الأَمامِ والإنتاجُ ساقِطٌ يَحتاجُ مُدخَلاً اسمُه «تَراجُع». **وصارَ**: الخُطوَةُ تَجلِبُ رَأسَ `main`
+    // مِن الأَصلِ لَحظَةَ الحُكمِ (`deploy_main_tip` بَينَ عَلامَتَي الحارِسِ نَفسِهِما) وتُمَرِّرُه خامِساً؛ والمُرَشَّحُ الَّذي **هُوَ** الرَأسُ يُدفَعُ بِسَطرٍ
+    // يُسَمّيه (الرَأسُ لا يَكونُ تَراجُعاً عَن `main` أَحدَثَ مِنه)، وكُلُّ ما سِواه يُرفَضُ كَما كانَ بِاسمِه، و`allow_rollback` يُجيزُه كَما كان.
+
+    [Fact]
+    public void An_unmeasured_live_pushes_mains_current_tip_and_still_refuses_any_other_candidate()
+    {
+        if (NoBash()) return;
+        var h = Scratch();
+        try
+        {
+            var cases = new (string Name, string Candidate, string Live, string State, string Allow, string Tip, int Code, string Decision, string Says)[]
+            {
+                ("فَشِلَ القِياسُ والمُرَشَّحُ رَأسُ main",       h.C, "",  "failed",   "false", h.C, 0, "push",   "رَأسُ main الآن"),
+                ("أَوَّلُ نَشرٍ والمُرَشَّحُ رَأسُ main",          h.C, "",  "absent",   "false", h.C, 0, "push",   "رَأسُ main الآن"),
+                ("لا مُضيفَ والمُرَشَّحُ رَأسُ main",             h.C, "",  "nohost",   "false", h.C, 0, "push",   "رَأسُ main الآن"),
+                ("قيسَ بِلا رَقمٍ والمُرَشَّحُ رَأسُ main",        h.C, "",  "measured", "false", h.C, 0, "push",   "رَأسُ main الآن"),
+                ("رَقمٌ وحالٌ غَيرُ measured والمُرَشَّحُ الرَأس",  h.C, h.A, "failed",   "false", h.C, 0, "push",   "رَأسُ main الآن"),
+                ("فَشِلَ القِياسُ والمُرَشَّحُ لَيسَ الرَأس",        h.B, "",  "failed",   "false", h.C, 1, "refuse", "::error::لا يُدفَعُ ما لَيسَ بَعدَ ما يَخدِم: الحارِسُ لَم يَقِس"),
+                ("… ويُسَمّى الرَأسُ في سَبَبِ الرَفض",           h.B, "",  "failed",   "false", h.C, 1, "refuse", "لَيسَ رَأسَ main"),
+                ("فَشِلَ القِياسُ والرَأسُ لَم يُجلَب",            h.C, "",  "failed",   "false", "",  1, "refuse", "رَأسُ main لَم يُجلَب"),
+                ("فَشِلَ القِياسُ، لَيسَ الرَأس، بِسَماح",         h.B, "",  "failed",   "true",  h.C, 0, "push",   "::warning::تَراجُعٌ مَقصود (allow_rollback=true): الحارِسُ لَم يَقِس"),
+                ("فَشِلَ القِياسُ، الرَأس، بِسَماح",              h.C, "",  "failed",   "true",  h.C, 0, "push",   "رَأسُ main الآن"),
+                ("رَأسٌ لَيسَ 40 مِحرَفاً لا يُطابِق",             h.C, "",  "failed",   "false", h.C[..7], 1, "refuse", "لَم يَقِس"),
+            };
+            var wrong = new List<string>();
+            foreach (var c in cases)
+            {
+                var (code, decision, reason) = DirectionWithTip(h, c.Candidate, c.Live, c.State, c.Allow, c.Tip);
+                if (code != c.Code || decision != c.Decision || !reason.Contains(c.Says, StringComparison.Ordinal))
+                    wrong.Add($"«{c.Name}»: {code}/{decision} «{reason}» لا {c.Code}/{c.Decision} «…{c.Says}…»");
+            }
+            output.WriteLine($"فُحِصَت {cases.Length} حالَةً لِحَيٍّ لَم يُقَس والرَأسُ وَسيط؛ أَخطَأَ الحُكمُ في {wrong.Count}");
+            Assert.True(cases.Length == 11, "أَداةٌ عَمياء: الحالاتُ أَقَلُّ مِمّا كُتِب.");
+            Assert.True(wrong.Count == 0, string.Join("\n", wrong));
+        }
+        finally
+        {
+            h.Dir.Delete(recursive: true);
+        }
+    }
+
+    /// <summary><b>الرَأسُ يُجلَبُ مِن الأَصلِ لَحظَةَ الحُكمِ لا لَحظَةَ الاستِنساخ</b>: <c>deploy_main_tip</c> (بَينَ عَلامَتَي الحارِس) عَلى مُستَودَعٍ مَصنوعٍ أَصلُه
+    /// مُستَودَعٌ عارٍ — يَطبَعُ رَأسَه، ثُمَّ رَأسَه الجَديدَ بَعدَ أَن يَتَقَدَّمَ الأَصلُ ولَم يُستَنسَخ شَيء، وفارِغاً بِلا أَصل. والخُطوَةُ تُناديها وتُمَرِّرُها خامِساً.</summary>
+    [Fact]
+    public void The_tip_is_fetched_from_origin_when_the_step_decides_and_is_empty_without_one()
+    {
+        if (NoBash()) return;
+        var wf = Workflow();
+        Assert.Contains("main_tip=\"$(deploy_main_tip)\"", wf, StringComparison.Ordinal);
+        Assert.Contains("deploy_direction \"${candidate}\" \"${base_commit:-}\" \"${base_state:-failed}\" \"${ALLOW_ROLLBACK:-false}\" \"${main_tip}\"", wf, StringComparison.Ordinal);
+
+        var h = Scratch();
+        var bare = Directory.CreateTempSubdirectory("wasayel-deploy-origin-");
+        try
+        {
+            string Git(string dir, params string[] a)
+            {
+                var (code, text) = Run("git", dir, a);
+                Assert.True(code == 0, $"git {string.Join(' ', a)} خَرَجَ {code}: {text}");
+                return text;
+            }
+            string Tip(string dir)
+            {
+                var script = Path.Combine(h.Dir.FullName, "..", Path.GetFileName(h.Dir.FullName) + "-tip.sh");
+                File.WriteAllText(script, "set -uo pipefail\n" + DirectionFunction() + "\ndeploy_main_tip\n", new UTF8Encoding(false));
+                try { return Run("/bin/bash", dir, script).Out; }
+                finally { File.Delete(script); }
+            }
+
+            // بِلا أَصل: الجَلبُ يَفشَلُ والرَأسُ فارِغ.
+            var none = Tip(h.Dir.FullName);
+            Git(bare.FullName, "init", "-q", "--bare", "-b", "main");
+            Git(h.Dir.FullName, "remote", "add", "origin", bare.FullName);
+            Git(h.Dir.FullName, "push", "-q", "origin", "main");
+            var first = Tip(h.Dir.FullName);
+
+            // الأَصلُ يَتَقَدَّمُ مِن مُستَودَعٍ آخَر — ولا يَستَنسِخُ المُستَودَعُ المَصنوعُ شَيئاً بَعدَه.
+            var other = Directory.CreateTempSubdirectory("wasayel-deploy-pusher-");
+            try
+            {
+                Git(other.FullName, "clone", "-q", bare.FullName, ".");
+                File.WriteAllText(Path.Combine(other.FullName, "d.txt"), "d");
+                Git(other.FullName, "add", "d.txt");
+                Git(other.FullName, "commit", "-q", "-m", "d");
+                var d = Git(other.FullName, "rev-parse", "HEAD");
+                Git(other.FullName, "push", "-q", "origin", "main");
+                var second = Tip(h.Dir.FullName);
+                output.WriteLine($"بِلا أَصل «{none}» · الأَصلُ عِندَ C «{first}» · بَعدَ تَقَدُّمِه إلى D «{second}»");
+                Assert.Equal("", none);
+                Assert.Equal(h.C, first);
+                Assert.Equal(d, second);
+                Assert.NotEqual(h.C, d);
+            }
+            finally { other.Delete(recursive: true); }
+        }
+        finally
+        {
+            h.Dir.Delete(recursive: true);
+            bare.Delete(recursive: true);
+        }
+    }
+
+    /// <summary><b>حَقنُ عَيب — صُفوفُ الرَأسِ تَحمَرُّ عَلى دالَّةٍ تُخطِئُه</b>: المُقارَنَةُ تَسقُطُ (كُلُّ رَأسٍ مَجلوبٍ يُدفَعُ مَعَه أَيُّ مُرَشَّح)، والفَرعُ يَسقُط
+    /// (الرَأسُ يُرفَضُ كَما كانَ اليَوم)، والرَأسُ يُقارَنُ بِما يَخدِمُ لا بِالمُرَشَّح — ويُشتَرَطُ أَن يَختَلِفَ حُكمُ حالَةٍ أَو سَبَبُها عَن الحَيّ.</summary>
+    [Fact]
+    public void The_tip_rows_can_actually_go_red_on_an_injected_fault()
+    {
+        if (NoBash()) return;
+        var live = DirectionFunction();
+        var faults = new (string Name, string From, string To)[]
+        {
+            ("المُقارَنَةُ تَسقُط", "[ -n \"${tip}\" ] && [ \"${candidate}\" = \"${tip}\" ]", "[ -n \"${tip}\" ]"),
+            ("الفَرعُ يَسقُط", "[ -n \"${tip}\" ] && [ \"${candidate}\" = \"${tip}\" ]", "false"),
+            ("الرَأسُ بِما يَخدِم", "[ -n \"${tip}\" ] && [ \"${candidate}\" = \"${tip}\" ]", "[ -n \"${tip}\" ] && [ \"${live}\" = \"${tip}\" ]"),
+        };
+        var h = Scratch();
+        try
+        {
+            var probes = new (string Candidate, string Live, string State, string Allow, string Tip)[]
+            {
+                (h.C, "", "failed", "false", h.C), (h.B, "", "failed", "false", h.C), (h.C, "", "failed", "false", ""),
+                (h.C, h.C, "failed", "false", h.C),
+            };
+            string Verdicts(string fn) => string.Join(" | ", probes.Select(p =>
+            {
+                var script = Path.Combine(h.Dir.FullName, "..", Path.GetFileName(h.Dir.FullName) + "-tf.sh");
+                File.WriteAllText(script, "set -uo pipefail\n" + fn + "\ndeploy_direction \"$1\" \"$2\" \"$3\" \"$4\" \"$5\"\n", new UTF8Encoding(false));
+                try
+                {
+                    var (code, text) = Run("/bin/bash", h.Dir.FullName, script, p.Candidate, p.Live, p.State, p.Allow, p.Tip);
+                    return $"{code}:{string.Join(" / ", text.Split('\n').Take(2))}";
+                }
+                finally { File.Delete(script); }
+            }));
+            var baseline = Verdicts(live);
+            output.WriteLine($"الحَيّ: {baseline}");
+            var blind = new List<string>();
+            foreach (var f in faults)
+            {
+                Assert.Single(Regex.Matches(live, Regex.Escape(f.From)));
+                var v = Verdicts(live.Replace(f.From, f.To, StringComparison.Ordinal));
+                output.WriteLine($"«{f.Name}»: {v}");
+                if (v == baseline) blind.Add(f.Name);
+            }
+            output.WriteLine($"حُقِنَ {faults.Length} عُيوبٍ عَلى {probes.Length} حالات؛ لَم يُرَ مِنها {blind.Count}");
+            Assert.True(blind.Count == 0, "عَيبٌ لا تَراه الحالات: " + string.Join("، ", blind));
+        }
+        finally
+        {
+            h.Dir.Delete(recursive: true);
+        }
+    }
 }
