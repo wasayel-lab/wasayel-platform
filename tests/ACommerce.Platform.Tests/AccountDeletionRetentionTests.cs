@@ -659,4 +659,33 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
             Assert.Contains(said, item, StringComparison.Ordinal);
         Assert.Contains("إشعارات مديري المتجر", Bare(Ar(StorePrivacyKey)), StringComparison.Ordinal);
     }
+
+    /// <summary>جِسمُ <c>ApiKeyService.AuthenticateAsync</c> بِلا تَعليق — ما يَسأَلُه قَبلَ أَن يُعيدَ الفاعِل.</summary>
+    internal static string AuthenticateBody()
+    {
+        var code = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Api", "ApiKeyService.cs")));
+        var at = code.IndexOf("public virtual async Task<ApiKeyAuthResult> AuthenticateAsync(", StringComparison.Ordinal);
+        Assert.True(at > 0, "لا AuthenticateAsync — الأَداةُ عَمياء.");
+        return code[at..code.IndexOf("public static string? BearerFrom(", at, StringComparison.Ordinal)];
+    }
+
+    /// <summary><b>تَوصيف</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢، صُغرى — القاعِدَة ٣: يَنقَلِبُ بِاسمِه في كوميتِ التَصنيفِ والنَصّ):
+    /// <c>ApiKeyDocument.ActorName</c> مُصَنَّفٌ نُسخَةً ساكِنَة («تُكتَبُ وَقتَ الفِعلِ ولا يَمَسُّها الحَذف»)، وهو اسمُ فاعِلِ مِفتاحٍ حَيّ: <c>AuthenticateAsync</c>
+    /// يَسأَلُ الحالَةَ والانتِهاءَ والمُستَأجِرَ ولا يَسأَلُ عَن حِسابِ الفاعِل، فَمِفتاحٌ صَدَرَ بِاسمِ مُستَخدِمٍ حَذَفَ حِسابَه يَبقى يُحَرِّكُ صَفَقاتِه بِاسمِه
+    /// ويَكتُبُه في سُطورٍ جَديدَة — والنُصوصُ تَقولُ «بَقِيَ اسمُكَ في… مَفاتيحِ الرَبط» لا «يَبقى يَعمَلُ بِاسمِك».</summary>
+    [Fact]
+    public void Today_an_integration_key_issued_in_a_deleted_users_name_is_classified_a_passive_copy_and_keeps_acting()
+    {
+        var field = PersonNameFields["ApiKeyDocument.ActorName"];
+        var auth = AuthenticateBody();
+        var asksUser = Regex.IsMatch(auth, @"\b(User|DeletedAt|LoadAsync<User>)\b");
+        output.WriteLine($"ApiKeyDocument.ActorName ← {field.Kind}/{field.Said} · AuthenticateAsync يَسأَلُ عَن حِسابِ الفاعِل: {asksUser} · يُعيدُ ActorUserId/ActorName: {auth.Contains("doc.ActorUserId, doc.ActorName", StringComparison.Ordinal)}");
+        Assert.Equal(NameKind.Copy, field.Kind);
+        Assert.Equal(Disclosure.StoreRecords, field.Said);
+        Assert.False(asksUser);
+        Assert.Contains("doc.ActorUserId, doc.ActorName", auth, StringComparison.Ordinal);
+        foreach (var k in new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey })
+            Assert.DoesNotContain("يعمل باسمك", Bare(Ar(k)), StringComparison.Ordinal);
+    }
 }
