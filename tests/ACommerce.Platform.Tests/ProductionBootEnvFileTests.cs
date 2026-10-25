@@ -149,6 +149,39 @@ public class ProductionBootEnvFileTests(ITestOutputHelper output)
         Assert.Equal("Host=from-file-branch;Database=x", conn);
     }
 
+    // ─── توصيفُ «اليَوم» — مُراجَعَةُ تَيّارِ W8-6، الكُبرى ١ (‏2026-10-25، عِندَ `6167b9f`) ───
+    //
+    // ‏`kept` لا يَحفَظُ إلّا اسماً يُسنِدُه المِلَفّ، فَمُتَغَيِّرٌ صُدِّرَ والمِلَفُّ لا يُسَمّيه يَسقُطُ في فَرعِ «مِن المِلَفّ». والإعدادُ الأَرجَح:
+    // مِلَفٌّ بِسَطرِ السِلسِلَةِ وَحدَه (مِثالُ §٢·و قَبلَ `d29e1d9`) والخُطوَةُ ١ مِن §٤‑د تُصَدِّرُ الاثنَين — فَتَنسِبُ البَوّابَةُ السِرَّ إلى مِلَفٍّ لا يَحمِلُه.
+
+    /// <summary>مِلَفٌّ بِسَطرِ السِلسِلَةِ وَحدَه — مِثالُ §٢·و قَبلَ <c>d29e1d9</c>.</summary>
+    private const string ConnOnlyFileBody = "ConnectionStrings__Postgres=\"Host=from-file-branch;Database=x\"\n";
+
+    private static readonly Dictionary<string, string> BothExported = new()
+    {
+        ["ConnectionStrings__Postgres"] = "Host=from-env-branch;Database=x",
+        ["ACOMMERCE_AUTH_SECRET"] = "env-secret-0000000000000000000000000000000",
+    };
+
+    /// <summary>ما تَقولُه البَوّابَةُ عَن مَصدَرِ مُتَغَيِّرٍ إلزامِيّ — ما بَعدَ «<c>NAME: </c>» في سَطرِه، أَو <c>null</c> إن لَم تَقُل.</summary>
+    internal static string? SourceOf(string text, string name)
+        => text.Split('\n').Select(l => l.Trim())
+            .Where(l => l.StartsWith(name + ": ", StringComparison.Ordinal))
+            .Select(l => l[(name.Length + 2)..]).SingleOrDefault();
+
+    /// <summary>توصيفُ «اليَوم»: السِرُّ صُدِّرَ والمِلَفُّ لا يُسنِدُه، فَقيمَتُه قيمَةُ البيئَة — والبَوّابَةُ تَقولُ «مِن المِلَفّ».</summary>
+    [Fact]
+    public void Today_an_exported_variable_the_file_does_not_assign_is_said_to_come_from_the_file()
+    {
+        if (OperatingSystem.IsWindows()) { output.WriteLine("Windows — يُقاسُ في CI (‏ubuntu)."); return; }
+        var (conn, secret, text) = Run(ConfigBlock(), BothExported, ConnOnlyFileBody);
+        Assert.Equal("Host=from-env-branch;Database=x", conn);
+        Assert.Equal("env-secret-0000000000000000000000000000000", secret);
+        Assert.DoesNotContain("ACOMMERCE_AUTH_SECRET", ConnOnlyFileBody, StringComparison.Ordinal);
+        Assert.Equal("مِن البيئَة (المِلَفُّ لا يَغلِبُها)", SourceOf(text, "ConnectionStrings__Postgres"));
+        Assert.Equal("مِن المِلَفّ", SourceOf(text, "ACOMMERCE_AUTH_SECRET"));
+    }
+
     /// <summary>ودَليلُ النَشرِ يَقولُ القاعِدَةَ في «التَهيئَة» وفي الخُطوَةِ ١ مِن §٤‑د، والخُطوَةُ تُصَدِّرُ السِرَّ الَّذي تَشتَرِطُه البَوّابَة.</summary>
     [Fact]
     public void The_deploy_guide_says_the_environment_wins_and_step_one_exports_both_mandatory_variables()
