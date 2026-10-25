@@ -146,4 +146,48 @@ public class DeployDocClaimsTests(ITestOutputHelper output)
         Assert.False(LayerTwoIsTruthful(before));
         Assert.True(LayerTwoIsTruthful("### الطَبَقَة الثانِيَة — بِاليَد\nلا مُقارَنَة\n"));
     }
+
+    // ─── lens-docs-vs-code-7 — `HF_SPACE_URL`: «بِدونِه لا يُقاسُ الحَيُّ ولا يُوقَفُ نَشر» ─────────────────────────────────
+
+    private static readonly string[] HfSpaceUrlClaims =
+    [
+        "**بِدونِه لا يُقاسُ الحَيُّ ولا يُوقَفُ نَشر**",
+        "**وغِيابُه لا يوقِفُ\nنَشراً**",
+    ];
+
+    /// <summary>كُلُّ ادِّعاءٍ مِن الاثنَينِ لا يَظهَرُ إلّا مَشطوباً، وفي الدَليلِ تَصحيحٌ يُسَمّي <c>.host</c> و<c>nohost</c> — وإلّا ما يَنقُص.</summary>
+    internal static IReadOnlyList<string> UnqualifiedHfSpaceUrlClaims(string deploy)
+    {
+        var missing = new List<string>();
+        var unstruck = Unstruck(deploy);
+        foreach (var c in HfSpaceUrlClaims)
+            if (unstruck.Contains(c, StringComparison.Ordinal)) missing.Add(c);
+        foreach (var word in new[] { "lens-docs-vs-code-7", "`.host`", "`nohost`" })
+            if (!unstruck.Contains(word, StringComparison.Ordinal)) missing.Add(word);
+        return missing;
+    }
+
+    [Fact]
+    public void Hf_space_url_absence_is_said_as_the_workflow_does_it()
+    {
+        var yml = Read(".github", "workflows", "deploy-hf.yml");
+        Assert.Contains("host_src=\"huggingface API .host\"", yml, StringComparison.Ordinal);
+        Assert.Contains("base_state=\"nohost\"", yml, StringComparison.Ordinal);
+        Assert.Contains("if [ \"${state}\" != \"measured\" ] || [ -z \"${live}\" ]; then", yml, StringComparison.Ordinal);
+        Assert.Contains("echo \"decision=refuse\"", yml, StringComparison.Ordinal);
+        Assert.Contains("lens-docs-vs-code-7", yml, StringComparison.Ordinal);
+        var missing = UnqualifiedHfSpaceUrlClaims(Deploy());
+        Assert.True(missing.Count == 0, "ادِّعاءُ HF_SPACE_URL بِلا تَصحيح: " + string.Join("، ", missing));
+    }
+
+    /// <summary><b>حَقنُ عَيب</b>: الدَليلُ بِالجُملَتَينِ بِلا شَطبٍ ولا تَصحيحٍ يُحمِرُّ المُتَحَقِّق.</summary>
+    [Fact]
+    public void The_hf_space_url_checker_goes_red_on_the_claims_as_they_were()
+    {
+        var sample = "| `HF_SPACE_URL` | " + HfSpaceUrlClaims[0] + " |\n…\n" + HfSpaceUrlClaims[1] + ": تُحَذِّرُ الخُطوَةُ\n";
+        var missing = UnqualifiedHfSpaceUrlClaims(sample);
+        Assert.Contains(HfSpaceUrlClaims[0], missing);
+        Assert.Contains(HfSpaceUrlClaims[1], missing);
+        Assert.Contains("`nohost`", missing);
+    }
 }
