@@ -638,4 +638,70 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
             + $"الرَفضُ بِـ..: {SnapshotPathRefusal("$HOME/wasayel-snapshots/../wasayel-platform/x.dump")}");
         Assert.Equal(2, prefixOnly);
     }
+
+    // ─── أَنواعُ الوَثائِقِ غَيرُ المُسَجَّلَةِ — مَعدودَةً مِن الكودِ لا مَذكورَةً بِاثنَين (‏2026-10-25، تَدقيقُ الإطلاق brief-P3-1) ───
+    //
+    // **المَقيسُ قَبل**: رَأسُ الفِعلِ و§٤‑د «وما لا يَشمَلُه (١)» يُسَمِّيانِ «مِنها `IncubatorSession` و`AuditEntry`»، والصَفُّ أَعلاه يَفحَصُ الاثنَين —
+    // والكودُ يَكتُبُ ويَقرَأُ عَشَرَةً لا يَعرِفُها الإعداد (مَقيس: ‏`AgentSession` و`AuditEntry` و`Cart` و`ConsentRecord` و`IncubatorSession`
+    // و`ModelCallRecord` و`Report` و`Review` و`StudioUser` و`TenantPlanDefinition`)، فَيُغَيِّرُ أَوَّلُ استِعمالٍ لِكُلٍّ مُخَطَّطَ الإنتاجِ بِلا عَرض.
+    // **وصارَ**: القائِمَةُ تُعَدُّ مِن نِداءاتِ الجَلسَةِ في libs/apps مُقابِلَ كائِناتِ التَركيبِ نَفسِها، وتُطابِقُ قائِمَةً مُثَبَّتَةً بِالاتِّجاهَين —
+    // نَوعٌ جَديدٌ غَيرُ مُسَجَّلٍ يُحمِرُّها حَتّى يُسَمّى، ونَوعٌ يُسَجَّلُ يَومَاً يُحمِرُّها حَتّى يَخرُجَ مِنها — ويُسَمّيها الرَأسُ و§٤‑د كُلَّها.
+
+    private static readonly System.Text.RegularExpressions.Regex SessionGeneric = new(
+        @"\.(Query|LoadAsync|Load|LoadManyAsync|Store|Insert|Update|Delete|DeleteWhere|HardDelete|QueryAsync)<(?<t>[A-Za-z0-9_.]+)>",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>أَسماءُ الأَنواعِ في نِداءاتِ الجَلسَةِ العامَّة — بِلا مُعامِلاتِ الأَنواع (<c>T</c>، <c>TDoc</c>…).</summary>
+    internal static IEnumerable<string> SessionDocumentTypesIn(string source)
+        => SessionGeneric.Matches(source).Select(m => m.Groups["t"].Value.Split('.').Last())
+            .Where(t => t != "T" && !System.Text.RegularExpressions.Regex.IsMatch(t, "^T[A-Z][a-z]+$"));
+
+    /// <summary>المُستَعمَلُ الَّذي لا جَدوَلَ لَه بَينَ الكائِناتِ المُهَيَّأَة — <c>platform.mt_doc_{اسمِه}</c>.</summary>
+    internal static IReadOnlyList<string> Unregistered(IEnumerable<string> used, IReadOnlyCollection<string> configuredIds)
+        => used.Distinct().Order(StringComparer.Ordinal)
+            .Where(t => !configuredIds.Contains($"platform.mt_doc_{t.ToLowerInvariant()}")).ToList();
+
+    /// <summary>العَشَرَةُ يَومَ الإلحاق — تَتَقَلَّصُ ولا تَنمو إلّا بِقَرارٍ مَرئِيّ (نَسَقُ قائِمَةِ اليَتامى في القاعِدَة ١).</summary>
+    private static readonly string[] PinnedUnregistered =
+    [
+        "AgentSession", "AuditEntry", "Cart", "ConsentRecord", "IncubatorSession",
+        "ModelCallRecord", "Report", "Review", "StudioUser", "TenantPlanDefinition",
+    ];
+
+    [Fact]
+    public async Task EveryUnregisteredDocumentTheCodeUses_IsCountedAndNamedInTheVerbAndTheDeployDoc()
+    {
+        var ids = await WithComposedStore(Environments.Production,
+            s => s.Storage.AllObjects().Select(o => o.Identifier.QualifiedName).ToHashSet(StringComparer.Ordinal));
+        var used = new[] { "libs", "apps" }
+            .SelectMany(d => Directory.EnumerateFiles(Path.Combine(RepoRoot, d), "*.*", SearchOption.AllDirectories))
+            .Where(f => (f.EndsWith(".cs", StringComparison.Ordinal) || f.EndsWith(".razor", StringComparison.Ordinal))
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                        && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .SelectMany(f => SessionDocumentTypesIn(File.ReadAllText(f))).Distinct().ToList();
+        var unregistered = Unregistered(used, ids);
+        output.WriteLine($"أَنواعٌ في نِداءاتِ الجَلسَة: {used.Count} · غَيرُ مُسَجَّلَة: {unregistered.Count} — {string.Join(" · ", unregistered)}");
+        Assert.True(used.Count >= 20, $"أَداةٌ عَمياء: {used.Count} نَوعاً.");
+        Assert.Equal(PinnedUnregistered.Order(StringComparer.Ordinal), unregistered);
+
+        var verbHeader = Verb()[..Verb().IndexOf("using System", StringComparison.Ordinal)];
+        var deploy = Read("docs", "DEPLOY.md");
+        var fourD = deploy[deploy.IndexOf("#### المُخَطَّطُ قَبلَ النَشر", StringComparison.Ordinal)..];
+        fourD = fourD[..fourD.IndexOf("\n#### ", 10, StringComparison.Ordinal)];
+        foreach (var t in unregistered)
+        {
+            Assert.True(verbHeader.Contains($"`{t}`", StringComparison.Ordinal), $"رَأسُ marten-schema.cs لا يُسَمّي {t}.");
+            Assert.True(fourD.Contains($"`{t}`", StringComparison.Ordinal), $"DEPLOY.md §٤‑د لا يُسَمّي {t}.");
+        }
+    }
+
+    /// <summary><b>حَقنُ عَيب</b>: مَصدَرٌ مَصنوعٌ يَكتُبُ نَوعاً جَديداً ويَقرَأُ مُسَجَّلاً — العَدّادُ يَجِدُ الجَديدَ وَحدَه غَيرَ مُسَجَّل، ومُعامِلُ النَوعِ لا يُعَدّ.</summary>
+    [Fact]
+    public void TheUnregisteredCounter_FindsAnInjectedNewDocumentType()
+    {
+        const string source = "session.Store<InjectedLedgerRow>(row); await s.LoadAsync<Deal>(id); q.Query<T>(); x.Query<TDoc>();";
+        var used = SessionDocumentTypesIn(source).ToList();
+        Assert.Equal(new[] { "InjectedLedgerRow", "Deal" }, used);
+        Assert.Equal(new[] { "InjectedLedgerRow" }, Unregistered(used, new HashSet<string> { "platform.mt_doc_deal" }));
+    }
 }
