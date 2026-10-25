@@ -10,6 +10,22 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    # ═══ قاعِدَةُ الوَظيفَةِ لِلبَراهينِ الحَيَّة (‏2026-10-25، تَدقيقُ الإطلاق lens-checkers-ci-2) ═══════════════════════
+    # حاوِيَةٌ تولَدُ فارِغَةً وتَموتُ مَعَ الوَظيفَة — لا فَرعَ Neon ولا إنتاج، ولا سِرَّ (كَلِمَةُ مُرورِها لِحاوِيَةٍ لا يَبلُغُها أَحَد).
+    # ‏`postgres:16` قَناةُ القاعِدَةِ المَحَلِّيَّةِ الَّتي قيسَت عَلَيها البَراهين (16.13). والخُطوَةُ الثانِيَةُ أَدناه وَحدَها تَقرَؤُها.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: wasayel_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +49,20 @@ jobs:
 
       - name: Run tests
         run: dotnet test tests/ACommerce.Platform.Tests/ACommerce.Platform.Tests.csproj -c Release --no-build
+
+      # ═══ البَراهينُ الحَيَّةُ عَلى قاعِدَةِ الوَظيفَة — كانَت «ناجِحَةً» هُنا وهي تَرجِعُ مِن حارِسِها (‏2026-10-25، lens-checkers-ci-2) ═══
+      # الخُطوَةُ أَعلاه بِلا قاعِدَة: كُلُّ `Live…ProofTests` يَرجِعُ مِن `if (!Enabled …) return;` أَخضَر. وهُنا البيئَةُ لِلخُطوَةِ وَحدَها.
+      # و`CI_LIVE_PROOF_REQUIRED` يَجعَلُ `LiveProofJobTests` يَحمَرُّ إن دَخَلَها تَشغيلٌ بِلا عَلَمٍ أَو بِلا قاعِدَةٍ تُجيب.
+      # ‏`LiveTenantExportProofTests` مُستَثنى: يَلزَمُه مَتجَرٌ مَملوكٌ، وقاعِدَةُ الوَظيفَةِ فارِغَة (يُشَغَّلُ عَلى فَرعٍ مَبذور — RELEASE-READINESS §٤).
+      - name: Live proofs on the job's own Postgres
+        env:
+          WASAYEL_LIVE_PROOF: "1"
+          CI_LIVE_PROOF_REQUIRED: "1"
+          ConnectionStrings__Postgres: Host=localhost;Port=5432;Database=wasayel_ci;Username=postgres;Password=postgres
+        run: >-
+          dotnet test tests/ACommerce.Platform.Tests/ACommerce.Platform.Tests.csproj -c Release --no-build
+          --filter "(FullyQualifiedName~ACommerce.Platform.Tests.Live&FullyQualifiedName!~LiveTenantExportProofTests)|FullyQualifiedName~ReadinessEndpointTests.Live_database_answers_200_ready"
+          --logger "console;verbosity=normal"
 
       # ═══ آلِيَّةُ حَقنِ البَصمَةِ تُشَغَّلُ مَرَّةً، وإلّا فَالإنتاجُ
       #     هُوَ أَوَّلُ مَن يَختَبِرُها (‏ADR-019) ═══════════════════════
