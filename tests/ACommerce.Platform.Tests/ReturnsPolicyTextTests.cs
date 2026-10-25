@@ -189,4 +189,32 @@ public class ReturnsPolicyTextTests
         // وهُوَ الأَحمَرُ الوَحيدُ الباقي في هذِه المادَّة.
         Assert.Equal(new[] { "return_action_absent" }, report.RejectionCodes);
     }
+
+    // ─── مَن يَرُدُّ ثَمَنَ البِطاقَة (تَدقيقُ الإطلاق brief-P0-5، ‏2026-10-25) ───────────────────────────────
+    //
+    // **المَقيس** (‏2026-10-24 عِندَ `dace7cd`؛ أُعيدَ عِندَ `8965745`): النَصُّ يَقولُ «البائِعُ … يَرُدّ المَبلَغ بِالطَّريقَة الَّتي دُفِع بِها»،
+    // والبِطاقَةُ تُقبَضُ بِمِفتاحِ ميسّر الَّذي لَصَقَه **صاحِبُ المَتجَر** (`GatewayPayments`، ‏ADR-032 الخُطُوات 8–10) — فَثَمَنُ طَلَبٍ مُلغًى دُفِعَ
+    // بِالبِطاقَةِ يَستَرجِعُه صاحِبُ المَتجَرِ مِن لَوحَةِ بَوّابَتِه («ب» S9·٨: يَدَوِيّ)، وصَفحَةُ الصَفقَةِ تَقولُه بِسَطرِ `GatewayRefundDue`
+    // (`deals.detail.event_gateway_refund_due`). والنَقدُ وَحدَه يَرُدُّه البائِعُ الَّذي قَبَضَه عِندَ التَسليم. يُثَبَّتُ «اليَوم» هُنا (القاعِدَة ٣)
+    // ويُقلَبُ بِاسمِه في كوميتِ الصِياغَة؛ والصُفوفُ أَعلاه تَبقى بِلا تَعديلِ حَرف.
+
+    /// <summary>ما تَقولُه صَفحَةُ الصَفقَةِ عَن طَلَبٍ مُلغًى دُفِعَ بِالبِطاقَة — والكاتِبُ سَطرُ <c>GatewayRefundDue</c> وحدَه.</summary>
+    [Fact]
+    public void The_deal_page_says_a_paid_cancelled_card_order_is_refunded_from_the_store_gateway()
+    {
+        var due = LocaleCatalog.Find(LocaleCatalog.Arabic, "deals.detail.event_gateway_refund_due");
+        Assert.Equal("دُفِعَ ثَمَنُ طَلَبٍ مُلغًى: استِرجاعُه مِن لَوحَةِ بَوّابَةِ المَتجَر", due);
+        var page = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "MyDealDetail.razor"));
+        Assert.Contains("DealEvent.GatewayRefundDue => L[\"deals.detail.event_gateway_refund_due\"]", page, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Today_the_returns_text_says_the_vendor_refunds_by_the_method_paid_even_for_card_orders_the_store_gateway_collected()
+    {
+        var how = LocaleCatalog.Find(LocaleCatalog.Arabic, "legal.returns.how")!;
+        Assert.Contains("البائِعُ هُوَ مَن يَقبَل الاستِرجاع ويَرُدّ المَبلَغ بِالطَّريقَة الَّتي دُفِع بِها", how, StringComparison.Ordinal);
+        Assert.DoesNotContain("بَوّابَة", how, StringComparison.Ordinal);
+        Assert.DoesNotContain("صاحِب المَتجَر", how, StringComparison.Ordinal);
+    }
 }
