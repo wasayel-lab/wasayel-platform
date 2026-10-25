@@ -134,4 +134,31 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
             Assert.Contains(field, oto, StringComparison.Ordinal);
         Assert.Contains("OTO", LocaleCatalog.Find("en", "platform.privacy.share_carrier")!, StringComparison.Ordinal);
     }
+
+    /// <summary>حُقولُ تَسجيلِ البائِعِ المُسَجَّلِ في الضَريبَةِ كَما يَكتُبُها <c>OtoClient.RegisterVendorAsync</c> تَحتَ <c>if (vendor.IsVatRegistered)</c>.</summary>
+    internal static readonly string[] VatRegistrationFields =
+    [
+        "body[\"companyName\"] = vendor.CompanyName;", "body[\"vatNumber\"]   = vendor.VatNumber;", "body[\"CRNumber\"]    = vendor.CrNumber;",
+        "body[\"district\"]    = vendor.District;", "body[\"zipCode\"]     = vendor.ZipCode;", "body[\"buildingNo\"]  = vendor.BuildingNo;",
+        "body[\"streetName\"]  = vendor.StreetName;",
+    ];
+
+    /// <summary><b>تَوصيف</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ١، صُغرى — القاعِدَة ٣: يَنقَلِبُ بِاسمِه في كوميتِ النَصّ): <c>share_carrier</c>
+    /// يَقولُ إنّه يُسَمّي ما يُرسِلُه الكودُ حَرفاً، والكودُ يُرسِلُ لِلبائِعِ المُسَجَّلِ في الضَريبَةِ سَبعَةَ حُقولٍ أُخرى (اسمُ المُنشَأَة، والرَقمُ الضَريبيّ،
+    /// والسِجِلُّ التِجاريّ، والحَيّ، والرَمزُ البَريديّ، ورَقمُ المَبنى، والشارِع) — والنَصّانِ لا يَذكُرانِ مِنها شَيئاً.</summary>
+    [Fact]
+    public void Today_share_carrier_does_not_name_the_vat_registration_fields_the_vendor_registration_sends()
+    {
+        var oto = UpgradePromptPriceTests.Code("libs", "kits", "Delivery", "ACommerce.Kit.Delivery.Core", "OtoClient.cs");
+        var vat = oto.IndexOf("if (vendor.IsVatRegistered)", StringComparison.Ordinal);
+        var sent = VatRegistrationFields.Count(f => oto.IndexOf(f, StringComparison.Ordinal) > vat);
+        var ar = AccountDeletionRetentionTests.Bare(LocaleCatalog.Find(LocaleCatalog.Arabic, "platform.privacy.share_carrier")!);
+        var en = LocaleCatalog.Find("en", "platform.privacy.share_carrier")!;
+        output.WriteLine($"حُقولُ الضَريبَةِ في RegisterVendorAsync: {sent}/{VatRegistrationFields.Length} · ar يَذكُرُ «الضريبي»: {ar.Contains("الضريبي", StringComparison.Ordinal)} · en يَذكُرُ VAT: {en.Contains("VAT", StringComparison.Ordinal)}");
+        Assert.True(vat > 0);
+        Assert.Equal(7, sent);
+        Assert.DoesNotContain("الضريبي", ar, StringComparison.Ordinal);
+        Assert.DoesNotContain("السجل التجاري", ar, StringComparison.Ordinal);
+        Assert.DoesNotContain("VAT", en, StringComparison.Ordinal);
+    }
 }
