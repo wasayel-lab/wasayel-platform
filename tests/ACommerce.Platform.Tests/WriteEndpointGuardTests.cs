@@ -1196,6 +1196,9 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
     // كاتِبٌ في مُعالِجِ نَقرٍ لِصَفحَةٍ تَفاعُلِيَّةٍ يُسأَلُ، ويُثَبَّتُ بِمُعالِجِه المُسَمّى (`InHandlers`) لا بِصَفحَتِه — وأَوَّلُ تَشغيلٍ أَمسَكَ
     // اثنَتَينِ بِالضَبط: `StudioAgent.razor` و`AgentChatPanel.razor`، كاتِباتُهُما في `SendAsync`/`ApplyAsync`/`RejectAsync`/`ResetAsync`. **وحَدُّه**: نِداءٌ عَلى نَتيجَةِ
     // `GetRequiredService<T>()` مُباشَرَةً بِلا مُتَغَيِّر، أَو عَلى `[Parameter]` بِنَوعِ خِدمَة، أَو في مِلَفِّ `.razor.cs` (صِفرٌ مِنها اليَوم)، لا يُرى.
+    // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة ٢، صُغرى): و`@inject` في `_Imports.razor` يَسري عَلى كُلِّ صَفحَةٍ تَحتَ مُجَلَّدِه (قاعِدَةُ Razor نَفسُها)
+    // وكانَ لا يُرى — فَصارَت مُستَقبِلاتُ الصَفحَةِ تَرِثُ حُقَنَ كُلِّ `_Imports.razor` مِن مُجَلَّدِها صُعوداً، والأَقرَبُ يَغلِب، وتَصريحُ الصَفحَةِ نَفسِها يَغلِبُهُما.
+    // (اليَومَ صِفرُ `@inject` في `_Imports.razor` الخَمسَة — فَالحُكمُ الحَيُّ لَم يَتَغَيَّر.)
 
     /// <summary>سَطحُ عَرضٍ يُسأَلُ عَن الكاتِبات: نَوعُه، ومَوضِعُه (المَسارُ، أَو المِلَفُّ لِصَفحَةِ razor — مِفتاحُ <see cref="PinnedDisplayWriters"/>)،
     /// ومِلَفُّه، ونَصُّه بِلا تَعليقات، ومُستَقبِلاتُه المُعلَنَةُ النَوعِ خارِجَ اللامدَة؛ و<c>AskDirect</c> حينَ لا يَسأَلُ صَفٌّ آخَرُ نَصَّه عَن
@@ -1231,12 +1234,51 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
     /// <summary>كُلُّ صَفحَةِ <c>.razor</c> سَطحُ عَرض: نَصُّها كُلُّه بَعدَ تَبييضِ تَعليقاتِ الصِنفَين، ومَوضِعُها مِلَفُّها.</summary>
     private static IEnumerable<DisplaySurface> RazorPages(IEnumerable<(string File, string Text)> sources)
     {
-        foreach (var (file, text) in sources)
+        var pages = sources.Where(f => f.File.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)).ToList();
+        var imports = pages.Where(f => Path.GetFileName(f.File).Equals("_Imports.razor", StringComparison.OrdinalIgnoreCase))
+            .Select(f => (Dir: Path.GetDirectoryName(Path.GetFullPath(f.File))!, Injects: RazorInject.Matches(StripComments(StripMarkupComments(f.Text))).ToList()))
+            .OrderBy(i => i.Dir.Length)
+            .ToList();
+        foreach (var (file, text) in pages)
         {
-            if (!file.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)) continue;
             var code = StripComments(StripMarkupComments(text));
-            yield return new(SurfaceRazor, Rel(file), Rel(file), code, RazorReceivers(code), AskDirect: false);
+            var dir = Path.GetDirectoryName(Path.GetFullPath(file))!;
+            var receivers = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var imp in imports.Where(i => dir == i.Dir || dir.StartsWith(i.Dir + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
+                foreach (var m in imp.Injects) receivers[m.Groups["name"].Value] = m.Groups["type"].Value.Split('.')[^1];
+            foreach (var (name, type) in RazorReceivers(code)) receivers[name] = type;
+            yield return new(SurfaceRazor, Rel(file), Rel(file), code, receivers, AskDirect: false);
         }
+    }
+
+    /// <summary>القاعِدَة ١٠ — حَقنُ <c>_Imports.razor</c> يَبلُغُ الصَفحَةَ تَحتَه ولا يَبلُغُ صَفحَةً في مُجَلَّدٍ شَقيق، وتَصريحُ الصَفحَةِ يَغلِبُه.</summary>
+    [Fact]
+    public void The_razor_receivers_inherit_the_injects_of_every_imports_file_above_the_page()
+    {
+        const string Service = """
+            public sealed class FakeDealsService(IDocumentSession s)
+            {
+                public async Task CancelAsync(Guid id) { s.Store(new { id }); await s.SaveChangesAsync(); }
+            }
+            """;
+        var writers = ServiceWriters([("x/FakeDealsService.cs", Service)]);
+        static string At(string rel) => Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, rel);
+        const string Calls = "@page \"/p\"\n@code {\n    protected override Task OnInitializedAsync() => Deals.CancelAsync(Id);\n}\n";
+        var sources = new (string File, string Text)[]
+        {
+            (At("x/inj/_Imports.razor"), "@using X\n@inject Services.Deals.FakeDealsService Deals\n"),
+            (At("x/inj/Pages/Deep/Under.razor"), Calls),
+            (At("x/inj/Beside.razor"), Calls),
+            (At("x/other/Sibling.razor"), Calls),
+            (At("x/inj/Pages/Shadowed.razor"), "@inject OtherService Deals\n" + Calls),
+        };
+        var surfaces = RazorPages(sources).ToDictionary(s => Path.GetFileName(s.File), StringComparer.Ordinal);
+        string Got(string page) => string.Join(", ", SurfaceWrites(surfaces[page], writers, []));
+        output.WriteLine($"تَحتَه بِمُجَلَّدَين: [{Got("Under.razor")}] · بِجانِبِه: [{Got("Beside.razor")}] · شَقيق: [{Got("Sibling.razor")}] · مُظَلَّل: [{Got("Shadowed.razor")}]");
+        Assert.Equal("FakeDealsService.CancelAsync", Got("Under.razor"));
+        Assert.Equal("FakeDealsService.CancelAsync", Got("Beside.razor"));
+        Assert.Equal("", Got("Sibling.razor"));
+        Assert.Equal("", Got("Shadowed.razor"));
     }
 
     /// <summary>كُلُّ <c>[WolverineGet]</c> سَطحُ عَرض: مِن السِمَةِ حَتّى آخِرِ جِسمِ طَريقَتِه، ومُستَقبِلاتُه وُسَطاؤها. وطَريقَةٌ لا يَقرَؤها الماسِحُ
