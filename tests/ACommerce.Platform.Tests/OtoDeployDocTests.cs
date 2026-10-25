@@ -225,4 +225,37 @@ public class OtoDeployDocTests
         Assert.Equal(1, gate.Split("\noto_environment\n").Length - 1);
         Assert.True(gate.IndexOf("\noto_environment\n", StringComparison.Ordinal) < gate.IndexOf("if ! dotnet publish \"$PROJECT\"", StringComparison.Ordinal));
     }
+
+    /// <summary>مَواضِعُ نِداءِ <c>CheckOtoDeliveryFeeAsync(</c> في نَصٍّ — بِلا سَطرِ تَعريفِه وبِلا أَسطُرِ التَعليق.</summary>
+    internal static int FeeCallers(string source)
+        => source.Split('\n').Count(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)
+                                         && l.Contains("CheckOtoDeliveryFeeAsync(", StringComparison.Ordinal)
+                                         && !l.Contains("public async Task", StringComparison.Ordinal));
+
+    /// <summary>
+    /// <para><b>‏<c>checkOTODeliveryFee</c> أَوَّلُ تَسلسُلِ القاعِدَة ٩ ولَيسَ في مَسارِ التَشغيل — والـADR يَقولُه</b> (‏2026-10-25، تَدقيقُ الإطلاق brief-P1b-5):
+    /// صِفرُ مُنادٍ في <c>libs/</c> و<c>apps/</c>، و‏ADR-033 §٧‑ق يُسَمّي ذلكَ وسَبَبَه ومُستَهلِكَه. فَإن نادَتها نُقطَةٌ يَوماً حَمِرَ هذا حَتّى يُلحَقَ الـADR.
+    /// والعَدّادُ يُقاسُ بِعَيِّنَةٍ مَحقونَة: مَصدَرٌ يُناديها يُعَدّ، وسَطرُ التَعريفِ والتَعليقُ لا.</para>
+    /// </summary>
+    [Fact]
+    public void The_fee_call_has_no_runtime_caller_and_adr033_says_why()
+    {
+        var sources = new[] { "libs", "apps" }
+            .SelectMany(d => Directory.EnumerateFiles(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, d), "*.*", SearchOption.AllDirectories))
+            .Where(f => (f.EndsWith(".cs", StringComparison.Ordinal) || f.EndsWith(".razor", StringComparison.Ordinal))
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                        && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .ToList();
+        Assert.True(sources.Count > 300, $"أَداةٌ عَمياء: {sources.Count} مِلَفّاً.");
+        var callers = sources.Sum(f => FeeCallers(File.ReadAllText(f)));
+        Assert.Equal(0, callers);
+        Assert.Equal(1, FeeCallers("var fees = await oto.CheckOtoDeliveryFeeAsync(token, q, ct);\n// CheckOtoDeliveryFeeAsync(x)\n" +
+                                   "public async Task<OtoResult<IReadOnlyList<OtoDeliveryOption>>> CheckOtoDeliveryFeeAsync(\n"));
+
+        var adr = Read(Path.Combine("docs", Path.GetFileName(Directory.GetFiles(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "docs"), "ADR-033-*.md").Single())));
+        var q = adr.IndexOf("### ق. إلحاقُ ‏2026-10-25 (تدقيقُ الإطلاق brief-P1b-5)", StringComparison.Ordinal);
+        Assert.True(q > 0, "‏ADR-033 §٧‑ق غائِب.");
+        foreach (var phrase in new[] { "لا منادِيَ له في `libs/` ولا `apps/`", "If deliveryOptionId is not sent on the request", "أمرُ البرهانِ الحيِّ" })
+            Assert.Contains(phrase, adr[q..], StringComparison.Ordinal);
+    }
 }
