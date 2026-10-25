@@ -51,9 +51,11 @@ ROUTES=(
   "GET  /ashare/api/me/unread"
 
   # ─── نُقطَتا Wolverine الكاتِبَتانِ (‏تَحمِلانِ slug) ─────────────
-  "POST /ashare/auth/nafath/request"
+  # (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-10 الجَولَة ٢ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): «نُقطَتا» صارَتا نُقطَةً — `ce1fff3` نَزَعَ
+  # `[WolverinePost]` عَن `/{slug}/auth/nafath/request` (لَم تَعمَل لِأَحَدٍ قَطّ)، فَسَقَطَ مِجَسّاها؛ ومِجَسُّ السلاجِ المَجهولِ صارَ
+  # عَلى `nafath/verify` الباقِيَة، فَتُقاسُ حَيَّةً بِسلاجٍ مَوجودٍ وبِسلاجٍ مَجهول.
   "POST /ashare/auth/nafath/verify"
-  "POST /zz-no-such-tenant/auth/nafath/request"
+  "POST /zz-no-such-tenant/auth/nafath/verify"
 
   # ─── نِقاط minimal API مُختارَة (‏لا يَجوز أَن تَتَأَثَّر) ────────
   "POST /admin/tenants/create"
