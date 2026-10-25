@@ -262,7 +262,6 @@
   "rider.request.back": "الرُجوع",
   "rider.request.subtitle": "حَدِّد مَكان الانطِلاق وَ الوُصول، وَ سَيَصِلكَ سائِقون بِعُروض أَسعار.",
   "rider.request.err_invalid": "حُقول ناقِصَة — مَوقِع الانطِلاق وَ الوُصول مَطلوبان.",
-  "rider.request.err_forbidden": "دَوركَ الحاليّ لا يَسمَح بِنَشر طَلَبات.",
   "rider.request.err_no_category": "لَم يُعَدّ المَتجَر بِفِئَة مُناسِبَة. اِتَّصِل بِإدارَة المَتجَر.",
   "rider.request.pickup": "مَكان الانطِلاق",
   "rider.request.dropoff": "وِجهَة الوُصول",

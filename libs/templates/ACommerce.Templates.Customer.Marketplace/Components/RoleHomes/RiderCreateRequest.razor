@@ -7,6 +7,10 @@
     يُعَرِّفها مُصَمِّم المَتجَر عَلى الفِئَة (مَثَلاً نَوع المَركَبَة
     المَطلوبَة، عَدَد الرُكّاب، وَقت الانطِلاق…) تَظهَر بَعدُ بِشَكل
     تِلقائيّ. هكَذا يَكون لِلمُصَمِّم مَرونَة.
+
+    (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١): كانَ بَعدَ فَرعِ `Err == "invalid"` فَرعُ `Err == "forbidden"` بِنَصِّ
+    `rider.request.err_forbidden` — لا كاتِبَ لَه (صِفرُ `create-listing?err=forbidden` في الكود)، وقَد حُذِفَ نَظيرُه مِن صَفحَةِ
+    النَشرِ الَّتي تُصَيِّرُ هذِه الاستِمارَةَ وتُمَرِّرُ لَها `Err`. فَحُذِفَ هُنا بِنَصِّه؛ ورَفضُ الصَلاحِيَّةِ يُرسَمُ مِن `GatedPage` حَولَها قَبلَها.
 *@
 
 <div class="acs-page">
@@ -22,10 +26,6 @@
     @if (Err == "invalid")
     {
         <AcAlert Variant="danger" Message="@(L["rider.request.err_invalid"])" />
-    }
-    else if (Err == "forbidden")
-    {
-        <AcAlert Variant="danger" Message="@(L["rider.request.err_forbidden"])" />
     }
 
     @if (DefaultCategory is null)

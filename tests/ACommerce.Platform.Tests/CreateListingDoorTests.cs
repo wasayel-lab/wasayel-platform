@@ -210,12 +210,12 @@ public class CreateListingDoorTests(ITestOutputHelper output)
             .Count(f => WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(f.Text))
                 .Contains("create-listing?err=forbidden", StringComparison.Ordinal));
 
-    /// <summary><b>«اليَوم» (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١ — صُغرى)</b>: حُذِفَ فَرعُ <c>Err == "forbidden"</c> مِن صَفحَةِ النَشرِ
-    /// لِأَنَّ لا كاتِبَ لَه، واستِمارَةُ المِشوارِ الَّتي يُصَيِّرُها المُوَزِّعُ نَفسُه (<c>Err="@Err"</c> يَمُرُّ إلَيها) تَحمِلُ الفَرعَ بِعَينِه ونَصَّه
-    /// <c>rider.request.err_forbidden</c> — وصِفرُ كاتِبٍ لَه في <c>.cs</c> و<c>.razor</c>. فَالصَفحَةُ الواحِدَةُ تُعامِلُ الفَرعَينِ مُعامَلَتَين.
-    /// يُقلَبُ بِاسمِه في كوميتِ الحَذف.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الحَذف؛ مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١ — صُغرى)</b> — كانَ
+    /// <c>Today_the_rider_request_form_keeps_a_forbidden_branch_that_no_code_writes</c> (‏<c>1275780</c>). والآن استِمارَةُ المِشوارِ كَصَفحَتِها:
+    /// لا فَرعَ <c>Err == "forbidden"</c> ولا مُفتاحَ <c>rider.request.err_forbidden</c>، وفَرعُ <c>invalid</c> باقٍ بِنَصِّه، و<c>Err</c> ما زالَ
+    /// يَمُرُّ مِن المُوَزِّع — وصِفرُ كاتِبٍ لِـ<c>create-listing?err=forbidden</c> في <c>.cs</c> و<c>.razor</c>. فَمَن يُضيفُ الفَرعَ يَومًا بِلا كاتِبٍ يَحمَرُّ هُنا.</summary>
     [Fact]
-    public void Today_the_rider_request_form_keeps_a_forbidden_branch_that_no_code_writes()
+    public void The_rider_request_form_keeps_no_forbidden_branch_without_a_writer_like_its_page()
     {
         var rider = WriteEndpointGuardTests.StripMarkupComments(Read(RiderFile));
         var dispatcher = WriteEndpointGuardTests.StripMarkupComments(Read(PageFile));
@@ -223,9 +223,11 @@ public class CreateListingDoorTests(ITestOutputHelper output)
         output.WriteLine($"فَرعُ forbidden في استِمارَةِ المِشوار: {rider.Contains("Err == \"forbidden\"", StringComparison.Ordinal)} · "
             + $"في صَفحَةِ النَشر: {dispatcher.Contains("Err == \"forbidden\"", StringComparison.Ordinal)} · كُتّابُ create-listing?err=forbidden: {writers}");
 
-        Assert.Contains("else if (Err == \"forbidden\")", rider, StringComparison.Ordinal);
-        Assert.Contains("L[\"rider.request.err_forbidden\"]", rider, StringComparison.Ordinal);
-        Assert.NotNull(ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "rider.request.err_forbidden"));
+        Assert.DoesNotContain("Err == \"forbidden\"", rider, StringComparison.Ordinal);
+        Assert.DoesNotContain("rider.request.err_forbidden", rider, StringComparison.Ordinal);
+        Assert.Null(ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "rider.request.err_forbidden"));
+        Assert.Contains("@if (Err == \"invalid\")", rider, StringComparison.Ordinal);
+        Assert.Contains("L[\"rider.request.err_invalid\"]", rider, StringComparison.Ordinal);
         Assert.Contains("Slug=\"@Slug\" Tenant=\"tenant\" Err=\"@Err\" />", dispatcher, StringComparison.Ordinal);
         Assert.DoesNotContain("Err == \"forbidden\"", dispatcher, StringComparison.Ordinal);
         Assert.Equal(0, writers);
