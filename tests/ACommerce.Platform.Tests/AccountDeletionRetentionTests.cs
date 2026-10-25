@@ -610,4 +610,23 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         Assert.Equal("أو كتبته في الطلب", Bare("أَو كَتَبتَه في الطَلَب"));
         Assert.Equal(Ar(key).Length - Regex.Matches(Ar(key), "[\u064B-\u0652\u0670]").Count, today.Length);
     }
+
+    /// <summary><b>تَوصيف</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢، صُغرى — القاعِدَة ٣: يَنقَلِبُ بِاسمِه في كوميتِ النَصّ): <c>Deal.CounterpartyName</c>
+    /// اسمُ البائِعِ عَلى كُلِّ صَفقَةٍ يَراه المُشتَري، ويُفصَحُ عَنه بِعِبارَةِ <see cref="Disclosure.Deal"/> وَحدَها — وجُملَتُها مَكتوبَةٌ مِن جِهَةِ المُشتَري
+    /// («يَراها بائِعُ الصَفقَة»). فَبائِعٌ يَحذِفُ حِسابَه لا يُقالُ لَه إنّ اسمَه يَبقى عَلى كُلِّ صَفقَةٍ يَراه مُشتَريها.</summary>
+    [Fact]
+    public void Today_a_seller_who_deletes_is_not_told_their_name_stays_on_each_deal_its_buyer_sees()
+    {
+        var said = PersonNameFields["Deal.CounterpartyName"].Said;
+        var texts = new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey }.ToDictionary(k => k, k => Bare(Ar(k)));
+        output.WriteLine($"Deal.CounterpartyName ← {said} · " + string.Join(" · ", texts.Select(t => $"{t.Key}: «مشتريها» {t.Value.Contains("مشتريها", StringComparison.Ordinal)}")));
+        Assert.Equal(Disclosure.Deal, said);
+        foreach (var (_, t) in texts)
+        {
+            Assert.Contains("يراها بائع الصفقة", t, StringComparison.Ordinal);
+            Assert.DoesNotContain("مشتريها", t, StringComparison.Ordinal);
+            Assert.DoesNotContain("إن كنت بائع", t, StringComparison.Ordinal);
+        }
+        Assert.DoesNotContain("its buyer", En(PlatformRetentionKey), StringComparison.Ordinal);
+    }
 }
