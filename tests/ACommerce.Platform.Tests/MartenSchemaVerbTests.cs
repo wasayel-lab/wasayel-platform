@@ -646,42 +646,180 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
     // و`ModelCallRecord` و`Report` و`Review` و`StudioUser` و`TenantPlanDefinition`)، فَيُغَيِّرُ أَوَّلُ استِعمالٍ لِكُلٍّ مُخَطَّطَ الإنتاجِ بِلا عَرض.
     // **وصارَ**: القائِمَةُ تُعَدُّ مِن نِداءاتِ الجَلسَةِ في libs/apps مُقابِلَ كائِناتِ التَركيبِ نَفسِها، وتُطابِقُ قائِمَةً مُثَبَّتَةً بِالاتِّجاهَين —
     // نَوعٌ جَديدٌ غَيرُ مُسَجَّلٍ يُحمِرُّها حَتّى يُسَمّى، ونَوعٌ يُسَجَّلُ يَومَاً يُحمِرُّها حَتّى يَخرُجَ مِنها — ويُسَمّيها الرَأسُ و§٤‑د كُلَّها.
+    //
+    // **(‏2026-10-25، مُراجَعَةُ تَيّارِ W8-6 — الجَولَة ١؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) — أَحَدَ عَشَرَ لا عَشَرَة، والأَداةُ كانَت عَمياءَ عَن شَكل**:
+    // `SessionGeneric` يَمسِكُ النِداءَ بِوَسيطِ نَوعٍ مَكتوبٍ وَحدَه، و`FeasibilityAnalysisService` يَكتُبُ `session.Insert(new AnalysisRunClaim { … })`
+    // — نَوعٌ يَستَنتِجُه المُتَرجِم — فَلَم يُعَدَّ ولَم يُسَمَّ وجَدوَلُه يُنشَأُ عِندَ أَوَّلِ استِعمالٍ كَالعَشَرَة (التَوصيفُ 22b5fe6). **وصارَ العَدُّ أَداتَين**:
+    //   (أ) **النَصّ** في libs/apps كُلِّها: الوَسيطُ المَكتوبُ، و`Store|Insert|Update(new X…)` (نَسَقُ `StoredNew` في `AccountDeletionRetentionTests`).
+    //   (ب) **IL** كُلِّ تَجميعٍ `ACommerce*` بِجِوارِ الاختِبار: وَسيطُ النَوعِ كَما حَلَّه المُتَرجِمُ في نِداءِ جَلسَةِ Marten — فَالمُتَغَيِّرُ (`s.Store(doc)`)
+    //       ومُرتَجَعُ الدالَّةِ (`s.Insert(Make())`) يُعَدّانِ بِاسمِ نَوعِهِما. والأَسماءُ الإحدى عَشرَةَ لِلأَداتَينِ واحِدَة (`SessionMethods`).
+    // والمُستَعمَلُ اتِّحادُهُما. **والثُقبُ يُثَبَّتُ عَدَداً ولا يُخفى** (القاعِدَة ١٠): مَشروعٌ لا يُحَمِّلُه الاختِبارُ (`*.Server` ومُزَوِّداتُ الدُخولِ و`V1.App`)
+    // لا يَبلُغُه (ب)، فَنِداءُ الكِتابَةِ فيه بِمُتَغَيِّرٍ مُثَبَّتٌ بِمِلَفِّه — جَديدٌ مِنه يُحمِرُّ صَفَّه حَتّى يُقرَأَ نَوعُه بِاليَد.
+
+    /// <summary>أَسماءُ نِداءاتِ الجَلسَةِ الَّتي تَبلُغُ وَثيقَةً — واحِدَةٌ لِلنَصِّ ولِـIL، فَلا تَنجَرِفُ أَداةٌ عَن أُختِها.</summary>
+    private static readonly string[] SessionMethods =
+        ["Query", "LoadAsync", "Load", "LoadManyAsync", "Store", "Insert", "Update", "Delete", "DeleteWhere", "HardDelete", "QueryAsync"];
 
     private static readonly System.Text.RegularExpressions.Regex SessionGeneric = new(
-        @"\.(Query|LoadAsync|Load|LoadManyAsync|Store|Insert|Update|Delete|DeleteWhere|HardDelete|QueryAsync)<(?<t>[A-Za-z0-9_.]+)>",
+        $@"\.({string.Join('|', SessionMethods)})<(?<t>[A-Za-z0-9_.]+)>",
         System.Text.RegularExpressions.RegexOptions.Compiled);
 
-    /// <summary>أَسماءُ الأَنواعِ في نِداءاتِ الجَلسَةِ العامَّة — بِلا مُعامِلاتِ الأَنواع (<c>T</c>، <c>TDoc</c>…).</summary>
+    /// <summary>الكائِنُ الجَديدُ في نِداءِ كِتابَةٍ بِلا وَسيطِ نَوع — بِحَرفِ <c>StoredNew</c> في <c>AccountDeletionRetentionTests</c>
+    /// (نُسخَتُه الثانِيَة؛ يُستَخرَجُ عِندَ الثالِثَة — القاعِدَة ١).</summary>
+    private static readonly System.Text.RegularExpressions.Regex SessionNew = new(
+        @"\.(?:Store|Insert|Update)\s*\(\s*new\s+(?<t>[A-Za-z_][\w.]*)\s*[({]",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>أَسماءُ الأَنواعِ في نِداءاتِ الجَلسَة: الوَسيطُ المَكتوبُ والكائِنُ الجَديد — بِلا مُعامِلاتِ الأَنواع (<c>T</c>، <c>TDoc</c>…).
+    /// والمُتَغَيِّرُ ومُرتَجَعُ الدالَّةِ لا يَراهُما النَصّ: يَعُدُّهُما <see cref="SessionDocumentTypesInIl"/>.</summary>
     internal static IEnumerable<string> SessionDocumentTypesIn(string source)
-        => SessionGeneric.Matches(source).Select(m => m.Groups["t"].Value.Split('.').Last())
+        => SessionGeneric.Matches(source).Concat(SessionNew.Matches(source))
+            .Select(m => m.Groups["t"].Value.Split('.').Last())
             .Where(t => t != "T" && !System.Text.RegularExpressions.Regex.IsMatch(t, "^T[A-Z][a-z]+$"));
+
+    /// <summary>مِلَفّاتُ <c>.cs</c> و<c>.razor</c> في <c>libs/</c> و<c>apps/</c> بِلا <c>bin</c> ولا <c>obj</c>.</summary>
+    private static IReadOnlyList<string> SourceFiles()
+        => new[] { "libs", "apps" }
+            .SelectMany(d => Directory.EnumerateFiles(Path.Combine(RepoRoot, d), "*.*", SearchOption.AllDirectories))
+            .Where(f => (f.EndsWith(".cs", StringComparison.Ordinal) || f.EndsWith(".razor", StringComparison.Ordinal))
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                        && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .ToList();
+
+    /// <summary>تَجميعاتُ <c>ACommerce*</c> بِجِوارِ الاختِبارِ عَدا تَجميعِه — نَمَطُ <c>AppliedEventEmitterTests</c> و<c>AccountDeletionRetentionTests</c>.</summary>
+    private static IReadOnlyList<System.Reflection.Assembly> LoadedACommerceAssemblies()
+        => Directory.EnumerateFiles(AppContext.BaseDirectory, "ACommerce*.dll")
+            .Where(p => Path.GetFileNameWithoutExtension(p) != typeof(MartenSchemaVerbTests).Assembly.GetName().Name)
+            .Select(System.Reflection.Assembly.LoadFrom).ToList();
+
+    /// <summary>ما يَقرَؤُه ماشي IL مِن مَجموعَةِ أَنواع — والعَدّاداتُ تُطبَعُ لِيُعرَفَ أَنّه رَأى (القاعِدَة ١٠).</summary>
+    internal sealed record IlSessionScan(IReadOnlyList<string> Types, int Methods, int Calls, int Unresolved);
+
+    /// <summary><b>وَسيطُ النَوعِ كَما حَلَّه المُتَرجِمُ</b> في كُلِّ نِداءٍ لِدالَّةٍ عامَّةٍ مِن <see cref="SessionMethods"/> يُعلِنُها نَوعٌ في مَجالِ
+    /// <c>Marten</c> — مِن IL الدَوالِّ والمُنشِئاتِ نَفسِها (ومِنها آلاتُ الحالِ والإغلاقاتُ المُوَلَّدَة). مُعامِلُ النَوعِ يُعَدُّ نِداءً ولا يُعَدُّ نَوعاً.
+    /// <para>ماشي التَعليماتِ نُسخَةٌ ثانِيَةٌ مِن ماشي <c>MoneyAllocationTests.NoFloatingPointEverReachesTheMoneyPath</c> (جَدوَلُ الرُموزِ مِن
+    /// <c>OpCodes</c> وحَجمُ المُعامِلِ مِن نَوعِه) — يُستَخرَجُ عِندَ المُستَهلِكِ الثالِث (القاعِدَة ١).</para></summary>
+    internal static IlSessionScan SessionDocumentTypesInIl(IEnumerable<Type> types)
+    {
+        var opCodeByValue = new Dictionary<short, System.Reflection.Emit.OpCode>();
+        foreach (var field in typeof(System.Reflection.Emit.OpCodes).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+            if (field.GetValue(null) is System.Reflection.Emit.OpCode op)
+                opCodeByValue[op.Value] = op;
+        const System.Reflection.BindingFlags all = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic
+            | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly;
+        var names = SessionMethods.ToHashSet(StringComparer.Ordinal);
+
+        var found = new HashSet<string>(StringComparer.Ordinal);
+        int methods = 0, calls = 0, unresolved = 0;
+        foreach (var type in types)
+            foreach (var method in type.GetMethods(all).Cast<System.Reflection.MethodBase>().Concat(type.GetConstructors(all)))
+            {
+                var il = method.GetMethodBody()?.GetILAsByteArray();
+                if (il is null) continue;
+                methods++;
+
+                var offset = 0;
+                while (offset < il.Length)
+                {
+                    short code = il[offset];
+                    if (code == 0xFE) { code = unchecked((short)(0xFE00 | il[offset + 1])); offset += 2; }
+                    else offset += 1;
+
+                    var op = opCodeByValue[code];
+                    var operandSize = op.OperandType switch
+                    {
+                        System.Reflection.Emit.OperandType.InlineNone => 0,
+                        System.Reflection.Emit.OperandType.ShortInlineBrTarget or System.Reflection.Emit.OperandType.ShortInlineI
+                            or System.Reflection.Emit.OperandType.ShortInlineVar => 1,
+                        System.Reflection.Emit.OperandType.InlineVar => 2,
+                        System.Reflection.Emit.OperandType.InlineI8 or System.Reflection.Emit.OperandType.InlineR => 8,
+                        System.Reflection.Emit.OperandType.InlineSwitch => 4 + 4 * BitConverter.ToInt32(il, offset),
+                        _ => 4,
+                    };
+
+                    if (op.OperandType == System.Reflection.Emit.OperandType.InlineMethod)
+                    {
+                        var token = BitConverter.ToInt32(il, offset);
+                        try
+                        {
+                            var called = method.Module.ResolveMethod(token,
+                                type.IsGenericType ? type.GetGenericArguments() : null,
+                                method.IsGenericMethod ? method.GetGenericArguments() : null);
+                            if (called is System.Reflection.MethodInfo { IsGenericMethod: true } info
+                                && names.Contains(info.Name)
+                                && info.DeclaringType?.Namespace is { } ns
+                                && (ns == "Marten" || ns.StartsWith("Marten.", StringComparison.Ordinal)))
+                            {
+                                calls++;
+                                var argument = info.GetGenericArguments()[0];
+                                if (!argument.IsGenericParameter) found.Add(argument.Name);
+                            }
+                        }
+                        catch (Exception) { unresolved++; }
+                    }
+
+                    offset += operandSize;
+                }
+            }
+
+        return new IlSessionScan(found.Order(StringComparer.Ordinal).ToList(), methods, calls, unresolved);
+    }
+
+    /// <summary>أَنواعُ تَجميعٍ بِلا ما لا يُحَمَّل — والثُقبُ يُعَدّ.</summary>
+    private static IEnumerable<Type> TypesOf(System.Reflection.Assembly assembly, ref int typeLoadHoles)
+    {
+        try { return assembly.GetTypes(); }
+        catch (System.Reflection.ReflectionTypeLoadException ex)
+        {
+            typeLoadHoles += ex.Types.Count(t => t is null);
+            return ex.Types.OfType<Type>().ToList();
+        }
+    }
 
     /// <summary>المُستَعمَلُ الَّذي لا جَدوَلَ لَه بَينَ الكائِناتِ المُهَيَّأَة — <c>platform.mt_doc_{اسمِه}</c>.</summary>
     internal static IReadOnlyList<string> Unregistered(IEnumerable<string> used, IReadOnlyCollection<string> configuredIds)
         => used.Distinct().Order(StringComparer.Ordinal)
             .Where(t => !configuredIds.Contains($"platform.mt_doc_{t.ToLowerInvariant()}")).ToList();
 
-    /// <summary>العَشَرَةُ يَومَ الإلحاق — تَتَقَلَّصُ ولا تَنمو إلّا بِقَرارٍ مَرئِيّ (نَسَقُ قائِمَةِ اليَتامى في القاعِدَة ١).</summary>
+    /// <summary>العَشَرَةُ يَومَ الإلحاق — تَتَقَلَّصُ ولا تَنمو إلّا بِقَرارٍ مَرئِيّ (نَسَقُ قائِمَةِ اليَتامى في القاعِدَة ١).
+    /// (‏2026-10-25، مُراجَعَةُ W8-6 — الجَولَة ١): **والحادي عَشَرَ <c>AnalysisRunClaim</c>** — لَم يَنمُ الكودُ بَل أَبصَرَت الأَداة.</summary>
     private static readonly string[] PinnedUnregistered =
     [
         "AgentSession", "AuditEntry", "Cart", "ConsentRecord", "IncubatorSession",
         "ModelCallRecord", "Report", "Review", "StudioUser", "TenantPlanDefinition",
+        "AnalysisRunClaim",
     ];
+
+    /// <summary>المُستَعمَلُ بِالأَداتَينِ مَعاً — النَصُّ في libs/apps والـIL في التَجميعاتِ المُحَمَّلَة — والعَدّاداتُ لِلطِباعَة.</summary>
+    private static (IReadOnlyList<string> Used, IReadOnlyList<string> Text, IlSessionScan Il, int Assemblies, int TypeLoadHoles) UsedByBothInstruments()
+    {
+        var text = SourceFiles().SelectMany(f => SessionDocumentTypesIn(File.ReadAllText(f))).Distinct().Order(StringComparer.Ordinal).ToList();
+        var assemblies = LoadedACommerceAssemblies();
+        var holes = 0;
+        var types = new List<Type>();
+        foreach (var assembly in assemblies) types.AddRange(TypesOf(assembly, ref holes));
+        var il = SessionDocumentTypesInIl(types);
+        var used = text.Union(il.Types).Distinct().Order(StringComparer.Ordinal).ToList();
+        return (used, text, il, assemblies.Count, holes);
+    }
 
     [Fact]
     public async Task EveryUnregisteredDocumentTheCodeUses_IsCountedAndNamedInTheVerbAndTheDeployDoc()
     {
         var ids = await WithComposedStore(Environments.Production,
             s => s.Storage.AllObjects().Select(o => o.Identifier.QualifiedName).ToHashSet(StringComparer.Ordinal));
-        var used = new[] { "libs", "apps" }
-            .SelectMany(d => Directory.EnumerateFiles(Path.Combine(RepoRoot, d), "*.*", SearchOption.AllDirectories))
-            .Where(f => (f.EndsWith(".cs", StringComparison.Ordinal) || f.EndsWith(".razor", StringComparison.Ordinal))
-                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                        && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .SelectMany(f => SessionDocumentTypesIn(File.ReadAllText(f))).Distinct().ToList();
+        var (used, text, il, assemblies, holes) = UsedByBothInstruments();
         var unregistered = Unregistered(used, ids);
-        output.WriteLine($"أَنواعٌ في نِداءاتِ الجَلسَة: {used.Count} · غَيرُ مُسَجَّلَة: {unregistered.Count} — {string.Join(" · ", unregistered)}");
-        Assert.True(used.Count >= 20, $"أَداةٌ عَمياء: {used.Count} نَوعاً.");
+        output.WriteLine($"النَصّ: {text.Count} نَوعاً · IL: {il.Types.Count} نَوعاً مِن {il.Calls} نِداءَ جَلسَةٍ في {il.Methods} دالَّةً عَبرَ {assemblies} تَجميعاً"
+            + $" (غَيرُ مَحلول: {il.Unresolved} · نَوعٌ لا يُحَمَّل: {holes}) · الاتِّحاد: {used.Count}");
+        output.WriteLine($"في IL وَحدَه: {string.Join(" · ", il.Types.Except(text))} · في النَصِّ وَحدَه: {string.Join(" · ", text.Except(il.Types))}");
+        output.WriteLine($"غَيرُ مُسَجَّلَة: {unregistered.Count} — {string.Join(" · ", unregistered)}");
+        Assert.True(text.Count >= 20, $"أَداةٌ عَمياء: {text.Count} نَوعاً في النَصّ.");
+        Assert.True(assemblies >= 30, $"أَداةٌ عَمياء: {assemblies} تَجميعاً.");
+        Assert.True(il.Methods >= 5000, $"أَداةٌ عَمياء: {il.Methods} دالَّةً مَقروءَة.");
+        Assert.True(il.Calls >= 100 && il.Types.Count >= 20, $"أَداةٌ عَمياء: {il.Calls} نِداءً و{il.Types.Count} نَوعاً في IL.");
+        Assert.Equal(0, il.Unresolved);
+        Assert.Equal(0, holes);
         Assert.Equal(PinnedUnregistered.Order(StringComparer.Ordinal), unregistered);
 
         var verbHeader = Verb()[..Verb().IndexOf("using System", StringComparison.Ordinal)];
@@ -712,20 +850,25 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
     // في libs/apps؛ فَلا يَعُدُّه العَدّادُ ولا تُسَمّيه القائِمَةُ المُثَبَّتَةُ ولا الرَأسُ ولا §٤‑د، وهُوَ لا يُسَجَّلُ فَيُنشِئُ التَطبيقُ جَدوَلَه عِندَ أَوَّلِ
     // استِعمال (مَقيسٌ عَلى Postgres المَحَلِّيّ: ‏`platform.mt_doc_analysisrunclaim` قائِمٌ بِجِوارِ `mt_doc_incubatorsession`). فَـ«عَشَرَةٌ بِالاتِّجاهَين»
     // كانَت عَدَّ أَداةٍ لَم تُقَس عَلى هذا الشَكل (القاعِدَة ١٠). **يُثَبَّتُ قَبلَ العِلاجِ** (القاعِدَة ٣): الصَفّانِ `Today_…` يَنقَلِبانِ بِاسمِهِما.
+    //
+    // **العِلاج** (‏2026-10-25): الأَداتانِ (أ) و(ب) أَعلاه. انقَلَبَ الصَفّانِ بِاسمِهِما (كانا `Today_an_inferred_session_write_is_invisible_to_the_counter`
+    // و`Today_AnalysisRunClaim_is_written_and_created_at_first_use_yet_neither_counted_nor_named`)، ومَصدَرُ الأَوَّلِ بِحَرفِه؛ وصَفّانِ جَديدان: حَقنُ عَيبٍ
+    // في IL (نَوعٌ مَصنوعٌ يَكتُبُ بِمُتَغَيِّرٍ وبِمُرتَجَعِ دالَّة)، والثُقبُ مُثَبَّتاً بِمِلَفِّه.
 
-    /// <summary>«اليَوم»: ثَلاثَةُ أَشكالٍ يَستَنتِجُ المُتَرجِمُ فيها النَوعَ — كائِنٌ جَديدٌ، ومُتَغَيِّرٌ، ومُرتَجَعُ دالَّة — لا يَعُدُّ العَدّادُ مِنها شَيئاً،
-    /// ويَعُدُّ النِداءَ المَكتوبَ بِجِوارِها.</summary>
+    /// <summary>الكائِنُ الجَديدُ يَعُدُّه النَصُّ الآن، والمُتَغَيِّرُ ومُرتَجَعُ الدالَّةِ يَبقَيانِ خارِجَه — يَعُدُّهُما IL (الصَفُّ بَعدَ التالي).
+    /// والمَصدَرُ بِحَرفِ صَفِّ «اليَوم».</summary>
     [Fact]
-    public void Today_an_inferred_session_write_is_invisible_to_the_counter()
+    public void An_inferred_write_of_a_new_object_is_counted_by_the_text_and_a_variable_is_left_to_the_il()
     {
         const string source = "session.Insert(new InjectedClaim { Key = k }); s.Store(claim); s.Insert(Make()); s.Store<Deal>(d);";
-        Assert.Equal(new[] { "Deal" }, SessionDocumentTypesIn(source));
+        Assert.Equal(new[] { "Deal", "InjectedClaim" }, SessionDocumentTypesIn(source).Order(StringComparer.Ordinal));
+        Assert.Equal(new[] { "Plan" }, SessionDocumentTypesIn("s.Store(new ACommerce.Kit.Subscriptions.Plan { Id = \"free\" }); s.Store(new TDoc());"));
     }
 
-    /// <summary>«اليَوم»: <c>AnalysisRunClaim</c> يَكتُبُه الكودُ بِنِداءٍ مُستَنتَجٍ ولا يُسَجِّلُه التَركيب — ولا يَعُدُّه العَدّادُ، ولا تُسَمّيه القائِمَةُ
-    /// المُثَبَّتَةُ ولا رَأسُ الفِعلِ ولا §٤‑د.</summary>
+    /// <summary><c>AnalysisRunClaim</c> تَعُدُّه الأَداتانِ كِلتاهُما، ولا يُسَجِّلُه التَركيبُ بَعد («أ» W8-6 · ١٣ قائِم)، فَهُوَ في القائِمَةِ المُثَبَّتَة
+    /// ويُسَمّيه رَأسُ الفِعلِ و§٤‑د.</summary>
     [Fact]
-    public async Task Today_AnalysisRunClaim_is_written_and_created_at_first_use_yet_neither_counted_nor_named()
+    public async Task AnalysisRunClaim_is_counted_by_both_instruments_pinned_and_named_in_the_verb_and_the_deploy_doc()
     {
         var feasibility = Read("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Incubator",
             "FeasibilityAnalysisService.cs");
@@ -736,22 +879,90 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.True(ids.Count > 0, "أَداةٌ عَمياء: صِفرُ كائِنٍ مُهَيَّأ.");
         Assert.DoesNotContain("platform.mt_doc_analysisrunclaim", ids);
 
-        var used = new[] { "libs", "apps" }
-            .SelectMany(d => Directory.EnumerateFiles(Path.Combine(RepoRoot, d), "*.*", SearchOption.AllDirectories))
-            .Where(f => (f.EndsWith(".cs", StringComparison.Ordinal) || f.EndsWith(".razor", StringComparison.Ordinal))
-                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                        && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .SelectMany(f => SessionDocumentTypesIn(File.ReadAllText(f))).Distinct().ToList();
-        output.WriteLine($"أَنواعٌ يَعُدُّها العَدّادُ اليَوم: {used.Count} — وAnalysisRunClaim بَينَها: {used.Contains("AnalysisRunClaim")}");
-        Assert.True(used.Count >= 20, $"أَداةٌ عَمياء: {used.Count} نَوعاً.");
-        Assert.DoesNotContain("AnalysisRunClaim", used);
-        Assert.DoesNotContain("AnalysisRunClaim", PinnedUnregistered);
+        var (used, text, il, _, _) = UsedByBothInstruments();
+        output.WriteLine($"النَصّ: {text.Count} · IL: {il.Types.Count} · الاتِّحاد: {used.Count} — وAnalysisRunClaim في النَصّ: {text.Contains("AnalysisRunClaim")}، في IL: {il.Types.Contains("AnalysisRunClaim")}");
+        Assert.True(text.Count >= 20 && il.Types.Count >= 20, $"أَداةٌ عَمياء: {text.Count} و{il.Types.Count}.");
+        Assert.Contains("AnalysisRunClaim", text);
+        Assert.Contains("AnalysisRunClaim", il.Types);
+        Assert.Contains("AnalysisRunClaim", PinnedUnregistered);
 
         var verbHeader = Verb()[..Verb().IndexOf("using System", StringComparison.Ordinal)];
         var deploy = Read("docs", "DEPLOY.md");
         var fourD = deploy[deploy.IndexOf("#### المُخَطَّطُ قَبلَ النَشر", StringComparison.Ordinal)..];
         fourD = fourD[..fourD.IndexOf("\n#### ", 10, StringComparison.Ordinal)];
-        Assert.DoesNotContain("`AnalysisRunClaim`", verbHeader, StringComparison.Ordinal);
-        Assert.DoesNotContain("`AnalysisRunClaim`", fourD, StringComparison.Ordinal);
+        Assert.Contains("`AnalysisRunClaim`", verbHeader, StringComparison.Ordinal);
+        Assert.Contains("`AnalysisRunClaim`", fourD, StringComparison.Ordinal);
     }
+
+    /// <summary><b>حَقنُ عَيبٍ في IL</b> (القاعِدَة ١٠): نَوعٌ مَصنوعٌ هُنا يَكتُبُ وَثيقَةً بِمُتَغَيِّرٍ وبِمُرتَجَعِ دالَّة — شَكلانِ لا يَراهُما النَصّ —
+    /// فَيَعُدُّها ماشي IL بِاسمِها، ونِداءُ مُعامِلِ النَوعِ يُعَدُّ نِداءً ولا يُعَدُّ نَوعاً.</summary>
+    [Fact]
+    public void TheIlCounter_ResolvesTheTypeTheCompilerInferred_InAnInjectedWriter()
+    {
+        var il = SessionDocumentTypesInIl([typeof(IlInjectedWriter)]);
+        output.WriteLine($"IL المَحقون: {il.Methods} دالَّة · {il.Calls} نِداءَ جَلسَة · غَيرُ مَحلول {il.Unresolved} — {string.Join(" · ", il.Types)}");
+        Assert.True(il.Methods >= 3, $"أَداةٌ عَمياء: {il.Methods} دالَّة.");
+        Assert.Equal(new[] { nameof(IlInjectedDocument) }, il.Types);
+        Assert.Equal(3, il.Calls);
+        Assert.Equal(0, il.Unresolved);
+        Assert.Empty(SessionDocumentTypesIn("session.Store(doc); session.Insert(Make()); session.Store(doc);"));
+    }
+
+    private sealed class IlInjectedDocument { public Guid Id { get; set; } }
+
+    /// <summary>لا يُنادى أَبَداً — يُقرَأُ IL‑ه وَحدَه.</summary>
+    private static class IlInjectedWriter
+    {
+        internal static void Write(IDocumentSession session, IlInjectedDocument doc)
+        {
+            session.Store(doc);
+            session.Insert(Make());
+        }
+
+        internal static void WriteAny<T>(IDocumentSession session, T doc) where T : notnull => session.Store(doc);
+
+        private static IlInjectedDocument Make() => new() { Id = Guid.NewGuid() };
+    }
+
+    /// <summary><b>الثُقبُ مُثَبَّتاً بِمِلَفِّه</b>: نِداءُ كِتابَةٍ بِمُتَغَيِّرٍ (لا بِكائِنٍ جَديدٍ ولا بِوَسيطٍ مَكتوب) في مَشروعٍ لا يُحَمِّلُ الاختِبارُ تَجميعَه —
+    /// فَلا يَبلُغُه IL ولا يَراه النَصّ. قُرِئَت أَنواعُه بِاليَدِ ‏2026-10-25: ‏`Cart` و`Notification` و`Report` و`Tenant` و`StudioUser` و`User`
+    /// و`ImportedRecord` — كُلُّها يَعُدُّها العَدّادانِ مِن مَوضِعٍ آخَر. فَنِداءٌ جَديدٌ مِنه يُحمِرُّ هذا الصَفَّ حَتّى يُقرَأَ نَوعُه ويُرفَعَ عَدُّ مِلَفِّه.</summary>
+    [Fact]
+    public void The_variable_writes_in_projects_the_il_counter_does_not_load_are_pinned_by_file()
+    {
+        var loaded = LoadedACommerceAssemblies().Select(a => a.GetName().Name!).ToHashSet(StringComparer.Ordinal);
+        var projects = new[] { "libs", "apps" }
+            .SelectMany(d => Directory.EnumerateFiles(Path.Combine(RepoRoot, d), "*.csproj", SearchOption.AllDirectories))
+            .ToList();
+        var unloadedDirs = projects.Where(p => !loaded.Contains(Path.GetFileNameWithoutExtension(p)))
+            .Select(p => Path.GetDirectoryName(p)! + Path.DirectorySeparatorChar).ToList();
+        var variableWrite = new System.Text.RegularExpressions.Regex(
+            @"\.(?:Store|Insert|Update|Delete|HardDelete)\s*\(\s*(?!new\b)[A-Za-z_@]");
+
+        var files = SourceFiles().Where(f => unloadedDirs.Any(d => f.StartsWith(d, StringComparison.Ordinal))).ToList();
+        var sites = files
+            .Select(f => (File: Path.GetRelativePath(RepoRoot, f).Replace(Path.DirectorySeparatorChar, '/'),
+                          Count: variableWrite.Matches(File.ReadAllText(f)).Count))
+            .Where(x => x.Count > 0)
+            .OrderBy(x => x.File, StringComparer.Ordinal)
+            .Select(x => $"{x.File}: {x.Count}").ToList();
+        output.WriteLine($"مَشاريع: {projects.Count} · يُحَمِّلُها الاختِبار: {projects.Count - unloadedDirs.Count} · لا: {unloadedDirs.Count} بِـ{files.Count} مِلَفّاً");
+        foreach (var s in sites) output.WriteLine($"  {s}");
+
+        Assert.True(projects.Count >= 40 && unloadedDirs.Count > 0 && files.Count > 0,
+            $"أَداةٌ عَمياء: {projects.Count} مَشروعاً، {unloadedDirs.Count} لا يُحَمَّل، {files.Count} مِلَفّاً.");
+        Assert.Equal(PinnedVariableWritesOutsideIl, sites);
+    }
+
+    /// <summary>‏15 نِداءً في 7 مِلَفّاتٍ يَومَ الإلحاق (‏2026-10-25).</summary>
+    private static readonly string[] PinnedVariableWritesOutsideIl =
+    [
+        "apps/V1.App/Seed/AppearanceBaselineSeeder.cs: 2",
+        "apps/V1.App/Seed/PlatformAdminSeeder.cs: 2",
+        "apps/V1.App/Seed/PlatformSeed.cs: 1",
+        "apps/V1.App/Seed/TestDataSeeder.cs: 3",
+        "libs/kits/Cart/ACommerce.Kit.Cart.Server/CartHandlers.cs: 3",
+        "libs/kits/Notifications/ACommerce.Kit.Notifications.Server/NotificationHandlers.cs: 1",
+        "libs/kits/Reports/ACommerce.Kit.Reports.Server/ReportHandlers.cs: 3",
+    ];
 }
