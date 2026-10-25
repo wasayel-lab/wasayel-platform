@@ -88,6 +88,12 @@ public static class ApiV1Endpoints
             await ApiWrite.OnceAsync(http, idem, "deals.advance", async p =>
             {
                 var body = await ApiBody.ReadAsync<AdvanceDealRequest>(http);
+                // والعُضوِيَّةُ قَبلَ الخِدمَة (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-10 الجَولَة ١؛ تَوصيفُه `e716f46`؛ ‏ADR-036 §١٣‑٨؛ القاعِدَة ٦): كانَ غَيرُ الطَرَفِ يَبلُغُ
+                // رَفضَ الفاعِلِ في الخِدمَة فَيَسمَعُ ‏403 بِمَرحَلَةِ صَفقَةِ غَيرِه وحالِها، أَو ‏409 بِحالِ المُلغاة — وبابُ القِراءَةِ والإلغاءُ يُجيبانِه ‏404. فَصارَ ‏404 قَبلَ أَيِّ سُؤال،
+                // بِنَسَقِ `/cancel` أَدناه؛ والخِدمَةُ تَبقى تَسأَلُ الفاعِلَ لِلطَرَف — حارِسانِ لِسُؤالَين (`DealApi.IsParty`).
+                var found = await deals.LoadAsync(p.TenantSlug, id, http.RequestAborted);
+                if (found is null || !DealApi.IsParty(found, p.ActorUserId))
+                    return ApiOutcome.Error(ApiErrorCatalog.NotFound);
                 // و`expected_stage` اختِيارِيٌّ: المَرحَلَةُ الَّتي قَرَأَها العَميلُ فَقَرَّرَ عَلَيها — غَيرُها ‏409 `deal_changed_meanwhile` (‏2026-10-24، تَدقيقُ الإطلاق
                 // brief-P0-6؛ ‏ADR-036 §١٣)؛ وغِيابُه كَما كان. نَسَقُ حَقلِ استِمارَتَي العُضوِ والاستوديو.
                 var res = await deals.AdvanceAsync(
