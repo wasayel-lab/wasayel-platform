@@ -704,4 +704,54 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(new[] { "InjectedLedgerRow", "Deal" }, used);
         Assert.Equal(new[] { "InjectedLedgerRow" }, Unregistered(used, new HashSet<string> { "platform.mt_doc_deal" }));
     }
+
+    // ─── تَوصيفُ «اليَوم» — العَدّادُ أَعمى عَن النِداءِ الَّذي يَستَنتِجُ المُتَرجِمُ نَوعَه (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-6 — الجَولَة ١) ───
+    //
+    // **المَقيس**: `SessionGeneric` يَمسِكُ النِداءَ بِوَسيطِ نَوعٍ مَكتوبٍ (`Store<X>(…)`) وَحدَه. و`FeasibilityAnalysisService` يَكتُبُ
+    // `session.Insert(new AnalysisRunClaim { … })` — النَوعُ يَستَنتِجُه المُتَرجِمُ ولا يُكتَبُ بَينَ قَوسَين — ولا نِداءَ عامَّ واحِداً لِـ`AnalysisRunClaim`
+    // في libs/apps؛ فَلا يَعُدُّه العَدّادُ ولا تُسَمّيه القائِمَةُ المُثَبَّتَةُ ولا الرَأسُ ولا §٤‑د، وهُوَ لا يُسَجَّلُ فَيُنشِئُ التَطبيقُ جَدوَلَه عِندَ أَوَّلِ
+    // استِعمال (مَقيسٌ عَلى Postgres المَحَلِّيّ: ‏`platform.mt_doc_analysisrunclaim` قائِمٌ بِجِوارِ `mt_doc_incubatorsession`). فَـ«عَشَرَةٌ بِالاتِّجاهَين»
+    // كانَت عَدَّ أَداةٍ لَم تُقَس عَلى هذا الشَكل (القاعِدَة ١٠). **يُثَبَّتُ قَبلَ العِلاجِ** (القاعِدَة ٣): الصَفّانِ `Today_…` يَنقَلِبانِ بِاسمِهِما.
+
+    /// <summary>«اليَوم»: ثَلاثَةُ أَشكالٍ يَستَنتِجُ المُتَرجِمُ فيها النَوعَ — كائِنٌ جَديدٌ، ومُتَغَيِّرٌ، ومُرتَجَعُ دالَّة — لا يَعُدُّ العَدّادُ مِنها شَيئاً،
+    /// ويَعُدُّ النِداءَ المَكتوبَ بِجِوارِها.</summary>
+    [Fact]
+    public void Today_an_inferred_session_write_is_invisible_to_the_counter()
+    {
+        const string source = "session.Insert(new InjectedClaim { Key = k }); s.Store(claim); s.Insert(Make()); s.Store<Deal>(d);";
+        Assert.Equal(new[] { "Deal" }, SessionDocumentTypesIn(source));
+    }
+
+    /// <summary>«اليَوم»: <c>AnalysisRunClaim</c> يَكتُبُه الكودُ بِنِداءٍ مُستَنتَجٍ ولا يُسَجِّلُه التَركيب — ولا يَعُدُّه العَدّادُ، ولا تُسَمّيه القائِمَةُ
+    /// المُثَبَّتَةُ ولا رَأسُ الفِعلِ ولا §٤‑د.</summary>
+    [Fact]
+    public async Task Today_AnalysisRunClaim_is_written_and_created_at_first_use_yet_neither_counted_nor_named()
+    {
+        var feasibility = Read("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Incubator",
+            "FeasibilityAnalysisService.cs");
+        Assert.Contains("session.Insert(new AnalysisRunClaim", feasibility, StringComparison.Ordinal);
+
+        var ids = await WithComposedStore(Environments.Production,
+            s => s.Storage.AllObjects().Select(o => o.Identifier.QualifiedName).ToHashSet(StringComparer.Ordinal));
+        Assert.True(ids.Count > 0, "أَداةٌ عَمياء: صِفرُ كائِنٍ مُهَيَّأ.");
+        Assert.DoesNotContain("platform.mt_doc_analysisrunclaim", ids);
+
+        var used = new[] { "libs", "apps" }
+            .SelectMany(d => Directory.EnumerateFiles(Path.Combine(RepoRoot, d), "*.*", SearchOption.AllDirectories))
+            .Where(f => (f.EndsWith(".cs", StringComparison.Ordinal) || f.EndsWith(".razor", StringComparison.Ordinal))
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                        && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .SelectMany(f => SessionDocumentTypesIn(File.ReadAllText(f))).Distinct().ToList();
+        output.WriteLine($"أَنواعٌ يَعُدُّها العَدّادُ اليَوم: {used.Count} — وAnalysisRunClaim بَينَها: {used.Contains("AnalysisRunClaim")}");
+        Assert.True(used.Count >= 20, $"أَداةٌ عَمياء: {used.Count} نَوعاً.");
+        Assert.DoesNotContain("AnalysisRunClaim", used);
+        Assert.DoesNotContain("AnalysisRunClaim", PinnedUnregistered);
+
+        var verbHeader = Verb()[..Verb().IndexOf("using System", StringComparison.Ordinal)];
+        var deploy = Read("docs", "DEPLOY.md");
+        var fourD = deploy[deploy.IndexOf("#### المُخَطَّطُ قَبلَ النَشر", StringComparison.Ordinal)..];
+        fourD = fourD[..fourD.IndexOf("\n#### ", 10, StringComparison.Ordinal)];
+        Assert.DoesNotContain("`AnalysisRunClaim`", verbHeader, StringComparison.Ordinal);
+        Assert.DoesNotContain("`AnalysisRunClaim`", fourD, StringComparison.Ordinal);
+    }
 }
