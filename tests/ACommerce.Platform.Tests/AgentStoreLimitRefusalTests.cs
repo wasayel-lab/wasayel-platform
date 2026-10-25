@@ -2,7 +2,9 @@ using System.Text;
 using System.Text.RegularExpressions;
 using ACommerce.Platform.I18n;
 using ACommerce.Templates.Customer.Marketplace.Services;
+using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace ACommerce.Platform.Tests;
 
@@ -17,7 +19,7 @@ namespace ACommerce.Platform.Tests;
 // (٢) الرَفضُ يَتبَعُ بَوّابَةَ `CheckBuildAsync` في جِسمِ `CreateTenantAsync` — يَبقى بِلا تَعديل؛ و(٣) البُرهانُ الحَيُّ
 // `LiveAgentStoreLimitRefusalProofTests` يُنادي المُنَفِّذَ الحَقيقيَّ عَلى Postgres ويُقارِنُ البايتات — يَبقى بِلا تَعديل.
 
-public class AgentStoreLimitRefusalTests
+public class AgentStoreLimitRefusalTests(ITestOutputHelper output)
 {
     /// <summary>النَصُّ بِحَرفِه كَما يَبلُغُ الوَكيلَ والمُستَخدِم — ثابِتٌ قَبلَ التَرحيلِ وبَعدَه.</summary>
     internal static string ExpectedFor(int used, int limit) =>
@@ -70,5 +72,38 @@ public class AgentStoreLimitRefusalTests
         Assert.True(gate > 0, "CreateTenantAsync لا يَسأَلُ CheckBuildAsync.");
         Assert.True(refused > gate && store > refused,
             $"التَرتيبُ: البَوّابَة {gate} ← الرَدّ {refused} ← الكِتابَة {store} — يَجِبُ أَن يَسبِقَ الرَدُّ الكِتابَة.");
+    }
+
+    // ─── بَندُ المُنَسِّقِ في تَيّارِ W8-3 (‏2026-10-25): الرَفضُ يَدعو إلى بابَينِ لا يُفتَحان ──────────────────────────────────────
+    //
+    // «أ» S14·٤ قاسَه في الطَريقِ ولَم يَمَسَّه: «اِحذِف تَطبيقاً» لا يُحَرِّرُ حِصَّةً — `StudioUser.StoresBuilt` لا يَكتُبُه إلّا
+    // `RecordStoreBuiltAsync` (‏`StoresBuilt++`)، وحَذفُ مَتجَرٍ لا يُنقِصُه — و«اِرفَع باقَتَك مِن /studio/billing» لا يُفتَحُ ما دامَت
+    // كُلُّ دَرَجَةٍ مُسَعَّرَةً و`StudioTierPurchase.SelfServiceCheckoutExists` ‏false (فَلا دَرَجَةَ `IsSelfGrantable`). القاعِدَة ٣:
+    // يُثَبَّتُ «اليَوم» في كوميتٍ مُستَقِلّ، ويُقلَبُ الصَفُّ بِاسمِه في كوميتِ الصِياغَة.
+
+    private static readonly Regex StoresBuiltWrite = new(@"StoresBuilt\s*(?:\+\+|--|[+\-]=|=(?!=))", RegexOptions.Compiled);
+
+    /// <summary>كُلُّ كِتابَةٍ لِـ<c>StoresBuilt</c> في <c>libs</c> و<c>apps</c> (الكودُ لا التَعليق) — بِنَصِّها، مِن الماسِحِ الواحِد.</summary>
+    internal static List<string> StoresBuiltWrites()
+        => EntitlementContractTests.SourceFiles()
+            .SelectMany(f => StoresBuiltWrite.Matches(WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(f.Text)))
+                .Select(m => Regex.Replace(m.Value, @"\s+", "")))
+            .ToList();
+
+    [Fact]
+    public void Today_the_store_limit_refusal_sends_the_user_to_two_doors_neither_of_which_opens()
+    {
+        var template = LocaleCatalog.Find(LocaleCatalog.Arabic, AgentToolExecutor.StoreLimitRefusalKey)!;
+        var writes = StoresBuiltWrites();
+        var grantable = TierCatalog.All.Keys.Where(StudioTierPurchase.IsSelfGrantable).ToList();
+        output.WriteLine($"كِتاباتُ StoresBuilt: {writes.Count} ({string.Join(", ", writes)}) · دَرَجاتٌ تُمنَحُ ذاتِيّاً: {grantable.Count} مِن {TierCatalog.All.Count}" +
+                         $" · SelfServiceCheckoutExists: {StudioTierPurchase.SelfServiceCheckoutExists}");
+
+        Assert.Contains("اِحذِف تَطبيقاً", template, StringComparison.Ordinal);
+        Assert.Contains("اِرفَع باقَتَك مِن /studio/billing", template, StringComparison.Ordinal);
+        Assert.Equal(new[] { "StoresBuilt++" }, writes);
+        Assert.True(TierCatalog.All.Count >= 4, $"أَداةٌ عَمياء: {TierCatalog.All.Count} دَرَجَة.");
+        Assert.Empty(grantable);
+        Assert.False(StudioTierPurchase.SelfServiceCheckoutExists);
     }
 }
