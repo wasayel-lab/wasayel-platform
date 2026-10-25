@@ -97,4 +97,34 @@ public class StudioHomeActivePlanTests
                  })
             Assert.Equal(state, TenantPlanPolicy.Derive(plan, now));   // ‏الثَلاثُ الأُخرى لا تَعبُرُ شَرطَ السَطر
     }
+
+    // ─── «سارِيَةٌ حَتّى X» وX يَومٌ لا تُقبَلُ فيه الكِتابَة (تَدقيقُ الإطلاق brief-P2-4، ‏2026-10-25) ─────────────────────────────
+    //
+    // **المَقيس** (‏2026-10-24 عِندَ `dace7cd`؛ أُعيدَ عِندَ `1e2cecf`): المُشرِفُ يَكتُبُ تاريخَ الانتِهاءِ يَوماً («2026-11-30») فَيُقرَأُ بِـ
+    // `AssumeUniversal` مُنتَصَفَ لَيلِ ذلكَ اليَومِ UTC، و`Derive` سارِيَةٌ ما دامَ `now <= ExpiresAt` — فَمِن الدَقيقَةِ الأولى في X (الثالِثَةِ فَجراً
+    // بِتَوقيتِ الرِياض) المَتجَرُ في السَماحِ ولا يَقبَلُ كِتابَة، والسَطرُ يَقولُ «سارِيَةٌ حَتّى X». يُثَبَّتُ «اليَوم» هُنا (القاعِدَة ٣) ويُقلَبُ بِاسمِه
+    // في كوميتِ الصِياغَة؛ والصَفّانِ أَعلاه يَبقَيانِ إلّا السَطرَ الَّذي يُثَبِّتُ القالِبَ بِحَرفِه (يُقلَبُ مَعَه، مُعلَنٌ هُنا سَلَفاً).
+
+    /// <summary>ما يَكتُبُه المُشرِفُ يَوماً يُقرَأُ مُنتَصَفَ لَيلِه UTC، وفي التاسِعَةِ صَباحاً بِتَوقيتِ الرِياضِ مِن ذلكَ اليَومِ لا كِتابَة.</summary>
+    [Fact]
+    public void An_expiry_day_written_by_the_admin_ends_the_plan_at_its_first_minute_utc()
+    {
+        var now = new DateTime(2026, 10, 25, 12, 0, 0, DateTimeKind.Utc);
+        var f = TenantPlanPolicy.ReadSetting("manual", "2026-09-01", "2026-11-30", "14", "0", now);
+        Assert.Equal(new DateTime(2026, 11, 30, 0, 0, 0, DateTimeKind.Utc), f.ExpiresAt);
+        var plan = new TenantPlan { PlanId = f.PlanId, StartsAt = f.StartsAt, ExpiresAt = f.ExpiresAt, GraceDays = f.GraceDays };
+
+        var nineRiyadh = new DateTime(2026, 11, 30, 6, 0, 0, DateTimeKind.Utc);     // ‏09:00 بِتَوقيتِ الرِياض (‏UTC+3)
+        Assert.Equal(TenantPlanState.Grace, TenantPlanPolicy.Derive(plan, nineRiyadh));
+        Assert.False(TenantPlanPolicy.AllowsWrite(TenantPlanPolicy.Derive(plan, nineRiyadh)));
+        Assert.Equal(TenantPlanState.Active, TenantPlanPolicy.Derive(plan, new DateTime(2026, 11, 29, 20, 59, 0, DateTimeKind.Utc)));
+        Assert.Equal("2026-11-30", plan.ExpiresAt.ToString("yyyy-MM-dd"));   // ‏ما يَطبَعُه السَطر
+    }
+
+    [Fact]
+    public void Today_the_active_line_says_valid_until_the_day_on_which_writes_are_already_refused()
+    {
+        var template = ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "studio.plan.active_line")!;
+        Assert.Equal("الباقَة: {0} — سارِيَةٌ حَتّى {1}", template);
+    }
 }
