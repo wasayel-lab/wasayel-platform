@@ -58,6 +58,12 @@ public class NuGetAuditGateTests(ITestOutputHelper output)
         if (props.Any(e => e.Name.LocalName is "NoWarn" or "WarningsNotAsErrors" && Codes.Any(c => Lists(e.Value, c)))) gaps.Add("audit_silenced");
         if (props.Any(e => e.Name.LocalName == "WarningsAsErrors" && !e.Value.Contains("$(WarningsAsErrors)", StringComparison.Ordinal)))
             gaps.Add("inherited_errors_dropped");
+        // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة ١، صُغرى): `NoWarn` عَلى حُزمَةٍ بِعَينِها — سِمَةً أَو عُنصُراً تَحتَ PackageReference/PackageVersion —
+        // يُسكِتُ NU1903/NU1904 لَها وَحدَها، والفاحِصُ كانَ يَقرَأُ PropertyGroup وَحدَه.
+        var packages = doc.Descendants().Where(e => e.Name.LocalName is "PackageReference" or "PackageVersion").ToList();
+        if (packages.Any(e => Codes.Any(c => Lists(e.Attribute("NoWarn")?.Value, c))
+                              || e.Elements().Any(x => x.Name.LocalName == "NoWarn" && Codes.Any(c => Lists(x.Value, c)))))
+            gaps.Add("package_silenced");
         return gaps;
     }
 
@@ -84,6 +90,11 @@ public class NuGetAuditGateTests(ITestOutputHelper output)
         // ‏ولا مِلَفَّ أَهدافٍ مُشتَرَكٌ يُعيدُ تَعريفَها بَعدَ الـprops — يَومَ يولَدُ يَمُرُّ بِالفاحِصِ نَفسِه.
         var targets = Path.Combine(RepoRoot, "Directory.Build.targets");
         if (File.Exists(targets)) Assert.Empty(ProjectGaps(File.ReadAllText(targets)));
+        // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة ١): و`Directory.Packages.props` — يَستَورِدُه CPM بَعدَ `Directory.Build.props`، فَـ`NuGetAuditMode=direct`
+        // أَو `NoWarn` فيه يَغلِبُ البَوّابَةَ وهي خَضراء؛ يُقرَأُ بِالفاحِصِ نَفسِه، ويُطبَعُ ما وُجِد.
+        var cpm = ProjectGaps(File.ReadAllText(Path.Combine(RepoRoot, "Directory.Packages.props")));
+        output.WriteLine($"Directory.Packages.props: خُروق {cpm.Count}{(cpm.Count > 0 ? " — " + string.Join(", ", cpm) : "")}");
+        Assert.Empty(cpm);
     }
 
     private const string Good = """
@@ -147,7 +158,12 @@ public class NuGetAuditGateTests(ITestOutputHelper output)
             ("مَشروعٌ يُضَيِّقُ الوَضع", With(Plain, "</PropertyGroup>", "<NuGetAuditMode>direct</NuGetAuditMode></PropertyGroup>"), "audit_overridden"),
             ("مَشروعٌ يُسكِتُ العالِيَة", With(Plain, "</PropertyGroup>", "<NoWarn>$(NoWarn);NU1903</NoWarn></PropertyGroup>"), "audit_silenced"),
             ("مَشروعٌ يُسقِطُ الموروث", With(Plain, "</PropertyGroup>", "<WarningsAsErrors>CS8600</WarningsAsErrors></PropertyGroup>"), "inherited_errors_dropped"),
+            ("حُزمَةٌ تُسكِتُ العالِيَةَ بِسِمَة", With(Plain, "</Project>", "<ItemGroup><PackageReference Include=\"MimeKit\" NoWarn=\"NU1903\" /></ItemGroup></Project>"), "package_silenced"),
+            ("نُسخَةٌ مَركَزِيَّةٌ تُسكِتُ بِعُنصُر", With(Plain, "</Project>", "<ItemGroup><PackageVersion Include=\"MimeKit\" Version=\"4.17.0\"><NoWarn>NU1701;NU1904</NoWarn></PackageVersion></ItemGroup></Project>"), "package_silenced"),
+            ("Directory.Packages.props يُضَيِّقُ الوَضع", With(Plain, "</PropertyGroup>", "<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally><NuGetAuditMode>direct</NuGetAuditMode></PropertyGroup>"), "audit_overridden"),
         };
+        // ‏وNoWarn لِرَمزٍ آخَرَ عَلى حُزمَةٍ لا يُعَدُّ إسكاتاً لِلفَحص.
+        Assert.Empty(ProjectGaps(With(Plain, "</Project>", "<ItemGroup><PackageReference Include=\"X\" NoWarn=\"NU1701\" /></ItemGroup></Project>")));
         var missed = new List<string>();
         foreach (var c in cases)
         {
