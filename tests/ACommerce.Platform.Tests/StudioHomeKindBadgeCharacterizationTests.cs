@@ -80,11 +80,14 @@ public class StudioHomeKindBadgeCharacterizationTests
     /// <para>تَوصيفٌ لا استِحسان — <c>LegacyMode_IsUntouched_AndItsConsumerIsNamed</c>
     /// في <c>StudioBuildRoleFloorTests</c> يُسَمّي مُستَهلِكَه المَقصود، ولا
     /// يُغلَقُ الوَضعُ هُنا.</para>
+    /// <para><b>(‏2026-10-28، ‏ADR-040، قَرارُ المالِك د62 — قُلِبَ بِاسمِه)</b>: كانَ
+    /// <c>Zero_roles_is_the_legacy_mode_that_grants_everything_to_everyone</c> بِـ<c>Assert.True(…, "tenant.manage")</c>. صارَ صِفرُ الأَدوارِ
+    /// يُعطي صَلاحِيّاتِ العُضوِ ولا يُعطي الإدارَة لِأَحَد.</para>
     /// </summary>
     [Fact]
-    public void Zero_roles_is_the_legacy_mode_that_grants_everything_to_everyone()
+    public void Zero_roles_grants_member_permissions_to_everyone_and_the_administration_to_no_one()
     {
-        Assert.True(RolePermissions.Has(Array.Empty<Role>(), activeRole: null, "tenant.manage"));
+        Assert.False(RolePermissions.Has(Array.Empty<Role>(), activeRole: null, "tenant.manage"));
         Assert.True(RolePermissions.Has(Array.Empty<Role>(), activeRole: "", "listing.create"));
 
         var customer = new Role { Slug = "customer", CatalogSlug = "customer", Permissions = ["listing.view"] };

@@ -51,6 +51,23 @@ public static class PermissionCatalog
 
     private static readonly HashSet<string> Set = new(All, StringComparer.Ordinal);
 
+    /// <summary>
+    /// <para><b>الصَلاحِيّاتُ الإدارِيَّة — ما لا يُعطيه مَتجَرٌ بِلا أَدوارٍ لِأَحَد</b> (‏2026-10-28، ‏ADR-040، قَرارُ المالِك د62). والمِعيارُ
+    /// مَقيسٌ لا مُسَمّى: صَلاحِيَّةٌ يَمنَحُها في الكاتالوجِ دَورُ <c>tenant_admin</c> وَحدَه — اليَومَ <c>tenant.manage</c> وَحدَها (تَفتَحُ
+    /// صَفَحاتِ <c>/admin/tenants/{slug}/*</c> وقائِمَةَ المُستَخدِمينَ بِهَواتِفِهِم). والسَبعُ الباقِيَةُ يَحمِلُها دَورُ عُضوٍ واحِدٌ عَلى الأَقَلّ
+    /// فَهي صَلاحِيّاتُ عُضو. و<c>RoleCatalogAdministrativeTests</c> يَحمَرُّ إن مَنَحَ الكاتالوجُ صَلاحِيَّةً لِـ<c>tenant_admin</c> وَحدَه
+    /// ولَم تُسَمَّ هُنا، أَو سُمِّيَت هُنا ويَحمِلُها دَورُ عُضو.</para>
+    /// </summary>
+    public static readonly IReadOnlyList<string> Administrative = new[]
+    {
+        "tenant.manage",
+    };
+
+    private static readonly HashSet<string> AdministrativeSet = new(Administrative, StringComparer.Ordinal);
+
+    /// <summary>هَل هذه الصَلاحِيَّةُ إدارِيَّة؟ (‏ADR-040) — المُقارَنَةُ حَسّاسَةٌ لِلحالَةِ كَـ<see cref="Contains"/>.</summary>
+    public static bool IsAdministrative(string permission) => AdministrativeSet.Contains(permission);
+
     /// <summary>هَل هذه السِلسِلَة صَلاحِيَّة مُعتَرَف بِها؟ المُقارَنَة
     /// <b>حَسّاسَة لِلحالَة</b> (Ordinal) كَما هي في <see cref="RolePermissions.Has"/>.</summary>
     public static bool Contains(string permission) => Set.Contains(permission);

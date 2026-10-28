@@ -189,6 +189,10 @@ int studioBorn = 0, studioRentalNoCart = 0, studioRentalNoCartAnalysisMarketplac
 var studioRentalNoCartSlugs = new List<string>();
 int legacy = 0, legacyStudio = 0, legacyOwned = 0, legacyMembers = 0;
 var legacySlugs = new List<string>();
+// ‏(‏2026-10-28، ‏ADR-040، قَرارُ المالِك د62) صِفرُ الأَدوارِ بِنيَةً لا صَلاحِيَّة: بَعدَ القَلبِ يُصَفِّرُ `legacy` أَعلاه نَفسَه (بُرهانُ القَلب)، و«كَم
+// مَتجَراً بِلا أَدوار، وكَم عُضواً فيها» — سُؤالُ المالِك في «ج» د62 — يُعَدُّ هُنا بِـ`ZeroRoles` في أَسفَلِ المِلَفّ.
+int zeroRole = 0, zeroRoleStudio = 0, zeroRoleMembers = 0;
+var zeroRoleSlugs = new List<string>();
 
 // ‏(‏2026-10-24) وكُلُّ خَطَأِ قاعِدَةٍ داخِلَ الحَلقَةِ يُصَنَّفُ ويَخرُجُ بِـ1 كَما يَعِدُ الرَأس — لا 134 بِتَتَبُّعِ مُكَدَّس.
 try
@@ -305,6 +309,13 @@ try
             members = await tq.Query<User>().Where(u => u.DeletedAt == null).CountAsync();
             legacyMembers += members;
         }
+        if (ZeroRoles(t))
+        {
+            zeroRole++;
+            zeroRoleSlugs.Add(t.Id);
+            if (studio) zeroRoleStudio++;
+            zeroRoleMembers += legacyMode ? members : await tq.Query<User>().Where(u => u.DeletedAt == null).CountAsync();
+        }
 
         switch (ownerIds.Count)
         {
@@ -338,6 +349,7 @@ Console.WriteLine($"فُحِصَ: {tenants.Count} مَتجَراً · {totalList
 Console.WriteLine($"بِمالِكِ إعلانٍ واحِد: {singleOwner} (مِنها مالِكُ المَتجَرِ هُوَ ذلكَ البائِع: {singleOwnerIsStoreOwner}) · بِأَكثَرَ مِن مالِك: {multiOwner} · بِلا مالِكٍ مَقروء: {zeroOwner}");
 Console.WriteLine($"مِن الاستوديو: {studioBorn} · مِنها مَرسومٌ Rental بِلا سَلَّة: {studioRentalNoCart} (ونَمَطُ تَحليلِه marketplace — وُلِدَ قَبلَ ADR-034: {studioRentalNoCartAnalysisMarketplace}){(studioRentalNoCartSlugs.Count == 0 ? "" : " ← " + string.Join(", ", studioRentalNoCartSlugs))}");
 Console.WriteLine($"بِلا أَدوار (وَضعٌ مَوروث — كُلُّ مُسَجَّلٍ يَحمِلُ tenant.manage): {legacy} · مِنها مِن الاستوديو: {legacyStudio} · بِمالِكِ استوديو: {legacyOwned} · مُستَخدِمونَ قائِمونَ فيها: {legacyMembers}{(legacySlugs.Count == 0 ? "" : " ← " + string.Join(", ", legacySlugs))}");
+Console.WriteLine($"بِصِفرِ أَدوار (‏ADR-040 — صَلاحِيّاتُ العُضوِ وَحدَها، ولا tenant.manage لِأَحَد): {zeroRole} · مِنها مِن الاستوديو: {zeroRoleStudio} · مُستَخدِمونَ قائِمونَ فيها: {zeroRoleMembers}{(zeroRoleSlugs.Count == 0 ? "" : " ← " + string.Join(", ", zeroRoleSlugs))}");
 
 if (mismatches.Count > 0)
 {
@@ -368,3 +380,7 @@ static string? DatabaseFailure(Exception ex) => ex switch
 static bool HasActiveRole(Tenant t, User u)
     => t.Roles.Count == 0
     || (!string.IsNullOrEmpty(u.ActiveRole) && t.Roles.Any(r => r.Slug == u.ActiveRole));
+
+// ‏صِفرُ الأَدوارِ بِنيَةً (‏2026-10-28، ‏ADR-040) — لا صَلاحِيَّة: الوَضعُ المَوروثُ أَعلاه يُسأَلُ بِدالَّةِ المُنتَجِ نَفسِها، وهذا يَعُدُّ المَتاجِرَ الَّتي
+// يُصيبُها القَلبُ أَيّاً كانَ جَوابُ الدالَّة.
+static bool ZeroRoles(Tenant t) => t.Roles.Count == 0;

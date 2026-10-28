@@ -34,7 +34,7 @@ namespace ACommerce.Templates.Customer.Marketplace.Gates;
 public static class PermissionDoor
 {
     /// <summary>هَل يُفتَحُ البابُ لِهذا الدَور؟ — <c>RolePermissions.Has</c> عَلى دَورِ المَسارِ إن وُجِدَ وإلّا المُخَزَّن. مَتجَرٌ بِلا أَدوارٍ مَفتوح
-    /// (الوَضعُ المَوروث)، ودَورٌ غائِبٌ مُغلَق.</summary>
+    /// (الوَضعُ المَوروث)، ودَورٌ غائِبٌ مُغلَق. (‏2026-10-28، ‏ADR-040: مَفتوحٌ لِصَلاحِيّاتِ العُضوِ وَحدَها — الإدارِيَّةُ مُغلَقَةٌ فيه لِكُلِّ دَور.)</summary>
     public static bool Opens(IReadOnlyCollection<Role> tenantRoles, string? urlRole, string? storedRole, string permission)
         => RolePermissions.Has(tenantRoles, EffectiveRole.Resolve(null, false, urlRole, storedRole), permission);
 

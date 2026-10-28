@@ -4651,7 +4651,8 @@ public static class MarketplaceTemplateExtensions
     {
         var tenant = await LoadTenantWithRolesAsync(store, slug);
         if (tenant is null) return false;
-        if (tenant.Roles.Count == 0) return true;   // legacy mode
+        // ‏(‏2026-10-28، ‏ADR-040، د62) كانَ `return true;   // legacy mode`. صارَ يَسأَلُ الدالَّةَ نَفسَها: الإدارِيَّةُ لا تُعطى لِمَتجَرٍ بِلا أَدوار.
+        if (tenant.Roles.Count == 0) return ACommerce.Kit.Roles.RolePermissions.Has(tenant.Roles, null, permission);
 
         await using var t = store.QuerySession(slug);
         var user = await t.LoadAsync<ACommerce.Kit.Auth.User>(userId);

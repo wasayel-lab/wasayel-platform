@@ -148,24 +148,35 @@ public class RolesLegacyModeMeasureTests(ITestOutputHelper output)
     /// <summary>الأَدوارُ المَسؤولُ عَنها في المَصفوفَة — الغائِبُ والفارِغُ ودَورٌ مِن الكاتالوجِ ودَورُ الإدارَةِ ودَورٌ لا وُجودَ لَه.</summary>
     private static readonly string?[] ProbedRoles = { null, "", "customer", "tenant_admin", "ghost" };
 
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-28، ‏ADR-040 — كوميتُ القَلب)</b> — كانَ
+    /// <c>Today_a_zero_role_store_grants_every_catalog_permission_to_any_role</c> (‏<c>aeb3ec3</c>): «40 مِن 40 خانَة تُمنَح». والآن صَلاحِيّاتُ
+    /// العُضوِ السَبعُ لِكُلِّ دَور (35)، و<c>tenant.manage</c> لا لِأَحَدٍ (5 خانات) — والإدارِيَّةُ ما يُسَمّيه <c>PermissionCatalog.Administrative</c>.</summary>
     [Fact]
-    public void Today_a_zero_role_store_grants_every_catalog_permission_to_any_role()
+    public void A_zero_role_store_grants_every_member_permission_and_no_administrative_one()
     {
         var none = Array.Empty<ACommerce.Kit.Roles.Role>();
         var cells = ProbedRoles.SelectMany(r => ACommerce.Kit.Roles.PermissionCatalog.All.Select(p => (Role: r, Permission: p))).ToList();
-        var granted = cells.Count(c => ACommerce.Kit.Roles.RolePermissions.Has(none, c.Role, c.Permission));
-        output.WriteLine($"مَتجَرٌ بِصِفرِ أَدوار: {granted} مِن {cells.Count} خانَة (‏{ProbedRoles.Length} دَوراً × {ACommerce.Kit.Roles.PermissionCatalog.All.Count} صَلاحِيّات) تُمنَح");
+        var granted = cells.Where(c => ACommerce.Kit.Roles.RolePermissions.Has(none, c.Role, c.Permission)).ToList();
+        var refused = cells.Except(granted).ToList();
+        output.WriteLine($"مَتجَرٌ بِصِفرِ أَدوار: {granted.Count} مِن {cells.Count} خانَة تُمنَح · {refused.Count} تُرَدّ ({string.Join(", ", refused.Select(c => c.Permission).Distinct())})");
         Assert.True(cells.Count >= 40, $"أَداةٌ عَمياء: {cells.Count} خانَة.");
-        Assert.Equal(cells.Count, granted);
+        Assert.Equal(ProbedRoles.Length * (ACommerce.Kit.Roles.PermissionCatalog.All.Count - 1), granted.Count);
+        Assert.All(refused, c => Assert.Equal("tenant.manage", c.Permission));
+        Assert.Equal(ProbedRoles.Length, refused.Count);
     }
 
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-28، ‏ADR-040)</b> — كانَ
+    /// <c>Today_a_role_less_member_of_a_zero_role_store_passes_the_tenant_admin_guard</c> (‏<c>aeb3ec3</c>): البَوّابَةُ تَفتَح. والآن تَرُدّ؛
+    /// ومالِكُ الاستوديو يَعبُرُها كَما كان (الطَرَفُ الآخَرُ مِن القَرار).</summary>
     [Fact]
-    public void Today_a_role_less_member_of_a_zero_role_store_passes_the_tenant_admin_guard()
+    public void A_role_less_member_of_a_zero_role_store_is_refused_and_the_studio_owner_still_passes()
     {
-        var tenant = new ACommerce.Kit.Tenants.Tenant { Id = "zero", Name = "صِفر", OwnerUserId = Guid.NewGuid() };
+        var owner = Guid.NewGuid();
+        var tenant = new ACommerce.Kit.Tenants.Tenant { Id = "zero", Name = "صِفر", OwnerUserId = owner };
         var member = new ACommerce.Kit.Auth.User { Id = Guid.NewGuid(), TenantSlug = "zero", ActiveRole = "" };
         Assert.Empty(tenant.Roles);
-        Assert.True(ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard.HasTenantManage(tenant, member));
+        Assert.False(ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard.HasTenantManage(tenant, member));
+        Assert.True(ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard.IsStudioOwner(tenant, owner));
     }
 
     /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-28، قَرارُ المالِك د62 — كوميتُ الرَفض)</b> — كانَ
@@ -228,13 +239,29 @@ public class RolesLegacyModeMeasureTests(ITestOutputHelper output)
         var asksPermission = Regex.Matches(code, Regex.Escape("RolePermissions.Has(t.Roles, activeRole: null, \"tenant.manage\")")).Count;
         output.WriteLine($"أَسطُرُ الخُلاصَة: {summaryLines} · RolePermissions.Has(t.Roles, null, tenant.manage): {asksPermission} · «وَضعٌ مَوروث» في الخُلاصَة: {summary.Contains("وَضعٌ مَوروث", StringComparison.Ordinal)}");
 
-        Assert.Equal(4, summaryLines);
+        Assert.Equal(5, summaryLines);   // ‏(‏2026-10-28، ‏ADR-040) كانَ 4 — والخامِسُ «بِصِفرِ أَدوار» (الصَفُّ التالي).
         Assert.Equal(1, asksPermission);
         Assert.DoesNotContain("Roles.Count == 0", code[..code.IndexOf("static bool HasActiveRole", StringComparison.Ordinal)]
             .Replace("t.Roles.Count == 0 ? \"— وَضعٌ مَوروث\"", "", StringComparison.Ordinal), StringComparison.Ordinal);
         foreach (var piece in new[] { "{legacy}", "{legacyStudio}", "{legacyOwned}", "{legacyMembers}" })
             Assert.Contains(piece, summary, StringComparison.Ordinal);
         Assert.Contains("members = await tq.Query<User>().Where(u => u.DeletedAt == null).CountAsync();", code, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>وسُؤالُ المالِكِ يَبقى مُجاباً بَعدَ القَلب</b> (‏2026-10-28، ‏ADR-040، قَرارُ المالِك د62 «ج»: «كَم مَتجَراً بِلا أَدوار، وهَل ashare
+    /// مِنها، وكَم عُضواً فيها»): سَطرُ الوَضعِ المَوروثِ يَسأَلُ الدالَّةَ فَيَصيرُ صِفراً بِالقَلب — وذاكَ بُرهانُه — فَسَطرٌ خامِسٌ يَعُدُّ صِفرَ الأَدوارِ
+    /// <b>بِنيَةً</b> (<c>ZeroRoles</c>، بَعدَ <c>HasActiveRole</c>) بِمُستَخدِميه وأَسماءِ مَتاجِرِه.</summary>
+    [Fact]
+    public void The_owner_count_script_counts_zero_role_stores_by_structure_after_the_flip()
+    {
+        var code = ScriptCode();
+        var summary = code[code.IndexOf("فُحِصَ: {tenants.Count} مَتجَراً", StringComparison.Ordinal)..];
+        output.WriteLine($"ZeroRoles(t): {Regex.Matches(code, Regex.Escape("ZeroRoles(t)")).Count} · سَطرُ «بِصِفرِ أَدوار» في الخُلاصَة: {summary.Contains("بِصِفرِ أَدوار", StringComparison.Ordinal)}");
+        Assert.Contains("static bool ZeroRoles(Tenant t) => t.Roles.Count == 0;", code, StringComparison.Ordinal);
+        Assert.True(code.IndexOf("static bool ZeroRoles", StringComparison.Ordinal) > code.IndexOf("static bool HasActiveRole", StringComparison.Ordinal));
+        Assert.Equal(1, Regex.Matches(code, Regex.Escape("if (ZeroRoles(t))")).Count);
+        foreach (var piece in new[] { "{zeroRole}", "{zeroRoleStudio}", "{zeroRoleMembers}", "zeroRoleSlugs" })
+            Assert.Contains(piece, summary, StringComparison.Ordinal);
     }
 }
 
@@ -286,8 +313,11 @@ public class LiveZeroRoleAdminProofTests(ITestOutputHelper output)
         await g.SaveChangesAsync();
     }
 
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-28، ‏ADR-040)</b> — كانَ
+    /// <c>Today_a_self_registered_member_of_a_zero_role_store_passes_the_admin_guard_on_Postgres</c> (‏<c>aeb3ec3</c>، «تَفتَح» 1/0 عَلى
+    /// <c>wasayel_dev</c>). والآن البَوّابَةُ تَرُدُّ العُضوَ نَفسَه.</summary>
     [Fact]
-    public async Task Today_a_self_registered_member_of_a_zero_role_store_passes_the_admin_guard_on_Postgres()
+    public async Task A_self_registered_member_of_a_zero_role_store_is_refused_by_the_admin_guard_on_Postgres()
     {
         if (!Enabled) return;
 
@@ -297,7 +327,7 @@ public class LiveZeroRoleAdminProofTests(ITestOutputHelper output)
         {
             var (member, allowed) = await SelfRegisteredMemberAsksTheAdminGuardAsync(store, slug, "966500000062");
             output.WriteLine($"مَتجَرٌ بِصِفرِ أَدوار · عُضوٌ سَجَّلَ نَفسَه ({member:N}) · بَوّابَةُ /admin/tenants/{{slug}}/users: {(allowed ? "تَفتَح" : "تَرُدّ")}");
-            Assert.True(allowed);
+            Assert.False(allowed);
         }
         finally { await CleanAsync(store, slug); }
     }

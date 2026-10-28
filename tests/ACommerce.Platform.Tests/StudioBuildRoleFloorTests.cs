@@ -241,11 +241,16 @@ public class StudioBuildRoleFloorTests(ITestOutputHelper output)
     /// <para>فَالعِلاجُ <b>مَنعُ بُلوغِه مِن مَسارِ البِناء</b> لا
     /// حَذفُه — وحَذفُه قَرارٌ مُنتَجِيٌّ يَملِكُه صاحِبُ المَشروعِ
     /// وَحدَه.</para>
+    /// <para><b>(‏2026-10-28، ‏ADR-040، قَرارُ المالِك د62 — قُلِبَ بِاسمِه)</b>: كانَ <c>LegacyMode_IsUntouched_AndItsConsumerIsNamed</c>
+    /// بِـ<c>Assert.True(…, "tenant.manage")</c>. و«حَذفُه قَرارٌ مُنتَجِيٌّ يَملِكُه صاحِبُ المَشروع» أَعلاه — اتَّخَذَه: صِفرُ الأَدوارِ لا يُعطي
+    /// الإدارَة. ومُستَهلِكُه المُسَمّى (<c>theme-demo</c> بِلا أَدوار) باقٍ لِفَرعِ الرَئيسِيَّةِ الافتِراضِيّ، وفَرعُ «لَوحَة الإداريّ» في
+    /// <c>user-manage.html</c> صارَ «لا صَلاحِيَّة» (سِجِلُّ المالِك «أ» د62).</para>
     /// </summary>
     [Fact]
-    public void LegacyMode_IsUntouched_AndItsConsumerIsNamed()
+    public void LegacyMode_GrantsMemberPermissionsAndNoAdministration_AndItsConsumerIsNamed()
     {
-        Assert.True(RolePermissions.Has(Array.Empty<Role>(), "", "tenant.manage"));
+        Assert.False(RolePermissions.Has(Array.Empty<Role>(), "", "tenant.manage"));
+        Assert.True(RolePermissions.Has(Array.Empty<Role>(), "", "listing.create"));
 
         var seeder = File.ReadAllText(Path.Combine(
             ThemeZeroEquivalenceTests.RepoRoot,

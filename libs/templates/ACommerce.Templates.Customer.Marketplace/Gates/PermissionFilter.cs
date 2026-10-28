@@ -31,7 +31,12 @@ public sealed class PermissionFilter : IEndpointFilter
         await using var g = store.QuerySession();
         var tenant = await g.LoadAsync<Tenant>(slug);
         if (tenant is null) return Results.NotFound();
-        if (tenant.Roles.Count == 0) return await next(ctx);   // legacy mode
+        // ‏(‏2026-10-28، ‏ADR-040، د62) كانَ `return await next(ctx);   // legacy mode` — يَفتَحُ أَيَّ صَلاحِيَّةٍ لِمَتجَرٍ بِلا أَدوار، ومِنها
+        // الإدارِيَّةُ لَو حُرِسَت بِها نُقطَة. صارَ يَسأَلُ الدالَّةَ نَفسَها: صَلاحِيّاتُ العُضوِ تَمُرّ، والإدارِيَّةُ 403.
+        if (tenant.Roles.Count == 0)
+            return RolePermissions.Has(tenant.Roles, null, _permission)
+                ? await next(ctx)
+                : Results.StatusCode(StatusCodes.Status403Forbidden);
 
         await using var t = store.QuerySession(slug);
         var user = await t.LoadAsync<User>(userId.Value);

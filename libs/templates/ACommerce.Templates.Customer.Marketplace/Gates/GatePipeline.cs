@@ -71,7 +71,13 @@ public sealed class GatePipeline
             var tenant = await g.LoadAsync<Tenant>(perm.TenantSlug, ct);
             if (tenant is null)
                 throw new GateDeniedException("tenant", "المَتجَر غَير مَوجود.");
-            if (tenant.Roles.Count == 0) return;   // legacy mode — مَفتوح
+            // ‏(‏2026-10-28، ‏ADR-040، د62) كانَ `return;   // legacy mode — مَفتوح`. صارَ يَسأَلُ الدالَّةَ نَفسَها: الإدارِيَّةُ تُرَدّ.
+            if (tenant.Roles.Count == 0)
+            {
+                if (RolePermissions.Has(tenant.Roles, null, perm.Permission)) return;
+                throw new GateDeniedException("permission",
+                    $"يَتَطَلَّب صَلاحِيَّة «{perm.Permission}».");
+            }
 
             await using var ts = _store.QuerySession(perm.TenantSlug);
             var user = await ts.LoadAsync<User>(perm.UserId!.Value, ct);

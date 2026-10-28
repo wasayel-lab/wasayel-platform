@@ -127,10 +127,14 @@ public static class RolePermissions
 {
     /// <summary>هَل المُستَخدِم بِدَورِه النَّشِط يَملِك هذه الصَلاحِيَّة؟
     /// مَتجَر بِلا أَدوار (Tenant.Roles فارِغَة) = legacy mode، كُلّ
-    /// الصَلاحِيّات مَمنوحَة.</summary>
+    /// الصَلاحِيّات مَمنوحَة.
+    /// <para><b>(‏2026-10-28، ‏ADR-040، قَرارُ المالِك د62 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: <b>إلّا الإدارِيَّة</b>. كانَ السَطرُ
+    /// <c>if (tenantRoles.Count == 0) return true;</c> فَكُلُّ مَن سَجَّلَ في مَتجَرٍ بِلا أَدوارٍ يَحمِلُ <c>tenant.manage</c> ويَرى هَواتِفَ
+    /// مُستَخدِميه. صارَ صِفرُ الأَدوارِ يُعطي صَلاحِيّاتِ العُضوِ وَحدَها ولا يُعطي <see cref="PermissionCatalog.Administrative"/> لِأَحَد —
+    /// ومالِكُ المَتجَرِ يُديرُه مِن الاستوديو (<c>TenantAdminGuard.IsStudioOwner</c>) لا مِن هذا السَطر.</para></summary>
     public static bool Has(IReadOnlyCollection<Role> tenantRoles, string? activeRole, string permission)
     {
-        if (tenantRoles.Count == 0) return true;
+        if (tenantRoles.Count == 0) return !PermissionCatalog.IsAdministrative(permission);
         if (string.IsNullOrEmpty(activeRole)) return false;
         var role = tenantRoles.FirstOrDefault(r => r.Slug == activeRole);
         return role?.Permissions.Contains(permission) == true;
