@@ -53,7 +53,7 @@ public class FormBodyGateTests(ITestOutputHelper output)
         output.WriteLine($"تُعلِنُ بَوّابَةَ النَوع: {gated} مِن {single.Count} · أَوَّلَ السِلسِلَة: {first}");
         Assert.Equal(single.Count, gated);
         Assert.Equal(single.Count, first);
-        Assert.Equal(76, single.Count);
+        Assert.Equal(78, single.Count);   // ‏2026-10-28 (د27): +2 — `/{slug}/me/contact/start` و`/verify`، كُلٌّ بِبَوّابَةِ النَوعِ أَوَّلَ سِلسِلَتِه
         Assert.DoesNotContain(form.Where(e => AcceptsJsonToo(e.Body)), e => e.Body.Contains(".RequireFormBody(", StringComparison.Ordinal));
     }
 

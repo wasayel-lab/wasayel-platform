@@ -260,5 +260,11 @@ internal static class PinnedRoutes
         // المَحقونَةُ في Minimal API تَحمِلُ `*DEFAULT*` فَتَرُدُّ `null` صامِتَة. الجَلسَةُ تُفتَحُ بِالسلاجِ في `SessionVersionGate.Revoke*Async`.
         "/{slug}/me/sessions/revoke",
         "/studio/me/sessions/revoke",
+
+        // ─── ‏2026-10-28 (قَرارُ المالِك د27): «أَضِف بَريدَك/جَوّالَك» — لِلسَبَبِ نَفسِه ──
+        // يَقرَأُ `User` ويَكتُبُه (مُتَعَدِّدُ الإيجار) ويَبحَثُ عَمَّن يَحمِلُ الوَسيلَةَ في جَلسَةِ مُستَأجِرِ المَسار — والجَلسَةُ تُفتَحُ بِالسلاجِ في
+        // `AccountContacts.StartAsync`/`VerifyAsync`.
+        "/{slug}/me/contact/start",
+        "/{slug}/me/contact/verify",
     };
 }

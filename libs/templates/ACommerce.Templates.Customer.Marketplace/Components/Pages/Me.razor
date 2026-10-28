@@ -7,6 +7,7 @@
 @inject ITenantContext Tenant
 @inject AuthSession Auth
 @inject NavigationManager Nav
+@inject IServiceProvider Sp
 @inject L L
 
 @*
@@ -49,6 +50,58 @@
                 </div>
             </ChildContent>
         </AcCard>
+
+        @* ‏(‏2026-10-28، قَرارُ المالِك د27 «ج») «وَسائِلُ الدُخول» — أَضِف بَريدَك / أَضِف جَوّالَك: وَسيلَةٌ ثانِيَةٌ تُثبَتُ بِرَمزٍ يَصِلُها فَتُربَطُ
+           بِهذا الحِسابِ نَفسِه، ولا دَمجَ تِلقائِيّ. تُرسَمُ الاستِمارَةُ لِنَوعٍ لا وَسيلَةَ مِنه في الحِسابِ وقَناتُه مُسَجَّلَة (القاعِدَة ١٢: لا بابَ لا يُرسِل)،
+           والرابِطُ يَحمِلُ مُعَرِّفَ المُحاوَلَةِ لا الوَسيلَة — والصَفحَةُ تَقرَؤُها مِن المُحاوَلَةِ الحَيَّة (`AccountContacts.Pending`). *@
+        @if (contactShown)
+        {
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">@L.Markup("me.contact.title")</h3>
+                    @if (ContactErrKey is { } errKey)
+                    {
+                        <AcAlert Variant="warning" Message="@L[errKey]" />
+                    }
+                    @if (Contact == "linked")
+                    {
+                        <AcAlert Variant="success" Message="@L["me.contact.linked"]" />
+                    }
+                    @if (pending is { } p)
+                    {
+                        <p style="color:var(--ac-text-muted);font-size:13px;">@L.Format("me.contact.code_sent", p.Value)</p>
+                        <form method="post" action="@($"/{Slug}/me/contact/verify")">
+                            <input type="hidden" name="attempt" value="@Attempt" />
+                            <AcField Label="@L["me.contact.code_label"]" Required="true">
+                                <input name="code" required class="ac-input" dir="ltr" inputmode="numeric" autocomplete="one-time-code" />
+                            </AcField>
+                            <AcButton Type="submit" Variant="primary" Block="true" Text="@L["me.contact.confirm"]" />
+                        </form>
+                    }
+                    else
+                    {
+                        @if (offerEmail)
+                        {
+                            <form method="post" action="@($"/{Slug}/me/contact/start")" style="margin-bottom:12px;">
+                                <input type="hidden" name="kind" value="@ACommerce.Kit.Auth.ContactLink.Email" />
+                                <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 6px;">@L.Markup("me.contact.email_hint")</p>
+                                <input name="value" type="email" required class="ac-input" dir="ltr" autocomplete="email" />
+                                <AcButton Type="submit" Variant="outline-primary" Block="true" Text="@L["me.contact.add_email"]" />
+                            </form>
+                        }
+                        @if (offerPhone)
+                        {
+                            <form method="post" action="@($"/{Slug}/me/contact/start")">
+                                <input type="hidden" name="kind" value="@ACommerce.Kit.Auth.ContactLink.Phone" />
+                                <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 6px;">@L.Markup("me.contact.phone_hint")</p>
+                                <input name="value" type="tel" required class="ac-input" dir="ltr" autocomplete="tel" />
+                                <AcButton Type="submit" Variant="outline-primary" Block="true" Text="@L["me.contact.add_phone"]" />
+                            </form>
+                        }
+                    }
+                </ChildContent>
+            </AcCard>
+        }
 
         @* بِطاقَة الدَور النَّشِط — تَظهَر فَقَط في النَّمَط القَديم (بِلا /r/).
            داخِل PWA دَور مُحَدَّد، الدَور هو التَّطبيق نَفسه فَلا يُعرَض
@@ -162,6 +215,17 @@
 @code {
     [Parameter] public string Slug { get; set; } = "";
     [Parameter] public string? Role { get; set; }
+    [SupplyParameterFromQuery(Name = "contact")] public string? Contact { get; set; }
+    [SupplyParameterFromQuery(Name = "attempt")] public string? Attempt { get; set; }
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+
+    // ‏(د27) وَسائِلُ الدُخول — مَن تُعرَضُ لَه الاستِمارَة، والمُحاوَلَةُ الحَيَّة، ورَمزُ الرَدِّ مِن المَعجَمِ المُغلَقِ وَحدَه (رَمزٌ مَجهولٌ لا يُطبَعُ خاماً).
+    bool offerEmail;
+    bool offerPhone;
+    (ACommerce.Kit.Auth.Server.AuthHandlers.AuthKind Kind, string Subject, string Value)? pending;
+    string? ContactErrKey => Err is { } code && ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.Codes.Contains(code)
+        ? $"me.contact.err_{code}" : null;
+    bool contactShown => pending is not null || offerEmail || offerPhone || ContactErrKey is not null || Contact == "linked";
 
     Tenant? loadedTenant;
     User? me;
@@ -190,6 +254,13 @@
         conversationsCount   = summary.Conversations;
         notificationsCount   = summary.UnreadNotifications;
         plansShown = (await ACommerce.Templates.Customer.Marketplace.Services.PlanShelf.ShownAsync(PlanSvc, Providers, Slug)).Count > 0;
+        if (me is not null && me.DeletedAt is null)
+        {
+            offerEmail = string.IsNullOrEmpty(me.Email) && Sp.GetService(typeof(ACommerce.Kit.Auth.IEmailOtpChannel)) is not null;
+            offerPhone = string.IsNullOrEmpty(me.Phone) && Sp.GetService(typeof(ACommerce.Kit.Auth.IOtpChannel)) is not null;
+        }
+        if (Contact == "verify")
+            pending = ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.Pending(Slug, Attempt, Auth.UserId.Value);
 
         if (tenantRoles.Count > 0)
         {

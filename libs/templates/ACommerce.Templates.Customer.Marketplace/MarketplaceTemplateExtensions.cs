@@ -474,6 +474,31 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect($"/{slug}");
         }).RequireFormBody().DisableAntiforgery();
 
+        // ─── أَضِف بَريدَك / أَضِف جَوّالَك (‏2026-10-28، قَرارُ المالِك د27 «ج»؛ NIST 800-63B) ──────────
+        // وَسيلَةُ دُخولٍ ثانِيَةٌ تُضافُ مِن جَلسَةٍ مُثبَتَةٍ وبَعدَ رَمزٍ يَصِلُها — ولا دَمجَ تِلقائِيّ: وَسيلَةٌ في حِسابٍ آخَرَ تُرفَضُ بِرَمزٍ يَشرَحُ الحَلّ.
+        // والرابِطُ يَحمِلُ مُعَرِّفَ المُحاوَلَةِ لا الوَسيلَة (نَسَقُ أَبوابِ الدُخول)؛ والقَرارُ والأَثَرُ في `AccountContacts` و`ContactLink`.
+        app.MapPost("/{slug}/me/contact/start",
+            async (string slug, HttpRequest req, IDocumentStore store,
+                   [FromServices] IOtpChannel? phoneChannel, [FromServices] IEmailOtpChannel? emailChannel) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null || parsed.Value.TenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
+            var outcome = await Services.AccountContacts.StartAsync(store, slug, parsed.Value.UserId,
+                req.Form["kind"].ToString(), req.Form["value"].ToString(), phoneChannel, emailChannel, req.HttpContext.RequestAborted);
+            return Results.Redirect(Link(req, slug, outcome.AttemptId is { } id
+                ? $"me?contact=verify&attempt={Uri.EscapeDataString(id)}" : $"me?err={outcome.Refusal}"));
+        }).RequireFormBody().DisableAntiforgery();
+
+        app.MapPost("/{slug}/me/contact/verify", async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null || parsed.Value.TenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
+            var attempt = req.Form["attempt"].ToString();
+            var refusal = await Services.AccountContacts.VerifyAsync(store, slug, parsed.Value.UserId, attempt,
+                req.Form["code"].ToString(), DateTime.UtcNow, req.HttpContext.RequestAborted);
+            return Results.Redirect(Link(req, slug, Services.AccountContacts.AfterVerify(slug, parsed.Value.UserId, attempt, refusal)));
+        }).RequireFormBody().DisableAntiforgery();
+
         // ─── عَدّادات الـ unread لِـ realtime-nav.js ───────────────────────
         // الـ JS عَلى المُتَصَفِّح يُنادي هذا عِندَ كُلّ <c>unread_changed</c>
         // مِن SignalR ويُحَدِّث الـ DOM badges بِلا full reload.

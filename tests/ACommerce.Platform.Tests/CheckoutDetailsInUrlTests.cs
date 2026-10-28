@@ -147,7 +147,7 @@ public class CheckoutDetailsInUrlTests(ITestOutputHelper output)
         var body = mte[at..mte.IndexOf(".RequireStoreWritable();", at, StringComparison.Ordinal)];
         Assert.Contains("var next = Services.Deals.CheckoutDetails.Apply(cart, req.Form);", body, StringComparison.Ordinal);
         Assert.Contains("return Results.Redirect(Link(req, slug, Services.Deals.CheckoutDetails.StepPath(next)));", body, StringComparison.Ordinal);
-        Assert.Equal(0, Regex.Matches(body, @"req\.Form\[").Count);
+        Assert.Empty(Regex.Matches(body, @"req\.Form\["));
         Assert.Contains(".RequireFormBody()", body, StringComparison.Ordinal);
     }
 

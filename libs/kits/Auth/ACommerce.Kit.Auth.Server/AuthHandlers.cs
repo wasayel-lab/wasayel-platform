@@ -29,7 +29,9 @@ public static class AuthHandlers
     /// («أ» W8-2).</summary>
     public const int MaxWrongGuessesPerCode = MaxVerifyPerMinute;
 
-    public enum AuthKind { PhoneOtp, Nafath, EmailOtp }
+    /// <remarks>‏(2026-10-28، قَرارُ المالِك د27) <c>AddEmail</c> و<c>AddPhone</c>: رَمزُ رَبطِ وَسيلَةٍ بِحِسابٍ قائِمٍ مِن «حِسابي» — نَوعٌ مُستَقِلٌّ عَن
+    /// رَمزِ الدُخول، فَرَمزُ الدُخولِ لا يَربِطُ ورَمزُ الرَبطِ لا يُدخِل؛ ومَوضوعُه الحِسابُ والوَسيلَةُ (<c>ContactLink.Subject</c>).</remarks>
+    public enum AuthKind { PhoneOtp, Nafath, EmailOtp, AddEmail, AddPhone }
 
     // ─── Rate-limit OTP ───────────────────────────────────────────────────
     // كانَ بِلا حُدود — مُهاجِم يَستَطيع تَجريب ١٠ٰ٠٠٠ OTP في الثانِيَة على
@@ -280,6 +282,26 @@ public static class AuthHandlers
     public static string TokenSecret { get; private set; } =
         Environment.GetEnvironmentVariable(AuthTokenSecretPolicy.EnvVarName)
         ?? AuthTokenSecretPolicy.DevelopmentFallback;
+
+    // ── رَمزُ رَبطِ وَسيلَةٍ بِحِسابٍ قائِم (‏2026-10-28، قَرارُ المالِك د27) ─────
+    /// <summary>
+    /// <para>يُرسِلُ رَمزَ «أَضِف بَريدَك/جَوّالَك» بِآلِيَّةِ الدُخولِ نَفسِها حَرفاً — حِصَّةُ الإرسالِ لِلوِجهَة (<c>{slug}|{sendTo}</c>، المِفتاحُ نَفسُه
+    /// الَّذي يَعُدُّه الدُخول) ثُمَّ سَقفُ المَنَصَّة، والرَمزُ مِن <see cref="NewCode"/>، والمُحاوَلَةُ بِـ<see cref="IssueAttempt"/>، والإرسالُ خَلفَ
+    /// <c>OtpSendGuard</c> — ويُعيدُ مُعَرِّفَ المُحاوَلَة. يَرمي <see cref="InvalidOperationException"/> عِندَ الحِصَّة، كَإخوَتِه.</para>
+    /// </summary>
+    public static async Task<string> RequestContactCodeAsync(
+        string tenantSlug, AuthKind kind, string subject, string sendTo, string? devHintCode,
+        Func<string, string, CancellationToken, Task> send, CancellationToken ct)
+    {
+        if (kind is not (AuthKind.AddEmail or AuthKind.AddPhone))
+            throw new ArgumentOutOfRangeException(nameof(kind), kind, "رَمزُ الرَبطِ لِـAddEmail أَو AddPhone وَحدَهُما.");
+        if (!TryConsumeSendQuota($"{tenantSlug}|{sendTo}") || !TryConsumeGlobalSendQuota(GlobalSendsPerHour))
+            throw new InvalidOperationException("rate_limited: try again in an hour");
+        var code = NewCode(devHintCode);
+        var attemptId = IssueAttempt(tenantSlug, subject, code, kind);
+        await OtpSendGuard.SendWithinAsync(token => send(sendTo, code, token), ct);
+        return attemptId;
+    }
 
     // ── Phone OTP ─────────────────────────────────────────────────────
     // ملاحَظَة: لا [WolverinePost] هُنا. القالِب (MarketplaceTemplate) يُسَجِّل
