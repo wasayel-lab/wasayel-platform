@@ -30,6 +30,12 @@ namespace ACommerce.Templates.Customer.Marketplace.Gates;
 /// بَل بَعدَه بِكوميت: الثالِثُ <c>TenantListingDetail</c> في <c>3f21e19</c>، والرابِعُ <c>TenantHome</c> في <c>f5f5703</c> (تَوصيفُه <c>57af82e</c>).
 /// وما زالَ <c>Me</c> و<c>TenantManage</c> نُسخَتَينِ بِيَدِهِما، وقائِمَةُ المُستَهلِكينَ يُثَبِّتُها
 /// <c>CreateListingDoorTests.The_home_page_asks_the_door_with_its_target_gates_stored_reads_so_an_authored_role_sees_no_link_its_page_refuses</c>.</para>
+///
+/// <para><b>والأَدوارُ المُجَسَّدَةُ لِلحارِسَينِ كِلَيهِما (‏2026-10-28، قَرارُ المالِك د42 «أ»؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: «يَقرَآنِ <c>Tenant.Roles</c>
+/// المُخَزَّنَة» أَعلاه صارَ تاريخاً — <see cref="PermissionFilter"/> يَقرَأُ <c>LoadTenantWithRolesAsync</c> (قِراءَةَ <c>HasPermissionAsync</c> بِعَينِها)،
+/// و<c>GatedPage</c> يَقرَأُ <c>TenantRoleService.LoadAsync</c>؛ فَدَورٌ مُؤَلَّفٌ مُعتَمَدٌ يَحمِلُ <c>listing.create</c> يَنشُر (تَوصيفُه <c>973dcd0</c>). والقاعِدَةُ
+/// باقِيَةٌ بِحَرفِها — البابُ يَقرَأُ ما يَقرَؤُه حارِسُ هَدَفِه — فَالرَئيسِيَّةُ و«إعلاناتي» تَقرَآنِ المُجَسَّدَةَ مَعَهُما، ويُثَبِّتُ ذلكَ
+/// <c>CreateListingDoorTests.The_home_page_asks_the_door_with_its_target_gates_materialized_reads_so_an_authored_publisher_sees_the_link_its_page_opens</c>.</para>
 /// </summary>
 public static class PermissionDoor
 {

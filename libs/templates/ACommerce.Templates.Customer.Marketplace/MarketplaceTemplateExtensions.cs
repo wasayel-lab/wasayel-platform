@@ -4752,8 +4752,11 @@ public static class MarketplaceTemplateExtensions
     /// التَعريفات داخِل <c>Tenant</c> فَيَصير لِلحَقيقَة مَصدَران. لِذلك
     /// <c>/admin/tenants/{slug}/roles/save</c> يَبقى عَلى تَحميلِه
     /// المُباشِر بِـ <c>LightweightSession</c>.</para>
+    ///
+    /// <para><b>و<c>internal</c> لا <c>private</c> (‏2026-10-28، قَرارُ المالِك د42 «أ»)</b>: <see cref="Gates.PermissionFilter"/> — حارِسُ
+    /// <c>.RequirePermission(…)</c> — يَقرَؤُها بِعَينِها، فَحارِسا النَشرِ والعَرضِ قِراءَةٌ واحِدَة لا نُسخَتان.</para>
     /// </summary>
-    private static async Task<ACommerce.Kit.Tenants.Tenant?> LoadTenantWithRolesAsync(
+    internal static async Task<ACommerce.Kit.Tenants.Tenant?> LoadTenantWithRolesAsync(
         IDocumentStore store, string slug)
         => (await LoadTenantAndRolesAsync(store, slug)).Tenant;
 

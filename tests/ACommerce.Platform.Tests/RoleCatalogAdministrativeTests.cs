@@ -127,7 +127,8 @@ public class RoleCatalogAdministrativeTests(ITestOutputHelper output)
         var gate = file.EndsWith("MarketplaceTemplateExtensions.cs", StringComparison.Ordinal)
             ? code[code.IndexOf("private static async Task<bool> HasPermissionAsync(", StringComparison.Ordinal)..]
             : code;
-        if (!ReferenceEquals(gate, code)) gate = gate[..gate.IndexOf("private static async Task<ACommerce.Kit.Tenants.Tenant?> LoadTenantWithRolesAsync(", StringComparison.Ordinal)];
+        // ‏(‏2026-10-28، د42) حَدُّ المَسحِ: صارَت `internal` لِيَقرَأَها PermissionFilter — والحَدُّ هُوَ هُوَ.
+        if (!ReferenceEquals(gate, code)) gate = gate[..gate.IndexOf("internal static async Task<ACommerce.Kit.Tenants.Tenant?> LoadTenantWithRolesAsync(", StringComparison.Ordinal)];
         var (sites, shortcuts) = ZeroRoleShortcuts(gate);
         output.WriteLine($"{Path.GetFileName(file)}: فُروعُ صِفرِ الأَدوار {sites} · اختِصار {shortcuts.Count}");
         Assert.True(sites >= 1, $"أَداةٌ عَمياء: لا فَرعَ صِفرٍ في {file}.");

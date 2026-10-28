@@ -6,7 +6,6 @@
 @inject L L
 @inject NavigationManager Nav
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
-@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantThemeService Themes
 
 @*
@@ -346,8 +345,9 @@
                 // يَقرَآنِ `Tenant.Roles` المُخَزَّنَة، لا `loaded.Roles` المُجَسَّدَةَ بِالأَدوارِ المُؤَلَّفَة. وكانَ هُنا `RolePermissions.Has(loaded.Roles, …)`:
                 // دَورٌ مُؤَلَّفٌ يَحمِلُ `listing.create` يَرى «أَضِف إعلانك» فَتَرُدُّه صَفحَتُه. والدَورُ المُخَزَّنُ `home.StoredActiveRole` — قِراءَةُ
                 // `AccountQueries.ActiveRoleAsync` نَفسُها (`User.ActiveRole` في جَلسَةِ المُستَأجِر) — و`activeRole` لِلتَركيبِ يَبقى مِن المُجَسَّدَة.
-                var storedRoles = (await Tenants.FindAsync(Slug))?.Roles ?? new List<ACommerce.Kit.Roles.Role>();
-                canCreateListing = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(storedRoles, Role, home.StoredActiveRole, "listing.create");
+                // ‏(‏2026-10-28، قَرارُ المالِك د42 «أ») وصارَ الحارِسانِ يَقرَآنِ المُجَسَّدَة — فَالبابُ يَقرَؤُها: كانَ هُنا
+                // `var storedRoles = (await Tenants.FindAsync(Slug))?.Roles ?? …` ثُمَّ `Opens(storedRoles, …)`. والقاعِدَةُ هِيَ هِيَ: البابُ يَقرَأُ ما يَقرَؤُه حارِسُ هَدَفِه.
+                canCreateListing = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(loaded.Roles, Role, home.StoredActiveRole, "listing.create");
             }
         }
     }

@@ -1,7 +1,7 @@
 @page "/{slug}/me/listings"
 @page "/{slug}/r/{role}/me/listings"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
-@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 @inject ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingService Vendors
 @using Vs = ACommerce.Templates.Customer.Marketplace.Services.Shipping
 @inject AuthSession Auth
@@ -242,7 +242,8 @@
     [SupplyParameterFromQuery(Name = "shipping")] public string? ShippingDone { get; set; }
     List<Listing>? myListings;
     /// <summary>بابُ صَفحَةِ النَشرِ بِحَرفِه (‏<c>PermissionDoor.Opens</c> بِما يَقرَؤُه <c>GatedPage</c> فيها: <c>Tenant.Roles</c> المُخَزَّنَة والدَورُ
-    /// المُخَزَّن) — ‏2026-10-25، W8-7. ومَتجَرٌ بِلا أَدوارٍ مَفتوحٌ كَما يَفتَحُه الحارِس.</summary>
+    /// المُخَزَّن) — ‏2026-10-25، W8-7. ومَتجَرٌ بِلا أَدوارٍ مَفتوحٌ كَما يَفتَحُه الحارِس. (‏2026-10-28، د42: و<c>Tenant.Roles</c> صارَت مُجَسَّدَةً بِالأَدوارِ
+    /// المُؤَلَّفَةِ المُعتَمَدَة في <c>GatedPage</c> والمُرَشِّح، فَتُقرَأُ هُنا كَذلِك.)</summary>
     bool canCreateListing;
     /// <summary>صَفحَةُ «اِختَر دَورَك» تَعرِضُ دَوراً يَنشُر (‏<c>PermissionDoor.SwitchOpens</c>) — شَرطُ رابِطِ <c>me/role</c> مَكانَ «إعلان جَديد».</summary>
     bool canSwitchToCreate;
@@ -262,7 +263,8 @@
     {
         if (!Auth.IsAuthenticated) return;
         // البابُ أَوَّلاً وبِقِراءَتَي GatedPage نَفسَيهِما (المُستَأجِرُ المُخَزَّن والدَورُ المُخَزَّن) — فَلا يَختَلِفُ الرابِطُ والصَفحَة.
-        var roles = (await Tenants.FindAsync(Slug))?.Roles ?? new List<ACommerce.Kit.Roles.Role>();
+        // ‏(‏2026-10-28، قَرارُ المالِك د42 «أ») والمُستَأجِرُ صارَ مُجَسَّداً بِأَدوارِه المُؤَلَّفَة كَما يَقرَؤُه GatedPage الآن — كانَ `Tenants.FindAsync(Slug)`.
+        var roles = (await Roles.LoadAsync(Slug)).Tenant?.Roles ?? new List<ACommerce.Kit.Roles.Role>();
         var storedRole = await Accounts.ActiveRoleAsync(Slug, Auth.UserId!.Value);
         canCreateListing = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(roles, Role, storedRole, "listing.create");
         canSwitchToCreate = !canCreateListing

@@ -1,7 +1,7 @@
 @inject IHttpContextAccessor HttpCtx
 @inject AuthSession AuthSession
 @inject ITenantContext Tenant
-@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject L L
 @using ACommerce.Kit.Auth
@@ -113,7 +113,9 @@
 
         if (!string.IsNullOrEmpty(Permission) && AuthSession.UserId is { } uid2)
         {
-            var tenant = await Tenants.FindAsync(Slug);
+            // ‏(‏2026-10-28، قَرارُ المالِك د42 «أ») كانَ `var tenant = await Tenants.FindAsync(Slug);` — الوَثيقَةُ المُخَزَّنَة، فَدَورٌ مُؤَلَّفٌ مُعتَمَدٌ
+            // يَحمِلُ الصَلاحِيَّةَ يُرَدُّ هُنا (تَوصيفُه `973dcd0`). صارَ يَقرَأُ ما تَقرَؤُه بَقِيَّةُ الصَفَحات: المُستَأجِرُ مُجَسَّداً بِأَدوارِه المُؤَلَّفَة.
+            var tenant = (await Roles.LoadAsync(Slug)).Tenant;
             if (tenant is { Roles.Count: > 0 })
             {
                 // القِراءَةُ غَير مَشروطَة عَمداً — كَما كانَت حَرفاً.

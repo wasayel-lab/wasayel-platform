@@ -70,28 +70,82 @@ public class ComposedRolePublishTests(ITestOutputHelper output)
         Assert.False(PermissionDoor.Opens(stored, AuthoredSlug, "customer", Permission));
     }
 
-    /// <summary><b>اليَوم</b>: مُرَشِّحُ الصَلاحِيَّةِ (حارِسُ <c>POST /{slug}/listings/create</c> بِـ<c>.RequirePermission("listing.create")</c>) يُحَمِّلُ
-    /// وَثيقَةَ <c>Tenant</c> بِجَلسَةٍ عامَّةٍ ويَسأَلُ <c>RolePermissions.Has</c> عَلى <c>tenant.Roles</c> المُخَزَّنَة — ولا يُجَسِّدُ دَوراً مُؤَلَّفاً.</summary>
+    /// <summary><b>مَتجَرٌ بِلا أَدوارٍ مُخَزَّنَةٍ ولَه تَعريفٌ مُؤَلَّفٌ مُعتَمَد</b> يَخرُجُ مِن فَرعِ «صِفرِ الأَدوار» عَلى المُجَسَّدَة — جَوابُ حارِسِ العَرضِ والرَئيسِيَّةِ
+    /// قَبلَ د42 وجَوابُ حارِسَي النَشرِ بَعدَه: العُضوُ بِلا دَورٍ نَشِطٍ يُرَدّ، وصاحِبُ الدَورِ المُؤَلَّفِ يَمُرّ؛ وبِلا تَعريفٍ يَبقى صِفرُ الأَدوارِ مَفتوحاً لِصَلاحِيَّةِ العُضو.</summary>
     [Fact]
-    public void Today_the_publish_filter_reads_the_stored_tenant_roles_alone()
+    public void A_zero_role_store_with_an_approved_authored_role_leaves_the_zero_role_branch_on_the_materialized_roles()
     {
-        var filter = WriteEndpointGuardTests.StripComments(Read("Gates", "PermissionFilter.cs"));
-        Assert.Contains("var tenant = await g.LoadAsync<Tenant>(slug);", filter, StringComparison.Ordinal);
-        Assert.Contains("RolePermissions.Has(tenant.Roles, effectiveRole, _permission)", filter, StringComparison.Ordinal);
-        Assert.DoesNotContain("Materialize", filter, StringComparison.Ordinal);
-        Assert.DoesNotContain("LoadTenantWithRolesAsync", filter, StringComparison.Ordinal);
-        Assert.DoesNotContain("TenantRoleService", filter, StringComparison.Ordinal);
+        var none = Array.Empty<Role>();
+        var set = TenantRoleSet.FromDocuments("zr-demo", new[]
+        {
+            new TenantRoleDefinition
+            {
+                Id = AuthoredSlug, Slug = AuthoredSlug, DefinitionJson = TenantRoleDefinitionToolTests.KhayyatJson,
+                Status = TenantRoleStatuses.Approved, CreatedBy = "agent:define_role",
+                CreatedAt = new DateTime(2026, 8, 10, 0, 0, 0, DateTimeKind.Utc),
+            },
+        });
+        var materialized = set.Materialize(none);
+        output.WriteLine($"مُخَزَّنَة: 0 · مُجَسَّدَة: {materialized.Count} · بِلا دَور: {PermissionDoor.Opens(materialized, null, null, Permission)} · "
+            + $"خَيّاط: {PermissionDoor.Opens(materialized, null, AuthoredSlug, Permission)} · صِفرٌ بِلا تَعريف: {PermissionDoor.Opens(none, null, null, Permission)}");
+
+        Assert.Single(materialized);
+        Assert.True(PermissionDoor.Opens(none, null, null, Permission));
+        Assert.False(PermissionDoor.Opens(materialized, null, null, Permission));
+        Assert.True(PermissionDoor.Opens(materialized, null, AuthoredSlug, Permission));
+        Assert.Same(none, TenantRoleSet.FromDocuments("zr-demo", Array.Empty<TenantRoleDefinition>()).Materialize(none));
     }
 
-    /// <summary><b>اليَوم</b>: صَفحَةُ النَشرِ (<c>CreateListing</c> داخِلَ <c>GatedPage Permission="listing.create"</c>) تَقرَأُ المُستَأجِرَ مِن
-    /// <c>TenantDirectory.FindAsync</c> — الوَثيقَةُ المُخَزَّنَة — ولا تَسأَلُ <c>TenantRoleService</c>.</summary>
+    /// <summary><b>المُرَشِّحُ المُجَسَّدُ لا يَحرُسُ صَلاحِيَّةً إدارِيَّة</b> (‏ADR-043 §٢·٤): مُصادِقُ تَعريفِ المُستَأجِرِ يَقبَلُ <c>tenant.manage</c>، و<c>SelfGrantPolicy</c>
+    /// يَمنَعُ بِالسلاجِ وَحدَه — فَصَلاحِيَّةٌ إدارِيَّةٌ عَلى الأَدوارِ المُجَسَّدَةِ كانَت سَتَفتَحُ لِأَيِّ عُضوٍ يَختارُ دَوراً مُؤَلَّفاً يَحمِلُها. فَكُلُّ
+    /// <c>.RequirePermission("…")</c> وكُلُّ <c>HasPermissionAsync(…, "…", …)</c> في المَصادِرِ صَلاحِيَّةُ عُضوٍ مِن المَعجَم. يُطبَعُ العَدُّ ويَفشَلُ عَلى الصِفر.</summary>
     [Fact]
-    public void Today_the_publish_page_gate_reads_the_stored_tenant_through_the_directory()
+    public void Every_permission_guard_on_the_materialized_roles_names_a_member_permission()
+    {
+        var sites = EntitlementContractTests.SourceFiles()
+            .SelectMany(f => System.Text.RegularExpressions.Regex.Matches(
+                    WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(f.Text)),
+                    @"\.RequirePermission\(""(?<p>[^""]+)""\)|HasPermissionAsync\([^,]+,[^,]+,[^,]+,\s*""(?<p>[^""]+)""")
+                .Select(m => (File: Path.GetFileName(f.File), Permission: m.Groups["p"].Value)))
+            .ToList();
+        output.WriteLine($"حُرّاسُ صَلاحِيَّةٍ عَلى المُجَسَّدَة: {sites.Count} · {string.Join(" · ", sites.Select(s => $"{s.File}:{s.Permission}"))}");
+        Assert.NotEmpty(sites);
+        Assert.All(sites, s =>
+        {
+            Assert.True(PermissionCatalog.Contains(s.Permission), $"{s.File}: «{s.Permission}» خارِجَ المَعجَم");
+            Assert.False(PermissionCatalog.IsAdministrative(s.Permission), $"{s.File}: «{s.Permission}» إدارِيَّةٌ عَلى الأَدوارِ المُجَسَّدَة");
+        });
+    }
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-28، كوميتُ تَبديلِ د42)</b> — كانَ <c>Today_the_publish_filter_reads_the_stored_tenant_roles_alone</c>
+    /// (‏<c>973dcd0</c>): <c>g.LoadAsync&lt;Tenant&gt;(slug)</c> ثُمَّ <c>RolePermissions.Has</c> عَلى المُخَزَّنَة. والآن مُرَشِّحُ الصَلاحِيَّةِ يَقرَأُ
+    /// <c>MarketplaceTemplateExtensions.LoadTenantWithRolesAsync</c> — قِراءَةَ حارِسِ العَرضِ (<c>HasPermissionAsync</c>) بِعَينِها — ولا يُحَمِّلُ <c>Tenant</c> بِيَدِه.</summary>
+    [Fact]
+    public void The_publish_filter_reads_the_tenant_materialized_with_its_authored_roles_through_the_offer_guards_own_read()
+    {
+        var filter = WriteEndpointGuardTests.StripComments(Read("Gates", "PermissionFilter.cs"));
+        var mte = WriteEndpointGuardTests.StripComments(Read("MarketplaceTemplateExtensions.cs"));
+        var offer = mte[mte.IndexOf("private static async Task<bool> HasPermissionAsync(", StringComparison.Ordinal)..];
+        Assert.Contains("var tenant = await MarketplaceTemplateExtensions.LoadTenantWithRolesAsync(store, slug);", filter, StringComparison.Ordinal);
+        Assert.Contains("var tenant = await LoadTenantWithRolesAsync(store, slug);", offer[..offer.IndexOf('}')], StringComparison.Ordinal);
+        Assert.Contains("RolePermissions.Has(tenant.Roles, effectiveRole, _permission)", filter, StringComparison.Ordinal);
+        Assert.DoesNotContain("LoadAsync<Tenant>", filter, StringComparison.Ordinal);
+        Assert.Contains("var merged = set.Materialize(tenant.Roles);", mte, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-28، كوميتُ تَبديلِ د42)</b> — كانَ <c>Today_the_publish_page_gate_reads_the_stored_tenant_through_the_directory</c>
+    /// (‏<c>973dcd0</c>): <c>TenantDirectory.FindAsync</c>. والآن صَفحَةُ النَشرِ تَقرَأُ <c>TenantRoleService.LoadAsync</c> — قِراءَةَ الرَئيسِيَّةِ وصَفحَةِ الإعلانِ
+    /// لِلتَركيبِ ولِبابِ العَرض — ولا <c>TenantDirectory</c> فيها.</summary>
+    [Fact]
+    public void The_publish_page_gate_reads_the_tenant_materialized_with_its_authored_roles_through_the_role_service()
     {
         var gate = WriteEndpointGuardTests.StripMarkupComments(Read("Components", "GatedPage.razor"));
-        Assert.Contains("var tenant = await Tenants.FindAsync(Slug);", gate, StringComparison.Ordinal);
-        Assert.Contains("PermissionDoor.Opens(tenant.Roles, Role, storedRole, Permission)", gate, StringComparison.Ordinal);
-        Assert.DoesNotContain("TenantRoleService", gate, StringComparison.Ordinal);
+        var code = WriteEndpointGuardTests.StripComments(gate);
+        Assert.Contains("@inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles", gate, StringComparison.Ordinal);
+        Assert.Contains("var tenant = (await Roles.LoadAsync(Slug)).Tenant;", code, StringComparison.Ordinal);
+        Assert.Contains("PermissionDoor.Opens(tenant.Roles, Role, storedRole, Permission)", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("TenantDirectory", gate, StringComparison.Ordinal);
+        Assert.DoesNotContain("Tenants.FindAsync", code, StringComparison.Ordinal);
     }
 }
 
@@ -159,9 +213,11 @@ public class LiveComposedRolePublishProofTests(ITestOutputHelper output)
         await LiveZeroRoleAdminProofTests.CleanAsync(store, slug);
     }
 
-    /// <summary><b>اليَوم</b>: المُرَشِّحُ يَرُدُّ «خَيّاط» بِـ‏403 — وبَقِيَّةُ المَنَصَّةِ (التَجسيدُ نَفسُه الَّذي يَقرَؤُه حارِسُ العَرضِ والرَئيسِيَّة) تَراه ناشِراً.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-28، كوميتُ تَبديلِ د42)</b> — كانَ
+    /// <c>Today_an_approved_authored_role_carrying_listing_create_is_refused_by_the_publish_filter_on_Postgres</c> (‏<c>973dcd0</c>، «رَدَّ 403» عَلى
+    /// <c>wasayel_dev</c>). والآن المُرَشِّحُ يُمَرِّرُ «خَيّاط» إلى النُقطَة — الجَوابُ الَّذي تَراه بَقِيَّةُ المَنَصَّة.</summary>
     [Fact]
-    public async Task Today_an_approved_authored_role_carrying_listing_create_is_refused_by_the_publish_filter_on_Postgres()
+    public async Task An_approved_authored_role_carrying_listing_create_passes_the_publish_filter_on_Postgres()
     {
         if (!Enabled) return;
 
@@ -173,8 +229,8 @@ public class LiveComposedRolePublishProofTests(ITestOutputHelper output)
             output.WriteLine($"عُضوٌ دَورُه «خَيّاط» المُعتَمَد · المَنَصَّةُ تَراه ناشِراً: {sees} · مُرَشِّحُ listing.create: "
                 + (passed ? "مَرَّ إلى النُقطَة" : $"رَدَّ {status}"));
             Assert.True(sees);
-            Assert.False(passed);
-            Assert.Equal(403, status);
+            Assert.True(passed);
+            Assert.Equal(200, status); // ‏ردُّ النُقطَةِ المُستَعارَةِ نَفسِها (Results.Ok) — لا رَفضَ مِن المُرَشِّح.
         }
         finally { await CleanAsync(store, slug); }
     }
