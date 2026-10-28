@@ -3,6 +3,7 @@ using ACommerce.Templates.Customer.Marketplace;
 using ACommerce.Templates.Customer.Marketplace.Services;
 using Microsoft.AspNetCore.Http;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace ACommerce.Platform.Tests;
 
@@ -11,9 +12,34 @@ namespace ACommerce.Platform.Tests;
 // `POST /{slug}/listings/{id}/view` عامَّةٌ بِالتَصميم، وكانَت تُلحِقُ `ListingViewed` بِكُلِّ طَلَبٍ بِلا حَدّ. الحَدُّ الآن `ListingViews.Counts`
 // قَبلَ أَيِّ قِراءَةٍ أَو كِتابَة (مَفروضٌ تَرتيبُه في `WriteEndpointGuardTests.The_view_door_is_pinned_public_and_bounded_before_it_reads_or_appends`)،
 // وهُنا الدالَّتانِ بِحُدودِهِما: مَن الزائِر، ومَتى تُعَدّ. والنافِذَةُ ساعَةُ حِصَّةِ الإرسالِ (لا رَقَمَ جَديد — «ب» W8-2).
-public class ListingViewBoundTests
+public class ListingViewBoundTests(ITestOutputHelper output)
 {
     private static string Slug() => $"lv-{Guid.NewGuid():N}"[..16];
+
+    // ─── د58: تَوصيفُ «اليَوم» قَبلَ نافِذَةِ اليَومِ وسَقفِ المَفاتيح (‏2026-10-28، القاعِدَة ٣) ─────────────────────────
+    //
+    // قَرارُ المالِك د58: «مُشاهَدَةٌ واحِدَةٌ لِكُلِّ زائِرٍ لِكُلِّ إعلانٍ في اليَوم (‏٢٤ ساعَة)»، و«حَدٌّ أَقصى تِقنِيٌّ لِحَجمِ العَدّادِ في الذاكِرَةِ
+    // بِحُدودِ مِئَةِ أَلفِ مِفتاح… عِندَ بُلوغِه تُحذَفُ المَفاتيحُ المُنتَهِيَةُ أَوَّلاً. فَإن بَقِيَ مُمتَلِئاً لا تُعَدُّ المُشاهَدَةُ الجَديدَة ولا يَرى الزائِرُ
+    // أَيَّ خَطَأ، ويُكتَبُ تَحذيرٌ في سِجِلِّ الخادِم». وهذا ما هِيَ عَلَيه قَبلَه.
+
+    /// <summary><b>اليَوم</b>: حِصَّةُ المُشاهَدَةِ واحِدَةٌ لِكُلِّ مِفتاحٍ في <b>ساعَة</b> (‏<c>TryConsume(_viewRl, key, 1, TimeSpan.FromHours(1))</c>)،
+    /// و<b>لا حَدَّ لِعَدَدِ مَفاتيحِها</b>: لا سَقفَ في المِلَفّ، وأَلفُ مِفتاحٍ مُختَلِفٍ تُعَدُّ كُلُّها. والكَنسُ مَرَّةً في النافِذَة.</summary>
+    [Fact]
+    public void Today_the_view_quota_counts_one_per_key_per_hour_and_its_keys_have_no_bound()
+    {
+        var auth = WriteEndpointGuardTests.StripComments(StudioConsentCharacterizationTests.Source(
+            "libs", "kits", "Auth", "ACommerce.Kit.Auth.Server", "AuthHandlers.cs"));
+        var at = auth.IndexOf("public static bool TryConsumeViewQuota(string key)", StringComparison.Ordinal);
+        Assert.True(at > 0, "لا TryConsumeViewQuota — الأَداةُ عَمياء.");
+        var body = auth[at..(auth.IndexOf(';', at) + 1)];
+        var slug = Slug();
+        var counted = Enumerable.Range(0, 1000).Count(_ => ListingViews.Counts(slug, Guid.NewGuid(), null, "198.51.100.7"));
+        output.WriteLine($"جِسمُ الحِصَّة: {body.Trim()} · مَفاتيحُ مُختَلِفَة: 1000 · عُدَّ مِنها: {counted}");
+
+        Assert.Contains("TryConsume(_viewRl, key, 1, TimeSpan.FromHours(1))", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxViewKeys", auth, StringComparison.Ordinal);
+        Assert.Equal(1000, counted);
+    }
 
     [Fact]
     public void One_view_per_viewer_per_listing_counts_within_the_window()
