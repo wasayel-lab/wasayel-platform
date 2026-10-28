@@ -144,7 +144,8 @@
         if (tenant is null) return;
 
         keys  = await Keys.ListAsync(Slug);
-        users = await TenantAdmin.UsersAsync(Slug);
+        // ‏(2026-10-28، د56) لا يُعرَضُ فاعِلاً حِسابٌ يَرُدُّه الفَحصُ عِندَ الاستِعمال — الدالَّةُ نَفسُها.
+        users = (await TenantAdmin.UsersAsync(Slug)).Where(u => !ApiKeyService.ActorGone(u)).ToList();
 
         // مَرَّةً واحِدَة: القِراءَةُ تَحذِف.
         if (!string.IsNullOrEmpty(Issued)) revealed = Reveal.TakeOnce(Slug, Issued);

@@ -851,8 +851,11 @@ public static class MarketplaceTemplateExtensions
             if (violation is not null)
                 return Results.Redirect(Link(req, slug, $"me/delete?err={violation.Code}"));
 
-            ACommerce.Kit.Auth.AccountDeletion.Erase(user!, DateTime.UtcNow);
+            var now = DateTime.UtcNow;
+            ACommerce.Kit.Auth.AccountDeletion.Erase(user!, now);
             session.Store(user!);
+            // ‏(د56) مَفاتيحُ الرَبطِ بِاسمِه تُبطَلُ في المُعامَلَةِ نَفسِها — لا يَبقى مِفتاحٌ يَتَكَلَّمُ بِاسمِ حِسابٍ مَحذوف.
+            await Services.Api.ApiKeyService.RevokeActorKeysAsync(session, slug, userId, now);
             await session.SaveChangesAsync();
             Services.SessionVersionGate.Forget(cache, slug, userId);   // ‏(د28) Erase رَفَعَ الإصدار — لا يَنتَظِرُ دَقيقَةَ الحِفظ
 

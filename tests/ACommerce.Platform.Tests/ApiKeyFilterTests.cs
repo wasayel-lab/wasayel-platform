@@ -97,6 +97,7 @@ public class ApiKeyFilterTests
     [InlineData(ApiKeyRejection.Revoked)]
     [InlineData(ApiKeyRejection.Expired)]
     [InlineData(ApiKeyRejection.TenantGone)]
+    [InlineData(ApiKeyRejection.ActorGone)]   // ‏2026-10-28 (د56): فاعِلٌ مَحذوف — رَمزٌ واحِدٌ كَإخوَتِه
     public async Task Any_failed_credential_is_401_with_one_code(ApiKeyRejection rejection)
     {
         var (status, body, passed) = await RunAsync(

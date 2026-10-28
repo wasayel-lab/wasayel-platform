@@ -358,7 +358,10 @@ public class EndpointBodyBleedTests
         // (سَبعَةُ أَسطُر: الحارِسُ ورَدُّه، والرَفعُ في `SessionVersionGate.RevokeTenantAsync`، ومَسحُ الكوكي، والرَدّ) و`/studio/me/sessions/revoke`
         // (سِتَّة)، وسَطرٌ في `/{slug}/me/delete/confirm` يَمحو الإصدارَ المَحفوظ — والقَرارُ والأَثَرُ في الخِدمَة لا في الأَجسام. طَبَعَ العَدّادُ
         // «‏2692 → 2711» و«‏3026 → 3045» و«135 → 137».
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2711),
+        // ‏2711 ← **2713** يَوم ‏2026-10-28 (قَرارُ المالِك د56): حَذفُ الحِسابِ يُبطِلُ مَفاتيحَ صاحِبِه في المُعامَلَةِ نَفسِها — سَطرٌ يُسَمّي `now` لِيَكتُبَه
+        // `Erase` والإبطالُ بِلَحظَةٍ واحِدَة، وسَطرُ النِداء؛ والاستِعلامُ والقَرارُ في `ApiKeyService.RevokeActorKeysAsync`/`RevokeForDeletedActor`.
+        // طَبَعَ العَدّادُ «‏2711 → 2713» و«‏3045 → 3047»، و**‏2 = 2**؛ والنِقاطُ ‏137.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2713),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -1051,7 +1054,9 @@ public class EndpointBodyBleedTests
     /// <remarks><b>‏3026 ← 3045 يَوم ‏2026-10-28</b> (قَرارُ المالِك د28): بابا «اخرج من كل الأجهزة» (المَتجَرُ والاستوديو) وسَطرُ مَحوِ الإصدارِ
     /// المَحفوظِ في حَذفِ الحِساب — ‏19 سَطراً في <c>MarketplaceTemplateExtensions.cs</c>، والرَفعُ والبَوّابَةُ في <c>SessionVersionGate</c>. وعَدَدُ
     /// النِقاطِ ‏135 ← 137.</remarks>
-    private const int PinnedTotal = 3045;
+    /// <remarks><b>‏3045 ← 3047 يَوم ‏2026-10-28</b> (قَرارُ المالِك د56): نُقطَةُ الحَذفِ تُبطِلُ مَفاتيحَ صاحِبِها قَبلَ حِفظِها الواحِد — سَطران، والقَرارُ
+    /// في <c>ApiKeyService</c>. طَبَعَ العَدّادُ «‏3045 → 3047»، و<b>‏2 = 2</b>؛ وعَدَدُ النِقاطِ ‏137 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 3047;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

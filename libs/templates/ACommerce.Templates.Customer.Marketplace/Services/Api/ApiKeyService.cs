@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using ACommerce.Kit.Auth;
 using Marten;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services.Api;
@@ -23,6 +24,9 @@ public enum ApiKeyRejection
     Revoked,
     Expired,
     TenantGone,
+    /// <summary>‏(2026-10-28، قَرارُ المالِك د56) فاعِلُ المِفتاحِ حَذَفَ حِسابَه — أَو لا حِسابَ لَه في مُستَأجِرِ المِفتاح. الفَحصُ الثاني
+    /// بَعدَ إبطالِ الحَذفِ نَفسِه (<see cref="ApiKeyService.RevokeActorKeysAsync"/>): مِفتاحٌ فاتَه الإبطالُ لا يَتَكَلَّمُ بِاسمِ مَن رَحَل.</summary>
+    ActorGone,
 }
 
 /// <summary>هُوِيَّةُ الطَلَب بَعدَ اعتِمادٍ ناجِح.</summary>
@@ -143,10 +147,19 @@ public class ApiKeyService
         if (string.IsNullOrWhiteSpace(doc.TenantSlug))
             return new(null, ApiKeyRejection.TenantGone);
 
+        // ‏(د56) الفاعِلُ في جَلسَةِ مُستَأجِرِ المِفتاح — `User` مُتَعَدِّدَةُ الإيجار، والمِفتاحُ عامّ.
+        await using var tenant = _store.QuerySession(doc.TenantSlug);
+        if (ActorGone(await tenant.LoadAsync<User>(doc.ActorUserId, ct)))
+            return new(null, ApiKeyRejection.ActorGone);
+
         return new(new ApiKeyPrincipal(
             doc.Id, doc.TenantSlug, doc.ActorUserId, doc.ActorName, doc.Scopes.ToArray()),
             ApiKeyRejection.None);
     }
+
+    /// <summary>‏(2026-10-28، قَرارُ المالِك د56) <b>هَل رَحَلَ فاعِلُ المِفتاح؟</b> — نَقِيَّة: حِسابُه مَحذوف (<c>DeletedAt</c>)، أَو لا وَثيقَةَ لَه
+    /// في مُستَأجِرِ المِفتاح. والغِيابُ رَفضٌ لا مُرور: الفاعِلُ يُختارُ مِن مُستَخدِمي المَتجَر، فَمِفتاحٌ لا يَجِدُ فاعِلَه لا يَتَكَلَّمُ بِاسمِ أَحَد.</summary>
+    public static bool ActorGone(User? actor) => actor is null || actor.DeletedAt is not null;
 
     /// <summary><b>الرَأسُ إلى المَعروض</b> — دالَّةٌ نَقِيَّة،
     /// فَتُختَبَر بِمُوجِبٍ وسالِبٍ بِلا خادِم. تَقبَل
@@ -192,11 +205,47 @@ public class ApiKeyService
         if (string.Equals(doc.Status, ApiKeyDocument.StatusRevoked, StringComparison.Ordinal))
             return true;
 
-        doc.Status    = ApiKeyDocument.StatusRevoked;
-        doc.RevokedAt = DateTime.UtcNow;
+        MarkRevoked(doc, DateTime.UtcNow);
         s.Store(doc);
         await s.SaveChangesAsync(ct);
         return true;
+    }
+
+    /// <summary>
+    /// <para><b>حَذفُ الحِسابِ يُبطِلُ مَفاتيحَ صاحِبِه — في المُعامَلَةِ نَفسِها</b> (‏2026-10-28، قَرارُ المالِك د56). كانَ مِفتاحُ الرَبطِ
+    /// الصادِرُ بِاسمِ مُستَخدِمٍ يُصادِقُ بَعدَ حَذفِ حِسابِه ويُحَرِّكُ صَفَقاتِه بِاسمِه حَتّى يُبطِلَه صاحِبُ المَتجَر (تَوصيفُه <c>2fe6bf5</c>).
+    /// والآن تُنادي نُقطَةُ الحَذفِ هذِه عَلى جَلسَتِها قَبلَ <c>SaveChangesAsync</c> الواحِدَة: فَإمّا يُحذَفُ الحِسابُ وتُبطَلُ مَفاتيحُه مَعاً، وإمّا
+    /// لا شَيء. ويَرى صاحِبُ المَتجَرِ المِفتاحَ «مُبطَلاً» في شاشَةِ المَفاتيح (<c>RevokedAt</c> مَكتوب).</para>
+    /// <para>تُعيدُ عَدَدَ ما أُبطِل، ولا تَحفَظ — الحِفظُ لِلمُنادي.</para>
+    /// </summary>
+    public static async Task<int> RevokeActorKeysAsync(
+        IDocumentSession session, string tenantSlug, Guid actorUserId, DateTime now, CancellationToken ct = default)
+    {
+        var active = await session.Query<ApiKeyDocument>()
+            .Where(k => k.TenantSlug == tenantSlug && k.ActorUserId == actorUserId && k.Status == ApiKeyDocument.StatusActive)
+            .ToListAsync(ct);
+        var revoked = RevokeForDeletedActor(active, tenantSlug, actorUserId, now);
+        foreach (var k in revoked) session.Store(k);
+        return revoked.Count;
+    }
+
+    /// <summary>نَقِيَّة: مِن المَفاتيحِ ما صَدَرَ في هذا المُستَأجِرِ بِاسمِ هذا الفاعِلِ وما زالَ فَعّالاً يُعَلَّمُ مُبطَلاً ويُعاد — وما سِواه لا يُمَسّ
+    /// (مِفتاحُ فاعِلٍ آخَر، أَو مُستَأجِرٍ آخَر، أَو مُبطَلٌ سَلَفاً فَيَبقى تاريخُ إبطالِه).</summary>
+    public static IReadOnlyList<ApiKeyDocument> RevokeForDeletedActor(
+        IEnumerable<ApiKeyDocument> keys, string tenantSlug, Guid actorUserId, DateTime now)
+    {
+        var hit = keys.Where(k => string.Equals(k.TenantSlug, tenantSlug, StringComparison.Ordinal)
+                                  && k.ActorUserId == actorUserId
+                                  && string.Equals(k.Status, ApiKeyDocument.StatusActive, StringComparison.Ordinal))
+                      .ToList();
+        foreach (var k in hit) MarkRevoked(k, now);
+        return hit;
+    }
+
+    private static void MarkRevoked(ApiKeyDocument doc, DateTime now)
+    {
+        doc.Status    = ApiKeyDocument.StatusRevoked;
+        doc.RevokedAt = now;
     }
 
     // ─── الأَدَوات ────────────────────────────────────────────────────

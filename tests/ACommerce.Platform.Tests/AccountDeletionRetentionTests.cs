@@ -169,17 +169,18 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         Unwritten,
         /// <summary>اسمُ شَيءٍ لا شَخص.</summary>
         NotAPerson,
-        /// <summary>‏(2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢) نُسخَةٌ لا يَمَسُّها الحَذفُ <b>وتَعمَل</b>: اسمُ فاعِلِ اعتِمادٍ حَيٍّ يُصادِقُ بِه
-        /// حَتّى يُبطَل — فَلا يُقالُ «بَقِيَ اسمُكَ» وَحدَه بَل «يَبقى يَعمَلُ بِاسمِك».</summary>
-        LiveCredential,
+        // ‏2026-10-28 (قَرارُ المالِك د56): كانَ هُنا `LiveCredential` (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢) — «نُسخَةٌ لا يَمَسُّها الحَذفُ
+        // وتَعمَل»، وصِنفُها الوَحيدُ `ApiKeyDocument.ActorName`. والحَذفُ صارَ يُبطِلُ المِفتاح، فَصارَ الاسمُ نُسخَةً ساكِنَةً (`Copy`) ولا صِنفَ
+        // يَبقى عَلَيه — والمَعجَمُ لا يَحمِلُ قيمَةً بِلا مُستَهلِك (القاعِدَة ١). ويَومَ يُوجَدُ اعتِمادٌ حَيٌّ آخَرُ بِاسمِ شَخصٍ يَعودُ بِصَفِّه.
     }
 
-    /// <summary>ما يَبقى بَعدَ الحَذفِ ويَحتاجُ إفصاحاً: النُسخَةُ الساكِنَةُ والاعتِمادُ الحَيّ — صَفُّ العَدِّ وقارِئُ الإفصاحِ يَسأَلانِ هذا وَحدَه.</summary>
-    internal static bool KeptAfterDeletion(NameKind kind) => kind is NameKind.Copy or NameKind.LiveCredential;
+    /// <summary>ما يَبقى بَعدَ الحَذفِ ويَحتاجُ إفصاحاً: النُسخَةُ الساكِنَة — صَفُّ العَدِّ وقارِئُ الإفصاحِ يَسأَلانِ هذا وَحدَه.</summary>
+    internal static bool KeptAfterDeletion(NameKind kind) => kind is NameKind.Copy;
 
     /// <summary>العِبارَةُ الَّتي تَقولُ النُسخَةَ في نَصِّ الحَذف — مَعجَمٌ مُغلَق، ولِكُلٍّ عِباراتُه في <see cref="DisclosurePhrases"/>.</summary>
     // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢): `DealSeller` — اسمُ البائِعِ عَلى الصَفقَةِ يُقالُ لِلبائِعِ بِجُملَتِه، لا بِجُملَةِ المُشتَري.
-    internal enum Disclosure { None, Deal, DealSeller, Records, Notifications, AdminNotices, StoreRecords, LiveKey }
+    // ‏2026-10-28 (د56): `LiveKey` خَرَجَ مَعَ `NameKind.LiveCredential` — جُملَةُ «يَبقى يَعمَلُ بِاسمِك» حُذِفَت مِن النُصوصِ لِأَنَّ الحَذفَ يُبطِلُ المِفتاح.
+    internal enum Disclosure { None, Deal, DealSeller, Records, Notifications, AdminNotices, StoreRecords }
 
     internal sealed record NameField(NameKind Kind, Disclosure Said, string WhyAr);
 
@@ -201,7 +202,7 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         ["Reply.AuthorName"]             = new(NameKind.Copy, Disclosure.Records, "كاتِبُ الرَدّ — كاتِبُه الوَحيدُ اليَومَ رَدُّ الاستوديو بِـ«دَعم التَّطبيق»، ويُعَدُّ نُسخَةً لِأَنّ الحَقلَ لِلاسم."),
         ["TicketReplied.AuthorName"]     = new(NameKind.Copy, Disclosure.Records, "حَدَثُ الرَدِّ في مَجرى الأَحداث — كَسابِقِه."),
         ["AuditEntry.ActorName"]         = new(NameKind.Copy, Disclosure.StoreRecords, "سِجِلُّ تَدقيقِ المَتجَر: البائِعُ عِندَ رَبطِ الشَحن، وفَريقُ الإدارَةِ عِندَ تَغييرِ الإعدادات."),
-        ["ApiKeyDocument.ActorName"]     = new(NameKind.LiveCredential, Disclosure.LiveKey, "الفاعِلُ الَّذي يُصدِرُ لَه صاحِبُ المَتجَرِ مِفتاحَ رَبط."),
+        ["ApiKeyDocument.ActorName"]     = new(NameKind.Copy, Disclosure.StoreRecords, "الفاعِلُ الَّذي يُصدِرُ لَه صاحِبُ المَتجَرِ مِفتاحَ رَبط — يُبطَلُ المِفتاحُ بِحَذفِ حِسابِه (د56) ويَبقى اسمُه عَلى الوَثيقَةِ المُبطَلَة."),
         ["User.FullName"]                = new(NameKind.Erased, Disclosure.None, "الوَثيقَةُ الَّتي يَمحوها `Erase` (الصَفّ ١)."),
         ["StudioUser.FullName"]          = new(NameKind.StudioAccount, Disclosure.None, "حِسابُ الاستوديو — لا بابَ لِحَذفِه (الصَفّ ٤)."),
         ["IncubatorSession.OwnerName"]   = new(NameKind.StudioAccount, Disclosure.None, "جَلسَةُ تَحليلِ الاستوديو لِصاحِبِها."),
@@ -607,7 +608,6 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         [Disclosure.Notifications] = new[] { "إشعارات من تعاملت معهم" },
         [Disclosure.AdminNotices]  = new[] { "إشعارات مديري المتجر", "هاتفك أو بريدك" },
         [Disclosure.StoreRecords]  = new[] { "سجل التدقيق ومفاتيح الربط" },
-        [Disclosure.LiveKey]       = new[] { "ومفتاح ربط صدر باسمك يبقى يعمل باسمك حتى يبطله صاحب المتجر" },
     };
 
     /// <summary>كُلُّ إفصاحٍ يَحتاجُه ما يَجِدُه المَسحان — مِن خَصائِصِ الاسمِ ومِن كُتّابِ الإشعار.</summary>
@@ -630,7 +630,8 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         output.WriteLine($"إفصاحاتٌ يَحتاجُها المَسحان: {string.Join(", ", needed)}");
         // ‏2026-10-25: سِتَّةٌ لا خَمسَة — `DealSeller` لِاسمِ البائِعِ عَلى الصَفقَة (مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢؛ تَوصيفُه `b7f9d8f`).
         // ‏2026-10-25: سَبعَةٌ — `LiveKey` لِمِفتاحِ الرَبطِ الحَيِّ بِاسمِ المَحذوف (تَوصيفُه `bc37868`).
-        Assert.Equal(new[] { Disclosure.Deal, Disclosure.DealSeller, Disclosure.Records, Disclosure.Notifications, Disclosure.AdminNotices, Disclosure.StoreRecords, Disclosure.LiveKey }, needed);
+        // ‏2026-10-28 (د56): سِتَّةٌ مِن جَديد — الحَذفُ يُبطِلُ المِفتاح، فَاسمُ فاعِلِه نُسخَةٌ ساكِنَةٌ يَقولُها `StoreRecords`.
+        Assert.Equal(new[] { Disclosure.Deal, Disclosure.DealSeller, Disclosure.Records, Disclosure.Notifications, Disclosure.AdminNotices, Disclosure.StoreRecords }, needed);
         foreach (var k in new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey })
         {
             var unsaid = Unsaid(Ar(k));
@@ -641,9 +642,9 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         foreach (var phrase in new[] { "each deal keeps", "If you were a deal's seller, your name stays on it and its buyer sees it",
                                        "conversations, reviews, offers, support tickets and reports",
                                        "the notifications of the people you dealt with", "the store managers' notifications",
-                                       "phone number or email", "the audit log and the integration keys",
-                                       "An integration key issued in your name keeps acting in your name until the store owner revokes it" })
+                                       "phone number or email", "the audit log and the integration keys" })
             Assert.Contains(phrase, En(PlatformRetentionKey), StringComparison.Ordinal);
+        Assert.DoesNotContain("keeps acting", En(PlatformRetentionKey), StringComparison.Ordinal);   // ‏(د56) حُذِفَت الجُملَة
         Assert.Null(LocaleCatalog.Find("en", StorePrivacyKey));
         Assert.Null(LocaleCatalog.Find("en", RetainedNoteKey));
     }
@@ -732,22 +733,28 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         return code[at..code.IndexOf("public static string? BearerFrom(", at, StringComparison.Ordinal)];
     }
 
-    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> (‏2026-10-25؛ كانَ <c>Today_an_integration_key_issued_in_a_deleted_users_name_is_classified_a_passive_copy_and_keeps_acting</c>،
-    /// مُودَعٌ في <c>bc37868</c>). والآن <c>ApiKeyDocument.ActorName</c> اعتِمادٌ حَيٌّ (<see cref="NameKind.LiveCredential"/>) بِإفصاحِه
-    /// (<see cref="Disclosure.LiveKey"/>): النُصوصُ الثَلاثَةُ والإنجليزيُّ يَقولونَ إنّ مِفتاحَ رَبطٍ صَدَرَ بِاسمِكَ يَبقى يَعمَلُ بِاسمِكَ حَتّى يُبطِلَه صاحِبُ المَتجَر —
-    /// والكودُ ما زالَ لا يَسأَلُ عَن حِسابِ الفاعِل (الإبطالُ نَفسُه قَرارُ المالِك، «ب»)؛ ويَومَ يُبطَلُ المِفتاحُ بِالحَذفِ يُحمِرُّ هذا الصَفُّ مَعَ النَصّ.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-28، قَرارُ المالِك د56)</b> — كانَ <c>An_integration_key_in_a_deleted_users_name_is_a_live_credential_and_the_texts_say_it_keeps_acting</c>
+    /// (وقَبلَه <c>Today_an_integration_key_issued_in_a_deleted_users_name_is_classified_a_passive_copy_and_keeps_acting</c>، مُودَعٌ في <c>bc37868</c>):
+    /// <c>ApiKeyDocument.ActorName</c> اعتِمادٌ حَيٌّ والنُصوصُ تَقولُ «يَبقى يَعمَلُ بِاسمِكَ حَتّى يُبطِلَه صاحِبُ المَتجَر»، و<c>AuthenticateAsync</c> لا يَسأَلُ
+    /// عَن حِسابِ الفاعِل. <b>والآن</b>: الحَذفُ يُبطِلُ مَفاتيحَ صاحِبِه (<c>ApiKeyActorDeletionTests</c>)، و<c>AuthenticateAsync</c> يَسأَلُ عَن حِسابِ الفاعِلِ
+    /// فَيَرُدُّ المَحذوفَ بِـ<c>ActorGone</c> — فَالاسمُ نُسخَةٌ ساكِنَةٌ عَلى وَثيقَةٍ مُبطَلَةٍ يَقولُها «سِجِلُّ التَدقيقِ ومَفاتيحُ الرَبط»، والجُملَةُ خَرَجَت
+    /// مِن النُصوصِ الثَلاثَةِ والإنجليزيّ.</summary>
     [Fact]
-    public void An_integration_key_in_a_deleted_users_name_is_a_live_credential_and_the_texts_say_it_keeps_acting()
+    public void An_integration_key_in_a_deleted_users_name_is_revoked_by_the_deletion_and_no_text_says_it_keeps_acting()
     {
         var field = PersonNameFields["ApiKeyDocument.ActorName"];
         var auth = AuthenticateBody();
-        var asksUser = Regex.IsMatch(auth, @"\b(User|DeletedAt|LoadAsync<User>)\b");
+        var asksUser = Regex.IsMatch(auth, @"\bLoadAsync<User>\(doc\.ActorUserId") && auth.Contains("ApiKeyRejection.ActorGone", StringComparison.Ordinal);
         output.WriteLine($"ApiKeyDocument.ActorName ← {field.Kind}/{field.Said} · AuthenticateAsync يَسأَلُ عَن حِسابِ الفاعِل: {asksUser}");
-        Assert.Equal(NameKind.LiveCredential, field.Kind);
-        Assert.Equal(Disclosure.LiveKey, field.Said);
-        Assert.False(asksUser);
+        Assert.Equal(NameKind.Copy, field.Kind);
+        Assert.Equal(Disclosure.StoreRecords, field.Said);
+        Assert.True(asksUser);
         Assert.Contains("doc.ActorUserId, doc.ActorName", auth, StringComparison.Ordinal);
         foreach (var k in new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey })
-            Assert.Contains("ومفتاح ربط صدر باسمك يبقى يعمل باسمك حتى يبطله صاحب المتجر", Bare(Ar(k)), StringComparison.Ordinal);
+        {
+            Assert.DoesNotContain("يبقى يعمل باسمك", Bare(Ar(k)), StringComparison.Ordinal);
+            Assert.Contains("سجل التدقيق ومفاتيح الربط", Bare(Ar(k)), StringComparison.Ordinal);
+        }
+        Assert.DoesNotContain("keeps acting in your name", En(PlatformRetentionKey), StringComparison.Ordinal);
     }
 }
