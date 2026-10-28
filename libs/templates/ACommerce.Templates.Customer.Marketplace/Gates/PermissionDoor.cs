@@ -36,6 +36,10 @@ namespace ACommerce.Templates.Customer.Marketplace.Gates;
 /// و<c>GatedPage</c> يَقرَأُ <c>TenantRoleService.LoadAsync</c>؛ فَدَورٌ مُؤَلَّفٌ مُعتَمَدٌ يَحمِلُ <c>listing.create</c> يَنشُر (تَوصيفُه <c>973dcd0</c>). والقاعِدَةُ
 /// باقِيَةٌ بِحَرفِها — البابُ يَقرَأُ ما يَقرَؤُه حارِسُ هَدَفِه — فَالرَئيسِيَّةُ و«إعلاناتي» تَقرَآنِ المُجَسَّدَةَ مَعَهُما، ويُثَبِّتُ ذلكَ
 /// <c>CreateListingDoorTests.The_home_page_asks_the_door_with_its_target_gates_materialized_reads_so_an_authored_publisher_sees_the_link_its_page_opens</c>.</para>
+///
+/// <para><b>والمُستَهلِكُ الخامِس <c>Me</c> (‏2026-10-28، قَرارُ المالِك د41 «أ»؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: بِطاقَةُ «إعلاناتي» في «حِسابي» تَسأَلُ
+/// <c>Opens(…, "listing.create")</c> عَلى قِراءَةِ صَفحَةِ النَشر (<c>TenantRoleService.LoadAsync</c>) — أَو لِصاحِبِها إعلانٌ — فَلا تُرسَمُ لِدَورٍ لا يَنشُرُ
+/// ولا إعلانَ لَه صَفحَةٌ فارِغَةٌ بِلا إجراء (تَوصيفُه <c>d1f789b</c>). و«ما زالَ <c>Me</c> نُسخَةً بِيَدِه» أَعلاه باقٍ لِـ<c>canManage</c> وَحدَه.</para>
 /// </summary>
 public static class PermissionDoor
 {

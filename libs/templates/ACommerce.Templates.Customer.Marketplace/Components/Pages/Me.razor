@@ -2,6 +2,7 @@
 @page "/{slug}/r/{role}/me"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantPlanService PlanSvc
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantProviderService Providers
 @inject ITenantContext Tenant
@@ -157,8 +158,14 @@
                وشاشَةُ تَحريرِها كودًا حَيّاً لا يَبلُغُه أَحَد في
                نِصف المُستَأجِرين. وصَفحَةُ «حِسابي» هي **المَوضِع
                المُعلَن** لِلزائِد عَن خَمسَة تَبويبات
-               (‏`MainLayout` §الشَريط السُفليّ). *@
-            <AcActionCard Label="@(L["me.action.my_listings"])" IconName="package"      Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"me/listings")" />
+               (‏`MainLayout` §الشَريط السُفليّ).
+               (‏2026-10-28، قَرارُ المالِك د41 «أ») ولِمَن يَستَطيعُ النَشرَ أَو لَه إعلانٌ وَحدَه (‏`showMyListings`): دَورٌ لا يَنشُرُ ولا إعلانَ لِصاحِبِه كانَت
+               تَفتَحُ لَه صَفحَةً فارِغَةً بِلا إجراء. والمَتجَرُ بِلا أَدوارٍ يَنشُرُ فيه الجَميعُ فَتَبقى. وبِلا فَراغٍ مُصَرَّحٍ قَبلَها: كانَت تَلي فَتحَ
+               `acm-home-actions` بِلا فَراغٍ حينَ لا تُرسَمُ «إدارَةُ المَتجَر» (مَقيسٌ بايتاً بِالشَجَرَتَين). *@
+            @if (showMyListings)
+            {
+                <AcActionCard Label="@(L["me.action.my_listings"])" IconName="package"      Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"me/listings")" />
+            }
             @* «الباقات» حينَ يَعرِضُ رَفُّها شَيئاً (‏2026-10-25، W8-7 — lens-dead-doors-5): كانَت تُرسَمُ في كُلِّ مَتجَر، ومَتجَرُ الاستوديو
                يولَدُ بِلا باقَةٍ فَتَفتَحُ عَلى «لا توجَد باقات بَعد». الشَرطُ `PlanShelf.ShownAsync` — ما تَرسُمُه الصَفحَةُ بِعَينِه. والفَراغانِ
                المُصَرَّحُ بِهِما يُعيدانِ ما كانَ بَينَ البِطاقاتِ بايتاً (حُدودُ كُتلَةِ `@if` تُسقِطُ فَراغَ النَصِّ حَولَها). *@
@@ -237,6 +244,10 @@
     bool canManage;
     /// <summary>صَفحَةُ الباقاتِ تَعرِضُ باقَةً واحِدَةً عَلى الأَقَلّ (‏<c>PlanShelf.ShownAsync</c>) — شَرطُ بِطاقَتِها (‏2026-10-25، W8-7).</summary>
     bool plansShown;
+    /// <summary>بِطاقَةُ «إعلاناتي» (‏2026-10-28، قَرارُ المالِك د41 «أ»): الدَورُ يَستَطيعُ النَشرَ — <c>PermissionDoor.Opens(…, "listing.create")</c> عَلى
+    /// قِراءَةِ صَفحَةِ النَشرِ نَفسِها (<c>TenantRoleService.LoadAsync</c>، المُجَسَّدَةِ بِالأَدوارِ المُؤَلَّفَةِ بَعدَ د42) — أَو لِصاحِبِه إعلانٌ واحِدٌ عَلى
+    /// الأَقَلّ (<c>AccountQueries.MyListingsAsync</c> نَفسُها الَّتي تَرسُمُ «إعلاناتي»، ولا تُسأَلُ إلّا إن أُغلِقَ الباب).</summary>
+    bool showMyListings;
 
 
     protected override async Task OnParametersSetAsync()
@@ -261,6 +272,10 @@
         }
         if (Contact == "verify")
             pending = ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.Pending(Slug, Attempt, Auth.UserId.Value);
+
+        var publishRoles = (await Roles.LoadAsync(Slug)).Tenant?.Roles ?? new List<ACommerce.Kit.Roles.Role>();
+        showMyListings = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(publishRoles, Role, me?.ActiveRole, "listing.create")
+            || (await Accounts.MyListingsAsync(Slug, Auth.UserId.Value)).Count > 0;
 
         if (tenantRoles.Count > 0)
         {

@@ -390,7 +390,9 @@ public class CreateListingDoorTests(ITestOutputHelper output)
         Assert.Equal(pageOpens, homeDraws);
         Assert.False(storedAlone);
 
-        Assert.Equal(new[] { "GatedPage.razor", "MyListings.razor", "TenantHome.razor", "TenantListingDetail.razor" }, consumers);
+        // ‏(‏2026-10-28، قَرارُ المالِك د41 «أ»): <c>Me.razor</c> المُستَهلِكُ الخامِس — بِطاقَةُ «إعلاناتي» تَسأَلُ <c>Opens(…, "listing.create")</c> عَلى
+        // ‏قِراءَةِ صَفحَةِ النَشرِ (يُثَبِّتُها <c>MyListingsCardTests</c>). ونُسخَةُ <c>canManage</c> بِيَدِها في الصَفحَةِ نَفسِها باقِيَةٌ كَما كانَت.
+        Assert.Equal(new[] { "GatedPage.razor", "Me.razor", "MyListings.razor", "TenantHome.razor", "TenantListingDetail.razor" }, consumers);
     }
 
     /// <summary><b>أَبوابُ الدَورِ صادِقَةٌ لِلكاتالوج</b>: كُلُّ دَورٍ في <c>RoleCatalog.Definitions</c> يَختارُ <c>sellerHome</c> أَو <c>riderHome</c>
