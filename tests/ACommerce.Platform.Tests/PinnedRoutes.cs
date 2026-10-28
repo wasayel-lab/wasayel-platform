@@ -146,6 +146,9 @@ internal static class PinnedRoutes
         "/{slug}/cart/{listingId:guid}/qty",
         "/{slug}/cart/clear",
         "/{slug}/checkout/submit",
+        // ‏2026-10-28 (قَرارُ المالِك د60): خُطوَتا الإتمامِ تَحفَظانِ بَياناتِ المُشتَري في سَلَّتِه — شَكلُ أَخَواتِها في السَلَّةِ بِحَرفِه (`Cart`
+        // مُتَعَدِّدَةُ الإيجار، وجَلسَةُ Minimal API المَحقونَةُ تَحمِلُ `*DEFAULT*`)، ويُرفَعُ مَعَهُنَّ يَومَ يُرَحَّلنَ إلى Wolverine.Http.
+        "/{slug}/checkout/details",
         "/{slug}/vendor/{vendorId:guid}/chat",
         "/studio/apps/{slug}/deals/{id:guid}/review",
         "/studio/apps/{slug}/listings/{id:guid}/moderate",

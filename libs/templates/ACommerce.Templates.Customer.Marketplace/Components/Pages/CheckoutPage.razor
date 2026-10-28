@@ -19,6 +19,12 @@
 
     خُطوَة واحِدَة في كُلّ صَفحَة — SSR بِلا JS. الخُطوَة في
     <c>?step=1|2|3</c>. الـ form يَتَراكَم القِيَم عَبر hidden inputs.
+
+    ‏2026-10-28 (قَرارُ المالِك د60 «ب»؛ OWASP وCWE-598 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): «يَتَراكَم القِيَم عَبر hidden inputs» أَعلاه
+    كانَ في رابِطِ الصَفحَة — الخُطوَتانِ ١ و٢ بِـGET، فَالاسمُ والجَوّالُ والعُنوانُ في سِجِلِّ المُتَصَفِّحِ وسِجِلّاتِ الخَوادِم. صارَتا تُرسِلانِ
+    بِـPOST إلى `/{slug}/checkout/details` فَتُحفَظُ في السَلَّة (`Cart.Checkout`)، والصَفحَةُ تَقرَؤُها مِنها، والرابِطُ رَقمُ الخُطوَةِ وَحدَه؛
+    والخُطوَتانِ ٢ و٣ لا تُفتَحانِ بِلا عُنوانٍ مَحفوظ (`CheckoutDetails.VisibleStep`). والحُقولُ المَخفِيَّةُ باقِيَةٌ في استِمارَةِ الإرسالِ الأَخيرَة
+    وَحدَها — جِسمُ POST لا رابِط.
 *@
 
 <div class="acs-page">
@@ -63,8 +69,8 @@
 
         @if (Step == 1)
         {
-            <form method="get" action="@($"/{Slug}/checkout")">
-                <input type="hidden" name="step" value="2" />
+            <form method="post" action="@($"/{Slug}/checkout/details")">
+                <input type="hidden" name="@CheckoutDetails.FromField" value="@CheckoutDetails.FromAddress" />
                 <AcCard>
                     <ChildContent>
                         <h3 style="margin-top:0;">@L.Markup("checkout.address.title")</h3>
@@ -88,11 +94,8 @@
         }
         else if (Step == 2)
         {
-            <form method="get" action="@($"/{Slug}/checkout")">
-                <input type="hidden" name="step" value="3" />
-                <input type="hidden" name="name" value="@Name" />
-                <input type="hidden" name="phone" value="@Phone" />
-                <input type="hidden" name="addr" value="@Addr" />
+            <form method="post" action="@($"/{Slug}/checkout/details")">
+                <input type="hidden" name="@CheckoutDetails.FromField" value="@CheckoutDetails.FromPayment" />
                 <AcCard>
                     <ChildContent>
                         <h3 style="margin-top:0;">@L.Markup("checkout.payment.title")</h3>
@@ -162,7 +165,7 @@
                     </ChildContent>
                 </AcCard>
                 <div style="display:flex;gap:8px;">
-                    <a href="@AuthSession.LinkFor(Slug, Role, $"checkout?step=1&name={Uri.EscapeDataString(Name)}&phone={Uri.EscapeDataString(Phone)}&addr={Uri.EscapeDataString(Addr)}")"
+                    <a href="@AuthSession.LinkFor(Slug, Role, CheckoutDetails.StepPath(1))"
                        class="ac-btn ac-btn-ghost">@L.Markup("checkout.action.previous")</a>
                     <AcButton Type="submit" Variant="primary" Block="true" Text="@L["checkout.action.next"]" />
                 </div>
@@ -221,10 +224,12 @@
     [Parameter] public string Slug { get; set; } = "";
     [Parameter] public string? Role { get; set; }
     [SupplyParameterFromQuery] public int Step { get; set; } = 1;
-    [SupplyParameterFromQuery] public string Name { get; set; } = "";
-    [SupplyParameterFromQuery] public string Phone { get; set; } = "";
-    [SupplyParameterFromQuery] public string Addr { get; set; } = "";
-    [SupplyParameterFromQuery] public string Pay { get; set; } = CheckoutPayMethods.Card;
+
+    // ‏(د60) مِن السَلَّةِ لا مِن الاستِعلام — `OnInitializedAsync` أَدناه.
+    string Name = "";
+    string Phone = "";
+    string Addr = "";
+    string Pay = CheckoutPayMethods.Card;
 
     /// <summary>رَمزُ الرَفضِ المُعادُ مِن النُقطَة — <b>يُقرَأُ ولا
     /// يُبتلَع</b>. نَفسُ شَكلِ <c>Plans.razor.Err</c>.</summary>
@@ -280,8 +285,13 @@
     {
         if (HttpCtx.HttpContext is { } ctx) { Auth.SetTenant(Slug); Auth.Load(ctx, Slug); }
         if (!Auth.IsAuthenticated) return;
-        if (Step < 1 || Step > 3) Step = 1;
         cart = await Accounts.CartAsync(Slug, Auth.UserId!.Value);
+        Step = CheckoutDetails.VisibleStep(Step, cart);
+        if (cart?.Checkout is { } saved)
+        {
+            (Name, Phone, Addr) = (saved.RecipientName, saved.Phone, saved.Address);
+            if (saved.Pay.Length > 0) Pay = saved.Pay;
+        }
         var tenant = await Tenants.FindAsync(Slug);
         Facts = await Gateway.CardFactsAsync(Slug, tenant?.PaymentProviderConfigured ?? false, PaymentChargeSurface.CanCharge(Payments), cart,
             MarketplaceTemplateExtensions.PatternFromTenant(tenant));

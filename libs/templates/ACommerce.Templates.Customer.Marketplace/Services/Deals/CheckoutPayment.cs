@@ -249,10 +249,11 @@ public static class CheckoutPaymentPolicy
     /// بِأَربَعَةِ مُعامِلاتٍ حِسابٌ يُختَبَر، وجِسمُ النُقطَةِ يَحمِلُ
     /// نِداءً ورَدّاً لا حِساباً — وذاكَ عَقدُ
     /// <c>EndpointBodyBleedTests</c>.</para>
+    ///
+    /// <para><b>‏2026-10-28 (قَرارُ المالِك د60؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: «حامِلاً ما مَلَأَه المُشتَري» أَعلاه لَم يَعُد يَصدُق — ما
+    /// مَلَأَه مَحفوظٌ في سَلَّتِه (<c>Cart.Checkout</c>، <see cref="CheckoutDetails"/>)، فَالمَسارُ رَقمُ الخُطوَةِ ورَمزُ الرَفضِ وَحدَهُما، ولا اسمَ
+    /// ولا جَوّالَ ولا عُنوانَ في رابِط (CWE-598). كانَت تَأخُذُ الثَلاثَةَ وتُعيدُها في الاستِعلام (تَوصيفُه <c>bddc7ae</c>).</para>
     /// </summary>
-    public static string RefusalPath(string refusal, string name, string phone, string addr)
-        => $"checkout?step=2&err={Uri.EscapeDataString(refusal)}"
-         + $"&name={Uri.EscapeDataString(name)}"
-         + $"&phone={Uri.EscapeDataString(phone)}"
-         + $"&addr={Uri.EscapeDataString(addr)}";
+    public static string RefusalPath(string refusal)
+        => $"checkout?step=2&err={Uri.EscapeDataString(refusal)}";
 }

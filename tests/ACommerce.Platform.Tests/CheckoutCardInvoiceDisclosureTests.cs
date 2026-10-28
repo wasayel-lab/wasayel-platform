@@ -55,7 +55,8 @@ public class CheckoutCardInvoiceDisclosureTests(ITestOutputHelper output)
                 cart.Items.Add(new CartItem { ListingId = new Guid($"00000000-0000-0000-0000-00000000000{i + 1}"), Title = $"سِلعَة {i + 1}", UnitPriceSar = 50m, Quantity = 1 });
             Set("cart", cart);
             Set("Facts", ProbeFacts!);
-            Step = 2; Name = "SAMPLE"; Phone = "0512345678"; Addr = "SAMPLE-ADDRESS";
+            // ‏2026-10-28 (د60): الثَلاثَةُ حُقولٌ خاصَّةٌ تُقرَأُ مِن السَلَّة لا مُعامِلاتُ استِعلام — فَتُضبَطُ كَالسَلَّةِ والحَقائِق.
+            Step = 2; Set("Name", "SAMPLE"); Set("Phone", "0512345678"); Set("Addr", "SAMPLE-ADDRESS");
             return Task.CompletedTask;
         }
 
@@ -149,8 +150,18 @@ public class CheckoutCardInvoiceDisclosureTests(ITestOutputHelper output)
         Assert.True(html.IndexOf(PerItemNote, StringComparison.Ordinal) < html.IndexOf(element, StringComparison.Ordinal), "الجُملَةُ قَبلَ الإفصاحِ النَقدِيّ.");
 
         var before = html.Replace(element, "", StringComparison.Ordinal);
-        Assert.Equal(4621, before.Length);
-        Assert.Equal("445BCC8DE5E35237", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(before)))[..16]);
+        // ‏2026-10-28 (قَرارُ المالِك د60؛ يُلحَقُ والبَصمَةُ القَديمَةُ بِحَرفِها): الخُطوَةُ ٢ تُرسِلُ بِـPOST إلى بابِ البَيانات و«رُجوع» رَقمُ الخُطوَة —
+        // مَقطَعانِ وَحدَهُما تَبَدَّلا (مَقيسٌ بِتَصييرِ شَجَرَةِ `bddc7ae` والرَأس)، فَإعادَتُهُما تُعيدُ صَفحَةَ «اليَوم» بايتاً: 4621 حَرفاً بِبَصمَتِها.
+        const string ind = "\n                ";
+        var today = before
+            .Replace("<form method=\"post\" action=\"/theme-demo/checkout/details\"><input type=\"hidden\" name=\"from\" value=\"2\" />",
+                     "<form method=\"get\" action=\"/theme-demo/checkout\"><input type=\"hidden\" name=\"step\" value=\"3\">" + ind
+                     + "<input type=\"hidden\" name=\"name\" value=\"SAMPLE\" />" + ind + "<input type=\"hidden\" name=\"phone\" value=\"0512345678\" />" + ind
+                     + "<input type=\"hidden\" name=\"addr\" value=\"SAMPLE-ADDRESS\" />", StringComparison.Ordinal)
+            .Replace("href=\"/theme-demo/checkout\"", "href=\"/theme-demo/checkout?step=1&amp;name=SAMPLE&amp;phone=0512345678&amp;addr=SAMPLE-ADDRESS\"", StringComparison.Ordinal);
+        Assert.Equal((4350, "3968233D84D3688E"), (before.Length, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(before)))[..16]));
+        Assert.Equal(4621, today.Length);
+        Assert.Equal("445BCC8DE5E35237", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(today)))[..16]);
 
         var bare = AccountDeletionRetentionTests.Bare(note);
         foreach (var said in new[] { "بالبطاقة", "فاتورة واحدة", "بوابة المتجر", "لا يلغى طلب منها وحده قبل دفعها" })

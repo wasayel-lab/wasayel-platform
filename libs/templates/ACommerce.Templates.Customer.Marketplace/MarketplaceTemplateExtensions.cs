@@ -854,6 +854,8 @@ public static class MarketplaceTemplateExtensions
             var now = DateTime.UtcNow;
             ACommerce.Kit.Auth.AccountDeletion.Erase(user!, now);
             session.Store(user!);
+            // ‏(د60) والسَلَّةُ تَحمِلُ اسمَه وجَوّالَه وعُنوانَه مِن خُطُواتِ الإتمام — تُحذَفُ مَعَه.
+            session.Delete<ACommerce.Kit.Cart.Cart>(userId);
             // ‏(د56) مَفاتيحُ الرَبطِ بِاسمِه تُبطَلُ في المُعامَلَةِ نَفسِها — لا يَبقى مِفتاحٌ يَتَكَلَّمُ بِاسمِ حِسابٍ مَحذوف.
             await Services.Api.ApiKeyService.RevokeActorKeysAsync(session, slug, userId, now);
             await session.SaveChangesAsync();
@@ -3031,6 +3033,24 @@ public static class MarketplaceTemplateExtensions
         }).DisableAntiforgery()
           .RequireStoreWritable();
 
+        // POST /{slug}/checkout/details — خُطوَتا الإتمامِ الأولى والثانِيَة (‏2026-10-28، قَرارُ المالِك د60 «ب»؛ OWASP وCWE-598): كانَتا
+        // `method="get"` فَالاسمُ والجَوّالُ والعُنوانُ في رابِطِ الصَفحَة (تَوصيفُه `bddc7ae`). صارَتا تُرسِلانِ هُنا فَتُحفَظُ في السَلَّة
+        // (`Cart.Checkout`) ويَمضي الرابِطُ بِرَقمِ الخُطوَةِ وَحدَه؛ والقَرارُ — ما يُقبَلُ وإلى أَينَ — في `CheckoutDetails.Apply` النَقِيَّة.
+        app.MapPost("/{slug}/checkout/details", async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
+            var (userId, _, _) = parsed.Value;
+            await using var s = store.LightweightSession(slug);
+            var cart = await s.LoadAsync<ACommerce.Kit.Cart.Cart>(userId);
+            if (cart is null || cart.Items.Count == 0) return Results.Redirect(Link(req, slug, "cart"));
+            var next = Services.Deals.CheckoutDetails.Apply(cart, req.Form);
+            s.Store(cart);
+            await s.SaveChangesAsync();
+            return Results.Redirect(Link(req, slug, Services.Deals.CheckoutDetails.StepPath(next)));
+        }).DisableAntiforgery().RequireFormBody()
+          .RequireStoreWritable();
+
         // POST /{slug}/checkout/submit — تَحويل السَّلَّة إلى صَفقَة + إفراغ.
         // كُلّ بَند في السَّلَّة → Deal مُنفَصِل (لِأَنّ الـ Deal فيه الإعلان
         // وكُلّ بَند قَد يَكون مالِكُه مُختَلِف). تَدخُلُ الصَفقَةُ بِمَرحَلَة **Offered**
@@ -3059,7 +3079,7 @@ public static class MarketplaceTemplateExtensions
             if (cart is null || cart.Items.Count == 0) return Results.Redirect(Link(req, slug, "cart"));
             // مُراجَعَةُ السَلَّة (‏2026-10-24؛ ADR-032 §٨‑ح‑١).
             if (await Services.Deals.CheckoutCart.RefreshAsync(s, cart)) return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
-                .RefusalPath(Services.Deals.CheckoutCart.Changed, name, phone, addr)));
+                .RefusalPath(Services.Deals.CheckoutCart.Changed)));
 
             var tenant = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
 
@@ -3085,7 +3105,7 @@ public static class MarketplaceTemplateExtensions
             var (payMethod, payRefusal) = Services.Deals.CheckoutPaymentPolicy.Decide(pay, card.Collects, card.ChargerCanCharge);
             if (payRefusal is not null)
                 return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
-                    .RefusalPath(card.GatewayRefusal ?? payRefusal, name, phone, addr)));
+                    .RefusalPath(card.GatewayRefusal ?? payRefusal)));
 
             // ─── بَوّابَةُ المَتجَر (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12) ─────────────────────────────
             // البِطاقَةُ في مَتجَرٍ يَفُكُّ مِفتاحَ بَوّابَتِه تُدفَعُ عَلى صَفحَتِها المُستَضافَةِ بَعدَ أَن تولَدَ الصَفَقات: فاتورَةٌ واحِدَةٌ
@@ -3210,7 +3230,7 @@ public static class MarketplaceTemplateExtensions
             // والسَلَّةُ تَبقى — بِنُسخَةٍ جَديدَة (‏2026-10-24، ‏ADR-036 §١٤): صَفَقاتُ هذِه المُحاوَلَةِ أُلغِيَت بِمُعَرِّفاتِ نُسخَتِها، فَإعادَةُ المُشتَري تَلِدُ بِغَيرِها.
             if (opened is { Ok: false }) { cart.UpdatedAt = DateTime.UtcNow; s.Store(cart); await s.SaveChangesAsync(); }
             if (opened is { Ok: false }) return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
-                .RefusalPath(Services.Deals.CheckoutPayMethods.GatewayOpenFailed, name, phone, addr)));
+                .RefusalPath(Services.Deals.CheckoutPayMethods.GatewayOpenFailed)));
 
             s.Delete<ACommerce.Kit.Cart.Cart>(userId);
             await s.SaveChangesAsync();

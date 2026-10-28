@@ -169,6 +169,9 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         Unwritten,
         /// <summary>اسمُ شَيءٍ لا شَخص.</summary>
         NotAPerson,
+        /// <summary>‏(2026-10-28، قَرارُ المالِك د60) في وَثيقَةٍ تَحذِفُها نُقطَةُ الحَذفِ نَفسُها في مُعامَلَتِها — سَلَّةُ المُشتَري بِما كَتَبَه في خُطُواتِ
+        /// الإتمام (<c>Cart.Checkout</c>). لا تَبقى بَعدَ الحَذفِ فَلا تَحتاجُ إفصاحاً؛ وحَذفُها مَقيسٌ في <c>CheckoutDetailsInUrlTests</c>.</summary>
+        DeletedWithAccount,
         // ‏2026-10-28 (قَرارُ المالِك د56): كانَ هُنا `LiveCredential` (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢) — «نُسخَةٌ لا يَمَسُّها الحَذفُ
         // وتَعمَل»، وصِنفُها الوَحيدُ `ApiKeyDocument.ActorName`. والحَذفُ صارَ يُبطِلُ المِفتاح، فَصارَ الاسمُ نُسخَةً ساكِنَةً (`Copy`) ولا صِنفَ
         // يَبقى عَلَيه — والمَعجَمُ لا يَحمِلُ قيمَةً بِلا مُستَهلِك (القاعِدَة ١). ويَومَ يُوجَدُ اعتِمادٌ حَيٌّ آخَرُ بِاسمِ شَخصٍ يَعودُ بِصَفِّه.
@@ -203,6 +206,7 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         ["TicketReplied.AuthorName"]     = new(NameKind.Copy, Disclosure.Records, "حَدَثُ الرَدِّ في مَجرى الأَحداث — كَسابِقِه."),
         ["AuditEntry.ActorName"]         = new(NameKind.Copy, Disclosure.StoreRecords, "سِجِلُّ تَدقيقِ المَتجَر: البائِعُ عِندَ رَبطِ الشَحن، وفَريقُ الإدارَةِ عِندَ تَغييرِ الإعدادات."),
         ["ApiKeyDocument.ActorName"]     = new(NameKind.Copy, Disclosure.StoreRecords, "الفاعِلُ الَّذي يُصدِرُ لَه صاحِبُ المَتجَرِ مِفتاحَ رَبط — يُبطَلُ المِفتاحُ بِحَذفِ حِسابِه (د56) ويَبقى اسمُه عَلى الوَثيقَةِ المُبطَلَة."),
+        ["CartCheckout.RecipientName"]   = new(NameKind.DeletedWithAccount, Disclosure.None, "اسمُ المُستَلِمِ كَما كُتِبَ في خُطوَةِ العُنوان — في السَلَّةِ الَّتي تَحذِفُها نُقطَةُ الحَذف (د60)."),
         ["User.FullName"]                = new(NameKind.Erased, Disclosure.None, "الوَثيقَةُ الَّتي يَمحوها `Erase` (الصَفّ ١)."),
         ["StudioUser.FullName"]          = new(NameKind.StudioAccount, Disclosure.None, "حِسابُ الاستوديو — لا بابَ لِحَذفِه (الصَفّ ٤)."),
         ["IncubatorSession.OwnerName"]   = new(NameKind.StudioAccount, Disclosure.None, "جَلسَةُ تَحليلِ الاستوديو لِصاحِبِها."),

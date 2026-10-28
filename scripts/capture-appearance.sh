@@ -434,10 +434,15 @@ GUARDED_PAGES=(
   # واحِدَة (`?step=`)، والثالِثَةُ فَرعان بِـ`pay`. وقيَمُ النَموذَج
   # في العُنوان **لاتينِيَّةٌ مُعَلَّمَةٌ عَيِّنَةً** لِأَنَّها تُطبَع في
   # الصَفحَة فَتَدخُل بايتات الأَساس.
+  #
+  # ‏2026-10-28 (قَرارُ المالِك د60؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): «قيَمُ النَموذَجِ في العُنوان» أَعلاه لَم تَعُد — الخُطوَتانِ ١ و٢ تُرسِلانِ بِـPOST
+  # إلى `/{slug}/checkout/details` فَتُحفَظُ البَياناتُ في السَلَّة، والصَفحَةُ تَقرَؤُها مِنها. فَلِكُلِّ صَفحَةٍ مِن الأَربَعِ تَحضيرٌ في `PREP` أَدناه
+  # يُرسِلُ القيَمَ نَفسَها قَبلَ الالتِقاط — وهو **الكِتابَةُ الوَحيدَةُ لِلأَداة**: بَياناتُ إتمامِ سَلَّةِ العَيِّنَة لِمِلَفّ `member`، بِقيَمٍ لاتينِيَّةٍ
+  # مُعَلَّمَة. والخُطوَةُ ١ تُحَضَّرُ أَيضاً فَلا تَرى ما تَرَكَه التِقاطٌ سابِق: تُرسَمُ بِالقيَمِ المَحفوظَة، حَتمِيَّةً بَينَ جَولَةٍ وأُخرى.
   "member-checkout:member:/{member}/checkout"
-  "member-checkout-pay:member:/{member}/checkout?step=2&name=SAMPLE&phone=0512345678&addr=SAMPLE-ADDRESS"
-  "member-checkout-confirm-cash:member:/{member}/checkout?step=3&name=SAMPLE&phone=0512345678&addr=SAMPLE-ADDRESS&pay=cash"
-  "member-checkout-confirm-card:member:/{member}/checkout?step=3&name=SAMPLE&phone=0512345678&addr=SAMPLE-ADDRESS&pay=card"
+  "member-checkout-pay:member:/{member}/checkout?step=2"
+  "member-checkout-confirm-cash:member:/{member}/checkout?step=3"
+  "member-checkout-confirm-card:member:/{member}/checkout?step=3"
   # وفَرعُ «السَّلَّة فارِغَة» لا يَضيع: `member2` بِلا سَلَّة.
   "member2-checkout-empty:member2:/{member}/checkout"
   "member-cart:member:/{member}/cart"
@@ -694,6 +699,14 @@ done
 # هاتِف خاطِئ) وإمّا أَنّ الصَفحَة **لَيسَت مَحروسَة أَصلاً** فَمَكانُها
 # `PAGES`. وكِلتا الحالَتَين خَطَأ يَجِب أَن يُصرَخ بِه لا أَن يُكتَب
 # مِلَفَّ أَساس.
+# ── تَحضيرُ الحالَةِ قَبلَ صَفحَة (‏2026-10-28، د60) — `POST مَسار|بَيانات` يُرسَلُ بِجَرَّةِ المِلَفّ ويُشتَرَطُ ‏302 ──────────────
+declare -A PREP=(
+  [member-checkout]="/{member}/checkout/details|from=1&name=SAMPLE&phone=0512345678&addr=SAMPLE-ADDRESS"
+  [member-checkout-pay]="/{member}/checkout/details|from=1&name=SAMPLE&phone=0512345678&addr=SAMPLE-ADDRESS"
+  [member-checkout-confirm-cash]="/{member}/checkout/details|from=2&pay=cash"
+  [member-checkout-confirm-card]="/{member}/checkout/details|from=2&pay=card"
+)
+
 guarded_ok=0
 guarded_skipped=0
 for entry in "${GUARDED_PAGES[@]}"; do
@@ -711,6 +724,14 @@ for entry in "${GUARDED_PAGES[@]}"; do
     continue
   fi
 
+  if [ -n "${PREP[$name]:-}" ]; then
+    prep_path="${PREP[$name]%%|*}"; prep_path="${prep_path//\{member\}/$MEMBER_TENANT}"
+    prep_code=$(curl -s -b "$jar" -o /dev/null -w '%{http_code}' -X POST --data "${PREP[$name]#*|}" "$BASE_URL$prep_path")
+    if [ "$prep_code" != "302" ]; then
+      echo "✗ تَحضيرُ $name ($prep_path) أَعطى $prep_code — الالتِقاط مُتَوَقِّف." >&2
+      exit 1
+    fi
+  fi
   code=$(curl -s -b "$jar" -o "$OUT_DIR/$name.raw" -w '%{http_code}' "$BASE_URL$path")
   if [ "$code" != "200" ]; then
     echo "✗ $path ($profile) أَعطى $code — الالتِقاط مُتَوَقِّف." >&2

@@ -106,7 +106,8 @@ public class CheckoutCardCartTests(ITestOutputHelper output)
             Path.Combine(new[] { ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace" }.Concat(parts).ToArray()))));
         var host = Code("MarketplaceTemplateExtensions.cs");
         Assert.Contains("ACommerce.Kit.Payments.PaymentChargeSurface.CanCharge(payments), cart, pattern);", host, StringComparison.Ordinal);
-        Assert.Contains(".RefusalPath(card.GatewayRefusal ?? payRefusal, name, phone, addr)));", host, StringComparison.Ordinal);
+        // ‏2026-10-28 (د60): المَسارُ بِرَمزِه وَحدَه — بَياناتُ المُشتَري في سَلَّتِه لا في الرابِط.
+        Assert.Contains(".RefusalPath(card.GatewayRefusal ?? payRefusal)));", host, StringComparison.Ordinal);
         var cartLoad = host.IndexOf("var cart = await s.LoadAsync<ACommerce.Kit.Cart.Cart>(userId);", StringComparison.Ordinal);
         var facts = host.IndexOf("var card = await gateway.CardFactsAsync(slug,", StringComparison.Ordinal);
         var birth = host.IndexOf("var deal = await deals.StartAsync(slug, pattern,", StringComparison.Ordinal);

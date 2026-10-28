@@ -446,7 +446,7 @@ public class GatewayPaymentConfirmTests(ITestOutputHelper output)
         var guard   = At("if (!viaGateway)");
         var hold    = At("var pr = await payments.AuthorizeAsync(new(");
         var open    = At("var opened = viaGateway && created.Count > 0 ? await gateway.OpenInvoiceAsync(");
-        var refuse  = At(".RefusalPath(Services.Deals.CheckoutPayMethods.GatewayOpenFailed, name, phone, addr)));");
+        var refuse  = At(".RefusalPath(Services.Deals.CheckoutPayMethods.GatewayOpenFailed)));");   // ‏2026-10-28 (د60): بِرَمزِه وَحدَه
         var delete  = At("s.Delete<ACommerce.Kit.Cart.Cart>(userId);");
         var leave   = At("return Results.Redirect(opened?.Url ?? Link(req, slug, firstDealId == Guid.Empty ? \"deals\" : $\"deals/{firstDealId}\"));");
         Assert.True(ask < loop && loop < guard && guard < hold && hold < open && open < refuse && refuse < delete && delete < leave,

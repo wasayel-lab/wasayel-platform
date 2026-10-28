@@ -29,10 +29,10 @@ public class LoginRedirectSubjectTests(ITestOutputHelper output)
     internal const string SubjectInQuery = @"[?&](?:phone|email|nid|\{field\})=\{Uri\.EscapeDataString\(";
 
     /// <summary>خارِجَ الدُخول — مُثَبَّتٌ بِاسمِه وعَدَدِه، لا يَنمو بِصَمت.</summary>
+    // ‏2026-10-28 (قَرارُ المالِك د60): صِفرٌ — كانَ `CheckoutPayment.cs` = 1 (`RefusalPath`) و`CheckoutPage.razor` = 1 (رابِطُ «رُجوع»)؛ صارَت بَياناتُ
+    // المُشتَري في سَلَّتِه (`CheckoutDetails`) والرابِطانِ رَقمَ الخُطوَةِ وَحدَه، فَالقاموسُ فارِغٌ ولا يَنمو بِلا سَطرٍ مُسَمّى.
     internal static readonly IReadOnlyDictionary<string, int> PinnedOutsideLogin = new Dictionary<string, int>(StringComparer.Ordinal)
     {
-        ["CheckoutPayment.cs"] = 1,
-        ["CheckoutPage.razor"] = 1,
     };
 
     internal static Dictionary<string, int> SitesByFile()
