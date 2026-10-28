@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using ACommerce.Kit.Auth;
@@ -179,9 +178,9 @@ public class PushSubscriptionDoorTests(ITestOutputHelper output)
     [Fact]
     public void The_users_list_keeps_the_newest_ten_and_a_resubscribe_replaces_its_own_row()
     {
-        // العَدَدُ حِصَّةُ السّاعَةِ في عُدَّةِ الدُخولِ نَفسُها — لا رَقَمٌ جَديد («ب» W8-2).
-        var hourly = (int)typeof(AuthHandlers).GetField("MaxRequestPerHour", BindingFlags.NonPublic | BindingFlags.Static)!.GetRawConstantValue()!;
-        Assert.Equal(hourly, PushSubscriptionDoor.MaxPerUser);
+        // ‏(‏2026-10-28، قَرارُ المالِك د59 «أ»): عَشرَةٌ رَقَمٌ مُستَقِلّ — حَدُّ أَمانٍ تِقنِيٌّ لِلأَجهِزَة لا يَتبَعُ حِصَّةَ رَسائِلِ الدُخول. كانَ هُنا سَطرُ
+        // ‏مُساواةٍ بِـ<c>AuthHandlers.MaxRequestPerHour</c> بِالانعِكاس («ب» W8-2)، فَمَن غَيَّرَ تِلكَ الحِصَّةَ لِسَبَبٍ أَمنِيٍّ اضطُرَّ إلى تَغييرِ هذِه أَو احمَرَّ الصَفّ.
+        Assert.Equal(10, PushSubscriptionDoor.MaxPerUser);
 
         static ACommerce.Kit.Auth.PushSubscription Row(int i, int minute) =>
             new() { Endpoint = $"https://fcm.googleapis.com/fcm/send/{i}", CreatedAt = DateTime.UnixEpoch.AddMinutes(minute) };
