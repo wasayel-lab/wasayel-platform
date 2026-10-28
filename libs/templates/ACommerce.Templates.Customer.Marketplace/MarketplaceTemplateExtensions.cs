@@ -2632,6 +2632,19 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect("/admin/agent");
         }).DisableAntiforgery();
 
+        // ─── Admin: عُنوانُ الزائِرِ كَما يَراه الخادِم — قِياسٌ مُؤَقَّت (‏2026-10-28، قَرارُ المالِك د57 «ب») ──────────
+        // قِراءَةٌ خالِصَة لِمُشرِفِ المَنَصَّةِ وَحدَه: هَل يُلحِقُ الـSpace عُنوانَ الزائِرِ الحَقيقيَّ أَم يُمَرِّرُ رَأسَه؟ — شَرطُ حَدِّ العُنوانِ
+        // وشَرطُ حَذفِ هذِه النُقطَةِ في `Services.ClientAddressProbe`. ولا يُخَزَّنُ الجَوابُ في وَسيطٍ (`no-store`). والحارِسُ نُسخَةُ الحَقنِ مِن
+        // `PlatformAdminGuard` (قَرارُ `RequirePlatformAdmin` بِعَينِه) — فَلا تَأخُذُ النُقطَةُ `IDocumentStore` (‏`EndpointStoreInjectionTests`).
+        app.MapGet("/admin/diagnostics/client-address",
+            async (HttpRequest req, HttpResponse res, Services.PlatformAdminGuard admin) =>
+        {
+            if (!(await admin.EvaluateAsync()).Allowed)
+                return Forbidden();
+            res.Headers.CacheControl = "no-store";
+            return Results.Json(Services.ClientAddressProbe.Of(req));
+        });
+
         // ─── Studio — مُصادَقَة وهميَّة + بَدء مِن صَفحَة الهبوط ──────────
         // صَفحَة الهبوط تُرسِل المُطالَبَة هُنا؛ نَحفَظها في cookie مُؤَقَّت
         // ثُمَّ نُحَوِّل لِلدُخول. بَعد الدُخول الناجِح نُنشِئ جَلسَة تَحليل
