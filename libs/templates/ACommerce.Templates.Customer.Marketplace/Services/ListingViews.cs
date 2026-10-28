@@ -1,5 +1,6 @@
 using ACommerce.Kit.Auth.Server;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services;
 
@@ -15,6 +16,11 @@ namespace ACommerce.Templates.Customer.Marketplace.Services;
 /// الزائِرِ أَم يُصَدِّقُ رَأسَه غَيرُ مَقيس («ب» W8-2).</para>
 ///
 /// <para><b>شَرطُ الاستِخراجِ إلى ما هُوَ أَعَمّ</b> (القاعِدَة ١): مُستَهلِكٌ ثانٍ في وَقتِ التَشغيلِ يَعُدُّ أَثَرَ قِراءَةٍ بِحَدّ — اليَومَ نُقطَةٌ واحِدَة.</para>
+///
+/// <para><b>‏(‏2026-10-28، قَرارُ المالِك د58؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: «كَم زائِراً في السّاعَة» أَعلاه صارَ <b>«كَم زائِراً في اليَوم»</b>
+/// (‏<c>AuthHandlers.ViewWindow</c>)، ولِلعَدّادِ في الذاكِرَةِ سَقفُ مَفاتيح (‏<c>AuthHandlers.MaxViewKeys</c>): مُمتَلِئٌ بَعدَ كَنسِ المُنتَهي ⇒ لا تُعَدُّ
+/// المُشاهَدَةُ الجَديدَة، والنُقطَةُ تُجيبُ ‏204 كَما تُجيبُ المُكَرَّرَة، وسَطرُ تَحذيرٍ في السِجِلّ. وأَرقامُ المُشاهَداتِ المُسَجَّلَةُ لا تُمَسّ — طَريقَةُ
+/// العَدِّ وَحدَها تَتَغَيَّرُ مِن يَومِ النَشر.</para>
 /// </summary>
 public static class ListingViews
 {
@@ -31,7 +37,15 @@ public static class ListingViews
             ? $"{slug}|view:{listingId:N}|u:{u:N}"
             : $"{slug}|view:{listingId:N}|ip:{(string.IsNullOrWhiteSpace(clientIp) ? "-" : clientIp.Trim())}";
 
-    /// <summary>أَتُعَدُّ هذِه المُشاهَدَة؟ الأُولى في النافِذَةِ نَعَم وما بَعدَها لا — الحِصَّةُ في <see cref="AuthHandlers.TryConsumeViewQuota"/>.</summary>
-    public static bool Counts(string slug, Guid listingId, Guid? viewerId, string? clientIp)
-        => AuthHandlers.TryConsumeViewQuota(QuotaKey(slug, listingId, viewerId, clientIp));
+    /// <summary>أَتُعَدُّ هذِه المُشاهَدَة؟ الأُولى في النافِذَةِ نَعَم وما بَعدَها لا — الحِصَّةُ في <see cref="AuthHandlers.ConsumeViewQuota"/>. وعَدّادٌ
+    /// كُنِسَ وبَقِيَ مُمتَلِئاً يُكتَبُ لَه تَحذيرٌ في <paramref name="logs"/> (‏2026-10-28، د58) — ولا يَرى الزائِرُ شَيئاً.</summary>
+    public static bool Counts(string slug, Guid listingId, Guid? viewerId, string? clientIp, ILoggerFactory? logs = null)
+    {
+        var outcome = AuthHandlers.ConsumeViewQuota(QuotaKey(slug, listingId, viewerId, clientIp));
+        if (outcome == AuthHandlers.ViewCount.FullAfterSweep)
+            logs?.CreateLogger("ACommerce.ListingViews").LogWarning(
+                "[views] counter full ({Max} keys after sweeping expired ones) — new views are not counted until a key expires",
+                AuthHandlers.MaxViewKeys);
+        return outcome == AuthHandlers.ViewCount.Counted;
+    }
 }

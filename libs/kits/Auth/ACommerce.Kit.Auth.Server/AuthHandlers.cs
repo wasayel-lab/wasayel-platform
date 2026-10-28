@@ -69,17 +69,74 @@ public static class AuthHandlers
     public static bool TryConsumeVerifyQuota(string key)
         => TryConsume(_verifyRl, key, MaxVerifyPerMinute, TimeSpan.FromMinutes(1));
 
-    private static readonly ConcurrentDictionary<string, RateBucket> _viewRl = new();
-
     /// <summary>
     /// <para><b>مُشاهَدَةٌ واحِدَةٌ تُعَدُّ لِكُلِّ مِفتاحٍ في السّاعَة</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-security-5): نُقطَةُ
     /// <c>/{slug}/listings/{id}/view</c> عامَّةٌ بِالتَصميمِ (مُشاهَدَةُ الزائِرِ أَغلَبُ المُشاهَدات) وكانَت تُلحِقُ حَدَثاً بِكُلِّ طَلَبٍ بِلا حَدّ —
     /// وكُلُّ حَدَثٍ يُبطِّئُ كُلَّ عَرضٍ لاحِقٍ يُعيدُ بِناءَ الإعلانِ مِن أَحداثِه. **الحَدُّ «واحِدَة» والنافِذَةُ ساعَةُ حِصَّةِ الإرسالِ نَفسُها** — لا
     /// رَقَمَ جَديد؛ وطولُها رَقَمُ المالِك يُبَدِّلُه هُنا («ب» W8-2). والمِفتاحُ يَبنيه القالِب (<c>ListingViews.QuotaKey</c>): الزائِرُ المُوَثَّقُ
     /// بِهُوِيَّتِه، والمَجهولُ بِعُنوانِه.</para>
+    /// <para><b>‏(‏2026-10-28، قَرارُ المالِك د58؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) النافِذَةُ يَومٌ والمَفاتيحُ بِسَقف</b>: «ساعَة» أَعلاه صارَت
+    /// <see cref="ViewWindow"/> (‏٢٤ ساعَة — «زائِرٌ فَريدٌ في اليَوم» كَما يَفهَمُه صاحِبُ الإعلانِ مِن كَلِمَةِ «مُشاهَدَة»)؛ ولِأَنَّ اليَومَ يُبقي المَفاتيحَ
+    /// أَطوَلَ ‏٢٤ مَرَّة صارَ لِعَدَدِها سَقفٌ تِقنِيّ <see cref="MaxViewKeys"/> (‏<see cref="OncePerWindow"/>): يُكنَسُ المُنتَهي فَوراً عِندَ بُلوغِه، فَإن بَقِيَ
+    /// مُمتَلِئاً لا تُعَدُّ المُشاهَدَةُ الجَديدَة — ولا خَطَأَ يَراه الزائِر — ويَكتُبُ القالِبُ تَحذيراً في السِجِلّ (<c>ListingViews.Counts</c>). والحِصَّةُ
+    /// قَبلَ قِراءَةِ الإعلانِ كَما كانَت. وتَوصيفُ ما قَبلَه <c>cf37171</c>.</para>
     /// </summary>
-    public static bool TryConsumeViewQuota(string key)
-        => TryConsume(_viewRl, key, 1, TimeSpan.FromHours(1));
+    public static ViewCount ConsumeViewQuota(string key) => _views.Consume(key, DateTime.UtcNow);
+
+    /// <summary>نافِذَةُ المُشاهَدَة — يَومٌ (قَرارُ المالِك د58 «ب»).</summary>
+    public static readonly TimeSpan ViewWindow = TimeSpan.FromHours(24);
+
+    /// <summary>سَقفُ مَفاتيحِ عَدّادِ المُشاهَدَةِ في الذاكِرَة — مِئَةُ أَلف (قَرارُ المالِك د58 «أ، مَعَ ج»): عَشَراتُ الميغابايتاتِ عَلى الأَكثَر.</summary>
+    public const int MaxViewKeys = 100_000;
+
+    private static readonly OncePerWindow _views = new(ViewWindow, MaxViewKeys);
+
+    /// <summary>جَوابُ حِصَّةِ المُشاهَدَة: <c>Counted</c> تُعَدّ؛ <c>Repeat</c> عُدَّت لِلمِفتاحِ في النافِذَة؛ <c>Full</c> العَدّادُ مُمتَلِئٌ ولا مُنتَهِيَ يُكنَس
+    /// قَبلَ أَقرَبِ انقِضاء؛ <c>FullAfterSweep</c> كُنِسَ الآنَ وبَقِيَ مُمتَلِئاً — وهُوَ وَحدَه ما يُكتَبُ لَه تَحذير، فَلا يَفيضُ السِجِلُّ بِسَطرٍ لِكُلِّ طَلَب.</summary>
+    public enum ViewCount { Counted, Repeat, Full, FullAfterSweep }
+
+    /// <summary>
+    /// <para><b>«مَرَّةٌ لِكُلِّ مِفتاحٍ في النافِذَة» بِسَقفٍ لِعَدَدِ المَفاتيح</b> (‏2026-10-28، قَرارُ المالِك د58) — عَدّادُ المُشاهَدَةِ وَحدَه
+    /// (‏<see cref="ConsumeViewQuota"/>)، بِآلِيَّةِ <see cref="TryConsume"/> نَفسِها. والساعَةُ مُعطاةٌ لا مَقروءَة فَيُقاسُ الكَنسُ بِلا انتِظار.</para>
+    /// <para><b>والكَنسُ عِندَ الامتِلاءِ لا يَتَكَرَّرُ قَبلَ أَقرَبِ انقِضاء</b>: كَنسٌ لا يَجِدُ مُنتَهِياً يَحفَظُ أَقرَبَ <c>ResetAt</c> باقٍ، ولا يُعادُ المَسحُ
+    /// (‏<c>O(MaxViewKeys)</c>) قَبلَه — فَلا يَصيرُ كُلُّ طَلَبٍ جَديدٍ تَحتَ الامتِلاءِ مَسحاً كامِلاً. لا رَقَمَ جَديد: الحَدُّ يُشتَقُّ مِن المَفاتيحِ نَفسِها.</para>
+    /// <para><b>شَرطُ الاستِخراجِ (القاعِدَة ١)</b>: حِصَّةٌ ثانِيَةٌ في وَقتِ التَشغيلِ تَحتاجُ سَقفَ مَفاتيح — اليَومَ المُشاهَدَةُ وَحدَها؛ والحِصَصُ الأُخرى
+    /// مَفاتيحُها أَرقامٌ يُحِدُّها سَقفُ المَنَصَّةِ ونافِذَتُها ساعَةٌ أَو دَقيقَة.</para>
+    /// </summary>
+    public sealed class OncePerWindow(TimeSpan window, int maxKeys)
+    {
+        private readonly ConcurrentDictionary<string, RateBucket> _rl = new();
+        private readonly object _sweep = new();
+        private DateTime _nextExpiry = DateTime.MinValue;
+
+        /// <summary>عَدَدُ المَفاتيحِ الآن.</summary>
+        public int Keys => _rl.Count;
+
+        /// <summary>يَعُدُّ المِفتاحَ مَرَّةً في النافِذَة؛ ومِفتاحٌ جَديدٌ والعَدّادُ مُمتَلِئ يُكنَسُ لَه المُنتَهي أَوَّلاً.</summary>
+        public ViewCount Consume(string key, DateTime now)
+        {
+            if (!_rl.ContainsKey(key) && _rl.Count >= maxKeys)
+            {
+                var swept = false;
+                lock (_sweep)
+                {
+                    if (_rl.Count >= maxKeys && now >= _nextExpiry)
+                    {
+                        var next = DateTime.MaxValue;
+                        foreach (var (k, bucket) in _rl)
+                        {
+                            if (bucket.ResetAt < now) _rl.TryRemove(new KeyValuePair<string, RateBucket>(k, bucket));
+                            else if (bucket.ResetAt < next) next = bucket.ResetAt;
+                        }
+                        _nextExpiry = next;
+                        swept = true;
+                    }
+                }
+                if (_rl.Count >= maxKeys) return swept ? ViewCount.FullAfterSweep : ViewCount.Full;
+            }
+            return TryConsume(_rl, key, 1, window, now) ? ViewCount.Counted : ViewCount.Repeat;
+        }
+    }
 
     // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-5) عَدّادٌ انقَضَت نافِذَتُه يُطرَد — مَرَّةً في النافِذَةِ لِكُلِّ قاموس. كانَ كُلُّ مِفتاحٍ يَبقى
     // إلى إعادَةِ التَشغيل، ومِفتاحُ المُشاهَدَةِ لِكُلِّ (زائِرٍ، إعلان). والدَلالَةُ لا تَتَغَيَّر: المُنقَضي يُعامَلُ عَدّاداً جَديداً في الحالَين.
@@ -144,10 +201,11 @@ public static class AuthHandlers
     }
 
     /// <summary>هَل تُسمَح المُحاوَلَة؟ يُحَدِّث العَدّاد ذَرّيّاً.</summary>
+    /// <remarks>‏(‏2026-10-28، د58) <paramref name="at"/> ساعَةُ <see cref="OncePerWindow"/> المُعطاة؛ وبِلاها الآنَ كَما كان.</remarks>
     private static bool TryConsume(ConcurrentDictionary<string, RateBucket> rl,
-        string key, int max, TimeSpan window)
+        string key, int max, TimeSpan window, DateTime? at = null)
     {
-        var now = DateTime.UtcNow;
+        var now = at ?? DateTime.UtcNow;
         SweepExpired(rl, now, window);
         while (true)
         {

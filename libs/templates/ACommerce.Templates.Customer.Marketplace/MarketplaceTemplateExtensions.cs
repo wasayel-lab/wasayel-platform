@@ -566,11 +566,12 @@ public static class MarketplaceTemplateExtensions
         // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-5) **والحَدُّ هُنا الآن، لا الحارِس**: كانَ كُلُّ طَلَبٍ يُلحِقُ حَدَثاً بِلا حَدّ، وكانَ
         // `ResolveToken` في الجِسمِ يَجعَلُ الفاحِصَ يَعُدُّها مَحروسَة. صارَت النِسبَةُ في `ListingViews.ViewerOf`، والنُقطَةُ مُثَبَّتَةً عامَّةً
         // بِسَبَبِها في `WriteEndpointGuardTests.PinnedPublic`، ومُشاهَدَةٌ واحِدَةٌ لِكُلِّ زائِرٍ في الإعلانِ في السّاعَةِ تُعَدُّ قَبلَ أَيِّ قِراءَة.
+        // ‏(‏2026-10-28، قَرارُ المالِك د58) «في السّاعَةِ» صارَ «في اليَوم»، ولِلعَدّادِ سَقفُ مَفاتيح؛ و`logs` لِسَطرِ التَحذيرِ حينَ يَمتَلِئ (`ListingViews.Counts`).
         app.MapPost("/{slug}/listings/{id:guid}/view",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Microsoft.Extensions.Logging.ILoggerFactory logs) =>
         {
             var viewerId = Services.ListingViews.ViewerOf(req, slug);
-            if (!Services.ListingViews.Counts(slug, id, viewerId, req.HttpContext.Connection.RemoteIpAddress?.ToString()))
+            if (!Services.ListingViews.Counts(slug, id, viewerId, req.HttpContext.Connection.RemoteIpAddress?.ToString(), logs))
                 return Results.NoContent();
 
             await using var s = store.LightweightSession(slug);
