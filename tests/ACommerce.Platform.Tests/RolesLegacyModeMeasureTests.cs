@@ -135,6 +135,53 @@ public class RolesLegacyModeMeasureTests(ITestOutputHelper output)
         Assert.Equal(expected, found.Count);
     }
 
+    // ─── تَوصيفُ «اليَوم» قَبلَ قَلبِ الوَضعِ المَوروث (‏2026-10-28، قَرارُ المالِك د62 — القاعِدَة ٣) ──────────────────────────
+    //
+    // ما يَتَغَيَّرُ بِالقَرار مُثَبَّتٌ هُنا بِأَطرافِه الثَلاثَة قَبلَ أَيِّ سَطرِ كود: (١) مَتجَرٌ بِصِفرِ أَدوارٍ يُعطي كُلَّ صَلاحِيَّةٍ في المَعجَمِ
+    // لِأَيِّ دَور — حَتّى الغائِب؛ (٢) فَعُضوٌ بِلا دَورٍ فيه يَعبُرُ بَوّابَةَ إدارَةِ المَتجَر؛ (٣) وحِفظُ اختِيارٍ فارِغٍ في `roles/save` يُحفَظُ صِفرَ
+    // أَدوار. وصُفوفُ `Today_` تُقلَبُ بِأَسمائِها في كوميتِ التَبديل.
+
+    /// <summary>الأَدوارُ المَسؤولُ عَنها في المَصفوفَة — الغائِبُ والفارِغُ ودَورٌ مِن الكاتالوجِ ودَورُ الإدارَةِ ودَورٌ لا وُجودَ لَه.</summary>
+    private static readonly string?[] ProbedRoles = { null, "", "customer", "tenant_admin", "ghost" };
+
+    [Fact]
+    public void Today_a_zero_role_store_grants_every_catalog_permission_to_any_role()
+    {
+        var none = Array.Empty<ACommerce.Kit.Roles.Role>();
+        var cells = ProbedRoles.SelectMany(r => ACommerce.Kit.Roles.PermissionCatalog.All.Select(p => (Role: r, Permission: p))).ToList();
+        var granted = cells.Count(c => ACommerce.Kit.Roles.RolePermissions.Has(none, c.Role, c.Permission));
+        output.WriteLine($"مَتجَرٌ بِصِفرِ أَدوار: {granted} مِن {cells.Count} خانَة (‏{ProbedRoles.Length} دَوراً × {ACommerce.Kit.Roles.PermissionCatalog.All.Count} صَلاحِيّات) تُمنَح");
+        Assert.True(cells.Count >= 40, $"أَداةٌ عَمياء: {cells.Count} خانَة.");
+        Assert.Equal(cells.Count, granted);
+    }
+
+    [Fact]
+    public void Today_a_role_less_member_of_a_zero_role_store_passes_the_tenant_admin_guard()
+    {
+        var tenant = new ACommerce.Kit.Tenants.Tenant { Id = "zero", Name = "صِفر", OwnerUserId = Guid.NewGuid() };
+        var member = new ACommerce.Kit.Auth.User { Id = Guid.NewGuid(), TenantSlug = "zero", ActiveRole = "" };
+        Assert.Empty(tenant.Roles);
+        Assert.True(ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard.HasTenantManage(tenant, member));
+    }
+
+    [Fact]
+    public async Task Today_saving_an_empty_role_selection_saves_zero_roles()
+    {
+        var all = ACommerce.Kit.Roles.RoleCatalog.All;
+        var tenant = new ACommerce.Kit.Tenants.Tenant
+        {
+            Id = "zero", Name = "صِفر",
+            Roles = all.Take(2).Select((t, i) => ACommerce.Kit.Roles.RoleCatalog.InstantiateRole(t, i)).ToList(),
+        };
+        var world = new DocWorld().Put(tenant);
+        var result = await ACommerce.Templates.Customer.Marketplace.Services.TenantConfig.RolesSaveService.SaveAsync(
+            world.Session, "zero", new(Array.Empty<string>(), null));
+        output.WriteLine($"الحِفظُ الفارِغ: {result.Status} · أَدوارُ المَتجَرِ بَعدَه: {world.Read<ACommerce.Kit.Tenants.Tenant>("zero")!.Roles.Count} · كُتِبَت وَثيقَة: {world.Wrote<ACommerce.Kit.Tenants.Tenant>()}");
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.TenantConfig.TenantConfigStatus.Saved, result.Status);
+        Assert.Empty(world.Read<ACommerce.Kit.Tenants.Tenant>("zero")!.Roles);
+        Assert.Equal(1, world.Wrote<ACommerce.Kit.Tenants.Tenant>());
+    }
+
     // ─── سكربتُ القياس ─────────────────────────────────────────────────────────────────────────
 
     private static string ScriptCode()
@@ -164,5 +211,70 @@ public class RolesLegacyModeMeasureTests(ITestOutputHelper output)
         foreach (var piece in new[] { "{legacy}", "{legacyStudio}", "{legacyOwned}", "{legacyMembers}" })
             Assert.Contains(piece, summary, StringComparison.Ordinal);
         Assert.Contains("members = await tq.Query<User>().Where(u => u.DeletedAt == null).CountAsync();", code, StringComparison.Ordinal);
+    }
+}
+
+// ═══ البُرهانُ الحَيّ — عُضوٌ سَجَّلَ نَفسَه في مَتجَرٍ بِصِفرِ أَدوار وبَوّابَةُ إدارَتِه (‏WASAYEL_LIVE_PROOF=1، ‏2026-10-28، قَرارُ المالِك د62) ═══
+//
+// المُعالِجُ نَفسُه الَّذي تُناديه نُقطَةُ `/{slug}/auth/phone/verify` يُنشِئُ الحِسابَ في مُستَأجِرٍ مُؤَقَّتٍ بِلا أَدوار، ورَمزُه في الكوكي
+// الَّذي يَقرَؤُه `AuthSession.ResolveToken`، ثُمَّ البَوّابَةُ الَّتي تَسأَلُها صَفحَةُ `/admin/tenants/{slug}/users` ونِقاطُ الـPOST تَحتَها
+// (`TenantAdminGuard.CanAdministerAsync`) — عَلى Postgres. ويُمسَحُ المُستَأجِرُ وحِساباتُه بَعدَه.
+
+[Collection(LiveProofCollection.Name)]
+public class LiveZeroRoleAdminProofTests(ITestOutputHelper output)
+{
+    private static bool Enabled
+        => LiveDealConcurrencyProofTests.Enabled && !string.IsNullOrEmpty(LiveDealConcurrencyProofTests.ConnectionString);
+
+    /// <summary>عُضوٌ يُسَجِّلُ نَفسَه بِالجَوّالِ في مَتجَرٍ بِلا أَدوار، ثُمَّ جَوابُ بَوّابَةِ الإدارَةِ لِطَلَبٍ يَحمِلُ كوكيَّه — ومالِكُ الاستوديو بِلا جَلسَة.</summary>
+    internal static async Task<(Guid Member, bool Allowed)> SelfRegisteredMemberAsksTheAdminGuardAsync(
+        Marten.IDocumentStore store, string slug, string phone)
+    {
+        await using (var g = store.LightweightSession())
+        {
+            g.Store(new ACommerce.Kit.Tenants.Tenant { Id = slug, Name = "مَتجَرٌ بِلا أَدوار", OwnerUserId = Guid.NewGuid(), AuthChannel = "phone" });
+            await g.SaveChangesAsync();
+        }
+        const string code = "424242";
+        ACommerce.Kit.Auth.Server.AuthHandlers.IssueAttempt(slug, phone, code, ACommerce.Kit.Auth.Server.AuthHandlers.AuthKind.PhoneOtp);
+        var signedIn = await ACommerce.Kit.Auth.Server.AuthHandlers.VerifyPhoneOtpHandler(
+            new ACommerce.Kit.Auth.VerifyPhoneOtp(phone, code), new VendorRegisterBucketTests.ResolvedTenant(slug), store);
+        Assert.NotNull(signedIn);
+
+        var http = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        http.Request.Path = $"/admin/tenants/{slug}/users";
+        http.Request.Headers.Cookie = $".acommerce.auth.{slug}={signedIn!.Token}";
+        var accessor = new Microsoft.AspNetCore.Http.HttpContextAccessor { HttpContext = http };
+        var allowed = await ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard.CanAdministerAsync(
+            store, new ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth(accessor), http.Request, slug);
+        return (signedIn.UserId, allowed);
+    }
+
+    internal static async Task CleanAsync(Marten.IDocumentStore store, string slug)
+    {
+        await using (var s = store.LightweightSession(slug))
+        {
+            foreach (var u in await Marten.QueryableExtensions.ToListAsync(s.Query<ACommerce.Kit.Auth.User>())) s.Delete(u);
+            await s.SaveChangesAsync();
+        }
+        await using var g = store.LightweightSession();
+        g.Delete<ACommerce.Kit.Tenants.Tenant>(slug);
+        await g.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task Today_a_self_registered_member_of_a_zero_role_store_passes_the_admin_guard_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = "zr-zz-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            var (member, allowed) = await SelfRegisteredMemberAsksTheAdminGuardAsync(store, slug, "966500000062");
+            output.WriteLine($"مَتجَرٌ بِصِفرِ أَدوار · عُضوٌ سَجَّلَ نَفسَه ({member:N}) · بَوّابَةُ /admin/tenants/{{slug}}/users: {(allowed ? "تَفتَح" : "تَرُدّ")}");
+            Assert.True(allowed);
+        }
+        finally { await CleanAsync(store, slug); }
     }
 }
