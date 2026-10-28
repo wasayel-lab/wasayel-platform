@@ -35,6 +35,10 @@ public static class AuthHandlers
     // كانَ بِلا حُدود — مُهاجِم يَستَطيع تَجريب ١٠ٰ٠٠٠ OTP في الثانِيَة على
     // نَفس الرَقم. الآن: ٥ مُحاوَلات/دَقيقَة لِكُلّ phone+tenant، و١٠
     // طَلَبات/ساعَة لِلإرسال. الـ counters تُمسَح تِلقائيّاً بَعد النافِذَة.
+    //
+    // ‏**شَرطُ النَقلِ — مَكتوبٌ هُنا بِقَرارِ المالِك د28 (‏2026-10-28)**: العَدّاداتُ في ذاكِرَةِ العَمَلِيَّةِ ما دامَ الموقِعُ يَعمَلُ **بِنُسخَةٍ
+    // واحِدَة** — والمُهاجِمُ لا يَفرِضُ نَشراً يُصَفِّرُها. **ويَومَ يَعمَلُ بِأَكثَرَ مِن نُسخَةٍ تُنقَلُ إلى قاعِدَةِ البَيانات** (عَدّادٌ مُشتَرَكٌ بِمِفتاحِه
+    // ونافِذَتِه)، وإلّا صارَ لِكُلِّ نُسخَةٍ حَدُّها فَيَتَضاعَفُ الحَدُّ بِعَدَدِها. ولا مَخزَنَ مُشتَرَكٌ قَبلَ ذلك (القاعِدَة ١: لا تَجريدَ قَبلَ مُستَهلِكِه).
     private sealed record RateBucket(int Count, DateTime ResetAt);
     private static readonly ConcurrentDictionary<string, RateBucket> _verifyRl = new();
     private static readonly ConcurrentDictionary<string, RateBucket> _requestRl = new();
@@ -465,7 +469,7 @@ public static class AuthHandlers
             session.Store(existing);
             await session.SaveChangesAsync();
         }
-        var token = MakeToken(existing.Id, tenantSlug);
+        var token = MakeToken(existing.Id, tenantSlug, existing.SessionVersion);
         // حَقل العَرض: الهاتِف حَيث وُجِد، وإلّا البَريد — كَي لا تَظهَر
         // بِطاقَة مُستَخدِم بَريديّ بِمُعَرِّف فارِغ في الواجِهَة والإشعارات.
         var display = string.IsNullOrEmpty(existing.Phone) ? existing.Email : existing.Phone;
@@ -498,15 +502,27 @@ public static class AuthHandlers
     /// <c>{userId}|{tenantSlug}|{expiresUnix}</c>. كانَ بِلا تَوقيع — قابِل
     /// لِلتَّزوير. الآن ParseToken يَفحَص التَّوقيع ويَرفُض أَيّ تَعديل.
     /// </summary>
-    public static string MakeToken(Guid userId, string tenantSlug)
+    /// <remarks>‏(‏2026-10-28، قَرارُ المالِك د28 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وإصدارُ الجَلسَة</b>: بِـ<paramref name="sessionVersion"/>
+    /// أَكبَرَ مِن صِفرٍ يَصيرُ الرَمزُ خَمسَةَ حُقول — <c>{userId}|{tenantSlug}|{exp}|{version}|{sig}</c> والتَوقيعُ فَوقَ الأَربَعَةِ الأولى — وبِالصِفرِ
+    /// يَبقى بِشَكلِه القَديمِ حَرفاً. فَرُموزُ اليَومِ (بِلا إصدار) إصدارُها 0، وحِسابٌ لَم يُرفَع إصدارُه لا يَخرُجُ بِالنَشر.</remarks>
+    public static string MakeToken(Guid userId, string tenantSlug, int sessionVersion = 0)
     {
         var exp = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
-        var payload = $"{userId}|{tenantSlug}|{exp}";
+        var payload = sessionVersion > 0
+            ? $"{userId}|{tenantSlug}|{exp}|{sessionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+            : $"{userId}|{tenantSlug}|{exp}";
         var sig = Sign(payload);
         return Convert.ToBase64String(Encoding.UTF8.GetBytes($"{payload}|{sig}"));
     }
 
     public static (Guid UserId, string TenantSlug, DateTime ExpiresAt)? ParseToken(string? token)
+        => ParseVersioned(token) is { } t ? (t.UserId, t.TenantSlug, t.ExpiresAt) : null;
+
+    /// <summary>إصدارُ الجَلسَةِ في رَمزٍ صالِح (‏2026-10-28، د28) — 0 لِلرَمزِ ذي الحُقولِ الأَربَعَة، و<c>null</c> لِرَمزٍ لا يَمُرّ
+    /// <see cref="ParseToken"/>.</summary>
+    public static int? SessionVersionOf(string? token) => ParseVersioned(token)?.Version;
+
+    private static (Guid UserId, string TenantSlug, DateTime ExpiresAt, int Version)? ParseVersioned(string? token)
     {
         if (string.IsNullOrEmpty(token)) return null;
         try
@@ -515,15 +531,21 @@ public static class AuthHandlers
             var parts = raw.Split('|');
             // ٤ حُقول إجباريّاً: userId, tenantSlug, exp, sig. أَيّ أَقَلّ
             // يُرفَض (تَوكينات قَديمَة بِلا تَوقيع لا تَمُرّ → تَسجيل دُخول مَرَّةً أُخرى).
-            if (parts.Length != 4) return null;
-            var payload = $"{parts[0]}|{parts[1]}|{parts[2]}";
+            // ‏(‏2026-10-28، د28) أَو خَمسَة: الرابِعُ إصدارُ الجَلسَة — عَدَدٌ مُوجَبٌ بِلا عَلامَة، والتَوقيعُ يُغَطّيه فَلا يُبَدَّل.
+            if (parts.Length is not (4 or 5)) return null;
+            var payload = string.Join('|', parts[..^1]);
             if (!CryptographicOperations.FixedTimeEquals(
-                    Encoding.UTF8.GetBytes(parts[3]),
+                    Encoding.UTF8.GetBytes(parts[^1]),
                     Encoding.UTF8.GetBytes(Sign(payload))))
+                return null;
+            var version = 0;
+            if (parts.Length == 5
+                && (!int.TryParse(parts[3], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out version)
+                    || version <= 0))
                 return null;
             var exp = DateTimeOffset.FromUnixTimeSeconds(long.Parse(parts[2])).UtcDateTime;
             if (exp < DateTime.UtcNow) return null;
-            return (Guid.Parse(parts[0]), parts[1], exp);
+            return (Guid.Parse(parts[0]), parts[1], exp, version);
         }
         catch { return null; }
     }

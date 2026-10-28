@@ -19,6 +19,7 @@ using ACommerce.Kit.Realtime.Server;
 using ACommerce.Kit.Versions;
 using ACommerce.Platform.Hosting;
 using ACommerce.Templates.Customer.Marketplace;
+using ACommerce.Templates.Customer.Marketplace.Services;
 using ACommerce.Templates.Customer.Marketplace.Components;
 using ACommerce.V1.App.Seed;
 using System.Reflection;
@@ -475,6 +476,10 @@ else
 // W3 middleware — Culture + Version gate.
 app.UseCultureContext();
 app.UseVersionGate();
+
+// ‏**بَوّابَةُ إصدارِ الجَلسَة** (‏2026-10-28، قَرارُ المالِك د28): قَبلَ نِقاطِ القالِبِ وصَفَحاتِه، فَرَمزٌ أَسقَطَه «اخرج من كل الأجهزة» أَو حَذفُ
+// الحِسابِ يُنزَعُ مِن الطَلَبِ قَبلَ أَن يَقرَأَه أَحَد. التَعليلُ في `SessionVersionGate.cs`.
+app.UseSessionVersionGate();
 
 // القالَب — يُسَجِّل form endpoints (auth/login/logout/chat send/favorite/...)
 app.MapCustomerMarketplaceTemplate();

@@ -10,6 +10,8 @@
   "common.action.back": "Back",
   "auth.action.login": "Sign in",
   "auth.action.logout": "Sign out",
+  "auth.action.logout_everywhere": "Sign out of all devices",
+  "auth.logout_everywhere.hint": "Signs this device and every other device out of this account — you will need to sign in again.",
   "listings.detail.contact": "Contact seller",
   "listings.detail.views": "views",
 

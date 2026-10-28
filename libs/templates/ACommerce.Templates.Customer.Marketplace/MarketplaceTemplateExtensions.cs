@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ACommerce.Templates.Customer.Marketplace;
@@ -460,6 +461,19 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect($"/{slug}");
         }).DisableAntiforgery();
 
+        // ─── اخرج من كل الأجهزة (‏2026-10-28، قَرارُ المالِك د28) ──────────
+        // يَرفَعُ إصدارَ جَلسَةِ الحِسابِ فَيَسقُطُ كُلُّ رَمزٍ صَدَرَ لَه — عَلى هذا الجِهازِ وغَيرِه — عِندَ `SessionVersionGate`. والخُروجُ أَعلاه
+        // يَبقى لِلجِهازِ وَحدَه. وكوكيّاتُ الأَدوارِ عَلى هذا الجِهازِ تَسقُطُ عِندَ البَوّابَةِ في الطَلَبِ التالي بِلا قائِمَةِ أَدوار.
+        app.MapPost("/{slug}/me/sessions/revoke",
+            async (string slug, HttpContext http, HttpRequest req, IDocumentStore store, IMemoryCache cache) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null || parsed.Value.TenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
+            await Services.SessionVersionGate.RevokeTenantAsync(store, cache, slug, parsed.Value.UserId);
+            AuthSession.ClearAllCookiesForTenant(http.Response, slug, Array.Empty<string>());
+            return Results.Redirect($"/{slug}");
+        }).RequireFormBody().DisableAntiforgery();
+
         // ─── عَدّادات الـ unread لِـ realtime-nav.js ───────────────────────
         // الـ JS عَلى المُتَصَفِّح يُنادي هذا عِندَ كُلّ <c>unread_changed</c>
         // مِن SignalR ويُحَدِّث الـ DOM badges بِلا full reload.
@@ -818,7 +832,7 @@ public static class MarketplaceTemplateExtensions
         // مَحقونَةً بِمُستَأجِرِها.
         app.MapPost("/{slug}/me/delete/confirm",
             async (string slug, HttpContext http, HttpRequest req, IDocumentStore store,
-                   Services.Queries.TenantDirectory tenants, L l) =>
+                   Services.Queries.TenantDirectory tenants, L l, IMemoryCache cache) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
@@ -840,6 +854,7 @@ public static class MarketplaceTemplateExtensions
             ACommerce.Kit.Auth.AccountDeletion.Erase(user!, DateTime.UtcNow);
             session.Store(user!);
             await session.SaveChangesAsync();
+            Services.SessionVersionGate.Forget(cache, slug, userId);   // ‏(د28) Erase رَفَعَ الإصدار — لا يَنتَظِرُ دَقيقَةَ الحِفظ
 
             var tenant = await tenants.FindAsync(slug);
             AuthSession.ClearAllCookiesForTenant(http.Response, slug,
@@ -2700,6 +2715,17 @@ public static class MarketplaceTemplateExtensions
             Services.Incubator.StudioAuth.DeleteCookie(res);
             return Results.Redirect("/");
         }).DisableAntiforgery();
+
+        // ‏(‏2026-10-28، قَرارُ المالِك د28) نَظيرُ «اخرج من كل الأجهزة» لِحِسابِ الاستوديو — ومِنه مُشرِفُ المَنَصَّة، أَثمَنُ جَلسَةٍ تُسرَق.
+        app.MapPost("/studio/me/sessions/revoke",
+            async (HttpResponse res, IDocumentStore store, IMemoryCache cache, Services.Incubator.StudioAuth auth) =>
+        {
+            auth.Load();
+            if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
+            await Services.SessionVersionGate.RevokeStudioAsync(store, cache, auth.UserId!.Value);
+            Services.Incubator.StudioAuth.DeleteCookie(res);
+            return Results.Redirect("/studio/auth");
+        }).RequireFormBody().DisableAntiforgery();
 
         // قَبول الشُروط — يَحفَظ ConsentRecord، ثُمَّ **يَستَأنِف
         // المُطالَبَةَ المُعَلَّقَةَ إن وُجِدَت**، وإلّا حَوَّلَ لِـ

@@ -28,7 +28,8 @@ public class PhoneVerifiedOnLoginTests(ITestOutputHelper output)
         Assert.True(File.Exists(path), $"مَصدَرٌ مَفقود: {path}");
         var code = WriteEndpointGuardTests.StripComments(File.ReadAllText(path));
         var start = code.IndexOf("private static async Task<AuthResult> GetOrCreateUserAsync(", StringComparison.Ordinal);
-        var end = code.IndexOf("var token = MakeToken(existing.Id, tenantSlug);", start, StringComparison.Ordinal);
+        // ‏(‏2026-10-28، د28) المِرساةُ بِلا قَوسِ الإغلاق: صارَ النِداءُ يُمَرِّرُ إصدارَ الجَلسَة (`existing.SessionVersion`).
+        var end = code.IndexOf("var token = MakeToken(existing.Id, tenantSlug", start, StringComparison.Ordinal);
         Assert.True(start > 0 && end > start, $"أَداةٌ عَمياء: لَم يوجَد الجِسم ({start}/{end}).");
         return code[start..end];
     }

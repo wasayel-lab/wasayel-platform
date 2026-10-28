@@ -173,6 +173,8 @@ public class AccountDeletionTests
             nameof(User.AcceptedTermsAt), nameof(User.AcceptedTermsVersion),
             // مُشتَقٌّ مِن المَرساةِ المُصَفَّرَة، بِلا واضِع.
             nameof(User.HasAnchor),
+            // ‏(‏2026-10-28، د28) إصدارُ الجَلسَة لا يَدُلُّ عَلى شَخص — يُرفَعُ في Erase لا يُمحى (SessionRevocationTests).
+            nameof(User.SessionVersion),
         };
 
         var erased = new HashSet<string>(StringComparer.Ordinal)

@@ -142,6 +142,17 @@
             </form>
         </div>
 
+        @* ‏(‏2026-10-28، قَرارُ المالِك د28) «اخرج من كل الأجهزة» — يَرفَعُ إصدارَ الجَلسَةِ فَيَسقُطُ كُلُّ رَمزٍ صَدَرَ لِهذا الحِساب، وزِرُّ الخُروجِ
+           أَعلاه يَبقى لِهذا الجِهازِ وَحدَه. *@
+        <div style="margin-top:8px;">
+            <form method="post" action="@($"/{Slug}/me/sessions/revoke")" style="margin:0;">
+                <button type="submit" class="ac-btn ac-btn-ghost" style="width:100%;">
+                    <AcIcon Name="log-out" Size="18" /> @L.Markup("auth.action.logout_everywhere")
+                </button>
+            </form>
+            <p style="margin:4px 0 0;text-align:center;color:var(--ac-text-muted);font-size:12px;">@L.Markup("auth.logout_everywhere.hint")</p>
+        </div>
+
         <div style="margin-top:24px;text-align:center;color:var(--ac-text-muted);font-size:12px;">
             @(loadedTenant?.Name) · platform-v1
         </div>

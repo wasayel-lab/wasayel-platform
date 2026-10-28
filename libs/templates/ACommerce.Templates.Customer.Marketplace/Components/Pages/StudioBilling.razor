@@ -113,6 +113,13 @@
         <p style="margin-top:18px;color:var(--st-muted);font-size:12px;text-align:center;">
             @((MarkupString)"\n            ")@L.Markup("studio.billing.note")@((MarkupString)"\n        ")
         </p>
+
+        @* ‏(‏2026-10-28، قَرارُ المالِك د28) «اخرج من كل الأجهزة» لِحِسابِ الاستوديو — ومِنه مُشرِفُ المَنَصَّة. هُنا لا في الشِلّ: صَفحَةُ الحِسابِ
+           الوَحيدَة في الاستوديو، فَلا تَتَبَدَّلُ كُلُّ لَقطَةِ استوديو بِزِرٍّ واحِد («أ» د28 في سِجِلِّ المالِك). *@
+        <form method="post" action="/studio/me/sessions/revoke" style="margin-top:18px;text-align:center;">
+            <button type="submit" class="st-btn st-btn-ghost">@L.Markup("auth.action.logout_everywhere")</button>
+            <p style="margin:4px 0 0;color:var(--st-muted);font-size:12px;">@L.Markup("auth.logout_everywhere.hint")</p>
+        </form>
     </ChildContent>
 </StudioShell>
 

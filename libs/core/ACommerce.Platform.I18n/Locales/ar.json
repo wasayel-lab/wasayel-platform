@@ -12,6 +12,8 @@
   "common.option.all": "الكلّ",
   "auth.action.login": "تَسجيل دُخول",
   "auth.action.logout": "تَسجيل خُروج",
+  "auth.action.logout_everywhere": "اخرُج مِن كُلِّ الأَجهِزَة",
+  "auth.logout_everywhere.hint": "يُخرِجُ هذا الجِهازَ وكُلَّ جِهازٍ دَخَلتَ مِنه بِهذا الحِساب — ويَلزَمُ الدُخولُ بَعدَه مِن جَديد.",
   "listings.detail.contact": "تَواصُل مَع المُعلِن",
   "listings.detail.views": "مَشاهَدات",
 

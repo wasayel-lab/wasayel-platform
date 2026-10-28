@@ -81,6 +81,11 @@ public sealed class User
     /// كامِلاً في <c>AccountDeletion</c>.</para>
     /// </summary>
     public DateTime? DeletedAt { get; set; }
+
+    /// <summary><b>إصدارُ الجَلسَة</b> (‏2026-10-28، قَرارُ المالِك د28): رَقمٌ يَحمِلُه كُلُّ رَمزِ دُخولٍ يَصدُرُ لِهذا الحِساب
+    /// (<c>AuthHandlers.MakeToken</c>)، ويَرفَعُه «اخرج من كل الأجهزة» وحَذفُ الحِساب — فَرَمزٌ بِإصدارٍ أَصغَرَ يَسقُطُ عِندَ بَوّابَةِ الجَلسَة
+    /// (<c>SessionVersionGate</c>). وثيقَةٌ قَديمَةٌ بِلا الحَقلِ تُقرَأ بِـ0، ورُموزُها القائِمَةُ (بِلا إصدار) إصدارُها 0 — فَلا يَخرُجُ أَحَدٌ بِالنَشر.</summary>
+    public int SessionVersion { get; set; }
 }
 
 /// <summary>اشتِراك Web Push واحِد — جِهاز + مُتَصَفِّح. الـ Endpoint مِن

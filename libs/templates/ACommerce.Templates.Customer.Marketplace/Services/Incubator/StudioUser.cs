@@ -44,4 +44,8 @@ public sealed class StudioUser
     /// المُراقَبَة. أَوَّل مُستَخدِم يُسَجِّل يَحصُل عَلَيها تِلقائيّاً (ميزَة
     /// MVP لِيَكون لَدَيك platform-admin مَوجود مِن البِدايَة).</summary>
     public bool IsPlatformAdmin { get; set; }
+
+    /// <summary><b>إصدارُ الجَلسَة</b> (‏2026-10-28، قَرارُ المالِك د28) — نَظيرُ <c>User.SessionVersion</c> لِحِسابِ الاستوديو، ومِنه مُشرِفُ
+    /// المَنَصَّة: جَلسَتُه أَثمَنُ جَلسَةٍ تُسرَق، ورَمزُها مِن <c>AuthHandlers.MakeToken</c> نَفسِها.</summary>
+    public int SessionVersion { get; set; }
 }

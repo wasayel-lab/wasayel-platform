@@ -154,6 +154,8 @@ public static class AccountDeletion
         user.RadiusKm = 0;
         user.DeletedAt = at;
         user.UpdatedAt = at;
+        // ‏(‏2026-10-28، قَرارُ المالِك د28) يُرفَعُ ولا يُمحى: كُلُّ رَمزٍ صَدَرَ قَبلَ الحَذفِ يَسقُطُ عِندَ بَوّابَةِ الجَلسَة، ولَو عَلى جِهازٍ آخَر.
+        user.SessionVersion++;
         return user;
     }
 }

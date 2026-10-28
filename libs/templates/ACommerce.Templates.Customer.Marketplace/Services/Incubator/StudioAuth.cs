@@ -139,7 +139,7 @@ public sealed class StudioAuth
     /// كان). والاسمُ لا يَقرَؤُه سِكربت: الخادِمُ وَحدَه (<see cref="Load"/>). مَحروسٌ في <c>AuthCookieFlagsTests</c>.</summary>
     public static void WriteCookie(HttpResponse res, StudioUser user)
     {
-        var token = AuthHandlers.MakeToken(user.Id, Tenant);
+        var token = AuthHandlers.MakeToken(user.Id, Tenant, user.SessionVersion);
         var opts = new CookieOptions
         {
             HttpOnly = true, IsEssential = true, SameSite = SameSiteMode.Lax,

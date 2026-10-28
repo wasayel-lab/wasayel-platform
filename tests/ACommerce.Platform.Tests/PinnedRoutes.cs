@@ -251,5 +251,11 @@ internal static class PinnedRoutes
         // تِكرارَ العَطَبِ مَفروضٌ بِفَحصٍ لا بِنِيَّة:
         // `No_minimal_api_endpoint_reads_a_tenanted_document_from_an_injected_session`.
         "/{slug}/me/delete/confirm",
+
+        // ─── ‏2026-10-28 (قَرارُ المالِك د28): «اخرج من كل الأجهزة» — لِلسَبَبِ نَفسِه ──
+        // يَرفَعُ `User.SessionVersion` (مُتَعَدِّدُ الإيجار) في جَلسَةِ مُستَأجِرِ المَسار، و`StudioUser.SessionVersion` في `_studio` — والجَلسَةُ
+        // المَحقونَةُ في Minimal API تَحمِلُ `*DEFAULT*` فَتَرُدُّ `null` صامِتَة. الجَلسَةُ تُفتَحُ بِالسلاجِ في `SessionVersionGate.Revoke*Async`.
+        "/{slug}/me/sessions/revoke",
+        "/studio/me/sessions/revoke",
     };
 }
