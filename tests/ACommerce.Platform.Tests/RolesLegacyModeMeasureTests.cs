@@ -60,10 +60,11 @@ public class RolesLegacyModeMeasureTests(ITestOutputHelper output)
     /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ التَبديل)</b> — كانَ
     /// <c>Today_the_roles_form_draws_no_line_saying_what_an_empty_save_grants</c> (‏<c>c8f9437</c>): مَفاتيحُ الاستِمارَتَينِ 2 و5 بِلا سَطرٍ عَن الفارِغ.
     /// والآن كُلُّ استِمارَةٍ تَرسُمُ <c>roles.save.empty_warning</c> مَرَّةً قَبلَ زِرِّ الحِفظِ مُباشَرَةً (القاعِدَة ١٧: عَلى الفِعلِ لا في صَفحَةٍ تَشرَح)،
-    /// وبَقِيَّةُ مَفاتيحِها بِعَينِها وبِتَرتيبِها.</summary>
+    /// وبَقِيَّةُ مَفاتيحِها بِعَينِها وبِتَرتيبِها. <b>(‏2026-10-28، د62)</b>: كانَ الاسمُ <c>…_says_what_an_empty_save_grants_…</c> — والفارِغُ صارَ
+    /// يُرفَض، فَصارَ «ما يَفعَلُه» لا «ما يُعطيه»؛ والمِفتاحُ ومَوضِعُه بِعَينِهِما.</summary>
     [Theory]
     [MemberData(nameof(RolesPages))]
-    public void The_roles_form_says_what_an_empty_save_grants_just_before_its_submit(string page, string action)
+    public void The_roles_form_says_what_an_empty_save_does_just_before_its_submit(string page, string action)
     {
         var form = Form(page, action);
         var keys = Keys(form);
@@ -79,16 +80,19 @@ public class RolesLegacyModeMeasureTests(ITestOutputHelper output)
             $"{page}: السَطرُ لَيسَ بَينَ قائِمَةِ الأَدوارِ وزِرِّ الحِفظ.");
     }
 
-    /// <summary>نَصُّ السَطرِ في القامُوسِ العَرَبيّ (القاعِدَة ١١)، ويُسَمّي ما يُعطيه الفارِغ: الإدارَةَ وبَياناتِ المُستَخدِمين.</summary>
+    /// <summary>نَصُّ السَطرِ في القامُوسِ العَرَبيّ (القاعِدَة ١١). <b>(‏2026-10-28، قَرارُ المالِك د62 — قُلِبَ بِاسمِه)</b>: كانَ
+    /// <c>The_empty_save_warning_lives_in_the_arabic_dictionary</c> يَشتَرِطُ «إدارَتُه» و«هَواتِفِ» — ما يُعطيه الفارِغ. والفارِغُ صارَ يُرفَض،
+    /// فَالسَطرُ يَقولُ الرَفضَ ولا يَعِدُ بِما لَم يَعُد يَقَع.</summary>
     [Fact]
-    public void The_empty_save_warning_lives_in_the_arabic_dictionary()
+    public void The_empty_save_line_in_the_arabic_dictionary_says_it_is_refused()
     {
         using var doc = System.Text.Json.JsonDocument.Parse(Read("libs/core/ACommerce.Platform.I18n/Locales/ar.json"));
         Assert.True(doc.RootElement.TryGetProperty(EmptyWarningKey, out var v), $"مِفتاحٌ غائِبٌ عَن ar.json: {EmptyWarningKey}");
         var text = v.GetString() ?? "";
         output.WriteLine($"{EmptyWarningKey} = {text}");
-        Assert.Contains("إدارَتُه", text, StringComparison.Ordinal);
-        Assert.Contains("هَواتِفِ", text, StringComparison.Ordinal);
+        Assert.Contains("يُرفَض", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("إدارَتُه", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("كُلَّ الصَلاحِيّات", text, StringComparison.Ordinal);
     }
 
     /// <summary>ولا ثالِثَةَ: كُلُّ استِمارَةٍ في المَصادِرِ تُرسِلُ إلى <c>…/roles/save</c> واحِدَةٌ مِن الاثنَتَين (القاعِدَة ١٠: يَعُدُّ ويَفشَلُ عَلى الصِفر).
@@ -164,8 +168,11 @@ public class RolesLegacyModeMeasureTests(ITestOutputHelper output)
         Assert.True(ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard.HasTenantManage(tenant, member));
     }
 
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-28، قَرارُ المالِك د62 — كوميتُ الرَفض)</b> — كانَ
+    /// <c>Today_saving_an_empty_role_selection_saves_zero_roles</c> (‏<c>aeb3ec3</c>): «Saved · أَدوارُ المَتجَرِ بَعدَه: 0 · كُتِبَت وَثيقَة: 1».
+    /// والآن يُرَدُّ بِـ<c>roles_empty_selection</c> قَبلَ تَحميلِ المَتجَر، فَيَبقى بِدَورَيه ولا تُكتَبُ وَثيقَة.</summary>
     [Fact]
-    public async Task Today_saving_an_empty_role_selection_saves_zero_roles()
+    public async Task Saving_an_empty_role_selection_is_refused_and_the_store_keeps_its_roles()
     {
         var all = ACommerce.Kit.Roles.RoleCatalog.All;
         var tenant = new ACommerce.Kit.Tenants.Tenant
@@ -176,10 +183,27 @@ public class RolesLegacyModeMeasureTests(ITestOutputHelper output)
         var world = new DocWorld().Put(tenant);
         var result = await ACommerce.Templates.Customer.Marketplace.Services.TenantConfig.RolesSaveService.SaveAsync(
             world.Session, "zero", new(Array.Empty<string>(), null));
-        output.WriteLine($"الحِفظُ الفارِغ: {result.Status} · أَدوارُ المَتجَرِ بَعدَه: {world.Read<ACommerce.Kit.Tenants.Tenant>("zero")!.Roles.Count} · كُتِبَت وَثيقَة: {world.Wrote<ACommerce.Kit.Tenants.Tenant>()}");
-        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.TenantConfig.TenantConfigStatus.Saved, result.Status);
-        Assert.Empty(world.Read<ACommerce.Kit.Tenants.Tenant>("zero")!.Roles);
-        Assert.Equal(1, world.Wrote<ACommerce.Kit.Tenants.Tenant>());
+        output.WriteLine($"الحِفظُ الفارِغ: {result.Status} ({result.Code}) · أَدوارُ المَتجَرِ بَعدَه: {world.Read<ACommerce.Kit.Tenants.Tenant>("zero")!.Roles.Count} · كُتِبَت وَثيقَة: {world.Wrote<ACommerce.Kit.Tenants.Tenant>()}");
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.TenantConfig.TenantConfigStatus.Rejected, result.Status);
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.TenantConfig.TenantConfigCodes.RolesEmptySelection, result.Code);
+        Assert.Equal(2, world.Read<ACommerce.Kit.Tenants.Tenant>("zero")!.Roles.Count);
+        Assert.Equal(0, world.Wrote<ACommerce.Kit.Tenants.Tenant>());
+    }
+
+    /// <summary>والسَطحانِ يَقولانِ الرَفضَ بِنَصِّه مِن القامُوس لا بِالرَمز (القاعِدَة ١١): كُلُّ صَفحَةٍ تَرسُمُ <c>roles.save.err_empty_selection</c>
+    /// مَرَّةً مَقرونَةً بِالرَمزِ مِن المُعجَم، والنَصُّ في <c>ar.json</c>.</summary>
+    [Theory]
+    [MemberData(nameof(RolesPages))]
+    public void Each_roles_page_says_the_empty_selection_refusal_from_the_dictionary(string page, string action)
+    {
+        _ = action;
+        var code = WriteEndpointGuardTests.StripMarkupComments(Read(page));
+        var keyAt = code.IndexOf("\"roles.save.err_empty_selection\"", StringComparison.Ordinal);
+        output.WriteLine($"{Path.GetFileName(page)}: المِفتاحُ {(keyAt > 0 ? "حاضِر" : "غائِب")} · TenantConfigCodes.RolesEmptySelection: {Regex.Matches(code, "TenantConfigCodes\\.RolesEmptySelection").Count}");
+        Assert.Equal(1, Regex.Matches(code, Regex.Escape("\"roles.save.err_empty_selection\"")).Count);
+        Assert.Equal(1, Regex.Matches(code, "TenantConfigCodes\\.RolesEmptySelection").Count);
+        using var doc = System.Text.Json.JsonDocument.Parse(Read("libs/core/ACommerce.Platform.I18n/Locales/ar.json"));
+        Assert.True(doc.RootElement.TryGetProperty("roles.save.err_empty_selection", out var v) && (v.GetString() ?? "").Length > 0);
     }
 
     // ─── سكربتُ القياس ─────────────────────────────────────────────────────────────────────────

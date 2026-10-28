@@ -4,6 +4,7 @@
 @inject L L
 @using ACommerce.Kit.Tenants
 @using ACommerce.Kit.Roles
+@using ACommerce.Templates.Customer.Marketplace.Services.TenantConfig
 
 @*
     تَحرير الأَدوار — checklist مِن RoleCatalog الثابِت. كُلّ دَور
@@ -27,6 +28,7 @@
             </div>
 
             @if (Saved == "1") { <div class="st-chip st-chip-success" style="margin-bottom:14px;">@L.Markup("studio.app.saved") <AcIcon Name="check" Size="16" /></div> }
+            @if (Err == TenantConfigCodes.RolesEmptySelection) { <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@L.Markup("roles.save.err_empty_selection")</div> }
 
             <form method="post" action="@($"/studio/apps/{Slug}/roles/save")">
                 <div class="studio-list">
@@ -81,6 +83,7 @@
 @code {
     [Parameter] public string Slug { get; set; } = "";
     [SupplyParameterFromQuery] public string? Saved { get; set; }
+    [SupplyParameterFromQuery] public string? Err   { get; set; }
     Tenant? tenant;
 
     protected override async Task OnInitializedAsync()

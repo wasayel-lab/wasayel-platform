@@ -159,7 +159,8 @@ public class TenantConfigDecisionTests
 
     /// <summary>ودَورٌ لَم يُختَر يَخرُج — نَفسُ سُلوك المَسارَين
     /// قَبلَ التَوحيد، ولَم يُضَف رَفضٌ لِاختِيارٍ فارِغ لِأَنَّه
-    /// لَم يَكُن.</summary>
+    /// لَم يَكُن. <b>(‏2026-10-28، د62 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: <c>Compose</c> نَقِيَّةٌ وما زالَت تُخرِجُ صِفراً لِلفارِغ؛ والرَفضُ
+    /// صارَ قَبلَها في <c>RolesSaveService.WhyInvalid</c> (الصُفوفُ الثَلاثَةُ أَدناه).</summary>
     [Fact]
     public void Roles_that_were_not_selected_are_dropped()
     {
@@ -168,6 +169,35 @@ public class TenantConfigDecisionTests
 
         Assert.Empty(RolesSaveService.Compose(existing, Array.Empty<string>(), null));
         Assert.Single(RolesSaveService.Compose(existing, new[] { all[1].Slug }, null));
+    }
+
+    // ─── رَفضُ الاختِيارِ الفارِغ (‏2026-10-28، قَرارُ المالِك د62) — مَوجَبٌ وسالِبٌ لِلرَمز ─────────
+
+    /// <summary>الرَمزُ مَوجَب: لا صُندوقَ مُختار ⇒ <c>roles_empty_selection</c>.</summary>
+    [Fact]
+    public void Roles_save_refuses_an_empty_selection_with_roles_empty_selection()
+    {
+        Assert.Equal("roles_empty_selection", TenantConfigCodes.RolesEmptySelection);
+        Assert.Equal(TenantConfigCodes.RolesEmptySelection,
+            RolesSaveService.WhyInvalid(new RolesSaveRequest(Array.Empty<string>(), null)));
+    }
+
+    /// <summary>والمِعيارُ ما تُخرِجُه <c>Compose</c>: أَسماءٌ لا يَعرِفُها الكاتالوج تُسقَطُ فَيَبقى الاختِيارُ فارِغاً ⇒ الرَمزُ نَفسُه.</summary>
+    [Fact]
+    public void Roles_save_refuses_a_selection_that_names_no_catalog_role()
+    {
+        var r = new RolesSaveRequest(new[] { "ghost", "admin" }, "ghost");
+        Assert.Empty(RolesSaveService.Compose(Array.Empty<ACommerce.Kit.Roles.Role>(), r.SelectedCatalogSlugs, r.DefaultCatalogSlug));
+        Assert.Equal(TenantConfigCodes.RolesEmptySelection, RolesSaveService.WhyInvalid(r));
+    }
+
+    /// <summary>والسالِب: دَورٌ واحِدٌ مِن الكاتالوج — ولو مَعَه اسمٌ مَجهول — يَمُرّ.</summary>
+    [Fact]
+    public void Roles_save_accepts_a_selection_with_one_catalog_role()
+    {
+        var one = ACommerce.Kit.Roles.RoleCatalog.All[0].Slug;
+        Assert.Null(RolesSaveService.WhyInvalid(new RolesSaveRequest(new[] { one }, null)));
+        Assert.Null(RolesSaveService.WhyInvalid(new RolesSaveRequest(new[] { "ghost", one }, one)));
     }
 
     // ─── المَناطِق ─────────────────────────────────────────────────

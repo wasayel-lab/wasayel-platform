@@ -94,10 +94,22 @@ public static class RolesSaveService
         return picks;
     }
 
+    /// <summary>
+    /// <para><b>دالَّةُ الرَفض، نَقِيَّة</b> (‏2026-10-28، قَرارُ المالِك د62): اختِيارٌ لا يُسَمّي دَوراً واحِداً مِن
+    /// <see cref="RoleCatalog.All"/> — فارِغٌ، أَو أَسماءٌ لا يَعرِفُها الكاتالوج فَتُسقِطُها <see cref="Compose"/> — يُرَدُّ بِـ
+    /// <see cref="TenantConfigCodes.RolesEmptySelection"/>. <b>والمِعيارُ ما يُخرِجُه <see cref="Compose"/> لا ما في النَموذَج</b>:
+    /// فَحصُ «الحَقلُ فارِغ» وَحدَه كانَ يُمَرِّرُ <c>role_ghost=1</c> صِفرَ أَدوار.</para>
+    /// <para>والتَخويلُ قَبلَها في النُقطَتَين (<c>TenantAdminGuard</c> / <c>StudioOwnsAsync</c>) — فَلا يَصيرُ الرَفضُ قِناعاً (القاعِدَة ٦).</para>
+    /// </summary>
+    public static string? WhyInvalid(RolesSaveRequest r)
+        => RoleCatalog.All.Any(t => r.SelectedCatalogSlugs.Contains(t.Slug)) ? null : TenantConfigCodes.RolesEmptySelection;
+
     public static async Task<TenantConfigResult> SaveAsync(
         IDocumentSession session, string slug, RolesSaveRequest r,
         CancellationToken ct = default)
     {
+        if (WhyInvalid(r) is { } code) return TenantConfigResult.Reject(code);
+
         var t = await session.LoadAsync<Tenant>(slug, ct);
         if (t is null) return TenantConfigResult.TenantMissing;
 

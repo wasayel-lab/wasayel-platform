@@ -92,10 +92,15 @@ public static class TenantConfigCodes
     /// <summary>نَوع أَيقونَة PWA غَير مَدعوم.</summary>
     public const string IconBadType = "icon_bad_type";
 
+    /// <summary><b>اختِيارُ أَدوارٍ لا يُطابِقُ دَوراً واحِداً مِن الكاتالوج</b> (‏2026-10-28، قَرارُ المالِك د62 — «لا تَتَهاوَن في الأَدوار»):
+    /// كانَ <c>roles/save</c> يَحفَظُه صِفرَ أَدوارٍ فَيُدخِلُ المَتجَرَ الوَضعَ المَوروث. يَرُدُّه السَطحانِ (الاستوديو والإدارَة) بِرِسالَةٍ مِن
+    /// القامُوس (<c>roles.save.err_empty_selection</c>).</summary>
+    public const string RolesEmptySelection = "roles_empty_selection";
+
     /// <summary>المُعجَم كامِلاً — مَقروءٌ في <see cref="TenantConfigResult.Reject"/>
     /// وفي فاحِصِ الانغِلاق.</summary>
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
-        BadFormat, Empty, NameRequired, ColorInvalid, NoScope, IconTooLarge, IconBadType,
+        BadFormat, Empty, NameRequired, ColorInvalid, NoScope, IconTooLarge, IconBadType, RolesEmptySelection,
     };
 }

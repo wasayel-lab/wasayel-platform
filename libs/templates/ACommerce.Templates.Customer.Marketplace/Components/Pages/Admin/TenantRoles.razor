@@ -4,6 +4,7 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 @inject L L
 @using ACommerce.Kit.Roles
+@using ACommerce.Templates.Customer.Marketplace.Services.TenantConfig
 
 @*
     مُحَرِّر الأَدوار — قائِمَة checklist مِن RoleCatalog. مُصَمِّم المَتجَر
@@ -207,8 +208,10 @@
         definitions = await Roles.ListAllAsync(Slug);
     }
 
-    static string FormatError(string err) => err switch
+    // ‏(‏2026-10-28، قَرارُ المالِك د62) رَمزُ الحِفظِ الفارِغِ بِنَصِّه مِن القامُوس — والباقي كَما كان.
+    string FormatError(string err) => err switch
     {
+        TenantConfigCodes.RolesEmptySelection => L["roles.save.err_empty_selection"],
         _ => err
     };
 }

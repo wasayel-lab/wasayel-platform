@@ -154,6 +154,13 @@
 صفحةٍ تشرح»): استمارتا `roles/save` (الاستوديو والإدارة — لا ثالثةَ، يعدُّها الماسح) ترسمانِ `roles.save.empty_warning` قبلَ زرِّ الحفظ. **وما لم يُفعَل — قرارُ المالك**
 («ب» W8-3 · ٢): رفضُ الاختيارِ الفارغِ في `RolesSaveService` برمزِ خرقٍ ثابت، أو قلبُ `RoleCatalog.cs:133` بـADR مستقلّ (`ADR-027` §٥ البند 3). والحارسُ: `RolesLegacyModeMeasureTests`.
 
+**(‏2026-10-28 — يُلحَقُ ولا يُعادُ حرفٌ فوقَه؛ قرارُ المالك د62، الخيار ب: «لا تتهاون في الأدوار»): «ما لم يُفعَل» أعلاه — نُفِّذ شطرُه الأوّل.**
+توصيفُه `aeb3ec3` (القاعدة ٣). **الرفض**: `RolesSaveService.WhyInvalid` يردُّ اختيارًا لا يسمّي دورًا واحدًا من `RoleCatalog.All` — فارغًا، أو أسماءً
+تُسقِطُها `Compose` (`role_ghost=1`) — بالرمزِ الثابت `roles_empty_selection` في المعجمِ المغلق `TenantConfigCodes`، **قبلَ تحميلِ المتجر** وبعدَ
+التخويلِ في النقطتَين (القاعدة ٦)؛ فيبقى المتجرُ بأدوارِه ولا تُكتَبُ وثيقة. والسطحانِ (`StudioAppRoles` و`Admin/TenantRoles`) يقولانه من القاموس
+(`roles.save.err_empty_selection`)، و`roles.save.empty_warning` صارَ يقولُ الرفضَ لا ما كانَ يعطيه الفارغ. وصفّا اللقطتَين `studio-app-roles` و
+`admin-tenant-roles` يتغيّرانِ في سطرِ التنبيهِ وحدَه (مقيسٌ قبلُ وبعدُ في سجلِّ المالك «أ» د62). **والشطرُ الثاني — قلبُ الأصل — `ADR-040`.**
+
 ### هـ. مسارُ «المالكُ يبيعُ» اليوم — مسارٌ قائمٌ لا نقرةٌ واحدة، وعددُ نقراتِه يُقاسُ لا يُبنى
 
 **مالكُ الاستوديو لا ينشرُ بصفتِه**: `Gates/PermissionFilter.cs` يمرُّ في الوضعِ الموروثِ وحدَه (‏`:34`) وإلّا فحصَ `RolePermissions.Has(tenant.Roles, effectiveRole, _permission)` (‏`:48`) **بلا فرعِ ملكيّة**؛ والمصنعُ يضبطُ `OwnerUserId = ownerId` (‏`TenantFromAnalysisFactory.cs:173`) **ولا يُنشئُ له مستخدمًا في واجهةِ المتجر**. **ومساران قائمان يُبلَغانِ بالنقر**: (أ) المالكُ يسجّلُ في واجهةِ متجرِه → `/{slug}/me/role` → يختارُ «تاجِر» ذاتيًّا (‏`RolePicker.razor:41-44`؛ `vendor.role.json` يحمِلُ `listing.create` `:14`) → CTA «عِندَك ما تَعرِضه؟» (‏`ar.json:169`؛ `TenantHome.razor:104-110`) → `POST /{slug}/listings/create` المحروسةُ بـ`.RequirePermission("listing.create")` (‏`MarketplaceTemplateExtensions.cs:1091-1092`). (ب) من الاستوديو: `StudioApp.razor:151` يربطُ إلى `/admin/tenants/{Slug}/users?from=studio` وتعليقُه `:143-150` يذكرُ السبب («حَلقَةٌ مُغلَقَةٌ: لوحَةُ المَتجَرِ تولَدُ مَيِّتَةً ولا سَبيلَ لِإحيائِها»)، وحارسُها يقبلُ «مالِك المَتجَر مُسَجَّل دُخولاً عَبر Studio» (‏`Services/TenantAdminGuard.cs:88-90`)، واستمارةُ «مَنح إدارَة» (‏`Admin/TenantUsers.razor:89` → `POST /admin/tenants/{slug}/users/{userId}/grant-admin` `:2096`) — و`tenant_admin` يحمِلُ `listing.create` (‏`tenant_admin.role.json:14`). **الشرطُ الباقي حقيقيّ**: أن يملكَ المالكُ مستخدمًا في واجهةِ المتجرِ أوّلًا. **يُقاسُ عددُ النقراتِ وأينَ يتعثّر** — ولا يُبنى زرٌّ قبلَ القياس.
