@@ -170,6 +170,20 @@ public static class GatewayReturn
             : null;
 
     /// <summary>
+    /// <para><b>أَانتَهَت مُهلَةُ دَفعِ فاتورَةِ هذِه الصَفقَةِ بِتاريخِها المَكتوب؟</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى؛ القاعِدَة ١٢؛ تَوصيفُ «اليَوم» <c>9f003b1</c>):
+    /// <see cref="GatewayPayments.ExpiresAtOf"/> وقَد بَلَغَه «الآن» — والفاتورَةُ أُرسِلَت بِهذا التاريخِ فَالبَوّابَةُ تَمنَعُ دَفعَها بَعدَه («User will be prevented from paying the invoice
+    /// once expired»). دالَّةٌ نَقِيَّةٌ تَسأَلُها الصَفحَتان: فَلا يُرسَمُ رابِطُ صَفحَةِ البَوّابَة (<see cref="PayUrlOf(Deal, DateTimeOffset)"/>) ولا «أَكمِلِ الدَّفع»، ويُقالُ أَنَّ
+    /// المُهلَةَ انتَهَت وأَنَّ «تَحَقَّق» يُسَجِّلُ دَفعاً سَبَقَها أَو يُلغي الطَلَب. وصَفقَةٌ بِلا تاريخٍ (فُتِحَت قَبلَه) لا تَنتَهي هُنا — بابُها كَما كان.</para>
+    /// </summary>
+    public static bool WindowClosed(Deal deal, DateTimeOffset now)
+        => GatewayPayments.ExpiresAtOf(deal) is { } at && now >= at;
+
+    /// <summary><b>رابِطُ صَفحَةِ الدَفعِ بِالسّاعَة</b> — <see cref="PayUrlOf(Deal)"/> وَلا رابِطَ بَعدَ انتِهاءِ المُهلَة (<see cref="WindowClosed"/>). <b>تَقرَؤُه الصَفحَةُ</b>؛ والأَوَّلُ
+    /// قَواعِدُ الحالِ بِلا ساعَة، يَبني عَلَيه هذا.</summary>
+    public static string? PayUrlOf(Deal deal, DateTimeOffset now)
+        => WindowClosed(deal, now) ? null : PayUrlOf(deal);
+
+    /// <summary>
     /// <para><b>نَصُّ حالِ الصَفقَةِ عَلى صَفحَةِ العَودَة — أَربَعَةٌ لا خامِس</b> (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الأولى): ثَبَتَ دَفعُها
     /// أَم لا (<see cref="IsConfirmed"/>) × أُلغِيَت أَم لا — <b>بِشَرطِ الكاتِبِ نَفسِه</b>: <c>DealsService.ConfirmGatewayPaymentAsync</c>
     /// يَكتُبُ <see cref="DealEvent.GatewayRefundDue"/> لِلمُلغاةِ وَحدَها، فَالصَفحَةُ تَقولُ «مُلغًى، واستِرجاعُه عَلى المَتجَرِ مِن لَوحَةِ

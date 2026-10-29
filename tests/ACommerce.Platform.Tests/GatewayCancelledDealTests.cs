@@ -245,7 +245,8 @@ public class GatewayCancelledDealTests(ITestOutputHelper output)
         Assert.Equal(2, page.Split("<p>@L.Markup(stateKey)</p>").Length - 1);
         foreach (var literal in new[] { "pay.return.pending", "pay.return.confirmed", "pay.return.cancelled_pending", "pay.return.cancelled_confirmed" })
             Assert.DoesNotContain($"\"{literal}\"", page, StringComparison.Ordinal);
-        Assert.Contains("payUrl = GatewayReturn.PayUrlOf(deal);", page, StringComparison.Ordinal);
+        // (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى — ولا يُعادُ حَرفٌ فَوقَه: والرابِطُ بِالسّاعَة — لا رابِطَ بَعدَ انتِهاءِ المُهلَة، `GatewayReturn.WindowClosed`.)
+        Assert.Contains("payUrl = GatewayReturn.PayUrlOf(deal, now);", page, StringComparison.Ordinal);
         Assert.Contains("@if (payUrl is not null)", page, StringComparison.Ordinal);
     }
 }

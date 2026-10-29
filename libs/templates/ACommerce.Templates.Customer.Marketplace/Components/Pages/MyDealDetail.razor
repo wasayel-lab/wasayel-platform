@@ -328,8 +328,19 @@
                    وقَبلَ فَرعِ الخُطوَةِ المَحجوزَةِ عِندَ OTO لا بَعدَه: ذاكَ لا يَرسُمُ شَيئاً ويُقاسُ أَنَّه لا يَرسُم، ولا تَجتَمِعُ الحالَتان (تالٍ واحِد). *@
                 @if (GatewayPayments.HasInvoice(deal))
                 {
-                    <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
-                       href="@AuthSession.LinkFor(Slug, Role, GatewayReturn.PathFor(deal.Id, null))">@L.Markup("deals.detail.complete_payment")</a>
+                    @if (paymentWindowClosed)
+                    {
+                        @* وانتَهَت مُهلَتُها بِتاريخِ الفاتورَةِ المَكتوب (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى؛ `GatewayReturn.WindowClosed`): البَوّابَةُ لا تَقبَلُ دَفعَها، فَلا «أَكمِلِ الدَّفع»
+                           (القاعِدَة ١٢) — سَطرُ حالِها، والبابُ إلى «تَحَقَّق» يُسَجِّلُ دَفعاً سَبَقَها أَو يُلغي الطَلَب. *@
+                        <AcAlert Variant="warning" Message="@L["deals.detail.payment_window_closed"]" />
+                        <a class="ac-btn ac-btn-ghost ac-btn-block"
+                           href="@AuthSession.LinkFor(Slug, Role, GatewayReturn.PathFor(deal.Id, null))">@L.Markup("pay.return.verify")</a>
+                    }
+                    else
+                    {
+                        <a class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block"
+                           href="@AuthSession.LinkFor(Slug, Role, GatewayReturn.PathFor(deal.Id, null))">@L.Markup("deals.detail.complete_payment")</a>
+                    }
                 }
                 else
                 {
@@ -486,6 +497,8 @@
     /// <summary>تاليها «دَفع» وعَلَيها فاتورَةُ بَوّابَةٍ لَم يَثبُت دَفعُها — <see cref="GatewayPayments.AwaitsPayment"/> نَفسُها الَّتي تَسأَلُها
     /// <c>AdvanceAsync</c> فَتَرُدُّ «تَأكيد: دَفع» بِـ<c>deal_awaits_payment</c>: فَبابُ الناظِرِ هُنا «أَكمِل الدَّفع» (‏ADR-032 الخُطوَة 10).</summary>
     bool awaitsPayment;
+    /// <summary>تَنتَظِرُ دَفعَ فاتورَتِها وقَد انتَهَت مُهلَتُها بِتاريخِها المَكتوب — <see cref="GatewayReturn.WindowClosed"/> (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى): لا «أَكمِلِ الدَّفع».</summary>
+    bool paymentWindowClosed;
     /// <summary>صَفقَةُ بِطاقَةٍ بِلا مَرجِعِ دَفعٍ وتاليها «دَفع» — <see cref="DealsService.MissesPayment"/> الَّتي تَسأَلُها <c>AdvanceAsync</c> فَتَرُدُّ
     /// «تَأكيد: دَفع» بِـ<c>deal_payment_missing</c> (‏2026-10-13، G5 (xv-g)): لا بِطاقَةَ «دَورُكَ الآن» ولا زِرَّ ولا «بِانتِظار» — نَصُّ رَمزِه لِلطَرَفَين.
     /// وبَعدَ حارِسِ البَوّابَةِ لا مَعَه: صَفقَةُ البَوّابَةِ بابُها «أَكمِل الدَّفع» (<c>awaitsPayment</c>).</summary>
@@ -584,6 +597,7 @@
         heldByCarrier = DealShipping.AwaitsCarrier(deal);
         // وخُطوَةٌ فاتورَتُها لَم تُدفَع لا يُرسَمُ لَها «تَأكيد: دَفع» — الدالَّةُ الَّتي يَرُدُّ بِها المُحَرِّك (‏ADR-032 الخُطوَة 10، ‏2026-10-12).
         awaitsPayment = GatewayPayments.AwaitsPayment(deal);
+        paymentWindowClosed = awaitsPayment && GatewayReturn.WindowClosed(deal, DateTimeOffset.UtcNow);
         paymentMissing = !awaitsPayment && DealsService.MissesPayment(deal);
         // وخُطوَةٌ مَحجوزَةٌ لا بابَ لَها: رَمزُ البَوّابَةِ الَّذي يُفَسِّرُها، بِالفاعِلِ والناقِلِ أَنفُسِهِما (مُراجَعَةُ المَوجَة 3a، ‏2026-10-12).
         shipHeldKey = DealRefusalTexts.KeyFor(DealShipAuthorization.HeldRefusal(deal, new DealShipper(uid, Auth.UserName ?? ""), carrier));

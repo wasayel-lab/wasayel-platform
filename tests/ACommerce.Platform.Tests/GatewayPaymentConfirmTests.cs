@@ -507,7 +507,8 @@ public class GatewayPaymentConfirmTests(ITestOutputHelper output)
 
         var back = Code("Components", "Pages", "GatewayPayReturn.razor");
         Assert.Contains("confirmed = GatewayReturn.IsConfirmed(deal);", back, StringComparison.Ordinal);
-        Assert.Contains("payUrl = GatewayReturn.PayUrlOf(deal);", back, StringComparison.Ordinal);
+        // (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى — ولا يُعادُ حَرفٌ فَوقَه: والرابِطُ بِالسّاعَة — لا رابِطَ بَعدَ انتِهاءِ المُهلَة، `GatewayReturn.WindowClosed`.)
+        Assert.Contains("payUrl = GatewayReturn.PayUrlOf(deal, now);", back, StringComparison.Ordinal);
 
         var checkout = Code("Components", "Pages", "CheckoutPage.razor");
         Assert.Contains("CheckoutPayMethods.GatewayOpenFailed => L[\"checkout.payment.err_gateway_open_failed\"]", checkout, StringComparison.Ordinal);

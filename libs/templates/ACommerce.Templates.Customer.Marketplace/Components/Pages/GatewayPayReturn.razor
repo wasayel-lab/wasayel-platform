@@ -61,6 +61,12 @@
             @* فاتورَةٌ رَأى تَحَقُّقٌ سابِقٌ إغلاقَها (‏2026-10-13، G5 (xvii-g)): يُقالُ رَمزُها بِلا `?err=`، والرابِطُ لا يُرسَمُ لَها (`PayUrlOf`). *@
             <AcAlert Variant="danger" Message="@L[closedKey]" />
         }
+        else if (windowClosed)
+        {
+            @* انتَهَت مُهلَةُ الفاتورَةِ بِتاريخِها المَكتوب (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى؛ `GatewayReturn.WindowClosed`): البَوّابَةُ لا تَقبَلُ دَفعَها بَعدَه، فَلا رابِطَ
+               إلَيها (القاعِدَة ١٢) — ويُقالُ ما يَفعَلُه زِرُّ «تَحَقَّق» الآن. *@
+            <AcAlert Variant="warning" Message="@L["pay.return.window_closed"]" />
+        }
 
         <AcCard>
             <ChildContent>
@@ -103,6 +109,8 @@
     /// <summary>رَمزُ الفاتورَةِ المُغلَقَةِ حينَ رَآها تَحَقُّقٌ سابِق (<see cref="GatewayReturn.IsClosed"/>، ‏2026-10-13) — يُقالُ بِلا <c>?err=</c>،
     /// والرابِطُ لا يُرسَمُ لَها (<see cref="GatewayReturn.PayUrlOf"/>).</summary>
     string? closedCode;
+    /// <summary>انتَهَت مُهلَةُ الدَفعِ بِتاريخِ الفاتورَةِ المَكتوب — لِصَفقَةٍ قائِمَةٍ لَم يَثبُت دَفعُها (<see cref="GatewayReturn.WindowClosed"/>، ‏2026-10-29).</summary>
+    bool windowClosed;
 
     protected override async Task OnInitializedAsync()
     {
@@ -113,7 +121,9 @@
         dealId = deal?.Id ?? Guid.Empty;
         if (refusalKey is not null || deal is null) return;
         confirmed = GatewayReturn.IsConfirmed(deal);
-        payUrl = GatewayReturn.PayUrlOf(deal);
+        var now = DateTimeOffset.UtcNow;
+        payUrl = GatewayReturn.PayUrlOf(deal, now);
+        windowClosed = deal.Status == DealStatus.Active && !confirmed && GatewayReturn.WindowClosed(deal, now);
         stateKey = GatewayReturn.StateKeyOf(deal);
         closedCode = GatewayReturn.IsClosed(deal) ? GatewayPaymentProof.InvoiceClosed : null;
     }

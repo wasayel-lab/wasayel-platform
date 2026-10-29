@@ -392,25 +392,62 @@ public class GatewayInvoiceExpiryTests(ITestOutputHelper output)
         Path.Combine(RepoRoot(), "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", name))));
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم» (القاعِدَة ٣) — بَعدَ انتِهاءِ الفاتورَةِ ما زالَ رابِطُها يُرسَم</b> (مُراجَعَةُ تَيّارِ S3 الأولى): الفاتورَةُ تُرسَلُ بِـ<c>expired_at</c>
-    /// والوَثيقَةُ تَقولُ «User will be prevented from paying the invoice once expired»، لكِنّ <see cref="GatewayReturn.PayUrlOf"/> يَسأَلُ الحالَ والإغلاقَ والرابِطَ وَحدَها —
-    /// فَصَفقَةٌ جاوَزَت تاريخَها المَكتوبَ يُرسَمُ لَها رابِطُ «أَكمِلِ الدَّفعَ عَلى صَفحَةِ البَوّابَة»، وصَفحَةُ الطَلَبِ «أَكمِلِ الدَّفع»، ولا تَقرَأُ صَفحَةٌ تاريخَ الانتِهاء.
-    /// يَحمَرُّ يَومَ يُسأَلُ الرابِطُ عَن السّاعَة.</para>
+    /// <para><b>بَعدَ انتِهاءِ الفاتورَةِ لا رابِطَ إلَيها ولا «أَكمِلِ الدَّفع»، والصَفحَتانِ تَقولانِ ذلك</b> (القاعِدَة ١٢؛ <b>قُلِبَ بِاسمِه</b> — كانَ
+    /// <c>Today_a_deal_past_its_written_expiry_still_draws_the_hosted_link_and_the_complete_payment_door</c> (<c>9f003b1</c>): الرابِطُ يَعودُ كَما هُوَ، وصِفرُ قِراءَةٍ
+    /// لِتاريخِ الانتِهاءِ في الصَفحَتَين). اليَوم: <see cref="GatewayReturn.PayUrlOf(Deal, DateTimeOffset)"/> بِالسّاعَة؛ وصَفحَةُ العَودَةِ تَرسُمُ سَطرَ المُهلَةِ وزِرَّ «تَحَقَّق»
+    /// بِلا رابِط، وصَفحَةُ الطَلَبِ سَطرَها وبابَ «تَحَقَّق» مَكانَ «أَكمِلِ الدَّفع». والنَصّانِ حَيّان.</para>
     /// </summary>
     [Fact]
-    public void Today_a_deal_past_its_written_expiry_still_draws_the_hosted_link_and_the_complete_payment_door()
+    public void A_deal_past_its_written_expiry_draws_no_hosted_link_and_both_pages_say_the_window_closed()
     {
         var deal = OpenDealExpiring();
-        Assert.True(GatewayPayments.ExpiresAtOf(deal) < Opened.AddHours(25));
-        Assert.Equal(HostedUrl, GatewayReturn.PayUrlOf(deal));
+        var at = Opened + GatewayPayments.InvoiceLifetime;
+        Assert.Null(GatewayReturn.PayUrlOf(deal, at));
+        Assert.Null(GatewayReturn.PayUrlOf(deal, at.AddHours(1)));
+        Assert.Equal(HostedUrl, GatewayReturn.PayUrlOf(deal, at.AddSeconds(-1)));
+        Assert.Equal(HostedUrl, GatewayReturn.PayUrlOf(deal));   // قَواعِدُ الحالِ بِلا ساعَة — كَما كانَت
 
         var back = PageSource("GatewayPayReturn.razor");
         var detail = PageSource("MyDealDetail.razor");
-        var reads = new[] { back, detail }.Sum(p => p.Split("ExpiresAtOf").Length - 1 + p.Split("ExpiryDue").Length - 1);
-        output.WriteLine($"قِراءاتُ تاريخِ الانتِهاءِ في الصَفحَتَين: {reads}");
-        Assert.Equal(0, reads);
-        Assert.Contains("payUrl = GatewayReturn.PayUrlOf(deal);", back, StringComparison.Ordinal);
-        Assert.Contains("@L.Markup(\"deals.detail.complete_payment\")", detail, StringComparison.Ordinal);
+        Assert.Contains("payUrl = GatewayReturn.PayUrlOf(deal, now);", back, StringComparison.Ordinal);
+        Assert.Contains("windowClosed = deal.Status == DealStatus.Active && !confirmed && GatewayReturn.WindowClosed(deal, now);", back, StringComparison.Ordinal);
+        Assert.Contains("<AcAlert Variant=\"warning\" Message=\"@L[\"pay.return.window_closed\"]\" />", back, StringComparison.Ordinal);
+        Assert.Contains("paymentWindowClosed = awaitsPayment && GatewayReturn.WindowClosed(deal, DateTimeOffset.UtcNow);", detail, StringComparison.Ordinal);
+        var invoice = detail.IndexOf("@if (GatewayPayments.HasInvoice(deal))", StringComparison.Ordinal);
+        var closed = detail.IndexOf("@if (paymentWindowClosed)", invoice, StringComparison.Ordinal);
+        var open = detail.IndexOf("else", closed, StringComparison.Ordinal);
+        var door = detail.IndexOf("@L.Markup(\"deals.detail.complete_payment\")", StringComparison.Ordinal);
+        Assert.True(invoice > 0 && closed > invoice && open > closed && door > open, $"فاتورَة {invoice} ← مُغلَقَة {closed} ← مَفتوحَة {open} ← «أَكمِل» {door}");
+        Assert.Contains("@L[\"deals.detail.payment_window_closed\"]", detail[closed..open], StringComparison.Ordinal);
+        Assert.DoesNotContain("deals.detail.complete_payment", detail[closed..open], StringComparison.Ordinal);
+
+        var texts = new[] { "pay.return.window_closed", "deals.detail.payment_window_closed" };
+        foreach (var key in texts)
+        {
+            var text = LocaleCatalog.Text(LocaleCatalog.Arabic, key);
+            Assert.NotEqual(key, text);
+            Assert.False(LocaleCatalog.IsPlaceholder(text), key);
+            Assert.Contains("مُهلَةُ دَفعِ", text, StringComparison.Ordinal);
+            Assert.Contains(LocaleCatalog.Text(LocaleCatalog.Arabic, "pay.return.verify"), text, StringComparison.Ordinal);
+        }
+        output.WriteLine($"نُصوصٌ حَيَّة: {texts.Length}");
+    }
+
+    /// <summary><b>المُوجِبُ والسالِبُ لِلدالَّة</b>: تَصدُقُ عِندَ التاريخِ المَكتوبِ وبَعدَه، ولا تَصدُقُ قَبلَه بِثانِيَة، ولا لِصَفقَةٍ بِلا تاريخٍ (فُتِحَت قَبلَه) أَو بِتاريخٍ
+    /// لا يُقرَأ — فَبابُ هذِه كَما كان.</summary>
+    [Theory]
+    [InlineData("2026-10-30T08:00:00.000Z", 0, true)]
+    [InlineData("2026-10-30T08:00:00.000Z", 3600, true)]
+    [InlineData("2026-10-30T08:00:00.000Z", -1, false)]
+    [InlineData(null, 86400, false)]
+    [InlineData("غَداً", 86400, false)]
+    public void The_window_closes_at_the_written_date_and_never_for_a_deal_without_one(string? at, int secondsAfter, bool closed)
+    {
+        var deal = OpenDealExpiring();
+        if (at is null) deal.Refs.Remove(GatewayPayments.InvoiceExpiresAtRef); else deal.Refs[GatewayPayments.InvoiceExpiresAtRef] = at;
+        var now = Opened.AddHours(24).AddSeconds(secondsAfter);
+        Assert.Equal(closed, GatewayReturn.WindowClosed(deal, now));
+        Assert.Equal(closed ? null : HostedUrl, GatewayReturn.PayUrlOf(deal, now));
     }
 
     private static string RepoRoot()
