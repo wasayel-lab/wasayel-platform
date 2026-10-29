@@ -33,7 +33,9 @@ namespace ACommerce.Platform.Tests;
 public class LiveApprovalFlowProofTests(ITestOutputHelper output)
 {
     /// <summary>مُستَأجِر تَجرِبَة — لا يُلمَس <c>ashare</c> (عَرض
-    /// مُستَثمِرين) ولا مُستَأجِر إنتاج.</summary>
+    /// مُستَثمِرين) ولا مُستَأجِر إنتاج.
+    /// ‏(‏2026-10-29 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) «عَرضُ المُستَثمِرين» رُفِعَ بِقَرارِ المالِك ‏2026-10-28؛ والبُرهانُ باقٍ عَلى
+    /// <c>owner-test</c> لِسَبَبِه التِقنِيّ: يَكتُبُ تَعريفَ دَورٍ في مَتجَرٍ واحِدٍ مُعَيَّنٍ لَيسَت فيه لَقطَةٌ تَقرَؤُه.</summary>
     private const string TenantSlug = "owner-test";
     private const string RoleSlug   = "khayyat";
 

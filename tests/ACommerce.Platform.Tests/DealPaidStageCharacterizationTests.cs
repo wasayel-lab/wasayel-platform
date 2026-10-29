@@ -349,8 +349,8 @@ public class LiveDealPaidStageProofTests(ITestOutputHelper output)
         var payments = new RecordingPaymentProvider();
         var deals = new DealsService(store, payments);
 
-        // مُستَأجِرٌ عَشوائِيٌّ يَخُصُّ هذا التَشغيلَ وَحدَه — لا `ashare`
-        // ولا مَتجَرَ لَقطَة.
+        // مُستَأجِرٌ عَشوائِيٌّ يَخُصُّ هذا التَشغيلَ وَحدَه — لا مَتجَرٌ مَبذورٌ
+        // ولا مَتجَرُ لَقطَة (‏2026-10-29: كانَ «لا `ashare`»، وسَبَبُه العَرضُ رُفِع؛ والعَزلُ تِقنِيّ).
         var slug = "zz-proof-" + Guid.NewGuid().ToString("N")[..8];
         var buyer = Guid.NewGuid();
         var seller = Guid.NewGuid();
