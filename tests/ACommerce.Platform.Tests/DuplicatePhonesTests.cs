@@ -206,6 +206,48 @@ public class DuplicatePhonesTests(ITestOutputHelper output)
         Assert.Equal(movedByTheMerge.Concat(noMemberAccount.Keys).OrderBy(t => t, StringComparer.Ordinal), found);
     }
 
+    // ─── A1 + G-4 (تَدقيقُ الموجَة ١١، ‏2026-10-29): ما يَرِثُه الباقي، وما يُعَدُّ قَبلَ الدَمج ───────────────────────────────
+    //
+    // الدَمجُ يَمحو المُندَمِجَ (`AccountDeletion.Erase`) بَعدَ أَن يُعطِيَ الباقِيَ تَحَقُّقَ الجَوّالِ والبَريدَ والهُوِيَّةَ وَحدَها — فَأَدوارُه وخَصائِصُها
+    // (ومِنها اسمُ النَشاط) وخَصائِصُه العامَّةُ ودَورُه النَشِطُ واسمُه وقَبولُه لِلشُروطِ واشتِراكاتُ إشعارِه تُمحى مَعَه، والعَدُّ لا يَقولُ إنَّها تَختَلِف.
+    // ولا شَيءَ يَمنَعُ مَجموعَةً فيها حِسابٌ إداريّ. القاعِدَة ٣: يُثَبَّتُ السُلوكُ القائِمُ قَبلَ التَبديل.
+
+    private static string MergeBody()
+    {
+        var code = StudioConsentCharacterizationTests.Source("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Identity", "DuplicatePhones.cs");
+        var body = code[code.IndexOf("private static async Task<long> ApplyOnceAsync(", StringComparison.Ordinal)..];
+        return body[..body.IndexOf("public static async Task<int> RenameAsync<T>(", StringComparison.Ordinal)];
+    }
+
+    /// <summary>حُقولُ الباقي الَّتي يَكتُبُها الدَمجُ — مِن جِسمِه لا مِن قائِمَة.</summary>
+    internal static IReadOnlyList<string> SurvivorWrites(string body)
+        => Regex.Matches(body, @"survivor\.(\w+)\s*(?:\|=|=(?!=))").Select(m => m.Groups[1].Value)
+            .Concat(Regex.Matches(body, @"\(survivor\.(\w+), survivor\.(\w+)\)\s*=").SelectMany(m => new[] { m.Groups[1].Value, m.Groups[2].Value }))
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+
+    /// <summary><b>تَوصيفُ اليَوم (‏2026-10-29، A1)</b>: الدَمجُ يَكتُبُ في الباقي جَوّالَه وتَحَقُّقَه والبَريدَ والهُوِيَّةَ وتاريخَ التَحديثِ وَحدَها.</summary>
+    [Fact]
+    public void Today_the_merge_gives_the_survivor_only_its_phone_verification_email_and_national_id()
+    {
+        var writes = SurvivorWrites(MergeBody());
+        output.WriteLine($"اليَوم: حُقولُ الباقي الَّتي يَكتُبُها الدَمج {writes.Count}: {string.Join(",", writes)}");
+        Assert.Equal(new[] { "Email", "EmailVerified", "NationalId", "Phone", "PhoneVerified", "UpdatedAt" }, writes);
+    }
+
+    /// <summary><b>تَوصيفُ اليَوم (A1 + G-4)</b>: سكربتُ العَدِّ لا يَذكُرُ دَوراً ولا اسماً ولا اسمَ نَشاط، والقِياسُ لا يَسأَلُ عَن الدَورِ الإداريّ.</summary>
+    [Fact]
+    public void Today_the_count_names_no_role_name_or_business_name_difference_and_the_scan_asks_no_admin_role()
+    {
+        var count = Code("count-duplicate-phones.cs");
+        var scan = StudioConsentCharacterizationTests.Source("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Identity", "DuplicatePhones.cs");
+        var words = new[] { "RoleAttributesJson", "ActiveRole", "FullName", "BusinessName" };
+        var inCount = words.Count(w => count.Contains(w, StringComparison.Ordinal));
+        var admin = scan.Contains("tenant_admin", StringComparison.Ordinal) || scan.Contains("IsAdmin", StringComparison.Ordinal);
+        output.WriteLine($"اليَوم: كَلِماتُ الفُروقِ في العَدّ {inCount} مِن {words.Length} · القِياسُ يَسأَلُ عَن الإداريّ: {admin}");
+        Assert.Equal(0, inCount);
+        Assert.False(admin);
+    }
+
     /// <summary>سُطورُ مَخزَنِ الدَمجِ الَّتي يُعيدُها الصَفُّ الحَيُّ بِحَرفِها — فَما يُقاسُ هُوَ ما يُشَغَّل.</summary>
     internal static readonly string[] StoreLines =
     {
@@ -380,6 +422,57 @@ public class LiveDuplicatePhonesProofTests(ITestOutputHelper output)
             Assert.Equal(a, signTyped);
             Assert.Equal(a, signIntl);
             Assert.True(blockedUntouched);
+        }
+        finally { await CleanAsync(slug); }
+    }
+
+    /// <summary><b>تَوصيفُ اليَوم (‏2026-10-29، A1 + G-4) حَيّاً عَلى Postgres</b>: أَ (أَقدَمُ، بِلا دَورٍ ولا اسم) وب (دَورُه «vendor» بِاسمِ نَشاطِه،
+    /// وخَصائِصُه، واسمُه، وقَبولُه الشُروطَ، واشتِراكُ إشعار) — بَعدَ الدَمجِ لا يَبقى لِأَ شَيءٌ مِنها؛ ومَجموعَةٌ فيها حِسابٌ دَورُه النَشِطُ
+    /// <c>tenant_admin</c> تُقاسُ قابِلَةً لِلدَمج.</summary>
+    [Fact]
+    public async Task Today_the_merge_drops_the_merged_away_roles_name_terms_and_push_and_an_admin_group_is_mergeable_on_Postgres()
+    {
+        if (!Enabled) return;
+        using var store = Store();
+        var slug = "dup-a1-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            var (a, b, c, d) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+            await using (var s = store.LightweightSession(slug))
+            {
+                s.Store(new User { Id = a, TenantSlug = slug, Phone = "0500000095", CreatedAt = DateTime.UtcNow.AddDays(-10), FullName = "" });
+                s.Store(new User
+                {
+                    Id = b, TenantSlug = slug, Phone = "+966500000095", CreatedAt = DateTime.UtcNow.AddDays(-2), FullName = "سارة",
+                    ActiveRole = "vendor", RoleAttributesJson = new() { ["vendor"] = new() { ["business_name"] = "مَتجَرُ سارة" } },
+                    AttributesJson = new() { ["bio"] = "—" }, AcceptedTermsAt = DateTime.UtcNow.AddDays(-1), AcceptedTermsVersion = 3,
+                    PushSubscriptions = [new PushSubscription { Endpoint = "https://push.example/b", P256dh = "k", Auth = "a", CreatedAt = DateTime.UtcNow }],
+                });
+                s.Store(new User { Id = c, TenantSlug = slug, Phone = "0500000096", CreatedAt = DateTime.UtcNow.AddDays(-9) });
+                s.Store(new User { Id = d, TenantSlug = slug, Phone = "+966500000096", CreatedAt = DateTime.UtcNow.AddDays(-1), ActiveRole = "tenant_admin" });
+                await s.SaveChangesAsync();
+            }
+            List<DuplicatePhones.Account> members;
+            await using (var q = store.QuerySession(slug))
+                members = (await q.Query<User>().ToListAsync()).Select(u => new DuplicatePhones.Account(u.Id, u.Phone, u.CreatedAt, u.DeletedAt is not null)).ToList();
+            var plan = DuplicatePhones.Build(members);
+            await using var conn = new NpgsqlConnection(LiveDealConcurrencyProofTests.ConnectionString);
+            await conn.OpenAsync();
+            var tables = await DuplicatePhones.TenantTablesAsync(conn);
+            var scanAB = await DuplicatePhones.ScanAsync(conn, slug, plan.Groups.Single(g => g.Survivor == a), tables);
+            var scanCD = await DuplicatePhones.ScanAsync(conn, slug, plan.Groups.Single(g => g.Survivor == c), tables);
+            await DuplicatePhones.ApplyAsync(store, slug, scanAB, DateTime.UtcNow);
+
+            User ua;
+            await using (var q = store.QuerySession(slug)) ua = (await q.LoadAsync<User>(a))!;
+            var kept = new[]
+            {
+                ("الدَور", ua.ActiveRole == "vendor"), ("خَصائِصُ الدَور", ua.RoleAttributesJson.ContainsKey("vendor")), ("الخَصائِص", ua.AttributesJson.ContainsKey("bio")),
+                ("الاسم", ua.FullName == "سارة"), ("الشُروط", ua.AcceptedTermsVersion == 3), ("الإشعار", ua.PushSubscriptions.Count == 1),
+            };
+            output.WriteLine($"اليَوم: ما وَرِثَه الباقي مِن المُندَمِج: {string.Join(" · ", kept.Select(k => $"{k.Item1} {k.Item2}"))} · مَجموعَةُ الإداريِّ قابِلَةٌ لِلدَمج: {scanCD.Mergeable}");
+            Assert.All(kept, k => Assert.False(k.Item2, k.Item1));
+            Assert.True(scanCD.Mergeable);
         }
         finally { await CleanAsync(slug); }
     }
