@@ -535,7 +535,13 @@ public class DealConcurrencyRefusalTests
             scanned++;
             hits += Count(WriteEndpointGuardTests.StripComments(File.ReadAllText(f)), "UseOptimisticConcurrency(");
         }
-        Assert.True(scanned > 200 && hits == 1, $"فُحِصَ {scanned} مِلَفّاً و`UseOptimisticConcurrency(` {hits} — المُتَوَقَّعُ واحِد.");
+        // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ G-1 — قَرارٌ مَرئِيّ) **ووَثيقَتا الحِسابِ بَعدَها**: `User` في `HostingExtensions` و`StudioUser` في `ConfigureMarten`
+        // القالِب (ADR-041 §٣). فَالصَفقَةُ ما زالَت مَرَّةً واحِدَةً بِدالَّةِ خِدمَتِها، والمَجموعُ ثَلاثَةٌ مُسَمّاة.
+        var host = Code("libs", "core", "ACommerce.Platform.Hosting", "HostingExtensions.cs");
+        Assert.Equal(1, Count(host, "opts.Schema.For<ACommerce.Kit.Auth.User>().Identity(x => x.Id).UseOptimisticConcurrency(true);"));
+        Assert.Equal(1, Count(Code(Template, "MarketplaceTemplateExtensions.cs"),
+            "opts.Schema.For<Services.Incubator.StudioUser>().Identity(x => x.Id).UseOptimisticConcurrency(true);"));
+        Assert.True(scanned > 200 && hits == 3, $"فُحِصَ {scanned} مِلَفّاً و`UseOptimisticConcurrency(` {hits} — المُتَوَقَّعُ ثَلاثَة (Deal وUser وStudioUser).");
     }
 
     /// <summary><b>كُلُّ بابِ كِتابَةٍ عامٍّ في الخِدمَةِ يَلتَقِطُ التَعارُض</b> — بِاسمِه؛ وقائِمَةُ مَن لا يَلتَقِطُ مُسَمّاةٌ بِسَبَبِها:

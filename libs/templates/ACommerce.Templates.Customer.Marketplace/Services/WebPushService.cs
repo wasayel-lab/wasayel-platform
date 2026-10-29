@@ -1,4 +1,5 @@
 using ACommerce.Kit.Auth;
+using ACommerce.Kit.Auth.Server;
 using Marten;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -86,8 +87,10 @@ public sealed class WebPushService
         string title, string body, string? url = null, string? tag = null,
         CancellationToken ct = default)
     {
-        await using var s = store.LightweightSession(tenantSlug);
-        var user = await s.LoadAsync<User>(userId, ct);
+        // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ G-1) **قِراءَةٌ لا تُحفَظ**: كانَت الجَلسَةُ نَفسُها تَقرَأُ ثُمَّ تَطرُقُ الشَبَكَةَ ثُمَّ تَحفَظُ الوَثيقَةَ كامِلَةً —
+        // أَطوَلُ نافِذَةٍ بَينَ قِراءَةٍ وحِفظ، فَيُعيدُ حِفظُها إصدارَ جَلسَةٍ رُفِعَ أَو حِساباً حُذِفَ بَينَهُما. والمَحوُ أَدناه يَقرَأُ مِن جَديد.
+        User? user;
+        await using (var q = store.QuerySession(tenantSlug)) user = await q.LoadAsync<User>(userId, ct);
         if (user is null || user.PushSubscriptions.Count == 0) return;
 
         var iconUrl = $"/api/{tenantSlug}/icon.svg";
@@ -121,9 +124,10 @@ public sealed class WebPushService
 
         if (stale.Count > 0)
         {
-            foreach (var sub in stale) user.PushSubscriptions.Remove(sub);
-            s.Store(user);
-            await s.SaveChangesAsync(ct);
+            // المُنتَهي وَحدَه — بِعُنوانِه — مِن قِراءَةٍ جَديدَة (`AccountWrites.UpdateAsync`): ما كَتَبَه غَيرُه أَثناءَ الإرسالِ يَبقى.
+            var endpoints = stale.Select(p => p.Endpoint).ToHashSet(StringComparer.Ordinal);
+            await AccountWrites.UpdateAsync<User>(store, tenantSlug, userId,
+                u => u.PushSubscriptions.RemoveAll(p => endpoints.Contains(p.Endpoint)) > 0, ct);
         }
     }
 }

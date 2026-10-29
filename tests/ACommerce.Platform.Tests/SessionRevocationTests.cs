@@ -180,6 +180,59 @@ public class SessionRevocationTests(ITestOutputHelper output)
         Assert.DoesNotContain("SessionVersion++", body, StringComparison.Ordinal);
     }
 
+    // ─── G-1 (تَدقيقُ الموجَة ١١، ‏2026-10-29): كُتّابُ الحِسابِ المُسَمَّونَ يَحفَظونَ بِالكِتابَةِ الواحِدَةِ الَّتي تُعيدُ مَرَّة ──────────
+
+    /// <summary>جِسمٌ يَحفَظُ الحِسابَ بِـ<c>AccountWrites.UpdateAsync</c> ولا يَفتَحُ جَلسَةً خَفيفَةً يُحَمِّلُ فيها الحِسابَ بِيَدِه — نَقِيّ.</summary>
+    internal static bool SavesThroughAccountWrites(string body)
+        => body.Contains("AccountWrites.UpdateAsync<", StringComparison.Ordinal)
+           && !Regex.IsMatch(body, @"LightweightSession\([^)]*\)[\s\S]*LoadAsync<(?:ACommerce\.Kit\.Auth\.)?(?:User|(?:Services\.Incubator\.)?StudioUser)>");
+
+    private static string MethodBody(string code, string signature)
+    {
+        var i = code.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(i >= 0, $"«{signature}» غائِب — الأَداةُ عَمياء.");
+        var j = code.IndexOf("\n    }\n", i, StringComparison.Ordinal);
+        return code[i..j];
+    }
+
+    [Fact]
+    public void Every_named_account_writer_saves_through_the_one_write_that_retries_once()
+    {
+        var gate = WriteEndpointGuardTests.StripComments(Read($"{TemplateRoot}/Services/SessionVersionGate.cs"));
+        var push = WriteEndpointGuardTests.StripComments(Read($"{TemplateRoot}/Services/WebPushService.cs"));
+        var contacts = WriteEndpointGuardTests.StripComments(Read($"{TemplateRoot}/Services/AccountContacts.cs"));
+        var mte = WriteEndpointGuardTests.StripComments(Read($"{TemplateRoot}/MarketplaceTemplateExtensions.cs"));
+        var auth = WriteEndpointGuardTests.StripComments(Read("libs/kits/Auth/ACommerce.Kit.Auth.Server/AuthHandlers.cs"));
+        var bodies = new Dictionary<string, string>
+        {
+            ["RevokeTenantAsync"] = MethodBody(gate, "RevokeTenantAsync("),
+            ["RevokeStudioAsync"] = MethodBody(gate, "RevokeStudioAsync("),
+            ["WebPushService.SendAsync"] = MethodBody(push, "public async Task SendAsync("),
+            ["AccountContacts.VerifyAsync"] = MethodBody(contacts, "public static async Task<string?> VerifyAsync("),
+            ["AuthHandlers.GetOrCreateUserAsync"] = MethodBody(auth, "private static async Task<AuthResult> GetOrCreateUserAsync("),
+            ["AssignRoleAsync"] = MethodBody(mte, "private static async Task AssignRoleAsync("),
+            ["PostLoginRouteAsync"] = MethodBody(mte, "private static async Task<string> PostLoginRouteAsync("),
+        };
+        foreach (var route in new[] { "/api/{slug}/push/subscribe", "/{slug}/me/save", "/{slug}/me/role/save", "/{slug}/me/role/onboarding/save", "/{slug}/me/area/save" })
+        {
+            var doors = WriteEndpointGuardTests.AllMinimalApiEndpoints().Where(e => e.Route == route).ToList();
+            Assert.True(doors.Count == 1, $"«{route}»: {doors.Count} باباً — الأَداةُ عَمياء.");
+            bodies[route] = doors[0].Body;
+        }
+        var off = bodies.Where(b => !SavesThroughAccountWrites(b.Value)).Select(b => b.Key).ToList();
+        output.WriteLine($"كُتّابُ الحِسابِ المُسَمَّون: {bodies.Count} · بِالكِتابَةِ الواحِدَة: {bodies.Count - off.Count}");
+        Assert.Equal(12, bodies.Count);
+        Assert.True(off.Count == 0, "كاتِبٌ يَحفَظُ الحِسابَ بِيَدِه: " + string.Join(" · ", off));
+    }
+
+    /// <summary>حَقنُ عَيب (القاعِدَة ١٠): شَكلُ اليَومِ بِحَرفِه يُحمِرُّ الفاحِص، وشَكلُ اليَومِ لِلاستوديو أَيضاً.</summary>
+    [Theory]
+    [InlineData("await using var s = store.LightweightSession(slug);\nvar user = await s.LoadAsync<User>(userId);\ns.Store(user);")]
+    [InlineData("var x = await AccountWrites.UpdateAsync<User>(store, slug, id, u => true);\nawait using var s = store.LightweightSession(slug);\nvar user = await s.LoadAsync<User>(userId);")]
+    [InlineData("await using var s = store.LightweightSession(StudioAuth.Tenant);\nvar user = await s.LoadAsync<StudioUser>(userId);")]
+    public void The_writer_scan_refuses_a_hand_written_load_and_store(string body)
+        => Assert.False(SavesThroughAccountWrites(body));
+
     // ─── I-SEC-1 (تَدقيقُ الموجَة ١١، ‏2026-10-29): كوكيُّ «الاسم» يَحمِلُ رَمزاً عَلى مَسارِ دَورٍ اسمُه name ─────────────────────
     //
     // البَوّابَةُ تُسقِطُ مِن فَحصِها كُلَّ اسمٍ يَنتَهي بِـ«.name» (كوكيُّ اسمِ العَرض)، و`ResolveCookieBase` يَقرَأُ لِمَسارِ
@@ -483,9 +536,12 @@ public class LiveAccountConcurrencyProofTests(ITestOutputHelper output)
         return user;
     }
 
-    /// <summary>شَكلُ <c>/api/{slug}/push/subscribe</c> (‏<c>Load → Keep → Store</c>): قَرَأَ قَبلَ الرَفعِ وحَفِظَ بَعدَه.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، G-1 — كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_a_subscribe_that_loaded_before_the_revoke_writes_the_old_version_back_on_Postgres</c> (‏<c>9f887fa</c>): «الحِفظُ القَديمُ حُفِظ ·
+    /// الإصدارُ بَعدَه 0 · رَمزُ ما قَبلَ الرَفع صالِحٌ مِن جَديد». والآن شَكلُ <c>/api/{slug}/push/subscribe</c> القَديمُ (‏<c>Load → Keep → Store</c>)
+    /// يُرَدُّ بِـ<c>ConcurrencyException</c> والإصدارُ قائِم.</summary>
     [Fact]
-    public async Task Today_a_subscribe_that_loaded_before_the_revoke_writes_the_old_version_back_on_Postgres()
+    public async Task A_subscribe_that_loaded_before_the_revoke_is_refused_and_the_version_stands_on_Postgres()
     {
         if (!Enabled) return;
         await using var app = HostApp();
@@ -509,17 +565,20 @@ public class LiveAccountConcurrencyProofTests(ITestOutputHelper output)
             await using var q = store.QuerySession(slug);
             var after = (await q.LoadAsync<User>(user.Id))!;
             var revoked = ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.IsRevoked(AuthHandlers.SessionVersionOf(token)!.Value, after.SessionVersion);
-            output.WriteLine($"اليَوم: الحِفظُ القَديمُ {outcome} · الإصدارُ بَعدَه {after.SessionVersion} · رَمزُ ما قَبلَ الرَفع {(revoked ? "ساقِط" : "صالِحٌ مِن جَديد")} · الاشتِراكات {after.PushSubscriptions.Count}");
-            Assert.Equal("حُفِظ", outcome);
-            Assert.Equal(0, after.SessionVersion);
-            Assert.False(revoked);
+            output.WriteLine($"بَعدَ التَبديل: الحِفظُ القَديمُ {outcome} · الإصدارُ بَعدَه {after.SessionVersion} · رَمزُ ما قَبلَ الرَفع {(revoked ? "ساقِط" : "صالِحٌ مِن جَديد")} · الاشتِراكات {after.PushSubscriptions.Count}");
+            Assert.Equal("رُدَّ (ConcurrencyException)", outcome);
+            Assert.Equal(1, after.SessionVersion);
+            Assert.True(revoked);
+            Assert.Empty(after.PushSubscriptions);
         }
         finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
     }
 
-    /// <summary>شَكلُ <c>WebPushService.SendAsync</c>: يَقرَأُ، ثُمَّ نِداءاتُ شَبَكَةٍ، ثُمَّ يَحفَظُ النُسخَةَ نَفسَها — والحَذفُ وَقَعَ بَينَهُما.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، G-1)</b> — كانَ <c>Today_a_stale_copy_saved_after_erase_writes_the_erased_account_back_on_Postgres</c>
+    /// (‏<c>9f887fa</c>): «حُفِظ · DeletedAt فارِغ · الاسم عادَ · الجَوّال عادَ · الإصدار 0». والآن شَكلُ <c>WebPushService.SendAsync</c> القَديمُ (قِراءَةٌ،
+    /// ثُمَّ نِداءاتُ شَبَكَة، ثُمَّ حِفظُ النُسخَةِ نَفسِها) بَعدَ الحَذفِ يُرَدّ، والحِسابُ يَبقى مَمحُوّاً — وبابُ الحَذفِ نَفسُه (F2) يَلتَقِطُه بِإعادَتِه.</summary>
     [Fact]
-    public async Task Today_a_stale_copy_saved_after_erase_writes_the_erased_account_back_on_Postgres()
+    public async Task A_stale_copy_saved_after_erase_is_refused_and_the_account_stays_erased_on_Postgres()
     {
         if (!Enabled) return;
         await using var app = HostApp();
@@ -547,11 +606,113 @@ public class LiveAccountConcurrencyProofTests(ITestOutputHelper output)
             var after = (await q.LoadAsync<User>(user.Id))!;
             var nameBack = after.FullName != AccountDeletion.ErasedName;
             var contactBack = after.Phone.Length > 0;
-            output.WriteLine($"اليَوم: الحِفظُ القَديمُ بَعدَ الحَذفِ {outcome} · DeletedAt {(after.DeletedAt is null ? "فارِغ" : "قائِم")} · الاسم {(nameBack ? "عادَ" : "مَمحُوّ")} · الجَوّال {(contactBack ? "عادَ" : "مَمحُوّ")} · الإصدار {after.SessionVersion}");
-            Assert.Equal("حُفِظ", outcome);
-            Assert.Null(after.DeletedAt);
-            Assert.Equal("صاحِبُ الحِساب", after.FullName);
-            Assert.Equal(0, after.SessionVersion);
+            output.WriteLine($"بَعدَ التَبديل: الحِفظُ القَديمُ بَعدَ الحَذفِ {outcome} · DeletedAt {(after.DeletedAt is null ? "فارِغ" : "قائِم")} · الاسم {(nameBack ? "عادَ" : "مَمحُوّ")} · الجَوّال {(contactBack ? "عادَ" : "مَمحُوّ")} · الإصدار {after.SessionVersion}");
+            Assert.Equal("رُدَّ (ConcurrencyException)", outcome);
+            Assert.NotNull(after.DeletedAt);
+            Assert.False(nameBack || contactBack);
+            Assert.Equal(1, after.SessionVersion);
+        }
+        finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
+    }
+
+    /// <summary><b>القِياسُ قَبلَ الوُثوق</b> (القاعِدَة ١٠): الجَلسَةُ الخَفيفَةُ تَحفَظُ نُسخَةَ القِراءَةِ — بِالمُعَرِّفِ أَو بِالاستِعلامِ (شَكلُ دُخولِ
+    /// الاستوديو ودُخولِ المَتجَر) — بِلا تَعارُضٍ حينَ لا كاتِبَ بَينَهُما، لِلحِسابَين؛ وتَرُدُّ وَثيقَةً لَم تُقرَأ في جَلسَتِها.</summary>
+    [Fact]
+    public async Task A_copy_read_by_id_or_by_query_saves_without_a_writer_between_and_an_unread_one_is_refused_on_Postgres()
+    {
+        if (!Enabled) return;
+        await using var app = HostApp();
+        var store = app.Services.GetRequiredService<Marten.IDocumentStore>();
+        var slug = "cc-zz-" + Guid.NewGuid().ToString("N")[..8];
+        var studio = new ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioUser { Id = Guid.NewGuid(), Phone = "cc-" + Guid.NewGuid().ToString("N")[..10] };
+        try
+        {
+            var user = await SeedAsync(store, slug);
+            await using (var s = store.LightweightSession(ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth.Tenant)) { s.Store(studio); await s.SaveChangesAsync(); }
+
+            async Task<string> Save(Func<Marten.IDocumentSession, Task> body, string tenant)
+            {
+                await using var s = store.LightweightSession(tenant);
+                await body(s);
+                try { await s.SaveChangesAsync(); return "حُفِظ"; }
+                catch (JasperFx.ConcurrencyException) { return "رُدّ"; }
+            }
+            var byId = await Save(async s => { var u = await s.LoadAsync<User>(user.Id); u!.FullName = "بِالمُعَرِّف"; s.Store(u); }, slug);
+            var byQuery = await Save(async s =>
+            {
+                var u = (await Marten.QueryableExtensions.ToListAsync(s.Query<User>().Where(x => x.Phone == user.Phone))).Single();
+                u.FullName = "بِالاستِعلام"; s.Store(u);
+            }, slug);
+            var studioByQuery = await Save(async s =>
+            {
+                var u = (await Marten.QueryableExtensions.ToListAsync(s.Query<ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioUser>().Where(x => x.Phone == studio.Phone))).Single();
+                u.LastLoginAt = DateTime.UtcNow; s.Store(u);
+            }, ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth.Tenant);
+            var unread = await Save(s =>
+            {
+                s.Store(new User { Id = user.Id, TenantSlug = slug, Phone = user.Phone, FullName = "لَم تُقرَأ" });
+                return Task.CompletedTask;
+            }, slug);
+            output.WriteLine($"بِالمُعَرِّف: {byId} · بِالاستِعلام: {byQuery} · الاستوديو بِالاستِعلام: {studioByQuery} · وَثيقَةٌ لَم تُقرَأ: {unread}");
+            Assert.Equal(("حُفِظ", "حُفِظ", "حُفِظ", "رُدّ"), (byId, byQuery, studioByQuery, unread));
+        }
+        finally
+        {
+            await LiveZeroRoleAdminProofTests.CleanAsync(store, slug);
+            await using var s = store.LightweightSession(ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth.Tenant);
+            s.Delete<ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioUser>(studio.Id);
+            await s.SaveChangesAsync();
+        }
+    }
+
+    /// <summary><b>الإعادَةُ تُطَبِّقُ تَغييرَ الكاتِبِ وَحدَه مَرَّةً عَلى ما كُتِب</b> (‏<c>AccountWrites.UpdateAsync</c>): كاتِبٌ يَرفَعُ الإصدارَ بَينَ قِراءَةِ
+    /// الاشتِراكِ وحِفظِه — فَيُرَدُّ الحِفظُ الأَوَّل، ويُعادُ التَغييرُ عَلى الوَثيقَةِ الجَديدَة: الإصدارُ المَرفوعُ والاشتِراكُ مَعاً (مُوجَب). وكاتِبٌ يَسبِقُ
+    /// المُحاوَلَتَينِ كِلتَيهِما يُفشِلُ الطَلَبَ مُغلَقاً ولا يَكتُبُ فَوقَه (سالِب).</summary>
+    [Fact]
+    public async Task The_writer_reapplies_only_its_own_change_once_and_fails_closed_on_a_second_conflict_on_Postgres()
+    {
+        if (!Enabled) return;
+        await using var app = HostApp();
+        var store = app.Services.GetRequiredService<Marten.IDocumentStore>();
+        var slug = "cc-zz-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            var user = await SeedAsync(store, slug);
+            var calls = 0;
+            var saved = await AccountWrites.UpdateAsync<User>(store, slug, user.Id, u =>
+            {
+                if (++calls == 1)
+                    ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.RevokeTenantAsync(store, Cache(), slug, user.Id).GetAwaiter().GetResult();
+                ACommerce.Templates.Customer.Marketplace.Services.PushSubscriptionDoor.Keep(u.PushSubscriptions,
+                    new ACommerce.Kit.Auth.PushSubscription { Endpoint = "https://fcm.googleapis.com/fcm/send/new", P256dh = "p", Auth = "a" });
+                return true;
+            });
+            await using (var q = store.QuerySession(slug))
+            {
+                var after = (await q.LoadAsync<User>(user.Id))!;
+                output.WriteLine($"مُحاوَلات: {calls} · الإصدار {after.SessionVersion} · الاشتِراكات {after.PushSubscriptions.Count}");
+                Assert.Equal(2, calls);
+                Assert.Equal((1, 1), (after.SessionVersion, after.PushSubscriptions.Count));
+                Assert.Equal("https://fcm.googleapis.com/fcm/send/new", after.PushSubscriptions[0].Endpoint);
+            }
+
+            var tries = 0;
+            var failed = await Assert.ThrowsAsync<JasperFx.ConcurrencyException>(() => AccountWrites.UpdateAsync<User>(store, slug, user.Id, u =>
+            {
+                tries++;
+                ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.RevokeTenantAsync(store, Cache(), slug, user.Id).GetAwaiter().GetResult();
+                u.FullName = "لا يُكتَب";
+                return true;
+            }));
+            await using (var q = store.QuerySession(slug))
+            {
+                var after = (await q.LoadAsync<User>(user.Id))!;
+                var unwritten = after.FullName != "لا يُكتَب";
+                output.WriteLine($"تَعارُضانِ مُتَتالِيان: مُحاوَلات {tries} · رُمِيَ {failed.GetType().Name} · الإصدار {after.SessionVersion} · التَغييرُ لَم يُكتَب {unwritten}");
+                Assert.Equal(AccountWrites.Attempts, tries);
+                Assert.Equal(3, after.SessionVersion);
+                Assert.True(unwritten);
+            }
         }
         finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
     }

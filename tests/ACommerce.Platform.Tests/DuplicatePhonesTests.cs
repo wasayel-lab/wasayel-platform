@@ -214,6 +214,7 @@ public class DuplicatePhonesTests(ITestOutputHelper output)
         "o.Events.TenancyStyle = JasperFx.MultiTenancy.TenancyStyle.Conjoined;",
         "o.Schema.For<Tenant>().SingleTenanted().Identity(x => x.Id);",
         "o.Schema.For<ApiKeyDocument>().SingleTenanted().Identity(x => x.Id);",
+        "o.Schema.For<User>().Identity(x => x.Id).UseOptimisticConcurrency(true);",
         "o.Projections.Snapshot<Listing>(SnapshotLifecycle.Inline);",
     };
 }
@@ -234,6 +235,7 @@ public class LiveDuplicatePhonesProofTests(ITestOutputHelper output)
         o.Events.TenancyStyle = JasperFx.MultiTenancy.TenancyStyle.Conjoined;
         o.Schema.For<Tenant>().SingleTenanted().Identity(x => x.Id);
         o.Schema.For<ApiKeyDocument>().SingleTenanted().Identity(x => x.Id);
+        o.Schema.For<User>().Identity(x => x.Id).UseOptimisticConcurrency(true);
         o.Projections.Snapshot<Listing>(SnapshotLifecycle.Inline);
         o.AutoCreateSchemaObjects = JasperFx.AutoCreate.All;
     });

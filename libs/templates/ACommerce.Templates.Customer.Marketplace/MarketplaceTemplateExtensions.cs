@@ -223,6 +223,11 @@ public static class MarketplaceTemplateExtensions
             // والصَفقَةُ <b>بِتَزامُنٍ تَفاؤُلِيّ</b> (‏ADR-036، ‏2026-10-12): كِتابَتانِ قَرَأَتا النُسخَةَ نَفسَها لا تَمحو
             // أَخيرَتُهُما الأُولى — تُرَدُّ بِرَمزٍ. والتَسجيلُ دالَّةُ الخِدمَةِ الكاتِبَةِ نَفسِها، يُناديها البُرهانُ الحَيُّ أَيضاً.
             Services.Deals.DealsService.RegisterDocument(opts);
+
+            // وحِسابُ الاستوديو — ومِنه مُشرِفُ المَنَصَّة — <b>بِتَزامُنٍ تَفاؤُلِيٍّ</b> كَحِسابِ المَتجَر (‏2026-10-29، تَدقيقُ الموجَة ١١ G-1 —
+            // ADR-041 §٣): إصدارُ جَلسَتِه لا يُعيدُه حِفظٌ قَرَأَ قَبلَ الرَفع. ونَظيرُه `User` في `HostingExtensions`. وبِهذا يَخرُجُ مِن
+            // قائِمَةِ غَيرِ المُسَجَّلِ (`MartenSchemaVerbTests.PinnedUnregistered`) فَيَدخُلُ عَرضَ المُخَطَّطِ وتَوكيدَه.
+            opts.Schema.For<Services.Incubator.StudioUser>().Identity(x => x.Id).UseOptimisticConcurrency(true);
         });
 
         return services;
@@ -663,13 +668,14 @@ public static class MarketplaceTemplateExtensions
             if (Gates.SelfGrantPolicy.IsAdminRole(picked))
                 return Results.Redirect(Link(req, slug, $"me/role?err={Gates.SelfGrantPolicy.RefusalCode}"));
 
-            await using var s = store.LightweightSession(slug);
-            var user = await s.LoadAsync<User>(userId);
+            // ‏(‏2026-10-29، G-1) تَغييرُ هذا البابِ وَحدَه عَلى قِراءَةٍ جَديدَة، ويُعادُ مَرَّةً إن سَبَقَه كاتِب (`AccountWrites.UpdateAsync`).
+            var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>
+            {
+                u.ActiveRole = role;
+                u.UpdatedAt = DateTime.UtcNow;
+                return true;
+            });
             if (user is null) return Results.Redirect(Link(req, slug, $"me"));
-            user.ActiveRole = role;
-            user.UpdatedAt = DateTime.UtcNow;
-            s.Store(user);
-            await s.SaveChangesAsync();
 
             // إن كانَ لِلدَور حُقول بَيانات مَطلوبَة غَير مَملوءَة، حَوِّل
             // إلى onboarding. لَو البَيانات مَوجودَة (مَثَلاً المُستَخدِم
@@ -700,28 +706,28 @@ public static class MarketplaceTemplateExtensions
             var tenant = await LoadTenantWithRolesAsync(store, slug);
             if (tenant is null) return Results.Redirect($"/{slug}");
 
-            await using var s = store.LightweightSession(slug);
-            var user = await s.LoadAsync<User>(userId);
-            if (user is null) return Results.Redirect(Link(req, slug, $"me"));
-
-            foreach (var (key, vals) in req.Form)
+            // ‏(‏2026-10-29، G-1) حُقولُ الاستِمارَةِ وَحدَها عَلى قِراءَةٍ جَديدَة، ويُعادُ تَطبيقُها مَرَّةً إن سَبَقَه كاتِب.
+            var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>
             {
-                if (!key.StartsWith("role_", StringComparison.Ordinal)) continue;
-                var rest = key["role_".Length..];
-                var attrIdx = rest.IndexOf("_attr_", StringComparison.Ordinal);
-                if (attrIdx <= 0) continue;
-                var roleSlug = rest[..attrIdx];
-                var attrCode = rest[(attrIdx + "_attr_".Length)..];
-                if (!user.RoleAttributesJson.TryGetValue(roleSlug, out var dict))
+                foreach (var (key, vals) in req.Form)
                 {
-                    dict = new Dictionary<string, string>();
-                    user.RoleAttributesJson[roleSlug] = dict;
+                    if (!key.StartsWith("role_", StringComparison.Ordinal)) continue;
+                    var rest = key["role_".Length..];
+                    var attrIdx = rest.IndexOf("_attr_", StringComparison.Ordinal);
+                    if (attrIdx <= 0) continue;
+                    var roleSlug = rest[..attrIdx];
+                    var attrCode = rest[(attrIdx + "_attr_".Length)..];
+                    if (!u.RoleAttributesJson.TryGetValue(roleSlug, out var dict))
+                    {
+                        dict = new Dictionary<string, string>();
+                        u.RoleAttributesJson[roleSlug] = dict;
+                    }
+                    dict[attrCode] = vals.ToString();
                 }
-                dict[attrCode] = vals.ToString();
-            }
-            user.UpdatedAt = DateTime.UtcNow;
-            s.Store(user);
-            await s.SaveChangesAsync();
+                u.UpdatedAt = DateTime.UtcNow;
+                return true;
+            });
+            if (user is null) return Results.Redirect(Link(req, slug, $"me"));
 
             var active = tenant.Roles.FirstOrDefault(r => r.Slug == user.ActiveRole);
             return Results.Redirect(string.IsNullOrEmpty(active?.HomeRoute)
@@ -789,45 +795,47 @@ public static class MarketplaceTemplateExtensions
             // الخَصائِص الديناميكِيَّة: كُلّ حَقل بِالـ form بِالبادِئَة
             // attr_<Code> يُحَدِّث user.AttributesJson. لا نَمسَح المَفاتيح
             // غَير المَوجودَة (سَلوك upsert: نُحَدِّث المُمَرَّر، نَتُرك الباقي).
-            await using var s = store.LightweightSession(slug);
-            var user = await s.LoadAsync<User>(userId);
-            if (user is null) return Results.Redirect(Link(req, slug, $"me"));
-            user.FullName = fullName;
-            if (newAvatarUrl is not null) user.AvatarUrl = newAvatarUrl;
-            user.UpdatedAt = DateTime.UtcNow;
-
-            // الدَور النَّشِط (يَظهَر فَقَط لَو المَتجَر يُعَرِّف أَدواراً).
-            // قُرِئَ وحُسِمَ أَعلى الجِسمِ قَبلَ أَيِّ أَثَر — فَما يَبلُغُ
-            // هُنا دَورٌ مَرَّ بِـ`SelfGrantPolicy` وَحدَه.
-            if (!string.IsNullOrEmpty(activeRole)) user.ActiveRole = activeRole;
-
-            // خَصائِص ديناميكِيَّة: attr_<Code> = بروفايل عامّ،
-            // role_<roleSlug>_attr_<Code> = خاصّ بِدَور.
-            foreach (var (key, vals) in req.Form)
+            // ‏(‏2026-10-29، G-1) ما تَحمِلُه الاستِمارَةُ وَحدَه عَلى قِراءَةٍ جَديدَة (`AccountWrites.UpdateAsync`) — كانَ يُحفَظُ فَوقَ ما كَتَبَه
+            // غَيرُه بَينَ القِراءَةِ والحِفظ، ومِنه إصدارُ الجَلسَة.
+            var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>
             {
-                if (key.StartsWith("attr_", StringComparison.Ordinal))
+                u.FullName = fullName;
+                if (newAvatarUrl is not null) u.AvatarUrl = newAvatarUrl;
+                u.UpdatedAt = DateTime.UtcNow;
+
+                // الدَور النَّشِط (يَظهَر فَقَط لَو المَتجَر يُعَرِّف أَدواراً).
+                // قُرِئَ وحُسِمَ أَعلى الجِسمِ قَبلَ أَيِّ أَثَر — فَما يَبلُغُ
+                // هُنا دَورٌ مَرَّ بِـ`SelfGrantPolicy` وَحدَه.
+                if (!string.IsNullOrEmpty(activeRole)) u.ActiveRole = activeRole;
+
+                // خَصائِص ديناميكِيَّة: attr_<Code> = بروفايل عامّ،
+                // role_<roleSlug>_attr_<Code> = خاصّ بِدَور.
+                foreach (var (key, vals) in req.Form)
                 {
-                    user.AttributesJson[key["attr_".Length..]] = vals.ToString();
-                }
-                else if (key.StartsWith("role_", StringComparison.Ordinal))
-                {
-                    // role_{slug}_attr_{code}
-                    var rest = key["role_".Length..];
-                    var attrIdx = rest.IndexOf("_attr_", StringComparison.Ordinal);
-                    if (attrIdx <= 0) continue;
-                    var roleSlug = rest[..attrIdx];
-                    var attrCode = rest[(attrIdx + "_attr_".Length)..];
-                    if (string.IsNullOrEmpty(roleSlug) || string.IsNullOrEmpty(attrCode)) continue;
-                    if (!user.RoleAttributesJson.TryGetValue(roleSlug, out var dict))
+                    if (key.StartsWith("attr_", StringComparison.Ordinal))
                     {
-                        dict = new Dictionary<string, string>();
-                        user.RoleAttributesJson[roleSlug] = dict;
+                        u.AttributesJson[key["attr_".Length..]] = vals.ToString();
                     }
-                    dict[attrCode] = vals.ToString();
+                    else if (key.StartsWith("role_", StringComparison.Ordinal))
+                    {
+                        // role_{slug}_attr_{code}
+                        var rest = key["role_".Length..];
+                        var attrIdx = rest.IndexOf("_attr_", StringComparison.Ordinal);
+                        if (attrIdx <= 0) continue;
+                        var roleSlug = rest[..attrIdx];
+                        var attrCode = rest[(attrIdx + "_attr_".Length)..];
+                        if (string.IsNullOrEmpty(roleSlug) || string.IsNullOrEmpty(attrCode)) continue;
+                        if (!u.RoleAttributesJson.TryGetValue(roleSlug, out var dict))
+                        {
+                            dict = new Dictionary<string, string>();
+                            u.RoleAttributesJson[roleSlug] = dict;
+                        }
+                        dict[attrCode] = vals.ToString();
+                    }
                 }
-            }
-            s.Store(user);
-            await s.SaveChangesAsync();
+                return true;
+            });
+            if (user is null) return Results.Redirect(Link(req, slug, $"me"));
 
             AuthSession.UpdateNameCookie(req.HttpContext.Response, slug, fullName);
             // عُد إلى returnUrl إن أُرسِل (يَحفَظ سِياق الدَّور /r/{role}/me).
@@ -1872,12 +1880,14 @@ public static class MarketplaceTemplateExtensions
             var sub = await Services.PushSubscriptionDoor.ReadAsync(req.Body, DateTime.UtcNow);
             if (sub is null) return Results.BadRequest();
 
-            await using var s = store.LightweightSession(slug);
-            var user = await s.LoadAsync<User>(userId);
-            if (user is null) return Results.NotFound();
-            Services.PushSubscriptionDoor.Keep(user.PushSubscriptions, sub);
-            s.Store(user);
-            await s.SaveChangesAsync();
+            // ‏(‏2026-10-29، G-1) يُنادى في كُلِّ صَفحَة، وكانَ حِفظُه الكامِلُ يُعيدُ إصدارَ جَلسَةٍ رُفِعَ بَينَ قِراءَتِه وحِفظِه — والآن الاشتِراكُ
+            // وَحدَه عَلى قِراءَةٍ جَديدَة، ويُعادُ مَرَّةً إن سَبَقَه كاتِب.
+            var saved = await AccountWrites.UpdateAsync<User>(store, slug, userId, user =>
+            {
+                Services.PushSubscriptionDoor.Keep(user.PushSubscriptions, sub);
+                return true;
+            });
+            if (saved is null) return Results.NotFound();
             return Results.Ok();
         }).DisableAntiforgery();
 
@@ -1952,15 +1962,16 @@ public static class MarketplaceTemplateExtensions
             if (radius < 0) radius = 0;
             if (radius > 500) radius = 500;
 
-            await using var s = store.LightweightSession(slug);
-            var user = await s.LoadAsync<User>(userId);
+            // ‏(‏2026-10-29، G-1) المِنطَقَةُ وَحدَها عَلى قِراءَةٍ جَديدَة، ويُعادُ تَطبيقُها مَرَّةً إن سَبَقَه كاتِب.
+            var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>
+            {
+                u.AnchorLat = lat;
+                u.AnchorLng = lng;
+                u.RadiusKm  = radius;
+                u.UpdatedAt = DateTime.UtcNow;
+                return true;
+            });
             if (user is null) return Results.Redirect(Link(req, slug, $"me"));
-            user.AnchorLat = lat;
-            user.AnchorLng = lng;
-            user.RadiusKm  = radius;
-            user.UpdatedAt = DateTime.UtcNow;
-            s.Store(user);
-            await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"me/area?saved=1"));
         }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
@@ -4898,13 +4909,13 @@ public static class MarketplaceTemplateExtensions
         var picked = tenant.Roles.FirstOrDefault(r => r.Slug == roleSlug);
         if (picked is null || Gates.SelfGrantPolicy.IsAdminRole(picked)) return;
 
-        await using var s = store.LightweightSession(slug);
-        var user = await s.LoadAsync<ACommerce.Kit.Auth.User>(userId);
-        if (user is null) return;
-        user.ActiveRole = roleSlug;
-        user.UpdatedAt = DateTime.UtcNow;
-        s.Store(user);
-        await s.SaveChangesAsync();
+        // ‏(‏2026-10-29، G-1) كاتِبُ دُخول: الدَورُ وَحدَه عَلى قِراءَةٍ جَديدَة، ويُعادُ مَرَّةً إن سَبَقَه كاتِب.
+        await AccountWrites.UpdateAsync<ACommerce.Kit.Auth.User>(store, slug, userId, u =>
+        {
+            u.ActiveRole = roleSlug;
+            u.UpdatedAt = DateTime.UtcNow;
+            return true;
+        });
     }
 
     // قَرار التَّوجيه بَعد دُخول ناجِح:
@@ -4919,8 +4930,8 @@ public static class MarketplaceTemplateExtensions
         if (tenant is null || tenant.Roles.Count == 0)
             return $"/{slug}";
 
-        await using var t = store.LightweightSession(slug);
-        var user = await t.LoadAsync<ACommerce.Kit.Auth.User>(userId);
+        ACommerce.Kit.Auth.User? user;
+        await using (var t = store.QuerySession(slug)) user = await t.LoadAsync<ACommerce.Kit.Auth.User>(userId);
         if (user is null) return $"/{slug}";
 
         // إن لَم يُعطَ asRole + لا ActiveRole + دَور واحِد → اِضبِطه تِلقائيّاً.
@@ -4937,9 +4948,14 @@ public static class MarketplaceTemplateExtensions
             tenant.Roles.Count == 1 && string.IsNullOrEmpty(user.ActiveRole) &&
             !Gates.SelfGrantPolicy.IsAdminRole(tenant.Roles[0]))
         {
-            user.ActiveRole = tenant.Roles[0].Slug;
-            t.Store(user);
-            await t.SaveChangesAsync();
+            // ‏(‏2026-10-29، G-1) كاتِبُ دُخول: يُسَكَّنُ الدَورُ عَلى قِراءَةٍ جَديدَةٍ إن بَقِيَ فارِغاً، ويُعادُ مَرَّةً إن سَبَقَه كاتِب.
+            var only = tenant.Roles[0].Slug;
+            user = await AccountWrites.UpdateAsync<ACommerce.Kit.Auth.User>(store, slug, userId, u =>
+            {
+                if (!string.IsNullOrEmpty(u.ActiveRole)) return false;
+                u.ActiveRole = only;
+                return true;
+            }) ?? user;
         }
 
         // الدَور الفِعليّ الَّذي سَنَستَخدِمُه لِلـ URL: asRole إن وُجِدَ، أَو

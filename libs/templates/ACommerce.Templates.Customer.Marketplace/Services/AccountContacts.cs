@@ -68,18 +68,24 @@ public static class AccountContacts
             || !AuthHandlers.ConsumeAttempt(slug, p.Subject, (code ?? "").Trim(), p.Kind)) return CodeInvalid;
 
         var kind = KindName(p.Kind);
-        await using var s = store.LightweightSession(slug);
-        var user = await s.LoadAsync<User>(userId, ct);
         var dest = AuthHandlers.PhoneDestination(p.Value);
-        var holders = kind == ContactLink.Email
-            ? await s.Query<User>().Where(u => u.Email == p.Value).ToListAsync(ct)
-            : await s.Query<User>().Where(u => u.Phone == p.Value || u.Phone == dest).ToListAsync(ct);
-        if (ContactLink.Validate(user, kind, p.Value, holders) is { } refused) return refused.Code;
+        List<User> holders;
+        await using (var q = store.QuerySession(slug))
+            holders = kind == ContactLink.Email
+                ? (await q.Query<User>().Where(u => u.Email == p.Value).ToListAsync(ct)).ToList()
+                : (await q.Query<User>().Where(u => u.Phone == p.Value || u.Phone == dest).ToListAsync(ct)).ToList();
 
-        ContactLink.Link(user!, kind, p.Value, now);
-        s.Store(user!);
-        await s.SaveChangesAsync(ct);
-        return null;
+        // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ G-1) القَرارُ والرَبطُ عَلى قِراءَةٍ جَديدَةٍ لِلحِساب (`AccountWrites.UpdateAsync`)، ويُعادانِ مَرَّةً إن سَبَقَه
+        // كاتِب — كانَ حِفظُه الكامِلُ يُعيدُ إصدارَ جَلسَةٍ رُفِعَ بَينَ القِراءَةِ والحِفظ. وحِسابٌ لا وَثيقَةَ لَه يُرَدُّ بِرَمزِه كَما كان.
+        string? refusal = null;
+        var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>
+        {
+            refusal = ContactLink.Validate(u, kind, p.Value, holders)?.Code;
+            if (refusal is not null) return false;
+            ContactLink.Link(u, kind, p.Value, now);
+            return true;
+        }, ct);
+        return user is null ? ContactLink.Validate(null, kind, p.Value, holders)!.Code : refusal;
     }
 
     /// <summary>مَسارُ «حِسابي» بَعدَ التَحَقُّق — نَقِيَّةٌ عَلى حالِ المُحاوَلَة: رُبِطَت ← <c>contact=linked</c>؛ رَمزٌ خاطِئٌ ومُحاوَلَتُه حَيَّة ← مَرحَلَةُ الرَمزِ

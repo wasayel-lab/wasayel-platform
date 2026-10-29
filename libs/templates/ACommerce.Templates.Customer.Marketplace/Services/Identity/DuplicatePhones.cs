@@ -194,9 +194,21 @@ public static class DuplicatePhones
     /// <para><b>ومَخزَنُه يُسَجِّلُ <see cref="ApiKeyDocument"/> عامَّةً كَما يُسَجِّلُها القالِب</b>: بِغَيرِه يَسأَلُها Marten بِـ<c>tenant_id</c> لا عَمودَ لَه
     /// فَيَرتَدُّ الاستِعلامُ قَبلَ الحِفظ ولا يُكتَبُ حَرف. ولا يُسأَلُ جَدوَلُها إلّا إن عَدَّ القِياسُ فيه مِفتاحاً.</para>
     /// </summary>
+    /// <remarks>‏(‏2026-10-29، تَدقيقُ الموجَة ١١ G-1) <b>ويُعادُ مَرَّةً مِن قِراءَةٍ جَديدَة</b> إن حَفِظَ كاتِبٌ آخَرُ أَحَدَ الحِساباتِ بَعدَ قِراءَتِها هُنا
+    /// (<c>User</c> بِتَزامُنٍ تَفاؤُلِيٍّ، فَيَرمي الحِفظُ <c>ConcurrencyException</c> والمُعامَلَةُ كُلُّها تُرَدّ) — نَسَقُ <c>AccountWrites.UpdateAsync</c>:
+    /// مُحاوَلَتانِ، والثانِيَةُ إن رُدَّت تَرمي ولا يُكتَبُ حَرف.</remarks>
     public static async Task<long> ApplyAsync(IDocumentStore store, string tenant, Scan scan, DateTime now, CancellationToken ct = default)
     {
         if (!scan.Mergeable) throw new InvalidOperationException("merge_blocked: " + string.Join(" · ", scan.Blocks));
+        for (var attempt = 1; ; attempt++)
+        {
+            try { return await ApplyOnceAsync(store, tenant, scan, now, ct); }
+            catch (JasperFx.ConcurrencyException) when (attempt < ACommerce.Kit.Auth.Server.AccountWrites.Attempts) { }
+        }
+    }
+
+    private static async Task<long> ApplyOnceAsync(IDocumentStore store, string tenant, Scan scan, DateTime now, CancellationToken ct)
+    {
         var g = scan.Group;
         await using var s = store.LightweightSession(tenant);
         var survivor = await s.LoadAsync<User>(g.Survivor, ct) ?? throw new InvalidOperationException("survivor_gone");

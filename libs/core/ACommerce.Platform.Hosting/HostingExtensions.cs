@@ -94,7 +94,11 @@ public static class HostingExtensions
 
                 // Documents الإضافيّة — Marten يَكتَشِفها لكنّ ذِكرها صَريحاً
                 // يَجعَل الـ schema gen أَوضَح ويَتَأكَّد من الـ identity.
-                opts.Schema.For<ACommerce.Kit.Auth.User>().Identity(x => x.Id);
+                // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ G-1؛ تَوصيفُه `9f887fa`) **وَثيقَةُ الحِسابِ بِتَزامُنٍ تَفاؤُلِيّ** — كانَ الأَخيرُ يَربَح: حِفظٌ
+                // قَرَأَ قَبلَ «اخرج من كل الأجهزة» يُعيدُ الإصدارَ القَديم، ونُسخَةٌ قُرِئَت قَبلَ الحَذفِ تُعيدُ الحِسابَ المَمحُوّ. والآن يَرمي
+                // `ConcurrencyException`، وكُتّابُه يُعيدونَ تَغييرَهم مَرَّةً مِن قِراءَةٍ جَديدَة (`AccountWrites.UpdateAsync`). ونَظيرُه
+                // `StudioUser` في `ConfigureMarten` القالِب (الاعتِمادُ مِن القالِبِ إلى النَواةِ لا العَكس).
+                opts.Schema.For<ACommerce.Kit.Auth.User>().Identity(x => x.Id).UseOptimisticConcurrency(true);
                 opts.Schema.For<ACommerce.Kit.Notifications.Notification>().Identity(x => x.Id);
                 opts.Schema.For<ACommerce.Kit.Chat.Conversation>().Identity(x => x.Id);
                 opts.Schema.For<ACommerce.Kit.Chat.Message>().Identity(x => x.Id);

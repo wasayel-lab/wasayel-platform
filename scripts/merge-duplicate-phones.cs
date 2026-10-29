@@ -77,6 +77,7 @@ using var store = DocumentStore.For(o =>
     o.Events.TenancyStyle = JasperFx.MultiTenancy.TenancyStyle.Conjoined;
     o.Schema.For<Tenant>().SingleTenanted().Identity(x => x.Id);
     o.Schema.For<ApiKeyDocument>().SingleTenanted().Identity(x => x.Id);   // ← عامٌّ كَما يُسَجِّلُه القالِب: مَفاتيحُ الرَبطِ تُنقَلُ بِحَقلِها
+    o.Schema.For<User>().Identity(x => x.Id).UseOptimisticConcurrency(true);   // ← كَما يُسَجِّلُه المُضيف (‏G-1): حِفظٌ قَرَأَ قَبلَ كاتِبٍ آخَرَ يُرَدُّ ويُعادُ الدَمج
     o.Projections.Snapshot<Listing>(SnapshotLifecycle.Inline);
 });
 await using var conn = new NpgsqlConnection(cs);

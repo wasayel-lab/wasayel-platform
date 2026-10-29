@@ -158,7 +158,9 @@ public class PushSubscriptionDoorTests(ITestOutputHelper output)
         var token = body.IndexOf("AuthSession.ResolveToken(", StringComparison.Ordinal);
         var door = body.IndexOf("Services.PushSubscriptionDoor.ReadAsync(req.Body", StringComparison.Ordinal);
         var refuse = body.IndexOf("if (sub is null) return Results.BadRequest();", StringComparison.Ordinal);
-        var load = body.IndexOf("LoadAsync<User>(", StringComparison.Ordinal);
+        // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ G-1) القِراءَةُ صارَت داخِلَ `AccountWrites.UpdateAsync<User>(` — والتَرتيبُ المَقيسُ هُوَ هُوَ: يُقَرِّرُ ثُمَّ يُحَمِّل.
+        var load = new[] { body.IndexOf("LoadAsync<User>(", StringComparison.Ordinal), body.IndexOf("AccountWrites.UpdateAsync<User>(", StringComparison.Ordinal) }
+            .Where(i => i >= 0).DefaultIfEmpty(-1).Min();
         var keep = body.IndexOf("Services.PushSubscriptionDoor.Keep(user.PushSubscriptions, sub);", StringComparison.Ordinal);
         return token >= 0 && door > token && refuse > door && load > refuse && keep > load;
     }

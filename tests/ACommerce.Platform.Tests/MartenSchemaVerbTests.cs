@@ -818,10 +818,12 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
 
     /// <summary>العَشَرَةُ يَومَ الإلحاق — تَتَقَلَّصُ ولا تَنمو إلّا بِقَرارٍ مَرئِيّ (نَسَقُ قائِمَةِ اليَتامى في القاعِدَة ١).
     /// (‏2026-10-25، مُراجَعَةُ W8-6 — الجَولَة ١): **والحادي عَشَرَ <c>AnalysisRunClaim</c>** — لَم يَنمُ الكودُ بَل أَبصَرَت الأَداة.</summary>
+    /// (‏2026-10-29، تَدقيقُ الموجَة ١١ G-1 — قَرارٌ مَرئِيّ): <b>وخَرَجَ <c>StudioUser</c></b> — صارَ مُسَجَّلاً بِتَزامُنٍ تَفاؤُلِيٍّ في <c>ConfigureMarten</c>
+    /// القالِب، فَيَدخُلُ العَرضَ والتَطبيقَ والتَوكيد. القائِمَةُ عَشَرَة.
     private static readonly string[] PinnedUnregistered =
     [
         "AgentSession", "AuditEntry", "Cart", "ConsentRecord", "IncubatorSession",
-        "ModelCallRecord", "Report", "Review", "StudioUser", "TenantPlanDefinition",
+        "ModelCallRecord", "Report", "Review", "TenantPlanDefinition",
         "AnalysisRunClaim",
     ];
 

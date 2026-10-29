@@ -536,9 +536,14 @@ public static class AuthHandlers
         {
             // مُستَخدِم قَديم بِبَريد غَير مُوَثَّق أَثبَتَ مِلكِيَّته الآن.
             // (‏2026-10-13، G5 M2 — ولا يُعادُ حَرفٌ فَوقَه: أَو بِجَوّالٍ غَيرِ مُوَثَّقٍ أَثبَتَه رَمزٌ إلَيه — `RaiseVerified`.)
-            existing.UpdatedAt = DateTime.UtcNow;
-            session.Store(existing);
-            await session.SaveChangesAsync();
+            // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ G-1) والرَفعُ عَلى قِراءَةٍ جَديدَةٍ بِمُعَرِّفِه (`AccountWrites.UpdateAsync`) لا عَلى نُسخَةِ البَحث —
+            // كانَ حِفظُها الكامِلُ يُعيدُ إصدارَ جَلسَةٍ رُفِعَ بَعدَ البَحث؛ ويُعادُ مَرَّةً إن سَبَقَه كاتِب.
+            existing = await AccountWrites.UpdateAsync<User>(store, tenantSlug, existing.Id, u =>
+            {
+                if (!RaiseVerified(u, email, nationalId)) return false;
+                u.UpdatedAt = DateTime.UtcNow;
+                return true;
+            }) ?? existing;
         }
         var token = MakeToken(existing.Id, tenantSlug, existing.SessionVersion);
         // حَقل العَرض: الهاتِف حَيث وُجِد، وإلّا البَريد — كَي لا تَظهَر

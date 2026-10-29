@@ -101,14 +101,12 @@ public static class SessionVersionGate
     }
 
     /// <summary>«اخرج من كل الأجهزة» لِحِسابِ مَتجَر — يُطَبِّقُ <see cref="Revoke"/> ويَحفَظُه ويَمحو المَحفوظ. <c>false</c> = لا حِساب.</summary>
+    /// <remarks>‏(‏2026-10-29، G-1) بِـ<see cref="AccountWrites.UpdateAsync{T}"/>: كاتِبٌ سَبَقَه يُعادُ عَلَيه الرَفعُ مِن قِراءَةٍ جَديدَة، ولا يَكتُبُ
+    /// أَحَدٌ فَوقَه نُسخَةً قُرِئَت قَبلَه.</remarks>
     public static async Task<bool> RevokeTenantAsync(IDocumentStore store, IMemoryCache cache, string slug, Guid userId)
     {
-        await using var s = store.LightweightSession(slug);
-        var user = await s.LoadAsync<User>(userId);
+        var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u => { Revoke(u, DateTime.UtcNow); return true; });
         if (user is null) return false;
-        Revoke(user, DateTime.UtcNow);
-        s.Store(user);
-        await s.SaveChangesAsync();
         Forget(cache, slug, userId);
         return true;
     }
@@ -116,12 +114,8 @@ public static class SessionVersionGate
     /// <summary>نَظيرُها لِحِسابِ الاستوديو — ومِنه مُشرِفُ المَنَصَّة.</summary>
     public static async Task<bool> RevokeStudioAsync(IDocumentStore store, IMemoryCache cache, Guid userId)
     {
-        await using var s = store.LightweightSession(StudioAuth.Tenant);
-        var user = await s.LoadAsync<StudioUser>(userId);
+        var user = await AccountWrites.UpdateAsync<StudioUser>(store, StudioAuth.Tenant, userId, u => { u.SessionVersion++; return true; });
         if (user is null) return false;
-        user.SessionVersion++;
-        s.Store(user);
-        await s.SaveChangesAsync();
         Forget(cache, StudioAuth.Tenant, userId);
         return true;
     }
