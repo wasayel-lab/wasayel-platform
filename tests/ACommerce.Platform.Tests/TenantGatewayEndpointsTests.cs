@@ -633,6 +633,29 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         Assert.Equal($"pay/return?deal={w.Ids[0]:N}&err=gateway_invoice_expired", GatewayReturn.AfterVerify(res));
     }
 
+    /// <summary><b>اليَوم</b> (‏2026-10-29، تَوصيفٌ قَبلَ قَرارِ المالِك د5 (٢) «ج»: «إشعار آليّ من ميسر إلى المنصّة عند كل دفع، محميّ بسرّ مشترك يُتحقَّق منه في كل إشعار»):
+    /// صِفرُ نُقطَةٍ في القالِبِ تَستَقبِلُ إشعارَ بَوّابَةِ المَتجَر — والدَفعُ لا يُكتَبُ إلّا بِنَقرَةِ «تَحَقَّق»؛ ونُقطَةُ الرَبطِ في الاستوديو لا تُسَجِّلُ إشعاراً عِندَ
+    /// البَوّابَة؛ وتَعريفُ المِفتاحِ السِرِّيِّ بِلا وارِد (صَفُّ <c>ProviderCatalogTests</c> القائِمُ يُثَبِّتُه بِحَقلِه الواحِد). يُقلَبُ بِاسمِه.</summary>
+    [Fact]
+    public void Today_no_route_receives_a_gateway_payment_notice_and_binding_the_key_registers_none()
+    {
+        var files = Directory.EnumerateFiles(Path.Combine(Root, "libs", "templates", "ACommerce.Templates.Customer.Marketplace"), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+            .ToArray();
+        output.WriteLine($"مِلَفّاتٌ مَفحوصَة: {files.Length}");
+        Assert.True(files.Length >= 50, $"أَداةٌ عَمياء: {files.Length} مِلَفّاً.");
+        var routes = files.Sum(f => WriteEndpointGuardTests.StripComments(File.ReadAllText(f)).Split("app.MapPost(\"/{slug}/payments/notify\"").Length - 1);
+        Assert.Equal(0, routes);
+
+        var template = WriteEndpointGuardTests.StripComments(Template("MarketplaceTemplateExtensions.cs"));
+        var at = template.IndexOf("app.MapPost(\"/studio/apps/{slug}/providers/bind\"", StringComparison.Ordinal);
+        Assert.True(at >= 0, "أَداةٌ عَمياء: لا نُقطَةَ رَبط.");
+        var bind = template[at..template.IndexOf(".DisableAntiforgery();", at, StringComparison.Ordinal)];
+        Assert.DoesNotContain("Notices", bind, StringComparison.Ordinal);
+        Assert.DoesNotContain("Webhook", bind, StringComparison.Ordinal);
+        Assert.Null(SealedKeyDefinition().Webhook);
+    }
+
     // ═══ ٥) صَفحَةُ العَودَة — قِراءَةٌ خالِصَةٌ لا تَسأَلُ البَوّابَة ═══════════════════════════════════════
 
     /// <summary>
