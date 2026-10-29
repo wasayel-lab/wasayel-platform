@@ -13,14 +13,16 @@ namespace ACommerce.Platform.Tests;
 
 public class CapabilitiesPromptMoneyTests
 {
+    /// <summary>(‏2026-10-29، قَرارُ المالِك د21 (٢) «ب»: «وسايل لا تقتطع» بَدَلَ «المنصة لا تقتطع» — «المَنَصَّةُ» تُقرَأُ مَتجَرَ المُستَخدِمِ نَفسَه.)</summary>
     internal const string MarketplaceWhenLine =
-        "- **متى يُستخدم**: بيع منتجات مادية أو رقمية من بائعين متعددين، اشتراك بائعين (لا عمولة على المعاملة: المنصة لا تقتطع من مال الصفقة ولا تقسمه بين البائعين).";
+        "- **متى يُستخدم**: بيع منتجات مادية أو رقمية من بائعين متعددين، اشتراك بائعين (لا عمولة على المعاملة: وسايل لا تقتطع من مال الصفقة ولا تقسمه بين البائعين).";
 
     internal const string PaymentsLine =
         "- **الدفع**: Moyasar (mada/Visa) بالمفتاح السري لحساب صاحب المتجر نفسه — المال يصل حسابه مباشرة ولا تمر به المنصة؛ والدفع عند الاستلام.";
 
+    /// <summary>(‏2026-10-29، د21 (٢) «ب»: «ووسايل لا تقتطع عمولة» بَدَلَ «والمنصة لا تقتطع عمولة».)</summary>
     internal const string CommissionReasoning =
-        "تربط بائعين ومشترين وتأخذ عمولة على المعاملة — نمط المتجر متعدد البائعين يجمعهم في متجر واحد، والدفع يصل حساب صاحب المتجر بمفتاح ميسر الخاص به أو نقداً عند الاستلام؛ والمنصة لا تقتطع عمولة ولا توزّع المال.";
+        "تربط بائعين ومشترين وتأخذ عمولة على المعاملة — نمط المتجر متعدد البائعين يجمعهم في متجر واحد، والدفع يصل حساب صاحب المتجر بمفتاح ميسر الخاص به أو نقداً عند الاستلام؛ ووسايل لا تقتطع عمولة ولا توزّع المال.";
 
     private static string[] PromptLines() =>
         new FeasibilityPromptBuilder(new SaudiDataProvider()).Build(new IncubatorSession(), "- لا دروس")
@@ -56,14 +58,16 @@ public class CapabilitiesPromptMoneyTests
         Assert.Contains("ووَسايِل لا تَمُرّ بِمالِه", json, StringComparison.Ordinal);
     }
 
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، د21 (٢) و(٣))</b> — كانَ <c>The_commission_branch_reasoning_says_the_platform_neither_takes_nor_distributes_the_money</c>
+    /// بِثِقَةِ «high» و«والمنصة لا تقتطع». والآن «وسايل» تُسَمّى، والثِقَةُ «medium».</summary>
     [Fact]
-    public void The_commission_branch_reasoning_says_the_platform_neither_takes_nor_distributes_the_money()
+    public void The_commission_branch_reasoning_names_wasayel_as_neither_taking_nor_distributing_the_money_at_medium_confidence()
     {
         Assert.Equal(CommissionReasoning, LocaleCatalog.Find(LocaleCatalog.Arabic, PatternMatcher.CommissionReasoningKey));
 
         var s = PatternMatcher.Match(new Dictionary<string, string>
             { ["offer"] = "twosided", ["payment"] = "commission", ["realtime"] = "no" });
-        Assert.Equal(("marketplace", "high"), (s.Pattern, s.Confidence));
+        Assert.Equal(("marketplace", "medium"), (s.Pattern, s.Confidence));
         Assert.Equal(CommissionReasoning, s.ReasoningAr);
         foreach (var promise in new[] { "يحصّل الدفع", "ويوزّعه" })
             Assert.DoesNotContain(promise, s.ReasoningAr, StringComparison.Ordinal);
@@ -72,7 +76,7 @@ public class CapabilitiesPromptMoneyTests
         {
             SuggestedPattern = s.Pattern, PatternConfidence = s.Confidence, PatternReasoning = s.ReasoningAr,
         };
-        Assert.Contains($"## النمط المقترح أولياً: marketplace (high) — {CommissionReasoning}",
+        Assert.Contains($"## النمط المقترح أولياً: marketplace (medium) — {CommissionReasoning}",
             FeasibilityPromptBuilder.BuildUserMessage(session).Replace("\r\n", "\n").Split('\n'));
     }
 }

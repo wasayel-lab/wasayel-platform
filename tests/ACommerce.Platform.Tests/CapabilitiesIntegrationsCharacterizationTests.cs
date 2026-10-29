@@ -61,16 +61,23 @@ public class CapabilitiesIntegrationsCharacterizationTests(ITestOutputHelper out
         Assert.Contains("public string ChannelName => \"Twilio\";", twilio, StringComparison.Ordinal);
     }
 
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_the_integrations_list_promises_zatca_rega_and_unifonic_and_the_classifieds_line_a_payment_guarantee</c> (‏<c>554debf</c>): الأَسطُرُ
+    /// الأَربَعَةُ حاضِرَة، ولا Twilio ولا سَطرَ مَحدودِيَّة. والآن الأَربَعَةُ غائِبَة، والمَدمَجُ يُسَمّى بِحَرفِه، والمَحدودِيَّةُ تُقال.</summary>
     [Fact]
-    public void Today_the_integrations_list_promises_zatca_rega_and_unifonic_and_the_classifieds_line_a_payment_guarantee()
+    public void The_integrations_list_names_only_what_the_code_carries_and_the_limits_say_the_rest()
     {
         var lines = CapabilityLines();
         output.WriteLine($"أَسطُرُ المَرجِع: {lines.Length}");
-        Assert.Contains(UnifonicLineOld, lines);
-        Assert.Contains(ZatcaLineOld, lines);
-        Assert.Contains(RegaLineOld, lines);
-        Assert.Contains(ClassifiedsContraLineOld, lines);
-        Assert.DoesNotContain(lines, l => l.Contains("Twilio", StringComparison.Ordinal));
-        Assert.DoesNotContain(lines, l => l.Contains("الفوترة الإلكترونية والربط بمنصة إيجار", StringComparison.Ordinal));
+        Assert.DoesNotContain(UnifonicLineOld, lines);
+        Assert.DoesNotContain(ZatcaLineOld, lines);
+        Assert.DoesNotContain(RegaLineOld, lines);
+        Assert.DoesNotContain(ClassifiedsContraLineOld, lines);
+        Assert.DoesNotContain(lines, l => Regex.IsMatch(l, @"\b(Unifonic|Taqnyat|ZATCA|REGA)\b") || l.Contains("وضمانه", StringComparison.Ordinal));
+        Assert.Contains("- **Twilio**: رسائل رمز الدخول (OTP) وحدها.", lines);
+        Assert.Contains("- **متى لا يُستخدم**: تحتاج تحصيل الدفع داخل المنصة (استخدم marketplace).", lines);
+        var limits = Array.IndexOf(lines, "## المحدوديات (صراحة مع العميل)");
+        var limitLine = Array.IndexOf(lines, "- الفوترة الإلكترونية والربط بمنصة إيجار غير مدمجَين — يتولاهما صاحب المتجر بأدواته.");
+        Assert.True(limits > 0 && limitLine > limits, "سَطرُ المَحدودِيَّةِ لَيسَ تَحتَ «المحدوديات».");
     }
 }

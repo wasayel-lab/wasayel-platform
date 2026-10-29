@@ -53,9 +53,11 @@ public static class PatternMatcher
 
         // 3) منصة طرفين بعمولة → marketplace
         //    (‏التَعليلُ مِن القامُوسِ بِالعَرَبِيَّةِ صَراحَةً — عِلَّةُ الفَرعِ 5 نَفسُها أَدناه.)
+        //    (‏2026-10-29، قَرارُ المالِك د21 (٣) «ب»: الثِقَةُ «medium» لا «high» — لا آلِيَّةَ عُمولَةٍ في المَنَصَّة، فَصاحِبُ المَتجَرِ يُحَصِّلُها
+        //    بِتَرتيبِه الخاصّ، و«العالِيَةُ» توحي بِغَيرِ ذلك.)
         if (offer == "twosided" && payment == "commission")
             return new("marketplace", "المتجر متعدد البائعين",
-                "high",
+                "medium",
                 LocaleCatalog.Text(LocaleCatalog.Arabic, CommissionReasoningKey));
 
         // 4) منصة طرفين باشتراك/بلا تحصيل → classifieds
@@ -68,9 +70,10 @@ public static class PatternMatcher
         //    (‏التَعليلُ مِن القامُوس — ADR-032 §٦‑ج‑3(ب)، القاعِدَة ١١ — ويُقرَأُ بِالعَرَبِيَّةِ صَراحَةً لا بِـ`L`:
         //    يُخَزَّنُ في `IncubatorSession.PatternReasoning` ويُحقَنُ في رِسالَةِ التَحليلِ العَرَبِيَّة، ولا طَلَبَ هُنا
         //    تُقرَأُ لُغَتُه — عِلَّةُ `SmtpEmailChannel` نَفسُها في سِجِلِّ دَينِ النُصوص §٤.)
+        //    (‏2026-10-29، د21 (٣): «متوسّطة حين يكون نموذج الإيراد عمولة» — والعُمولَةُ كانَت تَرفَعُها هُنا إلى «high»، فَصارَت «medium» كَغَيرِها.)
         if (offer is "physical" or "digital")
             return new("marketplace", "المتجر متعدد البائعين",
-                payment == "commission" ? "high" : "medium",
+                "medium",
                 LocaleCatalog.Text(LocaleCatalog.Arabic, ProductsReasoningKey));
 
         // 6) خدمة غير فورية → classifieds (تجميع مزوّدين)

@@ -39,8 +39,13 @@ public class CapabilitiesPromptMoneyCharacterizationTests
         "- **الدفع**:",
     };
 
-    /// <summary>بَصمَةُ المَرجِعِ بِحَجبِ السَطرَينِ — مَقيسَةٌ عِندَ ‏2939229 (أَوَّلُ ‏16 مِن SHA-256).</summary>
-    internal const string RestOfReferenceFingerprint = "797924f94f9c5629";
+    /// <summary>بَصمَةُ المَرجِعِ بِحَجبِ السَطرَينِ — مَقيسَةٌ عِندَ ‏2939229 (أَوَّلُ ‏16 مِن SHA-256).
+    /// <para><b>‏(2026-10-29، قَرارُ المالِك د21 — أُعيدَ تَثبيتُها بِقَرارٍ مَرئِيّ)</b>: كانَت <c>797924f94f9c5629</c> (أُعيدَ قِياسُها عِندَ <c>554debf</c>
+    /// بِأَداةٍ خارِجَ الاختِبارِ فَطابَقَت — الأَداةُ مَقيسَة)، وصارَت <c>3c77a8da1397fee2</c>: الفَرقُ في المَحجوبِ أَربَعَةُ مَواضِعَ لا خامِسَ لَها —
+    /// «وضمانه» مِن سَطرِ «متى لا يُستخدم» لِلإعلانات، وأَسطُرُ Unifonic/Taqnyat وZATCA وREGA الثَلاثَةُ صارَت سَطرَ Twilio واحِداً، وسَطرُ
+    /// مَحدودِيَّةٍ لِلفوتَرَةِ وإيجار بَعدَ سَطرِ التَرخيص (<c>CapabilitiesIntegrationsCharacterizationTests</c> يُثَبِّتُها بِحُروفِها). والسَطرُ المَحجوبُ الأَوَّلُ تَبَدَّلَت
+    /// فيه «المنصة» إلى «وسايل» (يُثَبِّتُه <c>CapabilitiesPromptMoneyTests</c>).</para></summary>
+    internal const string RestOfReferenceFingerprint = "3c77a8da1397fee2";
 
     private static string Prompt() =>
         new FeasibilityPromptBuilder(new SaudiDataProvider()).Build(new IncubatorSession(), "- لا دروس");
