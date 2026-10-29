@@ -168,11 +168,28 @@ public class OtoDeployDocTests
             Assert.Contains(phrase, fix, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// <para><b>والدَليلُ يَقولُ إنّ <c>staging</c> خارِجَ التَطويرِ يُرفَضُ إقلاعُه وإنّ التَجرِبَةَ في وَضعِ التَطوير</b> (قَرارُ المالِك د44 «ج»، ‏2026-10-29):
+    /// الرَمزُ بِحَرفِه مِن <see cref="OtoBootPolicy"/> لا مَنسوخاً، والجُملَتانِ اللَّتانِ نَقَضَهُما القَرارُ مُسَمّاتانِ في الإلحاق.</para>
+    /// </summary>
+    [Fact]
+    public void The_deploy_section_says_staging_is_refused_outside_development_and_the_proof_runs_in_development()
+    {
+        var section = Section();
+        var at = section.IndexOf("قَرارُ المالِك د44", StringComparison.Ordinal);
+        Assert.True(at > 0, "إلحاقُ د44 غائِبٌ عَن §٢·ط.");
+        var fix = section[at..];
+        foreach (var phrase in new[] { $"`{OtoBootPolicy.StagingOutsideDevelopment}`", "`OtoBootPolicy.AssertSafeOutsideDevelopment`", "‏**3**",
+                     "ASPNETCORE_ENVIRONMENT=Development", "فَرعِ Neon\nمَنسوخ", "ولا يُضبَطُ `staging` في الـSpace", "ولا يَتَغَيَّرُ رَمزُ خُروجِها", "`exit=3`", "`exit=0`" })
+            Assert.Contains(phrase, fix, StringComparison.Ordinal);
+    }
+
     private const string OtoGateStart = "# ─── بِدايَةُ oto_environment ───";
     private const string OtoGateEnd = "# ─── نِهايَةُ oto_environment ───";
 
-    /// <summary>يُشَغِّلُ دالَّةَ bash بِسِجِلٍّ وبِقيمَةِ مُتَغَيِّرٍ في بيئَتِها، ويُرجِعُ ما طَبَعَته.</summary>
-    private static string RunBash(string fn, string call, string? log, string? value)
+    /// <summary>يُشَغِّلُ دالَّةَ bash بِسِجِلٍّ وبِقيمَةِ مُتَغَيِّرٍ في بيئَتِها، ويُرجِعُ ما طَبَعَته — ورَمزُ خُروجِها <paramref name="exit"/>
+    /// (‏0 افتِراضاً؛ و3 لِكُتلَةٍ تَرفُضُ <c>staging</c> مُنذُ قَرارِ المالِك د44).</summary>
+    private static string RunBash(string fn, string call, string? log, string? value, int exit = 0)
     {
         Assert.True(File.Exists("/bin/bash"), "أَداةٌ غائِبَة: /bin/bash.");
         var dir = Directory.CreateTempSubdirectory("wasayel-oto-gate-");
@@ -192,7 +209,7 @@ public class OtoDeployDocTests
             using var p = System.Diagnostics.Process.Start(psi)!;
             var text = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
             Assert.True(p.WaitForExit(10_000));
-            Assert.Equal(0, p.ExitCode);
+            Assert.Equal(exit, p.ExitCode);
             return text.Trim();
         }
         finally { dir.Delete(recursive: true); }
@@ -216,14 +233,20 @@ public class OtoDeployDocTests
 
     /// <summary>الكُتلَةُ عَلى سِجِلٍّ فيه سَطرُ التَطبيقِ لِهذِه القيمَة — والقيمَةُ في البيئَةِ أَيضاً، والكُتلَةُ لا تَقرَؤُها.</summary>
     private static string RunOtoGateBlock(string? value)
-        => RunBash(OtoGateFunction(), "oto_environment \"$1\"", "[06:48:20 INF] Now listening on: http://127.0.0.1:5171\n" + AppLine(value), value);
+        => RunBash(OtoGateFunction(), "oto_environment \"$1\"", "[06:48:20 INF] Now listening on: http://127.0.0.1:5171\n" + AppLine(value), value,
+                   OtoEnvironment.IsOpen(value) ? 3 : 0);
+
+    /// <summary>أَتُعَلِّمُ الكُتلَةُ <c>staging</c>؟ — سَطرُ ⚠ القَديم (قَبلَ د44) أَو سَطرُ الرَفضِ ✗ (بَعدَه): الحُكمُ واحِدٌ عَلى الشَكلَين، فَتُقاسُ
+    /// بِه الكُتلَةُ الحَيَّةُ والعَيِّنَةُ المَحقونَةُ مَعاً.</summary>
+    private static bool FlagsStaging(string text)
+        => text.StartsWith("⚠ Shipping__Oto__Environment=staging", StringComparison.Ordinal)
+        || text.StartsWith("✗ Shipping__Oto__Environment=staging", StringComparison.Ordinal);
 
     /// <summary>
-    /// <para><b>بَوّابَةُ الإقلاعِ تُنَبِّهُ عَلى <c>staging</c> في إقلاعِها الإنتاجيِّ ولا تُغَيِّرُ رَمزَها</b> — وحُكمُ الكُتلَةِ (⚠ أَم لا) يُساوي
-    /// <see cref="OtoEnvironment.IsOpen"/> شَكلاً شَكلاً: بِقَصٍّ وأَحرُفٍ كَبيرَة، والإنتاجُ، والفَراغ. والكُتلَةُ تُنادى مَرَّةً قَبلَ النَشر.</para>
-    /// <para>(‏2026-10-25، مُراجَعَةُ تَيّارِ W8-6 الجَولَة ٢ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): <b>وتُنادى بَعدَ الإقلاعِ عَلى سِجِلِّه</b> — تَقرَأُ سَطرَ
-    /// <see cref="OtoEnvironment.BootLogPrefix"/> الَّذي يَكتُبُه <c>Program.cs</c> بِـ<see cref="OtoEnvironment.BootLogValue"/>، فَالتَساوي بِالبِناءِ لا بِتَطبيعٍ
-    /// ثانٍ؛ والصُفوفُ الثَلاثَةُ الأَخيرَةُ أَشكالُ توصيفِ <c>c1f2e29</c>.</para>
+    /// <para>انقَلَبَ بِاسمِه (كانَ <c>The_boot_gate_warns_on_staging_exactly_where_the_code_opens_it</c>؛ قَرارُ المالِك د44 «ج»، ‏2026-10-29): <b>بَوّابَةُ الإقلاعِ
+    /// تَرفُضُ <c>staging</c> بِرَمزِ 3</b> بَدَلَ سَطرِ ⚠ ورَمزِ ‏0 — وحُكمُ الكُتلَةِ (رَفضٌ أَم لا) يُساوي <see cref="OtoEnvironment.IsOpen"/> شَكلاً شَكلاً كَما كان: بِقَصٍّ
+    /// وأَحرُفٍ كَبيرَة، والإنتاجُ، والفَراغ، وأَشكالُ توصيفِ <c>c1f2e29</c>. والكُتلَةُ تُنادى مَرَّةً بَعدَ الإقلاعِ عَلى سِجِلِّه، ورَمزُها يُحفَظُ ويُقرَأُ بَعدَ حُكمِ
+    /// المَسارات (فَلا يَحجُبُ كَسراً في مَسار) وقَبلَ «✅ عَبَرَت».</para>
     /// </summary>
     [Theory]
     [InlineData("staging")]
@@ -233,27 +256,34 @@ public class OtoDeployDocTests
     [InlineData("")]
     [InlineData(null)]
     [InlineData("\vstaging")]
-    [InlineData(" staging ")]
+    [InlineData(" staging ")]
     [InlineData("sta ging")]
-    public void The_boot_gate_warns_on_staging_exactly_where_the_code_opens_it(string? value)
+    public void The_boot_gate_refuses_staging_exactly_where_the_code_opens_it(string? value)
     {
         if (OperatingSystem.IsWindows()) return;
         var text = RunOtoGateBlock(value);
-        var warns = text.StartsWith("⚠ Shipping__Oto__Environment=staging", StringComparison.Ordinal);
-        Assert.Equal(OtoEnvironment.IsOpen(value), warns);
-        if (warns)
+        var refuses = text.StartsWith("✗ Shipping__Oto__Environment=staging", StringComparison.Ordinal);
+        Assert.Equal(OtoEnvironment.IsOpen(value), refuses);
+        Assert.Equal(OtoEnvironment.IsOpen(value), FlagsStaging(text));
+        Assert.DoesNotContain("⚠ Shipping__Oto__Environment=staging", text, StringComparison.Ordinal);
+        if (refuses)
         {
-            Assert.Contains("لِكُلِّ مالِكِ إعلانٍ في كُلِّ مَتجَر", text, StringComparison.Ordinal);
+            Assert.Contains("د44", text, StringComparison.Ordinal);
             Assert.Contains("DEPLOY.md §٢·ط", text, StringComparison.Ordinal);
         }
         else
             Assert.StartsWith("الشَحنُ عَبرَ OTO: مُغلَق", text, StringComparison.Ordinal);
         var gate = Read("scripts/verify-production-boot.sh");
-        Assert.Equal(1, gate.Split("\noto_environment \"$APP_LOG\"\n").Length - 1);
+        Assert.Equal(1, gate.Split("\noto_environment \"$APP_LOG\" || OTO_VERDICT=$?\n").Length - 1);
+        Assert.Equal(0, gate.Split("\noto_environment \"$APP_LOG\"\n").Length - 1);
         Assert.Equal(0, gate.Split("\noto_environment\n").Length - 1);
-        Assert.True(gate.IndexOf("\noto_environment \"$APP_LOG\"\n", StringComparison.Ordinal)
-                    < gate.IndexOf("if [ \"$ROUTE_FAILED\" -ne 0 ]; then", StringComparison.Ordinal),
-            "الكُتلَةُ تُنادى بَعدَ الحُكم — لا تُطبَعُ حينَ يَسقُطُ مَسار.");
+        var call = gate.IndexOf("\noto_environment \"$APP_LOG\" || OTO_VERDICT=$?\n", StringComparison.Ordinal);
+        var routes = gate.IndexOf("if [ \"$ROUTE_FAILED\" -ne 0 ]; then", StringComparison.Ordinal);
+        var verdict = gate.IndexOf("if [ \"$OTO_VERDICT\" -ne 0 ]; then\n", StringComparison.Ordinal);
+        var passed = gate.IndexOf("echo \"✅ عَبَرَت", StringComparison.Ordinal);
+        Assert.True(call > 0 && call < routes, "الكُتلَةُ تُنادى بَعدَ الحُكم — لا تُطبَعُ حينَ يَسقُطُ مَسار.");
+        Assert.True(routes < verdict && verdict < passed, "رَمزُ الكُتلَةِ لا يُقرَأُ بَينَ حُكمِ المَساراتِ و«عَبَرَت».");
+        Assert.Contains("    exit \"$OTO_VERDICT\"\n", gate[verdict..passed], StringComparison.Ordinal);
     }
 
     /// <summary>وسَطرُ الإقلاعِ مِن الكود: <c>Program.cs</c> يَكتُبُه بِالقَرارِ عَلى <c>OtoOptions.Environment</c> كَما يَقرَؤُه العَميل، والكُتلَةُ لا تَقرَأُ المُتَغَيِّر.</summary>
@@ -271,26 +301,38 @@ public class OtoDeployDocTests
     }
 
     /// <summary>
-    /// <para><b>توصيفُ «اليَوم» قَبلَ حارِسِ الإقلاع (قَرارُ المالِك د44، ‏2026-10-29)</b>: إقلاعٌ خارِجَ التَطويرِ بِـ<c>Shipping__Oto__Environment=staging</c>
-    /// <b>لا يُرفَض</b> — <c>AddOtoShipping</c> لا يَرمي لِلقيمَة، ولا يَقرَأُ <c>Program.cs</c> بيئَةَ OTO بَينَ بِناءِ المُضيفِ وسَطرِ الإقلاع (فَلا حارِسَ هُناك)،
-    /// والسَطرُ <c>open</c>، وكُتلَةُ البَوّابَةِ تُنَبِّهُ بِـ⚠ ورَمزُها ‏0. يَنقَلِبُ هذا الصَفُّ بِاسمِه في كوميتِ الحارِس.</para>
+    /// <para>انقَلَبَ بِاسمِه (كانَ <c>Today_a_boot_outside_development_with_oto_staging_is_not_refused</c>، <c>73506af</c>؛ قَرارُ المالِك د44 «ج»): إقلاعٌ خارِجَ
+    /// التَطويرِ بِـ<c>Shipping__Oto__Environment=staging</c> <b>يُرفَضُ قَبلَ البَذرِ وأَوَّلِ طَلَب</b> — <c>AddOtoShipping</c> ما زالَ لا يَرمي لِلقيمَة (لا يَعرِفُ
+    /// البيئَة)، والرَفضُ في <c>Program.cs</c>: <see cref="OtoBootPolicy.AssertSafeOutsideDevelopment"/> يَقرَأُ <c>IOptions&lt;OtoOptions&gt;</c> بَينَ بِناءِ المُضيفِ
+    /// وسَطرِ الإقلاع، بَعدَ حارِسِ المَلَفّاتِ وقَبلَ <c>PlatformSeed.RunAsync</c>، عَلى <c>app.Environment.IsDevelopment()</c>؛ وكُتلَةُ البَوّابَةِ عَلى <c>open</c> تَرفُضُ بِـ3.</para>
     /// </summary>
     [Fact]
-    public void Today_a_boot_outside_development_with_oto_staging_is_not_refused()
+    public void A_boot_outside_development_with_oto_staging_is_refused_before_seeding()
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { [OtoEnvironment.EnvironmentKey] = OtoEnvironment.Staging }).Build();
         new ServiceCollection().AddOtoShipping(config);
         Assert.Equal(OtoEnvironment.OpenBootValue, OtoEnvironment.BootLogValue(OtoEnvironment.Staging));
+        var ex = Assert.Throws<InvalidOperationException>(() => OtoBootPolicy.AssertSafeOutsideDevelopment(false, OtoEnvironment.Staging));
+        Assert.Contains(OtoBootPolicy.StagingOutsideDevelopment, ex.Message, StringComparison.Ordinal);
 
         var program = Read("apps/V1.App/Program.cs").Replace("\r\n", "\n");
         var build = program.IndexOf("var app = builder.Build();", StringComparison.Ordinal);
         var bootLine = program.IndexOf("OtoEnvironment.BootLogPrefix + \"{Oto}\"", StringComparison.Ordinal);
         Assert.True(build > 0 && bootLine > build, "سَطرا البِناءِ والإقلاعِ غائِبانِ عَن Program.cs — الأَداةُ عَمياء.");
-        Assert.Equal(0, program[build..bootLine].Split("IOptions<OtoOptions>").Length - 1);
+        Assert.Equal(1, program[build..bootLine].Split("IOptions<OtoOptions>").Length - 1);
+
+        var guard = program.IndexOf("OtoBootPolicy.AssertSafeOutsideDevelopment(", StringComparison.Ordinal);
+        var files = program.IndexOf("FileStorageSelection.AssertNoStubsOutsideDevelopment(", StringComparison.Ordinal);
+        var seed = program.IndexOf("await PlatformSeed.RunAsync(", StringComparison.Ordinal);
+        Assert.True(files > build && guard > files && seed > guard, "حارِسُ بيئَةِ OTO لَيسَ بَينَ حارِسِ المَلَفّاتِ والبَذر.");
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(program, @"OtoBootPolicy\.AssertSafeOutsideDevelopment\("));
+        var call = program[guard..program.IndexOf(';', guard)];
+        Assert.Contains("app.Environment.IsDevelopment()", call, StringComparison.Ordinal);
+        Assert.Contains("IOptions<OtoOptions>>().Value.Environment", call, StringComparison.Ordinal);
 
         if (OperatingSystem.IsWindows()) return;
-        Assert.StartsWith("⚠ Shipping__Oto__Environment=staging", RunOtoGateBlock(OtoEnvironment.Staging), StringComparison.Ordinal);
+        Assert.StartsWith("✗ Shipping__Oto__Environment=staging", RunOtoGateBlock(OtoEnvironment.Staging), StringComparison.Ordinal);
     }
 
     /// <summary>وبِلا سَطرٍ في السِجِلِّ تَقولُ «لَم تُقَس» — ولا «مُغلَق» ولا ⚠ staging — ولَو كانَ المُتَغَيِّرُ staging في بيئَتِها.</summary>
@@ -306,6 +348,8 @@ public class OtoDeployDocTests
     /// <para>انقَلَبَ بِاسمِه (كانَ <c>Today_the_gate_block_renormalizes_the_value_and_parts_from_the_code</c>، <c>c1f2e29</c>): الكُتلَةُ كَما كانَت عِندَ
     /// <c>c1f2e29</c> بِحَرفِها — تَقرَأُ المُتَغَيِّرَ وتُطَبِّعُه بِـ<c>tr</c> — <b>عَيِّنَةٌ مَحقونَة</b>: حُكمُ الصَفِّ أَعلاه (⚠ حَيثُ يَفتَحُ الكودُ وَحدَه) يَحمَرُّ
     /// عَلَيها في الأَشكالِ الثَلاثَة، فَهُوَ لَيسَ أَعمى.</para>
+    /// <para>(‏2026-10-29، قَرارُ المالِك د44): الحُكمُ صارَ «تُعَلِّمُ staging» (<c>FlagsStaging</c>: ⚠ القَديمُ أَو ✗ الرَفض) فَيُقاسُ بِه الصَفُّ الحَيُّ
+    /// وهذِه العَيِّنَةُ مَعاً — والعَيِّنَةُ بِحَرفِها لَم تَتَغَيَّر.</para>
     /// </summary>
     [Theory]
     [InlineData("\vstaging")]
@@ -332,8 +376,7 @@ public class OtoDeployDocTests
             }
             """;
         var text = RunBash(before, "oto_environment", AppLine(value), value);
-        var warns = text.StartsWith("⚠ Shipping__Oto__Environment=staging", StringComparison.Ordinal);
-        Assert.NotEqual(OtoEnvironment.IsOpen(value), warns);
+        Assert.NotEqual(OtoEnvironment.IsOpen(value), FlagsStaging(text));
     }
 
     /// <summary>مَواضِعُ نِداءِ <c>CheckOtoDeliveryFeeAsync(</c> في نَصٍّ — بِلا سَطرِ تَعريفِه وبِلا أَسطُرِ التَعليق.</summary>

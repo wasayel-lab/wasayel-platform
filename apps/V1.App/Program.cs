@@ -302,6 +302,14 @@ FileStorageSelection.AssertNoStubsOutsideDevelopment(
     new[] { FileStorageSelection.Describe(app.Services.GetService<IFileStorage>()) }
         .OfType<RegisteredFileStorage>());
 
+// ─── وحارِسٌ رابِعٌ بِنَفسِ الشَكل: بيئَةُ OTO التَجريبِيَّةُ لا تُقلِعُ خارِجَ التَطوير ─
+// (قَرارُ المالِك د44 «ج»، ‏2026-10-29): كانَت الحِمايَةُ دَليلَ النَشرِ وسَطرَ ⚠ في بَوّابَةِ الإقلاع، و`staging` في الـSpace يَفتَحُ
+// قِسمَ الشَحنِ لِكُلِّ بائِعٍ في كُلِّ مَتجَرٍ عَلى بيئَةِ الاختِبار. فَيَرمي هُنا قَبلَ البَذرِ وأَوَّلِ طَلَب، عَلى `OtoOptions.Environment`
+// الَّذي يَقرَؤُه العَميل؛ وبَوّابَةُ الإقلاعِ تَقرَأُ رَمزَه 3 بِاسمِه (‏`boot_verdict`). والتَجرِبَةُ في وَضعِ التَطوير (‏DEPLOY.md §٢·ط).
+OtoBootPolicy.AssertSafeOutsideDevelopment(
+    app.Environment.IsDevelopment(),
+    app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<OtoOptions>>().Value.Environment);
+
 static RegisteredAuthChannel? Describe(AuthChannelKind kind, object? channel) => channel switch
 {
     null => null,

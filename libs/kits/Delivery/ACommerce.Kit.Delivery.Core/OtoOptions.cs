@@ -142,6 +142,58 @@ public static class OtoEnvironment
         => TimeSpan.FromSeconds(seconds > 0 ? seconds : DefaultTimeoutSeconds);
 }
 
+/// <summary>خَرقٌ واحِدٌ في بيئَةِ OTO عِندَ الإقلاع — شَكلُ <c>AuthTokenSecretViolation</c> حَرفاً (القاعِدَة ٤).</summary>
+public sealed record OtoBootViolation(string Code, string MessageAr);
+
+/// <summary>
+/// <para><b>بيئَةُ OTO التَجريبِيَّةُ لا تُقلِعُ خارِجَ التَطوير</b> (قَرارُ المالِك د44 «ج»، ‏2026-10-29): «يُرفَضُ تَشغيلُ الخادِمِ المَنشورِ إذا
+/// وُجِدَ فيه إعدادُ بيئَةِ OTO التَجريبِيَّة. والتَجرِبَةُ تَبقى مُمكِنَةً عَلى جِهازِكَ في وَضعِ التَطوير، عَبرَ نَفَقٍ إلى فَرعِ Neon مَنسوخ».
+/// كانَت الحِمايَةُ دَليلَ النَشرِ وسَطرَ ⚠ في بَوّابَةِ الإقلاعِ وَحدَهُما (توصيفُ <c>Today_a_boot_outside_development_with_oto_staging_is_not_refused</c>)،
+/// و<c>staging</c> في الـSpace يَفتَحُ قِسمَ الشَحنِ لِكُلِّ بائِعٍ في كُلِّ مَتجَرٍ عَلى بيئَةِ اختِبار (‏DEPLOY.md §٢·ط، brief-P1b-1).</para>
+///
+/// <para><b>ولا أُنبوبَ رابِع</b> (القاعِدَة ٨): شَكلُ <c>AuthTokenSecretPolicy</c> حَرفاً — جَدوَلٌ نَقِيٌّ، ورَميٌ في <c>Program.cs</c> بَعدَ بِناءِ المُضيفِ
+/// وقَبلَ البَذرِ وأَوَّلِ طَلَب، عَلى <c>OtoOptions.Environment</c> الَّذي يَقرَؤُه العَميلُ نَفسُه. <b>و«خارِجَ التَطوير» لا «في الإنتاج» فَقَط</b> — حُجَّةُ جارِه.
+/// <b>والمَفحوصُ «staging» بِعَينِها لا <see cref="OtoEnvironment.IsOpen"/></b>: يَومَ يُفتَحُ الإنتاجُ بِسَطرٍ هُناك لا يَصيرُ هذا الحارِسُ رافِضاً لَه.
+/// والرِسالَةُ لا تَحمِلُ «قيمَتُه «» — تِلكَ صيغَةُ «خارِجَ المَعجَم» الَّتي تَقرَؤُها <c>boot_verdict</c> بِسَبَبٍ آخَر؛ وهذِه تَقرَؤُها بِرَمزِها.</para>
+/// </summary>
+public static class OtoBootPolicy
+{
+    /// <summary><c>staging</c> في إقلاعٍ خارِجَ <c>Development</c>.</summary>
+    public const string StagingOutsideDevelopment = "oto_staging_outside_development";
+
+    /// <summary>المَعجَمُ المُغلَق — رَمزٌ واحِد. تَقرَؤُه <c>boot_verdict</c> في <c>scripts/verify-production-boot.sh</c> بِحَرفِه فَتُرجِعُ 3 بِاسمِه.</summary>
+    public static readonly IReadOnlyList<string> All = new[] { StagingOutsideDevelopment };
+
+    /// <summary>القَرار: في <c>Development</c> لا خَرقَ أَيّاً كانَت القيمَة؛ وإلّا فَـ<c>staging</c> (بِتَطبيعِ <see cref="OtoEnvironment.BaseUrlFor"/>
+    /// نَفسِه — قَصٌّ وأَحرُفٌ صَغيرَة) ⇒ <see cref="StagingOutsideDevelopment"/>؛ والفَراغُ و<c>production</c> لا خَرق.</summary>
+    public static IReadOnlyList<OtoBootViolation> Validate(bool isDevelopment, string? environment)
+    {
+        if (isDevelopment || OtoEnvironment.BaseUrlFor(environment) != OtoEnvironment.StagingBaseUrl)
+            return Array.Empty<OtoBootViolation>();
+
+        return new[]
+        {
+            new OtoBootViolation(StagingOutsideDevelopment,
+                $"‏{OtoEnvironment.EnvVarName(OtoEnvironment.EnvironmentKey)}={OtoEnvironment.Staging} خارِجَ بيئَةِ التَطوير — " +
+                "بيئَةُ OTO التَجريبِيَّةُ لا تُضبَطُ في خادِمٍ مَنشورٍ يَخدِمُ بائِعينَ حَقيقِيّين: احذِفه مِن الـSpace، " +
+                "وتَجرِبَةُ OTO عَلى جِهازِكَ في وَضعِ التَطوير بِنَفَقٍ إلى فَرعِ Neon مَنسوخ (docs/DEPLOY.md §٢·ط).")
+        };
+    }
+
+    public static bool IsValid(bool isDevelopment, string? environment) => Validate(isDevelopment, environment).Count == 0;
+
+    /// <summary>يَرمي إن كانَت بيئَةُ OTO <c>staging</c> خارِجَ التَطوير — يُستَدعى بَعدَ بِناءِ المُضيفِ بِجِوارِ حُرّاسِ الإقلاعِ الآخَرين.</summary>
+    public static void AssertSafeOutsideDevelopment(bool isDevelopment, string? environment)
+    {
+        var violations = Validate(isDevelopment, environment);
+        if (violations.Count == 0) return;
+        throw new InvalidOperationException(
+            "بيئَةُ الشَحنِ مَرفوضَةٌ عِندَ الإقلاع ["
+            + string.Join("، ", violations.Select(v => v.Code))
+            + "]: " + string.Join(" ", violations.Select(v => v.MessageAr)));
+    }
+}
+
 /// <summary>
 /// <para><b>رَمزُ الوُصولِ مُخَزَّناً ساعَتَه إلّا دَقيقَة — لِكُلِّ رَمزِ تَحديثٍ
 /// مَدخَلُه.</b> صِنفٌ مُستَقِلٌّ عَن العَميلِ لِلسَبَبِ المَقيسِ في

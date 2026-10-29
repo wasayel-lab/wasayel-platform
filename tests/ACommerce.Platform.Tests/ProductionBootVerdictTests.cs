@@ -144,6 +144,36 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         Assert.Contains("كَسرٌ في الكود", line, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// <para><b>‏<c>staging</c> خارِجَ التَطويرِ تَهيئَةٌ مَرفوضَةٌ بِرَمزِها</b> (قَرارُ المالِك د44 «ج»، ‏2026-10-29): السِجِلُّ مِن الاستِثناءِ الحَقيقيِّ
+    /// (<see cref="OtoBootPolicy.AssertSafeOutsideDevelopment"/>) لا مَنسوخاً ⇒ 3، والتَشخيصُ يُسَمّي المُتَغَيِّرَ والرَمز — ولا يَقولُ «خارِجَ مَعجَمِه».</para>
+    /// </summary>
+    [Fact]
+    public void Oto_staging_outside_development_is_refused_configuration_named_by_its_code()
+    {
+        if (NoBash(output)) return;
+        var log = Unhandled(Assert.Throws<InvalidOperationException>(
+            () => OtoBootPolicy.AssertSafeOutsideDevelopment(isDevelopment: false, OtoEnvironment.Staging)));
+        var (code, line) = Verdict(log);
+        Assert.Equal(3, code);
+        Assert.Contains("تَهيئَةٌ مَرفوضَة", line, StringComparison.Ordinal);
+        Assert.Contains("Shipping__Oto__Environment=staging", line, StringComparison.Ordinal);
+        Assert.Contains(OtoBootPolicy.StagingOutsideDevelopment, line, StringComparison.Ordinal);
+        Assert.DoesNotContain("خارِجَ مَعجَمِه", line, StringComparison.Ordinal);
+    }
+
+    /// <summary>والسالِب: بيئَةُ OTO المَكتوبَةُ خَطَأً لا تُقرَأُ «مَرفوضَةً خارِجَ التَطوير» — سَبَبُها خارِجَ المَعجَمِ كَما كان.</summary>
+    [Fact]
+    public void A_misspelt_oto_environment_is_not_read_as_staging_outside_development()
+    {
+        if (NoBash(output)) return;
+        var (_, log) = Misspelt("oto");
+        var (code, line) = Verdict(log);
+        Assert.Equal(3, code);
+        Assert.DoesNotContain(OtoBootPolicy.StagingOutsideDevelopment, line, StringComparison.Ordinal);
+        Assert.Contains("خارِجَ مَعجَمِه", line, StringComparison.Ordinal);
+    }
+
     /// <summary>واسما المُتَغَيِّرَينِ في البَوّابَةِ اسماهُما في الكودِ حَرفاً — فَإعادَةُ تَسمِيَةِ مِفتاحٍ تُحمِّرُ هذا الصَفَّ
     /// قَبلَ أَن تَصيرَ البَوّابَةُ عَمياءَ عَنه.</summary>
     [Fact]
