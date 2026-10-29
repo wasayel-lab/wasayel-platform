@@ -400,6 +400,8 @@ rm -rf "$D"
 `dotnet test tests/ACommerce.Platform.Tests/ACommerce.Platform.Tests.csproj -c Release --filter "FullyQualifiedName~PlatformDocFieldsTests|FullyQualifiedName~PlatformContactDoorTests"`،
 ولافِتَةُ «الحُقولُ النائِبَة» في `/admin` تَكُفُّ عِندَ الخَمسَة. وقائِمَةُ الخَمسَةِ نَفسُها `PlatformDocFields.EntityKeys` — وصَفُّ هذا
 الجَدوَلِ يَحرُسُه `PlatformContactDoorTests`.
+‏(‏2026-10-29، قَرارُ المالِك د55 «د» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه: رابِطُ «تَواصَل مَعَنا» في التَذييلِ **يَبقى** ما دامَ البَريدُ نائِباً — `/contact`
+صَفحَةُ الإفصاحِ النِظامِيِّ ولا تُخفى؛ وعِلاجُها مَلءُ `platform.doc.contact_email` في `ar.json` و`en.json` بِهذِه الخُطوَة. لا كود.)
 
 (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-8 الجَولَة ١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): «الحُقولُ النائِبَة» اسمٌ لِلافِتَةِ لا نَصُّها — عُنوانُها
 في `/admin` مِفتاحُ `admin.home.doc_fields_title`: «حُقولُ الكِيانِ النِظاميِّ لَم تُملَأ — الوَثائِقُ غَيرُ جاهِزَةٍ لِلتَقديم»، وتُرسَمُ ما دامَ `PlatformDocFields.UnfilledCount`
