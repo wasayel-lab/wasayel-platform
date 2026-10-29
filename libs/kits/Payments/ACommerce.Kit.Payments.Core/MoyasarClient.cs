@@ -125,14 +125,18 @@ public sealed class MoyasarClient
         if (string.IsNullOrWhiteSpace(secretKey)) return Fail<MoyasarInvoice>(MoyasarFailures.NotConfigured, operation, null);
         if (!IsSendable(draft)) return Fail<MoyasarInvoice>(MoyasarFailures.Invalid, operation, null);
 
-        var created = await SendAsync(secretKey, HttpMethod.Post, InvoicesPath, new Dictionary<string, object?>
+        var fields = new Dictionary<string, object?>
         {
             ["amount"]      = draft.Amount,
             ["currency"]    = Currency,
             ["description"] = draft.Description,
             ["success_url"] = draft.SuccessUrl,
             ["back_url"]    = draft.BackUrl,
-        }, operation, ct);
+        };
+        // وتاريخُ الانتِهاءِ حَقلُ الوَثيقَةِ نَفسِها — يُرسَلُ حينَ تَحمِلُه المُسَوَّدَة (‏2026-10-29، قَرارُ المالِك د5 (٣)؛ تَوصيفُ «اليَوم» صَفُّ
+        // `Creating_an_invoice_posts_the_documented_fields…` بِخَمسَةِ حُقولٍ بِلا تاريخ — باقٍ بِحَرفِه لِمُسَوَّدَةٍ بِلا تاريخ).
+        if (draft.ExpiresAt is { } expires) fields["expired_at"] = ExpiryText(expires);
+        var created = await SendAsync(secretKey, HttpMethod.Post, InvoicesPath, fields, operation, ct);
         if (!created.Ok) return MoyasarResult<MoyasarInvoice>.Fail(created.Failure!);
         // والرَدُّ يُقرَأُ بِشَرطِ أَخَواتِه (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b، G5 (xvi-g)؛ تَوصيفُ «اليَوم» `e4a3f14`): الرابِطُ مُطلَقٌ
         // بِـhttp(s) — شَرطُ `GatewayReturn.PayUrlOf` لِلرابِطِ نَفسِه، فَلا يُحَوَّلُ المُشتَري إلى `javascript:` — والمُعَرِّفُ uuid قَبلَ أَن يَدخُلَ مَسارَ
@@ -195,6 +199,14 @@ public sealed class MoyasarClient
     }
 
     // ═══ المَبلَغ — مِن الرِيالِ إلى أَصغَرِ وَحدَة ════════════════════════════
+
+    /// <summary>
+    /// <para><b>تاريخُ الانتِهاءِ بِصيغَةِ الوَثيقَة</b> (‏2026-10-29، قَرارُ المالِك د5 (٣)): جَدوَلُ «Create Invoice» — <c>expired_at</c> «timestamp»
+    /// و«ISO 8601 date or datetime» ومِثالُه <c>2018-01-01T09:55:14.000Z</c> — فَيُكتَبُ بِالتَوقيتِ العالَمِيِّ بِأَجزاءِ الثانِيَةِ الثَلاثَةِ وحَرفِ <c>Z</c>،
+    /// بِثَقافَةٍ ثابِتَةٍ لا بِثَقافَةِ الخادِم.</para>
+    /// </summary>
+    public static string ExpiryText(DateTimeOffset at)
+        => at.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// <para><b>المَبلَغُ بِالهَلَلَة — بِلا تَقريب</b>: «1.00 SAR = 100». ويُرجِعُ <c>null</c> لِمَبلَغٍ لا يَصيرُ عَدَداً صَحيحاً
@@ -324,8 +336,11 @@ public sealed class MoyasarClient
 
 /// <summary>مُسَوَّدَةُ فاتورَة — <see cref="Amount"/> بِالهَلَلَة (<see cref="MoyasarClient.ToSmallestUnit"/>)، ورابِطا العَودَة
 /// مُطلَقان، و<see cref="Metadata"/> ما يُلحَقُ بِها بَعدَ الإنشاء.</summary>
+/// <remarks>(‏2026-10-29، قَرارُ المالِك د5 (٣) — ولا يُعادُ حَرفٌ فَوقَه: و<see cref="ExpiresAt"/> تاريخُ انتِهائِها — حَقلُ <c>expired_at</c> في «Create Invoice»
+/// («User will be prevented from paying the invoice once expired»)؛ و<c>null</c> لا يُرسِلُه، كَما كانَت المُسَوَّدَةُ قَبلَه.)</remarks>
 public sealed record MoyasarInvoiceDraft(
-    long Amount, string Description, string SuccessUrl, string BackUrl, IReadOnlyDictionary<string, string> Metadata);
+    long Amount, string Description, string SuccessUrl, string BackUrl, IReadOnlyDictionary<string, string> Metadata,
+    DateTimeOffset? ExpiresAt = null);
 
 /// <summary>الفاتورَةُ كَما قالَتها البَوّابَة — <see cref="Amount"/> بِالهَلَلَة، و<see cref="Url"/> صَفحَةُ الدَفعِ المُستَضافَة.
 /// <b>ولا يُطبَعُ رابِطُها</b>: <c>ToString</c> بِلا رابِطٍ يَملِكُه مَن يَملِكُ السَطر.</summary>

@@ -238,6 +238,17 @@ public sealed class GatewayPayments
     public const string InvoiceClosedRef = "gateway_invoice_closed";
 
     /// <summary>
+    /// <para><b>مُدَّةُ الفاتورَةِ غَيرِ المَدفوعَة: ‏24 ساعَةً مِن إنشائِها</b> (‏2026-10-29، قَرارُ المالِك د5 (٣): «تنتهي الفاتورة غير المدفوعة بعد 24 ساعة من إنشائها،
+    /// ويُرسل تاريخ انتهائها مع الفاتورة إلى ميسر. هذا افتراض المنصّة»): رَقَمُ أَمانٍ تَشغيلِيٌّ قَرَّرَه المالِك لا رَقَمٌ اقتِصادِيّ (القاعِدَة ١٦)، ومُدَّةُ
+    /// الإمساكِ سِياسَةُ مَتجَرٍ يُبنى إعدادُها حينَ يَطلُبُه أَوَّلُ مَتجَر. والإنشاءُ عِندَ إتمامِ الشِراءِ (<see cref="OpenInvoiceAsync"/>) — فَالمُدَّةُ مِن الطَلَب.</para>
+    /// </summary>
+    public static readonly TimeSpan InvoiceLifetime = TimeSpan.FromHours(24);
+
+    /// <summary><b>تاريخُ انتِهاءِ الفاتورَةِ كَما أُرسِلَ إلى البَوّابَة</b> (‏2026-10-29، قَرارُ المالِك د5 (٣)) — يَكتُبُه <see cref="OpenInvoiceAsync"/> عَلى كُلِّ صَفقَةٍ مِنها
+    /// بِصيغَةِ <see cref="MoyasarClient.ExpiryText"/> نَفسِها، فَيُقرَأُ بِلا نِداء. داخِلِيٌّ: لا يُرسَمُ لِلطَرَفَين (لا تَسمِيَةَ لَه في <c>DealRefLabels</c>).</summary>
+    public const string InvoiceExpiresAtRef = "gateway_invoice_expires_at";
+
+    /// <summary>
     /// <para><b>عَلى الصَفقَةِ فاتورَةُ بَوّابَةٍ لَم يَثبُت دَفعُها، وتاليها «دَفع»</b> — رَمزُ <see cref="DealsService.AdvanceAsync"/> حينَ
     /// تَصدُقُ <see cref="AwaitsPayment"/>. يَبلُغُه زِرُّ «تَأكيد: دَفع» (<c>/advance</c> ← <c>?err=</c>) والـAPI (‏409)؛ والصَفحَةُ لا تَرسُمُ
     /// ذلكَ الزِرَّ لَها — بابُها «أَكمِل الدَّفع». نَسَقُ <see cref="DealShipping.DealAwaitsCarrier"/>.</para>
@@ -311,15 +322,19 @@ public sealed class GatewayPayments
     /// في <see cref="CardFactsAsync"/> مَقيساً مِن الحَقنِ نَفسِه لا مِن دَعوى؛ وبِدونِه لا فاتورَةَ ولا جَلبَ — <see cref="MoyasarFailures.NotConfigured"/>.</summary>
     private readonly MoyasarClient? _client;
     private readonly ILogger<GatewayPayments> _log;
+    /// <summary>ساعَةُ «الآن» لِتاريخِ انتِهاءِ الفاتورَة (‏2026-10-29، قَرارُ المالِك د5 (٣)) — نَسَقُ <c>DealShipping</c>: <see cref="TimeProvider.System"/>
+    /// ما لَم يُمَرِّر الاختِبارُ ساعَتَه.</summary>
+    private readonly TimeProvider _clock;
 
     public GatewayPayments(DealsService deals, TenantProviderService providers, ProviderVault vault, MoyasarClient? client = null,
-        ILogger<GatewayPayments>? log = null)
+        ILogger<GatewayPayments>? log = null, TimeProvider? clock = null)
     {
         _deals = deals;
         _providers = providers;
         _vault = vault;
         _client = client;
         _log = log ?? NullLogger<GatewayPayments>.Instance;
+        _clock = clock ?? TimeProvider.System;
     }
 
     /// <summary>
@@ -438,14 +453,16 @@ public sealed class GatewayPayments
             : null;
 
         MoyasarInvoice? invoice = null;
+        DateTimeOffset expiresAt = default;
         if (code is null)
         {
             if (_client is null || await SecretKeyAsync(_providers, _vault, _log, tenantSlug, ct) is not { } key)
                 code = MoyasarFailures.NotConfigured;
             else
             {
+                // وتاريخُ انتِهائِها مَعَها: الآنَ وأَربَعٌ وعِشرون ساعَة (‏2026-10-29، قَرارُ المالِك د5 (٣)).
                 var draft = new MoyasarInvoiceDraft(amount!.Value, l.Format("pay.invoice.description", storeName), returnUrl, returnUrl,
-                    GatewayPaymentProof.MetadataFor(deals.Select(d => d.Id).ToArray()));
+                    GatewayPaymentProof.MetadataFor(deals.Select(d => d.Id).ToArray()), expiresAt = _clock.GetUtcNow() + InvoiceLifetime);
                 var created = await _client.CreateInvoiceAsync(key, draft, ct);
                 if (created.Ok) invoice = created.Value; else code = created.Failure!.Code;
             }
@@ -471,6 +488,8 @@ public sealed class GatewayPayments
             await _deals.AttachRefAsync(tenantSlug, d.Id, InvoiceUrlRef, invoice.Url!, ct);
             // وأَخَواتُها عَلى الفاتورَة — فَلا تُلغى إحداها وَحدَها والفاتورَةُ مَفتوحَة (‏2026-10-13، G5 M4).
             await _deals.AttachRefAsync(tenantSlug, d.Id, InvoiceDealsRef, siblings, ct);
+            // وتاريخُ انتِهائِها كَما أُرسِل — يُقرَأُ بِلا نِداء (‏2026-10-29، قَرارُ المالِك د5 (٣)).
+            await _deals.AttachRefAsync(tenantSlug, d.Id, InvoiceExpiresAtRef, MoyasarClient.ExpiryText(expiresAt), ct);
         }
         _log.LogInformation("[gateway] open invoice {Slug} for {Count} deal(s) ← opened", tenantSlug, deals.Count);
         return new GatewayCheckout(invoice.Url, null);

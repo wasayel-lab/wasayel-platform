@@ -223,9 +223,10 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
     /// </summary>
     /// <remarks>و<paramref name="bornForGateway"/> (‏2026-10-13، G5 (xvi-g)): تولَدُ الصَفَقاتُ بِعَلامَةِ طَريقِ البَوّابَةِ كَما يُولِدُها
     /// <c>/checkout/submit</c> — بِـ<see cref="GatewayPayments.MarkedAtBirth"/> نَفسِها؛ والافتِراضُ بِلا عَلامَةٍ فَلا يَتَحَرَّكُ صَفٌّ قائِم.</remarks>
+    /// <remarks>و<paramref name="clock"/> (‏2026-10-29، قَرارُ المالِك د5 (٣)): ساعَةُ الخِدمَةِ لِتاريخِ انتِهاءِ الفاتورَة — والافتِراضُ ساعَةُ النِظام.</remarks>
     internal static async Task<World> PaidCart(
         Func<ProviderVault, TenantProviderBinding?>? binding = null, ProviderVault? serviceVault = null,
-        bool withSeller = false, bool invoice = true, bool bornForGateway = false)
+        bool withSeller = false, bool invoice = true, bool bornForGateway = false, TimeProvider? clock = null)
     {
         var docs = new DocWorld();
         var platform = new DealMoneyClaimFirstTests.RecordingPaymentProvider();
@@ -252,7 +253,7 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         var moyasar = new MoyasarScriptedHandler();
         var log = new GatewayCapturingLogger();
         var gateway = new GatewayPayments(deals, new TenantProviderService(docs.Store), serviceVault ?? vault,
-            new MoyasarClient(new HttpClient(moyasar), NullLogger<MoyasarClient>.Instance), log);
+            new MoyasarClient(new HttpClient(moyasar), NullLogger<MoyasarClient>.Instance), log, clock);
         return new World(docs, deals, gateway, moyasar, platform, ids.ToArray(), log);
     }
 

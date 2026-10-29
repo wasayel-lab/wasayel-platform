@@ -333,6 +333,38 @@ public class GatewayPaymentConfirmTests(ITestOutputHelper output)
         Assert.Empty(w.Platform.Calls);
     }
 
+    /// <summary><b>وتُفتَحُ الفاتورَةُ بِتاريخِ انتِهائِها: ‏24 ساعَةً مِن إنشائِها</b> (‏2026-10-29، قَرارُ المالِك د5 (٣)): بِساعَةٍ ثابِتَةٍ يَحمِلُ «Create Invoice»
+    /// <c>expired_at</c> = الآنَ + <see cref="GatewayPayments.InvoiceLifetime"/>، ويُكتَبُ التاريخُ نَفسُه عَلى كُلِّ صَفقَةٍ مِنها (<see cref="GatewayPayments.InvoiceExpiresAtRef"/>)
+    /// فَيُقرَأُ بِلا نِداء — ولا يُرسَمُ لِلطَرَفَين. والسالِب: فاتورَةٌ لَم تُفتَح لا تَكتُبُ تاريخاً.</summary>
+    [Fact]
+    public async Task An_opened_invoice_expires_twenty_four_hours_after_it_is_created_and_every_deal_carries_the_date()
+    {
+        var now = new DateTimeOffset(2026, 10, 29, 8, 0, 0, TimeSpan.Zero);
+        var w = await TenantGatewayEndpointsTests.PaidCart(invoice: false, clock: new FixedClock(now));
+        var metadata = GatewayPaymentProof.MetadataFor(w.Ids);
+        w.Moyasar.Then(HttpStatusCode.Created, MoyasarClientTests.InvoiceJson("initiated", 15000, metadata: new Dictionary<string, string>()))
+                 .Then(HttpStatusCode.OK, MoyasarClientTests.InvoiceJson("initiated", 15000, metadata: metadata));
+
+        var opened = await w.Gateway.OpenInvoiceAsync(Slug, new DealPayer(Buyer), w.Ids, "مَتجَرُ الاختِبار", ReturnUrl, Fresh());
+
+        Assert.True(opened.Ok, opened.Code);
+        Assert.Equal(TimeSpan.FromHours(24), GatewayPayments.InvoiceLifetime);
+        using var created = JsonDocument.Parse(w.Moyasar.Bodies[0]!);
+        output.WriteLine($"expired_at: {created.RootElement.GetProperty("expired_at").GetString()}");
+        Assert.Equal("2026-10-30T08:00:00.000Z", created.RootElement.GetProperty("expired_at").GetString());
+        foreach (var id in w.Ids)
+        {
+            var deal = Load(w, id);
+            Assert.Equal("2026-10-30T08:00:00.000Z", deal.Refs[GatewayPayments.InvoiceExpiresAtRef]);
+            Assert.False(DealRefLabels.IsShown(Assert.Single(deal.Timeline, e => DealRefLabels.RefKeyOf(e.Note) == GatewayPayments.InvoiceExpiresAtRef)));
+        }
+
+        var refused = await TenantGatewayEndpointsTests.PaidCart(invoice: false, clock: new FixedClock(now));
+        refused.Moyasar.Then(HttpStatusCode.Unauthorized, "{\"type\":\"authentication_error\",\"message\":\"Invalid authorization credentials\"}");
+        Assert.False((await refused.Gateway.OpenInvoiceAsync(Slug, new DealPayer(Buyer), refused.Ids, "مَتجَرُ الاختِبار", ReturnUrl, Fresh())).Ok);
+        Assert.All(refused.Ids, id => Assert.False(Load(refused, id).Refs.ContainsKey(GatewayPayments.InvoiceExpiresAtRef)));
+    }
+
     /// <summary><b>وما لَم تُفتَح فاتورَتُه يُلغى بِاسمِ مُشتَريه ولا يُخصَمُ شَيء</b> — رَفضُ البَوّابَة (‏401)، أَو مَبلَغٌ بِكَسرِ هَلَلَة
     /// (بِلا نِداء)، أَو لا مِفتاح (بِلا نِداء)، أَو صَفقَةُ غَيرِه في القائِمَة (بِلا نِداء): رَمزُه، والصَفَقاتُ مُلغاةٌ بِسَبَبٍ مِن القامُوس بِلا
     /// مَرجِعِ فاتورَة.</summary>

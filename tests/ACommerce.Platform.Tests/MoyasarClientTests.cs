@@ -142,6 +142,32 @@ public class MoyasarClientTests(ITestOutputHelper output)
         Assert.Equal(metadata["deal_2"], tagged.RootElement.GetProperty("metadata").GetProperty("deal_2").GetString());
     }
 
+    /// <summary><b>وتاريخُ الانتِهاءِ حَقلُ الوَثيقَةِ السادِس</b> (‏2026-10-29، قَرارُ المالِك د5 (٣) — «ويُرسل تاريخ انتهائها مع الفاتورة إلى ميسر»): مُسَوَّدَةٌ تَحمِلُ
+    /// <c>ExpiresAt</c> تُرسِلُ <c>expired_at</c> آخِرَ الحُقولِ بِصيغَةِ مِثالِ الوَثيقَة (<c>2018-01-01T09:55:14.000Z</c>) بِالتَوقيتِ العالَمِيّ — ولو جاءَ التاريخُ
+    /// بِإزاحَةِ الرِياض؛ والسالِبُ: الصَفُّ أَعلاه بِحَرفِه — مُسَوَّدَةٌ بِلا تاريخٍ بِخَمسَةِ حُقول.</summary>
+    [Fact]
+    public async Task An_invoice_draft_with_an_expiry_posts_expired_at_as_the_documented_utc_datetime()
+    {
+        var metadata = new Dictionary<string, string> { ["deal_1"] = Guid.NewGuid().ToString("N") };
+        var handler = new MoyasarScriptedHandler()
+            .Then(HttpStatusCode.Created, InvoiceJson("initiated", metadata: new Dictionary<string, string>()))
+            .Then(HttpStatusCode.OK, InvoiceJson("initiated", metadata: metadata));
+        var riyadh = new DateTimeOffset(2026, 10, 30, 12, 55, 14, 7, TimeSpan.FromHours(3));
+
+        var res = await Client(handler).CreateInvoiceAsync(Key, Draft(metadata: metadata) with { ExpiresAt = riyadh });
+
+        Assert.True(res.Ok, res.Failure?.Code);
+        using var created = JsonDocument.Parse(handler.Bodies[0]!);
+        Assert.Equal(new[] { "amount", "currency", "description", "success_url", "back_url", "expired_at" },
+            created.RootElement.EnumerateObject().Select(p => p.Name).ToArray());
+        Assert.Equal("2026-10-30T09:55:14.007Z", created.RootElement.GetProperty("expired_at").GetString());
+        Assert.Equal("2026-10-30T09:55:14.007Z", MoyasarClient.ExpiryText(riyadh));
+        Assert.True(DateTimeOffset.TryParse(MoyasarClient.ExpiryText(riyadh), System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal, out var back) && back == riyadh);
+        using var tagged = JsonDocument.Parse(handler.Bodies[1]!);
+        Assert.Equal(new[] { "metadata" }, tagged.RootElement.EnumerateObject().Select(p => p.Name).ToArray());
+    }
+
     /// <summary><b>الجَلبُ نِداءٌ واحِد</b>: <c>GET /v1/invoices/{id}</c> بِلا جِسمٍ وبِالمُصادَقَةِ نَفسِها؛ ويُقرَأُ مِثالُ الوَثيقَةِ
     /// كامِلاً — الحالُ والمَبلَغُ بِالهَلَلَةِ والعُملَةُ و<c>metadata</c>.</summary>
     [Fact]
