@@ -3388,33 +3388,10 @@ public static class MarketplaceTemplateExtensions
         }).DisableAntiforgery()
           .RequireStoreWritable();
 
-        // ─── Studio Reviews (تَقييم مُتَبادَل لِصَفقَة مُكتَمِلَة) ─────────
-        app.MapPost("/studio/apps/{slug}/deals/{id:guid}/review",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store,
-                   Services.Incubator.StudioAuth auth,
-                   Services.Deals.DealsService deals,
-                   ACommerce.Kit.Reviews.ReviewsService reviews) =>
-        {
-            if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
-            if (!int.TryParse(req.Form["rating"].ToString(), out var rating)) rating = 5;
-            var body = req.Form["body"].ToString().Trim();
-            var targetIsCounterparty = req.Form["target"].ToString() == "counterparty";
-            var deal = await deals.LoadAsync(slug, id);
-            if (deal is null) return Results.Redirect($"/studio/apps/{slug}/deals");
-
-            var (target, targetName, author, authorName) = targetIsCounterparty
-                ? (deal.CounterpartyId ?? Guid.Empty, deal.CounterpartyName ?? "—",
-                   deal.InitiatorId, deal.InitiatorName)
-                : (deal.InitiatorId, deal.InitiatorName,
-                   deal.CounterpartyId ?? Guid.Empty, deal.CounterpartyName ?? "—");
-            if (target == Guid.Empty)
-                return Results.Redirect($"/studio/apps/{slug}/deals/{id}?err=no-target");
-
-            var r = await reviews.SubmitAsync(slug, target, targetName, author, authorName,
-                rating, body, dealId: id, dealPattern: deal.Pattern);
-            await deals.AttachRefAsync(slug, id, $"review_{(targetIsCounterparty ? "cp" : "init")}", r.Id.ToString("N"));
-            return Results.Redirect($"/studio/apps/{slug}/deals/{id}");
-        }).RequireFormBody().DisableAntiforgery();
+        // ─── لا «تَقييمَ نِيابَةً» مِن الاستوديو (‏2026-10-29، قَرارُ المالِك د39 «ب») ─────────
+        // كانَت هُنا `POST /studio/apps/{slug}/deals/{id}/review`: تَسأَلُ مِلكِيَّةَ المَتجَرِ ثُمَّ تَكتُبُ بِاسمِ أَيِّ الطَرَفَينِ تَقييماً «مَوثوقاً» في أَيِّ
+        // مَرحَلَةٍ بِلا `DealReviewAuthorization` ولا مُعَرِّفٍ حَتمِيّ (تَوصيفُها `DealStudioProxyReviewTests`). «لا يكتب التقييم إلا صاحبه بعد اكتمال
+        // صفقته» — فَحُذِفَت هِيَ واستِمارَتُها ونَصُّ تَلميحِها، وبَقِيَ بابُ العُضوِ `/{slug}/deals/{id}/review` بِـ`DealReviews` الكاتِبَ الوَحيد.
 
         // ─── Studio Listings moderation (إخفاء/إظهار/حَذف إشرافيّ) ───────
         app.MapPost("/studio/apps/{slug}/listings/{id:guid}/moderate",

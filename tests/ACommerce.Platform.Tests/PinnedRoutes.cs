@@ -150,7 +150,7 @@ internal static class PinnedRoutes
         // مُتَعَدِّدَةُ الإيجار، وجَلسَةُ Minimal API المَحقونَةُ تَحمِلُ `*DEFAULT*`)، ويُرفَعُ مَعَهُنَّ يَومَ يُرَحَّلنَ إلى Wolverine.Http.
         "/{slug}/checkout/details",
         "/{slug}/vendor/{vendorId:guid}/chat",
-        "/studio/apps/{slug}/deals/{id:guid}/review",
+        // (‏`/studio/apps/{slug}/deals/{id:guid}/review` رُفِعَ ‏2026-10-29 — حُذِفَت النُقطَةُ نَفسُها بِقَرارِ المالِك د39 «ب»: لا «تَقييمَ نِيابَةً».)
         "/studio/apps/{slug}/listings/{id:guid}/moderate",
         "/studio/apps/{slug}/tickets/{id:guid}/reply",
         "/studio/apps/{slug}/tickets/{id:guid}/close",

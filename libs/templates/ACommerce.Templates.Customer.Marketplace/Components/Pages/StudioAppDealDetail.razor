@@ -154,43 +154,10 @@
                 }
             </div>
 
-            @* التَّقييم المُتَبادَل (يَظهَر في Reviewed أَو Delivered) *@
-            @if (deal.Stage is DealStage.Reviewed or DealStage.Delivered or DealStage.Received
-                 && deal.CounterpartyId is not null)
-            {
-                <div class="st-section-title"><AcIcon Name="star" Size="16" /> @L.Markup("studio.deal.review")</div>
-                <div class="st-card">
-                    <p style="margin:0 0 12px;font-size:14px;color:var(--st-muted);">@((MarkupString)"\n                        ")@L.Markup("studio.deal.review_hint")@((MarkupString)"\n                    ")
-                    </p>
-                    <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/review")"
-                          style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                        <div class="st-field" style="margin:0;">
-                            <label class="st-label">@L.Markup("studio.deal.reviewer")</label>
-                            <select class="st-input" name="target">
-                                <option value="counterparty">@deal.InitiatorName @L.Markup("studio.deal.reviews_verb") @deal.CounterpartyName</option>
-                                <option value="initiator">@deal.CounterpartyName @L.Markup("studio.deal.reviews_verb") @deal.InitiatorName</option>
-                            </select>
-                        </div>
-                        <div class="st-field" style="margin:0;">
-                            <label class="st-label">@L.Markup("studio.deal.stars")</label>
-                            <select class="st-input" name="rating">
-                                <option value="5">@L.Markup("deals.detail.rating_5")</option>
-                                <option value="4">@L.Markup("deals.detail.rating_4")</option>
-                                <option value="3">@L.Markup("deals.detail.rating_3")</option>
-                                <option value="2">@L.Markup("deals.detail.rating_2")</option>
-                                <option value="1">@L.Markup("deals.detail.rating_1")</option>
-                            </select>
-                        </div>
-                        <div class="st-field" style="margin:0;grid-column:1/-1;">
-                            <label class="st-label">@L.Markup("studio.deal.comment")</label>
-                            <textarea class="st-textarea" name="body" rows="3" required
-                                      placeholder="@L["studio.deal.review_placeholder"]"></textarea>
-                        </div>
-                        <button type="submit" class="st-btn st-btn-primary" style="grid-column:1/-1;">@((MarkupString)"\n                            ")@L.Markup("studio.deal.review_submit")@((MarkupString)"\n                        ")
-                        </button>
-                    </form>
-                </div>
-            }
+            @* لا «تَقييمَ نِيابَةً» هُنا (‏2026-10-29، قَرارُ المالِك د39 «ب»: «يُحذف الباب: لا يكتب التقييم إلا صاحبه بعد اكتمال صفقته»): كانَت هُنا
+               استِمارَةٌ تَكتُبُ بِاسمِ أَيِّ الطَرَفَينِ تَقييماً «مَوثوقاً» عِندَ «تَسليم» أَو «استِلام» أَو «تَقييم» بِلا بَوّابَةِ التَقييم (تَوصيفُها
+               `DealStudioProxyReviewTests`). والتَقييمُ يَكتُبُه صاحِبُه مِن صَفحَةِ صَفقَتِه بِـ`DealReviews` وَحدَها؛ والبَديلُ الصادِقُ بِوَسمِ «مِن إدارَةِ
+               المَتجَر» يُبنى عِندَ أَوَّلِ مَتجَرٍ يَطلُبُه (القاعِدَة ١). *@
 
             @* المَراجِع (PaymentId، ShipmentId، …) *@
             @if (deal.Refs.Count > 0)

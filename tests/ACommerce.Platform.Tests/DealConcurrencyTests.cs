@@ -450,7 +450,9 @@ public class DealConcurrencyRefusalTests
 
     /// <summary><b>مُنادي تَقييمِ الاستوديو</b> (<c>POST /studio/apps/{slug}/deals/{id}/review</c> — يُلحِقُ <c>review_cp</c>/<c>review_init</c>
     /// بِصَفقَةٍ قائِمَة، فَعّالَةً عِندَ <c>Delivered</c> أَو <c>Received</c>): المُشتَري يَختِمُها بَينَ تَحميلِ الإلحاقِ وحِفظِه —
-    /// يَبقى الاثنان: الصَفقَةُ <c>Completed</c> والمَرجِعُ عَلَيها.</summary>
+    /// يَبقى الاثنان: الصَفقَةُ <c>Completed</c> والمَرجِعُ عَلَيها.
+    /// (‏2026-10-29، قَرارُ المالِك د39 «ب» — ولا يُعادُ حَرفٌ فَوقَه: حُذِفَ ذلكَ البابُ ولا مُنادِيَ لَه؛ ويَبقى الصَفُّ قِياساً لِـ<c>AttachRefAsync</c> نَفسِها —
+    /// إلحاقٌ يُعادُ عَلى صَفقَةٍ خُتِمَت بَينَ تَحميلِه وحِفظِه — بِحَرفِه.)</summary>
     [Fact]
     public void A_studio_review_ref_lands_even_when_the_deal_is_completed_meanwhile()
     {

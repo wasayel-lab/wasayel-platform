@@ -24,6 +24,8 @@ public static class DealRefLabels
     /// و<c>listing_owner</c> (مُعَرِّفُ مُستَخدِم)، و<c>gateway_invoice_url</c> (بابُ الدَفعِ يُرسَمُ زِرّاً)، و<c>oto_id</c> (مُعَرِّفُ OTO
     /// يُرافِقُ <c>oto_order_id</c>).</para>
     /// <para>و<c>review_cp</c>/<c>review_init</c> يَكتُبُهُما بابُ تَقييمِ العُضوِ بِحَرفِهِما (<c>$"review_{…}"</c>) — لا ثابِتَ لَهُما هُناك.</para>
+    /// <para>(‏2026-10-29، قَرارُ المالِك د39 «ب» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه: كاتِبُهُما كانَ بابَ «التَقييم نِيابَةً» في الاستوديو لا بابَ العُضو، وحُذِف؛
+    /// فَلا كاتِبَ لَهُما بَعدَ اليَوم، وتُبقى تَسمِيَتُهُما لِسُطورٍ مُخَزَّنَةٍ قَبلَه — «مُتَقاعِدانِ» في <c>DealTimelineRefLabelsTests.Retired</c>.)</para>
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> Labels = new Dictionary<string, string>(StringComparer.Ordinal)
     {
