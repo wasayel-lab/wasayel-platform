@@ -251,7 +251,9 @@ public class DealNoticesTests
             ("public async Task<bool> NotifyCancelledByStoreAsync(", "public async Task<bool> NotifyAcceptedByStoreAsync("),
             ("public async Task<bool> NotifyAcceptedByStoreAsync(", "public async Task<int> NotifyPaidAsync("),
             // والسابِعَةُ (‏2026-10-29، قَرارُ المالِك د8) بِالتَرتيبِ نَفسِه: إشعارُ البائِعِ بِالإلغاء؛ والسادِسَةُ صارَت تَنتَهي عِندَها.
-            ("public async Task<int> NotifyPaidAsync(", "public async Task<bool> NotifyVendorCancelledAsync("),
+            ("public async Task<int> NotifyPaidAsync(", "public async Task<int> NotifyPaymentExpiredAsync("),
+            // والتاسِعَةُ (‏2026-10-29، قَرارُ المالِك د5 (٤)) بِالتَرتيبِ نَفسِه: إخبارُ المُشتَري بِإلغاءِ المُهلَة؛ والسادِسَةُ صارَت تَنتَهي عِندَها (كانَت عِندَ `NotifyVendorCancelledAsync`).
+            ("public async Task<int> NotifyPaymentExpiredAsync(", "public async Task<bool> NotifyVendorCancelledAsync("),
             // والثامِنَةُ (‏2026-10-29، قَرارُ المالِك د3) بِالتَرتيبِ نَفسِه: صاحِبُ المَتجَرِ بِالاستِرجاعِ والفاتورَة؛ والسابِعَةُ صارَت تَنتَهي عِندَها.
             ("public async Task<bool> NotifyVendorCancelledAsync(", "public async Task<bool> NotifyStoreOwnerAsync("),
             ("public async Task<bool> NotifyStoreOwnerAsync(", "\n}"),
@@ -274,7 +276,8 @@ public class DealNoticesTests
         // وسِتَّةٌ مُنذُ ‏2026-10-24 (تَدقيقُ الإطلاق brief-P1a-1): `NotifyAcceptedByStoreAsync` سادِسَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
         // وسَبعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د8): `NotifyVendorCancelledAsync` سابِعَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
         // وثَمانِيَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د3): `NotifyStoreOwnerAsync` ثامِنَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
-        Assert.Equal(8, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
+        // وتِسعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د5 (٤)): `NotifyPaymentExpiredAsync` تاسِعَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
+        Assert.Equal(9, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
     }
 
     /// <summary><c>/checkout/submit</c>: الصَفَقاتُ ذَواتُ المالِكِ تُجمَعُ في الحَلقَةِ،

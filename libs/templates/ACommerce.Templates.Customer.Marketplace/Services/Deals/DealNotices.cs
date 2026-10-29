@@ -138,6 +138,24 @@ public sealed class DealNotices
         => l.Format("notifications.deal_cancelled_by_store.push_body", deal.ListingTitle);
 
     /// <summary>
+    /// <para><b>إشعارُ المُشتَري بِأَنّ مُهلَةَ دَفعِ طَلَبِه انتَهَت فَأُلغِيَ</b> (‏2026-10-29، قَرارُ المالِك د5 (٤): «ويُخبَر المشتري وكل بائع فيه»): نَوعُه نَوعُ الإلغاء،
+    /// ونَصُّه لا يُسَمّي مُلغياً — المَنصَّةُ أَلغَتهُ بِالمُهلَة — ويَقولُ المُدَّةَ مِن ثابِتِها (<see cref="GatewayPayments.InvoiceLifetime"/>، القاعِدَة ١٦) وأَن لا خَصم.</para>
+    /// </summary>
+    public static Notification PaymentExpiredFor(string slug, Deal deal, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = deal.InitiatorId,
+        Type = CancelledType,
+        Title = l["notifications.deal_payment_expired.title"],
+        Body = l.Format("notifications.deal_payment_expired.body", deal.ListingTitle, (int)GatewayPayments.InvoiceLifetime.TotalHours),
+        RelatedUrl = $"/{slug}/deals/{deal.Id}",
+        At = at,
+    };
+
+    public static string PaymentExpiredPushBody(Deal deal, L l)
+        => l.Format("notifications.deal_payment_expired.push_body", deal.ListingTitle);
+
+    /// <summary>
     /// <para><b>إشعارُ المُشتَري بِأَنّ إدارَةَ المَتجَرِ قَبِلَت طَلَبَه</b> (‏2026-10-24، تَدقيقُ الإطلاق brief-P1a-1): المَسارُ الإداريُّ في الاستوديو يُخرِجُ
     /// <c>Offered</c> إلى <c>Booked</c> بِهُوِيَّةِ الطَرَف — قَبولٌ بِمِعيارِ <see cref="IsAcceptance"/> — وكانَ صامِتاً (تَوصيفُه <c>727bc9f</c>). نَوعُه نَوعُ القَبولِ
     /// وأَيقونَتُه، ونَصُّه نَسَقُ <see cref="CancelledByStoreFor"/>: «إدارَةُ المَتجَر» لا اسمٌ شَخصِيٌّ لِمالِكٍ لا يَعرِفُه المُشتَري.</para>
@@ -419,6 +437,37 @@ public sealed class DealNotices
         }
         foreach (var deal in owed) await NotifyStoreOwnerAsync(slug, deal, l, ct);
         return sent.Count;
+    }
+
+    /// <summary>
+    /// <para><b>بَعدَ أَن تُلغِيَ المَنصَّةُ طَلَباً انتَهَت مُهلَةُ دَفعِه</b> (<c>/payments/verify</c>؛ ‏2026-10-29، قَرارُ المالِك د5 (٤) «ب»: «ويُخبَر المشتري وكل بائع فيه»):
+    /// لِكُلِّ صَفقَةٍ أَلغاها التَحَقُّقُ <b>الآن</b> (<see cref="GatewayVerifyResult.Expired"/>) — بائِعُها بِالإشعارِ الواحِد (<see cref="NotifyVendorCancelledAsync"/>، والمُلغي
+    /// المَنصَّةُ لا هُوَ)، وصاحِبُ المَتجَرِ إن بَقِيَت الفاتورَةُ مَفتوحَة (<see cref="NotifyStoreOwnerAsync"/>)، ثُمَّ المُشتَري بِـ<see cref="PaymentExpiredFor"/> — بِتَرتيبِ الأُنبوبِ
+    /// نَفسِه. صَفقَةٌ لا تَزالُ قائِمَةً أَو لا توجَدُ تُتَجاوَز. تُرجِعُ عَدَدَ ما أُشعِرَ بِه المُشتَري.</para>
+    /// </summary>
+    public async Task<int> NotifyPaymentExpiredAsync(
+        string slug, IReadOnlyList<Guid> dealIds, L l, CancellationToken ct = default)
+    {
+        var told = 0;
+        foreach (var id in dealIds)
+        {
+            Deal? deal;
+            await using (var r = _store.LightweightSession(slug)) deal = await r.LoadAsync<Deal>(id, ct);
+            if (deal is not { Status: DealStatus.Cancelled }) continue;
+            await NotifyVendorCancelledAsync(slug, deal, GatewayPayments.ExpiryCanceller.ActorId, l, ct);
+            await NotifyStoreOwnerAsync(slug, deal, l, ct);
+            var n = PaymentExpiredFor(slug, deal, l, DateTime.UtcNow);
+            await using (var s = _store.LightweightSession(slug))
+            {
+                s.Store(n);
+                await s.SaveChangesAsync(ct);
+            }
+            await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
+            await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, PaymentExpiredPushBody(deal, l),
+                url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
+            told++;
+        }
+        return told;
     }
 
     /// <summary>

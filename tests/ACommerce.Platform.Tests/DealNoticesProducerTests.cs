@@ -76,7 +76,8 @@ public class DealNoticesProducerTests(ITestOutputHelper output)
         var typed = Regex.Matches(producer, @"Type = (NewDealType|AcceptedType|CancelledType|PaidType),").Count;
         // وسَبعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د8): `CancelledToVendorFor` سابِعُها — بِنَوعِ الإلغاءِ نَفسِه.
         // وتِسعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د3): `RefundDueFor` و`InvoiceLeftOpenFor` لِصاحِبِ المَتجَر — بِنَوعِ الإلغاءِ نَفسِه.
-        Assert.Equal(9, builders);
+        // وعَشَرَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د5 (٤)): `PaymentExpiredFor` لِلمُشتَري حينَ تُلغي المَنصَّةُ طَلَبَه بِالمُهلَة — بِنَوعِ الإلغاءِ نَفسِه.
+        Assert.Equal(10, builders);
         Assert.Equal(builders, typed);
 
         var reader = files.Single(f => f.Path == Reader).Text;

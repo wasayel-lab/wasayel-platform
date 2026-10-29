@@ -572,7 +572,9 @@ public class EndpointBodyBleedTests
         // نَسَقُ `/checkout/submit`؛ والكِتابَةُ والانتِقالُ في الخِدمَة. وصِفرُ سَطرِ قَرار.
         // **‏11 ← 14 (‏2026-10-29، قَرارُ المالِك د5 (٥))**: سَطرُ مَرجِعِ الصَفقَةِ وثَلاثَةُ أَسطُرٍ لِحِصَّةِ الأَفعالِ القائِمَة قَبلَ النِداء — المُتَجاوِزُ
         // يَعودُ بِـ`GatewayReturn.RateLimited` بِلا فَكِّ مِفتاحٍ ولا نِداء؛ والمِفتاحُ والرَمزُ في `GatewayReturn`. وصِفرُ سَطرِ قَرار.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Billing/TenantGatewayEndpoints.cs", 14),
+        // **‏14 ← 15 (‏2026-10-29، قَرارُ المالِك د5 (٤))**: سَطرُ إخبارِ أَطرافِ ما أَلغاه التَحَقُّقُ بِانتِهاءِ المُهلَة (`DealNotices.NotifyPaymentExpiredAsync`) —
+        // نَسَقُ سَطرِ `NotifyPaidAsync` فَوقَه؛ والإلغاءُ في الخِدمَة. وصِفرُ سَطرِ قَرار.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Billing/TenantGatewayEndpoints.cs", 15),
 
         // ─── مِلَفٌّ خامِس — هُوِيَّةُ البِناء (‏ADR-019) ─────────────
         //
@@ -1104,7 +1106,9 @@ public class EndpointBodyBleedTests
     /// ويَرجِعُ بِشَكلِ رُجوعِ فَشَلِ الفاتورَة؛ والإلغاءُ في <c>GatewayPayments.CancelUnsecuredAsync</c>. وعَدَدُ النِقاطِ ‏142 لَم يَتَحَرَّك.</remarks>
     /// <remarks><b>‏3118 ← 3121 يَوم ‏2026-10-29</b> (قَرارُ المالِك د5 (٥)): ثَلاثَةُ أَسطُرٍ في <c>/payments/verify</c> — عَشرُ نَقَراتٍ في السّاعَةِ لِكُلِّ مُشتَرٍ
     /// بِحِصَّةِ الأَفعالِ القائِمَة قَبلَ فَكِّ المِفتاحِ والنِداء؛ والمِفتاحُ والرَدُّ في <c>GatewayReturn</c>. وعَدَدُ النِقاطِ ‏142 لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 3121;
+    /// <remarks><b>‏3121 ← 3122 يَوم ‏2026-10-29</b> (قَرارُ المالِك د5 (٤)): سَطرُ <c>NotifyPaymentExpiredAsync</c> في <c>/payments/verify</c>؛ والإلغاءُ بِاسمِ المَنصَّةِ في
+    /// <c>GatewayPayments.VerifyAsync</c>. وعَدَدُ النِقاطِ ‏142 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 3122;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

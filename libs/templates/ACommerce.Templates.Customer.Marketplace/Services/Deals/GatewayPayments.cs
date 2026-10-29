@@ -77,6 +77,10 @@ public sealed record GatewayVerifyResult(Guid? DealId, ProvenGatewayPayment? Pay
     /// لِلرَفضِ ولِلتَحَقُّقِ الثاني مِن الدَفعِ نَفسِه. (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الأولى — ولا يُعادُ حَرفٌ فَوقَه: وفيها المُلغاةُ
     /// إن دُفِعَت — يُكتَبُ دَفعُها ولا يُبتلَع؛ والإشعارُ لِبائِعِ القائِمَةِ وَحدَها، <c>DealNotices.PaidRecipient</c>.)</summary>
     public IReadOnlyList<Guid> Confirmed { get; init; } = Array.Empty<Guid>();
+
+    /// <summary>الصَفَقاتُ الَّتي أَلغَتها المَنصَّةُ <b>في هذا التَحَقُّق</b> لِأَنّ مُهلَةَ دَفعِ فاتورَتِها انتَهَت (‏2026-10-29، قَرارُ المالِك د5 (٤)) — فَيُخبَرُ
+    /// مُشتَريها وكُلُّ بائِعٍ فيها مَرَّة (<c>DealNotices.NotifyPaymentExpiredAsync</c>). وفارِغَةٌ لِكُلِّ نَتيجَةٍ سِواها.</summary>
+    public IReadOnlyList<Guid> Expired { get; init; } = Array.Empty<Guid>();
 }
 
 /// <summary>نَتيجَةُ فَتحِ الفاتورَةِ في إتمامِ الشِراء: رابِطُ الصَفحَةِ المُستَضافَةِ أَو رَمزٌ مِن <see cref="MoyasarFailures"/> — ولا ثالِث.</summary>
@@ -189,6 +193,13 @@ public static class GatewayReturn
     /// </summary>
     public const string VerifyRateLimited = "gateway_verify_rate_limited";
 
+    /// <summary>
+    /// <para><b>انتَهَت مُهلَةُ دَفعِ الفاتورَةِ فَأُلغِيَ الطَلَبُ كُلُّه</b> (‏2026-10-29، قَرارُ المالِك د5 (٤) «ب»: «يُلغى الطلب كله آليًّا، وتُلغى الفاتورة عند ميسر إن بقيت
+    /// مفتوحة، ويُخبَر المشتري وكل بائع فيه»؛ تَوصيفُ «اليَوم» <c>23fae63</c>): رَمزُ التَحَقُّقِ الَّذي أَلغى — <see cref="GatewayVerifyResult.Expired"/> —
+    /// فَتَقولُه صَفحَةُ العَودَةِ بِنَصِّه في الشَريط.</para>
+    /// </summary>
+    public const string InvoiceExpired = "gateway_invoice_expired";
+
     /// <summary>مِفتاحُ حِصَّةِ نَقَراتِ التَحَقُّق — المَتجَرُ والمُشتَري بِصيغَةِ <c>D</c>، نَسَقُ <c>VendorShipping.RegisterAttemptKey</c>.</summary>
     public static string VerifyQuotaKey(string slug, Guid payer) => $"{slug}|gateway-verify:{payer:D}";
 
@@ -201,11 +212,13 @@ public static class GatewayReturn
     /// <summary>كُلُّ رَمزٍ قَد يَبلُغُ الصَفحَةَ — سُلطَةُ الدافِع، ثُمَّ مَعجَمُ فَشَلِ العَميلِ الخُماسيّ، ثُمَّ رُموزُ بَوّابَةِ البُرهانِ
     /// الخَمسَة. ثَلاثَةَ عَشَرَ لا رابِعَ عَشَر. (‏2026-10-13، G5 (xvii-g) — ولا يُعادُ حَرفٌ فَوقَه: والبُرهانُ سِتَّة — أَربَعَةَ عَشَر.)</summary>
     /// <remarks>(‏2026-10-29، قَرارُ المالِك د5 — ولا يُعادُ حَرفٌ فَوقَه: ومَعَها <see cref="VerifyRateLimited"/> — خَمسَةَ عَشَر.)</remarks>
+    /// <remarks>(‏2026-10-29، قَرارُ المالِك د5 (٤) — ولا يُعادُ حَرفٌ فَوقَه: و<see cref="InvoiceExpired"/> — سِتَّةَ عَشَر.)</remarks>
     public static readonly IReadOnlyList<string> Codes =
         DealPayAuthorization.All
             .Concat(MoyasarFailures.All)
             .Concat(GatewayPaymentProof.Codes)
             .Append(VerifyRateLimited)
+            .Append(InvoiceExpired)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
@@ -247,6 +260,36 @@ public sealed class GatewayPayments
     /// <summary><b>تاريخُ انتِهاءِ الفاتورَةِ كَما أُرسِلَ إلى البَوّابَة</b> (‏2026-10-29، قَرارُ المالِك د5 (٣)) — يَكتُبُه <see cref="OpenInvoiceAsync"/> عَلى كُلِّ صَفقَةٍ مِنها
     /// بِصيغَةِ <see cref="MoyasarClient.ExpiryText"/> نَفسِها، فَيُقرَأُ بِلا نِداء. داخِلِيٌّ: لا يُرسَمُ لِلطَرَفَين (لا تَسمِيَةَ لَه في <c>DealRefLabels</c>).</summary>
     public const string InvoiceExpiresAtRef = "gateway_invoice_expires_at";
+
+    /// <summary>تاريخُ انتِهاءِ فاتورَةِ الصَفقَةِ كَما كُتِب (<see cref="InvoiceExpiresAtRef"/>) — و<c>null</c> لِصَفقَةٍ بِلا تاريخٍ (فُتِحَت فاتورَتُها قَبلَ
+    /// ‏2026-10-29) أَو بِنَصٍّ لا يُقرَأ. بِثَقافَةٍ ثابِتَةٍ وبِالتَوقيتِ العالَمِيّ — صيغَةُ <see cref="MoyasarClient.ExpiryText"/>.</summary>
+    public static DateTimeOffset? ExpiresAtOf(Deal deal)
+        => deal.Refs.TryGetValue(InvoiceExpiresAtRef, out var at)
+           && DateTimeOffset.TryParse(at, System.Globalization.CultureInfo.InvariantCulture,
+                  System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, out var parsed)
+            ? parsed : null;
+
+    /// <summary>
+    /// <para><b>أَانتَهَت مُهلَةُ دَفعِ فاتورَةِ هذِه الصَفقَة؟</b> (‏2026-10-29، قَرارُ المالِك د5 (٤)) — دالَّةٌ نَقِيَّةٌ عَلى حالِ الفاتورَةِ كَما جَلَبَها التَحَقُّقُ
+    /// والصَفقَةِ و«الآن»: البَوّابَةُ تَقولُ <see cref="MoyasarClient.ExpiredStatus"/>، <b>أَو</b> الفاتورَةُ ما زالَت <see cref="MoyasarClient.OpenStatus"/> وقَد جاوَزَ
+    /// «الآنَ» تاريخَها المَكتوب (<see cref="ExpiresAtOf"/>) — فَتُلغى عِندَ البَوّابَةِ بِإلغاءِ آخِرِ صَفقَةٍ عَلَيها (<c>GatewayInvoiceCloser</c>)، «إن بقيت مفتوحة».</para>
+    /// <para><b>ولا تَصدُقُ لِسِواهُما</b>: <c>paid</c> يُثبِتُه البُرهانُ قَبلَها، والمُغلَقَةُ بِغَيرِ الانتِهاءِ (<c>canceled</c>، <c>voided</c>، <c>refunded</c>) والمُعَلَّقَةُ
+    /// (<c>on_hold</c>) والمَرفوضَة (<c>failed</c>) لا تُلغي طَلَباً بِاسمِ المُهلَة — قَد يَكونُ في الطَريقِ مالٌ لا تَشرَحُه الوَثيقَة.</para>
+    /// </summary>
+    public static bool ExpiryDue(string invoiceStatus, Deal deal, DateTimeOffset now)
+        => string.Equals(invoiceStatus, MoyasarClient.ExpiredStatus, StringComparison.Ordinal)
+           || (string.Equals(invoiceStatus, MoyasarClient.OpenStatus, StringComparison.Ordinal) && ExpiresAtOf(deal) is { } at && now >= at);
+
+    /// <summary>
+    /// <para><b>المُلغي حينَ تَنتَهي مُهلَةُ الدَفع: المَنصَّة</b> (‏2026-10-29، قَرارُ المالِك د5 (٤): «يُلغى الطلب كله آليًّا») — لا طَرَفٌ ولا مُستَخدِم: بِلا مُعَرِّفٍ
+    /// (<see cref="Guid.Empty"/>) وبِاسمِ <see cref="DealPatternCatalog.PlatformActor"/>، فَتُسَمّيه صَفحَتا الصَفقَةِ مِن القامُوس (<see cref="DealEvent.IsByPlatform"/>)،
+    /// ويُخبَرُ المُشتَري والبائِعُ مَعاً (لَيسَ أَحَدَهُما). وسُلطَتُه سُلطَةُ الإدارَة (<see cref="DealCanceller.IsStoreAdmin"/>) — ولا يَبنيه إلّا التَحَقُّقُ حينَ تَصدُقُ
+    /// <see cref="ExpiryDue"/> عَلى فاتورَةٍ جَلَبَها بِمِفتاحِ المَتجَر.</para>
+    /// </summary>
+    public static readonly DealCanceller ExpiryCanceller = new(Guid.Empty, DealPatternCatalog.PlatformActor, IsStoreAdmin: true);
+
+    /// <summary>مِفتاحُ سَبَبِ الإلغاءِ عِندَ انتِهاءِ المُهلَة — يُكتَبُ في <c>CancelReason</c> مِن القامُوس (القاعِدَة ١١).</summary>
+    public const string ExpiryReasonKey = "pay.invoice.cancel_expired";
 
     /// <summary>
     /// <para><b>عَلى الصَفقَةِ فاتورَةُ بَوّابَةٍ لَم يَثبُت دَفعُها، وتاليها «دَفع»</b> — رَمزُ <see cref="DealsService.AdvanceAsync"/> حينَ
@@ -359,8 +402,12 @@ public sealed class GatewayPayments
     /// </list>
     /// <para><b>ولا يُمَرَّرُ إلغاءُ الطَلَبِ مِن النُقطَة</b> (نَسَقُ <c>/ship</c>): مُهلَةُ العَميلِ تَحُدُّ النِداء.</para>
     /// </summary>
+    /// <remarks>(‏2026-10-29، قَرارُ المالِك د5 (٤) «ب» — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: <b>وفاتورَةٌ انتَهَت مُهلَتُها يُلغى طَلَبُها كُلُّه</b> بِاسمِ المَنصَّةِ
+    /// (<see cref="ExpiryDue"/>، <see cref="ExpiryCanceller"/>) بِكاتِبِ «إلغاءِ الطَلَبِ كُلِّه» القائِم، ويَعودُ <see cref="GatewayReturn.InvoiceExpired"/> ومَعَه
+    /// <see cref="GatewayVerifyResult.Expired"/> لِيُخبِرَ المُنادي المُشتَريَ وكُلَّ بائِع. <b>وكَسولٌ لا مُجَدوَل</b>: يَقَعُ في أَوَّلِ تَحَقُّقٍ بَعدَ الانتِهاء — لا مُؤَقِّتَ
+    /// ولا خِدمَةَ خَلفِيَّة (‏ADR-032 §٩‑٧). و<paramref name="l"/> لِنَصِّ السَبَب؛ وبِدونِه فَالعَرَبِيَّة — اللُغَةُ الإلزامِيَّة.)</remarks>
     public async Task<GatewayVerifyResult> VerifyAsync(
-        string tenantSlug, DealPayer by, string? dealRef, CancellationToken ct = default)
+        string tenantSlug, DealPayer by, string? dealRef, ACommerce.Platform.I18n.L? l = null, CancellationToken ct = default)
     {
         var deal = GatewayReturn.DealIdOf(dealRef) is { } id ? await _deals.LoadAsync(tenantSlug, id, ct) : null;
         if (DealPayAuthorization.Validate(deal, by) is { } refusal)
@@ -382,6 +429,23 @@ public sealed class GatewayPayments
             if (admitted.Violation!.Code == GatewayPaymentProof.InvoiceClosed)
                 foreach (var d in invoiceDeals.Where(d => !GatewayReturn.IsClosed(d)))
                     await _deals.AttachRefAsync(tenantSlug, d.Id, InvoiceClosedRef, invoice.Status, ct);
+            // وانتَهَت المُهلَة: يُلغى الطَلَبُ كُلُّه بِاسمِ المَنصَّة، وتُلغى الفاتورَةُ عِندَ البَوّابَةِ إن بَقِيَت مَفتوحَة (‏2026-10-29، قَرارُ المالِك د5 (٤)).
+            // كُلُّ صَفقَةٍ قائِمَةٍ سَمَّتها الفاتورَةُ تُلغى بِكاتِبِ «الطَلَبِ كُلِّه» — أَوَّلُها يُلغي أَخَواتِها المَكتوبَة، وما بَقِيَ (فاتورَةٌ بِلا مَرجِعِ أَخَوات) يُلغى بِدَورِه.
+            if (ExpiryDue(invoice.Status, deal, _clock.GetUtcNow()))
+            {
+                var reason = l?[ExpiryReasonKey] ?? ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, ExpiryReasonKey);
+                var cancelled = new List<Guid>();
+                foreach (var d in invoiceDeals.Where(d => d.Status == DealStatus.Active && !cancelled.Contains(d.Id)))
+                {
+                    var order = await _deals.CancelWholeInvoiceAsync(tenantSlug, d.Id, ExpiryCanceller, reason, ct);
+                    cancelled.AddRange(order.Cancelled.Select(c => c.Id).Where(c => !cancelled.Contains(c)));
+                    if (!order.Result.Ok && order.Result.Violation?.Code != DealCancelAuthorization.DealNotActive)
+                        _log.LogWarning("[gateway] verify {Slug}: invoice of deal {Deal} expired ← cancel {Code}",
+                            tenantSlug, d.Id, order.Result.Violation?.Code);
+                }
+                if (cancelled.Count > 0)
+                    return Logged(tenantSlug, new GatewayVerifyResult(deal.Id, null, GatewayReturn.InvoiceExpired) { Expired = cancelled.ToArray() });
+            }
             return Logged(tenantSlug, new(deal.Id, null, admitted.Violation!.Code));
         }
 

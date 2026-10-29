@@ -46,9 +46,11 @@ public static class TenantGatewayEndpoints
             // وعَشرُ نَقَراتٍ في السّاعَةِ لِكُلِّ مُشتَرٍ بِالحِصَّةِ القائِمَة — بَعدَ الجَلسَةِ وقَبلَ فَكِّ المِفتاحِ والنِداء (‏2026-10-29، قَرارُ المالِك د5 (٥)؛ تَوصيفُه `23fae63`).
             var dealRef = req.Form[Services.Deals.GatewayReturn.DealKey].ToString();
             var res = AuthHandlers.TryConsumeActionQuota(Services.Deals.GatewayReturn.VerifyQuotaKey(slug, userId))
-                ? await gateway.VerifyAsync(slug, payer, dealRef)
+                ? await gateway.VerifyAsync(slug, payer, dealRef, l)
                 : Services.Deals.GatewayReturn.RateLimited(dealRef);
             await notices.NotifyPaidAsync(slug, res.Confirmed, l);
+            // ومَن أَلغَته المَنصَّةُ بِانتِهاءِ المُهلَةِ يُخبَرُ مُشتَريه وكُلُّ بائِعٍ فيه (‏2026-10-29، قَرارُ المالِك د5 (٤)).
+            await notices.NotifyPaymentExpiredAsync(slug, res.Expired, l);
             return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, Services.Deals.GatewayReturn.AfterVerify(res)));
         }).RequireFormBody().DisableAntiforgery();
 

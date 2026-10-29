@@ -87,6 +87,10 @@ public sealed class MoyasarClient
     /// <c>GatewayInvoiceCloser</c> فَلا يَحسِبُ ‏200 بِحالٍ أُخرى «أُلغِيَت» (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b).</summary>
     public const string CanceledStatus = "canceled";
 
+    /// <summary>حالُ الفاتورَةِ بَعدَ انتِهاءِ مُهلَتِها — مِن مَعجَمِ <c>InvoiceStatus</c> بِحَرفِه، وحَقلُ <c>expired_at</c> في «Create Invoice» يَقولُ أَثَرَه:
+    /// «User will be prevented from paying the invoice once expired». يَقرَؤُه التَحَقُّقُ فَيُلغي الطَلَب (‏2026-10-29، قَرارُ المالِك د5 (٤)).</summary>
+    public const string ExpiredStatus = "expired";
+
     /// <summary>أَصغَرُ مَبلَغٍ تَقبَلُه الفاتورَة بِالهَلَلَة — «‏Possible values: &gt;= 100».</summary>
     public const long MinimumAmount = 100;
 

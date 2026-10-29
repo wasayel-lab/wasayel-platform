@@ -131,6 +131,9 @@ public sealed record DealEvent(
 
     /// <summary><b>سَطرٌ فاعِلُه المَنصَّة</b> (‏2026-10-29، قَرارُ المالِك د4) — بِلا مُعَرِّفِ فاعِلٍ وبِاسمِ <see cref="DealPatternCatalog.PlatformActor"/>، يَكتُبُه
     /// <c>DealsService.EnterPaidOnRecordAsync</c> وَحدَه؛ وتَقرَؤُه صَفحَتا الصَفقَةِ فَتُسَمّيه مِن القامُوسِ لا بِحَرفِه. دالَّةٌ لا خاصِّيَّة: لا تُخَزَّنُ في الوَثيقَة.</summary>
+    /// <remarks>(‏2026-10-29، قَرارُ المالِك د5 (٤) — ولا يُعادُ حَرفٌ فَوقَه: و«بِلا مُعَرِّفٍ» يَشمَلُ <see cref="Guid.Empty"/> — مُعَرِّفُ مُلغي المَنصَّةِ
+    /// <c>GatewayPayments.ExpiryCanceller</c>، فَسَطرُ الإلغاءِ عِندَ انتِهاءِ المُهلَةِ يُسَمّى كَسَطرِ «دَفع». ولا عُضوَ بِهذا المُعَرِّف.)</remarks>
     public static bool IsByPlatform(DealEvent e)
-        => e.ActorId is null && string.Equals(e.ActorName, DealPatternCatalog.PlatformActor, StringComparison.Ordinal);
+        => (e.ActorId is null || e.ActorId == Guid.Empty)
+           && string.Equals(e.ActorName, DealPatternCatalog.PlatformActor, StringComparison.Ordinal);
 }

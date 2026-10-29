@@ -153,10 +153,12 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
     public void The_strip_lexicon_is_the_union_of_the_three_lexicons_with_one_key_each()
     {
         // (‏2026-10-29، قَرارُ المالِك د5 — ولا يُعادُ حَرفٌ فَوقَه: ومَعَها رَمزُ حِصَّةِ النَقَرات `gateway_verify_rate_limited` — خَمسَةَ عَشَر.)
+        // (‏2026-10-29، قَرارُ المالِك د5 (٤) — ولا يُعادُ حَرفٌ فَوقَه: ورَمزُ انتِهاءِ المُهلَة `gateway_invoice_expired` — سِتَّةَ عَشَر.)
         var expected = DealPayAuthorization.All.Concat(MoyasarFailures.All).Concat(GatewayPaymentProof.Codes).Append(GatewayReturn.VerifyRateLimited)
+            .Append(GatewayReturn.InvoiceExpired)
             .OrderBy(c => c, StringComparer.Ordinal);
         Assert.Equal(expected, GatewayReturn.Codes.OrderBy(c => c, StringComparer.Ordinal));
-        Assert.Equal(15, GatewayReturn.Codes.Count);   // 13 ← 14 (‏2026-10-13، G5 (xvii-g): +gateway_invoice_closed) ← 15 (‏2026-10-29، د5)
+        Assert.Equal(16, GatewayReturn.Codes.Count);   // 13 ← 14 (‏2026-10-13، G5 (xvii-g): +gateway_invoice_closed) ← 15 (‏2026-10-29، د5) ← 16 (د5 (٤))
         Assert.All(GatewayReturn.Codes, c => Assert.Equal(GatewayReturn.TextPrefix + c, GatewayReturn.KeyFor(c)));
         Assert.All(GatewayReturn.Codes, c => Assert.Equal(3, GatewayReturn.KeyFor(c)!.Split('.').Length));
         Assert.Null(GatewayReturn.KeyFor("not_a_code"));
@@ -181,7 +183,7 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
             checkedCount++;
         }
         output.WriteLine($"· نُصوصُ صَفحَةِ العَودَة: {checkedCount} مِفتاحاً حَيّاً (‏{GatewayReturn.Codes.Count} رَمزاً + ‏4 نُصوص).");
-        Assert.Equal(19, checkedCount);   // 17 ← 18 (‏2026-10-13، G5 (xvii-g)) ← 19 (‏2026-10-29، قَرارُ المالِك د5 (٥): +gateway_verify_rate_limited)
+        Assert.Equal(20, checkedCount);   // 17 ← 18 (‏2026-10-13، G5 (xvii-g)) ← 19 (‏2026-10-29، قَرارُ المالِك د5 (٥): +gateway_verify_rate_limited) ← 20 (د5 (٤): +gateway_invoice_expired)
     }
 
     // ═══ ٣) الخِدمَة — السُلطَةُ قَبلَ المِفتاح، والمِفتاحُ قَبلَ البَوّابَة، وصِفرُ كِتابَة ═══════════════════════
@@ -576,7 +578,8 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         var body = file[at..file.IndexOf(".DisableAntiforgery();", at, StringComparison.Ordinal)];
         var session = body.IndexOf("AuthSession.ResolveToken(req, slug)", StringComparison.Ordinal);
         var quota = body.IndexOf("AuthHandlers.TryConsumeActionQuota(Services.Deals.GatewayReturn.VerifyQuotaKey(slug, userId))", StringComparison.Ordinal);
-        var call = body.IndexOf("gateway.VerifyAsync(slug, payer, dealRef)", StringComparison.Ordinal);
+        // (‏2026-10-29، قَرارُ المالِك د5 (٤) — ولا يُعادُ حَرفٌ فَوقَه: والنِداءُ يَحمِلُ `l` لِنَصِّ سَبَبِ الإلغاءِ عِندَ انتِهاءِ المُهلَة.)
+        var call = body.IndexOf("gateway.VerifyAsync(slug, payer, dealRef, l)", StringComparison.Ordinal);
         var refused = body.IndexOf("Services.Deals.GatewayReturn.RateLimited(dealRef)", StringComparison.Ordinal);
         Assert.True(session >= 0 && quota > session && call > quota && refused > call, $"جَلسَة {session} ← حِصَّة {quota} ← نِداء {call} ← رَدّ {refused}");
         Assert.Equal(1, body.Split("TryConsume").Length - 1);
@@ -604,24 +607,30 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         Assert.Contains("لَم نَسأَلِ البَوّابَة", text, StringComparison.Ordinal);
     }
 
-    /// <summary><b>اليَوم</b> (‏2026-10-29، تَوصيفٌ قَبلَ قَرارِ المالِك د5 (٤) «ب»: «يُلغى الطلب كله آليًّا، وتُلغى الفاتورة عند ميسر إن بقيت مفتوحة، ويُخبَر المشتري وكل بائع
-    /// فيه»): تَحَقُّقٌ يَرى الفاتورَةَ «expired» عِندَ البَوّابَةِ يُجيبُ <c>gateway_invoice_closed</c> ويَكتُبُ مَرجِعَ الإغلاق — <b>والصَفقَتانِ قائِمَتانِ</b> تُمسِكانِ
-    /// بائِعَيهِما بِلا نِهايَة. يُقلَبُ بِاسمِه.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د5 (٤) «ب»: «يُلغى الطلب كله آليًّا، وتُلغى الفاتورة عند ميسر إن بقيت مفتوحة، ويُخبَر المشتري وكل بائع
+    /// فيه»؛ تَوصيفُه <c>23fae63</c> — كانَ <c>Today_an_expired_invoice_seen_at_verify_leaves_its_deals_active</c>: الرَدُّ <c>gateway_invoice_closed</c> والصَفقَتانِ قائِمَتان):
+    /// تَحَقُّقٌ يَرى الفاتورَةَ «expired» يُلغي صَفقَتَيها <b>بِاسمِ المَنصَّة</b> بِسَبَبٍ مِن القامُوس، ويُجيبُ <see cref="GatewayReturn.InvoiceExpired"/> ومَعَه الصَفقَتان
+    /// لِيُخبِرَ المُنادي أَطرافَهُما؛ ومَرجِعُ الإغلاقِ مَكتوبٌ كَما كان.</summary>
     [Fact]
-    public async Task Today_an_expired_invoice_seen_at_verify_leaves_its_deals_active()
+    public async Task An_expired_invoice_seen_at_verify_cancels_the_whole_order_in_the_platform_name()
     {
         var w = await PaidCart(withSeller: true);
         w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "expired"));
 
         var res = await w.Gateway.VerifyAsync(Slug, new DealPayer(Buyer), w.Ids[0].ToString("N"));
 
-        Assert.Equal(GatewayPaymentProof.InvoiceClosed, res.Code);
+        Assert.Equal(GatewayReturn.InvoiceExpired, res.Code);
+        Assert.Equal(w.Ids.OrderBy(i => i), res.Expired.OrderBy(i => i));
+        Assert.Empty(res.Confirmed);
         Assert.All(w.Ids, id =>
         {
             var d = w.Docs.Read<Deal>(id.ToString())!;
-            Assert.Equal(DealStatus.Active, d.Status);
+            Assert.Equal(DealStatus.Cancelled, d.Status);
             Assert.True(GatewayReturn.IsClosed(d));
+            Assert.True(DealEvent.IsByPlatform(Assert.Single(d.Timeline, e => e.Action == "cancelled")));
+            Assert.Equal(LocaleCatalog.Text(LocaleCatalog.Arabic, GatewayPayments.ExpiryReasonKey), d.CancelReason);
         });
+        Assert.Equal($"pay/return?deal={w.Ids[0]:N}&err=gateway_invoice_expired", GatewayReturn.AfterVerify(res));
     }
 
     // ═══ ٥) صَفحَةُ العَودَة — قِراءَةٌ خالِصَةٌ لا تَسأَلُ البَوّابَة ═══════════════════════════════════════

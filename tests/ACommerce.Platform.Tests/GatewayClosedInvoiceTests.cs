@@ -23,9 +23,12 @@ public class GatewayClosedInvoiceTests(ITestOutputHelper output)
 
     /// <summary><b>قُلِبَ</b> (‏2026-10-13) — كانَ <c>Today_a_verify_that_sees_a_canceled_invoice_answers_unpaid_and_the_pay_link_stays</c> (‏<c>5c777d7</c>):
     /// تَحَقُّقٌ يَرى فاتورَةً مُغلَقَةً يُجيبُ بِرَمزِها، ويَكتُبُ حالَها عَلى صَفَقاتِها مَرَّةً، فَلا رابِطَ بَعدَه — والتَحَقُّقُ الثاني لا يَكتُبُ ثانِيَة.</summary>
+    /// <remarks>(‏2026-10-29، قَرارُ المالِك د5 (٤) «ب» — ولا يُعادُ حَرفٌ فَوقَه: صَفُّ <c>expired</c> خَرَجَ مِن هذِه النَظَرِيَّة — المُنتَهِيَةُ لَم تَعُد «تُجيبُ مُغلَقَةً
+    /// والصَفقَةُ قائِمَة»: يُلغى طَلَبُها كُلُّه بِاسمِ المَنصَّةِ ويُجيبُ <c>gateway_invoice_expired</c> — يَقيسُه <c>GatewayInvoiceExpiryTests</c>
+    /// و<c>TenantGatewayEndpointsTests.An_expired_invoice_seen_at_verify_cancels_the_whole_order_in_the_platform_name</c> (مَرجِعُ الإغلاقِ مَكتوبٌ فيه كَما هُنا).
+    /// والثَلاثُ الباقِيَةُ بِحَرفِها.)</remarks>
     [Theory]
     [InlineData("canceled")]
-    [InlineData("expired")]
     [InlineData("voided")]
     [InlineData("refunded")]
     public async Task A_verify_that_sees_a_closed_invoice_answers_closed_records_it_once_and_the_pay_link_goes(string status)
