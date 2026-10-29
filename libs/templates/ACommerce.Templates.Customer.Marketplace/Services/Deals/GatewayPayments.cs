@@ -732,6 +732,17 @@ public sealed class GatewayInvoiceCloser
     /// والإلغاء: نَتيجَةٌ بِرَمزِها لا «أُلغِيَت» (‏2026-10-13).</summary>
     public const string NotCancelled = "gateway_invoice_not_cancelled";
 
+    /// <summary>
+    /// <para><b>أَتُبقي هذِه النَتيجَةُ فاتورَةً قَد تُدفَعُ ثَمَناً لِما أُلغِيَ؟</b> (‏2026-10-29، قَرارُ المالِك د3 «د» — «وبكل فاتورة تعذّر إلغاؤها») — دالَّةٌ نَقِيَّةٌ عَلى
+    /// رَمزِ <see cref="CloseIfLastAsync"/>: <c>null</c> (أُلغِيَت)، و<see cref="GatewayInvoiceClosing.StillOwed"/> (تَدفَعُ لِأُختٍ قائِمَةٍ بِقَصد)، و<see cref="GatewayInvoiceClosing.NotOpen"/>
+    /// (لَيسَت مَفتوحَةً عِندَ البَوّابَة — دُفِعَت فَيُكتَبُ استِرجاعُها بِالتَأكيد، أَو أُلغِيَت أَو انتَهَت)، و<see cref="DealPayAuthorization.InvoiceMissing"/> (لا فاتورَة)
+    /// <b>لا تُبقي</b>؛ وكُلُّ رَمزٍ سِواها — لا مِفتاحَ يُفَكّ، وفَشَلُ الجَلبِ أَو الإلغاء، و<see cref="NotCancelled"/>، و<see cref="Faulted"/>، وفاتورَةٌ لا تُسَمّيها —
+    /// <b>يُبقيها</b>، فَيُكتَبُ سَطرُ <see cref="DealEvent.GatewayInvoiceLeftOpen"/> ويُخبَرُ صاحِبُ المَتجَر. وكانَت كُلُّها سَطرَ لوغٍ لا يَقرَؤُه أَحَد.</para>
+    /// </summary>
+    public static bool LeavesPayable(string? code)
+        => code is not null
+           && code is not (GatewayInvoiceClosing.StillOwed or GatewayInvoiceClosing.NotOpen or DealPayAuthorization.InvoiceMissing);
+
     private readonly TenantProviderService _providers;
     private readonly ProviderVault _vault;
     /// <summary>عَميلُ البَوّابَة — و<c>null</c> حينَ لا يُسَجِّلُه المُضيف، فَلا جَلبَ ولا إلغاء (<see cref="MoyasarFailures.NotConfigured"/>).</summary>

@@ -75,7 +75,8 @@ public class DealNoticesProducerTests(ITestOutputHelper output)
         var builders = Regex.Matches(producer, @"public static Notification \w+For\(").Count;
         var typed = Regex.Matches(producer, @"Type = (NewDealType|AcceptedType|CancelledType|PaidType),").Count;
         // وسَبعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د8): `CancelledToVendorFor` سابِعُها — بِنَوعِ الإلغاءِ نَفسِه.
-        Assert.Equal(7, builders);
+        // وتِسعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د3): `RefundDueFor` و`InvoiceLeftOpenFor` لِصاحِبِ المَتجَر — بِنَوعِ الإلغاءِ نَفسِه.
+        Assert.Equal(9, builders);
         Assert.Equal(builders, typed);
 
         var reader = files.Single(f => f.Path == Reader).Text;

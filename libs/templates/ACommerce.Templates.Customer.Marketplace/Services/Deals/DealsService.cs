@@ -33,6 +33,10 @@ public sealed class DealsService
     /// والقارِئَ يَجِبُ أَن يَقرَآ نَفسَ الحَرف.</summary>
     public const string ListingOwnerRef = "listing_owner";
 
+    /// <summary>عُملَةُ الدَفعِ الَّذي أَثبَتَته بَوّابَةُ المَتجَر — مِن الفاتورَةِ نَفسِها (<c>ProvenGatewayPayment.Currency</c>)، يَكتُبُه <see cref="ConfirmGatewayPaymentAsync"/>
+    /// ويَقرَؤُه <c>DealNotices.RefundDueFor</c> (‏2026-10-29، قَرارُ المالِك د3: «والمبلغ والعملة يُؤخذان من الفاتورة نفسها، فلا تُكتب عملة ثابتة»).</summary>
+    public const string PaymentCurrencyRef = "payment_currency";
+
     /// <summary>
     /// <para><b>«تَغَيَّرَت الصَفقَةُ في الأَثناء» — رَمزُ رَفضٍ واحِدٌ لِكُلِّ بابِ كِتابَةٍ عَلى الصَفقَة</b> (‏ADR-036،
     /// ‏2026-10-12): وَثيقَةُ <see cref="Deal"/> مُسَجَّلَةٌ بِتَزامُنٍ تَفاؤُلِيّ (<see cref="RegisterDocument"/>)، فَحِفظُ
@@ -773,8 +777,14 @@ public sealed class DealsService
         // البَوّابَةِ إن كانَت هذِه آخِرَ صَفقَةٍ قائِمَةٍ تَدفَعُ لَها**. كانَت تَبقى قابِلَةً لِلدَّفعِ فَيَدفَعُ المُشتَري ثَمَنَ طَلَبٍ مُلغًى مِن الصَفحَةِ
         // المَفتوحَةِ أَمامَه — تَوصيفُه `GatewayInvoiceCancelTests`. بَعدَ الحِفظِ كَالاستِرجاع، وما يَعودُ رَمزٌ في اللوغِ لا يَرُدُّ الإلغاء؛
         // والمُحَمِّلُ بِلا إلغاءِ الطَلَبِ عَمداً — الأَثَرُ يَتبَعُ ما حُفِظ.)
-        else if (GatewayPayments.HasInvoice(deal) && _invoices is not null)
-            await _invoices.CloseIfLastAsync(tenantSlug, deal, id => LoadAsync(tenantSlug, id));
+        // (‏2026-10-29، قَرارُ المالِك د3 «د» — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: **وما يَعودُ لا يَبقى في اللوغِ وَحدَه**. رَمزٌ يُبقي الفاتورَةَ قابِلَةً لِلدَّفعِ
+        // (`GatewayInvoiceCloser.LeavesPayable`) يُكتَبُ سَطراً في سِجِلِّ الصَفقَةِ بِحَلقَةِ التَسجيلِ نَفسِها — يَراه المُشتَري «لا تَدفَع» وصاحِبُ المَتجَرِ «ألغِها» —
+        // ويُخبَرُ بِه صاحِبُ المَتجَرِ مِن `DealNotices` مَعَ إشعارِ الإلغاء. تَوصيفُه `b55fead`.)
+        else if (GatewayPayments.HasInvoice(deal) && _invoices is not null
+                 && await _invoices.CloseIfLastAsync(tenantSlug, deal, id => LoadAsync(tenantSlug, id)) is { } left
+                 && GatewayInvoiceCloser.LeavesPayable(left))
+            deal = await RecordAsync(tenantSlug, dealId, stored => stored.Timeline.Add(new(stored.Stage, stored.Stage,
+                DealEvent.GatewayInvoiceLeftOpen, actorId, actorName, left, DateTime.UtcNow)), CancellationToken.None) ?? deal;
         return DealCancelResult.Cancelled(deal);
     }
 
@@ -885,6 +895,8 @@ public sealed class DealsService
                 var at = DateTime.UtcNow;
                 d.Refs["payment_id"] = payment.InvoiceId;
                 d.Refs["payment_status"] = nameof(ACommerce.Kit.Payments.PaymentStatus.Captured);
+                // وعُملَةُ الفاتورَةِ كَما ثَبَتَت — يَقرَؤُها إشعارُ الاستِرجاعِ المُستَحَقّ فَلا تُكتَبُ عُملَةٌ ثابِتَة (‏2026-10-29، قَرارُ المالِك د3).
+                d.Refs[PaymentCurrencyRef] = payment.Currency;
                 d.Timeline.Add(new(d.Stage, d.Stage, DealEvent.GatewayPaid, d.InitiatorId, d.InitiatorName, payment.InvoiceId, at));
                 if (d.Status == DealStatus.Cancelled)
                     d.Timeline.Add(new(d.Stage, d.Stage, DealEvent.GatewayRefundDue, d.InitiatorId, d.InitiatorName, payment.InvoiceId, at));

@@ -199,11 +199,15 @@ public class ReturnsPolicyTextTests
     // ويُقلَبُ بِاسمِه في كوميتِ الصِياغَة؛ والصُفوفُ أَعلاه تَبقى بِلا تَعديلِ حَرف.
 
     /// <summary>ما تَقولُه صَفحَةُ الصَفقَةِ عَن طَلَبٍ مُلغًى دُفِعَ بِالبِطاقَة — والكاتِبُ سَطرُ <c>GatewayRefundDue</c> وحدَه.</summary>
+    /// <remarks><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د3 «د»: «سطر «الاسترجاع المستحقّ» موجود اليوم في صفحتَي المشتري والاستوديو، فلا يتغيّر فيه إلّا نصّ المشتري،
+    /// لأن نصّه الحالي يحيله إلى لوحة لا يملكها»؛ تَوصيفُه <c>b55fead</c>) — كانَ <c>The_deal_page_says_a_paid_cancelled_card_order_is_refunded_from_the_store_gateway</c>
+    /// بِنَصِّ «دُفِعَ ثَمَنُ طَلَبٍ مُلغًى: استِرجاعُه مِن لَوحَةِ بَوّابَةِ المَتجَر». والآن يُطَمأَنُ المُشتَري عَلى مالِه، وصاحِبُ المَتجَرِ يُخبَرُ بِإشعارٍ يُعطيه الفِعل.</remarks>
     [Fact]
-    public void The_deal_page_says_a_paid_cancelled_card_order_is_refunded_from_the_store_gateway()
+    public void The_deal_page_tells_the_buyer_of_a_paid_cancelled_card_order_that_the_store_was_told_to_refund_his_card()
     {
         var due = LocaleCatalog.Find(LocaleCatalog.Arabic, "deals.detail.event_gateway_refund_due");
-        Assert.Equal("دُفِعَ ثَمَنُ طَلَبٍ مُلغًى: استِرجاعُه مِن لَوحَةِ بَوّابَةِ المَتجَر", due);
+        Assert.Equal("أُلغِيَ الطَّلَبُ بَعدَ دَفعِه — أُبلِغَ المَتجَرُ بِرَدِّ المَبلَغِ إلى بِطاقَتِك.", due);
+        Assert.DoesNotContain("لوحة", AccountDeletionRetentionTests.Bare(due!), StringComparison.Ordinal);
         var page = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
             "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "MyDealDetail.razor"));
         Assert.Contains("DealEvent.GatewayRefundDue => L[\"deals.detail.event_gateway_refund_due\"]", page, StringComparison.Ordinal);
@@ -228,8 +232,10 @@ public class ReturnsPolicyTextTests
         Assert.DoesNotContain("بِالطَّريقَة الَّتي دُفِع بِها", how, StringComparison.Ordinal);
 
         // وصَفحَةُ الصَفقَةِ والنَصُّ يَقولانِ الشَيءَ نَفسَه: لَوحَةُ بَوّابَةِ المَتجَر — بِلا حَرَكات.
+        // (‏2026-10-29، قَرارُ المالِك د3 «د» — ولا يُعادُ حَرفٌ فَوقَه: صارَ سَطرُ المُشتَري يَقولُ ما عَلى المَتجَرِ لا أَينَ يَفعَلُه — «أُبلِغَ المَتجَرُ بِرَدِّ المَبلَغِ
+        // إلى بِطاقَتِك» — والاتِّفاقُ بَينَهُما أَنّ المَتجَرَ يَرُدُّ ثَمَنَ البِطاقَة؛ واللَوحَةُ في إشعارِ صاحِبِ المَتجَرِ وسَطرِ الاستوديو.)
         var due = AccountDeletionRetentionTests.Bare(LocaleCatalog.Find(LocaleCatalog.Arabic, "deals.detail.event_gateway_refund_due")!);
-        Assert.Contains("لوحة بوابة المتجر", due, StringComparison.Ordinal);
+        Assert.Contains("ابلغ المتجر برد المبلغ الى بطاقتك", due.Replace("أ", "ا").Replace("إ", "ا"), StringComparison.Ordinal);
         Assert.Contains("لوحة بوابة الدفع", AccountDeletionRetentionTests.Bare(how), StringComparison.Ordinal);
         Assert.Contains("صاحب المتجر", AccountDeletionRetentionTests.Bare(how), StringComparison.Ordinal);
     }

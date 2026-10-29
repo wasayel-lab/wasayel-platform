@@ -218,6 +218,61 @@ public sealed class DealNotices
     public static string CancelledToVendorPushBody(Deal deal, L l)
         => l.Format("notifications.deal_cancelled_for_vendor.push_body", deal.ListingTitle);
 
+    // ─── صاحِبُ المَتجَر — ما عَلَيه أَن يَفعَلَه في لَوحَةِ ميسر (‏2026-10-29، قَرارُ المالِك د3 «د») ───────────────
+
+    /// <summary>ما يُخبَرُ بِه صاحِبُ المَتجَرِ عَن صَفقَة — مَعجَمٌ مُغلَق: استِرجاعٌ مُستَحَقٌّ، أَو فاتورَةٌ تَعَذَّرَ إلغاؤها.</summary>
+    public enum OwnerAction { RefundDue, InvoiceLeftOpen }
+
+    /// <summary>
+    /// <para><b>ما عَلى صاحِبِ المَتجَرِ أَن يَفعَلَه في هذِه الصَفقَة الآن</b> — آخِرُ سَطرٍ مِن السَطرَينِ في سِجِلِّها: <see cref="DealEvent.GatewayRefundDue"/> لِصَفقَةٍ مُلغاة
+    /// (المالُ عِندَ المَتجَرِ ويُستَرجَعُ مِن لَوحَةِ ميسر)، أَو <see cref="DealEvent.GatewayInvoiceLeftOpen"/> (فاتورَةٌ قَد تُدفَعُ فَتُلغى مِن اللَوحَة). والآخِرُ لا الأَوَّل:
+    /// فاتورَةٌ تَعَذَّرَ إلغاؤها ثُمَّ دَفَعَها المُشتَري صارَ عَلَيها استِرجاع. و<c>null</c> لِما سِواهُما. دالَّةٌ نَقِيَّة.</para>
+    /// </summary>
+    public static OwnerAction? OwnerActionOf(Deal deal)
+    {
+        for (var i = deal.Timeline.Count - 1; i >= 0; i--)
+        {
+            if (deal.Timeline[i].Action == DealEvent.GatewayRefundDue && deal.Status == DealStatus.Cancelled) return OwnerAction.RefundDue;
+            if (deal.Timeline[i].Action == DealEvent.GatewayInvoiceLeftOpen) return OwnerAction.InvoiceLeftOpen;
+        }
+        return null;
+    }
+
+    /// <summary>مَن يُخبَرُ مِن جِهَةِ المَتجَر: صاحِبُه <c>Tenant.OwnerUserId</c> — مَن رَبَطَ مِفتاحَ ميسر في الاستوديو ولِلوَحَتِه يُحالُ الفِعل — و<c>null</c> لِمَتجَرٍ
+    /// بِلا مالِكٍ مُعَيَّن.</summary>
+    public static Guid? StoreOwnerOf(ACommerce.Kit.Tenants.Tenant? tenant)
+        => tenant is { OwnerUserId: var owner } && owner != Guid.Empty ? owner : null;
+
+    /// <summary>إشعارُ صاحِبِ المَتجَرِ بِاستِرجاعٍ مُستَحَقّ — بِنَصِّ القَرارِ بِحَرفِه: «استرجاعٌ مستحقّ: أُلغي طلب على «{المنتج}» بعد دفع {المبلغ} {العملة} — استرجعه للمشتري
+    /// من لوحة ميسر.» والمَبلَغُ مَبلَغُ الصَفقَةِ (سَطرُها في الفاتورَة) والعُملَةُ عُملَةُ الفاتورَةِ كَما ثَبَتَت (<see cref="DealsService.PaymentCurrencyRef"/>)، فَإن غابَت
+    /// فَعُملَةُ إنشاءِ الفاتورَةِ نَفسُها (<see cref="ACommerce.Kit.Payments.MoyasarClient.Currency"/>). والرابِطُ صَفحَةُ الصَفقَةِ في الاستوديو.</summary>
+    public static Notification RefundDueFor(string slug, Deal deal, Guid ownerId, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = ownerId,
+        Type = CancelledType,
+        Title = l["notifications.deal_refund_due.title"],
+        Body = l.Format("notifications.deal_refund_due.body", deal.ListingTitle, deal.AmountSar, CurrencyOf(deal)),
+        RelatedUrl = $"/studio/apps/{slug}/deals/{deal.Id}",
+        At = at,
+    };
+
+    /// <summary>إشعارُ صاحِبِ المَتجَرِ بِفاتورَةٍ تَعَذَّرَ إلغاؤها — بِنَصِّ القَرارِ بِحَرفِه: «تعذّر إلغاء فاتورة الطلب الملغى على «{المنتج}» عند ميسر — ألغِها من لوحة ميسر
+    /// حتى لا تُدفع.»</summary>
+    public static Notification InvoiceLeftOpenFor(string slug, Deal deal, Guid ownerId, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = ownerId,
+        Type = CancelledType,
+        Title = l["notifications.deal_invoice_left_open.title"],
+        Body = l.Format("notifications.deal_invoice_left_open.body", deal.ListingTitle),
+        RelatedUrl = $"/studio/apps/{slug}/deals/{deal.Id}",
+        At = at,
+    };
+
+    private static string CurrencyOf(Deal deal)
+        => deal.Refs.TryGetValue(DealsService.PaymentCurrencyRef, out var c) && !string.IsNullOrWhiteSpace(c) ? c : ACommerce.Kit.Payments.MoyasarClient.Currency;
+
     // ─── الأُنبوب — تَخزينٌ ثُمَّ جَرَسٌ ثُمَّ دَفع ──────────────────────────
 
     /// <summary>بَعدَ حَفظِ <c>/checkout/submit</c>: إشعارٌ واحِدٌ لِمالِكِ إعلانِ كُلِّ
@@ -275,6 +330,7 @@ public sealed class DealNotices
         string slug, Deal deal, Guid cancellerId, string cancellerName, L l, CancellationToken ct = default)
     {
         await NotifyVendorCancelledAsync(slug, deal, cancellerId, l, ct);
+        await NotifyStoreOwnerAsync(slug, deal, l, ct);
         if (!TellsTheBuyer(deal, cancellerId)) return false;
         var n = CancelledFor(slug, deal, cancellerName, l, DateTime.UtcNow);
         await using (var s = _store.LightweightSession(slug))
@@ -297,6 +353,7 @@ public sealed class DealNotices
         string slug, Deal deal, Guid ownerId, L l, CancellationToken ct = default)
     {
         await NotifyVendorCancelledAsync(slug, deal, ownerId, l, ct);
+        await NotifyStoreOwnerAsync(slug, deal, l, ct);
         if (!TellsTheBuyer(deal, ownerId)) return false;
         var n = CancelledByStoreFor(slug, deal, l, DateTime.UtcNow);
         await using (var s = _store.LightweightSession(slug))
@@ -338,12 +395,15 @@ public sealed class DealNotices
         string slug, IReadOnlyList<Guid> dealIds, L l, CancellationToken ct = default)
     {
         if (dealIds.Count == 0) return 0;
+        var owed = new List<Deal>();
         var sent = new List<(Guid UserId, Guid DealId, Notification N, string PushBody)>();
         await using (var s = _store.LightweightSession(slug))
         {
             foreach (var id in dealIds)
             {
                 var deal = await s.LoadAsync<Deal>(id, ct);
+                // (‏2026-10-29، قَرارُ المالِك د3 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: ودَفعٌ ثَبَتَ عَلى صَفقَةٍ مُلغاةٍ يُخبَرُ بِه صاحِبُ المَتجَرِ «استِرجاعٌ مُستَحَقّ».)
+                if (deal is not null && OwnerActionOf(deal) == OwnerAction.RefundDue) owed.Add(deal);
                 if (deal is null || PaidRecipient(deal) is not { } ownerId) continue;
                 var n = PaidFor(slug, deal, ownerId, l, DateTime.UtcNow);
                 s.Store(n);
@@ -357,6 +417,7 @@ public sealed class DealNotices
             await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, userId);
             await _push.SendAsync(_store, slug, userId, n.Title, pushBody, url: n.RelatedUrl, tag: $"deal-{dealId}", ct: ct);
         }
+        foreach (var deal in owed) await NotifyStoreOwnerAsync(slug, deal, l, ct);
         return sent.Count;
     }
 
@@ -380,6 +441,30 @@ public sealed class DealNotices
         await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, vendorId);
         await _push.SendAsync(_store, slug, vendorId, n.Title, CancelledToVendorPushBody(deal, l),
             url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
+        return true;
+    }
+
+    /// <summary>
+    /// <para><b>صاحِبُ المَتجَرِ يُخبَرُ بِما عَلَيه في لَوحَةِ ميسر</b> (‏2026-10-29، قَرارُ المالِك د3 «د»: «ومعه إشعار لصاحب المتجر بكل استرجاع مستحقّ وبكل فاتورة
+    /// تعذّر إلغاؤها»؛ تَوصيفُ «اليَوم» <c>b55fead</c>): ما تُسَمّيه <see cref="OwnerActionOf"/> لِمَن تُسَمّيه <see cref="StoreOwnerOf"/>، بِتَرتيبِ الأُنبوبِ نَفسِه. يُناديه
+    /// إشعارا الإلغاءِ (بَعدَ إلغاءٍ كَتَبَ أَحَدَ السَطرَين) و<see cref="NotifyPaidAsync"/> (دَفعٌ ثَبَتَ عَلى مُلغاة) — فَلا تَتَغَيَّرُ أَجسامُ النِقاط. ولا مالَ يَتَحَرَّك:
+    /// الاستِرجاعُ يَدَوِيٌّ مِن اللَوحَة (د3 «أ»). تُرجِعُ هَل أُشعِر.</para>
+    /// </summary>
+    public async Task<bool> NotifyStoreOwnerAsync(string slug, Deal deal, L l, CancellationToken ct = default)
+    {
+        if (OwnerActionOf(deal) is not { } action) return false;
+        Notification n;
+        await using (var s = _store.LightweightSession(slug))
+        {
+            if (StoreOwnerOf(await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug, ct)) is not { } ownerId) return false;
+            n = action == OwnerAction.RefundDue
+                ? RefundDueFor(slug, deal, ownerId, l, DateTime.UtcNow)
+                : InvoiceLeftOpenFor(slug, deal, ownerId, l, DateTime.UtcNow);
+            s.Store(n);
+            await s.SaveChangesAsync(ct);
+        }
+        await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, n.UserId);
+        await _push.SendAsync(_store, slug, n.UserId, n.Title, n.Body, url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         return true;
     }
 }

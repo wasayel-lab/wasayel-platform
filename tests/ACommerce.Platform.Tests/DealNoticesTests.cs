@@ -252,7 +252,9 @@ public class DealNoticesTests
             ("public async Task<bool> NotifyAcceptedByStoreAsync(", "public async Task<int> NotifyPaidAsync("),
             // والسابِعَةُ (‏2026-10-29، قَرارُ المالِك د8) بِالتَرتيبِ نَفسِه: إشعارُ البائِعِ بِالإلغاء؛ والسادِسَةُ صارَت تَنتَهي عِندَها.
             ("public async Task<int> NotifyPaidAsync(", "public async Task<bool> NotifyVendorCancelledAsync("),
-            ("public async Task<bool> NotifyVendorCancelledAsync(", "\n}"),
+            // والثامِنَةُ (‏2026-10-29، قَرارُ المالِك د3) بِالتَرتيبِ نَفسِه: صاحِبُ المَتجَرِ بِالاستِرجاعِ والفاتورَة؛ والسابِعَةُ صارَت تَنتَهي عِندَها.
+            ("public async Task<bool> NotifyVendorCancelledAsync(", "public async Task<bool> NotifyStoreOwnerAsync("),
+            ("public async Task<bool> NotifyStoreOwnerAsync(", "\n}"),
         })
         {
             var body = Segment(src, from, to);
@@ -271,7 +273,8 @@ public class DealNoticesTests
         // وخَمسَةٌ مُنذُ ‏2026-10-13 (مُراجَعَةُ المَوجَة 3a — G4 (iii)): `NotifyCancelledByStoreAsync` خامِسَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
         // وسِتَّةٌ مُنذُ ‏2026-10-24 (تَدقيقُ الإطلاق brief-P1a-1): `NotifyAcceptedByStoreAsync` سادِسَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
         // وسَبعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د8): `NotifyVendorCancelledAsync` سابِعَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
-        Assert.Equal(7, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
+        // وثَمانِيَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د3): `NotifyStoreOwnerAsync` ثامِنَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
+        Assert.Equal(8, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
     }
 
     /// <summary><c>/checkout/submit</c>: الصَفَقاتُ ذَواتُ المالِكِ تُجمَعُ في الحَلقَةِ،

@@ -96,7 +96,7 @@ public enum DealStatus
 public sealed record DealEvent(
     DealStage StageBefore,
     DealStage StageAfter,
-    string Action,          // created | assigned | bound | advanced | captured | capture_failed | cash_on_delivery | cancelled | refunded | refund_failed | disputed | note | gateway_paid | gateway_refund_due
+    string Action,          // created | assigned | bound | advanced | captured | capture_failed | cash_on_delivery | cancelled | refunded | refund_failed | disputed | note | gateway_paid | gateway_refund_due | gateway_invoice_left_open
     Guid? ActorId,
     string? ActorName,
     string? Note,
@@ -119,6 +119,11 @@ public sealed record DealEvent(
     /// <summary>مالٌ قَبَضَته بَوّابَةُ المَتجَرِ عَن صَفقَةٍ أُلغِيَت — استِرجاعُه مُستَحَقٌّ عِندَ البَوّابَةِ نَفسِها، يَستَرجِعُه صاحِبُ المَتجَرِ
     /// مِن لَوحَتِها؛ ولا نِداءَ عِندَنا (مُزَوِّدُ النُسخَةِ لا يَعرِفُ المَرجِع). يَكتُبُه الإلغاءُ بَعدَ الدَفع، والتَأكيدُ بَعدَ الإلغاء.</summary>
     public const string GatewayRefundDue = "gateway_refund_due";
+
+    /// <summary>فاتورَةُ بَوّابَةٍ لِطَلَبٍ أُلغِيَ تَعَذَّرَ إلغاؤها عِندَ البَوّابَة — قَد تَبقى قابِلَةً لِلدَّفع (‏2026-10-29، قَرارُ المالِك د3 «د»): يَكتُبُه الإلغاءُ
+    /// حينَ يَعودُ المُلغي بِرَمزٍ يُبقيها (<c>GatewayInvoiceCloser.LeavesPayable</c>)، و<c>Note</c> الرَمزُ لِلمُراجَعَة؛ والنَصُّ مِن القامُوسِ عِندَ العَرض —
+    /// لِلمُشتَري «لا تَدفَع» ولِصاحِبِ المَتجَرِ «ألغِها مِن لَوحَةِ ميسر».</summary>
+    public const string GatewayInvoiceLeftOpen = "gateway_invoice_left_open";
 
     /// <summary>سَطرُ مَرجِعٍ أُلحِق — يَكتُبُه <c>DealsService.AttachRefAsync</c> وَحدَه بِنَصِّ <c>attach {key}={value}</c>، ويَقرَؤُه
     /// <c>DealRefLabels</c> لِصَفحَةِ الطَرَفَين (‏2026-10-13، G4 (xxvi)). الثابِتُ هُنا لِأَنّ الكاتِبَ والقارِئَ يَقرَآنِ نَفسَ الحَرف.</summary>
