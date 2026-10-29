@@ -274,19 +274,19 @@ public class DuplicatePhonesTests(ITestOutputHelper output)
         Assert.Equal(ACommerce.Templates.Customer.Marketplace.Gates.SelfGrantPolicy.AdminSlug, DuplicatePhones.AdminBlock);
     }
 
-    /// <summary><b>تَوصيفُ اليَوم (‏2026-10-29، G-6)</b>: القِياسُ يَسأَلُ جِسمَ الوَثيقَةِ (<c>data::text</c>) ولا يَسأَلُ عَمودَ <c>id</c> — فَوَثيقَةٌ مُعَرِّفُها
-    /// يَحمِلُ مُعَرِّفَ المُندَمِجِ (مَدخَلُ البائِع <c>{capability}:{owner}</c>) يُعادُ تَوجيهُ جِسمِها ويَبقى صَفُّها.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، G-6 — كوميتُ التَبديل)</b> — كانَ <c>Today_the_scan_reads_document_bodies_and_never_a_row_id</c>
+    /// (‏<c>bfc2900</c>): «أَسئِلَةُ عَمودِ id 0». والآن القِياسُ يَسأَلُ عَمودَ <c>id</c> بِصيغَتَي المُعَرِّف (D وN) فَيَمنَعُ، والمانِعُ يُسَمّي الجَدوَل.</summary>
     [Fact]
-    public void Today_the_scan_reads_document_bodies_and_never_a_row_id()
+    public void The_scan_asks_each_row_id_for_the_loser_id_in_both_forms_and_blocks()
     {
         var scan = StudioConsentCharacterizationTests.Source("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Identity", "DuplicatePhones.cs");
         var body = scan[scan.IndexOf("public static async Task<Scan> ScanAsync(", StringComparison.Ordinal)..];
         body = body[..body.IndexOf("// ─── الكِتابَة", StringComparison.Ordinal)];
-        var bodies = Regex.Matches(body, @"data::text like").Count;
         var ids = Regex.Matches(body, @"\bid::text\b").Count;
-        output.WriteLine($"اليَوم: أَسئِلَةُ الجِسمِ في القِياس {bodies} · أَسئِلَةُ عَمودِ id {ids}");
-        Assert.True(bodies > 0);
-        Assert.Equal(0, ids);
+        output.WriteLine($"بَعدَ التَبديل: أَسئِلَةُ عَمودِ id في القِياس {ids}");
+        Assert.Equal(2, ids);
+        Assert.Contains("(\"d\", $\"%{l}%\"), (\"n\", $\"%{loser:N}%\")", body, StringComparison.Ordinal);
+        Assert.Contains("if (named > 0) blocks.Add($\"{t.Name}: {named} صَفّاً مُعَرِّفُه يَحمِلُ مُعَرِّفَ المُندَمِج\");", body, StringComparison.Ordinal);
     }
 
     // ─── Inherit: لِكُلِّ قاعِدَةٍ مُوجَبٌ وسالِب ──────────────────────────────────────────────────────────
@@ -677,45 +677,52 @@ public class LiveDuplicatePhonesProofTests(ITestOutputHelper output)
         return id;
     }
 
-    /// <summary><b>تَوصيفُ اليَوم (‏2026-10-29، G-6) حَيّاً عَلى Postgres</b>: مُندَمِجٌ لَه مَدخَلُ بائِع (<c>delivery:{loser}</c> — المُعَرِّفُ في عَمودِ
-    /// <c>id</c> لا في الجِسمِ وَحدَه) — القِياسُ يَعُدُّه صَفّاً يُعادُ تَوجيهُه والمَجموعَةُ تُدمَج، فَيُستَبدَلُ المُعَرِّفُ في الجِسمِ ويَبقى عَمودُ <c>id</c> بِاسمِ
-    /// المُندَمِج: وَثيقَةٌ مُعَرِّفُها غَيرُ مُعَرِّفِ صَفِّها، ولا يَجِدُها بائِعٌ يَبني المُعَرِّفَ مِن نَفسِه.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، G-6 — كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_a_vendor_entry_named_by_the_loser_id_is_repointed_in_its_body_and_left_in_its_row_id_on_Postgres</c> (‏<c>bfc2900</c>): «قابِلَةٌ لِلدَمج: True ·
+    /// عَمودُ id بِاسمِ المُندَمِج: True · المُعَرِّفُ في الجِسمِ بِاسمِ الباقي: True». والآن مَدخَلُ بائِعٍ بِاسمِ المُندَمِجِ يَمنَعُ المَجموعَةَ ولا يُكتَبُ حَرف؛
+    /// ومَدخَلٌ بِاسمِ الباقي لا يَمنَع (سالِب) — المانِعُ لِمُعَرِّفِ المُندَمِجِ وَحدَه.</summary>
     [Fact]
-    public async Task Today_a_vendor_entry_named_by_the_loser_id_is_repointed_in_its_body_and_left_in_its_row_id_on_Postgres()
+    public async Task A_vendor_entry_named_by_the_loser_id_blocks_the_group_and_one_named_by_the_survivor_does_not_on_Postgres()
     {
         if (!Enabled) return;
         using var store = Store();
         var slug = "dup-g6-" + Guid.NewGuid().ToString("N")[..8];
         try
         {
-            var (a, b) = (Guid.NewGuid(), Guid.NewGuid());
+            var (a, b, c, d) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
             await using (var s = store.LightweightSession(slug))
             {
                 s.Store(new User { Id = a, TenantSlug = slug, Phone = "0500000098", CreatedAt = DateTime.UtcNow.AddDays(-10) });
                 s.Store(new User { Id = b, TenantSlug = slug, Phone = "+966500000098", CreatedAt = DateTime.UtcNow.AddDays(-2) });
+                s.Store(new User { Id = c, TenantSlug = slug, Phone = "0500000099", CreatedAt = DateTime.UtcNow.AddDays(-10) });
+                s.Store(new User { Id = d, TenantSlug = slug, Phone = "+966500000099", CreatedAt = DateTime.UtcNow.AddDays(-2) });
                 await s.SaveChangesAsync();
             }
             await using var conn = new NpgsqlConnection(LiveDealConcurrencyProofTests.ConnectionString);
             await conn.OpenAsync();
             var entry = await VendorEntryAsync(conn, slug, b);
+            await VendorEntryAsync(conn, slug, c);
             List<DuplicatePhones.Account> members;
             await using (var q = store.QuerySession(slug))
                 members = (await q.Query<User>().ToListAsync()).Select(u => new DuplicatePhones.Account(u.Id, u.Phone, u.CreatedAt, u.DeletedAt is not null)).ToList();
-            var group = Assert.Single(DuplicatePhones.Build(members).Groups);
+            var plan = DuplicatePhones.Build(members);
             var tables = await DuplicatePhones.TenantTablesAsync(conn);
-            var scan = await DuplicatePhones.ScanAsync(conn, slug, group, tables);
-            await DuplicatePhones.ApplyAsync(store, slug, scan, DateTime.UtcNow);
-            await using var read = new NpgsqlCommand("select id, data->>'Id' from platform.mt_doc_tenantproviderbinding where tenant_id = @t", conn);
+            var scanAB = await DuplicatePhones.ScanAsync(conn, slug, plan.Groups.Single(g => g.Survivor == a), tables);
+            var scanCD = await DuplicatePhones.ScanAsync(conn, slug, plan.Groups.Single(g => g.Survivor == c), tables);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => DuplicatePhones.ApplyAsync(store, slug, scanAB, DateTime.UtcNow));
+            await using var read = new NpgsqlCommand("select data->>'Id' from platform.mt_doc_tenantproviderbinding where tenant_id = @t and id = @i", conn);
             read.Parameters.AddWithValue("t", slug);
-            await using var r = await read.ExecuteReaderAsync();
-            Assert.True(await r.ReadAsync());
-            var (rowId, bodyId) = (r.GetString(0), r.GetString(1));
-            output.WriteLine($"اليَوم: يُعادُ تَوجيهُه في {string.Join(",", scan.Repoints.Select(x => x.Table))} · قابِلَةٌ لِلدَمج: {scan.Mergeable} · "
-                + $"عَمودُ id بِاسمِ المُندَمِج: {rowId == entry} · المُعَرِّفُ في الجِسمِ بِاسمِ الباقي: {bodyId.EndsWith(a.ToString(), StringComparison.Ordinal)}");
-            Assert.True(scan.Mergeable);
-            Assert.Contains(scan.Repoints, x => x.Table == "mt_doc_tenantproviderbinding");
-            Assert.Equal(entry, rowId);
-            Assert.NotEqual(rowId, bodyId);
+            read.Parameters.AddWithValue("i", entry);
+            var bodyId = (string?)await read.ExecuteScalarAsync();
+            User? ub;
+            await using (var q = store.QuerySession(slug)) ub = await q.LoadAsync<User>(b);
+            output.WriteLine($"بَعدَ التَبديل: مَدخَلٌ بِاسمِ المُندَمِج ⇒ قابِلَةٌ لِلدَمج: {scanAB.Mergeable} ({string.Join(" | ", scanAB.Blocks)}) · "
+                + $"الجِسمُ كَما هُوَ: {bodyId == entry} · المُندَمِجُ قائِم: {ub?.DeletedAt is null} · مَدخَلٌ بِاسمِ الباقي ⇒ قابِلَةٌ لِلدَمج: {scanCD.Mergeable}");
+            Assert.False(scanAB.Mergeable);
+            Assert.Contains(scanAB.Blocks, x => x.StartsWith("mt_doc_tenantproviderbinding:", StringComparison.Ordinal) && x.Contains("مُعَرِّفُه", StringComparison.Ordinal));
+            Assert.Equal(entry, bodyId);
+            Assert.Null(ub!.DeletedAt);
+            Assert.True(scanCD.Mergeable, string.Join(" · ", scanCD.Blocks));
         }
         finally { await CleanAsync(slug); }
     }
