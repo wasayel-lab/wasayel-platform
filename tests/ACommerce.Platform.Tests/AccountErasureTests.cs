@@ -66,6 +66,37 @@ public class AccountErasureTests
         Assert.True(AccountErasure.Identifies(Name));
     }
 
+    // ─── اسمُ التَسجيلِ الافتِراضِيّ، ووَسيلَةُ الاتِّصالِ في إشعارِ التَسجيلِ القَديم — تَوصيفُ «اليَوم» (مُراجَعَةُ تَيّارِ S2 الجَولَة ١، ‏2026-10-29) ───
+    //
+    // ‏`Identifies` يَستَثني `new User().FullName` («مُستَخدِم جَديد») ولا يَستَثني ما يُخَزَّنُ فِعلاً لِلحِسابِ الجَديدِ بِالهاتِفِ أَو البَريد:
+    // `me.profile.new_member` («عُضو جَديد»). وإشعاراتُ المُديرينَ (`new_user`/`report`) لا يَحصُرُها رابِط — فَحَذفُ حِسابٍ ما زالَ اسمُه الافتِراضِيَّ
+    // يَكتُبُ «حِسابٌ مَحذوف» في إشعارِ تَسجيلِ كُلِّ عُضوٍ آخَر (مَقيسٌ حَيّاً عِندَ المُراجِع). وإشعارُ التَسجيلِ قَبلَ `548ea4d` مَتنُه «{الاسم} · {الهاتِف}»
+    // أَو «… · {البَريد}» والاسمُ يَومَئِذٍ الافتِراضِيّ — والمَحوُ بِالاسمِ وَحدَه فَيَبقى الهاتِفُ والبَريدُ في صَناديقِ المُديرين. يُقلَبانِ بِاسمَيهِما في كوميتِ التَبديل.
+
+    private static string Placeholder
+        => ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, ACommerce.Kit.Auth.Server.AuthHandlers.NewMemberNameKey)!;
+
+    [Fact]
+    public void Today_deleting_a_placeholder_named_account_rewrites_another_members_registration_notice()
+    {
+        var anothers = Notice(Other, "new_user", "مُستَخدِم جَديد سَجَّل", Placeholder, "/admin/tenants/zz/users");
+        Assert.True(AccountErasure.Identifies(Placeholder));
+        Assert.True(AccountErasure.EraseFrom(anothers, Me, new[] { Placeholder }, Array.Empty<string>()));
+        Assert.Equal(AccountDeletion.ErasedName, anothers.Body);
+    }
+
+    [Fact]
+    public void Today_an_old_registration_notice_keeps_the_deleted_members_phone_and_email()
+    {
+        const string phone = "+966500000002", email = "member@example.test";
+        var byPhone = Notice(Other, "new_user", "مُستَخدِم جَديد سَجَّل", $"{Placeholder} · {phone}", "/admin/tenants/zz/users");
+        var byEmail = Notice(Other, "new_user", "مُستَخدِم جَديد سَجَّل", $"{Placeholder} · {email}", "/admin/tenants/zz/users");
+        Assert.False(AccountErasure.EraseFrom(byPhone, Me, new[] { "أَحمَدُ الفاحِص" }, Array.Empty<string>()));
+        Assert.False(AccountErasure.EraseFrom(byEmail, Me, new[] { "أَحمَدُ الفاحِص" }, Array.Empty<string>()));
+        Assert.Contains(phone, byPhone.Body, StringComparison.Ordinal);
+        Assert.Contains(email, byEmail.Body, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void A_ticket_loses_its_authors_name_on_the_ticket_and_their_replies_and_the_team_reply_keeps_its_signature()
     {
