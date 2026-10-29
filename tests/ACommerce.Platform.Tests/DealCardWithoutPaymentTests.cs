@@ -173,6 +173,42 @@ public class DealCardWithoutPaymentTests(ITestOutputHelper output)
         Assert.Contains("«دَفع»", text, StringComparison.Ordinal);
     }
 
+    /// <summary><b>اليَوم — تَعَذُّرُ الحَجزِ عِندَ الشِراءِ سُلوكانِ لا سُلوك</b> (‏2026-10-29، تَوصيفٌ قَبلَ قَرارِ المالِك د8 (٢) «أ»: «إذا تعذّر حجز المبلغ
+    /// عند الشراء أُلغيت طلبات السلّة فورًا، ويرى المشتري رسالة واضحة وسلّته كما هي»): في جِسمِ <c>/checkout/submit</c> (بِلا تَعليقات) فَرعُ رَميِ الحَجزِ
+    /// عِندَ مُزَوِّدِ النُسخَةِ يَكتُبُ <c>payment_error</c> ويَمضي — لا إلغاءَ ولا رُجوعَ ولا خُروجَ مِن الحَلقَة — فَتولَدُ بَقِيَّةُ السَلَّةِ وتُحذَفُ السَلَّةُ
+    /// ويُشعَرُ البائِعون، والصَفقَةُ تُمسَكُ عِندَ «تَأكيد» (<see cref="DealsService.MissesPayment"/>)؛ وطَريقُ البَوّابَةِ وَحدَه يُلغي ويُبقي السَلَّةَ ويَرُدُّ
+    /// بِرَمزِه (ثَلاثَةُ مَساراتِ رَدٍّ لا رابِع). يُقلَبُ بِاسمِه في كوميتِ التَوحيد.</summary>
+    [Fact]
+    public void Today_a_hold_failure_at_checkout_marks_the_deal_and_the_cart_goes_on_while_only_the_gateway_path_cancels()
+    {
+        var src = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs"));
+        var start = src.IndexOf("\"/{slug}/checkout/submit\"", StringComparison.Ordinal);
+        Assert.True(start > 0, "أَداةٌ عَمياء: النُقطَةُ غَيرُ مَوجودَة.");
+        var body = WriteEndpointGuardTests.StripComments(src[start..src.IndexOf(".RequireStoreWritable();", start, StringComparison.Ordinal)]);
+        Assert.True(body.Length > 2000, $"أَداةٌ عَمياء: جِسمُ النُقطَةِ {body.Length} مِحرَفاً.");
+
+        const string mark = "await deals.AttachRefAsync(slug, deal.Id, \"payment_error\", ex.Message);";
+        var catchAt = body.IndexOf("catch (Exception ex)", StringComparison.Ordinal);
+        var markAt = body.IndexOf(mark, catchAt, StringComparison.Ordinal);
+        var after = body[(markAt + mark.Length)..].TrimStart();
+        output.WriteLine($"catch={catchAt} · payment_error={markAt} · ما يَليه: «{after[..1]}» · break: {Count(body, "break;")} · CancelAsync: {Count(body, "CancelAsync(")} · RefusalPath: {Count(body, "RefusalPath(")}");
+
+        Assert.True(catchAt > 0 && markAt > catchAt, $"فَرعُ الرَميِ: catch={catchAt} mark={markAt}");
+        Assert.StartsWith("}", after, StringComparison.Ordinal);
+        Assert.Equal(0, Count(body, "break;"));
+        Assert.Equal(0, Count(body, "CancelAsync("));
+        Assert.Equal(3, Count(body, "RefusalPath("));
+        Assert.Contains("RefusalPath(Services.Deals.CheckoutPayMethods.GatewayOpenFailed)", body.Replace("\n", "").Replace(" ", ""), StringComparison.Ordinal);
+    }
+
+    private static int Count(string text, string needle)
+    {
+        var n = 0;
+        for (var i = text.IndexOf(needle, StringComparison.Ordinal); i >= 0; i = text.IndexOf(needle, i + needle.Length, StringComparison.Ordinal)) n++;
+        return n;
+    }
+
     /// <summary><b>الصَفحَةُ بِالدالَّةِ الَّتي يَرُدُّ بِها المُحَرِّك</b> (القاعِدَة ١٢): لا بِطاقَةَ «دَورُكَ الآن» ولا «تَأكيد: دَفع» ولا «بِانتِظار الطَّرَف الآخَر» —
     /// فَرعُها قَبلَ فَرعِ الزِرِّ والانتِظار، ونَصُّه مِن <c>DealRefusalTexts.KeyFor</c> لا حَرفٌ في الصَفحَة، ولا يُكَرَّرُ تَحتَ شَريطِ <c>?err=</c>.</summary>
     [Fact]
