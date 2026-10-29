@@ -28,21 +28,31 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
         // يُسَمّي «عَمَلِيَّةَ الاشتِراكِ» وَحدَها — فَالجَردُ كانَ يَعُدُّ مُسَمّىً ما لا يُسَمّيه النَصّ.
         // ‏(2026-10-25، كوميتُ المِفتاح — نُقِلَ مِن `PinnedUnlisted`): المُستَلِمُ في `DraftFor` والبائِعُ في `RegisterVendorAsync`.
         ["OtoClient"]             = "platform.privacy.share_carrier",
+        // ‏(2026-10-29، قَرارُ المالِك د20 «أ» — نُقِلَت مِن `PinnedUnlisted` حَتّى فَرَغَت): كَتَبَ المالِكُ سَطرَ كُلِّ جِهَةٍ بِاسمِها وفِئَتِها.
+        ["AnthropicBackend"]      = "platform.privacy.share_llm",
+        ["GeminiBackend"]         = "platform.privacy.share_llm",
+        ["OpenAIBackend"]         = "platform.privacy.share_llm",
+        ["WebPushService"]        = "platform.privacy.share_push",
+        ["MoyasarClient"]         = "platform.privacy.share_gateway",
+        // ‏(2026-10-29، د20) والجَردُ كانَ أَعمى عَن عَميلَينِ لا يَحمِلانِ `HttpClient` (القاعِدَة ١٠ — صَفُّ النَمَطِ أَدناه): قَناةُ SMTP تُرسِلُ
+        // البَريدَ والرَمزَ إلى مُضيفِها بِـ`SmtpClient`، ومَخزَنُ الصُوَرِ يَرفَعُ الصورَةَ الشَخصِيَّةَ وصُوَرَ الإعلاناتِ بِـ`IAmazonS3` — وهو
+        // في الإنتاجِ إلزامِيّ (`docs/DEPLOY.md` §٢·ز: «بِدونِها لا تُرفَع صورَةٌ»). فَلَم يَكُن في `PinnedUnlisted` ولا هُنا، لِأَنَّ الأَداةَ لَم تَرَه.
+        ["SmtpEmailChannel"]      = "platform.privacy.share_otp",
+        ["S3FileStorage"]         = "platform.privacy.share_files",
     };
 
-    /// <summary>عَميلٌ صادِرٌ لا يُسَمّيه نَصُّ السِياسَةِ اليَوم — بِسَبَبِه، وصِياغَتُه قَرارُ المالِك («ب» W8-4 · ٥).</summary>
-    internal static readonly IReadOnlyDictionary<string, string> PinnedUnlisted = new Dictionary<string, string>(StringComparer.Ordinal)
-    {
-        ["AnthropicBackend"] = "نَصُّ الفِكرَةِ ومُحادَثَةُ الوَكيلِ إلى مُزَوِّدِ نَموذَجِ اللُغَة",
-        ["GeminiBackend"]    = "نَصُّ الفِكرَةِ ومُحادَثَةُ الوَكيلِ إلى مُزَوِّدِ نَموذَجِ اللُغَة",
-        ["OpenAIBackend"]    = "نَصُّ الفِكرَةِ ومُحادَثَةُ الوَكيلِ إلى مُزَوِّدِ نَموذَجِ اللُغَة",
-        ["WebPushService"]   = "عُنوانُ اشتِراكِ الجِهازِ وحُمولَةٌ مُشَفَّرَةٌ إلى خِدمَةِ إشعاراتِ المُتَصَفِّح",
-        // ‏(2026-10-25، مِن `Listed`): بَوّابَةُ المَتجَر — فاتورَةٌ بِمَبلَغٍ ووَصفٍ ومُعَرِّفاتِ صَفَقاتٍ لا بَيانٍ شَخصِيّ، والمُشتَري يَكتُبُ بِطاقَتَه
-        // عِندَها. و`share_payment` يُسَمّي «الاشتِراكَ» وَحدَه؛ يَعودُ إلى `Listed` يَومَ يُسَمّي نَصُّه دَفعَ الطَلَبات («ب» W8-4 · ٥ البَند ٤).
-        ["MoyasarClient"]    = "فاتورَةُ دَفعِ الطَلَبِ (مَبلَغٌ ووَصفٌ ومُعَرِّفاتُ صَفَقات) إلى بَوّابَةِ دَفعِ المَتجَر",
-    };
+    /// <summary>عَميلٌ صادِرٌ لا يُسَمّيه نَصُّ السِياسَةِ اليَوم — بِسَبَبِه، وصِياغَتُه قَرارُ المالِك («ب» W8-4 · ٥).
+    /// <para><b>‏(2026-10-29، قَرارُ المالِك د20) فارِغَة</b>: الخَمسَةُ الَّتي كانَت هُنا — <c>AnthropicBackend</c> و<c>GeminiBackend</c>
+    /// و<c>OpenAIBackend</c> («نَصُّ الفِكرَةِ ومُحادَثَةُ الوَكيلِ إلى مُزَوِّدِ نَموذَجِ اللُغَة»)، و<c>WebPushService</c> («عُنوانُ اشتِراكِ
+    /// الجِهازِ وحُمولَةٌ مُشَفَّرَةٌ إلى خِدمَةِ إشعاراتِ المُتَصَفِّح»)، و<c>MoyasarClient</c> («فاتورَةُ دَفعِ الطَلَبِ … إلى بَوّابَةِ دَفعِ
+    /// المَتجَر») — صارَت سُطوراً في <see cref="Listed"/>. <b>والقائِمَةُ تَبقى</b>: عَميلٌ صادِرٌ جَديدٌ لا يُسَمّيه النَصُّ يَدخُلُها بِسَبَبِه
+    /// في مُراجَعَةٍ مَرئِيَّة، أَو يُحمِّرُ الصَفّ.</para></summary>
+    internal static readonly IReadOnlyDictionary<string, string> PinnedUnlisted = new Dictionary<string, string>(StringComparer.Ordinal);
 
-    private static readonly Regex HoldsClient = new(@"(?<!\w)(HttpClient|WebPushClient)\s+[_A-Za-z]\w*\s*[;=,)]", RegexOptions.Compiled);
+    // ‏(2026-10-29، د20): وعَميلا SMTP وS3 — المَحمولُ حَقلاً (`IAmazonS3 _client;`) والمُنشَأُ مَحَلِّيّاً (`using var c = new SmtpClient {`).
+    private static readonly Regex HoldsClient = new(
+        @"(?<!\w)(?:(?:HttpClient|WebPushClient|SmtpClient|IAmazonS3|AmazonS3Client)\s+[_A-Za-z]\w*\s*[;=,)]|new\s+(?:SmtpClient|AmazonS3Client)\s*[({])",
+        RegexOptions.Compiled);
     private static readonly Regex TypeDecl = new(@"\b(?:class|record)\s+(\w+)", RegexOptions.Compiled);
 
     /// <summary>كُلُّ صِنفٍ في <c>libs</c> يَحمِلُ عَميلَ شَبَكَةٍ صادِراً — بِاسمِه ومِلَفِّه.</summary>
@@ -89,7 +99,8 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
         {
             Assert.NotNull(LocaleCatalog.Find(LocaleCatalog.Arabic, key));
             Assert.NotNull(LocaleCatalog.Find("en", key));
-            Assert.Contains($"@doc.Markup(\"{key}\")", page, StringComparison.Ordinal);
+            // ‏(2026-10-29، د20) والمِفتاحُ قَد يَحمِلُ وُسَطاءَ (أَسماءً مِن الإعداد) — فَالبادِئَةُ لا القَوسُ المُغلَق.
+            Assert.Contains($"@doc.Markup(\"{key}\"", page, StringComparison.Ordinal);
         }
     }
 
@@ -101,28 +112,35 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
     [InlineData("var c = new WebPushClient(); WebPushClient client = c;", true)]
     // ‏الاسمُ المُؤَهَّلُ يُعَدّ — مَقيسٌ: صِنفٌ مَحقونٌ بِـ`System.Net.Http.HttpClient _http` مَرَّ مِن النَمَطِ الأَوَّلِ (`(?<![\w.])`) أَخضَر.
     [InlineData("private readonly System.Net.Http.HttpClient _http = new();", true)]
+    // ‏(2026-10-29، د20) — مَقيسٌ: صِفّانِ أَعمَيانِ قَبلَها، `SmtpEmailChannel` و`S3FileStorage`.
+    [InlineData("using var client = new SmtpClient { Timeout = 5000 };", true)]
+    [InlineData("private readonly IAmazonS3 _client;", true)]
+    [InlineData("_client = new AmazonS3Client(creds, cfg);", true)]
+    [InlineData("// SmtpClient.Timeout وَحدَه لا يَكفي", false)]
     [InlineData("services.AddHttpClient<MoyasarClient>(c => c.Timeout = t);", false)]
     [InlineData("_http.SendAsync(req)", false)]
     public void The_client_pattern_sees_what_it_counts(string code, bool holds)
         => Assert.Equal(holds, HoldsClient.IsMatch(code));
 
-    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ المِفتاح)</b> — كانَ <c>Today_the_privacy_share_list_renders_six_keys_and_none_names_the_carrier</c>
-    /// (‏<c>5ad4e05</c>). <b>والآن سَبعَة</b>: <c>share_carrier</c> بَعدَ مُزَوِّدِ الدَفع، والسِتُّ بِتَرتيبِها؛ ونَصُّه يُسَمّي ما يُرسِلُه الكودُ حَرفاً —
-    /// حُقولَ <c>OtoCustomer</c> الأَربَعَ الشَخصِيَّةَ وحُقولَ تَسجيلِ البائِع — وOTO خارِجَ القائِمَةِ المُثَبَّتَة (أَربَعَةٌ لا خَمسَة).</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، قَرارُ المالِك د20)</b> — كانَ <c>The_privacy_share_list_renders_seven_keys_and_names_the_carrier_with_what_the_code_sends_it</c>
+    /// (‏2026-10-25، كوميتُ المِفتاح؛ وقَبلَه <c>Today_the_privacy_share_list_renders_six_keys_and_none_names_the_carrier</c> في ‏<c>5ad4e05</c>): «سَبعَةُ مَفاتيح
+    /// · مُثَبَّتونَ غَيرَ مُسَمَّين: 5». <b>والآن اثنا عَشَر والمُثَبَّتَةُ فارِغَة</b>: بَوّابَةُ المَتجَرِ بَعدَ دَفعِ الاشتِراك، ونَموذَجُ اللُغَةِ وإشعاراتُ
+    /// المُتَصَفِّحِ والاستِضافَةُ ومَخزَنُ الصُوَرِ بَعدَ الناقِل، والسِتُّ القَديمَةُ بِتَرتيبِها. والمِفتاحُ قَد يَحمِلُ وُسَطاءَ فَيُقرَأُ حَتّى الفاصِلَة.
+    /// ونَصُّ الناقِلِ لَم يُمَسّ — يُقاسُ أَدناهُ كَما كان.</summary>
     [Fact]
-    public void The_privacy_share_list_renders_seven_keys_and_names_the_carrier_with_what_the_code_sends_it()
+    public void The_privacy_share_list_renders_twelve_keys_and_pins_no_party_unnamed()
     {
         var page = PrivacyPage();
-        var keys = Regex.Matches(page, @"@doc\.Markup\(""(?<k>platform\.privacy\.share_\w+)""\)").Select(m => m.Groups["k"].Value).ToList();
+        var keys = Regex.Matches(page, @"@doc\.Markup\(""(?<k>platform\.privacy\.share_\w+)""[,)]").Select(m => m.Groups["k"].Value).ToList();
         output.WriteLine($"مَفاتيحُ share_* في /privacy: {keys.Count} ({string.Join(", ", keys)}) · مُثَبَّتونَ غَيرَ مُسَمَّين: {PinnedUnlisted.Count}");
         Assert.Equal(new[]
         {
-            "platform.privacy.share_otp", "platform.privacy.share_nafath", "platform.privacy.share_payment", "platform.privacy.share_carrier",
-            "platform.privacy.share_fonts", "platform.privacy.share_maps", "platform.privacy.share_legal",
+            "platform.privacy.share_otp", "platform.privacy.share_nafath", "platform.privacy.share_payment", "platform.privacy.share_gateway",
+            "platform.privacy.share_carrier", "platform.privacy.share_llm", "platform.privacy.share_push", "platform.privacy.share_hosting",
+            "platform.privacy.share_files", "platform.privacy.share_fonts", "platform.privacy.share_maps", "platform.privacy.share_legal",
         }, keys);
         Assert.DoesNotContain("OtoClient", PinnedUnlisted.Keys);
-        // ‏(2026-10-25) خَمسَةٌ لا أَربَعَة: `MoyasarClient` نُقِلَ إلى المُثَبَّتَة — `share_payment` لا يُسَمّي دَفعَ الطَلَبات.
-        Assert.Equal(5, PinnedUnlisted.Count);
+        Assert.Empty(PinnedUnlisted);
 
         var ar = AccountDeletionRetentionTests.Bare(LocaleCatalog.Find(LocaleCatalog.Arabic, "platform.privacy.share_carrier")!);
         foreach (var said in new[] { "OTO", "اسمك", "هاتفك", "عنوان التوصيل", "مدينته", "بريده", "جواله", "عنوان فوترته" })

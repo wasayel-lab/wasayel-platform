@@ -2,6 +2,9 @@
 @page "/privacy/{Lang}"
 @using ACommerce.Templates.Customer.Marketplace.Services
 @inject L L
+@inject IServiceProvider Sp
+@inject Microsoft.Extensions.Configuration.IConfiguration Cfg
+@inject IAgentBackendProvider Agents
 
 @*
     سِياسَةُ الخُصوصِيَّة — **مَكتوبَةٌ بِالقِياسِ لا بِالتَعميم**.
@@ -21,6 +24,12 @@
     ‏(2026-10-25، تَدقيقُ الإطلاق brief-P3-5c — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): وما يُرسِلُه **الخادِمُ** لَم يَكُن مَعدوداً — فَسَقَطَ
     الناقِلُ (OTO: اسمُ المُشتَري وهاتِفُه وعُنوانُه). صارَ `share_carrier`، وجَردُ كُلِّ عَميلٍ صادِرٍ في `libs` يَحرُسُ القائِمَة
     (`PrivacyShareInventoryTests`): مُسَمّىً بِمِفتاحِه، أَو مُثَبَّتاً بِسَبَبِه حَتّى يَكتُبَ المالِكُ سَطرَه.
+
+    ‏(2026-10-29، قَرارُ المالِك د20 «أ» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): كَتَبَ المالِكُ السُطور، فَفَرَغَت القائِمَةُ المُثَبَّتَة: كُلُّ جِهَةٍ
+    بِاسمِها وفِئَتِها — ومُزَوِّدُ الرَسائِلِ ومُزَوِّدُ النَموذَجِ ومَخزَنُ الصُوَرِ تُقرَأُ أَسماؤُها مِن المَوضِعِ الَّذي يَختارُها
+    (`PrivacyRecipients`)، فَلا تَكذِبُ السِياسَةُ إن بُدِّلَت. والاستِضافَةُ وقاعِدَةُ البَياناتِ لا يَراهُما الجَردُ (لَيسا عَميلاً صادِراً)
+    فَلَهُما صَفٌّ يَحرُسُهُما، وجُملَةُ المُعالَجَةِ خارِجَ المَملَكَةِ بَعدَ القائِمَة. وتاريخُ هذِه الوَثيقَةِ صارَ مِفتاحَها (`platform.privacy.updated`):
+    الشُروطُ والاستِردادُ لَم يَتَغَيَّرا مَعَها، و§9 يَعِدُ بِأَن «يُنشَرُ أَيُّ تَغييرٍ في هذِه الصَفحَةِ مَع تاريخِه».
 *@
 
 <div class="acs-page">
@@ -32,7 +41,7 @@ else
 {
     <article class="wsl-doc" dir="@doc.Dir" lang="@doc.Lang">
         <h1 class="wsl-doc-title">@doc.Markup("platform.privacy.title")</h1>
-        <p class="wsl-doc-meta">@doc.Markup("platform.doc.updated")</p>
+        <p class="wsl-doc-meta">@doc.Markup("platform.privacy.updated")</p>
 
         <nav class="wsl-doc-nav" aria-label="@(doc["platform.footer.nav_label"])">
             <a class="wsl-doc-navlink" href="@Href("terms")">@doc.Markup("platform.footer.terms")</a>
@@ -96,14 +105,23 @@ else
             <h2>@doc.Markup("platform.privacy.s5_title")</h2>
             <p>@doc.Markup("platform.privacy.s5_intro")</p>
             <ul class="wsl-doc-list">
-                <li>@doc.Markup("platform.privacy.share_otp")</li>
+                <li>@doc.Markup("platform.privacy.share_otp", Names(signInSenders))</li>
                 <li>@doc.Markup("platform.privacy.share_nafath")</li>
                 <li>@doc.Markup("platform.privacy.share_payment")</li>
+                <li>@doc.Markup("platform.privacy.share_gateway")</li>
                 <li>@doc.Markup("platform.privacy.share_carrier")</li>
+                <li>@doc.Markup("platform.privacy.share_llm", Names(languageModels))</li>
+                <li>@doc.Markup("platform.privacy.share_push")</li>
+                <li>@doc.Markup("platform.privacy.share_hosting")</li>
+                @if (fileStore is not null)
+                {
+                    <li>@doc.Markup("platform.privacy.share_files", fileStore)</li>
+                }
                 <li>@doc.Markup("platform.privacy.share_fonts")</li>
                 <li>@doc.Markup("platform.privacy.share_maps")</li>
                 <li>@doc.Markup("platform.privacy.share_legal")</li>
             </ul>
+            <p>@doc.Markup("platform.privacy.s5_abroad")</p>
         </section>
 
         <section class="wsl-doc-section">
@@ -140,8 +158,34 @@ else
 
     PlatformDocLanguage doc = PlatformDocLanguage.FromRoute(null);
 
+    IReadOnlyList<string> signInSenders = [];
+    IReadOnlyList<string> languageModels = [];
+    string? fileStore;
+
     protected override void OnParametersSet()
-        => doc = PlatformDocLanguage.FromRoute(Lang);
+    {
+        doc = PlatformDocLanguage.FromRoute(Lang);
+
+        // ‏(2026-10-29، د20) مَن يَستَلِمُ فِعلاً — القَناتانِ المُسَجَّلَتانِ (أَثَرُ `AuthChannelSelection.Decide`)، وخَلفِيَّتا الوَكيلَين،
+        // ومَخزَنُ S3 إن اختارَه `FileStorageSelection.Decide` — لا نَصٌّ يُنسَخُ ويَنجَرِف.
+        var registered = new List<(string, bool)>();
+        if (Sp.GetService(typeof(ACommerce.Kit.Auth.IOtpChannel)) is ACommerce.Kit.Auth.IOtpChannel sms)
+            registered.Add((sms.ChannelName, sms is ACommerce.Kit.Auth.IDevelopmentStubChannel));
+        if (Sp.GetService(typeof(ACommerce.Kit.Auth.IEmailOtpChannel)) is ACommerce.Kit.Auth.IEmailOtpChannel email)
+            registered.Add((email.ChannelName, email is ACommerce.Kit.Auth.IDevelopmentStubChannel));
+        signInSenders = PrivacyRecipients.SignInSenders(registered, Cfg[PrivacyRecipients.SmtpHostKey]);
+        languageModels = PrivacyRecipients.LanguageModels(
+            [Agents.For(AgentNames.Analysis).ProviderName, Agents.For(AgentNames.Studio).ProviderName]);
+        fileStore = PrivacyRecipients.FileStore(new ACommerce.Kit.Files.S3StorageSettings(
+            Cfg[ACommerce.Kit.Files.FileStorageSelection.EndpointKey], Cfg[ACommerce.Kit.Files.FileStorageSelection.BucketKey],
+            Cfg[ACommerce.Kit.Files.FileStorageSelection.AccessKeyIdKey], Cfg[ACommerce.Kit.Files.FileStorageSelection.SecretAccessKeyKey],
+            Cfg[ACommerce.Kit.Files.FileStorageSelection.PublicBaseUrlKey]));
+    }
+
+    /// <summary>الأَسماءُ بِرابِطِ لُغَةِ الوَثيقَة، أَو «لا مُزَوِّدَ مَضبوطٌ اليَوم» — فَلا قَوسانِ فارِغان.</summary>
+    string Names(IReadOnlyList<string> names) => names.Count == 0
+        ? doc["platform.privacy.none_configured"]
+        : PrivacyRecipients.Join(names, doc["platform.privacy.names_pair"], doc["platform.privacy.names_comma"]);
 
     string Href(string name) => doc.IsEnglish && name != "contact" ? $"/{name}/en" : $"/{name}";
 }
