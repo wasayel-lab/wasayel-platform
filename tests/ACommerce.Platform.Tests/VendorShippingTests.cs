@@ -714,6 +714,33 @@ public class VendorShippingTests(ITestOutputHelper output)
         Assert.Contains("«Query»", stderr, StringComparison.Ordinal);       // جَلسَةُ الاختِبارِ لا تُنَفِّذُ الاستِعلام — CI لا يَرى الجَواب
     }
 
+    /// <summary>
+    /// <para><b>والسُؤالُ نَفسُه بِجَوابِه الثالِث</b> (‏2026-10-29، قَرارُ المالِك د9 (٢) «ب»): استِعلامُ المَداخِلِ الَّذي يَرمي ⇒ <see cref="StoreCarrier.Unreadable"/>
+    /// (لا <c>None</c>)، و<c>CarrierReadyForStoreAsync</c> بِجَوابِه كَما كان «لا»؛ وبِلا خِزانَةٍ <c>None</c> بِلا سُؤال، ورَمزُ التَهيئَةِ لِمَتجَرِ العَرضِ
+    /// <c>Ready</c>، والبيئَةُ المُغلَقَةُ <c>None</c> — فَلا يُقرَأُ «تَعَذَّر» إلّا حَيثُ سُئِلَت القاعِدَةُ فَرَمَت.</para>
+    /// </summary>
+    [Fact]
+    public async Task StoreCarrier_answers_unreadable_only_where_the_entries_query_failed()
+    {
+        const string store = "owner-test";
+        var w = await DealShipTests.ConfirmedCashDeal();
+        var asked = Asked(w);
+        Assert.Equal(StoreCarrier.Unreadable, await w.Shipping.StoreCarrierAsync(store));
+        Assert.Equal(asked + 1, Asked(w));
+        Assert.False(await w.Shipping.CarrierReadyForStoreAsync(store));
+        Assert.Equal(StoreCarrier.Ready, await w.Shipping.StoreCarrierAsync(Slug));
+
+        var options = Options.Create(Opts());
+        var noVault = new DealShipping(w.Deals,
+            new OtoClient(new HttpClient(w.Oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance),
+            options, null, w.Providers, ProviderVault.FromKek(null), new FixedClock(DealShipTests.Now));
+        var before = Asked(w);
+        Assert.Equal(StoreCarrier.None, await noVault.StoreCarrierAsync(store));
+        Assert.Equal(before, Asked(w));
+        Assert.Equal(StoreCarrier.None,
+            await (await DealShipTests.ConfirmedCashDeal(environment: OtoEnvironment.Production)).Shipping.StoreCarrierAsync(store));
+    }
+
     // ═══ ٦. النُقطَة ═══════════════════════════════════════════════════
 
     /// <summary>

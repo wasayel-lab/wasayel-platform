@@ -439,11 +439,21 @@ public sealed class DealShipping
     /// يُجابُ ‏404 فارِغاً ولا يُقرَأُ مِنه حَرف — كَما كان.</para>
     /// </summary>
     public async Task<bool> CarrierReadyForStoreAsync(string tenantSlug, CancellationToken ct = default)
+        => await StoreCarrierAsync(tenantSlug, ct) == StoreCarrier.Ready;
+
+    /// <summary>
+    /// <para><b>والسُؤالُ نَفسُه بِجَوابٍ ثالِث: «تَعَذَّرَت القِراءَة»</b> (‏2026-10-29، قَرارُ المالِك د9 (٢) «ب»: «نجيب 503، أي تعطّل مؤقّت، أعد المحاولة،
+    /// بدل 404»؛ تَوصيفُه <c>7acae84</c>). بِشُروطِ <see cref="CarrierReadyForStoreAsync"/> حَرفاً، والفَرقُ وَحدَه أَنّ استِعلامَ المَداخِلِ الَّذي يَرمي
+    /// يُجابُ <see cref="StoreCarrier.Unreadable"/> لا <see cref="StoreCarrier.None"/> — فَيَرُدُّ الوارِدُ ‏503 «أَعِد المُحاوَلَة» بِلا قِراءَةِ جِسم، وكانَ
+    /// ‏404 «لا نُقطَة» فَيَكُفُّ المُرسِلُ عَن الإرسال. ومَتجَرٌ لا ناقِلَ لَه حَقّاً ‏404 كَما كان.</para>
+    /// </summary>
+    public async Task<StoreCarrier> StoreCarrierAsync(string tenantSlug, CancellationToken ct = default)
     {
-        if (!OtoEnvironment.IsOpen(_opts.Environment)) return false;
-        if (VendorTokenFor(_opts, tenantSlug) is not null) return true;
-        return _providers is not null && _vault is { IsAvailable: true }
-               && await _providers.HasVendorEntriesAsync(tenantSlug, ProviderCapabilities.Delivery, ct);
+        if (!OtoEnvironment.IsOpen(_opts.Environment)) return StoreCarrier.None;
+        if (VendorTokenFor(_opts, tenantSlug) is not null) return StoreCarrier.Ready;
+        if (_providers is null || _vault is not { IsAvailable: true }) return StoreCarrier.None;
+        var entries = await _providers.ReadVendorEntriesAsync(tenantSlug, ProviderCapabilities.Delivery, ct);
+        return entries.Failed ? StoreCarrier.Unreadable : entries.Any ? StoreCarrier.Ready : StoreCarrier.None;
     }
 
     /// <summary>مَدخَلُ بائِعِ الصَفقَة — فَعّالاً أَو مَسحوباً — أَو <c>null</c> (لا خِدمَةَ مَداخِل، أَو لا مالِكَ إعلانٍ مَكتوب، أَو لا مَدخَل).
@@ -790,3 +800,7 @@ public sealed record VendorCarrier(string RefreshToken, string? WebhookSecret)
 {
     public override string ToString() => $"VendorCarrier(secret={(WebhookSecret is null ? "none" : "sealed")})";
 }
+
+/// <summary>جَوابُ <see cref="DealShipping.StoreCarrierAsync"/> — مَعجَمٌ مُغلَقٌ مِن ثَلاثَة (‏2026-10-29، قَرارُ المالِك د9 (٢) «ب»): لا ناقِلَ لِلمَتجَر،
+/// أَو ناقِل، أَو تَعَذَّرَت قِراءَةُ مَداخِلِ بائِعيه — والثالِثُ لا يُقرَأُ «لا ناقِل».</summary>
+public enum StoreCarrier { None, Ready, Unreadable }

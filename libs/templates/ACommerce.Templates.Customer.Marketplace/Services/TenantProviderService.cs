@@ -206,17 +206,27 @@ public sealed class TenantProviderService
     /// مُجَمَّعاً عَلى وَثائِقَ في الذاكِرَة، ويُتَرجِمُه Marten هُنا كَما كان.)</para></summary>
     public async Task<bool> HasVendorEntriesAsync(
         string tenantSlug, string capability, CancellationToken ct = default)
+        => (await ReadVendorEntriesAsync(tenantSlug, capability, ct)).Any;
+
+    /// <summary>
+    /// <para><b>والسُؤالُ نَفسُه يُفَرِّقُ «لا مَداخِل» مِن «تَعَذَّرَت القِراءَة»</b> (‏2026-10-29، قَرارُ المالِك د9 (٢) «ب»؛ تَوصيفُه <c>7acae84</c>): نَسَقُ
+    /// <see cref="ReadVendorEntryAsync"/> حَرفاً — <see cref="VendorEntriesRead.Failed"/> صادِقَةٌ حينَ رَمَى الاستِعلامُ ويُكتَبُ سَطرُه كَما كان،
+    /// و<see cref="VendorEntriesRead.Any"/> حينَئِذٍ <c>false</c> لا يُقرَأُ غِياباً. يَقرَؤُه وارِدُ الناقِلِ فَيُجيبُ ‏503 «أَعِد المُحاوَلَة» لا ‏404 «لا نُقطَة»؛
+    /// و<see cref="HasVendorEntriesAsync"/> بِجَوابِه كَما كان: «لا».</para>
+    /// </summary>
+    public async Task<VendorEntriesRead> ReadVendorEntriesAsync(
+        string tenantSlug, string capability, CancellationToken ct = default)
     {
         var activeVendorEntry = TenantProviderBinding.ActiveVendorEntryOf(capability);
         try
         {
             await using var s = Store.QuerySession(tenantSlug);
-            return await s.Query<TenantProviderBinding>().AnyAsync(activeVendorEntry, ct);
+            return new(await s.Query<TenantProviderBinding>().AnyAsync(activeVendorEntry, ct), false);
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine(ListFailureAr(tenantSlug, ex.Message));
-            return false;
+            return new(false, true);
         }
     }
 
@@ -274,3 +284,7 @@ public sealed class TenantProviderService
 /// <summary>جَوابُ <see cref="TenantProviderService.ReadVendorEntryAsync"/>: المَدخَلُ أَو <c>null</c> لِغِيابِه — و<see cref="Failed"/> حينَ تَعَذَّرَت
 /// القِراءَةُ فَلا يُقرَأُ <c>null</c> غِياباً (‏2026-10-13، G5 (iii)).</summary>
 public readonly record struct VendorEntryRead(TenantProviderBinding? Entry, bool Failed);
+
+/// <summary>جَوابُ <see cref="TenantProviderService.ReadVendorEntriesAsync"/>: مَدخَلُ بائِعٍ فَعّالٌ واحِدٌ عَلى الأَقَلّ، أَو تَعَذَّرَت القِراءَة
+/// (‏2026-10-29، قَرارُ المالِك د9 (٢) «ب») — نَسَقُ <see cref="VendorEntryRead"/>.</summary>
+public readonly record struct VendorEntriesRead(bool Any, bool Failed);

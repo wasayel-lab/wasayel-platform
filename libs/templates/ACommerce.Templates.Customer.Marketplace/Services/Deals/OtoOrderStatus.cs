@@ -124,12 +124,20 @@ public static class OtoOrderStatusGate
     /// <summary>التَوقيعُ لا يُطابِقُ بَصمَةَ سِرِّ البائِع — مُقارَنَةٌ ثابِتَةُ الزَمَن. ‏401.</summary>
     public const string SignatureMismatch = "signature_mismatch";
 
-    /// <summary>المَعجَمُ المُغلَق — عَشَرَةٌ، و<b>أَربَعَةَ عَشَرَ ‏2026-10-12</b> بِرُموزِ التَوقيعِ الأَربَعَةِ بَعدَها.</summary>
+    // ─── وخامِسَ عَشَرَ ‏2026-10-29 (قَرارُ المالِك د9 (٢) «ب»؛ ولا يُعادُ حَرفٌ فَوقَ الأَربَعَةَ عَشَر) ───────────
+
+    /// <summary>تَعَذَّرَت قِراءَةُ مَداخِلِ بائِعي المَتجَرِ لَحظَةَ سُؤالِ «أَلِهذا المَتجَرِ ناقِل؟» — عُطلٌ مُؤَقَّت، لا «لا ناقِل»: ‏503 فارِغٌ فَتُعيدُ
+    /// OTO الإرسال، ولا يُقرَأُ الإشعار. كانَ يُجابُ <see cref="CarrierUnavailable"/> ‏404 (تَوصيفُه <c>7acae84</c>).</summary>
+    public const string CarrierUnreadable = "carrier_unreadable";
+
+    /// <summary>المَعجَمُ المُغلَق — عَشَرَةٌ، و<b>أَربَعَةَ عَشَرَ ‏2026-10-12</b> بِرُموزِ التَوقيعِ الأَربَعَةِ بَعدَها، و<b>خَمسَةَ عَشَرَ ‏2026-10-29</b>
+    /// بِـ<see cref="CarrierUnreadable"/> بَعدَها.</summary>
     public static readonly IReadOnlyList<string> All = new[]
     {
         CarrierUnavailable, NoticeUnreadable, OrderUnknown, OrderMismatch, StateUnconfirmed,
         NotDelivered, AlreadyDelivered, DealNotActive, DealNotShipping, ActorCannotDeliver,
         NoticeUnverifiable, SignatureMissing, SignatureStale, SignatureMismatch,
+        CarrierUnreadable,
     };
 
     /// <summary>النَتيجَةُ الَّتي تَكتُب: خَرَجَت الصَفقَةُ إلى <c>Delivered</c>. لَيسَت خَرقاً فَلَيسَت في <see cref="All"/>.</summary>
@@ -148,8 +156,16 @@ public static class OtoOrderStatusGate
     /// رَقَماً — وإلّا فَلا يُقرَأ. وحُقولُ الإشعارِ في وَثيقَةِ OTO («Webhook»): ‏<c>orderId</c> و<c>otoId</c> و<c>status</c>.</para>
     /// </summary>
     public static OtoNoticeAdmission Admit(bool carrierReady, string? rawBody)
+        => Admit(carrierReady ? StoreCarrier.Ready : StoreCarrier.None, rawBody);
+
+    /// <summary>والبَوّابَةُ نَفسُها بِجَوابِ <see cref="DealShipping.StoreCarrierAsync"/> الثُلاثِيّ (‏2026-10-29، قَرارُ المالِك د9 (٢) «ب»): قِراءَةٌ تَعَذَّرَت
+    /// تُجابُ <see cref="CarrierUnreadable"/> قَبلَ أَيِّ قِراءَةٍ كَـ«لا ناقِل» — والفَرقُ في الرَدِّ وَحدَه (<see cref="StatusFor"/>).</summary>
+    public static OtoNoticeAdmission Admit(StoreCarrier carrier, string? rawBody)
     {
-        if (!carrierReady)
+        if (carrier == StoreCarrier.Unreadable)
+            return Refused(CarrierUnreadable, "تَعَذَّرَت قِراءَةُ مَداخِلِ بائِعي المَتجَر — عُطلٌ مُؤَقَّتٌ لا «لا ناقِل»؛ أَعِد المُحاوَلَة.");
+
+        if (carrier != StoreCarrier.Ready)
             return Refused(CarrierUnavailable, "لا رَمزَ ناقِلٍ لِهذا المَتجَر — لا وارِدَ لَه.");
 
         if (string.IsNullOrWhiteSpace(rawBody))
@@ -291,7 +307,8 @@ public static class OtoOrderStatusGate
         NoticeUnreadable => 400,
         // ‏401 لِإشعارٍ لا يُتَحَقَّقُ مِنه أَو لا يُطابِق (‏2026-10-12، تَيّارُ S8): لا يُكتَبُ شَيءٌ ولا تُسأَلُ OTO.
         NoticeUnverifiable or SignatureMissing or SignatureStale or SignatureMismatch => 401,
-        StateUnconfirmed or DealsService.ChangedMeanwhile => 503,
+        // و‏503 لِقاعِدَةٍ تَعَطَّلَت لَحظَةَ سُؤالِ «أَلِهذا المَتجَرِ ناقِل؟» (‏2026-10-29، قَرارُ المالِك د9 (٢) «ب»): «تعطّل مؤقّت، أعد المحاولة» لا «لا نُقطَة».
+        StateUnconfirmed or DealsService.ChangedMeanwhile or CarrierUnreadable => 503,
         Delivered or Shipped or OrderUnknown or OrderMismatch or NotDelivered or AlreadyDelivered
             or DealNotActive or DealNotShipping or ActorCannotDeliver => 200,
         _ => throw new ArgumentOutOfRangeException(nameof(code), code, "رَمزٌ خارِجَ مَعجَمِ الوارِد."),

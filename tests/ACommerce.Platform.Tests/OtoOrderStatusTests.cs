@@ -106,15 +106,18 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
     // ═══ ١. البَوّابَة ═══════════════════════════════════════════════════
 
     /// <summary><b>أَربَعَةَ عَشَرَ مُنذُ ‏2026-10-12</b> — كانَ <c>The_lexicon_is_ten_closed_codes_…</c>: رُموزُ التَوقيعِ الأَربَعَةُ أُضيفَت
-    /// بَعدَ العَشَرَةِ بِلا مَساسٍ بِها (تَيّارُ S8، ‏ADR-033 الخُطوَة 7).</summary>
+    /// بَعدَ العَشَرَةِ بِلا مَساسٍ بِها (تَيّارُ S8، ‏ADR-033 الخُطوَة 7).
+    /// <b>وخَمسَةَ عَشَرَ مُنذُ ‏2026-10-29</b> — كانَ <c>The_lexicon_is_fourteen_closed_codes_…</c> (قَرارُ المالِك د9 (٢) «ب»): <c>carrier_unreadable</c>
+    /// بَعدَ الأَربَعَةَ عَشَرَ بِلا مَساسٍ بِها.</summary>
     [Fact]
-    public void The_lexicon_is_fourteen_closed_codes_two_shared_by_value_and_the_success_is_outside_it()
+    public void The_lexicon_is_fifteen_closed_codes_two_shared_by_value_and_the_success_is_outside_it()
     {
-        Assert.Equal(14, OtoOrderStatusGate.All.Count);
-        Assert.Equal(14, OtoOrderStatusGate.All.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(15, OtoOrderStatusGate.All.Count);
+        Assert.Equal(15, OtoOrderStatusGate.All.Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(new[] { OtoOrderStatusGate.NoticeUnverifiable, OtoOrderStatusGate.SignatureMissing,
                              OtoOrderStatusGate.SignatureStale, OtoOrderStatusGate.SignatureMismatch },
-            OtoOrderStatusGate.All.Skip(10));
+            OtoOrderStatusGate.All.Skip(10).Take(4));
+        Assert.Equal(new[] { OtoOrderStatusGate.CarrierUnreadable }, OtoOrderStatusGate.All.Skip(14));
         Assert.Equal(DealShipAuthorization.CarrierUnavailable, OtoOrderStatusGate.CarrierUnavailable);
         Assert.Equal(DealAcceptAuthorization.DealNotActive, OtoOrderStatusGate.DealNotActive);
         Assert.DoesNotContain(OtoOrderStatusGate.Delivered, OtoOrderStatusGate.All);
@@ -128,6 +131,22 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         Assert.Equal(OtoOrderStatusGate.CarrierUnavailable, OtoOrderStatusGate.Admit(false, valid).Violation!.Code);
         Assert.Null(OtoOrderStatusGate.Admit(false, valid).Notice);
         Assert.Null(OtoOrderStatusGate.Admit(true, valid).Violation);
+    }
+
+    /// <summary>‏<c>carrier_unreadable</c> مُوجِباً وسالِباً (‏2026-10-29، قَرارُ المالِك د9 (٢) «ب»): قِراءَةٌ تَعَذَّرَت تُرَدُّ بِرَمزِها بِلا إشعار،
+    /// و«لا ناقِل» بِرَمزِه هُوَ، والناقِلُ يَمُرّ — والبَوّابَةُ القَديمَةُ بِالمَنطِقِيِّ تُعطي الجَوابَ نَفسَه لِـ<c>None</c> و<c>Ready</c>.</summary>
+    [Fact]
+    public void Carrier_unreadable_positive_and_negative()
+    {
+        var valid = NoticeJson(DealId.ToString("N"));
+        var unreadable = OtoOrderStatusGate.Admit(StoreCarrier.Unreadable, valid);
+        Assert.Equal(OtoOrderStatusGate.CarrierUnreadable, unreadable.Violation!.Code);
+        Assert.Null(unreadable.Notice);
+        Assert.Equal(OtoOrderStatusGate.CarrierUnavailable, OtoOrderStatusGate.Admit(StoreCarrier.None, valid).Violation!.Code);
+        Assert.Null(OtoOrderStatusGate.Admit(StoreCarrier.Ready, valid).Violation);
+        Assert.Equal(OtoOrderStatusGate.CarrierUnreadable, OtoOrderStatusGate.Admit(StoreCarrier.Unreadable, null).Violation!.Code);
+        Assert.Equal(503, OtoOrderStatusGate.StatusFor(OtoOrderStatusGate.CarrierUnreadable));
+        Assert.Equal(404, OtoOrderStatusGate.StatusFor(OtoOrderStatusGate.CarrierUnavailable));
     }
 
     [Theory]
@@ -258,6 +277,7 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
     [InlineData(OtoOrderStatusGate.SignatureMissing, 401)]
     [InlineData(OtoOrderStatusGate.SignatureStale, 401)]
     [InlineData(OtoOrderStatusGate.SignatureMismatch, 401)]
+    [InlineData(OtoOrderStatusGate.CarrierUnreadable, 503)]
     public void Each_code_has_one_answer(string code, int status)
         => Assert.Equal(status, OtoOrderStatusGate.StatusFor(code));
 
@@ -1073,6 +1093,8 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
 
         Add(OtoOrderStatusGate.Admit(false, NoticeJson("x")).Violation?.Code);
         Add(OtoOrderStatusGate.Admit(true, "{}").Violation?.Code);
+        // و`carrier_unreadable` مِن البَوّابَةِ بِالجَوابِ الثُلاثِيّ (‏2026-10-29، قَرارُ المالِك د9 (٢) «ب»).
+        Add(OtoOrderStatusGate.Admit(StoreCarrier.Unreadable, NoticeJson("x")).Violation?.Code);
         Add(OtoOrderStatusGate.Match(Notice(DealId), null)?.Code);
         Add(OtoOrderStatusGate.Match(Notice(DealId, otoId: "999"), Shipping())?.Code);
         Add(Decided(Shipping(), State("outForDelivery")));
@@ -1274,8 +1296,11 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
     // و‏404 يَعني لِمُرسِلِه «لا نُقطَة» فَقَد يَكُفُّ عَن الإرسال. **(١) «أ»**: حالُ OTO `lostOrDamaged` أَو `destroyed` يُجابُ `not_delivered`
     // ‏200 بِلا انتِقالٍ ولا عَلامَةٍ ولا إشعارٍ لِأَحَد. يَنقَلِبُ كُلُّ صَفٍّ بِاسمِه في كوميتِ القَرار.
 
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د9 (٢) «ب»؛ كانَ <c>Today_a_store_whose_vendor_entries_cannot_be_read_answers_404_unread</c>،
+    /// مُودَعٌ في <c>7acae84</c>): قاعِدَةٌ تَرمي لَحظَةَ سُؤالِ المَداخِلِ ‏503 فارِغٌ — «تعطّل مؤقّت، أعد المحاولة» — بِلا قِراءَةِ جِسمٍ ولا نِداءٍ لِـOTO،
+    /// وسُؤالُ المَداخِلِ وَقَعَ مَرَّة. وسالِبُه: مَتجَرٌ لا ناقِلَ لَه حَقّاً ‏404 كَما كان (<c>Without_a_carrier_…</c> وجاراه).</summary>
     [Fact]
-    public async Task Today_a_store_whose_vendor_entries_cannot_be_read_answers_404_unread()
+    public async Task A_store_whose_vendor_entries_cannot_be_read_answers_503_unread()
     {
         var w = await ShippedCashDeal();
         var calls = w.Oto.Calls.Count;
@@ -1287,7 +1312,8 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         using var resp = await host.PostAsync("owner-test", NoticeJson(w.Id.ToString("N")));
 
         output.WriteLine($"قاعِدَةٌ تَرمي: {(int)resp.StatusCode} · سُؤالُ المَداخِل: {w.Docs.Members.Count(m => m == "Query") - asked} · قِراءاتُ الجِسم: {tripwire.Reads}");
-        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, resp.StatusCode);
+        Assert.Equal("", await resp.Content.ReadAsStringAsync());
         Assert.Equal(asked + 1, w.Docs.Members.Count(m => m == "Query"));
         Assert.Equal(0, tripwire.Reads);
         Assert.Equal(calls, w.Oto.Calls.Count);
