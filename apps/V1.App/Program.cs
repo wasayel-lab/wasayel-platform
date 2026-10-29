@@ -11,7 +11,6 @@ using ACommerce.Kit.Culture;
 using ACommerce.Kit.Delivery;
 using ACommerce.Kit.Files;
 using ACommerce.Kit.Files.Providers.S3;
-using ACommerce.Kit.Maps;
 using ACommerce.Kit.Payments;
 using ACommerce.Kit.Payments.Providers.Paddle;
 using ACommerce.Kit.Payments.Providers.PayPal;
@@ -128,9 +127,12 @@ switch (AuthChannelSelection.Decide(AuthChannelKind.Email,
         break;
 }
 
-// مُزَوِّدو البِنيَة (mock — استَبدِلهم لاحِقاً بِـ Moyasar/Saee/Google Maps).
-// **وحُكمُهُما مَقيسٌ ومَكتوبٌ لا مَظنون**: ‏`docs/PROVIDER-STUB-DEBT.md`.
-builder.Services.AddMockMaps();
+// ─── مُحاكي الخَرائِطِ — حُذِفَ (‏2026-10-29، قَرارُ المالِك د35) ─────────────
+// كانَ هُنا `AddMockMaps()` آخِرَ سَطرِ تَسجيلٍ عارٍ لِمُحاكٍ: لا يَحقِنُ `IMapsProvider`
+// مِلَفُّ `.cs` ولا `.razor` واحِد، ومُستَهلِكُه الوَحيدُ (مُحاكي التَوصيل) حُذِفَ في
+// `ec807a6`. فَحُذِفَ السَطرُ والمُحاكي والواجِهَةُ وتَعريفُه في الكاتالوج (القاعِدَة ١،
+// ‏ADR-018)، ويُبنى مِن جَديدٍ يَومَ تُطلَبُ ميزَةٌ تَحتاجُه (خَريطَةُ عُنوانِ التَسليمِ مَثَلاً).
+// وبَقِيَ `Location` في عُدَّةِ الخَرائِطِ لِأَنّ عُدَّةَ التَوصيلِ تَقرَؤُه. ‏`docs/PROVIDER-STUB-DEBT.md` §٣.
 
 // ─── الشَحن — عَميلُ OTO في مَوضِعِ المُحاكي (‏ADR-033 الخُطوَة 3) ──────────
 // كانَ هُنا `AddMockDelivery()` سَطراً عارِياً بِصِفرِ مُستَهلِك، ومُحاكيه يَعرِضُ

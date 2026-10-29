@@ -1,7 +1,6 @@
 {
   "providers": [
     "mock_payments",
-    "mock_maps",
     "local_files",
     "s3_object_storage",
     "paypal_subscriptions",

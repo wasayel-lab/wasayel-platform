@@ -96,9 +96,12 @@ public class ProviderSelectionCharacterizationTests
             "builder.Services.AddMockNafathChannel(", "Auth:Nafath:Provider",
             "libs/kits/Auth/ACommerce.Kit.Auth.Providers.MockNafath/MockNafathChannel.cs"),
 
-        new("maps", "IMapsProvider",
-            "builder.Services.AddMockMaps();", null,
-            "libs/kits/Maps/ACommerce.Kit.Maps.Core/MockMapsProvider.cs"),
+        // ─── تَعديلٌ مُعلَنٌ رابِع — ‏2026-10-29، صَفُّ `maps` حُذِف (قَرارُ المالِك د35) ─────────
+        // كانَ هُنا `new("maps", "IMapsProvider", "builder.Services.AddMockMaps();", null, …MockMapsProvider.cs)`
+        // — آخِرَ تَسجيلٍ عارٍ لِمُحاكٍ، بِصِفرِ مُستَهلِكٍ في وَقتِ التَشغيلِ مُنذُ حَذفِ مُحاكي التَوصيلِ في `ec807a6`.
+        // حُذِفَ السَطرُ والمُحاكي والواجِهَةُ نَفسُها وتَعريفُ `mock_maps` واسمُ `maps` في `ProviderCapabilities` (‏ADR-018).
+        // **فلا صَفَّ يَبقى على نَسَقِ `delivery`**: هُناكَ الواجِهَةُ قائِمَةٌ بِلا تَسجيل، وهُنا لا واجِهَةَ أَصلاً.
+        // والأَرقامُ أَدناه (‏9→8 و6→5، وصَفُّ «العارِي» ‏1→0 بِحارِسٍ مَقلوب) تَقولُه، والتِسعُ مَقيسَةٌ قَبلَه أَخضَرَ عِندَ `2a7c0ce`.
 
         // ─── تَعديلٌ مُعلَنٌ ثالِث — ‏2026-10-12، صَفُّ `delivery` (‏ADR-033 الخُطوَة 3) ─────
         // كانَ `AddMockDelivery()` سَطراً عارِياً ومَصدَرُه مِلَفَّ المُحاكي. **حُذِفَ المُحاكي
@@ -165,12 +168,17 @@ public class ProviderSelectionCharacterizationTests
 
     // ─── ١. الجَدوَلُ نَفسُه ─────────────────────────────────────────
 
+    // ‏2026-10-29 (د35): ثَمانٍ لا تِسع — حُذِفَ صَفُّ `maps` مَعَ واجِهَتِه. والاسمُ تَغَيَّرَ لِيَقولَ الرَقَم،
+    // ومَعَه قيدٌ يَربِطُ الجَدوَلَ بِالمَعجَم: صَفٌّ لِكُلِّ اسمٍ في `ProviderCapabilities.All` ولا صَفَّ خارِجَه.
     [Fact]
-    public void Nine_capabilities_are_pinned_and_none_repeats()
+    public void Eight_capabilities_are_pinned_and_none_repeats()
     {
-        Assert.Equal(9, Rows.Length);
-        Assert.Equal(9, Rows.Select(r => r.Capability).Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(9, Rows.Select(r => r.Interface).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(8, Rows.Length);
+        Assert.Equal(8, Rows.Select(r => r.Capability).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(8, Rows.Select(r => r.Interface).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(
+            ACommerce.Platform.Providers.ProviderCapabilities.All.OrderBy(c => c, StringComparer.Ordinal),
+            Rows.Select(r => r.Capability).OrderBy(c => c, StringComparer.Ordinal));
     }
 
     // ─── ٢. التَسجيلُ في `Program.cs` — حَرفاً ────────────────────────
@@ -195,7 +203,8 @@ public class ProviderSelectionCharacterizationTests
 
         // **سِتَّةٌ لا سَبعَة مُنذُ ‏2026-10-12 (‏ADR-033 الخُطوَة 3)**: صَفُّ `delivery` بِلا سَطرِ تَسجيلٍ
         // بَعدَ حَذفِ المُحاكي. والسَبعَةُ مَقيسَةٌ قَبلَه أَخضَرَ عِندَ `a5155d0`.
-        Assert.True(checkedRows == 6, $"أَداة عَمياء: فُحِصَ {checkedRows} صَفّاً — والمَقيس ٦.");
+        // **خَمسَةٌ لا سِتَّة مُنذُ ‏2026-10-29 (د35)**: حُذِفَ صَفُّ `maps` وسَطرُه `AddMockMaps();`. والسِتَّةُ مَقيسَةٌ قَبلَه عِندَ `2a7c0ce`.
+        Assert.True(checkedRows == 5, $"أَداة عَمياء: فُحِصَ {checkedRows} صَفّاً — والمَقيس ٥.");
         Assert.True(breaches.Count == 0,
             "اختِيارُ المُزَوِّدِ اليَومَ لَيسَ ما وُصِف:\n  " + string.Join("\n  ", breaches));
     }
@@ -271,35 +280,41 @@ public class ProviderSelectionCharacterizationTests
             ProgramText, StringComparison.Ordinal);
     }
 
+    // ─── ‏2026-10-29 (قَرارُ المالِك د35): «العارِي» صارَ صِفراً، فَانقَلَبَ الفَحصُ لا سَقَط ─────────
+    // كانَ هذا الاختِبارُ `Unconditional_capabilities_are_registered_with_no_condition_at_all` يَعُدُّ صُفوفَ الجَدوَلِ
+    // الَّتي تُسَجَّلُ بِسَطرٍ عارٍ ويُثَبِّتُ العَدَد (‏4→3→2→1). وبِحَذفِ `maps` صارَ الصَفُّ العارِي صِفراً — فَعَدُّ
+    // الصُفوفِ صارَ أَداةً لا تَفحَصُ شَيئاً (القاعِدَة ١٠). فَيَقيسُ الآنَ **المَصدَرَ لا الجَدوَل**: كُلُّ سَطرِ تَسجيلٍ يَبدَأُ
+    // عِندَ العَمودِ صِفر (`builder.Services.Add…`) يُعَدّ، ولا واحِدَ مِنها يُسَجِّلُ مُحاكِياً (`AddMock`). والعَدّادُ
+    // يُطبَعُ ويَحمَرُّ عِندَ الصِفر، وعَينَةٌ مَحقونَةٌ تُثبِتُ أَنّ الفاحِصَ يَرى السَطرَ الَّذي حُذِف.
     [Fact]
-    public void Unconditional_capabilities_are_registered_with_no_condition_at_all()
+    public void No_mock_is_registered_by_a_bare_line_any_more()
     {
         var text = ProgramText.Replace("\r\n", "\n", StringComparison.Ordinal);
-        var bare = 0;
-        var breaches = new List<string>();
 
-        foreach (var r in Rows.Where(r => r.ConfigKeyToday is null && r.RegistrationToday.Length > 0))
+        static (int Bare, List<string> Mocks) Scan(string source)
         {
-            // سَطرٌ عارٍ = يَبدَأ عِندَ العَمودِ صِفر، أَي خارِجَ أَيّ
-            // `switch` أَو `if`. وهذا هُوَ **بِعَينِه** ما يَجعَل
-            // المُحاكِيَ جَوابَ الإنتاج.
-            if (text.Contains("\n" + r.RegistrationToday, StringComparison.Ordinal)) bare++;
-            else breaches.Add($"{r.Capability}: «{r.RegistrationToday}» لَم يَعُد سَطراً عارِياً.");
+            var bare = 0;
+            var mocks = new List<string>();
+            foreach (var line in source.Split('\n'))
+            {
+                if (!line.StartsWith("builder.Services.Add", StringComparison.Ordinal)) continue;
+                bare++;
+                if (line.StartsWith("builder.Services.AddMock", StringComparison.Ordinal)) mocks.Add(line.Trim());
+            }
+            return (bare, mocks);
         }
 
-        // **اثنانِ لا ثَلاثَة مُنذُ ‏2026-08-30 (المَوجَةُ الثانِيَة)**:
-        // خَرَجَ `payments` مِن العُري إلى قَرارِ البيئَة، ثُمَّ خَرَجَ
-        // `files` إلى قَرارِ التَهيئَة. والباقي `maps` و`delivery`
-        // — وحُكمُهُما مَقيسٌ ومَكتوبٌ في `docs/PROVIDER-STUB-DEBT.md`
-        // (‏صِفرُ مُستَهلِكٍ في وَقتِ التَشغيل، فَخَطَرُهُما صِفر).
-        // والرَقمُ مُثَبَّتٌ فَلا يَنزِل صامِتاً — ولا يَرتَفِع كَذلك.
-        //
-        // **واحِدٌ لا اثنانِ مُنذُ ‏2026-10-12 (‏ADR-033 الخُطوَة 3)**: خَرَجَ `delivery` — لا إلى قَرارِ
-        // تَهيئَةٍ بَل إلى العَدَم: حُذِفَ المُحاكي وسَطرُه في كوميتِ أَوَّلِ مُستَهلِكٍ لِلشَحن، والعَميلُ
-        // الَّذي حَلَّ مَحَلَّه لا يُنَفِّذُ الواجِهَة. والباقي `maps` وَحدَه — ومُستَهلِكُه الوَحيدُ كانَ
-        // المُحاكي المَحذوف، فَصارَ بِصِفرِ مُستَهلِك (`PROVIDER-STUB-DEBT.md` §٣ مُلحَقاً).
-        Assert.True(bare == 1, $"أَداة عَمياء: وُجِدَ {bare} تَسجيلاً عارِياً — والمَقيس ١.");
-        Assert.True(breaches.Count == 0, string.Join("\n  ", breaches));
+        var (bareLines, mocks) = Scan(text);
+        Assert.True(bareLines > 5, $"أَداة عَمياء: {bareLines} سَطرَ تَسجيلٍ عارٍ في `Program.cs` — والمُتَوَقَّعُ عَشَرات.");
+        Assert.True(mocks.Count == 0,
+            "مُحاكٍ يُسَجَّلُ بِسَطرٍ عارٍ — أَي أَنّه جَوابُ الإنتاجِ كَما هُوَ جَوابُ التَطوير:\n  " + string.Join("\n  ", mocks));
+
+        // العَينَةُ المَحقونَة: السَطرُ المَحذوفُ نَفسُه يُعادُ إلى نُسخَةٍ مِن المَصدَرِ فَيُرى.
+        var (_, injected) = Scan(text + "\nbuilder.Services.AddMockMaps();\n");
+        Assert.Equal(new[] { "builder.Services.AddMockMaps();" }, injected.ToArray());
+
+        // وما حُذِفَ لا يَعودُ بِاسمِه ولا داخِلَ شَرط (التَعليقُ فَوقَ مَوضِعِه يَذكُرُه بِلا `builder.Services.`).
+        Assert.DoesNotContain("builder.Services.AddMockMaps(", text, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -392,7 +407,8 @@ public class ProviderSelectionCharacterizationTests
                 breaches.Add($"{r.Capability}: صارَ يَذكُر ITenantContext في تَسجيلِه.");
         }
 
-        Assert.True(checkedRows == 9, $"أَداة عَمياء: فُحِصَ {checkedRows} مَصدَراً — والمَقيس ٩.");
+        // ‏2026-10-29 (د35): ثَمانِيَةٌ لا تِسعَة — حُذِفَ صَفُّ `maps` ومَصدَرُه `MockMapsProvider.cs`.
+        Assert.True(checkedRows == 8, $"أَداة عَمياء: فُحِصَ {checkedRows} مَصدَراً — والمَقيس ٨.");
         Assert.True(breaches.Count == 0,
             "مَدى حَياةِ المُزَوِّدِ لَيسَ ما وُصِف:\n  " + string.Join("\n  ", breaches));
     }

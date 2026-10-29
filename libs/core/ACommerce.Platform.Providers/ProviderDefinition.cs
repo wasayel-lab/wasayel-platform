@@ -9,6 +9,11 @@ namespace ACommerce.Platform.Providers;
 /// <c>IDeliveryProvider</c>, <c>IFileStorage</c>,
 /// <c>INotificationChannel</c>, <c>ICache</c>.</para>
 ///
+/// <para><b>‏2026-10-29 (قَرارُ المالِك د35) — ثَمانٍ لا تِسع، ويُقالُ تَحتَه ولا يُمحى</b>: حُذِفَت
+/// <c>IMapsProvider</c> ومُحاكيها وتَعريفُها <c>mock_maps</c> (صِفرُ مُستَهلِكٍ في وَقتِ التَشغيل، ‏ADR-018)،
+/// فَسَقَطَ اسمُ <c>maps</c> مِن المَعجَمِ مَعَها — اسمٌ بِلا واجِهَةٍ ولا تَعريفٍ هُوَ المَقبَرَةُ نَفسُها في
+/// البَيانات. ويَعودُ يَومَ تُبنى واجِهَةُ خَرائِطَ لِمُستَهلِكٍ حَيّ.</para>
+///
 /// <para><b>ولا إحالَةَ نَوعٍ واحِدَة</b>: المَعجَمُ أَسماءٌ نَصِّيَّة،
 /// فَلا تَجُرّ هذِه المَكتَبَةُ عُدَّةً واحِدَة ويَجوز لِأَيّ طَبَقَةٍ
 /// أَن تُحيلَها. والرِباطُ بَينَ الاسمِ والواجِهَةِ مَفحوصٌ نَصِّيّاً في
@@ -20,7 +25,6 @@ public static class ProviderCapabilities
     public const string SmsOtp        = "sms_otp";
     public const string EmailOtp      = "email_otp";
     public const string Nafath        = "nafath";
-    public const string Maps          = "maps";
     public const string Delivery      = "delivery";
     public const string Files         = "files";
     public const string Notifications = "notifications";
@@ -28,7 +32,7 @@ public static class ProviderCapabilities
 
     public static readonly IReadOnlyList<string> All = new[]
     {
-        Payments, SmsOtp, EmailOtp, Nafath, Maps,
+        Payments, SmsOtp, EmailOtp, Nafath,
         Delivery, Files, Notifications, Cache,
     };
 

@@ -39,9 +39,12 @@ public class ProviderCatalogTests
         // **تِسعَةٌ لا ثَمانِيَة مُنذُ ‏2026-10-12 (‏ADR-033 الخُطوَة 6، تَيّارُ S8)**: أُضيفَ تَعريفُ حِسابِ الشَحنِ
         // عِندَ OTO — `platform_key` بِحَقلَي بائِعٍ (`secret_key`، `issued_secret`) — في الكوميتِ الَّذي أَدخَلَ
         // `issued_secret` المَعجَم. والثَمانِيَةُ مَقيسَةٌ قَبلَه بِهذا الفَحصِ نَفسِه أَخضَرَ عِندَ `8e7330d`.
+        //
+        // **ثَمانِيَةٌ لا تِسعَة مُنذُ ‏2026-10-29 (قَرارُ المالِك د35)**: حُذِفَ `mock_maps` مَعَ مُحاكيه وواجِهَتِه — صِفرُ
+        // مُستَهلِكٍ في وَقتِ التَشغيل (‏ADR-018). والتِسعَةُ مَقيسَةٌ قَبلَه بِهذا الفَحصِ نَفسِه أَخضَرَ عِندَ `2a7c0ce`.
         var defs = ProviderCatalog.Definitions;
-        Assert.True(defs.Count == 9,
-            $"أَداة عَمياء: حُمِّلَ {defs.Count} تَعريفاً — والمَقيس ٩.");
+        Assert.True(defs.Count == 8,
+            $"أَداة عَمياء: حُمِّلَ {defs.Count} تَعريفاً — والمَقيس ٨.");
 
         foreach (var d in defs)
             Assert.True(ProviderDefinitionValidator.IsValid(d),
@@ -116,10 +119,8 @@ public class ProviderCatalogTests
             "AddSingleton<IPaymentProvider, MockPaymentProvider>",
             "التَنفيذُ القائِمُ المُسَجَّلُ بِلا شَرطٍ في Program.cs."),
 
-        new("mock_maps",
-            "libs/kits/Maps/ACommerce.Kit.Maps.Core/MockMapsProvider.cs",
-            "AddSingleton<IMapsProvider, MockMapsProvider>",
-            "التَنفيذُ القائِمُ المُسَجَّلُ بِلا شَرطٍ في Program.cs."),
+        // ‏`mock_maps` حُذِفَ ‏2026-10-29 مَعَ مِرساتِه (قَرارُ المالِك د35): مِرساتُه كانَت سَطرَ
+        // `AddSingleton<IMapsProvider, MockMapsProvider>` — مُحاكٍ يُسَجَّلُ عارِياً ولا يَحقِنُه مِلَفٌّ واحِد.
 
         // ‏`mock_delivery` حُذِفَ ‏2026-10-12 مَعَ مِرساتِه (‏ADR-033 الخُطوَة 3): مِرساتُه كانَت سَطرَ
         // `AddSingleton<IDeliveryProvider, MockDeliveryProvider>` — مُحاكٍ بِصِفرِ مُستَهلِكٍ يُسَجَّلُ عارِياً،
@@ -237,8 +238,10 @@ public class ProviderCatalogTests
         //
         // **وثَمانٍ كَما كانَت (‏2026-10-12، ‏ADR-032 الخُطوَة 8، تَيّارُ S9)**: انتَقَلَت مِرساةُ `moyasar_api` مِن سَطرِ تَسجيلِ الخِزانَةِ
         // إلى سَطرِ تَسجيلِ عَميلِ البَوّابَةِ في المِلَفِّ نَفسِه — نَقلُ مِرساةٍ لا إضافَتُها.
-        Assert.True(checkedAnchors == 8,
-            $"أَداة عَمياء: فُحِصَت {checkedAnchors} مِرساة — والمَقيس ٨.");
+        //
+        // **سَبعٌ لا ثَمانٍ مُنذُ ‏2026-10-29 (د35)**: سَقَطَت مِرساةُ `mock_maps` مَعَ تَعريفِها ومُحاكيها. والثَمانُ مَقيسَةٌ قَبلَه عِندَ `2a7c0ce`.
+        Assert.True(checkedAnchors == 7,
+            $"أَداة عَمياء: فُحِصَت {checkedAnchors} مِرساة — والمَقيس ٧.");
         Assert.True(breaches.Count == 0,
             "تَعريفُ مُزَوِّدٍ بِلا تَنفيذٍ حَيّ — مَقبَرَةٌ في البَيانات:\n  "
             + string.Join("\n  ", breaches));
