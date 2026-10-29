@@ -70,7 +70,8 @@ public class AccountContactLinkTests(ITestOutputHelper output)
     {
         var names = Enum.GetNames<AuthHandlers.AuthKind>();
         output.WriteLine($"أَنواعُ المُحاوَلَة: {string.Join(", ", names)}");
-        Assert.Equal(new[] { "PhoneOtp", "Nafath", "EmailOtp", "AddEmail", "AddPhone" }, names);
+        // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A3 — قَرارٌ مَرئِيّ) والسادِسُ `RemoveContact`: رَمزُ حَذفِ الوَسيلَةِ المُضافَة، يُلحَقُ آخِراً فَلا تَتَغَيَّرُ قيَمُ الخَمسَة.
+        Assert.Equal(new[] { "PhoneOtp", "Nafath", "EmailOtp", "AddEmail", "AddPhone", "RemoveContact" }, names);
         Assert.Equal((0, 1, 2), ((int)AuthHandlers.AuthKind.PhoneOtp, (int)AuthHandlers.AuthKind.Nafath, (int)AuthHandlers.AuthKind.EmailOtp));
     }
 
@@ -161,6 +162,7 @@ public class AccountContactLinkTests(ITestOutputHelper output)
         public string ChannelName => "capture";
         public string? DevHintCode => null;
         public Task SendOtpAsync(string email, string code, CancellationToken ct) { To = email; Code = code; return Task.CompletedTask; }
+        public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct) => Task.CompletedTask;
     }
 
     /// <summary>رَمزُ الرَبطِ لا يُدخِل ورَمزُ الدُخولِ لا يَربِط: المُحاوَلَةُ بِنَوعِ <c>AddEmail</c> ومَوضوعِ الحِسابِ والوَسيلَة، والدُخولُ بِالبَريدِ
@@ -190,7 +192,8 @@ public class AccountContactLinkTests(ITestOutputHelper output)
         Assert.Equal("me?err=contact_in_use", AccountContacts.AfterVerify("s", user, "x", ContactLink.InUse));
         Assert.Equal("me?err=contact_code_invalid", AccountContacts.AfterVerify("s", user, "dead-attempt", AccountContacts.CodeInvalid));
         // ‏(‏2026-10-29، A2) والرابِعُ `contact_not_offered` — نَوعٌ لا تَعرِضُه صَفحَةُ دُخولِ المَتجَر.
-        Assert.Equal(ContactLink.All.Count + 4, AccountContacts.Codes.Distinct().Count());
+        // ‏(‏2026-10-29، A3) وثَلاثَةُ رُموزِ الفَكِّ الجَديدَة (`contact_not_set` و`contact_not_added` و`contact_last`) — والمُشتَرَكانِ مَعَ الرَبطِ لا يُعَدّانِ مَرَّتَين.
+        Assert.Equal(ContactLink.All.Count + 4 + 3, AccountContacts.Codes.Distinct().Count());
         foreach (var code in AccountContacts.Codes)
             Assert.False(string.IsNullOrWhiteSpace(ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, $"me.contact.err_{code}")),
                 $"لا نَصَّ في القامُوسِ لِرَمزِ «{code}».");
@@ -213,6 +216,7 @@ public class LiveAccountContactLinkProofTests(ITestOutputHelper output)
         public string ChannelName => "capture";
         public string? DevHintCode => null;
         public Task SendOtpAsync(string email, string code, CancellationToken ct) { Code = code; return Task.CompletedTask; }
+        public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct) => Task.CompletedTask;
     }
 
     /// <summary>مَتجَرُ جَوّالٍ قَناةُ بَريدِه مُسَجَّلَة — يَعرِضُ الاثنَين (‏2026-10-29، A2).</summary>
@@ -238,13 +242,13 @@ public class LiveAccountContactLinkProofTests(ITestOutputHelper output)
             var mail = new CapturingEmail();
 
             var startA = await AccountContacts.StartAsync(store, slug, a.UserId, ContactLink.Email, " Sara.Link@Example.com ", null, mail, PhoneStore, default);
-            var linkedA = await AccountContacts.VerifyAsync(store, slug, a.UserId, startA.AttemptId, mail.Code, DateTime.UtcNow, default);
+            var linkedA = await AccountContacts.VerifyAsync(store, slug, a.UserId, startA.AttemptId, mail.Code, DateTime.UtcNow, null, mail, default);
 
             AuthHandlers.IssueAttempt(slug, "sara.link@example.com", code, AuthHandlers.AuthKind.EmailOtp);
             var byEmail = await AuthHandlers.VerifyEmailOtpHandler(new VerifyEmailOtp("sara.link@example.com", code), new VendorRegisterBucketTests.ResolvedTenant(slug), store);
 
             var startB = await AccountContacts.StartAsync(store, slug, b.UserId, ContactLink.Email, "sara.link@example.com", null, mail, PhoneStore, default);
-            var linkedB = await AccountContacts.VerifyAsync(store, slug, b.UserId, startB.AttemptId, mail.Code, DateTime.UtcNow, default);
+            var linkedB = await AccountContacts.VerifyAsync(store, slug, b.UserId, startB.AttemptId, mail.Code, DateTime.UtcNow, null, mail, default);
 
             int accounts;
             await using (var q = store.QuerySession(slug)) accounts = (await Marten.QueryableExtensions.ToListAsync(q.Query<User>())).Count;

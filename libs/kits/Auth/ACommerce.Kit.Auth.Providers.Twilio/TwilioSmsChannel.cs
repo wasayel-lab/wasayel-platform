@@ -42,7 +42,19 @@ public sealed class TwilioSmsChannel : IOtpChannel
 
     public async Task SendOtpAsync(string phone, string code, CancellationToken ct)
     {
-        var body = $"Your verification code: {code}";
+        await PostMessageAsync(phone, $"Your verification code: {code}", ct);
+        _logger.LogInformation("[Twilio] أُرسِلَ كود لِـ {Phone}", phone);
+    }
+
+    /// <summary>‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A3) إشعارٌ بِواجِهَةِ الرَسائِلِ نَفسِها (<c>Messages.json</c>) — نَفسُ الطَلَبِ والمُرسِلِ والرَمي، والنَصُّ نَصُّه.</summary>
+    public async Task SendNoticeAsync(string phone, string text, CancellationToken ct)
+    {
+        await PostMessageAsync(phone, text, ct);
+        _logger.LogInformation("[Twilio] أُرسِلَ إشعارٌ لِـ {Phone}", phone);
+    }
+
+    private async Task PostMessageAsync(string phone, string body, CancellationToken ct)
+    {
         var form = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["To"]   = phone.StartsWith("+") ? phone : "+" + phone,
@@ -57,7 +69,6 @@ public sealed class TwilioSmsChannel : IOtpChannel
             _logger.LogError("[Twilio] فَشِل {Status}: {Body}", resp.StatusCode, err);
             throw new InvalidOperationException($"Twilio فَشِل: {(int)resp.StatusCode}");
         }
-        _logger.LogInformation("[Twilio] أُرسِلَ كود لِـ {Phone}", phone);
     }
 }
 

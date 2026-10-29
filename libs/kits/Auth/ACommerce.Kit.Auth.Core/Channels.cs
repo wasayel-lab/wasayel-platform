@@ -16,6 +16,13 @@ public interface IOtpChannel
     /// <summary>الكود المُتَوَقَّع في وَضع التَطوير (لإظهاره في الواجهَة).
     /// <c>null</c> في الإنتاج.</summary>
     string? DevHintCode { get; }
+
+    /// <summary>
+    /// <para><b>رِسالَةُ إشعارٍ لا رَمز</b> (‏2026-10-29، تَدقيقُ الموجَة ١١ A3) — نَصٌّ قَصيرٌ إلى جَوّالٍ مُتَحَقَّقٍ مِنه: «أُضيفَت وَسيلَةُ دُخولٍ إلى
+    /// حِسابِك». كانَت القَناةُ لا تُرسِلُ إلّا رَمزاً، فَلا يُخطَرُ صاحِبُ الحِسابِ حينَ يُربَطُ بِه مُصادِقٌ (OWASP ASVS 2.2.3، NIST 800-63B).
+    /// <b>القَناةُ الحَيَّةُ نَفسُها تُمَدّ</b> (القاعِدَة ٨) — لا تُحيا <c>INotificationChannel</c> ذاتُ التَنفيذِ الصِفريّ. يَرمي عِندَ الفَشَلِ كَأَخيه.</para>
+    /// </summary>
+    Task SendNoticeAsync(string phone, string text, CancellationToken ct);
 }
 
 /// <summary>قَناة OTP عَبر البَريد الإلِكترونيّ (SMTP، Mock، …). نَفس
@@ -34,6 +41,13 @@ public interface IEmailOtpChannel
     /// <summary>الكود المُتَوَقَّع في وَضع التَطوير (لإظهاره في الواجهَة).
     /// <c>null</c> في الإنتاج.</summary>
     string? DevHintCode { get; }
+
+    /// <summary>
+    /// <para><b>رِسالَةُ إشعارٍ لا رَمز</b> (‏2026-10-29، تَدقيقُ الموجَة ١١ A3) — عُنوانٌ ونَصٌّ عادِيٌّ (بِلا HTML) إلى بَريدٍ مُتَحَقَّقٍ مِنه. مُستَهلِكاها في
+    /// وَقتِ التَشغيل: إشعارُ رَبطِ وَسيلَةٍ وحَذفِها (<c>AccountContacts</c>)، وبَريدُ مالِ صاحِبِ المَتجَر (CO3، تَيّارُ F3) — يَستَعمِلُها ولا يَمَسُّ العُدَّة.
+    /// يَرمي عِندَ الفَشَلِ كَأَخيه.</para>
+    /// </summary>
+    Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct);
 }
 
 /// <summary>قَناة تَحَقُّق نَفاذ (Nafath، Yakeen-Pro، Mock، …).</summary>

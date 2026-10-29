@@ -21,8 +21,29 @@ public static class AccountContacts
     /// فَنَصُّ «فَتَدخُلُ بَعدَها بِه» لا يَكذِب. مَتجَرُ نَفاذٍ لا يَعرِضُ غَيرَه.</summary>
     public const string NotOffered = "contact_not_offered";
 
+    /// <remarks>‏(‏2026-10-29، A3) ورُموزُ فَكِّ الوَسيلَةِ المُضافَة (<see cref="ContactLink.UnlinkAll"/>) — والمُشتَرَكُ مَعَ الرَبطِ مَرَّةً واحِدَة.</remarks>
     public static readonly IReadOnlyList<string> Codes =
-        ContactLink.All.Concat(new[] { Unavailable, SendFailed, CodeInvalid, NotOffered }).ToList();
+        ContactLink.All.Concat(new[] { Unavailable, SendFailed, CodeInvalid, NotOffered }).Concat(ContactLink.UnlinkAll).Distinct().ToList();
+
+    /// <summary>نَوعُ الإشعارِ في التَطبيق (‏2026-10-29، A3) — أُضيفَت وَسيلَةُ دُخولٍ أَو حُذِفَت.</summary>
+    public const string NoticeType = "account_contact";
+
+    /// <summary>فِعلا سَطرِ التَدقيق — بِالمُعَرِّفِ والنَوعِ وَحدَهُما، لا بِالوَسيلَة.</summary>
+    public const string AddedAction = "user.contact.add";
+    public const string RemovedAction = "user.contact.remove";
+
+    /// <summary>مَفاتيحُ نُصوصِ الإشعار — بِالعَرَبِيَّةِ صَراحَةً: تُخَزَّنُ في وَثيقَةٍ وتُقرَأُ في صُندوقِ رَسائِلَ لا في مُتَصَفِّح (نَسَقُ <c>OtpEmailMessage</c>).</summary>
+    public const string AddedTitleKey = "notifications.contact_added.title";
+    public const string AddedBodyKey = "notifications.contact_added.body";
+    public const string RemovedTitleKey = "notifications.contact_removed.title";
+    public const string RemovedBodyKey = "notifications.contact_removed.body";
+
+    private static string Text(string key, params object[] args)
+    {
+        var text = ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, key)
+                   ?? throw new InvalidOperationException($"مِفتاحُ القامُوس «{key}» غائِبٌ في ar.json.");
+        return args.Length == 0 ? text : string.Format(System.Globalization.CultureInfo.InvariantCulture, text, args);
+    }
 
     public sealed record StartOutcome(string? AttemptId, string? Refusal);
 
@@ -67,8 +88,11 @@ public static class AccountContacts
     /// <para>يُتِمُّ الرَبط: المُحاوَلَةُ لِهذا الحِساب، وحِصَّةُ التَحَقُّق، واستِهلاكُ الرَمز — ثُمَّ مَن يَحمِلُ الوَسيلَةَ في المَتجَر (البَريدُ بِتَطبيعِه، والجَوّالُ
     /// كَما كُتِبَ وبِصيغَتِه الدَولِيَّة) و<see cref="ContactLink.Validate"/> بِهِم، ثُمَّ <see cref="ContactLink.Link"/> والحِفظ. <c>null</c> = رُبِطَت؛ وإلّا رَمزُ الرَفض.</para>
     /// </summary>
+    /// <remarks>‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A3) <b>والرَبطُ يُخطِرُ</b> (<see cref="NoticeLinkedAsync"/>): الوَسيلَةَ الأُخرى المُتَحَقَّقَ مِنها بِقَناتِها،
+    /// وإشعاراً في التَطبيق، وسَطرَ تَدقيق — كانَ يَربِطُ ويَحفَظُ بِلا أَثَر.</remarks>
     public static async Task<string?> VerifyAsync(
-        IDocumentStore store, string slug, Guid userId, string? attemptId, string? code, DateTime now, CancellationToken ct)
+        IDocumentStore store, string slug, Guid userId, string? attemptId, string? code, DateTime now,
+        IOtpChannel? phoneChannel, IEmailOtpChannel? emailChannel, CancellationToken ct)
     {
         if (Pending(slug, attemptId, userId) is not { } p) return CodeInvalid;
         if (!AuthHandlers.TryConsumeVerifyQuota($"{slug}|{p.Subject}")
@@ -92,8 +116,130 @@ public static class AccountContacts
             ContactLink.Link(u, kind, p.Value, now);
             return true;
         }, ct);
-        return user is null ? ContactLink.Validate(null, kind, p.Value, holders)!.Code : refusal;
+        if (user is null) return ContactLink.Validate(null, kind, p.Value, holders)!.Code;
+        if (refusal is not null) return refusal;
+        await NoticeLinkedAsync(store, slug, user, kind, p.Value, now, phoneChannel, emailChannel, ct);
+        return null;
     }
+
+    /// <summary>
+    /// <para><b>إشعارُ الرَبط</b> (‏2026-10-29، تَدقيقُ الموجَة ١١ A3؛ مَرجِعُ P1: ‏OWASP ASVS 2.2.3 وNIST 800-63B): إشعارٌ في التَطبيقِ وسَطرُ تَدقيقٍ دائِماً،
+    /// ورِسالَةٌ إلى الوَسيلَةِ <b>الأُخرى المُتَحَقَّقِ مِنها</b> بِقَناتِها (<c>SendNoticeAsync</c> خَلفَ <c>OtpSendGuard</c>) — بِالوَسيلَةِ الجَديدَةِ مُقَنَّعَة.
+    /// والرِسالَةُ أَثَرٌ لا شَرط: فَشَلُها لا يَرُدُّ رَبطاً تَمَّ، ويُعادُ <c>failed</c>. يُعيدُ القَناةَ الَّتي حَمَلَت الرِسالَة: <c>email</c> أَو <c>phone</c>
+    /// أَو <c>none</c> (لا وَسيلَةَ أُخرى مُتَحَقَّقٌ مِنها، أَو قَناتُها غَيرُ مُسَجَّلَة) أَو <c>failed</c>.</para>
+    /// </summary>
+    public static async Task<string> NoticeLinkedAsync(
+        IDocumentStore store, string slug, User user, string kind, string value, DateTime now,
+        IOtpChannel? phoneChannel, IEmailOtpChannel? emailChannel, CancellationToken ct)
+    {
+        var title = Text(AddedTitleKey);
+        var body = Text(AddedBodyKey, ContactLink.Mask(kind, value));
+        await RecordAsync(store, slug, user.Id, title, body, AddedAction, kind, now, ct);
+
+        var other = ContactLink.Other(kind);
+        var to = ContactLink.Contact(user, other);
+        var verified = other == ContactLink.Email ? user.EmailVerified : user.PhoneVerified;
+        if (to is null || !verified) return "none";
+        try
+        {
+            if (other == ContactLink.Email)
+            {
+                if (emailChannel is null) return "none";
+                await OtpSendGuard.SendWithinAsync(t => emailChannel.SendNoticeAsync(to, title, body, t), ct);
+                return ContactLink.Email;
+            }
+            if (phoneChannel is null) return "none";
+            await OtpSendGuard.SendWithinAsync(t => phoneChannel.SendNoticeAsync(AuthHandlers.PhoneDestination(to), body, t), ct);
+            return ContactLink.Phone;
+        }
+        catch (Exception) { return "failed"; }
+    }
+
+    /// <summary>الإشعارُ في التَطبيقِ وسَطرُ التَدقيق — لِلرَبطِ والحَذف. والتَدقيقُ بِالمُعَرِّفِ والنَوعِ وَحدَهُما (لا اسمَ ولا وَسيلَة).</summary>
+    private static async Task RecordAsync(IDocumentStore store, string slug, Guid userId, string title, string body, string action, string kind,
+        DateTime now, CancellationToken ct)
+    {
+        await using (var s = store.LightweightSession(slug))
+        {
+            s.Store(new ACommerce.Kit.Notifications.Notification
+            {
+                Id = Guid.NewGuid(), UserId = userId, Type = NoticeType, Title = title, Body = body, RelatedUrl = $"/{slug}/me", At = now,
+            });
+            await s.SaveChangesAsync(ct);
+        }
+        await new Audit.AuditWriter(store).WriteAsync(slug, userId, "", action, "User", userId.ToString(), note: kind, ct: ct);
+    }
+
+    // ─── حَذفُ الوَسيلَةِ المُضافَة (‏2026-10-29، تَدقيقُ الموجَة ١١ A3) ───────────────────────────────
+
+    /// <summary>
+    /// <para>يَبدَأُ الحَذف: <see cref="ContactLink.ValidateUnlink"/> عَلى الحِساب، ثُمَّ رَمزٌ إلى الوَسيلَةِ <b>الباقِيَة</b> بِآلِيَّةِ الدُخولِ نَفسِها
+    /// (<see cref="AuthHandlers.RequestContactCodeAsync"/> بِـ<c>RemoveContact</c>)، ومَوضوعُه الحِسابُ والنَوعُ المَحذوف. قَناةٌ غَيرُ مُسَجَّلَةٍ ←
+    /// <see cref="Unavailable"/>، وفَشَلُ الإرسالِ أَو الحِصَّةُ ← <see cref="SendFailed"/>.</para>
+    /// </summary>
+    public static async Task<StartOutcome> StartRemoveAsync(
+        IDocumentStore store, string slug, Guid userId, string? kind,
+        IOtpChannel? phoneChannel, IEmailOtpChannel? emailChannel, CancellationToken ct)
+    {
+        User? user;
+        await using (var q = store.QuerySession(slug)) user = await q.LoadAsync<User>(userId, ct);
+        if (ContactLink.ValidateUnlink(user, kind) is { } refused) return new(null, refused.Code);
+        var remaining = ContactLink.Other(kind!);
+        var to = ContactLink.Contact(user!, remaining)!;
+        var subject = ContactLink.Subject(userId, kind!);
+        try
+        {
+            if (remaining == ContactLink.Email)
+                return emailChannel is null ? new(null, Unavailable)
+                    : new(await AuthHandlers.RequestContactCodeAsync(slug, AuthHandlers.AuthKind.RemoveContact, subject, to,
+                        emailChannel.DevHintCode, emailChannel.SendOtpAsync, ct), null);
+            return phoneChannel is null ? new(null, Unavailable)
+                : new(await AuthHandlers.RequestContactCodeAsync(slug, AuthHandlers.AuthKind.RemoveContact, subject, AuthHandlers.PhoneDestination(to),
+                    phoneChannel.DevHintCode, phoneChannel.SendOtpAsync, ct), null);
+        }
+        catch (Exception) { return new(null, SendFailed); }
+    }
+
+    /// <summary>مُحاوَلَةُ حَذفٍ حَيَّةٌ بِمُعَرِّفِها لِهذا الحِساب — النَوعُ المَحذوف؛ وإلّا <c>null</c>.</summary>
+    public static string? PendingRemoval(string slug, string? attemptId, Guid userId)
+        => AuthHandlers.SubjectOf(slug, attemptId, AuthHandlers.AuthKind.RemoveContact) is { } subject
+           && ContactLink.ValueFor(subject, userId) is { } kind && ContactLink.Kinds.Contains(kind) ? kind : null;
+
+    /// <summary>
+    /// <para>يُتِمُّ الحَذف: المُحاوَلَةُ لِهذا الحِساب، وحِصَّةُ التَحَقُّق، واستِهلاكُ الرَمز — ثُمَّ <see cref="ContactLink.ValidateUnlink"/> و<see cref="ContactLink.Unlink"/>
+    /// عَلى قِراءَةٍ جَديدَة (<see cref="AccountWrites.UpdateAsync{T}"/>)، ثُمَّ إشعارٌ في التَطبيقِ وسَطرُ تَدقيق. <c>null</c> = حُذِفَت؛ وإلّا رَمزُ الرَفض.</para>
+    /// </summary>
+    public static async Task<string?> VerifyRemoveAsync(
+        IDocumentStore store, string slug, Guid userId, string? attemptId, string? code, DateTime now, CancellationToken ct)
+    {
+        if (PendingRemoval(slug, attemptId, userId) is not { } kind) return CodeInvalid;
+        var subject = ContactLink.Subject(userId, kind);
+        if (!AuthHandlers.TryConsumeVerifyQuota($"{slug}|{subject}")
+            || !AuthHandlers.ConsumeAttempt(slug, subject, (code ?? "").Trim(), AuthHandlers.AuthKind.RemoveContact)) return CodeInvalid;
+
+        string? refusal = null;
+        var removed = "";
+        var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>
+        {
+            refusal = ContactLink.ValidateUnlink(u, kind)?.Code;
+            if (refusal is not null) return false;
+            removed = ContactLink.Contact(u, kind)!;
+            ContactLink.Unlink(u, kind, now);
+            return true;
+        }, ct);
+        if (user is null) return ContactLink.NoAccount;
+        if (refusal is not null) return refusal;
+        await RecordAsync(store, slug, userId, Text(RemovedTitleKey), Text(RemovedBodyKey, ContactLink.Mask(kind, removed)), RemovedAction, kind, now, ct);
+        return null;
+    }
+
+    /// <summary>مَسارُ «حِسابي» بَعدَ الحَذف — نَقِيَّة، نَسَقُ <see cref="AfterVerify"/>: حُذِفَت ← <c>contact=removed</c>؛ رَمزٌ خاطِئٌ ومُحاوَلَتُه حَيَّة ←
+    /// مَرحَلَةُ الرَمزِ بِمُعَرِّفِها؛ وما سِواهُما ← رَمزُ الرَفض.</summary>
+    public static string AfterRemove(string slug, Guid userId, string? attemptId, string? refusal)
+        => refusal is null ? "me?contact=removed"
+         : refusal == CodeInvalid && PendingRemoval(slug, attemptId, userId) is not null
+            ? $"me?contact=remove&attempt={Uri.EscapeDataString(attemptId!)}&err={refusal}"
+            : $"me?err={refusal}";
 
     /// <summary>مَسارُ «حِسابي» بَعدَ التَحَقُّق — نَقِيَّةٌ عَلى حالِ المُحاوَلَة: رُبِطَت ← <c>contact=linked</c>؛ رَمزٌ خاطِئٌ ومُحاوَلَتُه حَيَّة ← مَرحَلَةُ الرَمزِ
     /// بِمُعَرِّفِها ورَمزِ الخَطَإ؛ وما سِواهُما ← رَمزُ الرَفضِ وَحدَه. ولا وَسيلَةَ في رابِطٍ أَبَداً.</summary>

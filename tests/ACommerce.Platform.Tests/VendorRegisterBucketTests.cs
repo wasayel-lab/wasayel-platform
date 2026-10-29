@@ -46,6 +46,7 @@ public class VendorRegisterBucketTests(ITestOutputHelper output)
         public string ChannelName => "counting-sms";
         public string? DevHintCode => null;
         public Task SendOtpAsync(string phone, string code, CancellationToken ct) { Interlocked.Increment(ref Sent); return Task.CompletedTask; }
+        public Task SendNoticeAsync(string phone, string text, CancellationToken ct) => Task.CompletedTask;
     }
 
     internal static VendorShippingService Surface(DealShipTests.World w)

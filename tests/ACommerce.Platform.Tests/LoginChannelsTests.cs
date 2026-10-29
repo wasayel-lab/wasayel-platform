@@ -120,6 +120,7 @@ public class LoginChannelsTests(ITestOutputHelper output)
         public string ChannelName => "capture";
         public string? DevHintCode => null;
         public Task SendOtpAsync(string email, string code, CancellationToken ct) { Code = code; return Task.CompletedTask; }
+        public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct) => Task.CompletedTask;
     }
 
     /// <summary>بابُ الرَبطِ يَرُدُّ نَوعاً لا تَعرِضُه صَفحَةُ الدُخولِ قَبلَ أَن يَقرَأ (مُوجَب: مَتجَرُ نَفاذٍ والبَريد — المَخزَنُ البَديلُ لا يُسأَل)، ويَمضي

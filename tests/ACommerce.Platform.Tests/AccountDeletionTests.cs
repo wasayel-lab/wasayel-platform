@@ -200,6 +200,9 @@ public class AccountDeletionTests
             nameof(User.HasAnchor),
             // ‏(‏2026-10-28، د28) إصدارُ الجَلسَة لا يَدُلُّ عَلى شَخص — يُرفَعُ في Erase لا يُمحى (SessionRevocationTests).
             nameof(User.SessionVersion),
+            // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A3) نَوعُ الوَسيلَةِ المُضافَة (`email`|`phone`) لا يَدُلُّ عَلى شَخص — و`Erase` يَمحو الوَسيلَتَينِ فَيَراه
+            // بابُ الحَذفِ «لا وَسيلَة» (`contact_not_set`).
+            nameof(User.AddedContactKind),
         };
 
         var erased = new HashSet<string>(StringComparer.Ordinal)

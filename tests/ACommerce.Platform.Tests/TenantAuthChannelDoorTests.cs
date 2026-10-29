@@ -269,6 +269,7 @@ public class TenantAuthChannelDoorTests(ITestOutputHelper output)
         public string ChannelName => "fake-sms";
         public string? DevHintCode => null;
         public Task SendOtpAsync(string phone, string code, CancellationToken ct) => Task.CompletedTask;
+        public Task SendNoticeAsync(string phone, string text, CancellationToken ct) => Task.CompletedTask;
     }
 
     private sealed class FakeEmail : IEmailOtpChannel
@@ -276,6 +277,7 @@ public class TenantAuthChannelDoorTests(ITestOutputHelper output)
         public string ChannelName => "fake-email";
         public string? DevHintCode => null;
         public Task SendOtpAsync(string email, string code, CancellationToken ct) => Task.CompletedTask;
+        public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct) => Task.CompletedTask;
     }
 
     private sealed class FakeNafath : INafathChannel

@@ -68,6 +68,41 @@
                     {
                         <AcAlert Variant="success" Message="@L["me.contact.linked"]" />
                     }
+                    @if (Contact == "removed")
+                    {
+                        <AcAlert Variant="success" Message="@L["me.contact.removed"]" />
+                    }
+                    @* ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A3) وَسائِلُ الحِسابِ ظاهِرَة، والمُضافَةُ مِنها تُحذَفُ بِرَمزٍ إلى الباقِيَة — كانَت تُضافُ ولا تُرى ولا تُحذَف،
+                       فَمَن زَرَعَ بَريدَه بِجَلسَةٍ مُستَعارَةٍ يَعودُ بِه بَعدَ «اخرج من كل الأجهزة». الزِرُّ لِما يَقبَلُه البابُ وَحدَه (`ContactLink.IsUnlinkAllowed`). *@
+                    @foreach (var row in contactRows)
+                    {
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px;">
+                            <span style="font-size:13px;"><strong>@(row.Kind == ACommerce.Kit.Auth.ContactLink.Email ? L["auth.channel.email_full"] : L["auth.channel.phone_full"])</strong>
+                                <span dir="ltr" style="color:var(--ac-text-muted);">@row.Value</span></span>
+                            @if (row.Removable && removal is null)
+                            {
+                                <form method="post" action="@($"/{Slug}/me/contact/remove/start")" style="margin:0;">
+                                    <input type="hidden" name="kind" value="@row.Kind" />
+                                    <AcButton Type="submit" Variant="ghost" Size="sm" Text="@L["me.contact.remove"]" />
+                                </form>
+                            }
+                        </div>
+                    }
+                    @if (contactRows.Any(r => r.Removable) && removal is null)
+                    {
+                        <p style="color:var(--ac-text-muted);font-size:12px;margin:0 0 12px;">@L.Markup("me.contact.remove_hint")</p>
+                    }
+                    @if (removal is { } removing && me is not null && ACommerce.Kit.Auth.ContactLink.Contact(me, ACommerce.Kit.Auth.ContactLink.Other(removing)) is { } remaining)
+                    {
+                        <p style="color:var(--ac-text-muted);font-size:13px;">@L.Format("me.contact.remove_code_sent", ACommerce.Kit.Auth.ContactLink.Mask(ACommerce.Kit.Auth.ContactLink.Other(removing), remaining))</p>
+                        <form method="post" action="@($"/{Slug}/me/contact/remove/verify")">
+                            <input type="hidden" name="attempt" value="@Attempt" />
+                            <AcField Label="@L["me.contact.code_label"]" Required="true">
+                                <input name="code" required class="ac-input" dir="ltr" inputmode="numeric" autocomplete="one-time-code" />
+                            </AcField>
+                            <AcButton Type="submit" Variant="danger" Block="true" Text="@L["me.contact.remove_confirm"]" />
+                        </form>
+                    }
                     @if (pending is { } p)
                     {
                         <p style="color:var(--ac-text-muted);font-size:13px;">@L.Format("me.contact.code_sent", p.Value)</p>
@@ -234,7 +269,12 @@
     (ACommerce.Kit.Auth.Server.AuthHandlers.AuthKind Kind, string Subject, string Value)? pending;
     string? ContactErrKey => Err is { } code && ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.Codes.Contains(code)
         ? $"me.contact.err_{code}" : null;
-    bool contactShown => pending is not null || offerEmail || offerPhone || ContactErrKey is not null || Contact == "linked";
+    bool contactShown => pending is not null || offerEmail || offerPhone || ContactErrKey is not null || Contact == "linked"
+                         || Contact == "removed" || removal is not null || contactRows.Count > 0;
+    /// <summary>‏(‏2026-10-29، A3) وَسائِلُ الحِسابِ الَّتي تَستَقبِلُ رِسالَة (لا <c>NID-…</c>)، والمُضافَةُ مِنها تُحذَف.</summary>
+    List<(string Kind, string Value, bool Removable)> contactRows = new();
+    /// <summary>‏(A3) مُحاوَلَةُ حَذفٍ حَيَّة — النَوعُ المَحذوف.</summary>
+    string? removal;
 
     Tenant? loadedTenant;
     User? me;
@@ -279,6 +319,12 @@
         }
         if (Contact == "verify")
             pending = ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.Pending(Slug, Attempt, Auth.UserId.Value);
+        if (Contact == "remove")
+            removal = ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.PendingRemoval(Slug, Attempt, Auth.UserId.Value);
+        if (me is not null && me.DeletedAt is null)
+            foreach (var kind in new[] { ACommerce.Kit.Auth.ContactLink.Phone, ACommerce.Kit.Auth.ContactLink.Email })
+                if (ACommerce.Kit.Auth.ContactLink.Contact(me, kind) is { } value)
+                    contactRows.Add((kind, value, ACommerce.Kit.Auth.ContactLink.IsUnlinkAllowed(me, kind)));
 
         var publishRoles = (await Roles.LoadAsync(Slug)).Tenant?.Roles ?? new List<ACommerce.Kit.Roles.Role>();
         showMyListings = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(publishRoles, Role, me?.ActiveRole, "listing.create")

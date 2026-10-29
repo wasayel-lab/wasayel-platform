@@ -37,6 +37,7 @@ public class OtpSendQuotaTests(ITestOutputHelper output)
             lock (To) To.Add(phone);
             return Task.CompletedTask;
         }
+        public Task SendNoticeAsync(string phone, string text, CancellationToken ct) => Task.CompletedTask;
     }
 
     /// <summary>قَناةُ نَفاذٍ تَعُدُّ نِداءاتِ البَدءِ ولا تَتَّصِل.</summary>

@@ -23,6 +23,11 @@ public sealed class User
     /// <summary>بِنَفس دَلالَة <see cref="PhoneVerified"/> — يُرفَع عِندَ
     /// نَجاح تَحَقُّق OTP البَريد.</summary>
     public bool EmailVerified { get; set; }
+
+    /// <summary><b>الوَسيلَةُ الَّتي أُضيفَت بِـ«أَضِف بَريدَك/جَوّالَك»</b> (‏2026-10-29، تَدقيقُ الموجَة ١١ A3) — <c>email</c> أَو <c>phone</c>، وفارِغٌ لِحِسابٍ
+    /// بِوَسيلَتِه الأُولى وَحدَها. يَكتُبُه <c>ContactLink.Link</c> ويَمحوه <c>ContactLink.Unlink</c>، ويَقرَؤُه بابُ الحَذفِ: <b>يُحذَفُ المُضافُ وَحدَه</b> —
+    /// فَمَن زَرَعَ وَسيلَتَه بِجَلسَةٍ مُستَعارَةٍ لا يَحذِفُ بِرَمزٍ يَصِلُها الوَسيلَةَ الَّتي أُنشِئَ بِها الحِساب.</summary>
+    public string AddedContactKind { get; set; } = "";
     public string Role { get; set; } = "user";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

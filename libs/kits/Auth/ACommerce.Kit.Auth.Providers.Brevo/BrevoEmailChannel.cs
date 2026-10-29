@@ -94,7 +94,16 @@ public sealed class BrevoEmailChannel : IEmailOtpChannel
     /// <summary><c>null</c> — قَناةُ إنتاج: لا كودَ مَعروضٌ في الواجِهَة.</summary>
     public string? DevHintCode => null;
 
-    public async Task SendOtpAsync(string email, string code, CancellationToken ct)
+    public Task SendOtpAsync(string email, string code, CancellationToken ct)
+        => PostAsync(email, LocaleCatalog.Text(LocaleCatalog.Arabic, OtpEmailMessage.SubjectKey),
+            OtpEmailMessage.Text(code), OtpEmailMessage.Html(code), "كود", ct);
+
+    /// <summary>‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A3) إشعارٌ بِالبَريدِ التَعامُلِيِّ نَفسِه (<see cref="Endpoint"/>) — نَفسُ المُرسِلِ والمُهلَةِ والرَمي، ونَصٌّ
+    /// عادِيٌّ بِلا HTML (<c>textContent</c> وَحدَه).</summary>
+    public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct)
+        => PostAsync(email, subject, text, null, "إشعار", ct);
+
+    private async Task PostAsync(string email, string subject, string text, string? html, string what, CancellationToken ct)
     {
         // الرِسالَةُ مِن `OtpEmailMessage` — **نَفسُها** الَّتي يُرسِلُها
         // SMTP، لا نُسخَةٌ مِنها. والعُنوانُ مِن القامُوسِ بِالعَرَبِيَّةِ
@@ -107,10 +116,10 @@ public sealed class BrevoEmailChannel : IEmailOtpChannel
         {
             ["sender"] = sender,
             ["to"] = new[] { new Dictionary<string, string> { ["email"] = email } },
-            ["subject"] = LocaleCatalog.Text(LocaleCatalog.Arabic, OtpEmailMessage.SubjectKey),
-            ["textContent"] = OtpEmailMessage.Text(code),
-            ["htmlContent"] = OtpEmailMessage.Html(code)
+            ["subject"] = subject,
+            ["textContent"] = text,
         };
+        if (html is not null) payload["htmlContent"] = html;
 
         // مُهلَةٌ ثانِيَةٌ إلى جانِبِ `HttpClient.Timeout`: الأُولى تَحرُس
         // النِداءَ، وهذِه تَربِطُه بِرَمزِ الطَلَب فَيَنقَطِع مَعَه.
@@ -129,7 +138,7 @@ public sealed class BrevoEmailChannel : IEmailOtpChannel
                 _logger.LogError("[Brevo] فَشِل {Status}: {Body}", resp.StatusCode, body);
                 throw new InvalidOperationException($"Brevo فَشِل: {(int)resp.StatusCode}");
             }
-            _logger.LogInformation("[Brevo] أُرسِلَ كود لِـ {Email}", email);
+            _logger.LogInformation("[Brevo] أُرسِلَ {What} لِـ {Email}", what, email);
         }
         // الحُكمُ لِرَمزِنا لا لِنَوعِ الاستِثناء — نَفسُ عِلَّةِ قَناةِ
         // SMTP المَقيسَة: المَكتَبَةُ تَختار نَوعَ ما تَرميه عِندَ الإلغاء،
@@ -146,7 +155,7 @@ public sealed class BrevoEmailChannel : IEmailOtpChannel
         {
             // نَرمي ولا نَبتَلِع — فَشَلُ إرسالِ OTP يَعني أَنّ المُستَخدِمَ
             // لَن يَدخُل، فَيَجِب أَن يَظهَرَ لَه خَطَأٌ لا شاشَةُ انتِظار.
-            _logger.LogError(ex, "[Brevo] فَشِل إرسال كود لِـ {Email}", email);
+            _logger.LogError(ex, "[Brevo] فَشِل إرسال {What} لِـ {Email}", what, email);
             throw new InvalidOperationException("Brevo فَشِل الإرسال: " + ex.Message, ex);
         }
     }

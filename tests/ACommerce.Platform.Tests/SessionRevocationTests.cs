@@ -209,6 +209,7 @@ public class SessionRevocationTests(ITestOutputHelper output)
             ["RevokeStudioAsync"] = MethodBody(gate, "RevokeStudioAsync("),
             ["WebPushService.SendAsync"] = MethodBody(push, "public async Task SendAsync("),
             ["AccountContacts.VerifyAsync"] = MethodBody(contacts, "public static async Task<string?> VerifyAsync("),
+            ["AccountContacts.VerifyRemoveAsync"] = MethodBody(contacts, "public static async Task<string?> VerifyRemoveAsync("),
             ["AuthHandlers.GetOrCreateUserAsync"] = MethodBody(auth, "private static async Task<AuthResult> GetOrCreateUserAsync("),
             ["AssignRoleAsync"] = MethodBody(mte, "private static async Task AssignRoleAsync("),
             ["PostLoginRouteAsync"] = MethodBody(mte, "private static async Task<string> PostLoginRouteAsync("),
@@ -221,7 +222,7 @@ public class SessionRevocationTests(ITestOutputHelper output)
         }
         var off = bodies.Where(b => !SavesThroughAccountWrites(b.Value)).Select(b => b.Key).ToList();
         output.WriteLine($"كُتّابُ الحِسابِ المُسَمَّون: {bodies.Count} · بِالكِتابَةِ الواحِدَة: {bodies.Count - off.Count}");
-        Assert.Equal(12, bodies.Count);
+        Assert.Equal(13, bodies.Count);
         Assert.True(off.Count == 0, "كاتِبٌ يَحفَظُ الحِسابَ بِيَدِه: " + string.Join(" · ", off));
     }
 

@@ -29,6 +29,13 @@ public sealed class MockEmailChannel : IEmailOtpChannel, IDevelopmentStubChannel
         _logger.LogInformation("[MockEmail] أَرسَلنا الكود {Code} إلى {Email}", code, email);
         return Task.CompletedTask;
     }
+
+    /// <summary>‏(‏2026-10-29، A3) الإشعارُ يُكتَبُ في السِجِلِّ كَالرَمز — لا بَريدَ حَقيقِيَّ في التَطوير.</summary>
+    public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct)
+    {
+        _logger.LogInformation("[MockEmail] إشعارٌ إلى {Email}: {Subject} — {Text}", email, subject, text);
+        return Task.CompletedTask;
+    }
 }
 
 public static class MockEmailExtensions

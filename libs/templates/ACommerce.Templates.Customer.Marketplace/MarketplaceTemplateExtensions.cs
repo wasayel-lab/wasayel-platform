@@ -530,14 +530,41 @@ public static class MarketplaceTemplateExtensions
                 ? $"me?contact=verify&attempt={Uri.EscapeDataString(id)}" : $"me?err={outcome.Refusal}"));
         }).RequireFormBody().DisableAntiforgery();
 
-        app.MapPost("/{slug}/me/contact/verify", async (string slug, HttpRequest req, IDocumentStore store) =>
+        app.MapPost("/{slug}/me/contact/verify", async (string slug, HttpRequest req, IDocumentStore store,
+                   [FromServices] IOtpChannel? phoneChannel, [FromServices] IEmailOtpChannel? emailChannel) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null || parsed.Value.TenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
             var attempt = req.Form["attempt"].ToString();
+            // ‏(‏2026-10-29، A3) والقَناتانِ لِإشعارِ الوَسيلَةِ الأُخرى المُتَحَقَّقِ مِنها — والإشعارُ والتَدقيقُ في `AccountContacts.NoticeLinkedAsync`.
             var refusal = await Services.AccountContacts.VerifyAsync(store, slug, parsed.Value.UserId, attempt,
-                req.Form["code"].ToString(), DateTime.UtcNow, req.HttpContext.RequestAborted);
+                req.Form["code"].ToString(), DateTime.UtcNow, phoneChannel, emailChannel, req.HttpContext.RequestAborted);
             return Results.Redirect(Link(req, slug, Services.AccountContacts.AfterVerify(slug, parsed.Value.UserId, attempt, refusal)));
+        }).RequireFormBody().DisableAntiforgery();
+
+        // ─── احذِف الوَسيلَةَ المُضافَة (‏2026-10-29، تَدقيقُ الموجَة ١١ A3) ──────────
+        // وَسيلَةٌ زُرِعَت بِجَلسَةٍ مُستَعارَةٍ كانَت تَبقى تُدخِلُ بَعدَ «اخرج من كل الأجهزة» ولا تُرى. يَحذِفُها صاحِبُ الحِسابِ بِرَمزٍ إلى الوَسيلَةِ
+        // الباقِيَة، والمُضافُ وَحدَه يُحذَف (`ContactLink.ValidateUnlink`) — والقَرارُ والأَثَرُ في `AccountContacts`.
+        app.MapPost("/{slug}/me/contact/remove/start",
+            async (string slug, HttpRequest req, IDocumentStore store,
+                   [FromServices] IOtpChannel? phoneChannel, [FromServices] IEmailOtpChannel? emailChannel) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null || parsed.Value.TenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
+            var outcome = await Services.AccountContacts.StartRemoveAsync(store, slug, parsed.Value.UserId,
+                req.Form["kind"].ToString(), phoneChannel, emailChannel, req.HttpContext.RequestAborted);
+            return Results.Redirect(Link(req, slug, outcome.AttemptId is { } id
+                ? $"me?contact=remove&attempt={Uri.EscapeDataString(id)}" : $"me?err={outcome.Refusal}"));
+        }).RequireFormBody().DisableAntiforgery();
+
+        app.MapPost("/{slug}/me/contact/remove/verify", async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null || parsed.Value.TenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
+            var attempt = req.Form["attempt"].ToString();
+            var refusal = await Services.AccountContacts.VerifyRemoveAsync(store, slug, parsed.Value.UserId, attempt,
+                req.Form["code"].ToString(), DateTime.UtcNow, req.HttpContext.RequestAborted);
+            return Results.Redirect(Link(req, slug, Services.AccountContacts.AfterRemove(slug, parsed.Value.UserId, attempt, refusal)));
         }).RequireFormBody().DisableAntiforgery();
 
         // ─── عَدّادات الـ unread لِـ realtime-nav.js ───────────────────────

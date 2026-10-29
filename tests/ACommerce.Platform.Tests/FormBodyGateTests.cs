@@ -53,7 +53,7 @@ public class FormBodyGateTests(ITestOutputHelper output)
         output.WriteLine($"تُعلِنُ بَوّابَةَ النَوع: {gated} مِن {single.Count} · أَوَّلَ السِلسِلَة: {first}");
         Assert.Equal(single.Count, gated);
         Assert.Equal(single.Count, first);
-        Assert.Equal(78, single.Count);   // ‏2026-10-29 (د32 «٢»): ‏79 ← 78 — حُذِفَ `/studio/apps/{slug}/deals/seed` («العَمَلِيَّة التَجريبِيَّة») ومَدخَلاه. ‏2026-10-29 (د30): ‏78 ← 79 — `/{slug}/deals/{id}/return` بِبَوّابَةِ النَوعِ أَوَّلَ سِلسِلَتِه. ‏2026-10-29 (د38): ‏77 ← 78 — `/studio/apps/{slug}/deals/{id}/resolve` بِبَوّابَةِ النَوعِ أَوَّلَ سِلسِلَتِه. ‏2026-10-29 (د39 «ب»): ‏78 ← 77 — حُذِفَ `/studio/apps/{slug}/deals/{id}/review`. ‏2026-10-28 (د27): +2 — `/{slug}/me/contact/start` و`/verify`، كُلٌّ بِبَوّابَةِ النَوعِ أَوَّلَ سِلسِلَتِه
+        Assert.Equal(80, single.Count);   // ‏2026-10-29 (تَدقيقُ الموجَة ١١ A3): ‏78 ← 80 — `/{slug}/me/contact/remove/start` و`/verify`، كُلٌّ بِبَوّابَةِ النَوعِ أَوَّلَ سِلسِلَتِه. ‏2026-10-29 (د32 «٢»): ‏79 ← 78 — حُذِفَ `/studio/apps/{slug}/deals/seed` («العَمَلِيَّة التَجريبِيَّة») ومَدخَلاه. ‏2026-10-29 (د30): ‏78 ← 79 — `/{slug}/deals/{id}/return` بِبَوّابَةِ النَوعِ أَوَّلَ سِلسِلَتِه. ‏2026-10-29 (د38): ‏77 ← 78 — `/studio/apps/{slug}/deals/{id}/resolve` بِبَوّابَةِ النَوعِ أَوَّلَ سِلسِلَتِه. ‏2026-10-29 (د39 «ب»): ‏78 ← 77 — حُذِفَ `/studio/apps/{slug}/deals/{id}/review`. ‏2026-10-28 (د27): +2 — `/{slug}/me/contact/start` و`/verify`، كُلٌّ بِبَوّابَةِ النَوعِ أَوَّلَ سِلسِلَتِه
         Assert.DoesNotContain(form.Where(e => AcceptsJsonToo(e.Body)), e => e.Body.Contains(".RequireFormBody(", StringComparison.Ordinal));
     }
 

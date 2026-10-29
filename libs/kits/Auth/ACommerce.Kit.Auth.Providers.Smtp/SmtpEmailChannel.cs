@@ -69,7 +69,16 @@ public sealed class SmtpEmailChannel : IEmailOtpChannel
     /// <summary><c>null</c> — قَناة إنتاج: لا كود مَعروض في الواجِهَة.</summary>
     public string? DevHintCode => null;
 
-    public async Task SendOtpAsync(string email, string code, CancellationToken ct)
+    public Task SendOtpAsync(string email, string code, CancellationToken ct)
+        => DeliverAsync(email, LocaleCatalog.Text(LocaleCatalog.Arabic, OtpEmailMessage.SubjectKey),
+            new BodyBuilder { TextBody = OtpEmailMessage.Text(code), HtmlBody = OtpEmailMessage.Html(code) }, "كود", ct);
+
+    /// <summary>‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A3) إشعارٌ بِالنَقلِ نَفسِه — نَفسُ المُهلَةِ والرَمي، ونَصٌّ عادِيٌّ بِلا HTML.</summary>
+    public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct)
+        => DeliverAsync(email, subject, new BodyBuilder { TextBody = text }, "إشعار", ct);
+
+    /// <summary>النَقلُ الواحِدُ لِلرَمزِ والإشعار. <paramref name="what"/> وَسمُ سَطرِ السِجِلِّ وَحدَه — لا يَبلُغُ المُستَخدِم.</summary>
+    private async Task DeliverAsync(string email, string subject, BodyBuilder content, string what, CancellationToken ct)
     {
         var msg = new MimeMessage();
         msg.From.Add(ParseFrom());
@@ -88,12 +97,8 @@ public sealed class SmtpEmailChannel : IEmailOtpChannel
         // **وجِسمُ الرِسالَة صارَ في `OtpEmailMessage`** — مَوضِعٌ واحِدٌ
         // تَقرَؤُه قَناتا البَريدِ الفِعليَّتان. ولِماذا هُوَ حَرفِيٌّ لا
         // في القامُوس: مَشروحٌ هُناك (‏`value_unsafe_markup`).
-        msg.Subject = LocaleCatalog.Text(LocaleCatalog.Arabic, OtpEmailMessage.SubjectKey);
-        msg.Body = new BodyBuilder
-        {
-            TextBody = OtpEmailMessage.Text(code),
-            HtmlBody = OtpEmailMessage.Html(code)
-        }.ToMessageBody();
+        msg.Subject = subject;
+        msg.Body = content.ToMessageBody();
 
         // المَنفَذ ٤٦٥ تَشفير ضِمنيّ؛ ما دونه STARTTLS متى دَعَمَه الخادِم.
         var security = _opts.Port == 465
@@ -124,7 +129,7 @@ public sealed class SmtpEmailChannel : IEmailOtpChannel
                 await client.AuthenticateAsync(_opts.Username, _opts.Password, cts.Token);
             await client.SendAsync(msg, cts.Token);
             await client.DisconnectAsync(quit: true, cts.Token);
-            _logger.LogInformation("[Smtp] أُرسِلَ كود لِـ {Email}", email);
+            _logger.LogInformation("[Smtp] أُرسِلَ {What} لِـ {Email}", what, email);
         }
         // **والحُكمُ لِرَمزِنا لا لِنَوعِ الاستِثناء** — بِقياسٍ حَيّ:
         // ‏MailKit يَرمي `OperationCanceledException` حينَ يُلغى أَثناءَ
@@ -146,7 +151,7 @@ public sealed class SmtpEmailChannel : IEmailOtpChannel
             // نَرمي (لا نَبتَلِع) — بِخِلاف الإشعارات، فَشَل إرسال OTP
             // يَعني أَنّ المُستَخدِم لَن يَستَطيع الدُّخول، فَيَجِب أَن
             // يَظهَر لَه خَطَأ لا شاشَة انتِظار كاذِبَة.
-            _logger.LogError(ex, "[Smtp] فَشِل إرسال كود لِـ {Email}", email);
+            _logger.LogError(ex, "[Smtp] فَشِل إرسال {What} لِـ {Email}", what, email);
             throw new InvalidOperationException("SMTP فَشِل الإرسال: " + ex.Message, ex);
         }
     }

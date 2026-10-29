@@ -61,7 +61,74 @@ public static class ContactLink
         // ‏(‏2026-10-28، قَرارُ المالِك د57 «أ»؛ ‏ADR-044) الجَوّالُ يُكتَبُ بِصيغَتِه المُوَحَّدَة — كانَ كَما كُتِب (تَوصيفُه `d72e34e`). والمُقارَنَةُ
         // بِمَن يَحمِلُه تَبقى بِالصيغَتَين (`AccountContacts.VerifyAsync`).
         else { user.Phone = PhoneNumber.Canonical(value); user.PhoneVerified = true; }
+        // ‏(‏2026-10-29، A3) المُضافُ يُسَمّى — هُوَ وَحدَه ما يَحذِفُه بابُ الحَذف.
+        user.AddedContactKind = kind;
         user.UpdatedAt = at;
+    }
+
+    // ─── فَكُّ الوَسيلَةِ المُضافَة (‏2026-10-29، تَدقيقُ الموجَة ١١ A3) — مَعجَمٌ مُغلَق ─────────────
+    //
+    // كانَت الوَسيلَةُ تُضافُ ولا تُرى ولا تُحذَف، فَمَن زَرَعَ بَريدَه بِجَلسَةٍ مُستَعارَةٍ يَعودُ بِه بَعدَ «اخرج من كل الأجهزة». والآن يَحذِفُها صاحِبُ
+    // الحِسابِ مِن «حِسابي» بِرَمزٍ يَصِلُ الوَسيلَةَ <b>الباقِيَة</b>. <b>والمُضافُ وَحدَه يُحذَف</b> (<see cref="User.AddedContactKind"/>): لَو حُذِفَت أَيُّهُما
+    // بِرَمزٍ إلى الأُخرى لَحَذَفَ الزارِعُ جَوّالَ الضَحِيَّةِ بِرَمزٍ إلى بَريدِه هُوَ فَأَغلَقَ عَلَيها حِسابَها.
+    public const string NotSet = "contact_not_set";
+    public const string NotAdded = "contact_not_added";
+    public const string Last = "contact_last";
+
+    /// <summary>رُموزُ رَفضِ الفَكّ — والأَوَّلانِ مُشتَرَكانِ مَعَ الرَبط.</summary>
+    public static readonly IReadOnlyList<string> UnlinkAll = new[] { NoAccount, KindUnknown, NotSet, NotAdded, Last };
+
+    /// <summary>النَوعُ الآخَر — مَعجَمٌ مِن اثنَين.</summary>
+    public static string Other(string kind) => kind == Email ? Phone : Email;
+
+    /// <summary>الوَسيلَةُ إن كانَت وَسيلَةً تَستَقبِلُ رِسالَة — <c>NID-…</c> (هُوِيَّةُ حِسابِ نَفاذ) لَيسَ جَوّالاً، والفارِغُ لا شَيء.</summary>
+    public static string? Contact(User user, string kind)
+    {
+        var value = Current(user, kind);
+        return value.Length == 0 || (kind == Phone && value.StartsWith("NID-", StringComparison.Ordinal)) ? null : value;
+    }
+
+    /// <summary>
+    /// <para><b>أَيُحذَفُ <paramref name="kind"/>؟</b> <c>null</c> = امضِ. التَرتيب: الحِساب، ثُمَّ النَوع، ثُمَّ أَن تَكونَ لِلحِسابِ وَسيلَةٌ مِنه، ثُمَّ أَن تَكونَ
+    /// <b>المُضافَةَ</b> لا الَّتي أُنشِئَ بِها، ثُمَّ أَن تَبقى بَعدَها وَسيلَةٌ يَصِلُها الرَمزُ ويُدخَلُ بِها — فَلا يُحذَفُ آخِرُ وَسيلَة.</para>
+    /// </summary>
+    public static ContactLinkViolation? ValidateUnlink(User? user, string? kind)
+    {
+        if (user is null || user.DeletedAt is not null)
+            return new(NoAccount, "لا حِسابَ قائِمٌ بِهذِه الجَلسَة.");
+        if (kind is not (Email or Phone))
+            return new(KindUnknown, "نَوعُ الوَسيلَةِ خارِجَ المَعجَم (email|phone).");
+        if (Contact(user, kind) is null)
+            return new(NotSet, "لا وَسيلَةَ مِن هذا النَوعِ في الحِساب.");
+        if (user.AddedContactKind != kind)
+            return new(NotAdded, "هذِه الوَسيلَةُ الَّتي أُنشِئَ بِها الحِساب — يُحذَفُ المُضافُ وَحدَه.");
+        if (Contact(user, Other(kind)) is null)
+            return new(Last, "لا تَبقى بَعدَها وَسيلَةٌ يَصِلُها رَمز — لا تُحذَفُ آخِرُ وَسيلَة.");
+        return null;
+    }
+
+    public static bool IsUnlinkAllowed(User? user, string? kind) => ValidateUnlink(user, kind) is null;
+
+    /// <summary>الفَكّ: الحَقلُ فارِغٌ وغَيرُ مُتَحَقَّقٍ مِنه، ولا مُضاف. يُنادى بَعدَ <see cref="ValidateUnlink"/> وَحدَه.</summary>
+    public static void Unlink(User user, string kind, DateTime at)
+    {
+        if (kind == Email) { user.Email = ""; user.EmailVerified = false; }
+        else { user.Phone = ""; user.PhoneVerified = false; }
+        user.AddedContactKind = "";
+        user.UpdatedAt = at;
+    }
+
+    /// <summary>الوَسيلَةُ مُقَنَّعَةً لِرِسالَةٍ أَو صَفحَة: البَريدُ بِحَرفِه الأَوَّلِ ونِطاقِه، والجَوّالُ بِأَرقامِه الأَربَعَةِ الأَخيرَة — يَعرِفُها صاحِبُها ولا
+    /// تَصيرُ نُسخَةً كامِلَةً في إشعار.</summary>
+    public static string Mask(string kind, string value)
+    {
+        if (kind == Email)
+        {
+            var at = value.IndexOf('@');
+            return at <= 0 ? "•••" : $"{value[0]}•••{value[at..]}";
+        }
+        var digits = new string(value.Where(char.IsDigit).ToArray());
+        return digits.Length <= 4 ? "•••" : $"•••{digits[^4..]}";
     }
 
     /// <summary>مَوضوعُ مُحاوَلَةِ الرَبط: الحِسابُ والوَسيلَة — فَرَمزٌ أُرسِلَ لِحِسابٍ لا يَربِطُ بِحِسابٍ غَيرِه، ولا يُبَدِّلُ طَلَبُ غَيرِه مُحاوَلَتَه.</summary>

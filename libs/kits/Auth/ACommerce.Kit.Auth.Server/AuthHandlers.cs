@@ -31,7 +31,9 @@ public static class AuthHandlers
 
     /// <remarks>‏(2026-10-28، قَرارُ المالِك د27) <c>AddEmail</c> و<c>AddPhone</c>: رَمزُ رَبطِ وَسيلَةٍ بِحِسابٍ قائِمٍ مِن «حِسابي» — نَوعٌ مُستَقِلٌّ عَن
     /// رَمزِ الدُخول، فَرَمزُ الدُخولِ لا يَربِطُ ورَمزُ الرَبطِ لا يُدخِل؛ ومَوضوعُه الحِسابُ والوَسيلَةُ (<c>ContactLink.Subject</c>).</remarks>
-    public enum AuthKind { PhoneOtp, Nafath, EmailOtp, AddEmail, AddPhone }
+    /// <remarks>‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A3) <c>RemoveContact</c>: رَمزُ حَذفِ الوَسيلَةِ المُضافَة — يُرسَلُ إلى الوَسيلَةِ <b>الباقِيَة</b>، ومَوضوعُه
+    /// الحِسابُ والنَوعُ المَحذوف؛ يُلحَقُ آخِراً فَلا تَتَغَيَّرُ قيَمُ الخَمسَة.</remarks>
+    public enum AuthKind { PhoneOtp, Nafath, EmailOtp, AddEmail, AddPhone, RemoveContact }
 
     // ─── Rate-limit OTP ───────────────────────────────────────────────────
     // كانَ بِلا حُدود — مُهاجِم يَستَطيع تَجريب ١٠ٰ٠٠٠ OTP في الثانِيَة على
@@ -339,8 +341,8 @@ public static class AuthHandlers
         string tenantSlug, AuthKind kind, string subject, string sendTo, string? devHintCode,
         Func<string, string, CancellationToken, Task> send, CancellationToken ct)
     {
-        if (kind is not (AuthKind.AddEmail or AuthKind.AddPhone))
-            throw new ArgumentOutOfRangeException(nameof(kind), kind, "رَمزُ الرَبطِ لِـAddEmail أَو AddPhone وَحدَهُما.");
+        if (kind is not (AuthKind.AddEmail or AuthKind.AddPhone or AuthKind.RemoveContact))
+            throw new ArgumentOutOfRangeException(nameof(kind), kind, "رَمزُ الرَبطِ لِـAddEmail أَو AddPhone أَو RemoveContact وَحدَها.");
         if (!TryConsumeSendQuota($"{tenantSlug}|{sendTo}") || !TryConsumeGlobalSendQuota(GlobalSendsPerHour))
             throw new InvalidOperationException("rate_limited: try again in an hour");
         var code = NewCode(devHintCode);

@@ -269,5 +269,10 @@ internal static class PinnedRoutes
         // `AccountContacts.StartAsync`/`VerifyAsync`.
         "/{slug}/me/contact/start",
         "/{slug}/me/contact/verify",
+
+        // ─── ‏2026-10-29 (تَدقيقُ الموجَة ١١ A3): «احذِف الوَسيلَةَ المُضافَة» — لِلسَبَبِ نَفسِه ──
+        // يَقرَأُ `User` ويَكتُبُه في جَلسَةِ مُستَأجِرِ المَسار — والجَلسَةُ تُفتَحُ بِالسلاجِ في `AccountContacts.StartRemoveAsync`/`VerifyRemoveAsync`.
+        "/{slug}/me/contact/remove/start",
+        "/{slug}/me/contact/remove/verify",
     };
 }
