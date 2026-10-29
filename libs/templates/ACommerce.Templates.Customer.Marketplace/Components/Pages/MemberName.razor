@@ -1,4 +1,5 @@
 @page "/{slug}/me/name"
+@page "/{slug}/r/{role}/me/name"
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
 @inject L L
@@ -12,9 +13,15 @@
     إلى المَسارِ نَفسِه، والخُطوَةُ تَعودُ في الدُخولِ التالي ما دامَ الاسمُ افتِراضِيّاً.
 
     **قِراءَةٌ خالِصَة**: الحارِسُ `<GatedPage RequireAuth>`، ولا كِتابَةَ في `GET`. والنَصُّ كُلُّه مِن القامُوس (القاعِدَة ١١).
+
+    **ومَسارُ الدَورِ أَيضاً** (‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): بابا التَحَقُّقِ يَبنِيانِ الرابِطَ بِـ`Link(req, slug, p)`
+    والدَورُ مِن `Referer`، فَأَوَّلُ دُخولٍ مِن `/{slug}/r/{role}/login` (وإلَيها يُرسِلُ `RoleLanding.razor`) يُحَوَّلُ إلى `/{slug}/r/{role}/me/name` —
+    وكانَت الصَفحَةُ لا تُعلِنُه فَيَنتَهي أَوَّلُ دُخولٍ بِـ‏404 (القاعِدَة ١٢؛ مَقيسٌ حَيّاً). صارَ لَها المَساران كَأَخَواتِها في «حِسابي»، والدَورُ يَبلُغُ
+    `GatedPage` (رابِطُ الدُخولِ بِدَورِه) وسُقوطَ «لاحِقاً»، والاستِمارَةُ إلى النُقطَةِ نَفسِها (`ResolveCookieBase` يَقرَأُ كوكي الدَورِ عَلى المَسارِ بِلا دَور
+    كَما يَقرَؤُه لِـ`ProfileEdit.razor`). وكُلُّ مَسارٍ تُنتِجُه `MemberNameStep.Route` بِدَورٍ وبِلا دَورٍ مُقابَلٌ بِجَدوَلِ GET في `SellerDisplayNameTests`.
 *@
 
-<GatedPage Slug="@Slug" RequireAuth>
+<GatedPage Slug="@Slug" Role="@Role" RequireAuth>
 <div class="acs-page">
     <h1 class="acm-wizard-title">@L.Markup("me.name.title")</h1>
     <AcCard>
@@ -37,12 +44,13 @@
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
 
     /// <summary>مَسارُ ما بَعدَ الدُخول — يَكتُبُه بابُ التَحَقُّق؛ ويُحسَمُ هُنا بِـ<c>LocalRedirect.Resolve</c> كَما تَحسِمُه النُقطَة، فَرابِطُ «لاحِقاً»
     /// لا يَخرُجُ مِن المَوقِع.</summary>
     [SupplyParameterFromQuery(Name = "next")] public string? Next { get; set; }
 
-    string NextRoute => Services.LocalRedirect.Resolve(Next, $"/{Slug}/me");
+    string NextRoute => Services.LocalRedirect.Resolve(Next, AuthSession.LinkFor(Slug, Role, "me"));
 
     protected override void OnInitialized()
     {

@@ -273,8 +273,8 @@ ANALYZE_TRIES="${ANALYZE_TRIES:-$DEFAULT_TRIES}"
 [[ "$ANALYZE_TRIES" =~ ^[1-9][0-9]*$ ]] || { echo "✗ ANALYZE_TRIES عَدَدٌ مُوجَبٌ لا «$ANALYZE_TRIES»." >&2; exit 2; }
 
 SLUG="rewalk-$MARK"
-P_ENT="05${MARK}00"; P_VEN="05${MARK}01"; P_BUY="05${MARK}02"
-J_ENT="$WORK/ent"; J_ADM="$WORK/adm"; J_VEN="$WORK/ven"; J_BUY="$WORK/buy"
+P_ENT="05${MARK}00"; P_VEN="05${MARK}01"; P_BUY="05${MARK}02"; P_ROL="05${MARK}03"
+J_ENT="$WORK/ent"; J_ADM="$WORK/adm"; J_VEN="$WORK/ven"; J_BUY="$WORK/buy"; J_ROL="$WORK/rol"
 ADDR="الرِياض — حَيُّ الفَحصِ $MARK"
 F="$WORK/page.html"
 
@@ -464,6 +464,27 @@ store_login "$J_VEN" "$SLUG" "$P_VEN"
 # ‏(2026-10-29، قَرارُ المالِك د40 «ج») أَوَّلُ دُخولٍ لِهاتِفٍ جَديدٍ يَسبِقُه خُطوَةُ الاسم — والاسمُ مَتروكٌ هُنا عَمداً («لاحِقاً»): اسمُ النَشاطِ
 # في التَهيِئَةِ أَدناه هُوَ ما يَراه المُشتَري، وهو ما تَقيسُه الخُطوَة ٦.
 check "$([[ "$LOC" == */me/name\?next=* ]] && echo 1 || echo 0)" "أَوَّلُ دُخولٍ لِلبائِعِ ← خُطوَةُ الاسم (‏د40) — $LOC"
+# ‏(2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ١ — قَرارُ المالِك د40 «ج») **وأَوَّلُ دُخولٍ مِن صَفحَةِ دُخولِ دَور** (`RoleLanding.razor` ← `/{slug}/r/{role}/login`):
+# بابُ التَحَقُّقِ يَأخُذُ الدَورَ مِن `Referer` فَيُحَوِّلُ إلى `/{slug}/r/{role}/me/name`، وكانَت الصَفحَةُ لا تُعلِنُه — ‏404 مَقيسٌ حَيّاً، والسَطرُ أَعلاه أَعمى
+# عَنه لِأَنّ `store_login` لا يُرسِلُ `Referer`. حِسابٌ رابِعٌ بِهاتِفِ الجَولَة، والاستِمارَتانِ تُقرَآنِ مِن صَفحَتَيهِما (`form_dump`) وتُرسَلانِ بِـ`Referer`
+# الصَفحَةِ الَّتي رَسَمَتهُما — كَالمُتَصَفِّح.
+ROLE_LOGIN="/$SLUG/r/vendor/login"
+get "$J_ROL" "$ROLE_LOGIN" "$F"
+ROLE_DUMP="$(form_dump "$F" 'auth/phone/login')"; ROLE_ACT="$(fd_action "$ROLE_DUMP")"; ROLE_AS="$(fd_get "$ROLE_DUMP" HIDDEN as)"
+check "$([ "$CODE" = 200 ] && [ "$ROLE_ACT" = "/$SLUG/auth/phone/login" ] && [ "$ROLE_AS" = vendor ] && echo 1 || echo 0)" \
+    "GET $ROLE_LOGIN → $CODE · الاستِمارَةُ إلى ${ROLE_ACT:-غائِب} بِـas=${ROLE_AS:-غائِب}"
+post "$J_ROL" "$ROLE_ACT" -H "Referer: $BASE$ROLE_LOGIN" --data-urlencode "phone=$P_ROL" --data-urlencode "as=$ROLE_AS"
+check "$([ "$CODE" = 302 ] && [[ "$LOC" == "$ROLE_LOGIN?"*stage=verify* ]] && echo 1 || echo 0)" "POST $ROLE_ACT (مِن $ROLE_LOGIN) → $CODE $LOC"
+ROLE_VERIFY="$LOC"
+get "$J_ROL" "$ROLE_VERIFY" "$F"
+ROLE_DUMP="$(form_dump "$F" 'auth/phone/verify')"; ROLE_ACT="$(fd_action "$ROLE_DUMP")"; ROLE_ARGS=(); ROLE_HIDDEN=()
+while IFS='=' read -r n v; do [ -n "$n" ] && { ROLE_ARGS+=(--data-urlencode "$n=$v"); ROLE_HIDDEN+=("$n"); }; done < <(fd_kind "$ROLE_DUMP" HIDDEN)
+post "$J_ROL" "${ROLE_ACT:-/$SLUG/auth/phone/verify}" -H "Referer: $BASE$ROLE_VERIFY" "${ROLE_ARGS[@]}" --data-urlencode "code=$DEV_CODE"
+check "$([ "$CODE" = 302 ] && [[ "$LOC" == "/$SLUG/r/vendor/me/name?next="* ]] && echo 1 || echo 0)" \
+    "POST ${ROLE_ACT:-غائِب} (مِن صَفحَةِ الدَور، حُقولُ الاستِمارَةِ المَخفِيَّة: ${ROLE_HIDDEN[*]:-—}) → $CODE $LOC (‏د40)"
+ROLE_NAME_AT="$LOC"
+get "$J_ROL" "$ROLE_NAME_AT" "$F"
+check "$([ "$CODE" = 200 ] && grep -q 'name="fullName"' "$F" && echo 1 || echo 0)" "GET $ROLE_NAME_AT → $CODE · حَقلُ الاسم (‏د40 — كانَ 404)"
 get "$J_VEN" "/$SLUG/me/role" "$F"
 check "$([ "$CODE" = 200 ] && grep -q 'name="role" value="vendor"' "$F" && echo 1 || echo 0)" \
     "GET /$SLUG/me/role → $CODE · خِيارُ vendor ذاتِيُّ المَنح"

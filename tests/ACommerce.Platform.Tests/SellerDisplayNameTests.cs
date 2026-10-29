@@ -67,33 +67,44 @@ public class SellerDisplayNameTests(ITestOutputHelper output)
         Assert.Equal(2, stepped);    // الهاتِفُ والبَريد
         Assert.Equal(2, asks);
         Assert.Contains("@page \"/{slug}/me/name\"", page, StringComparison.Ordinal);
-        Assert.Contains("<GatedPage Slug=\"@Slug\" RequireAuth>", page, StringComparison.Ordinal);
+        // ‏(2026-10-29، مُراجَعَةُ S2 الجَولَة ١) والدَورُ يَبلُغُ الحارِسَ وسُقوطَ «لاحِقاً» — كانا `<GatedPage Slug="@Slug" RequireAuth>` و`$"/{Slug}/me"`.
+        Assert.Contains("<GatedPage Slug=\"@Slug\" Role=\"@Role\" RequireAuth>", page, StringComparison.Ordinal);
         Assert.Contains("action=\"@($\"/{Slug}/me/save\")\"", page, StringComparison.Ordinal);
         Assert.Contains("name=\"fullName\"", page, StringComparison.Ordinal);
-        Assert.Contains("Services.LocalRedirect.Resolve(Next, $\"/{Slug}/me\")", page, StringComparison.Ordinal);
+        Assert.Contains("Services.LocalRedirect.Resolve(Next, AuthSession.LinkFor(Slug, Role, \"me\"))", page, StringComparison.Ordinal);
         foreach (var key in new[] { "me.name.title", "me.name.lead", "me.name.label", "me.name.submit", "me.name.later" })
             Assert.False(string.IsNullOrWhiteSpace(LocaleCatalog.Find(LocaleCatalog.Arabic, key)), $"«{key}» بِلا قيمَة.");
     }
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم» قَبلَ التَبديل</b> (القاعِدَة ٣؛ مُراجَعَةُ تَيّارِ S2 الجَولَة ١، ‏2026-10-29): بابا التَحَقُّقِ يَبنِيانِ رابِطَ خُطوَةِ الاسمِ
-    /// بِـ<c>Link(req, slug, p)</c> — والدَورُ مِن <c>Referer</c>. فَأَوَّلُ دُخولٍ مِن صَفحَةِ دُخولِ دَورٍ (<c>/{slug}/r/{role}/login</c>، وإلَيها يُرسِلُ
-    /// <c>RoleLanding.razor</c>) يُحَوَّلُ إلى <c>/{slug}/r/{role}/me/name</c>، والصَفحَةُ لا تُعلِنُ إلّا <c>/{slug}/me/name</c>: ‏404 مَقيسٌ حَيّاً
-    /// (‏<c>/rewalk-291003/r/vendor/me/name?next=…</c> ← 404، والمَسارُ بِلا دَورٍ بِالجَلسَةِ نَفسِها ← 200). يُقلَبُ بِاسمِه في كوميتِ التَبديل.</para>
+    /// <para><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ١ — كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_a_first_login_on_a_role_page_is_sent_to_a_name_step_no_page_declares</c> (‏<c>6a9639f</c>): «قَوالِبُ GET المُعلَنَة: 148 ·
+    /// /zz-name/me/name?… ← True · /zz-name/r/vendor/me/name?… ← False» — أَوَّلُ دُخولٍ مِن صَفحَةِ دُخولِ دَورٍ يَنتَهي بِـ‏404 (مَقيسٌ حَيّاً عَلى
+    /// <c>wasayel_s2r1_pre_20261029</c>: «فُحِصَ 72 · فَشِلَ 1»). والآن كُلُّ مَسارٍ تُنتِجُه <c>MemberNameStep.Route</c> — بِلا دَورٍ وبِكُلِّ دَورٍ
+    /// مِن العَيِّنَة، بِـ<c>AuthSession.LinkFor</c> الَّتي يُنادِيها <c>Link(req, slug, p)</c> — يَحُلُّ قالِباً مُعلَناً، والصَفحَةُ تُعلِنُ المَسارَين.</para>
     /// </summary>
     [Fact]
-    public void Today_a_first_login_on_a_role_page_is_sent_to_a_name_step_no_page_declares()
+    public void Every_route_the_name_step_can_produce_resolves_to_a_declared_page()
     {
         var gets = RouteResolutionTests.Declared("GET");
-        var plain = ACommerce.Templates.Customer.Marketplace.Services.Queries.MemberNameStep.Route(true, "/zz-name/me/role",
-            p => ACommerce.Templates.Customer.Marketplace.AuthSession.LinkFor("zz-name", null, p));
-        var scoped = ACommerce.Templates.Customer.Marketplace.Services.Queries.MemberNameStep.Route(true, "/zz-name/r/vendor/me/role/onboarding",
-            p => ACommerce.Templates.Customer.Marketplace.AuthSession.LinkFor("zz-name", "vendor", p));
-        output.WriteLine($"قَوالِبُ GET المُعلَنَة: {gets.Count} · {plain} ← {RouteResolutionTests.Resolves(plain, gets)} · {scoped} ← {RouteResolutionTests.Resolves(scoped, gets)}");
+        var produced = new List<string>();
+        foreach (var role in new string?[] { null, "vendor", "customer", "host" })
+        {
+            var next = ACommerce.Templates.Customer.Marketplace.AuthSession.LinkFor("zz-name", role, "me/role/onboarding");
+            produced.Add(ACommerce.Templates.Customer.Marketplace.Services.Queries.MemberNameStep.Route(true, next,
+                p => ACommerce.Templates.Customer.Marketplace.AuthSession.LinkFor("zz-name", role, p)));
+        }
+        var dead = produced.Where(r => !RouteResolutionTests.Resolves(r, gets)).ToList();
+        output.WriteLine($"قَوالِبُ GET المُعلَنَة: {gets.Count} · مَساراتُ الخُطوَةِ المُنتَجَة: {produced.Count} · لا تَحُلُّ قالِباً: {dead.Count}");
         Assert.True(gets.Count > 0, "صِفرُ قالِبِ GET — الأَداةُ عَمياء (القاعِدَة ١٠).");
-        Assert.Equal("/zz-name/r/vendor/me/name?next=%2Fzz-name%2Fr%2Fvendor%2Fme%2Frole%2Fonboarding", scoped);
-        Assert.True(RouteResolutionTests.Resolves(plain, gets));
-        Assert.False(RouteResolutionTests.Resolves(scoped, gets));
+        Assert.Equal(4, produced.Count);
+        Assert.Contains("/zz-name/r/vendor/me/name?next=%2Fzz-name%2Fr%2Fvendor%2Fme%2Frole%2Fonboarding", produced);
+        Assert.Empty(dead);
+        // والسالِب: الأَداةُ تَرى المَسارَ المَيِّتَ — قالِبٌ لا تُعلِنُه صَفحَةٌ لا يَحُلّ.
+        Assert.False(RouteResolutionTests.Resolves("/zz-name/r/vendor/me/no-such-step?next=%2Fzz-name%2Fme", gets));
+        var page = Code("Components", "Pages", "MemberName.razor");
+        Assert.Contains("@page \"/{slug}/me/name\"", page, StringComparison.Ordinal);
+        Assert.Contains("@page \"/{slug}/r/{role}/me/name\"", page, StringComparison.Ordinal);
     }
 
     // ─── القاعِدَة: مُوجَبٌ وسالِب ──────────────────────────────────────────────────────────────
