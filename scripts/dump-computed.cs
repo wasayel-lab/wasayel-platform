@@ -81,16 +81,50 @@ if (urls.Count == 0)
     });
 }
 
+// ─── الهَدَفُ مَحَلِّيٌّ وَحدَه — لِكُلِّ مَتجَر (‏2026-10-29، قَرارُ المالِك د26 «ب»؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ───
+// المُتَصَفِّحُ يُطلِقُ ما تُطلِقُه الصَفحَةُ بَعدَ التَصيير (`POST …/view` في تَفصيلِ الإعلان)، فَالتَفريغُ عَلى خادِمٍ لَيسَ
+// عَلى هذا الجِهازِ — المَنشورُ مَوصولٌ بِقاعِدَةِ الإنتاج — كِتابَةٌ في بَياناتِ مَتجَرٍ حَيّ. فَالحَدُّ «لا يُشَغَّلُ التَطويرُ عَلى قاعِدَةِ
+// الإنتاج» (CLAUDE.md) يُفحَصُ هُنا آليّاً قَبلَ أَن يُفتَحَ مُتَصَفِّح (القاعِدَة ٢)، **لِكُلِّ مَتجَرٍ بِلا اسم** — `ashare` مَتجَرٌ تَجريبِيٌّ
+// كَغَيرِه (قَرارُ المالِك ‏2026-10-28). وما وَراءَ المُضيفِ المَحَلِّيّ — بِأَيِّ قاعِدَةٍ أَقلَعَ — يَحرُسُه `scripts/run.sh` وتَحَقُّقُ المُضيفِ قَبلَ كُلِّ إقلاع.
+static bool IsLoopbackTarget(string url)
+    => Uri.TryCreate(url, UriKind.Absolute, out var u)
+       && (u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps)
+       && (u.IsLoopback || string.Equals(u.Host, "localhost", StringComparison.OrdinalIgnoreCase));
+
+var remote = urls.Select(e => e.Contains('|') ? e[(e.IndexOf('|') + 1)..] : e).Where(u => !IsLoopbackTarget(u)).ToList();
+if (remote.Count > 0)
+{
+    Console.Error.WriteLine($"✗ هَدَفٌ لَيسَ عَلى هذا الجِهاز — لا يُفتَحُ بِمُتَصَفِّح: {string.Join("، ", remote)}");
+    Console.Error.WriteLine("  التَفريغُ عَلى خادِمٍ مَحَلِّيٍّ وَحدَه (localhost أَو 127.0.0.1 أَو ::1)، مَوصولٍ بِقاعِدَةٍ مَحَلِّيَّةٍ أَو فَرعِ Neon مَنسوخ.");
+    return 2;
+}
+Console.WriteLine($"  الأَهداف: {urls.Count} — كُلُّها عَلى هذا الجِهاز");
+
 Directory.CreateDirectory(outDir);
 
 // ─── العُثور على Chrome ─────────────────────────────────────────────
-string? chrome = new[]
+// ‏(‏2026-10-29، د26 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): القائِمَةُ كانَت مَساراتِ ويندوز وَحدَها، فَالأَداةُ عَمياءُ عَلى لينُكس والمُحَرِّكُ
+// مَوجود (القاعِدَة ١٤) — Chromium الَّذي يُثَبِّتُه Playwright تَحتَ `PLAYWRIGHT_BROWSERS_PATH`. فَصارَ: `WSL_CHROME` إن ضُبِطَ (وَحدَه، بِلا سُقوط)،
+// ثُمَّ مَساراتُ ويندوز، ثُمَّ مَساراتُ لينُكس الَّتي يَعرِفُها `verify-runtime.cs`، ثُمَّ مُحَرِّكُ Playwright.
+static IEnumerable<string> PlaywrightChromes()
 {
-    @"C:\Program Files\Google\Chrome\Application\chrome.exe",
-    @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-    @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-    @"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-}.FirstOrDefault(File.Exists);
+    var root = Environment.GetEnvironmentVariable("PLAYWRIGHT_BROWSERS_PATH");
+    if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) yield break;
+    foreach (var dir in Directory.GetDirectories(root, "chromium-*").OrderByDescending(d => d, StringComparer.Ordinal))
+        yield return Path.Combine(dir, "chrome-linux", "chrome");
+}
+
+var chromeOverride = Environment.GetEnvironmentVariable("WSL_CHROME");
+string? chrome = !string.IsNullOrEmpty(chromeOverride)
+    ? (File.Exists(chromeOverride) ? chromeOverride : null)
+    : new[]
+    {
+        @"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        @"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        "/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser",
+    }.Concat(PlaywrightChromes()).FirstOrDefault(File.Exists);
 
 if (chrome is null)
 {
