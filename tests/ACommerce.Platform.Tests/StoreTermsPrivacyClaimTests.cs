@@ -78,14 +78,20 @@ public class StoreTermsPrivacyClaimTests(ITestOutputHelper output)
     // `TermsPolicy.CurrentVersion` — فَالصَفحَةُ تَقولُ «إصدار 1»، وعُضوٌ قَبِلَ الإصدارَ 1 يَمُرُّ ولا يُطلَبُ قَبولُه، وبَندُ الشُروطِ الرابِعُ (`terms.changes.body`) يَعِدُ
     // «سَنُخطِركَ وَنَطلُب القَبول مَرَّة أُخرى لِلإصدار الجَديد».
 
-    /// <summary><b>«اليَوم»</b>: الإصدارُ 1 بَعدَ تَبديلِ البَند — وعُضوٌ قَبِلَ الإصدارَ 1 قَبلَ التَبديلِ يُعَدُّ قابِلاً.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29)</b> — كانَ <c>Today_the_store_terms_changed_under_version_one_and_a_member_who_accepted_version_one_is_not_asked_again</c>
+    /// («TermsPolicy.CurrentVersion = 1»). الإصدارُ 2: عُضوٌ قَبِلَ الإصدارَ 1 يُطلَبُ قَبولُه (سالِب)، ومَن قَبِلَ 2 يَمُرّ (مُوجَب)، والصَفحَةُ تَقولُ الإصدارَ مِن الثابِتِ
+    /// نَفسِه، وبابُ القَبولِ يَكتُبُه — فَوَعدُ البَندِ الرابِعِ «وَنَطلُب القَبول مَرَّة أُخرى لِلإصدار الجَديد» صادِق.</summary>
     [Fact]
-    public void Today_the_store_terms_changed_under_version_one_and_a_member_who_accepted_version_one_is_not_asked_again()
+    public void The_store_terms_are_version_two_after_the_privacy_clause_changed_so_a_version_one_member_re_accepts()
     {
         var acceptedBefore = new ACommerce.Kit.Auth.User { AcceptedTermsVersion = 1, AcceptedTermsAt = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc) };
+        var acceptedNow = new ACommerce.Kit.Auth.User { AcceptedTermsVersion = 2, AcceptedTermsAt = new DateTime(2026, 10, 29, 0, 0, 0, DateTimeKind.Utc) };
         output.WriteLine($"TermsPolicy.CurrentVersion = {ACommerce.Templates.Customer.Marketplace.Gates.TermsPolicy.CurrentVersion}");
-        Assert.Equal(1, ACommerce.Templates.Customer.Marketplace.Gates.TermsPolicy.CurrentVersion);
-        Assert.True(ACommerce.Templates.Customer.Marketplace.Gates.TermsPolicy.IsAccepted(acceptedBefore));
+        Assert.Equal(2, ACommerce.Templates.Customer.Marketplace.Gates.TermsPolicy.CurrentVersion);
+        Assert.False(ACommerce.Templates.Customer.Marketplace.Gates.TermsPolicy.IsAccepted(acceptedBefore));
+        Assert.True(ACommerce.Templates.Customer.Marketplace.Gates.TermsPolicy.IsAccepted(acceptedNow));
         Assert.Contains("وَنَطلُب القَبول مَرَّة أُخرى لِلإصدار الجَديد", LocaleCatalog.Find(LocaleCatalog.Arabic, "terms.changes.body"), StringComparison.Ordinal);
+        Assert.Contains("@L.Markup(\"terms.page.version_label\") @TermsPolicy.CurrentVersion", SellerDisplayNameTests.Code("Components", "Pages", "Terms.razor"), StringComparison.Ordinal);
+        Assert.Contains("new Commands.AcceptTermsCommand(userId, slug, TermsPolicy.CurrentVersion)", SellerDisplayNameTests.Code("MarketplaceTemplateExtensions.cs"), StringComparison.Ordinal);
     }
 }
