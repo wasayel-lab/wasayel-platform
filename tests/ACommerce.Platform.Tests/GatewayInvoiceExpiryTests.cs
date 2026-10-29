@@ -181,6 +181,32 @@ public class GatewayInvoiceExpiryTests(ITestOutputHelper output)
         output.WriteLine($"نُصوصٌ حَيَّة: {keys.Length}");
     }
 
+    // ═══ ٤) تَوصيفُ «اليَوم» — لا شَيءَ يُجَدوِلُ الإلغاء (مُراجَعَةُ تَيّارِ S3 الأولى، ‏2026-10-29) ══════════════════════════════════
+
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم» (القاعِدَة ٣) — فَتحُ الفاتورَةِ لا يُجَدوِلُ شَيئاً، وطَلَبٌ جاوَزَ مُهلَتَه يَبقى قائِماً ما لَم يَعُد مُشتَريه</b> (قَرارُ المالِك د5 (٤) «ب»:
+    /// «يُلغى الطلب كله آليًّا»): الإلغاءُ في <c>VerifyAsync</c> وَحدَها ولا يَبلُغُها إلّا زِرُّ المُشتَري؛ فَبَعدَ ‏25 ساعَةً بِلا تَحَقُّقٍ الصَفقَتانِ قائِمَتان، والبَوّابَةُ لَم تُسأَل
+    /// بَعدَ الفَتح، وصِفرُ <c>ScheduleAsync(</c> وصِفرُ <c>IMessageBus</c> في المَكتَبات. يَحمَرُّ يَومَ يُجَدوَلُ الإلغاءُ عِندَ الفَتح.</para>
+    /// </summary>
+    [Fact]
+    public async Task Today_opening_an_invoice_schedules_nothing_and_an_order_past_its_date_stays_active_until_the_buyer_verifies()
+    {
+        var (w, _) = await OpenedCart(TimeSpan.FromHours(25));
+
+        Assert.All(w.Ids, id => Assert.Equal(DealStatus.Active, Load(w, id).Status));
+        Assert.Equal(new[] { "POST /v1/invoices", $"PUT /v1/invoices/{InvoiceId}" }, Sent(w));
+
+        var files = Directory.EnumerateFiles(Path.Combine(RepoRoot(), "libs"), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+            .Select(f => WriteEndpointGuardTests.StripComments(File.ReadAllText(f)))
+            .ToArray();
+        int Count(string needle) => files.Sum(f => f.Split(needle).Length - 1);
+        var (scheduled, buses, messages) = (Count("ScheduleAsync("), Count("IMessageBus"), Count("GatewayInvoiceExpiryDue"));
+        output.WriteLine($"مِلَفّاتٌ مَفحوصَة: {files.Length} · ScheduleAsync: {scheduled} · IMessageBus: {buses} · GatewayInvoiceExpiryDue: {messages}");
+        Assert.True(files.Length >= 200, $"أَداةٌ عَمياء: {files.Length} مِلَفّاً.");
+        Assert.Equal((0, 0, 0), (scheduled, buses, messages));
+    }
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
