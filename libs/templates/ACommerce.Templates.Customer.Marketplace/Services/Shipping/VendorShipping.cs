@@ -436,7 +436,14 @@ public sealed class VendorShippingService
     /// </summary>
     public const string EntryReadFailed = "vendor_entry_read_failed";
 
-    public static readonly IReadOnlyList<string> Codes = new[] { PasteClosed, TokenMissing, VaultUnavailable, RegisterClosed, EntryUnreadable, RegisterRateLimited, TokenRefused, EntryReadFailed };
+    /// <summary>
+    /// <para><b>بَلَغَ البائِعُ حَدَّ مُحاوَلاتِ التَسجيلِ في ‏24 ساعَة</b> (‏2026-10-29، قَرارُ المالِك د11 (٢)؛ تَوصيفُه <c>57d57b5</c>): <see cref="RegisterDailyLimit"/> سَطرَ
+    /// أَثَرِ «register» لِهذا البائِعِ في هذا المَتجَرِ في آخِرِ <see cref="RegisterDailyWindow"/> — تُعَدُّ مِن القاعِدَةِ لا مِن الذاكِرَة، فَلا تُصَفِّرُها إعادَةُ
+    /// التَشغيل — فَتُرَدُّ الحادِيَةَ عَشرَةَ بِلا سَطرٍ ولا نِداء. وسُطورُ «إعادَةِ تَسجيلِ الوارِد» (<see cref="InboundNote"/>) لا تُعَدّ.</para>
+    /// </summary>
+    public const string RegisterDailyLimited = "vendor_register_daily_limited";
+
+    public static readonly IReadOnlyList<string> Codes = new[] { PasteClosed, TokenMissing, VaultUnavailable, RegisterClosed, EntryUnreadable, RegisterRateLimited, TokenRefused, EntryReadFailed, RegisterDailyLimited };
 
     /// <summary>
     /// <para><b>مِفتاحُ حَدِّ المُحاوَلاتِ في حِصَّةِ الإرسالِ القائِمَة</b> (<c>AuthHandlers.TryConsumeSendQuota</c>، «‏tenant|subject»): بائِعٌ في مَتجَر.
@@ -450,6 +457,35 @@ public sealed class VendorShippingService
 
     /// <summary>فِعلُ سَطرِ الأَثَرِ قَبلَ نِداءِ التَسجيل — يَكتُبُه كاتِبُ الأَثَرِ القائِم (‏ADR-033 الخُطوَة 8).</summary>
     public const string RegisterAuditAction = "provider.vendor.register";
+
+    /// <summary>مُلاحَظَةُ سَطرِ الأَثَرِ قَبلَ «Register» — تَسجيلُ حِسابٍ جَديدٍ عِندَ OTO؛ وهي وَحدَها تُعَدُّ في <see cref="RegisterAttemptsSince"/>.</summary>
+    public const string RegisterNote = "register";
+
+    /// <summary>مُلاحَظَةُ سَطرِ الأَثَرِ حينَ يُعادُ تَسجيلُ وارِدِ حِسابٍ قائِم — لا حِسابَ يُفتَحُ ولا تُعَدُّ في الحَدِّ اليَومِيّ (د11 (٢): «وتُستثنى سطور إعادة تسجيل الوارد»).</summary>
+    public const string InboundNote = "inbound";
+
+    /// <summary>
+    /// <para><b>حَدُّ مُحاوَلاتِ التَسجيلِ الدائِمُ لِلبائِعِ الواحِدِ في المَتجَر</b> (‏2026-10-29، قَرارُ المالِك د11 (٢): «10 محاولات لكل بائع في 24 ساعة … والرقم
+    /// عشرة هو الحدّ القائم نفسه فلا رقم جديد»): العَشرُ حَدُّ الساعَةِ في <c>AuthHandlers.TryConsumeActionQuota</c> بِعَينِه، والنافِذَةُ ‏24 ساعَةً مِن نَصِّ القَرار.
+    /// ويَبقى حَدُّ الساعَةِ كَما هو.</para>
+    /// </summary>
+    public const int RegisterDailyLimit = 10;
+
+    /// <summary>نافِذَةُ الحَدِّ الدائِم — ‏24 ساعَةً تَنزَلِقُ مِن لَحظَةِ المُحاوَلَة (د11 (٢)).</summary>
+    public static readonly TimeSpan RegisterDailyWindow = TimeSpan.FromHours(24);
+
+    /// <summary>
+    /// <para><b>سُطورُ «Register» لِبائِعٍ بِعَينِه مُنذُ لَحظَة — دالَّةٌ نَقِيَّةٌ يُتَرجِمُها Marten</b> (‏2026-10-29، قَرارُ المالِك د11 (٢)): فِعلُ <see cref="RegisterAuditAction"/>
+    /// عَلى مَدخَلِ البائِعِ (<c>delivery:{listing_owner}</c>) بِمُلاحَظَةِ <see cref="RegisterNote"/> لا <see cref="InboundNote"/>، والمَساحَةُ مَساحَةُ المَتجَر. تُقاسُ
+    /// في CI مُجَمَّعَةً عَلى سُطورٍ في الذاكِرَة، وعَلى Postgres كَما تُتَرجَم (نَسَقُ <c>TenantProviderBinding.ActiveVendorEntryOf</c>).</para>
+    /// <para><b>واللَحظَةُ بِتَوقيتٍ عالَمِيٍّ بِلا <c>Kind=Utc</c></b> — مَقيسٌ عَلى Postgres: Marten يُقارِنُ <c>At</c> عَموداً <c>timestamp without time zone</c>،
+    /// وNpgsql يَرمي <c>InvalidUtcDateTimeUsageException</c> عَلى وَسيطٍ بِـ<c>Kind=Utc</c> — فَيُطَبَّعُ كَما يُطَبِّعُ <c>ModelCallRecord.Instant</c>.</para>
+    /// </summary>
+    public static System.Linq.Expressions.Expression<Func<Audit.AuditEntry, bool>> RegisterAttemptsSince(string entryId, DateTime since)
+    {
+        var at = Metering.ModelCallRecord.Instant(since);
+        return a => a.Action == RegisterAuditAction && a.EntityId == entryId && a.Note == RegisterNote && a.At >= at;
+    }
 
     private readonly TenantProviderService _providers;
     private readonly ProviderVault _vault;
@@ -569,6 +605,20 @@ public sealed class VendorShippingService
             if (VendorRegistrationValidator.Validate(sent).FirstOrDefault() is { } invalid)
                 return new(invalid.Code, before, null);
 
+            // (‏2026-10-29، قَرارُ المالِك د11 (٢)؛ تَوصيفُه `57d57b5` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **والحَدُّ الدائِمُ قَبلَ حَدِّ الساعَة** — سُطورُ «register»
+            // لِهذا البائِعِ في آخِرِ ‏24 ساعَةً مِن القاعِدَة، فَلا تُصَفِّرُها إعادَةُ التَشغيل. وعَدٌّ تَعَذَّرَت قِراءَتُه لا يُقرَأُ صِفراً ولا يَرُدّ: يَبقى حَدُّ الساعَةِ
+            // تَحتَه، وكِتابَةُ الأَثَرِ بَعدَه تَسقُطُ مَعَ قاعِدَةٍ مُعَطَّلَةٍ قَبلَ أَيِّ نِداء (السِجِلُّ «أ» S4).
+            var tried = await _audit.CountAsync(tenantSlug, RegisterAttemptsSince(entryId, DateTime.UtcNow - RegisterDailyWindow), ct);
+            if (tried is null)
+                _log.LogWarning("[OTO] vendor {Slug}/{Owner} ← register daily count unread — the hourly bound alone applies",
+                    tenantSlug, owner.ToString("D"));
+            else if (tried >= RegisterDailyLimit)
+            {
+                _log.LogInformation("[OTO] vendor {Slug}/{Owner} ← register refused ({Code}, {Tried} in {Hours} h)",
+                    tenantSlug, owner.ToString("D"), RegisterDailyLimited, tried, RegisterDailyWindow.TotalHours);
+                return new(RegisterDailyLimited, before, null);
+            }
+
             if (!global::ACommerce.Kit.Auth.Server.AuthHandlers.TryConsumeActionQuota(RegisterAttemptKey(tenantSlug, owner)))
             {
                 _log.LogInformation("[OTO] vendor {Slug}/{Owner} ← register refused ({Code})",
@@ -577,7 +627,7 @@ public sealed class VendorShippingService
             }
 
             await _audit.WriteAsync(tenantSlug, owner, vendor.Name, RegisterAuditAction, "provider", entryId,
-                note: "register", ip: ip, ct: ct);
+                note: RegisterNote, ip: ip, ct: ct);
             // (‏2026-10-13، G5 (xiii)): الرَمزُ مَقصوصاً — القِراءَةُ نَفسُها الَّتي فَتَحَت هذا المَسار (`Input == Register`)، فَلا يَكونُ null هُنا.
             var registered = await _oto.RegisterVendorAsync(VendorShippingSurface.MarketplaceTokenOf(_opts)!, sent.ToOto(), ct);
             if (registered.Value is not { } account)
@@ -599,7 +649,7 @@ public sealed class VendorShippingService
             catch (CryptographicException) { return new(EntryUnreadable, before, null); }
 
             await _audit.WriteAsync(tenantSlug, owner, vendor.Name, RegisterAuditAction, "provider", entryId,
-                note: "inbound", ip: ip, ct: ct);
+                note: InboundNote, ip: ip, ct: ct);
         }
 
         var saved = await ConnectAsync(tenantSlug, owner, token, inboundUrl, kept, ct);

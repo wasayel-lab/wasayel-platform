@@ -218,7 +218,8 @@ public class VendorShippingTests(ITestOutputHelper output)
         output.WriteLine($"رُموزُ سَطحِ البائِع: {codes.Length} — {string.Join(" · ", codes)}");
         // (‏2026-10-13، G5 (ii)): والخِدمَةُ ‏6 ← 7 (`vendor_token_refused` — رَمزٌ مَلصوقٌ تَرُدُّه OTO لا يُحفَظ)؛ فَالعَدُّ ‏28 ← 29.
         // (‏2026-10-13، G5 (iii)): والخِدمَةُ ‏7 ← 8 (`vendor_entry_read_failed` — قِراءَةُ المَدخَلِ تَرمي فَلا تَسجيلَ ولا لَصق)؛ فَالعَدُّ ‏29 ← 30.
-        Assert.Equal(30, codes.Length);
+        // (‏2026-10-29، قَرارُ المالِك د11 (٢)): والخِدمَةُ ‏8 ← 9 (`vendor_register_daily_limited` — الحَدُّ الدائِمُ مِن سُطورِ الأَثَر)؛ فَالعَدُّ ‏30 ← 31.
+        Assert.Equal(31, codes.Length);
         Assert.Equal(codes.Length, codes.Distinct(StringComparer.Ordinal).Count());
         foreach (var code in codes)
         {
@@ -1215,8 +1216,11 @@ public class VendorShippingTests(ITestOutputHelper output)
     // التَشغيلِ تُصَفِّرُه، والسَقفُ اليَومِيُّ ‏240 نِداءً لِلبائِعِ الواحِد. وسُطورُ الأَثَرِ `provider.vendor.register` («register») مَحفوظَةٌ في القاعِدَةِ ولا
     // يَقرَؤُها شَيء. ونَصُّ الحَدِّ «أَعِدِ المُحاوَلَةَ بَعدَ ساعَة». يَنقَلِبُ الصَفُّ بِاسمِه، وصَفُّه الحَيُّ في `LiveVendorShippingProofTests`.
 
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د11 (٢)؛ كانَ <c>Today_the_register_bound_is_the_in_memory_hour_alone_and_its_text_says_an_hour</c>،
+    /// مُودَعٌ في <c>57d57b5</c>): <c>RegisterAsync</c> يَعُدُّ سُطورَ الأَثَرِ المَحفوظَةَ (<c>_audit.CountAsync</c> بِـ<see cref="VendorShippingService.RegisterAttemptsSince"/>)
+    /// قَبلَ حَدِّ الساعَةِ القائِمِ الباقي؛ والمَعجَمُ تِسعَة؛ ونَصُّ الحَدِّ اليَومِيِّ «بَعدَ 24 ساعَة»، ونَصُّ حَدِّ الساعَةِ «بَعدَ ساعَة» صادِقٌ لِرَمزِه كَما كان.</summary>
     [Fact]
-    public void Today_the_register_bound_is_the_in_memory_hour_alone_and_its_text_says_an_hour()
+    public void The_register_bound_counts_the_stored_audit_lines_before_the_hour_and_its_text_says_24_hours()
     {
         var code = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
             "libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Shipping/VendorShipping.cs")));
@@ -1224,10 +1228,59 @@ public class VendorShippingTests(ITestOutputHelper output)
         var to = code.IndexOf("public string? TakeActivationLink(", from, StringComparison.Ordinal);
         Assert.True(from > 0 && to > from, "أَداةٌ عَمياء: RegisterAsync لَم تُقرَأ.");
         var register = code[from..to];
-        Assert.Contains("TryConsumeActionQuota(RegisterAttemptKey(tenantSlug, owner))", register, StringComparison.Ordinal);
-        Assert.DoesNotContain("_audit.CountAsync(", register, StringComparison.Ordinal);
-        Assert.Equal(8, VendorShippingService.Codes.Count);
+        var count = register.IndexOf("_audit.CountAsync(tenantSlug, RegisterAttemptsSince(entryId, DateTime.UtcNow - RegisterDailyWindow), ct)", StringComparison.Ordinal);
+        var hour = register.IndexOf("TryConsumeActionQuota(RegisterAttemptKey(tenantSlug, owner))", StringComparison.Ordinal);
+        var audit = register.IndexOf("_audit.WriteAsync(", StringComparison.Ordinal);
+        var call = register.IndexOf("_oto.RegisterVendorAsync(", StringComparison.Ordinal);
+        output.WriteLine($"RegisterAsync: عَدّ={count} · ساعَة={hour} · أَثَر={audit} · نِداء={call}");
+        Assert.True(count > 0 && hour > count && audit > hour && call > audit, $"التَرتيبُ مَكسور: {count}/{hour}/{audit}/{call}");
+        Assert.Equal(9, VendorShippingService.Codes.Count);
+        Assert.Contains(VendorShippingService.RegisterDailyLimited, VendorShippingService.Codes);
+        Assert.Equal("بَلَغتَ حَدَّ مُحاوَلاتِ التَّسجيلِ اليَوم — أَعِدِ المُحاوَلَةَ بَعدَ 24 ساعَة.",
+            LocaleCatalog.Text(LocaleCatalog.Arabic, "shipping.vendor.err_" + VendorShippingService.RegisterDailyLimited));
         Assert.Contains("بَعدَ ساعَة", LocaleCatalog.Text(LocaleCatalog.Arabic, "shipping.vendor.err_" + VendorShippingService.RegisterRateLimited), StringComparison.Ordinal);
+        Assert.Equal((10, 24.0), (VendorShippingService.RegisterDailyLimit, VendorShippingService.RegisterDailyWindow.TotalHours));
+    }
+
+    /// <summary>الشَرطُ النَقِيُّ مُجَمَّعاً عَلى سُطورٍ في الذاكِرَة — مُوجَبُه سَطرُ «register» لِهذا المَدخَلِ داخِلَ النافِذَة، وسالِبُه: «inbound»، وأَقدَمُ مِن النافِذَة،
+    /// ومَدخَلُ بائِعٍ آخَر، وفِعلٌ آخَر. وما يُتَرجِمُه Marten يُقاسُ عَلى Postgres (<c>LiveVendorShippingProofTests</c>).</summary>
+    [Fact]
+    public void RegisterAttemptsSince_counts_register_lines_of_this_vendor_inside_the_window_only()
+    {
+        var owner = Guid.NewGuid();
+        var entryId = TenantProviderBinding.VendorEntryId(ProviderCapabilities.Delivery, owner);
+        var now = DealShipTests.Now.UtcDateTime;
+        ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry Line(string note = VendorShippingService.RegisterNote, string? entity = null,
+            double hoursAgo = 1, string action = VendorShippingService.RegisterAuditAction) => new()
+        {
+            Id = Guid.NewGuid(), Scope = Slug, ActorId = owner, Action = action, EntityType = "provider",
+            EntityId = entity ?? entryId, Note = note, At = now.AddHours(-hoursAgo),
+        };
+        var counts = VendorShippingService.RegisterAttemptsSince(entryId, now - VendorShippingService.RegisterDailyWindow).Compile();
+        Assert.True(counts(Line()));
+        Assert.True(counts(Line(hoursAgo: 23.9)));
+        Assert.False(counts(Line(note: VendorShippingService.InboundNote)));
+        Assert.False(counts(Line(hoursAgo: 24.1)));
+        Assert.False(counts(Line(entity: TenantProviderBinding.VendorEntryId(ProviderCapabilities.Delivery, Guid.NewGuid()))));
+        Assert.False(counts(Line(action: "provider.bind")));
+        Assert.Equal("register", VendorShippingService.RegisterNote);
+        Assert.Equal("inbound", VendorShippingService.InboundNote);
+    }
+
+    /// <summary>وعَدٌّ تَعَذَّرَت قِراءَتُه (عالَمُ الوَثائِقِ لا يُنَفِّذُ الاستِعلام) لا يُقرَأُ صِفراً ولا يَرُدّ: يَمضي التَسجيلُ تَحتَ حَدِّ الساعَةِ القائِم، وسَطرُ
+    /// الفَشَلِ في مَجرى الخَطَإ يُسَمّي المَساحَة — فَلا يَلتَبِسُ «لَم يُقرَأ» بِـ«أَقَلُّ مِن عَشر».</summary>
+    [Fact]
+    public async Task A_daily_count_that_cannot_be_read_leaves_the_hourly_bound_and_says_so()
+    {
+        var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
+        var surface = Surface(w, Registering());
+        VendorShippingResult? res = null;
+        var stderr = await StderrOfAsync(async () => res = await surface.RegisterAsync(Slug, Registrant(Guid.NewGuid()), Form(), Inbound));
+        output.WriteLine($"التَسجيل: {res!.Code ?? "ok"} · مَجرى الخَطَإ: «{stderr.Trim()}»");
+        Assert.True(res.Ok, res.Code);
+        Assert.Contains("[audit]", stderr, StringComparison.Ordinal);
+        Assert.Contains($"«{Slug}»", stderr, StringComparison.Ordinal);
+        Assert.Equal(1, w.Oto.CallsTo(OtoClient.RegisterPath));
     }
 
     /// <summary>
@@ -1643,11 +1696,12 @@ public class LiveVendorShippingProofTests(ITestOutputHelper output)
         }
     }
     /// <summary>
-    /// <para><b>توصيفُ «اليَوم» قَبلَ قَرارِ المالِك د11 (٢) عَلى Postgres</b> (‏2026-10-29): عَشرَةُ سُطورِ أَثَرِ «register» لِهذا البائِعِ في هذا المَتجَرِ
-    /// قَبلَ ساعَتَين — مَحفوظَةٌ في القاعِدَة — ومِفتاحُ الحِصَّةِ لَم يَرَه هذا الخادِمُ قَطّ (إعادَةُ تَشغيل): المُحاوَلَةُ الحادِيَةَ عَشرَةَ تَبلُغُ OTO وتَكتُبُ سَطراً.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د11 (٢)؛ كانَ <c>Today_ten_register_lines_in_the_last_day_do_not_stop_an_eleventh_after_a_restart_on_Postgres</c>،
+    /// مُودَعٌ في <c>57d57b5</c>): عَشرَةُ سُطورِ أَثَرِ «register» لِهذا البائِعِ في هذا المَتجَرِ قَبلَ ساعَتَين، ومِفتاحُ الحِصَّةِ لَم يَرَه هذا الخادِمُ قَطّ (إعادَةُ
+    /// تَشغيل): المُحاوَلَةُ الحادِيَةَ عَشرَةَ تُرَدُّ بِـ<c>vendor_register_daily_limited</c> — صِفرُ نِداءٍ وصِفرُ سَطرٍ جَديد.</para>
     /// </summary>
     [Fact]
-    public async Task Today_ten_register_lines_in_the_last_day_do_not_stop_an_eleventh_after_a_restart_on_Postgres()
+    public async Task Ten_register_lines_in_the_last_day_refuse_an_eleventh_after_a_restart_without_a_line_or_a_call_on_Postgres()
     {
         if (!Enabled) return;
 
@@ -1683,15 +1737,79 @@ public class LiveVendorShippingProofTests(ITestOutputHelper output)
             await using var q = store.QuerySession(slug);
             var lines = await q.Query<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>().CountAsync(a => a.EntityId == entryId);
             output.WriteLine($"الحادِيَةَ عَشرَة: {res.Code ?? "ok"} · نِداءاتُ Register: {oto.CallsTo(OtoClient.RegisterPath)} · سُطورُ الأَثَر: {lines}");
-            Assert.Equal(OtoFailures.Refused, res.Code);
-            Assert.Equal(1, oto.CallsTo(OtoClient.RegisterPath));
-            Assert.Equal(11, lines);
+            Assert.Equal(VendorShippingService.RegisterDailyLimited, res.Code);
+            Assert.Equal(0, oto.CallsTo(OtoClient.RegisterPath));
+            Assert.Equal(10, lines);
         }
         finally
         {
             await using var s = store.LightweightSession(slug);
             foreach (var a in await s.Query<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>().ToListAsync()) s.Delete(a);
             await s.SaveChangesAsync();
+        }
+    }
+    /// <summary>
+    /// <para><b>وسالِبُه عَلى Postgres</b> (‏2026-10-29، قَرارُ المالِك د11 (٢)): ما لا يُعَدّ — تِسعَةُ سُطورِ «register» داخِلَ النافِذَة، وخَمسَةٌ أَقدَمُ مِن ‏24 ساعَة،
+    /// وخَمسَةُ «inbound»، وخَمسَةٌ لِبائِعٍ آخَرَ في المَتجَر، وخَمسَةٌ لِلبائِعِ نَفسِه في مَتجَرٍ آخَر — فَالمُحاوَلَةُ تَبلُغُ OTO (نِداءٌ واحِد) وتَكتُبُ العاشِرَ؛
+    /// والحادِيَةَ عَشرَةَ بَعدَها تُرَدُّ بِرَمزِها: الشَرطُ كَما يُتَرجِمُه Marten يَعُدُّ ما يَعُدُّه في الذاكِرَة.</para>
+    /// </summary>
+    [Fact]
+    public async Task Only_this_vendors_register_lines_of_the_last_day_in_this_store_count_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var (slug, other) = ("vs-zz-dn-" + Guid.NewGuid().ToString("N")[..8], "vs-zz-do-" + Guid.NewGuid().ToString("N")[..8]);
+        var (owner, neighbour) = (Guid.NewGuid(), Guid.NewGuid());
+        try
+        {
+            var entryId = TenantProviderBinding.VendorEntryId(ProviderCapabilities.Delivery, owner);
+            ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry Line(string scope, string entity, string note, double hoursAgo) => new()
+            {
+                Id = Guid.NewGuid(), Scope = scope, ActorId = owner, ActorName = "بائِع",
+                Action = VendorShippingService.RegisterAuditAction, EntityType = "provider", EntityId = entity,
+                Note = note, At = DateTime.UtcNow.AddHours(-hoursAgo),
+            };
+            await using (var seed = store.LightweightSession(slug))
+            {
+                for (var i = 0; i < 9; i++) seed.Store(Line(slug, entryId, VendorShippingService.RegisterNote, 2 + i));
+                for (var i = 0; i < 5; i++) seed.Store(Line(slug, entryId, VendorShippingService.RegisterNote, 25 + i));
+                for (var i = 0; i < 5; i++) seed.Store(Line(slug, entryId, VendorShippingService.InboundNote, 1 + i));
+                for (var i = 0; i < 5; i++)
+                    seed.Store(Line(slug, TenantProviderBinding.VendorEntryId(ProviderCapabilities.Delivery, neighbour), VendorShippingService.RegisterNote, 1 + i));
+                await seed.SaveChangesAsync();
+            }
+            await using (var seed = store.LightweightSession(other))
+            {
+                for (var i = 0; i < 5; i++) seed.Store(Line(other, entryId, VendorShippingService.RegisterNote, 1 + i));
+                await seed.SaveChangesAsync();
+            }
+
+            var oto = new OtoRouteHandler();
+            oto.Routes[OtoClient.RegisterPath] = _ => OtoRouteHandler.Json(HttpStatusCode.BadRequest, "{\"success\": false}");
+            var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, MarketplaceToken = "MKT-live" });
+            var surface = new VendorShippingService(new TenantProviderService(store), DealShipTests.NewVault(),
+                new OtoClient(new HttpClient(oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options,
+                new ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditWriter(store),
+                new ACommerce.Templates.Customer.Marketplace.Services.Api.ApiKeyRevealStore(
+                    new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions())));
+
+            var tenth = await surface.RegisterAsync(slug, VendorShippingTests.Registrant(owner), VendorShippingTests.Form(), "https://wasayel.example/x");
+            var eleventh = await surface.RegisterAsync(slug, VendorShippingTests.Registrant(owner), VendorShippingTests.Form(), "https://wasayel.example/x");
+
+            output.WriteLine($"العاشِرَة: {tenth.Code ?? "ok"} · الحادِيَةَ عَشرَة: {eleventh.Code ?? "ok"} · نِداءاتُ Register: {oto.CallsTo(OtoClient.RegisterPath)}");
+            Assert.Equal(OtoFailures.Refused, tenth.Code);
+            Assert.Equal(VendorShippingService.RegisterDailyLimited, eleventh.Code);
+            Assert.Equal(1, oto.CallsTo(OtoClient.RegisterPath));
+        }
+        finally
+        {
+            foreach (var scope in new[] { slug, other })
+            {
+                await using var s = store.LightweightSession(scope);
+                foreach (var a in await s.Query<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>().ToListAsync()) s.Delete(a);
+                await s.SaveChangesAsync();
+            }
         }
     }
 }

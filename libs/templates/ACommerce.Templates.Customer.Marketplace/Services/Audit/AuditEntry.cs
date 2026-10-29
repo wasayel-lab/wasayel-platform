@@ -59,6 +59,26 @@ public sealed class AuditWriter
         await s.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// <para><b>عَدُّ سُطورِ الأَثَرِ في مَساحَةٍ بِشَرطٍ — أَو <c>null</c> حينَ تَتَعَذَّرُ القِراءَة</b> (‏2026-10-29، قَرارُ المالِك د11 (٢): «تُعدّ من سجلّ الأثر
+    /// المحفوظ في القاعدة لا من ذاكرة الخادم»). الشَرطُ يَبنيه المُنادي دالَّةً نَقِيَّةً تُقاسُ بِلا قاعِدَة؛ والفَشَلُ سَطرٌ في مَجرى الخَطَإ ولا يُقرَأُ صِفراً —
+    /// يُقَرِّرُ المُنادي ما يَعنيه (مُستَهلِكُه <c>VendorShippingService.RegisterAsync</c>).</para>
+    /// </summary>
+    public async Task<int?> CountAsync(
+        string scope, System.Linq.Expressions.Expression<Func<AuditEntry, bool>> where, CancellationToken ct = default)
+    {
+        try
+        {
+            await using var s = _store.QuerySession(scope);
+            return await s.Query<AuditEntry>().CountAsync(where, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Console.Error.WriteLine($"[audit] عَدُّ سُطورِ الأَثَرِ في «{scope}» تَعَذَّر: {ex.GetType().Name}");
+            return null;
+        }
+    }
+
     public async Task<List<AuditEntry>> ListAsync(
         string scope, int take = 200, CancellationToken ct = default)
     {
