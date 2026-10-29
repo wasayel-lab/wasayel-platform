@@ -556,7 +556,10 @@ public class DealConcurrencyRefusalTests
             // (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (ii)؛ ولا يُعادُ حَرفٌ فَوقَه: `DisputeAsync` صارَت تُرجِعُ `DealDisputeResult` لا `Deal?`،
             // فَتَبَدَّلَ حَرفُ عَلامَتَي المَقطَعِ وَحدَه — والمَقطَعانِ والعَدّانِ بِحَرفِهِما.)
             ("CancelAsync",             "public async Task<DealCancelResult> CancelAsync(",  "public async Task<DealDisputeResult> DisputeAsync("),
-            ("DisputeAsync",            "public async Task<DealDisputeResult> DisputeAsync(", "public async Task<Deal?> AttachRefAsync("),
+            // (‏2026-10-29، قَرارُ المالِك د38 — ولا يُعادُ حَرفٌ فَوقَه: بابٌ تاسِعٌ بَعدَ `DisputeAsync` — حَسمُ النِزاعِ بِيَدِ صاحِبِ المَتجَر — فَصارَ مَقطَعُ
+            // `DisputeAsync` يَنتَهي عِندَه؛ والاستِئنافُ لَه التِقاطُه، والإلغاءُ يَمُرُّ بِـ`CancelCoreAsync` الَّتي تَلتَقِط.)
+            ("DisputeAsync",            "public async Task<DealDisputeResult> DisputeAsync(", "public async Task<DealResolveResult> ResolveDisputeAsync("),
+            ("ResolveDisputeAsync",     "public async Task<DealResolveResult> ResolveDisputeAsync(", "public async Task<Deal?> AttachRefAsync("),
             ("AttachRefAsync",          "public async Task<Deal?> AttachRefAsync(",          "public async Task<Deal?> LoadAsync("),
             // ‏ADR-032 الخُطوَة 10 (تَيّارُ S9، ‏2026-10-12): بابٌ سابِعٌ يَكتُبُ بِحَلقَةِ الإلحاقِ نَفسِها (`RecordAsync` — تَقرَأُ ثُمَّ تُعيدُ عِندَ
             // التَعارُض)، فَالتِقاطُه التِقاطُها ومَقطَعُه يَبلُغُها؛ ولا حِفظَ لَه ولا التِقاطَ خاصَّين.
@@ -568,11 +571,13 @@ public class DealConcurrencyRefusalTests
         // سَبعَةُ أَبوابٍ وسِتَّةُ مَواضِعِ التِقاط (‏2026-10-12): الإلحاقُ وتَأكيدُ دَفعِ البَوّابَةِ يَشتَرِكانِ في حَلقَةِ `RecordAsync` — وكانَ
         // العَدَدانِ واحِداً (`writers.Length`) حينَ كانَ لِكُلِّ بابٍ التِقاطُه.
         // وسَبعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د4): التِقاطُ `EnterPaidOnRecordAsync`.
-        Assert.Equal(7, Count(service, "catch (JasperFx.ConcurrencyException)"));
+        // وثَمانِيَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د38): التِقاطُ استِئنافِ `ResolveDisputeAsync`.
+        Assert.Equal(8, Count(service, "catch (JasperFx.ConcurrencyException)"));
         Assert.DoesNotContain("SaveChangesAsync(", Segment(service, "public async Task<IReadOnlyList<Deal>> ConfirmGatewayPaymentAsync(", "private Task<Deal?> RecordAsync("), StringComparison.Ordinal);
 
         // كُلُّ `SaveChangesAsync(` في الخِدمَةِ مَحسوب: سِتَّة — الإدراجُ والتَعيينُ والانتِقالُ والإلغاءُ والنِزاعُ والإلحاق.
-        Assert.Equal(6, Count(service, "SaveChangesAsync("));
+        // وسَبعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د38): حِفظُ الاستِئنافِ في `ResolveDisputeAsync`.
+        Assert.Equal(7, Count(service, "SaveChangesAsync("));
         Assert.DoesNotContain("catch (JasperFx.ConcurrencyException)", Segment(service, "public async Task<Deal> StartAsync(", "public async Task<Deal?> AssignCounterpartyAsync("), StringComparison.Ordinal);
         Assert.DoesNotContain("SaveChangesAsync(", Segment(service, "public async Task<Deal?> BindListingOwnerAsync(", "public async Task<DealAcceptResult> AcceptAsync("), StringComparison.Ordinal);
     }

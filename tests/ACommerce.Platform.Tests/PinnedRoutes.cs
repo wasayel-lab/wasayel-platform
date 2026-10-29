@@ -165,6 +165,9 @@ internal static class PinnedRoutes
         "/studio/apps/{slug}/deals/{id:guid}/advance",
         "/studio/apps/{slug}/deals/{id:guid}/cancel",
         "/studio/apps/{slug}/deals/{id:guid}/dispute",
+        // ‏2026-10-29 (قَرارُ المالِك د38): بابُ حَسمِ النِزاعِ بِجِوارِ بابِ فَتحِه — شَكلُ أَخَواتِه الثَلاثِ بِحَرفِه: `StudioOwnsAsync(store, …)` حارِسُ مِلكِيَّةِ
+        // المَتجَرِ في الاستوديو يَقرَأُ وَثيقَةَ `Tenant` العامَّة، والكِتابَةُ في `DealsService.ResolveDisputeAsync`؛ ويُرفَعُ مَعَهُنَّ يَومَ يُرَحَّلنَ إلى Wolverine.Http.
+        "/studio/apps/{slug}/deals/{id:guid}/resolve",
         "/studio/apps/{slug}/branding/save",
         "/studio/apps/{slug}/categories/save",
         "/studio/apps/{slug}/roles/save",

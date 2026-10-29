@@ -280,7 +280,8 @@ public class DealNoticesTests
         // وثَمانِيَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د3): `NotifyStoreOwnerAsync` ثامِنَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
         // وتِسعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د5 (٤)): `NotifyPaymentExpiredAsync` تاسِعَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
         // وعَشَرَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د9 (١) «أ»): `NotifyInterventionAsync` عاشِرَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
-        Assert.Equal(10, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
+        // وأَحَدَ عَشَرَ مُنذُ ‏2026-10-29 (قَرارُ المالِك د38 (٣) «أ»): `NotifyDisputeResolvedAsync` حادِيَةَ عَشرَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
+        Assert.Equal(11, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
     }
 
     /// <summary><c>/checkout/submit</c>: الصَفَقاتُ ذَواتُ المالِكِ تُجمَعُ في الحَلقَةِ،

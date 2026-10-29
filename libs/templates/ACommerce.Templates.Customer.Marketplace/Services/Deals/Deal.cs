@@ -125,6 +125,11 @@ public sealed record DealEvent(
     /// لِلمُشتَري «لا تَدفَع» ولِصاحِبِ المَتجَرِ «ألغِها مِن لَوحَةِ ميسر».</summary>
     public const string GatewayInvoiceLeftOpen = "gateway_invoice_left_open";
 
+    /// <summary>حَسَمَ صاحِبُ المَتجَرِ نِزاعاً بِاستِئنافِ الصَفقَةِ مِن مَرحَلَتِها (‏2026-10-29، قَرارُ المالِك د38 (٢) «ج») — يَكتُبُه
+    /// <c>DealsService.ResolveDisputeAsync</c> وَحدَه بِمَرحَلَةٍ لا تَتَحَرَّك، و<c>Note</c> سَبَبُه كَما كَتَبَه؛ والنَصُّ مِن القامُوسِ عِندَ العَرض. والبَديلُ
+    /// الآخَرُ (الإلغاء) يَكتُبُ سَطرَ <c>cancelled</c> بِكاتِبِ الإلغاءِ القائِمِ نَفسِه.</summary>
+    public const string DisputeResumed = "dispute_resumed";
+
     /// <summary>سَطرُ مَرجِعٍ أُلحِق — يَكتُبُه <c>DealsService.AttachRefAsync</c> وَحدَه بِنَصِّ <c>attach {key}={value}</c>، ويَقرَؤُه
     /// <c>DealRefLabels</c> لِصَفحَةِ الطَرَفَين (‏2026-10-13، G4 (xxvi)). الثابِتُ هُنا لِأَنّ الكاتِبَ والقارِئَ يَقرَآنِ نَفسَ الحَرف.</summary>
     public const string RefNote = "note";

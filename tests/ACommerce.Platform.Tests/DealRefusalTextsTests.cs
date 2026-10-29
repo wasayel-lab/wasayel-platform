@@ -215,7 +215,8 @@ public class DealRefusalTextsTests
             "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs"));
         // (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (i)؛ ولا يُعادُ حَرفٌ فَوقَه: وثالِثٌ — نُقطَةُ الإلغاءِ الإدارِيَّةُ في الاستوديو تَرتَدُّ بِرَمزِها
         // إلى صَفحَتِها، وتَقرَؤُه بِمَعجَمِ الاستوديو `DealRefusalTexts.StudioKeyFor` لا بِهذا — `StudioDealRefusalTests`؛ العَدُّ 2 ← 3.)
-        Assert.Equal(3, endpoints.Split("$\"?err={res.Violation!.Code}\"").Length - 1);
+        // (‏2026-10-29، قَرارُ المالِك د38 — ولا يُعادُ حَرفٌ فَوقَه: ورابِعٌ — بابُ حَسمِ النِزاعِ في الاستوديو يَرتَدُّ بِرَمزِه إلى صَفحَتِه بِمَعجَمِ الاستوديو؛ 3 ← 4.)
+        Assert.Equal(4, endpoints.Split("$\"?err={res.Violation!.Code}\"").Length - 1);
         // و`/advance` يَرتَدُّ بِرَمزِ نَتيجَتِه حينَ يوجَد (‏ADR-036): اليَومَ تَعارُضُ النُسخَةِ وَحدَه.
         // (‏2026-10-12، مُراجَعَةُ تَيّارِ S7 الثانِيَة — ولا يُعادُ حَرفٌ فَوقَه: ومَعَه `deal_awaits_carrier`، والجِسمُ نَفسُه لَم يُمَسّ.)
         Assert.Equal(1, endpoints.Split("(res.Code is { } code ? $\"?err={code}\" : \"\")").Length - 1);

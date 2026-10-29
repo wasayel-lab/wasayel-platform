@@ -708,13 +708,19 @@ public sealed class DealsService
     /// </summary>
     private async Task<DealCancelResult> CancelCoreAsync(
         string tenantSlug, Guid dealId, DealCanceller by,
-        string reason, bool wholeInvoice, CancellationToken ct)
+        string reason, bool wholeInvoice, CancellationToken ct, bool resolvingDispute = false)
     {
         var (actorId, actorName) = (by.ActorId, by.ActorName);
         await using var s = _store.LightweightSession(tenantSlug);
         var loaded = await s.LoadAsync<Deal>(dealId, ct);
 
-        var violation = DealCancelAuthorization.Validate(loaded, by);
+        // (‏2026-10-29، قَرارُ المالِك د38 (٢) «ج» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وحَسمُ النِزاعِ بِالإلغاءِ يَمُرُّ بِهذا الجِسمِ نَفسِه** — «إلغاء مع تسجيل
+        // استرجاع مستحقّ إن كانت مدفوعة» بِأَثَرِ الإلغاءِ الماليِّ القائِمِ أَدناه حَرفاً — وبَوّابَتُه بَوّابَةُ الحَسم (`DealDisputeResolution`: صاحِبُ المَتجَرِ
+        // و`Disputed`) لا بَوّابَةُ الإلغاء (`Active`)؛ عَلى الوَثيقَةِ الَّتي سَتُكتَب، قَبلَ أَيِّ كِتابَة. ومُناديه `ResolveDisputeAsync` وَحدَه.
+        var violation = resolvingDispute
+            ? DealDisputeResolution.Validate(loaded, by, DealDisputeResolution.Cancel) is { } unresolvable
+                ? new DealCancelViolation(unresolvable.Code, unresolvable.MessageAr) : null
+            : DealCancelAuthorization.Validate(loaded, by);
         if (violation is not null) return DealCancelResult.Refused(violation, loaded);
         // ‏`Validate` تَرُدّ `deal_not_found` عِندَ العَدَم، فَما بَعدَها غَيرُ عَدَم.
         var deal = loaded!;
@@ -829,6 +835,41 @@ public sealed class DealsService
         try { await s.SaveChangesAsync(ct); }
         catch (JasperFx.ConcurrencyException) { return new(false, await LoadAsync(tenantSlug, dealId, ct), ChangedMeanwhile); }
         return new(true, deal, null);
+    }
+
+    /// <summary>
+    /// <para><b>حَسمُ نِزاعٍ عَلى صَفقَة — بِيَدِ صاحِبِ المَتجَر</b> (‏2026-10-29، قَرارُ المالِك د38): «إلغاء مع تسجيل استرجاع مستحقّ إن كانت مدفوعة، أو
+    /// استئناف من المرحلة نفسها». <b>والحارِسُ في التَوقيع</b> (القاعِدَة ٦): <see cref="DealCanceller"/> إلزامِيٌّ ويَقولُ السُلطَة، والقَرارُ كُلُّه في
+    /// <see cref="DealDisputeResolution.Validate"/> النَقِيَّة — عَلى الوَثيقَةِ الَّتي سَتُكتَبُ في البَديلَين، قَبلَ أَيِّ كِتابَة.</para>
+    /// <para><b>الإلغاءُ لا كاتِبَ ثانِيَ لَه</b>: يَمُرُّ بِـ<c>CancelCoreAsync</c> نَفسِها بِبَوّابَةِ الحَسم — فَالمَدفوعَةُ بِمُزَوِّدِ النُسخَةِ تُستَرجَعُ آلِيّاً،
+    /// والمَقبوضَةُ عِندَ بَوّابَةِ المَتجَرِ يُكتَبُ لَها «استِرجاعُه مُستَحَقّ»، وفاتورَةٌ لَم تُدفَع تُلغى إن كانَت آخِرَ ما تَدفَعُ لَه — بِحَرفِ ما يَفعَلُه كُلُّ إلغاء.
+    /// <b>والاستِئنافُ</b>: <c>Active</c> بِمَرحَلَتِها، وسَطرُ <see cref="DealEvent.DisputeResumed"/> بِسَبَبِه؛ وتَعارُضُ النُسخَةِ يُرَدُّ بِرَمزِه (‏ADR-036).
+    /// والإشعارُ لِلطَرَفَينِ عِندَ النُقطَة (<see cref="DealNotices.NotifyDisputeResolvedAsync"/>).</para>
+    /// </summary>
+    public async Task<DealResolveResult> ResolveDisputeAsync(
+        string tenantSlug, Guid dealId, DealCanceller by, string? outcome, string reason, CancellationToken ct = default)
+    {
+        if (outcome == DealDisputeResolution.Cancel)
+        {
+            var cancelled = await CancelCoreAsync(tenantSlug, dealId, by, reason, wholeInvoice: false, ct, resolvingDispute: true);
+            return cancelled.Ok
+                ? DealResolveResult.Resolved(cancelled.Deal!, DealDisputeResolution.Cancel)
+                : DealResolveResult.Refused(new(cancelled.Violation!.Code, cancelled.Violation.MessageAr), cancelled.Deal);
+        }
+
+        await using var s = _store.LightweightSession(tenantSlug);
+        var deal = await s.LoadAsync<Deal>(dealId, ct);
+        if (DealDisputeResolution.Validate(deal, by, outcome) is { } refused) return DealResolveResult.Refused(refused, deal);
+        deal!.Status = DealStatus.Active;
+        deal.UpdatedAt = DateTime.UtcNow;
+        deal.Timeline.Add(new(deal.Stage, deal.Stage, DealEvent.DisputeResumed, by.ActorId, by.ActorName, reason, DateTime.UtcNow));
+        s.Store(deal);
+        try { await s.SaveChangesAsync(ct); }
+        catch (JasperFx.ConcurrencyException)
+        {
+            return DealResolveResult.Refused(new(ChangedMeanwhile, ChangedMeanwhileAr), await LoadAsync(tenantSlug, dealId, ct));
+        }
+        return DealResolveResult.Resolved(deal, DealDisputeResolution.Resume);
     }
 
     /// <summary>كَم مَرَّةً يُحاوَلُ الإلحاقُ حينَ تُعارِضُه نُسخَة (‏ADR-036 §٧): الأولى، وإعادَتانِ عَلى ما كُتِبَ بَعدَها.

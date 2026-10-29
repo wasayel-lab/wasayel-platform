@@ -78,7 +78,9 @@ public class DealNoticesProducerTests(ITestOutputHelper output)
         // وتِسعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د3): `RefundDueFor` و`InvoiceLeftOpenFor` لِصاحِبِ المَتجَر — بِنَوعِ الإلغاءِ نَفسِه.
         // وعَشَرَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د5 (٤)): `PaymentExpiredFor` لِلمُشتَري حينَ تُلغي المَنصَّةُ طَلَبَه بِالمُهلَة — بِنَوعِ الإلغاءِ نَفسِه.
         // وأَحَدَ عَشَرَ مُنذُ ‏2026-10-29 (قَرارُ المالِك د9 (١) «أ»): `InterventionFor` لِلبائِعِ وصاحِبِ المَتجَرِ — بِنَوعِ الطَلَبِ الجَديدِ نَفسِه (لا نَوعَ خامِس).
-        Assert.Equal(11, builders);
+        // وثَلاثَةَ عَشَرَ مُنذُ ‏2026-10-29 (قَرارُ المالِك د38 (٣) «أ»): `DisputeCancelledFor` و`DisputeResumedFor` لِطَرَفَي الصَفقَةِ بِحَسمِ النِزاع — بِنَوعِ الإلغاءِ
+        // وبِنَوعِ الطَلَبِ الجَديدِ (لا نَوعَ جَديد).
+        Assert.Equal(13, builders);
         Assert.Equal(builders, typed);
 
         var reader = files.Single(f => f.Path == Reader).Text;

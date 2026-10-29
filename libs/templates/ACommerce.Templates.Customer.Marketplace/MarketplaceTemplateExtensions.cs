@@ -3738,6 +3738,29 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect($"/studio/apps/{slug}/deals/{id}" + (res.Ok ? "" : $"?err={res.Code}"));
         }).RequireFormBody().DisableAntiforgery();
 
+        // ─── حَسمُ النِزاع — بِجِوارِ بابِ فَتحِه (‏2026-10-29، قَرارُ المالِك د38؛ ‏ADR-047 §٢) ─────────
+        // كانَت «نِزاع» طَريقاً بِلا مَخرَج (تَوصيفُه `DealDisputeDeadEndTests`). صاحِبُ المَتجَرِ يَحسِمُ بِأَحَدِ البَديلَين — «إلغاء» بِأَثَرِ الإلغاءِ الماليِّ القائِم
+        // أَو «استئناف» مِن المَرحَلَةِ نَفسِها — والقَرارُ كُلُّه في `DealDisputeResolution` والكِتابَةُ في `DealsService.ResolveDisputeAsync`، والطَرَفانِ يُخبَرانِ
+        // بِالنَتيجَة (`DealNotices.NotifyDisputeResolvedAsync`). والسُلطَةُ تُقالُ صَراحَةً بَعدَ `StudioOwnsAsync`، ولا تَدقيقَ ولا إشعارَ لِحَسمٍ لَم يُكتَب.
+        app.MapPost("/studio/apps/{slug}/deals/{id:guid}/resolve",
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth, Services.Deals.DealsService deals,
+                   Services.Audit.AuditWriter audit, Services.Deals.DealNotices notices, L l) =>
+        {
+            if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
+            var outcome = req.Form["outcome"].ToString().Trim();
+            var note = req.Form["note"].ToString().Trim();
+            var by = new Services.Deals.DealCanceller(auth.UserId!.Value, "مالِك التَّطبيق", IsStoreAdmin: true);
+            var res = await deals.ResolveDisputeAsync(slug, id, by, outcome, string.IsNullOrEmpty(note) ? l["studio.deal.resolve_default_reason"] : note);
+            if (res.Ok)
+            {
+                await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق", "deal.dispute_resolve", "deal", id.ToString(),
+                    note: $"{res.Outcome}: {note}", ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
+                await notices.NotifyDisputeResolvedAsync(slug, res.Deal!, auth.UserId!.Value, res.Outcome!, l);
+            }
+            return Results.Redirect($"/studio/apps/{slug}/deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}"));
+        }).RequireFormBody().DisableAntiforgery();
+
         // ─── Studio per-app config saves (داخِل studio، redirect مَحَلّيّ) ─
         // مُحَقِّق المِلكِيَّة: المُستَخدِم يَجِب أَن يَكون مالِك الـ tenant.
         async Task<bool> StudioOwnsAsync(IDocumentStore docStore, Services.Incubator.StudioAuth auth, string slug)

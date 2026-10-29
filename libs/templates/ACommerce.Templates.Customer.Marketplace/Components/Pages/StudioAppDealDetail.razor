@@ -81,7 +81,8 @@
             @* طَلَبُ شَحنٍ قائِمٌ عِندَ OTO — يُقالُ لِصاحِبِ المَتجَرِ حينَ يُلغي (‏2026-10-29، قَرارُ المالِك د37 (٢) «أ»): الطَرَفانِ لا يُلغِيانِ
                صَفقَةً لَها طَلَبٌ عِندَ OTO، وهُوَ يُلغيها مِن هُنا — والشُحنَةُ عَلى حِسابِ البائِعِ لا يُلغيها إلغاءُ الصَفقَة. يُرسَمُ فَوقَ زِرِّ الإلغاءِ
                ما دامَت فَعّالَة، وبَعدَ الإلغاءِ عَلى الصَفقَةِ المُلغاةِ نَفسِها (الصَفحَةُ الَّتي يَعودُ إلَيها). *@
-            @if (DealShipping.HoldsLiveOrder(deal) && deal.Status is DealStatus.Active or DealStatus.Cancelled)
+            @* (‏2026-10-29، قَرارُ المالِك د38 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): وعَلى صَفقَةٍ في «نِزاع» — بَديلُ «إلغاء» في بابِ الحَسمِ أَدناه إلغاءٌ مِن هُنا. *@
+            @if (DealShipping.HoldsLiveOrder(deal) && deal.Status is DealStatus.Active or DealStatus.Cancelled or DealStatus.Disputed)
             {
                 <div class="st-chip st-chip-warning" style="margin-top:14px;">@L.Markup("studio.deal.oto_order_live")</div>
             }
@@ -129,6 +130,27 @@
                             <input type="hidden" name="scope" value="order" />
                         }
                         <button type="submit" class="st-btn st-btn-ghost" style="white-space:nowrap;">@((MarkupString)"\n                            ")@L.Markup(cancelShared ? "studio.deal.cancel_order" : "studio.deal.cancel")@((MarkupString)"\n                        ")
+                        </button>
+                    </form>
+                </div>
+            }
+
+            @* حَسمُ النِزاع — بِجِوارِ بابِ فَتحِه (‏2026-10-29، قَرارُ المالِك د38): «صاحب المتجر» يَختارُ أَحَدَ البَديلَين — إلغاءٌ بِأَثَرِ الإلغاءِ الماليِّ القائِم
+               أَو استِئنافٌ مِن المَرحَلَةِ نَفسِها — والطَرَفانِ يُخبَرانِ بِالنَتيجَة. يُرسَمُ لِصَفقَةٍ في «نِزاع» وَحدَها، والنُقطَةُ تَسأَلُ البَوّابَةَ نَفسَها
+               (`DealDisputeResolution`) قَبلَ أَيِّ كِتابَة. كانَت «نِزاع» بِلا مَخرَج (تَوصيفُه `DealDisputeDeadEndTests`). *@
+            @if (deal.Status == DealStatus.Disputed)
+            {
+                <div class="st-section-title">@L.Markup("studio.deal.resolve_title")</div>
+                <div class="st-card">
+                    <p style="margin:0 0 12px;font-size:14px;color:var(--st-muted);">@L.Markup("studio.deal.resolve_hint")</p>
+                    <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/resolve")"
+                          style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <input class="st-input" name="note" placeholder="@L["studio.deal.resolve_note_placeholder"]" style="flex:1;min-width:200px;" />
+                        <button type="submit" name="outcome" value="@DealDisputeResolution.Resume" class="st-btn st-btn-primary" style="white-space:nowrap;">
+                            @L.Format("studio.deal.resolve_resume", DealsPolicy.LabelAr(deal.Stage))
+                        </button>
+                        <button type="submit" name="outcome" value="@DealDisputeResolution.Cancel" class="st-btn st-btn-ghost" style="white-space:nowrap;color:var(--st-danger);">
+                            @L.Markup("studio.deal.resolve_cancel")
                         </button>
                     </form>
                 </div>
@@ -203,7 +225,7 @@
     {
         "created" => "sparkle", "assigned" => "people", "advanced" => "arrow-right",
         "cancelled" => "x", "disputed" => "alert-circle", "note" => "edit",
-        "refund" => "refresh", _ => "tag"
+        "refund" => "refresh", DealEvent.DisputeResumed => "refresh", _ => "tag"
     };
 
     string FormatEvent(DealEvent e) => e.Action switch
@@ -218,6 +240,7 @@
         "advanced"  => $"{DealsPolicy.LabelAr(e.StageBefore)} ← {DealsPolicy.LabelAr(e.StageAfter)}",
         "cancelled" => L["studio.deal.event_cancelled"],
         "disputed"  => L["studio.deal.event_disputed"],
+        DealEvent.DisputeResumed => L["studio.deal.event_dispute_resumed"],   // ‏2026-10-29، قَرارُ المالِك د38
         "note"      => L["studio.deal.event_note"],
         _ => e.Action
     };

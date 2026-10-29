@@ -74,6 +74,7 @@ public static class DealRefusalTexts
         GatewayPayments.DealAwaitsPayment,
         GatewayInvoiceShare.Shared,   // (‏2026-10-13، G5 M4)
         DealsService.PaymentMissing,  // (‏2026-10-13، G5 (xv-g))
+        DealDisputeResolution.DealNotDisputed,   // (‏2026-10-29، قَرارُ المالِك د38): بابُ حَسمِ النِزاعِ لِصَفقَةٍ حُسِمَت — النَقرَةُ الثانِيَة
     };
 
     /// <summary>مِفتاحُ نَصِّ الاستوديو لِرَمزٍ مِن <see cref="StudioCodes"/>، و<c>null</c> لِما سِواه — فَلا يُرسَمُ شَريطٌ لِرَمزٍ لا نَصَّ لَه.</summary>

@@ -325,6 +325,52 @@ public sealed class DealNotices
         At = at,
     };
 
+    // ─── نِزاعٌ حَسَمَه صاحِبُ المَتجَر (‏2026-10-29، قَرارُ المالِك د38 (٣) «أ»: «نعم، إشعار لكل طرف بالنتيجة») ───────────────
+
+    /// <summary>
+    /// <para><b>مَن يُخبَرُ بِحَسمِ النِزاع</b>: طَرَفا الصَفقَة — المُشتَري (<c>InitiatorId</c>) والطَرَفُ المُقابِلُ، أَو مالِكُ الإعلانِ حينَ لا طَرَفَ مُقابِل
+    /// (<see cref="NewDealRecipient"/>) — بِلا تَكرار، <b>ما لَم يَكُن أَحَدُهُما صاحِبَ المَتجَرِ الَّذي حَسَم</b> (مَن قَرَّرَ لا يُخبَرُ بِما قَرَّر)، ولا مُعَرِّفٌ
+    /// فارِغ. دالَّةٌ نَقِيَّة.</para>
+    /// </summary>
+    public static IReadOnlyList<Guid> DisputePartiesToTell(Deal deal, Guid resolverId)
+    {
+        var parties = new List<Guid>();
+        foreach (var id in new[] { (Guid?)deal.InitiatorId, deal.CounterpartyId ?? NewDealRecipient(deal) })
+            if (id is { } p && p != Guid.Empty && p != resolverId && !parties.Contains(p)) parties.Add(p);
+        return parties;
+    }
+
+    /// <summary>إشعارُ طَرَفٍ بِأَنّ إدارَةَ المَتجَرِ حَسَمَت النِزاعَ عَلى صَفقَتِه <b>بِإلغائِها</b> — نَوعُه نَوعُ الإلغاءِ وأَيقونَتُه، والنَصُّ «إدارَةُ المَتجَر» لا اسمٌ
+    /// شَخصِيٌّ (نَسَقُ <see cref="CancelledByStoreFor"/>)، والرابِطُ صَفحَةُ الصَفقَةِ لِلطَرَف.</summary>
+    public static Notification DisputeCancelledFor(string slug, Deal deal, Guid userId, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = userId,
+        Type = CancelledType,
+        Title = l["notifications.deal_dispute_cancelled.title"],
+        Body = l.Format("notifications.deal_dispute_cancelled.body", deal.ListingTitle),
+        RelatedUrl = $"/{slug}/deals/{deal.Id}",
+        At = at,
+    };
+
+    /// <summary>إشعارُ طَرَفٍ بِأَنّ إدارَةَ المَتجَرِ حَسَمَت النِزاعَ <b>بِاستِئنافِ الصَفقَةِ مِن مَرحَلَتِها</b> — بِاسمِ المَرحَلَة؛ ونَوعُه نَوعُ الطَلَبِ الجَديد
+    /// (أَصلُ العائِلَة، نَسَقُ <see cref="InterventionFor"/>) فَلا نَوعَ جَديدَ في القارِئ.</summary>
+    public static Notification DisputeResumedFor(string slug, Deal deal, Guid userId, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = userId,
+        Type = NewDealType,
+        Title = l["notifications.deal_dispute_resumed.title"],
+        Body = l.Format("notifications.deal_dispute_resumed.body", deal.ListingTitle, DealsPolicy.LabelAr(deal.Stage)),
+        RelatedUrl = $"/{slug}/deals/{deal.Id}",
+        At = at,
+    };
+
+    public static string DisputeResolvedPushBody(Deal deal, string outcome, L l)
+        => outcome == DealDisputeResolution.Cancel
+            ? l.Format("notifications.deal_dispute_cancelled.push_body", deal.ListingTitle)
+            : l.Format("notifications.deal_dispute_resumed.push_body", deal.ListingTitle, DealsPolicy.LabelAr(deal.Stage));
+
     private static string CurrencyOf(Deal deal)
         => deal.Refs.TryGetValue(DealsService.PaymentCurrencyRef, out var c) && !string.IsNullOrWhiteSpace(c) ? c : ACommerce.Kit.Payments.MoyasarClient.Currency;
 
@@ -553,6 +599,33 @@ public sealed class DealNotices
             await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, n.UserId);
             await _push.SendAsync(_store, slug, n.UserId, n.Title, n.Body, url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         }
+        return sent.Count;
+    }
+
+    /// <summary>
+    /// <para><b>بَعدَ حَسمٍ ناجِحٍ مِن الاستوديو</b> (<c>/studio/apps/{slug}/deals/{id}/resolve</c>؛ ‏2026-10-29، قَرارُ المالِك د38 (٣) «أ»): إشعارٌ لِكُلِّ طَرَفٍ
+    /// تُسَمّيه <see cref="DisputePartiesToTell"/> بِـ<see cref="DisputeCancelledFor"/> أَو <see cref="DisputeResumedFor"/>، ثُمَّ — في بَديلِ الإلغاءِ — صاحِبُ المَتجَرِ بِما عَلَيه في لَوحَةِ ميسر
+    /// (<see cref="NotifyStoreOwnerAsync"/>، نَسَقُ إشعاراتِ الإلغاء)؛ بِتَرتيبِ الأُنبوبِ نَفسِه (القاعِدَة ٨). تُرجِعُ عَدَدَ الطَرَفَينِ اللَّذَينِ أُخبِرا.</para>
+    /// </summary>
+    public async Task<int> NotifyDisputeResolvedAsync(
+        string slug, Deal deal, Guid resolverId, string outcome, L l, CancellationToken ct = default)
+    {
+        var cancelled = outcome == DealDisputeResolution.Cancel;
+        var sent = DisputePartiesToTell(deal, resolverId)
+            .Select(id => cancelled ? DisputeCancelledFor(slug, deal, id, l, DateTime.UtcNow) : DisputeResumedFor(slug, deal, id, l, DateTime.UtcNow))
+            .ToList();
+        if (sent.Count > 0)
+        {
+            await using var s = _store.LightweightSession(slug);
+            foreach (var n in sent) s.Store(n);
+            await s.SaveChangesAsync(ct);
+        }
+        foreach (var n in sent)
+        {
+            await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, n.UserId);
+            await _push.SendAsync(_store, slug, n.UserId, n.Title, DisputeResolvedPushBody(deal, outcome, l), url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
+        }
+        if (cancelled) await NotifyStoreOwnerAsync(slug, deal, l, ct);
         return sent.Count;
     }
 
