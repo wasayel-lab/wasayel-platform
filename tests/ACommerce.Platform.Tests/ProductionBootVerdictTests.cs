@@ -344,11 +344,13 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         Assert.Contains("if: env.BOOT_GATE_CONNECTION_STRING != ''", job, StringComparison.Ordinal);
         Assert.Contains("./scripts/verify-production-boot.sh || code=$?", job, StringComparison.Ordinal);
 
-        // ‏3 تَحذيرٌ بِلا خُروج، وما سِواها مِن غَيرِ الصِفرِ يَخرُجُ بِرَمزِه.
+        // ‏(‏2026-10-29، قَرارُ المالِك د29 «ب» — قُلِبَ هذا الصَفّ) 3 ‏`::error::` وخُروجٌ بِرَمزِه — كانَ ‏`::warning::` بِلا خُروج، فَتُنشَرُ
+        // شَجَرَةٌ لَم يُقَس إقلاعُها. وما سِواها مِن غَيرِ الصِفرِ يَخرُجُ بِرَمزِه؛ والكُتلَةُ مُشَغَّلَةً في §٦‑أ أَدناه.
         var three = Regex.Match(job, @"^\s+3\) (?<arm>.*?);;", RegexOptions.Multiline | RegexOptions.Singleline);
         Assert.True(three.Success, "لا فَرعَ لِرَمزِ 3.");
-        Assert.Contains("::warning::", three.Groups["arm"].Value, StringComparison.Ordinal);
-        Assert.DoesNotContain("exit", three.Groups["arm"].Value, StringComparison.Ordinal);
+        Assert.Contains("::error::", three.Groups["arm"].Value, StringComparison.Ordinal);
+        Assert.DoesNotContain("::warning::", three.Groups["arm"].Value, StringComparison.Ordinal);
+        Assert.Matches(new Regex(@"\bexit 3\s*$"), three.Groups["arm"].Value);
         Assert.Matches(new Regex(@"^\s+\*\) .*?exit ""\$code"" ;;", RegexOptions.Multiline | RegexOptions.Singleline), job);
 
         // ‏والسِرُّ مُسَمّىً في جَدوَلِ GitHub في DEPLOY.md — فَرعاً لا إنتاجاً.
@@ -441,18 +443,85 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         Assert.Equal(4, ran);
     }
 
-    /// <summary><b>اليَوم</b> (`c8e9d88`): 3 ‏<c>::warning::</c> و«لَم يُقَس» والخُطوَةُ تَخرُجُ بِصِفر — فَالوَظيفَةُ خَضراءُ و<c>deploy-hf.yml</c> يَنشُرُ ما
-    /// لَم يُقَس إقلاعُه. يُقلَبُ بِاسمِه بِقَرارِ المالِك د29 «ب».</summary>
+    /// <summary>الرُموزُ الَّتي يُحكَمُ بِها عَلى الخُطوَة: العُبور، والكَسر، والبِناء، وما عِندَ المُشَغِّل، ورَمزٌ لا يَعرِفُه مَعجَمُ البَوّابَة.</summary>
+    private static readonly int[] BootStepCodes = [0, 1, 2, 3, 4];
+
+    /// <summary><b>أَتُجيزُ الخُطوَةُ ما لَم يَعبُر؟</b> — <c>null</c> إن خَرَجَت بِصِفرٍ لِلصِفرِ وَحدَه ومُلَخَّصُها «عَبَرَت»، وبِالرَمزِ نَفسِه لِكُلِّ ما سِواه
+    /// ومُلَخَّصُها «✗»، و3 بِـ<c>::error::</c> و«لَم يُقَس» (لَيسَ حُكماً عَلى الكود، ولا يُجيز). وإلّا رَمزُ الرَفضِ بِأَوَّلِ رَمزٍ خالَفَ.</summary>
+    internal static string? BootStepRefusal(string block, out List<string> seen)
+    {
+        seen = new List<string>();
+        foreach (var code in BootStepCodes)
+        {
+            var (exit, summary, text) = RunBootStep(block, code);
+            seen.Add($"{code} → خُروجُ {exit} · «{summary}»");
+            if (code == 0)
+            {
+                if (exit != 0) return "fails_on_0";
+                if (!summary.Contains("عَبَرَت", StringComparison.Ordinal)) return "summary_0";
+                continue;
+            }
+            if (exit == 0) return $"passes_on_{code}";
+            if (exit != code) return $"wrong_exit_{code}";
+            if (!summary.Contains('✗')) return $"summary_{code}";
+            if (code == 3 && !(text.Contains("::error::", StringComparison.Ordinal) && summary.Contains("لَم يُقَس", StringComparison.Ordinal))) return "three_unnamed";
+        }
+        return null;
+    }
+
+    /// <summary>كانَ <c>Today_the_ci_boot_step_passes_3_with_a_warning</c> (‏<c>7c17495</c>): 3 ‏<c>::warning::</c> والخُطوَةُ تَخرُجُ بِصِفر. <b>وقُلِبَ
+    /// بِقَرارِ المالِك د29 «ب»</b>: البَوّابَةُ الَّتي لَم تَقِس لا تُجيز — خُطوَةُ البَوّابَةِ تُفشِلُ الوَظيفَةَ عَلى 3 وعَلى كُلِّ رَمزٍ غَيرِ الصِفر، ولا تَعبُرُ
+    /// إلّا بِالصِفر؛ مُشَغَّلَةً بِحَرفِها، والرُموزُ تُطبَع.</summary>
     [Fact]
-    public void Today_the_ci_boot_step_passes_3_with_a_warning()
+    public void The_ci_boot_step_fails_the_job_on_3_and_on_every_non_zero_code_and_passes_0_alone()
     {
         if (NoBash(output)) return;
         var block = BootStepRunBlock(File.ReadAllText(Path.Combine(RepoRoot, ".github", "workflows", "ci.yml")));
-        var (exit, summary, text) = RunBootStep(block, 3);
-        output.WriteLine($"3 → خُروجُ {exit} · «{summary}»");
-        Assert.Equal(0, exit);
-        Assert.Contains("::warning::", text, StringComparison.Ordinal);
-        Assert.Equal("### بَوّابَةُ الإقلاعِ الإنتاجيّ: لَم يُقَس — ما عِندَ المُشَغِّل (3)", summary);
+        var refusal = BootStepRefusal(block, out var seen);
+        foreach (var s in seen) output.WriteLine(s);
+        output.WriteLine($"رُموزٌ مُشَغَّلَة: {seen.Count} مِن {BootStepCodes.Length}");
+        Assert.True(seen.Count > 0, "أَداةٌ عَمياء: صِفرُ رَمزٍ مُشَغَّل.");
+        Assert.True(refusal is null, $"خُطوَةُ البَوّابَةِ تُجيزُ ما لَم يَعبُر ({refusal}).");
+        Assert.Equal(BootStepCodes.Length, seen.Count);
+    }
+
+    /// <summary><b>حَقنُ عَيب — فاحِصُ الخُطوَةِ يُحمِرُّ فِعلاً</b>: فَرعُ 3 بِحَرفِ <c>c8e9d88</c> (تَحذيرٌ بِلا خُروج) يُرَدّ، وكَذلِكَ نَجمَةٌ بِلا خُروج،
+    /// وصِفرٌ يَخرُج، و3 بِرَمزٍ غَيرِه، و3 بِتَحذيرٍ يَخرُج، والسكربتُ بِلا <c>|| code=$?</c> (فَيَقتُلُ <c>bash -e</c> الخُطوَةَ قَبلَ مُلَخَّصِها).</summary>
+    [Fact]
+    public void The_ci_boot_step_checker_can_actually_go_red()
+    {
+        if (NoBash(output)) return;
+        var live = BootStepRunBlock(File.ReadAllText(Path.Combine(RepoRoot, ".github", "workflows", "ci.yml")));
+        const string BeforeThree =
+            "  3) echo \"::warning::بَوّابَةُ الإقلاع: ما عِندَ المُشَغِّل (3) — لَيسَ حُكماً عَلى الكود؛ سَطرُ «التَشخيص» أَعلاه يُسَمّيه.\"\n" +
+            "     echo \"### بَوّابَةُ الإقلاعِ الإنتاجيّ: لَم يُقَس — ما عِندَ المُشَغِّل (3)\" >> \"$GITHUB_STEP_SUMMARY\" ;;";
+        var arm = Regex.Match(live, @"^  3\) .*?;;", RegexOptions.Multiline | RegexOptions.Singleline);
+        Assert.True(arm.Success, "لا فَرعَ لِرَمزِ 3 في الكُتلَة.");
+        Assert.True(BeforeThree != arm.Value, "عَيِّنَةُ c8e9d88 تُساوي الحَيّ — لا تَقيسُ شَيئاً.");
+        string Swap(string from, string to)
+        {
+            Assert.True(live.Split(from).Length == 2, $"العَيِّنَةُ لا تَقَعُ مَرَّةً واحِدَة: {from}");
+            return live.Replace(from, to, StringComparison.Ordinal);
+        }
+        var samples = new (string Name, string Block, string Code)[]
+        {
+            ("فَرعُ 3 بِحَرفِ c8e9d88", live.Replace(arm.Value, BeforeThree, StringComparison.Ordinal), "passes_on_3"),
+            ("نَجمَةٌ بِلا خُروج", Swap("     exit \"$code\" ;;", "     ;;"), "passes_on_1"),
+            ("الصِفرُ يَخرُج", Swap("\"$GITHUB_STEP_SUMMARY\" ;;\n  3)", "\"$GITHUB_STEP_SUMMARY\"; exit 1 ;;\n  3)"), "fails_on_0"),
+            ("3 يَخرُجُ بِغَيرِه", Swap("exit 3 ;;", "exit 1 ;;"), "wrong_exit_3"),
+            ("3 بِتَحذيرٍ يَخرُج", Swap("::error::", "::warning::"), "three_unnamed"),
+            ("بِلا || code=$?", Swap("./scripts/verify-production-boot.sh || code=$?", "./scripts/verify-production-boot.sh; code=$?"), "summary_1"),
+        };
+        var wrong = new List<string>();
+        foreach (var (name, block, expected) in samples)
+        {
+            var got = BootStepRefusal(block, out var seen);
+            output.WriteLine($"«{name}» → {got ?? "قُبِل"} ({string.Join(" | ", seen)})");
+            if (got != expected) wrong.Add($"«{name}»: {got ?? "قُبِل"} لا {expected}");
+        }
+        output.WriteLine($"حُقِنَ {samples.Length} شَكلاً بِـ{samples.Select(x => x.Code).Distinct().Count()} رَمزاً؛ أَخطَأَ الفاحِصُ في {wrong.Count}");
+        Assert.True(samples.Length >= 6, "أَداةٌ عَمياء: العَيِّنَةُ أَصغَرُ مِمّا كُتِب.");
+        Assert.True(wrong.Count == 0, string.Join("\n", wrong));
     }
 
     /// <summary><b>وتَشغيلٌ واحِدٌ عَلى فَرعِ البَوّابَةِ في كُلِّ لَحظَة</b> (‏2026-10-24 — مُراجَعَةُ الموجَة ٤، بَندُ N): الوَظيفَةُ تُقلِعُ Production
