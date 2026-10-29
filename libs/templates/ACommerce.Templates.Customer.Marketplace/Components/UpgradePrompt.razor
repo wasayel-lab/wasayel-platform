@@ -42,6 +42,9 @@
     [Parameter] public string? Reason { get; set; }
     /// <summary>الباقَة الحالِيَّة (لِحِساب التالِيَة).</summary>
     [Parameter] public string CurrentTier { get; set; } = "spark";
+    /// <summary>مَوعِدُ تَجَدُّدِ الحِصَّةِ مُنَسَّقاً بِساعَةِ الطَلَب (‏<c>Culture.FormatTime</c> في الصَفحَة) — مِن
+    /// <see cref="StudioLimitNextStep.RenewsAt"/>؛ <c>null</c> فَلا جُملَةَ تَجَدُّد. (‏2026-10-29، قَرارُ المالِك د15.)</summary>
+    [Parameter] public string? RenewsOn { get; set; }
 
     @* السُلَّمُ يُحسَبُ مِنَ الحُدودِ لا يُكتَبُ ثابِتاً — وإلّا عَرَضَ
        تَنازُلاً بِثَمَن يَومَ تُرفَعُ المَجّانِيَّة. الحُجَّةُ كامِلَةً
@@ -62,22 +65,34 @@
     @* الرَمزُ مِن `StudioUpgradeReason` لا نَصٌّ حَرفيّ: المَعجَمُ
        المُغلَقُ لَه تَعريفٌ واحِد، فَخَطَأُ إملاءٍ يَصير خَطَأَ
        تَرجَمَةٍ لا رِسالَةً تَصمُت. *@
+    @* ‏(2026-10-29، قَرارُ المالِك د15 (+د46) «ب»): **«تَرقِيَة» لا تُقالُ حَيثُ لا دَرَجَةَ تُشتَرى** — والسُؤالُ هُوَ `Offer` نَفسُه الَّذي يَرسُمُ
+       الزِرَّ والسِعر. فَبِلا عَرضٍ: عُنوانُ الميزَةِ ورِسالَةُ التَصديرِ «غَيرُ مَشمولَةٍ في باقَتِك»، ورِسالَةُ الحَدِّ تُتبَعُ بِخُطوَةٍ مُتاحَة — مَوعِدِ
+       التَجَدُّدِ لِلتَحاليلِ والتَحسينات، وجُملَةِ التَواصُلِ لِكُلِّ حَدٍّ ما دامَ بَريدُ التَواصُلِ مَملوءاً (`StudioLimitNextStep`). ويَومَ يُباعُ دَرَجَةٌ
+       تَعودُ صِياغَةُ «التَرقِيَة» وَحدَها بِلا سَطرٍ آخَر. *@
     string TitleFor(string reason) => reason switch
     {
         StudioUpgradeReason.Analyses => L["upgrade.title.analyze"],
         StudioUpgradeReason.Refines  => L["upgrade.title.refine"],
         StudioUpgradeReason.Stores   => L["upgrade.title.build"],
-        _ => L["upgrade.title.feature"]
+        _ => Offer is null ? L["upgrade.title.feature_not_included"] : L["upgrade.title.feature"]
     };
 
-    string MessageFor(string reason) => reason switch
+    string MessageFor(string reason)
     {
-        StudioUpgradeReason.Analyses => L["upgrade.msg.analyze"],
-        StudioUpgradeReason.Refines  => L["upgrade.msg.refine"],
-        StudioUpgradeReason.Stores   => L["upgrade.msg.build"],
-        StudioUpgradeReason.Export   => L["upgrade.msg.export"],
-        _ => ""
-    };
+        var limit = reason switch
+        {
+            StudioUpgradeReason.Analyses => L["upgrade.msg.analyze"],
+            StudioUpgradeReason.Refines  => L["upgrade.msg.refine"],
+            StudioUpgradeReason.Stores   => L["upgrade.msg.build"],
+            StudioUpgradeReason.Export   => Offer is null ? L["upgrade.msg.export_not_included"] : L["upgrade.msg.export"],
+            _ => ""
+        };
+        if (Offer is not null || limit.Length == 0) return limit;
+        var renews = reason is StudioUpgradeReason.Analyses or StudioUpgradeReason.Refines && RenewsOn is { Length: > 0 }
+            ? L.Format(StudioLimitNextStep.RenewsOnKey, RenewsOn) : null;
+        var contact = StudioLimitNextStep.Contact(k => L[k]);
+        return string.Join(" ", new[] { limit, renews, contact }.Where(x => !string.IsNullOrEmpty(x)));
+    }
 
     @* كُلُّ حَدٍّ مُنتَهٍ مُنذُ ‏2026-08-30، فَفَرعُ «بِلا حَدّ» صارَ
        شَرطاً لا يَصدُقُ أَبَداً — وحِراسَةُ مَعدومٍ أَسوَأُ مِن

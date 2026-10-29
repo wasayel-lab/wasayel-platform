@@ -2,6 +2,7 @@ using System.Reflection;
 using ACommerce.Platform.I18n;
 using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Xunit.Abstractions;
 using UpgradePrompt = ACommerce.Templates.Customer.Marketplace.Components.UpgradePrompt;
@@ -22,8 +23,27 @@ public class UpgradePromptNextStepTests(ITestOutputHelper output)
         .Where(p => p.GetCustomAttribute<ParameterAttribute>() is not null)
         .Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal).ToList();
 
+    /// <summary>لافِتَةٌ واحِدَةٌ بِوَسائِطَ صَريحَة — كَما تَرسُمُها الصَفحَتان.</summary>
+    internal static async Task<string> Render(string reason, string tier, string? renewsOn)
+    {
+        await using var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection()
+            .AddSingleton(new L(new Microsoft.AspNetCore.Http.HttpContextAccessor()))
+            .BuildServiceProvider();
+        await using var renderer = new Microsoft.AspNetCore.Components.Web.HtmlRenderer(services, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+        return await renderer.Dispatcher.InvokeAsync(async () =>
+            (await renderer.RenderComponentAsync<UpgradePrompt>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                [nameof(UpgradePrompt.Reason)] = reason,
+                [nameof(UpgradePrompt.CurrentTier)] = tier,
+                [nameof(UpgradePrompt.RenewsOn)] = renewsOn,
+            }))).ToHtmlString());
+    }
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، كوميتُ التَبديل)</b> — كانَ <c>Today_the_banner_takes_only_a_reason_and_a_tier_and_names_no_next_step</c>
+    /// (‏<c>4effde3</c>): «وَسائِطُ اللافِتَة: CurrentTier, Reason · لافِتاتٌ بِخُطوَةٍ تالِيَة: 0/16». والآن لِلافِتَةِ وَسيطٌ ثالِثٌ <c>RenewsOn</c> تَحسِبُه الصَفحَتانِ
+    /// بِـ<see cref="StudioLimitNextStep.RenewsAt"/> وتُنَسِّقانِه بِساعَةِ الطَلَب، والمِفتاحانِ في القامُوس — والرَسمُ بِلا وَسيطٍ ولا بَريدٍ كَما كانَ حَرفاً.</summary>
     [Fact]
-    public async Task Today_the_banner_takes_only_a_reason_and_a_tier_and_names_no_next_step()
+    public async Task The_banner_takes_the_renewal_date_from_its_page_and_the_two_next_step_keys_exist()
     {
         var parameters = PromptParameters();
         var all = await UpgradePromptTextsCharacterizationTests.RenderAll();
@@ -32,23 +52,81 @@ public class UpgradePromptNextStepTests(ITestOutputHelper output)
             var m = UpgradePromptTextsCharacterizationTests.MessageOf(b.Html);
             return m.Contains("تَتَجَدَّدُ", StringComparison.Ordinal) || m.Contains("تَواصَل", StringComparison.Ordinal);
         });
-        output.WriteLine($"وَسائِطُ اللافِتَة: {string.Join(", ", parameters)} · لافِتاتٌ بِخُطوَةٍ تالِيَة: {withStep}/{all.Count}");
-        Assert.Equal(new[] { nameof(UpgradePrompt.CurrentTier), nameof(UpgradePrompt.Reason) }, parameters);
-        Assert.True(all.Count >= 16, $"أَداةٌ عَمياء: {all.Count} لافِتَة.");
+        output.WriteLine($"وَسائِطُ اللافِتَة: {string.Join(", ", parameters)} · لافِتاتٌ بِخُطوَةٍ تالِيَة بِلا مَوعِدٍ ولا بَريد: {withStep}/{all.Count}");
+        Assert.Equal(new[] { nameof(UpgradePrompt.CurrentTier), nameof(UpgradePrompt.Reason), nameof(UpgradePrompt.RenewsOn) }, parameters);
         Assert.Equal(0, withStep);
-        Assert.Null(LocaleCatalog.Find(LocaleCatalog.Arabic, "upgrade.renews_on"));
-        Assert.Null(LocaleCatalog.Find(LocaleCatalog.Arabic, "upgrade.contact"));
+        Assert.Equal("تَتَجَدَّدُ حِصَّتُكَ في {0}.", LocaleCatalog.Find(LocaleCatalog.Arabic, StudioLimitNextStep.RenewsOnKey));
+        Assert.Equal("لِرَفعِ الحَدِّ تَواصَل مَعَنا عَلى {0}.", LocaleCatalog.Find(LocaleCatalog.Arabic, StudioLimitNextStep.ContactKey));
+        foreach (var page in new[] { "StudioHome.razor", "StudioStudy.razor" })
+        {
+            var code = UpgradePromptPriceTests.Code("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", page);
+            Assert.Contains("RenewsOn=\"@renewsOn\"", code, StringComparison.Ordinal);
+            Assert.Contains("StudioLimitNextStep.RenewsAt(u.PeriodStart, DateTime.UtcNow) is { } at", code, StringComparison.Ordinal);
+            Assert.Contains("Culture.FormatTime(at, \"yyyy-MM-dd\")", code, StringComparison.Ordinal);
+        }
     }
 
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> — كانَ <c>Today_the_agent_store_limit_refusal_ends_at_the_formatted_limit</c>: الرَدُّ يَنتَهي عِندَ القالَب.
+    /// والآن تُتبِعُه جُملَةُ التَواصُلِ مِن <see cref="StudioLimitNextStep.Contact"/> — والقالَبُ ونِداؤُه بِحَرفِهِما.</summary>
     [Fact]
-    public void Today_the_agent_store_limit_refusal_ends_at_the_formatted_limit()
+    public void The_agent_store_limit_refusal_is_followed_by_the_same_contact_sentence()
     {
         var body = AgentStoreLimitRefusalTests.CreateTenantBody();
         var at = body.IndexOf("if (!gate.Allowed)", StringComparison.Ordinal);
         Assert.True(at > 0, "لا رَدَّ عِندَ الحَدّ — الأَداةُ عَمياء.");
         var refusal = body[at..body.IndexOf(';', at)];
         output.WriteLine($"الرَدّ: {refusal.Replace('\n', ' ')}");
-        Assert.EndsWith("StoreLimitRefusalKey), gate.Used, gate.Limit))", refusal.TrimEnd(), StringComparison.Ordinal);
-        Assert.DoesNotContain("upgrade.contact", body, StringComparison.Ordinal);
+        Assert.Contains("StoreLimitRefusalKey), gate.Used, gate.Limit),", refusal, StringComparison.Ordinal);
+        Assert.Contains("StudioLimitNextStep.Contact(k => LocaleCatalog.Text(LocaleCatalog.Arabic, k))", refusal, StringComparison.Ordinal);
+    }
+
+    // ─── الخُطوَتانِ: مُوجَبٌ وسالِب ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void The_quota_renews_thirty_days_after_the_period_start_and_not_once_it_has_lapsed()
+    {
+        var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+        Assert.Equal(now.AddDays(20), StudioLimitNextStep.RenewsAt(now.AddDays(-10), now));
+        Assert.Equal(now.AddSeconds(1), StudioLimitNextStep.RenewsAt(now.AddDays(-30).AddSeconds(1), now));
+        Assert.Null(StudioLimitNextStep.RenewsAt(now.AddDays(-30), now));     // انقَضَت: الاستِعمالُ التالي يُجَدِّد
+        Assert.Null(StudioLimitNextStep.RenewsAt(now.AddDays(-45), now));
+    }
+
+    [Fact]
+    public void The_contact_sentence_appears_only_once_the_contact_email_is_filled()
+    {
+        string Filled(string k) => k == StudioLimitNextStep.ContactEmailKey ? "hello@example.com" : LocaleCatalog.Text(LocaleCatalog.Arabic, k);
+        Assert.Equal("لِرَفعِ الحَدِّ تَواصَل مَعَنا عَلى hello@example.com.", StudioLimitNextStep.Contact(Filled));
+        Assert.True(LocaleCatalog.IsPlaceholder(LocaleCatalog.Text(LocaleCatalog.Arabic, StudioLimitNextStep.ContactEmailKey)), "بَريدُ التَواصُلِ مَملوءٌ — صَفُّ النائِبِ لا يَقيسُ شَيئاً.");
+        Assert.Null(StudioLimitNextStep.Contact(k => LocaleCatalog.Text(LocaleCatalog.Arabic, k)));
+    }
+
+    [Theory]
+    [InlineData(StudioUpgradeReason.Analyses, "عَدَدُ التَحاليلِ في باقَتِكَ مَحدودٌ لِكُلِّ شَهر. تَتَجَدَّدُ حِصَّتُكَ في 2026-11-18.")]
+    [InlineData(StudioUpgradeReason.Refines,  "عَدَدُ التَحسيناتِ في باقَتِكَ مَحدودٌ لِكُلِّ شَهر. تَتَجَدَّدُ حِصَّتُكَ في 2026-11-18.")]
+    [InlineData(StudioUpgradeReason.Stores,   "عَدَدُ التَطبيقاتِ في باقَتِكَ مَحدود.")]
+    [InlineData(StudioUpgradeReason.Export,   "تَصديرُ الدِراسَةِ غَيرُ مَشمولٍ في باقَتِك.")]
+    public async Task The_renewal_date_follows_the_monthly_quotas_only(string reason, string message)
+    {
+        Assert.False(StudioTierPurchase.SelfServiceCheckoutExists);
+        foreach (var tier in TierCatalog.All.Keys)
+            Assert.Equal(message, UpgradePromptTextsCharacterizationTests.MessageOf(await Render(reason, tier, "2026-11-18")));
+    }
+
+    /// <summary>عُنوانُ الميزَةِ ورِسالَةُ التَصديرِ بِلا «تَرقِيَة» حينَ لا عَرض — و«الترقية» تَبقى مِفتاحَها لِيَومِ البَيع.</summary>
+    [Fact]
+    public async Task Without_a_self_purchasable_tier_the_feature_banner_says_not_included_not_upgrade()
+    {
+        foreach (var tier in TierCatalog.All.Keys)
+        {
+            var html = await Render(StudioUpgradeReason.Export, tier, null);
+            Assert.Equal("هذِه الميزَةُ غَيرُ مَشمولَةٍ في باقَتِك", UpgradePromptTextsCharacterizationTests.TitleOf(html));
+            Assert.DoesNotContain("تَرقيَة", html, StringComparison.Ordinal);
+            Assert.DoesNotContain("الأَعلى", html, StringComparison.Ordinal);
+        }
+        var code = UpgradePromptPriceTests.Code("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "UpgradePrompt.razor");
+        Assert.Contains("Offer is null ? L[\"upgrade.title.feature_not_included\"] : L[\"upgrade.title.feature\"]", code, StringComparison.Ordinal);
+        Assert.Contains("Offer is null ? L[\"upgrade.msg.export_not_included\"] : L[\"upgrade.msg.export\"]", code, StringComparison.Ordinal);
+        Assert.Contains("if (Offer is not null || limit.Length == 0) return limit;", code, StringComparison.Ordinal);
     }
 }

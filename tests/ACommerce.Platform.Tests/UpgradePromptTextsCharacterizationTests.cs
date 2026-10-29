@@ -62,8 +62,14 @@ public class UpgradePromptTextsCharacterizationTests(ITestOutputHelper output)
 
     internal static string TitleOf(string html) => WebUtility.HtmlDecode(TitleStrong.Match(html).Groups[1].Value).Trim();
 
-    /// <summary>بَصمَةُ اللافِتاتِ كُلِّها بِحَجبِ نَصِّ فِقرَةِ الرِسالَةِ وَحدَه — مَقيسَةٌ عِندَ ‏2939229 (أَوَّلُ ‏16 مِن SHA-256).</summary>
-    internal const string BannersWithMessageMaskedFingerprint = "b1c517f6d42a11eb";
+    /// <summary>بَصمَةُ اللافِتاتِ كُلِّها بِحَجبِ نَصِّ فِقرَةِ الرِسالَةِ وَحدَه — مَقيسَةٌ عِندَ ‏2939229 (أَوَّلُ ‏16 مِن SHA-256).
+    /// <para><b>‏(2026-10-29، قَرارُ المالِك د15 — أُعيدَ تَثبيتُها بِقَرارٍ مَرئِيّ)</b>: كانَت <see cref="BannersBeforeTheFeatureTitleFingerprint"/>،
+    /// وصارَت هذِه لِأَنَّ عُنوانَ لافِتَةِ التَصديرِ تَبَدَّلَ وَحدَه («هذِه الميزَةُ غَيرُ مَشمولَةٍ في باقَتِك») — والبُرهانُ في الصَفِّ نَفسِه: إعادَةُ العُنوانِ
+    /// القَديمِ إلى لافِتاتِ التَصديرِ وَحدَها تُعطي البَصمَةَ القَديمَةَ حَرفاً.</para></summary>
+    internal const string BannersWithMessageMaskedFingerprint = "6f2f44c48d8a40c5";
+
+    /// <summary>البَصمَةُ قَبلَ د15 (‏<c>b1c517f6d42a11eb</c>، عِندَ ‏2939229 حَتّى <c>4effde3</c>).</summary>
+    internal const string BannersBeforeTheFeatureTitleFingerprint = "b1c517f6d42a11eb";
 
     internal static string MaskedFingerprint(IEnumerable<(string Tier, string Reason, string Html)> banners)
     {
@@ -80,6 +86,15 @@ public class UpgradePromptTextsCharacterizationTests(ITestOutputHelper output)
         Assert.True(all.Count >= 16, $"أَداةٌ عَمياء: {all.Count} لافِتَةً فَقَط.");
         Assert.All(all, b => Assert.DoesNotContain("href=\"/studio/billing\"", b.Html, StringComparison.Ordinal));
         Assert.Equal(BannersWithMessageMaskedFingerprint, MaskedFingerprint(all));
+
+        // ‏(2026-10-29، د15) الفَرقُ مَحصورٌ في عُنوانِ لافِتَةِ التَصدير: بِعُنوانِه القَديمِ تَعودُ البَصمَةُ القَديمَةُ حَرفاً.
+        // (المُصَيِّرُ يُرَمِّزُ النَصَّ بِـ`HtmlEncoder.Default` — فَالعُنوانانِ يُقارَنانِ مُرَمَّزَين كَما في اللافِتَة.)
+        var newTitle = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(LocaleCatalog.Find(LocaleCatalog.Arabic, "upgrade.title.feature_not_included")!);
+        var oldTitle = System.Text.Encodings.Web.HtmlEncoder.Default.Encode(LocaleCatalog.Find(LocaleCatalog.Arabic, "upgrade.title.feature")!);
+        Assert.All(all.Where(b => b.Reason == StudioUpgradeReason.Export), b => Assert.Contains(newTitle, b.Html, StringComparison.Ordinal));
+        var restored = all.Select(b => b.Reason == StudioUpgradeReason.Export
+            ? (b.Tier, b.Reason, b.Html.Replace(newTitle, oldTitle, StringComparison.Ordinal)) : b).ToList();
+        Assert.Equal(BannersBeforeTheFeatureTitleFingerprint, MaskedFingerprint(restored));
     }
 
     /// <summary>(‏2026-10-24، كوميتُ الصِياغَة — انقَلَبَ بِقَرارٍ مَرئِيّ: كانَ <c>Today_the_quota_message_directs_to_a_plan_upgrade_nothing_sells</c>
@@ -99,16 +114,21 @@ public class UpgradePromptTextsCharacterizationTests(ITestOutputHelper output)
         Assert.All(drawn, b => Assert.DoesNotContain("تَرقِيَة", MessageOf(b.Html).Replace("ترقِيَة", "تَرقِيَة"), StringComparison.Ordinal));
     }
 
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، قَرارُ المالِك د15 (٢)(٣))</b> — كانَ <c>The_feature_title_and_the_export_message_state_a_requirement_not_an_action</c>:
+    /// «تَتَطَلَّب هذه الميزَة تَرقيَة» و«تَصديرُ الدِراسَة ميزَةٌ في الباقاتِ الأَعلى.». والآن، ولا دَرَجَةَ تُشتَرى، «هذِه الميزَةُ غَيرُ مَشمولَةٍ في باقَتِك»
+    /// و«تَصديرُ الدِراسَةِ غَيرُ مَشمولٍ في باقَتِك.» (وتُتبَعُ بِجُملَةِ التَواصُلِ حينَ يُملأُ البَريد) — والقَديمانِ باقِيانِ في القامُوسِ بِحَرفِهِما لِيَومِ البَيع.</summary>
     [Fact]
-    public async Task The_feature_title_and_the_export_message_state_a_requirement_not_an_action()
+    public async Task The_feature_title_and_the_export_message_say_not_included_while_no_tier_sells()
     {
+        Assert.False(StudioTierPurchase.SelfServiceCheckoutExists);
         var export = (await RenderAll()).Where(b => b.Reason == StudioUpgradeReason.Export).ToList();
         Assert.True(export.Count >= 4, $"أَداةٌ عَمياء: {export.Count} لافِتَةَ تَصدير.");
         Assert.All(export, b =>
         {
-            Assert.Equal("تَتَطَلَّب هذه الميزَة تَرقيَة", TitleOf(b.Html));
-            Assert.Equal("تَصديرُ الدِراسَة ميزَةٌ في الباقاتِ الأَعلى.", MessageOf(b.Html));
+            Assert.Equal("هذِه الميزَةُ غَيرُ مَشمولَةٍ في باقَتِك", TitleOf(b.Html));
+            Assert.Equal("تَصديرُ الدِراسَةِ غَيرُ مَشمولٍ في باقَتِك.", MessageOf(b.Html));
         });
         Assert.Equal("تَتَطَلَّب هذه الميزَة تَرقيَة", LocaleCatalog.Find(LocaleCatalog.Arabic, "upgrade.title.feature"));
+        Assert.Equal("تَصديرُ الدِراسَة ميزَةٌ في الباقاتِ الأَعلى.", LocaleCatalog.Find(LocaleCatalog.Arabic, "upgrade.msg.export"));
     }
 }

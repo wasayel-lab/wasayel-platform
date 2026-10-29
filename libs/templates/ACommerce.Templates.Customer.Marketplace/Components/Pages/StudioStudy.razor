@@ -2,6 +2,7 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Incubator.FeasibilityAnalysisService Incubator
 @inject Services.Incubator.TenantFromAnalysisFactory Factory
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject Services.Queries.TenantDirectory Tenants
 @inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
@@ -39,7 +40,7 @@
         }
     </TopBarActions>
     <ChildContent>
-        <UpgradePrompt Reason="@Upgrade" CurrentTier="@(currentTier ?? "spark")" />
+        <UpgradePrompt Reason="@Upgrade" CurrentTier="@(currentTier ?? "spark")" RenewsOn="@renewsOn" />
 
         @if (session is null)
         {
@@ -384,6 +385,7 @@
     [SupplyParameterFromQuery]                     public string? Upgrade  { get; set; }
     [Microsoft.AspNetCore.Components.Inject] Services.Incubator.StudioTierService TierSvc { get; set; } = default!;
     string? currentTier;
+    string? renewsOn;   // ‏(2026-10-29، د15) مَوعِدُ تَجَدُّدِ الحِصَّةِ بِساعَةِ الطَلَب، أَو null
 
     // مُستَوى مِن نَصّ low/medium/high → فِهرِس 0/1/2.
     static int Level(string s) => s.ToLowerInvariant() switch
@@ -448,6 +450,8 @@
         }
         var u = await TierSvc.GetUserAsync(Auth.UserId!.Value);
         currentTier = u?.Tier ?? "spark";
+        renewsOn = u is not null && Services.Incubator.StudioLimitNextStep.RenewsAt(u.PeriodStart, DateTime.UtcNow) is { } at
+            ? Culture.FormatTime(at, "yyyy-MM-dd") : null;
     }
 
     // كُلُّ رَمزٍ يُقابِلُ مِفتاحاً في القامُوس. و`_ => err` تَبقى

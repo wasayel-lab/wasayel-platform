@@ -198,7 +198,9 @@ public class DisplayTimeAbsentTests(ITestOutputHelper output)
         Assert.Contains("CultureTime.FormatTime(at, \"dddd\", Culture.TimeZone, new System.Globalization.CultureInfo(\"ar\"))", list, StringComparison.Ordinal);
         // ‏2026-10-29 (قَرارُ المالِك د53): ‏25 ← 27 — صَفحَةُ «بَياناتي» (`MyData.razor` بِـ`Culture.FormatTime`) واسمُ مِلَفِّ تَنزيلِها
         // (`UserDataExport.FileName` بِـ`CultureTime.FormatTime` ومِنطَقَةِ الثَقافَة) — وكِلاهُما مِن اللَحظَةِ المُخَزَّنَة.
-        Assert.Equal(27, callers.Count);
+        // ‏2026-10-29 (قَرارُ المالِك د15): ‏27 ← 28 — `StudioStudy.razor` (مَوعِدُ تَجَدُّدِ الحِصَّةِ بِـ`Culture.FormatTime`)؛ و`StudioHome.razor`
+        // يُنادي الدالَّةَ نَفسَها مِن قَبلُ فَلا يُعَدُّ مَرَّتَين.
+        Assert.Equal(28, callers.Count);
         Assert.Contains(callers, c => c.File.EndsWith("Chats.razor", StringComparison.Ordinal));
     }
 

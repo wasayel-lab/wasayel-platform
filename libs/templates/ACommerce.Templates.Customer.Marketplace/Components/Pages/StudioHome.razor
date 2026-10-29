@@ -45,7 +45,7 @@
         }
     </TopBarActions>
     <ChildContent>
-        <UpgradePrompt Reason="@Upgrade" CurrentTier="@(currentTier ?? "spark")" />
+        <UpgradePrompt Reason="@Upgrade" CurrentTier="@(currentTier ?? "spark")" RenewsOn="@renewsOn" />
 
         <div class="studio-page-head">
             <h1>@(IsIdeas ? L["studio.home.ideas_title"] : Greeting)</h1>
@@ -314,6 +314,7 @@
     List<Tenant>? myApps;
     List<(string Slug, Services.Deals.Deal Deal)> recentDeals = new();
     string? currentTier;
+    string? renewsOn;   // ‏(2026-10-29، د15) مَوعِدُ تَجَدُّدِ الحِصَّةِ بِساعَةِ الطَلَب، أَو null
     /// <summary>مُدخَلُ <see cref="StudioAgentDoor.Opens"/> — قَرارُ <see cref="Services.PlatformAdminGuard.Decide"/> عَلى صاحِبِ الجَلسَةِ
     /// الَّذي تُحَمِّلُه الصَفحَةُ أَصلاً (لا قِراءَةَ ثانِيَة، ولا تَعريفَ ثانٍ لِـ«مُشرِف مَنَصَّة»).</summary>
     bool isPlatformAdmin;
@@ -441,6 +442,8 @@
         myApps = (await Tenants.ListOwnedByAsync(uid)).ToList();
         var u = await TierSvc.GetUserAsync(uid);
         currentTier = u?.Tier ?? "spark";
+        renewsOn = u is not null && Services.Incubator.StudioLimitNextStep.RenewsAt(u.PeriodStart, DateTime.UtcNow) is { } at
+            ? Culture.FormatTime(at, "yyyy-MM-dd") : null;
         isPlatformAdmin = Services.PlatformAdminGuard.Decide(u) == Services.PlatformAdminOutcome.Allowed;
 
         myPlans = await Billing.AllPlansAsync();

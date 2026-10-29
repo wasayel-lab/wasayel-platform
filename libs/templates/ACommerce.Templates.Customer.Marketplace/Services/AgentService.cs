@@ -891,9 +891,13 @@ public sealed class AgentToolExecutor
             var gate = await tierService.CheckBuildAsync(quotaOwner, ct);
             // ‏نَصُّ الرَدِّ مِن القامُوسِ بِالعَرَبِيَّةِ صَراحَةً (‏2026-10-24، القاعِدَة ١١ — رُحِّلَ بِحَرفِه، وصِياغَتُه قَرارُ المالِكِ
             // في «ب» S11·١٨ و·٢١): يَبلُغُ الوَكيلَ والمُستَخدِمَ نَتيجَةَ أَداة، ولا طَلَبَ هُنا تُقرَأُ لُغَتُه.
+            // ‏(2026-10-29، قَرارُ المالِك د15 «ب»): وتُتبَعُ بِجُملَةِ التَواصُلِ مِن القامُوسِ ما دامَ بَريدُ التَواصُلِ مَملوءاً — الشَرطُ نَفسُه
+            // الَّذي تَسأَلُه لافِتَةُ الحَدّ (`StudioLimitNextStep.Contact`)؛ والقالَبُ نَفسُه لَم يُمَسّ.
             if (!gate.Allowed)
-                return (false, string.Format(
-                    LocaleCatalog.Text(LocaleCatalog.Arabic, StoreLimitRefusalKey), gate.Used, gate.Limit));
+                return (false, string.Join(" ", new[] { string.Format(
+                    LocaleCatalog.Text(LocaleCatalog.Arabic, StoreLimitRefusalKey), gate.Used, gate.Limit),
+                    Services.Incubator.StudioLimitNextStep.Contact(k => LocaleCatalog.Text(LocaleCatalog.Arabic, k)) }
+                    .Where(x => !string.IsNullOrEmpty(x))));
         }
 
         await using var s = _store.LightweightSession();

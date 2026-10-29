@@ -70,7 +70,8 @@ public class DisplayTimeZoneTests(ITestOutputHelper output)
         var readers = razors.Count(f => File.ReadAllText(f).Contains("@inject ACommerce.Kit.Culture.ICultureContext Culture", StringComparison.Ordinal));
         output.WriteLine($"مِلَفّاتُ razor: {razors.Count} · تَحقِنُ ICultureContext: {readers}");
         // ‏2026-10-29 (قَرارُ المالِك د53): ‏24 ← 25 — صَفحَةُ «بَياناتي» (`MyData.razor`) تَرسُمُ تَواريخَ الحِسابِ والصَفَقاتِ والرَسائِلِ بِـ`Culture.FormatTime`.
-        Assert.Equal(25, readers);
+        // ‏2026-10-29 (قَرارُ المالِك د15): ‏25 ← 26 — `StudioStudy.razor` تُنَسِّقُ مَوعِدَ تَجَدُّدِ الحِصَّةِ لِلافِتَةِ الحَدِّ بِـ`Culture.FormatTime`.
+        Assert.Equal(26, readers);
     }
 
     // ─── الدالَّةُ النَقِيَّة — DateTimeKind صَراحَةً، والمِنطَقَةُ المَجهولَة ─────────────────────────

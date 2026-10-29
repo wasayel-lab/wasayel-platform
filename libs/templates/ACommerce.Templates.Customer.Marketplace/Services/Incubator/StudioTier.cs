@@ -1,3 +1,4 @@
+using ACommerce.Platform.I18n;
 using Marten;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services.Incubator;
@@ -282,6 +283,33 @@ public static class StudioUpgradeReason
 
     public static readonly IReadOnlyList<string> All =
         new[] { Analyses, Refines, Stores, Export };
+}
+
+/// <summary>
+/// <para><b>الخُطوَةُ التالِيَةُ بَعدَ الحَدّ — جُملَةٌ ثانِيَةٌ مُتاحَةٌ فِعلاً لا «تَرقِيَةٌ» لا تُباع</b> (‏2026-10-29، قَرارُ المالِك د15 (+د46) «ب»).
+/// خُطوَتانِ لا ثالِثَة: <b>مَوعِدُ تَجَدُّدِ الحِصَّة</b> لِلتَحاليلِ والتَحسيناتِ الشَهرِيَّتَين (بِدايَةُ الفَترَةِ + <see cref="StudioTierService.PeriodDays"/>)،
+/// و<b>قَناةُ التَواصُلِ لِرَفعِ الحَدّ</b> لِكُلِّ حَدٍّ — ولا تُرسَمُ ما دامَ بَريدُ التَواصُلِ نائِباً (الآلِيَّةُ نَفسُها في <c>PlatformPricing.razor</c>
+/// و<c>PlatformContact.razor</c>: <see cref="LocaleCatalog.IsPlaceholder"/>) — فَلا بابَ ميِّت (القاعِدَة ١٢).</para>
+/// <para><b>ومُستَهلِكاها</b>: لافِتَةُ الحَدِّ (<c>UpgradePrompt.razor</c>) ورَدُّ وَكيلِ الاستوديو عِندَ حَدِّ التَطبيقات (<c>AgentToolExecutor.CreateTenantAsync</c>)
+/// — شَرطُ «البَريدُ مَملوء» واحِدٌ لَهُما، فَلا نُسخَتانِ تَنجَرِفان (القاعِدَة ٨).</para>
+/// </summary>
+public static class StudioLimitNextStep
+{
+    public const string RenewsOnKey = "upgrade.next.renews_on";
+    public const string ContactKey = "upgrade.next.contact";
+    public const string ContactEmailKey = "platform.doc.contact_email";
+
+    /// <summary>مَتى تَتَجَدَّدُ الحِصَّة — <c>null</c> إن انقَضَت الفَترَةُ فِعلاً: الاستِعمالُ التالي يُجَدِّدُها (<see cref="StudioTierService.ApplyPeriodRollover"/>)،
+    /// فَتاريخٌ في الماضي جُملَةٌ تَكذِب.</summary>
+    public static DateTime? RenewsAt(DateTime periodStart, DateTime nowUtc)
+        => StudioTierService.PeriodElapsed(periodStart, nowUtc) ? null : periodStart.AddDays(StudioTierService.PeriodDays);
+
+    /// <summary>جُملَةُ التَواصُلِ لِرَفعِ الحَدّ بِنَصِّ <paramref name="text"/> — أَو <c>null</c> ما دامَ بَريدُ التَواصُلِ نائِباً.</summary>
+    public static string? Contact(Func<string, string> text)
+    {
+        var email = text(ContactEmailKey);
+        return LocaleCatalog.IsPlaceholder(email) ? null : string.Format(text(ContactKey), email);
+    }
 }
 
 /// <summary>
