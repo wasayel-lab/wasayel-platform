@@ -356,6 +356,105 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         Assert.Contains("| Secrets | Repository secret (اختِياريّ، ‏2026-10-12) | `BOOT_GATE_CONNECTION_STRING` |", deploy, StringComparison.Ordinal);
     }
 
+    // ─── ٦‑أ. (‏2026-10-29، قَرارُ المالِك د29 «ب») خُطوَةُ البَوّابَةِ في CI مُشَغَّلَةً لا مَقروءَة ────────────────────────────────────
+    //
+    // الصَفُّ أَعلاه يَقرَأُ نَصَّ الكُتلَة. وهُنا تُقطَعُ كُتلَةُ `run: |` لِخُطوَةِ البَوّابَةِ بِحَرفِها وتُشَغَّلُ بِـbash كَما يُشَغِّلُها GitHub
+    // (`bash -e`)، وبَدَلَ `verify-production-boot.sh` ظِلٌّ يَخرُجُ بِالرَمزِ المَطلوب — فَيُقاسُ ما تَفعَلُه الخُطوَةُ (رَمزُ خُروجِها
+    // ومُلَخَّصُها) لا ما تَقولُه. **والتَوصيفُ قَبلَ القَلب** (القاعِدَة ٣): ما لا يَتَغَيَّرُ بِالقَرار — الصِفرُ يَعبُر، و1 و2 ورَمزٌ لا يَعرِفُه
+    // المَعجَمُ تَخرُجُ بِرَمزِها — صَفٌّ يَبقى بِلا حَرف؛ و3 اليَومَ صَفٌّ بِاسمِ «اليَوم» يُقلَبُ بِاسمِه. وغِيابُ السِرِّ خُطوَةٌ غَيرُها (لا تُمَسّ).
+
+    private const string BootStepName = "      - name: Production boot gate on the Neon branch";
+
+    /// <summary>كُتلَةُ <c>run: |</c> لِخُطوَةِ البَوّابَةِ في <c>ci.yml</c> بِلا إزاحَتِها (عَشرُ مَسافات) — إلى أَوَّلِ سَطرٍ أَقَلَّ إزاحَة.</summary>
+    internal static string BootStepRunBlock(string ci)
+    {
+        var lines = ci.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var at = Array.IndexOf(lines, BootStepName);
+        Assert.True(at >= 0, $"الخُطوَةُ غائِبَة: {BootStepName.Trim()}");
+        var run = Array.FindIndex(lines, at + 1, l => l == "        run: |");
+        Assert.True(run > at && run - at <= 3, "كُتلَةُ run: | لِخُطوَةِ البَوّابَةِ غائِبَة.");
+        var body = new List<string>();
+        for (var i = run + 1; i < lines.Length; i++)
+        {
+            if (lines[i].Length == 0) { body.Add(""); continue; }
+            if (!lines[i].StartsWith("          ", StringComparison.Ordinal)) break;
+            body.Add(lines[i][10..]);
+        }
+        return string.Join('\n', body).TrimEnd() + "\n";
+    }
+
+    /// <summary>يُشَغِّلُ الكُتلَةَ بِـ<c>bash -e</c> وظِلُّ <c>scripts/verify-production-boot.sh</c> يَخرُجُ بِـ<paramref name="code"/> — رَمزُ الخُطوَةِ
+    /// وما كَتَبَته في <c>$GITHUB_STEP_SUMMARY</c> ومُخرَجُها (وفيه سُطورُ <c>::error::</c> و<c>::warning::</c>).</summary>
+    internal static (int Exit, string Summary, string Out) RunBootStep(string block, int code)
+    {
+        Assert.True(File.Exists("/bin/bash"), "أَداةٌ غائِبَة: /bin/bash — لا تُشَغَّلُ الخُطوَةُ بِدونِها.");
+        var dir = Directory.CreateTempSubdirectory("wasayel-boot-step-");
+        try
+        {
+            var scripts = Directory.CreateDirectory(Path.Combine(dir.FullName, "scripts"));
+            var stub = Path.Combine(scripts.FullName, "verify-production-boot.sh");
+            File.WriteAllText(stub, $"#!/bin/bash\necho \"ظِلُّ البَوّابَة: {code}\"\nexit {code}\n", new UTF8Encoding(false));
+            File.SetUnixFileMode(stub, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            var step = Path.Combine(dir.FullName, "step.sh");
+            File.WriteAllText(step, block, new UTF8Encoding(false));
+            var summary = Path.Combine(dir.FullName, "summary.md");
+            File.WriteAllText(summary, "");
+            var psi = new ProcessStartInfo("/bin/bash", new[] { "--noprofile", "--norc", "-e", step })
+            {
+                WorkingDirectory = dir.FullName,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                StandardOutputEncoding = Encoding.UTF8,
+            };
+            psi.Environment["BOOT_GATE_CONNECTION_STRING"] = "Host=gate.invalid;Database=boot_gate";
+            psi.Environment["GITHUB_STEP_SUMMARY"] = summary;
+            using var p = Process.Start(psi)!;
+            var text = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
+            Assert.True(p.WaitForExit(10_000), "الخُطوَةُ لَم تَنتَهِ في عَشرِ ثَوانٍ.");
+            return (p.ExitCode, File.ReadAllText(summary).Trim(), text.Trim());
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    /// <summary><b>ما لا يُغَيِّرُه قَرارُ د29</b>: الصِفرُ يَعبُرُ بِـ«عَبَرَت»، و1 و2 و4 (رَمزٌ لا يَعرِفُه المَعجَم) تَخرُجُ بِرَمزِها ومُلَخَّصُها «✗ رَمزُ N» —
+    /// مُشَغَّلَةً بِحَرفِ الكُتلَة. يَبقى بِلا حَرفٍ بَعدَ القَلب.</summary>
+    [Fact]
+    public void The_ci_boot_step_passes_0_and_exits_with_every_code_the_decision_does_not_touch()
+    {
+        if (NoBash(output)) return;
+        var block = BootStepRunBlock(File.ReadAllText(Path.Combine(RepoRoot, ".github", "workflows", "ci.yml")));
+        Assert.Contains("./scripts/verify-production-boot.sh || code=$?", block, StringComparison.Ordinal);
+        var ran = 0;
+        foreach (var code in new[] { 0, 1, 2, 4 })
+        {
+            var (exit, summary, _) = RunBootStep(block, code);
+            output.WriteLine($"{code} → خُروجُ {exit} · «{summary}»");
+            ran++;
+            Assert.Equal(code, exit);
+            Assert.Equal(code == 0 ? "### بَوّابَةُ الإقلاعِ الإنتاجيّ: عَبَرَت" : $"### بَوّابَةُ الإقلاعِ الإنتاجيّ: ✗ رَمزُ {code}", summary);
+        }
+        output.WriteLine($"رُموزٌ مُشَغَّلَة: {ran}");
+        Assert.Equal(4, ran);
+    }
+
+    /// <summary><b>اليَوم</b> (`c8e9d88`): 3 ‏<c>::warning::</c> و«لَم يُقَس» والخُطوَةُ تَخرُجُ بِصِفر — فَالوَظيفَةُ خَضراءُ و<c>deploy-hf.yml</c> يَنشُرُ ما
+    /// لَم يُقَس إقلاعُه. يُقلَبُ بِاسمِه بِقَرارِ المالِك د29 «ب».</summary>
+    [Fact]
+    public void Today_the_ci_boot_step_passes_3_with_a_warning()
+    {
+        if (NoBash(output)) return;
+        var block = BootStepRunBlock(File.ReadAllText(Path.Combine(RepoRoot, ".github", "workflows", "ci.yml")));
+        var (exit, summary, text) = RunBootStep(block, 3);
+        output.WriteLine($"3 → خُروجُ {exit} · «{summary}»");
+        Assert.Equal(0, exit);
+        Assert.Contains("::warning::", text, StringComparison.Ordinal);
+        Assert.Equal("### بَوّابَةُ الإقلاعِ الإنتاجيّ: لَم يُقَس — ما عِندَ المُشَغِّل (3)", summary);
+    }
+
     /// <summary><b>وتَشغيلٌ واحِدٌ عَلى فَرعِ البَوّابَةِ في كُلِّ لَحظَة</b> (‏2026-10-24 — مُراجَعَةُ الموجَة ٤، بَندُ N): الوَظيفَةُ تُقلِعُ Production
     /// (‏CreateOrUpdate وبَذر) عَلى الفَرعِ الواحِدِ في كُلِّ دَفعَةٍ وطَلَبِ دَمج، وتَشغيلانِ مُتَزامِنانِ يَتَسابَقانِ عَلى نَوعِ وَثيقَةٍ جَديدٍ (‏23505 ⇒ 1).
     /// فَمَجموعَةُ تَزامُنٍ في الوَظيفَةِ نَفسِها بِلا إلغاءٍ لِلجاري، ولا مَجموعَةَ عَلى مُستَوى سَيرِ العَمَلِ تُلغيها؛ و§٢·و يُسَمّي الفَرعَ حالَةً مُشتَرَكَة.</summary>
