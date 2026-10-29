@@ -113,6 +113,8 @@ public class VendorShippingTests(ITestOutputHelper output)
     /// <para><b>وقُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د12 (٢) «أ»؛ كانَ <c>The_two_inputs_never_render_together_on_the_vendor_page</c>): وفي فَرعِ التَسجيلِ حَقلُ
     /// لَصقٍ واحِدٌ مُستَثنى — داخِلَ <c>@if (shippingView is { TokenUnreadable: true })</c> وَحدَه (بابُ الاستِرداد)، ولا نَموذَجَ تَسجيلٍ في تِلكَ الكُتلَة؛ فَالمَدخَلانِ لا يُرسَمانِ
     /// مَعاً كَما كان: الكُتلَةُ والاستِمارَةُ فَرعا شَرطٍ واحِد.</para>
+    /// <para>(‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): <b>وآخِرُ الجُملَةِ انقَلَبَ لِحالٍ واحِدَة</b> — مَدخَلُ الضَياعِ تُرسَمُ لَه
+    /// الاستِمارَةُ بَعدَ الكُتلَةِ («أَعِدِ المُحاوَلَة» بابٌ لا كَلِمَة)، فَلَيسَتا فَرعَي شَرطٍ واحِد؛ وما يَقيسُه الصَفُّ بِحَرفِه: لا نَموذَجَ تَسجيلٍ داخِلَ الكُتلَة.</para>
     /// </summary>
     [Fact]
     public void The_two_inputs_never_render_together_and_register_holds_only_the_recovery_paste()
@@ -151,7 +153,6 @@ public class VendorShippingTests(ITestOutputHelper output)
             Regex.Matches(page, @"shippingInput = [^;]*;").Select(m => m.Value).ToArray());
     }
 
-    /// <summary>الكُتلَةُ مِن أَوَّلِ <c>{</c> بَعدَ <paramref name="from"/> إلى قَوسِها المُقابِل.</summary>
     /// <summary>كُتلَةُ بابِ الاستِرداد (‏د12 (٢)) — تُقرَأُ مِن بَعدِ القَوسِ المُغلِق: نَمَطُ الخاصِّيَّةِ <c>{ TokenUnreadable: true }</c> قَوسٌ لا كُتلَة.</summary>
     internal static (int At, string Body) RecoveryBlock(string page, int from)
     {
@@ -161,6 +162,7 @@ public class VendorShippingTests(ITestOutputHelper output)
         return (at, page[at..(at + Head.Length)] + Block(page, at + Head.Length));
     }
 
+    /// <summary>الكُتلَةُ مِن أَوَّلِ <c>{</c> بَعدَ <paramref name="from"/> إلى قَوسِها المُقابِل.</summary>
     private static string Block(string code, int from)
     {
         var open = code.IndexOf('{', from);
@@ -1413,7 +1415,9 @@ public class VendorShippingTests(ITestOutputHelper output)
 
         const string SectionGuard = "@if (activationLink is not null || shippingView is not null || registrant is not null)";
         const string RetryGuard = "@if (registrant is not null)";
-        const string FormGuard = "else if (registrant is { } verified)";
+        // (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ د12 (١)): الحارِسُ نَفسُه وزادَ مَدخَلَ الضَياع — `else if` صارَ `@if` بِشَرطِه، فَتُرسَمُ الاستِمارَةُ
+        // بِلا مَدخَلٍ كَما كانَت ولِمَدخَلِ الضَياعِ بَعدَ بابِ اللَصق («أَعِدِ المُحاوَلَة»)، وبَوّابَةُ جِهَةِ التَواصُلِ شَرطُها في الحالَتَين.
+        const string FormGuard = "@if (shippingView is null or { TokenLost: true } && registrant is { } verified)";
         var section = Block(branch, branch.IndexOf(SectionGuard, StringComparison.Ordinal) + SectionGuard.Length);
         var retry = Block(branch, branch.IndexOf(RetryGuard, StringComparison.Ordinal) + RetryGuard.Length);
         var form = Block(branch, branch.IndexOf(FormGuard, StringComparison.Ordinal) + FormGuard.Length);

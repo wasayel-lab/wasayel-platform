@@ -379,7 +379,10 @@ public static class VendorRegistrationValidator
 /// البَند J): تَعَذَّرَت القِراءَةُ الآن — حالٌ ثالِثَةٌ لا «لا مَدخَل»، فَلا تُرسَمُ استِمارَةُ لَصقٍ ولا تَسجيل.</summary>
 /// <para>و<paramref name="TokenUnreadable"/> (‏2026-10-29، قَرارُ المالِك د12 (٢) «أ»): مَدخَلُه فَعّالٌ ورَمزُه لا يُفتَحُ هُنا — لا يُفَكُّ (مِفتاحُ الخِزانَةِ تَبَدَّل)
 /// أَو لَم يُحفَظ (ضاعَ بَعدَ تَسجيلٍ نَجَح) — فَيُرسَمُ لَه بابُ اللَصقِ في وَضعِ الرَمزِ السوقِيِّ وَحدَه (<see cref="VendorShippingService.TokenUnreadable"/>).</para>
-public sealed record VendorShippingView(string? TokenTail, string? WebhookId, string? WebhookRefusal, bool ReadFailed = false, bool TokenUnreadable = false);
+/// <para>و<paramref name="TokenLost"/> (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ د12 (١)): والحالُ الثانِيَةُ مِنهُما وَحدَها — مَدخَلُ الضَياع
+/// (<see cref="VendorShippingService.IsTokenLostMarker"/>) — فَيُرسَمُ مَعَ بابِ اللَصقِ بابُ «أَعِدِ المُحاوَلَة»: استِمارَةُ التَسجيلِ الَّتي يَقبَلُها <c>RegisterAsync</c> لَه.</para>
+public sealed record VendorShippingView(string? TokenTail, string? WebhookId, string? WebhookRefusal, bool ReadFailed = false, bool TokenUnreadable = false,
+    bool TokenLost = false);
 
 /// <summary>نَتيجَةُ الحِفظ: رَمزُ رَفضٍ أَو المَدخَلُ قَبلُ وبَعدُ (لِسَطرِ التَدقيقِ المُعَتَّم).</summary>
 public sealed record VendorShippingResult(string? Code, TenantProviderBinding? Before, TenantProviderBinding? After)
@@ -449,6 +452,8 @@ public sealed class VendorShippingService
     /// <para><b>فُتِحَ لِلبائِعِ حِسابٌ عِندَ OTO وتَعَذَّرَ حِفظُ رَمزِه هُنا</b> (‏2026-10-29، قَرارُ المالِك د12 (١) «أ» بِاختِيارِه؛ تَوصيفُه <c>d970122</c>): «Register» نَجَح
     /// والخَتمُ تَعَثَّرَ <see cref="SealAttempts"/> مَرّات — <b>فَلا يُعرَضُ رابِطُ التَفعيل</b> («فلا يفعّل البائع حسابًا لا نملك رمزه») ويُقالُ «أَعِدِ المُحاوَلَة»
     /// بِنَصِّه، ويُكتَبُ مَدخَلُه فَعّالاً بِلا رَمزٍ إن أَمكَن فَيُفتَحُ لَه بابُ اللَصق (<see cref="TokenUnreadable"/>). كانَ الاستِثناءُ يَصعَدُ والرابِطُ باقٍ.</para>
+    /// <para>(‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى): <b>و«أَعِدِ المُحاوَلَة» بابٌ لا كَلِمَة</b> — استِمارَةُ التَسجيلِ تُرسَمُ مَعَ بابِ اللَصق
+    /// (<see cref="VendorShippingView.TokenLost"/>) ويَقبَلُها <see cref="RegisterAsync"/> عَلى مَدخَلِ الضَياع (<see cref="IsTokenLostMarker"/>).</para>
     /// </summary>
     public const string RegisterTokenLost = "vendor_register_token_lost";
 
@@ -533,8 +538,17 @@ public sealed class VendorShippingService
         var entry = read.Entry;
         if (entry is not { IsActive: true }) return null;
         var tail = VendorShippingSurface.RefreshField is { } f && entry.Values.TryGetValue(f, out var v) ? v.Tail4 : null;
-        return new(tail, entry.WebhookId, entry.WebhookRefusal, TokenUnreadable: TokenUnreadable(tenantSlug, listingOwner, entry));
+        var unreadable = TokenUnreadable(tenantSlug, listingOwner, entry);
+        return new(tail, entry.WebhookId, entry.WebhookRefusal, TokenUnreadable: unreadable, TokenLost: unreadable && IsTokenLostMarker(entry));
     }
+
+    /// <summary>
+    /// <para><b>مَدخَلُ الضَياع — دالَّةٌ نَقِيَّة</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د12 (١) «أ»): فَعّالٌ <b>بِلا رَمزٍ مَختومٍ أَصلاً</b> — لا يَكتُبُه
+    /// إلّا <see cref="BindTokenLostAsync"/> بَعدَ «Register» نَجَحَ وخَتمٍ تَعَثَّرَ (<see cref="ConnectAsync"/> يَكتُبُ الرَمزَ دائِماً). غَيرُ مَدخَلٍ رَمزُه قائِمٌ لا يَنفَكُّ
+    /// (مِفتاحٌ رَئيسٌ تَبَدَّل): ذاكَ حِسابٌ يَعمَلُ عِندَ OTO ورَمزُه عِندَ البائِع، فَتَسجيلُه ثانِيَةً حِسابٌ ثانٍ — ولِذلك يَبقى <see cref="EntryUnreadable"/> بِلا نِداء.</para>
+    /// </summary>
+    public static bool IsTokenLostMarker(TenantProviderBinding? entry)
+        => entry is { IsActive: true } && VendorShippingSurface.RefreshField is { } refreshField && !entry.Values.ContainsKey(refreshField);
 
     /// <summary>
     /// <para><b>مَدخَلٌ فَعّالٌ لا يُفتَحُ رَمزُه هُنا — دالَّةٌ واحِدَةٌ لِلصَفحَةِ ولِلَّصقِ ولِلتَسجيل</b> (‏2026-10-29، قَرارُ المالِك د12 (٢) «أ»): لا رَمزَ مَختوماً فيه
@@ -640,7 +654,10 @@ public sealed class VendorShippingService
         }
 
         var before = read.Entry;
-        var kept = before is { IsActive: true } ? before : null;
+        // (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د12 (١) «أ»: «يُحجب رابط التفعيل … ويظهر بدله "أعد المحاولة"» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ
+        // ما سَبَق): **ومَدخَلُ الضَياعِ لا يُبقي شَيئاً يُعادُ تَسجيلُ وارِدِه** — لا رَمزَ فيه ولا وارِد — فَإعادَةُ المُحاوَلَةِ تَسجيلٌ مِن جَديدٍ بِالحُدودِ والأَثَرِ أَنفُسِها،
+        // ويُكتَبُ فَوقَه مَدخَلٌ يَعمَلُ إن حُفِظَ الرَمز. كانَ يُجابُ `vendor_entry_unreadable` بِلا نِداء، فَنَصُّ «أَعِدِ المُحاوَلَة» بابٌ مُغلَقٌ (القاعِدَة ١٢).
+        var kept = before is { IsActive: true } && !IsTokenLostMarker(before) ? before : null;
 
         string token;
         string? activationLink = null;
@@ -703,6 +720,8 @@ public sealed class VendorShippingService
         {
             // فُتِحَ الحِسابُ عِندَ OTO والرَمزُ لَم يُحفَظ: لا رابِط، ومَدخَلٌ فَعّالٌ بِلا رَمزٍ إن قَبِلَته القاعِدَةُ — فَيُفتَحُ بابُ اللَصق ولا يُفتَحُ حِسابٌ ثانٍ
             // بِإعادَةِ التَسجيل (`TokenUnreadable` ⇒ `vendor_entry_unreadable` بِلا نِداء). وإن رَفَضَته أَيضاً فَسَطرُ لوغٍ ورَمزُ الضَياعِ كَما هُوَ.
+            // (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه: «ولا يُفتَحُ حِسابٌ ثانٍ» انقَلَب — إعادَةُ التَسجيلِ عَلى مَدخَلِ الضَياعِ تَسجيلٌ
+            // مِن جَديد (`IsTokenLostMarker`): هي «أَعِدِ المُحاوَلَة» الَّتي قَرَّرَها المالِك، ورابِطُ الحِسابِ الأَوَّلِ لَم يُعرَض فَلا يُفَعَّلُ ما لا نَملِكُ رَمزَه.)
             try { await BindTokenLostAsync(tenantSlug, owner, ct); }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -760,6 +779,8 @@ public sealed class VendorShippingService
     /// (‏<c>ShipViewSingleUnsealTests</c> يَقيسُ الحَرفَ). وَحدَه يَكتُبُ مَدخَلَ بائِعٍ خارِجَ <c>ConnectAsync</c>، وأَثَرُه أَمرانِ لا غَير: ‏<see cref="TokenUnreadable"/> نَعَم
     /// (بابُ اللَصق)، وإعادَةُ التَسجيلِ <see cref="EntryUnreadable"/> بِلا نِداء (لا حِسابَ ثانِياً عِندَ OTO). وفي الشَحنِ هُوَ «مَدخَلٌ قائِمٌ لا يُفَكّ» عِندَ
     /// <c>DealShipping.ResolveCarrierAsync</c>: لا بوليصَةَ بِه ولا احتِياطَ عَنه — كَمَدخَلٍ خُتِمَ بِمِفتاحٍ آخَر، لا جَديدَ في الشَحن.</para>
+    /// <para>(‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): <b>والأَمرُ الثاني انقَلَب</b> — إعادَةُ التَسجيلِ عَلَيه تَسجيلٌ مِن جَديد
+    /// (<see cref="IsTokenLostMarker"/>)، لا <see cref="EntryUnreadable"/>: نَصُّ الضَياعِ يَقولُ «أَعِدِ المُحاوَلَة» والبابُ مَفتوحٌ بِحُدودِه وأَثَرِه.</para>
     /// </summary>
     private Task<TenantProviderBinding> BindTokenLostAsync(string tenantSlug, Guid owner, CancellationToken ct)
         => _providers.BindVendorAsync(tenantSlug, ProviderCapabilities.Delivery, owner, VendorShippingSurface.Definition!.Slug,

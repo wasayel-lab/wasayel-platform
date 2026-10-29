@@ -184,10 +184,14 @@
                         }
                     }
                 }
-                else if (registrant is { } verified)
+                @* (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د12 (١) «أ»): **و«أَعِدِ المُحاوَلَة» بابٌ لا كَلِمَة** — لِمَدخَلِ الضَياعِ
+                   (`TokenLost`: «Register» نَجَحَ والرَمزُ لَم يُحفَظ) تُرسَمُ استِمارَةُ التَسجيلِ بَعدَ بابِ اللَصقِ بِمُقَدِّمَتِها الخاصَّة، ويَقبَلُها `RegisterAsync` تَسجيلاً
+                   مِن جَديد (`IsTokenLostMarker`). كانَ الفَرعُ `else if` فَلا يُرسَمُ لَه إلّا اللَصقُ ونَصُّ الضَياعِ يَقولُ «أَعِدِ المُحاوَلَة». ومَدخَلٌ رَمزُه قائِمٌ لا يَنفَكُّ
+                   لا استِمارَةَ لَه — تَسجيلُه حِسابٌ ثانٍ. *@
+                @if (shippingView is null or { TokenLost: true } && registrant is { } verified)
                 {
                     <form method="post" action="@($"/{Slug}/me/shipping/oto/register")">
-                        <span style="display:block;font-size:13px;margin-bottom:8px;line-height:1.7;">@L.Markup("shipping.vendor.reg_intro")</span>
+                        <span style="display:block;font-size:13px;margin-bottom:8px;line-height:1.7;">@L.Markup(shippingView is null ? "shipping.vendor.reg_intro" : "shipping.vendor.reg_retry_intro")</span>
                         <AcField Label="@L["shipping.vendor.reg_first_name"]" Required="true">
                             <input name="@Vs.VendorRegistrationForm.FirstNameField" class="ac-input" required maxlength="30" autocomplete="given-name" />
                         </AcField>

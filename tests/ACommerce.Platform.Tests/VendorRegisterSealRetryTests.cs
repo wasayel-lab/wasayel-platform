@@ -248,6 +248,50 @@ public class LiveVendorRegisterSealRetryProofTests(ITestOutputHelper output)
         finally { await CleanAsync(store, slug); }
     }
 
+    /// <summary><b>و«أَعِدِ المُحاوَلَة» حَيّاً</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د12 (١) «أ»): ثَلاثُ حِفظاتٍ مُتَعَثِّرَةٍ تَترُكُ مَدخَلَ الضَياع
+    /// (العَرضُ <c>TokenLost</c>)، ثُمَّ الإعادَةُ عَلى الخِدمَةِ نَفسِها وقَد عادَت القاعِدَة: نِداءُ «Register» ثانٍ، والرَمزُ الجَديدُ مَختومٌ في Postgres فَوقَ مَدخَلِ
+    /// الضَياع، ورابِطُ تَفعيلِه في وِعاءِ العَرض.</summary>
+    [Fact]
+    public async Task A_retry_on_the_lost_token_entry_registers_again_and_seals_the_new_token_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = "vs-zz-rr-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            var owner = Guid.NewGuid();
+            var counter = new FailingSaveStore.Counter { Failures = VendorShippingService.SealAttempts };
+            var vault = DealShipTests.NewVault();
+            var oto = new OtoRouteHandler();
+            var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, MarketplaceToken = "MKT-live" });
+            var surface = new VendorShippingService(new TenantProviderService(FailingSaveStore.Wrap(store, counter)), vault,
+                new OtoClient(new HttpClient(oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options,
+                new ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditWriter(store),
+                new ACommerce.Templates.Customer.Marketplace.Services.Api.ApiKeyRevealStore(
+                    new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions())));
+
+            var lost = await surface.RegisterAsync(slug, VendorShippingTests.Registrant(owner), VendorShippingTests.Form(), "https://wasayel.example/x");
+            var view = await surface.ViewAsync(slug, owner);
+            var retry = await surface.RegisterAsync(slug, VendorShippingTests.Registrant(owner), VendorShippingTests.Form(), "https://wasayel.example/x");
+            var entry = (await new TenantProviderService(store).ReadVendorEntryAsync(slug, ProviderCapabilities.Delivery, owner)).Entry;
+            var token = entry is not null && entry.Values.TryGetValue(VendorShippingSurface.RefreshField!, out var v)
+                ? v.Unseal(vault, VendorShippingSurface.AadFor(slug, VendorShippingSurface.RefreshField!, owner))
+                : null;
+            var link = surface.TakeActivationLink(slug, owner);
+            output.WriteLine($"الأولى: {lost.Code} · العَرض: ضاع={view?.TokenLost} · الإعادَة: {retry.Code ?? "ok"} · Register: {oto.CallsTo(OtoClient.RegisterPath)} · " +
+                             $"الرَمز: {(token is null ? "لا" : "مَختوم")} · رابِطُ التَفعيل: {(link is null ? "لا" : "قائِم")}");
+
+            Assert.Equal(VendorShippingService.RegisterTokenLost, lost.Code);
+            Assert.True(view is { TokenUnreadable: true, TokenLost: true });
+            Assert.True(retry.Ok, retry.Code);
+            Assert.Equal(2, oto.CallsTo(OtoClient.RegisterPath));
+            Assert.Equal("_refreshToken_", token);
+            Assert.NotNull(link);
+        }
+        finally { await CleanAsync(store, slug); }
+    }
+
     /// <summary>وإن رَفَضَت القاعِدَةُ مَدخَلَ الضَياعِ أَيضاً (‏2026-10-29، د12 (١) «أ»): لا استِثناء، ولا رابِط، <b>ولا مَدخَلَ في Postgres</b> — فَلا بابَ
     /// لَصقٍ يُرسَمُ بِلا ما يُفتَحُ بِه، والتَسجيلُ التالي يَفتَحُ حِساباً عِندَ OTO كَما كانَ قَبلَ القَرار (باقٍ مُعلَنٌ في ADR-033 §٧‑ش البَند ٦).</summary>
     [Fact]
