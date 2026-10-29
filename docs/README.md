@@ -253,6 +253,7 @@ dotnet run scripts/verify-runtime.cs -- [--viewport 390x844] <url>
 | تَنَوُّع الأَلوان/المَسافات/الأَحجام | `./scripts/verify-design-quality.sh` |
 | الاختِبارات | `dotnet test PlatformV1.slnx` |
 | مالِكو الإعلاناتِ المُمَيَّزونَ لِكُلِّ مَتجَر، ونَمَطُه المَرسومُ وسَلَّتُه — أَداةُ عَتَبَةِ الرُجوعِ في ADR-032 §٦‑ز (قِراءَةٌ فَقَط، عَلى فَرعِ Neon مَنسوخ) | `dotnet run scripts/count-listing-owners.cs` |
+| الحِساباتُ المُكَرَّرَةُ بِصيغَتَي الجَوّالِ لِكُلِّ مَتجَرٍ ولِلاستوديو، وما يَدمِجُه الدَمجُ وما يَمتَنِعُ عَنه ولِماذا — ADR-044 §٤ (‏2026-10-29؛ قِراءَةٌ فَقَط. والدَمجُ `merge-duplicate-phones.cs` عَرضاً ثُمَّ `--apply --confirm N` بَعدَ لَقطَة) | `dotnet run scripts/count-duplicate-phones.cs` |
 
 ---
 

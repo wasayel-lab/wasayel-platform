@@ -68,7 +68,9 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         Assert.Equal(new[] { "user!" }, stores);
         Assert.Equal(0, patches);
         Assert.Equal(0, dealMentions);
-        Assert.Equal(new[] { "MarketplaceTemplateExtensions.cs" }, erasers);
+        // ‏‏2026-10-29 (د57، ‏ADR-044 §٤): مُستَدعٍ ثانٍ بِقَرار — الدَمجُ يَمحو الحِسابَ المُندَمِجَ بِـ`Erase` بِعَينِها بَعدَ أَن يَنقُلَ صَفَقاتِه
+        // وما يَحمِلُ مُعَرِّفَه إلى الباقي (`DuplicatePhones.ApplyAsync`)؛ فَلا يَبلُغُ المَحوُ صَفقَةً مِنه أَيضاً، والتَوقيعُ أَدناه كَما هُو.
+        Assert.Equal(new[] { "DuplicatePhones.cs", "MarketplaceTemplateExtensions.cs" }, erasers);
         Assert.True(dealFiles.Length >= 10, $"أَداةٌ عَمياء: {dealFiles.Length} مِلَفّاً في خِدماتِ الصَفَقات.");
         Assert.Empty(deletionAware);
 
