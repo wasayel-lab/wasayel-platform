@@ -200,6 +200,30 @@ public class GatewayPaymentConfirmTests(ITestOutputHelper output)
         Assert.Empty(w.Platform.Calls);
     }
 
+    /// <summary><b>اليَوم</b> (‏2026-10-29، تَوصيفٌ قَبلَ قَرارِ المالِك د4 «ب»: «تُدخَلُ مرحلة «دفع» آليًّا متى سُجّل الدفع، باسم المنصّة»): صَفقَةٌ دُفِعَت فاتورَتُها
+    /// وهي عِندَ «عرض» يَقبَلُها البائِعُ ويُؤَكِّدُها فَتَقِفُ عِندَ «تأكيد» — ودَفعُها مَكتوب — حَتّى يَنقُرَ المُشتَري «تأكيد: دفع»، فَتَدخُلُ «دفع» بِاسمِه.
+    /// ومَعَه الصَفُّ أَعلاه (<c>Verify_moves_a_deal_standing_before_Paid_into_Paid_as_its_buyer_and_leaves_earlier_ones</c>) — يُقلَبانِ بِاسمَيهِما.</summary>
+    [Fact]
+    public async Task Today_a_deal_paid_while_offered_waits_at_Confirmed_for_the_buyers_click()
+    {
+        var w = await PaidCart(withSeller: true);
+        w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w));
+        Assert.True((await w.Gateway.VerifyAsync(Slug, new DealPayer(Buyer), w.Ids[1].ToString("N"))).Ok);
+        Assert.Equal(DealStage.Offered, Load(w, w.Ids[1]).Stage);
+
+        await ToConfirmed(w, w.Ids[1]);
+        var waiting = Load(w, w.Ids[1]);
+        output.WriteLine($"بَعدَ التَأكيد: {waiting.Stage} · مَقبوضَة: {DealsService.IsCaptured(waiting)} · تاليها: {DealsPolicy.Next(waiting)}");
+        Assert.Equal(DealStage.Confirmed, waiting.Stage);
+        Assert.True(DealsService.IsCaptured(waiting));
+
+        var click = await w.Deals.AdvanceAsync(Slug, w.Ids[1], Buyer, "مُشتَرٍ");
+        Assert.True(click.Ok, click.Reason);
+        var move = Assert.Single(Load(w, w.Ids[1]).Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Paid);
+        Assert.Equal(Buyer, move.ActorId);
+        Assert.Empty(w.Platform.Calls);
+    }
+
     // ═══ ٤) الإلغاءُ لا يُنادي مُزَوِّدَ النُسخَةِ عَن مالِ البَوّابَة ═══════════════════════════════════════
 
     [Fact]
