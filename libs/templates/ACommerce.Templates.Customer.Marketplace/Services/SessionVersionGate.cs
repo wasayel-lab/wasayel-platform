@@ -71,15 +71,26 @@ public static class SessionVersionGate
 
     private static string Key(string tenant, Guid userId) => $"session-version|{tenant}|{userId:N}";
 
+    /// <summary>
+    /// <para><b>الإصدارُ الَّذي تُقارِنُ بِه البَوّابَةُ حِساباً في مَتجَر</b> — نَقِيَّة. <c>null</c> لِحِسابٍ لا وَثيقَةَ لَه (لا يُسقِطُ شَيئاً، كَما كان)؛
+    /// <b>و<see cref="int.MaxValue"/> لِحِسابٍ مَحذوف</b> فَيَسقُطُ كُلُّ رَمزٍ لَه؛ وإلّا <c>SessionVersion</c>.</para>
+    /// <para>(‏2026-10-29، تَدقيقُ الموجَة ١١ A4؛ تَوصيفُه <c>ca9e8b3</c>) كانَ الحَذفُ يُسقِطُ الرُموزَ بِرَفعِ الإصدارِ وَحدَه — وذاكَ مُنذُ <c>2e65882</c>
+    /// (د28)؛ فَحِسابٌ حُذِفَ قَبلَه إصدارُه ‏0 ورَمزُه القَديمُ ‏0 لَيسَ أَصغَرَ مِنه، فَيَعبُرُ ثَلاثينَ يَوماً مِن إصدارِه. والحَذفُ حالَةٌ لا عَدَد:
+    /// <c>DeletedAt</c> يَكفي، فَلا يَتَوَقَّفُ إسقاطُ رُموزِ المَحذوفِ عَلى رَفعٍ قَد يَكونُ فاتَه. <c>StudioUser</c> لا حَذفَ لَه اليَومَ (لا
+    /// <c>DeletedAt</c> فيه)، فَإصدارُه كَما هُوَ.</para>
+    /// </summary>
+    public static int? GateVersion(User? account)
+        => account is null ? null : account.DeletedAt is not null ? int.MaxValue : account.SessionVersion;
+
     /// <summary>إصدارُ الحِسابِ المُخَزَّن — مِن الذاكِرَةِ إن حُفِظَ خِلالَ <see cref="CacheFor"/>، وإلّا مِن وَثيقَتِه: <c>StudioUser</c> لِلاستوديو
-    /// و<c>User</c> في جَلسَةِ مُستَأجِرِه. <c>null</c> لِحِسابٍ لا وَثيقَةَ لَه.</summary>
+    /// و<c>User</c> في جَلسَةِ مُستَأجِرِه بِـ<see cref="GateVersion"/>. <c>null</c> لِحِسابٍ لا وَثيقَةَ لَه.</summary>
     public static async Task<int?> AccountVersionAsync(IDocumentStore store, IMemoryCache cache, string tenant, Guid userId)
     {
         if (cache.TryGetValue(Key(tenant, userId), out int? cached)) return cached;
         await using var q = store.QuerySession(tenant);
         int? version = tenant == StudioAuth.Tenant
             ? (await q.LoadAsync<StudioUser>(userId))?.SessionVersion
-            : (await q.LoadAsync<User>(userId))?.SessionVersion;
+            : GateVersion(await q.LoadAsync<User>(userId));
         cache.Set(Key(tenant, userId), version, CacheFor);
         return version;
     }

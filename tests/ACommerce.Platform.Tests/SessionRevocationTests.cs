@@ -358,19 +358,46 @@ public class SessionRevocationTests(ITestOutputHelper output)
     // الحَذفُ يَرفَعُ الإصدارَ مُنذُ `2e65882` (د28)، والبَوّابَةُ تُقارِنُ إصدارَ الرَمزِ بِإصدارِ الحِسابِ وَحدَه — فَحِسابٌ حُذِفَ قَبلَها إصدارُه
     // المُخَزَّنُ ‏0، ورَمزُه القَديمُ (بِلا إصدار = ‏0) لَيسَ أَصغَرَ مِنه: يَعبُرُ البَوّابَةَ ثَلاثينَ يَوماً مِن إصدارِه.
 
-    /// <summary><b>تَوصيفُ اليَوم (‏2026-10-29، A4)</b>: حِسابٌ <c>DeletedAt</c> فيه وإصدارُه ‏0، ورَمزُه ‏0 في كوكيِّ المَتجَر — البَوّابَةُ تُبقيه
-    /// والجَلسَةُ تُحَلّ.</summary>
-    [Fact]
-    public async Task Today_a_version_zero_token_of_an_account_deleted_before_session_versions_passes_the_gate()
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، A4 — كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_a_version_zero_token_of_an_account_deleted_before_session_versions_passes_the_gate</c> (‏<c>ca9e8b3</c>): «حِسابٌ مَحذوفٌ بِإصدارِ 0 ·
+    /// رَمزُه 0 يَعبُر · Set-Cookie 0». والآن المَحذوفُ إصدارُه في البَوّابَةِ <see cref="int.MaxValue"/>، فَيُنزَعُ رَمزُه ويُمحى مِن المُتَصَفِّح —
+    /// بِأَيِّ إصدارٍ كانَ الرَمزُ أَو الحِساب.</summary>
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(3, 3)]
+    [InlineData(0, 5)]
+    public async Task A_deleted_account_token_is_stripped_whatever_its_version(int accountVersion, int tokenVersion)
     {
-        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 0, DeletedAt = new DateTime(2026, 10, 1, 9, 0, 0, DateTimeKind.Utc) };
-        var token = AuthHandlers.MakeToken(user.Id, NameSlug, 0);
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = accountVersion, DeletedAt = new DateTime(2026, 10, 1, 9, 0, 0, DateTimeKind.Utc) };
+        var token = AuthHandlers.MakeToken(user.Id, NameSlug, tokenVersion);
         var ctx = GateContext($"/{NameSlug}/me", user, ($".acommerce.auth.{NameSlug}", token));
         await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ApplyAsync(ctx);
         var resolved = ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveToken(ctx.Request, NameSlug);
-        output.WriteLine($"اليَوم: حِسابٌ مَحذوفٌ بِإصدارِ 0 · رَمزُه 0 {(resolved is null ? "يُنزَع" : "يَعبُر")} · Set-Cookie {ctx.Response.Headers.SetCookie.Count}");
-        Assert.Equal(user.Id, AuthHandlers.ParseToken(resolved)!.Value.UserId);
+        output.WriteLine($"بَعدَ التَبديل: حِسابٌ مَحذوفٌ بِإصدارِ {accountVersion} · رَمزُه {tokenVersion} {(resolved is null ? "يُنزَع" : "يَعبُر")} · Set-Cookie {ctx.Response.Headers.SetCookie.Count}");
+        Assert.Null(resolved);
+        Assert.Contains(ctx.Response.Headers.SetCookie, c => c!.StartsWith($".acommerce.auth.{NameSlug}=;", StringComparison.Ordinal));
+    }
+
+    /// <summary>السالِب: حِسابٌ حَيٌّ بِإصدارِ ‏0 ورَمزُه ‏0 — يَعبُرُ كَما كان، ولا يُمحى شَيء.</summary>
+    [Fact]
+    public async Task A_live_version_zero_account_token_still_passes()
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 0 };
+        var token = AuthHandlers.MakeToken(user.Id, NameSlug, 0);
+        var ctx = GateContext($"/{NameSlug}/me", user, ($".acommerce.auth.{NameSlug}", token));
+        await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ApplyAsync(ctx);
+        Assert.Equal(user.Id, AuthHandlers.ParseToken(ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveToken(ctx.Request, NameSlug))!.Value.UserId);
         Assert.Equal(0, ctx.Response.Headers.SetCookie.Count);
+    }
+
+    /// <summary>الدالَّةُ النَقِيَّة: لا وَثيقَة ← <c>null</c> (لا يُسقِطُ شَيئاً)؛ مَحذوف ← <see cref="int.MaxValue"/>؛ حَيّ ← إصدارُه.</summary>
+    [Fact]
+    public void The_gate_version_is_null_without_an_account_max_when_deleted_and_the_stored_one_otherwise()
+    {
+        Assert.Null(ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.GateVersion(null));
+        Assert.Equal(int.MaxValue, ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.GateVersion(new User { SessionVersion = 2, DeletedAt = DateTime.UtcNow }));
+        Assert.Equal(2, ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.GateVersion(new User { SessionVersion = 2 }));
+        Assert.True(ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.IsRevoked(int.MaxValue - 1, int.MaxValue));
     }
 }
 
