@@ -377,7 +377,9 @@ public static class VendorRegistrationValidator
 
 /// <summary>ما يَراه البائِعُ مِن مَدخَلِه — ذَيلُ الرَمزِ وحالُ تَسجيلِ الوارِد، لا سِرَّ. و<paramref name="ReadFailed"/> (‏2026-10-24، تَيّارُ S15
 /// البَند J): تَعَذَّرَت القِراءَةُ الآن — حالٌ ثالِثَةٌ لا «لا مَدخَل»، فَلا تُرسَمُ استِمارَةُ لَصقٍ ولا تَسجيل.</summary>
-public sealed record VendorShippingView(string? TokenTail, string? WebhookId, string? WebhookRefusal, bool ReadFailed = false);
+/// <para>و<paramref name="TokenUnreadable"/> (‏2026-10-29، قَرارُ المالِك د12 (٢) «أ»): مَدخَلُه فَعّالٌ ورَمزُه لا يُفتَحُ هُنا — لا يُفَكُّ (مِفتاحُ الخِزانَةِ تَبَدَّل)
+/// أَو لَم يُحفَظ (ضاعَ بَعدَ تَسجيلٍ نَجَح) — فَيُرسَمُ لَه بابُ اللَصقِ في وَضعِ الرَمزِ السوقِيِّ وَحدَه (<see cref="VendorShippingService.TokenUnreadable"/>).</para>
+public sealed record VendorShippingView(string? TokenTail, string? WebhookId, string? WebhookRefusal, bool ReadFailed = false, bool TokenUnreadable = false);
 
 /// <summary>نَتيجَةُ الحِفظ: رَمزُ رَفضٍ أَو المَدخَلُ قَبلُ وبَعدُ (لِسَطرِ التَدقيقِ المُعَتَّم).</summary>
 public sealed record VendorShippingResult(string? Code, TenantProviderBinding? Before, TenantProviderBinding? After)
@@ -443,7 +445,14 @@ public sealed class VendorShippingService
     /// </summary>
     public const string RegisterDailyLimited = "vendor_register_daily_limited";
 
-    public static readonly IReadOnlyList<string> Codes = new[] { PasteClosed, TokenMissing, VaultUnavailable, RegisterClosed, EntryUnreadable, RegisterRateLimited, TokenRefused, EntryReadFailed, RegisterDailyLimited };
+    /// <summary>
+    /// <para><b>فُتِحَ لِلبائِعِ حِسابٌ عِندَ OTO وتَعَذَّرَ حِفظُ رَمزِه هُنا</b> (‏2026-10-29، قَرارُ المالِك د12 (١) «أ» بِاختِيارِه؛ تَوصيفُه <c>d970122</c>): «Register» نَجَح
+    /// والخَتمُ تَعَثَّرَ <see cref="SealAttempts"/> مَرّات — <b>فَلا يُعرَضُ رابِطُ التَفعيل</b> («فلا يفعّل البائع حسابًا لا نملك رمزه») ويُقالُ «أَعِدِ المُحاوَلَة»
+    /// بِنَصِّه، ويُكتَبُ مَدخَلُه فَعّالاً بِلا رَمزٍ إن أَمكَن فَيُفتَحُ لَه بابُ اللَصق (<see cref="TokenUnreadable"/>). كانَ الاستِثناءُ يَصعَدُ والرابِطُ باقٍ.</para>
+    /// </summary>
+    public const string RegisterTokenLost = "vendor_register_token_lost";
+
+    public static readonly IReadOnlyList<string> Codes = new[] { PasteClosed, TokenMissing, VaultUnavailable, RegisterClosed, EntryUnreadable, RegisterRateLimited, TokenRefused, EntryReadFailed, RegisterDailyLimited, RegisterTokenLost };
 
     /// <summary>
     /// <para><b>مِفتاحُ حَدِّ المُحاوَلاتِ في حِصَّةِ الإرسالِ القائِمَة</b> (<c>AuthHandlers.TryConsumeSendQuota</c>، «‏tenant|subject»): بائِعٌ في مَتجَر.
@@ -524,13 +533,43 @@ public sealed class VendorShippingService
         var entry = read.Entry;
         if (entry is not { IsActive: true }) return null;
         var tail = VendorShippingSurface.RefreshField is { } f && entry.Values.TryGetValue(f, out var v) ? v.Tail4 : null;
-        return new(tail, entry.WebhookId, entry.WebhookRefusal);
+        return new(tail, entry.WebhookId, entry.WebhookRefusal, TokenUnreadable: TokenUnreadable(tenantSlug, listingOwner, entry));
+    }
+
+    /// <summary>
+    /// <para><b>مَدخَلٌ فَعّالٌ لا يُفتَحُ رَمزُه هُنا — دالَّةٌ واحِدَةٌ لِلصَفحَةِ ولِلَّصقِ ولِلتَسجيل</b> (‏2026-10-29، قَرارُ المالِك د12 (٢) «أ»): لا رَمزَ مَختوماً فيه
+    /// (ضاعَ حِفظُه بَعدَ تَسجيلٍ نَجَح — <see cref="RegisterTokenLost"/>) أَو لا يَنفَكُّ بِخِزانَةِ هذِه النُسخَة (مِفتاحُها تَبَدَّل). هُما الحالَتانِ وَحدَهُما الَّلتانِ
+    /// يُفتَحُ فيهِما بابُ اللَصقِ في وَضعِ الرَمزِ السوقِيّ؛ ويُجيبُ بِهِما التَسجيلُ <see cref="EntryUnreadable"/> بِلا نِداء. وبِلا خِزانَةٍ تَفُكُّ: <c>false</c> — لا يُدَّعى
+    /// «لا يُفَكّ» بِلا مُحاوَلَة.</para>
+    /// </summary>
+    public bool TokenUnreadable(string tenantSlug, Guid listingOwner, TenantProviderBinding? entry)
+        => entry is { IsActive: true } && _vault.IsAvailable && !TryOpenToken(tenantSlug, listingOwner, entry, out _);
+
+    /// <summary>يَفُكُّ رَمزَ التَحديثِ المَختومَ في المَدخَلِ بِسِياقِه — أَو <c>false</c> حينَ لا رَمزَ أَو لا يَنفَكّ.</summary>
+    private bool TryOpenToken(string tenantSlug, Guid listingOwner, TenantProviderBinding entry, out string token)
+    {
+        token = "";
+        if (VendorShippingSurface.RefreshField is not { } refreshField || !entry.Values.TryGetValue(refreshField, out var sealedToken))
+            return false;
+        try { token = sealedToken.Unseal(_vault, VendorShippingSurface.AadFor(tenantSlug, refreshField, listingOwner)); return true; }
+        catch (CryptographicException) { return false; }
     }
 
     public async Task<VendorShippingResult> SaveTokenAsync(
         string tenantSlug, ListingVendor vendor, string? refreshToken, string inboundUrl, CancellationToken ct = default)
     {
-        if (Input != VendorShippingInput.Paste)
+        // (‏2026-10-29، قَرارُ المالِك د12 (٢) «أ»؛ تَوصيفُه `d970122` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وفي وَضعِ الرَمزِ السوقِيِّ يُفتَحُ اللَصقُ لِحالَتَينِ وَحدَهُما**
+        // — مَدخَلٌ فَعّالٌ رَمزُه لا يُفَكّ، أَو رَمزٌ ضاعَ حِفظُه بَعدَ تَسجيلٍ نَجَح (`TokenUnreadable`، الدالَّةُ الَّتي تَرسُمُ بِها الصَفحَةُ البابَ). والقِراءَةُ قَبلَ الحَقل:
+        // البابُ يُسأَلُ عَن المَدخَلِ قَبلَ أَن يُقرَأَ الرَمز (القاعِدَة ٦)، وقِراءَةٌ تَرمي تُجابُ رَمزَها بِلا كِتابَة.
+        TenantProviderBinding? recovered = null;
+        if (Input == VendorShippingInput.Register)
+        {
+            var current = await _providers.ReadVendorEntryAsync(tenantSlug, ProviderCapabilities.Delivery, vendor.UserId, ct);
+            if (current.Failed) return new(EntryReadFailed, null, null);
+            if (!TokenUnreadable(tenantSlug, vendor.UserId, current.Entry)) return new(PasteClosed, current.Entry, null);
+            recovered = current.Entry;
+        }
+        else if (Input != VendorShippingInput.Paste)
             return new(_vault.IsAvailable ? PasteClosed : VaultUnavailable, null, null);
 
         var token = (refreshToken ?? "").Trim();
@@ -548,7 +587,10 @@ public sealed class VendorShippingService
         }
 
         // (‏2026-10-13، G5 (iii)): قِراءَةٌ تَرمي لَيسَت «لا مَدخَل» — كانَت تُسقِطُ تَسجيلَ الوارِدِ القائِمَ فَيُنشَأُ عِندَ OTO ثانٍ. يُرَدُّ بِرَمزِه بِلا كِتابَة.
-        var read = await _providers.ReadVendorEntryAsync(tenantSlug, ProviderCapabilities.Delivery, vendor.UserId, ct);
+        // (‏2026-10-29، د12 (٢)): ومَدخَلُ بابِ الاستِردادِ قُرِئَ قَبلَ الحَقلِ أَعلاه — فَلا يُقرَأُ ثانِيَة.
+        var read = recovered is not null
+            ? new VendorEntryRead(recovered, false)
+            : await _providers.ReadVendorEntryAsync(tenantSlug, ProviderCapabilities.Delivery, vendor.UserId, ct);
         if (read.Failed)
         {
             _log.LogWarning("[OTO] vendor {Slug}/{Owner} ← paste refused ({Code}) — nothing stored",
@@ -557,7 +599,9 @@ public sealed class VendorShippingService
         }
 
         var before = read.Entry;
-        var saved = await ConnectAsync(tenantSlug, vendor.UserId, token, inboundUrl, before is { IsActive: true } ? before : null, ct);
+        TenantProviderBinding saved;
+        try { saved = await ConnectAsync(tenantSlug, vendor.UserId, token, inboundUrl, before is { IsActive: true } ? before : null, ct); }
+        catch (TokenNotSealedException lost) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(lost.InnerException!).Throw(); throw; }
 
         _log.LogInformation("[OTO] vendor {Slug}/{Owner} ← saved (webhook: {Webhook})",
             tenantSlug, vendor.UserId.ToString("D"), saved.WebhookRefusal ?? (saved.WebhookId is null ? "—" : "registered"));
@@ -599,6 +643,7 @@ public sealed class VendorShippingService
         var kept = before is { IsActive: true } ? before : null;
 
         string token;
+        string? activationLink = null;
         if (kept is null)
         {
             var sent = registrant.Bind(form);
@@ -637,22 +682,40 @@ public sealed class VendorShippingService
                 return new(registered.Failure!.Code, before, null);
             }
 
-            _reveal.Stash(tenantSlug, RevealKey(owner), account.ActivationLink);
+            // (‏2026-10-29، قَرارُ المالِك د12 (١) «أ»؛ تَوصيفُه `d970122` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **الرابِطُ بَعدَ الخَتمِ لا قَبلَه** — كانَ يوضَعُ
+            // في وِعاءِ العَرضِ ثُمَّ يُختَمُ الرَمز، فَخَتمٌ يَتَعَثَّرُ يَترُكُ رابِطاً يُفَعِّلُ حِساباً لا نَملِكُ رَمزَه. يُختَمُ أَوَّلاً، وضَياعُه رَمزُه.
+            activationLink = account.ActivationLink;
             token = account.RefreshToken;
         }
         else
         {
-            if (VendorShippingSurface.RefreshField is not { } refreshField
-                || !kept.Values.TryGetValue(refreshField, out var sealedToken))
+            // (‏2026-10-29، د12 (٢)): والحالَتانِ بِالدالَّةِ الَّتي تَفتَحُ بِها الصَفحَةُ بابَ اللَصق — لا رَمزَ مَختوماً، أَو لا يَنفَكّ.
+            if (!TryOpenToken(tenantSlug, owner, kept, out token))
                 return new(EntryUnreadable, before, null);
-            try { token = sealedToken.Unseal(_vault, VendorShippingSurface.AadFor(tenantSlug, refreshField, owner)); }
-            catch (CryptographicException) { return new(EntryUnreadable, before, null); }
 
             await _audit.WriteAsync(tenantSlug, owner, vendor.Name, RegisterAuditAction, "provider", entryId,
                 note: InboundNote, ip: ip, ct: ct);
         }
 
-        var saved = await ConnectAsync(tenantSlug, owner, token, inboundUrl, kept, ct);
+        TenantProviderBinding saved;
+        try { saved = await ConnectAsync(tenantSlug, owner, token, inboundUrl, kept, ct); }
+        catch (TokenNotSealedException) when (activationLink is not null)
+        {
+            // فُتِحَ الحِسابُ عِندَ OTO والرَمزُ لَم يُحفَظ: لا رابِط، ومَدخَلٌ فَعّالٌ بِلا رَمزٍ إن قَبِلَته القاعِدَةُ — فَيُفتَحُ بابُ اللَصق ولا يُفتَحُ حِسابٌ ثانٍ
+            // بِإعادَةِ التَسجيل (`TokenUnreadable` ⇒ `vendor_entry_unreadable` بِلا نِداء). وإن رَفَضَته أَيضاً فَسَطرُ لوغٍ ورَمزُ الضَياعِ كَما هُوَ.
+            try { await BindTokenLostAsync(tenantSlug, owner, ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _log.LogError("[OTO] vendor {Slug}/{Owner} ← the token-lost entry was not stored either ({Error})",
+                    tenantSlug, owner.ToString("D"), ex.GetType().Name);
+            }
+            _log.LogWarning("[OTO] vendor {Slug}/{Owner} ← register refused ({Code}) — activation link withheld",
+                tenantSlug, owner.ToString("D"), RegisterTokenLost);
+            return new(RegisterTokenLost, before, null);
+        }
+        // وإعادَةُ تَسجيلِ الوارِدِ لِمَدخَلٍ قائِمٍ (لا حِسابَ جَديداً ولا رابِط) يَصعَدُ فيها الأَصلُ كَما كان.
+        catch (TokenNotSealedException lost) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(lost.InnerException!).Throw(); throw; }
+        if (activationLink is not null) _reveal.Stash(tenantSlug, RevealKey(owner), activationLink);
         _log.LogInformation("[OTO] vendor {Slug}/{Owner} ← {Path} (webhook: {Webhook})", tenantSlug, owner.ToString("D"),
             kept is null ? "registered" : "inbound", saved.WebhookRefusal ?? (saved.WebhookId is null ? "—" : "registered"));
         return new(null, before, saved);
@@ -682,14 +745,28 @@ public sealed class VendorShippingService
                 _log.LogWarning(ex, "[OTO] vendor {Slug}/{Owner} ← sealing the account token failed (attempt {Attempt}/{Max}) — retrying",
                     tenantSlug, owner.ToString("D"), attempt, SealAttempts);
             }
-            catch (Exception ex) when (attempt >= SealAttempts)
+            catch (Exception ex) when (attempt >= SealAttempts && ex is not OperationCanceledException)
             {
                 _log.LogError(ex, "[OTO] vendor {Slug}/{Owner} ← sealing the account token failed {Max} times — a token OTO issued once is not stored",
                     tenantSlug, owner.ToString("D"), SealAttempts);
-                throw;
+                // (‏2026-10-29، قَرارُ المالِك د12 (١) «أ»): بِاسمٍ يُمَيِّزُ «الرَمزُ لَم يُحفَظ» مِن عُطلٍ بَعدَه — يَلتَقِطُه التَسجيلُ رَمزاً، ويُعيدُ اللَصقُ رَميَ الأَصل.
+                throw new TokenNotSealedException(ex);
             }
         }
     }
+
+    /// <summary>
+    /// <para><b>مَدخَلُ الضَياع</b> (‏2026-10-29، قَرارُ المالِك د12 (١) «أ»): فَعّالٌ <b>بِقاموسٍ فارِغٍ وبِلا وارِد</b> — لا رَمزَ ولا سِرّ، فَلا يَختِمُ سِرّاً أَحدَثَ مِن رَمزِه
+    /// (‏<c>ShipViewSingleUnsealTests</c> يَقيسُ الحَرفَ). وَحدَه يَكتُبُ مَدخَلَ بائِعٍ خارِجَ <c>ConnectAsync</c>، وأَثَرُه أَمرانِ لا غَير: ‏<see cref="TokenUnreadable"/> نَعَم
+    /// (بابُ اللَصق)، وإعادَةُ التَسجيلِ <see cref="EntryUnreadable"/> بِلا نِداء (لا حِسابَ ثانِياً عِندَ OTO). وفي الشَحنِ هُوَ «مَدخَلٌ قائِمٌ لا يُفَكّ» عِندَ
+    /// <c>DealShipping.ResolveCarrierAsync</c>: لا بوليصَةَ بِه ولا احتِياطَ عَنه — كَمَدخَلٍ خُتِمَ بِمِفتاحٍ آخَر، لا جَديدَ في الشَحن.</para>
+    /// </summary>
+    private Task<TenantProviderBinding> BindTokenLostAsync(string tenantSlug, Guid owner, CancellationToken ct)
+        => _providers.BindVendorAsync(tenantSlug, ProviderCapabilities.Delivery, owner, VendorShippingSurface.Definition!.Slug,
+            new Dictionary<string, StoredValue>(StringComparer.Ordinal), null, null, owner.ToString("D"), ct);
+
+    /// <summary>خَتمُ رَمزِ الحِسابِ تَعَثَّرَ <see cref="SealAttempts"/> مَرّات — والأَصلُ في <see cref="Exception.InnerException"/> (‏2026-10-29، د12 (١)).</summary>
+    private sealed class TokenNotSealedException(Exception inner) : Exception("vendor token not sealed", inner);
 
     /// <summary>
     /// <para><b>المَسارُ الواحِدُ لِلخَتمِ وتَسجيلِ الوارِد</b> — يَسلُكُه اللَصقُ والتَسجيلُ مَعاً (كانَ جِسمَ <c>SaveTokenAsync</c> حَرفاً حَتّى

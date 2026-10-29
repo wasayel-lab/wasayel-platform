@@ -64,11 +64,13 @@ public class VendorRegisterSealRetryTests(ITestOutputHelper output)
     }
 
     /// <summary><b>والحَدُّ مَحدود</b>: حِفظانِ مُتَعَثِّرانِ يُعادانِ فَالثالِثُ يَحفَظ؛ وثَلاثَةٌ (<see cref="VendorShippingService.SealAttempts"/>) يَصعَدُ
-    /// بَعدَها الاستِثناءُ ولا يُسَجَّلُ وارِد — الباقي المُعلَنُ في ADR-033 §٧‑ص‑٣.</summary>
+    /// بَعدَها الاستِثناءُ ولا يُسَجَّلُ وارِد — الباقي المُعلَنُ في ADR-033 §٧‑ص‑٣.
+    /// <para><b>وقُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د12 (١) «أ»؛ كانَ <c>The_seal_is_retried_up_to_the_bound_and_no_further</c>، وتَوصيفُ الرابِطِ <c>d970122</c>):
+    /// بَعدَ الثَلاثَةِ لا استِثناء — <c>vendor_register_token_lost</c>، وحِفظٌ رابِعٌ لِمَدخَلِ الضَياعِ (فَعّالٌ بِلا رَمز)، ولا وارِد.</para></summary>
     [Theory]
     [InlineData(2, true)]
     [InlineData(3, false)]
-    public async Task The_seal_is_retried_up_to_the_bound_and_no_further(int failures, bool sealedInTime)
+    public async Task The_seal_is_retried_up_to_the_bound_and_then_answers_token_lost(int failures, bool sealedInTime)
     {
         Assert.Equal(3, VendorShippingService.SealAttempts);
         var owner = Guid.NewGuid();
@@ -76,20 +78,22 @@ public class VendorRegisterSealRetryTests(ITestOutputHelper output)
         var surface = VendorRegisterBucketTests.Surface(w);
         var saves = FailSaves(w.Docs, failAt: 2, failures: failures);
 
-        var error = await Record.ExceptionAsync(() =>
-            surface.RegisterAsync(Slug, VendorShippingTests.Registrant(owner), VendorShippingTests.Form(), Inbound));
+        VendorShippingResult? result = null;
+        var error = await Record.ExceptionAsync(async () =>
+            result = await surface.RegisterAsync(Slug, VendorShippingTests.Registrant(owner), VendorShippingTests.Form(), Inbound));
 
-        output.WriteLine($"تَعَثُّر: {failures} · الاستِثناء: {error?.GetType().Name ?? "لا"} · حِفظات: {saves()} · webhook: {w.Oto.CallsTo(OtoClient.WebhookPath)}");
+        output.WriteLine($"تَعَثُّر: {failures} · الاستِثناء: {error?.GetType().Name ?? "لا"} · الرَمز: {result?.Code ?? "ok"} · حِفظات: {saves()} · webhook: {w.Oto.CallsTo(OtoClient.WebhookPath)}");
+        Assert.Null(error);
         if (sealedInTime)
         {
-            Assert.Null(error);
+            Assert.True(result!.Ok, result.Code);
             Assert.Equal(1 + failures + 1 + 1, saves());
             Assert.Equal(1, w.Oto.CallsTo(OtoClient.WebhookPath));
         }
         else
         {
-            Assert.IsType<InvalidOperationException>(error);
-            Assert.Equal(1 + VendorShippingService.SealAttempts, saves());
+            Assert.Equal(VendorShippingService.RegisterTokenLost, result!.Code);
+            Assert.Equal(1 + VendorShippingService.SealAttempts + 1, saves());   // الأَثَر · الثَلاثَةُ المُتَعَثِّرَة · مَدخَلُ الضَياع
             Assert.Equal(0, w.Oto.CallsTo(OtoClient.WebhookPath));
         }
     }
@@ -217,9 +221,11 @@ public class LiveVendorRegisterSealRetryProofTests(ITestOutputHelper output)
         finally { await CleanAsync(store, slug); }
     }
 
-    /// <summary><b>والباقي حَيّاً</b>: ثَلاثُ حِفظاتٍ مُتَعَثِّرَة — يَصعَدُ الاستِثناءُ بَعدَ الحَدّ، ولا مَدخَل، والرابِطُ قائِم (ADR-033 §٧‑ص‑٣).</summary>
+    /// <summary><b>والباقي حَيّاً</b>: ثَلاثُ حِفظاتٍ مُتَعَثِّرَة — يَصعَدُ الاستِثناءُ بَعدَ الحَدّ، ولا مَدخَل، والرابِطُ قائِم (ADR-033 §٧‑ص‑٣).
+    /// <para><b>وقُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د12 (١) «أ»؛ كانَ <c>Three_failed_seals_escape_after_the_bound_and_leave_no_entry_on_Postgres</c>): لا استِثناء،
+    /// <b>والرابِطُ مَحجوب</b>، ومَدخَلٌ فَعّالٌ بِلا رَمزٍ في Postgres (الحِفظُ الرابِع) — لا رَمزَ مَختوم.</para></summary>
     [Fact]
-    public async Task Three_failed_seals_escape_after_the_bound_and_leave_no_entry_on_Postgres()
+    public async Task Three_failed_seals_withhold_the_link_and_leave_a_tokenless_entry_on_Postgres()
     {
         if (!Enabled) return;
 
@@ -227,13 +233,42 @@ public class LiveVendorRegisterSealRetryProofTests(ITestOutputHelper output)
         var slug = "vs-zz-r3-" + Guid.NewGuid().ToString("N")[..8];
         try
         {
-            var (error, sealedToken, attempts, link, webhooks) = await RegisterWithFailingSealsAsync(store, slug, Guid.NewGuid(), failures: 3);
+            var owner = Guid.NewGuid();
+            var (error, sealedToken, attempts, link, webhooks) = await RegisterWithFailingSealsAsync(store, slug, owner, failures: 3);
             output.WriteLine($"الاستِثناء: {error?.GetType().Name ?? "لا"} · المَدخَل: {(sealedToken ? "مَختوم" : "لا")} · حِفظاتُ الخِدمَة: {attempts} · " +
                              $"رابِطُ التَفعيل: {(link ? "قائِم" : "لا")} · webhook: {webhooks}");
-            Assert.IsType<InvalidOperationException>(error);
+            Assert.Null(error);
             Assert.False(sealedToken);
-            Assert.Equal(VendorShippingService.SealAttempts, attempts);
-            Assert.True(link);
+            Assert.Equal(VendorShippingService.SealAttempts + 1, attempts);   // الثَلاثَةُ المُتَعَثِّرَة · مَدخَلُ الضَياع
+            Assert.False(link);
+            Assert.Equal(0, webhooks);
+            var entry = (await new TenantProviderService(store).ReadVendorEntryAsync(slug, ProviderCapabilities.Delivery, owner)).Entry;
+            Assert.True(entry is { IsActive: true } && entry.Values.Count == 0, "مَدخَلُ الضَياعِ لَم يُكتَب فَعّالاً بِلا رَمز.");
+        }
+        finally { await CleanAsync(store, slug); }
+    }
+
+    /// <summary>وإن رَفَضَت القاعِدَةُ مَدخَلَ الضَياعِ أَيضاً (‏2026-10-29، د12 (١) «أ»): لا استِثناء، ولا رابِط، <b>ولا مَدخَلَ في Postgres</b> — فَلا بابَ
+    /// لَصقٍ يُرسَمُ بِلا ما يُفتَحُ بِه، والتَسجيلُ التالي يَفتَحُ حِساباً عِندَ OTO كَما كانَ قَبلَ القَرار (باقٍ مُعلَنٌ في ADR-033 §٧‑ش البَند ٦).</summary>
+    [Fact]
+    public async Task Four_failed_saves_withhold_the_link_and_leave_no_entry_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = "vs-zz-r4-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            var owner = Guid.NewGuid();
+            var (error, sealedToken, attempts, link, webhooks) = await RegisterWithFailingSealsAsync(store, slug, owner, failures: VendorShippingService.SealAttempts + 1);
+            var entry = (await new TenantProviderService(store).ReadVendorEntryAsync(slug, ProviderCapabilities.Delivery, owner)).Entry;
+            output.WriteLine($"الاستِثناء: {error?.GetType().Name ?? "لا"} · المَدخَل: {(entry is null ? "لا" : "قائِم")} · حِفظاتُ الخِدمَة: {attempts} · " +
+                             $"رابِطُ التَفعيل: {(link ? "قائِم" : "لا")} · webhook: {webhooks}");
+            Assert.Null(error);
+            Assert.False(sealedToken);
+            Assert.Null(entry);
+            Assert.Equal(VendorShippingService.SealAttempts + 1, attempts);
+            Assert.False(link);
             Assert.Equal(0, webhooks);
         }
         finally { await CleanAsync(store, slug); }

@@ -152,7 +152,21 @@
                     <span style="display:block;font-size:13px;margin-bottom:8px;line-height:1.7;">@L.Markup("shipping.vendor.reg_activate")</span>
                     <a class="ac-btn ac-btn-primary ac-btn-block" href="@link" target="_blank" rel="noopener noreferrer" style="margin-bottom:8px;">@L.Markup("shipping.vendor.reg_activate_link")</a>
                 }
-                @if (shippingView is { } registered)
+                @* بابُ الاستِردادِ (‏2026-10-29، قَرارُ المالِك د12 (٢) «أ»): مَدخَلٌ فَعّالٌ رَمزُه لا يُفتَحُ هُنا — لا يُفَكّ، أَو ضاعَ حِفظُه بَعدَ تَسجيلٍ نَجَح —
+                   يُرسَمُ لَه اللَصقُ في وَضعِ الرَمزِ السوقِيّ، بِالدالَّةِ الَّتي تَفتَحُ بِها النُقطَةُ البابَ (`VendorShippingService.TokenUnreadable`)؛ ولا
+                   «مُتَّصِل» ولا إعادَةَ تَسجيل. ولِما سِوى الحالَتَينِ اللَصقُ مُغلَقٌ هُنا كَما كان. *@
+                @if (shippingView is { TokenUnreadable: true })
+                {
+                    <span style="display:block;font-size:13px;margin-bottom:8px;line-height:1.7;">@L.Markup("shipping.vendor.reg_token_unreadable")</span>
+                    <form method="post" action="@($"/{Slug}/me/shipping/oto")">
+                        <AcField Label="@L["shipping.vendor.field"]">
+                            <input name="refresh_token" type="password" autocomplete="new-password" class="ac-input" required />
+                        </AcField>
+                        <AcButton Type="submit" Variant="primary" Block="true" Text="@L["shipping.vendor.save"]" />
+                        <span style="display:block;margin-top:6px;font-size:12px;color:var(--ac-text-muted);line-height:1.7;">@L.Markup("shipping.vendor.hint")</span>
+                    </form>
+                }
+                else if (shippingView is { } registered)
                 {
                     <span style="display:block;font-size:13px;margin-bottom:4px;">@L.Markup("shipping.vendor.reg_connected")</span>
                     @if (registered.WebhookId is not null && registered.WebhookRefusal is null)

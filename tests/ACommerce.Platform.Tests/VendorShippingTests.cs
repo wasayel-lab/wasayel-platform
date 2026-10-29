@@ -110,9 +110,12 @@ public class VendorShippingTests(ITestOutputHelper output)
     /// <para><b>المَدخَلانِ لا يُرسَمانِ مَعاً — فاحِصٌ نَصِّيٌّ عَلى «إعلاناتي»</b>: سِلسِلَةُ فُروعٍ واحِدَةٌ عَلى <c>shippingInput</c> —
     /// <c>@if (… Paste)</c> ثُمَّ <c>else if (… Register)</c> لا غَير — وكُلُّ حَقلِ لَصقٍ داخِلَ فَرعِ اللَصق، وكُلُّ مَدخَلِ تَسجيلٍ داخِلَ فَرعِ
     /// التَسجيل. ويَطبَعُ عَدَدَ ما فَحَصَه ويَفشَلُ عَلى الصِفر (القاعِدَة ١٠). والصَفحَةُ تَقرَأُ المَدخَلَ مِن <c>Vendors.Input</c> وَحدَه.</para>
+    /// <para><b>وقُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د12 (٢) «أ»؛ كانَ <c>The_two_inputs_never_render_together_on_the_vendor_page</c>): وفي فَرعِ التَسجيلِ حَقلُ
+    /// لَصقٍ واحِدٌ مُستَثنى — داخِلَ <c>@if (shippingView is { TokenUnreadable: true })</c> وَحدَه (بابُ الاستِرداد)، ولا نَموذَجَ تَسجيلٍ في تِلكَ الكُتلَة؛ فَالمَدخَلانِ لا يُرسَمانِ
+    /// مَعاً كَما كان: الكُتلَةُ والاستِمارَةُ فَرعا شَرطٍ واحِد.</para>
     /// </summary>
     [Fact]
-    public void The_two_inputs_never_render_together_on_the_vendor_page()
+    public void The_two_inputs_never_render_together_and_register_holds_only_the_recovery_paste()
     {
         var page = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(Path.Combine(
             RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "MyListings.razor"))));
@@ -132,7 +135,12 @@ public class VendorShippingTests(ITestOutputHelper output)
         output.WriteLine($"مَدخَلاتُ اللَصق: {pasteInputs.Length} · مَدخَلاتُ التَسجيل: {registerInputs.Length} · فُروع: {branches.Count}");
         Assert.True(pasteInputs.Length + registerInputs.Length > 0, "أَداةٌ عَمياء: صِفرُ مَدخَل.");
 
-        Assert.All(pasteInputs, i => Assert.True(i > pasteAt && i < registerAt, $"حَقلُ لَصقٍ خارِجَ فَرعِه عِندَ {i}"));
+        var (recoveryAt, recovery) = RecoveryBlock(page, registerAt);
+        Assert.True(recoveryAt > registerAt && recoveryAt < registerAt + registerBody.Length, "لا بابَ استِردادٍ في فَرعِ التَسجيل.");
+        Assert.DoesNotContain("/me/shipping/oto/register", recovery, StringComparison.Ordinal);
+        bool InRecovery(int i) => i > recoveryAt && i < recoveryAt + recovery.Length;
+        Assert.Single(pasteInputs, InRecovery);
+        Assert.All(pasteInputs.Where(i => !InRecovery(i)), i => Assert.True(i > pasteAt && i < registerAt, $"حَقلُ لَصقٍ خارِجَ فَرعِه عِندَ {i}"));
         Assert.All(registerInputs, i => Assert.True(i > registerAt && i < registerAt + registerBody.Length,
             $"مَدخَلُ تَسجيلٍ خارِجَ فَرعِه عِندَ {i}"));
 
@@ -144,6 +152,15 @@ public class VendorShippingTests(ITestOutputHelper output)
     }
 
     /// <summary>الكُتلَةُ مِن أَوَّلِ <c>{</c> بَعدَ <paramref name="from"/> إلى قَوسِها المُقابِل.</summary>
+    /// <summary>كُتلَةُ بابِ الاستِرداد (‏د12 (٢)) — تُقرَأُ مِن بَعدِ القَوسِ المُغلِق: نَمَطُ الخاصِّيَّةِ <c>{ TokenUnreadable: true }</c> قَوسٌ لا كُتلَة.</summary>
+    internal static (int At, string Body) RecoveryBlock(string page, int from)
+    {
+        const string Head = "@if (shippingView is { TokenUnreadable: true })";
+        var at = page.IndexOf(Head, from, StringComparison.Ordinal);
+        Assert.True(at >= 0, "بابُ الاستِردادِ غائِب — الأَداةُ عَمياء.");
+        return (at, page[at..(at + Head.Length)] + Block(page, at + Head.Length));
+    }
+
     private static string Block(string code, int from)
     {
         var open = code.IndexOf('{', from);
@@ -219,7 +236,8 @@ public class VendorShippingTests(ITestOutputHelper output)
         // (‏2026-10-13، G5 (ii)): والخِدمَةُ ‏6 ← 7 (`vendor_token_refused` — رَمزٌ مَلصوقٌ تَرُدُّه OTO لا يُحفَظ)؛ فَالعَدُّ ‏28 ← 29.
         // (‏2026-10-13، G5 (iii)): والخِدمَةُ ‏7 ← 8 (`vendor_entry_read_failed` — قِراءَةُ المَدخَلِ تَرمي فَلا تَسجيلَ ولا لَصق)؛ فَالعَدُّ ‏29 ← 30.
         // (‏2026-10-29، قَرارُ المالِك د11 (٢)): والخِدمَةُ ‏8 ← 9 (`vendor_register_daily_limited` — الحَدُّ الدائِمُ مِن سُطورِ الأَثَر)؛ فَالعَدُّ ‏30 ← 31.
-        Assert.Equal(31, codes.Length);
+        // (‏2026-10-29، قَرارُ المالِك د12 (١)): والخِدمَةُ ‏9 ← 10 (`vendor_register_token_lost` — رَمزٌ ضاعَ حِفظُه فَلا رابِطَ تَفعيل)؛ فَالعَدُّ ‏31 ← 32.
+        Assert.Equal(32, codes.Length);
         Assert.Equal(codes.Length, codes.Distinct(StringComparer.Ordinal).Count());
         foreach (var code in codes)
         {
@@ -1234,7 +1252,7 @@ public class VendorShippingTests(ITestOutputHelper output)
         var call = register.IndexOf("_oto.RegisterVendorAsync(", StringComparison.Ordinal);
         output.WriteLine($"RegisterAsync: عَدّ={count} · ساعَة={hour} · أَثَر={audit} · نِداء={call}");
         Assert.True(count > 0 && hour > count && audit > hour && call > audit, $"التَرتيبُ مَكسور: {count}/{hour}/{audit}/{call}");
-        Assert.Equal(9, VendorShippingService.Codes.Count);
+        Assert.Equal(10, VendorShippingService.Codes.Count);   // 9 ← 10 (‏2026-10-29، قَرارُ المالِك د12 (١): vendor_register_token_lost)
         Assert.Contains(VendorShippingService.RegisterDailyLimited, VendorShippingService.Codes);
         Assert.Equal("بَلَغتَ حَدَّ مُحاوَلاتِ التَّسجيلِ اليَوم — أَعِدِ المُحاوَلَةَ بَعدَ 24 ساعَة.",
             LocaleCatalog.Text(LocaleCatalog.Arabic, "shipping.vendor.err_" + VendorShippingService.RegisterDailyLimited));
@@ -1463,9 +1481,11 @@ public class VendorShippingTests(ITestOutputHelper output)
     /// <summary>
     /// <para><b>الاستِمارَةُ في فَرعِ التَسجيلِ بِأَسماءِ القارِئِ نَفسِه</b>: كُلُّ ثابِتِ حَقلٍ في <see cref="VendorRegistrationForm"/> اسمُ مُدخَلٍ في الصَفحَة،
     /// ونَموذَجا الفَرعِ يُرسِلانِ إلى المَسارِ الحَرفِيّ؛ ومُرَبَّعُ المُوافَقَةِ <c>required</c>؛ ولا مُدخَلَ رَمزٍ في الفَرع — المَدخَلانِ لا يَلتَقِيان.</para>
+    /// <para><b>وقُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د12 (٢) «أ»؛ كانَ <c>The_register_branch_carries_every_reader_field_by_name_and_posts_to_the_literal_route</c>):
+    /// «ولا مُدخَلَ رَمزٍ في الفَرع» صارَ «ولا مُدخَلَ رَمزٍ في الفَرعِ خارِجَ بابِ الاستِرداد» — والبابُ بِلا نَموذَجِ تَسجيل.</para>
     /// </summary>
     [Fact]
-    public void The_register_branch_carries_every_reader_field_by_name_and_posts_to_the_literal_route()
+    public void The_register_branch_carries_every_reader_field_by_name_and_its_only_token_input_is_the_recovery_paste()
     {
         var page = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(Path.Combine(
             RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "MyListings.razor"))));
@@ -1481,7 +1501,9 @@ public class VendorShippingTests(ITestOutputHelper output)
         Assert.All(fields, f => Assert.Contains($"name=\"@Vs.VendorRegistrationForm.{f}\"", branch, StringComparison.Ordinal));
         Assert.Equal(2, Regex.Matches(branch, Regex.Escape("action=\"@($\"/{Slug}/me/shipping/oto/register\")\"")).Count);
         Assert.Contains("name=\"@Vs.VendorRegistrationForm.ConsentField\" value=\"@Vs.VendorRegistrationForm.Checked\" required", branch, StringComparison.Ordinal);
-        Assert.DoesNotContain("refresh_token", branch, StringComparison.Ordinal);
+        var (_, recovery) = RecoveryBlock(branch, 0);
+        Assert.Contains("refresh_token", recovery, StringComparison.Ordinal);
+        Assert.DoesNotContain("refresh_token", branch.Replace(recovery, "", StringComparison.Ordinal), StringComparison.Ordinal);
         Assert.Contains("activationLink = Vendors.TakeActivationLink(Slug, Auth.UserId!.Value);", page, StringComparison.Ordinal);
     }
 

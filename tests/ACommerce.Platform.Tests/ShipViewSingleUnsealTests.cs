@@ -273,8 +273,15 @@ public class ShipViewSingleUnsealTests(ITestOutputHelper output)
         var withValues = System.Text.RegularExpressions.Regex.Matches(body, @"_providers\.BindVendorAsync\(tenantSlug, ProviderCapabilities\.Delivery, owner, def\.Slug,\s+values,").Count;
         output.WriteLine($"نِداءاتُ BindVendorAsync في libs (غَيرَ التَعريف): {calls.Count(c => c.File != "TenantProviderService.cs")} · في ConnectAsync: {binds.Length} · بِـvalues: {withValues} · خَتمُ الرَمز@{token} · خَتمُ السِرّ@{secret}");
 
+        // (‏2026-10-29، قَرارُ المالِك د12 (١) «أ» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وكاتِبٌ واحِدٌ مُستَثنى بِاسمِه** — `BindTokenLostAsync`، مَدخَلُ الضَياعِ بِقاموسٍ فارِغٍ
+        // ووارِدٍ `null, null`: لا رَمزَ ولا سِرّ، فَلا سِرَّ أَحدَثَ مِن رَمزِه. كانَ العَدُّ «نِداءاتُ libs = نِداءاتُ ConnectAsync» (‏3 = 3)؛ وصارَ ‏4 = 3 + هذا وَحدَه بِحَرفِه.
+        var lost = System.Text.RegularExpressions.Regex.Matches(code,
+            @"private Task<TenantProviderBinding> BindTokenLostAsync\(string tenantSlug, Guid owner, CancellationToken ct\)\s+=> _providers\.BindVendorAsync\(tenantSlug, ProviderCapabilities\.Delivery, owner, VendorShippingSurface\.Definition!\.Slug,\s+new Dictionary<string, StoredValue>\(StringComparer\.Ordinal\), null, null, owner\.ToString\(""D""\), ct\);").Count;
+        output.WriteLine($"مَدخَلُ الضَياع (بِلا رَمزٍ ولا سِرّ): {lost}");
+        Assert.Equal(1, lost);
+
         Assert.NotEmpty(binds);
-        Assert.Equal(binds.Length, calls.Count(c => c.File != "TenantProviderService.cs"));
+        Assert.Equal(binds.Length + lost, calls.Count(c => c.File != "TenantProviderService.cs"));
         Assert.Equal(binds.Length, withValues);
         Assert.True(token >= 0 && secret > token && binds.All(b => b > token), "الرَمزُ يُختَمُ أَوَّلاً في كُلِّ حِفظ.");
         Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(code, @"StoredValue\.Sealed\(_vault, webhookField\.Kind").Count);
