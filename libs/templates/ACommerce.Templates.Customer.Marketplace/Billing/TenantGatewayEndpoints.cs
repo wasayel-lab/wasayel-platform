@@ -43,7 +43,11 @@ public static class TenantGatewayEndpoints
             if (parsed is null) return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
             var payer = new Services.Deals.DealPayer(userId);
-            var res = await gateway.VerifyAsync(slug, payer, req.Form[Services.Deals.GatewayReturn.DealKey].ToString());
+            // وعَشرُ نَقَراتٍ في السّاعَةِ لِكُلِّ مُشتَرٍ بِالحِصَّةِ القائِمَة — بَعدَ الجَلسَةِ وقَبلَ فَكِّ المِفتاحِ والنِداء (‏2026-10-29، قَرارُ المالِك د5 (٥)؛ تَوصيفُه `23fae63`).
+            var dealRef = req.Form[Services.Deals.GatewayReturn.DealKey].ToString();
+            var res = AuthHandlers.TryConsumeActionQuota(Services.Deals.GatewayReturn.VerifyQuotaKey(slug, userId))
+                ? await gateway.VerifyAsync(slug, payer, dealRef)
+                : Services.Deals.GatewayReturn.RateLimited(dealRef);
             await notices.NotifyPaidAsync(slug, res.Confirmed, l);
             return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, Services.Deals.GatewayReturn.AfterVerify(res)));
         }).RequireFormBody().DisableAntiforgery();

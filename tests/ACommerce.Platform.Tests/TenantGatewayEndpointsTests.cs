@@ -152,10 +152,11 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
     [Fact]
     public void The_strip_lexicon_is_the_union_of_the_three_lexicons_with_one_key_each()
     {
-        var expected = DealPayAuthorization.All.Concat(MoyasarFailures.All).Concat(GatewayPaymentProof.Codes)
+        // (‏2026-10-29، قَرارُ المالِك د5 — ولا يُعادُ حَرفٌ فَوقَه: ومَعَها رَمزُ حِصَّةِ النَقَرات `gateway_verify_rate_limited` — خَمسَةَ عَشَر.)
+        var expected = DealPayAuthorization.All.Concat(MoyasarFailures.All).Concat(GatewayPaymentProof.Codes).Append(GatewayReturn.VerifyRateLimited)
             .OrderBy(c => c, StringComparer.Ordinal);
         Assert.Equal(expected, GatewayReturn.Codes.OrderBy(c => c, StringComparer.Ordinal));
-        Assert.Equal(14, GatewayReturn.Codes.Count);   // 13 ← 14 (‏2026-10-13، G5 (xvii-g): +gateway_invoice_closed)
+        Assert.Equal(15, GatewayReturn.Codes.Count);   // 13 ← 14 (‏2026-10-13، G5 (xvii-g): +gateway_invoice_closed) ← 15 (‏2026-10-29، د5)
         Assert.All(GatewayReturn.Codes, c => Assert.Equal(GatewayReturn.TextPrefix + c, GatewayReturn.KeyFor(c)));
         Assert.All(GatewayReturn.Codes, c => Assert.Equal(3, GatewayReturn.KeyFor(c)!.Split('.').Length));
         Assert.Null(GatewayReturn.KeyFor("not_a_code"));
@@ -179,8 +180,8 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
             Assert.True(text.Length > 8, $"‏{key} بِنَصٍّ أَقصَرَ مِن أَن يُفهَم.");
             checkedCount++;
         }
-        output.WriteLine($"· نُصوصُ صَفحَةِ العَودَة: {checkedCount} مِفتاحاً حَيّاً (‏14 رَمزاً + ‏4 نُصوص).");
-        Assert.Equal(18, checkedCount);   // 17 ← 18 (‏2026-10-13، G5 (xvii-g))
+        output.WriteLine($"· نُصوصُ صَفحَةِ العَودَة: {checkedCount} مِفتاحاً حَيّاً (‏{GatewayReturn.Codes.Count} رَمزاً + ‏4 نُصوص).");
+        Assert.Equal(19, checkedCount);   // 17 ← 18 (‏2026-10-13، G5 (xvii-g)) ← 19 (‏2026-10-29، قَرارُ المالِك د5 (٥): +gateway_verify_rate_limited)
     }
 
     // ═══ ٣) الخِدمَة — السُلطَةُ قَبلَ المِفتاح، والمِفتاحُ قَبلَ البَوّابَة، وصِفرُ كِتابَة ═══════════════════════
@@ -563,18 +564,43 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         Assert.Equal(1, template.Split("app.MapTenantGateway();").Length - 1);
     }
 
-    /// <summary><b>اليَوم</b> (‏2026-10-29، تَوصيفٌ قَبلَ قَرارِ المالِك د5 (٥) «ب»: «عشر نقرات تحقّق في الساعة لكل مشترٍ، بالحصّة القائمة نفسها»): جِسمُ نُقطَةِ
-    /// التَحَقُّقِ (بِلا تَعليقات) لا يَسأَلُ حِصَّةً قَبلَ أَن تُفَكَّ الخِدمَةُ مِفتاحَ المَتجَرِ وتُنادي البَوّابَة — كُلُّ نَقرَةٍ نِداءٌ خارِجِيٌّ بِمِفتاحِه. يُقلَبُ بِاسمِه.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د5 (٥) «ب»؛ تَوصيفُه <c>23fae63</c> — كانَ <c>Today_the_verify_door_consumes_no_quota_before_the_gateway_call</c>):
+    /// الحِصَّةُ القائِمَةُ بَعدَ الجَلسَةِ وسِجِلِّ السُلطَةِ وقَبلَ نِداءِ الخِدمَة، بِمِفتاحِ المَتجَرِ والمُشتَري؛ والمُتَجاوِزُ يَعودُ إلى صَفحَةِ العَودَةِ بِرَمزِه بِلا نِداء.</summary>
     [Fact]
-    public void Today_the_verify_door_consumes_no_quota_before_the_gateway_call()
+    public void The_verify_door_consumes_the_action_quota_after_the_session_and_before_the_gateway_call()
     {
         var file = WriteEndpointGuardTests.StripComments(Template("Billing", "TenantGatewayEndpoints.cs"));
         var at = file.IndexOf("app.MapPost(\"/{slug}/payments/verify\"", StringComparison.Ordinal);
         Assert.True(at >= 0, "أَداةٌ عَمياء: لا نُقطَةَ تَحَقُّقٍ بِمَسارِها الحَرفِيّ.");
         var body = file[at..file.IndexOf(".DisableAntiforgery();", at, StringComparison.Ordinal)];
-        Assert.Contains("gateway.VerifyAsync(slug, payer, ", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("TryConsume", body, StringComparison.Ordinal);
+        var session = body.IndexOf("AuthSession.ResolveToken(req, slug)", StringComparison.Ordinal);
+        var quota = body.IndexOf("AuthHandlers.TryConsumeActionQuota(Services.Deals.GatewayReturn.VerifyQuotaKey(slug, userId))", StringComparison.Ordinal);
+        var call = body.IndexOf("gateway.VerifyAsync(slug, payer, dealRef)", StringComparison.Ordinal);
+        var refused = body.IndexOf("Services.Deals.GatewayReturn.RateLimited(dealRef)", StringComparison.Ordinal);
+        Assert.True(session >= 0 && quota > session && call > quota && refused > call, $"جَلسَة {session} ← حِصَّة {quota} ← نِداء {call} ← رَدّ {refused}");
+        Assert.Equal(1, body.Split("TryConsume").Length - 1);
         Assert.DoesNotContain("TryConsume", WriteEndpointGuardTests.StripComments(Template("Services", "Deals", "GatewayPayments.cs")), StringComparison.Ordinal);
+    }
+
+    /// <summary><b>المُوجِبُ والسالِب</b>: المِفتاحُ لِكُلِّ مَتجَرٍ ومُشتَرٍ؛ والحِصَّةُ القائِمَةُ تَقبَلُ عَشراً وتَرُدُّ الحادِيَةَ عَشرَة (مِفتاحٌ فَريدٌ لِلصَفّ)؛ والرَدُّ يَعودُ إلى
+    /// صَفحَةِ العَودَةِ بِالصَفقَةِ ورَمزِه، ولِلرَمزِ نَصٌّ حَيّ.</summary>
+    [Fact]
+    public void Ten_verifies_an_hour_pass_and_the_eleventh_returns_its_code_to_the_return_page()
+    {
+        var payer = Guid.NewGuid();
+        var key = GatewayReturn.VerifyQuotaKey("zz-quota-" + Guid.NewGuid().ToString("N")[..8], payer);
+        Assert.Contains($"|gateway-verify:{payer:D}", key, StringComparison.Ordinal);
+        Assert.NotEqual(key, GatewayReturn.VerifyQuotaKey("other", payer));
+        for (var i = 0; i < 10; i++) Assert.True(AuthHandlers.TryConsumeActionQuota(key), $"النَقرَةُ {i + 1}");
+        Assert.False(AuthHandlers.TryConsumeActionQuota(key));
+
+        var deal = Guid.NewGuid();
+        var limited = GatewayReturn.RateLimited(deal.ToString("N"));
+        Assert.False(limited.Ok);
+        Assert.Equal($"pay/return?deal={deal:N}&err=gateway_verify_rate_limited", GatewayReturn.AfterVerify(limited));
+        var text = LocaleCatalog.Text(LocaleCatalog.Arabic, GatewayReturn.KeyFor(GatewayReturn.VerifyRateLimited)!);
+        Assert.False(LocaleCatalog.IsPlaceholder(text));
+        Assert.Contains("لَم نَسأَلِ البَوّابَة", text, StringComparison.Ordinal);
     }
 
     /// <summary><b>اليَوم</b> (‏2026-10-29، تَوصيفٌ قَبلَ قَرارِ المالِك د5 (٤) «ب»: «يُلغى الطلب كله آليًّا، وتُلغى الفاتورة عند ميسر إن بقيت مفتوحة، ويُخبَر المشتري وكل بائع

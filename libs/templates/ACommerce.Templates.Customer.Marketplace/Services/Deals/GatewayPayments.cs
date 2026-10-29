@@ -182,15 +182,30 @@ public static class GatewayReturn
     /// <see cref="PayUrlOf"/> فَلا يُرسَمُ الرابِط، وصَفحَةُ العَودَةِ فَتَقولُ رَمزَه بِلا <c>?err=</c>.</summary>
     public static bool IsClosed(Deal deal) => deal.Refs.ContainsKey(GatewayPayments.InvoiceClosedRef);
 
+    /// <summary>
+    /// <para><b>عَشرُ نَقَراتِ تَحَقُّقٍ في السّاعَةِ لِكُلِّ مُشتَرٍ</b> (‏2026-10-29، قَرارُ المالِك د5 (٥) «ب»: «بالحصّة القائمة نفسها»، OWASP API4 «الاستِهلاكُ غَيرُ المَحدودِ
+    /// لِلمَوارِد»؛ تَوصيفُ «اليَوم» <c>23fae63</c>): كُلُّ نَقرَةٍ تَفُكُّ مِفتاحَ المَتجَرِ وتُنادي البَوّابَةَ بِه، فَيُحَدُّ البابُ بِحِصَّةِ الأَفعالِ القائِمَة
+    /// (<c>AuthHandlers.TryConsumeActionQuota</c> — عَشرٌ في السّاعَة، لا رَقَمٌ جَديد ولا آلِيَّةٌ جَديدَة) بِمِفتاحِ المَتجَرِ والمُشتَري. الرَمزُ في الشَريطِ بِنَصِّه.</para>
+    /// </summary>
+    public const string VerifyRateLimited = "gateway_verify_rate_limited";
+
+    /// <summary>مِفتاحُ حِصَّةِ نَقَراتِ التَحَقُّق — المَتجَرُ والمُشتَري بِصيغَةِ <c>D</c>، نَسَقُ <c>VendorShipping.RegisterAttemptKey</c>.</summary>
+    public static string VerifyQuotaKey(string slug, Guid payer) => $"{slug}|gateway-verify:{payer:D}";
+
+    /// <summary>رَدُّ النَقرَةِ الَّتي تَجاوَزَت الحِصَّة — إلى صَفحَةِ العَودَةِ بِصَفقَتِها ورَمزِها، بِلا مِفتاحٍ يُفَكُّ ولا نِداء.</summary>
+    public static GatewayVerifyResult RateLimited(string? dealRef) => new(DealIdOf(dealRef), null, VerifyRateLimited);
+
     /// <summary>بادِئَةُ مَفاتيحِ الشَريطِ — اصطِلاحُ القامُوسِ ثَلاثَةُ مَقاطِع (<c>LocaleValidator.KeyPattern</c>)، فَالرَمزُ في الثالِث.</summary>
     public const string TextPrefix = "pay.return.err_";
 
     /// <summary>كُلُّ رَمزٍ قَد يَبلُغُ الصَفحَةَ — سُلطَةُ الدافِع، ثُمَّ مَعجَمُ فَشَلِ العَميلِ الخُماسيّ، ثُمَّ رُموزُ بَوّابَةِ البُرهانِ
     /// الخَمسَة. ثَلاثَةَ عَشَرَ لا رابِعَ عَشَر. (‏2026-10-13، G5 (xvii-g) — ولا يُعادُ حَرفٌ فَوقَه: والبُرهانُ سِتَّة — أَربَعَةَ عَشَر.)</summary>
+    /// <remarks>(‏2026-10-29، قَرارُ المالِك د5 — ولا يُعادُ حَرفٌ فَوقَه: ومَعَها <see cref="VerifyRateLimited"/> — خَمسَةَ عَشَر.)</remarks>
     public static readonly IReadOnlyList<string> Codes =
         DealPayAuthorization.All
             .Concat(MoyasarFailures.All)
             .Concat(GatewayPaymentProof.Codes)
+            .Append(VerifyRateLimited)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
