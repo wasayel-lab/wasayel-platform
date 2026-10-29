@@ -542,47 +542,53 @@ post "$J_BUY" "/$SLUG/listings/$LID/cart/add" --data-urlencode qty=1
 check "$([ "$CODE" = 302 ] && [ "$LOC" = "/$SLUG/cart" ] && echo 1 || echo 0)" "POST /$SLUG/listings/$LID/cart/add → $CODE $LOC"
 # ‏(‏2026-10-25، brief-P1b-2): رابِطُ الدَفعِ مِن السَلَّة، والخُطوَةُ ٢ مِن استِمارَةِ الخُطوَةِ ١ (بابُها وحَقلُها المَخفِيّ وحُقولُها المَطلوبَة)
 # — كانَ `checkout?step=2&name=…` عُنواناً يَبنيه السكربت. والقِيَمُ ما يَكتُبُه المُشتَري؛ وحَقلٌ مَطلوبٌ لا يَعرِفُه يُوقِفُ الرِحلَة.
-uri() { jq -rn --arg v "$1" '$v|@uri'; }
 get "$J_BUY" "$LOC" "$F"
 PAY_HREF="$(grep -o "href=\"/$SLUG/[^\"]*checkout\"" "$F" | head -1 | sed 's/^href="//; s/"$//')"
 check "$([ "$CODE" = 200 ] && [ -n "$PAY_HREF" ] && echo 1 || echo 0)" "GET /$SLUG/cart → $CODE · رابِطُ الدَفع: ${PAY_HREF:-غائِب}"
 [ -n "$PAY_HREF" ] || die "لا رابِطَ دَفعٍ في السَلَّة"
 get "$J_BUY" "$PAY_HREF" "$F"
-STEP1_DUMP="$(form_dump "$F" 'name="step" value="2"')"
+# ‏(2026-10-29، تَيّارُ S2 — ولا يُعادُ حَرفٌ فَوقَه): الخُطوَتانِ صارَتا `POST /{slug}/checkout/details` بِحَقلِ `from` (‏`0d1411d`، قَرارُ المالِك د60)
+# والسكربتُ ما زالَ يَبحَثُ عَن `name="step" value="2"` ويَبني `GET …?step=2&name=…` — فَتَوَقَّفَت الجَولَةُ عِندَ «استِمارَةُ الخُطوَة ١ لا تُملَأ»
+# (مَقيسٌ عَلى `wasayel_s2_d40_20261029`: فُحِصَ 29 · فَشِلَ 1). صارَت الخُطوَتانِ تُرسَلانِ بِاستِمارَتَيهِما كَالمُتَصَفِّح، والتالي مِن `Location`.
+STEP1_DUMP="$(form_dump "$F" 'name="from" value="1"')"
 STEP1_ACTION="$(fd_action "$STEP1_DUMP")"; STEP1_REQ="$(fd_kind "$STEP1_DUMP" FIELD | tr '\n' ' ')"; STEP1_REQ="${STEP1_REQ% }"
-Q="step=$(fd_get "$STEP1_DUMP" HIDDEN step)"; UNKNOWN_REQ=""
+STEP1_FROM="$(fd_get "$STEP1_DUMP" HIDDEN from)"; STEP1_ARGS=(--data-urlencode "from=$STEP1_FROM"); UNKNOWN_REQ=""
 for n in $STEP1_REQ; do
     case "$n" in
-        name)  Q="$Q&name=$(uri "مُشتَري الجَولَة")" ;;
-        phone) Q="$Q&phone=$P_BUY" ;;
-        addr)  Q="$Q&addr=$(uri "$ADDR")" ;;
+        name)  STEP1_ARGS+=(--data-urlencode "name=مُشتَري الجَولَة") ;;
+        phone) STEP1_ARGS+=(--data-urlencode "phone=$P_BUY") ;;
+        addr)  STEP1_ARGS+=(--data-urlencode "addr=$ADDR") ;;
         *)     UNKNOWN_REQ="$UNKNOWN_REQ $n" ;;
     esac
 done
-check "$([ "$CODE" = 200 ] && [ -n "$STEP1_ACTION" ] && [ "$Q" != "step=" ] && [ -n "$STEP1_REQ" ] && [ -z "$UNKNOWN_REQ" ] && echo 1 || echo 0)" \
-    "GET $PAY_HREF → $CODE · استِمارَةُ الخُطوَة ١ إلى ${STEP1_ACTION:-غائِبَة} (${Q%%&*}) · مَطلوبُها: ${STEP1_REQ:-—}${UNKNOWN_REQ:+ · لا يَعرِفُه السكربت:$UNKNOWN_REQ}"
+check "$([ "$CODE" = 200 ] && [ -n "$STEP1_ACTION" ] && [ "$STEP1_FROM" = 1 ] && [ -n "$STEP1_REQ" ] && [ -z "$UNKNOWN_REQ" ] && echo 1 || echo 0)" \
+    "GET $PAY_HREF → $CODE · استِمارَةُ الخُطوَة ١ إلى ${STEP1_ACTION:-غائِبَة} (from=${STEP1_FROM:-—}) · مَطلوبُها: ${STEP1_REQ:-—}${UNKNOWN_REQ:+ · لا يَعرِفُه السكربت:$UNKNOWN_REQ}"
 [ -n "$STEP1_ACTION" ] && [ -z "$UNKNOWN_REQ" ] || die "استِمارَةُ الخُطوَة ١ لا تُملَأ"
-get "$J_BUY" "$STEP1_ACTION?$Q" "$F"
+post "$J_BUY" "$STEP1_ACTION" "${STEP1_ARGS[@]}"
+check "$([ "$CODE" = 302 ] && [[ "$LOC" == *checkout\?step=2 ]] && echo 1 || echo 0)" "POST $STEP1_ACTION from=1 → $CODE $LOC"
+get "$J_BUY" "$LOC" "$F"
 check "$([ "$CODE" = 200 ] && [ "$(count "$F" 'name="pay" value="cash"')" = 1 ] && has "$F" "$(ar checkout.payment.cash)" && echo 1 || echo 0)" \
     "GET /$SLUG/checkout?step=2 → $CODE · «$(ar checkout.payment.cash)» مَعروض"
 check "$([ "$(count "$F" 'name="pay" value="card"')" = 0 ] && echo 1 || echo 0)" \
     "GET /$SLUG/checkout?step=2 → البِطاقَةُ غَيرُ مَعروضَة (name=\"pay\" value=\"card\" = $(count "$F" 'name="pay" value="card"'))"
 # ‏(‏2026-10-25، brief-P1b-2): الخُطوَةُ ٣ مِن استِمارَةِ الخُطوَةِ ٢ بِخِيارِ «نَقد» المَرسومِ فيها، والإرسالُ مِن استِمارَةِ الخُطوَةِ ٣
 # بِحُقولِها المَخفِيَّة — والمُشتَري لا يَكتُبُ بَعدَ الخُطوَةِ ١ شَيئاً.
-STEP2_DUMP="$(form_dump "$F" 'name="step" value="3"')"
-STEP2_ACTION="$(fd_action "$STEP2_DUMP")"; Q3=""
-while IFS= read -r kv; do [ -n "$kv" ] && Q3="$Q3&${kv%%=*}=$(uri "${kv#*=}")"; done < <(fd_kind "$STEP2_DUMP" HIDDEN)
+STEP2_DUMP="$(form_dump "$F" 'name="from" value="2"')"
+STEP2_ACTION="$(fd_action "$STEP2_DUMP")"; STEP2_ARGS=()
+while IFS= read -r kv; do [ -n "$kv" ] && STEP2_ARGS+=(--data-urlencode "$kv"); done < <(fd_kind "$STEP2_DUMP" HIDDEN)
 CASH_RADIO="$(fd_kind "$STEP2_DUMP" RADIO | grep -cx 'pay=cash')"
-check "$([ -n "$STEP2_ACTION" ] && [ "$CASH_RADIO" = 1 ] && [[ "$Q3" == *"&step=3"* ]] && echo 1 || echo 0)" \
+check "$([ -n "$STEP2_ACTION" ] && [ "$CASH_RADIO" = 1 ] && [ "$(fd_get "$STEP2_DUMP" HIDDEN from)" = 2 ] && echo 1 || echo 0)" \
     "استِمارَةُ الخُطوَة ٢ إلى ${STEP2_ACTION:-غائِبَة} · خِيارُ pay=cash = $CASH_RADIO · مَخفِيُّها:$(fd_kind "$STEP2_DUMP" HIDDEN | sed 's/=.*//' | tr '\n' ' ')"
 [ -n "$STEP2_ACTION" ] && [ "$CASH_RADIO" = 1 ] || die "لا خِيارَ نَقدٍ في استِمارَةِ الخُطوَة ٢"
-get "$J_BUY" "$STEP2_ACTION?${Q3#&}&pay=cash" "$F"
+post "$J_BUY" "$STEP2_ACTION" "${STEP2_ARGS[@]}" --data-urlencode pay=cash
+check "$([ "$CODE" = 302 ] && [[ "$LOC" == *checkout\?step=3 ]] && echo 1 || echo 0)" "POST $STEP2_ACTION from=2 pay=cash → $CODE $LOC"
+get "$J_BUY" "$LOC" "$F"
 SUBMIT_DUMP="$(form_dump "$F" 'checkout/submit"')"
 SUBMIT_ACTION="$(fd_action "$SUBMIT_DUMP")"; SUBMIT_ARGS=()
 while IFS= read -r kv; do [ -n "$kv" ] && SUBMIT_ARGS+=(--data-urlencode "$kv"); done < <(fd_kind "$SUBMIT_DUMP" HIDDEN)
 check "$([ "$CODE" = 200 ] && [ -n "$SUBMIT_ACTION" ] && [ "$(fd_get "$SUBMIT_DUMP" HIDDEN pay)" = cash ] \
         && [ "$(fd_get "$SUBMIT_DUMP" HIDDEN phone)" = "$P_BUY" ] && echo 1 || echo 0)" \
-    "GET $STEP2_ACTION?…step=3&pay=cash → $CODE · استِمارَةُ الإرسالِ إلى ${SUBMIT_ACTION:-غائِبَة} بِـ$(( ${#SUBMIT_ARGS[@]} / 2 )) حَقلاً مَخفِيّاً (pay=$(fd_get "$SUBMIT_DUMP" HIDDEN pay))"
+    "GET /$SLUG/checkout?step=3 → $CODE · استِمارَةُ الإرسالِ إلى ${SUBMIT_ACTION:-غائِبَة} بِـ$(( ${#SUBMIT_ARGS[@]} / 2 )) حَقلاً مَخفِيّاً (pay=$(fd_get "$SUBMIT_DUMP" HIDDEN pay))"
 [ -n "$SUBMIT_ACTION" ] || die "لا استِمارَةَ إرسالٍ في الخُطوَة ٣"
 # ‏مِجَسُّ الرَفض — طَلَبٌ لا تَرسُمُه الصَفحَةُ عَمداً: الحُقولُ نَفسُها وpay=card.
 post "$J_BUY" "$SUBMIT_ACTION" --data-urlencode "name=مُشتَري الجَولَة" --data-urlencode "phone=$P_BUY" \
@@ -696,7 +702,12 @@ STUDIO_LINKS="$(get "$OWNER_JAR" "$LOC" "$F"; count "$F" 'href="/studio')"
 info "رابِطُ عَودَةٍ إلى الاستوديو مِن $LOC: $STUDIO_LINKS — و«$PREVIEW» إلى /$SLUG يَفتَحُ لِساناً جَديداً (target=\"_blank\" = $PREVIEW_TABS)، فَالعَودَةُ تَبديلُ لِسانٍ إلى الاستوديو، لا نَقرَةٌ ولا زِرُّ رُجوع"
 get "$OWNER_JAR" "/admin/tenants/$SLUG/users?from=studio" "$F"; ACTS=$((ACTS + 1))
 # الصَفُّ الَّذي يَحمِلُ هاتِفَ المالِكِ واستِمارَتَه — كُتلَةً كُتلَة، لا أَوَّلُ استِمارَةٍ في الصَفحَة.
-OWN_ROW="$(dec "$F" | PH="$OWNER_PHONE" perl -0777 -ne \
+# ‏(2026-10-29، تَيّارُ S2 — ولا يُعادُ حَرفٌ فَوقَه): الهاتِفُ يُكتَبُ مُوَحَّداً `+9665…` مُنذُ `c5325e4` (‏`PhoneNumber.Normalize`)، والسكربتُ
+# يَبحَثُ بِما كُتِبَ في الحَقل (`05…`) فَغابَ الصَفُّ وتَوَقَّفَت الجَولَةُ هُنا (مَقيسٌ عَلى `wasayel_s2_d40_20261029`: فُحِصَ 63 · فَشِلَ 1).
+# فَالبَحثُ بِالصيغَةِ المُوَحَّدَةِ لِلرَقَمِ السُعودِيّ — ما سِواه يُبحَثُ بِحَرفِه.
+e164_sa() { local d; d="$(printf '%s' "$1" | tr -cd '0-9')"; d="${d#00}"; d="${d#966}"; d="${d#0}"
+    if [[ "$d" =~ ^5[0-9]{8}$ ]]; then printf '+966%s' "$d"; else printf '%s' "$1"; fi; }
+OWN_ROW="$(dec "$F" | PH="$(e164_sa "$OWNER_PHONE")" perl -0777 -ne \
     'for my $b (split /class="acm-cat-row"/) { if (index($b, $ENV{PH}) >= 0 && $b =~ m{users/([0-9a-f-]{36})/(grant|revoke)-admin}) { print "$1 $2"; last } }')"
 OWN_ID="${OWN_ROW%% *}"; OWN_ACT="${OWN_ROW##* }"
 check "$([ "$CODE" = 200 ] && [ -n "$OWN_ROW" ] && echo 1 || echo 0)" \
