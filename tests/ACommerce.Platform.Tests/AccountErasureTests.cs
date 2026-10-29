@@ -142,6 +142,48 @@ public class AccountErasureTests
         Assert.Equal(new[] { MyPhone, MyEmail }, AccountErasure.ContactsOf(u));
     }
 
+    // ─── إشعاراتُ المُديرينَ بِأَسماءٍ حَقيقِيَّة (مُراجَعَةُ تَيّارِ S2 الجَولَة ٢، ‏2026-10-29 — كُبرى وصُغرى) ───────────────────────
+    //
+    // ‏(تَوصيفُ «اليَوم» قَبلَ رَبطِ البَلاغِ بِهُوِيَّةِ صاحِبِه — يُقلَبُ كُلٌّ بِاسمِه في كوميتِ الإصلاح): إصلاحُ الجَولَةِ ١ أَخرَجَ الاسمَ الافتِراضِيّ، وبَقِيَ
+    // `about = admin` صادِقاً لِكُلِّ إشعارِ مُديرين (`new_user`/`report`) أَيّاً كانَ صاحِبُه، وكُلُّ اسمٍ حَقيقِيٍّ مِن `NamesOf` يُستَبدَلُ نَصّاً داخِلَ نَصٍّ (`Replace`
+    // بِلا حُدود). والبَلاغُ يَحمِلُ اسمَ المُبَلِّغِ الحَقيقِيّ («{الاسم} بَلَّغَ عَن إعلان»)؛ وعُنوانُه سَبَبُ البَلاغِ حُرّاً (لا يَتَحَقَّقُ مِنه الخادِم).
+
+    /// <summary><b>«اليَوم»</b>: حَذفُ «عَلي» يَكتُبُ «حِسابٌ مَحذوف» في بَلاغِ عُضوٍ آخَرَ اسمُه «عَلي حَسَن».</summary>
+    [Fact]
+    public void Today_deleting_a_member_rewrites_another_members_report_whose_name_starts_with_the_same_name()
+    {
+        var anothers = Notice(Other, "report", "بَلاغ: مُخالِف", "عَلي حَسَن بَلَّغَ عَن إعلان", "/admin/tenants/zz/tickets");
+        Assert.True(AccountErasure.EraseFrom(anothers, Me, new[] { "عَلي" }, Array.Empty<string>(), Array.Empty<string>()));
+        Assert.Equal("حِسابٌ مَحذوف حَسَن بَلَّغَ عَن إعلان", anothers.Body);
+    }
+
+    /// <summary><b>«اليَوم»</b>: اسمٌ داخِلَ اسمٍ أَطوَلَ يُقطَع — «عَلِيّ» في «عَلِيّان».</summary>
+    [Fact]
+    public void Today_a_deleted_name_inside_a_longer_name_is_cut_out_of_a_manager_notice()
+    {
+        var anothers = Notice(Other, "report", "بَلاغ: مُخالِف", "عَلِيّان بَلَّغَ عَن إعلان", "/admin/tenants/zz/tickets");
+        Assert.True(AccountErasure.EraseFrom(anothers, Me, new[] { "عَلِيّ" }, Array.Empty<string>(), Array.Empty<string>()));
+        Assert.Equal("حِسابٌ مَحذوفان بَلَّغَ عَن إعلان", anothers.Body);
+    }
+
+    /// <summary><b>«اليَوم»</b>: عُضوٌ آخَرُ بِالاسمِ نَفسِه — بَلاغُه يُمحى كَأَنَّه بَلاغُ المَحذوف.</summary>
+    [Fact]
+    public void Today_a_same_named_members_report_is_erased_as_if_it_were_the_deleted_members()
+    {
+        var anothers = Notice(Other, "report", "بَلاغ: مُخالِف", "عَلي بَلَّغَ عَن إعلان", "/admin/tenants/zz/tickets");
+        Assert.True(AccountErasure.EraseFrom(anothers, Me, new[] { "عَلي" }, Array.Empty<string>(), Array.Empty<string>()));
+        Assert.Equal(AccountDeletion.ErasedName + " بَلَّغَ عَن إعلان", anothers.Body);
+    }
+
+    /// <summary><b>«اليَوم»</b> (صُغرى): بَلاغُ عُضوٍ آخَرَ بِالاسمِ الافتِراضِيِّ يَقتَبِسُ هاتِفَ المَحذوفِ في سَبَبِه — فَيُنسَبُ البَلاغُ إلى «حِسابٌ مَحذوف».</summary>
+    [Fact]
+    public void Today_a_report_quoting_the_deleted_members_phone_is_reattributed_to_the_deleted_account()
+    {
+        var anothers = Notice(Other, "report", $"بَلاغ: اتَّصَلَ بي {MyPhone}", $"{Placeholder} بَلَّغَ عَن إعلان", "/admin/tenants/zz/tickets");
+        Assert.True(AccountErasure.EraseFrom(anothers, Me, new[] { Placeholder }, Array.Empty<string>(), new[] { MyPhone }));
+        Assert.Equal(("بَلاغ: اتَّصَلَ بي", AccountDeletion.ErasedName + " بَلَّغَ عَن إعلان"), (anothers.Title, anothers.Body));
+    }
+
     [Fact]
     public void A_ticket_loses_its_authors_name_on_the_ticket_and_their_replies_and_the_team_reply_keeps_its_signature()
     {
