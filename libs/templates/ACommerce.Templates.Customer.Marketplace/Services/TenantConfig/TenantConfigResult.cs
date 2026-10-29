@@ -97,10 +97,15 @@ public static class TenantConfigCodes
     /// القامُوس (<c>roles.save.err_empty_selection</c>).</summary>
     public const string RolesEmptySelection = "roles_empty_selection";
 
+    /// <summary><b>نَمَطُ سَلَّةٍ خارِجَ المَعجَم</b> (‏2026-10-29، قَرارُ المالِك د2) — <c>CartModes.Unknown</c> نَفسُه: المُصادِقُ يَرُدُّه، والسَطحُ يَقولُه مِن القامُوس
+    /// (<c>studio.providers.err_cart_mode_unknown</c>).</summary>
+    public const string CartModeUnknown = Patterns.CartModes.Unknown;
+
     /// <summary>المُعجَم كامِلاً — مَقروءٌ في <see cref="TenantConfigResult.Reject"/>
     /// وفي فاحِصِ الانغِلاق.</summary>
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         BadFormat, Empty, NameRequired, ColorInvalid, NoScope, IconTooLarge, IconBadType, RolesEmptySelection,
+        CartModeUnknown,   // ‏2026-10-29، قَرارُ المالِك د2
     };
 }

@@ -3063,6 +3063,9 @@ public static class MarketplaceTemplateExtensions
             if (qty <= 0) qty = 1;
             var cart = await s.LoadAsync<ACommerce.Kit.Cart.Cart>(userId)
                 ?? new ACommerce.Kit.Cart.Cart { Id = userId };
+            // ونَمَطُ سَلَّةِ المَتجَر (‏2026-10-29، قَرارُ المالِك د2؛ تَوصيفُه `0dbb2dd`): «لِكُلِّ بائِعٍ سَلَّة» يَرُدُّ بائِعاً ثانِياً قَبلَ أَيِّ كِتابَة، والصَفحَةُ تَعرِضُ الإكمالَ أَو الإفراغ.
+            if (await Services.Patterns.CartModes.RefusalAsync(await tenants.FindAsync(slug), s, cart, listing) is { } mixedOut)
+                return Results.Redirect(Link(req, slug, $"listings/{id}?err={mixedOut}"));
             var existing = cart.Items.FirstOrDefault(i => i.ListingId == id);
             if (existing is not null) existing.Quantity += qty;
             else cart.Items.Add(new ACommerce.Kit.Cart.CartItem

@@ -46,6 +46,7 @@
                الإدارَة لِنَفس المَعنى. *@
             @if (Err == "name_required") { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">@L.Markup("studio.app_branding.err_name")</div> }
             @if (Err == "color_invalid") { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">@L.Markup("studio.app_branding.err_color")</div> }
+            @if (Err == Services.Patterns.CartModes.Unknown) { <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@L.Markup("studio.app_branding.err_cart_mode")</div> }
 
             <form method="post" action="@($"/studio/apps/{Slug}/branding/save")" class="st-card">
                 <div class="st-field">
@@ -108,6 +109,29 @@
                     }
                 </div>
 
+                @* نَمَطُ السَلَّة (‏2026-10-29، قَرارُ المالِك د2): «فاتورةٌ واحدةٌ لسلّةٍ مختلطة» أَو «سلّةٌ لكلِّ بائع» — بِأَزرارِ قَناةِ الدُخولِ نَفسِها
+                   (‏`acm-radio-card*`)، ولِنَمَطٍ يَستَعمِلُ السَلَّةَ وَحدَه (بابُ السَلَّةِ نَفسُه `CartDoor` — لا مَدخَلَ لِخِيارٍ لا أَثَرَ لَه، القاعِدَة ١٢)،
+                   والمَعجَمُ مِن `CartModes.All` والاختِيارُ مِن `CartModes.Of`. *@
+                @if (Services.Patterns.CartDoor.Opens(Services.Patterns.PatternProfileResolver.Of(tenant)))
+                {
+                    var cartMode = Services.Patterns.CartModes.Of(tenant);
+                    <div class="st-field">
+                        <label class="st-label">@L.Markup("studio.app_branding.section_cart_mode")</label>
+                        <div class="acm-radio-cards">
+                            @foreach (var m in Services.Patterns.CartModes.All)
+                            {
+                                <label class="acm-radio-card">
+                                    <input type="radio" name="cart_mode" value="@m" checked="@(m == cartMode)" />
+                                    <span class="acm-radio-card-body">
+                                        <strong><AcIcon Name="@CartModeIcon(m)" Size="16" /> @L.Markup(CartModeLabelKey(m))</strong>
+                                        <span>@L.Markup(CartModeHintKey(m))</span>
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+                }
+
                 <button type="submit" class="st-btn st-btn-primary">@L.Markup("studio.app_branding.save")</button>
             </form>
         }
@@ -144,6 +168,21 @@
         AuthChannels.Email  => "studio.app_branding.auth_email_hint",
         _                   => "studio.app_branding.auth_phone_hint"
     };
+
+    // نَمَطا السَلَّةِ بِمَفاتيحَ حَرفِيَّة — تُقرَأُ بِـgrep وتُقابَلُ بِالقامُوس (‏2026-10-29، قَرارُ المالِك د2).
+    static string CartModeLabelKey(string mode) => mode switch
+    {
+        Services.Patterns.CartModes.PerVendor => "studio.app_branding.cart_mode_per_vendor",
+        _                                     => "studio.app_branding.cart_mode_mixed",
+    };
+
+    static string CartModeHintKey(string mode) => mode switch
+    {
+        Services.Patterns.CartModes.PerVendor => "studio.app_branding.cart_mode_per_vendor_hint",
+        _                                     => "studio.app_branding.cart_mode_mixed_hint",
+    };
+
+    static string CartModeIcon(string mode) => mode == Services.Patterns.CartModes.PerVendor ? "store" : "cart";
 
     static string IconFor(string channel) => channel switch
     {

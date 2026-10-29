@@ -29,12 +29,15 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.TenantConfig;
 /// النُسخَة، ولا يَملِكُ صاحِبُه تَبديلَها. راجِع
 /// <c>TenantAuthChannelDoor</c>.</para>
 /// </summary>
+/// <remarks>(‏2026-10-29، قَرارُ المالِك د2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه: و<see cref="CartMode"/> نَمَطُ سَلَّةِ المَتجَرِ بِالعَقدِ نَفسِه — <c>null</c> «لا تُغَيِّر»،
+/// وقيمَةٌ مُرسَلَةٌ تُصادَقُ بِـ<c>CartModes.Validate</c> فَتُطَبَّقُ أَو تُرَدّ؛ فَحِفظُ الهُوِيَّةِ مِن سَطحٍ لا يُرسِلُه — صَفحَةُ الإدارَة — لا يَمَسُّه.)</remarks>
 public sealed record BrandingSaveRequest(
     string Name,
     string TagLine,
     string City,
     string BrandColor,
-    string? AuthChannel);
+    string? AuthChannel,
+    string? CartMode = null);
 
 /// <summary>
 /// <para><b>حِفظُ الهُوِيَّة البَصَرِيَّة — تَعريفٌ واحِد يُنادِيه
@@ -75,6 +78,8 @@ public static class BrandingSaveService
     {
         if (string.IsNullOrEmpty(r.Name.Trim())) return TenantConfigCodes.NameRequired;
         if (!HexColor.IsMatch(r.BrandColor.Trim())) return TenantConfigCodes.ColorInvalid;
+        // (‏2026-10-29، قَرارُ المالِك د2) — ونَمَطُ سَلَّةٍ مُرسَلٌ مِن المَعجَمِ وإلّا رَمزُه.
+        if (r.CartMode is not null && !Patterns.CartModes.IsValid(r.CartMode)) return TenantConfigCodes.CartModeUnknown;
         return null;
     }
 
@@ -96,6 +101,10 @@ public static class BrandingSaveService
         // الافتِراضيّ». راجِع شَرح BrandingSaveRequest.
         if (r.AuthChannel is not null)
             t.AuthChannel = AuthChannels.NormalizeOrDefault(r.AuthChannel.Trim());
+
+        // ونَمَطُ السَلَّةِ بِالعَقدِ نَفسِه: غِيابُه «لا تُغَيِّر» (‏2026-10-29، قَرارُ المالِك د2).
+        if (r.CartMode is not null)
+            t.CartMode = r.CartMode;
 
         session.Store(t);
         return TenantConfigResult.Saved;

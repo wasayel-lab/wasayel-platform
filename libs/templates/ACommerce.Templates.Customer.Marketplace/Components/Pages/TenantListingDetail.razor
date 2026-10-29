@@ -222,6 +222,18 @@ else
            الاستِمارَةَ هُنا، فَلا يَبلُغُه إلّا طَلَبٌ مَصنوع — ويُقالُ ولا يُبتلَع. *@
         <AcAlert Variant="danger" Message="@L["listings.detail.err_cart_closed"]" />
     }
+    else if (Err == ACommerce.Templates.Customer.Marketplace.Services.Patterns.CartModes.OtherVendorCode)
+    {
+        @* `cart_other_vendor` — رَدُّ `cart/add` في مَتجَرٍ نَمَطُ سَلَّتِه «لِكُلِّ بائِعٍ سَلَّة» (‏2026-10-29، قَرارُ المالِك د2): في السَلَّةِ بائِعٌ آخَر، فَيُعرَضُ
+           الطَريقانِ — إكمالُ السَلَّةِ القائِمَةِ أَو إفراغُها — بِبابَيهِما القائِمَين (صَفحَةُ السَلَّةِ و`cart/clear`). *@
+        <AcAlert Variant="warning" Message="@L["listings.detail.err_cart_other_vendor"]" />
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px;">
+            <a class="ac-btn ac-btn-primary ac-btn-sm" href="@AuthSession.LinkFor(Slug, Role, "cart")">@L.Markup("listings.detail.cart_other_vendor_complete")</a>
+            <form method="post" action="@($"/{Slug}/cart/clear")" style="margin:0;">
+                <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">@L.Markup("listings.detail.cart_other_vendor_empty")</button>
+            </form>
+        </div>
+    }
 
     @if (Trip == "completed") { <AcAlert Variant="success" Message="@L["listings.detail.trip_completed"]" /> }
     @if (Trip == "aborted")   { <AcAlert Variant="warning" Message="@L["listings.detail.trip_aborted"]" /> }
