@@ -154,10 +154,10 @@ public class SellerDisplayNameTests(ITestOutputHelper output)
             Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Type = "deal_accepted", RelatedUrl = $"/zz-name/deals/{deal}",
             Title = "قُبِلَ طَلَبُك", Body = "مَتجَرُ الوَرد قَبِلَ طَلَبَكَ عَلى «زَهر»",
         };
-        Assert.True(ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.EraseFrom(n, seller, new[] { "سارَة", "مَتجَرُ الوَرد" }, new[] { $"/deals/{deal}" }));
+        Assert.True(ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.EraseFrom(n, seller, new[] { "سارَة", "مَتجَرُ الوَرد" }, new[] { $"/deals/{deal}" }, Array.Empty<string>(), new HashSet<Guid>()));
         Assert.DoesNotContain("مَتجَرُ الوَرد", n.Body, StringComparison.Ordinal);
         Assert.Contains(ACommerce.Kit.Auth.AccountDeletion.ErasedName, n.Body, StringComparison.Ordinal);
         var other = new ACommerce.Kit.Notifications.Notification { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Type = "deal_accepted", RelatedUrl = "/zz-name/deals/x", Title = "t", Body = "مَتجَرُ الوَرد" };
-        Assert.False(ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.EraseFrom(other, seller, new[] { "مَتجَرُ الوَرد" }, new[] { $"/deals/{deal}" }));
+        Assert.False(ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.EraseFrom(other, seller, new[] { "مَتجَرُ الوَرد" }, new[] { $"/deals/{deal}" }, Array.Empty<string>(), new HashSet<Guid>()));
     }
 }

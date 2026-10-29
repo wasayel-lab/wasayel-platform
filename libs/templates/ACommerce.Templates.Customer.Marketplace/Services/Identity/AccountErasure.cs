@@ -56,7 +56,7 @@ public static class AccountErasure
     /// <summary>
     /// <para><b>الأَسماءُ الافتِراضِيَّةُ الَّتي لا تَدُلُّ عَلى أَحَد</b>: قيمَةُ <c>User.FullName</c> الابتِدائِيَّة، واسمُ الحِسابِ الجَديدِ بِالهاتِفِ أَو البَريد
     /// (<c>AuthHandlers.NewMemberNameKey</c> بِالعَرَبِيَّةِ صَراحَةً كَما يُخَزَّن — وهُوَ ما يَسأَلُه <c>ActorName.NeedsName</c>). اسمٌ مِنهُما يَحمِلُه كُلُّ
-    /// حِسابٍ لَم يَكتُب اسمَه، فَلا يُبحَثُ عَنه — إلّا في إشعارٍ ثَبَتَ أَنّه لِصاحِبِه بِوَسيلَةِ اتِّصالِه (<see cref="EraseFrom(Notification, Guid, IReadOnlyCollection{string}, IReadOnlyCollection{string}, IReadOnlyCollection{string})"/>).</para>
+    /// حِسابٍ لَم يَكتُب اسمَه، فَلا يُبحَثُ عَنه — إلّا في إشعارٍ ثَبَتَ أَنّه لِصاحِبِه بِوَسيلَةِ اتِّصالِه (<see cref="EraseFrom(Notification, Guid, IReadOnlyCollection{string}, IReadOnlyCollection{string}, IReadOnlyCollection{string}, IReadOnlySet{Guid})"/>).</para>
     /// </summary>
     public static IReadOnlyList<string> PlaceholderNames { get; } = new[]
         {
@@ -162,55 +162,63 @@ public static class AccountErasure
 
     /// <summary>
     /// <para><b>إشعارٌ في صُندوقِ غَيرِه يَحمِلُ اسمَه</b>: يُستَبدَلُ الاسمُ في العُنوانِ والمَتنِ — إن كانَ الإشعارُ عَن شَيءٍ يَخُصُّه (رابِطُه صَفقَةٌ أَو
-    /// مُحادَثَةٌ أَو إعلانٌ مِن <paramref name="relatedUrls"/>) أَو مِن إشعاراتِ مُديري المَتجَرِ الَّتي تُسَمّي العُضو (<c>new_user</c> و<c>report</c>).
-    /// والحَصرُ بِالرابِطِ لِكَي لا يُمَسَّ اسمُ شَخصٍ آخَرَ يُشبِهُ اسمَه في إشعارٍ لا عَلاقَةَ لَه بِه.</para>
+    /// مُحادَثَةٌ أَو إعلانٌ مِن <paramref name="relatedUrls"/>). والحَصرُ بِالرابِطِ لِكَي لا يُمَسَّ اسمُ شَخصٍ آخَرَ يُشبِهُ اسمَه في إشعارٍ لا عَلاقَةَ لَه بِه.
+    /// ‏(2026-10-29، قَرارُ المالِك د40) والأَسماءُ كُلُّها — اسمُه واسمُ نَشاطِه (<c>ActorName.NamesOf</c>)، الأَطوَلُ أَوَّلاً.</para>
+    ///
+    /// <para><b>‏(2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ١) ووَسيلَةُ اتِّصالِه تَربِطُ إشعارَ التَسجيلِ بِهُوِيَّتِه</b>: إشعارُ <c>new_user</c> قَبلَ <c>548ea4d</c>
+    /// مَتنُه «{الاسم} · {الهاتِف}» أَو «… · {البَريد}» والاسمُ يَومَئِذٍ الافتِراضِيّ — فَإشعارُ مُديرينَ يَحمِلُ وَسيلَتَه (<see cref="Carries"/>) تُنزَعُ مِنه الوَسيلَةُ
+    /// وفاصِلُها؛ وإن كانَ إشعارَ تَسجيلٍ فَهُوَ إشعارُه بِعَينِه: الافتِراضِيُّ في مَتنِه «حِسابٌ مَحذوف»، والعُنوانُ الثابِتُ كَما هُو.</para>
+    ///
+    /// <para><b>‏(2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢) ولا إشعارَ مُديرينَ «عَنه» بِنَوعِه</b>: كانَ كُلُّ إشعارِ <c>new_user</c>/<c>report</c> يُعَدُّ عَنه، وكُلُّ اسمٍ
+    /// حَقيقِيٍّ يُستَبدَلُ نَصّاً داخِلَ نَصّ — فَحَذفُ «عَلي» كَتَبَ «حِسابٌ مَحذوف» في بَلاغِ «عَلي حَسَن» وفي بَلاغِ سَمِيِّه، وقَطَعَ «عَلِيّ» مِن «عَلِيّان». والآن:
+    /// إشعارُ المُديرينَ عَنه بِهُوِيَّتِه وَحدَها — وَسيلَتُه (أَعلاه)، أَو بَلاغُه هُو (<paramref name="ownReports"/>: يُعلِنُ تَذكِرَةَ بَلاغٍ كَتَبَها،
+    /// <see cref="ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingReport.Announces"/>)؛ وبَلاغُ غَيرِه يَقتَبِسُ وَسيلَتَه تُنزَعُ مِنه الوَسيلَةُ وَحدَها.
+    /// والاسمُ يُستَبدَلُ كَلِمَةً تامَّةً لا جُزءَ كَلِمَة (<see cref="ReplaceWhole"/>).</para>
     /// </summary>
-    public static bool EraseFrom(Notification n, Guid userId, string oldName, IReadOnlyCollection<string> relatedUrls)
-        => EraseFrom(n, userId, new[] { oldName }, relatedUrls);
-
-    /// <summary>‏(2026-10-29، قَرارُ المالِك د40) والأَسماءُ كُلُّها لا الاسمُ وَحدَه — اسمُه واسمُ نَشاطِه (<c>ActorName.NamesOf</c>)، فَإشعارُ القَبولِ
-    /// الَّذي يُسَمّي البائِعَ بِنَشاطِه يُمحى كَما يُمحى الَّذي يُسَمّيه بِاسمِه. الأَطوَلُ أَوَّلاً: اسمٌ يَحوي غَيرَه لا يُقطَع.</summary>
-    public static bool EraseFrom(Notification n, Guid userId, IReadOnlyCollection<string> oldNames, IReadOnlyCollection<string> relatedUrls)
-        => EraseFrom(n, userId, oldNames, relatedUrls, Array.Empty<string>());
-
-    /// <summary>
-    /// <para><b>‏(2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ١) ووَسيلَةُ اتِّصالِه تَربِطُ إشعارَ المُديرينَ بِهُوِيَّتِه لا بِنَصِّ اسمِه</b>: إشعارُ <c>new_user</c>
-    /// قَبلَ <c>548ea4d</c> مَتنُه «{الاسم} · {الهاتِف}» أَو «… · {البَريد}»، والاسمُ يَومَئِذٍ الافتِراضِيُّ دائِماً (يُرسَلُ عِندَ التَحَقُّقِ لِحِسابٍ عُمرُه دونَ
-    /// دَقيقَة) — فَالمَحوُ بِالاسمِ وَحدَه لا يَراه، ويَبقى الهاتِفُ في صَناديقِ المُديرين. فَإشعارُ مُديرينَ يَحمِلُ وَسيلَتَه (<see cref="Carries"/>) إشعارُه بِعَينِه:
-    /// تُنزَعُ الوَسيلَةُ وفاصِلُها، ويَصيرُ الاسمُ الافتِراضِيُّ في مَتنِه «حِسابٌ مَحذوف» — والعُنوانُ («مُستَخدِم جَديد سَجَّل») نَصٌّ ثابِتٌ لا اسمٌ فَلا يُمَسّ.
-    /// والاسمُ الافتِراضِيُّ في إشعارِ غَيرِه لا يُمَسُّ أَبَداً: <see cref="Identifies"/> يَستَثنيه.</para>
-    /// </summary>
-    public static bool EraseFrom(Notification n, Guid userId, IReadOnlyCollection<string> oldNames, IReadOnlyCollection<string> relatedUrls, IReadOnlyCollection<string> contacts)
+    public static bool EraseFrom(Notification n, Guid userId, IReadOnlyCollection<string> oldNames, IReadOnlyCollection<string> relatedUrls,
+        IReadOnlyCollection<string> contacts, IReadOnlySet<Guid> ownReports)
     {
         if (n.UserId == userId) return false;
-        var names = oldNames.Where(Identifies).OrderByDescending(x => x.Length).ToList();
+        var names = oldNames.Where(Identifies).Select(x => x.Trim()).Distinct(StringComparer.Ordinal).OrderByDescending(x => x.Length).ToList();
         var marks = contacts.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim())
             .Distinct(StringComparer.Ordinal).OrderByDescending(c => c.Length).ToList();
-        var admin = AdminNoticeTypes.Contains(n.Type);
-        var byContact = admin && marks.Any(c => Carries(n.Title, c) || Carries(n.Body, c));
-        if (names.Count == 0 && !byContact) return false;
-        var about = admin || (n.RelatedUrl is { } url && relatedUrls.Any(r => url.EndsWith(r, StringComparison.Ordinal)));
-        if (!about) return false;
+        var linked = n.RelatedUrl is { } url && relatedUrls.Any(r => url.EndsWith(r, StringComparison.Ordinal));
+        var reported = ownReports.Contains(n.Id);
+        var byContact = AdminNoticeTypes.Contains(n.Type) && marks.Any(c => Carries(n.Title, c) || Carries(n.Body, c));
+        var registration = byContact && n.Type == NewUserNoticeType;
+        if (!linked && !reported && !byContact) return false;
         var (title, body) = (n.Title, n.Body);
         if (byContact)
         {
             foreach (var c in marks) { title = StripContact(title, c); body = StripContact(body, c); }
-            foreach (var p in PlaceholderNames.OrderByDescending(x => x.Length))
-                body = body.Replace(p, AccountDeletion.ErasedName, StringComparison.Ordinal);
-            if (string.IsNullOrWhiteSpace(body)) body = AccountDeletion.ErasedName;
+            if (registration)
+            {
+                foreach (var p in PlaceholderNames.OrderByDescending(x => x.Length)) body = ReplaceWhole(body, p);
+                if (string.IsNullOrWhiteSpace(body)) body = AccountDeletion.ErasedName;
+            }
         }
-        foreach (var oldName in names)
-        {
-            title = title.Replace(oldName, AccountDeletion.ErasedName, StringComparison.Ordinal);
-            body = body.Replace(oldName, AccountDeletion.ErasedName, StringComparison.Ordinal);
-        }
+        if (linked || reported || registration)
+            foreach (var name in names) { title = ReplaceWhole(title, name); body = ReplaceWhole(body, name); }
         if (title == n.Title && body == n.Body) return false;
         (n.Title, n.Body) = (title, body);
         return true;
     }
 
+    // حَدّا الاسمِ في النَصّ: لا حَرفَ ولا حَرَكَةَ ولا رَقَمَ قَبلَه أَو بَعدَه — فَـ«عَلِيّ» لا يُطابِقُ داخِلَ «عَلِيّان»، ولا «عَلي» داخِلَ «عَليٌّ».
+    private const string NameBefore = @"(?<![\p{L}\p{M}\p{N}])";
+    private const string NameAfter = @"(?![\p{L}\p{M}\p{N}])";
+
+    /// <summary>الاسمُ كَلِمَةً تامَّةً يَصيرُ «حِسابٌ مَحذوف» — لا جُزءَ كَلِمَةٍ أَطوَل.</summary>
+    public static string ReplaceWhole(string text, string name)
+        => string.IsNullOrEmpty(text) || string.IsNullOrEmpty(name) ? text
+         : Regex.Replace(text, NameBefore + Regex.Escape(name) + NameAfter, _ => AccountDeletion.ErasedName);
+
+    /// <summary>نَوعُ إشعارِ التَسجيلِ لِمُديري المَتجَر — «{الاسم}» (وقَبلَ <c>548ea4d</c> «{الاسم} · {الوَسيلَة}»).</summary>
+    public const string NewUserNoticeType = "new_user";
+
     /// <summary>إشعاراتُ مُديري المَتجَرِ الَّتي تُسَمّي العُضوَ في مَتنِها — كاتِباها في <c>MarketplaceTemplateExtensions</c> (التَسجيلُ والبَلاغ).</summary>
-    public static readonly IReadOnlySet<string> AdminNoticeTypes = new HashSet<string>(StringComparer.Ordinal) { "new_user", "report" };
+    public static readonly IReadOnlySet<string> AdminNoticeTypes = new HashSet<string>(StringComparer.Ordinal)
+        { NewUserNoticeType, ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingReport.NoticeType };
 
     private static bool Set(string? current, Action<string> set)
     {
@@ -227,17 +235,11 @@ public static class AccountErasure
 
     /// <summary>
     /// <para><b>الأَثَرُ في الجَلسَة — بِلا حِفظ</b>: يَقرَأُ ما يَذكُرُه بِمُعَرِّفِه ويُعَلِّمُ المُتَغَيِّرَ لِلحِفظِ (<c>Store</c>)، والحِفظُ الواحِدُ لِلنُقطَةِ بَعدَه —
-    /// فَالمَحوُ ووَثيقَةُ الحِسابِ ومَفاتيحُه في مُعامَلَةٍ واحِدَة: يَقَعُ كُلُّه أَو لا شَيء. و<paramref name="oldName"/> الاسمُ قَبلَ <c>Erase</c>.</para>
+    /// فَالمَحوُ ووَثيقَةُ الحِسابِ ومَفاتيحُه في مُعامَلَةٍ واحِدَة: يَقَعُ كُلُّه أَو لا شَيء. و<paramref name="oldNames"/> أَسماؤُه قَبلَ <c>Erase</c> (‏د40: اسمُه واسمُ
+    /// نَشاطِه، <c>ActorName.NamesOf</c>)، و<paramref name="contacts"/> وَسيلَتاه قَبلَه (<see cref="ContactsOf"/> — مُراجَعَةُ تَيّارِ S2 الجَولَة ١).</para>
+    /// <para><b>‏(2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢) وصيغَةٌ واحِدَة</b>: كانَت ثَلاثاً تُحيلُ الأولَيانِ مِنها إلى الثالِثَةِ بِوَسيطٍ فارِغ، ولا مُستَهلِكَ لَهُما
+    /// إلّا الاختِبار (القاعِدَة ١) — وتَسمَحانِ لِنِداءٍ قادِمٍ بِأَن يَتَخَطّى الوَسيلَتَينِ صامِتاً. فَالوَسيلَتانِ وَسيطٌ إلزامِيّ.</para>
     /// </summary>
-    public static Task<Counts> EraseCopiesAsync(IDocumentSession s, string tenantSlug, Guid userId, string oldName, CancellationToken ct = default)
-        => EraseCopiesAsync(s, tenantSlug, userId, new[] { oldName }, ct);
-
-    /// <summary>‏(2026-10-29، د40) بِأَسمائِه كُلِّها — اسمُه واسمُ نَشاطِه (<c>ActorName.NamesOf</c>).</summary>
-    public static Task<Counts> EraseCopiesAsync(IDocumentSession s, string tenantSlug, Guid userId, IReadOnlyCollection<string> oldNames, CancellationToken ct = default)
-        => EraseCopiesAsync(s, tenantSlug, userId, oldNames, Array.Empty<string>(), ct);
-
-    /// <summary>‏(2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ١) ووَسيلَتا اتِّصالِه قَبلَ <c>Erase</c> (<see cref="ContactsOf"/>) — إشعارُ المُديرينَ الَّذي يَحمِلُهُما
-    /// يُجلَبُ بِهِما ويُمحى (<see cref="EraseFrom(Notification, Guid, IReadOnlyCollection{string}, IReadOnlyCollection{string}, IReadOnlyCollection{string})"/>).</summary>
     public static async Task<Counts> EraseCopiesAsync(IDocumentSession s, string tenantSlug, Guid userId, IReadOnlyCollection<string> oldNames,
         IReadOnlyCollection<string> contacts, CancellationToken ct = default)
     {
@@ -273,8 +275,31 @@ public static class AccountErasure
             .Concat(convs.Select(c => $"/chats/{c.Id}"))
             .Concat(matches.Select(m => $"/listings/{m.Id}"))
             .ToList();
-        // كُلُّ اسمٍ بِاستِعلامِه، والنَتائِجُ وَثيقَةٌ واحِدَةٌ لِكُلِّ مُعَرِّف — فَلا تُخَزَّنُ نُسخَتانِ مِن إشعارٍ يَحمِلُ الاسمَين.
         var notices = new List<Notification>();
+        // ‏(2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢) بَلاغاتُه بِتَذاكِرِه لا بِنَصِّ اسمِه: كُلُّ تَذكِرَةِ بَلاغٍ كَتَبَها — بِاسمِه يَومَئِذٍ، قَبلَ مَحوِها أَدناه — وإشعاراتُ
+        // المُديرينَ الَّتي تُعلِنُها (`ListingReport.Announces`: بَعدَها وقَبلَ التالِيَةِ بِالمَوضوعِ نَفسِه في المَتجَر).
+        var ownReports = new HashSet<Guid>();
+        var reportNames = new List<string>();
+        foreach (var t in tickets.Where(t => ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingReport.ReasonOf(t.Subject) is not null).ToList())
+        {
+            var reason = ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingReport.ReasonOf(t.Subject)!;
+            var title = ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingReport.NoticeTitle(reason);
+            var body = ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingReport.NoticeBody(t.AuthorName);
+            var (subject, at) = (t.Subject, t.CreatedAt);
+            // المُقارَنَةُ بِالوَقتِ في الذاكِرَة لا في الاستِعلام: Npgsql يَرفُضُ `DateTime` بِـUTC وَسيطاً لِحَقلٍ مِن وَثيقَة (مَقيسٌ حَيّاً: InvalidUtcDateTimeUsageException)،
+            // والمُرَشَّحونَ قَليل — تَذاكِرُ بِالمَوضوعِ نَفسِه، وإشعاراتٌ بِالعُنوانِ والمَتنِ نَفسَيهِما.
+            var next = (await s.Query<Ticket>().Where(x => x.Subject == subject).ToListAsync(ct))
+                .Where(x => x.CreatedAt > at).Select(x => (DateTime?)x.CreatedAt).OrderBy(x => x).FirstOrDefault();
+            foreach (var n in await s.Query<Notification>().Where(n => n.UserId != userId && n.Title == title && n.Body == body).ToListAsync(ct))
+                if (ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingReport.Announces(n, t, next))
+                {
+                    ownReports.Add(n.Id);
+                    if (notices.All(x => x.Id != n.Id)) notices.Add(n);
+                }
+            reportNames.Add(t.AuthorName);
+        }
+        var names = oldNames.Concat(reportNames).ToList();
+        // كُلُّ اسمٍ بِاستِعلامِه، والنَتائِجُ وَثيقَةٌ واحِدَةٌ لِكُلِّ مُعَرِّف — فَلا تُخَزَّنُ نُسخَتانِ مِن إشعارٍ يَحمِلُ الاسمَين.
         foreach (var oldName in oldNames.Where(Identifies).Distinct(StringComparer.Ordinal))
             foreach (var n in await s.Query<Notification>().Where(n => n.UserId != userId && (n.Title.Contains(oldName) || n.Body.Contains(oldName))).ToListAsync(ct))
                 if (notices.All(x => x.Id != n.Id)) notices.Add(n);
@@ -291,6 +316,6 @@ public static class AccountErasure
             Matches: Mark(matches, m => EraseFrom(m, userId)),
             Tickets: Mark(tickets, t => EraseFrom(t, userId)),
             Keys: Mark(keys, k => EraseFrom(k, tenantSlug, userId)),
-            Notifications: Mark(notices, n => EraseFrom(n, userId, oldNames, urls, contacts)));
+            Notifications: Mark(notices, n => EraseFrom(n, userId, names, urls, contacts, ownReports)));
     }
 }

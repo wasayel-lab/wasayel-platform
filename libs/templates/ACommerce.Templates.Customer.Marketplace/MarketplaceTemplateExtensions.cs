@@ -1003,16 +1003,17 @@ public static class MarketplaceTemplateExtensions
             if (string.IsNullOrEmpty(reason)) reason = "غَير مُحَدَّد";
 
             await using var s = store.LightweightSession(slug);
+            // ‏(‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢) النُصوصُ الثَلاثَةُ بِحَرفِها مِن `ListingReport` — المَحوُ يَربِطُ الإشعارَ بِتَذكِرَتِه بِها.
             var ev = new ACommerce.Kit.Support.TicketCreated(
                 Guid.NewGuid(), userId, userName,
-                Subject: $"تَبليغ: {reason}",
+                Subject: Services.Listings.ListingReport.TicketSubject(reason),
                 Body:    $"الإعلان: /{slug}/listings/{id}\nالسَّبَب: {reason}\n\n{note}",
                 At:      DateTime.UtcNow);
             s.Events.StartStream<ACommerce.Kit.Support.Ticket>(ev.Id, ev);
             await s.SaveChangesAsync();
             await NotifyAdminsAsync(store, slug, "report",
-                $"بَلاغ: {reason}",
-                $"{userName} بَلَّغَ عَن إعلان",
+                Services.Listings.ListingReport.NoticeTitle(reason),
+                Services.Listings.ListingReport.NoticeBody(userName),
                 $"/admin/tenants/{slug}/tickets");
             return Results.Redirect(Link(req, slug, $"listings/{id}?reported=1"));
         }).DisableAntiforgery().RequireFormBody()

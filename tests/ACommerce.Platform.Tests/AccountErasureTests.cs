@@ -8,6 +8,7 @@ using ACommerce.Templates.Customer.Marketplace.Services.Api;
 using ACommerce.Templates.Customer.Marketplace.Services.Audit;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
 using ACommerce.Templates.Customer.Marketplace.Services.Identity;
+using ACommerce.Templates.Customer.Marketplace.Services.Listings;
 using ACommerce.Templates.Customer.Marketplace.Services.Queries;
 using Marten;
 using Xunit;
@@ -29,26 +30,37 @@ public class AccountErasureTests
     private static Notification Notice(Guid inbox, string type, string title, string body, string? url)
         => new() { Id = Guid.NewGuid(), UserId = inbox, Type = type, Title = title, Body = body, RelatedUrl = url };
 
+    // ‏(2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢) `EraseFrom(Notification, …)` صيغَةٌ واحِدَةٌ بِوَسائِطِها السِتَّة (لا صيغَةَ تُحيلُ بِوَسيطٍ فارِغ — القاعِدَة ١):
+    // الصُفوفُ القائِمَةُ تُمَرِّرُ ما لا يَعنيها فارِغاً صَراحَةً، وتَأكيداتُها بِحَرفِها.
+    private static readonly string[] NoContacts = Array.Empty<string>();
+    private static readonly IReadOnlySet<Guid> NoReports = new HashSet<Guid>();
+
     [Fact]
     public void A_notice_about_the_users_deal_or_chat_in_someone_elses_inbox_loses_the_name()
     {
         var deal = Guid.NewGuid();
         var n = Notice(Other, "deal_accepted", "قَبِلَ " + Name, Name + " قَبِلَ طَلَبَك", $"/zz/deals/{deal}");
         var chat = Notice(Other, "chat_message", "رِسالَةٌ مِن " + Name, "مَرحَباً", $"/zz/chats/{deal}");
-        Assert.True(AccountErasure.EraseFrom(n, Me, Name, new[] { $"/deals/{deal}" }));
+        Assert.True(AccountErasure.EraseFrom(n, Me, new[] { Name }, new[] { $"/deals/{deal}" }, NoContacts, NoReports));
         Assert.Equal(("قَبِلَ " + AccountDeletion.ErasedName, AccountDeletion.ErasedName + " قَبِلَ طَلَبَك"), (n.Title, n.Body));
-        Assert.True(AccountErasure.EraseFrom(chat, Me, Name, new[] { $"/chats/{deal}" }));
+        Assert.True(AccountErasure.EraseFrom(chat, Me, new[] { Name }, new[] { $"/chats/{deal}" }, NoContacts, NoReports));
         Assert.Equal("مَرحَباً", chat.Body);
     }
 
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢)</b> — كانَ <c>A_manager_notice_naming_the_user_loses_the_name_whatever_its_link</c>:
+    /// كُلُّ إشعارِ مُديرينَ يَحمِلُ اسمَه كانَ يُعَدُّ عَنه. والآن بِهُوِيَّتِه وَحدَها — وَسيلَتُه في إشعارِ التَسجيل، أَو بَلاغُه هُو (يُعلِنُ تَذكِرَتَه) — وما سِواهُما لا يُمَسّ.</summary>
     [Fact]
-    public void A_manager_notice_naming_the_user_loses_the_name_whatever_its_link()
+    public void A_manager_notice_loses_the_name_only_when_the_users_contact_or_own_report_ties_it_to_the_user()
     {
         var registered = Notice(Other, "new_user", "مُستَخدِم جَديد سَجَّل", Name, "/admin/tenants/zz/users");
-        var reported = Notice(Other, "report", "بَلاغ", Name + " بَلَّغَ عَن إعلان", "/admin/tenants/zz/tickets");
-        Assert.True(AccountErasure.EraseFrom(registered, Me, Name, Array.Empty<string>()));
-        Assert.True(AccountErasure.EraseFrom(reported, Me, Name, Array.Empty<string>()));
-        Assert.Equal(AccountDeletion.ErasedName, registered.Body);
+        var registeredByContact = Notice(Other, "new_user", "مُستَخدِم جَديد سَجَّل", $"{Name} · {MyPhone}", "/admin/tenants/zz/users");
+        var reported = Notice(Other, "report", "بَلاغ: مُخالِف", Name + " بَلَّغَ عَن إعلان", "/admin/tenants/zz/tickets");
+        Assert.False(AccountErasure.EraseFrom(registered, Me, new[] { Name }, Array.Empty<string>(), new[] { MyPhone }, NoReports));
+        Assert.False(AccountErasure.EraseFrom(reported, Me, new[] { Name }, Array.Empty<string>(), new[] { MyPhone }, NoReports));
+        Assert.Equal((Name, Name + " بَلَّغَ عَن إعلان"), (registered.Body, reported.Body));
+        Assert.True(AccountErasure.EraseFrom(registeredByContact, Me, new[] { Name }, Array.Empty<string>(), new[] { MyPhone }, NoReports));
+        Assert.True(AccountErasure.EraseFrom(reported, Me, new[] { Name }, Array.Empty<string>(), new[] { MyPhone }, new HashSet<Guid> { reported.Id }));
+        Assert.Equal((AccountDeletion.ErasedName, AccountDeletion.ErasedName + " بَلَّغَ عَن إعلان"), (registeredByContact.Body, reported.Body));
     }
 
     [Fact]
@@ -57,9 +69,9 @@ public class AccountErasureTests
         var unrelated = Notice(Other, "deal_accepted", "قَبِلَ " + Name, "—", $"/zz/deals/{Guid.NewGuid()}");   // اسمٌ يُشبِهُه في صَفقَةٍ لَيسَت لَه
         var own = Notice(Me, "deal_accepted", "قَبِلَ " + Name, "—", "/zz/deals/x");
         var deflt = Notice(Other, "new_user", "مُستَخدِم جَديد سَجَّل", new User().FullName, "/admin/tenants/zz/users");
-        Assert.False(AccountErasure.EraseFrom(unrelated, Me, Name, new[] { "/deals/mine" }));
-        Assert.False(AccountErasure.EraseFrom(own, Me, Name, new[] { "/deals/x" }));
-        Assert.False(AccountErasure.EraseFrom(deflt, Me, new User().FullName, Array.Empty<string>()));
+        Assert.False(AccountErasure.EraseFrom(unrelated, Me, new[] { Name }, new[] { "/deals/mine" }, NoContacts, NoReports));
+        Assert.False(AccountErasure.EraseFrom(own, Me, new[] { Name }, new[] { "/deals/x" }, NoContacts, NoReports));
+        Assert.False(AccountErasure.EraseFrom(deflt, Me, new[] { new User().FullName }, Array.Empty<string>(), NoContacts, NoReports));
         Assert.Equal("قَبِلَ " + Name, unrelated.Title);
         Assert.False(AccountErasure.Identifies(""));
         Assert.False(AccountErasure.Identifies(AccountDeletion.ErasedName));
@@ -92,9 +104,9 @@ public class AccountErasureTests
         Assert.Contains(Placeholder, AccountErasure.PlaceholderNames);
         Assert.Contains(new User().FullName, AccountErasure.PlaceholderNames);
         var mine = new[] { MyPhone };
-        Assert.False(AccountErasure.EraseFrom(anothers, Me, new[] { Placeholder }, Array.Empty<string>(), mine));
-        Assert.False(AccountErasure.EraseFrom(anothersOld, Me, new[] { Placeholder }, Array.Empty<string>(), mine));
-        Assert.False(AccountErasure.EraseFrom(anothersReport, Me, new[] { Placeholder }, Array.Empty<string>(), mine));
+        Assert.False(AccountErasure.EraseFrom(anothers, Me, new[] { Placeholder }, Array.Empty<string>(), mine, NoReports));
+        Assert.False(AccountErasure.EraseFrom(anothersOld, Me, new[] { Placeholder }, Array.Empty<string>(), mine, NoReports));
+        Assert.False(AccountErasure.EraseFrom(anothersReport, Me, new[] { Placeholder }, Array.Empty<string>(), mine, NoReports));
         Assert.Equal((Placeholder, $"{Placeholder} · +966500000001"), (anothers.Body, anothersOld.Body));
     }
 
@@ -106,12 +118,12 @@ public class AccountErasureTests
         var byPhone = Notice(Other, "new_user", "مُستَخدِم جَديد سَجَّل", $"{Placeholder} · {MyPhone}", "/admin/tenants/zz/users");
         var byEmail = Notice(Other, "new_user", "مُستَخدِم جَديد سَجَّل", $"{Placeholder} · {MyEmail}", "/admin/tenants/zz/users");
         var contacts = new[] { MyPhone, MyEmail };
-        Assert.True(AccountErasure.EraseFrom(byPhone, Me, new[] { "أَحمَدُ الفاحِص" }, Array.Empty<string>(), contacts));
-        Assert.True(AccountErasure.EraseFrom(byEmail, Me, new[] { Placeholder }, Array.Empty<string>(), contacts));
+        Assert.True(AccountErasure.EraseFrom(byPhone, Me, new[] { "أَحمَدُ الفاحِص" }, Array.Empty<string>(), contacts, NoReports));
+        Assert.True(AccountErasure.EraseFrom(byEmail, Me, new[] { Placeholder }, Array.Empty<string>(), contacts, NoReports));
         Assert.Equal(("مُستَخدِم جَديد سَجَّل", AccountDeletion.ErasedName), (byPhone.Title, byPhone.Body));
         Assert.Equal(("مُستَخدِم جَديد سَجَّل", AccountDeletion.ErasedName), (byEmail.Title, byEmail.Body));
         // ومَرَّةً ثانِيَةً لا شَيء: المَمحُوُّ لا يُكتَبُ مَرَّتَين.
-        Assert.False(AccountErasure.EraseFrom(byPhone, Me, new[] { "أَحمَدُ الفاحِص" }, Array.Empty<string>(), contacts));
+        Assert.False(AccountErasure.EraseFrom(byPhone, Me, new[] { "أَحمَدُ الفاحِص" }, Array.Empty<string>(), contacts, NoReports));
     }
 
     /// <summary>والوَسيلَةُ في غَيرِ إشعارِ المُديرين، أَو في صُندوقِه هُو، لا تَربِطُ — والمَحوُ بِالوَسيلَةِ لِإشعاراتِ التَسجيلِ والبَلاغِ وَحدَها.</summary>
@@ -120,8 +132,8 @@ public class AccountErasureTests
     {
         var dealNotice = Notice(Other, "deal_accepted", "قُبِلَ طَلَبُك", $"اتَّصِل عَلى {MyPhone}", $"/zz/deals/{Guid.NewGuid()}");
         var own = Notice(Me, "new_user", "مُستَخدِم جَديد سَجَّل", $"{Placeholder} · {MyPhone}", "/admin/tenants/zz/users");
-        Assert.False(AccountErasure.EraseFrom(dealNotice, Me, Array.Empty<string>(), Array.Empty<string>(), new[] { MyPhone }));
-        Assert.False(AccountErasure.EraseFrom(own, Me, Array.Empty<string>(), Array.Empty<string>(), new[] { MyPhone }));
+        Assert.False(AccountErasure.EraseFrom(dealNotice, Me, Array.Empty<string>(), Array.Empty<string>(), new[] { MyPhone }, NoReports));
+        Assert.False(AccountErasure.EraseFrom(own, Me, Array.Empty<string>(), Array.Empty<string>(), new[] { MyPhone }, NoReports));
         Assert.Contains(MyPhone, dealNotice.Body, StringComparison.Ordinal);
     }
 
@@ -148,40 +160,96 @@ public class AccountErasureTests
     // `about = admin` صادِقاً لِكُلِّ إشعارِ مُديرين (`new_user`/`report`) أَيّاً كانَ صاحِبُه، وكُلُّ اسمٍ حَقيقِيٍّ مِن `NamesOf` يُستَبدَلُ نَصّاً داخِلَ نَصٍّ (`Replace`
     // بِلا حُدود). والبَلاغُ يَحمِلُ اسمَ المُبَلِّغِ الحَقيقِيّ («{الاسم} بَلَّغَ عَن إعلان»)؛ وعُنوانُه سَبَبُ البَلاغِ حُرّاً (لا يَتَحَقَّقُ مِنه الخادِم).
 
-    /// <summary><b>«اليَوم»</b>: حَذفُ «عَلي» يَكتُبُ «حِسابٌ مَحذوف» في بَلاغِ عُضوٍ آخَرَ اسمُه «عَلي حَسَن».</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29)</b> — كانَ <c>Today_deleting_a_member_rewrites_another_members_report_whose_name_starts_with_the_same_name</c>
+    /// («عَلي حَسَن بَلَّغَ…» ← «حِسابٌ مَحذوف حَسَن بَلَّغَ…»). سالِب: بَلاغُ غَيرِه لَيسَ بَلاغَه — لا تَذكِرَةَ لَه يُعلِنُها — فَلا يُمَسّ.</summary>
     [Fact]
-    public void Today_deleting_a_member_rewrites_another_members_report_whose_name_starts_with_the_same_name()
+    public void Deleting_a_member_leaves_another_members_report_whose_name_starts_with_the_same_name_untouched()
     {
         var anothers = Notice(Other, "report", "بَلاغ: مُخالِف", "عَلي حَسَن بَلَّغَ عَن إعلان", "/admin/tenants/zz/tickets");
-        Assert.True(AccountErasure.EraseFrom(anothers, Me, new[] { "عَلي" }, Array.Empty<string>(), Array.Empty<string>()));
-        Assert.Equal("حِسابٌ مَحذوف حَسَن بَلَّغَ عَن إعلان", anothers.Body);
+        Assert.False(AccountErasure.EraseFrom(anothers, Me, new[] { "عَلي" }, Array.Empty<string>(), Array.Empty<string>(), NoReports));
+        Assert.Equal("عَلي حَسَن بَلَّغَ عَن إعلان", anothers.Body);
     }
 
-    /// <summary><b>«اليَوم»</b>: اسمٌ داخِلَ اسمٍ أَطوَلَ يُقطَع — «عَلِيّ» في «عَلِيّان».</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29)</b> — كانَ <c>Today_a_deleted_name_inside_a_longer_name_is_cut_out_of_a_manager_notice</c> («عَلِيّان» ← «حِسابٌ مَحذوفان»).
+    /// الاسمُ كَلِمَةٌ تامَّة: يُستَبدَلُ حَيثُ هُوَ كَلِمَة (مُوجَب)، ولا يُقطَعُ مِن كَلِمَةٍ أَطوَلَ ولا مِن كَلِمَةٍ بِحَرَكَتِها بَعدَه (سالِب) — ولَو في إشعارٍ عَن صَفقَتِه.</summary>
     [Fact]
-    public void Today_a_deleted_name_inside_a_longer_name_is_cut_out_of_a_manager_notice()
+    public void A_deleted_name_is_replaced_as_a_whole_word_and_never_inside_a_longer_name()
     {
-        var anothers = Notice(Other, "report", "بَلاغ: مُخالِف", "عَلِيّان بَلَّغَ عَن إعلان", "/admin/tenants/zz/tickets");
-        Assert.True(AccountErasure.EraseFrom(anothers, Me, new[] { "عَلِيّ" }, Array.Empty<string>(), Array.Empty<string>()));
-        Assert.Equal("حِسابٌ مَحذوفان بَلَّغَ عَن إعلان", anothers.Body);
+        var deal = Guid.NewGuid();
+        var longer = Notice(Other, "deal_accepted", "قُبِلَ طَلَبُك", "عَلِيّان قَبِلَ طَلَبَك", $"/zz/deals/{deal}");
+        Assert.False(AccountErasure.EraseFrom(longer, Me, new[] { "عَلِيّ" }, new[] { $"/deals/{deal}" }, NoContacts, NoReports));
+        Assert.Equal("عَلِيّان قَبِلَ طَلَبَك", longer.Body);
+        var whole = Notice(Other, "deal_accepted", "قُبِلَ طَلَبُك", "عَلِيّ قَبِلَ طَلَبَك.", $"/zz/deals/{deal}");
+        Assert.True(AccountErasure.EraseFrom(whole, Me, new[] { "عَلِيّ" }, new[] { $"/deals/{deal}" }, NoContacts, NoReports));
+        Assert.Equal(AccountDeletion.ErasedName + " قَبِلَ طَلَبَك.", whole.Body);
+        Assert.Equal("عَليٌّ هُنا", AccountErasure.ReplaceWhole("عَليٌّ هُنا", "عَلي"));
+        Assert.Equal("«" + AccountDeletion.ErasedName + "»", AccountErasure.ReplaceWhole("«عَلي»", "عَلي"));
     }
 
-    /// <summary><b>«اليَوم»</b>: عُضوٌ آخَرُ بِالاسمِ نَفسِه — بَلاغُه يُمحى كَأَنَّه بَلاغُ المَحذوف.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29)</b> — كانَ <c>Today_a_same_named_members_report_is_erased_as_if_it_were_the_deleted_members</c>. النَصُّ نَفسُه
+    /// لِعُضوَينِ بِاسمٍ واحِد: بَلاغُ سَمِيِّه لا يُمَسّ (سالِب)، وبَلاغُه هُو — الَّذي يُعلِنُ تَذكِرَتَه — يَصيرُ «حِسابٌ مَحذوف بَلَّغَ» (مُوجَب).</summary>
     [Fact]
-    public void Today_a_same_named_members_report_is_erased_as_if_it_were_the_deleted_members()
+    public void A_same_named_members_report_stays_and_the_deleted_members_own_report_loses_the_name()
     {
         var anothers = Notice(Other, "report", "بَلاغ: مُخالِف", "عَلي بَلَّغَ عَن إعلان", "/admin/tenants/zz/tickets");
-        Assert.True(AccountErasure.EraseFrom(anothers, Me, new[] { "عَلي" }, Array.Empty<string>(), Array.Empty<string>()));
-        Assert.Equal(AccountDeletion.ErasedName + " بَلَّغَ عَن إعلان", anothers.Body);
+        var mine = Notice(Other, "report", "بَلاغ: مُخالِف", "عَلي بَلَّغَ عَن إعلان", "/admin/tenants/zz/tickets");
+        var own = new HashSet<Guid> { mine.Id };
+        Assert.False(AccountErasure.EraseFrom(anothers, Me, new[] { "عَلي" }, Array.Empty<string>(), Array.Empty<string>(), own));
+        Assert.True(AccountErasure.EraseFrom(mine, Me, new[] { "عَلي" }, Array.Empty<string>(), Array.Empty<string>(), own));
+        Assert.Equal(("عَلي بَلَّغَ عَن إعلان", AccountDeletion.ErasedName + " بَلَّغَ عَن إعلان"), (anothers.Body, mine.Body));
     }
 
-    /// <summary><b>«اليَوم»</b> (صُغرى): بَلاغُ عُضوٍ آخَرَ بِالاسمِ الافتِراضِيِّ يَقتَبِسُ هاتِفَ المَحذوفِ في سَبَبِه — فَيُنسَبُ البَلاغُ إلى «حِسابٌ مَحذوف».</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29)</b> — كانَ <c>Today_a_report_quoting_the_deleted_members_phone_is_reattributed_to_the_deleted_account</c>. بَلاغُ غَيرِه
+    /// يَقتَبِسُ هاتِفَه في سَبَبِه: يُنزَعُ الهاتِفُ وَحدَه، ويَبقى البَلاغُ لِصاحِبِه — والافتِراضِيُّ يَصيرُ «حِسابٌ مَحذوف» في إشعارِ التَسجيلِ وَحدَه.</summary>
     [Fact]
-    public void Today_a_report_quoting_the_deleted_members_phone_is_reattributed_to_the_deleted_account()
+    public void A_report_quoting_the_deleted_members_phone_loses_the_phone_and_keeps_its_reporter()
     {
         var anothers = Notice(Other, "report", $"بَلاغ: اتَّصَلَ بي {MyPhone}", $"{Placeholder} بَلَّغَ عَن إعلان", "/admin/tenants/zz/tickets");
-        Assert.True(AccountErasure.EraseFrom(anothers, Me, new[] { Placeholder }, Array.Empty<string>(), new[] { MyPhone }));
-        Assert.Equal(("بَلاغ: اتَّصَلَ بي", AccountDeletion.ErasedName + " بَلَّغَ عَن إعلان"), (anothers.Title, anothers.Body));
+        Assert.True(AccountErasure.EraseFrom(anothers, Me, new[] { Placeholder }, Array.Empty<string>(), new[] { MyPhone }, NoReports));
+        Assert.Equal(("بَلاغ: اتَّصَلَ بي", $"{Placeholder} بَلَّغَ عَن إعلان"), (anothers.Title, anothers.Body));
+    }
+
+    /// <summary>البَلاغُ يُعلِنُ تَذكِرَتَه (<see cref="ListingReport.Announces"/>): السَبَبُ نَفسُه، واسمُ كاتِبِها مَتنُه كُلُّه، ووَقتُه مِنها إلى التالِيَةِ بِالمَوضوعِ نَفسِه —
+    /// مُوجَبٌ، وسالِبٌ لِكُلِّ شَرط.</summary>
+    [Fact]
+    public void A_report_notice_announces_the_ticket_it_follows_and_no_other()
+    {
+        var at = new DateTime(2026, 10, 29, 9, 0, 0, DateTimeKind.Utc);
+        var ticket = new Ticket { Id = Guid.NewGuid(), AuthorId = Me, AuthorName = "عَلي", Subject = ListingReport.TicketSubject("مُخالِف"), CreatedAt = at };
+        Notification N(string title, string body, DateTime when) => new()
+            { Id = Guid.NewGuid(), UserId = Other, Type = ListingReport.NoticeType, Title = title, Body = body, At = when };
+        var good = N(ListingReport.NoticeTitle("مُخالِف"), ListingReport.NoticeBody("عَلي"), at.AddMilliseconds(40));
+        Assert.True(ListingReport.Announces(good, ticket, at.AddMinutes(5)));
+        Assert.True(ListingReport.Announces(good, ticket, null));
+        Assert.False(ListingReport.Announces(good, ticket, at.AddMilliseconds(10)));                                       // بَعدَ التَذكِرَةِ التالِيَة
+        Assert.False(ListingReport.Announces(N(good.Title, good.Body, at.AddSeconds(-1)), ticket, null));                   // قَبلَ تَذكِرَتِه
+        Assert.False(ListingReport.Announces(N(ListingReport.NoticeTitle("آخَر"), good.Body, good.At), ticket, null));      // سَبَبٌ آخَر
+        Assert.False(ListingReport.Announces(N(good.Title, ListingReport.NoticeBody("عَلي حَسَن"), good.At), ticket, null)); // اسمٌ آخَر
+        var support = new Ticket { AuthorId = Me, AuthorName = "عَلي", Subject = "سُؤالٌ عَن الشَحن", CreatedAt = at };
+        Assert.False(ListingReport.Announces(good, support, null));                                                         // تَذكِرَةٌ لَيسَت بَلاغاً
+        Assert.False(ListingReport.Announces(new Notification { Type = "new_user", Title = good.Title, Body = good.Body, At = good.At }, ticket, null));
+        Assert.Equal(("تَبليغ: مُخالِف", "بَلاغ: مُخالِف", "عَلي بَلَّغَ عَن إعلان"),
+                     (ListingReport.TicketSubject("مُخالِف"), ListingReport.NoticeTitle("مُخالِف"), ListingReport.NoticeBody("عَلي")));
+        Assert.Equal("مُخالِف", ListingReport.ReasonOf(ticket.Subject));
+        Assert.Null(ListingReport.ReasonOf(support.Subject));
+    }
+
+    /// <summary>بابُ البَلاغِ يَكتُبُ بِنُصوصِ <see cref="ListingReport"/> — فَما يَقرَؤُه المَحوُ هُوَ ما يَكتُبُه البابُ لا نُسخَةً تَنجَرِف — ونَوعُ إشعارِه <c>"report"</c>.</summary>
+    [Fact]
+    public void The_report_door_writes_the_ticket_and_the_manager_notice_through_ListingReport()
+    {
+        var src = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs")));
+        var start = src.IndexOf("\"/{slug}/listings/{id:guid}/report\"", StringComparison.Ordinal);
+        var end = src.IndexOf("RequireStoreWritable", start, StringComparison.Ordinal);
+        Assert.True(start > 0 && end > start, "لا بابَ بَلاغ — الأَداةُ عَمياء.");
+        var body = src[start..end];
+        Assert.Contains("Subject: Services.Listings.ListingReport.TicketSubject(reason),", body, StringComparison.Ordinal);
+        Assert.Contains($"NotifyAdminsAsync(store, slug, \"{ListingReport.NoticeType}\",", body, StringComparison.Ordinal);
+        Assert.Contains("Services.Listings.ListingReport.NoticeTitle(reason),", body, StringComparison.Ordinal);
+        Assert.Contains("Services.Listings.ListingReport.NoticeBody(userName),", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("بَلَّغَ عَن إعلان", body, StringComparison.Ordinal);
+        Assert.Contains(ListingReport.NoticeType, AccountErasure.AdminNoticeTypes);
     }
 
     [Fact]
@@ -399,10 +467,11 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
                 Assert.Null(AccountDeletion.Validate(u, await AccountErasure.OpenDealsAsync(s, me.Id), "حذف", "حذف"));
                 var now = DateTime.UtcNow;
                 var nameBefore = u!.FullName;
+                var contactsBefore = AccountErasure.ContactsOf(u);   // ‏(2026-10-29، الجَولَة ٢) الصيغَةُ الواحِدَة — وَسيلَتاه قَبلَ Erase كَالنُقطَة
                 AccountDeletion.Erase(u, now);
                 s.Store(u);
                 await ApiKeyService.RevokeActorKeysAsync(s, slug, me.Id, now);
-                counts = await AccountErasure.EraseCopiesAsync(s, slug, me.Id, nameBefore);
+                counts = await AccountErasure.EraseCopiesAsync(s, slug, me.Id, new[] { nameBefore }, contactsBefore);
                 await s.SaveChangesAsync();
             }
             output.WriteLine($"مُحِيَ: صَفَقات {counts.Deals} · مُحادَثات {counts.Conversations} · تَقييمات {counts.Reviews} · عُروض {counts.Offers} · مُطابَقات {counts.Matches} · تَذاكِر {counts.Tickets} · مَفاتيح {counts.Keys} · إشعارات {counts.Notifications}");
@@ -514,6 +583,74 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
         var counts = await AccountErasure.EraseCopiesAsync(s, slug, userId, names, contacts);
         await s.SaveChangesAsync();
         return counts;
+    }
+
+    /// <summary>
+    /// <para><b>البَلاغُ بِتَذكِرَتِه لا بِنَصِّ اسمِه — حَيّاً</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢): ثَلاثَةُ مُبَلِّغينَ بِالسَبَبِ نَفسِه — المَحذوفُ «عَلي»، وسَمِيُّه
+    /// «عَلي» بَعدَه، و«عَلي حَسَن» بَعدَهُما — ومُديرانِ يَصِلُ كُلًّا مِنهُما إشعارُ كُلِّ بَلاغ؛ وبَلاغٌ رابِعٌ مِن «عُضو جَديد» يَقتَبِسُ هاتِفَ المَحذوفِ في سَبَبِه. ما لا يُقاسُ
+    /// في الذاكِرَة: استِعلامُ <c>Title == … &amp;&amp; Body == … &amp;&amp; At &gt;= …</c> والتَذكِرَةُ التالِيَةُ بِالمَوضوعِ نَفسِه عَلى Postgres.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_deleted_members_report_notices_lose_the_name_and_a_same_named_or_longer_named_members_stay_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = BuildStore();
+        var slug = "zz-erase-" + Guid.NewGuid().ToString("N")[..8];
+        const string myPhone = "+966500000557";
+        var placeholder = ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, ACommerce.Kit.Auth.Server.AuthHandlers.NewMemberNameKey)!;
+        var me = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = "عَلي", Phone = myPhone };
+        var reporters = new[] { (Id: me.Id, Name: "عَلي", Reason: "مُخالِف"), (Id: Guid.NewGuid(), Name: "عَلي", Reason: "مُخالِف"),
+                                (Id: Guid.NewGuid(), Name: "عَلي حَسَن", Reason: "مُخالِف"), (Id: Guid.NewGuid(), Name: placeholder, Reason: $"اتَّصَلَ بي {myPhone}") };
+        var admins = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var notices = new List<(int Reporter, Guid Id)>();
+        var streams = new List<Guid>();
+        try
+        {
+            await using (var s = store.LightweightSession(slug)) { s.Store(me); await s.SaveChangesAsync(); }
+            var at = DateTime.UtcNow.AddMinutes(-10);
+            for (var i = 0; i < reporters.Length; i++)
+            {
+                var (id, name, reason) = reporters[i];
+                var ticketAt = at.AddSeconds(i * 10);
+                var ticketId = Guid.NewGuid();
+                streams.Add(ticketId);
+                await using var s = store.LightweightSession(slug);
+                s.Events.StartStream<Ticket>(ticketId, new TicketCreated(ticketId, id, name, ListingReport.TicketSubject(reason), "نَصّ", ticketAt));
+                foreach (var admin in admins)
+                {
+                    var n = new Notification { Id = Guid.NewGuid(), UserId = admin, Type = ListingReport.NoticeType, Title = ListingReport.NoticeTitle(reason),
+                                               Body = ListingReport.NoticeBody(name), RelatedUrl = $"/admin/tenants/{slug}/tickets", At = ticketAt.AddMilliseconds(50) };
+                    s.Store(n);
+                    notices.Add((i, n.Id));
+                }
+                await s.SaveChangesAsync();
+            }
+            var counts = await EraseLikeTheDoorAsync(store, slug, me.Id);
+            await using var q = store.QuerySession(slug);
+            var after = new List<(int Reporter, Notification N)>();
+            foreach (var (r, id) in notices) after.Add((r, (await q.LoadAsync<Notification>(id))!));
+            var mine = after.Where(x => x.Reporter == 0).Select(x => x.N).ToList();
+            var twin = after.Where(x => x.Reporter == 1).Select(x => x.N).ToList();
+            var longer = after.Where(x => x.Reporter == 2).Select(x => x.N).ToList();
+            var quoting = after.Where(x => x.Reporter == 3).Select(x => x.N).ToList();
+            output.WriteLine($"إشعاراتٌ مَمحُوَّة: {counts.Notifications} · بَلاغاه بِلا اسمِه: {mine.All(n => n.Body == ListingReport.NoticeBody(AccountDeletion.ErasedName))} · " +
+                             $"بَلاغا سَمِيِّه كَما كُتِبا: {twin.All(n => n.Body == ListingReport.NoticeBody("عَلي"))} · " +
+                             $"بَلاغا «عَلي حَسَن» كَما كُتِبا: {longer.All(n => n.Body == ListingReport.NoticeBody("عَلي حَسَن"))} · " +
+                             $"المُقتَبِسُ بِلا هاتِفِه ولِصاحِبِه: {quoting.All(n => !n.Title.Contains(myPhone, StringComparison.Ordinal) && n.Body == ListingReport.NoticeBody(placeholder))}");
+            Assert.Equal(4, counts.Notifications);
+            Assert.All(mine, n => Assert.Equal(ListingReport.NoticeBody(AccountDeletion.ErasedName), n.Body));
+            Assert.All(twin, n => Assert.Equal(ListingReport.NoticeBody("عَلي"), n.Body));
+            Assert.All(longer, n => Assert.Equal(ListingReport.NoticeBody("عَلي حَسَن"), n.Body));
+            Assert.All(quoting, n => Assert.Equal((ListingReport.NoticeTitle("اتَّصَلَ بي"), ListingReport.NoticeBody(placeholder)), (n.Title, n.Body)));
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            s.DeleteWhere<User>(u => u.Id != Guid.Empty); s.DeleteWhere<Notification>(n => n.Id != Guid.Empty); s.DeleteWhere<Ticket>(t => t.Id != Guid.Empty);
+            foreach (var id in streams) s.Events.ArchiveStream(id);
+            await s.SaveChangesAsync();
+        }
     }
 
     /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29)</b> — كانَ <c>Today_the_studio_ticket_page_reads_the_stream_and_shows_the_deleted_authors_name_on_Postgres</c>

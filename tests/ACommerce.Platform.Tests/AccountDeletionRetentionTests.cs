@@ -506,7 +506,7 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     }
 
     /// <summary>الكُتّابُ الَّذينَ يَضَعونَ اسماً أَو هاتِفاً أَو بَريداً في إشعارٍ مُخَزَّنٍ في صُندوقِ غَيرِ صاحِبِه — وما يَقولُه نَصُّ الحَذفِ عَنهُم.
-    /// <para><b>‏2026-10-29 (د52)</b>: كُلُّها «يَصيرُ اسمُكَ حِساباً مَحذوفاً في الإشعاراتِ المَحفوظَةِ عِندَ غَيرِك» (<see cref="AccountErasure.EraseFrom(ACommerce.Kit.Notifications.Notification, Guid, string, IReadOnlyCollection{string})"/>)،
+    /// <para><b>‏2026-10-29 (د52)</b>: كُلُّها «يَصيرُ اسمُكَ حِساباً مَحذوفاً في الإشعاراتِ المَحفوظَةِ عِندَ غَيرِك» (<see cref="AccountErasure.EraseFrom(ACommerce.Kit.Notifications.Notification, Guid, IReadOnlyCollection{string}, IReadOnlyCollection{string}, IReadOnlyCollection{string}, IReadOnlySet{Guid})"/>)،
     /// وإشعارُ التَسجيلِ لِلمُديرينَ صارَ بِالاسمِ وَحدَه (د52 (٣) «أ») — كاتِبانِ بِمِفتاحٍ واحِد.</para></summary>
     internal static readonly IReadOnlyDictionary<string, Disclosure> PersonalNoticeWriters = new Dictionary<string, Disclosure>(StringComparer.Ordinal)
     {
