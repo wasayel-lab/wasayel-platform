@@ -353,6 +353,25 @@ public class ProviderCatalogTests
         Assert.Equal(CredentialKinds.SecretKey, d.HighestFieldKind);
     }
 
+    /// <summary><b>تَوصيفُ «اليَوم» لِنَصَّيْ مِفتاحِ مُيَسِّر</b> (‏2026-10-29، قَرارُ المالِك د7 (٢) «أ» — قَبلَ التَصحيح): الوَصفُ يَقولُ
+    /// «تَلصَق مِفتاحَك السِرِّيَّ مِن لَوحَة مُيَسِّر» — كَأَنَّ المِفتاحَ يُنسَخُ مِن اللَوحَةِ مَتى شِئت — ولا يَذكُرُ بادِئَتَيْ التَجرِبَةِ والحَيّ؛ ونَصُّ السَحبِ
+    /// يُحيلُ الإبطالَ إلى «لَوحَة مُيَسِّر نَفسِها» بِلا صَفحَة. والقِسمُ الماديُّ (<c>physicalGoodsOnly</c>) خارِجَ هذا الصَفّ — لا يُقلَب.</summary>
+    [Fact]
+    public void Today_the_secret_key_provider_texts_say_copy_from_the_dashboard_and_revoke_there_without_naming_the_page()
+    {
+        var d = ProviderCatalog.Find("moyasar_api");
+        Assert.NotNull(d);
+        var description = ProviderText.Get(d!.Description, "ar");
+        var revocation = ProviderText.Get(d.Revocation, "ar");
+
+        Assert.Contains("تَلصَق مِفتاحَك السِرِّيَّ مِن لَوحَة مُيَسِّر هُنا", description, StringComparison.Ordinal);
+        Assert.DoesNotContain("sk_test_", description, StringComparison.Ordinal);
+        Assert.DoesNotContain("الإعدادات", description, StringComparison.Ordinal);
+        Assert.Contains("إبطالُه أَو تَبديلُه مِن لَوحَة مُيَسِّر نَفسِها", revocation, StringComparison.Ordinal);
+        Assert.DoesNotContain("الإعدادات", revocation, StringComparison.Ordinal);
+        Assert.True(d.PhysicalGoodsOnly);
+    }
+
     /// <summary><b>حِسابُ الشَحنِ عِندَ OTO</b> (‏ADR-033 الخُطوَة 6 بِحَرفِها و§٢‑ج‑١): قُدرَةُ <c>delivery</c>، ونَوعُ رَبطٍ
     /// <c>platform_key</c> (الاعتِمادُ السوقِيُّ سِرُّنا)، وحَقلا <b>بائِعٍ</b> سِرِّيّانِ تَختِمُهُما الخِزانَة — رَمزُ تَحديثِه
     /// (<c>secret_key</c>) ورَمزُ وارِدِه (<c>issued_secret</c>) — بِلا سياج؛ و<c>webhook</c> مُعلَنٌ بِمَسارِ الوارِدِ الحَرفِيِّ
