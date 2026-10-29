@@ -1268,6 +1268,52 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         Assert.Equal(asked, w.Docs.Members.Count(m => m == "Query"));
     }
 
+    // ─── توصيفُ «اليَوم» قَبلَ قَرارِ المالِك د9 (‏2026-10-29) — ما لا تَحسِمُه إلّا تَجرِبَةُ OTO الحَقيقِيَّةُ الأولى ───────────────────
+    //
+    // **(٢) «ب»**: قاعِدَةٌ تَتَعَطَّلُ لَحظَةَ سُؤالِ «أَلِهذا المَتجَرِ ناقِل؟» تُجابُ اليَومَ ‏404 — `HasVendorEntriesAsync` يَبتَلِعُ الرَميَ «لا» —
+    // و‏404 يَعني لِمُرسِلِه «لا نُقطَة» فَقَد يَكُفُّ عَن الإرسال. **(١) «أ»**: حالُ OTO `lostOrDamaged` أَو `destroyed` يُجابُ `not_delivered`
+    // ‏200 بِلا انتِقالٍ ولا عَلامَةٍ ولا إشعارٍ لِأَحَد. يَنقَلِبُ كُلُّ صَفٍّ بِاسمِه في كوميتِ القَرار.
+
+    [Fact]
+    public async Task Today_a_store_whose_vendor_entries_cannot_be_read_answers_404_unread()
+    {
+        var w = await ShippedCashDeal();
+        var calls = w.Oto.Calls.Count;
+        var asked = w.Docs.Members.Count(m => m == "Query");
+        var tripwire = new BodyTripwire(throws: true);
+        // `w.Shipping` بِخِزانَةٍ ومَداخِل، و«owner-test» لا رَمزَ تَهيئَةٍ لَه — فَتُسأَلُ مَداخِلُه، وعالَمُ الوَثائِقِ يَرمي عِندَ الاستِعلامِ عَمداً.
+        await using var host = await OtoHost.StartAsync(w.Shipping, tripwire);
+
+        using var resp = await host.PostAsync("owner-test", NoticeJson(w.Id.ToString("N")));
+
+        output.WriteLine($"قاعِدَةٌ تَرمي: {(int)resp.StatusCode} · سُؤالُ المَداخِل: {w.Docs.Members.Count(m => m == "Query") - asked} · قِراءاتُ الجِسم: {tripwire.Reads}");
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+        Assert.Equal(asked + 1, w.Docs.Members.Count(m => m == "Query"));
+        Assert.Equal(0, tripwire.Reads);
+        Assert.Equal(calls, w.Oto.Calls.Count);
+    }
+
+    [Theory]
+    [InlineData("lostOrDamaged")]
+    [InlineData("destroyed")]
+    public async Task Today_a_lost_or_destroyed_shipment_is_answered_not_delivered_and_nobody_is_told(string status)
+    {
+        var w = await ShippedCashDeal();
+        OtoSays(w, status);
+        var told = w.Docs.Stored.OfType<ACommerce.Kit.Notifications.Notification>().Count();
+
+        var outcome = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id, status: status));
+
+        Assert.Equal(OtoOrderStatusGate.NotDelivered, outcome.Code);
+        Assert.Equal(200, OtoOrderStatusGate.StatusFor(outcome.Code));
+        var stored = Stored(w);
+        Assert.Equal(DealStage.Shipping, stored.Stage);
+        Assert.Equal(DealStatus.Active, stored.Status);
+        Assert.DoesNotContain(stored.Refs.Keys, k => k.Contains("intervention", StringComparison.Ordinal));
+        Assert.Equal(told, w.Docs.Stored.OfType<ACommerce.Kit.Notifications.Notification>().Count());
+        output.WriteLine($"{status}: {outcome.Code} ‏200 · المَرحَلَة {stored.Stage} · إشعارات +0");
+    }
+
     /// <summary><b>إشعارٌ بِلا تَوقيعٍ أَو بِسِرٍّ آخَرَ ‏401 فارِغ</b> — ولا تُسأَلُ OTO ولا تُكتَبُ الصَفقَة (تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 §٧‑م).
     /// والسالِب: المُوَقَّعُ بِسِرِّ البائِعِ يَمُرُّ إلى سُؤالِ OTO ويُكتَبُ التَسليم.</summary>
     [Fact]
