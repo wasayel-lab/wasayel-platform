@@ -670,24 +670,71 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
     /// ‏<c>false</c> بِحَرفِه (لا تَعبيرَ يُقلَبُ في فَرعٍ ما، ولا غِيابٌ يُترَكُ لِلافتِراض)، و<c>queue</c> ‏<c>max</c> — وغِيابُه هُوَ الافتِراضُ <c>single</c> الَّذي يُلغي المُنتَظِر.
     /// ومِفتاحٌ لا يَعرِفُه المَعجَمُ يُرَدّ: لا يُستَنتَجُ ما يَفعَلُه.</summary>
     internal static string? BootQueueRefusal(string jobBody, out Dictionary<string, string> keys)
+        => QueueRefusal(jobBody, "production-boot", "    ", out keys);
+
+    /// <summary>الفاحِصُ نَفسُه لِمَجموعَةٍ بِاسمِها وعَلى إزاحَتِها (‏2026-10-29، قَرارُ المالِك د63): <paramref name="indent"/> إزاحَةُ سَطرِ
+    /// <c>concurrency:</c> — أَربَعُ مَسافاتٍ لِوَظيفَة، ولا شَيءَ لِسَيرِ العَمَلِ كُلِّه (<c>deploy-hf.yml</c>) — ومَفاتيحُها بَعدَها بِمَسافَتَين.
+    /// والمَعجَمُ والرُموزُ بِحَرفِ <see cref="BootQueueRefusal"/>؛ فَعَيِّناتُه المَحقونَةُ تَقيسُ هذا أَيضاً.</summary>
+    internal static string? QueueRefusal(string text, string group, string indent, out Dictionary<string, string> keys)
     {
         keys = new Dictionary<string, string>(StringComparer.Ordinal);
-        var lines = jobBody.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
-        var at = Array.FindIndex(lines, l => Regex.IsMatch(l, @"^    concurrency:\s*(#.*)?$"));
-        if (at < 0) return lines.Any(l => Regex.IsMatch(l, @"^    concurrency:")) ? "concurrency_not_a_block" : "no_concurrency";
+        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var head = "^" + indent + "concurrency:";
+        var inner = indent + "  ";
+        var at = Array.FindIndex(lines, l => Regex.IsMatch(l, head + @"\s*(#.*)?$"));
+        if (at < 0) return lines.Any(l => Regex.IsMatch(l, head)) ? "concurrency_not_a_block" : "no_concurrency";
         for (var i = at + 1; i < lines.Length; i++)
         {
             var line = Regex.Replace(lines[i], @"\s+#.*$", "");
             if (line.Trim().Length == 0 || line.TrimStart().StartsWith('#')) continue;
-            var m = Regex.Match(line, @"^      (?<k>[\w-]+):\s*(?<v>\S.*?)\s*$");
-            if (!m.Success) { if (line.StartsWith("      ", StringComparison.Ordinal)) return "unreadable_line"; break; }
+            var m = Regex.Match(line, "^" + inner + @"(?<k>[\w-]+):\s*(?<v>\S.*?)\s*$");
+            if (!m.Success) { if (line.StartsWith(inner, StringComparison.Ordinal)) return "unreadable_line"; break; }
             if (!keys.TryAdd(m.Groups["k"].Value, m.Groups["v"].Value)) return "duplicate_key";
         }
         if (keys.Keys.FirstOrDefault(k => k is not ("group" or "cancel-in-progress" or "queue")) is { } unknown) return $"unknown_key:{unknown}";
-        if (keys.GetValueOrDefault("group") != "production-boot") return "group";
+        if (keys.GetValueOrDefault("group") != group) return "group";
         if (!keys.TryGetValue("cancel-in-progress", out var cancel)) return "cancel_unstated";
         if (cancel != "false") return "cancels_running";
         return keys.GetValueOrDefault("queue") == "max" ? null : "replaces_waiting";
+    }
+
+    // ─── ‏2026-10-29 (قَرارُ المالِك د63): مَجموعَةُ النَشرِ في deploy-hf.yml — تَوصيفُ «اليَوم» قَبلَ الطابور ───────────────────────
+    //
+    // **المَقيسُ قَبل** (`48d55c2`): `concurrency` عَلى مُستَوى سَيرِ العَمَلِ بِـ`group: deploy-hf` و`cancel-in-progress: false` **بِلا `queue`**،
+    // أَي الافتِراضُ `single`: يَنتَظِرُ تَشغيلٌ واحِد، وكُلُّ وافِدٍ أَحدَثَ يُلغيه (DEPLOY.md §٢·و، «مَسارٌ ثالِث»). وما لا يَتَغَيَّرُ بِالقَرار — مَجموعَةٌ
+    // واحِدَةٌ في المِلَفِّ عَلى مُستَوى سَيرِ العَمَل، بِاسمِها، لا تُلغي الجاري — صَفٌّ يَبقى بِلا حَرف؛ وغِيابُ الطابورِ صَفٌّ بِاسمِ «اليَوم» يُقلَبُ بِاسمِه.
+
+    private static string DeployWorkflow()
+    {
+        var text = File.ReadAllText(Path.Combine(RepoRoot, ".github", "workflows", "deploy-hf.yml")).Replace("\r\n", "\n", StringComparison.Ordinal);
+        Assert.True(text.Length > 10_000, "أَداةٌ عَمياء: deploy-hf.yml لَم يُقرَأ.");
+        return text;
+    }
+
+    /// <summary><b>النَشرُ في مَجموعَةٍ واحِدَةٍ عَلى مُستَوى سَيرِ العَمَل، بِاسمِها، لا تُلغي الجاري</b> — ولا مَجموعَةَ ثانِيَةٌ في المِلَف.</summary>
+    [Fact]
+    public void The_deploy_runs_in_one_workflow_level_group_that_never_cancels_a_running_deploy()
+    {
+        var text = DeployWorkflow();
+        var heads = Regex.Matches(text, @"^\s*concurrency:", RegexOptions.Multiline);
+        output.WriteLine($"سُطورُ concurrency في deploy-hf.yml: {heads.Count}");
+        Assert.Single(heads);
+        Assert.Matches(new Regex(@"^concurrency:\s*$", RegexOptions.Multiline), text);
+        QueueRefusal(text, "deploy-hf", "", out var keys);
+        output.WriteLine($"concurrency في deploy-hf.yml: {string.Join(" · ", keys.Select(k => $"{k.Key}={k.Value}"))}");
+        Assert.Equal("deploy-hf", keys.GetValueOrDefault("group"));
+        Assert.Equal("false", keys.GetValueOrDefault("cancel-in-progress"));
+    }
+
+    /// <summary><b>اليَوم</b> (`48d55c2`): مَجموعَةُ <c>deploy-hf</c> بِلا <c>queue</c> — الافتِراضُ <c>single</c> يُلغي المُنتَظِرَ بِوافِدٍ أَحدَث، فَنَشرٌ أَخضَرُ
+    /// يَضيعُ بِلا أَحمَر. يُقلَبُ بِاسمِه بِقَرارِ المالِك د63 «أ».</summary>
+    [Fact]
+    public void Today_a_waiting_deploy_is_replaced_by_a_newer_one()
+    {
+        var refusal = QueueRefusal(DeployWorkflow(), "deploy-hf", "", out var keys);
+        output.WriteLine($"concurrency في deploy-hf.yml: {string.Join(" · ", keys.Select(k => $"{k.Key}={k.Value}"))} ⇒ {refusal ?? "يُبقي المُنتَظِر"}");
+        Assert.Equal("replaces_waiting", refusal);
+        Assert.False(keys.ContainsKey("queue"));
     }
 
     /// <summary><b>حَقنُ عَيب — فاحِصُ طابورِ البَوّابَةِ يُحمِرُّ فِعلاً</b> (‏2026-10-24): كُتلَةُ اليَومِ تُقبَل، وكُلُّ شَكلٍ يُلغي جارِياً أَو مُنتَظِراً
