@@ -143,6 +143,50 @@ public class DealCancelStageTests(ITestOutputHelper output)
         output.WriteLine($"buyer cancel at Delivered: ok={res.Ok} code={res.Violation.Code} status={stored.Status} saves +{world.SaveCalls - saves} · api {api.Status}");
     }
 
+    // ─── توصيفُ «اليَوم» قَبلَ قَرارِ المالِك د37 (‏2026-10-29) — صَفقَةٌ لَها طَلَبٌ عِندَ OTO يُلغيها طَرَف ───────────────────
+    //
+    // **المَقيس**: `Validate` تَسأَلُ المَرحَلَةَ وَحدَها، و«تَأكيد»/«دَفع» في `PartyCancelStages` — فَصَفقَةٌ عَلَيها `oto_order_id` (طَلَبٌ أُنشِئَ عِندَ
+    // OTO ولَم تَدخُل «شَحن» بَعدُ: `ShipmentUnconfirmed`، أَو الوارِدُ لَم يَصِل) يُلغيها المُشتَري أَو البائِعُ مِن صَفحَتِها، والشُحنَةُ عَلى حِسابِ البائِعِ
+    // عِندَ OTO باقِيَةٌ (لا نِداءَ إلغاءٍ لَدَيها). ورِسالَةُ القاعِدَةِ «بَعدَ الشَحنِ أَو التَسليمِ» لا تَصدُقُ في الرِحلَةِ والخِدمَةِ والإيجار، وصَفحَةُ
+    // الاستوديو لا تَقولُ لِصاحِبِ المَتجَرِ حينَ يُلغي إنّ لِلصَفقَةِ طَلَباً عِندَ OTO. يَنقَلِبُ كُلُّ صَفٍّ بِاسمِه في كوميتِ القَرار.
+
+    private static Deal PlacedAt(DealStage stage)
+    {
+        var deal = CashAt(stage);
+        deal.Refs[DealShipping.OrderRef] = "wasayel-oto-order-1";
+        return deal;
+    }
+
+    [Theory]
+    [InlineData(DealStage.Confirmed)]
+    [InlineData(DealStage.Paid)]
+    public void Today_a_party_cancels_a_deal_whose_order_is_placed_at_oto(DealStage stage)
+    {
+        var world = new DocWorld();
+        var deals = new DealsService(world.Store, new ForbiddenPaymentProvider());
+        var deal = PlacedAt(stage);
+        Assert.True(DealShipping.IsPlaced(deal));
+        Assert.Null(DealCancelAuthorization.Validate(deal, Party(Buyer)));
+        Assert.Null(DealCancelAuthorization.Validate(deal, Party(Seller)));
+        world.Put(deal);
+
+        var res = Now(deals.CancelAsync(Slug, deal.Id, Party(Seller), "إلغاء"));
+        Assert.True(res.Ok);
+        Assert.Equal(DealStatus.Cancelled, world.Read<Deal>(deal.Id.ToString())!.Status);
+        output.WriteLine($"{stage} + oto_order_id: البائِعُ يُلغي — {res.Ok}");
+    }
+
+    [Fact]
+    public void Today_the_rule_message_says_after_shipping_or_delivery_and_the_studio_page_says_nothing_of_oto()
+    {
+        var v = DealCancelAuthorization.Validate(CashAt(DealStage.Shipping), Party(Buyer))!;
+        Assert.Contains("بَعدَ الشَحنِ أَو التَسليمِ لا يُلغيها طَرَف", v.MessageAr, StringComparison.Ordinal);
+        var page = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppDealDetail.razor"));
+        Assert.True(page.Length > 1000, "أَداةٌ عَمياء: صَفحَةُ صَفقَةِ الاستوديو لَم تُقرَأ.");
+        Assert.DoesNotContain("IsPlaced", page, StringComparison.Ordinal);
+    }
+
     /// <summary>ونَصُّ الرَمزِ لِلصَفحَةِ مِن القامُوسِ بِحَرفِه (القاعِدَة ١١) — يَبلُغُها طَلَبٌ لَم تَرسُمه أَو لِسانٌ قَديم.</summary>
     [Fact]
     public void The_past_cancel_stage_code_reads_its_dictionary_text_verbatim()
