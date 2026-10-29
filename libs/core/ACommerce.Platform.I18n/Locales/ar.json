@@ -886,6 +886,7 @@
   "studio.providers.revoke_action": "اِسحَب الرَبط",
   "studio.providers.revoked_ok": "سُحِبَ الرَبط — تَوَقَّفَ الآن.",
   "studio.providers.saved_ok": "رُبِطَ المُزَوِّد.",
+  "studio.providers.replaces_binding": "رَبطُ مُزَوِّدِ دَفعٍ آخَرَ يَحِلُّ مَحَلَّ الرَّبطِ الحالِيّ — مَن يَربِطُ المِفتاحَ السِّرِّيَّ يَفقِدُ رابِطَ الدَّفع، ولا تُعرَضُ باقاتُه المَدفوعَة.",
   "studio.providers.section_bound": "الرَبط الحاليّ",
   "studio.providers.state_active": "فَعّال",
   "studio.providers.state_revoked": "مَسحوب",

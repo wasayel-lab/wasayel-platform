@@ -168,6 +168,15 @@ public static class ProviderBindSurface
     }
 
     /// <summary>
+    /// <para><b>أَيُقالُ «رَبطٌ آخَرُ يَحِلُّ مَحَلَّ القائِم» فَوقَ نَماذِجِ الرَبط؟</b> (‏2026-10-29، قَرارُ المالِك د1: «نصّ واحد في القاموس يظهر في صفحة التكاملات فوق نماذج
+    /// الربط متى وُجد ربط قائم») — دالَّةٌ نَقِيَّةٌ تَسأَلُها الصَفحَة: قُدرَةُ الدَفعِ، ورَبطٌ فَعّالٌ قائِم، ونَموذَجُ رَبطٍ واحِدٌ مَعروضٌ عَلى الأَقَلّ — فَلا يُقالُ تَنبيهٌ
+    /// لا نَموذَجَ تَحتَه. والنَصُّ مِن القامُوس (<c>studio.providers.replaces_binding</c>)؛ و<see cref="TenantProviderService.BindProviderAsync"/> يَكتُبُ فَوقَ القائِمِ بِمُعَرِّفِ
+    /// القُدرَةِ فِعلاً — فَالتَنبيهُ يَقولُ ما يَقَع.</para>
+    /// </summary>
+    public static bool WarnsReplacement(string capability, TenantProviderBinding? current, int offeredCount)
+        => capability == ProviderCapabilities.Payments && current is { IsActive: true } && offeredCount > 0;
+
+    /// <summary>
     /// <para><b>أَيَملَأُ صاحِبُ المَتجَرِ هذا الحَقل؟</b> (‏2026-10-29، قَرارُ المالِك د5 (٢)) — كُلُّ حَقلٍ إلّا <c>issued_secret</c>: سِرُّ إشعارٍ تُصدِرُه وَسايِل وتُسَجِّلُه
     /// عِندَ المُزَوِّد (<c>GatewayPayments.ConnectNoticesAsync</c>)، فَلا يُرسَمُ لَه حَقلٌ في نَموذَجِ الاستوديو ولا يُقرَأُ مِن الطَلَب. دالَّةٌ واحِدَةٌ تَسأَلُها
     /// الصَفحَةُ و<see cref="FromForm(string, Func{string, string?}, string, ProviderVault?)"/> — فَلا يَفتَرِقُ ما يُرسَمُ عَمّا يُقرَأ.</para>

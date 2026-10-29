@@ -1,4 +1,6 @@
 using ACommerce.Platform.I18n;
+using ACommerce.Platform.Providers;
+using ACommerce.Templates.Customer.Marketplace.Services.Providers;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -16,15 +18,38 @@ public class ProviderReplacementWarningTests(ITestOutputHelper output)
         => WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
             "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "StudioProviders.razor")));
 
-    /// <summary><b>اليَوم</b> (‏2026-10-29، تَوصيفٌ قَبلَ قَرارِ المالِك د1): صَفحَةُ التَكامُلاتِ لا تَقولُ إنّ رَبطاً جَديداً يَحِلُّ مَحَلَّ القائِم — لا مِفتاحَ
-    /// قامُوسٍ لِذلك، والصَفحَةُ تَرسُمُ نَماذِجَ الرَبطِ بَعدَ بِطاقَةِ الرَبطِ الحاليِّ بِلا سَطرٍ بَينَهُما. يُقلَبُ بِاسمِه.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د1؛ تَوصيفُه <c>0e20acb</c> — كانَ
+    /// <c>Today_the_integrations_page_never_says_a_new_payment_binding_replaces_the_current_one</c>): الصَفحَةُ تَقولُ النَصَّ الواحِدَ مِن القامُوسِ فَوقَ نَماذِجِ الرَبطِ
+    /// وبَعدَ بِطاقَةِ الرَبطِ الحاليّ، بِشَرطِ <see cref="ProviderBindSurface.WarnsReplacement"/> لا بِسَطرٍ في الصَفحَة؛ والنَصُّ بِحَرفِ القَرار.</summary>
     [Fact]
-    public void Today_the_integrations_page_never_says_a_new_payment_binding_replaces_the_current_one()
+    public void The_integrations_page_says_once_above_the_forms_that_a_new_payment_binding_replaces_the_current_one()
     {
         var razor = StudioProviders();
         output.WriteLine($"الصَفحَة: {razor.Length} مِحرَفاً");
         Assert.True(razor.Length > 2000, "أَداةٌ عَمياء: صَفحَةٌ قَصيرَة.");
-        Assert.DoesNotContain("replaces_binding", razor, StringComparison.Ordinal);
-        Assert.Equal("studio.providers.replaces_binding", LocaleCatalog.Text(LocaleCatalog.Arabic, "studio.providers.replaces_binding"));
+        var none = razor.IndexOf("studio.providers.none_bound", StringComparison.Ordinal);
+        var warn = razor.IndexOf("@if (Services.Providers.ProviderBindSurface.WarnsReplacement(capability, current, offered.Count))", StringComparison.Ordinal);
+        var forms = razor.IndexOf("@foreach (var def in offered)", StringComparison.Ordinal);
+        Assert.True(none > 0 && warn > none && forms > warn, $"الحاليّ {none} ← التَنبيه {warn} ← النَماذِج {forms}");
+        Assert.Equal(1, razor.Split("studio.providers.replaces_binding").Length - 1);
+        Assert.Equal("رَبطُ مُزَوِّدِ دَفعٍ آخَرَ يَحِلُّ مَحَلَّ الرَّبطِ الحالِيّ — مَن يَربِطُ المِفتاحَ السِّرِّيَّ يَفقِدُ رابِطَ الدَّفع، ولا تُعرَضُ باقاتُه المَدفوعَة.",
+            LocaleCatalog.Text(LocaleCatalog.Arabic, "studio.providers.replaces_binding"));
+    }
+
+    private static TenantProviderBinding Bound(string status) => new() { Id = ProviderCapabilities.Payments, Slug = ProviderCapabilities.Payments, Status = status };
+
+    /// <summary><b>المُوجِب</b>: قُدرَةُ الدَفعِ ورَبطٌ فَعّالٌ ونَموذَجٌ مَعروض.</summary>
+    [Fact]
+    public void The_warning_shows_for_an_active_payment_binding_above_at_least_one_form()
+        => Assert.True(ProviderBindSurface.WarnsReplacement(ProviderCapabilities.Payments, Bound(TenantProviderBinding.StatusActive), 1));
+
+    /// <summary><b>السالِب</b>: لا رَبط، أَو رَبطٌ مَسحوب، أَو لا نَموذَجَ تَحتَه، أَو قُدرَةٌ غَيرُ الدَفع.</summary>
+    [Fact]
+    public void The_warning_hides_without_an_active_binding_without_a_form_or_outside_payments()
+    {
+        Assert.False(ProviderBindSurface.WarnsReplacement(ProviderCapabilities.Payments, null, 2));
+        Assert.False(ProviderBindSurface.WarnsReplacement(ProviderCapabilities.Payments, Bound(TenantProviderBinding.StatusRevoked), 2));
+        Assert.False(ProviderBindSurface.WarnsReplacement(ProviderCapabilities.Payments, Bound(TenantProviderBinding.StatusActive), 0));
+        Assert.False(ProviderBindSurface.WarnsReplacement(ProviderCapabilities.Delivery, Bound(TenantProviderBinding.StatusActive), 2));
     }
 }

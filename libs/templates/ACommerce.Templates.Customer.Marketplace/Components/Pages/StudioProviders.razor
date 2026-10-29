@@ -104,6 +104,12 @@
                     </div>
                 }
 
+                @* رَبطٌ آخَرُ يَحِلُّ مَحَلَّ القائِم — يُقالُ فَوقَ النَماذِجِ قَبلَ أَن يَقَع (‏2026-10-29، قَرارُ المالِك د1)؛ والشَرطُ في `WarnsReplacement` لا هُنا. *@
+                @if (Services.Providers.ProviderBindSurface.WarnsReplacement(capability, current, offered.Count))
+                {
+                    <p class="st-chip st-chip-warning" style="margin:0 0 12px;width:100%;">@L.Markup("studio.providers.replaces_binding")</p>
+                }
+
                 @foreach (var def in offered)
                 {
                     <form method="post" action="@($"/studio/apps/{Slug}/providers/bind")" class="st-card"
