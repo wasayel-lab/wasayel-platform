@@ -894,6 +894,7 @@ public static class MarketplaceTemplateExtensions
             var now = DateTime.UtcNow;
             // ‏(2026-10-29، د40) والأَسماءُ قَبلَ Erase لا الاسمُ وَحدَه: اسمُ نَشاطِه صارَ يُكتَبُ في نُسَخٍ عِندَ غَيرِه (إشعارُ القَبولِ مَثَلاً).
             var nameBefore = Services.Queries.ActorName.NamesOf(user!);
+            var contactsBefore = Services.Identity.AccountErasure.ContactsOf(user!);   // ‏(مُراجَعَةُ S2 الجَولَة ١) وإشعارُ التَسجيلِ القَديمِ يَحمِلُ وَسيلَتَه
             ACommerce.Kit.Auth.AccountDeletion.Erase(user!, now);
             session.Store(user!);
             // ‏(د60) والسَلَّةُ تَحمِلُ اسمَه وجَوّالَه وعُنوانَه مِن خُطُواتِ الإتمام — تُحذَفُ مَعَه.
@@ -901,7 +902,7 @@ public static class MarketplaceTemplateExtensions
             // ‏(د56) مَفاتيحُ الرَبطِ بِاسمِه تُبطَلُ في المُعامَلَةِ نَفسِها — لا يَبقى مِفتاحٌ يَتَكَلَّمُ بِاسمِ حِسابٍ مَحذوف.
             await Services.Api.ApiKeyService.RevokeActorKeysAsync(session, slug, userId, now);
             // ‏(د52 «أ») ونُسَخُ اسمِه القابِلَةُ لِلتَعديلِ في المُعامَلَةِ نَفسِها — والقَرارُ والأَثَرُ في `AccountErasure`.
-            await Services.Identity.AccountErasure.EraseCopiesAsync(session, slug, userId, nameBefore);
+            await Services.Identity.AccountErasure.EraseCopiesAsync(session, slug, userId, nameBefore, contactsBefore);
             await session.SaveChangesAsync();
             Services.SessionVersionGate.Forget(cache, slug, userId);   // ‏(د28) Erase رَفَعَ الإصدار — لا يَنتَظِرُ دَقيقَةَ الحِفظ
 

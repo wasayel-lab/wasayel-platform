@@ -64,7 +64,9 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         // ‏(2026-10-29، قَرارُ المالِك د40) الأَسماءُ قَبلَ Erase لا الاسمُ وَحدَه — اسمُ النَشاطِ صارَ يُكتَبُ في نُسَخٍ عِندَ غَيرِه؛ كانَ `= user!.FullName;`.
         var before = body.IndexOf("var nameBefore = Services.Queries.ActorName.NamesOf(user!);", StringComparison.Ordinal);
         var erase = body.IndexOf("AccountDeletion.Erase(user!, now)", StringComparison.Ordinal);
-        var copies = body.IndexOf("AccountErasure.EraseCopiesAsync(session, slug, userId, nameBefore)", StringComparison.Ordinal);
+        // ‏(2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ١) ووَسيلَتا اتِّصالِه قَبلَ Erase — إشعارُ التَسجيلِ القَديمِ يَحمِلُهُما؛ كانَ `(session, slug, userId, nameBefore)`.
+        var copies = body.IndexOf("AccountErasure.EraseCopiesAsync(session, slug, userId, nameBefore, contactsBefore)", StringComparison.Ordinal);
+        var contactsAt = body.IndexOf("var contactsBefore = Services.Identity.AccountErasure.ContactsOf(user!);", StringComparison.Ordinal);
         var save = body.IndexOf("SaveChangesAsync", StringComparison.Ordinal);
 
         var erasers = EntitlementContractTests.SourceFiles()
@@ -85,6 +87,7 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         Assert.Equal(new[] { "user!" }, stores);
         Assert.Equal(0, patches);
         Assert.True(before > 0 && erase > before && copies > erase && save > copies, "التَرتيب: الاسمُ القَديمُ ثُمَّ Erase ثُمَّ مَحوُ النُسَخِ ثُمَّ الحِفظُ الواحِد.");
+        Assert.True(contactsAt > before && erase > contactsAt, "وَسيلَتا الاتِّصالِ تُؤخَذانِ قَبلَ Erase — هِيَ تُفرِغُهُما.");
         Assert.Equal(1, Regex.Matches(body, "SaveChangesAsync").Count);
         // ‏‏2026-10-29 (د57، ‏ADR-044 §٤): مُستَدعٍ ثانٍ بِقَرار — الدَمجُ يَمحو الحِسابَ المُندَمِجَ بِـ`Erase` بِعَينِها بَعدَ أَن يَنقُلَ صَفَقاتِه
         // وما يَحمِلُ مُعَرِّفَه إلى الباقي (`DuplicatePhones.ApplyAsync`) — فَلا يَمحو نُسَخَه (صارَت لِلباقي).

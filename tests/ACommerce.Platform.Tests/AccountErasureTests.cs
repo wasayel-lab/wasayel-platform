@@ -66,35 +66,80 @@ public class AccountErasureTests
         Assert.True(AccountErasure.Identifies(Name));
     }
 
-    // ─── اسمُ التَسجيلِ الافتِراضِيّ، ووَسيلَةُ الاتِّصالِ في إشعارِ التَسجيلِ القَديم — تَوصيفُ «اليَوم» (مُراجَعَةُ تَيّارِ S2 الجَولَة ١، ‏2026-10-29) ───
+    // ─── اسمُ التَسجيلِ الافتِراضِيّ، ووَسيلَةُ الاتِّصالِ في إشعارِ التَسجيلِ القَديم (مُراجَعَةُ تَيّارِ S2 الجَولَة ١، ‏2026-10-29) ───
     //
-    // ‏`Identifies` يَستَثني `new User().FullName` («مُستَخدِم جَديد») ولا يَستَثني ما يُخَزَّنُ فِعلاً لِلحِسابِ الجَديدِ بِالهاتِفِ أَو البَريد:
-    // `me.profile.new_member` («عُضو جَديد»). وإشعاراتُ المُديرينَ (`new_user`/`report`) لا يَحصُرُها رابِط — فَحَذفُ حِسابٍ ما زالَ اسمُه الافتِراضِيَّ
-    // يَكتُبُ «حِسابٌ مَحذوف» في إشعارِ تَسجيلِ كُلِّ عُضوٍ آخَر (مَقيسٌ حَيّاً عِندَ المُراجِع). وإشعارُ التَسجيلِ قَبلَ `548ea4d` مَتنُه «{الاسم} · {الهاتِف}»
-    // أَو «… · {البَريد}» والاسمُ يَومَئِذٍ الافتِراضِيّ — والمَحوُ بِالاسمِ وَحدَه فَيَبقى الهاتِفُ والبَريدُ في صَناديقِ المُديرين. يُقلَبانِ بِاسمَيهِما في كوميتِ التَبديل.
+    // ‏(‏تَوصيفُه `1c651b7` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): `Identifies` كانَ يَستَثني `new User().FullName` («مُستَخدِم جَديد») ولا يَستَثني ما يُخَزَّنُ فِعلاً
+    // لِلحِسابِ الجَديدِ بِالهاتِفِ أَو البَريد: `me.profile.new_member` («عُضو جَديد»)، وإشعاراتُ المُديرينَ (`new_user`/`report`) لا يَحصُرُها رابِط — فَحَذفُ
+    // حِسابٍ ما زالَ اسمُه الافتِراضِيَّ كَتَبَ «حِسابٌ مَحذوف» في إشعارِ تَسجيلِ كُلِّ عُضوٍ آخَر. وإشعارُ التَسجيلِ قَبلَ `548ea4d` مَتنُه «{الاسم} · {الهاتِف}» أَو
+    // «… · {البَريد}» والاسمُ يَومَئِذٍ الافتِراضِيّ، والمَحوُ كانَ بِالاسمِ وَحدَه فَبَقِيَ الهاتِفُ والبَريد. قُلِبَ الصَفّانِ بِاسمَيهِما: الافتِراضِيُّ لا يَدُلُّ
+    // عَلى أَحَد، ووَسيلَةُ الاتِّصالِ تَربِطُ إشعارَ المُديرينَ بِهُوِيَّةِ صاحِبِه.
 
     private static string Placeholder
         => ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, ACommerce.Kit.Auth.Server.AuthHandlers.NewMemberNameKey)!;
 
+    private const string MyPhone = "+966500000002", MyEmail = "member@example.test";
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> — كانَ <c>Today_deleting_a_placeholder_named_account_rewrites_another_members_registration_notice</c>: الصَفُّ السالِب.
+    /// إشعارُ تَسجيلِ عُضوٍ آخَرَ بِالافتِراضِيّ (الجَديدُ بِلا وَسيلَة، والقَديمُ بِوَسيلَتِه هُو)، وبَلاغُه، لا يُمَسُّ بِحَذفِ حِسابٍ يَحمِلُ الافتِراضِيَّ نَفسَه.</summary>
     [Fact]
-    public void Today_deleting_a_placeholder_named_account_rewrites_another_members_registration_notice()
+    public void Deleting_a_placeholder_named_account_leaves_another_members_registration_notice_untouched()
     {
         var anothers = Notice(Other, "new_user", "مُستَخدِم جَديد سَجَّل", Placeholder, "/admin/tenants/zz/users");
-        Assert.True(AccountErasure.Identifies(Placeholder));
-        Assert.True(AccountErasure.EraseFrom(anothers, Me, new[] { Placeholder }, Array.Empty<string>()));
-        Assert.Equal(AccountDeletion.ErasedName, anothers.Body);
+        var anothersOld = Notice(Other, "new_user", "مُستَخدِم جَديد سَجَّل", $"{Placeholder} · +966500000001", "/admin/tenants/zz/users");
+        var anothersReport = Notice(Other, "report", "بَلاغ: سَبَب", $"{Placeholder} بَلَّغَ عَن إعلان", "/admin/tenants/zz/tickets");
+        foreach (var p in AccountErasure.PlaceholderNames) Assert.False(AccountErasure.Identifies(p));
+        Assert.False(AccountErasure.Identifies(" " + Placeholder + " "));
+        Assert.Contains(Placeholder, AccountErasure.PlaceholderNames);
+        Assert.Contains(new User().FullName, AccountErasure.PlaceholderNames);
+        var mine = new[] { MyPhone };
+        Assert.False(AccountErasure.EraseFrom(anothers, Me, new[] { Placeholder }, Array.Empty<string>(), mine));
+        Assert.False(AccountErasure.EraseFrom(anothersOld, Me, new[] { Placeholder }, Array.Empty<string>(), mine));
+        Assert.False(AccountErasure.EraseFrom(anothersReport, Me, new[] { Placeholder }, Array.Empty<string>(), mine));
+        Assert.Equal((Placeholder, $"{Placeholder} · +966500000001"), (anothers.Body, anothersOld.Body));
     }
 
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> — كانَ <c>Today_an_old_registration_notice_keeps_the_deleted_members_phone_and_email</c>: الصَفُّ المُوجَب.
+    /// إشعارُ تَسجيلِه القَديمُ يُعرَفُ بِوَسيلَتِه — ولَو كَتَبَ اسماً بَعدَه — فَتُنزَعُ ويَصيرُ الافتِراضِيُّ في مَتنِه «حِسابٌ مَحذوف»، والعُنوانُ الثابِتُ كَما هُو.</summary>
     [Fact]
-    public void Today_an_old_registration_notice_keeps_the_deleted_members_phone_and_email()
+    public void An_old_registration_notice_loses_the_deleted_members_phone_or_email_and_its_name()
     {
-        const string phone = "+966500000002", email = "member@example.test";
-        var byPhone = Notice(Other, "new_user", "مُستَخدِم جَديد سَجَّل", $"{Placeholder} · {phone}", "/admin/tenants/zz/users");
-        var byEmail = Notice(Other, "new_user", "مُستَخدِم جَديد سَجَّل", $"{Placeholder} · {email}", "/admin/tenants/zz/users");
-        Assert.False(AccountErasure.EraseFrom(byPhone, Me, new[] { "أَحمَدُ الفاحِص" }, Array.Empty<string>()));
-        Assert.False(AccountErasure.EraseFrom(byEmail, Me, new[] { "أَحمَدُ الفاحِص" }, Array.Empty<string>()));
-        Assert.Contains(phone, byPhone.Body, StringComparison.Ordinal);
-        Assert.Contains(email, byEmail.Body, StringComparison.Ordinal);
+        var byPhone = Notice(Other, "new_user", "مُستَخدِم جَديد سَجَّل", $"{Placeholder} · {MyPhone}", "/admin/tenants/zz/users");
+        var byEmail = Notice(Other, "new_user", "مُستَخدِم جَديد سَجَّل", $"{Placeholder} · {MyEmail}", "/admin/tenants/zz/users");
+        var contacts = new[] { MyPhone, MyEmail };
+        Assert.True(AccountErasure.EraseFrom(byPhone, Me, new[] { "أَحمَدُ الفاحِص" }, Array.Empty<string>(), contacts));
+        Assert.True(AccountErasure.EraseFrom(byEmail, Me, new[] { Placeholder }, Array.Empty<string>(), contacts));
+        Assert.Equal(("مُستَخدِم جَديد سَجَّل", AccountDeletion.ErasedName), (byPhone.Title, byPhone.Body));
+        Assert.Equal(("مُستَخدِم جَديد سَجَّل", AccountDeletion.ErasedName), (byEmail.Title, byEmail.Body));
+        // ومَرَّةً ثانِيَةً لا شَيء: المَمحُوُّ لا يُكتَبُ مَرَّتَين.
+        Assert.False(AccountErasure.EraseFrom(byPhone, Me, new[] { "أَحمَدُ الفاحِص" }, Array.Empty<string>(), contacts));
+    }
+
+    /// <summary>والوَسيلَةُ في غَيرِ إشعارِ المُديرين، أَو في صُندوقِه هُو، لا تَربِطُ — والمَحوُ بِالوَسيلَةِ لِإشعاراتِ التَسجيلِ والبَلاغِ وَحدَها.</summary>
+    [Fact]
+    public void A_contact_outside_a_manager_notice_or_in_the_users_own_inbox_does_not_tie_the_notice_to_the_user()
+    {
+        var dealNotice = Notice(Other, "deal_accepted", "قُبِلَ طَلَبُك", $"اتَّصِل عَلى {MyPhone}", $"/zz/deals/{Guid.NewGuid()}");
+        var own = Notice(Me, "new_user", "مُستَخدِم جَديد سَجَّل", $"{Placeholder} · {MyPhone}", "/admin/tenants/zz/users");
+        Assert.False(AccountErasure.EraseFrom(dealNotice, Me, Array.Empty<string>(), Array.Empty<string>(), new[] { MyPhone }));
+        Assert.False(AccountErasure.EraseFrom(own, Me, Array.Empty<string>(), Array.Empty<string>(), new[] { MyPhone }));
+        Assert.Contains(MyPhone, dealNotice.Body, StringComparison.Ordinal);
+    }
+
+    /// <summary>حَدّا الوَسيلَة: تُطابِقُ بِعَينِها ولا تُطابِقُ داخِلَ رَقَمٍ أَو بَريدٍ أَطوَل — مُوجَبٌ وسالِب.</summary>
+    [Fact]
+    public void A_contact_matches_whole_and_never_inside_a_longer_number_or_address()
+    {
+        Assert.True(AccountErasure.Carries($"{Placeholder} · {MyPhone}", MyPhone));
+        Assert.True(AccountErasure.Carries($"{Placeholder} · {MyEmail}.", MyEmail));
+        Assert.False(AccountErasure.Carries($"{Placeholder} · {MyPhone}9", MyPhone));
+        Assert.False(AccountErasure.Carries($"{Placeholder} · 1{MyPhone}", MyPhone));
+        Assert.False(AccountErasure.Carries($"{Placeholder} · x{MyEmail}", MyEmail));
+        Assert.False(AccountErasure.Carries($"{Placeholder} · {MyEmail}.sa", MyEmail));
+        Assert.False(AccountErasure.Carries(null, MyPhone));
+        var u = new User { FullName = Placeholder, Phone = " " + MyPhone + " ", Email = "" };
+        Assert.Equal(new[] { MyPhone }, AccountErasure.ContactsOf(u));
+        u.Email = MyEmail;
+        Assert.Equal(new[] { MyPhone, MyEmail }, AccountErasure.ContactsOf(u));
     }
 
     [Fact]
@@ -281,6 +326,63 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
             s.DeleteWhere<Review>(r => r.Id != Guid.Empty); s.DeleteWhere<Offer>(o => o.Id != Guid.Empty); s.DeleteWhere<ListingMatch>(m => m.Id != Guid.Empty);
             s.DeleteWhere<Ticket>(t => t.Id != Guid.Empty); s.DeleteWhere<Notification>(n => n.Id != Guid.Empty); s.DeleteWhere<AuditEntry>(a => a.Id != Guid.Empty);
             foreach (var id in issued) s.Delete<ApiKeyDocument>(id);
+            await s.SaveChangesAsync();
+        }
+    }
+
+    /// <summary>
+    /// <para><b>‏(2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ١) إشعاراتُ المُديرينَ تُربَطُ بِهُوِيَّةِ المَحذوفِ لا بِنَصِّ اسمِه — حَيّاً</b>: ما لا يُقاسُ في الذاكِرَة —
+    /// <c>Body.Contains</c> بِالوَسيلَةِ (‏<c>+</c> و<c>@</c> في <c>LIKE</c>) والحَدّانِ بَعدَه. حِسابٌ ما زالَ اسمُه الافتِراضِيّ «عُضو جَديد» وإشعارُ تَسجيلِه
+    /// القَديمُ «{الاسم} · {الهاتِف}»، وإشعارا تَسجيلِ عُضوَينِ آخَرَينِ (الجَديدُ بِلا وَسيلَة، والقَديمُ بِهاتِفِه هُو). تَسلسُلُ النُقطَةِ بِعَينِه.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_placeholder_named_deletion_erases_its_own_registration_notice_by_contact_and_no_one_elses_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = BuildStore();
+        var slug = "zz-erase-" + Guid.NewGuid().ToString("N")[..8];
+        var placeholder = ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, ACommerce.Kit.Auth.Server.AuthHandlers.NewMemberNameKey)!;
+        const string myPhone = "+966500000553", theirPhone = "+966500000554";
+        var me = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = placeholder, Phone = myPhone };
+        var admin = Guid.NewGuid();
+        Notification Registered(string body) => new()
+            { Id = Guid.NewGuid(), UserId = admin, Type = "new_user", Title = "مُستَخدِم جَديد سَجَّل", Body = body, RelatedUrl = $"/admin/tenants/{slug}/users" };
+        var mine = Registered($"{placeholder} · {myPhone}");
+        var theirsNew = Registered(placeholder);
+        var theirsOld = Registered($"{placeholder} · {theirPhone}");
+        try
+        {
+            await using (var s = store.LightweightSession(slug))
+            {
+                s.Store(me); s.Store(mine, theirsNew, theirsOld);
+                await s.SaveChangesAsync();
+            }
+            AccountErasure.Counts counts;
+            await using (var s = store.LightweightSession(slug))
+            {
+                var u = await s.LoadAsync<User>(me.Id);
+                Assert.Null(AccountDeletion.Validate(u, await AccountErasure.OpenDealsAsync(s, me.Id), "حذف", "حذف"));
+                var nameBefore = ActorName.NamesOf(u!);
+                var contactsBefore = AccountErasure.ContactsOf(u!);
+                AccountDeletion.Erase(u!, DateTime.UtcNow);
+                s.Store(u!);
+                counts = await AccountErasure.EraseCopiesAsync(s, slug, me.Id, nameBefore, contactsBefore);
+                await s.SaveChangesAsync();
+            }
+            await using var q = store.QuerySession(slug);
+            var (m, tn, to) = ((await q.LoadAsync<Notification>(mine.Id))!, (await q.LoadAsync<Notification>(theirsNew.Id))!, (await q.LoadAsync<Notification>(theirsOld.Id))!);
+            output.WriteLine($"إشعاراتٌ مَمحُوَّة: {counts.Notifications} · إشعارُه بِلا وَسيلَتِه: {!m.Body.Contains(myPhone, StringComparison.Ordinal)} · " +
+                             $"إشعارا غَيرِه كَما كُتِبا: {tn.Body == placeholder && to.Body == $"{placeholder} · {theirPhone}"}");
+            Assert.Equal(1, counts.Notifications);
+            Assert.Equal(("مُستَخدِم جَديد سَجَّل", AccountDeletion.ErasedName), (m.Title, m.Body));
+            Assert.Equal(placeholder, tn.Body);
+            Assert.Equal($"{placeholder} · {theirPhone}", to.Body);
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            s.DeleteWhere<User>(u => u.Id != Guid.Empty); s.DeleteWhere<Notification>(n => n.Id != Guid.Empty);
             await s.SaveChangesAsync();
         }
     }
