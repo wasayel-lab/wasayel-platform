@@ -13,7 +13,8 @@
 //  لَيسَ بِصيغَتِه الدَولِيَّةِ يُعادُ كَتبُ جَوّالِه؛ والمَجموعَةُ (رَقَمٌ واحِدٌ بِأَكثَرَ مِن حِساب) يَبقى
 //  أَقدَمُ حِساباتِها، وتُقاسُ (`ScanAsync`) ثُمَّ تُدمَجُ في مُعامَلَةٍ واحِدَة (`ApplyAsync`):
 //  إعلاناتُ المُندَمِجِ بِحَدَثٍ يُسَمّي مالِكَها الجَديد، وصَفَقاتُه ومُحادَثاتُه ورَسائِلُه وإشعاراتُه
-//  ومُفَضَّلاتُه ومَفاتيحُ رَبطِه وما سِواها تُعادُ إلى الباقي، وسَلَّتُه تُنقَل، ثُمَّ يُمحى كَحِسابٍ
+//  ومُفَضَّلاتُه وما سِواها تُعادُ إلى الباقي، ومَفاتيحُ رَبطِه (وَثيقَةٌ عامَّة) يُكتَبُ فاعِلَها الباقي،
+//  وسَلَّتُه تُنقَل، ثُمَّ يُمحى كَحِسابٍ
 //  مَحذوف (فَتَسقُطُ جَلَساتُه). ومَجموعَةٌ فيها مانِعٌ (صَفقَةُ المَرءِ مَعَ نَفسِه، مَجرى أَحداثٍ غَيرُ
 //  الإعلان، …) لا يُكتَبُ فيها حَرف — يُطبَعُ مانِعُها. وحِساباتُ الاستوديو يُعادُ كَتبُ جَوّالِ
 //  مُفرَدِها، ومَجموعاتُها لا تُدمَج (حِسابُ الاستوديو يَملِكُ مَتاجِر — «أ» د57).
@@ -44,6 +45,7 @@ using ACommerce.Kit.Auth;
 using ACommerce.Kit.Listings;
 using ACommerce.Kit.Tenants;
 using ACommerce.Templates.Customer.Marketplace.Services.Audit;
+using ACommerce.Templates.Customer.Marketplace.Services.Api;
 using ACommerce.Templates.Customer.Marketplace.Services.Identity;
 using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using JasperFx;
@@ -65,6 +67,7 @@ var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(cs)
 
 // ‏المَخزَنُ كَما يُرَكِّبُه المُضيفُ لِما يَمَسُّه الدَمج (‏`HostingExtensions.AddPlatformHost`): المُخَطَّطُ `platform`، والإيجارُ المُقتَرِنُ لِلوَثائِقِ
 // والأَحداث، و`Tenant` عامّ، و**نُسخَةُ `Listing` تُحَدَّثُ في المُعامَلَة** — فَحَدَثُ المالِكِ الجَديدِ يَبلُغُ ما تَقرَؤُه «إعلاناتي».
+// و`ApiKeyDocument` عامَّةٌ كَما يُسَجِّلُها `MarketplaceTemplateExtensions` — بِغَيرِها يَسأَلُها Marten بِـ`tenant_id` لا عَمودَ لَه.
 using var store = DocumentStore.For(o =>
 {
     o.Connection(cs);
@@ -73,6 +76,7 @@ using var store = DocumentStore.For(o =>
     o.Policies.AllDocumentsAreMultiTenanted();
     o.Events.TenancyStyle = JasperFx.MultiTenancy.TenancyStyle.Conjoined;
     o.Schema.For<Tenant>().SingleTenanted().Identity(x => x.Id);
+    o.Schema.For<ApiKeyDocument>().SingleTenanted().Identity(x => x.Id);   // ← عامٌّ كَما يُسَجِّلُه القالِب: مَفاتيحُ الرَبطِ تُنقَلُ بِحَقلِها
     o.Projections.Snapshot<Listing>(SnapshotLifecycle.Inline);
 });
 await using var conn = new NpgsqlConnection(cs);
@@ -109,7 +113,7 @@ foreach (var slug in tenants)
         else Console.WriteLine($"  ✗ {slug}: مَجموعَةٌ مِن {g.Losers.Count + 1} حِسابات مُمتَنِعَة — {string.Join(" · ", scan.Blocks)}");
     }
     Console.WriteLine($"{slug,-24} يُعادُ كَتبُه={plan.Renames.Count,-4} تُدمَج={ok.Count,-3} (تَندَمِجُ حِسابات={ok.Sum(s => s.Group.Losers.Count)}، "
-        + $"إعلانات={ok.Sum(s => s.Listings.Count)}، صُفوفٌ تُعادُ={ok.Sum(s => s.Repoints.Sum(r => r.Rows))}، سِلال={ok.Sum(s => s.LoserCarts)}) "
+        + $"إعلانات={ok.Sum(s => s.Listings.Count)}، صُفوفٌ تُعادُ={ok.Sum(s => s.Repoints.Sum(r => r.Rows))}، سِلال={ok.Sum(s => s.LoserCarts)}، مَفاتيحُ رَبط={ok.Sum(s => s.Keys)}) "
         + $"مُمتَنِعَة={plan.Groups.Count - ok.Count}");
     work.Add((slug, plan, ok));
     changes += plan.Renames.Count + ok.Count;
@@ -158,7 +162,7 @@ foreach (var (slug, plan, ok) in work)
         }
         var moved = await DuplicatePhones.ApplyAsync(store, slug, scan, now);
         await audit.WriteAsync(slug, null, "merge-duplicate-phones", "user.phone_merge", "User", scan.Group.Survivor.ToString(),
-            note: $"losers={string.Join(",", scan.Group.Losers)} listings={scan.Listings.Count} moved={moved}");
+            note: $"losers={string.Join(",", scan.Group.Losers)} listings={scan.Listings.Count} keys={scan.Keys} moved={moved}");
         merged++;
     }
     Console.WriteLine($"OK {slug}: أُعيدَ كَتبُ {plan.Renames.Count} · دُمِجَت {ok.Count}");

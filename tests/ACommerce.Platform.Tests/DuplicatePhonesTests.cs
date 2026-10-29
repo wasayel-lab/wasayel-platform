@@ -126,6 +126,8 @@ public class DuplicatePhonesTests(ITestOutputHelper output)
         var host = StudioConsentCharacterizationTests.Source("libs", "core", "ACommerce.Platform.Hosting", "HostingExtensions.cs");
         Assert.Contains("opts.Projections.Snapshot<ACommerce.Kit.Listings.Listing>(SnapshotLifecycle.Inline);", host, StringComparison.Ordinal);
         Assert.Contains("TenancyStyle.Conjoined", host, StringComparison.Ordinal);
+        Assert.Matches(@"For<Services\.Api\.ApiKeyDocument>\(\)\s*\.SingleTenanted\(\)", StudioConsentCharacterizationTests.Source(
+            "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs"));
         Assert.DoesNotContain("DocumentStore.For(", StudioConsentCharacterizationTests.Source(
             "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Identity", "DuplicatePhones.cs"), StringComparison.Ordinal);
 
@@ -138,6 +140,72 @@ public class DuplicatePhonesTests(ITestOutputHelper output)
             Assert.Contains(line, live.Groups["body"].Value, StringComparison.Ordinal);
     }
 
+    /// <summary><b>الجَدوَلُ الَّذي يَعُدُّ فيه القِياسُ المَفاتيحَ هُوَ جَدوَلُ Marten لَها</b>: <see cref="DuplicatePhones.KeysTable"/> نَصٌّ في SQL
+    /// القِياس، و<see cref="ApiKeyDocument"/> بِتَسجيلِ القالِبِ (عامَّة) جَدوَلُها هذا ولا <c>tenant_id</c> فيه (مُوجَب)؛ وجَدوَلُ <see cref="User"/>
+    /// بِالسِياسَةِ العامَّةِ غَيرُه ومَحصورٌ بِمُستَأجِر (سالِب) — فَاسمٌ يَنجَرِفُ أَو تَسجيلٌ يَتَغَيَّرُ يُحمِرُّ هُنا لا عَدّاً صامِتاً بِصِفر.</summary>
+    [Fact]
+    public void The_keys_table_the_scan_counts_is_the_single_tenanted_table_Marten_maps_the_api_key_to()
+    {
+        using var store = DocumentStore.For(o =>
+        {
+            o.Connection("Host=localhost;Database=never_opened");
+            o.DatabaseSchemaName = "platform";
+            o.Policies.AllDocumentsAreMultiTenanted();
+            o.Schema.For<ApiKeyDocument>().SingleTenanted().Identity(x => x.Id);
+        });
+        // ‏جَدوَلُ الوَثيقَةِ كَما يَبنيه Marten مِن تَسجيلِها — الاسمُ والأَعمِدَة، لا نَصٌّ مَكتوبٌ بِاليَد.
+        Weasel.Postgresql.Tables.Table TableOf(Type t) => Assert.Single(store.Options.Storage.FindFeature(t).Objects.OfType<Weasel.Postgresql.Tables.Table>());
+        bool Tenanted(Weasel.Postgresql.Tables.Table t) => t.Columns.Any(c => c.Name == "tenant_id");
+        var key = TableOf(typeof(ApiKeyDocument));
+        var user = TableOf(typeof(User));
+        output.WriteLine($"المِفتاح: {key.Identifier.Name} (tenant_id: {Tenanted(key)}) · المُستَخدِم: {user.Identifier.Name} (tenant_id: {Tenanted(user)})");
+        Assert.Equal(DuplicatePhones.KeysTable, key.Identifier.Name);
+        Assert.False(Tenanted(key));
+        Assert.NotEqual(DuplicatePhones.KeysTable, user.Identifier.Name);
+        Assert.True(Tenanted(user));
+    }
+
+    /// <summary>وَثائِقُ عامَّةٌ لا يَراها مَسحُ الجَداوِلِ (‏<see cref="DuplicatePhones.TenantTablesAsync"/> يَسأَلُ عَمودَ <c>tenant_id</c>): كُلُّ
+    /// <c>For&lt;T&gt;().SingleTenanted()</c> في <c>libs/</c> و<c>apps/</c> مُسَمّىً هُنا — يَنقُلُه الدَمجُ بِحَقلِه، أَو لا يَحمِلُ حِسابَ عُضوٍ بِسَبَبٍ
+    /// مَكتوب. وَثيقَةٌ عامَّةٌ جَديدَةٌ تُحمِرُّه حَتّى تُصَنَّف — فَلا يَعودُ مِفتاحُ الرَبطِ في صورَةٍ أُخرى. وعَيِّنَةٌ مَحقونَةٌ تُثبِتُ أَنَّ الأَداةَ تَرى.</summary>
+    [Fact]
+    public void Every_single_tenanted_document_is_moved_by_the_merge_or_named_as_holding_no_member_account()
+    {
+        var movedByTheMerge = new[] { "ApiKeyDocument" };
+        var noMemberAccount = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Tenant"] = "OwnerUserId حِسابُ استوديو — ومَجموعاتُ الاستوديو تُعَدُّ ولا تُدمَج («أ» د57 · ٥)",
+            ["TenantPlan"] = "SetBy مُشرِفٌ أَو رِسالَةُ مُزَوِّد",
+            ["PlatformSettings"] = "UpdatedBy مُشرِف",
+            ["PlatformPlanPayPal"] = "CreatedBy مُشرِف",
+            ["PayPalWebhookRecord"] = "رِسالَةُ مُزَوِّدٍ بِلا حِساب",
+            ["PayPalOrderRecord"] = "CreatedBy «studio · …» أَو platform-admin",
+            ["PaddleTransactionRecord"] = "CreatedBy «studio · …» أَو platform-admin",
+        };
+        var shape = new Regex(@"For<(?<t>[\w\.]+)>\(\)\s*\.SingleTenanted\(\)", RegexOptions.CultureInvariant);
+        IEnumerable<string> Found(string code) => shape.Matches(code).Select(m => m.Groups["t"].Value.Split('.')[^1]);
+        bool Named(string t) => movedByTheMerge.Contains(t) || noMemberAccount.ContainsKey(t);
+
+        // ‏عَيِّنَةٌ مَحقونَة: تَسجيلٌ عامٌّ جَديدٌ يُرى، ويُعَدُّ غَيرَ مُصَنَّف.
+        var injected = Found("opts.Schema.For<Kit.Probe.ProbeDocument>()\n    .SingleTenanted()\n    .Identity(x => x.Id);").ToList();
+        Assert.Equal(new[] { "ProbeDocument" }, injected);
+        Assert.Equal(injected, injected.Where(t => !Named(t)));
+
+        var root = ThemeZeroEquivalenceTests.RepoRoot;
+        var files = new[] { "libs", "apps" }.SelectMany(d => Directory.EnumerateFiles(Path.Combine(root, d), "*.cs", SearchOption.AllDirectories))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                     && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .ToList();
+        var found = files.SelectMany(f => Found(File.ReadAllText(f))).OrderBy(t => t, StringComparer.Ordinal).ToList();
+        var unnamed = found.Where(t => !Named(t)).ToList();
+        output.WriteLine($"مِلَفّاتٌ مَفحوصَة: {files.Count} · وَثائِقُ عامَّة: {found.Count} ({string.Join("، ", found)}) · يَنقُلُها الدَمج: {movedByTheMerge.Length} · "
+            + $"بِلا حِسابِ عُضو: {noMemberAccount.Count} · غَيرُ مُصَنَّفَة: {unnamed.Count} · العَيِّنَةُ المَحقونَة: {injected.Count}");
+
+        Assert.NotEmpty(found);
+        Assert.Empty(unnamed);
+        Assert.Equal(movedByTheMerge.Concat(noMemberAccount.Keys).OrderBy(t => t, StringComparer.Ordinal), found);
+    }
+
     /// <summary>سُطورُ مَخزَنِ الدَمجِ الَّتي يُعيدُها الصَفُّ الحَيُّ بِحَرفِها — فَما يُقاسُ هُوَ ما يُشَغَّل.</summary>
     internal static readonly string[] StoreLines =
     {
@@ -145,6 +213,7 @@ public class DuplicatePhonesTests(ITestOutputHelper output)
         "o.Policies.AllDocumentsAreMultiTenanted();",
         "o.Events.TenancyStyle = JasperFx.MultiTenancy.TenancyStyle.Conjoined;",
         "o.Schema.For<Tenant>().SingleTenanted().Identity(x => x.Id);",
+        "o.Schema.For<ApiKeyDocument>().SingleTenanted().Identity(x => x.Id);",
         "o.Projections.Snapshot<Listing>(SnapshotLifecycle.Inline);",
     };
 }
@@ -164,6 +233,7 @@ public class LiveDuplicatePhonesProofTests(ITestOutputHelper output)
         o.Policies.AllDocumentsAreMultiTenanted();
         o.Events.TenancyStyle = JasperFx.MultiTenancy.TenancyStyle.Conjoined;
         o.Schema.For<Tenant>().SingleTenanted().Identity(x => x.Id);
+        o.Schema.For<ApiKeyDocument>().SingleTenanted().Identity(x => x.Id);
         o.Projections.Snapshot<Listing>(SnapshotLifecycle.Inline);
         o.AutoCreateSchemaObjects = JasperFx.AutoCreate.All;
     });
@@ -312,12 +382,11 @@ public class LiveDuplicatePhonesProofTests(ITestOutputHelper output)
         finally { await CleanAsync(slug); }
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم» قَبلَ نَقلِ مَفاتيحِ الرَبطِ في الدَمج</b> (القاعِدَة ٣؛ مُراجَعَةُ <c>9f00eac</c>): مِفتاحُ الرَبطِ وَثيقَةٌ عامَّة
-    /// (‏<c>SingleTenanted</c>، لا عَمودَ <c>tenant_id</c>) فَلا يَراه مَسحُ <see cref="DuplicatePhones.TenantTablesAsync"/>، ولا يَلمِسُه
-    /// <see cref="DuplicatePhones.ApplyAsync"/>. فَمِفتاحٌ صَدَرَ بِاسمِ بٍ (المُندَمِج) يُصادِقُ قَبلَ الدَمجِ بِاسمِ ب، وبَعدَه يُرَدُّ <c>ActorGone</c>
-    /// (‏بٌ مَمحُوّ) ووَثيقَتُه «فَعّال» بِلا تاريخِ إبطال — مِفتاحٌ مَيِّتٌ يَبدو حَيّاً في شاشَةِ المَفاتيح.</summary>
+    /// <summary><b>مِفتاحُ الرَبطِ يَنتَقِلُ إلى الباقي</b> (‏2026-10-29؛ انقَلَبَ بِاسمِه مِن تَوصيفِ <c>c11fd8a</c>): مِفتاحٌ صَدَرَ بِاسمِ بٍ (المُندَمِج)
+    /// — وَثيقَةٌ عامَّةٌ لا يَراها مَسحُ الجَداوِل — يَعُدُّه القِياسُ بِحَقلِه، ويَكتُبُ الدَمجُ فاعِلَه أَ في المُعامَلَةِ نَفسِها: بَعدَ الدَمجِ يُصادِقُ بِاسمِ أَ،
+    /// فَعّالاً بِلا تاريخِ إبطال، واسمُه في خَطِّ الصَفقَةِ كَما كَتَبَه صاحِبُ المَتجَر. (كانَ: يُرَدُّ <c>ActorGone</c> و«فَعّال» في الشاشَة.)</summary>
     [Fact]
-    public async Task Today_a_key_issued_to_the_merged_away_account_still_reads_active_and_is_refused_actor_gone_after_the_merge_on_Postgres()
+    public async Task A_key_issued_to_the_merged_away_account_moves_to_the_survivor_and_authenticates_in_their_name_after_the_merge_on_Postgres()
     {
         if (!Enabled) return;
         using var store = Store();
@@ -351,15 +420,19 @@ public class LiveDuplicatePhonesProofTests(ITestOutputHelper output)
             var after = await keys.AuthenticateAsync(key.Presented);
             ApiKeyDocument? doc;
             await using (var q = keyStore.QuerySession()) doc = await q.LoadAsync<ApiKeyDocument>(key.Key.Id);
-            output.WriteLine($"جَدوَلُ المَفاتيحِ في المَسح: {tables.Any(t => t.Name == "mt_doc_apikeydocument")} · قَبلَ الدَمج: {before.Rejection} (الفاعِلُ ب: {before.Principal?.ActorUserId == b}) · "
-                + $"نُقِلَ: {moved} · بَعدَه: {after.Rejection} · الوَثيقَة: {doc?.Status}/{(doc?.RevokedAt is null ? "بِلا تاريخِ إبطال" : "مُؤَرَّخ")} · فاعِلُها ب: {doc?.ActorUserId == b}");
+            output.WriteLine($"جَدوَلُ المَفاتيحِ في المَسح: {tables.Any(t => t.Name == DuplicatePhones.KeysTable)} · قَبلَ الدَمج: {before.Rejection} (الفاعِلُ ب: {before.Principal?.ActorUserId == b}) · "
+                + $"مَفاتيحُ في القِياس: {scan.Keys} · نُقِلَ: {moved} · بَعدَه: {after.Rejection} (الفاعِلُ أ: {after.Principal?.ActorUserId == a}) · "
+                + $"الوَثيقَة: {doc?.Status}/{(doc?.RevokedAt is null ? "بِلا تاريخِ إبطال" : "مُؤَرَّخ")} · فاعِلُها أ: {doc?.ActorUserId == a} · الاسمُ كَما كُتِب: {doc?.ActorName == "سائِق"}");
 
-            Assert.DoesNotContain(tables, t => t.Name == "mt_doc_apikeydocument");
+            Assert.DoesNotContain(tables, t => t.Name == DuplicatePhones.KeysTable);
             Assert.Equal(ApiKeyRejection.None, before.Rejection);
             Assert.Equal(b, before.Principal!.ActorUserId);
             Assert.True(scan.Mergeable);
-            Assert.Equal(ApiKeyRejection.ActorGone, after.Rejection);
-            Assert.Equal((ApiKeyDocument.StatusActive, (DateTime?)null, b), (doc!.Status, doc.RevokedAt, doc.ActorUserId));
+            Assert.Equal(1, scan.Keys);
+            Assert.Equal(1, moved);
+            Assert.Equal(ApiKeyRejection.None, after.Rejection);
+            Assert.Equal(a, after.Principal!.ActorUserId);
+            Assert.Equal((ApiKeyDocument.StatusActive, (DateTime?)null, a, "سائِق"), (doc!.Status, doc.RevokedAt, doc.ActorUserId, doc.ActorName));
         }
         finally
         {

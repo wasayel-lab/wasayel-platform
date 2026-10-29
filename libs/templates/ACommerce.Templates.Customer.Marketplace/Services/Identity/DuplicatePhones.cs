@@ -3,6 +3,7 @@ using ACommerce.Kit.Auth;
 using ACommerce.Kit.Cart;
 using ACommerce.Kit.Favorites;
 using ACommerce.Kit.Listings;
+using ACommerce.Templates.Customer.Marketplace.Services.Api;
 using Marten;
 using Npgsql;
 
@@ -19,12 +20,20 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Identity;
 /// هُوِيَّتُه الهُوِيَّةُ الوَطَنِيَّة) والفارِغُ خارِجَها.</para>
 ///
 /// <para><b>والدَمجُ يَقيسُ قَبلَ أَن يَكتُب</b> (<see cref="ScanAsync"/>): كُلُّ جَدوَلِ وَثائِقَ مَحصورٍ بِمُستَأجِرٍ يُسأَلُ عَن مُعَرِّفِ المُندَمِجِ نَصّاً، فَما
-/// كانَ وَثيقَةً عادِيَّةً (صَفقَة، مُحادَثَة، رِسالَة، إشعار، مُفَضَّلَة، بَحثٌ مَحفوظ، مِفتاحُ رَبط، تَقييم، …) يُعادُ تَوجيهُه إلى الباقي في المُعامَلَةِ نَفسِها؛
+/// كانَ وَثيقَةً عادِيَّةً (صَفقَة، مُحادَثَة، رِسالَة، إشعار، مُفَضَّلَة، بَحثٌ مَحفوظ، تَقييم، …) يُعادُ تَوجيهُه إلى الباقي في المُعامَلَةِ نَفسِها؛
 /// والإعلانُ — مَجرى أَحداث — يُلحَقُ بِه <c>ListingEdited</c> بِمالِكِه الجَديد؛ والسَلَّةُ (مُعَرِّفُها مُعَرِّفُ صاحِبِها) تُنقَلُ إن لَم تَكُن لِلباقي سَلَّة؛
 /// والمُفَضَّلَةُ (مُعَرِّفُها <c>Favorite.MakeId</c> بِمُعَرِّفِ صاحِبِها بِلا شَرطات) تُعادُ بِمُعَرِّفِ الباقي، ومُكَرَّرُها عِندَه يُسقَط.
 /// <b>ويُمتَنَعُ عَن المَجموعَةِ كُلِّها</b> (يُطبَعُ سَبَبُه ولا يُكتَبُ فيها حَرف) إن وُجِدَ: صَفٌّ يَجمَعُ الحِسابَين (صَفقَةُ المَرءِ مَعَ نَفسِه)، أَو وَثيقَةُ
 /// مَجرى أَحداثٍ غَيرِ الإعلان (عَرض، تَذكِرَة، اشتِراك — أَحداثُها لا تُعادُ كِتابَتُها)، أَو حَدَثٌ يَذكُرُه خارِجَ مَجاري الإعلانات، أَو مُعَرِّفُه بِصيغَةٍ
 /// بِلا شَرطات. وسِجِلُّ التَدقيقِ تاريخٌ لا يُعادُ تَوجيهُه.</para>
+///
+/// <para><b>ومِفتاحُ الرَبطِ يُنقَلُ بِحَقلِه لا بِالمَسح</b> (‏2026-10-29، مُراجَعَةُ <c>9f00eac</c>؛ تَوصيفُه <c>c11fd8a</c>): <see cref="ApiKeyDocument"/>
+/// وَثيقَةٌ <b>عامَّة</b> (‏<c>SingleTenanted</c> — تُحَمَّلُ قَبلَ أَن يُعرَفَ المُستَأجِر)، فَلا عَمودَ <c>tenant_id</c> في جَدوَلِها ولا يَراها
+/// <see cref="TenantTablesAsync"/>. وكانَ مِفتاحٌ صَدَرَ بِاسمِ المُندَمِجِ يَبقى «فَعّالاً» في شاشَةِ المَفاتيحِ ويُرَدُّ <c>ActorGone</c> بَعدَ مَحوِه (د56) —
+/// مِفتاحٌ مَيِّتٌ يَبدو حَيّاً. فَالآن: <see cref="ScanAsync"/> يَعُدُّها بِحَقلَيها (<c>TenantSlug</c> و<c>ActorUserId</c>)، و<see cref="ApplyAsync"/>
+/// يَكتُبُ <c>ActorUserId</c> الباقي في المُعامَلَةِ نَفسِها — كُلَّ مِفتاحٍ بِاسمِه أَيّاً كانَت حالُه، كَما يُعادُ كُلُّ صَفٍّ يَذكُرُه — ويَبقى <c>ActorName</c>
+/// كَما كَتَبَه صاحِبُ المَتجَر. فَالرَبطُ الَّذي يُحَرِّكُ صَفَقاتِ الشَخصِ يَبقى يُحَرِّكُها، وهِيَ صارَت صَفَقاتِ الباقي.
+/// والوَثائِقُ العامَّةُ الأُخرى لا تَحمِلُ حِسابَ عُضو (مُثَبَّتٌ بِأَسمائِها في <c>DuplicatePhonesTests</c>).</para>
 ///
 /// <para><b>والمُندَمِجُ يُمحى كَما يُمحى الحِسابُ المَحذوف</b> (<see cref="AccountDeletion.Erase"/> بِعَينِها — ومِنها رَفعُ إصدارِ الجَلسَة، فَتَسقُطُ رُموزُه)،
 /// والباقي يَأخُذُ جَوّالَه مُوَحَّداً ويَرِثُ ما لَيسَ لَه: التَحَقُّقَ مِن الجَوّال، والبَريدَ والهُوِيَّةَ الوَطَنِيَّةَ إن كانَ بِلاهُما.</para>
@@ -32,7 +41,8 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Identity;
 /// <para><b>ولا يُرَكِّبُ مَخزَناً</b>: يَأخُذُ <see cref="IDocumentStore"/> مِن مُستَدعيه، وكُلُّ سكربتٍ يُرَكِّبُ مَخزَنَه في مِلَفِّه (كَـ<c>count-listing-owners.cs</c>
 /// و<c>repair-role-floor.cs</c>) — فَمَواضِعُ إعدادِ Marten في <c>libs/</c> تَبقى الثَلاثَةَ الَّتي يَراها <c>scripts/marten-schema.cs</c>
 /// (‏<c>MartenSchemaVerbTests.EveryMartenConfigurationSite_IsInsideTheTwoCallsTheVerbMakes</c>). ومَخزَنُ الدَمجِ يُعيدُ مِن تَركيبِ المُضيفِ ما يَمَسُّه:
-/// الإيجارُ المُقتَرِنُ لِلأَحداث، ونُسخَةُ <c>Listing</c> المُحَدَّثَةُ في المُعامَلَة (‏<c>HostingExtensions</c>) — مُثَبَّتٌ في <c>DuplicatePhonesTests</c>.</para>
+/// الإيجارُ المُقتَرِنُ لِلأَحداث، ونُسخَةُ <c>Listing</c> المُحَدَّثَةُ في المُعامَلَة (‏<c>HostingExtensions</c>)، و<see cref="ApiKeyDocument"/> عامَّةً
+/// (‏<c>MarketplaceTemplateExtensions</c>) — مُثَبَّتٌ في <c>DuplicatePhonesTests</c>.</para>
 /// </summary>
 public static class DuplicatePhones
 {
@@ -71,12 +81,16 @@ public static class DuplicatePhones
     /// <summary>ما يُعادُ تَوجيهُه لِمُندَمِجٍ في جَدوَل.</summary>
     public sealed record Repoint(Guid Loser, string Table, long Rows);
 
-    /// <summary>قِياسُ مَجموعَةٍ قَبلَ دَمجِها. تُدمَجُ إن خَلَت <see cref="Blocks"/>.</summary>
+    /// <summary>قِياسُ مَجموعَةٍ قَبلَ دَمجِها. تُدمَجُ إن خَلَت <see cref="Blocks"/>. و<see cref="Keys"/> مَفاتيحُ الرَبطِ بِاسمِ المُندَمِجينَ في المَتجَر.</summary>
     public sealed record Scan(Group Group, IReadOnlyList<Repoint> Repoints, IReadOnlyList<Guid> Listings, int LoserCarts, bool SurvivorCart,
-        int Favorites, IReadOnlyList<string> Blocks)
+        int Favorites, int Keys, IReadOnlyList<string> Blocks)
     {
         public bool Mergeable => Blocks.Count == 0;
     }
+
+    /// <summary>جَدوَلُ <see cref="ApiKeyDocument"/> كَما يُسَمّيه Marten — عامٌّ بِلا <c>tenant_id</c>، فَلا يَبلُغُه <see cref="TenantTablesAsync"/>.
+    /// مُطابَقَتُه لِتَسمِيَةِ Marten مُثَبَّتَةٌ في <c>DuplicatePhonesTests</c>.</summary>
+    public const string KeysTable = "mt_doc_apikeydocument";
 
     /// <summary>جَداوِلُ لا يُعادُ تَوجيهُها نَصّاً: المُستَخدِمُ والسَلَّةُ والمُفَضَّلَةُ (مُعَرِّفاتُها مِن مُعَرِّفِ صاحِبِها — تُعالَجُ بِـMarten)، والإعلانُ
     /// (بِحَدَث)، والتَدقيقُ (تاريخ).</summary>
@@ -116,9 +130,15 @@ public static class DuplicatePhones
         var blocks = new List<string>();
         var loserCarts = 0;
         var favorites = 0;
+        var keys = 0;
+        // ‏قاعِدَةٌ لَم يُصدَر فيها مِفتاحٌ قَطّ قَد لا يَكونُ فيها جَدوَلُه — والقِراءَةُ لا تُنشِئُ مُخَطَّطاً، فَغِيابُه صِفرُ مَفاتيح.
+        var keysTable = await CountAsync(conn, $"select count(*) from pg_catalog.pg_tables where schemaname = 'platform' and tablename = '{KeysTable}'", ct) > 0;
         foreach (var loser in group.Losers)
         {
             var l = loser.ToString();
+            if (keysTable)
+                keys += (int)await CountAsync(conn, $"select count(*) from platform.{KeysTable} where data->>'TenantSlug' = @t and data->>'ActorUserId' = @u", ct,
+                    ("t", tenant), ("u", l));
             foreach (var t in tables)
             {
                 if (t.Name is "mt_doc_user" or "mt_doc_auditentry") continue;
@@ -162,7 +182,7 @@ public static class DuplicatePhones
         }
         var survivorCart = await CountAsync(conn, "select count(*) from platform.mt_doc_cart where tenant_id = @t and id = @i", ct,
             ("t", tenant), ("i", group.Survivor)) > 0;
-        return new(group, repoints, listings, loserCarts, survivorCart, favorites, blocks);
+        return new(group, repoints, listings, loserCarts, survivorCart, favorites, keys, blocks);
     }
 
     // ─── الكِتابَة ─────────────────────────────────────────────────────────────────────────
@@ -170,7 +190,9 @@ public static class DuplicatePhones
     /// <summary>
     /// <para>يَدمِجُ مَجموعَةً قيسَت ولا مانِعَ فيها — <b>في مُعامَلَةٍ واحِدَة</b> (‏<c>SaveChangesAsync</c> واحِد): إعادَةُ التَوجيهِ النَصِّيَّةُ
     /// (‏<c>QueueSqlCommand</c>، ومَعَها <c>mt_version</c> جَديدٌ فَيُرَدُّ كُلُّ حِفظٍ قَرَأَ قَبلَها بِالتَزامُنِ التَفاؤُلِيِّ القائِم)، و<c>ListingEdited</c> لِكُلِّ
-    /// إعلانٍ يَملِكُه مُندَمِج، ونَقلُ السَلَّة، والمُستَخدِمون. يُعيدُ عَدَدَ ما أُعيدَ تَوجيهُه.</para>
+    /// إعلانٍ يَملِكُه مُندَمِج، ونَقلُ السَلَّة، ومَفاتيحُ الرَبطِ بِاسمِه، والمُستَخدِمون. يُعيدُ عَدَدَ ما أُعيدَ تَوجيهُه.</para>
+    /// <para><b>ومَخزَنُه يُسَجِّلُ <see cref="ApiKeyDocument"/> عامَّةً كَما يُسَجِّلُها القالِب</b>: بِغَيرِه يَسأَلُها Marten بِـ<c>tenant_id</c> لا عَمودَ لَه
+    /// فَيَرتَدُّ الاستِعلامُ قَبلَ الحِفظ ولا يُكتَبُ حَرف. ولا يُسأَلُ جَدوَلُها إلّا إن عَدَّ القِياسُ فيه مِفتاحاً.</para>
     /// </summary>
     public static async Task<long> ApplyAsync(IDocumentStore store, string tenant, Scan scan, DateTime now, CancellationToken ct = default)
     {
@@ -223,6 +245,16 @@ public static class DuplicatePhones
                     moved++;
                 }
                 s.Delete<Cart>(loser.Id);
+            }
+            if (scan.Keys > 0)
+            {
+                // ‏الوَثيقَةُ عامَّة: تُسأَلُ بِحَقلِ مُستَأجِرِها لا بِجَلسَتِه. والاسمُ في خَطِّ الصَفقَةِ (<c>ActorName</c>) لا يُمَسّ.
+                foreach (var key in await s.Query<ApiKeyDocument>().Where(k => k.TenantSlug == tenant && k.ActorUserId == loser.Id).ToListAsync(ct))
+                {
+                    key.ActorUserId = g.Survivor;
+                    s.Store(key);
+                    moved++;
+                }
             }
 
             survivor.PhoneVerified |= loser.PhoneVerified;

@@ -12,7 +12,8 @@
 //  **ويَطبَعُ لِكُلِّ مَتجَرٍ — `ashare` مِنها كَأَيِّ مَتجَر — ولِلاستوديو**: الحِساباتِ ذاتَ
 //  الجَوّال · كَم مِنها يُعادُ كَتبُ جَوّالِه مُوَحَّداً (مُفرَدٌ لَيسَ بِصيغَتِه الدَولِيَّة) ·
 //  المَجموعاتِ (رَقَمٌ واحِدٌ بِأَكثَرَ مِن حِساب) وكَم حِساباً يَندَمِج · وكَم مَجموعَةً يَدمِجُها
-//  `merge-duplicate-phones.cs` وكَم يَمتَنِعُ عَنها ولِماذا (بِاسمِ الجَدوَلِ لا بِالصَفّ).
+//  `merge-duplicate-phones.cs` وكَم يَمتَنِعُ عَنها ولِماذا (بِاسمِ الجَدوَلِ لا بِالصَفّ)، وكَم مِفتاحَ
+//  رَبطٍ بِاسمِ حِسابٍ يَندَمِجُ يَصيرُ فاعِلُه الباقي (وَثيقَةٌ عامَّة لا يَراها مَسحُ الجَداوِل).
 //  والقِياسُ دالَّةُ الدَمجِ بِعَينِها (`DuplicatePhones.Build` و`ScanAsync`) — لا نُسخَة.
 //
 // ─── ما لا يَفعَلُه — وذلك مَقصودٌ ومُعلَن ──────────────────────────────
@@ -105,7 +106,7 @@ try
     }
 
     var tables = await DuplicatePhones.TenantTablesAsync(conn);
-    int accounts = 0, renames = 0, groups = 0, losers = 0, mergeable = 0, blocked = 0;
+    int accounts = 0, renames = 0, groups = 0, losers = 0, mergeable = 0, blocked = 0, keys = 0;
     var reasons = new SortedDictionary<string, int>(StringComparer.Ordinal);
 
     foreach (var slug in tenants)
@@ -119,7 +120,7 @@ try
         foreach (var g in plan.Groups)
         {
             var scan = await DuplicatePhones.ScanAsync(conn, slug, g, tables);
-            if (scan.Mergeable) ok++;
+            if (scan.Mergeable) { ok++; keys += scan.Keys; }
             else
             {
                 no++;
@@ -147,6 +148,7 @@ try
     Console.WriteLine($"أَشخاصٌ بِأَكثَرَ مِن حِساب: {groups} في المَتاجِر ({losers} حِساباً يَندَمِج) و{sp.Groups.Count} في الاستوديو · "
         + $"يَدمِجُها السكربت: {mergeable} · يَمتَنِعُ عَنها: {blocked + sp.Groups.Count}");
     foreach (var (why, n) in reasons) Console.WriteLine($"  مانِعٌ في {why}: {n} مَجموعَة");
+    Console.WriteLine($"مَفاتيحُ رَبطٍ بِاسمِ حِساباتٍ تَندَمِجُ — يُكتَبُ فاعِلَها الباقي: {keys}");
     Console.WriteLine($"تَغييراتٌ يُنَفِّذُها merge-duplicate-phones.cs: {renames + sp.Renames.Count + mergeable}");
     return 0;
 }
