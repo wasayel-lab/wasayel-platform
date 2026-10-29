@@ -193,6 +193,31 @@ public sealed class DealNotices
     /// يُخبَرُ بِما فَعَلَه.</summary>
     public static bool TellsTheBuyer(Deal deal, Guid cancellerId) => cancellerId != deal.InitiatorId;
 
+    /// <summary>
+    /// <para><b>مَن يُخبَرُ مِن جِهَةِ البائِعِ بِالإلغاء</b> (‏2026-10-29، قَرارُ المالِك د8 «أ»: «إشعارٌ واحِدٌ لِلبائِعِ حينَ يُلغى طَلَبٌ عِندَه، أَيّاً كانَ
+    /// مَن أَلغاه وأَيّاً كانَ المَسار، ما لَم يَكُن هُوَ المُلغي»): مُستَلِمُ الطَلَبِ الجَديدِ نَفسُه (<see cref="NewDealRecipient"/>) — مالِكُ الإعلانِ ما لَم
+    /// يَكُن المُشتَري — <b>ما لَم يَكُن هُوَ المُلغي</b>. و<c>null</c> لِما سِوى ذلك: صَفقَةٌ بِلا مالِك (بَذرَةُ الاستوديو)، أَو بائِعٌ أَلغى بِنَفسِه.
+    /// كانَ كُلُّ إشعارِ إلغاءٍ يُخاطِبُ المُشتَري وَحدَه (تَوصيفُه <c>05e2e13</c>)، فَيُجَهِّزُ البائِعُ طَلَباً أَلغاه المُشتَري أَو إدارَةُ المَتجَر.</para>
+    /// </summary>
+    public static Guid? VendorToTell(Deal deal, Guid cancellerId)
+        => NewDealRecipient(deal) is { } vendor && vendor != cancellerId ? vendor : null;
+
+    /// <summary>إشعارُ البائِعِ بِأَنّ طَلَباً عِندَه أُلغِيَ — بِنَوعِ الإلغاءِ وأَيقونَتِه، وعُنوانُ الإعلانِ في المَتن، ولا اسمَ لِلمُلغي: النَصُّ واحِدٌ لِكُلِّ
+    /// مَسارٍ (المُشتَري، والاستوديو، ومِفتاحُ الربط) فَلا يُكتَبُ اسمٌ شَخصِيٌّ لِمالِكِ مَتجَرٍ في إشعارِ بائِع.</summary>
+    public static Notification CancelledToVendorFor(string slug, Deal deal, Guid vendorId, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = vendorId,
+        Type = CancelledType,
+        Title = l["notifications.deal_cancelled_for_vendor.title"],
+        Body = l.Format("notifications.deal_cancelled_for_vendor.body", deal.ListingTitle),
+        RelatedUrl = $"/{slug}/deals/{deal.Id}",
+        At = at,
+    };
+
+    public static string CancelledToVendorPushBody(Deal deal, L l)
+        => l.Format("notifications.deal_cancelled_for_vendor.push_body", deal.ListingTitle);
+
     // ─── الأُنبوب — تَخزينٌ ثُمَّ جَرَسٌ ثُمَّ دَفع ──────────────────────────
 
     /// <summary>بَعدَ حَفظِ <c>/checkout/submit</c>: إشعارٌ واحِدٌ لِمالِكِ إعلانِ كُلِّ
@@ -244,9 +269,12 @@ public sealed class DealNotices
     /// <summary>بَعدَ إلغاءٍ ناجِحٍ في <c>/cancel</c>: إشعارٌ لِلمُشتَري بِاسمِ المُلغي إن لَم يَكُن هُوَ
     /// (<see cref="TellsTheBuyer"/>). كانَ الإلغاءُ صامِتاً: البائِعُ المَربوطُ عِندَ الوِلادَةِ يَرفُضُ
     /// الطَلَبَ عِندَ <c>Offered</c> والمُشتَري لا يَعلَمُ إلّا إن فَتَحَ صَفقَتَه. تُرجِعُ هَل أُشعِر.</summary>
+    /// <remarks>(‏2026-10-29، قَرارُ المالِك د8 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه: <b>والبائِعُ يُخبَرُ قَبلَه</b> بِـ<see cref="NotifyVendorCancelledAsync"/> ما لَم يَكُن
+    /// هُوَ المُلغي — فَإلغاءُ المُشتَري طَلَبَه، وقَد كانَ لا يُخبِرُ أَحَداً، يُخبِرُ بائِعَه. و«تُرجِعُ هَل أُشعِر» باقِيَةٌ لِلمُشتَري.)</remarks>
     public async Task<bool> NotifyCancelledAsync(
         string slug, Deal deal, Guid cancellerId, string cancellerName, L l, CancellationToken ct = default)
     {
+        await NotifyVendorCancelledAsync(slug, deal, cancellerId, l, ct);
         if (!TellsTheBuyer(deal, cancellerId)) return false;
         var n = CancelledFor(slug, deal, cancellerName, l, DateTime.UtcNow);
         await using (var s = _store.LightweightSession(slug))
@@ -263,9 +291,12 @@ public sealed class DealNotices
     /// <summary>بَعدَ إلغاءٍ ناجِحٍ مِن الاستوديو (<c>/studio/apps/{slug}/deals/{id}/cancel</c>): إشعارٌ لِلمُشتَري بِنَصِّ «إدارَةِ المَتجَر»
     /// (<see cref="CancelledByStoreFor"/>) إن لَم يَكُن مالِكُ المَتجَرِ هُوَ المُشتَري (<see cref="TellsTheBuyer"/>) — وكانَ هذا الإلغاءُ صامِتاً
     /// (تَوصيفُه <c>DealNoticeDoorsTests</c>). بِتَرتيبِ الأُنبوبِ نَفسِه. تُرجِعُ هَل أُشعِر. (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (iii).)</summary>
+    /// <remarks>(‏2026-10-29، قَرارُ المالِك د8 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه: والبائِعُ يُخبَرُ قَبلَه بِـ<see cref="NotifyVendorCancelledAsync"/> ما لَم يَكُن مالِكُ
+    /// المَتجَرِ هُوَ البائِع.)</remarks>
     public async Task<bool> NotifyCancelledByStoreAsync(
         string slug, Deal deal, Guid ownerId, L l, CancellationToken ct = default)
     {
+        await NotifyVendorCancelledAsync(slug, deal, ownerId, l, ct);
         if (!TellsTheBuyer(deal, ownerId)) return false;
         var n = CancelledByStoreFor(slug, deal, l, DateTime.UtcNow);
         await using (var s = _store.LightweightSession(slug))
@@ -327,5 +358,28 @@ public sealed class DealNotices
             await _push.SendAsync(_store, slug, userId, n.Title, pushBody, url: n.RelatedUrl, tag: $"deal-{dealId}", ct: ct);
         }
         return sent.Count;
+    }
+
+    /// <summary>
+    /// <para><b>إشعارُ إلغاءٍ واحِدٌ لِلبائِع — تَمُرُّ بِه مَساراتُ الإلغاءِ كُلُّها</b> (‏2026-10-29، قَرارُ المالِك د8 «أ»): يُناديه <see cref="NotifyCancelledAsync"/>
+    /// (بابُ العُضوِ ومِفتاحُ الربط) و<see cref="NotifyCancelledByStoreAsync"/> (الاستوديو) قَبلَ إخبارِ المُشتَري، والإلغاءُ الآليُّ عِندَ انتِهاءِ الفاتورَةِ يَمُرُّ
+    /// بِالأَوَّل. والمُستَلِمُ <see cref="VendorToTell"/>، وبِتَرتيبِ الأُنبوبِ نَفسِه. تُرجِعُ هَل أُشعِر.</para>
+    /// <para><b>وما يُستَثنى بِقَصد</b>: طَلَبٌ لَم تُفتَح فاتورَتُه أَو تَعَذَّرَ حَجزُه عِندَ الشِراءِ لا يُخبَرُ بائِعُه بِإلغائِه — لَم يُخبَر بِوِلادَتِه أَصلاً
+    /// (‏ADR-032 §٨‑ح‑١٠، و§٩ مُلحَقاً)؛ ذلكَ الإلغاءُ في <c>GatewayPayments</c> ولا يَمُرُّ بِهذِه الخِدمَة.</para>
+    /// </summary>
+    public async Task<bool> NotifyVendorCancelledAsync(
+        string slug, Deal deal, Guid cancellerId, L l, CancellationToken ct = default)
+    {
+        if (VendorToTell(deal, cancellerId) is not { } vendorId) return false;
+        var n = CancelledToVendorFor(slug, deal, vendorId, l, DateTime.UtcNow);
+        await using (var s = _store.LightweightSession(slug))
+        {
+            s.Store(n);
+            await s.SaveChangesAsync(ct);
+        }
+        await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, vendorId);
+        await _push.SendAsync(_store, slug, vendorId, n.Title, CancelledToVendorPushBody(deal, l),
+            url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
+        return true;
     }
 }

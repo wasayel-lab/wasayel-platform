@@ -140,12 +140,11 @@ public class DealVendorCancelTests
         Assert.Equal(0, w.Docs.Wrote<Notification>());
     }
 
-    /// <summary><b>اليَوم</b> (‏2026-10-29، تَوصيفٌ قَبلَ قَرارِ المالِك د8 «أ»: «إشعارٌ واحِدٌ لِلبائِعِ حينَ يُلغى طَلَبٌ عِندَه، أَيّاً كانَ مَن أَلغاه
-    /// وأَيّاً كانَ المَسار، ما لَم يَكُن هُوَ المُلغي»): إدارَةُ المَتجَرِ تُلغي مِن الاستوديو طَلَباً بائِعُه غَيرُها — المُشتَري يُخبَرُ مَرَّة، والبائِعُ لا
-    /// يُخبَرُ بِشَيءٍ فَيُجَهِّزُ طَلَباً مُلغًى. ومَعَه صَفُّ إلغاءِ المُشتَري أَدناه (<c>The_buyer_cancelling_his_own_order_tells_nobody</c>) — يُقلَبانِ
-    /// بِاسمَيهِما في كوميتِ إشعارِ البائِع.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د8 «أ»؛ تَوصيفُه <c>05e2e13</c>) — كانَ
+    /// <c>Today_a_store_cancel_of_a_vendors_order_tells_the_buyer_and_never_the_vendor</c>: إشعارٌ لِلمُشتَري وصِفرٌ لِلبائِع. والآن إدارَةُ المَتجَرِ تُلغي
+    /// مِن الاستوديو طَلَباً بائِعُه غَيرُها: المُشتَري يُخبَرُ مَرَّة، والبائِعُ مَرَّةً بِنَصِّه (<see cref="DealNotices.CancelledToVendorFor"/>) — فَلا يُجَهِّزُ طَلَباً مُلغًى.</summary>
     [Fact]
-    public void Today_a_store_cancel_of_a_vendors_order_tells_the_buyer_and_never_the_vendor()
+    public void A_store_cancel_of_a_vendors_order_tells_the_buyer_and_the_vendor_once_each()
     {
         var w = NewWorld();
         var id = CartDeal(w);
@@ -154,13 +153,18 @@ public class DealVendorCancelTests
 
         Assert.True(Now(w.Notices.NotifyCancelledByStoreAsync(Slug, res.Deal!, Stranger, w.L)));
         Assert.Equal(1, NotificationsFor(w, Buyer));
-        Assert.Equal(0, NotificationsFor(w, Seller));
-        Assert.Equal(1, w.Docs.Wrote<Notification>());
+        Assert.Equal(1, NotificationsFor(w, Seller));
+        Assert.Equal(2, w.Docs.Wrote<Notification>());
+        var vendor = w.Docs.Stored.OfType<Notification>().Single(n => n.UserId == Seller);
+        Assert.Equal(DealNotices.CancelledType, vendor.Type);
+        Assert.Equal($"/{Slug}/deals/{id}", vendor.RelatedUrl);
+        Assert.Equal(w.L["notifications.deal_cancelled_for_vendor.title"], vendor.Title);
     }
 
-    /// <summary>ومَن يُلغي طَلَبَه هُوَ لا يُخبَرُ بِما فَعَل — ولا يُشعَرُ البائِعُ بِه أَيضاً (لا يُطلَبُ هُنا).</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د8 «أ»؛ تَوصيفُه الصَفُّ نَفسُه قَبلَه — كانَ
+    /// <c>The_buyer_cancelling_his_own_order_tells_nobody</c>): مَن يُلغي طَلَبَه هُوَ لا يُخبَرُ بِما فَعَل — <b>والبائِعُ يُخبَرُ مَرَّة</b>.</summary>
     [Fact]
-    public void The_buyer_cancelling_his_own_order_tells_nobody()
+    public void The_buyer_cancelling_his_own_order_tells_the_vendor_once_and_not_himself()
     {
         var w = NewWorld();
         var id = CartDeal(w);
@@ -168,9 +172,49 @@ public class DealVendorCancelTests
         Assert.True(res.Ok, res.Violation?.MessageAr);
 
         Assert.False(Now(w.Notices.NotifyCancelledAsync(Slug, res.Deal!, Buyer, "مُشتَرٍ", w.L)));
-        Assert.Equal(0, w.Docs.Wrote<Notification>());
+        Assert.Equal(1, w.Docs.Wrote<Notification>());
+        Assert.Equal(0, NotificationsFor(w, Buyer));
+        Assert.Equal(1, NotificationsFor(w, Seller));
         Assert.False(DealNotices.TellsTheBuyer(res.Deal!, Buyer));
         Assert.True(DealNotices.TellsTheBuyer(res.Deal!, Seller));
+        Assert.Equal(Seller, DealNotices.VendorToTell(res.Deal!, Buyer));
+    }
+
+    /// <summary><b>مَن يُخبَرُ مِن جِهَةِ البائِع</b> (‏2026-10-29، قَرارُ المالِك د8): المُوجِب — المُشتَري أَو إدارَةُ المَتجَرِ أَو غَيرُهُما يُلغي فَالبائِعُ هُوَ
+    /// المُستَلِم؛ والسالِب — البائِعُ يُلغي بِنَفسِه، أَو صَفقَةٌ بِلا مالِكِ إعلان، أَو مالِكُها المُشتَري: لا أَحَد.</summary>
+    [Fact]
+    public void The_vendor_is_told_of_a_cancel_unless_he_is_the_canceller_or_there_is_no_vendor()
+    {
+        var w = NewWorld();
+        var deal = w.Docs.Read<Deal>(CartDeal(w).ToString())!;
+        Assert.Equal(Seller, DealNotices.VendorToTell(deal, Buyer));
+        Assert.Equal(Seller, DealNotices.VendorToTell(deal, Stranger));
+        Assert.Null(DealNotices.VendorToTell(deal, Seller));
+
+        deal.Refs.Remove(DealsService.ListingOwnerRef);
+        Assert.Null(DealNotices.VendorToTell(deal, Buyer));
+        deal.Refs[DealsService.ListingOwnerRef] = Buyer.ToString();
+        Assert.Null(DealNotices.VendorToTell(deal, Stranger));
+    }
+
+    /// <summary><b>والبائِعُ الَّذي يُلغي لا يُخبَرُ بِما فَعَل، ولا يُكتَبُ لَه شَيء</b> — <see cref="DealNotices.NotifyVendorCancelledAsync"/> بِالبائِعِ مُلغِياً يُرجِعُ
+    /// <c>false</c> بِلا حِفظ؛ وبِالمُشتَري مُلغِياً يُرجِعُ <c>true</c> ويَكتُبُ لِلبائِعِ مَرَّة بِنَصٍّ مِن القامُوس.</summary>
+    [Fact]
+    public void NotifyVendorCancelledAsync_writes_once_for_the_vendor_and_nothing_when_he_cancelled_himself()
+    {
+        var w = NewWorld();
+        var deal = w.Docs.Read<Deal>(CartDeal(w).ToString())!;
+        var saves = w.Docs.SaveCalls;
+        Assert.False(Now(w.Notices.NotifyVendorCancelledAsync(Slug, deal, Seller, w.L)));
+        Assert.Equal(saves, w.Docs.SaveCalls);
+        Assert.Equal(0, w.Docs.Wrote<Notification>());
+
+        Assert.True(Now(w.Notices.NotifyVendorCancelledAsync(Slug, deal, Buyer, w.L)));
+        var told = Assert.Single(w.Docs.Stored.OfType<Notification>());
+        Assert.Equal(Seller, told.UserId);
+        Assert.Equal(w.L.Format("notifications.deal_cancelled_for_vendor.body", deal.ListingTitle), told.Body);
+        Assert.Equal("أُلغِيَ الطَّلَبُ عَلى «سِلعَة» — لا تُجَهِّزه، وافتَحِ الصَّفقَة لِلتَفاصيل.", told.Body);
+        Assert.Equal("أُلغِيَ الطَّلَبُ عَلى «سِلعَة» — لا تُجَهِّزه.", DealNotices.CancelledToVendorPushBody(deal, w.L));
     }
 
     // ─── «اليَوم» — مالِكُ إعلانِ العَرضِ غَيرُ المَربوطِ لا يُلغيه ────────────────────────────

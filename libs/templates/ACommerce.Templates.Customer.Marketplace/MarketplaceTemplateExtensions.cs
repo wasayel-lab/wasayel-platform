@@ -3302,6 +3302,8 @@ public static class MarketplaceTemplateExtensions
             // أَسطُر): الرُجوعُ أَدناه قَبلَ إشعارِ الوِلادَة، فَيَسمَعُ البائِعُ بِالطَلَبِ حينَ يَقدِرُ المُشتَري عَلى دَفعِه؛ والإلغاءُ بِاسمِ المُشتَري
             // لا يُخبِرُ أَحَداً (`DealNotices.TellsTheBuyer`، ولا إشعارَ إلغاءٍ لِبائِعٍ في الأُنبوبِ كُلِّه)، وسَبَبُه مَكتوبٌ عَلى الصَفقَةِ في قائِمَتِه.
             // ومُثَبَّتٌ في `GatewayOpenFailureNoticesTests`.
+            // (‏2026-10-29، قَرارُ المالِك د8 — ولا يُعادُ حَرفٌ فَوقَه: «ولا إشعارَ إلغاءٍ لِبائِعٍ في الأُنبوبِ كُلِّه» لَم يَعُد يَصدُق — صارَ لِلبائِعِ إشعارُ إلغاءٍ
+            // واحِدٌ (`DealNotices.NotifyVendorCancelledAsync`) تَمُرُّ بِه أَبوابُ الإلغاء؛ والقَرارُ نَفسُه يَستَثني هذا الفَرع: لَم يُخبَر بِالوِلادَةِ فَلا يُخبَرُ بِالإلغاء.)
             var opened = viaGateway && created.Count > 0 ? await gateway.OpenInvoiceAsync(slug, new Services.Deals.DealPayer(userId), created,
                 tenant?.Name ?? slug, Billing.PayPalOrderSurface.OriginFrom(req) + Link(req, slug, Services.Deals.GatewayReturn.PathFor(firstDealId, null)), l) : null;
             // والسَلَّةُ تَبقى — بِنُسخَةٍ جَديدَة (‏2026-10-24، ‏ADR-036 §١٤): صَفَقاتُ هذِه المُحاوَلَةِ أُلغِيَت بِمُعَرِّفاتِ نُسخَتِها، فَإعادَةُ المُشتَري تَلِدُ بِغَيرِها.

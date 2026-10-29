@@ -250,7 +250,9 @@ public class DealNoticesTests
             // والسادِسَةُ (‏2026-10-24، تَدقيقُ الإطلاق brief-P1a-1) بِالتَرتيبِ نَفسِه: قَبولُ الاستوديو؛ والخامِسَةُ صارَت تَنتَهي عِندَها.
             ("public async Task<bool> NotifyCancelledByStoreAsync(", "public async Task<bool> NotifyAcceptedByStoreAsync("),
             ("public async Task<bool> NotifyAcceptedByStoreAsync(", "public async Task<int> NotifyPaidAsync("),
-            ("public async Task<int> NotifyPaidAsync(", "\n}"),
+            // والسابِعَةُ (‏2026-10-29، قَرارُ المالِك د8) بِالتَرتيبِ نَفسِه: إشعارُ البائِعِ بِالإلغاء؛ والسادِسَةُ صارَت تَنتَهي عِندَها.
+            ("public async Task<int> NotifyPaidAsync(", "public async Task<bool> NotifyVendorCancelledAsync("),
+            ("public async Task<bool> NotifyVendorCancelledAsync(", "\n}"),
         })
         {
             var body = Segment(src, from, to);
@@ -268,7 +270,8 @@ public class DealNoticesTests
         // وأَربَعَةٌ مُنذُ ‏2026-10-12 (‏ADR-032 الخُطوَة 10): `NotifyPaidAsync` رابِعَةُ دَوالِّ الأُنبوب — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
         // وخَمسَةٌ مُنذُ ‏2026-10-13 (مُراجَعَةُ المَوجَة 3a — G4 (iii)): `NotifyCancelledByStoreAsync` خامِسَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
         // وسِتَّةٌ مُنذُ ‏2026-10-24 (تَدقيقُ الإطلاق brief-P1a-1): `NotifyAcceptedByStoreAsync` سادِسَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
-        Assert.Equal(6, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
+        // وسَبعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د8): `NotifyVendorCancelledAsync` سابِعَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
+        Assert.Equal(7, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
     }
 
     /// <summary><c>/checkout/submit</c>: الصَفَقاتُ ذَواتُ المالِكِ تُجمَعُ في الحَلقَةِ،
@@ -530,9 +533,10 @@ public class LiveDealNoticesProofTests(ITestOutputHelper output)
 
     /// <summary><b>البائِعُ المَربوطُ يُلغي عِندَ <c>Offered</c> والمُشتَري يُخبَرُ مَرَّة</b> (‏ADR-033 §٦‑ج مُلحَقاً،
     /// ‏2026-10-11) — بِتَسَلسُلِ النُقطَتَين: وِلادَةُ <c>/checkout/submit</c> ثُمَّ <c>CancelAsync</c> بِالبائِعِ ثُمَّ
-    /// النِداءُ نَفسُه؛ ومُشتَرٍ يُلغي طَلَبَه الآخَرَ لا يُخبِرُ أَحَداً.</summary>
+    /// النِداءُ نَفسُه؛ ومُشتَرٍ يُلغي طَلَبَه الآخَرَ لا يُخبِرُ أَحَداً.
+    /// (‏2026-10-29، قَرارُ المالِك د8 — قُلِبَ بِاسمِه، وكانَ <c>…_and_a_buyer_cancelling_tells_nobody</c>: ومُشتَرٍ يُلغي طَلَبَه الآخَرَ يُخبِرُ بائِعَه مَرَّةً ولا يُخبَرُ هُوَ.)</summary>
     [Fact]
-    public async Task A_bound_vendor_cancelling_at_Offered_tells_the_buyer_once_and_a_buyer_cancelling_tells_nobody()
+    public async Task A_bound_vendor_cancelling_at_Offered_tells_the_buyer_once_and_a_buyer_cancelling_tells_the_vendor_once()
     {
         if (!Enabled || string.IsNullOrEmpty(ConnectionString)) return;
 
@@ -580,8 +584,11 @@ public class LiveDealNoticesProofTests(ITestOutputHelper output)
             Assert.Single(forBuyer);
             Assert.Equal(DealNotices.CancelledType, forBuyer[0].Type);
             Assert.Equal($"/{slug}/deals/{declined.Id}", forBuyer[0].RelatedUrl);
-            Assert.Equal(0, await q.Query<Notification>().CountAsync(n => n.UserId == seller));
-            Log($"إلغاءُ البائِعِ عِندَ Offered: type={forBuyer[0].Type} · body={forBuyer[0].Body} · إلغاءُ المُشتَري: لا إشعار");
+            var forSeller = await q.Query<Notification>().Where(n => n.UserId == seller).ToListAsync();
+            Assert.Single(forSeller);
+            Assert.Equal(DealNotices.CancelledType, forSeller[0].Type);
+            Assert.Equal($"/{slug}/deals/{withdrawn.Id}", forSeller[0].RelatedUrl);
+            Log($"إلغاءُ البائِعِ عِندَ Offered: type={forBuyer[0].Type} · body={forBuyer[0].Body} · إلغاءُ المُشتَري: لِلبائِع «{forSeller[0].Body}»");
         }
         finally
         {

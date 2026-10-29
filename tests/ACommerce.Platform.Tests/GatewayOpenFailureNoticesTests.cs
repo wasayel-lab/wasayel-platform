@@ -22,6 +22,10 @@ namespace ACommerce.Platform.Tests;
 // يُخاطِبُ المُشتَري وَحدَه، وإلغاءُ المُشتَري لا يُخبِرُ أَحَداً (`TellsTheBuyer`) — فَإشعارُ بائِعٍ بِإلغاءٍ هُنا وَحدَه هُوَ غَيرُ المُتَّسِق؛ وبَوّابَةٌ
 // مُعَطَّلَةٌ كانَت سَتُرسِلُ لِكُلِّ بائِعٍ إشعارَ إلغاءٍ عَن كُلِّ مُحاوَلَةٍ لِطَلَبٍ لَم يَسمَع بِه. والصَفقَةُ المُلغاةُ في قائِمَتِه تَحمِلُ سَبَبَها.
 // والصُفوفُ أَدناه تَجعَلُ القَرارَ يَحمَرُّ إن انكَسَر.
+//
+// **(‏2026-10-29، قَرارُ المالِك د8 «أ» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)**: «كُلُّ إشعارِ إلغاءٍ في `DealNotices` يُخاطِبُ المُشتَري وَحدَه» لَم يَعُد يَصدُق —
+// صارَ لِلبائِعِ إشعارُ إلغاءٍ واحِدٌ تَمُرُّ بِه مَساراتُ الإلغاءِ كُلُّها ما لَم يَكُن هُوَ المُلغي. والقَرارُ نَفسُه أَبقى هذا الفَرعَ: «ويُستَثنى طَلَبٌ لَم يُخبَر بِه
+// البائِعُ أَصلاً (فاتورَةٌ لَم تُفتَح)» — فَالإلغاءُ هُنا في خِدمَةِ البَوّابَةِ ولا يَمُرُّ بِالإشعار، والصَفُّ الثالِثُ قُلِبَ بِاسمِه عَلى القاعِدَةِ الجَديدَة.
 
 public class GatewayOpenFailureNoticesTests(ITestOutputHelper output)
 {
@@ -101,21 +105,36 @@ public class GatewayOpenFailureNoticesTests(ITestOutputHelper output)
     /// <summary><b>قاعِدَةُ الأُنبوبِ الَّتي يَتَّسِقُ بِها القَرار</b>: كُلُّ بانٍ لِإشعارِ إلغاءٍ في <c>DealNotices</c> يُخاطِبُ المُشتَري (<c>UserId = deal.InitiatorId</c>)
     /// — فَإن وُلِدَ يَوماً إشعارُ إلغاءٍ لِبائِعٍ أَحمَرَّ هذا الصَفُّ، فَيُعادُ النَظَرُ في فَرعِ الفَشَلِ مَعَه. ولا تُشعِرُ خِدمَةُ البَوّابَةِ أَحَداً: الإشعارُ
     /// في النُقطَة. والعَدّادُ يُطبَعُ ويَفشَلُ صِفراً.</summary>
+    /// <remarks><b>قُلِبَ بِاسمِه وأُعيدَ فيه النَظَر</b> (‏2026-10-29، قَرارُ المالِك د8 «أ» — «ويُعادُ النَظَرُ فيه حينَ يَحمَرُّ اختِبارُ GatewayOpenFailureNoticesTests»؛
+    /// كانَ <c>Every_cancel_notice_in_the_pipe_addresses_the_buyer_and_the_gateway_service_notifies_nobody</c>): وُلِدَ إشعارُ إلغاءٍ لِلبائِعِ فَاحمَرَّ — والقَرارُ
+    /// نَفسُه يَستَثني «طَلَباً لَم يُخبَر بِه البائِعُ أَصلاً (فاتورَةٌ لَم تُفتَح)». فَصارَت القاعِدَة: بُناةُ المُشتَري يُخاطِبونَه، وبانٍ واحِدٌ لِلبائِعِ
+    /// (<c>CancelledToVendorFor</c>) يُخاطِبُ مَن سَمَّته <c>VendorToTell</c>، <b>ولا تُشعِرُ خِدمَةُ البَوّابَةِ أَحَداً</b> — فَإلغاءُ فَشَلِ الفَتحِ يَبقى صامِتاً لِلبائِعِ كَما قُرِّر.</remarks>
     [Fact]
-    public void Every_cancel_notice_in_the_pipe_addresses_the_buyer_and_the_gateway_service_notifies_nobody()
+    public void Cancel_notices_address_the_buyer_or_the_named_vendor_and_the_gateway_service_notifies_nobody()
     {
         var notices = WriteEndpointGuardTests.StripComments(Source(Template, "Services", "Deals", "DealNotices.cs"));
-        var builders = 0;
+        var (buyers, vendors) = (0, 0);
         for (var i = notices.IndexOf("public static Notification Cancelled", StringComparison.Ordinal); i >= 0;
              i = notices.IndexOf("public static Notification Cancelled", i + 1, StringComparison.Ordinal))
         {
             var close = notices.IndexOf("};", i, StringComparison.Ordinal);
             var builder = notices[i..close];
             output.WriteLine(builder[..builder.IndexOf('(')]);
-            Assert.Contains("UserId = deal.InitiatorId,", builder, StringComparison.Ordinal);
-            builders++;
+            if (builder.StartsWith("public static Notification CancelledToVendorFor(", StringComparison.Ordinal))
+            {
+                Assert.Contains("UserId = vendorId,", builder, StringComparison.Ordinal);
+                vendors++;
+            }
+            else
+            {
+                Assert.Contains("UserId = deal.InitiatorId,", builder, StringComparison.Ordinal);
+                buyers++;
+            }
         }
-        Assert.True(builders >= 2, $"أَداةٌ عَمياء: {builders} بانٍ لِإشعارِ إلغاء.");
+        output.WriteLine($"بُناةُ المُشتَري: {buyers} · بُناةُ البائِع: {vendors}");
+        Assert.True(buyers >= 2, $"أَداةٌ عَمياء: {buyers} بانٍ لِإشعارِ إلغاءِ المُشتَري.");
+        Assert.Equal(1, vendors);
+        Assert.Contains("if (VendorToTell(deal, cancellerId) is not { } vendorId) return false;", notices, StringComparison.Ordinal);
 
         var gateway = WriteEndpointGuardTests.StripComments(Source(Template, "Services", "Deals", "GatewayPayments.cs"));
         Assert.DoesNotContain("DealNotices", gateway, StringComparison.Ordinal);

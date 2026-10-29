@@ -74,7 +74,8 @@ public class DealNoticesProducerTests(ITestOutputHelper output)
         var producer = files.Single(f => f.Path == Producer).Text;
         var builders = Regex.Matches(producer, @"public static Notification \w+For\(").Count;
         var typed = Regex.Matches(producer, @"Type = (NewDealType|AcceptedType|CancelledType|PaidType),").Count;
-        Assert.Equal(6, builders);
+        // وسَبعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د8): `CancelledToVendorFor` سابِعُها — بِنَوعِ الإلغاءِ نَفسِه.
+        Assert.Equal(7, builders);
         Assert.Equal(builders, typed);
 
         var reader = files.Single(f => f.Path == Reader).Text;
