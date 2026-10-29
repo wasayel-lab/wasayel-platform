@@ -148,7 +148,7 @@
   "plans.list.empty_title": "لا توجَد باقات بَعد",
   "plans.card.subscribe": "اشتِراك",
   "plans.card.login_cta": "دُخول للاشتِراك",
-  "plans.list.empty_message": "يُسَجِّل المَتجَر باقاته مِن لوحَة التَحَكُّم.",
+  "plans.list.empty_message": "لا توجَد باقات مُتاحَة حالِيّاً.",
 
   "shell.nav.favorites": "مُفَضَّلَة",
   "shell.nav.my_deals": "صَفقاتي",
