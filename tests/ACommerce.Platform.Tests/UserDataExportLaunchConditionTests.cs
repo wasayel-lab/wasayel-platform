@@ -13,6 +13,10 @@ namespace ACommerce.Platform.Tests;
 //
 // **فَالمَحروسُ هُنا الصِدقُ لا البِناء** (القاعِدَة ٢): ما دامَ لا بابَ تَصديرٍ تَحتَ `/me` فَصَفُّ شَرطِ الإطلاقِ في §١ قائِمٌ بِحالِه
 // «مَفتوح»؛ ويَومَ يولَدُ البابُ يُحمِرُّ هذا الصَفّ — فَيُقلَبُ صَفُّ §١ في الكوميتِ نَفسِه لا بَعدَه.
+//
+// **‏2026-10-29 (قَرارُ المالِك د53 «أ/ب/ج») — وُلِدَ البابُ وقُلِبَ الصَفُّ في الكوميتِ نَفسِه** (يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): صَفحَةُ
+// «بَياناتي» `/{slug}/me/data` (والمَسارُ بِدَور) وتَنزيلُها `/{slug}/me/data/download`، وصَفُّ §١ «نُفِّذ». والاقتِرانُ أَدناه مَرَّ بِلا تَعديل؛
+// وصارَ الصَفُّ يَشتَرِطُ البابَين بِأَسمائِهِما — فَحَذفُ أَحَدِهِما بَعدَ اليَومِ يُحمِرُّه ولو بَقِيَ الصَفُّ «نُفِّذ».
 public class UserDataExportLaunchConditionTests(ITestOutputHelper output)
 {
     /// <summary>بابُ تَصديرٍ يَراه المُستَخدِمُ لِبَياناتِه: مَسارٌ تَحتَ <c>/me</c> يُسَمّي تَصديراً أَو تَنزيلاً أَو بَياناتِه.</summary>
@@ -25,8 +29,13 @@ public class UserDataExportLaunchConditionTests(ITestOutputHelper output)
     internal const string LaunchRowMarker = "تَصديرُ بَياناتِ المُستَخدِمِ (PDPL) غائِب";
     internal const string OpenMarker = "شَرطُ إطلاقٍ مَفتوح";
 
+    /// <summary>الأَبوابُ الَّتي وَلَدَها د53 بِأَسمائِها — الصَفحَةُ (بِلا دَورٍ وبِدَور) والتَنزيل.</summary>
+    internal static readonly string[] Doors = { "/{slug}/me/data", "/{slug}/me/data/download", "/{slug}/r/{role}/me/data" };
+
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، قَرارُ المالِك د53)</b> — كانَ <c>No_user_data_export_door_exists_and_release_readiness_names_it_an_open_launch_condition</c>
+    /// (‏<c>b52ea8d</c> وما بَعدَه): «بابُ تَصديرٍ لِلمُستَخدِم: 0» وصَفُّ §١ «مَفتوح». والآن الأَبوابُ الثَلاثَةُ قائِمَةٌ والصَفُّ «نُفِّذ» — والاقتِرانُ نَفسُه.</summary>
     [Fact]
-    public void No_user_data_export_door_exists_and_release_readiness_names_it_an_open_launch_condition()
+    public void The_user_data_export_doors_exist_and_release_readiness_names_the_launch_condition_closed()
     {
         var routes = ComplianceInspectorTests.RepoRoutes;
         var me = routes.Where(r => r.Contains("/me", StringComparison.Ordinal)).OrderBy(r => r, StringComparer.Ordinal).ToList();
@@ -43,6 +52,7 @@ public class UserDataExportLaunchConditionTests(ITestOutputHelper output)
 
         Assert.True(me.Count >= 10, $"أَداةٌ عَمياء: {me.Count} مَساراً تَحتَ /me.");
         Assert.Empty(unexplained);
+        Assert.Equal(Doors, userExports.OrderBy(r => r, StringComparer.Ordinal));
         // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-4 الجَولَة ١، مَعلومَة): الاقتِرانُ دالَّةٌ لا `Assert.Empty(userExports)` غَيرُ مَشروط — كانَ الصَفُّ يُحمِرُّ
         // يَومَ يولَدُ البابُ أَيّاً كانَ صَفُّ §١، فَكوميتُ البابِ يُعَدِّلُ هذا الاختِبارَ حَتماً. والآن: بِلا بابٍ يَبقى الصَفُّ «مَفتوحاً»، وبِبابٍ
         // يُقلَبُ — فَيَمُرُّ الاختِبارُ بِلا تَعديلٍ يَومَ يَنزِلُ البابُ وقَلبُ الصَفِّ مَعاً، ويُحمِرُّ إن نَزَلَ أَحَدُهُما وَحدَه.

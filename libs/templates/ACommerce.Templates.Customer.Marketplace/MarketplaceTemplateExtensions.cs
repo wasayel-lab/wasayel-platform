@@ -51,6 +51,8 @@ public static class MarketplaceTemplateExtensions
         services.AddScoped<Services.Queries.AuditLogQueries>();
         services.AddScoped<Services.Queries.ShellQueries>();
         services.AddScoped<Services.Queries.AccountQueries>();
+        // ‏(‏2026-10-29، قَرارُ المالِك د53) «بَياناتي»: استِعلامٌ واحِدٌ تَقرَؤُه الصَفحَةُ والتَنزيل.
+        services.AddScoped<Services.Queries.UserDataQueries>();
         services.AddScoped<Services.Queries.StorefrontQueries>();
         services.AddScoped<Services.Queries.StudioQueries>();
         services.AddScoped<Services.Queries.PlatformStatsQueries>();
@@ -894,6 +896,20 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect($"/{slug}?deleted=1");
         }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
+
+        // ─── «بَياناتي» — تَنزيلُ المِلَفِّ الآليّ (‏2026-10-29، قَرارُ المالِك د53 «ج») ─────────────────────
+        // قِراءَةٌ لا كِتابَة: الاستِعلامُ نَفسُه الَّذي تَرسُمُه صَفحَةُ `/{slug}/me/data` (`UserDataQueries.ExportAsync`)، بِصيغَةِ JSON.
+        // والحارِسُ في التَوقيع (`.RequireAuth()` — جَلسَةُ صاحِبِ البَيانات، ومُعَرِّفُه مِنها لا مِن الطَلَب)، و`no-store` لِأَنَّ المِلَفَّ
+        // بَياناتٌ شَخصِيَّةٌ لا تُحفَظُ في وَسيطٍ ولا في ذاكِرَةِ المُتَصَفِّحِ المُشتَرَكَة.
+        app.MapGet("/{slug}/me/data/download",
+            async (string slug, HttpContext http, Services.Queries.UserDataQueries data, ACommerce.Kit.Culture.ICultureContext culture) =>
+        {
+            var export = await data.ExportAsync(slug, http.UserId(), DateTime.UtcNow, http.RequestAborted);
+            if (export is null) return Results.Redirect(Link(http.Request, slug, "me"));
+            http.Response.Headers.CacheControl = "no-store";
+            return Results.File(Services.Queries.UserDataExport.ToJsonBytes(export), "application/json; charset=utf-8",
+                Services.Queries.UserDataExport.FileName(slug, export.GeneratedAt, culture.TimeZone));
+        }).RequireAuth();
 
         // ─── Plans subscribe ────────────────────────────────────────────
         // **الباقَةُ بِسِعرٍ لا تُباعُ مِن هُنا إطلاقاً.** كانَ الجِسمُ

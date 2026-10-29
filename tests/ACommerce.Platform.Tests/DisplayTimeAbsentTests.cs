@@ -196,7 +196,9 @@ public class DisplayTimeAbsentTests(ITestOutputHelper output)
         Assert.Contains("return Culture.FormatTime(sentUtc, \"yyyy/MM/dd\");", room, StringComparison.Ordinal);
         Assert.Contains("return Culture.FormatTime(at, \"yyyy/MM/dd\");", list, StringComparison.Ordinal);
         Assert.Contains("CultureTime.FormatTime(at, \"dddd\", Culture.TimeZone, new System.Globalization.CultureInfo(\"ar\"))", list, StringComparison.Ordinal);
-        Assert.Equal(25, callers.Count);
+        // ‏2026-10-29 (قَرارُ المالِك د53): ‏25 ← 27 — صَفحَةُ «بَياناتي» (`MyData.razor` بِـ`Culture.FormatTime`) واسمُ مِلَفِّ تَنزيلِها
+        // (`UserDataExport.FileName` بِـ`CultureTime.FormatTime` ومِنطَقَةِ الثَقافَة) — وكِلاهُما مِن اللَحظَةِ المُخَزَّنَة.
+        Assert.Equal(27, callers.Count);
         Assert.Contains(callers, c => c.File.EndsWith("Chats.razor", StringComparison.Ordinal));
     }
 

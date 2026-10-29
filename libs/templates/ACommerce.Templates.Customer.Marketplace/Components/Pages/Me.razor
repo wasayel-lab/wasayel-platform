@@ -179,6 +179,8 @@
             <AcActionCard Label="@(L["me.action.deals"])"        IconName="receipt"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"deals")" />
             <AcActionCard Label="@(L["me.action.support"])" IconName="alert-circle"  Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"support")" />
             <AcActionCard Label="@(L["me.action.legal"])" IconName="info"     Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"legal")" />
+            @* ‏(‏2026-10-29، قَرارُ المالِك د53) «بَياناتي»: حَقُّ الاطِّلاعِ والتَنزيلِ بِبابٍ يَفتَحُه صاحِبُ الحِساب — المَدخَلُ شَرطُ وُجودِ الصَفحَة (القاعِدَة ١٢). *@
+            <AcActionCard Label="@(L["me.action.my_data"])" IconName="download" Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"me/data")" />
         </div>
 
         @* المَدخَلُ نِصفُ الميزَة لا مُهِمَّةٌ تالِيَة (القاعِدَة ١٢):

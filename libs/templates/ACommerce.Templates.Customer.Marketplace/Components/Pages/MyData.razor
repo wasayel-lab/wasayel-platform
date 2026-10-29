@@ -1,0 +1,215 @@
+@page "/{slug}/me/data"
+@page "/{slug}/r/{role}/me/data"
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.UserDataQueries Data
+@inject ACommerce.Kit.Culture.ICultureContext Culture
+@inject AuthSession Auth
+@inject IHttpContextAccessor HttpCtx
+@inject L L
+@using ACommerce.Templates.Customer.Marketplace.Services.Deals
+@using ACommerce.Templates.Customer.Marketplace.Services.Queries
+
+@*
+    «بَياناتي» (‏2026-10-29، قَرارُ المالِك د53 «أ/ب/ج»): حَقُّ الاطِّلاعِ بِبابٍ يَفتَحُه صاحِبُ الحِسابِ بِنَفسِه — آخِرُ شَرطِ إطلاقٍ كانَ مَفتوحاً.
+    الصَفحَةُ والتَنزيلُ (`GET /{slug}/me/data/download`) يَقرَآنِ الاستِعلامَ نَفسَه (`UserDataQueries.ExportAsync`)، فَما يُرى هُنا هُوَ ما في المِلَفّ.
+    **قِراءَةٌ خالِصَة**: لا تُبَدِّلُ شَيئاً — والحارِسُ `<GatedPage RequireAuth>` قَبلَ أَيِّ مُحتَوى، والاستِعلامُ لا يُنادى بِلا جَلسَة.
+    والنَصُّ كُلُّه مِن القامُوس (القاعِدَة ١١).
+*@
+
+<div class="acs-page">
+<GatedPage Slug="@Slug" Role="@Role" RequireAuth>
+    <h1 class="acm-wizard-title">@L.Markup("me.data.title")</h1>
+
+    @if (export is null)
+    {
+        <AcEmptyState IconName="user"
+                      Title="@L["me.data.missing_title"]"
+                      Message="@L["me.data.missing_hint"]"
+                      ActionLabel="@L["me.data.back"]"
+                      ActionHref="@AuthSession.LinkFor(Slug, Role, "me")" />
+    }
+    else
+    {
+        <AcCard>
+            <ChildContent>
+                <p>@L.Markup("me.data.lead")</p>
+                <a class="ac-btn ac-btn-primary" href="@($"/{Slug}/me/data/download")" download>
+                    <AcIcon Name="download" Size="18" /> @L.Markup("me.data.download")
+                </a>
+                <p class="ac-text-muted">@L.Format("me.data.generated_at", Culture.FormatTime(export.GeneratedAt, "yyyy-MM-dd HH:mm"))</p>
+            </ChildContent>
+        </AcCard>
+
+        <AcSectionHeader Title="@L["me.data.section_account"]" />
+        <AcCard>
+            <ChildContent>
+                <div>
+                    @Row(L["me.data.field_name"], export.Account.FullName)
+                    @Row(L["me.data.field_phone"], export.Account.Phone)
+                    @Row(L["me.data.field_email"], export.Account.Email)
+                    @Row(L["me.data.field_national_id"], export.Account.NationalId)
+                    @Row(L["me.data.field_role"], export.Account.ActiveRole)
+                    @Row(L["me.data.field_created"], Culture.FormatTime(export.Account.CreatedAt, "yyyy-MM-dd"))
+                    @Row(L["me.data.field_terms"], export.Account.AcceptedTermsAt is { } t
+                        ? L.Format("me.data.terms_value", export.Account.AcceptedTermsVersion, Culture.FormatTime(t, "yyyy-MM-dd")) : null)
+                    @Row(L["me.data.field_push"], export.Account.PushDevices > 0 ? export.Account.PushDevices.ToString() : null)
+                    @if (export.Account.WorkArea is { } area)
+                    {
+                        @Row(L["me.data.field_area"], L.Format("me.data.area_value", area.RadiusKm))
+                    }
+                    @foreach (var a in export.Account.Attributes)
+                    {
+                        @Row(a.Key, a.Value)
+                    }
+                    @foreach (var role in export.Account.RoleAttributes)
+                    {
+                        @foreach (var a in role.Value)
+                        {
+                            @Row($"{role.Key} · {a.Key}", a.Value)
+                        }
+                    }
+                </div>
+            </ChildContent>
+        </AcCard>
+
+        <AcSectionHeader Title="@L.Format("me.data.section_deals", export.Deals.Count)" />
+        @if (export.Deals.Count == 0)
+        {
+            <p class="ac-text-muted">@L.Markup("me.data.none")</p>
+        }
+        @foreach (var d in export.Deals)
+        {
+            <AcCard>
+                <ChildContent>
+                    <strong>@(string.IsNullOrEmpty(d.ListingTitle) ? d.Pattern : d.ListingTitle)</strong>
+                    <div>
+                        @Row(L["me.data.field_side"], d.Side == UserDataDealSide.Initiator ? L["me.data.side_initiator"] : L["me.data.side_counterparty"])
+                        @Row(L["me.data.field_other_party"], d.OtherPartyName)
+                        @Row(L["me.data.field_amount"], ACommerce.Kit.Culture.Money.FormatExact(d.AmountSar))
+                        @Row(L["me.data.field_stage"], $"{DealsPolicy.LabelAr(d.Stage)} · {DealStatusLabel(d.Status)}")
+                        @Row(L["me.data.field_delivery_address"], d.DeliveryAddress)
+                        @Row(L["me.data.field_delivery_phone"], d.DeliveryPhone)
+                        @Row(L["me.data.field_created"], Culture.FormatTime(d.CreatedAt, "yyyy-MM-dd HH:mm"))
+                        @Row(L["me.data.field_steps"], d.Timeline.Count.ToString())
+                    </div>
+                </ChildContent>
+            </AcCard>
+        }
+
+        <AcSectionHeader Title="@L.Format("me.data.section_chats", export.Conversations.Count)" />
+        @if (export.Conversations.Count == 0)
+        {
+            <p class="ac-text-muted">@L.Markup("me.data.none")</p>
+        }
+        @foreach (var c in export.Conversations)
+        {
+            <AcCard>
+                <ChildContent>
+                    <strong>@(string.IsNullOrEmpty(c.Subject) ? c.OtherPartyName : c.Subject)</strong>
+                    <div>
+                        @Row(L["me.data.field_other_party"], c.OtherPartyName)
+                        @foreach (var m in c.Messages)
+                        {
+                            @Row($"{(m.FromYou ? L["me.data.from_you"] : c.OtherPartyName)} · {Culture.FormatTime(m.SentAt, "yyyy-MM-dd HH:mm")}", m.Body)
+                        }
+                    </div>
+                </ChildContent>
+            </AcCard>
+        }
+
+        <AcSectionHeader Title="@L.Format("me.data.section_reviews", export.Reviews.Count)" />
+        @if (export.Reviews.Count == 0)
+        {
+            <p class="ac-text-muted">@L.Markup("me.data.none")</p>
+        }
+        @foreach (var r in export.Reviews)
+        {
+            <AcCard>
+                <ChildContent>
+                    <div>
+                        @Row(r.Direction == UserDataReviewDirection.Written ? L["me.data.review_written"] : L["me.data.review_received"], r.OtherPartyName)
+                        @Row(L["me.data.field_rating"], r.Rating.ToString())
+                        @Row(L["me.data.field_body"], r.Body)
+                        @Row(L["me.data.field_created"], Culture.FormatTime(r.At, "yyyy-MM-dd"))
+                    </div>
+                </ChildContent>
+            </AcCard>
+        }
+
+        <AcSectionHeader Title="@L.Format("me.data.section_offers", export.Offers.Count)" />
+        @if (export.Offers.Count == 0)
+        {
+            <p class="ac-text-muted">@L.Markup("me.data.none")</p>
+        }
+        @foreach (var o in export.Offers)
+        {
+            <AcCard>
+                <ChildContent>
+                    <div>
+                        @Row(L["me.data.field_amount"], ACommerce.Kit.Culture.Money.FormatExact(o.Price))
+                        @Row(L["me.data.field_status"], OfferStatusLabel(o.Status))
+                        @Row(L["me.data.field_body"], o.Message)
+                        @Row(L["me.data.field_created"], Culture.FormatTime(o.SubmittedAt, "yyyy-MM-dd HH:mm"))
+                    </div>
+                </ChildContent>
+            </AcCard>
+        }
+
+        <AcSectionHeader Title="@L.Format("me.data.section_listings", export.Listings.Count)" />
+        @if (export.Listings.Count == 0)
+        {
+            <p class="ac-text-muted">@L.Markup("me.data.none")</p>
+        }
+        @foreach (var l in export.Listings)
+        {
+            <AcCard>
+                <ChildContent>
+                    <strong>@l.Title</strong>
+                    <div>
+                        @Row(L["me.data.field_amount"], ACommerce.Kit.Culture.Money.FormatExact(l.Price))
+                        @Row(L["me.data.field_city"], l.City)
+                        @Row(L["me.data.field_status"], l.IsDeleted ? L["me.data.listing_deleted"] : null)
+                        @Row(L["me.data.field_created"], Culture.FormatTime(l.CreatedAt, "yyyy-MM-dd"))
+                    </div>
+                </ChildContent>
+            </AcCard>
+        }
+    }
+</GatedPage>
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
+
+    UserDataExport? export;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpCtx.HttpContext is { } ctx) { Auth.SetTenant(Slug); Auth.Load(ctx, Slug); }
+        if (!Auth.IsAuthenticated) return;
+        export = await Data.ExportAsync(Slug, Auth.UserId!.Value, DateTime.UtcNow);
+    }
+
+    /// <summary>سَطرُ «اسم: قيمَة» بِصِنفِ سُطورِ الإعداداتِ القائِم (`acs-settings-info-row`) — والقيمَةُ الفارِغَةُ لا تُرسَمُ سَطراً.</summary>
+    RenderFragment Row(string label, string? value) => __builder =>
+    {
+        if (string.IsNullOrWhiteSpace(value)) return;
+        <div class="acs-settings-info-row"><span>@label</span><strong>@value</strong></div>
+    };
+
+    string DealStatusLabel(DealStatus s) => s switch
+    {
+        DealStatus.Active => L["deals.status.active"], DealStatus.Completed => L["deals.status.completed"],
+        DealStatus.Cancelled => L["deals.status.cancelled"], DealStatus.Disputed => L["deals.status.disputed"], _ => s.ToString()
+    };
+
+    string OfferStatusLabel(ACommerce.Kit.Offers.OfferStatus s) => s switch
+    {
+        ACommerce.Kit.Offers.OfferStatus.Pending   => L["offers.status.pending"],
+        ACommerce.Kit.Offers.OfferStatus.Accepted  => L["offers.status.accepted"],
+        ACommerce.Kit.Offers.OfferStatus.Rejected  => L["offers.status.rejected"],
+        ACommerce.Kit.Offers.OfferStatus.Withdrawn => L["offers.status.withdrawn"],
+        ACommerce.Kit.Offers.OfferStatus.Expired   => L["offers.status.expired"],
+        _ => s.ToString()
+    };
+}
