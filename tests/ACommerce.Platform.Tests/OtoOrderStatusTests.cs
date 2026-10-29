@@ -1325,8 +1325,12 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
     // (`ReadVendorEntryAsync` في `ResolveCarrierAsync`) — وعُطلُها يُجابُ اليَومَ `carrier_unavailable` ‏404، فَيَقرَؤُه المُرسِلُ «لا نُقطَة» والعِلَّةُ
     // عِلَّةُ القَرارِ نَفسُها. يَنقَلِبُ بِاسمِه في كوميتِ الإصلاح، ومَعَه صَفُّ `VendorEntryReadFailureTests` الَّذي يُثبِتُ الجَوابَ نَفسَه عَلى الخِدمَة.
 
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د9 (٢) «ب»؛ كانَ
+    /// <c>Today_a_deal_whose_vendor_entry_cannot_be_read_after_the_store_check_answers_404_unwritten</c>، مُودَعٌ في <c>61612d1</c>): مَدخَلُ بائِعِ الصَفقَةِ
+    /// الَّذي تَتَعَطَّلُ قِراءَتُه بَعدَ أَن يَمُرَّ سُؤالُ المَتجَرِ ‏503 فارِغٌ — «أَعِد المُحاوَلَة» — بِلا حِفظٍ ولا نِداءٍ لِـOTO، والصَفقَةُ عِندَ «شَحن».
+    /// وسالِبُه في <see cref="Carrier_unreadable_on_the_deal_vendor_read_positive_and_negative"/>.</summary>
     [Fact]
-    public async Task Today_a_deal_whose_vendor_entry_cannot_be_read_after_the_store_check_answers_404_unwritten()
+    public async Task A_deal_whose_vendor_entry_cannot_be_read_after_the_store_check_answers_503_unwritten()
     {
         var w = await ShippedCashDeal();
         var calls = w.Oto.Calls.Count;
@@ -1341,10 +1345,38 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         output.WriteLine($"مَدخَلُ البائِعِ يَرمي بَعدَ سُؤالِ المَتجَر: {(int)resp.StatusCode} · قِراءاتٌ رَمَت: {thrown()} · " +
                          $"حِفظات: {w.Docs.SaveCalls - saves} · نِداءاتُ OTO: {w.Oto.Calls.Count - calls}");
         Assert.Equal(1, thrown());
-        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, resp.StatusCode);
+        Assert.Equal("", await resp.Content.ReadAsStringAsync());
         Assert.Equal(saves, w.Docs.SaveCalls);
         Assert.Equal(calls, w.Oto.Calls.Count);
         Assert.Equal(DealStage.Shipping, Stored(w).Stage);
+    }
+
+    /// <summary>‏<c>carrier_unreadable</c> مِن قِراءَةِ مَدخَلِ بائِعِ الصَفقَةِ مُوجِباً وسالِباً (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى): قِراءَةٌ تَرمي ⇒ الرَمزُ و‏503؛
+    /// ومَدخَلٌ مَسحوبٌ يُقرَأُ بِلا عُطلٍ ⇒ <c>carrier_unavailable</c> ‏404 كَما كان — الغِيابُ غَيرُ العُطل؛ والقِراءَةُ نَفسُها بِلا عُطلٍ ⇒ يُكتَبُ التَسليم.</summary>
+    [Fact]
+    public async Task Carrier_unreadable_on_the_deal_vendor_read_positive_and_negative()
+    {
+        var w = await ShippedCashDeal();
+        OtoSays(w, "delivered");
+
+        VendorEntryReadFailureTests.FailEntryReads(w.Docs, afterLoads: 1, failures: 1);
+        var onFailure = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id));
+        w.Docs.BeforeMember = null;
+
+        var entry = w.Docs.Read<TenantProviderBinding>(TenantProviderBinding.VendorEntryId(ProviderCapabilities.Delivery, Seller))!;
+        entry.Status = TenantProviderBinding.StatusRevoked;
+        var onRevoked = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id));
+        entry.Status = TenantProviderBinding.StatusActive;
+        var onRead = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id));
+        output.WriteLine($"عُطل: {onFailure.Code} ({OtoOrderStatusGate.StatusFor(onFailure.Code)}) · مَسحوب: {onRevoked.Code} " +
+                         $"({OtoOrderStatusGate.StatusFor(onRevoked.Code)}) · قِراءَة: {onRead.Code}");
+
+        Assert.Equal(OtoOrderStatusGate.CarrierUnreadable, onFailure.Code);
+        Assert.Equal(503, OtoOrderStatusGate.StatusFor(onFailure.Code));
+        Assert.Equal(OtoOrderStatusGate.CarrierUnavailable, onRevoked.Code);
+        Assert.Equal(404, OtoOrderStatusGate.StatusFor(onRevoked.Code));
+        Assert.Equal(OtoOrderStatusGate.Delivered, onRead.Code);
     }
 
     /// <summary>خِدمَةُ الشَحنِ في العالَمِ ومَعَها أُنبوبُ الإشعاراتِ القائِمُ ولِسانٌ عَرَبِيّ، ووَثيقَةُ المَتجَرِ بِمالِكِه — كَما تُعطيها الحاوِيَة (‏2026-10-29، د9 (١) «أ»).</summary>

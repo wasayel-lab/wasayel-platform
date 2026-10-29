@@ -2348,6 +2348,11 @@ OTO» عَلى كُلِّ بائِعٍ في كُلِّ مَتجَر**، ومَن
 **فَحينَ تَرى في اللوغِ هذا الرَمز**: القاعِدَةُ لَم تُجِب (اتِّصالٌ أَو مُهلَة) — لا مَدخَلَ ضاع؛ ولا يُفعَلُ شَيءٌ بِمَداخِلِ البائِعين. والسُؤالُ عَن عَدَدِ إعادَةِ OTO بَعدَ ‏503 في «ج» S4.
 **والحَدُّ المَقيسُ آليّاً**: `OtoOrderStatusTests.A_store_whose_vendor_entries_cannot_be_read_answers_503_unread` · `VendorShippingTests.StoreCarrier_answers_unreadable_only_where_the_entries_query_failed`.
 
+**ويُلحَقُ ‏2026-10-29 (مُراجَعَةُ تَيّارِ S4 الأولى) — ولا يُعادُ حَرفٌ فَوقَه**: والرَمزُ نَفسُه — ‏503 فارِغاً — حينَ يَمُرُّ سُؤالُ المَتجَرِ ثُمَّ تَتَعَطَّلُ قِراءَةُ مَدخَلِ
+بائِعِ الصَفقَةِ في الطَلَبِ نَفسِه (سَطرُ اللوغِ قَبلَه `[OTO] vendor entry <المَتجَر>/<البائِع> could not be read — no carrier, no fallback`)؛ وكانَ ‏404 (تَوصيفُه `61612d1`).
+والفِعلُ هو هو: لا شَيءَ يُفعَلُ بِمَدخَلِ البائِع — القاعِدَةُ لَم تُجِب. **والحَدُّ المَقيسُ آليّاً**: `OtoOrderStatusTests.A_deal_whose_vendor_entry_cannot_be_read_after_the_store_check_answers_503_unwritten`
+· `OtoOrderStatusTests.Carrier_unreadable_on_the_deal_vendor_read_positive_and_negative` · `VendorEntryReadFailureTests.A_throwing_vendor_entry_read_on_the_inbound_is_answered_carrier_unreadable_503_without_the_fallback`.
+
 ---
 
 ## ٣. كَيفَ يُتَحَقَّق أَنّ النَشرَ وَصَل

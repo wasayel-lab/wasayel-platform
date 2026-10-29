@@ -354,7 +354,7 @@ public sealed class DealShipping
     {
         var ready = await CarrierReadyForAsync(tenantSlug, deal, ct);
         if (!ready || DealShipAuthorization.Validate(deal, viewer, carrierReady: true) is not null) return ready;
-        return await ResolveCarrierAsync(tenantSlug, deal!, ct) is { } carrier && OpensForView(tenantSlug, carrier);
+        return (await ResolveCarrierAsync(tenantSlug, deal!, ct)).Carrier is { } carrier && OpensForView(tenantSlug, carrier);
     }
 
     /// <summary>
@@ -379,7 +379,7 @@ public sealed class DealShipping
     /// مِنهُما وَحدَها</b> — <see cref="ResolveCarrierAsync"/> (المَدخَلُ وشُروطُه بِلا فَكّ) ثُمَّ <see cref="TryOpenToken"/> و<see cref="TryOpenSecret"/>.
     /// وهذِه تَفُكُّهُما مَعاً كَما كانَت، بِالتَرتيبِ نَفسِه وسَطرِ التَحذيرِ نَفسِه — لِلشَحن.</remarks>
     public async Task<VendorCarrier?> CarrierForAsync(string tenantSlug, Deal deal, CancellationToken ct = default)
-        => await ResolveCarrierAsync(tenantSlug, deal, ct) is { } carrier
+        => (await ResolveCarrierAsync(tenantSlug, deal, ct)).Carrier is { } carrier
            && TryOpenToken(tenantSlug, carrier, out var token) && TryOpenSecret(tenantSlug, carrier, out var secret)
             ? new VendorCarrier(token, secret)
             : null;
@@ -394,29 +394,38 @@ public sealed class DealShipping
     /// <para><b>الخُطوَةُ الأولى — المَدخَلُ وشُروطُه بِلا فَكّ</b> (‏2026-10-13، G5 (viii)): جِسمُ <see cref="CarrierForAsync"/> قَبلَ الفَكِّ بِحَرفِه —
     /// بيئَةٌ مَفتوحَة، وقِراءَةٌ لَم تَرمِ (‏G5 (iii))، ثُمَّ الاحتِياطُ لِمَن لا مَدخَلَ لَه، أَو مَدخَلٌ فَعّالٌ بِرَمزٍ مَختومٍ وخِزانَةٍ ومالِك؛ و<c>null</c> لِما سِواه.</para>
     /// </summary>
-    private async Task<SealedCarrier?> ResolveCarrierAsync(string tenantSlug, Deal deal, CancellationToken ct)
+    /// <remarks>(‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د9 (٢) «ب»؛ تَوصيفُه <c>61612d1</c> — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق):
+    /// <b>والجَوابُ يُفَرِّقُ العُطلَ مِن الغِياب</b> (<see cref="CarrierRead"/>) — الشُروطُ بِحَرفِها، والفَرقُ وَحدَه أَنّ قِراءَةَ مَدخَلِ البائِعِ الَّتي تَرمي تُجابُ
+    /// <see cref="CarrierRead.Unreadable"/> لا ناقِلاً غائِباً، فَيَرُدُّها الوارِدُ <see cref="OtoOrderStatusGate.CarrierUnreadable"/> ‏503 «أَعِد المُحاوَلَة» كَسُؤالِ
+    /// المَتجَر (<see cref="StoreCarrierAsync"/>)، وكانَت ‏404 «لا نُقطَة» والعِلَّةُ عِلَّةُ القَرارِ نَفسُها. وقارِئاها الآخَران (<see cref="CarrierForAsync"/>
+    /// و<see cref="CarrierReadyForViewerAsync"/>) يَقرَآنِ <see cref="CarrierRead.Carrier"/> وَحدَه كَما كانا: نَقرَةُ البائِعِ لا مُرسِلَ يَكُفُّ عَن الإرسال،
+    /// و«لا ناقِل» بِلا احتِياطٍ فيها فَشَلٌ مُغلَق (‏G5 (iii)).</remarks>
+    private async Task<CarrierRead> ResolveCarrierAsync(string tenantSlug, Deal deal, CancellationToken ct)
     {
-        if (!OtoEnvironment.IsOpen(_opts.Environment)) return null;
+        if (!OtoEnvironment.IsOpen(_opts.Environment)) return default;
 
         var read = await VendorEntryOfAsync(tenantSlug, deal, ct);
         if (read.Failed)
         {
             _log.LogWarning("[OTO] vendor entry {Slug}/{Owner} could not be read — no carrier, no fallback",
                 tenantSlug, DealAcceptAuthorization.OwnerIdOf(deal)?.ToString("D") ?? "—");
-            return null;
+            return new CarrierRead(null, Unreadable: true);
         }
 
         var entry = read.Entry;
         if (entry is null)
-            return VendorTokenFor(_opts, tenantSlug) is { } fallback ? new SealedCarrier(fallback, null, Guid.Empty, null) : null;
+            return new CarrierRead(VendorTokenFor(_opts, tenantSlug) is { } fallback ? new SealedCarrier(fallback, null, Guid.Empty, null) : null, false);
 
         if (!entry.IsActive || _vault is not { IsAvailable: true } || DealAcceptAuthorization.OwnerIdOf(deal) is not { } owner
             || VendorShippingSurface.RefreshField is not { } refreshField
             || !entry.Values.TryGetValue(refreshField, out var sealedToken) || !sealedToken.IsSealed)
-            return null;
+            return default;
 
-        return new SealedCarrier(null, entry, owner, sealedToken);
+        return new CarrierRead(new SealedCarrier(null, entry, owner, sealedToken), false);
     }
+
+    /// <summary>جَوابُ <see cref="ResolveCarrierAsync"/>: ناقِلٌ مَحلولٌ لَم يُفَكّ، أَو لا ناقِل (<c>default</c>)، أَو قِراءَةٌ تَعَذَّرَت — والثالِثُ لا ناقِلَ مَعَه.</summary>
+    private readonly record struct CarrierRead(SealedCarrier? Carrier, bool Unreadable);
 
     /// <summary><b>فَكُّ رَمزِ التَحديث</b> — رَمزُ الاحتِياطِ كَما هُوَ؛ ومَدخَلٌ لا يَنفَكُّ رَمزُه <c>false</c> بِسَطرِ التَحذيرِ القائِم.</summary>
     private bool TryOpenToken(string tenantSlug, SealedCarrier carrier, out string token)
@@ -827,7 +836,11 @@ public sealed class DealShipping
         // (تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 الخُطوَة 7 و§٧‑م). والمُطابَقَةُ قَبلَه لِأَنّ السِرَّ سِرُّ البائِع — قِراءَةٌ لا كِتابَة.
         // (‏2026-10-13، G5 (viii)؛ ‏ADR-033 §٧‑ص‑٩ — ولا يُعادُ حَرفٌ فَوقَه: **والسِرُّ وَحدَه يُفَكُّ قَبلَ التَحَقُّق** — كانَ `CarrierForAsync` يَفُكُّ رَمزَ التَحديثِ
         // الدائِمَ مَعَه، فَإشعارٌ مُزَوَّرٌ بِلا مُصادَقَةٍ يُطلِقُ فَكَّين (تَوصيفُه 9dbc6f9). والرَمزُ يُفَكُّ بَعدَ أَن يَمُرَّ التَوقيع، قُبَيلَ سُؤالِ OTO.)
-        if (await ResolveCarrierAsync(tenantSlug, deal!, ct) is not { } carrier || !TryOpenSecret(tenantSlug, carrier, out var secret))
+        // (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د9 (٢) «ب»؛ تَوصيفُه `61612d1` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **ومَدخَلُ البائِعِ
+        // الَّذي تَعَذَّرَت قِراءَتُه ‏503 لا ‏404** — كَسُؤالِ المَتجَرِ قَبلَه: عُطلٌ مُؤَقَّتٌ تُعيدُ OTO عَلَيه الإرسال، بِلا تَحَقُّقٍ ولا سُؤالٍ ولا كِتابَة.
+        var resolved = await ResolveCarrierAsync(tenantSlug, deal!, ct);
+        if (resolved.Unreadable) return new(OtoOrderStatusGate.CarrierUnreadable, deal);
+        if (resolved.Carrier is not { } carrier || !TryOpenSecret(tenantSlug, carrier, out var secret))
             return new(OtoOrderStatusGate.CarrierUnavailable, deal);
         var at = _clock.GetUtcNow();
         var age = OtoWebhookSignature.AgeMilliseconds(notice.Timestamp, at)?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "—";

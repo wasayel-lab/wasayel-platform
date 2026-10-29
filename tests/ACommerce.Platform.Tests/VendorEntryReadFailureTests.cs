@@ -104,9 +104,12 @@ public class VendorEntryReadFailureTests(ITestOutputHelper output)
 
     /// <summary><b>قُلِبَ</b> (‏2026-10-13) — كانَ <c>Today_a_throwing_vendor_entry_read_on_the_inbound_falls_back_and_the_signed_notice_is_answered_unverifiable</c>
     /// (‏<c>6830eb9</c>): «الوارِد: notice_unverifiable (401) · قِراءاتٌ رَمَت: 1 · نِداءاتُ OTO بَعدَ الشَحن: 0». والآن لا يُسقَطُ إلى رَمزِ التَهيئَةِ بِلا سِرّ:
-    /// «لا ناقِل» (‏404) — والإشعارُ نَفسُه بِلا عُطلٍ يُتَحَقَّقُ مِنه ويُكتَب (السالِب).</summary>
+    /// «لا ناقِل» (‏404) — والإشعارُ نَفسُه بِلا عُطلٍ يُتَحَقَّقُ مِنه ويُكتَب (السالِب).
+    /// <para><b>وقُلِبَ ثانِيَةً بِاسمِه</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د9 (٢) «ب»؛ تَوصيفُه <c>61612d1</c>؛ كانَ
+    /// <c>A_throwing_vendor_entry_read_on_the_inbound_is_answered_carrier_unavailable_without_the_fallback</c>): العُطلُ لَيسَ «لا ناقِل» بَعدَ اليَوم
+    /// بَل <c>carrier_unreadable</c> ‏503 «أَعِد المُحاوَلَة» — و‏404 «لا نُقطَة» قَد يُكِفُّ المُرسِلَ عَن الإرسال. ولا احتِياطَ ولا نِداءَ كَما كان.</para></summary>
     [Fact]
-    public async Task A_throwing_vendor_entry_read_on_the_inbound_is_answered_carrier_unavailable_without_the_fallback()
+    public async Task A_throwing_vendor_entry_read_on_the_inbound_is_answered_carrier_unreadable_503_without_the_fallback()
     {
         var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: true);
         Assert.True((await w.Shipping.ShipAsync(Slug, w.Id, DealShipTests.Vendor, "Riyadh")).Ok);
@@ -118,8 +121,8 @@ public class VendorEntryReadFailureTests(ITestOutputHelper output)
                          $"نِداءاتُ OTO بَعدَ الشَحن: {w.Oto.Calls.Count - callsBefore}");
 
         Assert.Equal(1, thrown());
-        Assert.Equal(OtoOrderStatusGate.CarrierUnavailable, outcome.Code);
-        Assert.Equal(404, OtoOrderStatusGate.StatusFor(outcome.Code));
+        Assert.Equal(OtoOrderStatusGate.CarrierUnreadable, outcome.Code);
+        Assert.Equal(503, OtoOrderStatusGate.StatusFor(outcome.Code));
         Assert.Equal(callsBefore, w.Oto.Calls.Count);
 
         w.Docs.BeforeMember = null;

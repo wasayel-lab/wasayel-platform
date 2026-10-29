@@ -87,7 +87,9 @@ public class ShipViewSingleUnsealTests(ITestOutputHelper output)
         var b = code.IndexOf("public async Task<VendorCarrier?> CarrierForAsync(", StringComparison.Ordinal);
         Assert.True(a > 0 && p > a && b > p, "الدالَّتانِ ثُمَّ CarrierForAsync بِتَرتيبِها.");
         var body = code[a..p];
-        Assert.Contains("ResolveCarrierAsync(tenantSlug, deal!, ct) is { } carrier && OpensForView(tenantSlug, carrier)", body, StringComparison.Ordinal);
+        // (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ د9 (٢)): `ResolveCarrierAsync` يُجيبُ `CarrierRead` يُفَرِّقُ العُطلَ مِن الغِياب لِلوارِد، والعَرضُ
+        // يَقرَأُ ناقِلَه وَحدَه كَما كان — فَالحَرفُ المُثَبَّتُ صارَ `.Carrier`، والشَرطُ هو هو.
+        Assert.Contains("(await ResolveCarrierAsync(tenantSlug, deal!, ct)).Carrier is { } carrier && OpensForView(tenantSlug, carrier)", body, StringComparison.Ordinal);
         Assert.DoesNotContain("CarrierForAsync(", body, StringComparison.Ordinal);
         Assert.DoesNotContain("TryOpenSecret(", body, StringComparison.Ordinal);
         Assert.DoesNotContain("TryOpenToken(", body, StringComparison.Ordinal);
