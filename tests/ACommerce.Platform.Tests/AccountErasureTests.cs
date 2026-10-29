@@ -386,4 +386,102 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
             await s.SaveChangesAsync();
         }
     }
+
+    // ─── مَجرى الأَحداثِ بَعدَ الحَذف (مُراجَعَةُ تَيّارِ S2 الجَولَة ٢، ‏2026-10-29) ───────────────────────────────────────────────
+    //
+    // ما لا تَراه الصُفوفُ أَعلاه: التَذكِرَةُ والعَرضُ فيهِما وَثيقَتانِ مُخَزَّنَتانِ بِلا مَجرى، والصَفحاتُ والنِقاطُ تَبني مِن المَجرى. فَهُنا يُبدَأُ
+    // المَجرى كَما تَبدَؤُه نُقطَتاه (‏`StartStream` بِـ`TicketCreated` و`OfferSubmitted`) ويُقرَأُ بَعدَ الحَذفِ كَما يَقرَؤُه قارِئوه.
+
+    /// <summary>تَسلسُلُ نُقطَةِ الحَذفِ بِعَينِه — الأَسماءُ والوَسيلَتانِ قَبلَ <c>Erase</c>، ثُمَّ المَحوُ وحِفظٌ واحِد.</summary>
+    private static async Task<AccountErasure.Counts> EraseLikeTheDoorAsync(DocumentStore store, string slug, Guid userId)
+    {
+        await using var s = store.LightweightSession(slug);
+        var u = await s.LoadAsync<User>(userId);
+        Assert.Null(AccountDeletion.Validate(u, await AccountErasure.OpenDealsAsync(s, userId), "حذف", "حذف"));
+        var names = ActorName.NamesOf(u!);
+        var contacts = AccountErasure.ContactsOf(u!);
+        AccountDeletion.Erase(u!, DateTime.UtcNow);
+        s.Store(u!);
+        var counts = await AccountErasure.EraseCopiesAsync(s, slug, userId, names, contacts);
+        await s.SaveChangesAsync();
+        return counts;
+    }
+
+    /// <summary><b>«اليَوم» حَيّاً</b>: الحَذفُ يَمحو لَقطَةَ التَذكِرَة، وصَفحَةُ تَذكِرَةِ الاستوديو (<c>TenantAdminQueries.TicketAsync</c>) تَبنيها مِن مَجراها
+    /// فَتَرسُمُ الاسمَ المَحذوفَ لِصاحِبِ المَتجَر.</summary>
+    [Fact]
+    public async Task Today_the_studio_ticket_page_reads_the_stream_and_shows_the_deleted_authors_name_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = BuildStore();
+        var slug = "zz-erase-" + Guid.NewGuid().ToString("N")[..8];
+        const string name = "كاتِبُ التَذكِرَةِ الحَيّ";
+        var me = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = name, Phone = "+966500000555" };
+        var ticketId = Guid.NewGuid();
+        try
+        {
+            await using (var s = store.LightweightSession(slug))
+            {
+                s.Store(me);
+                s.Events.StartStream<Ticket>(ticketId, new TicketCreated(ticketId, me.Id, name, "سُؤال", "نَصّ", DateTime.UtcNow));
+                await s.SaveChangesAsync();
+            }
+            var counts = await EraseLikeTheDoorAsync(store, slug, me.Id);
+            await using var q = store.QuerySession(slug);
+            var snapshot = (await q.LoadAsync<Ticket>(ticketId))!;
+            var page = (await new TenantAdminQueries(store).TicketAsync(slug, ticketId))!;
+            output.WriteLine($"تَذاكِرُ مَمحُوَّة: {counts.Tickets} · اللَقطَةُ مَمحُوَّة: {snapshot.AuthorName == AccountDeletion.ErasedName} · " +
+                             $"صَفحَةُ الاستوديو تَرسُمُ الاسمَ المَحذوف: {page.AuthorName == name}");
+            Assert.Equal(1, counts.Tickets);
+            Assert.Equal(AccountDeletion.ErasedName, snapshot.AuthorName);
+            Assert.Equal(name, page.AuthorName);
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            s.DeleteWhere<User>(u => u.Id != Guid.Empty); s.DeleteWhere<Ticket>(t => t.Id != Guid.Empty);
+            s.Events.ArchiveStream(ticketId);
+            await s.SaveChangesAsync();
+        }
+    }
+
+    /// <summary><b>«اليَوم» حَيّاً</b>: عَرضُ العُضوِ المَحذوفِ يَبقى «مُعَلَّقاً»، ولَقطَتُه مَمحُوَّةٌ ومَجراه — الَّذي تَبني مِنه نُقطَةُ القَبول — بِاسمِه.</summary>
+    [Fact]
+    public async Task Today_a_deleted_members_pending_offer_stays_pending_and_its_stream_keeps_the_name_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = BuildStore();
+        var slug = "zz-erase-" + Guid.NewGuid().ToString("N")[..8];
+        const string name = "مُقَدِّمُ العَرضِ الحَيّ";
+        var me = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = name, Phone = "+966500000556" };
+        var offerId = Guid.NewGuid();
+        try
+        {
+            await using (var s = store.LightweightSession(slug))
+            {
+                s.Store(me);
+                var now = DateTime.UtcNow;
+                s.Events.StartStream<Offer>(offerId, new OfferSubmitted(offerId, Guid.NewGuid(), me.Id, name, 10m, null, 24.7, 46.7, now.AddDays(3), now));
+                await s.SaveChangesAsync();
+            }
+            var counts = await EraseLikeTheDoorAsync(store, slug, me.Id);
+            await using var q = store.LightweightSession(slug);
+            var snapshot = (await q.LoadAsync<Offer>(offerId))!;
+            var stream = (await q.Events.AggregateStreamAsync<Offer>(offerId))!;
+            output.WriteLine($"عُروضٌ مَمحُوَّة: {counts.Offers} · اللَقطَةُ مَمحُوَّة: {snapshot.OffererName == AccountDeletion.ErasedName} · " +
+                             $"المَجرى بِالاسمِ المَحذوف: {stream.OffererName == name} · الحالُ في المَجرى: {stream.Status} · في اللَقطَة: {snapshot.Status}");
+            Assert.Equal(1, counts.Offers);
+            Assert.Equal(AccountDeletion.ErasedName, snapshot.OffererName);
+            Assert.Equal((name, OfferStatus.Pending, OfferStatus.Pending), (stream.OffererName, stream.Status, snapshot.Status));
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            s.DeleteWhere<User>(u => u.Id != Guid.Empty); s.DeleteWhere<Offer>(o => o.Id != Guid.Empty);
+            s.Events.ArchiveStream(offerId);
+            await s.SaveChangesAsync();
+        }
+    }
 }
