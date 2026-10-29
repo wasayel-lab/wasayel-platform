@@ -75,6 +75,27 @@ public class SellerDisplayNameTests(ITestOutputHelper output)
             Assert.False(string.IsNullOrWhiteSpace(LocaleCatalog.Find(LocaleCatalog.Arabic, key)), $"«{key}» بِلا قيمَة.");
     }
 
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم» قَبلَ التَبديل</b> (القاعِدَة ٣؛ مُراجَعَةُ تَيّارِ S2 الجَولَة ١، ‏2026-10-29): بابا التَحَقُّقِ يَبنِيانِ رابِطَ خُطوَةِ الاسمِ
+    /// بِـ<c>Link(req, slug, p)</c> — والدَورُ مِن <c>Referer</c>. فَأَوَّلُ دُخولٍ مِن صَفحَةِ دُخولِ دَورٍ (<c>/{slug}/r/{role}/login</c>، وإلَيها يُرسِلُ
+    /// <c>RoleLanding.razor</c>) يُحَوَّلُ إلى <c>/{slug}/r/{role}/me/name</c>، والصَفحَةُ لا تُعلِنُ إلّا <c>/{slug}/me/name</c>: ‏404 مَقيسٌ حَيّاً
+    /// (‏<c>/rewalk-291003/r/vendor/me/name?next=…</c> ← 404، والمَسارُ بِلا دَورٍ بِالجَلسَةِ نَفسِها ← 200). يُقلَبُ بِاسمِه في كوميتِ التَبديل.</para>
+    /// </summary>
+    [Fact]
+    public void Today_a_first_login_on_a_role_page_is_sent_to_a_name_step_no_page_declares()
+    {
+        var gets = RouteResolutionTests.Declared("GET");
+        var plain = ACommerce.Templates.Customer.Marketplace.Services.Queries.MemberNameStep.Route(true, "/zz-name/me/role",
+            p => ACommerce.Templates.Customer.Marketplace.AuthSession.LinkFor("zz-name", null, p));
+        var scoped = ACommerce.Templates.Customer.Marketplace.Services.Queries.MemberNameStep.Route(true, "/zz-name/r/vendor/me/role/onboarding",
+            p => ACommerce.Templates.Customer.Marketplace.AuthSession.LinkFor("zz-name", "vendor", p));
+        output.WriteLine($"قَوالِبُ GET المُعلَنَة: {gets.Count} · {plain} ← {RouteResolutionTests.Resolves(plain, gets)} · {scoped} ← {RouteResolutionTests.Resolves(scoped, gets)}");
+        Assert.True(gets.Count > 0, "صِفرُ قالِبِ GET — الأَداةُ عَمياء (القاعِدَة ١٠).");
+        Assert.Equal("/zz-name/r/vendor/me/name?next=%2Fzz-name%2Fr%2Fvendor%2Fme%2Frole%2Fonboarding", scoped);
+        Assert.True(RouteResolutionTests.Resolves(plain, gets));
+        Assert.False(RouteResolutionTests.Resolves(scoped, gets));
+    }
+
     // ─── القاعِدَة: مُوجَبٌ وسالِب ──────────────────────────────────────────────────────────────
 
     private static ACommerce.Kit.Auth.User Member(string name, string? business = null, string role = "vendor")
