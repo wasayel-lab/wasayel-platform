@@ -1319,6 +1319,34 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         Assert.Equal(calls, w.Oto.Calls.Count);
     }
 
+    // ─── تَوصيفُ «اليَوم» قَبلَ إتمامِ قَرارِ المالِك د9 (٢) (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى) ───────────────────────────────
+    //
+    // `5b9c6ee` بَدَّلَ سُؤالَ المَتجَرِ وَحدَه. وفي الطَلَبِ نَفسِه قِراءَةٌ ثانِيَة: بَعدَ أَن يَمُرَّ سُؤالُ المَتجَرِ وتُطابَقَ الصَفقَة، يُقرَأُ مَدخَلُ بائِعِها
+    // (`ReadVendorEntryAsync` في `ResolveCarrierAsync`) — وعُطلُها يُجابُ اليَومَ `carrier_unavailable` ‏404، فَيَقرَؤُه المُرسِلُ «لا نُقطَة» والعِلَّةُ
+    // عِلَّةُ القَرارِ نَفسُها. يَنقَلِبُ بِاسمِه في كوميتِ الإصلاح، ومَعَه صَفُّ `VendorEntryReadFailureTests` الَّذي يُثبِتُ الجَوابَ نَفسَه عَلى الخِدمَة.
+
+    [Fact]
+    public async Task Today_a_deal_whose_vendor_entry_cannot_be_read_after_the_store_check_answers_404_unwritten()
+    {
+        var w = await ShippedCashDeal();
+        var calls = w.Oto.Calls.Count;
+        var saves = w.Docs.SaveCalls;
+        // «theme-demo» يَمُرُّ سُؤالُه بِرَمزِ التَهيئَةِ بِلا قِراءَة؛ ثُمَّ تَحميلُ الصَفقَة، ثُمَّ قِراءَةُ مَدخَلِ بائِعِها تَرمي بِعُطلٍ كَعُطلِ القاعِدَة.
+        var thrown = VendorEntryReadFailureTests.FailEntryReads(w.Docs, afterLoads: 1, failures: 1);
+        await using var host = await OtoHost.StartAsync(w.Shipping);
+
+        using var resp = await host.PostAsync(Slug, NoticeJson(w.Id.ToString("N")));
+        w.Docs.BeforeMember = null;
+
+        output.WriteLine($"مَدخَلُ البائِعِ يَرمي بَعدَ سُؤالِ المَتجَر: {(int)resp.StatusCode} · قِراءاتٌ رَمَت: {thrown()} · " +
+                         $"حِفظات: {w.Docs.SaveCalls - saves} · نِداءاتُ OTO: {w.Oto.Calls.Count - calls}");
+        Assert.Equal(1, thrown());
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+        Assert.Equal(calls, w.Oto.Calls.Count);
+        Assert.Equal(DealStage.Shipping, Stored(w).Stage);
+    }
+
     /// <summary>خِدمَةُ الشَحنِ في العالَمِ ومَعَها أُنبوبُ الإشعاراتِ القائِمُ ولِسانٌ عَرَبِيّ، ووَثيقَةُ المَتجَرِ بِمالِكِه — كَما تُعطيها الحاوِيَة (‏2026-10-29، د9 (١) «أ»).</summary>
     private static DealShipping WithNotices(DealShipTests.World w)
     {
