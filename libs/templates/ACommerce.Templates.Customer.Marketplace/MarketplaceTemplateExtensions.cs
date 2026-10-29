@@ -160,6 +160,9 @@ public static class MarketplaceTemplateExtensions
         // التَحَقُّقُ مِن دَفعِ المُشتَري عِندَ بَوّابَةِ المَتجَر (‏ADR-032 الخُطوَة 9، تَيّارُ S9، ‏2026-10-12) — عَلى خِدمَةِ الصَفَقاتِ وخِدمَةِ
         // المُزَوِّدينَ والخِزانَةِ وعَميلِ البَوّابَةِ القائِمَة؛ مُستَهلِكُها نُقطَةُ `/{slug}/payments/verify` في `Billing/TenantGatewayEndpoints.cs`.
         services.AddScoped<Services.Deals.GatewayPayments>();
+        // وإلغاءُ الطَلَبِ عِندَ انتِهاءِ مُهلَةِ فاتورَتِه رِسالَةٌ مُجَدوَلَةٌ في Wolverine المُرَكَّبِ أَصلاً (‏2026-10-29، قَرارُ المالِك د5 (٤)؛ ‏ADR-046) — مُعالِجُها
+        // يُكتَشَفُ بِنَوعِه وطابورُها بِصُندوقٍ مُستَديم؛ والسَطرانِ في `GatewayInvoiceExpiry.Configure` يَقرَؤُهُما البُرهانُ الحَيُّ نَفسُهُما.
+        Wolverine.HostBuilderExtensions.ConfigureWolverine(services, Services.Deals.GatewayInvoiceExpiry.Configure);
         // وإلغاءُ الفاتورَةِ عِندَ البَوّابَةِ بَعدَ إلغاءِ آخِرِ صَفقَةٍ قائِمَةٍ تَدفَعُ لَها (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الثانِيَة؛ ‏ADR-032 §٨‑ز) —
         // عَلى خِدمَةِ المُزَوِّدينَ والخِزانَةِ وعَميلِ البَوّابَةِ القائِمَة؛ مُستَهلِكُه `DealsService` بِحَقنِه، فَكُلُّ بابِ إلغاءٍ يَمُرُّ بِه.
         services.AddScoped<Services.Deals.GatewayInvoiceCloser>();
