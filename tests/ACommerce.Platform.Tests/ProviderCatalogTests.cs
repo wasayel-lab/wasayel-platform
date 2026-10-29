@@ -353,23 +353,42 @@ public class ProviderCatalogTests
         Assert.Equal(CredentialKinds.SecretKey, d.HighestFieldKind);
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم» لِنَصَّيْ مِفتاحِ مُيَسِّر</b> (‏2026-10-29، قَرارُ المالِك د7 (٢) «أ» — قَبلَ التَصحيح): الوَصفُ يَقولُ
-    /// «تَلصَق مِفتاحَك السِرِّيَّ مِن لَوحَة مُيَسِّر» — كَأَنَّ المِفتاحَ يُنسَخُ مِن اللَوحَةِ مَتى شِئت — ولا يَذكُرُ بادِئَتَيْ التَجرِبَةِ والحَيّ؛ ونَصُّ السَحبِ
-    /// يُحيلُ الإبطالَ إلى «لَوحَة مُيَسِّر نَفسِها» بِلا صَفحَة. والقِسمُ الماديُّ (<c>physicalGoodsOnly</c>) خارِجَ هذا الصَفّ — لا يُقلَب.</summary>
+    /// <summary><b>نَصّا مِفتاحِ مُيَسِّر مِن صَفحَتِه العامَّةِ لِلمَفاتيح</b> (‏2026-10-29، قَرارُ المالِك د7 (٢) «أ»؛ <c>docsUrl</c> نَفسُه
+    /// <c>docs.moyasar.com/api/authentication</c>، مَقروءاً ‏2026-10-29): البادِئَتان «sk_test_» و«sk_live_» (و«pk_» لِلقابِلِ لِلنَشرِ لا لِهذا الحَقل)؛
+    /// و«New keys are shown only once» مَعَ «secret keys are now only partially visible in the dashboard» — فَلا يُنسَخُ المِفتاحُ مِن اللَوحَةِ مَتى شِئت؛
+    /// و«regenerate their API keys through the settings page» لِلضائِعِ والمُتَسَرِّب. <b>ولا يُقالُ ما لا تَقولُه الصَفحَة</b>: لا مَسارَ قائِمَةٍ لِعَرضِ
+    /// المَفاتيح، ولا «إبطالٌ» مُنفَصِلٌ عَن إعادَةِ التَوليد — فَنَصُّ السَحبِ يَنقُلُ نَصيحَتَها بِلَفظِها. و«آخِرُ أَربَعَة مَحارِف» تَصدُقُ
+    /// <see cref="ProviderSecrecy.TailLength"/>؛ و<c>physicalGoodsOnly</c> لا يُمَسّ (الشِقُّ (١) مِن القَرار).</summary>
+    /// <remarks><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_the_secret_key_provider_texts_say_copy_from_the_dashboard_and_revoke_there_without_naming_the_page</c>
+    /// (‏<c>6ea9642</c>): الوَصفُ «تَلصَق مِفتاحَك السِرِّيَّ مِن لَوحَة مُيَسِّر هُنا» بِلا بادِئَةٍ ولا صَفحَة، والسَحبُ «إبطالُه أَو تَبديلُه مِن لَوحَة مُيَسِّر نَفسِها».</remarks>
     [Fact]
-    public void Today_the_secret_key_provider_texts_say_copy_from_the_dashboard_and_revoke_there_without_naming_the_page()
+    public void The_secret_key_provider_texts_follow_moyasars_public_authentication_page()
     {
         var d = ProviderCatalog.Find("moyasar_api");
         Assert.NotNull(d);
-        var description = ProviderText.Get(d!.Description, "ar");
+        Assert.Equal("https://docs.moyasar.com/api/authentication", d!.DocsUrl);
+        var description = ProviderText.Get(d.Description, "ar");
         var revocation = ProviderText.Get(d.Revocation, "ar");
 
-        Assert.Contains("تَلصَق مِفتاحَك السِرِّيَّ مِن لَوحَة مُيَسِّر هُنا", description, StringComparison.Ordinal);
-        Assert.DoesNotContain("sk_test_", description, StringComparison.Ordinal);
-        Assert.DoesNotContain("الإعدادات", description, StringComparison.Ordinal);
-        Assert.Contains("إبطالُه أَو تَبديلُه مِن لَوحَة مُيَسِّر نَفسِها", revocation, StringComparison.Ordinal);
-        Assert.DoesNotContain("الإعدادات", revocation, StringComparison.Ordinal);
+        Assert.DoesNotContain("تَلصَق مِفتاحَك السِرِّيَّ مِن لَوحَة مُيَسِّر هُنا", description, StringComparison.Ordinal);
+        Assert.Contains("sk_test_", description, StringComparison.Ordinal);
+        Assert.Contains("sk_live_", description, StringComparison.Ordinal);
+        Assert.Contains("إلّا مَرَّةً حينَ يُوَلَّد", description, StringComparison.Ordinal);
+        Assert.Contains("صَفحَة «الإعدادات»", description, StringComparison.Ordinal);
+        Assert.Contains("آخِرُ أَربَعَة مَحارِف", description, StringComparison.Ordinal);
+        Assert.Equal(4, ProviderSecrecy.TailLength);
+
+        Assert.DoesNotContain("مِن لَوحَة مُيَسِّر نَفسِها", revocation, StringComparison.Ordinal);
+        Assert.Contains("ولا يُبطِل ذلكَ المِفتاحَ عِندَ مُيَسِّر", revocation, StringComparison.Ordinal);
+        Assert.Contains("بِإعادَةِ تَوليدِ مَفاتيحِك فَوراً مِن صَفحَة «الإعدادات»", revocation, StringComparison.Ordinal);
+
+        // والبادِئَتانِ في النَصِّ هُما ما يَقبَلُه حَقلُ المِفتاحِ لا غَيرُهُما.
+        var field = Assert.Single(d.Credential.Fields, f => f.Kind == CredentialKinds.SecretKey);
+        Assert.Null(ProviderValueValidator.Refuse(field, "sk_test_x"));
+        Assert.Null(ProviderValueValidator.Refuse(field, "sk_live_x"));
+        Assert.Equal(ProviderValueValidator.PatternMismatch, ProviderValueValidator.Refuse(field, "pk_test_x"));
         Assert.True(d.PhysicalGoodsOnly);
+        Assert.Empty(ProviderDefinitionValidator.Validate(d));
     }
 
     /// <summary><b>حِسابُ الشَحنِ عِندَ OTO</b> (‏ADR-033 الخُطوَة 6 بِحَرفِها و§٢‑ج‑١): قُدرَةُ <c>delivery</c>، ونَوعُ رَبطٍ
