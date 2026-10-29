@@ -255,6 +255,8 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         ["Review.TargetUserName"]        = new(NameKind.Renamed, Disclosure.Renamed, "مَن قُيِّمَ — اسمُه عَلى تَقييمِ غَيرِه لَه."),
         ["Offer.OffererName"]            = new(NameKind.Renamed, Disclosure.Renamed, "مُقَدِّمُ العَرض — لَقطَةُ مَجرى العَرضِ (تُعَدَّل)."),
         ["OfferSubmitted.OffererName"]   = new(NameKind.EventLog, Disclosure.EventLog, "حَدَثُ تَقديمِ العَرضِ في مَجرى الأَحداث — لا يُعادُ كَتبُه ولا تَعرِضُه شاشَة."),
+        // ‏(2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢) حَدَثُ المَحوِ نَفسُه — مُصدِرُه الوَحيدُ `AccountErasure.EraseEvents` بِقيمَةِ «حِسابٌ مَحذوف»، فَلا يَحمِلُ اسمَ أَحَد.
+        ["OffererRenamed.OffererName"]   = new(NameKind.NotAPerson, Disclosure.None, "حَدَثُ مَحوِ اسمِ مُقَدِّمِ العَرضِ في مَجراه — قيمَتُه «حِسابٌ مَحذوف» يَكتُبُها الحَذف."),
         ["ListingMatch.OffererName"]     = new(NameKind.Renamed, Disclosure.Renamed, "صاحِبُ العَرضِ المَقبولِ عَلى مُطابَقَةِ الإعلان (ويُرسَلُ في إشعارِ «وَصَلَ السائِق»)."),
         ["Ticket.AuthorName"]            = new(NameKind.Renamed, Disclosure.Renamed, "كاتِبُ تَذكِرَةِ الدَعم — والبَلاغُ عَن إعلانٍ تَذكِرَةٌ بِاسمِه؛ لَقطَةُ مَجرى (تُعَدَّل)."),
         ["TicketCreated.AuthorName"]     = new(NameKind.EventLog, Disclosure.EventLog, "حَدَثُ فَتحِ التَذكِرَةِ في مَجرى الأَحداث."),

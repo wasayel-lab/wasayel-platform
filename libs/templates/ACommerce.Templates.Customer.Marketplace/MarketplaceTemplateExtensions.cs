@@ -1462,6 +1462,10 @@ public static class MarketplaceTemplateExtensions
             if (!listing.Attributes.TryGetValue("owner_id", out var ownerStr) ||
                 ownerStr != acceptorId.ToString())
                 return Results.Redirect(Link(req, slug, $"listings/{offer.ListingId}?err=not_owner"));
+            // ‏(‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢؛ د52 (١)) عَرضُ حِسابٍ حُذِفَ لا يُقبَل — بَعدَ المالِكِ لا قَبلَه (القاعِدَة ٦): الحَذفُ يَسحَبُ المُعَلَّق
+            // (`AccountErasure.EraseEvents`)، وهذا لِعَرضٍ سَبَقَ حَذفُه ذلك؛ وإلّا وُلِدَت مُطابَقَةٌ ومُحادَثَةٌ مَعَ حِسابٍ لا وُجودَ لَه.
+            if (Services.Identity.AccountErasure.OffererGone(await s.LoadAsync<User>(offer.OffererId)))
+                return Results.Redirect(Link(req, slug, $"listings/{offer.ListingId}?err={Services.Identity.AccountErasure.OffererGoneCode}"));
 
             var now = DateTime.UtcNow;
             s.Events.Append(id, new ACommerce.Kit.Offers.OfferAccepted(id, now));

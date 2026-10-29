@@ -22,6 +22,11 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Identity;
 /// لا يُعادُ كَتبُه ولا تَعرِضُه شاشَة — الشاشاتُ تَقرَأُ اللَقَطاتِ المُمحُوَّة؛ وسِجِلُّ التَدقيقِ (<c>AuditEntry</c>) تاريخٌ يُخفى فيه الاسمُ عِندَ العَرض
 /// (<c>AuditLogQueries.HideErasedActors</c>) لا في المَخزَن.</para>
 ///
+/// <para><b>‏(‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢) و«لا تَعرِضُه شاشَة» مَقيسٌ لا مَظنون</b>: كانَت صَفحَةُ تَذكِرَةِ الاستوديو تَبني مِن المَجرى (صارَت تَقرَأُ
+/// اللَقطَة)، وقَبولُ العَرضِ يَبني مِن مَجراه فَيَنسَخُ الاسمَ ويَقبَلُ عَرضَ مَن حُذِف. فَالعَرضُ يُمحى **في مَجراه** (<see cref="EraseEvents"/>: <c>OffererRenamed</c>،
+/// ومَعَه <c>OfferWithdrawn</c> لِلمُعَلَّق — حِسابٌ لا وُجودَ لَه لا يُربَطُ بِرِحلَة)، والقَبولُ يَرُدُّ عَرضَ مَن حُذِفَ قَبلَ هذا (<see cref="OffererGone"/>).
+/// والحارِسُ <c>StreamNameReaderTests</c>: لا مَجرى لِنَوعٍ يَحمِلُ اسماً يُمحى يُسَلِّمُ اسمَه إلّا أَن يَحمِلَ المَجرى المَحوَ نَفسَه.</para>
+///
 /// <para><b>والصَفقَةُ الجارِيَةُ تَمنَعُ الحَذفَ قَبلَ أَيِّ مَحو</b> (<see cref="AccountDeletion.OpenDeal"/>): <see cref="IsOpen"/> — فَعّالَةٌ أَو في نِزاع
 /// — لِصَفقَةٍ هُوَ طَرَفُها (مُبادِراً أَو مُقابِلاً). وعَرضٌ وارِدٌ عَلى إعلانِه لَم يَقبَلْه بَعدُ لا يَمنَع: لَيسَ طَرَفاً فيه حَتّى يَقبَل. والسُؤالُ واحِدٌ
 /// تَسأَلُه النُقطَةُ وصَفحَةُ الحَذفِ (<see cref="OpenDealsAsync"/>)، فَلا تَرسُمُ الصَفحَةُ استِمارَةً تَرُدُّها النُقطَة (القاعِدَة ١٢).</para>
@@ -115,6 +120,28 @@ public static class AccountErasure
          | (r.TargetUserId == userId && Set(r.TargetUserName, v => r.TargetUserName = v));
 
     public static bool EraseFrom(Offer o, Guid userId) => o.OffererId == userId && Set(o.OffererName, v => o.OffererName = v);
+
+    /// <summary>
+    /// <para><b>عَرضُه يُمحى في مَجراه</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢): ما يُلحَقُ بِمَجرى عَرضِه في مُعامَلَةِ الحَذف — اسمُه «حِسابٌ مَحذوف»
+    /// (<c>OffererRenamed</c> بِما يَكتُبُه <see cref="EraseFrom(Offer, Guid)"/>)، و<c>OfferWithdrawn</c> إن كانَ مُعَلَّقاً. ولا شَيءَ لِعَرضِ غَيرِه.</para>
+    /// <para><b>ولِماذا لا <c>Store</c> كَبَقِيَّةِ النُسَخ</b>: اللَقطَةُ إسقاطٌ مُباشِر، وسَحبُ المُعَلَّقِ حَدَثٌ في مَجراه — وحَدَثٌ ولَقطَةٌ مُخَزَّنَةٌ يَدَوِيّاً في جَلسَةٍ
+    /// واحِدَةٍ يَكتُبُ فيهِما الإسقاطُ فَوقَ المُخَزَّنِ مِن المَخزَن فَيَعودُ الاسم (مَقيسٌ عَلى Postgres، بِأَيِّ تَرتيب).</para>
+    /// </summary>
+    public static IReadOnlyList<object> EraseEvents(Offer o, Guid userId, DateTime at)
+    {
+        if (o.OffererId != userId) return Array.Empty<object>();
+        var events = new List<object>();
+        if (EraseFrom(o, userId)) events.Add(new OffererRenamed(o.Id, o.OffererName, at));
+        if (o.Status == OfferStatus.Pending) events.Add(new OfferWithdrawn(o.Id, at));
+        return events;
+    }
+
+    /// <summary>رَمزُ رَدِّ القَبولِ حينَ يَكونُ صاحِبُ العَرضِ قَد حَذَفَ حِسابَه — تَقرَؤُه صَفحَةُ الإعلان (<c>listings.detail.err_offer_gone</c>).</summary>
+    public const string OffererGoneCode = "offer_gone";
+
+    /// <summary>صاحِبُ العَرضِ حَذَفَ حِسابَه (أَو لا حِسابَ لَه) — فَلا يُقبَلُ عَرضُه: عَرضٌ مُعَلَّقٌ مِن حَذفٍ سَبَقَ <see cref="EraseEvents"/> لا يُنشِئُ مُطابَقَةً
+    /// ولا مُحادَثَةً مَعَ حِسابٍ لا وُجودَ لَه.</summary>
+    public static bool OffererGone(User? offerer) => offerer is null || offerer.DeletedAt is not null;
 
     public static bool EraseFrom(ListingMatch m, Guid userId) => m.OffererId == userId && Set(m.OffererName, v => m.OffererName = v);
 
@@ -220,6 +247,15 @@ public static class AccountErasure
             foreach (var row in rows) if (erase(row)) { s.Store(row); n++; }
             return n;
         }
+        // العُروضُ بِأَحداثٍ في مَجاريها لا بِـ`Store` (<see cref="EraseEvents"/>) — والإسقاطُ المُباشِرُ يَكتُبُ لَقطَتَها في الحِفظِ نَفسِه.
+        int Withdraw(IEnumerable<Offer> rows)
+        {
+            var n = 0;
+            var at = DateTime.UtcNow;
+            foreach (var o in rows)
+                if (EraseEvents(o, userId, at) is { Count: > 0 } events) { s.Events.Append(o.Id, events.ToArray()); n++; }
+            return n;
+        }
 
         var deals = await s.Query<Deal>().Where(d => d.InitiatorId == userId || d.CounterpartyId == userId).ToListAsync(ct);
         var dealIds = deals.Select(d => d.Id).ToHashSet();
@@ -251,7 +287,7 @@ public static class AccountErasure
             Deals: Mark(deals.Concat(others), d => EraseFrom(d, userId)),
             Conversations: Mark(convs, c => EraseFrom(c, userId)),
             Reviews: Mark(reviews, r => EraseFrom(r, userId)),
-            Offers: Mark(offers, o => EraseFrom(o, userId)),
+            Offers: Withdraw(offers),
             Matches: Mark(matches, m => EraseFrom(m, userId)),
             Tickets: Mark(tickets, t => EraseFrom(t, userId)),
             Keys: Mark(keys, k => EraseFrom(k, tenantSlug, userId)),

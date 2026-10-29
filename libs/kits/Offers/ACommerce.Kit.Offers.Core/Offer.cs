@@ -31,6 +31,14 @@ public sealed record OfferAccepted(System.Guid Id, System.DateTime At);
 public sealed record OfferRejected(System.Guid Id, System.DateTime At);
 public sealed record OfferExpired(System.Guid Id, System.DateTime At);
 
+/// <summary>
+/// <para><b>اسمُ مُقَدِّمِ العَرضِ يُبَدَّلُ في المَجرى نَفسِه</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢؛ قَرارا المالِك د52 (١) ود53 (٤)): مُصدِرُه الوَحيدُ
+/// مَحوُ الحِسابِ (<c>AccountErasure.EraseEvents</c>) — يُلحَقُ مَعَ <see cref="OfferWithdrawn"/> لِعَرضٍ مُعَلَّقٍ في مُعامَلَةِ الحَذف. ولِماذا حَدَثٌ لا كِتابَةٌ
+/// عَلى اللَقطَة: اللَقطَةُ إسقاطٌ مُباشِر، وحَدَثٌ يُلحَقُ لِمَجراها في الجَلسَةِ نَفسِها يَكتُبُ الإسقاطُ فَوقَ ما خُزِّنَ يَدَوِيّاً مِن المَخزَن — الاسمُ الأَصلِيُّ
+/// يَعود (مَقيسٌ عَلى Postgres، بِأَيِّ تَرتيب). فَالمَحوُ في المَجرى: كُلُّ قارِئٍ — لَقطَةً أَو مَجرى — يَراه، وإعادَةُ بِناءِ الإسقاطِ تُعيدُه.</para>
+/// </summary>
+public sealed record OffererRenamed(System.Guid Id, string OffererName, System.DateTime At);
+
 /// <summary>الحالات: pending → accepted | rejected | withdrawn | expired.</summary>
 public enum OfferStatus { Pending, Accepted, Rejected, Withdrawn, Expired }
 
@@ -69,6 +77,7 @@ public sealed class Offer
     public void Apply(OfferAccepted  e) { Status = OfferStatus.Accepted;  ResolvedAt = e.At; }
     public void Apply(OfferRejected  e) { Status = OfferStatus.Rejected;  ResolvedAt = e.At; }
     public void Apply(OfferExpired   e) { Status = OfferStatus.Expired;   ResolvedAt = e.At; }
+    public void Apply(OffererRenamed e) { OffererName = e.OffererName; }
 }
 
 /// <summary>حالات الرِحلَة بَعدَ القَبول:

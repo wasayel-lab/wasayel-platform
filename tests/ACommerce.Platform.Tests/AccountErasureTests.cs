@@ -197,6 +197,73 @@ public class AccountErasureTests
         Assert.Equal(new[] { "مُدير" }, AuditLogQueries.HideErasedActors(
             new List<AuditEntry> { new() { ActorId = Other, ActorName = "مُدير" } }, new HashSet<Guid>()).Select(a => a.ActorName));
     }
+
+    // ─── العَرضُ يُمحى في مَجراه، والقَبولُ يَرُدُّ عَرضَ مَن حُذِف (مُراجَعَةُ تَيّارِ S2 الجَولَة ٢، ‏2026-10-29) ───────────────────
+
+    /// <summary>مُوجَب: عَرضُه المُعَلَّقُ — اسمُه في المَجرى «حِسابٌ مَحذوف» ويُسحَب؛ والمَقبولُ يُمحى اسمُه ولا يُسحَب. والأَحداثُ تُطَبَّقُ عَلى لَقطَةٍ بِالاسمِ
+    /// الأَصلِيِّ (كَما يُطَبِّقُها الإسقاطُ المُباشِرُ مِن المَخزَن) فَتَصيرُ مَمحُوَّةً مَسحوبَة.</summary>
+    [Fact]
+    public void A_deleted_members_pending_offer_gets_the_erased_name_and_a_withdrawal_in_its_stream()
+    {
+        var at = DateTime.UtcNow;
+        var pending = new Offer { Id = Guid.NewGuid(), OffererId = Me, OffererName = Name, Status = OfferStatus.Pending };
+        var accepted = new Offer { Id = Guid.NewGuid(), OffererId = Me, OffererName = Name, Status = OfferStatus.Accepted };
+        var pendingEvents = AccountErasure.EraseEvents(pending, Me, at);
+        var acceptedEvents = AccountErasure.EraseEvents(accepted, Me, at);
+        Assert.Equal(new object[] { new OffererRenamed(pending.Id, AccountDeletion.ErasedName, at), new OfferWithdrawn(pending.Id, at) }, pendingEvents);
+        Assert.Equal(new object[] { new OffererRenamed(accepted.Id, AccountDeletion.ErasedName, at) }, acceptedEvents);
+
+        var stored = new Offer { Id = pending.Id, OffererId = Me, OffererName = Name, Status = OfferStatus.Pending };
+        foreach (var e in pendingEvents)
+            switch (e) { case OffererRenamed r: stored.Apply(r); break; case OfferWithdrawn w: stored.Apply(w); break; }
+        Assert.Equal((AccountDeletion.ErasedName, OfferStatus.Withdrawn), (stored.OffererName, stored.Status));
+    }
+
+    /// <summary>سالِب: عَرضُ غَيرِه لا حَدَثَ لَه، وعَرضُه المَمحُوُّ المَسحوبُ لا يُكتَبُ مَرَّتَين.</summary>
+    [Fact]
+    public void Anothers_offer_and_an_already_erased_withdrawn_offer_get_no_event()
+    {
+        var at = DateTime.UtcNow;
+        var theirs = new Offer { Id = Guid.NewGuid(), OffererId = Other, OffererName = "غَيري", Status = OfferStatus.Pending };
+        var done = new Offer { Id = Guid.NewGuid(), OffererId = Me, OffererName = AccountDeletion.ErasedName, Status = OfferStatus.Withdrawn };
+        Assert.Empty(AccountErasure.EraseEvents(theirs, Me, at));
+        Assert.Empty(AccountErasure.EraseEvents(done, Me, at));
+        Assert.Equal(("غَيري", OfferStatus.Pending), (theirs.OffererName, theirs.Status));
+    }
+
+    /// <summary>مُوجَبٌ وسالِب: مَن حَذَفَ حِسابَه — أَو لا حِسابَ لَه — لا يُقبَلُ عَرضُه، والحِسابُ القائِمُ يُقبَل.</summary>
+    [Fact]
+    public void An_offer_whose_offerer_deleted_their_account_is_gone_and_a_live_offerers_is_not()
+    {
+        var gone = new User { Id = Me, FullName = AccountDeletion.ErasedName, DeletedAt = DateTime.UtcNow };
+        var live = new User { Id = Other, FullName = "قائِم" };
+        Assert.True(AccountErasure.OffererGone(gone));
+        Assert.True(AccountErasure.OffererGone(null));
+        Assert.False(AccountErasure.OffererGone(live));
+    }
+
+    /// <summary>الحارِسُ في نُقطَةِ القَبولِ بَعدَ المالِكِ وقَبلَ أَيِّ كِتابَة (القاعِدَة ٦)، وصَفحَةُ الإعلانِ تَقرَأُ رَمزَه بِنَصٍّ في القامُوس (القاعِدَتانِ ١١ و١٢).</summary>
+    [Fact]
+    public void The_accept_door_refuses_a_gone_offerer_after_the_owner_check_and_before_any_write_and_the_page_says_why()
+    {
+        var tpl = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace");
+        var src = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(tpl, "MarketplaceTemplateExtensions.cs")));
+        var start = src.IndexOf("\"/{slug}/offers/{id:guid}/accept\"", StringComparison.Ordinal);
+        var end = src.IndexOf("RequireStoreWritable", start, StringComparison.Ordinal);
+        Assert.True(start > 0 && end > start, "لا نُقطَةَ قَبول — الأَداةُ عَمياء.");
+        var body = src[start..end];
+        var owner = body.IndexOf("err=not_owner", StringComparison.Ordinal);
+        var gone = body.IndexOf("AccountErasure.OffererGone(await s.LoadAsync<User>(offer.OffererId))", StringComparison.Ordinal);
+        var firstWrite = body.IndexOf("OfferAccepted(", StringComparison.Ordinal);
+        Assert.True(owner > 0 && gone > owner && firstWrite > gone,
+            $"الحارِسُ لَيسَ بَعدَ المالِكِ وقَبلَ الكِتابَة: المالِك @{owner} · الحارِس @{gone} · أَوَّلُ كِتابَة @{firstWrite}.");
+
+        var page = File.ReadAllText(Path.Combine(tpl, "Components", "Pages", "TenantListingDetail.razor"));
+        Assert.Contains("Err == ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.OffererGoneCode", page, StringComparison.Ordinal);
+        Assert.Contains("@L[\"listings.detail.err_offer_gone\"]", page, StringComparison.Ordinal);
+        Assert.NotNull(ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "listings.detail.err_offer_gone"));
+        Assert.Equal("offer_gone", AccountErasure.OffererGoneCode);
+    }
 }
 
 /// <summary>
@@ -458,9 +525,11 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
         }
     }
 
-    /// <summary><b>«اليَوم» حَيّاً</b>: عَرضُ العُضوِ المَحذوفِ يَبقى «مُعَلَّقاً»، ولَقطَتُه مَمحُوَّةٌ ومَجراه — الَّذي تَبني مِنه نُقطَةُ القَبول — بِاسمِه.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29)</b> — كانَ <c>Today_a_deleted_members_pending_offer_stays_pending_and_its_stream_keeps_the_name_on_Postgres</c>
+    /// («المَجرى بِالاسمِ المَحذوف: True · الحالُ في المَجرى: Pending · في اللَقطَة: Pending»). عَرضُه المُعَلَّقُ يُسحَبُ ومَجراه يَحمِلُ الاسمَ المَمحُوَّ، ومَقبولُه
+    /// يُمحى اسمُه ويَبقى مَقبولاً، وعَرضُ غَيرِه عَلى الإعلانِ نَفسِه كَما هُو؛ والقَبولُ يَبني مِن المَجرى فَيَجِدُه مَسحوباً.</summary>
     [Fact]
-    public async Task Today_a_deleted_members_pending_offer_stays_pending_and_its_stream_keeps_the_name_on_Postgres()
+    public async Task A_deleted_members_pending_offer_is_withdrawn_and_its_stream_carries_the_erased_name_on_Postgres()
     {
         if (!Enabled) return;
 
@@ -468,31 +537,40 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
         var slug = "zz-erase-" + Guid.NewGuid().ToString("N")[..8];
         const string name = "مُقَدِّمُ العَرضِ الحَيّ";
         var me = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = name, Phone = "+966500000556" };
-        var offerId = Guid.NewGuid();
+        var (offerId, acceptedId, theirsId, listing) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         try
         {
             await using (var s = store.LightweightSession(slug))
             {
                 s.Store(me);
                 var now = DateTime.UtcNow;
-                s.Events.StartStream<Offer>(offerId, new OfferSubmitted(offerId, Guid.NewGuid(), me.Id, name, 10m, null, 24.7, 46.7, now.AddDays(3), now));
+                s.Events.StartStream<Offer>(offerId, new OfferSubmitted(offerId, listing, me.Id, name, 10m, null, 24.7, 46.7, now.AddDays(3), now));
+                s.Events.StartStream<Offer>(acceptedId, new OfferSubmitted(acceptedId, Guid.NewGuid(), me.Id, name, 12m, null, 24.7, 46.7, now.AddDays(3), now),
+                                                         new OfferAccepted(acceptedId, now));
+                s.Events.StartStream<Offer>(theirsId, new OfferSubmitted(theirsId, listing, Guid.NewGuid(), "مُقَدِّمٌ آخَر", 11m, null, 24.7, 46.7, now.AddDays(3), now));
                 await s.SaveChangesAsync();
             }
             var counts = await EraseLikeTheDoorAsync(store, slug, me.Id);
             await using var q = store.LightweightSession(slug);
             var snapshot = (await q.LoadAsync<Offer>(offerId))!;
             var stream = (await q.Events.AggregateStreamAsync<Offer>(offerId))!;
+            var accepted = (await q.Events.AggregateStreamAsync<Offer>(acceptedId))!;
+            var theirs = (await q.LoadAsync<Offer>(theirsId))!;
             output.WriteLine($"عُروضٌ مَمحُوَّة: {counts.Offers} · اللَقطَةُ مَمحُوَّة: {snapshot.OffererName == AccountDeletion.ErasedName} · " +
-                             $"المَجرى بِالاسمِ المَحذوف: {stream.OffererName == name} · الحالُ في المَجرى: {stream.Status} · في اللَقطَة: {snapshot.Status}");
-            Assert.Equal(1, counts.Offers);
-            Assert.Equal(AccountDeletion.ErasedName, snapshot.OffererName);
-            Assert.Equal((name, OfferStatus.Pending, OfferStatus.Pending), (stream.OffererName, stream.Status, snapshot.Status));
+                             $"المَجرى بِالاسمِ المَحذوف: {stream.OffererName == name} · الحالُ في المَجرى: {stream.Status} · في اللَقطَة: {snapshot.Status} · " +
+                             $"المَقبولُ: {accepted.Status}/{accepted.OffererName == AccountDeletion.ErasedName} · عَرضُ غَيرِه: {theirs.Status}/{theirs.OffererName == "مُقَدِّمٌ آخَر"}");
+            Assert.Equal(2, counts.Offers);
+            Assert.Equal((AccountDeletion.ErasedName, OfferStatus.Withdrawn), (snapshot.OffererName, snapshot.Status));
+            Assert.Equal((AccountDeletion.ErasedName, OfferStatus.Withdrawn), (stream.OffererName, stream.Status));
+            Assert.Equal((AccountDeletion.ErasedName, OfferStatus.Accepted), (accepted.OffererName, accepted.Status));
+            Assert.Equal(("مُقَدِّمٌ آخَر", OfferStatus.Pending), (theirs.OffererName, theirs.Status));
+            Assert.Equal(10m, snapshot.Price);   // اللَقطَةُ لَم تُبنَ مِن الصِفر: الإسقاطُ طَبَّقَ الحَدَثَينِ عَلى المُخَزَّنَة.
         }
         finally
         {
             await using var s = store.LightweightSession(slug);
             s.DeleteWhere<User>(u => u.Id != Guid.Empty); s.DeleteWhere<Offer>(o => o.Id != Guid.Empty);
-            s.Events.ArchiveStream(offerId);
+            s.Events.ArchiveStream(offerId); s.Events.ArchiveStream(acceptedId); s.Events.ArchiveStream(theirsId);
             await s.SaveChangesAsync();
         }
     }

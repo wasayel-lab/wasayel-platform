@@ -210,6 +210,12 @@ else
            مالِكَه: كانَ مَسارُ العَرضِ يَرتَدُّ بِه إلى هُنا والصَفحَةُ لا تَقرَؤُه (‏ADR-033 §٦‑ب‑١ مُلحَقاً). *@
         <AcAlert Variant="danger" Message="@L["listings.detail.err_self"]" />
     }
+    else if (Err == ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.OffererGoneCode)
+    {
+        @* `offer_gone` — رَدُّ نُقطَةِ القَبولِ حينَ حَذَفَ صاحِبُ العَرضِ حِسابَه (‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢): الحَذفُ يَسحَبُ عُروضَه المُعَلَّقَة،
+           فَلا يَبلُغُه إلّا عَرضٌ سَبَقَ حَذفُه ذلك — ويُقالُ ولا يُبتلَع. *@
+        <AcAlert Variant="warning" Message="@L["listings.detail.err_offer_gone"]" />
+    }
     else if (Err == ACommerce.Templates.Customer.Marketplace.Services.Patterns.CartDoor.ClosedCode)
     {
         @* `cart_closed` — رَمزُ `cart/add` عَلى مَتجَرٍ لا يَستَعمِلُ نَمَطُه السَلَّة (`CartDoor`، تَيّارُ S15 البَند L): الصَفحَةُ لا تَرسُمُ
