@@ -352,6 +352,10 @@ public class LiveDealReviewProofTests(ITestOutputHelper output)
             var back = await door.SubmitAsync(slug, deal.Id, new DealReviewer(seller, "بائِع"), 4, "مُشتَرٍ جَيِّد");
             Assert.True(back.Ok, back.Violation?.MessageAr);
             Assert.Equal(buyer, back.Review!.TargetUserId);
+            // (‏2026-10-29، قَرارُ المالِك د33 «٣» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): البائِعُ مَشاها وَحدَه، فَتَقييمُه لِلمُشتَري مَربوطٌ بِالصَفقَةِ بِلا «مَوثوق»؛
+            // وتَقييمُ المُشتَري لِلبائِعِ أَعلاه «مَوثوقٌ» لِأَنّ البائِعَ خَطا.
+            Assert.Equal(deal.Id, back.Review.DealId);
+            Assert.False(back.Review.VerifiedTransaction);
             Assert.Equal(2, await ReviewCount(store, slug));
             var summary = await reviews.SummaryAsync(slug, seller);
             Assert.Equal(1, summary.Count);

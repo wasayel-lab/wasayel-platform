@@ -15,13 +15,17 @@ public sealed class ReviewsService
     /// كَما كان. ومُعَرِّفٌ مُعطًى كُتِبَ قَبلُ يُرمى عِندَ الحِفظِ (<c>DocumentAlreadyExistsException</c>) ولا يُدهَس — فَيَصيرُ «مَرَّةً واحِدَة»
     /// قَيداً في القاعِدَةِ لِمَن يَختارُ مُعَرِّفاً حَتمِيّاً (<c>DealReviews</c>)، بِلا فِهرِسٍ ولا تَرحيل. ولِلمُعَرِّفِ العَشوائِيِّ <c>Insert</c>
     /// و<c>Store</c> سَواء.</para>
+    /// <para><b>و«مَوثوقٌ» قَرارٌ يُمَرَّرُ لا وُجودُ مُعَرِّف</b> (‏2026-10-29، قَرارُ المالِك د33 «٣»): كانَ كُلُّ تَقييمٍ مَربوطٍ بِصَفقَةٍ يُوسَمُ
+    /// <c>VerifiedTransaction</c> (‏<c>dealId is not null</c>) — فَبائِعٌ مَشى صَفقَةَ نَقدٍ وَحدَه يُقَيِّمُ مُشتَرِيَها «مَوثوقاً». الوَسمُ الآنَ
+    /// <paramref name="verified"/> يَقرَؤُه المُنادي مِن صَفقَتِه، مَعَ بَقاءِ رَبطِ التَقييمِ بِها؛ وغِيابُه «غَيرُ مَوثوق» (يُخطِئُ نَحوَ الأَمان)، ولا وَسمَ
+    /// بِلا صَفقَة. وبَعدَ <paramref name="id"/> عَمداً: النِداءاتُ القائِمَةُ لا تَتَحَرَّك.</para>
     /// </summary>
     public async Task<Review> SubmitAsync(
         string tenantSlug, Guid targetUserId, string targetName,
         Guid authorId, string authorName,
         int rating, string body,
         Guid? dealId = null, string dealPattern = "",
-        CancellationToken ct = default, Guid? id = null)
+        CancellationToken ct = default, Guid? id = null, bool verified = false)
     {
         if (rating < 1) rating = 1;
         if (rating > 5) rating = 5;
@@ -32,7 +36,7 @@ public sealed class ReviewsService
             AuthorId = authorId, AuthorName = authorName,
             Rating = rating, Body = body,
             DealId = dealId, DealPattern = dealPattern,
-            VerifiedTransaction = dealId is not null,
+            VerifiedTransaction = dealId is not null && verified,
             At = DateTime.UtcNow
         };
         await using var s = _store.LightweightSession(tenantSlug);

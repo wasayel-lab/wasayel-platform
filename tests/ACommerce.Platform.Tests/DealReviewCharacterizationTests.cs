@@ -237,11 +237,14 @@ public class DealReviewCharacterizationTests
     /// بِصَفقَةٍ يُوسَمُ «مُوَثَّقاً» بِمُجَرَّدِ وُجودِ مُعَرِّفِها، والتَكرارُ يُمنَعُ لِكُلِّ (كاتِب، صَفقَة)
     /// لا لِكُلِّ كاتِب، والمُلَخَّصُ يَعُدُّ كُلَّ ما لَيسَ مَخفِيّاً مِن تَقييماتِ الهَدَف — فَلا شَيءَ في
     /// الكيتِ يَسأَلُ عَن حالَةِ الصَفقَة. والدَرَجَةُ تُحصَرُ بَينَ ١ و٥.</summary>
+    /// <remarks><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د33 «٣»؛ كانَ <c>A_deal_review_is_marked_verified_once_per_author_per_deal_and_every_visible_one_counts_in_the_target_summary</c>):
+    /// «مَوثوقٌ» لَم يَعُد وُجودَ مُعَرِّفِ الصَفقَةِ بَل قَراراً يُمَرِّرُه المُنادي (<c>verified</c>) — وما سِواه بِحَرفِه.</remarks>
     [Fact]
-    public void A_deal_review_is_marked_verified_once_per_author_per_deal_and_every_visible_one_counts_in_the_target_summary()
+    public void A_deal_review_is_marked_verified_only_when_its_caller_says_so_once_per_author_per_deal_and_every_visible_one_counts()
     {
         var kit = ReviewsKit();
-        Assert.Contains("VerifiedTransaction = dealId is not null,", kit, StringComparison.Ordinal);
+        Assert.Contains("VerifiedTransaction = dealId is not null && verified,", kit, StringComparison.Ordinal);
+        Assert.Contains("CancellationToken ct = default, Guid? id = null, bool verified = false)", kit, StringComparison.Ordinal);
         Assert.Contains(".AnyAsync(r => r.AuthorId == authorId && r.DealId == dealId, ct);", kit, StringComparison.Ordinal);
         Assert.Contains(".Where(r => r.TargetUserId == userId).ToListAsync(ct);", kit, StringComparison.Ordinal);
         Assert.Contains("if (rating < 1) rating = 1;", kit, StringComparison.Ordinal);
@@ -281,19 +284,17 @@ public class DealReviewCharacterizationTests
         Assert.Contains("}).DisableAntiforgery()", review, StringComparison.Ordinal);
     }
 
-    // ═══ ٣) «اليَوم» — البائِعُ وَحدَه يُكمِلُ صَفقَةَ النَقدِ ويُقَيِّمُ مُشتَريها «مُوَثَّقاً» ═══════════════════
+    // ═══ ٣) البائِعُ وَحدَه يُكمِلُ صَفقَةَ النَقد — ويُنشَرُ تَقييمُه لِلمُشتَري عادِيّاً بِلا «مَوثوق» (‏2026-10-29، قَرارُ المالِك د33 «٣») ═══
     //
-    // مُراجَعَةُ الموجَةِ الثانِيَةِ الرابِعَة (‏2026-10-12): النَقدُ يَتَخَطّى `Paid` (‏ADR-033 §٦‑ب‑٣)، ونَمَطُ
-    // `marketplace` بِلا `Received`، وفاعِلُ كُلِّ مَرحَلَةٍ مَدخولَةٍ بَعدَها الطَرَفُ أَو أَيٌّ مِنهُما (§٦‑ط) — فَلا خُطوَةَ
-    // لِلمُشتَري في الطَريقِ كُلِّه. **يُثَبَّتُ ولا يُقَرَّر**: سُؤالٌ لِلمالِكِ «ب» (هَل يَتَطَلَّبُ إكمالُ صَفقَةِ النَقدِ، أَو
-    // تَقييمُ البائِعِ لِلمُشتَري «مُوَثَّقاً»، خُطوَةً مِن المُشتَري؟) وسَطرٌ مُؤَرَّخٌ في ‏ADR-033 §٦‑ج.
+    // مُراجَعَةُ الموجَةِ الثانِيَةِ الرابِعَة (‏2026-10-12): النَقدُ يَتَخَطّى `Paid` (‏ADR-033 §٦‑ب‑٣)، ونَمَطُ `marketplace` بِلا `Received`، وفاعِلُ كُلِّ
+    // مَرحَلَةٍ مَدخولَةٍ بَعدَها الطَرَفُ أَو أَيٌّ مِنهُما (§٦‑ط) — فَلا خُطوَةَ لِلمُشتَري في الطَريقِ كُلِّه. **وأَجابَ المالِك**: «يبقى إكمال الصفقة كما هو.
+    // لكن وسم «موثّق» لا يُعطى إلا إن قام الطرف المقيَّم نفسه بخطوة في الصفقة بعد إنشائها».
 
-    /// <summary><b>اليَوم</b>: البائِعُ المَربوطُ عِندَ الوِلادَةِ يَقبَلُ صَفقَةَ النَقدِ ثُمَّ يَمشيها وَحدَه — حَجز ← تَأكيد
-    /// ← شَحن ← تَسليم ← تَقييم — إلى <c>Completed</c> بِلا نَقرَةٍ واحِدَةٍ مِن المُشتَري، ثُمَّ تُجيزُ بَوّابَةُ التَقييمِ
-    /// (‏ADR-033 §٦‑ح) تَقييمَه لِلمُشتَري، والبابُ يُمَرِّرُ مُعَرِّفَ الصَفقَةِ فَيَسِمُه الكيتُ «مُوَثَّقاً»
-    /// (<c>VerifiedTransaction</c>) — لِطَلَبٍ رُبَّما لَم يُسَلَّم. يُقلَبُ بِاسمِه يَومَ يُجيبُ المالِك.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (كانَ <c>Today_the_seller_alone_walks_a_cash_deal_to_Completed_and_his_review_of_the_buyer_is_verified</c>): البائِعُ
+    /// المَربوطُ يَقبَلُ صَفقَةَ النَقدِ ويَمشيها وَحدَه إلى <c>Completed</c> كَما كان — ثُمَّ يُقَيِّمُ المُشتَري بِالبابِ الحَقيقِيِّ (<see cref="DealReviews"/>)
+    /// فَيُنشَرُ تَقييمُه مَربوطاً بِالصَفقَةِ <b>بِلا وَسمِ «مَوثوق»</b>؛ وتَقييمُ المُشتَري لِلبائِعِ — وقَد خَطا البائِعُ — «مَوثوق».</summary>
     [Fact]
-    public void Today_the_seller_alone_walks_a_cash_deal_to_Completed_and_his_review_of_the_buyer_is_verified()
+    public void The_seller_alone_walks_a_cash_deal_to_Completed_and_his_review_of_the_buyer_is_published_unverified()
     {
         var (world, id) = CashCartWorld();
         var deals = new DealsService(world.Store, new ForbiddenPaymentProvider());
@@ -315,13 +316,71 @@ public class DealReviewCharacterizationTests
         Assert.Equal(new[] { DealStage.Booked, DealStage.Confirmed, DealStage.Shipping, DealStage.Delivered, DealStage.Reviewed },
             stages.ToArray());
         Assert.All(deal.Timeline.Where(e => e.Action == "advanced"), e => Assert.Equal(Seller, e.ActorId));
-        Assert.Contains(deal.Timeline, e => e.Action == DealEvent.CashOnDelivery && e.ActorId == Seller);
+        Assert.False(DealReviewAuthorization.TookAStep(deal, Buyer));
+        Assert.True(DealReviewAuthorization.TookAStep(deal, Seller));
 
+        // البابُ (`DealReviews`) يُمَرِّرُ هذا الجَوابَ نَفسَه لِهَدَفِ التَقييم — مُثَبَّتٌ بِنَصِّه؛ وعالَمُ الوَثائِقِ لا يُنَفِّذُ استِعلامَ «قَيَّمَ مِن قَبل»
+        // (يُقاسُ حَيّاً في `DealReviewAuthorizationTests`)، فَيُنادى الكيتُ بِما يُنادي بِه البابُ حَرفاً.
         Assert.Null(DealReviewAuthorization.Validate(deal, new DealReviewer(Seller, "بائِع")));
         Assert.Equal((Buyer, "مُشتَرٍ"), DealReviewAuthorization.TargetOf(deal, Seller));
-        Assert.Contains("dealId: dealId, dealPattern: deal!.Pattern", DealReviewsService(), StringComparison.Ordinal);
-        var review = Now(new ReviewsService(world.Store).SubmitAsync(Slug, Buyer, "مُشتَرٍ", Seller, "بائِع", 1, "لَم يَستَلِم",
-            dealId: id, dealPattern: deal.Pattern));
-        Assert.True(review.VerifiedTransaction);
+        Assert.Contains("verified: DealReviewAuthorization.TookAStep(deal, targetId)", DealReviewsService(), StringComparison.Ordinal);
+        var kit = new ReviewsService(world.Store);
+        var ofBuyer = Now(kit.SubmitAsync(Slug, Buyer, "مُشتَرٍ", Seller, "بائِع", 1, "لَم يَستَلِم",
+            dealId: id, dealPattern: deal.Pattern, verified: DealReviewAuthorization.TookAStep(deal, Buyer)));
+        Assert.Equal(((Guid?)id, false), (ofBuyer.DealId, ofBuyer.VerifiedTransaction));
+        var ofSeller = Now(kit.SubmitAsync(Slug, Seller, "بائِع", Buyer, "مُشتَرٍ", 5, "وَصَل",
+            dealId: id, dealPattern: deal.Pattern, verified: DealReviewAuthorization.TookAStep(deal, Seller)));
+        Assert.Equal(((Guid?)id, true), (ofSeller.DealId, ofSeller.VerifiedTransaction));
+    }
+
+    // ═══ ٤) «خُطوَةُ الطَرَفِ نَفسِه» — مُوجِبٌ وسالِبٌ لِكُلِّ فِعل (‏2026-10-29، قَرارُ المالِك د33 «٣») ═══════════════
+
+    private static Deal WithLine(string action, Guid? actor)
+    {
+        var deal = new Deal { Id = Guid.NewGuid(), Pattern = "marketplace", InitiatorId = Buyer, CounterpartyId = Seller, Status = DealStatus.Completed, Stage = DealStage.Reviewed };
+        deal.Timeline.Add(new(DealStage.Offered, DealStage.Offered, "created", Buyer, "مُشتَرٍ", null, DateTime.UtcNow));
+        deal.Timeline.Add(new(DealStage.Offered, DealStage.Booked, action, actor, "فاعِل", null, DateTime.UtcNow));
+        return deal;
+    }
+
+    /// <summary>المُوجِب: «advanced» و«ثَبَتَ الدَفعُ عِندَ بَوّابَةِ المَتجَر» بِفاعِلِهِما خُطوَتُه.</summary>
+    [Theory]
+    [InlineData("advanced")]
+    [InlineData(DealEvent.GatewayPaid)]
+    public void A_party_steps_when_a_step_action_carries_his_own_id(string action)
+    {
+        Assert.Equal(new[] { "advanced", DealEvent.GatewayPaid }, DealReviewAuthorization.StepActions.ToArray());
+        Assert.True(DealReviewAuthorization.TookAStep(WithLine(action, Buyer), Buyer));
+        Assert.False(DealReviewAuthorization.TookAStep(WithLine(action, Seller), Buyer));   // خُطوَةُ غَيرِه لَيسَت خُطوَتَه
+        Assert.False(DealReviewAuthorization.TookAStep(WithLine(action, null), Buyer));     // سَطرُ المَنصَّة
+    }
+
+    /// <summary>السالِب: الإنشاءُ نَفسُه، والرَبطُ والتَعيين، والقَبضُ النَقدِيّ، وسُطورُ المالِ والنِزاعِ والمَرجِع — لَيسَت خُطوَةَ مَن تَحمِلُ اسمَه.</summary>
+    [Theory]
+    [InlineData("created")]
+    [InlineData("assigned")]
+    [InlineData(DealEvent.BoundAtBirth)]
+    [InlineData(DealEvent.CashOnDelivery)]
+    [InlineData("captured")]
+    [InlineData("cancelled")]
+    [InlineData("disputed")]
+    [InlineData(DealEvent.RefNote)]
+    public void A_party_does_not_step_by_a_line_that_is_not_a_step(string action)
+    {
+        var deal = WithLine(action, Buyer);
+        Assert.False(DealReviewAuthorization.TookAStep(deal, Buyer));
+        Assert.False(DealReviewAuthorization.TookAStep(deal, Guid.Empty));
+    }
+
+    /// <summary>والكيتُ: لا وَسمَ بِلا صَفقَة ولَو قيلَ «مَوثوق»، ولا وَسمَ بِصَفقَةٍ بِلا «مَوثوق»، والاثنانِ مَعاً وَسم.</summary>
+    [Fact]
+    public void The_kit_marks_verified_only_for_a_deal_review_its_caller_calls_verified()
+    {
+        var world = new DocWorld();
+        var kit = new ReviewsService(world.Store);
+        var deal = Guid.NewGuid();
+        Assert.False(Now(kit.SubmitAsync(Slug, Buyer, "مُشتَرٍ", Seller, "بائِع", 5, "x", dealId: deal)).VerifiedTransaction);
+        Assert.False(Now(kit.SubmitAsync(Slug, Buyer, "مُشتَرٍ", Seller, "بائِع", 5, "x", verified: true)).VerifiedTransaction);
+        Assert.True(Now(kit.SubmitAsync(Slug, Buyer, "مُشتَرٍ", Seller, "بائِع", 5, "x", dealId: deal, verified: true)).VerifiedTransaction);
     }
 }

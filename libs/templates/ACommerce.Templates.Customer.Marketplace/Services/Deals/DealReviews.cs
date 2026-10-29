@@ -61,8 +61,10 @@ public sealed class DealReviews
         // فَوُجِد (‏2026-10-13، G4 (iv)؛ ‏ADR-036 §١٢‑٤).
         try
         {
+            // و«مَوثوقٌ» حينَ خَطا الهَدَفُ نَفسُه خُطوَةً في الصَفقَة — لا بِمُجَرَّدِ رَبطِها (‏2026-10-29، قَرارُ المالِك د33 «٣»)؛ والرَبطُ بِالصَفقَةِ باقٍ.
             var review = await _reviews.SubmitAsync(tenantSlug, targetId, targetName, by.ActorId, by.ActorName,
-                rating, body, dealId: dealId, dealPattern: deal!.Pattern, ct: ct, id: ReviewIdFor(dealId, by.ActorId));
+                rating, body, dealId: dealId, dealPattern: deal!.Pattern, ct: ct, id: ReviewIdFor(dealId, by.ActorId),
+                verified: DealReviewAuthorization.TookAStep(deal, targetId));
             return DealReviewResult.Reviewed(deal, review);
         }
         catch (JasperFx.DocumentAlreadyExistsException)

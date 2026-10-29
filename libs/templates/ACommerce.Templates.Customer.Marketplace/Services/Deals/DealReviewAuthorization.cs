@@ -12,7 +12,8 @@ public sealed record DealReviewViolation(string Code, string MessageAr);
 ///
 /// <para><b>ولِماذا هُوِيَّةٌ وَحدَها بِلا رايَةِ سُلطَة</b>: السُلطَةُ مَكتوبَةٌ عَلى الصَفقَةِ نَفسِها —
 /// طَرَفاها — فَالقَرارُ مُقارَنَةُ هُوِيَّة. ومالِكُ التَطبيقِ يُقَيِّمُ «نِيابَةً عَن» أَحَدِ الطَرَفَينِ
-/// مِن مَسارِه الإداريِّ المُنفَصِل (<c>/studio/apps/{slug}/deals/{id}/review</c>) ولا يَمُرُّ مِن هُنا.</para>
+/// مِن مَسارِه الإداريِّ المُنفَصِل (<c>/studio/apps/{slug}/deals/{id}/review</c>) ولا يَمُرُّ مِن هُنا.
+/// (‏2026-10-29، قَرارُ المالِك د39 «ب» — ولا يُعادُ حَرفٌ فَوقَه: حُذِفَ ذلكَ المَسار؛ فَلا يَكتُبُ التَقييمَ إلّا صاحِبُه مِن هُنا.)</para>
 /// </summary>
 /// <param name="ActorId">المُستَخدِمُ الكاتِب — مُؤَلِّفُ التَقييم.</param>
 /// <param name="ActorName">اسمُه كَما يُكتَبُ في التَقييم.</param>
@@ -116,6 +117,22 @@ public static class DealReviewAuthorization
     }
 
     public static bool IsAllowed(Deal? deal, DealReviewer by) => Validate(deal, by) is null;
+
+    /// <summary>أَفعالُ سِجِلِّ الصَفقَةِ الَّتي هي خُطوَةٌ يَخطوها طَرَفٌ بِنَفسِه — مَعجَمٌ مُغلَق (‏2026-10-29، قَرارُ المالِك د33 «٣»): <c>advanced</c> (القَبول،
+    /// والتَأكيد، والشَحن، والتَسليم، والاستِلام، وخُطوَةُ التَقييم — كُلُّ انتِقالٍ بِفاعِلِه)، و<see cref="DealEvent.GatewayPaid"/> (الدَفعُ عِندَ بَوّابَةِ
+    /// المَتجَر، فاعِلُه المُشتَري). وما سِواهُما لَيسَ خُطوَتَه: <c>created</c> (الإنشاءُ نَفسُه)، والرَبطُ والتَعيين (يَكتُبُهُما الكاتِبُ عَنه)، و«قَبضٌ نَقديٌّ»
+    /// (يُرافِقُ انتِقالَ مَن سَلَّم)، وسُطورُ المالِ والمَراجِعِ والنِزاع.</summary>
+    public static readonly IReadOnlyList<string> StepActions = new[] { "advanced", DealEvent.GatewayPaid };
+
+    /// <summary>
+    /// <para><b>أَخَطا هذا الطَرَفُ بِنَفسِه خُطوَةً في الصَفقَةِ بَعدَ إنشائِها؟</b> (‏2026-10-29، قَرارُ المالِك د33 «٣»: «وسم «موثّق» لا يُعطى إلا إن قام
+    /// الطرف المقيَّم نفسه بخطوة في الصفقة بعد إنشائها… وفي صفقة نقد مشاها البائع وحده يُنشر تقييمه للمشتري عاديًّا، بلا وسم «موثّق»»). سَطرٌ في السِجِلِّ
+    /// فاعِلُه <paramref name="partyId"/> وفِعلُه مِن <see cref="StepActions"/>. يَسأَلُها <c>DealReviews</c> عَن هَدَفِ التَقييمِ ويُمَرِّرُ الجَوابَ وَسماً إلى
+    /// الكيت؛ وهي قاعِدَةٌ عامَّةٌ تَصدُقُ في كُلِّ نَمَط. دالَّةٌ نَقِيَّة.</para>
+    /// </summary>
+    public static bool TookAStep(Deal deal, Guid partyId)
+        => partyId != Guid.Empty
+           && deal.Timeline.Any(e => e.ActorId == partyId && StepActions.Contains(e.Action, StringComparer.Ordinal));
 }
 
 /// <summary>
