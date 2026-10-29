@@ -7,6 +7,7 @@ using ACommerce.Kit.Offers;
 using ACommerce.Kit.Reviews;
 using ACommerce.Platform.I18n;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
+using ACommerce.Templates.Customer.Marketplace.Services.Identity;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -24,6 +25,10 @@ namespace ACommerce.Platform.Tests;
 // **يُثَبَّتُ هُنا قَبلَ التَبديلِ** (القاعِدَة ٣): الصُفوفُ الأَربَعَةُ الأولى وَقائِعُ الكودِ — تَبقى بِلا تَعديلِ حَرفٍ بَعدَ الخِيارِ (ب)
 // (تَصحيحِ النُصوص)، فَهي ما يَقولُه النَصُّ الجَديد؛ والخامِسُ (`Today_…`) يَنقَلِبُ بِاسمِه في كوميتِ الصِياغَة. ويَومَ يُختارُ الخِيارُ
 // (أ) (مَدُّ الحَذفِ إلى الصَفَقات) يُحمِرُّ الأَوَّلُ والثاني بِقَصدٍ ويُكتَبُ النَصُّ مَعَهُما.
+//
+// **‏2026-10-29 — وَقَعَ الخِيارُ (أ) (قَرارُ المالِك د52 (١) «أ»؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)**: «يُمَدُّ الحَذفُ إلى ما يُمكِنُ تَعديلُه». فَقُلِبَت
+// بِأَسمائِها الصُفوفُ ١ و٣ و٣ب و٣ج وصُفوفُ النُصوص — النُسَخُ تُمحى في المُعامَلَة (`AccountErasure`)، وما في سِجِلٍّ لا يُعَدَّلُ يُقال — والصَفُّ ٢
+// (الصَفقَةُ الحَيَّةُ تَحمِلُ الاسمَ والهاتِفَ والعُنوانَ ويَقرَؤُها ثَلاثَة) والصَفُّ ٤ (حِسابُ الاستوديو بِلا باب) بَقِيا بِحَرفِهِما: ما زالا يَصدُقان.
 public class AccountDeletionRetentionTests(ITestOutputHelper output)
 {
     private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;
@@ -43,18 +48,29 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     }
 
     // ─── ١. الحَذفُ يَمَسُّ وَثيقَةَ المُستَخدِمِ وَحدَها ──────────────────────────────────────────────────
+    //
+    // ‏(‏2026-10-29، قَرارُ المالِك د52 (١) «أ» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): ما عادَ كَذلك. الصَفُّ أَدناه قُلِبَ بِاسمِه: النُقطَةُ تُسَمّي وَثيقَةَ
+    // الحِسابِ بِيَدِها كَما كانَت، ونُسَخُ الاسمِ يَمحوها `AccountErasure.EraseCopiesAsync` في الجَلسَةِ نَفسِها قَبلَ الحِفظِ الواحِد.
 
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، د52)</b> — كانَ <c>Deletion_writes_the_user_document_alone_and_nothing_else_reaches_a_deal</c>: «‏Store(…) في النُقطَة: 1
+    /// (user!) · Patch: 0 · ذِكرُ الصَفقَة: 0». والآن الوَثيقَةُ الوَحيدَةُ الَّتي تُسَمّيها النُقطَةُ بِيَدِها ما زالَت <c>user!</c>، ويَمحو <c>AccountErasure</c>
+    /// النُسَخَ في الجَلسَةِ نَفسِها — بَعدَ <c>Erase</c> (فَالاسمُ القَديمُ مَحفوظٌ قَبلَه) وقَبلَ الحِفظِ الواحِد — ولا يَعرِفُ الحَذفَ مِلَفٌّ في خِدماتِ الصَفَقات.</summary>
     [Fact]
-    public void Deletion_writes_the_user_document_alone_and_nothing_else_reaches_a_deal()
+    public void Deletion_erases_the_copies_in_the_same_save_and_still_stores_the_user_document_alone_by_hand()
     {
         var body = DeleteEndpointBody();
         var stores = Regex.Matches(body, @"\.Store\((?<arg>[^)]*)\)").Select(m => m.Groups["arg"].Value.Trim()).ToList();
         var patches = Regex.Matches(body, @"\.Patch<").Count;
-        var dealMentions = Regex.Matches(body, @"\bDeal\b|Deals\.|DealsService").Count;
+        var before = body.IndexOf("var nameBefore = user!.FullName;", StringComparison.Ordinal);
+        var erase = body.IndexOf("AccountDeletion.Erase(user!, now)", StringComparison.Ordinal);
+        var copies = body.IndexOf("AccountErasure.EraseCopiesAsync(session, slug, userId, nameBefore)", StringComparison.Ordinal);
+        var save = body.IndexOf("SaveChangesAsync", StringComparison.Ordinal);
 
-        // ومَن يُنادي `Erase` في الكودِ كُلِّه، ومَن يَقرَأُ `DeletedAt` في خِدماتِ الصَفَقات.
         var erasers = EntitlementContractTests.SourceFiles()
             .Where(f => WriteEndpointGuardTests.StripComments(f.Text).Contains("AccountDeletion.Erase(", StringComparison.Ordinal))
+            .Select(f => Path.GetFileName(f.File)).OrderBy(n => n, StringComparer.Ordinal).ToList();
+        var copyErasers = EntitlementContractTests.SourceFiles()
+            .Where(f => WriteEndpointGuardTests.StripComments(f.Text).Contains("AccountErasure.EraseCopiesAsync(", StringComparison.Ordinal))
             .Select(f => Path.GetFileName(f.File)).OrderBy(n => n, StringComparer.Ordinal).ToList();
         var dealsDir = Path.Combine(RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Deals");
         var dealFiles = Directory.GetFiles(dealsDir, "*.cs", SearchOption.AllDirectories);
@@ -62,21 +78,22 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
             .Where(f => Regex.IsMatch(WriteEndpointGuardTests.StripComments(File.ReadAllText(f)), @"DeletedAt|AccountDeletion"))
             .Select(Path.GetFileName).ToList();
 
-        output.WriteLine($"Store(…) في النُقطَة: {stores.Count} ({string.Join(", ", stores)}) · Patch: {patches} · ذِكرُ الصَفقَة: {dealMentions}" +
-                         $" · مَن يُنادي Erase: {string.Join(", ", erasers)} · مِلَفّاتُ الصَفَقاتِ المَفحوصَة: {dealFiles.Length}، تَعرِفُ الحَذف: {deletionAware.Count}");
+        output.WriteLine($"Store(…) في النُقطَة: {stores.Count} ({string.Join(", ", stores)}) · Patch: {patches} · الاسمُ قَبلَ Erase ثُمَّ النُسَخُ ثُمَّ الحِفظ: {before < erase && erase < copies && copies < save}" +
+                         $" · مَن يُنادي Erase: {string.Join(", ", erasers)} · مَن يَمحو النُسَخ: {string.Join(", ", copyErasers)} · مِلَفّاتُ الصَفَقاتِ تَعرِفُ الحَذف: {deletionAware.Count}/{dealFiles.Length}");
 
         Assert.Equal(new[] { "user!" }, stores);
         Assert.Equal(0, patches);
-        Assert.Equal(0, dealMentions);
+        Assert.True(before > 0 && erase > before && copies > erase && save > copies, "التَرتيب: الاسمُ القَديمُ ثُمَّ Erase ثُمَّ مَحوُ النُسَخِ ثُمَّ الحِفظُ الواحِد.");
+        Assert.Equal(1, Regex.Matches(body, "SaveChangesAsync").Count);
         // ‏‏2026-10-29 (د57، ‏ADR-044 §٤): مُستَدعٍ ثانٍ بِقَرار — الدَمجُ يَمحو الحِسابَ المُندَمِجَ بِـ`Erase` بِعَينِها بَعدَ أَن يَنقُلَ صَفَقاتِه
-        // وما يَحمِلُ مُعَرِّفَه إلى الباقي (`DuplicatePhones.ApplyAsync`)؛ فَلا يَبلُغُ المَحوُ صَفقَةً مِنه أَيضاً، والتَوقيعُ أَدناه كَما هُو.
+        // وما يَحمِلُ مُعَرِّفَه إلى الباقي (`DuplicatePhones.ApplyAsync`) — فَلا يَمحو نُسَخَه (صارَت لِلباقي).
         Assert.Equal(new[] { "DuplicatePhones.cs", "MarketplaceTemplateExtensions.cs" }, erasers);
+        Assert.Equal(new[] { "MarketplaceTemplateExtensions.cs" }, copyErasers);
         Assert.True(dealFiles.Length >= 10, $"أَداةٌ عَمياء: {dealFiles.Length} مِلَفّاً في خِدماتِ الصَفَقات.");
         Assert.Empty(deletionAware);
 
-        // و`Erase` لا يَأخُذُ إلّا الوَثيقَة: لا جَلسَةَ ولا مُعَرِّفَ يَبلُغُ بِه غَيرَها.
-        var erase = typeof(AccountDeletion).GetMethod(nameof(AccountDeletion.Erase))!;
-        Assert.Equal(new[] { typeof(User), typeof(DateTime) }, erase.GetParameters().Select(p => p.ParameterType));
+        var erasure = typeof(AccountDeletion).GetMethod(nameof(AccountDeletion.Erase))!;
+        Assert.Equal(new[] { typeof(User), typeof(DateTime) }, erasure.GetParameters().Select(p => p.ParameterType));
     }
 
     // ─── ٢. الصَفقَةُ تَحمِلُ الاسمَ والهاتِفَ والعُنوان، ويَراها ثَلاثَة ──────────────────────────────────
@@ -128,19 +145,43 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         (typeof(Offer), nameof(Offer.OffererName)),
     };
 
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، د52 (١) «أ»)</b> — كانَ <c>Copies_of_the_name_live_on_deals_conversations_reviews_and_offers_and_the_eraser_takes_none_of_them</c>
+    /// («يَمَسُّها الحَذف: 0»). والآن كُلُّ نُسخَةٍ مِن السَبعِ يَمحوها <see cref="AccountErasure"/> — لِصاحِبِها وَحدَه، والطَرَفُ الآخَرُ بِاسمِه.</summary>
     [Fact]
-    public void Copies_of_the_name_live_on_deals_conversations_reviews_and_offers_and_the_eraser_takes_none_of_them()
+    public void Copies_of_the_name_live_on_deals_conversations_reviews_and_offers_and_the_eraser_takes_every_one_of_them()
     {
         foreach (var (doc, field) in NameCopies)
             Assert.True(doc.GetProperty(field, BindingFlags.Public | BindingFlags.Instance)?.PropertyType is { } t
                         && (t == typeof(string)),
                 $"{doc.Name}.{field} لَيسَ حَقلَ نَصٍّ — الجَردُ تَغَيَّر.");
 
-        var body = DeleteEndpointBody();
-        var touched = NameCopies.Where(c => body.Contains(c.Doc.Name, StringComparison.Ordinal)).ToList();
-        output.WriteLine($"نُسَخُ الاسمِ المَجرودَة: {NameCopies.Length} ({string.Join(", ", NameCopies.Select(c => $"{c.Doc.Name}.{c.Field}"))}) · يَمَسُّها الحَذف: {touched.Count}");
+        var me = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        var deal = new Deal
+        {
+            InitiatorId = me, InitiatorName = "أَنا", CounterpartyId = other, CounterpartyName = "الآخَر",
+            Timeline = new() { new DealEvent(DealStage.Offered, DealStage.Offered, "created", me, "أَنا", null, DateTime.UtcNow),
+                               new DealEvent(DealStage.Offered, DealStage.Booked, "advanced", other, "الآخَر", null, DateTime.UtcNow) },
+        };
+        var conv = new Conversation { OwnerId = me, OwnerName = "أَنا", PartnerId = other, PartnerName = "الآخَر" };
+        var written = new Review { AuthorId = me, AuthorName = "أَنا", TargetUserId = other, TargetUserName = "الآخَر" };
+        var received = new Review { AuthorId = other, AuthorName = "الآخَر", TargetUserId = me, TargetUserName = "أَنا" };
+        var offer = new Offer { OffererId = me, OffererName = "أَنا" };
+        var erased = new[] { AccountErasure.EraseFrom(deal, me), AccountErasure.EraseFrom(conv, me), AccountErasure.EraseFrom(written, me),
+                             AccountErasure.EraseFrom(received, me), AccountErasure.EraseFrom(offer, me) };
+        var x = AccountDeletion.ErasedName;
+        output.WriteLine($"نُسَخُ الاسمِ المَجرودَة: {NameCopies.Length} ({string.Join(", ", NameCopies.Select(c => $"{c.Doc.Name}.{c.Field}"))}) · مَحاها الحَذف: {erased.Count(e => e)}/{erased.Length}");
         Assert.True(NameCopies.Length >= 5, $"أَداةٌ عَمياء: {NameCopies.Length} نُسخَة.");
-        Assert.Empty(touched);
+        Assert.All(erased, Assert.True);
+        Assert.Equal((x, "الآخَر"), (deal.InitiatorName, deal.CounterpartyName));
+        Assert.Equal(new[] { x, "الآخَر" }, deal.Timeline.Select(e => e.ActorName));
+        Assert.Equal((x, "الآخَر"), (conv.OwnerName, conv.PartnerName));
+        Assert.Equal((x, "الآخَر"), (written.AuthorName, written.TargetUserName));
+        Assert.Equal(("الآخَر", x), (received.AuthorName, received.TargetUserName));
+        Assert.Equal(x, offer.OffererName);
+        // ومَرَّةً ثانِيَة لا تُغَيِّرُ شَيئاً — فَلا تُعادُ كِتابَةُ وَثيقَةٍ بِلا سَبَب.
+        Assert.False(AccountErasure.EraseFrom(conv, me));
+        Assert.False(AccountErasure.EraseFrom(new Conversation { OwnerId = other, PartnerId = Guid.NewGuid(), OwnerName = "غَيري" }, me));
     }
 
     // ─── ٣ب. الجَردُ بِالمَسحِ لا بِاليَد ─────────────────────────────────────────────────────────────────────
@@ -158,11 +199,18 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     // تَصنيفٍ يُحمِرّ، وتَصنيفٌ لا يَجِدُه المَسحُ يُحمِرّ. والصَفُّ أَعلاه يَبقى بِحَرفِه (القاعِدَة ٣) — صادِقٌ عَن سَبعٍ، وهُنا يُفحَصُ أَنّه بَعضُ ما
     // يَجِدُه المَسح.
 
-    /// <summary>ما هي خاصِّيَّةُ الاسمِ لِلحَذف — مَعجَمٌ مُغلَق.</summary>
+    /// <summary>ما هي خاصِّيَّةُ الاسمِ لِلحَذف — مَعجَمٌ مُغلَق.
+    /// <para><b>‏2026-10-29 (قَرارُ المالِك د52 (١) «أ»؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: خَرَجَ <c>Copy</c> («نُسخَةٌ لا يَمَسُّها الحَذف») ولا صِنفَ يَبقى
+    /// عَلَيه — والمَعجَمُ لا يَحمِلُ قيمَةً بِلا مُستَهلِك (القاعِدَة ١). وحَلَّ مَحَلَّه ثَلاثٌ بِما يَحدُثُ لِكُلِّ نُسخَة: تُمحى في المُعامَلَة (<see cref="Renamed"/>)،
+    /// أَو تَبقى في سِجِلٍّ لا يُعَدَّلُ بِطَبيعَتِه (<see cref="EventLog"/>، <see cref="AuditLog"/>) فَيَقولُها نَصُّ الحَذف.</para></summary>
     internal enum NameKind
     {
-        /// <summary>نُسخَةٌ مِن اسمِ شَخصٍ تُكتَبُ وَقتَ الفِعلِ ولا يَمَسُّها الحَذف.</summary>
-        Copy,
+        /// <summary>‏(د52) نُسخَةٌ في وَثيقَةٍ تُعَدَّل — يَكتُبُ فَوقَها <c>AccountErasure</c> «حِسابٌ مَحذوف» في مُعامَلَةِ الحَذفِ نَفسِها.</summary>
+        Renamed,
+        /// <summary>‏(د52) في حَدَثٍ مِن مَجرى الأَحداث — سِجِلٌّ لا يُعادُ كَتبُه ولا تَعرِضُه شاشَة (الشاشاتُ تَقرَأُ اللَقطَةَ المَمحُوَّة).</summary>
+        EventLog,
+        /// <summary>‏(د52) في سِجِلِّ التَدقيق — تاريخٌ لا يُعادُ كَتبُه، ويُخفى الاسمُ عِندَ عَرضِه (<c>AuditLogQueries.HideErasedActors</c>).</summary>
+        AuditLog,
         /// <summary>الاسمُ في الوَثيقَةِ الَّتي يَمحوها <c>AccountDeletion.Erase</c> نَفسُها.</summary>
         Erased,
         /// <summary>حِسابُ الاستوديو — لا بابَ لِحَذفِه، ويَقولُ النَصُّ ذلِكَ بِاسمِه (الصَفّ ٤).</summary>
@@ -177,37 +225,39 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         // ‏2026-10-28 (قَرارُ المالِك د56): كانَ هُنا `LiveCredential` (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢) — «نُسخَةٌ لا يَمَسُّها الحَذفُ
         // وتَعمَل»، وصِنفُها الوَحيدُ `ApiKeyDocument.ActorName`. والحَذفُ صارَ يُبطِلُ المِفتاح، فَصارَ الاسمُ نُسخَةً ساكِنَةً (`Copy`) ولا صِنفَ
         // يَبقى عَلَيه — والمَعجَمُ لا يَحمِلُ قيمَةً بِلا مُستَهلِك (القاعِدَة ١). ويَومَ يُوجَدُ اعتِمادٌ حَيٌّ آخَرُ بِاسمِ شَخصٍ يَعودُ بِصَفِّه.
+        // ‏2026-10-29 (د52): ثُمَّ صارَ `Renamed` — الإبطالُ نَفسُه يَكتُبُ «حِسابٌ مَحذوف» عَلى الوَثيقَة (`ApiKeyService.RevokeForDeletedActor`).
     }
 
-    /// <summary>ما يَبقى بَعدَ الحَذفِ ويَحتاجُ إفصاحاً: النُسخَةُ الساكِنَة — صَفُّ العَدِّ وقارِئُ الإفصاحِ يَسأَلانِ هذا وَحدَه.</summary>
-    internal static bool KeptAfterDeletion(NameKind kind) => kind is NameKind.Copy;
+    /// <summary>ما يَبقى بَعدَ الحَذفِ ويَحتاجُ إفصاحاً: ما في سِجِلٍّ لا يُعَدَّل — صَفُّ العَدِّ وقارِئُ الإفصاحِ يَسأَلانِ هذا وَحدَه.</summary>
+    internal static bool KeptAfterDeletion(NameKind kind) => kind is NameKind.EventLog or NameKind.AuditLog;
 
-    /// <summary>العِبارَةُ الَّتي تَقولُ النُسخَةَ في نَصِّ الحَذف — مَعجَمٌ مُغلَق، ولِكُلٍّ عِباراتُه في <see cref="DisclosurePhrases"/>.</summary>
-    // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢): `DealSeller` — اسمُ البائِعِ عَلى الصَفقَةِ يُقالُ لِلبائِعِ بِجُملَتِه، لا بِجُملَةِ المُشتَري.
-    // ‏2026-10-28 (د56): `LiveKey` خَرَجَ مَعَ `NameKind.LiveCredential` — جُملَةُ «يَبقى يَعمَلُ بِاسمِك» حُذِفَت مِن النُصوصِ لِأَنَّ الحَذفَ يُبطِلُ المِفتاح.
-    internal enum Disclosure { None, Deal, DealSeller, Records, Notifications, AdminNotices, StoreRecords }
+    /// <summary>العِبارَةُ الَّتي يَقولُها نَصُّ الحَذفِ عَن كُلِّ أَثَر — مَعجَمٌ مُغلَق، ولِكُلٍّ عِباراتُه في <see cref="DisclosurePhrases"/>.
+    /// <para><b>‏2026-10-29 (د52)</b>: كانَت تَقولُ ما يَبقى (‏<c>Deal</c>/<c>DealSeller</c>/<c>Records</c>/<c>Notifications</c>/<c>AdminNotices</c>/<c>StoreRecords</c>)،
+    /// وصارَت تَقولُ ما يُمحى وما يَبقى ولِماذا: الاسمُ المَمحُوُّ في السِجِلّاتِ وفي الإشعارات، والعُنوانُ والهاتِفُ المَمحُوّانِ مِن الطَلَبات،
+    /// وسِجِلُّ الأَحداث، وسِجِلُّ التَدقيق، وما وَصَلَ قَبلَ الحَذفِ إلى الناقِلِ وأَجهِزَةِ الآخَرين، والصَفقَةُ الجارِيَةُ الَّتي تَمنَعُه.</para></summary>
+    internal enum Disclosure { None, Renamed, NoticesRenamed, AddressErased, EventLog, AuditLog, Delivered, OpenDeal }
 
     internal sealed record NameField(NameKind Kind, Disclosure Said, string WhyAr);
 
     /// <summary>كُلُّ خاصِّيَّةِ اسمٍ يَجِدُها <see cref="StoredNameFields"/> — بِتَصنيفِها وسَبَبِه. يُعَدَّلُ في الكوميتِ الَّذي يُغَيِّرُ ما يُخَزَّن.</summary>
     internal static readonly IReadOnlyDictionary<string, NameField> PersonNameFields = new Dictionary<string, NameField>(StringComparer.Ordinal)
     {
-        ["Deal.InitiatorName"]           = new(NameKind.Copy, Disclosure.Deal, "اسمُ المُشتَري كَما كُتِبَ في الطَلَب (مِن الاستِمارَةِ في السَلَّة، ومِن الحِسابِ في العَرض)."),
-        ["Deal.CounterpartyName"]        = new(NameKind.Copy, Disclosure.DealSeller, "اسمُ البائِعِ يَومَ رُبِطَ أَو قَبِلَ — `DealsService` عِندَ التَعيين."),
-        ["DealEvent.ActorName"]          = new(NameKind.Copy, Disclosure.Deal, "سَطرُ الخَطِّ الزَمَنيِّ لِكُلِّ فِعلٍ عَلى الصَفقَةِ بِاسمِ فاعِلِه."),
-        ["Conversation.OwnerName"]       = new(NameKind.Copy, Disclosure.Records, "طَرَفا المُحادَثَةِ بِاسمَيهِما عِندَ بَدئِها."),
-        ["Conversation.PartnerName"]     = new(NameKind.Copy, Disclosure.Records, "طَرَفا المُحادَثَةِ بِاسمَيهِما عِندَ بَدئِها."),
-        ["Review.AuthorName"]            = new(NameKind.Copy, Disclosure.Records, "كاتِبُ التَقييم."),
-        ["Review.TargetUserName"]        = new(NameKind.Copy, Disclosure.Records, "مَن قُيِّمَ — اسمُه عَلى تَقييمِ غَيرِه لَه."),
-        ["Offer.OffererName"]            = new(NameKind.Copy, Disclosure.Records, "مُقَدِّمُ العَرض — مُسقَطٌ مِن حَدَثِه."),
-        ["OfferSubmitted.OffererName"]   = new(NameKind.Copy, Disclosure.Records, "حَدَثُ تَقديمِ العَرضِ في مَجرى الأَحداث — لا يُحذَفُ بِحَذفِ الوَثيقَة."),
-        ["ListingMatch.OffererName"]     = new(NameKind.Copy, Disclosure.Records, "صاحِبُ العَرضِ المَقبولِ عَلى مُطابَقَةِ الإعلان (ويُرسَلُ في إشعارِ «وَصَلَ السائِق»)."),
-        ["Ticket.AuthorName"]            = new(NameKind.Copy, Disclosure.Records, "كاتِبُ تَذكِرَةِ الدَعم — والبَلاغُ عَن إعلانٍ تَذكِرَةٌ بِاسمِه."),
-        ["TicketCreated.AuthorName"]     = new(NameKind.Copy, Disclosure.Records, "حَدَثُ فَتحِ التَذكِرَةِ في مَجرى الأَحداث."),
-        ["Reply.AuthorName"]             = new(NameKind.Copy, Disclosure.Records, "كاتِبُ الرَدّ — كاتِبُه الوَحيدُ اليَومَ رَدُّ الاستوديو بِـ«دَعم التَّطبيق»، ويُعَدُّ نُسخَةً لِأَنّ الحَقلَ لِلاسم."),
-        ["TicketReplied.AuthorName"]     = new(NameKind.Copy, Disclosure.Records, "حَدَثُ الرَدِّ في مَجرى الأَحداث — كَسابِقِه."),
-        ["AuditEntry.ActorName"]         = new(NameKind.Copy, Disclosure.StoreRecords, "سِجِلُّ تَدقيقِ المَتجَر: البائِعُ عِندَ رَبطِ الشَحن، وفَريقُ الإدارَةِ عِندَ تَغييرِ الإعدادات."),
-        ["ApiKeyDocument.ActorName"]     = new(NameKind.Copy, Disclosure.StoreRecords, "الفاعِلُ الَّذي يُصدِرُ لَه صاحِبُ المَتجَرِ مِفتاحَ رَبط — يُبطَلُ المِفتاحُ بِحَذفِ حِسابِه (د56) ويَبقى اسمُه عَلى الوَثيقَةِ المُبطَلَة."),
+        ["Deal.InitiatorName"]           = new(NameKind.Renamed, Disclosure.Renamed, "اسمُ المُشتَري كَما كُتِبَ في الطَلَب (مِن الاستِمارَةِ في السَلَّة، ومِن الحِسابِ في العَرض) — يُمحى بِحَذفِ حِسابِه."),
+        ["Deal.CounterpartyName"]        = new(NameKind.Renamed, Disclosure.Renamed, "اسمُ البائِعِ يَومَ رُبِطَ أَو قَبِلَ — يُمحى بِحَذفِ حِسابِه."),
+        ["DealEvent.ActorName"]          = new(NameKind.Renamed, Disclosure.Renamed, "سَطرُ الخَطِّ الزَمَنيِّ لِكُلِّ فِعلٍ بِاسمِ فاعِلِه — يُمحى ما فَعَلَه هُو."),
+        ["Conversation.OwnerName"]       = new(NameKind.Renamed, Disclosure.Renamed, "طَرَفا المُحادَثَةِ بِاسمَيهِما — يُمحى اسمُه وَحدَه."),
+        ["Conversation.PartnerName"]     = new(NameKind.Renamed, Disclosure.Renamed, "طَرَفا المُحادَثَةِ بِاسمَيهِما — يُمحى اسمُه وَحدَه."),
+        ["Review.AuthorName"]            = new(NameKind.Renamed, Disclosure.Renamed, "كاتِبُ التَقييم."),
+        ["Review.TargetUserName"]        = new(NameKind.Renamed, Disclosure.Renamed, "مَن قُيِّمَ — اسمُه عَلى تَقييمِ غَيرِه لَه."),
+        ["Offer.OffererName"]            = new(NameKind.Renamed, Disclosure.Renamed, "مُقَدِّمُ العَرض — لَقطَةُ مَجرى العَرضِ (تُعَدَّل)."),
+        ["OfferSubmitted.OffererName"]   = new(NameKind.EventLog, Disclosure.EventLog, "حَدَثُ تَقديمِ العَرضِ في مَجرى الأَحداث — لا يُعادُ كَتبُه ولا تَعرِضُه شاشَة."),
+        ["ListingMatch.OffererName"]     = new(NameKind.Renamed, Disclosure.Renamed, "صاحِبُ العَرضِ المَقبولِ عَلى مُطابَقَةِ الإعلان (ويُرسَلُ في إشعارِ «وَصَلَ السائِق»)."),
+        ["Ticket.AuthorName"]            = new(NameKind.Renamed, Disclosure.Renamed, "كاتِبُ تَذكِرَةِ الدَعم — والبَلاغُ عَن إعلانٍ تَذكِرَةٌ بِاسمِه؛ لَقطَةُ مَجرى (تُعَدَّل)."),
+        ["TicketCreated.AuthorName"]     = new(NameKind.EventLog, Disclosure.EventLog, "حَدَثُ فَتحِ التَذكِرَةِ في مَجرى الأَحداث."),
+        ["Reply.AuthorName"]             = new(NameKind.Renamed, Disclosure.Renamed, "كاتِبُ الرَدّ — رَدُّ صاحِبِ التَذكِرَةِ (`FromStaff = false`) يُمحى، ورَدُّ الفَريقِ بِتَوقيعِه."),
+        ["TicketReplied.AuthorName"]     = new(NameKind.EventLog, Disclosure.EventLog, "حَدَثُ الرَدِّ في مَجرى الأَحداث — كَسابِقِه."),
+        ["AuditEntry.ActorName"]         = new(NameKind.AuditLog, Disclosure.AuditLog, "سِجِلُّ تَدقيقِ المَتجَر: البائِعُ عِندَ رَبطِ الشَحن، وفَريقُ الإدارَةِ عِندَ تَغييرِ الإعدادات — يُخفى عِندَ العَرض."),
+        ["ApiKeyDocument.ActorName"]     = new(NameKind.Renamed, Disclosure.Renamed, "الفاعِلُ الَّذي يُصدِرُ لَه صاحِبُ المَتجَرِ مِفتاحَ رَبط — يُبطَلُ المِفتاحُ بِحَذفِ حِسابِه (د56) ويُكتَبُ «حِسابٌ مَحذوف» عَلَيه (د52)."),
         ["CartCheckout.RecipientName"]   = new(NameKind.DeletedWithAccount, Disclosure.None, "اسمُ المُستَلِمِ كَما كُتِبَ في خُطوَةِ العُنوان — في السَلَّةِ الَّتي تَحذِفُها نُقطَةُ الحَذف (د60)."),
         ["User.FullName"]                = new(NameKind.Erased, Disclosure.None, "الوَثيقَةُ الَّتي يَمحوها `Erase` (الصَفّ ١)."),
         ["StudioUser.FullName"]          = new(NameKind.StudioAccount, Disclosure.None, "حِسابُ الاستوديو — لا بابَ لِحَذفِه (الصَفّ ٤)."),
@@ -288,31 +338,44 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
                 closure.OrderBy(t => t.FullName, StringComparer.Ordinal).ToList(), names);
     }
 
+    /// <summary>النَوعُ الَّذي يَمحوه <see cref="AccountErasure"/> لِكُلِّ نُسخَةٍ <see cref="NameKind.Renamed"/> — والسَطرُ في الخَطِّ الزَمَنيِّ يُمحى مَع صَفقَتِه،
+    /// والرَدُّ مَع تَذكِرَتِه.</summary>
+    internal static Type ErasedThrough(Type doc)
+        => doc == typeof(DealEvent) ? typeof(Deal) : doc == typeof(ACommerce.Kit.Support.Reply) ? typeof(ACommerce.Kit.Support.Ticket) : doc;
+
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، د52 (١) «أ»)</b> — كانَ <c>Every_person_name_field_on_a_stored_type_is_classified_and_the_eraser_takes_no_copy</c>
+    /// («نُسَخٌ لا يَمَسُّها الحَذف: 16»). والآن صِفرُ نُسخَةٍ تُعَدَّلُ وتَبقى: اثنَتا عَشرَةَ يَمحوها <see cref="AccountErasure"/> (لِكُلِّ نَوعٍ دالَّتُه)، وأَربَعٌ في سِجِلٍّ
+    /// لا يُعَدَّلُ بِطَبيعَتِه (ثَلاثَةُ أَحداثٍ وسِجِلُّ التَدقيق) يَقولُها نَصُّ الحَذف.</summary>
     [Fact]
-    public void Every_person_name_field_on_a_stored_type_is_classified_and_the_eraser_takes_no_copy()
+    public void Every_person_name_field_on_a_stored_type_is_classified_and_no_editable_copy_survives_the_deletion()
     {
         var (roots, closure, names) = StoredNameFields();
         var found = names.Select(n => n.Key).ToList();
         var unclassified = found.Where(k => !PersonNameFields.ContainsKey(k)).ToList();
         var stale = PersonNameFields.Keys.Where(k => !found.Contains(k)).ToList();
-        var copies = found.Where(k => PersonNameFields.TryGetValue(k, out var f) && KeptAfterDeletion(f.Kind)).ToList();
-        output.WriteLine($"جُذورٌ مُخَزَّنَة: {roots.Count} · ما تَبلُغُه: {closure.Count} نَوعاً · خَصائِصُ اسم: {found.Count} · نُسَخٌ لا يَمَسُّها الحَذف: {copies.Count}");
+        var renamed = names.Where(n => PersonNameFields.TryGetValue(n.Key, out var f) && f.Kind == NameKind.Renamed).ToList();
+        var kept = found.Where(k => PersonNameFields.TryGetValue(k, out var f) && KeptAfterDeletion(f.Kind)).ToList();
+        var erasers = typeof(AccountErasure).GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where(m => m.Name == nameof(AccountErasure.EraseFrom)).Select(m => m.GetParameters()[0].ParameterType).ToHashSet();
+        var unerased = renamed.Where(n => !erasers.Contains(ErasedThrough(n.Type))).Select(n => n.Key).ToList();
+        output.WriteLine($"جُذورٌ مُخَزَّنَة: {roots.Count} · ما تَبلُغُه: {closure.Count} نَوعاً · خَصائِصُ اسم: {found.Count} · تُمحى: {renamed.Count} · تَبقى في سِجِلٍّ لا يُعَدَّل: {kept.Count} · بِلا دالَّةِ مَحو: {unerased.Count}");
         foreach (var (key, _) in names)
             output.WriteLine($"  {key} — {(PersonNameFields.TryGetValue(key, out var f) ? $"{f.Kind}/{f.Said}" : "غَيرُ مُصَنَّف")}");
 
         Assert.True(roots.Count >= 30 && closure.Count >= roots.Count, $"أَداةٌ عَمياء: {roots.Count} جَذراً، {closure.Count} نَوعاً.");
         Assert.True(unclassified.Count == 0, $"خَصائِصُ اسمٍ بِلا تَصنيف: {string.Join(", ", unclassified)}");
         Assert.True(stale.Count == 0, $"تَصنيفٌ لا يَجِدُه المَسح: {string.Join(", ", stale)}");
-        Assert.Equal(16, copies.Count);
+        Assert.Equal(12, renamed.Count);
+        Assert.Equal(4, kept.Count);
+        Assert.True(unerased.Count == 0, $"نُسخَةٌ تُعَدَّلُ بِلا دالَّةِ مَحو: {string.Join(", ", unerased)}");
         Assert.Equal(found.Count, found.Distinct(StringComparer.Ordinal).Count());
 
-        // القائِمَةُ اليَدَوِيَّةُ (الصَفّ ٣) بَعضُ ما يَجِدُه المَسح — حَدٌّ أَدنى لا جَرد.
-        Assert.All(NameCopies, c => Assert.Contains($"{c.Doc.Name}.{c.Field}", copies));
+        // القائِمَةُ اليَدَوِيَّةُ (الصَفّ ٣) بَعضُ ما يَمحوه الحَذف — حَدٌّ أَدنى لا جَرد.
+        Assert.All(NameCopies, c => Assert.Contains($"{c.Doc.Name}.{c.Field}", renamed.Select(n => n.Key)));
 
-        // ولا يَمَسُّ الحَذفُ نَوعاً واحِداً يَحمِلُ نُسخَة.
-        var body = DeleteEndpointBody();
-        var copyTypes = names.Where(n => copies.Contains(n.Key)).Select(n => n.Type.Name).Distinct().ToList();
-        Assert.Empty(copyTypes.Where(t => Regex.IsMatch(body, $@"\b{t}\b")));
+        // ولا يَكتُبُ الحَذفُ إلّا في الجَلسَة: مَحوُ النُسَخِ داخِلَ `EraseCopiesAsync` ولا `SaveChangesAsync` فيه — الحِفظُ الواحِدُ لِلنُقطَة.
+        var erasure = WriteEndpointGuardTests.StripComments(Tpl("Services", "Identity", "AccountErasure.cs"));
+        Assert.DoesNotContain("SaveChangesAsync", erasure, StringComparison.Ordinal);
 
         // و«لا كاتِبَ لَه» مَقيسٌ لا مَظنون: لا `new SubmitReport(` خارِجَ مِلَفِّ تَعريفِه.
         var reportEmitters = EntitlementContractTests.SourceFiles()
@@ -436,17 +499,18 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         }
     }
 
-    /// <summary>الكُتّابُ الَّذينَ يَضَعونَ اسماً أَو هاتِفاً أَو بَريداً في إشعارٍ مُخَزَّنٍ في صُندوقِ غَيرِ صاحِبِه — وما يَقولُه نَصُّ الحَذفِ عَنهُم.</summary>
+    /// <summary>الكُتّابُ الَّذينَ يَضَعونَ اسماً أَو هاتِفاً أَو بَريداً في إشعارٍ مُخَزَّنٍ في صُندوقِ غَيرِ صاحِبِه — وما يَقولُه نَصُّ الحَذفِ عَنهُم.
+    /// <para><b>‏2026-10-29 (د52)</b>: كُلُّها «يَصيرُ اسمُكَ حِساباً مَحذوفاً في الإشعاراتِ المَحفوظَةِ عِندَ غَيرِك» (<see cref="AccountErasure.EraseFrom(ACommerce.Kit.Notifications.Notification, Guid, string, IReadOnlyCollection{string})"/>)،
+    /// وإشعارُ التَسجيلِ لِلمُديرينَ صارَ بِالاسمِ وَحدَه (د52 (٣) «أ») — كاتِبانِ بِمِفتاحٍ واحِد.</para></summary>
     internal static readonly IReadOnlyDictionary<string, Disclosure> PersonalNoticeWriters = new Dictionary<string, Disclosure>(StringComparer.Ordinal)
     {
-        ["AcceptedType|acceptorName"]    = Disclosure.Notifications,   // ‏DealNotices.AcceptedFor — لِلمُشتَري: قَبِلَ فُلان
-        ["CancelledType|cancellerName"]  = Disclosure.Notifications,   // ‏DealNotices.CancelledFor — لِلمُشتَري: أَلغى فُلان
-        ["\"offer_accepted\"|acceptorName"] = Disclosure.Notifications, // ‏لِلسائِق: قَبِلَ فُلانٌ عَرضَك
-        ["\"driver_arrived\"|OffererName"]  = Disclosure.Notifications, // ‏لِلراكِب: وَصَلَ فُلان
-        ["\"chat_message\"|senderName"]     = Disclosure.Notifications, // ‏لِلطَرَفِ الآخَر: رِسالَةٌ مِن فُلان
-        ["\"new_user\"|FullName,Phone"]     = Disclosure.AdminNotices,  // ‏لِمُديري المَتجَر: سَجَّلَ فُلانٌ · هاتِفُه
-        ["\"new_user\"|FullName,Email"]     = Disclosure.AdminNotices,  // ‏لِمُديري المَتجَر: سَجَّلَ فُلانٌ · بَريدُه
-        ["\"report\"|userName"]             = Disclosure.AdminNotices,  // ‏لِمُديري المَتجَر: فُلانٌ بَلَّغَ عَن إعلان
+        ["AcceptedType|acceptorName"]    = Disclosure.NoticesRenamed,   // ‏DealNotices.AcceptedFor — لِلمُشتَري: قَبِلَ فُلان
+        ["CancelledType|cancellerName"]  = Disclosure.NoticesRenamed,   // ‏DealNotices.CancelledFor — لِلمُشتَري: أَلغى فُلان
+        ["\"offer_accepted\"|acceptorName"] = Disclosure.NoticesRenamed, // ‏لِلسائِق: قَبِلَ فُلانٌ عَرضَك
+        ["\"driver_arrived\"|OffererName"]  = Disclosure.NoticesRenamed, // ‏لِلراكِب: وَصَلَ فُلان
+        ["\"chat_message\"|senderName"]     = Disclosure.NoticesRenamed, // ‏لِلطَرَفِ الآخَر: رِسالَةٌ مِن فُلان
+        ["\"new_user\"|FullName"]           = Disclosure.NoticesRenamed, // ‏لِمُديري المَتجَر: سَجَّلَ فُلان — بِالجَوّالِ وبِالبَريد، بِلا وَسيلَةِ اتِّصال
+        ["\"report\"|userName"]             = Disclosure.NoticesRenamed, // ‏لِمُديري المَتجَر: فُلانٌ بَلَّغَ عَن إعلان
     };
 
     internal static IReadOnlyList<NoticeWriter> AllNoticeWriters()
@@ -454,8 +518,11 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
             .SelectMany(f => NoticeWriters(Path.GetFileName(f.File), WriteEndpointGuardTests.StripComments(f.Text)))
             .ToList();
 
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، د52 (٣) «أ»)</b> — كانَ <c>Every_stored_notification_that_carries_a_name_a_phone_or_an_email_is_pinned</c>
+    /// («هاتِفٌ أَو بَريد: 2» — إشعارُ «مُستَخدِم جَديد سَجَّل» بِالاسمِ والهاتِفِ أَو البَريد). والآن صِفرُ كاتِبٍ يَضَعُ هاتِفاً أَو بَريداً في صُندوقِ غَيرِ صاحِبِه،
+    /// وكاتِبا التَسجيلِ بِالاسمِ وَحدَه.</summary>
     [Fact]
-    public void Every_stored_notification_that_carries_a_name_a_phone_or_an_email_is_pinned()
+    public void Every_stored_notification_that_carries_a_name_is_pinned_and_none_carries_a_phone_or_an_email()
     {
         var writers = AllNoticeWriters();
         var personal = writers.Where(w => w.Personal.Count > 0).ToList();
@@ -464,8 +531,9 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
 
         Assert.True(writers.Count >= 10, $"أَداةٌ عَمياء: {writers.Count} كاتِباً لِلإشعار.");
         Assert.Equal(PersonalNoticeWriters.Keys.OrderBy(k => k, StringComparer.Ordinal),
-                     personal.Select(w => w.Key).OrderBy(k => k, StringComparer.Ordinal));
-        Assert.Equal(2, personal.Count(w => w.Personal.Any(p => p.EndsWith("Phone", StringComparison.Ordinal) || p.EndsWith("Email", StringComparison.Ordinal))));
+                     personal.Select(w => w.Key).Distinct().OrderBy(k => k, StringComparer.Ordinal));
+        Assert.Equal(2, personal.Count(w => w.Key == "\"new_user\"|FullName"));
+        Assert.Equal(0, personal.Count(w => w.Personal.Any(p => p.EndsWith("Phone", StringComparison.Ordinal) || p.EndsWith("Email", StringComparison.Ordinal))));
     }
 
     [Theory]
@@ -510,12 +578,13 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         Assert.Empty(deletes);
     }
 
-    // ─── ٥. «اليَوم»: النُصوصُ تَعِدُ بِما لا يَقَع — يَنقَلِبُ بِاسمِه في كوميتِ الصِياغَة ─────────────────────
+    // ─── ٥. النُصوص — ما يُمحى وما يَبقى ولِماذا (‏2026-10-29، قَرارُ المالِك د52؛ وقَبلَه الخِيارُ (ب) مِن brief-P3-5a) ─────────────────────
 
     internal const string StorePrivacyKey = "legal.privacy.deletion";
     internal const string PlatformRetentionKey = "platform.privacy.s6_body";
     internal const string PlatformRightsKey = "platform.privacy.s7_body";
     internal const string RetainedNoteKey = "account.delete.retained_note";
+    internal const string RemovedItemsKey = "account.delete.removed_items";
 
     private static string Ar(string key) => LocaleCatalog.Find(LocaleCatalog.Arabic, key)
         ?? throw new Xunit.Sdk.XunitException($"لا مِفتاحَ «{key}» في ar.json.");
@@ -523,142 +592,132 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     private static string En(string key) => LocaleCatalog.Find("en", key)
         ?? throw new Xunit.Sdk.XunitException($"لا مِفتاحَ «{key}» في en.json.");
 
-    /// <summary>القيَمُ قَبلَ كوميتِ الصِياغَةِ بِحَرفِها (‏<c>b52ea8d</c> وما قَبلَه) — لِيُقاسَ أَنّ الفَرقَ مَحصورٌ في الجُملَةِ الكاذِبَة.</summary>
+    /// <summary>النَصُّ كَما يَقرَؤُه المُستَخدِم: لِشاشَةِ الحَذفِ «ما يُحذَفُ الآن» ثُمَّ «ما يَبقى، ولِماذا» (‏2026-10-29: المَمحُوُّ في الأَوَّلِ والباقي في الثاني)،
+    /// ولِلسِياسَتَينِ مِفتاحُهُما.</summary>
+    internal static string Text(string key) => key == RetainedNoteKey ? Ar(RemovedItemsKey) + " " + Ar(RetainedNoteKey) : Ar(key);
+
+    /// <summary>القيَمُ قَبلَ كوميتِ د52 بِحَرفِها (‏<c>c2637e4</c> وما قَبلَه — صِياغَةُ الخِيارِ (ب)) — لِيُقاسَ أَنّ الفَرقَ يَبدَأُ بَعدَ الصَدرِ المُعلَن.</summary>
     internal static readonly IReadOnlyDictionary<string, string> Before = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        [StorePrivacyKey] = "لِحَذف حِسابك بِالكامِل: صَفحَة «حِسابي» ثُمَّ «حَذفُ الحِساب». يَقَع الحَذف فَور تَأكيدك، ويَبقى سِجِلّ الصَّفَقات والفَواتير بِلا اسم لِالتِزام نِظاميّ ومُحاسَبيّ.",
-        [PlatformRetentionKey] = "نَحتَفِظُ بِبَياناتِكَ ما دامَ حِسابُكَ قائِماً وما تَقتَضيهِ المُتَطَلَّباتُ النِظامِيَّةُ والمُحاسَبِيَّة. ويُمكِنُكَ حَذفُ حِسابِكَ وبَياناتِكَ الشَخصِيَّةَ مِن داخِلِ التَطبيقِ نَفسِه: صَفحَةُ «حِسابي» ثُمَّ «حَذفُ الحِساب»، ويَقَعُ الحَذفُ فَورَ تَأكيدِك. ويَبقى سِجِلُّ الصَفَقاتِ والفَواتيرِ بِلا اسمٍ ولا وَسيلَةِ اتِّصالٍ ما اقتَضاهُ التِزامٌ نِظامِيٌّ ومُحاسَبِيّ.",
-        [RetainedNoteKey] = "يَبقى سِجِلُّ الصَفَقاتِ والفَواتيرِ مَنسوباً إلى حِسابٍ بِلا اسمٍ ولا وَسيلَةِ اتِّصال. والاحتِفاظُ بِه التِزامٌ نِظامِيٌّ ومُحاسَبِيّ: المادَّةُ الخامِسَةُ تُجيزُه صَراحَةً «دونَ إخلالٍ بِما يَقضي بِه نِظامٌ آخَر».",
+        [StorePrivacyKey] = "لِحَذف حِسابك بِالكامِل: صَفحَة «حِسابي» ثُمَّ «حَذفُ الحِساب». يَقَع الحَذف فَور تَأكيدك، ويَبقى سِجِلّ الصَّفَقات والفَواتير لِالتِزام نِظاميّ ومُحاسَبيّ، وفي كُلّ صَفقَة الاسم الَّذي كانَ لَك وَقتَها أَو كَتَبتَه في الطَّلَب، وعُنوان التَّوصيل والهاتِف اللَّذان كَتَبتَهُما فيه: يَراها بائِع الصَّفقَة، ويَرى صاحِب المَتجَر الاسم، وتَصِل إلى شَرِكَة الشَّحن إن شَحَن البائِع طَلَبك عَبرَها. وإن كُنت بائِع صَفقَة بَقِي اسمك عَلَيها يَراه مُشتَريها. ويَبقى اسمك كَما كُتِب عَلى مُحادَثاتك وتَقييماتك وعُروضك وتَذاكِر دَعمك وبَلاغاتك، وفي إشعارات مَن تَعامَلت مَعَهُم، وفي إشعارات مُديري المَتجَر: اسمك وهاتِفك أَو بَريدك عِند تَسجيلك، واسمك عِند كُلّ بَلاغ. وإن عَمِلت في المَتجَر بائِعاً أَو مِن فَريق إدارَتِه بَقِي اسمك في سِجِلّ التَّدقيق ومَفاتيح الرَّبط.",
+        [PlatformRetentionKey] = "نَحتَفِظُ بِبَياناتِكَ ما دامَ حِسابُكَ قائِماً وما تَقتَضيهِ المُتَطَلَّباتُ النِظامِيَّةُ والمُحاسَبِيَّة. ويُمكِنُكَ حَذفُ حِسابِكَ في المَتجَرِ وبَياناتِكَ الشَخصِيَّةَ مِن داخِلِ التَطبيقِ نَفسِه: صَفحَةُ «حِسابي» ثُمَّ «حَذفُ الحِساب»، ويَقَعُ الحَذفُ فَورَ تَأكيدِك. ويَبقى سِجِلُّ الصَفَقاتِ والفَواتيرِ ما اقتَضاهُ التِزامٌ نِظامِيٌّ ومُحاسَبِيّ، وفي كُلِّ صَفقَةٍ الاسمُ الَّذي كانَ لَكَ وَقتَها أَو كَتَبتَه في الطَلَب، وعُنوانُ التَوصيلِ والهاتِفُ اللَّذانِ كَتَبتَهُما فيه: يَراها بائِعُ الصَفقَة، ويَرى صاحِبُ المَتجَرِ الاسم، وتَصِلُ إلى شَرِكَةِ الشَحنِ إن شَحَنَ البائِعُ طَلَبَكَ عَبرَها. وإن كُنتَ بائِعَ صَفقَةٍ بَقِيَ اسمُكَ عَلَيها يَراه مُشتَريها. ويَبقى اسمُكَ كَما كُتِبَ عَلى مُحادَثاتِكَ وتَقييماتِكَ وعُروضِكَ وتَذاكِرِ دَعمِكَ وبَلاغاتِك، وفي إشعاراتِ مَن تَعامَلتَ مَعَهُم، وفي إشعاراتِ مُديري المَتجَر: اسمُكَ وهاتِفُكَ أَو بَريدُكَ عِندَ تَسجيلِك، واسمُكَ عِندَ كُلِّ بَلاغ. وإن عَمِلتَ في المَتجَرِ بائِعاً أَو مِن فَريقِ إدارَتِه بَقِيَ اسمُكَ في سِجِلِّ التَدقيقِ ومَفاتيحِ الرَبط. أَمّا حِسابُ الاستوديو (لِأَصحابِ المَتاجِر) فَلا بابَ لِحَذفِه داخِلَ التَطبيقِ اليَوم.",
+        [RetainedNoteKey] = "يَبقى سِجِلُّ الصَفَقاتِ والفَواتير، وفي كُلِّ صَفقَةٍ الاسمُ الَّذي كانَ لَكَ وَقتَها أَو كَتَبتَه في الطَلَب، وعُنوانُ التَوصيلِ والهاتِفُ اللَّذانِ كَتَبتَهُما فيه: يَراها بائِعُ الصَفقَة، ويَرى صاحِبُ المَتجَرِ الاسم، وتَصِلُ إلى شَرِكَةِ الشَحنِ إن شَحَنَ البائِعُ طَلَبَكَ عَبرَها. وإن كُنتَ بائِعَ صَفقَةٍ بَقِيَ اسمُكَ عَلَيها يَراه مُشتَريها. ويَبقى اسمُكَ كَما كُتِبَ عَلى مُحادَثاتِكَ وتَقييماتِكَ وعُروضِكَ وتَذاكِرِ دَعمِكَ وبَلاغاتِك، وفي إشعاراتِ مَن تَعامَلتَ مَعَهُم، وفي إشعاراتِ مُديري المَتجَر: اسمُكَ وهاتِفُكَ أَو بَريدُكَ عِندَ تَسجيلِك، واسمُكَ عِندَ كُلِّ بَلاغ. وإن عَمِلتَ في المَتجَرِ بائِعاً أَو مِن فَريقِ إدارَتِه بَقِيَ اسمُكَ في سِجِلِّ التَدقيقِ ومَفاتيحِ الرَبط. والاحتِفاظُ بِسِجِلِّ الصَفَقاتِ التِزامٌ نِظامِيٌّ ومُحاسَبِيّ: المادَّةُ الخامِسَةُ تُجيزُه صَراحَةً «دونَ إخلالٍ بِما يَقضي بِه نِظامٌ آخَر».",
     };
 
-    /// <summary>صَدرُ كُلِّ قيمَةٍ قَبلَ أَوَّلِ تَبديلٍ مَقصود — يَبقى بِحَرفِه: في الخُصوصِيَّتَينِ إلى «والفَواتير»/«حِسابِكَ» (ثُمَّ «في المَتجَرِ»)،
-    /// وفي شاشَةِ الحَذفِ إلى «والفَواتير» (ثُمَّ الكَسرَةُ الَّتي كانَت تَصِلُها بِـ«مَنسوباً»).</summary>
+    /// <summary>صَدرُ كُلِّ قيمَةٍ قَبلَ أَوَّلِ تَبديلٍ مَقصود — يَبقى بِحَرفِه: بابُ الحَذفِ ووَقتُه في السِياسَتَين، وصَدرُ «ما يَبقى» في الشاشَة.</summary>
     internal static readonly IReadOnlyDictionary<string, string> Unchanged = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        [StorePrivacyKey] = "لِحَذف حِسابك بِالكامِل: صَفحَة «حِسابي» ثُمَّ «حَذفُ الحِساب». يَقَع الحَذف فَور تَأكيدك، ويَبقى سِجِلّ الصَّفَقات والفَواتير ",
-        [PlatformRetentionKey] = "نَحتَفِظُ بِبَياناتِكَ ما دامَ حِسابُكَ قائِماً وما تَقتَضيهِ المُتَطَلَّباتُ النِظامِيَّةُ والمُحاسَبِيَّة. ويُمكِنُكَ حَذفُ حِسابِكَ ",
+        [StorePrivacyKey] = "لِحَذف حِسابك بِالكامِل: صَفحَة «حِسابي» ثُمَّ «حَذفُ الحِساب». يَقَع الحَذف فَور تَأكيدك، و",
+        [PlatformRetentionKey] = "نَحتَفِظُ بِبَياناتِكَ ما دامَ حِسابُكَ قائِماً وما تَقتَضيهِ المُتَطَلَّباتُ النِظامِيَّةُ والمُحاسَبِيَّة. ويُمكِنُكَ حَذفُ حِسابِكَ في المَتجَرِ وبَياناتِكَ الشَخصِيَّةَ مِن داخِلِ التَطبيقِ نَفسِه: صَفحَةُ «حِسابي» ثُمَّ «حَذفُ الحِساب»، ويَقَعُ الحَذفُ فَورَ تَأكيدِك",
         [RetainedNoteKey] = "يَبقى سِجِلُّ الصَفَقاتِ والفَواتير",
     };
 
     /// <summary>النَصُّ بِلا حَرَكات — فَالفاحِصُ يَقرَأُ الكَلِمَةَ لا تَشكيلَها (‏<c>LegalHub</c> بِتَشكيلٍ أَخَفَّ مِن صَفحَةِ المَنَصَّة).</summary>
-    internal static string Bare(string s) => Regex.Replace(s, "[\u064B-\u0652\u0670]", "");
+    internal static string Bare(string s) => Regex.Replace(s, "[ً-ْٰ]", "");
 
-    /// <summary>ما يَقولُه كُلُّ نَصٍّ عَمّا يَبقى ومَن يَراه — بِالكَلِماتِ الَّتي تُقابِلُ وَقائِعَ الصُفوفِ ١–٣ (بِلا حَرَكات).</summary>
-    internal static readonly string[] RetainedFacts =
-        { "الاسم الذي كان لك وقتها", "أو كتبته في الطلب", "عنوان التوصيل", "الهاتف", "بائع الصفقة", "صاحب المتجر الاسم", "شركة الشحن" };
-    // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-4 الجَولَة ١): «أو كتبته في الطلب» — صَفقَةُ إتمامِ الشِراءِ تُبقي الاسمَ المَكتوبَ في الاستِمارَة.
-
-    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> (‏2026-10-25؛ كانَ <c>Today_the_deletion_texts_call_the_deal_name_the_one_you_had_while_checkout_keeps_the_name_typed_in_the_order</c>،
-    /// مُودَعٌ في <c>6a16439</c>). والآن كُلٌّ مِن النُصوصِ الثَلاثَةِ يَقولُ «الاسمُ الَّذي كانَ لَكَ وَقتَها <b>أَو كَتَبتَه في الطَلَب</b>» — طَريقا العَرضِ
-    /// (الحِساب) وإتمامِ الشِراءِ (الاستِمارَة) كِلاهُما — والكودُ ما زالَ يَكتُبُ الاسمَ المَكتوبَ في الاستِمارَة؛ والإنجليزيُّ مِثلُه.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، د52)</b> — كانَ <c>The_deletion_texts_say_the_deal_keeps_the_name_you_had_or_typed_in_the_order</c> (وقَبلَه
+    /// <c>Today_…</c> في <c>6a16439</c>): النُصوصُ الثَلاثَةُ قالَت «الاسمُ الَّذي كانَ لَكَ وَقتَها أَو كَتَبتَه في الطَلَب» يَبقى في الصَفقَة. والآن يَمحوه <see cref="AccountErasure"/>
+    /// — الاسمُ المَكتوبُ في الاستِمارَةِ نَفسُه (`InitiatorName`) وعُنوانُ التَوصيلِ وهاتِفُه — والنُصوصُ تَقولُ «بِلا اسمِك» و«يُمحى عُنوانُ التَوصيلِ والهاتِف».</summary>
     [Fact]
-    public void The_deletion_texts_say_the_deal_keeps_the_name_you_had_or_typed_in_the_order()
+    public void The_deletion_texts_say_the_deal_keeps_neither_the_name_nor_the_address_typed_in_the_order()
     {
-        var mte = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
-            "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs")));
-        var submit = mte.IndexOf("\"/{slug}/checkout/submit\"", StringComparison.Ordinal);
-        var typed = mte.IndexOf("var name  = req.Form[\"name\"].ToString().Trim();", submit, StringComparison.Ordinal);
-        var kept = mte.IndexOf("initiatorId: userId, initiatorName: name,", submit, StringComparison.Ordinal);
-        var texts = new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey }.ToDictionary(k => k, k => Bare(Ar(k)));
-        output.WriteLine($"إتمامُ الشِراء: الاسمُ مِن الاستِمارَة {typed > submit} · يُكتَبُ InitiatorName {kept > typed} · " +
-                         string.Join(" · ", texts.Select(t => $"{t.Key}: «أو كتبته في الطلب» {t.Value.Contains("الاسم الذي كان لك وقتها أو كتبته في الطلب", StringComparison.Ordinal)}")));
-        Assert.True(submit > 0 && typed > submit && kept > typed);
-        foreach (var (_, t) in texts)
-            Assert.Contains("الاسم الذي كان لك وقتها أو كتبته في الطلب", t, StringComparison.Ordinal);
-        Assert.Contains("the name you had at the time or entered in the order", En(PlatformRetentionKey), StringComparison.Ordinal);
+        var me = Guid.NewGuid();
+        var typed = new Deal
+        {
+            InitiatorId = me, InitiatorName = "اسمٌ كُتِبَ في الاستِمارَة", CounterpartyId = Guid.NewGuid(),
+            Attributes = new() { [Deal.DeliveryAddressAttribute] = "حَيُّ المِثال", [Deal.DeliveryPhoneAttribute] = "0500000000", ["qty"] = "1" },
+        };
+        AccountErasure.EraseFrom(typed, me);
+        var texts = new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey }.ToDictionary(k => k, k => Bare(Text(k)));
+        output.WriteLine($"بَعدَ المَحو: الاسم «{(typed.InitiatorName == AccountDeletion.ErasedName ? "مَمحُوّ" : "باقٍ")}» · خَصائِص: {string.Join(",", typed.Attributes.Keys)}");
+        Assert.Equal(AccountDeletion.ErasedName, typed.InitiatorName);
+        Assert.Equal(new[] { "qty" }, typed.Attributes.Keys);
+        foreach (var (k, t) in texts)
+        {
+            Assert.DoesNotContain("الاسم الذي كان لك وقتها", t, StringComparison.Ordinal);
+            Assert.True(t.Contains("بلا اسمك", StringComparison.Ordinal), $"{k} لا يَقولُ «بِلا اسمِك»: {t}");
+        }
+        Assert.Contains("remain without your name", En(PlatformRetentionKey), StringComparison.Ordinal);
+        Assert.DoesNotContain("the name you had at the time", En(PlatformRetentionKey), StringComparison.Ordinal);
     }
 
-    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الصِياغَة — الخِيارُ (ب) مِن brief-P3-5a)</b> — كانَ
-    /// <c>Today_three_deletion_texts_promise_deal_records_without_a_name_or_contact_and_the_policy_promises_every_account_an_in_app_deletion</c>
-    /// (‏<c>b52ea8d</c>): ثَلاثَةُ نُصوصٍ تَقولُ «بِلا اسم»، وs6/s7 لا تُمَيِّزانِ حِسابَ الاستوديو. <b>والآن</b> يَقولُ كُلٌّ مِنها ما تَبقيه الصَفقَةُ
-    /// ومَن يَراه — وهو بِعَينِه ما تَقيسُه الصُفوفُ ١–٣ مِن الكود (فَإن وَقَعَ الخِيارُ (أ) أَحمَرَت تِلكَ وكُتِبَ النَصُّ مَعَها) — والفَرقُ
-    /// مَحصورٌ: صَدرُ كُلِّ قيمَةٍ إلى الجُملَةِ الكاذِبَةِ بِحَرفِه. والصِياغَةُ مِن كِتابَتي حَتّى يَكتُبَها المالِكُ («ب» W8-4 · ١ في سِجِلِّه).</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، د52)</b> — كانَ <c>Deletion_texts_say_what_each_deal_keeps_and_who_sees_it_and_tell_the_studio_account_apart</c>
+    /// (وقَبلَه <c>Today_three_deletion_texts_promise_deal_records_without_a_name_or_contact…</c> في <c>b52ea8d</c>). والآن يَقولُ كُلٌّ مِنها ما يُمحى ولِمَن
+    /// يَبقى ما يَبقى — بِعِباراتِ <see cref="DisclosurePhrases"/> — والفَرقُ مَحصور: صَدرُ القيمَةِ إلى أَوَّلِ تَبديلٍ مَقصودٍ بِحَرفِه، وحِسابُ الاستوديو بِاسمِه
+    /// وطَريقِ حَذفِه (د52 (٢) «ب»: «لا بابَ الآن، ويُطلَبُ الحَذفُ بِبَريدِ التَواصُل»).</summary>
     [Fact]
-    public void Deletion_texts_say_what_each_deal_keeps_and_who_sees_it_and_tell_the_studio_account_apart()
+    public void Deletion_texts_say_what_is_erased_and_what_remains_and_tell_the_studio_account_apart()
     {
-        var keys = new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey };
-        foreach (var k in keys)
+        foreach (var k in new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey })
         {
             var now = Ar(k);
             var was = Before[k];
             var shared = 0;
             while (shared < now.Length && shared < was.Length && now[shared] == was[shared]) shared++;
-            output.WriteLine($"{k}: قَبلُ {was.Length} حَرفاً · بَعدُ {now.Length} · الصَدرُ المُشتَرَك {shared} :: {now}");
-
-            Assert.DoesNotContain("بلا اسم", Bare(now), StringComparison.Ordinal);
-            Assert.DoesNotContain("وسيلة اتصال", Bare(now), StringComparison.Ordinal);
-            foreach (var fact in RetainedFacts)
-                Assert.True(Bare(now).Contains(fact, StringComparison.Ordinal), $"{k} لا يَقولُ «{fact}»: {now}");
-            // الفَرقُ مَحصور: صَدرُ القيمَةِ القَديمَةِ إلى أَوَّلِ تَبديلٍ مَقصودٍ بِحَرفِه في الجَديدَة.
+            output.WriteLine($"{k}: قَبلُ {was.Length} حَرفاً · بَعدُ {now.Length} · الصَدرُ المُشتَرَك {shared}");
             Assert.StartsWith(Unchanged[k], was, StringComparison.Ordinal);
             Assert.StartsWith(Unchanged[k], now, StringComparison.Ordinal);
             Assert.True(shared >= Unchanged[k].Length, $"{k}: الفَرقُ يَبدَأُ عِندَ {shared} قَبلَ الصَدرِ المُعلَن ({Unchanged[k].Length}).");
+            Assert.DoesNotContain("وفي إشعارات مديري المتجر: اسمك وهاتفك أو بريدك", Bare(Text(k)), StringComparison.Ordinal);
         }
-        Assert.DoesNotContain("without a name", En(PlatformRetentionKey), StringComparison.Ordinal);
-        Assert.Contains("the deal's seller sees them, the store owner sees the name", En(PlatformRetentionKey), StringComparison.Ordinal);
-
-        // وحِسابُ الاستوديو يُقالُ بِاسمِه: لا بابَ لِحَذفِه — وهو ما يَقيسُه الصَفُّ ٤.
-        Assert.Contains("أَمّا حِسابُ الاستوديو (لِأَصحابِ المَتاجِر) فَلا بابَ لِحَذفِه داخِلَ التَطبيقِ اليَوم.", Ar(PlatformRetentionKey), StringComparison.Ordinal);
-        Assert.Contains("A studio account (for store owners) has no deletion door inside the app today.", En(PlatformRetentionKey), StringComparison.Ordinal);
+        Assert.Contains("أَمّا حِسابُ الاستوديو (لِأَصحابِ المَتاجِر) فَلا بابَ لِحَذفِه داخِلَ التَطبيقِ اليَوم، ويُطلَبُ حَذفُه مِن بَريدِ التَواصُلِ أَدناه.", Ar(PlatformRetentionKey), StringComparison.Ordinal);
+        Assert.Contains("A studio account (for store owners) has no deletion door inside the app today; its deletion is requested at the contact email below.", En(PlatformRetentionKey), StringComparison.Ordinal);
         Assert.Contains("وحَذفُ حِسابِ المَتجَرِ يَقَعُ مِن داخِلِ التَطبيق", Ar(PlatformRightsKey), StringComparison.Ordinal);
         Assert.Contains("Store account deletion happens inside the app", En(PlatformRightsKey), StringComparison.Ordinal);
     }
-    // ─── ٥ب. «اليَوم»: ما يَجِدُه المَسحانِ ولا تَقولُه النُصوص — يَنقَلِبُ بِاسمِه في كوميتِ الصِياغَة ──────────
 
-    /// <summary>عِباراتُ كُلِّ إفصاحٍ بِلا حَرَكات — يَقولُها كُلٌّ مِن نُصوصِ الحَذفِ الثَلاثَة.</summary>
+    // ─── ٥ب. ما يَجِدُه المَسحانِ تَقولُه النُصوصُ الثَلاثَة ────────────────────────────────────────────────
+
+    /// <summary>عِباراتُ كُلِّ إفصاحٍ بِلا حَرَكات — يَقولُها كُلٌّ مِن نُصوصِ الحَذفِ الثَلاثَة (‏2026-10-29، د52).</summary>
     internal static readonly IReadOnlyDictionary<Disclosure, string[]> DisclosurePhrases = new Dictionary<Disclosure, string[]>
     {
-        [Disclosure.Deal]          = new[] { "وفي كل صفقة" },
-        [Disclosure.DealSeller]    = new[] { "وإن كنت بائع صفقة بقي اسمك عليها يراه مشتريها" },
-        [Disclosure.Records]       = new[] { "محادثاتك وتقييماتك وعروضك وتذاكر دعمك وبلاغاتك" },
-        [Disclosure.Notifications] = new[] { "إشعارات من تعاملت معهم" },
-        [Disclosure.AdminNotices]  = new[] { "إشعارات مديري المتجر", "هاتفك أو بريدك" },
-        [Disclosure.StoreRecords]  = new[] { "سجل التدقيق ومفاتيح الربط" },
+        [Disclosure.Renamed]        = new[] { "حساب محذوف", "في صفقاتك ومحادثاتك وتقييماتك وعروضك وتذاكر دعمك" },
+        [Disclosure.NoticesRenamed] = new[] { "وفي الإشعارات المحفوظة عند غيرك" },
+        [Disclosure.AddressErased]  = new[] { "ويمحى عنوان التوصيل والهاتف اللذان كتبتهما في طلباتك" },
+        [Disclosure.EventLog]       = new[] { "سجل الأحداث الداخلي الذي لا يعدل ولا تعرضه شاشة" },
+        [Disclosure.AuditLog]       = new[] { "سجل تدقيق المتجر", "ويخفى عند عرضه" },
+        [Disclosure.Delivered]      = new[] { "إلى شركة الشحن", "إلى أجهزة غيرك في إشعارات المتصفح" },
+        [Disclosure.OpenDeal]       = new[] { "صفقة جارية" },
     };
 
-    /// <summary>كُلُّ إفصاحٍ يَحتاجُه ما يَجِدُه المَسحان — مِن خَصائِصِ الاسمِ ومِن كُتّابِ الإشعار.</summary>
+    /// <summary>كُلُّ إفصاحٍ يَحتاجُه ما يَجِدُه المَسحان — مِن خَصائِصِ الاسمِ ومِن كُتّابِ الإشعار — ومَعَها ثَلاثَةٌ لَيسَت أَسماءً: العُنوانُ والهاتِفُ
+    /// المَمحُوّانِ مِن الصَفقَة (<see cref="Deal.DeliveryAddressAttribute"/>)، وما وَصَلَ قَبلَ الحَذفِ إلى الناقِلِ والأَجهِزَة، والصَفقَةُ الجارِيَة.</summary>
     internal static IReadOnlyList<Disclosure> NeededDisclosures()
-        => PersonNameFields.Values.Where(f => KeptAfterDeletion(f.Kind)).Select(f => f.Said)
-            .Concat(PersonalNoticeWriters.Values).Distinct().OrderBy(d => d).ToList();
+        => PersonNameFields.Values.Where(f => f.Said != Disclosure.None).Select(f => f.Said)
+            .Concat(PersonalNoticeWriters.Values)
+            .Concat(new[] { Disclosure.AddressErased, Disclosure.Delivered, Disclosure.OpenDeal })
+            .Distinct().OrderBy(d => d).ToList();
 
     internal static IReadOnlyList<Disclosure> Unsaid(string text)
         => NeededDisclosures().Where(d => !DisclosurePhrases[d].All(p => Bare(text).Contains(p, StringComparison.Ordinal))).ToList();
 
-    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ الصِياغَة — مُراجَعَةُ تَيّارِ W8-4)</b> — كانَ
-    /// <c>Today_the_deletion_texts_leave_unsaid_tickets_notifications_and_store_records_and_the_store_privacy_omits_conversations</c> (‏<c>e262f90</c>):
-    /// النُصوصُ الثَلاثَةُ تَقولُ الصَفقَةَ وَحدَها مِن خَمسَةِ إفصاحاتٍ يَحتاجُها المَسحان. <b>والآن</b> يَقولُ كُلٌّ مِنها الخَمسَة — وإفصاحٌ سادِسٌ
-    /// يَحتاجُه تَصنيفٌ جَديدٌ في <see cref="PersonNameFields"/> أَو <see cref="PersonalNoticeWriters"/> يُحمِرُّ هذا الصَفَّ حَتّى يُكتَبَ في النُصوص.
-    /// والصِياغَةُ مِن كِتابَتي حَتّى يَكتُبَها المالِكُ أَو مُحاميه («ب» W8-4 · ١).</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، د52)</b> — كانَ <c>Every_copy_the_scans_find_is_said_by_each_deletion_text</c> بِسِتَّةِ إفصاحاتٍ عَمّا يَبقى. والآن
+    /// سَبعَةٌ عَمّا يُمحى وما يَبقى ولِماذا — وإفصاحٌ ثامِنٌ يَحتاجُه تَصنيفٌ جَديدٌ في <see cref="PersonNameFields"/> أَو <see cref="PersonalNoticeWriters"/> يُحمِرُّ
+    /// هذا الصَفَّ حَتّى يُكتَبَ في النُصوص. والصِياغَةُ بِالمُمارَسَةِ المُعتادَة، ومُراجَعَةُ المُحامي اختِيارِيَّة («ج» د52).</summary>
     [Fact]
-    public void Every_copy_the_scans_find_is_said_by_each_deletion_text()
+    public void Every_copy_the_scans_find_is_said_by_each_deletion_text_as_erased_or_kept_with_its_reason()
     {
         var needed = NeededDisclosures();
         output.WriteLine($"إفصاحاتٌ يَحتاجُها المَسحان: {string.Join(", ", needed)}");
-        // ‏2026-10-25: سِتَّةٌ لا خَمسَة — `DealSeller` لِاسمِ البائِعِ عَلى الصَفقَة (مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢؛ تَوصيفُه `b7f9d8f`).
-        // ‏2026-10-25: سَبعَةٌ — `LiveKey` لِمِفتاحِ الرَبطِ الحَيِّ بِاسمِ المَحذوف (تَوصيفُه `bc37868`).
-        // ‏2026-10-28 (د56): سِتَّةٌ مِن جَديد — الحَذفُ يُبطِلُ المِفتاح، فَاسمُ فاعِلِه نُسخَةٌ ساكِنَةٌ يَقولُها `StoreRecords`.
-        Assert.Equal(new[] { Disclosure.Deal, Disclosure.DealSeller, Disclosure.Records, Disclosure.Notifications, Disclosure.AdminNotices, Disclosure.StoreRecords }, needed);
+        Assert.Equal(new[] { Disclosure.Renamed, Disclosure.NoticesRenamed, Disclosure.AddressErased, Disclosure.EventLog, Disclosure.AuditLog, Disclosure.Delivered, Disclosure.OpenDeal }, needed);
         foreach (var k in new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey })
         {
-            var unsaid = Unsaid(Ar(k));
-            output.WriteLine($"{k}: لا يَقولُ {unsaid.Count} :: {Ar(k)}");
+            var unsaid = Unsaid(Text(k));
+            output.WriteLine($"{k}: لا يَقولُ {unsaid.Count}");
             Assert.Empty(unsaid);
         }
         // والإنجليزيُّ لِـs6 يَقولُ ما يَقولُه العَرَبِيّ (en.json لِصَفَحاتِ المَنَصَّةِ وَحدَها — لا مُقابِلَ لِنَصَّيِ المَتجَر).
-        foreach (var phrase in new[] { "each deal keeps", "If you were a deal's seller, your name stays on it and its buyer sees it",
-                                       "conversations, reviews, offers, support tickets and reports",
-                                       "the notifications of the people you dealt with", "the store managers' notifications",
-                                       "phone number or email", "the audit log and the integration keys" })
+        foreach (var phrase in new[] { "\"Deleted account\"", "deals, conversations, reviews, offers and support tickets", "in the notifications stored for other people",
+                                       "the delivery address and phone number you entered in your orders are erased", "the internal event log, which is never edited and no screen displays",
+                                       "the store's audit log", "where it is hidden when shown", "the shipping company or other people's devices in browser notifications",
+                                       "while you have an open deal" })
             Assert.Contains(phrase, En(PlatformRetentionKey), StringComparison.Ordinal);
-        Assert.DoesNotContain("keeps acting", En(PlatformRetentionKey), StringComparison.Ordinal);   // ‏(د56) حُذِفَت الجُملَة
         Assert.Null(LocaleCatalog.Find("en", StorePrivacyKey));
         Assert.Null(LocaleCatalog.Find("en", RetainedNoteKey));
     }
 
-    /// <summary>القاعِدَة ١٠ — قارِئُ الإفصاحِ (<see cref="Unsaid"/>) يُقاسُ داخِلَ الشَجَرَة (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-4 الجَولَة ٢، صُغرى): قِياسُه
-    /// السالِبُ الوَحيدُ كانَ صَفَّ «Today_» (‏<c>e262f90</c>) وقُلِبَ إلى <c>Assert.Empty</c>، فَقارِئٌ مَقلوبٌ أَو واسِعٌ (يُسقِطُ <c>.All</c>، أَو <c>Bare</c>
-    /// يَنزِعُ أَكثَرَ مِن الحَرَكات) كانَ سَيُبقي الصَفَّ أَخضَر. هُنا لِكُلِّ نَصّ: حَذفُ عِبارَةٍ واحِدَةٍ مِن نَصِّ اليَومِ يَجعَلُ القارِئَ يُسَمّي إفصاحَها
-    /// وَحدَه؛ والنَصُّ قَبلَ الصِياغَةِ (<see cref="Before"/>) والنَصُّ الفارِغُ لا يَقولانِ شَيئاً مِن المَطلوب؛ و<c>Bare</c> لا يَمَسُّ إلّا الحَرَكات.</summary>
+    /// <summary>القاعِدَة ١٠ — قارِئُ الإفصاحِ (<see cref="Unsaid"/>) يُقاسُ داخِلَ الشَجَرَة: حَذفُ عِبارَةٍ واحِدَةٍ مِن نَصِّ اليَومِ يَجعَلُ القارِئَ يُسَمّي إفصاحَها
+    /// وَحدَه؛ والنَصُّ قَبلَ د52 (<see cref="Before"/>) والنَصُّ الفارِغُ لا يَقولانِ شَيئاً مِن المَطلوب؛ و<c>Bare</c> لا يَمَسُّ إلّا الحَرَكات.</summary>
     [Theory]
     [InlineData(StorePrivacyKey)]
     [InlineData(PlatformRetentionKey)]
@@ -666,7 +725,7 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     public void The_disclosure_reader_names_exactly_the_phrase_that_is_missing(string key)
     {
         var needed = NeededDisclosures();
-        var today = Bare(Ar(key));
+        var today = Bare(Text(key));
         Assert.Empty(Unsaid(today));
         var removals = 0;
         foreach (var d in needed)
@@ -676,57 +735,58 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
                 Assert.Equal(new[] { d }, Unsaid(today.Replace(phrase, "", StringComparison.Ordinal)));
                 removals++;
             }
-        output.WriteLine($"{key}: حَذفُ عِبارَةٍ واحِدَةٍ {removals} مَرَّة — كُلٌّ سَمّى إفصاحَه وَحدَه · قَبلَ الصِياغَة: {Unsaid(Before[key]).Count}/{needed.Count} · الفارِغ: {Unsaid("").Count}/{needed.Count}");
+        output.WriteLine($"{key}: حَذفُ عِبارَةٍ واحِدَةٍ {removals} مَرَّة — كُلٌّ سَمّى إفصاحَه وَحدَه · قَبلَ د52: {Unsaid(Before[key]).Count}/{needed.Count} · الفارِغ: {Unsaid("").Count}/{needed.Count}");
         Assert.True(removals >= needed.Count, $"أَداةٌ عَمياء: {removals} عِبارَة.");
         Assert.Equal(needed, Unsaid(Before[key]));
         Assert.Equal(needed, Unsaid(""));
         Assert.Equal("أو كتبته في الطلب", Bare("أَو كَتَبتَه في الطَلَب"));
-        Assert.Equal(Ar(key).Length - Regex.Matches(Ar(key), "[\u064B-\u0652\u0670]").Count, today.Length);
+        Assert.Equal(Text(key).Length - Regex.Matches(Text(key), "[ً-ْٰ]").Count, today.Length);
     }
 
-    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> (‏2026-10-25؛ كانَ <c>Today_a_seller_who_deletes_is_not_told_their_name_stays_on_each_deal_its_buyer_sees</c>،
-    /// مُودَعٌ في <c>b7f9d8f</c>). والآن لِـ<c>Deal.CounterpartyName</c> إفصاحُه (<see cref="Disclosure.DealSeller"/>) بِجُملَةٍ تُسَمّي البائِعَ والمُشتَري —
-    /// «وإن كُنتَ بائِعَ صَفقَةٍ بَقِيَ اسمُكَ عَلَيها يَراه مُشتَريها» — في النُصوصِ الثَلاثَةِ والإنجليزيِّ لِـs6؛ وجُملَةُ المُشتَري باقِيَةٌ كَما هي.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، د52)</b> — كانَ <c>A_seller_who_deletes_is_told_their_name_stays_on_each_deal_its_buyer_sees</c> (وقَبلَه <c>Today_…</c>
+    /// في <c>b7f9d8f</c>): اسمُ البائِعِ يَبقى عَلى صَفقَتِه يَراه مُشتَريها. والآن يُمحى (<c>Deal.CounterpartyName</c>)، وعُنوانُ المُشتَري وهاتِفُه في صَفقَةٍ باعَها
+    /// لا يُمَسّانِ — لَيسا بَيانَه — والجُملَةُ خَرَجَت مِن النُصوص.</summary>
     [Fact]
-    public void A_seller_who_deletes_is_told_their_name_stays_on_each_deal_its_buyer_sees()
+    public void A_seller_who_deletes_leaves_no_name_on_the_deals_they_sold_and_the_buyers_address_stays_the_buyers()
     {
-        var said = PersonNameFields["Deal.CounterpartyName"].Said;
-        var texts = new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey }.ToDictionary(k => k, k => Bare(Ar(k)));
-        output.WriteLine($"Deal.CounterpartyName ← {said} · " + string.Join(" · ", texts.Select(t => $"{t.Key}: «مشتريها» {t.Value.Contains("مشتريها", StringComparison.Ordinal)}")));
-        Assert.Equal(Disclosure.DealSeller, said);
-        foreach (var (_, t) in texts)
+        var me = Guid.NewGuid();
+        var sold = new Deal
         {
-            Assert.Contains("يراها بائع الصفقة", t, StringComparison.Ordinal);
-            Assert.Contains("وإن كنت بائع صفقة بقي اسمك عليها يراه مشتريها", t, StringComparison.Ordinal);
-        }
-        Assert.Contains("your name stays on it and its buyer sees it", En(PlatformRetentionKey), StringComparison.Ordinal);
+            InitiatorId = Guid.NewGuid(), InitiatorName = "مُشتَرٍ", CounterpartyId = me, CounterpartyName = "بائِع",
+            Attributes = new() { [Deal.DeliveryAddressAttribute] = "حَيُّ المُشتَري", [Deal.DeliveryPhoneAttribute] = "0500000001" },
+        };
+        Assert.True(AccountErasure.EraseFrom(sold, me));
+        Assert.Equal((AccountDeletion.ErasedName, "مُشتَرٍ"), (sold.CounterpartyName, sold.InitiatorName));
+        Assert.Equal(2, sold.Attributes.Count);
+        Assert.Equal(Disclosure.Renamed, PersonNameFields["Deal.CounterpartyName"].Said);
+        foreach (var k in new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey })
+            Assert.DoesNotContain("بقي اسمك عليها يراه مشتريها", Bare(Text(k)), StringComparison.Ordinal);
+        Assert.DoesNotContain("your name stays on it and its buyer sees it", En(PlatformRetentionKey), StringComparison.Ordinal);
     }
 
     internal const string StoreIdentityItemKey = "legal.privacy.item_identity";
 
-    /// <summary>جِسما إشعارِ <c>new_user</c> لِمُديري المَتجَرِ في <c>MarketplaceTemplateExtensions.cs</c> — بِالهاتِفِ (دُخولُ الجَوّال) وبِالبَريد (دُخولُ البَريد).</summary>
-    internal static (int Phone, int Email) NewUserNoticeBodies()
+    /// <summary>أَجسامُ إشعارِ <c>new_user</c> لِمُديري المَتجَرِ في <c>MarketplaceTemplateExtensions.cs</c>: بِالاسمِ وَحدَه، وبِالاسمِ والهاتِف، وبِالاسمِ والبَريد.</summary>
+    internal static (int NameOnly, int Phone, int Email) NewUserNoticeBodies()
     {
         var mte = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
             "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs")));
-        int Count(string field) => Regex.Matches(mte, @"NotifyAdminsAsync\(store, slug, ""new_user"",\s*""[^""]*"",\s*\$""\{user\.FullName\} · \{user\." + field + @"\}""").Count;
-        return (Count("Phone"), Count("Email"));
+        int Count(string tail) => Regex.Matches(mte, @"NotifyAdminsAsync\(store, slug, ""new_user"",\s*""[^""]*"",\s*\$""\{user\.FullName\}" + tail + @"""").Count;
+        return (Count(""), Count(@" · \{user\.Phone\}"), Count(@" · \{user\.Email\}"));
     }
 
-    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> (‏2026-10-25؛ كانَ <c>Today_the_store_privacy_says_name_and_phone_are_for_verification_only_while_registration_sends_them_to_the_store_managers</c>،
-    /// مُودَعٌ في <c>fbbb77a</c>). والآن البَندُ يَقولُ ما يَفعَلُه الكود: الاسمُ والهاتِفُ أَو البَريدُ لِلتَوثيق <b>ويَصِلانِ مُديري المَتجَرِ في إشعارِ التَسجيل</b> —
-    /// بِلا «فَقَط» — فَلا تُناقِضُ الصَفحَةُ جُملَةَ الحَذفِ تَحتَه؛ والكودُ ما زالَ يَكتُبُ الجِسمَين. والبَديلُ (نَزعُ الهاتِفِ والبَريدِ مِن جِسمِ الإشعار) قَرارُ المالِك.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، د52 (٣) «أ»)</b> — كانَ <c>The_store_privacy_says_registration_sends_name_and_phone_or_email_to_the_store_managers</c>
+    /// (وقَبلَه <c>Today_…</c> في <c>fbbb77a</c>): «إشعارُ new_user بِالهاتِف 1 · بِالبَريد 1». والآن الجِسمانِ بِالاسمِ وَحدَه، والبَندُ يَقولُ «يَصِلُ الاسمُ وَحدَه».</summary>
     [Fact]
-    public void The_store_privacy_says_registration_sends_name_and_phone_or_email_to_the_store_managers()
+    public void The_registration_notice_carries_the_name_alone_and_the_store_privacy_says_so()
     {
         var item = Bare(Ar(StoreIdentityItemKey));
-        var (phone, email) = NewUserNoticeBodies();
-        output.WriteLine($"{StoreIdentityItemKey} = {item} · إشعارُ new_user بِالهاتِف {phone} · بِالبَريد {email}");
-        Assert.Equal((1, 1), (phone, email));
-        Assert.DoesNotContain("فقط", item, StringComparison.Ordinal);
-        foreach (var said in new[] { "اسم وهاتف أو بريد عند التسجيل", "للتوثيق", "مديري المتجر في إشعار التسجيل" })
+        var bodies = NewUserNoticeBodies();
+        output.WriteLine($"{StoreIdentityItemKey} = {item} · إشعارُ new_user: بِالاسمِ وَحدَه {bodies.NameOnly} · بِالهاتِف {bodies.Phone} · بِالبَريد {bodies.Email}");
+        Assert.Equal((2, 0, 0), bodies);
+        foreach (var said in new[] { "اسم وهاتف أو بريد عند التسجيل", "للتوثيق", "ويصل الاسم وحده إلى مديري المتجر في إشعار التسجيل" })
             Assert.Contains(said, item, StringComparison.Ordinal);
-        Assert.Contains("إشعارات مديري المتجر", Bare(Ar(StorePrivacyKey)), StringComparison.Ordinal);
+        Assert.DoesNotContain("هاتفك أو بريدك", Bare(Ar(StorePrivacyKey)), StringComparison.Ordinal);
     }
 
     /// <summary>جِسمُ <c>ApiKeyService.AuthenticateAsync</c> بِلا تَعليق — ما يَسأَلُه قَبلَ أَن يُعيدَ الفاعِل.</summary>
@@ -739,28 +799,33 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         return code[at..code.IndexOf("public static string? BearerFrom(", at, StringComparison.Ordinal)];
     }
 
-    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-28، قَرارُ المالِك د56)</b> — كانَ <c>An_integration_key_in_a_deleted_users_name_is_a_live_credential_and_the_texts_say_it_keeps_acting</c>
-    /// (وقَبلَه <c>Today_an_integration_key_issued_in_a_deleted_users_name_is_classified_a_passive_copy_and_keeps_acting</c>، مُودَعٌ في <c>bc37868</c>):
-    /// <c>ApiKeyDocument.ActorName</c> اعتِمادٌ حَيٌّ والنُصوصُ تَقولُ «يَبقى يَعمَلُ بِاسمِكَ حَتّى يُبطِلَه صاحِبُ المَتجَر»، و<c>AuthenticateAsync</c> لا يَسأَلُ
-    /// عَن حِسابِ الفاعِل. <b>والآن</b>: الحَذفُ يُبطِلُ مَفاتيحَ صاحِبِه (<c>ApiKeyActorDeletionTests</c>)، و<c>AuthenticateAsync</c> يَسأَلُ عَن حِسابِ الفاعِلِ
-    /// فَيَرُدُّ المَحذوفَ بِـ<c>ActorGone</c> — فَالاسمُ نُسخَةٌ ساكِنَةٌ عَلى وَثيقَةٍ مُبطَلَةٍ يَقولُها «سِجِلُّ التَدقيقِ ومَفاتيحُ الرَبط»، والجُملَةُ خَرَجَت
-    /// مِن النُصوصِ الثَلاثَةِ والإنجليزيّ.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، د52)</b> — كانَ <c>An_integration_key_in_a_deleted_users_name_is_revoked_by_the_deletion_and_no_text_says_it_keeps_acting</c>
+    /// (د56): الحَذفُ يُبطِلُ المِفتاحَ ويَبقى اسمُه عَلى الوَثيقَةِ المُبطَلَة تَقولُه النُصوصُ في «سِجِلِّ التَدقيقِ ومَفاتيحِ الرَبط». والآن الإبطالُ نَفسُه يَكتُبُ
+    /// «حِسابٌ مَحذوف» (<c>ApiKeyService.RevokeForDeletedActor</c>)، ومِفتاحٌ أُبطِلَ قَبلَ الحَذفِ يُسَمّيه <c>AccountErasure</c> — والفَعّالُ لا يَلمَسُه هذا الأَخيرُ،
+    /// فَلا تُكتَبُ وَثيقَةٌ مَرَّتَين. و<c>AuthenticateAsync</c> ما زالَ يَرُدُّ المَحذوفَ بِـ<c>ActorGone</c>.</summary>
     [Fact]
-    public void An_integration_key_in_a_deleted_users_name_is_revoked_by_the_deletion_and_no_text_says_it_keeps_acting()
+    public void An_integration_key_in_a_deleted_users_name_is_revoked_and_renamed_by_the_deletion_and_no_text_says_it_keeps_acting()
     {
         var field = PersonNameFields["ApiKeyDocument.ActorName"];
         var auth = AuthenticateBody();
         var asksUser = Regex.IsMatch(auth, @"\bLoadAsync<User>\(doc\.ActorUserId") && auth.Contains("ApiKeyRejection.ActorGone", StringComparison.Ordinal);
-        output.WriteLine($"ApiKeyDocument.ActorName ← {field.Kind}/{field.Said} · AuthenticateAsync يَسأَلُ عَن حِسابِ الفاعِل: {asksUser}");
-        Assert.Equal(NameKind.Copy, field.Kind);
-        Assert.Equal(Disclosure.StoreRecords, field.Said);
+        var me = Guid.NewGuid();
+        var active = new ACommerce.Templates.Customer.Marketplace.Services.Api.ApiKeyDocument { Id = "k1", TenantSlug = "zz", ActorUserId = me, ActorName = "سائِق",
+            Status = ACommerce.Templates.Customer.Marketplace.Services.Api.ApiKeyDocument.StatusActive };
+        var revoked = new ACommerce.Templates.Customer.Marketplace.Services.Api.ApiKeyDocument { Id = "k2", TenantSlug = "zz", ActorUserId = me, ActorName = "سائِق",
+            Status = ACommerce.Templates.Customer.Marketplace.Services.Api.ApiKeyDocument.StatusRevoked };
+        var hit = ACommerce.Templates.Customer.Marketplace.Services.Api.ApiKeyService.RevokeForDeletedActor(new[] { active, revoked }, "zz", me, DateTime.UtcNow);
+        output.WriteLine($"ApiKeyDocument.ActorName ← {field.Kind}/{field.Said} · أُبطِلَ بِالحَذف: {hit.Count} · يَسأَلُ AuthenticateAsync عَن حِسابِ الفاعِل: {asksUser}");
+        Assert.Equal(NameKind.Renamed, field.Kind);
+        Assert.Equal(Disclosure.Renamed, field.Said);
         Assert.True(asksUser);
         Assert.Contains("doc.ActorUserId, doc.ActorName", auth, StringComparison.Ordinal);
+        Assert.Equal(AccountDeletion.ErasedName, Assert.Single(hit).ActorName);
+        Assert.False(AccountErasure.EraseFrom(active, "zz", me));                 // الفَعّالُ — كانَ — لِلإبطال
+        Assert.True(AccountErasure.EraseFrom(revoked, "zz", me));                 // والمُبطَلُ سَلَفاً لِلمَحو
+        Assert.Equal(AccountDeletion.ErasedName, revoked.ActorName);
         foreach (var k in new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey })
-        {
-            Assert.DoesNotContain("يبقى يعمل باسمك", Bare(Ar(k)), StringComparison.Ordinal);
-            Assert.Contains("سجل التدقيق ومفاتيح الربط", Bare(Ar(k)), StringComparison.Ordinal);
-        }
+            Assert.DoesNotContain("يبقى يعمل باسمك", Bare(Text(k)), StringComparison.Ordinal);
         Assert.DoesNotContain("keeps acting in your name", En(PlatformRetentionKey), StringComparison.Ordinal);
     }
 }

@@ -40,10 +40,12 @@ public class AccountDeletionTests
 
     // ─── المَعجَم ──────────────────────────────────────────────────
 
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، قَرارُ المالِك د52 (١) «أ»)</b> — كانَ <c>Exactly_four_violation_codes_and_they_are_these</c>:
+    /// والخامِسُ <c>open_deal</c> — صَفقَةٌ جارِيَةٌ تَمنَعُ الحَذفَ حَتّى تُكمَلَ أَو تُلغى.</summary>
     [Fact]
-    public void Exactly_four_violation_codes_and_they_are_these()
+    public void Exactly_five_violation_codes_and_they_are_these()
         => Assert.Equal(
-            new[] { "not_authenticated", "user_not_found", "already_deleted", "confirmation_mismatch" },
+            new[] { "not_authenticated", "user_not_found", "already_deleted", "confirmation_mismatch", "open_deal" },
             AccountDeletion.All);
 
     [Fact]
@@ -54,47 +56,70 @@ public class AccountDeletionTests
     public void Every_code_in_the_vocabulary_is_accepted()
     {
         foreach (var c in AccountDeletion.All) Assert.Equal(c, AccountDeletion.Require(c));
-        Assert.Equal(4, AccountDeletion.All.Count);
+        Assert.Equal(5, AccountDeletion.All.Count);   // ‏(‏2026-10-29، د52) كانَت ٤
     }
 
     // ─── مُوجِب ────────────────────────────────────────────────────
 
     [Fact]
     public void A_live_user_typing_the_confirmation_word_may_delete()
-        => Assert.Null(AccountDeletion.Validate(Live(), Word, Word));
+        => Assert.Null(AccountDeletion.Validate(Live(), 0, Word, Word));
 
     [Fact]
     public void Surrounding_whitespace_in_the_typed_word_is_forgiven()
-        => Assert.Null(AccountDeletion.Validate(Live(), "  حذف  ", Word));
+        => Assert.Null(AccountDeletion.Validate(Live(), 0, "  حذف  ", Word));
 
     [Fact]
     public void IsAllowed_agrees_with_Validate_on_the_allowed_case()
-        => Assert.True(AccountDeletion.IsAllowed(Live(), Word, Word));
+        => Assert.True(AccountDeletion.IsAllowed(Live(), 0, Word, Word));
 
     // ─── سالِب ────────────────────────────────────────────────────
 
     [Fact]
     public void A_missing_user_document_is_refused()
         => Assert.Equal(AccountDeletion.UserNotFound,
-            AccountDeletion.Validate(null, Word, Word)!.Code);
+            AccountDeletion.Validate(null, 0, Word, Word)!.Code);
 
     [Fact]
     public void An_already_deleted_account_is_refused_not_silently_repeated()
     {
         var u = AccountDeletion.Erase(Live(), DateTime.UtcNow);
         Assert.Equal(AccountDeletion.AlreadyDeleted,
-            AccountDeletion.Validate(u, Word, Word)!.Code);
+            AccountDeletion.Validate(u, 0, Word, Word)!.Code);
     }
 
     [Fact]
     public void A_wrong_confirmation_word_is_refused()
         => Assert.Equal(AccountDeletion.ConfirmationMismatch,
-            AccountDeletion.Validate(Live(), "نعم", Word)!.Code);
+            AccountDeletion.Validate(Live(), 0, "نعم", Word)!.Code);
 
     [Fact]
     public void An_empty_confirmation_is_refused()
         => Assert.Equal(AccountDeletion.ConfirmationMismatch,
-            AccountDeletion.Validate(Live(), null, Word)!.Code);
+            AccountDeletion.Validate(Live(), 0, null, Word)!.Code);
+
+    // ─── ‏(‏2026-10-29، قَرارُ المالِك د52 (١) «أ») الصَفقَةُ الجارِيَة — مُوجَبٌ وسالِب ─────────────────────
+
+    [Fact]
+    public void An_account_with_an_open_deal_is_refused_open_deal_even_with_the_right_word()
+        => Assert.Equal(AccountDeletion.OpenDeal, AccountDeletion.Validate(Live(), 1, Word, Word)!.Code);
+
+    [Fact]
+    public void An_account_whose_deals_have_all_ended_may_delete()
+    {
+        Assert.Null(AccountDeletion.Validate(Live(), 0, Word, Word));
+        Assert.False(AccountDeletion.IsAllowed(Live(), 3, Word, Word));
+    }
+
+    /// <summary>والصَفقَةُ الجارِيَةُ حالٌ لا حَقل: تُقالُ قَبلَ كَلِمَةِ التَأكيد — فَلا يَكتُبُها المُستَخدِمُ ثُمَّ يُقالُ لَه إنّ الحَذفَ مُمتَنِع —
+    /// وبَعدَ الغِيابِ والحَذفِ السابِق.</summary>
+    [Fact]
+    public void An_open_deal_is_answered_after_absence_and_before_the_confirmation_word()
+    {
+        Assert.Equal(AccountDeletion.OpenDeal, AccountDeletion.Validate(Live(), 2, "خَطَأ", Word)!.Code);
+        Assert.Equal(AccountDeletion.UserNotFound, AccountDeletion.Validate(null, 2, Word, Word)!.Code);
+        Assert.Equal(AccountDeletion.AlreadyDeleted, AccountDeletion.Validate(AccountDeletion.Erase(Live(), DateTime.UtcNow), 2, Word, Word)!.Code);
+    }
 
     /// <summary>التَرتيبُ مَقصود: الغِيابُ أَوَّلاً لِأَنَّه لا يُفشي
     /// شَيئاً، ثُمَّ الحالَة، ثُمَّ التَأكيد. ولَولاهُ لَصارَ خَطَأُ
@@ -102,7 +127,7 @@ public class AccountDeletionTests
     [Fact]
     public void Absence_is_answered_before_the_confirmation_word()
         => Assert.Equal(AccountDeletion.UserNotFound,
-            AccountDeletion.Validate(null, "خَطَأ", Word)!.Code);
+            AccountDeletion.Validate(null, 0, "خَطَأ", Word)!.Code);
 
     // ─── الأَثَر ───────────────────────────────────────────────────
 

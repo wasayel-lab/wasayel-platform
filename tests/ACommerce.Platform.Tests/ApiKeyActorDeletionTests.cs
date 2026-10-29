@@ -175,20 +175,22 @@ public class ApiKeyActorDeletionTests(ITestOutputHelper output)
             "385c00759bdca495d53c4ad7dffeb905480afdbd45539dd067a20f1453ae512f"),
     };
 
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، قَرارُ المالِك د52 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)</b> — كانَ <c>Each_deletion_text_lost_the_keeps_acting_sentence_and_nothing_else</c>:
+    /// بُرهانٌ بايتِيٌّ يَومَ د56 أَنّ الجُملَةَ وَحدَها خَرَجَت (إعادَتُها بَعدَ مَرساتِها تُعطي بَصمَةَ ما قَبلُ — ‏<c>2fe6bf5</c>). ثُمَّ أَعادَ د52 كِتابَةَ النُصوصِ الأَربَعَةِ
+    /// كُلِّها (ما يُمحى وما يَبقى — <c>AccountDeletionRetentionTests</c>) فَزالَت المَرساةُ «سِجِلِّ التَدقيقِ ومَفاتيحِ الرَبط» مَعَها، والبَصمَةُ صادِقَةٌ عَن يَومِها لا عَن اليَوم.
+    /// والمَحروسُ الباقي: الجُملَةُ لَم تَعُد، ولا مَرساتُها، في النُصوصِ الأَربَعَة.</summary>
     [Fact]
-    public void Each_deletion_text_lost_the_keeps_acting_sentence_and_nothing_else()
+    public void Each_deletion_text_lost_the_keeps_acting_sentence_and_the_d52_rewrite_did_not_bring_it_back()
     {
         var n = 0;
         foreach (var (key, lang, anchor, sentence, shaBefore) in RemovedSentence)
         {
             var now = LocaleCatalog.Find(lang == "ar" ? LocaleCatalog.Arabic : lang, key)
                 ?? throw new Xunit.Sdk.XunitException($"لا مِفتاحَ «{key}» في {lang}.json.");
+            output.WriteLine($"{lang}:{key} — {now.Length} حَرفاً · الجُملَة: {now.Contains(sentence, StringComparison.Ordinal)} · المَرساة: {now.Contains(anchor, StringComparison.Ordinal)} · بَصمَةُ يَومِ د56 {shaBefore[..8]}…");
             Assert.DoesNotContain(sentence, now, StringComparison.Ordinal);
-            Assert.Equal(1, now.Split(anchor).Length - 1);
-            var restored = now.Replace(anchor, anchor + sentence, StringComparison.Ordinal);
-            var sha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(restored))).ToLowerInvariant();
-            output.WriteLine($"{lang}:{key} — بَعدُ {now.Length} حَرفاً · بِإعادَةِ الجُملَةِ {restored.Length} · البَصمَةُ تُطابِقُ ما قَبلُ: {sha == shaBefore}");
-            Assert.Equal(shaBefore, sha);
+            Assert.DoesNotContain(anchor, now, StringComparison.Ordinal);
+            Assert.Equal(64, shaBefore.Length);
             n++;
         }
         Assert.Equal(4, n);

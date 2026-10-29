@@ -28,20 +28,38 @@ public sealed class AuditLogQueries
 
     public AuditLogQueries(IDocumentStore store) => _store = store;
 
-    /// <summary>آخِرُ قُيود نِطاقٍ واحِد، الأَحدَثُ أَوَّلاً.</summary>
+    /// <summary>آخِرُ قُيود نِطاقٍ واحِد، الأَحدَثُ أَوَّلاً.
+    /// <para><b>‏2026-10-29 (قَرارُ المالِك د52 «أ» — «ويُخفى الاسمُ عِندَ عَرضِ السِجِلّاتِ الَّتي لا تُعَدَّل»)</b>: سِجِلُّ التَدقيقِ تاريخٌ لا يُعادُ كَتبُه،
+    /// فَاسمُ فاعِلٍ حَذَفَ حِسابَه يُستَبدَلُ عِندَ العَرضِ بِـ«حِسابٌ مَحذوف» (<see cref="HideErasedActors"/>) ويَبقى في المَخزَنِ كَما كُتِب.</para></summary>
     public async Task<IReadOnlyList<AuditEntry>> RecentAsync(
         string scope, int take = DefaultTake, CancellationToken ct = default)
     {
         try
         {
             await using var s = _store.QuerySession(scope);
-            return (await s.Query<AuditEntry>()
+            var rows = (await s.Query<AuditEntry>()
                 .OrderByDescending(a => a.At).Take(take).ToListAsync(ct)).ToList();
+            var actors = rows.Where(a => a.ActorId is not null).Select(a => a.ActorId!.Value).Distinct().ToList();
+            var erased = actors.Count == 0
+                ? new HashSet<Guid>()
+                : (await s.Query<ACommerce.Kit.Auth.User>().Where(u => actors.Contains(u.Id) && u.DeletedAt != null)
+                    .Select(u => u.Id).ToListAsync(ct)).ToHashSet();
+            return HideErasedActors(rows, erased);
         }
         catch
         {
             return Array.Empty<AuditEntry>();
         }
+    }
+
+    /// <summary>نَقِيَّة: القُيودُ كَما هي، واسمُ فاعِلٍ في <paramref name="erasedActors"/> «حِسابٌ مَحذوف» — عَلى النُسخَةِ المَعروضَة، لا في المَخزَن
+    /// (جَلسَةُ قِراءَةٍ لا تَحفَظ).</summary>
+    public static IReadOnlyList<AuditEntry> HideErasedActors(IReadOnlyList<AuditEntry> rows, IReadOnlySet<Guid> erasedActors)
+    {
+        foreach (var a in rows)
+            if (a.ActorId is { } id && erasedActors.Contains(id))
+                a.ActorName = ACommerce.Kit.Auth.AccountDeletion.ErasedName;
+        return rows;
     }
 
     /// <summary>

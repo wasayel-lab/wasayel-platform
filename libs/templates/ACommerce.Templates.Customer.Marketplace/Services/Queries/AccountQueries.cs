@@ -326,6 +326,14 @@ public sealed class AccountQueries
             .OrderByDescending(t => t.UpdatedAt).Take(50).ToListAsync(ct)).ToList();
     }
 
+    /// <summary>‏(‏2026-10-29، قَرارُ المالِك د52 (١) «أ») عَدَدُ صَفَقاتِه الجارِيَة — سُؤالُ نُقطَةِ الحَذفِ بِعَينِه
+    /// (<see cref="Identity.AccountErasure.OpenDealsAsync"/>)، فَلا تَرسُمُ صَفحَةُ الحَذفِ استِمارَةً تَرُدُّها النُقطَة.</summary>
+    public async Task<int> OpenDealsAsync(string tenantSlug, Guid userId, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(tenantSlug);
+        return await Identity.AccountErasure.OpenDealsAsync(s, userId, ct);
+    }
+
     /// <summary>لَقطَةُ صَفحَة «حِسابي»: الوَثيقَةُ وثَلاثَةُ عَدّادات،
     /// بِجَلسَةٍ واحِدَة كَما كانَت.</summary>
     public async Task<AccountSummary> SummaryAsync(

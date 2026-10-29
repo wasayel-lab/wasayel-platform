@@ -50,6 +50,12 @@ public sealed record AccountDeletionViolation(string Code, string MessageAr);
 /// نُقطَةُ الحَذفِ تُبطِلُ مَفاتيحَه في المُعامَلَةِ نَفسِها (<c>ApiKeyService.RevokeActorKeysAsync</c>، في القالِب لا هُنا: هذِه النَواةُ لا تَعرِفُ
 /// وَثيقَةَ المِفتاح)، ومِفتاحٌ صاحِبُه مَحذوفٌ يُرَدُّ عِندَ الاستِعمالِ بِـ<c>ApiKeyRejection.ActorGone</c>؛ ويَبقى اسمُه عَلى الوَثيقَةِ المُبطَلَةِ
 /// نُسخَةً ساكِنَةً تَقولُها النُصوصُ في «سِجِلِّ التَدقيقِ ومَفاتيحِ الرَبط».</para>
+///
+/// <para><b>‏2026-10-29 (قَرارُ المالِك د52 (١) «أ»؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)</b>: وَقَعَ الخِيارُ (أ) — «يُمَدُّ الحَذفُ إلى ما يُمكِنُ تَعديلُه».
+/// فَنُسَخُ الاسمِ في الصَفَقاتِ والمُحادَثاتِ والتَقييماتِ والعُروضِ والتَذاكِرِ ومَفاتيحِ الرَبطِ والإشعاراتِ المُخَزَّنَةِ يَمحوها القالِبُ
+/// (<c>AccountErasure.EraseCopiesAsync</c>) في مُعامَلَةِ النُقطَةِ نَفسِها، ومَعَها عُنوانُ التَوصيلِ وهاتِفُه مِن صَفَقاتٍ بادَرَ بِها؛ وما في سِجِلٍّ لا يُعَدَّلُ
+/// بِطَبيعَتِه (مَجرى الأَحداث، وسِجِلُّ التَدقيقِ ويُخفى فيه عِندَ العَرض) تَقولُه النُصوص. و<see cref="Erase"/> باقِيَةٌ عَلى وَثيقَتِها — هذِه النَواةُ لا تَعرِفُ
+/// تِلكَ الوَثائِق. ورَمزٌ خامِسٌ <see cref="OpenDeal"/>: صَفقَةٌ جارِيَةٌ تَمنَعُ الحَذفَ قَبلَ أَيِّ مَحو. (‏ADR-045 §٦.)</para>
 /// </summary>
 public static class AccountDeletion
 {
@@ -69,9 +75,13 @@ public static class AccountDeletion
     /// <summary>كَلِمَةُ التَأكيدِ لَم تُطابِق.</summary>
     public const string ConfirmationMismatch = "confirmation_mismatch";
 
-    /// <summary>المَعجَمُ المُغلَق — أَربَعَةٌ لا خامِسَ لَها.</summary>
+    /// <summary>‏(‏2026-10-29، قَرارُ المالِك د52 (١) «أ») لِلحِسابِ صَفقَةٌ جارِيَة — يُكمِلُها أَو يُلغيها (أَو يَطلُبُ ذلكَ مِن المَتجَر) أَوَّلاً، بَدَلَ أَن يَبقى
+    /// طَرَفُها الآخَرُ بِصَفقَةٍ طَرَفُها مَمحُوّ. ما «الجارِيَةُ» يُقَرِّرُه القالِبُ (الَّذي يَعرِفُ الصَفقَة) ويُمَرِّرُ عَدَدَها — هذِه النَواةُ لا تَعرِفُ وَثيقَتَها.</summary>
+    public const string OpenDeal = "open_deal";
+
+    /// <summary>المَعجَمُ المُغلَق — خَمسَةٌ لا سادِسَ لَها (‏2026-10-29: الخامِسُ <see cref="OpenDeal"/>، د52).</summary>
     public static readonly IReadOnlyList<string> All =
-        new[] { NotAuthenticated, UserNotFound, AlreadyDeleted, ConfirmationMismatch };
+        new[] { NotAuthenticated, UserNotFound, AlreadyDeleted, ConfirmationMismatch, OpenDeal };
 
     public static bool Contains(string code) => All.Contains(code, StringComparer.Ordinal);
 
@@ -104,15 +114,22 @@ public static class AccountDeletion
     /// سَهواً. وكَلِمَةُ التَأكيدِ <b>تُمَرَّر</b> ولا تُكتَبُ هُنا،
     /// لِتَبقى نَصَّ واجِهَةٍ مِن القامُوس (القاعِدَة ١١) لا
     /// حَرفِيَّةً في بَوّابَة.</para>
+    ///
+    /// <para><b>‏2026-10-29 (قَرارُ المالِك د52 (١) «أ»؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: و<paramref name="openDeals"/> — عَدَدُ صَفَقاتِه الجارِيَةِ
+    /// كَما عَدَّها القالِبُ — وَسيطٌ إلزامِيٌّ لا افتِراضِيّ: مُنادٍ يَنسى الصَفَقاتِ لا يُبنى. ومَوضِعُه بَعدَ الحالَةِ وقَبلَ كَلِمَةِ التَأكيد: حالٌ لا حَقل،
+    /// فَلا يَكتُبُ المُستَخدِمُ الكَلِمَةَ ثُمَّ يُقالُ لَه إنّ الحَذفَ مُمتَنِع.</para>
     /// </summary>
     public static AccountDeletionViolation? Validate(
-        User? user, string? typedConfirmation, string expectedConfirmation)
+        User? user, int openDeals, string? typedConfirmation, string expectedConfirmation)
     {
         if (user is null)
             return new(UserNotFound, "لا وَثيقَةَ مُستَخدِمٍ بِهذا المُعَرِّف.");
 
         if (user.DeletedAt is not null)
             return new(AlreadyDeleted, "الحِسابُ مَحذوفٌ سَلَفاً — لا شَيءَ يُحذَف.");
+
+        if (openDeals > 0)
+            return new(OpenDeal, "لِلحِسابِ صَفقَةٌ جارِيَة — تُكمَلُ أَو تُلغى أَوَّلاً، ولَم يُحذَف شَيء.");
 
         if (!string.Equals((typedConfirmation ?? "").Trim(), expectedConfirmation,
                 StringComparison.Ordinal))
@@ -122,8 +139,8 @@ public static class AccountDeletion
         return null;
     }
 
-    public static bool IsAllowed(User? user, string? typed, string expected) =>
-        Validate(user, typed, expected) is null;
+    public static bool IsAllowed(User? user, int openDeals, string? typed, string expected) =>
+        Validate(user, openDeals, typed, expected) is null;
 
     // ─── الأَثَر ───────────────────────────────────────────────────
 

@@ -301,7 +301,9 @@ public static class MarketplaceTemplateExtensions
                 if (user is not null && (DateTime.UtcNow - user.CreatedAt).TotalMinutes < 1)
                     await NotifyAdminsAsync(store, slug, "new_user",
                         "مُستَخدِم جَديد سَجَّل",
-                        $"{user.FullName} · {user.Phone}",
+                        // ‏(‏2026-10-29، قَرارُ المالِك د52 (٣) «أ») الاسمُ وَحدَه — كُلُّ نُسخَةٍ مِن الهاتِفِ في صَناديقِ المُديرينَ خَطَرُ تَسريبٍ بِلا فائِدَة،
+                        // والتَفاصيلُ في صَفحَةِ المُستَخدِمينَ لِمَن يَملِكُ صَلاحِيَّتَها.
+                        $"{user.FullName}",
                         $"/admin/tenants/{slug}/users");
             }
             return Results.Redirect(await PostLoginRouteAsync(slug, result.UserId, asRole, store));
@@ -384,7 +386,8 @@ public static class MarketplaceTemplateExtensions
                 if (user is not null && (DateTime.UtcNow - user.CreatedAt).TotalMinutes < 1)
                     await NotifyAdminsAsync(store, slug, "new_user",
                         "مُستَخدِم جَديد سَجَّل",
-                        $"{user.FullName} · {user.Email}",
+                        // ‏(د52 (٣) «أ») الاسمُ وَحدَه — والبَريدُ في صَفحَةِ المُستَخدِمين.
+                        $"{user.FullName}",
                         $"/admin/tenants/{slug}/users");
             }
             return Results.Redirect(await PostLoginRouteAsync(slug, result.UserId, asRole, store));
@@ -873,19 +876,25 @@ public static class MarketplaceTemplateExtensions
 
             // كَلِمَةُ التَأكيدِ مِن القامُوسِ لا حَرفِيَّةً في بَوّابَة
             // (القاعِدَة ١١) — والمَعروضُ عَلى الشاشَةِ هُوَ المُقارَنُ بِه.
+            // ‏(‏2026-10-29، قَرارُ المالِك د52) والصَفَقاتُ الجارِيَةُ تُعَدُّ بِالجَلسَةِ نَفسِها وتَبلُغُ البَوّابَةَ قَبلَ كَلِمَةِ التَأكيد — `AccountErasure.OpenDealsAsync`
+            // سُؤالُ صَفحَةِ الحَذفِ بِعَينِه.
             var violation = ACommerce.Kit.Auth.AccountDeletion.Validate(
-                user, req.Form["confirm"].ToString(), l["account.delete.confirm_word"]);
+                user, await Services.Identity.AccountErasure.OpenDealsAsync(session, userId),
+                req.Form["confirm"].ToString(), l["account.delete.confirm_word"]);
 
             if (violation is not null)
                 return Results.Redirect(Link(req, slug, $"me/delete?err={violation.Code}"));
 
             var now = DateTime.UtcNow;
+            var nameBefore = user!.FullName;
             ACommerce.Kit.Auth.AccountDeletion.Erase(user!, now);
             session.Store(user!);
             // ‏(د60) والسَلَّةُ تَحمِلُ اسمَه وجَوّالَه وعُنوانَه مِن خُطُواتِ الإتمام — تُحذَفُ مَعَه.
             session.Delete<ACommerce.Kit.Cart.Cart>(userId);
             // ‏(د56) مَفاتيحُ الرَبطِ بِاسمِه تُبطَلُ في المُعامَلَةِ نَفسِها — لا يَبقى مِفتاحٌ يَتَكَلَّمُ بِاسمِ حِسابٍ مَحذوف.
             await Services.Api.ApiKeyService.RevokeActorKeysAsync(session, slug, userId, now);
+            // ‏(د52 «أ») ونُسَخُ اسمِه القابِلَةُ لِلتَعديلِ في المُعامَلَةِ نَفسِها — والقَرارُ والأَثَرُ في `AccountErasure`.
+            await Services.Identity.AccountErasure.EraseCopiesAsync(session, slug, userId, nameBefore);
             await session.SaveChangesAsync();
             Services.SessionVersionGate.Forget(cache, slug, userId);   // ‏(د28) Erase رَفَعَ الإصدار — لا يَنتَظِرُ دَقيقَةَ الحِفظ
 

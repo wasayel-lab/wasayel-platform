@@ -238,7 +238,13 @@ public class ApiKeyService
                                   && k.ActorUserId == actorUserId
                                   && string.Equals(k.Status, ApiKeyDocument.StatusActive, StringComparison.Ordinal))
                       .ToList();
-        foreach (var k in hit) MarkRevoked(k, now);
+        foreach (var k in hit)
+        {
+            MarkRevoked(k, now);
+            // ‏(‏2026-10-29، قَرارُ المالِك د52 «أ» — يُمَدُّ الحَذفُ إلى ما يُمكِنُ تَعديلُه) واسمُ صاحِبِه عَلى الوَثيقَةِ المُبطَلَةِ لا يَبقى: «حِسابٌ مَحذوف».
+            // ومُبطَلٌ سَلَفاً يُسَمّيه `AccountErasure` في المُعامَلَةِ نَفسِها — مَجموعَتانِ لا تَتَقاطَعان، فَلا تُكتَبُ وَثيقَةٌ مَرَّتَين.
+            k.ActorName = AccountDeletion.ErasedName;
+        }
         return hit;
     }
 

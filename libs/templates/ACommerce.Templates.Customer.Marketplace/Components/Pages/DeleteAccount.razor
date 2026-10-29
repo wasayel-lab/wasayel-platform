@@ -1,6 +1,8 @@
 @page "/{slug}/me/delete"
 @page "/{slug}/r/{role}/me/delete"
 @inject AuthSession Auth
+@inject IHttpContextAccessor HttpCtx
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject L L
 
 @*
@@ -28,7 +30,8 @@
     }
     else
     {
-        @if (!string.IsNullOrEmpty(Err))
+        @* ‏(‏2026-10-29، د52) رَمزُ الصَفقَةِ الجارِيَةِ لا يُقرَأُ «لَم تُطابِق الكَلِمَة» — بِطاقَتُه أَدناه تَقولُ ما يَفعَلُه، وتُرسَمُ ما دامَت لَه صَفقَةٌ جارِيَة. *@
+        @if (!string.IsNullOrEmpty(Err) && Err != ACommerce.Kit.Auth.AccountDeletion.OpenDeal)
         {
             <AcCard>
                 <ChildContent>
@@ -51,6 +54,21 @@
             </ChildContent>
         </AcCard>
 
+        @* ‏(‏2026-10-29، قَرارُ المالِك د52 (١) «أ») صَفقَةٌ جارِيَةٌ تَمنَعُ الحَذف: تُرسَمُ خُطوَتُه التالِيَةُ لا استِمارَةٌ تَرُدُّها النُقطَة (القاعِدَة ١٢). *@
+        @if (openDeals > 0)
+        {
+            <AcCard>
+                <ChildContent>
+                    <p style="color:var(--ac-danger-ink);">@L.Markup("account.delete.open_deal")</p>
+                    <div style="display:flex;gap:8px;margin-top:12px;">
+                        <a class="ac-btn ac-btn-primary" href="@AuthSession.LinkFor(Slug, Role, $"deals")">@L.Markup("account.delete.open_deal_action")</a>
+                        <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me")">@L.Markup("account.delete.cancel")</a>
+                    </div>
+                </ChildContent>
+            </AcCard>
+        }
+        else
+        {
         <AcCard>
             <ChildContent>
                 <form method="post" action="@($"/{Slug}/me/delete/confirm")" style="margin:0;">
@@ -68,6 +86,7 @@
                 </form>
             </ChildContent>
         </AcCard>
+        }
     }
 </div>
 
@@ -78,4 +97,14 @@
     /// <summary>رَمزُ الرَفضِ العائِدُ مِن النُقطَة — مِن مَعجَمِ
     /// <c>AccountDeletion.All</c> المُغلَق.</summary>
     [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+
+    /// <summary>صَفَقاتُه الجارِيَة — <c>AccountQueries.OpenDealsAsync</c>، سُؤالُ النُقطَةِ بِعَينِه.</summary>
+    int openDeals;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpCtx.HttpContext is { } ctx) { Auth.SetTenant(Slug); Auth.Load(ctx, Slug); }
+        if (!Auth.IsAuthenticated || Auth.UserId is null) return;
+        openDeals = await Accounts.OpenDealsAsync(Slug, Auth.UserId.Value);
+    }
 }

@@ -1,0 +1,172 @@
+using ACommerce.Kit.Auth;
+using ACommerce.Kit.Chat;
+using ACommerce.Kit.Notifications;
+using ACommerce.Kit.Offers;
+using ACommerce.Kit.Reviews;
+using ACommerce.Kit.Support;
+using ACommerce.Templates.Customer.Marketplace.Services.Api;
+using ACommerce.Templates.Customer.Marketplace.Services.Deals;
+using Marten;
+
+namespace ACommerce.Templates.Customer.Marketplace.Services.Identity;
+
+/// <summary>
+/// <para><b>الحَذفُ يَبلُغُ كُلَّ نُسخَةٍ تُعَدَّل</b> (‏2026-10-29، قَرارُ المالِك د52 (١) «أ»؛ ‏ADR-045 §٦). قَبلَه كانَ <see cref="AccountDeletion.Erase"/> يَمحو
+/// وَثيقَةَ <see cref="User"/> وَحدَها، ونُسَخُ الاسمِ خارِجَها (‏16 نُسخَةً مَقيسَةً في <c>AccountDeletionRetentionTests</c> §٣ب) تَبقى. والآن، في مُعامَلَةِ
+/// نُقطَةِ الحَذفِ نَفسِها: الاسمُ «حِسابٌ مَحذوف» في صَفَقاتِه (طَرَفاً وفي خَطِّها الزَمَنِيِّ) ومُحادَثاتِه وتَقييماتِه (كَتَبَها أَو كُتِبَت عَنه) وعُروضِه
+/// ومُطابَقاتِ إعلاناتِه وتَذاكِرِه ورُدودِه عَلَيها ومَفاتيحِ رَبطٍ مُبطَلَةٍ بِاسمِه، وفي الإشعاراتِ المُخَزَّنَةِ في صَناديقِ غَيرِه؛ ويُمحى عُنوانُ التَوصيلِ
+/// وهاتِفُه مِن صَفَقاتٍ بادَرَ بِها (كَتَبَهُما هُو — وعُنوانُ مُشتَرٍ في صَفقَةٍ باعَها لا يُمَسّ: لَيسَ بَيانَه).</para>
+///
+/// <para><b>وما لا يُعَدَّلُ بِطَبيعَتِه يُقالُ ولا يُكتَبُ فَوقَه</b>: مَجرى الأَحداثِ (‏<c>OfferSubmitted</c> و<c>TicketCreated</c> و<c>TicketReplied</c>) سِجِلٌّ
+/// لا يُعادُ كَتبُه ولا تَعرِضُه شاشَة — الشاشاتُ تَقرَأُ اللَقَطاتِ المُمحُوَّة؛ وسِجِلُّ التَدقيقِ (<c>AuditEntry</c>) تاريخٌ يُخفى فيه الاسمُ عِندَ العَرض
+/// (<c>AuditLogQueries.HideErasedActors</c>) لا في المَخزَن.</para>
+///
+/// <para><b>والصَفقَةُ الجارِيَةُ تَمنَعُ الحَذفَ قَبلَ أَيِّ مَحو</b> (<see cref="AccountDeletion.OpenDeal"/>): <see cref="IsOpen"/> — فَعّالَةٌ أَو في نِزاع
+/// — لِصَفقَةٍ هُوَ طَرَفُها (مُبادِراً أَو مُقابِلاً). وعَرضٌ وارِدٌ عَلى إعلانِه لَم يَقبَلْه بَعدُ لا يَمنَع: لَيسَ طَرَفاً فيه حَتّى يَقبَل. والسُؤالُ واحِدٌ
+/// تَسأَلُه النُقطَةُ وصَفحَةُ الحَذفِ (<see cref="OpenDealsAsync"/>)، فَلا تَرسُمُ الصَفحَةُ استِمارَةً تَرُدُّها النُقطَة (القاعِدَة ١٢).</para>
+/// </summary>
+public static class AccountErasure
+{
+    /// <summary>صَفقَةٌ لَم تَنتَهِ — فَعّالَة، أَو في نِزاعٍ يَنتَظِرُ الحَلّ. المُكتَمِلَةُ والمُلغاةُ مُنتَهِيَتان.</summary>
+    public static bool IsOpen(Deal deal) => deal.Status is DealStatus.Active or DealStatus.Disputed;
+
+    /// <summary>هُوَ طَرَفُ الصَفقَة: مُبادِرُها أَو طَرَفُها المُقابِل.</summary>
+    public static bool IsParty(Deal deal, Guid userId) => deal.InitiatorId == userId || deal.CounterpartyId == userId;
+
+    /// <summary>عَدَدُ صَفَقاتِه الجارِيَة — دالَّةٌ نَقِيَّةٌ عَلى ما جُلِب، يَسأَلُها الاستِعلامُ نَفسُه.</summary>
+    public static int OpenDeals(IEnumerable<Deal> deals, Guid userId) => deals.Count(d => IsParty(d, userId) && IsOpen(d));
+
+    /// <summary>الاستِعلامُ الواحِدُ لِلصَفَقاتِ الجارِيَة — تَسأَلُه نُقطَةُ الحَذفِ بِجَلسَتِها وصَفحَةُ الحَذفِ بِجَلسَةِ قِراءَة.</summary>
+    public static async Task<int> OpenDealsAsync(IQuerySession s, Guid userId, CancellationToken ct = default)
+        => OpenDeals(await s.Query<Deal>().Where(d => d.InitiatorId == userId || d.CounterpartyId == userId).ToListAsync(ct), userId);
+
+    /// <summary>اسمٌ لا يَدُلُّ عَلى أَحَد — فارِغ، أَو الافتِراضِيُّ قَبلَ أَن يُكتَبَ اسم، أَو المَمحُوُّ نَفسُه — فَلا يُبحَثُ عَنه في نَصِّ إشعار.</summary>
+    public static bool Identifies(string? name)
+        => !string.IsNullOrWhiteSpace(name) && name != new User().FullName && name != AccountDeletion.ErasedName && name.Trim() != "—";
+
+    // ─── الأَثَرُ عَلى كُلِّ نَوع — دالّاتٌ نَقِيَّةٌ تُعيدُ «تَغَيَّرَ أَم لا» ─────────────────────────────────
+
+    public static bool EraseFrom(Deal d, Guid userId)
+    {
+        var changed = false;
+        if (d.InitiatorId == userId)
+        {
+            changed |= Set(d.InitiatorName, v => d.InitiatorName = v);
+            changed |= d.Attributes.Remove(Deal.DeliveryAddressAttribute);
+            changed |= d.Attributes.Remove(Deal.DeliveryPhoneAttribute);
+        }
+        if (d.CounterpartyId == userId) changed |= Set(d.CounterpartyName, v => d.CounterpartyName = v);
+        for (var i = 0; i < d.Timeline.Count; i++)
+            if (d.Timeline[i].ActorId == userId && d.Timeline[i].ActorName != AccountDeletion.ErasedName)
+            {
+                d.Timeline[i] = d.Timeline[i] with { ActorName = AccountDeletion.ErasedName };
+                changed = true;
+            }
+        return changed;
+    }
+
+    public static bool EraseFrom(Conversation c, Guid userId)
+        => (c.OwnerId == userId && Set(c.OwnerName, v => c.OwnerName = v))
+         | (c.PartnerId == userId && Set(c.PartnerName, v => c.PartnerName = v));
+
+    public static bool EraseFrom(Review r, Guid userId)
+        => (r.AuthorId == userId && Set(r.AuthorName, v => r.AuthorName = v))
+         | (r.TargetUserId == userId && Set(r.TargetUserName, v => r.TargetUserName = v));
+
+    public static bool EraseFrom(Offer o, Guid userId) => o.OffererId == userId && Set(o.OffererName, v => o.OffererName = v);
+
+    public static bool EraseFrom(ListingMatch m, Guid userId) => m.OffererId == userId && Set(m.OffererName, v => m.OffererName = v);
+
+    /// <summary>تَذكِرَتُه: اسمُه كاتِباً، واسمُه عَلى رُدودِه هُو (<c>FromStaff = false</c>) — ورَدُّ الفَريقِ يَبقى بِتَوقيعِه.</summary>
+    public static bool EraseFrom(Ticket t, Guid userId)
+    {
+        if (t.AuthorId != userId) return false;
+        var changed = Set(t.AuthorName, v => t.AuthorName = v);
+        foreach (var r in t.Replies.Where(r => !r.FromStaff)) changed |= Set(r.AuthorName, v => r.AuthorName = v);
+        return changed;
+    }
+
+    /// <summary>مِفتاحُ رَبطٍ بِاسمِه أُبطِلَ قَبلَ الحَذف — والفَعّالُ يُبطِلُه ويُسَمّيه <c>ApiKeyService.RevokeForDeletedActor</c> في المُعامَلَةِ نَفسِها.</summary>
+    public static bool EraseFrom(ApiKeyDocument k, string tenantSlug, Guid userId)
+        => string.Equals(k.TenantSlug, tenantSlug, StringComparison.Ordinal) && k.ActorUserId == userId
+           && !string.Equals(k.Status, ApiKeyDocument.StatusActive, StringComparison.Ordinal)
+           && Set(k.ActorName, v => k.ActorName = v);
+
+    /// <summary>
+    /// <para><b>إشعارٌ في صُندوقِ غَيرِه يَحمِلُ اسمَه</b>: يُستَبدَلُ الاسمُ في العُنوانِ والمَتنِ — إن كانَ الإشعارُ عَن شَيءٍ يَخُصُّه (رابِطُه صَفقَةٌ أَو
+    /// مُحادَثَةٌ أَو إعلانٌ مِن <paramref name="relatedUrls"/>) أَو مِن إشعاراتِ مُديري المَتجَرِ الَّتي تُسَمّي العُضو (<c>new_user</c> و<c>report</c>).
+    /// والحَصرُ بِالرابِطِ لِكَي لا يُمَسَّ اسمُ شَخصٍ آخَرَ يُشبِهُ اسمَه في إشعارٍ لا عَلاقَةَ لَه بِه.</para>
+    /// </summary>
+    public static bool EraseFrom(Notification n, Guid userId, string oldName, IReadOnlyCollection<string> relatedUrls)
+    {
+        if (n.UserId == userId || !Identifies(oldName)) return false;
+        var about = AdminNoticeTypes.Contains(n.Type)
+                    || (n.RelatedUrl is { } url && relatedUrls.Any(r => url.EndsWith(r, StringComparison.Ordinal)));
+        if (!about) return false;
+        var title = n.Title.Replace(oldName, AccountDeletion.ErasedName, StringComparison.Ordinal);
+        var body = n.Body.Replace(oldName, AccountDeletion.ErasedName, StringComparison.Ordinal);
+        if (title == n.Title && body == n.Body) return false;
+        (n.Title, n.Body) = (title, body);
+        return true;
+    }
+
+    /// <summary>إشعاراتُ مُديري المَتجَرِ الَّتي تُسَمّي العُضوَ في مَتنِها — كاتِباها في <c>MarketplaceTemplateExtensions</c> (التَسجيلُ والبَلاغ).</summary>
+    public static readonly IReadOnlySet<string> AdminNoticeTypes = new HashSet<string>(StringComparer.Ordinal) { "new_user", "report" };
+
+    private static bool Set(string? current, Action<string> set)
+    {
+        if (current == AccountDeletion.ErasedName) return false;
+        set(AccountDeletion.ErasedName);
+        return true;
+    }
+
+    /// <summary>ما مُحِيَ في كُلِّ نَوع — يُطبَعُ في البُرهانِ الحَيّ.</summary>
+    public sealed record Counts(int Deals, int Conversations, int Reviews, int Offers, int Matches, int Tickets, int Keys, int Notifications)
+    {
+        public int Total => Deals + Conversations + Reviews + Offers + Matches + Tickets + Keys + Notifications;
+    }
+
+    /// <summary>
+    /// <para><b>الأَثَرُ في الجَلسَة — بِلا حِفظ</b>: يَقرَأُ ما يَذكُرُه بِمُعَرِّفِه ويُعَلِّمُ المُتَغَيِّرَ لِلحِفظِ (<c>Store</c>)، والحِفظُ الواحِدُ لِلنُقطَةِ بَعدَه —
+    /// فَالمَحوُ ووَثيقَةُ الحِسابِ ومَفاتيحُه في مُعامَلَةٍ واحِدَة: يَقَعُ كُلُّه أَو لا شَيء. و<paramref name="oldName"/> الاسمُ قَبلَ <c>Erase</c>.</para>
+    /// </summary>
+    public static async Task<Counts> EraseCopiesAsync(IDocumentSession s, string tenantSlug, Guid userId, string oldName, CancellationToken ct = default)
+    {
+        int Mark<T>(IEnumerable<T> rows, Func<T, bool> erase) where T : notnull
+        {
+            var n = 0;
+            foreach (var row in rows) if (erase(row)) { s.Store(row); n++; }
+            return n;
+        }
+
+        var deals = await s.Query<Deal>().Where(d => d.InitiatorId == userId || d.CounterpartyId == userId).ToListAsync(ct);
+        var dealIds = deals.Select(d => d.Id).ToHashSet();
+        // وخُطوَةٌ فَعَلَها في صَفقَةٍ لَيسَ طَرَفَها (فاعِلٌ بِمِفتاحِ رَبطٍ مَثَلاً) — اسمُه عَلى سَطرِ خَطِّها الزَمَنِيّ.
+        var others = (await s.Query<Deal>().Where(d => d.Timeline.Any(e => e.ActorId == userId)).ToListAsync(ct))
+            .Where(d => !dealIds.Contains(d.Id));
+        var convs = await s.Query<Conversation>().Where(c => c.OwnerId == userId || c.PartnerId == userId).ToListAsync(ct);
+        var reviews = await s.Query<Review>().Where(r => r.AuthorId == userId || r.TargetUserId == userId).ToListAsync(ct);
+        var offers = await s.Query<Offer>().Where(o => o.OffererId == userId).ToListAsync(ct);
+        var matches = await s.Query<ListingMatch>().Where(m => m.OffererId == userId).ToListAsync(ct);
+        var tickets = await s.Query<Ticket>().Where(t => t.AuthorId == userId).ToListAsync(ct);
+        var keys = await s.Query<ApiKeyDocument>().Where(k => k.TenantSlug == tenantSlug && k.ActorUserId == userId).ToListAsync(ct);
+
+        var urls = deals.Select(d => $"/deals/{d.Id}")
+            .Concat(convs.Select(c => $"/chats/{c.Id}"))
+            .Concat(matches.Select(m => $"/listings/{m.Id}"))
+            .ToList();
+        var notices = Identifies(oldName)
+            ? await s.Query<Notification>().Where(n => n.UserId != userId && (n.Title.Contains(oldName) || n.Body.Contains(oldName))).ToListAsync(ct)
+            : Array.Empty<Notification>();
+
+        return new Counts(
+            Deals: Mark(deals.Concat(others), d => EraseFrom(d, userId)),
+            Conversations: Mark(convs, c => EraseFrom(c, userId)),
+            Reviews: Mark(reviews, r => EraseFrom(r, userId)),
+            Offers: Mark(offers, o => EraseFrom(o, userId)),
+            Matches: Mark(matches, m => EraseFrom(m, userId)),
+            Tickets: Mark(tickets, t => EraseFrom(t, userId)),
+            Keys: Mark(keys, k => EraseFrom(k, tenantSlug, userId)),
+            Notifications: Mark(notices, n => EraseFrom(n, userId, oldName, urls)));
+    }
+}
