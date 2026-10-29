@@ -93,8 +93,8 @@ public class LivePageGateZeroRoleProofTests(ITestOutputHelper output)
     private static bool Enabled
         => LiveDealConcurrencyProofTests.Enabled && !string.IsNullOrEmpty(LiveDealConcurrencyProofTests.ConnectionString);
 
-    /// <summary>مَتجَرٌ بِأَدوارٍ مُعطاة (أَو بِلا أَدوار)، وعُضوٌ لِكُلِّ دَورٍ نَشِطٍ مُعطىً — ويُعيدُ مُعَرِّفاتِهِم بِتَرتيبِها.</summary>
-    internal static async Task<IReadOnlyList<Guid>> SeedAsync(Marten.IDocumentStore store, string slug, IEnumerable<string> catalogRoles, params string?[] activeRoles)
+    /// <summary>مَتجَرٌ بِأَدوارٍ مُعطاة (أَو بِلا أَدوار)، وعُضوٌ لِكُلِّ دَورٍ نَشِطٍ مُعطىً — و«""» بِلا دَور، قيمَةُ <c>User.ActiveRole</c> الافتِراضِيَّةُ لِعُضوٍ سَجَّلَ نَفسَه — ويُعيدُ مُعَرِّفاتِهِم بِتَرتيبِها.</summary>
+    internal static async Task<IReadOnlyList<Guid>> SeedAsync(Marten.IDocumentStore store, string slug, IEnumerable<string> catalogRoles, params string[] activeRoles)
     {
         var roles = catalogRoles.Select((s, i) => RoleCatalog.InstantiateRole(RoleCatalog.Find(s)!, i)).ToList();
         await using (var g = store.LightweightSession())
@@ -165,7 +165,7 @@ public class LivePageGateZeroRoleProofTests(ITestOutputHelper output)
         var slug = "pg-zz-" + Guid.NewGuid().ToString("N")[..8];
         try
         {
-            var ids = await SeedAsync(store, slug, Array.Empty<string>(), (string?)null);
+            var ids = await SeedAsync(store, slug, Array.Empty<string>(), "");
             var html = await RenderAsync(store, slug, ids[0], PageGateZeroRoleTests.Member);
             Print($"صِفرُ أَدوار · عُضوٌ بِلا دَور · {PageGateZeroRoleTests.Member}", html);
             Assert.True(Shows(html));
@@ -208,11 +208,29 @@ public class LivePageGateZeroRoleProofTests(ITestOutputHelper output)
         var slug = "pg-zz-" + Guid.NewGuid().ToString("N")[..8];
         try
         {
-            var ids = await SeedAsync(store, slug, Array.Empty<string>(), (string?)null);
+            var ids = await SeedAsync(store, slug, Array.Empty<string>(), "");
             var html = await RenderAsync(store, slug, ids[0], PageGateZeroRoleTests.Administrative);
             Print($"صِفرُ أَدوار · عُضوٌ بِلا دَور · {PageGateZeroRoleTests.Administrative} (الدالَّةُ تَرُدّ: {!PermissionDoor.Opens(Array.Empty<Role>(), null, null, PageGateZeroRoleTests.Administrative)})", html);
             Assert.True(Shows(html));
         }
         finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
+    }
+
+    /// <summary><b>والمُستَأجِرُ الغائِبُ مَرسوماً</b> (‏2026-10-29، يُلحَقُ قَبلَ التَبديلِ في كوميتٍ مُستَقِلّ): جَلسَةٌ مُوَقَّعَةٌ لِمَتجَرٍ لا وَثيقَةَ لَه
+    /// (حُذِفَ أَو لَم يوجَد) — <c>Roles.LoadAsync</c> يُعيدُ <c>Tenant = null</c>، والفَرعُ المَوجِبُ لا يَدخُلُه، فَالصَفحَةُ تَرسُمُ مُحتَواها لِأَيِّ صَلاحِيَّة؛
+    /// والحُرّاسُ الثَلاثَةُ الآخَرونَ يَرُدّونَه (<c>PermissionFilter</c> ‏404، و<c>HasPermissionAsync</c> ‏<c>false</c>).</summary>
+    [Fact]
+    public async Task Today_a_session_in_a_store_without_a_tenant_document_sees_the_page_behind_any_permission_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = "pg-zz-" + Guid.NewGuid().ToString("N")[..8];
+        var member = await RenderAsync(store, slug, Guid.NewGuid(), PageGateZeroRoleTests.Member);
+        var admin = await RenderAsync(store, slug, Guid.NewGuid(), PageGateZeroRoleTests.Administrative);
+        Print($"بِلا وَثيقَةِ مُستَأجِر · {PageGateZeroRoleTests.Member}", member);
+        Print($"بِلا وَثيقَةِ مُستَأجِر · {PageGateZeroRoleTests.Administrative}", admin);
+        Assert.True(Shows(member));
+        Assert.True(Shows(admin));
     }
 }
