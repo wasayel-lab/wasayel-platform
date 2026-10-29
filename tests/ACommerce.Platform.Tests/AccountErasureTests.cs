@@ -407,10 +407,11 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
         return counts;
     }
 
-    /// <summary><b>«اليَوم» حَيّاً</b>: الحَذفُ يَمحو لَقطَةَ التَذكِرَة، وصَفحَةُ تَذكِرَةِ الاستوديو (<c>TenantAdminQueries.TicketAsync</c>) تَبنيها مِن مَجراها
-    /// فَتَرسُمُ الاسمَ المَحذوفَ لِصاحِبِ المَتجَر.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29)</b> — كانَ <c>Today_the_studio_ticket_page_reads_the_stream_and_shows_the_deleted_authors_name_on_Postgres</c>
+    /// («صَفحَةُ الاستوديو تَرسُمُ الاسمَ المَحذوف: True»). صَفحَةُ تَذكِرَةِ الاستوديو (<c>TenantAdminQueries.TicketAsync</c>) تَقرَأُ اللَقطَةَ المَمحُوَّة —
+    /// وبَعدَ رَدٍّ يَكتُبُه الفَريقُ بَعدَ الحَذفِ (كَما تَكتُبُه نُقطَتُه) تَبقى مَمحُوَّة، والرَدُّ بِتَوقيعِه.</summary>
     [Fact]
-    public async Task Today_the_studio_ticket_page_reads_the_stream_and_shows_the_deleted_authors_name_on_Postgres()
+    public async Task The_studio_ticket_page_shows_the_erased_name_and_keeps_it_after_a_staff_reply_on_Postgres()
     {
         if (!Enabled) return;
 
@@ -431,11 +432,22 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
             await using var q = store.QuerySession(slug);
             var snapshot = (await q.LoadAsync<Ticket>(ticketId))!;
             var page = (await new TenantAdminQueries(store).TicketAsync(slug, ticketId))!;
+            await using (var s = store.LightweightSession(slug))
+            {
+                s.Events.Append(ticketId, new TicketReplied(ticketId, Guid.NewGuid(), "دَعم التَّطبيق", true, "رَدّ", DateTime.UtcNow));
+                await s.SaveChangesAsync();
+            }
+            var afterReply = (await new TenantAdminQueries(store).TicketAsync(slug, ticketId))!;
             output.WriteLine($"تَذاكِرُ مَمحُوَّة: {counts.Tickets} · اللَقطَةُ مَمحُوَّة: {snapshot.AuthorName == AccountDeletion.ErasedName} · " +
-                             $"صَفحَةُ الاستوديو تَرسُمُ الاسمَ المَحذوف: {page.AuthorName == name}");
+                             $"صَفحَةُ الاستوديو تَرسُمُ الاسمَ المَحذوف: {page.AuthorName == name} · وبَعدَ رَدِّ الفَريق: {afterReply.AuthorName == name} " +
+                             $"({afterReply.Replies.Count} رَدّ، {afterReply.Status})");
             Assert.Equal(1, counts.Tickets);
             Assert.Equal(AccountDeletion.ErasedName, snapshot.AuthorName);
-            Assert.Equal(name, page.AuthorName);
+            Assert.Equal(AccountDeletion.ErasedName, page.AuthorName);
+            Assert.Equal((AccountDeletion.ErasedName, "دَعم التَّطبيق", "answered"),
+                         (afterReply.AuthorName, Assert.Single(afterReply.Replies).AuthorName, afterReply.Status));
+            // ولَقطَةُ المَظهَرِ الوَحيدَةُ لِهذِه الصَفحَة (`studio-app-ticket-missing`) تَذكِرَةٌ لا وُجودَ لَها: القِراءَتانِ تُجيبانِها بِـnull فَالفَرعُ نَفسُه.
+            Assert.Null(await new TenantAdminQueries(store).TicketAsync(slug, Guid.Parse("00000000-0000-0000-0000-000000000001")));
         }
         finally
         {

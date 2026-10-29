@@ -137,14 +137,18 @@ public class StreamNameReaderTests(ITestOutputHelper output)
         foreach (var v in violations) output.WriteLine($"  {v.File}:{v.Line} — {v.Type} — {v.How}");
     }
 
-    /// <summary><b>«اليَوم»</b>: صَفحَةُ تَذكِرَةِ الاستوديو تَأخُذُ التَذكِرَةَ مَبنِيَّةً مِن مَجراها — فَيَعودُ اسمُ كاتِبِها المَحذوفِ إلى صاحِبِ المَتجَر.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29)</b> — كانَ <c>Today_the_studio_ticket_detail_returns_the_ticket_rebuilt_from_its_stream_with_the_authors_name</c>
+    /// («TenantAdminQueries.cs:153 — Ticket — returned»). صارَت <c>TicketAsync</c> تَقرَأُ اللَقطَةَ الَّتي يَمحوها الحَذف، ولا قارِئَ مَجرى تَذكِرَةٍ يُسَلِّمُ اسماً.</summary>
     [Fact]
-    public void Today_the_studio_ticket_detail_returns_the_ticket_rebuilt_from_its_stream_with_the_authors_name()
+    public void The_studio_ticket_detail_reads_the_erased_snapshot_and_no_ticket_stream_hands_a_name_on()
     {
         var (sites, violations) = ScanRepository();
         Print(sites, violations);
         Assert.True(sites.Count > 0, "أَداةٌ عَمياء: صِفرُ مَوضِعٍ لِـAggregateStreamAsync.");
-        Assert.Contains(violations, v => v.File == "TenantAdminQueries.cs" && v.Type == "Ticket" && v.How == "returned");
+        Assert.DoesNotContain(violations, v => v.Type == "Ticket");
+        var queries = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Queries", "TenantAdminQueries.cs")));
+        Assert.Contains("return await s.LoadAsync<Ticket>(id, ct);", queries, StringComparison.Ordinal);
     }
 
     /// <summary><b>«اليَوم»</b>: قَبولُ العَرضِ يَبنيه مِن مَجراه ويَقرَأُ <c>OffererName</c> — فَيَنسَخُ الاسمَ المَحذوفَ إلى مُطابَقَةٍ ومُحادَثَةٍ جَديدَتَين.</summary>
