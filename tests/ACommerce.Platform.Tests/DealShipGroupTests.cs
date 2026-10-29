@@ -232,6 +232,49 @@ public class DealShipGroupTests(ITestOutputHelper output)
         Assert.Equal(DealStage.Shipping, Stored(w, w.First).Stage);
     }
 
+    /// <summary>حِفظٌ يَنقَطِعُ بَعدَ <paramref name="saves"/> كِتابَةً: التَحميلُ الأَوَّلُ بَعدَها — تَحميلُ الإلحاقِ التالي قَبلَ أَن يَمَسَّ الصَفقَةَ — يَرمي مَرَّةً
+    /// كَعُطلِ قاعِدَة، وما بَعدَه يَمضي. (عالَمُ الوَثائِقِ يُعيدُ الكائِنَ المَخزونَ نَفسَه، فَالرَميُ عِندَ <c>Store</c> يَأتي بَعدَ الطَفرَة؛ والتَحميلُ قَبلَها.)</summary>
+    internal static void InterruptAfterSaves(DocWorld docs, int saves)
+    {
+        var saved = 0;
+        var thrown = false;
+        docs.BeforeMember = name =>
+        {
+            if (name == "SaveChangesAsync") { saved++; return; }
+            if (name != "LoadAsync" || saved < saves || thrown) return;
+            thrown = true;
+            throw new InvalidOperationException("انقِطاعٌ مَصنوعٌ بَعدَ حِفظِ مَراجِعِ صَفقَة");
+        };
+    }
+
+    // ─── تَوصيفُ «اليَوم» قَبلَ تَرتيبِ مَراجِعِ طَلَبِ المَجموعَة (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — مُلاحَظَةٌ ثانَوِيَّة) ──────────────────
+    //
+    // نَقرَةٌ عَلى صَفقَةٍ غَيرِ الأولى تَكتُبُ مَراجِعَها (`OrderRef` و`OtoIdRef`) قَبلَ مَراجِعِ الأولى — ومُعَرِّفُ الطَلَبِ عِندَ OTO مُعَرِّفُ الأولى. فَانقِطاعٌ بَينَهُما يَترُكُ الأولى
+    // بِلا مَرجِعِ طَلَبِها، فَإشعارُ OTO لَها يُجابُ `order_unknown` ‏200 ويَضيع. يَنقَلِبُ بِاسمِه في كوميتِ التَرتيب.
+
+    [Fact]
+    public async Task Today_an_interrupted_group_ship_from_a_later_sibling_leaves_the_lead_without_its_ref_and_otos_notice_for_it_is_dropped()
+    {
+        var w = await Grouped(await TwoConfirmedCashDeals());
+        InterruptAfterSaves(w.Docs, saves: 3);   // صَفَقاتُ الطَلَبِ عَلى الأولى · ثُمَّ مَرجِعانِ — والثالِثُ يَنقَطِع
+
+        var error = await Record.ExceptionAsync(() => w.Shipping.ShipAsync(Slug, w.Second, DealShipTests.Vendor, "Riyadh"));
+        w.Docs.BeforeMember = null;
+        var (first, second) = (Stored(w, w.First), Stored(w, w.Second));
+        w.Oto.Routes[OtoClient.OrderStatusPath] = body => OtoRouteHandler.Tracking(OtoRouteHandler.OrderIdIn(body), status: "delivered");
+        var notice = await w.Shipping.ReceiveAsync(Slug, OtoOrderStatusTests.Notice(w.First));
+        output.WriteLine($"الانقِطاع: {error?.GetType().Name ?? "لا"} · الأولى: {(first.Refs.ContainsKey(DealShipping.OrderRef) ? "بِمَرجِع" : "بِلا مَرجِع")} · " +
+                         $"الثانِيَة: {(second.Refs.ContainsKey(DealShipping.OrderRef) ? "بِمَرجِع" : "بِلا مَرجِع")} · إشعارُ الأولى: {notice.Code}");
+
+        Assert.IsType<InvalidOperationException>(error);
+        Assert.Single(Orders(w.Oto));
+        Assert.True(first.Refs.ContainsKey(DealShipping.OrderMembersRef));
+        Assert.False(first.Refs.ContainsKey(DealShipping.OrderRef));
+        Assert.Equal(w.First.ToString("N"), second.Refs[DealShipping.OrderRef]);
+        Assert.Equal(OtoOrderStatusGate.OrderUnknown, notice.Code);
+        Assert.Equal(DealStage.Confirmed, Stored(w, w.First).Stage);
+    }
+
     /// <summary>وطَلَبٌ أَغلَقَته OTO يُكتَبُ إغلاقُه عَلى صَفَقاتِه كُلِّها — فَلا «أَكمِل الشَّحن» لِأَيٍّ مِنها.</summary>
     [Fact]
     public async Task A_group_order_closed_at_oto_is_written_on_every_deal_of_it()
