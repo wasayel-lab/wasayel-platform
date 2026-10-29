@@ -453,15 +453,20 @@ public class ProviderCatalogTests
     /// إلى كَلِماتِ الـADR: حُذِفَ «ولا يَستَهلِكُ لَصقٌ ولا تَسجيلٌ ولا بوليصَةٌ ولا إشعارٌ حِصَّةً مِن باقَةِ المُستَأجِر» — دَعوى عَلى باقَةِ المُستَأجِرِ لا تُقَرِّرُها
     /// وَثيقَة (القاعِدَة ١٦؛ سِجِلُّ المالِكِ «ب» S11b·٢٩) — فَصارَ الصَفُّ يَقرَأُ جُملَةَ الـADR ويَحمَرُّ إن عادَت الدَعوى؛ والفاحِصُ النَصِّيُّ المُكَرَّرُ هُنا
     /// انتَقَلَ بِمِلَفّاتِه الخَمسَةِ إلى صَفِّ <c>VendorShippingTests</c> نَفسِه — صَفٌّ واحِدٌ يَقيسُ الكود.)</para>
+    /// <para><b>وقُلِبَ بِاسمِه عَمداً</b> (‏2026-10-29، قَرارُ المالِك د17 «أ»: «الشحن خارج حصص الباقات دائمًا: لا تُعدّ على باقة صاحب المتجر بوليصة ولا تسجيل ولا إشعار»؛
+    /// كانَ <c>The_vendor_shipping_definition_says_its_spending_is_not_counted_against_wasayel</c> ويَحمَرُّ إن عادَت دَعوى الباقَة): الدَعوى صارَت قَراراً فَعادَت جُملَتُها
+    /// بِحَرفِها إلى الوَصف — «ولا يَستَهلِكُ لَصقٌ ولا تَسجيلٌ ولا بوليصَةٌ ولا إشعارٌ حِصَّةً مِن باقَةِ المُستَأجِر» — والفاحِصُ الَّذي يَحرُسُها
+    /// <c>VendorShippingTests.The_vendor_shipping_paths_consume_no_quota</c>: لا مَسارَ شَحنٍ يَمَسُّ الاستِحقاقات. سِجِلُّ المالِكِ «ب» S11b·٢٩ أُجيب.</para>
     /// </summary>
     [Fact]
-    public void The_vendor_shipping_definition_says_its_spending_is_not_counted_against_wasayel()
+    public void The_vendor_shipping_definition_says_its_spending_is_not_counted_against_wasayel_nor_against_the_tenants_plan()
     {
         var d = Assert.Single(ProviderCatalog.ForCapability(ProviderCapabilities.Delivery));
         var ar = ProviderText.Get(d.Description, "ar");
         Assert.Contains("ولا حِصَّةَ عَلى الاعتِمادِ السّوقِيّ", ar, StringComparison.Ordinal);
         Assert.Contains("ما يُنفَقُ مِن مَحفَظَةِ البائِعِ عِندَ OTO لا يُعَدُّ عَلى وَسايِل", ar, StringComparison.Ordinal);
-        Assert.DoesNotContain("باقَةِ المُستَأجِر", ar, StringComparison.Ordinal);
+        Assert.Contains("ولا يَستَهلِكُ لَصقٌ ولا تَسجيلٌ ولا بوليصَةٌ ولا إشعارٌ حِصَّةً مِن باقَةِ المُستَأجِر.", ar, StringComparison.Ordinal);
+        Assert.True(ar.EndsWith("حِصَّةً مِن باقَةِ المُستَأجِر.", StringComparison.Ordinal), "جُملَةُ الباقَةِ آخِرُ الوَصفِ كَما قُرِّرَت.");
     }
 
     /// <summary><b>غِيابُ الاعتِمادِ السوقِيِّ لا يُسقِطُ التَعريف</b> (‏ADR-033 الخُطوَة 6: «غيابُ الرمزِ السوقيِّ بالبيئةِ يُخفي

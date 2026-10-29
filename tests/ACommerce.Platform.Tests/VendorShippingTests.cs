@@ -1452,7 +1452,10 @@ public class VendorShippingTests(ITestOutputHelper output)
     /// <summary><b>ولا استِهلاكَ لِحِصَّة</b>: لا الخِدمَةُ ولا نُقطَتاها تَمَسّانِ الاستِحقاقات — فاحِصٌ نَصِّيٌّ يَعُدُّ ما قَرَأ.
     /// <para>(‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (xi) — ولا يُعادُ حَرفٌ فَوقَه: <b>ومَساراتُ الشَحنِ الخَمسَة</b> — اللَصقُ والتَسجيلُ والبوليصَةُ والوارِدُ
     /// والعَميل — كانَ يَقيسُها صَفٌّ مُكَرَّرٌ في <c>ProviderCatalogTests</c> (‏d99e393)، فَانتَقَلَت إلى هُنا وبَقِيَ هُناكَ قِراءَةُ الوَصف. <b>وهو قِياسٌ لِحالِ الكودِ
-    /// لا قَرار</b>: أَيُعَدُّ شَيءٌ مِن الشَحنِ عَلى باقَةِ المُستَأجِرِ لا تُقَرِّرُه وَثيقَة — سِجِلُّ المالِكِ «ب» S11b·٢٩؛ ويَومَ يُقَرَّرُ يَحمَرُّ هذا بِقَرارٍ مَرئِيّ.)</para></summary>
+    /// لا قَرار</b>: أَيُعَدُّ شَيءٌ مِن الشَحنِ عَلى باقَةِ المُستَأجِرِ لا تُقَرِّرُه وَثيقَة — سِجِلُّ المالِكِ «ب» S11b·٢٩؛ ويَومَ يُقَرَّرُ يَحمَرُّ هذا بِقَرارٍ مَرئِيّ.)</para>
+    /// <para>(‏2026-10-29، قَرارُ المالِك د17 «أ» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): <b>وقُرِّرَ بِما يَقيسُه</b> — «الشحن خارج حصص الباقات دائمًا» — فَلَم يَحمَرّ: صارَ هذا
+    /// الصَفُّ حارِسَ القَرارِ وجُملَتِه العائِدَةِ إلى وَصفِ التَعريف (<c>ProviderCatalogTests</c>). <b>ومِلَفٌّ سادِس</b>: <c>DealShipGroup.cs</c> (‏د13) مِن مَسارِ البوليصَة —
+    /// المِلَفّاتُ ‏5 ← 6.</para></summary>
     [Fact]
     public void The_vendor_shipping_paths_consume_no_quota()
     {
@@ -1464,6 +1467,7 @@ public class VendorShippingTests(ITestOutputHelper output)
             Template("Services", "Deals", "DealShipping.cs"),
             Template("Shipping", "OtoShippingEndpoints.cs"),
             Path.Combine(RepoRoot, "libs", "kits", "Delivery", "ACommerce.Kit.Delivery.Core", "OtoClient.cs"),
+            Template("Services", "Deals", "DealShipGroup.cs"),
         };
         var read = 0;
         foreach (var f in files)
@@ -1474,7 +1478,7 @@ public class VendorShippingTests(ITestOutputHelper output)
                 Assert.DoesNotContain(quota, code, StringComparison.Ordinal);
         }
         output.WriteLine($"مِلَفّاتٌ مَقروءَة: {read} مِن {files.Length}");
-        Assert.Equal(5, files.Length);
+        Assert.Equal(6, files.Length);   // 5 ← 6 (‏2026-10-29، د17 «أ»: `DealShipGroup.cs` مِن مَسارِ البوليصَة، د13)
         Assert.Equal(files.Length, read);
     }
 
