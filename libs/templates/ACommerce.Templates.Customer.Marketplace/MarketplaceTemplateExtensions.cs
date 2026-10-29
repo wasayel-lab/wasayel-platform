@@ -4264,11 +4264,13 @@ public static class MarketplaceTemplateExtensions
         //
         // والقَرارُ نَفسُه في `ProviderBindSurface` — نَظيرُ
         // `ApiKeySurface` حَرفاً: جِسمُ النُقطَةِ لا يُختَبَر.
+        // (‏2026-10-29، قَرارُ المالِك د5 (٢) «ج» — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: وبَعدَ الكِتابَةِ يُسَجَّلُ إشعارُ الدَفعِ عِندَ البَوّابَة —
+        // `GatewayPayments.ConnectNoticesAsync`، ولا يَفعَلُ شَيئاً لِتَعريفٍ بِلا وارِد؛ وفَشَلُه رَمزٌ في الرَبطِ لا يَرُدُّ الرَبط.)
         app.MapPost("/studio/apps/{slug}/providers/bind", async (
             string slug, HttpRequest req, IDocumentStore store,
             Services.Incubator.StudioAuth auth,
             Services.TenantProviderService providers, ACommerce.Platform.Providers.ProviderVault vault,
-            Services.Audit.AuditWriter audit) =>
+            Services.Audit.AuditWriter audit, Services.Deals.GatewayPayments gateway) =>
         {
             if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
                 return Results.Redirect("/studio");
@@ -4285,6 +4287,7 @@ public static class MarketplaceTemplateExtensions
             var bound = await providers.BindProviderAsync(
                 slug, read.Capability, read.ProviderSlug, read.Values,
                 auth.UserId?.ToString() ?? "");
+            await gateway.ConnectNoticesAsync(slug, Billing.PayPalOrderSurface.OriginFrom(req));
             await SyncPaymentProviderFlagAsync(store, providers, slug);
 
             await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",

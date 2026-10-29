@@ -149,7 +149,8 @@ public static class ProviderBindSurface
 
         var values = new Dictionary<string, StoredValue>(StringComparer.Ordinal);
 
-        foreach (var f in def.Credential.Fields)
+        // (‏2026-10-29، قَرارُ المالِك د5 (٢) — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه: وحَقلٌ نُصدِرُه نَحن لا يُقرَأُ مِن النَموذَج — <see cref="IsFilledByOwner"/>.)
+        foreach (var f in def.Credential.Fields.Where(IsFilledByOwner))
         {
             var raw = (field(f.Code) ?? "").Trim();
             var refusal = ProviderValueValidator.Refuse(f, raw);
@@ -165,6 +166,13 @@ public static class ProviderBindSurface
 
         return new(null, def, values);
     }
+
+    /// <summary>
+    /// <para><b>أَيَملَأُ صاحِبُ المَتجَرِ هذا الحَقل؟</b> (‏2026-10-29، قَرارُ المالِك د5 (٢)) — كُلُّ حَقلٍ إلّا <c>issued_secret</c>: سِرُّ إشعارٍ تُصدِرُه وَسايِل وتُسَجِّلُه
+    /// عِندَ المُزَوِّد (<c>GatewayPayments.ConnectNoticesAsync</c>)، فَلا يُرسَمُ لَه حَقلٌ في نَموذَجِ الاستوديو ولا يُقرَأُ مِن الطَلَب. دالَّةٌ واحِدَةٌ تَسأَلُها
+    /// الصَفحَةُ و<see cref="FromForm(string, Func{string, string?}, string, ProviderVault?)"/> — فَلا يَفتَرِقُ ما يُرسَمُ عَمّا يُقرَأ.</para>
+    /// </summary>
+    public static bool IsFilledByOwner(ProviderFieldDefinition f) => f.Kind != CredentialKinds.IssuedSecret;
 
     /// <summary><b>سَطرُ التَدقيق — مُعَتَّمٌ بِالبِناء لا
     /// بِالنِيَّة.</b> القيمَةُ تَمُرّ مِن <c>ProviderSecrecy</c> قَبلَ

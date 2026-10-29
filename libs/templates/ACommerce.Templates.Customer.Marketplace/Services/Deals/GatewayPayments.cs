@@ -462,6 +462,101 @@ public sealed class GatewayPayments
         return Logged(tenantSlug, new GatewayVerifyResult(deal.Id, proven, null) { Confirmed = confirmed.Select(c => c.Id).ToArray() });
     }
 
+    // ═══ إشعارُ الدَفعِ الآليُّ مِن البَوّابَة (‏2026-10-29، قَرارُ المالِك د5 (٢) «ج»؛ ‏ADR-032 §٩‑٨) ═══════════════════════════════
+
+    /// <summary>مَسارُ الوارِدِ لِمَتجَرٍ بِعَينِه — <b>مَوضِعٌ واحِدٌ</b> يَقرَؤُه التَسجيلُ والاختِبارُ وتَعريفُ المُزَوِّد (<c>webhook.path</c>)؛ والنُقطَةُ تَكتُبُه
+    /// حَرفاً في <c>TenantGatewayEndpoints</c>، والاختِبارُ يَحمَرُّ إن افتَرَقوا — نَسَقُ <c>OtoShippingEndpoints.OrderStatusPath</c>.</summary>
+    public const string NoticePath = "/{slug}/payments/notify";
+
+    /// <summary>عُنوانُ الوارِدِ الَّذي يُسَجَّلُ عِندَ البَوّابَة — أَصلُ الطَلَبِ والمَسارُ الحَرفِيُّ نَفسُه (نَسَقُ <c>VendorShippingSurface.InboundUrl</c>).</summary>
+    public static string NoticeUrl(string origin, string tenantSlug)
+        => origin.TrimEnd('/') + NoticePath.Replace("{slug}", tenantSlug, StringComparison.Ordinal);
+
+    /// <summary>سِرُّ إشعارٍ جَديد — ‏32 بايتاً عَشوائِيّاً بِالسِتَّةَ عَشَرِيّ (نَسَقُ <c>OtoWebhookSignature.NewSecret</c>): نُصدِرُه نَحن ولا يَعرِفُه غَيرُنا وغَيرُ البَوّابَة.</summary>
+    public static string NewNoticeSecret() => Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+
+    /// <summary>حَقلُ سِرِّ الإشعارِ في تَعريفِ الرَبط — ما يُسَمّيه <c>webhook.verify</c> (مِن نَوعِ <c>issued_secret</c>)، و<c>null</c> لِتَعريفٍ بِلا وارِد.</summary>
+    public static ProviderFieldDefinition? NoticeFieldOf(ResolvedProvider? payments)
+        => payments?.Definition.Webhook is { } hook
+            ? payments.Definition.Credential.Fields.FirstOrDefault(f => f.Code == hook.Verify && f.Kind == CredentialKinds.IssuedSecret)
+            : null;
+
+    /// <summary>
+    /// <para><b>سِرُّ إشعارِ المَتجَرِ صَريحاً — لِلمُقارَنَةِ الواحِدَةِ ولا يُحفَظ</b>: رَبطُ دَفعٍ فَعّالٌ بِمِفتاحٍ مَختومٍ وسِرِّ إشعارٍ مَختومٍ يُفَكُّ بِسِياقِه. و<c>null</c>
+    /// لِكُلِّ ما سِواه — فَيُجيبُ الوارِدُ «لا سِرّ» ولا يَقرَأُ جِسماً.</para>
+    /// </summary>
+    public async Task<string?> NoticeSecretAsync(string tenantSlug, CancellationToken ct = default)
+    {
+        if (!_vault.IsAvailable) return null;
+        var payments = await PaymentsBindingAsync(_providers, tenantSlug, ct);
+        if (SealedKeyFieldOf(payments) is null || NoticeFieldOf(payments) is not { } field
+            || !payments!.Values.TryGetValue(field.Code, out var sealedSecret)) return null;
+        try { return sealedSecret.Unseal(_vault, ProviderBindSurface.AadFor(tenantSlug, payments.Capability, field.Code)); }
+        catch (CryptographicException)
+        {
+            _log.LogWarning("[gateway] {Slug} notice secret does not open — no notice", tenantSlug);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// <para><b>تَسجيلُ إشعارِ الدَفعِ عِندَ البَوّابَةِ بَعدَ رَبطِ المِفتاح</b> (قَرارُ المالِك د5 (٢) «ج»): يُناديه بابُ الرَبطِ في الاستوديو بَعدَ أَن كَتَب. لِرَبطِ دَفعٍ
+    /// فَعّالٍ بِمِفتاحٍ يُفَكُّ وتَعريفٍ يُعلِنُ وارِداً — يُصدِرُ سِرّاً جَديداً ويُسَجِّلُه بِعُنوانِ <see cref="NoticeUrl"/> (<see cref="MoyasarClient.CreateWebhookAsync"/>)،
+    /// فَإن قَبِلَته البَوّابَةُ خُتِمَ السِرُّ في الرَبطِ مَعَ مُعَرِّفِ التَسجيل، وإلّا كُتِبَ رَمزُ فَشَلِها ولا سِرّ — <b>والمِفتاحُ مَربوطٌ في الحالَين</b>، وزِرُّ «تَحَقَّق»
+    /// احتِياطٌ كَما قالَ القَرار. تُرجِعُ رَمزَ الفَشَلِ أَو <c>null</c>.</para>
+    /// <para><b>وما لا يَفعَلُه — يُقال</b>: لا يَحذِفُ تَسجيلاً سابِقاً عِندَ البَوّابَةِ حينَ يُعادُ الرَبط (حَذفُه لَم تُقرَأ صَفحَتُه) — فَإشعارُه بِسِرِّه القَديمِ يُرَدُّ
+    /// ‏401 هُنا وتُعيدُه البَوّابَةُ حَتّى تَيأَس.</para>
+    /// </summary>
+    public async Task<string?> ConnectNoticesAsync(string tenantSlug, string origin, CancellationToken ct = default)
+    {
+        var current = await _providers.CurrentAsync(tenantSlug, ProviderCapabilities.Payments, ct);
+        var payments = await PaymentsBindingAsync(_providers, tenantSlug, ct);
+        if (current is not { IsActive: true } || NoticeFieldOf(payments) is not { } field) return null;
+        if (_client is null || await SecretKeyAsync(_providers, _vault, _log, tenantSlug, ct) is not { } key)
+            return MoyasarFailures.NotConfigured;
+
+        var secret = NewNoticeSecret();
+        var registered = await _client.CreateWebhookAsync(key, NoticeUrl(origin, tenantSlug), secret, ct);
+        var values = new Dictionary<string, StoredValue>(current.Values, StringComparer.Ordinal);
+        values.Remove(field.Code);
+        if (registered.Ok)
+            values[field.Code] = StoredValue.Sealed(_vault, field.Kind, secret, ProviderBindSurface.AadFor(tenantSlug, current.Slug, field.Code));
+        await _providers.BindProviderAsync(tenantSlug, current.Slug, current.ProviderSlug, values, current.BoundBy, ct,
+            registered.Value, registered.Ok ? null : registered.Failure!.Code);
+        _log.LogInformation("[gateway] {Slug} payment notice ← {Outcome}", tenantSlug, registered.Ok ? "registered" : registered.Failure!.Code);
+        return registered.Ok ? null : registered.Failure!.Code;
+    }
+
+    /// <summary>
+    /// <para><b>إشعارُ دَفعٍ مَقبولٌ يُثبَتُ بِما تَقولُه البَوّابَة — لا بِما في جِسمِه</b>: الفاتورَةُ تُجلَبُ بِمِفتاحِ المَتجَرِ بِمُعَرِّفِ الإشعار، وصَفَقاتُها الَّتي سَمَّتها
+    /// بَياناتُها تُحَمَّلُ مِن المَتجَر (ثَلاثونَ عَلى الأَكثَر)، وتُعرَضُ عَلى <see cref="GatewayPaymentProof.Gate"/> نَفسِها — فَصَفقَةٌ لَم يُسَجِّل عَلَيها إتمامُ الشِراءِ
+    /// هذِه الفاتورَةَ لا تَعبُر. ثُمَّ الكاتِبانِ نَفسُهُما: <see cref="DealsService.ConfirmGatewayPaymentAsync"/> و<see cref="DealsService.EnterPaidOnRecordAsync"/> (د4).
+    /// <b>ولا سُلطَةَ دافِعٍ هُنا</b>: الحارِسُ <paramref name="notice"/> — لا يُبنى إلّا بِبَوّابَةِ السِرّ — والبُرهانُ جَلبٌ بِمِفتاحِنا.</para>
+    /// </summary>
+    public async Task<GatewayVerifyResult> ConfirmNoticeAsync(string tenantSlug, GatewayPaymentNotice notice, CancellationToken ct = default)
+    {
+        if (_client is null || await SecretKeyAsync(_providers, _vault, _log, tenantSlug, ct) is not { } key)
+            return Logged(tenantSlug, new(null, null, MoyasarFailures.NotConfigured));
+
+        var fetched = await _client.FetchInvoiceAsync(key, notice.InvoiceId, ct);
+        if (!fetched.Ok) return Logged(tenantSlug, new(null, null, fetched.Failure!.Code));
+
+        var invoice = fetched.Value!;
+        var named = new List<Deal>();
+        if (GatewayPaymentProof.DealIdsIn(invoice.Metadata) is { } listed && listed.Count <= GatewayPaymentProof.MaxDealsPerInvoice)
+            foreach (var id in listed)
+                if (await _deals.LoadAsync(tenantSlug, id, ct) is { } d) named.Add(d);
+
+        var admitted = GatewayPaymentProof.Gate(invoice, named);
+        if (admitted.Payment is not { } proven)
+            return Logged(tenantSlug, new(named.FirstOrDefault()?.Id, null, admitted.Violation!.Code));
+
+        var confirmed = await _deals.ConfirmGatewayPaymentAsync(tenantSlug, proven, ct);
+        foreach (var paidId in proven.DealIds)
+            await _deals.EnterPaidOnRecordAsync(tenantSlug, paidId, ct);
+        return Logged(tenantSlug, new GatewayVerifyResult(proven.DealIds[0], proven, null) { Confirmed = confirmed.Select(c => c.Id).ToArray() });
+    }
+
     /// <summary>
     /// <para><b>مُدخَلاتُ قَرارِ البِطاقَة — تُحسَبُ هُنا مَرَّةً، ويَقرَؤُها طَرَفا إتمامِ الشِراء</b> (‏ADR-032 الخُطوَة 8 — شَطرُ <c>CardOffered</c>،
     /// تَيّارُ S9، ‏2026-10-12؛ القاعِدَة ٧): الشاشَةُ (<c>CheckoutPage.razor</c>) والنُقطَةُ (<c>/checkout/submit</c>) تُنادِيانِها بِالمُدخَلَينِ

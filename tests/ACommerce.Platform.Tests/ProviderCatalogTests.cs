@@ -299,17 +299,28 @@ public class ProviderCatalogTests
     /// نَوعُ رَبطٍ <c>secret_key</c>، وحَقلٌ واحِدٌ بِنَمَطِ <c>^sk_(live|test)_</c>،
     /// و<c>hostAllowlist: []</c>، و<c>webhook: null</c>. والسِياجُ الفارِغُ لَيسَ
     /// سَهواً: المُصادِقُ يَرُدُّ سِرّاً يَحمِلُ مُضيفين.</summary>
+    /// <remarks><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د5 (٢) «ج»؛ تَوصيفُه هذا الصَفُّ و<c>8cff16b</c> — كانَ
+    /// <c>The_secret_key_provider_declares_one_sealed_field_no_fence_and_no_webhook</c>): ومَعَ المِفتاحِ حَقلُ سِرِّ إشعارٍ تُصدِرُه وَسايِل (<c>issued_secret</c>، غَيرُ
+    /// إلزامِيٍّ ولا يَملَؤُه صاحِبُ المَتجَر) ووارِدٌ يَتَحَقَّقُ بِه في مَسارِ <c>GatewayPayments.NoticePath</c> حَرفاً. وحَقلُ المِفتاحِ وفُحوصُه بِحَرفِها.</remarks>
     [Fact]
-    public void The_secret_key_provider_declares_one_sealed_field_no_fence_and_no_webhook()
+    public void The_secret_key_provider_declares_its_sealed_key_no_fence_and_an_issued_notice_secret_behind_its_webhook()
     {
         var d = ProviderCatalog.Find("moyasar_api");
         Assert.NotNull(d);
         Assert.Equal(ProviderCapabilities.Payments, d!.Capability);
         Assert.Equal(CredentialKinds.SecretKey, d.Credential.Kind);
         Assert.True(d.IsTenantBindable);
-        Assert.Null(d.Webhook);
+        Assert.NotNull(d.Webhook);
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayPayments.NoticePath, d.Webhook!.Path);
+        Assert.Equal(2, d.Credential.Fields.Count);
+        var notice = Assert.Single(d.Credential.Fields, f => f.Code == d.Webhook.Verify);
+        Assert.Equal(CredentialKinds.IssuedSecret, notice.Kind);
+        Assert.False(notice.IsRequired);
+        Assert.Empty(notice.HostAllowlist);
+        Assert.True(ProviderVault.Seals(notice.Kind));
+        Assert.Empty(ProviderDefinitionValidator.Validate(d));
 
-        var field = Assert.Single(d.Credential.Fields);
+        var field = Assert.Single(d.Credential.Fields, f => f.Kind == CredentialKinds.SecretKey);
         Assert.Equal("secret_key", field.Code);
         Assert.Equal(CredentialKinds.SecretKey, field.Kind);
         Assert.True(field.IsRequired);

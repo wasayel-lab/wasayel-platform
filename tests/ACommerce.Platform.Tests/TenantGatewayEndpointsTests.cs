@@ -633,11 +633,12 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         Assert.Equal($"pay/return?deal={w.Ids[0]:N}&err=gateway_invoice_expired", GatewayReturn.AfterVerify(res));
     }
 
-    /// <summary><b>اليَوم</b> (‏2026-10-29، تَوصيفٌ قَبلَ قَرارِ المالِك د5 (٢) «ج»: «إشعار آليّ من ميسر إلى المنصّة عند كل دفع، محميّ بسرّ مشترك يُتحقَّق منه في كل إشعار»):
-    /// صِفرُ نُقطَةٍ في القالِبِ تَستَقبِلُ إشعارَ بَوّابَةِ المَتجَر — والدَفعُ لا يُكتَبُ إلّا بِنَقرَةِ «تَحَقَّق»؛ ونُقطَةُ الرَبطِ في الاستوديو لا تُسَجِّلُ إشعاراً عِندَ
-    /// البَوّابَة؛ وتَعريفُ المِفتاحِ السِرِّيِّ بِلا وارِد (صَفُّ <c>ProviderCatalogTests</c> القائِمُ يُثَبِّتُه بِحَقلِه الواحِد). يُقلَبُ بِاسمِه.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د5 (٢) «ج»؛ تَوصيفُه <c>8cff16b</c> — كانَ
+    /// <c>Today_no_route_receives_a_gateway_payment_notice_and_binding_the_key_registers_none</c>: صِفرُ نُقطَةٍ، وبابُ الرَبطِ بِلا تَسجيل، والتَعريفُ بِلا وارِد):
+    /// نُقطَةٌ واحِدَةٌ في القالِبِ بِمَسارِ <see cref="GatewayPayments.NoticePath"/> حَرفاً — وهُوَ مَسارُ وارِدِ التَعريف — وجِسمُها يَسأَلُ سِرَّ المَتجَرِ قَبلَ قِراءَةِ
+    /// الجِسم، والبَوّابَةَ قَبلَ التَأكيد، ولا يَحمِلُ <c>RequireStoreWritable</c>؛ وبابُ الرَبطِ يُسَجِّلُ الإشعارَ بَعدَ الكِتابَةِ مَرَّة.</summary>
     [Fact]
-    public void Today_no_route_receives_a_gateway_payment_notice_and_binding_the_key_registers_none()
+    public void The_notice_route_is_written_once_at_the_definition_path_and_binding_the_key_registers_it()
     {
         var files = Directory.EnumerateFiles(Path.Combine(Root, "libs", "templates", "ACommerce.Templates.Customer.Marketplace"), "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
@@ -645,15 +646,30 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         output.WriteLine($"مِلَفّاتٌ مَفحوصَة: {files.Length}");
         Assert.True(files.Length >= 50, $"أَداةٌ عَمياء: {files.Length} مِلَفّاً.");
         var routes = files.Sum(f => WriteEndpointGuardTests.StripComments(File.ReadAllText(f)).Split("app.MapPost(\"/{slug}/payments/notify\"").Length - 1);
-        Assert.Equal(0, routes);
+        Assert.Equal(1, routes);
+        Assert.Equal("/{slug}/payments/notify", GatewayPayments.NoticePath);
+        Assert.Equal(GatewayPayments.NoticePath, SealedKeyDefinition().Webhook!.Path);
+        Assert.Equal("https://store.example/zz/payments/notify", GatewayPayments.NoticeUrl("https://store.example/", "zz"));
+
+        var file = WriteEndpointGuardTests.StripComments(Template("Billing", "TenantGatewayEndpoints.cs"));
+        var at = file.IndexOf("app.MapPost(\"/{slug}/payments/notify\"", StringComparison.Ordinal);
+        var body = file[at..file.IndexOf(".DisableAntiforgery();", at, StringComparison.Ordinal)];
+        var secret = body.IndexOf("gateway.NoticeSecretAsync(slug,", StringComparison.Ordinal);
+        var read = body.IndexOf("ReadToEndAsync", StringComparison.Ordinal);
+        var gate = body.IndexOf("Services.Deals.GatewayNoticeGate.Admit(secret, raw)", StringComparison.Ordinal);
+        var confirm = body.IndexOf("gateway.ConfirmNoticeAsync(slug, notice)", StringComparison.Ordinal);
+        var told = body.IndexOf("notices.NotifyPaidAsync(slug, res.Confirmed, l)", StringComparison.Ordinal);
+        Assert.True(secret >= 0 && read > secret && gate > read && confirm > gate && told > confirm,
+            $"سِرّ {secret} ← جِسم {read} ← بَوّابَة {gate} ← تَأكيد {confirm} ← إشعار {told}");
+        Assert.Contains("secret is not null ?", body, StringComparison.Ordinal);
 
         var template = WriteEndpointGuardTests.StripComments(Template("MarketplaceTemplateExtensions.cs"));
-        var at = template.IndexOf("app.MapPost(\"/studio/apps/{slug}/providers/bind\"", StringComparison.Ordinal);
-        Assert.True(at >= 0, "أَداةٌ عَمياء: لا نُقطَةَ رَبط.");
-        var bind = template[at..template.IndexOf(".DisableAntiforgery();", at, StringComparison.Ordinal)];
-        Assert.DoesNotContain("Notices", bind, StringComparison.Ordinal);
-        Assert.DoesNotContain("Webhook", bind, StringComparison.Ordinal);
-        Assert.Null(SealedKeyDefinition().Webhook);
+        var bindAt = template.IndexOf("app.MapPost(\"/studio/apps/{slug}/providers/bind\"", StringComparison.Ordinal);
+        var bind = template[bindAt..template.IndexOf(".DisableAntiforgery();", bindAt, StringComparison.Ordinal)];
+        var bound = bind.IndexOf("providers.BindProviderAsync(", StringComparison.Ordinal);
+        var connect = bind.IndexOf("gateway.ConnectNoticesAsync(slug, Billing.PayPalOrderSurface.OriginFrom(req))", StringComparison.Ordinal);
+        Assert.True(bound > 0 && connect > bound, $"رَبط {bound} ← تَسجيل {connect}");
+        Assert.Equal(1, bind.Split("ConnectNoticesAsync").Length - 1);
     }
 
     // ═══ ٥) صَفحَةُ العَودَة — قِراءَةٌ خالِصَةٌ لا تَسأَلُ البَوّابَة ═══════════════════════════════════════

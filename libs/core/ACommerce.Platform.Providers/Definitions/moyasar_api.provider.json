@@ -15,9 +15,17 @@
         "isRequired": true,
         "pattern": "^sk_(live|test)_",
         "hostAllowlist": []
+      },
+      {
+        "code": "webhook_secret",
+        "kind": "issued_secret",
+        "label": { "ar": "رَمزُ إشعارِ الدَّفعِ الآلِيِّ الَّذي تُصدِرُه وَسايِل وتُسَجِّلُه عِندَ مُيَسِّر", "en": null },
+        "isRequired": false,
+        "pattern": null,
+        "hostAllowlist": []
       }
     ]
   },
-  "webhook": null,
+  "webhook": { "path": "/{slug}/payments/notify", "verify": "webhook_secret" },
   "revocation": { "ar": "اسحَب الرَبطَ هُنا فَيَتَوَقَّف عِندَنا الآن — ولا يُبطِل ذلكَ المِفتاحَ عِندَ مُيَسِّر: إبطالُه أَو تَبديلُه مِن لَوحَة مُيَسِّر نَفسِها.", "en": null }
 }

@@ -116,10 +116,12 @@ public sealed class TenantProviderService
     /// <summary>يَكتُبُ رَبطاً فَعّالاً لِقُدرَةٍ واحِدَة — ويَسحَبُ ما
     /// قَبلَه بِالكِتابَةِ فَوقَه (لا تَحريرَ في المَوضِع: الوَثيقَةُ
     /// تُستَبدَل، والقَديمُ لا يَبقى فَعّالاً).</summary>
+    /// <remarks>(‏2026-10-29، قَرارُ المالِك د5 (٢) — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه: و<paramref name="webhookId"/> و<paramref name="webhookRefusal"/> تَسجيلُ إشعارِ البَوّابَةِ
+    /// لِهذا الرَبط — حَقلا مَدخَلِ البائِعِ نَفسُهُما (<see cref="BindVendorAsync"/>)؛ يَكتُبُهُما <c>GatewayPayments.ConnectNoticesAsync</c> وَحدَه، والافتِراضُ لا تَسجيل.)</remarks>
     public async Task<TenantProviderBinding> BindProviderAsync(
         string tenantSlug, string capability, string providerSlug,
         IReadOnlyDictionary<string, StoredValue> values,
-        string by, CancellationToken ct = default)
+        string by, CancellationToken ct = default, string? webhookId = null, string? webhookRefusal = null)
     {
         ProviderCapabilities.Require(capability);
 
@@ -134,6 +136,8 @@ public sealed class TenantProviderService
             BoundBy      = by,
             BoundAt      = DateTime.UtcNow,
             RevokedAt    = null,
+            WebhookId      = webhookId,
+            WebhookRefusal = webhookRefusal,
         };
 
         await using var s = Store.LightweightSession(tenantSlug);

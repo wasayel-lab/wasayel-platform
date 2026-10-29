@@ -435,7 +435,8 @@ public class ProviderBindSurfaceTests(Xunit.Abstractions.ITestOutputHelper outpu
     [Fact]
     public void Only_a_field_the_vault_seals_renders_as_a_password_input()
     {
-        var secret = ProviderCatalog.Find("moyasar_api")!.Credential.Fields.Single();
+        // (‏2026-10-29، قَرارُ المالِك د5 (٢) — ولا يُعادُ حَرفٌ فَوقَه: لِلتَعريفِ حَقلٌ ثانٍ تُصدِرُه وَسايِل — `IsFilledByOwner` تُسقِطُه مِن النَموذَج — فَالمِفتاحُ بِنَوعِه.)
+        var secret = ProviderCatalog.Find("moyasar_api")!.Credential.Fields.Single(f => f.Kind == CredentialKinds.SecretKey);
         var link = ProviderCatalog.Find("moyasar_hosted")!.Credential.Fields.Single();
 
         Assert.Equal("password", ProviderBindSurface.InputType(secret));

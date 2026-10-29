@@ -159,7 +159,9 @@ public class TenantProviderZeroEquivalenceTests
         // **ثَلاثَةٌ ‏2026-10-12** (‏ADR-033 الخُطوَتانِ 5 و6، تَيّارُ S8): وتَعريفُ حِسابِ الشَحنِ عِندَ OTO بِحَقلَي بائِعٍ
         // سِرِّيَّين — رَمزُ تَحديثِه (`secret_key`) ورَمزُ وارِدِه (`issued_secret`، يُختَمُ مُنذُ اليَوم: ‏ADR-033 §٧‑م) —
         // وكِلاهُما مِن نَوعٍ تَختِمُه الخِزانَةُ المَبنِيَّة، فَالحارِسُ نَفسُه أَخضَرُ عِندَ حَدِّه الجَديد.
-        Assert.Equal(new[] { "refresh_token", "secret_key", "webhook_secret" },
+        // **أَربَعَةٌ ‏2026-10-29** (قَرارُ المالِك د5 (٢) «ج» — ولا يُعادُ حَرفٌ فَوقَه): ومَعَ مِفتاحِ البَوّابَةِ سِرُّ إشعارِ الدَفعِ الَّذي نُصدِرُه (`issued_secret`
+        // بِالاسمِ نَفسِه `webhook_secret`) — مِن نَوعٍ تَختِمُه الخِزانَةُ المَبنِيَّة.
+        Assert.Equal(new[] { "refresh_token", "secret_key", "webhook_secret", "webhook_secret" },
             secret.Select(f => f.Code).OrderBy(c => c, StringComparer.Ordinal).ToArray());
 
         foreach (var f in fields.Except(secret))

@@ -118,7 +118,8 @@
                             <p class="st-chip st-chip-warning" style="margin:0 0 10px;">@L.Markup("studio.providers.physical_only")</p>
                         }
 
-                        @foreach (var f in def.Credential.Fields)
+                        @* حَقلٌ تُصدِرُه وَسايِل لا يَملَؤُه صاحِبُ المَتجَر (‏2026-10-29، قَرارُ المالِك د5 (٢)) — الدالَّةُ الَّتي يَسأَلُها القارِئُ نَفسُها. *@
+                        @foreach (var f in def.Credential.Fields.Where(Services.Providers.ProviderBindSurface.IsFilledByOwner))
                         {
                             <label class="ac-chip-input-label" for="@($"{def.Slug}-{f.Code}")"
                                    style="display:block;margin-top:10px;">@ProviderText.Get(f.Label, L.Lang)</label>

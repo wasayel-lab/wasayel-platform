@@ -70,6 +70,12 @@ public sealed class MoyasarClient
     public const string BaseUrl = "https://api.moyasar.com/v1";
     public const string InvoicesPath = "/invoices";
 
+    /// <summary>مَسارُ تَسجيلِ الإشعارات — «Create Webhook» (<c>POST /v1/webhooks</c>، مَقروءَةً ‏2026-10-29؛ قَرارُ المالِك د5 (٢)).</summary>
+    public const string WebhooksPath = "/webhooks";
+
+    /// <summary>حَدَثُ الدَفعِ الَّذي يُسَجَّلُ لَه الإشعار — مِن مَعجَمِ أَحداثِ الوَثيقَةِ بِحَرفِه (<c>payment_paid</c>)، ولا يُسَجَّلُ سِواه.</summary>
+    public const string PaymentPaidEvent = "payment_paid";
+
     /// <summary>ذَيلُ مَسارِ الإلغاءِ بَعدَ مُعَرِّفِ الفاتورَة — «<c>PUT /invoices/:id/cancel</c>» بِحَرفِ صَفحَةِ «Cancel invoice» (‏2026-10-12).</summary>
     public const string CancelSuffix = "/cancel";
 
@@ -200,6 +206,35 @@ public sealed class MoyasarClient
         return Read(res.Value) is { } invoice
             ? MoyasarResult<MoyasarInvoice>.Success(invoice)
             : Unreadable<MoyasarInvoice>(operation, "id");
+    }
+
+    // ─── والرابِعَة — ‏2026-10-29، قَرارُ المالِك د5 (٢) «ج» ─────────────────────────────────
+
+    /// <summary>
+    /// <para><b>تَسجيلُ إشعارِ الدَفعِ عِندَ البَوّابَةِ بِمِفتاحِ المُستَأجِر</b> — <c>POST /v1/webhooks</c> بِحُقولِ «Create Webhook» كَما قَرَأناها ‏2026-10-29:
+    /// <c>http_method</c> (<c>post</c>)، و<c>url</c>، و<c>shared_secret</c>، و<c>events</c> — هُنا <see cref="PaymentPaidEvent"/> وَحدَه؛ والرَدُّ يَحمِلُ
+    /// <c>id</c> التَسجيل. و«Webhook Payload» يُعيدُ السِرَّ في كُلِّ إشعارٍ بِحَقلِ <c>secret_token</c> («assigned by the consumer») — فَالسِرُّ سِرُّنا نُصدِرُه
+    /// ونَتَحَقَّقُ بِه، ولا تَوقيعَ في رَأسٍ تَقولُه الوَثيقَة.</para>
+    /// <para><b>ومُسَوَّدَةٌ خارِجَ الحُدودِ لا تُرسَل</b>: رابِطٌ غَيرُ مُطلَقٍ بِـhttp(s) أَو سِرٌّ أَبيَض — <see cref="MoyasarFailures.Invalid"/> بِلا شَبَكَة.</para>
+    /// </summary>
+    public async Task<MoyasarResult<string>> CreateWebhookAsync(
+        string secretKey, string url, string sharedSecret, CancellationToken ct = default)
+    {
+        const string operation = "create webhook";
+        if (string.IsNullOrWhiteSpace(secretKey)) return Fail<string>(MoyasarFailures.NotConfigured, operation, null);
+        if (!IsAbsoluteWeb(url) || string.IsNullOrWhiteSpace(sharedSecret)) return Fail<string>(MoyasarFailures.Invalid, operation, null);
+
+        var res = await SendAsync(secretKey, HttpMethod.Post, WebhooksPath, new Dictionary<string, object?>
+        {
+            ["http_method"]   = "post",
+            ["url"]           = url,
+            ["shared_secret"] = sharedSecret,
+            ["events"]        = new[] { PaymentPaidEvent },
+        }, operation, ct);
+        if (!res.Ok) return MoyasarResult<string>.Fail(res.Failure!);
+        return Text(res.Value, "id") is { Length: > 0 } id
+            ? MoyasarResult<string>.Success(id)
+            : Unreadable<string>(operation, "id");
     }
 
     // ═══ المَبلَغ — مِن الرِيالِ إلى أَصغَرِ وَحدَة ════════════════════════════

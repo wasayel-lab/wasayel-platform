@@ -388,7 +388,9 @@ public class EndpointBodyBleedTests
         // ‏2775 ← **2784** يَوم ‏2026-10-29 (قَرارُ المالِك د8 (٢) — سُلوكٌ واحِدٌ لِتَعَذُّرِ الحَجزِ عِندَ الشِراء): تِسعَةُ أَسطُرٍ في `/checkout/submit` — عَلَمُ التَعَذُّرِ
         // وضَبطُه ووُقوفُ الحَلقَةِ قَبلَ رَبطِ البائِع، ثُمَّ كُتلَةُ الرُجوعِ (الإلغاءُ بِـ`GatewayPayments.CancelUnsecuredAsync`، وتَجديدُ نُسخَةِ السَلَّة، والرَدُّ بِرَمزِه) —
         // شَكلُ رُجوعِ فَشَلِ فَتحِ الفاتورَةِ بِحَرفِه؛ والقَرارُ والأَثَرُ في الخِدمَة. طَبَعَ العَدّادُ «‏2775 → 2784» و«‏3109 → 3118»، وعَدَدُ النِقاطِ ‏142 لَم يَتَحَرَّك.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2784),
+        // ‏2784 ← **2785** يَوم ‏2026-10-29 (قَرارُ المالِك د5 (٢) «ج»): سَطرُ تَسجيلِ إشعارِ الدَفعِ بَعدَ الرَبطِ في `/studio/apps/{slug}/providers/bind`
+        // (`GatewayPayments.ConnectNoticesAsync`)؛ والقَرارُ والإصدارُ والخَتمُ في الخِدمَة. طَبَعَ العَدّادُ «‏2784 → 2785».
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2785),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -574,7 +576,10 @@ public class EndpointBodyBleedTests
         // يَعودُ بِـ`GatewayReturn.RateLimited` بِلا فَكِّ مِفتاحٍ ولا نِداء؛ والمِفتاحُ والرَمزُ في `GatewayReturn`. وصِفرُ سَطرِ قَرار.
         // **‏14 ← 15 (‏2026-10-29، قَرارُ المالِك د5 (٤))**: سَطرُ إخبارِ أَطرافِ ما أَلغاه التَحَقُّقُ بِانتِهاءِ المُهلَة (`DealNotices.NotifyPaymentExpiredAsync`) —
         // نَسَقُ سَطرِ `NotifyPaidAsync` فَوقَه؛ والإلغاءُ في الخِدمَة. وصِفرُ سَطرِ قَرار.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Billing/TenantGatewayEndpoints.cs", 15),
+        // **‏15 ← 25 (‏2026-10-29، قَرارُ المالِك د5 (٢) «ج»)**: نُقطَةٌ ثانِيَةٌ `POST /{slug}/payments/notify` في ‏10 أَسطُر — نَسَقُ وارِدِ OTO بِحَرفِه: سِرُّ
+        // المَتجَرِ (١)، والجِسمُ بِشَرطِه (١)، والبَوّابَةُ النَقِيَّةُ `GatewayNoticeGate.Admit` (١)، ونِداءُ `ConfirmNoticeAsync` بِالإشعارِ المَقبول (١)، وإشعارُ البائِعِ
+        // (١)، والرَدُّ مِن `StatusFor` النَقِيَّة (١)، والإطار (٤). **وصِفرُ سَطرِ قَرار**: البُرهانُ جَلبٌ بِمِفتاحِ المَتجَرِ في الخِدمَة.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Billing/TenantGatewayEndpoints.cs", 25),
 
         // ─── مِلَفٌّ خامِس — هُوِيَّةُ البِناء (‏ADR-019) ─────────────
         //
@@ -1108,7 +1113,9 @@ public class EndpointBodyBleedTests
     /// بِحِصَّةِ الأَفعالِ القائِمَة قَبلَ فَكِّ المِفتاحِ والنِداء؛ والمِفتاحُ والرَدُّ في <c>GatewayReturn</c>. وعَدَدُ النِقاطِ ‏142 لَم يَتَحَرَّك.</remarks>
     /// <remarks><b>‏3121 ← 3122 يَوم ‏2026-10-29</b> (قَرارُ المالِك د5 (٤)): سَطرُ <c>NotifyPaymentExpiredAsync</c> في <c>/payments/verify</c>؛ والإلغاءُ بِاسمِ المَنصَّةِ في
     /// <c>GatewayPayments.VerifyAsync</c>. وعَدَدُ النِقاطِ ‏142 لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 3122;
+    /// <remarks><b>‏3122 ← 3133 يَوم ‏2026-10-29</b> (قَرارُ المالِك د5 (٢) «ج»): عَشَرَةُ أَسطُرٍ لِنُقطَةِ إشعارِ الدَفعِ <c>/{slug}/payments/notify</c> وسَطرُ تَسجيلِه
+    /// في بابِ الرَبط؛ والبُرهانُ والإصدارُ في <c>GatewayPayments</c>. <b>وعَدَدُ النِقاطِ ‏142 ← 143</b> — المُضافَةُ وارِدُ البَوّابَة.</remarks>
+    private const int PinnedTotal = 3133;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ
@@ -1273,7 +1280,9 @@ public class EndpointBodyBleedTests
     /// («ج» د57)، لا شاشَة؛ ومُؤَقَّتَةٌ بِشَرطِ حَذفٍ مَكتوبٍ في <c>ClientAddressProbe</c>.</para>
     /// <para>والتاسِعَةُ والعِشرونَ يَومَ ‏2026-10-29 (قَرارُ المالِك د53): <c>GET /{slug}/me/data/download</c> — <b>قِراءَةٌ لا كِتابَة</b>: تَنزيلُ «بَياناتي»
     /// بِصيغَةٍ تَقرَؤُها البَرامِج، حارِسُها جَلسَةُ صاحِبِ البَياناتِ في السِلسِلَة؛ ومُستَهلِكُها زِرُّ صَفحَةِ <c>/{slug}/me/data</c> الَّتي تَقرَأُ الاستِعلامَ نَفسَه.</para>
-    private const int PinnedEndpointCount = 142;
+    /// <para>والثَلاثونَ يَومَ ‏2026-10-29 (قَرارُ المالِك د5 (٢) «ج»): <c>POST /{slug}/payments/notify</c> — إشعارُ الدَفعِ مِن بَوّابَةِ المَتجَر، حارِسُها
+    /// <c>GatewayNoticeGate.Admit</c> بِسِرٍّ أَصدَرناه قَبلَ أَيِّ قِراءَةٍ لِلحُقول، والبُرهانُ جَلبُ الفاتورَةِ بِمِفتاحِ المَتجَر.</para>
+    private const int PinnedEndpointCount = 143;
 
     // ─── الفَحص ───────────────────────────────────────────────────────
 

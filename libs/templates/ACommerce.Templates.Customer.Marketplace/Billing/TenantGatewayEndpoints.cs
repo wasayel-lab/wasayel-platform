@@ -54,6 +54,24 @@ public static class TenantGatewayEndpoints
             return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, Services.Deals.GatewayReturn.AfterVerify(res)));
         }).RequireFormBody().DisableAntiforgery();
 
+        // ─── إشعارُ الدَفعِ الآليُّ مِن بَوّابَةِ المَتجَر (‏2026-10-29، قَرارُ المالِك د5 (٢) «ج»؛ ‏ADR-032 §٩‑٨) ─────────────
+        //
+        // **لا جَلسَةَ لِمُنادِيه** (خادِمُ البَوّابَة)، فَالحارِسُ **دالَّةُ بَوّابَةٍ نَقِيَّةٌ بِاسمِها** قَبلَ أَوَّلِ كِتابَة — `GatewayNoticeGate.Admit`
+        // بِسِرِّ المَتجَرِ الَّذي أَصدَرناه وسَجَّلناه عِندَها، مُسَجَّلَةٌ في `BodyGuards` عَلى سابِقَةِ `OtoOrderStatusGate.Admit`. **ولا يُقرَأُ الجِسمُ بِلا سِرّ**
+        // (نَسَقُ وارِدِ OTO). **والإشعارُ إشارَةٌ لا بُرهان**: `ConfirmNoticeAsync` يَطلُبُ الإشعارَ المَقبولَ في تَوقيعِه ويَجلِبُ الفاتورَةَ بِمِفتاحِ المَتجَرِ
+        // ويَعرِضُها عَلى `GatewayPaymentProof.Gate` نَفسِها قَبلَ أَيِّ كِتابَة، ثُمَّ يُخبَرُ البائِعُ كَما يُخبَرُ بَعدَ «تَحَقَّق». **وبِلا `RequireStoreWritable`** —
+        // مُثَبَّتٌ بِسَبَبِ جارَتِه في `PinnedUngatedStoreWrites`: دَفعٌ وَقَعَ خَبَرٌ لا مُحتَوى. والمَسارُ حَرفُ `GatewayPayments.NoticePath`.
+        app.MapPost("/{slug}/payments/notify",
+            async (string slug, HttpRequest req, Services.Deals.GatewayPayments gateway, Services.Deals.DealNotices notices, L l) =>
+        {
+            var secret = await gateway.NoticeSecretAsync(slug, req.HttpContext.RequestAborted);
+            var raw = secret is not null ? await new StreamReader(req.Body).ReadToEndAsync(req.HttpContext.RequestAborted) : null;
+            var admitted = Services.Deals.GatewayNoticeGate.Admit(secret, raw);
+            var res = admitted.Notice is { } notice ? await gateway.ConfirmNoticeAsync(slug, notice) : null;
+            if (res is not null) await notices.NotifyPaidAsync(slug, res.Confirmed, l);
+            return Results.StatusCode(Services.Deals.GatewayNoticeGate.StatusFor(admitted.Violation?.Code));
+        }).DisableAntiforgery();
+
         return app;
     }
 }
