@@ -23,6 +23,11 @@ namespace ACommerce.Platform.Tests;
 // وإخفاءُ الشَريطِ عَلى `/{slug}` وَحدَه، وغِيابُ بَوّابَةِ الدُخولِ عَن الاستِكشاف،
 // وأَنّ مَتجَرَ الاستوديو يولَدُ بِأَدوار. ولا يَمَسُّ الكوميتُ ذاكَ الفَرعَ ولا الإخفاء —
 // رَسمُ مُحتَوىً عَلى `/{slug}` أَو إظهارُ الشَريطِ هُناكَ خِيارا المالِكِ الأَكبَران.
+//
+// (‏2026-10-29، قَرارُ المالِك د34 الخِيارُ ١، ‏ADR-048 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **واختارَ المالِكُ الأَوَّلَ ومَعَه الشَريط**:
+// زائِرُ جَذرِ مَتجَرٍ فيه دَورُ مُشتَرٍ يَرى رَئيسِيَّةَ المُشتَري بِشَريطِها، والبِطاقاتُ قِسمٌ تَحتَها. فَقُلِبَت ثَلاثَةُ صُفوفٍ بِأَسمائِها:
+// فَرعُ `TenantHome` (`…_unless_it_has_a_buyer_role`)، وإخفاءُ الشَريط (`…_of_the_gateway_…`)، ورابِطُ الاستِكشاف (`…_on_the_gateway_only`).
+// والتَوصيفُ السُلوكِيُّ المُستَقِلُّ قَبلَ التَبديل: `StoreRootVisitorCharacterizationTests` (‏2c277fe). والباقِيانِ بِحَرفِهِما.
 
 public class RoleLandingVisitorDoorCharacterizationTests
 {
@@ -79,20 +84,25 @@ public class RoleLandingVisitorDoorCharacterizationTests
     // ─── (٢) ما يَبقى بِحَرفِه بَعدَ الرابِط ─────────────────────────────────
 
     /// <summary>
-    /// <para><b>الزائِرُ غَيرُ المُسَجَّلِ لِمَتجَرٍ ذي أَدوارٍ يَرى البَوّابَةَ عَلى
-    /// <c>/{slug}</c></b> — فَرعُ <c>TenantHome</c> بِحَرفِه. ولا يُمَسُّ: رَسمُ رَئيسِيَّةِ
-    /// الدَورِ الافتِراضيِّ لِلزائِرِ خِيارُ المالِكِ الأَكبَر.</para>
+    /// <para><b>قُلِبَ ‏2026-10-29 (قَرارُ المالِك د34، ‏ADR-048)</b> — وكانَ <c>A_visitor_of_a_store_with_roles_gets_the_role_landing_on_the_store_root</c>:
+    /// الزائِرُ غَيرُ المُسَجَّلِ لِمَتجَرٍ ذي أَدوارٍ يَرى البَوّابَةَ عَلى <c>/{slug}</c>. <b>والآن إلّا أَن يَكونَ في المَتجَرِ دَورُ مُشتَر</b>
+    /// (<c>StoreRootDoor.GoodsFirst</c>): يَسقُطُ إلى الفَرعِ الافتِراضِيّ — رَئيسِيَّةِ المُشتَري — والبَوّابَةُ قِسمٌ في آخِرِه (<c>BelowGoods</c>).
+    /// والمُسَجَّلُ بِلا دَورٍ فَعّالٍ وزائِرُ <c>/{slug}/r/{role}</c> عَلى البَوّابَةِ كَما كانا.</para>
     /// </summary>
     [Fact]
-    public void A_visitor_of_a_store_with_roles_gets_the_role_landing_on_the_store_root()
+    public void A_visitor_of_a_store_with_roles_gets_the_role_landing_on_the_store_root_unless_it_has_a_buyer_role()
     {
         var home = Flat(Template("Components", "Pages", "TenantHome.razor"));
 
         Assert.Contains(
-            "else if (loaded.Roles.Count > 0 && (!Auth.IsAuthenticated || activeRole is null))",
+            "else if (loaded.Roles.Count > 0 && (!Auth.IsAuthenticated || activeRole is null) && !goodsFirst)",
             home, StringComparison.Ordinal);
         Assert.Contains("<RoleLanding Slug=\"@Slug\" Tenant=\"loaded\" Role=\"@Role\"/>", home, StringComparison.Ordinal);
-        Assert.Equal(1, Count(home, "<RoleLanding "));
+        Assert.Contains("@if (goodsFirst) { <RoleLanding Slug=\"@Slug\" Tenant=\"loaded\" Role=\"@Role\" BelowGoods=\"true\"/> }",
+            home, StringComparison.Ordinal);
+        Assert.Equal(2, Count(home, "<RoleLanding "));
+        Assert.Contains("goodsFirst = ACommerce.Templates.Customer.Marketplace.Gates.StoreRootDoor.GoodsFirst( loaded.Roles, roleSet, Auth.IsAuthenticated, Role);",
+            home, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -100,14 +110,17 @@ public class RoleLandingVisitorDoorCharacterizationTests
     /// ذي أَدوار — فَـ<c>/{slug}/explore</c> لَيسَ «المَدخَل» ويَظهَرُ عَلَيهِ الشَريطُ
     /// بِتَبويبِ الاستِكشافِ في التَبويباتِ الافتِراضِيَّة. ولا يُمَسُّ الإخفاءُ عَلى
     /// <c>/{slug}</c>: إظهارُه هُناكَ خِيارٌ لِلمالِك.</para>
+    /// <para><b>قُلِبَ ‏2026-10-29 (قَرارُ المالِك د34، ‏ADR-048)</b> — وكانَ <c>The_chrome_is_hidden_only_on_the_bare_store_root_so_explore_shows_the_nav</c>:
+    /// والجَذرُ لَيسَ «المَدخَل» لِزائِرِ مَتجَرٍ فيه دَورُ مُشتَرٍ — يَرى رَئيسِيَّةَ المُشتَري فَيَرى شَريطَها، بِسُؤالِ <c>TenantHome</c> نَفسِه.</para>
     /// </summary>
     [Fact]
-    public void The_chrome_is_hidden_only_on_the_bare_store_root_so_explore_shows_the_nav()
+    public void The_chrome_is_hidden_only_on_the_bare_store_root_of_the_gateway_so_explore_and_the_buyer_home_show_the_nav()
     {
         var layout = Flat(Template("Components", "Layout", "MainLayout.razor"));
 
         Assert.Contains(
-            "var isEntry = trimmed.Equals($\"/{slug}\", StringComparison.OrdinalIgnoreCase) && tenantHasRoles && !Auth.IsAuthenticated;",
+            "var isEntry = trimmed.Equals($\"/{slug}\", StringComparison.OrdinalIgnoreCase) && tenantHasRoles && !Auth.IsAuthenticated && " +
+            "!ACommerce.Templates.Customer.Marketplace.Gates.StoreRootDoor.GoodsFirst(tenantRoles, roleSet, Auth.IsAuthenticated, urlRole);",
             layout, StringComparison.Ordinal);
         Assert.Contains("var chromeHidden = isLogin || isEntry;", layout, StringComparison.Ordinal);
         Assert.Contains("Add(\"explore\", L[\"shell.nav.explore\"], \"search\");", layout, StringComparison.Ordinal);
@@ -155,22 +168,24 @@ public class RoleLandingVisitorDoorCharacterizationTests
     /// يُرسِلُ المُسَجَّلَ بِلا دَورٍ إلى البَوّابَة، و<c>RoleLanding.razor</c> يَحقِنُ الجَلسَةَ الآنَ ويَرسُمُ سَطرَ الاستِكشافِ داخِلَ
     /// <c>@if (!Auth.IsAuthenticated)</c> وَحدَه — فَلا يَقرَأُ مُسَجَّلٌ «دونَ تَسجيل». والنَصُّ لَم يَتَبَدَّل، وسَطرُ «لَدَيكَ حِساب»
     /// خارِجَ الشَرط.</para>
+    /// <para><b>قُلِبَ ‏2026-10-29 (قَرارُ المالِك د34، ‏ADR-048)</b> — وكانَ <c>The_browse_link_is_drawn_for_anonymous_visitors_only</c>: وفي البَوّابَةِ
+    /// وَحدَها — قِسمُ البِطاقاتِ تَحتَ رَئيسِيَّةِ المُشتَري (<c>BelowGoods</c>) بِلا «تَصَفَّح دونَ تَسجيل»، فَزائِرُه يَتَصَفَّحُ الآن.</para>
     /// </summary>
     [Fact]
-    public void The_browse_link_is_drawn_for_anonymous_visitors_only()
+    public void The_browse_link_is_drawn_for_anonymous_visitors_on_the_gateway_only()
     {
         var home = Flat(Template("Components", "Pages", "TenantHome.razor"));
         Assert.Contains("(!Auth.IsAuthenticated || activeRole is null)", home, StringComparison.Ordinal);
 
         var razor = RoleLanding();
         Assert.Contains("@inject AuthSession Auth", razor, StringComparison.Ordinal);
-        Assert.Equal(1, Count(razor, "@if (!Auth.IsAuthenticated)"));
+        Assert.Equal(1, Count(razor, "@if (!Auth.IsAuthenticated && !BelowGoods)"));
         Assert.Contains(
-            "@if (!Auth.IsAuthenticated) { @((MarkupString)\"\\n\\n \")<div class=\"acm-role-landing-foot\"> " +
+            "@if (!Auth.IsAuthenticated && !BelowGoods) { @((MarkupString)\"\\n\\n \")<div class=\"acm-role-landing-foot\"> " +
             "<a href=\"@AuthSession.LinkFor(Slug, null, \"explore\")\">@L.Markup(\"roles.landing.browse\")</a> </div> }",
             Flat(razor), StringComparison.Ordinal);
 
-        var guarded = Flat(razor).IndexOf("@if (!Auth.IsAuthenticated)", StringComparison.Ordinal);
+        var guarded = Flat(razor).IndexOf("@if (!Auth.IsAuthenticated && !BelowGoods)", StringComparison.Ordinal);
         var haveAccount = Flat(razor).IndexOf("@L.Markup(\"roles.landing.have_account\")", StringComparison.Ordinal);
         Assert.True(guarded > 0 && haveAccount > guarded);
         Assert.Contains("} @((MarkupString)\"\\n\\n \")<div class=\"acm-role-landing-foot\"> <a href=\"@AuthSession.LinkFor(Slug, Role, $\"login\")\">",

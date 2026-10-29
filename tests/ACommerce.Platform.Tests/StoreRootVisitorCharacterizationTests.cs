@@ -12,7 +12,7 @@ namespace ACommerce.Platform.Tests;
 // (`TestDataSeeder.cs:29`) — فَفيهِ دَورُ مُشتَرٍ، وهُوَ المَقيسُ هُنا لا المُستَثنى.
 //
 // **ما يُقلَبُ في كوميتِ التَبديلِ ويُقالُ في جِسمِه**: الصَفُّ الأَوَّلُ وَحدَه (`Today_…`) — البَوّابَةُ وَحدَها بِلا بِضاعَةٍ ولا شَريطٍ
-// عَلى جَذرِ مَتجَرٍ فيه دَورُ مُشتَرٍ؛ فَهُوَ ما قَرَّرَ المالِكُ تَبديلَه. **وما يَبقى بِحَرفِه**: الصُفوفُ بَعدَه — مَن يَفتَحُ تَطبيقَ دَورٍ
+// عَلى جَذرِ مَتجَرٍ فيه دَورُ مُشتَرٍ؛ فَهُوَ ما قَرَّرَ المالِكُ تَبديلَه. (‏2026-10-29 — قُلِبَ بِاسمِه إلى `The_visitor_of_a_store_with_a_buyer_role_sees_the_buyer_home_first_…`.) **وما يَبقى بِحَرفِه**: الصُفوفُ بَعدَه — مَن يَفتَحُ تَطبيقَ دَورٍ
 // مُباشَرَةً (`/{slug}/r/{role}`) يَرى البَوّابَةَ بِشَريطِها، ومَتجَرٌ بِلا أَدوارٍ يَرى رَئيسِيَّةَ المُشتَري بِشَريطِها، والكاتالوجُ فيه
 // دَورُ عُضوٍ واحِدٌ رَئيسِيَّتُه رَئيسِيَّةُ المُشتَري ويَتَصَفَّح: `customer`.
 
@@ -44,24 +44,36 @@ public class StoreRootVisitorCharacterizationTests
     // ─── (١) ما يُقلَب: جَذرُ مَتجَرٍ فيه دَورُ مُشتَرٍ ─────────────────────────────
 
     /// <summary>
-    /// <para><b>اليَوم</b>: زائِرُ <c>/ashare</c> يَرى البَوّابَةَ وَحدَها — بِطاقاتُ الأَدوارِ الثَلاث إلى <c>r/{role}/login</c> وسَطرُ «لَدَيكَ حِساب»
-    /// إلى <c>/ashare/login</c> — <b>ولا هيرو ولا إجراءاتِ رَئيسِيَّة ولا شَريط</b> (الشَريطُ مَخفِيٌّ عَلى الجَذرِ العاري لِمَتجَرٍ ذي أَدوار).</para>
+    /// <para><b>قُلِبَ ‏2026-10-29 (قَرارُ المالِك د34، ‏ADR-048)</b> — وكانَ <c>Today_the_visitor_of_a_store_with_a_buyer_role_sees_the_role_gateway_and_no_goods_on_the_store_root</c>:
+    /// البَوّابَةُ وَحدَها بِلا هيرو ولا إجراءاتٍ ولا شَريط. <b>والآن</b> زائِرُ <c>/ashare</c> يَرى رَئيسِيَّةَ المُشتَري بِشَريطِها — الهيرو والإجراءات —
+    /// <b>ثُمَّ</b> قِسمَ البِطاقاتِ الثَلاثِ وسَطرَ «لَدَيكَ حِساب» إلى <c>/ashare/login</c> تَحتَ الإجراءات، بِلا رَأسِ البَوّابَةِ ولا رابِطِ «تَصَفَّح دونَ تَسجيل».
+    /// اللَقطَةُ أُعيدَ تَثبيتُها بِالفَرقِ المَقيسِ وَحدَه (‏ADR-048 §٣).</para>
     /// </summary>
     [Fact]
-    public void Today_the_visitor_of_a_store_with_a_buyer_role_sees_the_role_gateway_and_no_goods_on_the_store_root()
+    public void The_visitor_of_a_store_with_a_buyer_role_sees_the_buyer_home_first_with_the_chrome_and_the_role_cards_below()
     {
         var html = Snapshot("ashare-portal");
 
+        Assert.Equal(1, Count(html, Hero));
+        Assert.Equal(1, Count(html, Actions));
+        Assert.Equal(1, Count(html, MobileNav));
+        Assert.Equal(1, Count(html, TopNav));
+
         Assert.Equal(1, Count(html, Gateway));
+        Assert.Equal(0, Count(html, "acm-role-landing-head"));
         Assert.Equal(3, Count(html, Card));
         foreach (var role in new[] { "customer", "host", "vendor" })
             Assert.Equal(1, Count(html, $"href=\"/ashare/r/{role}/login\""));
         Assert.Equal(1, Count(html, "<div class=\"acm-role-landing-foot\"><a href=\"/ashare/login\">"));
+        Assert.Equal(0, Count(html, RoleLandingBrowseLinkTests.BrowseText));
 
-        Assert.Equal(0, Count(html, Hero));
-        Assert.Equal(0, Count(html, Actions));
-        Assert.Equal(0, Count(html, MobileNav));
-        Assert.Equal(0, Count(html, TopNav));
+        // البِضاعَةُ أَوَّلاً: الهيرو قَبلَ الإجراءات، والإجراءاتُ قَبلَ قِسمِ البِطاقات، والقِسمُ قَبلَ سَطرِ الدُخول.
+        var hero = html.IndexOf(Hero, StringComparison.Ordinal);
+        var actions = html.IndexOf(Actions, StringComparison.Ordinal);
+        var cards = html.IndexOf(Gateway, StringComparison.Ordinal);
+        var login = html.IndexOf("<div class=\"acm-role-landing-foot\"><a href=\"/ashare/login\">", StringComparison.Ordinal);
+        Assert.True(hero > 0 && actions > hero && cards > actions && login > cards,
+            $"تَرتيبٌ غَيرُ المَقصود: الهيرو {hero}، الإجراءات {actions}، البِطاقات {cards}، الدُخول {login}.");
     }
 
     // ─── (٢) ما يَبقى بِحَرفِه ───────────────────────────────────────────────

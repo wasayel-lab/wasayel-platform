@@ -15,15 +15,18 @@
     var path = new Uri(Nav.Uri).AbsolutePath;
     var isLogin = path.Contains("/login", StringComparison.OrdinalIgnoreCase);
 
-    // إخفاء nav عَلى صَفحَة اختِيار التَّطبيق الفَرعيّ — لا nav قَبل
-    // أَن يَختار المُستَخدِم دَوراً، فَالـ tabs لا تَنطَبِق بَعد.
-    var trimmed = path.TrimEnd('/');
-    var isEntry = trimmed.Equals($"/{slug}", StringComparison.OrdinalIgnoreCase) &&
-                  tenantHasRoles && !Auth.IsAuthenticated;
-    var chromeHidden = isLogin || isEntry;
-
     // الدَور المُستَخرَج مِن URL (لِبِناء روابِط /r/{role}/ في الـ nav).
     var urlRole = AuthSession.ExtractRoleFromPath(new PathString(path));
+
+    // إخفاء nav عَلى صَفحَة اختِيار التَّطبيق الفَرعيّ — لا nav قَبل
+    // أَن يَختار المُستَخدِم دَوراً، فَالـ tabs لا تَنطَبِق بَعد.
+    // (‏2026-10-29، قَرارُ المالِك د34، ‏ADR-048 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والجَذرُ لَيسَ تِلكَ الصَفحَةَ لِزائِرِ مَتجَرٍ فيه
+    // دَورُ مُشتَرٍ: يَرى رَئيسِيَّةَ المُشتَري فَيَرى شَريطَها — سُؤالُ `TenantHome` نَفسُه (`StoreRootDoor.GoodsFirst`).
+    var trimmed = path.TrimEnd('/');
+    var isEntry = trimmed.Equals($"/{slug}", StringComparison.OrdinalIgnoreCase) &&
+                  tenantHasRoles && !Auth.IsAuthenticated &&
+                  !ACommerce.Templates.Customer.Marketplace.Gates.StoreRootDoor.GoodsFirst(tenantRoles, roleSet, Auth.IsAuthenticated, urlRole);
+    var chromeHidden = isLogin || isEntry;
 
     var (topItems, bottomItems) = BuildNav(slug, activeRoleSlug, urlRole);
 }
@@ -137,6 +140,9 @@ else
     string activeRoleSlug = "";
     bool tenantHasRoles;
 
+    /// <summary>أَدوارُ المَتجَرِ المُجَسَّدَة — ما يَقرَؤُه <c>TenantHome</c> لِسُؤالِ «البِضاعَةُ أَوَّلاً؟» (‏2026-10-29، د34).</summary>
+    IReadOnlyCollection<ACommerce.Kit.Roles.Role> tenantRoles = Array.Empty<ACommerce.Kit.Roles.Role>();
+
     /// <summary>لَقطَة أَدوار المَتجَر — <b>مَوضِع الالتِقاط في
     /// التَّنَقُّل</b>: فَتحَة <c>nav</c> لِدَور مُؤَلَّف تُقرَأ مِن
     /// تَعريفِه. بِلا تَأليف هي قاعِدَة المَنصَّة، فَالشَّريط كَما كان.</summary>
@@ -181,6 +187,7 @@ else
                 var t = withRoles.Tenant;
                 roleSet = withRoles.Roles;
                 tenantHasRoles = t is not null && t.Roles.Count > 0;
+                if (t is not null) tenantRoles = t.Roles;
                 // اِشتِقاق النَّمَط لِتَحديد ظُهور السَّلَّة: فَئات «menu»
                 // (مَقاهي/مَطاعِم) أَو غِياب الأَدوار العَقارِيَّة = marketplace.
                 if (t is not null)

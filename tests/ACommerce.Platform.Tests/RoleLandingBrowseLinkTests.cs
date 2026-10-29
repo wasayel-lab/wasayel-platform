@@ -68,15 +68,22 @@ public class RoleLandingBrowseLinkTests
     /// <para>والرابِطُ مِن جَذرِ المُستَأجِرِ حَتّى عَلى <c>/{slug}/r/{role}</c> — وسَطرُ الدُخولِ تَحتَه
     /// يَحمِلُ الدَور. واللَقطَةُ المُجَمَّدَةُ <c>baseline/</c> «ما كان» (يَقرَؤُها
     /// <c>ComponentVariantCharacterizationTests</c> تَوصيفاً لِما قَبلَ المُتَغايِرات) لا تَحمِلُه ولا تُمَسّ.</para>
+    /// <para><b>قُلِبَ ‏2026-10-29 (قَرارُ المالِك د34، ‏ADR-048)</b> — وكانَ <c>The_live_baselines_of_the_role_gateway_carry_the_link_once_above_the_have_account_line</c>
+    /// بِأَربَعِ لَقَطات: <c>ashare-portal</c> صارَت رَئيسِيَّةَ المُشتَري والبِطاقاتُ قِسمٌ تَحتَها بِلا الرابِط (زائِرُها يَتَصَفَّحُ الآن)،
+    /// فَالحامِلاتُ ثَلاثٌ — صَفَحاتُ <c>/ashare/r/{role}</c> — وسَطرُ الدُخولِ في <c>ashare-portal</c> باقٍ مَرَّةً.</para>
     /// </summary>
     [Fact]
-    public void The_live_baselines_of_the_role_gateway_carry_the_link_once_above_the_have_account_line()
+    public void The_live_baselines_of_the_role_gateway_carry_the_link_once_above_the_have_account_line_and_the_store_root_below_the_goods_does_not()
     {
         var appearance = Path.Combine(RepoRoot, "tests", "characterization", "appearance");
         var link = $"    <div class=\"acm-role-landing-foot\"><a href=\"/ashare/explore\">{BrowseText}</a></div>\n\n";
+
+        var root = File.ReadAllText(Path.Combine(appearance, "i18n-baseline", "ashare-portal.html"));
+        Assert.Empty(Regex.Matches(root, Regex.Escape(BrowseText)));
+        Assert.Single(Regex.Matches(root, Regex.Escape("<div class=\"acm-role-landing-foot\"><a href=\"/ashare/login\">")));
+
         var gateway = new Dictionary<string, string>
         {
-            ["ashare-portal"]        = "/ashare/login",
             ["ashare-role-customer"] = "/ashare/r/customer/login",
             ["ashare-role-host"]     = "/ashare/r/host/login",
             ["ashare-role-vendor"]   = "/ashare/r/vendor/login",

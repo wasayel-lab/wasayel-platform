@@ -27,11 +27,13 @@
     {
         <AcLoadingState />
     }
-    else if (loaded.Roles.Count > 0 && (!Auth.IsAuthenticated || activeRole is null))
+    else if (loaded.Roles.Count > 0 && (!Auth.IsAuthenticated || activeRole is null) && !goodsFirst)
     {
         @* مَتجَر بِأَدوار + غَير مُسَجَّل دُخول (أَو بِلا ActiveRole):
            لا يَرى أَيّ مُحتَوى. يَرَى صَفحَة اختِيار التَّطبيق الفَرعيّ.
-           هذا يُحَوِّل /{slug} مِن صَفحَة عامَّة إلى نُقطَة دُخول مُتَفَرِّعَة. *@
+           هذا يُحَوِّل /{slug} مِن صَفحَة عامَّة إلى نُقطَة دُخول مُتَفَرِّعَة.
+           (‏2026-10-29، قَرارُ المالِك د34، ‏ADR-048 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) إلّا زائِرَ الجَذرِ في مَتجَرٍ فيه دَورُ مُشتَرٍ
+           (`goodsFirst`): يَسقُطُ إلى الفَرعِ الافتِراضِيِّ أَدناه — رَئيسِيَّةُ المُشتَري — والبِطاقاتُ قِسمٌ في آخِرِه. *@
         <RoleLanding Slug="@Slug" Tenant="loaded" Role="@Role"/>
     }
     else if (RoleHome() is { } roleHome)
@@ -207,6 +209,12 @@
                               ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
             }
         }
+
+        @* بِطاقاتُ الأَدوارِ وسَطرُ «لَدَيكَ حِساب» — قِسمٌ ثانَوِيٌّ تَحتَ البِضاعَة (‏2026-10-29، د34، ‏ADR-048). *@
+        @if (goodsFirst)
+        {
+            <RoleLanding Slug="@Slug" Tenant="loaded" Role="@Role" BelowGoods="true"/>
+        }
     }
 </div>
 
@@ -267,6 +275,10 @@
     ACommerce.Kit.Roles.Role? activeRole;
     bool canCreateListing = true;   // افتراضيّاً true لِمَتاجِر بِلا أَدوار
 
+    /// <summary>زائِرُ الجَذرِ في مَتجَرٍ فيه دَورُ مُشتَرٍ يَرى البِضاعَةَ أَوَّلاً والبِطاقاتِ تَحتَها (‏2026-10-29، د34) —
+    /// <see cref="ACommerce.Templates.Customer.Marketplace.Gates.StoreRootDoor.GoodsFirst"/>، وهِيَ ما يَسأَلُه الشِلُّ لِلشَريط.</summary>
+    bool goodsFirst;
+
     /// <summary>لَقطَة أَدوار هذا المَتجَر — الكاتالوج المَضمون وفَوقَه
     /// تَعريفاتُه المُؤَلَّفَة المُعتَمَدَة. <b>مَوضِع الالتِقاط الأَوَّل</b>:
     /// مِنها تُبنى بِطاقات البَوّابَة (عَبر <c>Tenant.Roles</c>
@@ -314,6 +326,8 @@
 
         if (loaded is null) return;
         profile = Services.Patterns.PatternProfileResolver.Of(loaded);
+        goodsFirst = ACommerce.Templates.Customer.Marketplace.Gates.StoreRootDoor.GoodsFirst(
+            loaded.Roles, roleSet, Auth.IsAuthenticated, Role);
 
         // نِداءٌ واحِد بَدَل جَلسَةٍ مَفتوحَةٍ هُنا. والفَلتَرَةُ
         // انتَقَلَت مَعَه لا بَعدَه: عَدَدُ التَقييمات يُستَعلَم عَن

@@ -8,9 +8,22 @@
     تَطبيقَه الفَرعيّ. لا مُحتَوى ولا feed — فَقَط بِطاقات لِلتَّطبيقات
     المُتاحَة. كُلّ بِطاقَة تَحمِل لِـ login مُسبَق-التَّحديد لِلدَور.
     ومُنذُ ‏2026-10-11 (‏ADR-035): ورابِطٌ واحِدٌ إلى الاستِكشافِ لِلزائِر.
+    ومُنذُ ‏2026-10-29 (‏ADR-048، قَرارُ المالِك د34): وتُرسَمُ أَيضاً قِسماً تَحتَ رَئيسِيَّةِ المُشتَري (`BelowGoods`)
+    عَلى جَذرِ مَتجَرٍ فيه دَورُ مُشتَرٍ — والبَوّابَةُ صَفحَةً كامِلَةً لِما سِواه.
 *@
 
 <div class="acs-page acm-role-landing">
+    @* ─── تَحتَ البِضاعَة (‏2026-10-29، قَرارُ المالِك د34، ‏ADR-048) ───
+       زائِرُ جَذرِ مَتجَرٍ فيه دَورُ مُشتَرٍ يَرى رَئيسِيَّةَ المُشتَري أَوَّلاً، وهذِه البِطاقاتُ قِسمٌ ثانَوِيٌّ تَحتَها
+       (`StoreRootDoor.GoodsFirst`): عُنوانُ قِسمٍ بَدَلَ رَأسِ المَتجَر — فَالهيرو فَوقَه يَحمِلُ اسمَه وسَطرَه — وبِلا رابِطِ
+       «تَصَفَّح دونَ تَسجيل» (هُوَ يَتَصَفَّحُ الآن). والبِطاقاتُ وسَطرُ «لَدَيكَ حِساب» كَما هُما. والرَأسُ بِمَسافَتِه الأَصلِيَّة
+       داخِلَ `else`، والفَراغُ بَعدَه مَكتوبٌ صَراحَةً لِأَنّ Razor يُسقِطُ الفَراغَ المُجاوِرَ لِكُتلَةِ `@if` — فَالبَوّابَةُ بايتاً كَما كانَت. *@
+    @if (BelowGoods)
+    {
+        <AcSectionHeader Title="@(L["roles.landing.pick_hint"])" />
+    }
+    else
+    {
     <header class="acm-role-landing-head">
         <div class="acm-role-landing-brand"
              style="background:@Tenant.BrandColor;">
@@ -25,8 +38,8 @@
             <AcIcon Name="star" Size="14" /> @L.Markup("roles.landing.pick_hint")@((MarkupString)"\n        ")
         </span>
     </header>
-
-    <div class="acm-role-landing-cards@(theme.VariantClassSuffix(ACommerce.Kit.Theme.ThemeVariantCatalog.PortalRoleCards))">
+    }
+    @((MarkupString)"\n\n    ")<div class="acm-role-landing-cards@(theme.VariantClassSuffix(ACommerce.Kit.Theme.ThemeVariantCatalog.PortalRoleCards))">
         @foreach (var r in Tenant.Roles
                     .Where(r => r.CatalogSlug != "tenant_admin")
                     .OrderBy(r => r.SortOrder))
@@ -70,7 +83,7 @@
        **ولِلزائِرِ وَحدَه** (‏2026-10-13، مُراجَعَةُ الموجَةِ الثانِيَة): البَوّابَةُ تُرسَمُ أَيضاً لِمُسَجَّلٍ بِلا دَورٍ فَعّال
        (`TenantHome`: `!Auth.IsAuthenticated || activeRole is null`)، و«دونَ تَسجيل» كَذِبٌ عَلَيه — فَلا يُرسَمُ لَه.
        والفَراغانِ مَكتوبانِ صَراحَةً لِأَنّ Razor يُسقِطُ الفَراغَ المُجاوِرَ لِكُتلَةِ `@if` — فَصَفحَةُ الزائِرِ تَبقى بايتاً كَما كانَت. *@
-    @if (!Auth.IsAuthenticated)
+    @if (!Auth.IsAuthenticated && !BelowGoods)
     {
         @((MarkupString)"\n\n    ")<div class="acm-role-landing-foot">
             <a href="@AuthSession.LinkFor(Slug, null, "explore")">@L.Markup("roles.landing.browse")</a>
@@ -85,6 +98,10 @@
     [Parameter] public string Slug { get; set; } = "";
     [Parameter] public string? Role { get; set; }
     [Parameter] public ACommerce.Kit.Tenants.Tenant Tenant { get; set; } = default!;
+
+    /// <summary>قِسمٌ تَحتَ رَئيسِيَّةِ المُشتَري لا صَفحَةُ بَوّابَة (‏2026-10-29، د34): عُنوانُ قِسمٍ بَدَلَ رَأسِ المَتجَر، وبِلا رابِطِ الاستِكشاف.
+    /// <c>false</c> — البَوّابَةُ كَما كانَت بايتاً.</summary>
+    [Parameter] public bool BelowGoods { get; set; }
 
     /// <summary>ثيم هذا المَتجَر. مُهَيَّأ إلى قاعِدَة المَنصَّة، فَلَو
     /// لَم تَجرِ القِراءَة بَعد (أَو تَعَذَّرَت) صُيِّرَت الصَفحَة
