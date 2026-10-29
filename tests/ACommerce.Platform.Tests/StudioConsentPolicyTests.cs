@@ -74,40 +74,80 @@ public class StudioConsentPolicyTests
     }
 
     /// <summary>
-    /// <para><b>النَصُّ يَصِفُ ما يَفعَلُه الكودُ، ولا يَختَرِعُ رَقَماً</b>: الاشتِراكُ
-    /// تَضبُطُه المَنصَّةُ لِكُلِّ مَتجَرٍ عَلى حِدَة ويُعرَضُ قَبلَ أَيِّ دَفع، والنَشرُ
-    /// يَتَوَقَّفُ ثُمَّ يُخفى المَتجَرُ وَفقَ شُروطِ المَنصَّة — وكُلُّ جُملَةٍ مِنها لَها
-    /// طَرَفٌ مَقيس: دالَّةٌ في <c>TenantPlan</c> أَو مِفتاحٌ مَنشورٌ في شُروطِ المَنصَّة.
-    /// والرَقَمُ الوَحيدُ «٣٠» هُوَ دَوَرانُ حِصَّةِ الاستوديو المَقيس.</para>
+    /// <para><b>قُلِبَ بِاسمِه (‏2026-10-29، قَرارُ المالِك د18 «ج» — الصِياغَةُ مُسَوَّدَتُه بِحَرفِها)</b> — كانَ
+    /// <c>The_fourth_item_describes_what_the_code_enforces_and_invents_no_number</c> عَلى نَصِّ الإصدارِ 2: «تَضبُطُه المَنصَّةُ لِكُلِّ مَتجَرٍ
+    /// عَلى حِدَة … وَفقَ شُروطِ المَنصَّة»، والرَقَمُ الوَحيدُ «٣٠». <b>والآن</b> «الباقاتُ والاشتِراك»: كُلُّ جُملَةٍ لَها طَرَفٌ مَقيس — دالَّةٌ في
+    /// <c>StudioTierService</c> أَو <c>TenantPlanPolicy</c>، أَو مِفتاحٌ مَنشورٌ في شُروطِ المَنصَّة — والأَرقامُ «٣٠» ورَقَما البَندَينِ اللَذَينِ يُحيلُ
+    /// إلَيهِما، ويُقاسانِ بِعُنوانَيهِما.</para>
     /// </summary>
     [Fact]
-    public void The_fourth_item_describes_what_the_code_enforces_and_invents_no_number()
+    public void The_fourth_item_says_plans_and_subscription_as_the_code_and_the_terms_enforce_them()
     {
+        Assert.Equal("٤. الباقاتُ والاشتِراك.", Ar("studio.consent.item4_title"));
         var body = Ar(Item4Key);
 
-        Assert.Contains("تَضبُطُه المَنصَّةُ لِكُلِّ مَتجَرٍ عَلى حِدَة", body, StringComparison.Ordinal);
-        Assert.Contains("قَبلَ أَيِّ دَفع", body, StringComparison.Ordinal);
-        Assert.Contains("عَدَمِ السَداد", body, StringComparison.Ordinal);
-        Assert.Contains("يَتَوَقَّفُ النَشرُ", body, StringComparison.Ordinal);
-        Assert.Contains("يُخفى المَتجَرُ", body, StringComparison.Ordinal);
-        Assert.Contains("شُروطِ المَنصَّة", body, StringComparison.Ordinal);
+        foreach (var said in new[]
+        {
+            "التَحاليلُ والتَحسيناتُ تَتَجَدَّدُ كُلَّ ٣٠ يَوماً", "وعَدَدُ التَطبيقاتِ حَدٌّ ثابِت", "قَبلَ أَيِّ دَفع", "يَتَوَقَّفُ النَشرُ",
+            "ويَبقى المَتجَرُ ظاهِراً خِلالَ مُهلَةِ السَماحِ", "ثُمَّ يُخفى حَتّى التَجديد", "تَعليقُه عِندَ عَدَمِ السَداد",
+            "ولا يُحذَفُ شَيءٌ مِن بَياناتِه", "البَندُ ٤ (الباقاتُ والفَوتَرَةُ والتَجديد)", "البَندُ ٩ (التَعليقُ والإنهاء)", "وهي المَرجِعُ عِندَ الاختِلاف",
+        })
+            Assert.True(body.Contains(said, StringComparison.Ordinal), $"البَندُ الرابِعُ لا يَقولُ «{said}».");
 
-        // لا سِعرَ ولا عُملَةَ ولا نِسبَة — والرَقَمُ الوَحيدُ ٣٠.
+        // لا سِعرَ ولا عُملَةَ ولا نِسبَة — والأَرقامُ ٣٠ ورَقَما البَندَين.
         foreach (var forbidden in new[] { "ريال", "ر.س", "SAR", "$", "%", "مَجّان" })
             Assert.DoesNotContain(forbidden, body, StringComparison.Ordinal);
         var digits = Regex.Matches(body, "[0-9٠-٩]+").Select(m => m.Value).ToArray();
-        Assert.Equal(new[] { "٣٠" }, digits);
+        Assert.Equal(new[] { "٣٠", "٤", "٩" }, digits);
 
         // الأَطرافُ المَقيسَة لِكُلِّ جُملَة:
-        var now = new DateTime(2026, 10, 11, 12, 0, 0, DateTimeKind.Utc);
-        Assert.True(StudioTierService.PeriodElapsed(now.AddDays(-30), now));      // «تُعادُ كُلَّ ٣٠ يَوماً»
+        var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+        Assert.True(StudioTierService.PeriodElapsed(now.AddDays(-30), now));      // «تَتَجَدَّدُ كُلَّ ٣٠ يَوماً»
         Assert.False(StudioTierService.PeriodElapsed(now.AddDays(-29), now));
+        var user = new StudioUser { PeriodStart = now.AddDays(-30), AnalysesUsed = 1, RefinesUsed = 2, StoresBuilt = 3 };
+        Assert.True(StudioTierService.ApplyPeriodRollover(user, now));
+        Assert.Equal((0, 0, 3), (user.AnalysesUsed, user.RefinesUsed, user.StoresBuilt));  // … و«عَدَدُ التَطبيقاتِ حَدٌّ ثابِت»
         Assert.False(TenantPlanPolicy.AllowsWrite(TenantPlanState.Grace));         // «يَتَوَقَّفُ النَشرُ»
-        Assert.True(TenantPlanPolicy.IsVisible(TenantPlanState.Grace));            // … ويَبقى ظاهِراً في السَماح
-        Assert.False(TenantPlanPolicy.IsVisible(TenantPlanState.Suspended));       // «ثُمَّ يُخفى المَتجَرُ»
-        Assert.Contains("عَدَمِ السَداد", Ar("platform.terms.s9_body"), StringComparison.Ordinal);
+        Assert.True(TenantPlanPolicy.IsVisible(TenantPlanState.Grace));            // «ويَبقى المَتجَرُ ظاهِراً خِلالَ مُهلَةِ السَماح»
+        Assert.False(TenantPlanPolicy.IsVisible(TenantPlanState.Suspended));       // «ثُمَّ يُخفى حَتّى التَجديد»
         Assert.Contains("يُخفى حَتّى التَجديد", Ar("platform.terms.s4_body"), StringComparison.Ordinal);
-        Assert.Contains("يُحَدَّدُ لِكُلِّ مَتجَرٍ عَلى حِدَة", Ar("platform.pricing.no_price"), StringComparison.Ordinal);
+        Assert.Contains("عَدَمِ السَداد", Ar("platform.terms.s9_body"), StringComparison.Ordinal);
+        Assert.Contains("لا يُحذَفُ شَيءٌ مِن بَياناتِ المَتجَرِ", Ar("platform.terms.s4_note"), StringComparison.Ordinal);
+        Assert.Equal("4. الباقاتُ والفَوتَرَةُ والتَجديد", Ar("platform.terms.s4_title"));
+        Assert.Equal("9. التَعليقُ والإنهاء", Ar("platform.terms.s9_title"));
+    }
+
+    // ─── البَندُ الثالِث: لا «لا نُشارِكُها» والنَموذَجُ يُولِّدُ الدِراسَة ────────────────────────────
+
+    /// <summary>النَصُّ القَديمُ بِحَرفِه (قيمَةُ <c>studio.consent.item3_body</c> حَتّى ‏2026-10-29) — يُقارَنُ بِه.</summary>
+    private const string OldItem3Body = "نَحفَظ بَياناتِكَ (هاتِف، أَفكار، تَحاليل) لِاستِخدامِها في تَحسين الخِدمَة. لا نُشارِكها مَع أَطراف ثالِثَة.";
+
+    /// <summary><b>البَندُ الثالِثُ كانَ يَنقُضُ الأَوَّل</b> (قَرارُ المالِك د20 «أ»، ‏2026-10-29): «لا نُشارِكها مَع أَطراف ثالِثَة» والبَندُ الأَوَّلُ
+    /// يَقولُ إنّ نَموذَجَ ذَكاءٍ اصطِناعيٍّ يُولِّدُ الدِراسَة. والآن يُسَمّي مُزَوِّدَ النَموذَجِ ويُحيلُ إلى الجِهاتِ المُسَمّاةِ في سِياسَةِ الخُصوصِيَّة.</summary>
+    [Fact]
+    public void The_third_item_names_the_model_provider_and_the_privacy_policy_parties()
+    {
+        var body = Ar("studio.consent.item3_body");
+        Assert.NotEqual(OldItem3Body, body);
+        Assert.Contains("لا نَبيعُ بَياناتِك، ونُشارِكُها مَعَ مُزَوِّدِ نَموذَجِ اللُغَةِ لِتَوليدِ الدِراسَةِ ومَعَ الجِهاتِ المُسَمّاةِ في سِياسَةِ الخُصوصِيَّةِ فَقَط.",
+            body, StringComparison.Ordinal);
+        Assert.Contains("ذَكاء اصطِناعيّ", Ar("studio.consent.item1_body"), StringComparison.Ordinal);
+        // والسِياسَةُ تُسَمّيه فِعلاً — السَطرُ الَّذي تُحيلُ إلَيه الموافَقَة.
+        Assert.Contains("@doc.Markup(\"platform.privacy.share_llm\"", PrivacyShareInventoryTests.PrivacyPage(), StringComparison.Ordinal);
+    }
+
+    /// <summary>ولا بَندَ آخَرَ في مُوافَقَةِ الاستوديو يَحمِلُ الجُملَةَ القَديمَة. (‏شُروطُ المَتجَرِ <c>terms.privacy.body</c> تَقولُ «لا نُشارِكها مَع
+    /// أَطراف ثالِثَة بِدون إذنِكَ الصَّريح» — نَصُّ المَتجَرِ لا الاستوديو، وخارِجَ د20؛ مَقيسٌ ومُبَلَّغٌ في تَقريرِ التَيّارِ لا مُبَدَّل.)</summary>
+    [Fact]
+    public void No_studio_consent_value_still_says_we_share_with_no_third_party()
+    {
+        var consent = LocaleCatalog.Raw(LocaleCatalog.Arabic)
+            .Where(e => e.Key.StartsWith("studio.consent.", StringComparison.Ordinal)).ToList();
+        Assert.True(consent.Count >= 10, $"أَداةٌ عَمياء: {consent.Count} مِفتاحاً لِلمُوافَقَة.");
+        var carriers = consent
+            .Where(e => AccountDeletionRetentionTests.Bare(e.Value).Contains("لا نشاركها مع أطراف ثالثة", StringComparison.Ordinal))
+            .Select(e => e.Key).ToArray();
+        Assert.Empty(carriers);
     }
 
     // ─── الإصدارُ وشَرطُ القَبول ─────────────────────────────────────────────
@@ -118,19 +158,22 @@ public class StudioConsentPolicyTests
     /// شَرطَ الإصدارِ الحاليّ، وسِجِلُّ الإصدارِ الحاليِّ يُرضيه، وسِجِلُّ غَيرِه لا،
     /// وإصدارٌ أَعلى لا — مُساواةٌ لا <c>&gt;=</c>، وهذا بِعَينِه ما يُعيدُ صاحِبَ
     /// الاستوديو إلى الصَفحَةِ قَبلَ تَحليلِه التالي.</para>
+    /// <para><b>‏(2026-10-29، قَرارا المالِك د20 ود18 — رَفعٌ واحِد) قُلِبَ بِاسمِه</b>: كانَ <c>The_version_was_bumped_so_everyone_who_accepted_the_old_text_re_accepts</c>
+    /// عَلى الإصدارِ 2 (سِجِلُّ 2 يُرضي، و3 لا). والآن 3: مَن قَبِلَ «لا نُشارِكها مَع أَطراف ثالِثَة» و«الباقات.» القَديمَ (2) يُعادُ إلَيه النَصّ.</para>
     /// </summary>
     [Fact]
-    public void The_version_was_bumped_so_everyone_who_accepted_the_old_text_re_accepts()
+    public void The_version_was_bumped_to_three_so_everyone_who_accepted_version_two_re_accepts()
     {
-        Assert.Equal(2, ConsentPolicy.CurrentVersion);
+        Assert.Equal(3, ConsentPolicy.CurrentVersion);
 
         var me = Guid.NewGuid();
         var acceptedCurrent = ConsentPolicy.AcceptedBy(me, ConsentPolicy.CurrentVersion).Compile();
 
         Assert.False(acceptedCurrent(new ConsentRecord { UserId = me, Version = 1 }));            // قَبِلَ «لا يَتِم تَحصيل»
-        Assert.True (acceptedCurrent(new ConsentRecord { UserId = me, Version = 2 }));
-        Assert.False(acceptedCurrent(new ConsentRecord { UserId = Guid.NewGuid(), Version = 2 }));
-        Assert.False(acceptedCurrent(new ConsentRecord { UserId = me, Version = 3 }));
+        Assert.False(acceptedCurrent(new ConsentRecord { UserId = me, Version = 2 }));            // قَبِلَ «لا نُشارِكها مَع أَطراف ثالِثَة»
+        Assert.True (acceptedCurrent(new ConsentRecord { UserId = me, Version = 3 }));
+        Assert.False(acceptedCurrent(new ConsentRecord { UserId = Guid.NewGuid(), Version = 3 }));
+        Assert.False(acceptedCurrent(new ConsentRecord { UserId = me, Version = 4 }));
     }
 
     /// <summary>
