@@ -278,6 +278,17 @@ public sealed class GatewayPayments
            && deal.Refs.TryGetValue("payment_id", out var paymentId)
            && string.Equals(paymentId, deal.Refs[GatewayPaymentProof.InvoiceRef], StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// <para><b>أَتَدخُلُ الصَفقَةُ «دَفع» الآنَ بِاسمِ المَنصَّة؟</b> (‏2026-10-29، قَرارُ المالِك د4 «ب»: «تُدخَلُ مرحلة «دفع» آليًّا متى سُجّل الدفع، باسم المنصّة»؛
+    /// تَوصيفُ «اليَوم» <c>36fd7b8</c>) — قائِمَة، وتاليها «دَفع»، وقُبِضَ ثَمَنُها (<see cref="DealsService.IsCaptured"/>) <b>بِبَوّابَةِ المَتجَرِ نَفسِها</b>
+    /// (<see cref="CollectedByGateway"/>). دالَّةٌ نَقِيَّةٌ واحِدَةٌ يَسأَلُها كاتِبُ الدُخول (<see cref="DealsService.EnterPaidOnRecordAsync"/>) عَلى ما قَرَأَه في جَلسَتِه:
+    /// لَحظَةَ التَحَقُّق، وبَعدَ كُلِّ تَقَدُّمٍ يُبلِغُ الصَفقَةَ ما قَبلَ «دَفع». <b>ولا تَصدُقُ لِحَجزِ مُزَوِّدِ النُسخَة</b> — هُناكَ دُخولُ «دَفع» هُوَ القَبضُ نَفسُه
+    /// ويُدخِلُها المُشتَري؛ ولا لِمُلغاةٍ أَو في نِزاع.</para>
+    /// </summary>
+    public static bool EntersPaidOnRecord(Deal deal)
+        => deal.Status == DealStatus.Active && DealsPolicy.Next(deal) == DealStage.Paid
+           && DealsService.IsCaptured(deal) && CollectedByGateway(deal);
+
     private readonly DealsService _deals;
     private readonly TenantProviderService _providers;
     private readonly ProviderVault _vault;
@@ -348,11 +359,11 @@ public sealed class GatewayPayments
         // الكاتِبُ يَطلُبُ ما أَخرَجَته البَوّابَةُ في تَوقيعِه، ولا يَكتُبُ عَلى ما كُتِب. ثُمَّ صَفقَةٌ تاليها «دَفع» وقَد قُبِضَت تَدخُلُها
         // **بِبَوّابَةِ الانتِقالِ نَفسِها** والمُشتَري فاعِلُها — قاعِدَةُ الكاتالوجِ (`Paid` = المُبادِر)، لا تَجاوُزٌ لِفَحصِ الفاعِل؛ وما
         // قَبلَ ذلكَ يَبقى حَتّى يَبلُغَها ويُدخِلَها المُشتَري بِزِرِّه (والقَبضُ يَتَجاوَزُها: «Captured»). ورَدُّ الانتِقالِ لا يَكسِرُ التَأكيد.
+        // (‏2026-10-29، قَرارُ المالِك د4 «ب» — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: «والمُشتَري فاعِلُها» لَم يَعُد — تَدخُلُها المَنصَّةُ بِاسمِها بِالكاتِبِ الواحِد
+        // `EnterPaidOnRecordAsync` وشَرطِه `EntersPaidOnRecord`، وما يَقِفُ قَبلَ ذلكَ يَدخُلُها لَحظَةَ يَبلُغُها بِالكاتِبِ نَفسِه — لا بِنَقرَةِ المُشتَري.)
         var confirmed = await _deals.ConfirmGatewayPaymentAsync(tenantSlug, proven, ct);
         foreach (var paidId in proven.DealIds)
-            if (await _deals.LoadAsync(tenantSlug, paidId, ct) is { Status: DealStatus.Active } d
-                && DealsPolicy.Next(d) == DealStage.Paid && DealsService.IsCaptured(d))
-                await _deals.AdvanceAsync(tenantSlug, d.Id, by.ActorId, d.InitiatorName, null, ct, from: d.Stage);
+            await _deals.EnterPaidOnRecordAsync(tenantSlug, paidId, ct);
 
         return Logged(tenantSlug, new GatewayVerifyResult(deal.Id, proven, null) { Confirmed = confirmed.Select(c => c.Id).ToArray() });
     }

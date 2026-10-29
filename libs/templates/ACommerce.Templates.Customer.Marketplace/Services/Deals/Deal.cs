@@ -123,4 +123,9 @@ public sealed record DealEvent(
     /// <summary>سَطرُ مَرجِعٍ أُلحِق — يَكتُبُه <c>DealsService.AttachRefAsync</c> وَحدَه بِنَصِّ <c>attach {key}={value}</c>، ويَقرَؤُه
     /// <c>DealRefLabels</c> لِصَفحَةِ الطَرَفَين (‏2026-10-13، G4 (xxvi)). الثابِتُ هُنا لِأَنّ الكاتِبَ والقارِئَ يَقرَآنِ نَفسَ الحَرف.</summary>
     public const string RefNote = "note";
+
+    /// <summary><b>سَطرٌ فاعِلُه المَنصَّة</b> (‏2026-10-29، قَرارُ المالِك د4) — بِلا مُعَرِّفِ فاعِلٍ وبِاسمِ <see cref="DealPatternCatalog.PlatformActor"/>، يَكتُبُه
+    /// <c>DealsService.EnterPaidOnRecordAsync</c> وَحدَه؛ وتَقرَؤُه صَفحَتا الصَفقَةِ فَتُسَمّيه مِن القامُوسِ لا بِحَرفِه. دالَّةٌ لا خاصِّيَّة: لا تُخَزَّنُ في الوَثيقَة.</summary>
+    public static bool IsByPlatform(DealEvent e)
+        => e.ActorId is null && string.Equals(e.ActorName, DealPatternCatalog.PlatformActor, StringComparison.Ordinal);
 }

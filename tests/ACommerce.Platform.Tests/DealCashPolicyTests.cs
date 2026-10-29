@@ -601,7 +601,8 @@ public class DealCashPolicyTests
         // (‏2026-10-12، ‏ADR-036 الخُطوَة 2 — ولا يُعادُ حَرفٌ فَوقَه: كانَ `return new(true, await MoveAsync(…), null);` — صارَ إسناداً لِأَنّ
         // القَبضَ بَعدَ المُطالَبَةِ يُنادى خارِجَ التِقاطِ التَعارُض. والفاعِلُ هُوَ هُوَ: المُحَرِّكُ بِهُوِيَّتِه.)
         Assert.Contains("moved = await MoveAsync(s, deal, next.Value, actorId, actorName, note, ct);", AdvanceBody(), StringComparison.Ordinal);
-        Assert.Equal(3, Count(WriteEndpointGuardTests.StripComments(DealsServiceSource()), "MoveAsync("));   // التَعريفُ ونِداءان
+        // وأَربَعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د4): نِداءٌ ثالِثٌ في `EnterPaidOnRecordAsync` — المَنصَّةُ فاعِلُه بِالبِناءِ وشَرطُه عَلى المَقروء، لا مُستَعيرٌ لِلمُبادِر.
+        Assert.Equal(4, Count(WriteEndpointGuardTests.StripComments(DealsServiceSource()), "MoveAsync("));   // التَعريفُ وثَلاثَةُ نِداءات
         Assert.Null(typeof(DealsService).GetMethod("MoveAsync", BindingFlags.Public | BindingFlags.Instance));   // لا بابَ ثالِثاً مِن خارِجِ الخِدمَة
     }
 

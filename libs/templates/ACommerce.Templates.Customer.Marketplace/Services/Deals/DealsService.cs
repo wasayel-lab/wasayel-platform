@@ -464,8 +464,38 @@ public sealed class DealsService
         // **وبَعدَ المُطالَبَةِ لا إلغاء** (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-7؛ ‏ADR-036 §١٧ — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): كانَ `ct`
         // هُنا — ونُقطَةُ الـAPI تُمَرِّرُ `http.RequestAborted` — فَعَميلٌ يَنصَرِفُ والمُزَوِّدُ يُجيبُ يَترُكُ «دَفع» مَقبوضَةً بِلا سَطرِ `captured`
         // (تَوصيفُه `c385ae3`). وقاعِدَةُ `/ship` بِحَرفِها (`DealShipping.ShipAsync`): ما يَلي حِفظاً مَفحوصاً يَقَعُ يَجري بِـ`CancellationToken.None`.
-        return new(true, await CaptureClaimedAsync(tenantSlug, moved, next.Value, actorId, actorName, CancellationToken.None), null);
+        var done = await CaptureClaimedAsync(tenantSlug, moved, next.Value, actorId, actorName, CancellationToken.None);
+        // **وما بَلَغَ ما قَبلَ «دَفع» ودَفعُه مُثبَتٌ بِبَوّابَةِ المَتجَرِ يَدخُلُها الآنَ بِاسمِ المَنصَّة** (‏2026-10-29، قَرارُ المالِك د4 «ب»؛ تَوصيفُه `36fd7b8`):
+        // كانَ يَقِفُ عِندَ «تَأكيد» حَتّى يَنقُرَ المُشتَري «تَأكيد: دَفع» عَلى واقِعَةٍ ثَبَتَت. بِالكاتِبِ الواحِدِ وشَرطِه عَلى ما يَقرَؤُه هُوَ؛ وتَعارُضُه لا يَرُدُّ ما كُتِب.
+        if (GatewayPayments.EntersPaidOnRecord(done) && (await EnterPaidOnRecordAsync(tenantSlug, done.Id, CancellationToken.None)) is { Ok: true, Deal: { } paid })
+            done = paid;
+        return new(true, done, null);
     }
+
+    /// <summary>
+    /// <para><b>«دَفع» تَدخُلُها المَنصَّةُ بِاسمِها متى ثَبَتَ الدَفعُ بِبَوّابَةِ المَتجَر</b> (‏2026-10-29، قَرارُ المالِك د4 «ب»: «لا. متى كان الدفع مسجّلًا ووصل
+    /// الطلب إلى مرحلة «دفع»، تُدخله المنصّة إليها تلقائيًّا باسمها، فلا ينتظر البائع نقرة من المشتري ليشحن»؛ تَوصيفُ «اليَوم» <c>36fd7b8</c>؛ ‏ADR-033 §٧‑ر).</para>
+    /// <para><b>الحارِسُ في التَوقيع</b> (القاعِدَة ٦): لا وَسيطَ فاعِل — المَنصَّةُ فاعِلُها بِالبِناء (<see cref="DealPatternCatalog.PlatformActor"/>، فاعِلٌ في المَعجَمِ
+    /// المُغلَق) — والشَرطُ <see cref="GatewayPayments.EntersPaidOnRecord"/> يُسأَلُ عَلى الصَفقَةِ الَّتي قَرَأَتها جَلسَتُه، ويُحفَظُ الانتِقالُ بِفَحصِ نُسخَتِها (‏ADR-036).
+    /// <b>وهو استِثناءٌ مَقصودٌ لِفاعِلِ «دَفع» في الكاتالوج</b> (المُبادِر، §٦‑ط): لا يَبلُغُه غَيرُ دَفعٍ أَثبَتَته بَوّابَةُ المَتجَر؛ ولا قَبضَ هُنا — قُبِضَ بِتَعريفِ
+    /// الشَرط — ولا يَمَسُّ حَجزَ مُزَوِّدِ النُسخَة. وسَطرُه <c>advanced</c> بِلا مُعَرِّفِ فاعِلٍ وبِاسمِ <see cref="DealPatternCatalog.PlatformActor"/>، تُسَمّيه الصَفحَتانِ
+    /// مِن القامُوس (<see cref="DealEvent.IsByPlatform"/>).</para>
+    /// </summary>
+    public async Task<DealAdvanceResult> EnterPaidOnRecordAsync(string tenantSlug, Guid dealId, CancellationToken ct = default)
+    {
+        await using var s = _store.LightweightSession(tenantSlug);
+        var deal = await s.LoadAsync<Deal>(dealId, ct);
+        if (deal is null) return new(false, null, "deal not found");
+        if (!GatewayPayments.EntersPaidOnRecord(deal)) return new(false, deal, NotOnRecordAr);
+        try { return new(true, await MoveAsync(s, deal, DealStage.Paid, null, DealPatternCatalog.PlatformActor, null, ct), null); }
+        catch (JasperFx.ConcurrencyException)
+        {
+            return new(false, await LoadAsync(tenantSlug, dealId, ct), ChangedMeanwhileAr, ChangedMeanwhile);
+        }
+    }
+
+    /// <summary>رِسالَةُ المُراجِعِ البَشَرِيِّ حينَ لا تَصدُقُ <see cref="GatewayPayments.EntersPaidOnRecord"/> — لا رَمزَ ولا شاشَة: لا بابَ يَبلُغُه.</summary>
+    private const string NotOnRecordAr = "الصَفقَةُ لَيسَت قائِمَةً تاليها «دَفع» ودَفعُها مُثبَتٌ بِبَوّابَةِ المَتجَر — لا تَدخُلُها المَنصَّة.";
 
     /// <summary>
     /// <para><b>الانتِقالُ نَفسُه بَعدَ أَن حُسِمَ حَقُّ الفاعِل</b> — يَكتُبُ
@@ -484,7 +514,7 @@ public sealed class DealsService
     /// <c>Offered</c> إلى <c>Booked</c> في كُلِّ نَمَطٍ في الكاتالوج — مُثَبَّتٌ بِصَفٍّ يَعُدُّ الأَنماط.</para>
     /// </summary>
     private async Task<Deal> MoveAsync(
-        IDocumentSession s, Deal deal, DealStage next, Guid actorId, string actorName,
+        IDocumentSession s, Deal deal, DealStage next, Guid? actorId, string actorName,
         string? note, CancellationToken ct)
     {
         var before = deal.Stage;

@@ -122,25 +122,35 @@ public class GatewayPaymentConfirmTests(ITestOutputHelper output)
 
     /// <summary><b>مُوجِبٌ وسالِب</b>: صَفقَةُ بَوّابَةٍ قُبِضَت تَدخُلُ «دَفع» بِالمُشتَري <b>بِصِفرِ نِداءِ قَبض</b>؛ وصَفقَةُ إذنٍ مِن مُزَوِّدِ النُسخَةِ
     /// (‏Authorized) تُقبَضُ مَرَّةً كَما كانَت.</summary>
+    /// <remarks><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د4 «ب»؛ كانَ <c>A_captured_deal_enters_Paid_without_a_capture_and_an_authorized_one_is_captured_once</c>):
+    /// «بِالمُشتَري» لَم يَعُد — الصَفقَةُ المَقبوضَةُ بِالبَوّابَةِ تَدخُلُ «دَفع» بِاسمِ المَنصَّةِ لَحظَةَ يُؤَكِّدُها البائِع، بِصِفرِ نِداءِ قَبضٍ كَما كان؛ والسالِبُ بِحَرفِه:
+    /// إذنُ مُزَوِّدِ النُسخَةِ يَقِفُ عِندَ «تأكيد» ويُدخِلُه المُشتَري ويُقبَضُ مَرَّة.</remarks>
     [Fact]
-    public async Task A_captured_deal_enters_Paid_without_a_capture_and_an_authorized_one_is_captured_once()
+    public async Task A_gateway_captured_deal_enters_Paid_as_the_platform_without_a_capture_and_an_authorized_one_waits_and_is_captured_once()
     {
         var w = await PaidCart(withSeller: true);
         await w.Deals.ConfirmGatewayPaymentAsync(Slug, Proven(w));
-        await ToConfirmed(w, w.Ids[0]);
+        Assert.True((await w.Deals.AcceptAsync(Slug, w.Ids[0], new DealAcceptor(Seller, "بائِع"))).Ok);
 
-        var paid = await w.Deals.AdvanceAsync(Slug, w.Ids[0], Buyer, "مُشتَرٍ");
-        Assert.True(paid.Ok, paid.Reason);
-        Assert.Equal(DealStage.Paid, Load(w, w.Ids[0]).Stage);
+        var confirmed = await w.Deals.AdvanceAsync(Slug, w.Ids[0], Seller, "بائِع");
+        Assert.True(confirmed.Ok, confirmed.Reason);
+        Assert.Equal(DealStage.Paid, confirmed.Deal!.Stage);
+        var deal = Load(w, w.Ids[0]);
+        Assert.Equal(DealStage.Paid, deal.Stage);
+        var entry = Assert.Single(deal.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Paid);
+        Assert.Equal((null, DealPatternCatalog.PlatformActor, DealStage.Confirmed), (entry.ActorId, entry.ActorName, entry.StageBefore));
+        Assert.True(DealEvent.IsByPlatform(entry));
         Assert.Empty(w.Platform.Calls);
 
-        // والسالِب: صَفقَةٌ بِإذنِ مُزَوِّدِ النُسخَةِ بِلا فاتورَة — تُقبَضُ كَما كانَت.
+        // والسالِب: صَفقَةٌ بِإذنِ مُزَوِّدِ النُسخَةِ بِلا فاتورَة — تَقِفُ عِندَ «تأكيد» وتُقبَضُ كَما كانَت بِنَقرَةِ المُشتَري.
         var other = Load(w, w.Ids[1]);
         other.Refs.Remove(GatewayPaymentProof.InvoiceRef);
         other.Refs["payment_id"] = "pay_1";
         other.Refs["payment_status"] = nameof(PaymentStatus.Authorized);
         await ToConfirmed(w, w.Ids[1]);
+        Assert.False(GatewayPayments.EntersPaidOnRecord(Load(w, w.Ids[1])));
         Assert.True((await w.Deals.AdvanceAsync(Slug, w.Ids[1], Buyer, "مُشتَرٍ")).Ok);
+        Assert.Equal(Buyer, Assert.Single(Load(w, w.Ids[1]).Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Paid).ActorId);
         Assert.Equal(new[] { "capture pay_1" }, w.Platform.Calls);
     }
 
@@ -180,9 +190,13 @@ public class GatewayPaymentConfirmTests(ITestOutputHelper output)
     }
 
     // ═══ ٣) التَحَقُّقُ يُدخِلُ «دَفع» بِالمُشتَري — لا قَفز ═══════════════════════════════════════════
+    // (‏2026-10-29، قَرارُ المالِك د4 «ب» — ولا يُعادُ حَرفٌ فَوقَه: «بِالمُشتَري» صارَ «بِاسمِ المَنصَّة»، ولَحظَةَ تَبلُغُ الصَفقَةُ ما قَبلَ «دَفع» إن بَلَغَتها بَعدَ الدَفع.)
 
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د4 «ب»؛ كانَ <c>Verify_moves_a_deal_standing_before_Paid_into_Paid_as_its_buyer_and_leaves_earlier_ones</c>):
+    /// التَحَقُّقُ يُدخِلُ «دَفع» ما يَقِفُ قَبلَها <b>بِاسمِ المَنصَّة</b> (لا مُعَرِّفَ فاعِل، والاسمُ <see cref="DealPatternCatalog.PlatformActor"/>) — وما قَبلَ ذلكَ يَبقى
+    /// حَتّى يَبلُغَها (الصَفُّ التالي).</summary>
     [Fact]
-    public async Task Verify_moves_a_deal_standing_before_Paid_into_Paid_as_its_buyer_and_leaves_earlier_ones()
+    public async Task Verify_moves_a_deal_standing_before_Paid_into_Paid_as_the_platform_and_leaves_earlier_ones()
     {
         var w = await PaidCart(withSeller: true);
         await ToConfirmed(w, w.Ids[0]);
@@ -194,34 +208,68 @@ public class GatewayPaymentConfirmTests(ITestOutputHelper output)
         var paid = Load(w, w.Ids[0]);
         Assert.Equal(DealStage.Paid, paid.Stage);
         var move = Assert.Single(paid.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Paid);
-        Assert.Equal((Buyer, DealStage.Confirmed), (move.ActorId!.Value, move.StageBefore));
+        Assert.Equal(((Guid?)null, DealPatternCatalog.PlatformActor, DealStage.Confirmed), (move.ActorId, move.ActorName, move.StageBefore));
         Assert.Equal(DealStage.Offered, Load(w, w.Ids[1]).Stage);   // رُبِطَ بائِعُها ولَم يَقبَل — تَبقى حَتّى تَبلُغَ ما قَبلَ «دَفع».
-        Assert.True(DealsService.IsCaptured(Load(w, w.Ids[1])));      // ودَفعُها مَكتوب: يُدخِلُها المُشتَري حينَ تَبلُغُ «تأكيد».
+        Assert.True(DealsService.IsCaptured(Load(w, w.Ids[1])));      // ودَفعُها مَكتوب: تُدخِلُها المَنصَّةُ حينَ تَبلُغُ «تأكيد».
         Assert.Empty(w.Platform.Calls);
     }
 
-    /// <summary><b>اليَوم</b> (‏2026-10-29، تَوصيفٌ قَبلَ قَرارِ المالِك د4 «ب»: «تُدخَلُ مرحلة «دفع» آليًّا متى سُجّل الدفع، باسم المنصّة»): صَفقَةٌ دُفِعَت فاتورَتُها
-    /// وهي عِندَ «عرض» يَقبَلُها البائِعُ ويُؤَكِّدُها فَتَقِفُ عِندَ «تأكيد» — ودَفعُها مَكتوب — حَتّى يَنقُرَ المُشتَري «تأكيد: دفع»، فَتَدخُلُ «دفع» بِاسمِه.
-    /// ومَعَه الصَفُّ أَعلاه (<c>Verify_moves_a_deal_standing_before_Paid_into_Paid_as_its_buyer_and_leaves_earlier_ones</c>) — يُقلَبانِ بِاسمَيهِما.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د4 «ب»؛ تَوصيفُه <c>36fd7b8</c> — كانَ <c>Today_a_deal_paid_while_offered_waits_at_Confirmed_for_the_buyers_click</c>):
+    /// صَفقَةٌ دُفِعَت فاتورَتُها وهي عِندَ «عرض» تَدخُلُ «دَفع» بِاسمِ المَنصَّةِ <b>لَحظَةَ</b> يُؤَكِّدُها البائِع — فَلا يَنتَظِرُ البائِعُ نَقرَةً مِن المُشتَري لِيَشحَن؛
+    /// ونَقرَةُ المُشتَري بَعدَها لا تَجِدُ «دَفع» تالِياً فَتُرَدّ، ولا قَبضَ ولا سَطرَ ثانٍ.</summary>
     [Fact]
-    public async Task Today_a_deal_paid_while_offered_waits_at_Confirmed_for_the_buyers_click()
+    public async Task A_deal_paid_while_offered_enters_Paid_as_the_platform_the_moment_the_seller_confirms_it()
     {
         var w = await PaidCart(withSeller: true);
         w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w));
         Assert.True((await w.Gateway.VerifyAsync(Slug, new DealPayer(Buyer), w.Ids[1].ToString("N"))).Ok);
         Assert.Equal(DealStage.Offered, Load(w, w.Ids[1]).Stage);
 
-        await ToConfirmed(w, w.Ids[1]);
-        var waiting = Load(w, w.Ids[1]);
-        output.WriteLine($"بَعدَ التَأكيد: {waiting.Stage} · مَقبوضَة: {DealsService.IsCaptured(waiting)} · تاليها: {DealsPolicy.Next(waiting)}");
-        Assert.Equal(DealStage.Confirmed, waiting.Stage);
-        Assert.True(DealsService.IsCaptured(waiting));
+        Assert.True((await w.Deals.AcceptAsync(Slug, w.Ids[1], new DealAcceptor(Seller, "بائِع"))).Ok);
+        var confirmed = await w.Deals.AdvanceAsync(Slug, w.Ids[1], Seller, "بائِع");
+        var deal = Load(w, w.Ids[1]);
+        output.WriteLine($"بَعدَ التَأكيد: {deal.Stage} · تاليها: {DealsPolicy.Next(deal)} · سُطورُ «دَفع»: {deal.Timeline.Count(e => e.StageAfter == DealStage.Paid && e.Action == "advanced")}");
+        Assert.True(confirmed.Ok, confirmed.Reason);
+        Assert.Equal(DealStage.Paid, deal.Stage);
+        var move = Assert.Single(deal.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Paid);
+        Assert.Equal(((Guid?)null, DealPatternCatalog.PlatformActor), (move.ActorId, move.ActorName));
 
-        var click = await w.Deals.AdvanceAsync(Slug, w.Ids[1], Buyer, "مُشتَرٍ");
-        Assert.True(click.Ok, click.Reason);
-        var move = Assert.Single(Load(w, w.Ids[1]).Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Paid);
-        Assert.Equal(Buyer, move.ActorId);
+        var click = await w.Deals.AdvanceAsync(Slug, w.Ids[1], Buyer, "مُشتَرٍ", from: DealStage.Confirmed);
+        Assert.False(click.Ok);
+        Assert.Single(Load(w, w.Ids[1]).Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Paid);
         Assert.Empty(w.Platform.Calls);
+    }
+
+    /// <summary><b>الشَرطُ الواحِد — مُوجِبٌ وسالِب</b> (‏2026-10-29، قَرارُ المالِك د4): قائِمَةٌ تاليها «دَفع» قُبِضَت بِفاتورَتِها ⇒ تَدخُلُها المَنصَّة؛ وكُلُّ شَطرٍ يَسقُطُ
+    /// وَحدَه يُسقِطُها — مُلغاة، تاليها غَيرُ «دَفع»، لَم يُكتَب قَبضُها، أَو مَرجِعُ الدَفعِ غَيرُ فاتورَتِها (حَجزُ مُزَوِّدِ النُسخَة).</summary>
+    [Fact]
+    public async Task EntersPaidOnRecord_holds_only_for_an_active_deal_before_Paid_captured_by_its_own_invoice()
+    {
+        var w = await PaidCart(withSeller: true);
+        await w.Deals.ConfirmGatewayPaymentAsync(Slug, Proven(w));
+        await w.Deals.AcceptAsync(Slug, w.Ids[1], new DealAcceptor(Seller, "بائِع"));
+        // نُسخَةٌ لا مَرجِعُ المَخزون — عالَمُ الوَثائِقِ يُعيدُ الكائِنَ نَفسَه، فَتَعديلُه يَكتُبُ عَلَيه.
+        Deal Confirmed()
+        {
+            var d = System.Text.Json.JsonSerializer.Deserialize<Deal>(System.Text.Json.JsonSerializer.Serialize(Load(w, w.Ids[1])))!;
+            d.Stage = DealStage.Confirmed;
+            return d;
+        }
+        Assert.True(GatewayPayments.EntersPaidOnRecord(Confirmed()));
+
+        var cancelled = Confirmed(); cancelled.Status = DealStatus.Cancelled;
+        var early = Confirmed(); early.Stage = DealStage.Booked;
+        var unpaid = Confirmed(); unpaid.Refs.Remove("payment_status");
+        var provider = Confirmed(); provider.Refs["payment_id"] = "pay_1";
+        foreach (var (name, d) in new[] { ("مُلغاة", cancelled), ("Booked", early), ("بِلا قَبض", unpaid), ("مُزَوِّدُ النُسخَة", provider) })
+        {
+            output.WriteLine($"{name}: {GatewayPayments.EntersPaidOnRecord(d)}");
+            Assert.False(GatewayPayments.EntersPaidOnRecord(d));
+        }
+        Assert.False(GatewayPayments.EntersPaidOnRecord(Load(w, w.Ids[1])));   // عِندَ «حَجز» تاليها «تأكيد»
+        var refused = await w.Deals.EnterPaidOnRecordAsync(Slug, w.Ids[1]);
+        Assert.False(refused.Ok);
+        Assert.Equal(DealStage.Booked, Load(w, w.Ids[1]).Stage);
     }
 
     // ═══ ٤) الإلغاءُ لا يُنادي مُزَوِّدَ النُسخَةِ عَن مالِ البَوّابَة ═══════════════════════════════════════
@@ -553,7 +601,8 @@ public class LiveGatewayPaymentProofTests(ITestOutputHelper output)
             Assert.True(first.Ok, first.Code);
             Assert.Equal(2, first.Confirmed.Count);
             Assert.Equal(DealStage.Paid, paid.Stage);
-            Assert.Equal(buyer, Assert.Single(paid.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Paid).ActorId);
+            // (‏2026-10-29، قَرارُ المالِك د4 «ب» — ولا يُعادُ حَرفٌ فَوقَه: كانَ «buyer» — والآن المَنصَّةُ بِاسمِها، بِلا مُعَرِّفِ فاعِل.)
+            Assert.True(DealEvent.IsByPlatform(Assert.Single(paid.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Paid)));
             Assert.Equal((DealStage.Offered, "Captured"), (waiting.Stage, waiting.Refs["payment_status"]));
             Assert.Empty(platform.Calls);
 

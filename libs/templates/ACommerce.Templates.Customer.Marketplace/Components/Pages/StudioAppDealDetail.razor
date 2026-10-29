@@ -131,7 +131,7 @@
                         <div class="studio-list-body">
                             <strong>@FormatEvent(e)</strong>
                             <span>
-                                @(e.ActorName ?? "—") · @Culture.FormatTime(e.At, "yyyy-MM-dd HH:mm:ss")
+                                @(DealEvent.IsByPlatform(e) ? L["deals.detail.actor_platform"] : e.ActorName ?? "—") · @Culture.FormatTime(e.At, "yyyy-MM-dd HH:mm:ss")
                                 @if (!string.IsNullOrEmpty(e.Note)) { <text> · @e.Note</text> }
                             </span>
                         </div>

@@ -1405,7 +1405,9 @@ public class DealShipTests(ITestOutputHelper output)
         // **وسُئِلَ عَن السابِعِ فَأُجيب** (‏2026-10-12، ‏ADR-032 الخُطوَة 10، تَيّارُ S9): `GatewayPayments.VerifyAsync` (7) — بَعدَ أَن تُثبِتَ البَوّابَةُ
         // الدَفعَ ويُكتَب، يُدخِلُ «دَفع» صَفقَةً تاليها «دَفع» بِمُشتَريها فاعِلاً (`from:` المَرحَلَةُ المَقروءَة) — بِبَوّابَةِ الانتِقالِ نَفسِها، ولا جَوابَ
         // OTO يَحمِلُه: سَبعَةُ مُعامِلاتٍ بِلا `shipment:`، فَالحامِلانِ أَدناه كَما كانا.
-        Assert.True(calls.Count == 7, line);
+        // **وعادَت سِتَّة** (‏2026-10-29، قَرارُ المالِك د4 «ب» — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): `GatewayPayments.VerifyAsync` لا يُنادي `AdvanceAsync` بِالمُشتَري
+        // بَعدَ اليَوم — تَدخُلُ المَنصَّةُ «دَفع» بِكاتِبِها `EnterPaidOnRecordAsync` (بِلا جَوابِ OTO ولا فاعِلٍ مُستَعار). والحامِلانِ أَدناه كَما كانا.
+        Assert.True(calls.Count == 6, line);
         var carrying = calls.Where(c => c.Args >= 8 || c.Named).ToList();
         Assert.True(carrying.Count == 2 && carrying.All(c => c.File == "DealShipping.cs"), line);
     }

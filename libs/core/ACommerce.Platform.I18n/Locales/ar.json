@@ -1265,6 +1265,7 @@
   "admin.tenant_attrs.type_text": "نَصّ قَصير",
 
   "deals.detail.accept_offer": "قَبول العَرض",
+  "deals.detail.actor_platform": "المَنصَّة",
   "deals.detail.amount_label": "المَبلَغ",
   "deals.detail.awaiting_accept": "بانتِظار القَبول",
   "deals.detail.awaiting_other": "بانتِظار الطَّرَف الآخَر لِـ:",

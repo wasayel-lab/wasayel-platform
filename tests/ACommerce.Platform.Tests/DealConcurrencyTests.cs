@@ -547,7 +547,10 @@ public class DealConcurrencyRefusalTests
         {
             ("AssignCounterpartyAsync", "public async Task<Deal?> AssignCounterpartyAsync(", "public async Task<Deal?> BindListingOwnerAsync("),
             ("AcceptAsync",             "public async Task<DealAcceptResult> AcceptAsync(",  "public async Task<DealAdvanceResult> AdvanceAsync("),
-            ("AdvanceAsync",            "public async Task<DealAdvanceResult> AdvanceAsync(", "private async Task<Deal> MoveAsync("),
+            // (‏2026-10-29، قَرارُ المالِك د4 — ولا يُعادُ حَرفٌ فَوقَه: بابٌ ثامِنٌ بَينَ `AdvanceAsync` و`MoveAsync` — دُخولُ «دَفع» بِاسمِ المَنصَّة —
+            // فَصارَ مَقطَعُ `AdvanceAsync` يَنتَهي عِندَه، ولَه التِقاطُه.)
+            ("AdvanceAsync",            "public async Task<DealAdvanceResult> AdvanceAsync(", "public async Task<DealAdvanceResult> EnterPaidOnRecordAsync("),
+            ("EnterPaidOnRecordAsync",  "public async Task<DealAdvanceResult> EnterPaidOnRecordAsync(", "private async Task<Deal> MoveAsync("),
             // (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (ii)؛ ولا يُعادُ حَرفٌ فَوقَه: `DisputeAsync` صارَت تُرجِعُ `DealDisputeResult` لا `Deal?`،
             // فَتَبَدَّلَ حَرفُ عَلامَتَي المَقطَعِ وَحدَه — والمَقطَعانِ والعَدّانِ بِحَرفِهِما.)
             ("CancelAsync",             "public async Task<DealCancelResult> CancelAsync(",  "public async Task<DealDisputeResult> DisputeAsync("),
@@ -562,7 +565,8 @@ public class DealConcurrencyRefusalTests
         Assert.True(missing.Length == 0, $"فُحِصَ {writers.Length} باباً؛ لا يَلتَقِطُ التَعارُض: {string.Join("، ", missing)}");
         // سَبعَةُ أَبوابٍ وسِتَّةُ مَواضِعِ التِقاط (‏2026-10-12): الإلحاقُ وتَأكيدُ دَفعِ البَوّابَةِ يَشتَرِكانِ في حَلقَةِ `RecordAsync` — وكانَ
         // العَدَدانِ واحِداً (`writers.Length`) حينَ كانَ لِكُلِّ بابٍ التِقاطُه.
-        Assert.Equal(6, Count(service, "catch (JasperFx.ConcurrencyException)"));
+        // وسَبعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د4): التِقاطُ `EnterPaidOnRecordAsync`.
+        Assert.Equal(7, Count(service, "catch (JasperFx.ConcurrencyException)"));
         Assert.DoesNotContain("SaveChangesAsync(", Segment(service, "public async Task<IReadOnlyList<Deal>> ConfirmGatewayPaymentAsync(", "private Task<Deal?> RecordAsync("), StringComparison.Ordinal);
 
         // كُلُّ `SaveChangesAsync(` في الخِدمَةِ مَحسوب: سِتَّة — الإدراجُ والتَعيينُ والانتِقالُ والإلغاءُ والنِزاعُ والإلحاق.
