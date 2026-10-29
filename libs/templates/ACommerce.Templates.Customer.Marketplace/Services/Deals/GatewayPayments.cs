@@ -934,6 +934,23 @@ public static class GatewayInvoiceShare
     }
 
     public static bool IsValid(Deal deal, IReadOnlyList<Deal> siblings) => Validate(deal, siblings).Count == 0;
+
+    /// <summary>
+    /// <para><b>والصَفقَةُ في «نِزاع» تُحسَبُ عَلى فاتورَتِها ما لَم تُدفَع</b> (‏2026-10-29، قَرارُ المالِك د38 (٢) «ج» — الإلغاءُ «بِأَثَرِ الإلغاءِ الماليِّ القائِم»؛
+    /// مُراجَعَةُ تَيّارِ S5 الأولى، تَوصيفُه <c>fcffb9b</c>). <see cref="Validate"/> يَسأَلُ <see cref="GatewayInvoiceClosing.Owed"/> — <c>Active</c> وَحدَها — فَكانَ حَسمُ
+    /// النِزاعِ بِالإلغاءِ يُلغي المُتَنازَعَ عَلَيها وَحدَها وفاتورَتُها المَفتوحَةُ تَدفَعُ لِأُختٍ قائِمَة، فَتَبقى قابِلَةً لِلدَّفعِ بِمَبلَغِها كامِلاً ومِنه المُلغاة.
+    /// والفاتورَةُ لا تَعرِفُ «نِزاعاً»: ما لَم يُكتَب دَفعُها فَهي تَطلُبُ ثَمَنَها. فَهذا البابُ لِبَوّابَةِ الحَسمِ وَحدَها (<c>CancelCoreAsync</c> بِـ<c>resolvingDispute</c>)
+    /// والصَفحَةِ قَبلَ رَسمِ بَديلِ الإلغاء — بِالرَمزِ نَفسِه، فَلا رَمزَ جَديدَ في المَعجَمِ ولا في نُصوصِ الاستوديو.</para>
+    /// <para>ولا يُوَسَّعُ <see cref="GatewayInvoiceClosing.Owed"/> نَفسُه: يَقرَؤُه رابِطُ الدَفعِ وإشعارُه وفَتحُ الفاتورَةِ بِحَرفِ «القائِمَة» (سِجِلُّ المالِك «أ»).</para>
+    /// </summary>
+    public static IReadOnlyList<DealInvoiceShareViolation> ValidateDisputed(Deal disputed, IReadOnlyList<Deal> siblings)
+        => disputed.Status == DealStatus.Disputed && GatewayPayments.HasInvoice(disputed) && !DealsService.IsCaptured(disputed)
+           && OwedOnInvoice(disputed, siblings).Any(d => d.Id != disputed.Id)
+            ? new[] { new DealInvoiceShareViolation(Shared,
+                "عَلى فاتورَةِ هذِه الصَفقَةِ المُتَنازَعِ عَلَيها المَفتوحَةِ صَفَقاتٌ قائِمَةٌ أُخرى — لا تُلغى وَحدَها: تُستَأنَفُ ثُمَّ يُلغى الطَلَبُ كُلُّه، أَو تُلغى بَعدَ الدَفع.") }
+            : Array.Empty<DealInvoiceShareViolation>();
+
+    public static bool IsValidDisputed(Deal disputed, IReadOnlyList<Deal> siblings) => ValidateDisputed(disputed, siblings).Count == 0;
 }
 
 /// <summary>سَبَبٌ لِإبقاءِ الفاتورَةِ مَفتوحَةً بَعدَ إلغاءِ صَفقَةٍ عَلَيها — <c>Code</c> مِن <see cref="GatewayInvoiceClosing.All"/>.</summary>

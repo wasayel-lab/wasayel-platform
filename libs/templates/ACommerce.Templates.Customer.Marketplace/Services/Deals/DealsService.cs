@@ -726,8 +726,10 @@ public sealed class DealsService
 
         // ولا تُلغى وَحدَها صَفقَةٌ عَلى فاتورَةِ بَوّابَةٍ مَفتوحَةٍ تَدفَعُ لِأُختٍ قائِمَة — قَبلَ أَيِّ كِتابَة (‏2026-10-13، G5 M4؛ ‏ADR-032 §٨‑ز مُلحَقاً):
         // كانَت تُلغى فَتَبقى الفاتورَةُ قابِلَةً لِلدَّفعِ بِالمَبلَغِ كامِلاً (تَوصيفُه `411e120`). والطَلَبُ كُلُّه بِـ`CancelWholeInvoiceAsync`.
-        if (!wholeInvoice
-            && GatewayInvoiceShare.Validate(deal, await InvoiceSiblingsAsync(tenantSlug, deal, ct)).FirstOrDefault() is { } shared)
+        // (‏2026-10-29، قَرارُ المالِك د38 (٢)؛ مُراجَعَةُ تَيّارِ S5 الأولى — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **والحَسمُ يَسأَلُ بِالمُتَنازَعِ عَلَيها** — `Validate` لا يَحسِبُ
+        // عَلى الفاتورَةِ إلّا `Active`، فَكانَ الحَسمُ يُلغيها وَحدَها والفاتورَةُ قابِلَةٌ لِلدَّفعِ بِمَبلَغِها كامِلاً (تَوصيفُه `fcffb9b`). بِالرَمزِ نَفسِه.
+        if (!wholeInvoice && await InvoiceSiblingsAsync(tenantSlug, deal, ct) is var siblings
+            && (resolvingDispute ? GatewayInvoiceShare.ValidateDisputed(deal, siblings) : GatewayInvoiceShare.Validate(deal, siblings)).FirstOrDefault() is { } shared)
             return DealCancelResult.Refused(new DealCancelViolation(shared.Code, shared.MessageAr), deal);
 
         deal.Status = DealStatus.Cancelled;

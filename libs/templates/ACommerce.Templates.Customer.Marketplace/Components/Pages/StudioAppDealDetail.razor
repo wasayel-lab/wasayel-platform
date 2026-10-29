@@ -149,10 +149,19 @@
                         <button type="submit" name="outcome" value="@DealDisputeResolution.Resume" class="st-btn st-btn-primary" style="white-space:nowrap;">
                             @L.Format("studio.deal.resolve_resume", DealsPolicy.LabelAr(deal.Stage))
                         </button>
-                        <button type="submit" name="outcome" value="@DealDisputeResolution.Cancel" class="st-btn st-btn-ghost" style="white-space:nowrap;color:var(--st-danger);">
-                            @L.Markup("studio.deal.resolve_cancel")
-                        </button>
+                        @* وبَديلُ الإلغاءِ لا يُرسَمُ لِمُتَنازَعٍ عَلَيها تَدفَعُ فاتورَتُها المَفتوحَةُ لِأُختٍ قائِمَة — الدالَّةُ نَفسُها الَّتي يَرُدُّ بِها الكاتِبُ قَبلَ أَيِّ كِتابَة
+                           (‏2026-10-29، مُراجَعَةُ تَيّارِ S5 الأولى؛ القاعِدَة ١٢)، ومَكانَه الطَريقُ الَّذي يُفضي: الاستِئنافُ ثُمَّ إلغاءُ الطَلَبِ كُلِّه، أَو الإلغاءُ بَعدَ الدَفع. *@
+                        @if (!resolveShared)
+                        {
+                            <button type="submit" name="outcome" value="@DealDisputeResolution.Cancel" class="st-btn st-btn-ghost" style="white-space:nowrap;color:var(--st-danger);">
+                                @L.Markup("studio.deal.resolve_cancel")
+                            </button>
+                        }
                     </form>
+                    @if (resolveShared)
+                    {
+                        <p style="margin:12px 0 0;font-size:14px;color:var(--st-muted);">@L.Markup("studio.deal.resolve_cancel_shared")</p>
+                    }
                 </div>
             }
 
@@ -207,6 +216,7 @@
     Deal? deal;
     List<DealStage> stages = new();
     bool cancelShared;
+    bool resolveShared;
 
     protected override async Task OnInitializedAsync()
     {
@@ -217,6 +227,8 @@
         deal = await Deals.LoadAsync(Slug, Id);
         // صَفقَةٌ عَلى فاتورَةِ بَوّابَةٍ مَفتوحَةٍ تَدفَعُ لِأَخَواتٍ قائِمَة — بابُها إلغاءُ الطَلَبِ كُلِّه (‏2026-10-13، G5 M4).
         if (deal is not null) cancelShared = !GatewayInvoiceShare.IsValid(deal, await Deals.InvoiceSiblingsAsync(Slug, deal));
+        // ومُتَنازَعٌ عَلَيها عَلى فاتورَةٍ كَهذِه لا يُحسَمُ نِزاعُها بِإلغائِها وَحدَها (‏2026-10-29، مُراجَعَةُ تَيّارِ S5 الأولى).
+        if (deal is { Status: DealStatus.Disputed }) resolveShared = !GatewayInvoiceShare.IsValidDisputed(deal, await Deals.InvoiceSiblingsAsync(Slug, deal));
         // بِوَعيِ طَريقَةِ الدَفع (‏ADR-033 §٦): صَفقَةُ النَقدِ لا تَرسُمُ خُطوَةَ «دَفع».
         if (deal is not null) stages = DealsPolicy.StagesFor(deal).ToList();
     }
