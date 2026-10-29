@@ -2,6 +2,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using ACommerce.Kit.Auth;
 using ACommerce.Kit.Auth.Server;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -144,6 +146,107 @@ public class SessionRevocationTests(ITestOutputHelper output)
         var auth = Read("libs/kits/Auth/ACommerce.Kit.Auth.Server/AuthHandlers.cs");
         Assert.Contains("شَرطُ النَقلِ — مَكتوبٌ هُنا بِقَرارِ المالِك د28", auth, StringComparison.Ordinal);
         Assert.Contains("يَومَ يَعمَلُ بِأَكثَرَ مِن نُسخَةٍ تُنقَلُ إلى قاعِدَةِ البَيانات", auth, StringComparison.Ordinal);
+    }
+
+    // ─── I-SEC-1 (تَدقيقُ الموجَة ١١، ‏2026-10-29): كوكيُّ «الاسم» يَحمِلُ رَمزاً عَلى مَسارِ دَورٍ اسمُه name ─────────────────────
+    //
+    // البَوّابَةُ تُسقِطُ مِن فَحصِها كُلَّ اسمٍ يَنتَهي بِـ«.name» (كوكيُّ اسمِ العَرض)، و`ResolveCookieBase` يَقرَأُ لِمَسارِ
+    // `/{slug}/r/name/…` الكوكيَّ `.acommerce.auth.{slug}.name` نَفسَه ويَقبَلُه بِالتَوقيعِ والمَتجَرِ وَحدَهُما — فَرَمزٌ أَسقَطَه
+    // «اخرج من كل الأجهزة» يَفتَحُ الصَفحَةَ مِن ذلِكَ الاسم. والمَخزَنُ بَديلٌ يُعيدُ الحِسابَ بِإصدارِه (لا قاعِدَة).
+
+    internal const string NameSlug = "zz-name";
+
+    /// <summary>طَلَبٌ عَلى <paramref name="path"/> بِكوكيّاتِه، ومَخزَنٌ بَديلٌ يُعيدُ <paramref name="account"/> لِلبَوّابَة.</summary>
+    internal static DefaultHttpContext GateContext(string path, object? account, params (string Name, string Value)[] cookies)
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddSingleton(AccountStub.Store(account));
+        services.AddSingleton<Microsoft.Extensions.Caching.Memory.IMemoryCache>(
+            new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()));
+        var ctx = new DefaultHttpContext { RequestServices = services.BuildServiceProvider() };
+        ctx.Request.Path = path;
+        if (cookies.Length > 0)
+            ctx.Request.Headers.Cookie = string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
+        return ctx;
+    }
+
+    [Fact]
+    public async Task Today_a_revoked_token_under_the_name_cookie_opens_a_role_path_named_name()
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 1 };
+        var revoked = AuthHandlers.MakeToken(user.Id, NameSlug, 0);
+        var ctx = GateContext($"/{NameSlug}/r/name/me/data", user, ($".acommerce.auth.{NameSlug}.name", revoked));
+
+        await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ApplyAsync(ctx);
+        var resolved = ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveCookieBase(ctx.Request, NameSlug);
+        var token = ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveToken(ctx.Request, NameSlug);
+        output.WriteLine($"اليَوم: إصدارُ الحِسابِ {user.SessionVersion} والرَمزُ 0 · الكوكيُّ المَحلول «{resolved ?? "—"}» · الجَلسَة {(token is null ? "لا" : "تُفتَح")}");
+        Assert.Equal($".acommerce.auth.{NameSlug}.name", resolved);
+        Assert.Equal(user.Id, AuthHandlers.ParseToken(token)!.Value.UserId);
+    }
+
+    /// <summary>ما لا يَتَغَيَّرُ بِالإصلاح: كوكيُّ اسمِ العَرضِ — قيمَتُه اسمٌ لا رَمز — لا تَمَسُّه البَوّابَة، والجَلسَةُ بِجِوارِه تُحَلُّ
+    /// عَلى مَسارِ دَورٍ حَقيقيٍّ وبِلا دَور.</summary>
+    [Fact]
+    public async Task A_display_name_cookie_is_left_alone_and_a_real_role_path_still_resolves()
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 0 };
+        var live = AuthHandlers.MakeToken(user.Id, NameSlug, 0);
+        var header = new[]
+        {
+            ($".acommerce.auth.{NameSlug}", live), ($".acommerce.auth.{NameSlug}.name", "%D8%B9%D8%B6%D9%88"),
+            ($".acommerce.auth.{NameSlug}.driver", live), ($".acommerce.auth.{NameSlug}.driver.name", "%D8%B9%D8%B6%D9%88"),
+        };
+        foreach (var path in new[] { $"/{NameSlug}/r/driver/me", $"/{NameSlug}/me" })
+        {
+            var ctx = GateContext(path, user, header);
+            var before = ctx.Request.Headers.Cookie.ToString();
+            await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ApplyAsync(ctx);
+            Assert.Equal(before, ctx.Request.Headers.Cookie.ToString());
+            Assert.Equal(0, ctx.Response.Headers.SetCookie.Count);
+            Assert.Equal(user.Id, AuthHandlers.ParseToken(
+                ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveToken(ctx.Request, NameSlug))!.Value.UserId);
+        }
+    }
+}
+
+/// <summary>
+/// <para><b>مَخزَنٌ بَديلٌ لِلبَوّابَة</b> — <c>QuerySession(tenant).LoadAsync&lt;T&gt;(id)</c> يُعيدُ الحِسابَ المُعطى إن كانَ مِن نَوعِه ومُعَرِّفُه
+/// المَطلوب، وإلّا <c>null</c>؛ وكُلُّ نِداءٍ آخَرَ يَرمي، فَلا يَمُرُّ شَيءٌ بِلا قَصد. صُفوفُ البَوّابَةِ تُقاسُ بِه بِلا قاعِدَة.</para>
+/// </summary>
+public class AccountStub : System.Reflection.DispatchProxy
+{
+    private object? _account;
+
+    public static Marten.IDocumentStore Store(object? account)
+    {
+        var proxy = Create<Marten.IDocumentStore, AccountStub>();
+        ((AccountStub)(object)proxy)._account = account;
+        return proxy;
+    }
+
+    private static Marten.IQuerySession Session(object? account)
+    {
+        var proxy = Create<Marten.IQuerySession, AccountStub>();
+        ((AccountStub)(object)proxy)._account = account;
+        return proxy;
+    }
+
+    protected override object? Invoke(System.Reflection.MethodInfo? method, object?[]? args)
+    {
+        switch (method!.Name)
+        {
+            case "QuerySession": return Session(_account);
+            case "DisposeAsync": return ValueTask.CompletedTask;
+            case "Dispose": return null;
+            case "LoadAsync" when method.IsGenericMethod && args is { Length: > 0 }:
+                var type = method.GetGenericArguments()[0];
+                var id = args[0];
+                var hit = _account is not null && type.IsInstanceOfType(_account)
+                          && Equals(type.GetProperty("Id")?.GetValue(_account), id) ? _account : null;
+                return typeof(Task).GetMethod(nameof(Task.FromResult))!.MakeGenericMethod(type).Invoke(null, new[] { hit });
+            default: throw new NotSupportedException($"المَخزَنُ البَديلُ لا يُجيبُ {method.Name}.");
+        }
     }
 }
 
