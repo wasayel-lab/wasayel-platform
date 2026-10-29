@@ -31,6 +31,23 @@ public static class ListingViews
         return parsed is { } p && p.TenantSlug == slug ? p.UserId : null;
     }
 
+    /// <summary>عُنوانُ الزائِرِ كَما يَراه الخادِمُ بَعدَ <c>UseForwardedHeaders</c> — مَصدَرٌ واحِدٌ لِلاستِهلاكِ والإعادَة.</summary>
+    public static string? ClientIp(HttpRequest req) => req.HttpContext.Connection.RemoteIpAddress?.ToString();
+
+    /// <summary>
+    /// <para><b>رَدُّ ‏404 لِبابِ المُشاهَدَة — ومِفتاحُ مُعَرِّفٍ لا وُجودَ لَه يُعاد</b> (‏2026-10-29، تَدقيقُ الموجَة ١١ I-SEC-3؛ تَوصيفُه <c>c74b2ac</c>).
+    /// الحِصَّةُ تَسبِقُ القِراءَةَ (lens-security-5) فَيُستَهلَكُ المِفتاحُ قَبلَ أَن يُعرَفَ أَهُناكَ إعلان؛ وكانَ ‏404 يُبقيه يَوماً، فَمُعَرِّفاتٌ عَشوائِيَّةٌ
+    /// — لا تُكَلِّفُ المُرسِلَ شَيئاً — تَملَأُ سَقفَ المَفاتيحِ فَلا تُعَدُّ مُشاهَدَةٌ حَقيقِيَّة. والآن <b>مُعَرِّفٌ لا مَجرى لَه</b>
+    /// (<paramref name="existed"/> = <c>false</c>) يُعيدُ مِفتاحَه.</para>
+    /// <para><b>والإعلانُ المَحذوفُ يُبقي مِفتاحَه — عَمداً</b>: مَفاتيحُه مَحدودَةٌ بِما وُجِدَ فِعلاً مِن إعلانات، وإعادَتُها تَجعَلُ كُلَّ طَلَبٍ مُكَرَّرٍ
+    /// لِإعلانٍ مَحذوفٍ إعادَةَ بِناءٍ لِمَجراه كُلِّه (<c>AggregateStreamAsync</c>) بَدَلَ مَرَّةٍ في اليَوم. والمُعَرِّفُ الَّذي لا مَجرى لَه قِراءَتُه فارِغَة.</para>
+    /// </summary>
+    public static IResult NotFound(HttpRequest req, string slug, Guid listingId, Guid? viewerId, bool existed)
+    {
+        if (!existed) AuthHandlers.ForgetView(QuotaKey(slug, listingId, viewerId, ClientIp(req)));
+        return Results.NotFound();
+    }
+
     /// <summary>مِفتاحُ «مُشاهَدَةٍ واحِدَة»: الإعلانُ في المَتجَر، والزائِرُ بِهُوِيَّتِه إن وُثِّقَ وإلّا بِعُنوانِه.</summary>
     public static string QuotaKey(string slug, Guid listingId, Guid? viewerId, string? clientIp)
         => viewerId is Guid u

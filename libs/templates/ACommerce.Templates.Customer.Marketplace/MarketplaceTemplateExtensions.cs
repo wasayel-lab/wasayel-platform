@@ -639,12 +639,13 @@ public static class MarketplaceTemplateExtensions
             async (string slug, Guid id, HttpRequest req, IDocumentStore store, Microsoft.Extensions.Logging.ILoggerFactory logs) =>
         {
             var viewerId = Services.ListingViews.ViewerOf(req, slug);
-            if (!Services.ListingViews.Counts(slug, id, viewerId, req.HttpContext.Connection.RemoteIpAddress?.ToString(), logs))
+            if (!Services.ListingViews.Counts(slug, id, viewerId, Services.ListingViews.ClientIp(req), logs))
                 return Results.NoContent();
 
             await using var s = store.LightweightSession(slug);
             var listing = await s.Events.AggregateStreamAsync<Listing>(id);
-            if (listing is null || listing.IsDeleted) return Results.NotFound();
+            // ‏(‏2026-10-29، I-SEC-3) مُعَرِّفٌ لا مَجرى لَه يُعيدُ مِفتاحَ مُشاهَدَتِه — وإلّا مَلَأَت المُعَرِّفاتُ العَشوائِيَّةُ سَقفَ المَفاتيح.
+            if (listing is null || listing.IsDeleted) return Services.ListingViews.NotFound(req, slug, id, viewerId, existed: listing is not null);
 
             s.Events.Append(id, new ListingViewed(id, viewerId, DateTime.UtcNow));
             await s.SaveChangesAsync();

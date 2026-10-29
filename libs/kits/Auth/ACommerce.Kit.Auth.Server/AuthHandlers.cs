@@ -85,6 +85,10 @@ public static class AuthHandlers
     /// </summary>
     public static ViewCount ConsumeViewQuota(string key) => _views.Consume(key, DateTime.UtcNow);
 
+    /// <summary>يُعيدُ مِفتاحَ مُشاهَدَةٍ استُهلِكَ لِغَيرِ شَيء — إعلانٌ لا وُجودَ لَه (‏2026-10-29، تَدقيقُ الموجَة ١١ I-SEC-3؛ تَوصيفُه <c>c74b2ac</c>):
+    /// الحِصَّةُ قَبلَ القِراءَةِ كَما كانَت، فَمُعَرِّفٌ عَشوائِيٌّ كانَ يَحجِزُ مِفتاحاً يَوماً ويَملَأُ <see cref="MaxViewKeys"/>. <c>true</c> إن نُزِع.</summary>
+    public static bool ForgetView(string key) => _views.Forget(key);
+
     /// <summary>نافِذَةُ المُشاهَدَة — يَومٌ (قَرارُ المالِك د58 «ب»).</summary>
     public static readonly TimeSpan ViewWindow = TimeSpan.FromHours(24);
 
@@ -113,6 +117,9 @@ public static class AuthHandlers
 
         /// <summary>عَدَدُ المَفاتيحِ الآن.</summary>
         public int Keys => _rl.Count;
+
+        /// <summary>يَنزِعُ المِفتاحَ فَيُعَدُّ مِن جَديد — لِما استُهلِكَ لِغَيرِ شَيء (‏2026-10-29، I-SEC-3). <c>false</c> لِمِفتاحٍ غائِب.</summary>
+        public bool Forget(string key) => _rl.TryRemove(key, out _);
 
         /// <summary>يَعُدُّ المِفتاحَ مَرَّةً في النافِذَة؛ ومِفتاحٌ جَديدٌ والعَدّادُ مُمتَلِئ يُكنَسُ لَه المُنتَهي أَوَّلاً.</summary>
         public ViewCount Consume(string key, DateTime now)
