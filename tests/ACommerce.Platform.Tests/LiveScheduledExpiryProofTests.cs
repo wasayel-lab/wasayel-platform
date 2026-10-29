@@ -196,18 +196,22 @@ public class LiveScheduledExpiryProofTests(ITestOutputHelper output)
             await hostB.StartAsync();
             var store = hostB.Services.GetRequiredService<IDocumentStore>();
 
+            // والانتِظارُ حَتّى يَفرُغَ المُعالِجُ كُلُّه — لا حَتّى تُلغى الصَفَقاتُ وَحدَها (‏2026-10-29، جَولَةُ الإصلاحِ الأولى لِتَيّارِ S3): المُعالِجُ يُلغي ثُمَّ
+            // يُخبِر، فَالإلغاءُ يَسبِقُ الإشعارَ بِلَحظَة. مَقيسٌ عِندَ `6cf44f7` في سِتِّ جَولاتٍ مُتَتالِيَة: احمَرَّت اثنَتان، والَّتي قُرِئَ خَطَؤُها قَرَأَت الإشعاراتِ
+            // والرِسالَةُ «Incoming» بَعد (إشعارٌ واحِدٌ مِن أَربَعَة). فَالعَلامَةُ حالُ الرِسالَةِ نَفسِها: لا «مُجَدوَلَة» ولا «واصِلَة» — أَي فَرَغَ مِنها الصُندوق.
             var deadline = Stopwatch.StartNew();
             List<Deal> now = new();
+            List<(Guid Id, string Status, DateTimeOffset? At)> left = new();
             while (deadline.Elapsed < TimeSpan.FromSeconds(120))
             {
                 now = new();
                 await using (var q = store.QuerySession(slug))
                     foreach (var id in ids) now.Add((await q.LoadAsync<Deal>(id))!);
-                if (now.All(d => d.Status == DealStatus.Cancelled)) break;
+                left = await EnvelopesAsync(ids[0]);
+                if (now.All(d => d.Status == DealStatus.Cancelled) && !left.Any(e => e.Status is "Scheduled" or "Incoming")) break;
                 await Task.Delay(500);
             }
             var tookAfterDue = DateTimeOffset.UtcNow - expiresAt;
-            var left = await EnvelopesAsync(ids[0]);
             List<Notification> notes;
             await using (var q = store.QuerySession(slug))
                 notes = (await Marten.QueryableExtensions.ToListAsync(q.Query<Notification>())).ToList();
