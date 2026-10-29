@@ -157,34 +157,103 @@ public class DealCancelStageTests(ITestOutputHelper output)
         return deal;
     }
 
+    // **وقُلِبَت بِأَسمائِها** (‏2026-10-29، قَرارُ المالِك د37 (٢) «أ» و(٣) «ب»؛ تَوصيفُها `f496d70`؛ ‏ADR-033 §٧‑ش البَند ٢): صارَت `Validate` تَسأَلُ مَعَ
+    // المَرحَلَةِ `DealShipping.HoldsLiveOrder` — طَلَبٌ عِندَ OTO لَم يُكتَب أَنّها أَغلَقَته — فَيُرَدُّ الطَرَفُ بِـ`deal_past_cancel_stage` ويُلغي صاحِبُ
+    // المَتجَرِ كَما كان، والرِسالَةُ عامَّةٌ تَصدُقُ في كُلِّ نَمَط، وصَفحَةُ الاستوديو تَقولُ لِصاحِبِ المَتجَرِ إنّ الشُحنَةَ عَلى حِسابِ البائِعِ باقِيَة.
+
+    /// <summary><b>قُلِبَ بِاسمِه</b> (كانَ <c>Today_a_party_cancels_a_deal_whose_order_is_placed_at_oto</c>، مُودَعٌ في <c>f496d70</c>): عِندَ «تَأكيد» أَو
+    /// «دَفع» وعَلى الصَفقَةِ <c>oto_order_id</c> — المُشتَري والبائِعُ مَردودانِ بِالرَمزِ ولا يُكتَبُ شَيء، والصَفحَةُ لا تَرسُمُ الاستِمارَة، وصاحِبُ
+    /// المَتجَرِ يُلغي (سالِبُ الرَمز).</summary>
     [Theory]
     [InlineData(DealStage.Confirmed)]
     [InlineData(DealStage.Paid)]
-    public void Today_a_party_cancels_a_deal_whose_order_is_placed_at_oto(DealStage stage)
+    public void No_party_cancels_a_deal_whose_order_is_live_at_oto_and_the_store_owner_does(DealStage stage)
     {
         var world = new DocWorld();
         var deals = new DealsService(world.Store, new ForbiddenPaymentProvider());
         var deal = PlacedAt(stage);
-        Assert.True(DealShipping.IsPlaced(deal));
-        Assert.Null(DealCancelAuthorization.Validate(deal, Party(Buyer)));
-        Assert.Null(DealCancelAuthorization.Validate(deal, Party(Seller)));
+        Assert.True(DealShipping.HoldsLiveOrder(deal));
+        Assert.Equal(DealCancelAuthorization.DealPastCancelStage, DealCancelAuthorization.Validate(deal, Party(Buyer))!.Code);
+        Assert.Equal(DealCancelAuthorization.DealPastCancelStage, DealCancelAuthorization.Validate(deal, Party(Seller))!.Code);
+        Assert.False(DealCancelAuthorization.IsAllowed(deal, Party(Buyer)));
+        Assert.False(DealCancelAuthorization.IsAllowed(deal, Party(Seller)));
         world.Put(deal);
+        var saves = world.SaveCalls;
 
         var res = Now(deals.CancelAsync(Slug, deal.Id, Party(Seller), "إلغاء"));
-        Assert.True(res.Ok);
+        Assert.False(res.Ok);
+        Assert.Equal(DealCancelAuthorization.DealPastCancelStage, res.Violation!.Code);
+        Assert.Equal(saves, world.SaveCalls);
+        Assert.Equal(DealStatus.Active, world.Read<Deal>(deal.Id.ToString())!.Status);
+
+        var admin = Now(deals.CancelAsync(Slug, deal.Id, StoreAdmin(), "إلغاء إداريّ"));
+        Assert.True(admin.Ok);
         Assert.Equal(DealStatus.Cancelled, world.Read<Deal>(deal.Id.ToString())!.Status);
-        output.WriteLine($"{stage} + oto_order_id: البائِعُ يُلغي — {res.Ok}");
+        output.WriteLine($"{stage} + oto_order_id: الطَرَفانِ مَردودانِ بِـ{res.Violation.Code}، وصاحِبُ المَتجَرِ يُلغي — {admin.Ok}");
     }
 
-    [Fact]
-    public void Today_the_rule_message_says_after_shipping_or_delivery_and_the_studio_page_says_nothing_of_oto()
+    /// <summary>وسالِبُ الشَرط: طَلَبٌ كَتَبَت OTO أَنّها أَغلَقَته (<see cref="DealShipping.ClosedRef"/> مِن <c>TerminalStatuses</c> — البائِعُ أَلغاه مِن
+    /// حِسابِه) لا شُحنَةَ سائِرَةً لَه، فَيَعودُ الحُكمُ إلى المَرحَلَة: عِندَ «تَأكيد» يُلغي الطَرَف، وعِندَ «شَحن» يُرَدُّ كَما كان.</summary>
+    [Theory]
+    [InlineData("canceled")]
+    [InlineData("deleted")]
+    [InlineData("returned")]
+    [InlineData("shipmentCanceled")]
+    public void An_order_oto_closed_holds_no_live_shipment_and_the_stage_decides_again(string closed)
     {
-        var v = DealCancelAuthorization.Validate(CashAt(DealStage.Shipping), Party(Buyer))!;
-        Assert.Contains("بَعدَ الشَحنِ أَو التَسليمِ لا يُلغيها طَرَف", v.MessageAr, StringComparison.Ordinal);
+        Assert.Contains(closed, ACommerce.Kit.Delivery.OtoClient.TerminalStatuses);
+        var deal = PlacedAt(DealStage.Confirmed);
+        deal.Refs[DealShipping.ClosedRef] = closed;
+        Assert.True(DealShipping.IsPlaced(deal));
+        Assert.False(DealShipping.HoldsLiveOrder(deal));
+        Assert.Null(DealCancelAuthorization.Validate(deal, Party(Buyer)));
+        Assert.Null(DealCancelAuthorization.Validate(deal, Party(Seller)));
+
+        var shipped = PlacedAt(DealStage.Shipping);
+        shipped.Refs[DealShipping.ClosedRef] = closed;
+        Assert.Equal(DealCancelAuthorization.DealPastCancelStage, DealCancelAuthorization.Validate(shipped, Party(Buyer))!.Code);
+    }
+
+    /// <summary>والدالَّةُ نَفسُها، مُوجِبُها وسالِبُها: بِلا مَرجِعٍ أَو بِمَرجِعٍ فارِغٍ لا طَلَب؛ وحالٌ في <c>ClosedRef</c> لَيسَ مِن <c>TerminalStatuses</c>
+    /// (‏<c>lostOrDamaged</c> مَثَلاً، أَو حالُ شُحنَةٍ ذاهِبَة) لا يُغلِقُ الطَلَب — قائِمَةُ سَماحٍ لا تَخمين.</summary>
+    [Fact]
+    public void HoldsLiveOrder_reads_the_deal_alone()
+    {
+        Assert.False(DealShipping.HoldsLiveOrder(CashAt(DealStage.Confirmed)));
+        var blank = CashAt(DealStage.Confirmed);
+        blank.Refs[DealShipping.OrderRef] = "  ";
+        Assert.False(DealShipping.HoldsLiveOrder(blank));
+        Assert.True(DealShipping.HoldsLiveOrder(PlacedAt(DealStage.Confirmed)));
+        var unknown = PlacedAt(DealStage.Confirmed);
+        unknown.Refs[DealShipping.ClosedRef] = "searchingDriver";
+        Assert.True(DealShipping.HoldsLiveOrder(unknown));
+    }
+
+    /// <summary><b>قُلِبَ بِاسمِه</b> (كانَ <c>Today_the_rule_message_says_after_shipping_or_delivery_and_the_studio_page_says_nothing_of_oto</c>، مُودَعٌ في
+    /// <c>f496d70</c>): رِسالَةُ القاعِدَةِ عامَّةٌ لا «بَعدَ الشَحنِ أَو التَسليم»، وتُسَمّي طَلَبَ OTO حينَ يَكون؛ وصَفحَةُ صَفقَةِ الاستوديو تَسأَلُ
+    /// <see cref="DealShipping.HoldsLiveOrder"/> وتَرسُمُ نَصَّ القامُوسِ فَوقَ زِرِّ الإلغاء.</summary>
+    [Fact]
+    public void The_rule_message_is_neutral_and_the_studio_page_tells_the_owner_of_the_live_oto_order()
+    {
+        foreach (var (pattern, stage) in new[] { ("marketplace", DealStage.Shipping), ("trip", DealStage.Delivered), ("rental", DealStage.Received) })
+        {
+            var v = DealCancelAuthorization.Validate(CashAt(stage, pattern), Party(Buyer))!;
+            Assert.DoesNotContain("بَعدَ الشَحنِ أَو التَسليمِ", v.MessageAr, StringComparison.Ordinal);
+            Assert.Contains("تَجاوَزَت مَرحَلَةَ الإلغاءِ مِن صَفحَتِها", v.MessageAr, StringComparison.Ordinal);
+            Assert.DoesNotContain("OTO", v.MessageAr, StringComparison.Ordinal);
+        }
+        Assert.Contains("طَلَبُ شَحنٍ قائِمٌ عِندَ OTO",
+            DealCancelAuthorization.Validate(PlacedAt(DealStage.Paid), Party(Seller))!.MessageAr, StringComparison.Ordinal);
+
         var page = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
             "libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppDealDetail.razor"));
         Assert.True(page.Length > 1000, "أَداةٌ عَمياء: صَفحَةُ صَفقَةِ الاستوديو لَم تُقرَأ.");
-        Assert.DoesNotContain("IsPlaced", page, StringComparison.Ordinal);
+        var chip = page.IndexOf("@if (DealShipping.HoldsLiveOrder(deal)", StringComparison.Ordinal);
+        Assert.True(chip > 0, "صَفحَةُ الاستوديو لا تَسأَلُ HoldsLiveOrder.");
+        Assert.True(chip < page.IndexOf("/cancel\")", StringComparison.Ordinal), "نَصُّ الطَلَبِ القائِمِ لا يَسبِقُ زِرَّ الإلغاء.");
+        Assert.Contains("studio.deal.oto_order_live", page[chip..(chip + 300)], StringComparison.Ordinal);
+        Assert.Equal("لِهذِه الصَّفقَةِ طَلَبُ شَحنٍ قائِمٌ عِندَ OTO عَلى حِسابِ البائِع — إلغاؤها مِن هُنا لا يُلغيه؛ يُلغي البائِعُ الشُّحنَةَ مِن حِسابِه في OTO.",
+            ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "studio.deal.oto_order_live"));
     }
 
     /// <summary>ونَصُّ الرَمزِ لِلصَفحَةِ مِن القامُوسِ بِحَرفِه (القاعِدَة ١١) — يَبلُغُها طَلَبٌ لَم تَرسُمه أَو لِسانٌ قَديم.</summary>
@@ -193,7 +262,9 @@ public class DealCancelStageTests(ITestOutputHelper output)
     {
         var key = DealRefusalTexts.KeyFor(DealCancelAuthorization.DealPastCancelStage);
         Assert.Equal("deals.detail.err_deal_past_cancel_stage", key);
-        Assert.Equal("شُحِنَت هذِه الصَّفقَة أَو سُلِّمَت — فَلا يُلغيها طَرَفٌ مِن صَفحَتِها؛ يُلغيها صاحِبُ المَتجَر وَحدَه.",
+        // (‏2026-10-29، قَرارُ المالِك د37 (٣) «ب»): كانَ «شُحِنَت هذِه الصَّفقَة أَو سُلِّمَت — فَلا يُلغيها طَرَفٌ مِن صَفحَتِها؛ يُلغيها صاحِبُ المَتجَر وَحدَه.»
+        // ولا «شَحنَ» في الرِحلَةِ والخِدمَةِ والإيجار، ولا في صَفقَةٍ عِندَ «تَأكيد» لَها طَلَبٌ عِندَ OTO.
+        Assert.Equal("تَجاوَزَت هذِه الصَّفقَةُ مَرحَلَةَ الإلغاءِ مِن صَفحَتِها؛ يُلغيها صاحِبُ المَتجَر وَحدَه.",
             ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, key!));
     }
 }

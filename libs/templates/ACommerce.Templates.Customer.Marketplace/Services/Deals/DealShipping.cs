@@ -491,6 +491,15 @@ public sealed class DealShipping
            && deal.Refs.TryGetValue(ClosedRef, out var status)
            && OtoClient.TerminalStatuses.Contains(status, StringComparer.Ordinal);
 
+    /// <summary>
+    /// <para><b>لِلصَفقَةِ طَلَبُ شَحنٍ قائِمٌ عِندَ OTO — دالَّةٌ نَقِيَّةٌ لِقاعِدَةِ الإلغاءِ ولِصَفحَةِ الاستوديو</b> (‏2026-10-29، قَرارُ المالِك د37 (٢) «أ»):
+    /// طَلَبٌ (<see cref="IsPlaced"/>) لَم يُكتَب أَنّ OTO أَغلَقَته (<see cref="ClosedAtOto"/>). تَسأَلُها <see cref="DealCancelAuthorization.Validate"/> — فَلا
+    /// يُلغي الطَرَفُ صَفقَةً لَها شُحنَةٌ سائِرَةٌ عَلى حِسابِ البائِع — وصَفحَةُ صَفقَةِ الاستوديو تَقولُها لِصاحِبِ المَتجَرِ فَوقَ زِرِّ الإلغاء.</para>
+    /// <para><b>ولِماذا لا <see cref="IsPlaced"/> وَحدَها</b>: عِلَّةُ القَرارِ بِنَصِّه «ألّا تبقى شحنة سائرة لطلب ملغى» — وطَلَبٌ كَتَبَت OTO أَنّه
+    /// أُلغِيَ أَو حُذِفَ أَو رَجَع (البائِعُ أَلغاه مِن حِسابِه) لا شُحنَةَ سائِرَةً لَه، فَيَعودُ الإلغاءُ إلى المَرحَلَةِ وَحدَها كَما كان.</para>
+    /// </summary>
+    public static bool HoldsLiveOrder(Deal deal) => IsPlaced(deal) && !ClosedAtOto(deal);
+
     public static string? AttributeOf(Deal deal, string key)
         => deal.Attributes.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : null;
 

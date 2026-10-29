@@ -78,6 +78,14 @@
                 </div>
             </div>
 
+            @* طَلَبُ شَحنٍ قائِمٌ عِندَ OTO — يُقالُ لِصاحِبِ المَتجَرِ حينَ يُلغي (‏2026-10-29، قَرارُ المالِك د37 (٢) «أ»): الطَرَفانِ لا يُلغِيانِ
+               صَفقَةً لَها طَلَبٌ عِندَ OTO، وهُوَ يُلغيها مِن هُنا — والشُحنَةُ عَلى حِسابِ البائِعِ لا يُلغيها إلغاءُ الصَفقَة. يُرسَمُ فَوقَ زِرِّ الإلغاءِ
+               ما دامَت فَعّالَة، وبَعدَ الإلغاءِ عَلى الصَفقَةِ المُلغاةِ نَفسِها (الصَفحَةُ الَّتي يَعودُ إلَيها). *@
+            @if (DealShipping.HoldsLiveOrder(deal) && deal.Status is DealStatus.Active or DealStatus.Cancelled)
+            {
+                <div class="st-chip st-chip-warning" style="margin-top:14px;">@L.Markup("studio.deal.oto_order_live")</div>
+            }
+
             @* الإجراءات *@
             @if (deal.Status == DealStatus.Active)
             {
