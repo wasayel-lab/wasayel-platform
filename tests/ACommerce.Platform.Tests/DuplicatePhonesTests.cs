@@ -222,30 +222,176 @@ public class DuplicatePhonesTests(ITestOutputHelper output)
     /// <summary>حُقولُ الباقي الَّتي يَكتُبُها الدَمجُ — مِن جِسمِه لا مِن قائِمَة.</summary>
     internal static IReadOnlyList<string> SurvivorWrites(string body)
         => Regex.Matches(body, @"survivor\.(\w+)\s*(?:\|=|=(?!=))").Select(m => m.Groups[1].Value)
-            .Concat(Regex.Matches(body, @"\(survivor\.(\w+), survivor\.(\w+)\)\s*=").SelectMany(m => new[] { m.Groups[1].Value, m.Groups[2].Value }))
+            .Concat(Regex.Matches(body, @"\((?<list>survivor\.\w+(?:,\s*survivor\.\w+)+)\)\s*=")
+                .SelectMany(m => Regex.Matches(m.Groups["list"].Value, @"survivor\.(\w+)").Select(x => x.Groups[1].Value)))
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
 
-    /// <summary><b>تَوصيفُ اليَوم (‏2026-10-29، A1)</b>: الدَمجُ يَكتُبُ في الباقي جَوّالَه وتَحَقُّقَه والبَريدَ والهُوِيَّةَ وتاريخَ التَحديثِ وَحدَها.</summary>
-    [Fact]
-    public void Today_the_merge_gives_the_survivor_only_its_phone_verification_email_and_national_id()
+    private static string InheritBody()
     {
-        var writes = SurvivorWrites(MergeBody());
-        output.WriteLine($"اليَوم: حُقولُ الباقي الَّتي يَكتُبُها الدَمج {writes.Count}: {string.Join(",", writes)}");
-        Assert.Equal(new[] { "Email", "EmailVerified", "NationalId", "Phone", "PhoneVerified", "UpdatedAt" }, writes);
+        var code = StudioConsentCharacterizationTests.Source("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Identity", "DuplicatePhones.cs");
+        var body = code[code.IndexOf("public static void Inherit(User survivor, User loser)", StringComparison.Ordinal)..];
+        return body[..body.IndexOf("public sealed record Diff(", StringComparison.Ordinal)];
     }
 
-    /// <summary><b>تَوصيفُ اليَوم (A1 + G-4)</b>: سكربتُ العَدِّ لا يَذكُرُ دَوراً ولا اسماً ولا اسمَ نَشاط، والقِياسُ لا يَسأَلُ عَن الدَورِ الإداريّ.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، A1 — كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_the_merge_gives_the_survivor_only_its_phone_verification_email_and_national_id</c> (‏<c>9a7735b</c>): «حُقولُ الباقي الَّتي يَكتُبُها الدَمج 6:
+    /// Email,EmailVerified,NationalId,Phone,PhoneVerified,UpdatedAt». والآن الدَمجُ يَكتُبُ الجَوّالَ والتاريخَ وَحدَهُما ويُسَلِّمُ الباقي إلى
+    /// <c>Inherit</c> قَبلَ مَحوِ المُندَمِج — وهِيَ تَكتُبُ ثَلاثَةَ عَشَرَ حَقلاً (وتَضُمُّ الخَصائِصَ والإشعار).</summary>
     [Fact]
-    public void Today_the_count_names_no_role_name_or_business_name_difference_and_the_scan_asks_no_admin_role()
+    public void The_merge_hands_the_survivor_to_one_pure_inheritance_before_erasing_the_loser()
+    {
+        var merge = MergeBody();
+        var writes = SurvivorWrites(merge);
+        var inherits = SurvivorWrites(InheritBody());
+        output.WriteLine($"بَعدَ التَبديل: حُقولُ الباقي في الدَمج {writes.Count}: {string.Join(",", writes)} · في Inherit {inherits.Count}: {string.Join(",", inherits)}");
+        Assert.Equal(new[] { "Phone", "UpdatedAt" }, writes);
+        Assert.True(merge.IndexOf("Inherit(survivor, loser);", StringComparison.Ordinal) is var at && at > 0
+            && at < merge.IndexOf("AccountDeletion.Erase(loser, now)", StringComparison.Ordinal));
+        Assert.Equal(new[]
+        {
+            "AcceptedTermsAt", "AcceptedTermsVersion", "ActiveRole", "AddedContactKind", "AnchorLat", "AnchorLng", "AvatarUrl", "Email", "EmailVerified",
+            "FullName", "NationalId", "PhoneVerified", "RadiusKm",
+        }, inherits);
+        Assert.Contains("survivor.RoleAttributesJson[role] = mine = new();", InheritBody(), StringComparison.Ordinal);
+        Assert.Contains("PushSubscriptionDoor.Keep(survivor.PushSubscriptions,", InheritBody(), StringComparison.Ordinal);
+    }
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، A1 + G-4)</b> — كانَ <c>Today_the_count_names_no_role_name_or_business_name_difference_and_the_scan_asks_no_admin_role</c>:
+    /// «كَلِماتُ الفُروقِ في العَدّ 0 مِن 4 · القِياسُ يَسأَلُ عَن الإداريّ: False». والآن العَدُّ يَطبَعُ ما يَختَلِفُ بِـ<c>Differences</c> (أَعلاماً) ومَجموعاتِ
+    /// الإداريّ، والقِياسُ يَمنَعُ بِـ<c>AdminBlock</c> بِرَمزِ الكَتالوجِ الواحِد <c>SelfGrantPolicy.AdminSlug</c>.</summary>
+    [Fact]
+    public void The_count_prints_role_name_and_business_name_differences_and_the_scan_blocks_an_admin_group()
     {
         var count = Code("count-duplicate-phones.cs");
         var scan = StudioConsentCharacterizationTests.Source("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Identity", "DuplicatePhones.cs");
-        var words = new[] { "RoleAttributesJson", "ActiveRole", "FullName", "BusinessName" };
-        var inCount = words.Count(w => count.Contains(w, StringComparison.Ordinal));
-        var admin = scan.Contains("tenant_admin", StringComparison.Ordinal) || scan.Contains("IsAdmin", StringComparison.Ordinal);
-        output.WriteLine($"اليَوم: كَلِماتُ الفُروقِ في العَدّ {inCount} مِن {words.Length} · القِياسُ يَسأَلُ عَن الإداريّ: {admin}");
-        Assert.Equal(0, inCount);
-        Assert.False(admin);
+        var printed = new[] { "DuplicatePhones.Differences(byId[g.Survivor], g.Losers.Select(l => byId[l]))", "دَورٌ≠{roles} اسمٌ≠{names} نَشاطٌ≠{businesses}",
+            "في الدَور: {roleDiff} · في الاسمِ الحَقيقيّ: {nameDiff} · في اسمِ النَشاط: {businessDiff}", "reasons.GetValueOrDefault(DuplicatePhones.AdminBlock)" };
+        var inCount = printed.Count(w => count.Contains(w, StringComparison.Ordinal));
+        output.WriteLine($"بَعدَ التَبديل: ما يَطبَعُه العَدّ {inCount} مِن {printed.Length} · القِياسُ يَسأَلُ عَن الإداريّ: {scan.Contains("Gates.SelfGrantPolicy.AdminSlug", StringComparison.Ordinal)}");
+        Assert.Equal(printed.Length, inCount);
+        Assert.Contains("(\"admin\", Gates.SelfGrantPolicy.AdminSlug)", scan, StringComparison.Ordinal);
+        Assert.Contains("if (admins > 0) blocks.Add($\"{AdminBlock}:", scan, StringComparison.Ordinal);
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Gates.SelfGrantPolicy.AdminSlug, DuplicatePhones.AdminBlock);
+    }
+
+    // ─── Inherit: لِكُلِّ قاعِدَةٍ مُوجَبٌ وسالِب ──────────────────────────────────────────────────────────
+
+    private static User U(string name = "", string role = "") => new() { Id = Guid.NewGuid(), FullName = name, ActiveRole = role };
+
+    private static string NewMember => ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic,
+        ACommerce.Kit.Auth.Server.AuthHandlers.NewMemberNameKey)!;
+
+    [Fact]
+    public void Role_and_account_attributes_are_joined_key_by_key_and_the_survivor_wins_a_clash()
+    {
+        var survivor = U();
+        survivor.RoleAttributesJson["vendor"] = new() { ["business_name"] = "أ" };
+        survivor.AttributesJson["bio"] = "باقٍ";
+        var loser = U();
+        loser.RoleAttributesJson["vendor"] = new() { ["business_name"] = "ب", ["plate"] = "١٢٣" };
+        loser.RoleAttributesJson["driver"] = new() { ["license"] = "٧" };
+        loser.AttributesJson["bio"] = "مُندَمِج";
+        loser.AttributesJson["city"] = "جُدَّة";
+        DuplicatePhones.Inherit(survivor, loser);
+        AccountDeletion.Erase(loser, T0);
+        Assert.Equal(("أ", "١٢٣"), (survivor.RoleAttributesJson["vendor"]["business_name"], survivor.RoleAttributesJson["vendor"]["plate"]));
+        Assert.Equal("٧", survivor.RoleAttributesJson["driver"]["license"]);
+        Assert.Equal(("باقٍ", "جُدَّة"), (survivor.AttributesJson["bio"], survivor.AttributesJson["city"]));
+    }
+
+    [Theory]
+    [InlineData("", "vendor", "vendor")]
+    [InlineData("rider", "vendor", "rider")]
+    [InlineData("", "tenant_admin", "")]
+    [InlineData("", "", "")]
+    public void The_active_role_goes_to_an_empty_survivor_and_never_the_admin_role(string survivorRole, string loserRole, string expected)
+    {
+        var survivor = U(role: survivorRole);
+        DuplicatePhones.Inherit(survivor, U(role: loserRole));
+        Assert.Equal(expected, survivor.ActiveRole);
+    }
+
+    [Theory]
+    [InlineData("", "سارة", "سارة")]
+    [InlineData("new", "سارة", "سارة")]
+    [InlineData("هِند", "سارة", "هِند")]
+    [InlineData("", "new", "")]
+    public void The_name_goes_to_a_survivor_without_one_from_a_loser_with_one(string survivorName, string loserName, string expected)
+    {
+        string Of(string n) => n == "new" ? NewMember : n;
+        var survivor = U(Of(survivorName));
+        DuplicatePhones.Inherit(survivor, U(Of(loserName)));
+        Assert.Equal(Of(expected), survivor.FullName);
+    }
+
+    [Theory]
+    [InlineData(2, 3, 3)]
+    [InlineData(3, 2, 3)]
+    [InlineData(0, 0, 0)]
+    public void The_terms_acceptance_is_the_newest_version_with_its_date(int survivorVersion, int loserVersion, int expected)
+    {
+        var survivor = U();
+        (survivor.AcceptedTermsVersion, survivor.AcceptedTermsAt) = (survivorVersion, survivorVersion == 0 ? null : T0.AddDays(survivorVersion));
+        var loser = U();
+        (loser.AcceptedTermsVersion, loser.AcceptedTermsAt) = (loserVersion, loserVersion == 0 ? null : T0.AddDays(10 + loserVersion));
+        DuplicatePhones.Inherit(survivor, loser);
+        Assert.Equal(expected, survivor.AcceptedTermsVersion);
+        Assert.Equal(expected == 0 ? null : expected == loserVersion && loserVersion > survivorVersion ? T0.AddDays(10 + loserVersion) : T0.AddDays(survivorVersion),
+            survivor.AcceptedTermsAt);
+    }
+
+    [Fact]
+    public void Push_subscriptions_are_joined_once_per_device_within_the_cap_and_survive_the_loser_erasure()
+    {
+        PushSubscription P(string e, int day) => new() { Endpoint = $"https://push.example/{e}", P256dh = "k", Auth = "a", CreatedAt = T0.AddDays(day) };
+        var survivor = U();
+        survivor.PushSubscriptions.AddRange(Enumerable.Range(0, 8).Select(i => P($"s{i}", i)));
+        var loser = U();
+        loser.PushSubscriptions.AddRange(new[] { P("s0", 20), P("l1", 21), P("l2", 22), P("l3", 23) });
+        DuplicatePhones.Inherit(survivor, loser);
+        AccountDeletion.Erase(loser, T0);
+        output.WriteLine($"اشتِراكاتُ الباقي: {survivor.PushSubscriptions.Count} (الحَدّ {ACommerce.Templates.Customer.Marketplace.Services.PushSubscriptionDoor.MaxPerUser})");
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.PushSubscriptionDoor.MaxPerUser, survivor.PushSubscriptions.Count);
+        Assert.Single(survivor.PushSubscriptions, p => p.Endpoint.EndsWith("/s0", StringComparison.Ordinal));
+        Assert.Contains(survivor.PushSubscriptions, p => p.Endpoint.EndsWith("/l3", StringComparison.Ordinal));
+        Assert.Equal(survivor.PushSubscriptions.Count, survivor.PushSubscriptions.Select(p => p.Endpoint).Distinct().Count());
+    }
+
+    [Fact]
+    public void An_inherited_added_email_stays_added_and_the_survivor_contacts_photo_and_area_are_kept()
+    {
+        var survivor = U();
+        survivor.AvatarUrl = "/a.png";
+        (survivor.AnchorLat, survivor.AnchorLng, survivor.RadiusKm) = (21.5, 39.2, 10);
+        var loser = U();
+        (loser.Email, loser.EmailVerified, loser.AddedContactKind, loser.AvatarUrl) = ("b@example.com", true, ContactLink.Email, "/b.png");
+        (loser.AnchorLat, loser.AnchorLng, loser.RadiusKm) = (24.7, 46.7, 5);
+        DuplicatePhones.Inherit(survivor, loser);
+        Assert.Equal(("b@example.com", true, ContactLink.Email), (survivor.Email, survivor.EmailVerified, survivor.AddedContactKind));
+        Assert.Equal(("/a.png", 21.5, 10), (survivor.AvatarUrl, survivor.AnchorLat, survivor.RadiusKm));
+
+        var bare = U();
+        DuplicatePhones.Inherit(bare, loser);
+        Assert.Equal(("/b.png", 24.7, 5), (bare.AvatarUrl, bare.AnchorLat, bare.RadiusKm));
+        var original = U();
+        original.Email = "a@example.com";
+        DuplicatePhones.Inherit(original, loser);
+        Assert.Equal(("a@example.com", ""), (original.Email, original.AddedContactKind));
+    }
+
+    [Fact]
+    public void Differences_flag_role_real_name_and_business_name_and_nothing_for_identical_accounts()
+    {
+        var survivor = U("هِند", "rider");
+        var same = U("هِند", "rider");
+        Assert.Equal(new DuplicatePhones.Diff(false, false, false), DuplicatePhones.Differences(survivor, new[] { same }));
+        Assert.Equal(new DuplicatePhones.Diff(false, false, false), DuplicatePhones.Differences(survivor, new[] { U(NewMember) }));
+
+        var vendor = U("سارة", "vendor");
+        vendor.RoleAttributesJson["vendor"] = new() { ["business_name"] = "مَتجَرُ سارة" };
+        Assert.Equal(new DuplicatePhones.Diff(true, true, true), DuplicatePhones.Differences(survivor, new[] { same, vendor }));
+        var named = U("سارة");
+        Assert.Equal(new DuplicatePhones.Diff(false, true, false), DuplicatePhones.Differences(U(), new[] { named }));
     }
 
     /// <summary>سُطورُ مَخزَنِ الدَمجِ الَّتي يُعيدُها الصَفُّ الحَيُّ بِحَرفِها — فَما يُقاسُ هُوَ ما يُشَغَّل.</summary>
@@ -426,18 +572,24 @@ public class LiveDuplicatePhonesProofTests(ITestOutputHelper output)
         finally { await CleanAsync(slug); }
     }
 
-    /// <summary><b>تَوصيفُ اليَوم (‏2026-10-29، A1 + G-4) حَيّاً عَلى Postgres</b>: أَ (أَقدَمُ، بِلا دَورٍ ولا اسم) وب (دَورُه «vendor» بِاسمِ نَشاطِه،
-    /// وخَصائِصُه، واسمُه، وقَبولُه الشُروطَ، واشتِراكُ إشعار) — بَعدَ الدَمجِ لا يَبقى لِأَ شَيءٌ مِنها؛ ومَجموعَةٌ فيها حِسابٌ دَورُه النَشِطُ
-    /// <c>tenant_admin</c> تُقاسُ قابِلَةً لِلدَمج.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، A1 + G-4 — كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_the_merge_drops_the_merged_away_roles_name_terms_and_push_and_an_admin_group_is_mergeable_on_Postgres</c> (‏<c>9a7735b</c>): «ما وَرِثَه الباقي
+    /// مِن المُندَمِج: الدَور False · … · الإشعار False · مَجموعَةُ الإداريِّ قابِلَةٌ لِلدَمج: True». والآن الباقي يَرِثُ كُلَّها، ومَجموعَةٌ فيها <c>tenant_admin</c>
+    /// — بِدَورِه النَشِطِ أَو بِدَورٍ في المَتجَرِ رَمزُ كَتالوجِه <c>tenant_admin</c> — تُمنَعُ ولا يُكتَبُ فيها حَرف.</summary>
     [Fact]
-    public async Task Today_the_merge_drops_the_merged_away_roles_name_terms_and_push_and_an_admin_group_is_mergeable_on_Postgres()
+    public async Task The_survivor_inherits_the_merged_away_roles_name_terms_and_push_and_an_admin_group_is_blocked_on_Postgres()
     {
         if (!Enabled) return;
         using var store = Store();
         var slug = "dup-a1-" + Guid.NewGuid().ToString("N")[..8];
         try
         {
-            var (a, b, c, d) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+            var (a, b, c, d, e, f) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+            await using (var s = store.LightweightSession())
+            {
+                s.Store(new Tenant { Id = slug, Roles = [new ACommerce.Kit.Roles.Role { Slug = "boss", CatalogSlug = "tenant_admin" }] });
+                await s.SaveChangesAsync();
+            }
             await using (var s = store.LightweightSession(slug))
             {
                 s.Store(new User { Id = a, TenantSlug = slug, Phone = "0500000095", CreatedAt = DateTime.UtcNow.AddDays(-10), FullName = "" });
@@ -450,6 +602,8 @@ public class LiveDuplicatePhonesProofTests(ITestOutputHelper output)
                 });
                 s.Store(new User { Id = c, TenantSlug = slug, Phone = "0500000096", CreatedAt = DateTime.UtcNow.AddDays(-9) });
                 s.Store(new User { Id = d, TenantSlug = slug, Phone = "+966500000096", CreatedAt = DateTime.UtcNow.AddDays(-1), ActiveRole = "tenant_admin" });
+                s.Store(new User { Id = e, TenantSlug = slug, Phone = "0500000097", CreatedAt = DateTime.UtcNow.AddDays(-9), ActiveRole = "boss" });
+                s.Store(new User { Id = f, TenantSlug = slug, Phone = "+966500000097", CreatedAt = DateTime.UtcNow.AddDays(-1) });
                 await s.SaveChangesAsync();
             }
             List<DuplicatePhones.Account> members;
@@ -461,20 +615,37 @@ public class LiveDuplicatePhonesProofTests(ITestOutputHelper output)
             var tables = await DuplicatePhones.TenantTablesAsync(conn);
             var scanAB = await DuplicatePhones.ScanAsync(conn, slug, plan.Groups.Single(g => g.Survivor == a), tables);
             var scanCD = await DuplicatePhones.ScanAsync(conn, slug, plan.Groups.Single(g => g.Survivor == c), tables);
+            var scanEF = await DuplicatePhones.ScanAsync(conn, slug, plan.Groups.Single(g => g.Survivor == e), tables);
             await DuplicatePhones.ApplyAsync(store, slug, scanAB, DateTime.UtcNow);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => DuplicatePhones.ApplyAsync(store, slug, scanCD, DateTime.UtcNow));
 
-            User ua;
-            await using (var q = store.QuerySession(slug)) ua = (await q.LoadAsync<User>(a))!;
+            User ua, ud;
+            await using (var q = store.QuerySession(slug)) (ua, ud) = ((await q.LoadAsync<User>(a))!, (await q.LoadAsync<User>(d))!);
             var kept = new[]
             {
                 ("الدَور", ua.ActiveRole == "vendor"), ("خَصائِصُ الدَور", ua.RoleAttributesJson.ContainsKey("vendor")), ("الخَصائِص", ua.AttributesJson.ContainsKey("bio")),
                 ("الاسم", ua.FullName == "سارة"), ("الشُروط", ua.AcceptedTermsVersion == 3), ("الإشعار", ua.PushSubscriptions.Count == 1),
             };
-            output.WriteLine($"اليَوم: ما وَرِثَه الباقي مِن المُندَمِج: {string.Join(" · ", kept.Select(k => $"{k.Item1} {k.Item2}"))} · مَجموعَةُ الإداريِّ قابِلَةٌ لِلدَمج: {scanCD.Mergeable}");
-            Assert.All(kept, k => Assert.False(k.Item2, k.Item1));
-            Assert.True(scanCD.Mergeable);
+            output.WriteLine($"بَعدَ التَبديل: ما وَرِثَه الباقي مِن المُندَمِج: {string.Join(" · ", kept.Select(k => $"{k.Item1} {k.Item2}"))} · "
+                + $"مَجموعَةُ الإداريِّ بِدَورِه النَشِط: {scanCD.Mergeable} · بِدَورِ المَتجَر: {scanEF.Mergeable} · الإداريُّ كَما هُوَ: {ud.DeletedAt is null}");
+            Assert.All(kept, k => Assert.True(k.Item2, k.Item1));
+            Assert.Equal("مَتجَرُ سارة", ACommerce.Templates.Customer.Marketplace.Services.Queries.ActorName.BusinessName(ua));
+            Assert.False(scanCD.Mergeable);
+            Assert.False(scanEF.Mergeable);
+            Assert.Contains(scanCD.Blocks, x => x.StartsWith(DuplicatePhones.AdminBlock + ":", StringComparison.Ordinal));
+            Assert.Contains(scanEF.Blocks, x => x.StartsWith(DuplicatePhones.AdminBlock + ":", StringComparison.Ordinal));
+            Assert.True(scanAB.Mergeable, string.Join(" · ", scanAB.Blocks));
+            Assert.Null(ud.DeletedAt);
         }
-        finally { await CleanAsync(slug); }
+        finally
+        {
+            await using (var s = store.LightweightSession())
+            {
+                s.Delete<Tenant>(slug);
+                await s.SaveChangesAsync();
+            }
+            await CleanAsync(slug);
+        }
     }
 
     /// <summary><b>مِفتاحُ الرَبطِ يَنتَقِلُ إلى الباقي</b> (‏2026-10-29؛ انقَلَبَ بِاسمِه مِن تَوصيفِ <c>c11fd8a</c>): مِفتاحٌ صَدَرَ بِاسمِ بٍ (المُندَمِج)

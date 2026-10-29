@@ -36,7 +36,9 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Identity;
 /// والوَثائِقُ العامَّةُ الأُخرى لا تَحمِلُ حِسابَ عُضو (مُثَبَّتٌ بِأَسمائِها في <c>DuplicatePhonesTests</c>).</para>
 ///
 /// <para><b>والمُندَمِجُ يُمحى كَما يُمحى الحِسابُ المَحذوف</b> (<see cref="AccountDeletion.Erase"/> بِعَينِها — ومِنها رَفعُ إصدارِ الجَلسَة، فَتَسقُطُ رُموزُه)،
-/// والباقي يَأخُذُ جَوّالَه مُوَحَّداً ويَرِثُ ما لَيسَ لَه: التَحَقُّقَ مِن الجَوّال، والبَريدَ والهُوِيَّةَ الوَطَنِيَّةَ إن كانَ بِلاهُما.</para>
+/// والباقي يَأخُذُ جَوّالَه مُوَحَّداً ويَرِثُ ما لَيسَ لَه: التَحَقُّقَ مِن الجَوّال، والبَريدَ والهُوِيَّةَ الوَطَنِيَّةَ إن كانَ بِلاهُما.
+/// ‏(‏2026-10-29، A1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وما سِواها</b>: خَصائِصُ الأَدوارِ والحِساب، والدَورُ، والاسم، والشُروط، والإشعار — <see cref="Inherit"/>؛
+/// وحِسابٌ إداريٌّ في المَجموعَةِ يَمنَعُها (<see cref="AdminBlock"/>).</para>
 ///
 /// <para><b>ولا يُرَكِّبُ مَخزَناً</b>: يَأخُذُ <see cref="IDocumentStore"/> مِن مُستَدعيه، وكُلُّ سكربتٍ يُرَكِّبُ مَخزَنَه في مِلَفِّه (كَـ<c>count-listing-owners.cs</c>
 /// و<c>repair-role-floor.cs</c>) — فَمَواضِعُ إعدادِ Marten في <c>libs/</c> تَبقى الثَلاثَةَ الَّتي يَراها <c>scripts/marten-schema.cs</c>
@@ -73,6 +75,74 @@ public static class DuplicatePhones
         return new(live.Count, renames, groups);
     }
 
+    // ─── ما يَرِثُه الباقي — نَقِيّ ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// <para><b>الباقي يَرِثُ ما لَيسَ لَه، وما لَه يَبقى لَه</b> (‏2026-10-29، تَدقيقُ الموجَة ١١ A1؛ تَوصيفُه <c>9a7735b</c>). كانَ الدَمجُ يُوَرِّثُ
+    /// التَحَقُّقَ والبَريدَ والهُوِيَّةَ وَحدَها ثُمَّ يَمحو المُندَمِجَ (<see cref="AccountDeletion.Erase"/>) — فَيَضيعُ دَورُه واسمُ نَشاطِه واسمُه وقَبولُه
+    /// لِلشُروطِ واشتِراكُ إشعارِه، والصَفَقاتُ والإعلاناتُ الَّتي نُقِلَت إلى الباقي تُعرَضُ بِلا اسمِ النَشاطِ الَّذي عُرِفَت بِه.</para>
+    /// <para><b>والقاعِدَة</b> (P1 — لا يُكتَبُ فَوقَ ما يَملِكُه الباقي): خَصائِصُ كُلِّ دَورٍ وخَصائِصُ الحِسابِ العامَّةُ تُضَمُّ مِفتاحاً مِفتاحاً والباقي يَغلِبُ
+    /// عِندَ التَعارُض؛ والدَورُ النَشِطُ والصورَةُ والمَنطِقَةُ لِلباقي إن كانَت لَه وإلّا لِلمُندَمِج (<b>إلّا الدَورَ الإداريّ</b> — لا يُوَرَّثُ صَلاحِيَّةً، والقِياسُ
+    /// يَمنَعُ مَجموعَتَه أَصلاً)؛ والاسمُ لِلمُندَمِجِ إن كانَ الباقي بِلا اسم (<see cref="Queries.ActorName.NeedsName"/>)؛ والشُروطُ أَحدَثُها إصداراً
+    /// (ثُمَّ تاريخاً) بِتاريخِه؛ واشتِراكاتُ الإشعارِ تُضَمُّ بِـ<see cref="PushSubscriptionDoor.Keep"/> (الجِهازُ نَفسُه مَرَّة، وأَحدَثُ الحَدّ)؛ والبَريدُ
+    /// المُضافُ بِبابِ الرَبطِ يَبقى «مُضافاً» حينَ يُوَرَّث.</para>
+    /// </summary>
+    public static void Inherit(User survivor, User loser)
+    {
+        survivor.PhoneVerified |= loser.PhoneVerified;
+        if (string.IsNullOrEmpty(survivor.Email) && !string.IsNullOrEmpty(loser.Email))
+        {
+            (survivor.Email, survivor.EmailVerified) = (loser.Email, loser.EmailVerified);
+            if (survivor.AddedContactKind.Length == 0 && loser.AddedContactKind == ContactLink.Email) survivor.AddedContactKind = ContactLink.Email;
+        }
+        if (string.IsNullOrEmpty(survivor.NationalId) && !string.IsNullOrEmpty(loser.NationalId))
+            survivor.NationalId = loser.NationalId;
+
+        foreach (var (role, attrs) in loser.RoleAttributesJson)
+        {
+            if (!survivor.RoleAttributesJson.TryGetValue(role, out var mine)) survivor.RoleAttributesJson[role] = mine = new();
+            foreach (var (k, v) in attrs) mine.TryAdd(k, v);
+        }
+        foreach (var (k, v) in loser.AttributesJson) survivor.AttributesJson.TryAdd(k, v);
+        if (string.IsNullOrEmpty(survivor.ActiveRole) && !Gates.SelfGrantPolicy.IsAdminSlug(loser.ActiveRole))
+            survivor.ActiveRole = loser.ActiveRole;
+        if (Queries.ActorName.NeedsName(survivor) && !Queries.ActorName.NeedsName(loser))
+            survivor.FullName = loser.FullName;
+        if (string.IsNullOrEmpty(survivor.AvatarUrl) && !string.IsNullOrEmpty(loser.AvatarUrl))
+            survivor.AvatarUrl = loser.AvatarUrl;
+        if (!survivor.HasAnchor && loser.HasAnchor)
+            (survivor.AnchorLat, survivor.AnchorLng, survivor.RadiusKm) = (loser.AnchorLat, loser.AnchorLng, loser.RadiusKm);
+        if (loser.AcceptedTermsVersion > survivor.AcceptedTermsVersion
+            || (loser.AcceptedTermsVersion == survivor.AcceptedTermsVersion && loser.AcceptedTermsAt > (survivor.AcceptedTermsAt ?? DateTime.MinValue)))
+            (survivor.AcceptedTermsAt, survivor.AcceptedTermsVersion) = (loser.AcceptedTermsAt, loser.AcceptedTermsVersion);
+        foreach (var sub in loser.PushSubscriptions.OrderBy(p => p.CreatedAt))
+            PushSubscriptionDoor.Keep(survivor.PushSubscriptions,
+                new PushSubscription { Endpoint = sub.Endpoint, P256dh = sub.P256dh, Auth = sub.Auth, CreatedAt = sub.CreatedAt });
+    }
+
+    /// <summary>ما يَختَلِفُ بَينَ حِساباتِ مَجموعَةٍ ويُراجِعُه صاحِبُ القَرارِ قَبلَ الدَمج — أَعلامٌ لا قيَم (سكربتُ العَدِّ لا يَطبَعُ بَياناً شَخصِيّاً).</summary>
+    public sealed record Diff(bool Role, bool RealName, bool BusinessName);
+
+    /// <summary>
+    /// <para>(‏2026-10-29، تَدقيقُ الموجَة ١١ G-4) <b>الدَور</b>: مُندَمِجٌ دَورُه النَشِطُ غَيرُ دَورِ الباقي، أَو لَه دَورٌ بِخَصائِصَ لَيسَ لِلباقي؛
+    /// <b>الاسمُ الحَقيقيّ</b>: مُندَمِجٌ لَه اسمٌ والباقي بِلا اسمٍ أَو بِاسمٍ آخَر؛ <b>اسمُ النَشاط</b> (<see cref="Queries.ActorName.BusinessName"/>):
+    /// مُندَمِجٌ لَه اسمُ نَشاطٍ غَيرُ اسمِ نَشاطِ الباقي. نَقِيَّة.</para>
+    /// </summary>
+    public static Diff Differences(User survivor, IEnumerable<User> losers)
+    {
+        bool role = false, name = false, business = false;
+        var survivorName = Queries.ActorName.NeedsName(survivor) ? null : survivor.FullName.Trim();
+        var survivorBusiness = Queries.ActorName.BusinessName(survivor);
+        foreach (var l in losers)
+        {
+            role |= (l.ActiveRole.Length > 0 && l.ActiveRole != survivor.ActiveRole)
+                    || l.RoleAttributesJson.Keys.Any(k => !survivor.RoleAttributesJson.ContainsKey(k));
+            name |= !Queries.ActorName.NeedsName(l) && l.FullName.Trim() != survivorName;
+            business |= Queries.ActorName.BusinessName(l) is { } b && b != survivorBusiness;
+        }
+        return new(role, name, business);
+    }
+
     // ─── القِياس ──────────────────────────────────────────────────────────────────────────
 
     /// <summary>جَدوَلُ وَثائِقَ مَحصورٌ بِمُستَأجِر. <c>Aggregate</c> = نُسخَةُ مَجرى أَحداثٍ (‏<c>mt_version</c> عَدَدِيّ، لا <c>uuid</c>).</summary>
@@ -95,6 +165,9 @@ public static class DuplicatePhones
     /// <summary>جَداوِلُ لا يُعادُ تَوجيهُها نَصّاً: المُستَخدِمُ والسَلَّةُ والمُفَضَّلَةُ (مُعَرِّفاتُها مِن مُعَرِّفِ صاحِبِها — تُعالَجُ بِـMarten)، والإعلانُ
     /// (بِحَدَث)، والتَدقيقُ (تاريخ).</summary>
     public static readonly IReadOnlyList<string> NotRepointed = ["mt_doc_user", "mt_doc_cart", "mt_doc_favorite", "mt_doc_listing", "mt_doc_auditentry"];
+
+    /// <summary>بادِئَةُ مانِعِ «حِسابٌ إداريٌّ في المَجموعَة» — يَعُدُّها سكربتُ العَدِّ كَما يَعُدُّ أَسماءَ الجَداوِل.</summary>
+    public const string AdminBlock = "tenant_admin";
 
     private static readonly Regex TableName = new("^mt_doc_[a-z0-9_]+$", RegexOptions.CultureInvariant);
 
@@ -180,6 +253,21 @@ public static class DuplicatePhones
                 """, ct, ("t", tenant), ("p", $"%{l}%"));
             if (events > 0) blocks.Add($"mt_events: {events} حَدَثاً خارِجَ مَجاري الإعلانات");
         }
+        // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A1) حِسابٌ إداريٌّ في المَجموعَةِ يَمنَعُها: الدَمجُ لا يُنقِلُ صَلاحِيَّةً ولا يَمحو مَن يَملِكُها — يُحسَمُ بِبابَي
+        // grant-admin/revoke-admin المُدَقَّقَينِ أَوَّلاً. الإداريُّ دَورُه النَشِطُ tenant_admin، أَو دَورٌ في المَتجَرِ رَمزُ كَتالوجِه tenant_admin.
+        var tenantTable = await CountAsync(conn, "select count(*) from pg_catalog.pg_tables where schemaname = 'platform' and tablename = 'mt_doc_tenant'", ct) > 0;
+        var members = group.Losers.Prepend(group.Survivor).ToArray();
+        var admins = await CountAsync(conn, tenantTable
+            ? """
+              select count(*) from platform.mt_doc_user u
+              where u.tenant_id = @t and u.id = any(@ids)
+                and (u.data->>'ActiveRole' = @admin
+                     or exists (select 1 from platform.mt_doc_tenant d, jsonb_array_elements(coalesce(d.data->'Roles', '[]'::jsonb)) r
+                                where d.id = @t and r->>'Slug' = u.data->>'ActiveRole' and r->>'CatalogSlug' = @admin))
+              """
+            : "select count(*) from platform.mt_doc_user u where u.tenant_id = @t and u.id = any(@ids) and u.data->>'ActiveRole' = @admin",
+            ct, ("t", tenant), ("ids", members), ("admin", Gates.SelfGrantPolicy.AdminSlug));
+        if (admins > 0) blocks.Add($"{AdminBlock}: {admins} حِساباً إدارِيّاً في المَجموعَة");
         var survivorCart = await CountAsync(conn, "select count(*) from platform.mt_doc_cart where tenant_id = @t and id = @i", ct,
             ("t", tenant), ("i", group.Survivor)) > 0;
         return new(group, repoints, listings, loserCarts, survivorCart, favorites, keys, blocks);
@@ -269,11 +357,7 @@ public static class DuplicatePhones
                 }
             }
 
-            survivor.PhoneVerified |= loser.PhoneVerified;
-            if (string.IsNullOrEmpty(survivor.Email) && !string.IsNullOrEmpty(loser.Email))
-                (survivor.Email, survivor.EmailVerified) = (loser.Email, loser.EmailVerified);
-            if (string.IsNullOrEmpty(survivor.NationalId) && !string.IsNullOrEmpty(loser.NationalId))
-                survivor.NationalId = loser.NationalId;
+            Inherit(survivor, loser);
             s.Store(AccountDeletion.Erase(loser, now));
         }
         survivor.Phone = g.Canonical;

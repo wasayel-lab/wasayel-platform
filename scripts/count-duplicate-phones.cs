@@ -15,6 +15,9 @@
 //  `merge-duplicate-phones.cs` وكَم يَمتَنِعُ عَنها ولِماذا (بِاسمِ الجَدوَلِ لا بِالصَفّ)، وكَم مِفتاحَ
 //  رَبطٍ بِاسمِ حِسابٍ يَندَمِجُ يَصيرُ فاعِلُه الباقي (وَثيقَةٌ عامَّة لا يَراها مَسحُ الجَداوِل).
 //  والقِياسُ دالَّةُ الدَمجِ بِعَينِها (`DuplicatePhones.Build` و`ScanAsync`) — لا نُسخَة.
+//  ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ G-4) **وكَم مَجموعَةً تَختَلِفُ حِساباتُها** في الدَورِ والاسمِ الحَقيقيِّ واسمِ النَشاط
+//  (`DuplicatePhones.Differences` — أَعلامٌ لا قيَم)، فَيَعرِفُ صاحِبُ القَرارِ ما يَرِثُه الباقي (`Inherit`) قَبلَ `--apply`؛ وكَم
+//  مَجموعَةً يَمنَعُها حِسابٌ إداريّ (`tenant_admin`).
 //
 // ─── ما لا يَفعَلُه — وذلك مَقصودٌ ومُعلَن ──────────────────────────────
 //   ١. **لا يَكتُبُ حَرفاً**: جَلَساتُ قِراءَةٍ وَحدَها، و`AutoCreate.None`، والاتِّصالُ بِـ
@@ -106,19 +109,22 @@ try
     }
 
     var tables = await DuplicatePhones.TenantTablesAsync(conn);
-    int accounts = 0, renames = 0, groups = 0, losers = 0, mergeable = 0, blocked = 0, keys = 0;
+    int accounts = 0, renames = 0, groups = 0, losers = 0, mergeable = 0, blocked = 0, keys = 0, roleDiff = 0, nameDiff = 0, businessDiff = 0;
     var reasons = new SortedDictionary<string, int>(StringComparer.Ordinal);
 
     foreach (var slug in tenants)
     {
-        List<DuplicatePhones.Account> members;
+        List<User> users;
         await using (var q = store.QuerySession(slug))
-            members = (await q.Query<User>().ToListAsync())
-                .Select(u => new DuplicatePhones.Account(u.Id, u.Phone, u.CreatedAt, u.DeletedAt is not null)).ToList();
+            users = (await q.Query<User>().ToListAsync()).ToList();
+        var members = users.Select(u => new DuplicatePhones.Account(u.Id, u.Phone, u.CreatedAt, u.DeletedAt is not null)).ToList();
+        var byId = users.ToDictionary(u => u.Id);
         var plan = DuplicatePhones.Build(members);
-        int ok = 0, no = 0;
+        int ok = 0, no = 0, roles = 0, names = 0, businesses = 0;
         foreach (var g in plan.Groups)
         {
+            var diff = DuplicatePhones.Differences(byId[g.Survivor], g.Losers.Select(l => byId[l]));
+            roles += diff.Role ? 1 : 0; names += diff.RealName ? 1 : 0; businesses += diff.BusinessName ? 1 : 0;
             var scan = await DuplicatePhones.ScanAsync(conn, slug, g, tables);
             if (scan.Mergeable) { ok++; keys += scan.Keys; }
             else
@@ -128,7 +134,8 @@ try
             }
         }
         Console.WriteLine($"{slug,-24} بِجَوّال={plan.Considered,-5} يُعادُ كَتبُه={plan.Renames.Count,-4} مَجموعات={plan.Groups.Count,-3} "
-            + $"تَندَمِج={plan.Groups.Sum(g => g.Losers.Count),-3} تُدمَج={ok,-3} مُمتَنِعَة={no}");
+            + $"تَندَمِج={plan.Groups.Sum(g => g.Losers.Count),-3} تُدمَج={ok,-3} مُمتَنِعَة={no,-3} دَورٌ≠{roles} اسمٌ≠{names} نَشاطٌ≠{businesses}");
+        roleDiff += roles; nameDiff += names; businessDiff += businesses;
         accounts += plan.Considered; renames += plan.Renames.Count; groups += plan.Groups.Count;
         losers += plan.Groups.Sum(g => g.Losers.Count); mergeable += ok; blocked += no;
     }
@@ -148,6 +155,9 @@ try
     Console.WriteLine($"أَشخاصٌ بِأَكثَرَ مِن حِساب: {groups} في المَتاجِر ({losers} حِساباً يَندَمِج) و{sp.Groups.Count} في الاستوديو · "
         + $"يَدمِجُها السكربت: {mergeable} · يَمتَنِعُ عَنها: {blocked + sp.Groups.Count}");
     foreach (var (why, n) in reasons) Console.WriteLine($"  مانِعٌ في {why}: {n} مَجموعَة");
+    Console.WriteLine($"مَجموعاتٌ تَختَلِفُ حِساباتُها — في الدَور: {roleDiff} · في الاسمِ الحَقيقيّ: {nameDiff} · في اسمِ النَشاط: {businessDiff} "
+        + $"(يَرِثُ الباقي ما لَيسَ لَه ويَبقى لَه ما لَه — DuplicatePhones.Inherit)");
+    Console.WriteLine($"مَجموعاتٌ يَمنَعُها حِسابٌ إداريّ ({DuplicatePhones.AdminBlock}): {reasons.GetValueOrDefault(DuplicatePhones.AdminBlock)}");
     Console.WriteLine($"مَفاتيحُ رَبطٍ بِاسمِ حِساباتٍ تَندَمِجُ — يُكتَبُ فاعِلَها الباقي: {keys}");
     Console.WriteLine($"تَغييراتٌ يُنَفِّذُها merge-duplicate-phones.cs: {renames + sp.Renames.Count + mergeable}");
     return 0;
