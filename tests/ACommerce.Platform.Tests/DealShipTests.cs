@@ -168,12 +168,15 @@ public class DealShipTests(ITestOutputHelper output)
     // ═══ ١. البَوّابَة — لِكُلِّ رَمزٍ مُوجَبٌ وسالِب ═══════════════════════════════
 
     /// <summary><b>قُلِبَ بِاسمِه</b> — كانَ <c>The_lexicon_is_ten_closed_codes_and_three_are_the_accept_codes_by_value</c>: صارَ المَعجَمُ أَحَدَ عَشَرَ
-    /// بِـ<c>oto_order_closed</c> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12)، ولا ثانِيَ عَشَر.</summary>
+    /// بِـ<c>oto_order_closed</c> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12)، ولا ثانِيَ عَشَر.
+    /// <para><b>وقُلِبَ ثانِيَةً بِاسمِه</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د13 «ب»؛ كانَ
+    /// <c>The_lexicon_is_eleven_closed_codes_and_three_are_the_accept_codes_by_value</c>): اثنا عَشَرَ بِـ<c>siblings_not_ready</c> بَعدَ الأَحَدَ عَشَر.</para></summary>
     [Fact]
-    public void The_lexicon_is_eleven_closed_codes_and_three_are_the_accept_codes_by_value()
+    public void The_lexicon_is_twelve_closed_codes_and_three_are_the_accept_codes_by_value()
     {
-        Assert.Equal(11, DealShipAuthorization.All.Count);
-        Assert.Equal(11, DealShipAuthorization.All.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(12, DealShipAuthorization.All.Count);
+        Assert.Equal(12, DealShipAuthorization.All.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(DealShipAuthorization.SiblingsNotReady, DealShipAuthorization.All[^1]);
         Assert.Equal(DealAcceptAuthorization.DealNotFound, DealShipAuthorization.DealNotFound);
         Assert.Equal(DealAcceptAuthorization.ListingOwnerMissing, DealShipAuthorization.ListingOwnerMissing);
         Assert.Equal(DealAcceptAuthorization.DealNotActive, DealShipAuthorization.DealNotActive);
@@ -310,6 +313,33 @@ public class DealShipTests(ITestOutputHelper output)
         Assert.Equal(DealShipAuthorization.DeliveryDataMissing,
             Code(With(d => d.Attributes[Deal.DeliveryPhoneAttribute] = "   ")));
         Assert.Null(Code(Ready()));
+    }
+
+    /// <summary>‏<c>siblings_not_ready</c> مُوجِباً وسالِباً (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ د13 «ب»): أُختٌ عِندَ «عَرض» أَو «حَجز» تَنتَظِرُ تَأكيدَ
+    /// البائِعِ فَتَرُدُّ؛ وجاهِزَةٌ («تأكيد»)، ومُلغاةٌ، ولَها طَلَبٌ عِندَ OTO، وشُحِنَت بِاليَد («شَحن» بِلا طَلَب)، ولِبائِعٍ آخَرَ — لا تَنتَظِر؛ وقائِمَةٌ فارِغَةٌ لا خَرق.</summary>
+    [Fact]
+    public void Siblings_not_ready_positive_and_negative()
+    {
+        var waiting = new Dictionary<string, Deal>
+        {
+            ["offered"] = With(d => { d.Id = Guid.NewGuid(); d.Stage = DealStage.Offered; }),
+            ["booked"] = With(d => { d.Id = Guid.NewGuid(); d.Stage = DealStage.Booked; }),
+        };
+        var notWaiting = new Dictionary<string, Deal>
+        {
+            ["confirmed"] = Ready(),
+            ["cancelled"] = With(d => { d.Stage = DealStage.Booked; d.Status = DealStatus.Cancelled; }),
+            ["placed"] = With(d => { d.Stage = DealStage.Booked; d.Refs[DealShipping.OrderRef] = d.Id.ToString("N"); }),
+            ["shipped_by_hand"] = With(d => d.Stage = DealStage.Shipping),
+            ["other_vendor"] = With(d => { d.Stage = DealStage.Booked; d.Refs[DealsService.ListingOwnerRef] = Stranger.ToString(); }),
+        };
+        var held = DealShipAuthorization.WaitingSiblings(waiting.Values.Concat(notWaiting.Values), Vendor);
+        output.WriteLine($"تَنتَظِر: {held.Count} مِن {waiting.Count + notWaiting.Count}");
+
+        Assert.Equal(waiting.Values.Select(d => d.Id), held.Select(d => d.Id));
+        Assert.Equal(DealShipAuthorization.SiblingsNotReady, DealShipAuthorization.ValidateGroup(held)!.Code);
+        Assert.All(notWaiting, kv => Assert.Empty(DealShipAuthorization.WaitingSiblings(new[] { kv.Value }, Vendor)));
+        Assert.Null(DealShipAuthorization.ValidateGroup(Array.Empty<Deal>()));
     }
 
     [Fact]

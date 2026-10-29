@@ -83,13 +83,25 @@ public static class DealShipAuthorization
     /// <summary>حَقلُ مَدينَةِ المُستَلِمِ فارِغ — ‏<c>city</c> إلزامِيٌّ في «Create Order».</summary>
     public const string DeliveryCityMissing = "delivery_city_missing";
 
+    // ─── وثانِيَ عَشَرَ ‏2026-10-29 (مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د13 «ب»؛ ولا يُعادُ حَرفٌ فَوقَ الأَحَدَ عَشَر) ───────────
+
+    /// <summary>
+    /// <para><b>مِن طَلَبِ المُشتَري نَفسِه أَخَواتٌ عِندَ البائِعِ لَم يُؤَكِّدها بَعد</b> (<see cref="WaitingSiblings"/>) — فَلا يُنشَأُ طَلَبٌ يَترُكُها لِبوليصَةٍ ثانِيَةٍ
+    /// وتَحصيلٍ ثانٍ. القَرارُ بِنَصِّه: «تُجمَّع منتجات البائع الواحد في السلّة في طلب واحد وبوليصة واحدة»؛ وكانَت الأُختُ الَّتي لَم تَجهَز ساعَةَ النَقرَةِ
+    /// تُترَكُ فَتُشحَنُ وَحدَها (تَوصيفُه <c>A_sibling_not_yet_ready_is_left_out_and_ships_alone_later</c> في <c>5e8ae1f</c>). ومَخرَجُه بِيَدِ البائِعِ وَحدَه:
+    /// «حَجز» و«تأكيد» خُطوَتاه، والإلغاءُ قَبلَ الشَحنِ بابُه.</para>
+    /// </summary>
+    public const string SiblingsNotReady = "siblings_not_ready";
+
     /// <summary>المَعجَمُ المُغلَق — عَشَرَةٌ لا حادِيَ عَشَر. <b>صارَت أَحَدَ عَشَر ‏2026-10-12</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8):
-    /// <see cref="OrderClosedAtOto"/> بَعدَ <see cref="ActorCannotShip"/> وقَبلَ <see cref="CarrierUnavailable"/> — ولا ثانِيَ عَشَر.</summary>
+    /// <see cref="OrderClosedAtOto"/> بَعدَ <see cref="ActorCannotShip"/> وقَبلَ <see cref="CarrierUnavailable"/> — ولا ثانِيَ عَشَر.
+    /// <b>وصارَت اثنَي عَشَرَ ‏2026-10-29</b> (مُراجَعَةُ تَيّارِ S4 الأولى): <see cref="SiblingsNotReady"/> بَعدَ الأَحَدَ عَشَر.</summary>
     public static readonly IReadOnlyList<string> All = new[]
     {
         DealNotFound, ListingOwnerMissing, ActorNotShipper, DealNotActive, DealNotCash,
         DealNotReadyToShip, ActorCannotShip, OrderClosedAtOto, CarrierUnavailable,
         DeliveryDataMissing, DeliveryCityMissing,
+        SiblingsNotReady,
     };
 
     /// <summary><c>null</c> يَعني يُشحَن. والمَدينَةُ خارِجَها (<see cref="ValidateCity"/>).</summary>
@@ -138,6 +150,24 @@ public static class DealShipAuthorization
 
     public static bool IsAllowed(Deal? deal, DealShipper by, bool carrierReady)
         => Validate(deal, by, carrierReady) is null;
+
+    /// <summary>
+    /// <para><b>أَخَواتٌ تَنتَظِرُ تَأكيدَ البائِع — دالَّةٌ نَقِيَّة</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د13 «ب»): مِن أَخَواتِ الصَفقَةِ
+    /// مِن السَلَّةِ نَفسِها (<see cref="DealShipping.SiblingsOfAsync"/>، بِلا الصَفقَةِ نَفسِها) ما كانَت بِلا طَلَبٍ عِندَ OTO ولَم تَبلُغ «شَحن»، وتَرُدُّها
+    /// البَوّابَةُ لِهذا الشاحِنِ بِـ<see cref="DealNotReadyToShip"/> وَحدَه — أَي بائِعُها هو، فَعّالَةً، نَقداً، ولَم تَبلُغ «تأكيد». فَالمُلغاةُ والمَشحونَةُ (بِطَلَبٍ أَو
+    /// بِغَيرِه) والجاهِزَةُ لا تَنتَظِر، وما تَرُدُّه البَوّابَةُ لِسَبَبٍ غَيرِ مَرحَلَتِها لا يَنتَظِرُ ما لا يَأتي. بِتَرتيبِ ما أُعطِيَت.</para>
+    /// </summary>
+    public static IReadOnlyList<Deal> WaitingSiblings(IEnumerable<Deal> siblings, DealShipper by)
+        => siblings.Where(s => !DealShipping.IsPlaced(s)
+                               && !OtoOrderStatusGate.Reached(s, DealStage.Shipping)
+                               && Validate(s, by, carrierReady: true)?.Code == DealNotReadyToShip)
+                   .ToArray();
+
+    /// <summary>الخَرقُ لِأَخَواتٍ تَنتَظِر (<see cref="WaitingSiblings"/>) — و<c>null</c> لِقائِمَةٍ فارِغَة: يُنشَأُ الطَلَبُ بِمَن حَضَر.</summary>
+    public static DealShipViolation? ValidateGroup(IReadOnlyList<Deal> waiting)
+        => waiting.Count > 0
+            ? new(SiblingsNotReady, $"مِن طَلَبِ المُشتَري نَفسِه {waiting.Count} لَم يُؤَكِّدها البائِعُ بَعد — تُشحَنُ مَعاً في طَلَبٍ واحِد.")
+            : null;
 
     /// <summary>
     /// <para><b>خُطوَةٌ مَحجوزَةٌ عِندَ OTO لا بابَ لَها — رَمزُ البَوّابَةِ الَّذي يُفَسِّرُها</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، البَندُ A0 (x)،
@@ -634,6 +664,12 @@ public sealed class DealShipping
         // الناقِلُ يُسأَلُ بِلا فَكٍّ لِلبَوّابَة، ويُفَكُّ بَعدَها وَحدَها — فَلا يُفَكُّ سِرُّ بائِعٍ لِطَلَبٍ تَرُدُّه الهُوِيَّة (تَيّارُ S8، ‏2026-10-12).
         var refusal = DealShipAuthorization.Validate(deal, by, await CarrierReadyForAsync(tenantSlug, deal, ct));
         if (refusal is not null) return DealShipResult.Refused(refusal.Code, deal);
+        // (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د13 «ب» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **ولا طَلَبَ يَترُكُ أُختاً تَنتَظِرُ تَأكيدَ
+        // البائِع** — كانَت تُترَكُ فَتُشحَنُ وَحدَها بِبوليصَةٍ ثانِيَةٍ وتَحصيلٍ ثانٍ والمُشتَري قيلَ لَه «شُحنَةٌ واحِدَةٌ لِكُلِّ بائِع». حالٌ لا حَقل: بَعدَ البَوّابَةِ
+        // وقَبلَ الفَكِّ والمَدينَة (القاعِدَة ٦)، وبِالدالَّةِ الَّتي تَقرَؤُها الصَفحَةُ فَلا تَرسُمُ استِمارَةً تُرَدّ (القاعِدَة ١٢). وطَلَبٌ قائِمٌ يُستَأنَفُ بِلا سُؤال.
+        if (!IsPlaced(deal!)
+            && DealShipAuthorization.ValidateGroup(DealShipAuthorization.WaitingSiblings(await SiblingsOfAsync(tenantSlug, deal!, ct), by)) is { } waiting)
+            return DealShipResult.Refused(waiting.Code, deal);
         if (await CarrierForAsync(tenantSlug, deal!, ct) is not { } carrier)
             return DealShipResult.Refused(DealShipAuthorization.CarrierUnavailable, deal);
         var token = carrier.RefreshToken;
@@ -722,6 +758,8 @@ public sealed class DealShipping
     /// <para><b>صَفَقاتُ طَلَبٍ واحِد</b> (‏2026-10-29، د13 «ب»): الصَفقَةُ، ثُمَّ أَخَواتُها مِن السَلَّةِ عِندَ بائِعِها (<see cref="DealShipGroup.MembersOf"/>) بِتَرتيبِ
     /// وِلادَتِها — ما كانَ مِنها بِلا طَلَبٍ وتُجيزُه البَوّابَةُ لِهذا الشاحِنِ الآن (<see cref="DealShipAuthorization.Validate"/> بِناقِلِ الصَفقَة: البائِعُ واحِد).
     /// فَالأولى بِتَرتيبِ الوِلادَةِ مُعَرِّفُ الطَلَبِ أَيّاً كانَت الصَفقَةُ الَّتي نُقِرَت.</para>
+    /// <para>(‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): <b>ولا تُترَكُ أُختٌ تَنتَظِرُ تَأكيدَ البائِع</b> — <see cref="ShipAsync"/> يَرُدُّ قَبلَها
+    /// بِـ<see cref="DealShipAuthorization.SiblingsNotReady"/>، فَما يُترَكُ هُنا المُلغاةُ والمَشحونَةُ مِن قَبلُ وَحدَهُما.</para>
     /// </summary>
     private async Task<IReadOnlyList<Deal>> ShipTogetherAsync(string tenantSlug, Deal deal, DealShipper by, CancellationToken ct)
     {
@@ -736,6 +774,17 @@ public sealed class DealShipping
                 members.Add(member);
         }
         return members;
+    }
+
+    /// <summary>أَخَواتُ الصَفقَةِ مِن السَلَّةِ عِندَ بائِعِها (<see cref="DealShipGroup.MembersOf"/>) بِلا الصَفقَةِ نَفسِها — مُحَمَّلَةً الآن بِتَرتيبِ وِلادَتِها، وما لا
+    /// يُوجَدُ يُترَك. وصَفقَةٌ بِلا أَخَواتٍ لا تَحميلَ لَها. تَقرَؤُها <see cref="ShipAsync"/> وصَفحَةُ الصَفقَةِ بِـ<see cref="DealShipAuthorization.WaitingSiblings"/>
+    /// (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى).</summary>
+    public async Task<IReadOnlyList<Deal>> SiblingsOfAsync(string tenantSlug, Deal deal, CancellationToken ct = default)
+    {
+        var siblings = new List<Deal>();
+        foreach (var id in DealShipGroup.MembersOf(deal).Where(id => id != deal.Id))
+            if (await _deals.LoadAsync(tenantSlug, id, ct) is { } sibling) siblings.Add(sibling);
+        return siblings;
     }
 
     /// <summary>أُختٌ مِن السَلَّةِ لَها طَلَبٌ عِندَ OTO سَمّى الصَفقَةَ في صَفَقاتِه (<see cref="OrderMembersRef"/>) — أَو <c>null</c>.</summary>

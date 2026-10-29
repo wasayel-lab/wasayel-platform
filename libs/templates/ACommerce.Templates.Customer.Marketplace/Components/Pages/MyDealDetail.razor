@@ -321,6 +321,19 @@
                     }
                 </form>
             }
+            else if (shipWaiting.Count > 0 && DealRefusalTexts.KeyFor(DealShipAuthorization.SiblingsNotReady) != DealRefusalTexts.KeyFor(Err))
+            {
+                @* (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د13 «ب»): مِن طَلَبِ المُشتَري نَفسِه أَخَواتٌ لَم يُؤَكِّدها البائِعُ بَعد — `/ship` تَرُدُّها
+                   بِـ`siblings_not_ready` (`DealShipAuthorization.WaitingSiblings` نَفسُها) — فَلا استِمارَةَ تُرَدّ، بَل أَسماؤُها بِروابِطِ صَفَقاتِها: مَخرَجُها «تأكيد»
+                   أَو الإلغاءُ هُناك، ثُمَّ تُشحَنُ كُلُّها في طَلَبٍ واحِد. ولا يُكَرَّرُ إن كانَ شَريطُ `?err=` أَعلاه يَقولُه. *@
+                <AcAlert Variant="warning">
+                    @L.Markup("deals.detail.ship_group_waiting", shipWaiting.Count)
+                    @foreach (var waiting in shipWaiting)
+                    {
+                        <a href="@AuthSession.LinkFor(Slug, Role, $"deals/{waiting.Id}")" style="display:block;margin-top:4px;">@(string.IsNullOrEmpty(waiting.ListingTitle) ? L["deals.detail.title_fallback"] : waiting.ListingTitle)</a>
+                    }
+                </AcAlert>
+            }
             else if (shipHeldKey is { } held && held != DealRefusalTexts.KeyFor(Err))
             {
                 @* خُطوَتُه «شَحن» وطَلَبُها عِندَ OTO والبَوّابَةُ تَرُدُّ «أَكمِل الشَّحن»: نَصُّ رَمزِها — ما تَرتَدُّ بِه `/ship` — لا فَراغ
@@ -504,6 +517,9 @@
     /// <c>/ship</c>، بِرَمزِ ناقِلٍ يُحَلُّ لِهذا المَتجَر (<see cref="DealShipping.CarrierReadyForViewerAsync"/> — وكانَ المَرجِعُ <c>CarrierReady</c> المَحذوفَة، صُحِّحَ ‏2026-10-25) — وبِلا رَمزٍ لا تُرسَم (القاعِدَة ١٢).
     /// و<c>shipResumes</c>: لِلصَفقَةِ طَلَبٌ عِندَ OTO مِن مُحاوَلَةٍ سابِقَة، فَالاستِمارَةُ بِلا مَدينَة.</summary>
     bool canShip, shipResumes;
+    /// <summary>مِن طَلَبِ المُشتَري نَفسِه أَخَواتٌ عِندَ هذا البائِعِ لَم يُؤَكِّدها بَعد — <see cref="DealShipAuthorization.WaitingSiblings"/> نَفسُها الَّتي تَرُدُّ بِها
+    /// <c>/ship</c> (<c>siblings_not_ready</c>)، فَلا تُرسَمُ استِمارَةٌ تُرَدّ بَل أَسماؤُها (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ د13 «ب»).</summary>
+    IReadOnlyList<Deal> shipWaiting = Array.Empty<Deal>();
     /// <summary>تاليها «شَحن» وطَلَبُها عِندَ OTO — <see cref="DealShipping.AwaitsCarrier"/> نَفسُها الَّتي تَسأَلُها <c>AdvanceAsync</c>
     /// فَتَرُدُّ «تَأكيد: شَحن» بِـ<c>deal_awaits_carrier</c>: فَلا يُرسَمُ لِمَن خُطوَتُه هذِه، وبابُها «أَكمِل الشَّحن» (مُراجَعَةُ تَيّارِ S7
     /// الثانِيَة، ‏2026-10-12؛ القاعِدَة ١٢).</summary>
@@ -607,6 +623,11 @@
         var carrier = await Shipping.CarrierReadyForViewerAsync(Slug, deal, new DealShipper(uid, Auth.UserName ?? ""));
         canShip = DealShipAuthorization.IsAllowed(deal, new DealShipper(uid, Auth.UserName ?? ""), carrier);
         shipResumes = canShip && DealShipping.IsPlaced(deal);
+        // (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ د13 «ب»): وأَخَواتٌ تَنتَظِرُ تَأكيدَه — الدالَّةُ الَّتي تَرُدُّ بِها `/ship` بَعدَ بَوّابَتِها ولِطَلَبٍ لَم يُنشَأ وَحدَه.
+        shipWaiting = canShip && !shipResumes
+            ? DealShipAuthorization.WaitingSiblings(await Shipping.SiblingsOfAsync(Slug, deal), new DealShipper(uid, Auth.UserName ?? ""))
+            : Array.Empty<Deal>();
+        canShip = canShip && shipWaiting.Count == 0;
         // وخُطوَةٌ طَلَبُها عِندَ OTO لا يُرسَمُ لَها «تَأكيد: شَحن» — الدالَّةُ الَّتي يَرُدُّ بِها المُحَرِّك (مُراجَعَةُ تَيّارِ S7 الثانِيَة).
         heldByCarrier = DealShipping.AwaitsCarrier(deal);
         // وخُطوَةٌ فاتورَتُها لَم تُدفَع لا يُرسَمُ لَها «تَأكيد: دَفع» — الدالَّةُ الَّتي يَرُدُّ بِها المُحَرِّك (‏ADR-032 الخُطوَة 10، ‏2026-10-12).

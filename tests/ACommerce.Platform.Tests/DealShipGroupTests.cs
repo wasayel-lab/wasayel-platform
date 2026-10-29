@@ -143,20 +143,53 @@ public class DealShipGroupTests(ITestOutputHelper output)
     }
 
     /// <summary>وأُختٌ لَم تَبلُغ «تأكيد» (عِندَ «حَجز») لا تَدخُلُ الطَلَب: الأولى وَحدَها بِمُعَرِّفِها ومَبلَغِها، ولا مَرجِعَ صَفَقاتٍ (طَلَبٌ بِصَفقَةٍ واحِدَة)؛ والأُختُ
-    /// بِلا طَلَب، ثُمَّ تُشحَنُ وَحدَها بِمُعَرِّفِها حينَ تَجهَز.</summary>
+    /// بِلا طَلَب، ثُمَّ تُشحَنُ وَحدَها بِمُعَرِّفِها حينَ تَجهَز.
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د13 «ب»: «تُجمَّع منتجات البائع الواحد في السلّة في طلب واحد وبوليصة
+    /// واحدة»؛ كانَ <c>A_sibling_not_yet_ready_is_left_out_and_ships_alone_later</c>، مُودَعٌ في <c>5e8ae1f</c> — بوليصَتانِ وتَحصيلانِ لِسَلَّةٍ واحِدَة): أُختٌ عِندَ
+    /// «حَجز» تَرُدُّ النَقرَةَ بِـ<c>siblings_not_ready</c> <b>بِلا نِداءٍ واحِدٍ لِـOTO</b> ولا كِتابَة؛ وحينَ يُؤَكِّدُها البائِعُ تُشحَنانِ في طَلَبٍ واحِدٍ بِمَجموعِهِما.</para></summary>
     [Fact]
-    public async Task A_sibling_not_yet_ready_is_left_out_and_ships_alone_later()
+    public async Task A_sibling_not_yet_confirmed_holds_the_click_with_nothing_sent_to_oto_until_the_vendor_confirms_it_then_both_ship_as_one_order()
     {
         var w = await Grouped(await TwoConfirmedCashDeals());
         var held = Stored(w, w.Second);
         held.Stage = DealStage.Booked;
         w.Docs.Put(held);
+        var saves = w.Docs.SaveCalls;
 
-        Assert.True((await w.Shipping.ShipAsync(Slug, w.First, DealShipTests.Vendor, "Riyadh")).Ok);
+        var refused = await w.Shipping.ShipAsync(Slug, w.First, DealShipTests.Vendor, "Riyadh");
+        output.WriteLine($"النَقرَة: {refused.Code ?? "ok"} · نِداءاتُ OTO: {w.Oto.Calls.Count} · حِفظات: {w.Docs.SaveCalls - saves} · " +
+                         $"المَرحَلَتان: {Stored(w, w.First).Stage}/{Stored(w, w.Second).Stage}");
+        Assert.Equal(DealShipAuthorization.SiblingsNotReady, refused.Code);
+        Assert.Empty(w.Oto.Calls);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+        Assert.False(DealShipping.IsPlaced(Stored(w, w.First)));
+        Assert.Equal(DealStage.Confirmed, Stored(w, w.First).Stage);
+
+        Assert.True((await w.Deals.AdvanceAsync(Slug, w.Second, DealShipTests.Seller, "بائِع")).Ok);
+        var shipped = await w.Shipping.ShipAsync(Slug, w.First, DealShipTests.Vendor, "Riyadh");
+
+        Assert.True(shipped.Ok, shipped.Code);
+        Assert.Equal((w.First.ToString("N"), 250m, 250m, "سِلعَة 1 · سِلعَة 2"), Assert.Single(Orders(w.Oto)));
+        Assert.Equal(DealStage.Shipping, Stored(w, w.First).Stage);
+        Assert.Equal(DealStage.Shipping, Stored(w, w.Second).Stage);
+    }
+
+    /// <summary>وأُختٌ أَلغاها طَرَفٌ لا تَنتَظِرُ شَيئاً (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى): الأولى تُشحَنُ وَحدَها بِمُعَرِّفِها ومَبلَغِها، ولا مَرجِعَ صَفَقات —
+    /// والمُلغاةُ بِلا طَلَب. فَمَخرَجُ البائِعِ مِن الانتِظارِ «تأكيد» الأُختِ أَو إلغاؤُها، لا بوليصَةٌ ثانِيَة.</summary>
+    [Fact]
+    public async Task A_cancelled_sibling_does_not_hold_and_the_rest_ships_alone()
+    {
+        var w = await Grouped(await TwoConfirmedCashDeals());
+        var cancelled = Stored(w, w.Second);
+        cancelled.Status = DealStatus.Cancelled;
+        w.Docs.Put(cancelled);
+
+        var shipped = await w.Shipping.ShipAsync(Slug, w.First, DealShipTests.Vendor, "Riyadh");
+
+        Assert.True(shipped.Ok, shipped.Code);
         Assert.Equal((w.First.ToString("N"), 100m, 100m, "سِلعَة 1"), Assert.Single(Orders(w.Oto)));
         Assert.False(Stored(w, w.First).Refs.ContainsKey(DealShipping.OrderMembersRef));
         Assert.False(DealShipping.IsPlaced(Stored(w, w.Second)));
-        Assert.Equal(DealStage.Booked, Stored(w, w.Second).Stage);
     }
 
     /// <summary>وطَلَبٌ لَم تُثبِت OTO شُحنَتَه بَعد (لا بوليصَة) يَبقى عَلى الاثنَتَينِ بِمَرجِعِه؛ والنَقرَةُ التالِيَةُ عَلى أَيٍّ مِنهُما تَستَأنِفُه بِلا طَلَبٍ ثانٍ وتُخرِجُهُما مَعاً.</summary>
@@ -331,6 +364,37 @@ public class DealShipGroupTests(ITestOutputHelper output)
         Assert.Contains("{0}", text, StringComparison.Ordinal);
         Assert.Contains("بوليصَةٍ واحِدَة", text, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// <para><b>وأَخَواتٌ تَنتَظِرُ تَأكيدَ البائِعِ تُسَمّى بِروابِطِها مَكانَ الاستِمارَة</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ د13 «ب»؛ القاعِدَة ١٢):
+    /// الصَفحَةُ تَسأَلُ <see cref="DealShipAuthorization.WaitingSiblings"/> عَلى <see cref="DealShipping.SiblingsOfAsync"/> — الدالَّتَينِ اللَّتَينِ تَرُدُّ بِهِما <c>/ship</c>
+    /// — بَعدَ بَوّابَتِها ولِطَلَبٍ لَم يُنشَأ، فَتُطفِئُ <c>canShip</c> وتَرسُمُ النَصَّ وروابِطَ الأَخَوات؛ ونَصّا القاموسِ حَيّانِ ولا يَقولانِ «جاهِزاً» عَن انتِظار.</para>
+    /// </summary>
+    [Fact]
+    public void The_deal_page_names_the_siblings_still_waiting_instead_of_a_ship_form_the_endpoint_would_refuse()
+    {
+        var page = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(Path.Combine(
+            ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "MyDealDetail.razor"))));
+        var resumes = page.IndexOf("shipResumes = canShip && DealShipping.IsPlaced(deal);", StringComparison.Ordinal);
+        var asks = page.IndexOf("DealShipAuthorization.WaitingSiblings(await Shipping.SiblingsOfAsync(Slug, deal), new DealShipper(uid, Auth.UserName ?? \"\"))", StringComparison.Ordinal);
+        var off = page.IndexOf("canShip = canShip && shipWaiting.Count == 0;", StringComparison.Ordinal);
+        Assert.True(resumes > 0 && asks > resumes && off > asks, $"الاستِئناف {resumes} · السُؤال {asks} · الإطفاء {off}");
+        Assert.Contains("shipWaiting = canShip && !shipResumes", page, StringComparison.Ordinal);
+
+        var form = page.IndexOf("@if (canShip)", StringComparison.Ordinal);
+        var branch = page.IndexOf("else if (shipWaiting.Count > 0", form, StringComparison.Ordinal);
+        var key = page.IndexOf("@L.Markup(\"deals.detail.ship_group_waiting\", shipWaiting.Count)", StringComparison.Ordinal);
+        var link = page.IndexOf("AuthSession.LinkFor(Slug, Role, $\"deals/{waiting.Id}\")", StringComparison.Ordinal);
+        Assert.True(form > 0 && branch > form && key > branch && link > key, $"الاستِمارَة {form} · الفَرع {branch} · المِفتاح {key} · الرابِط {link}");
+
+        foreach (var k in new[] { "deals.detail.ship_group_waiting", "deals.detail.ship_group_hint", DealRefusalTexts.KeyFor(DealShipAuthorization.SiblingsNotReady)! })
+        {
+            var text = ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, k);
+            Assert.NotEqual(k, text);
+            Assert.Contains("طَلَبٍ واحِدٍ وبوليصَةٍ واحِدَة", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("جاهِزاً", text, StringComparison.Ordinal);
+        }
+    }
 }
 
 // ═══ البُرهانُ الحَيّ — Postgres (‏WASAYEL_LIVE_PROOF=1 وConnectionStrings__Postgres) ═══════════════════════
@@ -391,6 +455,68 @@ public class LiveDealShipGroupProofTests(ITestOutputHelper output)
             Assert.Equal(DealShipGroup.ValueFor(ids), first.Refs[DealShipping.OrderMembersRef]);
             Assert.Equal(DealStage.Shipping, first.Stage);
             Assert.Equal(DealStage.Shipping, second.Stage);
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            foreach (var d in await s.Query<Deal>().ToListAsync()) s.Delete(d);
+            await s.SaveChangesAsync();
+        }
+    }
+    /// <summary><b>والانتِظارُ عَلى Postgres</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ د13 «ب»): أُختٌ عِندَ «حَجز» تُقرَأُ مِن القاعِدَةِ نُسخَةً لا الكائِنَ
+    /// المَخزونَ نَفسَه — فَالنَقرَةُ تُرَدُّ <c>siblings_not_ready</c> بِلا نِداءٍ لِـOTO والصَفقَتانِ بِحالِهِما؛ وبَعدَ «تأكيد» الأُختِ طَلَبٌ واحِدٌ بِمَجموعِهِما.</summary>
+    [Fact]
+    public async Task A_sibling_not_yet_confirmed_holds_the_click_then_both_ship_as_one_order_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = DealShipping.DemoStore + "-zz-h" + Guid.NewGuid().ToString("N")[..8];
+        var (buyer, seller) = (Guid.NewGuid(), Guid.NewGuid());
+        try
+        {
+            var plain = new DealsService(store, new DealShipGroupTests.ForbiddenPaymentProvider());
+            var ids = new List<Guid>();
+            for (var i = 0; i < 2; i++)
+            {
+                var born = await plain.StartAsync(slug, "marketplace", buyer, "مُشتَرٍ", Guid.NewGuid(), $"سِلعَة {i + 1}", 100m + 50m * i, new()
+                {
+                    [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.CashOnDelivery,
+                    [Deal.DeliveryAddressAttribute] = "حَيُّ المِثال",
+                    [Deal.DeliveryPhoneAttribute] = "0500000000",
+                });
+                await plain.AttachRefAsync(slug, born.Id, DealsService.ListingOwnerRef, seller.ToString());
+                await plain.BindListingOwnerAsync(slug, born.Id, seller.ToString());
+                Assert.True((await plain.AcceptAsync(slug, born.Id, new DealAcceptor(seller, "بائِع"))).Ok);
+                if (i == 0) Assert.True((await plain.AdvanceAsync(slug, born.Id, seller, "بائِع")).Ok);   // والثانِيَةُ عِندَ «حَجز»
+                ids.Add(born.Id);
+            }
+            await DealShipGroup.WriteAsync(plain, slug, ids.Select(id => (id, seller.ToString())).ToArray());
+
+            var oto = new OtoRouteHandler();
+            var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, RefreshToken = "RT-live-proof" });
+            var shipping = new DealShipping(new DealsService(TenantAlias.Wrap(store, DealShipping.DemoStore, slug), new DealShipGroupTests.ForbiddenPaymentProvider()),
+                new OtoClient(new HttpClient(oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options);
+            var shipper = new DealShipper(seller, "بائِع");
+
+            var held = await shipping.ShipAsync(DealShipping.DemoStore, ids[0], shipper, "Riyadh");
+            var heldCalls = oto.Calls.Count;
+            var (first, second) = ((await plain.LoadAsync(slug, ids[0]))!, (await plain.LoadAsync(slug, ids[1]))!);
+            output.WriteLine($"النَقرَة: {held.Code ?? "ok"} · نِداءاتُ OTO: {heldCalls} · المَرحَلَتان: {first.Stage}/{second.Stage}");
+            Assert.Equal(DealShipAuthorization.SiblingsNotReady, held.Code);
+            Assert.Equal(0, heldCalls);
+            Assert.False(DealShipping.IsPlaced(first));
+            Assert.Equal((DealStage.Confirmed, DealStage.Booked), (first.Stage, second.Stage));
+
+            Assert.True((await plain.AdvanceAsync(slug, ids[1], seller, "بائِع")).Ok);
+            var shipped = await shipping.ShipAsync(DealShipping.DemoStore, ids[0], shipper, "Riyadh");
+            var orders = DealShipGroupTests.Orders(oto);
+            (first, second) = ((await plain.LoadAsync(slug, ids[0]))!, (await plain.LoadAsync(slug, ids[1]))!);
+            output.WriteLine($"بَعدَ التَأكيد: {(shipped.Ok ? "ok" : shipped.Code)} · طَلَباتُ OTO: {orders.Length} · المَبلَغ: {orders.FirstOrDefault().Amount} · " +
+                             $"المَرحَلَتان: {first.Stage}/{second.Stage}");
+            Assert.True(shipped.Ok, shipped.Code);
+            Assert.Equal((ids[0].ToString("N"), 250m, 250m, "سِلعَة 1 · سِلعَة 2"), Assert.Single(orders));
+            Assert.Equal((DealStage.Shipping, DealStage.Shipping), (first.Stage, second.Stage));
         }
         finally
         {
