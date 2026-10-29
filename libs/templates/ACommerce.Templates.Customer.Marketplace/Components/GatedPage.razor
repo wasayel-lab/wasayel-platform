@@ -116,7 +116,17 @@
             // ‏(‏2026-10-28، قَرارُ المالِك د42 «أ») كانَ `var tenant = await Tenants.FindAsync(Slug);` — الوَثيقَةُ المُخَزَّنَة، فَدَورٌ مُؤَلَّفٌ مُعتَمَدٌ
             // يَحمِلُ الصَلاحِيَّةَ يُرَدُّ هُنا (تَوصيفُه `973dcd0`). صارَ يَقرَأُ ما تَقرَؤُه بَقِيَّةُ الصَفَحات: المُستَأجِرُ مُجَسَّداً بِأَدوارِه المُؤَلَّفَة.
             var tenant = (await Roles.LoadAsync(Slug)).Tenant;
-            if (tenant is { Roles.Count: > 0 })
+            // ‏(‏2026-10-29، ‏ADR-040 §٢‑3، قَرارُ المالِك د62 — مُراجَعَةُ تَيّارِ S1 الجَولَة ٢؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ هُنا
+            // `if (tenant is { Roles.Count: > 0 })` وَحدَه ثُمَّ `_state = GateState.Allowed;` — فَمَتجَرٌ بِلا أَدوارٍ ومُستَأجِرٌ غائِبٌ يَفتَحانِ الصَفحَةَ
+            // لِأَيِّ صَلاحِيَّةٍ بِلا سُؤال، ومِنها الإدارِيَّةُ الَّتي تَرُدُّها الدالَّة (تَوصيفُه `3e44314` و`6bd2c9c`). صارَ لِكُلِّ حالٍ سُؤالُه كَما في الحُرّاسِ
+            // الثَلاثَة: المُستَأجِرُ الغائِبُ يُرَدُّ (`HasPermissionAsync` تُعيدُ `false`)، وصِفرُ الأَدوارِ يَسأَلُ البابَ نَفسَه — صَلاحِيّاتُ العُضوِ تَمُرّ
+            // والإدارِيَّةُ تُرَدّ — بِلا قِراءَةِ الدَورِ المُخَزَّن: الدالَّةُ لا تَقرَؤُه عَلى صِفرِ الأَدوار، فَلا استِعلامَ زائِدٌ عَمّا كان.
+            if (tenant is null) { Forbid(); return; }
+            if (tenant.Roles.Count == 0)
+            {
+                if (!PermissionDoor.Opens(tenant.Roles, Role, null, Permission)) { Forbid(); return; }
+            }
+            else
             {
                 // القِراءَةُ غَير مَشروطَة عَمداً — كَما كانَت حَرفاً.
                 // ‏`Role ?? await …` كانَ سَيَتَخَطّى الاستِعلامَ مَتى
@@ -128,10 +138,7 @@
                 // نَفسُه لِكُلِّ مُدخَل (دَورُ مَسارٍ فارِغٌ لا يولَدُ مِن التَوجيه)، مَقيسٌ بِجَدوَلِ `CreateListingDoorTests`.
                 if (!PermissionDoor.Opens(tenant.Roles, Role, storedRole, Permission))
                 {
-                    _state = GateState.Forbidden;
-                    _forbiddenMsg = string.IsNullOrEmpty(ForbiddenMessageKey)
-                        ? $"{L["gate.forbidden.prefix"]}{Permission}» — {L["gate.forbidden.suffix"]}"
-                        : L[ForbiddenMessageKey];
+                    Forbid();
                     if (PermissionDoor.SwitchOpens(tenant.Roles, Role, Permission))
                         _switchUrl = AuthSession.LinkFor(Slug, Role, "me/role");
                     return;
@@ -140,5 +147,16 @@
         }
 
         _state = GateState.Allowed;
+    }
+
+    /// <summary>حالُ الرَفضِ ونَصُّه — ما كانَ يَكتُبُه فَرعُ «لِلمَتجَرِ أَدوار» بِحَرفِه، صارَ يَكتُبُه الفُروعُ الثَلاثَة (‏2026-10-29، ‏ADR-040 §٢‑3).
+    /// ومَخرَجُ «اِختَر دَوراً آخَر» لِفَرعِ الأَدوارِ وَحدَه: صِفرُ الأَدوارِ لا يَعرِضُ دَوراً يُختار (‏<c>SwitchOpens</c> عَلى قائِمَةٍ فارِغَةٍ <c>false</c>)،
+    /// والمُستَأجِرُ الغائِبُ لا صَفحَةَ أَدوارٍ لَه.</summary>
+    void Forbid()
+    {
+        _state = GateState.Forbidden;
+        _forbiddenMsg = string.IsNullOrEmpty(ForbiddenMessageKey)
+            ? $"{L["gate.forbidden.prefix"]}{Permission}» — {L["gate.forbidden.suffix"]}"
+            : L[ForbiddenMessageKey];
     }
 }

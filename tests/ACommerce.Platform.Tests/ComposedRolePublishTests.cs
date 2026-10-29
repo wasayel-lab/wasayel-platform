@@ -98,14 +98,16 @@ public class ComposedRolePublishTests(ITestOutputHelper output)
 
     /// <summary><b>المُرَشِّحُ المُجَسَّدُ لا يَحرُسُ صَلاحِيَّةً إدارِيَّة</b> (‏ADR-043 §٢·٤): مُصادِقُ تَعريفِ المُستَأجِرِ يَقبَلُ <c>tenant.manage</c>، و<c>SelfGrantPolicy</c>
     /// يَمنَعُ بِالسلاجِ وَحدَه — فَصَلاحِيَّةٌ إدارِيَّةٌ عَلى الأَدوارِ المُجَسَّدَةِ كانَت سَتَفتَحُ لِأَيِّ عُضوٍ يَختارُ دَوراً مُؤَلَّفاً يَحمِلُها. فَكُلُّ
-    /// <c>.RequirePermission("…")</c> وكُلُّ <c>HasPermissionAsync(…, "…", …)</c> في المَصادِرِ صَلاحِيَّةُ عُضوٍ مِن المَعجَم. يُطبَعُ العَدُّ ويَفشَلُ عَلى الصِفر.</summary>
+    /// <c>.RequirePermission("…")</c> وكُلُّ <c>HasPermissionAsync(…, "…", …)</c> في المَصادِرِ صَلاحِيَّةُ عُضوٍ مِن المَعجَم. يُطبَعُ العَدُّ ويَفشَلُ عَلى الصِفر.
+    /// <para>(‏2026-10-29، الحارِسُ الرابِع — مُراجَعَةُ تَيّارِ S1 الجَولَة ٢؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): وكُلُّ <c>&lt;GatedPage … Permission="…"&gt;</c> —
+    /// الصَفحَةُ تَقرَأُ المُجَسَّدَةَ (‏<c>TenantRoleService.LoadAsync</c>) مُنذُ د42، وكانَ الماسِحُ لا يَراها. والنَمَطُ في <see cref="MaterializedGuard"/>
+    /// وعَيِّناتُه في <see cref="The_materialized_guard_scanner_reads_every_guard_shape"/>.</para></summary>
     [Fact]
     public void Every_permission_guard_on_the_materialized_roles_names_a_member_permission()
     {
         var sites = EntitlementContractTests.SourceFiles()
-            .SelectMany(f => System.Text.RegularExpressions.Regex.Matches(
-                    WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(f.Text)),
-                    @"\.RequirePermission\(""(?<p>[^""]+)""\)|HasPermissionAsync\([^,]+,[^,]+,[^,]+,\s*""(?<p>[^""]+)""")
+            .SelectMany(f => MaterializedGuard.Matches(
+                    WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(f.Text)))
                 .Select(m => (File: Path.GetFileName(f.File), Permission: m.Groups["p"].Value)))
             .ToList();
         output.WriteLine($"حُرّاسُ صَلاحِيَّةٍ عَلى المُجَسَّدَة: {sites.Count} · {string.Join(" · ", sites.Select(s => $"{s.File}:{s.Permission}"))}");
@@ -115,6 +117,26 @@ public class ComposedRolePublishTests(ITestOutputHelper output)
             Assert.True(PermissionCatalog.Contains(s.Permission), $"{s.File}: «{s.Permission}» خارِجَ المَعجَم");
             Assert.False(PermissionCatalog.IsAdministrative(s.Permission), $"{s.File}: «{s.Permission}» إدارِيَّةٌ عَلى الأَدوارِ المُجَسَّدَة");
         });
+    }
+
+    /// <summary>حُرّاسُ الصَلاحِيَّةِ عَلى الأَدوارِ المُجَسَّدَة بِأَشكالِها الثَلاثَة: مُرَشِّحُ النُقطَة، وسُؤالُ حارِسِ العَرض، وصَفحَةُ <c>GatedPage</c>.</summary>
+    internal static readonly System.Text.RegularExpressions.Regex MaterializedGuard = new(
+        @"\.RequirePermission\(""(?<p>[^""]+)""\)|HasPermissionAsync\([^,]+,[^,]+,[^,]+,\s*""(?<p>[^""]+)""|<GatedPage\b[^>]*\bPermission=""(?<p>[^""]+)""");
+
+    /// <summary>القاعِدَة ١٠ — عَيِّناتٌ مَحقونَة: كُلُّ شَكلٍ يُقرَأُ بِصَلاحِيَّتِه، و<c>GatedPage</c> بِلا <c>Permission</c> لا يُعَدّ، وصَلاحِيَّةٌ إدارِيَّةٌ في صَفحَةٍ
+    /// تُقرَأُ إدارِيَّةً فَيَحمَرُّ بِها الصَفُّ أَعلاه.</summary>
+    [Theory]
+    [InlineData("app.MapPost(\"/x\", h).RequirePermission(\"listing.create\");", "listing.create")]
+    [InlineData("if (!await HasPermissionAsync(http, slug, uid, \"offer.submit\", store)) return;", "offer.submit")]
+    [InlineData("<GatedPage Slug=\"@Slug\" Role=\"@Role\" Permission=\"listing.create\" ForbiddenMessageKey=\"k\">", "listing.create")]
+    [InlineData("<GatedPage Slug=\"@Slug\" Permission=\"tenant.manage\">", "tenant.manage")]
+    [InlineData("<GatedPage Slug=\"@Slug\" Role=\"@Role\" RequireAuth>", "")]
+    public void The_materialized_guard_scanner_reads_every_guard_shape(string sample, string expected)
+    {
+        var found = MaterializedGuard.Matches(sample).Select(m => m.Groups["p"].Value).ToList();
+        Assert.Equal(expected.Length == 0 ? Array.Empty<string>() : new[] { expected }, found);
+        if (expected.Length > 0)
+            Assert.Equal(expected == "tenant.manage", PermissionCatalog.IsAdministrative(found[0]));
     }
 
     /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-28، كوميتُ تَبديلِ د42)</b> — كانَ <c>Today_the_publish_filter_reads_the_stored_tenant_roles_alone</c>

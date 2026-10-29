@@ -58,24 +58,29 @@ public class PageGateZeroRoleTests(ITestOutputHelper output)
         Assert.True(cells >= 25, $"أَداةٌ عَمياء: {cells}");
     }
 
-    /// <summary><b>«اليَوم» في المَصدَر (يُقلَبُ بِاسمِه)</b>: الصَفحَةُ تَسأَلُ البابَ داخِلَ فَرعِ «لِلمَتجَرِ أَدوار» وَحدَه — <c>if (tenant is { Roles.Count: > 0 })</c>
-    /// — ولا فَرعَ لِصِفرِ الأَدوار، ولا سُؤالَ لِلدالَّةِ خارِجَه؛ فَما بَعدَ الفَرعِ (<c>_state = GateState.Allowed;</c>) يَبلُغُه صِفرُ الأَدوارِ والمُستَأجِرُ الغائِبُ
-    /// بِلا سُؤال. والماسِحانِ (<c>RoleCatalogAdministrativeTests.GateFiles</c> و<c>ComposedRolePublishTests</c>) لا يَقرَآنِ هذا المِلَفّ.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_the_page_gate_asks_the_door_only_inside_its_positive_role_count_branch_so_zero_roles_reach_allowed_unasked</c> (‏<c>3e44314</c>):
+    /// سُؤالٌ واحِدٌ داخِلَ <c>if (tenant is { Roles.Count: > 0 })</c> ولا فَرعَ لِلصِفرِ ولا لِلغائِب. والآن ثَلاثَةُ فُروعٍ قَبلَ <c>Allowed</c>: الغائِبُ يُرَدّ،
+    /// وفَرعُ <c>Roles.Count == 0</c> يَسأَلُ البابَ بِلا دَورٍ مُخَزَّن (لا قِراءَة)، وفَرعُ الأَدوارِ كَما كانَ بِقِراءَتِه وسُؤالِه ومَخرَجِه — والشَكلُ المَوجِبُ غائِب.</summary>
     [Fact]
-    public void Today_the_page_gate_asks_the_door_only_inside_its_positive_role_count_branch_so_zero_roles_reach_allowed_unasked()
+    public void The_page_gate_refuses_a_missing_tenant_asks_the_door_on_its_zero_role_branch_and_keeps_the_role_read_for_stores_with_roles()
     {
         var code = GateSource();
-        var branch = code.IndexOf("if (tenant is { Roles.Count: > 0 })", StringComparison.Ordinal);
+        var missing = code.IndexOf("if (tenant is null) { Forbid(); return; }", StringComparison.Ordinal);
+        var zero = code.IndexOf("if (tenant.Roles.Count == 0)", StringComparison.Ordinal);
         var asks = System.Text.RegularExpressions.Regex.Matches(code, @"PermissionDoor\.Opens\(").Select(m => m.Index).ToList();
+        var read = code.IndexOf("var storedRole = await Accounts.ActiveRoleAsync(Slug, uid2);", StringComparison.Ordinal);
         var allowed = code.LastIndexOf("_state = GateState.Allowed;", StringComparison.Ordinal);
-        output.WriteLine($"فَرعُ «لِلمَتجَرِ أَدوار»: {branch} · أَسئِلَةُ البابِ: {asks.Count} ({string.Join(", ", asks)}) · فَرعُ صِفرٍ صَريح: "
-            + $"{code.Contains("Roles.Count == 0", StringComparison.Ordinal)} · Allowed الأَخير: {allowed}");
+        output.WriteLine($"الغائِب: {missing} · فَرعُ الصِفر: {zero} · أَسئِلَةُ البابِ: {asks.Count} ({string.Join(", ", asks)}) · قِراءَةُ الدَور: {read} · "
+            + $"شَكلٌ مَوجِب: {code.Contains("Roles.Count: > 0", StringComparison.Ordinal)} · Allowed الأَخير: {allowed}");
 
-        Assert.True(branch > 0);
-        Assert.Single(asks);
-        Assert.True(asks[0] > branch && asks[0] < allowed, "سُؤالُ البابِ داخِلَ الفَرعِ المَوجِب، قَبلَ Allowed.");
-        Assert.DoesNotContain("Roles.Count == 0", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("tenant is null", code, StringComparison.Ordinal);
+        Assert.True(missing > 0 && missing < zero, "الغائِبُ يُرَدُّ قَبلَ فَرعِ الصِفر.");
+        Assert.Equal(2, asks.Count);
+        Assert.True(zero < asks[0] && asks[0] < read, "فَرعُ الصِفرِ يَسأَلُ البابَ قَبلَ قِراءَةِ الدَور — فَلا يَقرَؤُه.");
+        Assert.Contains("if (!PermissionDoor.Opens(tenant.Roles, Role, null, Permission)) { Forbid(); return; }", code, StringComparison.Ordinal);
+        Assert.True(read < asks[1] && asks[1] < allowed, "فَرعُ الأَدوارِ يَقرَأُ الدَورَ ثُمَّ يَسأَلُ — قَبلَ Allowed.");
+        Assert.DoesNotContain("Roles.Count: > 0", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("Roles.Count > 0", code, StringComparison.Ordinal);
     }
 }
 
@@ -198,9 +203,11 @@ public class LivePageGateZeroRoleProofTests(ITestOutputHelper output)
 
     // ─── «اليَوم» — يُقلَبُ بِاسمِه في كوميتِ التَبديل ──────────────────────────────────────────────────
 
-    /// <summary><b>الثَغرَةُ مَرسومَة</b>: صِفرُ الأَدوار، والصَلاحِيَّةُ <c>tenant.manage</c> الَّتي تَرُدُّها الدالَّة — والصَفحَةُ تَرسُمُ مُحتَواها لِعُضوٍ بِلا دَور.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_a_member_of_a_zero_role_store_sees_the_page_behind_an_administrative_permission_on_Postgres</c> (‏<c>3e44314</c>، «المُحتَوى» عَلى
+    /// <c>wasayel_dev</c>). والآن الصَفحَةُ تَسأَلُ البابَ عَلى صِفرِ الأَدوار: <c>tenant.manage</c> تُرَدُّ بِنَصِّ الرَفض، ولا مَخرَجَ «اِختَر دَوراً» — لا دَورَ يُختار.</summary>
     [Fact]
-    public async Task Today_a_member_of_a_zero_role_store_sees_the_page_behind_an_administrative_permission_on_Postgres()
+    public async Task A_member_of_a_zero_role_store_is_refused_the_page_behind_an_administrative_permission_on_Postgres()
     {
         if (!Enabled) return;
 
@@ -211,16 +218,18 @@ public class LivePageGateZeroRoleProofTests(ITestOutputHelper output)
             var ids = await SeedAsync(store, slug, Array.Empty<string>(), "");
             var html = await RenderAsync(store, slug, ids[0], PageGateZeroRoleTests.Administrative);
             Print($"صِفرُ أَدوار · عُضوٌ بِلا دَور · {PageGateZeroRoleTests.Administrative} (الدالَّةُ تَرُدّ: {!PermissionDoor.Opens(Array.Empty<Role>(), null, null, PageGateZeroRoleTests.Administrative)})", html);
-            Assert.True(Shows(html));
+            Assert.True(Refuses(html));
+            Assert.Contains(PageGateZeroRoleTests.Administrative, html, StringComparison.Ordinal);
+            Assert.DoesNotContain("me/role", html, StringComparison.Ordinal);
         }
         finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
     }
 
-    /// <summary><b>والمُستَأجِرُ الغائِبُ مَرسوماً</b> (‏2026-10-29، يُلحَقُ قَبلَ التَبديلِ في كوميتٍ مُستَقِلّ): جَلسَةٌ مُوَقَّعَةٌ لِمَتجَرٍ لا وَثيقَةَ لَه
-    /// (حُذِفَ أَو لَم يوجَد) — <c>Roles.LoadAsync</c> يُعيدُ <c>Tenant = null</c>، والفَرعُ المَوجِبُ لا يَدخُلُه، فَالصَفحَةُ تَرسُمُ مُحتَواها لِأَيِّ صَلاحِيَّة؛
-    /// والحُرّاسُ الثَلاثَةُ الآخَرونَ يَرُدّونَه (<c>PermissionFilter</c> ‏404، و<c>HasPermissionAsync</c> ‏<c>false</c>).</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_a_session_in_a_store_without_a_tenant_document_sees_the_page_behind_any_permission_on_Postgres</c> (‏<c>6bd2c9c</c>، «المُحتَوى» لِلصَلاحِيَّتَين).
+    /// والآن الصَفحَةُ تَرُدُّ المُستَأجِرَ الغائِبَ لِأَيِّ صَلاحِيَّة — كَما يَرُدُّه <c>PermissionFilter</c> و<c>HasPermissionAsync</c> — بِلا مَخرَج.</summary>
     [Fact]
-    public async Task Today_a_session_in_a_store_without_a_tenant_document_sees_the_page_behind_any_permission_on_Postgres()
+    public async Task A_session_in_a_store_without_a_tenant_document_is_refused_the_page_behind_any_permission_on_Postgres()
     {
         if (!Enabled) return;
 
@@ -230,7 +239,8 @@ public class LivePageGateZeroRoleProofTests(ITestOutputHelper output)
         var admin = await RenderAsync(store, slug, Guid.NewGuid(), PageGateZeroRoleTests.Administrative);
         Print($"بِلا وَثيقَةِ مُستَأجِر · {PageGateZeroRoleTests.Member}", member);
         Print($"بِلا وَثيقَةِ مُستَأجِر · {PageGateZeroRoleTests.Administrative}", admin);
-        Assert.True(Shows(member));
-        Assert.True(Shows(admin));
+        Assert.True(Refuses(member));
+        Assert.True(Refuses(admin));
+        Assert.DoesNotContain("me/role", member + admin, StringComparison.Ordinal);
     }
 }
