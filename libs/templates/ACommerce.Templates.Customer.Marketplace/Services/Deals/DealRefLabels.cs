@@ -57,3 +57,59 @@ public static class DealRefLabels
     public static bool IsShown(DealEvent e)
         => !string.Equals(e.Action, DealEvent.RefNote, StringComparison.Ordinal) || LabelKeyFor(e.Note) is not null;
 }
+
+/// <summary>
+/// <para><b>أَسطُرُ الدَفعِ الأَربَعَةُ في سِجِلِّ الصَفقَة: تُسَمّى بِالحالِ المُسَجَّلَةِ في السَطرِ لا بِفِعلِه وَحدَه</b> (‏2026-10-29، قَرارُ المالِك
+/// د22 (١) «ب»). <see cref="DealsService"/> يَكتُبُ <c>captured</c> بِمُلاحَظَةِ <c>capture {PaymentStatus} {المَبلَغ} SAR</c> كُلَّما عادَ
+/// <c>CaptureAsync</c> بِلا استِثناء — ولو بِحالٍ غَيرِ <see cref="ACommerce.Kit.Payments.PaymentStatus.Captured"/> — و<c>refunded</c> بِـ
+/// <c>refund {PaymentStatus} …</c>؛ وكانَت صَفحَةُ العُضوِ تَرسُمُ اسمَ الفِعلِ بِالإنكليزِيَّة. فَالتَسمِيَةُ بِالفِعلِ وَحدَه قَد تُخبِرُ المُشتَري
+/// بِتَحصيلٍ لَم يَقَع: <b>«تَمَّ» لا تُقالُ إلّا إذا قالَتها الحال</b>.</para>
+/// <para>مَعجَمٌ مُغلَقٌ مِن خَمسَةِ مَفاتيح، والحالُ تُقرَأُ بِحَرفِ التِعدادِ (<see cref="Enum.TryParse{TEnum}(string?, bool, out TEnum)"/> بِلا تَجاهُلِ حالَةِ
+/// الحُروف) — فَحالٌ مَجهولَةٌ أَو مُلاحَظَةٌ مَشوَّهَةٌ تُسَمّى «تَعَذَّر»، لا «تَمّ».</para>
+/// </summary>
+public static class DealPaymentLines
+{
+    public const string Captured      = "captured";
+    public const string CaptureFailed = "capture_failed";
+    public const string Refunded      = "refunded";
+    public const string RefundFailed  = "refund_failed";
+
+    public const string CapturedKey        = "deals.detail.event_payment_captured";
+    public const string CaptureFailedKey   = "deals.detail.event_payment_capture_failed";
+    public const string RefundedKey        = "deals.detail.event_payment_refunded";
+    public const string PartlyRefundedKey  = "deals.detail.event_payment_partly_refunded";
+    public const string RefundFailedKey    = "deals.detail.event_payment_refund_failed";
+
+    /// <summary>المَفاتيحُ الخَمسَة — لِلاختِبارِ الَّذي يَمنَعُ نُمُوَّها صامِتَة.</summary>
+    public static readonly IReadOnlyList<string> Keys = [CapturedKey, CaptureFailedKey, RefundedKey, PartlyRefundedKey, RefundFailedKey];
+
+    /// <summary>الحالُ المُسَجَّلَةُ في مُلاحَظَةِ <paramref name="verb"/> (‏<c>capture</c>/<c>refund</c>) — الكَلِمَةُ الثانِيَة — أَو <c>null</c>.</summary>
+    public static ACommerce.Kit.Payments.PaymentStatus? StatusOf(string? note, string verb)
+    {
+        if (note is null) return null;
+        var parts = note.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2 && parts[0] == verb
+               && Enum.TryParse<ACommerce.Kit.Payments.PaymentStatus>(parts[1], ignoreCase: false, out var status)
+               && Enum.IsDefined(status)
+            ? status : null;
+    }
+
+    /// <summary>مِفتاحُ القامُوسِ لِسَطرٍ مِن السِجِلّ — والصَفحَةُ تُمَرِّرُ السَطرَ كُلَّه فَلا تَلمِسُ مُلاحَظَتَه (‏<c>e.Note</c> في صَفحَةِ العُضوِ
+    /// وَسيطُ <see cref="DealRefLabels.LabelKeyFor"/> وَحدَه — <c>DealTimelineRefLabelsTests</c>).</summary>
+    public static string? LabelKeyFor(DealEvent e) => LabelKeyFor(e.Action, e.Note);
+
+    /// <summary>مِفتاحُ القامُوسِ لِسَطرِ دَفعٍ — أَو <c>null</c> لِما لَيسَ سَطرَ دَفع.</summary>
+    public static string? LabelKeyFor(string action, string? note) => action switch
+    {
+        Captured      => StatusOf(note, "capture") == ACommerce.Kit.Payments.PaymentStatus.Captured ? CapturedKey : CaptureFailedKey,
+        CaptureFailed => CaptureFailedKey,
+        Refunded      => StatusOf(note, "refund") switch
+        {
+            ACommerce.Kit.Payments.PaymentStatus.Refunded          => RefundedKey,
+            ACommerce.Kit.Payments.PaymentStatus.PartiallyRefunded => PartlyRefundedKey,
+            _                                                      => RefundFailedKey,
+        },
+        RefundFailed  => RefundFailedKey,
+        _             => null,
+    };
+}

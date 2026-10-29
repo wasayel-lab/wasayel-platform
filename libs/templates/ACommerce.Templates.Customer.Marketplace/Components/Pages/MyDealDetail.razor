@@ -604,6 +604,9 @@
         "cancelled" => L["deals.detail.event_cancelled"],
         "disputed" => L["deals.detail.event_disputed"],
         DealEvent.RefNote => L[DealRefLabels.LabelKeyFor(e.Note) ?? "deals.detail.event_note"],
+        // ‏(2026-10-29، قَرارُ المالِك د22 (١) «ب») أَسطُرُ الدَفعِ الأَربَعَةُ بِالحالِ المَكتوبَةِ في السَطر — كانَت تَسقُطُ إلى اسمِ الفِعلِ بِالإنكليزِيَّة.
+        DealPaymentLines.Captured or DealPaymentLines.CaptureFailed or DealPaymentLines.Refunded or DealPaymentLines.RefundFailed
+            => L[DealPaymentLines.LabelKeyFor(e)!],
         _ => e.Action
     };
 }
