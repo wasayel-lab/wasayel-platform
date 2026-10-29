@@ -109,6 +109,7 @@ public class DealTimelineRefLabelsTests
         ["OtoIdRef"]             = new[] { DealShipping.OtoIdRef },
         ["ClosedRef"]            = new[] { DealShipping.ClosedRef },
         ["DeliveredAfterCancelRef"] = new[] { DealShipping.DeliveredAfterCancelRef },   // ‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4
+        ["InterventionRef"]      = new[] { DealShipping.InterventionRef },   // ‏2026-10-29، قَرارُ المالِك د9 (١) «أ»: «يَحتاجُ تَدَخُّلاً»
         ["key"]                  = new[] { DealShipping.LabelRef, DealShipping.TrackingRef },
     };
 
@@ -235,12 +236,12 @@ public class DealTimelineRefLabelsTests
         foreach (var (file, arg) in sites) output.WriteLine($"{file}: {arg}");
         output.WriteLine($"مَواضِعُ الإلحاقِ: {sites.Count} · تَعابيرُ مُختَلِفَة: {sites.Select(s => s.Arg).Distinct().Count()} · مَفاتيح: {WrittenKeys.Values.SelectMany(k => k).Distinct().Count()}");
 
-        Assert.Equal(17, sites.Count);   // (‏2026-10-13، G5 M4): +`InvoiceDealsRef` في `OpenInvoiceAsync` — 13 ← 14. (G5 (xvii-g)): +`InvoiceClosedRef` في `VerifyAsync` — 14 ← 15. (‏2026-10-24، lens-money-integrity-4): +`DeliveredAfterCancelRef` في `DeliverAsync` — 15 ← 16. (‏2026-10-29، قَرارُ المالِك د5 (٣)): +`InvoiceExpiresAtRef` في `OpenInvoiceAsync` — 16 ← 17.
+        Assert.Equal(18, sites.Count);   // (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»): +`InterventionRef` في `FlagInterventionAsync` — 17 ← 18. (‏2026-10-13، G5 M4): +`InvoiceDealsRef` في `OpenInvoiceAsync` — 13 ← 14. (G5 (xvii-g)): +`InvoiceClosedRef` في `VerifyAsync` — 14 ← 15. (‏2026-10-24، lens-money-integrity-4): +`DeliveredAfterCancelRef` في `DeliverAsync` — 15 ← 16. (‏2026-10-29، قَرارُ المالِك د5 (٣)): +`InvoiceExpiresAtRef` في `OpenInvoiceAsync` — 16 ← 17.
         foreach (var (file, arg) in sites)
             Assert.True(WrittenKeys.ContainsKey(arg), $"مَرجِعٌ يُلحَقُ بِلا تَصنيف في {file}: {arg}");
         foreach (var expr in WrittenKeys.Keys)
             Assert.Contains(sites, s => s.Arg == expr);
-        Assert.Equal(18, WrittenKeys.Values.SelectMany(k => k).Distinct(StringComparer.Ordinal).Count());   // 14 ← 15 (G5 M4) ← 16 (G5 (xvii-g)) ← 17 (‏2026-10-24، lens-money-integrity-4) ← 18 (‏2026-10-29، د5 (٣))
+        Assert.Equal(19, WrittenKeys.Values.SelectMany(k => k).Distinct(StringComparer.Ordinal).Count());   // 14 ← 15 (G5 M4) ← 16 (G5 (xvii-g)) ← 17 (‏2026-10-24، lens-money-integrity-4) ← 18 (‏2026-10-29، د5 (٣)) ← 19 (‏2026-10-29، د9 (١))
 
         // «key» حَلقَةٌ عَلى الرابِطَينِ وَحدَهُما — بِحَرفِها.
         var shipping = WriteEndpointGuardTests.StripComments(Source(Template, "Services", "Deals", "DealShipping.cs"));
@@ -294,12 +295,12 @@ public class DealTimelineRefLabelsTests
     {
         var written = WrittenKeys.Values.SelectMany(k => k).ToHashSet(StringComparer.Ordinal);
         output.WriteLine($"مَكتوبَة: {written.Count} · مُسَمّاة: {DealRefLabels.Labels.Count} · داخِلِيَّة: {Internal.Count}");
-        Assert.Equal(18, written.Count);   // 14 ← 15 (G5 M4) ← 16 (G5 (xvii-g)) ← 17 (‏2026-10-24، lens-money-integrity-4: oto_delivered_after_cancel) ← 18 (‏2026-10-29، د5 (٣): gateway_invoice_expires_at)
+        Assert.Equal(19, written.Count);   // 14 ← 15 (G5 M4) ← 16 (G5 (xvii-g)) ← 17 (‏2026-10-24، lens-money-integrity-4: oto_delivered_after_cancel) ← 18 (‏2026-10-29، د5 (٣): gateway_invoice_expires_at) ← 19 (‏2026-10-29، د9 (١): oto_needs_intervention)
         foreach (var key in written)
             Assert.True(DealRefLabels.Labels.ContainsKey(key) ^ Internal.ContainsKey(key), $"‏{key}: يَجِبُ أَن يَكونَ مُسَمّىً أَو داخِلِيّاً، لا الاثنَين ولا لا شَيء.");
         foreach (var key in DealRefLabels.Labels.Keys.Concat(Internal.Keys))
             Assert.True(written.Contains(key), $"‏{key} مُصَنَّفٌ ولا يَكتُبُه أَحَد.");
-        Assert.Equal(11, DealRefLabels.Labels.Count);   // 9 ← 10 (‏2026-10-13، G5 (xvii-g): gateway_invoice_closed مُسَمّىً لِلطَرَفَين) ← 11 (‏2026-10-24: oto_delivered_after_cancel)
+        Assert.Equal(12, DealRefLabels.Labels.Count);   // 9 ← 10 (‏2026-10-13، G5 (xvii-g): gateway_invoice_closed مُسَمّىً لِلطَرَفَين) ← 11 (‏2026-10-24: oto_delivered_after_cancel) ← 12 (‏2026-10-29، د9 (١): oto_needs_intervention)
         Assert.Equal(7, Internal.Count);   // 5 ← 6 (G5 M4) ← 7 (‏2026-10-29، قَرارُ المالِك د5 (٣): gateway_invoice_expires_at)
     }
 

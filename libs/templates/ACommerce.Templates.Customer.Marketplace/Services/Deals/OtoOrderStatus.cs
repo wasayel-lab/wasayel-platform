@@ -149,6 +149,13 @@ public static class OtoOrderStatusGate
     /// </summary>
     public const string Shipped = "shipped";
 
+    /// <summary>
+    /// <para><b>النَتيجَةُ الثالِثَةُ الَّتي تَكتُب: عَلامَةُ «يَحتاجُ تَدَخُّلاً» ولا انتِقال</b> (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»): أَجابَت OTO أَنّ الشُحنَةَ فُقِدَت
+    /// أَو تَلِفَت أَو أُتلِفَت (<see cref="OtoOrderState.NeedsIntervention"/>)، فَكُتِبَ <see cref="DealShipping.InterventionRef"/> وأُخبِرَ البائِعُ وصاحِبُ المَتجَر.
+    /// لَيسَت خَرقاً فَلَيسَت في <see cref="All"/>، وجَوابُها ‏200 — لا شَيءَ تُعيدُه OTO.</para>
+    /// </summary>
+    public const string Intervention = "needs_intervention";
+
     // ─── المَرحَلَةُ الأولى: الإشعارُ الخامّ ───────────────────────────────
 
     /// <summary>
@@ -291,6 +298,17 @@ public static class OtoOrderStatusGate
            && deal.CounterpartyId is { } counterparty
            && DealsService.CanMove(deal, counterparty);
 
+    /// <summary>
+    /// <para><b>أَتُعَلَّمُ هذِه الصَفقَةُ «يَحتاجُ تَدَخُّلاً» بِهذا الجَواب؟ — دالَّةٌ نَقِيَّة</b> (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»): المُعَرِّفانِ لِطَلَبِها، وOTO
+    /// تَقولُ «فُقِدَت أَو تَلِفَت» أَو «أُتلِفَت» (<see cref="OtoOrderState.NeedsIntervention"/>)، والصَفقَةُ فَعّالَة، ولَم تُعَلَّم بِالكَلِمَةِ نَفسِها مِن قَبل — فَإعادَةُ
+    /// الإشعارِ بِلا أَثَر. تُسأَلُ عَلى المَخزونِ داخِلَ الكِتابَةِ أَيضاً. ولا تَسأَلُ المَرحَلَة: طَلَبٌ عِندَ «تأكيد» أَو «شَحن» يُعَلَّمُ سَواء، ولا يَتَحَرَّك.</para>
+    /// </summary>
+    public static bool FlagsIntervention(Deal deal, OtoOrderState state)
+        => IdsAgree(deal, state)
+           && state.NeedsIntervention
+           && deal.Status == DealStatus.Active
+           && !DealShipping.FlaggedWith(deal, state.Status);
+
     /// <summary>جَوابُ OTO لِطَلَبِ هذِه الصَفقَة: <c>orderId</c> = <c>oto_order_id</c>، و<c>otoId</c> — إن كُتِبَ — واحِد.</summary>
     private static bool IdsAgree(Deal deal, OtoOrderState state)
         => string.Equals(state.OrderId, deal.Refs.GetValueOrDefault(DealShipping.OrderRef), StringComparison.Ordinal)
@@ -309,7 +327,7 @@ public static class OtoOrderStatusGate
         NoticeUnverifiable or SignatureMissing or SignatureStale or SignatureMismatch => 401,
         // و‏503 لِقاعِدَةٍ تَعَطَّلَت لَحظَةَ سُؤالِ «أَلِهذا المَتجَرِ ناقِل؟» (‏2026-10-29، قَرارُ المالِك د9 (٢) «ب»): «تعطّل مؤقّت، أعد المحاولة» لا «لا نُقطَة».
         StateUnconfirmed or DealsService.ChangedMeanwhile or CarrierUnreadable => 503,
-        Delivered or Shipped or OrderUnknown or OrderMismatch or NotDelivered or AlreadyDelivered
+        Delivered or Shipped or Intervention or OrderUnknown or OrderMismatch or NotDelivered or AlreadyDelivered
             or DealNotActive or DealNotShipping or ActorCannotDeliver => 200,
         _ => throw new ArgumentOutOfRangeException(nameof(code), code, "رَمزٌ خارِجَ مَعجَمِ الوارِد."),
     };

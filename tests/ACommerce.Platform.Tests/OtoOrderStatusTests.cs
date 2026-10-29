@@ -1319,25 +1319,131 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         Assert.Equal(calls, w.Oto.Calls.Count);
     }
 
+    /// <summary>خِدمَةُ الشَحنِ في العالَمِ ومَعَها أُنبوبُ الإشعاراتِ القائِمُ ولِسانٌ عَرَبِيّ، ووَثيقَةُ المَتجَرِ بِمالِكِه — كَما تُعطيها الحاوِيَة (‏2026-10-29، د9 (١) «أ»).</summary>
+    private static DealShipping WithNotices(DealShipTests.World w)
+    {
+        w.Docs.Put(new ACommerce.Kit.Tenants.Tenant { Id = Slug, Name = "مَتجَر", OwnerUserId = GatewayOwnerMoneyNoticeTests.Owner });
+        var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, RefreshToken = DealShipTests.ConfigToken });
+        return new DealShipping(w.Deals,
+            new OtoClient(new HttpClient(w.Oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options,
+            null, w.Providers, w.Vault, new FixedClock(DealShipTests.Now),
+            GatewayOwnerMoneyNoticeTests.Notices(w.Docs), new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor()));
+    }
+
+    private static List<ACommerce.Kit.Notifications.Notification> Told(DealShipTests.World w)
+        => w.Docs.Stored.OfType<ACommerce.Kit.Notifications.Notification>().ToList();
+
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»؛ كانَ <c>Today_a_lost_or_destroyed_shipment_is_answered_not_delivered_and_nobody_is_told</c>،
+    /// مُودَعٌ في <c>7acae84</c>): «فُقِدَت أَو تَلِفَت» و«أُتلِفَت» ⇒ <c>needs_intervention</c> ‏200 بِلا انتِقال — الصَفقَةُ عِندَ «شَحن» فَعّالَة — وعَلَيها
+    /// <see cref="DealShipping.InterventionRef"/> بِكَلِمَةِ الحال، وإشعارانِ بِالأُنبوبِ القائِم: البائِعُ إلى صَفحَةِ الصَفقَة، وصاحِبُ المَتجَرِ إلى صَفحَتِها في الاستوديو.
+    /// وإعادَةُ OTO لِلإشعارِ نَفسِه بِلا أَثَر: لا سَطرَ ثانٍ ولا إشعارَ ثالِث.</summary>
     [Theory]
     [InlineData("lostOrDamaged")]
     [InlineData("destroyed")]
-    public async Task Today_a_lost_or_destroyed_shipment_is_answered_not_delivered_and_nobody_is_told(string status)
+    public async Task A_lost_or_destroyed_shipment_is_flagged_once_without_a_transition_and_the_vendor_and_owner_are_told(string status)
     {
         var w = await ShippedCashDeal();
         OtoSays(w, status);
-        var told = w.Docs.Stored.OfType<ACommerce.Kit.Notifications.Notification>().Count();
+        var shipping = WithNotices(w);
+        var before = Told(w).Count;
 
-        var outcome = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id, status: status));
+        var outcome = await shipping.ReceiveAsync(Slug, Notice(w.Id, status: status));
 
-        Assert.Equal(OtoOrderStatusGate.NotDelivered, outcome.Code);
+        Assert.Equal(OtoOrderStatusGate.Intervention, outcome.Code);
         Assert.Equal(200, OtoOrderStatusGate.StatusFor(outcome.Code));
         var stored = Stored(w);
         Assert.Equal(DealStage.Shipping, stored.Stage);
         Assert.Equal(DealStatus.Active, stored.Status);
-        Assert.DoesNotContain(stored.Refs.Keys, k => k.Contains("intervention", StringComparison.Ordinal));
-        Assert.Equal(told, w.Docs.Stored.OfType<ACommerce.Kit.Notifications.Notification>().Count());
-        output.WriteLine($"{status}: {outcome.Code} ‏200 · المَرحَلَة {stored.Stage} · إشعارات +0");
+        Assert.Equal(status, stored.Refs[DealShipping.InterventionRef]);
+        Assert.True(DealShipping.NeedsIntervention(stored));
+        var told = Told(w).Skip(before).ToList();
+        Assert.Equal(2, told.Count);
+        var l = new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor());
+        var vendor = Assert.Single(told, n => n.UserId == Seller);
+        Assert.Equal($"/{Slug}/deals/{w.Id}", vendor.RelatedUrl);
+        var owner = Assert.Single(told, n => n.UserId == GatewayOwnerMoneyNoticeTests.Owner);
+        Assert.Equal(DealNotices.StudioDealUrl(Slug, w.Id), owner.RelatedUrl);
+        Assert.All(told, n =>
+        {
+            Assert.Equal(DealNotices.NewDealType, n.Type);
+            Assert.Equal(l["notifications.deal_needs_intervention.title"], n.Title);
+            Assert.Equal(l.Format("notifications.deal_needs_intervention.body", stored.ListingTitle), n.Body);
+        });
+
+        var again = await shipping.ReceiveAsync(Slug, Notice(w.Id, status: status));
+        Assert.Equal(OtoOrderStatusGate.NotDelivered, again.Code);
+        Assert.Equal(2, Told(w).Count - before);
+        Assert.Single(Stored(w).Timeline, e => e.Note == $"attach {DealShipping.InterventionRef}={status}");
+        output.WriteLine($"{status}: {outcome.Code} ‏200 · المَرحَلَة {stored.Stage} · إشعارات +{told.Count} · الإعادَة {again.Code} +0");
+    }
+
+    /// <summary>وبِلا أُنبوبِ إشعاراتٍ (خِدمَةٌ تُنشَأُ بِلاه) تُكتَبُ العَلامَةُ ولا يَرمي شَيء — والصَفحَتانِ تَقولانِها.</summary>
+    [Fact]
+    public async Task Without_the_notices_pipe_the_flag_is_still_written_and_nothing_is_sent()
+    {
+        var w = await ShippedCashDeal();
+        OtoSays(w, "lostOrDamaged");
+        var before = Told(w).Count;
+
+        var outcome = await w.Shipping.ReceiveAsync(Slug, Notice(w.Id, status: "lostOrDamaged"));
+
+        Assert.Equal(OtoOrderStatusGate.Intervention, outcome.Code);
+        Assert.True(DealShipping.NeedsIntervention(Stored(w)));
+        Assert.Equal(before, Told(w).Count);
+    }
+
+    /// <summary>‏<see cref="OtoOrderStatusGate.FlagsIntervention"/> مُوجِباً وسالِباً — والقائِمَتانِ لا تَتَقاطَعانِ مَعَ «نِهايَةٍ» ولا «شُحنَةٍ ذاهِبَة».</summary>
+    [Fact]
+    public void FlagsIntervention_positive_and_negative()
+    {
+        Assert.Equal(new[] { "lostOrDamaged", "destroyed" }, OtoClient.InterventionStatuses);
+        Assert.Empty(OtoClient.InterventionStatuses.Intersect(OtoClient.TerminalStatuses));
+        Assert.Empty(OtoClient.InterventionStatuses.Intersect(OtoClient.ShipmentStatuses));
+        Assert.True(State("lostOrDamaged").NeedsIntervention);
+        Assert.False(State("delivered").NeedsIntervention);
+
+        Assert.True(OtoOrderStatusGate.FlagsIntervention(Shipping(), State("destroyed")));
+        Assert.True(OtoOrderStatusGate.FlagsIntervention(With(d => d.Stage = DealStage.Confirmed), State("lostOrDamaged")));
+        Assert.False(OtoOrderStatusGate.FlagsIntervention(Shipping(), State("outForDelivery")));
+        Assert.False(OtoOrderStatusGate.FlagsIntervention(Shipping(), State("lostOrDamaged", orderId: "another-order")));
+        Assert.False(OtoOrderStatusGate.FlagsIntervention(With(d => d.Status = DealStatus.Cancelled), State("lostOrDamaged")));
+        Assert.False(OtoOrderStatusGate.FlagsIntervention(With(d => d.Refs[DealShipping.InterventionRef] = "lostOrDamaged"), State("lostOrDamaged")));
+        Assert.True(OtoOrderStatusGate.FlagsIntervention(With(d => d.Refs[DealShipping.InterventionRef] = "lostOrDamaged"), State("destroyed")));
+        Assert.DoesNotContain(OtoOrderStatusGate.Intervention, OtoOrderStatusGate.All);
+    }
+
+    /// <summary>‏<see cref="DealShipping.NeedsIntervention"/> مُوجِباً وسالِباً: صَفقَةٌ فَعّالَةٌ لَم تُسَلَّم عَلَيها الكَلِمَةُ ⇒ تُرسَم؛ والمُلغاةُ والمُسَلَّمَةُ وكَلِمَةٌ خارِجَ القائِمَةِ لا.</summary>
+    [Fact]
+    public void NeedsIntervention_is_drawn_only_while_the_deal_is_open_and_undelivered()
+    {
+        Assert.True(DealShipping.NeedsIntervention(With(d => d.Refs[DealShipping.InterventionRef] = "destroyed")));
+        Assert.False(DealShipping.NeedsIntervention(Shipping()));
+        Assert.False(DealShipping.NeedsIntervention(With(d => { d.Refs[DealShipping.InterventionRef] = "destroyed"; d.Status = DealStatus.Cancelled; })));
+        Assert.False(DealShipping.NeedsIntervention(With(d => { d.Refs[DealShipping.InterventionRef] = "destroyed"; d.Stage = DealStage.Delivered; })));
+        Assert.False(DealShipping.NeedsIntervention(With(d => d.Refs[DealShipping.InterventionRef] = "canceled")));
+    }
+
+    /// <summary>والصَفحَتانِ تَرسُمانِ العَلامَةَ بِالدالَّةِ نَفسِها ونَصِّ القامُوس، والنُصوصُ عَرَبِيَّةٌ حَيَّةٌ لا نائِبَة (القاعِدَتانِ ١١ و١٢).</summary>
+    [Fact]
+    public void Both_deal_pages_draw_the_flag_with_the_one_predicate_and_dictionary_texts()
+    {
+        var template = Path.Combine(RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages");
+        foreach (var (page, key) in new[] { ("MyDealDetail.razor", "deals.detail.oto_needs_intervention"), ("StudioAppDealDetail.razor", "studio.deal.oto_needs_intervention") })
+        {
+            var code = WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(Path.Combine(template, page)));
+            Assert.True(code.Length > 1000, $"أَداةٌ عَمياء: {page}");
+            var at = code.IndexOf("@if (DealShipping.NeedsIntervention(deal))", StringComparison.Ordinal);
+            Assert.True(at > 0, $"{page} لا تَسأَلُ NeedsIntervention");
+            Assert.Contains(key, code[at..(at + 300)], StringComparison.Ordinal);
+        }
+        foreach (var key in new[] { "deals.detail.oto_needs_intervention", "studio.deal.oto_needs_intervention", "deals.detail.ref_oto_needs_intervention",
+                                    "notifications.deal_needs_intervention.title", "notifications.deal_needs_intervention.body" })
+        {
+            var text = ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, key);
+            Assert.NotEqual(key, text);
+            Assert.False(ACommerce.Platform.I18n.LocaleCatalog.IsPlaceholder(text), key);
+            Assert.Matches(@"\p{IsArabic}", text);
+        }
     }
 
     /// <summary><b>إشعارٌ بِلا تَوقيعٍ أَو بِسِرٍّ آخَرَ ‏401 فارِغ</b> — ولا تُسأَلُ OTO ولا تُكتَبُ الصَفقَة (تَيّارُ S8، ‏2026-10-12؛ ‏ADR-033 §٧‑م).

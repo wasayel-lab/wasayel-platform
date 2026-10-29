@@ -306,6 +306,25 @@ public sealed class DealNotices
                 && url.Length > StudioDealsPath(slug).Length)
             .ToList();
 
+    // ─── شُحنَةٌ تَحتاجُ تَدَخُّلاً (‏2026-10-29، قَرارُ المالِك د9 (١) «أ») ───────────────
+
+    /// <summary>
+    /// <para><b>إشعارُ «شُحنَةٌ تَحتاجُ تَدَخُّلاً»</b> — أَبلَغَت OTO أَنّ الشُحنَةَ فُقِدَت أَو تَلِفَت أَو أُتلِفَت، ولَم يُغلَقِ الطَلَب: «ويُبلَّغ البائع وصاحب المتجر،
+    /// وهما يقرّران الإلغاء أو التعويض أو إعادة الإرسال». المُستَلِمُ والرابِطُ مِن المُنادي — البائِعُ إلى صَفحَةِ الصَفقَة، وصاحِبُ المَتجَرِ إلى صَفحَتِها في
+    /// الاستوديو (<see cref="StudioDealUrl"/>، فَيَقرَؤُه <see cref="OwnerNoticesOf"/>). <b>ونَوعُه نَوعُ الطَلَبِ الجَديد</b> (<see cref="NewDealType"/>): النَوعُ مِفتاحُ
+    /// أَيقونَةٍ في شاشَةِ الإشعاراتِ لا غَير، و«deal» أَصلُ العائِلَة — فَلا نَوعَ خامِسَ ولا حَرفَ جَديداً في القارِئ.</para>
+    /// </summary>
+    public static Notification InterventionFor(string slug, Deal deal, Guid userId, string relatedUrl, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = userId,
+        Type = NewDealType,
+        Title = l["notifications.deal_needs_intervention.title"],
+        Body = l.Format("notifications.deal_needs_intervention.body", deal.ListingTitle),
+        RelatedUrl = relatedUrl,
+        At = at,
+    };
+
     private static string CurrencyOf(Deal deal)
         => deal.Refs.TryGetValue(DealsService.PaymentCurrencyRef, out var c) && !string.IsNullOrWhiteSpace(c) ? c : ACommerce.Kit.Payments.MoyasarClient.Currency;
 
@@ -509,6 +528,32 @@ public sealed class DealNotices
         await _push.SendAsync(_store, slug, vendorId, n.Title, CancelledToVendorPushBody(deal, l),
             url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         return true;
+    }
+
+    /// <summary>
+    /// <para><b>شُحنَةٌ تَحتاجُ تَدَخُّلاً: البائِعُ وصاحِبُ المَتجَر</b> (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»؛ يُناديه <see cref="DealShipping"/> بَعدَ أَن كَتَبَ العَلامَة):
+    /// البائِعُ مُستَلِمُ الطَلَبِ الجَديدِ نَفسُه (<see cref="NewDealRecipient"/>) إلى صَفحَةِ الصَفقَة، وصاحِبُ المَتجَرِ (<see cref="StoreOwnerOf"/>) إلى صَفحَتِها في الاستوديو
+    /// — ومُعَرِّفٌ واحِدٌ لَهُما يُخبَرُ مَرَّة. بِتَرتيبِ الأُنبوبِ نَفسِه. تُرجِعُ عَدَدَ ما أُشعِر.</para>
+    /// </summary>
+    public async Task<int> NotifyInterventionAsync(string slug, Deal deal, L l, CancellationToken ct = default)
+    {
+        var sent = new List<Notification>();
+        await using (var s = _store.LightweightSession(slug))
+        {
+            var vendor = NewDealRecipient(deal);
+            if (vendor is { } v) sent.Add(InterventionFor(slug, deal, v, $"/{slug}/deals/{deal.Id}", l, DateTime.UtcNow));
+            if (StoreOwnerOf(await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug, ct)) is { } owner && owner != vendor)
+                sent.Add(InterventionFor(slug, deal, owner, StudioDealUrl(slug, deal.Id), l, DateTime.UtcNow));
+            if (sent.Count == 0) return 0;
+            foreach (var n in sent) s.Store(n);
+            await s.SaveChangesAsync(ct);
+        }
+        foreach (var n in sent)
+        {
+            await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, n.UserId);
+            await _push.SendAsync(_store, slug, n.UserId, n.Title, n.Body, url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
+        }
+        return sent.Count;
     }
 
     /// <summary>

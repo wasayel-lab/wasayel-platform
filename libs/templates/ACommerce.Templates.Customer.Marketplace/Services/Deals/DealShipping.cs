@@ -1,5 +1,6 @@
 using ACommerce.Kit.Delivery;
 using ACommerce.Platform.Providers;
+using ACommerce.Platform.I18n;
 using ACommerce.Templates.Customer.Marketplace.Services.Shipping;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -217,6 +218,13 @@ public sealed class DealShipping
     /// </summary>
     public const string DeliveredAfterCancelRef = "oto_delivered_after_cancel";
 
+    /// <summary>
+    /// <para><b>«يَحتاجُ تَدَخُّلاً»: أَبلَغَت OTO أَنّ الشُحنَةَ فُقِدَت أَو تَلِفَت أَو أُتلِفَت</b> — كَلِمَةُ الحالِ كَما أَجابَت بِها «Order Tracking»
+    /// (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»؛ تَوصيفُه <c>7acae84</c>). يُلحَقُ مَرَّةً بِأُنبوبِ الإلحاقِ القائِم — سَطرٌ في السِجِلِّ يَراه الطَرَفانِ
+    /// تَسمِيَةً — ولا تَتَحَرَّكُ الصَفقَة؛ وتَقرَؤُه صَفحَتا الصَفقَةِ بِـ<see cref="NeedsIntervention"/>.</para>
+    /// </summary>
+    public const string InterventionRef = "oto_needs_intervention";
+
     /// <summary>المَتجَرُ الوَحيدُ الَّذي يُحَلُّ لَه رَمزٌ في هذِه المَوجَة — مَتجَرُ لَقطَةِ المَظهَر
     /// (‏ADR-033 §٢‑هـ القاعِدَة ٩: «بمتجرِ <c>theme-demo</c> … و<c>ashare</c> لا يُمسّ»).</summary>
     public const string DemoStore = "theme-demo";
@@ -252,14 +260,19 @@ public sealed class DealShipping
     private readonly TenantProviderService? _providers;
     private readonly ProviderVault? _vault;
     private readonly TimeProvider _clock;
+    private readonly DealNotices? _notices;
+    private readonly L? _l;
 
     /// <summary><paramref name="log"/> اختِيارِيٌّ (مُراجَعَةُ المَوجَة 3a، ‏2026-10-12): سَطرُ الرَفضِ بَعدَ سُؤالِ OTO يَحمِلُ كَلِمَةَ حالِها
     /// وَحدَها — لا رَمزاً ولا جِسماً — فَيُقرَأُ في اللوغِ لِماذا لا تَتَقَدَّمُ صَفقَة. والحاوِيَةُ تُعطيه، والاختِباراتُ تُنشِئُ الخِدمَةَ بِلاه.
     /// <para>و<paramref name="providers"/> و<paramref name="vault"/> اختِيارِيّانِ كَذلك (تَيّارُ S8، ‏2026-10-12): مَداخِلُ البائِعينَ وخِزانَتُها
     /// — والحاوِيَةُ تُعطيهِما؛ وبِدونِهِما لا مَدخَلَ يُقرَأ، فَيَبقى الاحتِياطُ وَحدَه كَما كانَت الخِدمَةُ قَبلَ الخُطوَة 7. و<paramref name="clock"/>
-    /// لِنافِذَةِ التَوقيع.</para></summary>
+    /// لِنافِذَةِ التَوقيع.</para>
+    /// <para>و<paramref name="notices"/> و<paramref name="l"/> اختِيارِيّانِ كَذلك (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»): أُنبوبُ إشعاراتِ الصَفقَةِ القائِمُ
+    /// (القاعِدَة ٨) يُخبِرُ بِه الوارِدُ البائِعَ وصاحِبَ المَتجَرِ بِشُحنَةٍ تَحتاجُ تَدَخُّلاً — والحاوِيَةُ تُعطيهِما، وبِدونِهِما تُكتَبُ العَلامَةُ ولا إشعار.</para></summary>
     public DealShipping(DealsService deals, OtoClient oto, IOptions<OtoOptions> opts, ILogger<DealShipping>? log = null,
-        TenantProviderService? providers = null, ProviderVault? vault = null, TimeProvider? clock = null)
+        TenantProviderService? providers = null, ProviderVault? vault = null, TimeProvider? clock = null,
+        DealNotices? notices = null, L? l = null)
     {
         _deals = deals;
         _oto = oto;
@@ -268,6 +281,8 @@ public sealed class DealShipping
         _providers = providers;
         _vault = vault;
         _clock = clock ?? TimeProvider.System;
+        _notices = notices;
+        _l = l;
     }
 
     /// <summary>
@@ -716,11 +731,58 @@ public sealed class DealShipping
         if (fetched.Value is not { } state)
             return new(OtoOrderStatusGate.StateUnconfirmed, deal, fetched.Failure!.Code);
 
+        // (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»؛ تَوصيفُه `7acae84` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **فُقِدَت أَو تَلِفَت أَو أُتلِفَت ⇒ لا انتِقال**
+        // — «لا يُغلق الطلب آليًّا. يُعلَّم "يحتاج تدخّلًا" ويُبلَّغ البائع وصاحب المتجر». كانَ يُجابُ `not_delivered` بِلا عَلامَةٍ ولا إشعار.
+        if (OtoOrderStatusGate.FlagsIntervention(deal!, state))
+            return await FlagInterventionAsync(tenantSlug, deal!, state);
+
         var outcome = await DeliverAsync(tenantSlug, deal!, state);
         return outcome.Code is OtoOrderStatusGate.OrderMismatch or DealsService.ChangedMeanwhile || outcome.Deal is not { } now
             ? outcome
             : outcome with { Deal = await AttachLinksAsync(tenantSlug, now, state, CancellationToken.None) };
     }
+
+    /// <summary>
+    /// <para><b>عَلامَةُ «يَحتاجُ تَدَخُّلاً» ثُمَّ الإشعار — ولا انتِقال</b> (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»): يُلحَقُ <see cref="InterventionRef"/> بِكَلِمَةِ
+    /// الحالِ والشَرطُ <see cref="OtoOrderStatusGate.FlagsIntervention"/> يُعادُ عَلى المَخزونِ داخِلَ الكِتابَة (نَسَقُ <see cref="DeliveredAfterCancelRef"/>) —
+    /// فَإعادَةُ OTO لِلإشعارِ لا تَكتُبُ ثانِيَةً ولا تُخبِرُ ثانِيَة. ثُمَّ يُخبَرُ البائِعُ وصاحِبُ المَتجَرِ بِالأُنبوبِ القائِم (<see cref="DealNotices.NotifyInterventionAsync"/>)؛
+    /// وفَشَلُ الإشعارِ يُكتَبُ سَطراً ولا يَرُدُّ الوارِد: العَلامَةُ في الصَفقَةِ وصَفحَتاها تَقولانِها (القاعِدَة ٥ — أَثَرُ رِسالَةٍ لا مال).
+    /// وشَرطٌ لَم يَعُد يَصدُقُ عَلى المَخزونِ (أُلغِيَت في الأَثناء) يَمُرُّ إلى <see cref="DeliverAsync"/> فَيُجابُ رَمزَه.</para>
+    /// </summary>
+    private async Task<OtoNoticeOutcome> FlagInterventionAsync(string tenantSlug, Deal deal, OtoOrderState state)
+    {
+        var stored = await _deals.AttachRefAsync(tenantSlug, deal.Id, InterventionRef, state.Status,
+            current => OtoOrderStatusGate.FlagsIntervention(current, state), CancellationToken.None);
+        if (stored is null) return new(OtoOrderStatusGate.OrderUnknown, null);
+        if (!FlaggedWith(stored, state.Status)) return await DeliverAsync(tenantSlug, stored, state);
+
+        // ودَخَلناها والصَفقَةُ بِلا العَلامَة (`FlagsIntervention`)؛ ولا يُسأَلُ `deal` بَعدَ الكِتابَة — قَد يَكونُ الكائِنَ المَخزونَ نَفسَه.
+        // وإشعارانِ مُتَداخِلانِ يَكتُبُ أَحَدُهُما العَلامَةَ وقَد يُخبِرانِ مَعاً: أَثَرُ رِسالَةٍ لا مال (القاعِدَة ٥)، والعَلامَةُ مَرَّةً عَلى كُلِّ حال.
+        if (_notices is not null && _l is not null)
+        {
+            try { await _notices.NotifyInterventionAsync(tenantSlug, stored, _l, CancellationToken.None); }
+            catch (Exception ex)
+            {
+                _log.LogWarning("[OTO] intervention notice {Slug}/{Deal} not sent: {Error}", tenantSlug, deal.Id.ToString("N"), ex.GetType().Name);
+            }
+        }
+        return new(OtoOrderStatusGate.Intervention, stored);
+    }
+
+    /// <summary>عَلى الصَفقَةِ عَلامَةُ «يَحتاجُ تَدَخُّلاً» بِهذِه الكَلِمَةِ نَفسِها — فَلا تُكتَبُ ثانِيَة.</summary>
+    internal static bool FlaggedWith(Deal deal, string status)
+        => deal.Refs.TryGetValue(InterventionRef, out var had) && string.Equals(had, status, StringComparison.Ordinal);
+
+    /// <summary>
+    /// <para><b>أَتُرسَمُ «يَحتاجُ تَدَخُّلاً» عَلى هذِه الصَفقَة؟ — دالَّةٌ نَقِيَّةٌ لِصَفحَتَي الصَفقَة</b> (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»): كَتَبَت OTO أَنّ
+    /// شُحنَتَها فُقِدَت أَو تَلِفَت أَو أُتلِفَت (<see cref="InterventionRef"/> بِحالٍ مِن <see cref="OtoClient.InterventionStatuses"/>)، وهي فَعّالَةٌ لَم تَبلُغ
+    /// «تَسليم» — فَإن أَلغاها أَحَدٌ أَو سُلِّمَت بَعدُ زالَت العَلامَة: قُرِّرَ ما كانَ يُنتَظَر. وسَطرُ السِجِلِّ باقٍ لِلتاريخ.</para>
+    /// </summary>
+    public static bool NeedsIntervention(Deal deal)
+        => deal.Refs.TryGetValue(InterventionRef, out var status)
+           && OtoClient.InterventionStatuses.Contains(status, StringComparer.Ordinal)
+           && deal.Status == DealStatus.Active
+           && !OtoOrderStatusGate.Reached(deal, DealStage.Delivered);
 
     /// <summary>القَرارُ ثُمَّ الانتِقال — ويُعادُ القَرارُ عَلى المَخزونِ بَعدَ كُلِّ رَدّ: <see cref="NoticeAttempts"/> كِتابَةً
     /// عَلى الأَكثَر، وقَرارٌ أَخيرٌ عَلى ما كُتِبَ بَعدَ آخِرِها (فَتَسليمٌ سَبَقَ يُجابُ «سَبَق» لا ‏503).

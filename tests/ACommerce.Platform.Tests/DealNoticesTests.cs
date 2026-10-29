@@ -255,7 +255,9 @@ public class DealNoticesTests
             // والتاسِعَةُ (‏2026-10-29، قَرارُ المالِك د5 (٤)) بِالتَرتيبِ نَفسِه: إخبارُ المُشتَري بِإلغاءِ المُهلَة؛ والسادِسَةُ صارَت تَنتَهي عِندَها (كانَت عِندَ `NotifyVendorCancelledAsync`).
             ("public async Task<int> NotifyPaymentExpiredAsync(", "public async Task<bool> NotifyVendorCancelledAsync("),
             // والثامِنَةُ (‏2026-10-29، قَرارُ المالِك د3) بِالتَرتيبِ نَفسِه: صاحِبُ المَتجَرِ بِالاستِرجاعِ والفاتورَة؛ والسابِعَةُ صارَت تَنتَهي عِندَها.
-            ("public async Task<bool> NotifyVendorCancelledAsync(", "public async Task<bool> NotifyStoreOwnerAsync("),
+            // والعاشِرَةُ (‏2026-10-29، قَرارُ المالِك د9 (١) «أ») بِالتَرتيبِ نَفسِه: شُحنَةٌ تَحتاجُ تَدَخُّلاً؛ والسابِعَةُ صارَت تَنتَهي عِندَها.
+            ("public async Task<bool> NotifyVendorCancelledAsync(", "public async Task<int> NotifyInterventionAsync("),
+            ("public async Task<int> NotifyInterventionAsync(", "public async Task<bool> NotifyStoreOwnerAsync("),
             ("public async Task<bool> NotifyStoreOwnerAsync(", "\n}"),
         })
         {
@@ -277,7 +279,8 @@ public class DealNoticesTests
         // وسَبعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د8): `NotifyVendorCancelledAsync` سابِعَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
         // وثَمانِيَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د3): `NotifyStoreOwnerAsync` ثامِنَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
         // وتِسعَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د5 (٤)): `NotifyPaymentExpiredAsync` تاسِعَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
-        Assert.Equal(9, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
+        // وعَشَرَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د9 (١) «أ»): `NotifyInterventionAsync` عاشِرَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
+        Assert.Equal(10, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
     }
 
     /// <summary><c>/checkout/submit</c>: الصَفَقاتُ ذَواتُ المالِكِ تُجمَعُ في الحَلقَةِ،

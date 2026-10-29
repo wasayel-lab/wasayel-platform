@@ -86,6 +86,13 @@
                 <div class="st-chip st-chip-warning" style="margin-top:14px;">@L.Markup("studio.deal.oto_order_live")</div>
             }
 
+            @* «يَحتاجُ تَدَخُّلاً» عِندَ صاحِبِ المَتجَر (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»): أَبلَغَت OTO أَنّ الشُحنَةَ فُقِدَت أَو تَلِفَت، ولَم تُغلَقِ
+               الصَفقَة — يُقَرِّرُ هُوَ والبائِعُ الإلغاءَ أَو التَعويضَ أَو إعادَةَ الإرسال. الدالَّةُ نَفسُها الَّتي تَقرَؤُها صَفحَةُ العُضو. *@
+            @if (DealShipping.NeedsIntervention(deal))
+            {
+                <div class="st-chip st-chip-danger" style="margin-top:14px;">@L.Markup("studio.deal.oto_needs_intervention")</div>
+            }
+
             @* الإجراءات *@
             @if (deal.Status == DealStatus.Active)
             {

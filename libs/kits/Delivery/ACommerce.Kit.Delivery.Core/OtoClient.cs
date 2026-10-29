@@ -106,6 +106,18 @@ public sealed class OtoClient
         "canceled", "deleted", "returned", "shipmentCanceled",
     };
 
+    /// <summary>
+    /// <para><b>الحالانِ اللَّذانِ يَحتاجُ فيهِما الطَلَبُ إنساناً</b> (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»: «لا يُغلق الطلب آليًّا. يُعلَّم "يحتاج تدخّلًا"
+    /// ويُبلَّغ البائع وصاحب المتجر، وهما يقرّران الإلغاء أو التعويض أو إعادة الإرسال») — بِحَرفِ «‏List Of Statuses» كَما سَمّاهُما تَعليقُ
+    /// <see cref="TerminalStatuses"/>: <c>lostOrDamaged</c> («Shipment is lost or damaged») و<c>destroyed</c> («Package was damaged beyond delivery»).
+    /// <b>لَيسا في <see cref="TerminalStatuses"/> بِقَصد</b>: هُناكَ يُغلَقُ «أَكمِل الشَّحن» آليّاً، وهُنا لا يُغلَقُ شَيءٌ ولا تَتَحَرَّكُ صَفقَة — عَلامَةٌ
+    /// وإشعار. ولا حالَ في القائِمَتَينِ مَعاً. قائِمَةُ سَماحٍ بِمُقارَنَةٍ حَرفِيَّة.</para>
+    /// </summary>
+    public static readonly IReadOnlyList<string> InterventionStatuses = new[]
+    {
+        "lostOrDamaged", "destroyed",
+    };
+
     private readonly HttpClient _http;
     private readonly OtoOptions _opts;
     private readonly OtoTokenCache _tokens;
@@ -555,6 +567,9 @@ public sealed record OtoOrderState(string OrderId, string? OtoId, string Status,
 
     /// <summary>الطَلَبُ عِندَ OTO في حالٍ لا يَعودُ مِنه — حالُه مِن <see cref="OtoClient.TerminalStatuses"/> (‏2026-10-12).</summary>
     public bool IsTerminal => OtoClient.TerminalStatuses.Contains(Status, StringComparer.Ordinal);
+
+    /// <summary>فُقِدَت الشُحنَةُ أَو تَلِفَت أَو أُتلِفَت — حالُه مِن <see cref="OtoClient.InterventionStatuses"/> (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»).</summary>
+    public bool NeedsIntervention => OtoClient.InterventionStatuses.Contains(Status, StringComparer.Ordinal);
 }
 
 /// <summary>
