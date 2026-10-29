@@ -269,8 +269,13 @@
         plansShown = (await ACommerce.Templates.Customer.Marketplace.Services.PlanShelf.ShownAsync(PlanSvc, Providers, Slug)).Count > 0;
         if (me is not null && me.DeletedAt is null)
         {
-            offerEmail = string.IsNullOrEmpty(me.Email) && Sp.GetService(typeof(ACommerce.Kit.Auth.IEmailOtpChannel)) is not null;
-            offerPhone = string.IsNullOrEmpty(me.Phone) && Sp.GetService(typeof(ACommerce.Kit.Auth.IOtpChannel)) is not null;
+            // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A2) «أَضِف» لِنَوعٍ تَعرِضُه صَفحَةُ دُخولِ هذا المَتجَرِ وَحدَه (`LoginChannels`) — فَنَصُّ «فَتَدخُلُ بَعدَها بِه»
+            // صادِقٌ بِالبِناء؛ ومَتجَرُ نَفاذٍ لا يَعرِضُ غَيرَه فَلا قِسمَ فيه (القاعِدَة ١٢).
+            var signIn = ACommerce.Templates.Customer.Marketplace.Services.LoginChannels.OfferedIn(Tenant.AuthChannel, Sp);
+            offerEmail = string.IsNullOrEmpty(me.Email) && signIn.Contains(ACommerce.Kit.Auth.ContactLink.Email)
+                         && Sp.GetService(typeof(ACommerce.Kit.Auth.IEmailOtpChannel)) is not null;
+            offerPhone = string.IsNullOrEmpty(me.Phone) && signIn.Contains(ACommerce.Kit.Auth.ContactLink.Phone)
+                         && Sp.GetService(typeof(ACommerce.Kit.Auth.IOtpChannel)) is not null;
         }
         if (Contact == "verify")
             pending = ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.Pending(Slug, Attempt, Auth.UserId.Value);

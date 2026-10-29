@@ -247,8 +247,13 @@ public static class MarketplaceTemplateExtensions
                    [FromServices] IOtpChannel? channel) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
+            // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A2) قَناةٌ لا يَعرِضُها المَتجَرُ تُرَدُّ قَبلَ كُلِّ شَيء (`LoginChannels`) — كانَ البابُ لا يَسأَلُ قَناةَ المَتجَر.
+            if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Phone, channel is not null))
+                return Results.Redirect(Link(req, slug, $"login?err={Services.LoginChannels.NotOffered}"));
             var phone = req.Form["phone"].ToString().Trim();
             var asRole = req.Form["as"].ToString().Trim();
+            // وتُبقي التَحويلاتُ الجَوّالَ مَعروضاً حينَ لَيسَ قَناةَ المَتجَر (`via=phone`) — رابِطُ القَناةِ الأُولى بايتاتُه كَما كانَت.
+            var via = Services.LoginChannels.ViaSuffix(tenant.AuthChannel, AuthChannels.Phone);
             if (channel is null)
                 return Results.Redirect(Link(req, slug,
                     $"login?err=phone_unavailable" +
@@ -256,8 +261,8 @@ public static class MarketplaceTemplateExtensions
             if (string.IsNullOrEmpty(phone))
                 return Results.Redirect(Link(req, slug,
                     $"login?err=phone_required" +
-                    (string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}")));
-            var asParam = string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}";
+                    (string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}") + via));
+            var asParam = (string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}") + via;
             // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-9) رَدُّ الحِصَّةِ أَو عُطلُ القَناةِ رِسالَةٌ لا صَفحَةُ ‏500 — كَبابَي البَريدِ والاستوديو.
             string attemptId;
             try { attemptId = (await AuthHandlers.RequestPhoneOtpHandler(new RequestPhoneOtp(phone), tenant, channel, default)).AttemptId; }
@@ -267,9 +272,13 @@ public static class MarketplaceTemplateExtensions
         }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/{slug}/auth/phone/verify",
-            async (string slug, HttpRequest req, HttpResponse res, IDocumentStore store, ITenantContext tenant) =>
+            async (string slug, HttpRequest req, HttpResponse res, IDocumentStore store, ITenantContext tenant,
+                   [FromServices] IOtpChannel? channel) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
+            // ‏(‏2026-10-29، A2) القَرارُ نَفسُه الَّذي يَسأَلُه بابُ الإرسال — فَرَمزٌ لا يَفتَحُ قَناةً لا يَعرِضُها المَتجَر.
+            if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Phone, channel is not null))
+                return Results.Redirect(Link(req, slug, $"login?err={Services.LoginChannels.NotOffered}"));
             // اقبَل HTML form (واجِهَة المُستَخدِم) أَو JSON (الـ APIs والفُحوصات).
             string phone = "", code = "", asRoleEarly = "";
             if (req.HasFormContentType)
@@ -294,7 +303,8 @@ public static class MarketplaceTemplateExtensions
             var result = await AuthHandlers.VerifyPhoneOtpHandler(new VerifyPhoneOtp(phone, code), tenant, store);
             if (result is null)
                 return Results.Redirect(Link(req, slug,
-                    $"login?{Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form["attempt"].ToString() : null, phone, AuthHandlers.AuthKind.PhoneOtp, "code_invalid")}"));
+                    $"login?{Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form["attempt"].ToString() : null, phone, AuthHandlers.AuthKind.PhoneOtp, "code_invalid")}"
+                    + Services.LoginChannels.ViaSuffix(tenant.AuthChannel, AuthChannels.Phone)));
             var asRole = (asRoleEarly ?? "").ToLowerInvariant();
             // كَتابَة cookie باسم يَتَضَمَّن الدَور — يَسمَح بِجَلَسات مُتَوازِيَة
             // (راكِب في تَبويب، سائِق في آخَر) في نَفس المُتَصَفِّح.
@@ -330,9 +340,14 @@ public static class MarketplaceTemplateExtensions
                    [FromServices] IEmailOtpChannel? channel) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
+            // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A2) قَناةٌ لا يَعرِضُها المَتجَرُ تُرَدُّ قَبلَ كُلِّ شَيء — كانَ بَريدٌ مَزروعٌ يُدخِلُ مَتجَرَ جَوّالٍ أَو نَفاذ (A3).
+            if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Email, channel is not null))
+                return Results.Redirect(Link(req, slug, $"login?err={Services.LoginChannels.NotOffered}"));
             var email = EmailAddress.Normalize(req.Form["email"].ToString());
             var asRole = req.Form["as"].ToString().Trim();
-            var asParam = string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}";
+            // وتُبقي التَحويلاتُ البَريدَ مَعروضاً حينَ لَيسَ قَناةَ المَتجَر (`via=email`) — ورابِطُ مَتجَرِ البَريدِ بايتاتُه كَما كانَت.
+            var asParam = (string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}")
+                          + Services.LoginChannels.ViaSuffix(tenant.AuthChannel, AuthChannels.Email);
             // نَفسُ الفَشَلِ المُغلَقِ — راجِع مَسارَ الهاتِف أَعلاه.
             if (channel is null)
                 return Results.Redirect(Link(req, slug, $"login?err=email_unavailable{asParam}"));
@@ -356,9 +371,13 @@ public static class MarketplaceTemplateExtensions
         }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/{slug}/auth/email/verify",
-            async (string slug, HttpRequest req, HttpResponse res, IDocumentStore store, ITenantContext tenant) =>
+            async (string slug, HttpRequest req, HttpResponse res, IDocumentStore store, ITenantContext tenant,
+                   [FromServices] IEmailOtpChannel? channel) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
+            // ‏(‏2026-10-29، A2) القَرارُ نَفسُه الَّذي يَسأَلُه بابُ الإرسال.
+            if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Email, channel is not null))
+                return Results.Redirect(Link(req, slug, $"login?err={Services.LoginChannels.NotOffered}"));
             // اقبَل HTML form (واجِهَة المُستَخدِم) أَو JSON (الـ APIs والفُحوصات).
             string email = "", code = "", asRoleEarly = "";
             if (req.HasFormContentType)
@@ -384,7 +403,8 @@ public static class MarketplaceTemplateExtensions
             var result = await AuthHandlers.VerifyEmailOtpHandler(new VerifyEmailOtp(email, code), tenant, store);
             if (result is null)
                 return Results.Redirect(Link(req, slug,
-                    $"login?{Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form["attempt"].ToString() : null, email, AuthHandlers.AuthKind.EmailOtp, "code_invalid")}"));
+                    $"login?{Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form["attempt"].ToString() : null, email, AuthHandlers.AuthKind.EmailOtp, "code_invalid")}"
+                    + Services.LoginChannels.ViaSuffix(tenant.AuthChannel, AuthChannels.Email)));
             var asRole = (asRoleEarly ?? "").ToLowerInvariant();
             AuthSession.WriteCookie(res, slug, result,
                 role: string.IsNullOrEmpty(asRole) ? null : asRole);
@@ -497,13 +517,15 @@ public static class MarketplaceTemplateExtensions
         // وَسيلَةُ دُخولٍ ثانِيَةٌ تُضافُ مِن جَلسَةٍ مُثبَتَةٍ وبَعدَ رَمزٍ يَصِلُها — ولا دَمجَ تِلقائِيّ: وَسيلَةٌ في حِسابٍ آخَرَ تُرفَضُ بِرَمزٍ يَشرَحُ الحَلّ.
         // والرابِطُ يَحمِلُ مُعَرِّفَ المُحاوَلَةِ لا الوَسيلَة (نَسَقُ أَبوابِ الدُخول)؛ والقَرارُ والأَثَرُ في `AccountContacts` و`ContactLink`.
         app.MapPost("/{slug}/me/contact/start",
-            async (string slug, HttpRequest req, IDocumentStore store,
+            async (string slug, HttpRequest req, IDocumentStore store, ITenantContext tenant,
                    [FromServices] IOtpChannel? phoneChannel, [FromServices] IEmailOtpChannel? emailChannel) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null || parsed.Value.TenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
+            // ‏(‏2026-10-29، A2) لا يُربَطُ نَوعٌ لا تَعرِضُه صَفحَةُ الدُخول — نَصُّ «فَتَدخُلُ بَعدَها بِه» صادِقٌ بِالبِناء.
             var outcome = await Services.AccountContacts.StartAsync(store, slug, parsed.Value.UserId,
-                req.Form["kind"].ToString(), req.Form["value"].ToString(), phoneChannel, emailChannel, req.HttpContext.RequestAborted);
+                req.Form["kind"].ToString(), req.Form["value"].ToString(), phoneChannel, emailChannel,
+                Services.LoginChannels.Offered(tenant.AuthChannel, phoneChannel is not null, emailChannel is not null), req.HttpContext.RequestAborted);
             return Results.Redirect(Link(req, slug, outcome.AttemptId is { } id
                 ? $"me?contact=verify&attempt={Uri.EscapeDataString(id)}" : $"me?err={outcome.Refusal}"));
         }).RequireFormBody().DisableAntiforgery();

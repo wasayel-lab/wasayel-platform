@@ -15,6 +15,9 @@
 
     الـ tenant يُحَدِّد القَناة: Ashare = Nafath، Ejar = Phone، وقَناة
     البَريد (email) لِمَن لا هاتِف لَه. لا اختِيار للمُستَخدِم.
+    (‏2026-10-29، تَدقيقُ الموجَة ١١ A2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والقَناةُ الثانِيَةُ مِفتاحٌ تَحتَ الاستِمارَة**: مَتجَرُ الجَوّالِ يَعرِضُ البَريدَ
+    ومَتجَرُ البَريدِ الجَوّالَ إن سُجِّلَت قَناتُها، ومَتجَرُ نَفاذٍ نَفاذاً وَحدَه (`LoginChannels`) — فَالوَسيلَةُ الَّتي يَربِطُها «حِسابي» تُستَعمَلُ بِنَقرَة.
+    والاستِمارَةُ المَرسومَةُ `via` إن عُرِضَت، وإلّا قَناةُ المَتجَر؛ ومَرحَلَةُ الرَمزِ تُبقيها (تَحويلاتُ بابِها تَحمِلُها).
 *@
 
 @{
@@ -65,23 +68,33 @@ else
                    يُعرَض نَموذَجٌ يَقود إلى رَفض. نَفسُ رِسالَةِ المَسار. *@
                 <AcAlert Variant="danger">@ChannelUnavailableMessage</AcAlert>
             }
-            else if (Tenant.AuthChannel == "nafath")
+            else if (Active == ACommerce.Kit.Auth.AuthChannels.Nafath)
             {
                 <NafathLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
                                  NationalId="@SubjectFor(AuthKind.Nafath, NationalIdValue)" AttemptId="@AttemptId" DisplayCode="@DisplayCode"
                                  AsRole="@effectiveRole" DevAuto="@NafathDevAuto" />
             }
-            else if (Tenant.AuthChannel == "email")
+            else if (Active == ACommerce.Kit.Auth.AuthChannels.Email)
             {
                 <EmailLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
                                 Email="@SubjectFor(AuthKind.EmailOtp, EmailValue)" AsRole="@effectiveRole" AttemptId="@AttemptId"
-                                DevHint="@EmailDevHint" />
+                                DevHint="@EmailDevHint" Via="@ViaFor(Active)" />
             }
             else
             {
                 <PhoneLoginForm Slug="@Slug" ErrorMessage="@ErrorMessage" Stage="@Stage"
                                 Phone="@SubjectFor(AuthKind.PhoneOtp, PhoneValue)" AsRole="@effectiveRole" AttemptId="@AttemptId"
-                                DevHint="@PhoneDevHint" />
+                                DevHint="@PhoneDevHint" Via="@ViaFor(Active)" />
+            }
+            @* ‏(‏2026-10-29، A2) المِفتاحُ إلى القَناةِ الأُخرى الَّتي يَعرِضُها المَتجَر — في الخُطوَةِ الأُولى وَحدَها. *@
+            @if (Stage != "verify")
+            {
+                @foreach (var other in Offered.Where(c => c != Active))
+                {
+                    <p class="ac-auth-back">
+                        <a href="@SwitchHref(other)">@(other == ACommerce.Kit.Auth.AuthChannels.Email ? L.Markup("auth.login.switch_to_email") : L.Markup("auth.login.switch_to_phone"))</a>
+                    </p>
+                }
             }
 
             <p class="ac-auth-back">
@@ -105,20 +118,40 @@ else
     /// <summary>دَور مَختار مُسبَقاً (مِن صَفحَة /{slug}/r/landing).
     /// يُمَرَّر كَ hidden إلى الـ POST لِيُسَكِّن ActiveRole بَعد التَّوثيق.</summary>
     [SupplyParameterFromQuery(Name = "as")]       public string? AsRole { get; set; }
+    /// <summary>‏(‏2026-10-29، A2) القَناةُ الثانِيَةُ الَّتي اختارَها الزائِرُ (<c>LoginChannels.ViaParam</c>) — تُرسَمُ إن عَرَضَها المَتجَر.</summary>
+    [SupplyParameterFromQuery(Name = "via")]      public string? Via { get; set; }
+
+    /// <summary>ما تَعرِضُه هذِه الصَفحَةُ لِهذا المَتجَر — القَرارُ الواحِدُ الَّذي تَسأَلُه أَبوابُ الدُخولِ و«حِسابي».</summary>
+    IReadOnlyList<string> Offered => Services.LoginChannels.OfferedIn(Tenant.AuthChannel, Sp);
+
+    /// <summary>الاستِمارَةُ المَرسومَة: <see cref="Via"/> إن عُرِضَت، وإلّا قَناةُ المَتجَر.</summary>
+    string Active => Services.LoginChannels.Active(Tenant.AuthChannel, Via, Offered);
+
+    /// <summary><c>via</c> لِقَناةٍ لَيسَت قَناةَ المَتجَر، و<c>null</c> لَها — فَرابِطُ القَناةِ الأُولى بايتاتُه كَما كانَت.</summary>
+    string? ViaFor(string kind) => kind == Services.LoginChannels.Primary(Tenant.AuthChannel) ? null : kind;
+
+    /// <summary>رابِطُ المِفتاحِ إلى <paramref name="kind"/> — بِـ<c>as</c> إن كانَ الدَورُ في الاستِعلام.</summary>
+    string SwitchHref(string kind)
+    {
+        var q = new List<string>();
+        if (ViaFor(kind) is { } v) q.Add($"{Services.LoginChannels.ViaParam}={v}");
+        if (string.IsNullOrEmpty(Role) && !string.IsNullOrEmpty(AsRole)) q.Add($"as={Uri.EscapeDataString(AsRole)}");
+        return AuthSession.LinkFor(Slug, Role, q.Count == 0 ? "login" : "login?" + string.Join("&", q));
+    }
 
     /// <summary>مَوضوعُ مَرحَلَةِ الرَمزِ مِن المُحاوَلَةِ الَّتي يُسَمّيها الرابِط (‏2026-10-24، تَدقيقُ الإطلاق lens-security-13) — كانَت التَحويلاتُ
     /// تَحمِلُ الرَقَمَ والعُنوانَ والهُوِيَّةَ نَفسَها. وما في الرابِطِ يَبقى سُقوطاً لِنَصِّ الزائِرِ نَفسِه (<c>LoginStageQuery.SubjectFor</c>).</summary>
     string? SubjectFor(AuthKind kind, string? typed)
         => Services.LoginStageQuery.SubjectFor(Tenant.Slug, AttemptId, kind, typed);
 
-    string ChannelIcon => Tenant.AuthChannel switch
+    string ChannelIcon => Active switch
     {
         "nafath" => "key",
         "email"  => "mail",
         _        => "phone"
     };
 
-    string ChannelLabel => Tenant.AuthChannel switch
+    string ChannelLabel => Active switch
     {
         "nafath" => L["auth.channel.nafath"],
         "email"  => L["auth.channel.email_full"],
@@ -149,14 +182,14 @@ else
 
     /// <summary>أَمُسَجَّلَةٌ قَناةُ هذا المُستَأجِر؟ خارِجَ التَطوير بِلا
     /// مُزَوِّدٍ مَضبوط لا تُسَجَّل، فَلا نَموذَجَ يُعرَض.</summary>
-    bool ChannelRegistered => Tenant.AuthChannel switch
+    bool ChannelRegistered => Active switch
     {
         "nafath" => Sp.GetService(typeof(ACommerce.Kit.Auth.INafathChannel)) is not null,
         "email"  => Sp.GetService(typeof(ACommerce.Kit.Auth.IEmailOtpChannel)) is not null,
         _        => Sp.GetService(typeof(ACommerce.Kit.Auth.IOtpChannel)) is not null
     };
 
-    string ChannelUnavailableMessage => Tenant.AuthChannel switch
+    string ChannelUnavailableMessage => Active switch
     {
         "nafath" => L["auth.login.err_nafath_unavailable"],
         "email"  => L["auth.login.err_email_unavailable"],
@@ -175,6 +208,8 @@ else
         "phone_unavailable"  => L["auth.login.err_phone_unavailable"],
         "email_unavailable"  => L["auth.login.err_email_unavailable"],
         "nafath_unavailable" => L["auth.login.err_nafath_unavailable"],
+        // ‏(‏2026-10-29، A2) بابُ قَناةٍ لا يَعرِضُها المَتجَر (`LoginChannels.NotOffered`).
+        "channel_not_offered" => L["auth.login.err_channel_not_offered"],
         _                => null
     };
 }

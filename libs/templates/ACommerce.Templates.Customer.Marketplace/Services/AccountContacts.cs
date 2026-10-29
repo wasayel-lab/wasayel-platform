@@ -17,17 +17,24 @@ public static class AccountContacts
     public const string SendFailed = "contact_send_failed";
     public const string CodeInvalid = "contact_code_invalid";
 
+    /// <summary>‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A2) نَوعٌ لا تَعرِضُه صَفحَةُ دُخولِ المَتجَر (<see cref="LoginChannels"/>) — لا يُربَطُ وَسيلَةَ دُخول،
+    /// فَنَصُّ «فَتَدخُلُ بَعدَها بِه» لا يَكذِب. مَتجَرُ نَفاذٍ لا يَعرِضُ غَيرَه.</summary>
+    public const string NotOffered = "contact_not_offered";
+
     public static readonly IReadOnlyList<string> Codes =
-        ContactLink.All.Concat(new[] { Unavailable, SendFailed, CodeInvalid }).ToList();
+        ContactLink.All.Concat(new[] { Unavailable, SendFailed, CodeInvalid, NotOffered }).ToList();
 
     public sealed record StartOutcome(string? AttemptId, string? Refusal);
 
     /// <summary>يَبدَأُ الرَبط: يَقرَأُ الحِساب، ويَسأَلُ <see cref="ContactLink.Validate"/> بِلا حامِلين، ثُمَّ يُرسِلُ الرَمزَ بِقَناةِ النَوع — وقَناةٌ غَيرُ مُسَجَّلَةٍ تُرَدُّ
     /// بِـ<see cref="Unavailable"/> (والصَفحَةُ لا تَرسُمُ استِمارَتَها أَصلاً)، وفَشَلُ الإرسالِ أَو الحِصَّةُ بِـ<see cref="SendFailed"/>.</summary>
+    /// <remarks>‏(‏2026-10-29، A2) <paramref name="loginChannels"/> ما تَعرِضُه صَفحَةُ دُخولِ المَتجَر (<see cref="LoginChannels.Offered"/>) — ونَوعٌ خارِجَه
+    /// يُرَدُّ بِـ<see cref="NotOffered"/> قَبلَ أَيِّ قِراءَة.</remarks>
     public static async Task<StartOutcome> StartAsync(
         IDocumentStore store, string slug, Guid userId, string? kind, string? raw,
-        IOtpChannel? phoneChannel, IEmailOtpChannel? emailChannel, CancellationToken ct)
+        IOtpChannel? phoneChannel, IEmailOtpChannel? emailChannel, IReadOnlyList<string> loginChannels, CancellationToken ct)
     {
+        if (kind is ContactLink.Email or ContactLink.Phone && !loginChannels.Contains(kind)) return new(null, NotOffered);
         var value = ContactLink.Normalize(kind, raw);
         User? user;
         await using (var q = store.QuerySession(slug)) user = await q.LoadAsync<User>(userId, ct);
