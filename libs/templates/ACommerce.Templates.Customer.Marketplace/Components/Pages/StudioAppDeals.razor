@@ -16,10 +16,8 @@
 <StudioShell Title="@($"{L["studio.app_deals.title"]} {tenant?.Name ?? Slug}")" Active="home">
     <TopBarActions>
         <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← @L.Markup("studio.app_nav.settings")</a>
-        <form method="post" action="@($"/studio/apps/{Slug}/deals/seed")" style="display:inline-block;margin-inline-start:8px;">
-            <input type="hidden" name="pattern" value="@SelectedPattern" />
-            <button type="submit" class="st-btn st-btn-light">@L.Markup("studio.app_deals.demo_op")</button>
-        </form>
+        @* (‏2026-10-29، قَرارُ المالِك د32 «٢»): كانَ هُنا زِرُّ «+ عَمَلِيَّة تَجريبيَّة» إلى `/studio/apps/{slug}/deals/seed` — يَكتُبُ صَفقَةً حَقيقِيَّةً
+           في المَتجَرِ تَقِفُ عِندَ «عَرض» (حارِسُ المُبادِرِ يَرُدُّ أَوَّلَ نَقرَةٍ إدارِيَّة)؛ فَحُذِفَ هُوَ واستِمارَةُ الصَفحَةِ الفارِغَةِ والبابُ نَفسُه (القاعِدَتانِ ١٢ و١٧). *@
     </TopBarActions>
     <ChildContent>
         @if (tenant is null)
@@ -63,17 +61,7 @@
                 <div class="st-card" style="text-align:center;padding:36px;">
                     <div style="margin-bottom:6px;"><AcIcon Name="package" Size="42" /></div>
                     <h3 style="margin:0 0 6px;">@L.Markup("studio.app_deals.empty")</h3>
-                    <p style="color:var(--st-muted);margin:0 0 16px;">@L.Markup("studio.app_deals.empty_hint")</p>
-                    <form method="post" action="@($"/studio/apps/{Slug}/deals/seed")" style="display:flex;justify-content:center;gap:8px;">
-                        <select name="pattern" class="st-input" style="width:auto;">
-                            <option value="marketplace">marketplace</option>
-                            <option value="trip">trip</option>
-                            <option value="rental">rental</option>
-                            <option value="service">service</option>
-                            <option value="classifieds">classifieds</option>
-                        </select>
-                        <button type="submit" class="st-btn st-btn-primary">@L.Markup("studio.app_deals.start")</button>
-                    </form>
+                    <p style="color:var(--st-muted);margin:0;">@L.Markup("studio.app_deals.empty_hint")</p>
                 </div>
             }
             else
@@ -117,7 +105,6 @@
     List<Deal> deals = new();
     /// <summary>إشعاراتُ صاحِبِ المَتجَرِ في مُستَأجِرِ المَتجَرِ بِمُعَرِّفِ جَلسَةِ الاستوديو — يَقرَؤُها القارِئُ القائِمُ نَفسُه (القاعِدَة ٨) بَعدَ فَحصِ المِلكِيَّة.</summary>
     IReadOnlyList<ACommerce.Kit.Notifications.Notification> ownerNotices = Array.Empty<ACommerce.Kit.Notifications.Notification>();
-    string SelectedPattern => deals.FirstOrDefault()?.Pattern ?? "marketplace";
 
     protected override async Task OnInitializedAsync()
     {

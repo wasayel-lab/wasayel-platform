@@ -355,17 +355,16 @@ public class DealNoticesTests
 
     /// <summary><b>والمَسارُ الإداريُّ يَبقى كَما هُو</b>: بَذرَةُ الاستوديو تُولِدُ صَفقَةَ عَرضٍ تَجريبِيَّةً
     /// مُبادِرُها مالِكُ التَطبيقِ نَفسُه وبِلا إعلانٍ ولا مَرجِعِ مالِك — فَلا أَحَدَ يُشعَر، ولا نِداءَ هُناك.
-    /// ونُقطَةُ التَقَدُّمِ الإدارِيَّة لا تُولِدُ صَفقَة.</summary>
+    /// ونُقطَةُ التَقَدُّمِ الإدارِيَّة لا تُولِدُ صَفقَة.
+    /// <para>(‏2026-10-29، قَرارُ المالِك د32 «٢» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه؛ كانَ <c>The_studio_seed_path_births_a_demo_deal_without_an_owner_and_notifies_nobody</c>):
+    /// حُذِفَ بابُ البَذرَةِ نَفسُه، فَما بَقِيَ مِن الصَفِّ أَنّ <b>لا بابَ في الاستوديو يُولِدُ صَفقَةً</b> — فَلا وِلادَةَ بِلا إشعارٍ هُناك أَصلاً.</para></summary>
     [Fact]
-    public void The_studio_seed_path_births_a_demo_deal_without_an_owner_and_notifies_nobody()
+    public void The_studio_seed_path_is_gone_and_no_studio_door_births_an_unannounced_deal()
     {
         var endpoints = Source(Template, "MarketplaceTemplateExtensions.cs");
-        var seed = Segment(endpoints, "\"/studio/apps/{slug}/deals/seed\"", ".DisableAntiforgery();");
-        Assert.Equal(1, Count(seed, "deals.StartAsync(slug, pattern,"));
-        Assert.Contains("listingId: null,", seed, StringComparison.Ordinal);
-        Assert.Equal(0, Count(seed, "AttachRefAsync("));
-        Assert.Equal(0, Count(seed, "notices."));
-        Assert.Equal(0, Count(seed, "Notification"));
+        Assert.Equal(0, Count(endpoints, "\"/studio/apps/{slug}/deals/seed\","));
+        Assert.Equal(0, Count(endpoints, "pattern,\n                initiatorId: owner"));
+        Assert.Equal(2, Count(endpoints, "deals.StartAsync("));   // ‏`/{slug}/checkout/submit` و`/{slug}/listings/{id}/deal` — كِلاهُما يُشعِرُ مالِكَ الإعلان
     }
 
     /// <summary>الخِدمَةُ نَفسُها ما زالَت لا تُشعِر — المُنتِجُ <c>DealNotices</c> وَحدَها،

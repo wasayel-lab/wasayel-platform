@@ -161,7 +161,7 @@ internal static class PinnedRoutes
         // (‏`/{slug}/deals/{id:guid}/review` رُفِعَ ‏2026-10-12 — سُدِّدَ دَينُه: صارَ جِسمُه نِداءً واحِداً لِـ
         // `DealReviews` في ‏ADR-033 §٦‑ح وبَقِيَ `IDocumentStore` في تَوقيعِه حَقناً مَيِّتاً بِلا استِعمال، فَأُسقِط.)
         "/admin/tenants/{slug}/suspend",
-        "/studio/apps/{slug}/deals/seed",
+        // (‏`/studio/apps/{slug}/deals/seed` رُفِعَ ‏2026-10-29 — حُذِفَت النُقطَةُ نَفسُها بِقَرارِ المالِك د32 «٢»: «العَمَلِيَّة التَجريبِيَّة» لا تَتَحَرَّك.)
         "/studio/apps/{slug}/deals/{id:guid}/advance",
         "/studio/apps/{slug}/deals/{id:guid}/cancel",
         "/studio/apps/{slug}/deals/{id:guid}/dispute",

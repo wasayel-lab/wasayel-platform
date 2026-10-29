@@ -238,6 +238,9 @@ public class DealOwnListingCharacterizationTests
     // عَن المُبادِر — وبَذرَةُ الاستوديو (`/studio/apps/{slug}/deals/seed`) تُولِدُ صَفقَةً تَجريبِيَّةً **مُبادِرُها مالِكُ
     // التَطبيقِ نَفسُه**. فَتُوَصَّفُ «اليَوم» بِاسمِها هُنا قَبلَ أَن يُنقَلَ الفَحصُ إلى الكاتِبِ الوَحيد
     // (`AssignCounterpartyAsync`) في الكوميتِ التالي.
+    //
+    // (‏2026-10-29، قَرارُ المالِك د32 «٢» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): حُذِفَ بابُ البَذرَةِ ومَدخَلاه، فَلا تولَدُ صَفقَةٌ تَجريبِيَّةٌ بَعدَ اليَوم؛ والَّتي وُلِدَت
+    // قَبلُ في مَتاجِرَ حَقيقِيَّةٍ باقِيَة — والحارِسُ نَفسُه لا يُمَسّ («ولا مساس بالحارس الذي يمنع صاحب الإعلان من أن يكون طرفًا مقابلًا لنفسه»).
 
     /// <summary>نَقرَةٌ عَلى «→ التالي» في تَفصيلِ صَفقَةِ الاستوديو — بِتَسَلسُلِ النُقطَةِ حَرفاً (مُثَبَّتٌ في
     /// <c>DealCounterpartyCharacterizationTests.The_admin_path_…</c>): تَحميلٌ، ثُمَّ تَعيينُ مالِكِ التَطبيقِ حَيثُ لا
@@ -254,7 +257,7 @@ public class DealOwnListingCharacterizationTests
     }
 
     /// <summary>صَفقَةُ البَذرَةِ التَجريبِيَّةُ بِتَسَلسُلِ نُقطَتِها: مُبادِرُها مالِكُ التَطبيقِ نَفسُه، بِلا إعلانٍ ولا
-    /// مَرجِع.</summary>
+    /// مَرجِع. (‏2026-10-29، د32: النُقطَةُ حُذِفَت — فَهذِه صَفقَةٌ وُلِدَت قَبلَ الحَذفِ وبَقِيَت في مَتجَرِها.)</summary>
     private static (DealsService Deals, DocWorld World, Guid Id) StudioSeedDeal(Guid appOwner)
     {
         var world = new DocWorld();
@@ -270,10 +273,16 @@ public class DealOwnListingCharacterizationTests
     /// (<c>AssignCounterpartyAsync</c>): لا يُعَيَّنُ المُبادِرُ طَرَفاً، فَتَبقى صَفقَةُ البَذرَةِ بِلا طَرَف، والتَحريكُ
     /// بِمالِكِ التَطبيقِ يُرَدُّ — <c>Booked</c> تَطلُبُ <c>counterparty</c> (‏ADR-033 §٦‑ط) — فَتَقِفُ عِندَ
     /// <c>Offered</c> بِلا سَطرٍ يُكتَب. <b>وأَثَرُه يُقال</b>: الصَفقَةُ التَجريبِيَّةُ لا تُمشى مِن الاستوديو بَعدَ اليَوم
-    /// (سِجِلُّ المالِكِ «ب»).</summary>
+    /// (سِجِلُّ المالِكِ «ب»).
+    /// <para><b>وقُلِبَ بِاسمِه مَرَّةً ثانِيَة</b> (‏2026-10-29، قَرارُ المالِك د32 «٢»؛ كانَ
+    /// <c>The_studio_path_cannot_make_the_app_owner_his_own_counterparty_and_his_demo_deal_stays_at_Offered</c>): «وُقوفُها» صارَ نِهايَةَ بابِها — حُذِفَ
+    /// <c>/studio/apps/{slug}/deals/seed</c> ومَدخَلاه فَلا تولَدُ صَفقَةٌ تَجريبِيَّة، والحارِسُ كَما هو: الصَفقَةُ القَديمَةُ تُرَدُّ نَقرَتُها الإدارِيَّةُ الأولى بِلا
+    /// حِفظ، و<b>يُلغيها صاحِبُ المَتجَرِ مِن الاستوديو إن شاء</b> (<c>CancelAsync</c> بِـ<c>IsStoreAdmin</c>) بِلا مَساسٍ بِالمال.</para></summary>
     [Fact]
-    public void The_studio_path_cannot_make_the_app_owner_his_own_counterparty_and_his_demo_deal_stays_at_Offered()
+    public void The_studio_path_cannot_make_the_app_owner_his_own_counterparty_and_an_old_demo_deal_waits_at_Offered_until_the_store_owner_cancels_it()
     {
+        Assert.DoesNotContain(WriteEndpointGuardTests.AllMinimalApiEndpoints(), e => e.Route == "/studio/apps/{slug}/deals/seed");
+
         var appOwner = Guid.Parse("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
         var (deals, world, id) = StudioSeedDeal(appOwner);
         var savesBefore = world.SaveCalls;
@@ -290,6 +299,12 @@ public class DealOwnListingCharacterizationTests
         Assert.Equal(DealStatus.Active, deal.Status);
         Assert.DoesNotContain(deal.Timeline, e => e.Action is "assigned" or "advanced");
         Assert.Equal(savesBefore, world.SaveCalls);   // لا تَعيينَ ولا تَحريك — صِفرُ حِفظ
+
+        // والمَخرَجُ: صاحِبُ المَتجَرِ يُلغيها مِن الاستوديو — والمُزَوِّدُ الَّذي يَرمي عِندَ أَيِّ نِداءٍ لا يُنادى.
+        var cancelled = Now(deals.CancelAsync(Slug, id, new DealCanceller(appOwner, "مالِك التَّطبيق", IsStoreAdmin: true), "صَفقَةٌ تَجريبِيَّة"));
+        Assert.True(cancelled.Ok, cancelled.Violation?.MessageAr);
+        Assert.Equal(DealStatus.Cancelled, world.Read<Deal>(id.ToString())!.Status);
+        Assert.Equal(savesBefore + 1, world.SaveCalls);
     }
 
     /// <summary><b>الكاتِبُ الوَحيدُ نَفسُه — مُوجِبٌ وسالِب</b>: <c>AssignCounterpartyAsync</c> تُعيدُ الصَفقَةَ بِلا

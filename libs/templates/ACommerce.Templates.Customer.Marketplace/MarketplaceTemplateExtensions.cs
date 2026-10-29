@@ -3657,22 +3657,10 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Studio Deals (تَدَفُّق العَمَلِيّات: المالِك يَتَدَخَّل أَو يُنفِّذ) ─
         // كُلّ الإجراءات تَفحَص مِلكِيَّة المُستَأجِر قَبل العَمَل.
-        app.MapPost("/studio/apps/{slug}/deals/seed",
-            async (string slug, HttpRequest req, IDocumentStore store,
-                   Services.Incubator.StudioAuth auth, Services.Deals.DealsService deals) =>
-        {
-            if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
-            var pattern = req.Form["pattern"].ToString().Trim();
-            if (string.IsNullOrEmpty(pattern)) pattern = "marketplace";
-            // أَنشِئ Deal تَجريبيَّة لِعَرض التَّدَفُّق في الواجِهَة.
-            var owner = auth.UserId!.Value;
-            await deals.StartAsync(slug, pattern,
-                initiatorId: owner, initiatorName: "صاحِب الفِكرَة",
-                listingId: null, listingTitle: $"عَمَلِيَّة تَجريبيَّة — {pattern}",
-                amountSar: 250m);
-            return Results.Redirect($"/studio/apps/{slug}/deals");
-        }).RequireFormBody().DisableAntiforgery();
-
+        // (‏2026-10-29، قَرارُ المالِك د32 «٢»؛ ‏ADR-047 §٦): كانَ هُنا `POST /studio/apps/{slug}/deals/seed` — «العَمَلِيَّة التَجريبِيَّة»: يَكتُبُ بِـ`StartAsync`
+        // صَفقَةً حَقيقِيَّةً في المَتجَرِ (250، مُبادِرُها صاحِبُ الفِكرَةِ بِلا إعلان) تَقِفُ عِندَ «عَرض» لِأَنّ حارِسَ المُبادِرِ يَرُدُّ أَوَّلَ نَقرَةٍ إدارِيَّة.
+        // حُذِفَ مَعَ مَدخَلَيه (القاعِدَتانِ ١ و١٢): لا مُشتَرٍ وَهمِيٌّ ولا استِثناءٌ مِن الحارِس. والصَفَقاتُ التَجريبِيَّةُ الَّتي وُلِدَت قَبلُ باقِيَة، ويُلغيها صاحِبُ
+        // المَتجَرِ مِن الاستوديو بِبابِ `/cancel` أَدناه إن شاء.
         app.MapPost("/studio/apps/{slug}/deals/{id:guid}/advance",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
                    Services.Incubator.StudioAuth auth, Services.Deals.DealsService deals,
