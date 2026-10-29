@@ -726,15 +726,40 @@ public class ProductionBootVerdictTests(ITestOutputHelper output)
         Assert.Equal("false", keys.GetValueOrDefault("cancel-in-progress"));
     }
 
-    /// <summary><b>اليَوم</b> (`48d55c2`): مَجموعَةُ <c>deploy-hf</c> بِلا <c>queue</c> — الافتِراضُ <c>single</c> يُلغي المُنتَظِرَ بِوافِدٍ أَحدَث، فَنَشرٌ أَخضَرُ
-    /// يَضيعُ بِلا أَحمَر. يُقلَبُ بِاسمِه بِقَرارِ المالِك د63 «أ».</summary>
+    /// <summary>كانَ <c>Today_a_waiting_deploy_is_replaced_by_a_newer_one</c> (‏<c>8a27a3e</c>): مَجموعَةُ <c>deploy-hf</c> بِلا <c>queue</c>. <b>وقُلِبَ
+    /// بِقَرارِ المالِك د63 «أ»</b>: نَشرٌ يَنتَظِرُ لا يُلغيه وافِدٌ أَحدَث — <c>queue: max</c> عَلى مُستَوى سَيرِ العَمَلِ بِحَرفِ مِثالِ GitHub، فَلا يَضيعُ
+    /// نَشرٌ أَخضَرُ بِصَمت؛ وما يُدفَعُ خارِجَ تَرتيبِه يَرُدُّه <c>deploy_direction</c> أَحمَر.</summary>
     [Fact]
-    public void Today_a_waiting_deploy_is_replaced_by_a_newer_one()
+    public void A_waiting_deploy_is_never_replaced_by_a_newer_one()
     {
         var refusal = QueueRefusal(DeployWorkflow(), "deploy-hf", "", out var keys);
-        output.WriteLine($"concurrency في deploy-hf.yml: {string.Join(" · ", keys.Select(k => $"{k.Key}={k.Value}"))} ⇒ {refusal ?? "يُبقي المُنتَظِر"}");
-        Assert.Equal("replaces_waiting", refusal);
-        Assert.False(keys.ContainsKey("queue"));
+        output.WriteLine($"concurrency في deploy-hf.yml: {string.Join(" · ", keys.Select(k => $"{k.Key}={k.Value}"))} ⇒ {refusal ?? "يُبقي الجاريَ والمُنتَظِر"}");
+        Assert.True(keys.Count > 0, "أَداةٌ عَمياء: صِفرُ مِفتاحٍ في كُتلَةِ concurrency.");
+        Assert.True(refusal is null, $"مَجموعَةُ deploy-hf تُلغي جارِياً أَو مُنتَظِراً ({refusal}) — ونَشرٌ أَخضَرُ يَضيعُ بِلا أَحمَر.");
+        Assert.Equal("max", keys["queue"]);
+    }
+
+    /// <summary><b>حَقنُ عَيب — الفاحِصُ عَلى مُستَوى سَيرِ العَمَلِ يُحمِرُّ فِعلاً</b>: كُتلَةُ اليَومِ تُقبَل، وكُتلَةُ <c>48d55c2</c> بِحَرفِها (بِلا <c>queue</c>)
+    /// تُرَدّ، وكَذلِكَ <c>single</c>، وإلغاءُ الجاري، ومَجموعَةٌ بِاسمٍ آخَر، ومَجموعَةٌ عَلى الوَظيفَةِ وَحدَها (إزاحَةُ أَربَع) لا يَراها فاحِصُ سَيرِ العَمَل.</summary>
+    [Fact]
+    public void The_workflow_level_queue_checker_can_actually_go_red()
+    {
+        const string Before = "name: x\n\nconcurrency:\n  # ‏تَعليق\n  group: deploy-hf\n  cancel-in-progress: false\n\npermissions:\n  contents: read\n";
+        var cases = new (string Name, string Text, string? Code)[]
+        {
+            ("كُتلَةُ اليَوم", DeployWorkflow(), null),
+            ("48d55c2 بِحَرفِها", Before, "replaces_waiting"),
+            ("queue: single", Before.Replace("cancel-in-progress: false\n", "cancel-in-progress: false\n  queue: single\n", StringComparison.Ordinal), "replaces_waiting"),
+            ("يُلغي الجاري", Before.Replace("cancel-in-progress: false\n", "cancel-in-progress: true\n  queue: max\n", StringComparison.Ordinal), "cancels_running"),
+            ("اسمٌ آخَر", Before.Replace("group: deploy-hf", "group: deploy-${{ github.ref }}", StringComparison.Ordinal).Replace("cancel-in-progress: false\n", "cancel-in-progress: false\n  queue: max\n", StringComparison.Ordinal), "group"),
+            ("عَلى الوَظيفَةِ وَحدَها", "jobs:\n  mirror:\n    concurrency:\n      group: deploy-hf\n      cancel-in-progress: false\n      queue: max\n", "no_concurrency"),
+        };
+        var wrong = cases.Where(c => QueueRefusal(c.Text, "deploy-hf", "", out _) != c.Code)
+            .Select(c => $"«{c.Name}»: {QueueRefusal(c.Text, "deploy-hf", "", out _) ?? "قُبِل"} لا {c.Code ?? "قُبِل"}").ToList();
+        foreach (var c in cases) output.WriteLine($"«{c.Name}» → {QueueRefusal(c.Text, "deploy-hf", "", out _) ?? "قُبِل"}");
+        output.WriteLine($"حُقِنَ {cases.Length} شَكلاً؛ أَخطَأَ الفاحِصُ في {wrong.Count}");
+        Assert.True(cases.Length >= 6, "أَداةٌ عَمياء: العَيِّنَةُ أَصغَرُ مِمّا كُتِب.");
+        Assert.True(wrong.Count == 0, string.Join("\n", wrong));
     }
 
     /// <summary><b>حَقنُ عَيب — فاحِصُ طابورِ البَوّابَةِ يُحمِرُّ فِعلاً</b> (‏2026-10-24): كُتلَةُ اليَومِ تُقبَل، وكُلُّ شَكلٍ يُلغي جارِياً أَو مُنتَظِراً

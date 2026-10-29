@@ -1889,6 +1889,21 @@ ACOMMERCE_AUTH_SECRET="$(openssl rand -hex 32)"   # سِرُّ البَوّاب�
   و`…The_tip_is_fetched_from_origin_when_the_step_decides_and_is_empty_without_one` (أَصلٌ عارٍ يَتَقَدَّمُ ولا يُستَنسَخُ شَيء ⇒ الرَأسُ الجَديد؛ بِلا أَصلٍ ⇒ فارِغ)،
   و`…The_tip_rows_can_actually_go_red_on_an_injected_fault` (ثَلاثَةُ عُيوب: المُقارَنَةُ تَسقُط، والفَرعُ يَسقُط، والرَأسُ بِما يَخدِم).
 
+(‏2026-10-29 — قَرارُ المالِك د63 «أ»، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **و«مَسارٌ ثالِث … لَم يُكتَب أَيُّهُما» أُغلِق — `queue: max` في مَجموعَةِ `deploy-hf`**:
+- اختارَ المالِكُ الطابور (البَديلُ الأَوَّلُ في «والإغلاقُ قَرارُك» أَعلاه؛ سِجِلُّه «أ» S16·٣): نَشرٌ يَنتَظِرُ لا يُلغيه وافِدٌ أَحدَث، فَلا يَضيعُ نَشرٌ أَخضَرُ بِصَمت؛ والتَرتيبُ
+  غَيرُ مَضمونٍ بِنَصِّ GitHub، فَما يُدفَعُ خارِجَ تَرتيبِه يَرُدُّه `deploy_direction` **أَحمَرَ لا صامِتاً**. والسَطرُ نَفسُه في `ci.yml` لِبَوّابَةِ الإقلاع (القاعِدَة ٨).
+- **والمِفتاحُ مَقروءٌ مِن الوَثيقَةِ قَبلَ أَن يُكتَب** (‏2026-10-29، صَفحَةُ workflow-syntax الرَسمِيَّة): «To allow more than one `pending` job or workflow run
+  to wait in the same concurrency group, use the optional `queue` property» بِقيمَتَين — «`single` (default)» و«`max`: Up to 100 jobs or workflow runs can be
+  `pending`» — ومِثالُها «Example: Queueing multiple pending runs» **عَلى مُستَوى سَيرِ العَمَلِ** بِحَرفِه (`concurrency: { group: production-deploy, queue: max }`)،
+  فَلا يَلزَمُ نَقلُ المَجموعَةِ إلى الوَظيفَة؛ و«The combination of `queue: max` and `cancel-in-progress: true` is not allowed» — والمَجموعَةُ `false`.
+- **وما لا يُغلِقُه — يُقال**: (١) **لَم يُقَس حَيّاً**: لا تَشغيلَ لِـActions عَلى هذا الفَرع؛ قَبولُ GitHub لِلمِفتاحِ في `deploy-hf.yml` يُقاسُ بِأَوَّلِ دَفعَتَينِ
+  مُتَتالِيَتَينِ بَعدَ الدَمج (سِجِلُّ المالِكِ «ج» S7 · د63). (٢) **وإلى أَن يُقاس** يُعرَفُ المَنشورُ مِن `/health` (‏`commit` = رَأسُ `main`) لا مِن لَونِ CI —
+  كَما في «فَـ«نُشِرَ فَلا شَيءَ يُفعَل» … تُقرَأُ مِن `/health`» أَعلاه. (٣) **طابورٌ مُمتَلِئٌ بِـ‏100** يُسقِطُ الوافِد («When the queue is full, any additional
+  jobs or workflow runs are canceled»)، وعِلاجُه ما في الفِقرَةِ نَفسِها.
+- والحَدُّ مَقيس: `ProductionBootVerdictTests.A_waiting_deploy_is_never_replaced_by_a_newer_one` (قُلِبَ بِاسمِه مِن `Today_a_waiting_deploy_is_replaced_by_a_newer_one`،
+  تَوصيفُ `8a27a3e`) يَقرَأُ المَجموعَةَ بِفاحِصِ بَوّابَةِ الإقلاعِ نَفسِه (`QueueRefusal`)، و`…The_deploy_runs_in_one_workflow_level_group_that_never_cancels_a_running_deploy`
+  بِلا حَرفٍ مِن التَوصيف، و`…The_workflow_level_queue_checker_can_actually_go_red` بِسِتِّ عَيِّنات.
+
 ---
 
 ## ٢·ز. صُوَرُ المُستَأجِرين — مَخزَنُ كائِناتٍ خارِجَ الحاوِيَة (‏ADR-017)

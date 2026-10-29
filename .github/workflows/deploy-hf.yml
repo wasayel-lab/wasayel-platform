@@ -83,6 +83,12 @@ concurrency:
   # نَشراً لا أَحَدَ قَرَأَ نَتيجَتَه.
   group: deploy-hf
   cancel-in-progress: false
+  # ‏(‏2026-10-29، قَرارُ المالِك د63 «أ» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ولا يُلغى المُنتَظِرُ أَيضاً**: بِالافتِراضِ (`single`) يَنتَظِرُ في
+  # المَجموعَةِ تَشغيلٌ واحِد، وكُلُّ وافِدٍ أَحدَثَ يُلغيه — فَنَشرٌ أَخضَرُ يَضيعُ بِلا أَحمَر (DEPLOY.md §٢·و، «مَسارٌ ثالِث»). و`max` يُبقي حَتّى
+  # ‏100 مُنتَظِرٍ FIFO بِوَقتِ بَدءِ انتِظارِه («ordering is not guaranteed» — وما يُدفَعُ خارِجَ تَرتيبِه يَرُدُّه `deploy_direction` أَحمَرَ لا صامِتاً).
+  # مَقروءٌ مِن وَثائِقِ GitHub (workflow-syntax، «Example: Queueing multiple pending runs» بِحَرفِه عَلى مُستَوى سَيرِ العَمَل)، ولا يَجتَمِعُ مَعَ
+  # إلغاءِ الجاري. والسَطرُ نَفسُه في `ci.yml` لِبَوّابَةِ الإقلاع؛ والحارِسُ `ProductionBootVerdictTests` (‏QueueRefusal).
+  queue: max
 
 permissions:
   contents: read
