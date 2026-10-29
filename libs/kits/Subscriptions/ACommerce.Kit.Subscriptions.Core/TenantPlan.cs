@@ -304,15 +304,15 @@ public static class TenantPlanPolicy
         ReadSetting(string? planId, string? startsAt, string? expiresAt,
                     string? graceDays, string? price, DateTime now)
     {
-        var starts = DateTime.TryParse(startsAt, System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.AssumeUniversal
-            | System.Globalization.DateTimeStyles.AdjustToUniversal, out var s)
-            ? s : now.Date;
-
-        var expires = DateTime.TryParse(expiresAt, System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.AssumeUniversal
-            | System.Globalization.DateTimeStyles.AdjustToUniversal, out var e)
-            ? e : DateTime.MinValue;
+        // **اليَومُ بِلا ساعَةٍ آخِرُ ذلكَ اليَومِ بِتَوقيتِ المَنَصَّة** (‏2026-10-29، قَرارُ المالِك د51؛ ‏ADR-039 §مُلحَق د51) — وكانَ
+        // مُنتَصَفَ لَيلِه UTC (الثالِثَةَ فَجراً بِتَوقيتِ الرِياض)، فَمِن تِلكَ الدَقيقَةِ يَدخُلُ المَتجَرُ السَماح. **والدالَّةُ نَفسُها
+        // لِلحَقلَين** لا لِلانتِهاءِ وَحدَه: البَدءُ لا يَقرَؤُه `Derive` أَصلاً، وإنَّما يُقرَأُ في طولِ المُدَّةِ (`ExpiresAt − StartsAt`)
+        // الَّذي يُضيفُه تَمديدُ PayPal حينَ لا تُعطي مَوعِداً — فَبَقِيَ أَيّاماً كامِلَةً كَما كان، وبَقِيَت ساعَةُ النِهايَةِ ثابِتَةً عَبرَ
+        // التَجديد، وبَقِيَ اليَومانِ اللَّذانِ تَطبَعُهُما صَفحَةُ المُشرِفِ (‏UTC) هُما المَكتوبان (`TenantPlanExpiryDayTests`).
+        // ولَحظَةٌ كُتِبَت بِساعَتِها (‏ISO بِـT) تُقرَأُ كَما كُتِبَت، كَما كانَت.
+        var today = DateOnly.FromDateTime(ACommerce.Kit.Culture.CultureTime.InZone(now));
+        var starts = ReadDay(startsAt) ?? ACommerce.Kit.Culture.CultureTime.EndOfDayUtc(today);
+        var expires = ReadDay(expiresAt) ?? DateTime.MinValue;
 
         var grace = int.TryParse(graceDays, System.Globalization.NumberStyles.Integer,
             System.Globalization.CultureInfo.InvariantCulture, out var g)
@@ -322,6 +322,22 @@ public static class TenantPlanPolicy
             System.Globalization.CultureInfo.InvariantCulture, out var p) ? p : 0m;
 
         return ((planId ?? "").Trim(), starts, expires, grace, amount);
+    }
+
+    /// <summary>حَقلُ تاريخٍ مِن الاستِمارَة: <c>yyyy-MM-dd</c> وَحدَه ← آخِرُ ذلكَ اليَومِ بِتَوقيتِ المَنَصَّة
+    /// (<see cref="ACommerce.Kit.Culture.CultureTime.EndOfDayUtc"/>)؛ وما سِواه يُقرَأُ لَحظَةً بِـ<c>AssumeUniversal</c> كَما كان؛
+    /// وما لا يُقرَأُ <c>null</c>.</summary>
+    private static DateTime? ReadDay(string? field)
+    {
+        var text = field?.Trim();
+        if (DateOnly.TryParseExact(text, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var day))
+            return ACommerce.Kit.Culture.CultureTime.EndOfDayUtc(day);
+
+        return DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal
+            | System.Globalization.DateTimeStyles.AdjustToUniversal, out var at)
+            ? at : null;
     }
 }
 

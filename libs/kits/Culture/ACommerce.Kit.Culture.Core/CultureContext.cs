@@ -80,6 +80,22 @@ public static class CultureTime
     public static string FormatTime(DateTime stored, string format, string? timeZoneId, IFormatProvider provider)
         => stored == DateTime.MinValue ? "" : InZone(stored, timeZoneId).ToString(format, provider);
 
+    /// <summary>
+    /// <para><b>يَومٌ مَكتوبٌ بِلا ساعَة ← آخِرُ لَحظَةٍ فيه بِساعَةِ المِنطَقَة، بِـUTC</b> (‏2026-10-29، قَرارُ المالِك د51؛ <c>ADR-039</c> §مُلحَق د51).</para>
+    ///
+    /// <para><b>العِلَّةُ المَقيسَة</b> (تَوصيفُها <c>StudioHomeActivePlanTests</c> عِندَ <c>a214307</c>): المُشرِفُ يَكتُبُ «تَنتَهي يَومَ 30» فَكانَ
+    /// يُقرَأُ بِـ<c>AssumeUniversal</c> مُنتَصَفَ لَيلِه UTC — الثالِثَةَ فَجراً بِتَوقيتِ الرِياض — فَيَخسَرُ العَميلُ ‏21 ساعَةً مِن يَومِه.
+    /// وأَفضَلُ المُمارَسَةِ في الاشتِراكاتِ أَنّ «تَنتَهي يَومَ 30» آخِرُ يَومِ 30 بِتَوقيتِ العَميل. والمِنطَقَةُ هُنا مِنطَقَةُ المَنَصَّة
+    /// (<see cref="DefaultTimeZone"/>) لِكُلِّ مَتجَرٍ اليَوم — وحَقلُ مِنطَقَةٍ لِكُلِّ مَتجَرٍ يُبنى يَومَ يَطلُبُه أَوَّلُ مَتجَرٍ خارِجَ السُعودِيَّة،
+    /// فَيُمَرَّرُ هُنا مُعَرِّفُه بِلا تَوقيعٍ جَديد.</para>
+    ///
+    /// <para><b>«آخِرُ لَحظَة» = <c>23:59:59.9999999</c> بِساعَةِ المِنطَقَة</b> لا مُنتَصَفُ لَيلِ الغَد: <c>Derive</c> سارِيَةٌ ما دامَ
+    /// <c>now &lt;= ExpiresAt</c>، فَمُنتَصَفُ الغَدِ كانَ سَيَجعَلُ أَوَّلَ لَحظَةٍ مِنه سارِيَة، وكانَ سَيُطبَعُ يَومَ الغَدِ بِساعَةِ الرِياض.
+    /// والساعَةُ قُبَيلَ مُنتَصَفِ اللَيلِ لا تَقَعُ في فَجوَةِ تَوقيتٍ صَيفِيّ (الفَجَواتُ عِندَ مُنتَصَفِ اللَيلِ أَو بَعدَه)، فَلا يَرمي.</para>
+    /// </summary>
+    public static DateTime EndOfDayUtc(DateOnly day, string? timeZoneId = null)
+        => TimeZoneInfo.ConvertTimeToUtc(day.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Unspecified), Zone(timeZoneId));
+
     /// <summary>المِنطَقَةُ بِمُعَرِّفِها، وإلّا الافتِراضِيَّة، وإلّا UTC — لا يَرمي.</summary>
     public static TimeZoneInfo Zone(string? timeZoneId)
     {

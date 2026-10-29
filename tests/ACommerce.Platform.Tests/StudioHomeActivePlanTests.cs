@@ -106,19 +106,27 @@ public class StudioHomeActivePlanTests
     // بِتَوقيتِ الرِياض) المَتجَرُ في السَماحِ ولا يَقبَلُ كِتابَة، والسَطرُ يَقولُ «سارِيَةٌ حَتّى X». يُثَبَّتُ «اليَوم» هُنا (القاعِدَة ٣) ويُقلَبُ بِاسمِه
     // في كوميتِ الصِياغَة؛ والصَفّانِ أَعلاه يَبقَيانِ إلّا السَطرَ الَّذي يُثَبِّتُ القالِبَ بِحَرفِه (يُقلَبُ مَعَه، مُعلَنٌ هُنا سَلَفاً).
 
-    /// <summary>ما يَكتُبُه المُشرِفُ يَوماً يُقرَأُ مُنتَصَفَ لَيلِه UTC، وفي التاسِعَةِ صَباحاً بِتَوقيتِ الرِياضِ مِن ذلكَ اليَومِ لا كِتابَة.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د51؛ ‏ADR-039 §مُلحَق د51) — كانَ
+    /// <c>An_expiry_day_written_by_the_admin_ends_the_plan_at_its_first_minute_utc</c> (‏<c>a214307</c>): «2026-11-30» يُقرَأُ مُنتَصَفَ لَيلِه UTC،
+    /// وفي التاسِعَةِ صَباحاً بِتَوقيتِ الرِياضِ مِن ذلكَ اليَومِ لا كِتابَة. <b>والآن</b> يُقرَأُ آخِرَ لَحظَةٍ مِنه بِتَوقيتِ الرِياض
+    /// (‏<c>20:59:59.9999999Z</c>، نَحوَ ‏21 ساعَةً أَكثَر): سارِيَةٌ طَوالَ يَومِها، وأَوَّلُ لَحظَةٍ مِن الغَدِ بِتَوقيتِ الرِياضِ سَماح،
+    /// واليَومُ المَطبوعُ في السَطرِ كَما كان.</summary>
     [Fact]
-    public void An_expiry_day_written_by_the_admin_ends_the_plan_at_its_first_minute_utc()
+    public void An_expiry_day_written_by_the_admin_keeps_the_plan_active_until_its_last_moment_in_riyadh()
     {
         var now = new DateTime(2026, 10, 25, 12, 0, 0, DateTimeKind.Utc);
         var f = TenantPlanPolicy.ReadSetting("manual", "2026-09-01", "2026-11-30", "14", "0", now);
-        Assert.Equal(new DateTime(2026, 11, 30, 0, 0, 0, DateTimeKind.Utc), f.ExpiresAt);
+        Assert.Equal(new DateTime(2026, 11, 30, 21, 0, 0, DateTimeKind.Utc).AddTicks(-1), f.ExpiresAt);
+        Assert.Equal(DateTimeKind.Utc, f.ExpiresAt.Kind);
         var plan = new TenantPlan { PlanId = f.PlanId, StartsAt = f.StartsAt, ExpiresAt = f.ExpiresAt, GraceDays = f.GraceDays };
 
         var nineRiyadh = new DateTime(2026, 11, 30, 6, 0, 0, DateTimeKind.Utc);     // ‏09:00 بِتَوقيتِ الرِياض (‏UTC+3)
-        Assert.Equal(TenantPlanState.Grace, TenantPlanPolicy.Derive(plan, nineRiyadh));
-        Assert.False(TenantPlanPolicy.AllowsWrite(TenantPlanPolicy.Derive(plan, nineRiyadh)));
-        Assert.Equal(TenantPlanState.Active, TenantPlanPolicy.Derive(plan, new DateTime(2026, 11, 29, 20, 59, 0, DateTimeKind.Utc)));
+        Assert.Equal(TenantPlanState.Active, TenantPlanPolicy.Derive(plan, nineRiyadh));
+        Assert.True(TenantPlanPolicy.AllowsWrite(TenantPlanPolicy.Derive(plan, nineRiyadh)));
+        var lastMinuteRiyadh = new DateTime(2026, 11, 30, 20, 59, 0, DateTimeKind.Utc); // ‏23:59 بِتَوقيتِ الرِياض
+        Assert.Equal(TenantPlanState.Active, TenantPlanPolicy.Derive(plan, lastMinuteRiyadh));
+        var midnightRiyadh = new DateTime(2026, 11, 30, 21, 0, 0, DateTimeKind.Utc);    // ‏00:00 مِن الغَدِ بِتَوقيتِ الرِياض
+        Assert.Equal(TenantPlanState.Grace, TenantPlanPolicy.Derive(plan, midnightRiyadh));
         Assert.Equal("2026-11-30", plan.ExpiresAt.ToString("yyyy-MM-dd"));   // ‏ما يَطبَعُه السَطر
     }
 
