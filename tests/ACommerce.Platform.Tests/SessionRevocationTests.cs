@@ -352,6 +352,26 @@ public class SessionRevocationTests(ITestOutputHelper output)
                 ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveToken(ctx.Request, NameSlug))!.Value.UserId);
         }
     }
+
+    // ─── A4 (تَدقيقُ الموجَة ١١، ‏2026-10-29): حِسابٌ حُذِفَ قَبلَ إصدارِ الجَلسَةِ يَبقى رَمزُه ‏0 صالِحاً ───────────────────────────
+    //
+    // الحَذفُ يَرفَعُ الإصدارَ مُنذُ `2e65882` (د28)، والبَوّابَةُ تُقارِنُ إصدارَ الرَمزِ بِإصدارِ الحِسابِ وَحدَه — فَحِسابٌ حُذِفَ قَبلَها إصدارُه
+    // المُخَزَّنُ ‏0، ورَمزُه القَديمُ (بِلا إصدار = ‏0) لَيسَ أَصغَرَ مِنه: يَعبُرُ البَوّابَةَ ثَلاثينَ يَوماً مِن إصدارِه.
+
+    /// <summary><b>تَوصيفُ اليَوم (‏2026-10-29، A4)</b>: حِسابٌ <c>DeletedAt</c> فيه وإصدارُه ‏0، ورَمزُه ‏0 في كوكيِّ المَتجَر — البَوّابَةُ تُبقيه
+    /// والجَلسَةُ تُحَلّ.</summary>
+    [Fact]
+    public async Task Today_a_version_zero_token_of_an_account_deleted_before_session_versions_passes_the_gate()
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 0, DeletedAt = new DateTime(2026, 10, 1, 9, 0, 0, DateTimeKind.Utc) };
+        var token = AuthHandlers.MakeToken(user.Id, NameSlug, 0);
+        var ctx = GateContext($"/{NameSlug}/me", user, ($".acommerce.auth.{NameSlug}", token));
+        await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ApplyAsync(ctx);
+        var resolved = ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveToken(ctx.Request, NameSlug);
+        output.WriteLine($"اليَوم: حِسابٌ مَحذوفٌ بِإصدارِ 0 · رَمزُه 0 {(resolved is null ? "يُنزَع" : "يَعبُر")} · Set-Cookie {ctx.Response.Headers.SetCookie.Count}");
+        Assert.Equal(user.Id, AuthHandlers.ParseToken(resolved)!.Value.UserId);
+        Assert.Equal(0, ctx.Response.Headers.SetCookie.Count);
+    }
 }
 
 /// <summary>
