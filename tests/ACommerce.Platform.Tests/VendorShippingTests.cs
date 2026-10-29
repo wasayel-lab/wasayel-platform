@@ -1472,6 +1472,9 @@ public class VendorShippingTests(ITestOutputHelper output)
             Template("Shipping", "OtoShippingEndpoints.cs"),
             Path.Combine(RepoRoot, "libs", "kits", "Delivery", "ACommerce.Kit.Delivery.Core", "OtoClient.cs"),
             Template("Services", "Deals", "DealShipGroup.cs"),
+            // (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — مُلاحَظَةٌ ثانَوِيَّة): وأُنبوبُ الإشعاراتِ الَّذي يَبعَثُ مِنه الشَحنُ «يَحتاجُ تَدَخُّلاً» (د9 (١)، `NotifyInterventionAsync`)
+            // — والقَرارُ «لا تُعدّ على باقة صاحب المتجر بوليصة ولا تسجيل ولا إشعار» يَشمَلُه.
+            Template("Services", "Deals", "DealNotices.cs"),
         };
         var read = 0;
         foreach (var f in files)
@@ -1482,7 +1485,7 @@ public class VendorShippingTests(ITestOutputHelper output)
                 Assert.DoesNotContain(quota, code, StringComparison.Ordinal);
         }
         output.WriteLine($"مِلَفّاتٌ مَقروءَة: {read} مِن {files.Length}");
-        Assert.Equal(6, files.Length);   // 5 ← 6 (‏2026-10-29، د17 «أ»: `DealShipGroup.cs` مِن مَسارِ البوليصَة، د13)
+        Assert.Equal(7, files.Length);   // 5 ← 6 (‏2026-10-29، د17 «أ»: `DealShipGroup.cs` مِن مَسارِ البوليصَة، د13)؛ 6 ← 7 (`DealNotices.cs`، إشعارُ الشَحن)
         Assert.Equal(files.Length, read);
     }
 
