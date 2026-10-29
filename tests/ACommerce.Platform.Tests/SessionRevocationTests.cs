@@ -148,6 +148,37 @@ public class SessionRevocationTests(ITestOutputHelper output)
         Assert.Contains("يَومَ يَعمَلُ بِأَكثَرَ مِن نُسخَةٍ تُنقَلُ إلى قاعِدَةِ البَيانات", auth, StringComparison.Ordinal);
     }
 
+    // ─── I-SEC-2 + A5 (تَدقيقُ الموجَة ١١، ‏2026-10-29): «اخرج من كل الأجهزة» يَمحو اشتِراكاتِ الإشعار ─────────────────────────────
+
+    private static ACommerce.Kit.Auth.PushSubscription Sub(string device)
+        => new() { Endpoint = $"https://fcm.googleapis.com/fcm/send/{device}", P256dh = "p", Auth = "a", CreatedAt = DateTime.UtcNow };
+
+    /// <summary>كانَ الرَفعُ يَرفَعُ الإصدارَ وَحدَه، والمُرسِلُ يَطرُقُ كُلَّ اشتِراكٍ مَحفوظٍ بِلا جَلسَة — فَالهاتِفُ المَسروقُ يَتَلَقّى نَصَّ المُحادَثات.
+    /// والآن الأَثَرُ الواحِدُ (<c>Revoke</c>) يَمحوها كُلَّها مَعَ الإصدار.</summary>
+    [Fact]
+    public void Signing_out_everywhere_clears_every_push_subscription_with_the_version()
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 3 };
+        user.PushSubscriptions.AddRange(new[] { Sub("phone"), Sub("laptop") });
+        var at = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+        ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.Revoke(user, at);
+        output.WriteLine($"بَعدَ الرَفع: الإصدارُ {user.SessionVersion} · الاشتِراكات {user.PushSubscriptions.Count}");
+        Assert.Equal(4, user.SessionVersion);
+        Assert.Empty(user.PushSubscriptions);
+        Assert.Equal(at, user.UpdatedAt);
+    }
+
+    /// <summary>بابُ «اخرج من كل الأجهزة» يُطَبِّقُ الأَثَرَ نَفسَه — لا رَفعاً بِيَدِه يَنجَرِف.</summary>
+    [Fact]
+    public void The_tenant_revoke_applies_the_one_effect()
+    {
+        var gate = WriteEndpointGuardTests.StripComments(Read($"{TemplateRoot}/Services/SessionVersionGate.cs"));
+        var body = gate[gate.IndexOf("RevokeTenantAsync(", StringComparison.Ordinal)..];
+        body = body[..body.IndexOf("public static", StringComparison.Ordinal)];
+        Assert.Contains("Revoke(", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("SessionVersion++", body, StringComparison.Ordinal);
+    }
+
     // ─── I-SEC-1 (تَدقيقُ الموجَة ١١، ‏2026-10-29): كوكيُّ «الاسم» يَحمِلُ رَمزاً عَلى مَسارِ دَورٍ اسمُه name ─────────────────────
     //
     // البَوّابَةُ تُسقِطُ مِن فَحصِها كُلَّ اسمٍ يَنتَهي بِـ«.name» (كوكيُّ اسمِ العَرض)، و`ResolveCookieBase` يَقرَأُ لِمَسارِ
@@ -350,6 +381,34 @@ public class LiveSessionRevocationProofTests(ITestOutputHelper output)
             Assert.Equal((0, 1), (before, after));
             Assert.True(Revoked(phoneA) && Revoked(phoneB));
             Assert.False(Revoked(fresh));
+        }
+        finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
+    }
+
+    /// <summary>(‏2026-10-29، I-SEC-2) الرَفعُ يَمحو اشتِراكاتِ صاحِبِه في الحِفظِ نَفسِه (مُوجَب) ويَترُكُ اشتِراكاتِ حِسابٍ آخَرَ في المَتجَرِ نَفسِه (سالِب).</summary>
+    [Fact]
+    public async Task Signing_out_everywhere_clears_its_own_push_subscriptions_and_no_one_elses_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        var slug = "sv-zz-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            var a = new User { Id = Guid.NewGuid(), TenantSlug = slug, Phone = "+966500000281" };
+            var b = new User { Id = Guid.NewGuid(), TenantSlug = slug, Phone = "+966500000282" };
+            a.PushSubscriptions.Add(new ACommerce.Kit.Auth.PushSubscription { Endpoint = "https://fcm.googleapis.com/fcm/send/a", P256dh = "p", Auth = "x" });
+            b.PushSubscriptions.Add(new ACommerce.Kit.Auth.PushSubscription { Endpoint = "https://fcm.googleapis.com/fcm/send/b", P256dh = "p", Auth = "x" });
+            await using (var s = store.LightweightSession(slug)) { s.Store(a); s.Store(b); await s.SaveChangesAsync(); }
+
+            Assert.True(await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.RevokeTenantAsync(store, cache, slug, a.Id));
+            await using var q = store.QuerySession(slug);
+            var a2 = await q.LoadAsync<User>(a.Id);
+            var b2 = await q.LoadAsync<User>(b.Id);
+            output.WriteLine($"بَعدَ رَفعِ أ: اشتِراكاتُ أ {a2!.PushSubscriptions.Count} وإصدارُه {a2.SessionVersion} · اشتِراكاتُ ب {b2!.PushSubscriptions.Count} وإصدارُه {b2.SessionVersion}");
+            Assert.Equal((0, 1), (a2.PushSubscriptions.Count, a2.SessionVersion));
+            Assert.Equal((1, 0), (b2.PushSubscriptions.Count, b2.SessionVersion));
         }
         finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
     }

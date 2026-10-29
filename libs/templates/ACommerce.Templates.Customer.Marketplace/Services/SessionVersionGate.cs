@@ -87,14 +87,26 @@ public static class SessionVersionGate
     /// <summary>يَمحو الإصدارَ المَحفوظ — فَورَ الرَفع، فَلا يَبقى رَمزٌ مُسقَطٌ يَعبُرُ دَقيقَةَ الحِفظ.</summary>
     public static void Forget(IMemoryCache cache, string tenant, Guid userId) => cache.Remove(Key(tenant, userId));
 
-    /// <summary>«اخرج من كل الأجهزة» لِحِسابِ مَتجَر — يَرفَعُ الإصدارَ ويَحفَظُه ويَمحو المَحفوظ. <c>false</c> = لا حِساب.</summary>
+    /// <summary>
+    /// <para><b>أَثَرُ «اخرج من كل الأجهزة» عَلى وَثيقَةِ حِسابِ المَتجَر</b> — نَقِيّ: يَرفَعُ الإصدارَ، <b>ويَمحو اشتِراكاتِ الإشعارِ كُلَّها</b>
+    /// (‏2026-10-29، تَدقيقُ الموجَة ١١ I-SEC-2 + A5). كانَ يَرفَعُ الإصدارَ وَحدَه و<c>WebPushService</c> يُرسِلُ إلى كُلِّ اشتِراكٍ مَحفوظٍ بِلا جَلسَة —
+    /// فَالهاتِفُ المَسروقُ يَبقى يَعرِضُ نَصَّ المُحادَثاتِ وإشعاراتِ الصَفَقاتِ عَلى شاشَتِه المُقفَلَة بِلا حَدّ (الاشتِراكُ لا يَنتَهي بِثَلاثينَ يَوماً).
+    /// وكُلُّ جِهازٍ — هذا مِنها — يَشتَرِكُ مِن جَديدٍ بِنِداءِ <c>App.razor</c> القائِمِ بَعدَ دُخولِه التالي.</para>
+    /// </summary>
+    public static void Revoke(User user, DateTime now)
+    {
+        user.SessionVersion++;
+        user.PushSubscriptions.Clear();
+        user.UpdatedAt = now;
+    }
+
+    /// <summary>«اخرج من كل الأجهزة» لِحِسابِ مَتجَر — يُطَبِّقُ <see cref="Revoke"/> ويَحفَظُه ويَمحو المَحفوظ. <c>false</c> = لا حِساب.</summary>
     public static async Task<bool> RevokeTenantAsync(IDocumentStore store, IMemoryCache cache, string slug, Guid userId)
     {
         await using var s = store.LightweightSession(slug);
         var user = await s.LoadAsync<User>(userId);
         if (user is null) return false;
-        user.SessionVersion++;
-        user.UpdatedAt = DateTime.UtcNow;
+        Revoke(user, DateTime.UtcNow);
         s.Store(user);
         await s.SaveChangesAsync();
         Forget(cache, slug, userId);
