@@ -40,7 +40,7 @@ public class SellerDisplayNameTests(ITestOutputHelper output)
         var deals = Code("Services", "Deals", "DealsService.cs");
         var vendor = Code("Components", "Pages", "VendorProfile.razor");
         var vendorNames = Regex.Matches(vendor, @"vendor\.FullName").Count;
-        output.WriteLine($"قُرّاءُ business_name: {readers.Count} · vendor.FullName في صَفحَةِ البائِع: {vendorNames}");
+        output.WriteLine($"قُرّاءُ business_name: {readers.Count} · مَواضِعُ الاسمِ الشَخصِيِّ في صَفحَةِ البائِع: {vendorNames}");
         Assert.Empty(readers);
         Assert.Contains("=> ActorName.Of((await ProfileAsync(tenantSlug, userId, ct))?.FullName);", accounts, StringComparison.Ordinal);
         Assert.Contains("ownerId, owner?.FullName, ct, DealEvent.BoundAtBirth);", deals, StringComparison.Ordinal);
