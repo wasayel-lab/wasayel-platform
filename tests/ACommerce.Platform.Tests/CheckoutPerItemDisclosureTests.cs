@@ -55,19 +55,24 @@ public class CheckoutPerItemDisclosureTests
         Assert.Single(Regex.Matches(body, Regex.Escape("deals.StartAsync(")));
         Assert.Contains("listingId: item.ListingId", body, StringComparison.Ordinal);
         Assert.DoesNotContain("GroupBy", body, StringComparison.Ordinal);   // ‏لا تَجميعَ بِالبائِع
+        // (‏2026-10-29، قَرارُ المالِك د13 «ب» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): والصَفقَةُ لِكُلِّ بَندٍ كَما كانَت، والتَجميعُ بِالبائِعِ لِلشَحنِ في
+        // `DealShipGroup.ForCheckout` لا في الجِسم — يُكتَبُ لِصَفَقاتِ البائِعِ أَخَواتُها بَعدَ الطَلَبِ ويَجمَعُها `ShipAsync` في طَلَبٍ واحِد (`DealShipGroupTests`).
     }
 
     /// <summary><b>خُطوَةُ الدَفعِ تُفصِحُ: طَلَبٌ لِكُلِّ مُنتَج، يُشحَنُ وَحدَه، ونَقدُه عِندَ تَسليمِه</b> (‏2026-10-13 — انقَلَبَ بِقَرارٍ
     /// مَرئِيٍّ مِن <c>Today_the_payment_step_speaks_of_one_order_and_discloses_nothing_per_item</c>). المِفتاحُ بِالعَرَبِيَّةِ وَحدَها،
     /// يَقولُ «كُلُّ مُنتَجٍ» لا «كُلُّ بائِع» — لِأَنّ الحَلقَةَ أَعلاه بِالبَند — ويُقرَأُ مَرَّةً في الخُطوَةِ ٢ بَعدَ بِطاقاتِ طُرُقِ الدَفعِ
-    /// وخارِجَ أَيِّ شَرط (فَيُرى مَعَ البِطاقَةِ والنَقدِ مَعاً)؛ ونَصُّ النَقدِ لَم يَتَبَدَّل.</summary>
+    /// وخارِجَ أَيِّ شَرط (فَيُرى مَعَ البِطاقَةِ والنَقدِ مَعاً)؛ ونَصُّ النَقدِ لَم يَتَبَدَّل.
+    /// <para><b>وقُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د13 «ب»؛ كانَ <c>The_payment_step_discloses_one_order_per_item_where_the_pay_method_is_chosen</c>،
+    /// وتَوصيفُ «اليَوم» <c>ee46c53</c>): «يتبدّل نصّ الإفصاح في خطوة الدفع إلى «لكل بائع»» — شُحنَةٌ واحِدَةٌ لِكُلِّ بائِعٍ ولِكُلِّ مُنتَجٍ طَلَبُه، والدَفعُ
+    /// عِندَ تَسليمِ شُحنَةِ كُلِّ بائِع؛ والمَوضِعُ والمِفتاحُ ونَصُّ النَقدِ كَما كانَت.</para></summary>
     [Fact]
-    public void The_payment_step_discloses_one_order_per_item_where_the_pay_method_is_chosen()
+    public void The_payment_step_discloses_one_shipment_per_vendor_where_the_pay_method_is_chosen()
     {
         const string Key = "checkout.payment.per_item_note";
         var text = LocaleCatalog.Find(LocaleCatalog.Arabic, Key);
-        Assert.Equal("كُلُّ مُنتَجٍ في سَلَّتِكَ طَلَبٌ مُستَقِلٌّ مَعَ بائِعِه — يُشحَنُ وَحدَه، والدَفعُ عِندَ الاستِلامِ عِندَ تَسليمِ كُلٍّ مِنها.", text);
-        Assert.DoesNotContain("بائِعٍ واحِد", text, StringComparison.Ordinal);
+        Assert.Equal("شُحنَةٌ واحِدَةٌ لِكُلِّ بائِعٍ في سَلَّتِك: مُنتَجاتُه تُشحَنُ مَعاً بِبوليصَةٍ واحِدَة، ولِكُلِّ مُنتَجٍ طَلَبُه — والدَفعُ عِندَ الاستِلامِ عِندَ تَسليمِ شُحنَةِ كُلِّ بائِع.", text);
+        Assert.DoesNotContain("يُشحَنُ وَحدَه", text, StringComparison.Ordinal);
         Assert.DoesNotMatch("[0-9٠-٩]", text);
         Assert.Null(LocaleCatalog.Find("en", Key));
 

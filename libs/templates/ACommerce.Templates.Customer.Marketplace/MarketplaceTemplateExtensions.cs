@@ -3198,6 +3198,8 @@ public static class MarketplaceTemplateExtensions
             Guid firstDealId = Guid.Empty;
             // الصَفَقاتُ الَّتي لَها مالِكٌ — يُشعَرُ بَعدَ الحَفظِ لا داخِلَ الحَلقَة (P1-5).
             var born = new List<Guid>();
+            // ومالِكُ إعلانِ كُلِّ صَفقَةٍ وُلِدَت بِتَرتيبِها — مَجموعاتُ الشَحنِ بَعدَ الحَلقَة (‏2026-10-29، قَرارُ المالِك د13 «ب»).
+            var bornVendors = new List<(Guid DealId, string Vendor)>();
             var created = new List<Guid>();
             // وتَعَذُّرُ الحَجزِ عِندَ مُزَوِّدِ النُسخَةِ يوقِفُ الحَلقَةَ ويُلغي ما وُلِدَ — كَفَشَلِ فَتحِ الفاتورَة (‏2026-10-29، قَرارُ المالِك د8 (٢)).
             var holdFailed = false;
@@ -3304,6 +3306,7 @@ public static class MarketplaceTemplateExtensions
                     // يَبقى فِعلَه هُوَ — بِهُوِيَّتِه لا بِاستِعارَةِ المُبادِر.
                     await deals.BindListingOwnerAsync(slug, deal.Id, oid);
                     born.Add(deal.Id);
+                    bornVendors.Add((deal.Id, oid));
                 }
             }
 
@@ -3329,6 +3332,11 @@ public static class MarketplaceTemplateExtensions
             if (opened is { Ok: false }) { cart.UpdatedAt = DateTime.UtcNow; s.Store(cart); await s.SaveChangesAsync(); }
             if (opened is { Ok: false }) return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
                 .RefusalPath(Services.Deals.CheckoutPayMethods.GatewayOpenFailed)));
+
+            // **ومُنتَجاتُ البائِعِ الواحِدِ مِن هذِه السَلَّةِ تُشحَنُ بِطَلَبٍ واحِدٍ وبوليصَةٍ واحِدَة** (‏2026-10-29، قَرارُ المالِك د13 «ب»؛ تَوصيفُه `ee46c53`):
+            // يُكتَبُ لِكُلِّ صَفقَةٍ مِن مَجموعَةِ بائِعٍ (اثنَتانِ فَأَكثَر) أَخَواتُها — نَسَقُ أَخَواتِ الفاتورَة — بَعدَ أَن نَجَحَ الطَلَب، ولا يُكتَبُ لِصَفقَةٍ وَحدَها لِبائِعِها.
+            // والصَفقَةُ لِكُلِّ بَندٍ كَما كانَت: التَجميعُ عِندَ الشَحن (`DealShipping.ShipAsync`) لا في نَموذَجِ الصَفقَة.
+            await Services.Deals.DealShipGroup.WriteAsync(deals, slug, bornVendors);
 
             s.Delete<ACommerce.Kit.Cart.Cart>(userId);
             await s.SaveChangesAsync();

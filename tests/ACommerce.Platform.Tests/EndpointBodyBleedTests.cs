@@ -392,7 +392,10 @@ public class EndpointBodyBleedTests
         // (`GatewayPayments.ConnectNoticesAsync`)؛ والقَرارُ والإصدارُ والخَتمُ في الخِدمَة. طَبَعَ العَدّادُ «‏2784 → 2785».
         // ‏2785 ← **2787** يَوم ‏2026-10-29 (قَرارُ المالِك د2 — نَمَطُ السَلَّة): سَطرا `cart/add` — سُؤالُ `CartModes.RefusalAsync` بَعدَ تَحميلِ السَلَّةِ ورَدُّه
         // إلى صَفحَةِ الإعلانِ بِرَمزِه؛ والقَرارُ والقِراءَةُ في `CartModes`. طَبَعَ العَدّادُ «‏2785 → 2787»، وعَدَدُ النِقاطِ ‏143 لَم يَتَحَرَّك.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2787),
+        // ‏2787 ← **2790** يَوم ‏2026-10-29 (قَرارُ المالِك د13 «ب» — طَلَبٌ واحِدٌ لِصَفَقاتِ البائِعِ مِن السَلَّة): ثَلاثَةُ أَسطُرٍ في `/checkout/submit` — قائِمَةُ
+        // `bornVendors` وإضافَتُها بِجِوارِ `born.Add`، ونِداءُ `DealShipGroup.WriteAsync` قَبلَ حَذفِ السَلَّة؛ والتَجميعُ والكِتابَةُ في `DealShipGroup`، والجَمعُ عِندَ الشَحنِ
+        // في `DealShipping`. طَبَعَ العَدّادُ «‏2787 → 2790».
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2790),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -1119,7 +1122,9 @@ public class EndpointBodyBleedTests
     /// في بابِ الرَبط؛ والبُرهانُ والإصدارُ في <c>GatewayPayments</c>. <b>وعَدَدُ النِقاطِ ‏142 ← 143</b> — المُضافَةُ وارِدُ البَوّابَة.</remarks>
     /// <remarks><b>‏3133 ← 3135 يَوم ‏2026-10-29</b> (قَرارُ المالِك د2): سَطرا نَمَطِ السَلَّةِ في <c>cart/add</c>؛ والحِفظُ بِخِدمَةِ الهُوِيَّةِ القائِمَةِ بِلا نُقطَةٍ جَديدَة.
     /// وعَدَدُ النِقاطِ ‏143 لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 3135;
+    /// <remarks><b>‏3135 ← 3138 يَوم ‏2026-10-29</b> (قَرارُ المالِك د13 «ب»): ثَلاثَةُ أَسطُرٍ في <c>/checkout/submit</c> — قائِمَةُ <c>bornVendors</c> وإضافَتُها ونِداءُ
+    /// <c>DealShipGroup.WriteAsync</c>؛ والتَجميعُ في <c>DealShipGroup</c> والجَمعُ عِندَ الشَحنِ في <c>DealShipping</c>. وعَدَدُ النِقاطِ ‏143 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 3138;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

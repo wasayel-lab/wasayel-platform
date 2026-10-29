@@ -313,6 +313,12 @@
                     <span style="display:block;margin-top:6px;font-size:12px;color:var(--ac-text-muted);line-height:1.7;">
                         @L.Markup(shipResumes ? "deals.detail.ship_resume_hint" : "deals.detail.ship_hint")
                     </span>
+                    @* (‏2026-10-29، قَرارُ المالِك د13 «ب»): ومَعَه مِن طَلَبِ المُشتَري نَفسِه مُنتَجاتٌ أُخرى لِهذا البائِع — يُقالُ قَبلَ النَقرَةِ أَنّ ما كانَ جاهِزاً مِنها يُشحَنُ
+                       مَعَه في طَلَبٍ واحِد، بِالدالَّةِ الَّتي يَجمَعُ بِها الشَحن (`DealShipGroup.MembersOf`). وبِلا أَخَواتٍ لا يُرسَمُ شَيء. *@
+                    @if (!shipResumes && DealShipGroup.OthersOf(deal) is > 0 and var others)
+                    {
+                        <span style="display:block;margin-top:6px;font-size:12px;color:var(--ac-text-muted);line-height:1.7;">@L.Markup("deals.detail.ship_group_hint", others)</span>
+                    }
                 </form>
             }
             else if (shipHeldKey is { } held && held != DealRefusalTexts.KeyFor(Err))

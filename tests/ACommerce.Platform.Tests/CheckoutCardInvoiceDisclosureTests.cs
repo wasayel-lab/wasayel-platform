@@ -110,6 +110,9 @@ public class CheckoutCardInvoiceDisclosureTests(ITestOutputHelper output)
 
     internal static string PerItemNote => LocaleCatalog.Find(LocaleCatalog.Arabic, "checkout.payment.per_item_note")!;
 
+    /// <summary>نَصُّ الإفصاحِ النَقدِيِّ حَتّى قَرارِ المالِك د13 (‏2026-10-29) بِحَرفِه — يُعيدُ صَفحَةَ «اليَوم» لِلمُقارَنَةِ البايتِيَّة.</summary>
+    internal const string PerItemNoteUntilD13 = "كُلُّ مُنتَجٍ في سَلَّتِكَ طَلَبٌ مُستَقِلٌّ مَعَ بائِعِه — يُشحَنُ وَحدَه، والدَفعُ عِندَ الاستِلامِ عِندَ تَسليمِ كُلٍّ مِنها.";
+
     /// <summary>بِلا بَوّابَة: البِطاقَةُ لا تُعرَض، والإفصاحُ مَرَّةً — يَبقى بِلا تَعديلِ حَرفٍ بَعدَ الجُملَة (وبَصمَتُه مَطبوعَةٌ لِلمُقارَنَة).</summary>
     [Fact]
     public async Task Without_the_gateway_the_pay_step_offers_cash_and_discloses_one_order_per_item_once()
@@ -158,8 +161,13 @@ public class CheckoutCardInvoiceDisclosureTests(ITestOutputHelper output)
                      "<form method=\"get\" action=\"/theme-demo/checkout\"><input type=\"hidden\" name=\"step\" value=\"3\">" + ind
                      + "<input type=\"hidden\" name=\"name\" value=\"SAMPLE\" />" + ind + "<input type=\"hidden\" name=\"phone\" value=\"0512345678\" />" + ind
                      + "<input type=\"hidden\" name=\"addr\" value=\"SAMPLE-ADDRESS\" />", StringComparison.Ordinal)
-            .Replace("href=\"/theme-demo/checkout\"", "href=\"/theme-demo/checkout?step=1&amp;name=SAMPLE&amp;phone=0512345678&amp;addr=SAMPLE-ADDRESS\"", StringComparison.Ordinal);
-        Assert.Equal((4350, "3968233D84D3688E"), (before.Length, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(before)))[..16]));
+            .Replace("href=\"/theme-demo/checkout\"", "href=\"/theme-demo/checkout?step=1&amp;name=SAMPLE&amp;phone=0512345678&amp;addr=SAMPLE-ADDRESS\"", StringComparison.Ordinal)
+            // ‏2026-10-29 (قَرارُ المالِك د13 «ب»؛ يُلحَقُ والبَصمَتانِ القَديمَتانِ بِحَرفِهِما): نَصُّ الإفصاحِ النَقدِيِّ تَبَدَّلَ إلى «لِكُلِّ بائِع» — مَقطَعٌ واحِدٌ تَبَدَّل،
+            // فَإعادَةُ نَصِّه القَديمِ تُعيدُ صَفحَةَ «اليَوم» بايتاً: 4621 حَرفاً بِبَصمَتِها.
+            .Replace(PerItemNote, PerItemNoteUntilD13, StringComparison.Ordinal);
+        // ‏2026-10-29 (د13): «قَبلَ الجُملَة» ‏(4350، 3968233D84D3688E) ← (4399، 614532EF76589C1A) — الإفصاحُ النَقدِيُّ أَطوَلُ بِـ49 حَرفاً، ولا شَيءَ غَيرُه (السَطرُ التالي).
+        Assert.Equal((4399, "614532EF76589C1A"), (before.Length, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(before)))[..16]));
+        Assert.Equal(4350, before.Length - PerItemNote.Length + PerItemNoteUntilD13.Length);
         Assert.Equal(4621, today.Length);
         Assert.Equal("445BCC8DE5E35237", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(today)))[..16]);
 

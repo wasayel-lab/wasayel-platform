@@ -225,6 +225,13 @@ public sealed class DealShipping
     /// </summary>
     public const string InterventionRef = "oto_needs_intervention";
 
+    /// <summary>
+    /// <para><b>صَفَقاتُ الطَلَبِ الواحِدِ عِندَ OTO — عَلى صَفقَتِه الأولى وَحدَها</b> (‏2026-10-29، قَرارُ المالِك د13 «ب»؛ تَوصيفُه <c>ee46c53</c>): مُعَرِّفاتُها
+    /// بِصيغَةِ <c>D</c> (<see cref="DealShipGroup.ValueFor"/>)، يُكتَبُ <b>قَبلَ</b> مَراجِعِ طَلَبِها — فَصَفقَةٌ مِنها لَم يُكتَب مَرجِعُها (انقَطَعَ الحِفظُ بَعدَ
+    /// أَن أُنشِئَ الطَلَب) تَتَبَنّاه عِندَ النَقرَةِ التالِيَة ولا يُنشَأُ لَها طَلَبٌ ثانٍ يُحَصِّلُ مَبلَغَها مَرَّتَين. ولا يُكتَبُ لِطَلَبٍ بِصَفقَةٍ واحِدَة.</para>
+    /// </summary>
+    public const string OrderMembersRef = "oto_order_deals";
+
     /// <summary>المَتجَرُ الوَحيدُ الَّذي يُحَلُّ لَه رَمزٌ في هذِه المَوجَة — مَتجَرُ لَقطَةِ المَظهَر
     /// (‏ADR-033 §٢‑هـ القاعِدَة ٩: «بمتجرِ <c>theme-demo</c> … و<c>ashare</c> لا يُمسّ»).</summary>
     public const string DemoStore = "theme-demo";
@@ -484,7 +491,14 @@ public sealed class DealShipping
     /// <summary>مُعَرِّفُ الطَلَبِ عِندَ OTO: مُعَرِّفُ الصَفقَةِ بِصيغَةِ <c>N</c> — فَإشعارُ الحالِ يَعودُ إلى
     /// صَفقَتِه بِلا جَدوَلِ رَبط، والمُعَرِّفُ واحِدٌ في كُلِّ مُحاوَلَة: OTO تَرُدُّ الثانِيَ بِـ«‏OTO1063 —
     /// Order Id is already exist» (جَدوَلُ «Error Codes» في وَثيقَتِها) فَلا يَتَضاعَفُ طَلَب.</summary>
-    public static string OrderIdOf(Deal deal) => deal.Id.ToString("N");
+    /// <remarks>(‏2026-10-29، قَرارُ المالِك د13 «ب» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): <b>وطَلَبٌ أُنشِئَ يُقرَأُ مُعَرِّفُه مِن مَرجِعِه</b> — صَفقَةٌ شُحِنَت في طَلَبِ
+    /// أُختِها مِن السَلَّةِ نَفسِها (<see cref="DealShipGroup"/>) مُعَرِّفُ طَلَبِها مُعَرِّفُ الأُخت الأولى، فَيُسأَلُ عَنه «Order Tracking» ويُطابَقُ بِه الجَواب.
+    /// ولِكُلِّ صَفقَةٍ قائِمَةٍ قَبلَ القَرارِ مَرجِعُها مُعَرِّفُها نَفسُه — فَالجَوابُ هو هو.</remarks>
+    public static string OrderIdOf(Deal deal)
+        => deal.Refs.TryGetValue(OrderRef, out var placed) && !string.IsNullOrWhiteSpace(placed) ? placed : deal.Id.ToString("N");
+
+    /// <summary>صَفَقاتُ طَلَبٍ عِندَ OTO كَما كَتَبَها إنشاؤه عَلى صَفقَتِه الأولى (<see cref="OrderMembersRef"/>) — أَو الصَفقَةُ وَحدَها.</summary>
+    public static IReadOnlyList<Guid> OrderMembersOf(Deal lead) => DealShipGroup.Parse(lead.Refs.GetValueOrDefault(OrderMembersRef), lead.Id);
 
     /// <summary>لِلصَفقَةِ طَلَبٌ عِندَ OTO كَتَبَته مُحاوَلَةٌ سابِقَة — فَالشَحنُ استِئنافٌ بِلا طَلَبٍ ثانٍ
     /// ولا سُؤالِ مَدينَة. تَقرَؤُه الشاشَةُ والخِدمَة.</summary>
@@ -542,6 +556,19 @@ public sealed class DealShipping
             city.Trim(),
             Country),
         deal.ListingTitle);
+
+    /// <summary>
+    /// <para><b>مُسَوَّدَةُ طَلَبٍ واحِدٍ لِصَفَقاتِ بائِعٍ مِن سَلَّةٍ واحِدَة — دالَّةٌ نَقِيَّة</b> (‏2026-10-29، قَرارُ المالِك د13 «ب»): صَفقَةٌ واحِدَةٌ ⇒
+    /// <see cref="DraftFor(Deal, string)"/> بِحَرفِها؛ وأَكثَرُ ⇒ مُعَرِّفُ الأولى، ومَبلَغُ التَحصيلِ مَجموعُ مَبالِغِها، والمُستَلِمُ مُستَلِمُ الأولى (السَلَّةُ واحِدَة
+    /// فَالعُنوانُ والهاتِفُ واحِد)، ووَصفُ البُنودِ عَناوينُها مَفصولَةً بِـ« · ».</para>
+    /// </summary>
+    public static OtoOrderDraft DraftFor(IReadOnlyList<Deal> members, string city)
+    {
+        if (members.Count == 1) return DraftFor(members[0], city);
+        var lead = DraftFor(members[0], city);
+        var amount = members.Sum(m => m.AmountSar);
+        return lead with { Amount = amount, AmountDue = amount, ItemDescription = string.Join(" · ", members.Select(m => m.ListingTitle)) };
+    }
 
     /// <summary>
     /// <para><b>أَتُثبِتُ OTO شُحنَةَ طَلَبِ الصَفقَةِ وبوليصَتَها؟ — دالَّةٌ نَقِيَّة.</b> جَوابُ «Order Tracking» عَن مُعَرِّفِنا
@@ -604,16 +631,38 @@ public sealed class DealShipping
 
         var seen = deal!.Stage;
         var current = deal;
-        if (!IsPlaced(deal))
+
+        // (‏2026-10-29، قَرارُ المالِك د13 «ب»؛ تَوصيفُه `ee46c53` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **صَفقَةٌ سَمّاها طَلَبُ أُختِها ولَم يُكتَب مَرجِعُها
+        // تَتَبَنّاه** — انقَطَعَ الحِفظُ بَعدَ أَن أُنشِئَ الطَلَبُ وكُتِبَت صَفَقاتُه عَلى أولاها (`OrderMembersRef`)؛ فَلا طَلَبَ ثانٍ يُحَصِّلُ مَبلَغَها مَرَّتَين.
+        if (!IsPlaced(deal) && await HeldByASiblingOrderAsync(tenantSlug, deal, ct) is { } held)
+        {
+            await _deals.AttachRefAsync(tenantSlug, dealId, OrderRef, held.Refs[OrderRef], CancellationToken.None);
+            current = held.Refs.TryGetValue(OtoIdRef, out var heldOtoId)
+                ? await _deals.AttachRefAsync(tenantSlug, dealId, OtoIdRef, heldOtoId, CancellationToken.None)
+                : await _deals.LoadAsync(tenantSlug, dealId, CancellationToken.None);
+            if (current is not { Status: DealStatus.Active } || current.Stage != seen)
+                return DealShipResult.Refused(DealsService.ChangedMeanwhile, current);
+        }
+        else if (!IsPlaced(deal))
         {
             var noCity = DealShipAuthorization.ValidateCity(city);
             if (noCity is not null) return DealShipResult.Refused(noCity.Code, deal);
 
-            var placed = await PlaceAsync(token, deal, city!, ct);
+            // (‏2026-10-29، د13 «ب»): **وطَلَبٌ واحِدٌ لِصَفَقاتِ البائِعِ مِن السَلَّةِ نَفسِها** — ما كانَ مِنها جاهِزاً لِلشَحنِ الآنَ بِالبَوّابَةِ نَفسِها ولا طَلَبَ لَه،
+            // بِتَرتيبِ وِلادَتِها؛ وصَفقَةٌ بِلا أَخَواتٍ (أَو بِلا أُختٍ جاهِزَة) وَحدَها كَما كانَت بِحَرفِها.
+            var members = await ShipTogetherAsync(tenantSlug, deal, by, ct);
+            var placed = await PlaceAsync(token, members, city!, ct);
             if (placed.Value is not { } order) return DealShipResult.Refused(placed.Failure!.Code, deal);
 
-            await _deals.AttachRefAsync(tenantSlug, dealId, OrderRef, order.OrderId, CancellationToken.None);
-            current = await _deals.AttachRefAsync(tenantSlug, dealId, OtoIdRef, order.OtoId, CancellationToken.None);
+            if (members.Count > 1)
+                await _deals.AttachRefAsync(tenantSlug, members[0].Id, OrderMembersRef,
+                    DealShipGroup.ValueFor(members.Select(m => m.Id).ToArray()), CancellationToken.None);
+            foreach (var member in members.Where(m => m.Id != dealId).Prepend(deal))
+            {
+                await _deals.AttachRefAsync(tenantSlug, member.Id, OrderRef, order.OrderId, CancellationToken.None);
+                var written = await _deals.AttachRefAsync(tenantSlug, member.Id, OtoIdRef, order.OtoId, CancellationToken.None);
+                if (member.Id == dealId) current = written;
+            }
 
             // أُلغِيَت أَو تَحَرَّكَت أَثناءَ نِداءِ OTO: انتِقالُها مَردودٌ لا مَحالَة — فَلا تُسأَلُ OTO عَن شُحنَتِها.
             if (current is not { Status: DealStatus.Active } || current.Stage != seen)
@@ -621,12 +670,18 @@ public sealed class DealShipping
         }
 
         // نَجاحُ «Create Order» طَلَبٌ لا شُحنَة: تُسأَلُ OTO قَبلَ أَن تَتَحَرَّكَ الصَفقَة — ولا «شَحنَ» بِلا شُحنَةٍ وبوليصَة.
-        var state = (await _oto.GetOrderStatusAsync(token, OrderIdOf(deal), CancellationToken.None)).Value;
+        // (‏2026-10-29، د13: والمُعَرِّفُ مِن مَرجِعِ الصَفقَةِ المَكتوب — `current` لا `deal`: صَفقَةٌ في طَلَبِ أُختِها مُعَرِّفُ طَلَبِها غَيرُ مُعَرِّفِها.)
+        var orderId = OrderIdOf(current);
+        var state = (await _oto.GetOrderStatusAsync(token, orderId, CancellationToken.None)).Value;
+        var siblings = await OrderSiblingsAsync(tenantSlug, current, orderId, CancellationToken.None);
 
         // وطَلَبٌ أَغلَقَته OTO لا يَعودُ إلى شُحنَة: يُكتَبُ حالُه فَيَختَفي «أَكمِل الشَّحن» ويُرَدُّ بِرَمزِه لا بِـ`shipment_unconfirmed` كُلَّ نَقرَة
         // (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛ تَوصيفُه `d1a6b83`). وجَوابٌ لِطَلَبٍ غَيرِ طَلَبِنا لا يُغلِقُ شَيئاً.
-        if (state is { IsTerminal: true } && string.Equals(state.OrderId, OrderIdOf(deal), StringComparison.Ordinal))
+        // (‏2026-10-29، د13: ويُكتَبُ عَلى صَفَقاتِ الطَلَبِ كُلِّها — الطَلَبُ واحِدٌ فَإغلاقُه واحِد.)
+        if (state is { IsTerminal: true } && string.Equals(state.OrderId, orderId, StringComparison.Ordinal))
         {
+            foreach (var sibling in siblings)
+                await _deals.AttachRefAsync(tenantSlug, sibling.Id, ClosedRef, state.Status, CancellationToken.None);
             current = await _deals.AttachRefAsync(tenantSlug, dealId, ClosedRef, state.Status, CancellationToken.None) ?? current;
             return Logged(tenantSlug, DealShipResult.Refused(DealShipAuthorization.OrderClosedAtOto, current) with { OtoStatus = state.Status });
         }
@@ -638,10 +693,71 @@ public sealed class DealShipping
         // (تَعارُضُ نُسخَة، أَو مَرحَلَةٌ غَيرُ `seen`، أَو صَفقَةٌ أُلغِيَت بَينَهُما).
         // وجَوابُ OTO مَعَ النِداء — الانتِقالُ يُعيدُ `ShipmentConfirmed` عَلى الصَفقَةِ الَّتي سَيَكتُبُها، فَلا يَدخُلُ «شَحن» بابٌ بِغَيرِه
         // (`AwaitsCarrier`؛ مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12).
-        var moved = await _deals.AdvanceAsync(tenantSlug, dealId, by.ActorId, by.ActorName, null, CancellationToken.None, seen, state);
-        if (!moved.Ok) return DealShipResult.Refused(DealsService.ChangedMeanwhile, moved.Deal);
+        // (‏2026-10-29، د13): **وأَخَواتُها في الطَلَبِ نَفسِه تَخرُجُ إلى «شَحن» بِالجَوابِ نَفسِه وبِالنِداءِ نَفسِه** — الصَفقَةُ أَوَّلاً بِمَرحَلَتِها المَقروءَة، ثُمَّ كُلُّ
+        // أُختٍ تُجيزُها البَوّابَةُ عَلى مَخزونِها (`ShipsFirst`) بِمَرحَلَتِها؛ ومَن رُدَّت (أُلغِيَت، أَو تَحَرَّكَت) تَبقى كَما هي، ونَتيجَةُ النَقرَةِ نَتيجَةُ صَفقَتِها.
+        DealAdvanceResult? moved = null;
+        foreach (var member in siblings.Prepend(current))
+        {
+            var mine = member.Id == dealId;
+            if (!mine && (!OtoOrderStatusGate.ShipsFirst(member, state!) || member.CounterpartyId != by.ActorId)) continue;
+            var advanced = await _deals.AdvanceAsync(tenantSlug, member.Id, by.ActorId, by.ActorName, null, CancellationToken.None, mine ? seen : member.Stage, state);
+            if (mine) moved = advanced;
+            else if (advanced.Ok) await AttachLinksAsync(tenantSlug, advanced.Deal!, state!, CancellationToken.None);
+        }
 
+        if (moved is not { Ok: true }) return DealShipResult.Refused(DealsService.ChangedMeanwhile, moved?.Deal);
         return DealShipResult.Shipped(await AttachLinksAsync(tenantSlug, moved.Deal!, state!, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// <para><b>صَفَقاتُ طَلَبٍ واحِد</b> (‏2026-10-29، د13 «ب»): الصَفقَةُ، ثُمَّ أَخَواتُها مِن السَلَّةِ عِندَ بائِعِها (<see cref="DealShipGroup.MembersOf"/>) بِتَرتيبِ
+    /// وِلادَتِها — ما كانَ مِنها بِلا طَلَبٍ وتُجيزُه البَوّابَةُ لِهذا الشاحِنِ الآن (<see cref="DealShipAuthorization.Validate"/> بِناقِلِ الصَفقَة: البائِعُ واحِد).
+    /// فَالأولى بِتَرتيبِ الوِلادَةِ مُعَرِّفُ الطَلَبِ أَيّاً كانَت الصَفقَةُ الَّتي نُقِرَت.</para>
+    /// </summary>
+    private async Task<IReadOnlyList<Deal>> ShipTogetherAsync(string tenantSlug, Deal deal, DealShipper by, CancellationToken ct)
+    {
+        var ids = DealShipGroup.MembersOf(deal);
+        if (ids.Count == 1) return new[] { deal };
+        var members = new List<Deal>();
+        foreach (var id in ids)
+        {
+            var member = id == deal.Id ? deal : await _deals.LoadAsync(tenantSlug, id, ct);
+            if (member is null) continue;
+            if (member.Id == deal.Id || (!IsPlaced(member) && DealShipAuthorization.Validate(member, by, carrierReady: true) is null))
+                members.Add(member);
+        }
+        return members;
+    }
+
+    /// <summary>أُختٌ مِن السَلَّةِ لَها طَلَبٌ عِندَ OTO سَمّى الصَفقَةَ في صَفَقاتِه (<see cref="OrderMembersRef"/>) — أَو <c>null</c>.</summary>
+    private async Task<Deal?> HeldByASiblingOrderAsync(string tenantSlug, Deal deal, CancellationToken ct)
+    {
+        foreach (var id in DealShipGroup.MembersOf(deal).Where(id => id != deal.Id))
+        {
+            if (await _deals.LoadAsync(tenantSlug, id, ct) is { } sibling && IsPlaced(sibling)
+                && OrderIdOf(sibling) == sibling.Id.ToString("N") && OrderMembersOf(sibling).Contains(deal.Id))
+                return sibling;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// <para><b>صَفَقاتُ الطَلَبِ نَفسِه غَيرُ الصَفقَة</b> (‏2026-10-29، د13 «ب»): ما سَمَّته أولاها في <see cref="OrderMembersRef"/> ومَرجِعُ طَلَبِها هذا
+    /// المُعَرِّف — مُحَمَّلَةً الآن. وطَلَبٌ بِصَفقَةٍ واحِدَةٍ لا أَخَواتَ لَه: لا تَحميلَ ولا كِتابَةَ زائِدَة.</para>
+    /// </summary>
+    private async Task<IReadOnlyList<Deal>> OrderSiblingsAsync(string tenantSlug, Deal deal, string orderId, CancellationToken ct)
+    {
+        if (!Guid.TryParseExact(orderId, "N", out var leadId)) return Array.Empty<Deal>();
+        var lead = leadId == deal.Id ? deal : await _deals.LoadAsync(tenantSlug, leadId, ct);
+        if (lead is null || !string.Equals(OrderIdOf(lead), orderId, StringComparison.Ordinal)) return Array.Empty<Deal>();
+        var siblings = new List<Deal>();
+        foreach (var id in OrderMembersOf(lead).Where(id => id != deal.Id))
+        {
+            var sibling = id == lead.Id ? lead : await _deals.LoadAsync(tenantSlug, id, ct);
+            if (sibling is not null && string.Equals(sibling.Refs.GetValueOrDefault(OrderRef), orderId, StringComparison.Ordinal))
+                siblings.Add(sibling);
+        }
+        return siblings;
     }
 
     /// <summary>سَطرُ الرَفضِ بَعدَ سُؤالِ OTO — الرَمزُ وكَلِمَةُ حالِها وَحدَهُما (لا رَمزَ وُصولٍ ولا جِسم)، ومُعَرِّفُ الصَفقَة؛ ويُعيدُ النَتيجَةَ كَما هي.</summary>
@@ -667,13 +783,13 @@ public sealed class DealShipping
     /// بِالعُطلِ نَفسِه قَبلَ أَن يَبلُغَ نُقطَةَ الحال، ويَعودُ الفَشَلُ الأَصلِيُّ بِرَمزِه. كُلفَتُه نِداءُ رَمزٍ ثانٍ لا طَلَبٌ ولا سُؤال —
     /// مَقيسٌ في <c>DealShipTests</c>.)</para>
     /// </summary>
-    private async Task<OtoResult<OtoCreatedOrder>> PlaceAsync(string token, Deal deal, string city, CancellationToken ct)
+    private async Task<OtoResult<OtoCreatedOrder>> PlaceAsync(string token, IReadOnlyList<Deal> members, string city, CancellationToken ct)
     {
-        var created = await _oto.CreateOrderAsync(token, DraftFor(deal, city), ct);
+        var created = await _oto.CreateOrderAsync(token, DraftFor(members, city), ct);
         if (created.Ok || created.Failure!.Code is OtoFailures.NotConfigured or OtoFailures.TokenRefused)
             return created;
 
-        var ours = OrderIdOf(deal);
+        var ours = OrderIdOf(members[0]);
         var held = await _oto.GetOrderStatusAsync(token, ours, CancellationToken.None);
         return held.Value is { OtoId: { } otoId } state
                && string.Equals(state.OrderId, ours, StringComparison.Ordinal)
@@ -733,10 +849,25 @@ public sealed class DealShipping
 
         // (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»؛ تَوصيفُه `7acae84` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **فُقِدَت أَو تَلِفَت أَو أُتلِفَت ⇒ لا انتِقال**
         // — «لا يُغلق الطلب آليًّا. يُعلَّم "يحتاج تدخّلًا" ويُبلَّغ البائع وصاحب المتجر». كانَ يُجابُ `not_delivered` بِلا عَلامَةٍ ولا إشعار.
-        if (OtoOrderStatusGate.FlagsIntervention(deal!, state))
-            return await FlagInterventionAsync(tenantSlug, deal!, state);
+        // (‏2026-10-29، قَرارُ المالِك د13 «ب» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **والطَلَبُ الواحِدُ لِصَفَقاتِ بائِعٍ مِن سَلَّةٍ واحِدَةٍ يُقضى لِكُلٍّ مِنها**
+        // بِالجَوابِ نَفسِه وبِالدالّاتِ نَفسِها عَلى مَخزونِها — أُخرى بَعدَ الأولى؛ ورَمزُ الأولى جَوابُ الإشعارِ إلّا أَن تَطلُبَ أُختٌ إعادَتَه (‏503) فَتُعادُ لِلجَميع.
+        var outcome = await DecideOneAsync(tenantSlug, deal!, state);
+        foreach (var sibling in await OrderSiblingsAsync(tenantSlug, deal!, notice.OrderId, ct))
+        {
+            var along = await DecideOneAsync(tenantSlug, sibling, state);
+            if (OtoOrderStatusGate.StatusFor(along.Code) == 503 && OtoOrderStatusGate.StatusFor(outcome.Code) != 503)
+                outcome = outcome with { Code = along.Code };
+        }
+        return outcome;
+    }
 
-        var outcome = await DeliverAsync(tenantSlug, deal!, state);
+    /// <summary>القَرارُ عَلى صَفقَةٍ واحِدَةٍ بِجَوابٍ مَجلوب — العَلامَةُ أَو التَسليمُ ثُمَّ الرابِطان (كانَ جِسمَ <see cref="ReceiveAsync"/> بِحَرفِه حَتّى د13).</summary>
+    private async Task<OtoNoticeOutcome> DecideOneAsync(string tenantSlug, Deal deal, OtoOrderState state)
+    {
+        if (OtoOrderStatusGate.FlagsIntervention(deal, state))
+            return await FlagInterventionAsync(tenantSlug, deal, state);
+
+        var outcome = await DeliverAsync(tenantSlug, deal, state);
         return outcome.Code is OtoOrderStatusGate.OrderMismatch or DealsService.ChangedMeanwhile || outcome.Deal is not { } now
             ? outcome
             : outcome with { Deal = await AttachLinksAsync(tenantSlug, now, state, CancellationToken.None) };
