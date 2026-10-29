@@ -374,6 +374,45 @@ public class GatewayInvoiceExpiryTests(ITestOutputHelper output)
         GatewayInvoiceExpiry.Configure(opts);
     }
 
+    // ═══ ٥) بَعدَ المُهلَةِ لا بابَ إلى فاتورَةٍ لا تُدفَع (مُراجَعَةُ تَيّارِ S3 الأولى، ‏2026-10-29؛ القاعِدَة ١٢) ═══════════════════════════
+
+    private const string HostedUrl = "https://checkout.moyasar.com/invoices/efebc231-7795-4cfd-b69c-980fe4c02c49";
+
+    /// <summary>صَفقَةٌ قائِمَةٌ عَلَيها فاتورَةُ بَوّابَةٍ ورابِطُها وتاريخُ انتِهائِها كَما يَكتُبُه الفَتح — <see cref="Opened"/> وأَربَعٌ وعِشرونَ ساعَة.</summary>
+    private static Deal OpenDealExpiring()
+    {
+        var d = new Deal { Id = Guid.NewGuid(), Pattern = "marketplace", Status = DealStatus.Active, InitiatorId = Buyer, AmountSar = 150m };
+        d.Refs[GatewayPaymentProof.InvoiceRef] = InvoiceId;
+        d.Refs[GatewayPayments.InvoiceUrlRef] = HostedUrl;
+        d.Refs[GatewayPayments.InvoiceExpiresAtRef] = MoyasarClient.ExpiryText(Opened + GatewayPayments.InvoiceLifetime);
+        return d;
+    }
+
+    private static string PageSource(string name) => WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(
+        Path.Combine(RepoRoot(), "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", name))));
+
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم» (القاعِدَة ٣) — بَعدَ انتِهاءِ الفاتورَةِ ما زالَ رابِطُها يُرسَم</b> (مُراجَعَةُ تَيّارِ S3 الأولى): الفاتورَةُ تُرسَلُ بِـ<c>expired_at</c>
+    /// والوَثيقَةُ تَقولُ «User will be prevented from paying the invoice once expired»، لكِنّ <see cref="GatewayReturn.PayUrlOf"/> يَسأَلُ الحالَ والإغلاقَ والرابِطَ وَحدَها —
+    /// فَصَفقَةٌ جاوَزَت تاريخَها المَكتوبَ يُرسَمُ لَها رابِطُ «أَكمِلِ الدَّفعَ عَلى صَفحَةِ البَوّابَة»، وصَفحَةُ الطَلَبِ «أَكمِلِ الدَّفع»، ولا تَقرَأُ صَفحَةٌ تاريخَ الانتِهاء.
+    /// يَحمَرُّ يَومَ يُسأَلُ الرابِطُ عَن السّاعَة.</para>
+    /// </summary>
+    [Fact]
+    public void Today_a_deal_past_its_written_expiry_still_draws_the_hosted_link_and_the_complete_payment_door()
+    {
+        var deal = OpenDealExpiring();
+        Assert.True(GatewayPayments.ExpiresAtOf(deal) < Opened.AddHours(25));
+        Assert.Equal(HostedUrl, GatewayReturn.PayUrlOf(deal));
+
+        var back = PageSource("GatewayPayReturn.razor");
+        var detail = PageSource("MyDealDetail.razor");
+        var reads = new[] { back, detail }.Sum(p => p.Split("ExpiresAtOf").Length - 1 + p.Split("ExpiryDue").Length - 1);
+        output.WriteLine($"قِراءاتُ تاريخِ الانتِهاءِ في الصَفحَتَين: {reads}");
+        Assert.Equal(0, reads);
+        Assert.Contains("payUrl = GatewayReturn.PayUrlOf(deal);", back, StringComparison.Ordinal);
+        Assert.Contains("@L.Markup(\"deals.detail.complete_payment\")", detail, StringComparison.Ordinal);
+    }
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
