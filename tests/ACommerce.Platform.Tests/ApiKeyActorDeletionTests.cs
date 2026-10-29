@@ -206,7 +206,7 @@ public class LiveApiKeyActorDeletionProofTests(ITestOutputHelper output)
         => LiveDealConcurrencyProofTests.Enabled && !string.IsNullOrEmpty(LiveDealConcurrencyProofTests.ConnectionString);
 
     /// <summary>تَركيبُ المَخزَنِ لِما يَلمِسُه الصَفّ: <c>ApiKeyDocument</c> عامَّةٌ كَما يُسَجِّلُها القالِب، و<c>User</c> مُتَعَدِّدَةُ الإيجار.</summary>
-    private static Marten.DocumentStore BuildStore() => Marten.DocumentStore.For(o =>
+    internal static Marten.DocumentStore BuildStore() => Marten.DocumentStore.For(o =>
     {
         o.Connection(LiveDealConcurrencyProofTests.ConnectionString!.TrimEnd(';') + ";Timeout=60;Command Timeout=120");
         o.DatabaseSchemaName = "platform";

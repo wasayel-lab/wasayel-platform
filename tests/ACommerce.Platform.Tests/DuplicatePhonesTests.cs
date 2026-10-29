@@ -6,6 +6,7 @@ using ACommerce.Kit.Favorites;
 using ACommerce.Kit.Listings;
 using ACommerce.Kit.Notifications;
 using ACommerce.Kit.Tenants;
+using ACommerce.Templates.Customer.Marketplace.Services.Api;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
 using ACommerce.Templates.Customer.Marketplace.Services.Identity;
 using JasperFx.Events.Projections;
@@ -309,5 +310,65 @@ public class LiveDuplicatePhonesProofTests(ITestOutputHelper output)
             Assert.True(blockedUntouched);
         }
         finally { await CleanAsync(slug); }
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم» قَبلَ نَقلِ مَفاتيحِ الرَبطِ في الدَمج</b> (القاعِدَة ٣؛ مُراجَعَةُ <c>9f00eac</c>): مِفتاحُ الرَبطِ وَثيقَةٌ عامَّة
+    /// (‏<c>SingleTenanted</c>، لا عَمودَ <c>tenant_id</c>) فَلا يَراه مَسحُ <see cref="DuplicatePhones.TenantTablesAsync"/>، ولا يَلمِسُه
+    /// <see cref="DuplicatePhones.ApplyAsync"/>. فَمِفتاحٌ صَدَرَ بِاسمِ بٍ (المُندَمِج) يُصادِقُ قَبلَ الدَمجِ بِاسمِ ب، وبَعدَه يُرَدُّ <c>ActorGone</c>
+    /// (‏بٌ مَمحُوّ) ووَثيقَتُه «فَعّال» بِلا تاريخِ إبطال — مِفتاحٌ مَيِّتٌ يَبدو حَيّاً في شاشَةِ المَفاتيح.</summary>
+    [Fact]
+    public async Task Today_a_key_issued_to_the_merged_away_account_still_reads_active_and_is_refused_actor_gone_after_the_merge_on_Postgres()
+    {
+        if (!Enabled) return;
+        using var store = Store();
+        await using var keyStore = LiveApiKeyActorDeletionProofTests.BuildStore();
+        var slug = "dup-ak-" + Guid.NewGuid().ToString("N")[..8];
+        var issued = new List<string>();
+        try
+        {
+            var (a, b) = (Guid.NewGuid(), Guid.NewGuid());
+            await using (var s = store.LightweightSession(slug))
+            {
+                s.Store(new User { Id = a, TenantSlug = slug, Phone = "0500000094", CreatedAt = DateTime.UtcNow.AddDays(-10) });
+                s.Store(new User { Id = b, TenantSlug = slug, Phone = "+966500000094", CreatedAt = DateTime.UtcNow.AddDays(-2) });
+                await s.SaveChangesAsync();
+            }
+            var keys = new ApiKeyService(keyStore);
+            var key = await keys.IssueAsync(slug, new ApiKeyValidator.IssueRequest("رَبطُ الناقِل", b, "سائِق", new[] { ApiScopeCatalog.DealsRead }, null), Guid.NewGuid());
+            issued.Add(key.Key.Id);
+            var before = await keys.AuthenticateAsync(key.Presented);
+
+            List<DuplicatePhones.Account> members;
+            await using (var q = store.QuerySession(slug))
+                members = (await q.Query<User>().ToListAsync()).Select(u => new DuplicatePhones.Account(u.Id, u.Phone, u.CreatedAt, u.DeletedAt is not null)).ToList();
+            var group = Assert.Single(DuplicatePhones.Build(members).Groups);
+            await using var conn = new NpgsqlConnection(LiveDealConcurrencyProofTests.ConnectionString);
+            await conn.OpenAsync();
+            var tables = await DuplicatePhones.TenantTablesAsync(conn);
+            var scan = await DuplicatePhones.ScanAsync(conn, slug, group, tables);
+            var moved = await DuplicatePhones.ApplyAsync(store, slug, scan, DateTime.UtcNow);
+
+            var after = await keys.AuthenticateAsync(key.Presented);
+            ApiKeyDocument? doc;
+            await using (var q = keyStore.QuerySession()) doc = await q.LoadAsync<ApiKeyDocument>(key.Key.Id);
+            output.WriteLine($"جَدوَلُ المَفاتيحِ في المَسح: {tables.Any(t => t.Name == "mt_doc_apikeydocument")} · قَبلَ الدَمج: {before.Rejection} (الفاعِلُ ب: {before.Principal?.ActorUserId == b}) · "
+                + $"نُقِلَ: {moved} · بَعدَه: {after.Rejection} · الوَثيقَة: {doc?.Status}/{(doc?.RevokedAt is null ? "بِلا تاريخِ إبطال" : "مُؤَرَّخ")} · فاعِلُها ب: {doc?.ActorUserId == b}");
+
+            Assert.DoesNotContain(tables, t => t.Name == "mt_doc_apikeydocument");
+            Assert.Equal(ApiKeyRejection.None, before.Rejection);
+            Assert.Equal(b, before.Principal!.ActorUserId);
+            Assert.True(scan.Mergeable);
+            Assert.Equal(ApiKeyRejection.ActorGone, after.Rejection);
+            Assert.Equal((ApiKeyDocument.StatusActive, (DateTime?)null, b), (doc!.Status, doc.RevokedAt, doc.ActorUserId));
+        }
+        finally
+        {
+            await using (var g = keyStore.LightweightSession())
+            {
+                foreach (var id in issued) g.Delete<ApiKeyDocument>(id);
+                await g.SaveChangesAsync();
+            }
+            await CleanAsync(slug);
+        }
     }
 }
