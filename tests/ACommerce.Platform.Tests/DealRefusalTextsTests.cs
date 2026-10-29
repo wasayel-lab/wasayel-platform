@@ -38,6 +38,7 @@ public class DealRefusalTextsTests
             .Append(GatewayPayments.DealAwaitsPayment)
             .Concat(GatewayInvoiceShare.All)
             .Append(DealsService.PaymentMissing)
+            .Concat(DealReturnRequest.All)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(c => c, StringComparer.Ordinal);
         Assert.Equal(expected, DealRefusalTexts.Codes.OrderBy(c => c, StringComparer.Ordinal));
@@ -50,7 +51,8 @@ public class DealRefusalTextsTests
         // ثُمَّ `deal_payment_missing` (‏2026-10-13، G5 (xv-g)) — صَفقَةُ بِطاقَةٍ بِلا مَرجِعِ دَفعٍ لا تَدخُلُ «دَفع»، مِن `AdvanceAsync`: 26 ← 27.
         // ثُمَّ `deal_past_cancel_stage` (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4) — رابِعُ بَوّابَةِ الإلغاء، يَدخُلُ بِها: 27 ← 28.
         // ثُمَّ `siblings_not_ready` (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ د13) — ثانِيَ عَشَرَ بَوّابَةِ الشَحن، يَدخُلُ بِها: 28 ← 29.
-        Assert.Equal(29, DealRefusalTexts.Codes.Count);
+        // ثُمَّ مَعجَمُ «طَلَب استِرجاع» (‏2026-10-29، قَرارُ المالِك د30): سِتَّةٌ مِنها `deal_not_found` المُشتَرَك — 29 ← 34.
+        Assert.Equal(34, DealRefusalTexts.Codes.Count);
         Assert.Equal(DealRefusalTexts.Codes.Count, DealRefusalTexts.Codes.Distinct(StringComparer.Ordinal).Count());
     }
 
@@ -216,7 +218,8 @@ public class DealRefusalTextsTests
         // (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (i)؛ ولا يُعادُ حَرفٌ فَوقَه: وثالِثٌ — نُقطَةُ الإلغاءِ الإدارِيَّةُ في الاستوديو تَرتَدُّ بِرَمزِها
         // إلى صَفحَتِها، وتَقرَؤُه بِمَعجَمِ الاستوديو `DealRefusalTexts.StudioKeyFor` لا بِهذا — `StudioDealRefusalTests`؛ العَدُّ 2 ← 3.)
         // (‏2026-10-29، قَرارُ المالِك د38 — ولا يُعادُ حَرفٌ فَوقَه: ورابِعٌ — بابُ حَسمِ النِزاعِ في الاستوديو يَرتَدُّ بِرَمزِه إلى صَفحَتِه بِمَعجَمِ الاستوديو؛ 3 ← 4.)
-        Assert.Equal(4, endpoints.Split("$\"?err={res.Violation!.Code}\"").Length - 1);
+        // (‏2026-10-29، قَرارُ المالِك د30 — ولا يُعادُ حَرفٌ فَوقَه: وخامِسٌ — بابُ «طَلَب استِرجاع» يَرتَدُّ بِرَمزِه إلى صَفحَةِ الصَفقَة بِهذا المَعجَم؛ 4 ← 5.)
+        Assert.Equal(5, endpoints.Split("$\"?err={res.Violation!.Code}\"").Length - 1);
         // و`/advance` يَرتَدُّ بِرَمزِ نَتيجَتِه حينَ يوجَد (‏ADR-036): اليَومَ تَعارُضُ النُسخَةِ وَحدَه.
         // (‏2026-10-12، مُراجَعَةُ تَيّارِ S7 الثانِيَة — ولا يُعادُ حَرفٌ فَوقَه: ومَعَه `deal_awaits_carrier`، والجِسمُ نَفسُه لَم يُمَسّ.)
         Assert.Equal(1, endpoints.Split("(res.Code is { } code ? $\"?err={code}\" : \"\")").Length - 1);

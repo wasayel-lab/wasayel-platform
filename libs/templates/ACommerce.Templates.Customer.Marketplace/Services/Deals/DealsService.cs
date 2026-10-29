@@ -872,6 +872,29 @@ public sealed class DealsService
         return DealResolveResult.Resolved(deal, DealDisputeResolution.Resume);
     }
 
+    /// <summary>
+    /// <para><b>«طَلَب استِرجاع» مِن المُشتَري</b> (‏2026-10-29، قَرارُ المالِك د30 «١»): «الزرّ يُشعر البائع ويُسجَّل في سجلّ الصفقة، ولا يحرّك مالًا». القَرارُ
+    /// كُلُّه في <see cref="DealReturnRequest.Validate"/> النَقِيَّةِ بِالوَقتِ المُمَرَّر (<paramref name="now"/>) — عَلى الوَثيقَةِ الَّتي سَتُكتَب، قَبلَ أَيِّ كِتابَة —
+    /// والكِتابَةُ سَطرُ <see cref="DealEvent.ReturnRequested"/> بِسَبَبِه وحالُ الصَفقَةِ ومَرحَلَتُها كَما هُما؛ وتَعارُضُ النُسخَةِ يُرَدُّ بِرَمزِه (‏ADR-036).
+    /// والإشعارُ لِلبائِعِ عِندَ النُقطَة (<see cref="DealNotices.NotifyReturnRequestedAsync"/>).</para>
+    /// </summary>
+    public async Task<DealReturnResult> RequestReturnAsync(
+        string tenantSlug, Guid dealId, DealReturnRequester by, string reason, DateTime now, CancellationToken ct = default)
+    {
+        await using var s = _store.LightweightSession(tenantSlug);
+        var deal = await s.LoadAsync<Deal>(dealId, ct);
+        if (DealReturnRequest.Validate(deal, by, now) is { } refused) return DealReturnResult.Refused(refused, deal);
+        deal!.UpdatedAt = now;
+        deal.Timeline.Add(new(deal.Stage, deal.Stage, DealEvent.ReturnRequested, by.ActorId, by.ActorName, reason, now));
+        s.Store(deal);
+        try { await s.SaveChangesAsync(ct); }
+        catch (JasperFx.ConcurrencyException)
+        {
+            return DealReturnResult.Refused(new(ChangedMeanwhile, ChangedMeanwhileAr), await LoadAsync(tenantSlug, dealId, ct));
+        }
+        return DealReturnResult.Requested(deal);
+    }
+
     /// <summary>كَم مَرَّةً يُحاوَلُ الإلحاقُ حينَ تُعارِضُه نُسخَة (‏ADR-036 §٧): الأولى، وإعادَتانِ عَلى ما كُتِبَ بَعدَها.
     /// ثَلاثُ كِتاباتٍ أُخرى تَقَعُ كُلٌّ مِنها بَينَ تَحميلٍ وحِفظٍ مُتَتالِيَين عَطَبٌ لا ازدِحام — فَيَصعَدُ الاستِثناءُ ولا يُبتلَع.</summary>
     private const int AttachAttempts = 3;

@@ -3580,6 +3580,24 @@ public static class MarketplaceTemplateExtensions
         }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
+        // ─── «طَلَب استِرجاع» (‏2026-10-29، قَرارُ المالِك د30 «١»؛ ‏ADR-047 §٥) ─────────
+        // زِرٌّ لِلمُشتَري في بَيعِ السِلَعِ بَعدَ التَسليمِ ولِسَبعَةِ أَيّامٍ مِنه (المادَّة ١٣): يُخبِرُ البائِعَ ويُسَجَّلُ في سِجِلِّ الصَفقَة، ولا يُحَرِّكُ مالاً.
+        // الحارِسُ جَلسَةُ العُضوِ قَبلَ أَيِّ حَقل، والقَرارُ كُلُّه في `DealReturnRequest` بِالوَقتِ المُمَرَّرِ والكِتابَةُ في الخِدمَة، والإشعارُ بَعدَ النَجاحِ وَحدَه.
+        app.MapPost("/{slug}/deals/{id:guid}/return",
+            async (string slug, Guid id, HttpRequest req, Services.Queries.AccountQueries actorNames,
+                   Services.Deals.DealsService deals, Services.Deals.DealNotices notices, L l) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
+            var (userId, _, _) = parsed.Value;
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "مُستَخدِم";
+            var res = await deals.RequestReturnAsync(slug, id, new Services.Deals.DealReturnRequester(userId, userName),
+                req.Form["reason"].ToString().Trim(), DateTime.UtcNow);
+            if (res.Ok) await notices.NotifyReturnRequestedAsync(slug, res.Deal!, l);
+            return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}")));
+        }).DisableAntiforgery().RequireFormBody()
+          .RequireStoreWritable();
+
         // تَقييم الطَّرَف الآخَر بَعد اكتِمال الصَّفقَة.
         //
         // **والحارِسُ في تَوقيعِ الخِدمَة** (القاعِدَة ٦؛ المُراجَعَةُ الثالِثَةُ عَلى `8769fa4`،

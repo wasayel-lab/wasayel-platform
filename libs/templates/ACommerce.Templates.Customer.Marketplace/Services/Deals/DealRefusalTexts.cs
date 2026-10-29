@@ -46,6 +46,7 @@ public static class DealRefusalTexts
             .Append(GatewayPayments.DealAwaitsPayment)
             .Concat(GatewayInvoiceShare.All)   // (‏2026-10-13، G5 M4): رَدُّ إلغاءِ صَفقَةٍ واحِدَةٍ مِن فاتورَةٍ مُشتَرَكَةٍ مَفتوحَة.
             .Append(DealsService.PaymentMissing)   // (‏2026-10-13، G5 (xv-g)): صَفقَةُ بِطاقَةٍ بِلا مَرجِعِ دَفعٍ لا تَدخُلُ «دَفع».
+            .Concat(DealReturnRequest.All)   // (‏2026-10-29، قَرارُ المالِك د30): رُدودُ «طَلَب استِرجاع» — نَقرَةٌ بَعدَ المُدَّةِ أَو ثانِيَةٌ أَو طَلَبٌ مَصنوع.
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 

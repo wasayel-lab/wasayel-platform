@@ -80,7 +80,8 @@ public class ActorNameSourceTests(ITestOutputHelper output)
 
     // انقَلَبَ بِاسمِه (‏2026-10-24) مِن `Today_fourteen_store_sites_and_six_studio_sites_take_the_actor_name_from_the_cookie`.
     [Fact]
-    public void No_endpoint_takes_an_actor_name_from_a_cookie_and_twenty_read_it_from_the_document()
+    // ‏2026-10-29 (قَرارُ المالِك د30): وحادٍ وعِشرون — بابُ «طَلَب استِرجاع» يَقرَأُ اسمَ المُشتَري مِن وَثيقَتِه؛ فَتَبَدَّلَ الاسمُ بِعَدَدِه (كانَ `…_and_twenty_read_it_from_the_document`).
+    public void No_endpoint_takes_an_actor_name_from_a_cookie_and_twenty_one_read_it_from_the_document()
     {
         var store = Matches(StoreCookieRead);
         var studio = Matches(StudioCookieRead, f => f.EndsWith("MarketplaceTemplateExtensions.cs", StringComparison.Ordinal));
@@ -88,7 +89,7 @@ public class ActorNameSourceTests(ITestOutputHelper output)
         output.WriteLine($"مَواضِعُ المَتجَر: {store} · مَواضِعُ الاستوديو: {studio} · مِن الوَثيقَة: {fromDocs}");
         Assert.Equal(0, store);
         Assert.Equal(0, studio);
-        Assert.Equal(20, fromDocs);
+        Assert.Equal(21, fromDocs);
 
         // والنَمَطانِ يَحمَرّانِ عَلى سَطرِ اليَومِ حَرفاً — والمُعَلَّقُ لا يُعَدّ.
         Assert.Matches(StoreCookieRead, "var userName = AuthSession.ResolveUserName(req, slug) ?? \"عميل\";");

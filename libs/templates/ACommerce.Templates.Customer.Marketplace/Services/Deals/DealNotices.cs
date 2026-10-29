@@ -371,6 +371,26 @@ public sealed class DealNotices
             ? l.Format("notifications.deal_dispute_cancelled.push_body", deal.ListingTitle)
             : l.Format("notifications.deal_dispute_resumed.push_body", deal.ListingTitle, DealsPolicy.LabelAr(deal.Stage));
 
+    // ─── طَلَبُ استِرجاعٍ مِن المُشتَري (‏2026-10-29، قَرارُ المالِك د30 «١»: «الزرّ يُشعر البائع») ───────────────
+
+    /// <summary>مَن يُخبَرُ بِطَلَبِ الاستِرجاع: بائِعُ الصَفقَة — طَرَفُها المُقابِل، أَو مالِكُ الإعلانِ حينَ لا طَرَف (<see cref="NewDealRecipient"/>) — ما لَم يَكُن
+    /// هُوَ المُشتَري نَفسَه؛ و<c>null</c> لِما سِوى ذلك. دالَّةٌ نَقِيَّة.</summary>
+    public static Guid? ReturnRecipient(Deal deal)
+        => (deal.CounterpartyId ?? NewDealRecipient(deal)) is { } vendor && vendor != Guid.Empty && vendor != deal.InitiatorId ? vendor : null;
+
+    /// <summary>إشعارُ البائِعِ بِأَنّ المُشتَري طَلَبَ استِرجاعَ سِلعَةٍ سُلِّمَت — عُنوانُ الإعلانِ في المَتن، ونَوعُه نَوعُ الطَلَبِ الجَديد (أَصلُ العائِلَة، فَلا نَوعَ
+    /// جَديدَ في القارِئ)، والرابِطُ صَفحَةُ الصَفقَة. ولا مالَ يُذكَرُ: الرَدُّ والاستِردادُ بَينَهُما بِسِياسَةِ المَتجَر.</summary>
+    public static Notification ReturnRequestedFor(string slug, Deal deal, Guid vendorId, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = vendorId,
+        Type = NewDealType,
+        Title = l["notifications.deal_return_requested.title"],
+        Body = l.Format("notifications.deal_return_requested.body", deal.ListingTitle),
+        RelatedUrl = $"/{slug}/deals/{deal.Id}",
+        At = at,
+    };
+
     private static string CurrencyOf(Deal deal)
         => deal.Refs.TryGetValue(DealsService.PaymentCurrencyRef, out var c) && !string.IsNullOrWhiteSpace(c) ? c : ACommerce.Kit.Payments.MoyasarClient.Currency;
 
@@ -627,6 +647,23 @@ public sealed class DealNotices
         }
         if (cancelled) await NotifyStoreOwnerAsync(slug, deal, l, ct);
         return sent.Count;
+    }
+
+    /// <summary>بَعدَ طَلَبِ استِرجاعٍ كُتِبَ (<c>/{slug}/deals/{id}/return</c>؛ ‏2026-10-29، قَرارُ المالِك د30 «١»): إشعارٌ واحِدٌ لِمَن تُسَمّيه
+    /// <see cref="ReturnRecipient"/> بِـ<see cref="ReturnRequestedFor"/>، بِتَرتيبِ الأُنبوبِ نَفسِه (القاعِدَة ٨). تُرجِعُ هَل أُشعِر.</summary>
+    public async Task<bool> NotifyReturnRequestedAsync(string slug, Deal deal, L l, CancellationToken ct = default)
+    {
+        if (ReturnRecipient(deal) is not { } vendorId) return false;
+        var n = ReturnRequestedFor(slug, deal, vendorId, l, DateTime.UtcNow);
+        await using (var s = _store.LightweightSession(slug))
+        {
+            s.Store(n);
+            await s.SaveChangesAsync(ct);
+        }
+        await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, vendorId);
+        await _push.SendAsync(_store, slug, vendorId, n.Title, l.Format("notifications.deal_return_requested.push_body", deal.ListingTitle),
+            url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
+        return true;
     }
 
     /// <summary>

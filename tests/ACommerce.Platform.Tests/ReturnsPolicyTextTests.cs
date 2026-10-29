@@ -25,6 +25,8 @@ namespace ACommerce.Platform.Tests;
 // `/{slug}/deals/{id}/return`) يَنتَظِرُ قَرارَ المالِكِ م‑٣ — لا يُبنى هُنا
 // ولا يُخفى: يُثَبَّتُ أَحمَرَ حَتّى يُقرَّر، فَيَومَ يُبنى يَحمَرُّ هذا الفَحصُ
 // ويُرفَعُ بِقَرارٍ مَرئِيّ.
+// (‏2026-10-29، قَرارُ المالِك د30 «١» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وقَرَّرَ المالِكُ فَبُني** — «زرّ «طلب استرجاع» على صفحة الصفقة، يظهر
+// للمشتري بعد التسليم ولمدّة سبعة أيام منه»؛ فَقُلِبَ صَفُّه بِاسمِه أَدناه، والمادَّةُ خَضراء.
 //
 // **والدَورَةُ الثانِيَة (مُراجَعَةُ ‏2026-10-11)**: النَصُّ الأَوَّلُ البَديلُ قالَ
 // «تَواصَل مَع البائِع مِن صَفحَة الصَّفقَة … أَو بِمُراسَلَتِه» — **وصَفحَةُ
@@ -173,21 +175,20 @@ public class ReturnsPolicyTextTests
     // ─── الأَحمَرُ المُعلَن ─────────────────────────────────────────────
 
     /// <summary>
-    /// <para><b>مَسارُ الاستِرجاعِ غائِبٌ، ويُقالُ ولا يُبتلَع</b>: الشاهِدُ
-    /// <c>return_action_reachable</c> أَحمَرُ عَلى المُستَودَعِ الحَيِّ لِأَنّ
-    /// <c>/{slug}/deals/{id}/return</c> غَيرُ مُسَجَّل — وبِناؤُه قَرارُ مالِك
-    /// (م‑٣) لا يُتَّخَذُ هُنا. يُثَبَّتُ أَحمَرَ حَتّى يُقرَّر؛ فَيَومَ يُبنى
-    /// المَسارُ يَحمَرُّ هذا الفَحصُ ويُرفَعُ بِقَرارٍ مَرئِيّ لا صامِت.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د30 «١»؛ كانَ <c>The_return_route_is_still_absent_and_that_is_declared_not_hidden</c> — الشاهِدُ
+    /// <c>return_action_reachable</c> أَحمَرُ بِقَصدٍ حَتّى يُقَرِّرَ المالِك): بُنِيَ زِرُّ «طَلَب استِرجاع» وبابُه <c>/{slug}/deals/{id}/return</c> — فَالمادَّةُ ١٣
+    /// خَضراءُ عَلى المُستَودَعِ الحَيّ بِلا رَمزِ رَفضٍ واحِد، والمَسارُ في جَدوَلِ المَساراتِ المَمسوح، وصَفحَةُ الصَفقَةِ تَرسُمُه بِبَوّابَتِه.</para>
     /// </summary>
     [Fact]
-    public void The_return_route_is_still_absent_and_that_is_declared_not_hidden()
+    public void The_return_route_is_registered_and_the_article_is_met()
     {
         var report = Inspect(LiveSubject());
-        Assert.Contains("return_action_absent", report.RejectionCodes);
-        Assert.DoesNotContain("/{slug}/deals/{id}/return", ComplianceInspectorTests.RepoRoutes);
-
-        // وهُوَ الأَحمَرُ الوَحيدُ الباقي في هذِه المادَّة.
-        Assert.Equal(new[] { "return_action_absent" }, report.RejectionCodes);
+        Assert.Contains("/{slug}/deals/{id}/return", ComplianceInspectorTests.RepoRoutes);
+        Assert.DoesNotContain("return_action_absent", report.RejectionCodes);
+        Assert.Empty(report.RejectionCodes);
+        var page = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/MyDealDetail.razor"));
+        Assert.Contains("<form method=\"post\" action=\"@($\"/{Slug}/deals/{deal.Id}/return\")\">", page, StringComparison.Ordinal);
     }
 
     // ─── مَن يَرُدُّ ثَمَنَ البِطاقَة (تَدقيقُ الإطلاق brief-P0-5، ‏2026-10-25) ───────────────────────────────

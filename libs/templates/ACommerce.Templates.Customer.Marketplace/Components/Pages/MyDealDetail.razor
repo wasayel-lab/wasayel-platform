@@ -472,6 +472,22 @@
                      Message="@($"{L["deals.detail.status_prefix"]} {deal.Status}" + (string.IsNullOrEmpty(deal.CancelReason) ? "" : $" — {deal.CancelReason}"))" />
         }
 
+        @* «طَلَب استِرجاع» (‏2026-10-29، قَرارُ المالِك د30 «١»): لِلمُشتَري في بَيعِ السِلَعِ بَعدَ التَسليمِ ولِسَبعَةِ أَيّامٍ مِنه — `DealReturnRequest.IsAllowed`
+           نَفسُها الَّتي تُطَبِّقُها `/return` بِالوَقتِ نَفسِه (القاعِدَة ١٢)، فَلا تُرسَمُ استِمارَةٌ تَرُدُّها النُقطَة. يُخبِرُ البائِعَ ويُسَجَّلُ في السِجِلّ، ولا مال. *@
+        @if (canReturn)
+        {
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin:0 0 6px;">@L.Markup("deals.detail.return_title")</h3>
+                    <p style="color:var(--ac-text-muted);font-size:12px;margin:0 0 8px;">@L.Format("deals.detail.return_hint", Culture.FormatTime(DealReturnRequest.WindowEndsAt(deal)!.Value, "yyyy-MM-dd HH:mm"), (int)DealReturnRequest.Window.TotalDays)</p>
+                    <form method="post" action="@($"/{Slug}/deals/{deal.Id}/return")">
+                        <input name="reason" class="ac-input" placeholder="@L["deals.detail.return_reason_placeholder"]" style="margin-bottom:6px;" />
+                        <AcButton Type="submit" Variant="ghost" Block="true" Text="@L["deals.detail.return_action"]" />
+                    </form>
+                </ChildContent>
+            </AcCard>
+        }
+
         @* السِجِلّ — وسَطرُ المَرجِعِ تَسمِيَةٌ مِن القامُوسِ أَو لا يُرسَم (‏2026-10-13، G4 (xxvi)): كانَ يُرسَمُ «attach key=value» خاماً
            لِلطَرَفَين، بِمُعَرِّفاتٍ وروابِطَ ونُصوصِ أَخطاء. المَعجَمُ والمُسنَدُ في `DealRefLabels`. *@
         <AcSectionHeader Title="@L["deals.detail.timeline_title"]" />
@@ -509,6 +525,9 @@
     /// <summary>الناظِرُ يُلغي هذِه الصَفقَة — <see cref="DealCancelAuthorization.IsAllowed"/> نَفسُها الَّتي تُطَبِّقُها <c>/cancel</c>
     /// بِسِجِلِّ السُلطَةِ نَفسِه (<c>IsStoreAdmin: false</c>)، فَلا تُرسَمُ استِمارَةٌ تَرُدُّها النُقطَة (‏2026-10-12).</summary>
     bool canCancel;
+    /// <summary>الناظِرُ يَطلُبُ استِرجاعَ هذِه الصَفقَة الآن — <see cref="DealReturnRequest.IsAllowed"/> نَفسُها الَّتي تُطَبِّقُها <c>/return</c> بِوَقتِ الطَلَب
+    /// (‏2026-10-29، قَرارُ المالِك د30).</summary>
+    bool canReturn;
     /// <summary>الصَفقَةُ عَلى فاتورَةِ بَوّابَةٍ مَفتوحَةٍ تَدفَعُ لِأَخَواتٍ قائِمَة (<see cref="GatewayInvoiceShare.Validate"/>) فَلا تُلغى وَحدَها،
     /// و<c>canCancelOrder</c>: الناظِرُ يُلغي صَفَقاتِ الفاتورَةِ كُلَّها — <see cref="DealCancelAuthorization.IsAllowed"/> لِكُلٍّ مِنها، كَما يَسأَلُها
     /// <c>CancelWholeInvoiceAsync</c> قَبلَ أَيِّ كِتابَة (‏2026-10-13، G5 M4).</summary>
@@ -613,6 +632,7 @@
         canCancelOrder = cancelShared && GatewayInvoiceShare.OwedOnInvoice(deal, siblings)
             .All(d => DealCancelAuthorization.IsAllowed(d, new DealCanceller(uid, Auth.UserName ?? "", IsStoreAdmin: false)));
         canCancel = canCancel && !cancelShared;
+        canReturn = DealReturnRequest.IsAllowed(deal, new DealReturnRequester(uid, Auth.UserName ?? ""), DateTime.UtcNow);
         // البوليصَة (‏ADR-033 الخُطوَة 3): رابِطاها لِلطَرَفَين بِالدالَّةِ الَّتي يَقرَأُ بِها الشَحنُ والوارِد، واستِمارَتُها بِالبَوّابَةِ
         // الَّتي تُطَبِّقُها النُقطَة — فَما يُرسَمُ هُوَ ما يُقبَل.
         (labelUrl, trackingUrl) = DealShipping.LinksOf(deal);
@@ -654,6 +674,7 @@
         "cancelled" => L["deals.detail.event_cancelled"],
         "disputed" => L["deals.detail.event_disputed"],
         DealEvent.DisputeResumed => L["deals.detail.event_dispute_resumed"],   // ‏2026-10-29، قَرارُ المالِك د38
+        DealEvent.ReturnRequested => L["deals.detail.event_return_requested"],   // ‏2026-10-29، قَرارُ المالِك د30
         DealEvent.RefNote => L[DealRefLabels.LabelKeyFor(e.Note) ?? "deals.detail.event_note"],
         // ‏(2026-10-29، قَرارُ المالِك د22 (١) «ب») أَسطُرُ الدَفعِ الأَربَعَةُ بِالحالِ المَكتوبَةِ في السَطر — كانَت تَسقُطُ إلى اسمِ الفِعلِ بِالإنكليزِيَّة.
         DealPaymentLines.Captured or DealPaymentLines.CaptureFailed or DealPaymentLines.Refunded or DealPaymentLines.RefundFailed

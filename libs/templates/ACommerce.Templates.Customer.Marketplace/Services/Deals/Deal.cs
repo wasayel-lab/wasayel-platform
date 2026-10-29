@@ -130,6 +130,10 @@ public sealed record DealEvent(
     /// الآخَرُ (الإلغاء) يَكتُبُ سَطرَ <c>cancelled</c> بِكاتِبِ الإلغاءِ القائِمِ نَفسِه.</summary>
     public const string DisputeResumed = "dispute_resumed";
 
+    /// <summary>طَلَبَ المُشتَري استِرجاعَ سِلعَةٍ سُلِّمَت، خِلالَ سَبعَةِ أَيّامٍ مِن تَسليمِها (‏2026-10-29، قَرارُ المالِك د30 «١») — يَكتُبُه
+    /// <c>DealsService.RequestReturnAsync</c> وَحدَه بِمَرحَلَةٍ لا تَتَحَرَّكُ وبِلا مال، و<c>Note</c> سَبَبُه كَما كَتَبَه؛ والنَصُّ مِن القامُوسِ عِندَ العَرض.</summary>
+    public const string ReturnRequested = "return_requested";
+
     /// <summary>سَطرُ مَرجِعٍ أُلحِق — يَكتُبُه <c>DealsService.AttachRefAsync</c> وَحدَه بِنَصِّ <c>attach {key}={value}</c>، ويَقرَؤُه
     /// <c>DealRefLabels</c> لِصَفحَةِ الطَرَفَين (‏2026-10-13، G4 (xxvi)). الثابِتُ هُنا لِأَنّ الكاتِبَ والقارِئَ يَقرَآنِ نَفسَ الحَرف.</summary>
     public const string RefNote = "note";

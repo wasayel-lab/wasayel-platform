@@ -80,7 +80,8 @@ public class DealNoticesProducerTests(ITestOutputHelper output)
         // وأَحَدَ عَشَرَ مُنذُ ‏2026-10-29 (قَرارُ المالِك د9 (١) «أ»): `InterventionFor` لِلبائِعِ وصاحِبِ المَتجَرِ — بِنَوعِ الطَلَبِ الجَديدِ نَفسِه (لا نَوعَ خامِس).
         // وثَلاثَةَ عَشَرَ مُنذُ ‏2026-10-29 (قَرارُ المالِك د38 (٣) «أ»): `DisputeCancelledFor` و`DisputeResumedFor` لِطَرَفَي الصَفقَةِ بِحَسمِ النِزاع — بِنَوعِ الإلغاءِ
         // وبِنَوعِ الطَلَبِ الجَديدِ (لا نَوعَ جَديد).
-        Assert.Equal(13, builders);
+        // وأَربَعَةَ عَشَرَ مُنذُ ‏2026-10-29 (قَرارُ المالِك د30): `ReturnRequestedFor` لِلبائِعِ بِطَلَبِ استِرجاع — بِنَوعِ الطَلَبِ الجَديدِ نَفسِه.
+        Assert.Equal(14, builders);
         Assert.Equal(builders, typed);
 
         var reader = files.Single(f => f.Path == Reader).Text;
