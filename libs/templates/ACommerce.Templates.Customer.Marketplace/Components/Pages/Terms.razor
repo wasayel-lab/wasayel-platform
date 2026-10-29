@@ -43,7 +43,10 @@ else
         <AcCard>
             <ChildContent>
                 <div style="font-size:14px;line-height:2;color:var(--ac-text);">
-                    <p><strong>@L.Markup("terms.privacy.heading")</strong> @L.Markup("terms.privacy.body")</p>
+                    @* ‏(2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ١ — قَرارُ المالِك د20 «أ»): كانَ النَصُّ «لا نُشارِكها مَع أَطراف ثالِثَة بِدون إذنِكَ الصَّريح» —
+                       الجُملَةُ الَّتي صَحَّحَها المالِكُ في مُوافَقَةِ الاستوديو، و`/privacy` §٥ تُسَمّي مُستَلِميها. صارَ يَقولُ ما تَقولُه الموافَقَة، والرابِطُ إلى السِياسَةِ
+                       الَّتي تُسَمّيهِم (القاعِدَة ١٢: إحالَةٌ بِلا بابٍ لا تُبلَغ). مَحروسٌ في `StoreTermsPrivacyClaimTests`. *@
+                    <p><strong>@L.Markup("terms.privacy.heading")</strong> @L.Markup("terms.privacy.body") <a href="/privacy">@L.Markup("terms.privacy.policy_link")</a></p>
 
                     <p><strong>@L.Markup("terms.transactions.heading")</strong> @L.Markup("terms.transactions.body")</p>
 
