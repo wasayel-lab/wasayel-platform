@@ -91,6 +91,9 @@ public sealed class AuthSession
         if (role is not null)
         {
             var scoped = CookieName(tenantSlug, role);
+            // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ I-SEC-1؛ تَوصيفُه `cf0f9bc`) دَورٌ اسمُه `name` (أَو يَنتَهي بِـ`.name`) يُسَمّي كوكيَّ اسمِ العَرض —
+            // كانَ يُقرَأُ جَلسَةً وتَتَخَطّاه البَوّابَة، فَرَمزٌ ساقِطٌ فيه يَفتَحُ صَفَحاتِ `/r/name/`. القَرارُ الواحِدُ `IsNameCookie`.
+            if (IsNameCookie(scoped)) return null;
             return IsValidFor(req.Cookies[scoped], tenantSlug) ? scoped : null;
         }
 
@@ -101,11 +104,16 @@ public sealed class AuthSession
         foreach (var (cookieName, value) in req.Cookies)
         {
             if (!cookieName.StartsWith(prefix, StringComparison.Ordinal)) continue;
-            if (cookieName.EndsWith(".name", StringComparison.Ordinal)) continue;
+            if (IsNameCookie(cookieName)) continue;
             if (IsValidFor(value, tenantSlug)) return cookieName;
         }
         return null;
     }
+
+    /// <summary><b>كوكيُّ اسمِ العَرضِ لا كوكيُّ جَلسَة</b> (‏2026-10-29، تَدقيقُ الموجَة ١١ I-SEC-1) — الاسمُ يَنتَهي بِـ<c>.name</c>. نَقِيَّة،
+    /// ويَسأَلُها الحَلُّ هُنا (لا يُقرَأُ جَلسَةً عَلى مَسارٍ ولا في السُقوط) و<c>SessionVersionGate.SessionCookieNames</c> — فَلا يَختَلِفانِ أَبَداً
+    /// في أَيِّ الأَسماءِ جَلسَة.</summary>
+    public static bool IsNameCookie(string cookieName) => cookieName.EndsWith(".name", StringComparison.Ordinal);
 
     /// <summary>الـ token الصالِح لِهذا الطَّلَب، أَو <c>null</c>.</summary>
     public static string? ResolveToken(HttpRequest req, string tenantSlug)

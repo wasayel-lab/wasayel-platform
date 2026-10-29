@@ -170,8 +170,11 @@ public class SessionRevocationTests(ITestOutputHelper output)
         return ctx;
     }
 
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، I-SEC-1 — كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_a_revoked_token_under_the_name_cookie_opens_a_role_path_named_name</c> (‏<c>cf0f9bc</c>): «الكوكيُّ المَحلول
+    /// ‹.acommerce.auth.zz-name.name› · الجَلسَة تُفتَح». والآن لا يُحَلُّ كوكيُّ «الاسم» جَلسَةً عَلى مَسارٍ، والبَوّابَةُ تَفحَصُ الرَمزَ فيه فَتَنزِعُه.</summary>
     [Fact]
-    public async Task Today_a_revoked_token_under_the_name_cookie_opens_a_role_path_named_name()
+    public async Task A_revoked_token_under_the_name_cookie_opens_no_role_path_and_the_gate_strips_it()
     {
         var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 1 };
         var revoked = AuthHandlers.MakeToken(user.Id, NameSlug, 0);
@@ -180,9 +183,64 @@ public class SessionRevocationTests(ITestOutputHelper output)
         await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ApplyAsync(ctx);
         var resolved = ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveCookieBase(ctx.Request, NameSlug);
         var token = ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveToken(ctx.Request, NameSlug);
-        output.WriteLine($"اليَوم: إصدارُ الحِسابِ {user.SessionVersion} والرَمزُ 0 · الكوكيُّ المَحلول «{resolved ?? "—"}» · الجَلسَة {(token is null ? "لا" : "تُفتَح")}");
-        Assert.Equal($".acommerce.auth.{NameSlug}.name", resolved);
-        Assert.Equal(user.Id, AuthHandlers.ParseToken(token)!.Value.UserId);
+        output.WriteLine($"بَعدَ الإصلاح: الكوكيُّ المَحلول «{resolved ?? "—"}» · الجَلسَة {(token is null ? "لا" : "تُفتَح")} · رَأسُ Cookie «{ctx.Request.Headers.Cookie}» · Set-Cookie {ctx.Response.Headers.SetCookie.Count}");
+        Assert.Null(resolved);
+        Assert.Null(token);
+        Assert.DoesNotContain($".acommerce.auth.{NameSlug}.name=", ctx.Request.Headers.Cookie.ToString(), StringComparison.Ordinal);
+        Assert.Contains(ctx.Response.Headers.SetCookie, c => c!.StartsWith($".acommerce.auth.{NameSlug}.name=;", StringComparison.Ordinal));
+    }
+
+    /// <summary>(أ) وَحدَه: حَتّى رَمزٌ <b>صالِحٌ</b> في كوكيِّ «الاسم» لا يُحَلُّ جَلسَةً عَلى مَسارِ دَورٍ اسمُه <c>name</c> أَو يَنتَهي بِـ<c>.name</c> —
+    /// والبَوّابَةُ لا تَنزِعُه (لَم يَسقُط).</summary>
+    [Theory]
+    [InlineData("name")]
+    [InlineData("driver.name")]
+    [InlineData("NAME")]
+    public async Task A_role_segment_naming_the_name_cookie_resolves_no_session_even_for_a_live_token(string segment)
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 0 };
+        var live = AuthHandlers.MakeToken(user.Id, NameSlug, 0);
+        var cookie = ACommerce.Templates.Customer.Marketplace.AuthSession.CookieName(NameSlug, segment.ToLowerInvariant());
+        var ctx = GateContext($"/{NameSlug}/r/{segment}/me", user, (cookie, live));
+        await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ApplyAsync(ctx);
+        Assert.Contains($"{cookie}=", ctx.Request.Headers.Cookie.ToString(), StringComparison.Ordinal);
+        Assert.Null(ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveCookieBase(ctx.Request, NameSlug));
+    }
+
+    /// <summary>(ب) وَحدَه: رَمزٌ ساقِطٌ في كوكيِّ «اسمٍ» لِدَورٍ عادِيٍّ (<c>.driver.name</c>) يُنزَعُ وإن لَم يَقرَأه حَلٌّ — وكوكيُّ الدَورِ نَفسِه الحَيُّ
+    /// بِجِوارِه يَبقى.</summary>
+    [Fact]
+    public async Task The_gate_checks_a_name_cookie_that_holds_a_token_and_leaves_its_live_neighbour()
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 2 };
+        var revoked = AuthHandlers.MakeToken(user.Id, NameSlug, 1);
+        var live = AuthHandlers.MakeToken(user.Id, NameSlug, 2);
+        var ctx = GateContext($"/{NameSlug}/me", user,
+            ($".acommerce.auth.{NameSlug}.driver", live), ($".acommerce.auth.{NameSlug}.driver.name", revoked));
+        Assert.Equal(new[] { $".acommerce.auth.{NameSlug}.driver", $".acommerce.auth.{NameSlug}.driver.name" },
+            ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.CheckedCookieNames(ctx.Request.Cookies));
+        await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ApplyAsync(ctx);
+        Assert.Equal($".acommerce.auth.{NameSlug}.driver={live}", ctx.Request.Headers.Cookie.ToString());
+        Assert.Equal(user.Id, AuthHandlers.ParseToken(
+            ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveToken(ctx.Request, NameSlug))!.Value.UserId);
+    }
+
+    /// <summary>القَرارُ الواحِد: ما تَعُدُّه البَوّابَةُ جَلسَةً بِاسمِه هُوَ بِعَينِه ما لا يَراه الحَلُّ «اسماً» — عَيِّنَةٌ تَطبَعُ عَدَدَها (القاعِدَة ١٠).</summary>
+    [Fact]
+    public void The_gate_and_the_resolver_agree_on_which_names_are_name_cookies()
+    {
+        var sample = new[]
+        {
+            ".acommerce.auth.ejar", ".acommerce.auth.ejar.name", ".acommerce.auth.ejar.driver", ".acommerce.auth.ejar.driver.name",
+            ".acommerce.auth.ejar.name.name", ".acommerce.auth.ejar.names", ".acommerce.studio", ".acommerce.studio.name",
+        };
+        var sessions = ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.SessionCookieNames(sample);
+        output.WriteLine($"عَيِّنَةٌ {sample.Length} · جَلَساتٌ {sessions.Count} · أَسماءُ عَرضٍ {sample.Count(ACommerce.Templates.Customer.Marketplace.AuthSession.IsNameCookie)}");
+        Assert.True(sample.Length > 0);
+        foreach (var n in sample)
+            Assert.Equal(!ACommerce.Templates.Customer.Marketplace.AuthSession.IsNameCookie(n), sessions.Contains(n));
+        Assert.True(ACommerce.Templates.Customer.Marketplace.AuthSession.IsNameCookie(".acommerce.auth.ejar.name"));
+        Assert.False(ACommerce.Templates.Customer.Marketplace.AuthSession.IsNameCookie(".acommerce.auth.ejar.names"));
     }
 
     /// <summary>ما لا يَتَغَيَّرُ بِالإصلاح: كوكيُّ اسمِ العَرضِ — قيمَتُه اسمٌ لا رَمز — لا تَمَسُّه البَوّابَة، والجَلسَةُ بِجِوارِه تُحَلُّ

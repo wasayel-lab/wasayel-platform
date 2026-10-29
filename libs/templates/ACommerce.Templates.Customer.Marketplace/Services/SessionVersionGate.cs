@@ -38,10 +38,28 @@ public static class SessionVersionGate
         => accountVersion is int stored && tokenVersion < stored;
 
     /// <summary>أَسماءُ كوكيّاتِ الجَلسَةِ في الطَلَب — المَتجَرُ بِكُلِّ أَدوارِه والاستوديو، بِلا كوكيّاتِ الاسمِ (<c>.name</c>).</summary>
+    /// <remarks>‏(‏2026-10-29، I-SEC-1) «كوكيُّ الاسمِ» قَرارُ <see cref="AuthSession.IsNameCookie"/> نَفسُه الَّذي يَسأَلُه الحَلّ — كانَ هُنا نَصّاً مُكَرَّراً.</remarks>
     public static IReadOnlyList<string> SessionCookieNames(IEnumerable<string> cookieNames)
-        => cookieNames.Where(n => (n == StudioAuth.CookieName || n.StartsWith(AuthCookiePrefix, StringComparison.Ordinal))
-                                  && !n.EndsWith(".name", StringComparison.Ordinal))
-                      .ToList();
+        => cookieNames.Where(n => InFamily(n) && !AuthSession.IsNameCookie(n)).ToList();
+
+    /// <summary>
+    /// <para><b>ما تَفحَصُه البَوّابَة</b> (‏2026-10-29، تَدقيقُ الموجَة ١١ I-SEC-1؛ تَوصيفُه <c>cf0f9bc</c>): كوكيّاتُ الجَلسَةِ
+    /// (<see cref="SessionCookieNames"/>) <b>وكُلُّ كوكيٍّ مِن العائِلَةِ يَحمِلُ رَمزاً يَقبَلُه <c>ParseToken</c> أَيّاً كانَ اسمُه</b> — فَكوكيُّ «الاسم»
+    /// الَّذي زُرِعَ فيه رَمزٌ ساقِطٌ يُفحَصُ ويُنزَع، وكوكيُّ اسمِ العَرضِ الحَقيقيُّ (قيمَتُه اسمٌ لا رَمز) لا يُمَسّ. كانَ الفَحصُ بِالاسمِ وَحدَه، والحَلُّ
+    /// يَقرَأُ ذلِكَ الاسمَ لِدَورٍ اسمُه <c>name</c>.</para>
+    /// </summary>
+    public static IReadOnlyList<string> CheckedCookieNames(IEnumerable<KeyValuePair<string, string>> cookies)
+    {
+        var all = cookies.ToList();
+        return SessionCookieNames(all.Select(c => c.Key))
+            .Concat(all.Where(c => InFamily(c.Key) && AuthSession.IsNameCookie(c.Key) && AuthHandlers.ParseToken(c.Value) is not null)
+                       .Select(c => c.Key))
+            .ToList();
+    }
+
+    /// <summary>عائِلَةُ كوكيّاتِ الدُخول: كوكيُّ الاستوديو بِعَينِه، وكُلُّ ما يَبدَأُ بِـ<c>.acommerce.auth.</c> — كَما كانَت.</summary>
+    private static bool InFamily(string name)
+        => name == StudioAuth.CookieName || name.StartsWith(AuthCookiePrefix, StringComparison.Ordinal);
 
     /// <summary>رَأسُ <c>Cookie</c> بِلا الأَسماءِ المُسقَطَة (وكوكيّاتِ أَسمائِها) — نَقِيَّة، فَتُقاسُ بِلا خادِم.</summary>
     public static string WithoutCookies(string header, IReadOnlyCollection<string> names)
@@ -99,7 +117,7 @@ public static class SessionVersionGate
     /// <summary>جِسمُ البَوّابَة: يَنزِعُ مِن الطَلَبِ كُلَّ كوكيِّ جَلسَةٍ أَسقَطَه رَفعُ الإصدار، ويَمحوه مِن المُتَصَفِّح.</summary>
     public static async Task ApplyAsync(HttpContext ctx)
     {
-        var names = SessionCookieNames(ctx.Request.Cookies.Keys);
+        var names = CheckedCookieNames(ctx.Request.Cookies);
         if (names.Count == 0) return;
         var store = ctx.RequestServices.GetRequiredService<IDocumentStore>();
         var cache = ctx.RequestServices.GetRequiredService<IMemoryCache>();
