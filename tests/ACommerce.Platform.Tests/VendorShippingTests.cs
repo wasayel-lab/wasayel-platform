@@ -1209,6 +1209,27 @@ public class VendorShippingTests(ITestOutputHelper output)
         Assert.Equal("inbound", w.Docs.Stored.OfType<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>().Last().Note);
     }
 
+    // ─── توصيفُ «اليَوم» قَبلَ قَرارِ المالِك د11 (٢) (‏2026-10-29) — حَدُّ التَسجيلِ ساعَةٌ في الذاكِرَةِ وَحدَها ─────────────────────────────
+    //
+    // **المَقيس**: `RegisterAsync` لا يَعُدُّ إلّا `AuthHandlers.TryConsumeActionQuota` — قاموسٌ في ذاكِرَةِ العَمَلِيَّةِ بِعَشرٍ في السّاعَة — فَإعادَةُ
+    // التَشغيلِ تُصَفِّرُه، والسَقفُ اليَومِيُّ ‏240 نِداءً لِلبائِعِ الواحِد. وسُطورُ الأَثَرِ `provider.vendor.register` («register») مَحفوظَةٌ في القاعِدَةِ ولا
+    // يَقرَؤُها شَيء. ونَصُّ الحَدِّ «أَعِدِ المُحاوَلَةَ بَعدَ ساعَة». يَنقَلِبُ الصَفُّ بِاسمِه، وصَفُّه الحَيُّ في `LiveVendorShippingProofTests`.
+
+    [Fact]
+    public void Today_the_register_bound_is_the_in_memory_hour_alone_and_its_text_says_an_hour()
+    {
+        var code = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Shipping/VendorShipping.cs")));
+        var from = code.IndexOf("public async Task<VendorShippingResult> RegisterAsync(", StringComparison.Ordinal);
+        var to = code.IndexOf("public string? TakeActivationLink(", from, StringComparison.Ordinal);
+        Assert.True(from > 0 && to > from, "أَداةٌ عَمياء: RegisterAsync لَم تُقرَأ.");
+        var register = code[from..to];
+        Assert.Contains("TryConsumeActionQuota(RegisterAttemptKey(tenantSlug, owner))", register, StringComparison.Ordinal);
+        Assert.DoesNotContain("_audit.CountAsync(", register, StringComparison.Ordinal);
+        Assert.Equal(8, VendorShippingService.Codes.Count);
+        Assert.Contains("بَعدَ ساعَة", LocaleCatalog.Text(LocaleCatalog.Arabic, "shipping.vendor.err_" + VendorShippingService.RegisterRateLimited), StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// <para><b><c>vendor_contact_unverified</c> مُوجَباً وسالِباً</b> — مُوجَبُه: لا وَثيقَة، أَو وَثيقَةُ غَيرِه، أَو مَحذوفَة، أَو بَريدٌ وجَوّالٌ غَيرُ مُتَحَقَّقٍ
     /// مِنهُما، أَو مَن دَخَلَ بِنَفاذ (<c>NID-…</c> بِلا <c>PhoneVerified</c> — كَما يَكتُبُه <c>AuthHandlers</c>)، أَو «مُتَحَقَّقٌ» لَيسَ بَريداً ولا أَرقاماً.
@@ -1617,6 +1638,58 @@ public class LiveVendorShippingProofTests(ITestOutputHelper output)
         {
             await using var s = store.LightweightSession(slug);
             foreach (var b in await s.Query<TenantProviderBinding>().ToListAsync()) s.Delete(b);
+            foreach (var a in await s.Query<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>().ToListAsync()) s.Delete(a);
+            await s.SaveChangesAsync();
+        }
+    }
+    /// <summary>
+    /// <para><b>توصيفُ «اليَوم» قَبلَ قَرارِ المالِك د11 (٢) عَلى Postgres</b> (‏2026-10-29): عَشرَةُ سُطورِ أَثَرِ «register» لِهذا البائِعِ في هذا المَتجَرِ
+    /// قَبلَ ساعَتَين — مَحفوظَةٌ في القاعِدَة — ومِفتاحُ الحِصَّةِ لَم يَرَه هذا الخادِمُ قَطّ (إعادَةُ تَشغيل): المُحاوَلَةُ الحادِيَةَ عَشرَةَ تَبلُغُ OTO وتَكتُبُ سَطراً.</para>
+    /// </summary>
+    [Fact]
+    public async Task Today_ten_register_lines_in_the_last_day_do_not_stop_an_eleventh_after_a_restart_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = "vs-zz-d-" + Guid.NewGuid().ToString("N")[..8];
+        var owner = Guid.NewGuid();
+        try
+        {
+            var entryId = TenantProviderBinding.VendorEntryId(ProviderCapabilities.Delivery, owner);
+            await using (var seed = store.LightweightSession(slug))
+            {
+                for (var i = 0; i < 10; i++)
+                    seed.Store(new ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry
+                    {
+                        Id = Guid.NewGuid(), Scope = slug, ActorId = owner, ActorName = "بائِع",
+                        Action = VendorShippingService.RegisterAuditAction, EntityType = "provider", EntityId = entryId,
+                        Note = "register", At = DateTime.UtcNow.AddHours(-2).AddMinutes(i),
+                    });
+                await seed.SaveChangesAsync();
+            }
+
+            var oto = new OtoRouteHandler();
+            oto.Routes[OtoClient.RegisterPath] = _ => OtoRouteHandler.Json(HttpStatusCode.BadRequest, "{\"success\": false}");
+            var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, MarketplaceToken = "MKT-live" });
+            var surface = new VendorShippingService(new TenantProviderService(store), DealShipTests.NewVault(),
+                new OtoClient(new HttpClient(oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance), options,
+                new ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditWriter(store),
+                new ACommerce.Templates.Customer.Marketplace.Services.Api.ApiKeyRevealStore(
+                    new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions())));
+
+            var res = await surface.RegisterAsync(slug, VendorShippingTests.Registrant(owner), VendorShippingTests.Form(), "https://wasayel.example/x");
+
+            await using var q = store.QuerySession(slug);
+            var lines = await q.Query<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>().CountAsync(a => a.EntityId == entryId);
+            output.WriteLine($"الحادِيَةَ عَشرَة: {res.Code ?? "ok"} · نِداءاتُ Register: {oto.CallsTo(OtoClient.RegisterPath)} · سُطورُ الأَثَر: {lines}");
+            Assert.Equal(OtoFailures.Refused, res.Code);
+            Assert.Equal(1, oto.CallsTo(OtoClient.RegisterPath));
+            Assert.Equal(11, lines);
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
             foreach (var a in await s.Query<ACommerce.Templates.Customer.Marketplace.Services.Audit.AuditEntry>().ToListAsync()) s.Delete(a);
             await s.SaveChangesAsync();
         }
