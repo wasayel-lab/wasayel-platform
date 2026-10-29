@@ -2,6 +2,8 @@ using ACommerce.Kit.Delivery;
 using ACommerce.Platform.MultiTenancy;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
 using ACommerce.Templates.Customer.Marketplace.Shipping;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace ACommerce.Platform.Tests;
@@ -266,6 +268,29 @@ public class OtoDeployDocTests
         Assert.DoesNotContain("Shipping__Oto__Environment:-", OtoGateFunction(), StringComparison.Ordinal);
         foreach (var shape in new[] { "staging", " Staging ", "\vstaging", " staging ", "production", "", "sta ging" })
             Assert.Equal(OtoEnvironment.IsOpen(shape) ? OtoEnvironment.OpenBootValue : OtoEnvironment.ClosedBootValue, OtoEnvironment.BootLogValue(shape));
+    }
+
+    /// <summary>
+    /// <para><b>توصيفُ «اليَوم» قَبلَ حارِسِ الإقلاع (قَرارُ المالِك د44، ‏2026-10-29)</b>: إقلاعٌ خارِجَ التَطويرِ بِـ<c>Shipping__Oto__Environment=staging</c>
+    /// <b>لا يُرفَض</b> — <c>AddOtoShipping</c> لا يَرمي لِلقيمَة، ولا يَقرَأُ <c>Program.cs</c> بيئَةَ OTO بَينَ بِناءِ المُضيفِ وسَطرِ الإقلاع (فَلا حارِسَ هُناك)،
+    /// والسَطرُ <c>open</c>، وكُتلَةُ البَوّابَةِ تُنَبِّهُ بِـ⚠ ورَمزُها ‏0. يَنقَلِبُ هذا الصَفُّ بِاسمِه في كوميتِ الحارِس.</para>
+    /// </summary>
+    [Fact]
+    public void Today_a_boot_outside_development_with_oto_staging_is_not_refused()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { [OtoEnvironment.EnvironmentKey] = OtoEnvironment.Staging }).Build();
+        new ServiceCollection().AddOtoShipping(config);
+        Assert.Equal(OtoEnvironment.OpenBootValue, OtoEnvironment.BootLogValue(OtoEnvironment.Staging));
+
+        var program = Read("apps/V1.App/Program.cs").Replace("\r\n", "\n");
+        var build = program.IndexOf("var app = builder.Build();", StringComparison.Ordinal);
+        var bootLine = program.IndexOf("OtoEnvironment.BootLogPrefix + \"{Oto}\"", StringComparison.Ordinal);
+        Assert.True(build > 0 && bootLine > build, "سَطرا البِناءِ والإقلاعِ غائِبانِ عَن Program.cs — الأَداةُ عَمياء.");
+        Assert.Equal(0, program[build..bootLine].Split("IOptions<OtoOptions>").Length - 1);
+
+        if (OperatingSystem.IsWindows()) return;
+        Assert.StartsWith("⚠ Shipping__Oto__Environment=staging", RunOtoGateBlock(OtoEnvironment.Staging), StringComparison.Ordinal);
     }
 
     /// <summary>وبِلا سَطرٍ في السِجِلِّ تَقولُ «لَم تُقَس» — ولا «مُغلَق» ولا ⚠ staging — ولَو كانَ المُتَغَيِّرُ staging في بيئَتِها.</summary>
