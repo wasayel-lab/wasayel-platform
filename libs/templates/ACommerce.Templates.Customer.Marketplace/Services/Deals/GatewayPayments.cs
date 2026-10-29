@@ -451,6 +451,23 @@ public sealed class GatewayPayments
     }
 
     /// <summary>
+    /// <para><b>إلغاءُ صَفَقاتِ السَلَّةِ حينَ تَعَذَّرَ تَأمينُ دَفعِها عِندَ الشِراء — سُلوكٌ واحِدٌ لِلعُطلِ الواحِد</b> (‏2026-10-29، قَرارُ المالِك د8 (٢) «أ»:
+    /// «إذا تعذّر حجز المبلغ عند الشراء أُلغيت طلبات السلّة فورًا، ويرى المشتري رسالة واضحة وسلّته كما هي»؛ تَوصيفُ «اليَوم» <c>05e2e13</c>): يُناديه
+    /// <c>/checkout/submit</c> حينَ يَرمي الحَجزُ عِندَ مُزَوِّدِ النُسخَةِ — كانَ يَكتُبُ <c>payment_error</c> ويَمضي بِبَقِيَّةِ السَلَّة، وطَريقُ البَوّابَةِ وَحدَه يُلغي.
+    /// والإلغاءُ هُوَ إلغاءُ فَشَلِ فَتحِ الفاتورَةِ نَفسُه (<see cref="CancelUnopenedAsync"/>) بِاسمِ المُشتَري وبِـ<paramref name="reason"/>؛ و<b>ما نَجَحَ حَجزُه يُفَكُّ</b>
+    /// بِالكاتِبِ القائِمِ لا بِنِداءٍ جَديد: <see cref="DealsService.CancelAsync"/> يَستَرجِعُ ما عَلَيه <c>payment_id</c> (القاعِدَة ٨). وصَفقَةُ غَيرِ <paramref name="by"/>
+    /// أَو ما لَم يَعُد قائِماً لا تُمَسّ. ولا إشعارَ هُنا: لَم يُخبَر بائِعٌ بِالوِلادَة (الرُجوعُ قَبلَ <c>NotifyNewDealsAsync</c>)، فَلا يُخبَرُ بِالإلغاء.</para>
+    /// </summary>
+    public async Task CancelUnsecuredAsync(
+        string tenantSlug, DealPayer by, IReadOnlyList<Guid> dealIds, string reason, CancellationToken ct = default)
+    {
+        foreach (var id in dealIds)
+            if (await _deals.LoadAsync(tenantSlug, id, ct) is { Status: DealStatus.Active } d && d.InitiatorId == by.ActorId)
+                await CancelUnopenedAsync(tenantSlug, d, new DealCanceller(by.ActorId, d.InitiatorName, IsStoreAdmin: false), reason, ct);
+        _log.LogWarning("[checkout] {Slug}: payment could not be secured for {Count} deal(s) — cancelled, held amounts released", tenantSlug, dealIds.Count);
+    }
+
+    /// <summary>
     /// <para><b>إلغاءُ صَفقَةٍ لَم تُفتَح فاتورَتُها — ونَتيجَتُه تُقرَأ</b> (‏2026-10-13، G5 (xvi-g)): <see cref="DealsService.ChangedMeanwhile"/>
     /// يُعادُ مَرَّةً بِجَلسَةٍ جَديدَةٍ تَقرَأُ ما كُتِب؛ و<see cref="DealCancelAuthorization.DealNotActive"/> نَجاحٌ (أَلغاها غَيرُه)؛ وكُلُّ رَدٍّ
     /// سِواهُما — أَو استِثناءٌ — سَطرُ خَطَأٍ يُسَمّي الصَفقَةَ ورَمزَها، ويَمضي إلى أُختِها فَلا يُترَكُ الباقي بِلا إلغاء.</para>

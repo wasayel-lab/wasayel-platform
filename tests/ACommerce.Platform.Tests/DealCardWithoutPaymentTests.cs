@@ -173,13 +173,13 @@ public class DealCardWithoutPaymentTests(ITestOutputHelper output)
         Assert.Contains("«دَفع»", text, StringComparison.Ordinal);
     }
 
-    /// <summary><b>اليَوم — تَعَذُّرُ الحَجزِ عِندَ الشِراءِ سُلوكانِ لا سُلوك</b> (‏2026-10-29، تَوصيفٌ قَبلَ قَرارِ المالِك د8 (٢) «أ»: «إذا تعذّر حجز المبلغ
-    /// عند الشراء أُلغيت طلبات السلّة فورًا، ويرى المشتري رسالة واضحة وسلّته كما هي»): في جِسمِ <c>/checkout/submit</c> (بِلا تَعليقات) فَرعُ رَميِ الحَجزِ
-    /// عِندَ مُزَوِّدِ النُسخَةِ يَكتُبُ <c>payment_error</c> ويَمضي — لا إلغاءَ ولا رُجوعَ ولا خُروجَ مِن الحَلقَة — فَتولَدُ بَقِيَّةُ السَلَّةِ وتُحذَفُ السَلَّةُ
-    /// ويُشعَرُ البائِعون، والصَفقَةُ تُمسَكُ عِندَ «تَأكيد» (<see cref="DealsService.MissesPayment"/>)؛ وطَريقُ البَوّابَةِ وَحدَه يُلغي ويُبقي السَلَّةَ ويَرُدُّ
-    /// بِرَمزِه (ثَلاثَةُ مَساراتِ رَدٍّ لا رابِع). يُقلَبُ بِاسمِه في كوميتِ التَوحيد.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د8 (٢) «أ»؛ تَوصيفُه <c>05e2e13</c>) — كانَ
+    /// <c>Today_a_hold_failure_at_checkout_marks_the_deal_and_the_cart_goes_on_while_only_the_gateway_path_cancels</c>: فَرعُ الرَميِ يَكتُبُ <c>payment_error</c>
+    /// ويَمضي، وثَلاثَةُ مَساراتِ رَدّ. <b>والآن سُلوكٌ واحِدٌ في الطَريقَين</b>: الفَرعُ يَرفَعُ عَلَمَه، والحَلقَةُ تَقِفُ قَبلَ رَبطِ البائِع، وبَعدَها — قَبلَ الفاتورَةِ وقَبلَ
+    /// أَيِّ إشعار — تُلغى صَفَقاتُ السَلَّةِ بِـ<see cref="GatewayPayments.CancelUnsecuredAsync"/>، والسَلَّةُ تُحفَظُ بِنُسخَةٍ جَديدَة، والرُجوعُ بِـ<see cref="CheckoutPayMethods.HoldFailed"/>
+    /// (أَربَعَةُ مَساراتِ رَدّ).</summary>
     [Fact]
-    public void Today_a_hold_failure_at_checkout_marks_the_deal_and_the_cart_goes_on_while_only_the_gateway_path_cancels()
+    public void A_hold_failure_at_checkout_stops_the_loop_cancels_the_cart_deals_keeps_the_cart_and_answers_its_code()
     {
         var src = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
             "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs"));
@@ -192,14 +192,102 @@ public class DealCardWithoutPaymentTests(ITestOutputHelper output)
         var catchAt = body.IndexOf("catch (Exception ex)", StringComparison.Ordinal);
         var markAt = body.IndexOf(mark, catchAt, StringComparison.Ordinal);
         var after = body[(markAt + mark.Length)..].TrimStart();
-        output.WriteLine($"catch={catchAt} · payment_error={markAt} · ما يَليه: «{after[..1]}» · break: {Count(body, "break;")} · CancelAsync: {Count(body, "CancelAsync(")} · RefusalPath: {Count(body, "RefusalPath(")}");
+        var stop = body.IndexOf("if (holdFailed) break;", StringComparison.Ordinal);
+        var bind = body.IndexOf("await deals.BindListingOwnerAsync(slug, deal.Id, oid);", StringComparison.Ordinal);
+        var cancel = body.IndexOf("await gateway.CancelUnsecuredAsync(slug, new Services.Deals.DealPayer(userId), created, l[\"checkout.payment.cancel_hold_failed\"]);", StringComparison.Ordinal);
+        var keep = body.IndexOf("cart.UpdatedAt = DateTime.UtcNow; s.Store(cart); await s.SaveChangesAsync();", cancel, StringComparison.Ordinal);
+        var back = body.IndexOf("RefusalPath(Services.Deals.CheckoutPayMethods.HoldFailed)", StringComparison.Ordinal);
+        var open = body.IndexOf("await gateway.OpenInvoiceAsync(", StringComparison.Ordinal);
+        var notify = body.IndexOf("await notices.NotifyNewDealsAsync(slug, born, l);", StringComparison.Ordinal);
+        output.WriteLine($"catch={catchAt} · payment_error={markAt} · ما يَليه: «{after[..18]}» · وُقوف={stop} · رَبط={bind} · إلغاء={cancel} · سَلَّة={keep} · رَدّ={back} · فاتورَة={open} · إشعار={notify} · RefusalPath: {Count(body, "RefusalPath(")}");
 
         Assert.True(catchAt > 0 && markAt > catchAt, $"فَرعُ الرَميِ: catch={catchAt} mark={markAt}");
-        Assert.StartsWith("}", after, StringComparison.Ordinal);
-        Assert.Equal(0, Count(body, "break;"));
-        Assert.Equal(0, Count(body, "CancelAsync("));
-        Assert.Equal(3, Count(body, "RefusalPath("));
-        Assert.Contains("RefusalPath(Services.Deals.CheckoutPayMethods.GatewayOpenFailed)", body.Replace("\n", "").Replace(" ", ""), StringComparison.Ordinal);
+        Assert.StartsWith("holdFailed = true;", after, StringComparison.Ordinal);
+        Assert.True(stop > markAt && bind > stop, $"الحَلقَةُ تَقِفُ قَبلَ رَبطِ البائِع: stop={stop} bind={bind}");
+        Assert.True(cancel > bind && keep > cancel && back > keep && open > back && notify > open,
+            $"بَعدَ الحَلقَة: إلغاء={cancel} سَلَّة={keep} رَدّ={back} فاتورَة={open} إشعار={notify}");
+        Assert.Equal(1, Count(body, "break;"));
+        Assert.Equal(4, Count(body, "RefusalPath("));
+    }
+
+    /// <summary><b>المُوجِب — صَفَقاتُ السَلَّةِ تُلغى بِاسمِ المُشتَري وبِسَبَبِها، وما نَجَحَ حَجزُه يُفَكُّ مَرَّةً بِالكاتِبِ القائِم، ولا يُخبَرُ أَحَد</b>
+    /// (‏2026-10-29، قَرارُ المالِك د8 (٢)): صَفقَةٌ حَجَزَت (<c>payment_id</c>) وصَفقَةٌ رَمى حَجزُها (<c>payment_error</c>) — كِلتاهُما «مُلغاة»، ونِداءُ مُزَوِّدٍ واحِد:
+    /// استِرجاعُ المَحجوزَةِ وَحدَها؛ وصِفرُ وَثيقَةِ إشعار.</summary>
+    [Fact]
+    public async Task CancelUnsecuredAsync_cancels_the_buyers_cart_deals_releases_the_held_amount_once_and_tells_nobody()
+    {
+        var (w, deals, pay, held) = LegacyCardDeal(withPaymentId: true);
+        var failed = Guid.NewGuid();
+        var other = w.Read<Deal>(held.ToString())!;
+        w.Put(new Deal
+        {
+            Id = failed, TenantSlug = Slug, Pattern = "marketplace", Stage = DealStage.Offered, AmountSar = 40,
+            InitiatorId = Buyer, InitiatorName = "مُشتَرٍ", Attributes = { [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.Card },
+            Refs = { ["payment_error"] = "provider unavailable" },
+        });
+        var gateway = new GatewayPayments(deals, new ACommerce.Templates.Customer.Marketplace.Services.TenantProviderService(w.Store),
+            TenantGatewayEndpointsTests.NewVault());
+        var reason = new L(new Microsoft.AspNetCore.Http.HttpContextAccessor())["checkout.payment.cancel_hold_failed"];
+        Assert.NotEqual("checkout.payment.cancel_hold_failed", reason);
+
+        await gateway.CancelUnsecuredAsync(Slug, new DealPayer(Buyer), new[] { other.Id, failed }, reason);
+
+        foreach (var id in new[] { held, failed })
+        {
+            var d = w.Read<Deal>(id.ToString())!;
+            output.WriteLine($"{id:N}: {d.Status} · «{d.CancelReason}» · {d.Timeline[^1].Action}");
+            Assert.Equal(DealStatus.Cancelled, d.Status);
+            Assert.Equal(reason, d.CancelReason);
+            Assert.Contains(d.Timeline, e => e.Action == "cancelled" && e.ActorId == Buyer);
+        }
+        Assert.Equal(new[] { "refund pay_1" }, pay.Calls);
+        Assert.Equal("ref_pay_1", w.Read<Deal>(held.ToString())!.Refs["refund_id"]);
+        Assert.Equal(0, w.Wrote<ACommerce.Kit.Notifications.Notification>());
+    }
+
+    /// <summary><b>السالِب — صَفقَةُ غَيرِ المُشتَري، وما لَم يَعُد قائِماً، لا يُمَسّ</b>: مُعَرِّفُ صَفقَةِ مُشتَرٍ آخَرَ في القائِمَةِ يَبقى قائِماً، وصَفقَةٌ مُلغاةٌ مِن قَبلُ لا يُكتَبُ
+    /// عَلَيها سَطرٌ ثانٍ، ومُعَرِّفٌ لا صَفقَةَ لَه يُتَجاوَز — صِفرُ نِداءِ مُزَوِّد.</summary>
+    [Fact]
+    public async Task CancelUnsecuredAsync_leaves_another_buyers_deal_and_an_already_cancelled_deal_untouched()
+    {
+        var (w, deals, pay, id) = LegacyCardDeal(withPaymentId: true);
+        var theirs = w.Read<Deal>(id.ToString())!;
+        theirs.InitiatorId = Seller;
+        w.Put(theirs);
+        var gone = Guid.NewGuid();
+        w.Put(new Deal
+        {
+            Id = gone, TenantSlug = Slug, Pattern = "marketplace", Stage = DealStage.Offered, AmountSar = 10, Status = DealStatus.Cancelled,
+            InitiatorId = Buyer, InitiatorName = "مُشتَرٍ",
+        });
+        var gateway = new GatewayPayments(deals, new ACommerce.Templates.Customer.Marketplace.Services.TenantProviderService(w.Store),
+            TenantGatewayEndpointsTests.NewVault());
+
+        await gateway.CancelUnsecuredAsync(Slug, new DealPayer(Buyer), new[] { id, gone, Guid.NewGuid() }, "سَبَب");
+
+        Assert.Equal(DealStatus.Active, w.Read<Deal>(id.ToString())!.Status);
+        Assert.DoesNotContain(w.Read<Deal>(gone.ToString())!.Timeline, e => e.Action == "cancelled");
+        Assert.Empty(pay.Calls);
+    }
+
+    /// <summary><b>ولِلرَمزِ نَصٌّ حَيٌّ في صَفحَةِ الإتمام</b> (القاعِدَة ١١): <see cref="CheckoutPayMethods.HoldFailed"/> يُقرَأُ في <c>CheckoutPage.razor</c> بِمِفتاحِه،
+    /// والنَصّانِ في القامُوسِ لا عَلامَةَ نائِبَةٍ فيهِما ويَقولانِ إنّ السَلَّةَ كَما هي وإنّ ما حُجِزَ فُكّ.</summary>
+    [Fact]
+    public void The_hold_failure_code_has_its_checkout_text_and_its_cancel_reason_in_the_dictionary()
+    {
+        var page = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "CheckoutPage.razor"));
+        Assert.Contains("CheckoutPayMethods.HoldFailed => L[\"checkout.payment.err_hold_failed\"],", page, StringComparison.Ordinal);
+        Assert.Equal("pay_hold_failed", CheckoutPayMethods.HoldFailed);
+        foreach (var key in new[] { "checkout.payment.err_hold_failed", "checkout.payment.cancel_hold_failed" })
+        {
+            var text = LocaleCatalog.Text(LocaleCatalog.Arabic, key);
+            output.WriteLine($"{key}: {text}");
+            Assert.NotEqual(key, text);
+            Assert.False(LocaleCatalog.IsPlaceholder(text));
+            Assert.Contains("فُكَّ ما حُجِز", text, StringComparison.Ordinal);
+        }
+        Assert.Contains("سَلَّتُكَ كَما هي", LocaleCatalog.Text(LocaleCatalog.Arabic, "checkout.payment.err_hold_failed"), StringComparison.Ordinal);
     }
 
     private static int Count(string text, string needle)

@@ -169,9 +169,11 @@ public class CheckoutClaimTests(ITestOutputHelper output)
             if (at < 0) v.Add($"{later} غائِب — الأَداةُ عَمياء");
             else if (caught > at || id > at) v.Add($"المُطالَبَةُ بَعدَ {later}");
         }
+        // (‏2026-10-29، قَرارُ المالِك د8 (٢) — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه: صارَ لِتَعَذُّرِ الحَجزِ رُجوعٌ قَبلَ الفاتورَةِ يُجَدِّدُ السَلَّةَ بِالسَطرِ نَفسِه، فَالتَجديدُ
+        // ورَمزُه يُطلَبانِ بَعدَ شَرطِ الفاتورَةِ لا في أَوَّلِ مَوضِع — وإلّا أَجابَ سَطرُ الرُجوعِ الآخَرِ عَن هذا. ورُجوعُ التَعَذُّرِ يُقاسُ في `DealCardWithoutPaymentTests`.)
         var failed = submit.IndexOf("if (opened is { Ok: false })", StringComparison.Ordinal);
-        var touch = submit.IndexOf("cart.UpdatedAt = DateTime.UtcNow;", StringComparison.Ordinal);
-        var refused = submit.IndexOf("CheckoutPayMethods.GatewayOpenFailed", StringComparison.Ordinal);
+        var touch = failed < 0 ? -1 : submit.IndexOf("cart.UpdatedAt = DateTime.UtcNow;", failed, StringComparison.Ordinal);
+        var refused = touch < 0 ? -1 : submit.IndexOf("CheckoutPayMethods.GatewayOpenFailed", touch, StringComparison.Ordinal);
         if (failed < 0 || touch < failed || refused < touch) v.Add("رَدُّ فَتحِ الفاتورَةِ لا يُجَدِّدُ نُسخَةَ السَلَّةِ قَبلَ أَن يَعود");
         return v;
     }

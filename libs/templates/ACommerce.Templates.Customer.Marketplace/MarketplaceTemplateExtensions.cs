@@ -3193,6 +3193,8 @@ public static class MarketplaceTemplateExtensions
             // الصَفَقاتُ الَّتي لَها مالِكٌ — يُشعَرُ بَعدَ الحَفظِ لا داخِلَ الحَلقَة (P1-5).
             var born = new List<Guid>();
             var created = new List<Guid>();
+            // وتَعَذُّرُ الحَجزِ عِندَ مُزَوِّدِ النُسخَةِ يوقِفُ الحَلقَةَ ويُلغي ما وُلِدَ — كَفَشَلِ فَتحِ الفاتورَة (‏2026-10-29، قَرارُ المالِك د8 (٢)).
+            var holdFailed = false;
             // **والسَلَّةُ يُطالَبُ بِها بِوِلادَةِ صَفقَةِ بَندِها الأَوَّل** (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-1؛ ‏ADR-036 §١٤): مُعَرِّفُ كُلِّ صَفقَةٍ مِن
             // نُسخَةِ السَلَّةِ الَّتي قُرِئَت (`CheckoutClaim.DealIdFor`)، فَإرسالٌ ثانٍ قَرَأَ النُسخَةَ نَفسَها يُرَدُّ حِفظُ بَندِه الأَوَّلِ قَبلَ أَيِّ حَجزٍ أَو فاتورَةٍ
             // أَو إشعار، ويَعودُ إلى «صَفقاتي» حَيثُ صَفَقاتُ الأَوَّل. كانَ يَلِدُ مَجموعَةً ثانِيَة (تَوصيفُه `94a7ef0`).
@@ -3280,8 +3282,12 @@ public static class MarketplaceTemplateExtensions
                         // تَبقى في حالَة Offered لكِن مَعلَّمَة بِخَطَأ، والمالِك
                         // يَستَطيع رُؤيَتها يَدَويّاً.
                         await deals.AttachRefAsync(slug, deal.Id, "payment_error", ex.Message);
+                        holdFailed = true;
                     }
                 }
+                // (‏2026-10-29، قَرارُ المالِك د8 (٢) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: «الصَّفقَة تَبقى في حالَة Offered … والمالِك يَستَطيع رُؤيَتها» لَم يَعُد —
+                // سُلوكٌ واحِدٌ في الطَريقَين: لا يولَدُ بَندٌ بَعدَه، وتُلغى صَفَقاتُ السَلَّةِ بَعدَ الحَلقَةِ ويُفَكُّ ما حُجِز، والسَلَّةُ كَما هي بِرَمزِها.)
+                if (holdFailed) break;
 
                 if (listing.Attributes.TryGetValue("owner_id", out var oid))
                 {
@@ -3304,6 +3310,13 @@ public static class MarketplaceTemplateExtensions
             // ومُثَبَّتٌ في `GatewayOpenFailureNoticesTests`.
             // (‏2026-10-29، قَرارُ المالِك د8 — ولا يُعادُ حَرفٌ فَوقَه: «ولا إشعارَ إلغاءٍ لِبائِعٍ في الأُنبوبِ كُلِّه» لَم يَعُد يَصدُق — صارَ لِلبائِعِ إشعارُ إلغاءٍ
             // واحِدٌ (`DealNotices.NotifyVendorCancelledAsync`) تَمُرُّ بِه أَبوابُ الإلغاء؛ والقَرارُ نَفسُه يَستَثني هذا الفَرع: لَم يُخبَر بِالوِلادَةِ فَلا يُخبَرُ بِالإلغاء.)
+            // والحَجزُ الَّذي تَعَذَّرَ يَمشي طَريقَ الفاتورَةِ الَّتي لَم تُفتَح بِحَرفِه: الإلغاءُ بِاسمِ المُشتَري، والسَلَّةُ بِنُسخَةٍ جَديدَة، والرُجوعُ بِرَمزِه قَبلَ أَيِّ إشعار.
+            if (holdFailed)
+            {
+                await gateway.CancelUnsecuredAsync(slug, new Services.Deals.DealPayer(userId), created, l["checkout.payment.cancel_hold_failed"]);
+                cart.UpdatedAt = DateTime.UtcNow; s.Store(cart); await s.SaveChangesAsync();
+                return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy.RefusalPath(Services.Deals.CheckoutPayMethods.HoldFailed)));
+            }
             var opened = viaGateway && created.Count > 0 ? await gateway.OpenInvoiceAsync(slug, new Services.Deals.DealPayer(userId), created,
                 tenant?.Name ?? slug, Billing.PayPalOrderSurface.OriginFrom(req) + Link(req, slug, Services.Deals.GatewayReturn.PathFor(firstDealId, null)), l) : null;
             // والسَلَّةُ تَبقى — بِنُسخَةٍ جَديدَة (‏2026-10-24، ‏ADR-036 §١٤): صَفَقاتُ هذِه المُحاوَلَةِ أُلغِيَت بِمُعَرِّفاتِ نُسخَتِها، فَإعادَةُ المُشتَري تَلِدُ بِغَيرِها.

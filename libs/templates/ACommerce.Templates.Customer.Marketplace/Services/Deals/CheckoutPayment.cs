@@ -75,6 +75,11 @@ public static class CheckoutPayMethods
     /// البَوّابَةِ نَفسُه في اللوغِ لِلمُراجَعَة.</summary>
     public const string GatewayOpenFailed = "pay_gateway_open_failed";
 
+    /// <summary>رَمزُ الرَدِّ حينَ تَعَذَّرَ حَجزُ مَبلَغِ بَندٍ عِندَ مُزَوِّدِ النُسخَةِ أَثناءَ الشِراء (‏2026-10-29، قَرارُ المالِك د8 (٢)): أُلغِيَت صَفَقاتُ السَلَّةِ كُلُّها
+    /// بِاسمِ المُشتَري وفُكَّ ما حُجِزَ مِنها (<see cref="GatewayPayments.CancelUnsecuredAsync"/>)، والسَلَّةُ كَما هي — سُلوكُ <see cref="GatewayOpenFailed"/> نَفسُه
+    /// لِلعُطلِ نَفسِه. <b>يُقرَأُ في الشاشَةِ لِيُختارَ نَصُّ القامُوس</b>.</summary>
+    public const string HoldFailed = "pay_hold_failed";
+
     /// <summary>رَمزُ البِطاقَةِ عَلى طَريقِ بَوّابَةِ المَتجَرِ لِسَلَّةٍ صَفَقاتُها أَكثَرُ مِمّا تَحمِلُه فاتورَةٌ واحِدَة
     /// (<see cref="GatewayPaymentProof.MaxDealsPerInvoice"/>) — يُقرَّرُ قَبلَ أَن تولَدَ صَفقَة (‏2026-10-13، G5 (xvi-g)؛ <see cref="CheckoutCardFacts.ForCart"/>).</summary>
     public const string CardCartTooMany = "pay_card_cart_too_many";
