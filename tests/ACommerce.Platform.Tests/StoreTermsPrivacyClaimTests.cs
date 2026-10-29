@@ -71,4 +71,21 @@ public class StoreTermsPrivacyClaimTests(ITestOutputHelper output)
         Assert.False(ClaimsNoThirdParty("لا نَبيع بَياناتك لِأَيّ طَرَف ثالِث."));
         Assert.False(ClaimsNoThirdParty("We do not sell your data to any third party."));
     }
+
+    // ─── إصدارُ الشُروطِ بَعدَ تَبديلِ بَندِ الخُصوصِيَّة (مُراجَعَةُ تَيّارِ S2 الجَولَة ٢، ‏2026-10-29 — كُبرى) ───────────────────────────
+    //
+    // ‏(تَوصيفُ «اليَوم» قَبلَ رَفعِ الإصدار — يُقلَبُ بِاسمِه في كوميتِ الرَفع): `5c6bede` بَدَّلَ جُملَةَ الخُصوصِيَّةِ في الشُروطِ الَّتي قَبِلَها كُلُّ عُضوٍ ولَم يَرفَع
+    // `TermsPolicy.CurrentVersion` — فَالصَفحَةُ تَقولُ «إصدار 1»، وعُضوٌ قَبِلَ الإصدارَ 1 يَمُرُّ ولا يُطلَبُ قَبولُه، وبَندُ الشُروطِ الرابِعُ (`terms.changes.body`) يَعِدُ
+    // «سَنُخطِركَ وَنَطلُب القَبول مَرَّة أُخرى لِلإصدار الجَديد».
+
+    /// <summary><b>«اليَوم»</b>: الإصدارُ 1 بَعدَ تَبديلِ البَند — وعُضوٌ قَبِلَ الإصدارَ 1 قَبلَ التَبديلِ يُعَدُّ قابِلاً.</summary>
+    [Fact]
+    public void Today_the_store_terms_changed_under_version_one_and_a_member_who_accepted_version_one_is_not_asked_again()
+    {
+        var acceptedBefore = new ACommerce.Kit.Auth.User { AcceptedTermsVersion = 1, AcceptedTermsAt = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc) };
+        output.WriteLine($"TermsPolicy.CurrentVersion = {ACommerce.Templates.Customer.Marketplace.Gates.TermsPolicy.CurrentVersion}");
+        Assert.Equal(1, ACommerce.Templates.Customer.Marketplace.Gates.TermsPolicy.CurrentVersion);
+        Assert.True(ACommerce.Templates.Customer.Marketplace.Gates.TermsPolicy.IsAccepted(acceptedBefore));
+        Assert.Contains("وَنَطلُب القَبول مَرَّة أُخرى لِلإصدار الجَديد", LocaleCatalog.Find(LocaleCatalog.Arabic, "terms.changes.body"), StringComparison.Ordinal);
+    }
 }
