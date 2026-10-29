@@ -98,7 +98,7 @@ public static class TenantConfigCodes
     public const string RolesEmptySelection = "roles_empty_selection";
 
     /// <summary><b>نَمَطُ سَلَّةٍ خارِجَ المَعجَم</b> (‏2026-10-29، قَرارُ المالِك د2) — <c>CartModes.Unknown</c> نَفسُه: المُصادِقُ يَرُدُّه، والسَطحُ يَقولُه مِن القامُوس
-    /// (<c>studio.providers.err_cart_mode_unknown</c>).</summary>
+    /// (<c>studio.app_branding.err_cart_mode</c> في <c>StudioAppBranding.razor</c> — ‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى: كانَ التَعليقُ يُسَمّي مِفتاحاً لا وُجودَ لَه).</summary>
     public const string CartModeUnknown = Patterns.CartModes.Unknown;
 
     /// <summary>المُعجَم كامِلاً — مَقروءٌ في <see cref="TenantConfigResult.Reject"/>
