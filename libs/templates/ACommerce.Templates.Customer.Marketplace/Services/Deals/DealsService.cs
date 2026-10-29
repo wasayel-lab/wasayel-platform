@@ -571,7 +571,6 @@ public sealed class DealsService
     public static bool IsCaptured(Deal deal)
         => deal.Refs.TryGetValue("payment_status", out var status)
            && string.Equals(status, nameof(ACommerce.Kit.Payments.PaymentStatus.Captured), StringComparison.Ordinal);
-
     /// <summary>
     /// <para><b>القَبضُ عِندَ دُخولِ <c>Paid</c> — بَعدَ المُطالَبَةِ لا قَبلَها</b> (‏ADR-036 الخُطوَة 2، ‏2026-10-12): يُناديها
     /// <see cref="AdvanceAsync"/> <b>بَعدَ</b> أَن حَفِظَت <see cref="MoveAsync"/> الانتِقالَ بِفَحصِ النُسخَةِ وخارِجَ التِقاطِ تَعارُضِه —
@@ -793,6 +792,13 @@ public sealed class DealsService
             }
             deal = await RecordAsync(tenantSlug, dealId, outcome, CancellationToken.None) ?? deal;
         }
+        // (‏2026-10-29، قَرارُ المالِك د38 (٢) «ج» «إلغاء مع تسجيل استرجاع مستحقّ إن كانت مدفوعة»؛ مُراجَعَةُ تَيّارِ S5 الأولى — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق):
+        // **ونَقدٌ قُبِضَ عِندَ التَسليمِ يُكتَبُ رَدُّه مُستَحَقّاً عَلى البائِع**. كانَت الفُروعُ الثَلاثَةُ لا يَبلُغُها النَقد، فَإلغاءُ صَفقَةِ نَقدٍ بَعدَ «تَسليم» —
+        // بِحَسمِ النِزاعِ أَو بِبابِ الاستوديو، وهُما كُلُّ ما يَبلُغُها (الطَرَفُ لا يُلغي بَعدَ «دَفع»، د37) — يَكتُبُ «أُلغِيَت» وَحدَه (تَوصيفُه `b7fa68b`).
+        // سَطرٌ بِحَلقَةِ التَسجيلِ نَفسِها بِلا نِداء — المالُ بِيَدِ البائِعِ لا عِندَنا (‏ق‑٦) — يَراه الطَرَفانِ وصاحِبُ المَتجَرِ، ويُخبَرُ بِه هذا مِن `DealNotices`.
+        else if (DealsPolicy.CollectedInCash(deal))
+            deal = await RecordAsync(tenantSlug, dealId, stored => stored.Timeline.Add(new(stored.Stage, stored.Stage,
+                DealEvent.CashRefundDue, actorId, actorName, null, DateTime.UtcNow)), CancellationToken.None) ?? deal;
         // (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الثانِيَة؛ ‏ADR-032 §٨‑ز — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: **وفاتورَةُ بَوّابَةٍ لَم يُقبَض بِها تُلغى عِندَ
         // البَوّابَةِ إن كانَت هذِه آخِرَ صَفقَةٍ قائِمَةٍ تَدفَعُ لَها**. كانَت تَبقى قابِلَةً لِلدَّفعِ فَيَدفَعُ المُشتَري ثَمَنَ طَلَبٍ مُلغًى مِن الصَفحَةِ
         // المَفتوحَةِ أَمامَه — تَوصيفُه `GatewayInvoiceCancelTests`. بَعدَ الحِفظِ كَالاستِرجاع، وما يَعودُ رَمزٌ في اللوغِ لا يَرُدُّ الإلغاء؛
@@ -845,6 +851,8 @@ public sealed class DealsService
     /// والمَقبوضَةُ عِندَ بَوّابَةِ المَتجَرِ يُكتَبُ لَها «استِرجاعُه مُستَحَقّ»، وفاتورَةٌ لَم تُدفَع تُلغى إن كانَت آخِرَ ما تَدفَعُ لَه — بِحَرفِ ما يَفعَلُه كُلُّ إلغاء.
     /// <b>والاستِئنافُ</b>: <c>Active</c> بِمَرحَلَتِها، وسَطرُ <see cref="DealEvent.DisputeResumed"/> بِسَبَبِه؛ وتَعارُضُ النُسخَةِ يُرَدُّ بِرَمزِه (‏ADR-036).
     /// والإشعارُ لِلطَرَفَينِ عِندَ النُقطَة (<see cref="DealNotices.NotifyDisputeResolvedAsync"/>).</para>
+    /// <para>(‏2026-10-29، مُراجَعَةُ تَيّارِ S5 الأولى — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): <b>ونَقدٌ قُبِضَ عِندَ التَسليمِ</b> يُكتَبُ لَه <see cref="DealEvent.CashRefundDue"/> — «رَدُّه
+    /// مُستَحَقٌّ عَلى البائِع» — بِفَرعٍ رابِعٍ في الجِسمِ نَفسِه، وصاحِبُ المَتجَرِ يُخبَرُ بِه بِالأُنبوبِ نَفسِه. كانَ الإلغاءُ لا يَكتُبُ لَه شَيئاً (تَوصيفُه <c>b7fa68b</c>).</para>
     /// </summary>
     public async Task<DealResolveResult> ResolveDisputeAsync(
         string tenantSlug, Guid dealId, DealCanceller by, string? outcome, string reason, CancellationToken ct = default)

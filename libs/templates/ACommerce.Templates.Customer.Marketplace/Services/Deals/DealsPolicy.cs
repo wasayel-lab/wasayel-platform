@@ -85,6 +85,13 @@ public static class DealsPolicy
 
     public static bool IsCashOnDelivery(Deal deal) => IsCashOnDelivery(PayMethodOf(deal));
 
+    /// <summary>أَقُبِضَ ثَمَنُ هذِه الصَفقَةِ نَقداً؟ — صَفقَةُ نَقدٍ (<see cref="IsCashOnDelivery(Deal)"/>) بَلَغَت «تَسليم» فَكَتَبَ كاتِبُ الانتِقالِ سَطرَ
+    /// <see cref="DealEvent.CashOnDelivery"/> — «لَحظَةُ القَبضِ عِندَ البائِع» (‏ADR-033 §٦). نَظيرُ <see cref="GatewayPayments.CollectedByGateway"/> لِلبِطاقَة؛ يَسأَلُه
+    /// الإلغاءُ لِيَكتُبَ <see cref="DealEvent.CashRefundDue"/> (‏2026-10-29، قَرارُ المالِك د38 (٢)؛ مُراجَعَةُ تَيّارِ S5 الأولى). دالَّةٌ نَقِيَّة، وهُنا لا في الخِدمَة:
+    /// كاتِبُ السَطرِ واحِدٌ هُناك (`DealCashPolicyTests` يَعُدُّه).</summary>
+    public static bool CollectedInCash(Deal deal)
+        => IsCashOnDelivery(deal) && deal.Timeline.Any(e => e.Action == DealEvent.CashOnDelivery);
+
     /// <summary><b>القاعِدَةُ الواحِدَة</b>: <c>Paid</c> تُسقَطُ عَن النَقد — ولا
     /// مَرحَلَةَ أُخرى ولا طَريقَةَ أُخرى.</summary>
     public static bool Skips(DealStage stage, string? payMethod)

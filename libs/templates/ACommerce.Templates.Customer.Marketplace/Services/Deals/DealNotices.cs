@@ -238,8 +238,9 @@ public sealed class DealNotices
 
     // ─── صاحِبُ المَتجَر — ما عَلَيه أَن يَفعَلَه في لَوحَةِ ميسر (‏2026-10-29، قَرارُ المالِك د3 «د») ───────────────
 
-    /// <summary>ما يُخبَرُ بِه صاحِبُ المَتجَرِ عَن صَفقَة — مَعجَمٌ مُغلَق: استِرجاعٌ مُستَحَقٌّ، أَو فاتورَةٌ تَعَذَّرَ إلغاؤها.</summary>
-    public enum OwnerAction { RefundDue, InvoiceLeftOpen }
+    /// <summary>ما يُخبَرُ بِه صاحِبُ المَتجَرِ عَن صَفقَة — مَعجَمٌ مُغلَق: استِرجاعٌ مُستَحَقٌّ، أَو فاتورَةٌ تَعَذَّرَ إلغاؤها.
+    /// (‏2026-10-29، قَرارُ المالِك د38 (٢)؛ مُراجَعَةُ تَيّارِ S5 الأولى — ولا يُعادُ حَرفٌ فَوقَه: وثالِثُها رَدٌّ نَقدِيٌّ مُستَحَقٌّ عَلى البائِع — <see cref="DealEvent.CashRefundDue"/>.)</summary>
+    public enum OwnerAction { RefundDue, InvoiceLeftOpen, CashRefundDue }
 
     /// <summary>
     /// <para><b>ما عَلى صاحِبِ المَتجَرِ أَن يَفعَلَه في هذِه الصَفقَة الآن</b> — آخِرُ سَطرٍ مِن السَطرَينِ في سِجِلِّها: <see cref="DealEvent.GatewayRefundDue"/> لِصَفقَةٍ مُلغاة
@@ -252,6 +253,8 @@ public sealed class DealNotices
         {
             if (deal.Timeline[i].Action == DealEvent.GatewayRefundDue && deal.Status == DealStatus.Cancelled) return OwnerAction.RefundDue;
             if (deal.Timeline[i].Action == DealEvent.GatewayInvoiceLeftOpen) return OwnerAction.InvoiceLeftOpen;
+            // (‏2026-10-29، قَرارُ المالِك د38 (٢) — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): ونَقدٌ قُبِضَ عَن صَفقَةٍ مُلغاة — صاحِبُ المَتجَرِ يُتابِعُ رَدَّه مَعَ البائِع.
+            if (deal.Timeline[i].Action == DealEvent.CashRefundDue && deal.Status == DealStatus.Cancelled) return OwnerAction.CashRefundDue;
         }
         return null;
     }
@@ -284,6 +287,20 @@ public sealed class DealNotices
         Type = CancelledType,
         Title = l["notifications.deal_invoice_left_open.title"],
         Body = l.Format("notifications.deal_invoice_left_open.body", deal.ListingTitle),
+        RelatedUrl = StudioDealUrl(slug, deal.Id),
+        At = at,
+    };
+
+    /// <summary>إشعارُ صاحِبِ المَتجَرِ بِرَدٍّ نَقدِيٍّ مُستَحَقّ (‏2026-10-29، قَرارُ المالِك د38 (٢) «إلغاء مع تسجيل استرجاع مستحقّ إن كانت مدفوعة»؛ مُراجَعَةُ تَيّارِ S5
+    /// الأولى): أُلغِيَت صَفقَةٌ بَعدَ أَن قَبَضَ البائِعُ ثَمَنَها نَقداً عِندَ التَسليم — فَالرَدُّ عَلى البائِع، وصاحِبُ المَتجَرِ يُتابِعُه، ولا مالَ يَمُرُّ بِالمَنصَّة.
+    /// المَبلَغُ مَبلَغُ الصَفقَةِ بِحَرفِ <c>notifications.deal_new.body</c> («ريال»)، ونَوعُه نَوعُ الإلغاءِ (نَسَقُ <see cref="RefundDueFor"/>)، والرابِطُ صَفحَتُها في الاستوديو.</summary>
+    public static Notification CashRefundDueFor(string slug, Deal deal, Guid ownerId, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = ownerId,
+        Type = CancelledType,
+        Title = l["notifications.deal_cash_refund_due.title"],
+        Body = l.Format("notifications.deal_cash_refund_due.body", deal.ListingTitle, deal.AmountSar),
         RelatedUrl = StudioDealUrl(slug, deal.Id),
         At = at,
     };
@@ -671,6 +688,8 @@ public sealed class DealNotices
     /// تعذّر إلغاؤها»؛ تَوصيفُ «اليَوم» <c>b55fead</c>): ما تُسَمّيه <see cref="OwnerActionOf"/> لِمَن تُسَمّيه <see cref="StoreOwnerOf"/>، بِتَرتيبِ الأُنبوبِ نَفسِه. يُناديه
     /// إشعارا الإلغاءِ (بَعدَ إلغاءٍ كَتَبَ أَحَدَ السَطرَين) و<see cref="NotifyPaidAsync"/> (دَفعٌ ثَبَتَ عَلى مُلغاة) — فَلا تَتَغَيَّرُ أَجسامُ النِقاط. ولا مالَ يَتَحَرَّك:
     /// الاستِرجاعُ يَدَوِيٌّ مِن اللَوحَة (د3 «أ»). تُرجِعُ هَل أُشعِر.</para>
+    /// <para>(‏2026-10-29، قَرارُ المالِك د38 (٢)؛ مُراجَعَةُ تَيّارِ S5 الأولى — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): <b>وما لَيسَ في اللَوحَة</b> — رَدٌّ نَقدِيٌّ مُستَحَقٌّ عَلى البائِع
+    /// (<see cref="CashRefundDueFor"/>) بِالأُنبوبِ نَفسِه، فَإشعارا الإلغاءِ وإشعارُ حَسمِ النِزاعِ يَبلُغونَه بِلا لَمس.</para>
     /// </summary>
     public async Task<bool> NotifyStoreOwnerAsync(string slug, Deal deal, L l, CancellationToken ct = default)
     {
@@ -679,9 +698,12 @@ public sealed class DealNotices
         await using (var s = _store.LightweightSession(slug))
         {
             if (StoreOwnerOf(await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug, ct)) is not { } ownerId) return false;
-            n = action == OwnerAction.RefundDue
-                ? RefundDueFor(slug, deal, ownerId, l, DateTime.UtcNow)
-                : InvoiceLeftOpenFor(slug, deal, ownerId, l, DateTime.UtcNow);
+            n = action switch
+            {
+                OwnerAction.RefundDue => RefundDueFor(slug, deal, ownerId, l, DateTime.UtcNow),
+                OwnerAction.CashRefundDue => CashRefundDueFor(slug, deal, ownerId, l, DateTime.UtcNow),   // ‏2026-10-29، قَرارُ المالِك د38 (٢)
+                _ => InvoiceLeftOpenFor(slug, deal, ownerId, l, DateTime.UtcNow),
+            };
             s.Store(n);
             await s.SaveChangesAsync(ct);
         }
