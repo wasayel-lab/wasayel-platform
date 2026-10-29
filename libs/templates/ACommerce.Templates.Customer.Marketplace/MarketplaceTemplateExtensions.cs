@@ -3702,7 +3702,8 @@ public static class MarketplaceTemplateExtensions
             if (result.Ok && result.Deal is not null)
                 await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
                     "deal.advance", "deal", id.ToString(),
-                    note: $"→ {result.Deal.Stage}" + (string.IsNullOrEmpty(note) ? "" : $" · {note}"),
+                    // ما بَلَغَته خُطوَةُ المالِكِ لا ما بَلَغَته الصَفقَةُ بَعدَها (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى): مُنذُ د4 قد تَدخُلُ المَنصَّةُ «دَفع» في العَمَلِيَّةِ نَفسِها.
+                    note: Services.Deals.DealsService.AdvanceAuditNote(result.Deal, actorId, note),
                     ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
             // والمُشتَري يَعلَمُ أَنّ إدارَةَ المَتجَرِ قَبِلَت طَلَبَه (‏2026-10-24، تَدقيقُ الإطلاق brief-P1a-1) — نَسَقُ `/accept` والـAPI؛ كانَ صامِتاً (`727bc9f`).
             if (Services.Deals.DealNotices.IsAcceptance(result)) await notices.NotifyAcceptedByStoreAsync(slug, result.Deal!, auth.UserId!.Value, l);

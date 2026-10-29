@@ -380,6 +380,20 @@ public sealed class DealsService
             ? stage
             : null;
 
+    /// <summary>
+    /// <para><b>ما بَلَغَته خُطوَةُ الفاعِلِ نَفسُه — لا ما بَلَغَته الصَفقَةُ بَعدَها</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى — مُلاحَظَةٌ ثانَوِيَّة؛ تَوصيفُه
+    /// <c>3574a47</c>): <c>StageAfter</c> آخِرِ سَطرِ <c>advanced</c> كَتَبَه <paramref name="actorId"/>، وإلّا مَرحَلَةُ الصَفقَة. كانَ بابُ الاستوديو <c>/advance</c>
+    /// يَكتُبُ في التَدقيقِ <c>result.Deal.Stage</c>؛ ومُنذُ د4 قد تَدخُلُ المَنصَّةُ «دَفع» بِاسمِها في العَمَلِيَّةِ نَفسِها
+    /// (<see cref="EnterPaidOnRecordAsync"/>، سَطرُها بِلا مُعَرِّفِ فاعِل)، فَكانَ يُنسَبُ إلى المالِكِ «→ Paid» عَن تَأكيدٍ خَطاه.</para>
+    /// <para>دالَّةٌ نَقِيَّةٌ يُناديها البابُ عَلى ما أَرجَعَه <see cref="AdvanceAsync"/> بِنَجاح — وفيهِ سَطرُ الفاعِلِ بِالبِناء (<c>MoveAsync</c> يَكتُبُه بِمُعَرِّفِه)،
+    /// فَالرُجوعُ إلى مَرحَلَةِ الصَفقَةِ لا يَبلُغُه إلّا مَن يُناديها عَلى غَيرِه.</para>
+    /// </summary>
+    public static string AdvanceAuditNote(Deal moved, Guid actorId, string? note)
+    {
+        var reached = moved.Timeline.LastOrDefault(e => e.Action == "advanced" && e.ActorId == actorId)?.StageAfter ?? moved.Stage;
+        return $"→ {reached}" + (string.IsNullOrEmpty(note) ? "" : $" · {note}");
+    }
+
     /// <summary>اِنتَقِل لِلمَرحَلَة التالِيَة في النَّمَط. يَفحَص أَنّ الفاعِل
     /// يَملِك حَقّ <b>دُخولِ المَرحَلَةِ التالِيَة</b> (initiator/counterparty/either) —
     /// <see cref="DealsPolicy.RequiredActorToLeave(Deal)"/>، فاعِلُ التالي لا فاعِلُ الحالِيَّة

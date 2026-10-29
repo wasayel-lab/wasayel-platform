@@ -240,18 +240,20 @@ public class GatewayPaymentConfirmTests(ITestOutputHelper output)
         Assert.Empty(w.Platform.Calls);
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى — مُلاحَظَةٌ ثانَوِيَّة): بابُ الاستوديو <c>/advance</c> يَكتُبُ في سَطرِ تَدقيقِه
-    /// <c>→ {result.Deal.Stage}</c> — مَرحَلَةَ الصَفقَةِ بَعدَ العَمَلِيَّةِ كُلِّها لا بَعدَ خُطوَتِه. فَمالِكُ التَطبيقِ يُؤَكِّدُ صَفقَةً دُفِعَت فاتورَتُها فَتَدخُلُ المَنصَّةُ
-    /// بَعدَه «دَفع» بِاسمِها (د4)، ويُنسَبُ إلَيه في التَدقيقِ «→ Paid»: خُطوَةٌ لَم يَخطُها، والصَفقَةُ نَفسُها تَكتُبُها لِلمَنصَّة.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى — مُلاحَظَةٌ ثانَوِيَّة؛ تَوصيفُه <c>3574a47</c> — كانَ
+    /// <c>Today_the_studio_advance_audit_line_credits_the_owner_with_Paid_when_the_platform_entered_it_after_his_confirm</c>): سَطرُ تَدقيقِ بابِ الاستوديو
+    /// <c>/advance</c> يُسَمّي ما بَلَغَته <b>خُطوَةُ المالِكِ نَفسُه</b> (<see cref="DealsService.AdvanceAuditNote"/>) — «→ Confirmed» — لا «→ Paid» الَّتي دَخَلَتها
+    /// المَنصَّةُ بَعدَه بِاسمِها (د4)؛ وصَفقَةٌ لا تَدخُلُها المَنصَّةُ يَبقى سَطرُها مَرحَلَتَها كَما كان، والمُلاحَظَةُ تَتبَعُه كَما كانَت.</summary>
     [Fact]
-    public async Task Today_the_studio_advance_audit_line_credits_the_owner_with_Paid_when_the_platform_entered_it_after_his_confirm()
+    public async Task The_studio_advance_audit_line_names_the_stage_the_owners_own_step_reached_not_the_platforms_move_after_it()
     {
         var endpoints = Code("MarketplaceTemplateExtensions.cs");
         var from = endpoints.IndexOf("\"/studio/apps/{slug}/deals/{id:guid}/advance\"", StringComparison.Ordinal);
         Assert.True(from > 0, "بابُ الاستوديو غَيرُ مَوجود — الأَداةُ عَمياء.");
         var studioAdvance = endpoints[from..endpoints.IndexOf(".DisableAntiforgery();", from, StringComparison.Ordinal)];
         Assert.Contains("var actorId = deal.CounterpartyId ?? auth.UserId!.Value;", studioAdvance, StringComparison.Ordinal);
-        Assert.Contains("note: $\"→ {result.Deal.Stage}\" + (string.IsNullOrEmpty(note) ? \"\" : $\" · {note}\"),", studioAdvance, StringComparison.Ordinal);
+        Assert.Contains("note: Services.Deals.DealsService.AdvanceAuditNote(result.Deal, actorId, note),", studioAdvance, StringComparison.Ordinal);
+        Assert.DoesNotContain("result.Deal.Stage", studioAdvance, StringComparison.Ordinal);
 
         var w = await PaidCart(withSeller: true);
         w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w));
@@ -263,9 +265,22 @@ public class GatewayPaymentConfirmTests(ITestOutputHelper output)
         var result = await w.Deals.AdvanceAsync(Slug, w.Ids[1], Seller, "مالِك التَّطبيق (إداريّ)", "", from: DealStage.Booked);
         Assert.True(result.Ok, result.Reason);
         var owners = Assert.Single(result.Deal!.Timeline, e => e.Action == "advanced" && e.ActorName == "مالِك التَّطبيق (إداريّ)");
-        output.WriteLine($"خُطوَةُ المالِك: {owners.StageBefore} → {owners.StageAfter} · مَرحَلَةُ الصَفقَة: {result.Deal.Stage} · سَطرُ التَدقيقِ اليَوم: «→ {result.Deal.Stage}»");
+        var line = DealsService.AdvanceAuditNote(result.Deal, Seller, "");
+        output.WriteLine($"خُطوَةُ المالِك: {owners.StageBefore} → {owners.StageAfter} · مَرحَلَةُ الصَفقَة: {result.Deal.Stage} · سَطرُ التَدقيق: «{line}»");
         Assert.Equal((DealStage.Booked, DealStage.Confirmed), (owners.StageBefore, owners.StageAfter));
-        Assert.Equal(DealStage.Paid, result.Deal.Stage);   // ← ما يَكتُبُه سَطرُ التَدقيقِ اليَوم بَعدَ «→».
+        Assert.Equal(DealStage.Paid, result.Deal.Stage);
+        Assert.Equal("→ Confirmed", line);
+        Assert.Equal("→ Confirmed · شُحِنَ اليَوم", DealsService.AdvanceAuditNote(result.Deal, Seller, "شُحِنَ اليَوم"));
+
+        // وصَفقَةٌ لا تَدخُلُها المَنصَّة — عالَمٌ آخَرُ فاتورَتُه لَم تُدفَع (فاتورَةُ العالَمِ الأَوَّلِ واحِدَةٌ لِلسَلَّةِ كُلِّها) — يَبقى سَطرُها مَرحَلَتَها كَما كان.
+        var u = await PaidCart(withSeller: true);
+        Assert.True((await u.Deals.AcceptAsync(Slug, u.Ids[0], new DealAcceptor(Seller, "بائِع"))).Ok);
+        var unpaid = await u.Deals.AdvanceAsync(Slug, u.Ids[0], Seller, "مالِك التَّطبيق (إداريّ)", "", from: DealStage.Booked);
+        Assert.True(unpaid.Ok, unpaid.Reason);
+        Assert.Equal((DealStage.Confirmed, "→ Confirmed"), (unpaid.Deal!.Stage, DealsService.AdvanceAuditNote(unpaid.Deal, Seller, null)));
+
+        // وفاعِلٌ لا سَطرَ لَه في الصَفقَة ⇒ مَرحَلَتُها (لا يَبلُغُه البابُ: يُناديها عَلى ما أَرجَعَته خُطوَتُه بِنَجاح).
+        Assert.Equal("→ Paid", DealsService.AdvanceAuditNote(result.Deal, Guid.NewGuid(), ""));
     }
 
     /// <summary><b>الشَرطُ الواحِد — مُوجِبٌ وسالِب</b> (‏2026-10-29، قَرارُ المالِك د4): قائِمَةٌ تاليها «دَفع» قُبِضَت بِفاتورَتِها ⇒ تَدخُلُها المَنصَّة؛ وكُلُّ شَطرٍ يَسقُطُ
