@@ -217,13 +217,13 @@ public class DealVendorCancelTests
         Assert.Equal("أُلغِيَ الطَّلَبُ عَلى «سِلعَة» — لا تُجَهِّزه.", DealNotices.CancelledToVendorPushBody(deal, w.L));
     }
 
-    // ─── «اليَوم» — مالِكُ إعلانِ العَرضِ غَيرُ المَربوطِ لا يُلغيه ────────────────────────────
+    // ─── مالِكُ إعلانِ العَرضِ غَيرُ المَربوطِ يَرفُضُه ما دامَ في «عَرض» (‏2026-10-29، قَرارُ المالِك د31 «١») ─────────────────────
 
-    /// <summary><b>اليَوم</b> (يُقالُ ولا يُبتلَع؛ سِجِلُّ المالِكِ «ب»): في مَسارِ العَرضِ عَلى إعلانٍ لا رَبطَ
-    /// عِندَ الوِلادَة، فَالمالِكُ لَيسَ طَرَفاً حَتّى يَقبَل — وإلغاؤُه (رَفضُه لِلعَرض) يُرَدُّ بِـ<c>actor_not_party</c>،
-    /// وصَفحَةُ الصَفقَةِ تَرسُمُ لَه استِمارَةَ الإلغاءِ مَعَ ذلك. يُقلَبُ بِاسمِه يَومَ يُقَرَّرُ بابُ رَفضِ العَرض.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (كانَ <c>Today_an_unbound_listing_owner_cannot_cancel_an_offer_on_his_listing</c>: رَفضُه يُرَدُّ بِـ<c>actor_not_party</c>):
+    /// «يُسمح لصاحب الإعلان أن يرفض العرض ما دام في مرحلة «عرض»… ويُخبَر المشتري». في مَسارِ العَرضِ لا رَبطَ عِندَ الوِلادَة — والمالِكُ يُلغيه الآنَ
+    /// بِالكاتِبِ القائِم، والمُشتَري يُخبَرُ مَرَّةً بِالأُنبوبِ القائِم، والمالِكُ نَفسُه لا يُخبَرُ بِما فَعَل.</summary>
     [Fact]
-    public void Today_an_unbound_listing_owner_cannot_cancel_an_offer_on_his_listing()
+    public void An_unbound_listing_owner_rejects_an_offer_on_his_listing_at_Offered_and_the_buyer_is_told_once()
     {
         var w = NewWorld();
         var id = OfferDeal(w);
@@ -231,9 +231,35 @@ public class DealVendorCancelTests
         Assert.Equal(Seller, DealAcceptAuthorization.OwnerIdOf(w.Docs.Read<Deal>(id.ToString())!));
 
         var res = Now(w.Deals.CancelAsync(Slug, id, new DealCanceller(Seller, "بائِع", IsStoreAdmin: false), "لا أَبيع"));
-        Assert.False(res.Ok);
+        Assert.True(res.Ok, res.Violation?.MessageAr);
+        var deal = w.Docs.Read<Deal>(id.ToString())!;
+        Assert.Equal((DealStatus.Cancelled, DealStage.Offered), (deal.Status, deal.Stage));
+        Assert.Equal(("cancelled", (Guid?)Seller, "لا أَبيع"), (deal.Timeline[^1].Action, deal.Timeline[^1].ActorId, deal.Timeline[^1].Note));
+
+        Assert.True(Now(w.Notices.NotifyCancelledAsync(Slug, res.Deal!, Seller, "بائِع", w.L)));
+        Assert.Equal(1, NotificationsFor(w, Buyer));
+        Assert.Equal(0, NotificationsFor(w, Seller));
+    }
+
+    /// <summary>وسالِبُ الشَرط: «ما دام في مرحلة «عرض»» وَحدَها — مالِكُ إعلانٍ لَيسَ طَرَفاً في صَفقَةٍ تَجاوَزَت «عَرض» (عَيَّنَ المَسارُ الإداريُّ غَيرَه
+    /// طَرَفاً) يُرَدُّ بِـ<c>actor_not_party</c> ولا يُكتَبُ شَيء؛ وغَريبٌ عِندَ «عَرض» يُرَدُّ كَما كان.</summary>
+    [Fact]
+    public void Past_Offered_the_unbound_listing_owner_is_no_party_and_a_stranger_never_is()
+    {
+        var w = NewWorld();
+        var booked = w.Docs.Read<Deal>(OfferDeal(w).ToString())!;
+        booked.Stage = DealStage.Booked;
+        booked.CounterpartyId = Stranger;
+        w.Docs.Put(booked);
+        var saves = w.Docs.SaveCalls;
+        var res = Now(w.Deals.CancelAsync(Slug, booked.Id, new DealCanceller(Seller, "بائِع", IsStoreAdmin: false), "لا"));
         Assert.Equal(DealCancelAuthorization.ActorNotParty, res.Violation!.Code);
-        Assert.Equal(DealStatus.Active, w.Docs.Read<Deal>(id.ToString())!.Status);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+
+        var offer = w.Docs.Read<Deal>(OfferDeal(w).ToString())!;
+        Assert.Equal(DealCancelAuthorization.ActorNotParty,
+            DealCancelAuthorization.Validate(offer, new DealCanceller(Stranger, "غَريب", IsStoreAdmin: false))!.Code);
+        Assert.Null(DealCancelAuthorization.Validate(offer, new DealCanceller(Seller, "بائِع", IsStoreAdmin: false)));
     }
 
     // ─── الشاشَة: استِمارَةُ الإلغاءِ في صَفحَةِ الصَفقَة — لِمَن تُرسَم؟ (القاعِدَة ١٢) ─────────────────────
@@ -310,9 +336,11 @@ public class DealVendorCancelTests
             if (draws && refused) drawnButRefused.Add(name);
         }
         Assert.Equal(4, checkedViewers);
-        Assert.Equal(3, drawn);
+        // (‏2026-10-29، قَرارُ المالِك د31 «١» — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: «فيظهر له زرّ الرفض تلقائيًّا» — صارَ مالِكُ العَرضِ قَبلَ القَبولِ يُلغي، فَتُرسَمُ
+        // لَه الاستِمارَةُ بِالدالَّةِ نَفسِها بِلا لَمسٍ لِلصَفحَة: 3 ← 4، وما زالَ صِفرُ بابٍ يُرَدّ.)
+        Assert.Equal(4, drawn);
         Assert.Empty(drawnButRefused);
-        Assert.False(DealCancelAuthorization.IsAllowed(Viewers().Single(v => v.Name == "offer/owner").Deal,
+        Assert.True(DealCancelAuthorization.IsAllowed(Viewers().Single(v => v.Name == "offer/owner").Deal,
             new DealCanceller(Seller, "بائِع", IsStoreAdmin: false)));
     }
 }

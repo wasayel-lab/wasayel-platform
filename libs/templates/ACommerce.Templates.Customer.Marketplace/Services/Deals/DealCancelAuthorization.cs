@@ -108,9 +108,16 @@ public static class DealCancelAuthorization
         if (deal is null)
             return new(DealNotFound, "لا صَفقَةَ بِهذا المُعَرِّف.");
 
+        // (‏2026-10-29، قَرارُ المالِك د31 «١» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **ومالِكُ الإعلانِ يَرفُضُ العَرضَ عَلَيه ما دامَ في «عَرض»** — «يُسمح لصاحب
+        // الإعلان أن يرفض العرض ما دام في مرحلة «عرض»، فيظهر له زرّ الرفض تلقائيًّا، ويُخبَر المشتري». في مَسارِ العَرضِ لا رَبطَ عِندَ الوِلادَة، فَالمالِكُ
+        // (`DealAcceptAuthorization.OwnerIdOf`) لَيسَ طَرَفاً حَتّى يَقبَل — وكانَ رَفضُه يُرَدُّ بِـ`actor_not_party` (تَوصيفُه
+        // `DealVendorCancelTests.Today_an_unbound_listing_owner_cannot_cancel_an_offer_on_his_listing`). وتَعريفُ تَدَفُّقِ العَرضِ يُعلِنُ «Pending→Rejected»
+        // بِفاعِلِه. وبَعدَ «عَرض» لا يَملِكُ إلّا ما يَملِكُه الطَرَف — والصَفحَةُ تَتبَعُ هذِه الدالَّةَ بِلا لَمس، والمُشتَري يُخبَرُ بِالأُنبوبِ القائِم.
+        var rejectsOffer = deal.Stage == DealStage.Offered && DealAcceptAuthorization.OwnerIdOf(deal) == by.ActorId;
         if (!by.IsStoreAdmin &&
             deal.InitiatorId != by.ActorId &&
-            deal.CounterpartyId != by.ActorId)
+            deal.CounterpartyId != by.ActorId &&
+            !rejectsOffer)
             return new(ActorNotParty,
                 "الفاعِلُ لَيسَ طَرَفاً في هذِه الصَفقَة ولا مُشرِفَ المَتجَر — " +
                 "والإلغاءُ يَستَرِدُّ المالَ، فَلا يَملِكُه غَيرُ أَطرافِها.");
