@@ -702,7 +702,10 @@ public sealed class DealShipping
             if (members.Count > 1)
                 await _deals.AttachRefAsync(tenantSlug, members[0].Id, OrderMembersRef,
                     DealShipGroup.ValueFor(members.Select(m => m.Id).ToArray()), CancellationToken.None);
-            foreach (var member in members.Where(m => m.Id != dealId).Prepend(deal))
+            // (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — تَوصيفُه `4ae191f` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **الأولى أَوَّلاً** — مُعَرِّفُ الطَلَبِ عِندَ OTO مُعَرِّفُها
+            // فَإشعارُه يُطابَقُ عَلَيها؛ كانَت الحَلقَةُ تَبدَأُ بِالمَنقورَةِ فَانقِطاعٌ بَعدَها يَترُكُ الأولى بِلا مَرجِعٍ وإشعارُها `order_unknown`. والمَنقورَةُ إن فاتَها
+            // مَرجِعُها تَتَبَنّى الطَلَبَ في نَقرَتِها التالِيَة (`HeldByASiblingOrderAsync`).
+            foreach (var member in members)
             {
                 await _deals.AttachRefAsync(tenantSlug, member.Id, OrderRef, order.OrderId, CancellationToken.None);
                 var written = await _deals.AttachRefAsync(tenantSlug, member.Id, OtoIdRef, order.OtoId, CancellationToken.None);

@@ -252,8 +252,12 @@ public class DealShipGroupTests(ITestOutputHelper output)
     // نَقرَةٌ عَلى صَفقَةٍ غَيرِ الأولى تَكتُبُ مَراجِعَها (`OrderRef` و`OtoIdRef`) قَبلَ مَراجِعِ الأولى — ومُعَرِّفُ الطَلَبِ عِندَ OTO مُعَرِّفُ الأولى. فَانقِطاعٌ بَينَهُما يَترُكُ الأولى
     // بِلا مَرجِعِ طَلَبِها، فَإشعارُ OTO لَها يُجابُ `order_unknown` ‏200 ويَضيع. يَنقَلِبُ بِاسمِه في كوميتِ التَرتيب.
 
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى؛ كانَ
+    /// <c>Today_an_interrupted_group_ship_from_a_later_sibling_leaves_the_lead_without_its_ref_and_otos_notice_for_it_is_dropped</c>، مُودَعٌ في <c>4ae191f</c>): الأولى
+    /// تُكتَبُ أَوَّلاً، فَالانقِطاعُ نَفسُه يَترُكُها بِمَرجِعَيها والمَنقورَةَ بِلا مَرجِع — وإشعارُ OTO لِلأولى يُطابَقُ ويُكتَب، والمَنقورَةُ تَتَبَنّى الطَلَبَ في نَقرَتِها
+    /// التالِيَةِ بِلا «Create Order» ثانٍ.</summary>
     [Fact]
-    public async Task Today_an_interrupted_group_ship_from_a_later_sibling_leaves_the_lead_without_its_ref_and_otos_notice_for_it_is_dropped()
+    public async Task An_interrupted_group_ship_from_a_later_sibling_writes_the_lead_first_so_otos_notice_is_matched_and_the_sibling_adopts()
     {
         var w = await Grouped(await TwoConfirmedCashDeals());
         InterruptAfterSaves(w.Docs, saves: 3);   // صَفَقاتُ الطَلَبِ عَلى الأولى · ثُمَّ مَرجِعانِ — والثالِثُ يَنقَطِع
@@ -261,18 +265,23 @@ public class DealShipGroupTests(ITestOutputHelper output)
         var error = await Record.ExceptionAsync(() => w.Shipping.ShipAsync(Slug, w.Second, DealShipTests.Vendor, "Riyadh"));
         w.Docs.BeforeMember = null;
         var (first, second) = (Stored(w, w.First), Stored(w, w.Second));
+        var firstHad = first.Refs.ContainsKey(DealShipping.OrderRef) && first.Refs.ContainsKey(DealShipping.OtoIdRef);
+        var secondHad = second.Refs.ContainsKey(DealShipping.OrderRef);
         w.Oto.Routes[OtoClient.OrderStatusPath] = body => OtoRouteHandler.Tracking(OtoRouteHandler.OrderIdIn(body), status: "delivered");
         var notice = await w.Shipping.ReceiveAsync(Slug, OtoOrderStatusTests.Notice(w.First));
-        output.WriteLine($"الانقِطاع: {error?.GetType().Name ?? "لا"} · الأولى: {(first.Refs.ContainsKey(DealShipping.OrderRef) ? "بِمَرجِع" : "بِلا مَرجِع")} · " +
-                         $"الثانِيَة: {(second.Refs.ContainsKey(DealShipping.OrderRef) ? "بِمَرجِع" : "بِلا مَرجِع")} · إشعارُ الأولى: {notice.Code}");
+        var adopted = await w.Shipping.ShipAsync(Slug, w.Second, DealShipTests.Vendor, null);
+        output.WriteLine($"الانقِطاع: {error?.GetType().Name ?? "لا"} · الأولى: {(firstHad ? "بِمَرجِع" : "بِلا مَرجِع")} · " +
+                         $"الثانِيَة: {(secondHad ? "بِمَرجِع" : "بِلا مَرجِع")} · إشعارُ الأولى: {notice.Code} · نَقرَةُ الثانِيَة: {adopted.Code ?? "ok"} · " +
+                         $"طَلَباتُ OTO: {Orders(w.Oto).Length}");
 
         Assert.IsType<InvalidOperationException>(error);
+        Assert.True(firstHad);
+        Assert.False(secondHad);
+        Assert.NotEqual(OtoOrderStatusGate.OrderUnknown, notice.Code);
+        Assert.NotEqual(DealStage.Confirmed, Stored(w, w.First).Stage);
+        Assert.True(adopted.Ok, adopted.Code);
+        Assert.Equal(w.First.ToString("N"), Stored(w, w.Second).Refs[DealShipping.OrderRef]);
         Assert.Single(Orders(w.Oto));
-        Assert.True(first.Refs.ContainsKey(DealShipping.OrderMembersRef));
-        Assert.False(first.Refs.ContainsKey(DealShipping.OrderRef));
-        Assert.Equal(w.First.ToString("N"), second.Refs[DealShipping.OrderRef]);
-        Assert.Equal(OtoOrderStatusGate.OrderUnknown, notice.Code);
-        Assert.Equal(DealStage.Confirmed, Stored(w, w.First).Stage);
     }
 
     /// <summary>وطَلَبٌ أَغلَقَته OTO يُكتَبُ إغلاقُه عَلى صَفَقاتِه كُلِّها — فَلا «أَكمِل الشَّحن» لِأَيٍّ مِنها.</summary>
