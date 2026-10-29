@@ -563,6 +563,40 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         Assert.Equal(1, template.Split("app.MapTenantGateway();").Length - 1);
     }
 
+    /// <summary><b>اليَوم</b> (‏2026-10-29، تَوصيفٌ قَبلَ قَرارِ المالِك د5 (٥) «ب»: «عشر نقرات تحقّق في الساعة لكل مشترٍ، بالحصّة القائمة نفسها»): جِسمُ نُقطَةِ
+    /// التَحَقُّقِ (بِلا تَعليقات) لا يَسأَلُ حِصَّةً قَبلَ أَن تُفَكَّ الخِدمَةُ مِفتاحَ المَتجَرِ وتُنادي البَوّابَة — كُلُّ نَقرَةٍ نِداءٌ خارِجِيٌّ بِمِفتاحِه. يُقلَبُ بِاسمِه.</summary>
+    [Fact]
+    public void Today_the_verify_door_consumes_no_quota_before_the_gateway_call()
+    {
+        var file = WriteEndpointGuardTests.StripComments(Template("Billing", "TenantGatewayEndpoints.cs"));
+        var at = file.IndexOf("app.MapPost(\"/{slug}/payments/verify\"", StringComparison.Ordinal);
+        Assert.True(at >= 0, "أَداةٌ عَمياء: لا نُقطَةَ تَحَقُّقٍ بِمَسارِها الحَرفِيّ.");
+        var body = file[at..file.IndexOf(".DisableAntiforgery();", at, StringComparison.Ordinal)];
+        Assert.Contains("gateway.VerifyAsync(slug, payer, ", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryConsume", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryConsume", WriteEndpointGuardTests.StripComments(Template("Services", "Deals", "GatewayPayments.cs")), StringComparison.Ordinal);
+    }
+
+    /// <summary><b>اليَوم</b> (‏2026-10-29، تَوصيفٌ قَبلَ قَرارِ المالِك د5 (٤) «ب»: «يُلغى الطلب كله آليًّا، وتُلغى الفاتورة عند ميسر إن بقيت مفتوحة، ويُخبَر المشتري وكل بائع
+    /// فيه»): تَحَقُّقٌ يَرى الفاتورَةَ «expired» عِندَ البَوّابَةِ يُجيبُ <c>gateway_invoice_closed</c> ويَكتُبُ مَرجِعَ الإغلاق — <b>والصَفقَتانِ قائِمَتانِ</b> تُمسِكانِ
+    /// بائِعَيهِما بِلا نِهايَة. يُقلَبُ بِاسمِه.</summary>
+    [Fact]
+    public async Task Today_an_expired_invoice_seen_at_verify_leaves_its_deals_active()
+    {
+        var w = await PaidCart(withSeller: true);
+        w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "expired"));
+
+        var res = await w.Gateway.VerifyAsync(Slug, new DealPayer(Buyer), w.Ids[0].ToString("N"));
+
+        Assert.Equal(GatewayPaymentProof.InvoiceClosed, res.Code);
+        Assert.All(w.Ids, id =>
+        {
+            var d = w.Docs.Read<Deal>(id.ToString())!;
+            Assert.Equal(DealStatus.Active, d.Status);
+            Assert.True(GatewayReturn.IsClosed(d));
+        });
+    }
+
     // ═══ ٥) صَفحَةُ العَودَة — قِراءَةٌ خالِصَةٌ لا تَسأَلُ البَوّابَة ═══════════════════════════════════════
 
     /// <summary>
