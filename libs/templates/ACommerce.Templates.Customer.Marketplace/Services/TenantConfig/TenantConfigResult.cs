@@ -101,11 +101,16 @@ public static class TenantConfigCodes
     /// (<c>studio.app_branding.err_cart_mode</c> في <c>StudioAppBranding.razor</c> — ‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى: كانَ التَعليقُ يُسَمّي مِفتاحاً لا وُجودَ لَه).</summary>
     public const string CartModeUnknown = Patterns.CartModes.Unknown;
 
+    /// <summary><b>تَجميعُ فِئَةٍ خارِجَ المَعجَم</b> (‏2026-10-29، قَرارُ المالِك د25) — <c>CategoryKinds.Unknown</c> نَفسُه: يَرُدُّه
+    /// <c>CategoriesSaveService.Parse</c>، وتَقولُه الصَفَحاتُ الثَلاثُ مِن القامُوس (<c>categories.kind.err_unknown</c>).</summary>
+    public const string CategoryKindUnknown = Patterns.CategoryKinds.Unknown;
+
     /// <summary>المُعجَم كامِلاً — مَقروءٌ في <see cref="TenantConfigResult.Reject"/>
     /// وفي فاحِصِ الانغِلاق.</summary>
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         BadFormat, Empty, NameRequired, ColorInvalid, NoScope, IconTooLarge, IconBadType, RolesEmptySelection,
         CartModeUnknown,   // ‏2026-10-29، قَرارُ المالِك د2
+        CategoryKindUnknown,   // ‏2026-10-29، قَرارُ المالِك د25
     };
 }

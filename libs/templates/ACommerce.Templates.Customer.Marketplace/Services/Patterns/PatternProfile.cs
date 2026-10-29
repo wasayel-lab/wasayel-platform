@@ -66,10 +66,17 @@ public static class PatternProfileResolver
     /// مُنفَصِل في الـ Tenant — البِنيَة الَّتي أَدخَلها صاحِب المَتجَر تَدُلّ
     /// عَلى نَمَطِه.</summary>
     public static AppPattern PatternOf(Tenant? t)
+        => t is null
+            ? AppPattern.Marketplace
+            : PatternOf(t.Categories.Select(c => c.Kind), t.Roles.Select(r => r.CatalogSlug));
+
+    /// <summary><b>القارِئُ نَفسُه عَلى تَجميعاتٍ وأَدوارٍ لا عَلى وَثيقَة</b> (‏2026-10-29، قَرارُ المالِك د25): يَسأَلُه
+    /// <see cref="CategoryKinds.EffectOf"/> عَن أَثَرِ تَجميعٍ واحِدٍ في مُحَرِّرِ الفِئات — فَالأَثَرُ المُعلَنُ هُوَ ما يَفعَلُه القارِئُ حَرفاً،
+    /// ولا وَثيقَةَ مَتجَرٍ تُبنى في الذاكِرَةِ لِأَجلِه. وفُروعُه وتَرتيبُها بِحَرفِ ما كانَت.</summary>
+    public static AppPattern PatternOf(IEnumerable<string> categoryKinds, IEnumerable<string> roleSlugs)
     {
-        if (t is null) return AppPattern.Marketplace;
-        var kinds = t.Categories.Select(c => c.Kind).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var roles = t.Roles.Select(r => r.CatalogSlug).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var kinds = categoryKinds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var roles = roleSlugs.ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (kinds.Contains("roommate")) return AppPattern.Roommate;
         if (roles.Contains("rider") || roles.Contains("driver") || roles.Contains("shipper")) return AppPattern.Trip;
         if (kinds.Contains("residential") || kinds.Contains("commercial") || roles.Contains("host"))

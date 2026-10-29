@@ -76,7 +76,9 @@ public class TenantConfigDecisionTests
     [Theory]
     [InlineData("sale | لِلبَيع")]
     [InlineData("sale | لِلبَيع |")]
-    [InlineData("sale | لِلبَيع |   | rent")]
+    // ‏(‏2026-10-29، قَرارُ المالِك د25) كانَ العَمودُ الرابِعُ «rent» — خارِجَ مَعجَمِ التَجميعِ المُغلَقِ فَيُرَدُّ الآن؛ والصَفُّ يَقيسُ الأَيقونَةَ
+    // لا التَجميع، فَصارَ تَجميعاً مِن المَعجَم («residential») بِلا مَساسٍ بِما يَقيسُه.
+    [InlineData("sale | لِلبَيع |   | residential")]
     public void Categories_default_the_icon_to_the_tag_not_the_house(string raw)
     {
         var (cats, code) = CategoriesSaveService.Parse(raw);
@@ -88,14 +90,15 @@ public class TenantConfigDecisionTests
     [Fact]
     public void Categories_keep_an_explicit_icon_and_normalise_slug_and_kind()
     {
-        var (cats, code) = CategoriesSaveService.Parse("  SALE | لِلبَيع | 🚚 | RENT  \n\n  cars | سَيّارات  ");
+        // ‏(‏2026-10-29، قَرارُ المالِك د25) كانَ «RENT» — خارِجَ مَعجَمِ التَجميعِ فَيُرَدُّ الآن؛ والتَصغيرُ نَفسُه يُقاسُ بِـ«RESIDENTIAL».
+        var (cats, code) = CategoriesSaveService.Parse("  SALE | لِلبَيع | 🚚 | RESIDENTIAL  \n\n  cars | سَيّارات  ");
         Assert.Null(code);
         Assert.Equal(2, cats!.Count);
 
         Assert.Equal("sale", cats[0].Slug);          // مُصَغَّر
         Assert.Equal("لِلبَيع", cats[0].Label);
         Assert.Equal("🚚", cats[0].Icon);            // الصَريحُ يَبقى
-        Assert.Equal("rent", cats[0].Kind);          // مُصَغَّر
+        Assert.Equal("residential", cats[0].Kind);   // مُصَغَّر
         Assert.Equal(0, cats[0].SortOrder);
 
         // التَشذيب: سَطرٌ بِمَسافَةٍ بادِئَة لا يُنتِج slug بِفَراغ.

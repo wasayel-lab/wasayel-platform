@@ -68,9 +68,13 @@ public static class CategoriesSaveService
             });
         }
 
-        return categories.Count == 0
-            ? (null, TenantConfigCodes.Empty)
-            : (categories, null);
+        if (categories.Count == 0) return (null, TenantConfigCodes.Empty);
+
+        // ‏(‏2026-10-29، قَرارُ المالِك د25 — ويُغَطّي د49) تَجميعٌ خارِجَ المَعجَمِ المُغلَقِ يُرَدُّ بِرَمزٍ ثابِت، فَلا يَعودُ مَتجَرُ مُنتَجاتٍ
+        // «إيجاراً» بِخَطَإِ حَرف. والمَوضِعُ هُنا لِأَنَّ الكُتّابَ يَمُرّونَ بِه: المُحَرِّرانِ (`SaveAsync`) وصَفحَةُ الإنشاءِ الإدارِيَّة (`0cfc033`).
+        return Patterns.CategoryKinds.IsValid(categories)
+            ? (categories, null)
+            : (null, TenantConfigCodes.CategoryKindUnknown);
     }
 
     public static async Task<TenantConfigResult> SaveAsync(

@@ -288,8 +288,8 @@ public sealed class AgentService
    أَدناه (تَحت كُلّ فِئَة + sentinel البروفايل لِكُلّ مَتجَر). استَخدِمه
    مُباشَرَة بِدون سُؤال المُشرِف. الـ sentinel الثابِت لِلبروفايل دائِماً:
    00000000-0000-0000-0000-000000000F01.
-6. الفِئات تُجَمَّع بِـ "kind": residential, commercial, events, vehicles,
-   roommate، أَو فارِغ.
+6. الفِئات تُجَمَّع بِـ "kind" مِن هذِه القيَمِ حَصراً (وما سِواها يُرَدّ):
+{{CategoryKindLines}}
 7. الأَدوار تُختار مِن كاتالوج الأَدوار — set_roles يَقبَل هذه الـ slugs
    حَصراً (مَقروءَة مِن مِلَفّات تَعريف الأَدوار، فَما يُؤَلَّف مِنها
    يَظهَر هُنا بِلا تَعديل نَصّ):
@@ -493,6 +493,18 @@ public sealed class AgentService
     //  نُقِلَ إلى SetRolesSchemaFor لِأَنّ التَعداد صارَ يُشتَقّ مِن
     //  لَقطَة أَدوار قَد تَكون مُستَأجِراً لا مِن الكاتالوج وَحدَه —
     //  والقيمَة السّاكِنَة لَم تَتَغَيَّر: لَقطَة المَنصَّة هي الكاتالوج.)
+
+    /// <summary><b>قيَمُ تَجميعِ الفِئات مِن المَعجَمِ المُغلَقِ لا مَكتوبَة</b> (‏2026-10-29، قَرارُ المالِك د25 (٤)): كانَ السَطرُ السادِسُ
+    /// يَكتُبُ «residential, commercial, events, vehicles, roommate، أَو فارِغ» بِيَدِه — لا <c>menu</c> ولا قيَمُ المَصنَع — فَتَنجَرِفُ قائِمَتُه
+    /// عَمّا يَقبَلُه المُصادِق. صارَت تُقرَأُ مِن <see cref="Patterns.CategoryKinds.All"/> مَعَ أَثَرِ كُلِّ قيمَةٍ عَلى نَمَطِ المَتجَر.</summary>
+    private static readonly string CategoryKindLines =
+        string.Join("\n", Patterns.CategoryKinds.All.Select(k =>
+            $"   - {(k.Length == 0 ? "\"\" (فارِغ)" : k)}: " + Patterns.CategoryKinds.EffectOf(k) switch
+            {
+                Patterns.AppPattern.Rental   => "يَجعَلُ المَتجَرَ إيجاراً بِلا سَلَّة",
+                Patterns.AppPattern.Roommate => "يَجعَلُ المَتجَرَ سَكَناً مُشتَرَكاً بِلا سَلَّة",
+                _                            => "لا يُغَيِّرُ نَمَطَ المَتجَر",
+            }));
 
     /// <summary>سُطور «slug — تَسمِيَة: وَصف» لِقاعِدَة الأَدوار في
     /// رِسالَة النِّظام.</summary>
@@ -866,6 +878,7 @@ public sealed class AgentToolExecutor
 
         var cats = ParseCategories(root);
         if (cats.Count == 0) return (false, "يَجِب فِئَة واحِدَة عَلى الأَقَلّ.");
+        if (KindRefusal(cats) is { } kindRefused) return (false, kindRefused);
 
         // ─── بَوّابَةُ حِصَّةِ المَتاجِر — والتَخويلُ يَسبِقُ الكِتابَة ──
         //
@@ -932,6 +945,7 @@ public sealed class AgentToolExecutor
         var slug = Str(root, "slug").ToLowerInvariant();
         var cats = ParseCategories(root);
         if (cats.Count == 0) return (false, "يَجِب فِئَة واحِدَة عَلى الأَقَلّ.");
+        if (KindRefusal(cats) is { } kindRefused) return (false, kindRefused);
 
         await using var s = _store.LightweightSession();
         var t = await s.LoadAsync<Tenant>(slug, ct);
@@ -1303,6 +1317,14 @@ public sealed class AgentToolExecutor
             return string.IsNullOrEmpty(s) ? null : s;
         }
         catch { return null; }
+    }
+
+    /// <summary><b>تَجميعٌ خارِجَ المَعجَمِ يُرَدُّ قَبلَ أَيِّ قِراءَةٍ أَو كِتابَة</b> (‏2026-10-29، قَرارُ المالِك د25): المُصادِقُ نَفسُه الَّذي يَمُرُّ بِه
+    /// المُحَرِّرانِ وصَفحَةُ الإنشاءِ (<see cref="Patterns.CategoryKinds.Validate"/>)، والرَدُّ رَمزُه الثابِتُ ونَصُّه — يَقرَؤُه النَموذَجُ فَيُصَحِّحُ عَلَيه.</summary>
+    internal static string? KindRefusal(IReadOnlyList<Category> cats)
+    {
+        var v = Patterns.CategoryKinds.Validate(cats);
+        return v.Count == 0 ? null : string.Join(" | ", v.Select(x => $"{x.Code}: {x.MessageAr}"));
     }
 
     private static List<Category> ParseCategories(JsonElement root)

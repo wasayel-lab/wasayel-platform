@@ -179,14 +179,20 @@ public class StudioStorePatternTests
     /// مَتجَراً بِيَدِه بِكِندِ <c>commercial</c> — فَلا يَقيسُ أَنّ الوَكيلَ يَكتُبُه. صارَ <c>AgentToolExecutor.ExecuteAsync</c> بِحَرفِه
     /// (‏<c>set_categories</c> بِهُوِيَّةِ المالِك) عَلى عالَمِ وَثائِقٍ فيه مَتجَرُ استوديو بِكِندٍ فارِغ: يُقرَأُ <c>Marketplace</c> قَبلُ،
     /// ويُخَزَّنُ الكِندُ <c>commercial</c> بِحُروفٍ صَغيرَةٍ لِلفِئَتَين، ويُقرَأُ المُخَزَّنُ <c>Rental</c> بِلا سَلَّة.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د25): كانَ
+    /// <c>The_studio_agent_offers_commercial_as_a_grouping_and_writes_any_kind_so_its_product_store_turns_Rental</c>. قائِمَةُ الوَكيلِ في رِسالَةِ
+    /// نِظامِه تُقرَأُ مِن <c>CategoryKinds.All</c> لا مَكتوبَة، و«تِجاريّ» ما زالَت تُكتَبُ حينَ تُختارُ (قيمَةٌ مَسموحَةٌ بِنَصِّ القَرار) فَيَصيرُ المَتجَرُ
+    /// إيجاراً كَما كان، وما خارِجَ المَعجَمِ يُرَدُّ بِرَمزِه قَبلَ أَيِّ كِتابَة (<c>CategoryKindsTests</c>).</para>
     [Fact]
-    public async Task The_studio_agent_offers_commercial_as_a_grouping_and_writes_any_kind_so_its_product_store_turns_Rental()
+    public async Task The_studio_agent_reads_its_grouping_list_from_the_lexicon_and_still_writes_commercial_when_chosen_so_its_store_turns_Rental()
     {
         var template = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
             "libs", "templates", "ACommerce.Templates.Customer.Marketplace");
         var agent = File.ReadAllText(Path.Combine(template, "Services", "AgentService.cs"));
-        Assert.Contains("الفِئات تُجَمَّع بِـ \"kind\": residential, commercial, events, vehicles,",
+        Assert.DoesNotContain("الفِئات تُجَمَّع بِـ \"kind\": residential, commercial, events, vehicles,",
             agent, StringComparison.Ordinal);
+        Assert.Contains("{{CategoryKindLines}}", agent, StringComparison.Ordinal);
+        Assert.Contains("Patterns.CategoryKinds.All.Select(", agent, StringComparison.Ordinal);
         Assert.Contains("Kind  = TryStr(c, \"kind\", out var k) ? k.ToLowerInvariant() : \"\",",
             agent, StringComparison.Ordinal);
         Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(
@@ -235,8 +241,10 @@ public class StudioStorePatternTests
     /// <para><b>قُلِبَ شَطرُه الأَوَّلُ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د25 (٢-أ) — كوميتُ التَوحيدِ وَحدَه): كانَ
     /// <c>The_admin_create_endpoint_is_a_third_kind_writer_that_parses_inline_and_accepts_any_kind</c>. النُقطَةُ صارَت تَمُرُّ بِـ
     /// <c>CategoriesSaveService.Parse</c> — فَمُصادِقُ قيَمِ التَجميعِ في المُحَلِّلِ يَبلُغُها — و«تَقبَلُ أَيَّ كِند» باقٍ حَتّى كوميتِ المُصادِق.</para>
+    /// <para><b>وقُلِبَ شَطرُه الثاني بِاسمِه</b> (كوميتُ المُصادِق): كانَ <c>…_parses_with_the_shared_parser_and_accepts_any_kind</c> — والمُحَلِّلُ يَرُدُّ
+    /// الآنَ تَجميعاً خارِجَ المَعجَمِ بِـ<c>category_kind_unknown</c> فَتُعيدُه النُقطَةُ رَمزاً تَقولُه صَفحَتُها.</para>
     [Fact]
-    public void The_admin_create_endpoint_is_a_third_kind_writer_that_parses_with_the_shared_parser_and_accepts_any_kind()
+    public void The_admin_create_endpoint_is_a_third_kind_writer_that_parses_with_the_shared_parser_and_refuses_a_kind_outside_the_lexicon()
     {
         var ext = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
             "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs"));
@@ -250,10 +258,13 @@ public class StudioStorePatternTests
         Assert.Contains("var (categories, catsCode) = CategoriesSaveService.Parse(catsRaw);", body, StringComparison.Ordinal);
         Assert.DoesNotContain("Kind  = parts.Length > 3", body, StringComparison.Ordinal);
 
-        // ‏و«أَيَّ كِند»: المُحَلِّلُ يَكتُبُ العَمودَ الرابِعَ بِحُروفٍ صَغيرَةٍ بِلا فَحص — يُقلَبُ في كوميتِ المُصادِق.
+        // ‏ولا «أَيَّ كِند»: المُحَلِّلُ يُصَغِّرُ ثُمَّ يُصادِقُ — فَيَرُدُّ ما خارِجَ المَعجَمِ ويَقبَلُ «تِجاريّ» بِحَرفِه.
         var (cats, code) = CategoriesSaveService.Parse("products | مُنتَجات | 🛍️ | Anything_Goes");
-        Assert.Null(code);
-        Assert.Equal("anything_goes", Assert.Single(cats!).Kind);
+        Assert.Null(cats);
+        Assert.Equal(TenantConfigCodes.CategoryKindUnknown, code);
+        var (commercial, ok) = CategoriesSaveService.Parse("shops | مَحَلّات | 🏪 | Commercial");
+        Assert.Null(ok);
+        Assert.Equal("commercial", Assert.Single(commercial!).Kind);
     }
 }
 

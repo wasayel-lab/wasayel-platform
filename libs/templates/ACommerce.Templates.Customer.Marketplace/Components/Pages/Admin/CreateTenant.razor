@@ -121,20 +121,12 @@
                             </div>
                             <div>
                                 <span class="ac-chip-input-label">@L.Markup("admin.new.cat_kind")</span>
-                                <input class="ac-input ac-cat-kind" placeholder="residential" list="kind-list" style="direction:ltr;" />
+                                <CategoryKindSelect />
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <datalist id="kind-list">
-                    <option value="residential"></option>
-                    <option value="commercial"></option>
-                    <option value="roommate"></option>
-                    <option value="vehicles"></option>
-                    <option value="events"></option>
-                    <option value="leisure"></option>
-                </datalist>
 
                 <button type="button" class="ac-add-row-btn" id="add-cat" style="margin-top:12px;">
                     <AcIcon Name="plus" Size="16" /> @L.Markup("admin.new.add_cat")@((MarkupString)"\n                ")
@@ -158,7 +150,7 @@
                     </div>
                     <div>
                         <span class="ac-chip-input-label">@L.Markup("admin.new.cat_kind")</span>
-                        <input class="ac-input ac-cat-kind" placeholder="residential" list="kind-list" style="direction:ltr;" />
+                        <CategoryKindSelect />
                     </div>
                 </div>
             </div>
@@ -203,6 +195,7 @@
         // `no_categories`/`bad_categories`؛ والنَصّانِ هُما هُما، تَقولُهُما مَفاتيحُهُما القائِمَة.
         "empty"         => L["admin.new.err_no_categories"],
         "bad_format"    => L["admin.new.err_bad_categories"],
+        Services.Patterns.CategoryKinds.Unknown => L["categories.kind.err_unknown"],   // ‏2026-10-29، قَرارُ المالِك د25
         _               => err
     };
 }
