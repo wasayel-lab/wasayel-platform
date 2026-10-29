@@ -992,6 +992,7 @@
   "studio.app_deals.heading": "تَدَفُّق العَمَليَّات",
   "studio.app_deals.intro": "كُلّ صَفقَة تَمُرّ بِمَراحِل (عَرض → حَجز → تَأكيد → دَفع → …) بِحَسَب نَوع التَّطبيق.",
   "studio.app_deals.list": "القائِمَة",
+  "studio.app_deals.owner_notices": "تَنبيهاتٌ لَكَ عَن صَفَقاتِ المَتجَر",
   "studio.app_deals.start": "+ ابدَأ",
   "studio.app_deals.stat_active": "نَشِطَة",
   "studio.app_deals.stat_completed": "مُكتَمِلَة",

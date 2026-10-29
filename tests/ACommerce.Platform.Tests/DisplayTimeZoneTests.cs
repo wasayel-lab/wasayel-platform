@@ -71,7 +71,8 @@ public class DisplayTimeZoneTests(ITestOutputHelper output)
         output.WriteLine($"مِلَفّاتُ razor: {razors.Count} · تَحقِنُ ICultureContext: {readers}");
         // ‏2026-10-29 (قَرارُ المالِك د53): ‏24 ← 25 — صَفحَةُ «بَياناتي» (`MyData.razor`) تَرسُمُ تَواريخَ الحِسابِ والصَفَقاتِ والرَسائِلِ بِـ`Culture.FormatTime`.
         // ‏2026-10-29 (قَرارُ المالِك د15): ‏25 ← 26 — `StudioStudy.razor` تُنَسِّقُ مَوعِدَ تَجَدُّدِ الحِصَّةِ لِلافِتَةِ الحَدِّ بِـ`Culture.FormatTime`.
-        Assert.Equal(26, readers);
+        // ‏2026-10-29 (مُراجَعَةُ تَيّارِ S3 الجَولَة ٢، قَرارُ المالِك د3 (٢) «د»): ‏26 ← 27 — `StudioOwnerNotices.razor` تَرسُمُ وَقتَ تَنبيهِ صاحِبِ المَتجَرِ بِـ`Culture.FormatTime`.
+        Assert.Equal(27, readers);
     }
 
     // ─── الدالَّةُ النَقِيَّة — DateTimeKind صَراحَةً، والمِنطَقَةُ المَجهولَة ─────────────────────────

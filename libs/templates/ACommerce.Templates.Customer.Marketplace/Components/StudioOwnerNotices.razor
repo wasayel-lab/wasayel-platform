@@ -1,0 +1,42 @@
+@inject ACommerce.Kit.Culture.ICultureContext Culture
+@inject L L
+@using ACommerce.Templates.Customer.Marketplace.Services.Deals
+
+@*
+    تَنبيهاتُ صاحِبِ المَتجَرِ عَن صَفَقاتِه — قِسمٌ في صَفحَةِ «العَمَلِيّات» في الاستوديو
+    (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الجَولَة ٢ — كُبرى عَلى `d85bc0f`؛ قَرارُ المالِك د3 (٢) «د»؛ تَوصيفُه `63ad0de`).
+    إشعارا «استِرجاعٌ مُستَحَقّ» و«فاتورَةٌ لَم تُلغَ» يُكتَبانِ لِمُعَرِّفِ صاحِبِ المَتجَرِ في الاستوديو، ولا صَندوقَ في الواجِهَةِ يَقرَأُ ذلكَ المُعَرِّف
+    — فَكانا مَكتوبَينِ لا يَبلُغانِ مَن عَلَيه الفِعل (القاعِدَة ١٢). يُرسَمُ كُلٌّ صَفّاً يُنقَرُ إلى صَفحَةِ صَفقَتِه في الاستوديو، بِعُنوانِه ومَتنِه (المُنتَجُ
+    والمَبلَغُ والعُملَة) ووَقتِه. وما يُرسَمُ تَختارُه الدالَّةُ النَقِيَّةُ `DealNotices.OwnerNoticesOf` — وبِلا إشعارٍ لا يُرسَمُ شَيء، فَصَفحَةُ مَتجَرٍ بِلا
+    تَنبيهٍ كَما كانَت بِحَرفِها.
+*@
+
+@if (Shown.Count > 0)
+{
+    <div class="st-section-title">@L.Markup("studio.app_deals.owner_notices")</div>
+    <div class="studio-list">
+        @foreach (var n in Shown)
+        {
+            <a class="studio-list-row" href="@n.RelatedUrl">
+                <span class="studio-list-icon"><AcIcon Name="bell" Size="16" /></span>
+                <div class="studio-list-body">
+                    <strong>@n.Title</strong>
+                    <span>@n.Body · @Culture.FormatTime(n.At, "yyyy-MM-dd HH:mm")</span>
+                </div>
+                <span style="color:var(--st-faint);">←</span>
+            </a>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>المَتجَرُ الَّذي تُرسَمُ صَفحَتُه — بادِئَةُ ما يُرسَمُ مِن رَوابِط (<see cref="DealNotices.StudioDealUrl"/>).</summary>
+    [Parameter, EditorRequired] public string Slug { get; set; } = "";
+
+    /// <summary>إشعاراتُ صاحِبِ المَتجَرِ كَما قَرَأَها القارِئُ القائِم (<c>AccountQueries.NotificationsAsync</c>) بِمُعَرِّفِ جَلسَةِ الاستوديو.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<Notification> Mine { get; set; } = Array.Empty<Notification>();
+
+    IReadOnlyList<Notification> Shown = Array.Empty<Notification>();
+
+    protected override void OnParametersSet() => Shown = DealNotices.OwnerNoticesOf(Mine, Slug);
+}

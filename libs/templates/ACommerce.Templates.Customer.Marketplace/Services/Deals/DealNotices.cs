@@ -271,7 +271,7 @@ public sealed class DealNotices
         Type = CancelledType,
         Title = l["notifications.deal_refund_due.title"],
         Body = l.Format("notifications.deal_refund_due.body", deal.ListingTitle, deal.AmountSar, CurrencyOf(deal)),
-        RelatedUrl = $"/studio/apps/{slug}/deals/{deal.Id}",
+        RelatedUrl = StudioDealUrl(slug, deal.Id),
         At = at,
     };
 
@@ -284,9 +284,27 @@ public sealed class DealNotices
         Type = CancelledType,
         Title = l["notifications.deal_invoice_left_open.title"],
         Body = l.Format("notifications.deal_invoice_left_open.body", deal.ListingTitle),
-        RelatedUrl = $"/studio/apps/{slug}/deals/{deal.Id}",
+        RelatedUrl = StudioDealUrl(slug, deal.Id),
         At = at,
     };
+
+    /// <summary>صَفحَةُ الصَفقَةِ في الاستوديو — رابِطُ إشعارَي صاحِبِ المَتجَرِ (<see cref="RefundDueFor"/>، <see cref="InvoiceLeftOpenFor"/>)، ومِنه بادِئَةُ ما يَرسُمُه
+    /// قارِئُها (<see cref="OwnerNoticesOf"/>): كاتِبٌ وقارِئٌ بِتَعريفٍ واحِد.</summary>
+    public static string StudioDealUrl(string slug, Guid dealId) => $"{StudioDealsPath(slug)}{dealId}";
+
+    private static string StudioDealsPath(string slug) => $"/studio/apps/{slug}/deals/";
+
+    /// <summary>
+    /// <para><b>ما يَرسُمُه الاستوديو لِصاحِبِ المَتجَرِ مِن إشعاراتِه</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الجَولَة ٢ — كُبرى عَلى <c>d85bc0f</c>؛ قَرارُ المالِك د3 (٢) «د»؛
+    /// تَوصيفُه <c>63ad0de</c>): إشعارا <see cref="NotifyStoreOwnerAsync"/> يُكتَبانِ لِمُعَرِّفِه في الاستوديو (<see cref="StoreOwnerOf"/>) — ولا صَندوقَ في الواجِهَةِ يَقرَأُ
+    /// ذلكَ المُعَرِّف. فَيَقرَؤُهُما في صَفحَةِ «العَمَلِيّات» بِالقارِئِ القائِمِ نَفسِه (<c>AccountQueries.NotificationsAsync</c>، القاعِدَة ٨) بِمُعَرِّفِ جَلسَةِ الاستوديو،
+    /// وهذِه الدالَّةُ تُبقي مِنها ما رابِطُه صَفحَةُ صَفقَةٍ <b>في هذا المَتجَرِ</b> في الاستوديو — فَلا يُرسَمُ رابِطٌ غَيرُ ذلك — بِتَرتيبِ ما قَرَأ. دالَّةٌ نَقِيَّة.</para>
+    /// </summary>
+    public static IReadOnlyList<Notification> OwnerNoticesOf(IEnumerable<Notification>? mine, string slug)
+        => (mine ?? Array.Empty<Notification>())
+            .Where(n => n.RelatedUrl is { } url && url.StartsWith(StudioDealsPath(slug), StringComparison.Ordinal)
+                && url.Length > StudioDealsPath(slug).Length)
+            .ToList();
 
     private static string CurrencyOf(Deal deal)
         => deal.Refs.TryGetValue(DealsService.PaymentCurrencyRef, out var c) && !string.IsNullOrWhiteSpace(c) ? c : ACommerce.Kit.Payments.MoyasarClient.Currency;

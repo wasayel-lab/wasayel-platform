@@ -3,6 +3,7 @@
 @inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.Deals.DealsService Deals
+@inject Services.Queries.AccountQueries Account
 @inject L L
 @using ACommerce.Kit.Tenants
 @using ACommerce.Templates.Customer.Marketplace.Services.Deals
@@ -37,6 +38,12 @@
             @if (DealRefusalTexts.StudioKeyFor(Err) is { } errKey)
             {
                 <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@L.Markup(errKey)</div>
+            }
+            @* تَنبيهاتُ صاحِبِ المَتجَرِ — «استِرجاعٌ مُستَحَقّ» و«فاتورَةٌ لَم تُلغَ» — صُفوفاً تُنقَرُ إلى صَفقاتِها (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الجَولَة ٢؛
+               قَرارُ المالِك د3 (٢) «د»). وبِلا إشعارٍ لا يُرسَمُ شَيء — الكُتلَةُ بِلا فَراغٍ قَبلَها ولا بَعدَها فَالصَفحَةُ كَما كانَت بِحَرفِها. *@
+            @if (ownerNotices.Count > 0)
+            {
+                <StudioOwnerNotices Slug="@Slug" Mine="@ownerNotices" />
             }
 
             <div class="studio-stats">
@@ -108,6 +115,8 @@
     [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
     Tenant? tenant;
     List<Deal> deals = new();
+    /// <summary>إشعاراتُ صاحِبِ المَتجَرِ في مُستَأجِرِ المَتجَرِ بِمُعَرِّفِ جَلسَةِ الاستوديو — يَقرَؤُها القارِئُ القائِمُ نَفسُه (القاعِدَة ٨) بَعدَ فَحصِ المِلكِيَّة.</summary>
+    IReadOnlyList<ACommerce.Kit.Notifications.Notification> ownerNotices = Array.Empty<ACommerce.Kit.Notifications.Notification>();
     string SelectedPattern => deals.FirstOrDefault()?.Pattern ?? "marketplace";
 
     protected override async Task OnInitializedAsync()
@@ -118,6 +127,7 @@
         if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) { tenant = null; return; }
         if (tenant is null) return;
         deals = await Deals.ListForTenantAsync(Slug);
+        ownerNotices = await Account.NotificationsAsync(Slug, Auth.UserId!.Value);
     }
 
     static string StageIcon(DealStage s) => s switch
