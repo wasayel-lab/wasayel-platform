@@ -478,7 +478,8 @@ public class DealCashPolicyTests
         Assert.Contains("LoadAsync<ACommerce.Kit.Auth.User>(ownerId, ct)", body, StringComparison.Ordinal);
         // **قُلِبَ** (‏2026-10-11، مُراجَعَةٌ ثانِيَة): كانَ `owner?.FullName ?? ""` — فَراغٌ يُرسَمُ فَراغاً؛ وصارَ الاسمُ
         // غائِباً `null` حينَ تَغيبُ الوَثيقَة (الصَفُّ `An_owner_without_a_user_document_…` أَعلاه).
-        Assert.Contains("AssignCounterpartyAsync(tenantSlug, dealId, ownerId, owner?.FullName, ct, DealEvent.BoundAtBirth)", body, StringComparison.Ordinal);
+        // ‏(2026-10-29، قَرارُ المالِك د40 «ج») اسمُ النَشاطِ حَيثُ وُجِد — القاعِدَةُ الواحِدَةُ `ActorName.Of(User?)` (و`null` لِوَثيقَةٍ غائِبَةٍ كَما كان)؛ كانَ `owner?.FullName`.
+        Assert.Contains("AssignCounterpartyAsync(tenantSlug, dealId, ownerId, Queries.ActorName.Of(owner), ct, DealEvent.BoundAtBirth)", body, StringComparison.Ordinal);
         Assert.DoesNotContain("owner?.FullName ?? \"\"", body, StringComparison.Ordinal);
 
         var assign = AssignBody();

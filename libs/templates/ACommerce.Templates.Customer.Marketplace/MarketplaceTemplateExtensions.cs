@@ -295,9 +295,11 @@ public static class MarketplaceTemplateExtensions
             if (!string.IsNullOrEmpty(asRole))
                 await AssignRoleAsync(slug, result.UserId, asRole, store);
             // إن كانَ المُستَخدِم أُنشِئ تَوّاً، أَخطِر مُديري المَتجَر.
+            var needsName = false;
             await using (var qs = store.QuerySession(slug))
             {
                 var user = await qs.LoadAsync<User>(result.UserId);
+                needsName = user is not null && Services.Queries.ActorName.NeedsName(user);
                 if (user is not null && (DateTime.UtcNow - user.CreatedAt).TotalMinutes < 1)
                     await NotifyAdminsAsync(store, slug, "new_user",
                         "مُستَخدِم جَديد سَجَّل",
@@ -306,7 +308,8 @@ public static class MarketplaceTemplateExtensions
                         $"{user.FullName}",
                         $"/admin/tenants/{slug}/users");
             }
-            return Results.Redirect(await PostLoginRouteAsync(slug, result.UserId, asRole, store));
+            // ‏(2026-10-29، قَرارُ المالِك د40 «ج») الاسمُ يُطلَبُ عِندَ أَوَّلِ دُخول: ما دامَ «عُضو جَديد» تَسبِقُ خُطوَةُ الاسمِ مَسارَ ما بَعدَ الدُخول.
+            return Results.Redirect(Services.Queries.MemberNameStep.Route(needsName, await PostLoginRouteAsync(slug, result.UserId, asRole, store), p => Link(req, slug, p)));
         }).DisableAntiforgery();
 
         // ─── Email OTP ──────────────────────────────────────────────────
@@ -380,9 +383,11 @@ public static class MarketplaceTemplateExtensions
             if (!string.IsNullOrEmpty(asRole))
                 await AssignRoleAsync(slug, result.UserId, asRole, store);
             // إن كانَ المُستَخدِم أُنشِئ تَوّاً، أَخطِر مُديري المَتجَر.
+            var needsName = false;
             await using (var qs = store.QuerySession(slug))
             {
                 var user = await qs.LoadAsync<User>(result.UserId);
+                needsName = user is not null && Services.Queries.ActorName.NeedsName(user);
                 if (user is not null && (DateTime.UtcNow - user.CreatedAt).TotalMinutes < 1)
                     await NotifyAdminsAsync(store, slug, "new_user",
                         "مُستَخدِم جَديد سَجَّل",
@@ -390,7 +395,8 @@ public static class MarketplaceTemplateExtensions
                         $"{user.FullName}",
                         $"/admin/tenants/{slug}/users");
             }
-            return Results.Redirect(await PostLoginRouteAsync(slug, result.UserId, asRole, store));
+            // ‏(2026-10-29، د40 «ج») خُطوَةُ الاسمِ أَوَّلاً ما دامَ الاسمُ افتِراضِيّاً — كَبابِ الهاتِف.
+            return Results.Redirect(Services.Queries.MemberNameStep.Route(needsName, await PostLoginRouteAsync(slug, result.UserId, asRole, store), p => Link(req, slug, p)));
         }).DisableAntiforgery();
 
         // ─── Nafath ─────────────────────────────────────────────────────
@@ -886,7 +892,8 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(Link(req, slug, $"me/delete?err={violation.Code}"));
 
             var now = DateTime.UtcNow;
-            var nameBefore = user!.FullName;
+            // ‏(2026-10-29، د40) والأَسماءُ قَبلَ Erase لا الاسمُ وَحدَه: اسمُ نَشاطِه صارَ يُكتَبُ في نُسَخٍ عِندَ غَيرِه (إشعارُ القَبولِ مَثَلاً).
+            var nameBefore = Services.Queries.ActorName.NamesOf(user!);
             ACommerce.Kit.Auth.AccountDeletion.Erase(user!, now);
             session.Store(user!);
             // ‏(د60) والسَلَّةُ تَحمِلُ اسمَه وجَوّالَه وعُنوانَه مِن خُطُواتِ الإتمام — تُحذَفُ مَعَه.

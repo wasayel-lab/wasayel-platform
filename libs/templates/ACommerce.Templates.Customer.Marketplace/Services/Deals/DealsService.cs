@@ -261,7 +261,8 @@ public sealed class DealsService
         var owner = await q.LoadAsync<ACommerce.Kit.Auth.User>(ownerId, ct);
         // وَثيقَةٌ غائِبَة: الهُوِيَّةُ تُربَطُ والاسمُ غائِبٌ لا فارِغ — `null` ما يَقرَؤُه كُلُّ قارِئٍ غِياباً (`?? "—"`،
         // `is not null`)؛ وكانَ `?? ""` فَيُرسَمُ فَراغاً وسَهماً مُعَلَّقاً في قائِمَةِ الاستوديو (‏2026-10-11، مُراجَعَةٌ ثانِيَة).
-        return await AssignCounterpartyAsync(tenantSlug, dealId, ownerId, owner?.FullName, ct, DealEvent.BoundAtBirth);
+        // ‏(2026-10-29، قَرارُ المالِك د40) اسمُ النَشاطِ حَيثُ وُجِد — القاعِدَةُ نَفسُها الَّتي يَكتُبُ بِها كُلُّ بابٍ اسمَ فاعِلِه.
+        return await AssignCounterpartyAsync(tenantSlug, dealId, ownerId, Queries.ActorName.Of(owner), ct, DealEvent.BoundAtBirth);
     }
 
     /// <summary>

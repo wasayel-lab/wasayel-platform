@@ -1,0 +1,51 @@
+@page "/{slug}/me/name"
+@inject AuthSession Auth
+@inject IHttpContextAccessor HttpCtx
+@inject L L
+
+@*
+    خُطوَةُ الاسمِ بَعدَ أَوَّلِ دُخول (‏2026-10-29، قَرارُ المالِك د40 «ج»: «يُطلب الاسم عند أوّل دخول»).
+
+    **يُحَوِّلُ إلَيها بابا التَحَقُّقِ بِالهاتِفِ والبَريد** حينَ يَكونُ اسمُ الحِسابِ ما زالَ الافتِراضِيَّ «عُضو جَديد» (`ActorName.NeedsName`)،
+    ومَعَها مَسارُ ما بَعدَ الدُخولِ في `next`. **ولا كاتِبَ جَديد**: الاستِمارَةُ تُرسِلُ إلى `POST /{slug}/me/save` — نُقطَةُ «تَعديل المَلَف» نَفسُها
+    الَّتي تَكتُبُ `FullName` (والكوكي) وتَعودُ إلى `returnUrl` بَعدَ `LocalRedirect.Resolve` — فَالحَقلُ واحِدٌ كَما قالَ القَرار. و«لاحِقاً» رابِطٌ
+    إلى المَسارِ نَفسِه، والخُطوَةُ تَعودُ في الدُخولِ التالي ما دامَ الاسمُ افتِراضِيّاً.
+
+    **قِراءَةٌ خالِصَة**: الحارِسُ `<GatedPage RequireAuth>`، ولا كِتابَةَ في `GET`. والنَصُّ كُلُّه مِن القامُوس (القاعِدَة ١١).
+*@
+
+<GatedPage Slug="@Slug" RequireAuth>
+<div class="acs-page">
+    <h1 class="acm-wizard-title">@L.Markup("me.name.title")</h1>
+    <AcCard>
+        <ChildContent>
+            <p>@L.Markup("me.name.lead")</p>
+            <form method="post" action="@($"/{Slug}/me/save")" style="margin:0;">
+                <input type="hidden" name="returnUrl" value="@NextRoute" />
+                <label for="fullName">@L.Markup("me.name.label")</label>
+                <input id="fullName" name="fullName" type="text" class="ac-input" required
+                       autocomplete="name" maxlength="80" />
+                <div style="display:flex;gap:8px;margin-top:12px;">
+                    <button type="submit" class="ac-btn ac-btn-primary">@L.Markup("me.name.submit")</button>
+                    <a class="ac-btn ac-btn-ghost" href="@NextRoute">@L.Markup("me.name.later")</a>
+                </div>
+            </form>
+        </ChildContent>
+    </AcCard>
+</div>
+</GatedPage>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    /// <summary>مَسارُ ما بَعدَ الدُخول — يَكتُبُه بابُ التَحَقُّق؛ ويُحسَمُ هُنا بِـ<c>LocalRedirect.Resolve</c> كَما تَحسِمُه النُقطَة، فَرابِطُ «لاحِقاً»
+    /// لا يَخرُجُ مِن المَوقِع.</summary>
+    [SupplyParameterFromQuery(Name = "next")] public string? Next { get; set; }
+
+    string NextRoute => Services.LocalRedirect.Resolve(Next, $"/{Slug}/me");
+
+    protected override void OnInitialized()
+    {
+        if (HttpCtx.HttpContext is { } ctx) { Auth.SetTenant(Slug); Auth.Load(ctx, Slug); }
+    }
+}

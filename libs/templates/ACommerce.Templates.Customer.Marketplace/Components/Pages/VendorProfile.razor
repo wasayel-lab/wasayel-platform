@@ -24,10 +24,10 @@
                 <div style="display:flex;gap:12px;align-items:center;">
                     <div style="width:64px;height:64px;border-radius:50%;background:var(--ac-primary);color:var(--ac-on-primary);
                                 display:grid;place-items:center;font-size:24px;font-weight:700;">
-                        @(string.IsNullOrEmpty(vendor.FullName) ? "?" : vendor.FullName[0].ToString())
+                        @(string.IsNullOrEmpty(shownName) ? "?" : shownName[0].ToString())
                     </div>
                     <div style="flex:1;">
-                        <h2 style="margin:0;">@vendor.FullName</h2>
+                        <h2 style="margin:0;">@shownName</h2>
                         @if (avgRating > 0)
                         {
                             <div style="color:var(--ac-rating);font-size:14px;">
@@ -55,7 +55,7 @@
             </form>
         }
 
-        <AcSectionHeader Title="@($"{L["vendors.profile.listings_prefix"]} {vendor.FullName} ({listings.Count})")" />
+        <AcSectionHeader Title="@($"{L["vendors.profile.listings_prefix"]} {shownName} ({listings.Count})")" />
         @if (listings.Count == 0)
         {
             <AcEmptyState IconName="package" Title="@L["vendors.profile.empty_title"]"
@@ -121,6 +121,8 @@
     [Parameter] public Guid VendorId { get; set; }
 
     User? vendor;
+    // ‏(2026-10-29، قَرارُ المالِك د40 «ج») اسمُ النَشاطِ حَيثُ وُجِد، وإلّا اسمُه — القاعِدَةُ الواحِدَةُ `ActorName.Of`.
+    string shownName = "";
     List<Listing> listings = new();
     List<Review> reviews = new();
     double avgRating;
@@ -132,6 +134,7 @@
         var page = await Storefront.VendorAsync(Slug, VendorId);
         vendor = page.Vendor;
         if (vendor is null) return;
+        shownName = Services.Queries.ActorName.Of(vendor) ?? "";
         listings = page.Listings.ToList();
         reviews  = page.Reviews.ToList();
         reviewCount = reviews.Count;

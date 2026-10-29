@@ -461,6 +461,9 @@ check "$([ "$CODE" = 200 ] && echo 1 || echo 0)" "GET /$SLUG/explore (بِلا �
 STEP="٤ — البائِع"
 say "٤ · بائِعٌ: تَسجيل ← دَورُ vendor ذاتِيّاً ← نَشر"
 store_login "$J_VEN" "$SLUG" "$P_VEN"
+# ‏(2026-10-29، قَرارُ المالِك د40 «ج») أَوَّلُ دُخولٍ لِهاتِفٍ جَديدٍ يَسبِقُه خُطوَةُ الاسم — والاسمُ مَتروكٌ هُنا عَمداً («لاحِقاً»): اسمُ النَشاطِ
+# في التَهيِئَةِ أَدناه هُوَ ما يَراه المُشتَري، وهو ما تَقيسُه الخُطوَة ٦.
+check "$([[ "$LOC" == */me/name\?next=* ]] && echo 1 || echo 0)" "أَوَّلُ دُخولٍ لِلبائِعِ ← خُطوَةُ الاسم (‏د40) — $LOC"
 get "$J_VEN" "/$SLUG/me/role" "$F"
 check "$([ "$CODE" = 200 ] && grep -q 'name="role" value="vendor"' "$F" && echo 1 || echo 0)" \
     "GET /$SLUG/me/role → $CODE · خِيارُ vendor ذاتِيُّ المَنح"
@@ -614,6 +617,12 @@ check "$([ "$CODE" = 302 ] && [ "$LOC" = "/$SLUG/deals/$DID" ] && echo 1 || echo
 get "$J_BUY" "/$SLUG/notifications" "$F"
 check "$([ "$CODE" = 200 ] && has "$F" "$(ar notifications.deal_accepted.title)" && echo 1 || echo 0)" \
     "GET /$SLUG/notifications (المُشتَري) → $CODE · «$(ar notifications.deal_accepted.title)»"
+# ‏(2026-10-29، قَرارُ المالِك د40 «ج») ونَصُّ الإشعارِ المُخَزَّنِ يُسَمّي البائِعَ بِاسمِ نَشاطِه لا «$(ar me.profile.new_member)»، وصَفحَةُ الصَفقَةِ كَذلك.
+VEN_SHOWN="بائِعُ الجَولَة $MARK"
+check "$(has "$F" "$VEN_SHOWN قَبِلَ طَلَبَكَ" && ! has "$F" "$(ar me.profile.new_member) قَبِلَ طَلَبَكَ" && echo 1 || echo 0)" \
+    "إشعارُ القَبولِ عِندَ المُشتَري: «$VEN_SHOWN قَبِلَ طَلَبَكَ …» — اسمُ النَشاطِ لا «$(ar me.profile.new_member)» (‏د40)"
+get "$J_BUY" "/$SLUG/deals/$DID" "$F"
+check "$([ "$CODE" = 200 ] && has "$F" "$VEN_SHOWN" && echo 1 || echo 0)" "GET /$SLUG/deals/$DID (المُشتَري) → $CODE · البائِعُ «$VEN_SHOWN» (‏د40)"
 
 # ═══ ٧) إلى «تَسليم» — وزِرُّ الشَحنِ مَخفِيٌّ بِلا رَمزِ OTO ═══════════
 STEP="٧ — التَسليم"

@@ -155,7 +155,7 @@ public sealed class AccountQueries
     /// القاعِدَةُ في <see cref="ActorName.Of"/>.</summary>
     public async Task<string?> ActorNameAsync(
         string tenantSlug, Guid userId, CancellationToken ct = default)
-        => ActorName.Of((await ProfileAsync(tenantSlug, userId, ct))?.FullName);
+        => ActorName.Of(await ProfileAsync(tenantSlug, userId, ct));   // ‏(2026-10-29، د40) اسمُ النَشاطِ حَيثُ وُجِد
 
     /// <summary>سَلَّةُ المُستَخدِم — مُعَرِّفُها هُوَ مُعَرِّفُه.</summary>
     public async Task<Cart?> CartAsync(

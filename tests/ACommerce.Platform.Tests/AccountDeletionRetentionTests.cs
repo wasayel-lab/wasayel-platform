@@ -61,7 +61,8 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         var body = DeleteEndpointBody();
         var stores = Regex.Matches(body, @"\.Store\((?<arg>[^)]*)\)").Select(m => m.Groups["arg"].Value.Trim()).ToList();
         var patches = Regex.Matches(body, @"\.Patch<").Count;
-        var before = body.IndexOf("var nameBefore = user!.FullName;", StringComparison.Ordinal);
+        // ‏(2026-10-29، قَرارُ المالِك د40) الأَسماءُ قَبلَ Erase لا الاسمُ وَحدَه — اسمُ النَشاطِ صارَ يُكتَبُ في نُسَخٍ عِندَ غَيرِه؛ كانَ `= user!.FullName;`.
+        var before = body.IndexOf("var nameBefore = Services.Queries.ActorName.NamesOf(user!);", StringComparison.Ordinal);
         var erase = body.IndexOf("AccountDeletion.Erase(user!, now)", StringComparison.Ordinal);
         var copies = body.IndexOf("AccountErasure.EraseCopiesAsync(session, slug, userId, nameBefore)", StringComparison.Ordinal);
         var save = body.IndexOf("SaveChangesAsync", StringComparison.Ordinal);

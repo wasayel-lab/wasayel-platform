@@ -98,13 +98,23 @@ public static class AccountErasure
     /// والحَصرُ بِالرابِطِ لِكَي لا يُمَسَّ اسمُ شَخصٍ آخَرَ يُشبِهُ اسمَه في إشعارٍ لا عَلاقَةَ لَه بِه.</para>
     /// </summary>
     public static bool EraseFrom(Notification n, Guid userId, string oldName, IReadOnlyCollection<string> relatedUrls)
+        => EraseFrom(n, userId, new[] { oldName }, relatedUrls);
+
+    /// <summary>‏(2026-10-29، قَرارُ المالِك د40) والأَسماءُ كُلُّها لا الاسمُ وَحدَه — اسمُه واسمُ نَشاطِه (<c>ActorName.NamesOf</c>)، فَإشعارُ القَبولِ
+    /// الَّذي يُسَمّي البائِعَ بِنَشاطِه يُمحى كَما يُمحى الَّذي يُسَمّيه بِاسمِه. الأَطوَلُ أَوَّلاً: اسمٌ يَحوي غَيرَه لا يُقطَع.</summary>
+    public static bool EraseFrom(Notification n, Guid userId, IReadOnlyCollection<string> oldNames, IReadOnlyCollection<string> relatedUrls)
     {
-        if (n.UserId == userId || !Identifies(oldName)) return false;
+        var names = oldNames.Where(Identifies).OrderByDescending(x => x.Length).ToList();
+        if (n.UserId == userId || names.Count == 0) return false;
         var about = AdminNoticeTypes.Contains(n.Type)
                     || (n.RelatedUrl is { } url && relatedUrls.Any(r => url.EndsWith(r, StringComparison.Ordinal)));
         if (!about) return false;
-        var title = n.Title.Replace(oldName, AccountDeletion.ErasedName, StringComparison.Ordinal);
-        var body = n.Body.Replace(oldName, AccountDeletion.ErasedName, StringComparison.Ordinal);
+        var (title, body) = (n.Title, n.Body);
+        foreach (var oldName in names)
+        {
+            title = title.Replace(oldName, AccountDeletion.ErasedName, StringComparison.Ordinal);
+            body = body.Replace(oldName, AccountDeletion.ErasedName, StringComparison.Ordinal);
+        }
         if (title == n.Title && body == n.Body) return false;
         (n.Title, n.Body) = (title, body);
         return true;
@@ -130,7 +140,11 @@ public static class AccountErasure
     /// <para><b>الأَثَرُ في الجَلسَة — بِلا حِفظ</b>: يَقرَأُ ما يَذكُرُه بِمُعَرِّفِه ويُعَلِّمُ المُتَغَيِّرَ لِلحِفظِ (<c>Store</c>)، والحِفظُ الواحِدُ لِلنُقطَةِ بَعدَه —
     /// فَالمَحوُ ووَثيقَةُ الحِسابِ ومَفاتيحُه في مُعامَلَةٍ واحِدَة: يَقَعُ كُلُّه أَو لا شَيء. و<paramref name="oldName"/> الاسمُ قَبلَ <c>Erase</c>.</para>
     /// </summary>
-    public static async Task<Counts> EraseCopiesAsync(IDocumentSession s, string tenantSlug, Guid userId, string oldName, CancellationToken ct = default)
+    public static Task<Counts> EraseCopiesAsync(IDocumentSession s, string tenantSlug, Guid userId, string oldName, CancellationToken ct = default)
+        => EraseCopiesAsync(s, tenantSlug, userId, new[] { oldName }, ct);
+
+    /// <summary>‏(2026-10-29، د40) بِأَسمائِه كُلِّها — اسمُه واسمُ نَشاطِه (<c>ActorName.NamesOf</c>).</summary>
+    public static async Task<Counts> EraseCopiesAsync(IDocumentSession s, string tenantSlug, Guid userId, IReadOnlyCollection<string> oldNames, CancellationToken ct = default)
     {
         int Mark<T>(IEnumerable<T> rows, Func<T, bool> erase) where T : notnull
         {
@@ -155,9 +169,11 @@ public static class AccountErasure
             .Concat(convs.Select(c => $"/chats/{c.Id}"))
             .Concat(matches.Select(m => $"/listings/{m.Id}"))
             .ToList();
-        var notices = Identifies(oldName)
-            ? await s.Query<Notification>().Where(n => n.UserId != userId && (n.Title.Contains(oldName) || n.Body.Contains(oldName))).ToListAsync(ct)
-            : Array.Empty<Notification>();
+        // كُلُّ اسمٍ بِاستِعلامِه، والنَتائِجُ وَثيقَةٌ واحِدَةٌ لِكُلِّ مُعَرِّف — فَلا تُخَزَّنُ نُسخَتانِ مِن إشعارٍ يَحمِلُ الاسمَين.
+        var notices = new List<Notification>();
+        foreach (var oldName in oldNames.Where(Identifies).Distinct(StringComparer.Ordinal))
+            foreach (var n in await s.Query<Notification>().Where(n => n.UserId != userId && (n.Title.Contains(oldName) || n.Body.Contains(oldName))).ToListAsync(ct))
+                if (notices.All(x => x.Id != n.Id)) notices.Add(n);
 
         return new Counts(
             Deals: Mark(deals.Concat(others), d => EraseFrom(d, userId)),
@@ -167,6 +183,6 @@ public static class AccountErasure
             Matches: Mark(matches, m => EraseFrom(m, userId)),
             Tickets: Mark(tickets, t => EraseFrom(t, userId)),
             Keys: Mark(keys, k => EraseFrom(k, tenantSlug, userId)),
-            Notifications: Mark(notices, n => EraseFrom(n, userId, oldName, urls)));
+            Notifications: Mark(notices, n => EraseFrom(n, userId, oldNames, urls)));
     }
 }
