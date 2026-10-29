@@ -66,11 +66,14 @@ public static class PlatformAdminSeeder
         await using var s = store.LightweightSession(StudioAuth.Tenant);
         var dirty = false;
 
+        // ‏(‏2026-10-28، قَرارُ المالِك د57 «أ»؛ ‏ADR-044) «ويُوَحَّدُ رَقَمُ مُشرِفِ المَنَصَّةِ حينَ يُطابَق»: المُتَغَيِّرُ كَما كُتِبَ أَوَّلاً ثُمَّ مُوَحَّداً — بابُ
+        // دُخولِ الاستوديو بِعَينِه (`PhoneNumber`) — فَحِسابٌ رُحِّلَ إلى `+9665…` يَبقى مُشرِفاً ومُتَغَيِّرُه `05…`، والجَديدُ يُكتَبُ مُوَحَّداً.
         if (request.Phone is { } phone)
         {
-            var byPhone = (await s.Query<StudioUser>()
-                .Where(u => u.Phone == phone).ToListAsync(ct)).FirstOrDefault();
-            if (Promote(ref byPhone, () => new StudioUser { Id = Guid.NewGuid(), Phone = phone }))
+            var phoneForms = ACommerce.Kit.Auth.PhoneNumber.LookupForms(phone).ToArray();
+            var byPhone = ACommerce.Kit.Auth.PhoneNumber.Pick(await s.Query<StudioUser>()
+                .Where(u => phoneForms.Contains(u.Phone)).ToListAsync(ct), u => u.Phone, phone);
+            if (Promote(ref byPhone, () => new StudioUser { Id = Guid.NewGuid(), Phone = ACommerce.Kit.Auth.PhoneNumber.Canonical(phone) }))
             { s.Store(byPhone!); dirty = true; }
         }
 

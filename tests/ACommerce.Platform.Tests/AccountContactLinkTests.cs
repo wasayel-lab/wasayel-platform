@@ -133,7 +133,8 @@ public class AccountContactLinkTests(ITestOutputHelper output)
         Assert.Equal(("sara@example.com", true, at), (user.Email, user.EmailVerified, user.UpdatedAt));
         var mail = Emailed();
         ContactLink.Link(mail, ContactLink.Phone, ContactLink.Normalize(ContactLink.Phone, " 0512345678 "), at);
-        Assert.Equal(("0512345678", true), (mail.Phone, mail.PhoneVerified));
+        // ‏(‏2026-10-28، قَرارُ المالِك د57 «أ»؛ ‏ADR-044) الجَوّالُ المَربوطُ يُكتَبُ مُوَحَّداً — كانَ `"0512345678"` كَما كُتِب (تَوصيفُه `d72e34e`).
+        Assert.Equal(("+966512345678", true), (mail.Phone, mail.PhoneVerified));
         Assert.Equal(EmailAddress.Normalize(" X@Y.Co "), ContactLink.Normalize(ContactLink.Email, " X@Y.Co "));
     }
 

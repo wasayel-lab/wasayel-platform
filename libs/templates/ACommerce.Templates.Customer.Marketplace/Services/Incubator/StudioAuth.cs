@@ -117,14 +117,16 @@ public sealed class StudioAuth
             return null;
 
         await using var s = store.LightweightSession(Tenant);
+        // ‏(‏2026-10-28، قَرارُ المالِك د57 «أ»؛ ‏ADR-044) الجَوّالُ كَما كُتِبَ أَوَّلاً ثُمَّ مُوَحَّداً، والجَديدُ يُكتَبُ مُوَحَّداً — قاعِدَةُ دُخولِ العُضوِ بِعَينِها
+        // (`PhoneNumber`)؛ كانَ `u.Phone == subject` و`Phone = subject` (تَوصيفُه `d72e34e`). والمَوضوعُ (المُحاوَلَةُ والحِصَّة) كَما كُتِب.
+        var phoneForms = PhoneNumber.LookupForms(subject).ToArray();
         var user = method == StudioAuthMethod.Email
             ? (await s.Query<StudioUser>().Where(u => u.Email == subject).ToListAsync())
                 .FirstOrDefault()
-            : (await s.Query<StudioUser>().Where(u => u.Phone == subject).ToListAsync())
-                .FirstOrDefault();
+            : PhoneNumber.Pick(await s.Query<StudioUser>().Where(u => phoneForms.Contains(u.Phone)).ToListAsync(), u => u.Phone, subject);
         user ??= method == StudioAuthMethod.Email
             ? new StudioUser { Id = Guid.NewGuid(), Email = subject }
-            : new StudioUser { Id = Guid.NewGuid(), Phone = subject };
+            : new StudioUser { Id = Guid.NewGuid(), Phone = PhoneNumber.Canonical(subject) };
         user.LastLoginAt = DateTime.UtcNow;
         s.Store(user);
         await s.SaveChangesAsync();

@@ -58,7 +58,9 @@ public static class ContactLink
     public static void Link(User user, string kind, string value, DateTime at)
     {
         if (kind == Email) { user.Email = value; user.EmailVerified = true; }
-        else { user.Phone = value; user.PhoneVerified = true; }
+        // ‏(‏2026-10-28، قَرارُ المالِك د57 «أ»؛ ‏ADR-044) الجَوّالُ يُكتَبُ بِصيغَتِه المُوَحَّدَة — كانَ كَما كُتِب (تَوصيفُه `d72e34e`). والمُقارَنَةُ
+        // بِمَن يَحمِلُه تَبقى بِالصيغَتَين (`AccountContacts.VerifyAsync`).
+        else { user.Phone = PhoneNumber.Canonical(value); user.PhoneVerified = true; }
         user.UpdatedAt = at;
     }
 

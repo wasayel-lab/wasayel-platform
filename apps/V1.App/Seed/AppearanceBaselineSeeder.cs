@@ -526,9 +526,10 @@ public static class AppearanceBaselineSeeder
         await using var qs = store.QuerySession(StudioAuth.Tenant);
         var adminPhone = Environment.GetEnvironmentVariable(PlatformAdminSeeder.PhoneVar);
         StudioUser? owner = null;
+        var adminForms = ACommerce.Kit.Auth.PhoneNumber.LookupForms(adminPhone).ToArray();   // ‏(د57، ‏ADR-044) كَما كُتِبَ ثُمَّ مُوَحَّداً
         if (!string.IsNullOrWhiteSpace(adminPhone))
-            owner = (await qs.Query<StudioUser>()
-                .Where(u => u.Phone == adminPhone).Take(1).ToListAsync()).FirstOrDefault();
+            owner = ACommerce.Kit.Auth.PhoneNumber.Pick(await qs.Query<StudioUser>()
+                .Where(u => adminForms.Contains(u.Phone)).ToListAsync(), u => u.Phone, adminPhone);
         owner ??= (await qs.Query<StudioUser>()
             .OrderBy(u => u.CreatedAt).Take(1).ToListAsync()).FirstOrDefault();
         if (owner is null)

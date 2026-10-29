@@ -184,21 +184,9 @@ public static class AuthHandlers
     /// بِـ<c>05…</c> لا تَنقَسِمُ إلى حِسابَين، و<c>StudioAuth.NormalizeSubject</c> يَبقى قَصّاً (مُطابِقاً لِمَنحِ المُشرِف). تَوحيدُ الهُوِيَّةِ
     /// تَرحيلُ بَياناتٍ («ب» W8-2).</para>
     /// </summary>
-    public static string PhoneDestination(string? typed)
-    {
-        var raw = (typed ?? "").Trim();
-        var compact = new System.Text.StringBuilder(raw.Length);
-        foreach (var c in raw)
-            if (c is not (' ' or '-' or '(' or ')')) compact.Append(c);
-        var s = compact.ToString();
-        var plus = s.StartsWith('+');
-        var digits = plus ? s[1..] : s;
-        if (digits.Length == 0 || !digits.All(char.IsAsciiDigit)) return raw;
-        if (!plus && digits.StartsWith("00", StringComparison.Ordinal)) digits = digits[2..];
-        else if (!plus && digits.Length == 10 && digits.StartsWith("05", StringComparison.Ordinal)) digits = "966" + digits[1..];
-        else if (!plus && digits.Length == 9 && digits[0] == '5') digits = "966" + digits;
-        return digits.Length == 12 && digits.StartsWith("9665", StringComparison.Ordinal) ? "+" + digits : raw;
-    }
+    /// <remarks>‏(‏2026-10-28، قَرارُ المالِك د57 «أ»؛ ‏ADR-044 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والمَنطِقُ صارَ <see cref="PhoneNumber.Canonical"/>
+    /// بِحَرفِه</b> — الصيغَةُ نَفسُها صارَت هُوِيَّةً أَيضاً: يُكتَبُ بِها الحِسابُ الجَديد، ويُبحَثُ بِها بَعدَ الكِتابَة. و«لا تَمَسُّ الهُوِيَّة» أَعلاه تاريخٌ.</remarks>
+    public static string PhoneDestination(string? typed) => PhoneNumber.Canonical(typed);
 
     /// <summary>هَل تُسمَح المُحاوَلَة؟ يُحَدِّث العَدّاد ذَرّيّاً.</summary>
     /// <remarks>‏(‏2026-10-28، د58) <paramref name="at"/> ساعَةُ <see cref="OncePerWindow"/> المُعطاة؛ وبِلاها الآنَ كَما كان.</remarks>
@@ -514,18 +502,21 @@ public static class AuthHandlers
         await using var session = store.LightweightSession(tenantSlug);
         // البَريد مِفتاح هُويَّة مُستَقِلّ — لا يُخلَط بِبَحث الهاتِف/نَفاذ
         // كَي لا يَلتَقِط مُستَخدِمي الهاتِف ذَوي الحَقل الفارِغ.
+        // ‏(‏2026-10-28، قَرارُ المالِك د57 «أ»؛ ‏ADR-044) الجَوّالُ يُبحَثُ كَما كُتِبَ أَوَّلاً ثُمَّ بِصيغَتِه المُوَحَّدَة (`PhoneNumber`) — كانَ
+        // `u.Phone == phone` وَحدَه فَـ`05…` و`+966…` لِرَقَمٍ واحِدٍ حِسابان (تَوصيفُه `d72e34e`). والجَديدُ يُكتَبُ مُوَحَّداً.
+        var phoneForms = PhoneNumber.LookupForms(phone).ToArray();
         var existing = email is not null
             ? await session.Query<User>().FirstOrDefaultAsync(u => u.Email == email)
-            : await session.Query<User>().FirstOrDefaultAsync(u =>
-                (nationalId == null && u.Phone == phone) ||
-                (nationalId != null && u.NationalId == nationalId));
+            : nationalId != null
+                ? await session.Query<User>().FirstOrDefaultAsync(u => u.NationalId == nationalId)
+                : PhoneNumber.Pick(await session.Query<User>().Where(u => phoneForms.Contains(u.Phone)).ToListAsync(), u => u.Phone, phone);
         if (existing is null)
         {
             existing = new User
             {
                 Id = Guid.NewGuid(),
                 TenantSlug = tenantSlug,
-                Phone = phone,
+                Phone = PhoneNumber.Canonical(phone),
                 Email = email ?? "",
                 NationalId = nationalId,
                 PhoneVerified = nationalId is null && email is null,
