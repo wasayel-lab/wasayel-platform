@@ -232,8 +232,11 @@ public class StudioStorePatternTests
     /// <c>bad_format</c>/<c>empty</c> (وصَفحَةُ <c>/admin/tenants/new</c> تَقرَأُ رَمزَيها). فَيُثَبَّتُ الكاتِبُ هُنا، ومَن يَبني المُصادِقَ
     /// يُحمِرُّ هذا مَعَ أَخَوَيه بِقَصدٍ ويُقَرِّرُ فيه.</para>
     /// </summary>
+    /// <para><b>قُلِبَ شَطرُه الأَوَّلُ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د25 (٢-أ) — كوميتُ التَوحيدِ وَحدَه): كانَ
+    /// <c>The_admin_create_endpoint_is_a_third_kind_writer_that_parses_inline_and_accepts_any_kind</c>. النُقطَةُ صارَت تَمُرُّ بِـ
+    /// <c>CategoriesSaveService.Parse</c> — فَمُصادِقُ قيَمِ التَجميعِ في المُحَلِّلِ يَبلُغُها — و«تَقبَلُ أَيَّ كِند» باقٍ حَتّى كوميتِ المُصادِق.</para>
     [Fact]
-    public void The_admin_create_endpoint_is_a_third_kind_writer_that_parses_inline_and_accepts_any_kind()
+    public void The_admin_create_endpoint_is_a_third_kind_writer_that_parses_with_the_shared_parser_and_accepts_any_kind()
     {
         var ext = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
             "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs"));
@@ -243,19 +246,14 @@ public class StudioStorePatternTests
         Assert.True(end > at, "لا نُقطَةَ بَعدَها — الأَداةُ عَمياء.");
         var body = ext[at..end];
 
-        // ‏الكاتِبُ نَفسُه: الكِندُ مِن العَمودِ الرابِعِ بِلا فَحص، ولا مُرورَ بِالمُحَلِّلِ المُشتَرَك.
-        Assert.Contains("Kind  = parts.Length > 3 ? parts[3].Trim().ToLowerInvariant() : \"\",", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("CategoriesSaveService", body, StringComparison.Ordinal);
+        // ‏الكاتِبُ نَفسُه: المُحَلِّلُ المُشتَرَكُ، ولا تَحليلَ في الجِسم.
+        Assert.Contains("var (categories, catsCode) = CategoriesSaveService.Parse(catsRaw);", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Kind  = parts.Length > 3", body, StringComparison.Ordinal);
 
-        // ‏ولِماذا لا يُستَبدَلُ بِالمُحَلِّلِ صِرفاً — الفُروقُ مَقيسَةً بِحَرفِها.
-        Assert.Contains("Icon  = parts.Length > 2 ? parts[2].Trim() : \"🏠\",", body, StringComparison.Ordinal);
-        Assert.Equal("🏷️", CategoriesSaveService.DefaultIcon);
-        Assert.Contains("Back(\"bad_categories\")", body, StringComparison.Ordinal);
-        Assert.Contains("Back(\"no_categories\")", body, StringComparison.Ordinal);
-        Assert.Equal(("bad_format", "empty"), (TenantConfigCodes.BadFormat, TenantConfigCodes.Empty));
-        var (blankLine, code) = CategoriesSaveService.Parse("a | أ\n \nb | ب");
+        // ‏و«أَيَّ كِند»: المُحَلِّلُ يَكتُبُ العَمودَ الرابِعَ بِحُروفٍ صَغيرَةٍ بِلا فَحص — يُقلَبُ في كوميتِ المُصادِق.
+        var (cats, code) = CategoriesSaveService.Parse("products | مُنتَجات | 🛍️ | Anything_Goes");
         Assert.Null(code);
-        Assert.Equal(2, blankLine!.Count);   // ‏المُحَلِّلُ يَتَخَطّى سَطرَ المَسافات — والنُقطَةُ تَرُدُّه bad_categories
+        Assert.Equal("anything_goes", Assert.Single(cats!).Kind);
     }
 }
 

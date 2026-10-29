@@ -199,8 +199,10 @@
         "slug_taken"    => L["admin.new.err_slug_taken"],
         "name_required" => L["admin.new.err_name_required"],
         "color_invalid" => L["admin.new.err_color"],
-        "no_categories" => L["admin.new.err_no_categories"],
-        "bad_categories" => L["admin.new.err_bad_categories"],
+        // ‏رَمزا الفِئاتِ رَمزا المُحَلِّلِ المُشتَرَكِ (`TenantConfigCodes`) مُنذُ ‏2026-10-29 (قَرارُ المالِك د25) — وكانا
+        // `no_categories`/`bad_categories`؛ والنَصّانِ هُما هُما، تَقولُهُما مَفاتيحُهُما القائِمَة.
+        "empty"         => L["admin.new.err_no_categories"],
+        "bad_format"    => L["admin.new.err_bad_categories"],
         _               => err
     };
 }

@@ -2177,27 +2177,12 @@ public static class MarketplaceTemplateExtensions
             if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))
                 return Results.Redirect(Back("color_invalid"));
 
-            // ── الفِئات: كُلّ صَفّ "slug | label | icon | kind" ──
-            var categories = new List<ACommerce.Kit.Tenants.Category>();
-            var idx = 0;
-            foreach (var line in catsRaw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var parts = line.Split('|', StringSplitOptions.TrimEntries);
-                if (parts.Length < 2) return Results.Redirect(Back("bad_categories"));
-                var cslug = parts[0].Trim().ToLowerInvariant();
-                var clabel = parts[1].Trim();
-                if (string.IsNullOrEmpty(cslug) || string.IsNullOrEmpty(clabel))
-                    return Results.Redirect(Back("bad_categories"));
-                categories.Add(new ACommerce.Kit.Tenants.Category
-                {
-                    Slug = cslug,
-                    Label = clabel,
-                    Icon  = parts.Length > 2 ? parts[2].Trim() : "🏠",
-                    Kind  = parts.Length > 3 ? parts[3].Trim().ToLowerInvariant() : "",
-                    SortOrder = idx++
-                });
-            }
-            if (categories.Count == 0) return Results.Redirect(Back("no_categories"));
+            // ── الفِئات: كُلّ صَفّ "slug | label | icon | kind" — بِالمُحَلِّلِ المُشتَرَكِ نَفسِه ──
+            // (‏2026-10-29، قَرارُ المالِك د25 (٢-أ)): كانَت تُحَلَّلُ هُنا في الجِسمِ بِأَربَعَةِ فُروقٍ عَن
+            // `CategoriesSaveService.Parse` (الأَيقونَةُ 🏠، وعَمودُ أَيقونَةٍ فارِغٌ يُكتَبُ فارِغاً، وسَطرُ المَسافاتِ يُرَدّ، ورَمزا
+            // `bad_categories`/`no_categories`) — فَمُصادِقُ قيَمِ التَجميعِ لا يَبلُغُها. صارَت تَمُرُّ بِه، فَالكُتّابُ الثَلاثَةُ واحِد.
+            var (categories, catsCode) = CategoriesSaveService.Parse(catsRaw);
+            if (catsCode is not null) return Results.Redirect(Back(catsCode));
 
             // ── تَحَقُّق مِن عَدَم تَكرار الـ slug ──
             await using var s = store.LightweightSession();
@@ -2213,7 +2198,7 @@ public static class MarketplaceTemplateExtensions
                 TagLine     = tagline,
                 City        = city,
                 AuthChannel = channel,
-                Categories  = categories,
+                Categories  = categories!,
                 CreatedAt   = DateTime.UtcNow,
                 // المُنشِئ هُوَ المالِك: كانَ المُستَأجِر يولَد يَتيماً
                 // (OwnerUserId = Guid.Empty)، فَيَرُدّ TenantAdminGuard
