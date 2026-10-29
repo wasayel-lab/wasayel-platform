@@ -4269,6 +4269,7 @@ public static class MarketplaceTemplateExtensions
         // `ApiKeySurface` حَرفاً: جِسمُ النُقطَةِ لا يُختَبَر.
         // (‏2026-10-29، قَرارُ المالِك د5 (٢) «ج» — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: وبَعدَ الكِتابَةِ يُسَجَّلُ إشعارُ الدَفعِ عِندَ البَوّابَة —
         // `GatewayPayments.ConnectNoticesAsync`، ولا يَفعَلُ شَيئاً لِتَعريفٍ بِلا وارِد؛ وفَشَلُه رَمزٌ في الرَبطِ لا يَرُدُّ الرَبط.)
+        // (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى — ولا يُعادُ حَرفٌ فَوقَه: ويُمَرِّرُ القُدرَةَ الَّتي كَتَب — رَبطُ قُدرَةٍ أُخرى كانَ يُعيدُ تَسجيلَ إشعارِ الدَفعِ ويَختِمُ سِرّاً فَوقَ العامِل.)
         app.MapPost("/studio/apps/{slug}/providers/bind", async (
             string slug, HttpRequest req, IDocumentStore store,
             Services.Incubator.StudioAuth auth,
@@ -4290,7 +4291,7 @@ public static class MarketplaceTemplateExtensions
             var bound = await providers.BindProviderAsync(
                 slug, read.Capability, read.ProviderSlug, read.Values,
                 auth.UserId?.ToString() ?? "");
-            await gateway.ConnectNoticesAsync(slug, Billing.PayPalOrderSurface.OriginFrom(req));
+            await gateway.ConnectNoticesAsync(slug, read.Capability, Billing.PayPalOrderSurface.OriginFrom(req));
             await SyncPaymentProviderFlagAsync(store, providers, slug);
 
             await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",

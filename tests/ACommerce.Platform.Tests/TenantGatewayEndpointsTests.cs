@@ -667,7 +667,7 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
         var bindAt = template.IndexOf("app.MapPost(\"/studio/apps/{slug}/providers/bind\"", StringComparison.Ordinal);
         var bind = template[bindAt..template.IndexOf(".DisableAntiforgery();", bindAt, StringComparison.Ordinal)];
         var bound = bind.IndexOf("providers.BindProviderAsync(", StringComparison.Ordinal);
-        var connect = bind.IndexOf("gateway.ConnectNoticesAsync(slug, Billing.PayPalOrderSurface.OriginFrom(req))", StringComparison.Ordinal);
+        var connect = bind.IndexOf("gateway.ConnectNoticesAsync(slug, read.Capability, Billing.PayPalOrderSurface.OriginFrom(req))", StringComparison.Ordinal);
         Assert.True(bound > 0 && connect > bound, $"رَبط {bound} ← تَسجيل {connect}");
         Assert.Equal(1, bind.Split("ConnectNoticesAsync").Length - 1);
     }

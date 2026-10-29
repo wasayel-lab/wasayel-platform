@@ -144,7 +144,7 @@ public class GatewayPaymentNoticeTests(ITestOutputHelper output)
         var keyBefore = Binding(w).Values["secret_key"];
         w.Moyasar.Then(HttpStatusCode.Created, "{\"id\":\"wh-1\"}");
 
-        var code = await w.Gateway.ConnectNoticesAsync(Slug, "https://store.example");
+        var code = await w.Gateway.ConnectNoticesAsync(Slug, ProviderCapabilities.Payments, "https://store.example");
         var sent = JsonDocument.Parse(w.Moyasar.Bodies[0]!).RootElement;
         var after = Binding(w);
         output.WriteLine($"الرَمز: {code ?? "—"} · التَسجيل: {after.WebhookId} · المَسار: {w.Moyasar.Requests[0].RequestUri!.AbsolutePath} · الحُقول: {string.Join(", ", after.Values.Keys)}");
@@ -167,7 +167,7 @@ public class GatewayPaymentNoticeTests(ITestOutputHelper output)
         var w = await PaidCart();
         w.Moyasar.Then(HttpStatusCode.Unauthorized, "{\"type\":\"authentication_error\",\"message\":\"Invalid authorization credentials\"}");
 
-        var code = await w.Gateway.ConnectNoticesAsync(Slug, "https://store.example");
+        var code = await w.Gateway.ConnectNoticesAsync(Slug, ProviderCapabilities.Payments, "https://store.example");
 
         Assert.Equal(MoyasarFailures.Refused, code);
         var after = Binding(w);
@@ -177,47 +177,54 @@ public class GatewayPaymentNoticeTests(ITestOutputHelper output)
         Assert.Null(await w.Gateway.NoticeSecretAsync(Slug));
 
         var unbound = await PaidCart(binding: _ => null);
-        Assert.Null(await unbound.Gateway.ConnectNoticesAsync(Slug, "https://store.example"));
+        Assert.Null(await unbound.Gateway.ConnectNoticesAsync(Slug, ProviderCapabilities.Payments, "https://store.example"));
         Assert.Empty(unbound.Moyasar.Requests);
         Assert.Null(await unbound.Gateway.NoticeSecretAsync(Slug));
     }
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم» (القاعِدَة ٣) — رَبطُ أَيِّ قُدرَةٍ يُعيدُ تَسجيلَ إشعارِ الدَفع</b> (مُراجَعَةُ تَيّارِ S3 الأولى، ‏2026-10-29): بابُ الرَبطِ في الاستوديو
-    /// يُنادي <see cref="GatewayPayments.ConnectNoticesAsync"/> بَعدَ كُلِّ رَبطٍ بِلا القُدرَةِ الَّتي رُبِطَت، والخِدمَةُ تَقرَأُ رَبطَ الدَفعِ القائِمَ وَحدَه. فَمَتجَرٌ مَربوطٌ
-    /// بِمِفتاحِ ميسّر يَربِطُ مُزَوِّدَ مِلَفّاتٍ أَو خَرائِط ← تَسجيلٌ ثانٍ عِندَ ميسّر بِسِرٍّ جَديد، ويُختَمُ فَوقَ القائِم؛ وإن رَدَّته البَوّابَةُ سَقَطَ السِرُّ العامِلُ فَيُجابُ
-    /// الوارِدُ ‏404 بَعدَها. يَحمَرُّ يَومَ يُسأَلُ البابُ عَن القُدرَة.</para>
+    /// <para><b>رَبطُ قُدرَةٍ غَيرِ الدَفعِ لا يَمَسُّ إشعارَ الدَفع</b> (مُراجَعَةُ تَيّارِ S3 الأولى، ‏2026-10-29؛ <b>قُلِبَ بِاسمِه</b> — كانَ
+    /// <c>Today_connecting_notices_after_a_bind_of_another_capability_re_registers_and_reseals_the_payments_secret</c> (<c>a1200e2</c>): نِداءٌ ثانٍ يُسَجِّلُ wh-2 بِسِرٍّ
+    /// جَديد، ورَدُّ البَوّابَةِ يُسقِطُ السِرَّ العامِل). بابُ الرَبطِ يُمَرِّرُ القُدرَةَ الَّتي كَتَب، فَلِكُلِّ قُدرَةٍ سِوى الدَفعِ — مَعدودَةً مِن المَعجَمِ لا مَكتوبَةً بِاليَد —
+    /// <b>صِفرُ نِداءٍ إلى ميسّر والرَبطُ بايتاً بِبايت</b> (السِرُّ والمِفتاحُ المَختومانِ ومُعَرِّفُ التَسجيل). وإعادَةُ رَبطِ الدَفعِ نَفسِه تُسَجِّلُ كَما كانَت.</para>
     /// </summary>
     [Fact]
-    public async Task Today_connecting_notices_after_a_bind_of_another_capability_re_registers_and_reseals_the_payments_secret()
+    public async Task Connecting_notices_after_a_bind_of_another_capability_calls_nothing_and_keeps_the_payments_secret_byte_identical()
     {
         var w = await PaidCart();
         w.Moyasar.Then(HttpStatusCode.Created, "{\"id\":\"wh-1\"}");
-        Assert.Null(await w.Gateway.ConnectNoticesAsync(Slug, "https://store.example"));
-        var first = Binding(w).Values["webhook_secret"].Cipher;
+        Assert.Null(await w.Gateway.ConnectNoticesAsync(Slug, ProviderCapabilities.Payments, "https://store.example"));
+        static string Print(TenantProviderBinding b) => string.Join("|", b.Values.OrderBy(v => v.Key, StringComparer.Ordinal)
+            .Select(v => $"{v.Key}={v.Value.Kind}:{v.Value.Plain}:{v.Value.Nonce}:{v.Value.Cipher}:{v.Value.Tag}:{v.Value.Aad}:{v.Value.KekVersion}"))
+            + $"#{b.WebhookId}#{b.WebhookRefusal}#{b.Status}";
+        var before = Print(Binding(w));
 
-        // رَبطُ مُزَوِّدِ مِلَفّات: البابُ يُنادي الخِدمَةَ بِحَرفِه — ولا يَقولُ لَها ما رُبِط.
+        var others = ProviderCapabilities.All.Where(c => c != ProviderCapabilities.Payments).Append("Payments").Append("").ToArray();
+        var counted = 0;
+        foreach (var capability in others)
+        {
+            Assert.Null(await w.Gateway.ConnectNoticesAsync(Slug, capability, "https://store.example"));
+            counted++;
+        }
+        output.WriteLine($"قُدُراتٌ مَفحوصَة: {counted} · نِداءاتُ ميسّر بَعدَ التَسجيلِ الأَوَّل: {w.Moyasar.Requests.Count - 1}");
+        Assert.True(counted >= ProviderCapabilities.All.Count - 1 && counted > 0, $"أَداةٌ عَمياء: {counted} قُدرَة.");
+        Assert.Single(w.Moyasar.Requests);
+        Assert.Equal(before, Print(Binding(w)));
+        Assert.Equal("wh-1", Binding(w).WebhookId);
+        Assert.NotNull(await w.Gateway.NoticeSecretAsync(Slug));
+
+        // وإعادَةُ رَبطِ مِفتاحِ الدَفعِ نَفسِه تُسَجِّلُ إشعاراً جَديداً كَما قالَ القَرار.
         w.Moyasar.Then(HttpStatusCode.Created, "{\"id\":\"wh-2\"}");
-        Assert.Null(await w.Gateway.ConnectNoticesAsync(Slug, "https://store.example"));
-        var second = Binding(w);
-        output.WriteLine($"نِداءاتُ ميسّر: {w.Moyasar.Requests.Count} · التَسجيل: {second.WebhookId} · السِرُّ تَبَدَّل: {first != second.Values["webhook_secret"].Cipher}");
-
+        Assert.Null(await w.Gateway.ConnectNoticesAsync(Slug, ProviderCapabilities.Payments, "https://store.example"));
         Assert.Equal(2, w.Moyasar.Requests.Count);
-        Assert.Equal("wh-2", second.WebhookId);
-        Assert.NotEqual(first, second.Values["webhook_secret"].Cipher);
-
-        // ورَدُّ البَوّابَةِ لِلتَسجيلِ الثاني يُسقِطُ السِرَّ العامِل.
-        w.Moyasar.Then(HttpStatusCode.Unauthorized, "{\"type\":\"authentication_error\"}");
-        Assert.Equal(MoyasarFailures.Refused, await w.Gateway.ConnectNoticesAsync(Slug, "https://store.example"));
-        Assert.False(Binding(w).Values.ContainsKey("webhook_secret"));
-        Assert.Null(await w.Gateway.NoticeSecretAsync(Slug));
+        Assert.Equal("wh-2", Binding(w).WebhookId);
+        Assert.NotEqual(before, Print(Binding(w)));
 
         var template = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
             "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs")));
         var bindAt = template.IndexOf("app.MapPost(\"/studio/apps/{slug}/providers/bind\"", StringComparison.Ordinal);
         var bind = template[bindAt..template.IndexOf(".DisableAntiforgery();", bindAt, StringComparison.Ordinal)];
-        Assert.Contains("gateway.ConnectNoticesAsync(slug, Billing.PayPalOrderSurface.OriginFrom(req))", bind, StringComparison.Ordinal);
-        Assert.DoesNotContain("read.Capability, Billing.PayPalOrderSurface", bind, StringComparison.Ordinal);
+        Assert.Contains("gateway.ConnectNoticesAsync(slug, read.Capability, Billing.PayPalOrderSurface.OriginFrom(req))", bind, StringComparison.Ordinal);
     }
 
     // ═══ ٤) الإشعارُ المَقبولُ يُثبَتُ بِالفاتورَةِ المَجلوبَة ═══════════════════════════════════════════════════════

@@ -506,9 +506,13 @@ public sealed class GatewayPayments
     /// احتِياطٌ كَما قالَ القَرار. تُرجِعُ رَمزَ الفَشَلِ أَو <c>null</c>.</para>
     /// <para><b>وما لا يَفعَلُه — يُقال</b>: لا يَحذِفُ تَسجيلاً سابِقاً عِندَ البَوّابَةِ حينَ يُعادُ الرَبط (حَذفُه لَم تُقرَأ صَفحَتُه) — فَإشعارُه بِسِرِّه القَديمِ يُرَدُّ
     /// ‏401 هُنا وتُعيدُه البَوّابَةُ حَتّى تَيأَس.</para>
+    /// <para><b>ولِرَبطِ الدَفعِ وَحدَه</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق؛ تَوصيفُ «اليَوم» <c>a1200e2</c>): <paramref name="boundCapability"/>
+    /// القُدرَةُ الَّتي كَتَبَها البابُ لِلتَّوّ. كانَ البابُ يُناديها بَعدَ كُلِّ رَبطٍ بِلا قُدرَة، فَرَبطُ مُزَوِّدِ مِلَفّاتٍ أَو خَرائِطَ في مَتجَرٍ مَربوطٍ بِمِفتاحِ ميسّر يُسَجِّلُ إشعاراً
+    /// ثانِياً بِسِرٍّ جَديدٍ ويَختِمُه فَوقَ العامِل — وإن رَدَّته البَوّابَةُ سَقَطَ السِرُّ فَيُجابُ الوارِدُ ‏404. فَما سِوى <see cref="ProviderCapabilities.Payments"/> لا نِداءَ لَه ولا كِتابَة.</para>
     /// </summary>
-    public async Task<string?> ConnectNoticesAsync(string tenantSlug, string origin, CancellationToken ct = default)
+    public async Task<string?> ConnectNoticesAsync(string tenantSlug, string boundCapability, string origin, CancellationToken ct = default)
     {
+        if (!string.Equals(boundCapability, ProviderCapabilities.Payments, StringComparison.Ordinal)) return null;
         var current = await _providers.CurrentAsync(tenantSlug, ProviderCapabilities.Payments, ct);
         var payments = await PaymentsBindingAsync(_providers, tenantSlug, ct);
         if (current is not { IsActive: true } || NoticeFieldOf(payments) is not { } field) return null;
