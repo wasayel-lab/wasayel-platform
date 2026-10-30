@@ -130,9 +130,11 @@ public static class DealReviewAuthorization
     /// فاعِلُه <paramref name="partyId"/> وفِعلُه مِن <see cref="StepActions"/>. يَسأَلُها <c>DealReviews</c> عَن هَدَفِ التَقييمِ ويُمَرِّرُ الجَوابَ وَسماً إلى
     /// الكيت؛ وهي قاعِدَةٌ عامَّةٌ تَصدُقُ في كُلِّ نَمَط. دالَّةٌ نَقِيَّة.</para>
     /// </summary>
+    /// <remarks>(‏2026-10-30، تَدقيقُ الموجَة ١١ CO11 — ولا يُعادُ حَرفٌ فَوقَه): <b>وما حَرَّكَه صاحِبُ المَتجَرِ مِن الاستوديو لَيسَ خُطوَتَه</b> (<see cref="DealEvent.IsByStudio"/>)
+    /// — البابُ يَكتُبُ سَطرَه بِمُعَرِّفِ الطَرَفِ المُقابِل، فَكانَ قَبولُ الإدارَةِ طَلَبَ بائِعٍ «خُطوَةً» لَه وتَقييمُه «مَوثوقاً» ولَم يَنقُر شَيئاً.</remarks>
     public static bool TookAStep(Deal deal, Guid partyId)
         => partyId != Guid.Empty
-           && deal.Timeline.Any(e => e.ActorId == partyId && StepActions.Contains(e.Action, StringComparer.Ordinal));
+           && deal.Timeline.Any(e => e.ActorId == partyId && StepActions.Contains(e.Action, StringComparer.Ordinal) && !DealEvent.IsByStudio(e));
 }
 
 /// <summary>

@@ -151,4 +151,13 @@ public sealed record DealEvent(
     public static bool IsByPlatform(DealEvent e)
         => (e.ActorId is null || e.ActorId == Guid.Empty)
            && string.Equals(e.ActorName, DealPatternCatalog.PlatformActor, StringComparison.Ordinal);
+
+    /// <summary>اسمُ فاعِلِ «→ التالي» مِن الاستوديو بِحَرفِ ما يُمَرِّرُه البابُ <c>/studio/apps/{slug}/deals/{id}/advance</c> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO11) —
+    /// والبابُ يَكتُبُه حَرفاً لا بِهذا الثابِت (صَفّانِ قَديمانِ يُثَبِّتانِ نِداءَه بِنَصِّه)، فَيَحرُسُ تَطابُقَهُما <c>DealStudioAdvanceStepTests</c>.</summary>
+    public const string StudioActor = "مالِك التَّطبيق (إداريّ)";
+
+    /// <summary><b>سَطرٌ حَرَّكَه صاحِبُ المَتجَرِ مِن الاستوديو</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO11): البابُ يُحَرِّكُ «بِهُوِيَّةِ جانِبِ المَتجَر» — مُعَرِّفُ الطَرَفِ
+    /// المُقابِلِ إن وُجِد (‏ADR-033 §٦‑ط) — فَمُعَرِّفُ السَطرِ لا يَقولُ مَن نَقَر؛ <b>والاسمُ يَقولُه</b>: <see cref="StudioActor"/>. والاسمُ لا المُعَرِّفُ لِأَنّه مَكتوبٌ عَلى
+    /// كُلِّ سَطرٍ سابِق، فَيَصدُقُ عَلى صَفَقاتٍ قَبلَ هذا الكوميت. دالَّةٌ لا خاصِّيَّة.</summary>
+    public static bool IsByStudio(DealEvent e) => string.Equals(e.ActorName, StudioActor, StringComparison.Ordinal);
 }

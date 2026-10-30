@@ -48,13 +48,15 @@ public class DealStudioAdvanceStepTests(ITestOutputHelper output)
         => WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
             "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs")));
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b> (القاعِدَة ٣): صاحِبُ المَتجَرِ يَقبَلُ مِن الاستوديو طَلَبَ بائِعٍ مَربوط (‏<c>Offered → Booked</c>) بِالنِداءِ الَّذي يُنادي بِه
-    /// البابُ حَرفاً — السَطرُ فاعِلُه البائِع ⇒ <c>TookAStep(deal, Seller)</c> صادِقٌ ولَم يَنقُر البائِعُ شَيئاً.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (تَوصيفُه <c>5fddc97</c> — كانَ <c>Today_a_studio_advance_counts_as_the_vendors_own_step</c>: صادِق): صاحِبُ المَتجَرِ يَقبَلُ مِن
+    /// الاستوديو طَلَبَ بائِعٍ مَربوطٍ بِالنِداءِ الَّذي يُنادي بِه البابُ حَرفاً — السَطرُ فاعِلُه البائِعُ بِاسمِ <see cref="DealEvent.StudioActor"/> كَما كان ⇒
+    /// <c>TookAStep(deal, Seller)</c> <b>كاذِب</b>. <b>والسالِب</b>: البائِعُ يَخطو الخُطوَةَ التالِيَةَ بِنَفسِه ⇒ صادِق. والبابُ يُمَرِّرُ الاسمَ بِحَرفِ الثابِت.</summary>
     [Fact]
-    public async Task Today_a_studio_advance_counts_as_the_vendors_own_step()
+    public async Task A_studio_advance_is_not_the_vendors_own_step_and_his_own_click_still_is()
     {
+        Assert.Equal(StudioName, DealEvent.StudioActor);
         Assert.Contains($"var actorId = deal.CounterpartyId ?? auth.UserId!.Value;", StudioAdvanceCall(), StringComparison.Ordinal);
-        Assert.Contains($"deals.AdvanceAsync(slug, id, actorId, \"{StudioName}\", note,", StudioAdvanceCall(), StringComparison.Ordinal);
+        Assert.Contains($"deals.AdvanceAsync(slug, id, actorId, \"{DealEvent.StudioActor}\", note,", StudioAdvanceCall(), StringComparison.Ordinal);
         var (world, deals, id) = await CashCart();
         var before = world.Read<Deal>(id.ToString())!;
 
@@ -65,6 +67,13 @@ public class DealStudioAdvanceStepTests(ITestOutputHelper output)
         output.WriteLine($"ok={moved.Ok} · {line.Action} {line.StageBefore}→{line.StageAfter} فاعِلُه {line.ActorId} «{line.ActorName}» · خَطا البائِع؟ {DealReviewAuthorization.TookAStep(deal, Seller)}");
         Assert.True(moved.Ok, moved.Reason);
         Assert.Equal(("advanced", (Guid?)Seller, StudioName), (line.Action, line.ActorId, line.ActorName));
+        Assert.True(DealEvent.IsByStudio(line));
+        Assert.False(DealReviewAuthorization.TookAStep(deal, Seller));
+
+        var own = await deals.AdvanceAsync(Slug, id, Seller, "بائِع", "");
+        Assert.True(own.Ok, own.Reason);
+        deal = world.Read<Deal>(id.ToString())!;
+        Assert.False(DealEvent.IsByStudio(deal.Timeline[^1]));
         Assert.True(DealReviewAuthorization.TookAStep(deal, Seller));
     }
 }
