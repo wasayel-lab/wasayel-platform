@@ -41,7 +41,7 @@
                 <a class="ac-offer" href="@AuthSession.LinkFor(Slug, Role, $"listings/{o.ListingId}")"
                    style="text-decoration:none;color:inherit;display:block;">
                     <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <span class="ac-chip ac-chip-sm">@StatusLabel(o.Status)</span>
+                        <span class="ac-chip ac-chip-sm">@StatusLabel(Shown(o))</span>
                         <span class="acm-details-price">@((MarkupString)ACommerce.Kit.Culture.Money.Format(o.Price, style: ACommerce.Kit.Culture.MoneyUnitStyle.Name))</span>
                     </div>
                     @if (!string.IsNullOrEmpty(o.Message))
@@ -49,7 +49,7 @@
                         <p style="margin:6px 0 0;font-size:13px;color:var(--ac-text-muted);">@o.Message</p>
                     }
                     <p style="margin:6px 0 0;font-size:11px;color:var(--ac-text-muted);">@((MarkupString)"\n                        ")@L.Markup("offers.mine.submitted_at") @Culture.FormatTime(o.SubmittedAt, "yyyy-MM-dd HH:mm")
-                        @if (o.Status == ACommerce.Kit.Offers.OfferStatus.Pending)
+                        @if (Live(o))
                         {
                             <span> · @L.Markup("offers.mine.valid_until") @Culture.FormatTime(o.ExpiresAt, "HH:mm")</span>
                         }
@@ -59,7 +59,7 @@
                         }
                     </p>
                 </a>
-                @if (o.Status == ACommerce.Kit.Offers.OfferStatus.Pending)
+                @if (Live(o))
                 {
                     <form method="post" action="@($"/{Slug}/offers/{o.Id}/withdraw")" style="margin:0;">
                         <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">
@@ -84,10 +84,22 @@
         // العُروضُ ومَواقِعُ الالتِقاط — نَفسُ التَرتيب (المُنتَهي يُؤَخَّر
         // وإن بَقِيَ Pending في المَخزَن) ونَفسُ قِراءَةِ مَجرى الأَحداث،
         // انتَقَلا إلى AccountQueries.MyOffersAsync.
-        var view = await Accounts.MyOffersAsync(Slug, Auth.UserId!.Value, DateTime.UtcNow);
+        now = DateTime.UtcNow;
+        var view = await Accounts.MyOffersAsync(Slug, Auth.UserId!.Value, now);
         offers = view.Offers.ToList();
         ListingPickup = view.Pickups.ToDictionary(kv => kv.Key, kv => kv.Value);
     }
+
+    /// <summary>لَحظَةُ القِراءَة — يُرَتِّبُ بِها الاستِعلامُ ويُسَمّي بِها الصَفُّ حالَ العَرض.</summary>
+    DateTime now;
+
+    /// <summary>(‏2026-10-30، تَدقيقُ الموجَة ١١ CO8) مُعَلَّقٌ لَم تَنتَهِ مُدَّتُه — لا يَقبَلُه بابُ القَبولِ بَعدَها (<c>OfferExpiry.ExpiredAt</c>)، فَلا يُرسَمُ لَه
+    /// «صالِح حَتَّى» ولا «سَحب» بَعدَها، ويُسَمّى «مُنتَهي» لا «قَيد المُراجَعَة».</summary>
+    bool Live(ACommerce.Kit.Offers.Offer o)
+        => o.Status == ACommerce.Kit.Offers.OfferStatus.Pending && !ACommerce.Kit.Offers.OfferExpiry.ExpiredAt(o, now);
+
+    ACommerce.Kit.Offers.OfferStatus Shown(ACommerce.Kit.Offers.Offer o)
+        => o.Status == ACommerce.Kit.Offers.OfferStatus.Pending && !Live(o) ? ACommerce.Kit.Offers.OfferStatus.Expired : o.Status;
 
     string StatusLabel(ACommerce.Kit.Offers.OfferStatus s) => s switch
     {

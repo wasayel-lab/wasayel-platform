@@ -216,6 +216,11 @@ else
            فَلا يَبلُغُه إلّا عَرضٌ سَبَقَ حَذفُه ذلك — ويُقالُ ولا يُبتلَع. *@
         <AcAlert Variant="warning" Message="@L["listings.detail.err_offer_gone"]" />
     }
+    else if (Err == ACommerce.Kit.Offers.OfferExpiry.Code)
+    {
+        @* ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ CO8) بابُ القَبولِ رَدَّ عَرضاً انتَهَت مُدَّتُه بَينَ رَسمِ الصَفحَةِ والنَقر. *@
+        <AcAlert Variant="warning" Message="@L["listings.detail.err_offer_expired"]" />
+    }
     else if (Err == ACommerce.Templates.Customer.Marketplace.Services.Deals.CheckoutCart.OwnerGoneCode)
     {
         @* `owner_gone` — رَدُّ بابَي السَلَّةِ والعَرضِ حينَ أَغلَقَ مالِكُ الإعلانِ حِسابَه (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1): الحَذفُ يَسحَبُ إعلاناتِه،
@@ -465,8 +470,8 @@ else
                                 }
                                 <span style="font-size:11px;color:var(--ac-text-muted);">@((MarkupString)"\n                                    ")@L.Markup("listings.detail.valid_until") @Culture.FormatTime(o.ExpiresAt, "HH:mm")
                                 </span>
-                                @* أَزرار القَبول/الرَفض لِصاحِب الإعلان فَقَط. *@
-                                @if (isOwner)
+                                @* أَزرار القَبول/الرَفض لِصاحِب الإعلان فَقَط. ‏(‏2026-10-30، CO8) ولِعَرضٍ لَم تَنتَهِ مُدَّتُه — سُؤالُ بابِ القَبولِ نَفسُه. *@
+                                @if (isOwner && !ACommerce.Kit.Offers.OfferExpiry.ExpiredAt(o, now))
                                 {
                                     <div style="display:flex;gap:6px;margin-top:8px;">
                                         <form method="post" action="@($"/{Slug}/offers/{o.Id}/accept")" style="margin:0;">
@@ -684,6 +689,8 @@ else
     bool IsFav;
     IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.ResolvedAttr>? resolvedAttrs;
     List<ACommerce.Kit.Offers.Offer> offers = new();
+    /// <summary>لَحظَةُ القِراءَة — يُرَشِّحُ بِها الاستِعلامُ العُروضَ القائِمَة، ويَسأَلُ بِها زِرُّ «قبول» (<c>OfferExpiry.ExpiredAt</c>، ‏CO8).</summary>
+    DateTime now;
     ACommerce.Kit.Offers.ListingMatch? listingMatch;
     bool showOffers;
     bool isOwner;
@@ -725,8 +732,9 @@ else
         dealPattern = MarketplaceTemplateExtensions.PatternFromTenant(tenant);
         if (tenant is null) return;
 
+        now = DateTime.UtcNow;
         var detail = await Storefront.ListingDetailAsync(
-            Slug, Id, Auth.IsAuthenticated ? Auth.UserId : null, DateTime.UtcNow);
+            Slug, Id, Auth.IsAuthenticated ? Auth.UserId : null, now);
         listing = detail.Listing;
         if (listing is null || listing.IsDeleted) return;
 

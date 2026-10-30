@@ -39,6 +39,21 @@ public sealed record OfferExpired(System.Guid Id, System.DateTime At);
 /// </summary>
 public sealed record OffererRenamed(System.Guid Id, string OffererName, System.DateTime At);
 
+/// <summary>
+/// <para><b>عَرضٌ انتَهَت مُدَّتُه</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO8؛ تَوصيفُه <c>8041dd7</c>): بَلَغَت اللَحظَةُ <see cref="Offer.ExpiresAt"/> — والوَقتُ
+/// الَّذي كَتَبَه التَقديمُ (الآنَ + المُهلَة) لا يُمَدَّد. دالَّةٌ نَقِيَّةٌ واحِدَةٌ يَسأَلُها بابُ القَبولِ (بَعدَ المالِكِ وقَبلَ أَيِّ كِتابَة، فَيَرُدُّ بِـ<see cref="Code"/>)،
+/// وصَفحَةُ الإعلانِ فَلا تَرسُمُ «قبول» لِمُنتَهٍ، و«عُروضي» فَتُسَمّيه «مُنتَهي» لا «قَيد المُراجَعَة». ولا حَدَثَ يُكتَب: <see cref="OfferExpired"/> بِلا مُصدِر
+/// كَما كانَ — الانتِهاءُ يُقرَأُ مِن الوَقتِ ولا يُخَزَّن.</para>
+/// <para>والحَدُّ نَفسُه الَّذي تَستَعمِلُه قائِمَتا العُروضِ في الاستِعلام (<c>ExpiresAt &gt; now</c> «قائِم»): المُنتَهي هُوَ ما لَيسَ قائِماً.</para>
+/// </summary>
+public static class OfferExpiry
+{
+    /// <summary>رَمزُ رَدِّ القَبولِ — تَقرَؤُه صَفحَةُ الإعلانِ بِـ<c>listings.detail.err_offer_expired</c>.</summary>
+    public const string Code = "offer_expired";
+
+    public static bool ExpiredAt(Offer offer, System.DateTime now) => now >= offer.ExpiresAt;
+}
+
 /// <summary>الحالات: pending → accepted | rejected | withdrawn | expired.</summary>
 public enum OfferStatus { Pending, Accepted, Rejected, Withdrawn, Expired }
 

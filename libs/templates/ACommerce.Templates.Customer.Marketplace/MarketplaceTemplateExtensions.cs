@@ -1554,6 +1554,9 @@ public static class MarketplaceTemplateExtensions
             // (`AccountErasure.EraseEvents`)، وهذا لِعَرضٍ سَبَقَ حَذفُه ذلك؛ وإلّا وُلِدَت مُطابَقَةٌ ومُحادَثَةٌ مَعَ حِسابٍ لا وُجودَ لَه.
             if (Services.Identity.AccountErasure.OffererGone(await s.LoadAsync<User>(offer.OffererId)))
                 return Results.Redirect(Link(req, slug, $"listings/{offer.ListingId}?err={Services.Identity.AccountErasure.OffererGoneCode}"));
+            // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ CO8) وعَرضٌ انتَهَت مُدَّتُه لا يُقبَل — بَعدَ المالِكِ وقَبلَ أَيِّ كِتابَة؛ وصَفحَتا الإعلانِ و«عُروضي» تَسأَلانِ الدالَّةَ نَفسَها.
+            if (ACommerce.Kit.Offers.OfferExpiry.ExpiredAt(offer, DateTime.UtcNow))
+                return Results.Redirect(Link(req, slug, $"listings/{offer.ListingId}?err={ACommerce.Kit.Offers.OfferExpiry.Code}"));
 
             var now = DateTime.UtcNow;
             s.Events.Append(id, new ACommerce.Kit.Offers.OfferAccepted(id, now));
