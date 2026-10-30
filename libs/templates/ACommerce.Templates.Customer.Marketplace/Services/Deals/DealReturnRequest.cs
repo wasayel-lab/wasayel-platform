@@ -1,3 +1,5 @@
+using ACommerce.Kit.Culture;
+
 namespace ACommerce.Templates.Customer.Marketplace.Services.Deals;
 
 /// <summary>خَرقٌ واحِدٌ في «طَلَبِ الاستِرجاع» — <c>Code</c> مِن <see cref="DealReturnRequest.All"/>، و<c>MessageAr</c> لِلمُراجِعِ البَشَريّ.
@@ -61,7 +63,13 @@ public static class DealReturnRequest
         => deal.Timeline.FirstOrDefault(e => e.Action == "advanced" && e.StageAfter == DealStage.Delivered)?.At;
 
     /// <summary>آخِرُ لَحظَةٍ يُقبَلُ فيها الطَلَب — التَسليمُ وسَبعَةُ أَيّام — أَو <c>null</c> حينَ لا تَسليم. تَقرَؤُها الصَفحَةُ لِتَقولَ «حَتّى مَتى».</summary>
-    public static DateTime? WindowEndsAt(Deal deal) => DeliveredAt(deal) is { } at ? at + Window : null;
+    /// <remarks>(‏2026-10-30، تَدقيقُ الموجَة ١١ E-deals-3؛ تَوصيفُه `7b17822` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): <b>آخِرُ اليَومِ السابِعِ بِتَوقيتِ الرِياض</b> — «خلال الأيام السبعة التالية
+    /// لتاريخ تسلّمه» أَيّامٌ تَقويمِيَّةٌ مِن تاريخِ التَسَلُّم، بِقاعِدَةِ المالِكِ لِلتَواريخِ في د51 (<see cref="CultureTime.EndOfDayUtc"/>)؛ كانَ <c>at + Window</c> — ‏168 ساعَةً
+    /// مِن النَقرَة — فَتَسليمٌ ‏09:00 يُغلِقُ ‏09:00 اليَومَ الثامِنَ ونَصُّ الرَدِّ «مَضَت سَبعَةُ الأَيّام» كاذِبٌ بَقِيَّةَ يَومِه. والصَفحَةُ والبَوّابَةُ تَقرَآنِها.</remarks>
+    public static DateTime? WindowEndsAt(Deal deal)
+        => DeliveredAt(deal) is { } at
+            ? CultureTime.EndOfDayUtc(DateOnly.FromDateTime(CultureTime.InZone(at)).AddDays(Window.Days))
+            : null;
 
     /// <summary><c>null</c> يَعني مُخَوَّل. والتَرتيبُ مَقصود: الغِياب، ثُمَّ الهُوِيَّة، ثُمَّ النَمَط، ثُمَّ التَسليم، ثُمَّ المُدَّة، ثُمَّ التَكرار.</summary>
     public static DealReturnViolation? Validate(Deal? deal, DealReturnRequester by, DateTime now)
@@ -77,10 +85,10 @@ public static class DealReturnRequest
         if (!string.Equals(deal.Pattern, GoodsPattern, StringComparison.Ordinal) || !CartBorn(deal))
             return new(PatternNotGoods, $"صَفقَةُ «{deal.Pattern}» {(CartBorn(deal) ? "" : "بِلا سَلَّةِ شِراءٍ ")}لَيسَت بَيعَ سِلعَة — زِرُّ الاستِرجاعِ لِبَيعِ السِلَعِ وَحدَه.");
 
-        if (deal.Status is not (DealStatus.Active or DealStatus.Completed) || DeliveredAt(deal) is not { } delivered)
+        if (deal.Status is not (DealStatus.Active or DealStatus.Completed) || DeliveredAt(deal) is null)
             return new(DealNotDelivered, $"الصَفقَةُ في حالَة {deal.Status} عِندَ «{deal.Stage}» — لَم تُسَلَّم السِلعَة.");
 
-        if (now > delivered + Window)
+        if (now > WindowEndsAt(deal)!.Value)   // (‏2026-10-30، E-deals-3): الحَدُّ الواحِدُ الَّذي تَقولُه الصَفحَة — كانَ `delivered + Window`
             return new(WindowClosed, "مَضَت سَبعَةُ الأَيّامِ مِن تَسليمِ السِلعَة.");
 
         if (deal.Timeline.Any(e => e.Action == DealEvent.ReturnRequested))

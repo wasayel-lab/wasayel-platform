@@ -111,15 +111,18 @@ public class DealReturnRequestTests(ITestOutputHelper output)
         Assert.Null(DealReturnRequest.Validate(reviewed, AsBuyer, DeliveredOn.AddDays(3)));
     }
 
-    /// <summary>الحَدّ: لَحظَةُ التَسليمِ وحَتّى سَبعَةِ أَيّامٍ بِتَمامِها مَقبولَة، وبَعدَها بِثانِيَةٍ مَردودَة — والوَقتُ مُمَرَّرٌ لا مَقروءٌ مِن ساعَة.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ E-deals-3؛ تَوصيفُه <c>7b17822</c> — كانَ
+    /// <c>WindowClosed_negative_a_second_past_seven_days_and_positive_up_to_the_seventh_day</c>: الحَدُّ <c>DeliveredOn + 7 أَيّام</c> بِالثانِيَة): التَسليمُ
+    /// ‏2026-10-20 ‏15:00 بِالرِياض ⇒ الحَدُّ <b>آخِرُ يَومِ 2026-10-27 بِتَوقيتِ الرِياض</b> — ‏23:59:59 مَقبولٌ، وبَعدَه بِثانِيَةٍ مَردود؛ والوَقتُ مُمَرَّرٌ لا مَقروءٌ مِن ساعَة.</summary>
     [Fact]
-    public void WindowClosed_negative_a_second_past_seven_days_and_positive_up_to_the_seventh_day()
+    public void WindowClosed_negative_a_second_past_the_seventh_riyadh_day_and_positive_up_to_its_last_second()
     {
         var deal = Delivered();
-        Assert.Equal(DeliveredOn.AddDays(7), DealReturnRequest.WindowEndsAt(deal));
-        foreach (var inside in new[] { DeliveredOn, DeliveredOn.AddDays(3.5), DeliveredOn.AddDays(7) })
+        var lastSecond = new DateTime(2026, 10, 27, 20, 59, 59, DateTimeKind.Utc);   // ‏23:59:59 بِالرِياض
+        Assert.Equal(ACommerce.Kit.Culture.CultureTime.EndOfDayUtc(new DateOnly(2026, 10, 27)), DealReturnRequest.WindowEndsAt(deal));
+        foreach (var inside in new[] { DeliveredOn, DeliveredOn.AddDays(3.5), DeliveredOn.AddDays(7), DeliveredOn.AddDays(7).AddSeconds(1), lastSecond })
             Assert.True(DealReturnRequest.IsAllowed(deal, AsBuyer, inside), $"{inside:O} داخِلَ المُدَّة.");
-        Assert.Equal(DealReturnRequest.WindowClosed, DealReturnRequest.Validate(deal, AsBuyer, DeliveredOn.AddDays(7).AddSeconds(1))!.Code);
+        Assert.Equal(DealReturnRequest.WindowClosed, DealReturnRequest.Validate(deal, AsBuyer, lastSecond.AddSeconds(1))!.Code);
         Assert.Equal(DealReturnRequest.WindowClosed, DealReturnRequest.Validate(deal, AsBuyer, DeliveredOn.AddDays(30))!.Code);
     }
 

@@ -32,16 +32,32 @@ public class DealReturnWindowDayTests(ITestOutputHelper output)
         return deal;
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b> (القاعِدَة ٣): التَسليمُ ‏2026-11-01 ‏09:00 بِالرِياض — المُدَّةُ تَنتَهي ‏2026-11-08 ‏09:00 بِالرِياضِ بِالضَبط، وطَلَبٌ ‏10:00 يَومَ
-    /// ‏2026-11-08 يُرَدُّ <c>return_window_closed</c>.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (تَوصيفُه <c>7b17822</c> — كانَ <c>Today_the_window_is_168_hours_from_the_delivery_click</c>: تَنتَهي ‏09:00 يَومَ 8): التَسليمُ ‏2026-11-01
+    /// ‏09:00 بِالرِياض ⇒ المُدَّةُ تَنتَهي <b>‏2026-11-08 ‏23:59:59 بِالرِياض</b> — طَلَبٌ ‏10:00 يَومَ 8 وطَلَبٌ ‏23:59:59 يُقبَلان (المُوجِب)، وبَعدَ آخِرِ ثانِيَةٍ بِثانِيَةٍ يُرَدُّ
+    /// <c>return_window_closed</c> (السالِب) — فَنَصُّ الرَدِّ «مَضَت سَبعَةُ الأَيّام» صادِقٌ بِالبِناء.</summary>
     [Fact]
-    public void Today_the_window_is_168_hours_from_the_delivery_click()
+    public void The_window_closes_at_the_end_of_the_seventh_riyadh_day_after_delivery()
     {
         var deal = DeliveredCartDeal(DeliveredUtc);
         var ends = DealReturnRequest.WindowEndsAt(deal)!.Value;
-        var tenAm = new DateTime(2026, 11, 8, 7, 0, 0, DateTimeKind.Utc);   // ‏10:00 بِالرِياض
-        output.WriteLine($"تَنتَهي: {CultureTime.InZone(ends):yyyy-MM-dd HH:mm:ss} بِالرِياض · الطَلَبُ 10:00 يَومَ 8: {DealReturnRequest.Validate(deal, AsBuyer, tenAm)?.Code ?? "يُقبَل"}");
-        Assert.Equal(DeliveredUtc.AddHours(168), ends);
-        Assert.Equal(DealReturnRequest.WindowClosed, DealReturnRequest.Validate(deal, AsBuyer, tenAm)?.Code);
+        var tenAm = new DateTime(2026, 11, 8, 7, 0, 0, DateTimeKind.Utc);          // ‏10:00 بِالرِياض
+        var lastSecond = new DateTime(2026, 11, 8, 20, 59, 59, DateTimeKind.Utc);  // ‏23:59:59 بِالرِياض
+        output.WriteLine($"تَنتَهي: {CultureTime.InZone(ends):yyyy-MM-dd HH:mm:ss} بِالرِياض · 10:00: {DealReturnRequest.Validate(deal, AsBuyer, tenAm)?.Code ?? "يُقبَل"} · " +
+                         $"23:59:59: {DealReturnRequest.Validate(deal, AsBuyer, lastSecond)?.Code ?? "يُقبَل"} · بَعدَها بِثانِيَة: {DealReturnRequest.Validate(deal, AsBuyer, lastSecond.AddSeconds(1))?.Code}");
+        Assert.Equal(CultureTime.EndOfDayUtc(new DateOnly(2026, 11, 8)), ends);
+        Assert.Equal(new DateTime(2026, 11, 8, 23, 59, 59), CultureTime.InZone(ends).AddTicks(-(CultureTime.InZone(ends).Ticks % TimeSpan.TicksPerSecond)));
+        Assert.Null(DealReturnRequest.Validate(deal, AsBuyer, tenAm));
+        Assert.Null(DealReturnRequest.Validate(deal, AsBuyer, lastSecond));
+        Assert.Equal(DealReturnRequest.WindowClosed, DealReturnRequest.Validate(deal, AsBuyer, lastSecond.AddSeconds(1))?.Code);
+    }
+
+    /// <summary>وتَسليمٌ قُبَيلَ مُنتَصَفِ لَيلِ الرِياضِ (‏23:30 = ‏20:30 UTC) يُعَدُّ مِن يَومِه بِتَوقيتِ الرِياضِ لا مِن يَومِ UTC — والحَدُّ آخِرُ اليَومِ السابِعِ بَعدَه.</summary>
+    [Fact]
+    public void The_delivery_day_is_the_riyadh_day_not_the_utc_day()
+    {
+        var lateNight = new DateTime(2026, 11, 1, 21, 30, 0, DateTimeKind.Utc);   // ‏2026-11-02 ‏00:30 بِالرِياض
+        Assert.Equal(CultureTime.EndOfDayUtc(new DateOnly(2026, 11, 9)), DealReturnRequest.WindowEndsAt(DeliveredCartDeal(lateNight)));
+        var evening = new DateTime(2026, 11, 1, 20, 30, 0, DateTimeKind.Utc);     // ‏2026-11-01 ‏23:30 بِالرِياض
+        Assert.Equal(CultureTime.EndOfDayUtc(new DateOnly(2026, 11, 8)), DealReturnRequest.WindowEndsAt(DeliveredCartDeal(evening)));
     }
 }
