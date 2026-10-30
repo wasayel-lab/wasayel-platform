@@ -228,6 +228,42 @@ public class SessionRevocationTests(ITestOutputHelper output)
         Assert.True(off.Count == 0, "كاتِبٌ يَحفَظُ الحِسابَ بِيَدِه: " + string.Join(" · ", off));
     }
 
+    // ─── StudioTier.Bump (الموجَة ١٢ F1 البَند ١٠ — G-docs-2، ‏2026-10-30): حِفظٌ بِلا إعادَةٍ بَعدَ أَثَرِه ─────────────────────────────
+
+    /// <summary>عالَمُ حِسابِ استوديو: الحِفظُ الأَوَّلُ يَرُدُّه كاتِبٌ مُوازٍ (دُخولُ جِهازٍ ثانٍ يَكتُبُ <c>LastLoginAt</c>) — يَضَعُ نُسخَتَه في المَخزَنِ ثُمَّ يَرمي
+    /// <c>ConcurrencyException</c>، كَما يَفعَلُ Marten حينَ تَتَغَيَّرُ النُسخَةُ بَعدَ القِراءَة.</summary>
+    private static (DocWorld World, ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioUser User, DateTime OtherLogin) StudioWorldWithAParallelWriter()
+    {
+        var user = new ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioUser { Id = Guid.NewGuid(), PeriodStart = DateTime.UtcNow, AnalysesUsed = 2 };
+        var otherLogin = DateTime.UtcNow.AddMinutes(-3);
+        var world = new DocWorld().Put(user);
+        var saves = 0;
+        world.BeforeMember = m =>
+        {
+            if (m != "SaveChangesAsync" || ++saves > 1) return;
+            world.Put(new ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioUser
+            {
+                Id = user.Id, PeriodStart = user.PeriodStart, AnalysesUsed = 2, LastLoginAt = otherLogin,
+            });
+            throw new JasperFx.ConcurrencyException(typeof(ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioUser), user.Id);
+        };
+        return (world, user, otherLogin);
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم»</b>: <c>StudioTier.Bump</c> تَحميلٌ وحِفظٌ بِلا إعادَة — فَتَعارُضٌ عَلى الحِفظِ الأَوَّلِ يَرمي مِن <c>RecordAnalysisAsync</c>
+    /// (بابُ التَحليلِ يَصيرُ ‏500 بَعدَ أَن حَجَزَ الفِكرَةَ «قيدَ التَحليل»)، ولا تُعَدُّ الزِيادَة. يُقلَبُ بِاسمِه في كوميتِ التَبديل.</summary>
+    [Fact]
+    public async Task Today_a_parallel_studio_writer_turns_the_analysis_count_into_a_throw()
+    {
+        var (world, user, _) = StudioWorldWithAParallelWriter();
+        var tier = new ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioTierService(world.Store);
+        var ex = await Record.ExceptionAsync(() => tier.RecordAnalysisAsync(user.Id));
+        var stored = world.Read<ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioUser>(user.Id.ToString())!;
+        output.WriteLine($"اليَوم: تَعارُضٌ عَلى الحِفظِ الأَوَّل ⇒ {ex?.GetType().Name ?? "لا رَمي"} · التَحليلاتُ المَعدودَة {stored.AnalysesUsed} (كانَت 2) · الحِفظ {world.SaveCalls}");
+        Assert.IsType<JasperFx.ConcurrencyException>(ex);
+        Assert.Equal(2, stored.AnalysesUsed);
+    }
+
     /// <summary>حَقنُ عَيب (القاعِدَة ١٠): شَكلُ اليَومِ بِحَرفِه يُحمِرُّ الفاحِص، وشَكلُ اليَومِ لِلاستوديو أَيضاً.</summary>
     [Theory]
     [InlineData("await using var s = store.LightweightSession(slug);\nvar user = await s.LoadAsync<User>(userId);\ns.Store(user);")]
