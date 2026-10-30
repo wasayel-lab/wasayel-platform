@@ -248,6 +248,19 @@ public sealed class DealNotices
     public static Guid? VendorToTell(Deal deal, Guid cancellerId)
         => NewDealRecipient(deal) is { } vendor && vendor != cancellerId ? vendor : null;
 
+    /// <summary>
+    /// <para><b>أَصاحِبُ الاستوديو وهذا العُضوُ شَخصٌ واحِد؟ — دالَّةٌ نَقِيَّة</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO4): الهُوِيَّتانِ مُنفَصِلَتانِ في الكود —
+    /// <see cref="TenantAdminGuard"/> يَقبَلُ <c>Tenant.OwnerUserId == StudioUser.Id</c> أَو عُضواً بِـ<c>tenant.manage</c> ولا يَربِطُهُما — فَالصِلَةُ <b>الوَسيلَة</b>:
+    /// هاتِفٌ يَدخُلُ بِه الاستوديو (<see cref="StudioUser.Phone"/>، يُخَزَّنُ بَعدَ رَمزِه) هُوَ هاتِفُ العُضوِ المُتَحَقَّقُ مِنه بِرَقَمِه لا بِكِتابَتِه
+    /// (<see cref="PhoneNumber.Canonical"/>)، أَو بَريدٌ كَذلِك (<see cref="EmailAddress.Normalize"/>). وسيلَةٌ لَم يَتَحَقَّق مِنها العُضوُ لا تَربِطُ — يَكتُبُها مَن شاء.</para>
+    /// </summary>
+    public static bool SamePerson(StudioUser? studio, User? member)
+        => studio is not null && member is not null
+        && ((member.PhoneVerified && !string.IsNullOrWhiteSpace(studio.Phone) && !string.IsNullOrWhiteSpace(member.Phone)
+                && PhoneNumber.Canonical(studio.Phone) == PhoneNumber.Canonical(member.Phone))
+            || (member.EmailVerified && !string.IsNullOrWhiteSpace(studio.Email) && !string.IsNullOrWhiteSpace(member.Email)
+                && EmailAddress.Normalize(studio.Email) == EmailAddress.Normalize(member.Email)));
+
     /// <summary>إشعارُ البائِعِ بِأَنّ طَلَباً عِندَه أُلغِيَ — بِنَوعِ الإلغاءِ وأَيقونَتِه، وعُنوانُ الإعلانِ في المَتن، ولا اسمَ لِلمُلغي: النَصُّ واحِدٌ لِكُلِّ
     /// مَسارٍ (المُشتَري، والاستوديو، ومِفتاحُ الربط) فَلا يُكتَبُ اسمٌ شَخصِيٌّ لِمالِكِ مَتجَرٍ في إشعارِ بائِع.</summary>
     public static Notification CancelledToVendorFor(string slug, Deal deal, Guid vendorId, L l, DateTime at) => new()
@@ -543,7 +556,8 @@ public sealed class DealNotices
     public async Task<bool> NotifyCancelledByStoreAsync(
         string slug, Deal deal, Guid ownerId, L l, CancellationToken ct = default)
     {
-        await NotifyVendorCancelledAsync(slug, deal, ownerId, l, ct);
+        // (‏2026-10-30، تَدقيقُ الموجَة ١١ CO4 — ولا يُعادُ حَرفٌ فَوقَه): المُلغي بِهُوِيَّةِ عُضوِه إن كانَ صاحِبُ الاستوديو هُوَ البائِع — لا يُخبَرُ بِما فَعَلَه.
+        await NotifyVendorCancelledAsync(slug, deal, await VendorIfStudioOwnerAsync(slug, deal, ownerId, ct) ?? ownerId, l, ct);
         await NotifyStoreOwnerAsync(slug, deal, l, ct);
         if (!TellsTheBuyer(deal, ownerId)) return false;
         var n = CancelledByStoreFor(slug, deal, l, DateTime.UtcNow);
@@ -643,6 +657,18 @@ public sealed class DealNotices
             told++;
         }
         return told;
+    }
+
+    /// <summary>مُعَرِّفُ البائِعِ العُضوِ إن كانَ هُوَ صاحِبَ الاستوديو <paramref name="studioUserId"/> نَفسَه (<see cref="SamePerson"/>)، وإلّا <c>null</c> — قِراءَتانِ
+    /// (‏2026-10-30، تَدقيقُ الموجَة ١١ CO4).</summary>
+    private async Task<Guid?> VendorIfStudioOwnerAsync(string slug, Deal deal, Guid studioUserId, CancellationToken ct)
+    {
+        if (NewDealRecipient(deal) is not { } vendor) return null;
+        StudioUser? studio;
+        await using (var q = _store.QuerySession(StudioAuth.Tenant)) studio = await q.LoadAsync<StudioUser>(studioUserId, ct);
+        if (studio is null) return null;
+        await using var m = _store.QuerySession(slug);
+        return SamePerson(studio, await m.LoadAsync<User>(vendor, ct)) ? vendor : null;
     }
 
     /// <summary>

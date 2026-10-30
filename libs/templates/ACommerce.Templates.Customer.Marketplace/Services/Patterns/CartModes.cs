@@ -61,14 +61,18 @@ public static class CartModes
 
     /// <summary>
     /// <para><b>سُؤالُ <c>cart/add</c> قَبلَ أَيِّ كِتابَة</b>: في <see cref="Mixed"/> لا يَقرَأُ شَيئاً (التَكافُؤُ الصِفرِيّ)؛ وفي <see cref="PerVendor"/> يَقرَأُ إعلانَ أَوَّلِ
-    /// بَندٍ في السَلَّةِ غَيرِ هذا الإعلانِ — والسَلَّةُ لِبائِعٍ واحِدٍ بِهذا القَيدِ نَفسِه — ويَسأَلُ <see cref="Refuses"/>. وإعلانٌ لَم يَعُد يُقرَأُ لا يَرُدّ.</para>
+    /// بَندٍ في السَلَّةِ غَيرِ هذا الإعلانِ — والسَلَّةُ لِبائِعٍ واحِدٍ بِهذا القَيدِ نَفسِه — ويَسأَلُ <see cref="Refuses"/>. وإعلانٌ لَم يَعُد يُقرَأُ لا يَرُدّ.
+    /// (‏2026-10-30، تَدقيقُ الموجَة ١١ CO4: «أَوَّلِ بَندٍ» صارَ «كُلَّ بَندٍ» — والقَيدُ لا يَصدُقُ عَلى سَلَّةٍ قَبلَه؛ انظُر الجِسم.)</para>
     /// </summary>
     public static async Task<string?> RefusalAsync(Tenant? tenant, IDocumentSession session, ACommerce.Kit.Cart.Cart cart, Listing listing)
     {
         var mode = Of(tenant);
         if (mode != PerVendor) return null;
-        var other = cart.Items.FirstOrDefault(i => i.ListingId != listing.Id);
-        if (other is null) return null;
-        return Refuses(mode, VendorOf(await session.LoadAsync<Listing>(other.ListingId)), VendorOf(listing));
+        // (‏2026-10-30، تَدقيقُ الموجَة ١١ CO4 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>كُلُّ بَندٍ آخَرَ لا أَوَّلُه</b> — سَلَّةٌ مِن عَهدِ «المُختَلِطَة» قَبلَ أَن يُقلَبَ
+        // النَمَطُ تَحمِلُ بائِعَين، وبَندٌ أَوَّلُ حُذِفَ إعلانُه لا يُقرَأ؛ فَكانَ بائِعُ البَندِ الأَوَّلِ يُقبَلُ والثاني في السَلَّة. أَوَّلُ رَدٍّ يُرجَع.
+        var added = VendorOf(listing);
+        foreach (var other in cart.Items.Where(i => i.ListingId != listing.Id).Select(i => i.ListingId).Distinct())
+            if (Refuses(mode, VendorOf(await session.LoadAsync<Listing>(other)), added) is { } code) return code;
+        return null;
     }
 }

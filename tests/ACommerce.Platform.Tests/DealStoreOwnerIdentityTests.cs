@@ -63,20 +63,39 @@ public class DealStoreOwnerIdentityTests(ITestOutputHelper output)
 
     private static int To(DocWorld docs, Guid user) => docs.Stored.OfType<Notification>().Count(n => n.UserId == user);
 
-    /// <summary><b>تَوصيفُ «اليَوم» (١)</b> (القاعِدَة ٣): صاحِبُ المَتجَرِ في الاستوديو (‏<c>0501234567</c>) وعُضوٌ بائِعٌ بِالهاتِفِ نَفسِه مَكتوباً
-    /// <c>+966501234567</c> — يُلغي مِن الاستوديو طَلَبَه ⇒ <b>يُخبَرُ بائِعاً بِما فَعَلَه هُوَ</b>، والمُشتَري مَرَّة.</summary>
-    [Fact]
-    public async Task Today_the_studio_owner_cancelling_an_order_on_his_own_member_listing_is_told_as_its_vendor()
+    /// <summary><b>قُلِبَ بِاسمِه</b> (تَوصيفُه <c>901678e</c> — كانَ <c>Today_the_studio_owner_cancelling_an_order_on_his_own_member_listing_is_told_as_its_vendor</c>:
+    /// البائِع ×1): صاحِبُ المَتجَرِ في الاستوديو (‏<c>0501234567</c>) وعُضوٌ بائِعٌ بِالهاتِفِ نَفسِه مَكتوباً <c>+966501234567</c> مُتَحَقَّقٍ مِنه — يُلغي مِن الاستوديو
+    /// ⇒ <b>لا يُخبَرُ بِما فَعَلَه</b>، والمُشتَري مَرَّةً كَما كان. <b>والسالِب</b>: عُضوٌ بائِعٌ بِهاتِفٍ آخَر، أَو بِالهاتِفِ نَفسِه لَم يَتَحَقَّق مِنه ⇒ يُخبَرُ مَرَّة.</summary>
+    [Theory]
+    [InlineData("+966501234567", true, 0)]
+    [InlineData("0501234567", true, 0)]
+    [InlineData("+966509999999", true, 1)]
+    [InlineData("+966501234567", false, 1)]
+    public async Task The_studio_owner_cancelling_an_order_on_his_own_member_listing_is_not_told_as_its_vendor(string vendorPhone, bool verified, int vendorTold)
     {
-        var (docs, deal) = World("+966501234567");
+        var (docs, deal) = World(vendorPhone, verified);
         var l = new L(new HttpContextAccessor());
 
         Assert.True(await Notices(docs).NotifyCancelledByStoreAsync(Slug, deal, StudioOwner, l));
 
-        output.WriteLine($"البائِعُ (صاحِبُ المَتجَرِ نَفسُه): {To(docs, VendorMember)} · المُشتَري: {To(docs, Buyer)}");
-        Assert.Equal(1, To(docs, VendorMember));
+        output.WriteLine($"{vendorPhone} (مُتَحَقَّق={verified}): البائِع {To(docs, VendorMember)} · المُشتَري {To(docs, Buyer)}");
+        Assert.Equal(vendorTold, To(docs, VendorMember));
         Assert.Equal(1, To(docs, Buyer));
-        Assert.Equal(VendorMember, DealNotices.VendorToTell(deal, StudioOwner));
+    }
+
+    /// <summary><see cref="DealNotices.SamePerson"/> — المُوجِبُ والسالِب: الهاتِفُ بِرَقَمِه، والبَريدُ بِتَطبيعِه، ومُتَحَقَّقٌ مِنهُما عِندَ العُضوِ وَحدَه يَربِط؛
+    /// وفارِغٌ لا يُطابِقُ فارِغاً، ولا غائِبٌ.</summary>
+    [Fact]
+    public void Same_person_is_a_verified_shared_contact_and_nothing_else()
+    {
+        var studio = new StudioUser { Id = StudioOwner, Phone = "0501234567", Email = "owner@store.example" };
+        Assert.True(DealNotices.SamePerson(studio, new User { Phone = "+966 50 123 4567", PhoneVerified = true }));
+        Assert.True(DealNotices.SamePerson(studio, new User { Email = "Owner@Store.example ", EmailVerified = true }));
+        Assert.False(DealNotices.SamePerson(studio, new User { Email = "owner@store.example", EmailVerified = false }));
+        Assert.False(DealNotices.SamePerson(studio, new User { Phone = "+966501234560", PhoneVerified = true }));
+        Assert.False(DealNotices.SamePerson(new StudioUser { Phone = "", Email = "" }, new User { Phone = "", PhoneVerified = true, Email = "", EmailVerified = true }));
+        Assert.False(DealNotices.SamePerson(null, new User { Phone = "0501234567", PhoneVerified = true }));
+        Assert.False(DealNotices.SamePerson(studio, null));
     }
 
     private static Listing ListingOf(Guid owner)
@@ -89,10 +108,11 @@ public class DealStoreOwnerIdentityTests(ITestOutputHelper output)
         return cart;
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم» (٢)</b>: سَلَّةٌ فيها بائِعانِ (أ ثُمَّ ب) في «لِكُلِّ بائِعٍ سَلَّة» — إضافَةُ إعلانٍ لِـ«أ» تُقبَل (البَندُ الأَوَّلُ لِـ«أ»)؛ وسَلَّةٌ بَندُها الأَوَّلُ
-    /// حُذِفَ إعلانُه والثاني لِـ«ب» — إضافَةُ «أ» تُقبَلُ كَذلِك.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (تَوصيفُه <c>901678e</c> — كانَ <c>Today_a_per_vendor_cart_asks_only_its_first_other_line</c>: تُقبَلانِ كِلتاهُما): سَلَّةٌ فيها
+    /// بائِعانِ (أ ثُمَّ ب) في «لِكُلِّ بائِعٍ سَلَّة» — إضافَةُ «أ» <b>تُرَدّ</b> بِـ<c>cart_other_vendor</c>؛ وسَلَّةٌ بَندُها الأَوَّلُ حُذِفَ إعلانُه والثاني لِـ«ب» — تُرَدُّ كَذلِك.
+    /// <b>والسالِب</b>: سَلَّةُ «أ+أ» ← «أ» تُقبَل، وسَلَّةُ «مَحذوف+أ» ← «أ» تُقبَل، وفي «المُختَلِطَة» لا رَدّ.</summary>
     [Fact]
-    public async Task Today_a_per_vendor_cart_asks_only_its_first_other_line()
+    public async Task A_per_vendor_cart_asks_every_other_line()
     {
         var docs = new DocWorld();
         var (a, b) = (Guid.NewGuid(), Guid.NewGuid());
@@ -105,7 +125,12 @@ public class DealStoreOwnerIdentityTests(ITestOutputHelper output)
         var firstGone = await CartModes.RefusalAsync(perVendor, s, CartOf(gone, b1), ListingOf(a));
 
         output.WriteLine($"سَلَّةُ «أ+ب» ← «أ»: {twoVendors ?? "تُقبَل"} · سَلَّةُ «مَحذوف+ب» ← «أ»: {firstGone ?? "تُقبَل"}");
-        Assert.Null(twoVendors);
-        Assert.Null(firstGone);
+        Assert.Equal(CartModes.OtherVendorCode, twoVendors);
+        Assert.Equal(CartModes.OtherVendorCode, firstGone);
+        var a2 = ListingOf(a);
+        docs.Put(a2);
+        Assert.Null(await CartModes.RefusalAsync(perVendor, s, CartOf(a1, a2), ListingOf(a)));
+        Assert.Null(await CartModes.RefusalAsync(perVendor, s, CartOf(gone, a2), ListingOf(a)));
+        Assert.Null(await CartModes.RefusalAsync(new Tenant { CartMode = CartModes.Mixed }, s, CartOf(a1, b1), ListingOf(a)));
     }
 }
