@@ -25,8 +25,41 @@ public class LoginChannelsTests(ITestOutputHelper output)
         return doors[0].Body;
     }
 
-    internal static readonly string[] SignInDoors =
-        ["/{slug}/auth/phone/login", "/{slug}/auth/phone/verify", "/{slug}/auth/email/login", "/{slug}/auth/email/verify"];
+    /// <summary>بابُ دُخولٍ والنَوعُ الَّذي يَسأَلُ عَنه — اسمُ ثابِتِ <c>AuthChannels</c> كَما يُكتَبُ في الجِسم.</summary>
+    internal sealed record SignInDoor(string Route, string Kind);
+
+    /// <summary>أَبوابُ الدُخولِ السِتَّة (‏2026-10-30، الموجَة ١٢ F1 A-SESS-1: كانَت أَربَعَةً بِلا نَوع — الجَوّالُ والبَريد — وبابا نَفاذٍ خارِجَها).</summary>
+    internal static readonly SignInDoor[] SignInDoors =
+    [
+        new("/{slug}/auth/phone/login", "Phone"), new("/{slug}/auth/phone/verify", "Phone"),
+        new("/{slug}/auth/email/login", "Email"), new("/{slug}/auth/email/verify", "Email"),
+        new("/{slug}/auth/nafath/login", "Nafath"), new("/{slug}/auth/nafath/verify", "Nafath"),
+    ];
+
+    private static readonly string[] Kinds = ["Phone", "Email", "Nafath"];
+
+    private static string AskOf(string kind) => $"Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.{kind},";
+
+    /// <summary>
+    /// <para><b>خَرقُ بابِ دُخولٍ لِقَرارِ القَناة</b> — دالَّةٌ تُسأَلُ عَلى جِسمٍ مُعطى (‏2026-10-30، الموجَة ١٢ F1، نَسَقُ <see cref="VerifyDoorBreach"/>)، <c>null</c>
+    /// إن سَأَلَ البابُ <c>LoginChannels.Offers</c> عَن نَوعِه <b>هُوَ</b> (لا عَن نَوعٍ آخَر) قَبلَ أَن يَقرَأَ حَقلاً أَو جِسماً، ورَدَّ <c>channel_not_offered</c>
+    /// بَعدَ السُؤالِ وقَبلَ الحَقل. وإلّا سَبَبُ الخَرق.</para>
+    /// </summary>
+    internal static string? SignInDoorBreach(string body, string kind)
+    {
+        var at = body.IndexOf(AskOf(kind), StringComparison.Ordinal);
+        if (at < 0) return $"لا يَسأَلُ {AskOf(kind)}";
+        foreach (var other in Kinds.Where(k => k != kind))
+            if (body.Contains(AskOf(other), StringComparison.Ordinal)) return $"يَسأَلُ عَن نَوعٍ آخَر AuthChannels.{other}";
+        var field = body.IndexOf("req.Form[", StringComparison.Ordinal);
+        var json = body.IndexOf("ReadFromJsonAsync", StringComparison.Ordinal);
+        if (field >= 0 && field < at) return "يَقرَأُ حَقلاً قَبلَ أَن يَسأَل";
+        if (json >= 0 && json < at) return "يَقرَأُ الجِسمَ قَبلَ أَن يَسأَل";
+        var refusal = body.IndexOf("login?err={Services.LoginChannels.NotOffered}", at, StringComparison.Ordinal);
+        if (refusal < 0) return "لا يَرُدُّ بِـchannel_not_offered بَعدَ السُؤال";
+        if (field >= 0 && refusal > field) return "الرَدُّ بَعدَ قِراءَةِ حَقل";
+        return null;
+    }
 
     /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، A2 — كوميتُ التَبديل)</b> — كانَ <c>Today_the_login_page_draws_one_form_chosen_by_the_store_channel_alone</c>
     /// (‏<c>beacb18</c>): «استِماراتُ الدُخولِ 1 · 1 · 1 · مَفتاحُ قَناةٍ ثانِيَة False». والآن الاستِمارَةُ المَرسومَةُ <c>Active</c> (مِن <c>LoginChannels</c>) والمِفتاحُ
@@ -59,24 +92,44 @@ public class LoginChannelsTests(ITestOutputHelper output)
 
     /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، A2)</b> — كانَ <c>Today_the_email_and_phone_sign_in_doors_never_read_the_store_channel</c>: «تَسأَلُ قَناةَ
     /// المَتجَر 0». والآن الأَبوابُ الأَربَعَةُ تَسأَلُ <c>LoginChannels.Offers</c> قَبلَ أَن تَقرَأَ حَقلاً.</summary>
+    /// <remarks>‏(‏2026-10-30، الموجَة ١٢ F1 A-SESS-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ اسمُه <c>Every_email_and_phone_sign_in_door_asks_the_store_channel_before_it_reads_a_field</c>
+    /// والقائِمَةُ أَربَعَةَ أَبوابٍ والسُؤالُ «أَيَّ <c>Offers</c>» بِلا نَوع؛ والآن سِتَّةٌ — ومَعَها بابا نَفاذ — ويُسأَلُ كُلٌّ عَن نَوعِه بِـ<see cref="SignInDoorBreach"/>،
+    /// ولِلدالَّةِ عَيِّنَةٌ مَحقونَة (<see cref="The_sign_in_door_check_refuses_a_door_body_in_an_old_shape"/>).</remarks>
     [Fact]
-    public void Every_email_and_phone_sign_in_door_asks_the_store_channel_before_it_reads_a_field()
+    public void Every_sign_in_door_asks_the_store_channel_before_it_reads_a_field()
     {
         var asking = 0;
-        foreach (var route in SignInDoors)
+        foreach (var door in SignInDoors)
         {
-            var body = Door(route);
-            var ask = body.IndexOf("Services.LoginChannels.Offers(tenant.AuthChannel", StringComparison.Ordinal);
-            var field = body.IndexOf("req.Form[", StringComparison.Ordinal);
-            var json = body.IndexOf("ReadFromJsonAsync", StringComparison.Ordinal);
-            Assert.True(ask >= 0, $"«{route}» لا يَسأَلُ قَناةَ المَتجَر.");
-            Assert.True(field < 0 || ask < field, $"«{route}» يَقرَأُ حَقلاً قَبلَ أَن يَسأَل.");
-            Assert.True(json < 0 || ask < json, $"«{route}» يَقرَأُ الجِسمَ قَبلَ أَن يَسأَل.");
-            Assert.Contains("login?err={Services.LoginChannels.NotOffered}", body, StringComparison.Ordinal);
+            var breach = SignInDoorBreach(Door(door.Route), door.Kind);
+            Assert.True(breach is null, $"«{door.Route}»: {breach}.");
             asking++;
         }
-        output.WriteLine($"بَعدَ التَبديل: أَبوابُ الدُخولِ بِالجَوّالِ والبَريد {SignInDoors.Length} · تَسأَلُ قَناةَ المَتجَرِ أَوَّلاً {asking}");
-        Assert.Equal(4, asking);
+        output.WriteLine($"بَعدَ التَبديل: أَبوابُ الدُخولِ المَفحوصَة {SignInDoors.Length} · تَسأَلُ قَناةَ المَتجَرِ عَن نَوعِها أَوَّلاً {asking}");
+        Assert.True(asking > 0, "الأَداةُ عَمياء: صِفرُ باب.");
+        Assert.Equal(6, asking);
+    }
+
+    /// <summary><b>عَيِّنَةٌ مَحقونَةٌ لِلدالَّة</b> (القاعِدَة ١٠): أَجسامٌ بِأَشكالٍ قَديمَةٍ أَو مَكسورَة — بابُ نَفاذٍ بِحَرفِه قَبلَ التَبديل، والسُؤالُ بَعدَ الحَقل،
+    /// والسُؤالُ عَن نَوعٍ آخَر، والسُؤالُ عَن نَوعَين، والرَدُّ بِغَيرِ الرَمز — كُلٌّ يُرَدّ، والبابُ الحَقيقيُّ لِلنَوعِ نَفسِه يَمُرّ.</summary>
+    [Theory]
+    [InlineData("nafath-before-the-switch", "Nafath",
+        "if (!tenant.IsResolved) return Results.NotFound(); var nid = req.Form[\"nid\"].ToString().Trim(); if (channel is null) return Results.Redirect(Link(req, slug, $\"login?err=nafath_unavailable\"));")]
+    [InlineData("asks-after-a-field", "Nafath",
+        "var nid = req.Form[\"nid\"].ToString().Trim(); if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Nafath, channel is not null)) return Results.Redirect(Link(req, slug, $\"login?err={Services.LoginChannels.NotOffered}\"));")]
+    [InlineData("asks-another-kind", "Nafath",
+        "if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Phone, channel is not null)) return Results.Redirect(Link(req, slug, $\"login?err={Services.LoginChannels.NotOffered}\")); var nid = req.Form[\"nid\"];")]
+    [InlineData("asks-two-kinds", "Nafath",
+        "if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Nafath, true) && !Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Phone, true)) return Results.Redirect(Link(req, slug, $\"login?err={Services.LoginChannels.NotOffered}\")); var nid = req.Form[\"nid\"];")]
+    [InlineData("refuses-without-the-code", "Nafath",
+        "if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Nafath, channel is not null)) return Results.NotFound(); var nid = req.Form[\"nid\"];")]
+    public void The_sign_in_door_check_refuses_a_door_body_in_an_old_shape(string shape, string kind, string body)
+    {
+        var breach = SignInDoorBreach(body, kind);
+        output.WriteLine($"{shape}: {breach ?? "يَمُرّ"}");
+        Assert.NotNull(breach);
+        var real = SignInDoors.First(d => d.Kind == kind);
+        Assert.Null(SignInDoorBreach(Door(real.Route), kind));
     }
 
     // ─── A-SESS-1 (الموجَة ١٢ F1 البَند ٥، ‏2026-10-30): بابا نَفاذٍ لا يَسأَلانِ قَناةَ المَتجَر ─────────────────────────────────────────
@@ -90,15 +143,23 @@ public class LoginChannelsTests(ITestOutputHelper output)
 
     internal static readonly string[] NafathDoors = ["/{slug}/auth/nafath/login", "/{slug}/auth/nafath/verify"];
 
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، كوميتُ التَبديل)</b> — كانَ <c>Today_the_nafath_sign_in_doors_never_ask_the_store_channel</c> (‏<c>5bde19e</c>):
+    /// «يَسأَلانِ قَناةَ المَتجَر 0/2 · بابُ التَأكيدِ يُنادي المُعالِجَ الَّذي يُنشِئ True». والآن البابانِ يَسأَلانِ عَن نَفاذٍ قَبلَ حَقلٍ واحِد، والمُعالِجُ
+    /// نَفسُه — وهُوَ جِسمُ مَسارِ <c>[WolverinePost]</c> أَيضاً — يَرُدُّ مَتجَراً لا يُدخِلُ نَفاذاً قَبلَ أَن يَقرَأَ المُحاوَلَة.</summary>
     [Fact]
-    public void Today_the_nafath_sign_in_doors_never_ask_the_store_channel()
+    public void The_nafath_sign_in_doors_ask_whether_the_store_offers_nafath_and_so_does_the_verify_handler()
     {
-        var asking = NafathDoors.Count(r => Door(r).Contains("Services.LoginChannels.Offers(", StringComparison.Ordinal));
-        var creates = Door("/{slug}/auth/nafath/verify").Contains("AuthHandlers.VerifyNafathHandler(", StringComparison.Ordinal);
-        output.WriteLine($"اليَوم: بابا نَفاذٍ يَسأَلانِ قَناةَ المَتجَر {asking}/{NafathDoors.Length} · بابُ التَأكيدِ يُنادي المُعالِجَ الَّذي يُنشِئ {creates}");
+        var asking = NafathDoors.Count(r => SignInDoorBreach(Door(r), "Nafath") is null);
+        var calls = Door("/{slug}/auth/nafath/verify").Contains("AuthHandlers.VerifyNafathHandler(", StringComparison.Ordinal);
+        var handler = Read("libs/kits/Auth/ACommerce.Kit.Auth.Server/AuthHandlers.cs");
+        var start = handler.IndexOf("public static async Task<AuthResult?> VerifyNafathHandler(", StringComparison.Ordinal);
+        var ask = handler.IndexOf("if (!NafathSignsIn(tenantCtx.AuthChannel)) return null;", start, StringComparison.Ordinal);
+        var attempt = handler.IndexOf("Attempts.TryGetValue(cmd.AttemptId", start, StringComparison.Ordinal);
+        output.WriteLine($"بَعدَ التَبديل: بابا نَفاذٍ يَسأَلانِ قَناةَ المَتجَر {asking}/{NafathDoors.Length} · بابُ التَأكيدِ يُنادي المُعالِج {calls} · المُعالِجُ يَسأَلُ قَبلَ المُحاوَلَة {ask > start && ask < attempt}");
         Assert.Equal(2, NafathDoors.Length);
-        Assert.Equal(0, asking);
-        Assert.True(creates);
+        Assert.Equal(2, asking);
+        Assert.True(calls);
+        Assert.True(start >= 0 && ask > start && attempt > ask, "VerifyNafathHandler لا يَسأَلُ NafathSignsIn قَبلَ المُحاوَلَة.");
     }
 
     /// <summary>نَفاذٌ يُوافِقُ فَوراً — بَديلُ MockNafath (تَسجيلُ <c>Program.cs</c> في التَطوير) بِلا انتِظارِ الثَواني الخَمس.</summary>
@@ -123,20 +184,42 @@ public class LoginChannelsTests(ITestOutputHelper output)
         public bool HasRoles => false;
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم» بِلا قاعِدَة</b>: <c>VerifyNafathHandler</c> بِمُحاوَلَةٍ مُوافَقٍ عَلَيها في مَتجَرِ جَوّالٍ يَمضي إلى المَخزَن (لِيَجِدَ
-    /// الحِسابَ أَو يُنشِئَه) — والمَخزَنُ البَديلُ يَرمي عِندَ أَوَّلِ جَلسَة، فَالرَميُ هُوَ القِياس: لا سُؤالَ عَن قَناةِ المَتجَرِ قَبلَه.</summary>
-    [Fact]
-    public async Task Today_the_nafath_verify_handler_reaches_the_store_in_a_phone_store()
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، كوميتُ التَبديل)</b> — كانَ <c>Today_the_nafath_verify_handler_reaches_the_store_in_a_phone_store</c> (‏<c>5bde19e</c>):
+    /// «مَتجَرُ phone ⇒ المُعالِجُ بَلَغَ المَخزَن». والآن مَتجَرٌ لا يُدخِلُ نَفاذاً (مُوجَب: الجَوّالُ والبَريدُ وقيمَةٌ خارِجَ المَعجَمِ والفارِغ) يُرَدُّ بِـ<c>null</c>
+    /// والمَخزَنُ البَديلُ لا يُسأَل؛ ومَتجَرُ نَفاذٍ (سالِب) يَمضي إلَيه — والرَميُ هُوَ القِياس.</summary>
+    [Theory]
+    [InlineData("phone", false)]
+    [InlineData("email", false)]
+    [InlineData("sms", false)]
+    [InlineData("", false)]
+    [InlineData("nafath", true)]
+    public async Task The_nafath_verify_handler_refuses_a_store_that_does_not_sign_in_with_nafath_before_it_reads_the_store(string storeChannel, bool reachesStore)
     {
         var slug = "zz-nf-" + Guid.NewGuid().ToString("N")[..6];
         var nid = "1012345678";
-        var tenant = new ChannelTenant(slug, ACommerce.Kit.Auth.AuthChannels.Phone);
+        var tenant = new ChannelTenant(slug, storeChannel);
         var channel = new ApprovingNafath();
         var pending = await ACommerce.Kit.Auth.Server.AuthHandlers.RequestNafathHandler(new ACommerce.Kit.Auth.RequestNafath(nid), tenant, channel, default);
-        var ex = await Record.ExceptionAsync(() => ACommerce.Kit.Auth.Server.AuthHandlers.VerifyNafathHandler(
+        ACommerce.Kit.Auth.AuthResult? result = null;
+        var ex = await Record.ExceptionAsync(async () => result = await ACommerce.Kit.Auth.Server.AuthHandlers.VerifyNafathHandler(
             new ACommerce.Kit.Auth.VerifyNafath(pending.AttemptId, nid), tenant, channel, AccountStub.Store(null), default));
-        output.WriteLine($"اليَوم: مَتجَرُ {tenant.AuthChannel} ⇒ المُعالِجُ {(ex is NotSupportedException ? "بَلَغَ المَخزَن" : ex?.GetType().Name ?? "رَدَّ بِلا مَخزَن")}");
-        Assert.IsType<NotSupportedException>(ex);
+        output.WriteLine($"مَتجَرُ «{storeChannel}» ⇒ المُعالِجُ {(ex is NotSupportedException ? "بَلَغَ المَخزَن" : ex?.GetType().Name ?? (result is null ? "رَدَّ بِلا مَخزَن" : "جَلسَة"))}");
+        if (reachesStore) Assert.IsType<NotSupportedException>(ex);
+        else { Assert.Null(ex); Assert.Null(result); }
+    }
+
+    /// <summary>قَرارُ العُدَّةِ (<c>AuthHandlers.NafathSignsIn</c>) هُوَ قَرارُ صَفحَةِ الدُخولِ (<c>LoginChannels.Offers(…, Nafath, …)</c>) لِكُلِّ قيمَةٍ وتَسجيل —
+    /// فَالبابُ والمُعالِجُ لا يَختَلِفان.</summary>
+    [Fact]
+    public void The_kit_nafath_decision_is_the_login_page_decision()
+    {
+        var values = new[] { "phone", "email", "nafath", "sms", "", "NAFATH" };
+        foreach (var v in values)
+            foreach (var registered in new[] { true, false })
+                Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.LoginChannels.Offers(v, ACommerce.Kit.Auth.AuthChannels.Nafath, registered),
+                    ACommerce.Kit.Auth.Server.AuthHandlers.NafathSignsIn(v));
+        output.WriteLine($"قيَمٌ مَقيسَة {values.Length} × تَسجيلان — والقَراران مُتَطابِقان؛ نَفاذٌ يُدخِلُ في «nafath» وَحدَه");
+        Assert.True(ACommerce.Kit.Auth.Server.AuthHandlers.NafathSignsIn("nafath"));
     }
 
     // ─── القَرارُ النَقِيّ — مَتجَرٌ × نَوع، مُوجَبٌ وسالِب ──────────────────────────────────────────────────
@@ -376,11 +459,23 @@ public class LiveSecondChannelProofTests(ITestOutputHelper output)
             ACommerce.Templates.Customer.Marketplace.Services.LoginChannels.Registers(storeChannel, ACommerce.Kit.Auth.AuthChannels.Phone));
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم» (الموجَة ١٢ F1 البَند ٥، A-SESS-1)</b>: بابا نَفاذٍ في مَتجَرِ جَوّالٍ بِحَرفِهِما اليَوم — لا سُؤالَ عَن قَناةِ المَتجَر
-    /// (الصَفُّ النَقِيُّ <c>Today_the_nafath_sign_in_doors_never_ask_the_store_channel</c> يُثبِتُه) ثُمَّ المُعالِجانِ اللَّذانِ يُناديانِهِما — فَهُوِيَّةٌ لا يَحمِلُها
-    /// حِسابٌ تُنشِئُ حِساباً ثانِياً جَوّالُه <c>NID-…</c>.</summary>
+    /// <summary>بابا نَفاذٍ بَعدَ التَبديل: سُؤالُ القَناةِ (بِحَرفِ البابِ — يُثبِتُه <c>SignInDoorBreach</c>) ثُمَّ المُعالِجان. <c>null</c> = رَدَّ البابُ أَو المُعالِج.</summary>
+    private static async Task<(bool DoorRefused, ACommerce.Kit.Auth.AuthResult? Result)> NafathDoorsAsync(Marten.IDocumentStore store, string slug, string storeChannel, string nid)
+    {
+        var tenant = new LoginChannelsTests.ChannelTenant(slug, storeChannel);
+        var channel = new LoginChannelsTests.ApprovingNafath();
+        var doorRefused = !ACommerce.Templates.Customer.Marketplace.Services.LoginChannels.Offers(tenant.AuthChannel, ACommerce.Kit.Auth.AuthChannels.Nafath, true);
+        var pending = await ACommerce.Kit.Auth.Server.AuthHandlers.RequestNafathHandler(new ACommerce.Kit.Auth.RequestNafath(nid), tenant, channel, default);
+        // المُعالِجُ يُنادى وإن رَدَّ البابُ — فَيُقاسُ رَدُّه هُوَ أَيضاً (مَسارُ JSON يَبلُغُه بِلا باب).
+        var result = await ACommerce.Kit.Auth.Server.AuthHandlers.VerifyNafathHandler(new ACommerce.Kit.Auth.VerifyNafath(pending.AttemptId, nid), tenant, channel, store, default);
+        return (doorRefused, result);
+    }
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، كوميتُ التَبديل)</b> — كانَ <c>Today_a_national_id_signs_up_in_a_phone_store_through_the_nafath_doors_on_Postgres</c>
+    /// (‏<c>5bde19e</c>): «مَتجَرُ phone ⇒ جَلسَة · الحِسابات 2 · جَوّالُ الجَديد NID-… True». والآن البابُ يَرُدُّ بِـ<c>channel_not_offered</c>، والمُعالِجُ — مَسارُ JSON —
+    /// يَرُدُّ بِـ<c>null</c>، ولا يُكتَبُ حِساب.</summary>
     [Fact]
-    public async Task Today_a_national_id_signs_up_in_a_phone_store_through_the_nafath_doors_on_Postgres()
+    public async Task A_national_id_is_refused_by_the_nafath_doors_of_a_phone_store_and_no_account_is_created_on_Postgres()
     {
         if (!Enabled) return;
         await using var store = LiveDealConcurrencyProofTests.BuildStore();
@@ -389,16 +484,33 @@ public class LiveSecondChannelProofTests(ITestOutputHelper output)
         try
         {
             var member = await SeedAsync(store, slug, "+966500000297", "");
-            var tenant = new LoginChannelsTests.ChannelTenant(slug, ACommerce.Kit.Auth.AuthChannels.Phone);
-            var channel = new LoginChannelsTests.ApprovingNafath();
-            var pending = await ACommerce.Kit.Auth.Server.AuthHandlers.RequestNafathHandler(new ACommerce.Kit.Auth.RequestNafath(nid), tenant, channel, default);
-            var result = await ACommerce.Kit.Auth.Server.AuthHandlers.VerifyNafathHandler(new ACommerce.Kit.Auth.VerifyNafath(pending.AttemptId, nid), tenant, channel, store, default);
+            var (doorRefused, result) = await NafathDoorsAsync(store, slug, ACommerce.Kit.Auth.AuthChannels.Phone, nid);
             var accounts = await AccountsAsync(store, slug);
             var created = accounts.Any(a => a.Phone == $"NID-{nid}");
-            output.WriteLine($"اليَوم: مَتجَرُ {tenant.AuthChannel}، هُوِيَّةٌ لا يَحمِلُها حِساب ⇒ {(result is null ? "لا جَلسَة" : "جَلسَة")} · الحِسابات {accounts.Count} · جَوّالُ الجَديد NID-… {created}");
+            output.WriteLine($"مَتجَرُ phone، هُوِيَّةٌ لا يَحمِلُها حِساب ⇒ البابُ {(doorRefused ? "channel_not_offered" : "يَمضي")} · المُعالِج {(result is null ? "لا جَلسَة" : "جَلسَة")} · الحِسابات {accounts.Count} · جَوّالُ الجَديد NID-… {created}");
+            Assert.True(doorRefused);
+            Assert.Null(result);
+            Assert.Equal(member.Id, Assert.Single(accounts).Id);
+        }
+        finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
+    }
+
+    /// <summary>السالِب: مَتجَرُ نَفاذٍ يُسَجِّلُ الهُوِيَّةَ كَما كان — البابُ يَمضي والمُعالِجُ يُنشِئُ حِسابَها.</summary>
+    [Fact]
+    public async Task A_national_id_signs_up_through_the_nafath_doors_of_a_nafath_store_on_Postgres()
+    {
+        if (!Enabled) return;
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = "sc-zz-" + Guid.NewGuid().ToString("N")[..8];
+        var nid = "10" + Random.Shared.Next(10_000_000, 99_999_999);
+        try
+        {
+            var (doorRefused, result) = await NafathDoorsAsync(store, slug, ACommerce.Kit.Auth.AuthChannels.Nafath, nid);
+            var accounts = await AccountsAsync(store, slug);
+            output.WriteLine($"مَتجَرُ nafath ⇒ البابُ {(doorRefused ? "channel_not_offered" : "يَمضي")} · المُعالِج {(result is null ? "لا جَلسَة" : "جَلسَة")} · الحِسابات {accounts.Count}");
+            Assert.False(doorRefused);
             Assert.NotNull(result);
-            Assert.Equal(2, accounts.Count);
-            Assert.Contains(accounts, a => a.Id != member.Id && a.Phone == $"NID-{nid}" && a.NationalId == nid);
+            Assert.Equal(nid, Assert.Single(accounts).NationalId);
         }
         finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
     }

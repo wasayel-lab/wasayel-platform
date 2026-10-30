@@ -423,7 +423,10 @@ public class EndpointBodyBleedTests
         // (`note: user.FullName`)، فَصارَ سَطرا النِداءِ سَطراً واحِداً في كُلٍّ. طَبَعَ العَدّادُ «‏2817 → 2815» و«‏3165 → 3163» («شَدُّه مَجّانيّ»).
         // ‏2815 ← **2817** يَوم ‏2026-10-30 (تَدقيقُ الموجَة ١١ CO8 — المَسار F2): سَطرا `/{slug}/offers/{id}/accept` — سُؤالُ `OfferExpiry.ExpiredAt` ورَدُّه
         // بِرَمزِه بَعدَ المالِكِ وقَبلَ أَوَّلِ كِتابَة، نَسَقُ سَطرَي `OffererGone` فَوقَهُما بِحَرفِه؛ والقَرارُ في كيت العُروض. طَبَعَ العَدّادُ «‏2815 → 2817» و«‏3163 → 3165»، و**‏2**.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2817),
+        // ‏2817 ← **2821** يَوم ‏2026-10-30 (الموجَة ١٢ F1 A-SESS-1): سَطرا كُلٍّ مِن بابَي `/{slug}/auth/nafath/login` و`/verify` — سُؤالُ
+        // `LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Nafath, …)` ورَدُّه بِـ`channel_not_offered` قَبلَ أَوَّلِ حَقل، نَسَقُ أَبوابِ الجَوّالِ والبَريدِ الأَربَعَةِ
+        // بِحَرفِها؛ والقَرارُ في `LoginChannels` والعُدَّة (`AuthHandlers.NafathSignsIn`). طَبَعَ العَدّادُ «‏2817 → 2821» و«‏3165 → 3169»، و**‏2 × 2 = 4**.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2821),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -1173,7 +1176,9 @@ public class EndpointBodyBleedTests
     /// وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
     /// <remarks><b>‏3163 ← 3165 يَوم ‏2026-10-30</b> (تَدقيقُ الموجَة ١١ CO8): سَطرا بابِ القَبولِ يَرُدّانِ عَرضاً انتَهَت مُدَّتُه (<c>OfferExpiry.ExpiredAt</c>/<c>Code</c>
     /// في كيت العُروض). وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 3165;
+    /// <remarks><b>‏3165 ← 3169 يَوم ‏2026-10-30</b> (الموجَة ١٢ F1 A-SESS-1): سَطرا كُلٍّ مِن بابَي نَفاذٍ يَسأَلانِ <c>LoginChannels.Offers(…, Nafath, …)</c> ويَرُدّانِ
+    /// بِـ<c>channel_not_offered</c> قَبلَ أَوَّلِ حَقل. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 3169;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

@@ -524,12 +524,24 @@ public static class AuthHandlers
         return new NafathPending(result.AttemptId, result.DisplayCode, result.AutoApproveInSeconds);
     }
 
+    /// <summary>
+    /// <para><b>أَيُدخِلُ نَفاذٌ في هذا المَتجَر؟</b> — نَقِيَّة (‏2026-10-30، الموجَة ١٢ F1 A-SESS-1؛ تَوصيفُه <c>5bde19e</c>): في مَتجَرٍ قَناتُه نَفاذٌ وَحدَه
+    /// (<see cref="AuthChannels.NormalizeOrDefault"/>) — قَرارُ <c>LoginChannels.Offers(…, Nafath, …)</c> في القالِبِ نَفسُه، يُثَبِّتُ تَطابُقَهُما صَفٌّ في
+    /// <c>LoginChannelsTests</c>. كانَ <see cref="VerifyNafathHandler"/> يُنشِئُ حِسابَ هُوِيَّةٍ في أَيِّ مَتجَرٍ عَبرَ بابِ الاستِمارَةِ ومَسارِ JSON مَعاً
+    /// (مَقيسٌ حَيّاً: ejar جَوّالٌ ‏3 ← 4 بِالاستِمارَة و4 ← 5 بِـJSON) — حِسابٌ ثانٍ لِلشَخصِ نَفسِه (ضَرَرُ د27) بِقَناةٍ لَم يَختَرها صاحِبُ المَتجَر (P2).</para>
+    /// </summary>
+    public static bool NafathSignsIn(string? authChannel) => AuthChannels.NormalizeOrDefault(authChannel) == AuthChannels.Nafath;
+
+    /// <remarks>‏(‏2026-10-30، A-SESS-1) <b>وَسمُ <c>[WolverinePost]</c> باقٍ لِأَنّه مَقيسٌ حَيّاً لا مَيتاً</b>: مَسارُ JSON يُحَلُّ مُستَأجِرُه ويُصدِرُ رَمزاً
+    /// (theme-demo ‏200)، فَشَرطُ نَزعِه — «يَرُدُّ tenant_required أَو null في كُلِّ نِداء» — لا يَصدُق؛ فَيَرُدُّ هُنا مَتجَراً لا يُدخِلُ نَفاذاً
+    /// (<see cref="NafathSignsIn"/>) قَبلَ أَن يَقرَأَ المُحاوَلَةَ أَو المَخزَن، والاستِمارَةُ تَسأَلُ القَرارَ نَفسَه قَبلَ حَقلٍ واحِد.</remarks>
     [WolverinePost("/{slug}/auth/nafath/verify")]
     public static async Task<AuthResult?> VerifyNafathHandler(
         VerifyNafath cmd, ITenantContext tenantCtx,
         INafathChannel channel, IDocumentStore store, CancellationToken ct)
     {
         if (!tenantCtx.IsResolved) return null;
+        if (!NafathSignsIn(tenantCtx.AuthChannel)) return null;
         if (!Attempts.TryGetValue(cmd.AttemptId, out var attempt)) return null;
         if (attempt.Kind != AuthKind.Nafath
          || attempt.TenantSlug != tenantCtx.Slug

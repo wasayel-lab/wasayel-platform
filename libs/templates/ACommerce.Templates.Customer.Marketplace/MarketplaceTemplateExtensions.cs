@@ -438,6 +438,9 @@ public static class MarketplaceTemplateExtensions
                    [FromServices] INafathChannel? channel) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
+            // ‏(‏2026-10-30، الموجَة ١٢ F1 A-SESS-1) قَناةُ المَتجَرِ وَحدَها تُسَجِّل (ADR-042 §٥) — كانَ بابا نَفاذٍ لا يَسأَلانِها فَمَتجَرُ جَوّالٍ أَو بَريدٍ يُنشِئُ حِسابَ هُوِيَّةٍ ثانِياً.
+            if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Nafath, channel is not null))
+                return Results.Redirect(Link(req, slug, $"login?err={Services.LoginChannels.NotOffered}"));
             var nid = req.Form["nid"].ToString().Trim();
             // نَفسُ الفَشَلِ المُغلَقِ — راجِع مَسارَ الهاتِف أَعلاه.
             if (channel is null)
@@ -459,6 +462,9 @@ public static class MarketplaceTemplateExtensions
                    IDocumentStore store) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
+            // ‏(‏2026-10-30، A-SESS-1) القَرارُ نَفسُه الَّذي يَسأَلُه بابُ البَدء — فَتَأكيدٌ لا يُنشِئُ حِساباً في مَتجَرٍ لا يَعرِضُ نَفاذاً.
+            if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Nafath, channel is not null))
+                return Results.Redirect(Link(req, slug, $"login?err={Services.LoginChannels.NotOffered}"));
             var nid = req.Form["nid"].ToString().Trim();
             var attempt = req.Form["attempt"].ToString();
             if (channel is null)
