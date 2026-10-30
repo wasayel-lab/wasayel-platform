@@ -2237,6 +2237,8 @@
   "notifications.offer_accepted.body": "{0} قَبِلَ عَرضكَ بِـ {1:N0} ريال. افتَح المُحادَثَة لِلتَنسيق.",
   "notifications.offer_accepted.push_body": "{0} قَبِلَ عَرضكَ بِـ {1:N0} ريال.",
   "notifications.offer_accepted.title": "تَمّ قَبول عَرضكَ ✓",
+  "notifications.owner_email.body": "{0}\n\nالمَتجَر: {1}\nالطَّلَب: «{2}»\nالمَبلَغ: {3:N2} {4}\n\nصَفحَةُ الطَّلَبِ في الاستوديو: {5}\n\nوَصَلَكَ هذا لِأَنَّكَ صاحِبُ هذا المَتجَر.",
+  "notifications.owner_email.subject": "{0} — {1}",
   "notifications.saved_search.push_title": "إعلان جَديد يُطابِق بَحثكَ",
   "notifications.saved_search.title": "إعلان جَديد يُطابِق «{0}»",
 

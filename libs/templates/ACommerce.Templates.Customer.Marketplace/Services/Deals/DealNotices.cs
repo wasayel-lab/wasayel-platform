@@ -1,7 +1,10 @@
+using ACommerce.Kit.Auth;
 using ACommerce.Kit.Notifications;
 using ACommerce.Platform.I18n;
+using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using Marten;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services.Deals;
 
@@ -53,15 +56,24 @@ public sealed class DealNotices
     private readonly IDocumentStore _store;
     private readonly IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> _hub;
     private readonly WebPushService _push;
+    private readonly IEmailOtpChannel? _email;
+    private readonly ILogger<DealNotices>? _log;
 
+    /// <param name="email">(‏2026-10-30، تَدقيقُ الموجَة ١١ CO3 — ولا يُعادُ حَرفٌ فَوقَه) قَناةُ البَريدِ إن سُجِّلَت — بَريدُ صاحِبِ المَتجَرِ بِما عَلَيه
+    /// (<see cref="NotifyStoreOwnerAsync(string, Deal, OwnerAction, L, CancellationToken)"/>)؛ وغِيابُها لا يُغَيِّرُ شَيئاً مِمّا سِواه.</param>
+    /// <param name="log">سَطرُ اللوغِ حينَ يَفشَلُ البَريد — والإشعارُ قَد كُتِب.</param>
     public DealNotices(
         IDocumentStore store,
         IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> hub,
-        WebPushService push)
+        WebPushService push,
+        IEmailOtpChannel? email = null,
+        ILogger<DealNotices>? log = null)
     {
         _store = store;
         _hub = hub;
         _push = push;
+        _email = email;
+        _log = log;
     }
 
     // ─── التَركيب — نَقِيٌّ ───────────────────────────────────────────────
@@ -335,6 +347,16 @@ public sealed class DealNotices
         RelatedUrl = StudioDealUrl(slug, deal.Id),
         At = at,
     };
+
+    /// <summary>
+    /// <para><b>بَريدُ صاحِبِ المَتجَرِ بِإشعارِه</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO3): العُنوانُ اسمُ المَتجَرِ وعُنوانُ الإشعار، والمَتنُ مَتنُ الإشعارِ بِحَرفِه
+    /// ثُمَّ المَتجَرُ والطَلَبُ وسَطرُ المال (مَبلَغُ الصَفقَةِ بِعُملَتِها — <see cref="CurrencyOf"/>) ثُمَّ صَفحَتُها في الاستوديو (<see cref="Notification.RelatedUrl"/>،
+    /// <see cref="StudioDealUrl"/>). <b>مَساراً لا رابِطاً مُطلَقاً</b>: لا أَصلَ مُعَدّاً لِلمَنصَّة، وأَصلُ الطَلَبِ مِن تَرويسَةِ <c>Host</c> يَصنَعُه مَن يُرسِلُ الطَلَب
+    /// (تَسميمُ رَوابِطِ البَريد) — وبَعضُ مُنادِيه رِسالَةٌ مُجَدوَلَةٌ لا طَلَبَ لَها. <b>ولا بَياناتِ مُشتَرٍ</b>: لا هاتِفَ ولا عُنوانَ ولا اسم — ما في الإشعارِ وَحدَه. دالَّةٌ نَقِيَّة.</para>
+    /// </summary>
+    public static (string Subject, string Text) OwnerEmailFor(string storeName, Deal deal, Notification notice, L l)
+        => (l.Format("notifications.owner_email.subject", storeName, notice.Title),
+            l.Format("notifications.owner_email.body", notice.Body, storeName, deal.ListingTitle, deal.AmountSar, CurrencyOf(deal), notice.RelatedUrl ?? ""));
 
     /// <summary>صَفحَةُ الصَفقَةِ في الاستوديو — رابِطُ إشعارَي صاحِبِ المَتجَرِ (<see cref="RefundDueFor"/>، <see cref="InvoiceLeftOpenFor"/>)، ومِنه بادِئَةُ ما يَرسُمُه
     /// قارِئُها (<see cref="OwnerNoticesOf"/>): كاتِبٌ وقارِئٌ بِتَعريفٍ واحِد.</summary>
@@ -735,9 +757,12 @@ public sealed class DealNotices
     public async Task<bool> NotifyStoreOwnerAsync(string slug, Deal deal, OwnerAction action, L l, CancellationToken ct = default)
     {
         Notification n;
+        string storeName;
         await using (var s = _store.LightweightSession(slug))
         {
-            if (StoreOwnerOf(await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug, ct)) is not { } ownerId) return false;
+            var tenant = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug, ct);
+            if (StoreOwnerOf(tenant) is not { } ownerId) return false;
+            storeName = tenant!.Name;
             n = action switch
             {
                 OwnerAction.RefundDue => RefundDueFor(slug, deal, ownerId, l, DateTime.UtcNow),
@@ -750,6 +775,33 @@ public sealed class DealNotices
         }
         await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, n.UserId);
         await _push.SendAsync(_store, slug, n.UserId, n.Title, n.Body, url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
+        await MailStoreOwnerAsync(slug, storeName, deal, n, l, ct);   // ‏2026-10-30، تَدقيقُ الموجَة ١١ CO3
         return true;
+    }
+
+    /// <summary>
+    /// <para><b>وبَريدٌ واحِدٌ بِالإشعارِ نَفسِه</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO3) — بَعدَ أَن كُتِبَ وقُرِعَ ودُفِع: إلى بَريدِ صاحِبِ المَتجَرِ في الاستوديو
+    /// (<see cref="StudioUser.Email"/> — يُخَزَّنُ حينَ يَدخُلُ بِه بِرَمزٍ، فَهو مُتَحَقَّقٌ مِنه) بِقَناةِ البَريدِ المُسَجَّلَةِ خَلفَ <see cref="OtpSendGuard"/>
+    /// (نَسَقُ <c>AccountContacts.NoticeLinkedAsync</c>، القاعِدَة ٨). <b>أَثَرٌ لا شَرط</b>: بِلا قَناةٍ أَو بِلا بَريدٍ لا شَيء، وفَشَلُه — القِراءَةُ أَو الإرسال — سَطرُ
+    /// لوغٍ لا يَرُدُّ إشعاراً كُتِب. تُرجِعُ هَل أُرسِل.</para>
+    /// </summary>
+    private async Task<bool> MailStoreOwnerAsync(string slug, string storeName, Deal deal, Notification n, L l, CancellationToken ct)
+    {
+        if (_email is not { } email) return false;
+        try
+        {
+            string? to;
+            await using (var q = _store.QuerySession(StudioAuth.Tenant))
+                to = (await q.LoadAsync<StudioUser>(n.UserId, ct))?.Email;
+            if (string.IsNullOrWhiteSpace(to)) return false;
+            var (subject, text) = OwnerEmailFor(storeName, deal, n, l);
+            await OtpSendGuard.SendWithinAsync(t => email.SendNoticeAsync(to, subject, text, t), ct);
+            return true;
+        }
+        catch (Exception e)
+        {
+            _log?.LogWarning(e, "تَعَذَّرَ بَريدُ صاحِبِ المَتجَرِ {Slug} عَن الصَفقَة {DealId} — الإشعارُ مَكتوبٌ في الاستوديو", slug, deal.Id);
+            return false;
+        }
     }
 }
