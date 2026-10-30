@@ -170,6 +170,33 @@ public static class DuplicatePhones
     /// <summary>بادِئَةُ مانِعِ «حِسابٌ إداريٌّ في المَجموعَة» — يَعُدُّها سكربتُ العَدِّ كَما يَعُدُّ أَسماءَ الجَداوِل.</summary>
     public const string AdminBlock = "tenant_admin";
 
+    /// <summary>نَوعُ مانِعٍ واحِد: رَمزُه الثابِت، والعِبارَةُ الَّتي يَنتَهي بِها سَطرُه في <see cref="ScanAsync"/>، وأَيُرفَعُ اليَومَ بِبابٍ قائِم.</summary>
+    public sealed record BlockKind(string Code, string Phrase, bool LiftableToday);
+
+    /// <summary>
+    /// <para><b>أَنواعُ المَوانِعِ — مَعجَمٌ مُغلَق</b> (‏2026-10-30، الموجَة ١٢ F1 البَند ١١ — A-SESS-3). كانَ سكربتُ العَدِّ يَطبَعُ «مانِعٌ في {جَدوَل}» لِكُلِّ نَوعٍ
+    /// بِلا تَمييز، وسِجِلُّ المالِكِ يَقرَأُ كُلَّ سَطرٍ «يَفصِلُ البائِعُ رَبطَ الشَحن» — ومُندَمِجٌ قَدَّمَ عَرضاً يَظهَرُ <c>mt_doc_offer</c>/<c>mt_events</c>. فَصارَ لِكُلِّ
+    /// سَطرٍ نَوعُه بِرَمزٍ ثابِت (<see cref="KindOf"/>)، والسكربتُ يَطبَعُ الجَدوَلَ والنَوعَ مَعاً ومَعَهُما هذا المَعجَمَ كُلَّه.</para>
+    /// <para><b>ولا يُرفَعُ اليَومَ بِبابٍ قائِمٍ إلّا الإداريّ</b> (سَحبُ الإدارَةِ ثُمَّ إعادَةُ مَنحِها لِلباقي — سِجِلُّ المالِك «ج» الموجَة ١٢): مَدخَلُ البائِعِ لا بابَ
+    /// يَفصِلُه، وما سِواه أَثَرُ تاريخٍ لا يُعادُ تَوجيهُه نَصّاً — فَالمَجموعَةُ تَبقى بِلا دَمجٍ (<c>merge_blocked</c>) ولا يُفسَدُ شَيء، ويُبَلَّغُ السَطرُ لا يُعمَلُ بِه.</para>
+    /// </summary>
+    public static readonly IReadOnlyList<BlockKind> BlockKinds =
+    [
+        new("id_without_dashes",       "صَفّاً بِالمُعَرِّفِ بِلا شَرطات", false),
+        new("row_id_holds_loser",      "صَفّاً مُعَرِّفُه يَحمِلُ مُعَرِّفَ المُندَمِج", false),
+        new("listing_mention",         "إعلاناً يَذكُرُه في غَيرِ مالِكِه", false),
+        new("row_names_both",          "صَفّاً يَجمَعُ الحِسابَين", false),
+        new("aggregate_stream",        "صَفّاً مِن مَجرى أَحداثٍ غَيرِ الإعلان", false),
+        new("events_outside_listings", "حَدَثاً خارِجَ مَجاري الإعلانات", false),
+        new("admin_account",           "حِساباً إدارِيّاً في المَجموعَة", true),
+    ];
+
+    /// <summary>رَمزُ نَوعِ سَطرِ مانِعٍ مِن <see cref="ScanAsync"/> — بِعِبارَتِه الخِتامِيَّة؛ و<c>unknown</c> لِسَطرٍ خارِجَ المَعجَم (يَحمَرُّ صَفُّه).</summary>
+    public static string KindOf(string block) => BlockKinds.FirstOrDefault(k => block.EndsWith(k.Phrase, StringComparison.Ordinal))?.Code ?? "unknown";
+
+    /// <summary>جَدوَلُ سَطرِ المانِع (أَو <see cref="AdminBlock"/>) — ما قَبلَ النُقطَتَين.</summary>
+    public static string TableOf(string block) => block[..Math.Max(0, block.IndexOf(':'))];
+
     private static readonly Regex TableName = new("^mt_doc_[a-z0-9_]+$", RegexOptions.CultureInvariant);
 
     /// <summary>كُلُّ جَدوَلِ وَثائِقَ في <c>platform</c> لَه عَمودُ <c>tenant_id</c> — مِن <c>information_schema</c> لا مِن قائِمَةٍ مَكتوبَة.</summary>

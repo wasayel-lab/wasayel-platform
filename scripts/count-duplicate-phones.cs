@@ -18,6 +18,9 @@
 //  ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ G-4) **وكَم مَجموعَةً تَختَلِفُ حِساباتُها** في الدَورِ والاسمِ الحَقيقيِّ واسمِ النَشاط
 //  (`DuplicatePhones.Differences` — أَعلامٌ لا قيَم)، فَيَعرِفُ صاحِبُ القَرارِ ما يَرِثُه الباقي (`Inherit`) قَبلَ `--apply`؛ وكَم
 //  مَجموعَةً يَمنَعُها حِسابٌ إداريّ (`tenant_admin`).
+//  ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ١١ — A-SESS-3) **ونَوعَ كُلِّ مانِعٍ بِجانِبِ جَدوَلِه**: كانَ «مانِعٌ في {جَدوَل}» سَطراً واحِداً لِسَبعَةِ
+//  أَنواعٍ لا يَرفَعُها بابٌ واحِد، فَصارَ «مانِعٌ في {جَدوَل} · {نَوع}» بِرَمزٍ مِن مَعجَمٍ مُغلَق (`DuplicatePhones.BlockKinds` و`KindOf`)، ويُطبَعُ المَعجَمُ
+//  كُلُّه بِما يُرفَعُ اليَومَ وما لا يُرفَع، ثُمَّ أَمرُ العَرضِ (`merge-duplicate-phones.cs` بِلا `--apply`) الَّذي يُسَمّي كُلَّ مَجموعَةٍ بِمانِعِها.
 //
 // ─── ما لا يَفعَلُه — وذلك مَقصودٌ ومُعلَن ──────────────────────────────
 //   ١. **لا يَكتُبُ حَرفاً**: جَلَساتُ قِراءَةٍ وَحدَها، و`AutoCreate.None`، والاتِّصالُ بِـ
@@ -111,6 +114,7 @@ try
     var tables = await DuplicatePhones.TenantTablesAsync(conn);
     int accounts = 0, renames = 0, groups = 0, losers = 0, mergeable = 0, blocked = 0, keys = 0, roleDiff = 0, nameDiff = 0, businessDiff = 0;
     var reasons = new SortedDictionary<string, int>(StringComparer.Ordinal);
+    var kinds = new SortedDictionary<(string Table, string Kind), int>();
 
     foreach (var slug in tenants)
     {
@@ -130,7 +134,12 @@ try
             else
             {
                 no++;
-                foreach (var b in scan.Blocks) reasons[b[..b.IndexOf(':')]] = reasons.GetValueOrDefault(b[..b.IndexOf(':')]) + 1;
+                foreach (var b in scan.Blocks)
+                {
+                    var table = DuplicatePhones.TableOf(b);
+                    reasons[table] = reasons.GetValueOrDefault(table) + 1;
+                    kinds[(table, DuplicatePhones.KindOf(b))] = kinds.GetValueOrDefault((table, DuplicatePhones.KindOf(b))) + 1;
+                }
             }
         }
         Console.WriteLine($"{slug,-24} بِجَوّال={plan.Considered,-5} يُعادُ كَتبُه={plan.Renames.Count,-4} مَجموعات={plan.Groups.Count,-3} "
@@ -154,7 +163,15 @@ try
     Console.WriteLine($"فُحِصَ: {tenants.Count} مَتجَراً والاستوديو · حِساباتٌ بِجَوّال: {accounts + sp.Considered} · يُعادُ كَتبُ جَوّالِه: {renames + sp.Renames.Count}");
     Console.WriteLine($"أَشخاصٌ بِأَكثَرَ مِن حِساب: {groups} في المَتاجِر ({losers} حِساباً يَندَمِج) و{sp.Groups.Count} في الاستوديو · "
         + $"يَدمِجُها السكربت: {mergeable} · يَمتَنِعُ عَنها: {blocked + sp.Groups.Count}");
-    foreach (var (why, n) in reasons) Console.WriteLine($"  مانِعٌ في {why}: {n} مَجموعَة");
+    foreach (var ((table, kind), n) in kinds) Console.WriteLine($"  مانِعٌ في {table} · {kind}: {n} مَجموعَة");
+    Console.WriteLine($"أَنواعُ المَوانِع — مَعجَمٌ مُغلَق (DuplicatePhones.BlockKinds): {DuplicatePhones.BlockKinds.Count}");
+    foreach (var k in DuplicatePhones.BlockKinds)
+        Console.WriteLine($"  {k.Code,-24} {kinds.Where(x => x.Key.Kind == k.Code).Sum(x => x.Value),-3} «{k.Phrase}» — "
+            + (k.LiftableToday ? "يُرفَعُ اليَوم إن لَم يَكُن في المَجموعَةِ مانِعٌ غَيرُه: اسحَب الإدارَةَ مِن حِساباتِها، ثُمَّ ادمِج، ثُمَّ أَعِد مَنحَها لِلباقي"
+                               : "لا يُرفَعُ اليَوم: تَبقى المَجموعَةُ بِلا دَمج — بَلِّغ السَطرَ ولا تَعمَل بِه"));
+    var unknown = kinds.Where(x => x.Key.Kind == "unknown").Sum(x => x.Value);
+    if (unknown > 0) Console.WriteLine($"  ✗ مانِعٌ خارِجَ المَعجَم: {unknown} — سَطرٌ في ScanAsync بِلا نَوعٍ في BlockKinds، بَلِّغه");
+    Console.WriteLine("كُلُّ مَجموعَةٍ بِمانِعِها: dotnet run scripts/merge-duplicate-phones.cs   (عَرضٌ بِلا --apply، لا يَكتُبُ حَرفاً)");
     Console.WriteLine($"مَجموعاتٌ تَختَلِفُ حِساباتُها — في الدَور: {roleDiff} · في الاسمِ الحَقيقيّ: {nameDiff} · في اسمِ النَشاط: {businessDiff} "
         + $"(يَرِثُ الباقي ما لَيسَ لَه ويَبقى لَه ما لَه — DuplicatePhones.Inherit)");
     Console.WriteLine($"مَجموعاتٌ يَمنَعُها حِسابٌ إداريّ ({DuplicatePhones.AdminBlock}): {reasons.GetValueOrDefault(DuplicatePhones.AdminBlock)}");
