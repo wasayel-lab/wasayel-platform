@@ -174,7 +174,9 @@ public class LivePhoneVerifiedOnLoginProofTests(ITestOutputHelper output)
             await using (var s = store.LightweightSession(slug)) { s.Store(imported); await s.SaveChangesAsync(); }
 
             var nafath = new ApprovingNafath();
-            var tenant = new VendorRegisterBucketTests.ResolvedTenant(slug);
+            // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٥ — A-SESS-1؛ التَبديلُ `022f18a`) مَتجَرُ نَفاذ: كانَ `ResolvedTenant` (قَناتُه `phone`)، ومُعالِجُ التَأكيدِ
+            // صارَ يَرُدُّ مَتجَراً لا يُدخِلُ نَفاذاً (`AuthHandlers.NafathSignsIn`) — فَالدُخولُ بِنَفاذٍ لا يَكونُ إلّا في مَتجَرٍ قَناتُه نَفاذ، وهو ما يَقيسُه الصَفّ.
+            var tenant = new LoginChannelsTests.ChannelTenant(slug, ACommerce.Kit.Auth.AuthChannels.Nafath);
             var pending = await AuthHandlers.RequestNafathHandler(new RequestNafath("1000000001"), tenant, nafath, CancellationToken.None);
             var result = await AuthHandlers.VerifyNafathHandler(new VerifyNafath(pending.AttemptId, "1000000001"), tenant, nafath, store, CancellationToken.None);
 
