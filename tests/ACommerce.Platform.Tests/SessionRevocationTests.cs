@@ -939,3 +939,118 @@ public class LiveAccountConcurrencyProofTests(ITestOutputHelper output)
         finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
     }
 }
+
+// ═══ كاتِبٌ بِاسمِ جَلسَةٍ عَلى قِراءَةٍ جَديدَة (مُراجَعَةُ الموجَة ١١ لِلمَسار F1، ‏2026-10-30؛ I-SEC-2 مَعَ G-1) ═══
+//
+// الجَلسَةُ تُفحَصُ مَرَّةً عِندَ البَوّابَةِ أَوَّلَ الطَلَب، و`AccountWrites.UpdateAsync` يُطَبِّقُ تَغييرَ البابِ عَلى الوَثيقَةِ الجَديدَةِ ولا يَسأَلُ: أَما زالَ
+// رَمزُ هذا الطَلَبِ صالِحاً عَلَيها؟ فَطَلَبٌ عَبَرَ البَوّابَةَ قَبلَ «اخرج من كل الأجهزة» وقَرَأَ بَعدَه يَحفَظُ بِلا تَعارُض، والاشتِراكُ لا يَنتَهي.
+
+[Collection(LiveProofCollection.Name)]
+public class LiveSessionWriteProofTests(ITestOutputHelper output)
+{
+    private static bool Enabled
+        => LiveDealConcurrencyProofTests.Enabled && !string.IsNullOrEmpty(LiveDealConcurrencyProofTests.ConnectionString);
+
+    private static Microsoft.Extensions.Caching.Memory.MemoryCache Cache()
+        => new(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+
+    internal static ACommerce.Kit.Auth.PushSubscription Thief()
+        => new() { Endpoint = "https://fcm.googleapis.com/fcm/send/thief", P256dh = "p", Auth = "a" };
+
+    private static async Task<User> SeedAsync(Marten.IDocumentStore store, string slug)
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = slug, Phone = "+966500000291", FullName = "صاحِبُ الحِساب", PhoneVerified = true };
+        await using var s = store.LightweightSession(slug);
+        s.Store(user);
+        await s.SaveChangesAsync();
+        return user;
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم» (القاعِدَة ٣)</b>: اشتِراكٌ بِرَمزِ ما قَبلَ الرَفعِ يَقرَأُ بَعدَه — تَطبيقُ <c>/api/{slug}/push/subscribe</c> بِحَرفِه — فَيُحفَظُ
+    /// بِلا تَعارُضٍ عَلى الحِسابِ المَرفوعِ إصدارُه، وعُنوانُ السارِقِ يَبقى.</summary>
+    [Fact]
+    public async Task Today_a_subscribe_for_a_session_revoked_before_its_read_lands_on_the_revoked_account_on_Postgres()
+    {
+        if (!Enabled) return;
+        await using var app = LiveAccountConcurrencyProofTests.HostApp();
+        var store = app.Services.GetRequiredService<Marten.IDocumentStore>();
+        var slug = "sw-zz-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            var user = await SeedAsync(store, slug);
+            var token = AuthHandlers.MakeToken(user.Id, slug, user.SessionVersion);
+            Assert.True(await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.RevokeTenantAsync(store, Cache(), slug, user.Id));
+            var saved = await AccountWrites.UpdateAsync<User>(store, slug, user.Id, u =>
+            {
+                ACommerce.Templates.Customer.Marketplace.Services.PushSubscriptionDoor.Keep(u.PushSubscriptions, Thief());
+                return true;
+            });
+            await using var q = store.QuerySession(slug);
+            var after = (await q.LoadAsync<User>(user.Id))!;
+            var revoked = ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.IsRevoked(AuthHandlers.SessionVersionOf(token)!.Value, after.SessionVersion);
+            output.WriteLine($"اليَوم: رَمزُ الطَلَب {(revoked ? "ساقِط" : "صالِح")} · الحِفظ {(saved is null ? "لا" : "حُفِظ")} · الإصدار {after.SessionVersion} · الاشتِراكات {after.PushSubscriptions.Count}");
+            Assert.True(revoked);
+            Assert.NotNull(saved);
+            Assert.Equal((1, 1), (after.SessionVersion, after.PushSubscriptions.Count));
+        }
+        finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم»</b>: الحِسابُ حُذِفَ قَبلَ قِراءَةِ الاشتِراك — فَيُكتَبُ عُنوانٌ عَلى حِسابٍ مَمحُوّ.</summary>
+    [Fact]
+    public async Task Today_a_subscribe_for_an_account_erased_before_its_read_lands_on_the_erased_account_on_Postgres()
+    {
+        if (!Enabled) return;
+        await using var app = LiveAccountConcurrencyProofTests.HostApp();
+        var store = app.Services.GetRequiredService<Marten.IDocumentStore>();
+        var slug = "sw-zz-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            var user = await SeedAsync(store, slug);
+            await AccountWrites.UpdateAsync<User>(store, slug, user.Id, u => { AccountDeletion.Erase(u, DateTime.UtcNow); return true; });
+            var saved = await AccountWrites.UpdateAsync<User>(store, slug, user.Id, u =>
+            {
+                ACommerce.Templates.Customer.Marketplace.Services.PushSubscriptionDoor.Keep(u.PushSubscriptions, Thief());
+                return true;
+            });
+            await using var q = store.QuerySession(slug);
+            var after = (await q.LoadAsync<User>(user.Id))!;
+            output.WriteLine($"اليَوم: DeletedAt {(after.DeletedAt is null ? "فارِغ" : "قائِم")} · الحِفظ {(saved is null ? "لا" : "حُفِظ")} · الاشتِراكات {after.PushSubscriptions.Count}");
+            Assert.NotNull(after.DeletedAt);
+            Assert.Single(after.PushSubscriptions);
+        }
+        finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم»</b>: رَبطُ وَسيلَةٍ بُدِئَ بِالجَلسَةِ ثُمَّ رَفَعَ صاحِبُها الإصدار، وتَأكيدُه — عَبَرَ البَوّابَةَ قَبلَ الرَفعِ وقَرَأَ بَعدَه — يَربِطُ
+    /// البَريدَ عَلى الحِسابِ المَرفوعِ إصدارُه.</summary>
+    [Fact]
+    public async Task Today_a_contact_link_for_a_session_revoked_before_its_verify_lands_on_Postgres()
+    {
+        if (!Enabled) return;
+        await using var app = LiveAccountConcurrencyProofTests.HostApp();
+        var store = app.Services.GetRequiredService<Marten.IDocumentStore>();
+        var slug = "sw-zz-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            const string code = "424243";
+            AuthHandlers.IssueAttempt(slug, "966500000302", code, AuthHandlers.AuthKind.PhoneOtp);
+            var victim = (await AuthHandlers.VerifyPhoneOtpHandler(new VerifyPhoneOtp("966500000302", code), new VendorRegisterBucketTests.ResolvedTenant(slug), store))!;
+            var mail = new LiveContactNoticeProofTests.Capture();
+            var sms = new LiveContactNoticeProofTests.CaptureSms();
+            var offered = ACommerce.Templates.Customer.Marketplace.Services.LoginChannels.Offered(AuthChannels.Phone, phoneRegistered: true, emailRegistered: true);
+            var start = await ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.StartAsync(store, slug, victim.UserId, ContactLink.Email, "planted.r1@example.com", sms, mail, offered, default);
+            Assert.True(await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.RevokeTenantAsync(store, Cache(), slug, victim.UserId));
+            var linked = await ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.VerifyAsync(store, slug, victim.UserId, start.AttemptId, mail.Code, DateTime.UtcNow, sms, mail, default);
+            await using var q = store.QuerySession(slug);
+            var after = (await q.LoadAsync<User>(victim.UserId))!;
+            var revoked = ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.IsRevoked(AuthHandlers.SessionVersionOf(victim.Token)!.Value, after.SessionVersion);
+            var planted = after.Email == "planted.r1@example.com";
+            output.WriteLine($"اليَوم: رَمزُ الطَلَب {(revoked ? "ساقِط" : "صالِح")} · الرَبط {(linked is null ? "رُبِط" : linked)} · البَريدُ المَزروعُ في الحِساب {planted}");
+            Assert.True(revoked);
+            Assert.Null(linked);
+            Assert.True(planted);
+        }
+        finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
+    }
+}
