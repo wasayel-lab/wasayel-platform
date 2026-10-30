@@ -374,6 +374,98 @@ public class AccountErasureTests
         Assert.NotNull(ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "listings.detail.err_offer_gone"));
         Assert.Equal("offer_gone", AccountErasure.OffererGoneCode);
     }
+
+    // ─── إعلاناتُ مَن حَذَفَ حِسابَه (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1 + G-5) — تَوصيفٌ قَبلَ التَبديل (القاعِدَة ٣) ─────────────────────
+    //
+    // المَقيسُ عِندَ `fcbeec5`: `EraseCopiesAsync` تَمَسُّ الصَفقَةَ والمُحادَثَةَ والتَقييمَ والعَرضَ والمُطابَقَةَ والتَذكِرَةَ والمِفتاحَ والإشعار — ولا إعلان؛ فَإعلانُ البائِعِ
+    // المَحذوفِ يَبقى في واجِهَةِ المَتجَر، تُراجِعُه السَلَّةُ فَيَبقى، والإتمامُ يَربِطُ مالِكَه المَمحُوَّ طَرَفاً مُقابِلاً (`BindListingOwnerAsync`) — والبابُ الَّذي بُنِيَ لِيَمنَعَ
+    // هذا (`open_deal`، د52 «حمايةً للطرف الذي بدأ التنفيذ») لا يَراه لِأَنّ الصَفقَةَ تولَدُ بَعدَ الحَذف. صَفّا «اليَوم» يُقلَبانِ بِاسمَيهِما في كوميتِ التَبديل،
+    // والصَفُّ السالِبُ (بائِعٌ قائِمٌ وإعلانٌ بِلا مالِك) يَبقى بِحَرفِه.
+
+    private static ACommerce.Kit.Listings.Listing OwnedListing(Guid? owner, decimal price = 100m)
+    {
+        var listing = new ACommerce.Kit.Listings.Listing();
+        var attrs = owner is { } o ? new Dictionary<string, string> { [ListingEditService.OwnerAttribute] = o.ToString() } : new();
+        listing.Apply(new ACommerce.Kit.Listings.ListingCreated(Guid.NewGuid(), "zz", "سِلعَةُ البائِع", null, price, "c", null, null, attrs, DateTime.UtcNow));
+        return listing;
+    }
+
+    private static ACommerce.Kit.Cart.Cart CartOf(params ACommerce.Kit.Listings.Listing[] listings)
+    {
+        var cart = new ACommerce.Kit.Cart.Cart { Id = Guid.NewGuid(), UpdatedAt = new DateTime(2026, 10, 30, 8, 0, 0, DateTimeKind.Utc) };
+        foreach (var l in listings)
+            cart.Items.Add(new ACommerce.Kit.Cart.CartItem { ListingId = l.Id, Title = l.Title, UnitPriceSar = l.Price, Quantity = 1 });
+        return cart;
+    }
+
+    /// <summary><b>تَوصيفُ اليَوم</b> (يُقلَبُ بِاسمِه في كوميتِ التَبديل): بائِعٌ حَذَفَ حِسابَه (<c>Erase</c>) وإعلانُه قائِم — بَندُه في السَلَّةِ يَمُرُّ بِمُراجَعَةِ الإتمامِ
+    /// (<see cref="CheckoutCart.RefreshAsync"/> لا تُغَيِّرُ شَيئاً)، والصَفقَةُ الَّتي تولَدُ مِنه يَربِطُ <c>BindListingOwnerAsync</c> مالِكَها المَمحُوَّ طَرَفاً مُقابِلاً بِاسمِ «حِسابٌ مَحذوف».</summary>
+    [Fact]
+    public async Task Today_a_deleted_sellers_listing_survives_the_cart_review_and_its_checkout_binds_the_erased_owner()
+    {
+        var world = new DocWorld();
+        var seller = AccountDeletion.Erase(new User { Id = Guid.NewGuid(), TenantSlug = "zz", FullName = "بائِعُ الجَولَة" }, DateTime.UtcNow);
+        var listing = OwnedListing(seller.Id);
+        var cart = CartOf(listing);
+        world.Put(seller).Put(listing).Put(cart);
+
+        var reviewed = await CheckoutCart.RefreshAsync(world.Session, cart);
+        var deals = new DealsService(world.Store, new DealMoneyClaimFirstTests.RecordingPaymentProvider());
+        var deal = await deals.StartAsync("zz", "marketplace", Other, "مُشتَرٍ", listing.Id, listing.Title, listing.Price);
+        var bound = await deals.BindListingOwnerAsync("zz", deal.Id, seller.Id.ToString());
+
+        Assert.True(CheckoutCart.Buyable(listing));
+        Assert.False(reviewed);
+        Assert.Single(cart.Items);
+        Assert.Equal((seller.Id, AccountDeletion.ErasedName), (bound!.CounterpartyId, bound.CounterpartyName));
+    }
+
+    /// <summary><b>السالِبُ — يَبقى بِحَرفِه بَعدَ التَبديل</b>: إعلانُ بائِعٍ قائِمٍ وإعلانٌ بِلا مالِكٍ (إعلاناتُ البَذر) يَمُرّانِ بِمُراجَعَةِ الإتمامِ بِلا تَغيير.</summary>
+    [Fact]
+    public async Task A_live_sellers_listing_and_an_ownerless_listing_survive_the_cart_review()
+    {
+        var world = new DocWorld();
+        var seller = new User { Id = Guid.NewGuid(), TenantSlug = "zz", FullName = "بائِعٌ قائِم" };
+        var live = OwnedListing(seller.Id);
+        var ownerless = OwnedListing(null, 40m);
+        var cart = CartOf(live, ownerless);
+        world.Put(seller).Put(live).Put(ownerless).Put(cart);
+
+        Assert.False(await CheckoutCart.RefreshAsync(world.Session, cart));
+        Assert.Equal(new[] { live.Id, ownerless.Id }, cart.Items.Select(i => i.ListingId));
+        Assert.Equal(0, world.SaveCalls);
+    }
+
+    /// <summary><b>تَوصيفُ اليَوم</b> (يُقلَبُ بِاسمِه في كوميتِ التَبديل) — في المَصدَر: مَحوُ النُسَخِ لا يَذكُرُ إعلاناً ولا يَرفُضُ عَرضاً عَلَيه، ونُقطَةُ الحَذفِ لا تُلغي صَفقَة،
+    /// وبابُ تَقديمِ العَرضِ وبابُ السَلَّةِ لا يَسأَلانِ عَن مالِكٍ حَذَفَ حِسابَه — والعَرضُ لا يَسأَلُ حَتّى عَن إعلانٍ مَحذوف.</summary>
+    [Fact]
+    public void Today_the_erasure_names_no_listing_and_the_offer_and_cart_doors_ask_no_owner()
+    {
+        var tpl = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace");
+        var erasure = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(tpl, "Services", "Identity", "AccountErasure.cs")));
+        var copies = erasure[erasure.IndexOf("public static async Task<Counts> EraseCopiesAsync(", StringComparison.Ordinal)..];
+        var door = AccountDeletionRetentionTests.DeleteEndpointBody();
+        var mte = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(tpl, "MarketplaceTemplateExtensions.cs")));
+        string Door(string route)
+        {
+            var start = mte.IndexOf(route, StringComparison.Ordinal);
+            Assert.True(start > 0, $"لا بابَ «{route}» — الأَداةُ عَمياء.");
+            return mte[start..mte.IndexOf("RequireStoreWritable", start, StringComparison.Ordinal)];
+        }
+        var offers = Door("app.MapPost(\"/{slug}/listings/{id:guid}/offers\"");
+        var cartAdd = Door("app.MapPost(\"/{slug}/listings/{id:guid}/cart/add\"");
+        output.WriteLine($"مَحوُ النُسَخِ {copies.Length} مِحرَفاً · نُقطَةُ الحَذفِ {door.Length} · بابُ العَرضِ {offers.Length} · بابُ السَلَّةِ {cartAdd.Length}");
+
+        Assert.DoesNotContain("ListingDeleted", copies, StringComparison.Ordinal);
+        Assert.DoesNotContain("OfferRejected", copies, StringComparison.Ordinal);
+        Assert.DoesNotContain("CancelAsync(", door, StringComparison.Ordinal);
+        Assert.DoesNotContain("OwnerGone", offers, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsDeleted", offers, StringComparison.Ordinal);
+        Assert.DoesNotContain("OwnerGone", cartAdd, StringComparison.Ordinal);
+    }
+
+    private readonly ITestOutputHelper output;
+    public AccountErasureTests(ITestOutputHelper output) => this.output = output;
 }
 
 /// <summary>
@@ -750,6 +842,58 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
             await using var s = store.LightweightSession(slug);
             s.DeleteWhere<User>(u => u.Id != Guid.Empty); s.DeleteWhere<Offer>(o => o.Id != Guid.Empty);
             s.Events.ArchiveStream(offerId); s.Events.ArchiveStream(acceptedId); s.Events.ArchiveStream(theirsId);
+            await s.SaveChangesAsync();
+        }
+    }
+
+    /// <summary><b>تَوصيفُ اليَوم حَيّاً</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1؛ يُقلَبُ بِاسمِه في كوميتِ التَبديل): بائِعٌ لا صَفقَةَ جارِيَةَ لَه طَرَفاً يَحذِفُ حِسابَه —
+    /// وعَلى إعلانِه عَرضٌ مُعَلَّقٌ مِن عُضوٍ آخَر، وصَفقَةُ مَسارِ العَرضِ وارِدَةٌ لَم يَقبَلْها (فَعّالَةٌ عِندَ «عَرض»، مَرجِعُ مالِكِها هُو ولا طَرَفَ مُقابِل). تَسلسُلُ النُقطَةِ
+    /// بِعَينِه عَلى Postgres: الإعلانُ قائِم، والعَرضُ مُعَلَّق، والصَفقَةُ فَعّالَةٌ — كُلُّها مَربوطَةٌ بِحِسابٍ مَمحُوّ.</summary>
+    [Fact]
+    public async Task Today_a_deleted_sellers_listing_its_pending_offer_and_its_incoming_deal_stay_open_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = BuildStore();
+        var slug = "zz-erase-" + Guid.NewGuid().ToString("N")[..8];
+        var seller = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = "بائِعُ الإعلانِ الحَيّ", Phone = "+966500000557" };
+        var buyer = Guid.NewGuid();
+        var (listingId, offerId) = (Guid.NewGuid(), Guid.NewGuid());
+        var incoming = new Deal
+        {
+            Id = Guid.NewGuid(), TenantSlug = slug, ListingId = listingId, ListingTitle = "سِلعَةُ البائِع", InitiatorId = buyer, InitiatorName = "مُشتَرٍ",
+            Status = DealStatus.Active, Stage = DealStage.Offered, Refs = new() { [DealsService.ListingOwnerRef] = seller.Id.ToString() },
+        };
+        try
+        {
+            await using (var s = store.LightweightSession(slug))
+            {
+                var now = DateTime.UtcNow;
+                s.Store(seller);
+                s.Events.StartStream<ACommerce.Kit.Listings.Listing>(listingId, new ACommerce.Kit.Listings.ListingCreated(listingId, slug, "سِلعَةُ البائِع", null, 100m, "c",
+                    null, null, new Dictionary<string, string> { [ListingEditService.OwnerAttribute] = seller.Id.ToString(), ["pickup_lat"] = "24.7" }, now));
+                s.Events.StartStream<Offer>(offerId, new OfferSubmitted(offerId, listingId, buyer, "مُقَدِّمٌ آخَر", 90m, null, 24.7, 46.7, now.AddDays(3), now));
+                s.Store(incoming);
+                await s.SaveChangesAsync();
+            }
+            var counts = await EraseLikeTheDoorAsync(store, slug, seller.Id);
+            await using var q = store.QuerySession(slug);
+            var listing = (await q.LoadAsync<ACommerce.Kit.Listings.Listing>(listingId))!;
+            var offer = (await q.LoadAsync<Offer>(offerId))!;
+            var deal = (await q.LoadAsync<Deal>(incoming.Id))!;
+            output.WriteLine($"مُحِيَ: {counts.Total} · الإعلانُ مَحذوف: {listing.IsDeleted} · العَرضُ عَلَيه: {offer.Status} · الصَفقَةُ الوارِدَة: {deal.Status} " +
+                             $"عِندَ {deal.Stage} · مالِكُها المَمحُوّ: {DealAcceptAuthorization.OwnerIdOf(deal) == seller.Id}");
+            Assert.False(listing.IsDeleted);
+            Assert.Equal(OfferStatus.Pending, offer.Status);
+            Assert.Equal((DealStatus.Active, DealStage.Offered), (deal.Status, deal.Stage));
+            Assert.Equal(seller.Id, DealAcceptAuthorization.OwnerIdOf(deal));
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            s.DeleteWhere<User>(u => u.Id != Guid.Empty); s.DeleteWhere<Offer>(o => o.Id != Guid.Empty); s.DeleteWhere<Deal>(d => d.Id != Guid.Empty);
+            s.DeleteWhere<ACommerce.Kit.Listings.Listing>(l => l.Id != Guid.Empty);
+            s.Events.ArchiveStream(offerId); s.Events.ArchiveStream(listingId);
             await s.SaveChangesAsync();
         }
     }
