@@ -171,13 +171,34 @@ public class RoleDefinitionValidatorTests
     // جَلسَتُه عَلى `/{slug}/r/name/` أَبَداً: بابٌ مَيت (القاعِدَة ١٢). وسَطرُ ADR-041 يَقولُ «ولا مُصادِقَ لِأَسماءِ الأَدوارِ يَمنَعُه اليَوم».
     // **تَوصيفُ «اليَوم»** — يُقلَبُ بِاسمِه في كوميتِ التَبديل.
 
-    [Fact]
-    public void Today_a_role_slug_named_name_passes_the_validator()
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، كوميتُ التَبديل)</b> — كانَ <c>Today_a_role_slug_named_name_passes_the_validator</c> (‏<c>1a51c96</c>):
+    /// المُصادِقانِ يَقبَلانِ «name». والآن يَرُدّانِه بِـ<c>slug_reserved_name</c> (مُوجَب)، و«names» و«driver» لا يَحمِلانِ الرَمز (سالِب).</summary>
+    [Theory]
+    [InlineData("name", true)]
+    [InlineData("names", false)]
+    [InlineData("driver", false)]
+    [InlineData("name_x", false)]
+    public void A_role_slug_named_name_is_reserved_and_its_neighbours_are_not(string slug, bool reserved)
     {
-        var d = Sound() with { Slug = "name" };
-        Assert.True(RoleDefinitionValidator.IsValid(d));
-        Assert.True(RoleDefinitionValidator.IsValidTenantDefinition(d));
-        Assert.True(ACommerce.Templates.Customer.Marketplace.AuthSession.IsNameCookie(ACommerce.Templates.Customer.Marketplace.AuthSession.CookieName("zz", "name")));
+        var d = Sound() with { Slug = slug };
+        var codes = RoleDefinitionValidator.Validate(d).Select(v => v.Code).ToList();
+        var tenantCodes = RoleDefinitionValidator.ValidateTenantDefinition(d).Select(v => v.Code).ToList();
+        Assert.Equal(reserved, codes.Contains("slug_reserved_name"));
+        Assert.Equal(reserved, tenantCodes.Contains("slug_reserved_name"));
+        if (reserved) Assert.False(RoleDefinitionValidator.IsValidTenantDefinition(d));
+    }
+
+    /// <summary>الثابِتُ في العُدَّةِ وقَرارُ القالِبِ واحِد: كوكيُّ جَلسَةِ الدَورِ المَحجوزِ كوكيُّ اسمٍ عِندَ <c>AuthSession.IsNameCookie</c>، وجيرانُه لَيسوا كَذلِك.</summary>
+    [Fact]
+    public void The_reserved_slug_is_exactly_the_role_whose_session_cookie_the_template_reads_as_the_name_cookie()
+    {
+        static bool NameCookie(string role)
+            => ACommerce.Templates.Customer.Marketplace.AuthSession.IsNameCookie(ACommerce.Templates.Customer.Marketplace.AuthSession.CookieName("zz", role));
+        Assert.Equal("name", RoleDefinitionValidator.ReservedNameSlug);
+        Assert.True(NameCookie(RoleDefinitionValidator.ReservedNameSlug));
+        Assert.False(NameCookie("names"));
+        Assert.False(NameCookie("driver"));
+        Assert.DoesNotContain(RoleCatalog.All, r => r.Slug == RoleDefinitionValidator.ReservedNameSlug);
     }
 
     // ─── سالِب — كُلّ رَمز خَرق بِمُدخَلِه المَقصود ───────────────────

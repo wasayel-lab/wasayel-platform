@@ -34,6 +34,14 @@ public static class RoleDefinitionValidator
     private static readonly Regex SlugPattern =
         new("^[a-z][a-z0-9_]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    /// <summary>
+    /// <para><b>اسمُ دَورٍ مَحجوز: <c>name</c></b> (‏2026-10-30، الموجَة ١٢ F1 البَند ٩؛ تَوصيفُه <c>1a51c96</c>). كوكيُّ جَلسَةِ الدَورِ
+    /// <c>.acommerce.auth.{slug}.{role}</c>، وكوكيُّ اسمِ العَرضِ <c>.acommerce.auth.{slug}.name</c> — ومُنذُ I-SEC-1 (‏ADR-041) لا يُحَلُّ كوكيُّ الاسمِ جَلسَةً
+    /// (<c>AuthSession.IsNameCookie</c> في القالِب)، فَدَورٌ بِهذا الاسمِ لا تُفتَحُ جَلسَتُه عَلى مَسارِه أَبَداً: بابٌ مَيت (القاعِدَة ١٢). العُدَّةُ لا تَعرِفُ
+    /// القالِب، فَالثابِتُ هُنا وصَفٌّ في الاختِباراتِ يُثَبِّتُ أَنّ القالِبَ يَراه كوكيَّ اسمٍ — فَلا يَنحَرِفان.</para>
+    /// </summary>
+    public const string ReservedNameSlug = "name";
+
     /// <summary>القائِمَة فارِغَة تَعني تَعريفاً صالِحاً.</summary>
     public static IReadOnlyList<RoleDefinitionViolation> Validate(RoleDefinition d)
     {
@@ -45,6 +53,9 @@ public static class RoleDefinitionValidator
         else if (!SlugPattern.IsMatch(d.Slug))
             v.Add(new("slug_pattern",
                 $"الـ slug «{d.Slug}» خارِج النَّمَط ^[a-z][a-z0-9_]*$."));
+        else if (d.Slug == ReservedNameSlug)
+            v.Add(new("slug_reserved_name",
+                $"الـ slug «{d.Slug}» مَحجوز — كوكيُّ جَلسَتِه هُوَ كوكيُّ اسمِ العَرض، فَلا تُفتَحُ جَلسَتُه عَلى مَسارِه. اِختَر اسماً آخَر."));
 
         if (string.IsNullOrWhiteSpace(d.Icon))
             v.Add(new("icon_missing", $"الدَور «{d.Slug}» بِلا أَيقونَة."));
