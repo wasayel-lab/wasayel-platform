@@ -268,6 +268,22 @@ public class AccountErasureTests
         Assert.Equal("غَيري", theirs.AuthorName);
     }
 
+    // ─── التَذكِرَةُ تُمحى في لَقطَتِها وَحدَها (‏2026-10-30، تَدقيقُ الموجَة ١١ CO16) — تَوصيفٌ قَبلَ التَبديل (القاعِدَة ٣) ───────────────────
+    //
+    // المَقيسُ عِندَ `4ee5400`: `EraseFrom(Ticket)` يَكتُبُ «حِسابٌ مَحذوف» عَلى وَثيقَةِ الإسقاطِ (`Mark(tickets…)` ← `Store`)، ومَجرى التَذكِرَةِ لا يَحمِلُ المَحو —
+    // لا حَدَثَ تَسمِيَةٍ في الكيت ولا `Apply` لَه — فَإعادَةُ بِناءِ اللَقطَةِ مِن المَجرى تُعيدُ الاسم. بِخِلافِ العَرض (`EraseEvents(Offer)` ← `OffererRenamed`).
+
+    [Fact]
+    public void Today_a_tickets_stream_has_no_rename_event_so_only_its_snapshot_is_erased()
+    {
+        var applies = typeof(Ticket).GetMethods().Where(m => m.Name == "Apply").Select(m => m.GetParameters()[0].ParameterType.Name).OrderBy(n => n).ToList();
+        var eraseEvents = typeof(AccountErasure).GetMethods().Where(m => m.Name == nameof(AccountErasure.EraseEvents)).Select(m => m.GetParameters()[0].ParameterType.Name).ToList();
+        output.WriteLine($"Apply عَلى Ticket: {applies.Count} ({string.Join(", ", applies)}) · EraseEvents لِـ: {string.Join(", ", eraseEvents)}");
+
+        Assert.Equal(new[] { "TicketClosed", "TicketCreated", "TicketReplied" }, applies);
+        Assert.Equal(new[] { "Offer" }, eraseEvents);
+    }
+
     [Fact]
     public void A_listing_match_loses_the_offerers_name_and_anothers_match_is_untouched()
     {
@@ -992,6 +1008,46 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
                          (afterReply.AuthorName, Assert.Single(afterReply.Replies).AuthorName, afterReply.Status));
             // ولَقطَةُ المَظهَرِ الوَحيدَةُ لِهذِه الصَفحَة (`studio-app-ticket-missing`) تَذكِرَةٌ لا وُجودَ لَها: القِراءَتانِ تُجيبانِها بِـnull فَالفَرعُ نَفسُه.
             Assert.Null(await new TenantAdminQueries(store).TicketAsync(slug, Guid.Parse("00000000-0000-0000-0000-000000000001")));
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            s.DeleteWhere<User>(u => u.Id != Guid.Empty); s.DeleteWhere<Ticket>(t => t.Id != Guid.Empty);
+            s.Events.ArchiveStream(ticketId);
+            await s.SaveChangesAsync();
+        }
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم» حَيّاً (‏2026-10-30، CO16)</b>: تَذكِرَتُه بِرَدِّه ورَدِّ الفَريقِ تُمحى لَقطَتُها، وإعادَةُ بِنائِها مِن مَجراها
+    /// (<c>AggregateStreamAsync&lt;Ticket&gt;</c> — ما يَفعَلُه <c>rebuild</c> لِكُلِّ مَجرى) تُعيدُ اسمَه عَلى التَذكِرَةِ ورَدِّه. يُقلَبُ بِاسمِه في كوميتِ التَبديل.</summary>
+    [Fact]
+    public async Task Today_a_rebuilt_ticket_gets_the_deleted_members_name_back_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = BuildStore();
+        var slug = "zz-erase-" + Guid.NewGuid().ToString("N")[..8];
+        const string name = "كاتِبُ تَذكِرَةٍ يُعادُ بِناؤها";
+        var me = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = name, Phone = "+966500000571" };
+        var ticketId = Guid.NewGuid();
+        try
+        {
+            await using (var s = store.LightweightSession(slug))
+            {
+                s.Store(me);
+                s.Events.StartStream<Ticket>(ticketId, new TicketCreated(ticketId, me.Id, name, "سُؤال", "نَصّ", DateTime.UtcNow),
+                    new TicketReplied(ticketId, Guid.NewGuid(), name, false, "تَوضيح", DateTime.UtcNow),
+                    new TicketReplied(ticketId, Guid.NewGuid(), "دَعم التَّطبيق", true, "رَدّ", DateTime.UtcNow));
+                await s.SaveChangesAsync();
+            }
+            var counts = await EraseLikeTheDoorAsync(store, slug, me.Id);
+            await using var q = store.QuerySession(slug);
+            var snapshot = (await q.LoadAsync<Ticket>(ticketId))!;
+            var rebuilt = (await q.Events.AggregateStreamAsync<Ticket>(ticketId))!;
+            output.WriteLine($"تَذاكِرُ مَمحُوَّة: {counts.Tickets} · اللَقطَة: {snapshot.AuthorName} · المُعادُ بِناؤها: {rebuilt.AuthorName} / {string.Join("، ", rebuilt.Replies.Select(r => r.AuthorName))}");
+            Assert.Equal(1, counts.Tickets);
+            Assert.Equal(AccountDeletion.ErasedName, snapshot.AuthorName);
+            Assert.Equal((name, name, "دَعم التَّطبيق"), (rebuilt.AuthorName, rebuilt.Replies[0].AuthorName, rebuilt.Replies[1].AuthorName));
         }
         finally
         {
