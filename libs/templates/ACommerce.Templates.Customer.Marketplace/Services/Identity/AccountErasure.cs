@@ -489,14 +489,10 @@ public static class AccountErasure
 
         // ‏(‏2026-10-30، B-PRIV-1) إعلاناتُه تُسحَبُ بِمَجاريها والعُروضُ المُعَلَّقَةُ عَلَيها تُرفَضُ بِحَدَثِ القَبولِ نَفسِه لِأَخَواتِه (`OfferRejected`)، والوارِدَةُ الَّتي
         // لَم يَقبَلْها تُعادُ لِلنُقطَة. و`Attributes` لا يُرَشِّحُها Marten في LINQ (`AccountQueries.MyListingsAsync`)، فَالمالِكُ يُرَشَّحُ في الذاكِرَة.
+        // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٨) والسُؤالُ والأَثَرُ دالَّتانِ يَقرَؤُهُما سكربتُ حِساباتٍ حُذِفَت قَبلَ هذا (`scripts/withdraw-erased-owner-listings.cs`) — لا نُسخَةٌ ثانِيَة.
         var closedAt = DateTime.UtcNow;
-        var withdrawn = (await s.Query<Listing>().Where(l => !l.IsDeleted).ToListAsync(ct)).Where(l => Withdraws(l, userId)).Select(l => l.Id).ToHashSet();
-        foreach (var id in withdrawn) s.Events.Append(id, new ListingDeleted(id, closedAt));
-        var rejected = (await s.Query<Offer>().Where(o => o.Status == OfferStatus.Pending && o.OffererId != userId).ToListAsync(ct))
-            .Where(o => withdrawn.Contains(o.ListingId)).ToList();
-        foreach (var o in rejected) s.Events.Append(o.Id, new OfferRejected(o.Id, closedAt));
-        var incoming = (await s.Query<Deal>().Where(d => d.Status == DealStatus.Active).ToListAsync(ct))
-            .Where(d => IncomingUnaccepted(d, userId)).Select(d => d.Id).ToList();
+        var plan = await WithdrawalPlanAsync(s, userId, ct);
+        AppendWithdrawal(s, plan, closedAt);
         // ‏(‏2026-10-30، CO16) وتَذاكِرُه بَعدَ أَن قُرِئَ اسمُه مِنها لِبَلاغاتِه أَعلاه.
         var renamedTickets = await Rename(tickets);
 
@@ -510,9 +506,38 @@ public static class AccountErasure
             Keys: Mark(keys, k => EraseFrom(k, tenantSlug, userId)),
             Notifications: Mark(notices, n => EraseFrom(n, userId, names, urls, contacts, ownReports)))
         {
-            Listings = withdrawn.Count,
-            RejectedOffers = rejected.Count,
-            IncomingDeals = incoming,
+            Listings = plan.Listings.Count,
+            RejectedOffers = plan.PendingOffers.Count,
+            IncomingDeals = plan.IncomingDeals,
         };
+    }
+
+    /// <summary>ما يَسحَبُه حَذفُ حِسابٍ مِن مَتجَرِه: إعلاناتُه القائِمَة، والعُروضُ المُعَلَّقَةُ عَلَيها مِن غَيرِه، وصَفَقاتُ العَرضِ الوارِدَةُ الَّتي لَم يَقبَلْها أَحَد.</summary>
+    public sealed record WithdrawalPlan(IReadOnlyList<Guid> Listings, IReadOnlyList<Guid> PendingOffers, IReadOnlyList<Guid> IncomingDeals)
+    {
+        public int Count => Listings.Count + PendingOffers.Count + IncomingDeals.Count;
+    }
+
+    /// <summary>
+    /// <para><b>السُؤال</b> (‏2026-10-30، B-PRIV-1؛ دالَّةً مُنذُ الموجَة ١٢ F2 · ٨): قِراءَةٌ لا تَكتُب — <see cref="Withdraws"/> لِلإعلان، والعَرضُ مُعَلَّقٌ ولَيسَ عَرضَه وإعلانُه
+    /// مِن المَسحوب، و<see cref="IncomingUnaccepted"/> لِلصَفقَة. يَسأَلُها <see cref="EraseCopiesAsync"/> في مُعامَلَةِ الحَذف، ويَسأَلُها السكربتُ لِحِسابٍ حُذِفَ قَبلَ
+    /// السَحبِ (عَرضاً ثُمَّ تَنفيذاً). و<c>Attributes</c> لا يُرَشِّحُها Marten في LINQ، فَالمالِكُ يُرَشَّحُ في الذاكِرَة.</para>
+    /// </summary>
+    public static async Task<WithdrawalPlan> WithdrawalPlanAsync(IQuerySession s, Guid userId, CancellationToken ct = default)
+    {
+        var withdrawn = (await s.Query<Listing>().Where(l => !l.IsDeleted).ToListAsync(ct)).Where(l => Withdraws(l, userId)).Select(l => l.Id).ToHashSet();
+        var rejected = (await s.Query<Offer>().Where(o => o.Status == OfferStatus.Pending && o.OffererId != userId).ToListAsync(ct))
+            .Where(o => withdrawn.Contains(o.ListingId)).Select(o => o.Id).ToList();
+        var incoming = (await s.Query<Deal>().Where(d => d.Status == DealStatus.Active).ToListAsync(ct))
+            .Where(d => IncomingUnaccepted(d, userId)).Select(d => d.Id).ToList();
+        return new WithdrawalPlan(withdrawn.ToList(), rejected, incoming);
+    }
+
+    /// <summary><b>الأَثَرُ في الجَلسَة</b> بِلا حِفظ: الإعلانُ يُسحَبُ بِمَجراه (<c>ListingDeleted</c>) والعَرضُ يُرفَضُ بِحَدَثِ القَبولِ نَفسِه لِأَخَواتِه (<c>OfferRejected</c>).
+    /// والصَفَقاتُ لا تُمَسُّ هُنا: تُلغى بَعدَ الحِفظِ بِـ<see cref="CloseIncomingAsync"/> — كاتِبُها الواحِدُ وقِراءَتُه الجَديدَة.</summary>
+    public static void AppendWithdrawal(IDocumentSession s, WithdrawalPlan plan, DateTime at)
+    {
+        foreach (var id in plan.Listings) s.Events.Append(id, new ListingDeleted(id, at));
+        foreach (var id in plan.PendingOffers) s.Events.Append(id, new OfferRejected(id, at));
     }
 }

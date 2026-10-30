@@ -38,6 +38,35 @@ public class ErasedOwnerListingSourceTests(ITestOutputHelper output)
         Assert.Contains("if ((showOffers || contact) && ownerId is not null)", page, StringComparison.Ordinal);
         Assert.Contains("ownerGone = ACommerce.Templates.Customer.Marketplace.Services.Deals.CheckoutCart.OwnerGone(listing, ownerAccount);", page, StringComparison.Ordinal);
     }
+
+    /// <summary><b>السكربتُ</b> (‏<c>scripts/withdraw-erased-owner-listings.cs</c>): يَعرِضُ افتِراضاً ويَخرُجُ بِـ2 بِالأَمرِ الدَقيق، ولا يَكتُبُ إلّا بِـ<c>--apply</c> وعَدَدٍ يُطابِقُ
+    /// العَرض، ويَكتُبُ بَيانَ ما سيُمَسُّ قَبلَ أَوَّلِ حِفظ، ويَسأَلُ دَوالَّ <c>AccountErasure</c> الَّتي يُنادِيها بابُ الحَذفِ لا نُسخَةً مِنها، ويُسَجِّلُ نُسخَتَي
+    /// <c>Listing</c> و<c>Offer</c> وتَزامُنَ الصَفقَة، ويَفشَلُ عَلى صِفرِ مَتجَر، ولا يَمَسُّ المُخَطَّط — ولا اسمَ مَتجَرٍ مُستَثنى، ولا مُرَشِّحَ واجِهَة.</summary>
+    [Fact]
+    public void The_withdraw_script_shows_by_default_backs_up_first_and_reuses_the_deletion_doors_functions()
+    {
+        var path = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "scripts", "withdraw-erased-owner-listings.cs");
+        var text = File.ReadAllText(path);
+        Assert.True(text.Length > 3000, $"أَداةٌ عَمياء: {path} طولُه {text.Length}.");
+        var needles = new[]
+        {
+            "var apply      = args.Contains(\"--apply\");", "if (!apply)", "return 2;", "if (confirm is null || confirm != changes)",
+            "--apply --confirm {changes}", "AutoCreateSchemaObjects = AutoCreate.None", "✗ BLIND CHECK",
+            "AccountErasure.WithdrawalPlanAsync(", "AccountErasure.AppendWithdrawal(", "AccountErasure.CloseIncomingAsync(",
+            "o.Projections.Snapshot<Listing>(SnapshotLifecycle.Inline);", "o.Projections.Snapshot<Offer>(SnapshotLifecycle.Inline);", "DealsService.RegisterDocument(o);",
+            "File.WriteAllTextAsync(manifestPath", "\"listing.withdraw_erased_owner\"",
+        };
+        foreach (var n in needles) Assert.Contains(n, text, StringComparison.Ordinal);
+        var gate = text.IndexOf("if (confirm is null || confirm != changes)", StringComparison.Ordinal);
+        var manifest = text.IndexOf("File.WriteAllTextAsync(manifestPath", StringComparison.Ordinal);
+        var firstSave = text.IndexOf("SaveChangesAsync", StringComparison.Ordinal);
+        output.WriteLine($"عِباراتٌ مَطلوبَة {needles.Length} · العَرض {text.IndexOf("if (!apply)", StringComparison.Ordinal)} · التَأكيد {gate} · البَيان {manifest} · أَوَّلُ حِفظ {firstSave}");
+        Assert.True(gate > text.IndexOf("if (!apply)", StringComparison.Ordinal) && manifest > gate && firstSave > manifest, "كِتابَةٌ قَبلَ العَرضِ أَو التَأكيدِ أَو البَيان.");
+        Assert.DoesNotContain("\"ashare\"", text, StringComparison.Ordinal);
+        // ‏ولا مُرَشِّحَ في الواجِهَة: السَحبُ يَحِلُّ مَحَلَّه — قاعِدَةٌ واحِدَة.
+        var storefront = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Services", "Queries", "StorefrontQueries.cs"));
+        Assert.DoesNotContain("OwnerGone", storefront, StringComparison.Ordinal);
+    }
 }
 
 [Collection(LiveProofCollection.Name)]

@@ -662,8 +662,9 @@ public class AccountErasureTests
     {
         var v = new List<string>();
         int At(string text, string what) => text.IndexOf(what, StringComparison.Ordinal);
-        if (At(src.Copies, "new ListingDeleted(") < 0) v.Add("المَحوُ لا يَسحَبُ الإعلانات");
-        if (At(src.Copies, "new OfferRejected(") < 0) v.Add("المَحوُ لا يَرفُضُ العُروض");
+        // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٨) السُؤالُ والأَثَرُ دالَّتانِ (`WithdrawalPlanAsync`، `AppendWithdrawal`) بَعدَ `EraseCopiesAsync` في المِلَفِّ — يُسأَلُ النِداءُ والحَدَثان.
+        if (At(src.Copies, "AppendWithdrawal(s, plan, closedAt)") < 0 || At(src.Copies, "new ListingDeleted(") < 0) v.Add("المَحوُ لا يَسحَبُ الإعلانات");
+        if (At(src.Copies, "var plan = await WithdrawalPlanAsync(s, userId, ct);") < 0 || At(src.Copies, "new OfferRejected(") < 0) v.Add("المَحوُ لا يَرفُضُ العُروض");
         if (At(src.Door, "for (var attempt = 1; ; attempt++)") < 0 || At(src.Door, "catch (JasperFx.ConcurrencyException) when (attempt < ACommerce.Kit.Auth.Server.AccountWrites.Attempts)") < 0)
             v.Add("الحَذفُ لا يُعادُ مِن قِراءَةٍ جَديدَة");
         if (At(src.Door, "Services.SessionVersionGate.StillOpen(user, token)") < 0) v.Add("الحَذفُ لا يَسأَلُ الجَلسَةَ عَلى القِراءَة");
