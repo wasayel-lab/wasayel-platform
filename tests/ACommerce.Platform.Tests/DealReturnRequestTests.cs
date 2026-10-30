@@ -41,6 +41,9 @@ public class DealReturnRequestTests(ITestOutputHelper output)
             Id = Guid.NewGuid(), TenantSlug = Slug, Pattern = pattern, Stage = DealStage.Delivered, Status = status, AmountSar = 120m,
             ListingTitle = "سِلعَة", InitiatorId = Buyer, InitiatorName = "مُشتَرٍ", CounterpartyId = Seller, CounterpartyName = "بائِع",
         };
+        // (‏2026-10-30، تَدقيقُ الموجَة ١١ E-deals-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وُلِدَت مِن سَلَّة** كَما تَلِدُ `checkout/submit` صَفقَةَ بَيعِ السِلَعِ الحَيَّة —
+        // كانَت الصَفقَةُ هُنا بِلا `pay_method`، أَي صَفقَةَ عَرضٍ تُعَدُّ «بَيعاً» بِنَمَطِها وَحدَه (المُقدِّمَةُ الكاذِبَةُ؛ صُفوفُها في `DealReturnGoodsGateTests`).
+        deal.Attributes[CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.CashOnDelivery;
         deal.Timeline.Add(new(DealStage.Offered, DealStage.Offered, "created", Buyer, "مُشتَرٍ", null, DeliveredOn.AddDays(-3)));
         deal.Timeline.Add(new(DealStage.Shipping, DealStage.Delivered, "advanced", Seller, "بائِع", null, DeliveredOn));
         return deal;

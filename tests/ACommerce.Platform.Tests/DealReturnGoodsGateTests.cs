@@ -43,10 +43,11 @@ public class DealReturnGoodsGateTests(ITestOutputHelper output)
         Roles = new() { new() { CatalogSlug = "customer" }, new() { CatalogSlug = "vendor" }, new() { CatalogSlug = "tenant_admin" } },
     };
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b> (القاعِدَة ٣): صَفقَةُ عَرضٍ (بِلا <c>pay_method</c>) عَلى «شقة» في مَتجَرِ صِفرِ أَدوارٍ وفي مَتجَرِ إعلاناتٍ مِن الاستوديو — نَمَطُها
-    /// <c>marketplace</c> كِلتَيهِما، و«طَلَب استِرجاع» <b>يُقبَل</b>.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (تَوصيفُه <c>d2fed52</c> — كانَ <c>Today_an_offer_path_deal_on_a_zero_role_or_studio_classifieds_store_may_request_a_goods_return</c>:
+    /// يُقبَل): صَفقَةُ عَرضٍ (بِلا <c>pay_method</c>) عَلى «شقة» في مَتجَرِ صِفرِ أَدوارٍ وفي مَتجَرِ إعلاناتٍ مِن الاستوديو — نَمَطُها <c>marketplace</c> كَما كان، و«طَلَب استِرجاع»
+    /// <b>يُرَدُّ</b> <c>pattern_not_goods</c> (السالِبان).</summary>
     [Fact]
-    public void Today_an_offer_path_deal_on_a_zero_role_or_studio_classifieds_store_may_request_a_goods_return()
+    public void An_offer_path_deal_on_a_zero_role_or_studio_classifieds_store_is_not_a_goods_sale()
     {
         foreach (var store in new[] { ZeroRoleStore(), StudioClassifiedsStore() })
         {
@@ -54,7 +55,23 @@ public class DealReturnGoodsGateTests(ITestOutputHelper output)
             var verdict = DealReturnRequest.Validate(deal, AsBuyer, DeliveredOn.AddDays(1));
             output.WriteLine($"{store.Id}: النَمَط {deal.Pattern} · pay_method؟ {deal.Attributes.ContainsKey(CheckoutPayMethods.AttributeKey)} · الرَدّ: {verdict?.Code ?? "يُقبَل"}");
             Assert.Equal(DealReturnRequest.GoodsPattern, deal.Pattern);
-            Assert.Null(verdict);
+            Assert.Equal(DealReturnRequest.PatternNotGoods, verdict?.Code);
+            Assert.False(DealReturnRequest.CartBorn(deal));
         }
+    }
+
+    /// <summary><b>المُوجِب</b>: صَفقَةُ سِلعَةٍ وَلَدَتها السَلَّةُ (‏<c>pay_method</c> نَقداً أَو بِطاقَة) في مَتجَرِ «بَيع» — يُقبَلُ طَلَبُها بَعدَ التَسليم؛ و<c>pay_method</c> فارِغٌ
+    /// لا يُعَدُّ سَلَّة.</summary>
+    [Theory]
+    [InlineData("cash")]
+    [InlineData("card")]
+    public void A_cart_born_goods_deal_may_request_a_return(string method)
+    {
+        var deal = Delivered(ZeroRoleStore(), cartBorn: true, title: "قَميص");
+        deal.Attributes[CheckoutPayMethods.AttributeKey] = method;
+        Assert.True(DealReturnRequest.CartBorn(deal));
+        Assert.Null(DealReturnRequest.Validate(deal, AsBuyer, DeliveredOn.AddDays(1)));
+        deal.Attributes[CheckoutPayMethods.AttributeKey] = " ";
+        Assert.Equal(DealReturnRequest.PatternNotGoods, DealReturnRequest.Validate(deal, AsBuyer, DeliveredOn.AddDays(1))?.Code);
     }
 }

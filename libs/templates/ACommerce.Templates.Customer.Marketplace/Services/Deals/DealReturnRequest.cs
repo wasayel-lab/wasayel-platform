@@ -47,6 +47,14 @@ public static class DealReturnRequest
     public static readonly IReadOnlyList<string> All =
         new[] { DealNotFound, ActorNotBuyer, PatternNotGoods, DealNotDelivered, WindowClosed, AlreadyRequested };
 
+    /// <summary>
+    /// <para><b>وُلِدَت مِن سَلَّةِ الشِراء — المُمَيِّزُ الَّذي تَحمِلُه صَفقَةُ بَيعِ السِلَعِ الحَيَّة</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ E-deals-1): <c>pay_method</c> في خَصائِصِها
+    /// (<see cref="CheckoutPayMethods.AttributeKey"/>) — يَكتُبُه <c>checkout/submit</c> وَحدَه، والسَلَّةُ لا تُفتَحُ إلّا في واجِهَةِ نَمَطِ «بَيع» (<c>CartDoor.Opens</c> ←
+    /// <c>PatternProfile.UsesCart</c>). وصَفقَةُ العَرضِ (<c>/{slug}/listings/{id}/deal</c>) لا تَحمِلُه — إيجاراً كانَت أَو سَكَناً أَو خِدمَةً أَو عَقاراً. دالَّةٌ نَقِيَّة.</para>
+    /// </summary>
+    public static bool CartBorn(Deal deal)
+        => deal.Attributes.TryGetValue(CheckoutPayMethods.AttributeKey, out var method) && !string.IsNullOrWhiteSpace(method);
+
     /// <summary>لَحظَةُ التَسليم: أَوَّلُ انتِقالٍ إلى <see cref="DealStage.Delivered"/> في سِجِلِّ الصَفقَة (يَكتُبُه البائِعُ أَو وارِدُ OTO)، و<c>null</c> حينَ لا
     /// تَسليم. دالَّةٌ نَقِيَّة.</summary>
     public static DateTime? DeliveredAt(Deal deal)
@@ -64,8 +72,10 @@ public static class DealReturnRequest
         if (deal.InitiatorId != by.ActorId)
             return new(ActorNotBuyer, "لا يَطلُبُ الاستِرجاعَ إلّا مُشتَري الصَفقَة.");
 
-        if (!string.Equals(deal.Pattern, GoodsPattern, StringComparison.Ordinal))
-            return new(PatternNotGoods, $"نَمَطُ الصَفقَة «{deal.Pattern}» لَيسَ بَيعَ سِلعَة — زِرُّ الاستِرجاعِ لِبَيعِ السِلَعِ وَحدَه.");
+        // (‏2026-10-30، تَدقيقُ الموجَة ١١ E-deals-1؛ تَوصيفُه `d2fed52` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **ووُلِدَت مِن سَلَّة** (<see cref="CartBorn"/>) — النَمَطُ
+        // وَحدَه لا يُمَيِّز: `marketplace` احتِياطُ المُحَلِّلِ لِكُلِّ مَتجَرٍ بِلا سائِقٍ ولا مُضيف، فَصَفقَةُ عَرضٍ عَلى «شقة» كانَت تَطلُبُ «استِرجاعَ السِّلعَة».
+        if (!string.Equals(deal.Pattern, GoodsPattern, StringComparison.Ordinal) || !CartBorn(deal))
+            return new(PatternNotGoods, $"صَفقَةُ «{deal.Pattern}» {(CartBorn(deal) ? "" : "بِلا سَلَّةِ شِراءٍ ")}لَيسَت بَيعَ سِلعَة — زِرُّ الاستِرجاعِ لِبَيعِ السِلَعِ وَحدَه.");
 
         if (deal.Status is not (DealStatus.Active or DealStatus.Completed) || DeliveredAt(deal) is not { } delivered)
             return new(DealNotDelivered, $"الصَفقَةُ في حالَة {deal.Status} عِندَ «{deal.Stage}» — لَم تُسَلَّم السِلعَة.");
