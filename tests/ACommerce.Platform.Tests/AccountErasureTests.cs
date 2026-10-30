@@ -594,6 +594,26 @@ public class AccountErasureTests
         return v;
     }
 
+    // ─── رَدٌّ نَقدِيٌّ مُستَحَقٌّ لِمَن يَحذِفُ حِسابَه (‏2026-10-30، تَدقيقُ الموجَة ١١ G-7) — تَوصيفٌ قَبلَ التَبديل (القاعِدَة ٣) ─────────────────────
+    //
+    // المَقيسُ عِندَ `c644737`: صَفقَةُ نَقدٍ أُلغِيَت بَعدَ القَبضِ يَكتُبُ إلغاؤها `cash_refund_due` (البائِعُ يَرُدُّ الثَمَن) — ولا كاتِبَ لِـ«رُدَّ» (S3 OI1)؛ وصَفحَةُ الحَذفِ
+    // لا تَسأَلُ عَنه: لا تَعُدُّه `open_deal` (المُلغاةُ لَيسَت جارِيَة) ولا تَذكُرُه، فَيَحذِفُ المُشتَري حِسابَه — ومَعَه الوَسيلَةُ الَّتي يَرُدُّ البائِعُ بِها — ولا يُقالُ لَه.
+
+    private static readonly string DeletePagePath = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+        "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "DeleteAccount.razor");
+
+    [Fact]
+    public void Today_the_deletion_page_says_nothing_of_cash_the_vendor_still_owes_back()
+    {
+        var page = WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(DeletePagePath));
+        var owed = typeof(AccountErasure).GetMethods().Count(m => m.Name.StartsWith("CashRefund", StringComparison.Ordinal));
+        output.WriteLine($"دالّاتُ «رَدٍّ مُستَحَقّ» في المَحو: {owed} · ذِكرُه في صَفحَةِ الحَذف: {page.Contains("cash_refund", StringComparison.Ordinal)}");
+
+        Assert.Equal(0, owed);
+        Assert.DoesNotContain("cash_refund", page, StringComparison.Ordinal);
+        Assert.False(AccountErasure.IsOpen(new Deal { Status = DealStatus.Cancelled }));
+    }
+
     private readonly ITestOutputHelper output;
     public AccountErasureTests(ITestOutputHelper output) => this.output = output;
 }
