@@ -34,6 +34,7 @@ public class DealRefusalTextsTests
             .Concat(DealShipAuthorization.All)
             .Concat(ACommerce.Kit.Delivery.OtoFailures.All)
             .Append(DealShipping.ShipmentUnconfirmed)
+            .Append(OtoOrderStatusGate.Intervention)   // (‏2026-10-30، تَدقيقُ الموجَة ١١ F4): رَدُّ «أَكمِل الشَّحن» عَلى شُحنَةٍ فُقِدَت
             .Append(DealShipping.DealAwaitsCarrier)
             .Append(GatewayPayments.DealAwaitsPayment)
             .Concat(GatewayInvoiceShare.All)
@@ -53,7 +54,7 @@ public class DealRefusalTextsTests
         // ثُمَّ `siblings_not_ready` (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ د13) — ثانِيَ عَشَرَ بَوّابَةِ الشَحن، يَدخُلُ بِها: 28 ← 29.
         // ثُمَّ مَعجَمُ «طَلَب استِرجاع» (‏2026-10-29، قَرارُ المالِك د30): سِتَّةٌ مِنها `deal_not_found` المُشتَرَك — 29 ← 34.
         // ثُمَّ `deal_in_shared_waybill` (‏2026-10-30، تَدقيقُ الموجَة ١١ F1) — خامِسُ بَوّابَةِ الإلغاء، يَدخُلُ بِها: 34 ← 35.
-        Assert.Equal(35, DealRefusalTexts.Codes.Count);
+        Assert.Equal(36, DealRefusalTexts.Codes.Count);   // (‏2026-10-30، تَدقيقُ الموجَة ١١ F4): +`needs_intervention` — «أَكمِل الشَّحن» عَلى شُحنَةٍ فُقِدَت: 35 ← 36.
         Assert.Equal(DealRefusalTexts.Codes.Count, DealRefusalTexts.Codes.Distinct(StringComparer.Ordinal).Count());
     }
 
@@ -67,6 +68,7 @@ public class DealRefusalTextsTests
                      .Append(DealsService.ChangedMeanwhile)
                      .Concat(DealShipAuthorization.All).Concat(ACommerce.Kit.Delivery.OtoFailures.All)
                      .Append(DealShipping.ShipmentUnconfirmed)
+                     .Append(OtoOrderStatusGate.Intervention)   // (‏2026-10-30، تَدقيقُ الموجَة ١١ F4)
                      .Append(DealShipping.DealAwaitsCarrier)
                      .Append(GatewayPayments.DealAwaitsPayment)
                      .Concat(GatewayInvoiceShare.All)   // (‏2026-10-13، G5 M4)
@@ -86,7 +88,7 @@ public class DealRefusalTextsTests
         // + 1 (`deal_awaits_payment`، ‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12): 29 ← 30.
         // (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى): +`siblings_not_ready` — 33 ← 34.
         // (‏2026-10-30، تَدقيقُ الموجَة ١١ F1): +`deal_in_shared_waybill` — خامِسُ بَوّابَةِ الإلغاء: 34 ← 35.
-        Assert.Equal(35, checked_);   // (‏2026-10-13، G5 M4): +`deal_invoice_shared` — 30 ← 31؛ (G5 (xv-g)): +`deal_payment_missing` — 31 ← 32؛ (‏2026-10-24): +`deal_past_cancel_stage` — 32 ← 33.
+        Assert.Equal(36, checked_);   // (‏2026-10-30، تَدقيقُ الموجَة ١١ F4): +`needs_intervention` — 35 ← 36.   // (‏2026-10-13، G5 M4): +`deal_invoice_shared` — 30 ← 31؛ (G5 (xv-g)): +`deal_payment_missing` — 31 ← 32؛ (‏2026-10-24): +`deal_past_cancel_stage` — 32 ← 33.
     }
 
     /// <summary><b>نَصُّ «بِلا مالِكِ إعلان» يُسَمّي مَن يُحَرِّكُها حَقّاً</b> (‏2026-10-11، مُراجَعَةُ الموجَةِ الثانِيَةِ

@@ -746,6 +746,19 @@ public sealed class DealShipping
             return Logged(tenantSlug, DealShipResult.Refused(DealShipAuthorization.OrderClosedAtOto, current) with { OtoStatus = state.Status });
         }
 
+        // (‏2026-10-30، تَدقيقُ الموجَة ١١ F4 — د9 (١) «أ»؛ تَوصيفُه `2b241f2` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **وشُحنَةٌ فُقِدَت أَو تَلِفَت أَو أُتلِفَت تُعَلَّمُ
+        // هُنا أَيضاً** — العَلامَةُ والإشعارُ بِالدالَّتَينِ اللَّتَينِ يَكتُبُ بِهِما الوارِد (`FlagsIntervention` ← `FlagInterventionAsync`) لِلصَفقَةِ وأَخَواتِ طَلَبِها، ثُمَّ
+        // يُرَدُّ بِرَمزِه `needs_intervention` لا `shipment_unconfirmed`: كانَت كُلُّ نَقرَةٍ «أَعِد المُحاوَلَةَ بَعدَ قَليل» بِلا عَلامَةٍ ولا إشعار لِبائِعٍ لا وارِدَ لَه —
+        // بابٌ بِلا نِهايَة (القاعِدَة ١٢). والمُعَلَّمَةُ مِن قَبلُ لا تُعَلَّمُ ثانِيَةً ولا تُخبِر، والرَدُّ نَفسُه.
+        if (state is { NeedsIntervention: true } && string.Equals(state.OrderId, orderId, StringComparison.Ordinal))
+        {
+            foreach (var member in siblings.Prepend(current))
+                if (OtoOrderStatusGate.FlagsIntervention(member, state))
+                    await FlagInterventionAsync(tenantSlug, member, state);
+            current = await _deals.LoadAsync(tenantSlug, dealId, CancellationToken.None) ?? current;
+            return Logged(tenantSlug, DealShipResult.Refused(OtoOrderStatusGate.Intervention, current) with { OtoStatus = state.Status });
+        }
+
         if (!ShipmentConfirmed(current, state))
             return Logged(tenantSlug, DealShipResult.Refused(ShipmentUnconfirmed, current) with { OtoStatus = state?.Status });
 
