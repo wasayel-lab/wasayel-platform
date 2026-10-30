@@ -933,6 +933,58 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
         }
     }
 
+    /// <summary>
+    /// <para><b>تَوصيفُ اليَوم حَيّاً</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ G-2؛ يُقلَبُ بِاسمِه في كوميتِ التَبديل): مالِكُ إعلانٍ يَرفُضُ عِندَ «عَرض» طَلَباً لَم يَصِر
+    /// طَرَفَه (د31 «١» — <c>rejectsOffer</c>)، فَيَحمِلُ إشعارُ المُشتَري «{اسمُه} أَلغى طَلَبَكَ…» (<c>DealNotices.CancelledFor</c>). ثُمَّ يَحذِفُ حِسابَه: سَطرُه في الخَطِّ
+    /// الزَمَنِيِّ يُمحى (الصَفقَةُ في <c>others</c>) والإشعارُ يَبقى بِاسمِه — رابِطُه لَيسَ مِن <c>urls</c> (صَفَقاتُ الطَرَفِ وَحدَها). <b>والسالِبُ يَبقى بِحَرفِه</b>: إشعارٌ
+    /// بِالاسمِ نَفسِه عَن صَفقَةٍ لَم يَمَسَّها لا يُمَسّ.</para>
+    /// </summary>
+    [Fact]
+    public async Task Today_a_buyers_notice_about_an_offer_the_deleted_owner_rejected_keeps_his_name_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = BuildStore();
+        var slug = "zz-erase-" + Guid.NewGuid().ToString("N")[..8];
+        const string name = "مالِكُ الإعلانِ الرافِض";
+        var owner = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = name, Phone = "+966500000558" };
+        var buyer = Guid.NewGuid();
+        var l = new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor());
+        var rejected = new Deal
+        {
+            Id = Guid.NewGuid(), TenantSlug = slug, ListingId = Guid.NewGuid(), ListingTitle = "سِلعَةٌ مَرفوضَة", InitiatorId = buyer, InitiatorName = "مُشتَرٍ",
+            Status = DealStatus.Cancelled, Stage = DealStage.Offered, Refs = new() { [DealsService.ListingOwnerRef] = owner.Id.ToString() },
+            Timeline = new() { new DealEvent(DealStage.Offered, DealStage.Offered, "cancelled", owner.Id, name, "رَفض", DateTime.UtcNow) },
+        };
+        var elsewhere = new Deal { Id = Guid.NewGuid(), TenantSlug = slug, ListingTitle = "صَفقَةُ غَيرِه", InitiatorId = buyer, InitiatorName = "مُشتَرٍ", Status = DealStatus.Cancelled };
+        var notice = DealNotices.CancelledFor(slug, rejected, name, l, DateTime.UtcNow);
+        var unrelated = DealNotices.CancelledFor(slug, elsewhere, name, l, DateTime.UtcNow);
+        try
+        {
+            await using (var s = store.LightweightSession(slug))
+            {
+                s.Store(owner); s.Store(rejected, elsewhere); s.Store(notice, unrelated);
+                await s.SaveChangesAsync();
+            }
+            var counts = await EraseLikeTheDoorAsync(store, slug, owner.Id);
+            await using var q = store.QuerySession(slug);
+            var deal = (await q.LoadAsync<Deal>(rejected.Id))!;
+            var told = (await q.LoadAsync<Notification>(notice.Id))!;
+            var other = (await q.LoadAsync<Notification>(unrelated.Id))!;
+            output.WriteLine($"صَفَقات {counts.Deals} · إشعارات {counts.Notifications} · سَطرُه مَمحُوّ: {deal.Timeline[0].ActorName == AccountDeletion.ErasedName} · " +
+                             $"إشعارُ المُشتَري بِاسمِه: {told.Body.Contains(name, StringComparison.Ordinal)} · إشعارُ صَفقَةٍ لَم يَمَسَّها كَما كُتِب: {other.Body == unrelated.Body}");
+            Assert.Equal(AccountDeletion.ErasedName, deal.Timeline[0].ActorName);
+            Assert.Contains(name, told.Body, StringComparison.Ordinal);
+            Assert.Equal(unrelated.Body, other.Body);
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            s.DeleteWhere<User>(u => u.Id != Guid.Empty); s.DeleteWhere<Deal>(d => d.Id != Guid.Empty); s.DeleteWhere<Notification>(n => n.Id != Guid.Empty);
+            await s.SaveChangesAsync();
+        }
+    }
+
     /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-30، B-PRIV-1)</b> — كانَ <c>Today_a_deleted_sellers_listing_its_pending_offer_and_its_incoming_deal_stay_open_on_Postgres</c>
     /// (‏<c>0e95601</c>: «مُحِيَ: 0 · الإعلانُ مَحذوف: False · العَرضُ عَلَيه: Pending · الصَفقَةُ الوارِدَة: Active عِندَ Offered · مالِكُها المَمحُوّ: True»). والآن تَسلسُلُ النُقطَةِ
     /// بِعَينِه عَلى Postgres — الحِفظُ الواحِدُ ثُمَّ إلغاءُ الوارِدَةِ بِـ<see cref="AccountErasure.ClosingCanceller"/> وسَبَبِ القامُوس: الإعلانُ مَحذوفٌ في لَقطَتِه، والعَرضُ عَلَيه
