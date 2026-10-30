@@ -604,7 +604,8 @@ public class AccountErasureTests
             "if (!Services.Deals.CheckoutCart.Buyable(listing)) return x; s.Store(cart);"));
         Assert.Equal(WithdrawalConditions, before.Count);
         var (copies, door, offers, cartAdd) = ErasureSources();
-        var early = door.Replace("try { await session.SaveChangesAsync();", "try { await deals.CancelAsync(); await session.SaveChangesAsync();", StringComparison.Ordinal);
+        var early = door.Replace("try { await session.SaveChangesAsync();",
+            "try { await Services.Identity.AccountErasure.CloseIncomingAsync(deals, slug, userId, incoming, reason); await session.SaveChangesAsync();", StringComparison.Ordinal);
         Assert.Equal(new[] { "الإلغاءُ قَبلَ الحِفظ" }, WithdrawalViolations((copies, early, offers, cartAdd)));
         output.WriteLine($"عَيِّنَةُ ما قَبلُ: {before.Count} مُخالَفات · الإلغاءُ المُبَكِّر: 1");
     }
@@ -638,7 +639,8 @@ public class AccountErasureTests
             v.Add("الحَذفُ لا يُعادُ مِن قِراءَةٍ جَديدَة");
         if (At(src.Door, "Services.SessionVersionGate.StillOpen(user, token)") < 0) v.Add("الحَذفُ لا يَسأَلُ الجَلسَةَ عَلى القِراءَة");
         var save = At(src.Door, "await session.SaveChangesAsync();");
-        var cancel = At(src.Door, "deals.CancelAsync(");
+        // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٤) الإلغاءُ صارَ في `AccountErasure.CloseIncomingAsync` (قِراءَةٌ جَديدَةٌ وإعادَةٌ مَرَّة) — كانَ `deals.CancelAsync(` في الجِسم.
+        var cancel = At(src.Door, "AccountErasure.CloseIncomingAsync(deals,");
         if (cancel < 0 || At(src.Door, "notices.NotifyCancelledAsync(") < 0) v.Add("الوارِدَةُ لا تُلغى ولا يُخبَرُ أَصحابُها");
         else if (save < 0 || cancel < save) v.Add("الإلغاءُ قَبلَ الحِفظ");
         var offerGone = At(src.Offers, "CheckoutCart.OwnerGoneAsync(s, listing)");
@@ -728,23 +730,30 @@ public class AccountErasureTests
 
     // ─── صَفقَةٌ قَبِلَها الاستوديو (‏2026-10-30، الموجَة ١٢ F2 · ٤ — XS-1 + H-SEC-1) — تَوصيفٌ قَبلَ التَبديل (القاعِدَة ٣) ──────────────────
 
-    /// <summary><b>تَوصيفُ اليَوم</b>: صَفقَةُ مَسارِ العَرضِ الَّتي قَبِلَها صاحِبُ المَتجَرِ مِن الاستوديو — «→ التالي» يُعَيِّنُ مُستَخدِمَ الاستوديو طَرَفاً مُقابِلاً ويُحَرِّكُها —
-    /// تُعَدُّ <see cref="AccountErasure.IncomingUnaccepted"/> عِندَ «حَجز» و«دَفع» كَما عِندَ «عَرض»: الدالَّةُ لا تَسأَلُ المَرحَلَةَ ولا الطَرَفَ المُقابِل، وتَعليقُها يَقولُ «لَم يَقبَلْها».
-    /// يَنقَلِبُ بِاسمِه في كوميتِ التَبديل.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، الموجَة ١٢ F2 · ٤ — كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_an_offer_deal_the_studio_accepted_still_reads_as_incoming_unaccepted_at_booked_and_paid</c> (‏<c>07a7948</c>: «عِندَ Booked: True · عِندَ Paid: True»).
+    /// والآن <see cref="AccountErasure.IncomingUnaccepted"/> «لَم يَقبَلْها» بِحَرفِه — «عَرض» وبِلا طَرَفٍ مُقابِل: سالِبٌ لِطَرَفٍ مِن الاستوديو عِندَ «حَجز» و«دَفع» وعِندَ «عَرض»
+    /// (عُيِّنَ ولَم يُحَرِّك بَعد)، ومُوجَبٌ لِعَرضٍ لَم يَقبَلْه أَحَد.</summary>
     [Fact]
-    public void Today_an_offer_deal_the_studio_accepted_still_reads_as_incoming_unaccepted_at_booked_and_paid()
+    public void An_offer_deal_the_studio_accepted_is_not_incoming_unaccepted_and_an_offer_nobody_accepted_is()
     {
         var studio = Guid.NewGuid();
-        Deal Accepted(DealStage stage) => new()
+        Deal Of(DealStage stage, Guid? counterparty) => new()
         {
-            Id = Guid.NewGuid(), InitiatorId = Guid.NewGuid(), CounterpartyId = studio, CounterpartyName = "مالِك التَّطبيق", Status = DealStatus.Active, Stage = stage,
-            Refs = new() { [DealsService.ListingOwnerRef] = Me.ToString() },
+            Id = Guid.NewGuid(), InitiatorId = Guid.NewGuid(), CounterpartyId = counterparty, CounterpartyName = counterparty is null ? null : "مالِك التَّطبيق",
+            Status = DealStatus.Active, Stage = stage, Refs = new() { [DealsService.ListingOwnerRef] = Me.ToString() },
         };
-        var booked = Accepted(DealStage.Booked);
-        var paid = Accepted(DealStage.Paid);
-        output.WriteLine($"قَبِلَها الاستوديو — عِندَ Booked: {AccountErasure.IncomingUnaccepted(booked, Me)} · عِندَ Paid: {AccountErasure.IncomingUnaccepted(paid, Me)}");
-        Assert.True(AccountErasure.IncomingUnaccepted(booked, Me));
-        Assert.True(AccountErasure.IncomingUnaccepted(paid, Me));
+        var booked = Of(DealStage.Booked, studio);
+        var paid = Of(DealStage.Paid, studio);
+        var assigned = Of(DealStage.Offered, studio);
+        var nobody = Of(DealStage.Offered, null);
+        output.WriteLine($"قَبِلَها الاستوديو — عِندَ Booked: {AccountErasure.IncomingUnaccepted(booked, Me)} · عِندَ Paid: {AccountErasure.IncomingUnaccepted(paid, Me)} · " +
+                         $"عُيِّنَ عِندَ Offered: {AccountErasure.IncomingUnaccepted(assigned, Me)} · لَم يَقبَلْها أَحَد: {AccountErasure.IncomingUnaccepted(nobody, Me)}");
+        Assert.False(AccountErasure.IncomingUnaccepted(booked, Me));
+        Assert.False(AccountErasure.IncomingUnaccepted(paid, Me));
+        Assert.False(AccountErasure.IncomingUnaccepted(assigned, Me));
+        Assert.False(AccountErasure.IncomingUnaccepted(Of(DealStage.Booked, null), Me));   // مَرحَلَةٌ بَعدَ «عَرض» بِلا طَرَف — لا تولَدُ في مَسارِ العَرض، والدالَّةُ تَسأَلُ المَرحَلَةَ صَراحَة
+        Assert.True(AccountErasure.IncomingUnaccepted(nobody, Me));
     }
 
     // ─── رِحلَةٌ جارِيَة (‏2026-10-30، الموجَة ١٢ F2 · ٣ — F2B-1) — مُوجَبٌ وسالِبٌ لِلدالَّتَين، وصَفحَةُ الحَذفِ تَسأَلُ السُؤالَ نَفسَه ─────────────
@@ -1912,25 +1921,151 @@ public class LiveAccountDeletionDoorProofTests(Xunit.Abstractions.ITestOutputHel
         await LiveZeroRoleAdminProofTests.CleanAsync(store, slug);
     }
 
-    /// <summary><b>تَوصيفٌ قَبلَ التَبديل (القاعِدَة ٣) — XS-1</b>: صَفقَةُ مَسارِ العَرضِ الَّتي قَبِلَها صاحِبُ المَتجَرِ مِن الاستوديو (مُستَخدِمُ الاستوديو طَرَفُها المُقابِلُ، عِندَ «حَجز»)
-    /// يُلغيها حَذفُ البائِعِ لِحِسابِه بِسَبَبِ «أَغلَقَ البائِعُ حِسابَه قَبلَ أَن يَقبَلَ الطَلَب» — وهُوَ كاذِبٌ — ويُقالُ لِلمُشتَري. يَنقَلِبُ بِاسمِه في كوميتِ التَبديل.</summary>
-    [Fact]
-    public async Task Today_a_deal_the_studio_accepted_is_cancelled_at_booked_by_the_sellers_deletion_with_the_before_acceptance_reason_on_Postgres()
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، الموجَة ١٢ F2 · ٤ — كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_a_deal_the_studio_accepted_is_cancelled_at_booked_by_the_sellers_deletion_with_the_before_acceptance_reason_on_Postgres</c> (‏<c>07a7948</c>: «الصَفقَةُ
+    /// الَّتي قَبِلَها الاستوديو: Cancelled عِندَ Booked · بِسَبَبِ «قَبلَ أَن يَقبَلَ الطَلَب»: True»). والآن حَذفُ البائِعِ يَمُرُّ ويَترُكُها فَعّالَةً عِندَ مَرحَلَتِها بِلا سَطرِ إلغاء —
+    /// عِندَ «حَجز» وعِندَ «دَفع» (السالِبُ عَلى مُستَوى الباب).</summary>
+    [Theory]
+    [InlineData(DealStage.Booked)]
+    [InlineData(DealStage.Paid)]
+    public async Task A_deal_the_studio_accepted_stays_active_and_untouched_by_the_sellers_deletion_on_Postgres(DealStage stage)
     {
         if (!Enabled) return;
         var slug = "zz-xs1-" + Guid.NewGuid().ToString("N")[..8];
         await using var host = LiveTemplateDoorHost.Build();
-        var (seller, listing, seeded) = await SeedOfferDealAsync(host.Store, slug, DealStage.Booked, Guid.NewGuid());
+        var (seller, listing, seeded) = await SeedOfferDealAsync(host.Store, slug, stage, Guid.NewGuid());
         try
         {
             var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(seller.Id, slug, seller.SessionVersion);
             var (status, at) = await host.PostFormAsync(DeleteDoor, new Dictionary<string, string> { ["slug"] = slug }, slug, token, Confirm());
             await using var q = host.Store.QuerySession(slug);
             var deal = (await q.LoadAsync<Deal>(seeded.Id))!;
-            var reason = ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "account.delete.cancel_reason");
-            output.WriteLine($"حَذفُ البائِع: {status} → {at} · الصَفقَةُ الَّتي قَبِلَها الاستوديو: {deal.Status} عِندَ {deal.Stage} · بِسَبَبِ «قَبلَ أَن يَقبَلَ الطَلَب»: {deal.CancelReason == reason}");
+            output.WriteLine($"حَذفُ البائِع: {status} → {at} · الصَفقَةُ الَّتي قَبِلَها الاستوديو: {deal.Status} عِندَ {deal.Stage} · سَطرُ إلغاء: {deal.Timeline.Count(e => e.Action == "cancelled")} · السَبَب: {deal.CancelReason ?? "—"}");
             Assert.Equal((302, $"/{slug}?deleted=1"), (status, at));
-            Assert.Equal((DealStatus.Cancelled, DealStage.Booked, reason), (deal.Status, deal.Stage, deal.CancelReason));
+            Assert.Equal((DealStatus.Active, stage), (deal.Status, deal.Stage));
+            Assert.Null(deal.CancelReason);
+            Assert.DoesNotContain(deal.Timeline, e => e.Action == "cancelled");
+        }
+        finally { await CleanDealAsync(host.Store, slug, listing); }
+    }
+
+    /// <summary><b>المُوجَبُ عَلى مُستَوى الباب</b>: عَرضٌ لَم يَقبَلْه أَحَد («عَرض» بِلا طَرَف) يُلغيه حَذفُ البائِعِ بِسَبَبِ القامُوسِ وسَطرِ المَنصَّة، ويُخبَرُ مُشتَريه.</summary>
+    [Fact]
+    public async Task An_offer_deal_nobody_accepted_is_cancelled_by_the_sellers_deletion_with_the_closing_reason_on_Postgres()
+    {
+        if (!Enabled) return;
+        var slug = "zz-xs1-" + Guid.NewGuid().ToString("N")[..8];
+        await using var host = LiveTemplateDoorHost.Build();
+        var (seller, listing, seeded) = await SeedOfferDealAsync(host.Store, slug, DealStage.Offered, null);
+        try
+        {
+            var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(seller.Id, slug, seller.SessionVersion);
+            var (status, at) = await host.PostFormAsync(DeleteDoor, new Dictionary<string, string> { ["slug"] = slug }, slug, token, Confirm());
+            await using var q = host.Store.QuerySession(slug);
+            var deal = (await q.LoadAsync<Deal>(seeded.Id))!;
+            var told = await Marten.QueryableExtensions.ToListAsync(q.Query<Notification>().Where(n => n.UserId == seeded.InitiatorId));
+            var reason = ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "account.delete.cancel_reason");
+            output.WriteLine($"حَذفُ البائِع: {status} → {at} · العَرضُ الَّذي لَم يَقبَلْه أَحَد: {deal.Status} بِسَبَبِ القامُوس: {deal.CancelReason == reason} · بِسَطرِ المَنصَّة: " +
+                             $"{DealEvent.IsByPlatform(deal.Timeline[^1])} · إشعاراتُ المُشتَري: {told.Count}");
+            Assert.Equal((302, $"/{slug}?deleted=1"), (status, at));
+            Assert.Equal((DealStatus.Cancelled, reason), (deal.Status, deal.CancelReason));
+            Assert.True(DealEvent.IsByPlatform(deal.Timeline[^1]));
+            Assert.NotEmpty(told);
+        }
+        finally { await CleanDealAsync(host.Store, slug, listing); }
+    }
+
+    /// <summary>بَعدَ أَوَّلِ حِفظٍ لِجَلسَةٍ تَحمِلُ وَثيقَةَ حِسابٍ مَمحُوَّة (حِفظُ الحَذف)، أَو قَبلَ أَوَّلِ حِفظٍ لِجَلسَةٍ تَحمِلُ صَفقَةً مُلغاة (حِفظُ الإلغاء) — كاتِبٌ مُوازٍ مَرَّةً واحِدَة.</summary>
+    internal sealed class OnceAround(Func<Task>? afterDeletionCommit, Func<Task>? beforeCancelSave) : Marten.DocumentSessionListenerBase
+    {
+        private int _after, _before;
+        public int CancelSaves;
+
+        public override async Task AfterCommitAsync(Marten.IDocumentSession session, Marten.Services.IChangeSet commit, CancellationToken token)
+        {
+            if (afterDeletionCommit is not null && commit.Updated.OfType<User>().Any(u => u.DeletedAt is not null) && Interlocked.Exchange(ref _after, 1) == 0)
+                await afterDeletionCommit();
+        }
+
+        public override async Task BeforeSaveChangesAsync(Marten.IDocumentSession session, CancellationToken token)
+        {
+            if (session.PendingChanges.AllChangedFor<Deal>().Any(d => d.Status == DealStatus.Cancelled))
+            {
+                Interlocked.Increment(ref CancelSaves);
+                if (beforeCancelSave is not null && Interlocked.Exchange(ref _before, 1) == 0) await beforeCancelSave();
+            }
+        }
+    }
+
+    /// <summary><b>السِباق — قَبولٌ بَينَ حِفظِ الحَذفِ والإلغاء</b>: صاحِبُ المَتجَرِ يَقبَلُ مِن الاستوديو (<c>AssignCounterpartyAsync</c>) بَعدَ أَن يُحفَظَ الحَذفُ وقَبلَ أَن
+    /// تُلغى الوارِدَة — فَالقِراءَةُ الجَديدَةُ تَراه طَرَفاً ولا تُلغيها: فَعّالَةٌ بِطَرَفِ الاستوديو، بِلا سَطرِ إلغاءٍ ولا حِفظِ إلغاء.</summary>
+    [Fact]
+    public async Task An_acceptance_between_the_deletion_save_and_the_cancel_leaves_the_deal_untouched_on_Postgres()
+    {
+        if (!Enabled) return;
+        var slug = "zz-xs1-" + Guid.NewGuid().ToString("N")[..8];
+        var studio = Guid.NewGuid();
+        Guid dealId = Guid.NewGuid();
+        Marten.IDocumentStore? hostStore = null;
+        var listener = new OnceAround(async () =>
+        {
+            var deals = new DealsService(hostStore!, new DealMoneyClaimFirstTests.RecordingPaymentProvider());
+            await deals.AssignCounterpartyAsync(slug, dealId, studio, "مالِك التَّطبيق");
+        }, null);
+        await using var host = LiveTemplateDoorHost.Build(o => o.Listeners.Add(listener));
+        hostStore = host.Store;
+        var (seller, listing, seeded) = await SeedOfferDealAsync(host.Store, slug, DealStage.Offered, null);
+        dealId = seeded.Id;
+        try
+        {
+            var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(seller.Id, slug, seller.SessionVersion);
+            var (status, at) = await host.PostFormAsync(DeleteDoor, new Dictionary<string, string> { ["slug"] = slug }, slug, token, Confirm());
+            await using var q = host.Store.QuerySession(slug);
+            var deal = (await q.LoadAsync<Deal>(seeded.Id))!;
+            output.WriteLine($"حَذفُ البائِع: {status} → {at} · قَبِلَها الاستوديو بَعدَ الحِفظ · الصَفقَة: {deal.Status} عِندَ {deal.Stage} · طَرَفُها: {(deal.CounterpartyId == studio ? "الاستوديو" : "—")} · " +
+                             $"حِفظُ إلغاء: {listener.CancelSaves}");
+            Assert.Equal((302, $"/{slug}?deleted=1"), (status, at));
+            Assert.Equal((DealStatus.Active, studio), (deal.Status, deal.CounterpartyId));
+            Assert.DoesNotContain(deal.Timeline, e => e.Action == "cancelled");
+            Assert.Equal(0, listener.CancelSaves);
+        }
+        finally { await CleanDealAsync(host.Store, slug, listing); }
+    }
+
+    /// <summary><b>الإعادَة — تَعارُضٌ عَلى حِفظِ الإلغاء</b> (8357c95 (ب)): كاتِبٌ مُوازٍ لا يَقبَلُ (مَرجِعٌ يُكتَبُ عَلى الصَفقَة) بَينَ قِراءَةِ الإلغاءِ وحِفظِه — فَيُرَدُّ الأَوَّلُ
+    /// بِـ<c>deal_changed_meanwhile</c> ويُعادُ مَرَّةً مِن قِراءَةٍ جَديدَة: مُلغاةٌ بِسَطرِ إلغاءٍ واحِد، وما كَتَبَه المُوازي باقٍ، وحِفظا إلغاء. كانَ يُترَكُ فَتَبقى فَعّالَةً بِمالِكٍ مَمحُوّ.</summary>
+    [Fact]
+    public async Task A_cancel_refused_by_a_concurrent_write_is_retried_once_from_a_fresh_read_on_Postgres()
+    {
+        if (!Enabled) return;
+        var slug = "zz-xs1-" + Guid.NewGuid().ToString("N")[..8];
+        Guid dealId = Guid.NewGuid();
+        Marten.IDocumentStore? hostStore = null;
+        var listener = new OnceAround(null, async () =>
+        {
+            await using var w = hostStore!.LightweightSession(slug);
+            var d = (await w.LoadAsync<Deal>(dealId))!;
+            d.Refs["probe"] = "concurrent";
+            w.Store(d);
+            await w.SaveChangesAsync();
+        });
+        await using var host = LiveTemplateDoorHost.Build(o => o.Listeners.Add(listener));
+        hostStore = host.Store;
+        var (seller, listing, seeded) = await SeedOfferDealAsync(host.Store, slug, DealStage.Offered, null);
+        dealId = seeded.Id;
+        try
+        {
+            var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(seller.Id, slug, seller.SessionVersion);
+            var (status, at) = await host.PostFormAsync(DeleteDoor, new Dictionary<string, string> { ["slug"] = slug }, slug, token, Confirm());
+            await using var q = host.Store.QuerySession(slug);
+            var deal = (await q.LoadAsync<Deal>(seeded.Id))!;
+            output.WriteLine($"حَذفُ البائِع: {status} → {at} · حِفظُ إلغاء: {listener.CancelSaves} · الصَفقَة: {deal.Status} · سُطورُ الإلغاء: {deal.Timeline.Count(e => e.Action == "cancelled")} · " +
+                             $"ما كَتَبَه المُوازي باقٍ: {deal.Refs.GetValueOrDefault("probe") == "concurrent"}");
+            Assert.Equal((302, $"/{slug}?deleted=1"), (status, at));
+            Assert.Equal(2, listener.CancelSaves);
+            Assert.Equal(DealStatus.Cancelled, deal.Status);
+            Assert.Single(deal.Timeline, e => e.Action == "cancelled");
+            Assert.Equal("concurrent", deal.Refs.GetValueOrDefault("probe"));
         }
         finally { await CleanDealAsync(host.Store, slug, listing); }
     }

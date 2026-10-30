@@ -228,9 +228,36 @@ public static class AccountErasure
         => !listing.IsDeleted && ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingEditService.IsOwnedBy(listing, userId);
 
     /// <summary>صَفقَةُ مَسارِ العَرضِ الوارِدَةُ عَلى إعلانِه ولَم يَقبَلْها (‏2026-10-30، B-PRIV-1): فَعّالَةٌ، ومَرجِعُ مالِكِها هُو، ولَيسَ طَرَفاً فيها — فَلا يَمنَعُ
-    /// حَذفَه (<see cref="IsOpen"/> لِلطَرَفِ وَحدَه) ويُلغيها بَعدَه، بَدَلَ أَن تَبقى مَربوطَةً بِحِسابٍ لا يَقبَلُ ولا يَرفُض.</summary>
+    /// حَذفَه (<see cref="IsOpen"/> لِلطَرَفِ وَحدَه) ويُلغيها بَعدَه، بَدَلَ أَن تَبقى مَربوطَةً بِحِسابٍ لا يَقبَلُ ولا يَرفُض.
+    /// <para>‏(‏2026-10-30، الموجَة ١٢ F2 · ٤ — XS-1 + H-SEC-1؛ تَوصيفُه <c>07a7948</c>؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>و«لَم يَقبَلْها» بِحَرفِه</b>: عِندَ «عَرض»
+    /// وبِلا طَرَفٍ مُقابِل — <see cref="DealsService.IsIncomingOfferFor"/> الدالَّةُ القائِمَةُ لِلعَرضِ الوارِد (القاعِدَة ٨). كانَت لا تَسأَلُ المَرحَلَةَ ولا الطَرَف، وصاحِبُ
+    /// المَتجَرِ يَقبَلُ مِن الاستوديو بِأَن يَصيرَ طَرَفَها المُقابِلَ ويُحَرِّكَها — فَكانَ حَذفُ البائِعِ يُلغيها في أَيِّ مَرحَلَةٍ بِسَبَبِ «قَبلَ أَن يَقبَلَ الطَلَب».</para></summary>
     public static bool IncomingUnaccepted(Deal deal, Guid userId)
-        => deal.Status == DealStatus.Active && DealAcceptAuthorization.OwnerIdOf(deal) == userId && !IsParty(deal, userId);
+        => deal.Status == DealStatus.Active && deal.Stage == DealStage.Offered && DealsService.IsIncomingOfferFor(deal, userId);
+
+    /// <summary>
+    /// <para><b>إلغاءُ الوارِدَةِ بَعدَ حِفظِ الحَذف</b> (‏2026-10-30، الموجَة ١٢ F2 · ٤ — XS-1 و8357c95 (ب)): لِكُلِّ صَفقَةٍ أَعادَها <see cref="EraseCopiesAsync"/> — قَبلَ كُلِّ
+    /// مُحاوَلَةٍ قِراءَةٌ جَديدَةٌ و<see cref="IncomingUnaccepted"/> عَلَيها، فَقَبولٌ وَقَعَ بَعدَ الحِفظِ يُخرِجُها فَلا تُمَسّ؛ ثُمَّ <c>DealsService.CancelAsync</c> بِـ<see cref="ClosingCanceller"/>
+    /// والسَبَب، وتَعارُضُ نُسخَةٍ (<see cref="DealsService.ChangedMeanwhile"/>) يُعادُ مَرَّةً عَلى ما كُتِب (<c>AccountWrites.Attempts</c>) — كانَ يُترَكُ فَتَبقى الصَفقَةُ فَعّالَةً بِمالِكٍ
+    /// مَمحُوّ. يُعيدُ ما أُلغِيَ لِيُخبِرَ البابُ أَصحابَه بِالأُنبوبِ القائِم.</para>
+    /// <para><b>ولِماذا لا <c>CancelWholeInvoiceAsync(…, stillDue:)</c></b>: قائِمَةُ أَهدافِه مِن الفاتورَة، ومَعَ الشَرطِ لا رُجوعَ إلى الصَفقَةِ وَحدَها — فَصَفقَةُ العَرضِ (بِلا فاتورَةٍ
+    /// ولا شُحنَة) لا تُلغى ويُجابُ <c>deal_no_longer_due</c> (مَقيسٌ حَيّاً في <c>07a7948</c>). <b>وما لا يُدَّعى</b>: قَبولٌ يَقَعُ بَينَ القِراءَةِ الجَديدَةِ هُنا وقِراءَةِ
+    /// <c>CancelAsync</c> نَفسِها لا يُعادُ عَلَيه الشَرط — يُغلِقُه أَن يُلغِيَ ذلكَ الأُنبوبُ الصَفقَةَ وَحدَها حينَ لا فاتورَةَ ولا شُحنَة (طَلَبٌ لِـ<c>Services/Deals</c>).</para>
+    /// </summary>
+    public static async Task<IReadOnlyList<Deal>> CloseIncomingAsync(DealsService deals, string tenantSlug, Guid userId, IEnumerable<Guid> dealIds, string reason,
+        CancellationToken ct = default)
+    {
+        var closed = new List<Deal>();
+        foreach (var id in dealIds)
+            for (var attempt = 1; attempt <= ACommerce.Kit.Auth.Server.AccountWrites.Attempts; attempt++)
+            {
+                if (await deals.LoadAsync(tenantSlug, id, ct) is not { } fresh || !IncomingUnaccepted(fresh, userId)) break;
+                var result = await deals.CancelAsync(tenantSlug, id, ClosingCanceller, reason, ct);
+                if (result.Ok) { closed.Add(result.Deal!); break; }
+                if (result.Violation?.Code != DealsService.ChangedMeanwhile) break;
+            }
+        return closed;
+    }
 
     /// <summary>مُلغي تِلكَ الصَفَقاتِ — المَنصَّةُ لا شَخص (بِلا مُعَرِّفٍ وبِاسمِ <see cref="DealPatternCatalog.PlatformActor"/>، فَتُسَمّيه صَفحَتا الصَفقَةِ مِن
     /// القامُوس)، وبِسُلطَةِ صاحِبِ المَتجَرِ في <see cref="DealCancelAuthorization.Validate"/> — نَسَقُ <c>GatewayPayments.ExpiryCanceller</c>.</summary>
