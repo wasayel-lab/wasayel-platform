@@ -122,12 +122,13 @@ public class TenantPlanSetCharacterizationTests
         Assert.Equal(PlatformPlanStatuses.Active, plan.Status);
     }
 
-    /// <summary>(٥) <b>تَوصيفٌ</b> (‏2026-10-30، مُراجَعَةُ تَيّارِ F4 الجَولَة ١): الباقَةُ المَحفوظَةُ غَيرُ الَّتي تُعَيِّنُها الاستِمارَة — واليَومَ
-    /// يُحمَلُ رابِطُ الدَفعِ الَّذي أُنشِئَ لِخُطَّةِ PayPal الباقَةِ القَديمَة، ومَعَه مُعَرِّفُ الاشتِراكِ وعَلامَةُ إلغاءِ التَجديد. والمَحفوظُ هُنا
-    /// باقَةٌ لا يُدرِجُها كاتالوجُ اليَوم (‏<c>plans.index.json</c> فيه <c>manual</c> وَحدَه) — وهو الطَريقُ القائِمُ اليَومَ إلى تَغييرِ الباقَة؛
-    /// وباقَةٌ ثانِيَةٌ في الكاتالوجِ تَفتَحُ الطَريقَ نَفسَه مِن قائِمَةِ الاستِمارَة.</summary>
+    /// <summary>(٥) <b>مَقلوبٌ بِاسمِه</b> (كانَ <c>Changing_the_plan_today_carries_the_old_plans_pay_link_with_its_subscription_and_renewal_mark</c>،
+    /// ‏<c>e908295</c>؛ مُراجَعَةُ تَيّارِ F4 الجَولَة ١): تَعيينُ باقَةٍ غَيرِ المَحفوظَةِ يُسقِطُ رابِطَ الدَفعِ الَّذي أُنشِئَ لِخُطَّةِ PayPal الباقَةِ
+    /// القَديمَة — فَلا يَبقى في الاستوديو زِرُّ دَفعٍ لِخُطَّةٍ غَيرِ باقَةِ المَتجَر — ويَحمِلُ مُعَرِّفَ الاشتِراكِ وعَلامَةَ إلغاءِ التَجديد: يَصِفانِ
+    /// اشتِراكاً قائِماً عِندَ PayPal لا عَرضاً (<c>TenantPlanAdminService.KeepsPayLink</c>). والمَحفوظُ هُنا باقَةٌ لا يُدرِجُها كاتالوجُ اليَوم
+    /// (‏<c>plans.index.json</c> فيه <c>manual</c> وَحدَه)، وباقَةٌ ثانِيَةٌ في الكاتالوجِ تَفتَحُ الطَريقَ نَفسَه مِن قائِمَةِ الاستِمارَة.</summary>
     [Fact]
-    public async Task Changing_the_plan_today_carries_the_old_plans_pay_link_with_its_subscription_and_renewal_mark()
+    public async Task Changing_the_plan_drops_the_old_plans_pay_link_and_keeps_its_subscription_and_renewal_mark()
     {
         var stored = StoredPlan();
         stored.PlanId = "plan-no-longer-listed";
@@ -137,7 +138,7 @@ public class TenantPlanSetCharacterizationTests
 
         var plan = Assert.IsType<TenantPlan>(Assert.Single(w.Stored));
         Assert.Equal("manual", plan.PlanId);
-        Assert.Equal(stored.PayPalApproveUrl, plan.PayPalApproveUrl);
+        Assert.Null(plan.PayPalApproveUrl);
         Assert.Equal("I-SUB-42", plan.PayPalSubscriptionId);
         Assert.Equal(new DateTime(2026, 10, 15, 7, 0, 0, DateTimeKind.Utc), plan.RenewalCancelledAt);
     }

@@ -37,6 +37,8 @@ public static class TenantPlanAdminService
     /// المَتجَرِ في الاستوديو، وعَلامَةُ «لَن يُجَدَّد تِلقائِيّاً» — يَكتُبُها غَيرُ هذا البابِ (المُشرِفُ مِن بِطاقَةِ PayPal، ورَسائِلُ PayPal)،
     /// وكانَ التَعيينُ يَبني وَثيقَةً جَديدَةً فَيُسقِطُها. <b>والحالَةُ <c>Active</c> عِندَ التَعيينِ كَما صُمِّمَت</b>: «مَن أَوقَفَ بِالخَطَأ
     /// يُعيدُها بِتَعيينٍ واحِد» (<see cref="Stop"/>). والتَحميلُ هُنا لا في النُقطَة: نُقطَةٌ تَنسى التَحميلَ تُعيدُ العَطَبَ صامِتَة.</para>
+    ///
+    /// <para><b>ورابِطُ الدَفعِ يُحمَلُ ما دامَت الباقَةُ نَفسَها</b> (‏2026-10-30، مُراجَعَةُ تَيّارِ F4 الجَولَة ١) — <see cref="KeepsPayLink"/>.</para>
     /// </summary>
     public static async Task<IReadOnlyList<TenantPlanViolation>> SetAsync(
         IDocumentSession session, string tenantSlug, string planId,
@@ -56,7 +58,7 @@ public static class TenantPlanAdminService
             SetBy     = setBy,
             SetAt     = at,
             PayPalSubscriptionId = stored?.PayPalSubscriptionId,
-            PayPalApproveUrl     = stored?.PayPalApproveUrl,
+            PayPalApproveUrl     = KeepsPayLink(stored, planId) ? stored!.PayPalApproveUrl : null,
             RenewalCancelledAt   = stored?.RenewalCancelledAt,
         };
 
@@ -66,6 +68,22 @@ public static class TenantPlanAdminService
         session.Store(plan);
         return Array.Empty<TenantPlanViolation>();
     }
+
+    /// <summary>
+    /// <para><b>أَيُحمَلُ رابِطُ الدَفعِ المَحفوظُ إلى التَعيين؟ ما دامَت الباقَةُ نَفسَها</b> (‏2026-10-30، مُراجَعَةُ تَيّارِ F4 الجَولَة ١؛ تَوصيفُه
+    /// الصَفُّ (٥) في <c>TenantPlanSetCharacterizationTests</c> عِندَ <c>e908295</c>). الرابِطُ يُنشَأُ مِن خُطَّةِ PayPal لِلباقَةِ لَحظَتَها
+    /// (<c>/admin/tenants/{slug}/plan/paypal-link</c> ← <c>PlatformPlanPayPalBinding.Resolve(PlatformPlanCatalog.Find(plan.PlanId), …)</c>)، فَهو
+    /// عَرضُ دَفعٍ لِتِلكَ الباقَة: تَغييرُها يَترُكُ في استوديو صاحِبِ المَتجَرِ زِرَّ دَفعٍ لِخُطَّةٍ غَيرِ باقَتِه (<c>StudioHome.PayPalUrl</c>)، وبِطاقَةُ
+    /// PayPal لا تُرسَمُ لِلمُشرِفِ إن لَم تَكُن لِلباقَةِ الجَديدَةِ خُطَّة فَلا يَراه ولا يُبدِلُه. فَيَسقُطُ الرابِطُ عِندَ التَغيير ويُنشِئُ المُشرِفُ
+    /// رابِطَ الباقَةِ الجَديدَة. والمُقارَنَةُ <c>Ordinal</c> كَما يَقرَأُ الكاتالوجُ (<see cref="PlatformPlanCatalog.Find"/>) ووَثيقَةُ الرِباطِ المُعَرِّف.</para>
+    ///
+    /// <para><b>ومُعَرِّفُ الاشتِراكِ وعَلامَةُ إلغاءِ التَجديدِ يُحمَلانِ عَلى كُلِّ حال</b>: يَصِفانِ اشتِراكاً قائِماً عِندَ PayPal لا عَرضاً. يَبقى
+    /// الاشتِراكُ بَعدَ تَغييرِ الباقَةِ ويُمَدِّدُ بِـ<c>custom_id</c> لا بِالمُعَرِّفِ المَحفوظ (النُقطَةُ تُحَمِّلُ الباقَةَ بِـ<c>e.TenantSlug</c> قَبلَ
+    /// <c>PayPalBillingPolicy.Decide</c>)، ولا تَقرَأُ المُعَرِّفَ شاشَة — فَمَحوُه لا يُوقِفُ دَفعاً ولا يُخفي زِرّاً، ويَمحو المَرجِعَ الوَحيدَ
+    /// عِندَنا لِاشتِراكٍ قَد يُلغيه المُشرِفُ مِن لَوحَةِ PayPal. ورابِطٌ جَديدٌ يَكتُبُ فَوقَه (<c>SaveApproveLink</c>)، وكَذلِكَ أَوَّلُ رِسالَة.</para>
+    /// </summary>
+    public static bool KeepsPayLink(TenantPlan? stored, string planId)
+        => stored is not null && string.Equals(stored.PlanId, planId, StringComparison.Ordinal);
 
     /// <summary>
     /// <para><b>إيقافٌ يَدَوِيّ</b> — يُخفي المَتجَرَ مِن لَحظَتِه ولا
