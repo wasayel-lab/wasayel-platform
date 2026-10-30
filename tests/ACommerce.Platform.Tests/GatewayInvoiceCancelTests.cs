@@ -394,10 +394,12 @@ public class GatewayInvoiceCancelTests(ITestOutputHelper output)
     }
 
     /// <summary><c>gateway_invoice_still_owed</c> — سالِب: أُختٌ مُلغاةٌ أَو في نِزاعٍ أَو مُكتَمِلَة (لا «أَكمِلِ الدَّفعَ» لَها، §٨‑هـ.1)، أَو قائِمَةٌ
-    /// كُتِبَ دَفعُها — «القائِمَةُ» بِحَرفِ الرابِطِ والإشعارِ والفَتح.</summary>
+    /// كُتِبَ دَفعُها — «القائِمَةُ» بِحَرفِ الرابِطِ والإشعارِ والفَتح.
+    /// <para>(‏2026-10-30، تَدقيقُ الموجَة ١١ CO12 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): صَفُّ <c>(Disputed, false)</c> <b>قُلِبَ</b> — أُختٌ في «نِزاع» لَم تُقبَض تُبقي الفاتورَةَ
+    /// (<see cref="GatewayInvoiceClosing.KeepsOpen"/>، صَفُّه المُوجِبُ في <c>GatewayInvoiceDisputedSiblingTests</c>)؛ ومَكانَه <c>(Disputed, true)</c>: في «نِزاع» وقُبِضَت ⇐ لا تُبقيها.</para></summary>
     [Theory]
     [InlineData(DealStatus.Cancelled, false)]
-    [InlineData(DealStatus.Disputed, false)]
+    [InlineData(DealStatus.Disputed, true)]
     [InlineData(DealStatus.Completed, false)]
     [InlineData(DealStatus.Active, true)]
     public void StillOwed_never_fires_for_a_sibling_that_is_not_active_or_is_already_paid(DealStatus status, bool paid)

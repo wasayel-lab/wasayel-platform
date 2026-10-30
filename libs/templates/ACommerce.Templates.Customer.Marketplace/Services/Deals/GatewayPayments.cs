@@ -1031,6 +1031,15 @@ public static class GatewayInvoiceClosing
     public static bool Owed(Deal deal) => deal.Status == DealStatus.Active && !DealsService.IsCaptured(deal);
 
     /// <summary>
+    /// <para><b>أَيُبقي هذا الطَرَفُ الفاتورَةَ مَفتوحَةً عِندَ البَوّابَة؟</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO12 — المُرَحَّلُ [S5]؛ تَوصيفُه <c>1a5d31c</c>؛ قَرارُ «أ» F3·٦):
+    /// لَم يُقبَض دَفعُها، وهي قائِمَةٌ <b>أَو في «نِزاع»</b> — فَالنِزاعُ يُحسَمُ بِالاستِئنافِ (د38) فَتَعودُ مَدينَةً تَدفَعُ بِالفاتورَةِ نَفسِها. كانَ المُلغي يَسأَلُ <see cref="Owed"/>
+    /// فَإلغاءُ أُختِها يُلغي الفاتورَةَ والمُستَأنَفَةُ بِلا ما تَدفَعُ بِه. <b>ولا يَمَسُّ <see cref="Owed"/></b>: ذاكَ «ما يَعمَلُ عَلَيه إلغاءٌ وطَلَبٌ كُلُّه» ويَطلُبُ قائِمَةً — صَفقَةٌ
+    /// في «نِزاع» لا يُلغيها الإلغاءُ العامّ (<see cref="DealCancelAuthorization.DealNotActive"/>)، فَعَدُّها هُناكَ يُغلِقُ بابَ الطَلَبِ كُلِّه.</para>
+    /// </summary>
+    public static bool KeepsOpen(Deal deal)
+        => deal.Status is DealStatus.Active or DealStatus.Disputed && !DealsService.IsCaptured(deal);
+
+    /// <summary>
     /// <para><b>كُلُّ سَبَبٍ لِإبقاءِ الفاتورَة</b> — الفاتورَةُ فاتورَتُها، ثُمَّ الحال، ثُمَّ الصَفَقاتُ الَّتي تَدفَعُ لَها: <paramref name="named"/> كَما
     /// حَمَّلَها المُنادي مِمّا تُسَمّيه البَيانات، و<paramref name="cancelled"/> مَعَها — وما في <paramref name="named"/> ولا تُسَمّيه البَياناتُ
     /// لا يُحسَب. فارِغَةٌ = تُلغى.</para>
@@ -1048,7 +1057,8 @@ public static class GatewayInvoiceClosing
         if (!string.Equals(invoice.Status, MoyasarClient.OpenStatus, StringComparison.Ordinal))
             v.Add(new(NotOpen, $"حالُ الفاتورَةِ «{invoice.Status}» لا «{MoyasarClient.OpenStatus}» — لا تُلغى."));
 
-        if (named.Where(d => listed?.Contains(d.Id) == true).Append(cancelled).Any(Owed))
+        // (‏2026-10-30، تَدقيقُ الموجَة ١١ CO12 — ولا يُعادُ حَرفٌ فَوقَه): `KeepsOpen` لا `Owed` — أُختٌ في «نِزاع» لَم تُقبَض تُبقيها.
+        if (named.Where(d => listed?.Contains(d.Id) == true).Append(cancelled).Any(KeepsOpen))
             v.Add(new(StillOwed, "صَفقَةٌ تُسَمّيها الفاتورَةُ قائِمَةٌ لَم تُدفَع — الفاتورَةُ تَدفَعُ لَها فَتَبقى."));
 
         return v;
