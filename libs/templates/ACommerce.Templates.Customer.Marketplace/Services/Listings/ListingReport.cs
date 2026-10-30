@@ -31,6 +31,14 @@ public static class ListingReport
 
     public static string NoticeBody(string reporterName) => reporterName + BodySuffix;
 
+    /// <summary>
+    /// <para><b>رابِطُ إشعارِ البَلاغ: الإعلانُ المُبَلَّغُ عَنه</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO7؛ تَوصيفُه <c>390eb0d</c>). كانَ البابُ يَكتُبُ
+    /// <c>/admin/tenants/{slug}/tickets</c> — ولا مَسارَ يَخدُمُه فَالنَقرُ ‏404 (القاعِدَة ١٢). والإعلانُ صَفحَةٌ يَفتَحُها مُديرُ المَتجَرِ كَأَيِّ عُضو، وهِيَ ما يُحكَمُ
+    /// فيه البَلاغ؛ نَسَقُ رابِطِ إشعارِ «إعلان جَديد». والمَحوُ لا يَربِطُ إشعارَ البَلاغِ بِرابِطِه بَل بِتَذكِرَتِه (<see cref="Announces"/>) أَو بِوَسيلَتِه:
+    /// <c>AccountErasure.EraseFrom(Notification…)</c> يَستَثني إشعاراتِ المُديرينَ مِن «ما يَخُصُّه بِالرابِط».</para>
+    /// </summary>
+    public static string NoticeUrl(string tenantSlug, Guid listingId) => $"/{tenantSlug}/listings/{listingId}";
+
     /// <summary>سَبَبُ البَلاغِ مِن مَوضوعِ تَذكِرَتِه — أَو لا شَيء إن لَم تَكُن تَذكِرَةَ بَلاغ.</summary>
     public static string? ReasonOf(string? ticketSubject)
         => ticketSubject is not null && ticketSubject.StartsWith(SubjectPrefix, StringComparison.Ordinal) ? ticketSubject[SubjectPrefix.Length..] : null;

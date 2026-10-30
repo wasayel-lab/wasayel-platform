@@ -48,37 +48,64 @@ public class ListingReportLinkTests(ITestOutputHelper output)
     /// <summary>قالِبُ المَسارِ مِن رابِطٍ مَكتوب: <c>{slug}</c> و<c>{id}</c> كَما هُما، فَيُقارَنُ بِجَدوَلِ المَساراتِ المَطبوع (<c>ComplianceProbe.Normalize</c>).</summary>
     internal static string Template(string url) => url.Split('?')[0];
 
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-30، CO7)</b> — كانَ <c>Today_the_report_notice_links_an_admin_tickets_page_no_route_serves</c> (‏<c>390eb0d</c>:
+    /// «report → /admin/tenants/{slug}/tickets (لا مَسار)»). والآن البابُ يَكتُبُ <see cref="ListingReport.NoticeUrl"/> — صَفحَةُ الإعلانِ المُبَلَّغِ عَنه، مَسارٌ
+    /// مُسَجَّلٌ يَفتَحُه مُديرُ المَتجَرِ كَأَيِّ عُضو (لا بَوّابَةَ صَلاحِيَّةٍ عَلى الصَفحَة، وصَفحَةُ الإشعاراتِ تَرسُمُ الرابِطَ <c>href</c> كَما هُو)؛ وإشعارا
+    /// المُديرينَ الآخَرانِ بِرابِطَيهِما كَما كانا.</summary>
     [Fact]
-    public void Today_the_report_notice_links_an_admin_tickets_page_no_route_serves()
+    public void The_report_notice_links_the_reported_listing_and_the_other_admin_notice_links_are_unchanged()
     {
         var links = AdminNoticeLinks();
         var routes = ComplianceInspectorTests.RepoRoutes;
-        output.WriteLine($"مَساراتٌ مَمسوحَة: {routes.Count} · روابِطُ إشعاراتِ المُديرين: {links.Count} — " +
-                         string.Join(" | ", links.Select(l => $"{l.Type} → {l.Url} ({(routes.Contains(Template(l.Url)) ? "مُسَجَّل" : "لا مَسار")})")));
+        output.WriteLine($"مَساراتٌ مَمسوحَة: {routes.Count} · روابِطُ إشعاراتِ المُديرين: {links.Count} — " + string.Join(" | ", links.Select(l => $"{l.Type} → {l.Url}")));
 
         Assert.True(routes.Count > 100, "جَدوَلُ المَساراتِ أَعمى.");
         Assert.Equal(4, links.Count);
         var report = Assert.Single(links, l => l.Type == ListingReport.NoticeType);
-        Assert.Equal("/admin/tenants/{slug}/tickets", report.Url);
-        Assert.DoesNotContain(Template(report.Url), routes);
-        Assert.All(links.Where(l => l.Type == AccountErasure.NewUserNoticeType), l => Assert.Equal("/admin/tenants/{slug}/users", l.Url));
-        Assert.Contains("/admin/tenants/{slug}/users", routes);
-        Assert.Equal("/{slug}/listings/{id}", Assert.Single(links, l => l.Type == "new_listing").Url);
+        Assert.Equal("Services.Listings.ListingReport.NoticeUrl(slug, id)", report.Url);
+        var listing = Guid.NewGuid();
+        Assert.Equal($"/zz/listings/{listing}", ListingReport.NoticeUrl("zz", listing));
         Assert.Contains("/{slug}/listings/{id}", routes);
+        Assert.DoesNotContain(links, l => l.Url.Contains("/tickets", StringComparison.Ordinal));
+        Assert.All(links.Where(l => l.Type == AccountErasure.NewUserNoticeType), l => Assert.Equal("/admin/tenants/{slug}/users", l.Url));
+        Assert.Equal(2, links.Count(l => l.Type == AccountErasure.NewUserNoticeType));
+        Assert.Equal("/{slug}/listings/{id}", Assert.Single(links, l => l.Type == "new_listing").Url);
+
+        // يَفتَحُه مُديرُ المَتجَر: الصَفحَةُ تُعلِنُ المَسارَ بِلا بَوّابَةِ صَلاحِيَّة، وصَفحَةُ الإشعاراتِ تَرسُمُ الرابِطَ كَما خُزِّن.
+        var detail = File.ReadAllText(Path.Combine(Tpl, "Components", "Pages", "TenantListingDetail.razor"));
+        var notices = File.ReadAllText(Path.Combine(Tpl, "Components", "Pages", "Notifications.razor"));
+        Assert.Contains("@page \"/{slug}/listings/{id:guid}\"", detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("[Authorize", detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("RequiredPermission", detail, StringComparison.Ordinal);
+        Assert.Contains("Href=\"@(string.IsNullOrEmpty(n.RelatedUrl) ? null : n.RelatedUrl)\"", notices, StringComparison.Ordinal);
     }
 
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-30، CO7)</b> — كانَ <c>Today_a_report_notice_that_linked_a_listing_he_matched_would_erase_a_namesakes_report</c>
+    /// (‏<c>390eb0d</c>: «مُحِيَ True ← حِسابٌ مَحذوف حَسَن بَلَّغَ عَن إعلان»). والآن إشعارُ المُديرينَ لا يَدخُلُ «ما يَخُصُّه» بِرابِطِه: بَلاغُ سَمِيِّه بِرابِطِ إعلانٍ
+    /// طابَقَه يَبقى بِحَرفِه، وبَلاغُه هُو — تُعلِنُه تَذكِرَتُه (<c>ownReports</c>) — يُمحى كَما كانَ، وإشعارٌ غَيرُ إداريٍّ بِالرابِطِ نَفسِه يَبقى «يَخُصُّه».</summary>
     [Fact]
-    public void Today_a_report_notice_that_linked_a_listing_he_matched_would_erase_a_namesakes_report()
+    public void A_report_notice_is_linked_to_the_erased_member_by_its_ticket_not_by_its_listing_link()
     {
         var me = Guid.NewGuid();
         var listing = Guid.NewGuid();
         var urls = new[] { $"/listings/{listing}" };
-        var namesakes = new Notification { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Type = ListingReport.NoticeType,
-            Title = ListingReport.NoticeTitle("مُخالِف"), Body = ListingReport.NoticeBody("عَلي حَسَن"), RelatedUrl = $"/zz/listings/{listing}" };
-        var erased = AccountErasure.EraseFrom(namesakes, me, new[] { "عَلي" }, urls, Array.Empty<string>(), new HashSet<Guid>());
-        output.WriteLine($"بَلاغُ «عَلي حَسَن» بِرابِطِ إعلانٍ طابَقَه «عَلي»: مُحِيَ {erased} ← {namesakes.Body}");
+        Notification Report(string reporter) => new() { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Type = ListingReport.NoticeType,
+            Title = ListingReport.NoticeTitle("مُخالِف"), Body = ListingReport.NoticeBody(reporter), RelatedUrl = ListingReport.NoticeUrl("zz", listing) };
+        var namesakes = Report("عَلي حَسَن");
+        var mine = Report("عَلي");
+        var aboutHisMatch = new Notification { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Type = "offer_accepted",
+            Title = "قُبِلَ عَرضُك", Body = "عَلي قَبِلَ عَرضَك", RelatedUrl = $"/zz/listings/{listing}" };
 
-        Assert.True(erased);
-        Assert.Equal(AccountDeletion.ErasedName + " حَسَن بَلَّغَ عَن إعلان", namesakes.Body);
+        var erasedNamesake = AccountErasure.EraseFrom(namesakes, me, new[] { "عَلي" }, urls, Array.Empty<string>(), new HashSet<Guid>());
+        var erasedMine = AccountErasure.EraseFrom(mine, me, new[] { "عَلي" }, urls, Array.Empty<string>(), new HashSet<Guid> { mine.Id });
+        var erasedLinked = AccountErasure.EraseFrom(aboutHisMatch, me, new[] { "عَلي" }, urls, Array.Empty<string>(), new HashSet<Guid>());
+        output.WriteLine($"بَلاغُ سَمِيِّه: مُحِيَ {erasedNamesake} ({namesakes.Body}) · بَلاغُه: مُحِيَ {erasedMine} ({mine.Body}) · إشعارُ مُطابَقَتِه: مُحِيَ {erasedLinked}");
+
+        Assert.False(erasedNamesake);
+        Assert.Equal("عَلي حَسَن بَلَّغَ عَن إعلان", namesakes.Body);
+        Assert.True(erasedMine);
+        Assert.Equal(ListingReport.NoticeBody(AccountDeletion.ErasedName), mine.Body);
+        Assert.True(erasedLinked);
+        Assert.Equal(AccountDeletion.ErasedName + " قَبِلَ عَرضَك", aboutHisMatch.Body);
     }
 }

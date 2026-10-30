@@ -1097,7 +1097,7 @@ public static class MarketplaceTemplateExtensions
             await NotifyAdminsAsync(store, slug, "report",
                 Services.Listings.ListingReport.NoticeTitle(reason),
                 Services.Listings.ListingReport.NoticeBody(userName),
-                $"/admin/tenants/{slug}/tickets");
+                Services.Listings.ListingReport.NoticeUrl(slug, id));
             return Results.Redirect(Link(req, slug, $"listings/{id}?reported=1"));
         }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();

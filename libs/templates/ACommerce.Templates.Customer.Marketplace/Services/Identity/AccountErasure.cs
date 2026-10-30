@@ -260,7 +260,9 @@ public static class AccountErasure
         var names = oldNames.Where(Identifies).Select(x => x.Trim()).Distinct(StringComparer.Ordinal).OrderByDescending(x => x.Length).ToList();
         var marks = contacts.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim())
             .Distinct(StringComparer.Ordinal).OrderByDescending(c => c.Length).ToList();
-        var linked = n.RelatedUrl is { } url && relatedUrls.Any(r => url.EndsWith(r, StringComparison.Ordinal));
+        // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ CO7) وإشعارُ المُديرينَ لا يُربَطُ بِرابِطِه: رابِطُ البَلاغِ صارَ الإعلانَ المُبَلَّغَ عَنه (`ListingReport.NoticeUrl`)، ومُطابَقَتُه
+        // عَلى ذلكَ الإعلانِ كانَت سَتَجعَلُ بَلاغَ سَمِيِّه «يَخُصُّه» فَيُمحى اسمُه مِنه (تَوصيفُه `390eb0d`). رَبطُه بِهُوِيَّتِه وَحدَها كَما كانَ: بَلاغُه أَو وَسيلَتُه.
+        var linked = !AdminNoticeTypes.Contains(n.Type) && n.RelatedUrl is { } url && relatedUrls.Any(r => url.EndsWith(r, StringComparison.Ordinal));
         var reported = ownReports.Contains(n.Id);
         var byContact = AdminNoticeTypes.Contains(n.Type) && marks.Any(c => Carries(n.Title, c) || Carries(n.Body, c));
         var registration = byContact && n.Type == NewUserNoticeType;
