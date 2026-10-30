@@ -263,6 +263,8 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         ["TicketCreated.AuthorName"]     = new(NameKind.EventLog, Disclosure.EventLog, "حَدَثُ فَتحِ التَذكِرَةِ في مَجرى الأَحداث."),
         ["Reply.AuthorName"]             = new(NameKind.Renamed, Disclosure.Renamed, "كاتِبُ الرَدّ — رَدُّ صاحِبِ التَذكِرَةِ (`FromStaff = false`) يُمحى، ورَدُّ الفَريقِ بِتَوقيعِه."),
         ["TicketReplied.AuthorName"]     = new(NameKind.EventLog, Disclosure.EventLog, "حَدَثُ الرَدِّ في مَجرى الأَحداث — كَسابِقِه."),
+        // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ CO16) وحَدَثُ مَحوِ اسمِ كاتِبِ التَذكِرَةِ في مَجراها — مُصدِرُه الوَحيدُ `AccountErasure.EraseEvents(Ticket…)` بِقيمَةِ «حِسابٌ مَحذوف».
+        ["TicketAuthorRenamed.AuthorName"] = new(NameKind.NotAPerson, Disclosure.None, "حَدَثُ مَحوِ اسمِ كاتِبِ التَذكِرَةِ في مَجراها — قيمَتُه «حِسابٌ مَحذوف» يَكتُبُها الحَذف."),
         ["AuditEntry.ActorName"]         = new(NameKind.AuditLog, Disclosure.AuditLog, "سِجِلُّ تَدقيقِ المَتجَر: البائِعُ عِندَ رَبطِ الشَحن، وفَريقُ الإدارَةِ عِندَ تَغييرِ الإعدادات — يُخفى عِندَ العَرض."),
         ["ApiKeyDocument.ActorName"]     = new(NameKind.Renamed, Disclosure.Renamed, "الفاعِلُ الَّذي يُصدِرُ لَه صاحِبُ المَتجَرِ مِفتاحَ رَبط — يُبطَلُ المِفتاحُ بِحَذفِ حِسابِه (د56) ويُكتَبُ «حِسابٌ مَحذوف» عَلَيه (د52)."),
         ["CartCheckout.RecipientName"]   = new(NameKind.DeletedWithAccount, Disclosure.None, "اسمُ المُستَلِمِ كَما كُتِبَ في خُطوَةِ العُنوان — في السَلَّةِ الَّتي تَحذِفُها نُقطَةُ الحَذف (د60)."),

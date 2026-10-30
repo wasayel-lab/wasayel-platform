@@ -211,7 +211,34 @@ public class StreamNameReaderTests(ITestOutputHelper output)
         else Assert.Equal("reads offer.OffererName", Assert.Single(violations).How);
     }
 
-    /// <summary>عَيِّناتٌ مَحقونَة (القاعِدَة ١٠): كُلُّ شَكلٍ يَراه الماسِحُ بِمُخالَفَتِه أَو بِغِيابِها — والتَذكِرَةُ مِثالُ نَوعٍ لا يَحمِلُ مَجراه المَحو.</summary>
+    /// <summary>والتَذكِرَةُ كَالعَرضِ مُنذُ ‏2026-10-30 (تَدقيقُ الموجَة ١١ CO16): قِراءَةُ <c>AuthorName</c> مِن مَجراها لا تُخالِفُ ما دامَ المَحوُ يُنشِئُ
+    /// <c>TicketAuthorRenamed</c>، وتُخالِفُ إن لَم يُنشِئه (مَصدَرُ مَحوٍ مَحقونٌ بِلا الحَدَث).</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_ticket_stream_read_is_safe_only_while_the_erasure_writes_into_the_stream(bool erasureEmitsRename)
+    {
+        const string code = "var t = await s.Events.AggregateStreamAsync<ACommerce.Kit.Support.Ticket>(id);\nShow(t.AuthorName);";
+        var erasure = erasureEmitsRename ? ErasureCode() : WithoutTicketRename();
+        Assert.Contains("new TicketAuthorRenamed(", ErasureCode(), StringComparison.Ordinal);
+        var (sites, violations) = Scan(new[] { ("sample.cs", code) }, erasure);
+        output.WriteLine($"المَحوُ يُنشِئُ TicketAuthorRenamed: {erasureEmitsRename} · مُخالَفات: {violations.Count}");
+        Assert.Single(sites);
+        if (erasureEmitsRename) Assert.Empty(violations);
+        else Assert.Equal("reads t.AuthorName", Assert.Single(violations).How);
+    }
+
+    /// <summary>مَصدَرُ المَحوِ بِلا حَدَثِ تَسمِيَةِ التَذكِرَة — فَتَبقى التَذكِرَةُ في العَيِّناتِ أَدناه مِثالَ نَوعٍ لا يَحمِلُ مَجراه المَحو (‏2026-10-30، CO16).</summary>
+    private static string WithoutTicketRename()
+    {
+        var code = ErasureCode();
+        Assert.Contains("new TicketAuthorRenamed(", code, StringComparison.Ordinal);
+        return code.Replace("new TicketAuthorRenamed(", "new SomethingElse(", StringComparison.Ordinal);
+    }
+
+    /// <summary>عَيِّناتٌ مَحقونَة (القاعِدَة ١٠): كُلُّ شَكلٍ يَراه الماسِحُ بِمُخالَفَتِه أَو بِغِيابِها — والتَذكِرَةُ مِثالُ نَوعٍ لا يَحمِلُ مَجراه المَحو.
+    /// ‏(‏2026-10-30، CO16 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ومُنذُ صارَ مَجراها يَحمِلُه تُقرَأُ العَيِّناتُ بِمَصدَرِ مَحوٍ بِلا حَدَثِه (<see cref="WithoutTicketRename"/>)؛
+    /// والعَيِّناتُ بِحَرفِها.</summary>
     [Theory]
     [InlineData("return await s.Events.AggregateStreamAsync<ACommerce.Kit.Support.Ticket>(id, token: ct);", "returned")]
     [InlineData("var t = await s.Events.AggregateStreamAsync<ACommerce.Kit.Support.Ticket>(id);\nShow(t.AuthorName);", "reads t.AuthorName")]
@@ -221,7 +248,7 @@ public class StreamNameReaderTests(ITestOutputHelper output)
     [InlineData("var l = await s.Events.AggregateStreamAsync<ACommerce.Kit.Listings.Listing>(id);\nreturn Results.Ok(l);", null)]
     public void The_scanner_sees_each_shape_of_a_stream_read(string code, string? expected)
     {
-        var (sites, violations) = Scan(new[] { ("sample.cs", code) }, ErasureCode());
+        var (sites, violations) = Scan(new[] { ("sample.cs", code) }, WithoutTicketRename());
         output.WriteLine($"مَواضِع: {sites.Count} · مُخالَفات: {string.Join(" | ", violations.Select(v => v.How))}");
         Assert.Single(sites);
         if (expected is null) Assert.Empty(violations);

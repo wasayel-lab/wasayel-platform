@@ -24,7 +24,7 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Identity;
 /// (<c>AuditLogQueries.HideErasedActors</c>) لا في المَخزَن.</para>
 ///
 /// <para><b>‏(‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢) و«لا تَعرِضُه شاشَة» مَقيسٌ لا مَظنون</b>: كانَت صَفحَةُ تَذكِرَةِ الاستوديو تَبني مِن المَجرى (صارَت تَقرَأُ
-/// اللَقطَة)، وقَبولُ العَرضِ يَبني مِن مَجراه فَيَنسَخُ الاسمَ ويَقبَلُ عَرضَ مَن حُذِف. فَالعَرضُ يُمحى **في مَجراه** (<see cref="EraseEvents"/>: <c>OffererRenamed</c>،
+/// اللَقطَة)، وقَبولُ العَرضِ يَبني مِن مَجراه فَيَنسَخُ الاسمَ ويَقبَلُ عَرضَ مَن حُذِف. فَالعَرضُ يُمحى **في مَجراه** (<see cref="EraseEvents(Offer, Guid, DateTime)"/>: <c>OffererRenamed</c>،
 /// ومَعَه <c>OfferWithdrawn</c> لِلمُعَلَّق — حِسابٌ لا وُجودَ لَه لا يُربَطُ بِرِحلَة)، والقَبولُ يَرُدُّ عَرضَ مَن حُذِفَ قَبلَ هذا (<see cref="OffererGone"/>).
 /// والحارِسُ <c>StreamNameReaderTests</c>: لا مَجرى لِنَوعٍ يَحمِلُ اسماً يُمحى يُسَلِّمُ اسمَه إلّا أَن يَحمِلَ المَجرى المَحوَ نَفسَه.</para>
 ///
@@ -194,7 +194,7 @@ public static class AccountErasure
     /// <summary>رَمزُ رَدِّ القَبولِ حينَ يَكونُ صاحِبُ العَرضِ قَد حَذَفَ حِسابَه — تَقرَؤُه صَفحَةُ الإعلان (<c>listings.detail.err_offer_gone</c>).</summary>
     public const string OffererGoneCode = "offer_gone";
 
-    /// <summary>صاحِبُ العَرضِ حَذَفَ حِسابَه (أَو لا حِسابَ لَه) — فَلا يُقبَلُ عَرضُه: عَرضٌ مُعَلَّقٌ مِن حَذفٍ سَبَقَ <see cref="EraseEvents"/> لا يُنشِئُ مُطابَقَةً
+    /// <summary>صاحِبُ العَرضِ حَذَفَ حِسابَه (أَو لا حِسابَ لَه) — فَلا يُقبَلُ عَرضُه: عَرضٌ مُعَلَّقٌ مِن حَذفٍ سَبَقَ <see cref="EraseEvents(Offer, Guid, DateTime)"/> لا يُنشِئُ مُطابَقَةً
     /// ولا مُحادَثَةً مَعَ حِسابٍ لا وُجودَ لَه.</summary>
     public static bool OffererGone(User? offerer) => offerer is null || offerer.DeletedAt is not null;
 
@@ -222,6 +222,15 @@ public static class AccountErasure
         foreach (var r in t.Replies.Where(r => !r.FromStaff)) changed |= Set(r.AuthorName, v => r.AuthorName = v);
         return changed;
     }
+
+    /// <summary>
+    /// <para><b>تَذكِرَتُه تُمحى في مَجراها</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO16؛ تَوصيفُه <c>13b1754</c>) — نَسَقُ <see cref="EraseEvents(Offer, Guid, DateTime)"/>:
+    /// كانَ المَحوُ يَكتُبُ لَقطَتَها وَحدَها (<c>Store</c>)، فَإعادَةُ بِنائِها مِن المَجرى تُعيدُ اسمَه. والآن <c>TicketAuthorRenamed</c> بِما يَكتُبُه
+    /// <see cref="EraseFrom(Ticket, Guid)"/> — يُطَبِّقُه <c>Ticket.Apply</c> عَلى التَذكِرَةِ ورُدودِه، والإسقاطُ المُباشِرُ يَكتُبُ اللَقطَةَ في الحِفظِ نَفسِه.
+    /// ولا شَيءَ لِتَذكِرَةِ غَيرِه، ولا لِتَذكِرَةٍ مَمحُوَّةٍ قَبلُ.</para>
+    /// </summary>
+    public static IReadOnlyList<object> EraseEvents(Ticket t, Guid userId, DateTime at)
+        => EraseFrom(t, userId) ? new object[] { new TicketAuthorRenamed(t.Id, t.AuthorName, at) } : Array.Empty<object>();
 
     /// <summary>مِفتاحُ رَبطٍ بِاسمِه أُبطِلَ قَبلَ الحَذف — والفَعّالُ يُبطِلُه ويُسَمّيه <c>ApiKeyService.RevokeForDeletedActor</c> في المُعامَلَةِ نَفسِها.</summary>
     public static bool EraseFrom(ApiKeyDocument k, string tenantSlug, Guid userId)
@@ -339,7 +348,21 @@ public static class AccountErasure
             foreach (var row in rows) if (erase(row)) { s.Store(row); n++; }
             return n;
         }
-        // العُروضُ بِأَحداثٍ في مَجاريها لا بِـ`Store` (<see cref="EraseEvents"/>) — والإسقاطُ المُباشِرُ يَكتُبُ لَقطَتَها في الحِفظِ نَفسِه.
+        // ‏(‏2026-10-30، CO16) والتَذاكِرُ كَالعُروض: حَدَثٌ في مَجرى كُلٍّ مِنها لا `Store` — حَدَثٌ ولَقطَةٌ مُخَزَّنَةٌ يَدَوِيّاً في جَلسَةٍ واحِدَةٍ يَكتُبُ فيهِما الإسقاطُ
+        // فَوقَ المُخَزَّن (مُلاحَظَةُ `EraseEvents(Offer)`). وتَذكِرَةٌ بِلا مَجرى (وَثيقَةٌ خُزِّنَت مُباشَرَةً — عَيِّنَةُ البَذر) لا إسقاطَ لَها يُعادُ بِناؤه:
+        // وَثيقَتُها هِيَ الحَقيقَة، فَتُكتَبُ كَما كانَت. وإلحاقُ حَدَثٍ بِمُعَرِّفٍ لا مَجرى لَه يَبدَأُ مَجرىً بِحَدَثِ التَسمِيَةِ وَحدَه فَتولَدُ لَقطَةٌ فارِغَة.
+        async Task<int> Rename(IEnumerable<Ticket> rows)
+        {
+            var n = 0;
+            var at = DateTime.UtcNow;
+            foreach (var t in rows)
+            {
+                if (await s.Events.FetchStreamStateAsync(t.Id, ct) is null) { if (EraseFrom(t, userId)) { s.Store(t); n++; } }
+                else if (EraseEvents(t, userId, at) is { Count: > 0 } events) { s.Events.Append(t.Id, events.ToArray()); n++; }
+            }
+            return n;
+        }
+        // العُروضُ بِأَحداثٍ في مَجاريها لا بِـ`Store` (<see cref="EraseEvents(Offer, Guid, DateTime)"/>) — والإسقاطُ المُباشِرُ يَكتُبُ لَقطَتَها في الحِفظِ نَفسِه.
         int Withdraw(IEnumerable<Offer> rows)
         {
             var n = 0;
@@ -408,6 +431,8 @@ public static class AccountErasure
         foreach (var o in rejected) s.Events.Append(o.Id, new OfferRejected(o.Id, closedAt));
         var incoming = (await s.Query<Deal>().Where(d => d.Status == DealStatus.Active).ToListAsync(ct))
             .Where(d => IncomingUnaccepted(d, userId)).Select(d => d.Id).ToList();
+        // ‏(‏2026-10-30، CO16) وتَذاكِرُه بَعدَ أَن قُرِئَ اسمُه مِنها لِبَلاغاتِه أَعلاه.
+        var renamedTickets = await Rename(tickets);
 
         return new Counts(
             Deals: Mark(deals.Concat(others), d => EraseFrom(d, userId)),
@@ -415,7 +440,7 @@ public static class AccountErasure
             Reviews: Mark(reviews, r => EraseFrom(r, userId)),
             Offers: Withdraw(offers),
             Matches: Mark(matches, m => EraseFrom(m, userId)),
-            Tickets: Mark(tickets, t => EraseFrom(t, userId)),
+            Tickets: renamedTickets,
             Keys: Mark(keys, k => EraseFrom(k, tenantSlug, userId)),
             Notifications: Mark(notices, n => EraseFrom(n, userId, names, urls, contacts, ownReports)))
         {
