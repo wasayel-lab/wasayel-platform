@@ -1189,6 +1189,143 @@ WASAYEL_LIVE_PROOF=1 … --filter "…Tests.Live|…ReadinessEndpointTests.Live_
 
 وأفعالُ المالكِ في الموجةِ كلِّها — كلُّ «ج» في السجلّ بأمرِه وترتيبِه — مجموعةٌ في `report/wave11-owner-actions.md` خارجَ المستودع.
 
+### (هـ) قياسُ الإغلاقِ عندَ الرأس — ‏2026-10-30 (تيّارُ الإغلاق؛ يُلحَقُ ولا يُعادُ حرفٌ فوقَ ما سبق)
+
+> **ما هذا**: القياساتُ الأربعُ في (أ) أُعيدَت كلُّها عندَ الرأسِ `e864303` بعدَ الإصلاحات — والكودُ المقيسُ كودُ `fb8a2cb`، فكوميتاتُ F5 وثائقُ وحدَها — وهي
+> ما قالَ البندُ الأخيرُ في (د) إنّه «لم يُعَد». **على Postgres محلّيٍّ وحدَه** (`inet_server_addr()` = ‏127.0.0.1)، بقواعدَ جديدةٍ أُنشِئَت للقياس، وبالثنائيِّ
+> الذي عبرَ البوّابات (`dotnet run -c Release --no-build`). ولا Neon، ولا رمزَ OTO، ولا مفتاحَ ميسر، ولا مفتاحَ نموذج، ولا Actions على هذا الفرع.
+
+**(١) البوّاباتُ بـRelease عندَ الرأس** — الأسطرُ بحرفِها:
+
+```text
+dotnet build PlatformV1.slnx -c Release                 →  4 Warning(s) · 0 Error(s)   (تزايديّ — NU1510 الأربع)
+dotnet build PlatformV1.slnx -c Release --no-incremental
+                                                        →  52 Warning(s) · 0 Error(s)  (ASPDEPR005 · CA1416 · CS0162 · CS8601 · CS8602 · CS8604 · NU1510 · RZ10012 — لا NU1903/NU1904)
+dotnet test tests/ACommerce.Platform.Tests/ACommerce.Platform.Tests.csproj -c Release --no-build
+                                                        →  Passed!  - Failed:     0, Passed:  5881, Skipped:     0, Total:  5881, Duration: 54 s
+./scripts/verify-static.sh                              →  All nine static layers green.   (رمزُ الخروج 0)
+```
+
+وأسطرُ الطبقاتِ بعدِّها: ١ ‏115 ملفَّ صفحة، 24 مخالفةً كلُّها في الدَّينِ المثبَّت (10 مداخل، جديدٌ 0)؛ ٢ ‏171 ملفَّ razor و10 ملفّاتِ CSS؛ ٣ ‏353 حجمَ خطٍّ و377 مسافة؛
+٤ الألوانُ 132 والمسافاتُ 29 والأحجامُ 39 والأيقوناتُ 16؛ ٥ ‏40 عقدًا على 1477 قاعدةً بصفرِ مخالفة؛ ٧ ‏171 razor و323 ‏.cs، ‏17 نصًّا حرفيًّا في 3 ملفّاتٍ مثبَّتة،
+والتغطيةُ 99.3 %؛ ٨ ‏171 razor، صفرُ جلسةٍ وصفرُ `SaveChangesAsync`، و٨ب ‏8 تعريفاتٍ في الفهرس؛ ٩ ‏4 نقاطٍ تحتَ `/api/v1` بأربعةِ حرّاس؛ ١٠ ‏4 ملفّاتٍ و472 سطرًا
+و12 موضعَ خطأ. **والعددُ كما كتبَه (ج)**: 5881 عندَ `e864303` كما عندَ `fb8a2cb`، والتحذيراتُ 52 كما عندَ `eec6bf0` في (أ).
+
+**(٢) الإقلاعُ الباردُ والرحلة** — قاعدةٌ جديدة `wasayel_w11_close`، Development، ‏`PLATFORM_ADMIN_PHONE` هاتفٌ مصطنعٌ للجولة، و`TEST_DATA_SEED=1
+INCUBATOR_SAMPLE_SEED=1 APPEARANCE_BASELINE_SEED=1` كما في «أمرُ الجولةِ كاملًا» في §٧، بلا مفتاحِ تحليل: «Now listening» بعدَ نحوِ 4 ثوانٍ (‏12:28:14.976Z ←
+12:28:19)، وإقلاعٌ واحدٌ بذرَ كلَّ شيء — «[platform-admin] مُنِحَ …» ثمّ «[IncubatorSample] ✅ بُذِرَت جَلسَةُ عَيِّنَة …» و«[AppearanceSeed] ✅ مُستَأجِرا اللَقطَة جاهِزان —
+وقيسَ 31 عَدّاداً لِمُستَأجِرين آخَرين، لَم يَتَحَرَّك مِنها واحِد.»، و«[TestSeed] ✅ test data seeded — 3 مِن 4 مُستَأجِرين؛ تُخُطِّيَ الغائِب: injez.»،
+و`[studio] analysis_door=analysis_unavailable` و`[shipping] oto_environment=closed`؛ وصفرُ سطرٍ بمستوى `ERR` أو `FTL` في سجلِّ الإقلاع.
+
+| الجولة | القاعدة | السطرُ الختاميّ | عندَ `eec6bf0` في (أ) |
+|---|---|---|---|
+| بابٌ مغلق، متجرٌ يُبنى في الجولة (`rewalk-301101`) | `wasayel_w11_close` | «لا يُمَيِّزُ FLGAP-04 — فِئاتُ المَتجَر: general:''» · **فُحِصَ 72 · فَشِلَ 0** | ‏72 · 0 (`rewalk-291101`) |
+| بابٌ مغلق، إعادةٌ على المتجرِ نفسِه (`MARK=301102`) | نفسُها | «— مَبنِيٌّ سَلَفاً، لا rewalk-301102» و«لا عَدّ — المالِكُ مُشرِفٌ سَلَفاً» · **فُحِصَ 70 · فَشِلَ 0** | ‏70 · 0 (`291102`) |
+| بابٌ مفتوحٌ بالبديلِ يؤخّرُ ردَّه 40 ثانية (`rewalk-301103`) | `wasayel_w11_close_b` (جديدة) | «التَحليلُ اكتَمَلَ بَعدَ 41 ثانِيَة» · «يُمَيِّزُ FLGAP-04 — فِئاتُ المَتجَر: products:'' deals:''» · **فُحِصَ 81 · فَشِلَ 0** | ‏81 · 0 (`rewalk-291103`) |
+
+**والمخرَجُ سطرًا بسطرٍ هو مخرَجُ `eec6bf0`** — مقيسًا: الجولاتُ الثلاثُ مقابلَ نظيراتِها في (أ) بعدَ استبدالِ المعرّفاتِ والعلامةِ والأوقاتِ بنوائب، والفرقُ سطرانِ في كلٍّ
+وحدَهما: «starts=2026-10-29 … expires=2026-11-28» ← «starts=2026-10-30 … expires=2026-11-29» و«تَنتَهي في 2026-11-28» ← «2026-11-29» — يومُ الجولة. فالإصلاحاتُ الـ140
+لم تُغيِّر حرفًا ممّا تمشيه الرحلة؛ **وما لا تمشيه الرحلة** (القناةُ الثانية، الحذف، البطاقة، OTO، النزاع، الدمج) تقيسُه الحقيبةُ الحيّةُ في (٣) والاختباراتُ في (١).
+والجدرانُ الثلاثةُ في مواضعِها: «⊘ الجِدارُ الأَوَّل: بابُ التَحليلِ مُغلَقٌ قَبلَ الدُخول» (في المغلقتَين)، و«⊘ الجِدارُ الثاني: رَمزُ OTO غائِب»، و«⊘ الجِدارُ الثالِث:
+مِفتاحُ البَوّابَةِ ومِفتاحُ الخِزانَةِ غائِبان»؛ وأوّلُ مشرفٍ لمتجرٍ مبنيّ «6 أَفعالٍ داخِلَ المُنتَج + عَودَةٌ واحِدَةٌ خارِجَه (تَبديلُ لِسان)». **والبديلُ كما يصفُه §٧**:
+`POST /v1/chat/completions` واحدٌ في سجلِّه («12:29:36 … delay=40.0» ثمّ «12:30:16 replied 200 after 40.0s bytes=5381»)، و«[agent] Analysis: المُزَوِّد=openai ·
+التَسميَة=stand-in · …» و`analysis_door=open` في سجلِّ الإقلاع، وسطرٌ واحدٌ في `mt_doc_modelcallrecord`.
+
+**(٣) الحقيبةُ الحيّةُ كلُّها** على `wasayel_w11_close` بعدَ الجولتَين المغلقتَين أعلاه (مبذورةٌ بالإقلاعِ والرحلة)، بمرشِّحِ §٤ (٣) الموسَّع:
+
+```bash
+WASAYEL_LIVE_PROOF=1 ConnectionStrings__Postgres="Host=localhost;Database=wasayel_w11_close;Username=postgres;Password=<المَحَلِّيَّة>" \
+  dotnet test tests/ACommerce.Platform.Tests -c Release --no-build \
+  --filter "FullyQualifiedName~ACommerce.Platform.Tests.Live|FullyQualifiedName~ReadinessEndpointTests.Live_database_answers_200_ready" \
+  --logger "console;verbosity=normal" --logger "trx;LogFileName=live.trx"
+```
+
+← **‏136 اختبارًا · 136 أخضر · صفرُ أحمر** (‏1.83 دقيقة)، و`./scripts/live-proof-floor.sh live.trx 55` على الـtrx نفسِه: «البَراهينُ الحَيَّة: نَجَحَ 116 · رَجَعَ مِن
+حارِسٍ فَرعِيٍّ 1 · بَلَغَ القاعِدَة 115 (الأَرضِيَّة 55) · فَشِلَ 0» (والعشرونَ الباقيةُ صفوفُ `LiveProofJobTests`، خارجَ العدّ). **والأمرُ نفسُه على `wasayel_w11_journey`**
+(قاعدةُ (أ) التي قاسَ عليها F5): ‏136 / 136 وسطرُ الأرضيّةِ نفسُه بحرفِه.
+
+| الصنف | نجح/فشل | | الصنف | نجح/فشل |
+|---|---|---|---|---|
+| `LiveAccountConcurrencyProofTests` ✚ | 4/0 | | `LiveGatewayPaymentProofTests` | 1/0 |
+| `LiveAccountContactLinkProofTests` | 1/0 | | `LiveModelUsageMeteringProofTests` | 1/0 |
+| `LiveAccountErasureProofTests` | 12/0 | | `LiveOtoOrderStatusProofTests` | 4/0 |
+| `LiveAdminAgentStoreOwnerProofTests` | 1/0 | | `LiveOtoStagingProofTests` — **رجعَ من حارسِه**: «[live:returned-early] لا رَمزَ staging لِـOTO» | 1/0 |
+| `LiveAgentStoreLimitRefusalProofTests` | 1/0 | | `LiveOutboxTenantProofTests` | 3/0 |
+| `LiveAnalysisClaimRaceProofTests` | 1/0 | | `LivePageGateZeroRoleProofTests` | 4/0 |
+| `LiveApiKeyActorDeletionProofTests` | 2/0 | | `LivePhoneIdentityProofTests` | 1/0 |
+| `LiveApiKeyIssueActorProofTests` ✚ | 1/0 | | `LivePhoneVerifiedOnLoginProofTests` | 2/0 |
+| `LiveApprovalFlowProofTests` | 1/0 | | `LivePlansShelfProofTests` | 2/0 |
+| `LiveCheckoutClaimProofTests` | 1/0 | | `LiveProofCollectionTests` (الحارسان) | 2/0 |
+| `LiveComposedRolePublishProofTests` | 1/0 | | `LiveProofJobTests` — بلا `CI_LIVE_PROOF_REQUIRED` | 20/0 |
+| `LiveContactNoticeProofTests` ✚ | 1/0 | | `LiveQuotaRaceProofTests` | 1/0 |
+| `LiveDealAcceptSequenceProofTests` | 1/0 | | `LiveRefineInterleaveProofTests` | 1/0 |
+| `LiveDealConcurrencyProofTests` | 3/0 | | `LiveRoleDefinitionProofTests` | 1/0 |
+| `LiveDealMoneyClaimFirstProofTests` | 4/0 | | `LiveScheduledExpiryProofTests` | 4/0 |
+| `LiveDealMoneyEffectTokenProofTests` | 2/0 | | `LiveSecondChannelProofTests` ✚ | 5/0 |
+| `LiveDealNoticesProofTests` | 3/0 | | `LiveSessionRevocationProofTests` | 3/0 |
+| `LiveDealPaidStageProofTests` | 1/0 | | `LiveSessionWriteProofTests` ✚ | 5/0 |
+| `LiveDealReviewOnceProofTests` | 2/0 | | `LiveStudioOwnerNoticeReaderProofTests` | 1/0 |
+| `LiveDealReviewProofTests` | 1/0 | | `LiveStudioStorePatternProofTests` | 1/0 |
+| `LiveDealShipGroupProofTests` | 2/0 | | `LiveTenantExportProofTests` — 6 مستأجرينَ في السجلّ و3 مملوكة، وفي كلٍّ «2 تَعَذَّرَت قِراءَتُه» (`Report` و`ConsentRecord`، كما في (أ)) | 1/0 |
+| `LiveDealShipProofTests` | 3/0 | | `LiveThemeProofTests` | 1/0 |
+| `LiveDealStoredCommissionFieldProofTests` | 1/0 | | `LiveUserDataExportProofTests` | 1/0 |
+| `LiveDealWaybillCancelProofTests` ✚ | 1/0 | | `LiveVendorRegisterBucketProofTests` | 1/0 |
+| `LiveDisplayTimeKindProofTests` | 1/0 | | `LiveVendorRegisterSealRetryProofTests` | 4/0 |
+| `LiveDuplicatePhonesProofTests` | 4/0 | | `LiveVendorShippingProofTests` | 5/0 |
+| `LiveGatewayInvoiceCancelProofTests` | 1/0 | | `LiveZeroRoleAdminProofTests` | 1/0 |
+| `LiveGatewayInvoiceShareProofTests` | 1/0 | | `ReadinessEndpointTests` (`Live_database_answers_200_ready`) | 1/0 |
+
+**دقّةٌ في عدِّ الأصناف** (يُلحَقُ ولا يُعادُ حرفٌ فوقَ (أ) ولا (ج)): الـtrx يحملُ **56 صنفًا = 55 صنفَ `Live…` + `ReadinessEndpointTests`**؛ و«49 صنفًا» في (أ) عدُّ أصنافِ `Live…`
+وحدَها (الـtrx عندَ `eec6bf0` ‏50 بصفِّ الجاهزيّة)؛ و«57 صنفًا» في (ج) **لا يُعيدُه عدٌّ للـtrx** — لا 55 ولا 56. فبالطريقةِ الواحدة: ‏49 ← 55 صنفَ `Live…` (+6، المعلَّمةُ ✚:
+`LiveAccountConcurrencyProofTests` و`LiveApiKeyIssueActorProofTests` و`LiveContactNoticeProofTests` و`LiveDealWaybillCancelProofTests` و`LiveSecondChannelProofTests`
+و`LiveSessionWriteProofTests`)، و106 ← 136 اختبارًا، وما نقصَ صنف. **وما لا يقيسُه الأخضرُ هنا**: OTO staging (بلا رمز)، وكلُّ ما على Neon.
+
+**(٤) بوّابةُ الإقلاعِ الإنتاجيّ** على قاعدةٍ محلّيّةٍ جديدة `wasayel_w11_close_gate` بـ`ASPNETCORE_ENVIRONMENT=Production`، والإلزاميّانِ من البيئةِ وحدَها (لا
+`scripts/.prod-gate.env`): سلسلةُ القاعدةِ المحلّيّة، و`ACOMMERCE_AUTH_SECRET="$(openssl rand -hex 32)"` — سرٌّ للجولةِ لا يُحفَظ، لا سرُّ إنتاج — والمقتطَفُ أسطرُ
+الخرجِ بحرفِها و«…» ما حُذِف:
+
+```text
+  لا مِلَفَّ scripts/.prod-gate.env — تُقرَأُ المُتَغَيِّراتُ مِن البيئَة
+  سِرُّ تَوقيعِ الجَلسَة: مَضبوط (طولُه 64 مِحرَفاً — لا يُطبَع)
+  ⚠ مِفتاحُ الخِزانَةِ Providers__Kek__v1 غائِب — vault_unavailable: …
+      ✓ 57 تَجميعَة ACommerce* في المُخرَج
+      ✓ أَجابَ بَعدَ 4ث
+  ✓ GET    /health/ready                      200  (الجِسمُ يَحمِل "ready":true · والرَأسُ no-store)
+  ⚠ مِفتاحُ وَكيلِ التَحليلِ غائِب — analysis_unavailable: …
+  ⚠ مَفاتيحُ VAPID غائِبَة — ephemeral: …
+  الشَحنُ عَبرَ OTO: مُغلَق — OtoEnvironment.IsOpen كاذِبَةٌ في التَطبيق (لا Shipping__Oto__Environment، أَو production المُغلَقُ في الكود)
+✅ عَبَرَت — 15 مَساراً، كُلٌّ بِرَمزِه المُتَوَقَّع (‏ومِنها
+   2 مَفحوصُ الجِسم و6 مَفحوصُ الرَأس)، مِن إقلاعٍ
+   فِعليٍّ بِوَضع Production.
+```
+
+رمزُ الخروج **0** (‏50 ثانيةً بالنشر)، **والخرجُ كلُّه هو خرجُ `eec6bf0` سطرًا بسطر** بعدَ استبدالِ المنفذِ والثواني وبصمةِ المضيفِ بنوائب (صفرُ سطرٍ مختلف).
+**ومعه عرضُ المخطَّطِ للقراءة** (`dotnet run scripts/marten-schema.cs` بلا فعل — «عَرضٌ فَقَط — لَم يُكتَب شَيء») على قاعدتَي البوّابة: `wasayel_w11_gate` (أقلعَها
+`eec6bf0` في Production) و`wasayel_w11_close_gate` (أقلعَها الرأس): كلتاهما «كائِناتُ المُخَطَّطِ المُهَيَّأَة: 77 · الفُروق: 35»، والقائمتانِ بحرفِهما واحدة، وكلُّ سطرٍ فيهما
+«إنشاء» لجدولٍ لا تستعملُه مساراتُ البوّابة — صفرُ تعديل. **وما لا يقيسُه هذا**: شكلُ جدولِ `User` نفسِه (لا جدولَ له في قاعدتَي البوّابة) — وذاك قياسُ F1 على
+`wasayel_f1_schema_before` في سطرِ G-1 المؤرَّخِ في `DEPLOY.md` §٤‑د؛ والاثنانِ معًا يقولانِ إنّ أوامرَ §٤‑د بترتيبِها تكفي ولا خطوةَ لـG-1 وحدَه.
+
+**(٥) عدُّ التدقيق**: **‏39 نتيجةً خامًا، نجا منها 38 من التحقّق** (عدُّ توليفِ التدقيقِ كما سلّمَه المنسّقُ لهذا التيّار — ملفُّ التوليفِ ليس في المستودع). والرموزُ
+الـ39 بأُسَرِها: ‏I-SEC ‏3 · A ‏6 · G ‏7 · B-PRIV ‏5 · C-PAY ‏3 · F (الشحن) ‏4 · E-deals ‏3 · F-SDC ‏3 · H-docs ‏4 · MEAS-79 ‏1؛ ومعها المُرحَّلاتُ CO1–CO17 (‏17) وبندُ الخطّة
+PLAN-closing. **وكلُّها لها موضعٌ في هذا القسم** — مقيسٌ بسكربتٍ خارجَ المستودعِ يبحثُ عن كلِّ رمزٍ في القسمِ بعدَ هذا الإلحاق ويطبعُ ما وجد: ‏57 / 57 (ورموزُ الشحنِ F1–F4 بنصِّ
+صفوفِها في (ب) لأنّ أسماءَ التيّاراتِ تحملُ الحروفَ نفسَها)، ورمزٌ مصطنعٌ لا يحملُه القسمُ محقونٌ في القائمةِ يُطبَعُ غائبًا ويُخرِجُه 1، ونسخةُ القسمِ قبلَ هذا الإلحاقِ ‏56 / 57 (F-SDC-3 غائب). ومنها **A6** سُمِّيَ ولم يُبنَ (F1 · ٧)، و**F-SDC-3** بلا كوميت: سؤالانِ للمالكِ سقطا بجوابِ CO6 وCO5 (سجلُّ المالك «ب»
+F5). **وأيُّ الـ39 لم ينجُ** لا يسمّيه ما بيدِ هذا التيّار، فلا يُخمَّن.
+
+**(٦) البنودُ → الكوميتات**: الخريطةُ (ب) أعلاه؛ **ومقيسٌ عندَ هذا الإلحاق**: ‏145 إيداعًا في `eec6bf0..e864303` (`git rev-list --count`)، ‏144 منها بأرقامِها في (ب)،
+والـ145 هو `e864303` نفسُه — «كوميتُ هذا القسم» في صفِّ PLAN-closing؛ وكوميتُ هذا الإلحاقِ بعدَه. فلا إيداعَ في الموجةِ بلا بندِه.
+
+**(٧) ما بقيَ — بسببِه** (يُلحَقُ ولا يُعادُ حرفٌ فوقَ (د)):
+- **البندُ الأخيرُ في (د) — «رحلةُ الإطلاقِ وبوّابةُ الإقلاعِ لم تُعادا» — أُغلِقَ بـ(٢) و(٤) أعلاه**؛ والبنودُ الأربعةُ قبلَه قائمةٌ بأسبابِها هناك: إعلاناتُ من حُذِفَ قبلَ
+  الموجة (ترحيلُ بياناتٍ في الإنتاجِ يحتاجُ سكربتًا بعرضٍ وتأكيدٍ وحضورِ المالك، ولم يُبنَ؛ والبابانِ يردّانِ الشراءَ والعرض)، و«طلب استرجاع» لصفقةِ خدمةٍ من سلّةِ «بيع»
+  (نوعُ الفئةِ لا يُكتَبُ على الصفقةِ عندَ الولادة)، ومستوردُ إيجار (سببٌ مستقلٌّ وهو خارجَ الحلّ)، وما سمّاه F1 ولم يُبنَ.
+- **سبعُ لقطاتِ مظهرٍ ترسمُ الغيابَ محلّيًّا** (معرّفاتٌ من بياناتِ Neon — «أ» F4 · ٥): فروعٌ محروسةٌ باختباراتِها، وتثبيتُ معرّفاتٍ محلّيّةٍ لها بابٌ مسمًّى للموجِّه.
+- **مدّةُ بقاءِ صفِّ `Handled` مقيسةٌ بمسبارٍ خارجَ المستودعِ لا بصفّ** («أ» F5 · ٢): ترقيةُ WolverineFx لا يُحمِرُّها شيء — بابٌ مسمًّى للموجِّه.
+- **ما لم يُقَس هنا ولا يُقاسُ بلا المالك**: كلُّ ما على Neon، وOTO staging، ومفتاحُ ميسر، ومفتاحُ نموذجٍ حقيقيّ، وبرهانُ Actions لـد29 ود63 (لا Actions على هذا الفرع —
+  بعدَ الدمج).
+
+وأفعالُ المالكِ في الموجتَين ١٠ و١١ — كلُّ «ج» في السجلّ، وأفعالُ ملفَّي الموجتَين، وما تركَه التدقيقُ عليه — **قائمةٌ واحدةٌ بترتيبِ التنفيذِ** بأمرِ كلِّ فعلٍ وما يقرؤُه
+حينَ ينجح: `report/owner-actions-final.md` خارجَ المستودع، وهي تسبقُ الملفَّين في كلِّ فعلٍ تكرّر.
+
 ---
 
 ## ما قيس قبل التحوّل — ‏2026-08-17
