@@ -388,15 +388,30 @@ public static class AuthHandlers
     }
 
     // لا [WolverinePost] — راجِع التَّعليق على RequestPhoneOtpHandler.
+    // ‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1 — A2؛ تَوصيفُه `c3aa888` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الجِسمُ انتَقَلَ بِحَرفِه إلى
+    // `VerifyPhoneOtpAsync` بِالقَناةِ الَّتي تُسَجِّل — فَهذا المُعالِجُ هُوَ هُوَ: يُنشِئُ لِجَوّالٍ لا يَحمِلُه حِساب.
     public static async Task<AuthResult?> VerifyPhoneOtpHandler(
         VerifyPhoneOtp cmd, ITenantContext tenantCtx, IDocumentStore store)
     {
-        if (!tenantCtx.IsResolved) return null;
+        return (await VerifyPhoneOtpAsync(cmd, tenantCtx, store, registers: true)).Result;
+    }
+
+    /// <summary>
+    /// <para><b>رَمزُ الجَوّالِ بِقَرارِ القَناة</b> (‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1 — A2). <paramref name="registers"/> قَرارُ القالِب
+    /// (<c>LoginChannels.Registers</c>): قَناةُ المَتجَرِ تُسَجِّلُ (<c>GetOrCreateUserAsync</c> كَما كان)، والقَناةُ الثانِيَةُ <b>تُدخِلُ مَن يَحمِلُ الوَسيلَةَ
+    /// مُتَحَقَّقاً مِنها ولا تُنشِئ</b> (<see cref="SignInHolderAsync"/>) — وإلّا <see cref="NotLinked"/>. والرَدُّ بَعدَ رَمزٍ صَحيحٍ لا قَبلَه: لا يَعرِفُ
+    /// مَن لا يَملِكُ الوَسيلَةَ أَنَّها غَيرُ مَربوطَة (نَسَقُ <c>contact_in_use</c> في ADR-042 §٢).</para>
+    /// </summary>
+    public static async Task<VerifyOutcome> VerifyPhoneOtpAsync(
+        VerifyPhoneOtp cmd, ITenantContext tenantCtx, IDocumentStore store, bool registers)
+    {
+        if (!tenantCtx.IsResolved) return VerifyOutcome.Wrong;
         // حِماية مِن brute-force OTP (٥/دَقيقَة لِكُلّ phone+tenant).
         var rlKey = $"{tenantCtx.Slug}|{cmd.Phone}";
-        if (!TryConsumeVerifyQuota(rlKey)) return null;
-        if (!ConsumeAttempt(tenantCtx.Slug, cmd.Phone, cmd.Code, AuthKind.PhoneOtp)) return null;
-        return await GetOrCreateUserAsync(store, tenantCtx.Slug, cmd.Phone, nationalId: null);
+        if (!TryConsumeVerifyQuota(rlKey)) return VerifyOutcome.Wrong;
+        if (!ConsumeAttempt(tenantCtx.Slug, cmd.Phone, cmd.Code, AuthKind.PhoneOtp)) return VerifyOutcome.Wrong;
+        if (!registers) return await SignInHolderAsync(store, tenantCtx.Slug, phone: cmd.Phone, email: null);
+        return new(await GetOrCreateUserAsync(store, tenantCtx.Slug, cmd.Phone, nationalId: null), null);
     }
 
     // ── Email OTP ─────────────────────────────────────────────────────
@@ -433,17 +448,56 @@ public static class AuthHandlers
     }
 
     // لا [WolverinePost] — راجِع التَّعليق على RequestPhoneOtpHandler.
+    // ‏(‏2026-10-30، A2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الجِسمُ في `VerifyEmailOtpAsync` بِحَرفِه، وهذا المُعالِجُ القَناةُ الَّتي تُسَجِّل.
     public static async Task<AuthResult?> VerifyEmailOtpHandler(
         VerifyEmailOtp cmd, ITenantContext tenantCtx, IDocumentStore store)
     {
-        if (!tenantCtx.IsResolved) return null;
+        return (await VerifyEmailOtpAsync(cmd, tenantCtx, store, registers: true)).Result;
+    }
+
+    /// <summary>رَمزُ البَريدِ بِقَرارِ القَناة — نَظيرُ <see cref="VerifyPhoneOtpAsync"/> حَرفاً: الثانِيَةُ تُدخِلُ حامِلَ البَريدِ المُتَحَقَّقِ مِنه ولا تُنشِئ.</summary>
+    public static async Task<VerifyOutcome> VerifyEmailOtpAsync(
+        VerifyEmailOtp cmd, ITenantContext tenantCtx, IDocumentStore store, bool registers)
+    {
+        if (!tenantCtx.IsResolved) return VerifyOutcome.Wrong;
         var email = EmailAddress.Normalize(cmd.Email);
         // حِماية مِن brute-force OTP (٥/دَقيقَة لِكُلّ email+tenant).
         var rlKey = $"{tenantCtx.Slug}|{email}";
-        if (!TryConsumeVerifyQuota(rlKey)) return null;
-        if (!ConsumeAttempt(tenantCtx.Slug, email, cmd.Code, AuthKind.EmailOtp)) return null;
-        return await GetOrCreateUserAsync(store, tenantCtx.Slug,
-            phone: "", nationalId: null, email: email);
+        if (!TryConsumeVerifyQuota(rlKey)) return VerifyOutcome.Wrong;
+        if (!ConsumeAttempt(tenantCtx.Slug, email, cmd.Code, AuthKind.EmailOtp)) return VerifyOutcome.Wrong;
+        if (!registers) return await SignInHolderAsync(store, tenantCtx.Slug, phone: null, email: email);
+        return new(await GetOrCreateUserAsync(store, tenantCtx.Slug,
+            phone: "", nationalId: null, email: email), null);
+    }
+
+    /// <summary>رَمزُ رَدِّ القَناةِ الثانِيَةِ بَعدَ رَمزٍ صَحيحٍ لِوَسيلَةٍ لا يَحمِلُها حِسابٌ مُتَحَقَّقاً مِنها (‏2026-10-30، A2) — تُتَرجِمُه صَفحَةُ الدُخولِ
+    /// (<c>auth.login.err_contact_not_linked</c>): ادخُل بِقَناةِ المَتجَر، ثُمَّ أَضِف الوَسيلَةَ مِن «حِسابي».</summary>
+    public const string NotLinked = "contact_not_linked";
+
+    /// <summary>نَتيجَةُ رَمزِ الدُخول: الجَلسَةُ، أَو رَمزُ رَدٍّ ثابِتٌ بَعدَ رَمزٍ صَحيح (<see cref="NotLinked"/>) — وكِلاهُما فارِغانِ لِرَمزٍ خاطِئٍ أَو حِصَّةٍ
+    /// نَفِدَت (<see cref="Wrong"/>)، كَما كانَ <c>null</c> المُعالِجَين.</summary>
+    public sealed record VerifyOutcome(AuthResult? Result, string? Refusal)
+    {
+        public static readonly VerifyOutcome Wrong = new(null, null);
+    }
+
+    /// <summary>
+    /// <para><b>القَناةُ الثانِيَةُ تُدخِلُ ولا تُسَجِّل</b> (‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1 — A2): الحِسابُ الَّذي يَحمِلُ الوَسيلَةَ
+    /// <b>مُتَحَقَّقاً مِنها</b> — بَريدٌ بِتَطبيعِ الدُخول، أَو جَوّالٌ بِصيغَتَيه (<c>PhoneNumber.LookupForms</c> و<c>Pick</c>، بَحثُ
+    /// <c>GetOrCreateUserAsync</c> نَفسُه) — وإلّا <see cref="NotLinked"/> ولا كِتابَة. ووَسيلَةٌ في حِسابٍ لَم يُتَحَقَّق مِنها لا تَفتَحُه بِهذا الباب: رَمزٌ إلَيها
+    /// يُثبِتُ مِلكِيَّةَ الوَسيلَةِ لا الحِساب. والذَيلُ (الرَمزُ بِإصدارِ الجَلسَة، وحَقلُ العَرض) نَسَقُ ذَيلِ <c>GetOrCreateUserAsync</c> حَرفاً.</para>
+    /// </summary>
+    private static async Task<VerifyOutcome> SignInHolderAsync(IDocumentStore store, string tenantSlug, string? phone, string? email)
+    {
+        await using var session = store.QuerySession(tenantSlug);
+        var phoneForms = PhoneNumber.LookupForms(phone).ToArray();
+        var holder = email is not null
+            ? await session.Query<User>().FirstOrDefaultAsync(u => u.Email == email && u.EmailVerified)
+            : PhoneNumber.Pick(await session.Query<User>().Where(u => phoneForms.Contains(u.Phone) && u.PhoneVerified).ToListAsync(), u => u.Phone, phone);
+        if (holder is null) return new(null, NotLinked);
+        var token = MakeToken(holder.Id, tenantSlug, holder.SessionVersion);
+        var display = string.IsNullOrEmpty(holder.Phone) ? holder.Email : holder.Phone;
+        return new(new AuthResult(holder.Id, holder.FullName, display, token, holder.Role), null);
     }
 
     // ── Nafath ────────────────────────────────────────────────────────

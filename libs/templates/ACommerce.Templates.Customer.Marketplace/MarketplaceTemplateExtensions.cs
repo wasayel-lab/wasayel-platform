@@ -300,7 +300,10 @@ public static class MarketplaceTemplateExtensions
                     }
                 } catch { /* بِنيَة غَير مُتَوَقَّعَة → نَترُك الحُقول فارِغَة، يَفشَل verify بِشَكل صَريح */ }
             }
-            var result = await AuthHandlers.VerifyPhoneOtpHandler(new VerifyPhoneOtp(phone, code), tenant, store);
+            // ‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1 — A2) القَناةُ الثانِيَةُ تُدخِلُ مَن رَبَطَها ولا تُسَجِّل (`LoginChannels.Registers`) —
+            // كانَ هذا السَطرُ يُنادي المُعالِجَ الَّذي يُنشِئ، فَجَوّالٌ لا يَحمِلُه حِسابٌ في مَتجَرِ بَريدٍ صارَ حِساباً ثانِياً. والرَدُّ بَعدَ الرَمز.
+            var (result, refusal) = await AuthHandlers.VerifyPhoneOtpAsync(new VerifyPhoneOtp(phone, code), tenant, store, Services.LoginChannels.Registers(tenant.AuthChannel, AuthChannels.Phone));
+            if (refusal is not null) return Results.Redirect(Link(req, slug, $"login?err={refusal}"));
             if (result is null)
                 return Results.Redirect(Link(req, slug,
                     $"login?{Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form["attempt"].ToString() : null, phone, AuthHandlers.AuthKind.PhoneOtp, "code_invalid")}"
@@ -400,7 +403,9 @@ public static class MarketplaceTemplateExtensions
                 } catch { /* بِنيَة غَير مُتَوَقَّعَة → نَترُك الحُقول فارِغَة، يَفشَل verify بِشَكل صَريح */ }
             }
             email = EmailAddress.Normalize(email);
-            var result = await AuthHandlers.VerifyEmailOtpHandler(new VerifyEmailOtp(email, code), tenant, store);
+            // ‏(‏2026-10-30، A2) القَرارُ نَفسُه: بَريدٌ لا يَحمِلُه حِسابٌ مُتَحَقَّقاً مِنه في مَتجَرِ جَوّالٍ يُرَدُّ بِـ`contact_not_linked` ولا يُنشِئُ حِساباً.
+            var (result, refusal) = await AuthHandlers.VerifyEmailOtpAsync(new VerifyEmailOtp(email, code), tenant, store, Services.LoginChannels.Registers(tenant.AuthChannel, AuthChannels.Email));
+            if (refusal is not null) return Results.Redirect(Link(req, slug, $"login?err={refusal}"));
             if (result is null)
                 return Results.Redirect(Link(req, slug,
                     $"login?{Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form["attempt"].ToString() : null, email, AuthHandlers.AuthKind.EmailOtp, "code_invalid")}"

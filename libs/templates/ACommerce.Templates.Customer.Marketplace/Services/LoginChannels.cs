@@ -13,6 +13,12 @@ namespace ACommerce.Templates.Customer.Marketplace.Services;
 /// اختارَ صاحِبُه الدُخولَ بِالهُوِيَّة. والأُولى قَناةُ المَتجَرِ دائِماً (وإن لَم تُسَجَّل: تَرسُمُ الصَفحَةُ لافِتَتَها كَما كانَت).
 /// <b>ومُستَهلِكوه ثَلاثَة</b>: <c>Login.razor</c> (الاستِمارَةُ والمِفتاحُ إلى الأُخرى)، و<c>Me.razor</c> (لا «أَضِف» لِنَوعٍ لا يُدخِل)، وأَبوابُ الدُخولِ
 /// الأَربَعَة وبابُ الرَبط (تَرُدُّ ما لا يُعرَضُ بِرَمزٍ ثابِت) — فَالنُصوصُ صادِقَةٌ بِالبِناء.</para>
+///
+/// <para><b>‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1؛ تَوصيفُه <c>c3aa888</c> — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والثانِيَةُ تُدخِلُ ولا تُسَجِّل</b>
+/// (<see cref="Registers"/>): كانَ بابُ تَأكيدِها يُنادي المُعالِجَ الَّذي يُنشِئ، فَبَريدٌ لا يَحمِلُه حِسابٌ في مَتجَرِ جَوّالٍ صارَ حِساباً ثانِياً بِلا جَوّال —
+/// المُشكِلَةُ الَّتي قَرَّرَ د27 «ج» عِلاجَها بِالرَبط، وتَجاوُزٌ لِقَناةٍ اختارَها صاحِبُ المَتجَر (P2). فَقَناةُ المَتجَرِ وَحدَها تُسَجِّل، والثانِيَةُ تُدخِلُ مَن رَبَطَها
+/// مِن «حِسابي» مُتَحَقَّقاً مِنها (<c>AuthHandlers.VerifyEmailOtpAsync</c>/<c>VerifyPhoneOtpAsync</c>) وتَرُدُّ ما سِواه بِـ<c>AuthHandlers.NotLinked</c>
+/// بَعدَ الرَمزِ لا قَبلَه. <b>ومُستَهلِكوه ثَلاثَة</b>: بابا التَأكيدِ بِالجَوّالِ والبَريد، و<c>Login.razor</c> (سَطرُ «لِمَن رَبَطَها» تَحتَ استِمارَتِها).</para>
 /// </summary>
 public static class LoginChannels
 {
@@ -45,6 +51,10 @@ public static class LoginChannels
                 phoneRegistered: kind == AuthChannels.Phone && kindRegistered,
                 emailRegistered: kind == AuthChannels.Email && kindRegistered)
             .Contains(kind);
+
+    /// <summary>أَتُسَجِّلُ <paramref name="kind"/> حِساباً جَديداً في هذا المَتجَر؟ قَناةُ المَتجَرِ وَحدَها (<see cref="Primary"/>)؛ والثانِيَةُ تُدخِلُ مَن يَحمِلُ
+    /// الوَسيلَةَ مُتَحَقَّقاً مِنها ولا تُنشِئ (‏2026-10-30). نَقِيَّة.</summary>
+    public static bool Registers(string? authChannel, string kind) => kind == Primary(authChannel);
 
     /// <summary>الاستِمارَةُ الَّتي تُرسَم: <paramref name="via"/> إن عُرِضَت، وإلّا قَناةُ المَتجَر.</summary>
     public static string Active(string? authChannel, string? via, IReadOnlyList<string> offered)

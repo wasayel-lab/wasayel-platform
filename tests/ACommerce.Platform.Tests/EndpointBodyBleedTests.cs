@@ -411,7 +411,10 @@ public class EndpointBodyBleedTests
         // سَبعَةَ عَشَرَ سَطراً: كُلٌّ تَوقيعُه وحارِسُ جَلسَتِه ورَدُّه ونِداءٌ واحِدٌ لِـ`AccountContacts` والرَدُّ بِمُعَرِّفِ المُحاوَلَةِ أَو رَمزِ الرَفض (نَسَقُ أَخَوَيهِ
         // `/me/contact/start|verify` بِحَرفِه) — وسَطرُ القَناتَينِ في تَوقيعِ `/me/contact/verify` لِإشعارِ الرَبط. والقَرارُ في `ContactLink` النَقِيَّةِ والأَثَرُ
         // في الخِدمَة. طَبَعَ العَدّادُ «‏2784 → 2802» و«‏3132 → 3150» و«143 → 145»، و**‏17 + 1 = 18**.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2802),
+        // ‏2802 ← **2804** يَوم ‏2026-10-30 (مُراجَعَةُ الموجَة ١١ لِلمَسار F1 — A2): سَطرُ `if (refusal is not null) return …` في بابَي التَأكيدِ بِالبَريدِ
+        // والجَوّال — القَناةُ الثانِيَةُ تُدخِلُ مَن رَبَطَها ولا تُسَجِّل؛ ونِداءُ `Verify*OtpAsync` بِقَرارِ `LoginChannels.Registers` سَطرُ المُعالِجِ القَديمِ نَفسُه.
+        // طَبَعَ العَدّادُ «‏2802 → 2804» و«‏3150 → 3152»، و**‏1 + 1 = 2**.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2804),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -1150,7 +1153,11 @@ public class EndpointBodyBleedTests
     /// الأَربَعَةَ عَشَر. وعَدَدُ النِقاطِ ‏144 ← 143.</remarks>
     /// <remarks><b>‏3132 ← 3150 يَوم ‏2026-10-29</b> (تَدقيقُ الموجَة ١١ A3): بابا حَذفِ الوَسيلَةِ المُضافَةِ بِسَبعَةَ عَشَرَ سَطراً وسَطرُ القَناتَينِ في تَوقيعِ
     /// بابِ تَأكيدِ الرَبط؛ والقَرارُ في <c>ContactLink.ValidateUnlink</c> والأَثَرُ والإشعارُ في <c>AccountContacts</c>. وعَدَدُ النِقاطِ ‏143 ← 145.</remarks>
-    private const int PinnedTotal = 3150;
+    /// <remarks><b>‏3150 ← 3152 يَوم ‏2026-10-30</b> (مُراجَعَةُ الموجَة ١١ لِلمَسار F1 — A2): سَطرُ الرَدِّ <c>if (refusal is not null) return …</c> في بابَي
+    /// <c>/{slug}/auth/email/verify</c> و<c>/{slug}/auth/phone/verify</c> — القَناةُ الثانِيَةُ تُدخِلُ مَن رَبَطَها ولا تُسَجِّل؛ والقَرارُ في
+    /// <c>LoginChannels.Registers</c> والبَحثُ في <c>AuthHandlers.VerifyEmailOtpAsync</c>/<c>VerifyPhoneOtpAsync</c>، ونِداؤُهُما سَطرُ المُعالِجِ القَديمِ نَفسُه.
+    /// وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 3152;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

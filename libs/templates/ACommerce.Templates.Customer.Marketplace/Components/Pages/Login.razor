@@ -89,6 +89,12 @@ else
             @* ‏(‏2026-10-29، A2) المِفتاحُ إلى القَناةِ الأُخرى الَّتي يَعرِضُها المَتجَر — في الخُطوَةِ الأُولى وَحدَها. *@
             @if (Stage != "verify")
             {
+                @* ‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1) والثانِيَةُ تُدخِلُ مَن رَبَطَها ولا تُسَجِّل (`LoginChannels.Registers`) — يُقالُ قَبلَ أَن
+                   يُرسَلَ رَمزٌ لا يَفتَح؛ وصَفحَةُ قَناةِ المَتجَرِ بايتاتُها كَما كانَت. *@
+                @if (!Services.LoginChannels.Registers(Tenant.AuthChannel, Active))
+                {
+                    <p class="ac-auth-back">@L.Markup("auth.login.second_channel_hint")</p>
+                }
                 @foreach (var other in Offered.Where(c => c != Active))
                 {
                     <p class="ac-auth-back">
@@ -210,6 +216,8 @@ else
         "nafath_unavailable" => L["auth.login.err_nafath_unavailable"],
         // ‏(‏2026-10-29، A2) بابُ قَناةٍ لا يَعرِضُها المَتجَر (`LoginChannels.NotOffered`).
         "channel_not_offered" => L["auth.login.err_channel_not_offered"],
+        // ‏(‏2026-10-30، A2) رَمزٌ صَحيحٌ إلى قَناةٍ ثانِيَةٍ لا يَحمِلُ وَسيلَتَها حِسابٌ مُتَحَقَّقاً مِنها (`AuthHandlers.NotLinked`).
+        ACommerce.Kit.Auth.Server.AuthHandlers.NotLinked => L["auth.login.err_contact_not_linked"],
         _                => null
     };
 }
