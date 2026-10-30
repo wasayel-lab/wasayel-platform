@@ -538,6 +538,18 @@ public sealed class GatewayPayments
         => await _deals.AttachRefAsync(tenantSlug, dealId, ExpiryToldRef, "1", ExpiredUntold, CancellationToken.None);
 
     /// <summary>
+    /// <para><b>ما بَقِيَ عَلى فاتورَةِ الصَفقَةِ يُطالَبُ بِه الآن</b> (‏2026-10-30، جَولَةُ الإصلاحِ الثانِيَةُ لِلمَسار F3؛ تَوصيفُه <c>0c2cd09</c>): الصَفقَةُ وأَخَواتُها كَما سَمّاها
+    /// مَرجِعُها (<see cref="DealsService.InvoiceSiblingsAsync"/>) مُحَمَّلَةً الآن، ثُمَّ <see cref="GatewayInvoiceShare.OwedOnInvoice"/> بِحَرفِه — قائِمَةٌ لَم يُكتَب دَفعُها، والصَفقَةُ
+    /// أَوَّلُها إن كانَت مِنها. <b>شَرطُ إلغاءِ المُهلَةِ نَفسُه</b> (<see cref="GatewayInvoiceClosing.Owed"/>، يُمَرَّرُ <c>stillDue</c> في <see cref="SettleAsync"/>) بِلا نِداءٍ إلى
+    /// البَوّابَة: يَسأَلُه مُعالِجُ المُهلَةِ حينَ لا يُجيبُ الجَلب، و<see cref="GatewayInvoiceExpiry.GaveUpAsync"/> قَبلَ أَن يُخبِرَ صاحِبَ المَتجَر. فارِغَةٌ لِصَفقَةٍ غائِبَةٍ أَو بِلا
+    /// فاتورَة. و«نِزاعٌ» لَم يُقبَض لا يُحسَبُ هُنا: المُهلَةُ لا تُلغيه (<c>Active</c> وَحدَها)، وصاحِبُ المَتجَرِ لا يُلغيه بِالإلغاءِ العامّ — فَلا يُقالُ لَه «أَلغِه» (قَرارُ «أ» F3-R2·١).</para>
+    /// </summary>
+    public async Task<IReadOnlyList<Deal>> OwedOnInvoiceAsync(string tenantSlug, Guid dealId, CancellationToken ct = default)
+        => await _deals.LoadAsync(tenantSlug, dealId, ct) is { } deal
+            ? GatewayInvoiceShare.OwedOnInvoice(deal, await _deals.InvoiceSiblingsAsync(tenantSlug, deal, ct))
+            : Array.Empty<Deal>();
+
+    /// <summary>
     /// <para><b>التَسوِيَةُ بَعدَ الجَلب — مَوضِعٌ واحِدٌ لِلتَحَقُّقِ ولِلمُهلَة</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى — نُقِلَ مِن جِسمِ <see cref="VerifyAsync"/> بِحَرفِه
     /// وتَعليقاتِه، فَصُفوفُ التَحَقُّقِ كَما هي): البَوّابَةُ النَقِيَّةُ أَوَّلاً، ثُمَّ إمّا الكاتِبانِ (الدَفعُ و«دَفع» بِاسمِ المَنصَّة)، وإمّا الإغلاقُ والمُهلَة، وإمّا رَمزُها.</para>
     /// </summary>

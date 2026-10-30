@@ -384,4 +384,94 @@ public class LiveScheduledExpiryProofTests(ITestOutputHelper output)
             }
         }
     }
+
+    /// <summary>
+    /// <para><b>طَلَبٌ مَدفوعٌ والبَوّابَةُ تُجيبُ ‏503 ساعَةَ تَحينُ مُهلَتُه</b> (‏2026-10-30، جَولَةُ الإصلاحِ الثانِيَةُ لِلمَسار F3؛ تَوصيفُه <c>0c2cd09</c> — مُراجَعَةُ <c>cc71027</c>
+    /// الحاجِبَة): الرِسالَةُ تَحينُ لِكُلِّ فاتورَةٍ ولو دُفِعَت، فَكانَ جَلبٌ فاشِلٌ يُميتُها ويُخبِرُ صاحِبَ المَتجَرِ «أَلغِه» عَن طَلَبٍ مَدفوع. اليَوم، عَلى القاعِدَةِ وصُندوقِها المُستَديم:
+    /// <b>مُحاوَلَةٌ واحِدَة</b>، و<b>لا صَفَّ</b> في <c>platform.wolverine_dead_letters</c>، و<b>لا إشعارَ</b> لِصاحِبِ المَتجَر، والصَفقَةُ قائِمَةٌ مَقبوضَة.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_paid_order_whose_gateway_answers_503_at_expiry_lands_no_dead_letter_and_no_owner_notice()
+    {
+        if (!Enabled) return;
+
+        var attempts = 0;
+        var failing = new MoyasarScriptedHandler();
+        for (var i = 0; i < 8; i++)
+            failing.ThenDoing(() => Interlocked.Increment(ref attempts), HttpStatusCode.ServiceUnavailable, "<html>upstream</html>");
+        var slug = "zz-exppaid-" + Guid.NewGuid().ToString("N")[..8];
+        var (buyer, owner) = (Guid.NewGuid(), Guid.NewGuid());
+        var kek = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        Guid dealId = default;
+        await using var host = BuildApp(kek, failing, shiftClock: false);
+        await host.StartAsync();
+        var store = host.Services.GetRequiredService<IDocumentStore>();
+        try
+        {
+            var binding = PaymentsBinding(host.Services.GetRequiredService<ProviderVault>(), sealedFor: slug);
+            binding.TenantSlug = slug;
+            await using (var s = store.LightweightSession(slug)) { s.Store(binding); await s.SaveChangesAsync(); }
+            await using (var s = store.LightweightSession())
+            {
+                s.Store(new ACommerce.Kit.Tenants.Tenant { Id = slug, Name = "مَتجَر", OwnerUserId = owner });
+                await s.SaveChangesAsync();
+            }
+            using (var scope = host.Services.CreateScope())
+            {
+                var deals = scope.ServiceProvider.GetRequiredService<DealsService>();
+                var born = await deals.StartAsync(slug, "marketplace", buyer, "مُشتَرٍ", null, "سِلعَة", 100m, GatewayPayments.MarkedAtBirth(new()
+                {
+                    [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.Card,
+                }, viaGateway: true));
+                await deals.AttachRefAsync(slug, born.Id, GatewayPaymentProof.InvoiceRef, InvoiceId);
+                await deals.AttachRefAsync(slug, born.Id, "payment_status", nameof(PaymentStatus.Captured));   // دُفِعَت قَبلَ المُهلَة
+                dealId = born.Id;
+                await scope.ServiceProvider.GetRequiredService<IMessageBus>().SendAsync(new GatewayInvoiceExpiryDue(slug, dealId));
+            }
+
+            var deadline = Stopwatch.StartNew();
+            while (deadline.Elapsed < TimeSpan.FromSeconds(60) && Volatile.Read(ref attempts) == 0) await Task.Delay(200);
+            await Task.Delay(TimeSpan.FromSeconds(9));   // أَطوَلُ مِن الإعادَتَينِ الأولَيَين (‏1 ثُمَّ ‏5 ثَوانٍ) — فَإعادَةٌ لَو وَقَعَت تُرى
+            var dead = await DeadLettersAsync(dealId);
+            List<Notification> told;
+            await using (var q = store.QuerySession(slug))
+                told = (await Marten.QueryableExtensions.ToListAsync(q.Query<Notification>())).Where(n => n.UserId == owner).ToList();
+            Deal? deal;
+            await using (var q = store.QuerySession(slug)) deal = await q.LoadAsync<Deal>(dealId);
+            output.WriteLine($"مُحاوَلات: {Volatile.Read(ref attempts)} · بَعدَ {deadline.Elapsed.TotalSeconds:0.0}ث · ميتَة: {dead.Count} · إشعاراتُ المالِك: {told.Count} · " +
+                             $"الصَفقَة {deal?.Status} مَقبوضَة={deal is not null && DealsService.IsCaptured(deal)}");
+
+            Assert.Equal(1, Volatile.Read(ref attempts));
+            Assert.Empty(dead);
+            Assert.Empty(told);
+            Assert.Equal(DealStatus.Active, deal!.Status);
+            Assert.True(DealsService.IsCaptured(deal));
+        }
+        finally
+        {
+            await host.StopAsync();
+            await using (var conn = new NpgsqlConnection(ResilientConnection))
+            {
+                await conn.OpenAsync();
+                var ids = (await DeadLettersAsync(dealId)).Select(d => d.Id).ToArray();
+                await using var cmd = new NpgsqlCommand("delete from platform.wolverine_dead_letters where id = any(@ids)", conn);
+                cmd.Parameters.AddWithValue("ids", ids);
+                await cmd.ExecuteNonQueryAsync();
+            }
+            await DeleteEnvelopesAsync(dealId);
+            await using var cleanup = LiveDealConcurrencyProofTests.BuildStore();
+            await using (var s = cleanup.LightweightSession(slug))
+            {
+                foreach (var d in await Marten.QueryableExtensions.ToListAsync(s.Query<Deal>())) s.Delete(d);
+                foreach (var b in await Marten.QueryableExtensions.ToListAsync(s.Query<TenantProviderBinding>())) s.Delete(b);
+                foreach (var n in await Marten.QueryableExtensions.ToListAsync(s.Query<Notification>())) s.Delete(n);
+                await s.SaveChangesAsync();
+            }
+            await using (var s = cleanup.LightweightSession())
+            {
+                s.Delete<ACommerce.Kit.Tenants.Tenant>(slug);
+                await s.SaveChangesAsync();
+            }
+        }
+    }
 }

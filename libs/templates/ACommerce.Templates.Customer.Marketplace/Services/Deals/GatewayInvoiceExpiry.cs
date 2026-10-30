@@ -49,7 +49,11 @@ public static class GatewayInvoiceExpiryHandler
         // (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3؛ تَوصيفُه `4bc251c` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وجَلبٌ فَشِلَ يُفشِلُ الرِسالَة** — بَعدَ ما أُخبِرَ بِه،
         // فَتَعمَلُ سِياسَتُها (`GatewayInvoiceExpiryFailures`): إعاداتٌ بِتَأَنٍّ ثُمَّ الرَسائِلُ الميتَةُ وسَطرُ الخَطَإِ وإشعارُ صاحِبِ المَتجَر. كانَ رَمزُ العَميلِ يُرجَعُ فَيَفرُغُ
         // المُعالِجُ بِلا خَطَأ، والطَلَبُ غَيرُ المَدفوعِ قائِمٌ بِلا نِهايَة ولا يَعلَمُ بِه أَحَد.
-        if (GatewayInvoiceExpiry.FailsTheMessage(res.Code)) throw new GatewayInvoiceExpiryFetchFailed(due.TenantSlug, due.DealId, res.Code!);
+        // (‏2026-10-30، جَولَةُ الإصلاحِ الثانِيَةُ لِلمَسار F3؛ تَوصيفُه `0c2cd09` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وما لا يُطالَبُ عَلى فاتورَتِه بِشَيءٍ لا يُفشِلُها** — الرِسالَةُ
+        // تَحينُ لِكُلِّ فاتورَةٍ ولو دُفِعَت أَو أُلغِيَت قَبلَها، فَجَلبٌ فَشِلَ عَلَيها كانَ يُميتُها ويَقولُ لِصاحِبِ المَتجَرِ «أَلغِه» عَن طَلَبٍ مَدفوع. الشَرطُ شَرطُ إلغائِها نَفسُه
+        // (`GatewayInvoiceClosing.Owed` عَبرَ `OwedOnInvoiceAsync`)، يُسأَلُ الآنَ بَعدَ الجَلبِ الفاشِل — فَدَفعٌ كُتِبَ بَينَ الإعاداتِ يُنهيها.
+        if (GatewayInvoiceExpiry.FailsTheMessage(res.Code) && (await gateway.OwedOnInvoiceAsync(due.TenantSlug, due.DealId, ct)).Count > 0)
+            throw new GatewayInvoiceExpiryFetchFailed(due.TenantSlug, due.DealId, res.Code!);
     }
 }
 
@@ -100,6 +104,8 @@ public static class GatewayInvoiceExpiry
     /// <para><b>ولا تَصدُقُ لِسِواها</b>: صَفقَةٌ غائِبَةٌ أَو بِلا فاتورَة (لا شَيءَ يُلغى)، وما أَجابَت بِه الفاتورَةُ نَفسُها — «لَم تُدفَع» (<c>on_hold</c>، <c>failed</c>…
     /// لا تُلغي بِاسمِ المُهلَة عَمداً، <see cref="GatewayPayments.ExpiryDue"/>) ومُغلَقَةٌ وما لا يُطابِق — والإلغاءُ والدَفعُ الثابِت.</para>
     /// </summary>
+    /// <remarks>(‏2026-10-30، جَولَةُ الإصلاحِ الثانِيَةُ لِلمَسار F3؛ تَوصيفُه <c>0c2cd09</c> — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): الدالَّةُ كَما هي — «لَم يُجِب الجَلب» — <b>والرِسالَةُ لا
+    /// تَفشَلُ بِها وَحدَها</b>: يَسأَلُ المُعالِجُ بَعدَها أَبَقِيَ عَلى الفاتورَةِ ما يُطالَبُ بِه (<see cref="GatewayPayments.OwedOnInvoiceAsync"/>)، فَما دُفِعَ أَو أُلغِيَ يَفرُغُ بِلا إعادَة.</remarks>
     public static bool FailsTheMessage(string? code)
         => code is not null && ACommerce.Kit.Payments.MoyasarFailures.All.Contains(code, StringComparer.Ordinal);
 
@@ -115,25 +121,45 @@ public static class GatewayInvoiceExpiry
     /// <para><b>ما يَقَعُ حينَ يَيأَسُ المُعالِج</b> — بَعدَ آخِرِ إعادَة، والرِسالَةُ إلى الرَسائِلِ الميتَة: سَطرُ خَطَأٍ يُسَمّي المَتجَرَ والصَفقَةَ والعَطَب، ثُمَّ إشعارٌ لِصاحِبِ
     /// المَتجَرِ في نِطاقِ خِدماتٍ جَديد. <b>وفَشَلُ الإشعارِ سَطرٌ ثانٍ لا يَرمي</b>: العَطَبُ الَّذي أَيأَسَ المُعالِجَ قَد يَكونُ القاعِدَةَ نَفسَها، والسَطرُ الأَوَّلُ قَد كُتِب.</para>
     /// </summary>
+    /// <remarks>(‏2026-10-30، جَولَةُ الإصلاحِ الثانِيَةُ لِلمَسار F3؛ تَوصيفُه <c>0c2cd09</c> — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>ولا يُخبَرُ صاحِبُ المَتجَرِ إلّا بِما يُطالَبُ بِه</b> —
+    /// تُقرَأُ صَفَقاتُ الفاتورَةِ الآن (<see cref="GatewayPayments.OwedOnInvoiceAsync"/>) قَبلَ السَطرِ والإشعار: لا شَيءَ يُطالَبُ بِه (دُفِعَت أَو أُلغِيَت، أَو الصَفقَةُ غائِبَة) ⇒ سَطرُ يَأسٍ
+    /// يَقولُ ذلكَ بِلا «the unpaid order stays» ولا إشعارَ ولا بَريد؛ وما يُطالَبُ بِه ⇒ السَطرُ بِحَرفِه وإشعارُ <b>أَوَّلِ صَفقَةٍ مِنه</b> (المَرجِعُ إن كانَ مِنه — كَما كان). وقِراءَةٌ تَرمي
+    /// ⇒ السَطرُ بِحَرفِه وسَطرُ «لَم يُخبَر» بِعَطَبِها — العَطَبُ الَّذي أَيأَسَ المُعالِجَ قَد يَكونُ القاعِدَةَ نَفسَها. كانَ يُخبِرُ عَن المَرجِعِ بِلا سُؤال: «تَعَذَّرَ إلغاءُ طَلَبِ … آلِيّاً
+    /// … أَلغِه» عَن طَلَبٍ مَدفوعٍ قائِمٍ أَو مُلغًى.</remarks>
     public static async ValueTask GaveUpAsync(IWolverineRuntime runtime, IEnvelopeLifecycle lifecycle, Exception error)
     {
         if (lifecycle.Envelope?.Message is not GatewayInvoiceExpiryDue due) return;
         var log = runtime.LoggerFactory.CreateLogger(typeof(GatewayInvoiceExpiry));
         // (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): وجَلبٌ فَشِلَ يُسَمّى بِرَمزِ العَميلِ لا بِنَوعِ الاستِثناءِ وَحدَه.
+        var cause = error is GatewayInvoiceExpiryFetchFailed failed ? $"{nameof(GatewayInvoiceExpiryFetchFailed)} {failed.Code}" : error.GetType().Name;
+        using var scope = runtime.Services.CreateScope();
+        IReadOnlyList<Deal>? owed = null;
+        Exception? unread = null;
+        try { owed = await scope.ServiceProvider.GetRequiredService<GatewayPayments>().OwedOnInvoiceAsync(due.TenantSlug, due.DealId); }
+        catch (Exception read) { unread = read; }
+        if (owed is { Count: 0 })
+        {
+            log.LogError(error, "[gateway] expiry {Slug}/{Deal} gave up after {Attempts} attempt(s) ← {Error} — moved to wolverine_dead_letters; nothing on its invoice is still owed (paid or cancelled), so the store owner is not told",
+                due.TenantSlug, due.DealId.ToString("N"), RetryCooldowns.Length + 1, cause);
+            return;
+        }
         log.LogError(error, "[gateway] expiry {Slug}/{Deal} gave up after {Attempts} attempt(s) ← {Error} — moved to wolverine_dead_letters; the unpaid order stays until the store owner cancels it",
-            due.TenantSlug, due.DealId.ToString("N"), RetryCooldowns.Length + 1,
-            error is GatewayInvoiceExpiryFetchFailed failed ? $"{nameof(GatewayInvoiceExpiryFetchFailed)} {failed.Code}" : error.GetType().Name);
+            due.TenantSlug, due.DealId.ToString("N"), RetryCooldowns.Length + 1, cause);
+        void NotTold(Exception e) => log.LogError("[gateway] expiry {Slug}/{Deal}: the store owner was not told ← {Error}", due.TenantSlug, due.DealId.ToString("N"), e.GetType().Name);
+        if (unread is not null)
+        {
+            NotTold(unread);
+            return;
+        }
         try
         {
-            using var scope = runtime.Services.CreateScope();
-            var deals = scope.ServiceProvider.GetRequiredService<DealsService>();
-            if (await deals.LoadAsync(due.TenantSlug, due.DealId) is { } deal)
+            if (owed is [var deal, ..])
                 await scope.ServiceProvider.GetRequiredService<DealNotices>().NotifyStoreOwnerAsync(due.TenantSlug, deal, DealNotices.OwnerAction.ExpiryFailed,
                     scope.ServiceProvider.GetRequiredService<L>());
         }
         catch (Exception notice)
         {
-            log.LogError("[gateway] expiry {Slug}/{Deal}: the store owner was not told ← {Error}", due.TenantSlug, due.DealId.ToString("N"), notice.GetType().Name);
+            NotTold(notice);
         }
     }
 }
