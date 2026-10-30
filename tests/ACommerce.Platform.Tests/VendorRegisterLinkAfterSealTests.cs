@@ -29,10 +29,10 @@ public class VendorRegisterLinkAfterSealTests(ITestOutputHelper output)
         return () => saves;
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b> (القاعِدَة ٣): الأَثَر (١) · الخَتمُ يَتَعَثَّر (٢) ثُمَّ يَنجَح (٣) · الحِفظُ الأَخيرُ بَعدَ تَسجيلِ الوارِدِ يَرمي (٤) — التَسجيلُ يَرمي،
-    /// والرَمزُ مَختوم، و<b>لا رابِطَ</b> في العَرضِ التالي.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (تَوصيفُه <c>0ca8d25</c> — كانَ <c>Today_a_failure_after_the_seal_loses_the_activation_link</c>: لا رابِط): الأَثَر (١) · الخَتمُ يَتَعَثَّر (٢)
+    /// ثُمَّ يَنجَح (٣) · الحِفظُ الأَخيرُ بَعدَ تَسجيلِ الوارِدِ يَرمي (٤) — التَسجيلُ يَرمي كَما كان والرَمزُ مَختوم، <b>والرابِطُ في العَرضِ التالي مَرَّةً</b> (المُوجِب).</summary>
     [Fact]
-    public async Task Today_a_failure_after_the_seal_loses_the_activation_link()
+    public async Task A_failure_after_the_seal_keeps_the_activation_link_for_the_next_view()
     {
         var owner = Guid.NewGuid();
         var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
@@ -50,6 +50,25 @@ public class VendorRegisterLinkAfterSealTests(ITestOutputHelper output)
         Assert.Equal(4, saves());
         Assert.Equal(1, w.Oto.CallsTo(OtoClient.WebhookPath));
         Assert.True(entry is { IsActive: true });
-        Assert.Null(link);
+        Assert.False(string.IsNullOrWhiteSpace(link));
+        Assert.Null(surface.TakeActivationLink(Slug, owner));   // مَرَّةً واحِدَة
+    }
+
+    /// <summary><b>السالِب</b>: الخَتمُ يَتَعَثَّرُ ثَلاثاً (<see cref="VendorShippingService.SealAttempts"/>) ⇒ <c>vendor_register_token_lost</c> و<b>لا رابِط</b> — الرَمزُ لَم يُحفَظ فَلا يُفَعَّلُ
+    /// حِسابٌ لا نَملِكُ رَمزَه (د12 (١) «أ» كَما هو).</summary>
+    [Fact]
+    public async Task A_seal_that_never_lands_still_withholds_the_activation_link()
+    {
+        var owner = Guid.NewGuid();
+        var w = await DealShipTests.ConfirmedCashDeal(vendorEntry: false);
+        var surface = VendorRegisterBucketTests.Surface(w);
+        FailSavesAt(w.Docs, 2, 3, 4);
+
+        var result = await surface.RegisterAsync(Slug, VendorShippingTests.Registrant(owner), VendorShippingTests.Form(), Inbound);
+        w.Docs.BeforeMember = null;
+
+        Assert.Equal(VendorShippingService.RegisterTokenLost, result.Code);
+        Assert.Null(surface.TakeActivationLink(Slug, owner));
+        Assert.Equal(0, w.Oto.CallsTo(OtoClient.WebhookPath));
     }
 }

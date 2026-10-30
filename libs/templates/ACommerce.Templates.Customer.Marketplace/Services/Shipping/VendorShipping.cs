@@ -715,7 +715,12 @@ public sealed class VendorShippingService
         }
 
         TenantProviderBinding saved;
-        try { saved = await ConnectAsync(tenantSlug, owner, token, inboundUrl, kept, ct); }
+        // (‏2026-10-30، تَدقيقُ الموجَة ١١ F2 — د12؛ تَوصيفُه `0ca8d25` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **الرابِطُ ساعَةَ يَنجَحُ الخَتمُ لا بَعدَ `ConnectAsync` كُلِّه**
+        // (`onSealed`) — كانَ تَسجيلُ الوارِدِ والحِفظُ الأَخيرُ بَعدَ الخَتمِ إن رَمى أَحَدُهُما يُضَيِّعانِه والرَمزُ مَحفوظ، فَحِسابٌ عِندَ OTO لا يُفَعَّلُ ولا بابَ لِلبائِع.
+        // وما لَم يُختَم لا رابِطَ لَه كَما قَرَّرَ د12 (١) «أ»: الخَتمُ يَرمي `TokenNotSealedException` قَبلَ النِداء.
+        var link = activationLink;
+        try { saved = await ConnectAsync(tenantSlug, owner, token, inboundUrl, kept, ct,
+                onSealed: link is null ? null : () => _reveal.Stash(tenantSlug, RevealKey(owner), link)); }
         catch (TokenNotSealedException) when (activationLink is not null)
         {
             // فُتِحَ الحِسابُ عِندَ OTO والرَمزُ لَم يُحفَظ: لا رابِط، ومَدخَلٌ فَعّالٌ بِلا رَمزٍ إن قَبِلَته القاعِدَةُ — فَيُفتَحُ بابُ اللَصق ولا يُفتَحُ حِسابٌ ثانٍ
@@ -734,7 +739,6 @@ public sealed class VendorShippingService
         }
         // وإعادَةُ تَسجيلِ الوارِدِ لِمَدخَلٍ قائِمٍ (لا حِسابَ جَديداً ولا رابِط) يَصعَدُ فيها الأَصلُ كَما كان.
         catch (TokenNotSealedException lost) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(lost.InnerException!).Throw(); throw; }
-        if (activationLink is not null) _reveal.Stash(tenantSlug, RevealKey(owner), activationLink);
         _log.LogInformation("[OTO] vendor {Slug}/{Owner} ← {Path} (webhook: {Webhook})", tenantSlug, owner.ToString("D"),
             kept is null ? "registered" : "inbound", saved.WebhookRefusal ?? (saved.WebhookId is null ? "—" : "registered"));
         return new(null, before, saved);
@@ -794,8 +798,10 @@ public sealed class VendorShippingService
     /// الخُطوَة 8): ١) الرَمزُ مَختوماً والسِرُّ وتَسجيلُه القائِمانِ كَما هُما؛ ٢) الوارِدُ بِسِرٍّ جَديدٍ بِرَمزِ البائِعِ نَفسِه — يُحَدَّثُ تَسجيلُه القائِم،
     /// وتَسجيلٌ يَرُدُّه حِسابٌ آخَرُ يُنشَأُ مِن جَديد؛ ٣) السِرُّ يُستَبدَلُ حينَ تَقبَلُه OTO وَحدَه، وإلّا يُكتَبُ رَمزُ فَشَلِها ويَبقى القَديم.</para>
     /// </summary>
+    /// <param name="onSealed">(‏2026-10-30، تَدقيقُ الموجَة ١١ F2): يُنادى مَرَّةً ساعَةَ يُحفَظُ الرَمزُ مَختوماً وقَبلَ أَيِّ نِداءٍ بَعدَه — بِه يَضَعُ التَسجيلُ رابِطَ التَفعيل.</param>
     private async Task<TenantProviderBinding> ConnectAsync(
-        string tenantSlug, Guid owner, string token, string inboundUrl, TenantProviderBinding? kept, CancellationToken ct)
+        string tenantSlug, Guid owner, string token, string inboundUrl, TenantProviderBinding? kept, CancellationToken ct,
+        Action? onSealed = null)
     {
         var def = VendorShippingSurface.Definition!;
         var refreshField = def.Credential.Fields.First(f => f.Kind == CredentialKinds.SecretKey);
@@ -813,6 +819,7 @@ public sealed class VendorShippingService
         // (‏2026-10-13، G5 M3 — ولا يُعادُ حَرفٌ فَوقَه: والحِفظُ يُعادُ — `SealAttempts` — قَبلَ أَن يُجابَ الطَلَب: رَمزُ التَسجيلِ تُعطيه OTO مَرَّة.)
         var saved = await SealWithRetryAsync(() => _providers.BindVendorAsync(tenantSlug, ProviderCapabilities.Delivery, owner, def.Slug,
             values, kept?.WebhookId, kept?.WebhookRefusal, by, ct), tenantSlug, owner, ct);
+        onSealed?.Invoke();
 
         // ٢) الوارِدُ بِسِرٍّ جَديدٍ وبِرَمزِ البائِعِ نَفسِه: يُحَدَّثُ تَسجيلُه القائِم، وتَسجيلٌ يَرُدُّه حِسابٌ آخَرُ يُنشَأُ مِن جَديد.
         var secret = OtoWebhookSignature.NewSecret();
