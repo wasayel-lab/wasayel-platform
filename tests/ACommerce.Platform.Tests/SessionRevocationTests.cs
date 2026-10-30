@@ -236,6 +236,31 @@ public class SessionRevocationTests(ITestOutputHelper output)
     public void The_writer_scan_refuses_a_hand_written_load_and_store(string body)
         => Assert.False(SavesThroughAccountWrites(body));
 
+    // ─── ذاكِرَةُ الإصدار (الموجَة ١٢ F1 البَند ٧، ‏2026-10-30): قِراءَةٌ فاتَتها الذاكِرَةُ قَبلَ رَفعٍ تُعيدُ حِفظَ ما قَبلَه ──────────────────
+
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم»</b>: <c>AccountVersionAsync</c> تَقرَأُ الإصدارَ ثُمَّ تَحفَظُه دَقيقَة، و<c>Forget</c> يَمحو المَحفوظَ فَورَ الرَفع. فَقِراءَةٌ بَدَأَت
+    /// قَبلَ الرَفعِ (فَأَعادَت الإصدارَ 0) ووَقَعَ الرَفعُ و<c>Forget</c> بَينَها وبَينَ الحِفظ تَحفَظُ 0 بَعدَ المَحو — فَيَعبُرُ رَمزُ ما قَبلَ الرَفعِ البَوّابَةَ دَقيقَةً
+    /// كامِلَة. الصَفُّ نَقِيٌّ بِالمَخزَنِ المُرَتَّب: القِراءَةُ الأُولى 0 ثُمَّ <c>Forget</c> قَبلَ أَن تَعودَ، والثانِيَةُ (إن وَقَعَت) 1. يُقلَبُ بِاسمِه في كوميتِ التَبديل.</para>
+    /// </summary>
+    [Fact]
+    public async Task Today_a_read_that_misses_the_cache_before_a_revoke_caches_the_old_version_after_the_forget()
+    {
+        var id = Guid.NewGuid();
+        var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        var (store, script) = ScriptedAccountStore.Of(
+            read => { if (read == 1) ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.Forget(cache, NameSlug, id); },
+            new User { Id = id, TenantSlug = NameSlug, SessionVersion = 0 }, new User { Id = id, TenantSlug = NameSlug, SessionVersion = 1 });
+        var first = await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.AccountVersionAsync(store, cache, NameSlug, id);
+        var next = await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.AccountVersionAsync(store, cache, NameSlug, id);
+        var refused = ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.IsRevoked(0, next);
+        output.WriteLine($"اليَوم: القِراءَةُ المُتَقاطِعَة ⇒ {first} · الطَلَبُ التالي ⇒ {next} مِن الذاكِرَة · قِراءاتُ المَخزَن {script.Reads} · رَمزُ ما قَبلَ الرَفعِ يُرَدّ {refused}");
+        Assert.Equal(0, first);
+        Assert.Equal(0, next);
+        Assert.Equal(1, script.Reads);
+        Assert.False(refused);
+    }
+
     // ─── الكاتِبُ بِاسمِ جَلسَةٍ يَسأَلُها عَلى القِراءَةِ الجَديدَة (مُراجَعَةُ الموجَة ١١ لِلمَسار F1، ‏2026-10-30) ───────────────────────
 
     /// <summary><c>SessionVersionGate.StillOpen</c> — نَقِيَّة: رَمزٌ حَيٌّ لِهذا الحِسابِ مَفتوح (مُوجَب)؛ ورَمزُ ما قَبلَ الرَفعِ، ورَمزُ المَحذوف، ورَمزُ حِسابٍ آخَر،
@@ -857,6 +882,50 @@ public class SessionRevocationTests(ITestOutputHelper output)
 /// <para><b>مَخزَنٌ بَديلٌ لِلبَوّابَة</b> — <c>QuerySession(tenant).LoadAsync&lt;T&gt;(id)</c> يُعيدُ الحِسابَ المُعطى إن كانَ مِن نَوعِه ومُعَرِّفُه
 /// المَطلوب، وإلّا <c>null</c>؛ وكُلُّ نِداءٍ آخَرَ يَرمي، فَلا يَمُرُّ شَيءٌ بِلا قَصد. صُفوفُ البَوّابَةِ تُقاسُ بِه بِلا قاعِدَة.</para>
 /// </summary>
+/// <summary>
+/// <para><b>مَخزَنُ حِسابٍ بِقِراءاتٍ مُرَتَّبَة</b> (‏2026-10-30، الموجَة ١٢ F1 البَند ٧): كُلُّ <c>LoadAsync&lt;User&gt;</c> يُعيدُ الحِسابَ التالي مِن القائِمَة —
+/// القِراءَةُ الأُولى «قَبلَ الرَفع» والثانِيَةُ «بَعدَه» — و<c>AfterRead</c> يَجري بَعدَ أَن تَثبُتَ قيمَةُ القِراءَةِ وقَبلَ أَن تَعودَ إلى المُنادي: فَـ«الرَفعُ ثُمَّ
+/// <c>Forget</c>» يَقَعُ بَينَ القِراءَةِ والحِفظِ في الذاكِرَةِ تَرتيباً حَتمِيّاً لا حَظّاً.</para>
+/// </summary>
+public class ScriptedAccountStore : System.Reflection.DispatchProxy
+{
+    private ScriptedAccountStore _root = null!;
+    private Queue<User> _reads = new();
+    private Action<int>? _afterRead;
+
+    /// <summary>عَدَدُ القِراءاتِ الَّتي بَلَغَت المَخزَن.</summary>
+    public int Reads { get; private set; }
+
+    public static (Marten.IDocumentStore Store, ScriptedAccountStore Script) Of(Action<int>? afterRead, params User[] reads)
+    {
+        var proxy = Create<Marten.IDocumentStore, ScriptedAccountStore>();
+        var script = (ScriptedAccountStore)(object)proxy;
+        script._root = script;
+        script._reads = new Queue<User>(reads);
+        script._afterRead = afterRead;
+        return (proxy, script);
+    }
+
+    protected override object? Invoke(System.Reflection.MethodInfo? method, object?[]? args)
+    {
+        switch (method!.Name)
+        {
+            case "QuerySession":
+                var session = Create<Marten.IQuerySession, ScriptedAccountStore>();
+                ((ScriptedAccountStore)(object)session)._root = _root;
+                return session;
+            case "DisposeAsync": return ValueTask.CompletedTask;
+            case "Dispose": return null;
+            case "LoadAsync" when method.IsGenericMethod && method.GetGenericArguments()[0] == typeof(User):
+                var read = _root._reads.Dequeue();
+                _root.Reads++;
+                _root._afterRead?.Invoke(_root.Reads);
+                return Task.FromResult<User?>(read);
+            default: throw new NotSupportedException($"المَخزَنُ المُرَتَّبُ لا يُجيبُ {method.Name}.");
+        }
+    }
+}
+
 public class AccountStub : System.Reflection.DispatchProxy
 {
     private object? _account;
