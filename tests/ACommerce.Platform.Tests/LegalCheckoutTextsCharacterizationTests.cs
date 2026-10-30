@@ -149,14 +149,30 @@ public class LegalCheckoutTextsCharacterizationTests
         Assert.Equal(3, Count(Regex.Match(baseline, "<ol>.*?</ol>", RegexOptions.Singleline).Value, "<li>"));
     }
 
-    /// <summary>تَلميحُ البِطاقَةِ يُسَمّي ما تُنادِيه البِطاقَةُ فِعلاً: مُزَوِّدَ دَفعِ المَنَصَّة.</summary>
+    /// <summary>تَلميحُ البِطاقَةِ يُسَمّي ما تُنادِيه البِطاقَةُ فِعلاً: مُزَوِّدَ دَفعِ المَنَصَّة — ويُرسَمُ بِجِوارِ خِيارِ البِطاقَةِ وَحدَه.
+    /// <para>‏(‏2026-10-30، تَدقيقُ الموجَة ١١ CO15 — أُعيدَ تَثبيتُه بِاسمِه) كانَ يَشتَرِطُ التَلميحَ مَرَّةً في <c>member-checkout-pay.html</c>
+    /// المُودَعَة — وتِلكَ لَقطَةٌ مِن بيئَةٍ عُرِضَت فيها البِطاقَة. والالتِقاطُ الكامِلُ مِن قاعِدَةٍ مَحَلِّيَّةٍ مَبذورَةٍ بِلا بَوّابَةِ دَفعٍ مَربوطَة،
+    /// والبِطاقَةُ لا تُعرَضُ بِلا مُزَوِّدٍ يَقبِض (‏<c>CardOffered</c>، ‏48d6c2a): فَيُرسَمُ فيها التَلميحُ صِفراً ولا خِيارَ بِطاقَة. فَصارَ الشَرطُ
+    /// علاقَةً لا عَدَداً: التَلميحُ في اللَقطَةِ بِعَدَدِ خِيارِ البِطاقَةِ فيها — ومَكانُه في المَصدَرِ داخِلَ فَرعِ <c>CardOffered</c> لا خارِجَه.</para></summary>
     [Fact]
-    public void The_card_hint_names_the_platforms_payment_provider()
+    public void The_card_hint_names_the_platforms_payment_provider_and_is_drawn_only_beside_the_card_option()
     {
         var value = LocaleCatalog.Find(LocaleCatalog.Arabic, CardHintKey);
         Assert.Equal("دَفعٌ بِالبِطاقَة عَبر مُزَوِّد دَفعِ المَنصَّة", value);
         Assert.DoesNotContain("هذا المَتجَر", value!, StringComparison.Ordinal);
-        Assert.Equal(1, Count(Baseline("member-checkout-pay.html"), $"<span>{value}</span>"));
+
+        var page = Baseline("member-checkout-pay.html");
+        var cardOption = Count(page, "name=\"pay\" value=\"card\"");
+        Assert.True(cardOption <= 1, $"خِيارُ البِطاقَةِ {cardOption} مَرّات في اللَقطَة.");
+        Assert.Equal(cardOption, Count(page, $"<span>{value}</span>"));
+
+        var razor = Template("Components", "Pages", "CheckoutPage.razor");
+        var branch = razor.IndexOf("@if (CardOffered)", StringComparison.Ordinal);
+        var hint = razor.IndexOf("L[\"checkout.payment.card_hint\"]", StringComparison.Ordinal);
+        var otherwise = razor.IndexOf("else if (GatewayRefusalText(", StringComparison.Ordinal);
+        Assert.True(branch > 0 && hint > branch && otherwise > hint,
+            $"التَلميحُ خارِجَ فَرعِ CardOffered (فَرع {branch} · تَلميح {hint} · وإلّا {otherwise}).");
+        Assert.Equal(hint, razor.LastIndexOf("L[\"checkout.payment.card_hint\"]", StringComparison.Ordinal));
     }
 
     // ─── (٢) ما يَبقى بِحَرفِه — لِماذا النُصوصُ الثَلاثَةُ لا تَصدُق ──────────
