@@ -326,8 +326,6 @@
 
         if (loaded is null) return;
         profile = Services.Patterns.PatternProfileResolver.Of(loaded);
-        goodsFirst = ACommerce.Templates.Customer.Marketplace.Gates.StoreRootDoor.GoodsFirst(
-            loaded.Roles, roleSet, Auth.IsAuthenticated, Role);
 
         // نِداءٌ واحِد بَدَل جَلسَةٍ مَفتوحَةٍ هُنا. والفَلتَرَةُ
         // انتَقَلَت مَعَه لا بَعدَه: عَدَدُ التَقييمات يُستَعلَم عَن
@@ -341,6 +339,11 @@
         cities       = home.Cities;
         reviewCounts = home.ReviewCounts;
         favIds       = home.FavouriteListingIds;
+
+        // ‏(‏2026-10-30، CO5) الدَورُ الفَعّالُ لِلمُسَجَّلِ — المَسارُ وإلّا المُخَزَّن، كَما يَقرَؤُه `activeRole` أَدناه — يَدخُلُ السُؤال، فَبَعدَ القِراءَة.
+        goodsFirst = ACommerce.Templates.Customer.Marketplace.Gates.StoreRootDoor.GoodsFirst(
+            loaded.Roles, roleSet, Auth.IsAuthenticated, Role,
+            !string.IsNullOrEmpty(Role) ? Role : home.StoredActiveRole);
 
         if (loaded.Roles.Count > 0)
         {

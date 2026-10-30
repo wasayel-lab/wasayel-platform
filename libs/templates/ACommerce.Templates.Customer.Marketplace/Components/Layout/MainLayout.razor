@@ -25,7 +25,7 @@
     var trimmed = path.TrimEnd('/');
     var isEntry = trimmed.Equals($"/{slug}", StringComparison.OrdinalIgnoreCase) &&
                   tenantHasRoles && !Auth.IsAuthenticated &&
-                  !ACommerce.Templates.Customer.Marketplace.Gates.StoreRootDoor.GoodsFirst(tenantRoles, roleSet, Auth.IsAuthenticated, urlRole);
+                  !ACommerce.Templates.Customer.Marketplace.Gates.StoreRootDoor.GoodsFirst(tenantRoles, roleSet, Auth.IsAuthenticated, urlRole, activeRoleSlug);
     var chromeHidden = isLogin || isEntry;
 
     var (topItems, bottomItems) = BuildNav(slug, activeRoleSlug, urlRole);

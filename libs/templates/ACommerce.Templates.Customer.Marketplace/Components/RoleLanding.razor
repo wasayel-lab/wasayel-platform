@@ -89,9 +89,14 @@
             <a href="@AuthSession.LinkFor(Slug, null, "explore")">@L.Markup("roles.landing.browse")</a>
         </div>
     }
-    @((MarkupString)"\n\n    ")<div class="acm-role-landing-foot">
-        <a href="@AuthSession.LinkFor(Slug, Role, $"login")">@L.Markup("roles.landing.have_account")</a>
-    </div>
+    @* ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ CO5) وسَطرُ «لَدَيكَ حِساب» لا يُرسَمُ لِمُسَجَّلٍ تَحتَ البِضاعَة: صارَ القِسمُ يُرسَمُ لِمُسَجَّلٍ بِلا دَورٍ فَعّال
+       (`StoreRootDoor.GoodsFirst`)، و«سَجِّل الدُخول» لِمَن دَخَلَ بابٌ يُرجِعُه إلى الصَفحَةِ نَفسِها (القاعِدَة ١٢). والبَوّابَةُ كَما كانَت. *@
+    @if (!(BelowGoods && Auth.IsAuthenticated))
+    {
+        @((MarkupString)"\n\n    ")<div class="acm-role-landing-foot">
+            <a href="@AuthSession.LinkFor(Slug, Role, $"login")">@L.Markup("roles.landing.have_account")</a>
+        </div>
+    }
 </div>
 
 @code {

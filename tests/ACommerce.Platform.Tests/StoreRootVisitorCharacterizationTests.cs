@@ -79,13 +79,15 @@ public class StoreRootVisitorCharacterizationTests
     // ─── (٢) ما يَبقى بِحَرفِه ───────────────────────────────────────────────
 
     /// <summary>
-    /// <para><b>مَن يَفتَحُ تَطبيقَ دَورٍ مُباشَرَةً</b> (<c>/ashare/r/{role}</c>) بِلا جَلسَةٍ يَرى البَوّابَةَ — والشَريطُ ظاهِرٌ لِأَنّ المَسارَ لَيسَ
-    /// الجَذرَ العاري. والسُؤالُ «ماذا يَرى الزائِرُ عَلى صَفحَةِ المَتجَر» لا يَمَسُّه: الدَورُ مُختارٌ في الرابِطِ نَفسِه.</para>
+    /// <para><b>مَن يَفتَحُ تَطبيقَ دَورِ بائِعٍ مُباشَرَةً</b> (<c>/ashare/r/{host|vendor}</c>) بِلا جَلسَةٍ يَرى البَوّابَةَ — والشَريطُ ظاهِرٌ لِأَنّ المَسارَ
+    /// لَيسَ الجَذرَ العاري. والسُؤالُ «ماذا يَرى الزائِرُ عَلى صَفحَةِ المَتجَر» لا يَمَسُّه: الدَورُ مُختارٌ في الرابِطِ نَفسِه.</para>
+    /// <para><b>مَقلوبٌ بِاسمِه ‏2026-10-30 (تَدقيقُ الموجَة ١١ CO5)</b> — وكانَ <c>A_visitor_who_opens_a_role_app_directly_sees_the_role_gateway_with_the_chrome</c>
+    /// بِالأَدوارِ الثَلاثَة: خَرَجَ مِنه تَطبيقُ دَورِ المُشتَري (<c>customer</c>) إلى الصَفِّ بَعدَه، وجِسمُ الحَلقَةِ بِحَرفِه لِلاثنَينِ الباقِيَين.</para>
     /// </summary>
     [Fact]
-    public void A_visitor_who_opens_a_role_app_directly_sees_the_role_gateway_with_the_chrome()
+    public void A_visitor_who_opens_a_seller_role_app_directly_sees_the_role_gateway_with_the_chrome()
     {
-        foreach (var role in new[] { "customer", "host", "vendor" })
+        foreach (var role in new[] { "host", "vendor" })
         {
             var html = Snapshot($"ashare-role-{role}");
 
@@ -99,6 +101,33 @@ public class StoreRootVisitorCharacterizationTests
         }
     }
 
+    /// <summary>
+    /// <para><b>‏2026-10-30 (تَدقيقُ الموجَة ١١ CO5)</b> — <b>تَطبيقُ دَورِ المُشتَري مَفتوحاً بِلا جَلسَة</b> (<c>/ashare/r/customer</c>، وهو <c>start_url</c>
+    /// تَطبيقِ المُشتَري المُثَبَّت) يَرى ما يَراه زائِرُ الجَذر: رَئيسِيَّةَ المُشتَري بِشَريطِها ثُمَّ قِسمَ البِطاقاتِ الثَلاث، بِلا رَأسِ البَوّابَةِ ولا رابِطِ
+    /// «تَصَفَّح دونَ تَسجيل»، وسَطرُ «لَدَيكَ حِساب» يَحمِلُ الدَورَ (<c>/ashare/r/customer/login</c>). اللَقطَةُ أُعيدَ تَثبيتُها بِالفَرقِ المَقيسِ وَحدَه.</para>
+    /// </summary>
+    [Fact]
+    public void A_visitor_who_opens_the_buyer_role_app_directly_sees_the_buyer_home_first_with_the_role_cards_below()
+    {
+        var html = Snapshot("ashare-role-customer");
+
+        Assert.Equal(1, Count(html, Hero));
+        Assert.Equal(1, Count(html, Actions));
+        Assert.Equal(1, Count(html, MobileNav));
+        Assert.Equal(1, Count(html, TopNav));
+        Assert.Equal(1, Count(html, Gateway));
+        Assert.Equal(0, Count(html, "acm-role-landing-head"));
+        Assert.Equal(3, Count(html, Card));
+        Assert.Equal(0, Count(html, RoleLandingBrowseLinkTests.BrowseText));
+        Assert.Equal(1, Count(html, "<div class=\"acm-role-landing-foot\"><a href=\"/ashare/r/customer/login\">"));
+
+        var hero = html.IndexOf(Hero, StringComparison.Ordinal);
+        var actions = html.IndexOf(Actions, StringComparison.Ordinal);
+        var cards = html.IndexOf(Gateway, StringComparison.Ordinal);
+        Assert.True(hero > 0 && actions > hero && cards > actions,
+            $"تَرتيبٌ غَيرُ المَقصود: الهيرو {hero}، الإجراءات {actions}، البِطاقات {cards}.");
+    }
+
     // ─── (٣) جَذرُ المَتجَرِ لِلمُسَجَّل (‏2026-10-30، تَدقيقُ الموجَة ١١ CO5 — التَوصيفُ قَبلَ التَبديل) ──────────
     //
     // لَقطَتانِ جَديدَتانِ بِالأَداةِ نَفسِها (`capture-appearance.sh`، مِلَفُّ `roleless` الجَديدُ ومِلَفُّ `member2`) عَلى قاعِدَةٍ مَحَلِّيَّةٍ مَبذورَة.
@@ -106,23 +135,30 @@ public class StoreRootVisitorCharacterizationTests
     // تَطبيقاتِ الأَدوارِ أَعلاه. **وما يَبقى بِحَرفِه**: صاحِبُ دَورِ البائِعِ عَلى الجَذرِ يَرى رَئيسِيَّةَ البائِع.
 
     /// <summary>
-    /// <para><b>اليَوم</b>: عُضوٌ مُسَجَّلٌ بِلا دَورٍ فَعّالٍ (<c>owner-test</c>، فيه دَورُ مُشتَرٍ <c>customer</c>) يَرى عَلى <c>/owner-test</c>
-    /// البَوّابَةَ صَفحَةً كامِلَة — رَأسُها وبِطاقاتُها وسَطرُ «لَدَيكَ حِساب» — بِلا هيرو ولا إجراءات، والشَريطُ ظاهِرٌ (مُسَجَّل).
-    /// بَينَما زائِرُ الجَذرِ نَفسِه يَرى البِضاعَةَ أَوَّلاً (‏ADR-048).</para>
+    /// <para><b>مَقلوبٌ بِاسمِه ‏2026-10-30 (تَدقيقُ الموجَة ١١ CO5)</b> — وكانَ <c>Today_a_signed_in_member_without_an_active_role_sees_the_role_gateway_on_the_store_root</c>
+    /// (‏<c>d453ac4</c>): البَوّابَةُ صَفحَةً كامِلَةً بِرَأسِها وبِطاقاتِها الخَمسِ وسَطرِ «لَدَيكَ حِساب»، بِلا هيرو ولا إجراءات. <b>والآن</b> عُضوٌ مُسَجَّلٌ بِلا دَورٍ
+    /// فَعّالٍ (<c>owner-test</c>، فيه دَورُ مُشتَرٍ) يَرى رَئيسِيَّةَ المُشتَري ثُمَّ البِطاقاتِ الخَمسَ قِسماً تَحتَها، **بِلا سَطرِ «لَدَيكَ حِساب»** (هُوَ مُسَجَّل —
+    /// القاعِدَة ١٢) وبِلا رابِطِ «دونَ تَسجيل».</para>
     /// </summary>
     [Fact]
-    public void Today_a_signed_in_member_without_an_active_role_sees_the_role_gateway_on_the_store_root()
+    public void A_signed_in_member_without_an_active_role_sees_the_buyer_home_first_with_the_role_cards_below()
     {
         var html = Snapshot("roleless-store-root");
 
-        Assert.Equal(1, Count(html, Gateway));
-        Assert.Equal(1, Count(html, "acm-role-landing-head"));
-        Assert.Equal(5, Count(html, Card));
-        Assert.Equal(1, Count(html, "<div class=\"acm-role-landing-foot\"><a href=\"/owner-test/login\">"));
-        Assert.Equal(0, Count(html, Hero));
-        Assert.Equal(0, Count(html, Actions));
+        Assert.Equal(1, Count(html, Hero));
+        Assert.Equal(1, Count(html, Actions));
         Assert.Equal(1, Count(html, MobileNav));
         Assert.Equal(1, Count(html, TopNav));
+        Assert.Equal(1, Count(html, Gateway));
+        Assert.Equal(0, Count(html, "acm-role-landing-head"));
+        Assert.Equal(5, Count(html, Card));
+        Assert.Equal(0, Count(html, "acm-role-landing-foot"));
+
+        var hero = html.IndexOf(Hero, StringComparison.Ordinal);
+        var actions = html.IndexOf(Actions, StringComparison.Ordinal);
+        var cards = html.IndexOf(Gateway, StringComparison.Ordinal);
+        Assert.True(hero > 0 && actions > hero && cards > actions,
+            $"تَرتيبٌ غَيرُ المَقصود: الهيرو {hero}، الإجراءات {actions}، البِطاقات {cards}.");
     }
 
     /// <summary>

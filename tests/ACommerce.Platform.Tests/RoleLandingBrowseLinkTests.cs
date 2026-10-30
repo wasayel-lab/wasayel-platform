@@ -71,20 +71,25 @@ public class RoleLandingBrowseLinkTests
     /// <para><b>قُلِبَ ‏2026-10-29 (قَرارُ المالِك د34، ‏ADR-048)</b> — وكانَ <c>The_live_baselines_of_the_role_gateway_carry_the_link_once_above_the_have_account_line</c>
     /// بِأَربَعِ لَقَطات: <c>ashare-portal</c> صارَت رَئيسِيَّةَ المُشتَري والبِطاقاتُ قِسمٌ تَحتَها بِلا الرابِط (زائِرُها يَتَصَفَّحُ الآن)،
     /// فَالحامِلاتُ ثَلاثٌ — صَفَحاتُ <c>/ashare/r/{role}</c> — وسَطرُ الدُخولِ في <c>ashare-portal</c> باقٍ مَرَّةً.</para>
+    /// <para><b>وقُلِبَ ‏2026-10-30 (تَدقيقُ الموجَة ١١ CO5)</b> — وكانَ <c>…_and_the_store_root_below_the_goods_does_not</c>: <c>ashare-role-customer</c> صارَت
+    /// رَئيسِيَّةَ المُشتَري والبِطاقاتُ تَحتَها بِلا الرابِط (زائِرُ تَطبيقِ المُشتَري يَتَصَفَّحُ الآن)، فَالحامِلَتانِ صَفحَتا <c>/ashare/r/host</c> و<c>/ashare/r/vendor</c>،
+    /// وسَطرُ الدُخولِ باقٍ مَرَّةً في كُلٍّ مِن الصَفحَتَينِ اللَّتَينِ تَحتَ البِضاعَة.</para>
     /// </summary>
     [Fact]
-    public void The_live_baselines_of_the_role_gateway_carry_the_link_once_above_the_have_account_line_and_the_store_root_below_the_goods_does_not()
+    public void The_live_baselines_of_the_role_gateway_carry_the_link_once_above_the_have_account_line_and_the_pages_below_the_goods_do_not()
     {
         var appearance = Path.Combine(RepoRoot, "tests", "characterization", "appearance");
         var link = $"    <div class=\"acm-role-landing-foot\"><a href=\"/ashare/explore\">{BrowseText}</a></div>\n\n";
 
-        var root = File.ReadAllText(Path.Combine(appearance, "i18n-baseline", "ashare-portal.html"));
-        Assert.Empty(Regex.Matches(root, Regex.Escape(BrowseText)));
-        Assert.Single(Regex.Matches(root, Regex.Escape("<div class=\"acm-role-landing-foot\"><a href=\"/ashare/login\">")));
+        foreach (var (page, login) in new[] { ("ashare-portal", "/ashare/login"), ("ashare-role-customer", "/ashare/r/customer/login") })
+        {
+            var below = File.ReadAllText(Path.Combine(appearance, "i18n-baseline", page + ".html"));
+            Assert.Empty(Regex.Matches(below, Regex.Escape(BrowseText)));
+            Assert.Single(Regex.Matches(below, Regex.Escape($"<div class=\"acm-role-landing-foot\"><a href=\"{login}\">")));
+        }
 
         var gateway = new Dictionary<string, string>
         {
-            ["ashare-role-customer"] = "/ashare/r/customer/login",
             ["ashare-role-host"]     = "/ashare/r/host/login",
             ["ashare-role-vendor"]   = "/ashare/r/vendor/login",
         };
