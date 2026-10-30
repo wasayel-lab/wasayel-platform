@@ -173,7 +173,8 @@ public class GatewayInvoiceExpiryTests(ITestOutputHelper output)
         Assert.True(at >= 0, "أَداةٌ عَمياء: لا نُقطَةَ تَحَقُّق.");
         var body = file[at..file.IndexOf(".DisableAntiforgery();", at, StringComparison.Ordinal)];
         var paid = body.IndexOf("await notices.NotifyPaidAsync(slug, res.Confirmed, l);", StringComparison.Ordinal);
-        var expired = body.IndexOf("await notices.NotifyPaymentExpiredAsync(slug, res.Expired, l);", StringComparison.Ordinal);
+        // (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3): والسَطرُ يَسِمُ كُلَّ صَفقَةٍ بَعدَ إشعاراتِها — فَإشعارٌ يَرمي هُنا تُخبِرُ بِه رِسالَةُ المُهلَة.
+        var expired = body.IndexOf("await notices.NotifyPaymentExpiredAsync(slug, res.Expired, l, told: id => gateway.MarkExpiryToldAsync(slug, id));", StringComparison.Ordinal);
         Assert.True(paid > 0 && expired > paid, $"الدَفع {paid} ← المُهلَة {expired}");
 
         var keys = new[] { "notifications.deal_payment_expired.title", "notifications.deal_payment_expired.body",
@@ -410,7 +411,8 @@ public class GatewayInvoiceExpiryTests(ITestOutputHelper output)
         Assert.DoesNotContain("IncludeAssembly", expiry, StringComparison.Ordinal);
         var ask = expiry.IndexOf("gateway.ExpireAsync(due.TenantSlug, due.DealId, l, ct)", StringComparison.Ordinal);
         var paid = expiry.IndexOf("notices.NotifyPaidAsync(due.TenantSlug, res.Confirmed, l, ct)", StringComparison.Ordinal);
-        var expired = expiry.IndexOf("notices.NotifyPaymentExpiredAsync(due.TenantSlug, res.Expired, l, ct)", StringComparison.Ordinal);
+        // (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3): والسَطرُ يَسِمُ كُلَّ صَفقَةٍ بَعدَ إشعاراتِها.
+        var expired = expiry.IndexOf("notices.NotifyPaymentExpiredAsync(due.TenantSlug, res.Expired, l, ct, told: id => gateway.MarkExpiryToldAsync(due.TenantSlug, id))", StringComparison.Ordinal);
         Assert.True(ask > 0 && paid > ask && expired > paid, $"تَسوِيَة {ask} ← دَفع {paid} ← مُهلَة {expired}");
 
         var opts = new Wolverine.WolverineOptions();

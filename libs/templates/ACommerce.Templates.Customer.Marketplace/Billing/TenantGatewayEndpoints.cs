@@ -50,7 +50,8 @@ public static class TenantGatewayEndpoints
                 : Services.Deals.GatewayReturn.RateLimited(dealRef);
             await notices.NotifyPaidAsync(slug, res.Confirmed, l);
             // ومَن أَلغَته المَنصَّةُ بِانتِهاءِ المُهلَةِ يُخبَرُ مُشتَريه وكُلُّ بائِعٍ فيه (‏2026-10-29، قَرارُ المالِك د5 (٤)).
-            await notices.NotifyPaymentExpiredAsync(slug, res.Expired, l);
+            // (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3): وتُوسَمُ كُلٌّ بَعدَ إشعاراتِها — فَإشعارٌ يَرمي هُنا تُخبِرُ بِه رِسالَةُ المُهلَة.
+            await notices.NotifyPaymentExpiredAsync(slug, res.Expired, l, told: id => gateway.MarkExpiryToldAsync(slug, id));
             return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, Services.Deals.GatewayReturn.AfterVerify(res)));
         }).RequireFormBody().DisableAntiforgery();
 

@@ -50,6 +50,8 @@ public class GatewayExpiryFailureTests(ITestOutputHelper output)
     /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-30، CO2؛ تَوصيفُه <c>1e65236</c> — كانَ <c>Today_a_redelivery_after_a_crash_between_cancel_and_notify_tells_nobody</c>): انقِطاعٌ بَعدَ أَن
     /// أَلغى المُعالِجُ الصَفقَتَينِ وقَبلَ أَن يُخبِر، ثُمَّ يُعيدُ الوَكيلُ الرِسالَة ⇒ <b>يُخبَرُ المُشتَري وكُلُّ بائِعٍ مَرَّةً</b> (المُطالَبَةُ <c>gateway_expiry_told</c> تُكتَبُ قَبلَ
     /// الإشعار)، وإعادَةٌ ثالِثَةٌ لا تُخبِرُ أَحَداً.</para>
+    /// <para>(‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): «تُكتَبُ قَبلَ الإشعار» صارَ «بَعدَه» — والصَفُّ بِحَرفِه أَخضَر؛ وانقِطاعٌ
+    /// <b>بَعدَ</b> أَوَّلِ إشعارٍ يَقيسُه <c>GatewayExpiryNoticeRetryTests</c>.</para>
     /// </summary>
     [Fact]
     public async Task A_redelivery_after_a_crash_between_cancel_and_notify_tells_the_buyer_and_every_vendor_once()
@@ -76,7 +78,10 @@ public class GatewayExpiryFailureTests(ITestOutputHelper output)
     }
 
     /// <summary><b>والطَريقانِ لا يُكَرِّرانِ بَعضَهُما</b>: التَحَقُّقُ يُلغي عِندَ المُهلَةِ ويُطالِبُ بِإشعارِه فَيُخبِرُ مُناديه، ثُمَّ تَحينُ الرِسالَةُ المُجَدوَلَة — لا إشعارَ ثانٍ.
-    /// <b>والسالِب</b>: إلغاءٌ بِغَيرِ المُهلَة (صاحِبُ المَتجَر) لا تُطالِبُ بِه الرِسالَة.</summary>
+    /// <b>والسالِب</b>: إلغاءٌ بِغَيرِ المُهلَة (صاحِبُ المَتجَر) لا تُطالِبُ بِه الرِسالَة.
+    /// (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3؛ تَوصيفُه <c>8e19697</c> — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): «يُطالِبُ بِإشعارِه» صارَ «يُخبِرُ مُناديه ثُمَّ يَسِمُ» — فَبَينَ التَحَقُّقِ
+    /// والرِسالَةِ خُطوَةُ النُقطَةِ بِسَطرِها (<c>NotifyPaymentExpiredAsync(…, told: …)</c>)، وبِدونِها تُخبِرُ الرِسالَةُ بِما لَم يُخبَر بِه. وصَفُّ الإشعارِ الَّذي يَرمي في
+    /// <c>GatewayExpiryNoticeRetryTests</c>.</summary>
     [Fact]
     public async Task A_verify_that_cancelled_at_expiry_leaves_nothing_for_the_scheduled_message_and_other_cancels_are_never_claimed()
     {
@@ -87,6 +92,7 @@ public class GatewayExpiryFailureTests(ITestOutputHelper output)
                  .Then(HttpStatusCode.OK, GatewayExpiryRaceTests.Invoice(ids, "canceled"));
         var verified = await gateway.VerifyAsync(Slug, new DealPayer(Buyer), ids[0].ToString("N"), l);
         Assert.Equal(ids.OrderBy(i => i), verified.Expired.OrderBy(i => i));
+        Assert.Equal(2, await GatewayOwnerMoneyNoticeTests.Notices(w.Docs).NotifyPaymentExpiredAsync(Slug, verified.Expired, l, told: id => gateway.MarkExpiryToldAsync(Slug, id)));
         w.Moyasar.Then(HttpStatusCode.OK, GatewayExpiryRaceTests.Invoice(ids, "canceled"));
         var scheduled = await gateway.ExpireAsync(Slug, ids[0], l);
         Assert.Empty(scheduled.Expired);

@@ -44,7 +44,8 @@ public static class GatewayInvoiceExpiryHandler
     {
         var res = await gateway.ExpireAsync(due.TenantSlug, due.DealId, l, ct);
         await notices.NotifyPaidAsync(due.TenantSlug, res.Confirmed, l, ct);
-        await notices.NotifyPaymentExpiredAsync(due.TenantSlug, res.Expired, l, ct);
+        // (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3؛ تَوصيفُه `8e19697`): وكُلُّ صَفقَةٍ تُوسَمُ بَعدَ إشعاراتِها — فَإشعارٌ يَرمي يَترُكُها لِلإعادَة.
+        await notices.NotifyPaymentExpiredAsync(due.TenantSlug, res.Expired, l, ct, told: id => gateway.MarkExpiryToldAsync(due.TenantSlug, id));
         // (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3؛ تَوصيفُه `4bc251c` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وجَلبٌ فَشِلَ يُفشِلُ الرِسالَة** — بَعدَ ما أُخبِرَ بِه،
         // فَتَعمَلُ سِياسَتُها (`GatewayInvoiceExpiryFailures`): إعاداتٌ بِتَأَنٍّ ثُمَّ الرَسائِلُ الميتَةُ وسَطرُ الخَطَإِ وإشعارُ صاحِبِ المَتجَر. كانَ رَمزُ العَميلِ يُرجَعُ فَيَفرُغُ
         // المُعالِجُ بِلا خَطَأ، والطَلَبُ غَيرُ المَدفوعِ قائِمٌ بِلا نِهايَة ولا يَعلَمُ بِه أَحَد.

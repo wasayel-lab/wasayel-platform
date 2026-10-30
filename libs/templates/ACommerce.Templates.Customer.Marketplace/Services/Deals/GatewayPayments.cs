@@ -309,9 +309,14 @@ public sealed class GatewayPayments
     public const string ExpiryReasonKey = "pay.invoice.cancel_expired";
 
     /// <summary>
-    /// <para><b>عَلامَةُ «أُخبِرَ بِالمُهلَة»</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO2 — المُرَحَّلُ [S3·١]): يَكتُبُها <see cref="ClaimExpiryNoticesAsync"/> عَلى صَفقَةٍ أَلغَتها المُهلَةُ
+    /// <para><b>عَلامَةُ «أُخبِرَ بِالمُهلَة»</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO2 — المُرَحَّلُ [S3·١]): يَكتُبُها <c>ClaimExpiryNoticesAsync</c> عَلى صَفقَةٍ أَلغَتها المُهلَةُ
     /// <b>قَبلَ</b> أَن يُخبَرَ طَرَفاها — مُطالَبَةٌ بِالإشعارِ مَرَّةً (نَسَقُ المُطالَبَةِ في ‏ADR-036 الخُطوَة 2): فَرِسالَةٌ تُعادُ بَعدَ الإشعارِ لا تُخبِرُ ثانِيَة، وإعادَتُها بَعدَ
     /// انقِطاعٍ بَينَ الإلغاءِ والإشعارِ تُخبِرُ مَرَّة. داخِلِيٌّ: لا يُرسَمُ لِلطَرَفَين.</para>
+    /// <para>(‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3؛ تَوصيفُه <c>8e19697</c> — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>«قَبلَ» صارَ «بَعدَ»</b> — تُكتَبُ العَلامَةُ عَلى
+    /// كُلِّ صَفقَةٍ <b>بَعدَ</b> أَن يُحفَظَ إشعارُ بائِعِها ومُشتَريها (<see cref="MarkExpiryToldAsync"/>، يُناديه <see cref="DealNotices.NotifyPaymentExpiredAsync"/> لِكُلِّ صَفقَةٍ
+    /// بَعدَ إشعاراتِها). فَالمُطالَبَةُ قَبلَ الإرسالِ كانَت «مَرَّةً عَلى الأَكثَر»: إشعارٌ يَرمي فَتُعيدُه السِياسَةُ والإعادَةُ تَجِدُ الصَفَقاتِ مُطالَباً بِها فَلا تُخبِرُ أَحَداً.
+    /// واليَومَ «مَرَّةً عَلى الأَقَلّ» بِمَنعِ تَكرارٍ لِكُلِّ صَفقَة: ما لَم تُكتَب عَلامَتُه يُعادُ إشعارُه، وما كُتِبَت لا يُعاد — وآثارُ الرَسائِلِ يَحتَمِلُها التَكرارُ (القاعِدَة ٥).
+    /// و«ما يَنتَظِرُ الإشعار» لا يَحتاجُ عَلامَةً ثانِيَة: سَطرُ الإلغاءِ بِاسمِ المَنصَّةِ وسَبَبُ المُهلَةِ (<see cref="CancelledByExpiry"/>) يُكتَبانِ في كِتابَةِ الإلغاءِ نَفسِها.</para>
     /// </summary>
     public const string ExpiryToldRef = "gateway_expiry_told";
 
@@ -493,7 +498,8 @@ public sealed class GatewayPayments
         if (!HasInvoice(deal))
             return Logged(tenantSlug, new(deal.Id, null, DealPayAuthorization.InvoiceMissing));
 
-        var recovered = await ClaimExpiryNoticesAsync(tenantSlug, (GatewayInvoiceShare.DealsOn(deal) ?? Array.Empty<Guid>()).Prepend(deal.Id), ct);
+        // (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3؛ تَوصيفُه `8e19697` — ولا يُعادُ حَرفٌ فَوقَه): قِراءَةٌ لا مُطالَبَة — ما لَم يُخبَر بِه يُرجَعُ حَتّى تُكتَبَ عَلامَتُه بَعدَ إشعارِه.
+        var recovered = await ExpiredUntoldAsync(tenantSlug, (GatewayInvoiceShare.DealsOn(deal) ?? Array.Empty<Guid>()).Prepend(deal.Id), ct);
         GatewayVerifyResult With(GatewayVerifyResult r)
             => recovered.Count == 0 ? r : r with { Expired = recovered.Concat(r.Expired).Distinct().ToArray() };
 
@@ -510,21 +516,26 @@ public sealed class GatewayPayments
     }
 
     /// <summary>
-    /// <para><b>المُطالَبَةُ بِإشعارِ المُهلَة</b> (‏2026-10-30، CO2): لِكُلِّ صَفقَةٍ تَصدُقُ عَلَيها <see cref="ExpiredUntold"/> عَلى المَخزونِ داخِلَ الكِتابَة تُكتَبُ <see cref="ExpiryToldRef"/>
-    /// بِالكاتِبِ القائِم (<see cref="DealsService.AttachRefAsync(string, Guid, string, string, Func{Deal, bool}, CancellationToken)"/>)، وتُرجَعُ ما كَتَبَ عَلَيه <b>هذا النِداء</b> —
-    /// فَيُخبِرُ مُناديه بِها وَحدَها. <b>مَرَّةً عَلى الأَكثَر</b>: انقِطاعٌ بَينَ المُطالَبَةِ والإشعارِ يُضَيِّعُ الإشعارَ ولا يُكَرِّرُه — والصَفقَةُ في صَفحَتِها مُلغاةٌ بِسَبَبِها.</para>
+    /// <para><b>ما أَلغَته المُهلَةُ ولَم يُخبَر بِه</b> (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3 — حَلَّ مَحَلَّ <c>ClaimExpiryNoticesAsync</c>، المُطالَبَةِ قَبلَ الإرسالِ مِن
+    /// <c>f97e6c7</c>): قِراءَةٌ خالِصَةٌ لِكُلِّ صَفقَةٍ تَصدُقُ عَلَيها <see cref="ExpiredUntold"/> الآن، بِلا كِتابَة — فَيُخبِرُ مُناديها بِها ثُمَّ يَسِمُ كُلّاً بَعدَ إشعاراتِها
+    /// (<see cref="MarkExpiryToldAsync"/>). وما لَم يُوسَم — انقِطاعٌ أَو إشعارٌ رَمى — تُرجِعُه القِراءَةُ التالِيَة.</para>
     /// </summary>
-    private async Task<IReadOnlyList<Guid>> ClaimExpiryNoticesAsync(string tenantSlug, IEnumerable<Guid> dealIds, CancellationToken ct)
+    private async Task<IReadOnlyList<Guid>> ExpiredUntoldAsync(string tenantSlug, IEnumerable<Guid> dealIds, CancellationToken ct)
     {
-        var claimed = new List<Guid>();
+        var untold = new List<Guid>();
         foreach (var id in dealIds.Distinct())
-        {
-            var mine = false;
-            await _deals.AttachRefAsync(tenantSlug, id, ExpiryToldRef, "1", d => mine = ExpiredUntold(d), CancellationToken.None);
-            if (mine) claimed.Add(id);
-        }
-        return claimed;
+            if (await _deals.LoadAsync(tenantSlug, id, ct) is { } d && ExpiredUntold(d)) untold.Add(id);
+        return untold;
     }
+
+    /// <summary>
+    /// <para><b>أُخبِرَ طَرَفا صَفقَةٍ أَلغَتها المُهلَة — تُكتَبُ عَلامَتُها</b> (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3): <see cref="ExpiryToldRef"/> بِالكاتِبِ القائِم
+    /// (<see cref="DealsService.AttachRefAsync(string, Guid, string, string, Func{Deal, bool}, CancellationToken)"/>) وبِشَرطِ <see cref="ExpiredUntold"/> عَلى المَخزونِ داخِلَ الكِتابَة
+    /// — فَلا تُكتَبُ مَرَّتَين ولا عَلى صَفقَةٍ لَم تُلغِها المُهلَة. يُناديه <see cref="DealNotices.NotifyPaymentExpiredAsync"/> لِكُلِّ صَفقَةٍ <b>بَعدَ</b> إشعاراتِها، مِن المُعالِجِ ومِن
+    /// بابِ «تَحَقَّق». و<see cref="CancellationToken.None"/> بِقاعِدَةِ <c>/ship</c>: الإشعارُ وَقَعَ فَلا يُلغى تَدوينُه.</para>
+    /// </summary>
+    public async Task MarkExpiryToldAsync(string tenantSlug, Guid dealId)
+        => await _deals.AttachRefAsync(tenantSlug, dealId, ExpiryToldRef, "1", ExpiredUntold, CancellationToken.None);
 
     /// <summary>
     /// <para><b>التَسوِيَةُ بَعدَ الجَلب — مَوضِعٌ واحِدٌ لِلتَحَقُّقِ ولِلمُهلَة</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى — نُقِلَ مِن جِسمِ <see cref="VerifyAsync"/> بِحَرفِه
@@ -557,9 +568,10 @@ public sealed class GatewayPayments
                             tenantSlug, d.Id, order.Result.Violation?.Code);
                 }
                 // (‏2026-10-30، تَدقيقُ الموجَة ١١ CO2 — ولا يُعادُ حَرفٌ فَوقَه): وما أُلغِيَ يُطالَبُ بِإشعارِه قَبلَ أَن يُعادَ — فَلا يُخبِرُ المُنادي إلّا ما كَسَبَ مُطالَبَتَه.
+                // (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3؛ تَوصيفُه `8e19697` — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): «يُطالَبُ قَبلَ أَن يُعادَ» لَم يَعُد — ما أَلغاه هذا النِداءُ
+                // يُعادُ كُلُّه (إلغاءٌ واحِدٌ يَكسِبُ الكِتابَةَ فَلا يَتَكَرَّرُ بَينَ مُنادِيَين)، ويَسِمُه المُنادي بَعدَ إشعاراتِه (`MarkExpiryToldAsync`).
                 if (cancelled.Count > 0)
-                    return Logged(tenantSlug, new GatewayVerifyResult(deal.Id, null, GatewayReturn.InvoiceExpired)
-                        { Expired = (await ClaimExpiryNoticesAsync(tenantSlug, cancelled, ct)).ToArray() });
+                    return Logged(tenantSlug, new GatewayVerifyResult(deal.Id, null, GatewayReturn.InvoiceExpired) { Expired = cancelled.ToArray() });
             }
             return Logged(tenantSlug, new(deal.Id, null, admitted.Violation!.Code));
         }

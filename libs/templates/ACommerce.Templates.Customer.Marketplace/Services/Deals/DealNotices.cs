@@ -631,18 +631,25 @@ public sealed class DealNotices
     /// لِكُلِّ صَفقَةٍ أَلغاها التَحَقُّقُ <b>الآن</b> (<see cref="GatewayVerifyResult.Expired"/>) — بائِعُها بِالإشعارِ الواحِد (<see cref="NotifyVendorCancelledAsync"/>، والمُلغي
     /// المَنصَّةُ لا هُوَ)، وصاحِبُ المَتجَرِ إن بَقِيَت الفاتورَةُ مَفتوحَة (<see cref="NotifyStoreOwnerAsync"/>)، ثُمَّ المُشتَري بِـ<see cref="PaymentExpiredFor"/> — بِتَرتيبِ الأُنبوبِ
     /// نَفسِه. صَفقَةٌ لا تَزالُ قائِمَةً أَو لا توجَدُ تُتَجاوَز. تُرجِعُ عَدَدَ ما أُشعِرَ بِه المُشتَري.</para>
+    /// <para>(‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3؛ تَوصيفُه <c>8e19697</c> — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>و<paramref name="told"/> يُنادى لِكُلِّ صَفقَةٍ بَعدَ
+    /// إشعاراتِها</b> — أَو بَعدَ تَجاوُزِها — فَيَسِمُها المُنادي (<see cref="GatewayPayments.MarkExpiryToldAsync"/>)؛ وإشعارٌ يَرمي قَبلَه يَترُكُها بِلا عَلامَةٍ فَتُخبِرُ بِها
+    /// الإعادَة. و<c>null</c> لِمُنادٍ لا يَسِم.</para>
     /// </summary>
     public async Task<int> NotifyPaymentExpiredAsync(
-        string slug, IReadOnlyList<Guid> dealIds, L l, CancellationToken ct = default)
+        string slug, IReadOnlyList<Guid> dealIds, L l, CancellationToken ct = default, Func<Guid, Task>? told = null)
     {
-        var told = 0;
+        var buyers = 0;
         foreach (var id in dealIds)
         {
             Deal? deal;
             await using (var r = _store.LightweightSession(slug)) deal = await r.LoadAsync<Deal>(id, ct);
             // (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-2 — ولا يُعادُ حَرفٌ فَوقَه): ومُلغاةٌ قُبِضَ دَفعُها لا يُقالُ لِمُشتَريها «لَم يُخصَم مِنكَ شَيء» — كَذِبٌ يُناقِضُ «أ» S3·١٢؛
             // استِرجاعُها يُخبَرُ بِه صاحِبُ المَتجَرِ مِن `NotifyPaidAsync`.
-            if (deal is not { Status: DealStatus.Cancelled } || DealsService.IsCaptured(deal)) continue;
+            if (deal is not { Status: DealStatus.Cancelled } || DealsService.IsCaptured(deal))
+            {
+                if (told is not null) await told(id);
+                continue;
+            }
             await NotifyVendorCancelledAsync(slug, deal, GatewayPayments.ExpiryCanceller.ActorId, l, ct);
             await NotifyStoreOwnerAsync(slug, deal, l, ct);
             var n = PaymentExpiredFor(slug, deal, l, DateTime.UtcNow);
@@ -654,9 +661,10 @@ public sealed class DealNotices
             await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
             await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, PaymentExpiredPushBody(deal, l),
                 url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
-            told++;
+            buyers++;
+            if (told is not null) await told(id);
         }
-        return told;
+        return buyers;
     }
 
     /// <summary>مُعَرِّفُ البائِعِ العُضوِ إن كانَ هُوَ صاحِبَ الاستوديو <paramref name="studioUserId"/> نَفسَه (<see cref="SamePerson"/>)، وإلّا <c>null</c> — قِراءَتانِ
