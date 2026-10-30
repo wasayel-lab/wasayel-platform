@@ -589,7 +589,9 @@ public sealed class DealNotices
         {
             Deal? deal;
             await using (var r = _store.LightweightSession(slug)) deal = await r.LoadAsync<Deal>(id, ct);
-            if (deal is not { Status: DealStatus.Cancelled }) continue;
+            // (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-2 — ولا يُعادُ حَرفٌ فَوقَه): ومُلغاةٌ قُبِضَ دَفعُها لا يُقالُ لِمُشتَريها «لَم يُخصَم مِنكَ شَيء» — كَذِبٌ يُناقِضُ «أ» S3·١٢؛
+            // استِرجاعُها يُخبَرُ بِه صاحِبُ المَتجَرِ مِن `NotifyPaidAsync`.
+            if (deal is not { Status: DealStatus.Cancelled } || DealsService.IsCaptured(deal)) continue;
             await NotifyVendorCancelledAsync(slug, deal, GatewayPayments.ExpiryCanceller.ActorId, l, ct);
             await NotifyStoreOwnerAsync(slug, deal, l, ct);
             var n = PaymentExpiredFor(slug, deal, l, DateTime.UtcNow);

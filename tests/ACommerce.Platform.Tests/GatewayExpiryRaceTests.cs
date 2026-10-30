@@ -62,11 +62,12 @@ public class GatewayExpiryRaceTests(ITestOutputHelper output)
         => w.Docs.Stored.OfType<Notification>().Count(n => n.UserId == Buyer && n.Title == l["notifications.deal_payment_expired.title"]);
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم»</b> (القاعِدَة ٣، المَشهَدُ ١): جَلبُ المُهلَةِ يَرى «initiated» والإشعارُ يَكتُبُ الدَفعَ في الأَثناء — <b>تُلغى الصَفقَتانِ المَقبوضَتان</b>
-    /// بِاسمِ المَنصَّةِ ويُكتَبُ لَهُما «استِرجاعُه مُستَحَقّ»، ويُقالُ لِلمُشتَري مَرَّتَينِ «لَم يُخصَم مِنكَ شَيء».</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (تَوصيفُه <c>627c179</c> — كانَ <c>Today_the_expiry_cancels_deals_captured_while_it_fetched_and_tells_the_buyer_nothing_was_charged</c>:
+    /// تُلغى الصَفقَتانِ المَقبوضَتانِ ويُكتَبُ «استِرجاعُه مُستَحَقّ» ويُقالُ لِلمُشتَري مَرَّتَينِ «لَم يُخصَم مِنكَ شَيء»): جَلبُ المُهلَةِ يَرى «initiated» والإشعارُ يَكتُبُ
+    /// الدَفعَ في الأَثناء ⇒ <b>لا تُلغى صَفقَةٌ قُبِضَت</b> — الشَرطُ يُسأَلُ عِندَ الكِتابَة — ولا «لَم يُخصَم» ولا «استِرجاع».</para>
     /// </summary>
     [Fact]
-    public async Task Today_the_expiry_cancels_deals_captured_while_it_fetched_and_tells_the_buyer_nothing_was_charged()
+    public async Task The_expiry_does_not_cancel_deals_captured_while_it_fetched_and_says_nothing_was_charged_to_no_one()
     {
         var (w, gateway, ids) = await ExpiredCart();
         w.Moyasar.ThenDoing(PaidMeanwhile(w, ids), HttpStatusCode.OK, Invoice(ids, "initiated"))
@@ -79,19 +80,20 @@ public class GatewayExpiryRaceTests(ITestOutputHelper output)
         output.WriteLine($"الحال: {string.Join(" · ", deals.Select(d => $"{d.Status} مَقبوضَة={DealsService.IsCaptured(d)}"))} · «لَم يُخصَم»: {NothingChargedNotices(w, l)}");
         Assert.All(deals, d =>
         {
-            Assert.Equal(DealStatus.Cancelled, d.Status);
+            Assert.Equal(DealStatus.Active, d.Status);
             Assert.True(DealsService.IsCaptured(d));
-            Assert.Contains(d.Timeline, e => e.Action == DealEvent.GatewayRefundDue);
+            Assert.DoesNotContain(d.Timeline, e => e.Action == DealEvent.GatewayRefundDue || e.Action == "cancelled");
         });
-        Assert.Equal(2, NothingChargedNotices(w, l));
+        Assert.Equal(0, NothingChargedNotices(w, l));
     }
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم»</b> (القاعِدَة ٣، المَشهَدُ ٢): فاتورَةٌ بِصَفقَةٍ واحِدَةٍ انتَهَت مُهلَتُها، وحِفظُ إلغائِها يَرُدُّه تَعارُضُ نُسخَة — <b>لا إعادَة</b>: الصَفقَةُ
-    /// قائِمَةٌ والرِسالَةُ استُهلِكَت، ولا إشعار.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (تَوصيفُه <c>627c179</c> — كانَ <c>Today_a_single_deal_expiry_whose_cancel_hits_a_concurrent_write_leaves_the_unpaid_order_active</c>):
+    /// فاتورَةٌ بِصَفقَةٍ واحِدَةٍ انتَهَت مُهلَتُها، وحِفظُ إلغائِها يَرُدُّه تَعارُضُ نُسخَة ⇒ <b>يُعادُ مَرَّةً عَلى ما كُتِب</b> فَتُلغى مَرَّةً واحِدَةً بِسَطرٍ واحِد، وتُلغى فاتورَتُها
+    /// عِندَ البَوّابَة، وما كَتَبَه الكاتِبُ الآخَرُ باقٍ.</para>
     /// </summary>
     [Fact]
-    public async Task Today_a_single_deal_expiry_whose_cancel_hits_a_concurrent_write_leaves_the_unpaid_order_active()
+    public async Task A_single_deal_expiry_whose_cancel_hits_a_concurrent_write_is_retried_and_cancelled_once()
     {
         var (w, gateway, ids) = await ExpiredCart(onInvoice: 1);
         w.Moyasar.Then(HttpStatusCode.OK, Invoice(ids, "initiated", 10000)).Then(HttpStatusCode.OK, Invoice(ids, "initiated", 10000))
@@ -115,8 +117,30 @@ public class GatewayExpiryRaceTests(ITestOutputHelper output)
 
         var deal = Load(w, ids[0]);
         output.WriteLine($"المُهلَة: {res.Code} · أُلغِيَ {res.Expired.Count} · الصَفقَة {deal.Status}");
-        Assert.Empty(res.Expired);
-        Assert.Equal(DealStatus.Active, deal.Status);
+        Assert.Equal(new[] { ids[0] }, res.Expired);
+        Assert.Equal(GatewayReturn.InvoiceExpired, res.Code);
+        Assert.Equal(DealStatus.Cancelled, deal.Status);
+        Assert.Single(deal.Timeline, e => e.Action == "cancelled");
+        Assert.Contains(deal.Timeline, e => e.Note == "كاتِبٌ آخَر");
+        Assert.Equal($"PUT /v1/invoices/{InvoiceId}{MoyasarClient.CancelSuffix}", $"{w.Moyasar.Requests[^1].Method} {w.Moyasar.Requests[^1].RequestUri!.AbsolutePath}");
         Assert.False(armed);
+    }
+
+    /// <summary><b>السالِبُ لِلإشعار</b> (‏2026-10-30، C-PAY-2): مُلغاةٌ بِالمُهلَةِ قُبِضَ دَفعُها بَعدَ إلغائِها (الفاتورَةُ دُفِعَت قَبلَ أَن تُلغى عِندَ البَوّابَة) — لا يُقالُ لِمُشتَريها
+    /// «لَم يُخصَم مِنكَ شَيء»؛ ومُلغاةٌ غَيرُ مَقبوضَةٍ يُقالُ لَه كَما كان.</summary>
+    [Fact]
+    public async Task A_cancelled_deal_whose_payment_was_captured_is_never_told_nothing_was_charged()
+    {
+        var (w, _, ids) = await ExpiredCart();
+        Assert.Equal(2, (await w.Deals.CancelWholeInvoiceAsync(Slug, ids[0], GatewayPayments.ExpiryCanceller, "انتَهَت المُهلَة")).Cancelled.Count);
+        PaidMeanwhile(w, ids)();
+        Load(w, ids[1]).Refs["payment_status"] = "Authorized";   // الثانِيَةُ: لا قَبض — يُقالُ لَها كَما كان
+        var l = new L(new HttpContextAccessor());
+
+        var told = await GatewayOwnerMoneyNoticeTests.Notices(w.Docs).NotifyPaymentExpiredAsync(Slug, ids, l);
+
+        output.WriteLine($"أُخبِرَ المُشتَري: {told} · «لَم يُخصَم»: {NothingChargedNotices(w, l)}");
+        Assert.Equal(1, told);
+        Assert.Equal(1, NothingChargedNotices(w, l));
     }
 }

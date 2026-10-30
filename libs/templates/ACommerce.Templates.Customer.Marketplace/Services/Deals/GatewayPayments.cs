@@ -501,9 +501,11 @@ public sealed class GatewayPayments
                 var cancelled = new List<Guid>();
                 foreach (var d in invoiceDeals.Where(d => d.Status == DealStatus.Active && !cancelled.Contains(d.Id)))
                 {
-                    var order = await _deals.CancelWholeInvoiceAsync(tenantSlug, d.Id, ExpiryCanceller, reason, ct);
+                    // (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-2؛ تَوصيفُه `627c179` — ولا يُعادُ حَرفٌ فَوقَه): **وبِشَرطٍ عِندَ الكِتابَة** — ما قُبِضَ بَعدَ جَلبِ الفاتورَةِ
+                    // لا يُلغى (`GatewayInvoiceClosing.Owed` يُسأَلُ في جَلسَةِ الإلغاءِ نَفسِها)، ولا رُجوعَ إلى «الصَفقَةِ وَحدَها»، وتَعارُضٌ يُعادُ مَرَّة.
+                    var order = await _deals.CancelWholeInvoiceAsync(tenantSlug, d.Id, ExpiryCanceller, reason, ct, stillDue: GatewayInvoiceClosing.Owed);
                     cancelled.AddRange(order.Cancelled.Select(c => c.Id).Where(c => !cancelled.Contains(c)));
-                    if (!order.Result.Ok && order.Result.Violation?.Code != DealCancelAuthorization.DealNotActive)
+                    if (!order.Result.Ok && order.Result.Violation?.Code is not (DealCancelAuthorization.DealNotActive or DealsService.NoLongerDue))
                         _log.LogWarning("[gateway] verify {Slug}: invoice of deal {Deal} expired ← cancel {Code}",
                             tenantSlug, d.Id, order.Result.Violation?.Code);
                 }
