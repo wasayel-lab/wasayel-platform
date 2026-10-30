@@ -1002,6 +1002,43 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
         }
     }
 
+    /// <summary><b>مُوجَبٌ وسالِبٌ حَيّاً (‏2026-10-30، B-PRIV-2)</b>: مَوضوعُ مُحادَثَتِه المُباشِرَةِ «تَواصُل مَع {اسمِه}» يَصيرُ «تَواصُل مَع حِسابٌ مَحذوف» في مُعامَلَةِ الحَذف
+    /// (<see cref="AccountErasure.EraseSubject"/> عَبرَ <see cref="AccountErasure.EraseCopiesAsync"/>)، ومُحادَثَةُ غَيرِه بِالاسمِ نَفسِه كَما كُتِبَت.</summary>
+    [Fact]
+    public async Task A_deleted_members_name_leaves_his_direct_chat_subject_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = BuildStore();
+        var slug = "zz-erase-" + Guid.NewGuid().ToString("N")[..8];
+        const string name = "بائِعُ المُحادَثَة";
+        var me = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = name, Phone = "+966500000560" };
+        string Subject(string n) => ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "chats.direct.subject").Replace("{0}", n, StringComparison.Ordinal);
+        var mine = new Conversation { Id = Guid.NewGuid(), OwnerId = Guid.NewGuid(), OwnerName = "مُشتَرٍ", PartnerId = me.Id, PartnerName = name, Subject = Subject(name) };
+        var theirs = new Conversation { Id = Guid.NewGuid(), OwnerId = Guid.NewGuid(), OwnerName = "مُشتَرٍ", PartnerId = Guid.NewGuid(), PartnerName = name, Subject = Subject(name) };
+        try
+        {
+            await using (var s = store.LightweightSession(slug))
+            {
+                s.Store(me); s.Store(mine, theirs);
+                await s.SaveChangesAsync();
+            }
+            var counts = await EraseLikeTheDoorAsync(store, slug, me.Id);
+            await using var q = store.QuerySession(slug);
+            var a = (await q.LoadAsync<Conversation>(mine.Id))!;
+            var b = (await q.LoadAsync<Conversation>(theirs.Id))!;
+            output.WriteLine($"مُحادَثات {counts.Conversations} · مَوضوعُه: {a.Subject} · مُحادَثَةُ غَيرِه: {b.Subject}");
+            Assert.Equal((AccountDeletion.ErasedName, Subject(AccountDeletion.ErasedName)), (a.PartnerName, a.Subject));
+            Assert.Equal((name, Subject(name)), (b.PartnerName, b.Subject));
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            s.DeleteWhere<User>(u => u.Id != Guid.Empty); s.DeleteWhere<Conversation>(c => c.Id != Guid.Empty);
+            await s.SaveChangesAsync();
+        }
+    }
+
     /// <summary><b>مُوجَب (‏2026-10-30، G-2)</b>: عُضوٌ مِن فَريقِ المَتجَرِ أَلغى بِمِفتاحِ رَبطٍ صَفقَةً لَيسَ طَرَفَها (بابُ <c>/api/v1/deals/{id}/cancel</c>: سَطرُ الخَطِّ الزَمَنِيِّ
     /// بِمُعَرِّفِه، وإشعارُ المُشتَري بِاسمِ المِفتاحِ كَما أُصدِر — وقَد تَبَدَّلَ اسمُ حِسابِه بَعدَه)، ثُمَّ حَذَفَ حِسابَه: الاسمُ القَديمُ عَلى مِفتاحِه (د56) يُمحى مِن
     /// الإشعارِ أَيضاً، والمِفتاحُ «حِسابٌ مَحذوف».</summary>

@@ -122,6 +122,22 @@ public static class AccountErasure
         => (c.OwnerId == userId && Set(c.OwnerName, v => c.OwnerName = v))
          | (c.PartnerId == userId && Set(c.PartnerName, v => c.PartnerName = v));
 
+    /// <summary>
+    /// <para><b>واسمُه داخِلَ مَوضوعِ المُحادَثَة</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-2؛ تَوصيفُه <c>1075fc9</c>): بابُ المُحادَثَةِ المُباشِرَةِ يَكتُبُ
+    /// «تَواصُل مَع {اسمِه}» في <c>Subject</c>، وقائِمَةُ المُحادَثاتِ تَعرِضُه ما لَم تُرسَل رِسالَة، و«بَياناتي» تَحمِلُه. فَفي مُحادَثَةٍ هُوَ طَرَفُها يُستَبدَلُ كُلُّ اسمٍ لَه
+    /// كَلِمَةً تامَّةً (<see cref="ReplaceWhole"/>، الأَطوَلُ أَوَّلاً) — والاسمُ الافتِراضِيُّ لا يُبحَثُ عَنه (<see cref="Identifies"/>). ومُحادَثَةُ غَيرِه لا تُمَسّ.</para>
+    /// </summary>
+    public static bool EraseSubject(Conversation c, Guid userId, IReadOnlyCollection<string> oldNames)
+    {
+        if ((c.OwnerId != userId && c.PartnerId != userId) || string.IsNullOrEmpty(c.Subject)) return false;
+        var subject = c.Subject;
+        foreach (var name in oldNames.Where(Identifies).Select(x => x.Trim()).Distinct(StringComparer.Ordinal).OrderByDescending(x => x.Length))
+            subject = ReplaceWhole(subject, name);
+        if (subject == c.Subject) return false;
+        c.Subject = subject;
+        return true;
+    }
+
     public static bool EraseFrom(Review r, Guid userId)
         => (r.AuthorId == userId && Set(r.AuthorName, v => r.AuthorName = v))
          | (r.TargetUserId == userId && Set(r.TargetUserName, v => r.TargetUserName = v));
@@ -363,7 +379,7 @@ public static class AccountErasure
 
         return new Counts(
             Deals: Mark(deals.Concat(others), d => EraseFrom(d, userId)),
-            Conversations: Mark(convs, c => EraseFrom(c, userId)),
+            Conversations: Mark(convs, c => EraseFrom(c, userId) | EraseSubject(c, userId, names)),
             Reviews: Mark(reviews, r => EraseFrom(r, userId)),
             Offers: Withdraw(offers),
             Matches: Mark(matches, m => EraseFrom(m, userId)),

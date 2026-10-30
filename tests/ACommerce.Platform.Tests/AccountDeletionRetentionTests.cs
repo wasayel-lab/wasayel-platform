@@ -407,28 +407,103 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     // و`EraseFrom(Conversation)` يَمحو `OwnerName`/`PartnerName` وَحدَهُما، والماسِحُ أَعلاه يَجمَعُ خَصائِصَ النَصِّ المُنتَهِيَةَ بِـName وَحدَها — فَلا يَرى `Subject`
     // (القاعِدَة ١٠: أَداةٌ عَمياء). صَفّا «اليَوم» يُقلَبانِ بِاسمَيهِما في كوميتِ التَبديل.
 
-    /// <summary><b>تَوصيفُ اليَوم</b>: مُحادَثَةٌ بَدَأَها المُشتَري مَعَ بائِعٍ ثُمَّ حَذَفَ البائِعُ حِسابَه — اسمُه طَرَفاً «حِسابٌ مَحذوف»، ومَوضوعُها «تَواصُل مَع {اسمِه}» كَما كُتِب.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-30، B-PRIV-2)</b> — كانَ <c>Today_a_deleted_partners_name_stays_in_the_conversation_subject</c> (‏<c>1075fc9</c>: «الطَرَف:
+    /// حِسابٌ مَحذوف · المَوضوع: تَواصُل مَع أحمد الزهراني»). والآن <see cref="AccountErasure.EraseSubject"/> يَستَبدِلُ اسمَه في مَوضوعِ مُحادَثَةٍ هُوَ طَرَفُها كَلِمَةً تامَّة؛
+    /// ومُحادَثَةٌ لَيسَ طَرَفَها — ولو حَمَلَ مَوضوعُها الاسمَ نَفسَه — ومَوضوعٌ بِلا اسمِه لا يُمَسّان.</summary>
     [Fact]
-    public void Today_a_deleted_partners_name_stays_in_the_conversation_subject()
+    public void A_deleted_partners_name_leaves_the_conversation_subject_and_anothers_conversation_keeps_it()
     {
         var me = Guid.NewGuid();
         const string name = "أحمد الزهراني";
-        var subject = ACommerce.Platform.I18n.LocaleCatalog.Text(LocaleCatalog.Arabic, "chats.direct.subject").Replace("{0}", name, StringComparison.Ordinal);
-        var conv = new Conversation { OwnerId = Guid.NewGuid(), OwnerName = "مُشتَرٍ", PartnerId = me, PartnerName = name, Subject = subject };
-        Assert.True(AccountErasure.EraseFrom(conv, me));
-        output.WriteLine($"الطَرَف: {conv.PartnerName} · المَوضوع: {conv.Subject}");
-        Assert.Equal(AccountDeletion.ErasedName, conv.PartnerName);
-        Assert.Contains(name, conv.Subject, StringComparison.Ordinal);
+        string Subject(string n) => LocaleCatalog.Text(LocaleCatalog.Arabic, "chats.direct.subject").Replace("{0}", n, StringComparison.Ordinal);
+        var conv = new Conversation { OwnerId = Guid.NewGuid(), OwnerName = "مُشتَرٍ", PartnerId = me, PartnerName = name, Subject = Subject(name) };
+        var theirs = new Conversation { OwnerId = Guid.NewGuid(), OwnerName = "مُشتَرٍ", PartnerId = Guid.NewGuid(), PartnerName = name, Subject = Subject(name) };
+        var offerChat = new Conversation { OwnerId = me, OwnerName = name, PartnerId = Guid.NewGuid(), PartnerName = "سائِق", Subject = "عَرضٌ بِـ٢٠" };
+        Assert.True(AccountErasure.EraseFrom(conv, me) | AccountErasure.EraseSubject(conv, me, new[] { name }));
+        Assert.False(AccountErasure.EraseSubject(theirs, me, new[] { name }));
+        Assert.False(AccountErasure.EraseSubject(offerChat, me, new[] { name }));
+        output.WriteLine($"الطَرَف: {conv.PartnerName} · المَوضوع: {conv.Subject} · مُحادَثَةُ غَيرِه: {theirs.Subject}");
+        Assert.Equal((AccountDeletion.ErasedName, Subject(AccountDeletion.ErasedName)), (conv.PartnerName, conv.Subject));
+        Assert.Equal(Subject(name), theirs.Subject);
+        Assert.Equal("عَرضٌ بِـ٢٠", offerChat.Subject);
     }
 
-    /// <summary><b>تَوصيفُ اليَوم</b>: ماسِحُ خَصائِصِ الاسمِ يَرى ما يَنتَهي بِـName وَحدَه — <c>Conversation.Subject</c> خارِجَه وإن كُتِبَ فيه اسمُ شَخص.</summary>
+    /// <summary>كُلُّ خاصِّيَّةِ نَصٍّ لا يَنتَهي اسمُها بِـName ويَكتُبُ فيها مُهَيِّئٌ في الكودِ اسمَ شَخص — بِتَصنيفِها وسَبَبِه (‏2026-10-30، B-PRIV-2).</summary>
+    internal static readonly IReadOnlyDictionary<string, NameField> NameBearingFieldsClassified = new Dictionary<string, NameField>(StringComparer.Ordinal)
+    {
+        ["Conversation.Subject"] = new(NameKind.Renamed, Disclosure.Renamed, "«تَواصُل مَع {الاسم}» — بابُ المُحادَثَةِ المُباشِرَة؛ يَمحوه `AccountErasure.EraseSubject`."),
+        ["AgentTurn.Text"]       = new(NameKind.NotAPerson, Disclosure.None, "اسمُ مُزَوِّدِ النَموذَجِ (`_backend.ProviderName`) في سَطرِ «لا مِفتاح» — لا شَخص."),
+    };
+
+    private static readonly Regex NewInitializer = new(@"\bnew\s+(?<t>[A-Za-z_][\w.]*)\s*(?:\(\s*\))?\s*(?=\{)", RegexOptions.Compiled);
+
+    /// <summary>
+    /// <para><b>ماسِحُ الاسمِ داخِلَ حَقلٍ لا يَنتَهي بِـName</b> (‏2026-10-30، B-PRIV-2؛ تَوصيفُه <c>1075fc9</c>): كُلُّ مُهَيِّئِ كائِنٍ لِنَوعٍ مُخَزَّنٍ (<paramref name="stored"/>)
+    /// يُسنِدُ إلى خاصِّيَّةِ نَصٍّ لا يَنتَهي اسمُها بِـName تَعبيراً فيه رَمزُ اسمٍ (<see cref="PersonalTokens"/> المُنتَهي بِـName) — <c>Type.Prop</c>. والإشعارُ خارِجُه:
+    /// لِعُنوانِه ومَتنِه جَردُهُما (<see cref="NoticeWriters"/>).</para>
+    /// </summary>
+    internal static IReadOnlyList<string> NameBearingFields(IEnumerable<(string File, string Text)> sources, IEnumerable<Type> stored)
+    {
+        var byName = stored.Where(t => t != typeof(ACommerce.Kit.Notifications.Notification))
+            .GroupBy(t => t.Name).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        var found = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var (_, text) in sources)
+        {
+            var code = WriteEndpointGuardTests.StripComments(text);
+            foreach (Match m in NewInitializer.Matches(code))
+            {
+                if (!byName.TryGetValue(m.Groups["t"].Value.Split('.')[^1], out var type)) continue;
+                var open = m.Index + m.Length;
+                var close = Closing(code, open);
+                if (close < 0) continue;
+                foreach (var member in InitializerMembers(code[(open + 1)..close]))
+                {
+                    var a = Regex.Match(member, @"^\s*(?<p>[A-Za-z_]\w*)\s*=(?!=)\s*(?<e>[\s\S]*)$");
+                    if (!a.Success) continue;
+                    var prop = a.Groups["p"].Value;
+                    if (prop.EndsWith("Name", StringComparison.Ordinal)
+                        || type.GetProperty(prop, BindingFlags.Public | BindingFlags.Instance)?.PropertyType != typeof(string)) continue;
+                    if (PersonalTokens(a.Groups["e"].Value).Any(t => t.EndsWith("Name", StringComparison.Ordinal) || t.EndsWith("name", StringComparison.Ordinal)))
+                        found.Add($"{type.Name}.{prop}");
+                }
+            }
+        }
+        return found.ToList();
+    }
+
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-30، B-PRIV-2)</b> — كانَ <c>Today_the_name_inventory_sees_only_fields_ending_in_Name_so_the_conversation_subject_is_unseen</c>
+    /// (‏<c>1075fc9</c>). والآن جَردٌ ثانٍ (<see cref="NameBearingFields"/>) لِما يُكتَبُ فيه اسمٌ ولا يَنتَهي بِـName: كُلُّ ما يَجِدُه مُصَنَّف، ولا تَصنيفَ لا يَجِدُه، ولِكُلِّ
+    /// <see cref="NameKind.Renamed"/> دالَّةُ مَحوٍ عَلى نَوعِه؛ ويَطبَعُ عَدَدَه ويَفشَلُ عَلى الصِفر (القاعِدَة ١٠).</summary>
     [Fact]
-    public void Today_the_name_inventory_sees_only_fields_ending_in_Name_so_the_conversation_subject_is_unseen()
+    public void Every_name_bearing_field_not_ending_in_Name_is_classified_and_erased()
     {
         var (_, closure, names) = StoredNameFields();
-        output.WriteLine($"خَصائِصُ اسمٍ يَراها الماسِح: {names.Count} · Conversation في ما يَبلُغُه: {closure.Contains(typeof(Conversation))}");
-        Assert.Contains(typeof(Conversation), closure);
-        Assert.DoesNotContain("Conversation.Subject", names.Select(n => n.Key));
+        var found = NameBearingFields(EntitlementContractTests.SourceFiles(), closure);
+        var unclassified = found.Where(k => !NameBearingFieldsClassified.ContainsKey(k)).ToList();
+        var stale = NameBearingFieldsClassified.Keys.Where(k => !found.Contains(k)).ToList();
+        var subjectErasers = typeof(AccountErasure).GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where(m => m.Name == nameof(AccountErasure.EraseSubject)).Select(m => m.GetParameters()[0].ParameterType).ToHashSet();
+        var unerased = found.Where(k => NameBearingFieldsClassified.TryGetValue(k, out var f) && f.Kind == NameKind.Renamed)
+            .Where(k => !subjectErasers.Contains(closure.First(t => t.Name == k.Split('.')[0]))).ToList();
+        var renamed = found.Count(k => NameBearingFieldsClassified.TryGetValue(k, out var f) && f.Kind == NameKind.Renamed);
+        output.WriteLine($"خَصائِصُ اسمٍ تَنتَهي بِـName: {names.Count} · وحُقولٌ يُكتَبُ فيها اسمٌ ولا تَنتَهي بِه: {found.Count} ({string.Join(", ", found)})");
+        Assert.True(found.Count > 0, "أَداةٌ عَمياء: صِفرُ حَقلٍ يُكتَبُ فيه اسم.");
+        Assert.True(unclassified.Count == 0, $"حَقلٌ يُكتَبُ فيه اسمٌ بِلا تَصنيف: {string.Join(", ", unclassified)}");
+        Assert.True(stale.Count == 0, $"تَصنيفٌ لا يَجِدُه المَسح: {string.Join(", ", stale)}");
+        Assert.True(unerased.Count == 0, $"حَقلٌ يُمحى بِلا دالَّة: {string.Join(", ", unerased)}");
+        Assert.Equal(1, renamed);
+    }
+
+    /// <summary><b>والماسِحُ يُحمِرُّ ويَبيَضُّ عَلى عَيِّنَةٍ مَحقونَة</b> (القاعِدَة ١٠): مَوضوعٌ بِـ<c>partner.FullName</c> يُرى، ومَوضوعٌ بِسِعرٍ لا يُرى، والإشعارُ خارِجُه.</summary>
+    [Fact]
+    public void The_name_bearing_scan_sees_a_name_written_into_a_subject_and_nothing_else()
+    {
+        var types = new[] { typeof(Conversation), typeof(ACommerce.Kit.Notifications.Notification) };
+        var named = ("x.cs", "var c = new Conversation\n{\n    Id = Guid.NewGuid(), PartnerName = partner.FullName,\n    Subject = l.Format(\"chats.direct.subject\", partner.FullName),\n};");
+        var priced = ("y.cs", "var c = new Conversation { Subject = l.Format(\"chats.offer.subject\", offer.Price), OwnerName = meName };");
+        var notice = ("z.cs", "s.Store(new ACommerce.Kit.Notifications.Notification { Body = l.Format(\"k\", acceptorName) });");
+        Assert.Equal(new[] { "Conversation.Subject" }, NameBearingFields(new[] { named }, types));
+        Assert.Empty(NameBearingFields(new[] { priced, notice }, types));
     }
 
     // ─── ٣ج. مَن يَكتُبُ `Notification` وما يَحمِلُه ─────────────────────────────────────────────────────────
