@@ -43,15 +43,22 @@ public sealed class EjarImporter
         await src.OpenAsync();
         _log.LogInformation("  ✓ source SQL Server connected ({Db}).", src.Database);
 
-        if (reset) await _target.ResetTenantAsync(TenantSlug);
-
         // 1) Tenant.Categories مِن DiscoveryCategories — مَع تَجميع شَجَريّ
         // عَلى Kind (residential / commercial / events / vehicles / leisure).
         // Ejar V1 يَحوي ~20 فِئَة في 5 مَجموعات — لِذلك الـ tree مُهِمّ.
+        // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ F-SDC-2) **ويُقرَأُ ويُفحَصُ قَبلَ الإفراغ**: تَجميعٌ خارِجَ `LegacyKinds` يوقِفُ
+        // الاستيرادَ قَبلَ أَن يُمحى حَرف — فَلا يُكتَبُ تَجميعٌ يَرُدُّه مُحَرِّرُ الفِئاتِ عِندَ أَوَّلِ حِفظ.
         var categories = (await src.QueryAsync<EjarCategoryRow>(
             @"SELECT TOP 50 Id, Slug, Label, Icon, Kind FROM DiscoveryCategories
               WHERE IsDeleted = 0 ORDER BY Kind, Label"
         )).ToList();
+        var unknown = categories.Where(c => !LegacyKinds.Contains(LegacyKind(c.Kind))).ToList();
+        if (unknown.Count > 0)
+            throw new InvalidOperationException(
+                "تَجميعُ فِئَةٍ خارِجَ ما يَعرِفُه الاستيراد (" + string.Join(", ", LegacyKinds.Select(k => k.Length == 0 ? "\"\"" : k)) + "): "
+                + string.Join(", ", unknown.Select(c => $"{c.Slug}={c.Kind}")) + " — لَم يُكتَب شَيء.");
+
+        if (reset) await _target.ResetTenantAsync(TenantSlug);
 
         await _target.UpsertTenantAsync(new Tenant
         {
@@ -66,7 +73,7 @@ public sealed class EjarImporter
                 Slug      = c.Slug,
                 Label     = c.Label,
                 Icon      = string.IsNullOrEmpty(c.Icon) ? "🏠" : c.Icon,
-                Kind      = c.Kind ?? "",
+                Kind      = LegacyKind(c.Kind),
                 SortOrder = idx
             }).ToList()
         });
@@ -238,6 +245,17 @@ public sealed class EjarImporter
         foreach (var t in genericTables)
             await _target.DumpGenericAsync(src, TenantSlug, t);
     }
+
+    /// <summary>
+    /// <para><b>تَجميعاتُ إيجار V1 الَّتي يَكتُبُها الاستيراد — كُلُّها في مَعجَمِ <c>CategoryKinds</c></b> (‏2026-10-30، تَدقيقُ الموجَة ١١ F-SDC-2؛
+    /// ‏ADR-034 §٣‑٢). كانَ يَنسَخُ قيمَةَ المَصدَرِ كَما هي (<c>c.Kind ?? ""</c>)، فَقيمَةٌ خارِجَ المَعجَمِ تُكتَبُ ويَرُدُّها المُحَرِّرُ عِندَ أَوَّلِ
+    /// حِفظ. والأَداةُ لا تَرى القالِبَ (لا مَرجِعَ مَشروع)، فَالقائِمَةُ هُنا والحارِسُ فاحِصٌ: <c>CategoryKindsTests.Every_code_writer_writes_only_kinds_in_the_lexicon</c>
+    /// يَقرَأُها ويَحمَرُّ إن خَرَجَت قيمَةٌ عَن المَعجَم (القاعِدَة ٢).</para>
+    /// </summary>
+    internal static readonly string[] LegacyKinds = { "", "residential", "commercial", "events", "vehicles", "leisure" };
+
+    /// <summary>تَجميعُ المَصدَرِ بِحُروفٍ صَغيرَةٍ بِلا فَراغ — كَما يُصَغِّرُ كُتّابُ المَنَصَّةِ قَبلَ السُؤال.</summary>
+    internal static string LegacyKind(string? kind) => (kind ?? "").Trim().ToLowerInvariant();
 
     private sealed record EjarCategoryRow(Guid Id, string Slug, string Label, string? Icon, string? Kind);
     private sealed record EjarUserRow(Guid Id, string? FullName, string? Phone, DateTime CreatedAt);

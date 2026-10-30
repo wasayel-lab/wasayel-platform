@@ -19,16 +19,23 @@ namespace ACommerce.Platform.Tests;
 // تَجميعاً، و`PatternOf` يَقرَأُ «تِجاريّ»/«سَكَنيّ» إيجاراً بِلا سَلَّة. **وما صارَ**: `CategoryKinds.All` عَشرُ قيَمٍ مِمّا يَكتُبُه الكودُ
 // ويَقرَؤُه (نَصُّ القَرار)، و`CategoryKinds.Validate` يَرُدُّ ما سِواها بِرَمزٍ ثابِت (`category_kind_unknown`) — في `CategoriesSaveService.Parse`
 // (المُحَرِّرانِ وصَفحَةُ الإنشاء) وفي الوَكيلِ قَبلَ الكِتابَة؛ والمُحَرِّرُ يَعرِضُ القيَمَ اختِياراً بِأَثَرِ كُلٍّ مِنها مَقروءاً مِن `PatternOf` نَفسِه.
+//
+// **‏2026-10-30 (تَدقيقُ الموجَة ١١ F-SDC-2) — `leisure` الحادِيَةَ عَشرَة، بِمِعيارِ القَرارِ نَفسِه**: الكودُ يَقرَؤُها (تَسمِيَتا `TaxonomyChips`
+// و`CreateListing`، والتَجميعُ والتَصفِيَةُ في الواجِهَة) ويَكتُبُها مُستَورِدُ إيجار. فَقُلِبَت الصُفوفُ الَّتي كانَت تَستَعمِلُها مِثالاً لِلمَرفوض
+// بِأَسمائِها: (١) القائِمَةُ إحدى عَشرَة (`…exactly_the_ten_values…` ← `…the_ten_values_the_owner_listed_and_leisure`)، (٢) `leisure` في صُفوفِ
+// المَقبول ومِثالُ المَرفوضِ `park`، (٣) الصَفحاتُ الثَلاثُ لا تَكتُبُ القيَمَ بِأَيديها (`value="leisure"`) والمُحَرِّرُ يَعرِضُها مِن المَعجَم،
+// (٤) المُحَرِّرُ يَعرِضُ إحدى عَشرَةَ والقيمَةُ القَديمَةُ المَوسومَةُ `shop`، (٥) الماسِحُ يَقرَأُ قائِمَةَ المُستَورِد، وعَيِّنَتُه المَحقونَةُ `park`.
 
 public class CategoryKindsTests(ITestOutputHelper output)
 {
     private static string Root => ThemeZeroEquivalenceTests.RepoRoot;
 
-    /// <summary>القائِمَةُ بِحَرفِ نَصِّ القَرار — لا قيمَةٌ مُختَرَعَةٌ ولا ناقِصَة.</summary>
+    /// <summary>القائِمَةُ بِحَرفِ نَصِّ القَرار ثُمَّ <c>leisure</c> الَّتي يَقرَؤُها الكودُ ويَكتُبُها المُستَورِد — لا قيمَةٌ مُختَرَعَةٌ ولا ناقِصَة.
+    /// (مَقلوبٌ بِاسمِه ‏2026-10-30: كانَ <c>The_lexicon_is_exactly_the_ten_values_the_owner_listed</c>.)</summary>
     [Fact]
-    public void The_lexicon_is_exactly_the_ten_values_the_owner_listed()
+    public void The_lexicon_is_exactly_the_ten_values_the_owner_listed_and_leisure()
     {
-        Assert.Equal(new[] { "", "menu", "residential", "commercial", "roommate", "fnb", "services", "transport", "events", "vehicles" },
+        Assert.Equal(new[] { "", "menu", "residential", "commercial", "roommate", "fnb", "services", "transport", "events", "vehicles", "leisure" },
             CategoryKinds.All.ToArray());
         Assert.Equal(new[] { CategoryKinds.Unknown }, CategoryKinds.Codes.ToArray());
         Assert.Equal("category_kind_unknown", CategoryKinds.Unknown);
@@ -49,6 +56,7 @@ public class CategoryKindsTests(ITestOutputHelper output)
     [InlineData("transport")]
     [InlineData("events")]
     [InlineData("vehicles")]
+    [InlineData("leisure")]
     public void A_kind_in_the_lexicon_passes_the_validator_and_the_editor_parser(string kind)
     {
         Assert.True(CategoryKinds.IsKnown(kind));
@@ -60,7 +68,7 @@ public class CategoryKindsTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData("leisure")]
+    [InlineData("park")]
     [InlineData("shop")]
     [InlineData("rental")]
     [InlineData("commerical")]
@@ -93,7 +101,7 @@ public class CategoryKindsTests(ITestOutputHelper output)
     {
         var v = CategoryKinds.Validate(new[]
         {
-            new Category { Slug = "a", Label = "أ", Kind = "leisure" },
+            new Category { Slug = "a", Label = "أ", Kind = "park" },
             new Category { Slug = "b", Label = "ب", Kind = "commercial" },
             new Category { Slug = "c", Label = "ج", Kind = "shop" },
         });
@@ -116,7 +124,7 @@ public class CategoryKindsTests(ITestOutputHelper output)
         });
 
         var refused = await CategoriesSaveService.SaveAsync(world.Session, "kinds-probe",
-            new CategoriesSaveRequest("products | مُنتَجات | 🛍️ | leisure"));
+            new CategoriesSaveRequest("products | مُنتَجات | 🛍️ | park"));
         Assert.Equal(TenantConfigStatus.Rejected, refused.Status);
         Assert.Equal(TenantConfigCodes.CategoryKindUnknown, refused.Code);
         Assert.Empty(world.Stored);
@@ -141,7 +149,7 @@ public class CategoryKindsTests(ITestOutputHelper output)
         var executor = new AgentToolExecutor(world.Store, new TenantRoleService(world.Store));
 
         var (ok, message) = await executor.ExecuteAsync("set_categories",
-            """{"slug":"kinds-probe","categories":[{"slug":"x","label":"س","kind":"Leisure"}]}""", owner);
+            """{"slug":"kinds-probe","categories":[{"slug":"x","label":"س","kind":"Park"}]}""", owner);
         Assert.False(ok);
         Assert.Contains(CategoryKinds.Unknown, message, StringComparison.Ordinal);
         Assert.Equal(0, world.SaveCalls);
@@ -174,7 +182,9 @@ public class CategoryKindsTests(ITestOutputHelper output)
             Assert.Contains("categories.kind.err_unknown", text, StringComparison.Ordinal);
             Assert.Contains("<CategoryKindSelect", text, StringComparison.Ordinal);
             Assert.DoesNotContain("list=\"kind-list\"", text, StringComparison.Ordinal);
-            Assert.DoesNotContain("value=\"leisure\"", text, StringComparison.Ordinal);
+            // ‏(مَقلوبٌ بِاسمِه ‏2026-10-30: كانَ «لا اقتِراحَ `leisure`» — والآنَ لا تَكتُبُ الصَفحَةُ قيمَةً بِيَدِها، والمُحَرِّرُ يَعرِضُ `leisure` مِن المَعجَم.)
+            foreach (var k in CategoryKinds.All.Where(k => k.Length > 0))
+                Assert.DoesNotContain($"value=\"{k}\"", text, StringComparison.Ordinal);
             checkedPages++;
         }
         Assert.Equal(3, checkedPages);
@@ -220,18 +230,26 @@ public class CategoryKindsTests(ITestOutputHelper output)
 
         var fresh = await Render(null);
         Assert.Contains("class=\"ac-input ac-cat-kind\"", fresh, StringComparison.Ordinal);
-        Assert.Equal(10, Options(fresh));
+        Assert.Equal(CategoryKinds.All.Count, Options(fresh));
+        Assert.Equal(11, Options(fresh));
         Assert.Equal("", Selected(fresh));
+        Assert.Contains("<option value=\"leisure\">" + LocaleCatalog.Text(LocaleCatalog.Arabic, "categories.kind.leisure"), fresh, StringComparison.Ordinal);
 
         var commercial = await Render("commercial");
-        Assert.Equal(10, Options(commercial));
+        Assert.Equal(11, Options(commercial));
         Assert.Equal("commercial", Selected(commercial));
         var rentalEffect = LocaleCatalog.Text(LocaleCatalog.Arabic, "categories.kind_effect.rental");
         Assert.Equal(2, Regex.Matches(commercial, Regex.Escape(rentalEffect)).Count);   // ‏سَكَنيّ وتِجاريّ
 
-        var legacy = await Render("leisure");
-        Assert.Equal(11, Options(legacy));
-        Assert.Equal("leisure", Selected(legacy));
+        // ‏(مَقلوبٌ بِاسمِه ‏2026-10-30: القيمَةُ القَديمَةُ كانَت `leisure`، وصارَت في المَعجَمِ فَتُرسَمُ مُختارَةً بِلا وَسم.)
+        var leisure = await Render("leisure");
+        Assert.Equal(11, Options(leisure));
+        Assert.Equal("leisure", Selected(leisure));
+        Assert.DoesNotContain(LocaleCatalog.Text(LocaleCatalog.Arabic, "categories.kind.outside"), leisure, StringComparison.Ordinal);
+
+        var legacy = await Render("shop");
+        Assert.Equal(12, Options(legacy));
+        Assert.Equal("shop", Selected(legacy));
         Assert.Contains(LocaleCatalog.Text(LocaleCatalog.Arabic, "categories.kind.outside"), legacy, StringComparison.Ordinal);
     }
 
@@ -281,8 +299,26 @@ public class CategoryKindsTests(ITestOutputHelper output)
         Assert.All(seedKinds, k => Assert.True(CategoryKinds.IsKnown(k), $"البُذورُ تَكتُبُ «{k}» خارِجَ المَعجَم."));
 
         // العَيِّنَةُ المَحقونَة: صَفٌّ بِتَجميعٍ خارِجَ المَعجَمِ يُرى ويُرَدّ.
-        var injected = Scan(tuple, seed + "\n(\"park\", \"حَديقَة\", \"🌳\", \"leisure\"),");
+        var injected = Scan(tuple, seed + "\n(\"park\", \"حَديقَة\", \"🌳\", \"park\"),");
         Assert.Equal(seedKinds.Count + 1, injected.Count);
         Assert.False(CategoryKinds.IsKnown(injected[^1]));
+
+        // ‏(‏2026-10-30، F-SDC-2) **ومُستَورِدُ إيجار**: لا يَرى القالِبَ، فَقائِمَتُه `LegacyKinds` تُقرَأُ هُنا وكُلُّ قيمَةٍ فيها في المَعجَم، وكِتابَتُه
+        // تَمُرُّ بِـ`LegacyKind(` لا بِنَسخِ المَصدَر — وكِتابَةٌ تَنسَخُ المَصدَرَ تُرى وتُرَدّ.
+        var ejar = File.ReadAllText(Path.Combine(Root, "tools", "ACommerce.Importer", "EjarImporter.cs"));
+        var legacyList = new Regex("LegacyKinds = \\{([^}]*)\\}");
+        static List<string> Kinds(Regex r, string text)
+            => r.Match(text) is { Success: true } m
+                ? Regex.Matches(m.Groups[1].Value, "\"([^\"]*)\"").Select(x => x.Groups[1].Value).ToList()
+                : new List<string>();
+        var importerKinds = Kinds(legacyList, ejar);
+        output.WriteLine($"المُستَورِد: {importerKinds.Count} تَجميعاً — {string.Join("، ", importerKinds.Select(k => k.Length == 0 ? "\"\"" : k))}");
+        Assert.True(importerKinds.Count >= 5, $"أَداةٌ عَمياء: {importerKinds.Count} تَجميعاً في LegacyKinds.");
+        Assert.All(importerKinds, k => Assert.True(CategoryKinds.IsKnown(k), $"المُستَورِدُ يَكتُبُ «{k}» خارِجَ المَعجَم."));
+        Assert.Contains("Kind      = LegacyKind(c.Kind),", ejar, StringComparison.Ordinal);
+        Assert.DoesNotContain("Kind      = c.Kind", ejar, StringComparison.Ordinal);
+        var injectedImporter = Kinds(legacyList, ejar.Replace("\"leisure\" };", "\"leisure\", \"park\" };"));
+        Assert.Equal(importerKinds.Count + 1, injectedImporter.Count);
+        Assert.False(CategoryKinds.IsKnown(injectedImporter[^1]));
     }
 }

@@ -17,6 +17,11 @@ public sealed record CategoryKindViolation(string Code, string MessageAr);
 /// و<c>commercial</c> و<c>roommate</c> يَكتُبُها الاثنانِ ويَقرَؤُها <c>PatternOf</c>. <b>و«تِجاريّ» و«سَكَنيّ» مَسموحَتان</b>: مَتجَرُ تَأجيرِ العَقارِ يَختارُهُما
 /// عَن قَصد — فَلا يُمنَعُ اختِيارٌ صَحيح، بَل يُرَدُّ الخَطَأُ ويُعلَنُ الأَثَر (<see cref="EffectOf"/>).</para>
 ///
+/// <para><b>و<c>leisure</c> الحادِيَةَ عَشرَة</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ F-SDC-2؛ دِقَّةٌ بِمِعيارِ القَرارِ نَفسِه — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق):
+/// «ولا يَقرَؤُه» كانَ خَطَأً — تَسمِيَتانِ في القامُوسِ (<c>listings.kind.leisure</c> في <c>TaxonomyChips</c> و<c>listings.create.kind_leisure</c> في
+/// <c>CreateListing</c>، «تَرفيه»)، والواجِهَةُ تُجَمِّعُ وتُصَفّي بِالتَجميع (<c>explore?kind=</c>)، ومُستَورِدُ إيجار يَكتُبُها مِن المَصدَر. فَمَتجَرٌ
+/// خُزِّنَت لَه كانَ يُرَدُّ بِـ<see cref="Unknown"/> عِندَ كُلِّ حِفظ. وأَثَرُها «لا يُغَيِّرُ نَمَطَ مَتجَرِك» (<see cref="EffectOf"/>: <c>PatternOf</c> لا يَقرَؤُها).</para>
+///
 /// <para><b>والمُصادِقُ في مَوضِعٍ واحِدٍ يَمُرُّ بِه الكُتّابُ الثَلاثَة</b>: <c>CategoriesSaveService.Parse</c> (المُحَرِّرانِ وصَفحَةُ الإنشاءِ بَعدَ التَوحيدِ
 /// في <c>0cfc033</c>) ووَكيلُ الاستوديو بَعدَ قِراءَةِ حُمولَتِه. وقائِمَةُ الوَكيلِ في رِسالَةِ نِظامِه تُقرَأُ مِن <see cref="All"/>.</para>
 /// </summary>
@@ -33,11 +38,12 @@ public static class CategoryKinds
     public const string Transport = "transport";
     public const string Events = "events";
     public const string Vehicles = "vehicles";
+    public const string Leisure = "leisure";
 
-    /// <summary>المَعجَمُ المُغلَق — عَشرٌ بِتَرتيبِ نَصِّ القَرار.</summary>
+    /// <summary>المَعجَمُ المُغلَق — العَشرُ بِتَرتيبِ نَصِّ القَرار، ثُمَّ <see cref="Leisure"/> (‏2026-10-30، F-SDC-2).</summary>
     public static readonly IReadOnlyList<string> All = new[]
     {
-        None, Menu, Residential, Commercial, Roommate, Fnb, Services, Transport, Events, Vehicles,
+        None, Menu, Residential, Commercial, Roommate, Fnb, Services, Transport, Events, Vehicles, Leisure,
     };
 
     /// <summary>تَجميعٌ خارِجَ المَعجَم.</summary>

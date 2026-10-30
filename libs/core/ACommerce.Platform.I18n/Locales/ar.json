@@ -734,6 +734,7 @@
   "categories.kind.transport": "نَقل",
   "categories.kind.events": "مُناسَبات",
   "categories.kind.vehicles": "مَركَبات",
+  "categories.kind.leisure": "تَرفيه",
   "categories.kind_effect.none": "لا يُغَيِّرُ نَمَطَ مَتجَرِك",
   "categories.kind_effect.rental": "يَجعَلُ مَتجَرَكَ إيجاراً بِلا سَلَّة",
   "categories.kind_effect.roommate": "يَجعَلُ مَتجَرَكَ سَكَناً مُشتَرَكاً بِلا سَلَّة",
