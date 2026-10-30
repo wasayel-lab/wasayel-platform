@@ -165,6 +165,21 @@ public class RoleDefinitionValidatorTests
         Assert.False(RoleDealPatternAffinity.Contains(RoleDealPatternAffinity.Fallback));
     }
 
+    // ─── اسمُ الدَورِ «name» (الموجَة ١٢ F1 البَند ٩، ‏2026-10-30) ─────────────────────────────────────────────────────────
+    //
+    // مُنذُ I-SEC-1 (‏ADR-041) لا يُحَلُّ كوكيُّ `.acommerce.auth.{slug}.name` جَلسَةً — هُوَ كوكيُّ اسمِ العَرض — فَدَورٌ يُسَمّيه مَتجَرٌ `name` لا تُفتَحُ
+    // جَلسَتُه عَلى `/{slug}/r/name/` أَبَداً: بابٌ مَيت (القاعِدَة ١٢). وسَطرُ ADR-041 يَقولُ «ولا مُصادِقَ لِأَسماءِ الأَدوارِ يَمنَعُه اليَوم».
+    // **تَوصيفُ «اليَوم»** — يُقلَبُ بِاسمِه في كوميتِ التَبديل.
+
+    [Fact]
+    public void Today_a_role_slug_named_name_passes_the_validator()
+    {
+        var d = Sound() with { Slug = "name" };
+        Assert.True(RoleDefinitionValidator.IsValid(d));
+        Assert.True(RoleDefinitionValidator.IsValidTenantDefinition(d));
+        Assert.True(ACommerce.Templates.Customer.Marketplace.AuthSession.IsNameCookie(ACommerce.Templates.Customer.Marketplace.AuthSession.CookieName("zz", "name")));
+    }
+
     // ─── سالِب — كُلّ رَمز خَرق بِمُدخَلِه المَقصود ───────────────────
     [Theory]
     [MemberData(nameof(CorruptCases))]
