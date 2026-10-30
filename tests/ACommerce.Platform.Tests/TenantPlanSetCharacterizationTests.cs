@@ -15,6 +15,11 @@ namespace ACommerce.Platform.Tests;
 //       يُعيدُها بِتَعيينٍ واحِد»؛
 //   (٢) وتَعيينٌ فيه خَرقٌ لا يُخَزِّنُ شَيئاً ولا يَمَسُّ المَحفوظ.
 // والمِعيارُ نِداءُ الخِدمَةِ كَما تُناديه النُقطَة (`Save` أَدناه) — يَتَغَيَّرُ مَعَ النُقطَةِ وَحدَه، وأَجسامُ الصُفوفِ لا تُمَسّ.
+//
+// **‏2026-10-30 — تَوصيفٌ ثانٍ (مُراجَعَةُ تَيّارِ F4 الجَولَة ١)**: الصَفُّ (٥) — تَعيينُ باقَةٍ غَيرِ المَحفوظَةِ يَحمِلُ رابِطَ الدَفعِ الَّذي
+// أُنشِئَ لِلباقَةِ القَديمَة. والرابِطُ يُنشَأُ مِن خُطَّةِ PayPal لِلباقَةِ لَحظَتَها (`/admin/tenants/{slug}/plan/paypal-link` ←
+// `PlatformPlanPayPalBinding.Resolve(PlatformPlanCatalog.Find(plan.PlanId), …)`)، ويَراه صاحِبُ المَتجَرِ زِرَّ دَفعٍ في الاستوديو
+// (`StudioHome.PayPalUrl`). **وما يُقلَبُ**: الصَفُّ (٥) وَحدَه، بِاسمِه، في كوميتِ تَبديلِه؛ و(١)–(٤) لا يُمَسُّ مِنها حَرف.
 
 public class TenantPlanSetCharacterizationTests
 {
@@ -115,5 +120,25 @@ public class TenantPlanSetCharacterizationTests
         Assert.Null(plan.PayPalApproveUrl);
         Assert.Null(plan.RenewalCancelledAt);
         Assert.Equal(PlatformPlanStatuses.Active, plan.Status);
+    }
+
+    /// <summary>(٥) <b>تَوصيفٌ</b> (‏2026-10-30، مُراجَعَةُ تَيّارِ F4 الجَولَة ١): الباقَةُ المَحفوظَةُ غَيرُ الَّتي تُعَيِّنُها الاستِمارَة — واليَومَ
+    /// يُحمَلُ رابِطُ الدَفعِ الَّذي أُنشِئَ لِخُطَّةِ PayPal الباقَةِ القَديمَة، ومَعَه مُعَرِّفُ الاشتِراكِ وعَلامَةُ إلغاءِ التَجديد. والمَحفوظُ هُنا
+    /// باقَةٌ لا يُدرِجُها كاتالوجُ اليَوم (‏<c>plans.index.json</c> فيه <c>manual</c> وَحدَه) — وهو الطَريقُ القائِمُ اليَومَ إلى تَغييرِ الباقَة؛
+    /// وباقَةٌ ثانِيَةٌ في الكاتالوجِ تَفتَحُ الطَريقَ نَفسَه مِن قائِمَةِ الاستِمارَة.</summary>
+    [Fact]
+    public async Task Changing_the_plan_today_carries_the_old_plans_pay_link_with_its_subscription_and_renewal_mark()
+    {
+        var stored = StoredPlan();
+        stored.PlanId = "plan-no-longer-listed";
+        var w = new DocWorld().Put(stored);
+
+        Assert.Empty(await Save(w, "manual", Starts, Expires, 14, 99m));
+
+        var plan = Assert.IsType<TenantPlan>(Assert.Single(w.Stored));
+        Assert.Equal("manual", plan.PlanId);
+        Assert.Equal(stored.PayPalApproveUrl, plan.PayPalApproveUrl);
+        Assert.Equal("I-SUB-42", plan.PayPalSubscriptionId);
+        Assert.Equal(new DateTime(2026, 10, 15, 7, 0, 0, DateTimeKind.Utc), plan.RenewalCancelledAt);
     }
 }
