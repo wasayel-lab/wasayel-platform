@@ -199,6 +199,34 @@ public static class SessionVersionGate
         return true;
     }
 
+    /// <summary>أَكثَرُ العَناوينِ الَّتي يَسحَبُها خُروجٌ واحِد — نِطاقاتُ المَتجَرِ في مُتَصَفِّحٍ واحِد (العامُّ وكُلُّ دَور) لا تَبلُغُها.</summary>
+    public const int DeviceEndpointsLimit = 10;
+
+    /// <summary>
+    /// <para><b>الخُروجُ مِن هذا الجِهازِ يَسحَبُ اشتِراكاتِ مُتَصَفِّحِه</b> (‏2026-10-30، الموجَة ١٢ F1 البَند ٨؛ تَوصيفُه <c>a620502</c>): بابُ الخُروجِ كانَ
+    /// يَمسَحُ الكوكيّاتِ وَحدَها، فَيَبقى عُنوانُ هذا المُتَصَفِّحِ في الحِسابِ ويَصِلُه أَوَّلُ مِئَةِ حَرفٍ مِن كُلِّ رِسالَةٍ وإشعاراتُ الصَفَقاتِ بَعدَ خُروجِ صاحِبِه
+    /// مِن جِهازٍ مُشتَرَك (P1)؛ وسكربتُ <c>App.razor</c> صارَ يُرسِلُ عَناوينَ اشتِراكاتِ هذا المَتجَرِ في المُتَصَفِّحِ مَعَ استِمارَةِ الخُروج.</para>
+    /// <para>يَمحو مِن حِسابِ <paramref name="userId"/> <b>وَحدَه</b> ما يَقبَلُه <see cref="PushSubscriptionDoor.IsPushServiceEndpoint"/> مِن العَناوين
+    /// (حَتّى <see cref="DeviceEndpointsLimit"/>) — فَعُنوانُ حِسابٍ آخَرَ لا يُوجَدُ في قائِمَتِه فَلا يُمَسّ، وما لَيسَ عُنوانَ خِدمَةِ إشعارٍ لا يَبلُغُ المَخزَن.
+    /// والكِتابَةُ بِـ<see cref="AccountWrites.UpdateAsync{T}"/> وشَرطِ الجَلسَةِ <paramref name="admit"/> يُعطيه البابُ — فَجَلسَةٌ أَسقَطَها رَفعٌ قَبلَ القِراءَةِ لا
+    /// تَكتُب. <c>true</c> = مُحِيَ شَيء.</para>
+    /// </summary>
+    public static async Task<bool> ForgetDeviceAsync(IDocumentStore store, string slug, Guid userId, IEnumerable<string?> endpoints,
+        Func<User, bool> admit, CancellationToken ct = default)
+    {
+        var drop = endpoints.Where(PushSubscriptionDoor.IsPushServiceEndpoint).Select(e => e!)
+            .Distinct(StringComparer.Ordinal).Take(DeviceEndpointsLimit).ToHashSet(StringComparer.Ordinal);
+        if (drop.Count == 0) return false;
+        var removed = 0;
+        await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>
+        {
+            removed = u.PushSubscriptions.RemoveAll(p => drop.Contains(p.Endpoint));
+            if (removed > 0) u.UpdatedAt = DateTime.UtcNow;
+            return removed > 0;
+        }, ct, admit);
+        return removed > 0;
+    }
+
     /// <summary>نَظيرُها لِحِسابِ الاستوديو — ومِنه مُشرِفُ المَنَصَّة.</summary>
     public static async Task<bool> RevokeStudioAsync(IDocumentStore store, IMemoryCache cache, Guid userId)
     {

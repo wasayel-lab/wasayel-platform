@@ -429,7 +429,10 @@ public class EndpointBodyBleedTests
         // ‏2821 ← **2824** يَوم ‏2026-10-30 (الموجَة ١٢ F1 البَند ٦ — ثابِتُ StillOpen): ثَلاثَةُ أَسطُرٍ في `/{slug}/terms/accept` — حَلُّ الرَمزِ لِيُعطى
         // الكاتِبُ `admit: u => Services.SessionVersionGate.StillOpen(u, token)`، وحامِلُ النَتيجَة، ورَدُّ الجَلسَةِ المُغلَقَةِ بِرَمزِ بَوّابَةِ التَوثيق؛ والكِتابَةُ
         // في `AcceptTermsHandler` بِـ`AccountWrites.UpdateAsync`. طَبَعَ العَدّادُ «‏2821 → 2824» و«‏3169 → 3172»، و**‏3**.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2824),
+        // ‏2824 ← **2828** يَوم ‏2026-10-30 (الموجَة ١٢ F1 البَند ٨): أَربَعَةُ أَسطُرٍ في `/{slug}/auth/logout` — حَلُّ الرَمز، وشَرطُ «استِمارَةٌ وجَلسَةٌ لِهذا المَتجَر»،
+        // ونِداءُ `SessionVersionGate.ForgetDeviceAsync` بِعَناوينِ `push_endpoint` وشَرطِ الجَلسَة (سَطران)؛ والمَحوُ والتَحَقُّقُ مِن العُنوانِ في الدالَّة.
+        // طَبَعَ العَدّادُ «‏2824 → 2828» و«‏3172 → 3176»، و**‏4**.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2828),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -1183,7 +1186,9 @@ public class EndpointBodyBleedTests
     /// بِـ<c>channel_not_offered</c> قَبلَ أَوَّلِ حَقل. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
     /// <remarks><b>‏3169 ← 3172 يَوم ‏2026-10-30</b> (الموجَة ١٢ F1 البَند ٦): ثَلاثَةُ أَسطُرٍ في بابِ قَبولِ الشُروطِ تُعطي كاتِبَه شَرطَ الجَلسَةِ وتَرُدُّ المُغلَقَة.
     /// وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 3172;
+    /// <remarks><b>‏3172 ← 3176 يَوم ‏2026-10-30</b> (الموجَة ١٢ F1 البَند ٨): أَربَعَةُ أَسطُرٍ في بابِ الخُروجِ تُعطي <c>ForgetDeviceAsync</c> عَناوينَ المُتَصَفِّحِ
+    /// وشَرطَ الجَلسَة. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 3176;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

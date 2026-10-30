@@ -501,6 +501,12 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/auth/logout",
             async (string slug, HttpContext http, IDocumentStore store) =>
         {
+            // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٨) الخُروجُ مِن هذا الجِهازِ يَسحَبُ اشتِراكاتِ مُتَصَفِّحِه الَّتي يُرسِلُها سكربتُ `App.razor` — لِحِسابِ الجَلسَةِ
+            // وَحدَه وبِشَرطِها؛ وبِلا جَلسَةٍ يَمسَحُ الكوكيّاتِ كَما كانَ ولا يَكتُب.
+            var token = AuthSession.ResolveToken(http.Request, slug);
+            if (http.Request.HasFormContentType && AuthHandlers.ParseToken(token) is { } session && session.TenantSlug == slug)
+                await Services.SessionVersionGate.ForgetDeviceAsync(store, slug, session.UserId, (await http.Request.ReadFormAsync())["push_endpoint"].ToArray(),
+                    admit: u => Services.SessionVersionGate.StillOpen(u, token));
             // اِجلِب أَدوار المَتجَر لِنَمسَح cookies كُلّ الأَدوار المُمكِنَة
             // (المُستَخدِم قَد يَكون مَفتوحاً بِأَكثَر مِن دَور). كانَ يَمسَح
             // cookie واحِد فَيَتَسَرَّب /r/{role}/.

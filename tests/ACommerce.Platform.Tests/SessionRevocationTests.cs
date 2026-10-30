@@ -245,24 +245,80 @@ public class SessionRevocationTests(ITestOutputHelper output)
         return doors[0].Body;
     }
 
-    /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم»</b>: بابُ الخُروجِ يَمسَحُ الكوكيّاتِ وَحدَها (<c>ClearAllCookiesForTenant</c>) ولا يَقرَأُ عُنوانَ المُتَصَفِّحِ ولا يَكتُبُ الحِساب،
-    /// وسكربتُ <c>App.razor</c> لا يُرسِلُه — فَيَبقى العُنوانُ في <c>User.PushSubscriptions</c> و<c>WebPushService</c> يُرسِلُ إلَيه أَوَّلَ مِئَةِ حَرفٍ مِن كُلِّ
-    /// رِسالَةٍ وإشعاراتِ الصَفَقاتِ بَعدَ خُروجِ صاحِبِه مِن جِهازٍ مُشتَرَك (والعِلاجُ اليَومَ «اخرج من كل الأجهزة» وَحدَه). يُقلَبُ بِاسمِه في كوميتِ التَبديل.</para>
-    /// </summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، كوميتُ التَبديل)</b> — كانَ <c>Today_signing_out_of_one_device_leaves_its_push_subscription_on_the_account</c>
+    /// (‏<c>a620502</c>): «بابُ الخُروجِ يَقرَأُ عُنوانَ المُتَصَفِّح False · يَكتُبُ الحِساب False · السكربتُ يُرسِلُه False». والآن السكربتُ يَضَعُ عَناوينَ اشتِراكاتِ
+    /// المَتجَرِ في <c>push_endpoint</c> قَبلَ أَن تُرسَلَ استِمارَةُ الخُروج، والبابُ — بِجَلسَةٍ لِهذا المَتجَرِ وجِسمِ استِمارَة — يُعطيها
+    /// <c>ForgetDeviceAsync</c> بِشَرطِ الجَلسَةِ ثُمَّ يَمسَحُ الكوكيّاتِ كَما كان.</summary>
     [Fact]
-    public void Today_signing_out_of_one_device_leaves_its_push_subscription_on_the_account()
+    public void Signing_out_of_one_device_sends_its_push_endpoints_and_the_door_forgets_them_for_the_session_account()
     {
         var door = LogoutDoor();
         var app = Read($"{TemplateRoot}/Components/App.razor");
-        var reads = door.Contains("push_endpoint", StringComparison.Ordinal);
-        var writes = door.Contains("AccountWrites.UpdateAsync", StringComparison.Ordinal) || door.Contains("ForgetDeviceAsync", StringComparison.Ordinal);
-        var sends = app.Contains("push_endpoint", StringComparison.Ordinal);
-        output.WriteLine($"اليَوم: بابُ الخُروجِ يَقرَأُ عُنوانَ المُتَصَفِّح {reads} · يَكتُبُ الحِساب {writes} · السكربتُ يُرسِلُه {sends}");
-        Assert.Contains("AuthSession.ClearAllCookiesForTenant(http.Response, slug, roles);", door, StringComparison.Ordinal);
-        Assert.False(reads);
-        Assert.False(writes);
-        Assert.False(sends);
+        var reads = door.Contains("[\"push_endpoint\"]", StringComparison.Ordinal);
+        var writes = door.Contains("Services.SessionVersionGate.ForgetDeviceAsync(store, slug, session.UserId,", StringComparison.Ordinal);
+        var sends = app.Contains("field.name = 'push_endpoint';", StringComparison.Ordinal) && app.Contains("'/auth/logout$'", StringComparison.Ordinal);
+        output.WriteLine($"بَعدَ التَبديل: بابُ الخُروجِ يَقرَأُ عُنوانَ المُتَصَفِّح {reads} · يَكتُبُ الحِساب {writes} · السكربتُ يُرسِلُه {sends}");
+        Assert.True(reads && writes && sends);
+        Assert.Contains("if (http.Request.HasFormContentType && AuthHandlers.ParseToken(token) is { } session && session.TenantSlug == slug)", door, StringComparison.Ordinal);
+        Assert.True(AsksTheSession(door), "بابُ الخُروجِ يَكتُبُ الحِسابَ بِلا شَرطِ الجَلسَة.");
+        Assert.True(door.IndexOf("ForgetDeviceAsync", StringComparison.Ordinal) < door.IndexOf("AuthSession.ClearAllCookiesForTenant(http.Response, slug, roles);", StringComparison.Ordinal));
+    }
+
+    private const string PushA = "https://fcm.googleapis.com/fcm/send/device-a";
+    private const string PushB = "https://fcm.googleapis.com/fcm/send/device-b";
+
+    private static User WithPushes(params string[] endpoints)
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 1 };
+        foreach (var e in endpoints) user.PushSubscriptions.Add(new PushSubscription { Endpoint = e, P256dh = "k", Auth = "a" });
+        return user;
+    }
+
+    private static Task<bool> ForgetDeviceAsync(DocWorld world, User user, string token, params string?[] endpoints)
+        => ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ForgetDeviceAsync(world.Store, NameSlug, user.Id, endpoints,
+            admit: u => ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.StillOpen(u, token));
+
+    /// <summary>المُوجَب: عُنوانُ هذا المُتَصَفِّحِ يُمحى مِن حِسابِ الجَلسَة وَحدَه، والآخَرُ يَبقى.</summary>
+    [Fact]
+    public async Task Signing_out_removes_this_browser_endpoint_from_the_session_account_and_keeps_the_others()
+    {
+        var user = WithPushes(PushA, PushB);
+        var world = new DocWorld().Put(user);
+        var removed = await ForgetDeviceAsync(world, user, AuthHandlers.MakeToken(user.Id, NameSlug, 1), PushA);
+        var left = world.Read<User>(user.Id.ToString())!.PushSubscriptions.Select(p => p.Endpoint).ToList();
+        output.WriteLine($"عُنوانُ هذا المُتَصَفِّح ⇒ {(removed ? "مُحِي" : "بَقِي")} · الباقي {left.Count} · كُتِبَ {world.Wrote<User>()} مَرَّة");
+        Assert.True(removed);
+        Assert.Equal(new[] { PushB }, left);
+        Assert.Equal(1, world.Wrote<User>());
+    }
+
+    /// <summary>السَوالِب: عُنوانُ حِسابٍ آخَرَ لا يُوجَدُ في قائِمَةِ الجَلسَةِ فَلا يُكتَب؛ وما لَيسَ عُنوانَ خِدمَةِ إشعارٍ (أَو فارِغٌ) لا يَبلُغُ المَخزَن؛ وجَلسَةٌ أَسقَطَها
+    /// رَفعٌ بَعدَ البَوّابَةِ تُرَدُّ عَلى القِراءَةِ الجَديدَةِ بِلا كِتابَة.</summary>
+    [Theory]
+    [InlineData("another-account")]
+    [InlineData("not-a-push-service")]
+    [InlineData("empty")]
+    [InlineData("revoked-after-the-gate")]
+    public async Task Signing_out_ignores_what_is_not_this_session_browser(string row)
+    {
+        var user = WithPushes(PushA);
+        var world = new DocWorld().Put(user);
+        var token = AuthHandlers.MakeToken(user.Id, NameSlug, 1);
+        if (row == "revoked-after-the-gate") world.BeforeMember = m => { if (m == "LoadAsync") user.SessionVersion = 2; };
+        string? endpoint = row switch
+        {
+            "another-account" => "https://fcm.googleapis.com/fcm/send/someone-else",
+            "not-a-push-service" => "https://evil.example/fcm/send/device-a",
+            "empty" => "",
+            _ => PushA,
+        };
+        var removed = await ForgetDeviceAsync(world, user, token, endpoint);
+        output.WriteLine($"{row} ⇒ {(removed ? "مُحِي" : "لا شَيء")} · كُتِبَ {world.Wrote<User>()} · لَمَسَ المَخزَن {world.Touches.Count} · الاشتِراكات {user.PushSubscriptions.Count}");
+        Assert.False(removed);
+        Assert.Equal(0, world.Wrote<User>());
+        Assert.Equal(0, world.SaveCalls);
+        Assert.Single(user.PushSubscriptions);
+        if (row is "not-a-push-service" or "empty") Assert.Empty(world.Touches);
     }
 
     // ─── ذاكِرَةُ الإصدار (الموجَة ١٢ F1 البَند ٧، ‏2026-10-30): قِراءَةٌ فاتَتها الذاكِرَةُ قَبلَ رَفعٍ تُعيدُ حِفظَ ما قَبلَه ──────────────────

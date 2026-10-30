@@ -107,6 +107,8 @@ public class FormBodyGateTests(ITestOutputHelper output)
     public void The_two_dual_endpoints_ask_the_content_type_before_reading()
     {
         var dual = FormWriteEndpoints().Where(e => AcceptsJsonToo(e.Body)).Select(e => e.Route).OrderBy(r => r, StringComparer.Ordinal).ToList();
-        Assert.Equal(new[] { "/{slug}/auth/email/verify", "/{slug}/auth/phone/verify" }, dual);
+        // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) وثالِثَتُهُما `/{slug}/auth/logout` بِقَرارٍ مَرئيّ: يَقرَأُ `push_endpoint` إن كانَ
+        // الجِسمُ استِمارَةً (لِيَمحوَ إشعاراتِ المُتَصَفِّحِ الخارِج)، ويَخرُجُ بِلا قِراءَةٍ لِما سِواها — فَبَوّابَةُ نَوعٍ تُغلِقُه (‏415) كانَت سَتَحبِسُ خُروجاً كانَ يَمُرّ.
+        Assert.Equal(new[] { "/{slug}/auth/email/verify", "/{slug}/auth/logout", "/{slug}/auth/phone/verify" }, dual);
     }
 }
