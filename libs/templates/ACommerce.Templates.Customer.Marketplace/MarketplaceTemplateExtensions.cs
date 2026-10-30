@@ -1993,14 +1993,18 @@ public static class MarketplaceTemplateExtensions
                 req.Query["returnUrl"].ToString(), AuthSession.LinkFor(slug, role, ""));
 
             var cmd = new Commands.AcceptTermsCommand(userId, slug, TermsPolicy.CurrentVersion);
+            // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٦) قَبولُ الشُروطِ سِجِلٌّ يَبقى بَعدَ الجَلسَة — فَيُكتَبُ مِن جَلسَةٍ مَفتوحَةٍ عَلى القِراءَةِ الجَديدَةِ وَحدَها.
+            var token = AuthSession.ResolveToken(req, slug);
+            bool accepted;
             try
             {
-                await pipeline.ExecuteAsync(cmd, () => handler.HandleAsync(cmd));
+                accepted = await pipeline.ExecuteAsync(cmd, () => handler.HandleAsync(cmd, admit: u => Services.SessionVersionGate.StillOpen(u, token)));
             }
             catch (Gates.GateDeniedException ex)
             {
                 return Results.Redirect(AuthSession.LinkFor(slug, role, $"login?err={ex.GateName}"));
             }
+            if (!accepted) return Results.Redirect(AuthSession.LinkFor(slug, role, "login?err=auth"));
             return Results.Redirect(returnUrl);
         }).DisableAntiforgery().RequireAuth();
 

@@ -426,7 +426,10 @@ public class EndpointBodyBleedTests
         // ‏2817 ← **2821** يَوم ‏2026-10-30 (الموجَة ١٢ F1 A-SESS-1): سَطرا كُلٍّ مِن بابَي `/{slug}/auth/nafath/login` و`/verify` — سُؤالُ
         // `LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Nafath, …)` ورَدُّه بِـ`channel_not_offered` قَبلَ أَوَّلِ حَقل، نَسَقُ أَبوابِ الجَوّالِ والبَريدِ الأَربَعَةِ
         // بِحَرفِها؛ والقَرارُ في `LoginChannels` والعُدَّة (`AuthHandlers.NafathSignsIn`). طَبَعَ العَدّادُ «‏2817 → 2821» و«‏3165 → 3169»، و**‏2 × 2 = 4**.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2821),
+        // ‏2821 ← **2824** يَوم ‏2026-10-30 (الموجَة ١٢ F1 البَند ٦ — ثابِتُ StillOpen): ثَلاثَةُ أَسطُرٍ في `/{slug}/terms/accept` — حَلُّ الرَمزِ لِيُعطى
+        // الكاتِبُ `admit: u => Services.SessionVersionGate.StillOpen(u, token)`، وحامِلُ النَتيجَة، ورَدُّ الجَلسَةِ المُغلَقَةِ بِرَمزِ بَوّابَةِ التَوثيق؛ والكِتابَةُ
+        // في `AcceptTermsHandler` بِـ`AccountWrites.UpdateAsync`. طَبَعَ العَدّادُ «‏2821 → 2824» و«‏3169 → 3172»، و**‏3**.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2824),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -1178,7 +1181,9 @@ public class EndpointBodyBleedTests
     /// في كيت العُروض). وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
     /// <remarks><b>‏3165 ← 3169 يَوم ‏2026-10-30</b> (الموجَة ١٢ F1 A-SESS-1): سَطرا كُلٍّ مِن بابَي نَفاذٍ يَسأَلانِ <c>LoginChannels.Offers(…, Nafath, …)</c> ويَرُدّانِ
     /// بِـ<c>channel_not_offered</c> قَبلَ أَوَّلِ حَقل. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 3169;
+    /// <remarks><b>‏3169 ← 3172 يَوم ‏2026-10-30</b> (الموجَة ١٢ F1 البَند ٦): ثَلاثَةُ أَسطُرٍ في بابِ قَبولِ الشُروطِ تُعطي كاتِبَه شَرطَ الجَلسَةِ وتَرُدُّ المُغلَقَة.
+    /// وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 3172;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

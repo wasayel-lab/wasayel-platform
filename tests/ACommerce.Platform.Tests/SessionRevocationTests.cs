@@ -213,6 +213,8 @@ public class SessionRevocationTests(ITestOutputHelper output)
             ["AuthHandlers.GetOrCreateUserAsync"] = MethodBody(auth, "private static async Task<AuthResult> GetOrCreateUserAsync("),
             ["AssignRoleAsync"] = MethodBody(mte, "private static async Task AssignRoleAsync("),
             ["PostLoginRouteAsync"] = MethodBody(mte, "private static async Task<string> PostLoginRouteAsync("),
+            // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٦) كانَ يَحفَظُ بِيَدِه — وكانَ في قائِمَةِ «ما بَقِيَ بِلا إعادَة» تَحتَ ADR-041 G-1.
+            ["AcceptTermsHandler.HandleAsync"] = MethodBody(WriteEndpointGuardTests.StripComments(Read($"{TemplateRoot}/Commands/AcceptTermsCommand.cs")), "public async Task<bool> HandleAsync("),
         };
         foreach (var route in new[] { "/api/{slug}/push/subscribe", "/{slug}/me/save", "/{slug}/me/role/save", "/{slug}/me/role/onboarding/save", "/{slug}/me/area/save" })
         {
@@ -222,7 +224,7 @@ public class SessionRevocationTests(ITestOutputHelper output)
         }
         var off = bodies.Where(b => !SavesThroughAccountWrites(b.Value)).Select(b => b.Key).ToList();
         output.WriteLine($"كُتّابُ الحِسابِ المُسَمَّون: {bodies.Count} · بِالكِتابَةِ الواحِدَة: {bodies.Count - off.Count}");
-        Assert.Equal(13, bodies.Count);
+        Assert.Equal(14, bodies.Count);
         Assert.True(off.Count == 0, "كاتِبٌ يَحفَظُ الحِسابَ بِيَدِه: " + string.Join(" · ", off));
     }
 
@@ -259,27 +261,60 @@ public class SessionRevocationTests(ITestOutputHelper output)
         Assert.Equal(open, ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.StillOpen(account, token));
     }
 
-    /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم» (الموجَة ١٢ F1 البَند ٦ — ثابِتُ StillOpen، ‏2026-10-30)</b>: ADR-041 §٣ و«أ» F1·٣ يَقولانِ إنّ كُلَّ كاتِبٍ بِاسمِ جَلسَةٍ
-    /// يُعلِنُ <c>StillOpen</c> — و<c>AcceptTermsHandler</c> يُحَمِّلُ الحِسابَ ويَحفَظُه بِيَدِه بِلا سُؤال. فَجَلسَةٌ عَبَرَت البَوّابَةَ ثُمَّ أُسقِطَت («اخرج من كل
-    /// الأجهزة» يَقَعُ بَينَ البَوّابَةِ والقِراءَة — يُدخِلُه خُطّافُ <c>DocWorld</c> عِندَ <c>LoadAsync</c>) تَكتُبُ قَبولَ الشُروط: سِجِلٌّ قانونيٌّ يَبقى بَعدَ الجَلسَة،
-    /// مِن جَلسَةٍ مُغلَقَة. يُقلَبُ بِاسمِه في كوميتِ التَبديل.</para>
-    /// </summary>
+    /// <summary>قَبولُ الشُروطِ بِالبابِ الحَقيقيّ: <c>admit</c> قَرارُ <c>StillOpen</c> عَلى الرَمزِ الَّذي عَبَرَ البَوّابَة.</summary>
+    private static async Task<bool> AcceptTermsAsync(DocWorld world, Guid userId, string token, int version)
+        => await new ACommerce.Templates.Customer.Marketplace.Commands.AcceptTermsHandler(world.Store).HandleAsync(
+            new ACommerce.Templates.Customer.Marketplace.Commands.AcceptTermsCommand(userId, NameSlug, version),
+            admit: u => ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.StillOpen(u, token));
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، كوميتُ التَبديل)</b> — كانَ <c>Today_the_terms_acceptance_is_written_for_a_session_revoked_before_the_write</c>
+    /// (‏<c>c5d124c</c>): «كُتِبَ القَبولُ 1 مَرَّة · إصدارُ الشُروط 3 · الجَلسَةُ مَفتوحَة False». والآن جَلسَةٌ أَسقَطَها «اخرج من كل الأجهزة» بَينَ البَوّابَةِ
+    /// والقِراءَةِ يُرَدُّ قَبولُها عَلى الوَثيقَةِ الجَديدَة بِلا كِتابَة.</summary>
     [Fact]
-    public async Task Today_the_terms_acceptance_is_written_for_a_session_revoked_before_the_write()
+    public async Task A_session_revoked_before_the_terms_write_is_refused_and_nothing_is_written()
     {
         var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 0 };
         var token = AuthHandlers.MakeToken(user.Id, NameSlug, 0);
         var world = new DocWorld().Put(user);
         world.BeforeMember = m => { if (m == "LoadAsync") user.SessionVersion = 1; };
-        var handler = new ACommerce.Templates.Customer.Marketplace.Commands.AcceptTermsHandler(world.Store);
-        await handler.HandleAsync(new ACommerce.Templates.Customer.Marketplace.Commands.AcceptTermsCommand(user.Id, NameSlug, 3));
+        var accepted = await AcceptTermsAsync(world, user.Id, token, 3);
         var stored = world.Read<User>(user.Id.ToString())!;
-        var open = ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.StillOpen(stored, token);
-        output.WriteLine($"اليَوم: جَلسَةٌ أُسقِطَت بَينَ البَوّابَةِ والكِتابَة ⇒ كُتِبَ القَبولُ {world.Wrote<User>()} مَرَّة · إصدارُ الشُروط {stored.AcceptedTermsVersion} · الجَلسَةُ مَفتوحَة {open}");
+        output.WriteLine($"جَلسَةٌ أُسقِطَت بَينَ البَوّابَةِ والكِتابَة ⇒ {(accepted ? "قُبِل" : "رُدّ")} · كُتِبَ {world.Wrote<User>()} مَرَّة · إصدارُ الشُروط {stored.AcceptedTermsVersion}");
+        Assert.False(accepted);
+        Assert.Equal(0, world.Wrote<User>());
+        Assert.Equal(0, world.SaveCalls);
+        Assert.Equal(0, stored.AcceptedTermsVersion);
+        Assert.Null(stored.AcceptedTermsAt);
+    }
+
+    /// <summary>السالِبان: جَلسَةٌ مَفتوحَةٌ تَقبَلُ الشُروطَ ويُكتَبُ الإصدار؛ وحِسابٌ غائِبٌ يُرَدُّ بِـ<c>false</c> (كانَ يَرمي «user not found» ← ‏500).</summary>
+    [Fact]
+    public async Task An_open_session_accepts_the_terms_and_a_missing_account_is_refused_without_a_throw()
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 2 };
+        var world = new DocWorld().Put(user);
+        var accepted = await AcceptTermsAsync(world, user.Id, AuthHandlers.MakeToken(user.Id, NameSlug, 2), 3);
+        var stored = world.Read<User>(user.Id.ToString())!;
+        var missing = await AcceptTermsAsync(new DocWorld(), Guid.NewGuid(), AuthHandlers.MakeToken(Guid.NewGuid(), NameSlug, 0), 3);
+        output.WriteLine($"جَلسَةٌ مَفتوحَة ⇒ {(accepted ? "قُبِل" : "رُدّ")} · إصدارُ الشُروط {stored.AcceptedTermsVersion} · حِسابٌ غائِب ⇒ {(missing ? "قُبِل" : "رُدّ")}");
+        Assert.True(accepted);
         Assert.Equal(1, world.Wrote<User>());
         Assert.Equal(3, stored.AcceptedTermsVersion);
-        Assert.False(open);
+        Assert.NotNull(stored.AcceptedTermsAt);
+        Assert.False(missing);
+    }
+
+    /// <summary>بابُ <c>/{slug}/terms/accept</c> يُعطي كاتِبَه <c>admit</c> عَلى الرَمزِ الَّذي يَحُلُّه، ويَرُدُّ المُغلَقَ إلى الدُخولِ بِرَمزِ بَوّابَةِ التَوثيقِ نَفسِه.</summary>
+    [Fact]
+    public void The_terms_door_hands_its_writer_the_session_and_sends_a_closed_one_to_sign_in()
+    {
+        var doors = WriteEndpointGuardTests.AllMinimalApiEndpoints().Where(e => e.Route == "/{slug}/terms/accept").ToList();
+        Assert.True(doors.Count == 1, $"«/{{slug}}/terms/accept»: {doors.Count} باباً — الأَداةُ عَمياء.");
+        var body = doors[0].Body;
+        Assert.Contains("var token = AuthSession.ResolveToken(req, slug);", body, StringComparison.Ordinal);
+        Assert.Contains("handler.HandleAsync(cmd, admit: u => Services.SessionVersionGate.StillOpen(u, token))", body, StringComparison.Ordinal);
+        Assert.Contains("if (!accepted) return Results.Redirect(AuthSession.LinkFor(slug, role, \"login?err=auth\"));", body, StringComparison.Ordinal);
+        Assert.True(AsksTheSession(body));
     }
 
     /// <summary>
