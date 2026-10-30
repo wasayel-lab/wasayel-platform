@@ -66,12 +66,15 @@ public class CheckoutPerItemDisclosureTests
     /// <para><b>وقُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د13 «ب»؛ كانَ <c>The_payment_step_discloses_one_order_per_item_where_the_pay_method_is_chosen</c>،
     /// وتَوصيفُ «اليَوم» <c>ee46c53</c>): «يتبدّل نصّ الإفصاح في خطوة الدفع إلى «لكل بائع»» — شُحنَةٌ واحِدَةٌ لِكُلِّ بائِعٍ ولِكُلِّ مُنتَجٍ طَلَبُه، والدَفعُ
     /// عِندَ تَسليمِ شُحنَةِ كُلِّ بائِع؛ والمَوضِعُ والمِفتاحُ ونَصُّ النَقدِ كَما كانَت.</para></summary>
+    /// <para><b>وقُلِبَ بِاسمِه ثانِيَةً</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO13؛ تَوصيفُه <c>48ad0da</c> — كانَ <c>The_payment_step_discloses_one_shipment_per_vendor_where_the_pay_method_is_chosen</c>):
+    /// «شُحنَةٌ واحِدَةٌ لِكُلِّ بائِع» <b>حينَ يَشحَنُ عَبرَ شَرِكَةِ الشَّحن</b>، وما يُسَلِّمُه بِنَفسِه يَصِلُ وَحدَه — فَـ«تأكيد: شحن» العامُّ يُخرِجُ الأُختَ مِن البوليصَة؛ والمَوضِعُ
+    /// والمِفتاحُ ونَصُّ النَقدِ كَما كانَت.</para>
     [Fact]
-    public void The_payment_step_discloses_one_shipment_per_vendor_where_the_pay_method_is_chosen()
+    public void The_payment_step_discloses_one_shipment_per_vendor_through_the_carrier_where_the_pay_method_is_chosen()
     {
         const string Key = "checkout.payment.per_item_note";
         var text = LocaleCatalog.Find(LocaleCatalog.Arabic, Key);
-        Assert.Equal("شُحنَةٌ واحِدَةٌ لِكُلِّ بائِعٍ في سَلَّتِك: مُنتَجاتُه تُشحَنُ مَعاً بِبوليصَةٍ واحِدَة، ولِكُلِّ مُنتَجٍ طَلَبُه — والدَفعُ عِندَ الاستِلامِ عِندَ تَسليمِ شُحنَةِ كُلِّ بائِع.", text);
+        Assert.Equal("شُحنَةٌ واحِدَةٌ لِكُلِّ بائِعٍ في سَلَّتِك حينَ يَشحَنُ عَبرَ شَرِكَةِ الشَّحن: مُنتَجاتُه تُشحَنُ مَعاً بِبوليصَةٍ واحِدَة، وما يُسَلِّمُه بِنَفسِه يَصِلُ وَحدَه، ولِكُلِّ مُنتَجٍ طَلَبُه — والدَفعُ عِندَ الاستِلامِ عِندَ تَسليمِ كُلِّ شُحنَة.", text);
         Assert.DoesNotContain("يُشحَنُ وَحدَه", text, StringComparison.Ordinal);
         Assert.DoesNotMatch("[0-9٠-٩]", text);
         Assert.Null(LocaleCatalog.Find("en", Key));

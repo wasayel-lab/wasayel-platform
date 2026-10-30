@@ -157,16 +157,25 @@ public static class DealShipAuthorization
     /// البَوّابَةُ لِهذا الشاحِنِ بِـ<see cref="DealNotReadyToShip"/> وَحدَه — أَي بائِعُها هو، فَعّالَةً، نَقداً، ولَم تَبلُغ «تأكيد». فَالمُلغاةُ والمَشحونَةُ (بِطَلَبٍ أَو
     /// بِغَيرِه) والجاهِزَةُ لا تَنتَظِر، وما تَرُدُّه البَوّابَةُ لِسَبَبٍ غَيرِ مَرحَلَتِها لا يَنتَظِرُ ما لا يَأتي. بِتَرتيبِ ما أُعطِيَت.</para>
     /// </summary>
+    /// <remarks>(‏2026-10-30، تَدقيقُ الموجَة ١١ CO13 — المُرَحَّلُ [S4]؛ تَوصيفُه <c>48ad0da</c> — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>وأُختٌ في «نِزاع» تَنتَظِرُ أَيضاً</b>
+    /// (<see cref="MayResume"/>) — البَوّابَةُ تَرُدُّها بِـ<see cref="DealNotActive"/> فَكانَت لا تُمسِكُ النَقرَة، وتُستَأنَفُ (د38) فَتُشحَنُ وَحدَها بِطَلَبٍ ثانٍ.</remarks>
     public static IReadOnlyList<Deal> WaitingSiblings(IEnumerable<Deal> siblings, DealShipper by)
         => siblings.Where(s => !DealShipping.IsPlaced(s)
                                && !OtoOrderStatusGate.Reached(s, DealStage.Shipping)
-                               && Validate(s, by, carrierReady: true)?.Code == DealNotReadyToShip)
+                               && (Validate(s, by, carrierReady: true)?.Code == DealNotReadyToShip || MayResume(s, by)))
                    .ToArray();
+
+    /// <summary><b>أُختٌ في «نِزاع» قَد تُستَأنَفُ إلى طَلَبِ هذا البائِع — دالَّةٌ نَقِيَّة</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO13): في «نِزاع»، وبائِعُها هذا الشاحِن،
+    /// ونَقداً — ما كانَت البَوّابَةُ سَتُجيزُه لَولا حالُه. حَسمُ النِزاعِ يُفرِجُ عَنها: إلغاءٌ يُخرِجُها، واستِئنافٌ يُعيدُها فَتُشحَنُ مَعَ أَخَواتِها.</summary>
+    public static bool MayResume(Deal sibling, DealShipper by)
+        => sibling.Status == DealStatus.Disputed
+           && DealAcceptAuthorization.OwnerIdOf(sibling) == by.ActorId
+           && DealsPolicy.IsCashOnDelivery(sibling);
 
     /// <summary>الخَرقُ لِأَخَواتٍ تَنتَظِر (<see cref="WaitingSiblings"/>) — و<c>null</c> لِقائِمَةٍ فارِغَة: يُنشَأُ الطَلَبُ بِمَن حَضَر.</summary>
     public static DealShipViolation? ValidateGroup(IReadOnlyList<Deal> waiting)
         => waiting.Count > 0
-            ? new(SiblingsNotReady, $"مِن طَلَبِ المُشتَري نَفسِه {waiting.Count} لَم يُؤَكِّدها البائِعُ بَعد — تُشحَنُ مَعاً في طَلَبٍ واحِد.")
+            ? new(SiblingsNotReady, $"مِن طَلَبِ المُشتَري نَفسِه {waiting.Count} لَم يُؤَكِّدها البائِعُ بَعد أَو في «نِزاع» — تُشحَنُ مَعاً في طَلَبٍ واحِد.")
             : null;
 
     /// <summary>

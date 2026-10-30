@@ -111,6 +111,9 @@ public class CheckoutCardInvoiceDisclosureTests(ITestOutputHelper output)
     internal static string PerItemNote => LocaleCatalog.Find(LocaleCatalog.Arabic, "checkout.payment.per_item_note")!;
 
     /// <summary>نَصُّ الإفصاحِ النَقدِيِّ حَتّى قَرارِ المالِك د13 (‏2026-10-29) بِحَرفِه — يُعيدُ صَفحَةَ «اليَوم» لِلمُقارَنَةِ البايتِيَّة.</summary>
+    /// <summary>نَصُّه بَعدَ د13 وحَتّى تَدقيقِ الموجَة ١١ CO13 (‏2026-10-30) بِحَرفِه — لِلمُقارَنَةِ البايتِيَّةِ نَفسِها.</summary>
+    internal const string PerItemNoteUntilCO13 = "شُحنَةٌ واحِدَةٌ لِكُلِّ بائِعٍ في سَلَّتِك: مُنتَجاتُه تُشحَنُ مَعاً بِبوليصَةٍ واحِدَة، ولِكُلِّ مُنتَجٍ طَلَبُه — والدَفعُ عِندَ الاستِلامِ عِندَ تَسليمِ شُحنَةِ كُلِّ بائِع.";
+
     internal const string PerItemNoteUntilD13 = "كُلُّ مُنتَجٍ في سَلَّتِكَ طَلَبٌ مُستَقِلٌّ مَعَ بائِعِه — يُشحَنُ وَحدَه، والدَفعُ عِندَ الاستِلامِ عِندَ تَسليمِ كُلٍّ مِنها.";
 
     /// <summary>بِلا بَوّابَة: البِطاقَةُ لا تُعرَض، والإفصاحُ مَرَّةً — يَبقى بِلا تَعديلِ حَرفٍ بَعدَ الجُملَة (وبَصمَتُه مَطبوعَةٌ لِلمُقارَنَة).</summary>
@@ -166,8 +169,11 @@ public class CheckoutCardInvoiceDisclosureTests(ITestOutputHelper output)
             // فَإعادَةُ نَصِّه القَديمِ تُعيدُ صَفحَةَ «اليَوم» بايتاً: 4621 حَرفاً بِبَصمَتِها.
             .Replace(PerItemNote, PerItemNoteUntilD13, StringComparison.Ordinal);
         // ‏2026-10-29 (د13): «قَبلَ الجُملَة» ‏(4350، 3968233D84D3688E) ← (4399، 614532EF76589C1A) — الإفصاحُ النَقدِيُّ أَطوَلُ بِـ49 حَرفاً، ولا شَيءَ غَيرُه (السَطرُ التالي).
-        Assert.Equal((4399, "614532EF76589C1A"), (before.Length, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(before)))[..16]));
-        Assert.Equal(4350, before.Length - PerItemNote.Length + PerItemNoteUntilD13.Length);
+        // ‏2026-10-30 (تَدقيقُ الموجَة ١١ CO13؛ يُلحَقُ والبَصمَةُ القَديمَةُ بِحَرفِها): الإفصاحُ النَقدِيُّ صارَ «حينَ يَشحَنُ عَبرَ شَرِكَةِ الشَّحن … وما يُسَلِّمُه بِنَفسِه
+        // يَصِلُ وَحدَه» — مَقطَعٌ واحِدٌ تَبَدَّل (مَقيسٌ بِتَصييرِ الخُطوَةِ قَبلَه وبَعدَه: الفَرقُ داخِلَ نَصِّه)، فَإعادَةُ نَصِّه السابِقِ تُعيدُ (4399، 614532EF76589C1A) بايتاً.
+        var beforeCo13 = before.Replace(PerItemNote, PerItemNoteUntilCO13, StringComparison.Ordinal);
+        Assert.Equal((4399, "614532EF76589C1A"), (beforeCo13.Length, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(beforeCo13)))[..16]));
+        Assert.Equal(4350, beforeCo13.Length - PerItemNoteUntilCO13.Length + PerItemNoteUntilD13.Length);
         Assert.Equal(4621, today.Length);
         Assert.Equal("445BCC8DE5E35237", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(today)))[..16]);
 
