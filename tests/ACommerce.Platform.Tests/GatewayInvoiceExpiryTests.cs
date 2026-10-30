@@ -224,6 +224,49 @@ public class GatewayInvoiceExpiryTests(ITestOutputHelper output)
         Assert.Equal(new[] { "GatewayPayments.cs" }, scheduling);
     }
 
+    /// <summary>
+    /// <para><b>ساعَةُ المُهلَةِ مِن إنشاءِ الفاتورَةِ عِندَ إتمامِ الشِراء، والقَبولُ لا يُحَرِّكُها</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO1 — المُرَحَّلُ [S3·٢]؛ <b>بِلا تَغييرِ
+    /// سُلوك</b>): صَفُّ ساعَةٍ في CI يَجمَعُ ما كانَ مُفَرَّقاً بَينَ صَفَّين — <c>GatewayPaymentConfirmTests</c> يُثَبِّتُ ‏24 ساعَةً والتاريخَ المَكتوبَ بِلا حافِلَة، وصَفُّ الجَدوَلَةِ أَعلاه
+    /// يُثَبِّتُ وَقتَ الرِسالَةِ = <c>Opened + InvoiceLifetime</c> بِالثابِتِ نَفسِه (فَيَمُرُّ لَو صارَ ‏48). هُنا بِحَرفِها: الفَتحُ ‏2026-10-29 ‏08:00Z ⇒ <c>expired_at</c> إلى ميسر
+    /// و<c>gateway_invoice_expires_at</c> عَلى كُلِّ صَفقَةٍ ووَقتُ رِسالَةِ المُهلَة — ثَلاثَتُها ‏2026-10-30 ‏08:00Z.</para>
+    /// <para>ثُمَّ يَقبَلُ البائِعُ ويُؤَكِّدُ (د5 (١) «أ»: «أَكمِل الدَّفع» بَعدَ القَبول) — فَلا يُعادُ التاريخُ ولا تُجَدوَلُ رِسالَةٌ ثانِيَة، و«أَكمِل الدَّفع» يُرسَمُ قَبلَ التاريخِ ويُخفى
+    /// عِندَه؛ فَقَبولٌ بَعدَ ‏23 ساعَةً يَترُكُ لِلمُشتَري ساعَةً واحِدَة — كُلفَةُ «أ» S3·٣ مَقيسَةً لا مَحكِيَّة.</para>
+    /// </summary>
+    [Fact]
+    public async Task The_payment_window_runs_from_invoice_creation_at_checkout_and_acceptance_does_not_move_it()
+    {
+        const string due = "2026-10-30T08:00:00.000Z";
+        var dueAt = new DateTimeOffset(2026, 10, 30, 8, 0, 0, TimeSpan.Zero);
+        var bus = new RecordingMessageBus();
+        var (w, _) = await OpenedCart(TimeSpan.FromHours(23), bus);
+
+        using var created = System.Text.Json.JsonDocument.Parse(w.Moyasar.Bodies[0]!);
+        var sent = Assert.Single(bus.Sent);
+        Assert.Equal(due, created.RootElement.GetProperty("expired_at").GetString());
+        Assert.All(w.Ids, id => Assert.Equal(due, Load(w, id).Refs[GatewayPayments.InvoiceExpiresAtRef]));
+        Assert.Equal(dueAt, sent.Options!.ScheduledTime);
+        Assert.All(w.Ids, id => Assert.False(GatewayPayments.AwaitsPayment(Load(w, id))));   // قَبلَ القَبولِ لا «أَكمِل الدَّفع»
+
+        var acceptedAt = Opened + TimeSpan.FromHours(23);
+        foreach (var id in w.Ids)
+        {
+            Assert.True((await w.Deals.AcceptAsync(Slug, id, new DealAcceptor(Seller, "بائِع"))).Ok);
+            Assert.True((await w.Deals.AdvanceAsync(Slug, id, Seller, "بائِع")).Ok);
+        }
+
+        var deals = w.Ids.Select(id => Load(w, id)).ToArray();
+        output.WriteLine($"الفَتح: {Opened:O} · expired_at: {created.RootElement.GetProperty("expired_at").GetString()} · المَكتوب: " +
+                         $"{string.Join("، ", deals.Select(d => d.Refs[GatewayPayments.InvoiceExpiresAtRef]))} · الرِسالَة: {sent.Options.ScheduledTime:O} · رَسائِل: {bus.Sent.Count} · " +
+                         $"بَعدَ القَبولِ ‏+23س يَبقى: {dueAt - acceptedAt}");
+        Assert.All(deals, d => Assert.Equal(DealStage.Confirmed, d.Stage));
+        Assert.All(deals, d => Assert.Equal(due, d.Refs[GatewayPayments.InvoiceExpiresAtRef]));
+        Assert.Single(bus.Sent);
+        Assert.All(deals, d => Assert.True(GatewayPayments.AwaitsPayment(d)));
+        Assert.All(deals, d => Assert.False(GatewayReturn.WindowClosed(d, acceptedAt)));
+        Assert.All(deals, d => Assert.True(GatewayReturn.WindowClosed(d, dueAt)));
+        Assert.Equal(TimeSpan.FromHours(1), dueAt - acceptedAt);
+    }
+
     /// <summary><b>تَعَذُّرُ الجَدوَلَةِ لا يُسقِطُ الشِراء</b>: الحافِلَةُ تَرمي ← الفاتورَةُ مَفتوحَةٌ ورابِطُها يَعود، والمَراجِعُ مَكتوبَة، وسَطرُ خَطَأٍ يُسَمّي الصَفقَةَ —
     /// وزِرُّ «تَحَقَّق» يُلغي بَعدَ المُهلَةِ كَما كان.</summary>
     [Fact]
