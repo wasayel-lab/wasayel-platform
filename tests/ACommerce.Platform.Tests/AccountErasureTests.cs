@@ -344,28 +344,33 @@ public class AccountErasureTests
         Assert.False(AccountErasure.EraseFrom(deal, Me));    // ومَرَّةً ثانِيَةً لا شَيء
     }
 
-    /// <summary><b>تَوصيفٌ قَبلَ التَبديل (‏2026-10-30، الموجَة ١٢ F2 · ٦ — XS-2؛ القاعِدَة ٣)</b>: بابُ «→ التالي» في الاستوديو يَكتُبُ سَطرَه بِمُعَرِّفِ البائِعِ
-    /// المُقابِلِ واسمِ <see cref="DealEvent.StudioActor"/> (‏ADR-047 §٨ (٢))، و<c>EraseFrom(Deal)</c> يُعيدُ تَسمِيَةَ كُلِّ سَطرٍ مُعَرِّفُه مُعَرِّفُ المَحذوف — فَيَصيرُ سَطرُ
-    /// الاستوديو «حِسابٌ مَحذوف»، فَلا يَعُدُّه <see cref="DealEvent.IsByStudio"/>، فَيَصيرُ <c>TookAStep</c> لِلبائِعِ صادِقاً — ولَم يَنقُر شَيئاً: تَقييمٌ عَنه بَعدَها
-    /// «مَوثوق». وسَطرُه هُو (خُطوَتُه بِنَفسِه) يُعادُ اسمُه كَما يَنبَغي.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، الموجَة ١٢ F2 · ٦ — XS-2)</b> — كانَ
+    /// <c>Today_erasing_the_vendor_renames_the_studio_line_carrying_his_id_so_it_becomes_his_step</c> (‏<c>cb88a77</c>: سَطرُ الاستوديو «حِسابٌ مَحذوف»،
+    /// <c>IsByStudio</c> كاذِب، <c>TookAStep</c> صادِق). <b>السالِب</b>: سَطرُ الاستوديو بِمُعَرِّفِ البائِعِ يَبقى بِاسمِه، و<c>IsByStudio</c> صادِق، و<c>TookAStep</c>
+    /// كاذِبٌ قَبلَ الحَذفِ وبَعدَه — فَتَقييمٌ عَنه بَعدَها لا يُوسَمُ «مَوثوقاً»؛ وسَطرُ المَنصَّةِ بِلا مُعَرِّفٍ كَما كان. <b>المُوجَب</b>: سَطرُه هُو يُعادُ اسمُه،
+    /// و<c>TookAStep</c> لَه صادِقٌ بِخُطوَتِه هُو.</summary>
     [Fact]
-    public void Today_erasing_the_vendor_renames_the_studio_line_carrying_his_id_so_it_becomes_his_step()
+    public void Erasing_the_vendor_keeps_the_studio_and_platform_lines_and_renames_only_his_own_step()
     {
         var studio = new DealEvent(DealStage.Offered, DealStage.Booked, "advanced", Me, DealEvent.StudioActor, null, DateTime.UtcNow);
+        var platform = new DealEvent(DealStage.Confirmed, DealStage.Paid, "advanced", null, DealPatternCatalog.PlatformActor, null, DateTime.UtcNow);
         var own = new DealEvent(DealStage.Booked, DealStage.Confirmed, "advanced", Me, Name, null, DateTime.UtcNow);
-        var studioOnly = new Deal { InitiatorId = Other, InitiatorName = "مُشتَرٍ", CounterpartyId = Me, CounterpartyName = Name, Timeline = new() { studio } };
+        var studioOnly = new Deal { InitiatorId = Other, InitiatorName = "مُشتَرٍ", CounterpartyId = Me, CounterpartyName = Name, Timeline = new() { studio, platform } };
         var both = new Deal { InitiatorId = Other, InitiatorName = "مُشتَرٍ", CounterpartyId = Me, CounterpartyName = Name, Timeline = new() { studio, own } };
         var stepBefore = DealReviewAuthorization.TookAStep(studioOnly, Me);
 
-        Assert.True(AccountErasure.EraseFrom(studioOnly, Me));
+        Assert.True(AccountErasure.EraseFrom(studioOnly, Me));   // اسمُ الطَرَفِ المُقابِل
         Assert.True(AccountErasure.EraseFrom(both, Me));
         output.WriteLine($"قَبلَ الحَذف: خُطوَتُه {stepBefore} · بَعدَه: اسمُ سَطرِ الاستوديو «{studioOnly.Timeline[0].ActorName}» · مِن الاستوديو {DealEvent.IsByStudio(studioOnly.Timeline[0])} · " +
-                         $"خُطوَتُه {DealReviewAuthorization.TookAStep(studioOnly, Me)} · سَطرُه هُو «{both.Timeline[1].ActorName}»");
+                         $"خُطوَتُه {DealReviewAuthorization.TookAStep(studioOnly, Me)} · سَطرُ المَنصَّة «{studioOnly.Timeline[1].ActorName}» · سَطرُه هُو «{both.Timeline[1].ActorName}» · خُطوَتُه فيها {DealReviewAuthorization.TookAStep(both, Me)}");
         Assert.False(stepBefore);
-        Assert.Equal(AccountDeletion.ErasedName, studioOnly.Timeline[0].ActorName);
-        Assert.False(DealEvent.IsByStudio(studioOnly.Timeline[0]));
-        Assert.True(DealReviewAuthorization.TookAStep(studioOnly, Me));
-        Assert.Equal(AccountDeletion.ErasedName, both.Timeline[1].ActorName);
+        Assert.Equal((DealEvent.StudioActor, true), (studioOnly.Timeline[0].ActorName, DealEvent.IsByStudio(studioOnly.Timeline[0])));
+        Assert.False(DealReviewAuthorization.TookAStep(studioOnly, Me));
+        Assert.Equal((DealPatternCatalog.PlatformActor, true), (studioOnly.Timeline[1].ActorName, DealEvent.IsByPlatform(studioOnly.Timeline[1])));
+        Assert.Equal(AccountDeletion.ErasedName, studioOnly.CounterpartyName);
+        Assert.Equal((DealEvent.StudioActor, AccountDeletion.ErasedName), (both.Timeline[0].ActorName, both.Timeline[1].ActorName));
+        Assert.True(DealReviewAuthorization.TookAStep(both, Me));
+        Assert.False(AccountErasure.EraseFrom(both, Me));         // ومَرَّةً ثانِيَةً لا شَيء
     }
 
     [Fact]

@@ -155,6 +155,10 @@ public static class AccountErasure
 
     // ─── الأَثَرُ عَلى كُلِّ نَوع — دالّاتٌ نَقِيَّةٌ تُعيدُ «تَغَيَّرَ أَم لا» ─────────────────────────────────
 
+    /// <remarks>(‏2026-10-30، الموجَة ١٢ F2 · ٦ — XS-2؛ تَوصيفُه <c>cb88a77</c>) <b>سَطرٌ فاعِلُه الاستوديو أَو المَنصَّةُ لا يُعادُ اسمُه</b>
+    /// (<see cref="DealEvent.IsByStudio"/>، <see cref="DealEvent.IsByPlatform"/>): بابُ «→ التالي» يَكتُبُ سَطرَه بِمُعَرِّفِ البائِعِ المُقابِلِ واسمِ
+    /// <see cref="DealEvent.StudioActor"/> — والاسمُ هُوَ ما يُمَيِّزُه (ADR-047 §٨ (٢)) — فَكانَت تَسمِيَتُه «حِسابٌ مَحذوف» تُصَيِّرُه خُطوَةَ البائِعِ
+    /// (<c>DealReviewAuthorization.TookAStep</c>) ولَم يَنقُر شَيئاً. ولا اسمَ لِلمَحذوفِ في السَطرَين: اسمُ صاحِبِ المَتجَرِ وثابِتُ المَنصَّة.</remarks>
     public static bool EraseFrom(Deal d, Guid userId)
     {
         var changed = false;
@@ -166,7 +170,8 @@ public static class AccountErasure
         }
         if (d.CounterpartyId == userId) changed |= Set(d.CounterpartyName, v => d.CounterpartyName = v);
         for (var i = 0; i < d.Timeline.Count; i++)
-            if (d.Timeline[i].ActorId == userId && d.Timeline[i].ActorName != AccountDeletion.ErasedName)
+            if (d.Timeline[i].ActorId == userId && d.Timeline[i].ActorName != AccountDeletion.ErasedName
+                && !DealEvent.IsByStudio(d.Timeline[i]) && !DealEvent.IsByPlatform(d.Timeline[i]))
             {
                 d.Timeline[i] = d.Timeline[i] with { ActorName = AccountDeletion.ErasedName };
                 changed = true;
