@@ -28,23 +28,48 @@ public class OtoClosedOrderNoticeTests(ITestOutputHelper output)
 
     private static Deal Stored(DealShipTests.World w) => w.Docs.Read<Deal>(w.Id.ToString())!;
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b> (القاعِدَة ٣): OTO تَقولُ «canceled» عَن طَلَبِ صَفقَةٍ عِندَ «تأكيد» — الوارِدُ <c>not_delivered</c> بِلا <c>oto_closed_status</c>،
-    /// والصَفقَةُ «تَحمِلُ طَلَباً حَيّاً»، وإلغاءُ المُشتَري والبائِعِ يُرَدّانِ <c>deal_past_cancel_stage</c>.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه</b> (تَوصيفُه <c>97167af</c> — كانَ <c>Today_a_canceled_order_notice_writes_nothing_and_the_party_cancel_stays_refused</c>): OTO تَقولُ
+    /// «canceled» عَن طَلَبِ صَفقَةٍ عِندَ «تأكيد» — الوارِدُ <c>not_delivered</c> كَما كان <b>ويَكتُبُ <c>oto_closed_status</c></b>، فَلا «طَلَبَ حَيّاً» وإلغاءُ المُشتَري
+    /// والبائِعِ يُقبَلانِ (مُوجِب)؛ وإعادَةُ الإشعارِ لا تَكتُبُ سَطراً ثانِياً.</summary>
     [Fact]
-    public async Task Today_a_canceled_order_notice_writes_nothing_and_the_party_cancel_stays_refused()
+    public async Task A_canceled_order_notice_closes_the_order_and_the_party_cancel_is_allowed()
     {
         var w = await PlacedAtConfirmed("canceled");
 
         var outcome = await w.Shipping.ReceiveAsync(Slug, OtoOrderStatusTests.Notice(w.Id, OtoId, status: "canceled"));
+        var lines = Stored(w).Timeline.Count;
+        await w.Shipping.ReceiveAsync(Slug, OtoOrderStatusTests.Notice(w.Id, OtoId, status: "canceled"));
 
         var deal = Stored(w);
         var buyer = DealCancelAuthorization.Validate(deal, new DealCanceller(DealShipTests.Buyer, "مُشتَرٍ", IsStoreAdmin: false))?.Code;
         var vendor = DealCancelAuthorization.Validate(deal, new DealCanceller(DealShipTests.Seller, "بائِع", IsStoreAdmin: false))?.Code;
-        output.WriteLine($"الوارِد: {outcome.Code} · مُغلَق؟ {deal.Refs.ContainsKey(DealShipping.ClosedRef)} · حَيّ؟ {DealShipping.HoldsLiveOrder(deal)} · المُشتَري: {buyer} · البائِع: {vendor}");
+        output.WriteLine($"الوارِد: {outcome.Code} · مُغلَق: {deal.Refs.GetValueOrDefault(DealShipping.ClosedRef)} · حَيّ؟ {DealShipping.HoldsLiveOrder(deal)} · المُشتَري: {buyer ?? "يُقبَل"} · البائِع: {vendor ?? "يُقبَل"} · أَسطُر: {lines}→{deal.Timeline.Count}");
         Assert.Equal(OtoOrderStatusGate.NotDelivered, outcome.Code);
+        Assert.Equal("canceled", deal.Refs[DealShipping.ClosedRef]);
+        Assert.True(DealShipping.ClosedAtOto(deal));
+        Assert.False(DealShipping.HoldsLiveOrder(deal));
+        Assert.Null(buyer);
+        Assert.Null(vendor);
+        Assert.Equal(lines, deal.Timeline.Count);
+        Assert.True((await w.Deals.CancelAsync(Slug, w.Id, new DealCanceller(DealShipTests.Buyer, "مُشتَرٍ", IsStoreAdmin: false), "عَدَلتُ")).Ok);
+    }
+
+    /// <summary><b>السالِب</b>: حالٌ غَيرُ نِهائِيٍّ (<c>searchingDriver</c>) لا يُغلِق — لا <c>oto_closed_status</c>، والطَلَبُ حَيٌّ، والإلغاءُ يُرَدُّ <c>deal_past_cancel_stage</c> كَما كان؛
+    /// وجَوابٌ عَن طَلَبٍ غَيرِ طَلَبِنا لا يُغلِقُ شَيئاً.</summary>
+    [Theory]
+    [InlineData("searchingDriver", true)]
+    [InlineData("canceled", false)]
+    public async Task A_non_terminal_or_foreign_answer_keeps_the_order_live(string status, bool ours)
+    {
+        var w = await PlacedAtConfirmed(status);
+        if (!ours) w.Oto.Routes[OtoClient.OrderStatusPath] = _ => OtoRouteHandler.Tracking("another-order", OtoId, status, label: null);
+
+        await w.Shipping.ReceiveAsync(Slug, OtoOrderStatusTests.Notice(w.Id, OtoId, status: status));
+
+        var deal = Stored(w);
         Assert.False(deal.Refs.ContainsKey(DealShipping.ClosedRef));
         Assert.True(DealShipping.HoldsLiveOrder(deal));
-        Assert.Equal(DealCancelAuthorization.DealPastCancelStage, buyer);
-        Assert.Equal(DealCancelAuthorization.DealPastCancelStage, vendor);
+        Assert.Equal(DealCancelAuthorization.DealPastCancelStage,
+            DealCancelAuthorization.Validate(deal, new DealCanceller(DealShipTests.Buyer, "مُشتَرٍ", IsStoreAdmin: false))?.Code);
     }
 }

@@ -917,6 +917,14 @@ public sealed class DealShipping
         // — «لا يُغلق الطلب آليًّا. يُعلَّم "يحتاج تدخّلًا" ويُبلَّغ البائع وصاحب المتجر». كانَ يُجابُ `not_delivered` بِلا عَلامَةٍ ولا إشعار.
         // (‏2026-10-29، قَرارُ المالِك د13 «ب» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **والطَلَبُ الواحِدُ لِصَفَقاتِ بائِعٍ مِن سَلَّةٍ واحِدَةٍ يُقضى لِكُلٍّ مِنها**
         // بِالجَوابِ نَفسِه وبِالدالّاتِ نَفسِها عَلى مَخزونِها — أُخرى بَعدَ الأولى؛ ورَمزُ الأولى جَوابُ الإشعارِ إلّا أَن تَطلُبَ أُختٌ إعادَتَه (‏503) فَتُعادُ لِلجَميع.
+        // (‏2026-10-30، تَدقيقُ الموجَة ١١ F3 — د37؛ تَوصيفُه `97167af` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **وطَلَبٌ أَغلَقَته OTO يُكتَبُ إغلاقُه هُنا أَيضاً** —
+        // الكِتابَةُ الَّتي يَكتُبُها `ShipAsync` بِحَرفِها عَلى الصَفقَةِ وأَخَواتِ طَلَبِها حينَ يَتَّفِقُ المُعَرِّفان؛ كانَ «canceled» يُجابُ `not_delivered` بِلا كِتابَة
+        // فَيَبقى `HoldsLiveOrder` صادِقاً يَحبِسُ إلغاءَ الطَرَفِ حَتّى نَقرَةٍ لا يُقالُ لِأَحَدٍ أَن يَنقُرَها. وبِشَرطٍ عَلى المَخزون — فَإعادَةُ OTO لِلإشعارِ لا تَكتُبُ ثانِيَة.
+        if (state is { IsTerminal: true } && string.Equals(state.OrderId, OrderIdOf(deal!), StringComparison.Ordinal))
+            foreach (var closing in (await OrderSiblingsAsync(tenantSlug, deal!, notice.OrderId, ct)).Prepend(deal!))
+                await _deals.AttachRefAsync(tenantSlug, closing.Id, ClosedRef, state.Status,
+                    stored => !(stored.Refs.TryGetValue(ClosedRef, out var had) && string.Equals(had, state.Status, StringComparison.Ordinal)), CancellationToken.None);
+
         var outcome = await DecideOneAsync(tenantSlug, deal!, state);
         foreach (var sibling in await OrderSiblingsAsync(tenantSlug, deal!, notice.OrderId, ct))
         {
