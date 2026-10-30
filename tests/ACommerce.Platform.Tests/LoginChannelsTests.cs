@@ -126,28 +126,80 @@ public class LoginChannelsTests(ITestOutputHelper output)
     [Fact]
     public void The_verify_doors_of_the_second_channel_ask_whether_it_registers_before_they_sign_in()
     {
-        var doors = new[]
-        {
-            (Route: "/{slug}/auth/email/verify", Call: "AuthHandlers.VerifyEmailOtpAsync(", Old: "AuthHandlers.VerifyEmailOtpHandler(",
-             Ask: "Services.LoginChannels.Registers(tenant.AuthChannel, AuthChannels.Email)"),
-            (Route: "/{slug}/auth/phone/verify", Call: "AuthHandlers.VerifyPhoneOtpAsync(", Old: "AuthHandlers.VerifyPhoneOtpHandler(",
-             Ask: "Services.LoginChannels.Registers(tenant.AuthChannel, AuthChannels.Phone)"),
-        };
         var asking = 0;
-        foreach (var d in doors)
+        foreach (var d in SecondChannelVerifyDoors)
         {
-            var body = Door(d.Route);
-            var call = body.IndexOf(d.Call, StringComparison.Ordinal);
-            var refusal = body.IndexOf("if (refusal is not null) return Results.Redirect(Link(req, slug, $\"login?err={refusal}\"));", StringComparison.Ordinal);
-            var cookie = body.IndexOf("AuthSession.WriteCookie(", StringComparison.Ordinal);
-            Assert.True(call > 0, $"«{d.Route}» لا يُنادي {d.Call}");
-            Assert.Contains(d.Ask, body, StringComparison.Ordinal);
-            Assert.DoesNotContain(d.Old, body, StringComparison.Ordinal);
-            Assert.True(refusal > call && cookie > refusal, $"«{d.Route}»: الرَدُّ لا يَسبِقُ الكوكيّ ({call}/{refusal}/{cookie}).");
+            var breach = VerifyDoorBreach(Door(d.Route), d);
+            Assert.True(breach is null, $"«{d.Route}»: {breach}");
             asking++;
         }
-        output.WriteLine($"بَعدَ التَبديل: بابا التَأكيدِ يَسأَلانِ أَيُّ القَناتَينِ تُسَجِّل {asking}/2 · يُناديانِ المُعالِجَ المُسَجِّلَ بِلا سُؤال 0");
+        output.WriteLine($"بَعدَ التَبديل: بابا التَأكيدِ يَسأَلانِ أَيُّ القَناتَينِ تُسَجِّل {asking}/{SecondChannelVerifyDoors.Length} · يُناديانِ المُعالِجَ المُسَجِّلَ بِلا سُؤال 0");
+        Assert.True(asking > 0, "صِفرُ بابٍ مَفحوص — الأَداةُ عَمياء.");
         Assert.Equal(2, asking);
+    }
+
+    // ─── (‏2026-10-30، الموجَة ١٢ F1 البَند ٣ — مُراجَعَةُ F1 الأَخيرَة R1-3) الفاحِصُ يَقبَلُ جِسماً مُعطى فَيُقاسُ أَنَّه يَحمَرّ ─────────────
+    //
+    // كانَ القَرارُ داخِلَ حَلقَةِ الصَفِّ أَعلاه عَلى البابَينِ الحَقيقِيَّينِ وَحدَهُما، فَلا صَفَّ يُثبِتُ أَنَّه يَرُدُّ جِسماً بِالشَكلِ القَديم (القاعِدَة ١٠ — وصَفّا
+    // R1-1 وR1-2 لِكُلٍّ مِنهُما عَيِّنَةٌ مَحقونَة). فَصارَ دالَّةً تُسأَلُ عَلى جِسمٍ مُعطى، والصَفُّ أَعلاه يُناديها عَلى البابَين، والنَظَريَّةُ أَدناه تَحقِنُ
+    // الأَشكالَ الَّتي يَجِبُ أَن تَرُدَّها: المُعالِجُ القَديم، والرَدُّ بَعدَ الكوكيّ، والنَوعانِ مُتَبادَلانِ في سُؤالِ «أَتُسَجِّل».
+
+    /// <summary>بابُ تَأكيدٍ لِلقَناةِ الثانِيَة: مَسارُه، والنِداءُ الَّذي يُناديه، والمُعالِجُ القَديمُ الَّذي لا يُناديه، وسُؤالُ «أَتُسَجِّل» بِنَوعِه.</summary>
+    internal sealed record VerifyDoor(string Route, string Call, string Old, string Ask);
+
+    internal static readonly VerifyDoor[] SecondChannelVerifyDoors =
+    [
+        new("/{slug}/auth/email/verify", "AuthHandlers.VerifyEmailOtpAsync(", "AuthHandlers.VerifyEmailOtpHandler(",
+            "Services.LoginChannels.Registers(tenant.AuthChannel, AuthChannels.Email)"),
+        new("/{slug}/auth/phone/verify", "AuthHandlers.VerifyPhoneOtpAsync(", "AuthHandlers.VerifyPhoneOtpHandler(",
+            "Services.LoginChannels.Registers(tenant.AuthChannel, AuthChannels.Phone)"),
+    ];
+
+    private const string RefusalLine = "if (refusal is not null) return Results.Redirect(Link(req, slug, $\"login?err={refusal}\"));";
+
+    /// <summary><b>القَرارُ عَلى جِسمٍ مُعطى</b> — <c>null</c> إن كانَ البابُ يُنادي <see cref="VerifyDoor.Call"/> بِسُؤالِ «أَتُسَجِّل» بِنَوعِه هُوَ في وُسَطائِه، ولا
+    /// يُنادي المُعالِجَ القَديم، ولا يَسأَلُ بِنَوعِ غَيرِه، ويَرُدُّ رَمزَ الرَدِّ بَعدَ النِداءِ وقَبلَ أَن يَكتُبَ كوكيّاً؛ وإلّا سَبَبُ الرَدّ.</summary>
+    internal static string? VerifyDoorBreach(string body, VerifyDoor d)
+    {
+        var call = body.IndexOf(d.Call, StringComparison.Ordinal);
+        if (call < 0) return $"لا يُنادي {d.Call}";
+        if (body.Contains(d.Old, StringComparison.Ordinal)) return $"يُنادي المُعالِجَ القَديمَ {d.Old}";
+        var close = body.IndexOf(';', call);
+        var args = close < 0 ? body[call..] : body[call..close];
+        if (!args.Contains(d.Ask, StringComparison.Ordinal)) return $"لا يُمَرِّرُ {d.Ask} إلى {d.Call}";
+        var kind = d.Ask[(d.Ask.LastIndexOf('.') + 1)..^1];
+        foreach (var other in new[] { "Phone", "Email", "Nafath" }.Where(k => k != kind))
+            if (body.Contains($"Services.LoginChannels.Registers(tenant.AuthChannel, AuthChannels.{other})", StringComparison.Ordinal))
+                return $"يَسأَلُ «أَتُسَجِّل» بِنَوعِ {other}";
+        var refusal = body.IndexOf(RefusalLine, StringComparison.Ordinal);
+        var cookie = body.IndexOf("AuthSession.WriteCookie(", StringComparison.Ordinal);
+        if (!(refusal > call && cookie > refusal)) return $"الرَدُّ لا يَسبِقُ الكوكيّ ({call}/{refusal}/{cookie})";
+        return null;
+    }
+
+    /// <summary>حَقنُ عَيب (القاعِدَة ١٠): بابُ تَأكيدِ البَريدِ بِأَشكالِه القَديمَة — المُعالِجُ القَديم، والرَدُّ بَعدَ الكوكيّ، والنَوعانِ مُتَبادَلان — يَرُدُّه الفاحِصُ كُلَّه،
+    /// وجِسمُ البابِ الحَقيقيِّ يَمُرّ.</summary>
+    [Theory]
+    [InlineData("old-handler",
+        "var result = await AuthHandlers.VerifyEmailOtpHandler(new VerifyEmailOtp(email, code), tenant, store);\nAuthSession.WriteCookie(res, slug, result, role: null);")]
+    [InlineData("old-handler-beside-new",
+        "var (result, refusal) = await AuthHandlers.VerifyEmailOtpAsync(new VerifyEmailOtp(email, code), tenant, store, Services.LoginChannels.Registers(tenant.AuthChannel, AuthChannels.Email));\n" +
+        "if (refusal is not null) return Results.Redirect(Link(req, slug, $\"login?err={refusal}\"));\nresult ??= await AuthHandlers.VerifyEmailOtpHandler(new VerifyEmailOtp(email, code), tenant, store);\nAuthSession.WriteCookie(res, slug, result, role: null);")]
+    [InlineData("refusal-after-cookie",
+        "var (result, refusal) = await AuthHandlers.VerifyEmailOtpAsync(new VerifyEmailOtp(email, code), tenant, store, Services.LoginChannels.Registers(tenant.AuthChannel, AuthChannels.Email));\n" +
+        "AuthSession.WriteCookie(res, slug, result, role: null);\nif (refusal is not null) return Results.Redirect(Link(req, slug, $\"login?err={refusal}\"));")]
+    [InlineData("swapped-kinds",
+        "var (result, refusal) = await AuthHandlers.VerifyEmailOtpAsync(new VerifyEmailOtp(email, code), tenant, store, Services.LoginChannels.Registers(tenant.AuthChannel, AuthChannels.Phone));\n" +
+        "if (refusal is not null) return Results.Redirect(Link(req, slug, $\"login?err={refusal}\"));\nAuthSession.WriteCookie(res, slug, result, role: null);")]
+    [InlineData("no-question",
+        "var (result, refusal) = await AuthHandlers.VerifyEmailOtpAsync(new VerifyEmailOtp(email, code), tenant, store, true);\n" +
+        "if (refusal is not null) return Results.Redirect(Link(req, slug, $\"login?err={refusal}\"));\nAuthSession.WriteCookie(res, slug, result, role: null);")]
+    public void The_verify_door_check_refuses_a_door_body_in_an_old_shape(string shape, string body)
+    {
+        var breach = VerifyDoorBreach(body, SecondChannelVerifyDoors[0]);
+        output.WriteLine($"{shape}: {breach ?? "يَمُرّ"}");
+        Assert.NotNull(breach);
+        Assert.Null(VerifyDoorBreach(Door(SecondChannelVerifyDoors[0].Route), SecondChannelVerifyDoors[0]));
     }
 
     /// <summary>القَرارُ النَقِيّ: قَناةُ المَتجَرِ وَحدَها تُسَجِّل (مُوجَب)، والثانِيَةُ لا (سالِب) — وقيمَةٌ خارِجَ المَعجَمِ قَناتُها الجَوّالُ كَما تُرسَم.</summary>
