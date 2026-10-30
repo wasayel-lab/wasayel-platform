@@ -697,6 +697,11 @@ else
   PROFILES_MISSING="$PROFILES_MISSING roleless(WSL_CAPTURE_ROLELESS_NID)"
 fi
 
+# ── عَدّادُ ما كُتِب (‏2026-10-30، تَدقيقُ الموجَة ١١ CO15 — القاعِدَة ١٠) ──────────────────────
+# سَطرُ الخِتامِ كانَ يَطبَعُ **طولَ المَصفوفَةِ** لا ما كُتِب، ويَخرُجُ بِـ0 ولو لَم تُكتَب صَفحَة (مِلَفّاتٌ كُلُّها غَيرُ مُهَيَّأَة
+# ومَصفوفَةٌ عامَّةٌ فارِغَة) — و«اِلتُقِطَت» بِلا عَدّادٍ لا تُمَيَّزُ عَن أَداةٍ عَمياء. فَيُعَدُّ كُلُّ مِلَفٍّ يُكتَب، ويَفشَلُ الخِتامُ عَلى الصِفر.
+captured=0
+
 for entry in "${PAGES[@]}"; do
   name="${entry%%:*}"
   path="${entry#*:}"
@@ -707,6 +712,7 @@ for entry in "${PAGES[@]}"; do
   fi
   normalize "$OUT_DIR/$name.raw" "$OUT_DIR/$name.html"
   rm -f "$OUT_DIR/$name.raw"
+  captured=$((captured + 1))
   echo "✓ $path → $OUT_DIR/$name.html  ($(wc -c < "$OUT_DIR/$name.html") بايت)"
 done
 
@@ -767,6 +773,7 @@ for entry in "${GUARDED_PAGES[@]}"; do
   normalize "$OUT_DIR/$name.raw" "$OUT_DIR/$name.html"
   rm -f "$OUT_DIR/$name.raw"
   guarded_ok=$((guarded_ok + 1))
+  captured=$((captured + 1))
   echo "✓ $path ($profile) → $OUT_DIR/$name.html  ($(wc -c < "$OUT_DIR/$name.html") بايت)"
 done
 
@@ -808,5 +815,10 @@ echo "اِلتُقِطَت ${#PAGES[@]} صَفَحات عامَّة و$guarded_o
 [ -n "$PROFILES_READY" ] && echo "المِلَفّات المُهَيَّأَة:$PROFILES_READY"
 if [ "$guarded_skipped" -gt 0 ]; then
   echo "⚠ تُخُطِّيَت $guarded_skipped صَفحَة مَحروسَة — الناقِص:$PROFILES_MISSING" >&2
+fi
+echo "الصَفَحاتُ المُلتَقَطَة: $captured"
+if [ "$captured" -eq 0 ]; then
+  echo "✗ BLIND CAPTURE — صِفرُ صَفحَةٍ كُتِبَت في $OUT_DIR: لا لَقطَةَ أَساسٍ مِن لا شَيء." >&2
+  exit 1
 fi
 exit 0
