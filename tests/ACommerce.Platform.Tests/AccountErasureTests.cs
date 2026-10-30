@@ -344,6 +344,30 @@ public class AccountErasureTests
         Assert.False(AccountErasure.EraseFrom(deal, Me));    // ومَرَّةً ثانِيَةً لا شَيء
     }
 
+    /// <summary><b>تَوصيفٌ قَبلَ التَبديل (‏2026-10-30، الموجَة ١٢ F2 · ٦ — XS-2؛ القاعِدَة ٣)</b>: بابُ «→ التالي» في الاستوديو يَكتُبُ سَطرَه بِمُعَرِّفِ البائِعِ
+    /// المُقابِلِ واسمِ <see cref="DealEvent.StudioActor"/> (‏ADR-047 §٨ (٢))، و<c>EraseFrom(Deal)</c> يُعيدُ تَسمِيَةَ كُلِّ سَطرٍ مُعَرِّفُه مُعَرِّفُ المَحذوف — فَيَصيرُ سَطرُ
+    /// الاستوديو «حِسابٌ مَحذوف»، فَلا يَعُدُّه <see cref="DealEvent.IsByStudio"/>، فَيَصيرُ <c>TookAStep</c> لِلبائِعِ صادِقاً — ولَم يَنقُر شَيئاً: تَقييمٌ عَنه بَعدَها
+    /// «مَوثوق». وسَطرُه هُو (خُطوَتُه بِنَفسِه) يُعادُ اسمُه كَما يَنبَغي.</summary>
+    [Fact]
+    public void Today_erasing_the_vendor_renames_the_studio_line_carrying_his_id_so_it_becomes_his_step()
+    {
+        var studio = new DealEvent(DealStage.Offered, DealStage.Booked, "advanced", Me, DealEvent.StudioActor, null, DateTime.UtcNow);
+        var own = new DealEvent(DealStage.Booked, DealStage.Confirmed, "advanced", Me, Name, null, DateTime.UtcNow);
+        var studioOnly = new Deal { InitiatorId = Other, InitiatorName = "مُشتَرٍ", CounterpartyId = Me, CounterpartyName = Name, Timeline = new() { studio } };
+        var both = new Deal { InitiatorId = Other, InitiatorName = "مُشتَرٍ", CounterpartyId = Me, CounterpartyName = Name, Timeline = new() { studio, own } };
+        var stepBefore = DealReviewAuthorization.TookAStep(studioOnly, Me);
+
+        Assert.True(AccountErasure.EraseFrom(studioOnly, Me));
+        Assert.True(AccountErasure.EraseFrom(both, Me));
+        output.WriteLine($"قَبلَ الحَذف: خُطوَتُه {stepBefore} · بَعدَه: اسمُ سَطرِ الاستوديو «{studioOnly.Timeline[0].ActorName}» · مِن الاستوديو {DealEvent.IsByStudio(studioOnly.Timeline[0])} · " +
+                         $"خُطوَتُه {DealReviewAuthorization.TookAStep(studioOnly, Me)} · سَطرُه هُو «{both.Timeline[1].ActorName}»");
+        Assert.False(stepBefore);
+        Assert.Equal(AccountDeletion.ErasedName, studioOnly.Timeline[0].ActorName);
+        Assert.False(DealEvent.IsByStudio(studioOnly.Timeline[0]));
+        Assert.True(DealReviewAuthorization.TookAStep(studioOnly, Me));
+        Assert.Equal(AccountDeletion.ErasedName, both.Timeline[1].ActorName);
+    }
+
     [Fact]
     public void The_audit_log_hides_an_erased_actors_name_when_shown_and_keeps_anothers()
     {
