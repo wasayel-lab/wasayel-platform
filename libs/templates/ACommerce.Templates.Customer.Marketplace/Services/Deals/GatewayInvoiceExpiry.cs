@@ -45,7 +45,23 @@ public static class GatewayInvoiceExpiryHandler
         var res = await gateway.ExpireAsync(due.TenantSlug, due.DealId, l, ct);
         await notices.NotifyPaidAsync(due.TenantSlug, res.Confirmed, l, ct);
         await notices.NotifyPaymentExpiredAsync(due.TenantSlug, res.Expired, l, ct);
+        // (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3؛ تَوصيفُه `4bc251c` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وجَلبٌ فَشِلَ يُفشِلُ الرِسالَة** — بَعدَ ما أُخبِرَ بِه،
+        // فَتَعمَلُ سِياسَتُها (`GatewayInvoiceExpiryFailures`): إعاداتٌ بِتَأَنٍّ ثُمَّ الرَسائِلُ الميتَةُ وسَطرُ الخَطَإِ وإشعارُ صاحِبِ المَتجَر. كانَ رَمزُ العَميلِ يُرجَعُ فَيَفرُغُ
+        // المُعالِجُ بِلا خَطَأ، والطَلَبُ غَيرُ المَدفوعِ قائِمٌ بِلا نِهايَة ولا يَعلَمُ بِه أَحَد.
+        if (GatewayInvoiceExpiry.FailsTheMessage(res.Code)) throw new GatewayInvoiceExpiryFetchFailed(due.TenantSlug, due.DealId, res.Code!);
     }
+}
+
+/// <summary>
+/// <para><b>جَلبُ فاتورَةِ المُهلَةِ فَشِلَ — فَتُعادُ الرِسالَة</b> (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3 — CO2 / [S3·١]): يَرميه <see cref="GatewayInvoiceExpiryHandler.Handle"/>
+/// حينَ تَصدُقُ <see cref="GatewayInvoiceExpiry.FailsTheMessage"/> عَلى رَمزِ <see cref="GatewayPayments.ExpireAsync"/>، فَيَبلُغُ سِياسَةَ الرِسالَةِ ما كانَ رَمزاً يُبتَلَع. <b>واسمُ
+/// النَوعِ يُكتَبُ في صَفِّ الرِسالَةِ الميتَة</b> (<c>exception_type</c>) ورَمزُ العَميلِ في نَصِّه — فَيَقرَأُ المُشَغِّلُ العَطَبَ بِاسمِه.</para>
+/// </summary>
+public sealed class GatewayInvoiceExpiryFetchFailed(string tenantSlug, Guid dealId, string code)
+    : Exception($"[gateway] expiry {tenantSlug}/{dealId:N}: the invoice fetch answered {code}")
+{
+    /// <summary>رَمزُ العَميلِ كَما أَرجَعَه الجَلب — مِن <see cref="ACommerce.Kit.Payments.MoyasarFailures.All"/>.</summary>
+    public string Code { get; } = code;
 }
 
 /// <summary>
@@ -74,6 +90,18 @@ public static class GatewayInvoiceExpiry
     /// </summary>
     public static readonly TimeSpan[] RetryCooldowns = { TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15) };
 
+    /// <summary>
+    /// <para><b>أَيُفشِلُ رَمزُ المُهلَةِ الرِسالَة؟</b> (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3؛ قَرارُ F3-R1·١ تَحتَ P1) — دالَّةٌ نَقِيَّة: <b>نَعَم لِكُلِّ رَمزٍ مِن
+    /// مَعجَمِ العَميلِ المُغلَق</b> (<see cref="ACommerce.Kit.Payments.MoyasarFailures.All"/>، سِتَّة) — الجَلبُ لَم يُجِب بِفاتورَة، فَلا يُعرَفُ أَدُفِعَت أَم انتَهَت. العابِرَةُ
+    /// مِنها (لا جَواب، ‏429، لا يُقرَأ، مِفتاحٌ لا يُفَكّ — رُموزُ <see cref="GatewayNoticeGate.RetriedConfirmCodes"/> بِلا «لَم تُدفَع») تَبرَأُ بِالإعادَة؛ والدائِمَتانِ
+    /// (رَفضٌ ‏401/403/404، طَلَبٌ غَيرُ صالِح) لا تَبرَآن، <b>وتُعادانِ مَعَ ذلك</b>: أَربَعُ نِداءاتٍ في نَحوِ ‏21 ثانِيَةً ثَمَنٌ زَهيدٌ لِسِياسَةٍ واحِدَةٍ تَنتَهي بِإشعارِ صاحِبِ
+    /// المَتجَر — والبَديلُ فَرعٌ ثانٍ في السِياسَة، أَو تَركُهُما صامِتَتَينِ كَما كانَتا والطَلَبُ قائِمٌ بِلا نِهايَة.</para>
+    /// <para><b>ولا تَصدُقُ لِسِواها</b>: صَفقَةٌ غائِبَةٌ أَو بِلا فاتورَة (لا شَيءَ يُلغى)، وما أَجابَت بِه الفاتورَةُ نَفسُها — «لَم تُدفَع» (<c>on_hold</c>، <c>failed</c>…
+    /// لا تُلغي بِاسمِ المُهلَة عَمداً، <see cref="GatewayPayments.ExpiryDue"/>) ومُغلَقَةٌ وما لا يُطابِق — والإلغاءُ والدَفعُ الثابِت.</para>
+    /// </summary>
+    public static bool FailsTheMessage(string? code)
+        => code is not null && ACommerce.Kit.Payments.MoyasarFailures.All.Contains(code, StringComparer.Ordinal);
+
     public static void Configure(WolverineOptions opts)
     {
         opts.Discovery.IncludeType(typeof(GatewayInvoiceExpiryHandler));
@@ -90,8 +118,10 @@ public static class GatewayInvoiceExpiry
     {
         if (lifecycle.Envelope?.Message is not GatewayInvoiceExpiryDue due) return;
         var log = runtime.LoggerFactory.CreateLogger(typeof(GatewayInvoiceExpiry));
+        // (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): وجَلبٌ فَشِلَ يُسَمّى بِرَمزِ العَميلِ لا بِنَوعِ الاستِثناءِ وَحدَه.
         log.LogError(error, "[gateway] expiry {Slug}/{Deal} gave up after {Attempts} attempt(s) ← {Error} — moved to wolverine_dead_letters; the unpaid order stays until the store owner cancels it",
-            due.TenantSlug, due.DealId.ToString("N"), RetryCooldowns.Length + 1, error.GetType().Name);
+            due.TenantSlug, due.DealId.ToString("N"), RetryCooldowns.Length + 1,
+            error is GatewayInvoiceExpiryFetchFailed failed ? $"{nameof(GatewayInvoiceExpiryFetchFailed)} {failed.Code}" : error.GetType().Name);
         try
         {
             using var scope = runtime.Services.CreateScope();

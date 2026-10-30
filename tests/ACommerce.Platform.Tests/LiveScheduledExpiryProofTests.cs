@@ -270,14 +270,42 @@ public class LiveScheduledExpiryProofTests(ITestOutputHelper output)
     {
         if (!Enabled) return;
 
-        var slug = "zz-expf-" + Guid.NewGuid().ToString("N")[..8];
-        var (buyer, owner) = (Guid.NewGuid(), Guid.NewGuid());
-        var kek = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-        Guid dealId = default;
         var attempts = 0;
         var failing = new MoyasarScriptedHandler();
         for (var i = 0; i < 8; i++)
             failing.ThenDoing(() => { Interlocked.Increment(ref attempts); throw new InvalidOperationException("عُطلٌ مَصنوعٌ في البَوّابَة"); }, HttpStatusCode.OK, "{}");
+        await DeadLetterProofAsync("zz-expf-", failing, () => attempts, nameof(InvalidOperationException));
+    }
+
+    /// <summary>
+    /// <para><b>بَوّابَةٌ تُجيبُ ‏503 أَو تَقطَعُ الاتِّصالَ في كُلِّ مُحاوَلَة</b> (‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3 — CO2 / [S3·١]): العَطَبُ الحَقيقِيُّ لا الاستِثناءُ
+    /// المَصنوع — عَميلُ ميسر يَلتَقِطُ ‏5xx و<c>HttpRequestException</c> فَيُرجِعُ <c>gateway_unreachable</c> ولا يَرمي، فَكانَ المُعالِجُ يَفرُغُ ويُستَهلَكُ الصَفُّ بِلا كَلِمَة
+    /// (<c>4bc251c</c>). اليَوم: <b>أَربَعُ مُحاوَلات</b> ثُمَّ صَفٌّ في <c>platform.wolverine_dead_letters</c> بِنَوعِ <see cref="GatewayInvoiceExpiryFetchFailed"/>، و<b>إشعارٌ واحِدٌ</b>
+    /// لِصاحِبِ المَتجَر، والصَفقَةُ قائِمَة. الفَرديَّةُ ‏503 والزَوجِيَّةُ انقِطاع.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_gateway_answering_503_or_dropping_the_connection_at_every_attempt_lands_in_the_dead_letters_with_one_owner_notice()
+    {
+        if (!Enabled) return;
+
+        var attempts = 0;
+        var failing = new MoyasarScriptedHandler();
+        for (var i = 0; i < 8; i++)
+            failing.ThenDoing(() =>
+            {
+                if (Interlocked.Increment(ref attempts) % 2 == 0) throw new HttpRequestException("connection reset by peer");
+            }, HttpStatusCode.ServiceUnavailable, "<html>upstream</html>");
+        await DeadLetterProofAsync("zz-exp503-", failing, () => attempts, nameof(GatewayInvoiceExpiryFetchFailed));
+    }
+
+    /// <summary>مُضيفٌ بِتَركيبِ القالَبِ وبَوّابَةٍ تَفشَلُ كَما يَصِفُها <paramref name="failing"/>، ورِسالَةُ مُهلَةٍ لِصَفقَةٍ واحِدَة ⇒ أَربَعُ مُحاوَلاتٍ وصَفٌّ ميتٌ واحِدٌ بِنَوعِ
+    /// <paramref name="exception"/> وإشعارٌ واحِدٌ لِصاحِبِ المَتجَر، والصَفقَةُ قائِمَة — جِسمُ الصَفِّ الأَوَّلِ بِحَرفِه (‏2026-10-30) نُقِلَ إلى هُنا لِيَقيسَ العَطَبَ الحَقيقِيَّ أَيضاً.</summary>
+    private async Task DeadLetterProofAsync(string slugPrefix, MoyasarScriptedHandler failing, Func<int> attempts, string exception)
+    {
+        var slug = slugPrefix + Guid.NewGuid().ToString("N")[..8];
+        var (buyer, owner) = (Guid.NewGuid(), Guid.NewGuid());
+        var kek = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        Guid dealId = default;
         await using var host = BuildApp(kek, failing, shiftClock: false);
         await host.StartAsync();
         var store = host.Services.GetRequiredService<IDocumentStore>();
@@ -319,11 +347,11 @@ public class LiveScheduledExpiryProofTests(ITestOutputHelper output)
                 told = (await Marten.QueryableExtensions.ToListAsync(q.Query<Notification>())).Where(n => n.UserId == owner).ToList();
             Deal? deal;
             await using (var q = store.QuerySession(slug)) deal = await q.LoadAsync<Deal>(dealId);
-            output.WriteLine($"مُحاوَلات: {attempts} · بَعدَ {deadline.Elapsed.TotalSeconds:0.0}ث · ميتَة: [{string.Join(", ", dead.Select(d => $"{d.Exception} replayable={d.Replayable}"))}] · " +
+            output.WriteLine($"مُحاوَلات: {attempts()} · بَعدَ {deadline.Elapsed.TotalSeconds:0.0}ث · ميتَة: [{string.Join(", ", dead.Select(d => $"{d.Exception} replayable={d.Replayable}"))}] · " +
                              $"إشعاراتُ المالِك: {told.Count} «{told.FirstOrDefault()?.Title}» → {told.FirstOrDefault()?.RelatedUrl} · الصَفقَة {deal?.Status}");
 
-            Assert.Equal(GatewayInvoiceExpiry.RetryCooldowns.Length + 1, attempts);
-            Assert.Contains(nameof(InvalidOperationException), Assert.Single(dead).Exception ?? "");
+            Assert.Equal(GatewayInvoiceExpiry.RetryCooldowns.Length + 1, attempts());
+            Assert.Contains(exception, Assert.Single(dead).Exception ?? "");
             var note = Assert.Single(told);
             Assert.Equal(ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "notifications.deal_expiry_failed.title"), note.Title);
             Assert.Equal(DealNotices.StudioDealUrl(slug, dealId), note.RelatedUrl);

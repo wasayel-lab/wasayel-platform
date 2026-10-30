@@ -480,6 +480,10 @@ public sealed class GatewayPayments
     /// بِما أَلغَته قَبلَ انقِطاعِها</b> — قَبلَ الجَلب، صَفَقاتُ الفاتورَةِ كَما سَمَّتها مَراجِعُها (<see cref="GatewayInvoiceShare.DealsOn"/>) يُطالَبُ بِإشعارِ ما أَلغَته المُهلَةُ ولَم يُطالَب
     /// بِه (<see cref="ExpiredUntold"/>)، ويُضَمُّ إلى <see cref="GatewayVerifyResult.Expired"/> أَيّاً كانَ ما أَجابَت بِه البَوّابَة. كانَت الإعادَةُ لا تَجِدُ ما «أُلغِيَ الآن» فَلا
     /// يُخبَرُ المُشتَري ولا البائِعُ أَبَداً. وما أُخبِرَ بِه لا يُعادُ: العَلامَةُ تُكتَبُ قَبلَ الإشعار.</remarks>
+    /// <remarks>(‏2026-10-30، جَولَةُ الإصلاحِ الأولى لِلمَسار F3؛ تَوصيفُه <c>4bc251c</c> — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>«وفَشَلُ الجَلبِ رَمزٌ في اللوغِ لا إعادَة» لَم يَعُد</b> —
+    /// الدالَّةُ تُرجِعُ رَمزَ العَميلِ كَما كانَت (صُفوفُ <c>The_scheduled_expiry_cancels_nothing_and_answers_its_code_for_every_other_case</c> بِحَرفِها)، ومُعالِجُ الرِسالَةِ يَرمي بِه
+    /// (<see cref="GatewayInvoiceExpiry.FailsTheMessage"/> ← <see cref="GatewayInvoiceExpiryFetchFailed"/>) فَتُعادُ ثُمَّ تَموتُ ويُخبَرُ صاحِبُ المَتجَر. والرَقَمُ قَرارٌ تِقنِيٌّ لا رَقَمُ مُنتَج
+    /// (<see cref="GatewayInvoiceExpiry.RetryCooldowns"/>). وزِرُّ «تَحَقَّق» لا يَرمي: مُناديه المُشتَري وصَفحَتُه تَقولُ الرَمز.</remarks>
     public async Task<GatewayVerifyResult> ExpireAsync(
         string tenantSlug, Guid dealId, ACommerce.Platform.I18n.L? l = null, CancellationToken ct = default)
     {
