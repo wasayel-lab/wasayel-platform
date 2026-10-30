@@ -309,6 +309,24 @@ public sealed class GatewayPayments
     public const string ExpiryReasonKey = "pay.invoice.cancel_expired";
 
     /// <summary>
+    /// <para><b>عَلامَةُ «أُخبِرَ بِالمُهلَة»</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO2 — المُرَحَّلُ [S3·١]): يَكتُبُها <see cref="ClaimExpiryNoticesAsync"/> عَلى صَفقَةٍ أَلغَتها المُهلَةُ
+    /// <b>قَبلَ</b> أَن يُخبَرَ طَرَفاها — مُطالَبَةٌ بِالإشعارِ مَرَّةً (نَسَقُ المُطالَبَةِ في ‏ADR-036 الخُطوَة 2): فَرِسالَةٌ تُعادُ بَعدَ الإشعارِ لا تُخبِرُ ثانِيَة، وإعادَتُها بَعدَ
+    /// انقِطاعٍ بَينَ الإلغاءِ والإشعارِ تُخبِرُ مَرَّة. داخِلِيٌّ: لا يُرسَمُ لِلطَرَفَين.</para>
+    /// </summary>
+    public const string ExpiryToldRef = "gateway_expiry_told";
+
+    /// <summary>أَأَلغَت المُهلَةُ هذِه الصَفقَة؟ — سَطرُ إلغائِها الأَخيرُ بِاسمِ المَنصَّةِ (<see cref="DealEvent.IsByPlatform"/>) وسَبَبُها نَصُّ <see cref="ExpiryReasonKey"/> بِأَيِّ لُغَةٍ في
+    /// القامُوس (التَحَقُّقُ يَكتُبُه بِلُغَةِ المُشتَري، والرِسالَةُ بِالعَرَبِيَّة) — فَلا يَلتَبِسُ بِإلغاءِ إغلاقِ الحِساب (فاعِلُه المَنصَّةُ أَيضاً وسَبَبُه غَيرُ هذا). دالَّةٌ نَقِيَّة.</summary>
+    public static bool CancelledByExpiry(Deal deal)
+        => deal.Status == DealStatus.Cancelled
+           && deal.CancelReason is { } reason
+           && ACommerce.Platform.I18n.LocaleCatalog.Languages.Any(lang => ACommerce.Platform.I18n.LocaleCatalog.Find(lang, ExpiryReasonKey) == reason)
+           && deal.Timeline.LastOrDefault(e => e.Action == "cancelled") is { } line && DealEvent.IsByPlatform(line);
+
+    /// <summary>أَلغَتها المُهلَةُ ولَم يُطالَب بِإشعارِها بَعد (<see cref="ExpiryToldRef"/>) — الشَرطُ الَّذي تُكتَبُ بِه العَلامَةُ عَلى المَخزونِ داخِلَ الكِتابَة. دالَّةٌ نَقِيَّة.</summary>
+    public static bool ExpiredUntold(Deal deal) => CancelledByExpiry(deal) && !deal.Refs.ContainsKey(ExpiryToldRef);
+
+    /// <summary>
     /// <para><b>عَلى الصَفقَةِ فاتورَةُ بَوّابَةٍ لَم يَثبُت دَفعُها، وتاليها «دَفع»</b> — رَمزُ <see cref="DealsService.AdvanceAsync"/> حينَ
     /// تَصدُقُ <see cref="AwaitsPayment"/>. يَبلُغُه زِرُّ «تَأكيد: دَفع» (<c>/advance</c> ← <c>?err=</c>) والـAPI (‏409)؛ والصَفحَةُ لا تَرسُمُ
     /// ذلكَ الزِرَّ لَها — بابُها «أَكمِل الدَّفع». نَسَقُ <see cref="DealShipping.DealAwaitsCarrier"/>.</para>
@@ -458,6 +476,10 @@ public sealed class GatewayPayments
     /// والصَفَقاتُ مِن صَفَقاتِ مُبادِرِ المَرجِعِ وَحدَه (نَسَقُ <see cref="ConfirmNoticeAsync"/>). وصَفقَةٌ غائِبَةٌ أَو بِلا فاتورَةٍ رَمزُها بِلا نِداء.</para>
     /// <para><b>وفَشَلُ الجَلبِ رَمزٌ في اللوغِ لا إعادَة</b>: لا رَقَمَ لِمُحاوَلاتٍ في التَوثيق (القاعِدَة ١٦)، وزِرُّ «تَحَقَّق» باقٍ لِلمُشتَري؛ والسُطورُ مُعلَنَةٌ في ‏ADR-046 §٣.</para>
     /// </summary>
+    /// <remarks>(‏2026-10-30، تَدقيقُ الموجَة ١١ CO2 — المُرَحَّلُ [S3·١]؛ تَوصيفُه <c>1e65236</c> — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>والرِسالَةُ المُعادَةُ تُخبِرُ مَرَّةً
+    /// بِما أَلغَته قَبلَ انقِطاعِها</b> — قَبلَ الجَلب، صَفَقاتُ الفاتورَةِ كَما سَمَّتها مَراجِعُها (<see cref="GatewayInvoiceShare.DealsOn"/>) يُطالَبُ بِإشعارِ ما أَلغَته المُهلَةُ ولَم يُطالَب
+    /// بِه (<see cref="ExpiredUntold"/>)، ويُضَمُّ إلى <see cref="GatewayVerifyResult.Expired"/> أَيّاً كانَ ما أَجابَت بِه البَوّابَة. كانَت الإعادَةُ لا تَجِدُ ما «أُلغِيَ الآن» فَلا
+    /// يُخبَرُ المُشتَري ولا البائِعُ أَبَداً. وما أُخبِرَ بِه لا يُعادُ: العَلامَةُ تُكتَبُ قَبلَ الإشعار.</remarks>
     public async Task<GatewayVerifyResult> ExpireAsync(
         string tenantSlug, Guid dealId, ACommerce.Platform.I18n.L? l = null, CancellationToken ct = default)
     {
@@ -467,16 +489,37 @@ public sealed class GatewayPayments
         if (!HasInvoice(deal))
             return Logged(tenantSlug, new(deal.Id, null, DealPayAuthorization.InvoiceMissing));
 
+        var recovered = await ClaimExpiryNoticesAsync(tenantSlug, (GatewayInvoiceShare.DealsOn(deal) ?? Array.Empty<Guid>()).Prepend(deal.Id), ct);
+        GatewayVerifyResult With(GatewayVerifyResult r)
+            => recovered.Count == 0 ? r : r with { Expired = recovered.Concat(r.Expired).Distinct().ToArray() };
+
         if (_client is null || await SecretKeyAsync(_providers, _vault, _log, tenantSlug, ct) is not { } key)
-            return Logged(tenantSlug, new(deal.Id, null, MoyasarFailures.NotConfigured));
+            return With(Logged(tenantSlug, new(deal.Id, null, MoyasarFailures.NotConfigured)));
 
         var fetched = await _client.FetchInvoiceAsync(key, deal.Refs[GatewayPaymentProof.InvoiceRef], ct);
         if (!fetched.Ok)
-            return Logged(tenantSlug, new(deal.Id, null, fetched.Failure!.Code));
+            return With(Logged(tenantSlug, new(deal.Id, null, fetched.Failure!.Code)));
 
         var invoice = fetched.Value!;
         var invoiceDeals = await InvoiceDealsAsync(tenantSlug, deal, invoice, deal.InitiatorId, ct);
-        return await SettleAsync(tenantSlug, deal, invoice, invoiceDeals, l, ct);
+        return With(await SettleAsync(tenantSlug, deal, invoice, invoiceDeals, l, ct));
+    }
+
+    /// <summary>
+    /// <para><b>المُطالَبَةُ بِإشعارِ المُهلَة</b> (‏2026-10-30، CO2): لِكُلِّ صَفقَةٍ تَصدُقُ عَلَيها <see cref="ExpiredUntold"/> عَلى المَخزونِ داخِلَ الكِتابَة تُكتَبُ <see cref="ExpiryToldRef"/>
+    /// بِالكاتِبِ القائِم (<see cref="DealsService.AttachRefAsync(string, Guid, string, string, Func{Deal, bool}, CancellationToken)"/>)، وتُرجَعُ ما كَتَبَ عَلَيه <b>هذا النِداء</b> —
+    /// فَيُخبِرُ مُناديه بِها وَحدَها. <b>مَرَّةً عَلى الأَكثَر</b>: انقِطاعٌ بَينَ المُطالَبَةِ والإشعارِ يُضَيِّعُ الإشعارَ ولا يُكَرِّرُه — والصَفقَةُ في صَفحَتِها مُلغاةٌ بِسَبَبِها.</para>
+    /// </summary>
+    private async Task<IReadOnlyList<Guid>> ClaimExpiryNoticesAsync(string tenantSlug, IEnumerable<Guid> dealIds, CancellationToken ct)
+    {
+        var claimed = new List<Guid>();
+        foreach (var id in dealIds.Distinct())
+        {
+            var mine = false;
+            await _deals.AttachRefAsync(tenantSlug, id, ExpiryToldRef, "1", d => mine = ExpiredUntold(d), CancellationToken.None);
+            if (mine) claimed.Add(id);
+        }
+        return claimed;
     }
 
     /// <summary>
@@ -509,8 +552,10 @@ public sealed class GatewayPayments
                         _log.LogWarning("[gateway] verify {Slug}: invoice of deal {Deal} expired ← cancel {Code}",
                             tenantSlug, d.Id, order.Result.Violation?.Code);
                 }
+                // (‏2026-10-30، تَدقيقُ الموجَة ١١ CO2 — ولا يُعادُ حَرفٌ فَوقَه): وما أُلغِيَ يُطالَبُ بِإشعارِه قَبلَ أَن يُعادَ — فَلا يُخبِرُ المُنادي إلّا ما كَسَبَ مُطالَبَتَه.
                 if (cancelled.Count > 0)
-                    return Logged(tenantSlug, new GatewayVerifyResult(deal.Id, null, GatewayReturn.InvoiceExpired) { Expired = cancelled.ToArray() });
+                    return Logged(tenantSlug, new GatewayVerifyResult(deal.Id, null, GatewayReturn.InvoiceExpired)
+                        { Expired = (await ClaimExpiryNoticesAsync(tenantSlug, cancelled, ct)).ToArray() });
             }
             return Logged(tenantSlug, new(deal.Id, null, admitted.Violation!.Code));
         }

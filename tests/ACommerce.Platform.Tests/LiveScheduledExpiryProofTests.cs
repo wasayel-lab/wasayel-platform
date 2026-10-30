@@ -240,4 +240,120 @@ public class LiveScheduledExpiryProofTests(ITestOutputHelper output)
             await s.SaveChangesAsync();
         }
     }
+
+    /// <summary>صُفوفُ الرَسائِلِ الميتَةِ لِرِسالَةِ مُهلَةِ هذِه الصَفقَة — نَوعُ العَطَبِ وقابِلِيَّةُ الإعادَة (والجِسمُ يُبحَثُ فيه عَن المُعَرِّفِ هُنا، نَسَقُ <see cref="EnvelopesAsync"/>).</summary>
+    private static async Task<List<(Guid Id, string? Exception, bool? Replayable)>> DeadLettersAsync(Guid dealId)
+    {
+        await using var conn = new NpgsqlConnection(ResilientConnection);
+        await conn.OpenAsync();
+        await using var cmd = new NpgsqlCommand(
+            "select id, exception_type, replayable, body from platform.wolverine_dead_letters where message_type like @type", conn);
+        cmd.Parameters.AddWithValue("type", "%" + nameof(GatewayInvoiceExpiryDue) + "%");
+        var needle = System.Text.Encoding.UTF8.GetBytes(dealId.ToString("D"));
+        var rows = new List<(Guid, string?, bool?)>();
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+        {
+            if (((byte[])r.GetValue(3)).AsSpan().IndexOf(needle) < 0) continue;
+            rows.Add((r.GetGuid(0), r.IsDBNull(1) ? null : r.GetString(1), r.IsDBNull(2) ? null : r.GetBoolean(2)));
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// <para><b>مُعالِجٌ يَفشَلُ في كُلِّ مُحاوَلَة</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO2 — المُرَحَّلُ [S3·١]): البَوّابَةُ تَرمي عَطَباً لا تَبتَلِعُه العَميل، فَيَرمي المُعالِج —
+    /// <b>أَربَعُ مُحاوَلاتٍ</b> (الأولى وثَلاثُ إعاداتٍ بِتَأَنّي <see cref="GatewayInvoiceExpiry.RetryCooldowns"/>) ثُمَّ صَفٌّ في <c>platform.wolverine_dead_letters</c>، و<b>إشعارٌ واحِدٌ</b>
+    /// لِصاحِبِ المَتجَرِ بِنَصِّ «طَلَبٌ انتَهَت مُهلَتُه لَم يُلغَ» ورابِطِ صَفقَتِه في الاستوديو، والصَفقَةُ قائِمَةٌ كَما كانَت. كانَ: نِداءٌ واحِدٌ ثُمَّ الصَفُّ بِلا كَلِمَة (‏ADR-046 §٤‑1).</para>
+    /// </summary>
+    [Fact]
+    public async Task An_expiry_handler_failing_every_attempt_lands_in_the_dead_letters_with_one_owner_notice()
+    {
+        if (!Enabled) return;
+
+        var slug = "zz-expf-" + Guid.NewGuid().ToString("N")[..8];
+        var (buyer, owner) = (Guid.NewGuid(), Guid.NewGuid());
+        var kek = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        Guid dealId = default;
+        var attempts = 0;
+        var failing = new MoyasarScriptedHandler();
+        for (var i = 0; i < 8; i++)
+            failing.ThenDoing(() => { Interlocked.Increment(ref attempts); throw new InvalidOperationException("عُطلٌ مَصنوعٌ في البَوّابَة"); }, HttpStatusCode.OK, "{}");
+        await using var host = BuildApp(kek, failing, shiftClock: false);
+        await host.StartAsync();
+        var store = host.Services.GetRequiredService<IDocumentStore>();
+        try
+        {
+            var binding = PaymentsBinding(host.Services.GetRequiredService<ProviderVault>(), sealedFor: slug);
+            binding.TenantSlug = slug;
+            await using (var s = store.LightweightSession(slug)) { s.Store(binding); await s.SaveChangesAsync(); }
+            await using (var s = store.LightweightSession())
+            {
+                s.Store(new ACommerce.Kit.Tenants.Tenant { Id = slug, Name = "مَتجَر", OwnerUserId = owner });
+                await s.SaveChangesAsync();
+            }
+            using (var scope = host.Services.CreateScope())
+            {
+                var deals = scope.ServiceProvider.GetRequiredService<DealsService>();
+                var born = await deals.StartAsync(slug, "marketplace", buyer, "مُشتَرٍ", null, "سِلعَة", 100m, GatewayPayments.MarkedAtBirth(new()
+                {
+                    [CheckoutPayMethods.AttributeKey] = CheckoutPayMethods.Card,
+                }, viaGateway: true));
+                await deals.AttachRefAsync(slug, born.Id, GatewayPaymentProof.InvoiceRef, InvoiceId);
+                dealId = born.Id;
+                await scope.ServiceProvider.GetRequiredService<IMessageBus>().SendAsync(new GatewayInvoiceExpiryDue(slug, dealId));
+            }
+
+            var deadline = Stopwatch.StartNew();
+            List<(Guid Id, string? Exception, bool? Replayable)> dead = new();
+            List<Notification> told = new();
+            while (deadline.Elapsed < TimeSpan.FromSeconds(90))
+            {
+                dead = await DeadLettersAsync(dealId);
+                await using (var q = store.QuerySession(slug))
+                    told = (await Marten.QueryableExtensions.ToListAsync(q.Query<Notification>())).Where(n => n.UserId == owner).ToList();
+                if (dead.Count > 0 && told.Count > 0) break;
+                await Task.Delay(500);
+            }
+            await Task.Delay(1000);   // ولا ثانٍ يَلحَقُ الأَوَّل
+            await using (var q = store.QuerySession(slug))
+                told = (await Marten.QueryableExtensions.ToListAsync(q.Query<Notification>())).Where(n => n.UserId == owner).ToList();
+            Deal? deal;
+            await using (var q = store.QuerySession(slug)) deal = await q.LoadAsync<Deal>(dealId);
+            output.WriteLine($"مُحاوَلات: {attempts} · بَعدَ {deadline.Elapsed.TotalSeconds:0.0}ث · ميتَة: [{string.Join(", ", dead.Select(d => $"{d.Exception} replayable={d.Replayable}"))}] · " +
+                             $"إشعاراتُ المالِك: {told.Count} «{told.FirstOrDefault()?.Title}» → {told.FirstOrDefault()?.RelatedUrl} · الصَفقَة {deal?.Status}");
+
+            Assert.Equal(GatewayInvoiceExpiry.RetryCooldowns.Length + 1, attempts);
+            Assert.Contains(nameof(InvalidOperationException), Assert.Single(dead).Exception ?? "");
+            var note = Assert.Single(told);
+            Assert.Equal(ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "notifications.deal_expiry_failed.title"), note.Title);
+            Assert.Equal(DealNotices.StudioDealUrl(slug, dealId), note.RelatedUrl);
+            Assert.Equal(DealStatus.Active, deal!.Status);
+        }
+        finally
+        {
+            await host.StopAsync();
+            await using (var conn = new NpgsqlConnection(ResilientConnection))
+            {
+                await conn.OpenAsync();
+                var ids = (await DeadLettersAsync(dealId)).Select(d => d.Id).ToArray();
+                await using var cmd = new NpgsqlCommand("delete from platform.wolverine_dead_letters where id = any(@ids)", conn);
+                cmd.Parameters.AddWithValue("ids", ids);
+                await cmd.ExecuteNonQueryAsync();
+            }
+            await DeleteEnvelopesAsync(dealId);
+            await using var cleanup = LiveDealConcurrencyProofTests.BuildStore();
+            await using (var s = cleanup.LightweightSession(slug))
+            {
+                foreach (var d in await Marten.QueryableExtensions.ToListAsync(s.Query<Deal>())) s.Delete(d);
+                foreach (var b in await Marten.QueryableExtensions.ToListAsync(s.Query<TenantProviderBinding>())) s.Delete(b);
+                foreach (var n in await Marten.QueryableExtensions.ToListAsync(s.Query<Notification>())) s.Delete(n);
+                await s.SaveChangesAsync();
+            }
+            await using (var s = cleanup.LightweightSession())
+            {
+                s.Delete<ACommerce.Kit.Tenants.Tenant>(slug);
+                await s.SaveChangesAsync();
+            }
+        }
+    }
 }

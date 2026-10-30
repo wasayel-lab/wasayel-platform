@@ -2211,6 +2211,8 @@
   "notifications.deal_cancelled_for_vendor.title": "أُلغِيَ طَلَبٌ عَلى إعلانِكَ",
   "notifications.deal_cash_refund_due.body": "رَدٌّ نَقديٌّ مُستَحَقّ: أُلغِيَ طَلَبٌ عَلى «{0}» بَعدَ قَبضِ {1:N0} ريال نَقداً عِندَ التَّسليم — يَرُدُّها البائِعُ إلى المُشتَري؛ تابِعِ الرَّدَّ مَعَه.",
   "notifications.deal_cash_refund_due.title": "رَدٌّ نَقديٌّ مُستَحَقّ",
+  "notifications.deal_expiry_failed.body": "تَعَذَّرَ عَلى المَنصَّةِ إلغاءُ طَلَبِ «{0}» آلِيّاً بَعدَ انتِهاءِ مُهلَةِ دَفعِ فاتورَتِه — افتَحِ الطَّلَبَ في الاستوديو وأَلغِه، وأَلغِ فاتورَتَه مِن لَوحَةِ ميسر إن بَقِيَت مَفتوحَة.",
+  "notifications.deal_expiry_failed.title": "طَلَبٌ انتَهَت مُهلَتُه لَم يُلغَ",
   "notifications.deal_dispute_cancelled.body": "حَسَمَت إدارَةُ المَتجَرِ النِّزاعَ عَلى «{0}» بِإلغاءِ الصَّفقَة، ويُرَدُّ ما دُفِعَ إن كانَ قَد دُفِع — افتَحِ الصَّفقَة لِلتَفاصيل.",
   "notifications.deal_dispute_cancelled.push_body": "حُسِمَ النِّزاعُ عَلى «{0}» بِإلغاءِ الصَّفقَة.",
   "notifications.deal_dispute_cancelled.title": "حُسِمَ النِّزاع: أُلغِيَت الصَّفقَة",

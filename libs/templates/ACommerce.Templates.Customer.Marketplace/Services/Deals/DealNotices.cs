@@ -256,7 +256,9 @@ public sealed class DealNotices
 
     /// <summary>ما يُخبَرُ بِه صاحِبُ المَتجَرِ عَن صَفقَة — مَعجَمٌ مُغلَق: استِرجاعٌ مُستَحَقٌّ، أَو فاتورَةٌ تَعَذَّرَ إلغاؤها.
     /// (‏2026-10-29، قَرارُ المالِك د38 (٢)؛ مُراجَعَةُ تَيّارِ S5 الأولى — ولا يُعادُ حَرفٌ فَوقَه: وثالِثُها رَدٌّ نَقدِيٌّ مُستَحَقٌّ عَلى البائِع — <see cref="DealEvent.CashRefundDue"/>.)</summary>
-    public enum OwnerAction { RefundDue, InvoiceLeftOpen, CashRefundDue }
+    /// <remarks>(‏2026-10-30، تَدقيقُ الموجَة ١١ CO2 — ولا يُعادُ حَرفٌ فَوقَه: ورابِعُها إلغاءُ مُهلَةٍ يَئِسَ مِنه المُعالِج — <see cref="ExpiryFailedFor"/>؛ لا يَقرَؤُه
+    /// <see cref="OwnerActionOf"/> مِن السِجِلّ — لا سَطرَ يُكتَبُ عَلى صَفقَةٍ لَم تُكتَب — بَل يُسَمّيه المُنادي، <see cref="NotifyStoreOwnerAsync(string, Deal, OwnerAction, L, CancellationToken)"/>.)</remarks>
+    public enum OwnerAction { RefundDue, InvoiceLeftOpen, CashRefundDue, ExpiryFailed }
 
     /// <summary>
     /// <para><b>ما عَلى صاحِبِ المَتجَرِ أَن يَفعَلَه في هذِه الصَفقَة الآن</b> — آخِرُ سَطرٍ مِن السَطرَينِ في سِجِلِّها: <see cref="DealEvent.GatewayRefundDue"/> لِصَفقَةٍ مُلغاة
@@ -317,6 +319,19 @@ public sealed class DealNotices
         Type = CancelledType,
         Title = l["notifications.deal_cash_refund_due.title"],
         Body = l.Format("notifications.deal_cash_refund_due.body", deal.ListingTitle, deal.AmountSar),
+        RelatedUrl = StudioDealUrl(slug, deal.Id),
+        At = at,
+    };
+
+    /// <summary>إشعارُ صاحِبِ المَتجَرِ بِأَنّ المَنصَّةَ لَم تَستَطِع إلغاءَ طَلَبٍ انتَهَت مُهلَةُ دَفعِه (‏2026-10-30، تَدقيقُ الموجَة ١١ CO2): المُعالِجُ أَعادَ حَتّى يَئِسَ والرِسالَةُ في
+    /// الرَسائِلِ الميتَة — فَالطَلَبُ قائِمٌ يَحجِزُ بائِعيه حَتّى يُلغيه هُوَ؛ والرابِطُ صَفحَتُه في الاستوديو. لا بَياناتِ مُشتَرٍ.</summary>
+    public static Notification ExpiryFailedFor(string slug, Deal deal, Guid ownerId, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = ownerId,
+        Type = CancelledType,
+        Title = l["notifications.deal_expiry_failed.title"],
+        Body = l.Format("notifications.deal_expiry_failed.body", deal.ListingTitle),
         RelatedUrl = StudioDealUrl(slug, deal.Id),
         At = at,
     };
@@ -713,8 +728,12 @@ public sealed class DealNotices
     /// (<see cref="CashRefundDueFor"/>) بِالأُنبوبِ نَفسِه، فَإشعارا الإلغاءِ وإشعارُ حَسمِ النِزاعِ يَبلُغونَه بِلا لَمس.</para>
     /// </summary>
     public async Task<bool> NotifyStoreOwnerAsync(string slug, Deal deal, L l, CancellationToken ct = default)
+        => OwnerActionOf(deal) is { } action && await NotifyStoreOwnerAsync(slug, deal, action, l, ct);
+
+    /// <summary>الأُنبوبُ نَفسُه بِفِعلٍ يُسَمّيه المُنادي (‏2026-10-30، تَدقيقُ الموجَة ١١ CO2): ما لا سَطرَ لَه في سِجِلِّ الصَفقَة — <see cref="OwnerAction.ExpiryFailed"/> مِن سِياسَةِ فَشَلِ
+    /// رِسالَةِ المُهلَة — وما سِواه كَما يُسَمّيه <see cref="OwnerActionOf"/> بِحَرفِه.</summary>
+    public async Task<bool> NotifyStoreOwnerAsync(string slug, Deal deal, OwnerAction action, L l, CancellationToken ct = default)
     {
-        if (OwnerActionOf(deal) is not { } action) return false;
         Notification n;
         await using (var s = _store.LightweightSession(slug))
         {
@@ -723,6 +742,7 @@ public sealed class DealNotices
             {
                 OwnerAction.RefundDue => RefundDueFor(slug, deal, ownerId, l, DateTime.UtcNow),
                 OwnerAction.CashRefundDue => CashRefundDueFor(slug, deal, ownerId, l, DateTime.UtcNow),   // ‏2026-10-29، قَرارُ المالِك د38 (٢)
+                OwnerAction.ExpiryFailed => ExpiryFailedFor(slug, deal, ownerId, l, DateTime.UtcNow),   // ‏2026-10-30، تَدقيقُ الموجَة ١١ CO2
                 _ => InvoiceLeftOpenFor(slug, deal, ownerId, l, DateTime.UtcNow),
             };
             s.Store(n);

@@ -82,7 +82,8 @@ public class DealNoticesProducerTests(ITestOutputHelper output)
         // وبِنَوعِ الطَلَبِ الجَديدِ (لا نَوعَ جَديد).
         // وأَربَعَةَ عَشَرَ مُنذُ ‏2026-10-29 (قَرارُ المالِك د30): `ReturnRequestedFor` لِلبائِعِ بِطَلَبِ استِرجاع — بِنَوعِ الطَلَبِ الجَديدِ نَفسِه.
         // وخَمسَةَ عَشَرَ مُنذُ ‏2026-10-29 (قَرارُ المالِك د38 (٢)؛ مُراجَعَةُ تَيّارِ S5 الأولى): `CashRefundDueFor` لِصاحِبِ المَتجَرِ بِرَدٍّ نَقدِيٍّ مُستَحَقّ — بِنَوعِ الإلغاءِ نَفسِه.
-        Assert.Equal(15, builders);
+        // وسِتَّةَ عَشَرَ مُنذُ ‏2026-10-30 (تَدقيقُ الموجَة ١١ CO2): `ExpiryFailedFor` لِصاحِبِ المَتجَرِ حينَ يَيأَسُ مُعالِجُ المُهلَة — بِنَوعِ الإلغاءِ نَفسِه.
+        Assert.Equal(16, builders);
         Assert.Equal(builders, typed);
 
         var reader = files.Single(f => f.Path == Reader).Text;
