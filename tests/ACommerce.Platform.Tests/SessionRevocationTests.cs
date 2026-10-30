@@ -259,32 +259,162 @@ public class SessionRevocationTests(ITestOutputHelper output)
         Assert.Equal(open, ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.StillOpen(account, token));
     }
 
-    /// <summary>المُعلَنُ في النِداء: كُلُّ كاتِبٍ بِاسمِ جَلسَةٍ يُعطي <c>admit</c> قَرارَ <c>StillOpen</c>، والخِدمَتانِ تُمَرِّرانِه — عَيِّنَةٌ تَطبَعُ عَدَدَها.</summary>
+    /// <summary>
+    /// <para>المُعلَنُ في النِداء: كُلُّ كاتِبٍ بِاسمِ جَلسَةٍ يُعطي <c>admit</c> قَرارَ <c>StillOpen</c>، والخِدماتُ الَّتي تَأخُذُ <c>admit</c> تُمَرِّرُه — عَيِّنَةٌ تَطبَعُ عَدَدَها.</para>
+    /// <para><b>(‏2026-10-30، الموجَة ١٢ F1 البَند ٢ — مُراجَعَةُ F1 الأَخيرَة R1-2؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) يَجِدُ الكُتّابَ ولا يُسَمّيهِم</b>: كانَ
+    /// يُسَمّي سَبعَةَ مَساراتٍ ودالَّتَين (<c>SessionWriterRoutes</c>)، فَبابُ جَلسَةٍ جَديدٌ يُنادي <c>AccountWrites.UpdateAsync&lt;User&gt;</c> بِلا <c>admit</c>، أَو
+    /// مُنادٍ جَديدٌ لِـ<c>AccountContacts.VerifyAsync</c> (و<c>admit</c> فيها اختِيارِيٌّ افتِراضُه <c>null</c>) بِلا <c>admit</c>، يَترُكُ كُلَّ صَفٍّ أَخضَر —
+    /// العَمى نَفسُه الَّذي تُسَمّيه القاعِدَة ١٠ («قَواعِدُ احتِواءٍ تَفحَصُ أَزواجاً مُسَمّاة»). والآن: كُلُّ جِسمِ نُقطَةٍ يَقرَأُ جَلسَةً (<see cref="ReadsTheSession"/>)
+    /// ويَكتُبُ الحِسابَ (<see cref="WritesTheAccount"/>: نِداءٌ مُباشِرٌ أَو دالَّةٌ كاتِبَةٌ يَجِدُها <see cref="AccountWriterMethods"/> في المَصدَر) يُسأَلُ
+    /// <see cref="AsksTheSession"/>، إلّا ما في <see cref="SessionlessWriters"/> بِسَبَبِه؛ وكُلُّ دالَّةٍ كاتِبَةٍ تَأخُذُ <c>admit</c> تُسأَلُ أَن تُمَرِّرَه.</para>
+    /// </summary>
     [Fact]
     public void Every_session_writer_asks_the_session_on_the_fresh_read()
     {
-        var contacts = WriteEndpointGuardTests.StripComments(Read($"{TemplateRoot}/Services/AccountContacts.cs"));
-        var bodies = new Dictionary<string, string>
-        {
-            ["AccountContacts.VerifyAsync"] = MethodBody(contacts, "public static async Task<string?> VerifyAsync("),
-            ["AccountContacts.VerifyRemoveAsync"] = MethodBody(contacts, "public static async Task<string?> VerifyRemoveAsync("),
-        };
-        foreach (var route in SessionWriterRoutes)
-        {
-            var doors = WriteEndpointGuardTests.AllMinimalApiEndpoints().Where(e => e.Route == route).ToList();
-            Assert.True(doors.Count == 1, $"«{route}»: {doors.Count} باباً — الأَداةُ عَمياء.");
-            bodies[route] = doors[0].Body;
-        }
-        var off = bodies.Where(b => !AsksTheSession(b.Value)).Select(b => b.Key).ToList();
-        output.WriteLine($"كُتّابٌ بِاسمِ جَلسَة: {bodies.Count} · يَسأَلونَها عَلى القِراءَةِ الجَديدَة: {bodies.Count - off.Count}");
-        Assert.Equal(9, bodies.Count);
+        var all = AccountWriterMethods();
+        var notForSession = SessionlessWriterMethods.Select(m => m.Writer).ToHashSet(StringComparer.Ordinal);
+        var writers = all.Where(w => !notForSession.Contains($"{w.Type}.{w.Method}")).ToList();
+        var staleMethods = notForSession.Where(n => all.All(w => $"{w.Type}.{w.Method}" != n)).ToList();
+        Assert.True(staleMethods.Count == 0, "استِثناءٌ لِدالَّةٍ لا يَجِدُها الفاحِصُ كاتِبَة — يُرفَع: " + string.Join(" · ", staleMethods));
+        var found = WriteEndpointGuardTests.AllMinimalApiEndpoints()
+            .Where(e => ReadsTheSession.IsMatch(e.Body) && WritesTheAccount(e.Body, writers)).ToList();
+        var exempt = SessionlessWriters.ToDictionary(x => x.Route, x => x.WhyAr, StringComparer.Ordinal);
+        var asked = found.Where(e => !exempt.ContainsKey(e.Route)).ToList();
+        var off = asked.Where(e => !AsksTheSession(e.Body)).Select(e => e.Route).ToList();
+        var takers = writers.Where(w => w.TakesAdmit).ToList();
+        var dropped = takers.Where(w => !PassesAdmit(w.Body)).Select(w => $"{w.Type}.{w.Method}").ToList();
+        output.WriteLine($"دَوالُّ تَكتُبُ الحِساب: {all.Count} ({string.Join(" · ", all.Select(w => $"{w.Type}.{w.Method}"))}) · لا تَكتُبُ لِجَلسَةٍ بِسَبَبِها: {all.Count - writers.Count} · تَأخُذُ admit: {takers.Count}");
+        output.WriteLine($"أَبوابٌ تَقرَأُ جَلسَةً وتَكتُبُ الحِساب: {found.Count} · مُستَثناةٌ بِسَبَبِها: {found.Count - asked.Count} · تَسأَلُ الجَلسَةَ عَلى القِراءَةِ الجَديدَة: {asked.Count - off.Count}/{asked.Count}");
+        foreach (var e in found) output.WriteLine($"  {e.Route}{(exempt.ContainsKey(e.Route) ? "  (مُستَثنى)" : "")}");
+        Assert.True(writers.Count > 0 && found.Count > 0 && takers.Count > 0, "صِفرٌ مَفحوص — الأَداةُ عَمياء.");
         Assert.True(off.Count == 0, "كاتِبٌ بِاسمِ جَلسَةٍ لا يَسأَلُها: " + string.Join(" · ", off));
+        Assert.True(dropped.Count == 0, "دالَّةٌ تَأخُذُ admit ولا تُمَرِّرُه: " + string.Join(" · ", dropped));
+        var stale = exempt.Keys.Where(r => found.All(e => e.Route != r)).ToList();
+        Assert.True(stale.Count == 0, "استِثناءٌ لِبابٍ لا يَجِدُه الفاحِص — يُرفَع: " + string.Join(" · ", stale));
     }
 
-    internal static readonly string[] SessionWriterRoutes =
+    /// <summary>يَقرَأُ جِسمُ النُقطَةِ جَلسَةَ مَتجَر — الشَكلانِ اللَّذانِ يَحُلُّ بِهِما كُلُّ بابٍ رَمزَه.</summary>
+    internal static readonly Regex ReadsTheSession = new(@"AuthSession\.ResolveToken\s*\(|AuthHandlers\.ParseToken\s*\(", RegexOptions.Compiled);
+
+    /// <summary>الكِتابَةُ الواحِدَةُ لِوَثيقَةِ الحِساب (‏<c>AccountWrites</c>).</summary>
+    private static readonly Regex AccountWrite = new(@"AccountWrites\s*\.\s*UpdateAsync\s*<\s*(?:[\w.]+\.)?User\s*>\s*\(", RegexOptions.Compiled);
+
+    private static readonly Regex TypeDecl = new(@"\b(?:class|record|struct)\s+(?<name>\w+)", RegexOptions.Compiled);
+    private static readonly Regex MethodDecl = new(
+        @"(?:public|internal|private|protected)\s+(?:(?:static|async|virtual|override|sealed|new|readonly|partial)\s+)*[\w<>\[\]?,.() ]+?\s+(?<name>\w+)\s*(?:<[^<>()]*>)?\s*\(",
+        RegexOptions.Compiled);
+
+    /// <summary>دالَّةٌ في المَصدَرِ يُنادي جِسمُها <c>AccountWrites.UpdateAsync&lt;User&gt;</c> — بِنَوعِها واسمِها وجِسمِها، و<c>TakesAdmit</c> إن كانَ لَها وَسيطٌ اسمُه <c>admit</c>.</summary>
+    internal sealed record AccountWriter(string Type, string Method, string Body, bool TakesAdmit);
+
+    /// <summary>
+    /// <para><b>يَجِدُ الدَوالَّ الكاتِبَةَ لِلحِسابِ في <c>libs/</c> و<c>apps/</c></b>: لِكُلِّ نِداءٍ لِـ<c>AccountWrites.UpdateAsync&lt;User&gt;</c> الدالَّةُ الَّتي تَحويه
+    /// (أَقرَبُ تَصريحٍ قَبلَه يَحتَوي جِسمُه النِداءَ) ونَوعُها (أَقرَبُ تَصريحِ نَوعٍ قَبلَها). ودالَّةُ تَسجيلِ النِقاطِ نَفسُها (<c>Map…</c>) لا تُعَدُّ كاتِبَة: النِداءاتُ
+    /// فيها أَجسامُ نِقاطٍ يَسأَلُها الصَفُّ بِأَعيانِها. <b>وحَدُّه</b>: النَصُّ لا الدَلالَة — كاتِبٌ يُنادى عَبرَ واجِهَةٍ أَو مُفَوَّضٍ لا يُرى.</para>
+    /// </summary>
+    internal static IReadOnlyList<AccountWriter> AccountWriterMethods()
     {
-        "/api/{slug}/push/subscribe", "/{slug}/me/save", "/{slug}/me/role/save", "/{slug}/me/role/onboarding/save", "/{slug}/me/area/save",
-        "/{slug}/me/contact/verify", "/{slug}/me/contact/remove/verify",
+        var found = new List<AccountWriter>();
+        foreach (var (file, text) in EntitlementContractTests.SourceFiles())
+        {
+            if (!file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)) continue;
+            var code = WriteEndpointGuardTests.StripComments(text);
+            if (!AccountWrite.IsMatch(code)) continue;
+            var methods = MethodDecl.Matches(code).Cast<Match>().Select(m => (Match: m, Span: MethodSpan(code, m))).Where(x => x.Span.Start >= 0).ToList();
+            var types = TypeDecl.Matches(code).Cast<Match>().Select(t =>
+            {
+                var open = code.IndexOf('{', t.Index + t.Length);
+                var semi = code.IndexOf(';', t.Index + t.Length);
+                return open < 0 || (semi >= 0 && semi < open)
+                    ? (Name: t.Groups["name"].Value, Start: -1, End: -1)
+                    : (Name: t.Groups["name"].Value, Start: open, End: Closing(code, open, '{', '}'));
+            }).Where(t => t.Start >= 0).ToList();
+            foreach (Match call in AccountWrite.Matches(code))
+            {
+                var owner = methods.LastOrDefault(x => x.Match.Index < call.Index && x.Span.End > call.Index);
+                if (owner.Match is null) continue;
+                var name = owner.Match.Groups["name"].Value;
+                var body = code[owner.Span.Start..owner.Span.End];
+                if (name.StartsWith("Map", StringComparison.Ordinal) && body.Contains(".MapPost(", StringComparison.Ordinal)) continue;
+                var type = types.Where(t => t.Start < owner.Match.Index && t.End > owner.Match.Index).OrderByDescending(t => t.Start).Select(t => t.Name).FirstOrDefault() ?? "?";
+                var head = code[owner.Match.Index..owner.Span.Start];
+                if (found.Any(w => w.Type == type && w.Method == name)) continue;
+                found.Add(new(type, name, body, Regex.IsMatch(head, @"\badmit\b")));
+            }
+        }
+        return found;
+    }
+
+    /// <summary>مَدى جِسمِ الدالَّةِ الَّتي يَبدَأُ تَصريحُها عِندَ <paramref name="decl"/>: مِن بَعدِ قَوسِ وُسَطائِها إلى قَوسِها المُغلِق (أَو فاصِلَةِ السَهمِ المُنهِيَة).</summary>
+    private static (int Start, int End) MethodSpan(string code, Match decl)
+    {
+        var after = Closing(code, decl.Index + decl.Length - 1, '(', ')') + 1;
+        var head = Regex.Match(code[after..Math.Min(code.Length, after + 400)], @"^\s*(?:where[^{=;]*)?(?<kind>\{|=>)");
+        if (!head.Success) return (-1, -1);
+        var at = after + head.Groups["kind"].Index;
+        if (head.Groups["kind"].Value == "{") return (at, Closing(code, at, '{', '}') + 1);
+        var semi = at;
+        for (int depth = 0; semi < code.Length; semi++)
+        {
+            if (code[semi] is '"' or '\'') { semi = WriteEndpointGuardTests.SkipLiteral(code, semi); continue; }
+            if (code[semi] is '(' or '{' or '[') depth++;
+            else if (code[semi] is ')' or '}' or ']') depth--;
+            else if (code[semi] == ';' && depth == 0) break;
+        }
+        return (at, Math.Min(semi + 1, code.Length));
+    }
+
+    private static int Closing(string code, int open, char o, char c)
+    {
+        var depth = 0;
+        for (var i = open; i < code.Length; i++)
+        {
+            if (code[i] is '"' or '\'') { i = WriteEndpointGuardTests.SkipLiteral(code, i); continue; }
+            if (code[i] == o) depth++;
+            else if (code[i] == c && --depth == 0) return i;
+        }
+        return code.Length - 1;
+    }
+
+    /// <summary>يَكتُبُ جِسمُ النُقطَةِ الحِساب: يُنادي الكِتابَةَ الواحِدَةَ أَو <c>AccountContacts.Verify…Async</c> مُباشَرَةً، أَو دالَّةً كاتِبَةً — بِنَوعِها
+    /// (<c>Type.Method(</c>، ولِلساكِنَةِ في مِلَفِّ النُقطَةِ بِلا نَوع) أَو عَلى وَسيطٍ مِن نَوعِها في لامدَتِها.</summary>
+    internal static bool WritesTheAccount(string body, IReadOnlyList<AccountWriter> writers)
+    {
+        if (AccountWrite.IsMatch(body) || Regex.IsMatch(body, @"AccountContacts\s*\.\s*Verify\w*Async\s*\(")) return true;
+        var receivers = WriteEndpointGuardTests.HandlerParameters(body);
+        foreach (var w in writers)
+        {
+            if (Regex.IsMatch(body, $@"(?<![\w.]){Regex.Escape(w.Type)}\s*\.\s*{Regex.Escape(w.Method)}\s*\(")) return true;
+            if (Regex.IsMatch(body, $@"\.\s*{Regex.Escape(w.Type)}\s*\.\s*{Regex.Escape(w.Method)}\s*\(")) return true;
+            if (w.Type == "MarketplaceTemplateExtensions" && Regex.IsMatch(body, $@"(?<![\w.]){Regex.Escape(w.Method)}\s*\(")) return true;
+            foreach (var (name, type) in receivers)
+                if (type == w.Type && Regex.IsMatch(body, $@"(?<![\w.]){Regex.Escape(name)}\s*\.\s*{Regex.Escape(w.Method)}\s*\(")) return true;
+        }
+        return false;
+    }
+
+    /// <summary>دالَّةٌ تَأخُذُ <c>admit</c> تُمَرِّرُه إلى الكِتابَةِ الواحِدَة.</summary>
+    internal static bool PassesAdmit(string body)
+        => Regex.IsMatch(body, @"AccountWrites\.UpdateAsync<(?:[\w.]+\.)?User>\([\s\S]*\},\s*ct,\s*admit\)");
+
+    /// <summary><b>دَوالُّ تَكتُبُ الحِسابَ ولا تَكتُبُ لِلجَلسَةِ الَّتي يَقرَؤُها البابُ</b> — بِسَبَبِ كُلٍّ؛ وإدخالَةٌ لا يَجِدُها المَسحُ كاتِبَةً تَحمَرّ.</summary>
+    internal static readonly (string Writer, string WhyAr)[] SessionlessWriterMethods =
+    {
+        ("WebPushService.SendAsync",
+            "مُرسِلُ الإشعار: يَكتُبُ حِسابَ **المُستَلِم** لا حِسابَ الجَلسَة — يَمحو عَناوينَ قالَت خِدمَةُ الإشعارِ إنَّها انتَهَت؛ ولا جَلسَةَ لِلمُستَلِمِ في الطَلَب (`/offers/{id}/accept` و`/trips/{id}/arrived` يُخبِرانِ غَيرَ الناقِر)."),
+        ("AuthHandlers.GetOrCreateUserAsync",
+            "كاتِبُ الدُخول: يُصدِرُ الجَلسَةَ ولا يَبني عَلى جَلسَةٍ قائِمَة — رَمزُه الجَديدُ بِإصدارِ الحِسابِ نَفسِه."),
+        ("MarketplaceTemplateExtensions.AssignRoleAsync",
+            "كاتِبُ الدُخول: يَكتُبُ الدَورَ لِلجَلسَةِ الَّتي صَدَرَت في الطَلَبِ نَفسِه (بَعدَ `WriteCookie`) — لا جَلسَةَ أَقدَمَ مِنها تُسأَل."),
+        ("MarketplaceTemplateExtensions.PostLoginRouteAsync",
+            "كاتِبُ الدُخول: يُتِمُّ الدَورَ الوَحيدَ لِلجَلسَةِ الَّتي صَدَرَت في الطَلَبِ نَفسِه — نَفسُ حُجَّةِ `AssignRoleAsync`."),
+    };
+
+    /// <summary><b>الكُتّابُ بِاسمِ جَلسَةٍ المُستَثنَونَ بِسَبَبِهِم</b> — ونُموُّ القائِمَةِ قَرارٌ مَرئيٌّ في مُراجَعَة، وإدخالَةٌ لا يَجِدُ الفاحِصُ بابَها تَحمَرّ.</summary>
+    internal static readonly (string Route, string WhyAr)[] SessionlessWriters =
+    {
+        ("/{slug}/me/sessions/revoke",
+            "«اخرج من كل الأجهزة» — يُنهي الجَلسَةَ ولا يَبني عَلَيها: رَفعُ الإصدارِ ومَحوُ الاشتِراكاتِ يُزيلانِ وُصولاً ولا يَمنَحانِه، و`RevokeTenantAsync` مُتَساوي الأَثَر؛ فَرَدُّ رَفعٍ مِن جَلسَةٍ أُغلِقَت قَبلَه بِلَحظَةٍ لا يُغَيِّرُ شَيئاً (الموجَة ١٢ F1 البَند ٦ يُسَمّيه مُستَثنىً بِالتَصميم)."),
     };
 
     internal static bool AsksTheSession(string body)
@@ -297,6 +427,21 @@ public class SessionRevocationTests(ITestOutputHelper output)
     [InlineData("var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>\n{\n    ContactLink.Link(u, kind, p.Value, now);\n    return true;\n}, ct);")]
     public void The_session_writer_scan_refuses_a_write_without_admission(string body)
         => Assert.False(AsksTheSession(body));
+
+    /// <summary>حَقنُ عَيب (القاعِدَة ١٠، ‏2026-10-30، الموجَة ١٢ F1 البَند ٢): الحالَتانِ اللَّتانِ كانَتا تَترُكانِ كُلَّ صَفٍّ أَخضَر — بابُ جَلسَةٍ جَديدٌ يُنادي الكِتابَةَ
+    /// الواحِدَةَ بِلا <c>admit</c>، ومُنادٍ جَديدٌ لِـ<c>AccountContacts.VerifyAsync</c> بِلا <c>admit</c> — وبابٌ يُنادي دالَّةً كاتِبَةً وَجَدَها المَسح (لا اسمَ لَها
+    /// في الصَفّ): الفاحِصُ يَجِدُ كُلّاً كاتِباً بِاسمِ جَلسَةٍ ويَرُدُّه.</summary>
+    [Theory]
+    [InlineData("var token = AuthSession.ResolveToken(req, slug);\nvar user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>\n{\n    u.FullName = name;\n    return true;\n});")]
+    [InlineData("var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));\nvar refusal = await Services.AccountContacts.VerifyAsync(store, slug, parsed.Value.UserId, attempt,\n    req.Form[\"code\"].ToString(), DateTime.UtcNow, phoneChannel, emailChannel, req.HttpContext.RequestAborted);")]
+    [InlineData("var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));\nawait Services.SessionVersionGate.RevokeTenantAsync(store, cache, slug, parsed.Value.UserId);")]
+    public void The_session_writer_finder_finds_and_refuses_an_unnamed_writer_without_admission(string body)
+    {
+        var writers = AccountWriterMethods();
+        Assert.Matches(ReadsTheSession, body);
+        Assert.True(WritesTheAccount(body, writers), "الفاحِصُ لا يَرى الكاتِب.");
+        Assert.False(AsksTheSession(body));
+    }
 
     // ─── I-SEC-1 (تَدقيقُ الموجَة ١١، ‏2026-10-29): كوكيُّ «الاسم» يَحمِلُ رَمزاً عَلى مَسارِ دَورٍ اسمُه name ─────────────────────
     //
