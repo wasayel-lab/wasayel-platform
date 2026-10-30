@@ -280,19 +280,20 @@ public class GatewayPaymentNoticeTests(ITestOutputHelper output)
     // ═══ ٤‑أ) ما يَرُدُّه الوارِدُ حينَ لَم يُثبَت الدَفع (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-1) ═════════════════════════════
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم»</b> (القاعِدَة ٣): إشعارٌ مَقبولٌ بِسِرِّه، ثُمَّ تَعَذَّرَ إثباتُ الدَفعِ لِسَبَبٍ عابِر — البَوّابَةُ لا تُجيب (‏5xx أَو انقِطاع)،
-    /// أَو تَرُدُّ ‏429 «Too Many Requests» (وَثيقَةُ الأَخطاء)، أَو جَوابٌ لا يُقرَأ، أَو المِفتاحُ لا يُفَكُّ الآن، أَو الفاتورَةُ ما زالَت «initiated» لِأَنّ حالَها يَتَأَخَّرُ
-    /// عَن الحَدَث: <b>لا يُكتَبُ شَيء، ويُجيبُ الوارِدُ ‏200</b> — لِأَنّ النُقطَةَ تَحسُبُ الرَدَّ مِن رَمزِ البَوّابَةِ وَحدَه ولا تَقرَأُ رَمزَ التَأكيد. فَلا تُعيدُ
-    /// البَوّابَةُ الإشعارَ (تُعيدُ غَيرَ 2xx خَمسَ مَرّات، ‏ADR-032 §٩‑٨) ويَبقى الطَلَبُ المَدفوعُ عِندَ «يَنتَظِرُ الدَفع».</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-1؛ تَوصيفُه <c>2948fd9</c> — كانَ
+    /// <c>Today_a_notice_whose_payment_could_not_be_confirmed_answers_200_so_the_gateway_never_retries</c>: صِفرُ كِتابَةٍ والرَدّ ‏200، و‏429 يَقَعُ في <c>gateway_refused</c>):
+    /// إشعارٌ مَقبولٌ بِسِرِّه ثُمَّ تَعَذَّرَ إثباتُ الدَفعِ لِسَبَبٍ عابِر — البَوّابَةُ لا تُجيب (‏5xx أَو انقِطاع)، أَو ‏429 «Too Many Requests» (وَثيقَةُ الأَخطاء)
+    /// ورَمزُه صارَ <see cref="MoyasarFailures.RateLimited"/>، أَو جَوابٌ لا يُقرَأ، أَو المِفتاحُ لا يُفَكُّ الآن، أَو الفاتورَةُ ما زالَت «initiated»: <b>لا يُكتَبُ شَيء،
+    /// ويُجيبُ الوارِدُ ‏503</b> فَتُعيدُه البَوّابَة — والنُقطَةُ تَحسُبُ الرَدَّ مِن النَتيجَتَين (<see cref="GatewayNoticeGate.StatusFor(string?, string?)"/>).</para>
     /// </summary>
     [Theory]
     [InlineData("server_error", MoyasarFailures.Unreachable)]
     [InlineData("dropped", MoyasarFailures.Unreachable)]
-    [InlineData("rate_limited", MoyasarFailures.Refused)]
+    [InlineData("rate_limited", MoyasarFailures.RateLimited)]
     [InlineData("unreadable", MoyasarFailures.Unreadable)]
     [InlineData("keyless", MoyasarFailures.NotConfigured)]
     [InlineData("status_lags", GatewayPaymentProof.InvoiceUnpaid)]
-    public async Task Today_a_notice_whose_payment_could_not_be_confirmed_answers_200_so_the_gateway_never_retries(string kind, string code)
+    public async Task A_notice_whose_payment_could_not_be_confirmed_answers_503_so_the_gateway_retries(string kind, string code)
     {
         var w = await PaidCart(binding: kind == "keyless" ? _ => null : null);
         switch (kind)
@@ -307,15 +308,74 @@ public class GatewayPaymentNoticeTests(ITestOutputHelper output)
         var admitted = GatewayNoticeGate.Admit(Secret, Payload());
 
         var res = await w.Gateway.ConfirmNoticeAsync(Slug, admitted.Notice!);
-        var status = GatewayNoticeGate.StatusFor(admitted.Violation?.Code);
+        var status = GatewayNoticeGate.StatusFor(admitted.Violation?.Code, res.Code);
         output.WriteLine($"{kind}: الرَمز={res.Code} · كُتِب={w.Docs.SaveCalls - saves} · الرَدّ={status}");
 
         Assert.Equal(code, res.Code);
         Assert.Equal(saves, w.Docs.SaveCalls);
-        Assert.Equal(200, status);
+        Assert.Equal(503, status);
         var endpoint = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
             "ACommerce.Templates.Customer.Marketplace", "Billing", "TenantGatewayEndpoints.cs")));
-        Assert.Contains("return Results.StatusCode(Services.Deals.GatewayNoticeGate.StatusFor(admitted.Violation?.Code));", endpoint, StringComparison.Ordinal);
+        Assert.Contains("return Results.StatusCode(Services.Deals.GatewayNoticeGate.StatusFor(admitted.Violation?.Code, res?.Code));", endpoint, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>والإعادَةُ آمِنَة</b> (‏2026-10-30، C-PAY-1): الإشعارُ الأَوَّلُ يَرى «initiated» فَيُجابُ ‏503 بِصِفرِ كِتابَة، وإعادَتُهُ تَرى «paid» فَيُكتَبُ الدَفعُ
+    /// عَلى الصَفقَتَينِ مَرَّةً ويُجابُ ‏200، والإعادَةُ الثالِثَةُ صِفرُ كِتابَةٍ و‏200 — <c>ConfirmGatewayPaymentAsync</c> لا يَكتُبُ عَلى ما قُبِض.</summary>
+    [Fact]
+    public async Task A_retried_notice_records_the_payment_once_and_then_answers_200()
+    {
+        var w = await PaidCart();
+        w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "initiated")).Then(HttpStatusCode.OK, PaidInvoice(w)).Then(HttpStatusCode.OK, PaidInvoice(w));
+
+        var first = await w.Gateway.ConfirmNoticeAsync(Slug, Notice());
+        var retried = await w.Gateway.ConfirmNoticeAsync(Slug, Notice());
+        var saves = w.Docs.SaveCalls;
+        var again = await w.Gateway.ConfirmNoticeAsync(Slug, Notice());
+        output.WriteLine($"الأَوَّل: {GatewayNoticeGate.StatusFor(null, first.Code)} · المُعاد: {GatewayNoticeGate.StatusFor(null, retried.Code)} كُتِب={retried.Confirmed.Count} · الثالِث: {GatewayNoticeGate.StatusFor(null, again.Code)} كُتِب={again.Confirmed.Count}");
+
+        Assert.Equal(503, GatewayNoticeGate.StatusFor(null, first.Code));
+        Assert.Equal(200, GatewayNoticeGate.StatusFor(null, retried.Code));
+        Assert.Equal(w.Ids.OrderBy(i => i), retried.Confirmed.OrderBy(i => i));
+        Assert.Equal(200, GatewayNoticeGate.StatusFor(null, again.Code));
+        Assert.Empty(again.Confirmed);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+    }
+
+    /// <summary><b>صَفٌّ لِكُلِّ رَمز</b> (‏2026-10-30، C-PAY-1): رَمزُ البَوّابَةِ يَحكُمُ قَبلَ التَأكيد؛ والمَقبولُ ‏503 لِلعابِرِ وَحدَه و‏200 لِما ثَبَتَ ولِما لَيسَ لَنا —
+    /// وكُلُّ رَمزٍ في مَعجَمَي التَأكيدِ (فَشَلُ العَميلِ وبَوّابَةُ البُرهان) لَه صَفُّه هُنا، والعَدّادُ يُطبَع.</summary>
+    [Theory]
+    [InlineData(null, null, 200)]
+    [InlineData(null, MoyasarFailures.Unreachable, 503)]
+    [InlineData(null, MoyasarFailures.Unreadable, 503)]
+    [InlineData(null, MoyasarFailures.NotConfigured, 503)]
+    [InlineData(null, MoyasarFailures.RateLimited, 503)]
+    [InlineData(null, GatewayPaymentProof.InvoiceUnpaid, 503)]
+    [InlineData(null, MoyasarFailures.Refused, 200)]
+    [InlineData(null, MoyasarFailures.Invalid, 200)]
+    [InlineData(null, GatewayPaymentProof.InvoiceClosed, 200)]
+    [InlineData(null, GatewayPaymentProof.CurrencyMismatch, 200)]
+    [InlineData(null, GatewayPaymentProof.AmountMismatch, 200)]
+    [InlineData(null, GatewayPaymentProof.DealsMismatch, 200)]
+    [InlineData(null, GatewayPaymentProof.InvoiceMismatch, 200)]
+    [InlineData(GatewayNoticeGate.NoticeUnavailable, null, 404)]
+    [InlineData(GatewayNoticeGate.NoticeUnreadable, null, 400)]
+    [InlineData(GatewayNoticeGate.SecretMismatch, null, 401)]
+    [InlineData(GatewayNoticeGate.NotPaymentPaid, null, 200)]
+    [InlineData(GatewayNoticeGate.InvoiceMissing, null, 200)]
+    public void The_notice_status_is_a_pure_function_of_the_gate_and_the_confirm(string? gate, string? confirm, int status)
+        => Assert.Equal(status, GatewayNoticeGate.StatusFor(gate, confirm));
+
+    [Fact]
+    public void Every_confirm_code_has_its_status_row()
+    {
+        var rows = typeof(GatewayPaymentNoticeTests).GetMethod(nameof(The_notice_status_is_a_pure_function_of_the_gate_and_the_confirm))!
+            .GetCustomAttributes(typeof(InlineDataAttribute), false).Cast<InlineDataAttribute>()
+            .Select(a => a.GetData(null!).Single()[1] as string).Where(c => c is not null).ToHashSet();
+        var codes = MoyasarFailures.All.Concat(GatewayPaymentProof.Codes).ToArray();
+        output.WriteLine($"رُموزُ التَأكيد: {codes.Length} · صُفوفُها: {rows.Count} · تُعاد: {GatewayNoticeGate.RetriedConfirmCodes.Count}");
+        Assert.True(codes.Length >= 12, $"أَداةٌ عَمياء: {codes.Length} رَمزاً.");
+        Assert.All(codes, c => Assert.Contains(c, rows));
+        Assert.All(GatewayNoticeGate.RetriedConfirmCodes, c => Assert.Contains(c, codes));
     }
 
     // ═══ ٥) الحَقلُ الَّذي نُصدِرُه لا يَملَؤُه صاحِبُ المَتجَر ═══════════════════════════════════════════════════

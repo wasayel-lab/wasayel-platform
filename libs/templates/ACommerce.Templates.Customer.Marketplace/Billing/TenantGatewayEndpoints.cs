@@ -69,7 +69,8 @@ public static class TenantGatewayEndpoints
             var admitted = Services.Deals.GatewayNoticeGate.Admit(secret, raw);
             var res = admitted.Notice is { } notice ? await gateway.ConfirmNoticeAsync(slug, notice) : null;
             if (res is not null) await notices.NotifyPaidAsync(slug, res.Confirmed, l);
-            return Results.StatusCode(Services.Deals.GatewayNoticeGate.StatusFor(admitted.Violation?.Code));
+            // والرَدُّ مِن النَتيجَتَين: تَأكيدٌ تَعَذَّرَ لِسَبَبٍ عابِرٍ ‏503 فَتُعيدُه البَوّابَة (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-1).
+            return Results.StatusCode(Services.Deals.GatewayNoticeGate.StatusFor(admitted.Violation?.Code, res?.Code));
         }).DisableAntiforgery();
 
         return app;

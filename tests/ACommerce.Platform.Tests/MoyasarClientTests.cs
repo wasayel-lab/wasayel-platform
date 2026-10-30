@@ -309,6 +309,22 @@ public class MoyasarClientTests(ITestOutputHelper output)
         Assert.True((await Client(ok).CreateInvoiceAsync(Key, Draft())).Ok);
     }
 
+    /// <summary><c>gateway_rate_limited</c> (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-1) — مُوجَب: ‏429 «Too Many Requests» (جَدوَلُ وَثيقَةِ الأَخطاء) في الجَلبِ والإنشاءِ
+    /// والإلغاءِ بِحالِه، فَيُعيدُه مَن يُعيد؛ سالِب: ‏4xx سِواه يَبقى <c>gateway_refused</c> (الصَفُّ أَعلاه)، و‏5xx يَبقى <c>gateway_unreachable</c>.</summary>
+    [Fact]
+    public async Task Rate_limited_fires_for_429_alone()
+    {
+        const string busy = "{\"type\":\"rate_limit_error\",\"message\":\"Too many requests hit the API too quickly.\"}";
+        var fetched = await Client(new MoyasarScriptedHandler().Then((HttpStatusCode)429, busy)).FetchInvoiceAsync(Key, InvoiceId);
+        Assert.Equal((MoyasarFailures.RateLimited, (int?)429), (fetched.Failure!.Code, fetched.Failure.HttpStatus));
+        Assert.Equal(MoyasarFailures.RateLimited, (await Client(new MoyasarScriptedHandler().Then((HttpStatusCode)429, busy)).CreateInvoiceAsync(Key, Draft())).Failure!.Code);
+        Assert.Equal(MoyasarFailures.RateLimited, (await Client(new MoyasarScriptedHandler().Then((HttpStatusCode)429, busy)).CancelInvoiceAsync(Key, InvoiceId)).Failure!.Code);
+
+        foreach (var other in new[] { HttpStatusCode.BadRequest, HttpStatusCode.Conflict, (HttpStatusCode)428, (HttpStatusCode)430 })
+            Assert.Equal(MoyasarFailures.Refused, (await Client(new MoyasarScriptedHandler().Then(other, busy)).FetchInvoiceAsync(Key, InvoiceId)).Failure!.Code);
+        Assert.Equal(MoyasarFailures.Unreachable, (await Client(new MoyasarScriptedHandler().Then(HttpStatusCode.ServiceUnavailable, busy)).FetchInvoiceAsync(Key, InvoiceId)).Failure!.Code);
+    }
+
     /// <summary><c>gateway_unreadable</c> — مُوجَب: نَجاحٌ لَيسَ JSON، أَو بِلا <c>id</c>، أَو بِمَبلَغٍ نَصّاً، أَو إنشاءٌ بِلا <c>url</c>؛
     /// سالِب: مِثالُ الوَثيقَةِ يُقرَأ.</summary>
     [Fact]
@@ -336,12 +352,13 @@ public class MoyasarClientTests(ITestOutputHelper output)
         Assert.True((await Client(documented).FetchInvoiceAsync(Key, InvoiceId)).Ok);
     }
 
-    /// <summary>المَعجَمُ مُغلَقٌ ومُعَدودٌ — خَمسَة، ولِكُلٍّ رِسالَةٌ بِلا سِرّ، ورَمزٌ خارِجَه يَرمي.</summary>
+    /// <summary>المَعجَمُ مُغلَقٌ ومُعَدودٌ — خَمسَة، ولِكُلٍّ رِسالَةٌ بِلا سِرّ، ورَمزٌ خارِجَه يَرمي.
+    /// (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-1 — ولا يُعادُ حَرفٌ فَوقَه: سِتَّة — ‏429 صارَ <see cref="MoyasarFailures.RateLimited"/>.)</summary>
     [Fact]
-    public void The_failure_vocabulary_is_closed_at_five_and_every_code_has_a_message()
+    public void The_failure_vocabulary_is_closed_at_six_and_every_code_has_a_message()
     {
-        Assert.Equal(5, MoyasarFailures.All.Count);
-        Assert.Equal(5, MoyasarFailures.All.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(6, MoyasarFailures.All.Count);   // 5 ← 6 (‏2026-10-30، C-PAY-1: +gateway_rate_limited)
+        Assert.Equal(6, MoyasarFailures.All.Distinct(StringComparer.Ordinal).Count());
         foreach (var code in MoyasarFailures.All)
         {
             var f = MoyasarFailures.Describe(code, 401);

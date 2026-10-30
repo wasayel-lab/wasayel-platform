@@ -46,6 +46,8 @@ public sealed record GatewayNoticeAdmission(GatewayPaymentNotice? Notice, Gatewa
 /// (٤) الحَدَثُ <see cref="ACommerce.Kit.Payments.MoyasarClient.PaymentPaidEvent"/>؛ (٥) الدَفعُ لِفاتورَة (<c>data.invoice_id</c> uuid).</para>
 /// <para><b>والرَدُّ لِلبَوّابَة</b> (<see cref="StatusFor"/>): «لا سِرّ» ‏404، و«لا يُقرَأ» ‏400، و«السِرُّ لا يُطابِق» ‏401 — فَتُعيدُ البَوّابَةُ المُحاوَلَةَ كَما تَقولُ الوَثيقَة؛
 /// و«حَدَثٌ آخَر» و«دَفعٌ بِلا فاتورَة» ‏200 — لا عَمَلَ لَنا فيهِما فَلا يُعادانِ عَبَثاً؛ والمَقبولُ ‏200 أَيّاً كانَ ما أَجابَت بِه البَوّابَةُ عَن الفاتورَة.</para>
+/// <para>(‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-1 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: «والمَقبولُ ‏200 أَيّاً كانَ» لَم يَعُد — المَقبولُ الَّذي تَعَذَّرَ إثباتُ دَفعِه
+/// لِسَبَبٍ عابِرٍ ‏503 فَيُعاد، <see cref="StatusFor(string?, string?)"/>.)</para>
 /// </summary>
 public static class GatewayNoticeGate
 {
@@ -114,6 +116,32 @@ public static class GatewayNoticeGate
         SecretMismatch    => 401,
         _                 => 200,
     };
+
+    /// <summary>
+    /// <para><b>رُموزُ التَأكيدِ الَّتي تُعادُ — العابِرَةُ وَحدَها</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-1؛ تَوصيفُ «اليَوم» <c>2948fd9</c>): البَوّابَةُ لا تُجيب
+    /// (انقِطاعٌ، مُهلَة، ‏5xx)، أَو تَرُدُّ بِحَدِّ النِداءات (‏429)، أَو جَوابٌ لا يُقرَأ، أَو مِفتاحُ المَتجَرِ لا يُفَكُّ الآن، أَو الفاتورَةُ ما زالَت غَيرَ مَدفوعَةٍ
+    /// لِأَنّ حالَها يَتَأَخَّرُ عَن الحَدَث. <b>وما سِواها لَيسَ لَنا أَو لا تُصلِحُه الإعادَة</b>: فاتورَةٌ تُسَمّي صَفَقاتٍ لا تَحمِلُ مَرجِعَها، أَو مُغلَقَة، أَو بِمَبلَغٍ
+    /// أَو عُملَةٍ غَيرِ ما عَلى الصَفَقات، أَو مِفتاحٌ تَرفُضُه البَوّابَة (‏401/403/404).</para>
+    /// </summary>
+    public static readonly IReadOnlyList<string> RetriedConfirmCodes = new[]
+    {
+        ACommerce.Kit.Payments.MoyasarFailures.Unreachable,
+        ACommerce.Kit.Payments.MoyasarFailures.Unreadable,
+        ACommerce.Kit.Payments.MoyasarFailures.NotConfigured,
+        ACommerce.Kit.Payments.MoyasarFailures.RateLimited,
+        GatewayPaymentProof.InvoiceUnpaid,
+    };
+
+    /// <summary>
+    /// <para><b>رَدُّ الوارِدِ دالَّةٌ نَقِيَّةٌ في نَتيجَتَيه</b> (‏2026-10-30، C-PAY-1): رَمزُ البَوّابَةِ أَوَّلاً كَما في <see cref="StatusFor(string?)"/>؛ فَإن قُبِلَ الإشعارُ
+    /// فَرَمزُ التَأكيد — <b>‏503 لِما في <see cref="RetriedConfirmCodes"/></b> فَتُعيدُه البَوّابَةُ (تُعيدُ غَيرَ 2xx خَمسَ مَرّات، ‏ADR-032 §٩‑٨)، و‏200 لِدَفعٍ ثَبَتَ
+    /// ولِما لَيسَ لَنا. <b>والإعادَةُ آمِنَة</b>: <c>ConfirmGatewayPaymentAsync</c> لا يَكتُبُ عَلى ما قُبِض (<c>IsCaptured</c>)، فَالإشعارُ الثاني صِفرُ كِتابَة.
+    /// والسابِقَةُ قَرارُ المالِكِ لِوارِدِ OTO في د9 (٢): ‏503 لِأَنّ المُزَوِّدَ يُعيدُ عَلى ‏5xx.</para>
+    /// </summary>
+    public static int StatusFor(string? gateCode, string? confirmCode)
+        => gateCode is not null ? StatusFor(gateCode)
+           : confirmCode is not null && RetriedConfirmCodes.Contains(confirmCode, StringComparer.Ordinal) ? 503
+           : 200;
 
     /// <summary>مُقارَنَةٌ بِزَمَنٍ ثابِت — لا يَتَسَرَّبُ طولُ ما طابَقَ مِن السِرّ.</summary>
     private static bool SameSecret(string expected, string given)

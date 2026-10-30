@@ -158,7 +158,7 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
             .Append(GatewayReturn.InvoiceExpired)
             .OrderBy(c => c, StringComparer.Ordinal);
         Assert.Equal(expected, GatewayReturn.Codes.OrderBy(c => c, StringComparer.Ordinal));
-        Assert.Equal(16, GatewayReturn.Codes.Count);   // 13 ← 14 (‏2026-10-13، G5 (xvii-g): +gateway_invoice_closed) ← 15 (‏2026-10-29، د5) ← 16 (د5 (٤))
+        Assert.Equal(17, GatewayReturn.Codes.Count);   // 13 ← 14 (‏2026-10-13، G5 (xvii-g): +gateway_invoice_closed) ← 15 (‏2026-10-29، د5) ← 16 (د5 (٤)) ← 17 (‏2026-10-30، C-PAY-1: +gateway_rate_limited)
         Assert.All(GatewayReturn.Codes, c => Assert.Equal(GatewayReturn.TextPrefix + c, GatewayReturn.KeyFor(c)));
         Assert.All(GatewayReturn.Codes, c => Assert.Equal(3, GatewayReturn.KeyFor(c)!.Split('.').Length));
         Assert.Null(GatewayReturn.KeyFor("not_a_code"));
@@ -183,7 +183,7 @@ public class TenantGatewayEndpointsTests(ITestOutputHelper output)
             checkedCount++;
         }
         output.WriteLine($"· نُصوصُ صَفحَةِ العَودَة: {checkedCount} مِفتاحاً حَيّاً (‏{GatewayReturn.Codes.Count} رَمزاً + ‏4 نُصوص).");
-        Assert.Equal(20, checkedCount);   // 17 ← 18 (‏2026-10-13، G5 (xvii-g)) ← 19 (‏2026-10-29، قَرارُ المالِك د5 (٥): +gateway_verify_rate_limited) ← 20 (د5 (٤): +gateway_invoice_expired)
+        Assert.Equal(21, checkedCount);   // 17 ← 18 (‏2026-10-13، G5 (xvii-g)) ← 19 (‏2026-10-29، قَرارُ المالِك د5 (٥): +gateway_verify_rate_limited) ← 20 (د5 (٤): +gateway_invoice_expired) ← 21 (‏2026-10-30، C-PAY-1: +gateway_rate_limited)
     }
 
     // ═══ ٣) الخِدمَة — السُلطَةُ قَبلَ المِفتاح، والمِفتاحُ قَبلَ البَوّابَة، وصِفرُ كِتابَة ═══════════════════════

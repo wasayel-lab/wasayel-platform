@@ -280,6 +280,8 @@ public sealed class MoyasarClient
     /// <para><b>كُلُّ عَمَلِيَّةٍ تَمُرُّ مِن هُنا</b>: رَأسُ <c>Authorization: Basic</c> مِن المِفتاحِ ونُقطَتَين (المِفتاحُ اسمُ
     /// المُستَخدِمِ وكَلِمَةُ السِرِّ فارِغَة)، ثُمَّ تَصنيفُ الرَدّ: ‏5xx أَو انقِطاعٌ أَو مُهلَة ← <see cref="MoyasarFailures.Unreachable"/>؛
     /// ‏4xx ← <see cref="MoyasarFailures.Refused"/> بِحالِه؛ نَجاحٌ لا يُقرَأ ← <see cref="MoyasarFailures.Unreadable"/>.</para>
+    /// <para>(‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-1 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: و‏429 لَيسَ رَفضاً — <see cref="MoyasarFailures.RateLimited"/> بِحالِه،
+    /// فَيُعيدُ مَن يُعيدُ: وَثيقَةُ الأَخطاءِ «429 Too Many Requests – Too many requests hit the API too quickly».)</para>
     /// </summary>
     private async Task<MoyasarResult<JsonElement>> SendAsync(
         string secretKey, HttpMethod method, string path, object? body, string operation, CancellationToken ct)
@@ -311,6 +313,7 @@ public sealed class MoyasarClient
         {
             var status = (int)resp.StatusCode;
             if (status >= 500) return Fail<JsonElement>(MoyasarFailures.Unreachable, operation, status);
+            if (status == MoyasarFailures.RateLimitedStatus) return Fail<JsonElement>(MoyasarFailures.RateLimited, operation, status);
             if (!resp.IsSuccessStatusCode) return Fail<JsonElement>(MoyasarFailures.Refused, operation, status);
 
             var root = await ReadJsonAsync(resp, ct);
@@ -424,8 +427,16 @@ public static class MoyasarFailures
     /// <summary>أَجابَت بِنَجاحٍ لا يُقرَأ — جِسمٌ لَيسَ JSON أَو بِلا حَقلٍ مَطلوب.</summary>
     public const string Unreadable = "gateway_unreadable";
 
+    /// <summary><b>أَجابَت ‏429 — «Too Many Requests»</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-1): حِصَّةُ النِداءاتِ لا رَفضُ الطَلَب، فَيُعادُ بَعدَ قَليل.
+    /// كانَ يَقَعُ في <see cref="Refused"/> فَيُعامَلُ مُعامَلَةَ مِفتاحٍ مَرفوض.</summary>
+    public const string RateLimited = "gateway_rate_limited";
+
+    /// <summary>رَمزُ الحالِ الَّذي يَعني <see cref="RateLimited"/> — مِن جَدوَلِ أَخطاءِ الوَثيقَة.</summary>
+    public const int RateLimitedStatus = 429;
+
+    /// <summary>(‏2026-10-30، C-PAY-1 — ولا يُعادُ حَرفٌ فَوقَه: سِتَّةٌ بَعدَ خَمسَة — <see cref="RateLimited"/>.)</summary>
     public static readonly IReadOnlyList<string> All =
-        new[] { NotConfigured, Invalid, Unreachable, Refused, Unreadable };
+        new[] { NotConfigured, Invalid, Unreachable, Refused, Unreadable, RateLimited };
 
     public static bool Contains(string code) => All.Contains(code, StringComparer.Ordinal);
 
@@ -437,6 +448,7 @@ public static class MoyasarFailures
         Unreachable   => new(code, "لا جَوابَ مِن البَوّابَة — انقِطاعٌ أَو مُهلَةٌ أَو خَطَأُ خادِم.", httpStatus),
         Refused       => new(code, "رَفَضَت البَوّابَةُ الطَلَب — مِفتاحٌ مَرفوضٌ أَو فاتورَةٌ لا تَعرِفُها لِهذا المِفتاح.", httpStatus),
         Unreadable    => new(code, "رَدُّ البَوّابَةِ ناجِحٌ لا يُقرَأ — حَقلٌ مَطلوبٌ غائِب.", httpStatus),
+        RateLimited   => new(code, "رَدَّت البَوّابَةُ بِحَدِّ النِداءات (‏429) — يُعادُ بَعدَ قَليل.", httpStatus),
         _ => throw new ArgumentException($"الرَمز «{code}» خارِج مَعجَم MoyasarFailures.", nameof(code)),
     };
 }

@@ -229,6 +229,7 @@ public static class GatewayReturn
     /// الخَمسَة. ثَلاثَةَ عَشَرَ لا رابِعَ عَشَر. (‏2026-10-13، G5 (xvii-g) — ولا يُعادُ حَرفٌ فَوقَه: والبُرهانُ سِتَّة — أَربَعَةَ عَشَر.)</summary>
     /// <remarks>(‏2026-10-29، قَرارُ المالِك د5 — ولا يُعادُ حَرفٌ فَوقَه: ومَعَها <see cref="VerifyRateLimited"/> — خَمسَةَ عَشَر.)</remarks>
     /// <remarks>(‏2026-10-29، قَرارُ المالِك د5 (٤) — ولا يُعادُ حَرفٌ فَوقَه: و<see cref="InvoiceExpired"/> — سِتَّةَ عَشَر.)</remarks>
+    /// <remarks>(‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-1 — ولا يُعادُ حَرفٌ فَوقَه: ومَعجَمُ العَميلِ سِتَّةٌ بِـ<see cref="MoyasarFailures.RateLimited"/> — سَبعَةَ عَشَر.)</remarks>
     public static readonly IReadOnlyList<string> Codes =
         DealPayAuthorization.All
             .Concat(MoyasarFailures.All)
