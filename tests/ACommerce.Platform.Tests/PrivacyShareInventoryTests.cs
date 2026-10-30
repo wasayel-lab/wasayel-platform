@@ -200,20 +200,38 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
             .OrderBy(p => p, StringComparer.Ordinal).ToList();
     }
 
-    /// <summary><b>تَوصيفُ اليَوم</b> (يُقلَبُ بِاسمِه في كوميتِ التَبديل): المُتَصَفِّحُ يَطلُبُ مِن أَربَعَةِ مُضيفينَ خارِجِيّين، وجِهَتانِ مِنها لا يُسَمّيهِما نَصّ.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-30، B-PRIV-5)</b> — كانَ <c>Today_the_browser_fetches_from_google_fonts_and_jsdelivr_and_no_share_line_names_them</c>
+    /// (‏<c>410fc75</c>: «جِهاتٌ غَيرُ مُسَمّاة: Google Fonts, jsDelivr»). والآن كُلُّ مُضيفٍ يَطلُبُ مِنه المُتَصَفِّحُ لَه جِهَةٌ في <see cref="BrowserHostParties"/>، وكُلُّ جِهَةٍ مُسَمّاةٌ
+    /// في سَطرِ <c>share_*</c> بِالعَرَبِيَّةِ والإنجليزِيَّة — وسَطرُ الخَطِّ يُسَمّي الاثنَين.</summary>
     [Fact]
-    public void Today_the_browser_fetches_from_google_fonts_and_jsdelivr_and_no_share_line_names_them()
+    public void Every_host_the_browser_fetches_from_has_its_party_named_in_a_share_line()
     {
         var hosts = BrowserHosts();
         var distinct = hosts.Select(h => h.Host).Distinct(StringComparer.Ordinal).OrderBy(h => h, StringComparer.Ordinal).ToList();
         var unnamed = UnnamedBrowserParties(distinct);
         output.WriteLine($"طَلَباتُ مُتَصَفِّحٍ إلى مُضيفٍ خارِجِيّ: {hosts.Count} في {hosts.Select(h => h.File).Distinct().Count()} مِلَفّ · مُضيفون: {distinct.Count} " +
-                         $"({string.Join(", ", distinct)}) · جِهاتٌ غَيرُ مُسَمّاة: {string.Join(", ", unnamed)}");
+                         $"({string.Join(", ", distinct)}) · جِهاتٌ غَيرُ مُسَمّاة: {unnamed.Count}");
         Assert.True(hosts.Count > 0, "أَداةٌ عَمياء: صِفرُ طَلَبٍ خارِجِيّ.");
         Assert.Contains(hosts, h => h.File.EndsWith("App.razor", StringComparison.Ordinal));
         Assert.Contains(hosts, h => h.File.EndsWith("app.css", StringComparison.Ordinal));
-        Assert.Equal(new[] { "Google Fonts", "jsDelivr" }, unnamed);
+        Assert.True(unnamed.Count == 0, "جِهَةٌ يَطلُبُ مِنها المُتَصَفِّحُ ولا يُسَمّيها سَطر: " + string.Join("، ", unnamed));
+        var fonts = (LocaleCatalog.Find(LocaleCatalog.Arabic, "platform.privacy.share_fonts")!, LocaleCatalog.Find("en", "platform.privacy.share_fonts")!);
+        foreach (var party in new[] { "Google Fonts", "jsDelivr" })
+            Assert.True(fonts.Item1.Contains(party, StringComparison.Ordinal) && fonts.Item2.Contains(party, StringComparison.Ordinal), $"share_fonts لا يُسَمّي {party}.");
+        var stale = BrowserHostParties.Keys.Where(h => !distinct.Contains(h)).ToList();
+        Assert.True(stale.Count == 0, "سَطرٌ لِمُضيفٍ لَم يَعُد يُطلَبُ مِنه (المَعجَمُ يَتَقَلَّص): " + string.Join("، ", stale));
     }
+
+    /// <summary>الفاحِصُ يَرى ما يَعُدّ (القاعِدَة ١٠): الوُسومُ والاستيرادُ يُلتَقَطان، والرابِطُ لِلتَصَفُّحِ وفَضاءُ أَسماءِ SVG لا.</summary>
+    [Theory]
+    [InlineData("<link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=Cairo\" />", "fonts.googleapis.com")]
+    [InlineData("<script src=\"https://cdn.jsdelivr.net/npm/x.js\"></script>", "cdn.jsdelivr.net")]
+    [InlineData("@import url('https://fonts.googleapis.com/css2?family=Rubik');", "fonts.googleapis.com")]
+    [InlineData("background: url(https://tiles.example.org/a.png);", "tiles.example.org")]
+    [InlineData("<a href=\"https://moyasar.com/docs\">", "")]
+    [InlineData("background: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E\");", "")]
+    public void The_browser_fetch_pattern_sees_what_it_counts(string code, string host)
+        => Assert.Equal(host, BrowserFetch.Matches(code).Select(m => m.Groups["h"].Value).FirstOrDefault() ?? "");
 
     /// <summary>حُقولُ تَسجيلِ البائِعِ المُسَجَّلِ في الضَريبَةِ كَما يَكتُبُها <c>OtoClient.RegisterVendorAsync</c> تَحتَ <c>if (vendor.IsVatRegistered)</c>.</summary>
     internal static readonly string[] VatRegistrationFields =

@@ -65,7 +65,7 @@
   "platform.terms.s13_body": "For any question about these terms, write to us at:",
 
   "platform.privacy.title": "Privacy Policy",
-  "platform.privacy.updated": "Last updated: 2026-10-29",
+  "platform.privacy.updated": "Last updated: 2026-10-30",
   "platform.privacy.intro": "This policy explains what the Wasayel platform actually collects, why it collects it, and who it is shared with. It is written against what the code stores, not in general terms.",
   "platform.privacy.s1_title": "1. Data controller",
   "platform.privacy.s1_body": "The data controller is the legal entity that operates Wasayel:",
@@ -99,7 +99,7 @@
   "platform.privacy.share_push": "The browser push service (Google, Mozilla, Apple or Microsoft, depending on your browser) — when you turn on notifications: it receives your device's subscription address and an encrypted payload, to deliver the notification to your device.",
   "platform.privacy.share_hosting": "The hosting and database providers (Hugging Face and Neon today) — they hold all of the platform's data, stored to run and keep it.",
   "platform.privacy.share_files": "The uploaded image store ({0}) — it holds the profile photo and listing photos you upload.",
-  "platform.privacy.share_fonts": "The web font service and the web file delivery network — your browser requests the font and the live-connection library from them, so your network address is visible to them.",
+  "platform.privacy.share_fonts": "The web font service (Google Fonts) and the web file delivery network (jsDelivr) — your browser requests the font and the live-connection library from them, so your network address is visible to them.",
   "platform.privacy.share_maps": "OpenStreetMap — map tiles are requested from it when a screen containing a map is opened.",
   "platform.privacy.share_legal": "Competent authorities — on a binding legal request.",
   "platform.privacy.s5_abroad": "Some of these parties process data outside the Kingdom of Saudi Arabia.",

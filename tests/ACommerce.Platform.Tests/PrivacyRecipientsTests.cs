@@ -252,7 +252,8 @@ public class PrivacyRecipientsTests(ITestOutputHelper output)
         Assert.Contains("@doc.Markup(\"platform.privacy.updated\")", page, StringComparison.Ordinal);
         Assert.DoesNotContain("platform.doc.updated", page, StringComparison.Ordinal);
         var date = Regex.Match(Ar("platform.privacy.updated"), @"\d{4}-\d{2}-\d{2}").Value;
-        Assert.Equal("2026-10-29", date);
+        // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1 وB-PRIV-5) §6 (سَحبُ الإعلانات) و§5 (جِهَتا الخَطِّ والمَكتَبَة) تَبَدَّلا — فَالتاريخُ مَعَهُما؛ كانَ «2026-10-29».
+        Assert.Equal("2026-10-30", date);
         Assert.Contains(date, En("platform.privacy.updated"), StringComparison.Ordinal);
     }
 }
