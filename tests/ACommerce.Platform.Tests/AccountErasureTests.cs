@@ -602,16 +602,72 @@ public class AccountErasureTests
     private static readonly string DeletePagePath = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
         "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "DeleteAccount.razor");
 
+    private static Deal CashDeal(Guid buyer, DealStatus status, params string[] lines)
+    {
+        var d = new Deal { Id = Guid.NewGuid(), InitiatorId = buyer, CounterpartyId = Other, CounterpartyName = "بائِعُ النَقد",
+            ListingTitle = "سِلعَةٌ نَقدِيَّة", AmountSar = 250m, Status = status };
+        foreach (var a in lines) d.Timeline.Add(new(DealStage.Delivered, DealStage.Delivered, a, Other, "بائِعُ النَقد", null, DateTime.UtcNow));
+        return d;
+    }
+
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-30، G-7)</b> — كانَ <c>Today_the_deletion_page_says_nothing_of_cash_the_vendor_still_owes_back</c> (‏<c>228b1be</c>:
+    /// دالّاتُ «رَدٍّ مُستَحَقّ» في المَحو 0، وصَفحَةُ الحَذفِ لا تَذكُرُه). والآن تَسأَلُ الصَفحَةُ <see cref="AccountErasure.CashRefundsOwedAsync"/> بِاستِعلامِ «بَياناتي»،
+    /// وتَرسُمُ كُلَّ صَفقَةٍ (البائِع، السِلعَة، المَبلَغ) بِجُملَةِ الوَسيلَة — <b>في فَرعِ الاستِمارَةِ وقَبلَها</b>: تَحذيرٌ يُقرَأُ قَبلَ التَأكيدِ لا مَنعٌ يَرُدُّه.
+    /// والمُلغاةُ ما زالَت غَيرَ جارِيَة — لا تَدخُلُ <c>open_deal</c>.</summary>
     [Fact]
-    public void Today_the_deletion_page_says_nothing_of_cash_the_vendor_still_owes_back()
+    public void The_deletion_page_warns_of_cash_the_vendor_still_owes_back_before_the_confirm_and_does_not_block_it()
     {
         var page = WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(DeletePagePath));
         var owed = typeof(AccountErasure).GetMethods().Count(m => m.Name.StartsWith("CashRefund", StringComparison.Ordinal));
-        output.WriteLine($"دالّاتُ «رَدٍّ مُستَحَقّ» في المَحو: {owed} · ذِكرُه في صَفحَةِ الحَذف: {page.Contains("cash_refund", StringComparison.Ordinal)}");
+        var load = page.IndexOf("owedCash = await Data.CashRefundsOwedAsync(Slug, Auth.UserId.Value);", StringComparison.Ordinal);
+        var openBranch = page.IndexOf("@if (openDeals > 0)", StringComparison.Ordinal);
+        var warn = page.IndexOf("@if (owedCash.Count > 0)", StringComparison.Ordinal);
+        var form = page.IndexOf("/me/delete/confirm", StringComparison.Ordinal);
+        var keys = new[] { "account.delete.cash_refund_title", "account.delete.cash_refund_lead", "account.delete.cash_refund_row", "account.delete.cash_refund_vendor" };
+        output.WriteLine($"دالّاتُ «رَدٍّ مُستَحَقّ» في المَحو: {owed} · التَحذيرُ قَبلَ الاستِمارَةِ في فَرعِها: {openBranch < warn && warn < form} · مَفاتيحُ في القامُوس: " +
+            $"{keys.Count(k => ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, k) is not null)}/{keys.Length}");
 
-        Assert.Equal(0, owed);
-        Assert.DoesNotContain("cash_refund", page, StringComparison.Ordinal);
+        Assert.Equal(3, owed);
+        Assert.True(load > 0, "الصَفحَةُ لا تَسأَلُ الاستِعلام.");
+        Assert.True(openBranch > 0 && warn > openBranch && form > warn && page.IndexOf("else", openBranch, StringComparison.Ordinal) < warn,
+            "التَحذيرُ لَيسَ في فَرعِ الاستِمارَةِ قَبلَها.");
+        foreach (var k in keys)
+        {
+            Assert.Contains(k, page, StringComparison.Ordinal);
+            Assert.NotNull(ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, k));
+        }
+        Assert.Contains("d.CounterpartyName, d.ListingTitle, d.AmountSar", page, StringComparison.Ordinal);
         Assert.False(AccountErasure.IsOpen(new Deal { Status = DealStatus.Cancelled }));
+        var l = new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor());
+        Assert.Equal("«سِلعَة» — 250 ريال، يَرُدُّها بائِع", l.Format("account.delete.cash_refund_row", "بائِع", "سِلعَة", 250m));
+    }
+
+    /// <summary>مُوجَبٌ وسالِبٌ لِـ<see cref="AccountErasure.CashRefundOwed"/>: مُلغاةٌ آخِرُ سَطرِ مالِها «رَدٌّ نَقدِيٌّ مُستَحَقّ» ⇒ نَعَم. وغَيرُ مُلغاةٍ، أَو لِغَيرِه
+    /// مُشتَرِياً (هُوَ البائِعُ فيها)، أَو مُلغاةٌ بِلا قَبض، أَو أُعيدَ مالُها إلى البِطاقَة (<c>gateway_refund_due</c>/<c>refunded</c> آخِراً) ⇒ لا. وسَطرٌ لا مالَ فيه
+    /// بَعدَ «المُستَحَقّ» (مُلاحَظَة) لا يَحجُبُه.</summary>
+    [Fact]
+    public void A_cash_refund_is_owed_to_the_buyer_of_a_cancelled_deal_whose_latest_money_line_says_so_and_not_otherwise()
+    {
+        var owed = CashDeal(Me, DealStatus.Cancelled, DealEvent.CashOnDelivery, "cancelled", DealEvent.CashRefundDue);
+        var noteAfter = CashDeal(Me, DealStatus.Cancelled, DealEvent.CashOnDelivery, DealEvent.CashRefundDue, DealEvent.RefNote);
+        var notOwed = CashDeal(Me, DealStatus.Cancelled, "cancelled");
+        var active = CashDeal(Me, DealStatus.Active, DealEvent.CashOnDelivery, DealEvent.CashRefundDue);
+        var asSeller = CashDeal(Other, DealStatus.Cancelled, DealEvent.CashOnDelivery, DealEvent.CashRefundDue);
+        asSeller.CounterpartyId = Me;
+        var card = CashDeal(Me, DealStatus.Cancelled, DealEvent.GatewayPaid, "cancelled", DealEvent.GatewayRefundDue);
+        var cardRefunded = CashDeal(Me, DealStatus.Cancelled, DealPaymentLines.Captured, "cancelled", DealPaymentLines.Refunded);
+        var cashThenCard = CashDeal(Me, DealStatus.Cancelled, DealEvent.CashRefundDue, DealPaymentLines.Refunded);
+
+        Assert.True(AccountErasure.CashRefundOwed(owed, Me));
+        Assert.True(AccountErasure.CashRefundOwed(noteAfter, Me));
+        Assert.False(AccountErasure.CashRefundOwed(notOwed, Me));
+        Assert.False(AccountErasure.CashRefundOwed(active, Me));
+        Assert.False(AccountErasure.CashRefundOwed(asSeller, Me));
+        Assert.False(AccountErasure.CashRefundOwed(card, Me));
+        Assert.False(AccountErasure.CashRefundOwed(cardRefunded, Me));
+        Assert.False(AccountErasure.CashRefundOwed(cashThenCard, Me));
+        Assert.Equal(new[] { owed.Id, noteAfter.Id }.OrderBy(i => i),
+            AccountErasure.CashRefundsOwed(new[] { owed, noteAfter, notOwed, active, asSeller, card, cardRefunded, cashThenCard }, Me).Select(d => d.Id).OrderBy(i => i));
     }
 
     private readonly ITestOutputHelper output;
@@ -1251,6 +1307,48 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
             s.DeleteWhere<ACommerce.Kit.Listings.Listing>(l => l.Id != Guid.Empty);
             s.Events.ArchiveStream(offerId); s.Events.ArchiveStream(listingId); s.Events.ArchiveStream(othersListing); s.Events.ArchiveStream(othersOffer);
             await s.SaveChangesAsync();
+        }
+    }
+
+    /// <summary><b>مُوجَبٌ وسالِبٌ حَيّاً (‏2026-10-30، G-7)</b>: استِعلامُ صَفحَةِ الحَذفِ (<see cref="UserDataQueries.CashRefundsOwedAsync"/>) يُعيدُ مُلغاتَه الَّتي آخِرُ سَطرِ مالِها
+    /// «رَدٌّ نَقدِيٌّ مُستَحَقّ» — لا مُلغاتَه بِبِطاقَةٍ مُستَرجَعَة، ولا صَفقَةَ غَيرِه بِالسَطرِ نَفسِه، ولا صَفقَتَه في مَتجَرٍ آخَر (جَلسَةُ المُستَأجِر).</summary>
+    [Fact]
+    public async Task The_deletion_pages_query_returns_his_cancelled_cash_deals_still_owed_back_and_nothing_else_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = BuildStore();
+        var slug = "zz-erase-" + Guid.NewGuid().ToString("N")[..8];
+        var neighbour = "zz-erase-" + Guid.NewGuid().ToString("N")[..8];
+        var me = Guid.NewGuid();
+        Deal Make(string tenant, Guid buyer, params string[] lines)
+        {
+            var d = new Deal { Id = Guid.NewGuid(), TenantSlug = tenant, InitiatorId = buyer, InitiatorName = "مُشتَري", CounterpartyId = Guid.NewGuid(),
+                CounterpartyName = "بائِعُ النَقد", ListingTitle = "سِلعَة", AmountSar = 180m, Status = DealStatus.Cancelled };
+            foreach (var a in lines) d.Timeline.Add(new(DealStage.Delivered, DealStage.Delivered, a, null, null, null, DateTime.UtcNow));
+            return d;
+        }
+        var owed = Make(slug, me, DealEvent.CashOnDelivery, "cancelled", DealEvent.CashRefundDue);
+        var card = Make(slug, me, DealPaymentLines.Captured, "cancelled", DealPaymentLines.Refunded);
+        var theirs = Make(slug, Guid.NewGuid(), DealEvent.CashOnDelivery, "cancelled", DealEvent.CashRefundDue);
+        var elsewhere = Make(neighbour, me, DealEvent.CashOnDelivery, "cancelled", DealEvent.CashRefundDue);
+        try
+        {
+            await using (var s = store.LightweightSession(slug)) { s.Store(owed, card, theirs); await s.SaveChangesAsync(); }
+            await using (var s = store.LightweightSession(neighbour)) { s.Store(elsewhere); await s.SaveChangesAsync(); }
+
+            var found = await new UserDataQueries(store).CashRefundsOwedAsync(slug, me);
+            output.WriteLine($"صَفَقاتٌ مَخزونَة: 4 · يُرَدُّ لَه نَقداً هُنا: {found.Count} ({string.Join(", ", found.Select(d => $"{d.ListingTitle} {d.AmountSar:0}"))})");
+            Assert.Equal(owed.Id, Assert.Single(found).Id);
+        }
+        finally
+        {
+            foreach (var t in new[] { slug, neighbour })
+            {
+                await using var s = store.LightweightSession(t);
+                s.DeleteWhere<Deal>(d => d.Id != Guid.Empty);
+                await s.SaveChangesAsync();
+            }
         }
     }
 }

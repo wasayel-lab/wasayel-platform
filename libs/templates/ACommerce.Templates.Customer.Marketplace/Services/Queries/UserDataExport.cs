@@ -218,4 +218,12 @@ public sealed class UserDataQueries
 
         return UserDataExport.Project(tenantSlug, now, user, deals, convs, messages, reviews, offers, listings);
     }
+
+    /// <summary>(‏2026-10-30، تَدقيقُ الموجَة ١١ G-7 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) صَفَقاتُه المُلغاةُ الَّتي يَرُدُّ فيها البائِعُ ثَمَناً نَقدِيّاً — تَرسُمُها صَفحَةُ
+    /// الحَذفِ قَبلَ التَأكيد (<see cref="Identity.AccountErasure.CashRefundsOwed"/>). قِراءَةٌ بِجَلسَةِ المُستَأجِرِ كَما سَبَق، وهُنا لِأَنّ بَياناتِه هِيَ ما يُسأَلُ عَنه.</summary>
+    public async Task<IReadOnlyList<Deal>> CashRefundsOwedAsync(string tenantSlug, Guid userId, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(tenantSlug);
+        return await Identity.AccountErasure.CashRefundsOwedAsync(s, userId, ct);
+    }
 }

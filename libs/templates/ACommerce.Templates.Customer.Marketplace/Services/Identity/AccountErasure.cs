@@ -53,6 +53,38 @@ public static class AccountErasure
     public static async Task<int> OpenDealsAsync(IQuerySession s, Guid userId, CancellationToken ct = default)
         => OpenDeals(await s.Query<Deal>().Where(d => d.InitiatorId == userId || d.CounterpartyId == userId).ToListAsync(ct), userId);
 
+    // ─── ثَمَنٌ نَقدِيٌّ يَرُدُّه البائِع (‏2026-10-30، تَدقيقُ الموجَة ١١ G-7؛ تَوصيفُه 228b1be) ───────────────────────────────────────────────
+
+    /// <summary>أَسطُرُ المالِ في سِجِلِّ الصَفقَة — ما يَكتُبُه القَبضُ والاستِرجاعُ والإلغاءُ عَن مال؛ وآخِرُها حالُ المالِ الآن.</summary>
+    private static readonly HashSet<string> MoneyLines = new(StringComparer.Ordinal)
+    {
+        DealEvent.CashOnDelivery, DealEvent.CashRefundDue, DealEvent.GatewayPaid, DealEvent.GatewayRefundDue, DealEvent.GatewayInvoiceLeftOpen,
+        DealPaymentLines.Captured, DealPaymentLines.CaptureFailed, DealPaymentLines.Refunded, DealPaymentLines.RefundFailed,
+    };
+
+    /// <summary>
+    /// <para><b>صَفقَةٌ أُلغِيَت ولِلمُشتَري عَلى البائِعِ ثَمَنٌ نَقدِيٌّ يَرُدُّه</b> (قَرارُ «أ» F2·٧، P1+P2): المُشتَري (<c>InitiatorId</c>) هُوَ صاحِبُ الحِساب، والصَفقَةُ
+    /// <see cref="DealStatus.Cancelled"/>، وآخِرُ سَطرِ مالٍ في سِجِلِّها <see cref="DealEvent.CashRefundDue"/>. والآخِرُ لا الأَوَّل كَـ<c>DealNotices.OwnerActionOf</c>:
+    /// سَطرُ مالٍ بَعدَه يَقولُ حالاً أَحدَث. وما رُدَّ إلى البِطاقَةِ (<see cref="DealEvent.GatewayRefundDue"/>، <c>refunded</c>) لا يُحتاجُ فيه إلى وَسيلَةِ اتِّصال. دالَّةٌ نَقِيَّة.</para>
+    /// <para><b>ولِماذا تَحذيرٌ لا مَنع</b>: لا كاتِبَ لِـ«رُدَّ النَقد» (S3 OI1)، فَمَنعٌ بِه لا يُرفَعُ أَبَداً — يَحبِسُ صاحِبَ الحِسابِ في حِسابٍ لا يَستَطيعُ حَذفَه.
+    /// فَتَرسُمُ صَفحَةُ الحَذفِ كُلَّ صَفقَةٍ مِنها (البائِع، السِلعَة، المَبلَغ) بِجُملَةِ أَنّ الحَذفَ يُزيلُ الوَسيلَةَ الَّتي يَرُدُّ بِها البائِع؛ وخُطوَةُ التَأكيدِ القائِمَةُ هِيَ الإقرار.</para>
+    /// </summary>
+    public static bool CashRefundOwed(Deal deal, Guid userId)
+    {
+        if (deal.InitiatorId != userId || deal.Status != DealStatus.Cancelled) return false;
+        for (var i = deal.Timeline.Count - 1; i >= 0; i--)
+            if (MoneyLines.Contains(deal.Timeline[i].Action)) return deal.Timeline[i].Action == DealEvent.CashRefundDue;
+        return false;
+    }
+
+    /// <summary>صَفَقاتُه الَّتي لَه فيها ثَمَنٌ نَقدِيٌّ يَرُدُّه البائِع (<see cref="CashRefundOwed"/>)، أَحدَثُها أَوَّلاً.</summary>
+    public static IReadOnlyList<Deal> CashRefundsOwed(IEnumerable<Deal> deals, Guid userId)
+        => deals.Where(d => CashRefundOwed(d, userId)).OrderByDescending(d => d.UpdatedAt).ToList();
+
+    /// <summary>الاستِعلامُ الواحِدُ لِما سَبَق — تَسأَلُه صَفحَةُ الحَذفِ بِجَلسَةِ قِراءَة (<c>UserDataQueries.CashRefundsOwedAsync</c>).</summary>
+    public static async Task<IReadOnlyList<Deal>> CashRefundsOwedAsync(IQuerySession s, Guid userId, CancellationToken ct = default)
+        => CashRefundsOwed(await s.Query<Deal>().Where(d => d.InitiatorId == userId && d.Status == DealStatus.Cancelled).ToListAsync(ct), userId);
+
     /// <summary>اسمٌ لا يَدُلُّ عَلى أَحَد — فارِغ، أَو الافتِراضِيُّ قَبلَ أَن يُكتَبَ اسم، أَو المَمحُوُّ نَفسُه — فَلا يُبحَثُ عَنه في نَصِّ إشعار.
     /// ‏(‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ١) والافتِراضِيّانِ كِلاهُما (<see cref="PlaceholderNames"/>) لا قيمَةُ <c>User</c> وَحدَها: «عُضو جَديد» هُوَ
     /// ما يُخَزَّنُ لِلحِسابِ الجَديدِ بِالهاتِفِ أَو البَريد، وكانَ يُعَدُّ مُعَرِّفاً فَيَكتُبُ حَذفُ حِسابٍ بِه «حِسابٌ مَحذوف» في إشعارِ تَسجيلِ كُلِّ عُضوٍ آخَر.</summary>
