@@ -375,6 +375,22 @@ public class AccountErasureTests
         Assert.Equal("offer_gone", AccountErasure.OffererGoneCode);
     }
 
+    /// <summary><b>مُوجَبٌ وسالِب (‏2026-10-30، G-2)</b>: الصَفقَةُ الَّتي فَعَلَ فيها ولَيسَ طَرَفَها رابِطُها في <see cref="AccountErasure.RelatedUrls"/> فَيُمحى اسمُه مِن إشعارِها،
+    /// وإشعارُ صَفقَةٍ لَم يَمَسَّها بِالاسمِ نَفسِه لا يُمَسّ.</summary>
+    [Fact]
+    public void A_deal_the_user_acted_on_without_being_a_party_links_its_notice_and_an_untouched_deal_does_not()
+    {
+        var acted = new Deal { Id = Guid.NewGuid(), InitiatorId = Other, Timeline = new() { new DealEvent(DealStage.Offered, DealStage.Offered, "cancelled", Me, Name, null, DateTime.UtcNow) } };
+        var untouched = new Deal { Id = Guid.NewGuid(), InitiatorId = Other };
+        var urls = AccountErasure.RelatedUrls(new[] { acted }, Array.Empty<Conversation>(), Array.Empty<ListingMatch>());
+        var told = Notice(Other, DealNotices.CancelledType, "أَلغى البائِعُ طَلَبَك", Name + " أَلغى طَلَبَكَ عَلى «سِلعَة»", $"/zz/deals/{acted.Id}");
+        var other = Notice(Other, DealNotices.CancelledType, "أَلغى البائِعُ طَلَبَك", Name + " أَلغى طَلَبَكَ عَلى «سِلعَة»", $"/zz/deals/{untouched.Id}");
+        Assert.Equal(new[] { $"/deals/{acted.Id}" }, urls);
+        Assert.True(AccountErasure.EraseFrom(told, Me, new[] { Name }, urls, NoContacts, NoReports));
+        Assert.False(AccountErasure.EraseFrom(other, Me, new[] { Name }, urls, NoContacts, NoReports));
+        Assert.Equal((AccountDeletion.ErasedName + " أَلغى طَلَبَكَ عَلى «سِلعَة»", Name + " أَلغى طَلَبَكَ عَلى «سِلعَة»"), (told.Body, other.Body));
+    }
+
     // ─── إعلاناتُ مَن حَذَفَ حِسابَه (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1 + G-5) — تَوصيفٌ قَبلَ التَبديل (القاعِدَة ٣) ─────────────────────
     //
     // المَقيسُ عِندَ `fcbeec5`: `EraseCopiesAsync` تَمَسُّ الصَفقَةَ والمُحادَثَةَ والتَقييمَ والعَرضَ والمُطابَقَةَ والتَذكِرَةَ والمِفتاحَ والإشعار — ولا إعلان؛ فَإعلانُ البائِعِ
@@ -934,13 +950,13 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// <para><b>تَوصيفُ اليَوم حَيّاً</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ G-2؛ يُقلَبُ بِاسمِه في كوميتِ التَبديل): مالِكُ إعلانٍ يَرفُضُ عِندَ «عَرض» طَلَباً لَم يَصِر
-    /// طَرَفَه (د31 «١» — <c>rejectsOffer</c>)، فَيَحمِلُ إشعارُ المُشتَري «{اسمُه} أَلغى طَلَبَكَ…» (<c>DealNotices.CancelledFor</c>). ثُمَّ يَحذِفُ حِسابَه: سَطرُه في الخَطِّ
-    /// الزَمَنِيِّ يُمحى (الصَفقَةُ في <c>others</c>) والإشعارُ يَبقى بِاسمِه — رابِطُه لَيسَ مِن <c>urls</c> (صَفَقاتُ الطَرَفِ وَحدَها). <b>والسالِبُ يَبقى بِحَرفِه</b>: إشعارٌ
+    /// <para><b>قُلِبَ بِاسمِه (‏2026-10-30، G-2)</b> — كانَ <c>Today_a_buyers_notice_about_an_offer_the_deleted_owner_rejected_keeps_his_name_on_Postgres</c> (‏<c>fcd9efe</c>:
+    /// «صَفَقات 1 · إشعارات 0 · سَطرُه مَمحُوّ: True · إشعارُ المُشتَري بِاسمِه: True»). مالِكُ الإعلانِ الَّذي رَفَضَ عِندَ «عَرض» ولَيسَ طَرَفاً ثُمَّ حَذَفَ حِسابَه: إشعارُ المُشتَري
+    /// صارَ «حِسابٌ مَحذوف أَلغى طَلَبَكَ…» — الصَفقَةُ الَّتي فَعَلَ فيها تَربِطُه كَصَفقَةِ الطَرَف (<see cref="AccountErasure.RelatedUrls"/>). <b>والسالِبُ بِحَرفِه</b>: إشعارٌ
     /// بِالاسمِ نَفسِه عَن صَفقَةٍ لَم يَمَسَّها لا يُمَسّ.</para>
     /// </summary>
     [Fact]
-    public async Task Today_a_buyers_notice_about_an_offer_the_deleted_owner_rejected_keeps_his_name_on_Postgres()
+    public async Task A_buyers_notice_about_an_offer_the_deleted_owner_rejected_loses_his_name_on_Postgres()
     {
         if (!Enabled) return;
 
@@ -974,13 +990,71 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
             output.WriteLine($"صَفَقات {counts.Deals} · إشعارات {counts.Notifications} · سَطرُه مَمحُوّ: {deal.Timeline[0].ActorName == AccountDeletion.ErasedName} · " +
                              $"إشعارُ المُشتَري بِاسمِه: {told.Body.Contains(name, StringComparison.Ordinal)} · إشعارُ صَفقَةٍ لَم يَمَسَّها كَما كُتِب: {other.Body == unrelated.Body}");
             Assert.Equal(AccountDeletion.ErasedName, deal.Timeline[0].ActorName);
-            Assert.Contains(name, told.Body, StringComparison.Ordinal);
+            Assert.Equal(1, counts.Notifications);
+            Assert.Equal(DealNotices.CancelledFor(slug, rejected, AccountDeletion.ErasedName, l, DateTime.UtcNow).Body, told.Body);
             Assert.Equal(unrelated.Body, other.Body);
         }
         finally
         {
             await using var s = store.LightweightSession(slug);
             s.DeleteWhere<User>(u => u.Id != Guid.Empty); s.DeleteWhere<Deal>(d => d.Id != Guid.Empty); s.DeleteWhere<Notification>(n => n.Id != Guid.Empty);
+            await s.SaveChangesAsync();
+        }
+    }
+
+    /// <summary><b>مُوجَب (‏2026-10-30، G-2)</b>: عُضوٌ مِن فَريقِ المَتجَرِ أَلغى بِمِفتاحِ رَبطٍ صَفقَةً لَيسَ طَرَفَها (بابُ <c>/api/v1/deals/{id}/cancel</c>: سَطرُ الخَطِّ الزَمَنِيِّ
+    /// بِمُعَرِّفِه، وإشعارُ المُشتَري بِاسمِ المِفتاحِ كَما أُصدِر — وقَد تَبَدَّلَ اسمُ حِسابِه بَعدَه)، ثُمَّ حَذَفَ حِسابَه: الاسمُ القَديمُ عَلى مِفتاحِه (د56) يُمحى مِن
+    /// الإشعارِ أَيضاً، والمِفتاحُ «حِسابٌ مَحذوف».</summary>
+    [Fact]
+    public async Task An_api_key_actors_cancel_notice_loses_the_name_the_key_was_issued_under_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = BuildStore();
+        var slug = "zz-erase-" + Guid.NewGuid().ToString("N")[..8];
+        const string issuedAs = "مُوَظَّفُ الرَبطِ القَديم";
+        var member = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = "مُوَظَّفُ الرَبطِ بَعدَ التَسمِيَة", Phone = "+966500000559" };
+        var l = new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor());
+        var cancelled = new Deal
+        {
+            Id = Guid.NewGuid(), TenantSlug = slug, ListingTitle = "طَلَبٌ أُلغِيَ بِالرَبط", InitiatorId = Guid.NewGuid(), InitiatorName = "مُشتَرٍ", CounterpartyId = Guid.NewGuid(),
+            CounterpartyName = "بائِع", Status = DealStatus.Cancelled,
+            Timeline = new() { new DealEvent(DealStage.Booked, DealStage.Booked, "cancelled", member.Id, issuedAs, "api", DateTime.UtcNow) },
+        };
+        var notice = DealNotices.CancelledFor(slug, cancelled, issuedAs, l, DateTime.UtcNow);
+        var keys = new ApiKeyService(store);
+        string? keyId = null;
+        try
+        {
+            await using (var s = store.LightweightSession(slug))
+            {
+                s.Store(member); s.Store(cancelled); s.Store(notice);
+                await s.SaveChangesAsync();
+            }
+            keyId = (await keys.IssueAsync(slug, new ApiKeyValidator.IssueRequest("رَبطُ المَخزَن", member.Id, issuedAs, new[] { ApiScopeCatalog.DealsRead }, null), Guid.NewGuid())).Key.Id;
+            await using (var s = store.LightweightSession(slug))
+            {
+                var u = (await s.LoadAsync<User>(member.Id))!;
+                var names = ActorName.NamesOf(u);
+                var contacts = AccountErasure.ContactsOf(u);
+                AccountDeletion.Erase(u, DateTime.UtcNow);
+                s.Store(u);
+                await ApiKeyService.RevokeActorKeysAsync(s, slug, member.Id, DateTime.UtcNow);
+                await AccountErasure.EraseCopiesAsync(s, slug, member.Id, names, contacts);
+                await s.SaveChangesAsync();
+            }
+            await using var q = store.QuerySession(slug);
+            var told = (await q.LoadAsync<Notification>(notice.Id))!;
+            var key = (await q.LoadAsync<ApiKeyDocument>(keyId))!;
+            output.WriteLine($"إشعارُ المُشتَري بِاسمِ المِفتاح: {told.Body.Contains(issuedAs, StringComparison.Ordinal)} · المِفتاحُ: {key.Status}/{key.ActorName == AccountDeletion.ErasedName}");
+            Assert.Equal(DealNotices.CancelledFor(slug, cancelled, AccountDeletion.ErasedName, l, DateTime.UtcNow).Body, told.Body);
+            Assert.Equal((ApiKeyDocument.StatusRevoked, AccountDeletion.ErasedName), (key.Status, key.ActorName));
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            s.DeleteWhere<User>(u => u.Id != Guid.Empty); s.DeleteWhere<Deal>(d => d.Id != Guid.Empty); s.DeleteWhere<Notification>(n => n.Id != Guid.Empty);
+            if (keyId is not null) s.Delete<ApiKeyDocument>(keyId);
             await s.SaveChangesAsync();
         }
     }

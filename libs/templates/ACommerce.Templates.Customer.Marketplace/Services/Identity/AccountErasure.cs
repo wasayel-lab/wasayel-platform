@@ -234,6 +234,19 @@ public static class AccountErasure
         => string.IsNullOrEmpty(text) || string.IsNullOrEmpty(name) ? text
          : Regex.Replace(text, NameBefore + Regex.Escape(name) + NameAfter, _ => AccountDeletion.ErasedName);
 
+    /// <summary>
+    /// <para><b>روابِطُ ما يَخُصُّه</b> — إشعارٌ رابِطُه مِنها عَنه (<see cref="EraseFrom(Notification, Guid, IReadOnlyCollection{string}, IReadOnlyCollection{string}, IReadOnlyCollection{string}, IReadOnlySet{Guid})"/>):
+    /// كُلُّ صَفقَةٍ في <paramref name="touched"/>، ومُحادَثاتُه، ومُطابَقاتُ إعلاناتِه. نَقِيَّة.</para>
+    /// <para><b>‏(‏2026-10-30، تَدقيقُ الموجَة ١١ G-2؛ تَوصيفُه <c>fcd9efe</c>) و«الصَفقَةُ» صَفقَةٌ فَعَلَ فيها لا صَفقَةُ طَرَفٍ وَحدَها</b>: كانَت الروابِطُ تُبنى مِن صَفَقاتِ
+    /// المُبادِرِ والمُقابِل، فَمالِكُ إعلانٍ رَفَضَ عِندَ «عَرض» طَلَباً لَم يَصِر طَرَفَه (د31 «١»)، وفاعِلٌ بِمِفتاحِ رَبطٍ أَلغى صَفقَةَ غَيرِه، يُمحى سَطرُه في خَطِّها الزَمَنِيِّ
+    /// ويَبقى اسمُه في إشعارِ مُشتَريها «{الاسم} أَلغى طَلَبَكَ…». فَالمُنادي يُمَرِّرُ صَفَقاتِ الطَرَفِ والَّتي في خَطِّها سَطرٌ لَه مَعاً.</para>
+    /// </summary>
+    public static IReadOnlyList<string> RelatedUrls(IEnumerable<Deal> touched, IEnumerable<Conversation> convs, IEnumerable<ListingMatch> matches)
+        => touched.Select(d => $"/deals/{d.Id}")
+            .Concat(convs.Select(c => $"/chats/{c.Id}"))
+            .Concat(matches.Select(m => $"/listings/{m.Id}"))
+            .Distinct(StringComparer.Ordinal).ToList();
+
     /// <summary>نَوعُ إشعارِ التَسجيلِ لِمُديري المَتجَر — «{الاسم}» (وقَبلَ <c>548ea4d</c> «{الاسم} · {الوَسيلَة}»).</summary>
     public const string NewUserNoticeType = "new_user";
 
@@ -300,10 +313,8 @@ public static class AccountErasure
         var tickets = await s.Query<Ticket>().Where(t => t.AuthorId == userId).ToListAsync(ct);
         var keys = await s.Query<ApiKeyDocument>().Where(k => k.TenantSlug == tenantSlug && k.ActorUserId == userId).ToListAsync(ct);
 
-        var urls = deals.Select(d => $"/deals/{d.Id}")
-            .Concat(convs.Select(c => $"/chats/{c.Id}"))
-            .Concat(matches.Select(m => $"/listings/{m.Id}"))
-            .ToList();
+        // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ G-2) والصَفقَةُ الَّتي فَعَلَ فيها ولَيسَ طَرَفَها (`others`) تَربِطُ إشعاراتِها كَصَفقَةِ الطَرَف — `RelatedUrls`.
+        var urls = RelatedUrls(deals.Concat(others), convs, matches);
         var notices = new List<Notification>();
         // ‏(2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢) بَلاغاتُه بِتَذاكِرِه لا بِنَصِّ اسمِه: كُلُّ تَذكِرَةِ بَلاغٍ كَتَبَها — بِاسمِه يَومَئِذٍ، قَبلَ مَحوِها أَدناه — وإشعاراتُ
         // المُديرينَ الَّتي تُعلِنُها (`ListingReport.Announces`: بَعدَها وقَبلَ التالِيَةِ بِالمَوضوعِ نَفسِه في المَتجَر).
@@ -327,9 +338,11 @@ public static class AccountErasure
                 }
             reportNames.Add(t.AuthorName);
         }
-        var names = oldNames.Concat(reportNames).ToList();
+        // ‏(‏2026-10-30، G-2) واسمُه عَلى مَفاتيحِ رَبطِه كَما كُتِبَ يَومَ أُصدِرَت — يَكتُبُه بابُ الـAPI في إشعارِ الإلغاءِ (`p.ActorName`) ولو تَبَدَّلَ اسمُه بَعدَها.
+        var names = oldNames.Concat(reportNames).Concat(keys.Select(k => k.ActorName)).ToList();
         // كُلُّ اسمٍ بِاستِعلامِه، والنَتائِجُ وَثيقَةٌ واحِدَةٌ لِكُلِّ مُعَرِّف — فَلا تُخَزَّنُ نُسخَتانِ مِن إشعارٍ يَحمِلُ الاسمَين.
-        foreach (var oldName in oldNames.Where(Identifies).Distinct(StringComparer.Ordinal))
+        // ‏(‏2026-10-30، G-2) بِالأَسماءِ كُلِّها — ومِنها اسمُه عَلى مَفاتيحِه — لا بِاسمِ الحِسابِ وَحدَه: المُرَشَّحونَ أَوسَع، والقَرارُ لِـ`EraseFrom` بِرابِطِه.
+        foreach (var oldName in names.Where(Identifies).Distinct(StringComparer.Ordinal))
             foreach (var n in await s.Query<Notification>().Where(n => n.UserId != userId && (n.Title.Contains(oldName) || n.Body.Contains(oldName))).ToListAsync(ct))
                 if (notices.All(x => x.Id != n.Id)) notices.Add(n);
         // ووَسيلَتا اتِّصالِه — والحَصرُ في إشعاراتِ المُديرينَ وحُدودِ الوَسيلَةِ لِـ`EraseFrom` لا لِلاستِعلام.
