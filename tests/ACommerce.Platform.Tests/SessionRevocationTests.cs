@@ -236,6 +236,35 @@ public class SessionRevocationTests(ITestOutputHelper output)
     public void The_writer_scan_refuses_a_hand_written_load_and_store(string body)
         => Assert.False(SavesThroughAccountWrites(body));
 
+    // ─── الخُروجُ مِن جِهازٍ واحِد (الموجَة ١٢ F1 البَند ٨، ‏2026-10-30): اشتِراكُ مُتَصَفِّحِه يَبقى في الحِساب ─────────────────────────────
+
+    private static string LogoutDoor()
+    {
+        var doors = WriteEndpointGuardTests.AllMinimalApiEndpoints().Where(e => e.Route == "/{slug}/auth/logout").ToList();
+        Assert.True(doors.Count == 1, $"«/{{slug}}/auth/logout»: {doors.Count} باباً — الأَداةُ عَمياء.");
+        return doors[0].Body;
+    }
+
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم»</b>: بابُ الخُروجِ يَمسَحُ الكوكيّاتِ وَحدَها (<c>ClearAllCookiesForTenant</c>) ولا يَقرَأُ عُنوانَ المُتَصَفِّحِ ولا يَكتُبُ الحِساب،
+    /// وسكربتُ <c>App.razor</c> لا يُرسِلُه — فَيَبقى العُنوانُ في <c>User.PushSubscriptions</c> و<c>WebPushService</c> يُرسِلُ إلَيه أَوَّلَ مِئَةِ حَرفٍ مِن كُلِّ
+    /// رِسالَةٍ وإشعاراتِ الصَفَقاتِ بَعدَ خُروجِ صاحِبِه مِن جِهازٍ مُشتَرَك (والعِلاجُ اليَومَ «اخرج من كل الأجهزة» وَحدَه). يُقلَبُ بِاسمِه في كوميتِ التَبديل.</para>
+    /// </summary>
+    [Fact]
+    public void Today_signing_out_of_one_device_leaves_its_push_subscription_on_the_account()
+    {
+        var door = LogoutDoor();
+        var app = Read($"{TemplateRoot}/Components/App.razor");
+        var reads = door.Contains("push_endpoint", StringComparison.Ordinal);
+        var writes = door.Contains("AccountWrites.UpdateAsync", StringComparison.Ordinal) || door.Contains("ForgetDeviceAsync", StringComparison.Ordinal);
+        var sends = app.Contains("push_endpoint", StringComparison.Ordinal);
+        output.WriteLine($"اليَوم: بابُ الخُروجِ يَقرَأُ عُنوانَ المُتَصَفِّح {reads} · يَكتُبُ الحِساب {writes} · السكربتُ يُرسِلُه {sends}");
+        Assert.Contains("AuthSession.ClearAllCookiesForTenant(http.Response, slug, roles);", door, StringComparison.Ordinal);
+        Assert.False(reads);
+        Assert.False(writes);
+        Assert.False(sends);
+    }
+
     // ─── ذاكِرَةُ الإصدار (الموجَة ١٢ F1 البَند ٧، ‏2026-10-30): قِراءَةٌ فاتَتها الذاكِرَةُ قَبلَ رَفعٍ تُعيدُ حِفظَ ما قَبلَه ──────────────────
 
     private static Microsoft.Extensions.Caching.Memory.MemoryCache FreshCache()
