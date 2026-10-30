@@ -917,6 +917,11 @@ public sealed class DealsService
         {
             return DealResolveResult.Refused(new(ChangedMeanwhile, ChangedMeanwhileAr), await LoadAsync(tenantSlug, dealId, ct));
         }
+        // (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-3 + E-deals-2؛ تَوصيفُه `dd1c5df` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **ودَفعٌ سُجِّلَ أَثناءَ النِزاعِ يُدخِلُ «دَفع»
+        // بِاسمِ المَنصَّةِ لَحظَةَ الاستِئناف** — الكاتِبُ الواحِدُ وشَرطُه (د4 «ب»: «فلا ينتظر البائع نقرة من المشتري»). كانَت مَواضِعُه ثَلاثَة (التَقَدُّم، والتَسوِيَة،
+        // والإشعار) فَصَفقَةٌ قُبِضَت وهي في «نِزاع» تُستَأنَفُ عِندَ «تأكيد» تَنتَظِرُ نَقرَةَ المُشتَري. بَعدَ الحِفظ، ورَدُّه لا يَرُدُّ الاستِئناف.
+        if (GatewayPayments.EntersPaidOnRecord(deal) && await EnterPaidOnRecordAsync(tenantSlug, dealId, ct) is { Ok: true, Deal: { } entered })
+            deal = entered;
         return DealResolveResult.Resolved(deal, DealDisputeResolution.Resume);
     }
 

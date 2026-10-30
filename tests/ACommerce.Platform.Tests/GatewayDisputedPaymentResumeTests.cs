@@ -52,11 +52,13 @@ public class GatewayDisputedPaymentResumeTests(ITestOutputHelper output)
         => w.Docs.Stored.OfType<Notification>().Count(n => n.Type == DealNotices.PaidType && n.UserId == Seller && n.RelatedUrl!.EndsWith(dealId.ToString(), StringComparison.Ordinal));
 
     /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم»</b> (القاعِدَة ٣): دُفِعَت الفاتورَةُ والصَفقَةُ الأولى في «نِزاع» — كُتِبَ دَفعُها، والثانِيَةُ دَخَلَت «دَفع» وأُخبِرَ بائِعُها؛ ثُمَّ استُؤنِفَت الأولى
-    /// ⇒ <b>عِندَ «تأكيد» مَقبوضَةً وتاليها «دَفع»</b>، ولا إشعارَ «دُفِع» لِبائِعِها بَعدَ إشعارِ الحَسم.</para>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-3؛ تَوصيفُه <c>dd1c5df</c> — كانَ
+    /// <c>Today_a_deal_paid_during_its_dispute_is_resumed_at_Confirmed_waiting_for_the_buyer_and_its_vendor_never_hears_paid</c>): دُفِعَت الفاتورَةُ والصَفقَةُ الأولى
+    /// في «نِزاع» — كُتِبَ دَفعُها، والثانِيَةُ دَخَلَت «دَفع» وأُخبِرَ بائِعُها؛ ثُمَّ استُؤنِفَت الأولى ⇒ <b>تَدخُلُ «دَفع» بِاسمِ المَنصَّةِ في الاستِئنافِ نَفسِه</b>، ويُخبَرُ
+    /// بائِعُها بِالدَفعِ <b>مَرَّةً واحِدَة</b> بَعدَ إشعارِ الحَسم؛ ونِزاعٌ ثانٍ ثُمَّ استِئنافٌ ثانٍ لا يُعيدُ «دُفِع» — آخِرُ «disputed» صارَ بَعدَ الدَفع.</para>
     /// </summary>
     [Fact]
-    public async Task Today_a_deal_paid_during_its_dispute_is_resumed_at_Confirmed_waiting_for_the_buyer_and_its_vendor_never_hears_paid()
+    public async Task A_deal_paid_during_its_dispute_enters_Paid_on_resume_and_its_vendor_hears_paid_once()
     {
         var w = await ConfirmedCart();
         var notices = GatewayOwnerMoneyNoticeTests.Notices(w.Docs);
@@ -65,17 +67,59 @@ public class GatewayDisputedPaymentResumeTests(ITestOutputHelper output)
         await PayAsync(w, notices, l);
         Assert.Equal(DealStage.Paid, Load(w, w.Ids[1]).Stage);
         Assert.Equal(1, PaidNoticesFor(w, w.Ids[1]));
+        Assert.Equal(0, PaidNoticesFor(w, w.Ids[0]));
 
         var res = await w.Deals.ResolveDisputeAsync(Slug, w.Ids[0], Owner, DealDisputeResolution.Resume, "حُسِم");
         await notices.NotifyDisputeResolvedAsync(Slug, res.Deal!, AppOwner, res.Outcome!, l);
 
         var deal = Load(w, w.Ids[0]);
-        output.WriteLine($"الاستِئناف: ok={res.Ok} · {deal.Status}/{deal.Stage} · مَقبوضَة={DealsService.IsCaptured(deal)} · التالي={DealsPolicy.Next(deal)} · «دُفِع» لِلبائِع={PaidNoticesFor(w, w.Ids[0])}");
+        output.WriteLine($"الاستِئناف: ok={res.Ok} · {deal.Status}/{deal.Stage} · النَتيجَةُ تَحمِلُ {res.Deal!.Stage} · «دُفِع» لِلبائِع={PaidNoticesFor(w, w.Ids[0])}");
         Assert.True(res.Ok);
+        Assert.Equal((DealStatus.Active, DealStage.Paid), (deal.Status, deal.Stage));
+        Assert.Equal(DealStage.Paid, res.Deal!.Stage);
+        var entry = Assert.Single(deal.Timeline, e => e.Action == "advanced" && e.StageAfter == DealStage.Paid);
+        Assert.True(DealEvent.IsByPlatform(entry));
+        Assert.Equal(1, PaidNoticesFor(w, w.Ids[0]));
+        Assert.Equal(1, PaidNoticesFor(w, w.Ids[1]));
+        Assert.Empty(w.Platform.Calls);
+
+        // ونِزاعٌ ثانٍ ثُمَّ استِئنافٌ ثانٍ: الدَفعُ قَبلَ آخِرِ نِزاعٍ فَأُخبِرَ بِه — لا «دُفِع» ثانٍ.
+        Assert.True((await w.Deals.DisputeAsync(Slug, w.Ids[0], AppOwner, "مالِك التَّطبيق", "شَكوى ثانِيَة")).Ok);
+        var again = await w.Deals.ResolveDisputeAsync(Slug, w.Ids[0], Owner, DealDisputeResolution.Resume, "حُسِم");
+        await notices.NotifyDisputeResolvedAsync(Slug, again.Deal!, AppOwner, again.Outcome!, l);
+        Assert.Equal(1, PaidNoticesFor(w, w.Ids[0]));
+    }
+
+    /// <summary><b>السالِب</b>: صَفقَةٌ لَم تُدفَع فاتورَتُها تُستَأنَفُ عِندَ «تأكيد» كَما كانَت — لا «دَفع» ولا «دُفِع»؛ ولا تَصدُقُ <see cref="DealNotices.PaidDuringDispute"/>
+    /// لِدَفعٍ قَبلَ النِزاع، ولا لِحَجزِ مُزَوِّدِ النُسخَة.</summary>
+    [Fact]
+    public async Task Resuming_an_unpaid_disputed_deal_enters_nothing_and_tells_nobody_of_a_payment()
+    {
+        var w = await ConfirmedCart();
+        var notices = GatewayOwnerMoneyNoticeTests.Notices(w.Docs);
+        var l = new L(new HttpContextAccessor());
+        Assert.True((await w.Deals.DisputeAsync(Slug, w.Ids[0], AppOwner, "مالِك التَّطبيق", "شَكوى")).Ok);
+
+        var res = await w.Deals.ResolveDisputeAsync(Slug, w.Ids[0], Owner, DealDisputeResolution.Resume, "حُسِم");
+        await notices.NotifyDisputeResolvedAsync(Slug, res.Deal!, AppOwner, res.Outcome!, l);
+
+        var deal = Load(w, w.Ids[0]);
         Assert.Equal((DealStatus.Active, DealStage.Confirmed), (deal.Status, deal.Stage));
-        Assert.True(DealsService.IsCaptured(deal));
-        Assert.Equal(DealStage.Paid, DealsPolicy.Next(deal));
-        Assert.True(GatewayPayments.EntersPaidOnRecord(deal));
+        Assert.False(DealNotices.PaidDuringDispute(deal));
         Assert.Equal(0, PaidNoticesFor(w, w.Ids[0]));
+
+        // والدالَّةُ النَقِيَّة: دَفعٌ ثُمَّ نِزاعٌ ⇐ لا؛ ونِزاعٌ ثُمَّ دَفعٌ ⇐ نَعَم؛ وبِلا فاتورَةِ بَوّابَةٍ ⇐ لا.
+        static Deal With(params string[] actions)
+        {
+            var d = new Deal { Refs = { [GatewayPaymentProof.InvoiceRef] = InvoiceId, ["payment_id"] = InvoiceId } };
+            foreach (var a in actions) d.Timeline.Add(new(DealStage.Confirmed, DealStage.Confirmed, a, null, null, null, DateTime.UtcNow));
+            return d;
+        }
+        Assert.False(DealNotices.PaidDuringDispute(With(DealEvent.GatewayPaid, "disputed")));
+        Assert.True(DealNotices.PaidDuringDispute(With("disputed", DealEvent.GatewayPaid)));
+        Assert.False(DealNotices.PaidDuringDispute(With(DealEvent.GatewayPaid)));
+        var card = With("disputed", DealEvent.GatewayPaid);
+        card.Refs.Remove(GatewayPaymentProof.InvoiceRef);
+        Assert.False(DealNotices.PaidDuringDispute(card));
     }
 }

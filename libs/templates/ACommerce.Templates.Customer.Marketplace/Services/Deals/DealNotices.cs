@@ -205,7 +205,23 @@ public sealed class DealNotices
     /// نِزاعٍ لا يُتابِعُها بائِعُها — وكانَ دَفعٌ وَقَعَ عَلى طَلَبٍ أَلغاه البائِعُ نَفسُه يُبَشَّرُ بِه بِعَلامَةِ ✓. ودَفعُ المُلغاةِ مَكتوبٌ عَلَيها
     /// بِسَطرِ «استِرجاعُه مُستَحَقٌّ عِندَ بَوّابَةِ المَتجَر» يَراهُ صاحِبُ المَتجَرِ في سِجِلِّها. و<c>null</c> لِما سِوى ذلك.</para>
     /// </summary>
+    /// <remarks>(‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-3 — ولا يُعادُ حَرفٌ فَوقَه: «أَو في نِزاعٍ لا يُتابِعُها بائِعُها» كُتِبَ قَبلَ د38 — والنِزاعُ اليَومَ يُحسَمُ
+    /// بِالاستِئناف، فَالصَفقَةُ تَعودُ قائِمَةً ويُتابِعُها بائِعُها. فَالدَفعُ الَّذي سُجِّلَ أَثناءَ النِزاعِ لا يَبتلِعُه هذا الحُكم: يُخبَرُ بِه البائِعُ لَحظَةَ الاستِئنافِ
+    /// (<see cref="PaidDuringDispute"/> في <see cref="NotifyDisputeResolvedAsync"/>)، ويَبقى هذا الحُكمُ لِلمُلغاةِ ولِما هي في نِزاعٍ الآن.)</remarks>
     public static Guid? PaidRecipient(Deal deal) => deal.Status == DealStatus.Active ? NewDealRecipient(deal) : null;
+
+    /// <summary>
+    /// <para><b>أَسُجِّلَ دَفعُ هذِه الصَفقَةِ وهي في نِزاعِها الأَخير؟ — دالَّةٌ نَقِيَّة</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-3): قَبَضَتها بَوّابَةُ المَتجَرِ نَفسُها
+    /// (<see cref="GatewayPayments.CollectedByGateway"/>)، وآخِرُ سَطرِ <see cref="DealEvent.GatewayPaid"/> بَعدَ آخِرِ سَطرِ <c>disputed</c> — فَيَومَ كُتِبَ الدَفعُ تَجاوَزَ
+    /// <see cref="NotifyPaidAsync"/> بائِعَها (<see cref="PaidRecipient"/>). ودَفعٌ قَبلَ النِزاعِ أُخبِرَ بِه يَومَها؛ ونِزاعٌ ثانٍ بَعدَ استِئنافٍ أَخبَرَ لا يُعيدُه.</para>
+    /// </summary>
+    public static bool PaidDuringDispute(Deal deal)
+    {
+        if (!GatewayPayments.CollectedByGateway(deal)) return false;
+        var paid = deal.Timeline.FindLastIndex(e => e.Action == DealEvent.GatewayPaid);
+        var disputed = deal.Timeline.FindLastIndex(e => e.Action == "disputed");
+        return disputed >= 0 && paid > disputed;
+    }
 
     /// <summary>مَن يُشعَرُ بِالإلغاء: المُشتَري، ما لَم يَكُن هُوَ المُلغي — فَمَن يُلغي طَلَبَه لا
     /// يُخبَرُ بِما فَعَلَه.</summary>
@@ -663,6 +679,9 @@ public sealed class DealNotices
             await _push.SendAsync(_store, slug, n.UserId, n.Title, DisputeResolvedPushBody(deal, outcome, l), url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         }
         if (cancelled) await NotifyStoreOwnerAsync(slug, deal, l, ct);
+        // (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **واستِئنافُ صَفقَةٍ دُفِعَت أَثناءَ نِزاعِها يُخبِرُ بائِعَها بِالدَفعِ مَرَّةً** بِالأُنبوبِ
+        // نَفسِه — كانَ يَومَ كُتِبَ الدَفعُ تَجاوَزَه (لَيسَت قائِمَة) ولا شَيءَ بَعدَه يُخبِرُه، فَلا يَسمَعُ «دُفِع» أَبَداً. فَلا يَتَغَيَّرُ جِسمُ `/resolve`.
+        else if (PaidDuringDispute(deal)) await NotifyPaidAsync(slug, new[] { deal.Id }, l, ct);
         return sent.Count;
     }
 
